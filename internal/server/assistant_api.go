@@ -846,7 +846,7 @@ func (s *assistantConversationService) createTurn(ctx context.Context, tenantID 
 	if err != nil {
 		return nil, err
 	}
-	intent := resolvedIntent.Intent
+	intent := assistantMergeIntentWithPendingTurn(resolvedIntent.Intent, assistantLatestPendingTurn(conversation))
 	intentValidationErrors := assistantIntentValidationErrors(intent)
 	candidates := make([]assistantCandidate, 0)
 	resolvedCandidateID := ""
@@ -917,10 +917,12 @@ func (s *assistantConversationService) createTurn(ctx context.Context, tenantID 
 		CreatedAt:           turnCreatedAt,
 		UpdatedAt:           turnCreatedAt,
 	}
+	assistantRefreshTurnDerivedFields(turn)
 
 	conversation.Turns = append(conversation.Turns, turn)
 	conversation.UpdatedAt = turnCreatedAt
 	conversation.State = turn.State
+	conversation.CurrentPhase = turn.Phase
 	conversation.Transitions = append(conversation.Transitions, assistantStateTransition{
 		TurnID:     turn.TurnID,
 		RequestID:  turn.RequestID,
@@ -931,6 +933,7 @@ func (s *assistantConversationService) createTurn(ctx context.Context, tenantID 
 		ActorID:    principal.ID,
 		ChangedAt:  turnCreatedAt,
 	})
+	assistantRefreshConversationDerivedFields(conversation)
 
 	return cloneConversation(conversation), nil
 }
@@ -1204,6 +1207,45 @@ func assistantTurnRequiresIntentClarification(turn *assistantTurn) bool {
 		}
 	}
 	return false
+}
+
+func assistantMergeIntentWithPendingTurn(intent assistantIntentSpec, pending *assistantTurn) assistantIntentSpec {
+	if pending == nil {
+		return intent
+	}
+	if strings.TrimSpace(pending.Intent.Action) != assistantIntentCreateOrgUnit {
+		return intent
+	}
+	if strings.TrimSpace(pending.Phase) != assistantPhaseAwaitMissingFields {
+		return intent
+	}
+	merged := intent
+	if strings.TrimSpace(merged.Action) == "" || strings.TrimSpace(merged.Action) == "plan_only" {
+		merged.Action = pending.Intent.Action
+	}
+	if strings.TrimSpace(merged.ParentRefText) == "" {
+		merged.ParentRefText = strings.TrimSpace(pending.Intent.ParentRefText)
+	}
+	if strings.TrimSpace(merged.EntityName) == "" {
+		merged.EntityName = strings.TrimSpace(pending.Intent.EntityName)
+	}
+	if strings.TrimSpace(merged.EffectiveDate) == "" {
+		merged.EffectiveDate = strings.TrimSpace(pending.Intent.EffectiveDate)
+	}
+	return merged
+}
+
+func assistantLatestPendingTurn(conversation *assistantConversation) *assistantTurn {
+	turn := latestTurn(conversation)
+	if turn == nil {
+		return nil
+	}
+	switch strings.TrimSpace(turn.Phase) {
+	case assistantPhaseAwaitMissingFields:
+		return turn
+	default:
+		return nil
+	}
 }
 
 func assistantIntentValidationErrors(intent assistantIntentSpec) []string {

@@ -170,6 +170,62 @@ func TestAssistantIntentPipeline_RetryOnSchemaInvalid(t *testing.T) {
 	}
 }
 
+func TestAssistantIntentPipeline_MergesPendingTurnContextForMissingFields(t *testing.T) {
+	t.Setenv("OPENAI_API_KEY", "dummy")
+	store := newOrgUnitMemoryStore()
+	if _, err := store.CreateNodeCurrent(context.Background(), "tenant-1", "2026-01-01", "FLOWER-A", "鲜花组织", "", true); err != nil {
+		t.Fatal(err)
+	}
+	svc := newAssistantConversationService(store, assistantWriteServiceStub{store: store})
+	svc.modelGateway = &assistantModelGateway{
+		config: assistantModelConfig{
+			ProviderRouting: assistantProviderRouting{Strategy: "priority_failover", FallbackEnabled: true},
+			Providers: []assistantModelProviderConfig{{
+				Name:      "openai",
+				Enabled:   true,
+				Model:     "gpt-5-codex",
+				Endpoint:  "https://api.openai.com/v1",
+				TimeoutMS: 1000,
+				Retries:   0,
+				Priority:  1,
+				KeyRef:    "OPENAI_API_KEY",
+			}},
+		},
+		adapters: map[string]assistantProviderAdapter{
+			"openai": assistantAdapterFunc(func(context.Context, string, assistantModelProviderConfig) ([]byte, error) {
+				return []byte(`{"choices":[{"message":{"content":"fallback"}}]}`), nil
+			}),
+		},
+	}
+	principal := Principal{ID: "actor-1", RoleSlug: "tenant-admin"}
+	conversation := svc.createConversation("tenant-1", principal)
+	created, err := svc.createTurn(context.Background(), "tenant-1", principal, conversation.ConversationID, "在鲜花组织之下，新建一个部门，成立日期是2026-01-01")
+	if err != nil {
+		t.Fatalf("create first turn err=%v", err)
+	}
+	first := created.Turns[len(created.Turns)-1]
+	if first.Phase != assistantPhaseAwaitMissingFields {
+		t.Fatalf("expected await_missing_fields, got=%q", first.Phase)
+	}
+	next, err := svc.createTurn(context.Background(), "tenant-1", principal, conversation.ConversationID, "名为运营部的部门")
+	if err != nil {
+		t.Fatalf("create follow-up turn err=%v", err)
+	}
+	if len(next.Turns) != 2 {
+		t.Fatalf("expected 2 turns, got=%d", len(next.Turns))
+	}
+	merged := next.Turns[len(next.Turns)-1]
+	if merged.Intent.ParentRefText != "鲜花组织" || merged.Intent.EntityName != "运营部" || merged.Intent.EffectiveDate != "2026-01-01" {
+		t.Fatalf("unexpected merged intent=%+v", merged.Intent)
+	}
+	if merged.Phase != assistantPhaseAwaitCommitConfirm {
+		t.Fatalf("expected await_commit_confirm, got=%q", merged.Phase)
+	}
+	if merged.ResolvedCandidateID == "" {
+		t.Fatal("expected candidate resolved from pending context")
+	}
+}
+
 func TestAssistantIntentPipeline_ResolveIntentErrorBranches(t *testing.T) {
 	t.Setenv("OPENAI_API_KEY", "dummy")
 

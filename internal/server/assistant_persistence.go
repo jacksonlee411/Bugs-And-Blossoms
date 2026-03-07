@@ -194,11 +194,21 @@ func (s *assistantConversationService) createTurnPG(ctx context.Context, tenantI
 	if ctx == nil {
 		ctx = context.Background()
 	}
+	var pendingTurn *assistantTurn
+	var conversation *assistantConversation
+	if s.pool != nil {
+		conversationForContext, getErr := s.getConversationPG(ctx, tenantID, principal.ID, conversationID)
+		if getErr == nil {
+			pendingTurn = assistantLatestPendingTurn(conversationForContext)
+		} else if !errors.Is(getErr, errAssistantConversationNotFound) && !errors.Is(getErr, errAssistantConversationForbidden) && !errors.Is(getErr, errAssistantTenantMismatch) {
+			return nil, getErr
+		}
+	}
 	resolvedIntent, err := s.resolveIntent(ctx, tenantID, conversationID, userInput)
 	if err != nil {
 		return nil, err
 	}
-	intent := resolvedIntent.Intent
+	intent := assistantMergeIntentWithPendingTurn(resolvedIntent.Intent, pendingTurn)
 	intentValidationErrors := assistantIntentValidationErrors(intent)
 	candidates := make([]assistantCandidate, 0)
 	resolvedCandidateID := ""
@@ -277,7 +287,7 @@ func (s *assistantConversationService) createTurnPG(ctx context.Context, tenantI
 	}
 	defer tx.Rollback(ctx)
 
-	conversation, err := s.loadConversationTx(ctx, tx, tenantID, conversationID, true)
+	conversation, err = s.loadConversationTx(ctx, tx, tenantID, conversationID, true)
 	if err != nil {
 		return nil, err
 	}

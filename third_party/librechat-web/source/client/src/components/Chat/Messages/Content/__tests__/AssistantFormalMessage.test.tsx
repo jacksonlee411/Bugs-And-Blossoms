@@ -91,7 +91,7 @@ describe('AssistantFormalMessage', () => {
       turns: [
         {
           turn_id: 'turn-1',
-          state: 'validated',
+          state: 'confirmed',
           phase: 'await_commit_confirm',
           request_id: 'req-1',
           trace_id: 'trace-1',
@@ -115,6 +115,72 @@ describe('AssistantFormalMessage', () => {
     expect(mockCommitAssistantFormalTurn).not.toHaveBeenCalled();
   });
 
+
+  it('renders confirm button before submit for validated commit draft', async () => {
+    const message = {
+      messageId: 'msg-confirm',
+      text: '请确认后提交。',
+      sender: 'Assistant',
+      isCreatedByUser: false,
+      parentMessageId: 'user-1',
+      conversationId: null,
+      error: false,
+      assistantFormalPayload: {
+        kind: 'assistant_formal',
+        backendConversationId: 'conv-1',
+        turnId: 'turn-confirm',
+        requestId: 'req-confirm',
+        traceId: 'trace-confirm',
+        messageId: 'msg-confirm',
+        bindingKey: 'conv-1::turn-confirm::req-confirm',
+        state: 'validated',
+        phase: 'await_commit_confirm',
+        selectedCandidateId: 'cand-1',
+        pendingDraftSummary: '已生成草案，等待确认。',
+        missingFields: [],
+        candidates: [
+          {
+            candidate_id: 'cand-1',
+            candidate_code: 'FLOWER-A',
+            name: '鲜花组织',
+            path: '/鲜花组织',
+            as_of: '2026-01-01',
+            is_active: true,
+            match_score: 0.99,
+          },
+        ],
+      },
+    } as TMessage & { assistantFormalPayload: any };
+
+    mockGetMessages.mockReturnValue([message]);
+    mockConfirmAssistantFormalTurn.mockResolvedValue({
+      conversation_id: 'conv-1',
+      turns: [
+        {
+          turn_id: 'turn-confirm',
+          state: 'confirmed',
+          phase: 'await_commit_confirm',
+          request_id: 'req-confirm',
+          trace_id: 'trace-confirm',
+          selected_candidate_id: 'cand-1',
+          pending_draft_summary: '已确认草案，等待提交。',
+          candidates: message.assistantFormalPayload.candidates,
+          missing_fields: [],
+        },
+      ],
+    });
+
+    render(<AssistantFormalMessage message={message as any} />);
+
+    expect(screen.getByRole('button', { name: 'Confirm' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Submit' })).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Confirm' }));
+
+    await waitFor(() => {
+      expect(mockConfirmAssistantFormalTurn).toHaveBeenCalledWith('conv-1', 'turn-confirm', '');
+    });
+    expect(mockCommitAssistantFormalTurn).not.toHaveBeenCalled();
+  });
 
   it('renders failure state inside the official bubble without action buttons', () => {
     const message = {

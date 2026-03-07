@@ -103,12 +103,20 @@ function AssistantFormalMessage({ message }: { message: AssistantFormalMessageTy
     !payload.errorCode &&
     payload.phase === 'await_candidate_pick' &&
     payload.candidates.length > 0;
+  const canConfirmCommitDraft =
+    !busy &&
+    !message.assistantFormalPending &&
+    !payload.errorCode &&
+    !payload.commitResult &&
+    payload.phase === 'await_commit_confirm' &&
+    payload.state === 'validated';
   const canCommit =
     !busy &&
     !message.assistantFormalPending &&
     !payload.errorCode &&
     !payload.commitResult &&
-    payload.phase === 'await_commit_confirm';
+    payload.phase === 'await_commit_confirm' &&
+    payload.state === 'confirmed';
   const toneClasses =
     payload.reply?.kind === 'error' || payload.errorCode
       ? 'border-red-500/20 bg-red-500/5 text-gray-700 dark:text-gray-100'
@@ -210,6 +218,19 @@ function AssistantFormalMessage({ message }: { message: AssistantFormalMessageTy
             <div>parent_org_code: {payload.commitResult.parent_org_code}</div>
             <div>effective_date: {payload.commitResult.effective_date}</div>
             <div>event_type: {payload.commitResult.event_type}</div>
+          </div>
+        )}
+
+        {canConfirmCommitDraft && (
+          <div>
+            <button
+              type="button"
+              className="rounded-md bg-[#09a7a3] px-3 py-2 text-sm font-medium text-white disabled:opacity-50"
+              onClick={() => void runMutation('confirm')}
+              disabled={busy || message.assistantFormalPending}
+            >
+              {localize('com_ui_confirm')}
+            </button>
           </div>
         )}
 
