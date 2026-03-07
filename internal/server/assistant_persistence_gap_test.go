@@ -14,7 +14,7 @@ import (
 )
 
 func assistantPersistenceConversationRow(conversationID string, actorID string, state string, now time.Time) []any {
-	return []any{conversationID, "tenant_1", actorID, "tenant-admin", state, now, now}
+	return []any{conversationID, "tenant_1", actorID, "tenant-admin", state, assistantConversationPhaseFromLegacyState(state), now, now}
 }
 
 func TestAssistantPersistence_CreateAndGetPGErrorBranches(t *testing.T) {
@@ -280,14 +280,19 @@ func TestAssistantPersistence_LoadConversationTxErrorMatrix(t *testing.T) {
 		name string
 		idx  int
 	}{
-		{name: "intent", idx: 9},
-		{name: "plan", idx: 10},
-		{name: "candidates", idx: 11},
-		{name: "dry_run", idx: 16},
-		{name: "commit_result", idx: 17},
+		{name: "intent", idx: 10},
+		{name: "plan", idx: 11},
+		{name: "candidates", idx: 12},
+		{name: "dry_run", idx: 19},
+		{name: "missing_fields", idx: 21},
+		{name: "commit_result", idx: 22},
+		{name: "commit_reply", idx: 23},
 	} {
 		row := makeBaseTurnRow()
 		row[tc.idx] = []byte("{")
+		if tc.name == "candidates" {
+			row[13] = []byte("{")
+		}
 		turnRows := &assistFakeRows{rows: [][]any{row}}
 		_, err := svc.loadConversationTx(context.Background(), makeTx(turnRows, nil, &assistFakeRows{}, nil), "tenant_1", "conv_err", false)
 		if err == nil {
@@ -847,7 +852,7 @@ func TestAssistantPersistence_CommitTurnPG_ErrorPathMatrix(t *testing.T) {
 			}
 			switch {
 			case strings.Contains(sql, "FROM iam.assistant_conversations"):
-				return &assistFakeRow{vals: []any{"conv_1", "tenant_1", actorID, actorRole, assistantStateValidated, now, now}}
+				return &assistFakeRow{vals: []any{"conv_1", "tenant_1", actorID, actorRole, assistantStateValidated, assistantConversationPhaseFromLegacyState(assistantStateValidated), now, now}}
 			case strings.Contains(sql, "INSERT INTO iam.assistant_idempotency"):
 				return &assistFakeRow{vals: []any{1}}
 			case strings.Contains(sql, "INSERT INTO iam.assistant_state_transitions"):

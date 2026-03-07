@@ -25,7 +25,7 @@
 5. [ ] 将 `/app/assistant/librechat` 收敛为单一真实入口，不再依赖 iframe 套壳作为正式交互承载面。
 6. [ ] 保持 One Door：任何业务写入仍只允许经本仓 `/internal/assistant/*` 与业务提交链路完成，绝不把可写业务能力下放到上游 runtime。
 7. [ ] 明确业务事实源：业务真相以本仓 `conversation_id/turn_id/request_id/trace_id` 与其状态流转为准；官方消息树只是唯一用户可见渲染面，不得反客为主成为业务事实源。
-8. [ ] 明确前端降权：vendored UI 只消费后端返回的 `phase/candidates/draft/commit-reply` 等 DTO，不得在页面 helper / adapter 内重算业务 FSM、候选裁决或提交约束。
+8. [ ] 明确前端降权：vendored UI 只消费后端返回的 `phase/missing_fields/candidates/pending_draft_summary/selected_candidate_id/commit_reply/error_code` DTO，不得在页面 helper / adapter 内重算业务 FSM、候选裁决或提交约束。
 
 ### 2.2 非目标
 1. [ ] **不** vendoring LibreChat 后端 Node 服务，不在本计划中接管上游 API/runtime 实现。
@@ -103,7 +103,7 @@ graph TD
 
 ### ADR-280-03：`/app/assistant/librechat` 直接承载官方 UI，不再以 iframe 作为正式入口（选定）
 - 选项 A：继续 iframe，仅把桥逻辑改成更深 patch。缺点：消息流仍跨窗口，状态仍然分裂。
-- 选项 B（选定）：直接以本仓编译的官方 UI 页面作为正式承载面；若需兼容 `/assistant-ui/*`，仅保留短期灰度别名。
+- 选项 B（选定）：直接以本仓编译的官方 UI 页面作为正式承载面；若需保留 `/assistant-ui/*`，仅允许作为历史别名/调试入口；具体对外行为由 `DEV-PLAN-283` 冻结。
 
 ### ADR-280-04：发送与回执必须进入源码级消息管线（选定）
 - 选项 A：继续 DOM 事件 `preventDefault` + `postMessage`。缺点：脆弱、不可维护。
@@ -123,7 +123,7 @@ graph TD
 
 ### ADR-280-08：前端降权，只消费 DTO（选定）
 - 选项 A：继续让页面 helper / adapter 承担候选判断、确认词语义与提交前置校验。缺点：会把旧的“DOM hack”升级成“源码 patch hack”。
-- 选项 B（选定）：业务 FSM、候选裁决、确认约束以后端为 SSOT；vendored UI 只消费后端返回的 `phase/candidates/draft/commit-reply` DTO 并负责渲染。
+- 选项 B（选定）：业务 FSM、候选裁决、确认约束以后端为 SSOT；vendored UI 只消费后端返回的 `phase/missing_fields/candidates/pending_draft_summary/selected_candidate_id/commit_reply/error_code` DTO 并负责渲染。
 
 ## 6. 仓库布局与资产模型（目标态）
 
@@ -132,7 +132,7 @@ graph TD
 2. [ ] `third_party/librechat-web/UPSTREAM.yaml`：记录来源仓库、commit/tag、导入时间、回滚基线。
 3. [ ] `third_party/librechat-web/patches/`：本仓 patch 清单，按主题拆分（send-pipeline / message-render / auth-shell / assistant-adapter）。
 4. [ ] `scripts/librechat-web/`：同步、校验、构建、升级辅助脚本。
-5. [ ] `internal/server/assets/librechat-ui/` 或等价目录：构建产物归档路径。
+5. [ ] `internal/server/assets/librechat-web/`：构建产物归档路径（已由 `DEV-PLAN-281` 冻结）。
 
 ### 6.2 资产约束
 1. [ ] vendored UI 必须有单一来源元数据，不得出现“手抄文件 + 无来源”的隐式纳管。
@@ -143,13 +143,13 @@ graph TD
 
 ### 7.0 业务事实源与前端职责冻结
 1. [ ] 业务真相固定为本仓持久化的 `conversation_id/turn_id/request_id/trace_id + phase + 审计状态转移`；官方消息树不是业务真相，只是唯一用户可见渲染面。
-2. [ ] vendored UI 只能消费后端 DTO（如 `phase/candidates/draft/commit_reply/error_code`），不得在前端 helper 中重新计算候选解析、确认判定、提交约束或状态推进规则。
+2. [ ] vendored UI 只能消费后端 DTO（如 `phase/missing_fields/candidates/pending_draft_summary/selected_candidate_id/commit_reply/error_code`），不得在前端 helper 中重新计算候选解析、确认判定、提交约束或状态推进规则。
 3. [ ] 若前端需要临时 adapter，只能做展示层归一、事件分发与协议适配，不得承载业务判定。
 4. [ ] `223/260` 是业务事实源与业务 FSM 的 SSOT；`280` 负责承载面与控制点收口，不得与其冲突。
 
 ### 7.1 UI 承载面收口
 1. [ ] `/app/assistant/librechat` 改为直接加载本仓构建的 vendored LibreChat Web UI。
-2. [ ] `/assistant-ui/*` 若保留，只能作为迁移别名或调试入口，不再作为 iframe 套壳的正式承载面。
+2. [ ] `/assistant-ui/*` 若保留，只能作为历史别名或调试入口，不再作为 iframe 套壳的正式承载面；正式静态资源前缀由 `DEV-PLAN-283` 冻结，且不得依赖 `/assistant-ui/*` 代理。
 3. [ ] 迁移完成后，`apps/web/src/pages/assistant/LibreChatPage.tsx` 不再承担业务桥接 orchestrator 角色，只保留必要入口外壳或直接退役。
 
 ### 7.2 发送链路接管
@@ -217,7 +217,7 @@ graph TD
 3. [ ] HTML rewrite / DOM 注入式消息回执。
 4. [ ] `data-assistant-dialog-stream` 或等价外挂消息流。
 5. [ ] `assistantDialogFlow`、`assistantAutoRun` 或等价页面级业务编排职责。
-6. [ ] 旧 `/assistant-ui/*` 正式入口地位；如保留，最多只允许作为短期调试/排障入口，且不得承担正式验收职责。
+6. [ ] 旧 `/assistant-ui/*` 正式入口地位；如保留，最多只允许作为历史别名/调试/排障入口，且其具体收口语义以 `DEV-PLAN-283` 为准，不得承担正式验收职责。
 7. [ ] 只服务于旧桥接方案的测试、截图、E2E 断言与说明文案。
 
 ### 8.4 停止线（Fail-Closed）
@@ -257,24 +257,24 @@ graph TD
 1. [ ] `/app/assistant/librechat` 不再依赖 iframe 作为正式聊天承载面。
 2. [ ] 不再依赖运行时注入 `bridge.js` 才能阻断原始发送或显示业务回执。
 3. [ ] 不再存在 `data-assistant-dialog-stream` 或等价外挂消息流承担用户可见业务回执职责。
-4. [ ] 不再存在两个同时有效的正式用户入口、两套正式消息落点或两套正式 E2E 通过口径。
+4. [ ] 不再存在两个同时有效的正式用户入口、两套正式静态资源前缀、两套正式消息落点或两套正式 E2E 通过口径。
 5. [ ] `260` Case 1~4 中，所有业务回执都由官方消息列表组件树渲染，且每轮仅有唯一 assistant 回复实体。
-6. [ ] 前端只消费后端 `phase/candidates/draft/commit-reply` 等 DTO；业务事实源仍以本仓 `conversation/turn/request/trace` 与审计状态转移为准。
+6. [ ] 前端只消费后端 `phase/missing_fields/candidates/pending_draft_summary/selected_candidate_id/commit_reply/error_code` DTO；业务事实源仍以本仓 `conversation/turn/request/trace` 与审计状态转移为准。
 7. [ ] 发送、缺字段、多候选、确认、提交成功/失败的关键路径，都能通过源码级单测/组件测 + 真实 E2E 双重验证。
 8. [ ] 旧桥接链路相关代码、测试与文案已删除或明确退役，不再形成持续维护负担。
 9. [ ] 上游 runtime 镜像基线仍可独立启动、健康检查、升级与回滚，不因 UI 源码纳管而退化。
 
 ## 11. 子计划拆分（自本次修订起）
-1. [ ] `DEV-PLAN-281`：LibreChat Web UI 源码纳管与新主链路冻结实施计划。
-2. [ ] `DEV-PLAN-282`：LibreChat 旧桥接链路删除实施计划。
-3. [ ] `DEV-PLAN-283`：LibreChat 正式入口直接切换实施计划。
+1. [X] `DEV-PLAN-281`：LibreChat Web UI 源码纳管与新主链路冻结实施计划（已完成，见执行日志）。
+2. [X] `DEV-PLAN-282`：LibreChat 旧桥接链路删除实施计划（已完成，旧桥正式职责与残留实现已收口）。
+3. [X] `DEV-PLAN-283`：LibreChat 正式入口直接切换实施计划（已完成，见该计划内收口证据）。
 4. [ ] `DEV-PLAN-284`：LibreChat 发送与渲染主链路源码级接管实施计划。
 5. [ ] `DEV-PLAN-285`：LibreChat 切换回归闭环与封板实施计划。
 
 ### 11.1 执行顺序与并行策略
-1. [ ] **必须先做**：`281`（先冻结新主链路与来源元数据，否则后续删除与切换没有稳定目标）。
-2. [ ] **可部分并行**：`282` 与 `235` 可在 `281` 完成后并行推进；前者清旧桥职责，后者补新入口边界。
-3. [ ] **必须晚于 `282/235`**：`283`（正式入口切换）只能在“旧桥正式职责已去除 + 新入口边界已补齐”后执行。
+1. [X] **必须先做**：`281`（先冻结新主链路与来源元数据，否则后续删除与切换没有稳定目标）。
+2. [X] **可部分并行**：`282` 与 `235` 可在 `281` 完成后并行推进；前者清旧桥职责，后者补新入口边界。
+3. [X] **必须晚于 `282/235`**：`283`（正式入口切换）只能在“旧桥正式职责已去除 + 新入口边界已补齐”后执行。
 4. [ ] **必须晚于 `223/260/283`**：`284` 需要业务事实源与 FSM DTO 已冻结，且正式入口已完成切换。
 5. [ ] **最后封板**：`285` 只能在 `281~284`、`235`、`237` 对应 stopline 全部满足后执行。
 6. [ ] **禁止并行**：`283` 与“继续维护旧桥接正式职责”不得并行存在；一旦进入 `283`，旧入口只能是调试/审计角色或直接删除。
@@ -294,8 +294,10 @@ graph TD
 - `docs/dev-plans/237-librechat-upgrade-and-regression-closure-plan.md`
 - `docs/dev-plans/260-librechat-conversation-first-auto-execution-plan.md`
 - `docs/dev-plans/266-librechat-official-ui-single-dialog-channel-and-in-bubble-gpt52-plan.md`
+- `docs/dev-plans/271-assistant-librechat-cross-plan-sequenced-delivery-plan.md`
 - `docs/dev-plans/270-project-container-deployment-review-and-layered-convergence-plan.md`
 - `docs/dev-plans/281-librechat-web-ui-source-vendoring-and-mainline-freeze-plan.md`
+- `docs/archive/dev-records/dev-plan-281-execution-log.md`
 - `docs/dev-plans/282-librechat-old-bridge-deletion-plan.md`
 - `docs/dev-plans/283-librechat-formal-entry-cutover-plan.md`
 - `docs/dev-plans/284-librechat-source-level-send-and-render-takeover-plan.md`

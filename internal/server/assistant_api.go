@@ -63,6 +63,7 @@ type assistantConversation struct {
 	ActorID        string                     `json:"actor_id"`
 	ActorRole      string                     `json:"actor_role"`
 	State          string                     `json:"state"`
+	CurrentPhase   string                     `json:"current_phase,omitempty"`
 	Transitions    []assistantStateTransition `json:"state_transitions,omitempty"`
 	CreatedAt      time.Time                  `json:"created_at"`
 	UpdatedAt      time.Time                  `json:"updated_at"`
@@ -77,6 +78,8 @@ type assistantStateTransition struct {
 	TraceID    string    `json:"trace_id"`
 	FromState  string    `json:"from_state"`
 	ToState    string    `json:"to_state"`
+	FromPhase  string    `json:"from_phase,omitempty"`
+	ToPhase    string    `json:"to_phase,omitempty"`
 	ReasonCode string    `json:"reason_code,omitempty"`
 	ActorID    string    `json:"actor_id"`
 	ChangedAt  time.Time `json:"changed_at"`
@@ -86,6 +89,7 @@ type assistantTurn struct {
 	TurnID              string                        `json:"turn_id"`
 	UserInput           string                        `json:"user_input"`
 	State               string                        `json:"state"`
+	Phase               string                        `json:"phase,omitempty"`
 	RiskTier            string                        `json:"risk_tier"`
 	RequestID           string                        `json:"request_id"`
 	TraceID             string                        `json:"trace_id"`
@@ -94,13 +98,18 @@ type assistantTurn struct {
 	MappingVersion      string                        `json:"mapping_version"`
 	Intent              assistantIntentSpec           `json:"intent"`
 	Plan                assistantPlanSummary          `json:"plan"`
+	PendingDraftSummary string                        `json:"pending_draft_summary,omitempty"`
+	MissingFields       []string                      `json:"missing_fields,omitempty"`
 	Candidates          []assistantCandidate          `json:"candidates"`
 	ResolvedCandidateID string                        `json:"resolved_candidate_id,omitempty"`
+	SelectedCandidateID string                        `json:"selected_candidate_id,omitempty"`
 	AmbiguityCount      int                           `json:"ambiguity_count"`
 	Confidence          float64                       `json:"confidence"`
 	ResolutionSource    string                        `json:"resolution_source,omitempty"`
 	DryRun              assistantDryRunResult         `json:"dry_run"`
 	CommitResult        *assistantCommitResult        `json:"commit_result,omitempty"`
+	CommitReply         *assistantCommitReply         `json:"commit_reply,omitempty"`
+	ErrorCode           string                        `json:"error_code,omitempty"`
 	ReplyNLG            *assistantRenderReplyResponse `json:"reply_nlg,omitempty"`
 	CreatedAt           time.Time                     `json:"created_at"`
 	UpdatedAt           time.Time                     `json:"updated_at"`
@@ -749,6 +758,7 @@ func (s *assistantConversationService) createConversation(tenantID string, princ
 		ActorID:        principal.ID,
 		ActorRole:      strings.TrimSpace(principal.RoleSlug),
 		State:          assistantStateValidated,
+		CurrentPhase:   assistantPhaseIdle,
 		CreatedAt:      now,
 		UpdatedAt:      now,
 		Transitions: []assistantStateTransition{
@@ -757,6 +767,8 @@ func (s *assistantConversationService) createConversation(tenantID string, princ
 				TraceID:    traceID,
 				FromState:  "init",
 				ToState:    assistantStateValidated,
+				FromPhase:  "init",
+				ToPhase:    assistantPhaseIdle,
 				ReasonCode: "conversation_created",
 				ActorID:    principal.ID,
 				ChangedAt:  now,
@@ -948,10 +960,13 @@ func (s *assistantConversationService) confirmTurn(tenantID string, principal Pr
 	}
 	turn.PolicyVersion, turn.CompositionVersion, turn.MappingVersion = assistantTurnVersionSnapshot(turn.Plan.CapabilityKey)
 	fromState := turn.State
+	fromPhase := turn.Phase
 	turn.State = assistantStateConfirmed
 	turn.UpdatedAt = time.Now().UTC()
+	assistantRefreshTurnDerivedFields(turn)
 	conversation.UpdatedAt = turn.UpdatedAt
 	conversation.State = turn.State
+	conversation.CurrentPhase = turn.Phase
 	conversation.Transitions = append(conversation.Transitions, assistantStateTransition{
 		TurnID:     turn.TurnID,
 		TurnAction: "confirm",
@@ -959,6 +974,8 @@ func (s *assistantConversationService) confirmTurn(tenantID string, principal Pr
 		TraceID:    turn.TraceID,
 		FromState:  fromState,
 		ToState:    turn.State,
+		FromPhase:  fromPhase,
+		ToPhase:    turn.Phase,
 		ReasonCode: "confirmed",
 		ActorID:    principal.ID,
 		ChangedAt:  turn.UpdatedAt,
@@ -1013,10 +1030,13 @@ func (s *assistantConversationService) commitTurn(ctx context.Context, tenantID 
 	}
 	if assistantTurnContractVersionMismatched(turn) {
 		fromState := turn.State
+		fromPhase := turn.Phase
 		turn.State = assistantStateValidated
 		turn.UpdatedAt = time.Now().UTC()
+		assistantRefreshTurnDerivedFields(turn)
 		conversation.UpdatedAt = turn.UpdatedAt
 		conversation.State = turn.State
+		conversation.CurrentPhase = turn.Phase
 		conversation.Transitions = append(conversation.Transitions, assistantStateTransition{
 			TurnID:     turn.TurnID,
 			TurnAction: "commit",
@@ -1024,6 +1044,8 @@ func (s *assistantConversationService) commitTurn(ctx context.Context, tenantID 
 			TraceID:    turn.TraceID,
 			FromState:  fromState,
 			ToState:    turn.State,
+			FromPhase:  fromPhase,
+			ToPhase:    turn.Phase,
 			ReasonCode: "contract_version_mismatch",
 			ActorID:    principal.ID,
 			ChangedAt:  turn.UpdatedAt,
@@ -1032,10 +1054,13 @@ func (s *assistantConversationService) commitTurn(ctx context.Context, tenantID 
 	}
 	if assistantTurnVersionDrifted(turn) {
 		fromState := turn.State
+		fromPhase := turn.Phase
 		turn.State = assistantStateValidated
 		turn.UpdatedAt = time.Now().UTC()
+		assistantRefreshTurnDerivedFields(turn)
 		conversation.UpdatedAt = turn.UpdatedAt
 		conversation.State = turn.State
+		conversation.CurrentPhase = turn.Phase
 		conversation.Transitions = append(conversation.Transitions, assistantStateTransition{
 			TurnID:     turn.TurnID,
 			TurnAction: "commit",
@@ -1043,6 +1068,8 @@ func (s *assistantConversationService) commitTurn(ctx context.Context, tenantID 
 			TraceID:    turn.TraceID,
 			FromState:  fromState,
 			ToState:    turn.State,
+			FromPhase:  fromPhase,
+			ToPhase:    turn.Phase,
 			ReasonCode: "version_drift",
 			ActorID:    principal.ID,
 			ChangedAt:  turn.UpdatedAt,
@@ -1091,10 +1118,13 @@ func (s *assistantConversationService) commitTurn(ctx context.Context, tenantID 
 		EventUUID:     result.EventUUID,
 	}
 	fromState := turn.State
+	fromPhase := turn.Phase
 	turn.State = assistantStateCommitted
 	turn.UpdatedAt = time.Now().UTC()
+	assistantRefreshTurnDerivedFields(turn)
 	conversation.UpdatedAt = turn.UpdatedAt
 	conversation.State = turn.State
+	conversation.CurrentPhase = turn.Phase
 	conversation.Transitions = append(conversation.Transitions, assistantStateTransition{
 		TurnID:     turn.TurnID,
 		TurnAction: "commit",
@@ -1102,6 +1132,8 @@ func (s *assistantConversationService) commitTurn(ctx context.Context, tenantID 
 		TraceID:    turn.TraceID,
 		FromState:  fromState,
 		ToState:    turn.State,
+		FromPhase:  fromPhase,
+		ToPhase:    turn.Phase,
 		ReasonCode: "committed",
 		ActorID:    principal.ID,
 		ChangedAt:  turn.UpdatedAt,
@@ -1539,11 +1571,16 @@ func cloneConversation(in *assistantConversation) *assistantConversation {
 			continue
 		}
 		copyTurn := *turn
+		copyTurn.MissingFields = append([]string(nil), turn.MissingFields...)
 		copyTurn.Candidates = append([]assistantCandidate(nil), turn.Candidates...)
 		copyTurn.DryRun.Diff = append([]map[string]any(nil), turn.DryRun.Diff...)
 		if turn.CommitResult != nil {
 			copyResult := *turn.CommitResult
 			copyTurn.CommitResult = &copyResult
+		}
+		if turn.CommitReply != nil {
+			copyReply := *turn.CommitReply
+			copyTurn.CommitReply = &copyReply
 		}
 		if turn.ReplyNLG != nil {
 			copyReply := *turn.ReplyNLG
@@ -1551,6 +1588,7 @@ func cloneConversation(in *assistantConversation) *assistantConversation {
 		}
 		out.Turns = append(out.Turns, &copyTurn)
 	}
+	assistantRefreshConversationDerivedFields(&out)
 	return &out
 }
 

@@ -266,7 +266,7 @@ func TestAssistantTaskHandlers_SuccessPaths(t *testing.T) {
 	submitTx.queryRowFn = func(sql string, _ ...any) pgx.Row {
 		switch {
 		case strings.Contains(sql, "FROM iam.assistant_conversations"):
-			return &assistFakeRow{vals: []any{"conv_1", "tenant-1", "actor-1", "tenant-admin", assistantStateValidated, now, now}}
+			return &assistFakeRow{vals: []any{"conv_1", "tenant-1", "actor-1", "tenant-admin", assistantStateValidated, assistantConversationPhaseFromLegacyState(assistantStateValidated), now, now}}
 		case strings.Contains(sql, "FROM iam.assistant_tasks"):
 			return &assistFakeRow{err: pgx.ErrNoRows}
 		default:
