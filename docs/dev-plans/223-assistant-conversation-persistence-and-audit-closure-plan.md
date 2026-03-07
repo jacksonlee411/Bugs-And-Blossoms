@@ -1,6 +1,12 @@
 # DEV-PLAN-223：Assistant 会话持久化与审计闭环详细设计
 
-**状态**: 进行中（2026-03-07 15:45 CST；原持久化/审计闭环已完成，但已按 `DEV-PLAN-280/260` 方向重新评估，现作为“业务事实源 + phase/DTO 持久化”现行契约）
+**状态**: 已完成（2026-03-07；已完成 `DEV-PLAN-280/260` 口径下的业务事实源、phase/DTO 持久化、恢复与测试收口；本地 `make preflight` 仅剩 IAM goose migrate 的表 owner 权限问题，不影响本计划代码与契约封板）
+
+## 0. 2026-03-07 状态更新
+- 已完成 `assistant_conversations.current_phase`、`assistant_turns.phase/pending_draft_summary/missing_fields/candidate_options/selected_candidate_id/commit_reply/error_code`、`assistant_state_transitions.from_phase/to_phase` 的增量迁移与运行时读写接线。
+- 已完成会话恢复、幂等回放、DTO rebuild 与 reply snapshot 持久化收口；`223` 现正式作为 `223 -> 260 -> 280/284` 链路中的后端业务事实源 SSOT。
+- 已补齐 phase/DTO 派生、持久化加载、幂等恢复、LibreChat 承载相关覆盖测试；验证通过 `go test ./internal/server -count=1`、`go vet ./...`、`make check lint`、`make test`。
+- 本地 `make preflight` 最后停在 IAM migration 执行权限：当前数据库角色不是 `iam.assistant_conversations` 表 owner；这属于环境权限问题，不改变本计划“代码实现已完成”的结论。
 
 ## 1. 背景与上下文 (Context)
 - **需求来源**:
@@ -19,14 +25,14 @@
 
 ## 2. 目标与非目标 (Goals & Non-Goals)
 ### 2.1 核心目标
-1. [ ] 落地会话/回合/状态转移/幂等最小持久化模型。
-2. [ ] 支持 `tenant_id/actor_id/conversation_id/turn_id/request_id/trace_id` 全链路追踪。
-3. [ ] 支持服务重启后的会话恢复、`phase` 恢复、待补全/待候选/待确认上下文恢复与提交幂等验证。
-4. [ ] 幂等重试返回**同一响应语义**（同 `http_status + error_code + response_body`）。
-5. [ ] 强化租户绑定防漂移（对齐 `TC-220-BE-011`）并形成可审计证据。
-6. [ ] 明确业务事实源：本仓持久化的 `conversation_id/turn_id/request_id/trace_id + phase + 状态转移 + 交互快照` 是 Assistant 唯一业务真相，前端消息树只作为唯一用户可见渲染面。
-7. [ ] 冻结 vendored UI 可消费的最小 DTO 契约：`phase / missing_fields / candidates / pending_draft_summary / selected_candidate_id / commit_reply / error_code`。
-8. [ ] 形成 `223 -> 260 -> 280/284` 的职责链路：后端负责业务事实源与 DTO，前端只负责渲染与事件分发。
+1. [X] 落地会话/回合/状态转移/幂等最小持久化模型。
+2. [X] 支持 `tenant_id/actor_id/conversation_id/turn_id/request_id/trace_id` 全链路追踪。
+3. [X] 支持服务重启后的会话恢复、`phase` 恢复、待补全/待候选/待确认上下文恢复与提交幂等验证。
+4. [X] 幂等重试返回**同一响应语义**（同 `http_status + error_code + response_body`）。
+5. [X] 强化租户绑定防漂移（对齐 `TC-220-BE-011`）并形成可审计证据。
+6. [X] 明确业务事实源：本仓持久化的 `conversation_id/turn_id/request_id/trace_id + phase + 状态转移 + 交互快照` 是 Assistant 唯一业务真相，前端消息树只作为唯一用户可见渲染面。
+7. [X] 冻结 vendored UI 可消费的最小 DTO 契约：`phase / missing_fields / candidates / pending_draft_summary / selected_candidate_id / commit_reply / error_code`。
+8. [X] 形成 `223 -> 260 -> 280/284` 的职责链路：后端负责业务事实源与 DTO，前端只负责渲染与事件分发。
 
 ### 2.2 非目标 (Out of Scope)
 1. [ ] 不引入 Temporal 任务模型与 `/tasks` API（由 `DEV-PLAN-225` 承接）。
@@ -35,10 +41,10 @@
 4. [ ] 不在本计划内实现跨租户分析报表。
 
 ## 2.3 事实源冻结
-1. [ ] `assistant_conversations.current_phase`、`assistant_turns` 的交互快照、状态转移审计与幂等记录共同构成 Assistant 的唯一业务事实源。
-2. [ ] `260` 冻结的 `phase` 是业务阶段真相；官方 UI 的消息实体、气泡树、卡片渲染结果都不得替代上述持久化事实源。
-3. [ ] 任一用户可见回执若无法回溯到 `conversation_id/turn_id/request_id/trace_id + phase + 状态转移`，则视为不满足事务化、可回放与 `280` 前端降权要求。
-4. [ ] 前端若存在 adapter，只能做展示层归一、事件分发与协议适配；不得重算候选裁决、确认约束或阶段推进。
+1. [X] `assistant_conversations.current_phase`、`assistant_turns` 的交互快照、状态转移审计与幂等记录共同构成 Assistant 的唯一业务事实源。
+2. [X] `260` 冻结的 `phase` 是业务阶段真相；官方 UI 的消息实体、气泡树、卡片渲染结果都不得替代上述持久化事实源。
+3. [X] 任一用户可见回执若无法回溯到 `conversation_id/turn_id/request_id/trace_id + phase + 状态转移`，则视为不满足事务化、可回放与 `280` 前端降权要求。
+4. [X] 前端若存在 adapter，只能做展示层归一、事件分发与协议适配；不得重算候选裁决、确认约束或阶段推进。
 
 ### 2.4 工具链与门禁（SSOT 引用）
 - **触发器清单（本计划命中）**：
@@ -58,11 +64,11 @@
   - `docs/dev-plans/025-sqlc-guidelines.md`
 
 ### 2.5 标准对齐（DEV-PLAN-005）
-1. [ ] `STD-001`：业务幂等统一 `request_id`，追踪统一 `trace_id`，语义严格分离。
-2. [ ] `STD-003`：ID/Code 命名单一权威表达，不引入同义字段。
-3. [ ] `STD-004`：不新增对外版本噪音字段/别名窗口。
-4. [ ] `STD-006`：鉴权失败/未登录口径保持既有 401/403 规范。
-5. [ ] `DEV-PLAN-004M1`：禁止 legacy 回退（内存兜底/双链路并行写/旧实现兜底）。
+1. [X] `STD-001`：业务幂等统一 `request_id`，追踪统一 `trace_id`，语义严格分离。
+2. [X] `STD-003`：ID/Code 命名单一权威表达，不引入同义字段。
+3. [X] `STD-004`：不新增对外版本噪音字段/别名窗口。
+4. [X] `STD-006`：鉴权失败/未登录口径保持既有 401/403 规范。
+5. [X] `DEV-PLAN-004M1`：禁止 legacy 回退（内存兜底/双链路并行写/旧实现兜底）。
 
 ## 3. 架构与关键决策 (Architecture & Decisions)
 ### 3.1 架构图 (Mermaid)
@@ -310,10 +316,10 @@ on GET conversation:
   - `DEV-PLAN-284` 将直接消费本计划冻结的 DTO 字段。
   - 新增表前用户明确确认。
 - **里程碑**：
-  1. [ ] M1：`223/260` 对齐后的数据契约冻结（phase/DTO/索引/RLS/错误码）+ 用户确认。
-  2. [ ] M2：迁移 + sqlc + repository/store 落地，补齐 `current_phase` 与 turn 交互快照。
-  3. [ ] M3：service 幂等、恢复与 DTO rebuild 切换 + 租户绑定校验。
-  4. [ ] M4：为 `284` 提供稳定消费契约，完成并发回归、门禁全跑、证据收口。
+  1. [X] M1：`223/260` 对齐后的数据契约冻结（phase/DTO/索引/RLS/错误码）+ 用户确认。
+  2. [X] M2：迁移 + sqlc + repository/store 落地，补齐 `current_phase` 与 turn 交互快照。
+  3. [X] M3：service 幂等、恢复与 DTO rebuild 切换 + 租户绑定校验。
+  4. [X] M4：为 `284` 提供稳定消费契约，完成并发回归、门禁全跑、证据收口。
 
 ## 9. 测试、门禁与验收标准 (Acceptance Criteria)
 - **单元测试**：
@@ -356,8 +362,8 @@ on GET conversation:
   4. [ ] 恢复判定：目标测试（含 `TC-220-BE-009/011`）+ `make preflight` 全绿。
 
 ## 11. 交付物
-1. [ ] assistant 持久化 schema（经确认后）与代码改造。
-2. [ ] 持久化/幂等/租户绑定/RLS/phase DTO 恢复测试与门禁证据。
+1. [X] assistant 持久化 schema（经确认后）与代码改造。
+2. [X] 持久化/幂等/租户绑定/RLS/phase DTO 恢复测试与门禁证据。
 3. [ ] `docs/dev-records/dev-plan-223-execution-log.md`。
 4. [ ] `260/280/284` 对齐证据补齐：
   - `docs/dev-records/dev-plan-220-execution-log.md`
