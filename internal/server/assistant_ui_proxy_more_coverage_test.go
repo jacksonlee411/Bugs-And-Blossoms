@@ -163,8 +163,11 @@ func TestAssistantUIProxyHandlerBootstrapFailureAndCredentialTruncation(t *testi
 	req = req.WithContext(withPrincipal(withTenant(req.Context(), Tenant{ID: "tenant-1"}), Principal{ID: "principal-1", RoleSlug: "tenant-admin"}))
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
-	if rec.Code != http.StatusOK && rec.Code != http.StatusBadGateway && rec.Code != http.StatusServiceUnavailable {
+	if rec.Code != http.StatusFound {
 		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+	}
+	if loc := rec.Result().Header.Get("Location"); loc != libreChatFormalEntryPrefix {
+		t.Fatalf("location=%q", loc)
 	}
 
 	creds := assistantUIBootstrapCredentialSet(Tenant{ID: strings.Repeat("tenant", 20)}, Principal{ID: strings.Repeat("principal", 20), KratosIdentityID: strings.Repeat("kratos", 20)})

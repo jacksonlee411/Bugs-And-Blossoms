@@ -507,8 +507,13 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, error) {
 	}))
 
 	assetsSub, _ := fs.Sub(embeddedAssets, "assets")
+	libreChatAssetsSub, _ := fs.Sub(embeddedAssets, "assets/librechat-web")
 
 	entrypoint := http.NewServeMux()
+	libreChatWebUI := newLibreChatWebUIHandler(embeddedAssets)
+	entrypoint.Handle(libreChatFormalEntryPrefix, libreChatWebUI)
+	entrypoint.Handle(libreChatFormalEntryPrefix+"/", libreChatWebUI)
+	entrypoint.Handle(libreChatStaticPrefix+"/", http.StripPrefix(libreChatStaticPrefix+"/", http.FileServer(http.FS(libreChatAssetsSub))))
 	entrypoint.Handle("/app", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		serveWebMUIIndex(w, r, embeddedAssets)
 	}))
@@ -523,6 +528,7 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, error) {
 	guarded := withTenantAndSession(classifier, tenancyResolver, principals, sessions, withAuthz(classifier, authorizer, entrypoint))
 
 	mux := http.NewServeMux()
+	mux.Handle(libreChatStaticPrefix+"/", guarded)
 	mux.Handle("/assets/", http.StripPrefix("/assets/", http.FileServer(http.FS(assetsSub))))
 	mux.Handle("/", guarded)
 
@@ -569,7 +575,7 @@ func withTenantAndSession(classifier *routing.Classifier, tenants TenancyResolve
 			rc = classifier.Classify(path)
 		}
 
-		if path == "/health" || path == "/healthz" || path == "/assets" || pathHasPrefixSegment(path, "/assets") {
+		if path == "/health" || path == "/healthz" || path == "/assets" || (pathHasPrefixSegment(path, "/assets") && !pathHasPrefixSegment(path, libreChatStaticPrefix)) {
 			next.ServeHTTP(w, r)
 			return
 		}
@@ -586,7 +592,7 @@ func withTenantAndSession(classifier *routing.Classifier, tenants TenancyResolve
 		}
 		r = r.WithContext(withTenant(r.Context(), t))
 
-		// DEV-PLAN-103/103A/235: protected tenant UI lives under /app/** and /assistant-ui/**.
+		// DEV-PLAN-103/103A/235/283: protected tenant UI lives under /app/**, /assets/librechat-web/** and /assistant-ui/**.
 		// For other UI paths (e.g. old URLs like /login, /org/*), do not redirect-to-login alias;
 		// let the router return 404 instead.
 		if rc == routing.RouteClassUI && path != "/" && !isProtectedTenantUIPath(path) {
@@ -652,5 +658,5 @@ func pathHasPrefixSegment(path, prefix string) bool {
 }
 
 func isProtectedTenantUIPath(path string) bool {
-	return pathHasPrefixSegment(path, "/app") || pathHasPrefixSegment(path, "/assistant-ui")
+	return pathHasPrefixSegment(path, "/app") || pathHasPrefixSegment(path, libreChatStaticPrefix) || pathHasPrefixSegment(path, "/assistant-ui")
 }

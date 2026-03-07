@@ -10,7 +10,6 @@ import (
 	"io"
 	"log"
 	"net/http"
-	"net/http/httputil"
 	"net/url"
 	"regexp"
 	"strconv"
@@ -51,31 +50,6 @@ type assistantUIBootstrapCredentials struct {
 }
 
 func newAssistantUIProxyHandler() http.Handler {
-	targetRaw := assistantRuntimeDefaultUpstreamURL()
-	targetURL, err := url.Parse(targetRaw)
-	if err != nil || targetURL.Scheme == "" || targetURL.Host == "" {
-		return assistantUIUnavailableHandler("LIBRECHAT_UPSTREAM is invalid")
-	}
-
-	proxy := httputil.NewSingleHostReverseProxy(targetURL)
-	basePath := strings.TrimSuffix(targetURL.Path, "/")
-	proxyDirector := proxy.Director
-	proxy.Director = func(req *http.Request) {
-		proxyDirector(req)
-		filterAssistantUIProxyRequestHeaders(req)
-		proxyPath := strings.TrimPrefix(req.URL.Path, "/assistant-ui")
-		if proxyPath == "" {
-			proxyPath = "/"
-		}
-		req.URL.Path = joinProxyPath(basePath, proxyPath)
-		req.Host = targetURL.Host
-		req.Header.Set("X-Forwarded-Prefix", "/assistant-ui")
-	}
-	proxy.ModifyResponse = modifyAssistantUIProxyResponse
-	proxy.ErrorHandler = func(w http.ResponseWriter, r *http.Request, _ error) {
-		serveAssistantUIUnavailableResponse(w, r, http.StatusBadGateway, "upstream_unreachable")
-	}
-
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if !assistantUIProxyMethodAllowed(r.Method) {
 			writeAssistantUIProxyError(
@@ -99,8 +73,7 @@ func newAssistantUIProxyHandler() http.Handler {
 			)
 			return
 		}
-		proxyPath := strings.TrimPrefix(r.URL.Path, "/assistant-ui")
-		if assistantUIProxyBypassPathForbidden(proxyPath) {
+		if proxyPath := strings.TrimPrefix(r.URL.Path, "/assistant-ui"); assistantUIProxyBypassPathForbidden(proxyPath) {
 			writeAssistantUIProxyError(
 				w,
 				r,
@@ -111,18 +84,7 @@ func newAssistantUIProxyHandler() http.Handler {
 			)
 			return
 		}
-		proxyReq, bootstrapCookies, err := assistantUIProxyBootstrapRequest(r, targetURL)
-		if err != nil {
-			assistantUIProxyLog(r, "upstream_auth_bootstrap_failed:"+err.Error())
-			serveAssistantUIUnavailableResponse(w, r, http.StatusBadGateway, "upstream_auth_bootstrap_failed")
-			return
-		}
-		if assistantUIProxyIsLoginPath(proxyReq) && len(bootstrapCookies) > 0 {
-			assistantUIWriteProxyResponseCookies(w, bootstrapCookies)
-			http.Redirect(w, proxyReq, "/assistant-ui", http.StatusFound)
-			return
-		}
-		proxy.ServeHTTP(w, proxyReq)
+		http.Redirect(w, r, libreChatFormalEntryPrefix, http.StatusFound)
 	})
 }
 
@@ -601,10 +563,8 @@ func joinProxyPath(base string, suffix string) string {
 }
 
 var assistantUIProxyAllowedMethods = map[string]struct{}{
-	http.MethodGet:     {},
-	http.MethodHead:    {},
-	http.MethodPost:    {},
-	http.MethodOptions: {},
+	http.MethodGet:  {},
+	http.MethodHead: {},
 }
 
 func assistantUIProxyMethodAllowed(method string) bool {
@@ -615,9 +575,7 @@ func assistantUIProxyMethodAllowed(method string) bool {
 var assistantUIProxyAllowedRequestHeaders = map[string]struct{}{
 	"Accept":          {},
 	"Accept-Language": {},
-	"Authorization":   {},
 	"Cache-Control":   {},
-	"Cookie":          {},
 	"Content-Type":    {},
 	"Origin":          {},
 	"Referer":         {},
@@ -632,7 +590,6 @@ var assistantUIProxyAllowedAuthCookies = map[string]struct{}{
 
 func filterAssistantUIProxyRequestHeaders(req *http.Request) {
 	cookieHeader := sanitizeAssistantUIProxyRequestCookieHeader(req)
-	authHeader := sanitizeAssistantUIProxyAuthorizationHeader(req)
 	for key := range req.Header {
 		if _, allowed := assistantUIProxyAllowedRequestHeaders[key]; allowed {
 			continue
@@ -644,11 +601,7 @@ func filterAssistantUIProxyRequestHeaders(req *http.Request) {
 	} else {
 		req.Header.Set("Cookie", cookieHeader)
 	}
-	if authHeader == "" {
-		req.Header.Del("Authorization")
-	} else {
-		req.Header.Set("Authorization", authHeader)
-	}
+	req.Header.Del("Authorization")
 	req.Header.Del("Accept-Encoding")
 }
 
@@ -668,24 +621,6 @@ func sanitizeAssistantUIProxyRequestCookieHeader(req *http.Request) string {
 		filtered = append(filtered, (&http.Cookie{Name: cookie.Name, Value: cookie.Value}).String())
 	}
 	return strings.Join(filtered, "; ")
-}
-
-func sanitizeAssistantUIProxyAuthorizationHeader(req *http.Request) string {
-	if req == nil {
-		return ""
-	}
-	raw := strings.TrimSpace(req.Header.Get("Authorization"))
-	if raw == "" {
-		return ""
-	}
-	parts := strings.Fields(raw)
-	if len(parts) != 2 {
-		return ""
-	}
-	if !strings.EqualFold(parts[0], "Bearer") {
-		return ""
-	}
-	return "Bearer " + parts[1]
 }
 
 func modifyAssistantUIProxyResponse(resp *http.Response) error {

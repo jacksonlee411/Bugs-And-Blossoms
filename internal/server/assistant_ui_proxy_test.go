@@ -24,36 +24,23 @@ func TestAssistantUIProxyHandlerRejectsInvalidPath(t *testing.T) {
 }
 
 func TestAssistantUIProxyBridgePathIsNoLongerSpecialCased(t *testing.T) {
-	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/bridge.js" {
-			t.Fatalf("unexpected path=%s", r.URL.Path)
-		}
-		w.Header().Set("Content-Type", "application/javascript")
-		_, _ = io.WriteString(w, "window.__upstreamBridgeMarker = true;")
-	}))
-	defer upstream.Close()
-
-	t.Setenv("LIBRECHAT_UPSTREAM", upstream.URL)
 	h := newAssistantUIProxyHandler()
 	req := httptest.NewRequest(http.MethodGet, "http://localhost/assistant-ui/bridge.js", nil)
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
-	if rec.Code != http.StatusOK {
+	if rec.Code != http.StatusFound {
 		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
 	}
-	if !strings.Contains(rec.Body.String(), "__upstreamBridgeMarker") {
-		t.Fatalf("expected upstream body, got=%q", rec.Body.String())
-	}
-	if strings.Contains(rec.Body.String(), "assistant.prompt.sync") {
-		t.Fatalf("bridge helper should not be injected anymore, got=%q", rec.Body.String())
+	if loc := rec.Result().Header.Get("Location"); loc != libreChatFormalEntryPrefix {
+		t.Fatalf("location=%q", loc)
 	}
 }
 
 func TestModifyAssistantUIProxyResponseOnlyFiltersCookies(t *testing.T) {
 	html := `<!doctype html><html><head><base href="/" /></head><body>x</body></html>`
 	resp := &http.Response{
-		Header: make(http.Header),
-		Body:   io.NopCloser(strings.NewReader(html)),
+		Header:  make(http.Header),
+		Body:    io.NopCloser(strings.NewReader(html)),
 		Request: httptest.NewRequest(http.MethodGet, "http://localhost/assistant-ui", nil),
 	}
 	resp.Header.Set("Content-Type", "text/html; charset=utf-8")

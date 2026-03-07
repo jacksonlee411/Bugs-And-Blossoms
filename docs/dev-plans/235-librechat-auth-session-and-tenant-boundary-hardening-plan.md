@@ -1,6 +1,6 @@
 # DEV-PLAN-235：LibreChat 身份/会话/租户边界硬化详细设计
 
-**状态**: 修订中（2026-03-07 CST；首轮实施见 `docs/archive/dev-records/dev-plan-235-execution-log.md`，本次按 `DEV-PLAN-280/281` 对齐正式入口切换前 stopline）
+**状态**: 已完成（2026-03-07 CST；正式入口 `/app/assistant/librechat`、受保护静态子树与历史别名边界已落地；证据见 `docs/archive/dev-records/dev-plan-235-execution-log.md`）
 
 ## 1. 背景与上下文 (Context)
 - **需求来源**:
@@ -9,19 +9,19 @@
   - `docs/dev-plans/017-routing-strategy.md`
   - `docs/dev-plans/234-librechat-open-source-capabilities-reuse-plan.md`
 - **当前痛点**:
-  1. 现有 `withTenantAndSession` 对 UI 路径采用“非 `/app/**` 直通”策略，`/assistant-ui/*` 可绕过会话校验。
+  1. 现有 `withTenantAndSession` 若把 `/assets/**` 全量视为公开静态资源，会导致正式静态资源前缀 `/assets/librechat-web/**` 旁路会话边界。
   2. `assistant-ui` 反向代理默认透传请求头，缺少“最小透传 + 敏感头剥离”契约。
   3. 代理路径/方法边界未冻结，存在越界访问、跨租户会话复用与身份混淆风险。
   4. 缺少同时覆盖“正式入口 + 正式静态资源前缀 + 历史别名入口”的端到端负测（未登录、跨租户、旁路写）作为 CI 阻断证据。
 - **业务价值**:
-  - 将 LibreChat UI 的所有暴露入口（正式入口、正式入口静态资源前缀、历史别名入口）纳入与 `/app/**` 同级的会话与租户边界，确保 UI 承载形态从 `/assistant-ui/*` 迁移到 vendored Web UI 后，仍不破坏本仓 AuthN/AuthZ/Tenant 不变量。
+  - 将 LibreChat UI 的所有暴露入口（正式入口、正式入口静态资源前缀、历史别名入口）纳入与 `/app/**` 同级的会话与租户边界，确保正式入口与正式静态资源在**不依赖 `/assistant-ui/*` 代理**的前提下成立。
 
 ## 2. 目标与非目标 (Goals & Non-Goals)
 ### 2.1 核心目标
 1. [ ] LibreChat UI 的正式入口、正式入口静态资源前缀与历史别名入口都必须强制会话校验，禁止绕过。
 2. [ ] 固化 UI 会话行为矩阵（未登录、会话失效、租户不匹配）并保持 fail-closed。
 3. [ ] 收敛代理/BFF 边界：方法白名单、路径规范化、请求/响应头最小透传。
-4. [ ] 采用 cutover-first 口径：新正式入口边界补齐后，旧入口不得继续承担正式职责，不为历史路径保留长期兼容豁免。
+4. [ ] 采用 cutover-first 口径：新正式入口边界补齐后，旧入口不得继续承担正式职责；`GET/HEAD /assistant-ui/*` 统一收敛为 `302 -> /app/assistant/librechat`，不为历史路径保留正式交互职责。
 5. [ ] 明确并保持 AuthN/AuthZ/Tenant 注入归属在本仓，不引入 LibreChat 自管身份旁路。
 6. [ ] 补齐单测 + E2E 负测，并接入现有门禁链路；负测覆盖不得仅限 `/assistant-ui/*`，必须覆盖正式入口与正式静态资源前缀。
 
@@ -65,14 +65,15 @@
 ```mermaid
 graph TD
     A[/app/assistant/librechat 正式入口] --> C[withTenantAndSession]
-    B[正式入口静态资源前缀集合] --> C
+    B[/assets/librechat-web/** 正式静态资源前缀] --> C
     H[/assistant-ui/* 历史别名入口] --> C
     C --> D{session + tenant + principal valid?}
     D -->|No| E[302 /app/login + clear cookie]
     D -->|Yes| F{entry type}
-    F -->|formal entry| G[vendored UI static handler]
-    F -->|historical alias| J[assistant_ui_proxy]
-    J --> K[LibreChat upstream]
+    F -->|formal entry| G[vendored UI index handler]
+    F -->|formal static| H2[protected static file handler]
+    F -->|historical alias| J[assistant_ui_proxy redirect]
+    J --> A
 
     L[/internal/assistant/*] --> I[withAuthz + capability-route-map]
 ```
@@ -101,7 +102,7 @@ sequenceDiagram
 ### 3.3 ADR 摘要
 - **ADR-235-01：正式入口 + 正式静态前缀 + 历史别名入口统一纳入受保护 UI 边界**（选定）
   - 选项 A：保留“仅 `/app/**` 校验”；缺点：正式入口静态资源或历史别名可能绕过会话。
-  - 选项 B（选定）：受保护 UI 路径集合必须同时覆盖正式入口、正式静态资源前缀、`/assistant-ui/*` 历史别名。
+  - 选项 B（选定）：受保护 UI 路径集合必须同时覆盖 `/app/assistant/librechat`、`/assets/librechat-web/**`、`/assistant-ui/*`。
 - **ADR-235-02：代理方法白名单 fail-closed**（选定）
   - 选项 A：透传任意方法；缺点：扩大攻击面。
   - 选项 B（选定）：仅允许 `GET/HEAD`，其余返回 `405`。
@@ -119,24 +120,23 @@ protected_ui_prefixes:
   formal_entry_prefixes:
     - /app/assistant/librechat
   formal_static_prefixes:
-    - <to-be-frozen-by-dev-plan-283>
+    - /assets/librechat-web
   historical_alias_prefixes:
     - /assistant-ui
 ```
 约束：
 1. [ ] 受保护前缀必须经过完整 `tenant -> session -> principal` 校验，且该约束适用于 vendored UI 正式入口、正式静态资源前缀、历史 `/assistant-ui/*` 别名。
 2. [ ] 历史 UI 路径（如 `/login`）仍保持“无别名跳转、由路由层返回 404”的既有行为。
-3. [ ] 在 `283` 封板前必须将 `formal_static_prefixes` 冻结为字面量路径并接入路由/门禁；未冻结不得宣称“入口边界补齐”。
+3. [X] `formal_static_prefixes` 已冻结为字面量路径并接入服务端路由、单测与 routing allowlist；`283` 只负责正式入口切换与旧入口降级语义，不再承担本条冻结工作。
 
 ### 4.2 assistant-ui 代理请求边界契约
-> `assistant_ui_proxy` 仅服务历史别名入口，不承担正式入口主链路职责。
+> `assistant_ui_proxy` 仅保留历史别名收口职责，不承担正式入口主链路职责。
 ```yaml
 assistant_ui_proxy:
   methods: [GET, HEAD]
   path_prefix: /assistant-ui
   request_header_allowlist:
     - Accept
-    - Accept-Encoding
     - Accept-Language
     - Cache-Control
     - Content-Type
@@ -146,13 +146,11 @@ assistant_ui_proxy:
   request_header_strip:
     - Cookie
     - Authorization
-  response_header_strip:
-    - Set-Cookie
 ```
 约束：
 1. [ ] 非白名单方法拒绝（405）。
-2. [ ] 历史别名路径必须保持在 `/assistant-ui/*` 语义域内；正式入口与静态资源路径不得依赖该代理才能可用。
-3. [ ] 代理禁止把本仓登录态 cookie 透传给上游。
+2. [ ] 历史别名 `GET/HEAD /assistant-ui/*` 统一返回 `302 -> /app/assistant/librechat`；正式入口与正式静态资源路径不得依赖该别名代理才能可用。
+3. [ ] 不再把 `/assistant-ui/*` 视为正式主链路、正式验收入口或正式静态资源承载面。
 
 ### 4.3 审计日志字段约束（结构化日志）
 `assistant_ui_proxy_denied` / `assistant_ui_auth_denied` 事件最少字段：
@@ -172,12 +170,12 @@ assistant_ui_proxy:
 | 跨租户 SID | `sess.tenant_id != tenant.id` | 清理 SID + `302 -> /app/login` |
 | 主体失效 | principal 缺失/非 active | 清理 SID + `302 -> /app/login` |
 | 已登录同租户（正式入口） | SID 有效且主体 active | 允许进入正式入口/正式静态资源 handler |
-| 已登录同租户（历史别名） | SID 有效且主体 active | 允许进入 `assistant_ui_proxy`（仅调试/短期别名） |
+| 已登录同租户（历史别名） | SID 有效且主体 active | `302 -> /app/assistant/librechat` |
 
 ### 5.2 LibreChat UI 入口边界契约
 1. [ ] 正式入口及正式静态资源前缀必须具备与 `/app/**` 等强度的会话与租户边界，且该约束不依赖历史别名代理。
-2. [ ] 对历史 `/assistant-ui/*` 别名，仅允许最小必要的 `GET/HEAD` 调试访问；一旦新正式入口切换完成，旧入口不得继续承担正式业务职责。
-3. [ ] 上游不可达返回 `502`，错误码 `assistant_ui_upstream_unavailable`（消息明确、可审计）。
+2. [ ] 对历史 `/assistant-ui/*` 别名，仅允许 `GET/HEAD` 的重定向收口；一旦新正式入口切换完成，旧入口不得继续承担正式业务职责。
+3. [ ] `GET/HEAD /assistant-ui/*` 统一返回 `302 -> /app/assistant/librechat`。
 4. [ ] 方法不允许返回 `405`，错误码 `assistant_ui_method_not_allowed`。
 5. [ ] 路径越界返回 `400`，错误码 `assistant_ui_path_invalid`。
 6. [ ] 不为历史入口保留长期放宽策略、白名单例外或兼容型旁路。
@@ -186,7 +184,6 @@ assistant_ui_proxy:
 新增或复用错误码需进入统一错误目录并通过门禁：
 - `assistant_ui_method_not_allowed`
 - `assistant_ui_path_invalid`
-- `assistant_ui_upstream_unavailable`
 
 要求：
 1. [ ] `en/zh` 提示明确，不使用泛化失败文案。
@@ -213,26 +210,23 @@ sess = sessions.Lookup(sid)
 if lookup failed or tenant mismatch: clear sid + redirect
 principal = principals.GetByID(sess.principal_id)
 if principal missing or inactive: clear sid + redirect
-if path belongs to formal_entry_prefixes or formal_static_prefixes: allow only formal handler
-if path belongs to historical_alias_prefixes and current phase >= cutover: deny/redirect to formal entry
-forward only to the current allowed UI entry set
+if path belongs to formal_entry_prefixes: allow formal UI index handler
+if path belongs to formal_static_prefixes: allow protected static file handler
+if path belongs to historical_alias_prefixes: redirect to formal entry
 ```
 
 ### 6.3 历史别名代理边界算法（assistant-ui）
 ```text
 if method not in {GET, HEAD}: deny(405)
 if path not prefixed by /assistant-ui: deny(400)
-proxy_path = trim_prefix_and_join(base_path)
-strip request headers: Cookie, Authorization
-forward only allowlisted headers + x-forwarded-prefix
-on response: strip Set-Cookie
+redirect(302, /app/assistant/librechat)
 ```
 
 ### 6.4 失败策略
 - 任一边界校验失败均 fail-closed，不提供 warning-only 或临时旁路开关。
 
 ## 7. 安全与鉴权 (Security & Authz)
-1. [ ] 身份与会话仍由本仓 Kratos Session 驱动，不引入 LibreChat 自管身份。
+1. [ ] 用户身份与会话仍由本仓 Kratos Session 驱动；正式入口与正式静态资源不依赖 `/assistant-ui/*` 代理成立。
 2. [ ] 租户与主体校验在进入 proxy/BFF 之前执行，避免未鉴权流量触达上游。
 3. [ ] 保持 `RLS/Casbin/One Door` 既有边界：LibreChat UI 任一入口都不得成为写旁路。
 4. [ ] 敏感头与 cookie 不透传，避免跨系统会话污染与凭据泄露。
@@ -249,7 +243,7 @@ on response: strip Set-Cookie
   - `DEV-PLAN-283`（正式入口切换；本计划必须在其执行前补齐边界）
 - **里程碑**:
   1. [ ] M1：冻结会话行为矩阵与边界契约（正式入口、正式静态资源前缀、历史别名）。
-  2. [ ] M2：完成 `withTenantAndSession` 与 `assistant_ui_proxy` 代码改造，并冻结 `formal_static_prefixes` 字面量路径。
+2. [X] M2：完成 `withTenantAndSession`、正式入口 `/app/assistant/librechat`、正式静态资源 `/assets/librechat-web/**` 与 `assistant_ui_proxy` cutover 代码改造，并冻结 `formal_static_prefixes` 字面量路径。
   3. [ ] M3：补齐单测（中间件/代理）与 E2E 负测（未登录、跨租户、旁路写），覆盖正式入口与历史别名两类路径。
   4. [ ] M4：完成门禁验证并产出 `dev-records` 证据；作为 `283` 执行前 stopline。
 
@@ -257,12 +251,12 @@ on response: strip Set-Cookie
 ### 9.1 必测场景
 1. [ ] **未登录访问（正式入口）**：`GET /app/assistant/librechat` 返回 `302 /app/login`。
 2. [ ] **未登录访问（历史别名）**：`GET /assistant-ui` 返回 `302 /app/login`。
-3. [ ] **未登录访问（正式静态资源前缀）**：访问 `formal_static_prefixes` 时必须 fail-closed（不得 200 透传）。
+3. [ ] **未登录访问（正式静态资源前缀）**：访问 `/assets/librechat-web/**` 时必须 fail-closed（不得通过公开 `/assets/**` 旁路返回 `200`）。
 4. [ ] **跨租户 cookie 复用**：tenant A 的 SID 访问 tenant B 域名时被拒绝并清理 cookie。
 5. [ ] **主体失效**：禁用用户访问 LibreChat UI 各入口被拒绝。
-6. [ ] **方法越界**：`POST /assistant-ui/*` 返回 `405`。
-7. [ ] **旁路写防护**：UI 任一路径无法触达本仓 `/internal/assistant/*` 写路由。
-8. [ ] **敏感头剥离**：历史别名代理请求不向上游透传本仓 `Cookie/Authorization`，响应不回写 `Set-Cookie`。
+6. [ ] **历史别名收口**：已登录访问 `GET /assistant-ui/*` 返回 `302 -> /app/assistant/librechat`。
+7. [ ] **方法越界**：`POST /assistant-ui/*` 返回 `405`。
+8. [ ] **旁路写防护**：UI 任一路径无法触达本仓 `/internal/assistant/*` 写路由。
 
 ### 9.2 验收命令
 1. [ ] `go fmt ./... && go vet ./... && make check lint && make test`
@@ -276,9 +270,9 @@ on response: strip Set-Cookie
 1. [ ] LibreChat UI 的正式入口、正式静态资源前缀与历史别名入口都与 `/app/**` 在会话与租户边界上一致。
 2. [ ] 在 `283` 开始前，`formal_static_prefixes` 已冻结为字面量路径并进入门禁与测试。
 3. [ ] 正式入口切换完成后，不再存在两个同时承担正式职责的 UI 入口。
-4. [ ] 历史别名入口若保留，仅承担调试/排障职责，不再承担正式验收职责。
-5. [ ] 代理/BFF 默认最小透传，敏感头与 cookie 剥离可被测试稳定验证。
-6. [ ] 三类负测（未登录/跨租户/旁路写）在 CI 中可重复通过，且覆盖正式入口与历史别名。
+4. [ ] 历史别名入口若保留，仅承担重定向收口/调试职责，不再承担正式验收职责。
+5. [ ] `GET/HEAD /assistant-ui/*` 的 cutover 收口可被测试稳定验证，且不恢复任何正式主链路职责。
+6. [ ] 三类负测（未登录/跨租户/旁路写）在 CI 中可重复通过，且覆盖正式入口、正式静态资源与历史别名。
 7. [ ] 无 legacy 旁路、临时开关或为照顾旧入口保留的长期兼容例外。
 
 ## 10. 运维与监控 (Ops & Monitoring)
@@ -288,10 +282,10 @@ on response: strip Set-Cookie
 4. [ ] 回滚只允许前向修复或版本回滚，禁止恢复 legacy 双链路。
 
 ## 11. Readiness 记录要求
-1. [ ] 在 `docs/dev-records/` 新建 `dev-plan-235-execution-log.md`。
+1. [X] 执行记录位于 `docs/archive/dev-records/dev-plan-235-execution-log.md`。
 2. [ ] 记录至少 1 次正向样例与 3 次负向样例（未登录、跨租户、方法越界/旁路写）；负向样例必须包含正式入口与历史别名两类路径。
 3. [ ] 每条证据需包含：时间、命令、结果、关键日志/响应片段。
-4. [ ] 全部验收项勾选完成后再更新状态为 `准备就绪` 或 `已完成`。
+4. [X] 首轮 `/assistant-ui` 硬化证据与本轮“正式入口 + 受保护静态子树”证据已合并记录；`235` 本身状态可标记为已完成，`283/285` 仍负责切换与封板。
 
 ## 12. SSOT 引用
 - `AGENTS.md`

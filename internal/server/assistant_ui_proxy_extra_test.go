@@ -62,6 +62,22 @@ func TestAssistantUIProxyHelperCoverage(t *testing.T) {
 	if !assistantUIProxyLooksLikeHTML([]byte("<html><body>x</body></html>")) || assistantUIProxyLooksLikeHTML([]byte("not html")) {
 		t.Fatal("unexpected html detection")
 	}
+
+	headerReq := httptest.NewRequest(http.MethodGet, "/assistant-ui", nil)
+	headerReq.Header.Set("Authorization", "Bearer secret")
+	headerReq.Header.Set("X-Extra", "drop-me")
+	headerReq.AddCookie(&http.Cookie{Name: sidCookieName, Value: "session-cookie-must-not-forward"})
+	headerReq.AddCookie(&http.Cookie{Name: "refreshToken", Value: "rf"})
+	filterAssistantUIProxyRequestHeaders(headerReq)
+	if got := headerReq.Header.Get("Authorization"); got != "" {
+		t.Fatalf("authorization should be stripped, got=%q", got)
+	}
+	if got := headerReq.Header.Get("X-Extra"); got != "" {
+		t.Fatalf("unexpected passthrough header=%q", got)
+	}
+	if got := headerReq.Header.Get("Cookie"); strings.Contains(got, sidCookieName+"=") || !strings.Contains(got, "refreshToken=rf") {
+		t.Fatalf("cookie header=%q", got)
+	}
 }
 
 func TestAssistantUIRefreshUpstreamSessionBranches(t *testing.T) {

@@ -23,6 +23,33 @@ entrypoints:
       - path: /app/assistant/models
         methods: [GET]
         route_class: ui
+      - path: /app/assistant/librechat
+        methods: [GET]
+        route_class: ui
+      - path: /app/assistant/librechat/{path}
+        methods: [GET]
+        route_class: ui
+      - path: /assets/librechat-web/{path}
+        methods: [GET]
+        route_class: static
+      - path: /assets/librechat-web/assets/{path}
+        methods: [GET]
+        route_class: static
+      - path: /assets/librechat-web/manifest.webmanifest
+        methods: [GET]
+        route_class: static
+      - path: /assets/librechat-web/registerSW.js
+        methods: [GET]
+        route_class: static
+      - path: /assets/librechat-web/sw.js
+        methods: [GET]
+        route_class: static
+      - path: /assets/librechat-web/workbox-4c320e2c.js
+        methods: [GET]
+        route_class: static
+      - path: /assets/librechat-web/robots.txt
+        methods: [GET]
+        route_class: static
       - path: /assistant-ui
         methods: [GET]
         route_class: ui
