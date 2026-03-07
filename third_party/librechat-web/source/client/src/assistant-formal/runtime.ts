@@ -46,6 +46,8 @@ export interface AssistantFormalTurn {
   turn_id: string;
   state: string;
   phase?: string;
+  request_id?: string;
+  trace_id?: string;
   pending_draft_summary?: string;
   missing_fields?: string[];
   candidates?: AssistantFormalCandidate[];
@@ -65,6 +67,11 @@ export interface AssistantFormalPayload {
   kind: 'assistant_formal';
   backendConversationId: string;
   turnId: string;
+  requestId: string;
+  traceId: string;
+  messageId: string;
+  frontendUserMessageId?: string;
+  bindingKey: string;
   state: string;
   phase?: string;
   pendingDraftSummary?: string;
@@ -135,15 +142,41 @@ export function clearStoredAssistantFormalConversationId() {
   window.localStorage.removeItem(assistantFormalConversationStorageKey);
 }
 
+export function assistantFormalBindingKey(input: {
+  backendConversationId?: string;
+  turnId?: string;
+  requestId?: string;
+}) {
+  const conversationId = input.backendConversationId?.trim() ?? '';
+  const turnId = input.turnId?.trim() ?? '';
+  const requestId = input.requestId?.trim() ?? '';
+  return [conversationId, turnId, requestId].join('::');
+}
+
 export function buildAssistantFormalPayload(
   conversation: AssistantFormalConversation,
   turn: AssistantFormalTurn,
   reply?: AssistantFormalReply,
+  options?: {
+    messageId?: string;
+    frontendUserMessageId?: string;
+  },
 ): AssistantFormalPayload {
+  const messageId = options?.messageId?.trim() ?? '';
+  const requestId = turn.request_id?.trim() ?? '';
   return {
     kind: 'assistant_formal',
     backendConversationId: conversation.conversation_id,
     turnId: turn.turn_id,
+    requestId,
+    traceId: turn.trace_id?.trim() ?? '',
+    messageId,
+    frontendUserMessageId: options?.frontendUserMessageId?.trim() ?? '',
+    bindingKey: assistantFormalBindingKey({
+      backendConversationId: conversation.conversation_id,
+      turnId: turn.turn_id,
+      requestId,
+    }),
     state: turn.state,
     phase: turn.phase,
     pendingDraftSummary: turn.pending_draft_summary,
@@ -167,10 +200,24 @@ export function buildAssistantFormalFailurePayload(
     (detectAssistantFormalLocale() === 'en'
       ? 'The request could not be completed. Please adjust the input and try again.'
       : '本次请求未能完成，请根据提示调整后重试。');
+  const backendConversationId = basePayload.backendConversationId?.trim() ?? '';
+  const turnId = basePayload.turnId?.trim() ?? '';
+  const requestId = basePayload.requestId?.trim() ?? '';
   return {
     kind: 'assistant_formal',
-    backendConversationId: basePayload.backendConversationId ?? '',
-    turnId: basePayload.turnId ?? '',
+    backendConversationId,
+    turnId,
+    requestId,
+    traceId: basePayload.traceId ?? '',
+    messageId: basePayload.messageId ?? '',
+    frontendUserMessageId: basePayload.frontendUserMessageId ?? '',
+    bindingKey:
+      basePayload.bindingKey ??
+      assistantFormalBindingKey({
+        backendConversationId,
+        turnId,
+        requestId,
+      }),
     state: basePayload.state ?? 'failed',
     phase: basePayload.phase,
     pendingDraftSummary: basePayload.pendingDraftSummary,
@@ -184,8 +231,33 @@ export function buildAssistantFormalFailurePayload(
       text: fallbackText,
       kind: 'error',
       stage: 'commit_failed',
-      conversation_id: basePayload.backendConversationId ?? '',
-      turn_id: basePayload.turnId ?? '',
+      conversation_id: backendConversationId,
+      turn_id: turnId,
+    },
+  };
+}
+
+export function buildAssistantFormalPendingPayload(input: {
+  messageId: string;
+  frontendUserMessageId?: string;
+}) {
+  const messageId = input.messageId.trim();
+  return {
+    kind: 'assistant_formal' as const,
+    backendConversationId: '',
+    turnId: '',
+    requestId: '',
+    traceId: '',
+    messageId,
+    frontendUserMessageId: input.frontendUserMessageId?.trim() ?? '',
+    bindingKey: assistantFormalBindingKey({}),
+    state: 'pending',
+    missingFields: [],
+    candidates: [],
+    reply: {
+      text: detectAssistantFormalLocale() === 'en' ? 'Processing...' : '处理中...',
+      kind: 'info',
+      stage: 'draft',
     },
   };
 }
@@ -236,6 +308,57 @@ export function patchAssistantFormalMessage(
       ...message,
       ...patch,
     } as TMessage;
+  });
+}
+
+function assistantFormalMessageMatches(
+  message: TMessage,
+  selector: {
+    messageId?: string;
+    bindingKey?: string;
+  },
+) {
+  if (selector.messageId && message.messageId === selector.messageId) {
+    return true;
+  }
+  if (!isAssistantFormalMessage(message) || !selector.bindingKey) {
+    return false;
+  }
+  return message.assistantFormalPayload?.bindingKey === selector.bindingKey;
+}
+
+export function upsertAssistantFormalMessage(
+  messages: TMessage[],
+  selector: {
+    messageId?: string;
+    bindingKey?: string;
+  },
+  patch: Partial<AssistantFormalMessage>,
+): TMessage[] {
+  const next = [...messages];
+  const targetIndex = next.findIndex((message) => assistantFormalMessageMatches(message, selector));
+  if (targetIndex === -1) {
+    return next;
+  }
+  next[targetIndex] = {
+    ...next[targetIndex],
+    ...patch,
+  } as TMessage;
+
+  const resolvedBindingKey =
+    selector.bindingKey ||
+    (isAssistantFormalMessage(next[targetIndex])
+      ? next[targetIndex].assistantFormalPayload?.bindingKey
+      : undefined);
+  if (!resolvedBindingKey) {
+    return next;
+  }
+
+  return next.filter((message, index) => {
+    if (index === targetIndex || !isAssistantFormalMessage(message)) {
+      return true;
+    }
+    return message.assistantFormalPayload?.bindingKey !== resolvedBindingKey;
   });
 }
 

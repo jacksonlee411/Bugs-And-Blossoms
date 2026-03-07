@@ -7,8 +7,8 @@ import {
   buildAssistantFormalFailurePayload,
   buildAssistantFormalPayload,
   latestAssistantFormalTurn,
-  patchAssistantFormalMessage,
   resolveAssistantFormalText,
+  upsertAssistantFormalMessage,
 } from '~/assistant-formal/runtime';
 import {
   confirmAssistantFormalTurn,
@@ -26,10 +26,17 @@ function AssistantFormalMessage({ message }: { message: AssistantFormalMessageTy
   const patchMessage = useCallback(
     (patch: Partial<AssistantFormalMessageType>) => {
       setMessages(
-        patchAssistantFormalMessage(getMessages() ?? [], message.messageId, patch),
+        upsertAssistantFormalMessage(
+          getMessages() ?? [],
+          {
+            messageId: message.messageId,
+            bindingKey: payload?.bindingKey,
+          },
+          patch,
+        ),
       );
     },
-    [getMessages, message.messageId, setMessages],
+    [getMessages, message.messageId, payload?.bindingKey, setMessages],
   );
 
   const runMutation = useCallback(
@@ -39,6 +46,7 @@ function AssistantFormalMessage({ message }: { message: AssistantFormalMessageTy
       }
       setBusy(true);
       patchMessage({ assistantFormalPending: true });
+      let currentPayload = payload;
       try {
         const conversation =
           mode === 'confirm'
@@ -52,8 +60,17 @@ function AssistantFormalMessage({ message }: { message: AssistantFormalMessageTy
         if (!turn) {
           throw new Error('assistant turn missing');
         }
-        const reply = await renderAssistantFormalReply(conversation.conversation_id, turn.turn_id, 'zh');
-        const nextPayload = buildAssistantFormalPayload(conversation, turn, reply);
+        let nextPayload = buildAssistantFormalPayload(conversation, turn, turn.reply_nlg, {
+          messageId: payload.messageId || message.messageId,
+          frontendUserMessageId: payload.frontendUserMessageId,
+        });
+        currentPayload = nextPayload;
+        const reply = turn.reply_nlg ?? await renderAssistantFormalReply(conversation.conversation_id, turn.turn_id, 'zh');
+        nextPayload = buildAssistantFormalPayload(conversation, turn, reply, {
+          messageId: payload.messageId || message.messageId,
+          frontendUserMessageId: payload.frontendUserMessageId,
+        });
+        currentPayload = nextPayload;
         patchMessage({
           text: resolveAssistantFormalText(nextPayload),
           assistantFormalPayload: nextPayload,
@@ -62,7 +79,7 @@ function AssistantFormalMessage({ message }: { message: AssistantFormalMessageTy
         });
       } catch (error) {
         const failurePayload = buildAssistantFormalFailurePayload(
-          payload,
+          currentPayload,
           error as AssistantFormalAPIError,
         );
         patchMessage({
@@ -109,7 +126,14 @@ function AssistantFormalMessage({ message }: { message: AssistantFormalMessageTy
 
   return (
     <Container message={message}>
-      <div className="flex flex-col gap-3">
+      <div
+        className="flex flex-col gap-3"
+        data-assistant-conversation-id={payload.backendConversationId || undefined}
+        data-assistant-turn-id={payload.turnId || undefined}
+        data-assistant-request-id={payload.requestId || undefined}
+        data-assistant-message-id={payload.messageId || message.messageId}
+        data-assistant-binding-key={payload.bindingKey || undefined}
+      >
         <div className={`rounded-xl border px-3 py-3 text-sm ${toneClasses}`}>
           <div className="whitespace-pre-wrap">{resolveAssistantFormalText(payload)}</div>
           {(busy || message.assistantFormalPending) && (

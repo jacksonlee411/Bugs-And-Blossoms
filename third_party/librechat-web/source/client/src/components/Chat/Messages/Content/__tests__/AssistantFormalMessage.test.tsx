@@ -57,6 +57,10 @@ describe('AssistantFormalMessage', () => {
         kind: 'assistant_formal',
         backendConversationId: 'conv-1',
         turnId: 'turn-1',
+        requestId: 'req-1',
+        traceId: 'trace-1',
+        messageId: 'msg-1',
+        bindingKey: 'conv-1::turn-1::req-1',
         state: 'validated',
         phase: 'await_candidate_pick',
         missingFields: [],
@@ -91,6 +95,8 @@ describe('AssistantFormalMessage', () => {
           turn_id: 'turn-1',
           state: 'confirmed',
           phase: 'await_candidate_confirm',
+          request_id: 'req-1',
+          trace_id: 'trace-1',
           selected_candidate_id: 'cand-1',
           candidates: message.assistantFormalPayload.candidates,
           missing_fields: [],
@@ -114,5 +120,39 @@ describe('AssistantFormalMessage', () => {
     expect(mockRenderAssistantFormalReply).toHaveBeenCalledWith('conv-1', 'turn-1', 'zh');
     expect(mockSetMessages).toHaveBeenCalled();
     expect(mockCommitAssistantFormalTurn).not.toHaveBeenCalled();
+  });
+
+  it('exposes binding data attributes on the official assistant bubble', () => {
+    const message = {
+      messageId: 'msg-1',
+      text: '处理中...',
+      sender: 'Assistant',
+      isCreatedByUser: false,
+      parentMessageId: 'user-1',
+      conversationId: null,
+      error: false,
+      assistantFormalPayload: {
+        kind: 'assistant_formal',
+        backendConversationId: 'conv-1',
+        turnId: 'turn-1',
+        requestId: 'req-1',
+        traceId: 'trace-1',
+        messageId: 'msg-1',
+        bindingKey: 'conv-1::turn-1::req-1',
+        state: 'validated',
+        missingFields: [],
+        candidates: [],
+      },
+    } as TMessage & { assistantFormalPayload: any };
+
+    mockGetMessages.mockReturnValue([message]);
+    const { container } = render(<AssistantFormalMessage message={message as any} />);
+    const bubble = container.querySelector('[data-assistant-binding-key="conv-1::turn-1::req-1"]');
+
+    expect(bubble).not.toBeNull();
+    expect(bubble).toHaveAttribute('data-assistant-conversation-id', 'conv-1');
+    expect(bubble).toHaveAttribute('data-assistant-turn-id', 'turn-1');
+    expect(bubble).toHaveAttribute('data-assistant-request-id', 'req-1');
+    expect(bubble).toHaveAttribute('data-assistant-message-id', 'msg-1');
   });
 });

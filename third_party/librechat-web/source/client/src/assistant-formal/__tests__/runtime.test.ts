@@ -1,11 +1,13 @@
 import type { TMessage } from 'librechat-data-provider';
 import {
+  assistantFormalBindingKey,
   buildAssistantFormalFailurePayload,
   buildAssistantFormalPayload,
   isAssistantFormalMessage,
   isFormalAssistantPath,
   patchAssistantFormalMessage,
   resolveAssistantFormalText,
+  upsertAssistantFormalMessage,
 } from '~/assistant-formal/runtime';
 
 describe('assistant formal runtime', () => {
@@ -50,6 +52,91 @@ describe('assistant formal runtime', () => {
     expect(payload.turnId).toBe('turn-1');
     expect(payload.selectedCandidateId).toBe('cand-1');
     expect(resolveAssistantFormalText(payload)).toBe('候选已确认，可以继续提交。');
+  });
+
+
+
+  it('adds stable binding key and request mapping', () => {
+    const payload = buildAssistantFormalPayload(
+      { conversation_id: 'conv-1', turns: [] },
+      {
+        turn_id: 'turn-1',
+        state: 'validated',
+        request_id: 'req-1',
+        trace_id: 'trace-1',
+      },
+      undefined,
+      { messageId: 'msg-1', frontendUserMessageId: 'user-1' },
+    );
+
+    expect(payload.messageId).toBe('msg-1');
+    expect(payload.requestId).toBe('req-1');
+    expect(payload.traceId).toBe('trace-1');
+    expect(payload.bindingKey).toBe(
+      assistantFormalBindingKey({
+        backendConversationId: 'conv-1',
+        turnId: 'turn-1',
+        requestId: 'req-1',
+      }),
+    );
+  });
+
+  it('upserts by binding key and removes duplicate assistant bubbles', () => {
+    const bindingKey = assistantFormalBindingKey({
+      backendConversationId: 'conv-1',
+      turnId: 'turn-1',
+      requestId: 'req-1',
+    });
+    const messages: TMessage[] = [
+      {
+        messageId: 'msg-1',
+        text: '旧内容',
+        sender: 'Assistant',
+        isCreatedByUser: false,
+        parentMessageId: 'user-1',
+        conversationId: null,
+        error: false,
+        assistantFormalPayload: {
+          kind: 'assistant_formal',
+          backendConversationId: 'conv-1',
+          turnId: 'turn-1',
+          requestId: 'req-1',
+          traceId: 'trace-1',
+          messageId: 'msg-1',
+          bindingKey,
+          state: 'validated',
+          missingFields: [],
+          candidates: [],
+        },
+      } as TMessage,
+      {
+        messageId: 'msg-dup',
+        text: '重复气泡',
+        sender: 'Assistant',
+        isCreatedByUser: false,
+        parentMessageId: 'user-1',
+        conversationId: null,
+        error: false,
+        assistantFormalPayload: {
+          kind: 'assistant_formal',
+          backendConversationId: 'conv-1',
+          turnId: 'turn-1',
+          requestId: 'req-1',
+          traceId: 'trace-1',
+          messageId: 'msg-dup',
+          bindingKey,
+          state: 'validated',
+          missingFields: [],
+          candidates: [],
+        },
+      } as TMessage,
+    ];
+
+    const next = upsertAssistantFormalMessage(messages, { bindingKey }, { text: '新内容' });
+
+    expect(next).toHaveLength(1);
+    expect(next[0].messageId).toBe('msg-1');
+    expect(next[0].text).toBe('新内容');
   });
 
   it('patches assistant message with runtime payload', () => {

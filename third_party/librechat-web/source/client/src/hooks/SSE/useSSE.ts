@@ -24,12 +24,13 @@ import {
 import {
   buildAssistantFormalFailurePayload,
   buildAssistantFormalPayload,
+  buildAssistantFormalPendingPayload,
   clearStoredAssistantFormalConversationId,
   detectAssistantFormalLocale,
   getStoredAssistantFormalConversationId,
   isFormalAssistantPath,
   latestAssistantFormalTurn,
-  patchAssistantFormalMessage,
+  upsertAssistantFormalMessage,
   resolveAssistantFormalText,
   setStoredAssistantFormalConversationId,
   shouldResetAssistantFormalConversation,
@@ -116,15 +117,30 @@ export default function useSSE(
 
     if (isFormalAssistantPath()) {
       const assistantMessageId = submission.initialResponse?.messageId;
+      const frontendUserMessageId = submission.userMessage.messageId;
       const locale = detectAssistantFormalLocale();
       let cancelled = false;
+      let currentBindingKey = '';
+      let currentPayload = assistantMessageId
+        ? buildAssistantFormalPendingPayload({
+            messageId: assistantMessageId,
+            frontendUserMessageId,
+          })
+        : undefined;
 
       const patchFormalMessage = (patch: Partial<TMessage>) => {
         if (!assistantMessageId) {
           return;
         }
         setMessages(
-          patchAssistantFormalMessage(getMessages() ?? [], assistantMessageId, patch),
+          upsertAssistantFormalMessage(
+            getMessages() ?? [],
+            {
+              messageId: assistantMessageId,
+              bindingKey: currentBindingKey || undefined,
+            },
+            patch,
+          ),
         );
       };
 
@@ -139,6 +155,7 @@ export default function useSSE(
 
         patchFormalMessage({
           text: locale === 'en' ? 'Processing...' : '处理中...',
+          assistantFormalPayload: currentPayload,
           assistantFormalPending: true,
           error: false,
         } as Partial<TMessage>);
@@ -178,9 +195,19 @@ export default function useSSE(
           if (!turn) {
             throw new Error('assistant turn missing');
           }
+          currentPayload = buildAssistantFormalPayload(conversation, turn, turn.reply_nlg, {
+            messageId: assistantMessageId,
+            frontendUserMessageId,
+          });
+          currentBindingKey = currentPayload.bindingKey;
           const reply = turn.reply_nlg ??
             (await renderAssistantFormalReply(conversation.conversation_id, turn.turn_id, locale, token));
-          const payload = buildAssistantFormalPayload(conversation, turn, reply);
+          const payload = buildAssistantFormalPayload(conversation, turn, reply, {
+            messageId: assistantMessageId,
+            frontendUserMessageId,
+          });
+          currentPayload = payload;
+          currentBindingKey = payload.bindingKey;
           if (cancelled) {
             return;
           }
@@ -196,9 +223,10 @@ export default function useSSE(
             return;
           }
           const failurePayload = buildAssistantFormalFailurePayload(
-            {},
+            currentPayload ?? {},
             error as AssistantFormalAPIError,
           );
+          currentBindingKey = failurePayload.bindingKey;
           patchFormalMessage({
             text: resolveAssistantFormalText(failurePayload),
             assistantFormalPayload: failurePayload,
