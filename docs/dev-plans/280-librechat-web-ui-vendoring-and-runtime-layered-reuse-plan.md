@@ -103,7 +103,7 @@ graph TD
 
 ### ADR-280-03：`/app/assistant/librechat` 直接承载官方 UI，不再以 iframe 作为正式入口（选定）
 - 选项 A：继续 iframe，仅把桥逻辑改成更深 patch。缺点：消息流仍跨窗口，状态仍然分裂。
-- 选项 B（选定）：直接以本仓编译的官方 UI 页面作为正式承载面；若需兼容 `/assistant-ui/*`，仅保留短期灰度别名。
+- 选项 B（选定）：直接以本仓编译的官方 UI 页面作为正式承载面；若需保留 `/assistant-ui/*`，仅允许作为历史别名/调试入口；具体对外行为由 `DEV-PLAN-283` 冻结。
 
 ### ADR-280-04：发送与回执必须进入源码级消息管线（选定）
 - 选项 A：继续 DOM 事件 `preventDefault` + `postMessage`。缺点：脆弱、不可维护。
@@ -132,7 +132,7 @@ graph TD
 2. [ ] `third_party/librechat-web/UPSTREAM.yaml`：记录来源仓库、commit/tag、导入时间、回滚基线。
 3. [ ] `third_party/librechat-web/patches/`：本仓 patch 清单，按主题拆分（send-pipeline / message-render / auth-shell / assistant-adapter）。
 4. [ ] `scripts/librechat-web/`：同步、校验、构建、升级辅助脚本。
-5. [ ] `internal/server/assets/librechat-ui/` 或等价目录：构建产物归档路径。
+5. [ ] `internal/server/assets/librechat-web/`：构建产物归档路径（已由 `DEV-PLAN-281` 冻结）。
 
 ### 6.2 资产约束
 1. [ ] vendored UI 必须有单一来源元数据，不得出现“手抄文件 + 无来源”的隐式纳管。
@@ -149,7 +149,7 @@ graph TD
 
 ### 7.1 UI 承载面收口
 1. [ ] `/app/assistant/librechat` 改为直接加载本仓构建的 vendored LibreChat Web UI。
-2. [ ] `/assistant-ui/*` 若保留，只能作为迁移别名或调试入口，不再作为 iframe 套壳的正式承载面。
+2. [ ] `/assistant-ui/*` 若保留，只能作为历史别名或调试入口，不再作为 iframe 套壳的正式承载面；正式静态资源前缀由 `DEV-PLAN-283` 冻结，且不得依赖 `/assistant-ui/*` 代理。
 3. [ ] 迁移完成后，`apps/web/src/pages/assistant/LibreChatPage.tsx` 不再承担业务桥接 orchestrator 角色，只保留必要入口外壳或直接退役。
 
 ### 7.2 发送链路接管
@@ -217,7 +217,7 @@ graph TD
 3. [ ] HTML rewrite / DOM 注入式消息回执。
 4. [ ] `data-assistant-dialog-stream` 或等价外挂消息流。
 5. [ ] `assistantDialogFlow`、`assistantAutoRun` 或等价页面级业务编排职责。
-6. [ ] 旧 `/assistant-ui/*` 正式入口地位；如保留，最多只允许作为短期调试/排障入口，且不得承担正式验收职责。
+6. [ ] 旧 `/assistant-ui/*` 正式入口地位；如保留，最多只允许作为历史别名/调试/排障入口，且其具体收口语义以 `DEV-PLAN-283` 为准，不得承担正式验收职责。
 7. [ ] 只服务于旧桥接方案的测试、截图、E2E 断言与说明文案。
 
 ### 8.4 停止线（Fail-Closed）
@@ -257,7 +257,7 @@ graph TD
 1. [ ] `/app/assistant/librechat` 不再依赖 iframe 作为正式聊天承载面。
 2. [ ] 不再依赖运行时注入 `bridge.js` 才能阻断原始发送或显示业务回执。
 3. [ ] 不再存在 `data-assistant-dialog-stream` 或等价外挂消息流承担用户可见业务回执职责。
-4. [ ] 不再存在两个同时有效的正式用户入口、两套正式消息落点或两套正式 E2E 通过口径。
+4. [ ] 不再存在两个同时有效的正式用户入口、两套正式静态资源前缀、两套正式消息落点或两套正式 E2E 通过口径。
 5. [ ] `260` Case 1~4 中，所有业务回执都由官方消息列表组件树渲染，且每轮仅有唯一 assistant 回复实体。
 6. [ ] 前端只消费后端 `phase/candidates/draft/commit-reply` 等 DTO；业务事实源仍以本仓 `conversation/turn/request/trace` 与审计状态转移为准。
 7. [ ] 发送、缺字段、多候选、确认、提交成功/失败的关键路径，都能通过源码级单测/组件测 + 真实 E2E 双重验证。
