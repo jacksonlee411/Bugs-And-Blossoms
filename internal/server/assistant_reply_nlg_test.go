@@ -6,6 +6,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/jackc/pgx/v5/pgconn"
 )
 
 func seedAssistantReplyConversation(t *testing.T, svc *assistantConversationService) (Principal, *assistantConversation, *assistantTurn) {
@@ -277,5 +279,42 @@ func TestAssistantReplyNLGFailurePipeline(t *testing.T) {
 	}
 	if captured.TurnID != turn.TurnID {
 		t.Fatalf("expected real turn id, got=%q", captured.TurnID)
+	}
+}
+
+func TestAssistantPersistRenderedReplySnapshot_Branches(t *testing.T) {
+	svc := newAssistantConversationService(nil, nil)
+	turn := &assistantTurn{TurnID: "turn_1", State: assistantStateCommitted, CommitResult: &assistantCommitResult{OrgCode: "ORG-1"}, UpdatedAt: time.Now().UTC()}
+	svc.persistRenderedReplySnapshot(context.Background(), "tenant_1", "conv_1", nil)
+
+	svc.pool = assistFakeTxBeginner{err: errors.New("begin failed")}
+	svc.persistRenderedReplySnapshot(context.Background(), "tenant_1", "conv_1", turn)
+
+	execCalls := 0
+	execErrTx := &assistFakeTx{}
+	execErrTx.execFn = func(string, ...any) (pgconn.CommandTag, error) {
+		execCalls++
+		if execCalls == 2 {
+			return pgconn.NewCommandTag(""), errors.New("exec failed")
+		}
+		return pgconn.NewCommandTag(""), nil
+	}
+	svc.pool = assistFakeTxBeginner{tx: execErrTx}
+	svc.persistRenderedReplySnapshot(context.Background(), "tenant_1", "conv_1", turn)
+	if execErrTx.committed {
+		t.Fatal("exec failure should not commit")
+	}
+
+	successTx := &assistFakeTx{}
+	svc.pool = assistFakeTxBeginner{tx: successTx}
+	svc.persistRenderedReplySnapshot(context.Background(), "tenant_1", "conv_1", turn)
+	if !successTx.committed {
+		t.Fatal("expected snapshot tx committed")
+	}
+}
+
+func TestAssistantReplyContainsTechnicalSignal_UnderscoreToken(t *testing.T) {
+	if !assistantReplyContainsTechnicalSignal("opaque-123_456_code") {
+		t.Fatal("expected underscore token treated as technical signal")
 	}
 }

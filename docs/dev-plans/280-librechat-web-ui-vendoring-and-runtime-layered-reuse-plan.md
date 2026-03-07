@@ -294,6 +294,7 @@ graph TD
 - `docs/dev-plans/237-librechat-upgrade-and-regression-closure-plan.md`
 - `docs/dev-plans/260-librechat-conversation-first-auto-execution-plan.md`
 - `docs/dev-plans/266-librechat-official-ui-single-dialog-channel-and-in-bubble-gpt52-plan.md`
+- `docs/dev-plans/271-assistant-librechat-cross-plan-sequenced-delivery-plan.md`
 - `docs/dev-plans/270-project-container-deployment-review-and-layered-convergence-plan.md`
 - `docs/dev-plans/281-librechat-web-ui-source-vendoring-and-mainline-freeze-plan.md`
 - `docs/archive/dev-records/dev-plan-281-execution-log.md`

@@ -336,6 +336,7 @@ interface DialogFlowSnapshotDTO {
 - `docs/dev-plans/263-librechat-gpt52-assistant-dialogue-response-implementation-plan.md`
 - `docs/dev-plans/264-librechat-gpt52-reply-single-pipeline-and-real-evidence-plan.md`
 - `docs/dev-plans/266-librechat-official-ui-single-dialog-channel-and-in-bubble-gpt52-plan.md`
+- `docs/dev-plans/271-assistant-librechat-cross-plan-sequenced-delivery-plan.md`
 - `docs/dev-plans/280-librechat-web-ui-vendoring-and-runtime-layered-reuse-plan.md`
 - `docs/dev-plans/284-librechat-source-level-send-and-render-takeover-plan.md`
 - `docs/archive/dev-records/dev-plan-260-execution-log.md`

@@ -133,6 +133,10 @@ func (s *assistantConversationService) renderTurnReply(ctx context.Context, tena
 		ConversationID:     strings.TrimSpace(conversation.ConversationID),
 		TurnID:             resolvedTurnID,
 	}
+	if turn != nil {
+		assistantSetReplySnapshot(turn, reply, req.ErrorCode)
+		s.persistRenderedReplySnapshot(ctx, tenantID, conversationID, turn)
+	}
 	s.persistRenderedReply(tenantID, principal.ID, conversationID, resolvedTurnID, reply)
 	return reply, nil
 }
@@ -148,6 +152,36 @@ func assistantRenderReplyWithModel(ctx context.Context, svc *assistantConversati
 		return assistantReplyModelResult{}, errAssistantModelProviderUnavailable
 	}
 	return svc.modelGateway.RenderReply(ctx, prompt)
+}
+
+func (s *assistantConversationService) persistRenderedReplySnapshot(ctx context.Context, tenantID string, conversationID string, turn *assistantTurn) {
+	if s == nil || s.pool == nil || turn == nil {
+		return
+	}
+	tx, err := s.beginAssistantTx(ctx, tenantID)
+	if err != nil {
+		return
+	}
+	defer tx.Rollback(ctx)
+	assistantRefreshTurnDerivedFields(turn)
+	_, err = tx.Exec(ctx, `
+UPDATE iam.assistant_turns
+SET phase = $4,
+    pending_draft_summary = NULLIF($5, ''),
+    missing_fields = $6::jsonb,
+    candidate_options = $7::jsonb,
+    selected_candidate_id = NULLIF($8, ''),
+    commit_reply = $9::jsonb,
+    error_code = NULLIF($10, ''),
+    updated_at = $11
+WHERE tenant_uuid = $1::uuid
+  AND conversation_id = $2
+  AND turn_id = $3
+`, tenantID, conversationID, turn.TurnID, turn.Phase, turn.PendingDraftSummary, assistantMissingFieldsJSON(turn), assistantCandidateOptionsJSON(turn), turn.SelectedCandidateID, assistantCommitReplyJSON(turn), turn.ErrorCode, turn.UpdatedAt)
+	if err != nil {
+		return
+	}
+	_ = tx.Commit(ctx)
 }
 
 func (s *assistantConversationService) persistRenderedReply(tenantID string, actorID string, conversationID string, turnID string, reply *assistantRenderReplyResponse) {
@@ -172,8 +206,8 @@ func (s *assistantConversationService) persistRenderedReply(tenantID string, act
 	if turn == nil {
 		return
 	}
-	copyReply := *reply
-	turn.ReplyNLG = &copyReply
+	assistantSetReplySnapshot(turn, reply, turn.ErrorCode)
+	assistantRefreshConversationDerivedFields(conversation)
 }
 
 func assistantFindTurnForReply(conversation *assistantConversation, turnID string) *assistantTurn {
