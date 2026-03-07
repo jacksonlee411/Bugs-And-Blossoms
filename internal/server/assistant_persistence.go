@@ -209,7 +209,10 @@ func (s *assistantConversationService) createTurnPG(ctx context.Context, tenantI
 	if intent.Action == assistantIntentCreateOrgUnit && intent.ParentRefText != "" && len(intentValidationErrors) == 0 {
 		resolved, resolveErr := s.resolveCandidates(ctx, tenantID, intent.ParentRefText, intent.EffectiveDate)
 		if resolveErr != nil {
-			return nil, resolveErr
+			if !errors.Is(resolveErr, errOrgUnitNotFound) {
+				return nil, resolveErr
+			}
+			resolved = make([]assistantCandidate, 0)
 		}
 		candidates = resolved
 		ambiguityCount = len(candidates)
@@ -883,7 +886,11 @@ func (s *assistantConversationService) upsertTurnTx(ctx context.Context, tx pgx.
 	if err != nil {
 		return err
 	}
-	candidatesJSON, _ := json.Marshal(turn.Candidates)
+	candidates := turn.Candidates
+	if candidates == nil {
+		candidates = make([]assistantCandidate, 0)
+	}
+	candidatesJSON, _ := json.Marshal(candidates)
 	dryRunJSON, err := json.Marshal(turn.DryRun)
 	if err != nil {
 		return err

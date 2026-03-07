@@ -658,6 +658,20 @@ func assistantUIBridgeScriptBody() string {
   var params = new URLSearchParams(window.location.search || "");
   var channel = (params.get("channel") || "").trim();
   var nonce = (params.get("nonce") || "").trim();
+  var tokenStorageKey = "assistant.bridge.tokens";
+  try {
+    if ((!channel || !nonce) && window.sessionStorage) {
+      var storedTokens = JSON.parse(window.sessionStorage.getItem(tokenStorageKey) || "null");
+      if (storedTokens && typeof storedTokens === "object") {
+        channel = (storedTokens.channel || "").trim();
+        nonce = (storedTokens.nonce || "").trim();
+      }
+    }
+    if (channel && nonce && window.sessionStorage) {
+      window.sessionStorage.setItem(tokenStorageKey, JSON.stringify({ channel: channel, nonce: nonce }));
+    }
+  } catch (error) {
+  }
   if (!channel || !nonce) {
     return;
   }
@@ -673,6 +687,33 @@ func assistantUIBridgeScriptBody() string {
       last_message_id: ""
     };
     window.__assistantBridgeMetrics = bridgeMetrics;
+  }
+  var inboxAudit = window.__assistantBridgeInboxAudit;
+  if (!Array.isArray(inboxAudit)) {
+    inboxAudit = [];
+    window.__assistantBridgeInboxAudit = inboxAudit;
+  }
+  window.__assistantBridgeTokens = { channel: channel, nonce: nonce };
+  function pushInboxAudit(event) {
+    inboxAudit.push(Object.assign({ ts: Date.now() }, event || {}));
+  }
+  function acknowledgeDelivery(type, payload) {
+    var messageID = normalizeToken(payload && payload.message_id);
+    var deliveryKey = "";
+    if (type === "assistant.flow.dialog" && messageID) {
+      deliveryKey = "assistant.flow.dialog:" + messageID;
+    }
+    window.parent.postMessage({
+      type: "assistant.bridge.delivery_ack",
+      channel: channel,
+      nonce: nonce,
+      payload: {
+        delivery_key: deliveryKey,
+        message_id: messageID,
+        accepted_type: normalize(type),
+        href: window.location.href
+      }
+    }, window.location.origin);
   }
   var lastPayload = "";
   var lastAt = 0;
@@ -822,10 +863,14 @@ func assistantUIBridgeScriptBody() string {
     return /send|发送|提交/.test(readButtonLabel(button));
   }
   var dialogQueue = [];
+  var dialogEntries = [];
+  var dialogEntrySequence = 0;
   var dialogObserver = null;
   var dialogObserverTimer = null;
   var dialogObserverAttempts = 0;
   var dialogObserverMaxAttempts = 80;
+  var dialogPersistenceObserver = null;
+  var dialogReconciling = false;
   function isValidDialogRoot(node) {
     if (!node || !node.tagName) {
       return false;
@@ -838,14 +883,15 @@ func assistantUIBridgeScriptBody() string {
   }
   function findDialogRoot() {
     var selectors = [
-      "#messages-view",
       '[data-testid="conversation-container"] [role="log"]',
       '[data-testid="chat-container"] [role="log"]',
+      '[role="log"]',
       '[data-testid="conversation-container"]',
       '[data-testid="chat-container"]',
       '[data-testid="messages-container"]',
       '[data-testid="message-list"]',
-      '[role="log"]'
+      'main[role="main"]',
+      '#messages-view'
     ];
     for (var i = 0; i < selectors.length; i += 1) {
       var node = document.querySelector(selectors[i]);
@@ -853,7 +899,24 @@ func assistantUIBridgeScriptBody() string {
         return node;
       }
     }
+    var form = document.querySelector('form');
+    if (form && form.parentElement && isValidDialogRoot(form.parentElement)) {
+      return form.parentElement;
+    }
+    var textInput = document.querySelector('[data-testid="text-input"], form textarea, textarea, [contenteditable="true"]');
+    if (textInput && textInput.closest) {
+      var region = textInput.closest('main, section, article, [class*="flex-grow"], [class*="overflow-y-auto"], [class*="overflow-auto"]');
+      if (isValidDialogRoot(region)) {
+        return region;
+      }
+    }
     return null;
+  }
+  function findDialogInsertionAnchor(root) {
+    if (!root || !root.querySelector) {
+      return null;
+    }
+    return root.querySelector('form, [data-testid="composer"] form, [data-testid="send-button"]');
   }
   function ensureDialogStream() {
     var root = findDialogRoot();
@@ -870,10 +933,55 @@ func assistantUIBridgeScriptBody() string {
       container.style.margin = "12px 0";
       container.style.pointerEvents = "none";
     }
-    if (container.parentElement !== root) {
-      root.appendChild(container);
+    var anchor = findDialogInsertionAnchor(root);
+    var parent = root;
+    if (anchor && anchor.parentElement && isValidDialogRoot(anchor.parentElement)) {
+      parent = anchor.parentElement;
+    }
+    if (container.parentElement !== parent) {
+      if (anchor && anchor.parentElement === parent) {
+        parent.insertBefore(container, anchor);
+      } else {
+        parent.appendChild(container);
+      }
+    } else if (anchor && container.nextSibling !== anchor && anchor.parentElement === parent) {
+      parent.insertBefore(container, anchor);
     }
     return container;
+  }
+  function resolveDialogEntryKey(payload, fallbackSeverity) {
+    var messageID = normalizeToken(payload && payload.message_id);
+    if (messageID) {
+      return "message:" + messageID;
+    }
+    dialogEntrySequence += 1;
+    return [
+      "transient",
+      String(dialogEntrySequence),
+      normalize(payload && payload.stage),
+      normalize(payload && payload.kind),
+      normalize(payload && payload.text).slice(0, 48),
+      normalize(fallbackSeverity)
+    ].join(":");
+  }
+  function rememberDialogEntry(payload, fallbackSeverity) {
+    var entry = {
+      key: resolveDialogEntryKey(payload, fallbackSeverity),
+      payload: payload,
+      fallbackSeverity: fallbackSeverity
+    };
+    var replaced = false;
+    for (var i = 0; i < dialogEntries.length; i += 1) {
+      if (dialogEntries[i].key !== entry.key) {
+        continue;
+      }
+      dialogEntries[i] = entry;
+      replaced = true;
+      break;
+    }
+    if (!replaced) {
+      dialogEntries.push(entry);
+    }
   }
   function styleDialogItem(item, level) {
     item.style.padding = "10px 12px";
@@ -959,6 +1067,33 @@ func assistantUIBridgeScriptBody() string {
     publishMetrics("bridge_reply_embedded");
     item.scrollIntoView({ block: "nearest", inline: "nearest" });
   }
+  function reconcileDialogStream() {
+    if (dialogReconciling) {
+      return false;
+    }
+    dialogReconciling = true;
+    try {
+      var stream = ensureDialogStream();
+      if (!stream) {
+        return false;
+      }
+      for (var i = 0; i < dialogEntries.length; i += 1) {
+        appendDialogMessageToStream(stream, dialogEntries[i].payload, dialogEntries[i].fallbackSeverity);
+      }
+      return true;
+    } finally {
+      dialogReconciling = false;
+    }
+  }
+  function startDialogPersistenceObserver() {
+    if (dialogPersistenceObserver || !document.documentElement) {
+      return;
+    }
+    dialogPersistenceObserver = new MutationObserver(function () {
+      reconcileDialogStream();
+    });
+    dialogPersistenceObserver.observe(document.documentElement, { childList: true, subtree: true });
+  }
   function stopDialogObserver() {
     if (dialogObserver) {
       dialogObserver.disconnect();
@@ -1012,6 +1147,7 @@ func assistantUIBridgeScriptBody() string {
       var next = dialogQueue.shift();
       appendDialogMessageToStream(stream, next.payload, next.fallbackSeverity);
     }
+    reconcileDialogStream();
     stopDialogObserver();
     return true;
   }
@@ -1020,26 +1156,36 @@ func assistantUIBridgeScriptBody() string {
     if (!text) {
       return;
     }
+    rememberDialogEntry(payload, fallbackSeverity);
+    startDialogPersistenceObserver();
     dialogQueue.push({ payload: payload, fallbackSeverity: fallbackSeverity });
     flushDialogQueue();
   }
   window.addEventListener("message", function (event) {
+    pushInboxAudit({ kind: "message_seen", origin: event.origin, type: event && event.data && event.data.type ? String(event.data.type) : "" });
     if (event.origin !== window.location.origin) {
+      pushInboxAudit({ kind: "message_dropped", reason: "origin_mismatch", origin: event.origin });
       return;
     }
     var data = event.data;
     if (!data || typeof data !== "object") {
+      pushInboxAudit({ kind: "message_dropped", reason: "schema_invalid" });
       return;
     }
     if (data.channel !== channel || data.nonce !== nonce) {
+      pushInboxAudit({ kind: "message_dropped", reason: "token_mismatch", actualChannel: data.channel, actualNonce: data.nonce, expectedChannel: channel, expectedNonce: nonce });
       return;
     }
     if (data.type === "assistant.flow.dialog" && data.payload && typeof data.payload === "object") {
+      pushInboxAudit({ kind: "message_accepted", type: "assistant.flow.dialog", messageID: data.payload.message_id || "" });
       appendDialogMessage(data.payload, "info");
+      acknowledgeDelivery("assistant.flow.dialog", data.payload);
       return;
     }
     if (data.type === "assistant.flow.notice" && data.payload && typeof data.payload === "object") {
+      pushInboxAudit({ kind: "message_accepted", type: "assistant.flow.notice" });
       appendDialogMessage(data.payload, "info");
+      acknowledgeDelivery("assistant.flow.notice", data.payload);
     }
   });
   document.addEventListener("submit", function (event) {
@@ -1072,7 +1218,7 @@ func assistantUIBridgeScriptBody() string {
     type: "assistant.bridge.ready",
     channel: channel,
     nonce: nonce,
-    payload: { source: "assistant-ui-bridge" }
+    payload: { source: "assistant-ui-bridge", href: window.location.href }
   }, window.location.origin);
 })();`
 }

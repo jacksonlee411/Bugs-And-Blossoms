@@ -216,3 +216,48 @@ func TestAssistantIntentPipeline_ResolveIntentErrorBranches(t *testing.T) {
 		t.Fatalf("expected timeout on retry, got=%v", err)
 	}
 }
+
+func TestAssistantIntentPipeline_FallbackToLocalIntentOnStrictDecodeFailure(t *testing.T) {
+	t.Setenv("OPENAI_API_KEY", "dummy")
+	svc := newAssistantConversationService(newOrgUnitMemoryStore(), assistantWriteServiceStub{store: newOrgUnitMemoryStore()})
+	svc.modelGateway = &assistantModelGateway{
+		config: assistantModelConfig{
+			ProviderRouting: assistantProviderRouting{Strategy: "priority_failover", FallbackEnabled: true},
+			Providers: []assistantModelProviderConfig{{
+				Name:      "openai",
+				Enabled:   true,
+				Model:     "gpt-5-codex",
+				Endpoint:  "https://api.openai.com/v1",
+				TimeoutMS: 1000,
+				Retries:   0,
+				Priority:  1,
+				KeyRef:    "OPENAI_API_KEY",
+			}},
+		},
+		adapters: map[string]assistantProviderAdapter{
+			"openai": assistantAdapterFunc(func(context.Context, string, assistantModelProviderConfig) ([]byte, error) {
+				return []byte(`{"choices":[{"message":{"content":"好的，我来帮你创建部门"}}]}`), nil
+			}),
+		},
+	}
+
+	resolved, err := svc.resolveIntent(context.Background(), "tenant-1", "conv-1", "在鲜花组织之下，新建一个名为运营部的部门。")
+	if err != nil {
+		t.Fatalf("resolve intent err=%v", err)
+	}
+	if resolved.ProviderName != "deterministic" {
+		t.Fatalf("provider=%s", resolved.ProviderName)
+	}
+	if resolved.ModelName != "builtin-intent-extractor" {
+		t.Fatalf("model=%s", resolved.ModelName)
+	}
+	if resolved.Intent.Action != assistantIntentCreateOrgUnit {
+		t.Fatalf("intent action=%s", resolved.Intent.Action)
+	}
+	if resolved.Intent.ParentRefText != "鲜花组织" || resolved.Intent.EntityName != "运营部" {
+		t.Fatalf("unexpected intent=%+v", resolved.Intent)
+	}
+	if resolved.Intent.EffectiveDate != "" {
+		t.Fatalf("expected missing effective date for follow-up, got=%q", resolved.Intent.EffectiveDate)
+	}
+}

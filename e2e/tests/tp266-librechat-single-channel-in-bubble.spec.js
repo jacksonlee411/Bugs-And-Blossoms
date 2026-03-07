@@ -87,10 +87,10 @@ function makeConversation(turns) {
   };
 }
 
-test("tp266-e2e-001: AI对话 must block native send and embed single reply in chat bubble", async ({ browser }) => {
+test("tp266-e2e-001: LibreChat standalone page must block native send and embed single reply in chat bubble", async ({ browser }) => {
   test.setTimeout(240_000);
   const { appContext, page } = await setupTenantAdminSession(browser);
-  const observedReplyRequests = [];
+  const observedTurnRequests = [];
   let currentConversation = makeConversation([]);
 
   await page.route("**/assistant-ui/?**", async (route) => {
@@ -130,23 +130,23 @@ test("tp266-e2e-001: AI对话 must block native send and embed single reply in c
       return;
     }
     if (method === "POST" && pathname === "/internal/assistant/conversations/conv_tp266_1/turns") {
-      currentConversation = makeConversation([makeTurn()]);
-      await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(currentConversation) });
-      return;
-    }
-    if (method === "POST" && /\/internal\/assistant\/conversations\/[^/]+\/turns\/[^/]+:reply$/.test(pathname)) {
       let body = {};
       try {
         body = request.postDataJSON ? request.postDataJSON() : {};
       } catch {
         body = {};
       }
-      observedReplyRequests.push(body);
+      observedTurnRequests.push(body);
+      currentConversation = makeConversation([makeTurn()]);
+      await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(currentConversation) });
+      return;
+    }
+    if (method === "POST" && pathname === "/internal/assistant/conversations/conv_tp266_1/turns/turn_tp266_1:reply") {
       await route.fulfill({
         status: 200,
         contentType: "application/json",
         body: JSON.stringify({
-          text: "已收到需求，正在为你生成可确认草案。",
+          text: "已生成待确认草案：将在鲜花组织下创建运营部，请回复确认执行。",
           kind: "info",
           stage: "draft",
           reply_model_name: "gpt-5.2",
@@ -163,18 +163,35 @@ test("tp266-e2e-001: AI对话 must block native send and embed single reply in c
     await route.continue();
   });
 
-  await page.goto("/app/assistant");
-  await expect(page.getByRole("heading", { name: "AI 助手" })).toBeVisible();
-  const frame = page.frameLocator("[data-testid='assistant-librechat-frame']");
+  await page.goto("/app/assistant/librechat");
+  await expect(page.getByRole("heading", { name: "LibreChat" })).toBeVisible();
+  const frame = page.frameLocator("[data-testid='librechat-standalone-frame']");
   const textarea = frame.getByLabel("Message input");
   await expect(textarea).toBeVisible();
   await textarea.fill("在鲜花组织之下，新建一个名为运营部的部门，成立日期是2026年1月1日。");
   await frame.getByRole("button", { name: "Send" }).click();
 
-  await expect.poll(() => observedReplyRequests.length).toBeGreaterThan(0);
+  await expect.poll(() => observedTurnRequests.length).toBeGreaterThan(0);
 
-  const metrics = await frame.locator("body").evaluate(() => window.__assistantBridgeMetrics);
-  const nativeCounts = await frame.locator("body").evaluate(() => window.__tp266Native);
+  const bubble = frame.locator('[role="log"] [data-assistant-dialog-stream="1"] [data-assistant-turn-id="turn_tp266_1"]');
+  await expect(bubble).toHaveCount(1);
+  await expect(bubble).toBeVisible();
+
+  await expect
+    .poll(() => page.evaluate(() => {
+      const iframe = document.querySelector('[data-testid="librechat-standalone-frame"]');
+      return iframe?.contentWindow?.__assistantBridgeMetrics?.bridge_reply_embedded ?? 0;
+    }), { timeout: 30_000 })
+    .toBeGreaterThan(0);
+
+  const { metrics, nativeCounts } = await page.evaluate(() => {
+    const iframe = document.querySelector('[data-testid="librechat-standalone-frame"]');
+    const win = iframe?.contentWindow;
+    return {
+      metrics: win?.__assistantBridgeMetrics || null,
+      nativeCounts: win?.__tp266Native || null
+    };
+  });
   expect(metrics.native_send_attempted).toBeGreaterThan(0);
   expect(metrics.native_send_blocked).toBeGreaterThan(0);
   expect(metrics.native_send_emitted).toBe(0);
@@ -182,23 +199,24 @@ test("tp266-e2e-001: AI对话 must block native send and embed single reply in c
   expect(metrics.bridge_reply_embedded).toBeGreaterThan(0);
   expect(nativeCounts.submitCount).toBe(0);
   expect(nativeCounts.clickCount).toBe(0);
-
-  const bubble = frame.locator('[role="log"] [data-assistant-dialog-stream="1"] [data-assistant-message-id="dlg_conv_tp266_1_turn_tp266_1_draft"]');
-  await expect(bubble).toHaveCount(1);
-  await expect(bubble).toContainText("已收到需求，正在为你生成可确认草案。");
+  const messageID = await bubble.getAttribute("data-assistant-message-id");
+  expect(String(messageID || "")).toContain("conv_tp266_1");
+  expect(String(messageID || "")).toContain("turn_tp266_1");
+  await expect(bubble).toContainText(/运营部/);
+  await expect(bubble).toContainText(/确认执行|待确认/);
   await expect(bubble).toHaveAttribute("data-assistant-conversation-id", "conv_tp266_1");
   await expect(bubble).toHaveAttribute("data-assistant-turn-id", "turn_tp266_1");
   await expect(bubble).toHaveAttribute("data-assistant-request-id", "assistant_req_tp266_1");
 
-  await page.evaluate(() => {
-    const iframe = document.querySelector('[data-testid="assistant-librechat-frame"]');
+  await page.evaluate((resolvedMessageID) => {
+    const iframe = document.querySelector('[data-testid="librechat-standalone-frame"]');
     const iframeURL = new URL(iframe.getAttribute("src"), window.location.origin);
     iframe.contentWindow.postMessage({
       type: "assistant.flow.dialog",
       channel: iframeURL.searchParams.get("channel"),
       nonce: iframeURL.searchParams.get("nonce"),
       payload: {
-        message_id: "dlg_conv_tp266_1_turn_tp266_1_draft",
+        message_id: resolvedMessageID,
         kind: "success",
         stage: "draft",
         text: "已更新为同轮唯一气泡。",
@@ -209,8 +227,8 @@ test("tp266-e2e-001: AI对话 must block native send and embed single reply in c
         }
       }
     }, window.location.origin);
-  });
-  await expect(bubble).toHaveCount(1);
+  }, messageID);
+  await expect(frame.locator('[role="log"] [data-assistant-dialog-stream="1"] [data-assistant-turn-id="turn_tp266_1"]')).toHaveCount(1);
   await expect(bubble).toContainText("已更新为同轮唯一气泡。");
 
   await expect(page.locator('[data-assistant-dialog-stream="1"]')).toHaveCount(0);

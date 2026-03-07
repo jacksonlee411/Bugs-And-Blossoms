@@ -1207,8 +1207,12 @@ func assistantBuildDryRun(intent assistantIntentSpec, candidates []assistantCand
 		}
 	}
 	explain := "计划已生成，等待确认后可提交"
-	if intent.Action == assistantIntentCreateOrgUnit && len(candidates) > 1 && strings.TrimSpace(resolvedCandidateID) == "" {
-		validationErrors = append(validationErrors, "candidate_confirmation_required")
+	if intent.Action == assistantIntentCreateOrgUnit && strings.TrimSpace(intent.ParentRefText) != "" && strings.TrimSpace(resolvedCandidateID) == "" {
+		if len(candidates) == 0 {
+			validationErrors = append(validationErrors, "parent_candidate_not_found")
+		} else if len(candidates) > 1 {
+			validationErrors = append(validationErrors, "candidate_confirmation_required")
+		}
 	}
 	validationErrors = assistantNormalizeValidationErrors(validationErrors)
 	if len(validationErrors) > 0 {
@@ -1252,7 +1256,7 @@ func assistantTurnRequiresIntentClarification(turn *assistantTurn) bool {
 	}
 	for _, code := range assistantNormalizeValidationErrors(turn.DryRun.ValidationErrors) {
 		switch code {
-		case "missing_parent_ref_text", "missing_entity_name", "missing_effective_date", "invalid_effective_date_format":
+		case "missing_parent_ref_text", "parent_candidate_not_found", "missing_entity_name", "missing_effective_date", "invalid_effective_date_format":
 			return true
 		}
 	}
@@ -1306,11 +1310,16 @@ func assistantDryRunValidationExplain(validationErrors []string) string {
 	if len(validationErrors) == 1 && validationErrors[0] == "candidate_confirmation_required" {
 		return "检测到多个同名父组织候选，需先确认候选主键"
 	}
+	if len(validationErrors) == 1 && validationErrors[0] == "parent_candidate_not_found" {
+		return "未找到匹配的上级组织，请补充更准确的上级组织名称或编码后继续。"
+	}
 	hints := make([]string, 0, len(validationErrors))
 	for _, code := range validationErrors {
 		switch code {
 		case "missing_parent_ref_text":
 			hints = append(hints, "上级组织（例如：鲜花组织）")
+		case "parent_candidate_not_found":
+			hints = append(hints, "更准确的上级组织名称或编码（例如：鲜花组织 / FLOWER-A）")
 		case "missing_entity_name":
 			hints = append(hints, "部门名称（例如：运营部）")
 		case "missing_effective_date":

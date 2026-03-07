@@ -13,6 +13,12 @@ const assistantAPIMocks = vi.hoisted(() => ({
 vi.mock('../../api/assistant', () => assistantAPIMocks)
 
 import { LibreChatPage } from './LibreChatPage'
+import {
+  composeCreateOrgUnitPrompt,
+  composeStructuredIntentRetryPrompt,
+  extractIntentDraftFromText,
+  mergeIntentDraft
+} from './assistantAutoRun'
 
 function makeTurn(overrides: Record<string, unknown> = {}) {
   return {
@@ -145,7 +151,7 @@ describe('LibreChatPage', () => {
     )
   })
 
-  it('shows bridge connected notice after assistant.bridge.ready', async () => {
+  it('tracks bridge readiness without rendering outer visible notice', async () => {
     render(<LibreChatPage />)
     const { channel, nonce } = await readBridgeTokens()
 
@@ -156,26 +162,30 @@ describe('LibreChatPage', () => {
       payload: { source: 'assistant-ui-bridge' }
     })
 
-    expect(screen.getByText('自动执行通道已连接：可直接在 LibreChat 对话中输入需求。')).toBeInTheDocument()
+    expect(screen.getByTestId('librechat-bridge-status')).toHaveTextContent('connected')
   })
 
-  it('requires second-turn confirmation before commit for complete input', async () => {
-    render(<LibreChatPage />)
-    const { channel, nonce } = await readBridgeTokens()
+	it('requires second-turn confirmation before commit for complete input', async () => {
+	  render(<LibreChatPage />)
+	  const { channel, nonce } = await readBridgeTokens()
+	  const completeInput = '在 AI治理办公室 下新建 人力资源部2，生效日期 2026-01-01'
+	  const expectedStructuredPrompt = composeStructuredIntentRetryPrompt(
+	    composeCreateOrgUnitPrompt(extractIntentDraftFromText(completeInput))
+	  )
 
-    await dispatchBridgeMessage(window.location.origin, {
-      type: 'assistant.prompt.sync',
-      channel,
-      nonce,
-      payload: { input: '在 AI治理办公室 下新建 人力资源部2，生效日期 2026-01-01' }
-    })
+	  await dispatchBridgeMessage(window.location.origin, {
+	    type: 'assistant.prompt.sync',
+	    channel,
+	    nonce,
+	    payload: { input: completeInput }
+	  })
 
-    await waitFor(() =>
-      expect(assistantAPIMocks.createAssistantTurn).toHaveBeenCalledWith(
-        'conv_1',
-        '在AI治理办公室之下，新建一个名为人力资源部2的部门，成立日期是2026-01-01。'
-      )
-    )
+	  await waitFor(() =>
+	    expect(assistantAPIMocks.createAssistantTurn).toHaveBeenCalledWith(
+	      'conv_1',
+	      expectedStructuredPrompt
+	    )
+	  )
     expect(assistantAPIMocks.confirmAssistantTurn).not.toHaveBeenCalled()
     expect(assistantAPIMocks.commitAssistantTurn).not.toHaveBeenCalled()
 
@@ -236,11 +246,24 @@ describe('LibreChatPage', () => {
         })
       )
 
-    render(<LibreChatPage />)
-    const { channel, nonce } = await readBridgeTokens()
+	  render(<LibreChatPage />)
+	  const { channel, nonce } = await readBridgeTokens()
+	  const missingFieldFollowUp = '生效日期 2026-03-25'
+	  const expectedMergedStructuredPrompt = composeStructuredIntentRetryPrompt(
+	    composeCreateOrgUnitPrompt(
+	      mergeIntentDraft(
+	        {
+	          parent_ref_text: 'AI治理办公室',
+	          entity_name: '人力资源部239A补全',
+	          effective_date: ''
+	        },
+	        extractIntentDraftFromText(missingFieldFollowUp)
+	      )
+	    )
+	  )
 
-    await dispatchBridgeMessage(window.location.origin, {
-      type: 'assistant.prompt.sync',
+	  await dispatchBridgeMessage(window.location.origin, {
+	    type: 'assistant.prompt.sync',
       channel,
       nonce,
       payload: { input: '在 AI治理办公室 下新建 人力资源部239A补全' }
@@ -249,19 +272,19 @@ describe('LibreChatPage', () => {
       expect(assistantAPIMocks.createAssistantTurn).toHaveBeenNthCalledWith(1, 'conv_1', '在 AI治理办公室 下新建 人力资源部239A补全')
     )
 
-    await dispatchBridgeMessage(window.location.origin, {
-      type: 'assistant.prompt.sync',
-      channel,
-      nonce,
-      payload: { input: '生效日期 2026-03-25' }
-    })
-    await waitFor(() =>
-      expect(assistantAPIMocks.createAssistantTurn).toHaveBeenNthCalledWith(
-        2,
-        'conv_1',
-        '在AI治理办公室之下，新建一个名为人力资源部239A补全的部门，成立日期是2026-03-25。'
-      )
-    )
+	  await dispatchBridgeMessage(window.location.origin, {
+	    type: 'assistant.prompt.sync',
+	    channel,
+	    nonce,
+	    payload: { input: missingFieldFollowUp }
+	  })
+	  await waitFor(() =>
+	    expect(assistantAPIMocks.createAssistantTurn).toHaveBeenNthCalledWith(
+	      2,
+	      'conv_1',
+	      expectedMergedStructuredPrompt
+	    )
+	  )
     expect(assistantAPIMocks.confirmAssistantTurn).not.toHaveBeenCalled()
     expect(assistantAPIMocks.commitAssistantTurn).not.toHaveBeenCalled()
 
@@ -378,7 +401,7 @@ describe('LibreChatPage', () => {
       payload: { input: '在鲜花组织之下，新建一个名为运营部的部门' }
     })
 
-    await waitFor(() => expect(screen.getByText('创建会话失败')).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByTestId('librechat-bridge-error')).toHaveTextContent('创建会话失败'))
     expect(assistantAPIMocks.renderAssistantTurnReply).not.toHaveBeenCalled()
   })
 

@@ -180,19 +180,19 @@ func TestAssistantUIProxyHandler(t *testing.T) {
 		if strings.Contains(bridgeRec.Body.String(), "return document.body") {
 			t.Fatalf("bridge script must not fall back to document.body for dialog root, got=%q", bridgeRec.Body.String())
 		}
-			if !strings.Contains(bridgeRec.Body.String(), "assistant.bridge.render_error") {
-				t.Fatalf("bridge script should emit render_error when dialog root is missing, got=%q", bridgeRec.Body.String())
-			}
-			if !strings.Contains(bridgeRec.Body.String(), "native_send_attempted") || !strings.Contains(bridgeRec.Body.String(), "native_send_emitted") {
-				t.Fatalf("bridge script should expose native send probe metrics, got=%q", bridgeRec.Body.String())
-			}
-			if !strings.Contains(bridgeRec.Body.String(), "stopImmediatePropagation") {
-				t.Fatalf("bridge script should block native send propagation, got=%q", bridgeRec.Body.String())
-			}
-			if !strings.Contains(bridgeRec.Body.String(), "data-assistant-message-id") {
-				t.Fatalf("bridge script should support stable in-bubble message ids, got=%q", bridgeRec.Body.String())
-			}
-			putReq := httptest.NewRequest(http.MethodPut, "http://localhost/assistant-ui", nil)
+		if !strings.Contains(bridgeRec.Body.String(), "assistant.bridge.render_error") {
+			t.Fatalf("bridge script should emit render_error when dialog root is missing, got=%q", bridgeRec.Body.String())
+		}
+		if !strings.Contains(bridgeRec.Body.String(), "native_send_attempted") || !strings.Contains(bridgeRec.Body.String(), "native_send_emitted") {
+			t.Fatalf("bridge script should expose native send probe metrics, got=%q", bridgeRec.Body.String())
+		}
+		if !strings.Contains(bridgeRec.Body.String(), "stopImmediatePropagation") {
+			t.Fatalf("bridge script should block native send propagation, got=%q", bridgeRec.Body.String())
+		}
+		if !strings.Contains(bridgeRec.Body.String(), "data-assistant-message-id") {
+			t.Fatalf("bridge script should support stable in-bubble message ids, got=%q", bridgeRec.Body.String())
+		}
+		putReq := httptest.NewRequest(http.MethodPut, "http://localhost/assistant-ui", nil)
 		putReq.Header.Set("Accept", "application/json")
 		putRec := httptest.NewRecorder()
 		h.ServeHTTP(putRec, putReq)

@@ -14,13 +14,13 @@
   3. 代理路径/方法边界未冻结，存在越界访问、跨租户会话复用与身份混淆风险。
   4. 缺少覆盖 `/assistant-ui/*` 的端到端负测（未登录、跨租户、旁路写）作为 CI 阻断证据。
 - **业务价值**:
-  - 将 `assistant-ui` 纳入与 `/app/**` 同级的会话与租户边界，确保 LibreChat UI 复用不破坏本仓 AuthN/AuthZ/Tenant 不变量。
+  - 将 LibreChat UI 的所有暴露入口纳入与 `/app/**` 同级的会话与租户边界，确保 UI 承载形态从 `/assistant-ui/*` 迁移到 vendored Web UI 后，仍不破坏本仓 AuthN/AuthZ/Tenant 不变量。
 
 ## 2. 目标与非目标 (Goals & Non-Goals)
 ### 2.1 核心目标
-1. [ ] `/assistant-ui` 与 `/assistant-ui/*` 强制会话校验，禁止绕过。
+1. [ ] LibreChat UI 的正式入口与历史别名入口都必须强制会话校验，禁止绕过。
 2. [ ] 固化 UI 会话行为矩阵（未登录、会话失效、租户不匹配）并保持 fail-closed。
-3. [ ] 收敛代理边界：方法白名单、路径规范化、请求/响应头最小透传。
+3. [ ] 收敛代理/BFF 边界：方法白名单、路径规范化、请求/响应头最小透传。
 4. [ ] 明确并保持 AuthN/AuthZ/Tenant 注入归属在本仓，不引入 LibreChat 自管身份旁路。
 5. [ ] 补齐单测 + E2E 负测，并接入现有门禁链路。
 
@@ -104,13 +104,14 @@ sequenceDiagram
 > 本计划不新增数据库 schema；冻结运行时边界契约。
 
 ### 4.1 受保护 UI 路径契约
+> 自 `DEV-PLAN-280` 起，本计划不再把 `/assistant-ui/*` 视为唯一正式 UI 路径；凡承载 LibreChat Web UI 的正式入口、静态资源前缀、短期灰度别名入口，都属于受保护 UI 路径集合。
 ```yaml
 protected_ui_prefixes:
   - /app
   - /assistant-ui
 ```
 约束：
-1. [ ] 受保护前缀必须经过完整 `tenant -> session -> principal` 校验。
+1. [ ] 受保护前缀必须经过完整 `tenant -> session -> principal` 校验，且该约束适用于 vendored UI 正式入口与历史 `/assistant-ui/*` 别名。
 2. [ ] 历史 UI 路径（如 `/login`）仍保持“无别名跳转、由路由层返回 404”的既有行为。
 
 ### 4.2 assistant-ui 代理请求边界契约
@@ -244,7 +245,7 @@ on response: strip Set-Cookie
 6. [ ] `make check doc`
 
 ### 9.3 完成定义（DoD）
-1. [ ] `/assistant-ui/*` 与 `/app/**` 在会话与租户边界上一致。
+1. [ ] LibreChat UI 的正式入口、静态资源路径与历史别名入口都与 `/app/**` 在会话与租户边界上一致。
 2. [ ] 代理默认最小透传，敏感头与 cookie 剥离可被测试稳定验证。
 3. [ ] 三类负测（未登录/跨租户/旁路写）在 CI 中可重复通过。
 4. [ ] 无 legacy 旁路或临时开关残留。

@@ -40,6 +40,7 @@ export interface DialogTurnAnalysis {
 
 const missingFieldGuidanceByCode: Record<string, string> = {
   missing_parent_ref_text: '请补充上级组织名称（例如：AI治理办公室）',
+  parent_candidate_not_found: '未找到匹配的上级组织，请补充更准确的名称或编码（例如：鲜花组织 / FLOWER-A）',
   missing_entity_name: '请补充部门名称（例如：人力资源部2）',
   missing_effective_date: '请补充生效日期（YYYY-MM-DD）',
   invalid_effective_date_format: '生效日期格式不正确，请使用 YYYY-MM-DD'
@@ -68,7 +69,7 @@ function resolveValidationCodes(turn: AssistantTurn | null): string[] {
 
 function hasMissingFieldError(codes: string[]): boolean {
   return codes.some((code) =>
-    ['missing_parent_ref_text', 'missing_entity_name', 'missing_effective_date', 'invalid_effective_date_format'].includes(code)
+    ['missing_parent_ref_text', 'parent_candidate_not_found', 'missing_entity_name', 'missing_effective_date', 'invalid_effective_date_format'].includes(code)
   )
 }
 

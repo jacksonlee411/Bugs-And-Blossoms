@@ -1,5 +1,5 @@
 import ChatIcon from '@mui/icons-material/Chat'
-import { Alert, Box, Button, Card, CardContent, Stack, Typography } from '@mui/material'
+import { Box, Button, Card, CardContent, Stack, Typography } from '@mui/material'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   commitAssistantTurn,
@@ -48,8 +48,12 @@ function normalized(value: string | undefined): string {
 }
 
 function buildAssistantDialogMessageID(conversationID: string, turnID: string, stage: string): string {
-  const parts = [conversationID, turnID, stage]
-    .map((value) => normalized(value).replace(/[^a-zA-Z0-9_-]+/g, '_'))
+  const stableConversationID = normalized(conversationID).replace(/[^a-zA-Z0-9_-]+/g, '_')
+  const stableTurnID = normalized(turnID).replace(/[^a-zA-Z0-9_-]+/g, '_')
+  if (stableConversationID.length > 0 && stableTurnID.length > 0) {
+    return `dlg_${stableConversationID}_${stableTurnID}`
+  }
+  const parts = [stableConversationID, stableTurnID, normalized(stage).replace(/[^a-zA-Z0-9_-]+/g, '_')]
     .filter((value) => value.length > 0)
   if (parts.length === 0) {
     return `dlg_${Date.now()}_${Math.random().toString(16).slice(2, 10)}`
@@ -70,6 +74,15 @@ function errorMessage(err: unknown, fallback: string): string {
     return message
   }
   return fallback
+}
+
+function pushBridgeAudit(event: Record<string, unknown>) {
+  if (typeof window === 'undefined') {
+    return
+  }
+  const target = window as typeof window & { __assistantBridgeAudit?: Array<Record<string, unknown>> }
+  target.__assistantBridgeAudit = Array.isArray(target.__assistantBridgeAudit) ? target.__assistantBridgeAudit : []
+  target.__assistantBridgeAudit.push({ ts: Date.now(), ...event })
 }
 
 function errorCode(err: unknown): string {
@@ -101,6 +114,21 @@ export function LibreChatPage() {
     () => `/assistant-ui/?channel=${encodeURIComponent(bridgeChannel)}&nonce=${encodeURIComponent(bridgeNonce)}`,
     [bridgeChannel, bridgeNonce]
   )
+  const bridgeReadyRef = useRef(false)
+  const pendingBridgeDeliveryTimersRef = useRef<Map<string, number>>(new Map())
+  const pendingBridgeDeliveriesRef = useRef<Map<string, { type: string; payload: Record<string, unknown> }>>(new Map())
+
+  const cancelPendingBridgeDelivery = useCallback((deliveryKey: string) => {
+    if (typeof window === 'undefined') {
+      return
+    }
+    const timer = pendingBridgeDeliveryTimersRef.current.get(deliveryKey)
+    if (typeof timer === 'number' && timer >= 0) {
+      window.clearTimeout(timer)
+    }
+    pendingBridgeDeliveryTimersRef.current.delete(deliveryKey)
+    pendingBridgeDeliveriesRef.current.delete(deliveryKey)
+  }, [])
 
   const setDialogFlow = useCallback((next: DialogFlowState) => {
     dialogFlowRef.current = next
@@ -142,15 +170,17 @@ export function LibreChatPage() {
     return refreshed
   }, [applyConversation])
 
-  const postBridgeMessage = useCallback(
-    (type: string, payload: Record<string, unknown>) => {
+  const deliverBridgeMessage = useCallback(
+    (type: string, payload: Record<string, unknown>, deliveryKey?: string, attempt?: number) => {
       if (typeof window === 'undefined') {
         return
       }
       const target = iframeRef.current?.contentWindow
       if (!target) {
+        pushBridgeAudit({ kind: 'post_skipped', type, reason: 'missing_target', deliveryKey, attempt })
         return
       }
+      pushBridgeAudit({ kind: 'post_sent', type, payload, deliveryKey, attempt, bridgeReady: bridgeReadyRef.current })
       target.postMessage(
         {
           type,
@@ -162,6 +192,44 @@ export function LibreChatPage() {
       )
     },
     [bridgeChannel, bridgeNonce]
+  )
+
+  const postBridgeMessage = useCallback(
+    (
+      type: string,
+      payload: Record<string, unknown>,
+      options?: {
+        deliveryKey?: string
+        retryDelays?: number[]
+      }
+    ) => {
+      const deliveryKey = normalized(options?.deliveryKey)
+      if (deliveryKey.length === 0 || typeof window === 'undefined') {
+        deliverBridgeMessage(type, payload)
+        return
+      }
+      cancelPendingBridgeDelivery(deliveryKey)
+      pendingBridgeDeliveriesRef.current.set(deliveryKey, { type, payload })
+      const retryDelays = options?.retryDelays ?? [300, 1000, 2500, 5000, 10000, 20000, 40000]
+      const sendAttempt = (attempt: number) => {
+        deliverBridgeMessage(type, payload, deliveryKey, attempt)
+        if (attempt >= retryDelays.length) {
+          pendingBridgeDeliveryTimersRef.current.delete(deliveryKey)
+          pendingBridgeDeliveriesRef.current.delete(deliveryKey)
+          return
+        }
+        const timer = window.setTimeout(() => {
+          if (!pendingBridgeDeliveryTimersRef.current.has(deliveryKey)) {
+            return
+          }
+          sendAttempt(attempt + 1)
+        }, retryDelays[attempt])
+        pendingBridgeDeliveryTimersRef.current.set(deliveryKey, timer)
+      }
+      pendingBridgeDeliveryTimersRef.current.set(deliveryKey, -1)
+      sendAttempt(0)
+    },
+    [cancelPendingBridgeDelivery, deliverBridgeMessage]
   )
 
   const postBridgeNotice = useCallback(
@@ -199,19 +267,24 @@ export function LibreChatPage() {
         const activeConversationID = normalized(options?.conversationID) || normalized(conversationRef.current?.conversation_id)
         const activeTurn = latestTurn(conversationRef.current)
         const activeTurnID = normalized(options?.turnID) || normalized(activeTurn?.turn_id)
-        postBridgeMessage('assistant.flow.dialog', {
-          message_id: buildAssistantDialogMessageID(activeConversationID, activeTurnID, finalStage),
-          kind: finalKind,
-          stage: finalStage,
-          text,
-          meta: {
-            ...(finalMeta ?? {}),
-            ...(activeConversationID.length > 0 ? { conversation_id: activeConversationID } : {}),
-            ...(activeTurnID.length > 0 ? { turn_id: activeTurnID } : {}),
-            ...(normalized(activeTurn?.request_id).length > 0 ? { request_id: normalized(activeTurn?.request_id) } : {}),
-            ...(normalized(activeTurn?.trace_id).length > 0 ? { trace_id: normalized(activeTurn?.trace_id) } : {})
-          }
-        })
+        const messageID = buildAssistantDialogMessageID(activeConversationID, activeTurnID, finalStage)
+        postBridgeMessage(
+          'assistant.flow.dialog',
+          {
+            message_id: messageID,
+            kind: finalKind,
+            stage: finalStage,
+            text,
+            meta: {
+              ...(finalMeta ?? {}),
+              ...(activeConversationID.length > 0 ? { conversation_id: activeConversationID } : {}),
+              ...(activeTurnID.length > 0 ? { turn_id: activeTurnID } : {}),
+              ...(normalized(activeTurn?.request_id).length > 0 ? { request_id: normalized(activeTurn?.request_id) } : {}),
+              ...(normalized(activeTurn?.trace_id).length > 0 ? { trace_id: normalized(activeTurn?.trace_id) } : {})
+            }
+          },
+          { deliveryKey: `assistant.flow.dialog:${messageID}` }
+        )
       }
       const text = normalized(message)
       if (text.length === 0) {
@@ -220,17 +293,38 @@ export function LibreChatPage() {
       const conversationID = normalized(options?.conversationID) || normalized(conversationRef.current?.conversation_id)
       const resolvedTurnID = normalized(options?.turnID) || normalized(latestTurn(conversationRef.current)?.turn_id)
       const allowMissingTurn = Boolean(options?.allowMissingTurn)
+      pushBridgeAudit({ kind: 'dialog_requested', stage, conversationID, resolvedTurnID, allowMissingTurn })
       if (conversationID.length === 0 || (resolvedTurnID.length === 0 && !allowMissingTurn)) {
         const notice =
           conversationID.length === 0
             ? '回复生成链路不可用：缺少会话上下文，请先发起业务请求。'
             : '回复生成链路不可用：缺少轮次上下文，请重试。'
         setBridgeError(notice)
+        pushBridgeAudit({ kind: 'dialog_blocked', stage, reason: notice, conversationID, resolvedTurnID, allowMissingTurn })
         postBridgeNotice(notice, 'warning')
         return
       }
       void (async () => {
+        let fallbackPosted = false
+        let fallbackTimer: number | null = null
+        const emitLocalFallback = () => {
+          if (fallbackPosted) {
+            return
+          }
+          fallbackPosted = true
+          pushBridgeAudit({ kind: 'dialog_fallback_emitted', stage, conversationID, resolvedTurnID })
+          sendBridgeDialog(text, kind, stage, {
+            ...(meta ?? {}),
+            reply_source: 'local_fallback',
+            used_fallback: 'true'
+          })
+        }
         try {
+          if (typeof window !== 'undefined') {
+            fallbackTimer = window.setTimeout(() => {
+              emitLocalFallback()
+            }, 8000)
+          }
           const replyTurnID = resolvedTurnID || assistantMissingTurnContextID
           const replyPayload = {
             stage,
@@ -247,6 +341,18 @@ export function LibreChatPage() {
             ...(fallbackText.length > 0 ? { fallback_text: fallbackText } : {}),
             ...(allowMissingTurn && resolvedTurnID.length === 0 ? { allow_missing_turn: true } : {})
           })
+          if (fallbackTimer !== null && typeof window !== 'undefined') {
+            window.clearTimeout(fallbackTimer)
+          }
+          pushBridgeAudit({
+            kind: 'dialog_rendered',
+            stage,
+            conversationID,
+            replyTurnID,
+            renderedStage: normalized(rendered.stage),
+            renderedKind: normalized(rendered.kind),
+            renderedText: normalized(rendered.text)
+          })
           sendBridgeDialog(
             normalized(rendered.text) || text,
             (normalized(rendered.kind) as DialogMessageKind) || kind,
@@ -259,10 +365,14 @@ export function LibreChatPage() {
               used_fallback: rendered.used_fallback ? 'true' : 'false'
             }
           )
-        } catch {
+        } catch (error) {
+          if (fallbackTimer !== null && typeof window !== 'undefined') {
+            window.clearTimeout(fallbackTimer)
+          }
+          emitLocalFallback()
           const notice = '回复生成失败，请稍后重试。'
           setBridgeError(notice)
-          postBridgeNotice(notice, 'error')
+          pushBridgeAudit({ kind: 'dialog_failed', stage, conversationID, resolvedTurnID, error: errorMessage(error, notice) })
         }
       })()
     },
@@ -435,6 +545,7 @@ export function LibreChatPage() {
   const runBridgeAutoFlow = useCallback(
     async (incomingText: string) => {
       const userInput = normalized(incomingText)
+      pushBridgeAudit({ kind: 'auto_flow_start', userInput })
       if (userInput.length === 0) {
         return
       }
@@ -443,11 +554,14 @@ export function LibreChatPage() {
       let activeConversation = conversationRef.current
       if (!activeConversation) {
         try {
+          pushBridgeAudit({ kind: 'conversation_create_requested' })
           const created = await createAssistantConversation()
+          pushBridgeAudit({ kind: 'conversation_created', conversationID: created.conversation_id })
           applyConversation(created)
           activeConversation = created
         } catch (err) {
           const message = errorMessage(err, '创建会话失败')
+          pushBridgeAudit({ kind: 'conversation_create_failed', error: message })
           setBridgeError(message)
           postBridgeNotice(message, 'error')
           return
@@ -490,8 +604,16 @@ export function LibreChatPage() {
 
       let generatedConversation: AssistantConversation | null = null
       try {
+        pushBridgeAudit({ kind: 'turn_create_requested', conversationID: activeConversation.conversation_id, generationInput })
         generatedConversation = await createAssistantTurn(activeConversation.conversation_id, generationInput)
         applyConversation(generatedConversation)
+        pushBridgeAudit({
+          kind: 'turn_created',
+          conversationID: generatedConversation.conversation_id,
+          turnID: normalized(latestTurn(generatedConversation)?.turn_id),
+          requestID: normalized(latestTurn(generatedConversation)?.request_id),
+          traceID: normalized(latestTurn(generatedConversation)?.trace_id)
+        })
       } catch (err) {
         const code = errorCode(err)
         const recoverable = shouldRetryStructuredPromptForError(code)
@@ -517,6 +639,17 @@ export function LibreChatPage() {
       }
 
       const generatedAnalysis = analyzeTurnForDialog(generatedTurn)
+      pushBridgeAudit({
+        kind: 'turn_analyzed',
+        phase: generatedAnalysis.phase,
+        conversationID: generatedConversation.conversation_id,
+        turnID: generatedTurn.turn_id,
+        requestID: generatedTurn.request_id,
+        traceID: generatedTurn.trace_id,
+        missingFields: generatedAnalysis.missing_field_messages,
+        candidateCount: generatedAnalysis.candidates.length,
+        draftSummary: generatedAnalysis.draft_summary
+      })
       setDialogFlow(
         withDialogPhase(dialogFlowRef.current, generatedAnalysis.phase, {
           candidates: generatedAnalysis.candidates,
@@ -554,10 +687,12 @@ export function LibreChatPage() {
         return
       }
       bridgePromptQueueRef.current.push(text)
+      pushBridgeAudit({ kind: 'prompt_enqueued', text, queueSize: bridgePromptQueueRef.current.length })
       if (bridgeWorkerRunningRef.current) {
         return
       }
       bridgeWorkerRunningRef.current = true
+      pushBridgeAudit({ kind: 'worker_started', queueSize: bridgePromptQueueRef.current.length })
       void (async () => {
         try {
           while (bridgePromptQueueRef.current.length > 0) {
@@ -565,6 +700,7 @@ export function LibreChatPage() {
             if (!nextInput) {
               continue
             }
+            pushBridgeAudit({ kind: 'worker_dequeued', text: nextInput, queueSize: bridgePromptQueueRef.current.length })
             await runBridgeAutoFlow(nextInput)
           }
         } finally {
@@ -577,6 +713,11 @@ export function LibreChatPage() {
 
   useEffect(() => {
     const handleMessage = (event: MessageEvent<unknown>) => {
+      const rawType =
+        typeof event.data === 'object' && event.data !== null && 'type' in event.data
+          ? String((event.data as { type?: unknown }).type ?? '')
+          : ''
+      pushBridgeAudit({ kind: 'message_seen', origin: event.origin, rawType })
       const validation = validateAssistantBridgeMessage({
         allowedOrigins,
         expectedChannel: bridgeChannel,
@@ -588,15 +729,35 @@ export function LibreChatPage() {
       })
 
       if (!validation.accepted) {
+        pushBridgeAudit({ kind: 'message_rejected', origin: event.origin, rawType, reason: validation.reason ?? 'unknown' })
         return
       }
       const message = validation.message
       if (!message) {
+        pushBridgeAudit({ kind: 'message_rejected', origin: event.origin, rawType, reason: 'missing_message' })
         return
       }
+      pushBridgeAudit({ kind: 'message_accepted', type: message.type, origin: event.origin })
       if (message.type === 'assistant.bridge.ready') {
-        setBridgeStatus('自动执行通道已连接：可直接在 LibreChat 对话中输入需求。')
-        postBridgeNotice('自动执行通道已连接：可直接在 LibreChat 对话中输入需求。', 'info')
+        bridgeReadyRef.current = true
+        setBridgeStatus('connected')
+        pendingBridgeDeliveriesRef.current.forEach((delivery, deliveryKey) => {
+          deliverBridgeMessage(delivery.type, delivery.payload, deliveryKey, -1)
+        })
+        pushBridgeAudit({ kind: 'bridge_ready', pendingDeliveryCount: pendingBridgeDeliveriesRef.current.size })
+        return
+      }
+      if (message.type === 'assistant.bridge.delivery_ack') {
+        const deliveryKey = normalized(String(message.payload?.delivery_key ?? ''))
+        if (deliveryKey.length > 0) {
+          cancelPendingBridgeDelivery(deliveryKey)
+        }
+        pushBridgeAudit({
+          kind: 'delivery_ack',
+          deliveryKey,
+          messageID: normalized(String(message.payload?.message_id ?? '')),
+          acceptedType: normalized(String(message.payload?.accepted_type ?? ''))
+        })
         return
       }
       if (message.type === 'assistant.prompt.sync') {
@@ -611,7 +772,22 @@ export function LibreChatPage() {
     return () => {
       window.removeEventListener('message', handleMessage)
     }
-  }, [allowedOrigins, bridgeChannel, bridgeNonce, enqueueBridgePrompt, postBridgeNotice])
+  }, [allowedOrigins, bridgeChannel, bridgeNonce, cancelPendingBridgeDelivery, deliverBridgeMessage, enqueueBridgePrompt])
+
+  useEffect(() => {
+    return () => {
+      if (typeof window === 'undefined') {
+        return
+      }
+      pendingBridgeDeliveryTimersRef.current.forEach((timer) => {
+        if (typeof timer === 'number' && timer >= 0) {
+          window.clearTimeout(timer)
+        }
+      })
+      pendingBridgeDeliveryTimersRef.current.clear()
+      pendingBridgeDeliveriesRef.current.clear()
+    }
+  }, [])
 
   return (
     <Stack spacing={2}>
@@ -624,10 +800,14 @@ export function LibreChatPage() {
         </Button>
       </Stack>
       <Typography color='text.secondary' variant='body2'>
-        独立聊天页：支持“对话式自动执行”，无需切回右侧事务按钮。
+        独立聊天页：唯一交互入口；所有业务回复必须回写到官方聊天流内。
       </Typography>
-      <Alert severity='info'>{bridgeStatus}</Alert>
-      {bridgeError ? <Alert severity='error'>{bridgeError}</Alert> : null}
+      <Box data-testid='librechat-bridge-status' sx={{ display: 'none' }}>
+        {bridgeStatus}
+      </Box>
+      <Box data-testid='librechat-bridge-error' sx={{ display: 'none' }}>
+        {bridgeError}
+      </Box>
       <Card>
         <CardContent sx={{ p: 0, '&:last-child': { pb: 0 } }}>
           <Box

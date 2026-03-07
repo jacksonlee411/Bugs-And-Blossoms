@@ -349,7 +349,7 @@ modules/{module}/
 - DEV-PLAN-210：200蓝图 Phase 4 会话事务提交与委托授权同构收口：`docs/dev-plans/210-blueprint-conversation-transaction-and-actor-delegated-authz.md`
 - DEV-PLAN-211：200蓝图 Phase 5 自建 Temporal M10D0 最小化落地：`docs/dev-plans/211-blueprint-temporal-m10d0-minimal-orchestration-foundation.md`
 - DEV-PLAN-212：200蓝图 Phase 6 评测门禁与触发式 Temporal 平台化验收：`docs/dev-plans/212-blueprint-eval-gates-and-triggered-temporal-productionization.md`
-- DEV-PLAN-220：聊天框式 AI 助手升级实施方案（SetID Governance × Req2Config × Conversation Tx）：`docs/dev-plans/220-chat-assistant-upgrade-implementation-plan.md`
+- DEV-PLAN-220：聊天框式 AI 助手升级总纲（历史基线修订；交互与 UI 架构约束已转移至 DEV-PLAN-260/266/280）：`docs/dev-plans/220-chat-assistant-upgrade-implementation-plan.md`
 - DEV-PLAN-220A：聊天框 AI 助手（220）测试验证与功能缺口收敛方案：`docs/dev-plans/220a-chat-assistant-gap-assessment-and-closure-plan.md`
 - DEV-PLAN-221：Assistant P1 Blocker 收口实施计划（状态机 × 漂移回退 × Strict Decode）：`docs/dev-plans/221-assistant-p1-blocker-closure-plan.md`
 - DEV-PLAN-221 执行日志：`docs/archive/dev-records/dev-plan-221-execution-log.md`
@@ -362,7 +362,7 @@ modules/{module}/
 - DEV-PLAN-224C：Assistant 可扩展意图注册表与多场景受控提交实施计划：`docs/dev-plans/224c-assistant-intent-registry-and-multi-scenario-expansion-plan.md`
 - DEV-PLAN-224D：Assistant `correct_orgunit` 意图全字段覆盖实施计划：`docs/dev-plans/224d-assistant-correct-orgunit-full-field-coverage-plan.md`
 - DEV-PLAN-225：Assistant Tasks API 与 Temporal（P2）实施计划：`docs/dev-plans/225-assistant-tasks-temporal-p2-implementation-plan.md`
-- DEV-PLAN-230：LibreChat 项目级集成实施方案（源码纳管 + 运行基线 + 安全边界）：`docs/dev-plans/230-librechat-project-level-integration-plan.md`
+- DEV-PLAN-230：LibreChat 项目级集成总纲（历史基线修订；UI 架构约束已转移至 DEV-PLAN-280）：`docs/dev-plans/230-librechat-project-level-integration-plan.md`
 - DEV-PLAN-231：LibreChat 集成前置契约与门禁补齐实施计划：`docs/dev-plans/231-librechat-prerequisites-contract-and-gates-plan.md`
 - DEV-PLAN-231 执行日志：`docs/archive/dev-records/dev-plan-231-execution-log.md`
 - DEV-PLAN-232：LibreChat 官方运行基线落地实施计划：`docs/dev-plans/232-librechat-official-runtime-baseline-plan.md`
@@ -397,6 +397,7 @@ modules/{module}/
 - DEV-PLAN-265 执行日志：`docs/archive/dev-records/dev-plan-265-execution-log.md`
 - DEV-PLAN-266：AI对话官方 UI 单通道与气泡内回写前置子计划：`docs/dev-plans/266-librechat-official-ui-single-dialog-channel-and-in-bubble-gpt52-plan.md`
 - DEV-PLAN-270：项目容器部署分层检讨与收敛方案：`docs/dev-plans/270-project-container-deployment-review-and-layered-convergence-plan.md`
+- DEV-PLAN-280：LibreChat Web UI 源码纳管与 Runtime 分层复用实施方案：`docs/dev-plans/280-librechat-web-ui-vendoring-and-runtime-layered-reuse-plan.md`
 - DEV-PLAN-225 执行日志：`docs/archive/dev-records/dev-plan-225-execution-log.md`
 - DEV-PLAN-226：测试指引 TG-004（门禁口径变更审批）：`docs/dev-plans/226-test-guide-tg004-gate-caliber-change-approval.md`
 - DEV-PLAN-170 执行日志：`docs/archive/dev-records/dev-plan-170-execution-log.md`

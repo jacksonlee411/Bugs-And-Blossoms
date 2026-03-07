@@ -66,6 +66,23 @@ describe('assistantDialogFlow', () => {
     expect(formatMissingFieldMessageText(analysis.missing_field_messages)).toContain('请补充生效日期')
   })
 
+  it('treats parent candidate not found as missing-field phase', () => {
+    const analysis = analyzeTurnForDialog(
+      makeTurn({
+        ambiguity_count: 0,
+        resolved_candidate_id: '',
+        candidates: [],
+        dry_run: {
+          explain: '未找到匹配的上级组织，请补充更准确的名称或编码后继续。',
+          diff: [],
+          validation_errors: ['parent_candidate_not_found']
+        }
+      }) as never
+    )
+    expect(analysis.phase).toBe('await_missing_fields')
+    expect(formatMissingFieldMessageText(analysis.missing_field_messages)).toContain('未找到匹配的上级组织')
+  })
+
   it('detects candidate pick phase when ambiguity exists', () => {
     const analysis = analyzeTurnForDialog(
       makeTurn({
