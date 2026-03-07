@@ -267,7 +267,7 @@ graph TD
 ## 11. 子计划拆分（自本次修订起）
 1. [X] `DEV-PLAN-281`：LibreChat Web UI 源码纳管与新主链路冻结实施计划（已完成，见执行日志）。
 2. [ ] `DEV-PLAN-282`：LibreChat 旧桥接链路删除实施计划。
-3. [ ] `DEV-PLAN-283`：LibreChat 正式入口直接切换实施计划。
+3. [X] `DEV-PLAN-283`：LibreChat 正式入口直接切换实施计划（已完成，见该计划内收口证据）。
 4. [ ] `DEV-PLAN-284`：LibreChat 发送与渲染主链路源码级接管实施计划。
 5. [ ] `DEV-PLAN-285`：LibreChat 切换回归闭环与封板实施计划。
 

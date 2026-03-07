@@ -93,6 +93,9 @@ export function AssistantPage() {
         <SmartToyIcon color='primary' />
         <Typography variant='h5'>AI 助手日志</Typography>
         <Box sx={{ flex: 1 }} />
+        <Button component='a' href='/app/assistant/librechat' variant='contained'>
+          打开 LibreChat
+        </Button>
         <Button component='a' href='/app/assistant/models' variant='text'>
           模型配置
         </Button>
@@ -102,7 +105,7 @@ export function AssistantPage() {
         `/app/assistant` 仅保留运行态、会话与审计记录；旧 `iframe + bridge` 对话承载页已按 `DEV-PLAN-282` 退役。
       </Typography>
 
-      <Alert severity='info'>旧 `/app/assistant/librechat` 页面不再承载正式交互职责；正式入口切换由 `DEV-PLAN-283` 承接。</Alert>
+      <Alert severity='info'>正式交互入口已统一到 `/app/assistant/librechat`；本页不再承担正式聊天交互与验收职责。</Alert>
 
       {pageError ? <Alert severity='warning'>{pageError}</Alert> : null}
 

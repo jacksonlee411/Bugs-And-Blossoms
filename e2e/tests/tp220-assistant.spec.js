@@ -367,12 +367,12 @@ test("tp220-e2e-104: ambiguous candidate must confirm before commit", async ({ b
   await appContext.close();
 });
 
-test("tp220-e2e-007: librechat shell cannot bypass business write routes", async ({ browser }) => {
+test("tp220-e2e-007: librechat formal entry cannot bypass business write routes", async ({ browser }) => {
   test.setTimeout(240_000);
   const { appContext, page } = await setupTenantAdminSession(browser, "007");
 
-  await page.goto("/app/assistant?as_of=2026-01-01");
-  await expect(page.getByRole("heading", { name: "AI 助手" })).toBeVisible();
+  await page.goto("/app/assistant/librechat");
+  await expect(page).toHaveTitle(/LibreChat/i);
 
   const bypassResp = await appContext.request.post("/assistant-ui/org/api/org-units", {
     data: {

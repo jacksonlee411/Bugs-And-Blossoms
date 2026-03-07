@@ -1,12 +1,22 @@
 import SmartToyIcon from '@mui/icons-material/SmartToy'
 import { Alert, Box, Button, Card, CardContent, Stack, Typography } from '@mui/material'
+import { useEffect } from 'react'
+
+const formalEntryURL = '/app/assistant/librechat'
 
 export function LibreChatPage() {
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return
+    }
+    window.location.replace(formalEntryURL)
+  }, [])
+
   return (
     <Stack spacing={2}>
       <Stack alignItems='center' direction='row' spacing={1}>
         <SmartToyIcon color='primary' />
-        <Typography variant='h5'>LibreChat 旧桥接入口已下线</Typography>
+        <Typography variant='h5'>正在进入 LibreChat 正式入口</Typography>
         <Box sx={{ flex: 1 }} />
         <Button component='a' href='/app/assistant' variant='text'>
           返回助手日志
@@ -14,19 +24,22 @@ export function LibreChatPage() {
       </Stack>
 
       <Alert severity='info'>
-        `iframe`、`bridge.js`、HTML 注入与页面级业务编排职责已按 `DEV-PLAN-282` 退役；该页面不再承担正式对话交互职责。
+        导航已统一到正式入口 `/app/assistant/librechat`；当前页面仅作为 SPA 内部跳转桥接，防止保留第二套正式入口语义。
       </Alert>
 
       <Card>
         <CardContent>
           <Stack spacing={1.5}>
-            <Typography variant='subtitle1'>当前状态</Typography>
+            <Typography variant='subtitle1'>切换状态</Typography>
             <Typography color='text.secondary' variant='body2'>
-              `/app/assistant/librechat` 仅保留历史入口占位，用于阻断旧桥接链路继续承担正式职责。
+              正在执行整页跳转以进入服务端正式入口。
             </Typography>
             <Typography color='text.secondary' variant='body2'>
-              正式入口切换与用户可见交互恢复由 `DEV-PLAN-283` 承接；在该计划完成前，不再通过本页承载旧 `iframe + postMessage` 方案。
+              若浏览器未自动跳转，请点击下方按钮手动进入正式入口。
             </Typography>
+            <Button component='a' href={formalEntryURL} variant='contained'>
+              打开正式入口
+            </Button>
           </Stack>
         </CardContent>
       </Card>

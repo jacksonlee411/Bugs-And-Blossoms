@@ -2,12 +2,12 @@
 
 **状态**: 实施中（2026-03-07 23:55 CST；旧桥正式职责已下线）
 
-## 0. 当前实施进度（2026-03-08）
+## 0. 当前实施进度（2026-03-07）
 - [x] `/app/assistant/librechat` 已退役为历史入口占位页，不再承载 `iframe + postMessage` 正式职责。
 - [x] `assistantAutoRun`、`assistantDialogFlow`、`assistantMessageBridge` 与 `assistantReplyFailurePayload` 已从前端主代码删除。
 - [x] `assistant-ui/bridge.js` 特判、HTML 注入与 fallback shell 外挂流已从服务端主链路删除。
 - [x] 旧桥专用的页面单测与 E2E 用例已删除。
-- [ ] 正式入口切换、导航与验收口径统一仍由 `DEV-PLAN-283` 承接。
+- [x] 正式入口切换、导航与验收口径统一已由 `DEV-PLAN-283` 完成收口。
 
 ## 1. 背景
 - 承接 `DEV-PLAN-280` 的 `280B`。
@@ -59,7 +59,7 @@
    - `docs/archive/dev-plans/239a-librechat-dialog-auto-execution-and-standalone-page-plan.md`
    - `docs/archive/dev-plans/239b-239a-direct-validation-report-and-implementation-gaps.md`
    - `docs/archive/dev-plans/262-librechat-dialog-render-outside-chat-investigation-and-fix-plan.md`
-2. [ ] 与 `DEV-PLAN-283` 对齐“正式入口唯一化”结果，确认上述文档不再承担正式验收口径。
+2. [X] 与 `DEV-PLAN-283` 对齐“正式入口唯一化”结果，确认上述文档不再承担正式验收口径。
 3. [ ] 将最终物理归档动作放在 `DEV-PLAN-285` 封板步骤中一次完成，避免中途口径漂移。
 
 ## 5. 验收标准

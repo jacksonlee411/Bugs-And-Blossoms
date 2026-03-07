@@ -63,8 +63,9 @@ describe('AssistantPage', () => {
 
     await screen.findByRole('heading', { name: 'AI 助手日志' })
 
-    expect(screen.queryByRole('link', { name: '打开 AI 对话' })).not.toBeInTheDocument()
+    expect(screen.getByRole('link', { name: '打开 LibreChat' })).toHaveAttribute('href', '/app/assistant/librechat')
     expect(screen.getByText(/旧 `iframe \+ bridge` 对话承载页已按 `DEV-PLAN-282` 退役/)).toBeInTheDocument()
+    expect(screen.getByText(/正式交互入口已统一到 `\/app\/assistant\/librechat`/)).toBeInTheDocument()
     expect(screen.queryByTestId('assistant-librechat-frame')).not.toBeInTheDocument()
     expect(screen.queryByRole('textbox')).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Confirm' })).not.toBeInTheDocument()
