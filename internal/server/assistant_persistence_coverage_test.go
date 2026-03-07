@@ -796,7 +796,7 @@ func TestAssistantPersistence_PGFlowCreateConfirmCommitTurn(t *testing.T) {
 		},
 		AmbiguityCount: 2,
 		Confidence:     0.55,
-		DryRun:         assistantBuildDryRun(assistantIntentSpec{Action: assistantIntentCreateOrgUnit, ParentRefText: "鲜花组织", EntityName: "运营部", EffectiveDate: "2026-01-01"}, nil, ""),
+		DryRun:         assistantBuildDryRun(assistantIntentSpec{Action: assistantIntentCreateOrgUnit, ParentRefText: "鲜花组织", EntityName: "运营部", EffectiveDate: "2026-01-01"}, []assistantCandidate{{CandidateID: "c1", CandidateCode: "FLOWER-A"}, {CandidateID: "c2", CandidateCode: "FLOWER-B"}}, ""),
 		CreatedAt:      now,
 		UpdatedAt:      now,
 	}
