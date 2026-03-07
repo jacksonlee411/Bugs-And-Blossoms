@@ -232,6 +232,7 @@ func TestKnownErrorMessage_AllCases(t *testing.T) {
 		{code: "ai_plan_schema_constrained_decode_failed", want: "计划结构化解析失败，请补全必填信息后重试。"},
 		{code: "ai_plan_boundary_violation", want: "计划超出助手执行边界，请调整后重试。"},
 		{code: "ai_plan_contract_version_mismatch", want: "计划契约版本不一致，请重新生成并确认后再提交。"},
+		{code: "ai_version_tuple_stale", want: "确认基线已变化，请重新确认后再提交。"},
 		{code: "ai_plan_determinism_violation", want: "计划确定性校验失败，请重新生成后重试。"},
 		{code: "ai_model_provider_unavailable", want: "当前无可用模型服务，请检查模型健康状态后重试。"},
 		{code: "ai_model_timeout", want: "模型请求超时，请稍后重试。"},

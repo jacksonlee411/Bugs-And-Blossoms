@@ -391,7 +391,7 @@ func TestAssistantPersistence_ApplyCommitTurnBranches(t *testing.T) {
 	baseIntent := assistantIntentSpec{Action: assistantIntentCreateOrgUnit, EntityName: "运营部", EffectiveDate: "2026-01-01", IntentSchemaVersion: assistantIntentSchemaVersionV1}
 
 	mkTurn := func() *assistantTurn {
-		return &assistantTurn{
+		turn := &assistantTurn{
 			TurnID:              "turn_1",
 			State:               assistantStateConfirmed,
 			TraceID:             "trace_1",
@@ -404,6 +404,10 @@ func TestAssistantPersistence_ApplyCommitTurnBranches(t *testing.T) {
 			ResolvedCandidateID: "c1",
 			Candidates:          []assistantCandidate{{CandidateID: "c1", CandidateCode: "FLOWER-A"}},
 		}
+		if err := svc.refreshTurnVersionTuple(context.Background(), "tenant_1", turn); err != nil {
+			t.Fatalf("refresh turn version tuple err=%v", err)
+		}
+		return turn
 	}
 	conversation := &assistantConversation{ConversationID: "conv_1"}
 
@@ -455,6 +459,19 @@ func TestAssistantPersistence_ApplyCommitTurnBranches(t *testing.T) {
 		t.Fatalf("unexpected err=%v", err)
 	}
 	svc.writeSvc = assistantWriteServiceStub{store: store}
+
+	turn = mkTurn()
+	svc.commitAdapterRegistry = assistantCommitAdapterRegistryMap{adapters: map[string]assistantCommitAdapter{}}
+	if _, err := svc.applyCommitTurn(context.Background(), conversation, turn, principal, "tenant_1"); !errors.Is(err, errAssistantServiceMissing) {
+		t.Fatalf("want missing adapter, got err=%v", err)
+	}
+	svc.commitAdapterRegistry = nil
+
+	turn = mkTurn()
+	turn.Plan.VersionTuple = []byte(`{"parent_candidate_id":"c1","parent_org_code":"FLOWER-A","parent_updated_at":"2000-01-01T00:00:00Z","effective_date":"2026-01-01"}`)
+	if result, err := svc.applyCommitTurn(context.Background(), conversation, turn, principal, "tenant_1"); !errors.Is(err, errAssistantVersionTupleStale) || !result.PersistTurn {
+		t.Fatalf("want version tuple stale, got result=%+v err=%v", result, err)
+	}
 
 	turn = mkTurn()
 	turn.ResolvedCandidateID = "missing"
@@ -867,6 +884,9 @@ func TestAssistantPersistence_PGFlowCreateConfirmCommitTurn(t *testing.T) {
 	turnForCommit.ResolutionSource = assistantResolutionUserConfirmed
 	turnForCommit.RequestID = "req_commit_1"
 	turnForCommit.TraceID = "trace_commit_1"
+	if err := svc.refreshTurnVersionTuple(context.Background(), "tenant_1", &turnForCommit); err != nil {
+		t.Fatalf("refresh commit turn version tuple err=%v", err)
+	}
 
 	stage := "create"
 	tx := &assistFakeTx{}

@@ -329,6 +329,13 @@ errors:
     user_message_key: errors.ai_plan_contract_version_mismatch
     backend_policy: mapped
     frontend_policy: mapped
+  - code: ai_version_tuple_stale
+    module: assistant
+    http_status: 409
+    severity: error
+    user_message_key: errors.ai_version_tuple_stale
+    backend_policy: mapped
+    frontend_policy: mapped
   - code: ai_plan_determinism_violation
     module: assistant
     http_status: 409

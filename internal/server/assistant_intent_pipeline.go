@@ -64,10 +64,7 @@ func assistantShouldFallbackIntentLocally(err error) bool {
 
 func assistantResolveIntentLocally(userInput string) (assistantResolveIntentResult, error) {
 	intent := assistantExtractIntent(strings.TrimSpace(userInput))
-	plan := assistantBuildPlan(intent)
-	if _, ok := capabilityDefinitionForKey(plan.CapabilityKey); !ok {
-		return assistantResolveIntentResult{}, errAssistantPlanBoundaryViolation
-	}
+	_ = assistantBuildPlan(intent)
 	return assistantResolveIntentResult{
 		Intent:        intent,
 		ProviderName:  "deterministic",
@@ -154,7 +151,10 @@ func assistantPlanHash(intent assistantIntentSpec, plan assistantPlanSummary, dr
 		"intent": intent,
 		"plan": map[string]any{
 			"title":                     plan.Title,
+			"action_id":                 plan.ActionID,
+			"action_version":            plan.ActionVersion,
 			"capability_key":            plan.CapabilityKey,
+			"commit_adapter_key":        plan.CommitAdapterKey,
 			"summary":                   plan.Summary,
 			"capability_map_version":    plan.CapabilityMapVersion,
 			"compiler_contract_version": plan.CompilerContractVersion,
@@ -162,6 +162,7 @@ func assistantPlanHash(intent assistantIntentSpec, plan assistantPlanSummary, dr
 			"model_provider":            plan.ModelProvider,
 			"model_name":                plan.ModelName,
 			"model_revision":            plan.ModelRevision,
+			"version_tuple":             plan.VersionTuple,
 			"skill_execution_plan":      plan.SkillExecutionPlan,
 			"config_delta_plan":         plan.ConfigDeltaPlan,
 		},

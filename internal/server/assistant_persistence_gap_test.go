@@ -543,6 +543,9 @@ func TestAssistantPersistence_UpsertAndMutationBranchCoverage(t *testing.T) {
 		MappingVersion:      capabilityPolicyVersionBaseline,
 	}
 	commitTurn.Plan.SkillManifestDigest = "digest"
+	if err := commitSvc.refreshTurnVersionTuple(context.Background(), "tenant_1", commitTurn); err != nil {
+		t.Fatalf("refresh turn version tuple err=%v", err)
+	}
 	if _, err := commitSvc.applyCommitTurn(context.Background(), conversation, commitTurn, principal, "tenant_1"); err != nil {
 		t.Fatalf("unexpected err=%v", err)
 	}

@@ -287,7 +287,7 @@ func assistantTransitionPhaseValue(state string, reason string, turnPhase string
 			return assistantPhaseAwaitCommitConfirm
 		}
 		return assistantPhaseAwaitCommitConfirm
-	case "contract_version_mismatch", "version_drift":
+	case "contract_version_mismatch", "version_drift", "version_tuple_stale":
 		return assistantPhaseAwaitCommitConfirm
 	case "committed":
 		if from {
@@ -321,10 +321,7 @@ func assistantCommitReplyJSON(turn *assistantTurn) any {
 	if reply == nil {
 		return nil
 	}
-	payload, err := json.Marshal(reply)
-	if err != nil {
-		return nil
-	}
+	payload, _ := json.Marshal(reply)
 	return string(payload)
 }
 

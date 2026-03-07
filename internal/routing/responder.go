@@ -164,6 +164,8 @@ func knownErrorMessage(code string) string {
 		return "计划超出助手执行边界，请调整后重试。"
 	case "ai_plan_contract_version_mismatch":
 		return "计划契约版本不一致，请重新生成并确认后再提交。"
+	case "ai_version_tuple_stale":
+		return "确认基线已变化，请重新确认后再提交。"
 	case "ai_plan_determinism_violation":
 		return "计划确定性校验失败，请重新生成后重试。"
 	case "ai_model_provider_unavailable":

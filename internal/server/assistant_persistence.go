@@ -14,7 +14,6 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
-	orgunitservices "github.com/jacksonlee411/Bugs-And-Blossoms/modules/orgunit/services"
 )
 
 const (
@@ -239,6 +238,12 @@ func (s *assistantConversationService) createTurnPG(ctx context.Context, tenantI
 		return nil, errAssistantPlanBoundaryViolation
 	}
 	dryRun := assistantBuildDryRun(intent, candidates, resolvedCandidateID)
+	tempTurn := &assistantTurn{Intent: intent, Plan: plan, Candidates: candidates, ResolvedCandidateID: resolvedCandidateID, DryRun: dryRun}
+	if err := s.refreshTurnVersionTuple(ctx, tenantID, tempTurn); err != nil {
+		return nil, err
+	}
+	plan = tempTurn.Plan
+	dryRun = tempTurn.DryRun
 	if err := assistantAnnotateIntentPlanFn(tenantID, conversationID, userInput, &intent, &plan, &dryRun); err != nil {
 		return nil, err
 	}
@@ -529,6 +534,9 @@ func (s *assistantConversationService) applyConfirmTurn(conversation *assistantC
 	if turn.Intent.Action == assistantIntentCreateOrgUnit && turn.ResolvedCandidateID == "" {
 		return assistantTurnMutationResult{}, errAssistantConfirmationRequired
 	}
+	if err := s.refreshTurnVersionTuple(context.Background(), conversation.TenantID, turn); err != nil {
+		return assistantTurnMutationResult{}, err
+	}
 	fromState := turn.State
 	fromPhase := turn.Phase
 	turn.PolicyVersion, turn.CompositionVersion, turn.MappingVersion = assistantTurnVersionSnapshot(turn.Plan.CapabilityKey)
@@ -618,45 +626,62 @@ func (s *assistantConversationService) applyCommitTurn(ctx context.Context, conv
 		conversation.Transitions = append(conversation.Transitions, *transition)
 		return assistantTurnMutationResult{Transition: transition, PersistTurn: true}, errAssistantConfirmationRequired
 	}
-	if turn.Intent.Action != assistantIntentCreateOrgUnit {
+	spec, ok := s.lookupActionSpec(turn.Intent.Action)
+	if !ok {
 		return assistantTurnMutationResult{}, errAssistantUnsupportedIntent
 	}
 	if turn.ResolvedCandidateID == "" {
 		return assistantTurnMutationResult{}, errAssistantCandidateNotFound
 	}
-	if s.writeSvc == nil {
-		return assistantTurnMutationResult{}, errAssistantServiceMissing
-	}
 	resolved, ok := assistantFindCandidate(turn.Candidates, turn.ResolvedCandidateID)
 	if !ok {
 		return assistantTurnMutationResult{}, errAssistantCandidateNotFound
 	}
-	name := turn.Intent.EntityName
-	if strings.TrimSpace(name) == "" {
-		name = "新建组织"
+	if err := s.validateTurnVersionTuple(ctx, tenantID, turn); err != nil {
+		fromState := turn.State
+		fromPhase := turn.Phase
+		turn.State = assistantStateValidated
+		turn.ErrorCode = strings.TrimSpace(err.Error())
+		turn.UpdatedAt = time.Now().UTC()
+		assistantRefreshTurnDerivedFields(turn)
+		conversation.UpdatedAt = turn.UpdatedAt
+		conversation.State = turn.State
+		conversation.CurrentPhase = turn.Phase
+		transition := &assistantStateTransition{
+			TurnID:     turn.TurnID,
+			TurnAction: "commit",
+			RequestID:  turn.RequestID,
+			TraceID:    turn.TraceID,
+			FromState:  fromState,
+			ToState:    turn.State,
+			FromPhase:  fromPhase,
+			ToPhase:    turn.Phase,
+			ReasonCode: "version_tuple_stale",
+			ActorID:    principal.ID,
+			ChangedAt:  turn.UpdatedAt,
+		}
+		conversation.Transitions = append(conversation.Transitions, *transition)
+		return assistantTurnMutationResult{Transition: transition, PersistTurn: true}, err
 	}
-	parentOrgCode := resolved.CandidateCode
-	result, err := s.writeSvc.Write(ctx, tenantID, orgunitservices.WriteOrgUnitRequest{
-		Intent:        string(orgunitservices.OrgUnitWriteIntentCreateOrg),
-		EffectiveDate: turn.Intent.EffectiveDate,
-		PolicyVersion: turn.PolicyVersion,
-		RequestID:     turn.RequestID,
-		Patch: orgunitservices.OrgUnitWritePatch{
-			Name:          ptrString(name),
-			ParentOrgCode: ptrString(parentOrgCode),
-		},
-		InitiatorUUID: principal.ID,
+	adapterKey := strings.TrimSpace(turn.Plan.CommitAdapterKey)
+	if adapterKey == "" {
+		adapterKey = strings.TrimSpace(spec.Handler.CommitAdapterKey)
+	}
+	adapter, ok := s.lookupCommitAdapter(adapterKey)
+	if !ok {
+		return assistantTurnMutationResult{}, errAssistantServiceMissing
+	}
+	commitResult, err := adapter.Commit(ctx, assistantCommitRequest{
+		TenantID:          tenantID,
+		Principal:         principal,
+		Turn:              turn,
+		ResolvedCandidate: resolved,
 	})
 	if err != nil {
 		return assistantTurnMutationResult{}, err
 	}
-	turn.CommitResult = &assistantCommitResult{
-		OrgCode:       result.OrgCode,
-		ParentOrgCode: parentOrgCode,
-		EffectiveDate: result.EffectiveDate,
-		EventType:     result.EventType,
-		EventUUID:     result.EventUUID,
-	}
+	turn.CommitResult = commitResult
+	turn.ErrorCode = ""
 	fromState := turn.State
 	fromPhase := turn.Phase
 	turn.State = assistantStateCommitted
@@ -1340,6 +1365,8 @@ func assistantIdempotencyErrorPayload(err error) (status int, code string, ok bo
 		return http.StatusConflict, errAssistantConversationStateInvalid.Error(), true
 	case errors.Is(err, errAssistantPlanContractVersionMismatch):
 		return http.StatusConflict, errAssistantPlanContractVersionMismatch.Error(), true
+	case errors.Is(err, errAssistantVersionTupleStale):
+		return http.StatusConflict, errAssistantVersionTupleStale.Error(), true
 	case errors.Is(err, errAssistantCandidateNotFound):
 		return http.StatusUnprocessableEntity, errAssistantCandidateNotFound.Error(), true
 	case errors.Is(err, errAssistantAuthSnapshotExpired):
@@ -1380,6 +1407,8 @@ func assistantErrorFromIdempotencyCode(code string) error {
 		return errAssistantConversationStateInvalid
 	case errAssistantPlanContractVersionMismatch.Error():
 		return errAssistantPlanContractVersionMismatch
+	case errAssistantVersionTupleStale.Error():
+		return errAssistantVersionTupleStale
 	case errAssistantCandidateNotFound.Error():
 		return errAssistantCandidateNotFound
 	case errAssistantAuthSnapshotExpired.Error():

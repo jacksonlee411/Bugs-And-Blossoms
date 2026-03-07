@@ -43,14 +43,16 @@ var (
 )
 
 type assistantConversationService struct {
-	orgStore     OrgUnitStore
-	writeSvc     orgunitservices.OrgUnitWriteService
-	modelGateway *assistantModelGateway
-	gatewayErr   error
-	pool         assistantTxBeginner
-	mu           sync.RWMutex
-	byID         map[string]*assistantConversation
-	byActorID    map[string][]string
+	orgStore              OrgUnitStore
+	writeSvc              orgunitservices.OrgUnitWriteService
+	actionRegistry        assistantActionRegistry
+	commitAdapterRegistry assistantCommitAdapterRegistry
+	modelGateway          *assistantModelGateway
+	gatewayErr            error
+	pool                  assistantTxBeginner
+	mu                    sync.RWMutex
+	byID                  map[string]*assistantConversation
+	byActorID             map[string][]string
 }
 
 type assistantTxBeginner interface {
@@ -127,7 +129,10 @@ type assistantIntentSpec struct {
 
 type assistantPlanSummary struct {
 	Title                   string                      `json:"title"`
+	ActionID                string                      `json:"action_id,omitempty"`
+	ActionVersion           string                      `json:"action_version,omitempty"`
 	CapabilityKey           string                      `json:"capability_key"`
+	CommitAdapterKey        string                      `json:"commit_adapter_key,omitempty"`
 	Summary                 string                      `json:"summary"`
 	CapabilityMapVersion    string                      `json:"capability_map_version,omitempty"`
 	CompilerContractVersion string                      `json:"compiler_contract_version,omitempty"`
@@ -135,6 +140,7 @@ type assistantPlanSummary struct {
 	ModelProvider           string                      `json:"model_provider,omitempty"`
 	ModelName               string                      `json:"model_name,omitempty"`
 	ModelRevision           string                      `json:"model_revision,omitempty"`
+	VersionTuple            json.RawMessage             `json:"version_tuple,omitempty"`
 	SkillExecutionPlan      assistantSkillExecutionPlan `json:"skill_execution_plan,omitempty"`
 	ConfigDeltaPlan         assistantConfigDeltaPlan    `json:"config_delta_plan,omitempty"`
 }
@@ -165,6 +171,7 @@ type assistantDryRunResult struct {
 }
 
 type assistantCandidate struct {
+	OrgID         int     `json:"org_id,omitempty"`
 	CandidateID   string  `json:"candidate_id"`
 	CandidateCode string  `json:"candidate_code"`
 	Name          string  `json:"name"`
@@ -526,6 +533,8 @@ func handleAssistantTurnActionAPI(w http.ResponseWriter, r *http.Request, svc *a
 				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusConflict, "conversation_state_invalid", "conversation state invalid")
 			case errors.Is(err, errAssistantPlanContractVersionMismatch):
 				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusConflict, "ai_plan_contract_version_mismatch", "ai plan contract version mismatch")
+			case errors.Is(err, errAssistantVersionTupleStale):
+				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusConflict, "ai_version_tuple_stale", "ai version tuple stale")
 			case errors.Is(err, errAssistantAuthSnapshotExpired):
 				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusForbidden, "ai_actor_auth_snapshot_expired", "ai actor auth snapshot expired")
 			case errors.Is(err, errAssistantRoleDriftDetected):
@@ -642,6 +651,7 @@ var (
 	errAssistantPlanSchemaConstrainedDecodeFailed = errors.New("assistant_plan_schema_constrained_decode_failed")
 	errAssistantPlanBoundaryViolation             = errors.New("assistant_plan_boundary_violation")
 	errAssistantPlanContractVersionMismatch       = errors.New("assistant_plan_contract_version_mismatch")
+	errAssistantVersionTupleStale                 = errors.New("assistant_version_tuple_stale")
 	errAssistantPlanDeterminismViolation          = errors.New("assistant_plan_determinism_violation")
 	errAssistantModelProviderUnavailable          = errors.New("assistant_model_provider_unavailable")
 	errAssistantModelTimeout                      = errors.New("assistant_model_timeout")
@@ -866,6 +876,12 @@ func (s *assistantConversationService) createTurn(ctx context.Context, tenantID 
 		return nil, errAssistantPlanBoundaryViolation
 	}
 	dryRun := assistantBuildDryRun(intent, candidates, resolvedCandidateID)
+	tempTurn := &assistantTurn{Intent: intent, Plan: plan, Candidates: candidates, ResolvedCandidateID: resolvedCandidateID, DryRun: dryRun}
+	if err := s.refreshTurnVersionTuple(ctx, tenantID, tempTurn); err != nil {
+		return nil, err
+	}
+	plan = tempTurn.Plan
+	dryRun = tempTurn.DryRun
 	if err := assistantAnnotateIntentPlanFn(tenantID, conversationID, userInput, &intent, &plan, &dryRun); err != nil {
 		return nil, err
 	}
@@ -1186,6 +1202,7 @@ func (s *assistantConversationService) resolveCandidates(ctx context.Context, te
 			candidateID = strconv.Itoa(item.OrgID)
 		}
 		candidates = append(candidates, assistantCandidate{
+			OrgID:         item.OrgID,
 			CandidateID:   candidateID,
 			CandidateCode: strings.TrimSpace(item.OrgCode),
 			Name:          strings.TrimSpace(item.Name),
@@ -1199,29 +1216,31 @@ func (s *assistantConversationService) resolveCandidates(ctx context.Context, te
 }
 
 func assistantRiskTierForIntent(intent assistantIntentSpec) string {
-	switch intent.Action {
-	case assistantIntentCreateOrgUnit:
-		return "high"
-	default:
-		return "low"
+	if spec, ok := assistantLookupDefaultActionSpec(intent.Action); ok {
+		if riskTier := strings.TrimSpace(spec.RiskTier); riskTier != "" {
+			return riskTier
+		}
 	}
+	return "low"
 }
 
 func assistantBuildPlan(intent assistantIntentSpec) assistantPlanSummary {
-	summary := "生成只读计划，不执行提交"
-	title := "只读规划"
-	capabilityKey := "org.orgunit_create.field_policy"
-	if intent.Action == assistantIntentCreateOrgUnit {
-		title = "创建组织计划"
-		summary = "在指定父组织下创建部门，提交前需要确认候选主键"
-	}
-	return assistantPlanSummary{
-		Title:                   title,
-		CapabilityKey:           capabilityKey,
-		Summary:                 summary,
+	plan := assistantPlanSummary{
+		Title:                   "只读规划",
+		CapabilityKey:           "org.orgunit_create.field_policy",
+		Summary:                 "生成只读计划，不执行提交",
 		CapabilityMapVersion:    assistantCapabilityMapVersionV1,
 		CompilerContractVersion: assistantCompilerContractVersionV1,
 	}
+	if spec, ok := assistantLookupDefaultActionSpec(intent.Action); ok {
+		plan.Title = spec.PlanTitle
+		plan.ActionID = spec.ID
+		plan.ActionVersion = spec.Version
+		plan.CapabilityKey = spec.CapabilityKey
+		plan.CommitAdapterKey = spec.Handler.CommitAdapterKey
+		plan.Summary = spec.PlanSummary
+	}
+	return plan
 }
 
 func assistantBuildDryRun(intent assistantIntentSpec, candidates []assistantCandidate, resolvedCandidateID string) assistantDryRunResult {
