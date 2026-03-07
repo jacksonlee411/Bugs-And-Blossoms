@@ -414,6 +414,9 @@ modules/{module}/
 - DEV-PLAN-286：266 剩余项 A——官方消息树绑定与同轮单气泡收口：`docs/dev-plans/286-librechat-official-message-binding-and-single-bubble-closure-plan.md`
 - DEV-PLAN-287：266 剩余项 B——失败回包同落点与前端 DTO-only 降权收口：`docs/dev-plans/287-librechat-dto-render-only-and-failure-in-bubble-closure-plan.md`
 - DEV-PLAN-288：266 剩余项 C——真实入口 E2E 与证据封板收口：`docs/dev-plans/288-librechat-266-live-e2e-and-evidence-closure-plan.md`
+- DEV-PLAN-289：260-M2~M4 实施收口专项（事实源推进 + 主链联调）：`docs/dev-plans/289-librechat-260-m2-m4-implementation-closure-plan.md`
+- DEV-PLAN-290：260-M5 真实 Case 验收与证据固化专项：`docs/dev-plans/290-librechat-260-m5-real-case-validation-and-evidence-plan.md`
+- DEV-PLAN-291：237 升级兼容回归前置专项（供 285 封板复核）：`docs/dev-plans/291-librechat-237-upgrade-compatibility-readiness-plan.md`
 - DEV-PLAN-225 执行日志：`docs/archive/dev-records/dev-plan-225-execution-log.md`
 - DEV-PLAN-226：测试指引 TG-004（门禁口径变更审批）：`docs/dev-plans/226-test-guide-tg004-gate-caliber-change-approval.md`
 - DEV-PLAN-170 执行日志：`docs/archive/dev-records/dev-plan-170-execution-log.md`
