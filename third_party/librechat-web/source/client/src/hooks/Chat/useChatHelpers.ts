@@ -7,6 +7,7 @@ import useChatFunctions from '~/hooks/Chat/useChatFunctions';
 import { useGetMessagesByConvoId } from '~/data-provider';
 import { useAuthContext } from '~/hooks/AuthContext';
 import useNewConvo from '~/hooks/useNewConvo';
+import { isFormalAssistantPath } from '~/assistant-formal/runtime';
 import store from '~/store';
 
 // this to be set somewhere else
@@ -17,6 +18,7 @@ export default function useChatHelpers(index = 0, paramId?: string) {
 
   const queryClient = useQueryClient();
   const { isAuthenticated } = useAuthContext();
+  const formalAssistantMode = isFormalAssistantPath();
 
   const { newConversation } = useNewConvo(index);
   const { useCreateConversationAtom } = store;
@@ -28,7 +30,7 @@ export default function useChatHelpers(index = 0, paramId?: string) {
   /* Messages: here simply to fetch, don't export and use `getMessages()` instead */
 
   const { data: _messages } = useGetMessagesByConvoId(conversationId ?? '', {
-    enabled: isAuthenticated,
+    enabled: isAuthenticated && !formalAssistantMode,
   });
 
   const resetLatestMessage = useResetRecoilState(store.latestMessageFamily(index));

@@ -7,6 +7,7 @@ import { Constants, buildTree } from 'librechat-data-provider';
 import type { TMessage } from 'librechat-data-provider';
 import type { ChatFormValues } from '~/common';
 import { ChatContext, AddedChatContext, useFileMapContext, ChatFormProvider } from '~/Providers';
+import { isFormalAssistantPath } from '~/assistant-formal/runtime';
 import { useChatHelpers, useAddedResponse, useSSE } from '~/hooks';
 import ConversationStarters from './Input/ConversationStarters';
 import { useGetMessagesByConvoId } from '~/data-provider';
@@ -34,6 +35,7 @@ function ChatView({ index = 0 }: { index?: number }) {
   const rootSubmission = useRecoilValue(store.submissionByIndex(index));
   const addedSubmission = useRecoilValue(store.submissionByIndex(index + 1));
   const centerFormOnLanding = useRecoilValue(store.centerFormOnLanding);
+  const formalAssistantMode = isFormalAssistantPath();
 
   const fileMap = useFileMapContext();
 
@@ -45,7 +47,7 @@ function ChatView({ index = 0 }: { index?: number }) {
       },
       [fileMap],
     ),
-    enabled: !!fileMap,
+    enabled: !!fileMap && !formalAssistantMode,
   });
 
   const chatHelpers = useChatHelpers(index, conversationId);

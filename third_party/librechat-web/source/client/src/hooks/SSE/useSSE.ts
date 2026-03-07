@@ -15,6 +15,25 @@ import type { EventHandlerParams } from './useEventHandlers';
 import type { TResData } from '~/common';
 import { useGenTitleMutation, useGetStartupConfig, useGetUserBalance } from '~/data-provider';
 import { useAuthContext } from '~/hooks/AuthContext';
+import {
+  createAssistantFormalConversation,
+  createAssistantFormalTurn,
+  renderAssistantFormalReply,
+  type AssistantFormalAPIError,
+} from '~/assistant-formal/api';
+import {
+  buildAssistantFormalFailurePayload,
+  buildAssistantFormalPayload,
+  clearStoredAssistantFormalConversationId,
+  detectAssistantFormalLocale,
+  getStoredAssistantFormalConversationId,
+  isFormalAssistantPath,
+  latestAssistantFormalTurn,
+  patchAssistantFormalMessage,
+  resolveAssistantFormalText,
+  setStoredAssistantFormalConversationId,
+  shouldResetAssistantFormalConversation,
+} from '~/assistant-formal/runtime';
 import useEventHandlers from './useEventHandlers';
 import store from '~/store';
 
@@ -95,6 +114,113 @@ export default function useSSE(
       return;
     }
 
+    if (isFormalAssistantPath()) {
+      const assistantMessageId = submission.initialResponse?.messageId;
+      const locale = detectAssistantFormalLocale();
+      let cancelled = false;
+
+      const patchFormalMessage = (patch: Partial<TMessage>) => {
+        if (!assistantMessageId) {
+          return;
+        }
+        setMessages(
+          patchAssistantFormalMessage(getMessages() ?? [], assistantMessageId, patch),
+        );
+      };
+
+      const runFormalSubmission = async () => {
+        setIsSubmitting(true);
+        setShowStopButton(true);
+        setAbortScroll(false);
+
+        if (shouldResetAssistantFormalConversation(submission)) {
+          clearStoredAssistantFormalConversationId();
+        }
+
+        patchFormalMessage({
+          text: locale === 'en' ? 'Processing...' : '处理中...',
+          assistantFormalPending: true,
+          error: false,
+        } as Partial<TMessage>);
+
+        try {
+          let backendConversationId = getStoredAssistantFormalConversationId();
+          if (!backendConversationId) {
+            const conversation = await createAssistantFormalConversation(token);
+            backendConversationId = conversation.conversation_id;
+            setStoredAssistantFormalConversationId(backendConversationId);
+          }
+
+          let conversation;
+          try {
+            conversation = await createAssistantFormalTurn(
+              backendConversationId,
+              submission.userMessage.text,
+              token,
+            );
+          } catch (error) {
+            if (backendConversationId) {
+              clearStoredAssistantFormalConversationId();
+              const retryConversation = await createAssistantFormalConversation(token);
+              backendConversationId = retryConversation.conversation_id;
+              setStoredAssistantFormalConversationId(backendConversationId);
+              conversation = await createAssistantFormalTurn(
+                backendConversationId,
+                submission.userMessage.text,
+                token,
+              );
+            } else {
+              throw error;
+            }
+          }
+
+          const turn = latestAssistantFormalTurn(conversation);
+          if (!turn) {
+            throw new Error('assistant turn missing');
+          }
+          const reply = turn.reply_nlg ??
+            (await renderAssistantFormalReply(conversation.conversation_id, turn.turn_id, locale, token));
+          const payload = buildAssistantFormalPayload(conversation, turn, reply);
+          if (cancelled) {
+            return;
+          }
+          clearDraft(submission.conversation?.conversationId);
+          patchFormalMessage({
+            text: resolveAssistantFormalText(payload),
+            assistantFormalPayload: payload,
+            assistantFormalPending: false,
+            error: false,
+          } as Partial<TMessage>);
+        } catch (error) {
+          if (cancelled) {
+            return;
+          }
+          const failurePayload = buildAssistantFormalFailurePayload(
+            {},
+            error as AssistantFormalAPIError,
+          );
+          patchFormalMessage({
+            text: resolveAssistantFormalText(failurePayload),
+            assistantFormalPayload: failurePayload,
+            assistantFormalPending: false,
+            error: false,
+          } as Partial<TMessage>);
+        } finally {
+          if (!cancelled) {
+            setIsSubmitting(false);
+            setShowStopButton(false);
+          }
+        }
+      };
+
+      void runFormalSubmission();
+
+      return () => {
+        cancelled = true;
+        setShowStopButton(false);
+      };
+    }
+
     let { userMessage } = submission;
 
     const payloadData = createPayload(submission);
@@ -143,7 +269,6 @@ export default function useSSE(
       } else if (data.sync != null) {
         const runId = v4();
         setActiveRunId(runId);
-        /* synchronize messages to Assistants API as well as with real DB ID's */
         syncHandler(data, { ...submission, userMessage } as EventSubmission);
       } else if (data.type != null) {
         const { text, index } = data;
@@ -200,7 +325,6 @@ export default function useSSE(
     sse.addEventListener('error', async (e: MessageEvent) => {
       /* @ts-ignore */
       if (e.responseCode === 401) {
-        /* token expired, refresh and retry */
         try {
           const refreshResponse = await request.refreshToken();
           const token = refreshResponse?.token ?? '';
@@ -216,7 +340,6 @@ export default function useSSE(
           sse.stream();
           return;
         } catch (error) {
-          /* token refresh failed, continue handling the original 401 */
           console.log(error);
         }
       }

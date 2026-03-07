@@ -6,11 +6,13 @@ import type { TMessageContentProps, TDisplayProps } from '~/common';
 import Error from '~/components/Messages/Content/Error';
 import Thinking from '~/components/Artifacts/Thinking';
 import { useMessageContext } from '~/Providers';
+import { isAssistantFormalMessage } from '~/assistant-formal/runtime';
 import MarkdownLite from './MarkdownLite';
 import EditMessage from './EditMessage';
 import { useLocalize } from '~/hooks';
 import Container from './Container';
 import Markdown from './Markdown';
+import AssistantFormalMessage from './AssistantFormalMessage';
 import { cn } from '~/utils';
 import store from '~/store';
 
@@ -144,6 +146,10 @@ const MessageContent = ({
       ) : null,
     [isSubmitting, unfinished, message],
   );
+
+  if (isAssistantFormalMessage(message) && !message.isCreatedByUser) {
+    return <AssistantFormalMessage message={message} />;
+  }
 
   if (error) {
     return <ErrorMessage message={props.message} text={text} />;

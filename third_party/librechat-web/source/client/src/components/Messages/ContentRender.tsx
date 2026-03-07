@@ -8,6 +8,7 @@ import SiblingSwitch from '~/components/Chat/Messages/SiblingSwitch';
 import HoverButtons from '~/components/Chat/Messages/HoverButtons';
 import MessageIcon from '~/components/Chat/Messages/MessageIcon';
 import { useAttachments, useMessageActions } from '~/hooks';
+import { isAssistantFormalMessage } from '~/assistant-formal/runtime';
 import SubRow from '~/components/Chat/Messages/SubRow';
 import { cn, logger } from '~/utils';
 import store from '~/store';
@@ -72,6 +73,8 @@ const ContentRender = memo(
     const isLatestMessage = msg?.messageId === latestMessage?.messageId;
     const showCardRender = isLast && !isSubmittingFamily && isCard;
     const isLatestCard = isCard && !isSubmittingFamily && isLatestMessage;
+
+    const disableFormalHoverActions = isAssistantFormalMessage(msg) && !msg?.isCreatedByUser;
 
     const iconData: TMessageIcon = useMemo(
       () => ({
@@ -182,7 +185,7 @@ const ContentRender = memo(
 
             {(isSubmittingFamily || isSubmitting) && !(msg.children?.length ?? 0) ? (
               <PlaceholderRow isCard={isCard} />
-            ) : (
+            ) : disableFormalHoverActions ? null : (
               <SubRow classes="text-xs">
                 <SiblingSwitch
                   siblingIdx={siblingIdx}
