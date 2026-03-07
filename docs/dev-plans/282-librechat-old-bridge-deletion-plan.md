@@ -1,6 +1,13 @@
 # DEV-PLAN-282：LibreChat 旧桥接链路删除实施计划
 
-**状态**: 规划中（2026-03-07 23:55 CST）
+**状态**: 实施中（2026-03-07 23:55 CST；旧桥正式职责已下线）
+
+## 0. 当前实施进度（2026-03-08）
+- [x] `/app/assistant/librechat` 已退役为历史入口占位页，不再承载 `iframe + postMessage` 正式职责。
+- [x] `assistantAutoRun`、`assistantDialogFlow`、`assistantMessageBridge` 与 `assistantReplyFailurePayload` 已从前端主代码删除。
+- [x] `assistant-ui/bridge.js` 特判、HTML 注入与 fallback shell 外挂流已从服务端主链路删除。
+- [x] 旧桥专用的页面单测与 E2E 用例已删除。
+- [ ] 正式入口切换、导航与验收口径统一仍由 `DEV-PLAN-283` 承接。
 
 ## 1. 背景
 - 承接 `DEV-PLAN-280` 的 `280B`。

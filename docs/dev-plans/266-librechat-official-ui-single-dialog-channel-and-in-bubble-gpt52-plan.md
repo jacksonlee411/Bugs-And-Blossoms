@@ -126,8 +126,8 @@
 - 266 最低验证集计划：
   1. [ ] 补充 266 专属真实 E2E，硬断言“官方原始发送未发出 + 成功/失败均经统一官方气泡返回 + 无页面外挂回复容器”；该用例是 266 的主通过条件。
   2. [X] `go test ./internal/server -run 'TestAssistantUIProxy|TestModifyAssistantUIProxyResponse|TestAssistantReply|TestAssistantRenderReply' -count=1`
-  3. [X] `pnpm --dir apps/web test -- src/pages/assistant/LibreChatPage.test.tsx src/pages/assistant/AssistantPage.test.tsx src/pages/assistant/assistantAutoRun.test.ts`
-  4. [ ] `pnpm --dir e2e exec playwright test tests/tp264-librechat-gpt52-dialog-response-real.spec.js tests/tp265-librechat-gpt52-blocked-reply-real.spec.js --reporter=line` 作为 264/265 回归集继续保留，但**不替代 266 专属 stopline**。
+  3. [X] `pnpm --dir apps/web test -- src/pages/assistant/LibreChatPage.test.tsx src/pages/assistant/AssistantPage.test.tsx`（旧桥 helper 测试已由 `DEV-PLAN-282` 退役）
+  4. [ ] 旧桥专属 real E2E 已由 `DEV-PLAN-282` 删除；266 的新入口真实回归由 `DEV-PLAN-283/285` 在新承载面上重建。
   5. [ ] `make check doc`
 
 ## 9. 交付物

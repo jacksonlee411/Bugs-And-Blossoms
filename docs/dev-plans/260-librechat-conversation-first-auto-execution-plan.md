@@ -221,8 +221,8 @@ interface DialogFlowState {
 - 触发器与门禁以 `AGENTS.md`、`docs/dev-plans/012-ci-quality-gates.md`、`Makefile` 为 SSOT。
 - 260 当前最低验证集：
   1. [ ] `go test ./internal/server -run 'TestAssistantUIProxy|TestAssistantReply|TestAssistantRenderReply' -count=1`
-  2. [ ] `pnpm --dir apps/web test -- src/pages/assistant/assistantDialogFlow.test.ts src/pages/assistant/assistantAutoRun.test.ts src/pages/assistant/AssistantPage.test.tsx src/pages/assistant/LibreChatPage.test.tsx`
-  3. [ ] `pnpm --dir e2e exec playwright test tests/tp260-librechat-dialog-closure.spec.js --reporter=line`
+  2. [ ] `pnpm --dir apps/web test -- src/pages/assistant/AssistantPage.test.tsx src/pages/assistant/LibreChatPage.test.tsx`（旧桥 helper 测试已由 `DEV-PLAN-282` 删除）
+  3. [ ] 旧桥专属 E2E 已由 `DEV-PLAN-282` 删除；正式入口 E2E 由 `DEV-PLAN-283/285` 重新补齐。
   4. [ ] 补充“AI对话独立页真实 Case 1~4”专属 E2E；每个 Case 必须同时断言 266 的共通 stopline：无官方原始发送、无官方错误气泡、无外挂回复容器、同轮唯一 assistant 气泡。
   5. [ ] `make check doc`
 

@@ -93,17 +93,16 @@ export function AssistantPage() {
         <SmartToyIcon color='primary' />
         <Typography variant='h5'>AI 助手日志</Typography>
         <Box sx={{ flex: 1 }} />
-        <Button component='a' href='/app/assistant/librechat' variant='contained'>
-          打开 AI 对话
-        </Button>
         <Button component='a' href='/app/assistant/models' variant='text'>
           模型配置
         </Button>
       </Stack>
 
       <Typography color='text.secondary' variant='body2'>
-        `/app/assistant` 仅保留运行态、会话与审计记录；所有用户交互统一收敛到 `/app/assistant/librechat`。
+        `/app/assistant` 仅保留运行态、会话与审计记录；旧 `iframe + bridge` 对话承载页已按 `DEV-PLAN-282` 退役。
       </Typography>
+
+      <Alert severity='info'>旧 `/app/assistant/librechat` 页面不再承载正式交互职责；正式入口切换由 `DEV-PLAN-283` 承接。</Alert>
 
       {pageError ? <Alert severity='warning'>{pageError}</Alert> : null}
 
@@ -170,16 +169,12 @@ export function AssistantPage() {
               {conversations.map((item) => (
                 <ListItem data-testid='assistant-conversation-log-item' divider key={item.conversation_id} disableGutters>
                   <ListItemText
-                    primary={`${item.conversation_id} / ${item.state}`}
+                    primary={`${item.conversation_id} · ${item.state}`}
                     secondary={`${item.updated_at} · ${conversationSummary(item)}`}
                   />
                 </ListItem>
               ))}
-              {!conversations.length ? (
-                <ListItem disableGutters>
-                  <ListItemText primary={loading ? '日志加载中…' : '暂无会话日志'} />
-                </ListItem>
-              ) : null}
+              {!conversations.length ? <Typography variant='body2'>暂无会话日志</Typography> : null}
             </List>
           </Stack>
         </CardContent>
