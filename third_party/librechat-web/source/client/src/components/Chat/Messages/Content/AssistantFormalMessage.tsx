@@ -13,7 +13,6 @@ import {
 import {
   confirmAssistantFormalTurn,
   commitAssistantFormalTurn,
-  renderAssistantFormalReply,
   type AssistantFormalAPIError,
 } from '~/assistant-formal/api';
 
@@ -60,13 +59,7 @@ function AssistantFormalMessage({ message }: { message: AssistantFormalMessageTy
         if (!turn) {
           throw new Error('assistant turn missing');
         }
-        let nextPayload = buildAssistantFormalPayload(conversation, turn, turn.reply_nlg, {
-          messageId: payload.messageId || message.messageId,
-          frontendUserMessageId: payload.frontendUserMessageId,
-        });
-        currentPayload = nextPayload;
-        const reply = turn.reply_nlg ?? await renderAssistantFormalReply(conversation.conversation_id, turn.turn_id, 'zh');
-        nextPayload = buildAssistantFormalPayload(conversation, turn, reply, {
+        const nextPayload = buildAssistantFormalPayload(conversation, turn, turn.reply_nlg, {
           messageId: payload.messageId || message.messageId,
           frontendUserMessageId: payload.frontendUserMessageId,
         });
@@ -108,15 +101,14 @@ function AssistantFormalMessage({ message }: { message: AssistantFormalMessageTy
     !busy &&
     !message.assistantFormalPending &&
     !payload.errorCode &&
-    payload.candidates.length > 1 &&
-    !payload.selectedCandidateId;
+    payload.phase === 'await_candidate_pick' &&
+    payload.candidates.length > 0;
   const canCommit =
     !busy &&
     !message.assistantFormalPending &&
     !payload.errorCode &&
     !payload.commitResult &&
-    payload.missingFields.length === 0 &&
-    (payload.candidates.length <= 1 || !!payload.selectedCandidateId);
+    payload.phase === 'await_commit_confirm';
   const toneClasses =
     payload.reply?.kind === 'error' || payload.errorCode
       ? 'border-red-500/20 bg-red-500/5 text-gray-700 dark:text-gray-100'
@@ -152,7 +144,7 @@ function AssistantFormalMessage({ message }: { message: AssistantFormalMessageTy
           </div>
         )}
 
-        {payload.missingFields.length > 0 && (
+        {payload.phase === 'await_missing_fields' && payload.missingFields.length > 0 && (
           <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 px-3 py-3 text-sm text-text-primary">
             <div className="font-medium">Missing fields</div>
             <ul className="mt-2 list-disc space-y-1 pl-5">
@@ -163,7 +155,7 @@ function AssistantFormalMessage({ message }: { message: AssistantFormalMessageTy
           </div>
         )}
 
-        {payload.candidates.length > 0 && (
+        {payload.phase === 'await_candidate_pick' && payload.candidates.length > 0 && (
           <div className="flex flex-col gap-2">
             {payload.candidates.map((candidate) => {
               const isSelected = candidate.candidate_id === payload.selectedCandidateId;
@@ -206,7 +198,7 @@ function AssistantFormalMessage({ message }: { message: AssistantFormalMessageTy
           </div>
         )}
 
-        {selectedCandidate && !canSelectCandidate && (
+        {selectedCandidate && payload.phase !== 'await_candidate_pick' && (
           <div className="rounded-xl border border-[#09a7a3]/30 bg-[#09a7a3]/10 px-3 py-3 text-sm text-text-primary">
             Selected: {selectedCandidate.name || selectedCandidate.candidate_code}
           </div>

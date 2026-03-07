@@ -8,7 +8,6 @@ const mockGetMessages = jest.fn();
 const mockSetMessages = jest.fn();
 const mockConfirmAssistantFormalTurn = jest.fn();
 const mockCommitAssistantFormalTurn = jest.fn();
-const mockRenderAssistantFormalReply = jest.fn();
 
 jest.mock('~/components/Chat/Messages/Content/Container', () => ({
   __esModule: true,
@@ -36,7 +35,6 @@ jest.mock('~/Providers/MessagesViewContext', () => ({
 jest.mock('~/assistant-formal/api', () => ({
   confirmAssistantFormalTurn: (...args: unknown[]) => mockConfirmAssistantFormalTurn(...args),
   commitAssistantFormalTurn: (...args: unknown[]) => mockCommitAssistantFormalTurn(...args),
-  renderAssistantFormalReply: (...args: unknown[]) => mockRenderAssistantFormalReply(...args),
 }));
 
 describe('AssistantFormalMessage', () => {
@@ -93,20 +91,16 @@ describe('AssistantFormalMessage', () => {
       turns: [
         {
           turn_id: 'turn-1',
-          state: 'confirmed',
-          phase: 'await_candidate_confirm',
+          state: 'validated',
+          phase: 'await_commit_confirm',
           request_id: 'req-1',
           trace_id: 'trace-1',
           selected_candidate_id: 'cand-1',
+          pending_draft_summary: '已选择鲜花组织，等待提交确认。',
           candidates: message.assistantFormalPayload.candidates,
           missing_fields: [],
         },
       ],
-    });
-    mockRenderAssistantFormalReply.mockResolvedValue({
-      text: '候选已确认，可以继续提交。',
-      kind: 'info',
-      stage: 'candidate_confirm',
     });
 
     render(<AssistantFormalMessage message={message as any} />);
@@ -117,9 +111,48 @@ describe('AssistantFormalMessage', () => {
     await waitFor(() => {
       expect(mockConfirmAssistantFormalTurn).toHaveBeenCalledWith('conv-1', 'turn-1', 'cand-1');
     });
-    expect(mockRenderAssistantFormalReply).toHaveBeenCalledWith('conv-1', 'turn-1', 'zh');
     expect(mockSetMessages).toHaveBeenCalled();
     expect(mockCommitAssistantFormalTurn).not.toHaveBeenCalled();
+  });
+
+
+  it('renders failure state inside the official bubble without action buttons', () => {
+    const message = {
+      messageId: 'msg-failed',
+      text: '提交失败',
+      sender: 'Assistant',
+      isCreatedByUser: false,
+      parentMessageId: 'user-1',
+      conversationId: null,
+      error: false,
+      assistantFormalPayload: {
+        kind: 'assistant_formal',
+        backendConversationId: 'conv-1',
+        turnId: 'turn-2',
+        requestId: 'req-2',
+        traceId: 'trace-2',
+        messageId: 'msg-failed',
+        bindingKey: 'conv-1::turn-2::req-2',
+        state: 'failed',
+        phase: 'failed',
+        errorCode: 'assistant_commit_failed',
+        missingFields: [],
+        candidates: [],
+        reply: {
+          text: '提交失败',
+          kind: 'error',
+          stage: 'commit_failed',
+        },
+      },
+    } as TMessage & { assistantFormalPayload: any };
+
+    mockGetMessages.mockReturnValue([message]);
+    const { container } = render(<AssistantFormalMessage message={message as any} />);
+
+    expect(screen.getByText('提交失败')).toBeInTheDocument();
+    expect(screen.getByText('Error: assistant_commit_failed')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Submit' })).not.toBeInTheDocument();
+    expect(container.querySelector('[data-assistant-binding-key="conv-1::turn-2::req-2"]')).not.toBeNull();
   });
 
   it('exposes binding data attributes on the official assistant bubble', () => {

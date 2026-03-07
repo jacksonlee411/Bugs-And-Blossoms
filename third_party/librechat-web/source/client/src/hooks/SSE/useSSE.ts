@@ -18,7 +18,6 @@ import { useAuthContext } from '~/hooks/AuthContext';
 import {
   createAssistantFormalConversation,
   createAssistantFormalTurn,
-  renderAssistantFormalReply,
   type AssistantFormalAPIError,
 } from '~/assistant-formal/api';
 import {
@@ -195,14 +194,7 @@ export default function useSSE(
           if (!turn) {
             throw new Error('assistant turn missing');
           }
-          currentPayload = buildAssistantFormalPayload(conversation, turn, turn.reply_nlg, {
-            messageId: assistantMessageId,
-            frontendUserMessageId,
-          });
-          currentBindingKey = currentPayload.bindingKey;
-          const reply = turn.reply_nlg ??
-            (await renderAssistantFormalReply(conversation.conversation_id, turn.turn_id, locale, token));
-          const payload = buildAssistantFormalPayload(conversation, turn, reply, {
+          const payload = buildAssistantFormalPayload(conversation, turn, turn.reply_nlg, {
             messageId: assistantMessageId,
             frontendUserMessageId,
           });
