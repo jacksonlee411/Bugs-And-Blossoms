@@ -233,6 +233,7 @@ func TestAssistantPersistence_UtilityFunctions(t *testing.T) {
 		err  error
 	}{
 		{errAssistantConfirmationRequired.Error(), errAssistantConfirmationRequired},
+		{errAssistantConfirmationExpired.Error(), errAssistantConfirmationExpired},
 		{errAssistantConversationStateInvalid.Error(), errAssistantConversationStateInvalid},
 		{errAssistantPlanContractVersionMismatch.Error(), errAssistantPlanContractVersionMismatch},
 		{errAssistantCandidateNotFound.Error(), errAssistantCandidateNotFound},
@@ -252,6 +253,7 @@ func TestAssistantPersistence_UtilityFunctions(t *testing.T) {
 	}
 	idemCases := []error{
 		errAssistantConfirmationRequired,
+		errAssistantConfirmationExpired,
 		errAssistantConversationStateInvalid,
 		errAssistantPlanContractVersionMismatch,
 		errAssistantCandidateNotFound,
@@ -273,6 +275,9 @@ func TestAssistantPersistence_UtilityFunctions(t *testing.T) {
 	}
 
 	if _, err := (&assistantConversationService{}).restoreIdempotentResult(assistantIdempotencyClaim{ErrorCode: errAssistantCandidateNotFound.Error()}); !errors.Is(err, errAssistantCandidateNotFound) {
+		t.Fatalf("unexpected err=%v", err)
+	}
+	if _, err := (&assistantConversationService{}).restoreIdempotentResult(assistantIdempotencyClaim{ErrorCode: errAssistantConfirmationExpired.Error()}); !errors.Is(err, errAssistantConfirmationExpired) {
 		t.Fatalf("unexpected err=%v", err)
 	}
 	if _, err := (&assistantConversationService{}).restoreIdempotentResult(assistantIdempotencyClaim{Body: nil}); !errors.Is(err, errAssistantRequestInProgress) {
@@ -311,6 +316,9 @@ func TestAssistantPersistence_UtilityFunctions(t *testing.T) {
 	}
 	if turn := assistantLookupTurn(&assistantConversation{Turns: []*assistantTurn{{TurnID: "t1"}}}, "t1"); turn == nil {
 		t.Fatal("expected lookup hit")
+	}
+	if got := assistantExpireTurn(nil, nil, Principal{ID: "actor_1"}, "confirm"); got.PersistTurn || got.Transition != nil {
+		t.Fatalf("nil expire turn result=%+v", got)
 	}
 }
 

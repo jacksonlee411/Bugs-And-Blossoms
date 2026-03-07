@@ -518,6 +518,13 @@ errors:
     user_message_key: errors.conversation_confirmation_required
     backend_policy: passthrough
     frontend_policy: mapped
+  - code: conversation_confirmation_expired
+    module: assistant
+    http_status: 409
+    severity: error
+    user_message_key: errors.conversation_confirmation_expired
+    backend_policy: passthrough
+    frontend_policy: mapped
   - code: conversation_not_found
     module: assistant
     http_status: 404

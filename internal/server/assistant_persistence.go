@@ -368,12 +368,26 @@ func (s *assistantConversationService) confirmTurnPG(ctx context.Context, tenant
 	result, applyErr := s.applyConfirmTurn(conversation, turn, principal, candidateID)
 	assistantRefreshConversationDerivedFields(conversation)
 	if applyErr != nil {
+		if result.PersistTurn {
+			if err := s.upsertTurnTx(ctx, tx, tenantID, conversation.ConversationID, turn); err != nil {
+				return nil, err
+			}
+			if err := s.updateConversationStateTx(ctx, tx, tenantID, conversation.ConversationID, conversation.State, conversation.CurrentPhase, conversation.UpdatedAt); err != nil {
+				return nil, err
+			}
+		}
+		if result.Transition != nil {
+			if err := s.insertTransitionTx(ctx, tx, tenantID, conversation.ConversationID, result.Transition); err != nil {
+				return nil, err
+			}
+		}
 		if finalizeErr := s.finalizeIdempotencyErrorTx(ctx, tx, claimKey, applyErr); finalizeErr != nil {
 			return nil, finalizeErr
 		}
 		if commitErr := tx.Commit(ctx); commitErr != nil {
 			return nil, commitErr
 		}
+		s.cacheConversation(conversation)
 		return nil, applyErr
 	}
 
@@ -467,6 +481,7 @@ func (s *assistantConversationService) commitTurnPG(ctx context.Context, tenantI
 		if commitErr := tx.Commit(ctx); commitErr != nil {
 			return nil, commitErr
 		}
+		s.cacheConversation(conversation)
 		return nil, applyErr
 	}
 
@@ -496,12 +511,46 @@ type assistantTurnMutationResult struct {
 	PersistTurn bool
 }
 
+func assistantExpireTurn(conversation *assistantConversation, turn *assistantTurn, principal Principal, turnAction string) assistantTurnMutationResult {
+	if conversation == nil || turn == nil {
+		return assistantTurnMutationResult{}
+	}
+	fromState := turn.State
+	fromPhase := turn.Phase
+	now := time.Now().UTC()
+	turn.State = assistantStateExpired
+	turn.ErrorCode = errAssistantConfirmationExpired.Error()
+	turn.UpdatedAt = now
+	assistantRefreshTurnDerivedFields(turn)
+	conversation.UpdatedAt = now
+	conversation.State = turn.State
+	conversation.CurrentPhase = turn.Phase
+	transition := &assistantStateTransition{
+		TurnID:     turn.TurnID,
+		TurnAction: turnAction,
+		RequestID:  turn.RequestID,
+		TraceID:    turn.TraceID,
+		FromState:  fromState,
+		ToState:    turn.State,
+		FromPhase:  fromPhase,
+		ToPhase:    turn.Phase,
+		ReasonCode: "confirm_ttl_expired",
+		ActorID:    principal.ID,
+		ChangedAt:  now,
+	}
+	conversation.Transitions = append(conversation.Transitions, *transition)
+	return assistantTurnMutationResult{Transition: transition, PersistTurn: true}
+}
+
 func (s *assistantConversationService) applyConfirmTurn(conversation *assistantConversation, turn *assistantTurn, principal Principal, candidateID string) (assistantTurnMutationResult, error) {
 	if turn.State == assistantStateCommitted {
 		return assistantTurnMutationResult{}, nil
 	}
 	if turn.State == assistantStateCanceled || turn.State == assistantStateExpired {
 		return assistantTurnMutationResult{}, errAssistantConversationStateInvalid
+	}
+	if assistantTurnConfirmExpired(turn, time.Now().UTC()) {
+		return assistantExpireTurn(conversation, turn, principal, "confirm"), errAssistantConfirmationExpired
 	}
 	if turn.State == assistantStateConfirmed {
 		if turn.AmbiguityCount > 1 {
@@ -569,6 +618,9 @@ func (s *assistantConversationService) applyCommitTurn(ctx context.Context, conv
 	}
 	if turn.State == assistantStateCanceled || turn.State == assistantStateExpired {
 		return assistantTurnMutationResult{}, errAssistantConversationStateInvalid
+	}
+	if assistantTurnConfirmExpired(turn, time.Now().UTC()) {
+		return assistantExpireTurn(conversation, turn, principal, "commit"), errAssistantConfirmationExpired
 	}
 	if turn.State != assistantStateConfirmed {
 		return assistantTurnMutationResult{}, errAssistantConfirmationRequired
@@ -1361,6 +1413,8 @@ func assistantIdempotencyErrorPayload(err error) (status int, code string, ok bo
 	switch {
 	case errors.Is(err, errAssistantConfirmationRequired):
 		return http.StatusConflict, errAssistantConfirmationRequired.Error(), true
+	case errors.Is(err, errAssistantConfirmationExpired):
+		return http.StatusConflict, errAssistantConfirmationExpired.Error(), true
 	case errors.Is(err, errAssistantConversationStateInvalid):
 		return http.StatusConflict, errAssistantConversationStateInvalid.Error(), true
 	case errors.Is(err, errAssistantPlanContractVersionMismatch):
@@ -1403,6 +1457,8 @@ func assistantErrorFromIdempotencyCode(code string) error {
 	switch strings.TrimSpace(code) {
 	case errAssistantConfirmationRequired.Error():
 		return errAssistantConfirmationRequired
+	case errAssistantConfirmationExpired.Error():
+		return errAssistantConfirmationExpired
 	case errAssistantConversationStateInvalid.Error():
 		return errAssistantConversationStateInvalid
 	case errAssistantPlanContractVersionMismatch.Error():

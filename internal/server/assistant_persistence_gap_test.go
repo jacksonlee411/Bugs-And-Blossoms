@@ -812,6 +812,42 @@ func TestAssistantPersistence_ConfirmTurnPG_ErrorPathMatrix(t *testing.T) {
 	if _, err := successCommitErrSvc.confirmTurnPG(context.Background(), "tenant_1", principal, "conv_1", "turn_1", "c1"); err == nil || !strings.Contains(err.Error(), "commit success failed") {
 		t.Fatalf("unexpected err=%v", err)
 	}
+
+	expiredTurn := *baseTurn
+	expiredTurn.Plan = assistantFreezeConfirmWindow(expiredTurn.Plan, now.Add(-1*time.Hour))
+	expiredTurn.CreatedAt = now.Add(-1 * time.Hour)
+	expiredTurn.UpdatedAt = expiredTurn.CreatedAt
+	expiredRow := assistantTurnRowValues(&expiredTurn)
+
+	expiredUpsertErrSvc := makeSvc("actor_1", [][]any{expiredRow}, func(sql string) error {
+		if strings.Contains(sql, "INSERT INTO iam.assistant_turns") {
+			return errors.New("expired upsert failed")
+		}
+		return nil
+	}, nil, nil)
+	if _, err := expiredUpsertErrSvc.confirmTurnPG(context.Background(), "tenant_1", principal, "conv_1", "turn_1", "c1"); err == nil || !strings.Contains(err.Error(), "expired upsert failed") {
+		t.Fatalf("unexpected err=%v", err)
+	}
+
+	expiredUpdateErrSvc := makeSvc("actor_1", [][]any{expiredRow}, func(sql string) error {
+		if strings.Contains(sql, "UPDATE iam.assistant_conversations") {
+			return errors.New("expired update failed")
+		}
+		return nil
+	}, nil, nil)
+	if _, err := expiredUpdateErrSvc.confirmTurnPG(context.Background(), "tenant_1", principal, "conv_1", "turn_1", "c1"); err == nil || !strings.Contains(err.Error(), "expired update failed") {
+		t.Fatalf("unexpected err=%v", err)
+	}
+
+	expiredTransitionErrSvc := makeSvc("actor_1", [][]any{expiredRow}, nil, func(sql string) pgx.Row {
+		if strings.Contains(sql, "INSERT INTO iam.assistant_state_transitions") {
+			return &assistFakeRow{err: errors.New("expired transition failed")}
+		}
+		return nil
+	}, nil)
+	if _, err := expiredTransitionErrSvc.confirmTurnPG(context.Background(), "tenant_1", principal, "conv_1", "turn_1", "c1"); err == nil || !strings.Contains(err.Error(), "expired transition failed") {
+		t.Fatalf("unexpected err=%v", err)
+	}
 }
 
 func TestAssistantPersistence_CommitTurnPG_ErrorPathMatrix(t *testing.T) {
@@ -1028,6 +1064,107 @@ func TestAssistantPersistence_CommitTurnPG_ErrorPathMatrix(t *testing.T) {
 	if _, err := successPathCommitErrSvc.commitTurnPG(context.Background(), "tenant_1", principal, "conv_1", "turn_1"); err == nil || !strings.Contains(err.Error(), "commit success-path failed") {
 		t.Fatalf("unexpected err=%v", err)
 	}
+}
+
+func TestAssistantPersistence_ConfirmationExpiryPaths(t *testing.T) {
+	store := newOrgUnitMemoryStore()
+	svc := newAssistantConversationService(store, assistantWriteServiceStub{store: store})
+	principal := Principal{ID: "actor_1", RoleSlug: "tenant-admin"}
+	now := time.Now().UTC()
+
+	newExpiredTurn := func(turnID string) *assistantTurn {
+		createdAt := now.Add(-1 * time.Hour)
+		plan := assistantFreezeConfirmWindow(assistantBuildPlan(assistantIntentSpec{Action: assistantIntentCreateOrgUnit}), createdAt)
+		return &assistantTurn{
+			TurnID:     turnID,
+			State:      assistantStateValidated,
+			RequestID:  "req_" + turnID,
+			TraceID:    "trace_" + turnID,
+			Intent:     assistantIntentSpec{Action: assistantIntentCreateOrgUnit},
+			Plan:       plan,
+			CreatedAt:  createdAt,
+			UpdatedAt:  createdAt,
+			RiskTier:   "low",
+			Confidence: 0.9,
+		}
+	}
+
+	t.Run("apply confirm and commit expire validated turn", func(t *testing.T) {
+		confirmTurn := newExpiredTurn("turn_confirm")
+		confirmConv := &assistantConversation{ConversationID: "conv_confirm", TenantID: "tenant_1", ActorID: principal.ID, ActorRole: principal.RoleSlug, State: assistantStateValidated, Turns: []*assistantTurn{confirmTurn}, CreatedAt: now, UpdatedAt: now}
+		result, err := svc.applyConfirmTurn(confirmConv, confirmTurn, principal, "")
+		if !errors.Is(err, errAssistantConfirmationExpired) {
+			t.Fatalf("want confirmation expired, got %v", err)
+		}
+		if !result.PersistTurn || result.Transition == nil {
+			t.Fatalf("want persisted expiry transition, got %+v", result)
+		}
+		if confirmTurn.State != assistantStateExpired || confirmTurn.ErrorCode != errAssistantConfirmationExpired.Error() {
+			t.Fatalf("turn not expired: %+v", confirmTurn)
+		}
+
+		commitTurn := newExpiredTurn("turn_commit")
+		commitConv := &assistantConversation{ConversationID: "conv_commit", TenantID: "tenant_1", ActorID: principal.ID, ActorRole: principal.RoleSlug, State: assistantStateValidated, Turns: []*assistantTurn{commitTurn}, CreatedAt: now, UpdatedAt: now}
+		result, err = svc.applyCommitTurn(context.Background(), commitConv, commitTurn, principal, "tenant_1")
+		if !errors.Is(err, errAssistantConfirmationExpired) {
+			t.Fatalf("want commit confirmation expired, got %v", err)
+		}
+		if !result.PersistTurn || result.Transition == nil {
+			t.Fatalf("want persisted commit expiry transition, got %+v", result)
+		}
+		if commitTurn.State != assistantStateExpired || commitTurn.ErrorCode != errAssistantConfirmationExpired.Error() {
+			t.Fatalf("commit turn not expired: %+v", commitTurn)
+		}
+	})
+
+	t.Run("pg confirm and commit persist expired turn", func(t *testing.T) {
+		makeSvc := func(turn *assistantTurn) *assistantConversationService {
+			tx := &assistFakeTx{}
+			tx.queryRowFn = func(sql string, _ ...any) pgx.Row {
+				switch {
+				case strings.Contains(sql, "FROM iam.assistant_conversations"):
+					return &assistFakeRow{vals: []any{"conv_1", "tenant_1", principal.ID, principal.RoleSlug, assistantStateValidated, assistantConversationPhaseFromLegacyState(assistantStateValidated), now, now}}
+				case strings.Contains(sql, "INSERT INTO iam.assistant_idempotency"):
+					return &assistFakeRow{vals: []any{1}}
+				case strings.Contains(sql, "INSERT INTO iam.assistant_state_transitions"):
+					return &assistFakeRow{vals: []any{int64(1)}}
+				default:
+					return &assistFakeRow{err: pgx.ErrNoRows}
+				}
+			}
+			tx.queryFn = func(sql string, _ ...any) (pgx.Rows, error) {
+				switch {
+				case strings.Contains(sql, "FROM iam.assistant_turns"):
+					return &assistFakeRows{rows: [][]any{assistantTurnRowValues(turn)}}, nil
+				case strings.Contains(sql, "FROM iam.assistant_state_transitions"):
+					return &assistFakeRows{}, nil
+				default:
+					return &assistFakeRows{}, nil
+				}
+			}
+			svc := newAssistantConversationService(store, assistantWriteServiceStub{store: store})
+			svc.pool = assistFakeTxBeginner{tx: tx}
+			return svc
+		}
+
+		confirmSvc := makeSvc(newExpiredTurn("turn_confirm_pg"))
+		if _, err := confirmSvc.confirmTurnPG(context.Background(), "tenant_1", principal, "conv_1", "turn_confirm_pg", ""); !errors.Is(err, errAssistantConfirmationExpired) {
+			t.Fatalf("want confirm expired from pg path, got %v", err)
+		}
+		cachedConfirm, ok := confirmSvc.getCachedConversation("conv_1")
+		if !ok || cachedConfirm.Turns[0].State != assistantStateExpired {
+			t.Fatalf("want cached expired confirm conversation, got %+v ok=%v", cachedConfirm, ok)
+		}
+
+		commitSvc := makeSvc(newExpiredTurn("turn_commit_pg"))
+		if _, err := commitSvc.commitTurnPG(context.Background(), "tenant_1", principal, "conv_1", "turn_commit_pg"); !errors.Is(err, errAssistantConfirmationExpired) {
+			t.Fatalf("want commit expired from pg path, got %v", err)
+		}
+		cachedCommit, ok := commitSvc.getCachedConversation("conv_1")
+		if !ok || cachedCommit.Turns[0].State != assistantStateExpired {
+			t.Fatalf("want cached expired commit conversation, got %+v ok=%v", cachedCommit, ok)
+		}
+	})
 }
 
 func TestAssistantPersistence_ListConversationsPG_BranchMatrix(t *testing.T) {

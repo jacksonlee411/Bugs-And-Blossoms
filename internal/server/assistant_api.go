@@ -141,6 +141,8 @@ type assistantPlanSummary struct {
 	ModelName               string                      `json:"model_name,omitempty"`
 	ModelRevision           string                      `json:"model_revision,omitempty"`
 	VersionTuple            json.RawMessage             `json:"version_tuple,omitempty"`
+	ConfirmTTLSeconds       int                         `json:"confirm_ttl_seconds,omitempty"`
+	ExpiresAt               string                      `json:"expires_at,omitempty"`
 	SkillExecutionPlan      assistantSkillExecutionPlan `json:"skill_execution_plan,omitempty"`
 	ConfigDeltaPlan         assistantConfigDeltaPlan    `json:"config_delta_plan,omitempty"`
 }
@@ -501,6 +503,8 @@ func handleAssistantTurnActionAPI(w http.ResponseWriter, r *http.Request, svc *a
 				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusConflict, "request_in_progress", "request in progress")
 			case errors.Is(err, errAssistantConfirmationRequired):
 				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusConflict, "conversation_confirmation_required", "conversation confirmation required")
+			case errors.Is(err, errAssistantConfirmationExpired):
+				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusConflict, "conversation_confirmation_expired", "conversation confirmation expired")
 			case errors.Is(err, errAssistantConversationStateInvalid):
 				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusConflict, "conversation_state_invalid", "conversation state invalid")
 			case errors.Is(err, errAssistantCandidateNotFound):
@@ -529,6 +533,8 @@ func handleAssistantTurnActionAPI(w http.ResponseWriter, r *http.Request, svc *a
 				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusConflict, "request_in_progress", "request in progress")
 			case errors.Is(err, errAssistantConfirmationRequired):
 				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusConflict, "conversation_confirmation_required", "conversation confirmation required")
+			case errors.Is(err, errAssistantConfirmationExpired):
+				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusConflict, "conversation_confirmation_expired", "conversation confirmation expired")
 			case errors.Is(err, errAssistantConversationStateInvalid):
 				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusConflict, "conversation_state_invalid", "conversation state invalid")
 			case errors.Is(err, errAssistantPlanContractVersionMismatch):
@@ -642,6 +648,7 @@ var (
 	errAssistantConversationCorrupted             = errors.New("assistant_conversation_corrupted")
 	errAssistantTurnNotFound                      = errors.New("assistant_turn_not_found")
 	errAssistantConfirmationRequired              = errors.New("assistant_confirmation_required")
+	errAssistantConfirmationExpired               = errors.New("assistant_confirmation_expired")
 	errAssistantCandidateNotFound                 = errors.New("assistant_candidate_not_found")
 	errAssistantAuthSnapshotExpired               = errors.New("assistant_auth_snapshot_expired")
 	errAssistantRoleDriftDetected                 = errors.New("assistant_role_drift_detected")
@@ -866,6 +873,8 @@ func (s *assistantConversationService) createTurn(ctx context.Context, tenantID 
 	}
 
 	plan := assistantBuildPlan(intent)
+	turnCreatedAt := time.Now().UTC()
+	plan = assistantFreezeConfirmWindow(plan, turnCreatedAt)
 	plan.ModelProvider = resolvedIntent.ProviderName
 	plan.ModelName = resolvedIntent.ModelName
 	plan.ModelRevision = resolvedIntent.ModelRevision
@@ -905,12 +914,12 @@ func (s *assistantConversationService) createTurn(ctx context.Context, tenantID 
 		Confidence:          confidence,
 		ResolutionSource:    resolutionSource,
 		DryRun:              dryRun,
-		CreatedAt:           time.Now().UTC(),
-		UpdatedAt:           time.Now().UTC(),
+		CreatedAt:           turnCreatedAt,
+		UpdatedAt:           turnCreatedAt,
 	}
 
 	conversation.Turns = append(conversation.Turns, turn)
-	conversation.UpdatedAt = time.Now().UTC()
+	conversation.UpdatedAt = turnCreatedAt
 	conversation.State = turn.State
 	conversation.Transitions = append(conversation.Transitions, assistantStateTransition{
 		TurnID:     turn.TurnID,
@@ -920,10 +929,65 @@ func (s *assistantConversationService) createTurn(ctx context.Context, tenantID 
 		ToState:    assistantStateValidated,
 		ReasonCode: "turn_created",
 		ActorID:    principal.ID,
-		ChangedAt:  turn.CreatedAt,
+		ChangedAt:  turnCreatedAt,
 	})
 
 	return cloneConversation(conversation), nil
+}
+
+const assistantConfirmTTLSecondsDefault = 15 * 60
+
+func assistantFreezeConfirmWindow(plan assistantPlanSummary, createdAt time.Time) assistantPlanSummary {
+	ttlSeconds := plan.ConfirmTTLSeconds
+	if ttlSeconds <= 0 {
+		ttlSeconds = assistantConfirmTTLSecondsDefault
+	}
+	plan.ConfirmTTLSeconds = ttlSeconds
+	if createdAt.IsZero() {
+		createdAt = time.Now().UTC()
+	}
+	if strings.TrimSpace(plan.ExpiresAt) == "" {
+		plan.ExpiresAt = createdAt.UTC().Add(time.Duration(ttlSeconds) * time.Second).Format(time.RFC3339)
+	}
+	return plan
+}
+
+func assistantTurnConfirmDeadline(turn *assistantTurn) (time.Time, bool) {
+	if turn == nil {
+		return time.Time{}, false
+	}
+	if expiresAt := strings.TrimSpace(turn.Plan.ExpiresAt); expiresAt != "" {
+		parsed, err := time.Parse(time.RFC3339, expiresAt)
+		if err == nil {
+			return parsed.UTC(), true
+		}
+	}
+	base := turn.CreatedAt.UTC()
+	if base.IsZero() {
+		base = turn.UpdatedAt.UTC()
+	}
+	if base.IsZero() {
+		return time.Time{}, false
+	}
+	ttlSeconds := turn.Plan.ConfirmTTLSeconds
+	if ttlSeconds <= 0 {
+		ttlSeconds = assistantConfirmTTLSecondsDefault
+	}
+	return base.Add(time.Duration(ttlSeconds) * time.Second), true
+}
+
+func assistantTurnConfirmExpired(turn *assistantTurn, now time.Time) bool {
+	if turn == nil || strings.TrimSpace(turn.State) != assistantStateValidated {
+		return false
+	}
+	if now.IsZero() {
+		now = time.Now().UTC()
+	}
+	deadline, ok := assistantTurnConfirmDeadline(turn)
+	if !ok {
+		return false
+	}
+	return !deadline.After(now.UTC())
 }
 
 func (s *assistantConversationService) confirmTurn(tenantID string, principal Principal, conversationID string, turnID string, candidateID string) (*assistantConversation, error) {
@@ -937,65 +1001,14 @@ func (s *assistantConversationService) confirmTurn(tenantID string, principal Pr
 	if err != nil {
 		return nil, err
 	}
-	if turn.State == assistantStateCommitted {
+	result, applyErr := s.applyConfirmTurn(conversation, turn, principal, candidateID)
+	assistantRefreshConversationDerivedFields(conversation)
+	if applyErr != nil {
+		return nil, applyErr
+	}
+	if result.Transition == nil {
 		return cloneConversation(conversation), nil
 	}
-	if turn.State == assistantStateCanceled || turn.State == assistantStateExpired {
-		return nil, errAssistantConversationStateInvalid
-	}
-	if turn.State == assistantStateConfirmed {
-		if turn.AmbiguityCount > 1 {
-			if candidateID == "" || candidateID == turn.ResolvedCandidateID {
-				return cloneConversation(conversation), nil
-			}
-			if !assistantCandidateExists(turn.Candidates, candidateID) {
-				return nil, errAssistantCandidateNotFound
-			}
-			return nil, errAssistantConversationStateInvalid
-		}
-		return cloneConversation(conversation), nil
-	}
-	if turn.State != assistantStateValidated {
-		return nil, errAssistantConfirmationRequired
-	}
-	if assistantTurnRequiresIntentClarification(turn) {
-		return nil, errAssistantConfirmationRequired
-	}
-	if turn.AmbiguityCount > 1 {
-		if candidateID == "" {
-			return nil, errAssistantConfirmationRequired
-		}
-		if !assistantCandidateExists(turn.Candidates, candidateID) {
-			return nil, errAssistantCandidateNotFound
-		}
-		turn.ResolvedCandidateID = candidateID
-		turn.ResolutionSource = assistantResolutionUserConfirmed
-	}
-	if turn.Intent.Action == assistantIntentCreateOrgUnit && turn.ResolvedCandidateID == "" {
-		return nil, errAssistantConfirmationRequired
-	}
-	turn.PolicyVersion, turn.CompositionVersion, turn.MappingVersion = assistantTurnVersionSnapshot(turn.Plan.CapabilityKey)
-	fromState := turn.State
-	fromPhase := turn.Phase
-	turn.State = assistantStateConfirmed
-	turn.UpdatedAt = time.Now().UTC()
-	assistantRefreshTurnDerivedFields(turn)
-	conversation.UpdatedAt = turn.UpdatedAt
-	conversation.State = turn.State
-	conversation.CurrentPhase = turn.Phase
-	conversation.Transitions = append(conversation.Transitions, assistantStateTransition{
-		TurnID:     turn.TurnID,
-		TurnAction: "confirm",
-		RequestID:  turn.RequestID,
-		TraceID:    turn.TraceID,
-		FromState:  fromState,
-		ToState:    turn.State,
-		FromPhase:  fromPhase,
-		ToPhase:    turn.Phase,
-		ReasonCode: "confirmed",
-		ActorID:    principal.ID,
-		ChangedAt:  turn.UpdatedAt,
-	})
 	return cloneConversation(conversation), nil
 }
 
@@ -1019,142 +1032,21 @@ func (s *assistantConversationService) commitTurn(ctx context.Context, tenantID 
 	if principal.ID != conversation.ActorID {
 		return nil, errAssistantAuthSnapshotExpired
 	}
-	var turn *assistantTurn
-	for _, item := range conversation.Turns {
-		if item != nil && item.TurnID == turnID {
-			turn = item
-			break
-		}
-	}
-	if turn == nil {
-		return nil, errAssistantTurnNotFound
-	}
 	if strings.TrimSpace(principal.RoleSlug) != strings.TrimSpace(conversation.ActorRole) {
 		return nil, errAssistantRoleDriftDetected
 	}
-	if turn.State == assistantStateCommitted {
+	turn := assistantLookupTurn(conversation, turnID)
+	if turn == nil {
+		return nil, errAssistantTurnNotFound
+	}
+	result, applyErr := s.applyCommitTurn(ctx, conversation, turn, principal, tenantID)
+	assistantRefreshConversationDerivedFields(conversation)
+	if applyErr != nil {
+		return nil, applyErr
+	}
+	if result.Transition == nil {
 		return cloneConversation(conversation), nil
 	}
-	if turn.State == assistantStateCanceled || turn.State == assistantStateExpired {
-		return nil, errAssistantConversationStateInvalid
-	}
-	if turn.State != assistantStateConfirmed {
-		return nil, errAssistantConfirmationRequired
-	}
-	if assistantTurnRequiresIntentClarification(turn) {
-		return nil, errAssistantConfirmationRequired
-	}
-	if assistantTurnContractVersionMismatched(turn) {
-		fromState := turn.State
-		fromPhase := turn.Phase
-		turn.State = assistantStateValidated
-		turn.UpdatedAt = time.Now().UTC()
-		assistantRefreshTurnDerivedFields(turn)
-		conversation.UpdatedAt = turn.UpdatedAt
-		conversation.State = turn.State
-		conversation.CurrentPhase = turn.Phase
-		conversation.Transitions = append(conversation.Transitions, assistantStateTransition{
-			TurnID:     turn.TurnID,
-			TurnAction: "commit",
-			RequestID:  turn.RequestID,
-			TraceID:    turn.TraceID,
-			FromState:  fromState,
-			ToState:    turn.State,
-			FromPhase:  fromPhase,
-			ToPhase:    turn.Phase,
-			ReasonCode: "contract_version_mismatch",
-			ActorID:    principal.ID,
-			ChangedAt:  turn.UpdatedAt,
-		})
-		return nil, errAssistantPlanContractVersionMismatch
-	}
-	if assistantTurnVersionDrifted(turn) {
-		fromState := turn.State
-		fromPhase := turn.Phase
-		turn.State = assistantStateValidated
-		turn.UpdatedAt = time.Now().UTC()
-		assistantRefreshTurnDerivedFields(turn)
-		conversation.UpdatedAt = turn.UpdatedAt
-		conversation.State = turn.State
-		conversation.CurrentPhase = turn.Phase
-		conversation.Transitions = append(conversation.Transitions, assistantStateTransition{
-			TurnID:     turn.TurnID,
-			TurnAction: "commit",
-			RequestID:  turn.RequestID,
-			TraceID:    turn.TraceID,
-			FromState:  fromState,
-			ToState:    turn.State,
-			FromPhase:  fromPhase,
-			ToPhase:    turn.Phase,
-			ReasonCode: "version_drift",
-			ActorID:    principal.ID,
-			ChangedAt:  turn.UpdatedAt,
-		})
-		return nil, errAssistantConfirmationRequired
-	}
-	if turn.Intent.Action != assistantIntentCreateOrgUnit {
-		return nil, errAssistantUnsupportedIntent
-	}
-	if turn.ResolvedCandidateID == "" {
-		return nil, errAssistantCandidateNotFound
-	}
-	if s.writeSvc == nil {
-		return nil, errAssistantServiceMissing
-	}
-
-	resolved, ok := assistantFindCandidate(turn.Candidates, turn.ResolvedCandidateID)
-	if !ok {
-		return nil, errAssistantCandidateNotFound
-	}
-	name := turn.Intent.EntityName
-	if strings.TrimSpace(name) == "" {
-		name = "新建组织"
-	}
-	parentOrgCode := resolved.CandidateCode
-	result, err := s.writeSvc.Write(ctx, tenantID, orgunitservices.WriteOrgUnitRequest{
-		Intent:        string(orgunitservices.OrgUnitWriteIntentCreateOrg),
-		EffectiveDate: turn.Intent.EffectiveDate,
-		PolicyVersion: turn.PolicyVersion,
-		RequestID:     turn.RequestID,
-		Patch: orgunitservices.OrgUnitWritePatch{
-			Name:          ptrString(name),
-			ParentOrgCode: ptrString(parentOrgCode),
-		},
-		InitiatorUUID: principal.ID,
-	})
-	if err != nil {
-		return nil, err
-	}
-
-	turn.CommitResult = &assistantCommitResult{
-		OrgCode:       result.OrgCode,
-		ParentOrgCode: parentOrgCode,
-		EffectiveDate: result.EffectiveDate,
-		EventType:     result.EventType,
-		EventUUID:     result.EventUUID,
-	}
-	fromState := turn.State
-	fromPhase := turn.Phase
-	turn.State = assistantStateCommitted
-	turn.UpdatedAt = time.Now().UTC()
-	assistantRefreshTurnDerivedFields(turn)
-	conversation.UpdatedAt = turn.UpdatedAt
-	conversation.State = turn.State
-	conversation.CurrentPhase = turn.Phase
-	conversation.Transitions = append(conversation.Transitions, assistantStateTransition{
-		TurnID:     turn.TurnID,
-		TurnAction: "commit",
-		RequestID:  turn.RequestID,
-		TraceID:    turn.TraceID,
-		FromState:  fromState,
-		ToState:    turn.State,
-		FromPhase:  fromPhase,
-		ToPhase:    turn.Phase,
-		ReasonCode: "committed",
-		ActorID:    principal.ID,
-		ChangedAt:  turn.UpdatedAt,
-	})
-
 	return cloneConversation(conversation), nil
 }
 

@@ -274,8 +274,8 @@ const (
 ## 7. 分阶段实施路线（M0-M7）
 1. [X] **M0（对齐前置）**：与 `223/260/280/284` 冻结接口边界，确认 DTO 字段与 phase 语义不再漂移。
 2. [X] **M1（契约冻结）**：冻结 `AssistantActionSpec/ExecutionPlan/TxEnvelope/CompensationSpec`、状态机、错误码与 Confirm `plan_hash` 契约，并冻结 `confirm_ttl_seconds/expires_at/version_tuple` 字段口径。
-3. [ ] **M2（去写死第一步）**：把 `create_orgunit` 从核心 `if/switch` 下沉到 `ActionRegistry + CommitAdapter`，保持行为等价；强制 Commit 前执行 `version_tuple` OCC 校验。
-4. [ ] **M3（编排统一）**：统一内存与 PG 路径状态迁移；把 confirm/commit/task 三段收敛为同一状态机实现。
+3. [X] **M2（去写死第一步）**：把 `create_orgunit` 从核心 `if/switch` 下沉到 `ActionRegistry + CommitAdapter`，保持行为等价；强制 Commit 前执行 `version_tuple` OCC 校验。
+4. [X] **M3（编排统一）**：统一内存与 PG 路径状态迁移；把 confirm/commit/task 三段收敛为同一状态机实现。
 5. [ ] **M4（权鉴与风控左移）**：落地 `ActionInterceptor`，将 `auth_object/auth_action/risk_tier/required_checks` 固化到执行前 gate。
 6. [ ] **M5（耐久执行 + 补偿）**：提交链路默认走任务编排（receipt + 异步执行）；高风险组织操作在初期默认“人工接管优先”，`partial failure` 先落 `MANUAL_TAKEOVER_REQUIRED`，`auto-saga` 按白名单渐进启用。
 7. [ ] **M6（MCP/LibreChat 对齐）**：将 MCP 调用接入统一风控/审批门，完成“默认只读 + 显式写能力注册 + 审计门”。
