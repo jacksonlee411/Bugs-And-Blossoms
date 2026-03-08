@@ -504,6 +504,48 @@ errors:
     user_message_key: errors.assistant_ui_upstream_unavailable
     backend_policy: mapped
     frontend_policy: mapped
+  - code: assistant_vendored_sid_missing
+    module: assistant
+    http_status: 401
+    severity: error
+    user_message_key: errors.assistant_vendored_sid_missing
+    backend_policy: mapped
+    frontend_policy: mapped
+  - code: assistant_vendored_session_invalid
+    module: assistant
+    http_status: 401
+    severity: error
+    user_message_key: errors.assistant_vendored_session_invalid
+    backend_policy: mapped
+    frontend_policy: mapped
+  - code: assistant_vendored_tenant_mismatch
+    module: assistant
+    http_status: 401
+    severity: error
+    user_message_key: errors.assistant_vendored_tenant_mismatch
+    backend_policy: mapped
+    frontend_policy: mapped
+  - code: assistant_vendored_principal_invalid
+    module: assistant
+    http_status: 401
+    severity: error
+    user_message_key: errors.assistant_vendored_principal_invalid
+    backend_policy: mapped
+    frontend_policy: mapped
+  - code: assistant_startup_endpoints_unavailable
+    module: assistant
+    http_status: 503
+    severity: error
+    user_message_key: errors.assistant_startup_endpoints_unavailable
+    backend_policy: mapped
+    frontend_policy: mapped
+  - code: assistant_startup_models_unavailable
+    module: assistant
+    http_status: 503
+    severity: error
+    user_message_key: errors.assistant_startup_models_unavailable
+    backend_policy: mapped
+    frontend_policy: mapped
   - code: authz_error
     module: iam
     http_status: 500

@@ -246,6 +246,12 @@ func TestKnownErrorMessage_AllCases(t *testing.T) {
 		{code: "assistant_ui_method_not_allowed", want: "当前请求方法不被允许，请刷新页面后重试。"},
 		{code: "assistant_ui_path_invalid", want: "助手聊天路径无效，请从助手页面重新进入。"},
 		{code: "assistant_ui_upstream_unavailable", want: "聊天服务暂不可用，请稍后重试。"},
+		{code: "assistant_vendored_sid_missing", want: "登录会话缺失，请先从正式登录入口登录。"},
+		{code: "assistant_vendored_session_invalid", want: "登录会话已失效，请重新登录。"},
+		{code: "assistant_vendored_tenant_mismatch", want: "当前登录会话与租户不匹配，请重新登录。"},
+		{code: "assistant_vendored_principal_invalid", want: "登录主体已失效，请重新登录。"},
+		{code: "assistant_startup_endpoints_unavailable", want: "正式入口缺少可用 endpoint 配置，请检查 Assistant 运行时模型配置。"},
+		{code: "assistant_startup_models_unavailable", want: "正式入口缺少可用模型清单，请检查 Assistant 运行时配置。"},
 		{code: "unknown", want: ""},
 	}
 

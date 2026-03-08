@@ -29,6 +29,30 @@ entrypoints:
       - path: /app/assistant/librechat/{path}
         methods: [GET]
         route_class: ui
+      - path: /assets/librechat-web/api/auth/refresh
+        methods: [POST]
+        route_class: internal_api
+      - path: /assets/librechat-web/api/auth/logout
+        methods: [POST]
+        route_class: internal_api
+      - path: /assets/librechat-web/api/user
+        methods: [GET]
+        route_class: internal_api
+      - path: /assets/librechat-web/api/roles/user
+        methods: [GET]
+        route_class: internal_api
+      - path: /assets/librechat-web/api/roles/admin
+        methods: [GET]
+        route_class: internal_api
+      - path: /assets/librechat-web/api/config
+        methods: [GET]
+        route_class: internal_api
+      - path: /assets/librechat-web/api/endpoints
+        methods: [GET]
+        route_class: internal_api
+      - path: /assets/librechat-web/api/models
+        methods: [GET]
+        route_class: internal_api
       - path: /assets/librechat-web/{path}
         methods: [GET]
         route_class: static

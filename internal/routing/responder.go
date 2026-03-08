@@ -196,6 +196,18 @@ func knownErrorMessage(code string) string {
 		return "助手聊天路径无效，请从助手页面重新进入。"
 	case "assistant_ui_upstream_unavailable":
 		return "聊天服务暂不可用，请稍后重试。"
+	case "assistant_vendored_sid_missing":
+		return "登录会话缺失，请先从正式登录入口登录。"
+	case "assistant_vendored_session_invalid":
+		return "登录会话已失效，请重新登录。"
+	case "assistant_vendored_tenant_mismatch":
+		return "当前登录会话与租户不匹配，请重新登录。"
+	case "assistant_vendored_principal_invalid":
+		return "登录主体已失效，请重新登录。"
+	case "assistant_startup_endpoints_unavailable":
+		return "正式入口缺少可用 endpoint 配置，请检查 Assistant 运行时模型配置。"
+	case "assistant_startup_models_unavailable":
+		return "正式入口缺少可用模型清单，请检查 Assistant 运行时配置。"
 	default:
 		return ""
 	}

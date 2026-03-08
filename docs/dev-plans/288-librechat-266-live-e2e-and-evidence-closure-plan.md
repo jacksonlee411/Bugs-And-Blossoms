@@ -1,6 +1,6 @@
 # DEV-PLAN-288：266 剩余项 C——真实入口 E2E 与证据封板收口
 
-**状态**: 实施中（2026-03-08 CST；真实入口 E2E 已接入默认 Playwright 基线，迁移 admin 环境阻塞已排除；当前真实阻塞已转为正式入口 vendored UI 与 sid 会话的认证/启动闭环缺口，该缺口由 `292` 承接，页面内部回到 `/app/login`，尚未形成 `266` 主通过证据）
+**状态**: 实施中（2026-03-08 CST；真实入口 E2E 已接入默认 Playwright 基线，迁移 admin 环境阻塞已排除；`292` 已完成正式入口 vendored UI 与 `sid` 会话的认证/启动最小兼容层，`288` 当前从“实现阻塞”转入“基于正式入口的默认 E2E 复跑与证据固化”阶段）
 
 ## 1. 背景
 1. [X] `DEV-PLAN-266` 当前已有 mock stopline 与部分 live runtime 证据，但“真实入口自动化断言 + 完整封板证据”仍未闭环。
@@ -27,12 +27,12 @@
 1. [X] `DEV-PLAN-286/287` 已完成，实现侧不再存在同轮多泡或失败回落外挂风险。
 2. [X] `DEV-PLAN-284` 已进入正式 patch 并满足消息树接管前提。
 3. [X] 若真实入口 E2E 未稳定通过，不得在 `266` 或 `285` 宣称封板完成。
-4. [ ] 当前阻塞：`tp288` 已接入默认 `make e2e` 基线，且 `iam` 迁移 admin 用户口径问题已修复；当前真实阻塞是 `/app/assistant/librechat` 已不再提供 `main iframe`，vendored UI 在正式入口下仍未与当前 sid 会话完成认证/启动闭环，运行时会内部跳到 `/app/login` 并停在空白页。
+4. [X] 先前“正式入口 vendored UI 与 sid 会话缺少认证/启动闭环”的实现阻塞已由 `292` 关闭；`tp288` 当前待基于新兼容层复跑默认 `make e2e` 并补齐证据固化。
 
 ## 5. 实施步骤
 1. [X] 整理并更新 `266` 专属真实入口 E2E 用例骨架，覆盖成功、失败、重试、连续多轮四类路径。
 2. [X] 将现有 live-runtime runner 接入默认 E2E 基线或形成等价常规触发入口，避免 `266` 主通过依赖人工绑定运行态。
-3. [ ] 在 `292` 完成正式入口 vendored UI 的 sid 会话认证/启动最小兼容层（至少覆盖 `refresh/user/roles/config/endpoints/models/logout`）后复跑默认 E2E，并为每类路径采集/固化证据：页面录屏/截图、DOM 断言、请求与 trace 片段、`native_send_*` 指标。
+3. [ ] 基于 `292` 已完成的正式入口 vendored UI `sid` 会话认证/启动最小兼容层（已覆盖 `refresh/user/roles/config/endpoints/models/logout`）复跑默认 E2E，并为每类路径采集/固化证据：页面录屏/截图、DOM 断言、请求与 trace 片段、`native_send_*` 指标。
 4. [X] 补齐证据目录结构与命名规范，统一沉淀到 `docs/dev-records/assets/dev-plan-266/`。
 5. [X] 更新 `docs/dev-records/dev-plan-266-execution-log.md`，补记默认基线接线结果与当前阻塞点。
 6. [ ] 输出 `266` 收口清单，作为 `285` 封板输入项。
