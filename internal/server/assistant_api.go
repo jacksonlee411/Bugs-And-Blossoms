@@ -1057,6 +1057,7 @@ func (s *assistantConversationService) confirmTurn(tenantID string, principal Pr
 	if result.Transition == nil {
 		return cloneConversation(conversation), nil
 	}
+
 	return cloneConversation(conversation), nil
 }
 
@@ -1095,6 +1096,7 @@ func (s *assistantConversationService) commitTurn(ctx context.Context, tenantID 
 	if result.Transition == nil {
 		return cloneConversation(conversation), nil
 	}
+
 	return cloneConversation(conversation), nil
 }
 
