@@ -1,4 +1,162 @@
+import fs from "node:fs/promises";
+import path from "node:path";
 import { expect, test } from "@playwright/test";
+
+const repoRoot = path.resolve(__dirname, "..", "..");
+const tp288EvidenceRoot = path.join(repoRoot, "docs", "dev-records", "assets", "dev-plan-266");
+
+const tp288DefaultCommand =
+  "pnpm --dir /home/lee/Projects/Bugs-And-Blossoms/e2e exec playwright test tests/tp288-librechat-real-entry-evidence.spec.js --workers=1";
+
+const tp288StaleOn = [
+  "290A pending placeholder bubble fix merged",
+  "240C runtime gate semantics changed",
+  "240D durable execution/compensation semantics changed",
+  "240E MCP write admission semantics changed",
+  "message binding/render path changed",
+  "routing/authn chain changed",
+  "error code semantics changed",
+  "fail-closed behavior changed",
+];
+
+async function ensureEvidenceRoot() {
+  await fs.mkdir(tp288EvidenceRoot, { recursive: true });
+}
+
+async function writeJSON(filePath, payload) {
+  await fs.writeFile(filePath, `${JSON.stringify(payload, null, 2)}\n`, "utf8");
+}
+
+async function collectBubbleSnapshot(surface) {
+  return surface.locator("[data-assistant-binding-key]").evaluateAll((nodes) =>
+    nodes.map((node) => ({
+      binding_key: node.getAttribute("data-assistant-binding-key") || "",
+      conversation_id: node.getAttribute("data-assistant-conversation-id") || "",
+      turn_id: node.getAttribute("data-assistant-turn-id") || "",
+      request_id: node.getAttribute("data-assistant-request-id") || "",
+      message_id: node.getAttribute("data-assistant-message-id") || "",
+      text: (node.textContent || "").replace(/\s+/g, " ").trim(),
+    })),
+  );
+}
+
+function buildBindingAssertion(expectedBindings, bubbles) {
+  const actualCounts = new Map();
+  for (const bubble of bubbles) {
+    actualCounts.set(bubble.binding_key, (actualCounts.get(bubble.binding_key) || 0) + 1);
+  }
+
+  const bindings = expectedBindings.map((binding) => {
+    const bubble = bubbles.find((item) => item.binding_key === binding.binding_key);
+    return {
+      ...binding,
+      actual_count: actualCounts.get(binding.binding_key) || 0,
+      attrs_match:
+        Boolean(bubble) &&
+        bubble.conversation_id === binding.conversation_id &&
+        bubble.turn_id === binding.turn_id &&
+        bubble.request_id === binding.request_id,
+      message_id: bubble?.message_id || "",
+    };
+  });
+
+  return {
+    all_expected_bindings_present_once: bindings.every(
+      (binding) => binding.actual_count === 1 && binding.attrs_match,
+    ),
+    unique_binding_key_count: new Set(bubbles.map((bubble) => bubble.binding_key)).size,
+    bindings,
+  };
+}
+
+async function persistTp288Evidence({
+  appContext,
+  page,
+  surface,
+  caseID,
+  title,
+  result,
+  expectedBubbleCount,
+  expectedBindings,
+  expectedTexts,
+  network,
+}) {
+  await ensureEvidenceRoot();
+
+  const executedAt = new Date().toISOString();
+  const command = process.env.TP288_EVIDENCE_COMMAND || tp288DefaultCommand;
+  const casePrefix = `tp288-e2e-${caseID}`;
+  const pagePath = path.join(tp288EvidenceRoot, `${casePrefix}-page.png`);
+  const domPath = path.join(tp288EvidenceRoot, `${casePrefix}-dom.json`);
+  const networkPath = path.join(tp288EvidenceRoot, `${casePrefix}-network.json`);
+  const assertionsPath = path.join(tp288EvidenceRoot, `${casePrefix}-assertions.json`);
+
+  await page.screenshot({ path: pagePath, fullPage: true });
+  const bubbles = await collectBubbleSnapshot(surface);
+  const bindingAssertion = buildBindingAssertion(expectedBindings, bubbles);
+  const pageTextCounts = {};
+  for (const text of expectedTexts) {
+    pageTextCounts[text] = await page.getByText(text).count();
+  }
+
+  const domPayload = {
+    plan: "DEV-PLAN-288",
+    case_id: casePrefix,
+    title,
+    captured_at: executedAt,
+    formal_entry: "/app/assistant/librechat",
+    bubble_count: bubbles.length,
+    bubbles,
+  };
+
+  const networkPayload = {
+    plan: "DEV-PLAN-288",
+    case_id: casePrefix,
+    captured_at: executedAt,
+    internal_post_paths: [...network.internalPostPaths],
+    native_post_paths: [...network.nativePostPaths],
+    native_send_emitted: network.nativePostPaths.length,
+  };
+
+  const assertionsPayload = {
+    plan: "DEV-PLAN-288",
+    case_id: casePrefix,
+    title,
+    formal_entry: "/app/assistant/librechat",
+    command,
+    executed_at: executedAt,
+    result,
+    stale_on: tp288StaleOn,
+    stopline: {
+      no_native_send_post: network.nativePostPaths.length === 0,
+      official_message_tree_only: expectedTexts.every((text) => pageTextCounts[text] === 1),
+      single_assistant_bubble: bindingAssertion.all_expected_bindings_present_once,
+      conversation_turn_request_binding_unique:
+        bindingAssertion.all_expected_bindings_present_once &&
+        bindingAssertion.unique_binding_key_count === bubbles.length,
+      expected_bubble_count_match: bubbles.length === expectedBubbleCount,
+    },
+    page_text_counts: pageTextCounts,
+    expected_bubble_count: expectedBubbleCount,
+    actual_bubble_count: bubbles.length,
+    binding_assertion: bindingAssertion,
+  };
+
+  await writeJSON(domPath, domPayload);
+  await writeJSON(networkPath, networkPayload);
+  await writeJSON(assertionsPath, assertionsPayload);
+
+  return {
+    command,
+    executedAt,
+    artifacts: {
+      page: path.relative(repoRoot, pagePath),
+      dom: path.relative(repoRoot, domPath),
+      network: path.relative(repoRoot, networkPath),
+      assertions: path.relative(repoRoot, assertionsPath),
+    },
+  };
+}
 
 async function ensureKratosIdentity(ctx, kratosAdminURL, { traits, identifier, password }) {
   const resp = await ctx.request.post(`${kratosAdminURL}/admin/identities`, {
@@ -308,6 +466,7 @@ async function sendFromFormalEntry(surface, text) {
 test("tp288-e2e-001: real entry success path stays in one official bubble", async ({ browser }) => {
   test.setTimeout(240_000);
   const { appContext, page } = await setupTenantAdminSession(browser, "001");
+  await ensureEvidenceRoot();
   const network = await installFormalEntryMock(page);
   const surface = await openFormalEntry(page);
   const turn1BindingKey = "conv_tp288_1::turn_tp288_1::req_tp288_1";
@@ -348,12 +507,33 @@ test("tp288-e2e-001: real entry success path stays in one official bubble", asyn
     "/internal/assistant/conversations/conv_tp288_1/turns/turn_tp288_1:commit",
   ]);
 
+  await persistTp288Evidence({
+    appContext,
+    page,
+    surface,
+    caseID: "001",
+    title: "real entry success path stays in one official bubble",
+    result: "passed",
+    expectedBubbleCount: 1,
+    expectedBindings: [
+      {
+        binding_key: turn1BindingKey,
+        conversation_id: "conv_tp288_1",
+        turn_id: "turn_tp288_1",
+        request_id: "req_tp288_1",
+      },
+    ],
+    expectedTexts: ["已创建华东运营部。", "将在鲜花组织下创建华东运营部。"],
+    network,
+  });
+
   await appContext.close();
 });
 
 test("tp288-e2e-002: failure stays in-bubble and retry creates exactly one new bubble", async ({ browser }) => {
   test.setTimeout(240_000);
   const { appContext, page } = await setupTenantAdminSession(browser, "002");
+  await ensureEvidenceRoot();
   const network = await installFormalEntryMock(page, { failFirstCommit: true });
   const surface = await openFormalEntry(page);
   const turn1BindingKey = "conv_tp288_1::turn_tp288_1::req_tp288_1";
@@ -404,6 +584,32 @@ test("tp288-e2e-002: failure stays in-bubble and retry creates exactly one new b
     "/internal/assistant/conversations/conv_tp288_1/turns/turn_tp288_2:confirm",
     "/internal/assistant/conversations/conv_tp288_1/turns/turn_tp288_2:commit",
   ]);
+
+  await persistTp288Evidence({
+    appContext,
+    page,
+    surface,
+    caseID: "002",
+    title: "failure stays in-bubble and retry creates exactly one new bubble",
+    result: "passed",
+    expectedBubbleCount: 2,
+    expectedBindings: [
+      {
+        binding_key: turn1BindingKey,
+        conversation_id: "conv_tp288_1",
+        turn_id: "turn_tp288_1",
+        request_id: "req_tp288_1",
+      },
+      {
+        binding_key: turn2BindingKey,
+        conversation_id: "conv_tp288_1",
+        turn_id: "turn_tp288_2",
+        request_id: "req_tp288_2",
+      },
+    ],
+    expectedTexts: ["提交失败，请重试。", "已创建华北运营部。"],
+    network,
+  });
 
   await appContext.close();
 });

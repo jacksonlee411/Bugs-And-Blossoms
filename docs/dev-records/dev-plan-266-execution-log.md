@@ -1,6 +1,6 @@
 # DEV-PLAN-266 执行日志（AI对话官方 UI 单通道与气泡内回写）
 
-**状态**: 验证推进中（2026-03-08 CST；真实入口 E2E 已接入默认 Playwright 基线，迁移 admin 环境阻塞已排除；`292` 认证/启动闭环已完成，`tp288-e2e-001/002` 已通过，当前进入证据归档与 `266` 收口整理）
+**状态**: 已完成（2026-03-08 CST；真实入口 E2E 已接入默认 Playwright 基线并完成 `tp288-e2e-001/002` 定向 trace 复跑；`tp288-real-entry-evidence-index.json`、`tp288-handoff-to-285.md` 与固定命名截图/DOM/网络/trace/断言资产均已落地，`266` 当前可作为 `285` 的已完成输入之一被引用）
 
 ## 1. 本次落地范围
 1. [X] Go 代理：`assistant-ui/bridge.js` 从“监听并转发”升级为“拦截并接管”。
@@ -24,7 +24,7 @@
 2. [X] Web：`pnpm --dir apps/web test -- src/pages/assistant/LibreChatPage.test.tsx src/pages/assistant/AssistantPage.test.tsx src/pages/assistant/assistantAutoRun.test.ts` 通过。
 3. [X] 266 mock stopline：通过，确认 `native_send_emitted=0`、同轮单气泡回写、无页面外挂容器。
 4. [X] 266 真实入口自动化已接入默认基线：移除 `TP288_USE_EXISTING_RUNTIME=1` 条件后，`e2e/tests/tp288-librechat-real-entry-evidence.spec.js` 已进入 Playwright 默认发现集合（`--list` 可见 2 个用例）。
-5. [ ] `266` 收口清单待补齐：当前 `286/287` 已完成，`288` 已完成默认基线复跑并通过，剩余为证据索引与封板输入整理。
+5. [X] `266` 收口清单已补齐：`288` 已完成默认基线复跑、固定命名证据索引与 `285` 交接单整理。
 
 ## 4.1 本轮推进记录（2026-03-08）
 1. [X] 已移除 `tp288` 的环境开关 skip，使真实入口用例直接进入默认 Playwright 基线。
@@ -35,6 +35,12 @@
 6. [X] 已执行 `pnpm --dir /home/lee/Projects/Bugs-And-Blossoms/e2e exec playwright test tests/tp288-librechat-real-entry-evidence.spec.js --grep "tp288-e2e-002"`，结果通过。
 7. [X] 已执行 `pnpm --dir /home/lee/Projects/Bugs-And-Blossoms/e2e exec playwright test tests/tp288-librechat-real-entry-evidence.spec.js`，结果 `2 passed`（`tp288-e2e-001/002` 全通过）。
 
+## 4.2 证据固化补记（2026-03-08 22:49 CST）
+1. [X] 已为 `tp288-e2e-001/002` 增补固定命名资产：`*-page.png`、`*-dom.json`、`*-network.json`、`*-trace.zip`、`*-assertions.json`。
+2. [X] 已重写 `docs/dev-records/assets/dev-plan-266/tp288-real-entry-evidence-index.json`，按用例维度记录 `command/executed_at/artifacts/assertions/result`。
+3. [X] 已新增 `docs/dev-records/assets/dev-plan-266/tp288-handoff-to-285.md`，供 `285` 直接引用 `266` 子域 stopline 结论。
+4. [X] 已执行 `make check doc`，文档门禁通过。
+
 ## 5. 证据资产
 1. [X] `docs/dev-records/assets/dev-plan-266/tp266-mock-stopline-trace.zip`
 2. [X] `docs/dev-records/assets/dev-plan-266/live-runtime-page.png`
@@ -43,6 +49,17 @@
 5. [X] `docs/dev-records/assets/dev-plan-266/live-runtime-stream.json`
 6. [X] `docs/dev-records/assets/dev-plan-266/live-runtime-turn-responses.json`
 7. [X] `docs/dev-records/assets/dev-plan-266/tp288-real-entry-evidence-index.json`
+8. [X] `docs/dev-records/assets/dev-plan-266/tp288-e2e-001-page.png`
+9. [X] `docs/dev-records/assets/dev-plan-266/tp288-e2e-001-dom.json`
+10. [X] `docs/dev-records/assets/dev-plan-266/tp288-e2e-001-network.json`
+11. [X] `docs/dev-records/assets/dev-plan-266/tp288-e2e-001-trace.zip`
+12. [X] `docs/dev-records/assets/dev-plan-266/tp288-e2e-001-assertions.json`
+13. [X] `docs/dev-records/assets/dev-plan-266/tp288-e2e-002-page.png`
+14. [X] `docs/dev-records/assets/dev-plan-266/tp288-e2e-002-dom.json`
+15. [X] `docs/dev-records/assets/dev-plan-266/tp288-e2e-002-network.json`
+16. [X] `docs/dev-records/assets/dev-plan-266/tp288-e2e-002-trace.zip`
+17. [X] `docs/dev-records/assets/dev-plan-266/tp288-e2e-002-assertions.json`
+18. [X] `docs/dev-records/assets/dev-plan-266/tp288-handoff-to-285.md`
 
 ## 6. 本次补充修复
 1. [X] `apps/web/src/pages/assistant/AssistantPage.tsx`：首轮 turn 创建失败时，补齐桥接气泡回写路径，避免只在页面右侧报错而不回写到聊天壳层。

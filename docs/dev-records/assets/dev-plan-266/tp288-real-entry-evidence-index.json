@@ -1,44 +1,83 @@
 {
   "plan": "DEV-PLAN-288",
-  "status": "in_progress",
-  "updated_at": "2026-03-08 CST",
+  "status": "completed",
+  "updated_at": "2026-03-08 22:49 CST",
   "formal_entry": "/app/assistant/librechat",
-  "e2e_spec": "e2e/tests/tp288-librechat-real-entry-evidence.spec.js",
-  "runner_mode": "default_playwright_baseline",
-  "coverage": [
-    "success_in_official_bubble",
-    "failure_in_same_official_bubble",
-    "retry_via_second_round",
-    "continuous_multi_turn_binding",
-    "outer_page_has_no_reply_container",
-    "no_native_send_post_to_api_agents_chat_or_api_messages"
+  "aligned_with": [
+    "DEV-PLAN-266",
+    "DEV-PLAN-271",
+    "DEV-PLAN-285",
+    "DEV-PLAN-292"
   ],
-  "selectors": {
-    "surface_root": "direct_page_or_legacy_iframe",
-    "input": "textarea[placeholder*=发送消息]",
-    "send_button": "button[aria-label=发送消息]",
-    "bubble": "[data-assistant-binding-key]",
-    "binding_attrs": [
-      "data-assistant-conversation-id",
-      "data-assistant-turn-id",
-      "data-assistant-request-id",
-      "data-assistant-message-id",
-      "data-assistant-binding-key"
+  "runner_mode": "default_playwright_baseline_plus_targeted_trace_rerun",
+  "summary": "tp288-e2e-001/002 已在真实入口按固定命名资产重跑并通过；官方消息树唯一落点、同轮唯一 assistant 气泡、conversation_id/turn_id/request_id 与唯一气泡一一对应、native_send_emitted=0 均已有可回溯证据。",
+  "fixed_assets": {
+    "root": "docs/dev-records/assets/dev-plan-266",
+    "pattern": [
+      "tp288-e2e-{id}-page.png",
+      "tp288-e2e-{id}-dom.json",
+      "tp288-e2e-{id}-network.json",
+      "tp288-e2e-{id}-trace.zip",
+      "tp288-e2e-{id}-assertions.json"
     ]
   },
-  "network_equivalent_stopline": {
-    "allowed_post_prefix": "/internal/assistant/",
-    "blocked_native_post_prefixes": [
-      "/api/agents/chat",
-      "/api/messages"
-    ]
-  },
-  "notes": [
-    "真实入口仍以 /app/assistant/librechat 为唯一用户入口；当前正式契约应对齐 direct page，不再把 iframe 视为稳定前提。",
-    "自动化证据仍以 DOM 断言 + POST 请求捕获为主，作为 native_send_emitted=0 的等价强证据。",
-    "2026-03-08 已修复默认 E2E 迁移 admin 用户口径问题，并确认 `playwright test --list` 可默认发现 2 个 tp288 用例。",
-    "2026-03-08 `292` 已关闭正式入口 vendored UI 与 sid 会话的认证/启动闭环缺口；当前阶段阻塞转为“基于默认 E2E 基线完成复跑并固化可复核证据”。",
-    "失败产物仍由 Playwright 默认输出到 e2e/test-results/ 与 e2e/playwright-report/。"
+  "stale_on": [
+    "290A pending placeholder bubble fix merged",
+    "240C runtime gate semantics changed",
+    "240D durable execution/compensation semantics changed",
+    "240E MCP write admission semantics changed",
+    "message binding/render path changed",
+    "routing/authn chain changed",
+    "error code semantics changed",
+    "fail-closed behavior changed"
   ],
-  "current_blocker": "default_e2e_evidence_replay_pending"
+  "cases": [
+    {
+      "id": "001",
+      "name": "real entry success path stays in one official bubble",
+      "result": "passed",
+      "command": "pnpm --dir /home/lee/Projects/Bugs-And-Blossoms/e2e exec playwright test tests/tp288-librechat-real-entry-evidence.spec.js --workers=1 --trace on --grep \"tp288-e2e-001\"",
+      "executed_at": "2026-03-08T14:32:29.538Z",
+      "artifacts": {
+        "page": "docs/dev-records/assets/dev-plan-266/tp288-e2e-001-page.png",
+        "dom": "docs/dev-records/assets/dev-plan-266/tp288-e2e-001-dom.json",
+        "network": "docs/dev-records/assets/dev-plan-266/tp288-e2e-001-network.json",
+        "trace": "docs/dev-records/assets/dev-plan-266/tp288-e2e-001-trace.zip",
+        "assertions": "docs/dev-records/assets/dev-plan-266/tp288-e2e-001-assertions.json"
+      },
+      "assertions": {
+        "no_native_send_post": true,
+        "official_message_tree_only": true,
+        "single_assistant_bubble": true,
+        "conversation_turn_request_binding_unique": true,
+        "expected_bubble_count_match": true
+      }
+    },
+    {
+      "id": "002",
+      "name": "failure stays in-bubble and retry creates exactly one new bubble",
+      "result": "passed",
+      "command": "pnpm --dir /home/lee/Projects/Bugs-And-Blossoms/e2e exec playwright test tests/tp288-librechat-real-entry-evidence.spec.js --workers=1 --trace on --grep \"tp288-e2e-002\"",
+      "executed_at": "2026-03-08T14:46:42.906Z",
+      "artifacts": {
+        "page": "docs/dev-records/assets/dev-plan-266/tp288-e2e-002-page.png",
+        "dom": "docs/dev-records/assets/dev-plan-266/tp288-e2e-002-dom.json",
+        "network": "docs/dev-records/assets/dev-plan-266/tp288-e2e-002-network.json",
+        "trace": "docs/dev-records/assets/dev-plan-266/tp288-e2e-002-trace.zip",
+        "assertions": "docs/dev-records/assets/dev-plan-266/tp288-e2e-002-assertions.json"
+      },
+      "assertions": {
+        "no_native_send_post": true,
+        "official_message_tree_only": true,
+        "single_assistant_bubble": true,
+        "conversation_turn_request_binding_unique": true,
+        "expected_bubble_count_match": true
+      }
+    }
+  ],
+  "freshness": {
+    "effective_at": "2026-03-08T22:49:12+08:00",
+    "rule": "若 290A 或 240C/240D/240E 的影响性变更合入，必须按 DEV-PLAN-271 S5 规则重跑 tp288 并刷新本索引。"
+  },
+  "handoff": "docs/dev-records/assets/dev-plan-266/tp288-handoff-to-285.md"
 }

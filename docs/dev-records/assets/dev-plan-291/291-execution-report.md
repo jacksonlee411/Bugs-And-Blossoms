@@ -1,9 +1,9 @@
 # DEV-PLAN-291 执行报告
 
-- 执行时间：2026-03-08 21:41:02 CST
+- 执行时间：2026-03-09 01:54:16 CST
 - 执行口径：`291-v2`
 - 工作目录：`/home/lee/Projects/Bugs-And-Blossoms`
-- 总结论：`291 已完成执行与留证；R1~R8/R10 通过，R9 未通过，因此 291 当前为“已执行但未通过”。`
+- 总结论：`291 已完成执行与留证；R1~R8/R10 通过，R9 已按最新 288/290 证据刷新后仍未通过，因此 291 当前为“已执行但未通过”。`
 
 ## 固定命令链
 1. `make librechat-web-verify`
@@ -20,13 +20,14 @@
 
 ## 本轮结果
 - Source / build / runtime / formal entry / compat alias / routing / no-legacy 均通过。
-- `R9` 未通过：`tp288` 可继续作为正式入口与官方消息树的引用输入，但 `tp290` 当前仍显示 Case 2/3/4 因 pending placeholder bubble 未通过 stopline，无法证明 `280 §10.2` 在完整 Case Matrix 上已满足。
+- `R9` 未通过：`tp288` 已刷新为 `completed` 且可继续作为正式入口与官方消息树的引用输入，但 `tp290` 当前仍显示 Case 2/3/4 因 pending placeholder bubble 未通过 stopline，无法证明 `280 §10.2` 在完整 Case Matrix 上已满足。
 - 因此 `291` 已形成可复核阻塞事实，但尚不能把 `237` 前置标记为“已齐备”。
 
 ## Stopline 复核
 - 未发现旧桥职责回流：`make check no-legacy` 通过。
 - 未发现正式入口/静态前缀分类漂移：`make check routing` 通过。
 - 未发现 `/app/assistant/librechat/api/**` compat alias 偏离 `292` 边界：相关 Go 测试通过。
+- `tp288` 最新索引时间晚于最新相关代码提交，可继续作为 `266` 子域完成态引用输入。
 - 仍存在 `280` 硬门槛引用缺口：`docs/dev-records/assets/dev-plan-291/291-ref-288-290-freshness.md` 已记录。
 
 ## 结论

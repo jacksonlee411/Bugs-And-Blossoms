@@ -1,9 +1,9 @@
 {
   "plan": "DEV-PLAN-291",
   "status": "executed_blocked",
-  "updated_at": "2026-03-08 21:41 CST",
+  "updated_at": "2026-03-09 01:54 CST",
   "formal_entry": "/app/assistant/librechat",
-  "summary": "R1~R8/R10 passed; R9 failed because tp290 still fails Case 2/3/4 stopline.",
+  "summary": "R1~R8/R10 passed; R9 refreshed against latest tp288/tp290 evidence and still failed because tp290 still fails Case 2/3/4 stopline.",
   "entries": [
     {
       "id": "R1",
@@ -106,7 +106,7 @@
     {
       "id": "R9",
       "command": "reference freshness review for tp288/tp290",
-      "executed_at": "2026-03-08T13:41:02Z",
+      "executed_at": "2026-03-08T17:54:16Z",
       "exit_code": 1,
       "artifacts": [
         "docs/dev-records/assets/dev-plan-291/291-ref-288-290-freshness.md"
@@ -114,16 +114,18 @@
       "referenced_artifacts": [
         {
           "path": "docs/dev-records/assets/dev-plan-266/tp288-real-entry-evidence-index.json",
-          "mtime": "2026-03-08T15:58:22.549111+08:00"
+          "mtime": "2026-03-08T22:51:45.930181+08:00",
+          "status": "completed"
         },
         {
           "path": "docs/dev-records/assets/dev-plan-290/tp290-real-case-evidence-index.json",
-          "mtime": "2026-03-08T20:42:52.088357+08:00"
+          "mtime": "2026-03-08T20:42:52.088357+08:00",
+          "status": "in_progress"
         }
       ],
       "result": "failed",
       "owner": "Codex",
-      "notes": "tp290 当前仍有 Case 2/3/4 未通过 stopline，无法证明 280 核心硬门槛在完整 Case Matrix 上成立。"
+      "notes": "tp288 已刷新为 completed 且可继续作为引用输入；tp290 当前仍有 Case 2/3/4 未通过 stopline，无法证明 280 核心硬门槛在完整 Case Matrix 上成立。"
     },
     {
       "id": "R10",
