@@ -1,6 +1,6 @@
 # DEV-PLAN-240：Assistant 组织架构事务编排现代化方案（按 DEV-PLAN-280 新方向修订）
 
-**状态**: 进行中（已完成 `M0/M1`：边界冻结与契约冻结；`M2` 待启动；2026-03-07 CST）
+**状态**: 进行中（已完成 `M0/M1/M2/M3`；`M4~M7` 由 `DEV-PLAN-240C~240F` 承接推进；2026-03-08 CST）
 
 ## 1. 背景与问题定义
 - **需求来源**：针对当前 Assistant 在组织架构操作中的“代码写死”实现，提出批判性评估，并给出更先进、可扩展、可审计的事务操作模式。
@@ -274,8 +274,8 @@ const (
 ## 7. 分阶段实施路线（M0-M7）
 1. [X] **M0（对齐前置）**：与 `223/260/280/284` 冻结接口边界，确认 DTO 字段与 phase 语义不再漂移。
 2. [X] **M1（契约冻结）**：冻结 `AssistantActionSpec/ExecutionPlan/TxEnvelope/CompensationSpec`、状态机、错误码与 Confirm `plan_hash` 契约，并冻结 `confirm_ttl_seconds/expires_at/version_tuple` 字段口径。
-3. [ ] **M2（去写死第一步）**：把 `create_orgunit` 从核心 `if/switch` 下沉到 `ActionRegistry + CommitAdapter`，保持行为等价；强制 Commit 前执行 `version_tuple` OCC 校验。
-4. [ ] **M3（编排统一）**：统一内存与 PG 路径状态迁移；把 confirm/commit/task 三段收敛为同一状态机实现。
+3. [X] **M2（去写死第一步）**：把 `create_orgunit` 从核心 `if/switch` 下沉到 `ActionRegistry + CommitAdapter`，保持行为等价；强制 Commit 前执行 `version_tuple` OCC 校验。
+4. [X] **M3（编排统一）**：统一内存与 PG 路径状态迁移；把 confirm/commit/task 三段收敛为同一状态机实现。
 5. [ ] **M4（权鉴与风控左移）**：落地 `ActionInterceptor`，将 `auth_object/auth_action/risk_tier/required_checks` 固化到执行前 gate。
 6. [ ] **M5（耐久执行 + 补偿）**：提交链路默认走任务编排（receipt + 异步执行）；高风险组织操作在初期默认“人工接管优先”，`partial failure` 先落 `MANUAL_TAKEOVER_REQUIRED`，`auto-saga` 按白名单渐进启用。
 7. [ ] **M6（MCP/LibreChat 对齐）**：将 MCP 调用接入统一风控/审批门，完成“默认只读 + 显式写能力注册 + 审计门”。
@@ -287,6 +287,14 @@ const (
 3. [X] 事务契约冻结完成：`AssistantActionSpec/AssistantExecutionPlan/AssistantTxEnvelope/AssistantCompensationSpec` 与 `plan_hash + confirm_ttl_seconds/expires_at + version_tuple` 已冻结为 M1 基线。
 4. [X] Stopline 冻结完成：前端仅消费 DTO，禁止在 helper/adapter 内重算阶段、候选裁决或提交约束。
 5. [X] 进入条件确认：`M2` 仅在保持上述冻结口径不变的前提下启动，实现层不得回流 UI 兜底业务判定。
+
+### 7.2 子计划拆分（M2-M7）
+1. [X] `DEV-PLAN-240A`（承接 `M2`）：ActionRegistry + CommitAdapter + OCC 落地。
+2. [X] `DEV-PLAN-240B`（承接 `M3`）：状态机统一与内存/PG 路径收敛。
+3. [X] `DEV-PLAN-240C`（承接 `M4`）：ActionInterceptor 与风险门左移。
+4. [X] `DEV-PLAN-240D`（承接 `M5`）：耐久执行与人工接管优先。
+5. [X] `DEV-PLAN-240E`（承接 `M6`）：MCP 写能力准入与治理。
+6. [X] `DEV-PLAN-240F`（承接 `M7`）：与 `280/284/260` 对齐封板回归。
 
 ## 8. 门禁与验证（SSOT 引用）
 - 触发器与本地必跑矩阵：`AGENTS.md`
@@ -346,7 +354,8 @@ const (
 3. [ ] 对齐 `DEV-PLAN-223/260`：事实源持久化与业务 FSM/DTO 语义由两者主导，`240` 负责事务编排实现。
 4. [ ] 对齐 `DEV-PLAN-280/283/284`：UI 承载、入口切换与源码级发送渲染接管由其主导，`240` 不重复定义前端承载策略。
 5. [ ] 对齐 `DEV-PLAN-271`：跨计划阶段编排与封板顺序按统一主链路执行。
-6. [ ] 本计划聚焦“去写死 + 统一事务编排抽象”，不重复定义既有单主源与边界规则。
+6. [ ] `DEV-PLAN-240A~240F` 承接 `M2~M7` 的原子实施，不再在主计划中堆叠实现细节。
+7. [ ] 本计划聚焦“去写死 + 统一事务编排抽象”，不重复定义既有单主源与边界规则。
 
 ## 14. 当前实现 vs 目标态对照表（专门）
 
