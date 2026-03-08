@@ -1,0 +1,16 @@
+{
+  "url": "http://localhost:8080/app/assistant/librechat/c/new",
+  "bubble_count": 1,
+  "bubbles": [
+    {
+      "binding_key": "conv_tp290_1::turn_tp290_1::req_tp290_1",
+      "conversation_id": "conv_tp290_1",
+      "turn_id": "turn_tp290_1",
+      "request_id": "req_tp290_1",
+      "message_id": "80146d75-459c-47f4-8ded-1053b1d8ea61_",
+      "text": "你好，我在。"
+    }
+  ],
+  "external_reply_container_count": 0,
+  "connection_error_count": 0
+}

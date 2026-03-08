@@ -50,3 +50,18 @@
 3. [X] `apps/web/src/pages/assistant/AssistantPage.test.tsx`：新增首轮结构化失败回写单测。
 4. [X] `e2e/tests/tp266-librechat-single-channel-in-bubble.spec.js`：历史 mock stopline 记录保留。
 5. [X] `e2e/tests/tp288-librechat-real-entry-evidence.spec.js`：真实入口 `/app/assistant/librechat` 回归脚本已接入默认 Playwright 基线；当前已把登录与承载面探针更新为租户 host + “direct page / iframe 双承载探测”，并继续保留 `data-assistant-*` 三元组与“无 native send POST”作为最终 stopline。
+
+## 7. 288 推进卡点复盘（沉淀给后续复跑）
+1. [X] 启动链卡点：`localhost` SW + `sid/auth` 兼容缺口会直接导致白屏/401/回跳，先修启动链再查业务层。
+2. [X] 产物生效卡点：仅执行 `make librechat-web-build` 不会让已运行 Go 进程加载新前端包；必须重启 server。
+3. [X] 渲染链卡点：formal 渲染需同时覆盖 `components/Messages/*` 与 `Chat/Messages/MessageParts` 主路径，单改旧回退链不足。
+4. [X] 消息覆盖卡点：retry 二轮若沿用同 `messageId`，会在 upsert 时覆盖首轮；已通过 runtime 匹配策略修复并补单测。
+5. [X] 断言口径卡点：文本“存在于气泡”与“全页计数=0”不能并存；已统一为“目标容器命中 + 全页唯一计数”。
+6. [X] patch 维护卡点：手写 patch 容易 hunk 失配；后续统一用源文件 diff 生成 patch，并以 `make librechat-web-build` 校验。
+7. [X] runner 噪声卡点：Playwright 偶发 `step id not found` 与业务失败要分层判断，最终以业务断言和 trace 为准。
+
+## 8. 后续复跑检查清单（可直接执行）
+1. [X] 前置：确认 `292` 已生效（auth/startup 链路可通）后再跑 `288`。
+2. [X] 前置：`TRUST_PROXY=1`，并显式设置正确 `KRATOS_PUBLIC_URL/E2E_KRATOS_ADMIN_URL`。
+3. [X] 执行：每次 patch stack 或 assets 变更后，固定执行“`make librechat-web-build` + 重启 server + 复跑 tp288”。
+4. [X] 验收：至少同时满足 `tp288-e2e-001/002` 通过、`data-assistant-binding-key` 命中、无 native send POST。

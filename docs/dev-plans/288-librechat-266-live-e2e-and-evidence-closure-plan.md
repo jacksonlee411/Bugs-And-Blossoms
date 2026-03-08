@@ -69,3 +69,26 @@
 3. [X] retry 二轮覆盖问题已关闭：同会话 retry 会新增 assistant 气泡而非覆盖首轮，`tp288-e2e-002` 通过。
 4. [X] 默认基线验证结果：`tp288-e2e-001/002` 已通过，`288` 已从“实现阻塞修复”进入“证据固化与封板输入整理”。
 5. [ ] 当前下一步：补齐 `docs/dev-records/assets/dev-plan-266/` 证据索引与 `266` 收口清单，确保文档勾选、执行日志与资产索引一致后，再将 `288` 标记为完成。
+
+## 11. 卡点、解法与经验沉淀（288 复盘）
+1. [X] 卡点：正式入口启动链早期被 `localhost` SW 注册与 `sid/auth` 兼容缺口阻塞，表现为白屏/401/登录回跳。
+   - 解法：在 vendored patch stack 中补齐 `localhost` SW 与 `/app/assistant/librechat/api/**` 启动兼容，形成 `292 -> 288` 的固定前置顺序。
+   - 经验：`288` 复跑前必须先验证 `292` 前置是否生效，避免把启动链问题误判为业务渲染问题。
+2. [X] 卡点：`make librechat-web-build` 后直接复跑仍失败，出现“已改代码但页面不变”的假阴性。
+   - 解法：明确 Go `go:embed` 产物只有在 server 进程重启后才会生效；将“重建 + 重启服务”作为固定步骤。
+   - 经验：凡命中 `internal/server/assets/librechat-web/**` 变更，必须执行“重建前端产物 -> 重启服务 -> 再跑 E2E”三步，不可省略。
+3. [X] 卡点：消息状态层已有 `assistantFormalPayload/bindingKey`，但 DOM 不出现 `data-assistant-binding-key`。
+   - 解法：定位到渲染链分叉，主路径实际命中 `components/Messages/*` 与 `Chat/Messages/MessageParts`，将 formal 渲染短路与 remount key 补到真实命中路径。
+   - 经验：排查渲染问题时先确认“真实命中组件树”，不要仅依据历史补丁位置判断。
+4. [X] 卡点：retry 第二轮覆盖第一轮气泡，`tp288-e2e-002` 期望两轮气泡但实际只有一轮。
+   - 解法：修正 `upsertAssistantFormalMessage` 对“同 messageId + 新 pending”场景的匹配策略，避免覆盖已绑定旧 turn 的消息，并补单测固化。
+   - 经验：消息 upsert 逻辑必须以 `bindingKey` 作为主识别键，`messageId` 只能用于同轮占位更新，不能跨轮复用覆盖。
+5. [X] 卡点：E2E 断言存在“同一文本既要求在气泡内存在，又要求全页为 0”的冲突，导致误报。
+   - 解法：将该类断言修正为“全页计数 = 1（且不重复）”，保持“无外挂重复气泡”的真实语义。
+   - 经验：禁止使用自相矛盾断言表达“唯一性”；应改为“目标容器命中 + 全页唯一计数”组合断言。
+6. [X] 卡点：手写 patch 容易出现 malformed hunk，导致构建阶段 patch 应用失败。
+   - 解法：统一改为“从原文件生成 diff”产出 patch，并以 `make librechat-web-build` 作为 patch stack 验证。
+   - 经验：`third_party/librechat-web/patches/*` 变更后，构建成功是唯一有效校验；只看源码 diff 不足以证明可用。
+7. [X] 卡点：Playwright 偶发 `Internal error: step id not found` 噪声干扰判断。
+   - 解法：以业务断言结果为准，不把该噪声当根因；结合截图/trace 判断真实失败点。
+   - 经验：测试框架噪声与业务失败要分层定位，避免把 runner 噪声误当产品缺陷。

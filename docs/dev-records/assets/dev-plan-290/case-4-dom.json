@@ -1,0 +1,24 @@
+{
+  "url": "http://localhost:8080/app/assistant/librechat/c/new",
+  "bubble_count": 2,
+  "bubbles": [
+    {
+      "binding_key": "conv_tp290_4::turn_tp290_4::req_tp290_4",
+      "conversation_id": "conv_tp290_4",
+      "turn_id": "turn_tp290_4",
+      "request_id": "req_tp290_4",
+      "message_id": "227f390d-43bc-4754-a937-f524118d3e91_",
+      "text": "Case 4 提交成功。 Selected: 共享服务中心（候选2） org_code: AI2904 parent_org_code: FLOWER-B effective_date: 2026-03-26 event_type: orgunit_created"
+    },
+    {
+      "binding_key": "::::",
+      "conversation_id": null,
+      "turn_id": null,
+      "request_id": null,
+      "message_id": "227f390d-43bc-4754-a937-f524118d3e91_",
+      "text": "Processing... Loading..."
+    }
+  ],
+  "external_reply_container_count": 0,
+  "connection_error_count": 0
+}
