@@ -338,7 +338,7 @@ test("tp288-e2e-001: real entry success path stays in one official bubble", asyn
   await expect(turn1Bubble).toContainText("已创建华东运营部。");
   await expect(turn1Bubble).toContainText("org_code: AI2881");
   await expect(surface.locator("[data-assistant-binding-key]")).toHaveCount(1);
-  await expect(page.getByText("已创建华东运营部。")).toHaveCount(0);
+  await expect(page.getByText("已创建华东运营部。")).toHaveCount(1);
 
   expect(network.nativePostPaths).toEqual([]);
   expect(network.internalPostPaths).toEqual([
@@ -374,7 +374,7 @@ test("tp288-e2e-002: failure stays in-bubble and retry creates exactly one new b
   await expect(surface.getByRole("button", { name: /确认|Confirm/i })).toHaveCount(0);
   await expect(surface.getByRole("button", { name: /提交|Submit/i })).toHaveCount(0);
   await expect(surface.locator("[data-assistant-binding-key]")).toHaveCount(1);
-  await expect(page.getByText("提交失败，请重试。")).toHaveCount(0);
+  await expect(page.getByText("提交失败，请重试。")).toHaveCount(1);
 
   await sendFromFormalEntry(surface, "重新创建华北运营部");
   await expect(turn2Bubble).toHaveCount(1);
@@ -392,7 +392,7 @@ test("tp288-e2e-002: failure stays in-bubble and retry creates exactly one new b
   await expect(turn2Bubble).toHaveAttribute("data-assistant-turn-id", "turn_tp288_2");
   await expect(turn2Bubble).toHaveAttribute("data-assistant-request-id", "req_tp288_2");
   await expect(surface.locator("[data-assistant-binding-key]")).toHaveCount(2);
-  await expect(page.getByText("已创建华北运营部。")).toHaveCount(0);
+  await expect(page.getByText("已创建华北运营部。")).toHaveCount(1);
 
   expect(network.nativePostPaths).toEqual([]);
   expect(network.internalPostPaths).toEqual([

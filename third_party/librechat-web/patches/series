@@ -9,3 +9,7 @@
 0003-localhost-sw-and-axios-credentials.patch
 0004-use-sse-formal-message-replace-fallback.patch
 0006-message-render-force-remount-on-formal-state.patch
+0007-content-render-formal-main-path.patch
+0008-message-parts-formal-main-path.patch
+0009-formal-turn-append-with-new-message-id.patch
+0010-upsert-pending-with-same-message-id-keeps-history.patch

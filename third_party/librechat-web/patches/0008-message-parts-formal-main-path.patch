@@ -1,0 +1,77 @@
+--- a/client/src/components/Chat/Messages/MessageParts.tsx
++++ b/client/src/components/Chat/Messages/MessageParts.tsx
+@@ -5,6 +5,11 @@
+ import { useMessageHelpers, useLocalize, useAttachments } from '~/hooks';
+ import MessageIcon from '~/components/Chat/Messages/MessageIcon';
+ import ContentParts from './Content/ContentParts';
++import AssistantFormalMessage from './Content/AssistantFormalMessage';
++import {
++  isAssistantFormalMessage,
++  type AssistantFormalMessage as AssistantFormalMessageType,
++} from '~/assistant-formal/runtime';
+ import SiblingSwitch from './SiblingSwitch';
+ import MultiMessage from './MultiMessage';
+ import HoverButtons from './HoverButtons';
+@@ -77,6 +82,16 @@
+     return null;
+   }
+ 
++  const disableFormalHoverActions = isAssistantFormalMessage(message) && !message.isCreatedByUser;
++  const formalContentRenderKey = [
++    message.messageId,
++    message.assistantFormalPayload?.bindingKey ?? '',
++    message.assistantFormalPayload?.state ?? '',
++    message.assistantFormalPending ? 'pending' : 'ready',
++    message.text ?? '',
++  ].join('::');
++  const formalMessage = disableFormalHoverActions ? (message as AssistantFormalMessageType) : null;
++
+   const baseClasses = {
+     common: 'group mx-auto flex flex-1 gap-3 transition-all duration-300 transform-gpu',
+     chat: maximizeChatSpace
+@@ -113,25 +128,29 @@
+               </h2>
+               <div className="flex flex-col gap-1">
+                 <div className="flex max-w-full flex-grow flex-col gap-0">
+-                  <ContentParts
+-                    edit={edit}
+-                    isLast={isLast}
+-                    enterEdit={enterEdit}
+-                    siblingIdx={siblingIdx}
+-                    attachments={attachments}
+-                    isSubmitting={isSubmitting}
+-                    searchResults={searchResults}
+-                    messageId={message.messageId}
+-                    setSiblingIdx={setSiblingIdx}
+-                    isCreatedByUser={message.isCreatedByUser}
+-                    conversationId={conversation?.conversationId}
+-                    isLatestMessage={messageId === latestMessage?.messageId}
+-                    content={message.content as Array<TMessageContentParts | undefined>}
+-                  />
++                  {formalMessage ? (
++                    <AssistantFormalMessage key={formalContentRenderKey} message={formalMessage} />
++                  ) : (
++                    <ContentParts
++                      edit={edit}
++                      isLast={isLast}
++                      enterEdit={enterEdit}
++                      siblingIdx={siblingIdx}
++                      attachments={attachments}
++                      isSubmitting={isSubmitting}
++                      searchResults={searchResults}
++                      messageId={message.messageId}
++                      setSiblingIdx={setSiblingIdx}
++                      isCreatedByUser={message.isCreatedByUser}
++                      conversationId={conversation?.conversationId}
++                      isLatestMessage={messageId === latestMessage?.messageId}
++                      content={message.content as Array<TMessageContentParts | undefined>}
++                    />
++                  )}
+                 </div>
+                 {isLast && isSubmitting ? (
+                   <div className="mt-1 h-[27px] bg-transparent" />
+-                ) : (
++                ) : disableFormalHoverActions ? null : (
+                   <SubRow classes="text-xs">
+                     <SiblingSwitch
+                       siblingIdx={siblingIdx}

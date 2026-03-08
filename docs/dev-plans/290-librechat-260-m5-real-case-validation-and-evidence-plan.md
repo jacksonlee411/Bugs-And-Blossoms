@@ -25,18 +25,47 @@
 
 ## 4. 实施步骤
 1. [X] 前置口径已冻结：`292` 已完成最小兼容层；在 `288` 未据此形成可复核复跑证据前，本计划只准备 Case matrix、断言清单与证据目录，不提前宣称 Case 通过。
-2. [ ] Case 1 验收：通道连通 + `266` 共通 stopline 同时成立。
-3. [ ] Case 2 验收：草案 -> 确认 -> 提交顺序严格成立。
-4. [ ] Case 3 验收：缺字段补全 -> 确认 -> 提交闭环成立。
-5. [ ] Case 4 验收：多候选 -> 选择 -> 二次确认 -> 提交闭环成立。
-6. [ ] 证据固化：每个 Case 保存截图、DOM 断言、请求日志、trace 及失败分支记录。
-7. [ ] 执行日志：将本轮真实验收写入 `dev-plan-260` 相关执行记录，显式区分旧口径记录与新口径记录。
+2. [ ] 固定 `Case Matrix v1` 并执行：Case 1~4 必须按 4.1 节的输入向量复跑，不接受临场改词替代。
+3. [ ] Case 1 验收：通道连通 + `266` 共通 stopline 同时成立。
+4. [ ] Case 2 验收：草案 -> 确认 -> 提交顺序严格成立。
+5. [ ] Case 3 验收：缺字段补全 -> 确认 -> 提交闭环成立。
+6. [ ] Case 4 验收：多候选 -> 选择 -> 二次确认 -> 提交闭环成立。
+7. [ ] 证据固化：每个 Case 按 4.2 节固定命名产出截图、DOM 断言、请求日志、trace 与阶段断言。
+8. [ ] 执行日志：本轮真实验收仅写入 `docs/dev-records/dev-plan-290-execution-log.md`；`dev-plan-260` 仅保留“引用与摘要”。
+
+### 4.1 Case Matrix v1（冻结输入向量）
+> 本矩阵承接 `DEV-PLAN-260` 第 2.2 节 Case 1~4，作为 `290` 的唯一复跑口径。
+
+| Case | 固定输入序列（按轮次） | 关键阶段断言（后端 phase） | 通过判定 |
+| --- | --- | --- | --- |
+| Case 1 | T1：`你好` | `idle -> idle`（不得进入提交链） | `/app/assistant/librechat` 可发送、可回包，且同轮满足 `266` stopline |
+| Case 2 | T1：`在 AI治理办公室 下新建 人力资源部2，生效日期 2026-01-01`；T2：`确认` | `idle -> await_commit_confirm -> committing -> committed` | 对话内完成草案、确认、提交、成功回执 |
+| Case 3 | T1：`在 AI治理办公室 下新建 人力资源部239A补全`；T2：`生效日期 2026-03-25`；T3：`确认` | `idle -> await_missing_fields -> await_commit_confirm -> committing -> committed` | 对话内提示缺字段、补全后确认并提交成功 |
+| Case 4 | T1：`在 共享服务中心 下新建 239A候选验证部，生效日期 2026-03-26`；T2：`选第2个`（或候选编码）；T3：`是的` | `idle -> await_candidate_pick -> await_candidate_confirm -> await_commit_confirm -> committing -> committed` | 对话内完成候选选择、二次确认并提交成功 |
+
+补充规则：
+1. [ ] `Case Matrix v1` 的默认确认词冻结为 `确认` / `是的`；若运行时接受同义词，验收仍以本矩阵默认输入为准。
+2. [ ] 仅当候选顺序在运行时不稳定时，Case 4 才允许改用“候选编码”；必须在执行日志记录原因与实际输入。
+3. [ ] 任一 Case 输入向量偏离本矩阵且未在执行日志说明，不计入通过统计。
+
+### 4.2 证据目录与命名冻结
+1. [ ] 证据根目录冻结为：`docs/dev-records/assets/dev-plan-290/`。
+2. [ ] 每个 Case 必须产出以下固定文件（`{id}` 取 `1..4`）：
+   - `case-{id}-page.png`
+   - `case-{id}-dom.json`
+   - `case-{id}-network.har`
+   - `case-{id}-trace.zip`
+   - `case-{id}-phase-assertions.json`
+3. [ ] 汇总索引文件冻结为：`docs/dev-records/assets/dev-plan-290/tp290-real-case-evidence-index.json`。
+4. [ ] `Case Matrix v1` 资产副本冻结为：`docs/dev-records/assets/dev-plan-290/tp290-case-matrix-v1.md`。
 
 ## 5. 验收标准
 1. [ ] Case 1~4 全部通过，且每个 Case 均满足 `266` 共通 stopline。
 2. [ ] 任一 Case 出现双链路、外挂回复、同轮多泡或官方原始错误体验即判失败。
 3. [ ] 证据可追溯、可复核、可重复执行。
 4. [ ] 若 `288` 尚未基于 `292` 产物完成默认基线复跑与证据固化，则本计划不得更新为“已完成”。
+5. [ ] 任一 Case 未按 4.1 节固定输入向量执行，或未产出 4.2 节固定命名证据文件，不得判定通过。
+6. [ ] 若 `240C/240D/240E` 有影响性合入（运行时 gate、路由/认证链路、错误码语义、MCP 写能力准入、fail-closed 行为），`290` 历史证据立即失效，必须基于最新代码重跑并刷新索引（对齐 `271`）。
 
 ## 6. 测试与门禁（SSOT 引用）
 1. [ ] 触发器与命令以 `AGENTS.md`、`Makefile`、`docs/dev-plans/012-ci-quality-gates.md` 为准。
@@ -44,16 +73,21 @@
 
 ## 7. 交付物
 1. [ ] 本计划文档：`docs/dev-plans/290-librechat-260-m5-real-case-validation-and-evidence-plan.md`。
-2. [ ] Case 1~4 验收记录与证据资产索引。
-3. [ ] 面向 `285` 的 `260` 收口结论。
+2. [ ] Case 1~4 验收记录与证据资产索引：`docs/dev-records/assets/dev-plan-290/tp290-real-case-evidence-index.json`。
+3. [ ] `Case Matrix v1` 资产副本：`docs/dev-records/assets/dev-plan-290/tp290-case-matrix-v1.md`。
+4. [ ] 执行日志：`docs/dev-records/dev-plan-290-execution-log.md`。
+5. [ ] 面向 `285` 的 `260` 收口结论。
 
 ## 8. 关联文档
 - `docs/dev-plans/260-librechat-conversation-first-auto-execution-plan.md`
 - `docs/dev-plans/266-librechat-official-ui-single-dialog-channel-and-in-bubble-gpt52-plan.md`
 - `docs/dev-plans/271-assistant-librechat-cross-plan-sequenced-delivery-plan.md`
 - `docs/dev-plans/285-librechat-cutover-regression-and-closure-plan.md`
+- `docs/dev-plans/288-librechat-266-live-e2e-and-evidence-closure-plan.md`
 - `docs/dev-plans/289-librechat-260-m2-m4-implementation-closure-plan.md`
+- `docs/dev-plans/291-librechat-237-upgrade-compatibility-readiness-plan.md`
 - `docs/dev-plans/292-librechat-vendored-ui-auth-startup-compat-plan.md`
+- `docs/dev-records/dev-plan-290-execution-log.md`
 - `AGENTS.md`
 
 ## 9. 前置发现登记（承接 288，2026-03-08）
@@ -62,5 +96,5 @@
 3. [ ] `290` 启动门槛补充：`288` 必须先提供以下证据后，`290` 才能进入 Case 1~4 正式通过判定。
    - `tp288` 正式入口 DOM 出现 `data-assistant-binding-key`；
    - 同轮消息无普通 GPT 气泡回退；
-   - 证据时间晚于最近一次影响渲染主链的合入。
+   - 证据时间晚于最近一次影响渲染主链或 `240C/240D/240E` 影响性合入。
 4. [X] 单链路原则补充：`290` 执行阶段若发现再次依赖 `message.content` 缺失回退链才能通过，视为 `288` 未闭环，必须回退到 `288` 修复，不得以 Case 结果“暂时可用”替代结构性收口。

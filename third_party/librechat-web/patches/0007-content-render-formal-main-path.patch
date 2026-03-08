@@ -1,0 +1,89 @@
+--- a/client/src/components/Messages/ContentRender.tsx
++++ b/client/src/components/Messages/ContentRender.tsx
+@@ -8,7 +8,11 @@
+ import HoverButtons from '~/components/Chat/Messages/HoverButtons';
+ import MessageIcon from '~/components/Chat/Messages/MessageIcon';
+ import { useAttachments, useMessageActions } from '~/hooks';
+-import { isAssistantFormalMessage } from '~/assistant-formal/runtime';
++import {
++  isAssistantFormalMessage,
++  type AssistantFormalMessage as AssistantFormalMessageType,
++} from '~/assistant-formal/runtime';
++import AssistantFormalMessage from '~/components/Chat/Messages/Content/AssistantFormalMessage';
+ import SubRow from '~/components/Chat/Messages/SubRow';
+ import { cn, logger } from '~/utils';
+ import store from '~/store';
+@@ -76,6 +80,24 @@
+ 
+     const disableFormalHoverActions = isAssistantFormalMessage(msg) && !msg?.isCreatedByUser;
+ 
++    const formalContentRenderKey = useMemo(
++      () =>
++        [
++          msg?.messageId ?? '',
++          msg?.assistantFormalPayload?.bindingKey ?? '',
++          msg?.assistantFormalPayload?.state ?? '',
++          msg?.assistantFormalPending ? 'pending' : 'ready',
++          msg?.text ?? '',
++        ].join('::'),
++      [
++        msg?.assistantFormalPayload?.bindingKey,
++        msg?.assistantFormalPayload?.state,
++        msg?.assistantFormalPending,
++        msg?.messageId,
++        msg?.text,
++      ],
++    );
++
+     const iconData: TMessageIcon = useMemo(
+       () => ({
+         endpoint: msg?.endpoint ?? conversation?.endpoint,
+@@ -111,6 +133,7 @@
+       return null;
+     }
+ 
++    const formalMessage = disableFormalHoverActions ? (msg as AssistantFormalMessageType) : null;
+     const baseClasses = {
+       common: 'group mx-auto flex flex-1 gap-3 transition-all duration-300 transform-gpu ',
+       card: 'relative w-full gap-1 rounded-lg border border-border-medium bg-surface-primary-alt p-2 md:w-1/2 md:gap-3 md:p-4',
+@@ -166,21 +189,25 @@
+ 
+           <div className="flex flex-col gap-1">
+             <div className="flex max-w-full flex-grow flex-col gap-0">
+-              <ContentParts
+-                edit={edit}
+-                isLast={isLast}
+-                enterEdit={enterEdit}
+-                siblingIdx={siblingIdx}
+-                messageId={msg.messageId}
+-                attachments={attachments}
+-                isSubmitting={isSubmitting}
+-                searchResults={searchResults}
+-                setSiblingIdx={setSiblingIdx}
+-                isLatestMessage={isLatestMessage}
+-                isCreatedByUser={msg.isCreatedByUser}
+-                conversationId={conversation?.conversationId}
+-                content={msg.content as Array<TMessageContentParts | undefined>}
+-              />
++              {formalMessage ? (
++                <AssistantFormalMessage key={formalContentRenderKey} message={formalMessage} />
++              ) : (
++                <ContentParts
++                  edit={edit}
++                  isLast={isLast}
++                  enterEdit={enterEdit}
++                  siblingIdx={siblingIdx}
++                  messageId={msg.messageId}
++                  attachments={attachments}
++                  isSubmitting={isSubmitting}
++                  searchResults={searchResults}
++                  setSiblingIdx={setSiblingIdx}
++                  isLatestMessage={isLatestMessage}
++                  isCreatedByUser={msg.isCreatedByUser}
++                  conversationId={conversation?.conversationId}
++                  content={msg.content as Array<TMessageContentParts | undefined>}
++                />
++              )}
+             </div>
+ 
+             {(isSubmittingFamily || isSubmitting) && !(msg.children?.length ?? 0) ? (
