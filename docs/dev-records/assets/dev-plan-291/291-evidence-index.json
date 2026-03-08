@@ -1,14 +1,14 @@
 {
   "plan": "DEV-PLAN-291",
-  "status": "executed_blocked",
-  "updated_at": "2026-03-09 01:54 CST",
+  "status": "completed",
+  "updated_at": "2026-03-09 02:14 CST",
   "formal_entry": "/app/assistant/librechat",
-  "summary": "R1~R8/R10 passed; R9 refreshed against latest tp288/tp290 evidence and still failed because tp290 still fails Case 2/3/4 stopline.",
+  "summary": "R1~R10 全部通过；R9 已基于最新 `tp288/tp290` 证据刷新为通过，`291` 现可作为 `285` 的升级兼容前置件直接引用。",
   "entries": [
     {
       "id": "R1",
       "command": "make librechat-web-verify",
-      "executed_at": "2026-03-08T13:41:02Z",
+      "executed_at": "2026-03-08T18:10:27Z",
       "exit_code": 0,
       "artifacts": [
         "docs/dev-records/assets/dev-plan-291/291-source-verify.log"
@@ -20,7 +20,7 @@
     {
       "id": "R2",
       "command": "make librechat-web-build",
-      "executed_at": "2026-03-08T13:41:02Z",
+      "executed_at": "2026-03-08T18:12:01Z",
       "exit_code": 0,
       "artifacts": [
         "docs/dev-records/assets/dev-plan-291/291-web-build.log"
@@ -32,7 +32,7 @@
     {
       "id": "R3",
       "command": "make assistant-runtime-up && make assistant-runtime-status",
-      "executed_at": "2026-03-08T13:41:02Z",
+      "executed_at": "2026-03-08T18:12:05Z",
       "exit_code": 0,
       "artifacts": [
         "docs/dev-records/assets/dev-plan-291/291-runtime-up.log",
@@ -46,7 +46,7 @@
     {
       "id": "R4",
       "command": "docker compose config --format json + versions.lock.yaml compare",
-      "executed_at": "2026-03-08T13:41:02Z",
+      "executed_at": "2026-03-08T18:12:21Z",
       "exit_code": 0,
       "artifacts": [
         "docs/dev-records/assets/dev-plan-291/291-runtime-version-check.md"
@@ -58,7 +58,7 @@
     {
       "id": "R5",
       "command": "go test ./internal/server -run 'TestLibreChatWebUI'",
-      "executed_at": "2026-03-08T13:41:02Z",
+      "executed_at": "2026-03-08T18:12:17Z",
       "exit_code": 0,
       "artifacts": [
         "docs/dev-records/assets/dev-plan-291/291-formal-entry-go-test.log"
@@ -70,7 +70,7 @@
     {
       "id": "R6",
       "command": "go test ./internal/server -run 'TestLibreChatVendoredCompatAPI'",
-      "executed_at": "2026-03-08T13:41:02Z",
+      "executed_at": "2026-03-08T18:12:18Z",
       "exit_code": 0,
       "artifacts": [
         "docs/dev-records/assets/dev-plan-291/291-compat-alias-go-test.log"
@@ -82,7 +82,7 @@
     {
       "id": "R7",
       "command": "make check routing",
-      "executed_at": "2026-03-08T13:41:02Z",
+      "executed_at": "2026-03-08T18:12:19Z",
       "exit_code": 0,
       "artifacts": [
         "docs/dev-records/assets/dev-plan-291/291-routing-check.log"
@@ -94,7 +94,7 @@
     {
       "id": "R8",
       "command": "make check no-legacy",
-      "executed_at": "2026-03-08T13:41:02Z",
+      "executed_at": "2026-03-08T18:12:19Z",
       "exit_code": 0,
       "artifacts": [
         "docs/dev-records/assets/dev-plan-291/291-no-legacy.log"
@@ -106,31 +106,31 @@
     {
       "id": "R9",
       "command": "reference freshness review for tp288/tp290",
-      "executed_at": "2026-03-08T17:54:16Z",
-      "exit_code": 1,
+      "executed_at": "2026-03-08T18:14:00Z",
+      "exit_code": 0,
       "artifacts": [
         "docs/dev-records/assets/dev-plan-291/291-ref-288-290-freshness.md"
       ],
       "referenced_artifacts": [
         {
           "path": "docs/dev-records/assets/dev-plan-266/tp288-real-entry-evidence-index.json",
-          "mtime": "2026-03-08T22:51:45.930181+08:00",
+          "mtime": "2026-03-09T02:16:53.928554+08:00",
           "status": "completed"
         },
         {
           "path": "docs/dev-records/assets/dev-plan-290/tp290-real-case-evidence-index.json",
-          "mtime": "2026-03-08T20:42:52.088357+08:00",
-          "status": "in_progress"
+          "mtime": "2026-03-09T01:57:57.415336+08:00",
+          "status": "completed"
         }
       ],
-      "result": "failed",
+      "result": "passed",
       "owner": "Codex",
-      "notes": "tp288 已刷新为 completed 且可继续作为引用输入；tp290 当前仍有 Case 2/3/4 未通过 stopline，无法证明 280 核心硬门槛在完整 Case Matrix 上成立。"
+      "notes": "tp288 已按 `290A/290` 回灌要求重跑并保持 completed；tp290 已完成 Case 1~4 全通过，现可共同证明 `DEV-PLAN-280` 核心硬门槛成立。"
     },
     {
       "id": "R10",
       "command": "make assistant-runtime-down",
-      "executed_at": "2026-03-08T13:41:02Z",
+      "executed_at": "2026-03-08T18:12:21Z",
       "exit_code": 0,
       "artifacts": [
         "docs/dev-records/assets/dev-plan-291/291-runtime-down.log"

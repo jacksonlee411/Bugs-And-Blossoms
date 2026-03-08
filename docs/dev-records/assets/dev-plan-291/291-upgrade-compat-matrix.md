@@ -1,9 +1,9 @@
 # DEV-PLAN-291 升级兼容回归矩阵（291-v2）
 
-- 执行时间：2026-03-09 01:54:16 CST
+- 执行时间：2026-03-09 02:14:00 CST
 - 执行人：Codex
 - 关联计划：`DEV-PLAN-237`、`DEV-PLAN-271`、`DEV-PLAN-280`、`DEV-PLAN-285`
-- 总结论：`R1~R8/R10 通过，R9 在刷新最新 288/290 引用证据后仍未通过；291 已执行但当前不能作为 285 通过前置件。`
+- 总结论：`R1~R10 全部通过；291 现可作为 285 的升级兼容前置件直接引用。`
 
 | ID | 检查项 | 结果 | 证据 |
 | --- | --- | --- | --- |
@@ -15,5 +15,5 @@
 | R6 | Compat alias 一致性 | 通过 | `docs/dev-records/assets/dev-plan-291/291-compat-alias-go-test.log` |
 | R7 | 路由与入口边界 | 通过 | `docs/dev-records/assets/dev-plan-291/291-routing-check.log` |
 | R8 | Legacy 回流阻断 | 通过 | `docs/dev-records/assets/dev-plan-291/291-no-legacy.log` |
-| R9 | `280` 硬门槛引用新鲜度 | 未通过 | `docs/dev-records/assets/dev-plan-291/291-ref-288-290-freshness.md` |
+| R9 | `280` 硬门槛引用新鲜度 | 通过 | `docs/dev-records/assets/dev-plan-291/291-ref-288-290-freshness.md` |
 | R10 | 运行态清理闭环 | 通过 | `docs/dev-records/assets/dev-plan-291/291-runtime-down.log` |

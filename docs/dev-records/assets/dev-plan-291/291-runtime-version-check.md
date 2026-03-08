@@ -1,6 +1,6 @@
 # DEV-PLAN-291 R4：Runtime 版本锁一致性检查
 
-- 执行时间：2026-03-08T13:41:02Z
+- 执行时间：2026-03-08T18:12:21Z
 - 输入锁文件：`deploy/librechat/versions.lock.yaml`
 - 比对源：`docker compose -p bugs-and-blossoms-librechat --env-file deploy/librechat/.env -f deploy/librechat/docker-compose.upstream.yaml -f deploy/librechat/docker-compose.overlay.yaml config --format json`
 - 结论：通过

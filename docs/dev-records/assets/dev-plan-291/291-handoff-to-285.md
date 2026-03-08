@@ -1,7 +1,7 @@
 # DEV-PLAN-291 -> DEV-PLAN-285 交接清单
 
-- 生成时间：2026-03-09 01:54:16 CST
-- 当前结论：`不得作为 285 的通过前置件直接引用；只能作为已执行的阻塞事实引用。`
+- 生成时间：2026-03-09 02:14:00 CST
+- 当前结论：`可作为 285 的通过前置件直接引用。`
 
 ## 已通过项
 - Source 元数据完整：见 `docs/dev-records/assets/dev-plan-291/291-source-verify.log`
@@ -13,14 +13,13 @@
 - `tp288` 已刷新为完成态引用输入：见 `docs/dev-records/assets/dev-plan-266/tp288-real-entry-evidence-index.json`
 
 ## 未通过项
-- `R9`：`288/290` 引用证据未能共同证明 `DEV-PLAN-280` 核心硬门槛已全部满足。
-- 当前唯一直接阻塞：`docs/dev-records/assets/dev-plan-290/tp290-real-case-evidence-index.json` 仍记录 Case 2/3/4 失败；因此 `single_assistant_bubble` / `dto_only` 不能按 `291-v2` 口径判定为通过。
+- 无。
 
 ## Compat alias 状态
 - `/app/assistant/librechat/api/**` 当前仍是 `DEV-PLAN-292` 允许的 compat alias。
 - 本轮已确认其未形成第二正式 API 面，但在 `285` 启动前仍需保持“只限兼容、不扩语义”的边界。
 
 ## 对 285 的建议
-- 可以直接引用 `tp288` 作为 `266` 子域已完成输入，但不要据此提前完成 `291` 或 `285`。
-- 在 `290` 完成重新复跑并满足完整 Case Matrix 通过前，不要将 `237` 前置标记为完成。
-- 若 `290` 后续修复 pending placeholder bubble，需重新执行 `291` 的 `R9` 复核并刷新本交接单。
+- 可以直接引用 `tp288` 与 `tp290` 作为 `266/260` 子域已完成输入。
+- `291` 当前已满足 `285` 对升级兼容前置件的直接引用条件。
+- 若后续发生影响 vendored UI、formal entry、compat alias、routing 或 `240C/240D/240E` 的影响性合入，需重新执行 `291` 并刷新本交接单。

@@ -3,8 +3,8 @@
   "case_id": "tp288-e2e-002",
   "title": "failure stays in-bubble and retry creates exactly one new bubble",
   "formal_entry": "/app/assistant/librechat",
-  "command": "pnpm --dir /home/lee/Projects/Bugs-And-Blossoms/e2e exec playwright test tests/tp288-librechat-real-entry-evidence.spec.js --workers=1 --trace on --grep \"tp288-e2e-002\"",
-  "executed_at": "2026-03-08T14:46:42.906Z",
+  "command": "pnpm --dir /home/lee/Projects/Bugs-And-Blossoms/e2e exec playwright test tests/tp288-librechat-real-entry-evidence.spec.js --workers=1",
+  "executed_at": "2026-03-08T18:08:04.301Z",
   "result": "passed",
   "stale_on": [
     "290A pending placeholder bubble fix merged",
@@ -40,7 +40,7 @@
         "request_id": "req_tp288_1",
         "actual_count": 1,
         "attrs_match": true,
-        "message_id": "96903a0b-952b-469a-969d-d67eda32f1c0_"
+        "message_id": "5e1836bc-b404-4999-8cc7-30e8fb40f1d3_"
       },
       {
         "binding_key": "conv_tp288_1::turn_tp288_2::req_tp288_2",
@@ -49,7 +49,7 @@
         "request_id": "req_tp288_2",
         "actual_count": 1,
         "attrs_match": true,
-        "message_id": "beaf1942-6ed6-4b75-94eb-c50ef90ed33e_"
+        "message_id": "77afe511-4209-46df-b6e4-ba6144afa15f_"
       }
     ]
   }

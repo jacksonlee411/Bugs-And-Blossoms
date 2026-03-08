@@ -1,7 +1,7 @@
 {
   "plan": "DEV-PLAN-288",
   "status": "completed",
-  "updated_at": "2026-03-08 22:49 CST",
+  "updated_at": "2026-03-09 02:14 CST",
   "formal_entry": "/app/assistant/librechat",
   "aligned_with": [
     "DEV-PLAN-266",
@@ -10,7 +10,7 @@
     "DEV-PLAN-292"
   ],
   "runner_mode": "default_playwright_baseline_plus_targeted_trace_rerun",
-  "summary": "tp288-e2e-001/002 已在真实入口按固定命名资产重跑并通过；官方消息树唯一落点、同轮唯一 assistant 气泡、conversation_id/turn_id/request_id 与唯一气泡一一对应、native_send_emitted=0 均已有可回溯证据。",
+  "summary": "tp288-e2e-001/002 已在 `290A` 与 `290` 回灌后按真实入口固定命名资产重跑并通过；官方消息树唯一落点、同轮唯一 assistant 气泡、conversation_id/turn_id/request_id 与唯一气泡一一对应、native_send_emitted=0 均已有最新可回溯证据。",
   "fixed_assets": {
     "root": "docs/dev-records/assets/dev-plan-266",
     "pattern": [
@@ -36,8 +36,8 @@
       "id": "001",
       "name": "real entry success path stays in one official bubble",
       "result": "passed",
-      "command": "pnpm --dir /home/lee/Projects/Bugs-And-Blossoms/e2e exec playwright test tests/tp288-librechat-real-entry-evidence.spec.js --workers=1 --trace on --grep \"tp288-e2e-001\"",
-      "executed_at": "2026-03-08T14:32:29.538Z",
+      "command": "pnpm --dir /home/lee/Projects/Bugs-And-Blossoms/e2e exec playwright test tests/tp288-librechat-real-entry-evidence.spec.js --workers=1",
+      "executed_at": "2026-03-08T18:08:01.559Z",
       "artifacts": {
         "page": "docs/dev-records/assets/dev-plan-266/tp288-e2e-001-page.png",
         "dom": "docs/dev-records/assets/dev-plan-266/tp288-e2e-001-dom.json",
@@ -57,8 +57,8 @@
       "id": "002",
       "name": "failure stays in-bubble and retry creates exactly one new bubble",
       "result": "passed",
-      "command": "pnpm --dir /home/lee/Projects/Bugs-And-Blossoms/e2e exec playwright test tests/tp288-librechat-real-entry-evidence.spec.js --workers=1 --trace on --grep \"tp288-e2e-002\"",
-      "executed_at": "2026-03-08T14:46:42.906Z",
+      "command": "pnpm --dir /home/lee/Projects/Bugs-And-Blossoms/e2e exec playwright test tests/tp288-librechat-real-entry-evidence.spec.js --workers=1",
+      "executed_at": "2026-03-08T18:08:04.301Z",
       "artifacts": {
         "page": "docs/dev-records/assets/dev-plan-266/tp288-e2e-002-page.png",
         "dom": "docs/dev-records/assets/dev-plan-266/tp288-e2e-002-dom.json",
@@ -76,7 +76,7 @@
     }
   ],
   "freshness": {
-    "effective_at": "2026-03-08T22:49:12+08:00",
+    "effective_at": "2026-03-09T02:08:04+08:00",
     "rule": "若 290A 或 240C/240D/240E 的影响性变更合入，必须按 DEV-PLAN-271 S5 规则重跑 tp288 并刷新本索引。"
   },
   "handoff": "docs/dev-records/assets/dev-plan-266/tp288-handoff-to-285.md"
