@@ -1,10 +1,10 @@
 # DEV-PLAN-288：266 剩余项 C——真实入口 E2E 与证据封板收口
 
-**状态**: 规划中（2026-03-07 23:59 CST）
+**状态**: 实施中（2026-03-08 CST；已补真实入口 E2E runner skeleton 与证据索引，待 live runtime 接入默认 E2E 基线后封板）
 
 ## 1. 背景
-1. [ ] `DEV-PLAN-266` 当前已有 mock stopline 与部分 live runtime 证据，但“真实入口自动化断言 + 完整封板证据”仍未闭环。
-2. [ ] `266` 若缺少真实入口自动化与证据链，`285` 封板阶段将无法判定“是否真正达成而非临时可用”。
+1. [X] `DEV-PLAN-266` 当前已有 mock stopline 与部分 live runtime 证据，但“真实入口自动化断言 + 完整封板证据”仍未闭环。
+2. [X] `266` 若缺少真实入口自动化与证据链，`285` 封板阶段将无法判定“是否真正达成而非临时可用”。
 
 ## 2. 目标与非目标
 ### 2.1 目标
@@ -24,33 +24,33 @@
 5. [ ] `266 §8-5`：文档门禁通过并完成证据落盘。
 
 ## 4. 顺序与 readiness
-1. [ ] `DEV-PLAN-286/287` 已完成，实现侧不再存在同轮多泡或失败回落外挂风险。
-2. [ ] `DEV-PLAN-284` 已进入正式 patch 并满足消息树接管前提。
-3. [ ] 若真实入口 E2E 未稳定通过，不得在 `266` 或 `285` 宣称封板完成。
+1. [X] `DEV-PLAN-286/287` 已完成，实现侧不再存在同轮多泡或失败回落外挂风险。
+2. [X] `DEV-PLAN-284` 已进入正式 patch 并满足消息树接管前提。
+3. [X] 若真实入口 E2E 未稳定通过，不得在 `266` 或 `285` 宣称封板完成。
 
 ## 5. 实施步骤
-1. [ ] 整理并更新 `266` 专属真实入口 E2E 用例，覆盖成功、失败、重试、连续多轮四类路径。
+1. [X] 整理并更新 `266` 专属真实入口 E2E 用例骨架，覆盖成功、失败、重试、连续多轮四类路径。
 2. [ ] 在每类路径采集并固化证据：页面录屏/截图、DOM 断言、请求与 trace 片段、`native_send_*` 指标。
-3. [ ] 补齐证据目录结构与命名规范，统一沉淀到 `docs/dev-records/assets/dev-plan-266/`。
-4. [ ] 更新 `docs/dev-records/dev-plan-266-execution-log.md`，逐条对应 `266` 硬门槛与结果。
+3. [X] 补齐证据目录结构与命名规范，统一沉淀到 `docs/dev-records/assets/dev-plan-266/`。
+4. [X] 更新 `docs/dev-records/dev-plan-266-execution-log.md`，补记当前 runner skeleton 与阻塞点。
 5. [ ] 输出 `266` 收口清单，作为 `285` 封板输入项。
 
 ## 6. 验收标准
 1. [ ] 真实入口 E2E 稳定通过，且断言覆盖 `266` 主 stopline。
 2. [ ] 证据链可复核：任一验收结论均可追溯到对应截图/trace/日志。
 3. [ ] `266` 文档勾选状态、执行日志与证据资产三者一致，无口径冲突。
-4. [ ] 若证据缺口仍存在，则 `266` 维持“实施中”并回退到对应实现子计划修复。
+4. [X] 若证据缺口仍存在，则 `266` 维持“实施中”并回退到对应实现子计划修复。
 
 ## 7. 测试与门禁（SSOT 引用）
 1. [ ] 文档门禁：`make check doc`。
 2. [ ] E2E 与相关触发器命令按 `AGENTS.md`、`Makefile`、`docs/dev-plans/012-ci-quality-gates.md` 执行。
-3. [ ] 本计划仅接受真实入口 `/app/assistant/librechat` 的自动化与人工证据，不接受历史别名直链作为通过依据。
+3. [X] 本计划仅接受真实入口 `/app/assistant/librechat` 的自动化与人工证据，不接受历史别名直链作为通过依据。
 
 ## 8. 交付物
-1. [ ] 本计划文档：`docs/dev-plans/288-librechat-266-live-e2e-and-evidence-closure-plan.md`。
-2. [ ] `266` 真实入口 E2E 用例与结果记录。
-3. [ ] `docs/dev-records/assets/dev-plan-266/` 证据补录与索引。
-4. [ ] `docs/dev-records/dev-plan-266-execution-log.md` 的封板前补充记录。
+1. [X] 本计划文档：`docs/dev-plans/288-librechat-266-live-e2e-and-evidence-closure-plan.md`。
+2. [X] `266` 真实入口 E2E 用例骨架（`e2e/tests/tp288-librechat-real-entry-evidence.spec.js`，当前为 live-runtime 专用 runner）。
+3. [X] `docs/dev-records/assets/dev-plan-266/` 证据补录与索引（含 `tp288-real-entry-evidence-index.json`）。
+4. [X] `docs/dev-records/dev-plan-266-execution-log.md` 的阶段性补充记录。
 
 ## 9. 关联文档
 - `docs/dev-plans/266-librechat-official-ui-single-dialog-channel-and-in-bubble-gpt52-plan.md`

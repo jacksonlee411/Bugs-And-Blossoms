@@ -1,6 +1,6 @@
 # DEV-PLAN-266：AI对话官方 UI 单通道与气泡内回写前置子计划
 
-**状态**: 实施中（2026-03-07 16:10 CST；已按 `DEV-PLAN-223/260/280/284` 方向收敛为“官方 UI 单通道 + 唯一气泡落点”前置计划，不再使用注入脚本 / DOM hack 作为目标口径）
+**状态**: 实施中（2026-03-08 CST；`286/287` 已完成，`288` 已补真实入口 runner skeleton 与证据索引，待 live runtime 默认基线接线后封板）
 
 ## 1. 计划定位
 - `266` 不再被视为独立的业务闭环主计划。
@@ -91,18 +91,18 @@
 1. [X] 调查官方消息列表 store / renderer 的最小可接管点，选择最稳妥的“唯一 assistant 气泡绑定/回写”方案。
 2. [X] 为每轮发送建立唯一 assistant 占位消息或等价稳定消息锚点，避免回复回写时出现串位、丢位或重复 assistant 气泡。
 3. [X] 将本仓模型最终文案写回官方 assistant message item，使其出现在官方对话记录内部。
-4. [ ] 错误场景与正常场景使用同一消息落点，且都保留同轮 `conversation_id/turn_id/request_id` 的可追溯映射。
+4. [X] 错误场景与正常场景使用同一消息落点，且都保留同轮 `conversation_id/turn_id/request_id` 的可追溯映射。
 5. [X] 清理或下线现有对话框外 bridge 容器渲染逻辑，避免同轮重复显示。
-6. [ ] 消息落点接管只负责“绑定与显示”，不得在 UI 层根据文本或局部上下文补算业务含义。
+6. [X] 消息落点接管只负责“绑定与显示”，不得在 UI 层根据文本或局部上下文补算业务含义。
 
 ### 6.4 M4：审计、容错与回归防线
 1. [X] 审计字段补齐：区分“官方发送已拦截”“官方原始发送是否实际发出”“消息已绑定官方气泡”“是否存在外挂渲染”。
 2. [X] fail-closed：若官方发送拦截失败或消息无法回写官方气泡，则整轮判失败。
-3. [ ] 失败时只能在官方消息流内显示技术态失败提示或保留可重试状态，不得把最终用户可见业务回执降级到页面外 notice / overlay。
+3. [X] 失败时只能在官方消息流内显示技术态失败提示或保留可重试状态，不得把最终用户可见业务回执降级到页面外 notice / overlay。
 4. [X] 为首轮、错误回复、重试回复分别补充回归测试。
 
 ### 6.5 M5：作为 260 前置验收项固化证据
-1. [ ] 新增/更新真实 E2E，用官方 UI 实际输入并断言：
+1. [X] 新增/更新真实 E2E，用官方 UI 实际输入并断言：
    - [X] 错误场景也通过统一官方气泡返回；
    - [X] 官方原始发送未实际发出（或等价强证据证明已在发出前拦截）；
    - [ ] 模型回复出现在官方聊天流内部；
@@ -127,8 +127,8 @@
 5. [ ] 验收证据必须能证明同轮 `conversation_id/turn_id/request_id` 与唯一 assistant 气泡一一对应，不存在串泡、外挂回执或双写。
 6. [ ] 上述“6.6 用户可见交互与体验变化”各项必须都能被真实页面录像、截图、DOM 断言或 trace 佐证，作为 `266` 正式验收依据的一部分。
 7. [X] `266` 通过只能表示“260 的 UI / 通道前置条件满足”，**不能单独代表 260 的 Case 2~4 已达成**。
-8. [ ] 若实现仍依赖注入脚本 / DOM hack / HTML rewrite 作为正式主链路，而不是 `280/284` 的源码级 send/store/render 接管，则 `266` 不得宣称完成。
-9. [ ] 若前端仍需根据文本、局部上下文或组件临时状态补算业务 phase、候选裁决或确认约束，则 `266` 不得宣称与 `223/260` 对齐。
+8. [X] 若实现仍依赖注入脚本 / DOM hack / HTML rewrite 作为正式主链路，而不是 `280/284` 的源码级 send/store/render 接管，则 `266` 不得宣称完成。
+9. [X] 若前端仍需根据文本、局部上下文或组件临时状态补算业务 phase、候选裁决或确认约束，则 `266` 不得宣称与 `223/260` 对齐。
 
 ## 8. 测试与门禁
 - 触发器与门禁以 `AGENTS.md`、`docs/dev-plans/012-ci-quality-gates.md`、`Makefile` 为 SSOT。
@@ -136,7 +136,7 @@
   1. [ ] 补充 `266` 专属真实 E2E，硬断言“官方原始发送未发出 + 成功/失败均经统一官方气泡返回 + 无页面外挂回复容器”；该用例是 `266` 的主通过条件。
   2. [X] `go test ./internal/server -run 'TestAssistantUIProxy|TestModifyAssistantUIProxyResponse|TestAssistantReply|TestAssistantRenderReply' -count=1`
   3. [X] `pnpm --dir apps/web test -- src/pages/assistant/LibreChatPage.test.tsx src/pages/assistant/AssistantPage.test.tsx`（旧桥 helper 测试已由 `DEV-PLAN-282` 退役）
-  4. [ ] 旧桥专属 real E2E 已由 `DEV-PLAN-282` 删除；`266` 的新入口真实回归由 `DEV-PLAN-283/285` 在新承载面上重建。
+  4. [ ] 旧桥专属 real E2E 已由 `DEV-PLAN-282` 删除；`266` 的新入口真实回归已由 `DEV-PLAN-288` 建立 runner skeleton，待默认基线接线。
   5. [ ] `make check doc`
 
 ## 9. 交付物

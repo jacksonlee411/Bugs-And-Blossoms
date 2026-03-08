@@ -1,0 +1,42 @@
+{
+  "plan": "DEV-PLAN-288",
+  "status": "in_progress",
+  "updated_at": "2026-03-08 CST",
+  "formal_entry": "/app/assistant/librechat",
+  "e2e_spec": "e2e/tests/tp288-librechat-real-entry-evidence.spec.js",
+  "runner_mode": "requires TP288_USE_EXISTING_RUNTIME=1 against an interactive localhost runtime",
+  "coverage": [
+    "success_in_official_bubble",
+    "failure_in_same_official_bubble",
+    "retry_via_second_round",
+    "continuous_multi_turn_binding",
+    "outer_page_has_no_reply_container",
+    "no_native_send_post_to_api_agents_chat_or_api_messages"
+  ],
+  "selectors": {
+    "iframe": "iframe",
+    "input": "textarea[placeholder*=发送消息]",
+    "send_button": "button[aria-label=发送消息]",
+    "bubble": "[data-assistant-binding-key]",
+    "binding_attrs": [
+      "data-assistant-conversation-id",
+      "data-assistant-turn-id",
+      "data-assistant-request-id",
+      "data-assistant-message-id",
+      "data-assistant-binding-key"
+    ]
+  },
+  "network_equivalent_stopline": {
+    "allowed_post_prefix": "/internal/assistant/",
+    "blocked_native_post_prefixes": [
+      "/api/agents/chat",
+      "/api/messages"
+    ]
+  },
+  "notes": [
+    "真实入口仍以 /app/assistant/librechat 为唯一用户入口；官方 UI 在其 iframe 内承载。",
+    "自动化证据以 DOM 断言 + POST 请求捕获为主，作为 native_send_emitted=0 的等价强证据。",
+    "当前 runner 默认跳过；待把 live runtime 接入默认 E2E 基线后再转为常规必跑。",
+    "失败产物仍由 Playwright 默认输出到 e2e/test-results/ 与 e2e/playwright-report/。"
+  ]
+}
