@@ -1,6 +1,6 @@
 # DEV-PLAN-290 执行日志（260-M5 真实 Case 验收与证据固化）
 
-**状态**: 未开始（2026-03-08 CST；等待 `288` 基于 `292` 产物完成默认基线复跑并固化可复核证据后启动）
+**状态**: 准备中（2026-03-08 CST；`289/292` 已完成，`288` 已完成默认基线复跑并通过 `tp288-e2e-001/002`，当前进入 Case Matrix v1 执行准备）
 
 ## 1. 执行范围（与 290 对齐）
 1. [ ] 按 `Case Matrix v1` 执行 Case 1~4 真实验收（固定输入向量，不临场改词）。
@@ -13,10 +13,13 @@
 3. [ ] Case 4 仅在候选顺序不稳定时允许使用候选编码，且必须记录原因。
 
 ## 3. 执行记录
-1. [ ] 待首轮复跑后补记。
+1. [X] 启动门槛已满足：`292 -> 288 -> 290` 前置链路前两段已关闭，`tp288-e2e-001/002` 已通过。
+2. [ ] 待执行 Case 1~4 首轮真实验收并补记结论与异常记录。
 
 ## 4. 命令与结果
-1. [ ] 待执行后补记（命令、退出码、关键日志摘要）。
+1. [X] 前置验证命令：`pnpm --dir /home/lee/Projects/Bugs-And-Blossoms/e2e exec playwright test tests/tp288-librechat-real-entry-evidence.spec.js --grep "tp288-e2e-002"`，结果通过。
+2. [X] 前置验证命令：`pnpm --dir /home/lee/Projects/Bugs-And-Blossoms/e2e exec playwright test tests/tp288-librechat-real-entry-evidence.spec.js`，结果 `2 passed`。
+3. [ ] `290` 正式验收命令待补记（Case 1~4、退出码、关键日志摘要）。
 
 ## 5. 证据资产索引
 1. [ ] 证据根目录：`docs/dev-records/assets/dev-plan-290/`

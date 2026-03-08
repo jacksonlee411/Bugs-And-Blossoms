@@ -1,6 +1,6 @@
 # DEV-PLAN-288：266 剩余项 C——真实入口 E2E 与证据封板收口
 
-**状态**: 实施中（2026-03-08 CST；真实入口 E2E 已接入默认 Playwright 基线，迁移 admin 环境阻塞已排除；`292` 已完成正式入口 vendored UI 与 `sid` 会话的认证/启动最小兼容层，`288` 当前从“实现阻塞”转入“基于正式入口的默认 E2E 复跑与证据固化”阶段；最新剩余阻塞已收敛为 vendored UI 渲染链路分叉导致的 formal 消息未落 DOM）
+**状态**: 实施中（2026-03-08 CST；`292` 已完成正式入口 vendored UI 与 `sid` 会话的认证/启动最小兼容层；`tp288-e2e-001/002` 已在默认 Playwright 基线通过，`288` 当前进入证据归档、日志对齐与 `266/285` 封板输入整理阶段）
 
 ## 1. 背景
 1. [X] `DEV-PLAN-266` 当前已有 mock stopline 与部分 live runtime 证据，但“真实入口自动化断言 + 完整封板证据”仍未闭环。
@@ -8,7 +8,7 @@
 
 ## 2. 目标与非目标
 ### 2.1 目标
-1. [ ] 在 `/app/assistant/librechat` 真实入口补齐 `266` 主通过 E2E。
+1. [X] 在 `/app/assistant/librechat` 真实入口补齐 `266` 主通过 E2E。
 2. [ ] 固化 `native_send_*`、官方消息树落点、同轮唯一气泡、三元组映射等关键证据。
 3. [ ] 完成 `266` 文档、执行日志、资产目录三者一致的封板记录，作为 `285` 输入。
 
@@ -27,18 +27,18 @@
 1. [X] `DEV-PLAN-286/287` 已完成，实现侧不再存在同轮多泡或失败回落外挂风险。
 2. [X] `DEV-PLAN-284` 已进入正式 patch 并满足消息树接管前提。
 3. [X] 若真实入口 E2E 未稳定通过，不得在 `266` 或 `285` 宣称封板完成。
-4. [X] 先前“正式入口 vendored UI 与 sid 会话缺少认证/启动闭环”的实现阻塞已由 `292` 关闭；`tp288` 当前待基于新兼容层复跑默认 `make e2e` 并补齐证据固化。
+4. [X] 先前“正式入口 vendored UI 与 sid 会话缺少认证/启动闭环”的实现阻塞已由 `292` 关闭；`tp288` 已基于新兼容层完成默认基线复跑并通过（`001/002`）。
 
 ## 5. 实施步骤
 1. [X] 整理并更新 `266` 专属真实入口 E2E 用例骨架，覆盖成功、失败、重试、连续多轮四类路径。
 2. [X] 将现有 live-runtime runner 接入默认 E2E 基线或形成等价常规触发入口，避免 `266` 主通过依赖人工绑定运行态。
-3. [ ] 基于 `292` 已完成的正式入口 vendored UI `sid` 会话认证/启动最小兼容层（已覆盖 `refresh/user/roles/config/endpoints/models/logout`）复跑默认 E2E，并为每类路径采集/固化证据：页面录屏/截图、DOM 断言、请求与 trace 片段、`native_send_*` 指标。
+3. [X] 基于 `292` 已完成的正式入口 vendored UI `sid` 会话认证/启动最小兼容层（已覆盖 `refresh/user/roles/config/endpoints/models/logout`）完成默认 E2E 复跑，`tp288-e2e-001/002` 已通过；证据固化持续补齐中（页面录屏/截图、DOM 断言、请求与 trace 片段、`native_send_*` 指标）。
 4. [X] 补齐证据目录结构与命名规范，统一沉淀到 `docs/dev-records/assets/dev-plan-266/`。
-5. [X] 更新 `docs/dev-records/dev-plan-266-execution-log.md`，补记默认基线接线结果与当前阻塞点。
+5. [X] 更新 `docs/dev-records/dev-plan-266-execution-log.md`，补记默认基线接线结果、`tp288` 通过结果与环境前置（含 `TRUST_PROXY=1`）。
 6. [ ] 输出 `266` 收口清单，作为 `285` 封板输入项。
 
 ## 6. 验收标准
-1. [ ] 真实入口 E2E 稳定通过，且断言覆盖 `266` 主 stopline。
+1. [X] 真实入口 E2E 稳定通过，且断言覆盖 `266` 主 stopline。
 2. [X] 主通过依据不再依赖人工指定 `TP288_USE_EXISTING_RUNTIME=1` 的临时运行方式。
 3. [ ] 证据链可复核：任一验收结论均可追溯到对应截图/trace/日志。
 4. [ ] `266` 文档勾选状态、执行日志与证据资产三者一致，无口径冲突。
@@ -63,15 +63,9 @@
 - `docs/dev-plans/287-librechat-dto-render-only-and-failure-in-bubble-closure-plan.md`
 - `AGENTS.md`
 
-## 10. 最新发现与收敛策略（2026-03-08）
+## 10. 最新进展与收口策略（2026-03-08）
 1. [X] 启动链阻塞已关闭：`localhost` Service Worker 注册问题与 `/app/assistant/librechat/api/**` 的 `sid/auth` 启动兼容问题均已修复并落入 patch stack。
-2. [X] 当前 `tp288` 已不再卡白屏/401/登录链路；`/internal/assistant/conversations` 与 `/turns` mock 路径均返回 `200`。
-3. [X] 运行态探针已确认状态层正确：assistant message fiber 上已存在 `assistantFormalPayload` 与正确 `bindingKey`（示例：`conv_tp288_1::turn_tp288_1::req_tp288_1`）。
-4. [X] 最新根因定位：DOM 层 `bindingCount = 0` 并非状态缺失，而是渲染分支未命中 `AssistantFormalMessage`。当前实际命中链在 `components/Messages/*`，而此前补丁主要落在 `Chat/Messages/*`。
-5. [X] 渲染链路来源冻结：
-   - 主路径：`Chat/Messages/MultiMessage -> components/Messages/MessageContent -> components/Messages/ContentRender`（`message.content` 场景）。
-   - 旧兼容回退：`Chat/Messages/MultiMessage -> Chat/Messages/Message -> Chat/Messages/ui/MessageRender`（仅在 `message.content` 缺失时）。
-6. [ ] `288` 下一步执行口径（两阶段）：
-   - 阶段 A（先通过）：在 `components/Messages/ContentRender` 主路径接入 formal 渲染短路与强制 remount key，确保 `data-assistant-binding-key` 进入 DOM，先让 `tp288` 通过并固化证据。
-   - 阶段 B（再收口）：在证明正式入口消息均满足 `message.content` 不变量后，删除旧兼容回退链，保持单渲染主链，避免同类问题重复发生。
-7. [X] stopline：在阶段 A 未完成前，不得将“修复仅落在 `Chat/Messages/*`”视为 `288` 关闭依据；必须以真实入口 DOM 断言命中 `data-assistant-binding-key` 作为通过条件之一。
+2. [X] 渲染主路径阻塞已关闭：`components/Messages/*` 主路径已命中 formal 渲染，`data-assistant-binding-key` 已进入 DOM。
+3. [X] retry 二轮覆盖问题已关闭：同会话 retry 会新增 assistant 气泡而非覆盖首轮，`tp288-e2e-002` 通过。
+4. [X] 默认基线验证结果：`tp288-e2e-001/002` 已通过，`288` 已从“实现阻塞修复”进入“证据固化与封板输入整理”。
+5. [ ] 当前下一步：补齐 `docs/dev-records/assets/dev-plan-266/` 证据索引与 `266` 收口清单，确保文档勾选、执行日志与资产索引一致后，再将 `288` 标记为完成。
