@@ -104,7 +104,7 @@ db_name="${DB_NAME:-bugs_and_blossoms}"
 db_pass="${DB_PASSWORD:-app}"
 db_sslmode="${DB_SSLMODE:-disable}"
 
-admin_db_user="${DB_USER:-app}"
+admin_db_user="${E2E_DB_ADMIN_USER:-app}"
 runtime_db_user="app_runtime"
 admin_db_url="postgres://${admin_db_user}:${db_pass}@${db_host}:${db_port}/${db_name}?sslmode=${db_sslmode}"
 runtime_db_url="postgres://${runtime_db_user}:${db_pass}@${db_host}:${db_port}/${db_name}?sslmode=${db_sslmode}"

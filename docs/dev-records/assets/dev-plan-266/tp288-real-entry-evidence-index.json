@@ -4,7 +4,7 @@
   "updated_at": "2026-03-08 CST",
   "formal_entry": "/app/assistant/librechat",
   "e2e_spec": "e2e/tests/tp288-librechat-real-entry-evidence.spec.js",
-  "runner_mode": "requires TP288_USE_EXISTING_RUNTIME=1 against an interactive localhost runtime",
+  "runner_mode": "default_playwright_baseline",
   "coverage": [
     "success_in_official_bubble",
     "failure_in_same_official_bubble",
@@ -14,7 +14,7 @@
     "no_native_send_post_to_api_agents_chat_or_api_messages"
   ],
   "selectors": {
-    "iframe": "iframe",
+    "surface_root": "direct_page_or_legacy_iframe",
     "input": "textarea[placeholder*=发送消息]",
     "send_button": "button[aria-label=发送消息]",
     "bubble": "[data-assistant-binding-key]",
@@ -34,9 +34,11 @@
     ]
   },
   "notes": [
-    "真实入口仍以 /app/assistant/librechat 为唯一用户入口；官方 UI 在其 iframe 内承载。",
-    "自动化证据以 DOM 断言 + POST 请求捕获为主，作为 native_send_emitted=0 的等价强证据。",
-    "当前 runner 默认跳过；待把 live runtime 接入默认 E2E 基线后再转为常规必跑。",
+    "真实入口仍以 /app/assistant/librechat 为唯一用户入口；当前正式契约应对齐 direct page，不再把 iframe 视为稳定前提。",
+    "自动化证据仍以 DOM 断言 + POST 请求捕获为主，作为 native_send_emitted=0 的等价强证据。",
+    "2026-03-08 已修复默认 E2E 迁移 admin 用户口径问题，并确认 `playwright test --list` 可默认发现 2 个 tp288 用例。",
+    "2026-03-08 进一步确认当前真实阻塞不是 runner 接线，而是 vendored UI 在正式入口下仍未与 sid 会话完成认证/启动闭环，运行时会内部回到 /app/login。",
     "失败产物仍由 Playwright 默认输出到 e2e/test-results/ 与 e2e/playwright-report/。"
-  ]
+  ],
+  "current_blocker": "formal_entry_auth_bootstrap_gap"
 }

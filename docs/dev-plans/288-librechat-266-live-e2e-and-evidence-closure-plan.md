@@ -1,6 +1,6 @@
 # DEV-PLAN-288：266 剩余项 C——真实入口 E2E 与证据封板收口
 
-**状态**: 实施中（2026-03-08 CST；已补真实入口 E2E runner skeleton 与证据索引；当前最近战术阻塞为 live runtime 接入默认 E2E 基线，未完成前不得转为 `266` 主通过依据）
+**状态**: 实施中（2026-03-08 CST；真实入口 E2E 已接入默认 Playwright 基线，迁移 admin 环境阻塞已排除；当前真实阻塞已转为正式入口 vendored UI 与 sid 会话的认证/启动闭环缺口，该缺口由 `292` 承接，页面内部回到 `/app/login`，尚未形成 `266` 主通过证据）
 
 ## 1. 背景
 1. [X] `DEV-PLAN-266` 当前已有 mock stopline 与部分 live runtime 证据，但“真实入口自动化断言 + 完整封板证据”仍未闭环。
@@ -27,19 +27,19 @@
 1. [X] `DEV-PLAN-286/287` 已完成，实现侧不再存在同轮多泡或失败回落外挂风险。
 2. [X] `DEV-PLAN-284` 已进入正式 patch 并满足消息树接管前提。
 3. [X] 若真实入口 E2E 未稳定通过，不得在 `266` 或 `285` 宣称封板完成。
-4. [ ] 当前阻塞：`tp288` runner 仍要求绑定现有 live runtime，默认 `make e2e` 基线尚未具备等价触发入口；在此之前，本计划只能视为“证据骨架已就绪”。
+4. [ ] 当前阻塞：`tp288` 已接入默认 `make e2e` 基线，且 `iam` 迁移 admin 用户口径问题已修复；当前真实阻塞是 `/app/assistant/librechat` 已不再提供 `main iframe`，vendored UI 在正式入口下仍未与当前 sid 会话完成认证/启动闭环，运行时会内部跳到 `/app/login` 并停在空白页。
 
 ## 5. 实施步骤
 1. [X] 整理并更新 `266` 专属真实入口 E2E 用例骨架，覆盖成功、失败、重试、连续多轮四类路径。
-2. [ ] 将现有 live-runtime runner 接入默认 E2E 基线或形成等价常规触发入口，避免 `266` 主通过依赖人工绑定运行态。
-3. [ ] 在每类路径采集并固化证据：页面录屏/截图、DOM 断言、请求与 trace 片段、`native_send_*` 指标。
+2. [X] 将现有 live-runtime runner 接入默认 E2E 基线或形成等价常规触发入口，避免 `266` 主通过依赖人工绑定运行态。
+3. [ ] 在 `292` 完成正式入口 vendored UI 的 sid 会话认证/启动最小兼容层（至少覆盖 `refresh/user/roles/config/endpoints/models/logout`）后复跑默认 E2E，并为每类路径采集/固化证据：页面录屏/截图、DOM 断言、请求与 trace 片段、`native_send_*` 指标。
 4. [X] 补齐证据目录结构与命名规范，统一沉淀到 `docs/dev-records/assets/dev-plan-266/`。
-5. [X] 更新 `docs/dev-records/dev-plan-266-execution-log.md`，补记当前 runner skeleton 与阻塞点。
+5. [X] 更新 `docs/dev-records/dev-plan-266-execution-log.md`，补记默认基线接线结果与当前阻塞点。
 6. [ ] 输出 `266` 收口清单，作为 `285` 封板输入项。
 
 ## 6. 验收标准
 1. [ ] 真实入口 E2E 稳定通过，且断言覆盖 `266` 主 stopline。
-2. [ ] 主通过依据不再依赖人工指定 `TP288_USE_EXISTING_RUNTIME=1` 的临时运行方式。
+2. [X] 主通过依据不再依赖人工指定 `TP288_USE_EXISTING_RUNTIME=1` 的临时运行方式。
 3. [ ] 证据链可复核：任一验收结论均可追溯到对应截图/trace/日志。
 4. [ ] `266` 文档勾选状态、执行日志与证据资产三者一致，无口径冲突。
 5. [X] 若证据缺口仍存在，则 `266` 维持“实施中”并回退到对应实现子计划修复。
@@ -51,7 +51,7 @@
 
 ## 8. 交付物
 1. [X] 本计划文档：`docs/dev-plans/288-librechat-266-live-e2e-and-evidence-closure-plan.md`。
-2. [X] `266` 真实入口 E2E 用例骨架（`e2e/tests/tp288-librechat-real-entry-evidence.spec.js`，当前为 live-runtime 专用 runner）。
+2. [X] `266` 真实入口 E2E 用例（`e2e/tests/tp288-librechat-real-entry-evidence.spec.js`，现已接入默认 Playwright 基线）。
 3. [X] `docs/dev-records/assets/dev-plan-266/` 证据补录与索引（含 `tp288-real-entry-evidence-index.json`）。
 4. [X] `docs/dev-records/dev-plan-266-execution-log.md` 的阶段性补充记录。
 

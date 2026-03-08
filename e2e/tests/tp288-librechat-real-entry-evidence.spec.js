@@ -1,8 +1,22 @@
 import { expect, test } from "@playwright/test";
 
-const liveRuntimeOnly = process.env.TP288_USE_EXISTING_RUNTIME === "1";
-
-test.skip(!liveRuntimeOnly, "tp288 requires an existing interactive runtime on /app/assistant/librechat");
+async function ensureKratosIdentity(ctx, kratosAdminURL, { traits, identifier, password }) {
+  const resp = await ctx.request.post(`${kratosAdminURL}/admin/identities`, {
+    data: {
+      schema_id: "default",
+      traits,
+      credentials: {
+        password: {
+          identifiers: [identifier],
+          config: { password },
+        },
+      },
+    },
+  });
+  if (!resp.ok()) {
+    expect(resp.status(), `unexpected status: ${resp.status()} (${await resp.text()})`).toBe(409);
+  }
+}
 
 function buildReply(text, kind, stage, turnId) {
   return {
@@ -65,16 +79,68 @@ function buildConversation(turns) {
   };
 }
 
-async function setupLocalAdminSession(browser) {
+async function setupTenantAdminSession(browser, suffix) {
+  const runID = `${Date.now()}-${suffix}`;
+  const tenantHost = `t-tp288-${runID}.localhost`;
+  const tenantName = `TP288 Tenant ${runID}`;
+  const tenantAdminEmail = `tenant-admin+tp288-${runID}@example.invalid`;
+  const tenantAdminPass = process.env.E2E_TENANT_ADMIN_PASS || "pw";
+
+  const superadminBaseURL = process.env.E2E_SUPERADMIN_BASE_URL || "http://localhost:8081";
+  const superadminUser = process.env.E2E_SUPERADMIN_USER || "admin";
+  const superadminPass = process.env.E2E_SUPERADMIN_PASS || "admin";
+  const superadminEmail = process.env.E2E_SUPERADMIN_EMAIL || `admin+tp288-${runID}@example.invalid`;
+  const superadminLoginPass = process.env.E2E_SUPERADMIN_LOGIN_PASS || superadminPass;
+  const kratosAdminURL = process.env.E2E_KRATOS_ADMIN_URL || "http://localhost:4434";
+
+  const superadminContext = await browser.newContext({
+    baseURL: superadminBaseURL,
+    httpCredentials: { username: superadminUser, password: superadminPass },
+  });
+  const superadminPage = await superadminContext.newPage();
+
+  if (!process.env.E2E_SUPERADMIN_EMAIL) {
+    await ensureKratosIdentity(superadminContext, kratosAdminURL, {
+      traits: { email: superadminEmail },
+      identifier: `sa:${superadminEmail.toLowerCase()}`,
+      password: superadminLoginPass,
+    });
+  }
+
+  await superadminPage.goto("/superadmin/login");
+  await superadminPage.locator('input[name="email"]').fill(superadminEmail);
+  await superadminPage.locator('input[name="password"]').fill(superadminLoginPass);
+  await superadminPage.getByRole("button", { name: "Login" }).click();
+  await expect(superadminPage).toHaveURL(/\/superadmin\/tenants$/);
+
+  await superadminPage.locator('form[action="/superadmin/tenants"] input[name="name"]').fill(tenantName);
+  await superadminPage.locator('form[action="/superadmin/tenants"] input[name="hostname"]').fill(tenantHost);
+  await superadminPage.locator('form[action="/superadmin/tenants"] button[type="submit"]').click();
+  await expect(superadminPage).toHaveURL(/\/superadmin\/tenants$/);
+  await expect(superadminPage.locator("tr", { hasText: tenantHost }).first()).toBeVisible({ timeout: 60_000 });
+
+  const tenantRow = superadminPage.locator("tr", { hasText: tenantHost }).first();
+  const tenantID = (await tenantRow.locator("code").first().innerText()).replace(/\s+/g, "").trim();
+  expect(tenantID).not.toBe("");
+
+  await ensureKratosIdentity(superadminContext, kratosAdminURL, {
+    traits: { tenant_uuid: tenantID, email: tenantAdminEmail, role_slug: "tenant-admin" },
+    identifier: `${tenantID}:${tenantAdminEmail}`,
+    password: tenantAdminPass,
+  });
+  await superadminContext.close();
+
   const appBaseURL = process.env.E2E_BASE_URL || "http://localhost:8080";
-  const appContext = await browser.newContext({ baseURL: appBaseURL });
+  const appContext = await browser.newContext({
+    baseURL: appBaseURL,
+    extraHTTPHeaders: { "X-Forwarded-Host": tenantHost },
+  });
+
   const loginResp = await appContext.request.post("/iam/api/sessions", {
-    data: {
-      email: process.env.E2E_LOCAL_ADMIN_EMAIL || "admin@localhost",
-      password: process.env.E2E_LOCAL_ADMIN_PASS || "admin123",
-    },
+    data: { email: tenantAdminEmail, password: tenantAdminPass },
   });
   expect(loginResp.status(), await loginResp.text()).toBe(204);
+
   const page = await appContext.newPage();
   return { appContext, page };
 }
@@ -211,16 +277,26 @@ async function installFormalEntryMock(page, options = {}) {
 
 async function openFormalEntry(page) {
   await page.goto("/app/assistant/librechat");
-  await expect(page.locator("main iframe").first()).toBeVisible({ timeout: 60_000 });
-  const iframeHandle = await page.locator("main iframe").first().elementHandle();
-  const iframe = await iframeHandle.contentFrame();
-  await iframe.waitForLoadState("domcontentloaded");
-  await iframe.evaluate(() => {
+
+  const iframeLocator = page.locator("main iframe").first();
+  if ((await iframeLocator.count()) > 0) {
+    await expect(iframeLocator).toBeVisible({ timeout: 60_000 });
+    const iframeHandle = await iframeLocator.elementHandle();
+    const iframe = await iframeHandle.contentFrame();
+    await iframe.waitForLoadState("domcontentloaded");
+    await iframe.evaluate(() => {
+      window.history.replaceState({}, "", "/app/assistant/librechat/c/new");
+    });
+    const surface = page.frameLocator("main iframe").first();
+    await expect(surface.getByRole("textbox").last()).toBeVisible({ timeout: 60_000 });
+    return surface;
+  }
+
+  await page.evaluate(() => {
     window.history.replaceState({}, "", "/app/assistant/librechat/c/new");
   });
-  const surface = page.frameLocator("main iframe").first();
-  await expect(surface.getByRole("textbox").last()).toBeVisible({ timeout: 60_000 });
-  return surface;
+  await expect(page.getByRole("textbox").last()).toBeVisible({ timeout: 60_000 });
+  return page;
 }
 
 async function sendFromFormalEntry(surface, text) {
@@ -231,7 +307,7 @@ async function sendFromFormalEntry(surface, text) {
 
 test("tp288-e2e-001: real entry success path stays in one official bubble", async ({ browser }) => {
   test.setTimeout(240_000);
-  const { appContext, page } = await setupLocalAdminSession(browser);
+  const { appContext, page } = await setupTenantAdminSession(browser, "001");
   const network = await installFormalEntryMock(page);
   const surface = await openFormalEntry(page);
   const turn1BindingKey = "conv_tp288_1::turn_tp288_1::req_tp288_1";
@@ -277,7 +353,7 @@ test("tp288-e2e-001: real entry success path stays in one official bubble", asyn
 
 test("tp288-e2e-002: failure stays in-bubble and retry creates exactly one new bubble", async ({ browser }) => {
   test.setTimeout(240_000);
-  const { appContext, page } = await setupLocalAdminSession(browser);
+  const { appContext, page } = await setupTenantAdminSession(browser, "002");
   const network = await installFormalEntryMock(page, { failFirstCommit: true });
   const surface = await openFormalEntry(page);
   const turn1BindingKey = "conv_tp288_1::turn_tp288_1::req_tp288_1";

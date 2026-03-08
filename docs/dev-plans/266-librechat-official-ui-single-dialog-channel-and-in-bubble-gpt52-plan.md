@@ -1,6 +1,6 @@
 # DEV-PLAN-266：AI对话官方 UI 单通道与气泡内回写前置子计划
 
-**状态**: 实施中（2026-03-08 CST；`286/287` 已完成，当前剩余缺口收敛为 `288` 证据闭环；主链实现已基本达成，待 live runtime 默认 E2E 基线接线与真实入口证据补齐后封板）
+**状态**: 实施中（2026-03-08 CST；`286/287` 已完成，`288` 已完成默认 E2E 基线接线；当前剩余缺口已收敛为正式入口 vendored UI 的 sid 会话认证/启动闭环修复 + 复跑取证）
 
 ## 1. 计划定位
 - `266` 不再被视为独立的业务闭环主计划。
@@ -120,9 +120,9 @@
 6. [X] **266 的用户价值边界明确**：`266` 达成只表示聊天承载面、通道与落点收口完成；用户虽然会感受到更干净、更一致的聊天体验，但这不等于 `260` 的缺字段补全、多候选确认、提交确认、成功回执等业务 FSM 已全部完成。
 
 ### 6.7 当前阻塞判定（2026-03-08）
-1. [ ] 当前最近阻塞不是新的 UI 主链实现，而是 `DEV-PLAN-288` 真实入口证据闭环：runner 已存在，但仍依赖交互式 live runtime，尚未接入默认 E2E 基线。
-2. [ ] `6.5/6.6` 中未勾选条目当前应优先通过真实页面录像、截图、DOM 断言、trace 与请求证据补齐，不再以新增桥接渲染逻辑作为默认解法。
-3. [ ] 在 `288` 未稳定通过前，`266` 继续维持“实施中”；`285` 不得将 `266` 视为已完成输入。
+1. [ ] 当前最近阻塞不是新的 send/store/render 主链接管，而是 `DEV-PLAN-288` 暴露出的正式入口运行态缺口：runner 已接入默认 E2E 基线，但 `/app/assistant/librechat` 下 vendored UI 仍未与 sid 会话完成认证/启动闭环，导致页面内部回到 `/app/login`。
+2. [ ] `6.5/6.6` 中未勾选条目当前应优先修复正式入口 direct-page 契约（不再假设 iframe）与 sid 会话启动闭环，再通过真实页面录像、截图、DOM 断言、trace 与请求证据补齐；不再以新增桥接渲染逻辑作为默认解法。
+3. [ ] 在 `288` 未修复正式入口认证/启动缺口并形成稳定复跑证据前，`266` 继续维持“实施中”；`285` 不得将 `266` 视为已完成输入。
 
 ## 7. 验收标准（硬门槛）
 1. [X] 官方 UI 中真实发送后，成功与失败都通过统一官方气泡返回。
@@ -141,7 +141,7 @@
   1. [ ] 补充 `266` 专属真实 E2E，硬断言“官方原始发送未发出 + 成功/失败均经统一官方气泡返回 + 无页面外挂回复容器”；该用例是 `266` 的主通过条件。
   2. [X] `go test ./internal/server -run 'TestAssistantUIProxy|TestModifyAssistantUIProxyResponse|TestAssistantReply|TestAssistantRenderReply' -count=1`
   3. [X] `pnpm --dir apps/web test -- src/pages/assistant/LibreChatPage.test.tsx src/pages/assistant/AssistantPage.test.tsx`（旧桥 helper 测试已由 `DEV-PLAN-282` 退役）
-  4. [ ] 旧桥专属 real E2E 已由 `DEV-PLAN-282` 删除；`266` 的新入口真实回归已由 `DEV-PLAN-288` 建立 runner skeleton，待默认基线接线。
+  4. [ ] 旧桥专属 real E2E 已由 `DEV-PLAN-282` 删除；`266` 的新入口真实回归已由 `DEV-PLAN-288` 接入默认 E2E 基线，当前待修复正式入口 direct-page + sid 会话启动缺口后复跑并补齐证据。
   5. [ ] `make check doc`
 
 ## 9. 交付物

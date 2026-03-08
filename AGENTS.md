@@ -417,6 +417,7 @@ modules/{module}/
 - DEV-PLAN-289：260-M2~M4 实施收口专项（事实源推进 + 主链联调）：`docs/dev-plans/289-librechat-260-m2-m4-implementation-closure-plan.md`
 - DEV-PLAN-290：260-M5 真实 Case 验收与证据固化专项：`docs/dev-plans/290-librechat-260-m5-real-case-validation-and-evidence-plan.md`
 - DEV-PLAN-291：237 升级兼容回归前置专项（供 285 封板复核）：`docs/dev-plans/291-librechat-237-upgrade-compatibility-readiness-plan.md`
+- DEV-PLAN-292：LibreChat 正式入口 vendored UI 认证/启动最小兼容层专项：`docs/dev-plans/292-librechat-vendored-ui-auth-startup-compat-plan.md`
 - DEV-PLAN-225 执行日志：`docs/archive/dev-records/dev-plan-225-execution-log.md`
 - DEV-PLAN-226：测试指引 TG-004（门禁口径变更审批）：`docs/dev-plans/226-test-guide-tg004-gate-caliber-change-approval.md`
 - DEV-PLAN-170 执行日志：`docs/archive/dev-records/dev-plan-170-execution-log.md`
