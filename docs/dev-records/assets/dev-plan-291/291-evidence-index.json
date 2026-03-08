@@ -1,0 +1,141 @@
+{
+  "plan": "DEV-PLAN-291",
+  "status": "executed_blocked",
+  "updated_at": "2026-03-08 21:41 CST",
+  "formal_entry": "/app/assistant/librechat",
+  "summary": "R1~R8/R10 passed; R9 failed because tp290 still fails Case 2/3/4 stopline.",
+  "entries": [
+    {
+      "id": "R1",
+      "command": "make librechat-web-verify",
+      "executed_at": "2026-03-08T13:41:02Z",
+      "exit_code": 0,
+      "artifacts": [
+        "docs/dev-records/assets/dev-plan-291/291-source-verify.log"
+      ],
+      "result": "passed",
+      "owner": "Codex",
+      "notes": ""
+    },
+    {
+      "id": "R2",
+      "command": "make librechat-web-build",
+      "executed_at": "2026-03-08T13:41:02Z",
+      "exit_code": 0,
+      "artifacts": [
+        "docs/dev-records/assets/dev-plan-291/291-web-build.log"
+      ],
+      "result": "passed",
+      "owner": "Codex",
+      "notes": "构建成功；关键产物输出至 internal/server/assets/librechat-web。"
+    },
+    {
+      "id": "R3",
+      "command": "make assistant-runtime-up && make assistant-runtime-status",
+      "executed_at": "2026-03-08T13:41:02Z",
+      "exit_code": 0,
+      "artifacts": [
+        "docs/dev-records/assets/dev-plan-291/291-runtime-up.log",
+        "docs/dev-records/assets/dev-plan-291/291-runtime-status.log",
+        "docs/dev-records/assets/dev-plan-291/291-runtime-status.json"
+      ],
+      "result": "passed",
+      "owner": "Codex",
+      "notes": ""
+    },
+    {
+      "id": "R4",
+      "command": "docker compose config --format json + versions.lock.yaml compare",
+      "executed_at": "2026-03-08T13:41:02Z",
+      "exit_code": 0,
+      "artifacts": [
+        "docs/dev-records/assets/dev-plan-291/291-runtime-version-check.md"
+      ],
+      "result": "passed",
+      "owner": "Codex",
+      "notes": "`rag_api` 以 digest pin 形式表达，与锁文件一致。"
+    },
+    {
+      "id": "R5",
+      "command": "go test ./internal/server -run 'TestLibreChatWebUI'",
+      "executed_at": "2026-03-08T13:41:02Z",
+      "exit_code": 0,
+      "artifacts": [
+        "docs/dev-records/assets/dev-plan-291/291-formal-entry-go-test.log"
+      ],
+      "result": "passed",
+      "owner": "Codex",
+      "notes": ""
+    },
+    {
+      "id": "R6",
+      "command": "go test ./internal/server -run 'TestLibreChatVendoredCompatAPI'",
+      "executed_at": "2026-03-08T13:41:02Z",
+      "exit_code": 0,
+      "artifacts": [
+        "docs/dev-records/assets/dev-plan-291/291-compat-alias-go-test.log"
+      ],
+      "result": "passed",
+      "owner": "Codex",
+      "notes": ""
+    },
+    {
+      "id": "R7",
+      "command": "make check routing",
+      "executed_at": "2026-03-08T13:41:02Z",
+      "exit_code": 0,
+      "artifacts": [
+        "docs/dev-records/assets/dev-plan-291/291-routing-check.log"
+      ],
+      "result": "passed",
+      "owner": "Codex",
+      "notes": ""
+    },
+    {
+      "id": "R8",
+      "command": "make check no-legacy",
+      "executed_at": "2026-03-08T13:41:02Z",
+      "exit_code": 0,
+      "artifacts": [
+        "docs/dev-records/assets/dev-plan-291/291-no-legacy.log"
+      ],
+      "result": "passed",
+      "owner": "Codex",
+      "notes": ""
+    },
+    {
+      "id": "R9",
+      "command": "reference freshness review for tp288/tp290",
+      "executed_at": "2026-03-08T13:41:02Z",
+      "exit_code": 1,
+      "artifacts": [
+        "docs/dev-records/assets/dev-plan-291/291-ref-288-290-freshness.md"
+      ],
+      "referenced_artifacts": [
+        {
+          "path": "docs/dev-records/assets/dev-plan-266/tp288-real-entry-evidence-index.json",
+          "mtime": "2026-03-08T15:58:22.549111+08:00"
+        },
+        {
+          "path": "docs/dev-records/assets/dev-plan-290/tp290-real-case-evidence-index.json",
+          "mtime": "2026-03-08T20:42:52.088357+08:00"
+        }
+      ],
+      "result": "failed",
+      "owner": "Codex",
+      "notes": "tp290 当前仍有 Case 2/3/4 未通过 stopline，无法证明 280 核心硬门槛在完整 Case Matrix 上成立。"
+    },
+    {
+      "id": "R10",
+      "command": "make assistant-runtime-down",
+      "executed_at": "2026-03-08T13:41:02Z",
+      "exit_code": 0,
+      "artifacts": [
+        "docs/dev-records/assets/dev-plan-291/291-runtime-down.log"
+      ],
+      "result": "passed",
+      "owner": "Codex",
+      "notes": ""
+    }
+  ]
+}
