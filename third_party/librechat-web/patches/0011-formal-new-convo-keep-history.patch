@@ -1,0 +1,26 @@
+--- a/client/src/hooks/Chat/useChatFunctions.ts
++++ b/client/src/hooks/Chat/useChatFunctions.ts
+@@ -29,6 +29,7 @@
+ import useUserKey from '~/hooks/Input/useUserKey';
+ import { useNavigate } from 'react-router-dom';
+ import { useAuthContext } from '~/hooks';
++import { isFormalAssistantPath } from '~/assistant-formal/runtime';
+ 
+ const logChatRequest = (request: Record<string, unknown>) => {
+   logger.log('=====================================\\nAsk function called with:');
+@@ -143,9 +144,13 @@
+       currentMessages,
+     });
+ 
++    const formalAssistantMode = isFormalAssistantPath();
+     if (conversationId == Constants.NEW_CONVO) {
+-      parentMessageId = Constants.NO_PARENT;
+-      currentMessages = [];
++      if (!formalAssistantMode) {
++        parentMessageId = Constants.NO_PARENT;
++        currentMessages = [];
++      }
++
+       conversationId = null;
+       navigate('/c/new', { state: { focusChat: true } });
+     }

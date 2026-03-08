@@ -24,9 +24,29 @@ cp -n .env.example .env
 - `DB_USER=app_runtime`
 - `RLS_ENFORCE=enforce`
 - `AUTHZ_MODE=enforce`
+- `TRUST_PROXY=1`（当你通过 `X-Forwarded-Host` 做租户联调/E2E 时必须开启；否则会退回 `localhost` 租户导致登录串租户并出现 `invalid_credentials`）
 - `ASSISTANT_MODEL_CONFIG_JSON="{\"provider_routing\":{\"strategy\":\"priority_failover\",\"fallback_enabled\":true},\"providers\":[{\"name\":\"openai\",\"enabled\":true,\"model\":\"gpt-5-codex\",\"endpoint\":\"https://api.openai.com/v1\",\"timeout_ms\":8000,\"retries\":1,\"priority\":10,\"key_ref\":\"OPENAI_API_KEY\"}]}"`（避免 `assistant_runtime_config_missing/invalid`）
 
 ## 工作流（推荐顺序）
+
+0) 启动前先做“单实例清理”（强烈建议）
+
+> 目的：避免同机残留多个 `server/superadmin/kratosstub` 进程导致“seed 在 A 实例、登录走 B 实例”的错位，出现看似随机的 `invalid_credentials`。
+
+```bash
+cd "$(git rev-parse --show-toplevel)"
+
+# 先停容器依赖（不删数据）
+DEV_INFRA_ENV_FILE=.env make dev-down || true
+
+# 清理本机 Go 服务残留进程（前台/后台都覆盖）
+pkill -f 'cmd/server|/exe/server' || true
+pkill -f 'cmd/superadmin|/exe/superadmin' || true
+pkill -f 'cmd/kratosstub|/exe/kratosstub' || true
+
+# 端口基线检查：预期无监听
+ss -ltnp | grep -E ':(8080|8081|4433|4434|5438|6379)' || true
+```
 
 1) 启动基础依赖（Postgres/Redis；不会删除数据）
 
