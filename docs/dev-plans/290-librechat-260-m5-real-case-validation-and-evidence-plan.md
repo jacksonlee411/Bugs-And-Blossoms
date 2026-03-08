@@ -19,6 +19,7 @@
 2. [ ] 不承担升级兼容回归实施（由 `DEV-PLAN-291/237` 承接）。
 3. [ ] 不修改 `260` FSM/DTO 契约定义。
 4. [ ] 不恢复旧桥接口径（`iframe` 正式承载、`bridge.js`、`data-assistant-dialog-stream`、页面 helper 业务编排）。
+5. [ ] 不在本计划内承载 `pending placeholder bubble` 的实现修复；该缺口由 `DEV-PLAN-290A` 承接，本计划仅负责验收重跑与证据收敛。
 
 ## 3. 顺序与依赖（对齐 271 + 280）
 1. [X] 前置：`DEV-PLAN-289` 完成，`260-M2~M4` 无待修缺口。
@@ -26,7 +27,8 @@
 3. [X] 前置：`292` 已关闭正式入口 vendored UI 与 `sid` 会话认证/启动阻塞，默认顺序 `292 -> 288 -> 290` 已满足。
 4. [X] 路线图定位：`290` 作为 `271-S5` 的 `P0` 项执行，优先级高于 `240F/285` 启动。
 5. [X] 主计划对齐：`290` 的通过判定显式继承 `280` 的停止线与验收硬门槛，不接受旧桥/双入口口径回流。
-6. [ ] 后置：本计划通过后方可进入 `285` 封板汇总。
+6. [ ] 若命中 `pending placeholder bubble`，必须先执行 `DEV-PLAN-290A` 修复，再回到 `290` 重跑 Case Matrix。
+7. [ ] 后置：本计划通过后方可进入 `285` 封板汇总。
 
 ## 4. 实施步骤
 1. [X] 前置口径已冻结并满足：`292` 已完成最小兼容层，`288` 已形成可复核复跑通过结果；本计划从“准备阶段”切换到“Case Matrix 执行与证据固化”。
@@ -40,6 +42,7 @@
 9. [ ] 执行日志：本轮真实验收仅写入 `docs/dev-records/dev-plan-290-execution-log.md`；`dev-plan-260` 仅保留“引用与摘要”。
 10. [X] 首轮实跑已完成并登记：命令 `pnpm --dir /home/lee/Projects/Bugs-And-Blossoms/e2e exec playwright test tests/tp290-librechat-real-case-matrix.spec.js --workers=1 --trace on`；证据见 `docs/dev-records/assets/dev-plan-290/`，结论见执行日志。
 11. [X] 已按同口径多轮重跑并覆盖证据资产；截至 `2026-03-08 20:42 CST`，Case 2/3/4 仍命中 pending placeholder bubble，`290` 继续保持进行中。
+12. [ ] 修复分流：`pending placeholder bubble` 实现修复转入 `DEV-PLAN-290A`；本计划在 `290A` 完成后执行同口径回归重跑并更新通过判定。
 
 ### 4.1 Case Matrix v1（冻结输入向量）
 > 本矩阵承接 `DEV-PLAN-260` 第 2.2 节 Case 1~4，作为 `290` 的唯一复跑口径。
@@ -102,6 +105,7 @@
 - `docs/dev-plans/285-librechat-cutover-regression-and-closure-plan.md`
 - `docs/dev-plans/288-librechat-266-live-e2e-and-evidence-closure-plan.md`
 - `docs/dev-plans/289-librechat-260-m2-m4-implementation-closure-plan.md`
+- `docs/dev-plans/290a-librechat-pending-placeholder-bubble-fix-plan.md`
 - `docs/dev-plans/291-librechat-237-upgrade-compatibility-readiness-plan.md`
 - `docs/dev-plans/292-librechat-vendored-ui-auth-startup-compat-plan.md`
 - `docs/dev-records/dev-plan-290-execution-log.md`
