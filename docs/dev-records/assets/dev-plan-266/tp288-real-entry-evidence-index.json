@@ -37,8 +37,8 @@
     "真实入口仍以 /app/assistant/librechat 为唯一用户入口；当前正式契约应对齐 direct page，不再把 iframe 视为稳定前提。",
     "自动化证据仍以 DOM 断言 + POST 请求捕获为主，作为 native_send_emitted=0 的等价强证据。",
     "2026-03-08 已修复默认 E2E 迁移 admin 用户口径问题，并确认 `playwright test --list` 可默认发现 2 个 tp288 用例。",
-    "2026-03-08 进一步确认当前真实阻塞不是 runner 接线，而是 vendored UI 在正式入口下仍未与 sid 会话完成认证/启动闭环，运行时会内部回到 /app/login。",
+    "2026-03-08 `292` 已关闭正式入口 vendored UI 与 sid 会话的认证/启动闭环缺口；当前阶段阻塞转为“基于默认 E2E 基线完成复跑并固化可复核证据”。",
     "失败产物仍由 Playwright 默认输出到 e2e/test-results/ 与 e2e/playwright-report/。"
   ],
-  "current_blocker": "formal_entry_auth_bootstrap_gap"
+  "current_blocker": "default_e2e_evidence_replay_pending"
 }
