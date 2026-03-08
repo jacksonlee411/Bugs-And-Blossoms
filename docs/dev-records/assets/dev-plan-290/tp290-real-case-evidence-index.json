@@ -1,7 +1,7 @@
 {
   "plan": "DEV-PLAN-290",
-  "status": "in_progress",
-  "updated_at": "2026-03-08 20:42 CST",
+  "status": "completed",
+  "updated_at": "2026-03-09 01:55 CST",
   "formal_entry": "/app/assistant/librechat",
   "aligned_with": [
     "DEV-PLAN-260",
@@ -51,7 +51,7 @@
     {
       "id": 2,
       "name": "Case 2",
-      "status": "failed",
+      "status": "passed",
       "input_sequence": [
         "在 AI治理办公室 下新建 人力资源部2，生效日期 2026-01-01",
         "确认"
@@ -73,7 +73,7 @@
     {
       "id": 3,
       "name": "Case 3",
-      "status": "failed",
+      "status": "passed",
       "input_sequence": [
         "在 AI治理办公室 下新建 人力资源部239A补全",
         "生效日期 2026-03-25",
@@ -97,7 +97,7 @@
     {
       "id": 4,
       "name": "Case 4",
-      "status": "failed",
+      "status": "passed",
       "input_sequence": [
         "在 共享服务中心 下新建 239A候选验证部，生效日期 2026-03-26",
         "选第2个",
@@ -124,6 +124,7 @@
     "2026-03-08 首轮 tp290 实跑结果：Case 1 通过；Case 2/3/4 命中 pending placeholder bubble（binding_key=::::）导致 stopline 未通过。",
     "2026-03-08 20:42 CST 已按最新代码多轮重跑 tp290（命令均为 tests/tp290-librechat-real-case-matrix.spec.js --workers=1 --trace on）；结果维持不变：Case 2/3/4 仍存在 pending placeholder bubble。",
     "Case 通过必须同时满足 DEV-PLAN-266 共通 stopline 与 DEV-PLAN-280 硬门槛。",
-    "若出现双入口、双回复、外挂回执或前端重算业务 FSM，该轮证据直接作废。"
+    "若出现双入口、双回复、外挂回执或前端重算业务 FSM，该轮证据直接作废。",
+    "2026-03-09 01:54 CST 已在 `290A` 根因修复后执行“重建前端产物 -> 重启服务 -> `tp290` 单 spec 复跑”；Case 1~4 全部通过，Case 2/3/4 已清除 pending placeholder bubble。"
   ]
 }

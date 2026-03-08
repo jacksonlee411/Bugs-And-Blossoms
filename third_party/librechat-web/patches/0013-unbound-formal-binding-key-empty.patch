@@ -1,0 +1,27 @@
+--- a/client/src/assistant-formal/runtime.ts
++++ b/client/src/assistant-formal/runtime.ts
+@@ -149,7 +149,10 @@
+ }) {
+   const conversationId = input.backendConversationId?.trim() ?? '';
+   const turnId = input.turnId?.trim() ?? '';
+   const requestId = input.requestId?.trim() ?? '';
++  if (!conversationId || !turnId || !requestId) {
++    return '';
++  }
+   return [conversationId, turnId, requestId].join('::');
+ }
+ 
+--- a/client/src/assistant-formal/__tests__/runtime.test.ts
++++ b/client/src/assistant-formal/__tests__/runtime.test.ts
+@@ -45,6 +45,11 @@
+     expect(resolveAssistantFormalText(payload)).toBe('候选已确认，可以继续提交。');
+   });
+ 
++  it('returns empty binding key for unbound placeholder state', () => {
++    expect(assistantFormalBindingKey({})).toBe('');
++    expect(assistantFormalBindingKey({ backendConversationId: 'conv-1' })).toBe('');
++  });
++
+ 
+ 
+   it('adds stable binding key and request mapping', () => {

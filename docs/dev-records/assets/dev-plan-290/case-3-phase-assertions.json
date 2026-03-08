@@ -1,7 +1,7 @@
 {
   "case_id": 3,
-  "status": "failed",
-  "validated_at": "2026-03-08T12:37:43.337Z",
+  "status": "passed",
+  "validated_at": "2026-03-08T17:54:03.142Z",
   "observed_phase_path": [
     "idle",
     "await_missing_fields",
@@ -19,15 +19,15 @@
   ],
   "stopline_266": {
     "single_channel": true,
-    "single_assistant_bubble": false,
+    "single_assistant_bubble": true,
     "no_official_connection_error": true,
     "no_external_reply_container": true
   },
   "stopline_280": {
     "single_formal_entry": true,
     "no_bridge_or_injected_stream": true,
-    "official_message_tree_only": false,
+    "official_message_tree_only": true,
     "dto_only_frontend": true
   },
-  "notes": "captured by tp290 real case e2e; pending placeholder bubble detected"
+  "notes": "captured by tp290 real case e2e"
 }

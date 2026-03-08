@@ -15,3 +15,4 @@
 0010-upsert-pending-with-same-message-id-keeps-history.patch
 0011-formal-new-convo-keep-history.patch
 0012-dedupe-stale-formal-placeholder.patch
+0013-unbound-formal-binding-key-empty.patch
