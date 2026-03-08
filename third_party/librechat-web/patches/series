@@ -14,3 +14,4 @@
 0009-formal-turn-append-with-new-message-id.patch
 0010-upsert-pending-with-same-message-id-keeps-history.patch
 0011-formal-new-convo-keep-history.patch
+0012-dedupe-stale-formal-placeholder.patch
