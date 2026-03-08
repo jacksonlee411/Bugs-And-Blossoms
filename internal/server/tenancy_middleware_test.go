@@ -92,6 +92,7 @@ func mustLibreChatCompatAPIClassifier(t *testing.T) *routing.Classifier {
 			"server": {
 				Routes: []routing.Route{
 					{Path: libreChatCompatAPIPrefix + "/user", Methods: []string{"GET"}, RouteClass: "internal_api"},
+					{Path: libreChatFormalEntryAPIPrefix + "/user", Methods: []string{"GET"}, RouteClass: "internal_api"},
 				},
 			},
 		},

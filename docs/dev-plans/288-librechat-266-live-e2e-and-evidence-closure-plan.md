@@ -1,6 +1,6 @@
 # DEV-PLAN-288：266 剩余项 C——真实入口 E2E 与证据封板收口
 
-**状态**: 实施中（2026-03-08 CST；真实入口 E2E 已接入默认 Playwright 基线，迁移 admin 环境阻塞已排除；`292` 已完成正式入口 vendored UI 与 `sid` 会话的认证/启动最小兼容层，`288` 当前从“实现阻塞”转入“基于正式入口的默认 E2E 复跑与证据固化”阶段）
+**状态**: 实施中（2026-03-08 CST；真实入口 E2E 已接入默认 Playwright 基线，迁移 admin 环境阻塞已排除；`292` 已完成正式入口 vendored UI 与 `sid` 会话的认证/启动最小兼容层，`288` 当前从“实现阻塞”转入“基于正式入口的默认 E2E 复跑与证据固化”阶段；最新剩余阻塞已收敛为 vendored UI 渲染链路分叉导致的 formal 消息未落 DOM）
 
 ## 1. 背景
 1. [X] `DEV-PLAN-266` 当前已有 mock stopline 与部分 live runtime 证据，但“真实入口自动化断言 + 完整封板证据”仍未闭环。
@@ -62,3 +62,16 @@
 - `docs/dev-plans/286-librechat-official-message-binding-and-single-bubble-closure-plan.md`
 - `docs/dev-plans/287-librechat-dto-render-only-and-failure-in-bubble-closure-plan.md`
 - `AGENTS.md`
+
+## 10. 最新发现与收敛策略（2026-03-08）
+1. [X] 启动链阻塞已关闭：`localhost` Service Worker 注册问题与 `/app/assistant/librechat/api/**` 的 `sid/auth` 启动兼容问题均已修复并落入 patch stack。
+2. [X] 当前 `tp288` 已不再卡白屏/401/登录链路；`/internal/assistant/conversations` 与 `/turns` mock 路径均返回 `200`。
+3. [X] 运行态探针已确认状态层正确：assistant message fiber 上已存在 `assistantFormalPayload` 与正确 `bindingKey`（示例：`conv_tp288_1::turn_tp288_1::req_tp288_1`）。
+4. [X] 最新根因定位：DOM 层 `bindingCount = 0` 并非状态缺失，而是渲染分支未命中 `AssistantFormalMessage`。当前实际命中链在 `components/Messages/*`，而此前补丁主要落在 `Chat/Messages/*`。
+5. [X] 渲染链路来源冻结：
+   - 主路径：`Chat/Messages/MultiMessage -> components/Messages/MessageContent -> components/Messages/ContentRender`（`message.content` 场景）。
+   - 旧兼容回退：`Chat/Messages/MultiMessage -> Chat/Messages/Message -> Chat/Messages/ui/MessageRender`（仅在 `message.content` 缺失时）。
+6. [ ] `288` 下一步执行口径（两阶段）：
+   - 阶段 A（先通过）：在 `components/Messages/ContentRender` 主路径接入 formal 渲染短路与强制 remount key，确保 `data-assistant-binding-key` 进入 DOM，先让 `tp288` 通过并固化证据。
+   - 阶段 B（再收口）：在证明正式入口消息均满足 `message.content` 不变量后，删除旧兼容回退链，保持单渲染主链，避免同类问题重复发生。
+7. [X] stopline：在阶段 A 未完成前，不得将“修复仅落在 `Chat/Messages/*`”视为 `288` 关闭依据；必须以真实入口 DOM 断言命中 `data-assistant-binding-key` 作为通过条件之一。

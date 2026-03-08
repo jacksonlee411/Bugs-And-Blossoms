@@ -96,6 +96,9 @@ func TestLibreChatWebUIServesIndexAndProtectedAssets(t *testing.T) {
 		if !strings.Contains(body, `<base href="/assets/librechat-web/" />`) {
 			t.Fatalf("missing formal base href body=%q", body)
 		}
+		if !strings.Contains(body, `window.__LIBRECHAT_FORMAL_BASENAME__`) {
+			t.Fatalf("missing router basename shim body=%q", body)
+		}
 	})
 
 	t.Run("formal entry spa fallback", func(t *testing.T) {

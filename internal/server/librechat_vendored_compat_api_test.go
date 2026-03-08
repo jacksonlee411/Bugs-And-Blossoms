@@ -44,6 +44,43 @@ func TestLibreChatVendoredCompatAPIRequiresSession(t *testing.T) {
 	}
 }
 
+func TestLibreChatVendoredCompatAPIFormalEntryAliasWorksWithSIDSession(t *testing.T) {
+	wd, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	allowlistPath := filepath.Clean(filepath.Join(wd, "..", "..", "config", "routing", "allowlist.yaml"))
+	t.Setenv("ALLOWLIST_PATH", allowlistPath)
+
+	h, err := NewHandlerWithOptions(HandlerOptions{
+		TenancyResolver:  localTenancyResolver(),
+		IdentityProvider: staticIdentityProvider{ident: authenticatedIdentity{Email: "tenant-admin@example.invalid", KratosIdentityID: "kid1"}},
+		OrgUnitStore:     newOrgUnitMemoryStore(),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	loginReq := httptest.NewRequest(http.MethodPost, "/iam/api/sessions", strings.NewReader(`{"email":"tenant-admin@example.invalid","password":"pw"}`))
+	loginReq.Host = "localhost:8080"
+	loginReq.Header.Set("Content-Type", "application/json")
+	loginRec := httptest.NewRecorder()
+	h.ServeHTTP(loginRec, loginReq)
+	if loginRec.Code != http.StatusNoContent {
+		t.Fatalf("login status=%d body=%s", loginRec.Code, loginRec.Body.String())
+	}
+	sidCookie := loginRec.Result().Cookies()[0]
+
+	req := httptest.NewRequest(http.MethodPost, libreChatFormalEntryAPIPrefix+"/auth/refresh", http.NoBody)
+	req.Host = "localhost:8080"
+	req.AddCookie(sidCookie)
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+	}
+}
+
 func TestLibreChatVendoredCompatAPIWorksWithSIDSession(t *testing.T) {
 	wd, err := os.Getwd()
 	if err != nil {

@@ -1,0 +1,74 @@
+diff --git a/client/src/hooks/SSE/useSSE.ts b/client/src/hooks/SSE/useSSE.ts
+--- a/client/src/hooks/SSE/useSSE.ts
++++ b/client/src/hooks/SSE/useSSE.ts
+@@ -28,6 +28,7 @@
+   detectAssistantFormalLocale,
+   getStoredAssistantFormalConversationId,
+   isFormalAssistantPath,
++  isAssistantFormalMessage,
+   latestAssistantFormalTurn,
+   upsertAssistantFormalMessage,
+   resolveAssistantFormalText,
+@@ -70,6 +71,7 @@
+   const [completed, setCompleted] = useState(new Set());
+   const setAbortScroll = useSetRecoilState(store.abortScrollFamily(runIndex));
+   const setShowStopButton = useSetRecoilState(store.showStopButtonByIndex(runIndex));
++  const setLatestMessage = useSetRecoilState(store.latestMessageFamily(runIndex));
+ 
+   const {
+     setMessages,
+@@ -131,16 +133,46 @@
+         if (!assistantMessageId) {
+           return;
+         }
+-        setMessages(
+-          upsertAssistantFormalMessage(
+-            getMessages() ?? [],
++        const messages = getMessages() ?? [];
++        const bindingKey = currentBindingKey || patch.assistantFormalPayload?.bindingKey;
++        let nextMessages = upsertAssistantFormalMessage(
++          messages,
++          {
++            messageId: assistantMessageId,
++            bindingKey: bindingKey || undefined,
++          },
++          patch,
++        );
++        const hasTarget = nextMessages.some((message) => {
++          if (message.messageId === assistantMessageId) {
++            return true;
++          }
++          return (
++            !!bindingKey &&
++            isAssistantFormalMessage(message) &&
++            message.assistantFormalPayload?.bindingKey === bindingKey
++          );
++        });
++        if (!hasTarget) {
++          nextMessages = [
++            ...messages.filter((message) => message.messageId !== assistantMessageId),
+             {
++              ...(submission.initialResponse as TMessage),
++              ...patch,
+               messageId: assistantMessageId,
+-              bindingKey: currentBindingKey || undefined,
+-            },
+-            patch,
+-          ),
+-        );
++              parentMessageId: submission.userMessage.messageId,
++              isCreatedByUser: false,
++              error: patch.error ?? false,
++            } as TMessage,
++          ];
++        }
++        const latestFormalMessage =
++          nextMessages.find((message) => message.messageId === assistantMessageId) ??
++          nextMessages[nextMessages.length - 1];
++        setMessages(nextMessages);
++        if (latestFormalMessage) {
++          setLatestMessage(latestFormalMessage);
++        }
+       };
+ 
+       const runFormalSubmission = async () => {

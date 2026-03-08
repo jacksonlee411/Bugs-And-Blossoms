@@ -5,3 +5,7 @@
 # - patch 文件命名使用 4 位序号前缀，例如：0001-prune-workspaces.patch。
 # - 未冻结来源元数据前禁止直接散改 vendored 源码。
 0001-use-node-fs-in-post-build.patch
+0002-assistant-formal-upsert-fallback.patch
+0003-localhost-sw-and-axios-credentials.patch
+0004-use-sse-formal-message-replace-fallback.patch
+0006-message-render-force-remount-on-formal-state.patch

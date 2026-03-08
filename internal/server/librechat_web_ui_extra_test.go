@@ -55,5 +55,8 @@ func TestLibreChatWebUIHandler_ExtraCoverage(t *testing.T) {
 		if !strings.Contains(rec.Body.String(), libreChatStaticPrefix+`/`) {
 			t.Fatalf("unexpected body=%q", rec.Body.String())
 		}
+		if !strings.Contains(rec.Body.String(), `window.__LIBRECHAT_FORMAL_BASENAME__`) {
+			t.Fatalf("missing basename shim body=%q", rec.Body.String())
+		}
 	})
 }

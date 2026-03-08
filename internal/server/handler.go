@@ -512,9 +512,10 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, error) {
 	entrypoint := http.NewServeMux()
 	libreChatWebUI := newLibreChatWebUIHandler(embeddedAssets)
 	libreChatCompatAPI := newLibreChatCompatAPIHandler(assistantSvc, sessions)
+	entrypoint.Handle(libreChatFormalEntryAPIPrefix+"/", libreChatCompatAPI)
+	entrypoint.Handle(libreChatCompatAPIPrefix+"/", libreChatCompatAPI)
 	entrypoint.Handle(libreChatFormalEntryPrefix, libreChatWebUI)
 	entrypoint.Handle(libreChatFormalEntryPrefix+"/", libreChatWebUI)
-	entrypoint.Handle(libreChatCompatAPIPrefix+"/", libreChatCompatAPI)
 	entrypoint.Handle(libreChatStaticPrefix+"/", http.StripPrefix(libreChatStaticPrefix+"/", http.FileServer(http.FS(libreChatAssetsSub))))
 	entrypoint.Handle("/app", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		serveWebMUIIndex(w, r, embeddedAssets)

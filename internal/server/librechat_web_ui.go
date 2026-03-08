@@ -12,6 +12,7 @@ const (
 	libreChatFormalEntryPrefix = "/app/assistant/librechat"
 	libreChatStaticPrefix      = "/assets/librechat-web"
 	libreChatWebUIIndexPath    = "assets/librechat-web/index.html"
+	libreChatRouterBasenameShim = `<script>(function(){var formal="/app/assistant/librechat";var base=document.querySelector("base");if(!base||typeof base.getAttribute!=="function"){return;}var original=base.getAttribute.bind(base);base.getAttribute=function(name){if(String(name).toLowerCase()==="href"){return formal;}return original(name);};window.__LIBRECHAT_FORMAL_BASENAME__=formal;})();</script>`
 )
 
 func newLibreChatWebUIHandler(assets fs.FS) http.Handler {
@@ -31,7 +32,7 @@ func serveLibreChatWebUIIndex(w http.ResponseWriter, r *http.Request, assets fs.
 		routing.WriteError(w, r, routing.RouteClassUI, http.StatusInternalServerError, "internal_error", "internal error")
 		return
 	}
-	b = bytes.ReplaceAll(b, []byte(`<base href="/" />`), []byte(`<base href="`+libreChatStaticPrefix+`/" />`))
+	b = bytes.ReplaceAll(b, []byte(`<base href="/" />`), []byte(`<base href="`+libreChatStaticPrefix+`/" />`+libreChatRouterBasenameShim))
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
 	if r.Method == http.MethodHead {

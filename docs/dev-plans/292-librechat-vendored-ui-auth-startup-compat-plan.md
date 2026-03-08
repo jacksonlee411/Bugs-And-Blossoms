@@ -134,3 +134,8 @@
 - `docs/dev-plans/288-librechat-266-live-e2e-and-evidence-closure-plan.md`
 - `docs/dev-plans/290-librechat-260-m5-real-case-validation-and-evidence-plan.md`
 - `AGENTS.md`
+
+## 13. 边界交接补充（2026-03-08）
+1. [X] 本专项已关闭的阻塞范围仅限“正式入口 vendored UI 的 auth/startup 闭环”（含 `localhost` SW 注册、`/app/assistant/librechat/api/**` 的 `sid/auth` 启动兼容）。
+2. [X] 本专项不覆盖 `tp288` 后续暴露的渲染命中问题：已确认存在“状态层已有 `assistantFormalPayload/bindingKey`，但 DOM 无 `data-assistant-binding-key`”的渲染链路分叉缺口。
+3. [X] 上述渲染缺口已正式交接给 `288` 承接：由 `288` 负责在 `components/Messages/*` 主路径完成修复、复跑与证据固化；`292` 不再扩张到 render 语义改造。

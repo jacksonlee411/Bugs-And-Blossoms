@@ -55,3 +55,12 @@
 - `docs/dev-plans/289-librechat-260-m2-m4-implementation-closure-plan.md`
 - `docs/dev-plans/292-librechat-vendored-ui-auth-startup-compat-plan.md`
 - `AGENTS.md`
+
+## 9. 前置发现登记（承接 288，2026-03-08）
+1. [X] `292` 已关闭认证/启动兼容阻塞后，`290` 的最近前置缺口不再是 auth/startup，而是 `288` 中 vendored UI 渲染主路径对 formal 消息的命中问题。
+2. [X] 当前已确认存在双渲染链并存：主路径为 `components/Messages/*`，旧兼容回退为 `Chat/Messages/*`；`290` 验收仅接受主路径证据，不接受“仅修旧链”的通过声明。
+3. [ ] `290` 启动门槛补充：`288` 必须先提供以下证据后，`290` 才能进入 Case 1~4 正式通过判定。
+   - `tp288` 正式入口 DOM 出现 `data-assistant-binding-key`；
+   - 同轮消息无普通 GPT 气泡回退；
+   - 证据时间晚于最近一次影响渲染主链的合入。
+4. [X] 单链路原则补充：`290` 执行阶段若发现再次依赖 `message.content` 缺失回退链才能通过，视为 `288` 未闭环，必须回退到 `288` 修复，不得以 Case 结果“暂时可用”替代结构性收口。

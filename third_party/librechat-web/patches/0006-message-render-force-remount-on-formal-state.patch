@@ -1,0 +1,34 @@
+diff --git a/client/src/components/Chat/Messages/ui/MessageRender.tsx b/client/src/components/Chat/Messages/ui/MessageRender.tsx
+--- a/client/src/components/Chat/Messages/ui/MessageRender.tsx
++++ b/client/src/components/Chat/Messages/ui/MessageRender.tsx
+@@ -93,6 +93,22 @@
+       ],
+     );
+ 
++    const contentRenderKey = useMemo(
++      () =>
++        [
++          msg?.messageId ?? '',
++          msg?.assistantFormalPayload?.bindingKey ?? '',
++          msg?.assistantFormalPending ? 'pending' : 'ready',
++          msg?.text ?? '',
++        ].join('::'),
++      [
++        msg?.assistantFormalPayload?.bindingKey,
++        msg?.assistantFormalPending,
++        msg?.messageId,
++        msg?.text,
++      ],
++    );
++
+     const clickHandler = useMemo(
+       () =>
+         showCardRender && !isLatestMessage
+@@ -175,6 +191,7 @@
+               >
+                 {msg.plugin && <Plugin plugin={msg.plugin} />}
+                 <MessageContent
++                  key={contentRenderKey}
+                   ask={ask}
+                   edit={edit}
+                   isLast={isLast}

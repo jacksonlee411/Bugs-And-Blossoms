@@ -12,6 +12,7 @@ import (
 
 const (
 	libreChatCompatAPIPrefix         = libreChatStaticPrefix + "/api"
+	libreChatFormalEntryAPIPrefix    = libreChatFormalEntryPrefix + "/api"
 	libreChatCompatRoleUser          = "USER"
 	libreChatCompatRoleAdmin         = "ADMIN"
 	libreChatCompatProvider          = "bugs-and-blossoms-sid"
@@ -60,22 +61,27 @@ func newLibreChatCompatAPIHandler(assistantSvc *assistantConversationService, se
 }
 
 func (h *libreChatCompatAPIHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	switch r.URL.Path {
-	case libreChatCompatAPIPrefix + "/auth/refresh":
+	suffix, ok := libreChatCompatAPISuffix(r.URL.Path)
+	if !ok {
+		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusNotFound, "not_found", "未找到兼容接口。")
+		return
+	}
+	switch suffix {
+	case "/auth/refresh":
 		h.handleRefresh(w, r)
-	case libreChatCompatAPIPrefix + "/auth/logout":
+	case "/auth/logout":
 		h.handleLogout(w, r)
-	case libreChatCompatAPIPrefix + "/user":
+	case "/user":
 		h.handleUser(w, r)
-	case libreChatCompatAPIPrefix + "/roles/user":
+	case "/roles/user":
 		h.handleRole(w, r, libreChatCompatRoleUser)
-	case libreChatCompatAPIPrefix + "/roles/admin":
+	case "/roles/admin":
 		h.handleRole(w, r, libreChatCompatRoleAdmin)
-	case libreChatCompatAPIPrefix + "/config":
+	case "/config":
 		h.handleConfig(w, r)
-	case libreChatCompatAPIPrefix + "/endpoints":
+	case "/endpoints":
 		h.handleEndpoints(w, r)
-	case libreChatCompatAPIPrefix + "/models":
+	case "/models":
 		h.handleModels(w, r)
 	default:
 		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusNotFound, "not_found", "未找到兼容接口。")
@@ -441,8 +447,21 @@ func libreChatCompatModelExists(models []string, target string) bool {
 	return false
 }
 
+func libreChatCompatAPISuffix(path string) (string, bool) {
+	for _, prefix := range []string{libreChatCompatAPIPrefix, libreChatFormalEntryAPIPrefix} {
+		if path == prefix {
+			return "", true
+		}
+		if strings.HasPrefix(path, prefix+"/") {
+			return strings.TrimPrefix(path, prefix), true
+		}
+	}
+	return "", false
+}
+
 func isLibreChatCompatAPIPath(path string) bool {
-	return pathHasPrefixSegment(path, libreChatCompatAPIPrefix)
+	_, ok := libreChatCompatAPISuffix(path)
+	return ok
 }
 
 var _ = time.RFC3339
