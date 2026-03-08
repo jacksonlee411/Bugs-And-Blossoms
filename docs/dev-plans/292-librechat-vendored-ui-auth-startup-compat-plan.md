@@ -32,9 +32,11 @@
 ## 4. 方案边界与核心决策
 ### 4.1 路径边界冻结
 1. [X] 正式用户可见入口继续冻结为 `/app/assistant/librechat`；本专项不得通过 302/重定向把用户正式入口切换为 `/assets/librechat-web/*`。
-2. [X] vendored UI 的静态资源与相对 API 解析继续以 `<base href="/assets/librechat-web/">` 为准；因此认证/启动兼容层的正式目标路径冻结为 `/assets/librechat-web/api/**`。
-3. [X] 是否同时暴露根路径 `/api/**` 别名，不作为本专项默认目标；若后续确需增加，必须单独证明不会形成第二正式 API 面或第二入口语义。
-4. [X] basename/formal-entry 兼容的当前决策是：**formal entry 负责页面承载，static prefix 负责静态资源与相对 API 落点**；本专项只解决其 auth/startup 闭环，不把路径拓扑扩张成第二正式入口。
+2. [X] vendored UI 的静态资源与相对 API 解析继续以 `<base href="/assets/librechat-web/">` 为准；因此认证/启动兼容层的主路径冻结为 `/assets/librechat-web/api/**`。
+3. [X] 允许保留 `/app/assistant/librechat/api/**` 作为 formal-entry 侧兼容别名，但必须与 `/assets/librechat-web/api/**` 指向同一套 handler/DTO/会话校验链，不得形成第二事实源、第二写入口或第二正式 API 面。
+4. [X] `/app/assistant/librechat/api/**` 的退出条件冻结为：当 vendored UI 与自动化验证均不再依赖该别名时，应在后续计划中显式下线；在下线前其职责仅限兼容，不得扩展新语义。
+5. [X] 是否同时暴露根路径 `/api/**` 别名，不作为本专项默认目标；若后续确需增加，必须单独证明不会形成第二正式 API 面或第二入口语义。
+6. [X] basename/formal-entry 兼容的当前决策是：**formal entry 负责页面承载，static prefix 负责静态资源与相对 API 落点**；本专项只解决其 auth/startup 闭环，不把路径拓扑扩张成第二正式入口。
 
 ### 4.2 会话事实源冻结
 1. [X] 兼容层所有认证态判断均只读取现有 `sid` cookie 与 `sessions.Lookup(...)` / `principals.GetByID(...)` 结果。
@@ -79,8 +81,8 @@
    - 失败：若当前 tenant/运行时无可用模型，必须明确报错，不得用随意拼装的占位模型欺骗前端进入不可提交状态。
 8. [X] `POST /assets/librechat-web/api/auth/logout`
    - 作用：桥接现有 `sid` 失效与前端登出动作，保持单事实源。
-9. [X] `POST /assets/librechat-web/api/auth/login`
-   - 当前状态：**不列为本计划默认必做项**；只有在确认“必须支持 vendored 登录页本身”后，才可在本计划后续修订中纳入。
+9. [ ] `POST /assets/librechat-web/api/auth/login`
+   - 当前状态：**未实现，且不列为本计划默认必做项**；只有在确认“必须支持 vendored 登录页本身”后，才可在本计划后续修订中纳入。
 
 ## 6. DTO 映射、basename 兼容与失败语义
 1. [X] 输出 DTO 必须是 vendored UI 当前源码所需的最小子集，不追求实现 LibreChat 全量账户能力。
