@@ -1,6 +1,6 @@
 # DEV-PLAN-290A：pending placeholder bubble 修复专项（Case 2 优先路径）
 
-**状态**: 规划中（2026-03-08 CST；由 `DEV-PLAN-290` 多轮复跑失败触发，当前问题聚焦 `binding_key=::::` 的遗留 assistant 气泡）
+**状态**: 规划中（2026-03-08 21:31 CST；由 `DEV-PLAN-290` 多轮复跑失败触发，当前问题聚焦 `binding_key=::::` 的遗留 assistant 气泡）
 
 ## 1. 背景
 1. [ ] `DEV-PLAN-290` 已多轮重跑 `tp290-e2e-001~004`，Playwright 进程结果为 `4 passed`，但业务 stopline 仍未通过。
@@ -40,9 +40,11 @@
    修复 `placeholder -> bound message` 的替换/合并逻辑，确保 pending 节点在成功落地后被清理。
 3. [ ] **步骤 C：单轮唯一气泡约束（Case 2）**  
    在同轮消息归并处加入一致性防护，阻断“空键占位 + 正式消息”并存。
-4. [ ] **步骤 D：回归扩展到 Case 3/4**  
+4. [ ] **步骤 C1：先确认根因归属层，再实施修复**  
+   必须先明确缺口属于 `binding key` 生成、placeholder 生命周期清理、还是消息树 merge/append 并存；禁止未分层定位就直接叠加 UI 去重或渲染条件分支。
+5. [ ] **步骤 D：回归扩展到 Case 3/4**  
    复用 Case 2 修复路径验证缺字段补全与候选选择链路，确认无回归。
-5. [ ] **步骤 E：回灌 `290` 验收**  
+6. [ ] **步骤 E：回灌 `290` 验收**  
    重跑 `tests/tp290-librechat-real-case-matrix.spec.js --workers=1 --trace on`，刷新 `290` 证据与索引。
 
 ## 6. 停止线（Fail-Closed）
@@ -50,9 +52,10 @@
 2. [ ] 若出现双正式入口、双消息落点或页面级业务 FSM 重算，立即判失败。
 3. [ ] 若 Case 2 通过但 Case 3/4 回归失败，不得关闭 `290A`。
 4. [ ] 若仅测试“通过数”上升但 phase 断言仍失败，不得关闭 `290A`。
+5. [ ] 若修复依赖渲染层过滤、CSS 隐藏、DOM 去重，或仅对 `binding_key=::::` 做展示层屏蔽来制造“单气泡”假象，立即判失败。
 
 ## 7. 验收标准
-1. [ ] Case 2/3/4 均不再出现 `binding_key=::::` 的 pending placeholder bubble。
+1. [ ] Case 2/3/4 在终态均不残留 unbound/pending placeholder；`binding_key=::::` 当前症状必须消失，但不得仅以隐藏该症状作为通过依据。
 2. [ ] `single_assistant_bubble=true` 与 `official_message_tree_only=true` 在 Case 2/3/4 全部成立。
 3. [ ] `DEV-PLAN-290` 重跑结论更新为 Case 1~4 全通过，且 stopline 通过。
 4. [ ] 修复后证据时间戳晚于最近一次影响性合入，且索引已刷新。
@@ -60,7 +63,8 @@
 ## 8. 测试与门禁（SSOT 引用）
 1. [ ] 复跑命令入口以 `Makefile`、`AGENTS.md` 与 `docs/dev-plans/012-ci-quality-gates.md` 为准。
 2. [ ] 最低执行：`tp290` 用例重跑（`--workers=1 --trace on`）+ 文档门禁 `make check doc`。
-3. [ ] 若修复触达更广范围，按触发器补跑对应专项门禁（routing/no-legacy 等）。
+3. [ ] 至少补一层确定性回归测试（store/helper/unit 其一即可），覆盖 `placeholder 创建 -> 正式消息绑定 -> 终态清理`，以及同轮/跨轮不发生错误 merge 或覆盖。
+4. [ ] 若修复触达更广范围，按触发器补跑对应专项门禁（routing/no-legacy 等）。
 
 ## 9. 交付物
 1. [ ] 本计划文档：`docs/dev-plans/290a-librechat-pending-placeholder-bubble-fix-plan.md`。
