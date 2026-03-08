@@ -9,9 +9,9 @@ import (
 )
 
 const (
-	libreChatFormalEntryPrefix = "/app/assistant/librechat"
-	libreChatStaticPrefix      = "/assets/librechat-web"
-	libreChatWebUIIndexPath    = "assets/librechat-web/index.html"
+	libreChatFormalEntryPrefix  = "/app/assistant/librechat"
+	libreChatStaticPrefix       = "/assets/librechat-web"
+	libreChatWebUIIndexPath     = "assets/librechat-web/index.html"
 	libreChatRouterBasenameShim = `<script>(function(){var formal="/app/assistant/librechat";var base=document.querySelector("base");if(!base||typeof base.getAttribute!=="function"){return;}var original=base.getAttribute.bind(base);base.getAttribute=function(name){if(String(name).toLowerCase()==="href"){return formal;}return original(name);};window.__LIBRECHAT_FORMAL_BASENAME__=formal;})();</script>`
 )
 

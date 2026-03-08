@@ -8,11 +8,19 @@ import (
 	"time"
 
 	orgunitservices "github.com/jacksonlee411/Bugs-And-Blossoms/modules/orgunit/services"
+	"github.com/jacksonlee411/Bugs-And-Blossoms/pkg/authz"
 )
 
 type assistantActionHandlerSpec struct {
 	DryRunKey        string
 	CommitAdapterKey string
+}
+
+type assistantActionSecuritySpec struct {
+	AuthObject     string
+	AuthAction     string
+	RiskTier       string
+	RequiredChecks []string
 }
 
 type assistantActionSpec struct {
@@ -21,7 +29,7 @@ type assistantActionSpec struct {
 	CapabilityKey string
 	PlanTitle     string
 	PlanSummary   string
-	RiskTier      string
+	Security      assistantActionSecuritySpec
 	Handler       assistantActionHandlerSpec
 }
 
@@ -39,13 +47,31 @@ func (r assistantActionRegistryMap) Lookup(actionID string) (assistantActionSpec
 }
 
 var assistantDefaultActionRegistry = assistantActionRegistryMap{specs: map[string]assistantActionSpec{
+	assistantIntentPlanOnly: {
+		ID:            assistantIntentPlanOnly,
+		Version:       "v1",
+		CapabilityKey: "org.assistant_conversation.manage",
+		PlanTitle:     "只读规划",
+		PlanSummary:   "生成只读计划，不执行提交",
+		Security: assistantActionSecuritySpec{
+			AuthObject:     authz.ObjectOrgSetIDCapability,
+			AuthAction:     authz.ActionAdmin,
+			RiskTier:       "low",
+			RequiredChecks: []string{"strict_decode", "boundary_lint"},
+		},
+	},
 	assistantIntentCreateOrgUnit: {
 		ID:            assistantIntentCreateOrgUnit,
 		Version:       "v1",
 		CapabilityKey: "org.orgunit_create.field_policy",
 		PlanTitle:     "创建组织计划",
 		PlanSummary:   "在指定父组织下创建部门，提交前需要确认候选主键",
-		RiskTier:      "high",
+		Security: assistantActionSecuritySpec{
+			AuthObject:     authz.ObjectOrgSetIDCapability,
+			AuthAction:     authz.ActionAdmin,
+			RiskTier:       "high",
+			RequiredChecks: []string{"strict_decode", "boundary_lint", "candidate_confirmation", "dry_run"},
+		},
 		Handler: assistantActionHandlerSpec{
 			DryRunKey:        "orgunit_create_dry_run_v1",
 			CommitAdapterKey: "orgunit_create_v1",

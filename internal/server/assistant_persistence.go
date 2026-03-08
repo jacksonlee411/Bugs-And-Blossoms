@@ -236,18 +236,35 @@ func (s *assistantConversationService) createTurnPG(ctx context.Context, tenantI
 			confidence = 0.55
 		}
 	}
+	spec, ok := s.lookupActionSpec(intent.Action)
+	if !ok {
+		return nil, errAssistantUnsupportedIntent
+	}
 
 	plan := assistantBuildPlan(intent)
 	plan.ModelProvider = resolvedIntent.ProviderName
 	plan.ModelName = resolvedIntent.ModelName
 	plan.ModelRevision = resolvedIntent.ModelRevision
-	skillExecutionPlan, configDeltaPlan := assistantCompileIntentToPlans(intent, resolvedCandidateID)
+	skillExecutionPlan, configDeltaPlan := assistantCompileIntentToPlansWithSpec(intent, resolvedCandidateID, spec)
 	plan.SkillExecutionPlan = skillExecutionPlan
 	plan.ConfigDeltaPlan = configDeltaPlan
-	if _, ok := capabilityDefinitionForKey(plan.CapabilityKey); !ok {
-		return nil, errAssistantPlanBoundaryViolation
+	decision := assistantEvaluateActionGate(assistantActionGateInput{
+		Stage:      assistantActionStagePlan,
+		TenantID:   tenantID,
+		Principal:  principal,
+		Action:     spec,
+		Intent:     intent,
+		Candidates: candidates,
+		ResolvedID: resolvedCandidateID,
+		UserInput:  userInput,
+	})
+	if !decision.Allowed {
+		if errors.Is(decision.Error, errAssistantActionCapabilityUnregistered) {
+			return nil, errAssistantPlanBoundaryViolation
+		}
+		return nil, decision.Error
 	}
-	dryRun := assistantBuildDryRun(intent, candidates, resolvedCandidateID)
+	dryRun := assistantBuildDryRunFn(intent, candidates, resolvedCandidateID)
 	tempTurn := &assistantTurn{Intent: intent, Plan: plan, Candidates: candidates, ResolvedCandidateID: resolvedCandidateID, DryRun: dryRun}
 	if err := s.refreshTurnVersionTuple(ctx, tenantID, tempTurn); err != nil {
 		return nil, err
@@ -263,7 +280,7 @@ func (s *assistantConversationService) createTurnPG(ctx context.Context, tenantI
 		TurnID:              "turn_" + strings.ReplaceAll(newUUIDString(), "-", ""),
 		UserInput:           userInput,
 		State:               assistantStateValidated,
-		RiskTier:            assistantRiskTierForIntent(intent),
+		RiskTier:            strings.TrimSpace(spec.Security.RiskTier),
 		RequestID:           "assistant_" + strings.ReplaceAll(newUUIDString(), "-", ""),
 		TraceID:             strings.ReplaceAll(newUUIDString(), "-", ""),
 		PolicyVersion:       policyVersion,
@@ -580,6 +597,25 @@ func (s *assistantConversationService) applyConfirmTurn(conversation *assistantC
 	if assistantTurnRequiresIntentClarification(turn) {
 		return assistantTurnMutationResult{}, errAssistantConfirmationRequired
 	}
+	spec, ok := s.lookupActionSpec(turn.Intent.Action)
+	if !ok {
+		return assistantTurnMutationResult{}, errAssistantUnsupportedIntent
+	}
+	decision := assistantEvaluateActionGate(assistantActionGateInput{
+		Stage:      assistantActionStageConfirm,
+		TenantID:   conversation.TenantID,
+		Principal:  principal,
+		Action:     spec,
+		Intent:     turn.Intent,
+		Turn:       turn,
+		Candidates: turn.Candidates,
+		ResolvedID: firstNonEmpty(strings.TrimSpace(candidateID), strings.TrimSpace(turn.ResolvedCandidateID)),
+		DryRun:     &turn.DryRun,
+		UserInput:  turn.UserInput,
+	})
+	if !decision.Allowed {
+		return assistantApplyGateDecision(conversation, turn, principal, "confirm", decision)
+	}
 	if turn.AmbiguityCount > 1 {
 		if candidateID == "" {
 			return assistantTurnMutationResult{}, errAssistantConfirmationRequired
@@ -590,8 +626,8 @@ func (s *assistantConversationService) applyConfirmTurn(conversation *assistantC
 		turn.ResolvedCandidateID = candidateID
 		turn.ResolutionSource = assistantResolutionUserConfirmed
 	}
-	if turn.Intent.Action == assistantIntentCreateOrgUnit && turn.ResolvedCandidateID == "" {
-		return assistantTurnMutationResult{}, errAssistantConfirmationRequired
+	if turn.Intent.Action == assistantIntentCreateOrgUnit {
+		turn.DryRun = assistantBuildDryRunFn(turn.Intent, turn.Candidates, turn.ResolvedCandidateID)
 	}
 	if err := s.refreshTurnVersionTuple(context.Background(), conversation.TenantID, turn); err != nil {
 		return assistantTurnMutationResult{}, err
@@ -637,6 +673,13 @@ func (s *assistantConversationService) applyCommitTurn(ctx context.Context, conv
 	}
 	if assistantTurnRequiresIntentClarification(turn) {
 		return assistantTurnMutationResult{}, errAssistantConfirmationRequired
+	}
+	spec, ok := s.lookupActionSpec(turn.Intent.Action)
+	if !ok {
+		return assistantTurnMutationResult{}, errAssistantUnsupportedIntent
+	}
+	if strings.TrimSpace(spec.Handler.CommitAdapterKey) == "" {
+		return assistantTurnMutationResult{}, errAssistantUnsupportedIntent
 	}
 	if assistantTurnContractVersionMismatched(turn) {
 		fromState := turn.State
@@ -688,16 +731,27 @@ func (s *assistantConversationService) applyCommitTurn(ctx context.Context, conv
 		conversation.Transitions = append(conversation.Transitions, *transition)
 		return assistantTurnMutationResult{Transition: transition, PersistTurn: true}, errAssistantConfirmationRequired
 	}
-	spec, ok := s.lookupActionSpec(turn.Intent.Action)
-	if !ok {
-		return assistantTurnMutationResult{}, errAssistantUnsupportedIntent
-	}
 	if turn.ResolvedCandidateID == "" {
 		return assistantTurnMutationResult{}, errAssistantCandidateNotFound
 	}
 	resolved, ok := assistantFindCandidate(turn.Candidates, turn.ResolvedCandidateID)
 	if !ok {
 		return assistantTurnMutationResult{}, errAssistantCandidateNotFound
+	}
+	decision := assistantEvaluateActionGate(assistantActionGateInput{
+		Stage:      assistantActionStageCommit,
+		TenantID:   tenantID,
+		Principal:  principal,
+		Action:     spec,
+		Intent:     turn.Intent,
+		Turn:       turn,
+		Candidates: turn.Candidates,
+		ResolvedID: turn.ResolvedCandidateID,
+		DryRun:     &turn.DryRun,
+		UserInput:  turn.UserInput,
+	})
+	if !decision.Allowed {
+		return assistantApplyGateDecision(conversation, turn, principal, "commit", decision)
 	}
 	if err := s.validateTurnVersionTuple(ctx, tenantID, turn); err != nil {
 		fromState := turn.State
@@ -1437,6 +1491,16 @@ func assistantIdempotencyErrorPayload(err error) (status int, code string, ok bo
 		return http.StatusForbidden, errAssistantAuthSnapshotExpired.Error(), true
 	case errors.Is(err, errAssistantRoleDriftDetected):
 		return http.StatusForbidden, errAssistantRoleDriftDetected.Error(), true
+	case errors.Is(err, errAssistantActionSpecMissing):
+		return http.StatusUnprocessableEntity, errAssistantActionSpecMissing.Error(), true
+	case errors.Is(err, errAssistantActionCapabilityUnregistered):
+		return http.StatusUnprocessableEntity, errAssistantActionCapabilityUnregistered.Error(), true
+	case errors.Is(err, errAssistantActionAuthzDenied):
+		return http.StatusForbidden, errAssistantActionAuthzDenied.Error(), true
+	case errors.Is(err, errAssistantActionRiskGateDenied):
+		return http.StatusConflict, errAssistantActionRiskGateDenied.Error(), true
+	case errors.Is(err, errAssistantActionRequiredCheckFailed):
+		return http.StatusConflict, errAssistantActionRequiredCheckFailed.Error(), true
 	case errors.Is(err, errAssistantUnsupportedIntent):
 		return http.StatusUnprocessableEntity, errAssistantUnsupportedIntent.Error(), true
 	case errors.Is(err, errAssistantServiceMissing):
@@ -1481,6 +1545,16 @@ func assistantErrorFromIdempotencyCode(code string) error {
 		return errAssistantAuthSnapshotExpired
 	case errAssistantRoleDriftDetected.Error():
 		return errAssistantRoleDriftDetected
+	case errAssistantActionSpecMissing.Error():
+		return errAssistantActionSpecMissing
+	case errAssistantActionCapabilityUnregistered.Error():
+		return errAssistantActionCapabilityUnregistered
+	case errAssistantActionAuthzDenied.Error():
+		return errAssistantActionAuthzDenied
+	case errAssistantActionRiskGateDenied.Error():
+		return errAssistantActionRiskGateDenied
+	case errAssistantActionRequiredCheckFailed.Error():
+		return errAssistantActionRequiredCheckFailed
 	case errAssistantUnsupportedIntent.Error():
 		return errAssistantUnsupportedIntent
 	case errAssistantServiceMissing.Error():

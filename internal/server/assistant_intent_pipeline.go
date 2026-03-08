@@ -10,6 +10,7 @@ var (
 	assistantAnnotateIntentPlanFn = assistantAnnotateIntentPlan
 	assistantCanonicalHashFn      = assistantCanonicalHash
 	assistantPlanHashFn           = assistantPlanHash
+	assistantBuildDryRunFn        = assistantBuildDryRun
 )
 
 func (s *assistantConversationService) resolveIntent(ctx context.Context, tenantID string, conversationID string, userInput string) (assistantResolveIntentResult, error) {
@@ -74,11 +75,22 @@ func assistantResolveIntentLocally(userInput string) (assistantResolveIntentResu
 }
 
 func assistantCompileIntentToPlans(intent assistantIntentSpec, resolvedCandidateID string) (assistantSkillExecutionPlan, assistantConfigDeltaPlan) {
+	spec, _ := assistantLookupDefaultActionSpec(intent.Action)
+	return assistantCompileIntentToPlansWithSpec(intent, resolvedCandidateID, spec)
+}
+
+func assistantCompileIntentToPlansWithSpec(intent assistantIntentSpec, resolvedCandidateID string, spec assistantActionSpec) (assistantSkillExecutionPlan, assistantConfigDeltaPlan) {
 	skill := assistantSkillExecutionPlan{
 		SelectedSkills: []string{"assistant.plan_only"},
 		ExecutionOrder: []string{"assistant.plan_only"},
-		RiskTier:       assistantRiskTierForIntent(intent),
-		RequiredChecks: []string{"strict_decode", "boundary_lint"},
+		RiskTier:       strings.TrimSpace(spec.Security.RiskTier),
+		RequiredChecks: append([]string(nil), spec.Security.RequiredChecks...),
+	}
+	if skill.RiskTier == "" {
+		skill.RiskTier = "low"
+	}
+	if len(skill.RequiredChecks) == 0 {
+		skill.RequiredChecks = []string{"strict_decode", "boundary_lint"}
 	}
 	delta := assistantConfigDeltaPlan{
 		CapabilityKey: "org.orgunit_create.field_policy",
@@ -87,7 +99,6 @@ func assistantCompileIntentToPlans(intent assistantIntentSpec, resolvedCandidate
 	if intent.Action == assistantIntentCreateOrgUnit {
 		skill.SelectedSkills = []string{"org.orgunit_create"}
 		skill.ExecutionOrder = []string{"org.orgunit_create"}
-		skill.RequiredChecks = []string{"strict_decode", "boundary_lint", "candidate_confirmation", "dry_run"}
 		delta.Changes = append(delta.Changes,
 			assistantConfigChange{Field: "name", After: intent.EntityName},
 			assistantConfigChange{Field: "effective_date", After: intent.EffectiveDate},

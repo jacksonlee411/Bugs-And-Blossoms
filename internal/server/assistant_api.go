@@ -32,6 +32,7 @@ const (
 	assistantResolutionUserConfirmed = "user_confirmed"
 
 	assistantIntentCreateOrgUnit = "create_orgunit"
+	assistantIntentPlanOnly      = "plan_only"
 )
 
 var (
@@ -439,6 +440,16 @@ func handleAssistantConversationTurnsAPI(w http.ResponseWriter, r *http.Request,
 			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusInternalServerError, "ai_model_secret_missing", "ai model secret missing")
 		case errors.Is(err, errAssistantPlanDeterminismViolation):
 			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusConflict, "ai_plan_determinism_violation", "ai plan determinism violation")
+		case errors.Is(err, errAssistantUnsupportedIntent):
+			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusUnprocessableEntity, "assistant_intent_unsupported", "assistant intent unsupported")
+		case errors.Is(err, errAssistantActionSpecMissing):
+			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusUnprocessableEntity, errAssistantActionSpecMissing.Error(), "assistant action spec missing")
+		case errors.Is(err, errAssistantActionAuthzDenied):
+			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusForbidden, errAssistantActionAuthzDenied.Error(), "assistant action authz denied")
+		case errors.Is(err, errAssistantActionRiskGateDenied):
+			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusConflict, errAssistantActionRiskGateDenied.Error(), "assistant action risk gate denied")
+		case errors.Is(err, errAssistantActionRequiredCheckFailed):
+			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusConflict, errAssistantActionRequiredCheckFailed.Error(), "assistant action required check failed")
 		default:
 			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusInternalServerError, "assistant_turn_create_failed", "assistant turn create failed")
 		}
@@ -509,6 +520,12 @@ func handleAssistantTurnActionAPI(w http.ResponseWriter, r *http.Request, svc *a
 				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusConflict, "conversation_state_invalid", "conversation state invalid")
 			case errors.Is(err, errAssistantCandidateNotFound):
 				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusUnprocessableEntity, "assistant_candidate_not_found", "assistant candidate not found")
+			case errors.Is(err, errAssistantUnsupportedIntent):
+				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusUnprocessableEntity, "assistant_intent_unsupported", "assistant intent unsupported")
+			case errors.Is(err, errAssistantActionAuthzDenied):
+				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusForbidden, errAssistantActionAuthzDenied.Error(), "assistant action authz denied")
+			case errors.Is(err, errAssistantActionRiskGateDenied):
+				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusConflict, errAssistantActionRiskGateDenied.Error(), "assistant action risk gate denied")
 			default:
 				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusInternalServerError, "assistant_turn_confirm_failed", "assistant turn confirm failed")
 			}
@@ -551,6 +568,12 @@ func handleAssistantTurnActionAPI(w http.ResponseWriter, r *http.Request, svc *a
 				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusInternalServerError, "orgunit_service_missing", "orgunit service missing")
 			case errors.Is(err, errAssistantCandidateNotFound):
 				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusConflict, "conversation_confirmation_required", "conversation confirmation required")
+			case errors.Is(err, errAssistantActionAuthzDenied):
+				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusForbidden, errAssistantActionAuthzDenied.Error(), "assistant action authz denied")
+			case errors.Is(err, errAssistantActionRiskGateDenied):
+				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusConflict, errAssistantActionRiskGateDenied.Error(), "assistant action risk gate denied")
+			case errors.Is(err, errAssistantActionRequiredCheckFailed):
+				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusConflict, errAssistantActionRequiredCheckFailed.Error(), "assistant action required check failed")
 			default:
 				if status, code, message, ok := assistantResolveCommitError(err); ok {
 					routing.WriteError(w, r, routing.RouteClassInternalAPI, status, code, message)
@@ -670,6 +693,11 @@ var (
 	errAssistantConversationCursorInvalid         = errors.New("assistant_conversation_cursor_invalid")
 	errAssistantIdempotencyKeyConflict            = errors.New("assistant_idempotency_key_conflict")
 	errAssistantRequestInProgress                 = errors.New("assistant_request_in_progress")
+	errAssistantActionSpecMissing                 = errors.New("ai_action_spec_missing")
+	errAssistantActionCapabilityUnregistered      = errors.New("ai_capability_unregistered")
+	errAssistantActionAuthzDenied                 = errors.New("ai_action_authz_denied")
+	errAssistantActionRiskGateDenied              = errors.New("ai_action_risk_gate_denied")
+	errAssistantActionRequiredCheckFailed         = errors.New("ai_action_required_check_failed")
 	errAssistantTaskNotFound                      = errors.New("assistant_task_not_found")
 	errAssistantTaskStateInvalid                  = errors.New("assistant_task_state_invalid")
 	errAssistantTaskCancelNotAllowed              = errors.New("assistant_task_cancel_not_allowed")
@@ -871,6 +899,10 @@ func (s *assistantConversationService) createTurn(ctx context.Context, tenantID 
 			confidence = 0.55
 		}
 	}
+	spec, ok := s.lookupActionSpec(intent.Action)
+	if !ok {
+		return nil, errAssistantUnsupportedIntent
+	}
 
 	plan := assistantBuildPlan(intent)
 	turnCreatedAt := time.Now().UTC()
@@ -878,13 +910,26 @@ func (s *assistantConversationService) createTurn(ctx context.Context, tenantID 
 	plan.ModelProvider = resolvedIntent.ProviderName
 	plan.ModelName = resolvedIntent.ModelName
 	plan.ModelRevision = resolvedIntent.ModelRevision
-	skillExecutionPlan, configDeltaPlan := assistantCompileIntentToPlans(intent, resolvedCandidateID)
+	skillExecutionPlan, configDeltaPlan := assistantCompileIntentToPlansWithSpec(intent, resolvedCandidateID, spec)
 	plan.SkillExecutionPlan = skillExecutionPlan
 	plan.ConfigDeltaPlan = configDeltaPlan
-	if _, ok := capabilityDefinitionForKey(plan.CapabilityKey); !ok {
-		return nil, errAssistantPlanBoundaryViolation
+	decision := assistantEvaluateActionGate(assistantActionGateInput{
+		Stage:      assistantActionStagePlan,
+		TenantID:   tenantID,
+		Principal:  principal,
+		Action:     spec,
+		Intent:     intent,
+		Candidates: candidates,
+		ResolvedID: resolvedCandidateID,
+		UserInput:  userInput,
+	})
+	if !decision.Allowed {
+		if errors.Is(decision.Error, errAssistantActionCapabilityUnregistered) {
+			return nil, errAssistantPlanBoundaryViolation
+		}
+		return nil, decision.Error
 	}
-	dryRun := assistantBuildDryRun(intent, candidates, resolvedCandidateID)
+	dryRun := assistantBuildDryRunFn(intent, candidates, resolvedCandidateID)
 	tempTurn := &assistantTurn{Intent: intent, Plan: plan, Candidates: candidates, ResolvedCandidateID: resolvedCandidateID, DryRun: dryRun}
 	if err := s.refreshTurnVersionTuple(ctx, tenantID, tempTurn); err != nil {
 		return nil, err
@@ -900,7 +945,7 @@ func (s *assistantConversationService) createTurn(ctx context.Context, tenantID 
 		TurnID:              "turn_" + strings.ReplaceAll(uuid.NewString(), "-", ""),
 		UserInput:           userInput,
 		State:               assistantStateValidated,
-		RiskTier:            assistantRiskTierForIntent(intent),
+		RiskTier:            strings.TrimSpace(spec.Security.RiskTier),
 		RequestID:           "assistant_" + strings.ReplaceAll(uuid.NewString(), "-", ""),
 		TraceID:             strings.ReplaceAll(uuid.NewString(), "-", ""),
 		PolicyVersion:       policyVersion,
@@ -1112,7 +1157,7 @@ func (s *assistantConversationService) resolveCandidates(ctx context.Context, te
 
 func assistantRiskTierForIntent(intent assistantIntentSpec) string {
 	if spec, ok := assistantLookupDefaultActionSpec(intent.Action); ok {
-		if riskTier := strings.TrimSpace(spec.RiskTier); riskTier != "" {
+		if riskTier := strings.TrimSpace(spec.Security.RiskTier); riskTier != "" {
 			return riskTier
 		}
 	}
