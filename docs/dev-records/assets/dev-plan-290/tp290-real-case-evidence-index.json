@@ -1,7 +1,7 @@
 {
   "plan": "DEV-PLAN-290",
   "status": "in_progress",
-  "updated_at": "2026-03-08 19:24 CST",
+  "updated_at": "2026-03-08 20:42 CST",
   "formal_entry": "/app/assistant/librechat",
   "aligned_with": [
     "DEV-PLAN-260",
@@ -122,6 +122,7 @@
   ],
   "notes": [
     "2026-03-08 首轮 tp290 实跑结果：Case 1 通过；Case 2/3/4 命中 pending placeholder bubble（binding_key=::::）导致 stopline 未通过。",
+    "2026-03-08 20:42 CST 已按最新代码多轮重跑 tp290（命令均为 tests/tp290-librechat-real-case-matrix.spec.js --workers=1 --trace on）；结果维持不变：Case 2/3/4 仍存在 pending placeholder bubble。",
     "Case 通过必须同时满足 DEV-PLAN-266 共通 stopline 与 DEV-PLAN-280 硬门槛。",
     "若出现双入口、双回复、外挂回执或前端重算业务 FSM，该轮证据直接作废。"
   ]

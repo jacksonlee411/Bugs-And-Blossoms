@@ -1,6 +1,6 @@
 # DEV-PLAN-290：260-M5 真实 Case 验收与证据固化专项
 
-**状态**: 进行中（2026-03-08 CST；已完成与 `271-S5` 和 `280` 主计划的验收口径对齐，`289` 与 `292` 已完成，`288` 已在默认 Playwright 基线通过 `tp288-e2e-001/002`；`tp290-e2e-001~004` 首轮已执行并落盘证据，当前结论为 Case 1 通过、Case 2/3/4 因 pending placeholder bubble 未通过 stopline）
+**状态**: 进行中（2026-03-08 CST；已完成与 `271-S5` 和 `280` 主计划的验收口径对齐，`289` 与 `292` 已完成，`288` 已在默认 Playwright 基线通过 `tp288-e2e-001/002`；`tp290-e2e-001~004` 已多轮执行并刷新证据，当前结论仍为 Case 1 通过、Case 2/3/4 因 pending placeholder bubble 未通过 stopline）
 
 ## 1. 背景
 1. [ ] `DEV-PLAN-260` 的最终通过依赖 Case 1~4 在真实入口完整闭环，且必须同时满足 `266` 共通 stopline。
@@ -39,6 +39,7 @@
 8. [X] 证据固化：每个 Case 按 4.2 节固定命名产出截图、DOM 断言、请求日志、trace 与阶段断言。
 9. [ ] 执行日志：本轮真实验收仅写入 `docs/dev-records/dev-plan-290-execution-log.md`；`dev-plan-260` 仅保留“引用与摘要”。
 10. [X] 首轮实跑已完成并登记：命令 `pnpm --dir /home/lee/Projects/Bugs-And-Blossoms/e2e exec playwright test tests/tp290-librechat-real-case-matrix.spec.js --workers=1 --trace on`；证据见 `docs/dev-records/assets/dev-plan-290/`，结论见执行日志。
+11. [X] 已按同口径多轮重跑并覆盖证据资产；截至 `2026-03-08 20:42 CST`，Case 2/3/4 仍命中 pending placeholder bubble，`290` 继续保持进行中。
 
 ### 4.1 Case Matrix v1（冻结输入向量）
 > 本矩阵承接 `DEV-PLAN-260` 第 2.2 节 Case 1~4，作为 `290` 的唯一复跑口径。

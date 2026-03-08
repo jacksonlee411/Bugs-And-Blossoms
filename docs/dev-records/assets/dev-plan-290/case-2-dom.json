@@ -7,7 +7,7 @@
       "conversation_id": "conv_tp290_2",
       "turn_id": "turn_tp290_2",
       "request_id": "req_tp290_2",
-      "message_id": "bb4c3ec0-c95f-4179-a4fd-fcb3e3b4bc53_",
+      "message_id": "1d89f9ba-b479-4be8-a75a-5bae781fc5b5_",
       "text": "Case 2 提交成功。 将在 AI治理办公室 下新建 人力资源部2，生效日期 2026-01-01。 org_code: AI2902 parent_org_code: FLOWER-A effective_date: 2026-01-01 event_type: orgunit_created"
     },
     {
@@ -15,7 +15,7 @@
       "conversation_id": null,
       "turn_id": null,
       "request_id": null,
-      "message_id": "bb4c3ec0-c95f-4179-a4fd-fcb3e3b4bc53_",
+      "message_id": "1d89f9ba-b479-4be8-a75a-5bae781fc5b5_",
       "text": "Processing... Loading..."
     }
   ],

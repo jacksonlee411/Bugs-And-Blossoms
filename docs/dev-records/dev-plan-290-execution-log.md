@@ -1,6 +1,6 @@
 # DEV-PLAN-290 执行日志（260-M5 真实 Case 验收与证据固化）
 
-**状态**: 实施中（2026-03-08 CST；`289/292` 已完成，`288` 已完成默认基线复跑并通过 `tp288-e2e-001/002`；`tp290-e2e-001~004` 已完成首轮实跑与证据落盘，当前结论为 Case 1 通过、Case 2/3/4 未通过 `266/280` stopline）
+**状态**: 实施中（2026-03-08 CST；`289/292` 已完成，`288` 已完成默认基线复跑并通过 `tp288-e2e-001/002`；`tp290-e2e-001~004` 已完成多轮实跑与证据刷新，当前结论仍为 Case 1 通过、Case 2/3/4 未通过 `266/280` stopline）
 
 ## 1. 执行范围（与 290 对齐）
 1. [X] 按 `Case Matrix v1` 执行 Case 1~4 真实验收（固定输入向量，不临场改词）。
@@ -18,6 +18,7 @@
 2. [X] 2026-03-08：已完成 `290` 文档与 `271/280` 对齐改写，并把 `280` 硬门槛写入 `290` 验收条款。
 3. [X] 2026-03-08：已创建 `docs/dev-records/assets/dev-plan-290/`，并落地 `tp290-case-matrix-v1.md` 与 `tp290-real-case-evidence-index.json`。
 4. [X] 2026-03-08 首轮结果：Case 1 `passed`；Case 2/3/4 因 `pending placeholder bubble (binding_key=::::)` 导致 `single_assistant_bubble=false` 与 `official_message_tree_only=false`，当前不得判定 `290` 通过。
+5. [X] 2026-03-08 20:42 CST：已按最新代码多轮重跑 `tp290` 并覆盖证据资产，结论保持不变：Case 2/3/4 仍存在 `pending placeholder bubble (binding_key=::::)`。
 
 ## 4. 命令与结果
 1. [X] 前置验证命令：`pnpm --dir /home/lee/Projects/Bugs-And-Blossoms/e2e exec playwright test tests/tp288-librechat-real-entry-evidence.spec.js --grep "tp288-e2e-002"`，结果通过。
@@ -25,6 +26,7 @@
 3. [X] 首轮命令：`pnpm --dir /home/lee/Projects/Bugs-And-Blossoms/e2e exec playwright test tests/tp290-librechat-real-case-matrix.spec.js --workers=1 --trace on`，结果 `4 passed`（测试执行通过，但按 phase 断言 Case 2/3/4 未满足 stopline）。
 4. [X] 用例发现命令：`pnpm --dir /home/lee/Projects/Bugs-And-Blossoms/e2e exec playwright test --list tests/tp290-librechat-real-case-matrix.spec.js`，结果命中 `tp290-e2e-001~004`。
 5. [X] 文档门禁命令：`make check doc`，结果 `[doc] OK`（2026-03-08 CST）。
+6. [X] 多轮复跑命令（同口径）：`pnpm --dir /home/lee/Projects/Bugs-And-Blossoms/e2e exec playwright test tests/tp290-librechat-real-case-matrix.spec.js --workers=1 --trace on`，结果均为 `4 passed`（测试执行通过，但 phase 断言 Case 2/3/4 仍未满足 stopline）。
 
 ## 5. 证据资产索引
 1. [X] 证据根目录：`docs/dev-records/assets/dev-plan-290/`
@@ -37,6 +39,11 @@
 3. [X] 总索引：`docs/dev-records/assets/dev-plan-290/tp290-real-case-evidence-index.json`
 4. [X] 矩阵副本：`docs/dev-records/assets/dev-plan-290/tp290-case-matrix-v1.md`
 5. [X] 首轮证据覆盖状态：
+   - Case 1：`passed`
+   - Case 2：`failed`（pending placeholder bubble）
+   - Case 3：`failed`（pending placeholder bubble）
+   - Case 4：`failed`（pending placeholder bubble）
+6. [X] 最新复跑证据覆盖状态（2026-03-08 20:42 CST）：
    - Case 1：`passed`
    - Case 2：`failed`（pending placeholder bubble）
    - Case 3：`failed`（pending placeholder bubble）

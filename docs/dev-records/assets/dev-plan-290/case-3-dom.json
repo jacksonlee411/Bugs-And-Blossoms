@@ -7,7 +7,7 @@
       "conversation_id": "conv_tp290_3",
       "turn_id": "turn_tp290_3",
       "request_id": "req_tp290_3",
-      "message_id": "47f109f0-b31a-493b-a3aa-7a90e0840be5_",
+      "message_id": "89abc5cd-072a-4cba-a011-22f9084474f2_",
       "text": "Case 3 提交成功。 补全完成：生效日期 2026-03-25。 org_code: AI2903 parent_org_code: FLOWER-A effective_date: 2026-03-25 event_type: orgunit_created"
     },
     {
@@ -15,7 +15,7 @@
       "conversation_id": null,
       "turn_id": null,
       "request_id": null,
-      "message_id": "47f109f0-b31a-493b-a3aa-7a90e0840be5_",
+      "message_id": "89abc5cd-072a-4cba-a011-22f9084474f2_",
       "text": "Processing... Loading..."
     }
   ],
