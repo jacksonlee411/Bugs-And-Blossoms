@@ -381,12 +381,12 @@ modules/{module}/
 - DEV-PLAN-239A 执行日志：`docs/archive/dev-records/dev-plan-239a-execution-log.md`
 - DEV-PLAN-239B【归档】：239A 直接验证用例测试报告与实现缺口（旧桥接阶段历史报告）：`docs/archive/dev-plans/239b-239a-direct-validation-report-and-implementation-gaps.md`
 - DEV-PLAN-239D：Ubuntu 本地开发环境搭建方案（Clone 后首日）：`docs/dev-plans/239d-ubuntu-local-development-environment-bootstrap-plan.md`
-- DEV-PLAN-240：Assistant 组织架构事务编排现代化方案（去写死 + Skill/MCP/LibreChat 对齐）：`docs/dev-plans/240-assistant-org-transaction-orchestration-modernization-plan.md`
+- DEV-PLAN-240：Assistant 组织架构事务编排现代化方案（去写死 + Skill/知识/LibreChat 对齐）：`docs/dev-plans/240-assistant-org-transaction-orchestration-modernization-plan.md`
 - DEV-PLAN-240A：Assistant ActionRegistry 与 CommitAdapter 落地计划（承接 240-M2）：`docs/dev-plans/240a-assistant-action-registry-and-commit-adapter-plan.md`
 - DEV-PLAN-240B：Assistant 状态机统一与内存/PG 路径收敛计划（承接 240-M3）：`docs/dev-plans/240b-assistant-state-machine-unification-plan.md`
 - DEV-PLAN-240C：Assistant ActionInterceptor 与风险门左移计划（承接 240-M4）：`docs/dev-plans/240c-assistant-action-interceptor-and-risk-gate-plan.md`
 - DEV-PLAN-240D：Assistant 耐久执行与人工接管优先计划（承接 240-M5）：`docs/dev-plans/240d-assistant-durable-execution-and-manual-takeover-plan.md`
-- DEV-PLAN-240E：Assistant MCP 写能力准入与治理计划（承接 240-M6）：`docs/dev-plans/240e-assistant-mcp-write-capability-governance-plan.md`
+- DEV-PLAN-240E：Assistant 内部知识包与只读 Resolver 方案（承接 240-M6）：`docs/dev-plans/240e-assistant-internal-knowledge-pack-and-readonly-resolver-plan.md`
 - DEV-PLAN-240F：Assistant 与 280 主链路对齐封板回归计划（承接 240-M7）：`docs/dev-plans/240f-assistant-280-aligned-closure-and-regression-plan.md`
 - DEV-PLAN-250：Go 网关 + PostgreSQL RAG/鉴权接管实施方案（覆盖阶段一至阶段二）：`docs/dev-plans/250-go-gateway-rag-and-authz-phase1-2-plan.md`
 - DEV-PLAN-260：AI对话真实业务闭环主计划（多轮补全 / 候选确认 / 提交回执）：`docs/dev-plans/260-librechat-conversation-first-auto-execution-plan.md`

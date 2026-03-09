@@ -25,14 +25,14 @@
 3. [ ] **计划编译器未插件化**：`assistantCompileIntentToPlans` 仍以 if/switch 方式写死 skill 与 delta 生成，难以实现多领域复用（`internal/server/assistant_intent_pipeline.go:47`）。
 4. [ ] **内存实现与 PG 实现双处维护**：`commitTurn` 与 `applyCommitTurn` 逻辑重复，策略变更存在双改与漂移风险（`internal/server/assistant_api.go:908`、`internal/server/assistant_persistence.go:543`）。
 5. [ ] **同步直提交流程抗抖动不足**：执行阶段仍偏同步串行，遇到模型/网络抖动时缺少标准化“耐久重试+人工接管”路径。
-6. [ ] **外部能力接入边界未形成统一事务抽象**：Skill、MCP、LibreChat 能力已具备基础接入，但与会话事务状态机尚未统一成一个“可声明、可编排、可回放”的模型。
+6. [ ] **知识与上下文主链未形成统一抽象**：Skill、内部知识、运行时承载能力虽已部分具备，但与会话事务状态机尚未统一成一个“可声明、可裁剪、可回放”的模型。
 
 ### 2.2 根因归纳
 1. [ ] 以“先跑通单场景”为主的实现策略，未提前抽象 Intent->Plan->Action->Tx 的稳定边界。
 2. [ ] 配置、技能、事务编排分层不彻底，导致变更时跨层修改。
 3. [ ] 事务耐久化与异步编排能力虽已有基础（见 DEV-PLAN-225），但尚未完全承接组织操作主链路。
 
-## 3. 行业先进模式调研（Skill / MCP / LibreChat / Durable Workflow）
+## 3. 行业先进模式调研（Skill / Internal Knowledge / LibreChat / Durable Workflow）
 
 ### 3.1 Skill-First（声明式技能编排）
 1. [ ] 将“可执行动作”收敛为 Skill Manifest（输入/输出 schema、风险等级、允许工具、前置检查）。
@@ -40,17 +40,17 @@
 3. [ ] 提交前执行 Skill Gate（strict decode、policy check、idempotency check、dry-run explain）。
 4. [ ] 优势：动作扩展主要走“注册+契约”，而非“改核心分支代码”。
 
-### 3.2 MCP（Model Context Protocol）模式
-1. [ ] MCP 官方架构强调 Host-Client-Server 解耦，工具/资源/提示可按能力动态注册。
-2. [ ] Tool 调用可采用 Human-in-the-loop 审批，适配高风险组织变更操作。
-3. [ ] Resource 由应用侧控制读取（非模型任意写入），适合“只读上下文 + 受控提交”。
-4. [ ] 新增的 MCP Tasks 能力可用于长耗时任务和异步状态追踪，契合事务编排。
+### 3.2 Internal Knowledge / Readonly Resolver 模式
+1. [ ] 内部知识应先被整理为结构化知识包，再按动作与阶段裁剪给 AI 助手，而不是直接把原始文档全文注入运行时。
+2. [ ] 动态知识应通过只读 Resolver 提供，适合候选解释、字段约束、只读配置与错误解释等场景。
+3. [ ] 知识层只负责解释、补全、确认与反馈指导，不直接承担业务写入。
+4. [ ] 知识版本与上下文装配结果应可冻结、可审计、可随会话/任务回放。
 
 ### 3.3 LibreChat 组合模式
-1. [ ] LibreChat 已支持 Agents 与 MCP Servers，可在 `librechat.yaml` 中声明 `mcpServers`、`mcpSettings`、`allowedDomains`、`agents`。
+1. [ ] LibreChat 已支持 Agents、Prompts、Context Files、Knowledge Files 等知识承载能力，可作为本仓知识与上下文的承载面。
 2. [ ] 按 `280` 新方向，运行态维持“上游 runtime 复用 + 本仓 Web UI 源码纳管”：上游继续负责 runtime，本仓接管 send/store/render 控制点。
 3. [ ] `240` 只定义“交易裁决与提交”主链，不重定义 UI 承载细节；UI 侧仅允许消费后端 DTO，不得在 helper/adapter 内重算事务语义。
-4. [ ] 业务写入仍必须回归本仓 One Door；LibreChat/MCP 不得形成第二写入口。
+4. [ ] 业务写入仍必须回归本仓 One Door；知识承载层不得形成第二执行入口。
 
 ### 3.4 Durable Workflow（Temporal/Saga/Outbox）
 1. [ ] Durable Execution 模式强调“事件历史 + 可恢复重试 +确定性回放”，适合高价值事务。
@@ -60,7 +60,7 @@
 
 ### 3.5 调研结论（本仓适配）
 1. [ ] **短期最优**：Skill Registry + Tx 编排器 + One Door Commit Adapter。
-2. [ ] **中期增强**：MCP Tool 只读增强 + 人工确认网关 + Task 异步执行。
+2. [ ] **中期增强**：内部知识包 + 只读 Resolver + Task 异步执行。
 3. [ ] **长期方向**：统一 Conversation/Task/Workflow 事务模型，逐步消除硬编码动作分支。
 
 ### 3.6 蓝图采纳结论（2026-03-04）
@@ -68,7 +68,7 @@
 2. [X] 采用“条件采纳”：不直接引入多写入口（如 DB 动态回写注册），初期仅允许代码内注册表或只读配置源。
 3. [X] 权鉴语义对齐本仓现行模型：subject/domain/object/action（Casbin），禁止仅以 `UserID` 直判替代既有授权口径。
 4. [X] `CommitPath` 采用受控 Adapter 注册（typed key + allowlist），禁止字符串直路由导致第二写入口风险。
-5. [X] MCP 外部能力默认只读接入；涉及业务写入的能力必须显式映射 capability_key 并通过确认/审计门。
+5. [X] 知识与上下文能力必须由本仓后端裁剪、冻结并纳入审计；不得形成脱离事实源的第二知识主源。
 
 ### 3.7 与 DEV-PLAN-280 的对齐结论（2026-03-08）
 1. [X] 前端承载面收口、源码级发送/渲染接管由 `280/283/284` 承接；`240` 不重复定义 UI 方案。
@@ -81,7 +81,7 @@
 ### 4.1 核心目标
 1. [ ] 去除组织架构操作在核心流程中的硬编码分支，收敛到声明式动作注册。
 2. [ ] 建立 Assistant 事务编排层（Plan/Confirm/Commit/Task）并支持可恢复执行。
-3. [ ] 对齐 Skill/MCP/LibreChat 能力模型，形成统一的扩展与安全治理口径（runtime 复用、后端裁决、前端降权）。
+3. [ ] 对齐 Skill/内部知识/LibreChat 能力模型，形成统一的知识与执行治理口径（runtime 复用、后端裁决、前端降权）。
 4. [ ] 保持 AI/UI 同构提交与审计一致性，禁止产生第二写入口。
 5. [ ] 明确与 `280/284` 的职责边界：后端只输出冻结 DTO 与状态机事实，不把业务推进逻辑回灌到前端 helper。
 6. [ ] 对齐 `223/260`：确保 `phase + 事务元数据` 可持久化、可恢复、可回放。
@@ -110,13 +110,13 @@ graph TD
     A --> W[submit_*_event + Projection]
     W --> S
 
-    M[MCP Servers] --> P
-    L[LibreChat Agents] --> P
+    K[Internal Knowledge Pack] --> P
+    L[Readonly Resolver] --> P
 ```
 
 ### 5.1 关键分层
 1. [ ] **Planner 层**：只产出声明式 ActionPlan（不直接拼写业务请求结构）。
-2. [ ] **Registry 层**：Skill/Capability/MCP 工具白名单及版本快照主源。
+2. [ ] **Registry 层**：Skill/Capability/Knowledge Pack 版本快照主源。
 3. [ ] **Orchestrator 层**：统一状态机、幂等键、重试与补偿策略。
 4. [ ] **Commit Adapter 层**：唯一对接 One Door 的执行器。
 5. [ ] **Snapshot/DTO 层**：从持久化事实源重建 `phase/missing_fields/candidates/pending_draft_summary/selected_candidate_id/commit_reply/error_code`，供 `260/284` 消费。
@@ -278,7 +278,7 @@ const (
 4. [X] **M3（编排统一）**：统一内存与 PG 路径状态迁移；把 confirm/commit/task 三段收敛为同一状态机实现。
 5. [ ] **M4（权鉴与风控左移）**：落地 `ActionInterceptor`，将 `auth_object/auth_action/risk_tier/required_checks` 固化到执行前 gate。
 6. [ ] **M5（耐久执行 + 补偿）**：提交链路默认走任务编排（receipt + 异步执行）；高风险组织操作在初期默认“人工接管优先”，`partial failure` 先落 `MANUAL_TAKEOVER_REQUIRED`，`auto-saga` 按白名单渐进启用。
-7. [ ] **M6（MCP/LibreChat 对齐）**：将 MCP 调用接入统一风控/审批门，完成“默认只读 + 显式写能力注册 + 审计门”。
+7. [ ] **M6（内部知识与上下文收口）**：建立知识包、只读 Resolver 与上下文装配主链，并完成反馈语义收口。
 8. [ ] **M7（280 方向封板）**：在 `283/284` 主链路下完成 AI/UI 同构回归，确保无前端重算、无旧桥接职责回流。
 
 ### 7.1 M0-M1 执行记录（2026-03-07 CST）
@@ -293,7 +293,7 @@ const (
 2. [X] `DEV-PLAN-240B`（承接 `M3`）：状态机统一与内存/PG 路径收敛。
 3. [X] `DEV-PLAN-240C`（承接 `M4`）：ActionInterceptor 与风险门左移。
 4. [X] `DEV-PLAN-240D`（承接 `M5`）：耐久执行与人工接管优先。
-5. [X] `DEV-PLAN-240E`（承接 `M6`）：MCP 写能力准入与治理。
+5. [X] `DEV-PLAN-240E`（承接 `M6`）：内部知识包与只读 Resolver 方案。
 6. [X] `DEV-PLAN-240F`（承接 `M7`）：与 `280/284/260` 对齐封板回归。
 
 ## 8. 门禁与验证（SSOT 引用）
@@ -320,14 +320,14 @@ const (
 5. [ ] Commit Adapter 在写门前必须完成 `version_tuple` OCC 校验；校验失败返回稳定错误码并阻断提交。
 6. [ ] 高风险动作 `partial failure` 默认进入 `MANUAL_TAKEOVER_REQUIRED`，并生成可追踪人工接管信息。
 7. [ ] 任务执行支持断点恢复与可审计重试，不出现“已受理但不可追踪”状态。
-8. [ ] MCP/LibreChat 接入不突破 One Door 与租户边界，外部写能力必须显式注册并受审批门控制。
-9. [ ] 关键失败路径（超时/版本漂移/审批拒绝/外部工具失败/补偿失败）均有稳定错误码与人工接管入口。
+8. [ ] 知识与上下文接入不突破 One Door 与租户边界，且不得形成第二知识主源。
+9. [ ] 关键失败路径（超时/版本漂移/知识装配失败/Resolver 查询失败/补偿失败）均有稳定错误码与人工接管入口。
 10. [ ] `260` DTO 字段语义保持单主源：后端可稳定输出 `phase/missing_fields/candidates/pending_draft_summary/selected_candidate_id/commit_reply/error_code`，且能从持久化事实源重建。
 11. [ ] 在 `283/284` 正式链路下，前端不再承担事务阶段推进、候选裁决与提交约束；若出现前端重算则本计划验收失败。
 
 ## 10. 风险与缓解
 1. [ ] **风险：抽象过度导致落地变慢**；缓解：先从 orgunit create 单场景切片落地，再复制到其他动作。
-2. [ ] **风险：外部工具引入安全面扩大**；缓解：MCP/Actions 全部走 allowlist + 审计 + fail-closed。
+2. [ ] **风险：知识主源分散导致语义漂移**；缓解：统一知识包、只读 Resolver 与上下文装配主链，并保持 fail-closed。
 3. [ ] **风险：异步化后用户感知变差**；缓解：统一 receipt + 任务进度查询 + 超时告警提示。
 4. [ ] **风险：迁移期行为漂移**；缓解：双轨验证但非双写（影子评估 + 单链路提交）。
 5. [ ] **风险：`240` 与 `280/284` 边界回流**；缓解：以“后端事实源 + 前端降权”作为 stopline，任何 UI 兜底业务判定都阻断合并。
@@ -339,18 +339,16 @@ const (
 4. [ ] E2E 证据：组织架构创建/更正/移动等至少 3 类动作的计划-确认-提交-任务闭环。
 
 ## 12. 行业调研参考（Primary Sources）
-1. [ ] MCP 架构与能力模型：`https://modelcontextprotocol.io/docs/concepts/architecture`
-2. [ ] MCP Tools（人机审批与工具调用边界）：`https://modelcontextprotocol.io/docs/concepts/tools`
-3. [ ] MCP Resources（应用控制上下文读取）：`https://modelcontextprotocol.io/docs/concepts/resources`
-4. [ ] LibreChat MCP Servers 配置：`https://www.librechat.ai/docs/configuration/librechat_yaml/object_structure/mcp_servers`
-5. [ ] LibreChat MCP Settings（allowedDomains 等）：`https://www.librechat.ai/docs/configuration/librechat_yaml/object_structure/mcp_settings`
+1. [ ] LibreChat Agents 能力：`https://www.librechat.ai/docs/configuration/librechat_yaml/object_structure/agents`
+2. [ ] Temporal Durable Execution/Workflow 基础：`https://docs.temporal.io/workflow-execution`、`https://docs.temporal.io/workflow-definition`
+3. [ ] Saga 模式（Microsoft Architecture）：`https://learn.microsoft.com/azure/architecture/patterns/saga`
 6. [ ] LibreChat Agents 能力：`https://www.librechat.ai/docs/configuration/librechat_yaml/object_structure/agents`
 7. [ ] Temporal Durable Execution/Workflow 基础：`https://docs.temporal.io/workflow-execution`、`https://docs.temporal.io/workflow-definition`
 8. [ ] Saga 模式（Microsoft Architecture）：`https://learn.microsoft.com/azure/architecture/patterns/saga`
 
 ## 13. 与既有计划关系（避免重复建设）
 1. [ ] 承接 `DEV-PLAN-224/224C/225` 的意图治理、技能计划、任务编排基础。
-2. [ ] 复用 `DEV-PLAN-234/235/239` 的 LibreChat、MCP、运行边界收敛成果。
+2. [ ] 复用 `DEV-PLAN-235/239` 的运行边界收敛成果，并以 `240E` 承接内部知识与上下文主链。
 3. [ ] 对齐 `DEV-PLAN-223/260`：事实源持久化与业务 FSM/DTO 语义由两者主导，`240` 负责事务编排实现。
 4. [ ] 对齐 `DEV-PLAN-280/283/284`：UI 承载、入口切换与源码级发送渲染接管由其主导，`240` 不重复定义前端承载策略。
 5. [ ] 对齐 `DEV-PLAN-271`：跨计划阶段编排与封板顺序按统一主链路执行。
@@ -371,7 +369,7 @@ const (
 | P1 | Task 执行语义补齐 | 当前 workflow 主要做快照一致性校验后标记成功，未承接完整业务提交/补偿 | 对齐 `QUEUED/EXECUTING/SUCCEEDED/COMPENSATING/COMPENSATED/MANUAL_TAKEOVER_REQUIRED` | `internal/server/assistant_task_store.go:548`、`internal/server/assistant_task_store.go:611`；本计划 §6.4/§6.5 |
 | P1 | 权鉴与风控左移 | `required_checks` 主要在计划编译阶段硬编码，缺少统一拦截器承载 | 通过 `ActionInterceptor` 固化 `auth_object/auth_action/risk_tier/required_checks` gate | `internal/server/assistant_intent_pipeline.go:56`、`internal/server/assistant_intent_pipeline.go:65`；本计划 §6.1/§6.2/§7(M4) |
 | P1 | DTO 快照重建与前端降权边界 | 业务阶段信息部分停留在运行时流程中，跨端语义依赖实现细节 | 后端稳定输出并可重建 `phase/missing_fields/candidates/pending_draft_summary/selected_candidate_id/commit_reply/error_code`，前端不重算 | `internal/server/assistant_api.go`、`internal/server/assistant_persistence.go`；本计划 §5.1/§6.2/§6.7/§9 |
-| P2 | MCP/LibreChat 对齐（受控写入） | 已有域名 allowlist 与 runtime capability 检测，但未与 ActionSpec/Adapter 全量闭环 | MCP 默认只读；写能力必须显式 capability 映射 + 审批/审计门 | `internal/server/assistant_domain_policy.go:15`、`internal/server/assistant_domain_policy.go:168`；本计划 §3.6/§7(M6) |
+| P2 | 内部知识与上下文收口 | 已有动作主链与 DTO 事实源，但缺少结构化知识包、只读 Resolver 与统一反馈指导 | 建立 Internal Knowledge Pack + Readonly Resolver + Context Assembler，并保持 One Door 与事实源不变量 | `docs/dev-plans/240e-assistant-internal-knowledge-pack-and-readonly-resolver-plan.md`；本计划 §3.6/§7(M6) |
 
 ### 14.1 与 M0-M7 的对应关系（执行顺序）
 1. [X] **M0**：先冻结 `223/260/280/284` 边界与 DTO 字段口径（对照表“DTO 快照重建与前端降权边界”行）。
@@ -380,5 +378,5 @@ const (
 4. [ ] **M3**：消除内存/PG 双实现漂移，统一状态迁移（对照表第 4 行）。
 5. [ ] **M4**：接入 ActionInterceptor，权鉴与风控左移（对照表第 7 行）。
 6. [ ] **M5**：提交改为耐久任务主链，补齐人工接管优先策略（对照表第 5/6 行）。
-7. [ ] **M6**：完成 MCP/LibreChat 的受控写入闭环（对照表最后一行）。
+7. [ ] **M6**：完成内部知识包、只读 Resolver 与上下文装配闭环（对照表最后一行）。
 8. [ ] **M7**：在 `283/284` 新主链路上完成封板回归（对照表全部项）。
