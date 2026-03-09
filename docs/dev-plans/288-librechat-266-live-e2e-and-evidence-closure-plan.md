@@ -71,6 +71,7 @@
 - `docs/dev-plans/285-librechat-cutover-regression-and-closure-plan.md`
 - `docs/dev-plans/286-librechat-official-message-binding-and-single-bubble-closure-plan.md`
 - `docs/dev-plans/287-librechat-dto-render-only-and-failure-in-bubble-closure-plan.md`
+- `docs/dev-plans/288b-librechat-tp288-async-task-receipt-and-live-evidence-plan.md`
 - `AGENTS.md`
 
 ## 10. 最新进展与收口策略（2026-03-08）
