@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/http"
 	"strings"
 	"time"
 
@@ -265,11 +266,89 @@ func assistantTaskDetailFromRecord(record assistantTaskRecord) assistantTaskDeta
 	}
 }
 
+func assistantBuildTaskSnapshotFromTurn(turn *assistantTurn) assistantTaskContractSnapshot {
+	if turn == nil {
+		return assistantTaskContractSnapshot{}
+	}
+	return assistantTaskContractSnapshot{
+		IntentSchemaVersion:     strings.TrimSpace(turn.Intent.IntentSchemaVersion),
+		CompilerContractVersion: strings.TrimSpace(turn.Plan.CompilerContractVersion),
+		CapabilityMapVersion:    strings.TrimSpace(turn.Plan.CapabilityMapVersion),
+		SkillManifestDigest:     strings.TrimSpace(turn.Plan.SkillManifestDigest),
+		ContextHash:             strings.TrimSpace(turn.Intent.ContextHash),
+		IntentHash:              strings.TrimSpace(turn.Intent.IntentHash),
+		PlanHash:                strings.TrimSpace(turn.DryRun.PlanHash),
+	}
+}
+
+func assistantBuildTaskSubmitRequestFromTurn(conversationID string, turn *assistantTurn) (assistantTaskSubmitRequest, error) {
+	if turn == nil {
+		return assistantTaskSubmitRequest{}, errAssistantTurnNotFound
+	}
+	req := assistantTaskSubmitRequest{
+		ConversationID:   strings.TrimSpace(conversationID),
+		TurnID:           strings.TrimSpace(turn.TurnID),
+		TaskType:         assistantTaskTypeAsyncPlan,
+		RequestID:        strings.TrimSpace(turn.RequestID),
+		TraceID:          strings.TrimSpace(turn.TraceID),
+		ContractSnapshot: assistantBuildTaskSnapshotFromTurn(turn),
+	}
+	if err := assistantTaskValidateSubmitRequest(req); err != nil {
+		if strings.Contains(err.Error(), "contract_snapshot incomplete") {
+			return assistantTaskSubmitRequest{}, errAssistantPlanContractVersionMismatch
+		}
+		return assistantTaskSubmitRequest{}, err
+	}
+	return req, nil
+}
+
+func assistantTaskRecordFromSubmitRequest(tenantID string, req assistantTaskSubmitRequest, requestHash string, now time.Time) assistantTaskRecord {
+	return assistantTaskRecord{
+		TaskID:             uuid.NewString(),
+		TenantID:           tenantID,
+		ConversationID:     strings.TrimSpace(req.ConversationID),
+		TurnID:             strings.TrimSpace(req.TurnID),
+		TaskType:           assistantTaskTypeAsyncPlan,
+		RequestID:          strings.TrimSpace(req.RequestID),
+		RequestHash:        requestHash,
+		WorkflowID:         assistantTaskWorkflowID(tenantID, req.ConversationID, req.TurnID, req.RequestID),
+		Status:             assistantTaskStatusQueued,
+		DispatchStatus:     assistantTaskDispatchPending,
+		DispatchAttempt:    0,
+		DispatchDeadlineAt: now.Add(assistantTaskDefaultDispatchDeadline),
+		Attempt:            0,
+		MaxAttempts:        assistantTaskDefaultMaxAttempts,
+		LastErrorCode:      "",
+		TraceID:            strings.TrimSpace(req.TraceID),
+		ContractSnapshot:   req.ContractSnapshot,
+		SubmittedAt:        now,
+		CreatedAt:          now,
+		UpdatedAt:          now,
+	}
+}
+
+func (s *assistantConversationService) insertAssistantTaskGraphTx(ctx context.Context, tx pgx.Tx, tenantID string, record assistantTaskRecord, now time.Time) error {
+	if err := s.insertAssistantTaskTx(ctx, tx, record); err != nil {
+		return err
+	}
+	if err := s.insertAssistantTaskEventTx(ctx, tx, tenantID, record.TaskID, "", assistantTaskStatusQueued, "queued", "", nil, now); err != nil {
+		return err
+	}
+	return s.insertAssistantTaskOutboxTx(ctx, tx, tenantID, record.TaskID, record.WorkflowID, now)
+}
+
 func (s *assistantConversationService) submitTask(ctx context.Context, tenantID string, principal Principal, req assistantTaskSubmitRequest) (*assistantTaskAsyncReceipt, error) {
 	if s == nil || s.pool == nil {
 		return nil, errAssistantTaskWorkflowUnavailable
 	}
 	return s.submitTaskPG(ctx, tenantID, principal, req)
+}
+
+func (s *assistantConversationService) submitCommitTask(ctx context.Context, tenantID string, principal Principal, conversationID string, turnID string) (*assistantTaskAsyncReceipt, error) {
+	if s == nil || s.pool == nil {
+		return nil, errAssistantTaskWorkflowUnavailable
+	}
+	return s.submitCommitTaskPG(ctx, tenantID, principal, conversationID, turnID)
 }
 
 func (s *assistantConversationService) getTask(ctx context.Context, tenantID string, principal Principal, taskID string) (*assistantTaskDetailResponse, error) {
@@ -297,7 +376,6 @@ func (s *assistantConversationService) submitTaskPG(ctx context.Context, tenantI
 	if err != nil {
 		return nil, err
 	}
-	workflowID := assistantTaskWorkflowID(tenantID, req.ConversationID, req.TurnID, req.RequestID)
 
 	tx, err := s.beginAssistantTx(ctx, tenantID)
 	if err != nil {
@@ -336,35 +414,8 @@ func (s *assistantConversationService) submitTaskPG(ctx context.Context, tenantI
 	}
 
 	now := time.Now().UTC()
-	record := assistantTaskRecord{
-		TaskID:             uuid.NewString(),
-		TenantID:           tenantID,
-		ConversationID:     strings.TrimSpace(req.ConversationID),
-		TurnID:             strings.TrimSpace(req.TurnID),
-		TaskType:           assistantTaskTypeAsyncPlan,
-		RequestID:          strings.TrimSpace(req.RequestID),
-		RequestHash:        requestHash,
-		WorkflowID:         workflowID,
-		Status:             assistantTaskStatusQueued,
-		DispatchStatus:     assistantTaskDispatchPending,
-		DispatchAttempt:    0,
-		DispatchDeadlineAt: now.Add(assistantTaskDefaultDispatchDeadline),
-		Attempt:            0,
-		MaxAttempts:        assistantTaskDefaultMaxAttempts,
-		LastErrorCode:      "",
-		TraceID:            strings.TrimSpace(req.TraceID),
-		ContractSnapshot:   req.ContractSnapshot,
-		SubmittedAt:        now,
-		CreatedAt:          now,
-		UpdatedAt:          now,
-	}
-	if err := s.insertAssistantTaskTx(ctx, tx, record); err != nil {
-		return nil, err
-	}
-	if err := s.insertAssistantTaskEventTx(ctx, tx, tenantID, record.TaskID, "", assistantTaskStatusQueued, "queued", "", nil, now); err != nil {
-		return nil, err
-	}
-	if err := s.insertAssistantTaskOutboxTx(ctx, tx, tenantID, record.TaskID, workflowID, now); err != nil {
+	record := assistantTaskRecordFromSubmitRequest(tenantID, req, requestHash, now)
+	if err := s.insertAssistantTaskGraphTx(ctx, tx, tenantID, record, now); err != nil {
 		return nil, err
 	}
 
@@ -372,6 +423,135 @@ func (s *assistantConversationService) submitTaskPG(ctx context.Context, tenantI
 		return nil, err
 	}
 	receipt := assistantTaskReceiptFromRecord(record)
+	return &receipt, nil
+}
+
+func (s *assistantConversationService) submitCommitTaskPG(ctx context.Context, tenantID string, principal Principal, conversationID string, turnID string) (*assistantTaskAsyncReceipt, error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	tx, err := s.beginAssistantTx(ctx, tenantID)
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback(ctx)
+
+	conversation, err := s.loadConversationTx(ctx, tx, tenantID, conversationID, true)
+	if err != nil {
+		return nil, err
+	}
+	if principal.ID != conversation.ActorID {
+		return nil, errAssistantAuthSnapshotExpired
+	}
+	if strings.TrimSpace(principal.RoleSlug) != strings.TrimSpace(conversation.ActorRole) {
+		return nil, errAssistantRoleDriftDetected
+	}
+	turn := assistantLookupTurn(conversation, turnID)
+	if turn == nil {
+		return nil, errAssistantTurnNotFound
+	}
+
+	claimKey := assistantIdempotencyKey{
+		TenantID:       tenantID,
+		ConversationID: conversationID,
+		TurnID:         turnID,
+		TurnAction:     "commit",
+		RequestID:      turn.RequestID,
+	}
+	claim, err := s.claimIdempotencyTx(ctx, tx, claimKey, assistantHashText("commit\n"))
+	if err != nil {
+		return nil, err
+	}
+	switch claim.State {
+	case assistantIdempotencyClaimConflict:
+		return nil, errAssistantIdempotencyKeyConflict
+	case assistantIdempotencyClaimInProgress:
+		return nil, errAssistantRequestInProgress
+	case assistantIdempotencyClaimDone:
+		return assistantRestoreTaskReceiptFromIdempotency(claim)
+	}
+
+	result := assistantTurnMutationResult{}
+	prepared, result, preErr := s.prepareCommitTurn(ctx, conversation, turn, principal, tenantID)
+	assistantRefreshConversationDerivedFields(conversation)
+	if preErr != nil {
+		if err := s.persistConversationTurnMutationTx(ctx, tx, tenantID, conversation, turn, result); err != nil {
+			return nil, err
+		}
+		if err := s.finalizeIdempotencyErrorTx(ctx, tx, claimKey, preErr); err != nil {
+			return nil, err
+		}
+		if err := tx.Commit(ctx); err != nil {
+			return nil, err
+		}
+		return nil, preErr
+	}
+	if prepared.SkipExecution {
+		if err := s.finalizeIdempotencyErrorTx(ctx, tx, claimKey, errAssistantTaskStateInvalid); err != nil {
+			return nil, err
+		}
+		if err := tx.Commit(ctx); err != nil {
+			return nil, err
+		}
+		return nil, errAssistantTaskStateInvalid
+	}
+
+	req, err := assistantBuildTaskSubmitRequestFromTurn(conversationID, turn)
+	if err != nil {
+		if finalizeErr := s.finalizeIdempotencyErrorTx(ctx, tx, claimKey, err); finalizeErr != nil {
+			return nil, finalizeErr
+		}
+		if commitErr := tx.Commit(ctx); commitErr != nil {
+			return nil, commitErr
+		}
+		return nil, err
+	}
+	requestHash, err := assistantTaskRequestHash(req)
+	if err != nil {
+		if finalizeErr := s.finalizeIdempotencyErrorTx(ctx, tx, claimKey, err); finalizeErr != nil {
+			return nil, finalizeErr
+		}
+		if commitErr := tx.Commit(ctx); commitErr != nil {
+			return nil, commitErr
+		}
+		return nil, err
+	}
+	existing, exists, err := s.loadAssistantTaskBySubmitKeyTx(ctx, tx, tenantID, conversationID, turnID, req.RequestID, true)
+	if err != nil {
+		return nil, err
+	}
+	if exists {
+		if strings.TrimSpace(existing.RequestHash) != strings.TrimSpace(requestHash) {
+			if finalizeErr := s.finalizeIdempotencyErrorTx(ctx, tx, claimKey, errAssistantIdempotencyKeyConflict); finalizeErr != nil {
+				return nil, finalizeErr
+			}
+			if commitErr := tx.Commit(ctx); commitErr != nil {
+				return nil, commitErr
+			}
+			return nil, errAssistantIdempotencyKeyConflict
+		}
+		receipt := assistantTaskReceiptFromRecord(existing)
+		if err := s.finalizeIdempotencyJSONSuccessTx(ctx, tx, claimKey, http.StatusAccepted, receipt); err != nil {
+			return nil, err
+		}
+		if err := tx.Commit(ctx); err != nil {
+			return nil, err
+		}
+		return &receipt, nil
+	}
+
+	now := time.Now().UTC()
+	record := assistantTaskRecordFromSubmitRequest(tenantID, req, requestHash, now)
+	if err := s.insertAssistantTaskGraphTx(ctx, tx, tenantID, record, now); err != nil {
+		return nil, err
+	}
+	receipt := assistantTaskReceiptFromRecord(record)
+	if err := s.finalizeIdempotencyJSONSuccessTx(ctx, tx, claimKey, http.StatusAccepted, receipt); err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return nil, err
+	}
 	return &receipt, nil
 }
 
@@ -576,36 +756,30 @@ func (s *assistantConversationService) executeAssistantTaskWorkflowTx(ctx contex
 		return err
 	}
 	if currentSnapshot != task.ContractSnapshot {
-		task.Status = assistantTaskStatusManualTakeoverNeeded
-		task.LastErrorCode = "ai_plan_contract_version_mismatch"
-		task.CompletedAt = &now
-		task.UpdatedAt = now
-		if err := s.updateAssistantTaskStateTx(ctx, tx, *task); err != nil {
-			return err
-		}
-		if err := s.insertAssistantTaskEventTx(ctx, tx, tenantID, task.TaskID, fromStatus, task.Status, "manual_takeover_required", task.LastErrorCode, nil, now); err != nil {
-			return err
-		}
-		if err := s.insertAssistantTaskEventTx(ctx, tx, tenantID, task.TaskID, task.Status, task.Status, "dead_lettered", task.LastErrorCode, nil, now); err != nil {
-			return err
-		}
-		return nil
+		return s.markAssistantTaskManualTakeoverTx(ctx, tx, tenantID, task, fromStatus, "ai_plan_contract_version_mismatch", now)
 	}
 	if strings.TrimSpace(task.ContractSnapshot.PlanHash) == "" {
-		task.Status = assistantTaskStatusManualTakeoverNeeded
-		task.LastErrorCode = "ai_plan_determinism_violation"
-		task.CompletedAt = &now
-		task.UpdatedAt = now
-		if err := s.updateAssistantTaskStateTx(ctx, tx, *task); err != nil {
-			return err
+		return s.markAssistantTaskManualTakeoverTx(ctx, tx, tenantID, task, fromStatus, "ai_plan_determinism_violation", now)
+	}
+
+	conversation, err := s.loadConversationTx(ctx, tx, tenantID, task.ConversationID, true)
+	if err != nil {
+		if errors.Is(err, errAssistantConversationNotFound) {
+			return s.markAssistantTaskManualTakeoverTx(ctx, tx, tenantID, task, fromStatus, errAssistantConversationNotFound.Error(), now)
 		}
-		if err := s.insertAssistantTaskEventTx(ctx, tx, tenantID, task.TaskID, fromStatus, task.Status, "manual_takeover_required", task.LastErrorCode, nil, now); err != nil {
-			return err
-		}
-		if err := s.insertAssistantTaskEventTx(ctx, tx, tenantID, task.TaskID, task.Status, task.Status, "dead_lettered", task.LastErrorCode, nil, now); err != nil {
-			return err
-		}
-		return nil
+		return err
+	}
+	turn := assistantLookupTurn(conversation, task.TurnID)
+	if turn == nil {
+		return s.markAssistantTaskManualTakeoverTx(ctx, tx, tenantID, task, fromStatus, errAssistantTurnNotFound.Error(), now)
+	}
+	principal := assistantTaskExecutionPrincipal(conversation)
+	_, applyErr, execErr := s.executeCommitCoreTx(ctx, tx, tenantID, principal, conversation, turn)
+	if execErr != nil {
+		return execErr
+	}
+	if applyErr != nil {
+		return s.markAssistantTaskManualTakeoverTx(ctx, tx, tenantID, task, fromStatus, assistantTaskErrorCode(applyErr), now)
 	}
 
 	task.Status = assistantTaskStatusSucceeded
@@ -620,6 +794,41 @@ func (s *assistantConversationService) executeAssistantTaskWorkflowTx(ctx contex
 		return err
 	}
 	return nil
+}
+
+func assistantTaskExecutionPrincipal(conversation *assistantConversation) Principal {
+	if conversation == nil {
+		return Principal{}
+	}
+	return Principal{
+		ID:       strings.TrimSpace(conversation.ActorID),
+		TenantID: strings.TrimSpace(conversation.TenantID),
+		RoleSlug: strings.TrimSpace(conversation.ActorRole),
+	}
+}
+
+func assistantTaskErrorCode(err error) string {
+	if err == nil {
+		return ""
+	}
+	return strings.TrimSpace(err.Error())
+}
+
+func (s *assistantConversationService) markAssistantTaskManualTakeoverTx(ctx context.Context, tx pgx.Tx, tenantID string, task *assistantTaskRecord, fromStatus string, errorCode string, now time.Time) error {
+	if task == nil {
+		return errAssistantTaskStateInvalid
+	}
+	task.Status = assistantTaskStatusManualTakeoverNeeded
+	task.LastErrorCode = strings.TrimSpace(errorCode)
+	task.CompletedAt = &now
+	task.UpdatedAt = now
+	if err := s.updateAssistantTaskStateTx(ctx, tx, *task); err != nil {
+		return err
+	}
+	if err := s.insertAssistantTaskEventTx(ctx, tx, tenantID, task.TaskID, fromStatus, task.Status, "manual_takeover_required", task.LastErrorCode, nil, now); err != nil {
+		return err
+	}
+	return s.insertAssistantTaskEventTx(ctx, tx, tenantID, task.TaskID, task.Status, task.Status, "dead_lettered", task.LastErrorCode, nil, now)
 }
 
 func (s *assistantConversationService) markAssistantTaskDispatchFailureTx(ctx context.Context, tx pgx.Tx, task *assistantTaskRecord, now time.Time) error {

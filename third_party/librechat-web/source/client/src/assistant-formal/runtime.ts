@@ -63,6 +63,32 @@ export interface AssistantFormalConversation {
   turns: AssistantFormalTurn[];
 }
 
+export interface AssistantFormalTaskReceipt {
+  task_id: string;
+  task_type: string;
+  status: string;
+  workflow_id: string;
+  submitted_at: string;
+  poll_uri: string;
+}
+
+export interface AssistantFormalTaskDetail {
+  task_id: string;
+  task_type: string;
+  status: string;
+  dispatch_status: string;
+  attempt: number;
+  max_attempts: number;
+  last_error_code?: string;
+  workflow_id: string;
+  request_id: string;
+  trace_id?: string;
+  conversation_id: string;
+  turn_id: string;
+  submitted_at: string;
+  updated_at: string;
+}
+
 export interface AssistantFormalPayload {
   kind: 'assistant_formal';
   backendConversationId: string;
@@ -82,6 +108,13 @@ export interface AssistantFormalPayload {
   commitReply?: AssistantFormalCommitReply;
   errorCode?: string;
   reply?: AssistantFormalReply;
+  taskId?: string;
+  taskType?: string;
+  taskStatus?: string;
+  taskDispatchStatus?: string;
+  taskWorkflowId?: string;
+  taskPollUri?: string;
+  taskLastErrorCode?: string;
 }
 
 export type AssistantFormalMessage = TMessage & {
@@ -160,6 +193,7 @@ export function buildAssistantFormalPayload(
   options?: {
     messageId?: string;
     frontendUserMessageId?: string;
+    task?: Partial<AssistantFormalTaskReceipt & AssistantFormalTaskDetail>;
   },
 ): AssistantFormalPayload {
   const messageId = options?.messageId?.trim() ?? '';
@@ -187,6 +221,13 @@ export function buildAssistantFormalPayload(
     commitReply: turn.commit_reply,
     errorCode: turn.error_code,
     reply: reply ?? turn.reply_nlg,
+    taskId: options?.task?.task_id?.trim() ?? '',
+    taskType: options?.task?.task_type?.trim() ?? '',
+    taskStatus: options?.task?.status?.trim() ?? '',
+    taskDispatchStatus: options?.task?.dispatch_status?.trim() ?? '',
+    taskWorkflowId: options?.task?.workflow_id?.trim() ?? '',
+    taskPollUri: options?.task?.poll_uri?.trim() ?? '',
+    taskLastErrorCode: options?.task?.last_error_code?.trim() ?? '',
   };
 }
 
@@ -227,6 +268,13 @@ export function buildAssistantFormalFailurePayload(
     commitResult: basePayload.commitResult,
     commitReply: basePayload.commitReply,
     errorCode,
+    taskId: basePayload.taskId,
+    taskType: basePayload.taskType,
+    taskStatus: basePayload.taskStatus,
+    taskDispatchStatus: basePayload.taskDispatchStatus,
+    taskWorkflowId: basePayload.taskWorkflowId,
+    taskPollUri: basePayload.taskPollUri,
+    taskLastErrorCode: basePayload.taskLastErrorCode,
     reply: {
       text: fallbackText,
       kind: 'error',
@@ -254,6 +302,13 @@ export function buildAssistantFormalPendingPayload(input: {
     state: 'pending',
     missingFields: [],
     candidates: [],
+    taskId: '',
+    taskType: '',
+    taskStatus: '',
+    taskDispatchStatus: '',
+    taskWorkflowId: '',
+    taskPollUri: '',
+    taskLastErrorCode: '',
     reply: {
       text: detectAssistantFormalLocale() === 'en' ? 'Processing...' : '处理中...',
       kind: 'info',
@@ -262,9 +317,103 @@ export function buildAssistantFormalPendingPayload(input: {
   };
 }
 
+function assistantFormalManualTakeoverText(errorCode?: string) {
+  const code = errorCode?.trim() ?? '';
+  if (detectAssistantFormalLocale() === 'en') {
+    if (code === 'assistant_task_dispatch_failed') {
+      return 'Execution could not continue automatically and now requires manual takeover.';
+    }
+    if (code === 'ai_plan_contract_version_mismatch') {
+      return 'Plan changed before execution and now requires manual takeover.';
+    }
+    return 'Automatic execution stopped and now requires manual takeover.';
+  }
+  if (code === 'assistant_task_dispatch_failed') {
+    return '自动执行无法继续，当前已转人工接管。';
+  }
+  if (code === 'ai_plan_contract_version_mismatch') {
+    return '执行前计划已发生漂移，当前已转人工接管。';
+  }
+  return '自动执行已停止，当前已转人工接管。';
+}
+
+function assistantFormalTaskStatusText(payload: AssistantFormalPayload) {
+  switch (payload.taskStatus?.trim()) {
+    case 'queued':
+      return detectAssistantFormalLocale() === 'en'
+        ? 'Submission accepted. Waiting to execute.'
+        : '提交已受理，等待执行。';
+    case 'running':
+      return detectAssistantFormalLocale() === 'en'
+        ? 'Submission accepted. Executing now.'
+        : '提交已受理，正在执行。';
+    case 'manual_takeover_required':
+      return assistantFormalManualTakeoverText(payload.taskLastErrorCode || payload.errorCode);
+    case 'canceled':
+      return detectAssistantFormalLocale() === 'en' ? 'Task canceled.' : '任务已取消。';
+    default:
+      return '';
+  }
+}
+
+export function attachAssistantFormalTaskReceipt(
+  basePayload: AssistantFormalPayload,
+  receipt: AssistantFormalTaskReceipt,
+): AssistantFormalPayload {
+  return {
+    ...basePayload,
+    taskId: receipt.task_id,
+    taskType: receipt.task_type,
+    taskStatus: receipt.status,
+    taskWorkflowId: receipt.workflow_id,
+    taskPollUri: receipt.poll_uri,
+    taskLastErrorCode: '',
+    reply: {
+      text:
+        detectAssistantFormalLocale() === 'en'
+          ? 'Submission accepted. Waiting to execute.'
+          : '提交已受理，等待执行。',
+      kind: 'info',
+      stage: 'task_queued',
+      conversation_id: basePayload.backendConversationId,
+      turn_id: basePayload.turnId,
+    },
+  };
+}
+
+export function attachAssistantFormalTaskDetail(
+  basePayload: AssistantFormalPayload,
+  detail: AssistantFormalTaskDetail,
+): AssistantFormalPayload {
+  return {
+    ...basePayload,
+    taskId: detail.task_id,
+    taskType: detail.task_type,
+    taskStatus: detail.status,
+    taskDispatchStatus: detail.dispatch_status,
+    taskWorkflowId: detail.workflow_id,
+    taskLastErrorCode: detail.last_error_code?.trim() ?? '',
+    errorCode: detail.last_error_code?.trim() || basePayload.errorCode,
+    reply:
+      detail.status === 'succeeded'
+        ? basePayload.reply
+        : {
+            text: assistantFormalTaskStatusText({ ...basePayload, taskStatus: detail.status, taskLastErrorCode: detail.last_error_code?.trim() ?? '' }),
+            kind: detail.status === 'manual_takeover_required' ? 'error' : 'info',
+            stage: detail.status === 'manual_takeover_required' ? 'manual_takeover_required' : 'task_status',
+            conversation_id: detail.conversation_id,
+            turn_id: detail.turn_id,
+          },
+  };
+}
+
 export function resolveAssistantFormalText(payload?: AssistantFormalPayload) {
   if (!payload) {
     return '';
+  }
+  const taskText = assistantFormalTaskStatusText(payload);
+  if (taskText && payload.taskStatus !== 'succeeded') {
+    return taskText;
   }
   const replyText = payload.reply?.text?.trim();
   if (replyText) {

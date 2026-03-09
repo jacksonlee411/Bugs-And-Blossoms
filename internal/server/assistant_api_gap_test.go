@@ -344,11 +344,8 @@ func TestAssistantTurnAction_RequiresIntentClarificationBeforeConfirm(t *testing
 	liveTurn.DryRun.ValidationErrors = []string{"missing_effective_date"}
 	svc.mu.Unlock()
 
-	rec = httptest.NewRecorder()
-	commitPath := "/internal/assistant/conversations/" + conv.ConversationID + "/turns/" + turn.TurnID + ":commit"
-	handleAssistantTurnActionAPI(rec, assistantReqWithContext(http.MethodPost, commitPath, `{}`, true, true), svc)
-	if rec.Code != http.StatusConflict || assistantDecodeErrCode(t, rec) != "conversation_confirmation_required" {
-		t.Fatalf("commit status=%d code=%s body=%s", rec.Code, assistantDecodeErrCode(t, rec), rec.Body.String())
+	if _, err := assistantCommitTurnSyncForTest(svc, context.Background(), "tenant-1", principal, conv.ConversationID, turn.TurnID); !errors.Is(err, errAssistantConfirmationRequired) {
+		t.Fatalf("commit err=%v", err)
 	}
 }
 
@@ -400,7 +397,7 @@ func TestAssistantServiceHelpers_PoolWrappersAndPathEdges(t *testing.T) {
 	if _, err := svc.confirmTurn("tenant-1", principal, "conv_1", "turn_1", ""); err == nil {
 		t.Fatal("expected confirmTurn pg error")
 	}
-	if _, err := svc.commitTurn(context.Background(), "tenant-1", principal, "conv_1", "turn_1"); err == nil {
+	if _, err := assistantCommitTurnSyncForTest(svc, context.Background(), "tenant-1", principal, "conv_1", "turn_1"); err == nil {
 		t.Fatal("expected commitTurn pg error")
 	}
 

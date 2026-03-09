@@ -1,6 +1,6 @@
 # DEV-PLAN-240C：Assistant ActionInterceptor 与风险门左移计划（承接 240-M4）
 
-**状态**: 准备就绪（2026-03-09 11:30 CST；已完成评审修订，范围/代码落点/验收口径已冻结，可直接实施）
+**状态**: 已完成（2026-03-09 13:25 CST；`assistant_action_interceptor.go`、ActionSpec `Security` 单主源、create/confirm/commit 三阶段接线、错误码映射与回归测试已落地；`go test ./internal/server` 通过，`271-S5` 后续仅需把 `240C` 作为已完成输入参与 `240D/240E` 与证据新鲜度联动）
 
 ## 1. 背景
 1. [X] `240A` 已完成 `ActionRegistry/CommitAdapter/version_tuple OCC`，`240B` 已完成 confirm/commit 状态机统一，但 `auth_object/auth_action/risk_tier/required_checks` 仍未进入运行时单点 gate。
@@ -34,7 +34,7 @@
 1. [X] 不改 Casbin 领域模型与 `pkg/authz` 规则结构；仅复用既有 `loadAuthorizer()`、`authz.SubjectFromRoleSlug()`、`authz.DomainFromTenantID()`。
 2. [X] 不引入新的数据库表、列或迁移；沿用现有 `assistant_turns.risk_tier/error_code`、`assistant_state_transitions` 与会话快照字段。
 3. [X] 不切换默认异步耐久执行；该部分仍由 `240D` 承接。
-4. [X] 不处理 MCP 写能力准入；该部分仍由 `240E` 承接。
+4. [X] 不处理内部知识包与只读 Resolver 收口；该部分仍由 `240E` 承接。
 5. [X] 不扩大 `260/266/280` 的 DTO/UI 契约；前端继续只消费既有 DTO。
 
 ## 4. 当前实现盘点（作为实施基线）
@@ -252,7 +252,7 @@ type assistantActionGateDecision struct {
 - `docs/dev-plans/240a-assistant-action-registry-and-commit-adapter-plan.md`
 - `docs/dev-plans/240b-assistant-state-machine-unification-plan.md`
 - `docs/dev-plans/240d-assistant-durable-execution-and-manual-takeover-plan.md`
-- `docs/dev-plans/240e-assistant-mcp-write-capability-governance-plan.md`
+- `docs/dev-plans/240e-assistant-internal-knowledge-pack-and-readonly-resolver-plan.md`
 - `docs/dev-plans/260-librechat-conversation-first-auto-execution-plan.md`
 - `docs/dev-plans/271-assistant-librechat-cross-plan-sequenced-delivery-plan.md`
 - `docs/dev-plans/288-librechat-266-live-e2e-and-evidence-closure-plan.md`

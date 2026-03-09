@@ -1,7 +1,9 @@
 import { expect, test } from "@playwright/test";
 import fs from "node:fs/promises";
+import path from "node:path";
 
-const EVIDENCE_ROOT = "/home/lee/Projects/Bugs-And-Blossoms/docs/dev-records/assets/dev-plan-290";
+const repoRoot = path.resolve(__dirname, "..", "..");
+const EVIDENCE_ROOT = path.join(repoRoot, "docs", "dev-records", "assets", "dev-plan-290");
 
 const CASE_INPUTS = {
   1: ["你好"],
@@ -368,6 +370,7 @@ async function installCaseMock(page, caseId) {
     phaseHistory: [],
     internalPostPaths: [],
     nativePostPaths: [],
+    taskByID: {},
   };
 
   page.on("request", (request) => {
@@ -392,12 +395,49 @@ async function installCaseMock(page, caseId) {
     });
   };
 
+  const nowISO = () => new Date().toISOString();
+
+  const buildTaskReceiptForTurn = (turn) => {
+    const taskID = `task_${turn.turn_id}`;
+    const submittedAt = nowISO();
+    state.taskByID[taskID] = {
+      task_id: taskID,
+      task_type: "assistant_async_plan",
+      status: "queued",
+      dispatch_status: "pending",
+      attempt: 0,
+      max_attempts: 3,
+      last_error_code: "",
+      workflow_id: `wf_${turn.turn_id}`,
+      request_id: turn.request_id,
+      trace_id: turn.trace_id,
+      conversation_id: state.conversationId,
+      turn_id: turn.turn_id,
+      submitted_at: submittedAt,
+      updated_at: submittedAt,
+      poll_count: 0,
+    };
+    return {
+      task_id: taskID,
+      task_type: "assistant_async_plan",
+      status: "queued",
+      workflow_id: `wf_${turn.turn_id}`,
+      submitted_at: submittedAt,
+      poll_uri: `/internal/assistant/tasks/${taskID}`,
+    };
+  };
+
   await page.route("**/internal/assistant/**", async (route) => {
     const request = route.request();
     const pathname = new URL(request.url()).pathname;
     const method = request.method();
 
     if (method === "POST" && pathname === "/internal/assistant/conversations") {
+      await fulfillJSON(route, 200, buildConversation(state.conversationId, state.turn ? [state.turn] : []));
+      return;
+    }
+
+    if (method === "GET" && pathname === `/internal/assistant/conversations/${state.conversationId}`) {
       await fulfillJSON(route, 200, buildConversation(state.conversationId, state.turn ? [state.turn] : []));
       return;
     }
@@ -448,7 +488,43 @@ async function installCaseMock(page, caseId) {
       };
       state.turn.reply_nlg = buildReply(`Case ${caseId} 提交成功。`, "success", "commit_result", state.turn.turn_id);
       state.phaseHistory.push("committed");
-      await fulfillJSON(route, 200, buildConversation(state.conversationId, [state.turn]));
+      await fulfillJSON(route, 202, buildTaskReceiptForTurn(state.turn));
+      return;
+    }
+
+    if (method === "GET" && pathname.startsWith("/internal/assistant/tasks/")) {
+      const taskID = pathname.replace("/internal/assistant/tasks/", "").trim();
+      const task = state.taskByID[taskID];
+      if (!task) {
+        await fulfillJSON(route, 404, {
+          code: "assistant_task_not_found",
+          message: "assistant task not found",
+        });
+        return;
+      }
+      task.poll_count += 1;
+      if (task.poll_count >= 1) {
+        task.status = "succeeded";
+        task.dispatch_status = "started";
+        task.attempt = 1;
+        task.updated_at = nowISO();
+      }
+      await fulfillJSON(route, 200, {
+        task_id: task.task_id,
+        task_type: task.task_type,
+        status: task.status,
+        dispatch_status: task.dispatch_status,
+        attempt: task.attempt,
+        max_attempts: task.max_attempts,
+        last_error_code: task.last_error_code,
+        workflow_id: task.workflow_id,
+        request_id: task.request_id,
+        trace_id: task.trace_id,
+        conversation_id: task.conversation_id,
+        turn_id: task.turn_id,
+        submitted_at: task.submitted_at,
+        updated_at: task.updated_at,
+      });
       return;
     }
 

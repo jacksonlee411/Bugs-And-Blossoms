@@ -1,6 +1,8 @@
 import type {
   AssistantFormalConversation,
   AssistantFormalReply,
+  AssistantFormalTaskDetail,
+  AssistantFormalTaskReceipt,
 } from './runtime';
 
 export class AssistantFormalAPIError extends Error {
@@ -98,12 +100,36 @@ export function commitAssistantFormalTurn(
   turnId: string,
   token?: string | null,
 ) {
-  return assistantFormalRequest<AssistantFormalConversation>(
+  return assistantFormalRequest<AssistantFormalTaskReceipt>(
     `/internal/assistant/conversations/${encodeURIComponent(conversationId)}/turns/${encodeURIComponent(turnId)}:commit`,
     {
       method: 'POST',
       body: JSON.stringify({}),
     },
+    token,
+  );
+}
+
+export function getAssistantFormalConversation(conversationId: string, token?: string | null) {
+  return assistantFormalRequest<AssistantFormalConversation>(
+    `/internal/assistant/conversations/${encodeURIComponent(conversationId)}`,
+    { method: 'GET' },
+    token,
+  );
+}
+
+export function getAssistantFormalTask(taskId: string, token?: string | null) {
+  return assistantFormalRequest<AssistantFormalTaskDetail>(
+    `/internal/assistant/tasks/${encodeURIComponent(taskId)}`,
+    { method: 'GET' },
+    token,
+  );
+}
+
+export function cancelAssistantFormalTask(taskId: string, token?: string | null) {
+  return assistantFormalRequest<AssistantFormalTaskDetail>(
+    `/internal/assistant/tasks/${encodeURIComponent(taskId)}:cancel`,
+    { method: 'POST', body: JSON.stringify({}) },
     token,
   );
 }

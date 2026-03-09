@@ -197,10 +197,8 @@ func TestAssistant240C_RuntimeAndCoverageBranches(t *testing.T) {
 		commitServiceMissingSvc.byID[commitConv.ConversationID].Turns = append(commitServiceMissingSvc.byID[commitConv.ConversationID].Turns, commitTurn)
 		commitServiceMissingSvc.mu.Unlock()
 		assistantLoadAuthorizerFn = func() (authorizer, error) { return assistantGateAuthorizerStub{allowed: true, enforced: true}, nil }
-		rec = httptest.NewRecorder()
-		handleAssistantTurnActionAPI(rec, assistantReqWithContext(http.MethodPost, "/internal/assistant/conversations/"+commitConv.ConversationID+"/turns/turn-service:commit", `{}`, true, true), commitServiceMissingSvc)
-		if rec.Code != http.StatusInternalServerError || assistantDecodeErrCode(t, rec) != "orgunit_service_missing" {
-			t.Fatalf("service missing commit status=%d body=%s", rec.Code, rec.Body.String())
+		if _, err := assistantCommitTurnSyncForTest(commitServiceMissingSvc, context.Background(), "tenant-1", principal, commitConv.ConversationID, "turn-service"); !errors.Is(err, errAssistantServiceMissing) {
+			t.Fatalf("service missing commit err=%v", err)
 		}
 
 		commitCandidateSvc := newAssistantConversationService(store, assistantWriteServiceStub{store: store})
@@ -210,10 +208,8 @@ func TestAssistant240C_RuntimeAndCoverageBranches(t *testing.T) {
 		commitCandidateSvc.byID[commitConv.ConversationID].Turns = append(commitCandidateSvc.byID[commitConv.ConversationID].Turns, commitTurn)
 		commitCandidateSvc.mu.Unlock()
 		assistantLoadAuthorizerFn = func() (authorizer, error) { return assistantGateAuthorizerStub{allowed: true, enforced: true}, nil }
-		rec = httptest.NewRecorder()
-		handleAssistantTurnActionAPI(rec, assistantReqWithContext(http.MethodPost, "/internal/assistant/conversations/"+commitConv.ConversationID+"/turns/turn-missing-candidate:commit", `{}`, true, true), commitCandidateSvc)
-		if rec.Code != http.StatusConflict || assistantDecodeErrCode(t, rec) != "conversation_confirmation_required" {
-			t.Fatalf("candidate commit status=%d body=%s", rec.Code, rec.Body.String())
+		if _, err := assistantCommitTurnSyncForTest(commitCandidateSvc, context.Background(), "tenant-1", principal, commitConv.ConversationID, "turn-missing-candidate"); !errors.Is(err, errAssistantCandidateNotFound) {
+			t.Fatalf("candidate commit err=%v", err)
 		}
 
 		commitAuthzSvc := newAssistantConversationService(store, assistantWriteServiceStub{store: store})
@@ -223,10 +219,8 @@ func TestAssistant240C_RuntimeAndCoverageBranches(t *testing.T) {
 		commitAuthzSvc.byID[commitConv.ConversationID].Turns = append(commitAuthzSvc.byID[commitConv.ConversationID].Turns, commitTurn)
 		commitAuthzSvc.mu.Unlock()
 		assistantLoadAuthorizerFn = func() (authorizer, error) { return assistantGateAuthorizerStub{allowed: false, enforced: true}, nil }
-		rec = httptest.NewRecorder()
-		handleAssistantTurnActionAPI(rec, assistantReqWithContext(http.MethodPost, "/internal/assistant/conversations/"+commitConv.ConversationID+"/turns/turn-authz:commit", `{}`, true, true), commitAuthzSvc)
-		if rec.Code != http.StatusForbidden || assistantDecodeErrCode(t, rec) != errAssistantActionAuthzDenied.Error() {
-			t.Fatalf("authz commit status=%d body=%s", rec.Code, rec.Body.String())
+		if _, err := assistantCommitTurnSyncForTest(commitAuthzSvc, context.Background(), "tenant-1", principal, commitConv.ConversationID, "turn-authz"); !errors.Is(err, errAssistantActionAuthzDenied) {
+			t.Fatalf("authz commit err=%v", err)
 		}
 	})
 

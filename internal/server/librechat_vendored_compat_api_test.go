@@ -252,6 +252,16 @@ func TestLibreChatVendoredCompatAPIHandler_UnitCoverage(t *testing.T) {
 		}
 	})
 
+	t.Run("serve http rejects non compat path", func(t *testing.T) {
+		h := newLibreChatCompatAPIHandler(nil, nil)
+		req := httptest.NewRequest(http.MethodGet, "/totally-different", nil)
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, req)
+		if rec.Code != http.StatusNotFound {
+			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+		}
+	})
+
 	t.Run("method not allowed branches", func(t *testing.T) {
 		h := newLibreChatCompatAPIHandler(nil, nil)
 		paths := []string{
@@ -446,6 +456,12 @@ func TestLibreChatVendoredCompatAPIHandler_UnitCoverage(t *testing.T) {
 			if got := libreChatCompatEndpointLabel(tc.provider, gotKey); got != tc.wantName {
 				t.Fatalf("provider=%q got label=%q want=%q", tc.provider.Name, got, tc.wantName)
 			}
+		}
+		if suffix, ok := libreChatCompatAPISuffix(libreChatCompatAPIPrefix); !ok || suffix != "" {
+			t.Fatalf("compat prefix suffix=%q ok=%v", suffix, ok)
+		}
+		if suffix, ok := libreChatCompatAPISuffix(libreChatFormalEntryAPIPrefix); !ok || suffix != "" {
+			t.Fatalf("formal prefix suffix=%q ok=%v", suffix, ok)
 		}
 	})
 }
