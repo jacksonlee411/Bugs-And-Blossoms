@@ -3,12 +3,12 @@
   "bubble_count": 1,
   "bubbles": [
     {
-      "binding_key": "conv_843befe5344742d1948739ce8741d62d::turn_aff3c1f236ef4ba1a2605df48b5cb88d::assistant_2961185948984254846f1015743682fa",
-      "conversation_id": "conv_843befe5344742d1948739ce8741d62d",
-      "turn_id": "turn_aff3c1f236ef4ba1a2605df48b5cb88d",
-      "request_id": "assistant_2961185948984254846f1015743682fa",
-      "message_id": "87f31cb4-5e72-41dd-97fb-2f2572363533_",
-      "text": "Missing fields: parent_ref_text Missing fields parent_ref_text"
+      "binding_key": "conv_8104a592fd9e48749594e831bb83f1b9::turn_3a9aafb9e8b24b13a8ac3795c179f6b1::assistant_2241736d501840d59a4a3dfa2271b686",
+      "conversation_id": "conv_8104a592fd9e48749594e831bb83f1b9",
+      "turn_id": "turn_3a9aafb9e8b24b13a8ac3795c179f6b1",
+      "request_id": "assistant_2241736d501840d59a4a3dfa2271b686",
+      "message_id": "989c5d90-8ea7-4a18-8e87-0783c0f20faf_",
+      "text": "上级组织：AI治理办公室；新建组织：人力资源部2；生效日期：2026-01-01 task_id: 51361cf9-c2bd-4296-8f0f-d5f586c8e090 · succeeded Selected: AI治理办公室 org_code: O000001 parent_org_code: TP290BAIGOV effective_date: 2026-01-01 event_type: CREATE"
     }
   ],
   "external_reply_container_count": 0,

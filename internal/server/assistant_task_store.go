@@ -793,6 +793,7 @@ func (s *assistantConversationService) executeAssistantTaskWorkflowTx(ctx contex
 	if err := s.insertAssistantTaskEventTx(ctx, tx, tenantID, task.TaskID, fromStatus, task.Status, "succeeded", "", nil, now); err != nil {
 		return err
 	}
+	s.cacheConversation(conversation)
 	return nil
 }
 

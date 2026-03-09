@@ -180,3 +180,41 @@ func TestAssistantStrictDecodeIntent(t *testing.T) {
 		t.Fatalf("want constrained decode failed, got=%v", err)
 	}
 }
+
+func TestAssistantStrictDecodeIntentExpandedFields(t *testing.T) {
+	intent, err := assistantStrictDecodeIntent([]byte(`{"action":"move_orgunit","org_code":"FLOWER-C","effective_date":"2026-04-01","new_parent_ref_text":"共享服务中心"}`))
+	if err != nil {
+		t.Fatalf("strict decode err=%v", err)
+	}
+	if intent.Action != assistantIntentMoveOrgUnit || intent.OrgCode != "FLOWER-C" || intent.NewParentRefText != "共享服务中心" {
+		t.Fatalf("unexpected intent=%+v", intent)
+	}
+}
+
+func TestAssistantIntentPipelineExpandedActions(t *testing.T) {
+	moveIntent := assistantIntentSpec{Action: assistantIntentMoveOrgUnit, OrgCode: "FLOWER-C", EffectiveDate: "2026-04-01", NewParentRefText: "共享服务中心"}
+	movePlan := assistantBuildPlan(moveIntent)
+	if movePlan.ActionID != assistantIntentMoveOrgUnit || movePlan.CommitAdapterKey != "orgunit_move_v1" {
+		t.Fatalf("unexpected move plan=%+v", movePlan)
+	}
+	moveSkill, moveDelta := assistantCompileIntentToPlans(moveIntent, "FLOWER-B")
+	if len(moveSkill.SelectedSkills) != 1 || moveSkill.SelectedSkills[0] != "org.orgunit_move" {
+		t.Fatalf("unexpected move skill=%+v", moveSkill)
+	}
+	if moveDelta.CapabilityKey != "org.orgunit_write.field_policy" || len(moveDelta.Changes) == 0 {
+		t.Fatalf("unexpected move delta=%+v", moveDelta)
+	}
+	moveDryRun := assistantBuildDryRun(moveIntent, []assistantCandidate{{CandidateID: "FLOWER-B", CandidateCode: "FLOWER-B"}}, "FLOWER-B")
+	if len(moveDryRun.ValidationErrors) != 0 {
+		t.Fatalf("unexpected move validation=%v", moveDryRun.ValidationErrors)
+	}
+
+	correctIntent := assistantIntentSpec{Action: assistantIntentCorrectOrgUnit, OrgCode: "FLOWER-C", TargetEffectiveDate: "2026-01-01", NewName: "运营中心"}
+	if errs := assistantIntentValidationErrors(correctIntent); len(errs) != 0 {
+		t.Fatalf("unexpected correct errs=%v", errs)
+	}
+	missingMove := assistantIntentSpec{Action: assistantIntentMoveOrgUnit, OrgCode: "FLOWER-C", EffectiveDate: "2026-04-01"}
+	if errs := assistantIntentValidationErrors(missingMove); len(errs) == 0 || errs[0] != "missing_new_parent_ref_text" {
+		t.Fatalf("unexpected missing move errs=%v", errs)
+	}
+}

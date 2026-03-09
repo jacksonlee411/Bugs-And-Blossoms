@@ -1,0 +1,27 @@
+{
+  "case_id": 4,
+  "status": "passed",
+  "validated_at": "2026-03-09T18:47:11.354Z",
+  "observed_phase_path": [
+    "await_candidate_pick",
+    "await_commit_confirm",
+    "committed"
+  ],
+  "network_internal_posts": [
+    "/internal/assistant/conversations",
+    "/internal/assistant/conversations/conv_0eb9565fe8d444a1830729d0b2e66f56/turns",
+    "/internal/assistant/conversations/conv_0eb9565fe8d444a1830729d0b2e66f56/turns/turn_05106c9c8f9149aaa8cbc47f1274f6dd:confirm",
+    "/internal/assistant/conversations/conv_0eb9565fe8d444a1830729d0b2e66f56/turns/turn_05106c9c8f9149aaa8cbc47f1274f6dd:commit"
+  ],
+  "task_terminal_status": "succeeded",
+  "task_status_poll_count": 1,
+  "stopline_266": {
+    "single_channel": true,
+    "no_official_connection_error": true,
+    "no_external_reply_container": true
+  },
+  "stopline_280": {
+    "single_formal_entry": true,
+    "no_bridge_or_injected_stream": true
+  }
+}

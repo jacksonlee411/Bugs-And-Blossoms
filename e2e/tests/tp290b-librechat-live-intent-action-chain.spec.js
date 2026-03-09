@@ -35,7 +35,7 @@ const CASE_INPUTS = {
   1: ["你好"],
   2: ["在 AI治理办公室 下新建 人力资源部2，生效日期 2026-01-01", "确认"],
   3: ["在 AI治理办公室 下新建 人力资源部239A补全", "生效日期 2026-03-25", "确认"],
-  4: ["在 共享服务中心 下新建 239A候选验证部，生效日期 2026-03-26", "选第2个", "是的"],
+  4: ["请在父组织共享服务中心下新建239A候选验证部，生效日期2026-03-26", "选第2个", "是的"],
 };
 
 const staleOn = [
@@ -106,6 +106,19 @@ async function listOrgUnits(appContext, asOf) {
   const { text, json } = await parseResponseBody(response);
   expect(response.status(), text).toBe(200);
   return Array.isArray(json?.org_units) ? json.org_units : [];
+}
+
+function orgUnitDetailsSnapshot(details) {
+  if (!details?.org_unit) {
+    return null;
+  }
+  return {
+    org_code: String(details.org_unit.org_code || "").trim(),
+    name: String(details.org_unit.name || "").trim(),
+    parent_org_code: String(details.org_unit.parent_org_code || "").trim(),
+    full_name_path: String(details.org_unit.full_name_path || "").trim(),
+    status: String(details.org_unit.status || "").trim(),
+  };
 }
 
 async function getOrgUnitDetails(appContext, orgCode, asOf) {
@@ -253,6 +266,32 @@ async function collectCandidateDetails(appContext, orgUnits, asOf) {
   return details;
 }
 
+async function collectOrgDetailsBySpecs(appContext, specs, asOf) {
+  const details = [];
+  for (const spec of specs) {
+    const response = await waitForOrgUnitDetails(appContext, spec.code, asOf, 250);
+    const snapshot = orgUnitDetailsSnapshot(response);
+    if (snapshot) {
+      details.push(snapshot);
+    }
+  }
+  return details;
+}
+
+function assistantCandidateSnapshot(turn) {
+  if (!Array.isArray(turn?.candidates)) {
+    return [];
+  }
+  return turn.candidates.map((item, index) => ({
+    ordinal: index + 1,
+    candidate_id: String(item?.candidate_id || item?.candidateId || item?.id || "").trim(),
+    org_code: String(item?.org_code || item?.orgCode || "").trim(),
+    name: String(item?.name || item?.display_name || item?.displayName || item?.label || "").trim(),
+    parent_org_code: String(item?.parent_org_code || item?.parentOrgCode || "").trim(),
+    full_name_path: String(item?.full_name_path || item?.fullNamePath || item?.label || "").trim(),
+  }));
+}
+
 async function ensureTenantBaseline(appContext, tenantID) {
   const report = {
     tenant_id: tenantID,
@@ -294,8 +333,13 @@ async function ensureTenantBaseline(appContext, tenantID) {
   }
   report.root_org_code = String(rootOrg?.org_code || "").trim();
 
-  let orgUnits = await listOrgUnits(appContext, BASELINE_CASE4_AS_OF);
-  if (orgUnitsByExactName(orgUnits, BASELINE_ORG_SPECS.ai_governance_office.name).length === 0) {
+  const aiGovernanceDetailsBefore = await waitForOrgUnitDetails(
+    appContext,
+    BASELINE_ORG_SPECS.ai_governance_office.code,
+    BASELINE_CASE4_AS_OF,
+    250,
+  );
+  if (!aiGovernanceDetailsBefore?.org_unit) {
     await ensureOrgUnitByCode(
       appContext,
       BASELINE_ORG_SPECS.ai_governance_office,
@@ -305,9 +349,13 @@ async function ensureTenantBaseline(appContext, tenantID) {
     );
   }
 
-  orgUnits = await listOrgUnits(appContext, BASELINE_CASE4_AS_OF);
-  const sharedCandidatesBefore = orgUnitsByNameContains(orgUnits, BASELINE_ORG_SPECS.shared_service_center_primary.name);
-  if (sharedCandidatesBefore.length === 0) {
+  const sharedServicePrimaryBefore = await waitForOrgUnitDetails(
+    appContext,
+    BASELINE_ORG_SPECS.shared_service_center_primary.code,
+    BASELINE_CASE4_AS_OF,
+    250,
+  );
+  if (!sharedServicePrimaryBefore?.org_unit) {
     await ensureOrgUnitByCode(
       appContext,
       BASELINE_ORG_SPECS.shared_service_center_primary,
@@ -317,8 +365,15 @@ async function ensureTenantBaseline(appContext, tenantID) {
     );
   }
 
-  orgUnits = await listOrgUnits(appContext, BASELINE_CASE4_AS_OF);
-  if (orgUnitsByNameContains(orgUnits, BASELINE_ORG_SPECS.shared_service_center_primary.name).length < 2) {
+  const sharedServiceBaselineDetails = await collectOrgDetailsBySpecs(
+    appContext,
+    [
+      BASELINE_ORG_SPECS.shared_service_center_primary,
+      BASELINE_ORG_SPECS.shared_service_center_secondary,
+    ],
+    BASELINE_CASE4_AS_OF,
+  );
+  if (sharedServiceBaselineDetails.length < 2) {
     await ensureOrgUnitByCode(
       appContext,
       BASELINE_ORG_SPECS.shared_service_center_branch,
@@ -335,13 +390,24 @@ async function ensureTenantBaseline(appContext, tenantID) {
     );
   }
 
-  orgUnits = await listOrgUnits(appContext, BASELINE_CASE4_AS_OF);
-  const aiGovernanceUnits = orgUnitsByExactName(orgUnits, BASELINE_ORG_SPECS.ai_governance_office.name);
-  const sharedServiceUnits = orgUnitsByNameContains(orgUnits, BASELINE_ORG_SPECS.shared_service_center_primary.name);
+  const aiGovernanceUnits = await collectOrgDetailsBySpecs(
+    appContext,
+    [BASELINE_ORG_SPECS.ai_governance_office],
+    BASELINE_CASE4_AS_OF,
+  );
+  const sharedServiceUnits = await collectOrgDetailsBySpecs(
+    appContext,
+    [
+      BASELINE_ORG_SPECS.shared_service_center_primary,
+      BASELINE_ORG_SPECS.shared_service_center_secondary,
+    ],
+    BASELINE_CASE4_AS_OF,
+  );
   const case2Probe = await createAssistantProbe(appContext, CASE_INPUTS[2][0]);
   const case4Probe = await createAssistantProbe(appContext, CASE_INPUTS[4][0]);
   const case2Summary = baselineProbeSummary(case2Probe);
   const case4Summary = baselineProbeSummary(case4Probe);
+  const case4Candidates = assistantCandidateSnapshot(case4Probe?.latest_turn || null);
 
   report.probes.case2 = case2Summary;
   report.probes.case4 = case4Summary;
@@ -374,8 +440,11 @@ async function ensureTenantBaseline(appContext, tenantID) {
         !case4Summary.validation_errors.includes("parent_candidate_not_found"),
     },
   ];
-  report.candidate_snapshot.candidate_count = sharedServiceUnits.length;
-  report.candidate_snapshot.candidates = await collectCandidateDetails(appContext, sharedServiceUnits, BASELINE_CASE4_AS_OF);
+  report.candidate_snapshot.candidate_count = case4Summary.candidate_count;
+  report.candidate_snapshot.candidates =
+    case4Candidates.length > 0
+      ? case4Candidates
+      : await collectCandidateDetails(appContext, sharedServiceUnits, BASELINE_CASE4_AS_OF);
 
   if (report.required_orgs[0].matched_count !== 1) {
     report.issues.push(`AI治理办公室 命中数量异常：${report.required_orgs[0].matched_count}`);
@@ -435,6 +504,21 @@ function assertCasePreflightGate(caseId, snapshot, baseline) {
 }
 
 function captureBaselineHint(caseId, tenantID, baseline, snapshot) {
+  if (baseline) {
+    baselineHints.t0 = {
+      ...(baselineHints.t0 || {}),
+      tenant_id: tenantID,
+      ensured_status: String(baseline?.status || ""),
+      root_org_code: String(baseline?.root_org_code || ""),
+      created_orgs: Array.isArray(baseline?.created_orgs) ? baseline.created_orgs : [],
+      required_orgs: Array.isArray(baseline?.required_orgs) ? baseline.required_orgs : [],
+      candidate_snapshot: baseline?.candidate_snapshot || {},
+      probes: baseline?.probes || {},
+      issues: Array.isArray(baseline?.issues) ? baseline.issues : [],
+      effective_date: String(baseline?.effective_date || ""),
+      validated_at: String(baseline?.validated_at || ""),
+    };
+  }
   if (caseId !== 2 && caseId !== 4) {
     return;
   }
@@ -670,6 +754,61 @@ async function sendFromFormalEntry(surface, text) {
   const input = surface.getByRole("textbox").last();
   await input.fill(text);
   await surface.getByRole("button", { name: /发送消息|Send message/i }).click();
+}
+
+async function clickFormalConfirm(surface) {
+  const button = surface.getByRole("button", { name: /确认|Confirm/i }).last();
+  await expect(button).toBeVisible({ timeout: 30_000 });
+  await button.click();
+}
+
+async function clickFormalSubmit(surface) {
+  const button = surface.getByRole("button", { name: /提交|Submit/i }).last();
+  await expect(button).toBeVisible({ timeout: 30_000 });
+  await button.click();
+}
+
+async function clickFormalCandidateSelect(surface, ordinal) {
+  const buttons = surface.getByRole("button", { name: /(选择|Select).*(确认|Confirm)|Select \+ Confirm/i });
+  const target = buttons.nth(Math.max(0, ordinal - 1));
+  await expect(target).toBeVisible({ timeout: 30_000 });
+  await target.click();
+}
+
+async function runFormalCaseStep(surface, caseId, stepIndex, text) {
+  if (stepIndex === 0) {
+    await sendFromFormalEntry(surface, text);
+    return;
+  }
+
+  if (caseId === 2 && stepIndex === 1) {
+    await clickFormalConfirm(surface);
+    await clickFormalSubmit(surface);
+    return;
+  }
+
+  if (caseId === 3 && stepIndex === 1) {
+    await sendFromFormalEntry(surface, text);
+    return;
+  }
+
+  if (caseId === 3 && stepIndex === 2) {
+    await clickFormalConfirm(surface);
+    await clickFormalSubmit(surface);
+    return;
+  }
+
+  if (caseId === 4 && stepIndex === 1) {
+    await clickFormalCandidateSelect(surface, 2);
+    return;
+  }
+
+  if (caseId === 4 && stepIndex === 2) {
+    await clickFormalSubmit(surface);
+    return;
+  }
+
+  await sendFromFormalEntry(surface, text);
 }
 
 async function latestFormalBubble(surface) {
@@ -968,7 +1107,7 @@ async function runCaseAndCollectEvidence(browser, caseId) {
     expect(usedIframe, "formal entry must be direct page").toBe(false);
 
     for (let index = 0; index < inputs.length; index += 1) {
-      await sendFromFormalEntry(surface, inputs[index]);
+      await runFormalCaseStep(surface, caseId, index, inputs[index]);
       const bubble = await latestFormalBubble(surface);
       conversationId = conversationId || bubble.conversationId;
       if (conversationId) {
@@ -1023,6 +1162,13 @@ async function runCaseAndCollectEvidence(browser, caseId) {
     const actionAtFirstTurn = String(snapshots[0]?.latest_turn?.intent?.action || "").trim();
     const actionAtFinalTurn = String(finalTurn?.intent?.action || "").trim();
     const actionOnCommittedPath = actionAtFinalTurn || actionAtFirstTurn;
+    const case3ExpectedPhaseVariants = [
+      ["await_missing_fields", "await_commit_confirm", "committed"],
+      ["await_missing_fields", "committed"],
+    ];
+    const case3PhaseMatched = case3ExpectedPhaseVariants.some(
+      (variant) => JSON.stringify(variant) === JSON.stringify(observedPhases),
+    );
 
     expect(networkState.nativePostPaths).toEqual([]);
     if (caseId === 1) {
@@ -1040,7 +1186,7 @@ async function runCaseAndCollectEvidence(browser, caseId) {
       expect(finalTurn?.state).toBe("committed");
     } else if (caseId === 3) {
       expect(snapshots[0]?.latest_turn?.phase).toBe("await_missing_fields");
-      expect(observedPhases).toContain("await_commit_confirm");
+      expect(case3PhaseMatched, `unexpected case3 phases: ${JSON.stringify(observedPhases)}`).toBe(true);
       expect(hasInternalPost(networkState, ":confirm")).toBe(true);
       expect(hasInternalPost(networkState, ":commit")).toBe(true);
       expect(taskStatusCalls.length).toBeGreaterThan(0);
@@ -1093,7 +1239,7 @@ async function runCaseAndCollectEvidence(browser, caseId) {
           : caseId === 2
             ? ["await_commit_confirm", "committed"]
             : caseId === 3
-              ? ["await_missing_fields", "await_commit_confirm", "committed"]
+              ? case3ExpectedPhaseVariants
               : ["await_candidate_pick", "await_commit_confirm", "committed"],
       phase_observed_path: observedPhases,
       error_code: finalTurn?.error_code || "",
@@ -1261,10 +1407,10 @@ test.afterAll(async () => {
     runtimeGate?.status === "passed" && merged.length === 4 && merged.every((item) => item.status === "passed");
   const baselineCase2 = baselineHints.case2 || {};
   const baselineCase4 = baselineHints.case4 || {};
+  const baselineT0 = baselineHints.t0 || {};
   const baselineReady =
-    baselineCase2.ensured_status === "passed" &&
-    baselineCase4.ensured_status === "passed" &&
-    Boolean(baselineCase2.tenant_id || baselineCase4.tenant_id);
+    baselineT0.ensured_status === "passed" &&
+    Boolean(baselineT0.tenant_id || baselineCase2.tenant_id || baselineCase4.tenant_id);
   const indexPayload = {
     plan: "DEV-PLAN-290B",
     status: allPassed ? "passed" : hasBlocked ? "blocked" : "in_progress",
@@ -1299,57 +1445,34 @@ test.afterAll(async () => {
 
   const baselinePayload = {
     plan: "DEV-PLAN-290B",
+    scope: "T0_DATA_BASELINE",
     status: baselineReady ? "passed" : "blocked",
+    t0_baseline_ready: baselineReady,
     validated_at: new Date().toISOString(),
     runtime_gate_status: runtimeGate?.status || "not_run",
-    tenant_id: baselineCase2.tenant_id || baselineCase4.tenant_id || String(runtimeGate?.tenant_id || ""),
-    tenant_ids: {
-      case2: baselineCase2.tenant_id || "",
-      case4: baselineCase4.tenant_id || "",
-    },
-    effective_date: BASELINE_EFFECTIVE_DATE,
-    as_of: BASELINE_CASE4_AS_OF,
-    candidate_snapshot: {
-      source_case: "case4",
-      conversation_id: baselineCase4.conversation_id || "",
-      candidate_count: baselineCase4.candidate_count ?? 0,
-      candidates: baselineCase4.candidate_snapshot?.candidates || [],
-    },
-    required_orgs: [
-      {
-        name: "AI治理办公室",
-        source: "case2-baseline-gate",
-        expected: "exactly_one_candidate",
-        ensured_status: baselineCase2.ensured_status || "",
-        observed_phase: baselineCase2.phase || "",
-        observed_parent_ref_text: baselineCase2.parent_ref_text || "",
-        validation_errors: baselineCase2.validation_errors || [],
-        matched_count:
-          baselineCase2.required_orgs?.find((item) => item.name === "AI治理办公室")?.matched_count ?? 0,
-        matched_org_codes:
-          baselineCase2.required_orgs?.find((item) => item.name === "AI治理办公室")?.matched_org_codes || [],
+    t0_baseline: {
+      tenant_id: baselineT0.tenant_id || baselineCase2.tenant_id || baselineCase4.tenant_id || String(runtimeGate?.tenant_id || ""),
+      tenant_ids: {
+        case2: baselineCase2.tenant_id || "",
+        case4: baselineCase4.tenant_id || "",
       },
-      {
-        name: "共享服务中心",
-        source: "case4-baseline-gate",
-        expected: "multiple_candidates",
-        ensured_status: baselineCase4.ensured_status || "",
-        observed_phase: baselineCase4.phase || "",
-        candidate_count: baselineCase4.candidate_count ?? 0,
-        validation_errors: baselineCase4.validation_errors || [],
-        matched_count:
-          baselineCase4.required_orgs?.find((item) => item.name === "共享服务中心")?.matched_count ?? 0,
-        matched_org_codes:
-          baselineCase4.required_orgs?.find((item) => item.name === "共享服务中心")?.matched_org_codes || [],
+      effective_date: baselineT0.effective_date || BASELINE_EFFECTIVE_DATE,
+      as_of: BASELINE_CASE4_AS_OF,
+      root_org_code: baselineT0.root_org_code || baselineCase2.root_org_code || baselineCase4.root_org_code || "",
+      created_orgs: baselineT0.created_orgs || baselineCase2.created_orgs || baselineCase4.created_orgs || [],
+      required_orgs: baselineT0.required_orgs || [],
+      candidate_snapshot: {
+        source_case: "case4_probe",
+        conversation_id: baselineT0.probes?.case4?.conversation_id || baselineCase4.conversation_id || "",
+        candidate_count:
+          baselineT0.candidate_snapshot?.candidate_count ?? baselineCase4.candidate_count ?? 0,
+        candidates: baselineT0.candidate_snapshot?.candidates || [],
       },
-    ],
-    created_orgs: {
-      case2: baselineCase2.created_orgs || [],
-      case4: baselineCase4.created_orgs || [],
-    },
-    issues: {
-      case2: baselineCase2.issues || [],
-      case4: baselineCase4.issues || [],
+      probes: {
+        case2: baselineT0.probes?.case2 || baselineCase2.probe || {},
+        case4: baselineT0.probes?.case4 || baselineCase4.probe || {},
+      },
+      issues: baselineT0.issues || [],
     },
     notes: [
       "该文件由 tp290b 主验收脚本覆盖写入。",

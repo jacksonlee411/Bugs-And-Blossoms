@@ -1,0 +1,27 @@
+{
+  "case_id": 3,
+  "status": "passed",
+  "validated_at": "2026-03-09T18:46:52.748Z",
+  "observed_phase_path": [
+    "await_missing_fields",
+    "committed"
+  ],
+  "network_internal_posts": [
+    "/internal/assistant/conversations",
+    "/internal/assistant/conversations/conv_717603cf52784cdf8f917d2402790586/turns",
+    "/internal/assistant/conversations/conv_717603cf52784cdf8f917d2402790586/turns",
+    "/internal/assistant/conversations/conv_717603cf52784cdf8f917d2402790586/turns/turn_2f2ce11911194866af51f9db15902eac:confirm",
+    "/internal/assistant/conversations/conv_717603cf52784cdf8f917d2402790586/turns/turn_2f2ce11911194866af51f9db15902eac:commit"
+  ],
+  "task_terminal_status": "succeeded",
+  "task_status_poll_count": 1,
+  "stopline_266": {
+    "single_channel": true,
+    "no_official_connection_error": true,
+    "no_external_reply_container": true
+  },
+  "stopline_280": {
+    "single_formal_entry": true,
+    "no_bridge_or_injected_stream": true
+  }
+}

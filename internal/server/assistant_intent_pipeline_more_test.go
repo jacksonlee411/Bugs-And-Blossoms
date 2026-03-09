@@ -46,6 +46,43 @@ func TestAssistantIntentPipeline_Branches(t *testing.T) {
 		t.Fatalf("expected missing required fields, got=%v", got)
 	}
 
+	svc.modelGateway = &assistantModelGateway{
+		config: assistantModelConfig{ProviderRouting: assistantProviderRouting{Strategy: "priority_failover", FallbackEnabled: true}, Providers: []assistantModelProviderConfig{{Name: "openai", Enabled: true, Model: "m", Endpoint: "https://api.openai.com/v1", TimeoutMS: 1000, Retries: 0, Priority: 1, KeyRef: "OPENAI_API_KEY"}}},
+		adapters: map[string]assistantProviderAdapter{"openai": assistantAdapterFunc(func(context.Context, string, assistantModelProviderConfig) ([]byte, error) {
+			return []byte(`{"action":"plan_only"}`), nil
+		})},
+	}
+	resolvedIntent, err = svc.resolveIntent(context.Background(), "t1", "c1", "在 AI治理办公室 下新建 人力资源部239A补全")
+	if err != nil {
+		t.Fatalf("unexpected plan_only upgrade err=%v", err)
+	}
+	if resolvedIntent.Intent.Action != assistantIntentCreateOrgUnit {
+		t.Fatalf("expected create_orgunit after upgrade, got=%s", resolvedIntent.Intent.Action)
+	}
+	if resolvedIntent.Intent.ParentRefText != "AI治理办公室" || resolvedIntent.Intent.EntityName != "人力资源部239A补全" {
+		t.Fatalf("unexpected upgraded intent=%+v", resolvedIntent.Intent)
+	}
+	if got := assistantIntentValidationErrors(resolvedIntent.Intent); len(got) != 1 || got[0] != "missing_effective_date" {
+		t.Fatalf("expected only missing_effective_date, got=%v", got)
+	}
+
+	svc.modelGateway = &assistantModelGateway{
+		config: assistantModelConfig{ProviderRouting: assistantProviderRouting{Strategy: "priority_failover", FallbackEnabled: true}, Providers: []assistantModelProviderConfig{{Name: "openai", Enabled: true, Model: "m", Endpoint: "https://api.openai.com/v1", TimeoutMS: 1000, Retries: 0, Priority: 1, KeyRef: "OPENAI_API_KEY"}}},
+		adapters: map[string]assistantProviderAdapter{"openai": assistantAdapterFunc(func(context.Context, string, assistantModelProviderConfig) ([]byte, error) {
+			return []byte(`{"action":"create_orgunit","parent_ref_text":"AI治理办公室","entity_name":"人力资源部239A补全","effective_date":"2026-03-09"}`), nil
+		})},
+	}
+	resolvedIntent, err = svc.resolveIntent(context.Background(), "t1", "c1", "在 AI治理办公室 下新建 人力资源部239A补全")
+	if err != nil {
+		t.Fatalf("unexpected hallucinated date normalize err=%v", err)
+	}
+	if resolvedIntent.Intent.EffectiveDate != "" {
+		t.Fatalf("expected hallucinated effective date cleared, got=%q", resolvedIntent.Intent.EffectiveDate)
+	}
+	if got := assistantIntentValidationErrors(resolvedIntent.Intent); len(got) != 1 || got[0] != "missing_effective_date" {
+		t.Fatalf("expected missing_effective_date after clearing hallucinated date, got=%v", got)
+	}
+
 	intent := assistantIntentSpec{Action: assistantIntentCreateOrgUnit, ParentRefText: "鲜花组织", EntityName: "运营部", EffectiveDate: "2026-01-01"}
 	plan := assistantBuildPlan(intent)
 	plan.SkillExecutionPlan = assistantSkillExecutionPlan{SelectedSkills: []string{"s1"}}
@@ -152,13 +189,13 @@ func TestAssistantIntentPipeline_RetryOnSchemaInvalid(t *testing.T) {
 			"openai": assistantAdapterFunc(func(context.Context, string, assistantModelProviderConfig) ([]byte, error) {
 				attempt++
 				if attempt == 1 {
-					return []byte(`{"action":"create_orgunit"}`), nil
+					return []byte(`{"action":"create_orgunit","parent_ref_text":"鲜花组织","effective_date":"2026-01-01"}`), nil
 				}
 				return []byte(`{"action":"create_orgunit","parent_ref_text":"鲜花组织","entity_name":"运营部","effective_date":"2026-01-01"}`), nil
 			}),
 		},
 	}
-	resolved, err := svc.resolveIntent(context.Background(), "t1", "c1", "在鲜花组织之下，新建一个名为运营部的部门，成立日期是2026年1月1日。")
+	resolved, err := svc.resolveIntent(context.Background(), "t1", "c1", "在鲜花组织之下，新建一个部门，成立日期是2026年1月1日。")
 	if err != nil {
 		t.Fatalf("resolve intent err=%v", err)
 	}
@@ -315,5 +352,137 @@ func TestAssistantIntentPipeline_FallbackToLocalIntentOnStrictDecodeFailure(t *t
 	}
 	if resolved.Intent.EffectiveDate != "" {
 		t.Fatalf("expected missing effective date for follow-up, got=%q", resolved.Intent.EffectiveDate)
+	}
+}
+
+func TestAssistantIntentPipeline_LocalFactHelpers(t *testing.T) {
+	t.Run("overlay keeps non create action unchanged", func(t *testing.T) {
+		intent := assistantIntentSpec{Action: assistantIntentPlanOnly, EffectiveDate: "2026-03-09"}
+		local := assistantIntentSpec{Action: assistantIntentCreateOrgUnit, ParentRefText: "鲜花组织", EntityName: "运营部", EffectiveDate: "2026-01-01"}
+		got := assistantOverlayExplicitIntentFacts(intent, local)
+		if got != intent {
+			t.Fatalf("unexpected overlay=%+v", got)
+		}
+	})
+
+	t.Run("overlay fills missing parent entity and explicit date", func(t *testing.T) {
+		intent := assistantIntentSpec{Action: assistantIntentCreateOrgUnit}
+		local := assistantIntentSpec{ParentRefText: "鲜花组织", EntityName: "运营部", EffectiveDate: "2026-01-01"}
+		got := assistantOverlayExplicitIntentFacts(intent, local)
+		if got.ParentRefText != "鲜花组织" || got.EntityName != "运营部" || got.EffectiveDate != "2026-01-01" {
+			t.Fatalf("unexpected overlay=%+v", got)
+		}
+	})
+
+	t.Run("overlay clears hallucinated date when user omitted it", func(t *testing.T) {
+		intent := assistantIntentSpec{Action: assistantIntentCreateOrgUnit, ParentRefText: "鲜花组织", EntityName: "运营部", EffectiveDate: "2026-03-09"}
+		got := assistantOverlayExplicitIntentFacts(intent, assistantIntentSpec{})
+		if got.EffectiveDate != "" {
+			t.Fatalf("expected cleared date, got=%+v", got)
+		}
+	})
+
+	t.Run("normalize upgrades plan only from local create intent", func(t *testing.T) {
+		resolved, upgraded := assistantNormalizeResolvedIntentWithLocalFacts(
+			assistantResolveIntentResult{Intent: assistantIntentSpec{Action: assistantIntentPlanOnly}},
+			assistantIntentSpec{Action: assistantIntentCreateOrgUnit, ParentRefText: "鲜花组织", EntityName: "运营部"},
+		)
+		if !upgraded || resolved.Intent.Action != assistantIntentCreateOrgUnit || resolved.Intent.ParentRefText != "鲜花组织" {
+			t.Fatalf("resolved=%+v upgraded=%v", resolved, upgraded)
+		}
+	})
+
+	t.Run("normalize keeps provider create intent when no upgrade needed", func(t *testing.T) {
+		resolved, upgraded := assistantNormalizeResolvedIntentWithLocalFacts(
+			assistantResolveIntentResult{Intent: assistantIntentSpec{Action: assistantIntentCreateOrgUnit, EffectiveDate: "2026-03-09"}},
+			assistantIntentSpec{EffectiveDate: "2026-03-25"},
+		)
+		if upgraded {
+			t.Fatal("unexpected upgrade")
+		}
+		if resolved.Intent.EffectiveDate != "2026-03-25" {
+			t.Fatalf("resolved=%+v", resolved)
+		}
+	})
+}
+
+func TestAssistantIntentPipeline_RetryInvalidThenFallbackLocal(t *testing.T) {
+	t.Setenv("OPENAI_API_KEY", "dummy")
+	attempt := 0
+	svc := newAssistantConversationService(newOrgUnitMemoryStore(), assistantWriteServiceStub{store: newOrgUnitMemoryStore()})
+	svc.modelGateway = &assistantModelGateway{
+		config: assistantModelConfig{
+			ProviderRouting: assistantProviderRouting{Strategy: "priority_failover", FallbackEnabled: true},
+			Providers: []assistantModelProviderConfig{{
+				Name:      "openai",
+				Enabled:   true,
+				Model:     "gpt-5-codex",
+				Endpoint:  "https://api.openai.com/v1",
+				TimeoutMS: 1000,
+				Retries:   0,
+				Priority:  1,
+				KeyRef:    "OPENAI_API_KEY",
+			}},
+		},
+		adapters: map[string]assistantProviderAdapter{
+			"openai": assistantAdapterFunc(func(context.Context, string, assistantModelProviderConfig) ([]byte, error) {
+				attempt++
+				return []byte(`{"action":"create_orgunit","parent_ref_text":"鲜花组织","effective_date":"2026-01-01"}`), nil
+			}),
+		},
+	}
+
+	resolved, err := svc.resolveIntent(context.Background(), "tenant-1", "conv-1", "在鲜花组织之下，新建一个部门，成立日期是2026-01-01")
+	if err != nil {
+		t.Fatalf("resolve intent err=%v", err)
+	}
+	if attempt != 2 {
+		t.Fatalf("expected two attempts, got=%d", attempt)
+	}
+	if resolved.ProviderName != "deterministic" || resolved.ModelName != "builtin-intent-extractor" {
+		t.Fatalf("expected local fallback, got=%+v", resolved)
+	}
+	if resolved.Intent.Action != assistantIntentCreateOrgUnit || resolved.Intent.ParentRefText != "鲜花组织" || resolved.Intent.EffectiveDate != "2026-01-01" {
+		t.Fatalf("unexpected intent=%+v", resolved.Intent)
+	}
+}
+
+func TestAssistantIntentPipeline_RetryPlanOnlyUpgradeAfterInvalidFirstPass(t *testing.T) {
+	t.Setenv("OPENAI_API_KEY", "dummy")
+	attempt := 0
+	svc := newAssistantConversationService(newOrgUnitMemoryStore(), assistantWriteServiceStub{store: newOrgUnitMemoryStore()})
+	svc.modelGateway = &assistantModelGateway{
+		config: assistantModelConfig{
+			ProviderRouting: assistantProviderRouting{Strategy: "priority_failover", FallbackEnabled: true},
+			Providers: []assistantModelProviderConfig{{
+				Name:      "openai",
+				Enabled:   true,
+				Model:     "gpt-5-codex",
+				Endpoint:  "https://api.openai.com/v1",
+				TimeoutMS: 1000,
+				Retries:   0,
+				Priority:  1,
+				KeyRef:    "OPENAI_API_KEY",
+			}},
+		},
+		adapters: map[string]assistantProviderAdapter{
+			"openai": assistantAdapterFunc(func(context.Context, string, assistantModelProviderConfig) ([]byte, error) {
+				attempt++
+				if attempt == 1 {
+					return []byte(`{"action":"create_orgunit"}`), nil
+				}
+				return []byte(`{"action":"plan_only"}`), nil
+			}),
+		},
+	}
+	resolved, err := svc.resolveIntent(context.Background(), "tenant-1", "conv-1", "在 AI治理办公室 下新建 人力资源部239A补全")
+	if err != nil {
+		t.Fatalf("resolve intent err=%v", err)
+	}
+	if attempt != 2 {
+		t.Fatalf("expected two attempts, got=%d", attempt)
+	}
+	if resolved.Intent.Action != assistantIntentCreateOrgUnit || resolved.Intent.ParentRefText != "AI治理办公室" || resolved.Intent.EntityName != "人力资源部239A补全" {
+		t.Fatalf("unexpected intent=%+v", resolved.Intent)
 	}
 }

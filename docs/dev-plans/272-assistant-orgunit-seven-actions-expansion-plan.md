@@ -1,6 +1,6 @@
 # DEV-PLAN-272：Assistant OrgUnit 七动作纳管实施计划（1-7 全量纳入）
 
-**状态**: 规划中（2026-03-09 21:35 CST）
+**状态**: 实施中（2026-03-10 03:42 CST，PR-272-01/02/03 已落地最小闭环）
 
 ## 1. 背景与问题
 1. [ ] 当前 Assistant 提交主链已完成 `240A~240D` 的结构化收敛，但运行时可稳定提交的业务动作仍以 `create_orgunit` 为主。
@@ -62,19 +62,19 @@
 ## 5. 分批实施（PR 切片）
 
 ### 5.1 PR-272-01：契约与注册表扩展（无行为切换）
-1. [ ] 扩展 `assistantActionRegistry` 默认注册，纳入七动作完整 spec。
-2. [ ] 每个动作补齐 `PlanTitle/PlanSummary/CapabilityKey/Security/Handler`。
-3. [ ] 保持现有 create 行为不变，先确保新增 spec 不影响既有链路。
+1. [x] 扩展 `assistantActionRegistry` 默认注册，纳入七动作完整 spec。
+2. [x] 每个动作补齐 `PlanTitle/PlanSummary/CapabilityKey/Security/Handler`。
+3. [x] 保持现有 create 行为不变，先确保新增 spec 不影响既有链路。
 
 ### 5.2 PR-272-02：CommitAdapter 全量接线
-1. [ ] 新增并注册七动作对应 adapter（复用 `orgunitservices.OrgUnitWriteService` 既有入口）。
-2. [ ] 适配各动作最小输入载荷与 request_id/initiator 透传。
-3. [ ] 明确 unsupported/invalid payload 的稳定错误码映射。
+1. [x] 新增并注册七动作对应 adapter（复用 `orgunitservices.OrgUnitWriteService` 既有入口）。
+2. [x] 适配各动作最小输入载荷与 request_id/initiator 透传。
+3. [x] 明确 unsupported/invalid payload 的稳定错误码映射。
 
 ### 5.3 PR-272-03：Intent 编译与字段校验扩展
-1. [ ] 扩展 intent decode/normalize 与 compile 逻辑，覆盖七动作最小必填字段。
-2. [ ] 按动作输出 `skill_execution_plan` 与 `config_delta_plan`，不再隐式回落到 create-only 分支。
-3. [ ] 缺字段、候选冲突、日期格式错误等失败路径统一落入现有错误契约。
+1. [x] 扩展 intent decode/normalize 与 compile 逻辑，覆盖七动作最小必填字段。
+2. [x] 按动作输出 `skill_execution_plan` 与 `config_delta_plan`，不再隐式回落到 create-only 分支。
+3. [x] 缺字段、候选冲突、日期格式错误等失败路径统一落入现有错误契约。
 
 ### 5.4 PR-272-04：Gate 规则按动作收敛
 1. [ ] 对 `required_checks` 做动作级最小化配置（如 create/move 可能需要候选确认，其余动作按需启用）。
@@ -84,12 +84,12 @@
 ### 5.5 PR-272-05：回归与证据封板
 1. [ ] 补齐七动作 API/PG/任务执行回归测试与 E2E 证据。
 2. [ ] 按 `271-S5` 新鲜度规则刷新 `288/290` 受影响证据。
-3. [ ] 在 `docs/dev-records/` 新增或更新 `dev-plan-272-execution-log.md`。
+3. [x] 在 `docs/dev-records/` 新增或更新 `dev-plan-272-execution-log.md`。
 
 ## 6. 测试与覆盖率
 1. [ ] 覆盖率口径：沿用仓库 CI 既有口径与阈值，不新增排除项规避。
 2. [ ] 单测最小集：
-   - [ ] `assistant_action_registry_test.go`：七动作注册完整性
+   - [x] `assistant_action_registry_test.go`：七动作注册完整性
    - [ ] `assistant_action_interceptor_test.go`：七动作 gate 分支
    - [ ] `assistant_api_test.go` / `assistant_api_coverage_test.go`：plan/confirm/commit 错误码映射
    - [ ] `assistant_persistence_gap_test.go`：PG 路径下 gate 拒绝不写门
@@ -121,7 +121,7 @@
    - [ ] `internal/server/assistant_api.go`
    - [ ] `internal/server/assistant_persistence.go`
 3. [ ] 测试改动：`internal/server/*assistant*_test.go` 邻近文件
-4. [ ] 执行证据：`docs/dev-records/dev-plan-272-execution-log.md`
+4. [x] 执行证据：`docs/dev-records/dev-plan-272-execution-log.md`
 
 ## 10. 门禁与命令（SSOT 引用）
 1. [ ] 基础门禁：`go fmt ./... && go vet ./... && make check lint && make test`

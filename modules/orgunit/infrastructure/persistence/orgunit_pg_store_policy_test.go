@@ -385,9 +385,9 @@ func TestOrgUnitPGStore_ResolveSetIDStrategyFieldDecision(t *testing.T) {
 		}
 	})
 
-	t.Run("query row error", func(t *testing.T) {
+	t.Run("query error", func(t *testing.T) {
 		store := newConcreteOrgUnitPGStore(beginFunc(func(context.Context) (pgx.Tx, error) {
-			return &txStub{row: stubRow{err: errors.New("row")}}, nil
+			return &txStub{queryErr: errors.New("query")}, nil
 		}))
 		if _, found, err := store.ResolveSetIDStrategyFieldDecision(ctx, "t1", "org.orgunit_create.field_policy", "org_code", "", "2026-01-01"); err == nil || found {
 			t.Fatalf("found=%v err=%v", found, err)
@@ -396,7 +396,10 @@ func TestOrgUnitPGStore_ResolveSetIDStrategyFieldDecision(t *testing.T) {
 
 	t.Run("allowed_value_codes json invalid", func(t *testing.T) {
 		store := newConcreteOrgUnitPGStore(beginFunc(func(context.Context) (pgx.Tx, error) {
-			return &txStub{row: stubRow{vals: []any{"org.orgunit_create.field_policy", "org_code", true, true, true, "", "", "{"}}}, nil
+			return &txStub{rows: &rowsWithData{
+				stubRows: &stubRows{},
+				data:     [][]any{{"org.orgunit_create.field_policy", "org_code", "tenant", "", true, true, true, "", "", "{", 100, "2026-01-01"}},
+			}}, nil
 		}))
 		if _, found, err := store.ResolveSetIDStrategyFieldDecision(ctx, "t1", "org.orgunit_create.field_policy", "org_code", "", "2026-01-01"); err == nil || found {
 			t.Fatalf("found=%v err=%v", found, err)
@@ -406,7 +409,10 @@ func TestOrgUnitPGStore_ResolveSetIDStrategyFieldDecision(t *testing.T) {
 	t.Run("commit error", func(t *testing.T) {
 		store := newConcreteOrgUnitPGStore(beginFunc(func(context.Context) (pgx.Tx, error) {
 			return &txStub{
-				row:       stubRow{vals: []any{"org.orgunit_create.field_policy", "org_code", true, true, false, `next_org_code("F", 8)`, "", `["11"]`}},
+				rows: &rowsWithData{
+					stubRows: &stubRows{},
+					data:     [][]any{{"org.orgunit_create.field_policy", "org_code", "tenant", "", true, true, false, `next_org_code("F", 8)`, "", `["11"]`, 100, "2026-01-01"}},
+				},
 				commitErr: errors.New("commit"),
 			}, nil
 		}))
@@ -418,7 +424,10 @@ func TestOrgUnitPGStore_ResolveSetIDStrategyFieldDecision(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
 		store := newConcreteOrgUnitPGStore(beginFunc(func(context.Context) (pgx.Tx, error) {
 			return &txStub{
-				row: stubRow{vals: []any{"org.orgunit_create.field_policy", "d_org_type", true, true, true, "", "11", `[" 11 ", "11", "12"]`}},
+				rows: &rowsWithData{
+					stubRows: &stubRows{},
+					data:     [][]any{{"org.orgunit_create.field_policy", "d_org_type", "tenant", "", true, true, true, "", "11", `[" 11 ", "11", "12"]`, 100, "2026-01-01"}},
+				},
 			}, nil
 		}))
 		decision, found, err := store.ResolveSetIDStrategyFieldDecision(ctx, "t1", " Org.OrgUnit_Create.Field_Policy ", " D_Org_Type ", "", "2026-01-01")
@@ -430,6 +439,30 @@ func TestOrgUnitPGStore_ResolveSetIDStrategyFieldDecision(t *testing.T) {
 		}
 		if len(decision.AllowedValueCodes) != 2 || decision.AllowedValueCodes[0] != "11" || decision.AllowedValueCodes[1] != "12" {
 			t.Fatalf("allowed=%v", decision.AllowedValueCodes)
+		}
+	})
+
+	t.Run("fallback to baseline capability and prefer baseline business unit over intent tenant", func(t *testing.T) {
+		store := newConcreteOrgUnitPGStore(beginFunc(func(context.Context) (pgx.Tx, error) {
+			return &txStub{
+				rows: &rowsWithData{
+					stubRows: &stubRows{},
+					data: [][]any{
+						{"org.orgunit_create.field_policy", "org_code", "tenant", "", true, true, false, `next_org_code("T", 6)`, "", `[]`, 100, "2026-01-01"},
+						{"org.orgunit_write.field_policy", "org_code", "business_unit", "10000001", true, true, false, `next_org_code("B", 8)`, "", `[]`, 100, "2026-01-01"},
+					},
+				},
+			}, nil
+		}))
+		decision, found, err := store.ResolveSetIDStrategyFieldDecision(ctx, "t1", "org.orgunit_create.field_policy", "org_code", "10000001", "2026-01-01")
+		if err != nil || !found {
+			t.Fatalf("decision=%+v found=%v err=%v", decision, found, err)
+		}
+		if decision.CapabilityKey != "org.orgunit_write.field_policy" {
+			t.Fatalf("capability_key=%q", decision.CapabilityKey)
+		}
+		if decision.DefaultRuleRef != `next_org_code("B", 8)` {
+			t.Fatalf("default_rule_ref=%q", decision.DefaultRuleRef)
 		}
 	})
 }
@@ -456,4 +489,61 @@ func TestCloneOptionalString(t *testing.T) {
 	if got == nil || *got != "X001" {
 		t.Fatalf("got=%v", got)
 	}
+}
+
+func TestOrgUnitPGStore_SetIDStrategyHelperBranches(t *testing.T) {
+	t.Run("baseline capability mapping", func(t *testing.T) {
+		if got := orgUnitBaselineCapabilityKeyForSetIDStrategy(" org.orgunit_create.field_policy "); got != "org.orgunit_write.field_policy" {
+			t.Fatalf("got=%q", got)
+		}
+		if got := orgUnitBaselineCapabilityKeyForSetIDStrategy("org.other"); got != "org.other" {
+			t.Fatalf("got=%q", got)
+		}
+	})
+
+	t.Run("decision bucket precedence", func(t *testing.T) {
+		capabilityKey := "org.orgunit_create.field_policy"
+		baselineKey := "org.orgunit_write.field_policy"
+		businessUnitID := "BU-1"
+		cases := []struct {
+			name      string
+			candidate setIDStrategyFieldDecisionCandidate
+			want      int
+		}{
+			{name: "intent business unit", candidate: setIDStrategyFieldDecisionCandidate{CapabilityKey: capabilityKey, OrgApplicability: "business_unit", BusinessUnitID: businessUnitID}, want: 4},
+			{name: "baseline business unit", candidate: setIDStrategyFieldDecisionCandidate{CapabilityKey: baselineKey, OrgApplicability: "business_unit", BusinessUnitID: businessUnitID}, want: 3},
+			{name: "intent tenant", candidate: setIDStrategyFieldDecisionCandidate{CapabilityKey: capabilityKey, OrgApplicability: "tenant"}, want: 2},
+			{name: "baseline tenant", candidate: setIDStrategyFieldDecisionCandidate{CapabilityKey: baselineKey, OrgApplicability: "tenant"}, want: 1},
+			{name: "other", candidate: setIDStrategyFieldDecisionCandidate{CapabilityKey: "x", OrgApplicability: "other"}, want: -1},
+		}
+		for _, tc := range cases {
+			t.Run(tc.name, func(t *testing.T) {
+				if got := orgUnitSetIDStrategyDecisionBucket(tc.candidate, capabilityKey, baselineKey, businessUnitID); got != tc.want {
+					t.Fatalf("got=%d want=%d", got, tc.want)
+				}
+			})
+		}
+	})
+
+	t.Run("candidate wins tie breakers", func(t *testing.T) {
+		base := setIDStrategyFieldDecisionCandidate{Priority: 1, EffectiveDate: "2026-01-01", CapabilityKey: "a", OrgApplicability: "tenant", BusinessUnitID: "A"}
+		if !orgUnitSetIDStrategyCandidateWins(setIDStrategyFieldDecisionCandidate{Priority: 2}, base) {
+			t.Fatal("expected higher priority to win")
+		}
+		if !orgUnitSetIDStrategyCandidateWins(setIDStrategyFieldDecisionCandidate{Priority: 1, EffectiveDate: "2026-02-01"}, base) {
+			t.Fatal("expected newer effective date to win")
+		}
+		if !orgUnitSetIDStrategyCandidateWins(setIDStrategyFieldDecisionCandidate{Priority: 1, EffectiveDate: "2026-01-01", CapabilityKey: "z"}, base) {
+			t.Fatal("expected capability key tie breaker")
+		}
+		if !orgUnitSetIDStrategyCandidateWins(setIDStrategyFieldDecisionCandidate{Priority: 1, EffectiveDate: "2026-01-01", CapabilityKey: "a", OrgApplicability: "z"}, base) {
+			t.Fatal("expected applicability tie breaker")
+		}
+		if !orgUnitSetIDStrategyCandidateWins(setIDStrategyFieldDecisionCandidate{Priority: 1, EffectiveDate: "2026-01-01", CapabilityKey: "a", OrgApplicability: "tenant", BusinessUnitID: "Z"}, base) {
+			t.Fatal("expected business unit tie breaker")
+		}
+		if orgUnitSetIDStrategyCandidateWins(base, base) {
+			t.Fatal("expected equal candidate not to win")
+		}
+	})
 }

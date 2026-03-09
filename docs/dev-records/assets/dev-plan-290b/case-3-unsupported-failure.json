@@ -1,0 +1,60 @@
+{
+  "case_id": 3,
+  "conversation_id": "conv_84f4b7e7b56f49f598f967c17d3457b5",
+  "turn_id": "turn_0d2efb289c394d39ad0680e3a5d486ed",
+  "request_id": "assistant_1c6814e92eaa4e0c805665fcbd93d14e",
+  "trace_id": "e2ff1e3efb644bd99d35636c225e5301",
+  "intent_action": "plan_only",
+  "phase": "await_commit_confirm",
+  "error_code": "assistant_intent_unsupported",
+  "failure_stage": "runtime_or_case_flow",
+  "failure_message": "assistant_intent_unsupported (case=3, phase=await_commit_confirm, action=plan_only)",
+  "observed_calls": [
+    {
+      "method": "POST",
+      "path": "/internal/assistant/conversations/conv_84f4b7e7b56f49f598f967c17d3457b5/turns/turn_0d2efb289c394d39ad0680e3a5d486ed:commit",
+      "status": 422,
+      "body": "",
+      "json": {
+        "code": "assistant_intent_unsupported",
+        "message": "assistant intent unsupported",
+        "trace_id": "",
+        "meta": {
+          "path": "/internal/assistant/conversations/conv_84f4b7e7b56f49f598f967c17d3457b5/turns/turn_0d2efb289c394d39ad0680e3a5d486ed:commit",
+          "method": "POST"
+        }
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/internal/assistant/conversations/conv_84f4b7e7b56f49f598f967c17d3457b5/turns",
+      "status": 422,
+      "body": "",
+      "json": {
+        "code": "assistant_intent_unsupported",
+        "message": "assistant intent unsupported",
+        "trace_id": "",
+        "meta": {
+          "path": "/internal/assistant/conversations/conv_84f4b7e7b56f49f598f967c17d3457b5/turns",
+          "method": "POST"
+        }
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/internal/assistant/conversations/conv_d643a4daaf68456fbc52838b522ec6c0/turns",
+      "status": 422,
+      "body": "",
+      "json": {
+        "code": "assistant_intent_unsupported",
+        "message": "assistant intent unsupported",
+        "trace_id": "",
+        "meta": {
+          "path": "/internal/assistant/conversations/conv_d643a4daaf68456fbc52838b522ec6c0/turns",
+          "method": "POST"
+        }
+      }
+    }
+  ],
+  "captured_at": "2026-03-09T18:17:39.043Z"
+}

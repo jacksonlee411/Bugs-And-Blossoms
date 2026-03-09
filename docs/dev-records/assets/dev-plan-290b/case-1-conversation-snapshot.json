@@ -1,72 +1,72 @@
 {
   "case_id": 1,
-  "tenant_id": "22b30cf3-8dd7-4e14-a63a-da2cfe7f7fe4",
-  "conversation_id": "conv_29955620094b42bb98999ff80c591026",
+  "tenant_id": "5aee0553-b6fe-42f9-9207-6aa1f889fecc",
+  "conversation_id": "conv_81e8a97a721141b2b2bafd08ce6baf6d",
   "snapshots": [
     {
       "step": 1,
       "input": "你好",
       "bubble": {
         "count": 1,
-        "bindingKey": "conv_29955620094b42bb98999ff80c591026::turn_6e243ae9ba82471abaeebcb5a265b7e6::assistant_e40b7e815ba24233a5adbcbe8156f81d",
-        "conversationId": "conv_29955620094b42bb98999ff80c591026",
-        "turnId": "turn_6e243ae9ba82471abaeebcb5a265b7e6",
-        "requestId": "assistant_e40b7e815ba24233a5adbcbe8156f81d",
+        "bindingKey": "conv_81e8a97a721141b2b2bafd08ce6baf6d::turn_cfd3a81e0ee34e9b9c4d3d91446e75df::assistant_8cef6ccfb4fe489e8e3a89cc631bf57c",
+        "conversationId": "conv_81e8a97a721141b2b2bafd08ce6baf6d",
+        "turnId": "turn_cfd3a81e0ee34e9b9c4d3d91446e75df",
+        "requestId": "assistant_8cef6ccfb4fe489e8e3a89cc631bf57c",
         "text": "计划已生成，等待确认后可提交 Confirm"
       },
       "conversation": {
-        "conversation_id": "conv_29955620094b42bb98999ff80c591026",
-        "tenant_id": "22b30cf3-8dd7-4e14-a63a-da2cfe7f7fe4",
-        "actor_id": "9c138c36-29bf-4960-83f1-9975ecb6931f",
+        "conversation_id": "conv_81e8a97a721141b2b2bafd08ce6baf6d",
+        "tenant_id": "5aee0553-b6fe-42f9-9207-6aa1f889fecc",
+        "actor_id": "2c6bfdef-375a-45b9-b0d2-520dcafe67d0",
         "actor_role": "tenant-admin",
         "state": "validated",
         "current_phase": "await_commit_confirm",
         "state_transitions": [
           {
-            "id": 401,
-            "request_id": "assistant_d7829b8a844646a59ed15844278178fb",
-            "trace_id": "f16190326be4441d815daacb34a66cf0",
+            "id": 569,
+            "request_id": "assistant_a14712d71ddd4f2997b982956bc39544",
+            "trace_id": "8828dbf200604890b3977be9efce732d",
             "from_state": "init",
             "to_state": "validated",
             "from_phase": "init",
             "to_phase": "idle",
             "reason_code": "conversation_created",
-            "actor_id": "9c138c36-29bf-4960-83f1-9975ecb6931f",
-            "changed_at": "2026-03-09T19:15:27.627136+08:00"
+            "actor_id": "2c6bfdef-375a-45b9-b0d2-520dcafe67d0",
+            "changed_at": "2026-03-10T02:45:57.194545+08:00"
           },
           {
-            "id": 402,
-            "turn_id": "turn_6e243ae9ba82471abaeebcb5a265b7e6",
-            "request_id": "assistant_e40b7e815ba24233a5adbcbe8156f81d",
-            "trace_id": "cd22ddbe8fc649c39151380f8182b1af",
+            "id": 570,
+            "turn_id": "turn_cfd3a81e0ee34e9b9c4d3d91446e75df",
+            "request_id": "assistant_8cef6ccfb4fe489e8e3a89cc631bf57c",
+            "trace_id": "5ea9cbe607ea4f48a8c14b55a8da22b0",
             "from_state": "init",
             "to_state": "validated",
             "from_phase": "idle",
             "to_phase": "await_commit_confirm",
             "reason_code": "turn_created",
-            "actor_id": "9c138c36-29bf-4960-83f1-9975ecb6931f",
-            "changed_at": "2026-03-09T11:15:31.858050045Z"
+            "actor_id": "2c6bfdef-375a-45b9-b0d2-520dcafe67d0",
+            "changed_at": "2026-03-09T18:46:08.064784066Z"
           }
         ],
-        "created_at": "2026-03-09T19:15:27.627136+08:00",
-        "updated_at": "2026-03-09T11:15:31.858050045Z",
+        "created_at": "2026-03-10T02:45:57.194545+08:00",
+        "updated_at": "2026-03-09T18:46:08.064784066Z",
         "turns": [
           {
-            "turn_id": "turn_6e243ae9ba82471abaeebcb5a265b7e6",
+            "turn_id": "turn_cfd3a81e0ee34e9b9c4d3d91446e75df",
             "user_input": "你好",
             "state": "validated",
             "phase": "await_commit_confirm",
             "risk_tier": "low",
-            "request_id": "assistant_e40b7e815ba24233a5adbcbe8156f81d",
-            "trace_id": "cd22ddbe8fc649c39151380f8182b1af",
+            "request_id": "assistant_8cef6ccfb4fe489e8e3a89cc631bf57c",
+            "trace_id": "5ea9cbe607ea4f48a8c14b55a8da22b0",
             "policy_version": "2026-02-23",
             "composition_version": "2026-02-23",
             "mapping_version": "2026-02-23",
             "intent": {
               "action": "plan_only",
               "intent_schema_version": "assistant.intent.v1",
-              "context_hash": "a9a7341b6d24ccb73f40cfbe71bff34ed3ce107d051050ce76cd0972bb861600",
-              "intent_hash": "ec2c4cd0ed08736ba04ac4e720d616c05924cfdb923824767243b485e3f38830"
+              "context_hash": "2ceb6077ef5ca70c6bec8f010da535fc2ab2f9027cbcff092029e1d4f56e5825",
+              "intent_hash": "2e8f82315c0283a689a5c02c3c2c3d1690d5a8844bad78bd4b468dbd25156003"
             },
             "plan": {
               "title": "只读规划",
@@ -106,29 +106,29 @@
               "diff": null,
               "explain": "计划已生成，等待确认后可提交",
               "would_commit": false,
-              "plan_hash": "1e91571eb9fd70efccbb07c63a2a17dcdfeea8b4288414af9448f3977bd4167d"
+              "plan_hash": "4052450128011179bf2e662f87334cafe40f90bae6056254395be0d1b2d2d534"
             },
-            "created_at": "2026-03-09T11:15:31.858050045Z",
-            "updated_at": "2026-03-09T11:15:31.858050045Z"
+            "created_at": "2026-03-09T18:46:08.064784066Z",
+            "updated_at": "2026-03-09T18:46:08.064784066Z"
           }
         ]
       },
       "latest_turn": {
-        "turn_id": "turn_6e243ae9ba82471abaeebcb5a265b7e6",
+        "turn_id": "turn_cfd3a81e0ee34e9b9c4d3d91446e75df",
         "user_input": "你好",
         "state": "validated",
         "phase": "await_commit_confirm",
         "risk_tier": "low",
-        "request_id": "assistant_e40b7e815ba24233a5adbcbe8156f81d",
-        "trace_id": "cd22ddbe8fc649c39151380f8182b1af",
+        "request_id": "assistant_8cef6ccfb4fe489e8e3a89cc631bf57c",
+        "trace_id": "5ea9cbe607ea4f48a8c14b55a8da22b0",
         "policy_version": "2026-02-23",
         "composition_version": "2026-02-23",
         "mapping_version": "2026-02-23",
         "intent": {
           "action": "plan_only",
           "intent_schema_version": "assistant.intent.v1",
-          "context_hash": "a9a7341b6d24ccb73f40cfbe71bff34ed3ce107d051050ce76cd0972bb861600",
-          "intent_hash": "ec2c4cd0ed08736ba04ac4e720d616c05924cfdb923824767243b485e3f38830"
+          "context_hash": "2ceb6077ef5ca70c6bec8f010da535fc2ab2f9027cbcff092029e1d4f56e5825",
+          "intent_hash": "2e8f82315c0283a689a5c02c3c2c3d1690d5a8844bad78bd4b468dbd25156003"
         },
         "plan": {
           "title": "只读规划",
@@ -168,66 +168,66 @@
           "diff": null,
           "explain": "计划已生成，等待确认后可提交",
           "would_commit": false,
-          "plan_hash": "1e91571eb9fd70efccbb07c63a2a17dcdfeea8b4288414af9448f3977bd4167d"
+          "plan_hash": "4052450128011179bf2e662f87334cafe40f90bae6056254395be0d1b2d2d534"
         },
-        "created_at": "2026-03-09T11:15:31.858050045Z",
-        "updated_at": "2026-03-09T11:15:31.858050045Z"
+        "created_at": "2026-03-09T18:46:08.064784066Z",
+        "updated_at": "2026-03-09T18:46:08.064784066Z"
       }
     }
   ],
   "final_conversation": {
-    "conversation_id": "conv_29955620094b42bb98999ff80c591026",
-    "tenant_id": "22b30cf3-8dd7-4e14-a63a-da2cfe7f7fe4",
-    "actor_id": "9c138c36-29bf-4960-83f1-9975ecb6931f",
+    "conversation_id": "conv_81e8a97a721141b2b2bafd08ce6baf6d",
+    "tenant_id": "5aee0553-b6fe-42f9-9207-6aa1f889fecc",
+    "actor_id": "2c6bfdef-375a-45b9-b0d2-520dcafe67d0",
     "actor_role": "tenant-admin",
     "state": "validated",
     "current_phase": "await_commit_confirm",
     "state_transitions": [
       {
-        "id": 401,
-        "request_id": "assistant_d7829b8a844646a59ed15844278178fb",
-        "trace_id": "f16190326be4441d815daacb34a66cf0",
+        "id": 569,
+        "request_id": "assistant_a14712d71ddd4f2997b982956bc39544",
+        "trace_id": "8828dbf200604890b3977be9efce732d",
         "from_state": "init",
         "to_state": "validated",
         "from_phase": "init",
         "to_phase": "idle",
         "reason_code": "conversation_created",
-        "actor_id": "9c138c36-29bf-4960-83f1-9975ecb6931f",
-        "changed_at": "2026-03-09T19:15:27.627136+08:00"
+        "actor_id": "2c6bfdef-375a-45b9-b0d2-520dcafe67d0",
+        "changed_at": "2026-03-10T02:45:57.194545+08:00"
       },
       {
-        "id": 402,
-        "turn_id": "turn_6e243ae9ba82471abaeebcb5a265b7e6",
-        "request_id": "assistant_e40b7e815ba24233a5adbcbe8156f81d",
-        "trace_id": "cd22ddbe8fc649c39151380f8182b1af",
+        "id": 570,
+        "turn_id": "turn_cfd3a81e0ee34e9b9c4d3d91446e75df",
+        "request_id": "assistant_8cef6ccfb4fe489e8e3a89cc631bf57c",
+        "trace_id": "5ea9cbe607ea4f48a8c14b55a8da22b0",
         "from_state": "init",
         "to_state": "validated",
         "from_phase": "idle",
         "to_phase": "await_commit_confirm",
         "reason_code": "turn_created",
-        "actor_id": "9c138c36-29bf-4960-83f1-9975ecb6931f",
-        "changed_at": "2026-03-09T11:15:31.858050045Z"
+        "actor_id": "2c6bfdef-375a-45b9-b0d2-520dcafe67d0",
+        "changed_at": "2026-03-09T18:46:08.064784066Z"
       }
     ],
-    "created_at": "2026-03-09T19:15:27.627136+08:00",
-    "updated_at": "2026-03-09T11:15:31.858050045Z",
+    "created_at": "2026-03-10T02:45:57.194545+08:00",
+    "updated_at": "2026-03-09T18:46:08.064784066Z",
     "turns": [
       {
-        "turn_id": "turn_6e243ae9ba82471abaeebcb5a265b7e6",
+        "turn_id": "turn_cfd3a81e0ee34e9b9c4d3d91446e75df",
         "user_input": "你好",
         "state": "validated",
         "phase": "await_commit_confirm",
         "risk_tier": "low",
-        "request_id": "assistant_e40b7e815ba24233a5adbcbe8156f81d",
-        "trace_id": "cd22ddbe8fc649c39151380f8182b1af",
+        "request_id": "assistant_8cef6ccfb4fe489e8e3a89cc631bf57c",
+        "trace_id": "5ea9cbe607ea4f48a8c14b55a8da22b0",
         "policy_version": "2026-02-23",
         "composition_version": "2026-02-23",
         "mapping_version": "2026-02-23",
         "intent": {
           "action": "plan_only",
           "intent_schema_version": "assistant.intent.v1",
-          "context_hash": "a9a7341b6d24ccb73f40cfbe71bff34ed3ce107d051050ce76cd0972bb861600",
-          "intent_hash": "ec2c4cd0ed08736ba04ac4e720d616c05924cfdb923824767243b485e3f38830"
+          "context_hash": "2ceb6077ef5ca70c6bec8f010da535fc2ab2f9027cbcff092029e1d4f56e5825",
+          "intent_hash": "2e8f82315c0283a689a5c02c3c2c3d1690d5a8844bad78bd4b468dbd25156003"
         },
         "plan": {
           "title": "只读规划",
@@ -267,10 +267,10 @@
           "diff": null,
           "explain": "计划已生成，等待确认后可提交",
           "would_commit": false,
-          "plan_hash": "1e91571eb9fd70efccbb07c63a2a17dcdfeea8b4288414af9448f3977bd4167d"
+          "plan_hash": "4052450128011179bf2e662f87334cafe40f90bae6056254395be0d1b2d2d534"
         },
-        "created_at": "2026-03-09T11:15:31.858050045Z",
-        "updated_at": "2026-03-09T11:15:31.858050045Z"
+        "created_at": "2026-03-09T18:46:08.064784066Z",
+        "updated_at": "2026-03-09T18:46:08.064784066Z"
       }
     ]
   }

@@ -1,0 +1,24 @@
+{
+  "url": "http://localhost:8080/app/assistant/librechat/c/new",
+  "bubble_count": 2,
+  "bubbles": [
+    {
+      "binding_key": "conv_717603cf52784cdf8f917d2402790586::turn_773023f5f8694791b42fa32aa8915fbc::assistant_5f354a140d3046599bdec87031e2e3d7",
+      "conversation_id": "conv_717603cf52784cdf8f917d2402790586",
+      "turn_id": "turn_773023f5f8694791b42fa32aa8915fbc",
+      "request_id": "assistant_5f354a140d3046599bdec87031e2e3d7",
+      "message_id": "2616f9fc-fe48-4c39-b310-630e026463ef_",
+      "text": "Missing fields: effective_date、parent_ref_text Missing fields effective_date parent_ref_text"
+    },
+    {
+      "binding_key": "conv_717603cf52784cdf8f917d2402790586::turn_2f2ce11911194866af51f9db15902eac::assistant_eb2cce922acb4118a394b914b01c2a07",
+      "conversation_id": "conv_717603cf52784cdf8f917d2402790586",
+      "turn_id": "turn_2f2ce11911194866af51f9db15902eac",
+      "request_id": "assistant_eb2cce922acb4118a394b914b01c2a07",
+      "message_id": "87b722c1-674e-4c04-a7bd-c36945a60b34_",
+      "text": "上级组织：AI治理办公室；新建组织：人力资源部239A补全；生效日期：2026-03-25 task_id: 7deb70ee-8903-41c9-8cd4-4eed986045ac · succeeded Selected: AI治理办公室 org_code: O000001 parent_org_code: TP290BAIGOV effective_date: 2026-03-25 event_type: CREATE"
+    }
+  ],
+  "external_reply_container_count": 0,
+  "connection_error_count": 0
+}

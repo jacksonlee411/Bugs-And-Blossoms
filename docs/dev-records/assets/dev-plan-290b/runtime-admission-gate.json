@@ -1,7 +1,7 @@
 {
   "plan": "DEV-PLAN-290B",
   "status": "passed",
-  "tenant_id": "ccc9c7c6-f6af-42fe-a1ad-1e3f6e56c9b7",
+  "tenant_id": "abe6c8cc-7c33-4a1e-99b7-fd198c4c6f2c",
   "probe_input": "在 AI治理办公室 下新建 人力资源部2，生效日期 2026-01-01",
   "checks": {
     "create_turn_status_200": true,
@@ -10,7 +10,7 @@
   },
   "create_conversation": {
     "status": 200,
-    "conversation_id": "conv_09c26149988443e9a1a6a9d5883bb5a3"
+    "conversation_id": "conv_74e5965b59f74de091acc98d09985682"
   },
   "create_turn": {
     "status": 200,
@@ -23,8 +23,8 @@
     "model_name": "gpt-5.2",
     "model_revision": "rfccc76156fa9",
     "fallback_detected": false,
-    "request_id": "assistant_0c72f482489f438cbe10fe396077c6de",
-    "trace_id": "4a5edd6efe4749f0802b6ef6d068c632"
+    "request_id": "assistant_0c20f0aa6f0449f7ab3bdd8b8e808a76",
+    "trace_id": "ab6237a1753d480c9f13ae9a38894368"
   },
-  "captured_at": "2026-03-09T14:08:48.597Z"
+  "captured_at": "2026-03-09T18:45:49.017Z"
 }

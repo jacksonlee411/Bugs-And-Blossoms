@@ -77,6 +77,104 @@ var assistantDefaultActionRegistry = assistantActionRegistryMap{specs: map[strin
 			CommitAdapterKey: "orgunit_create_v1",
 		},
 	},
+	assistantIntentAddOrgUnitVersion: {
+		ID:            assistantIntentAddOrgUnitVersion,
+		Version:       "v1",
+		CapabilityKey: "org.orgunit_add_version.field_policy",
+		PlanTitle:     "新增版本计划",
+		PlanSummary:   "为指定组织新增未来版本，提交前进行字段校验",
+		Security: assistantActionSecuritySpec{
+			AuthObject:     authz.ObjectOrgSetIDCapability,
+			AuthAction:     authz.ActionAdmin,
+			RiskTier:       "high",
+			RequiredChecks: []string{"strict_decode", "boundary_lint", "candidate_confirmation", "dry_run"},
+		},
+		Handler: assistantActionHandlerSpec{DryRunKey: "orgunit_add_version_dry_run_v1", CommitAdapterKey: "orgunit_add_version_v1"},
+	},
+	assistantIntentInsertOrgUnitVersion: {
+		ID:            assistantIntentInsertOrgUnitVersion,
+		Version:       "v1",
+		CapabilityKey: "org.orgunit_insert_version.field_policy",
+		PlanTitle:     "插入版本计划",
+		PlanSummary:   "为指定组织插入历史版本，提交前进行字段校验",
+		Security: assistantActionSecuritySpec{
+			AuthObject:     authz.ObjectOrgSetIDCapability,
+			AuthAction:     authz.ActionAdmin,
+			RiskTier:       "high",
+			RequiredChecks: []string{"strict_decode", "boundary_lint", "candidate_confirmation", "dry_run"},
+		},
+		Handler: assistantActionHandlerSpec{DryRunKey: "orgunit_insert_version_dry_run_v1", CommitAdapterKey: "orgunit_insert_version_v1"},
+	},
+	assistantIntentCorrectOrgUnit: {
+		ID:            assistantIntentCorrectOrgUnit,
+		Version:       "v1",
+		CapabilityKey: "org.orgunit_correct.field_policy",
+		PlanTitle:     "更正组织计划",
+		PlanSummary:   "更正指定组织版本的字段内容，提交前进行字段校验",
+		Security: assistantActionSecuritySpec{
+			AuthObject:     authz.ObjectOrgSetIDCapability,
+			AuthAction:     authz.ActionAdmin,
+			RiskTier:       "high",
+			RequiredChecks: []string{"strict_decode", "boundary_lint", "candidate_confirmation", "dry_run"},
+		},
+		Handler: assistantActionHandlerSpec{DryRunKey: "orgunit_correct_dry_run_v1", CommitAdapterKey: "orgunit_correct_v1"},
+	},
+	assistantIntentDisableOrgUnit: {
+		ID:            assistantIntentDisableOrgUnit,
+		Version:       "v1",
+		CapabilityKey: "org.orgunit_write.field_policy",
+		PlanTitle:     "停用组织计划",
+		PlanSummary:   "停用指定组织，提交前进行字段校验",
+		Security: assistantActionSecuritySpec{
+			AuthObject:     authz.ObjectOrgSetIDCapability,
+			AuthAction:     authz.ActionAdmin,
+			RiskTier:       "high",
+			RequiredChecks: []string{"strict_decode", "boundary_lint", "dry_run"},
+		},
+		Handler: assistantActionHandlerSpec{DryRunKey: "orgunit_disable_dry_run_v1", CommitAdapterKey: "orgunit_disable_v1"},
+	},
+	assistantIntentEnableOrgUnit: {
+		ID:            assistantIntentEnableOrgUnit,
+		Version:       "v1",
+		CapabilityKey: "org.orgunit_write.field_policy",
+		PlanTitle:     "启用组织计划",
+		PlanSummary:   "启用指定组织，提交前进行字段校验",
+		Security: assistantActionSecuritySpec{
+			AuthObject:     authz.ObjectOrgSetIDCapability,
+			AuthAction:     authz.ActionAdmin,
+			RiskTier:       "high",
+			RequiredChecks: []string{"strict_decode", "boundary_lint", "dry_run"},
+		},
+		Handler: assistantActionHandlerSpec{DryRunKey: "orgunit_enable_dry_run_v1", CommitAdapterKey: "orgunit_enable_v1"},
+	},
+	assistantIntentMoveOrgUnit: {
+		ID:            assistantIntentMoveOrgUnit,
+		Version:       "v1",
+		CapabilityKey: "org.orgunit_write.field_policy",
+		PlanTitle:     "移动组织计划",
+		PlanSummary:   "将组织移动到新的上级组织，提交前需要确认候选主键",
+		Security: assistantActionSecuritySpec{
+			AuthObject:     authz.ObjectOrgSetIDCapability,
+			AuthAction:     authz.ActionAdmin,
+			RiskTier:       "high",
+			RequiredChecks: []string{"strict_decode", "boundary_lint", "candidate_confirmation", "dry_run"},
+		},
+		Handler: assistantActionHandlerSpec{DryRunKey: "orgunit_move_dry_run_v1", CommitAdapterKey: "orgunit_move_v1"},
+	},
+	assistantIntentRenameOrgUnit: {
+		ID:            assistantIntentRenameOrgUnit,
+		Version:       "v1",
+		CapabilityKey: "org.orgunit_write.field_policy",
+		PlanTitle:     "重命名组织计划",
+		PlanSummary:   "重命名指定组织，提交前进行字段校验",
+		Security: assistantActionSecuritySpec{
+			AuthObject:     authz.ObjectOrgSetIDCapability,
+			AuthAction:     authz.ActionAdmin,
+			RiskTier:       "high",
+			RequiredChecks: []string{"strict_decode", "boundary_lint", "dry_run"},
+		},
+		Handler: assistantActionHandlerSpec{DryRunKey: "orgunit_rename_dry_run_v1", CommitAdapterKey: "orgunit_rename_v1"},
+	},
 }}
 
 func assistantLookupDefaultActionSpec(actionID string) (assistantActionSpec, bool) {
@@ -116,7 +214,14 @@ func (r assistantCommitAdapterRegistryMap) Lookup(key string) (assistantCommitAd
 
 func newAssistantDefaultCommitAdapterRegistry(writeSvc orgunitservices.OrgUnitWriteService) assistantCommitAdapterRegistry {
 	return assistantCommitAdapterRegistryMap{adapters: map[string]assistantCommitAdapter{
-		"orgunit_create_v1": assistantCreateOrgUnitCommitAdapter{writeSvc: writeSvc},
+		"orgunit_create_v1":         assistantCreateOrgUnitCommitAdapter{writeSvc: writeSvc},
+		"orgunit_add_version_v1":    assistantAddOrgUnitVersionCommitAdapter{writeSvc: writeSvc},
+		"orgunit_insert_version_v1": assistantInsertOrgUnitVersionCommitAdapter{writeSvc: writeSvc},
+		"orgunit_correct_v1":        assistantCorrectOrgUnitCommitAdapter{writeSvc: writeSvc},
+		"orgunit_disable_v1":        assistantDisableOrgUnitCommitAdapter{writeSvc: writeSvc},
+		"orgunit_enable_v1":         assistantEnableOrgUnitCommitAdapter{writeSvc: writeSvc},
+		"orgunit_move_v1":           assistantMoveOrgUnitCommitAdapter{writeSvc: writeSvc},
+		"orgunit_rename_v1":         assistantRenameOrgUnitCommitAdapter{writeSvc: writeSvc},
 	}}
 }
 
@@ -167,6 +272,168 @@ func (a assistantCreateOrgUnitCommitAdapter) Commit(ctx context.Context, req ass
 		EventType:     result.EventType,
 		EventUUID:     result.EventUUID,
 	}, nil
+}
+
+type assistantAddOrgUnitVersionCommitAdapter struct {
+	writeSvc orgunitservices.OrgUnitWriteService
+}
+
+type assistantInsertOrgUnitVersionCommitAdapter struct {
+	writeSvc orgunitservices.OrgUnitWriteService
+}
+
+type assistantCorrectOrgUnitCommitAdapter struct {
+	writeSvc orgunitservices.OrgUnitWriteService
+}
+
+type assistantDisableOrgUnitCommitAdapter struct {
+	writeSvc orgunitservices.OrgUnitWriteService
+}
+
+type assistantEnableOrgUnitCommitAdapter struct {
+	writeSvc orgunitservices.OrgUnitWriteService
+}
+
+type assistantMoveOrgUnitCommitAdapter struct {
+	writeSvc orgunitservices.OrgUnitWriteService
+}
+
+type assistantRenameOrgUnitCommitAdapter struct {
+	writeSvc orgunitservices.OrgUnitWriteService
+}
+
+func assistantCommitAdapterReady(writeSvc orgunitservices.OrgUnitWriteService, req assistantCommitRequest) error {
+	if writeSvc == nil {
+		return errAssistantServiceMissing
+	}
+	if req.Turn == nil {
+		return errAssistantConversationCorrupted
+	}
+	return nil
+}
+
+func assistantResolvedCandidateOrgCode(candidate assistantCandidate) string {
+	if code := strings.TrimSpace(candidate.CandidateCode); code != "" {
+		return code
+	}
+	return strings.TrimSpace(candidate.CandidateID)
+}
+
+func assistantWritePatchFromIntent(intent assistantIntentSpec, resolvedParentOrgCode string) orgunitservices.OrgUnitWritePatch {
+	patch := orgunitservices.OrgUnitWritePatch{}
+	if newName := strings.TrimSpace(intent.NewName); newName != "" {
+		patch.Name = ptrString(newName)
+	}
+	if parentOrgCode := strings.TrimSpace(resolvedParentOrgCode); parentOrgCode != "" {
+		patch.ParentOrgCode = ptrString(parentOrgCode)
+	}
+	return patch
+}
+
+func (a assistantAddOrgUnitVersionCommitAdapter) Commit(ctx context.Context, req assistantCommitRequest) (*assistantCommitResult, error) {
+	if err := assistantCommitAdapterReady(a.writeSvc, req); err != nil {
+		return nil, err
+	}
+	parentOrgCode := assistantResolvedCandidateOrgCode(req.ResolvedCandidate)
+	result, err := a.writeSvc.Write(ctx, req.TenantID, orgunitservices.WriteOrgUnitRequest{
+		Intent:        string(orgunitservices.OrgUnitWriteIntentAddVersion),
+		OrgCode:       strings.TrimSpace(req.Turn.Intent.OrgCode),
+		EffectiveDate: strings.TrimSpace(req.Turn.Intent.EffectiveDate),
+		PolicyVersion: req.Turn.PolicyVersion,
+		RequestID:     req.Turn.RequestID,
+		Patch:         assistantWritePatchFromIntent(req.Turn.Intent, parentOrgCode),
+		InitiatorUUID: req.Principal.ID,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return &assistantCommitResult{OrgCode: result.OrgCode, ParentOrgCode: parentOrgCode, EffectiveDate: result.EffectiveDate, EventType: result.EventType, EventUUID: result.EventUUID}, nil
+}
+
+func (a assistantInsertOrgUnitVersionCommitAdapter) Commit(ctx context.Context, req assistantCommitRequest) (*assistantCommitResult, error) {
+	if err := assistantCommitAdapterReady(a.writeSvc, req); err != nil {
+		return nil, err
+	}
+	parentOrgCode := assistantResolvedCandidateOrgCode(req.ResolvedCandidate)
+	result, err := a.writeSvc.Write(ctx, req.TenantID, orgunitservices.WriteOrgUnitRequest{
+		Intent:        string(orgunitservices.OrgUnitWriteIntentInsertVersion),
+		OrgCode:       strings.TrimSpace(req.Turn.Intent.OrgCode),
+		EffectiveDate: strings.TrimSpace(req.Turn.Intent.EffectiveDate),
+		PolicyVersion: req.Turn.PolicyVersion,
+		RequestID:     req.Turn.RequestID,
+		Patch:         assistantWritePatchFromIntent(req.Turn.Intent, parentOrgCode),
+		InitiatorUUID: req.Principal.ID,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return &assistantCommitResult{OrgCode: result.OrgCode, ParentOrgCode: parentOrgCode, EffectiveDate: result.EffectiveDate, EventType: result.EventType, EventUUID: result.EventUUID}, nil
+}
+
+func (a assistantCorrectOrgUnitCommitAdapter) Commit(ctx context.Context, req assistantCommitRequest) (*assistantCommitResult, error) {
+	if err := assistantCommitAdapterReady(a.writeSvc, req); err != nil {
+		return nil, err
+	}
+	parentOrgCode := assistantResolvedCandidateOrgCode(req.ResolvedCandidate)
+	patch := orgunitservices.OrgUnitCorrectionPatch{}
+	if newName := strings.TrimSpace(req.Turn.Intent.NewName); newName != "" {
+		patch.Name = ptrString(newName)
+	}
+	if parentOrgCode != "" {
+		patch.ParentOrgCode = ptrString(parentOrgCode)
+	}
+	result, err := a.writeSvc.Correct(ctx, req.TenantID, orgunitservices.CorrectOrgUnitRequest{
+		OrgCode:             strings.TrimSpace(req.Turn.Intent.OrgCode),
+		TargetEffectiveDate: strings.TrimSpace(req.Turn.Intent.TargetEffectiveDate),
+		Patch:               patch,
+		RequestID:           req.Turn.RequestID,
+		InitiatorUUID:       req.Principal.ID,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return &assistantCommitResult{OrgCode: result.OrgCode, ParentOrgCode: parentOrgCode, EffectiveDate: result.EffectiveDate, EventType: "UPDATE"}, nil
+}
+
+func (a assistantDisableOrgUnitCommitAdapter) Commit(ctx context.Context, req assistantCommitRequest) (*assistantCommitResult, error) {
+	if err := assistantCommitAdapterReady(a.writeSvc, req); err != nil {
+		return nil, err
+	}
+	if err := a.writeSvc.Disable(ctx, req.TenantID, orgunitservices.DisableOrgUnitRequest{EffectiveDate: strings.TrimSpace(req.Turn.Intent.EffectiveDate), OrgCode: strings.TrimSpace(req.Turn.Intent.OrgCode), InitiatorUUID: req.Principal.ID}); err != nil {
+		return nil, err
+	}
+	return &assistantCommitResult{OrgCode: strings.TrimSpace(req.Turn.Intent.OrgCode), EffectiveDate: strings.TrimSpace(req.Turn.Intent.EffectiveDate), EventType: "DISABLE"}, nil
+}
+
+func (a assistantEnableOrgUnitCommitAdapter) Commit(ctx context.Context, req assistantCommitRequest) (*assistantCommitResult, error) {
+	if err := assistantCommitAdapterReady(a.writeSvc, req); err != nil {
+		return nil, err
+	}
+	if err := a.writeSvc.Enable(ctx, req.TenantID, orgunitservices.EnableOrgUnitRequest{EffectiveDate: strings.TrimSpace(req.Turn.Intent.EffectiveDate), OrgCode: strings.TrimSpace(req.Turn.Intent.OrgCode), InitiatorUUID: req.Principal.ID}); err != nil {
+		return nil, err
+	}
+	return &assistantCommitResult{OrgCode: strings.TrimSpace(req.Turn.Intent.OrgCode), EffectiveDate: strings.TrimSpace(req.Turn.Intent.EffectiveDate), EventType: "ENABLE"}, nil
+}
+
+func (a assistantMoveOrgUnitCommitAdapter) Commit(ctx context.Context, req assistantCommitRequest) (*assistantCommitResult, error) {
+	if err := assistantCommitAdapterReady(a.writeSvc, req); err != nil {
+		return nil, err
+	}
+	parentOrgCode := assistantResolvedCandidateOrgCode(req.ResolvedCandidate)
+	if err := a.writeSvc.Move(ctx, req.TenantID, orgunitservices.MoveOrgUnitRequest{EffectiveDate: strings.TrimSpace(req.Turn.Intent.EffectiveDate), OrgCode: strings.TrimSpace(req.Turn.Intent.OrgCode), NewParentOrgCode: parentOrgCode, InitiatorUUID: req.Principal.ID}); err != nil {
+		return nil, err
+	}
+	return &assistantCommitResult{OrgCode: strings.TrimSpace(req.Turn.Intent.OrgCode), ParentOrgCode: parentOrgCode, EffectiveDate: strings.TrimSpace(req.Turn.Intent.EffectiveDate), EventType: "MOVE"}, nil
+}
+
+func (a assistantRenameOrgUnitCommitAdapter) Commit(ctx context.Context, req assistantCommitRequest) (*assistantCommitResult, error) {
+	if err := assistantCommitAdapterReady(a.writeSvc, req); err != nil {
+		return nil, err
+	}
+	if err := a.writeSvc.Rename(ctx, req.TenantID, orgunitservices.RenameOrgUnitRequest{EffectiveDate: strings.TrimSpace(req.Turn.Intent.EffectiveDate), OrgCode: strings.TrimSpace(req.Turn.Intent.OrgCode), NewName: strings.TrimSpace(req.Turn.Intent.NewName), InitiatorUUID: req.Principal.ID}); err != nil {
+		return nil, err
+	}
+	return &assistantCommitResult{OrgCode: strings.TrimSpace(req.Turn.Intent.OrgCode), EffectiveDate: strings.TrimSpace(req.Turn.Intent.EffectiveDate), EventType: "RENAME"}, nil
 }
 
 type assistantVersionTuple struct {
