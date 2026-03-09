@@ -1,72 +1,72 @@
 {
   "case_id": 1,
-  "tenant_id": "5aee0553-b6fe-42f9-9207-6aa1f889fecc",
-  "conversation_id": "conv_81e8a97a721141b2b2bafd08ce6baf6d",
+  "tenant_id": "1ed9d1b9-e0b6-4f47-be96-5e23160c96d7",
+  "conversation_id": "conv_7d0a5d4b328c45a5aaf01e666bca0f7e",
   "snapshots": [
     {
       "step": 1,
-      "input": "你好",
+      "input": "你好，请只打个招呼，不要创建或修改任何数据",
       "bubble": {
         "count": 1,
-        "bindingKey": "conv_81e8a97a721141b2b2bafd08ce6baf6d::turn_cfd3a81e0ee34e9b9c4d3d91446e75df::assistant_8cef6ccfb4fe489e8e3a89cc631bf57c",
-        "conversationId": "conv_81e8a97a721141b2b2bafd08ce6baf6d",
-        "turnId": "turn_cfd3a81e0ee34e9b9c4d3d91446e75df",
-        "requestId": "assistant_8cef6ccfb4fe489e8e3a89cc631bf57c",
+        "bindingKey": "conv_7d0a5d4b328c45a5aaf01e666bca0f7e::turn_a40ba48522fa4996aaa85949ffd5633e::assistant_0f415b0618a94d8e97f57e94af1d439a",
+        "conversationId": "conv_7d0a5d4b328c45a5aaf01e666bca0f7e",
+        "turnId": "turn_a40ba48522fa4996aaa85949ffd5633e",
+        "requestId": "assistant_0f415b0618a94d8e97f57e94af1d439a",
         "text": "计划已生成，等待确认后可提交 Confirm"
       },
       "conversation": {
-        "conversation_id": "conv_81e8a97a721141b2b2bafd08ce6baf6d",
-        "tenant_id": "5aee0553-b6fe-42f9-9207-6aa1f889fecc",
-        "actor_id": "2c6bfdef-375a-45b9-b0d2-520dcafe67d0",
+        "conversation_id": "conv_7d0a5d4b328c45a5aaf01e666bca0f7e",
+        "tenant_id": "1ed9d1b9-e0b6-4f47-be96-5e23160c96d7",
+        "actor_id": "38b5c94d-627f-439e-abf7-cbc49e8f0ebc",
         "actor_role": "tenant-admin",
         "state": "validated",
         "current_phase": "await_commit_confirm",
         "state_transitions": [
           {
-            "id": 569,
-            "request_id": "assistant_a14712d71ddd4f2997b982956bc39544",
-            "trace_id": "8828dbf200604890b3977be9efce732d",
+            "id": 661,
+            "request_id": "assistant_186db110b3bb4b52bd1815959bad3906",
+            "trace_id": "bf94c048dffe4ef19ed5154d3f50e46b",
             "from_state": "init",
             "to_state": "validated",
             "from_phase": "init",
             "to_phase": "idle",
             "reason_code": "conversation_created",
-            "actor_id": "2c6bfdef-375a-45b9-b0d2-520dcafe67d0",
-            "changed_at": "2026-03-10T02:45:57.194545+08:00"
+            "actor_id": "38b5c94d-627f-439e-abf7-cbc49e8f0ebc",
+            "changed_at": "2026-03-10T07:04:20.765739+08:00"
           },
           {
-            "id": 570,
-            "turn_id": "turn_cfd3a81e0ee34e9b9c4d3d91446e75df",
-            "request_id": "assistant_8cef6ccfb4fe489e8e3a89cc631bf57c",
-            "trace_id": "5ea9cbe607ea4f48a8c14b55a8da22b0",
+            "id": 663,
+            "turn_id": "turn_a40ba48522fa4996aaa85949ffd5633e",
+            "request_id": "assistant_0f415b0618a94d8e97f57e94af1d439a",
+            "trace_id": "676db99662c14fb7b95a7d8d5dc22780",
             "from_state": "init",
             "to_state": "validated",
             "from_phase": "idle",
             "to_phase": "await_commit_confirm",
             "reason_code": "turn_created",
-            "actor_id": "2c6bfdef-375a-45b9-b0d2-520dcafe67d0",
-            "changed_at": "2026-03-09T18:46:08.064784066Z"
+            "actor_id": "38b5c94d-627f-439e-abf7-cbc49e8f0ebc",
+            "changed_at": "2026-03-09T23:04:34.459530734Z"
           }
         ],
-        "created_at": "2026-03-10T02:45:57.194545+08:00",
-        "updated_at": "2026-03-09T18:46:08.064784066Z",
+        "created_at": "2026-03-10T07:04:20.765739+08:00",
+        "updated_at": "2026-03-09T23:04:34.459530734Z",
         "turns": [
           {
-            "turn_id": "turn_cfd3a81e0ee34e9b9c4d3d91446e75df",
-            "user_input": "你好",
+            "turn_id": "turn_a40ba48522fa4996aaa85949ffd5633e",
+            "user_input": "你好，请只打个招呼，不要创建或修改任何数据",
             "state": "validated",
             "phase": "await_commit_confirm",
             "risk_tier": "low",
-            "request_id": "assistant_8cef6ccfb4fe489e8e3a89cc631bf57c",
-            "trace_id": "5ea9cbe607ea4f48a8c14b55a8da22b0",
+            "request_id": "assistant_0f415b0618a94d8e97f57e94af1d439a",
+            "trace_id": "676db99662c14fb7b95a7d8d5dc22780",
             "policy_version": "2026-02-23",
             "composition_version": "2026-02-23",
             "mapping_version": "2026-02-23",
             "intent": {
               "action": "plan_only",
               "intent_schema_version": "assistant.intent.v1",
-              "context_hash": "2ceb6077ef5ca70c6bec8f010da535fc2ab2f9027cbcff092029e1d4f56e5825",
-              "intent_hash": "2e8f82315c0283a689a5c02c3c2c3d1690d5a8844bad78bd4b468dbd25156003"
+              "context_hash": "5667587158a25f15050f129e43900ededb8473bf0f315959bb1622ef63c01ffa",
+              "intent_hash": "b7443c9503245e53bcf0cd59e3ac28dd71fa15e9a259fb887e226812bd4aa3b4"
             },
             "plan": {
               "title": "只读规划",
@@ -94,7 +94,7 @@
                 ]
               },
               "config_delta_plan": {
-                "capability_key": "org.orgunit_create.field_policy",
+                "capability_key": "org.assistant_conversation.manage",
                 "changes": []
               }
             },
@@ -106,29 +106,29 @@
               "diff": null,
               "explain": "计划已生成，等待确认后可提交",
               "would_commit": false,
-              "plan_hash": "4052450128011179bf2e662f87334cafe40f90bae6056254395be0d1b2d2d534"
+              "plan_hash": "545e1284ae0b396fa29ee8b1895fa4474d8b68e8ef18b2b0eb771ecce138ab38"
             },
-            "created_at": "2026-03-09T18:46:08.064784066Z",
-            "updated_at": "2026-03-09T18:46:08.064784066Z"
+            "created_at": "2026-03-09T23:04:34.459530734Z",
+            "updated_at": "2026-03-09T23:04:34.459530734Z"
           }
         ]
       },
       "latest_turn": {
-        "turn_id": "turn_cfd3a81e0ee34e9b9c4d3d91446e75df",
-        "user_input": "你好",
+        "turn_id": "turn_a40ba48522fa4996aaa85949ffd5633e",
+        "user_input": "你好，请只打个招呼，不要创建或修改任何数据",
         "state": "validated",
         "phase": "await_commit_confirm",
         "risk_tier": "low",
-        "request_id": "assistant_8cef6ccfb4fe489e8e3a89cc631bf57c",
-        "trace_id": "5ea9cbe607ea4f48a8c14b55a8da22b0",
+        "request_id": "assistant_0f415b0618a94d8e97f57e94af1d439a",
+        "trace_id": "676db99662c14fb7b95a7d8d5dc22780",
         "policy_version": "2026-02-23",
         "composition_version": "2026-02-23",
         "mapping_version": "2026-02-23",
         "intent": {
           "action": "plan_only",
           "intent_schema_version": "assistant.intent.v1",
-          "context_hash": "2ceb6077ef5ca70c6bec8f010da535fc2ab2f9027cbcff092029e1d4f56e5825",
-          "intent_hash": "2e8f82315c0283a689a5c02c3c2c3d1690d5a8844bad78bd4b468dbd25156003"
+          "context_hash": "5667587158a25f15050f129e43900ededb8473bf0f315959bb1622ef63c01ffa",
+          "intent_hash": "b7443c9503245e53bcf0cd59e3ac28dd71fa15e9a259fb887e226812bd4aa3b4"
         },
         "plan": {
           "title": "只读规划",
@@ -156,7 +156,7 @@
             ]
           },
           "config_delta_plan": {
-            "capability_key": "org.orgunit_create.field_policy",
+            "capability_key": "org.assistant_conversation.manage",
             "changes": []
           }
         },
@@ -168,66 +168,66 @@
           "diff": null,
           "explain": "计划已生成，等待确认后可提交",
           "would_commit": false,
-          "plan_hash": "4052450128011179bf2e662f87334cafe40f90bae6056254395be0d1b2d2d534"
+          "plan_hash": "545e1284ae0b396fa29ee8b1895fa4474d8b68e8ef18b2b0eb771ecce138ab38"
         },
-        "created_at": "2026-03-09T18:46:08.064784066Z",
-        "updated_at": "2026-03-09T18:46:08.064784066Z"
+        "created_at": "2026-03-09T23:04:34.459530734Z",
+        "updated_at": "2026-03-09T23:04:34.459530734Z"
       }
     }
   ],
   "final_conversation": {
-    "conversation_id": "conv_81e8a97a721141b2b2bafd08ce6baf6d",
-    "tenant_id": "5aee0553-b6fe-42f9-9207-6aa1f889fecc",
-    "actor_id": "2c6bfdef-375a-45b9-b0d2-520dcafe67d0",
+    "conversation_id": "conv_7d0a5d4b328c45a5aaf01e666bca0f7e",
+    "tenant_id": "1ed9d1b9-e0b6-4f47-be96-5e23160c96d7",
+    "actor_id": "38b5c94d-627f-439e-abf7-cbc49e8f0ebc",
     "actor_role": "tenant-admin",
     "state": "validated",
     "current_phase": "await_commit_confirm",
     "state_transitions": [
       {
-        "id": 569,
-        "request_id": "assistant_a14712d71ddd4f2997b982956bc39544",
-        "trace_id": "8828dbf200604890b3977be9efce732d",
+        "id": 661,
+        "request_id": "assistant_186db110b3bb4b52bd1815959bad3906",
+        "trace_id": "bf94c048dffe4ef19ed5154d3f50e46b",
         "from_state": "init",
         "to_state": "validated",
         "from_phase": "init",
         "to_phase": "idle",
         "reason_code": "conversation_created",
-        "actor_id": "2c6bfdef-375a-45b9-b0d2-520dcafe67d0",
-        "changed_at": "2026-03-10T02:45:57.194545+08:00"
+        "actor_id": "38b5c94d-627f-439e-abf7-cbc49e8f0ebc",
+        "changed_at": "2026-03-10T07:04:20.765739+08:00"
       },
       {
-        "id": 570,
-        "turn_id": "turn_cfd3a81e0ee34e9b9c4d3d91446e75df",
-        "request_id": "assistant_8cef6ccfb4fe489e8e3a89cc631bf57c",
-        "trace_id": "5ea9cbe607ea4f48a8c14b55a8da22b0",
+        "id": 663,
+        "turn_id": "turn_a40ba48522fa4996aaa85949ffd5633e",
+        "request_id": "assistant_0f415b0618a94d8e97f57e94af1d439a",
+        "trace_id": "676db99662c14fb7b95a7d8d5dc22780",
         "from_state": "init",
         "to_state": "validated",
         "from_phase": "idle",
         "to_phase": "await_commit_confirm",
         "reason_code": "turn_created",
-        "actor_id": "2c6bfdef-375a-45b9-b0d2-520dcafe67d0",
-        "changed_at": "2026-03-09T18:46:08.064784066Z"
+        "actor_id": "38b5c94d-627f-439e-abf7-cbc49e8f0ebc",
+        "changed_at": "2026-03-09T23:04:34.459530734Z"
       }
     ],
-    "created_at": "2026-03-10T02:45:57.194545+08:00",
-    "updated_at": "2026-03-09T18:46:08.064784066Z",
+    "created_at": "2026-03-10T07:04:20.765739+08:00",
+    "updated_at": "2026-03-09T23:04:34.459530734Z",
     "turns": [
       {
-        "turn_id": "turn_cfd3a81e0ee34e9b9c4d3d91446e75df",
-        "user_input": "你好",
+        "turn_id": "turn_a40ba48522fa4996aaa85949ffd5633e",
+        "user_input": "你好，请只打个招呼，不要创建或修改任何数据",
         "state": "validated",
         "phase": "await_commit_confirm",
         "risk_tier": "low",
-        "request_id": "assistant_8cef6ccfb4fe489e8e3a89cc631bf57c",
-        "trace_id": "5ea9cbe607ea4f48a8c14b55a8da22b0",
+        "request_id": "assistant_0f415b0618a94d8e97f57e94af1d439a",
+        "trace_id": "676db99662c14fb7b95a7d8d5dc22780",
         "policy_version": "2026-02-23",
         "composition_version": "2026-02-23",
         "mapping_version": "2026-02-23",
         "intent": {
           "action": "plan_only",
           "intent_schema_version": "assistant.intent.v1",
-          "context_hash": "2ceb6077ef5ca70c6bec8f010da535fc2ab2f9027cbcff092029e1d4f56e5825",
-          "intent_hash": "2e8f82315c0283a689a5c02c3c2c3d1690d5a8844bad78bd4b468dbd25156003"
+          "context_hash": "5667587158a25f15050f129e43900ededb8473bf0f315959bb1622ef63c01ffa",
+          "intent_hash": "b7443c9503245e53bcf0cd59e3ac28dd71fa15e9a259fb887e226812bd4aa3b4"
         },
         "plan": {
           "title": "只读规划",
@@ -255,7 +255,7 @@
             ]
           },
           "config_delta_plan": {
-            "capability_key": "org.orgunit_create.field_policy",
+            "capability_key": "org.assistant_conversation.manage",
             "changes": []
           }
         },
@@ -267,10 +267,10 @@
           "diff": null,
           "explain": "计划已生成，等待确认后可提交",
           "would_commit": false,
-          "plan_hash": "4052450128011179bf2e662f87334cafe40f90bae6056254395be0d1b2d2d534"
+          "plan_hash": "545e1284ae0b396fa29ee8b1895fa4474d8b68e8ef18b2b0eb771ecce138ab38"
         },
-        "created_at": "2026-03-09T18:46:08.064784066Z",
-        "updated_at": "2026-03-09T18:46:08.064784066Z"
+        "created_at": "2026-03-09T23:04:34.459530734Z",
+        "updated_at": "2026-03-09T23:04:34.459530734Z"
       }
     ]
   }

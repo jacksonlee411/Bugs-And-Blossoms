@@ -1,18 +1,18 @@
 {
   "case_id": 3,
-  "conversation_id": "conv_84f4b7e7b56f49f598f967c17d3457b5",
-  "turn_id": "turn_0d2efb289c394d39ad0680e3a5d486ed",
-  "request_id": "assistant_1c6814e92eaa4e0c805665fcbd93d14e",
-  "trace_id": "e2ff1e3efb644bd99d35636c225e5301",
-  "intent_action": "plan_only",
-  "phase": "await_commit_confirm",
+  "conversation_id": "conv_ca0b7f99dc48437aa746e90c697ecf52",
+  "turn_id": "turn_1d341025fd184833902e3154012a902c",
+  "request_id": "assistant_e05a00227c1f49739647d83e65401971",
+  "trace_id": "83b9c226bd304ea8bd5258e17389a2a3",
+  "intent_action": "create_orgunit",
+  "phase": "committed",
   "error_code": "assistant_intent_unsupported",
   "failure_stage": "runtime_or_case_flow",
-  "failure_message": "assistant_intent_unsupported (case=3, phase=await_commit_confirm, action=plan_only)",
+  "failure_message": "assistant_intent_unsupported (case=3, phase=committed, action=create_orgunit)",
   "observed_calls": [
     {
       "method": "POST",
-      "path": "/internal/assistant/conversations/conv_84f4b7e7b56f49f598f967c17d3457b5/turns/turn_0d2efb289c394d39ad0680e3a5d486ed:commit",
+      "path": "/internal/assistant/conversations/conv_f8f5d869037f498d8fcec45d5118d8d1/turns",
       "status": 422,
       "body": "",
       "json": {
@@ -20,41 +20,11 @@
         "message": "assistant intent unsupported",
         "trace_id": "",
         "meta": {
-          "path": "/internal/assistant/conversations/conv_84f4b7e7b56f49f598f967c17d3457b5/turns/turn_0d2efb289c394d39ad0680e3a5d486ed:commit",
-          "method": "POST"
-        }
-      }
-    },
-    {
-      "method": "POST",
-      "path": "/internal/assistant/conversations/conv_84f4b7e7b56f49f598f967c17d3457b5/turns",
-      "status": 422,
-      "body": "",
-      "json": {
-        "code": "assistant_intent_unsupported",
-        "message": "assistant intent unsupported",
-        "trace_id": "",
-        "meta": {
-          "path": "/internal/assistant/conversations/conv_84f4b7e7b56f49f598f967c17d3457b5/turns",
-          "method": "POST"
-        }
-      }
-    },
-    {
-      "method": "POST",
-      "path": "/internal/assistant/conversations/conv_d643a4daaf68456fbc52838b522ec6c0/turns",
-      "status": 422,
-      "body": "",
-      "json": {
-        "code": "assistant_intent_unsupported",
-        "message": "assistant intent unsupported",
-        "trace_id": "",
-        "meta": {
-          "path": "/internal/assistant/conversations/conv_d643a4daaf68456fbc52838b522ec6c0/turns",
+          "path": "/internal/assistant/conversations/conv_f8f5d869037f498d8fcec45d5118d8d1/turns",
           "method": "POST"
         }
       }
     }
   ],
-  "captured_at": "2026-03-09T18:17:39.043Z"
+  "captured_at": "2026-03-09T23:05:25.894Z"
 }

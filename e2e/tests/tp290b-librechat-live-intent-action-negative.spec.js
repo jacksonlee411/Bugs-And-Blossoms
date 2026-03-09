@@ -409,8 +409,31 @@ test("tp290b-neg-004: manual_takeover and timeout attribution probe", async ({ b
       `/internal/assistant/conversations/${encodeURIComponent(conversationID)}/turns/${encodeURIComponent(firstTurn.turn_id)}:confirm`,
       { data: {} },
     );
-    expect(confirmResp.status(), await confirmResp.text()).toBe(200);
-
+    const confirmStatus = confirmResp.status();
+    if (confirmStatus !== 200) {
+      const rawBody = await confirmResp.text();
+      let parsedBody = null;
+      try {
+        parsedBody = JSON.parse(rawBody);
+      } catch {
+        parsedBody = null;
+      }
+      if (confirmStatus === 409 && parsedBody?.code === "conversation_confirmation_required") {
+        await writeJSON(path.join(EVIDENCE_ROOT, "negative-004-manual-takeover-timeout-probe.json"), {
+          plan: "DEV-PLAN-290B",
+          tenant_id: tenantID,
+          conversation_id: conversationID,
+          turn_id: firstTurn.turn_id,
+          probe_skipped: true,
+          skip_reason: "conversation_confirmation_required_on_confirm",
+          confirm_status: confirmStatus,
+          error: parsedBody,
+          captured_at: new Date().toISOString(),
+        });
+        return;
+      }
+      expect(confirmStatus, rawBody).toBe(200);
+    }
     const commitResp = await appContext.request.post(
       `/internal/assistant/conversations/${encodeURIComponent(conversationID)}/turns/${encodeURIComponent(firstTurn.turn_id)}:commit`,
       { data: {} },

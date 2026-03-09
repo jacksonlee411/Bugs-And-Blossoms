@@ -82,7 +82,7 @@
 - `docs/dev-plans/291-librechat-237-upgrade-compatibility-readiness-plan.md`
 - `AGENTS.md`
 
-## 6. 后续跟踪（2026-03-09 19:27 CST）
+## 6. 后续跟踪（2026-03-10 06:04 CST）
 1. [X] 本计划封板结论不变：`285` 封板资产已完整生成并完成交接。
-2. [ ] 新观察到 `290B` 主验收阻断（Case 2/3）：该问题属于后续真实业务证据链稳定性，不回滚本计划既有封板产物，但要求后续引用 `290B` 结论时标注当前为 `blocked`。
-3. [ ] 待 `290B` 重跑恢复为通过后，建议同步刷新 `285` 关联索引中的 `290B` 引用时间戳，保持证据新鲜度一致。
+2. [X] `290B` 已恢复并保持通过，`285` 的相关引用现可继续直接消费最新 `tp290b` 通过结论。
+3. [X] `288B` 已完成 async receipt/task 专项补强，`285` 现同时引用 `docs/dev-records/assets/dev-plan-288b/tp288b-live-evidence-index.json` 作为 `tp288` 的补充强证据。

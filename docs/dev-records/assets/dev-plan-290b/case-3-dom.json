@@ -3,20 +3,20 @@
   "bubble_count": 2,
   "bubbles": [
     {
-      "binding_key": "conv_717603cf52784cdf8f917d2402790586::turn_773023f5f8694791b42fa32aa8915fbc::assistant_5f354a140d3046599bdec87031e2e3d7",
-      "conversation_id": "conv_717603cf52784cdf8f917d2402790586",
-      "turn_id": "turn_773023f5f8694791b42fa32aa8915fbc",
-      "request_id": "assistant_5f354a140d3046599bdec87031e2e3d7",
-      "message_id": "2616f9fc-fe48-4c39-b310-630e026463ef_",
+      "binding_key": "conv_ca0b7f99dc48437aa746e90c697ecf52::turn_6bcead134773417f82cd43219d71337e::assistant_0d7218e6e0f04ad48af31ad3b4445130",
+      "conversation_id": "conv_ca0b7f99dc48437aa746e90c697ecf52",
+      "turn_id": "turn_6bcead134773417f82cd43219d71337e",
+      "request_id": "assistant_0d7218e6e0f04ad48af31ad3b4445130",
+      "message_id": "a288c525-32e3-41a3-9aee-804a9268a9f5_",
       "text": "Missing fields: effective_date、parent_ref_text Missing fields effective_date parent_ref_text"
     },
     {
-      "binding_key": "conv_717603cf52784cdf8f917d2402790586::turn_2f2ce11911194866af51f9db15902eac::assistant_eb2cce922acb4118a394b914b01c2a07",
-      "conversation_id": "conv_717603cf52784cdf8f917d2402790586",
-      "turn_id": "turn_2f2ce11911194866af51f9db15902eac",
-      "request_id": "assistant_eb2cce922acb4118a394b914b01c2a07",
-      "message_id": "87b722c1-674e-4c04-a7bd-c36945a60b34_",
-      "text": "上级组织：AI治理办公室；新建组织：人力资源部239A补全；生效日期：2026-03-25 task_id: 7deb70ee-8903-41c9-8cd4-4eed986045ac · succeeded Selected: AI治理办公室 org_code: O000001 parent_org_code: TP290BAIGOV effective_date: 2026-03-25 event_type: CREATE"
+      "binding_key": "conv_ca0b7f99dc48437aa746e90c697ecf52::turn_1d341025fd184833902e3154012a902c::assistant_e05a00227c1f49739647d83e65401971",
+      "conversation_id": "conv_ca0b7f99dc48437aa746e90c697ecf52",
+      "turn_id": "turn_1d341025fd184833902e3154012a902c",
+      "request_id": "assistant_e05a00227c1f49739647d83e65401971",
+      "message_id": "6b995f24-4cd0-404d-83b6-953eaa7b5aeb_",
+      "text": "上级组织：AI治理办公室；新建组织：人力资源部239A补全；生效日期：2026-03-25 task_id: 4fd2e1b4-a5bd-44ca-8982-53c490fa837c · succeeded Selected: AI治理办公室 org_code: O000001 parent_org_code: TP290BAIGOV effective_date: 2026-03-25 event_type: CREATE"
     }
   ],
   "external_reply_container_count": 0,

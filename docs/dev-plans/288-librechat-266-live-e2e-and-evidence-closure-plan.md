@@ -64,6 +64,7 @@
 3. [X] `docs/dev-records/assets/dev-plan-266/` 证据补录与索引（含 `tp288-real-entry-evidence-index.json`）。
 4. [X] `docs/dev-records/dev-plan-266-execution-log.md` 的阶段性补充记录。
 5. [X] 面向 `285` 的 `266` 收口清单：`docs/dev-records/assets/dev-plan-266/tp288-handoff-to-285.md`。
+6. [X] `288B` 异步回执专项补强索引：`docs/dev-records/assets/dev-plan-288b/tp288b-live-evidence-index.json`。
 
 ## 9. 关联文档
 - `docs/dev-plans/266-librechat-official-ui-single-dialog-channel-and-in-bubble-gpt52-plan.md`
@@ -82,6 +83,7 @@
 5. [X] 与 `290A` 的边界已冻结：`binding_key=::::` 对应的 pending placeholder bubble 修复由 `290A` 承接；`288` 不再吸收该实现缺口。
 6. [X] 本轮已补齐 `docs/dev-records/assets/dev-plan-266/` 证据索引与 `266` 收口清单，`266/288` 文档勾选、执行日志、资产索引与交接清单现已一致。
 7. [X] 新鲜度规则：若 `290A` 或 `240C/240D/240E` 合入触发 `271-S5` 证据失效条件，必须先刷新 `tp288` 证据，再允许 `285` 引用本计划产物。
+8. [X] `288B` 已完成 async receipt/task 契约专项补强：`tp288-e2e-001/002` 现已内建 receipt 反回归断言，且新增 `docs/dev-records/assets/dev-plan-288b/tp288b-live-evidence-index.json` 作为正式入口非 mock 补充证据。
 
 ## 11. 卡点、解法与经验沉淀（288 复盘）
 1. [X] 卡点：正式入口启动链早期被 `localhost` SW 注册与 `sid/auth` 兼容缺口阻塞，表现为白屏/401/登录回跳。

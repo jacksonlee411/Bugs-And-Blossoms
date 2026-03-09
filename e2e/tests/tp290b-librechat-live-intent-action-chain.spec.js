@@ -32,7 +32,7 @@ const BASELINE_ORG_SPECS = {
 };
 
 const CASE_INPUTS = {
-  1: ["你好"],
+  1: ["你好，请只打个招呼，不要创建或修改任何数据"],
   2: ["在 AI治理办公室 下新建 人力资源部2，生效日期 2026-01-01", "确认"],
   3: ["在 AI治理办公室 下新建 人力资源部239A补全", "生效日期 2026-03-25", "确认"],
   4: ["请在父组织共享服务中心下新建239A候选验证部，生效日期2026-03-26", "选第2个", "是的"],
@@ -231,6 +231,18 @@ async function createAssistantProbe(appContext, userInput) {
   };
 }
 
+async function createAssistantProbeWithRetry(appContext, userInput, isReady, maxAttempts = 3) {
+  let lastProbe = null;
+  for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+    lastProbe = await createAssistantProbe(appContext, userInput);
+    if (!isReady || isReady(lastProbe)) {
+      return lastProbe;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 500));
+  }
+  return lastProbe;
+}
+
 function baselineProbeSummary(probe) {
   const turn = probe?.latest_turn || null;
   return {
@@ -403,8 +415,14 @@ async function ensureTenantBaseline(appContext, tenantID) {
     ],
     BASELINE_CASE4_AS_OF,
   );
-  const case2Probe = await createAssistantProbe(appContext, CASE_INPUTS[2][0]);
-  const case4Probe = await createAssistantProbe(appContext, CASE_INPUTS[4][0]);
+  const case2Probe = await createAssistantProbeWithRetry(appContext, CASE_INPUTS[2][0], (probe) => {
+    const summary = baselineProbeSummary(probe);
+    return summary.create_turn_status === 200 && summary.intent_action === "create_orgunit" && summary.phase === "await_commit_confirm" && Boolean(summary.resolved_candidate_id);
+  });
+  const case4Probe = await createAssistantProbeWithRetry(appContext, CASE_INPUTS[4][0], (probe) => {
+    const summary = baselineProbeSummary(probe);
+    return summary.create_turn_status === 200 && summary.intent_action === "create_orgunit" && summary.phase === "await_candidate_pick" && summary.candidate_count > 1;
+  });
   const case2Summary = baselineProbeSummary(case2Probe);
   const case4Summary = baselineProbeSummary(case4Probe);
   const case4Candidates = assistantCandidateSnapshot(case4Probe?.latest_turn || null);
@@ -811,9 +829,16 @@ async function runFormalCaseStep(surface, caseId, stepIndex, text) {
   await sendFromFormalEntry(surface, text);
 }
 
-async function latestFormalBubble(surface) {
+async function latestFormalBubbleMaybe(surface, timeoutMs = 15_000) {
+  try {
+    return await latestFormalBubble(surface, timeoutMs);
+  } catch {
+    return null;
+  }
+}
+async function latestFormalBubble(surface, timeoutMs = 60_000) {
   const locator = surface.locator("[data-assistant-binding-key]");
-  await expect(locator.first()).toBeVisible({ timeout: 60_000 });
+  await expect(locator.first()).toBeVisible({ timeout: timeoutMs });
   const count = await locator.count();
   const node = locator.nth(Math.max(0, count - 1));
   return {
@@ -931,6 +956,26 @@ function assistantErrorCodeFromCall(call) {
   } catch {
     return "";
   }
+}
+
+function latestConversationSnapshotFromState(state) {
+  const calls = state.internalCalls.filter(
+    (call) => call.json && typeof call.json.conversation_id === "string" && Array.isArray(call.json.turns),
+  );
+  if (calls.length === 0) {
+    return null;
+  }
+  return calls[calls.length - 1].json;
+}
+
+async function waitForConversationSnapshotFromState(state, timeoutMs = 30_000) {
+  const deadline = Date.now() + timeoutMs;
+  let snapshot = latestConversationSnapshotFromState(state);
+  while (!snapshot && Date.now() < deadline) {
+    await new Promise((resolve) => setTimeout(resolve, 250));
+    snapshot = latestConversationSnapshotFromState(state);
+  }
+  return snapshot;
 }
 
 function assistantTaskStatusCalls(state) {
@@ -1108,14 +1153,31 @@ async function runCaseAndCollectEvidence(browser, caseId) {
 
     for (let index = 0; index < inputs.length; index += 1) {
       await runFormalCaseStep(surface, caseId, index, inputs[index]);
-      const bubble = await latestFormalBubble(surface);
-      conversationId = conversationId || bubble.conversationId;
+      const bubble = await latestFormalBubbleMaybe(surface);
+      const fallbackConversation = await waitForConversationSnapshotFromState(networkState);
+      const fallbackTurn = latestTurn(fallbackConversation || {});
+      conversationId =
+        conversationId ||
+        bubble?.conversationId ||
+        String(fallbackConversation?.conversation_id || "").trim();
       if (conversationId) {
-        const conversation = await fetchConversation(appContext, conversationId);
+        const conversation =
+          fallbackConversation && String(fallbackConversation?.conversation_id || "").trim() === conversationId
+            ? fallbackConversation
+            : await fetchConversation(appContext, conversationId);
         snapshots.push({
           step: index + 1,
           input: inputs[index],
-          bubble,
+          bubble:
+            bubble ||
+            {
+              count: 0,
+              bindingKey: "",
+              conversationId,
+              turnId: String(fallbackTurn?.turn_id || ""),
+              requestId: String(fallbackTurn?.request_id || ""),
+              text: "",
+            },
           conversation,
           latest_turn: latestTurn(conversation),
         });

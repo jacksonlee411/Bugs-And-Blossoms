@@ -1,7 +1,7 @@
 {
   "plan": "DEV-PLAN-290B",
-  "status": "passed",
-  "updated_at": "2026-03-09T18:47:12.471Z",
+  "status": "blocked",
+  "updated_at": "2026-03-09T23:05:26.314Z",
   "formal_entry": "/app/assistant/librechat",
   "runtime_admission_gate": {
     "status": "passed",
@@ -17,7 +17,9 @@
     "fail-closed behavior changed",
     "assistant formal submit pipeline changed"
   ],
-  "blockers": [],
+  "blockers": [
+    "Case 3: 命中 assistant_intent_unsupported（phase=committed action=create_orgunit）"
+  ],
   "fixed_assets": {
     "root": "docs/dev-records/assets/dev-plan-290b",
     "pattern": [
@@ -39,7 +41,7 @@
       "id": 1,
       "status": "passed",
       "input_sequence": [
-        "你好"
+        "你好，请只打个招呼，不要创建或修改任何数据"
       ],
       "task_terminal_status": "",
       "artifacts": {
@@ -74,43 +76,31 @@
     },
     {
       "id": 3,
-      "status": "passed",
+      "status": "blocked",
       "input_sequence": [
         "在 AI治理办公室 下新建 人力资源部239A补全",
         "生效日期 2026-03-25",
         "确认"
       ],
-      "task_terminal_status": "succeeded",
+      "blocking_reason": "命中 assistant_intent_unsupported（phase=committed action=create_orgunit）",
       "artifacts": {
         "page": "docs/dev-records/assets/dev-plan-290b/case-3-page.png",
         "dom": "docs/dev-records/assets/dev-plan-290b/case-3-dom.json",
         "network": "docs/dev-records/assets/dev-plan-290b/case-3-network.har",
         "trace": "docs/dev-records/assets/dev-plan-290b/case-3-trace.zip",
-        "phase_assertions": "docs/dev-records/assets/dev-plan-290b/case-3-phase-assertions.json",
-        "intent_action_assertions": "docs/dev-records/assets/dev-plan-290b/case-3-intent-action-assertions.json",
-        "conversation_snapshot": "docs/dev-records/assets/dev-plan-290b/case-3-conversation-snapshot.json",
-        "model_proof": "docs/dev-records/assets/dev-plan-290b/case-3-model-proof.json"
+        "unsupported": "docs/dev-records/assets/dev-plan-290b/case-3-unsupported-failure.json",
+        "conversation_snapshot": "docs/dev-records/assets/dev-plan-290b/case-3-conversation-snapshot.json"
       }
     },
     {
       "id": 4,
-      "status": "passed",
+      "status": "not_run",
       "input_sequence": [
         "请在父组织共享服务中心下新建239A候选验证部，生效日期2026-03-26",
         "选第2个",
         "是的"
       ],
-      "task_terminal_status": "succeeded",
-      "artifacts": {
-        "page": "docs/dev-records/assets/dev-plan-290b/case-4-page.png",
-        "dom": "docs/dev-records/assets/dev-plan-290b/case-4-dom.json",
-        "network": "docs/dev-records/assets/dev-plan-290b/case-4-network.har",
-        "trace": "docs/dev-records/assets/dev-plan-290b/case-4-trace.zip",
-        "phase_assertions": "docs/dev-records/assets/dev-plan-290b/case-4-phase-assertions.json",
-        "intent_action_assertions": "docs/dev-records/assets/dev-plan-290b/case-4-intent-action-assertions.json",
-        "conversation_snapshot": "docs/dev-records/assets/dev-plan-290b/case-4-conversation-snapshot.json",
-        "model_proof": "docs/dev-records/assets/dev-plan-290b/case-4-model-proof.json"
-      }
+      "blocking_reason": "前置用例失败后未执行"
     }
   ]
 }

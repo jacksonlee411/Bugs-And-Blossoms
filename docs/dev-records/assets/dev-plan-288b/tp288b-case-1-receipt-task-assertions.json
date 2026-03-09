@@ -1,0 +1,52 @@
+{
+  "plan": "DEV-PLAN-288B",
+  "case_id": "tp288b-case-1",
+  "tenant_id": "59213c1d-6a10-47ef-8608-217f8499837f",
+  "scenario": "create -> confirm -> commit(receipt) -> poll(task) -> refresh(conversation)",
+  "formal_entry": "/app/assistant/librechat",
+  "command": "pnpm --dir /home/lee/Projects/Bugs-And-Blossoms/e2e exec playwright test tests/tp288b-librechat-live-task-receipt-contract.spec.js --workers=1 --trace on",
+  "captured_at": "2026-03-09T23:04:07.098Z",
+  "conversation_id": "conv_e07935ac5642493db305c54f45e7ca06",
+  "turn_id": "turn_2500814842a340e0ab055f672421b5b3",
+  "commit_status": 202,
+  "receipt": {
+    "task_id": "c873e7cd-f045-43cd-9173-b222985842d6",
+    "poll_uri": "/internal/assistant/tasks/c873e7cd-f045-43cd-9173-b222985842d6",
+    "task_type": "assistant_async_plan",
+    "status": "queued",
+    "workflow_id": "assistant_async_orchestration_v1:59213c1d-6a10-47ef-8608-217f8499837f:conv_e07935ac5642493db305c54f45e7ca06:turn_2500814842a340e0ab055f672421b5b3:assistant_83730003f08246b7be6049ed0d38c3cb",
+    "submitted_at": "2026-03-09T23:04:04.787441397Z"
+  },
+  "poll_status_sequence": [
+    "succeeded"
+  ],
+  "final_task_status": "succeeded",
+  "final_turn_state": "committed",
+  "model_proof": {
+    "model_provider": "openai",
+    "model_name": "gpt-5.1",
+    "model_revision": "r2f31cdf6746a",
+    "fallback_detected": false
+  },
+  "stopline": {
+    "single_channel": true,
+    "single_formal_entry": true,
+    "no_external_reply_container": true,
+    "no_connection_error": true,
+    "single_assistant_bubble": true,
+    "no_invalid_task_poll_path": true,
+    "no_assistant_task_dispatch_failed": true,
+    "frontend_polled_receipt_task": true,
+    "frontend_refreshed_conversation": true,
+    "no_business_mock": true
+  },
+  "final_bubble": {
+    "count": 1,
+    "bindingKey": "conv_e07935ac5642493db305c54f45e7ca06::turn_2500814842a340e0ab055f672421b5b3::assistant_83730003f08246b7be6049ed0d38c3cb",
+    "conversationId": "conv_e07935ac5642493db305c54f45e7ca06",
+    "turnId": "turn_2500814842a340e0ab055f672421b5b3",
+    "requestId": "assistant_83730003f08246b7be6049ed0d38c3cb",
+    "text": "上级组织：AI治理办公室；新建组织：人力资源部288B433405；生效日期：2026-01-01 task_id: c873e7cd-f045-43cd-9173-b222985842d6 · succeeded Selected: AI治理办公室 org_code: O000001 parent_org_code: TP288BAIGOV effective_date: 2026-01-01 event_type: CREATE"
+  },
+  "passed": true
+}

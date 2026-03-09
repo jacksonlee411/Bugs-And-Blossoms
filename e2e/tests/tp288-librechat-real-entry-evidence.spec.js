@@ -69,6 +69,89 @@ function buildBindingAssertion(expectedBindings, bubbles) {
   };
 }
 
+function assistantErrorCodeFromCall(call) {
+  if (call?.json && typeof call.json === "object" && typeof call.json.code === "string") {
+    return call.json.code.trim();
+  }
+  const body = String(call?.body || "").trim();
+  if (!body) {
+    return "";
+  }
+  try {
+    const parsed = JSON.parse(body);
+    return typeof parsed?.code === "string" ? parsed.code.trim() : "";
+  } catch {
+    return "";
+  }
+}
+
+function buildReceiptTaskAssertion(network) {
+  const commitReceipts = network.internalCalls.filter(
+    (call) =>
+      call.method === "POST" &&
+      call.path.endsWith(":commit") &&
+      call.status === 202 &&
+      call.json &&
+      typeof call.json.task_id === "string",
+  );
+  const taskPollCalls = network.internalCalls.filter(
+    (call) =>
+      call.method === "GET" &&
+      call.path.startsWith("/internal/assistant/tasks/") &&
+      call.json &&
+      typeof call.json.status === "string",
+  );
+  const assistantErrorCodes = network.internalCalls
+    .map((call) => assistantErrorCodeFromCall(call))
+    .filter(Boolean);
+  const polledTaskIDs = new Set(
+    taskPollCalls
+      .map((call) => String(call?.json?.task_id || "").trim())
+      .filter(Boolean),
+  );
+  const missingReceiptPolls = commitReceipts
+    .map((call) => String(call?.json?.task_id || "").trim())
+    .filter((taskID) => taskID && !polledTaskIDs.has(taskID));
+
+  return {
+    commit_receipt_count: commitReceipts.length,
+    commit_receipts: commitReceipts.map((call) => ({
+      path: call.path,
+      status: call.status,
+      task_id: String(call?.json?.task_id || "").trim(),
+      poll_uri: String(call?.json?.poll_uri || "").trim(),
+      workflow_id: String(call?.json?.workflow_id || "").trim(),
+      has_turns_payload: Boolean(call?.json && Object.prototype.hasOwnProperty.call(call.json, "turns")),
+    })),
+    task_poll_count: taskPollCalls.length,
+    task_poll_paths: taskPollCalls.map((call) => call.path),
+    task_poll_status_sequence: taskPollCalls.map((call) => String(call?.json?.status || "").trim()),
+    invalid_task_poll_paths: [...network.invalidTaskPollPaths],
+    missing_receipt_polls: missingReceiptPolls,
+    assistant_error_codes: assistantErrorCodes,
+    passed:
+      network.invalidTaskPollPaths.length === 0 &&
+      missingReceiptPolls.length === 0 &&
+      !assistantErrorCodes.includes("assistant_task_dispatch_failed") &&
+      commitReceipts.every((call) => !Object.prototype.hasOwnProperty.call(call.json, "turns")),
+  };
+}
+
+function assertTp288ReceiptTaskContract(network, expectedReceiptCount) {
+  const receiptTaskAssertion = buildReceiptTaskAssertion(network);
+  expect(receiptTaskAssertion.commit_receipt_count).toBe(expectedReceiptCount);
+  expect(receiptTaskAssertion.invalid_task_poll_paths).toEqual([]);
+  expect(receiptTaskAssertion.missing_receipt_polls).toEqual([]);
+  expect(receiptTaskAssertion.assistant_error_codes).not.toContain("assistant_task_dispatch_failed");
+  expect(receiptTaskAssertion.commit_receipts.every((item) => item.status === 202)).toBe(true);
+  expect(receiptTaskAssertion.commit_receipts.every((item) => Boolean(item.task_id) && Boolean(item.poll_uri))).toBe(true);
+  expect(receiptTaskAssertion.commit_receipts.every((item) => item.poll_uri === `/internal/assistant/tasks/${item.task_id}`)).toBe(true);
+  expect(receiptTaskAssertion.commit_receipts.every((item) => item.has_turns_payload === false)).toBe(true);
+  expect(receiptTaskAssertion.task_poll_count).toBeGreaterThanOrEqual(expectedReceiptCount);
+  expect(receiptTaskAssertion.passed).toBe(true);
+  return receiptTaskAssertion;
+}
+
 async function persistTp288Evidence({
   appContext,
   page,
@@ -94,6 +177,7 @@ async function persistTp288Evidence({
   await page.screenshot({ path: pagePath, fullPage: true });
   const bubbles = await collectBubbleSnapshot(surface);
   const bindingAssertion = buildBindingAssertion(expectedBindings, bubbles);
+  const receiptTaskAssertion = buildReceiptTaskAssertion(network);
   const pageTextCounts = {};
   for (const text of expectedTexts) {
     pageTextCounts[text] = await page.getByText(text).count();
@@ -116,6 +200,10 @@ async function persistTp288Evidence({
     internal_post_paths: [...network.internalPostPaths],
     native_post_paths: [...network.nativePostPaths],
     native_send_emitted: network.nativePostPaths.length,
+    task_poll_paths: receiptTaskAssertion.task_poll_paths,
+    invalid_task_poll_paths: receiptTaskAssertion.invalid_task_poll_paths,
+    commit_receipts: receiptTaskAssertion.commit_receipts,
+    assistant_error_codes: receiptTaskAssertion.assistant_error_codes,
   };
 
   const assertionsPayload = {
@@ -135,11 +223,16 @@ async function persistTp288Evidence({
         bindingAssertion.all_expected_bindings_present_once &&
         bindingAssertion.unique_binding_key_count === bubbles.length,
       expected_bubble_count_match: bubbles.length === expectedBubbleCount,
+      no_invalid_task_poll_path: receiptTaskAssertion.invalid_task_poll_paths.length === 0,
+      no_assistant_task_dispatch_failed:
+        !receiptTaskAssertion.assistant_error_codes.includes("assistant_task_dispatch_failed"),
+      receipt_task_chain_matched: receiptTaskAssertion.missing_receipt_polls.length === 0,
     },
     page_text_counts: pageTextCounts,
     expected_bubble_count: expectedBubbleCount,
     actual_bubble_count: bubbles.length,
     binding_assertion: bindingAssertion,
+    receipt_task_contract: receiptTaskAssertion,
   };
 
   await writeJSON(domPath, domPayload);
@@ -311,6 +404,8 @@ async function installFormalEntryMock(page, options = {}) {
     nativePostPaths: [],
     firstTurnCommitFailed: false,
     taskByID: {},
+    internalCalls: [],
+    invalidTaskPollPaths: [],
   };
 
   page.on("request", (request) => {
@@ -335,6 +430,27 @@ async function installFormalEntryMock(page, options = {}) {
     });
   };
 
+  const recordInternalCall = (method, path, status, payload) => {
+    const item = {
+      method,
+      path,
+      status,
+      body: "",
+      json: null,
+    };
+    if (payload && typeof payload === "object") {
+      item.json = JSON.parse(JSON.stringify(payload));
+    } else if (typeof payload === "string") {
+      item.body = payload;
+    }
+    state.internalCalls.push(item);
+  };
+
+  const fulfillInternalJSON = async (route, method, path, status, payload) => {
+    recordInternalCall(method, path, status, payload);
+    await fulfillJSON(route, status, payload);
+  };
+
   const nowISO = () => new Date().toISOString();
 
   const buildTaskReceiptForTurn = (turn) => {
@@ -357,7 +473,7 @@ async function installFormalEntryMock(page, options = {}) {
       updated_at: submittedAt,
       poll_count: 0,
     };
-    return {
+    const receipt = {
       task_id: taskID,
       task_type: "assistant_async_plan",
       status: "queued",
@@ -365,6 +481,7 @@ async function installFormalEntryMock(page, options = {}) {
       submitted_at: submittedAt,
       poll_uri: `/internal/assistant/tasks/${taskID}`,
     };
+    return receipt;
   };
 
   await page.route("**/internal/assistant/**", async (route) => {
@@ -373,12 +490,12 @@ async function installFormalEntryMock(page, options = {}) {
     const method = request.method();
 
     if (method === "POST" && pathname === "/internal/assistant/conversations") {
-      await fulfillJSON(route, 200, buildConversation(state.turns));
+      await fulfillInternalJSON(route, method, pathname, 200, buildConversation(state.turns));
       return;
     }
 
     if (method === "GET" && pathname === "/internal/assistant/conversations/conv_tp288_1") {
-      await fulfillJSON(route, 200, buildConversation(state.turns));
+      await fulfillInternalJSON(route, method, pathname, 200, buildConversation(state.turns));
       return;
     }
 
@@ -411,7 +528,7 @@ async function installFormalEntryMock(page, options = {}) {
           }),
         );
       }
-      await fulfillJSON(route, 200, buildConversation(state.turns));
+      await fulfillInternalJSON(route, method, pathname, 200, buildConversation(state.turns));
       return;
     }
 
@@ -425,7 +542,7 @@ async function installFormalEntryMock(page, options = {}) {
         "confirmed",
         activeTurn.turn_id,
       );
-      await fulfillJSON(route, 200, buildConversation(state.turns));
+      await fulfillInternalJSON(route, method, pathname, 200, buildConversation(state.turns));
       return;
     }
 
@@ -433,7 +550,7 @@ async function installFormalEntryMock(page, options = {}) {
       const activeTurn = state.turns[state.turns.length - 1];
       if (options.failFirstCommit && activeTurn.turn_id === "turn_tp288_1" && !state.firstTurnCommitFailed) {
         state.firstTurnCommitFailed = true;
-        await fulfillJSON(route, 409, {
+        await fulfillInternalJSON(route, method, pathname, 409, {
           code: "assistant_commit_failed",
           message: "提交失败，请重试。",
           trace_id: activeTurn.trace_id,
@@ -461,15 +578,24 @@ async function installFormalEntryMock(page, options = {}) {
         "committed",
         activeTurn.turn_id,
       );
-      await fulfillJSON(route, 202, buildTaskReceiptForTurn(activeTurn));
+      await fulfillInternalJSON(route, method, pathname, 202, buildTaskReceiptForTurn(activeTurn));
       return;
     }
 
     if (method === "GET" && pathname.startsWith("/internal/assistant/tasks/")) {
       const taskID = pathname.replace("/internal/assistant/tasks/", "").trim();
+      if (!taskID || taskID === "undefined") {
+        state.invalidTaskPollPaths.push(pathname);
+        await fulfillInternalJSON(route, method, pathname, 404, {
+          code: "assistant_task_not_found",
+          message: "assistant task not found",
+        });
+        return;
+      }
       const task = state.taskByID[taskID];
       if (!task) {
-        await fulfillJSON(route, 404, {
+        state.invalidTaskPollPaths.push(pathname);
+        await fulfillInternalJSON(route, method, pathname, 404, {
           code: "assistant_task_not_found",
           message: "assistant task not found",
         });
@@ -482,7 +608,7 @@ async function installFormalEntryMock(page, options = {}) {
         task.attempt = 1;
         task.updated_at = nowISO();
       }
-      await fulfillJSON(route, 200, {
+      await fulfillInternalJSON(route, method, pathname, 200, {
         task_id: task.task_id,
         task_type: task.task_type,
         status: task.status,
@@ -572,6 +698,7 @@ test("tp288-e2e-001: real entry success path stays in one official bubble", asyn
   await expect(turn1Bubble).toContainText("org_code: AI2881");
   await expect(surface.locator("[data-assistant-binding-key]")).toHaveCount(1);
   await expect(page.getByText("已创建华东运营部。")).toHaveCount(1);
+  await expect(page.getByText("assistant_task_dispatch_failed", { exact: false })).toHaveCount(0);
 
   expect(network.nativePostPaths).toEqual([]);
   expect(network.internalPostPaths).toEqual([
@@ -580,6 +707,7 @@ test("tp288-e2e-001: real entry success path stays in one official bubble", asyn
     "/internal/assistant/conversations/conv_tp288_1/turns/turn_tp288_1:confirm",
     "/internal/assistant/conversations/conv_tp288_1/turns/turn_tp288_1:commit",
   ]);
+  assertTp288ReceiptTaskContract(network, 1);
 
   await persistTp288Evidence({
     appContext,
@@ -647,6 +775,7 @@ test("tp288-e2e-002: failure stays in-bubble and retry creates exactly one new b
   await expect(turn2Bubble).toHaveAttribute("data-assistant-request-id", "req_tp288_2");
   await expect(surface.locator("[data-assistant-binding-key]")).toHaveCount(2);
   await expect(page.getByText("已创建华北运营部。")).toHaveCount(1);
+  await expect(page.getByText("assistant_task_dispatch_failed", { exact: false })).toHaveCount(0);
 
   expect(network.nativePostPaths).toEqual([]);
   expect(network.internalPostPaths).toEqual([
@@ -658,6 +787,7 @@ test("tp288-e2e-002: failure stays in-bubble and retry creates exactly one new b
     "/internal/assistant/conversations/conv_tp288_1/turns/turn_tp288_2:confirm",
     "/internal/assistant/conversations/conv_tp288_1/turns/turn_tp288_2:commit",
   ]);
+  assertTp288ReceiptTaskContract(network, 1);
 
   await persistTp288Evidence({
     appContext,

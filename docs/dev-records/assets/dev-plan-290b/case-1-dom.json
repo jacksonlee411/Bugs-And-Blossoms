@@ -3,11 +3,11 @@
   "bubble_count": 1,
   "bubbles": [
     {
-      "binding_key": "conv_81e8a97a721141b2b2bafd08ce6baf6d::turn_cfd3a81e0ee34e9b9c4d3d91446e75df::assistant_8cef6ccfb4fe489e8e3a89cc631bf57c",
-      "conversation_id": "conv_81e8a97a721141b2b2bafd08ce6baf6d",
-      "turn_id": "turn_cfd3a81e0ee34e9b9c4d3d91446e75df",
-      "request_id": "assistant_8cef6ccfb4fe489e8e3a89cc631bf57c",
-      "message_id": "1ffbaedd-3abb-4df2-8246-ca00b521fa11_",
+      "binding_key": "conv_7d0a5d4b328c45a5aaf01e666bca0f7e::turn_a40ba48522fa4996aaa85949ffd5633e::assistant_0f415b0618a94d8e97f57e94af1d439a",
+      "conversation_id": "conv_7d0a5d4b328c45a5aaf01e666bca0f7e",
+      "turn_id": "turn_a40ba48522fa4996aaa85949ffd5633e",
+      "request_id": "assistant_0f415b0618a94d8e97f57e94af1d439a",
+      "message_id": "d34707ea-715b-4052-beb6-99e02f9bf1e6_",
       "text": "计划已生成，等待确认后可提交 Confirm"
     }
   ],

@@ -171,6 +171,7 @@
 2. [ ] 命令入口：`Makefile`。
 3. [ ] CI 门禁：`.github/workflows/quality-gates.yml` 与 `docs/dev-plans/012-ci-quality-gates.md`。
 4. [ ] 跨计划推进证据默认登记在对应子计划执行记录、PR、CI 输出与本文件第 5.7 节阶段状态中；如 S4 后仍需横向汇总，再补独立 `271` 执行记录文件。
+5. [X] `288B` 已新增 async receipt/task 补强证据：`docs/dev-records/assets/dev-plan-288b/tp288b-live-evidence-index.json`；`285` 若消费 `tp288` 结论，应同时参考该索引。
 
 ## 11. 交付物
 1. [ ] 主计划：`docs/dev-plans/271-assistant-librechat-cross-plan-sequenced-delivery-plan.md`。
