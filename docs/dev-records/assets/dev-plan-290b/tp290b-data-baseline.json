@@ -1,31 +1,57 @@
 {
   "plan": "DEV-PLAN-290B",
   "status": "blocked",
-  "validated_at": "2026-03-09T11:27:10Z",
-  "tenant_id": "",
+  "validated_at": "2026-03-09T15:38:34.000Z",
+  "runtime_gate_status": "passed",
+  "tenant_id": "ccc9c7c6-f6af-42fe-a1ad-1e3f6e56c9b7",
+  "tenant_ids": {
+    "case2": "",
+    "case4": ""
+  },
+  "effective_date": "2026-01-01",
   "as_of": "2026-03-26",
   "candidate_snapshot": {
     "source_case": "case4",
     "conversation_id": "",
-    "candidate_count": 0
+    "candidate_count": 0,
+    "candidates": []
   },
   "required_orgs": [
     {
       "name": "AI治理办公室",
-      "source": "case2-first-turn",
-      "observed_phase": "await_commit_confirm",
-      "observed_parent_ref_text": ""
+      "source": "case2-baseline-gate",
+      "expected": "exactly_one_candidate",
+      "ensured_status": "",
+      "observed_phase": "",
+      "observed_parent_ref_text": "",
+      "validation_errors": [],
+      "matched_count": 0,
+      "matched_org_codes": []
     },
     {
       "name": "共享服务中心",
-      "source": "case4-first-turn",
+      "source": "case4-baseline-gate",
+      "expected": "multiple_candidates",
+      "ensured_status": "",
       "observed_phase": "",
-      "candidate_count": 0
+      "candidate_count": 0,
+      "validation_errors": [],
+      "matched_count": 0,
+      "matched_org_codes": []
     }
   ],
+  "created_orgs": {
+    "case2": [],
+    "case4": []
+  },
+  "issues": {
+    "case2": [],
+    "case4": []
+  },
   "notes": [
-    "Case2 真实后端返回 deterministic plan_only，未触发 :confirm/:commit，主验收提交链路阻断。",
-    "Case3 未稳定进入 formal 气泡链路，Case4 因串行提前终止未执行。",
-    "负测已完成：neg-001/003 为有效负例，neg-002/004 在 assistant_intent_unsupported 前置下按 probe_skipped 落盘。"
+    "该文件由 tp290b 主验收脚本覆盖写入。",
+    "该文件状态仅表示 T0 数据基线是否就绪，不等价于主验收是否全部通过。",
+    "若 AI治理办公室 不能唯一命中，或 共享服务中心 候选数 <= 1，则基线未达标。",
+    "runtime-admission-gate 的阻断仍由主索引 `tp290b-live-evidence-index.json` 统一表达。"
   ]
 }

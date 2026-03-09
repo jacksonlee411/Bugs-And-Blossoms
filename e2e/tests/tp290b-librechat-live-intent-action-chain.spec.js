@@ -6,10 +6,34 @@ const repoRoot = path.resolve(__dirname, "..", "..");
 const EVIDENCE_ROOT = path.join(repoRoot, "docs", "dev-records", "assets", "dev-plan-290b");
 const INDEX_PATH = path.join(EVIDENCE_ROOT, "tp290b-live-evidence-index.json");
 const BASELINE_PATH = path.join(EVIDENCE_ROOT, "tp290b-data-baseline.json");
+const RUNTIME_GATE_PATH = path.join(EVIDENCE_ROOT, "runtime-admission-gate.json");
+const RUNTIME_GATE_HAR_PATH = path.join(EVIDENCE_ROOT, "runtime-admission-gate.har");
+const BASELINE_EFFECTIVE_DATE = "2026-01-01";
+const BASELINE_CASE4_AS_OF = "2026-03-26";
+const BASELINE_ROOT_CODE = "ROOT";
+const BASELINE_ROOT_NAME = "集团";
+const BASELINE_ORG_SPECS = {
+  ai_governance_office: {
+    code: "TP290BAIGOV",
+    name: "AI治理办公室",
+  },
+  shared_service_center_primary: {
+    code: "TP290BSSC1",
+    name: "共享服务中心",
+  },
+  shared_service_center_branch: {
+    code: "TP290BSSB",
+    name: "B",
+  },
+  shared_service_center_secondary: {
+    code: "TP290BSSC2",
+    name: "共享服务中心",
+  },
+};
 
 const CASE_INPUTS = {
   1: ["你好"],
-  2: ["在 AI治理办公室 下新建 人力资源部二期，生效日期 2026-01-01", "确认"],
+  2: ["在 AI治理办公室 下新建 人力资源部2，生效日期 2026-01-01", "确认"],
   3: ["在 AI治理办公室 下新建 人力资源部239A补全", "生效日期 2026-03-25", "确认"],
   4: ["在 共享服务中心 下新建 239A候选验证部，生效日期 2026-03-26", "选第2个", "是的"],
 };
@@ -27,8 +51,416 @@ const staleOn = [
 const caseSummaries = [];
 const baselineHints = {};
 
+function upsertCaseSummary(summary) {
+  const index = caseSummaries.findIndex((item) => item.id === summary.id);
+  if (index >= 0) {
+    caseSummaries[index] = summary;
+    return;
+  }
+  caseSummaries.push(summary);
+}
+
+function defaultCaseSummary(caseId) {
+  return {
+    id: caseId,
+    status: "not_run",
+    input_sequence: CASE_INPUTS[caseId],
+    blocking_reason: "前置用例失败后未执行",
+  };
+}
+
 function normalizeText(value) {
   return String(value || "").trim().replace(/\s+/g, " ");
+}
+
+function parseJSONSafe(raw) {
+  const body = String(raw || "").trim();
+  if (!body) {
+    return null;
+  }
+  try {
+    return JSON.parse(body);
+  } catch {
+    return null;
+  }
+}
+
+function dryRunValidationErrors(turn) {
+  if (!Array.isArray(turn?.dry_run?.validation_errors)) {
+    return [];
+  }
+  return turn.dry_run.validation_errors.map((item) => String(item || "").trim()).filter(Boolean);
+}
+
+function hasValidationError(turn, code) {
+  return dryRunValidationErrors(turn).includes(code);
+}
+
+async function parseResponseBody(response) {
+  const text = await response.text();
+  return { text, json: parseJSONSafe(text) };
+}
+
+async function listOrgUnits(appContext, asOf) {
+  const response = await appContext.request.get(`/org/api/org-units?as_of=${encodeURIComponent(asOf)}`);
+  const { text, json } = await parseResponseBody(response);
+  expect(response.status(), text).toBe(200);
+  return Array.isArray(json?.org_units) ? json.org_units : [];
+}
+
+async function getOrgUnitDetails(appContext, orgCode, asOf) {
+  const response = await appContext.request.get(
+    `/org/api/org-units/details?as_of=${encodeURIComponent(asOf)}&org_code=${encodeURIComponent(orgCode)}`,
+  );
+  const { text, json } = await parseResponseBody(response);
+  if (response.status() === 404) {
+    return null;
+  }
+  expect(response.status(), text).toBe(200);
+  return json;
+}
+
+async function waitForOrgUnitDetails(appContext, orgCode, asOf, timeoutMs = 15_000) {
+  const deadline = Date.now() + timeoutMs;
+  let details = null;
+  while (Date.now() < deadline) {
+    details = await getOrgUnitDetails(appContext, orgCode, asOf);
+    if (details?.org_unit) {
+      return details;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 250));
+  }
+  return details;
+}
+
+async function createOrgUnit(appContext, payload) {
+  const response = await appContext.request.post("/org/api/org-units", { data: payload });
+  const { text, json } = await parseResponseBody(response);
+  expect(response.status(), text).toBe(201);
+  return json;
+}
+
+function orgUnitsByExactName(orgUnits, name) {
+  const target = normalizeText(name);
+  return orgUnits.filter((item) => normalizeText(item?.name) === target);
+}
+
+function orgUnitsByNameContains(orgUnits, name) {
+  const target = normalizeText(name);
+  return orgUnits.filter((item) => normalizeText(item?.name).includes(target));
+}
+
+async function detectRootOrg(appContext, asOf) {
+  const orgUnits = await listOrgUnits(appContext, asOf);
+  const preferred = orgUnits.find((item) => String(item?.org_code || "").trim() === BASELINE_ROOT_CODE);
+  if (preferred) {
+    const details = await getOrgUnitDetails(appContext, BASELINE_ROOT_CODE, asOf);
+    if (details?.org_unit && !String(details.org_unit.parent_org_code || "").trim()) {
+      return details.org_unit;
+    }
+  }
+  for (const item of orgUnits) {
+    const orgCode = String(item?.org_code || "").trim();
+    if (!orgCode) {
+      continue;
+    }
+    const details = await getOrgUnitDetails(appContext, orgCode, asOf);
+    if (details?.org_unit && !String(details.org_unit.parent_org_code || "").trim()) {
+      return details.org_unit;
+    }
+  }
+  return null;
+}
+
+async function ensureOrgUnitByCode(appContext, spec, effectiveDate, parentOrgCode, createdOrgs) {
+  const existing = await waitForOrgUnitDetails(appContext, spec.code, effectiveDate, 250);
+  if (existing?.org_unit) {
+    return existing.org_unit;
+  }
+  await createOrgUnit(appContext, {
+    org_code: spec.code,
+    name: spec.name,
+    effective_date: effectiveDate,
+    parent_org_code: parentOrgCode,
+    is_business_unit: false,
+  });
+  const created = await waitForOrgUnitDetails(appContext, spec.code, BASELINE_CASE4_AS_OF);
+  expect(created?.org_unit, `org ${spec.code} should be readable after creation`).toBeTruthy();
+  createdOrgs.push({
+    org_code: spec.code,
+    name: spec.name,
+    parent_org_code: parentOrgCode,
+    effective_date: effectiveDate,
+  });
+  return created.org_unit;
+}
+
+async function createAssistantProbe(appContext, userInput) {
+  const createConversation = await appContext.request.post("/internal/assistant/conversations", { data: {} });
+  const { text: conversationText, json: conversationJSON } = await parseResponseBody(createConversation);
+  expect(createConversation.status(), conversationText).toBe(200);
+  const conversationID = String(conversationJSON?.conversation_id || "").trim();
+  expect(conversationID).not.toBe("");
+  const createTurn = await appContext.request.post(
+    `/internal/assistant/conversations/${encodeURIComponent(conversationID)}/turns`,
+    {
+      data: { user_input: userInput },
+    },
+  );
+  const { text: turnText, json: turnJSON } = await parseResponseBody(createTurn);
+  return {
+    conversation_id: conversationID,
+    status: createTurn.status(),
+    raw_text: turnText,
+    conversation: turnJSON,
+    latest_turn: latestTurn(turnJSON || {}),
+    error_code: String(turnJSON?.code || "").trim(),
+  };
+}
+
+function baselineProbeSummary(probe) {
+  const turn = probe?.latest_turn || null;
+  return {
+    conversation_id: String(probe?.conversation_id || ""),
+    create_turn_status: Number(probe?.status || 0),
+    error_code: String(probe?.error_code || ""),
+    phase: String(turn?.phase || ""),
+    intent_action: String(turn?.intent?.action || ""),
+    parent_ref_text: String(turn?.intent?.parent_ref_text || ""),
+    candidate_count: Array.isArray(turn?.candidates) ? turn.candidates.length : 0,
+    validation_errors: dryRunValidationErrors(turn),
+    resolved_candidate_id: String(turn?.resolved_candidate_id || turn?.resolvedCandidateID || ""),
+    request_id: String(turn?.request_id || ""),
+    trace_id: String(turn?.trace_id || ""),
+  };
+}
+
+async function collectCandidateDetails(appContext, orgUnits, asOf) {
+  const details = [];
+  for (const item of orgUnits) {
+    const orgCode = String(item?.org_code || "").trim();
+    if (!orgCode) {
+      continue;
+    }
+    const response = await getOrgUnitDetails(appContext, orgCode, asOf);
+    details.push({
+      org_code: orgCode,
+      name: String(item?.name || "").trim(),
+      full_name_path: String(response?.org_unit?.full_name_path || ""),
+      parent_org_code: String(response?.org_unit?.parent_org_code || ""),
+    });
+  }
+  return details;
+}
+
+async function ensureTenantBaseline(appContext, tenantID) {
+  const report = {
+    tenant_id: tenantID,
+    effective_date: BASELINE_EFFECTIVE_DATE,
+    validated_at: new Date().toISOString(),
+    status: "blocked",
+    root_org_code: "",
+    created_orgs: [],
+    required_orgs: [],
+    candidate_snapshot: {
+      query: "共享服务中心",
+      as_of: BASELINE_CASE4_AS_OF,
+      candidate_count: 0,
+      candidates: [],
+    },
+    issues: [],
+    probes: {},
+  };
+
+  let rootOrg = await detectRootOrg(appContext, BASELINE_EFFECTIVE_DATE);
+  if (!rootOrg) {
+    await createOrgUnit(appContext, {
+      org_code: BASELINE_ROOT_CODE,
+      name: BASELINE_ROOT_NAME,
+      effective_date: BASELINE_EFFECTIVE_DATE,
+      parent_org_code: "",
+      is_business_unit: true,
+    });
+    report.created_orgs.push({
+      org_code: BASELINE_ROOT_CODE,
+      name: BASELINE_ROOT_NAME,
+      parent_org_code: "",
+      effective_date: BASELINE_EFFECTIVE_DATE,
+      is_business_unit: true,
+    });
+    const createdRoot = await waitForOrgUnitDetails(appContext, BASELINE_ROOT_CODE, BASELINE_CASE4_AS_OF);
+    expect(createdRoot?.org_unit, "root org should be readable after creation").toBeTruthy();
+    rootOrg = createdRoot.org_unit;
+  }
+  report.root_org_code = String(rootOrg?.org_code || "").trim();
+
+  let orgUnits = await listOrgUnits(appContext, BASELINE_CASE4_AS_OF);
+  if (orgUnitsByExactName(orgUnits, BASELINE_ORG_SPECS.ai_governance_office.name).length === 0) {
+    await ensureOrgUnitByCode(
+      appContext,
+      BASELINE_ORG_SPECS.ai_governance_office,
+      BASELINE_EFFECTIVE_DATE,
+      report.root_org_code,
+      report.created_orgs,
+    );
+  }
+
+  orgUnits = await listOrgUnits(appContext, BASELINE_CASE4_AS_OF);
+  const sharedCandidatesBefore = orgUnitsByNameContains(orgUnits, BASELINE_ORG_SPECS.shared_service_center_primary.name);
+  if (sharedCandidatesBefore.length === 0) {
+    await ensureOrgUnitByCode(
+      appContext,
+      BASELINE_ORG_SPECS.shared_service_center_primary,
+      BASELINE_EFFECTIVE_DATE,
+      report.root_org_code,
+      report.created_orgs,
+    );
+  }
+
+  orgUnits = await listOrgUnits(appContext, BASELINE_CASE4_AS_OF);
+  if (orgUnitsByNameContains(orgUnits, BASELINE_ORG_SPECS.shared_service_center_primary.name).length < 2) {
+    await ensureOrgUnitByCode(
+      appContext,
+      BASELINE_ORG_SPECS.shared_service_center_branch,
+      BASELINE_EFFECTIVE_DATE,
+      report.root_org_code,
+      report.created_orgs,
+    );
+    await ensureOrgUnitByCode(
+      appContext,
+      BASELINE_ORG_SPECS.shared_service_center_secondary,
+      BASELINE_EFFECTIVE_DATE,
+      BASELINE_ORG_SPECS.shared_service_center_branch.code,
+      report.created_orgs,
+    );
+  }
+
+  orgUnits = await listOrgUnits(appContext, BASELINE_CASE4_AS_OF);
+  const aiGovernanceUnits = orgUnitsByExactName(orgUnits, BASELINE_ORG_SPECS.ai_governance_office.name);
+  const sharedServiceUnits = orgUnitsByNameContains(orgUnits, BASELINE_ORG_SPECS.shared_service_center_primary.name);
+  const case2Probe = await createAssistantProbe(appContext, CASE_INPUTS[2][0]);
+  const case4Probe = await createAssistantProbe(appContext, CASE_INPUTS[4][0]);
+  const case2Summary = baselineProbeSummary(case2Probe);
+  const case4Summary = baselineProbeSummary(case4Probe);
+
+  report.probes.case2 = case2Summary;
+  report.probes.case4 = case4Summary;
+  report.required_orgs = [
+    {
+      name: BASELINE_ORG_SPECS.ai_governance_office.name,
+      expected: "exactly_one_candidate",
+      matched_count: aiGovernanceUnits.length,
+      matched_org_codes: aiGovernanceUnits.map((item) => String(item.org_code || "").trim()),
+      ready:
+        aiGovernanceUnits.length === 1 &&
+        case2Summary.create_turn_status === 200 &&
+        case2Summary.intent_action === "create_orgunit" &&
+        case2Summary.phase === "await_commit_confirm" &&
+        !case2Summary.validation_errors.includes("parent_candidate_not_found") &&
+        !case2Summary.validation_errors.includes("candidate_confirmation_required") &&
+        Boolean(case2Summary.resolved_candidate_id),
+    },
+    {
+      name: BASELINE_ORG_SPECS.shared_service_center_primary.name,
+      expected: "multiple_candidates",
+      matched_count: sharedServiceUnits.length,
+      matched_org_codes: sharedServiceUnits.map((item) => String(item.org_code || "").trim()),
+      ready:
+        sharedServiceUnits.length > 1 &&
+        case4Summary.create_turn_status === 200 &&
+        case4Summary.intent_action === "create_orgunit" &&
+        case4Summary.phase === "await_candidate_pick" &&
+        case4Summary.candidate_count > 1 &&
+        !case4Summary.validation_errors.includes("parent_candidate_not_found"),
+    },
+  ];
+  report.candidate_snapshot.candidate_count = sharedServiceUnits.length;
+  report.candidate_snapshot.candidates = await collectCandidateDetails(appContext, sharedServiceUnits, BASELINE_CASE4_AS_OF);
+
+  if (report.required_orgs[0].matched_count !== 1) {
+    report.issues.push(`AI治理办公室 命中数量异常：${report.required_orgs[0].matched_count}`);
+  }
+  if (report.required_orgs[1].matched_count <= 1) {
+    report.issues.push(`共享服务中心 候选数量不足：${report.required_orgs[1].matched_count}`);
+  }
+  if (!report.required_orgs[0].ready) {
+    report.issues.push(`Case2 基线探针未就绪（phase=${case2Summary.phase || "unknown"} validation=${case2Summary.validation_errors.join(",") || "none"}）`);
+  }
+  if (!report.required_orgs[1].ready) {
+    report.issues.push(`Case4 基线探针未就绪（phase=${case4Summary.phase || "unknown"} candidates=${case4Summary.candidate_count}）`);
+  }
+
+  report.status = report.required_orgs.every((item) => item.ready) ? "passed" : "blocked";
+  return report;
+}
+
+function buildBaselineGateError(message, baseline) {
+  const error = new Error(message);
+  error.code = "tp290b_baseline_not_ready";
+  error.baseline = baseline;
+  return error;
+}
+
+function assertCasePreflightGate(caseId, snapshot, baseline) {
+  const turn = snapshot?.latest_turn || null;
+  if (caseId === 2) {
+    if (hasValidationError(turn, "parent_candidate_not_found")) {
+      throw buildBaselineGateError(
+        `数据基线未就绪：AI治理办公室 未命中候选（phase=${String(turn?.phase || "unknown")})`,
+        baseline,
+      );
+    }
+    if (String(turn?.phase || "") !== "await_commit_confirm") {
+      throw buildBaselineGateError(
+        `数据基线未就绪：Case2 首轮未进入 await_commit_confirm（phase=${String(turn?.phase || "unknown")})`,
+        baseline,
+      );
+    }
+  }
+  if (caseId === 4) {
+    const candidateCount = Array.isArray(turn?.candidates) ? turn.candidates.length : 0;
+    if (hasValidationError(turn, "parent_candidate_not_found")) {
+      throw buildBaselineGateError(
+        `数据基线未就绪：共享服务中心 未命中候选（phase=${String(turn?.phase || "unknown")})`,
+        baseline,
+      );
+    }
+    if (String(turn?.phase || "") !== "await_candidate_pick" || candidateCount <= 1) {
+      throw buildBaselineGateError(
+        `数据基线未就绪：Case4 首轮候选不足（phase=${String(turn?.phase || "unknown")} candidates=${candidateCount})`,
+        baseline,
+      );
+    }
+  }
+}
+
+function captureBaselineHint(caseId, tenantID, baseline, snapshot) {
+  if (caseId !== 2 && caseId !== 4) {
+    return;
+  }
+  const turn = snapshot?.latest_turn || null;
+  baselineHints[`case${caseId}`] = {
+    ...(baselineHints[`case${caseId}`] || {}),
+    tenant_id: tenantID,
+    ensured_status: String(baseline?.status || ""),
+    root_org_code: String(baseline?.root_org_code || ""),
+    created_orgs: Array.isArray(baseline?.created_orgs) ? baseline.created_orgs : [],
+    required_orgs: Array.isArray(baseline?.required_orgs) ? baseline.required_orgs : [],
+    issues: Array.isArray(baseline?.issues) ? baseline.issues : [],
+    candidate_snapshot: baseline?.candidate_snapshot || {},
+    probe: baseline?.probes?.[`case${caseId}`] || {},
+    conversation_id: String(snapshot?.conversation?.conversation_id || snapshot?.conversation_id || ""),
+    phase: String(turn?.phase || baseline?.probes?.[`case${caseId}`]?.phase || ""),
+    parent_ref_text: String(turn?.intent?.parent_ref_text || baseline?.probes?.[`case${caseId}`]?.parent_ref_text || ""),
+    candidate_count:
+      Array.isArray(turn?.candidates) ? turn.candidates.length : Number(baseline?.probes?.[`case${caseId}`]?.candidate_count || 0),
+    validation_errors:
+      dryRunValidationErrors(turn).length > 0
+        ? dryRunValidationErrors(turn)
+        : Array.isArray(baseline?.probes?.[`case${caseId}`]?.validation_errors)
+          ? baseline.probes[`case${caseId}`].validation_errors
+          : [],
+  };
 }
 
 async function ensureDir(dirPath) {
@@ -69,6 +501,29 @@ async function ensureKratosIdentity(ctx, kratosAdminURL, { traits, identifier, p
   if (!resp.ok()) {
     expect(resp.status(), `unexpected status: ${resp.status()} (${await resp.text()})`).toBe(409);
   }
+}
+
+async function createIAMSessionWithRetry(appContext, email, password, timeoutMs = 15_000) {
+  const deadline = Date.now() + timeoutMs;
+  let lastStatus = 0;
+  let lastBody = "";
+  while (Date.now() < deadline) {
+    const resp = await appContext.request.post("/iam/api/sessions", {
+      data: { email, password },
+    });
+    lastStatus = resp.status();
+    lastBody = await resp.text();
+    if (lastStatus === 204) {
+      return;
+    }
+    const parsed = parseJSONSafe(lastBody);
+    const code = String(parsed?.code || "").trim();
+    if (!(lastStatus === 422 && code === "invalid_credentials")) {
+      break;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 500));
+  }
+  expect(lastStatus, lastBody).toBe(204);
 }
 
 async function setupTenantAdminSession(browser, suffix, harPath) {
@@ -132,10 +587,7 @@ async function setupTenantAdminSession(browser, suffix, harPath) {
       mode: "full",
     },
   });
-  const loginResp = await appContext.request.post("/iam/api/sessions", {
-    data: { email: tenantAdminEmail, password: tenantAdminPass },
-  });
-  expect(loginResp.status(), await loginResp.text()).toBe(204);
+  await createIAMSessionWithRetry(appContext, tenantAdminEmail, tenantAdminPass);
   const page = await appContext.newPage();
   return { appContext, page, tenantID };
 }
@@ -352,12 +804,136 @@ function assistantTaskStatusCalls(state) {
   );
 }
 
+function unsupportedCallsFromState(state) {
+  return state.internalCalls.filter((call) => assistantErrorCodeFromCall(call) === "assistant_intent_unsupported");
+}
+
+function fallbackDetectedFromTurn(turn) {
+  const provider = String(turn?.plan?.model_provider || "").trim();
+  const modelName = String(turn?.plan?.model_name || "").trim();
+  return provider === "deterministic" || modelName === "builtin-intent-extractor";
+}
+
+function unsupportedFailurePayload({ caseId, conversationId, snapshots, unsupportedCalls, failureStage, failureMessage }) {
+  const lastTurn = snapshots.length > 0 ? snapshots[snapshots.length - 1]?.latest_turn || null : null;
+  return {
+    case_id: caseId,
+    conversation_id: conversationId,
+    turn_id: String(lastTurn?.turn_id || ""),
+    request_id: String(lastTurn?.request_id || ""),
+    trace_id: String(lastTurn?.trace_id || ""),
+    intent_action: String(lastTurn?.intent?.action || ""),
+    phase: String(lastTurn?.phase || ""),
+    error_code: "assistant_intent_unsupported",
+    failure_stage: failureStage,
+    failure_message: failureMessage,
+    observed_calls: unsupportedCalls,
+    captured_at: new Date().toISOString(),
+  };
+}
+
+async function runRuntimeAdmissionGate(browser) {
+  await ensureDir(EVIDENCE_ROOT);
+  const { appContext, tenantID } = await setupTenantAdminSession(browser, "runtime-gate", RUNTIME_GATE_HAR_PATH);
+  const report = {
+    plan: "DEV-PLAN-290B",
+    status: "blocked",
+    tenant_id: tenantID,
+    probe_input: CASE_INPUTS[2][0],
+    checks: {
+      create_turn_status_200: false,
+      intent_action_is_create_orgunit: false,
+      no_deterministic_fallback: false,
+    },
+    create_conversation: {
+      status: 0,
+      conversation_id: "",
+    },
+    create_turn: {
+      status: 0,
+      error_code: "",
+    },
+    observed: {
+      intent_action: "",
+      phase: "",
+      model_provider: "",
+      model_name: "",
+      model_revision: "",
+      fallback_detected: false,
+      request_id: "",
+      trace_id: "",
+    },
+    captured_at: new Date().toISOString(),
+  };
+  try {
+    const createConversation = await appContext.request.post("/internal/assistant/conversations", { data: {} });
+    report.create_conversation.status = createConversation.status();
+    const conversationText = await createConversation.text();
+    const conversationJSON = parseJSONSafe(conversationText);
+    report.create_conversation.conversation_id = String(conversationJSON?.conversation_id || "");
+
+    if (createConversation.status() !== 200 || !report.create_conversation.conversation_id) {
+      await writeJSON(RUNTIME_GATE_PATH, report);
+      expect(createConversation.status(), conversationText).toBe(200);
+      expect(report.create_conversation.conversation_id).not.toBe("");
+      return;
+    }
+
+    const conversationID = report.create_conversation.conversation_id;
+    const createTurn = await appContext.request.post(
+      `/internal/assistant/conversations/${encodeURIComponent(conversationID)}/turns`,
+      {
+        data: { user_input: CASE_INPUTS[2][0] },
+      },
+    );
+    report.create_turn.status = createTurn.status();
+    const createTurnText = await createTurn.text();
+    const createTurnJSON = parseJSONSafe(createTurnText);
+    report.create_turn.error_code = String(createTurnJSON?.code || "");
+    report.checks.create_turn_status_200 = createTurn.status() === 200;
+
+    if (createTurn.status() === 200) {
+      const turn = latestTurn(createTurnJSON || {});
+      report.observed.intent_action = String(turn?.intent?.action || "");
+      report.observed.phase = String(turn?.phase || "");
+      report.observed.model_provider = String(turn?.plan?.model_provider || "");
+      report.observed.model_name = String(turn?.plan?.model_name || "");
+      report.observed.model_revision = String(turn?.plan?.model_revision || "");
+      report.observed.fallback_detected = fallbackDetectedFromTurn(turn);
+      report.observed.request_id = String(turn?.request_id || "");
+      report.observed.trace_id = String(turn?.trace_id || "");
+      report.checks.intent_action_is_create_orgunit = report.observed.intent_action === "create_orgunit";
+      report.checks.no_deterministic_fallback = !report.observed.fallback_detected;
+    }
+
+    report.status =
+      report.checks.create_turn_status_200 &&
+      report.checks.intent_action_is_create_orgunit &&
+      report.checks.no_deterministic_fallback
+        ? "passed"
+        : "blocked";
+    await writeJSON(RUNTIME_GATE_PATH, report);
+
+    expect(createTurn.status(), createTurnText).toBe(200);
+    expect(report.observed.intent_action).toBe("create_orgunit");
+    expect(report.observed.fallback_detected).toBe(false);
+  } finally {
+    await appContext.close();
+  }
+}
+
 async function runCaseAndCollectEvidence(browser, caseId) {
   await ensureDir(EVIDENCE_ROOT);
   const paths = evidencePaths(caseId);
   const { appContext, page, tenantID } = await setupTenantAdminSession(browser, `case-${caseId}`, paths.network);
   const networkState = installNetworkRecorder(page);
+  const inputs = CASE_INPUTS[caseId];
   let traceMode = "none";
+  let surface = page;
+  let usedIframe = true;
+  let conversationId = "";
+  let baseline = null;
+  const snapshots = [];
   try {
     await appContext.tracing.start({ screenshots: true, snapshots: true, sources: true });
     traceMode = "full";
@@ -374,18 +950,23 @@ async function runCaseAndCollectEvidence(browser, caseId) {
     );
   }
 
-  let surface = page;
-  let usedIframe = true;
-  let conversationId = "";
-  const snapshots = [];
-
   try {
+    if (caseId !== 1) {
+      baseline = await ensureTenantBaseline(appContext, tenantID);
+      captureBaselineHint(caseId, tenantID, baseline, null);
+      if (baseline.status !== "passed") {
+        throw buildBaselineGateError(
+          `数据基线未就绪：${baseline.issues[0] || "租户基线校验失败"}`,
+          baseline,
+        );
+      }
+    }
+
     const entry = await openFormalEntry(page);
     surface = entry.surface;
     usedIframe = entry.usedIframe;
     expect(usedIframe, "formal entry must be direct page").toBe(false);
 
-    const inputs = CASE_INPUTS[caseId];
     for (let index = 0; index < inputs.length; index += 1) {
       await sendFromFormalEntry(surface, inputs[index]);
       const bubble = await latestFormalBubble(surface);
@@ -399,6 +980,10 @@ async function runCaseAndCollectEvidence(browser, caseId) {
           conversation,
           latest_turn: latestTurn(conversation),
         });
+        captureBaselineHint(caseId, tenantID, baseline, snapshots[snapshots.length - 1]);
+        if (index === 0) {
+          assertCasePreflightGate(caseId, snapshots[snapshots.length - 1], baseline);
+        }
       }
     }
 
@@ -414,61 +999,62 @@ async function runCaseAndCollectEvidence(browser, caseId) {
       });
     }
 
-	    const finalTurn = latestTurn(finalConversation || {});
-	    const observedPhases = compressPhases(snapshots.map((item) => item.latest_turn?.phase));
-	    const unsupportedCalls = networkState.internalCalls.filter(
-	      (call) => assistantErrorCodeFromCall(call) === "assistant_intent_unsupported",
-	    );
-	    if (unsupportedCalls.length > 0) {
-	      await writeJSON(paths.unsupported, {
-	        case_id: caseId,
-	        conversation_id: conversationId,
-	        observed_calls: unsupportedCalls,
-	        captured_at: new Date().toISOString(),
-	      });
-	    }
-	    expect(unsupportedCalls).toEqual([]);
+    const finalTurn = latestTurn(finalConversation || {});
+    const observedPhases = compressPhases(snapshots.map((item) => item.latest_turn?.phase));
+    const unsupportedCalls = unsupportedCallsFromState(networkState);
+    if (unsupportedCalls.length > 0) {
+      const payload = unsupportedFailurePayload({
+        caseId,
+        conversationId,
+        snapshots,
+        unsupportedCalls,
+        failureStage: "post_turn_assertion",
+        failureMessage: "assistant_intent_unsupported returned by runtime",
+      });
+      await writeJSON(paths.unsupported, payload);
+      throw new Error(
+        `assistant_intent_unsupported (case=${caseId}, phase=${payload.phase || "unknown"}, action=${payload.intent_action || "unknown"})`,
+      );
+    }
 
-	    const taskStatusCalls = assistantTaskStatusCalls(networkState);
-	    const lastTaskStatus =
-	      taskStatusCalls.length > 0
-	        ? String(taskStatusCalls[taskStatusCalls.length - 1].json.status || "").trim()
-	        : "";
-	    const actionAtFirstTurn = String(snapshots[0]?.latest_turn?.intent?.action || "").trim();
-	    const actionAtFinalTurn = String(finalTurn?.intent?.action || "").trim();
-	    const actionOnCommittedPath = actionAtFinalTurn || actionAtFirstTurn;
+    const taskStatusCalls = assistantTaskStatusCalls(networkState);
+    const lastTaskStatus =
+      taskStatusCalls.length > 0 ? String(taskStatusCalls[taskStatusCalls.length - 1].json.status || "").trim() : "";
+    const actionAtFirstTurn = String(snapshots[0]?.latest_turn?.intent?.action || "").trim();
+    const actionAtFinalTurn = String(finalTurn?.intent?.action || "").trim();
+    const actionOnCommittedPath = actionAtFinalTurn || actionAtFirstTurn;
 
-	    expect(networkState.nativePostPaths).toEqual([]);
-	    if (caseId === 1) {
-	      expect(hasInternalPost(networkState, ":confirm")).toBe(false);
-	      expect(hasInternalPost(networkState, ":commit")).toBe(false);
-	      expect(finalTurn?.intent?.action).toBe("plan_only");
-	      expect(observedPhases).not.toContain("committing");
-	      expect(observedPhases).not.toContain("committed");
-	    } else if (caseId === 2) {
-	      expect(observedPhases).toContain("await_commit_confirm");
-	      expect(hasInternalPost(networkState, ":confirm")).toBe(true);
-	      expect(hasInternalPost(networkState, ":commit")).toBe(true);
-	      expect(taskStatusCalls.length).toBeGreaterThan(0);
-	      expect(lastTaskStatus).toBe("succeeded");
-	      expect(finalTurn?.state).toBe("committed");
-	    } else if (caseId === 3) {
-	      expect(snapshots[0]?.latest_turn?.phase).toBe("await_missing_fields");
-	      expect(observedPhases).toContain("await_commit_confirm");
-	      expect(hasInternalPost(networkState, ":confirm")).toBe(true);
-	      expect(hasInternalPost(networkState, ":commit")).toBe(true);
-	      expect(taskStatusCalls.length).toBeGreaterThan(0);
-	      expect(lastTaskStatus).toBe("succeeded");
-	      expect(finalTurn?.state).toBe("committed");
-	    } else if (caseId === 4) {
-	      expect(snapshots[0]?.latest_turn?.phase).toBe("await_candidate_pick");
-	      expect((snapshots[0]?.latest_turn?.candidates || []).length).toBeGreaterThan(1);
-	      expect(hasInternalPost(networkState, ":confirm")).toBe(true);
-	      expect(hasInternalPost(networkState, ":commit")).toBe(true);
-	      expect(taskStatusCalls.length).toBeGreaterThan(0);
-	      expect(lastTaskStatus).toBe("succeeded");
-	      expect(finalTurn?.state).toBe("committed");
-	    }
+    expect(networkState.nativePostPaths).toEqual([]);
+    if (caseId === 1) {
+      expect(hasInternalPost(networkState, ":confirm")).toBe(false);
+      expect(hasInternalPost(networkState, ":commit")).toBe(false);
+      expect(finalTurn?.intent?.action).toBe("plan_only");
+      expect(observedPhases).not.toContain("committing");
+      expect(observedPhases).not.toContain("committed");
+    } else if (caseId === 2) {
+      expect(observedPhases).toContain("await_commit_confirm");
+      expect(hasInternalPost(networkState, ":confirm")).toBe(true);
+      expect(hasInternalPost(networkState, ":commit")).toBe(true);
+      expect(taskStatusCalls.length).toBeGreaterThan(0);
+      expect(lastTaskStatus).toBe("succeeded");
+      expect(finalTurn?.state).toBe("committed");
+    } else if (caseId === 3) {
+      expect(snapshots[0]?.latest_turn?.phase).toBe("await_missing_fields");
+      expect(observedPhases).toContain("await_commit_confirm");
+      expect(hasInternalPost(networkState, ":confirm")).toBe(true);
+      expect(hasInternalPost(networkState, ":commit")).toBe(true);
+      expect(taskStatusCalls.length).toBeGreaterThan(0);
+      expect(lastTaskStatus).toBe("succeeded");
+      expect(finalTurn?.state).toBe("committed");
+    } else if (caseId === 4) {
+      expect(snapshots[0]?.latest_turn?.phase).toBe("await_candidate_pick");
+      expect((snapshots[0]?.latest_turn?.candidates || []).length).toBeGreaterThan(1);
+      expect(hasInternalPost(networkState, ":confirm")).toBe(true);
+      expect(hasInternalPost(networkState, ":commit")).toBe(true);
+      expect(taskStatusCalls.length).toBeGreaterThan(0);
+      expect(lastTaskStatus).toBe("succeeded");
+      expect(finalTurn?.state).toBe("committed");
+    }
 
     const modelProof = modelProofFromConversation(finalConversation || {});
     if (caseId !== 1) {
@@ -515,19 +1101,19 @@ async function runCaseAndCollectEvidence(browser, caseId) {
     };
     await writeJSON(paths.intent, intentAssertion);
 
-	    const phaseAssertions = {
-	      case_id: caseId,
-	      status: "passed",
-	      validated_at: new Date().toISOString(),
-	      observed_phase_path: observedPhases,
-	      network_internal_posts: networkState.internalPostPaths,
-	      task_terminal_status: lastTaskStatus,
-	      task_status_poll_count: taskStatusCalls.length,
-	      stopline_266: {
-	        single_channel: networkState.nativePostPaths.length === 0,
-	        no_official_connection_error: domEvidence.connection_error_count === 0,
-	        no_external_reply_container: domEvidence.external_reply_container_count === 0,
-	      },
+    const phaseAssertions = {
+      case_id: caseId,
+      status: "passed",
+      validated_at: new Date().toISOString(),
+      observed_phase_path: observedPhases,
+      network_internal_posts: networkState.internalPostPaths,
+      task_terminal_status: lastTaskStatus,
+      task_status_poll_count: taskStatusCalls.length,
+      stopline_266: {
+        single_channel: networkState.nativePostPaths.length === 0,
+        no_official_connection_error: domEvidence.connection_error_count === 0,
+        no_external_reply_container: domEvidence.external_reply_container_count === 0,
+      },
       stopline_280: {
         single_formal_entry: usedIframe === false,
         no_bridge_or_injected_stream: domEvidence.external_reply_container_count === 0,
@@ -535,14 +1121,14 @@ async function runCaseAndCollectEvidence(browser, caseId) {
     };
     await writeJSON(paths.phase, phaseAssertions);
 
-	    caseSummaries.push({
-	      id: caseId,
-	      status: "passed",
-	      input_sequence: inputs,
-	      task_terminal_status: lastTaskStatus,
-	      artifacts: {
-	        page: path.relative(repoRoot, paths.page),
-	        dom: path.relative(repoRoot, paths.dom),
+    upsertCaseSummary({
+      id: caseId,
+      status: "passed",
+      input_sequence: inputs,
+      task_terminal_status: lastTaskStatus,
+      artifacts: {
+        page: path.relative(repoRoot, paths.page),
+        dom: path.relative(repoRoot, paths.dom),
         network: path.relative(repoRoot, paths.network),
         trace: path.relative(repoRoot, paths.trace),
         phase_assertions: path.relative(repoRoot, paths.phase),
@@ -552,22 +1138,65 @@ async function runCaseAndCollectEvidence(browser, caseId) {
       },
     });
 
-    if (caseId === 2) {
-      baselineHints.case2 = {
+    captureBaselineHint(caseId, tenantID, baseline, snapshots[0] || null);
+  } catch (error) {
+    const unsupportedCalls = unsupportedCallsFromState(networkState);
+    const errorMessage = String(error?.message || error || "unknown_error");
+    let blockingReason = `主验收执行失败：${errorMessage}`;
+    if (error?.code === "tp290b_baseline_not_ready") {
+      blockingReason = errorMessage;
+      captureBaselineHint(caseId, tenantID, error?.baseline || baseline, snapshots[0] || null);
+    } else if (unsupportedCalls.length > 0) {
+      const payload = unsupportedFailurePayload({
+        caseId,
+        conversationId,
+        snapshots,
+        unsupportedCalls,
+        failureStage: "runtime_or_case_flow",
+        failureMessage: errorMessage,
+      });
+      await writeJSON(paths.unsupported, payload);
+      blockingReason = `命中 assistant_intent_unsupported（phase=${payload.phase || "unknown"} action=${payload.intent_action || "unknown"}）`;
+    }
+
+    try {
+      await page.screenshot({ path: paths.page, fullPage: true });
+    } catch {
+      // ignore evidence capture failures
+    }
+    try {
+      const domEvidence = await collectDOMEvidence(page, surface);
+      await writeJSON(paths.dom, domEvidence);
+    } catch {
+      // ignore evidence capture failures
+    }
+    try {
+      await writeJSON(paths.snapshot, {
+        case_id: caseId,
         tenant_id: tenantID,
         conversation_id: conversationId,
-        phase: snapshots[0]?.latest_turn?.phase || "",
-        parent_ref_text: snapshots[0]?.latest_turn?.intent?.parent_ref_text || "",
-      };
+        snapshots,
+        failure_message: errorMessage,
+      });
+    } catch {
+      // ignore evidence capture failures
     }
-    if (caseId === 4) {
-      baselineHints.case4 = {
-        tenant_id: tenantID,
-        conversation_id: conversationId,
-        phase: snapshots[0]?.latest_turn?.phase || "",
-        candidate_count: (snapshots[0]?.latest_turn?.candidates || []).length,
-      };
-    }
+
+    upsertCaseSummary({
+      id: caseId,
+      status: "blocked",
+      input_sequence: inputs,
+      blocking_reason: blockingReason,
+      artifacts: {
+        page: path.relative(repoRoot, paths.page),
+        dom: path.relative(repoRoot, paths.dom),
+        network: path.relative(repoRoot, paths.network),
+        trace: path.relative(repoRoot, paths.trace),
+        unsupported: path.relative(repoRoot, paths.unsupported),
+        conversation_snapshot: path.relative(repoRoot, paths.snapshot),
+      },
+    });
+    throw error;
   } finally {
     if (traceMode === "full") {
       await appContext.tracing.stop({ path: paths.trace });
@@ -577,6 +1206,11 @@ async function runCaseAndCollectEvidence(browser, caseId) {
 }
 
 test.describe.configure({ mode: "serial" });
+
+test("tp290b-e2e-000: runtime admission gate for case2 must be executable", async ({ browser }) => {
+  test.setTimeout(240_000);
+  await runRuntimeAdmissionGate(browser);
+});
 
 test("tp290b-e2e-001: case 1 greeting keeps plan_only on real backend", async ({ browser }) => {
   test.setTimeout(360_000);
@@ -600,65 +1234,129 @@ test("tp290b-e2e-004: case 4 candidate pick then dialog commit", async ({ browse
 
 test.afterAll(async () => {
   await ensureDir(EVIDENCE_ROOT);
-  const sorted = [...caseSummaries].sort((a, b) => a.id - b.id);
+  let runtimeGate = null;
+  try {
+    const raw = await fs.readFile(RUNTIME_GATE_PATH, "utf8");
+    runtimeGate = parseJSONSafe(raw);
+  } catch {
+    runtimeGate = null;
+  }
+
+  const merged = [1, 2, 3, 4]
+    .map((id) => caseSummaries.find((item) => item.id === id) || defaultCaseSummary(id))
+    .sort((a, b) => a.id - b.id);
+  const blockers = [];
+  if (runtimeGate?.status === "blocked") {
+    blockers.push(
+      `运行态准入闸门失败（intent_action=${runtimeGate?.observed?.intent_action || ""}, provider=${runtimeGate?.observed?.model_provider || ""}, model=${runtimeGate?.observed?.model_name || ""}, error_code=${runtimeGate?.create_turn?.error_code || ""})`,
+    );
+  }
+  blockers.push(
+    ...merged
+      .filter((item) => item.status === "blocked" && item.blocking_reason)
+      .map((item) => `Case ${item.id}: ${item.blocking_reason}`),
+  );
+  const hasBlocked = blockers.length > 0;
+  const allPassed =
+    runtimeGate?.status === "passed" && merged.length === 4 && merged.every((item) => item.status === "passed");
+  const baselineCase2 = baselineHints.case2 || {};
+  const baselineCase4 = baselineHints.case4 || {};
+  const baselineReady =
+    baselineCase2.ensured_status === "passed" &&
+    baselineCase4.ensured_status === "passed" &&
+    Boolean(baselineCase2.tenant_id || baselineCase4.tenant_id);
   const indexPayload = {
     plan: "DEV-PLAN-290B",
-    status: sorted.length === 4 && sorted.every((item) => item.status === "passed") ? "passed" : "in_progress",
+    status: allPassed ? "passed" : hasBlocked ? "blocked" : "in_progress",
     updated_at: new Date().toISOString(),
     formal_entry: "/app/assistant/librechat",
+    runtime_admission_gate: {
+      status: runtimeGate?.status || "not_run",
+      artifact: path.relative(repoRoot, RUNTIME_GATE_PATH),
+      network: path.relative(repoRoot, RUNTIME_GATE_HAR_PATH),
+    },
     stale_on: staleOn,
-	    fixed_assets: {
-	      root: "docs/dev-records/assets/dev-plan-290b",
-	      pattern: [
+    blockers,
+    fixed_assets: {
+      root: "docs/dev-records/assets/dev-plan-290b",
+      pattern: [
         "case-{id}-page.png",
         "case-{id}-dom.json",
         "case-{id}-network.har",
         "case-{id}-trace.zip",
-	        "case-{id}-phase-assertions.json",
-	        "case-{id}-intent-action-assertions.json",
-	        "case-{id}-unsupported-failure.json",
-	        "case-{id}-conversation-snapshot.json",
-	        "case-{id}-model-proof.json",
-	      ],
-	    },
-    cases: sorted,
+        "case-{id}-phase-assertions.json",
+        "case-{id}-intent-action-assertions.json",
+        "case-{id}-unsupported-failure.json",
+        "case-{id}-conversation-snapshot.json",
+        "case-{id}-model-proof.json",
+        "runtime-admission-gate.json",
+        "runtime-admission-gate.har",
+      ],
+    },
+    cases: merged,
   };
   await writeJSON(INDEX_PATH, indexPayload);
 
-	  const baselinePayload = {
-	    plan: "DEV-PLAN-290B",
-	    status:
-	      sorted.length === 4 &&
-	      sorted.every((item) => item.status === "passed") &&
-	      (baselineHints.case4?.candidate_count ?? 0) > 1
-	        ? "passed"
-	        : "blocked",
-	    validated_at: new Date().toISOString(),
-	    tenant_id: baselineHints.case2?.tenant_id || baselineHints.case4?.tenant_id || "",
-	    as_of: "2026-03-26",
-	    candidate_snapshot: {
-	      source_case: "case4",
-	      conversation_id: baselineHints.case4?.conversation_id || "",
-	      candidate_count: baselineHints.case4?.candidate_count ?? 0,
-	    },
-	    required_orgs: [
-	      {
-	        name: "AI治理办公室",
-        source: "case2-first-turn",
-        observed_phase: baselineHints.case2?.phase || "",
-        observed_parent_ref_text: baselineHints.case2?.parent_ref_text || "",
+  const baselinePayload = {
+    plan: "DEV-PLAN-290B",
+    status: baselineReady ? "passed" : "blocked",
+    validated_at: new Date().toISOString(),
+    runtime_gate_status: runtimeGate?.status || "not_run",
+    tenant_id: baselineCase2.tenant_id || baselineCase4.tenant_id || String(runtimeGate?.tenant_id || ""),
+    tenant_ids: {
+      case2: baselineCase2.tenant_id || "",
+      case4: baselineCase4.tenant_id || "",
+    },
+    effective_date: BASELINE_EFFECTIVE_DATE,
+    as_of: BASELINE_CASE4_AS_OF,
+    candidate_snapshot: {
+      source_case: "case4",
+      conversation_id: baselineCase4.conversation_id || "",
+      candidate_count: baselineCase4.candidate_count ?? 0,
+      candidates: baselineCase4.candidate_snapshot?.candidates || [],
+    },
+    required_orgs: [
+      {
+        name: "AI治理办公室",
+        source: "case2-baseline-gate",
+        expected: "exactly_one_candidate",
+        ensured_status: baselineCase2.ensured_status || "",
+        observed_phase: baselineCase2.phase || "",
+        observed_parent_ref_text: baselineCase2.parent_ref_text || "",
+        validation_errors: baselineCase2.validation_errors || [],
+        matched_count:
+          baselineCase2.required_orgs?.find((item) => item.name === "AI治理办公室")?.matched_count ?? 0,
+        matched_org_codes:
+          baselineCase2.required_orgs?.find((item) => item.name === "AI治理办公室")?.matched_org_codes || [],
       },
       {
         name: "共享服务中心",
-        source: "case4-first-turn",
-        observed_phase: baselineHints.case4?.phase || "",
-	        candidate_count: baselineHints.case4?.candidate_count ?? 0,
-	      },
-	    ],
-	    notes: [
-	      "该文件由 tp290b 主验收脚本覆盖写入。",
-	      "若 candidate_count <= 1，则基线未达标，阻断主验收通过判定。",
-	    ],
-	  };
+        source: "case4-baseline-gate",
+        expected: "multiple_candidates",
+        ensured_status: baselineCase4.ensured_status || "",
+        observed_phase: baselineCase4.phase || "",
+        candidate_count: baselineCase4.candidate_count ?? 0,
+        validation_errors: baselineCase4.validation_errors || [],
+        matched_count:
+          baselineCase4.required_orgs?.find((item) => item.name === "共享服务中心")?.matched_count ?? 0,
+        matched_org_codes:
+          baselineCase4.required_orgs?.find((item) => item.name === "共享服务中心")?.matched_org_codes || [],
+      },
+    ],
+    created_orgs: {
+      case2: baselineCase2.created_orgs || [],
+      case4: baselineCase4.created_orgs || [],
+    },
+    issues: {
+      case2: baselineCase2.issues || [],
+      case4: baselineCase4.issues || [],
+    },
+    notes: [
+      "该文件由 tp290b 主验收脚本覆盖写入。",
+      "该文件状态仅表示 T0 数据基线是否就绪，不等价于主验收是否全部通过。",
+      "若 AI治理办公室 不能唯一命中，或 共享服务中心 候选数 <= 1，则基线未达标。",
+      "runtime-admission-gate 的阻断仍由主索引 `tp290b-live-evidence-index.json` 统一表达。",
+    ],
+  };
   await writeJSON(BASELINE_PATH, baselinePayload);
 });

@@ -377,26 +377,89 @@ func assistantNormalizeOpenAIIntentPayload(content string) []byte {
 	if !ok {
 		return []byte(trimmed)
 	}
-	parentRefText := assistantFirstString(obj,
+	action := assistantNormalizeOpenAIIntentAction(assistantFirstStringByPaths(obj,
+		"action",
+		"intent_action",
+		"intentAction",
+		"operation",
+		"type"))
+	parentRefText := assistantFirstStringByPaths(obj,
 		"parent_ref_text",
+		"parentRefText",
 		"parent_department",
+		"parentDepartment",
+		"parent_department_name",
+		"parentDepartmentName",
+		"parent_org_name",
+		"parentOrgName",
 		"parent_org",
+		"parentOrg",
 		"parent_orgunit",
+		"parentOrgunit",
+		"parent_org_unit",
+		"parentOrgUnit",
+		"parent_org_unit_name",
+		"parentOrgUnitName",
 		"parent_unit",
-		"parent")
-	entityName := assistantFirstString(obj,
+		"parentUnit",
+		"parent_organization",
+		"parentOrganization",
+		"parent_organization_name",
+		"parentOrganizationName",
+		"parent",
+		"parent.name",
+		"parent.code",
+		"parentOrg.name",
+		"parentOrg.code",
+		"parent_org.name",
+		"parent_org.code",
+		"parentDepartment.name",
+		"parentDepartment.code",
+		"parent_department.name",
+		"parent_department.code",
+		"parentOrganization.name",
+		"parentOrganization.code",
+		"parent_organization.name",
+		"parent_organization.code")
+	entityName := assistantFirstStringByPaths(obj,
 		"entity_name",
+		"entityName",
 		"department_name",
+		"departmentName",
 		"org_name",
+		"orgName",
 		"orgunit_name",
-		"name")
-	effectiveDate := assistantFirstString(obj,
+		"orgunitName",
+		"new_org_name",
+		"newOrgName",
+		"new_department_name",
+		"newDepartmentName",
+		"new_org_unit_name",
+		"newOrgUnitName",
+		"name",
+		"newOrg.name",
+		"new_org.name",
+		"newDepartment.name",
+		"new_department.name",
+		"newOrgUnit.name",
+		"new_org_unit.name")
+	effectiveDate := assistantFirstStringByPaths(obj,
 		"effective_date",
+		"effectiveDate",
 		"established_date",
 		"establishment_date",
 		"start_date",
-		"date")
-	action := assistantNormalizeOpenAIIntentAction(assistantFirstString(obj, "action"))
+		"startDate",
+		"date",
+		"newOrg.effectiveDate",
+		"newOrg.effective_date",
+		"new_org.effective_date",
+		"newDepartment.effectiveDate",
+		"newDepartment.effective_date",
+		"new_department.effective_date",
+		"newOrgUnit.effectiveDate",
+		"newOrgUnit.effective_date",
+		"new_org_unit.effective_date")
 	if action == "" && parentRefText != "" && entityName != "" {
 		action = assistantIntentCreateOrgUnit
 	}
@@ -492,6 +555,75 @@ func assistantFirstString(object map[string]any, keys ...string) string {
 	return ""
 }
 
+func assistantFirstStringByPaths(object map[string]any, paths ...string) string {
+	for _, item := range paths {
+		value, ok := assistantLookupPathValue(object, item)
+		if !ok {
+			continue
+		}
+		if text, ok := assistantToNonEmptyString(value); ok {
+			return text
+		}
+	}
+	return ""
+}
+
+func assistantLookupPathValue(object map[string]any, path string) (any, bool) {
+	current := any(object)
+	segments := strings.Split(strings.TrimSpace(path), ".")
+	if len(segments) == 0 {
+		return nil, false
+	}
+	for _, segment := range segments {
+		key := strings.TrimSpace(segment)
+		if key == "" {
+			return nil, false
+		}
+		asMap, ok := current.(map[string]any)
+		if !ok {
+			return nil, false
+		}
+		next, ok := assistantLookupMapValueLoose(asMap, key)
+		if !ok {
+			return nil, false
+		}
+		current = next
+	}
+	return current, true
+}
+
+func assistantLookupMapValueLoose(object map[string]any, key string) (any, bool) {
+	if value, ok := object[key]; ok {
+		return value, true
+	}
+	target := assistantLooseKey(key)
+	for candidateKey, candidateValue := range object {
+		if assistantLooseKey(candidateKey) == target {
+			return candidateValue, true
+		}
+	}
+	return nil, false
+}
+
+func assistantLooseKey(key string) string {
+	normalized := strings.ToLower(strings.TrimSpace(key))
+	normalized = strings.ReplaceAll(normalized, "_", "")
+	normalized = strings.ReplaceAll(normalized, "-", "")
+	return normalized
+}
+
+func assistantToNonEmptyString(value any) (string, bool) {
+	text, ok := value.(string)
+	if !ok {
+		return "", false
+	}
+	trimmed := strings.TrimSpace(text)
+	if trimmed == "" {
+		return "", false
+	}
+	return trimmed, true
+}
+
 func assistantNormalizeOpenAIIntentAction(action string) string {
 	trimmed := strings.TrimSpace(action)
 	if trimmed == "" {
@@ -499,16 +631,27 @@ func assistantNormalizeOpenAIIntentAction(action string) string {
 	}
 	normalized := strings.ToLower(trimmed)
 	normalized = strings.ReplaceAll(normalized, "-", "_")
+	normalized = strings.ReplaceAll(normalized, " ", "_")
 	switch normalized {
 	case assistantIntentCreateOrgUnit,
 		"create_department",
 		"createdepartment",
 		"create_org_unit",
+		"create_organization",
 		"create_organization_unit",
 		"createorganizationunit",
 		"orgunit_create":
 		return assistantIntentCreateOrgUnit
 	default:
+		compact := strings.ReplaceAll(normalized, "_", "")
+		if strings.HasPrefix(compact, "create") &&
+			(strings.Contains(compact, "department") ||
+				strings.Contains(compact, "orgunit") ||
+				strings.Contains(compact, "organizationunit") ||
+				strings.Contains(compact, "organization") ||
+				strings.Contains(compact, "org")) {
+			return assistantIntentCreateOrgUnit
+		}
 		return trimmed
 	}
 }
@@ -749,7 +892,11 @@ func (g *assistantModelGateway) ResolveIntent(ctx context.Context, req assistant
 			}
 			intent, err := assistantStrictDecodeIntent(raw)
 			if err != nil {
-				return assistantResolveIntentResult{}, errAssistantPlanSchemaConstrainedDecodeFailed
+				invokeErr = errAssistantPlanSchemaConstrainedDecodeFailed
+				if attempt < attempts-1 {
+					continue
+				}
+				break
 			}
 			return assistantResolveIntentResult{
 				Intent:        intent,
@@ -759,7 +906,7 @@ func (g *assistantModelGateway) ResolveIntent(ctx context.Context, req assistant
 			}, nil
 		}
 		switch {
-		case errorsIsAny(invokeErr, errAssistantModelTimeout, errAssistantModelRateLimited, errAssistantModelProviderUnavailable):
+		case errorsIsAny(invokeErr, errAssistantModelTimeout, errAssistantModelRateLimited, errAssistantModelProviderUnavailable, errAssistantPlanSchemaConstrainedDecodeFailed):
 			lastTransientErr = invokeErr
 			continue
 		default:

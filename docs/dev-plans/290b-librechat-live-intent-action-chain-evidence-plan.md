@@ -1,6 +1,6 @@
 # DEV-PLAN-290B：真实 intent/action 执行链路验收与非 Mock 证据收敛计划
 
-**状态**: 阻断中（2026-03-09 19:27 CST；Case 1 已通过，Case 2/3 阻断导致 Case 4 未执行，负测已稳定通过）
+**状态**: 阻断中（2026-03-09 23:42 CST；认证链路与真实模型路由已恢复，`tp290b-e2e-000` 证据已命中 `openai / gpt-5.2` 且 `fallback_detected=false`；主阻断已迁移为 T0 数据基线未稳定，Case 2 首轮仍可能因 `parent_candidate_not_found` 停在 `await_missing_fields`）
 
 ## 1. 背景（调查发现）
 1. [X] `DEV-PLAN-260` Case 2 的核心验收是：输入 `在 AI治理办公室 下新建 人力资源部2，生效日期 2026-01-01` 后，必须走真实 `create -> confirm -> commit` 闭环。
@@ -40,9 +40,9 @@
 5. [X] 执行日志：`docs/dev-records/dev-plan-290b-execution-log.md`（已创建模板）。
 
 ## 5. Readiness（开工前必须满足）
-1. [ ] 环境可用：`E2E_BASE_URL`、`E2E_SUPERADMIN_BASE_URL`、`E2E_KRATOS_ADMIN_URL` 可达，且租户/登录流程可跑通。
-2. [ ] 模型配置可用：`ASSISTANT_MODEL_CONFIG_JSON` 有效，且对应 provider key 已注入环境变量。
-3. [ ] 正式入口可访问：`/app/assistant/librechat` 非白屏，输入框可用。
+1. [X] 环境可用：`E2E_BASE_URL`、`E2E_SUPERADMIN_BASE_URL`、`E2E_KRATOS_ADMIN_URL` 可达，且租户/登录流程可跑通（2026-03-09 21:14 CST 实跑验证）。
+2. [X] 模型配置可用：`ASSISTANT_MODEL_CONFIG_JSON` 有效，且对应 provider key 已注入环境变量（`.env/.env.local` 已对齐并实跑）。
+3. [X] 正式入口可访问：`/app/assistant/librechat` 非白屏，输入框可用。
 4. [ ] 运行态不强制 iframe 承载；若出现 iframe，判定为 stopline 风险，记录并阻断通过。
 5. [ ] 已确认本轮不使用 `page.route("**/internal/assistant/**")` 与 `route.fulfill` 对业务接口造数。
 6. [ ] 测试数据基线已建置并验真：至少包含 `AI治理办公室` 与可稳定复现 Case 4 的多候选父组织数据（含 `共享服务中心` 候选）。
@@ -108,11 +108,15 @@
 6. [ ] 主验收中出现 `manual_takeover_required` 或任何非 `succeeded` 终态，整轮作废（转入负测结论）。
 
 ## 9. 执行命令序列（可直接复制执行）
-1. [ ] 主验收（成功路径）：`pnpm --dir /home/lee/Projects/Bugs-And-Blossoms/e2e exec playwright test tests/tp290b-librechat-live-intent-action-chain.spec.js --workers=1 --trace on`
-2. [ ] 负测（失败归因）：`pnpm --dir /home/lee/Projects/Bugs-And-Blossoms/e2e exec playwright test tests/tp290b-librechat-live-intent-action-negative.spec.js --workers=1 --trace on`
-3. [ ] 若改动 Go 后端：`go fmt ./... && go vet ./... && make check lint && make test`
-4. [ ] 文档门禁：`make check doc`
-5. [ ] PR 前对齐：`make preflight`
+1. [ ] 运行态准入门禁（先于主验收）：`make check assistant-config-single-source`
+2. [ ] 单案排障（Case 2）：`pnpm --dir /home/lee/Projects/Bugs-And-Blossoms/e2e exec playwright test tests/tp290b-librechat-live-intent-action-chain.spec.js --workers=1 --trace on --grep "tp290b-e2e-002"`
+3. [ ] 单案排障（Case 3）：`pnpm --dir /home/lee/Projects/Bugs-And-Blossoms/e2e exec playwright test tests/tp290b-librechat-live-intent-action-chain.spec.js --workers=1 --trace on --grep "tp290b-e2e-003"`
+4. [ ] 单案排障（Case 4）：`pnpm --dir /home/lee/Projects/Bugs-And-Blossoms/e2e exec playwright test tests/tp290b-librechat-live-intent-action-chain.spec.js --workers=1 --trace on --grep "tp290b-e2e-004"`
+5. [ ] 主验收（全量串行成功路径）：`pnpm --dir /home/lee/Projects/Bugs-And-Blossoms/e2e exec playwright test tests/tp290b-librechat-live-intent-action-chain.spec.js --workers=1 --trace on`
+6. [ ] 负测（失败归因）：`pnpm --dir /home/lee/Projects/Bugs-And-Blossoms/e2e exec playwright test tests/tp290b-librechat-live-intent-action-negative.spec.js --workers=1 --trace on`
+7. [ ] 若改动 Go 后端：`go fmt ./... && go vet ./... && make check lint && make test`
+8. [ ] 文档门禁：`make check doc`
+9. [ ] PR 前对齐：`make preflight`
 
 ## 10. 产物模板（本计划固定格式）
 ### 10.1 `case-{id}-intent-action-assertions.json` 最小字段
@@ -207,16 +211,40 @@ Case 2 的强断言（通过条件）：
 2. [X] `tp290b` 负测套件通过：`tp290b-neg-001~004` 全部通过（其中 `neg-002/004` 在 `assistant_intent_unsupported` 前置场景按 `probe_skipped` 落盘，不再因环境能力缺失误判脚本失败）。
 3. [X] 证据与执行日志已回填：`docs/dev-records/assets/dev-plan-290b/tp290b-live-evidence-index.json`、`tp290b-data-baseline.json`、`docs/dev-records/dev-plan-290b-execution-log.md` 已更新到本轮结果。
 4. [X] 文档门禁已通过：`make check doc` 通过。
-5. [ ] 主验收 `tp290b-e2e-001~004` 未全绿：当前仅 Case 1 稳定通过，Case 2/3 阻断，Case 4 未进入执行。
+5. [X] 主验收脚本已完成 P0/P1 改造：新增 `tp290b-e2e-000` 运行态准入闸门、Case 2 输入向量收敛为 `DEV-PLAN-260` 合同文案、失败归因新增结构化落盘（含 `assistant_intent_unsupported` 上下文），并在 `afterAll` 自动补齐 `blocked/not_run` 索引。
+6. [ ] 主验收 `tp290b-e2e-001~004` 未全绿：当前仅 Case 1 稳定通过，Case 2/3 阻断，Case 4 未进入执行。
+7. [X] 已执行 `tp290b-e2e-000|002` 实跑验证：`tp290b-e2e-000` 按 fail-closed 阻断（`intent_action=plan_only`、`model_provider=deterministic`、`model_name=builtin-intent-extractor`），`tp290b-e2e-002` 因串行前置失败未执行；证据已写入 `runtime-admission-gate.json/.har` 与主索引。
+8. [X] 认证链路阻断已排除：修正 `TRUST_PROXY=1` 后，不再出现 `invalid_credentials`；当前阻断已收敛为纯运行态能力问题（`intent_action=plan_only` + fallback）。
 
 ## 16. 仍待解决问题（阻断清单）
 1. [ ] Case 2 阻断：真实后端持续返回 `intent.action=plan_only`（`model_provider=deterministic`），链路仅出现 `POST .../turns`，未触发 `:confirm/:commit`，无法进入 `committed`。
-2. [ ] Case 3 阻断：执行中偶发未进入 formal 气泡链路（`data-assistant-binding-key` 缺失），失败截图停留在 `SuperAdmin / Tenants`，说明运行态稳定性仍不足。
+2. [ ] Case 3 阻断：本轮 `case-3-network.har` 显示首轮 `POST .../turns` 即返回 `422 assistant_intent_unsupported`；另有历史偶发“未稳定进入 formal 气泡链路”现象，说明“运行态能力 + 前端挂载时序”均需治理。
 3. [ ] Case 4 未执行：串行执行在 Case 2/3 失败后提前终止，当前无有效主验收证据。
 4. [ ] `typecheck` 仍失败：存在大量历史类型错误（含 `librechat-data-provider/react-query` 缺失等），虽非本轮增量引入，但会影响全仓质量门禁闭环。
+5. [ ] Runtime 能力阻断仍在：`runtime-admission-gate.json` 持续显示 `model_provider=deterministic`、`model_name=builtin-intent-extractor`、`intent_action=plan_only`，未达到 `create_orgunit` 准入线。
 
 ## 17. 下一步（执行顺序冻结）
-1. [ ] 先修运行态前置：确保真实后端从 `plan_only/deterministic` 恢复到可执行 `create_orgunit` 链路（否则主验收无法成立）。
-2. [ ] 修复/稳定 Case 3 入口与消息挂载时序，确保 `latestFormalBubble` 前置可稳定命中。
-3. [ ] 重新串行重跑 `tp290b-e2e-001~004`，目标是 Case 2~4 全部达到 `committed + task.succeeded`。
-4. [ ] 重跑后覆盖写入 `tp290b-live-evidence-index.json` 与 `tp290b-data-baseline.json`，并同步刷新 `260/271/285` 关联结论引用。
+### 17.1 P0：运行态准入闸门（必须先完成）
+1. [ ] 在 UI E2E 前执行“Case 2 API 冒烟”：同输入向量下必须命中 `intent.action=create_orgunit`，且 `model_provider/model_name` 不得为 `deterministic/builtin-intent-extractor`。
+2. [ ] 若冒烟仍返回 `plan_only` 或 `assistant_intent_unsupported`，判定为运行态阻断，禁止进入主验收；失败证据必须落盘到 `docs/dev-records/assets/dev-plan-290b/`。
+3. [ ] 保持 `assistant-config-single-source` 门禁为必跑项，防止配置写入口或契约口径漂移导致“假恢复”。
+
+### 17.2 P0：数据基线先行（对应 T0 硬阻断）
+1. [ ] 在同一租户内先完成基线建置与验真（`AI治理办公室` 唯一命中、`共享服务中心` 多候选稳定可复现），再进入 Case 2~4。
+2. [ ] `tp290b-data-baseline.json` 只允许由实跑覆盖写入，不允许保留模板或空 `tenant_id/candidate_count`。
+3. [ ] 若基线未达标，主验收直接标记 `blocked`，不执行 Case 2~4。
+
+### 17.3 P1：测试脚本与合同收敛
+1. [ ] Case 2 输入向量与 `DEV-PLAN-260` 对齐为：`在 AI治理办公室 下新建 人力资源部2，生效日期 2026-01-01`，避免因文案漂移引入额外变量。
+2. [ ] Case 3 优先按后端返回归因：命中 `422 assistant_intent_unsupported` 时先按运行态阻断失败，不再仅以“气泡未挂载”作为单一结论。
+3. [ ] 排障阶段采用“按 case 单独执行”；仅在 Case 2/3/4 单案均稳定通过后，恢复 `tp290b-e2e-001~004` 全量串行门禁。
+
+### 17.4 P1：重跑顺序与通过标准
+1. [ ] 执行顺序固定：Case 2 -> Case 3 -> Case 4 -> 全量 Case 1~4。
+2. [ ] Case 2~4 主通过标准固定：`intent.action=create_orgunit` + `:confirm/:commit` 实际发生 + `task.status=succeeded` + 会话终态 `committed`。
+3. [ ] 任一 Case 命中 stopline（mock、fallback、双入口、双回执、manual_takeover_required、非 succeeded 终态）整轮作废。
+
+### 17.5 P2：证据回写与跨计划刷新
+1. [ ] 重跑完成后覆盖更新：`tp290b-live-evidence-index.json`、`tp290b-data-baseline.json`、`dev-plan-290b-execution-log.md`。
+2. [ ] 以 290B 最新证据刷新 `260/271/285` 的“真实链路已通过”结论引用；未刷新前不得将 290B 标记为“已完成”。
+3. [ ] 完成后再启动 `288B` 的 live receipt/poll 证据补强，避免在 `290B` 未恢复时重复命中 `assistant_intent_unsupported`。

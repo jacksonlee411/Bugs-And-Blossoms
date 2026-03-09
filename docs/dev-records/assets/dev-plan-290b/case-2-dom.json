@@ -1,0 +1,16 @@
+{
+  "url": "http://localhost:8080/app/assistant/librechat/c/new",
+  "bubble_count": 1,
+  "bubbles": [
+    {
+      "binding_key": "conv_843befe5344742d1948739ce8741d62d::turn_aff3c1f236ef4ba1a2605df48b5cb88d::assistant_2961185948984254846f1015743682fa",
+      "conversation_id": "conv_843befe5344742d1948739ce8741d62d",
+      "turn_id": "turn_aff3c1f236ef4ba1a2605df48b5cb88d",
+      "request_id": "assistant_2961185948984254846f1015743682fa",
+      "message_id": "87f31cb4-5e72-41dd-97fb-2f2572363533_",
+      "text": "Missing fields: parent_ref_text Missing fields parent_ref_text"
+    }
+  ],
+  "external_reply_container_count": 0,
+  "connection_error_count": 0
+}

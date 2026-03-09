@@ -725,6 +725,38 @@ func TestAssistantModelGateway_HelperFunctions_ExtraBranches(t *testing.T) {
 	if intent.Action != assistantIntentCreateOrgUnit || intent.ParentRefText != "鲜花组织" || intent.EntityName != "测试部" || intent.EffectiveDate != "2026-01-01" {
 		t.Fatalf("unexpected normalized intent=%+v", intent)
 	}
+	camelPayload := assistantNormalizeOpenAIIntentPayload(`{"action":"create_organization_unit","parentOrg":"AI治理办公室","newOrgName":"人力资源部2","effectiveDate":"2026-01-01"}`)
+	camelIntent, err := assistantStrictDecodeIntent(camelPayload)
+	if err != nil {
+		t.Fatalf("camel payload decode err=%v payload=%s", err, string(camelPayload))
+	}
+	if camelIntent.Action != assistantIntentCreateOrgUnit || camelIntent.ParentRefText != "AI治理办公室" || camelIntent.EntityName != "人力资源部2" || camelIntent.EffectiveDate != "2026-01-01" {
+		t.Fatalf("unexpected camel intent=%+v payload=%s", camelIntent, string(camelPayload))
+	}
+	nestedPayload := assistantNormalizeOpenAIIntentPayload(`{"action":"CREATE_ORG_UNIT","parentOrg":{"name":"AI治理办公室"},"newOrg":{"name":"人力资源部2","effectiveDate":"2026-01-01"}}`)
+	nestedIntent, err := assistantStrictDecodeIntent(nestedPayload)
+	if err != nil {
+		t.Fatalf("nested payload decode err=%v payload=%s", err, string(nestedPayload))
+	}
+	if nestedIntent.Action != assistantIntentCreateOrgUnit || nestedIntent.ParentRefText != "AI治理办公室" || nestedIntent.EntityName != "人力资源部2" || nestedIntent.EffectiveDate != "2026-01-01" {
+		t.Fatalf("unexpected nested intent=%+v payload=%s", nestedIntent, string(nestedPayload))
+	}
+	parentAliasPayload := assistantNormalizeOpenAIIntentPayload(`{"action":"create_org_unit","parentOrgName":"AI治理办公室","newOrgName":"人力资源部2","effectiveDate":"2026-01-01"}`)
+	parentAliasIntent, err := assistantStrictDecodeIntent(parentAliasPayload)
+	if err != nil {
+		t.Fatalf("parent alias payload decode err=%v payload=%s", err, string(parentAliasPayload))
+	}
+	if parentAliasIntent.Action != assistantIntentCreateOrgUnit || parentAliasIntent.ParentRefText != "AI治理办公室" || parentAliasIntent.EntityName != "人力资源部2" || parentAliasIntent.EffectiveDate != "2026-01-01" {
+		t.Fatalf("unexpected parent alias intent=%+v payload=%s", parentAliasIntent, string(parentAliasPayload))
+	}
+	orgAliasPayload := assistantNormalizeOpenAIIntentPayload(`{"action":"create_organization","parentOrganizationName":"AI治理办公室","newDepartmentName":"人力资源部2","effectiveDate":"2026-01-01"}`)
+	orgAliasIntent, err := assistantStrictDecodeIntent(orgAliasPayload)
+	if err != nil {
+		t.Fatalf("org alias payload decode err=%v payload=%s", err, string(orgAliasPayload))
+	}
+	if orgAliasIntent.Action != assistantIntentCreateOrgUnit || orgAliasIntent.ParentRefText != "AI治理办公室" || orgAliasIntent.EntityName != "人力资源部2" || orgAliasIntent.EffectiveDate != "2026-01-01" {
+		t.Fatalf("unexpected org alias intent=%+v payload=%s", orgAliasIntent, string(orgAliasPayload))
+	}
 	markdownPayload := assistantNormalizeOpenAIIntentPayload("```json\n{\"action\":\"plan_only\"}\n```")
 	if string(markdownPayload) != `{"action":"plan_only"}` {
 		t.Fatalf("unexpected markdown normalized payload=%s", string(markdownPayload))

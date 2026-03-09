@@ -1,0 +1,30 @@
+{
+  "case_id": 2,
+  "conversation_id": "conv_843befe5344742d1948739ce8741d62d",
+  "turn_id": "turn_aff3c1f236ef4ba1a2605df48b5cb88d",
+  "request_id": "assistant_2961185948984254846f1015743682fa",
+  "trace_id": "754fe97fda324931ad38f4f68ad9c726",
+  "intent_action": "create_orgunit",
+  "phase": "await_missing_fields",
+  "error_code": "assistant_intent_unsupported",
+  "failure_stage": "runtime_or_case_flow",
+  "failure_message": "assistant_intent_unsupported (case=2, phase=await_missing_fields, action=create_orgunit)",
+  "observed_calls": [
+    {
+      "method": "POST",
+      "path": "/internal/assistant/conversations/conv_5538e2faf51f4b7f97061792fdae0424/turns",
+      "status": 422,
+      "body": "",
+      "json": {
+        "code": "assistant_intent_unsupported",
+        "message": "assistant intent unsupported",
+        "trace_id": "",
+        "meta": {
+          "path": "/internal/assistant/conversations/conv_5538e2faf51f4b7f97061792fdae0424/turns",
+          "method": "POST"
+        }
+      }
+    }
+  ],
+  "captured_at": "2026-03-09T14:09:57.573Z"
+}

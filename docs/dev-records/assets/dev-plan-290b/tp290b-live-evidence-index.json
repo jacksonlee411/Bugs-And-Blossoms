@@ -1,8 +1,13 @@
 {
   "plan": "DEV-PLAN-290B",
-  "status": "blocked",
-  "updated_at": "2026-03-09T11:27:10Z",
+  "status": "in_progress",
+  "updated_at": "2026-03-09T15:38:34.000Z",
   "formal_entry": "/app/assistant/librechat",
+  "runtime_admission_gate": {
+    "status": "passed",
+    "artifact": "docs/dev-records/assets/dev-plan-290b/runtime-admission-gate.json",
+    "network": "docs/dev-records/assets/dev-plan-290b/runtime-admission-gate.har"
+  },
   "stale_on": [
     "240C runtime gate semantics changed",
     "240D durable execution/compensation semantics changed",
@@ -12,10 +17,7 @@
     "fail-closed behavior changed",
     "assistant formal submit pipeline changed"
   ],
-  "blockers": [
-    "主验收 Case2 在真实后端持续返回 plan_only + deterministic，未触发 :confirm/:commit，无法进入 committed",
-    "主验收 Case3 本次运行未稳定进入 formal 气泡链路（失败截图停留在 SuperAdmin / Tenants），导致证据链中断"
-  ],
+  "blockers": [],
   "fixed_assets": {
     "root": "docs/dev-records/assets/dev-plan-290b",
     "pattern": [
@@ -27,54 +29,38 @@
       "case-{id}-intent-action-assertions.json",
       "case-{id}-unsupported-failure.json",
       "case-{id}-conversation-snapshot.json",
-      "case-{id}-model-proof.json"
+      "case-{id}-model-proof.json",
+      "runtime-admission-gate.json",
+      "runtime-admission-gate.har"
     ]
   },
   "cases": [
     {
       "id": 1,
-      "status": "passed",
+      "status": "not_run",
       "input_sequence": [
         "你好"
       ],
-      "task_terminal_status": "",
-      "artifacts": {
-        "page": "docs/dev-records/assets/dev-plan-290b/case-1-page.png",
-        "dom": "docs/dev-records/assets/dev-plan-290b/case-1-dom.json",
-        "network": "docs/dev-records/assets/dev-plan-290b/case-1-network.har",
-        "trace": "docs/dev-records/assets/dev-plan-290b/case-1-trace.zip",
-        "phase_assertions": "docs/dev-records/assets/dev-plan-290b/case-1-phase-assertions.json",
-        "intent_action_assertions": "docs/dev-records/assets/dev-plan-290b/case-1-intent-action-assertions.json",
-        "conversation_snapshot": "docs/dev-records/assets/dev-plan-290b/case-1-conversation-snapshot.json",
-        "model_proof": "docs/dev-records/assets/dev-plan-290b/case-1-model-proof.json"
-      }
+      "blocking_reason": "前置用例失败后未执行"
     },
     {
       "id": 2,
-      "status": "blocked",
+      "status": "not_run",
       "input_sequence": [
-        "在 AI治理办公室 下新建 人力资源部二期，生效日期 2026-01-01",
+        "在 AI治理办公室 下新建 人力资源部2，生效日期 2026-01-01",
         "确认"
       ],
-      "blocking_reason": "真实后端两轮均为 plan_only，且仅出现 /turns（无 :confirm/:commit），等待 committed 超时后断言失败",
-      "artifacts": {
-        "network": "docs/dev-records/assets/dev-plan-290b/case-2-network.har",
-        "trace": "docs/dev-records/assets/dev-plan-290b/case-2-trace.zip"
-      }
+      "blocking_reason": "前置用例失败后未执行"
     },
     {
       "id": 3,
-      "status": "blocked",
+      "status": "not_run",
       "input_sequence": [
         "在 AI治理办公室 下新建 人力资源部239A补全",
         "生效日期 2026-03-25",
         "确认"
       ],
-      "blocking_reason": "运行中未观察到 data-assistant-binding-key 气泡，脚本在 latestFormalBubble 前置检查失败",
-      "artifacts": {
-        "network": "docs/dev-records/assets/dev-plan-290b/case-3-network.har",
-        "trace": "docs/dev-records/assets/dev-plan-290b/case-3-trace.zip"
-      }
+      "blocking_reason": "前置用例失败后未执行"
     },
     {
       "id": 4,
@@ -84,7 +70,7 @@
         "选第2个",
         "是的"
       ],
-      "blocking_reason": "串行执行在 Case2/Case3 失败后提前终止，未进入本用例"
+      "blocking_reason": "前置用例失败后未执行"
     }
   ]
 }
