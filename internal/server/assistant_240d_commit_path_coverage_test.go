@@ -20,7 +20,7 @@ func assistantConversationRowWithRole(conversationID string, actorID string, act
 
 func newAssistantCommitCoverageEnv(t *testing.T, turnState string) (*assistantConversationService, Principal, *assistantTurn, time.Time) {
 	t.Helper()
-	now := time.Date(2026, 3, 9, 6, 0, 0, 0, time.UTC)
+	now := time.Now().UTC()
 	store := newOrgUnitMemoryStore()
 	if _, err := store.CreateNodeCurrent(context.Background(), "tenant_1", "2026-01-01", "FLOWER-A", "鲜花组织", "", true); err != nil {
 		t.Fatalf("create parent org err=%v", err)
@@ -97,7 +97,7 @@ func newAssistantCommitTx(now time.Time, actorID string, actorRole string, conve
 }
 
 func TestAssistant240DRequestAndCommitPGCoverage(t *testing.T) {
-	now := time.Date(2026, 3, 9, 6, 0, 0, 0, time.UTC)
+	now := time.Now().UTC()
 	turn := assistantTaskSampleTurn(now)
 	turn.RequestID = ""
 	if _, err := assistantBuildTaskSubmitRequestFromTurn("conv_1", turn); err == nil || !strings.Contains(err.Error(), "request_id required") {
