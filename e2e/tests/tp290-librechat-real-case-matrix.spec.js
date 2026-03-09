@@ -1,7 +1,9 @@
 import { expect, test } from "@playwright/test";
 import fs from "node:fs/promises";
+import path from "node:path";
 
-const EVIDENCE_ROOT = "/home/lee/Projects/Bugs-And-Blossoms/docs/dev-records/assets/dev-plan-290";
+const repoRoot = path.resolve(__dirname, "..", "..");
+const EVIDENCE_ROOT = path.join(repoRoot, "docs", "dev-records", "assets", "dev-plan-290");
 
 const CASE_INPUTS = {
   1: ["你好"],

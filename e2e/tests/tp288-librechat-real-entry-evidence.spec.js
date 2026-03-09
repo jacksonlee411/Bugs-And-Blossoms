@@ -6,7 +6,7 @@ const repoRoot = path.resolve(__dirname, "..", "..");
 const tp288EvidenceRoot = path.join(repoRoot, "docs", "dev-records", "assets", "dev-plan-266");
 
 const tp288DefaultCommand =
-  "pnpm --dir /home/lee/Projects/Bugs-And-Blossoms/e2e exec playwright test tests/tp288-librechat-real-entry-evidence.spec.js --workers=1";
+  `pnpm --dir ${path.join(repoRoot, "e2e")} exec playwright test tests/tp288-librechat-real-entry-evidence.spec.js --workers=1`;
 
 const tp288StaleOn = [
   "290A pending placeholder bubble fix merged",
