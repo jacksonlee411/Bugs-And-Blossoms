@@ -56,4 +56,4 @@
 - `docs/archive/dev-plans/102-as-of-time-context-convergence-and-critique.md`
 - `docs/dev-plans/120-org-field-default-values-cel-rule-engine-roadmap.md`
 - `AGENTS.md`
-- `docs/dev-records/dev-plan-102a-execution-log.md`
+- `docs/archive/dev-records/dev-plan-102a-execution-log.md`

@@ -122,7 +122,7 @@
 | 已完成 | `docs/dev-plans/106a-org-ext-fields-dict-as-field-key-and-custom-label.md` | 对齐 110：确认 106A 中关于 `x_...` 的描述不再暗含“仅 text”，并保持 DICT 路径不受 110 影响。 |
 | 已完成 | `docs/dev-plans/107-orgunit-ext-field-slots-expand-to-100.md` | 补充“110 直接消费 107 六种槽位能力”说明，作为容量与类型来源引用，避免两份枚举漂移。 |
 | 已完成 | `AGENTS.md` | Doc Map 增补 `DEV-PLAN-110` 链接（若尚未登记）；若已登记，核对标题与文件名保持一致。 |
-| 已完成 | `docs/dev-records/dev-plan-110-execution-log.md` | 新增执行日志文件，记录文档同步与实现门禁证据（时间戳、命令、结果）。 |
+| 已完成 | `docs/archive/dev-records/dev-plan-110-execution-log.md` | 新增执行日志文件，记录文档同步与实现门禁证据（时间戳、命令、结果）。 |
 
 建议执行顺序（Simple 路径）：
 
@@ -154,7 +154,7 @@
 - E2E：`make e2e`（若更新用例）
 - 预检建议：`make preflight`
 
-执行证据统一登记到 `docs/dev-records/dev-plan-110-execution-log.md`（实现阶段新增）。
+执行证据统一登记到 `docs/archive/dev-records/dev-plan-110-execution-log.md`（实现阶段新增）。
 
 ## 9. 验收标准（DoD）
 

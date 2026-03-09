@@ -1,0 +1,1 @@
+if('serviceWorker' in navigator){window.addEventListener('load',()=>{const hostname=window.location.hostname;if(hostname==='localhost'||hostname==='127.0.0.1'){return;}navigator.serviceWorker.register('./sw.js',{scope:'./'})})}

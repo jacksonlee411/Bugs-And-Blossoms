@@ -148,7 +148,7 @@
 
 ### M4：门禁与证据
 - [X] 新增/强化测试：参数校验、默认日期、重定向、列表稳定性（Go handler/shell tests + MUI unit tests）。
-- [X] 在 `docs/dev-records/` 记录执行日志与回归结果：`docs/dev-records/dev-plan-102-execution-log.md`。
+- [X] 在 `docs/dev-records/` 记录执行日志与回归结果：`docs/archive/dev-records/dev-plan-102-execution-log.md`。
 
 ## 6. 影响范围（草案）
 - 文档：`docs/dev-plans/073`、`docs/dev-plans/076`、本计划（102）及后续执行日志。
@@ -171,4 +171,4 @@
 
 ## 9. 交付物
 - `docs/archive/dev-plans/102-as-of-time-context-convergence-and-critique.md`（本文件）。
-- 后续执行证据：`docs/dev-records/dev-plan-102-execution-log.md`（实施时创建）。
+- 后续执行证据：`docs/archive/dev-records/dev-plan-102-execution-log.md`（实施时创建）。

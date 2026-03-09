@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"errors"
 	"strings"
 )
 
@@ -9,6 +10,7 @@ var (
 	assistantAnnotateIntentPlanFn = assistantAnnotateIntentPlan
 	assistantCanonicalHashFn      = assistantCanonicalHash
 	assistantPlanHashFn           = assistantPlanHash
+	assistantBuildDryRunFn        = assistantBuildDryRun
 )
 
 func (s *assistantConversationService) resolveIntent(ctx context.Context, tenantID string, conversationID string, userInput string) (assistantResolveIntentResult, error) {
@@ -31,6 +33,9 @@ func (s *assistantConversationService) resolveIntent(ctx context.Context, tenant
 		TenantID:       tenantID,
 	})
 	if err != nil {
+		if assistantShouldFallbackIntentLocally(err) {
+			return assistantResolveIntentLocally(text)
+		}
 		return assistantResolveIntentResult{}, err
 	}
 	if assistantIntentSchemaInvalid(resolved.Intent) {
@@ -41,19 +46,51 @@ func (s *assistantConversationService) resolveIntent(ctx context.Context, tenant
 			TenantID:       tenantID,
 		})
 		if retryErr != nil {
+			if assistantShouldFallbackIntentLocally(retryErr) {
+				return assistantResolveIntentLocally(text)
+			}
 			return assistantResolveIntentResult{}, retryErr
+		}
+		if assistantIntentSchemaInvalid(retryResolved.Intent) {
+			return assistantResolveIntentLocally(text)
 		}
 		return retryResolved, nil
 	}
 	return resolved, nil
 }
 
+func assistantShouldFallbackIntentLocally(err error) bool {
+	return errors.Is(err, errAssistantPlanSchemaConstrainedDecodeFailed)
+}
+
+func assistantResolveIntentLocally(userInput string) (assistantResolveIntentResult, error) {
+	intent := assistantExtractIntent(strings.TrimSpace(userInput))
+	_ = assistantBuildPlan(intent)
+	return assistantResolveIntentResult{
+		Intent:        intent,
+		ProviderName:  "deterministic",
+		ModelName:     "builtin-intent-extractor",
+		ModelRevision: assistantIntentSchemaVersionV1,
+	}, nil
+}
+
 func assistantCompileIntentToPlans(intent assistantIntentSpec, resolvedCandidateID string) (assistantSkillExecutionPlan, assistantConfigDeltaPlan) {
+	spec, _ := assistantLookupDefaultActionSpec(intent.Action)
+	return assistantCompileIntentToPlansWithSpec(intent, resolvedCandidateID, spec)
+}
+
+func assistantCompileIntentToPlansWithSpec(intent assistantIntentSpec, resolvedCandidateID string, spec assistantActionSpec) (assistantSkillExecutionPlan, assistantConfigDeltaPlan) {
 	skill := assistantSkillExecutionPlan{
 		SelectedSkills: []string{"assistant.plan_only"},
 		ExecutionOrder: []string{"assistant.plan_only"},
-		RiskTier:       assistantRiskTierForIntent(intent),
-		RequiredChecks: []string{"strict_decode", "boundary_lint"},
+		RiskTier:       strings.TrimSpace(spec.Security.RiskTier),
+		RequiredChecks: append([]string(nil), spec.Security.RequiredChecks...),
+	}
+	if skill.RiskTier == "" {
+		skill.RiskTier = "low"
+	}
+	if len(skill.RequiredChecks) == 0 {
+		skill.RequiredChecks = []string{"strict_decode", "boundary_lint"}
 	}
 	delta := assistantConfigDeltaPlan{
 		CapabilityKey: "org.orgunit_create.field_policy",
@@ -62,7 +99,6 @@ func assistantCompileIntentToPlans(intent assistantIntentSpec, resolvedCandidate
 	if intent.Action == assistantIntentCreateOrgUnit {
 		skill.SelectedSkills = []string{"org.orgunit_create"}
 		skill.ExecutionOrder = []string{"org.orgunit_create"}
-		skill.RequiredChecks = []string{"strict_decode", "boundary_lint", "candidate_confirmation", "dry_run"}
 		delta.Changes = append(delta.Changes,
 			assistantConfigChange{Field: "name", After: intent.EntityName},
 			assistantConfigChange{Field: "effective_date", After: intent.EffectiveDate},
@@ -126,7 +162,10 @@ func assistantPlanHash(intent assistantIntentSpec, plan assistantPlanSummary, dr
 		"intent": intent,
 		"plan": map[string]any{
 			"title":                     plan.Title,
+			"action_id":                 plan.ActionID,
+			"action_version":            plan.ActionVersion,
 			"capability_key":            plan.CapabilityKey,
+			"commit_adapter_key":        plan.CommitAdapterKey,
 			"summary":                   plan.Summary,
 			"capability_map_version":    plan.CapabilityMapVersion,
 			"compiler_contract_version": plan.CompilerContractVersion,
@@ -134,6 +173,7 @@ func assistantPlanHash(intent assistantIntentSpec, plan assistantPlanSummary, dr
 			"model_provider":            plan.ModelProvider,
 			"model_name":                plan.ModelName,
 			"model_revision":            plan.ModelRevision,
+			"version_tuple":             plan.VersionTuple,
 			"skill_execution_plan":      plan.SkillExecutionPlan,
 			"config_delta_plan":         plan.ConfigDeltaPlan,
 		},

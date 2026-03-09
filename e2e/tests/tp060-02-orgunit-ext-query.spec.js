@@ -1,5 +1,7 @@
 import { expect, test } from "@playwright/test";
 import { spawnSync } from "node:child_process";
+import fs from "node:fs";
+import path from "node:path";
 
 async function ensureKratosIdentity(ctx, kratosAdminURL, { traits, identifier, password }) {
   const resp = await ctx.request.post(`${kratosAdminURL}/admin/identities`, {
@@ -73,6 +75,45 @@ async function waitForEnabledFieldConfig(ctx, { asOf, fieldKey }) {
   throw new Error(`field config not enabled in time: ${fieldKey}`);
 }
 
+function runPsqlInDockerPostgres({ dbUser, dbPassword, dbName, sql, variables }) {
+  const cliArgs = ["-v", "ON_ERROR_STOP=1", ...variables];
+  const composeProject = process.env.DEV_COMPOSE_PROJECT || "bugs-and-blossoms-dev";
+  const composeEnvFile = process.env.DEV_INFRA_ENV_FILE || ".env.example";
+  const resolvedComposeEnvFile = fs.existsSync(composeEnvFile) ? composeEnvFile : path.join("..", composeEnvFile);
+  const composeFile = fs.existsSync("compose.dev.yml") ? "compose.dev.yml" : path.join("..", "compose.dev.yml");
+  return spawnSync(
+    "docker",
+    [
+      "compose",
+      "-p",
+      composeProject,
+      "--env-file",
+      resolvedComposeEnvFile,
+      "-f",
+      composeFile,
+      "exec",
+      "-T",
+      "postgres",
+      "psql",
+      "-h",
+      "localhost",
+      "-U",
+      dbUser,
+      "-d",
+      dbName,
+      ...cliArgs
+    ],
+    {
+      input: sql,
+      encoding: "utf8",
+      env: {
+        ...process.env,
+        PGPASSWORD: dbPassword
+      }
+    }
+  );
+}
+
 async function setOrgTypeViaAPI(ctx, { asOf, orgCode, value }) {
   const resp = await ctx.request.post("/org/api/org-units/corrections", {
     data: {
@@ -90,13 +131,9 @@ async function setOrgTypeViaAPI(ctx, { asOf, orgCode, value }) {
 }
 
 function seedOrgTypeDictForTenant({ tenantID, asOf, runID }) {
-  const dbHost = process.env.DB_HOST || "127.0.0.1";
-  const dbPort = process.env.DB_PORT || "5438";
   const dbName = process.env.DB_NAME || "bugs_and_blossoms";
   const dbUser = process.env.DB_USER || "app";
   const dbPassword = process.env.DB_PASSWORD || "app";
-  const dbSSLMode = process.env.DB_SSLMODE || "disable";
-  const dbURL = `postgres://${dbUser}:${dbPassword}@${dbHost}:${dbPort}/${dbName}?sslmode=${dbSSLMode}`;
   const requestID = `e2e-seed-${runID}`;
   const sql = `
 BEGIN;
@@ -132,22 +169,15 @@ SELECT iam.submit_dict_value_event(
 );
 COMMIT;
 `;
-  const res = spawnSync(
-    "psql",
-    [
-      dbURL,
-      "-v",
-      "ON_ERROR_STOP=1",
-      "-v",
-      `tenant_id=${tenantID}`,
-      "-v",
-      `as_of=${asOf}`,
-      "-v",
-      `request_id=${requestID}`
-    ],
-    { input: sql, encoding: "utf8" }
-  );
-  expect(res.status, `dict seed failed: ${res.stderr || res.stdout}`).toBe(0);
+  const res = runPsqlInDockerPostgres({
+    dbUser,
+    dbPassword,
+    dbName,
+    sql,
+    variables: ["-v", `tenant_id=${tenantID}`, "-v", `as_of=${asOf}`, "-v", `request_id=${requestID}`]
+  });
+  const failureDetail = res.error?.message || res.stderr || res.stdout;
+  expect(res.status, `dict seed failed: ${failureDetail}`).toBe(0);
 }
 
 test("tp060-02: orgunit list ext filter/sort (admin)", async ({ browser }) => {

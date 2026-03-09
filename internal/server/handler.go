@@ -507,8 +507,16 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, error) {
 	}))
 
 	assetsSub, _ := fs.Sub(embeddedAssets, "assets")
+	libreChatAssetsSub, _ := fs.Sub(embeddedAssets, "assets/librechat-web")
 
 	entrypoint := http.NewServeMux()
+	libreChatWebUI := newLibreChatWebUIHandler(embeddedAssets)
+	libreChatCompatAPI := newLibreChatCompatAPIHandler(assistantSvc, sessions)
+	entrypoint.Handle(libreChatFormalEntryAPIPrefix+"/", libreChatCompatAPI)
+	entrypoint.Handle(libreChatCompatAPIPrefix+"/", libreChatCompatAPI)
+	entrypoint.Handle(libreChatFormalEntryPrefix, libreChatWebUI)
+	entrypoint.Handle(libreChatFormalEntryPrefix+"/", libreChatWebUI)
+	entrypoint.Handle(libreChatStaticPrefix+"/", http.StripPrefix(libreChatStaticPrefix+"/", http.FileServer(http.FS(libreChatAssetsSub))))
 	entrypoint.Handle("/app", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		serveWebMUIIndex(w, r, embeddedAssets)
 	}))
@@ -523,6 +531,7 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, error) {
 	guarded := withTenantAndSession(classifier, tenancyResolver, principals, sessions, withAuthz(classifier, authorizer, entrypoint))
 
 	mux := http.NewServeMux()
+	mux.Handle(libreChatStaticPrefix+"/", guarded)
 	mux.Handle("/assets/", http.StripPrefix("/assets/", http.FileServer(http.FS(assetsSub))))
 	mux.Handle("/", guarded)
 
@@ -569,7 +578,7 @@ func withTenantAndSession(classifier *routing.Classifier, tenants TenancyResolve
 			rc = classifier.Classify(path)
 		}
 
-		if path == "/health" || path == "/healthz" || path == "/assets" || pathHasPrefixSegment(path, "/assets") {
+		if path == "/health" || path == "/healthz" || path == "/assets" || (pathHasPrefixSegment(path, "/assets") && !pathHasPrefixSegment(path, libreChatStaticPrefix)) {
 			next.ServeHTTP(w, r)
 			return
 		}
@@ -586,7 +595,7 @@ func withTenantAndSession(classifier *routing.Classifier, tenants TenancyResolve
 		}
 		r = r.WithContext(withTenant(r.Context(), t))
 
-		// DEV-PLAN-103/103A/235: protected tenant UI lives under /app/** and /assistant-ui/**.
+		// DEV-PLAN-103/103A/235/283: protected tenant UI lives under /app/**, /assets/librechat-web/** and /assistant-ui/**.
 		// For other UI paths (e.g. old URLs like /login, /org/*), do not redirect-to-login alias;
 		// let the router return 404 instead.
 		if rc == routing.RouteClassUI && path != "/" && !isProtectedTenantUIPath(path) {
@@ -601,6 +610,10 @@ func withTenantAndSession(classifier *routing.Classifier, tenants TenancyResolve
 
 		sid, ok := readSID(r)
 		if !ok {
+			if isLibreChatCompatAPIPath(path) {
+				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusUnauthorized, "assistant_vendored_sid_missing", "登录会话缺失，请先从正式登录入口登录。")
+				return
+			}
 			if rc == routing.RouteClassInternalAPI || rc == routing.RouteClassPublicAPI || rc == routing.RouteClassWebhook {
 				routing.WriteError(w, r, rc, http.StatusUnauthorized, "unauthorized", "unauthorized")
 				return
@@ -614,8 +627,25 @@ func withTenantAndSession(classifier *routing.Classifier, tenants TenancyResolve
 			routing.WriteError(w, r, rc, http.StatusInternalServerError, "session_lookup_error", "session lookup error")
 			return
 		}
-		if !ok || sess.TenantID != t.ID {
+		if !ok {
 			clearSIDCookie(w)
+			if isLibreChatCompatAPIPath(path) {
+				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusUnauthorized, "assistant_vendored_session_invalid", "登录会话已失效，请重新登录。")
+				return
+			}
+			if rc == routing.RouteClassInternalAPI || rc == routing.RouteClassPublicAPI || rc == routing.RouteClassWebhook {
+				routing.WriteError(w, r, rc, http.StatusUnauthorized, "unauthorized", "unauthorized")
+				return
+			}
+			http.Redirect(w, r, "/app/login", http.StatusFound)
+			return
+		}
+		if sess.TenantID != t.ID {
+			clearSIDCookie(w)
+			if isLibreChatCompatAPIPath(path) {
+				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusUnauthorized, "assistant_vendored_tenant_mismatch", "当前登录会话与租户不匹配，请重新登录。")
+				return
+			}
 			if rc == routing.RouteClassInternalAPI || rc == routing.RouteClassPublicAPI || rc == routing.RouteClassWebhook {
 				routing.WriteError(w, r, rc, http.StatusUnauthorized, "unauthorized", "unauthorized")
 				return
@@ -631,6 +661,10 @@ func withTenantAndSession(classifier *routing.Classifier, tenants TenancyResolve
 		}
 		if !ok || p.Status != "active" {
 			clearSIDCookie(w)
+			if isLibreChatCompatAPIPath(path) {
+				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusUnauthorized, "assistant_vendored_principal_invalid", "登录主体已失效，请重新登录。")
+				return
+			}
 			if rc == routing.RouteClassInternalAPI || rc == routing.RouteClassPublicAPI || rc == routing.RouteClassWebhook {
 				routing.WriteError(w, r, rc, http.StatusUnauthorized, "unauthorized", "unauthorized")
 				return
@@ -652,5 +686,5 @@ func pathHasPrefixSegment(path, prefix string) bool {
 }
 
 func isProtectedTenantUIPath(path string) bool {
-	return pathHasPrefixSegment(path, "/app") || pathHasPrefixSegment(path, "/assistant-ui")
+	return pathHasPrefixSegment(path, "/app") || pathHasPrefixSegment(path, libreChatStaticPrefix) || pathHasPrefixSegment(path, "/assistant-ui")
 }

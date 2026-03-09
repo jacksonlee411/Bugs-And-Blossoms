@@ -354,7 +354,7 @@
 - 回滚：重灌失败可清库重做（测试环境）。
 
 ## 5. 里程碑与验收标准
-> 证据统一写入：`docs/dev-records/dev-plan-078-execution-log.md`（记录命令、时间、样本规模、结果、提交号）。
+> 证据统一写入：`docs/archive/dev-records/dev-plan-078-execution-log.md`（记录命令、时间、样本规模、结果、提交号）。
 
 1. M1（契约冻结）
    - 文档冻结“一次性重基线 + 无双链路 + 无迁移期开关”。
@@ -435,7 +435,7 @@
 - `docs/archive/dev-plans/075e-orgunit-same-day-correction-status-conflict-investigation.md`
 - `docs/dev-plans/077-orgunit-replay-write-amplification-assessment-and-mitigation.md`
 - `docs/dev-plans/032-effective-date-day-granularity.md`
-- `docs/dev-records/dev-plan-077-write-amplification-baseline.md`
+- `docs/archive/dev-records/dev-plan-077-write-amplification-baseline.md`
 - `docs/dev-plans/080-orgunit-audit-chain-consolidation.md`
 
 ## 9. 变更登记

@@ -84,7 +84,12 @@ type assistantProviderHealthProber interface {
 var assistantIntentMarshalFn = json.Marshal
 var assistantOpenAIRequestMarshalFn = json.Marshal
 var assistantOpenAINewRequestWithContextFn = http.NewRequestWithContext
-var assistantOpenAIHTTPClientFactory = func() *http.Client { return nil }
+
+func assistantDefaultOpenAIHTTPClient() *http.Client {
+	return nil
+}
+
+var assistantOpenAIHTTPClientFactory = assistantDefaultOpenAIHTTPClient
 
 var errAssistantModelProbeUnsupported = errors.New("assistant_model_probe_unsupported")
 

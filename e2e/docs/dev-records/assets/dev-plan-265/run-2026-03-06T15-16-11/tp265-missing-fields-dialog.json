@@ -1,0 +1,14 @@
+{
+  "status": 200,
+  "body": {
+    "text": "创建部门信息还不完整，请补充以下三项（按任意顺序回复即可）：\n1）上级组织（例如：鲜花组织）\n2）部门名称（例如：运营部）\n3）成立日期（YYYY-MM-DD）\n\n你也可以直接按这个格式回复：上级组织：___；部门名称：___；成立日期：____-__-__",
+    "kind": "warning",
+    "stage": "draft",
+    "reply_model_name": "gpt-5.2",
+    "reply_prompt_version": "assistant.reply.v1",
+    "reply_source": "model",
+    "used_fallback": false,
+    "conversation_id": "conv_62cd5f376936420ab4b4c7bbc422491a",
+    "turn_id": "turn_a6f4206c8ddd4a14b10f32d47e578c17"
+  }
+}

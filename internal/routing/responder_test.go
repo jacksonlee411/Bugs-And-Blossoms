@@ -232,6 +232,7 @@ func TestKnownErrorMessage_AllCases(t *testing.T) {
 		{code: "ai_plan_schema_constrained_decode_failed", want: "计划结构化解析失败，请补全必填信息后重试。"},
 		{code: "ai_plan_boundary_violation", want: "计划超出助手执行边界，请调整后重试。"},
 		{code: "ai_plan_contract_version_mismatch", want: "计划契约版本不一致，请重新生成并确认后再提交。"},
+		{code: "ai_version_tuple_stale", want: "确认基线已变化，请重新确认后再提交。"},
 		{code: "ai_plan_determinism_violation", want: "计划确定性校验失败，请重新生成后重试。"},
 		{code: "ai_model_provider_unavailable", want: "当前无可用模型服务，请检查模型健康状态后重试。"},
 		{code: "ai_model_timeout", want: "模型请求超时，请稍后重试。"},
@@ -245,6 +246,12 @@ func TestKnownErrorMessage_AllCases(t *testing.T) {
 		{code: "assistant_ui_method_not_allowed", want: "当前请求方法不被允许，请刷新页面后重试。"},
 		{code: "assistant_ui_path_invalid", want: "助手聊天路径无效，请从助手页面重新进入。"},
 		{code: "assistant_ui_upstream_unavailable", want: "聊天服务暂不可用，请稍后重试。"},
+		{code: "assistant_vendored_sid_missing", want: "登录会话缺失，请先从正式登录入口登录。"},
+		{code: "assistant_vendored_session_invalid", want: "登录会话已失效，请重新登录。"},
+		{code: "assistant_vendored_tenant_mismatch", want: "当前登录会话与租户不匹配，请重新登录。"},
+		{code: "assistant_vendored_principal_invalid", want: "登录主体已失效，请重新登录。"},
+		{code: "assistant_startup_endpoints_unavailable", want: "正式入口缺少可用 endpoint 配置，请检查 Assistant 运行时模型配置。"},
+		{code: "assistant_startup_models_unavailable", want: "正式入口缺少可用模型清单，请检查 Assistant 运行时配置。"},
 		{code: "unknown", want: ""},
 	}
 

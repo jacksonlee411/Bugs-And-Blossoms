@@ -61,13 +61,15 @@
 - `docs/dev-plans/220-chat-assistant-upgrade-implementation-plan.md`
 - `docs/dev-plans/220a-chat-assistant-gap-assessment-and-closure-plan.md`
 - `docs/dev-plans/221-assistant-p1-blocker-closure-plan.md`
-- `docs/dev-plans/222-assistant-frontend-e2e-evidence-closure-plan.md`
+- `docs/archive/dev-plans/222-assistant-frontend-e2e-evidence-closure-plan.md`
 - `docs/dev-plans/223-assistant-conversation-persistence-and-audit-closure-plan.md`
 - `docs/dev-plans/224-assistant-multi-model-and-llm-intent-governance-plan.md`
 - `docs/dev-plans/225-assistant-tasks-temporal-p2-implementation-plan.md`
 - `docs/dev-plans/226-test-guide-tg004-gate-caliber-change-approval.md`
 
 ## 4. 前置条件与数据准备
+
+- 环境口径承接 `DEV-PLAN-060/012/226`：若本子计划复用 TP-060 数据 seed、联动全量 `make e2e`，或需要数据库直连/校验，必须默认 PostgreSQL 运行于 Docker / compose 并优先使用容器内工具链；不得把宿主机 `psql` 缺失误判为 Assistant 业务失败。
 
 1. [ ] 复用 TP-060-01 基线：`T060` 可登录、RLS/Authz enforce、跨租户 fail-closed 已验证。  
 2. [ ] 测试账号：`tenant-admin@example.invalid`（至少 1 个可写账号）。  
@@ -145,7 +147,7 @@
 
 | 时间（UTC） | 环境（Host/as_of/模式） | 复现步骤摘要 | 期望（契约引用） | 实际结果 | 严重级别（P0/P1/P2） | 类型（BUG/CONTRACT_DRIFT/CONTRACT_MISSING/ENV_DRIFT） | 处理建议（改实现/先改契约） | 负责人 | 链接（Issue/PR/日志） |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| 2026-03-03 01:20 | localhost / 2026-01-01 / `make e2e` | 执行全量 E2E（含 `tp220-assistant`） | `make e2e` 通过且 TP-060-05 证据可留存 | `tp220-assistant` 全部通过（5/5），但全套件因 `tp060-02-orgunit-ext-query` 的 `row bounding box missing` 失败（12/13） | P1 | BUG | 先修复/稳定 `tp060-02-orgunit-ext-query` 后复跑 `make e2e`；Assistant API/多模型实链路证据继续补齐 | 待指派 | `docs/dev-records/dev-plan-064a-execution-log.md` |
-| 2026-03-03 01:39 | localhost / 2026-01-01 / `make e2e` | 修复 `tp060-02-orgunit-ext-query` 后复跑全量 E2E | 全量套件通过，TP-060-05 证据可持续留存 | 13/13 通过，`tp220-assistant` 维持 5/5 通过 | P2 | BUG | 继续补齐 Assistant API 实链路与多模型证据后再标记 TP-060-05 完成 | 待指派 | `docs/dev-records/dev-plan-064a-execution-log.md` |
-| 2026-03-03 01:58 | localhost / unit-test / `go test -v ./internal/server -run ...` | 执行 Assistant API + 多模型分支覆盖测试 | create/turn/confirm/commit 与 validate/apply 至少各 1 正/负例并可审计 | 目标用例全部通过；状态码/错误码覆盖含 `invalid_request`/`assistant_candidate_not_found`/`conversation_state_invalid`/`unauthorized`/422 validate 错误 | P2 | BUG | 保持该证据基线；后续补齐 `ai_plan_contract_version_mismatch` 专项样例 | 待指派 | `docs/dev-records/dev-plan-064a-execution-log.md` |
-| 2026-03-03 02:05 | localhost / unit-test / `go test -v ./internal/server -run ...` | 新增并验证 `ai_plan_contract_version_mismatch` 专项分支 | 提交阶段契约版本漂移返回 409 `ai_plan_contract_version_mismatch` 且状态回退 validated | 用例通过，返回码与状态回退符合预期 | P2 | BUG | TP-060-05 证据闭环完成，后续进入维护期 | 待指派 | `docs/dev-records/dev-plan-064a-execution-log.md` |
+| 2026-03-03 01:20 | localhost / 2026-01-01 / `make e2e` | 执行全量 E2E（含 `tp220-assistant`） | `make e2e` 通过且 TP-060-05 证据可留存 | `tp220-assistant` 全部通过（5/5），但全套件因 `tp060-02-orgunit-ext-query` 的 `row bounding box missing` 失败（12/13） | P1 | BUG | 先修复/稳定 `tp060-02-orgunit-ext-query` 后复跑 `make e2e`；Assistant API/多模型实链路证据继续补齐 | 待指派 | `docs/archive/dev-records/dev-plan-064a-execution-log.md` |
+| 2026-03-03 01:39 | localhost / 2026-01-01 / `make e2e` | 修复 `tp060-02-orgunit-ext-query` 后复跑全量 E2E | 全量套件通过，TP-060-05 证据可持续留存 | 13/13 通过，`tp220-assistant` 维持 5/5 通过 | P2 | BUG | 继续补齐 Assistant API 实链路与多模型证据后再标记 TP-060-05 完成 | 待指派 | `docs/archive/dev-records/dev-plan-064a-execution-log.md` |
+| 2026-03-03 01:58 | localhost / unit-test / `go test -v ./internal/server -run ...` | 执行 Assistant API + 多模型分支覆盖测试 | create/turn/confirm/commit 与 validate/apply 至少各 1 正/负例并可审计 | 目标用例全部通过；状态码/错误码覆盖含 `invalid_request`/`assistant_candidate_not_found`/`conversation_state_invalid`/`unauthorized`/422 validate 错误 | P2 | BUG | 保持该证据基线；后续补齐 `ai_plan_contract_version_mismatch` 专项样例 | 待指派 | `docs/archive/dev-records/dev-plan-064a-execution-log.md` |
+| 2026-03-03 02:05 | localhost / unit-test / `go test -v ./internal/server -run ...` | 新增并验证 `ai_plan_contract_version_mismatch` 专项分支 | 提交阶段契约版本漂移返回 409 `ai_plan_contract_version_mismatch` 且状态回退 validated | 用例通过，返回码与状态回退符合预期 | P2 | BUG | TP-060-05 证据闭环完成，后续进入维护期 | 待指派 | `docs/archive/dev-records/dev-plan-064a-execution-log.md` |

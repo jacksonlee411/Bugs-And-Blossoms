@@ -137,11 +137,11 @@
 3. [x] DB 侧补齐并收紧 `RESCIND_*` 的 payload/快照内容约束（禁止 `{} + target_event_uuid-only`）。
 4. [x] 增补历史数据修复迁移，清理已存在的快照信息不足样本。
 5. [x] 补齐 `internal/server/orgunit_nodes_audit_test.go` 与 DB 迁移测试覆盖。
-6. [x] 更新 `docs/dev-records/dev-plan-080-execution-log.md` 记录落地证据。
+6. [x] 更新 `docs/archive/dev-records/dev-plan-080-execution-log.md` 记录落地证据。
 
 ## 10. 关联文档
 - `docs/dev-plans/075c-orgunit-delete-disable-semantics-alignment.md`
 - `docs/dev-plans/080-orgunit-audit-chain-consolidation.md`
 - `docs/dev-plans/080a-orgunit-audit-snapshot-mechanism-and-fix.md`
 - `docs/dev-plans/080c-orgunit-audit-snapshot-presence-table-constraint-plan.md`
-- `docs/dev-records/dev-plan-080-execution-log.md`
+- `docs/archive/dev-records/dev-plan-080-execution-log.md`

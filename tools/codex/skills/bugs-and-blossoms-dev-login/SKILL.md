@@ -1,13 +1,13 @@
 ---
 name: bugs-and-blossoms-dev-login
-description: Start the Bugs-And-Blossoms local login stack and bring up the tenant login page at http://localhost:8080/app/login (Postgres+Redis via make dev-up, IAM migrations, KratosStub, and the Go server). Optionally boot LibreChat runtime (`make assistant-runtime-up`) for `/app/assistant` verification. Use when you need a repeatable workflow to get a working login on port 8080, seed test identities, verify session creation (cookie sid), and check assistant-ui tenant/session boundaries locally. 适用于“启动8080登录页/本地联调登录/起dev-up+kratosstub+dev-server（可选 assistant runtime）”的场景。
+description: Start the Bugs-And-Blossoms local login stack and bring up the tenant login page at http://localhost:8080/app/login (Postgres+Redis via make dev-up, IAM migrations, KratosStub, and the Go server). Optionally boot LibreChat runtime (`make assistant-runtime-up`) for `/app/assistant/librechat` formal-entry verification and `/assistant-ui/*` boundary checks. Use when you need a repeatable workflow to get a working login on port 8080, seed test identities, verify session creation (cookie sid), and check assistant-ui tenant/session boundaries locally. 适用于“启动8080登录页/本地联调登录/起dev-up+kratosstub+dev-server（可选 assistant runtime）”的场景。
 ---
 
 # Bugs-And-Blossoms：本地 8080 登录页启动（dev-up + kratosstub + server，可选 assistant runtime）
 
 目标 A：在本机把 `http://localhost:8080/app/login` 跑通（含 `POST /iam/api/sessions` 成功设置 `sid` cookie，并进入 `/app`）。
 
-目标 B（可选）：在已登录前提下，跑通 `/app/assistant` 对应的 `/assistant-ui/*` 受保护代理链路，并验证 LibreChat runtime 可用性。
+目标 B（可选）：在已登录前提下，跑通 `/app/assistant/librechat` 正式入口与 `/assistant-ui/*` 受保护代理链路，并验证 LibreChat runtime 可用性。
 
 本技能默认只做“启动/迁移/seed/验证”，不会执行 `make dev-reset`，不会轻易清库删数据。
 
@@ -24,9 +24,29 @@ cp -n .env.example .env
 - `DB_USER=app_runtime`
 - `RLS_ENFORCE=enforce`
 - `AUTHZ_MODE=enforce`
+- `TRUST_PROXY=1`（当你通过 `X-Forwarded-Host` 做租户联调/E2E 时必须开启；否则会退回 `localhost` 租户导致登录串租户并出现 `invalid_credentials`）
 - `ASSISTANT_MODEL_CONFIG_JSON="{\"provider_routing\":{\"strategy\":\"priority_failover\",\"fallback_enabled\":true},\"providers\":[{\"name\":\"openai\",\"enabled\":true,\"model\":\"gpt-5-codex\",\"endpoint\":\"https://api.openai.com/v1\",\"timeout_ms\":8000,\"retries\":1,\"priority\":10,\"key_ref\":\"OPENAI_API_KEY\"}]}"`（避免 `assistant_runtime_config_missing/invalid`）
 
 ## 工作流（推荐顺序）
+
+0) 启动前先做“单实例清理”（强烈建议）
+
+> 目的：避免同机残留多个 `server/superadmin/kratosstub` 进程导致“seed 在 A 实例、登录走 B 实例”的错位，出现看似随机的 `invalid_credentials`。
+
+```bash
+cd "$(git rev-parse --show-toplevel)"
+
+# 先停容器依赖（不删数据）
+DEV_INFRA_ENV_FILE=.env make dev-down || true
+
+# 清理本机 Go 服务残留进程（前台/后台都覆盖）
+pkill -f 'cmd/server|/exe/server' || true
+pkill -f 'cmd/superadmin|/exe/superadmin' || true
+pkill -f 'cmd/kratosstub|/exe/kratosstub' || true
+
+# 端口基线检查：预期无监听
+ss -ltnp | grep -E ':(8080|8081|4433|4434|5438|6379)' || true
+```
 
 1) 启动基础依赖（Postgres/Redis；不会删除数据）
 
@@ -35,7 +55,7 @@ cd "$(git rev-parse --show-toplevel)"
 DEV_INFRA_ENV_FILE=.env make dev-up
 ```
 
-2) 确保 IAM 迁移已执行（会插入 `localhost` 租户域名与 Local Tenant）
+2) 确保 IAM 迁移已执行（执行后请校验租户/域名映射；若缺失按后文 SQL 幂等补齐）
 
 ```bash
 cd "$(git rev-parse --show-toplevel)"
@@ -101,7 +121,7 @@ cd "$(git rev-parse --show-toplevel)"
 DEV_SERVER_ENV_FILE=.env make dev-server
 ```
 
-（可选）6) 启动 LibreChat Runtime（用于 `/app/assistant`）
+（可选）6) 启动 LibreChat Runtime（用于 `/app/assistant/librechat` 正式入口）
 
 ```bash
 cd "$(git rev-parse --show-toplevel)"
@@ -110,8 +130,9 @@ make assistant-runtime-status
 ```
 
 预期：
-- `make assistant-runtime-status` 输出 `status=healthy` 时，`/app/assistant` 可进入完整对话闭环。
+- `make assistant-runtime-status` 输出 `status=healthy` 时，可通过 `/app/assistant/librechat` 进入正式对话闭环（`/app/assistant` 页面仅用于运行态与日志查看）。
 - 若输出 `status=unavailable`，先执行文末“关闭”小节中的 runtime 恢复流程再重试。
+- 注意：正式入口 `/app/assistant/librechat` 复用 `/app/login` 的 `sid` 会话，不需要单独 LibreChat 登录；仅当你直连 runtime upstream（如 `http://127.0.0.1:3080`）时，才会使用 LibreChat 本地账号体系。
 
 ## 一键启动 + seed + 验证登录（推荐）
 
@@ -161,8 +182,10 @@ curl -i -X POST -H 'Host: localhost:8080' -H 'Content-Type: application/json' \
    - `admin2@localhost`（tenant `00000000-0000-0000-0000-000000000002`）
 3) 预期：前端调用 `POST /iam/api/sessions` 成功（204），并设置 `sid` cookie，然后进入 `/app`。
 4) 登录后可直接访问：`http://<对应租户域名>:8080/app/org/units`（未登录时访问 `/app/*` 会 302 到 `/app/login`，属正常行为）。
-5) （可选）访问：`http://<对应租户域名>:8080/app/assistant`
-   - 若 runtime healthy：可加载 LibreChat iframe，并进行聊天。
+5) （可选）访问：
+   - `http://<对应租户域名>:8080/app/assistant`（运行态与会话记录页）
+   - `http://<对应租户域名>:8080/app/assistant/librechat`（正式聊天入口）
+   - 若 runtime healthy：可进入正式聊天页面并发起对话。
    - 若 runtime 未启动：通过会话校验后可能返回 `502`（表示边界已生效，但上游不可用）。
 
 （注意）不要用 `http://127.0.0.1:8080/app/login`：租户解析基于 Host，`127.0.0.1` 默认无租户映射，会 404（tenant not found）。
@@ -275,8 +298,11 @@ curl -i -b /tmp/sid-saas.txt -H 'Host: tenant2.localhost:8080' \
 ## 常见排障
 
 - 浏览器提示“无法访问此网站 / 连接被拒绝”：先确认服务是否在监听 8080（`curl -fsS http://localhost:8080/health` 预期返回 200）。若连接失败，重新执行 `DEV_SERVER_ENV_FILE=.env make dev-server` 并查看其输出。
-- 404 tenant not found：确认用的是 `localhost`；并确认 `make iam migrate up` 已执行。
+- 登录页直接显示 `tenant resolve error`（HTTP 500）：通常是 DB 未启动或服务端无法连接 DB（常见于未执行 `DEV_INFRA_ENV_FILE=.env make dev-up`）。先启动 infra，再重试 `http://localhost:8080/app/login`。
+- 404 tenant not found：确认访问 Host 是否存在于 `iam.tenant_domains`；并确认 `make iam migrate up` 已执行，必要时按“快速验证清单”第 1 步补齐域名映射。
 - 登录一直 invalid credentials：确认 KratosStub 在跑；并确认已按 `tenant_id:email` seed 过同一密码。
+- 访问 `/app/assistant/librechat` 却出现 LibreChat 登录页：优先确认是否误连到了 runtime upstream（如 `:3080`）。正式入口应走 `:8080` 同域并复用 `sid`，通常不应再次要求登录。
+- 若你确实在调试“直连 runtime upstream”（非正式入口）且遇到 LibreChat 邮箱/注册问题：`admin@localhost` 会因邮箱格式被拒；可改用 `admin@localhost.local`，并按需在 `deploy/librechat/.env` 设置 `ALLOW_REGISTRATION=true` 后重启 runtime。
 - seed 脚本提示 409 但你仍然 invalid credentials：说明 **KratosStub 当前进程**里该 identifier 已存在，seed 不会更新密码；处理方式是重启 KratosStub（它是内存存储）后重新 seed，或换一个新邮箱 seed。
 - 登录显示 identity error：确认 KratosStub 在跑（4433/4434）；未设置时默认 `KRATOS_PUBLIC_URL=http://127.0.0.1:4433`；并确认已执行 seed。
 - `POST /iam/api/sessions` 返回 `invalid_json`：确认 `Content-Type: application/json`，并传入合法 JSON（例如 `{"email":"admin@localhost","password":"admin123"}`）。

@@ -116,7 +116,7 @@ rg -l "global_setid_scope_package|global_setids|allow_share_read|global_tenant_i
 #### B4：owner_setid 制度化
 - 证据要点：
   - `DEV-PLAN-071A` 已冻结：owner_setid 仅 owner 可编辑、订阅者只读、治理入口唯一、回填阻断条件（多订阅人工决策、无订阅迁移阻断）。
-  - `docs/dev-records/dev-plan-071-execution-log.md` 已记录 owner_setid 回填与手工决策证据（含多订阅与 SMOKE 特例）。
+  - `docs/archive/dev-records/dev-plan-071-execution-log.md` 已记录 owner_setid 回填与手工决策证据（含多订阅与 SMOKE 特例）。
 - 结论：owner_setid 已形成“规则 + 迁移阻断 + 执行证据”的制度化闭环。
 
 #### B5：权限矩阵可审计
@@ -234,8 +234,8 @@ rg -n "/org/api/scope-packages|/org/api/owned-scope-packages|/org/api/scope-subs
   - `docs/archive/dev-plans/070-setid-orgunit-binding-redesign.md`
   - `docs/archive/dev-plans/071-setid-scope-package-subscription-blueprint.md`
   - `docs/archive/dev-plans/071a-package-selection-ownership-and-subscription.md`
-  - `docs/dev-records/dev-plan-070-execution-log.md`
-  - `docs/dev-records/dev-plan-071-execution-log.md`
+  - `docs/archive/dev-records/dev-plan-070-execution-log.md`
+  - `docs/archive/dev-records/dev-plan-071-execution-log.md`
 - 代码/Schema/权限核查（按需抽样）：`modules/orgunit/**`、`config/access/policy.csv`、`config/routing/allowlist.yaml`。
 
 ### 9.2 外部证据（公开资料）
@@ -296,6 +296,6 @@ rg -n "/org/api/scope-packages|/org/api/owned-scope-packages|/org/api/scope-subs
 - `docs/archive/dev-plans/071-setid-scope-package-subscription-blueprint.md`
 - `docs/archive/dev-plans/071a-package-selection-ownership-and-subscription.md`
 - `docs/dev-plans/012-ci-quality-gates.md`
-- `docs/dev-records/dev-plan-070-execution-log.md`
-- `docs/dev-records/dev-plan-071-execution-log.md`
+- `docs/archive/dev-records/dev-plan-070-execution-log.md`
+- `docs/archive/dev-records/dev-plan-071-execution-log.md`
 - `docs/dev-plans/070b-no-global-tenant-and-dict-release-to-tenant-plan.md`

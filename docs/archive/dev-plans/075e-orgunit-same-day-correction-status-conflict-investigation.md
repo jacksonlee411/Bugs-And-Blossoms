@@ -235,4 +235,4 @@
 - `docs/archive/dev-plans/075a-orgunit-records-ui-and-editing-issues.md`
 - `docs/dev-plans/075c-orgunit-delete-disable-semantics-alignment.md`
 - `docs/archive/dev-plans/075d-orgunit-status-field-active-inactive-selector.md`
-- `docs/dev-records/dev-plan-075d-execution-log.md`
+- `docs/archive/dev-records/dev-plan-075d-execution-log.md`

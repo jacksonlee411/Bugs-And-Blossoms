@@ -164,6 +164,8 @@ func knownErrorMessage(code string) string {
 		return "计划超出助手执行边界，请调整后重试。"
 	case "ai_plan_contract_version_mismatch":
 		return "计划契约版本不一致，请重新生成并确认后再提交。"
+	case "ai_version_tuple_stale":
+		return "确认基线已变化，请重新确认后再提交。"
 	case "ai_plan_determinism_violation":
 		return "计划确定性校验失败，请重新生成后重试。"
 	case "ai_model_provider_unavailable":
@@ -180,6 +182,10 @@ func knownErrorMessage(code string) string {
 		return "助手运行时模型配置缺失，请完成配置并重启服务。"
 	case "ai_model_secret_missing":
 		return "模型密钥缺失，请检查 key_ref 配置后重试。"
+	case "ai_reply_model_target_mismatch":
+		return "助手回复未命中预期的大模型链路，请稍后重试。"
+	case "ai_reply_render_failed":
+		return "助手回复生成失败，请稍后重试。"
 	case "assistant_conversation_cursor_invalid":
 		return "会话分页游标无效或已过期，请刷新列表后重试。"
 	case "assistant_conversation_list_failed":
@@ -190,6 +196,18 @@ func knownErrorMessage(code string) string {
 		return "助手聊天路径无效，请从助手页面重新进入。"
 	case "assistant_ui_upstream_unavailable":
 		return "聊天服务暂不可用，请稍后重试。"
+	case "assistant_vendored_sid_missing":
+		return "登录会话缺失，请先从正式登录入口登录。"
+	case "assistant_vendored_session_invalid":
+		return "登录会话已失效，请重新登录。"
+	case "assistant_vendored_tenant_mismatch":
+		return "当前登录会话与租户不匹配，请重新登录。"
+	case "assistant_vendored_principal_invalid":
+		return "登录主体已失效，请重新登录。"
+	case "assistant_startup_endpoints_unavailable":
+		return "正式入口缺少可用 endpoint 配置，请检查 Assistant 运行时模型配置。"
+	case "assistant_startup_models_unavailable":
+		return "正式入口缺少可用模型清单，请检查 Assistant 运行时配置。"
 	default:
 		return ""
 	}

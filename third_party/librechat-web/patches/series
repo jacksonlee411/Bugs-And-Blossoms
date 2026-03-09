@@ -1,0 +1,18 @@
+# DEV-PLAN-281 patch stack entrypoint
+#
+# 约定：
+# - 一个 patch 一行，按应用顺序排序。
+# - patch 文件命名使用 4 位序号前缀，例如：0001-prune-workspaces.patch。
+# - 未冻结来源元数据前禁止直接散改 vendored 源码。
+0001-use-node-fs-in-post-build.patch
+0002-assistant-formal-upsert-fallback.patch
+0003-localhost-sw-and-axios-credentials.patch
+0004-use-sse-formal-message-replace-fallback.patch
+0006-message-render-force-remount-on-formal-state.patch
+0007-content-render-formal-main-path.patch
+0008-message-parts-formal-main-path.patch
+0009-formal-turn-append-with-new-message-id.patch
+0010-upsert-pending-with-same-message-id-keeps-history.patch
+0011-formal-new-convo-keep-history.patch
+0012-dedupe-stale-formal-placeholder.patch
+0013-unbound-formal-binding-key-empty.patch

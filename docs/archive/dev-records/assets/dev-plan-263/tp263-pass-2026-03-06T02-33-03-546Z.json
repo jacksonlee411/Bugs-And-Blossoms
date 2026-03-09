@@ -1,0 +1,28 @@
+{
+  "captured_at": "2026-03-06T02:33:04.807Z",
+  "base_url": "http://localhost:8080",
+  "screenshots": {
+    "page": "docs/dev-records/assets/dev-plan-263/tp263-pass-page-2026-03-06T02-33-03-546Z.png",
+    "iframe": "docs/dev-records/assets/dev-plan-263/tp263-pass-iframe-2026-03-06T02-33-03-546Z.png",
+    "stream": "docs/dev-records/assets/dev-plan-263/tp263-pass-stream-2026-03-06T02-33-03-546Z.png"
+  },
+  "extracted": {
+    "conversation_id": "conv_tp263_1",
+    "turn_id": "turn_tp263_1",
+    "reply_model_name": "gpt-5.2",
+    "reply_prompt_version": "assistant.reply.v1",
+    "stage": "draft",
+    "kind": "info"
+  },
+  "reply_request_body": {
+    "stage": "draft",
+    "kind": "info",
+    "outcome": "success",
+    "error_code": "",
+    "error_message": "已生成提交草案：\n- 上级组织：鲜花组织\n- 新组织：运营部\n- 生效日期：2026-01-01\n- 候选：FLOWERS-ROOT\n请回复“确认执行”后提交。",
+    "next_action": "",
+    "locale": "zh",
+    "fallback_text": "已生成提交草案：\n- 上级组织：鲜花组织\n- 新组织：运营部\n- 生效日期：2026-01-01\n- 候选：FLOWERS-ROOT\n请回复“确认执行”后提交。",
+    "allow_missing_turn": false
+  }
+}

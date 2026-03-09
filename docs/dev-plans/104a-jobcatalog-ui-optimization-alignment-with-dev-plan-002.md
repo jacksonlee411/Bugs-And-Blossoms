@@ -3,7 +3,7 @@
 **状态**: 已完成（2026-02-16 05:32 UTC）
 
 > 本文件是 `DEV-PLAN-104` 的规范对齐补充；主方案与 IA 约束见 `docs/dev-plans/104-jobcatalog-ui-optimization.md`。
-> 实施与验证证据见：`docs/dev-records/dev-plan-104-execution-log.md`。
+> 实施与验证证据见：`docs/archive/dev-records/dev-plan-104-execution-log.md`。
 
 ## 1. 背景
 

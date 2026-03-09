@@ -1,0 +1,7 @@
+[
+  "LibreChat Runtime：status=healthy / code=- / upstream=danny-avila/LibreChat@main (http://127.0.0.1:3080)checked_at=3/6/2026, 10:38:44 PMapi=healthy | mongodb=healthy | meilisearch=healthy | rag_api=healthy | vectordb=healthy",
+  "高风险计划需要先 Confirm，再允许 Commit。",
+  "当前信息不完整，请先在对话中补全必填信息，再执行 Confirm / Commit。",
+  "创建组织计划在指定父组织下创建部门，提交前需要确认候选主键capability_key=org.orgunit_create.field_policyprovider=openai / model=gpt-5.1",
+  "请补充上级组织名称（例如：鲜花组织）请补充部门名称（例如：运营部）请补充成立日期（YYYY-MM-DD）"
+]

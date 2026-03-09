@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -72,6 +73,26 @@ func mustInternalAPIClassifier(t *testing.T) *routing.Classifier {
 			"server": {
 				Routes: []routing.Route{
 					{Path: "/org/api/org-units", Methods: []string{"GET"}, RouteClass: "internal_api"},
+				},
+			},
+		},
+	}, "server")
+	if err != nil {
+		t.Fatal(err)
+	}
+	return c
+}
+
+func mustLibreChatCompatAPIClassifier(t *testing.T) *routing.Classifier {
+	t.Helper()
+
+	c, err := routing.NewClassifier(routing.Allowlist{
+		Version: 1,
+		Entrypoints: map[string]routing.Entrypoint{
+			"server": {
+				Routes: []routing.Route{
+					{Path: libreChatCompatAPIPrefix + "/user", Methods: []string{"GET"}, RouteClass: "internal_api"},
+					{Path: libreChatFormalEntryAPIPrefix + "/user", Methods: []string{"GET"}, RouteClass: "internal_api"},
 				},
 			},
 		},
@@ -364,6 +385,67 @@ func TestWithTenantAndSession_SessionTenantMismatchInternalAPI_Returns401(t *tes
 	}
 	if !cleared {
 		t.Fatalf("expected %s cookie cleared", sidCookieName)
+	}
+}
+
+func TestWithTenantAndSession_SessionMissingInternalAPI_Returns401(t *testing.T) {
+	tnt := Tenant{ID: "t1", Domain: "localhost", Name: "Local"}
+	classifier := mustInternalAPIClassifier(t)
+	sessions := &stubSessionStore{ok: false}
+	h := withTenantAndSession(classifier, stubTenancyResolver{tenant: tnt, ok: true}, newMemoryPrincipalStore(), sessions, http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
+		t.Fatal("unexpected next")
+	}))
+
+	req := httptest.NewRequest(http.MethodGet, "/org/api/org-units", nil)
+	req.Host = "localhost:8080"
+	req.AddCookie(&http.Cookie{Name: sidCookieName, Value: "sid1"})
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("status=%d body=%q", rec.Code, rec.Body.String())
+	}
+}
+
+func TestWithTenantAndSession_LibreChatCompatTenantMismatch_ReturnsSpecific401(t *testing.T) {
+	tnt := Tenant{ID: "t1", Domain: "localhost", Name: "Local"}
+	classifier := mustLibreChatCompatAPIClassifier(t)
+	sessions := &stubSessionStore{ok: true, sess: Session{TenantID: "t2", PrincipalID: "p1", ExpiresAt: time.Now().Add(time.Hour)}}
+	h := withTenantAndSession(classifier, stubTenancyResolver{tenant: tnt, ok: true}, newMemoryPrincipalStore(), sessions, http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
+		t.Fatal("unexpected next")
+	}))
+
+	req := httptest.NewRequest(http.MethodGet, libreChatCompatAPIPrefix+"/user", nil)
+	req.Host = "localhost:8080"
+	req.AddCookie(&http.Cookie{Name: sidCookieName, Value: "sid1"})
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("status=%d body=%q", rec.Code, rec.Body.String())
+	}
+	if !strings.Contains(rec.Body.String(), "assistant_vendored_tenant_mismatch") {
+		t.Fatalf("body=%q", rec.Body.String())
+	}
+}
+
+func TestWithTenantAndSession_LibreChatCompatPrincipalInvalid_ReturnsSpecific401(t *testing.T) {
+	tnt := Tenant{ID: "t1", Domain: "localhost", Name: "Local"}
+	classifier := mustLibreChatCompatAPIClassifier(t)
+	sessions := &stubSessionStore{ok: true, sess: Session{TenantID: "t1", PrincipalID: "p1", ExpiresAt: time.Now().Add(time.Hour)}}
+	principals := &stubPrincipalStore{ok: true, p: Principal{ID: "p1", TenantID: "t1", Status: "disabled", RoleSlug: "tenant-admin"}}
+	h := withTenantAndSession(classifier, stubTenancyResolver{tenant: tnt, ok: true}, principals, sessions, http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
+		t.Fatal("unexpected next")
+	}))
+
+	req := httptest.NewRequest(http.MethodGet, libreChatCompatAPIPrefix+"/user", nil)
+	req.Host = "localhost:8080"
+	req.AddCookie(&http.Cookie{Name: sidCookieName, Value: "sid1"})
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("status=%d body=%q", rec.Code, rec.Body.String())
+	}
+	if !strings.Contains(rec.Body.String(), "assistant_vendored_principal_invalid") {
+		t.Fatalf("body=%q", rec.Body.String())
 	}
 }
 

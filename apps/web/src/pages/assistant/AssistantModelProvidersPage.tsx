@@ -137,8 +137,8 @@ export function AssistantModelProvidersPage() {
           <RefreshIcon fontSize='small' />
         </IconButton>
         <Box sx={{ flex: 1 }} />
-        <Button component='a' href='/app/assistant' variant='text'>
-          返回助手
+        <Button component='a' href='/app/assistant/librechat' variant='text'>
+          返回 LibreChat
         </Button>
       </Stack>
 

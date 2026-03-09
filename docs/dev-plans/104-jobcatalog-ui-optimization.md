@@ -4,7 +4,7 @@
 
 > 补充修订：与 `DEV-PLAN-002` 的规范对齐细则见 `docs/dev-plans/104a-jobcatalog-ui-optimization-alignment-with-dev-plan-002.md`。  
 > 若本文件与 `DEV-PLAN-104A` 存在冲突，以 `DEV-PLAN-104A` 为准（仅限 UI 规范对齐条款）。
-> 实施与验证证据见：`docs/dev-records/dev-plan-104-execution-log.md`。
+> 实施与验证证据见：`docs/archive/dev-records/dev-plan-104-execution-log.md`。
 
 ## 1. 背景
 

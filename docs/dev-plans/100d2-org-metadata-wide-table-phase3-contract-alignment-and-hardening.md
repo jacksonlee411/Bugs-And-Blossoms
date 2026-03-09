@@ -92,7 +92,7 @@
    - 本次变更未触及 routing/authz 映射，因此无需更新。
 
 7. [x] **证据记录与收口**
-   - 新建/更新执行日志：`docs/dev-records/dev-plan-100d2-execution-log.md`（记录命令、时间戳、结果）。
+   - 新建/更新执行日志：`docs/archive/dev-records/dev-plan-100d2-execution-log.md`（记录命令、时间戳、结果）。
    - `DEV-PLAN-100D2` 状态在全部完成后更新为 `已完成`，并写入完成时间戳。
 
 ## 5. 验收标准（DoD）

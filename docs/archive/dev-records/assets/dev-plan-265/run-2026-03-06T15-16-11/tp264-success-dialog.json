@@ -1,0 +1,14 @@
+{
+  "status": 200,
+  "body": {
+    "text": "抱歉，本次请求未能完成。请您检查输入内容是否完整、清晰（如：要办理的HR事项类型、时间/人员/部门范围、期望输出格式等），补充后再提交重试。",
+    "kind": "error",
+    "stage": "commit_failed",
+    "reply_model_name": "gpt-5.2",
+    "reply_prompt_version": "assistant.reply.v1",
+    "reply_source": "model",
+    "used_fallback": false,
+    "conversation_id": "conv_7e9ca801ad0b4c60934567080488dc9c",
+    "turn_id": "missing-turn-context"
+  }
+}

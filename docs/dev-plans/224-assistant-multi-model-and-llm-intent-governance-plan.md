@@ -1,16 +1,16 @@
 # DEV-PLAN-224：Assistant 多模型适配与 LLM 意图治理详细设计（修订版）
 
-**状态**: 已完成（2026-03-03，M1-M5 与 223 集成收口已完成）
+**状态**: 已完成（2026-03-03，M1-M5 与 223 集成收口已完成；自 2026-03-08 起本计划仅保留“模型与意图治理”契约，UI 承载面与入口口径以 `280/283/284/266` 为准）
 
 ## 1. 背景与上下文 (Context)
 - **需求来源**:
   - `docs/dev-plans/220-chat-assistant-upgrade-implementation-plan.md`
   - `docs/dev-plans/220a-chat-assistant-gap-assessment-and-closure-plan.md`
   - `docs/dev-plans/221-assistant-p1-blocker-closure-plan.md`
-  - `docs/dev-plans/222-assistant-frontend-e2e-evidence-closure-plan.md`
+  - `docs/archive/dev-plans/222-assistant-frontend-e2e-evidence-closure-plan.md`
   - `docs/dev-plans/223-assistant-conversation-persistence-and-audit-closure-plan.md`
 - **当前痛点（修订确认）**:
-  1. 当前仓库对 LibreChat 的利用停留在 `/assistant-ui/*` 反向代理与 iframe 嵌入，尚未形成平台侧多模型治理闭环。
+  1. 历史阶段仓库对 LibreChat 的利用曾停留在 `/assistant-ui/*` 反向代理与 iframe 嵌入；该描述仅作历史基线，不再约束当前主链路实现。
   2. 意图识别仍以规则匹配为主，缺少 LLM + strict decode + boundary lint 的确定性主链路。
   3. `DEV-PLAN-223` 已完成会话持久化与审计闭环；224 需在其基础上完成上下文构建、版本快照注入与恢复链路集成，确保多轮行为稳定一致。
   4. 用户无法在产品内配置 provider/model，无法实现“可视化多模型切换 + 治理审计”。
@@ -50,6 +50,7 @@
 
 ## 3. 架构与关键决策 (Architecture & Decisions)
 ### 3.1 架构图 (Mermaid)
+> 说明：下图是 224 历史实施阶段的架构快照，仅用于解释当时治理问题来源；不作为当前正式入口、承载面与消息通道约束。当前 UI SSOT 以 `DEV-PLAN-280/283/284/266` 为准。
 ```mermaid
 graph TD
     A[Assistant Workspace /app/assistant] --> B[Right Panel: Tx Control]
@@ -259,14 +260,14 @@ return plan + hashes
 2. [ ] provider endpoint 白名单校验，禁止任意 URL 注入。
 3. [ ] assistant capability 与路由映射不漂移。
 4. [ ] 模型输出必须 boundary lint，禁止越界能力进入提交链路。
-5. [ ] LibreChat iframe 通信必须通过 origin/schema/nonce-channel 三重校验。
+5. [ ] 历史跨窗口消息桥接链路采用 origin/schema/nonce-channel 三重校验；新主链路不再把该机制作为正式职责。
 6. [ ] LibreChat 只允许访问 `internal/assistant/*` 编排接口，禁止业务写旁路。
 7. [ ] 反向代理与路由层对 `assistant-ui` 到业务写路由实施硬阻断（非“仅测试约束”）。
 
 ## 8. 依赖与里程碑 (Dependencies & Milestones)
 - **依赖（修订）**：
   - `DEV-PLAN-221` 错误码与状态机契约冻结。
-  - `DEV-PLAN-222` iframe/postMessage 安全契约与 FE/E2E 收口。
+  - `DEV-PLAN-222`（历史桥接安全收口证据，不作为新主链路实现约束）。
   - `DEV-PLAN-223` 会话持久化与审计字段已落地（作为 224 会话恢复集成基线）。
 - **里程碑**：
   1. [ ] M1：Provider 配置契约 + `ModelGateway` 接口冻结（含配置页 IA）。
@@ -290,8 +291,8 @@ return plan + hashes
 - **前端/E2E**：
   1. [ ] 模型配置页可完成“查看/校验/应用”闭环。
   2. [ ] `/app/assistant` 多轮会话可恢复（会话列表 + 回放）。
-  3. [ ] postMessage 三重校验均有自动化断言。
-  4. [ ] 右侧事务面板展示 `*_version` 与 `*_hash`，并支持“版本不一致”阻断提示。
+  3. [ ] 历史桥接链路的 postMessage 三重校验均有自动化断言（当前仅保留为历史证据）。
+  4. [ ] 事务交互区展示 `*_version` 与 `*_hash`，并支持“版本不一致”阻断提示。
 - **验收对齐**：
   1. [ ] 对齐 `TC-220-BE-003/004` 及 220A 的多模型/意图缺口项。
   2. [ ] 新增“多模型切换一致性”“intent->command 稳定性”“会话恢复一致性”证据。
@@ -360,7 +361,7 @@ return plan + hashes
    - [ ] 推理参数冻结（temperature/top_p/n）。
    - [ ] 编译器纯函数化与稳定排序。
    - [ ] 回放对账（同输入同快照）失败返回 `ai_plan_determinism_violation`。
-8. [ ] 右侧事务面板改为消费结构化结果（不允许前端本地拼写提交命令）。
+8. [ ] 事务交互区改为消费结构化结果（不允许前端本地拼写提交命令）。
 
 ### 12.4 M4：多轮会话恢复（依赖 223）
 1. [ ] 对接 223 已落地的持久化会话读取能力（conversation/turn/transition/idempotency）。
@@ -407,7 +408,7 @@ return plan + hashes
 - `docs/dev-plans/220-chat-assistant-upgrade-implementation-plan.md`
 - `docs/dev-plans/220a-chat-assistant-gap-assessment-and-closure-plan.md`
 - `docs/dev-plans/221-assistant-p1-blocker-closure-plan.md`
-- `docs/dev-plans/222-assistant-frontend-e2e-evidence-closure-plan.md`
+- `docs/archive/dev-plans/222-assistant-frontend-e2e-evidence-closure-plan.md`
 - `docs/dev-plans/223-assistant-conversation-persistence-and-audit-closure-plan.md`
 - `docs/dev-plans/225-assistant-tasks-temporal-p2-implementation-plan.md`
 - `docs/dev-plans/209-blueprint-skill-manifest-tool-whitelist-and-risk-tier.md`

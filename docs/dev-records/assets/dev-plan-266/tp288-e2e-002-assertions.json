@@ -1,0 +1,56 @@
+{
+  "plan": "DEV-PLAN-288",
+  "case_id": "tp288-e2e-002",
+  "title": "failure stays in-bubble and retry creates exactly one new bubble",
+  "formal_entry": "/app/assistant/librechat",
+  "command": "pnpm --dir /home/lee/Projects/Bugs-And-Blossoms/e2e exec playwright test tests/tp288-librechat-real-entry-evidence.spec.js --workers=1",
+  "executed_at": "2026-03-09T00:27:02.440Z",
+  "result": "passed",
+  "stale_on": [
+    "290A pending placeholder bubble fix merged",
+    "240C runtime gate semantics changed",
+    "240D durable execution/compensation semantics changed",
+    "240E MCP write admission semantics changed",
+    "message binding/render path changed",
+    "routing/authn chain changed",
+    "error code semantics changed",
+    "fail-closed behavior changed"
+  ],
+  "stopline": {
+    "no_native_send_post": true,
+    "official_message_tree_only": true,
+    "single_assistant_bubble": true,
+    "conversation_turn_request_binding_unique": true,
+    "expected_bubble_count_match": true
+  },
+  "page_text_counts": {
+    "提交失败，请重试。": 1,
+    "已创建华北运营部。": 1
+  },
+  "expected_bubble_count": 2,
+  "actual_bubble_count": 2,
+  "binding_assertion": {
+    "all_expected_bindings_present_once": true,
+    "unique_binding_key_count": 2,
+    "bindings": [
+      {
+        "binding_key": "conv_tp288_1::turn_tp288_1::req_tp288_1",
+        "conversation_id": "conv_tp288_1",
+        "turn_id": "turn_tp288_1",
+        "request_id": "req_tp288_1",
+        "actual_count": 1,
+        "attrs_match": true,
+        "message_id": "595cbd92-44d7-4c0e-8c08-6c6a9ec99567_"
+      },
+      {
+        "binding_key": "conv_tp288_1::turn_tp288_2::req_tp288_2",
+        "conversation_id": "conv_tp288_1",
+        "turn_id": "turn_tp288_2",
+        "request_id": "req_tp288_2",
+        "actual_count": 1,
+        "attrs_match": true,
+        "message_id": "3eee9fa5-977d-4a23-a37f-4616628482cf_"
+      }
+    ]
+  }
+}

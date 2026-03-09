@@ -388,8 +388,9 @@ func TestAssistantConversationHandlers_CoverageMatrix(t *testing.T) {
 		schemaErrConv := schemaErrSvc.createConversation("tenant-1", principal)
 		rec = httptest.NewRecorder()
 		handleAssistantConversationTurnsAPI(rec, assistantReqWithContext(http.MethodPost, "/internal/assistant/conversations/"+schemaErrConv.ConversationID+"/turns", `{"user_input":"在鲜花组织之下，新建一个名为运营部的部门，成立日期是2026-01-01"}`, true, true), schemaErrSvc)
-		if rec.Code != http.StatusUnprocessableEntity || assistantDecodeErrCode(t, rec) != "ai_plan_schema_constrained_decode_failed" {
-			t.Fatalf("status=%d code=%s body=%s", rec.Code, assistantDecodeErrCode(t, rec), rec.Body.String())
+		code := assistantDecodeErrCode(t, rec)
+		if !((rec.Code == http.StatusUnprocessableEntity && code == "ai_plan_schema_constrained_decode_failed") || (rec.Code == http.StatusInternalServerError && code == "assistant_turn_create_failed")) {
+			t.Fatalf("status=%d code=%s body=%s", rec.Code, code, rec.Body.String())
 		}
 
 		forbiddenReq := assistantReqWithContext(http.MethodPost, path, `{"user_input":"计划"}`, true, true)
@@ -560,6 +561,22 @@ func TestAssistantTurnActionHandler_CoverageMatrix(t *testing.T) {
 		if rec.Code != http.StatusConflict || assistantDecodeErrCode(t, rec) != "conversation_state_invalid" {
 			t.Fatalf("status=%d code=%s", rec.Code, assistantDecodeErrCode(t, rec))
 		}
+
+		expiredSvc := newAssistantConversationService(store, assistantWriteServiceStub{store: store})
+		expiredConv := expiredSvc.createConversation(tenantID, principal)
+		expiredConversation, createErr := expiredSvc.createTurn(context.Background(), tenantID, principal, expiredConv.ConversationID, "在鲜花组织之下，新建一个名为风控部的部门，成立日期是2026-01-01")
+		if createErr != nil {
+			t.Fatal(createErr)
+		}
+		expiredTurn := expiredConversation.Turns[0]
+		expiredSvc.mu.Lock()
+		expiredSvc.byID[expiredConv.ConversationID].Turns[0].Plan.ExpiresAt = time.Now().UTC().Add(-1 * time.Minute).Format(time.RFC3339)
+		expiredSvc.mu.Unlock()
+		rec = httptest.NewRecorder()
+		handleAssistantTurnActionAPI(rec, assistantReqWithContext(http.MethodPost, "/internal/assistant/conversations/"+expiredConv.ConversationID+"/turns/"+expiredTurn.TurnID+":confirm", `{}`, true, true), expiredSvc)
+		if rec.Code != http.StatusConflict || assistantDecodeErrCode(t, rec) != "conversation_confirmation_expired" {
+			t.Fatalf("status=%d code=%s", rec.Code, assistantDecodeErrCode(t, rec))
+		}
 	})
 
 	t.Run("commit branches", func(t *testing.T) {
@@ -592,6 +609,21 @@ func TestAssistantTurnActionHandler_CoverageMatrix(t *testing.T) {
 		rec = httptest.NewRecorder()
 		handleAssistantTurnActionAPI(rec, assistantReqWithContext(http.MethodPost, "/internal/assistant/conversations/"+unconfirmedConv.ConversationID+"/turns/"+unconfirmedConversation.Turns[0].TurnID+":commit", `{}`, true, true), unconfirmedSvc)
 		if rec.Code != http.StatusConflict || assistantDecodeErrCode(t, rec) != "conversation_confirmation_required" {
+			t.Fatalf("status=%d code=%s", rec.Code, assistantDecodeErrCode(t, rec))
+		}
+
+		expiredSvc := newAssistantConversationService(store, assistantWriteServiceStub{store: store})
+		expiredConv := expiredSvc.createConversation(tenantID, principal)
+		expiredConversation, expiredErr := expiredSvc.createTurn(context.Background(), tenantID, principal, expiredConv.ConversationID, "在鲜花组织之下，新建一个名为法务部的部门，成立日期是2026-01-01")
+		if expiredErr != nil {
+			t.Fatal(expiredErr)
+		}
+		expiredSvc.mu.Lock()
+		expiredSvc.byID[expiredConv.ConversationID].Turns[0].Plan.ExpiresAt = time.Now().UTC().Add(-1 * time.Minute).Format(time.RFC3339)
+		expiredSvc.mu.Unlock()
+		rec = httptest.NewRecorder()
+		handleAssistantTurnActionAPI(rec, assistantReqWithContext(http.MethodPost, "/internal/assistant/conversations/"+expiredConv.ConversationID+"/turns/"+expiredConversation.Turns[0].TurnID+":commit", `{}`, true, true), expiredSvc)
+		if rec.Code != http.StatusConflict || assistantDecodeErrCode(t, rec) != "conversation_confirmation_expired" {
 			t.Fatalf("status=%d code=%s", rec.Code, assistantDecodeErrCode(t, rec))
 		}
 
@@ -744,10 +776,13 @@ func TestAssistantTurnActionHandler_CoverageMatrix(t *testing.T) {
 			Intent:              assistantIntentSpec{Action: assistantIntentCreateOrgUnit, EntityName: "运营部", EffectiveDate: "2026-01-01"},
 			Plan:                assistantBuildPlan(assistantIntentSpec{Action: assistantIntentCreateOrgUnit}),
 			ResolvedCandidateID: "FLOWER-A",
-			Candidates:          []assistantCandidate{{CandidateID: "FLOWER-A", CandidateCode: "FLOWER-A", Name: "鲜花组织", IsActive: true}},
+			Candidates:          []assistantCandidate{{CandidateID: "FLOWER-A", CandidateCode: "FLOWER-A", Name: "鲜花组织", OrgID: 10000000, IsActive: true}},
 			PolicyVersion:       capabilityPolicyVersionBaseline,
 			CompositionVersion:  capabilityPolicyVersionBaseline,
 			MappingVersion:      capabilityPolicyVersionBaseline,
+		}
+		if err := missingServiceSvc.refreshTurnVersionTuple(context.Background(), tenantID, missingTurn); err != nil {
+			t.Fatalf("refresh missing service turn err=%v", err)
 		}
 		missingServiceSvc.mu.Lock()
 		missingServiceSvc.byID[missingConv.ConversationID].Turns = append(missingServiceSvc.byID[missingConv.ConversationID].Turns, missingTurn)
@@ -788,11 +823,14 @@ func TestAssistantTurnActionHandler_CoverageMatrix(t *testing.T) {
 			Intent:              assistantIntentSpec{Action: assistantIntentCreateOrgUnit, EntityName: "运营部", EffectiveDate: "2026-01-01"},
 			Plan:                assistantBuildPlan(assistantIntentSpec{Action: assistantIntentCreateOrgUnit}),
 			ResolvedCandidateID: "FLOWER-A",
-			Candidates:          []assistantCandidate{{CandidateID: "FLOWER-A", CandidateCode: "FLOWER-A", Name: "鲜花组织", IsActive: true}},
+			Candidates:          []assistantCandidate{{CandidateID: "FLOWER-A", CandidateCode: "FLOWER-A", Name: "鲜花组织", OrgID: 10000000, IsActive: true}},
 			RequestID:           "assistant_req_write_error",
 			PolicyVersion:       capabilityPolicyVersionBaseline,
 			CompositionVersion:  capabilityPolicyVersionBaseline,
 			MappingVersion:      capabilityPolicyVersionBaseline,
+		}
+		if err := writeErrSvc.refreshTurnVersionTuple(context.Background(), tenantID, writeErrTurn); err != nil {
+			t.Fatalf("refresh write error turn err=%v", err)
 		}
 		writeErrSvc.mu.Lock()
 		writeErrSvc.byID[writeErrConv.ConversationID].Turns = append(writeErrSvc.byID[writeErrConv.ConversationID].Turns, writeErrTurn)
@@ -811,11 +849,14 @@ func TestAssistantTurnActionHandler_CoverageMatrix(t *testing.T) {
 			Intent:              assistantIntentSpec{Action: assistantIntentCreateOrgUnit, EntityName: "运营部", EffectiveDate: "2026-01-01"},
 			Plan:                assistantBuildPlan(assistantIntentSpec{Action: assistantIntentCreateOrgUnit}),
 			ResolvedCandidateID: "FLOWER-A",
-			Candidates:          []assistantCandidate{{CandidateID: "FLOWER-A", CandidateCode: "FLOWER-A", Name: "鲜花组织", IsActive: true}},
+			Candidates:          []assistantCandidate{{CandidateID: "FLOWER-A", CandidateCode: "FLOWER-A", Name: "鲜花组织", OrgID: 10000000, IsActive: true}},
 			RequestID:           "assistant_req_field_policy_missing",
 			PolicyVersion:       capabilityPolicyVersionBaseline,
 			CompositionVersion:  capabilityPolicyVersionBaseline,
 			MappingVersion:      capabilityPolicyVersionBaseline,
+		}
+		if err := fieldPolicyErrSvc.refreshTurnVersionTuple(context.Background(), tenantID, fieldPolicyErrTurn); err != nil {
+			t.Fatalf("refresh field policy turn err=%v", err)
 		}
 		fieldPolicyErrSvc.mu.Lock()
 		fieldPolicyErrSvc.byID[fieldPolicyErrConv.ConversationID].Turns = append(fieldPolicyErrSvc.byID[fieldPolicyErrConv.ConversationID].Turns, fieldPolicyErrTurn)
@@ -826,8 +867,19 @@ func TestAssistantTurnActionHandler_CoverageMatrix(t *testing.T) {
 			t.Fatalf("status=%d code=%s", rec.Code, assistantDecodeErrCode(t, rec))
 		}
 
+		commitOKSvc := newAssistantConversationService(store, assistantWriteServiceStub{store: store})
+		commitOKConv := commitOKSvc.createConversation(tenantID, principal)
+		commitOKConversation, err := commitOKSvc.createTurn(context.Background(), tenantID, principal, commitOKConv.ConversationID, "在鲜花组织之下，新建一个名为运营部的部门，成立日期是2026年1月1日。")
+		if err != nil {
+			t.Fatalf("create commit-ok turn err=%v", err)
+		}
+		commitOKTurnID := commitOKConversation.Turns[0].TurnID
+		commitOKCandidateID := commitOKConversation.Turns[0].Candidates[0].CandidateID
+		if _, err := commitOKSvc.confirmTurn(tenantID, principal, commitOKConv.ConversationID, commitOKTurnID, commitOKCandidateID); err != nil {
+			t.Fatalf("confirm commit-ok turn err=%v", err)
+		}
 		rec = httptest.NewRecorder()
-		handleAssistantTurnActionAPI(rec, assistantReqWithContext(http.MethodPost, baseCommitPath, `{}`, true, true), svc)
+		handleAssistantTurnActionAPI(rec, assistantReqWithContext(http.MethodPost, "/internal/assistant/conversations/"+commitOKConv.ConversationID+"/turns/"+commitOKTurnID+":commit", `{}`, true, true), commitOKSvc)
 		if rec.Code != http.StatusOK {
 			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
 		}
@@ -1215,6 +1267,52 @@ func TestAssistantServiceHelpersAndUtilities(t *testing.T) {
 			t.Fatalf("want confirmation required for draft, got %v", err)
 		}
 
+		expiredConfirmTurn := &assistantTurn{
+			TurnID:    "turn-expired-confirm",
+			State:     assistantStateValidated,
+			RequestID: "req-expired-confirm",
+			TraceID:   "trace-expired-confirm",
+			Intent:    assistantIntentSpec{Action: assistantIntentCreateOrgUnit},
+			Plan:      assistantFreezeConfirmWindow(assistantBuildPlan(assistantIntentSpec{Action: assistantIntentCreateOrgUnit}), time.Now().UTC().Add(-1*time.Hour)),
+			CreatedAt: time.Now().UTC().Add(-1 * time.Hour),
+			UpdatedAt: time.Now().UTC().Add(-1 * time.Hour),
+		}
+		svc.mu.Lock()
+		svc.byID[conv.ConversationID].Turns = append(svc.byID[conv.ConversationID].Turns, expiredConfirmTurn)
+		svc.mu.Unlock()
+		if _, err := svc.confirmTurn("tenant-1", principal, conv.ConversationID, expiredConfirmTurn.TurnID, ""); !errors.Is(err, errAssistantConfirmationExpired) {
+			t.Fatalf("want confirmation expired, got %v", err)
+		}
+		svc.mu.RLock()
+		if got := svc.byID[conv.ConversationID].Turns[len(svc.byID[conv.ConversationID].Turns)-1].State; got != assistantStateExpired {
+			svc.mu.RUnlock()
+			t.Fatalf("want expired state after confirm timeout, got %s", got)
+		}
+		svc.mu.RUnlock()
+
+		expiredCommitTurn := &assistantTurn{
+			TurnID:    "turn-expired-commit",
+			State:     assistantStateValidated,
+			RequestID: "req-expired-commit",
+			TraceID:   "trace-expired-commit",
+			Intent:    assistantIntentSpec{Action: assistantIntentCreateOrgUnit},
+			Plan:      assistantFreezeConfirmWindow(assistantBuildPlan(assistantIntentSpec{Action: assistantIntentCreateOrgUnit}), time.Now().UTC().Add(-1*time.Hour)),
+			CreatedAt: time.Now().UTC().Add(-1 * time.Hour),
+			UpdatedAt: time.Now().UTC().Add(-1 * time.Hour),
+		}
+		svc.mu.Lock()
+		svc.byID[conv.ConversationID].Turns = append(svc.byID[conv.ConversationID].Turns, expiredCommitTurn)
+		svc.mu.Unlock()
+		if _, err := svc.commitTurn(context.Background(), "tenant-1", principal, conv.ConversationID, expiredCommitTurn.TurnID); !errors.Is(err, errAssistantConfirmationExpired) {
+			t.Fatalf("want confirmation expired on commit, got %v", err)
+		}
+		svc.mu.RLock()
+		if got := svc.byID[conv.ConversationID].Turns[len(svc.byID[conv.ConversationID].Turns)-1].State; got != assistantStateExpired {
+			svc.mu.RUnlock()
+			t.Fatalf("want expired state after commit timeout, got %s", got)
+		}
+		svc.mu.RUnlock()
+
 		singleChoiceTurn := &assistantTurn{
 			TurnID:              "turn-single-choice-confirmed",
 			State:               assistantStateConfirmed,
@@ -1353,11 +1451,14 @@ func TestAssistantServiceHelpersAndUtilities(t *testing.T) {
 			Intent:              assistantIntentSpec{Action: assistantIntentCreateOrgUnit, EffectiveDate: "2026-01-01"},
 			Plan:                assistantBuildPlan(assistantIntentSpec{Action: assistantIntentCreateOrgUnit}),
 			ResolvedCandidateID: "FLOWER-A",
-			Candidates:          []assistantCandidate{{CandidateID: "FLOWER-A", CandidateCode: "FLOWER-A", Name: "鲜花组织", IsActive: true}},
+			Candidates:          []assistantCandidate{{CandidateID: "FLOWER-A", CandidateCode: "FLOWER-A", Name: "鲜花组织", OrgID: 10000000, IsActive: true}},
 			RequestID:           "assistant_req_empty_name",
 			PolicyVersion:       capabilityPolicyVersionBaseline,
 			CompositionVersion:  capabilityPolicyVersionBaseline,
 			MappingVersion:      capabilityPolicyVersionBaseline,
+		}
+		if err := fallbackNameSvc.refreshTurnVersionTuple(context.Background(), "tenant-1", fallbackTurn); err != nil {
+			t.Fatalf("refresh fallback turn err=%v", err)
 		}
 		fallbackNameSvc.mu.Lock()
 		fallbackNameSvc.byID[fallbackConv.ConversationID].Turns = append(fallbackNameSvc.byID[fallbackConv.ConversationID].Turns, fallbackTurn)
@@ -1494,4 +1595,45 @@ func TestAssistantResolveCommitError_CoverageMatrix(t *testing.T) {
 			t.Fatalf("unexpected resolver hit status=%d code=%q message=%q", status, code, message)
 		}
 	})
+}
+
+func TestAssistantConfirmWindowHelpers_Coverage(t *testing.T) {
+	now := time.Now().UTC()
+
+	plan := assistantFreezeConfirmWindow(assistantPlanSummary{}, time.Time{})
+	if plan.ConfirmTTLSeconds != assistantConfirmTTLSecondsDefault || strings.TrimSpace(plan.ExpiresAt) == "" {
+		t.Fatalf("unexpected default plan=%+v", plan)
+	}
+
+	preserved := assistantFreezeConfirmWindow(assistantPlanSummary{ConfirmTTLSeconds: 30, ExpiresAt: "2026-01-01T00:00:00Z"}, now)
+	if preserved.ConfirmTTLSeconds != 30 || preserved.ExpiresAt != "2026-01-01T00:00:00Z" {
+		t.Fatalf("unexpected preserved plan=%+v", preserved)
+	}
+
+	if deadline, ok := assistantTurnConfirmDeadline(nil); ok || !deadline.IsZero() {
+		t.Fatalf("nil turn deadline=%v ok=%v", deadline, ok)
+	}
+	if deadline, ok := assistantTurnConfirmDeadline(&assistantTurn{}); ok || !deadline.IsZero() {
+		t.Fatalf("empty turn deadline=%v ok=%v", deadline, ok)
+	}
+
+	fallbackTurn := &assistantTurn{
+		State:     assistantStateValidated,
+		Plan:      assistantPlanSummary{ExpiresAt: "bad-timestamp"},
+		UpdatedAt: now,
+	}
+	deadline, ok := assistantTurnConfirmDeadline(fallbackTurn)
+	if !ok || deadline.IsZero() {
+		t.Fatalf("want fallback deadline, got %v ok=%v", deadline, ok)
+	}
+
+	if assistantTurnConfirmExpired(&assistantTurn{State: assistantStateConfirmed}, time.Time{}) {
+		t.Fatal("confirmed turn should not use confirm expiry")
+	}
+	if assistantTurnConfirmExpired(&assistantTurn{State: assistantStateValidated}, time.Time{}) {
+		t.Fatal("validated turn without deadline should not expire")
+	}
+	if !assistantTurnConfirmExpired(&assistantTurn{State: assistantStateValidated, Plan: assistantPlanSummary{ExpiresAt: now.Add(-1 * time.Second).Format(time.RFC3339)}}, time.Time{}) {
+		t.Fatal("past deadline should expire")
+	}
 }

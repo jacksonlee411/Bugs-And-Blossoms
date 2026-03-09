@@ -32,6 +32,7 @@ const (
 	assistantResolutionUserConfirmed = "user_confirmed"
 
 	assistantIntentCreateOrgUnit = "create_orgunit"
+	assistantIntentPlanOnly      = "plan_only"
 )
 
 var (
@@ -43,14 +44,16 @@ var (
 )
 
 type assistantConversationService struct {
-	orgStore     OrgUnitStore
-	writeSvc     orgunitservices.OrgUnitWriteService
-	modelGateway *assistantModelGateway
-	gatewayErr   error
-	pool         assistantTxBeginner
-	mu           sync.RWMutex
-	byID         map[string]*assistantConversation
-	byActorID    map[string][]string
+	orgStore              OrgUnitStore
+	writeSvc              orgunitservices.OrgUnitWriteService
+	actionRegistry        assistantActionRegistry
+	commitAdapterRegistry assistantCommitAdapterRegistry
+	modelGateway          *assistantModelGateway
+	gatewayErr            error
+	pool                  assistantTxBeginner
+	mu                    sync.RWMutex
+	byID                  map[string]*assistantConversation
+	byActorID             map[string][]string
 }
 
 type assistantTxBeginner interface {
@@ -63,6 +66,7 @@ type assistantConversation struct {
 	ActorID        string                     `json:"actor_id"`
 	ActorRole      string                     `json:"actor_role"`
 	State          string                     `json:"state"`
+	CurrentPhase   string                     `json:"current_phase,omitempty"`
 	Transitions    []assistantStateTransition `json:"state_transitions,omitempty"`
 	CreatedAt      time.Time                  `json:"created_at"`
 	UpdatedAt      time.Time                  `json:"updated_at"`
@@ -77,32 +81,41 @@ type assistantStateTransition struct {
 	TraceID    string    `json:"trace_id"`
 	FromState  string    `json:"from_state"`
 	ToState    string    `json:"to_state"`
+	FromPhase  string    `json:"from_phase,omitempty"`
+	ToPhase    string    `json:"to_phase,omitempty"`
 	ReasonCode string    `json:"reason_code,omitempty"`
 	ActorID    string    `json:"actor_id"`
 	ChangedAt  time.Time `json:"changed_at"`
 }
 
 type assistantTurn struct {
-	TurnID              string                 `json:"turn_id"`
-	UserInput           string                 `json:"user_input"`
-	State               string                 `json:"state"`
-	RiskTier            string                 `json:"risk_tier"`
-	RequestID           string                 `json:"request_id"`
-	TraceID             string                 `json:"trace_id"`
-	PolicyVersion       string                 `json:"policy_version"`
-	CompositionVersion  string                 `json:"composition_version"`
-	MappingVersion      string                 `json:"mapping_version"`
-	Intent              assistantIntentSpec    `json:"intent"`
-	Plan                assistantPlanSummary   `json:"plan"`
-	Candidates          []assistantCandidate   `json:"candidates"`
-	ResolvedCandidateID string                 `json:"resolved_candidate_id,omitempty"`
-	AmbiguityCount      int                    `json:"ambiguity_count"`
-	Confidence          float64                `json:"confidence"`
-	ResolutionSource    string                 `json:"resolution_source,omitempty"`
-	DryRun              assistantDryRunResult  `json:"dry_run"`
-	CommitResult        *assistantCommitResult `json:"commit_result,omitempty"`
-	CreatedAt           time.Time              `json:"created_at"`
-	UpdatedAt           time.Time              `json:"updated_at"`
+	TurnID              string                        `json:"turn_id"`
+	UserInput           string                        `json:"user_input"`
+	State               string                        `json:"state"`
+	Phase               string                        `json:"phase,omitempty"`
+	RiskTier            string                        `json:"risk_tier"`
+	RequestID           string                        `json:"request_id"`
+	TraceID             string                        `json:"trace_id"`
+	PolicyVersion       string                        `json:"policy_version"`
+	CompositionVersion  string                        `json:"composition_version"`
+	MappingVersion      string                        `json:"mapping_version"`
+	Intent              assistantIntentSpec           `json:"intent"`
+	Plan                assistantPlanSummary          `json:"plan"`
+	PendingDraftSummary string                        `json:"pending_draft_summary,omitempty"`
+	MissingFields       []string                      `json:"missing_fields,omitempty"`
+	Candidates          []assistantCandidate          `json:"candidates"`
+	ResolvedCandidateID string                        `json:"resolved_candidate_id,omitempty"`
+	SelectedCandidateID string                        `json:"selected_candidate_id,omitempty"`
+	AmbiguityCount      int                           `json:"ambiguity_count"`
+	Confidence          float64                       `json:"confidence"`
+	ResolutionSource    string                        `json:"resolution_source,omitempty"`
+	DryRun              assistantDryRunResult         `json:"dry_run"`
+	CommitResult        *assistantCommitResult        `json:"commit_result,omitempty"`
+	CommitReply         *assistantCommitReply         `json:"commit_reply,omitempty"`
+	ErrorCode           string                        `json:"error_code,omitempty"`
+	ReplyNLG            *assistantRenderReplyResponse `json:"reply_nlg,omitempty"`
+	CreatedAt           time.Time                     `json:"created_at"`
+	UpdatedAt           time.Time                     `json:"updated_at"`
 }
 
 type assistantIntentSpec struct {
@@ -117,7 +130,10 @@ type assistantIntentSpec struct {
 
 type assistantPlanSummary struct {
 	Title                   string                      `json:"title"`
+	ActionID                string                      `json:"action_id,omitempty"`
+	ActionVersion           string                      `json:"action_version,omitempty"`
 	CapabilityKey           string                      `json:"capability_key"`
+	CommitAdapterKey        string                      `json:"commit_adapter_key,omitempty"`
 	Summary                 string                      `json:"summary"`
 	CapabilityMapVersion    string                      `json:"capability_map_version,omitempty"`
 	CompilerContractVersion string                      `json:"compiler_contract_version,omitempty"`
@@ -125,6 +141,9 @@ type assistantPlanSummary struct {
 	ModelProvider           string                      `json:"model_provider,omitempty"`
 	ModelName               string                      `json:"model_name,omitempty"`
 	ModelRevision           string                      `json:"model_revision,omitempty"`
+	VersionTuple            json.RawMessage             `json:"version_tuple,omitempty"`
+	ConfirmTTLSeconds       int                         `json:"confirm_ttl_seconds,omitempty"`
+	ExpiresAt               string                      `json:"expires_at,omitempty"`
 	SkillExecutionPlan      assistantSkillExecutionPlan `json:"skill_execution_plan,omitempty"`
 	ConfigDeltaPlan         assistantConfigDeltaPlan    `json:"config_delta_plan,omitempty"`
 }
@@ -155,6 +174,7 @@ type assistantDryRunResult struct {
 }
 
 type assistantCandidate struct {
+	OrgID         int     `json:"org_id,omitempty"`
 	CandidateID   string  `json:"candidate_id"`
 	CandidateCode string  `json:"candidate_code"`
 	Name          string  `json:"name"`
@@ -201,6 +221,18 @@ type assistantCreateTurnRequest struct {
 
 type assistantConfirmRequest struct {
 	CandidateID string `json:"candidate_id"`
+}
+
+type assistantRenderReplyRequest struct {
+	Stage            string `json:"stage"`
+	Kind             string `json:"kind"`
+	Outcome          string `json:"outcome"`
+	ErrorCode        string `json:"error_code"`
+	ErrorMessage     string `json:"error_message"`
+	NextAction       string `json:"next_action"`
+	Locale           string `json:"locale"`
+	FallbackText     string `json:"fallback_text"`
+	AllowMissingTurn bool   `json:"allow_missing_turn"`
 }
 
 func newAssistantConversationService(orgStore OrgUnitStore, writeSvc orgunitservices.OrgUnitWriteService) *assistantConversationService {
@@ -408,6 +440,16 @@ func handleAssistantConversationTurnsAPI(w http.ResponseWriter, r *http.Request,
 			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusInternalServerError, "ai_model_secret_missing", "ai model secret missing")
 		case errors.Is(err, errAssistantPlanDeterminismViolation):
 			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusConflict, "ai_plan_determinism_violation", "ai plan determinism violation")
+		case errors.Is(err, errAssistantUnsupportedIntent):
+			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusUnprocessableEntity, "assistant_intent_unsupported", "assistant intent unsupported")
+		case errors.Is(err, errAssistantActionSpecMissing):
+			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusUnprocessableEntity, errAssistantActionSpecMissing.Error(), "assistant action spec missing")
+		case errors.Is(err, errAssistantActionAuthzDenied):
+			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusForbidden, errAssistantActionAuthzDenied.Error(), "assistant action authz denied")
+		case errors.Is(err, errAssistantActionRiskGateDenied):
+			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusConflict, errAssistantActionRiskGateDenied.Error(), "assistant action risk gate denied")
+		case errors.Is(err, errAssistantActionRequiredCheckFailed):
+			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusConflict, errAssistantActionRequiredCheckFailed.Error(), "assistant action required check failed")
 		default:
 			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusInternalServerError, "assistant_turn_create_failed", "assistant turn create failed")
 		}
@@ -472,10 +514,18 @@ func handleAssistantTurnActionAPI(w http.ResponseWriter, r *http.Request, svc *a
 				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusConflict, "request_in_progress", "request in progress")
 			case errors.Is(err, errAssistantConfirmationRequired):
 				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusConflict, "conversation_confirmation_required", "conversation confirmation required")
+			case errors.Is(err, errAssistantConfirmationExpired):
+				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusConflict, "conversation_confirmation_expired", "conversation confirmation expired")
 			case errors.Is(err, errAssistantConversationStateInvalid):
 				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusConflict, "conversation_state_invalid", "conversation state invalid")
 			case errors.Is(err, errAssistantCandidateNotFound):
 				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusUnprocessableEntity, "assistant_candidate_not_found", "assistant candidate not found")
+			case errors.Is(err, errAssistantUnsupportedIntent):
+				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusUnprocessableEntity, "assistant_intent_unsupported", "assistant intent unsupported")
+			case errors.Is(err, errAssistantActionAuthzDenied):
+				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusForbidden, errAssistantActionAuthzDenied.Error(), "assistant action authz denied")
+			case errors.Is(err, errAssistantActionRiskGateDenied):
+				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusConflict, errAssistantActionRiskGateDenied.Error(), "assistant action risk gate denied")
 			default:
 				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusInternalServerError, "assistant_turn_confirm_failed", "assistant turn confirm failed")
 			}
@@ -500,10 +550,14 @@ func handleAssistantTurnActionAPI(w http.ResponseWriter, r *http.Request, svc *a
 				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusConflict, "request_in_progress", "request in progress")
 			case errors.Is(err, errAssistantConfirmationRequired):
 				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusConflict, "conversation_confirmation_required", "conversation confirmation required")
+			case errors.Is(err, errAssistantConfirmationExpired):
+				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusConflict, "conversation_confirmation_expired", "conversation confirmation expired")
 			case errors.Is(err, errAssistantConversationStateInvalid):
 				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusConflict, "conversation_state_invalid", "conversation state invalid")
 			case errors.Is(err, errAssistantPlanContractVersionMismatch):
 				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusConflict, "ai_plan_contract_version_mismatch", "ai plan contract version mismatch")
+			case errors.Is(err, errAssistantVersionTupleStale):
+				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusConflict, "ai_version_tuple_stale", "ai version tuple stale")
 			case errors.Is(err, errAssistantAuthSnapshotExpired):
 				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusForbidden, "ai_actor_auth_snapshot_expired", "ai actor auth snapshot expired")
 			case errors.Is(err, errAssistantRoleDriftDetected):
@@ -514,6 +568,12 @@ func handleAssistantTurnActionAPI(w http.ResponseWriter, r *http.Request, svc *a
 				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusInternalServerError, "orgunit_service_missing", "orgunit service missing")
 			case errors.Is(err, errAssistantCandidateNotFound):
 				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusConflict, "conversation_confirmation_required", "conversation confirmation required")
+			case errors.Is(err, errAssistantActionAuthzDenied):
+				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusForbidden, errAssistantActionAuthzDenied.Error(), "assistant action authz denied")
+			case errors.Is(err, errAssistantActionRiskGateDenied):
+				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusConflict, errAssistantActionRiskGateDenied.Error(), "assistant action risk gate denied")
+			case errors.Is(err, errAssistantActionRequiredCheckFailed):
+				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusConflict, errAssistantActionRequiredCheckFailed.Error(), "assistant action required check failed")
 			default:
 				if status, code, message, ok := assistantResolveCommitError(err); ok {
 					routing.WriteError(w, r, routing.RouteClassInternalAPI, status, code, message)
@@ -524,6 +584,52 @@ func handleAssistantTurnActionAPI(w http.ResponseWriter, r *http.Request, svc *a
 			return
 		}
 		writeJSON(w, http.StatusOK, conversation)
+		return
+	case "reply":
+		var req assistantRenderReplyRequest
+		if hasRequestBody(r) {
+			dec := json.NewDecoder(r.Body)
+			dec.DisallowUnknownFields()
+			if err := dec.Decode(&req); err != nil {
+				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "bad_json", "bad json")
+				return
+			}
+		}
+		reply, err := svc.renderTurnReply(r.Context(), tenant.ID, principal, conversationID, turnID, req)
+		if err != nil {
+			switch {
+			case errors.Is(err, errAssistantConversationNotFound):
+				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusNotFound, "conversation_not_found", "conversation not found")
+			case errors.Is(err, errAssistantTenantMismatch):
+				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusForbidden, "tenant_mismatch", "tenant mismatch")
+			case errors.Is(err, errAssistantConversationForbidden):
+				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusForbidden, "forbidden", "forbidden")
+			case errors.Is(err, errAssistantTurnNotFound):
+				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusNotFound, "conversation_turn_not_found", "conversation turn not found")
+			case errors.Is(err, errAssistantReplyModelTargetMismatch):
+				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusUnprocessableEntity, "ai_reply_model_target_mismatch", "assistant reply model target mismatch")
+			case errors.Is(err, errAssistantReplyRenderFailed):
+				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusUnprocessableEntity, "ai_reply_render_failed", "assistant reply render failed")
+			case errors.Is(err, errAssistantModelProviderUnavailable):
+				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusServiceUnavailable, "ai_model_provider_unavailable", "ai model provider unavailable")
+			case errors.Is(err, errAssistantModelTimeout):
+				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusGatewayTimeout, "ai_model_timeout", "ai model timeout")
+			case errors.Is(err, errAssistantModelRateLimited):
+				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusTooManyRequests, "ai_model_rate_limited", "ai model rate limited")
+			case errors.Is(err, errAssistantModelConfigInvalid):
+				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusUnprocessableEntity, "ai_model_config_invalid", "ai model config invalid")
+			case errors.Is(err, errAssistantRuntimeConfigInvalid):
+				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusUnprocessableEntity, "ai_runtime_config_invalid", "ai runtime config invalid")
+			case errors.Is(err, errAssistantRuntimeConfigMissing):
+				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusServiceUnavailable, "ai_runtime_config_missing", "ai runtime config missing")
+			case errors.Is(err, errAssistantModelSecretMissing):
+				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusInternalServerError, "ai_model_secret_missing", "ai model secret missing")
+			default:
+				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusInternalServerError, "assistant_reply_render_failed", "assistant reply render failed")
+			}
+			return
+		}
+		writeJSON(w, http.StatusOK, reply)
 		return
 	default:
 		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "invalid_request", "assistant action unsupported")
@@ -565,6 +671,7 @@ var (
 	errAssistantConversationCorrupted             = errors.New("assistant_conversation_corrupted")
 	errAssistantTurnNotFound                      = errors.New("assistant_turn_not_found")
 	errAssistantConfirmationRequired              = errors.New("assistant_confirmation_required")
+	errAssistantConfirmationExpired               = errors.New("assistant_confirmation_expired")
 	errAssistantCandidateNotFound                 = errors.New("assistant_candidate_not_found")
 	errAssistantAuthSnapshotExpired               = errors.New("assistant_auth_snapshot_expired")
 	errAssistantRoleDriftDetected                 = errors.New("assistant_role_drift_detected")
@@ -574,6 +681,7 @@ var (
 	errAssistantPlanSchemaConstrainedDecodeFailed = errors.New("assistant_plan_schema_constrained_decode_failed")
 	errAssistantPlanBoundaryViolation             = errors.New("assistant_plan_boundary_violation")
 	errAssistantPlanContractVersionMismatch       = errors.New("assistant_plan_contract_version_mismatch")
+	errAssistantVersionTupleStale                 = errors.New("assistant_version_tuple_stale")
 	errAssistantPlanDeterminismViolation          = errors.New("assistant_plan_determinism_violation")
 	errAssistantModelProviderUnavailable          = errors.New("assistant_model_provider_unavailable")
 	errAssistantModelTimeout                      = errors.New("assistant_model_timeout")
@@ -585,11 +693,18 @@ var (
 	errAssistantConversationCursorInvalid         = errors.New("assistant_conversation_cursor_invalid")
 	errAssistantIdempotencyKeyConflict            = errors.New("assistant_idempotency_key_conflict")
 	errAssistantRequestInProgress                 = errors.New("assistant_request_in_progress")
+	errAssistantActionSpecMissing                 = errors.New("ai_action_spec_missing")
+	errAssistantActionCapabilityUnregistered      = errors.New("ai_capability_unregistered")
+	errAssistantActionAuthzDenied                 = errors.New("ai_action_authz_denied")
+	errAssistantActionRiskGateDenied              = errors.New("ai_action_risk_gate_denied")
+	errAssistantActionRequiredCheckFailed         = errors.New("ai_action_required_check_failed")
 	errAssistantTaskNotFound                      = errors.New("assistant_task_not_found")
 	errAssistantTaskStateInvalid                  = errors.New("assistant_task_state_invalid")
 	errAssistantTaskCancelNotAllowed              = errors.New("assistant_task_cancel_not_allowed")
 	errAssistantTaskWorkflowUnavailable           = errors.New("assistant_task_workflow_unavailable")
 	errAssistantTaskDispatchFailed                = errors.New("assistant_task_dispatch_failed")
+	errAssistantReplyRenderFailed                 = errors.New("assistant_reply_render_failed")
+	errAssistantReplyModelTargetMismatch          = errors.New("assistant_reply_model_target_mismatch")
 )
 
 func (s *assistantConversationService) createConversationWithContext(ctx context.Context, tenantID string, principal Principal) (*assistantConversation, error) {
@@ -688,6 +803,7 @@ func (s *assistantConversationService) createConversation(tenantID string, princ
 		ActorID:        principal.ID,
 		ActorRole:      strings.TrimSpace(principal.RoleSlug),
 		State:          assistantStateValidated,
+		CurrentPhase:   assistantPhaseIdle,
 		CreatedAt:      now,
 		UpdatedAt:      now,
 		Transitions: []assistantStateTransition{
@@ -696,6 +812,8 @@ func (s *assistantConversationService) createConversation(tenantID string, princ
 				TraceID:    traceID,
 				FromState:  "init",
 				ToState:    assistantStateValidated,
+				FromPhase:  "init",
+				ToPhase:    assistantPhaseIdle,
 				ReasonCode: "conversation_created",
 				ActorID:    principal.ID,
 				ChangedAt:  now,
@@ -756,7 +874,7 @@ func (s *assistantConversationService) createTurn(ctx context.Context, tenantID 
 	if err != nil {
 		return nil, err
 	}
-	intent := resolvedIntent.Intent
+	intent := assistantMergeIntentWithPendingTurn(resolvedIntent.Intent, assistantLatestPendingTurn(conversation))
 	intentValidationErrors := assistantIntentValidationErrors(intent)
 	candidates := make([]assistantCandidate, 0)
 	resolvedCandidateID := ""
@@ -781,18 +899,43 @@ func (s *assistantConversationService) createTurn(ctx context.Context, tenantID 
 			confidence = 0.55
 		}
 	}
+	spec, ok := s.lookupActionSpec(intent.Action)
+	if !ok {
+		return nil, errAssistantUnsupportedIntent
+	}
 
 	plan := assistantBuildPlan(intent)
+	turnCreatedAt := time.Now().UTC()
+	plan = assistantFreezeConfirmWindow(plan, turnCreatedAt)
 	plan.ModelProvider = resolvedIntent.ProviderName
 	plan.ModelName = resolvedIntent.ModelName
 	plan.ModelRevision = resolvedIntent.ModelRevision
-	skillExecutionPlan, configDeltaPlan := assistantCompileIntentToPlans(intent, resolvedCandidateID)
+	skillExecutionPlan, configDeltaPlan := assistantCompileIntentToPlansWithSpec(intent, resolvedCandidateID, spec)
 	plan.SkillExecutionPlan = skillExecutionPlan
 	plan.ConfigDeltaPlan = configDeltaPlan
-	if _, ok := capabilityDefinitionForKey(plan.CapabilityKey); !ok {
-		return nil, errAssistantPlanBoundaryViolation
+	decision := assistantEvaluateActionGate(assistantActionGateInput{
+		Stage:      assistantActionStagePlan,
+		TenantID:   tenantID,
+		Principal:  principal,
+		Action:     spec,
+		Intent:     intent,
+		Candidates: candidates,
+		ResolvedID: resolvedCandidateID,
+		UserInput:  userInput,
+	})
+	if !decision.Allowed {
+		if errors.Is(decision.Error, errAssistantActionCapabilityUnregistered) {
+			return nil, errAssistantPlanBoundaryViolation
+		}
+		return nil, decision.Error
 	}
-	dryRun := assistantBuildDryRun(intent, candidates, resolvedCandidateID)
+	dryRun := assistantBuildDryRunFn(intent, candidates, resolvedCandidateID)
+	tempTurn := &assistantTurn{Intent: intent, Plan: plan, Candidates: candidates, ResolvedCandidateID: resolvedCandidateID, DryRun: dryRun}
+	if err := s.refreshTurnVersionTuple(ctx, tenantID, tempTurn); err != nil {
+		return nil, err
+	}
+	plan = tempTurn.Plan
+	dryRun = tempTurn.DryRun
 	if err := assistantAnnotateIntentPlanFn(tenantID, conversationID, userInput, &intent, &plan, &dryRun); err != nil {
 		return nil, err
 	}
@@ -802,7 +945,7 @@ func (s *assistantConversationService) createTurn(ctx context.Context, tenantID 
 		TurnID:              "turn_" + strings.ReplaceAll(uuid.NewString(), "-", ""),
 		UserInput:           userInput,
 		State:               assistantStateValidated,
-		RiskTier:            assistantRiskTierForIntent(intent),
+		RiskTier:            strings.TrimSpace(spec.Security.RiskTier),
 		RequestID:           "assistant_" + strings.ReplaceAll(uuid.NewString(), "-", ""),
 		TraceID:             strings.ReplaceAll(uuid.NewString(), "-", ""),
 		PolicyVersion:       policyVersion,
@@ -816,13 +959,15 @@ func (s *assistantConversationService) createTurn(ctx context.Context, tenantID 
 		Confidence:          confidence,
 		ResolutionSource:    resolutionSource,
 		DryRun:              dryRun,
-		CreatedAt:           time.Now().UTC(),
-		UpdatedAt:           time.Now().UTC(),
+		CreatedAt:           turnCreatedAt,
+		UpdatedAt:           turnCreatedAt,
 	}
+	assistantRefreshTurnDerivedFields(turn)
 
 	conversation.Turns = append(conversation.Turns, turn)
-	conversation.UpdatedAt = time.Now().UTC()
+	conversation.UpdatedAt = turnCreatedAt
 	conversation.State = turn.State
+	conversation.CurrentPhase = turn.Phase
 	conversation.Transitions = append(conversation.Transitions, assistantStateTransition{
 		TurnID:     turn.TurnID,
 		RequestID:  turn.RequestID,
@@ -831,10 +976,66 @@ func (s *assistantConversationService) createTurn(ctx context.Context, tenantID 
 		ToState:    assistantStateValidated,
 		ReasonCode: "turn_created",
 		ActorID:    principal.ID,
-		ChangedAt:  turn.CreatedAt,
+		ChangedAt:  turnCreatedAt,
 	})
+	assistantRefreshConversationDerivedFields(conversation)
 
 	return cloneConversation(conversation), nil
+}
+
+const assistantConfirmTTLSecondsDefault = 15 * 60
+
+func assistantFreezeConfirmWindow(plan assistantPlanSummary, createdAt time.Time) assistantPlanSummary {
+	ttlSeconds := plan.ConfirmTTLSeconds
+	if ttlSeconds <= 0 {
+		ttlSeconds = assistantConfirmTTLSecondsDefault
+	}
+	plan.ConfirmTTLSeconds = ttlSeconds
+	if createdAt.IsZero() {
+		createdAt = time.Now().UTC()
+	}
+	if strings.TrimSpace(plan.ExpiresAt) == "" {
+		plan.ExpiresAt = createdAt.UTC().Add(time.Duration(ttlSeconds) * time.Second).Format(time.RFC3339)
+	}
+	return plan
+}
+
+func assistantTurnConfirmDeadline(turn *assistantTurn) (time.Time, bool) {
+	if turn == nil {
+		return time.Time{}, false
+	}
+	if expiresAt := strings.TrimSpace(turn.Plan.ExpiresAt); expiresAt != "" {
+		parsed, err := time.Parse(time.RFC3339, expiresAt)
+		if err == nil {
+			return parsed.UTC(), true
+		}
+	}
+	base := turn.CreatedAt.UTC()
+	if base.IsZero() {
+		base = turn.UpdatedAt.UTC()
+	}
+	if base.IsZero() {
+		return time.Time{}, false
+	}
+	ttlSeconds := turn.Plan.ConfirmTTLSeconds
+	if ttlSeconds <= 0 {
+		ttlSeconds = assistantConfirmTTLSecondsDefault
+	}
+	return base.Add(time.Duration(ttlSeconds) * time.Second), true
+}
+
+func assistantTurnConfirmExpired(turn *assistantTurn, now time.Time) bool {
+	if turn == nil || strings.TrimSpace(turn.State) != assistantStateValidated {
+		return false
+	}
+	if now.IsZero() {
+		now = time.Now().UTC()
+	}
+	deadline, ok := assistantTurnConfirmDeadline(turn)
+	if !ok {
+		return false
+	}
+	return !deadline.After(now.UTC())
 }
 
 func (s *assistantConversationService) confirmTurn(tenantID string, principal Principal, conversationID string, turnID string, candidateID string) (*assistantConversation, error) {
@@ -848,60 +1049,15 @@ func (s *assistantConversationService) confirmTurn(tenantID string, principal Pr
 	if err != nil {
 		return nil, err
 	}
-	if turn.State == assistantStateCommitted {
+	result, applyErr := s.applyConfirmTurn(conversation, turn, principal, candidateID)
+	assistantRefreshConversationDerivedFields(conversation)
+	if applyErr != nil {
+		return nil, applyErr
+	}
+	if result.Transition == nil {
 		return cloneConversation(conversation), nil
 	}
-	if turn.State == assistantStateCanceled || turn.State == assistantStateExpired {
-		return nil, errAssistantConversationStateInvalid
-	}
-	if turn.State == assistantStateConfirmed {
-		if turn.AmbiguityCount > 1 {
-			if candidateID == "" || candidateID == turn.ResolvedCandidateID {
-				return cloneConversation(conversation), nil
-			}
-			if !assistantCandidateExists(turn.Candidates, candidateID) {
-				return nil, errAssistantCandidateNotFound
-			}
-			return nil, errAssistantConversationStateInvalid
-		}
-		return cloneConversation(conversation), nil
-	}
-	if turn.State != assistantStateValidated {
-		return nil, errAssistantConfirmationRequired
-	}
-	if assistantTurnRequiresIntentClarification(turn) {
-		return nil, errAssistantConfirmationRequired
-	}
-	if turn.AmbiguityCount > 1 {
-		if candidateID == "" {
-			return nil, errAssistantConfirmationRequired
-		}
-		if !assistantCandidateExists(turn.Candidates, candidateID) {
-			return nil, errAssistantCandidateNotFound
-		}
-		turn.ResolvedCandidateID = candidateID
-		turn.ResolutionSource = assistantResolutionUserConfirmed
-	}
-	if turn.Intent.Action == assistantIntentCreateOrgUnit && turn.ResolvedCandidateID == "" {
-		return nil, errAssistantConfirmationRequired
-	}
-	turn.PolicyVersion, turn.CompositionVersion, turn.MappingVersion = assistantTurnVersionSnapshot(turn.Plan.CapabilityKey)
-	fromState := turn.State
-	turn.State = assistantStateConfirmed
-	turn.UpdatedAt = time.Now().UTC()
-	conversation.UpdatedAt = turn.UpdatedAt
-	conversation.State = turn.State
-	conversation.Transitions = append(conversation.Transitions, assistantStateTransition{
-		TurnID:     turn.TurnID,
-		TurnAction: "confirm",
-		RequestID:  turn.RequestID,
-		TraceID:    turn.TraceID,
-		FromState:  fromState,
-		ToState:    turn.State,
-		ReasonCode: "confirmed",
-		ActorID:    principal.ID,
-		ChangedAt:  turn.UpdatedAt,
-	})
+
 	return cloneConversation(conversation), nil
 }
 
@@ -925,126 +1081,21 @@ func (s *assistantConversationService) commitTurn(ctx context.Context, tenantID 
 	if principal.ID != conversation.ActorID {
 		return nil, errAssistantAuthSnapshotExpired
 	}
-	var turn *assistantTurn
-	for _, item := range conversation.Turns {
-		if item != nil && item.TurnID == turnID {
-			turn = item
-			break
-		}
-	}
-	if turn == nil {
-		return nil, errAssistantTurnNotFound
-	}
 	if strings.TrimSpace(principal.RoleSlug) != strings.TrimSpace(conversation.ActorRole) {
 		return nil, errAssistantRoleDriftDetected
 	}
-	if turn.State == assistantStateCommitted {
+	turn := assistantLookupTurn(conversation, turnID)
+	if turn == nil {
+		return nil, errAssistantTurnNotFound
+	}
+	result, applyErr := s.applyCommitTurn(ctx, conversation, turn, principal, tenantID)
+	assistantRefreshConversationDerivedFields(conversation)
+	if applyErr != nil {
+		return nil, applyErr
+	}
+	if result.Transition == nil {
 		return cloneConversation(conversation), nil
 	}
-	if turn.State == assistantStateCanceled || turn.State == assistantStateExpired {
-		return nil, errAssistantConversationStateInvalid
-	}
-	if turn.State != assistantStateConfirmed {
-		return nil, errAssistantConfirmationRequired
-	}
-	if assistantTurnRequiresIntentClarification(turn) {
-		return nil, errAssistantConfirmationRequired
-	}
-	if assistantTurnContractVersionMismatched(turn) {
-		fromState := turn.State
-		turn.State = assistantStateValidated
-		turn.UpdatedAt = time.Now().UTC()
-		conversation.UpdatedAt = turn.UpdatedAt
-		conversation.State = turn.State
-		conversation.Transitions = append(conversation.Transitions, assistantStateTransition{
-			TurnID:     turn.TurnID,
-			TurnAction: "commit",
-			RequestID:  turn.RequestID,
-			TraceID:    turn.TraceID,
-			FromState:  fromState,
-			ToState:    turn.State,
-			ReasonCode: "contract_version_mismatch",
-			ActorID:    principal.ID,
-			ChangedAt:  turn.UpdatedAt,
-		})
-		return nil, errAssistantPlanContractVersionMismatch
-	}
-	if assistantTurnVersionDrifted(turn) {
-		fromState := turn.State
-		turn.State = assistantStateValidated
-		turn.UpdatedAt = time.Now().UTC()
-		conversation.UpdatedAt = turn.UpdatedAt
-		conversation.State = turn.State
-		conversation.Transitions = append(conversation.Transitions, assistantStateTransition{
-			TurnID:     turn.TurnID,
-			TurnAction: "commit",
-			RequestID:  turn.RequestID,
-			TraceID:    turn.TraceID,
-			FromState:  fromState,
-			ToState:    turn.State,
-			ReasonCode: "version_drift",
-			ActorID:    principal.ID,
-			ChangedAt:  turn.UpdatedAt,
-		})
-		return nil, errAssistantConfirmationRequired
-	}
-	if turn.Intent.Action != assistantIntentCreateOrgUnit {
-		return nil, errAssistantUnsupportedIntent
-	}
-	if turn.ResolvedCandidateID == "" {
-		return nil, errAssistantCandidateNotFound
-	}
-	if s.writeSvc == nil {
-		return nil, errAssistantServiceMissing
-	}
-
-	resolved, ok := assistantFindCandidate(turn.Candidates, turn.ResolvedCandidateID)
-	if !ok {
-		return nil, errAssistantCandidateNotFound
-	}
-	name := turn.Intent.EntityName
-	if strings.TrimSpace(name) == "" {
-		name = "新建组织"
-	}
-	parentOrgCode := resolved.CandidateCode
-	result, err := s.writeSvc.Write(ctx, tenantID, orgunitservices.WriteOrgUnitRequest{
-		Intent:        string(orgunitservices.OrgUnitWriteIntentCreateOrg),
-		EffectiveDate: turn.Intent.EffectiveDate,
-		PolicyVersion: turn.PolicyVersion,
-		RequestID:     turn.RequestID,
-		Patch: orgunitservices.OrgUnitWritePatch{
-			Name:          ptrString(name),
-			ParentOrgCode: ptrString(parentOrgCode),
-		},
-		InitiatorUUID: principal.ID,
-	})
-	if err != nil {
-		return nil, err
-	}
-
-	turn.CommitResult = &assistantCommitResult{
-		OrgCode:       result.OrgCode,
-		ParentOrgCode: parentOrgCode,
-		EffectiveDate: result.EffectiveDate,
-		EventType:     result.EventType,
-		EventUUID:     result.EventUUID,
-	}
-	fromState := turn.State
-	turn.State = assistantStateCommitted
-	turn.UpdatedAt = time.Now().UTC()
-	conversation.UpdatedAt = turn.UpdatedAt
-	conversation.State = turn.State
-	conversation.Transitions = append(conversation.Transitions, assistantStateTransition{
-		TurnID:     turn.TurnID,
-		TurnAction: "commit",
-		RequestID:  turn.RequestID,
-		TraceID:    turn.TraceID,
-		FromState:  fromState,
-		ToState:    turn.State,
-		ReasonCode: "committed",
-		ActorID:    principal.ID,
-		ChangedAt:  turn.UpdatedAt,
-	})
 
 	return cloneConversation(conversation), nil
 }
@@ -1093,6 +1144,7 @@ func (s *assistantConversationService) resolveCandidates(ctx context.Context, te
 			candidateID = strconv.Itoa(item.OrgID)
 		}
 		candidates = append(candidates, assistantCandidate{
+			OrgID:         item.OrgID,
 			CandidateID:   candidateID,
 			CandidateCode: strings.TrimSpace(item.OrgCode),
 			Name:          strings.TrimSpace(item.Name),
@@ -1106,29 +1158,31 @@ func (s *assistantConversationService) resolveCandidates(ctx context.Context, te
 }
 
 func assistantRiskTierForIntent(intent assistantIntentSpec) string {
-	switch intent.Action {
-	case assistantIntentCreateOrgUnit:
-		return "high"
-	default:
-		return "low"
+	if spec, ok := assistantLookupDefaultActionSpec(intent.Action); ok {
+		if riskTier := strings.TrimSpace(spec.Security.RiskTier); riskTier != "" {
+			return riskTier
+		}
 	}
+	return "low"
 }
 
 func assistantBuildPlan(intent assistantIntentSpec) assistantPlanSummary {
-	summary := "生成只读计划，不执行提交"
-	title := "只读规划"
-	capabilityKey := "org.orgunit_create.field_policy"
-	if intent.Action == assistantIntentCreateOrgUnit {
-		title = "创建组织计划"
-		summary = "在指定父组织下创建部门，提交前需要确认候选主键"
-	}
-	return assistantPlanSummary{
-		Title:                   title,
-		CapabilityKey:           capabilityKey,
-		Summary:                 summary,
+	plan := assistantPlanSummary{
+		Title:                   "只读规划",
+		CapabilityKey:           "org.orgunit_create.field_policy",
+		Summary:                 "生成只读计划，不执行提交",
 		CapabilityMapVersion:    assistantCapabilityMapVersionV1,
 		CompilerContractVersion: assistantCompilerContractVersionV1,
 	}
+	if spec, ok := assistantLookupDefaultActionSpec(intent.Action); ok {
+		plan.Title = spec.PlanTitle
+		plan.ActionID = spec.ID
+		plan.ActionVersion = spec.Version
+		plan.CapabilityKey = spec.CapabilityKey
+		plan.CommitAdapterKey = spec.Handler.CommitAdapterKey
+		plan.Summary = spec.PlanSummary
+	}
+	return plan
 }
 
 func assistantBuildDryRun(intent assistantIntentSpec, candidates []assistantCandidate, resolvedCandidateID string) assistantDryRunResult {
@@ -1146,8 +1200,12 @@ func assistantBuildDryRun(intent assistantIntentSpec, candidates []assistantCand
 		}
 	}
 	explain := "计划已生成，等待确认后可提交"
-	if intent.Action == assistantIntentCreateOrgUnit && len(candidates) > 1 && strings.TrimSpace(resolvedCandidateID) == "" {
-		validationErrors = append(validationErrors, "candidate_confirmation_required")
+	if intent.Action == assistantIntentCreateOrgUnit && strings.TrimSpace(intent.ParentRefText) != "" && strings.TrimSpace(resolvedCandidateID) == "" {
+		if len(candidates) == 0 {
+			validationErrors = append(validationErrors, "parent_candidate_not_found")
+		} else if len(candidates) > 1 {
+			validationErrors = append(validationErrors, "candidate_confirmation_required")
+		}
 	}
 	validationErrors = assistantNormalizeValidationErrors(validationErrors)
 	if len(validationErrors) > 0 {
@@ -1191,11 +1249,50 @@ func assistantTurnRequiresIntentClarification(turn *assistantTurn) bool {
 	}
 	for _, code := range assistantNormalizeValidationErrors(turn.DryRun.ValidationErrors) {
 		switch code {
-		case "missing_parent_ref_text", "missing_entity_name", "missing_effective_date", "invalid_effective_date_format":
+		case "missing_parent_ref_text", "parent_candidate_not_found", "missing_entity_name", "missing_effective_date", "invalid_effective_date_format":
 			return true
 		}
 	}
 	return false
+}
+
+func assistantMergeIntentWithPendingTurn(intent assistantIntentSpec, pending *assistantTurn) assistantIntentSpec {
+	if pending == nil {
+		return intent
+	}
+	if strings.TrimSpace(pending.Intent.Action) != assistantIntentCreateOrgUnit {
+		return intent
+	}
+	if strings.TrimSpace(pending.Phase) != assistantPhaseAwaitMissingFields {
+		return intent
+	}
+	merged := intent
+	if strings.TrimSpace(merged.Action) == "" || strings.TrimSpace(merged.Action) == "plan_only" {
+		merged.Action = pending.Intent.Action
+	}
+	if strings.TrimSpace(merged.ParentRefText) == "" {
+		merged.ParentRefText = strings.TrimSpace(pending.Intent.ParentRefText)
+	}
+	if strings.TrimSpace(merged.EntityName) == "" {
+		merged.EntityName = strings.TrimSpace(pending.Intent.EntityName)
+	}
+	if strings.TrimSpace(merged.EffectiveDate) == "" {
+		merged.EffectiveDate = strings.TrimSpace(pending.Intent.EffectiveDate)
+	}
+	return merged
+}
+
+func assistantLatestPendingTurn(conversation *assistantConversation) *assistantTurn {
+	turn := latestTurn(conversation)
+	if turn == nil {
+		return nil
+	}
+	switch strings.TrimSpace(turn.Phase) {
+	case assistantPhaseAwaitMissingFields:
+		return turn
+	default:
+		return nil
+	}
 }
 
 func assistantIntentValidationErrors(intent assistantIntentSpec) []string {
@@ -1245,11 +1342,16 @@ func assistantDryRunValidationExplain(validationErrors []string) string {
 	if len(validationErrors) == 1 && validationErrors[0] == "candidate_confirmation_required" {
 		return "检测到多个同名父组织候选，需先确认候选主键"
 	}
+	if len(validationErrors) == 1 && validationErrors[0] == "parent_candidate_not_found" {
+		return "未找到匹配的上级组织，请补充更准确的上级组织名称或编码后继续。"
+	}
 	hints := make([]string, 0, len(validationErrors))
 	for _, code := range validationErrors {
 		switch code {
 		case "missing_parent_ref_text":
 			hints = append(hints, "上级组织（例如：鲜花组织）")
+		case "parent_candidate_not_found":
+			hints = append(hints, "更准确的上级组织名称或编码（例如：鲜花组织 / FLOWER-A）")
 		case "missing_entity_name":
 			hints = append(hints, "部门名称（例如：运营部）")
 		case "missing_effective_date":
@@ -1469,14 +1571,24 @@ func cloneConversation(in *assistantConversation) *assistantConversation {
 			continue
 		}
 		copyTurn := *turn
+		copyTurn.MissingFields = append([]string(nil), turn.MissingFields...)
 		copyTurn.Candidates = append([]assistantCandidate(nil), turn.Candidates...)
 		copyTurn.DryRun.Diff = append([]map[string]any(nil), turn.DryRun.Diff...)
 		if turn.CommitResult != nil {
 			copyResult := *turn.CommitResult
 			copyTurn.CommitResult = &copyResult
 		}
+		if turn.CommitReply != nil {
+			copyReply := *turn.CommitReply
+			copyTurn.CommitReply = &copyReply
+		}
+		if turn.ReplyNLG != nil {
+			copyReply := *turn.ReplyNLG
+			copyTurn.ReplyNLG = &copyReply
+		}
 		out.Turns = append(out.Turns, &copyTurn)
 	}
+	assistantRefreshConversationDerivedFields(&out)
 	return &out
 }
 

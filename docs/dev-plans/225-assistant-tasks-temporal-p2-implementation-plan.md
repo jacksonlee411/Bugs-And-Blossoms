@@ -1,6 +1,6 @@
 # DEV-PLAN-225：Assistant Tasks API 与 Temporal（P2）详细设计（修订版）
 
-**状态**: 已完成（2026-03-03 01:16 UTC，M1-M5 实施完成，执行证据见 `docs/dev-records/dev-plan-225-execution-log.md`）
+**状态**: 已完成（2026-03-03 01:16 UTC，M1-M5 实施完成，执行证据见 `docs/archive/dev-records/dev-plan-225-execution-log.md`）
 
 ## 1. 背景与上下文 (Context)
 - **需求来源**:
@@ -495,7 +495,7 @@ on workflow canceled callback:
 6. [ ] 合并前统一执行：`make preflight && make check doc`
 
 ## 13. 执行记录模板（新增）
-1. [X] 新建：`docs/dev-records/dev-plan-225-execution-log.md`。
+1. [X] 新建：`docs/archive/dev-records/dev-plan-225-execution-log.md`。
 2. [ ] 每个 PR 至少记录：
    - [ ] 变更范围（文件与模块）；
    - [ ] 命中门禁命令与结果；

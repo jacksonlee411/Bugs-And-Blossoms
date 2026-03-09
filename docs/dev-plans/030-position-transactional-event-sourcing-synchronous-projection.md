@@ -65,14 +65,14 @@
 > 说明：本节用于把“实现事实”回写到合同文档，避免 009M2/TP060 与 dev-plan 漂移；实现细节以代码/迁移为准。
 
 - [X] 合并记录：PR #43 https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/43
-- [X] Readiness 证据入口：`docs/dev-records/DEV-PLAN-010-READINESS.md`（§11：009M2）
+- [X] Readiness 证据入口：`docs/archive/dev-records/DEV-PLAN-010-READINESS.md`（§11：009M2）
 - [X] Schema SSOT（staffing）：`modules/staffing/infrastructure/persistence/schema/00002_staffing_tables.sql`
 - [X] Kernel SSOT（staffing）：`modules/staffing/infrastructure/persistence/schema/00003_staffing_engine.sql`（含 `staffing.submit_position_event` / `staffing.replay_position_versions`）
 - [X] 迁移闭环（staffing）：`migrations/staffing/20260106152000_staffing_schema.sql`、`migrations/staffing/20260106152100_staffing_engine.sql`
 - [X] DB smoke：`cmd/dbtool/main.go`（`staffing-smoke`）
 - [X] UI/Internal API：`internal/server/staffing_handlers.go`、`internal/server/staffing.go`（`/org/positions`、`/org/api/positions`、`/org/assignments`、`/org/api/assignments`）
 - [X] E2E：`e2e/tests/tp060-02-master-data.spec.js`、`e2e/tests/tp060-03-person-and-assignments.spec.js`
-- [X] TP060 文档证据：`docs/dev-plans/062-test-tp060-02-master-data-org-setid-jobcatalog-position.md`、`docs/dev-plans/063-test-tp060-03-person-and-assignments.md`、`docs/dev-records/dev-plan-063-execution-log.md`
+- [X] TP060 文档证据：`docs/dev-plans/062-test-tp060-02-master-data-org-setid-jobcatalog-position.md`、`docs/dev-plans/063-test-tp060-03-person-and-assignments.md`、`docs/archive/dev-records/dev-plan-063-execution-log.md`
 
 ## 2.5 已落地范围（M3，主干）
 > 说明：M3 的增量以“生命周期切片 + 交叉不变量（disabled ↔ 任职）”为核心，补齐 UI/Internal API 与最小 E2E 断言。

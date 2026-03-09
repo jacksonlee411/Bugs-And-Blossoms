@@ -57,9 +57,9 @@
 2. [X] 工具权限漂移。缓解：manifest 审核与自动校验双重门禁。
 
 ## 9. 交付物与证据
-- 证据归档：`docs/dev-records/dev-plan-200-m9b-skill-schema-evidence.md`、`docs/dev-records/dev-plan-200-m9b-skill-tool-matrix-evidence.md`
+- 证据归档：`docs/archive/dev-records/dev-plan-200-m9b-skill-schema-evidence.md`、`docs/archive/dev-records/dev-plan-200-m9b-skill-tool-matrix-evidence.md`
 - 交付物最小集：契约文档更新、自动化测试/门禁项、Readiness 证据记录。
-- 本次执行记录：见 `docs/dev-records/dev-plan-200-m9b-skill-schema-evidence.md`、`docs/dev-records/dev-plan-200-m9b-skill-tool-matrix-evidence.md` 的 2026-02-28 条目。
+- 本次执行记录：见 `docs/archive/dev-records/dev-plan-200-m9b-skill-schema-evidence.md`、`docs/archive/dev-records/dev-plan-200-m9b-skill-tool-matrix-evidence.md` 的 2026-02-28 条目。
 
 ## 10. 文档完整性与 DEV-PLAN-003 对齐自检
 1. [X] 已覆盖对应阶段目标、边界、不变量与失败路径。

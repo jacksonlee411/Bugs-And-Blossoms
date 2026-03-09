@@ -26,7 +26,7 @@
 - `pkg/authz/*`：Authorizer 门面与 mode 语义（`disabled|shadow|enforce`）
 - `internal/server/authz_middleware.go`：统一 403/forbidden 契约
 - policy SSOT/生成物：`config/access/policies/00-bootstrap.csv` → `config/access/policy.csv`、`config/access/policy.csv.rev`
-- 证据：`docs/dev-records/DEV-PLAN-010-READINESS.md`（第 10 节）
+- 证据：`docs/archive/dev-records/DEV-PLAN-010-READINESS.md`（第 10 节）
 
 ### 2.2 非目标（明确不做）
 

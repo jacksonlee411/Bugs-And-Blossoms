@@ -81,6 +81,7 @@
 | 记录/Readiness | `docs/dev-records/**` | 时间戳 + 命令 + 结果 + 链接 | 重新定义计划契约 | 以现有模式为准（如 `DEV-PLAN-XXX-READINESS.md`） |
 | 仓库级文档资源 | `docs/assets/**` | 截图、图表等 | 代码/配置 | 目录与文件名全小写 `kebab-case` |
 | 归档快照（非活体） | `docs/archive/**` | 历史快照，标题/头部标注 `[Archived]` | 作为活体 SSOT 引用 | `kebab-case.md`（建议） |
+| 历史执行记录归档 | `docs/archive/dev-records/**` | 已封存的证据/执行记录，仅保留历史参考价值 | 作为当前执行记录入口 | 延续原文件名 |
 | 模块级文档（豁免） | `modules/{module}/README.md`、`modules/{module}/docs/**` | 模块内部实现与说明 | 仓库级规则/流程 | 目录与文件名建议 `kebab-case` |
 
 ## 6. 文档创建与更新流程（Process）

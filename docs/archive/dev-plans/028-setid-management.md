@@ -101,7 +101,7 @@
 - 共享解析入口：`pkg/setid/setid.go`
 - UI 入口：`/org/setid`（实现：`internal/server/setid.go`；allowlist：`config/routing/allowlist.yaml`）
 - 现状限制：record group 的 DB 约束 + 管理面当前仅覆盖 `jobcatalog`（`orgunit` 等 group 仍待补齐）
-- 证据：`docs/dev-records/DEV-PLAN-010-READINESS.md`（第 10 节）
+- 证据：`docs/archive/dev-records/DEV-PLAN-010-READINESS.md`（第 10 节）
 
 ### 3.2 非目标（明确不做）
 
@@ -340,7 +340,7 @@ SetID 解析 `ResolveSetID(tenant_id, business_unit_id, record_group)` 的失败
 
 ## 9. 实施步骤 (Checklist)
 
-1. [X] 落地 tenant bootstrap（009M1：`SHARE` + `BU000` + `jobcatalog` mapping）—— 证据见 `docs/dev-records/DEV-PLAN-010-READINESS.md`（第 10 节，2026-01-06）。
+1. [X] 落地 tenant bootstrap（009M1：`SHARE` + `BU000` + `jobcatalog` mapping）—— 证据见 `docs/archive/dev-records/DEV-PLAN-010-READINESS.md`（第 10 节，2026-01-06）。
    - [ ] 扩展：bootstrap 覆盖所有 stable record group（新增 `orgunit` 后必须补齐）。
 2. [ ] 补齐 record group 的稳定枚举与落地清单（计划：`jobcatalog/orgunit`；现状 DB/UI 仅 `jobcatalog`），并在实现模块的 dev-plan 中声明“哪些表受控于哪个 group”。
 3. [X] 冻结共享包 API：`ResolveSetID(tx, tenant_id, business_unit_id, record_group) -> setid`（含错误契约），并约束所有模块复用（009M1：`pkg/setid`）。
@@ -358,10 +358,10 @@ SetID 解析 `ResolveSetID(tenant_id, business_unit_id, record_group)` 的失败
 ## 10. 验收标准 (Acceptance Criteria)
 
 - [ ] 同一 tenant 内可配置多个 SetID，但 JobCatalog `code` 唯一（`tenant_id + code`），不允许跨 SetID 同码。
-- [X] 给定 `(business_unit_id, record_group=jobcatalog)`，系统能稳定解析出唯一 SetID（009M1 已验证；证据见 `docs/dev-records/DEV-PLAN-010-READINESS.md` §10）。
+- [X] 给定 `(business_unit_id, record_group=jobcatalog)`，系统能稳定解析出唯一 SetID（009M1 已验证；证据见 `docs/archive/dev-records/DEV-PLAN-010-READINESS.md` §10）。
 - [ ] 扩展：`record_group=orgunit` 及后续 group 同样满足解析与无缺省洞。
 - [ ] 任何绕过解析入口直接写 setid 的路径会被门禁阻断。
-- [X] 新 tenant 初始化后即满足：`SHARE` + 至少 1 个 BU + `jobcatalog` mapping（默认 `SHARE`），无需手工补洞（009M1 已落地；证据见 `docs/dev-records/DEV-PLAN-010-READINESS.md` §10）。
+- [X] 新 tenant 初始化后即满足：`SHARE` + 至少 1 个 BU + `jobcatalog` mapping（默认 `SHARE`），无需手工补洞（009M1 已落地；证据见 `docs/archive/dev-records/DEV-PLAN-010-READINESS.md` §10）。
 - [ ] 扩展：初始化覆盖所有 stable record group（新增 `orgunit` 后必须补齐）。
 - [X] `jobcatalog` 至少一个主数据实体完成端到端接入（解析→写入→读取→UI 展示；009M1 已落地并留证）。
 - [ ] 示例验收：同一 `code` 不允许在 `setid=A0001` 与 `setid=B0001` 并存；创建第二条应被拒绝（`tenant_id + code` 唯一）。

@@ -20,7 +20,7 @@
   - CI 门禁结构与验收：`docs/dev-plans/012-ci-quality-gates.md`、`.github/workflows/quality-gates.yml`
   - 本地入口与触发器矩阵：`AGENTS.md`、`Makefile`
   - 工具链版本口径（Node/Playwright/Go 等）：`docs/dev-plans/011-tech-stack-and-toolchain-versions.md`
-  - 证据记录（可复现步骤/结果链接）：`docs/dev-records/DEV-PLAN-010-READINESS.md`
+  - 证据记录（可复现步骤/结果链接）：`docs/archive/dev-records/DEV-PLAN-010-READINESS.md`
   - 评审与停止线（约束性引用）：`docs/dev-plans/003-simple-not-easy-review-guide.md`、`docs/dev-plans/004m1-no-legacy-principle-cleanup-and-gates.md`
   - Routing：`docs/dev-plans/017-routing-strategy.md`
   - Tenancy/AuthN（Host→tenant fail-closed + 登录入口）：`docs/dev-plans/019-tenant-and-authn.md`
@@ -77,7 +77,7 @@
 - [ ] Routing 漂移可被定位：`make check routing` 的失败信息能指向具体 allowlist/分类漂移点（SSOT：`scripts/routing/**`）。
 
 ### 4.3 证据固化（可审计）
-- [ ] 将本里程碑 E2E 与门禁收口的“可复现步骤 + 结果链接”写入 `docs/dev-records/DEV-PLAN-010-READINESS.md`（或在 `DEV-PLAN-012` 增设对应 readiness 记录文件，并在本文引用其 SSOT 路径）。
+- [ ] 将本里程碑 E2E 与门禁收口的“可复现步骤 + 结果链接”写入 `docs/archive/dev-records/DEV-PLAN-010-READINESS.md`（或在 `DEV-PLAN-012` 增设对应 readiness 记录文件，并在本文引用其 SSOT 路径）。
 - [ ] E2E 失败时最小证据集（至少）：
   - [ ] Playwright 报告/trace（或等价）、至少 1 张 screenshot
   - [ ] server 启动日志（含监听地址、关键 env）
@@ -88,7 +88,7 @@
 > 说明：每个 PR 都必须在 GitHub Actions required checks 全绿且不 `skipped` 后合并；`main` 禁止直推与 force-push。
 
 ### PR-0：文档回填（对齐“009m2 已完成”的输入事实）
-- [X] 在 `docs/dev-records/DEV-PLAN-010-READINESS.md` 补齐 `DEV-PLAN-009M2` 的最小可复现证据入口（不要求复制全部细节，但必须能复跑）。
+- [X] 在 `docs/archive/dev-records/DEV-PLAN-010-READINESS.md` 补齐 `DEV-PLAN-009M2` 的最小可复现证据入口（不要求复制全部细节，但必须能复跑）。
 - [X] 在 `docs/dev-plans/009-implementation-roadmap.md` Phase 4 出口条件中补齐对应勾选与证据链接（使路线图状态与实现事实一致）。
 - [X] 将 `docs/archive/dev-plans/009m2-phase4-person-identity-staffing-vertical-slice-execution-plan.md` 的状态更新为 `已完成` 并补时间戳（以 readiness 证据为前置）。
 

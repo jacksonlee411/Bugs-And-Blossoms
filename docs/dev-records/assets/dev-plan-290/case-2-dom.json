@@ -1,0 +1,16 @@
+{
+  "url": "http://localhost:18080/app/assistant/librechat/c/new",
+  "bubble_count": 1,
+  "bubbles": [
+    {
+      "binding_key": "conv_tp290_2::turn_tp290_2::req_tp290_2",
+      "conversation_id": "conv_tp290_2",
+      "turn_id": "turn_tp290_2",
+      "request_id": "req_tp290_2",
+      "message_id": "3574f04e-9721-4524-b64a-f43af3d6b989_",
+      "text": "Case 2 提交成功。 将在 AI治理办公室 下新建 人力资源部2，生效日期 2026-01-01。 org_code: AI2902 parent_org_code: FLOWER-A effective_date: 2026-01-01 event_type: orgunit_created"
+    }
+  ],
+  "external_reply_container_count": 0,
+  "connection_error_count": 0
+}

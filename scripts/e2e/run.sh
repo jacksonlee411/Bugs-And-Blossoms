@@ -81,6 +81,7 @@ require_cmd() {
 require_cmd docker
 require_cmd go
 require_cmd python3
+require_cmd curl
 
 if ! command -v pnpm >/dev/null 2>&1; then
   if command -v corepack >/dev/null 2>&1; then
@@ -92,6 +93,10 @@ require_cmd pnpm
 
 infra_env_file="${DEV_INFRA_ENV_FILE:-.env.example}"
 load_env_file "$infra_env_file"
+if [[ "$infra_env_file" != ".env" && -f .env ]]; then
+  load_env_file .env
+fi
+export DEV_INFRA_ENV_FILE="$infra_env_file"
 
 db_host="${DB_HOST:-127.0.0.1}"
 db_port="${DB_PORT:-5438}"
@@ -99,7 +104,7 @@ db_name="${DB_NAME:-bugs_and_blossoms}"
 db_pass="${DB_PASSWORD:-app}"
 db_sslmode="${DB_SSLMODE:-disable}"
 
-admin_db_user="${DB_USER:-app}"
+admin_db_user="${E2E_DB_ADMIN_USER:-app}"
 runtime_db_user="app_runtime"
 admin_db_url="postgres://${admin_db_user}:${db_pass}@${db_host}:${db_port}/${db_name}?sslmode=${db_sslmode}"
 runtime_db_url="postgres://${runtime_db_user}:${db_pass}@${db_host}:${db_port}/${db_name}?sslmode=${db_sslmode}"
@@ -362,6 +367,17 @@ for i in $(seq 1 60); do
   fi
   sleep 0.5
 done
+
+kratos_seed_script="./tools/codex/skills/bugs-and-blossoms-dev-login/scripts/seed_kratosstub_identity.sh"
+if [[ ! -x "$kratos_seed_script" ]]; then
+  echo "[e2e] missing kratos seed script: $kratos_seed_script" >&2
+  exit 1
+fi
+
+echo "[e2e] seed default kratosstub identities"
+"$kratos_seed_script" --tenant-id 00000000-0000-0000-0000-000000000000 --email admin0@localhost --password admin123 --role-slug tenant-admin --kratos-admin-base-url "$E2E_KRATOS_ADMIN_URL"
+"$kratos_seed_script" --tenant-id 00000000-0000-0000-0000-000000000001 --email admin@localhost --password admin123 --role-slug tenant-admin --kratos-admin-base-url "$E2E_KRATOS_ADMIN_URL"
+"$kratos_seed_script" --tenant-id 00000000-0000-0000-0000-000000000002 --email admin2@localhost --password admin123 --role-slug tenant-admin --kratos-admin-base-url "$E2E_KRATOS_ADMIN_URL"
 
 echo "[e2e] install e2e deps (pnpm --frozen-lockfile)"
 (cd e2e && pnpm install --frozen-lockfile)

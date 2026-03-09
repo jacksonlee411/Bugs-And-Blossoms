@@ -76,7 +76,7 @@
 
 ## 9. 关联文档
 - `docs/dev-plans/170-org-form-ui-shell-alignment-with-capability-key.md`
-- `docs/dev-records/dev-plan-170-execution-log.md`
+- `docs/archive/dev-records/dev-plan-170-execution-log.md`
 - `docs/dev-plans/160-capability-key-m8-m10-ui-delivery-and-evidence-closure.md`
 - `docs/dev-plans/108-org-crud-ui-actions-consolidation-and-unified-field-mutation-rules.md`
 - `docs/dev-plans/002-ui-design-guidelines.md`

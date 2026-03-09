@@ -13,6 +13,7 @@ export DEV_INFRA_ENV_FILE ?= .env.example
 .PHONY: iam orgunit jobcatalog staffing person
 .PHONY: dev dev-up dev-down dev-reset dev-ps dev-server dev-kratos-stub
 .PHONY: assistant-runtime-up assistant-runtime-down assistant-runtime-status assistant-runtime-clean
+.PHONY: librechat-web-verify librechat-web-build
 .PHONY: coverage
 
 help:
@@ -46,6 +47,8 @@ help:
 		"  make assistant-runtime-status" \
 		"  make assistant-runtime-down" \
 		"  make assistant-runtime-clean" \
+		"  make librechat-web-verify" \
+		"  make librechat-web-build" \
 	"" \
 	"开发环境：" \
 		"  make dev-up" \
@@ -230,6 +233,12 @@ assistant-runtime-status: ## LibreChat 运行健康检查（产出 runtime-statu
 assistant-runtime-clean: ## LibreChat 本地数据清理（仅 .local/librechat/*）
 	@./scripts/librechat/clean.sh
 
+librechat-web-verify: ## 校验 vendored LibreChat Web UI 骨架、来源元数据与产物出口约定
+	@./scripts/librechat-web/verify.sh
+
+librechat-web-build: ## 构建 vendored LibreChat Web UI 到 internal/server/assets/librechat-web
+	@./scripts/librechat-web/build.sh
+
 routing: ## 路由门禁（allowlist/entrypoint key 等）
 	@./scripts/routing/check-allowlist.sh
 
@@ -277,7 +286,7 @@ staffing:
 person:
 	@:
 
-MODULE := $(firstword $(filter-out preflight check fmt lint test routing e2e doc tr generate css sqlc-generate sqlc-verify-schema authz-pack authz-test authz-lint no-legacy assistant-config-single-source assistant-domain-allowlist no-scope-package capability-key capability-contract capability-route-map capability-catalog policy-baseline-dup request-code as-of-explicit dict-tenant-only go-version error-message plan migrate up dev dev-up dev-down dev-reset dev-ps dev-server assistant-runtime-up assistant-runtime-down assistant-runtime-status assistant-runtime-clean,$(MAKECMDGOALS)))
+MODULE := $(firstword $(filter-out preflight check fmt lint test routing e2e doc tr generate css sqlc-generate sqlc-verify-schema authz-pack authz-test authz-lint no-legacy assistant-config-single-source assistant-domain-allowlist no-scope-package capability-key capability-contract capability-route-map capability-catalog policy-baseline-dup request-code as-of-explicit dict-tenant-only go-version error-message plan migrate up dev dev-up dev-down dev-reset dev-ps dev-server assistant-runtime-up assistant-runtime-down assistant-runtime-status assistant-runtime-clean librechat-web-verify librechat-web-build,$(MAKECMDGOALS)))
 MIGRATE_DIR := $(lastword $(filter up down,$(MAKECMDGOALS)))
 
 plan:

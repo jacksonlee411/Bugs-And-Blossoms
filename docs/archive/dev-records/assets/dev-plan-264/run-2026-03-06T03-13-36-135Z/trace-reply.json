@@ -1,0 +1,45 @@
+{
+  "captured_at": "2026-03-06T03:13:45.347Z",
+  "base_url": "http://localhost:8080",
+  "screenshots": {
+    "page": "docs/dev-records/assets/dev-plan-264/run-2026-03-06T03-13-36-135Z/screenshot-page.png",
+    "iframe": "docs/dev-records/assets/dev-plan-264/run-2026-03-06T03-13-36-135Z/screenshot-iframe.png"
+  },
+  "reply_request": {
+    "path": "/internal/assistant/conversations/conv_a6f32d1be40b4780bfc0c94105cd758b/turns/turn_125c8bdf85684c6e8b7fbcd993760e08:reply",
+    "body": {
+      "stage": "draft",
+      "kind": "info",
+      "outcome": "success",
+      "error_code": "",
+      "error_message": "已生成提交草案：\n- 上级组织：-\n- 新组织：运营部\n- 生效日期：2026-01-01\n- 候选：待确认\n请回复“确认执行”后提交。",
+      "next_action": "",
+      "locale": "zh",
+      "fallback_text": "已生成提交草案：\n- 上级组织：-\n- 新组织：运营部\n- 生效日期：2026-01-01\n- 候选：待确认\n请回复“确认执行”后提交。",
+      "allow_missing_turn": false
+    },
+    "at": "2026-03-06T03:13:39.979Z"
+  },
+  "reply_response": {
+    "path": "/internal/assistant/conversations/conv_a6f32d1be40b4780bfc0c94105cd758b/turns/turn_125c8bdf85684c6e8b7fbcd993760e08:reply",
+    "status": 200,
+    "body": {
+      "text": "已生成提交草案：\n- 上级组织：-\n- 新组织：运营部\n- 生效日期：2026-01-01\n- 候选：待确认\n请回复“确认执行”后提交。",
+      "kind": "info",
+      "stage": "draft",
+      "reply_model_name": "gpt-5.2",
+      "reply_prompt_version": "assistant.reply.v1",
+      "conversation_id": "conv_a6f32d1be40b4780bfc0c94105cd758b",
+      "turn_id": "turn_125c8bdf85684c6e8b7fbcd993760e08"
+    },
+    "at": "2026-03-06T03:13:43.442Z"
+  },
+  "extracted": {
+    "conversation_id": "conv_a6f32d1be40b4780bfc0c94105cd758b",
+    "turn_id": "turn_125c8bdf85684c6e8b7fbcd993760e08",
+    "reply_model_name": "gpt-5.2",
+    "reply_prompt_version": "assistant.reply.v1",
+    "stage": "draft",
+    "kind": "info"
+  }
+}

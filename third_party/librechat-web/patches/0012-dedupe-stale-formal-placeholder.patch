@@ -1,0 +1,232 @@
+--- a/client/src/assistant-formal/runtime.ts
++++ b/client/src/assistant-formal/runtime.ts
+@@ -364,28 +364,63 @@
+   return patchBindingKey.length === 0;
+ }
+ 
+-export function upsertAssistantFormalMessage(
++function isUnboundPendingFormalMessage(message: TMessage, messageId?: string) {
++  const selectorMessageId = messageId?.trim() ?? '';
++  if (!selectorMessageId || message.messageId !== selectorMessageId || !isAssistantFormalMessage(message)) {
++    return false;
++  }
++  const existingBindingKey = message.assistantFormalPayload?.bindingKey?.trim() ?? '';
++  return existingBindingKey.length === 0;
++}
++
++function resolveAssistantFormalTargetIndex(
+   messages: TMessage[],
+   selector: {
+     messageId?: string;
+     bindingKey?: string;
+   },
+   patch: Partial<AssistantFormalMessage>,
+-): TMessage[] {
+-  const next = [...messages];
+-  const targetIndex = next.findIndex((message) => {
++) {
++  const selectorBindingKey = selector.bindingKey?.trim() ?? '';
++  if (selectorBindingKey) {
++    const exactBindingKeyIndex = messages.findIndex(
++      (message) =>
++        isAssistantFormalMessage(message) &&
++        (message.assistantFormalPayload?.bindingKey?.trim() ?? '') === selectorBindingKey,
++    );
++    if (exactBindingKeyIndex !== -1) {
++      return exactBindingKeyIndex;
++    }
++
++    const pendingPlaceholderIndex = messages.findIndex((message) =>
++      isUnboundPendingFormalMessage(message, selector.messageId),
++    );
++    if (pendingPlaceholderIndex !== -1) {
++      return pendingPlaceholderIndex;
++    }
++  }
++
++  return messages.findIndex((message) => {
+     if (!assistantFormalMessageMatches(message, selector)) {
+       return false;
+     }
+     if (!shouldReusePendingFormalMessage(selector, patch) || message.messageId !== selector.messageId) {
+       return true;
+     }
+-    if (!isAssistantFormalMessage(message)) {
+-      return true;
+-    }
+-    const existingBindingKey = message.assistantFormalPayload?.bindingKey?.trim() ?? '';
+-    return existingBindingKey.length === 0;
++    return isUnboundPendingFormalMessage(message, selector.messageId);
+   });
++}
++
++export function upsertAssistantFormalMessage(
++  messages: TMessage[],
++  selector: {
++    messageId?: string;
++    bindingKey?: string;
++  },
++  patch: Partial<AssistantFormalMessage>,
++): TMessage[] {
++  const next = [...messages];
++  const targetIndex = resolveAssistantFormalTargetIndex(next, selector, patch);
+   if (targetIndex === -1) {
+     const fallbackMessage = buildAssistantFormalFallbackMessage(selector, patch);
+     if (fallbackMessage == null) {
+@@ -398,20 +433,29 @@
+     ...patch,
+   } as TMessage;
+ 
+-  const resolvedBindingKey =
++  const resolvedBindingKey = (
+     selector.bindingKey ||
+     (isAssistantFormalMessage(next[targetIndex])
+       ? next[targetIndex].assistantFormalPayload?.bindingKey
+-      : undefined);
++      : undefined) ||
++    ''
++  ).trim();
+   if (!resolvedBindingKey) {
+     return next;
+   }
+ 
++  const resolvedMessageId = next[targetIndex].messageId;
++
+   return next.filter((message, index) => {
+     if (index === targetIndex || !isAssistantFormalMessage(message)) {
+       return true;
+     }
+-    return message.assistantFormalPayload?.bindingKey !== resolvedBindingKey;
++
++    const messageBindingKey = message.assistantFormalPayload?.bindingKey?.trim() ?? '';
++    if (messageBindingKey === resolvedBindingKey) {
++      return false;
++    }
++    return !(message.messageId === resolvedMessageId && messageBindingKey.length === 0);
+   });
+ }
+ 
+--- a/client/src/assistant-formal/__tests__/runtime.test.ts
++++ b/client/src/assistant-formal/__tests__/runtime.test.ts
+@@ -164,6 +164,121 @@
+     expect(next[1].text).toBe('处理中...');
+   });
+ 
++  it('reuses the same pending placeholder once the binding key becomes available', () => {
++    const bindingKey = assistantFormalBindingKey({
++      backendConversationId: 'conv-1',
++      turnId: 'turn-1',
++      requestId: 'req-1',
++    });
++    const messages: TMessage[] = [
++      {
++        messageId: 'msg-1',
++        text: '处理中...',
++        sender: 'Assistant',
++        isCreatedByUser: false,
++        parentMessageId: 'user-1',
++        conversationId: null,
++        error: false,
++        assistantFormalPayload: {
++          kind: 'assistant_formal',
++          backendConversationId: '',
++          turnId: '',
++          requestId: '',
++          traceId: '',
++          messageId: 'msg-1',
++          bindingKey: '',
++          state: 'pending',
++          missingFields: [],
++          candidates: [],
++        },
++      } as TMessage,
++    ];
++
++    const next = upsertAssistantFormalMessage(messages, { messageId: 'msg-1', bindingKey }, {
++      text: '已完成',
++      assistantFormalPayload: {
++        kind: 'assistant_formal',
++        backendConversationId: 'conv-1',
++        turnId: 'turn-1',
++        requestId: 'req-1',
++        traceId: 'trace-1',
++        messageId: 'msg-1',
++        bindingKey,
++        state: 'validated',
++        missingFields: [],
++        candidates: [],
++      },
++      assistantFormalPending: false,
++      error: false,
++    });
++
++    expect(next).toHaveLength(1);
++    expect((next[0] as any).assistantFormalPayload?.bindingKey).toBe(bindingKey);
++    expect(next[0].text).toBe('已完成');
++  });
++
++  it('prefers the exact binding key and removes stale unbound duplicates with same messageId', () => {
++    const bindingKey = assistantFormalBindingKey({
++      backendConversationId: 'conv-1',
++      turnId: 'turn-1',
++      requestId: 'req-1',
++    });
++    const next = upsertAssistantFormalMessage(
++      [
++        {
++          messageId: 'msg-1',
++          text: '处理中...',
++          sender: 'Assistant',
++          isCreatedByUser: false,
++          parentMessageId: 'user-1',
++          conversationId: null,
++          error: false,
++          assistantFormalPayload: {
++            kind: 'assistant_formal',
++            backendConversationId: '',
++            turnId: '',
++            requestId: '',
++            traceId: '',
++            messageId: 'msg-1',
++            bindingKey: '',
++            state: 'pending',
++            missingFields: [],
++            candidates: [],
++          },
++        } as TMessage,
++        {
++          messageId: 'msg-1',
++          text: '旧正式内容',
++          sender: 'Assistant',
++          isCreatedByUser: false,
++          parentMessageId: 'user-1',
++          conversationId: null,
++          error: false,
++          assistantFormalPayload: {
++            kind: 'assistant_formal',
++            backendConversationId: 'conv-1',
++            turnId: 'turn-1',
++            requestId: 'req-1',
++            traceId: 'trace-1',
++            messageId: 'msg-1',
++            bindingKey,
++            state: 'validated',
++            missingFields: [],
++            candidates: [],
++          },
++        } as TMessage,
++      ],
++      { messageId: 'msg-1', bindingKey },
++      {
++        text: '新正式内容',
++      },
++    );
++
++    expect(next).toHaveLength(1);
++    expect((next[0] as any).assistantFormalPayload?.bindingKey).toBe(bindingKey);
++    expect(next[0].text).toBe('新正式内容');
++  });
++
+   it('upserts by binding key and removes duplicate assistant bubbles', () => {
+     const bindingKey = assistantFormalBindingKey({
+       backendConversationId: 'conv-1',

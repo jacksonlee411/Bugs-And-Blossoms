@@ -50,12 +50,12 @@ export const navItems: NavItem[] = [
   },
   {
     key: 'assistant',
-    path: '/assistant',
+    path: '/assistant/librechat',
     labelKey: 'nav_ai_assistant',
     icon: <SmartToyIcon fontSize='small' />,
     order: 23,
     permissionKey: 'orgunit.read',
-    keywords: ['assistant', 'ai', 'chat', 'planner', '智能助手', '对话']
+    keywords: ['assistant', 'ai', 'chat', 'librechat', '智能助手', '对话']
   },
   {
     key: 'assistant-models',
@@ -66,16 +66,6 @@ export const navItems: NavItem[] = [
     parentKey: 'assistant',
     permissionKey: 'orgunit.admin',
     keywords: ['assistant', 'model', 'provider', 'llm', '模型', '供应商']
-  },
-  {
-    key: 'assistant-librechat',
-    path: '/assistant/librechat',
-    labelKey: 'nav_librechat',
-    icon: <SmartToyIcon fontSize='small' />,
-    order: 232,
-    parentKey: 'assistant',
-    permissionKey: 'orgunit.read',
-    keywords: ['assistant', 'librechat', 'chat', '独立聊天', '对话页']
   },
   {
     key: 'configuration-policy',

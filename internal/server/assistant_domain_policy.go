@@ -151,9 +151,6 @@ func assistantDomainPatternDangerous(pattern string) bool {
 			if ip4[0] == 10 {
 				return true
 			}
-			if ip4[0] == 127 {
-				return true
-			}
 			if ip4[0] == 172 && ip4[1] >= 16 && ip4[1] <= 31 {
 				return true
 			}

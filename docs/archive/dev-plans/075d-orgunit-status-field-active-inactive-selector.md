@@ -128,7 +128,7 @@
 4. [x] **P3（测试与门禁）**：补双向切换、可达性、冲突/403 回归，跑通质量门禁并收口文档。
 
 ## 执行记录
-- `docs/dev-records/dev-plan-075d-execution-log.md`
+- `docs/archive/dev-records/dev-plan-075d-execution-log.md`
 
 ## 验收标准
 - 页面可见真实状态字段，且不再固定显示 `Active`。

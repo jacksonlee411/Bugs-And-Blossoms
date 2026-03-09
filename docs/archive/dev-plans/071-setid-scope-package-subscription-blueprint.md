@@ -775,7 +775,7 @@ ALTER FUNCTION orgunit.assert_scope_package_active_as_of(uuid, text, uuid, uuid,
 - 2026-01-29：完成 M4（scope package/subscription API + UI 入口；shared-only 只读 UI；补齐路由与 Casbin 门禁；E2E 增加 SetID 订阅脚本）
 - 2026-01-30：修复 Staffing Positions 快照读取，按 `resolve_scope_package` 解析 jobcatalog package_id 以恢复 `job_profile_code` 展示
 - 2026-01-30：补齐 scope package/subscription 路由与 API/UI 覆盖率至 100%，`make test` 通过
-- 2026-01-29：完成 M5（stable scope 回填 + shared-only 默认包与订阅回填；证据记录见 `docs/dev-records/dev-plan-071-execution-log.md`）
+- 2026-01-29：完成 M5（stable scope 回填 + shared-only 默认包与订阅回填；证据记录见 `docs/archive/dev-records/dev-plan-071-execution-log.md`）
 - 2026-01-30：补齐 `ensure_setid_bootstrap` 对既有 DEFLT 包的有效期版本（修复 CI `PACKAGE_INACTIVE_AS_OF`）
 
 ### 8.1 里程碑触发器与门禁（对齐 2.1/AGENTS.md）
@@ -797,7 +797,7 @@ ALTER FUNCTION orgunit.assert_scope_package_active_as_of(uuid, text, uuid, uuid,
   - [ ] 共享包读取需显式开关且无 OR 混用。
   - [ ] `shared-only` scope 禁止租户包订阅。
 - **Readiness**：
-  - [ ] 命令与结果记录在 `docs/dev-records/dev-plan-071-execution-log.md`。
+  - [ ] 命令与结果记录在 `docs/archive/dev-records/dev-plan-071-execution-log.md`。
 - **验收标准**：
   - [ ] 任一 SetID 可在不同 `scope_code` 订阅不同 `scope_package` 并生效。
   - [ ] 缺失订阅时配置读取/写入 fail-closed。

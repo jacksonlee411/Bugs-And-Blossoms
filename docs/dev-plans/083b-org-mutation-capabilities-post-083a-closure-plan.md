@@ -68,7 +68,7 @@
    - `e2e/tests/tp060-02-orgunit-ext-query.spec.js`
 3. [X] 同步回写：
    - `docs/dev-plans/100g-org-metadata-wide-table-phase4c-orgunits-list-ext-query-i18n-closure.md`
-   - `docs/dev-records/dev-plan-100g-execution-log.md`
+   - `docs/archive/dev-records/dev-plan-100g-execution-log.md`
 
 ### 4.3 W3：Phase 5 入口化（稳定性/性能）
 
@@ -91,7 +91,7 @@
 
 ### 5.1 强制证据文件
 
-- `docs/dev-records/dev-plan-083b-execution-log.md`（本计划唯一执行日志 SSOT）
+- `docs/archive/dev-records/dev-plan-083b-execution-log.md`（本计划唯一执行日志 SSOT）
 
 ### 5.2 实施步骤
 
@@ -134,6 +134,6 @@
 - `docs/archive/dev-plans/083a-orgunit-append-actions-capabilities-policy-extension.md`
 - `docs/dev-plans/100g-org-metadata-wide-table-phase4c-orgunits-list-ext-query-i18n-closure.md`
 - `docs/dev-plans/100-org-metadata-wide-table-implementation-roadmap.md`
-- `docs/dev-records/dev-plan-083b-execution-log.md`
+- `docs/archive/dev-records/dev-plan-083b-execution-log.md`
 - `docs/dev-plans/012-ci-quality-gates.md`
 - `AGENTS.md`

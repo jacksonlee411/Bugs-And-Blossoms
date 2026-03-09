@@ -58,9 +58,9 @@
 2. [X] hash 输入遗漏上下文。缓解：固定测试向量覆盖 setid/as_of/intent 变化。
 
 ## 9. 交付物与证据
-- 证据归档：`docs/dev-records/dev-plan-200-m5-version-consistency-evidence.md`、`docs/dev-records/dev-plan-200-m7-explain-evidence.md`（新增）
+- 证据归档：`docs/archive/dev-records/dev-plan-200-m5-version-consistency-evidence.md`、`docs/archive/dev-records/dev-plan-200-m7-explain-evidence.md`（新增）
 - 交付物最小集：契约文档更新、自动化测试/门禁项、Readiness 证据记录。
-- 本次执行记录：见 `docs/dev-records/dev-plan-200-m5-version-consistency-evidence.md`、`docs/dev-records/dev-plan-200-m7-explain-evidence.md` 的 2026-02-28 条目。
+- 本次执行记录：见 `docs/archive/dev-records/dev-plan-200-m5-version-consistency-evidence.md`、`docs/archive/dev-records/dev-plan-200-m7-explain-evidence.md` 的 2026-02-28 条目。
 
 ## 10. 文档完整性与 DEV-PLAN-003 对齐自检
 1. [X] 已覆盖对应阶段目标、边界、不变量与失败路径。

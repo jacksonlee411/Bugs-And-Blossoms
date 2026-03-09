@@ -107,3 +107,36 @@ func TestClassifier_PathPattern(t *testing.T) {
 		t.Fatalf("got=%q", got)
 	}
 }
+
+func TestClassifier_LibreChatCompatAPIOverridesStatic(t *testing.T) {
+	t.Parallel()
+
+	a := Allowlist{
+		Version: 1,
+		Entrypoints: map[string]Entrypoint{
+			"server": {Routes: []Route{
+				{Path: "/assets/librechat-web/api/user", Methods: []string{"GET"}, RouteClass: "internal_api"},
+				{Path: "/assets/librechat-web/api/models", Methods: []string{"GET"}, RouteClass: "internal_api"},
+				{Path: "/app/assistant/librechat/api/user", Methods: []string{"GET"}, RouteClass: "internal_api"},
+				{Path: "/assets/librechat-web/{path}", Methods: []string{"GET"}, RouteClass: "static"},
+			}},
+		},
+	}
+	c, err := NewClassifier(a, "server")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if got := c.Classify("/assets/librechat-web/api/user"); got != RouteClassInternalAPI {
+		t.Fatalf("got=%q", got)
+	}
+	if got := c.Classify("/assets/librechat-web/api/models"); got != RouteClassInternalAPI {
+		t.Fatalf("got=%q", got)
+	}
+	if got := c.Classify("/app/assistant/librechat/api/user"); got != RouteClassInternalAPI {
+		t.Fatalf("got=%q", got)
+	}
+	if got := c.Classify("/assets/librechat-web/registerSW.js"); got != RouteClassStatic {
+		t.Fatalf("got=%q", got)
+	}
+}

@@ -407,7 +407,7 @@
 5. [ ] 测试
    - [ ] SQL 回归 + Go 单测 + API 契约 + 前端单测 + E2E
 6. [ ] 证据
-   - [ ] `docs/dev-records/dev-plan-108-execution-log.md`
+   - [ ] `docs/archive/dev-records/dev-plan-108-execution-log.md`
 
 ---
 
@@ -507,7 +507,7 @@
 
 ### 14.2 执行证据（实施时新增）
 
-- [ ] `docs/dev-records/dev-plan-108-execution-log.md`
+- [ ] `docs/archive/dev-records/dev-plan-108-execution-log.md`
 
 ## 15. 关联文档
 

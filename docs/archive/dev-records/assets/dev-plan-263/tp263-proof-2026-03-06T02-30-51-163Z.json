@@ -1,0 +1,50 @@
+{
+  "captured_at": "2026-03-06T02:31:28.644Z",
+  "base_url": "http://localhost:8080",
+  "screenshots": {
+    "page": "docs/dev-records/assets/dev-plan-263/tp263-proof-page-2026-03-06T02-30-51-163Z.png",
+    "iframe": "docs/dev-records/assets/dev-plan-263/tp263-proof-iframe-2026-03-06T02-30-51-163Z.png",
+    "stream": null
+  },
+  "reply_request": {
+    "type": "request",
+    "method": "POST",
+    "path": "/internal/assistant/conversations/conv_b59b1edafa45440d9142f8f0e77a5819/turns/system:reply",
+    "body": {
+      "stage": "commit_failed",
+      "kind": "error",
+      "outcome": "failure",
+      "error_code": "ai_plan_schema_constrained_decode_failed",
+      "error_message": "Plan schema decode failed under strict constraints.",
+      "next_action": "",
+      "locale": "zh",
+      "fallback_text": "Plan schema decode failed under strict constraints.",
+      "allow_missing_turn": true
+    },
+    "at": "2026-03-06T02:31:22.723Z"
+  },
+  "reply_response": {
+    "type": "response",
+    "status": 200,
+    "path": "/internal/assistant/conversations/conv_b59b1edafa45440d9142f8f0e77a5819/turns/system:reply",
+    "body": {
+      "text": "Plan schema decode failed under strict constraints.",
+      "kind": "error",
+      "stage": "commit_failed",
+      "reply_model_name": "gpt-5.2",
+      "reply_prompt_version": "assistant.reply.v1",
+      "conversation_id": "conv_b59b1edafa45440d9142f8f0e77a5819",
+      "turn_id": "system"
+    },
+    "at": "2026-03-06T02:31:27.154Z"
+  },
+  "extracted": {
+    "conversation_id": "conv_b59b1edafa45440d9142f8f0e77a5819",
+    "turn_id": "system",
+    "reply_model_name": "gpt-5.2",
+    "reply_prompt_version": "assistant.reply.v1",
+    "stage": "commit_failed",
+    "kind": "error",
+    "text_preview": "Plan schema decode failed under strict constraints."
+  }
+}

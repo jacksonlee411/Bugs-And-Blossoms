@@ -1,0 +1,83 @@
+--- a/client/src/assistant-formal/runtime.ts
++++ b/client/src/assistant-formal/runtime.ts
+@@ -327,6 +327,28 @@
+   return message.assistantFormalPayload?.bindingKey === selector.bindingKey;
+ }
+ 
++function buildAssistantFormalFallbackMessage(
++  selector: {
++    messageId?: string;
++  },
++  patch: Partial<AssistantFormalMessage>,
++): TMessage | null {
++  const messageId = selector.messageId?.trim() || patch.assistantFormalPayload?.messageId?.trim() || '';
++  if (!messageId) {
++    return null;
++  }
++  return {
++    sender: 'Assistant',
++    text: typeof patch.text === 'string' ? patch.text : '',
++    parentMessageId: patch.assistantFormalPayload?.frontendUserMessageId ?? '',
++    conversationId: null,
++    messageId,
++    isCreatedByUser: false,
++    error: patch.error ?? false,
++    ...patch,
++  } as TMessage;
++}
++
+ export function upsertAssistantFormalMessage(
+   messages: TMessage[],
+   selector: {
+@@ -338,7 +360,11 @@
+   const next = [...messages];
+   const targetIndex = next.findIndex((message) => assistantFormalMessageMatches(message, selector));
+   if (targetIndex === -1) {
+-    return next;
++    const fallbackMessage = buildAssistantFormalFallbackMessage(selector, patch);
++    if (fallbackMessage == null) {
++      return next;
++    }
++    return [...next, fallbackMessage];
+   }
+   next[targetIndex] = {
+     ...next[targetIndex],
+--- a/client/src/assistant-formal/__tests__/runtime.test.ts
++++ b/client/src/assistant-formal/__tests__/runtime.test.ts
+@@ -79,6 +79,36 @@
+         requestId: 'req-1',
+       }),
+     );
++  });
++
++  it('creates a fallback assistant bubble when placeholder is not yet present', () => {
++    const payload = buildAssistantFormalPayload(
++      { conversation_id: 'conv-1', turns: [] },
++      {
++        turn_id: 'turn-1',
++        state: 'validated',
++        request_id: 'req-1',
++        trace_id: 'trace-1',
++      },
++      undefined,
++      { messageId: 'msg-1', frontendUserMessageId: 'user-1' },
++    );
++
++    const next = upsertAssistantFormalMessage(
++      [],
++      { messageId: 'msg-1' },
++      {
++        text: '处理中...',
++        assistantFormalPayload: payload,
++        assistantFormalPending: true,
++        error: false,
++      },
++    );
++
++    expect(next).toHaveLength(1);
++    expect(next[0].messageId).toBe('msg-1');
++    expect(next[0].parentMessageId).toBe('user-1');
++    expect((next[0] as any).assistantFormalPayload?.bindingKey).toBe('conv-1::turn-1::req-1');
+   });
+ 
+   it('upserts by binding key and removes duplicate assistant bubbles', () => {
