@@ -587,9 +587,19 @@ func TestAssistantTaskStore_SubmitTaskPG_Branches(t *testing.T) {
 }
 
 func TestAssistantTaskStore_GetCancelDispatchAndExecute_Branches(t *testing.T) {
+	wd := mustGetwd(t)
+	t.Setenv("ALLOWLIST_PATH", mustAllowlistPathFromWd(t, wd))
+	t.Setenv("AUTHZ_MODE", "disabled")
+	t.Setenv("AUTHZ_UNSAFE_ALLOW_DISABLED", "1")
+
 	now := time.Now().UTC()
 	turn := assistantTaskSampleTurn(now)
+	turn.State = assistantStateConfirmed
 	principal := Principal{ID: "actor_1", RoleSlug: "tenant-admin"}
+	store := newOrgUnitMemoryStore()
+	if _, err := store.CreateNodeCurrent(context.Background(), "tenant_1", "2026-01-01", "FLOWER-A", "鲜花组织", "", true); err != nil {
+		t.Fatal(err)
+	}
 	record := assistantTaskRecord{
 		TaskID:             "c2784a4b-b884-4018-8d4f-31fa4b40db69",
 		TenantID:           "tenant_1",
@@ -610,7 +620,15 @@ func TestAssistantTaskStore_GetCancelDispatchAndExecute_Branches(t *testing.T) {
 		UpdatedAt:          now,
 	}
 
-	svc := newAssistantConversationService(newOrgUnitMemoryStore(), assistantWriteServiceStub{store: newOrgUnitMemoryStore()})
+	svc := newAssistantConversationService(store, nil)
+	svc.commitAdapterRegistry = assistantCommitAdapterRegistryMap{adapters: map[string]assistantCommitAdapter{
+		"orgunit_create_v1": assistantCommitAdapterStub{result: &assistantCommitResult{OrgCode: "ORG_NEW", EventUUID: "evt_1"}},
+	}}
+	if err := svc.refreshTurnVersionTuple(context.Background(), "tenant_1", turn); err != nil {
+		t.Fatalf("refreshTurnVersionTuple err=%v", err)
+	}
+	assistantRefreshTurnDerivedFields(turn)
+	record.ContractSnapshot = assistantTaskSnapshotFromTurn(turn)
 
 	// getTaskPG: begin error / not found / forbidden / commit error / success
 	svc.pool = assistFakeTxBeginner{err: errors.New("begin failed")}
@@ -909,10 +927,26 @@ func TestAssistantTaskStore_GetCancelDispatchAndExecute_Branches(t *testing.T) {
 	planJSON, _ := json.Marshal(turn.Plan)
 	dryRunJSON, _ := json.Marshal(turn.DryRun)
 	execTx.queryRowFn = func(sql string, _ ...any) pgx.Row {
-		if strings.Contains(sql, "FROM iam.assistant_turns") {
+		switch {
+		case strings.Contains(sql, "FROM iam.assistant_conversations"):
+			return &assistFakeRow{vals: assistantPersistenceConversationRow("conv_1", "actor_1", assistantStateConfirmed, now)}
+		case strings.Contains(sql, "FROM iam.assistant_turns"):
 			return &assistFakeRow{vals: []any{intentJSON, planJSON, dryRunJSON}}
+		case strings.Contains(sql, "INSERT INTO iam.assistant_state_transitions"):
+			return &assistFakeRow{vals: []any{int64(1)}}
+		default:
+			return &assistFakeRow{err: pgx.ErrNoRows}
 		}
-		return &assistFakeRow{err: pgx.ErrNoRows}
+	}
+	execTx.queryFn = func(sql string, _ ...any) (pgx.Rows, error) {
+		switch {
+		case strings.Contains(sql, "FROM iam.assistant_turns"):
+			return &assistFakeRows{rows: [][]any{assistantTurnRowValues(turn)}}, nil
+		case strings.Contains(sql, "FROM iam.assistant_state_transitions"):
+			return &assistFakeRows{}, nil
+		default:
+			return &assistFakeRows{}, nil
+		}
 	}
 
 	if err := svc.executeAssistantTaskWorkflowTx(context.Background(), execTx, "tenant_1", nil, now); !errors.Is(err, errAssistantTaskStateInvalid) {

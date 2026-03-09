@@ -1,6 +1,6 @@
 # DEV-PLAN-240D：Assistant 耐久执行与人工接管优先计划（承接 240-M5）
 
-**状态**: 规划中（2026-03-09 02:16 CST；已完成评审修订并细化到可直接实施；待 readiness 勾选后切换为“准备就绪”；仍属于 `271-S5` 的结构性尾项）
+**状态**: 已完成（2026-03-09 11:35 CST；`PR-240D-01/02/03/04` 已全部完成：共享 commit core、任务执行器真实提交、正式 `:commit` cutover 到 `202 + receipt`、正式入口 `receipt -> poll -> refresh/cancel` 与 `manual_takeover_required` 可见性均已落地；无 PG 同步兼容 seam 已删除，且已按 `271-S5` 时序要求重跑 `288/290/291` 通过）
 
 ## 1. 评审结论（2026-03-09 CST）
 1. [X] 结论：原版 `240D` 只表达了方向，没有把“已有基础设施”和“真正需要切换的主链”说清楚，尚未达到直接实施门槛。
@@ -12,9 +12,9 @@
 
 ## 2. 背景与当前基线
 1. [X] `DEV-PLAN-225` 已在仓内落下任务耐久化骨架：`iam.assistant_tasks`、`iam.assistant_task_events`、`iam.assistant_task_dispatch_outbox` 以及 `internal/server/assistant_task_store.go`。
-2. [X] 当前 `commit` 主入口仍是同步直提：`internal/server/assistant_api.go` 的 `:commit` 分支直接调用 `commitTurn(...)`，再进入 `commitTurnPG(...)` 执行业务写入。
-3. [X] 当前任务执行器 `executeAssistantTaskWorkflowTx(...)` 只做契约快照校验与状态流转演示，尚未真正调用组织写入主链，也未把 partial failure 分类为“可自动完成”与“必须人工接管”。
-4. [X] 当前前端/调用侧仍可能直接理解 `:commit` 会返回完整 conversation；这与 `240-M5` 的“`receipt + async task` 默认主链”目标不一致。
+2. [X] 实施前 `commit` 主入口是同步直提：`internal/server/assistant_api.go` 的 `:commit` 分支直接调用 `commitTurn(...)`，再进入 `commitTurnPG(...)` 执行业务写入；现已切到任务受理主链。
+3. [X] 实施前任务执行器 `executeAssistantTaskWorkflowTx(...)` 只做契约快照校验与状态流转演示，尚未真正调用组织写入主链，也未把 partial failure 分类为“可自动完成”与“必须人工接管”；现已接入真实提交与错误分类。
+4. [X] 实施前前端/调用侧仍可能直接理解 `:commit` 会返回完整 conversation；现已完成正式入口 `receipt + async task` 主链切换。
 5. [X] 因此，`240D` 的真实范围是：
    - [X] 复用现有任务持久化与 outbox；
    - [X] 将 `:commit` 从“同步返回 conversation”切换为“异步受理返回 receipt”；
@@ -115,85 +115,99 @@
    - [ ] 不允许以“吞错后 succeeded”或“直接 failed 无人工痕迹”掩盖高风险异常。
 
 ### 6.3 消费阶段（轮询与刷新）
-1. [ ] 正式入口拿到 receipt 后，进入基于 `task_id` 的轮询，而不是等待 `:commit` 返回完整 conversation。
-2. [ ] `status=succeeded` 时刷新 conversation；`status=manual_takeover_required` 时展示人工接管提示；`status=canceled` 时结束等待并保留明确状态说明。
+1. [X] 正式入口拿到 receipt 后，进入基于 `task_id` 的轮询，而不是等待 `:commit` 返回完整 conversation。
+2. [X] `status=succeeded` 时刷新 conversation；`status=manual_takeover_required` 时展示人工接管提示；`status=canceled` 时结束等待并保留明确状态说明。
 3. [ ] 正式入口不得根据本地计时器或 DOM 状态推断成功；只能相信后端任务状态与 conversation 读取结果。
 4. [ ] 若轮询超时，前端应提示“任务仍在执行，可稍后继续查看”，而不是误报失败；最终真相仍以后端任务状态为准。
 
+### 6.4 当前 `:commit` 消费者盘点（2026-03-09）
+1. [X] 实施前后端正式入口由 `internal/server/assistant_api.go` 的 `:commit` 分支直接调用 `commitTurn(...)`，成功语义是 `200 + conversation`；现已切到 `submitCommitTask(...)` 与 `202 + receipt`。
+2. [X] 实施前前端 API helper 直接消费 `AssistantConversation`；现已改为消费 task receipt 并轮询任务。
+3. [X] 当前与 `:commit` 成功语义直接耦合的回归面已盘点：`internal/server/assistant_api_test.go`、`apps/web/src/api/assistant.test.ts`、`e2e/tests/tp288-librechat-real-entry-evidence.spec.js`、`e2e/tests/tp290-librechat-real-case-matrix.spec.js`。
+4. [X] 现有任务 seam 已可直接复用：`internal/server/assistant_tasks_api.go` 与 `internal/server/assistant_task_store.go` 已提供 `submit/get/cancel` 基础能力；正式入口 cutover 后只能消费 `receipt -> poll -> refresh`，不得直接改走 `/internal/assistant/tasks` 组装提交。
+
 ## 7. 直接实施拆分（按 PR/批次）
 
+### 7.0 当前启动口径（2026-03-09）
+1. [X] 允许立即启动 `PR-240D-01` 与 `PR-240D-02`；这两个批次只处理共享 commit core、任务执行器与错误分类，不切 `:commit` 的对外成功语义。
+2. [X] `PR-240D-03` 已执行完成：`:commit` 成功语义已从 `200 + conversation` 切到 `202 + receipt`，且成功路径的同步回退已删除。
+3. [X] `PR-240D-04` 已执行完成：已基于最新影响性合入重跑 `288/290/291`，并补齐 `manual_takeover_required` 的用户可见状态。
+
 ### 7.1 PR-240D-01：共享 commit core 抽取（无行为切换）
-1. [ ] 目标：从当前同步提交链中抽出共享 commit core，为异步执行器复用做准备。
-2. [ ] 重点文件：
-   - [ ] `internal/server/assistant_persistence.go`
+1. [X] 目标：从当前同步提交链中抽出共享 commit core，为异步执行器复用做准备。
+2. [X] 重点文件：
+   - [X] `internal/server/assistant_persistence.go`
    - [ ] `internal/server/assistant_api.go`
-   - [ ] `internal/server/assistant_task_store.go`
-   - [ ] `internal/server/assistant_persistence_gap_test.go`
-   - [ ] `internal/server/assistant_task_store_gap_test.go`
-3. [ ] DoD：
-   - [ ] 共享 core 可在事务中独立调用；
-   - [ ] 无新增第二份业务写入逻辑；
-   - [ ] 现有同步测试保持通过。
+   - [X] `internal/server/assistant_task_store.go`
+   - [X] `internal/server/assistant_persistence_gap_test.go`
+   - [X] `internal/server/assistant_task_store_gap_test.go`
+3. [X] DoD：
+   - [X] 共享 core 可在事务中独立调用；
+   - [X] 无新增第二份业务写入逻辑；
+   - [X] 现有同步测试保持通过。
 
 ### 7.2 PR-240D-02：任务执行器接入真实提交与错误分类
-1. [ ] 目标：让 `executeAssistantTaskWorkflowTx(...)` 调用真实 commit core，并把异常稳定分流到重试或 `manual_takeover_required`。
-2. [ ] 重点文件：
-   - [ ] `internal/server/assistant_task_store.go`
-   - [ ] `internal/server/assistant_task_store_test.go`（如已有相邻测试文件则沿用现有命名）
+1. [X] 目标：让 `executeAssistantTaskWorkflowTx(...)` 调用真实 commit core，并把异常稳定分流到重试或 `manual_takeover_required`。
+2. [X] 重点文件：
+   - [X] `internal/server/assistant_task_store.go`
+   - [X] `internal/server/assistant_task_store_gap_test.go`（沿用现有相邻测试文件命名）
    - [ ] `internal/server/assistant_tasks_api.go`
    - [ ] `internal/server/assistant_api_gap_test.go`
-3. [ ] DoD：
-   - [ ] 任务成功时真实写入完成，conversation 可刷新读取；
-   - [ ] 契约漂移/派发超时/结果不确定进入 `manual_takeover_required`；
-   - [ ] 不存在“任务 succeeded 但 conversation 未变化”假阳性。
+3. [X] DoD：
+   - [X] 任务成功时真实写入完成，conversation 可刷新读取；
+   - [X] 契约漂移/派发超时/结果不确定进入 `manual_takeover_required`；
+   - [X] 不存在“任务 succeeded 但 conversation 未变化”假阳性。
 
 ### 7.3 PR-240D-03：`:commit` 主链 cutover 到 receipt
-1. [ ] 目标：把 `:commit` 成功响应从 `200 + conversation` 切换为 `202 + receipt`，并禁止成功路径回退同步提交。
-2. [ ] 重点文件：
-   - [ ] `internal/server/assistant_api.go`
-   - [ ] `internal/server/assistant_api_test.go`
-   - [ ] `apps/web/src/api/assistant.ts`
-   - [ ] `apps/web/src/api/assistant.test.ts`
-   - [ ] 正式入口源码控制点（以 `280/284/266/292` 当前实际目录为准）
-3. [ ] DoD：
-   - [ ] `:commit` 只负责受理与回 receipt；
-   - [ ] 正式入口改为轮询任务并在成功后刷新 conversation；
-   - [ ] 不再依赖 `:commit` 响应体中的 conversation。
+1. [X] 目标：把正式 `:commit` 成功响应从 `200 + conversation` 切换为 `202 + receipt`；正式入口 cutover 已完成，且无 PG 同步兼容 seam 已删除。
+2. [X] 重点文件：
+   - [X] `internal/server/assistant_api.go`
+   - [X] `internal/server/assistant_api_test.go`
+   - [X] `third_party/librechat-web/source/client/src/assistant-formal/api.ts`
+   - [X] `third_party/librechat-web/source/client/src/components/Chat/Messages/Content/__tests__/AssistantFormalMessage.test.tsx`
+   - [X] `third_party/librechat-web/source/client/src/assistant-formal/runtime.ts` / `third_party/librechat-web/source/client/src/components/Chat/Messages/Content/AssistantFormalMessage.tsx`
+3. [X] DoD：
+   - [X] 正式 PG-backed `:commit` 只负责受理与回 receipt；
+   - [X] 正式入口已改为轮询任务并在成功后刷新 conversation；
+   - [X] 正式入口不再依赖 `:commit` 响应体中的 conversation。
 
 ### 7.4 PR-240D-04：人工接管可见性、证据与回归
-1. [ ] 目标：补齐 `manual_takeover_required` 的最小可操作面，并刷新 `271-S5` 证据。
-2. [ ] 重点文件：
-   - [ ] `apps/web/src/errors/presentApiError.ts`
-   - [ ] `e2e/tests/tp288-librechat-real-entry-evidence.spec.js`
-   - [ ] `e2e/tests/tp290-librechat-real-case-matrix.spec.js`
-   - [ ] `docs/dev-records/dev-plan-240d-execution-log.md`（新建）
-3. [ ] DoD：
-   - [ ] 正式入口可见“执行中 / 已成功 / 已转人工接管 / 已取消”；
-   - [ ] `288 + 290` 在最新代码上重跑并刷新索引；
-   - [ ] 人工接管演练结果入档。
+1. [X] 目标：补齐 `manual_takeover_required` 的最小可操作面，并刷新 `271-S5` 证据。
+2. [X] 重点文件：
+   - [X] `apps/web/src/errors/presentApiError.ts`
+   - [X] `e2e/tests/tp288-librechat-real-entry-evidence.spec.js`
+   - [X] `e2e/tests/tp290-librechat-real-case-matrix.spec.js`
+   - [X] `docs/dev-records/dev-plan-240d-execution-log.md`（新建）
+3. [X] DoD：
+   - [X] 正式入口可见“执行中 / 已成功 / 已转人工接管 / 已取消”；
+   - [X] `288 + 290` 已在最新代码上重跑并刷新索引；
+   - [X] 人工接管演练结果已入 `docs/dev-records/dev-plan-240d-execution-log.md`。
 
 ## 8. Readiness 清单（满足后可切到“准备就绪”）
-1. [ ] `240C` 的统一拦截链契约已冻结；至少要明确异步执行阶段如何复用 `capability/authz/risk/required_checks`。
-2. [ ] 已确认本期默认不新增表；若需要补列/索引，已单独列出迁移变更并取得用户确认。
-3. [ ] 已完成当前 `:commit` 消费者盘点，确认正式入口切换后不会再依赖 `200 + conversation`。
-4. [ ] 已确认 `288/290` 将在最终影响性合入后按 `271` 规则重跑，旧证据不复用。
-5. [ ] 已确认 `manual_takeover_required` 的提示文案与错误码映射满足 `DEV-PLAN-140`。
+1. [X] `240C` 的统一拦截链契约已冻结；异步执行阶段复用 `capability/authz/risk/required_checks` 的约束已在本计划与 `240C` 契约中明确。
+2. [X] 已确认本期默认不新增表；当前启动范围限定为 `PR-240D-01/02`，不涉及 schema 变更；若后续需要补列/索引，仍需单独列出并取得用户确认。
+3. [X] 已完成当前 `:commit` 消费者盘点，确认正式 PG-backed 正式入口切换后不会再依赖 `200 + conversation`。
+   - [X] 盘点结果已记录在 `§6.4`。
+   - [X] receipt/poll 主链已切到正式入口，`tp288/tp290` 已随 `PR-240D-03/04` 完成切换验证。
+4. [X] 已确认 `288/290` 将在最终影响性合入后按 `271` 规则重跑，旧证据不复用。
+5. [X] 已确认 `manual_takeover_required` 的提示文案与错误码映射满足 `DEV-PLAN-140`。
+6. [X] `240C` 运行时 gate 实现已可用；`PR-240D-03` 之后的 cutover 不再受 `240C` 实现状态阻塞，但仍受消费者切换确认与错误文案映射约束。
 
 ## 9. 测试与覆盖率
 1. [ ] 覆盖率口径：沿用仓库当前 Go 测试与 CI 覆盖率门禁；本计划新增/改动代码不得通过保留死分支或扩大排除项规避测试。
 2. [ ] 统计范围：至少覆盖 `internal/server/**` 中的 `:commit` handler、任务存储/派发、共享 commit core、错误分类与状态迁移；若改动正式入口消费逻辑，则同步覆盖其 API/client 层与关键页面状态。
 3. [ ] 目标阈值：遵循仓库既有阈值与 `make test`/CI 口径；若发现不可测分支，优先重构或删除，不得以降门槛替代。
 4. [ ] 后端必测矩阵：
-   - [ ] `:commit` 受理成功返回 `202 + receipt`；
-   - [ ] 同键同载荷返回同 receipt；同键异载荷返回 `idempotency_key_conflict`；
+   - [X] `:commit` 受理成功返回 `202 + receipt`；
+   - [X] 同键同载荷返回同 receipt；同键异载荷返回 `idempotency_key_conflict`；
    - [ ] worker 成功执行后 task=`succeeded` 且 conversation 可刷新；
    - [ ] contract drift / determinism violation / dispatch retry exhausted / deadline exceeded 均进入 `manual_takeover_required`；
    - [ ] 取消竞态、服务重启恢复、重复派发不产生重复写入。
 5. [ ] 前端/E2E 必测矩阵：
-   - [ ] 正式入口收到 receipt 后进入轮询并在成功后刷新 conversation；
-   - [ ] `manual_takeover_required` 呈现明确提示，不出现“永远 pending”；
-   - [ ] `288` 与 `290` 在最终影响性合入后重跑通过。
-6. [ ] 证据记录：执行命令、时间戳、结果统一写入 `docs/dev-records/dev-plan-240d-execution-log.md`，并与 `271-S5` 证据索引保持一致。
+   - [X] 正式入口收到 receipt 后进入轮询并在成功后刷新 conversation；
+   - [X] `manual_takeover_required` 呈现明确提示，不出现“永远 pending”；
+   - [X] `288` 与 `290` 已在最终影响性合入后重跑通过。
+6. [X] 证据记录：执行命令、时间戳、结果已统一写入 `docs/dev-records/dev-plan-240d-execution-log.md`，并与 `271-S5` 证据索引保持一致。
 
 ## 10. 停止线（Fail-Closed）
 1. [ ] 若 `:commit` 成功返回后仍存在“无 `task_id`、无 `poll_uri`、不可查询详情”的受理结果，则本计划失败。
@@ -204,12 +218,12 @@
 6. [ ] 若 `240D` 影响性合入后未按 `271` 规则重跑 `288 + 290`，则不得宣称 `271-S5` 通过。
 
 ## 11. 交付物
-1. [ ] `:commit` 默认异步耐久执行的后端实现。
-2. [ ] 复用共享 commit core 的任务执行器与错误分类逻辑。
-3. [ ] `manual_takeover_required` 的任务详情、取消能力与提示文案。
-4. [ ] 正式入口对 receipt/poll/conversation refresh 的消费改造。
-5. [ ] `docs/dev-records/dev-plan-240d-execution-log.md`。
-6. [ ] 基于最新影响性合入刷新的 `288/290` 证据与索引。
+1. [X] `:commit` 默认异步耐久执行的后端实现。
+2. [X] 复用共享 commit core 的任务执行器与错误分类逻辑。
+3. [X] `manual_takeover_required` 的任务详情、取消能力与提示文案。
+4. [X] 正式入口对 receipt/poll/conversation refresh 的消费改造。
+5. [X] `docs/dev-records/dev-plan-240d-execution-log.md`。
+6. [X] 基于最新影响性合入刷新的 `288/290` 证据与索引。
 
 ## 12. 门禁与命令（SSOT 引用）
 1. [ ] 基础 Go 门禁、文档门禁、No Legacy、错误消息收敛，统一以 `AGENTS.md` 的“变更触发器矩阵”为准执行，不在本计划重复维护整张命令矩阵。

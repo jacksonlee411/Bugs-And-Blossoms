@@ -486,22 +486,11 @@ func (s *assistantConversationService) commitTurnPG(ctx context.Context, tenantI
 		return s.restoreIdempotentResult(claim)
 	}
 
-	result, applyErr := s.applyCommitTurn(ctx, conversation, turn, principal, tenantID)
-	assistantRefreshConversationDerivedFields(conversation)
+	_, applyErr, execErr := s.executeCommitCoreTx(ctx, tx, tenantID, principal, conversation, turn)
+	if execErr != nil {
+		return nil, execErr
+	}
 	if applyErr != nil {
-		if result.PersistTurn {
-			if err := s.upsertTurnTx(ctx, tx, tenantID, conversation.ConversationID, turn); err != nil {
-				return nil, err
-			}
-			if err := s.updateConversationStateTx(ctx, tx, tenantID, conversation.ConversationID, conversation.State, conversation.CurrentPhase, conversation.UpdatedAt); err != nil {
-				return nil, err
-			}
-		}
-		if result.Transition != nil {
-			if err := s.insertTransitionTx(ctx, tx, tenantID, conversation.ConversationID, result.Transition); err != nil {
-				return nil, err
-			}
-		}
 		if finalizeErr := s.finalizeIdempotencyErrorTx(ctx, tx, claimKey, applyErr); finalizeErr != nil {
 			return nil, finalizeErr
 		}
@@ -512,17 +501,6 @@ func (s *assistantConversationService) commitTurnPG(ctx context.Context, tenantI
 		return nil, applyErr
 	}
 
-	if err := s.upsertTurnTx(ctx, tx, tenantID, conversation.ConversationID, turn); err != nil {
-		return nil, err
-	}
-	if err := s.updateConversationStateTx(ctx, tx, tenantID, conversation.ConversationID, conversation.State, conversation.CurrentPhase, conversation.UpdatedAt); err != nil {
-		return nil, err
-	}
-	if result.Transition != nil {
-		if err := s.insertTransitionTx(ctx, tx, tenantID, conversation.ConversationID, result.Transition); err != nil {
-			return nil, err
-		}
-	}
 	if err := s.finalizeIdempotencySuccessTx(ctx, tx, claimKey, conversation); err != nil {
 		return nil, err
 	}
@@ -531,6 +509,52 @@ func (s *assistantConversationService) commitTurnPG(ctx context.Context, tenantI
 	}
 	s.cacheConversation(conversation)
 	return cloneConversation(conversation), nil
+}
+
+func (s *assistantConversationService) executeCommitCoreTx(
+	ctx context.Context,
+	tx pgx.Tx,
+	tenantID string,
+	principal Principal,
+	conversation *assistantConversation,
+	turn *assistantTurn,
+) (assistantTurnMutationResult, error, error) {
+	result, applyErr := s.applyCommitTurn(ctx, conversation, turn, principal, tenantID)
+	assistantRefreshConversationDerivedFields(conversation)
+	if err := s.persistConversationTurnMutationTx(ctx, tx, tenantID, conversation, turn, result); err != nil {
+		return assistantTurnMutationResult{}, nil, err
+	}
+	return result, applyErr, nil
+}
+
+func (s *assistantConversationService) persistConversationTurnMutationTx(
+	ctx context.Context,
+	tx pgx.Tx,
+	tenantID string,
+	conversation *assistantConversation,
+	turn *assistantTurn,
+	result assistantTurnMutationResult,
+) error {
+	if result.PersistTurn {
+		if err := s.upsertTurnTx(ctx, tx, tenantID, conversation.ConversationID, turn); err != nil {
+			return err
+		}
+		if err := s.updateConversationStateTx(ctx, tx, tenantID, conversation.ConversationID, conversation.State, conversation.CurrentPhase, conversation.UpdatedAt); err != nil {
+			return err
+		}
+	}
+	if result.Transition != nil {
+		if err := s.insertTransitionTx(ctx, tx, tenantID, conversation.ConversationID, result.Transition); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+type assistantPreparedCommit struct {
+	Resolved      assistantCandidate
+	Adapter       assistantCommitAdapter
+	SkipExecution bool
 }
 
 type assistantTurnMutationResult struct {
@@ -658,28 +682,34 @@ func (s *assistantConversationService) applyConfirmTurn(conversation *assistantC
 	return assistantTurnMutationResult{Transition: transition, PersistTurn: true}, nil
 }
 
-func (s *assistantConversationService) applyCommitTurn(ctx context.Context, conversation *assistantConversation, turn *assistantTurn, principal Principal, tenantID string) (assistantTurnMutationResult, error) {
+func (s *assistantConversationService) prepareCommitTurn(
+	ctx context.Context,
+	conversation *assistantConversation,
+	turn *assistantTurn,
+	principal Principal,
+	tenantID string,
+) (assistantPreparedCommit, assistantTurnMutationResult, error) {
 	if turn.State == assistantStateCommitted {
-		return assistantTurnMutationResult{}, nil
+		return assistantPreparedCommit{SkipExecution: true}, assistantTurnMutationResult{}, nil
 	}
 	if turn.State == assistantStateCanceled || turn.State == assistantStateExpired {
-		return assistantTurnMutationResult{}, errAssistantConversationStateInvalid
+		return assistantPreparedCommit{}, assistantTurnMutationResult{}, errAssistantConversationStateInvalid
 	}
 	if assistantTurnConfirmExpired(turn, time.Now().UTC()) {
-		return assistantExpireTurn(conversation, turn, principal, "commit"), errAssistantConfirmationExpired
+		return assistantPreparedCommit{}, assistantExpireTurn(conversation, turn, principal, "commit"), errAssistantConfirmationExpired
 	}
 	if turn.State != assistantStateConfirmed {
-		return assistantTurnMutationResult{}, errAssistantConfirmationRequired
+		return assistantPreparedCommit{}, assistantTurnMutationResult{}, errAssistantConfirmationRequired
 	}
 	if assistantTurnRequiresIntentClarification(turn) {
-		return assistantTurnMutationResult{}, errAssistantConfirmationRequired
+		return assistantPreparedCommit{}, assistantTurnMutationResult{}, errAssistantConfirmationRequired
 	}
 	spec, ok := s.lookupActionSpec(turn.Intent.Action)
 	if !ok {
-		return assistantTurnMutationResult{}, errAssistantUnsupportedIntent
+		return assistantPreparedCommit{}, assistantTurnMutationResult{}, errAssistantUnsupportedIntent
 	}
 	if strings.TrimSpace(spec.Handler.CommitAdapterKey) == "" {
-		return assistantTurnMutationResult{}, errAssistantUnsupportedIntent
+		return assistantPreparedCommit{}, assistantTurnMutationResult{}, errAssistantUnsupportedIntent
 	}
 	if assistantTurnContractVersionMismatched(turn) {
 		fromState := turn.State
@@ -704,7 +734,7 @@ func (s *assistantConversationService) applyCommitTurn(ctx context.Context, conv
 			ChangedAt:  turn.UpdatedAt,
 		}
 		conversation.Transitions = append(conversation.Transitions, *transition)
-		return assistantTurnMutationResult{Transition: transition, PersistTurn: true}, errAssistantPlanContractVersionMismatch
+		return assistantPreparedCommit{}, assistantTurnMutationResult{Transition: transition, PersistTurn: true}, errAssistantPlanContractVersionMismatch
 	}
 	if assistantTurnVersionDrifted(turn) {
 		fromState := turn.State
@@ -729,14 +759,14 @@ func (s *assistantConversationService) applyCommitTurn(ctx context.Context, conv
 			ChangedAt:  turn.UpdatedAt,
 		}
 		conversation.Transitions = append(conversation.Transitions, *transition)
-		return assistantTurnMutationResult{Transition: transition, PersistTurn: true}, errAssistantConfirmationRequired
+		return assistantPreparedCommit{}, assistantTurnMutationResult{Transition: transition, PersistTurn: true}, errAssistantConfirmationRequired
 	}
 	if turn.ResolvedCandidateID == "" {
-		return assistantTurnMutationResult{}, errAssistantCandidateNotFound
+		return assistantPreparedCommit{}, assistantTurnMutationResult{}, errAssistantCandidateNotFound
 	}
 	resolved, ok := assistantFindCandidate(turn.Candidates, turn.ResolvedCandidateID)
 	if !ok {
-		return assistantTurnMutationResult{}, errAssistantCandidateNotFound
+		return assistantPreparedCommit{}, assistantTurnMutationResult{}, errAssistantCandidateNotFound
 	}
 	decision := assistantEvaluateActionGate(assistantActionGateInput{
 		Stage:      assistantActionStageCommit,
@@ -751,7 +781,8 @@ func (s *assistantConversationService) applyCommitTurn(ctx context.Context, conv
 		UserInput:  turn.UserInput,
 	})
 	if !decision.Allowed {
-		return assistantApplyGateDecision(conversation, turn, principal, "commit", decision)
+		result, err := assistantApplyGateDecision(conversation, turn, principal, "commit", decision)
+		return assistantPreparedCommit{}, result, err
 	}
 	if err := s.validateTurnVersionTuple(ctx, tenantID, turn); err != nil {
 		fromState := turn.State
@@ -777,7 +808,7 @@ func (s *assistantConversationService) applyCommitTurn(ctx context.Context, conv
 			ChangedAt:  turn.UpdatedAt,
 		}
 		conversation.Transitions = append(conversation.Transitions, *transition)
-		return assistantTurnMutationResult{Transition: transition, PersistTurn: true}, err
+		return assistantPreparedCommit{}, assistantTurnMutationResult{Transition: transition, PersistTurn: true}, err
 	}
 	adapterKey := strings.TrimSpace(turn.Plan.CommitAdapterKey)
 	if adapterKey == "" {
@@ -785,13 +816,24 @@ func (s *assistantConversationService) applyCommitTurn(ctx context.Context, conv
 	}
 	adapter, ok := s.lookupCommitAdapter(adapterKey)
 	if !ok {
-		return assistantTurnMutationResult{}, errAssistantServiceMissing
+		return assistantPreparedCommit{}, assistantTurnMutationResult{}, errAssistantServiceMissing
 	}
-	commitResult, err := adapter.Commit(ctx, assistantCommitRequest{
+	return assistantPreparedCommit{Resolved: resolved, Adapter: adapter}, assistantTurnMutationResult{}, nil
+}
+
+func (s *assistantConversationService) applyCommitTurn(ctx context.Context, conversation *assistantConversation, turn *assistantTurn, principal Principal, tenantID string) (assistantTurnMutationResult, error) {
+	prepared, result, err := s.prepareCommitTurn(ctx, conversation, turn, principal, tenantID)
+	if err != nil {
+		return result, err
+	}
+	if prepared.SkipExecution {
+		return assistantTurnMutationResult{}, nil
+	}
+	commitResult, err := prepared.Adapter.Commit(ctx, assistantCommitRequest{
 		TenantID:          tenantID,
 		Principal:         principal,
 		Turn:              turn,
-		ResolvedCandidate: resolved,
+		ResolvedCandidate: prepared.Resolved,
 	})
 	if err != nil {
 		return assistantTurnMutationResult{}, err
@@ -1442,6 +1484,29 @@ WHERE tenant_uuid = $1::uuid
 	return err
 }
 
+func (s *assistantConversationService) finalizeIdempotencyJSONSuccessTx(ctx context.Context, tx pgx.Tx, key assistantIdempotencyKey, httpStatus int, payload any) error {
+	body, err := json.Marshal(payload)
+	if err != nil {
+		return err
+	}
+	responseHash := assistantHashBytes(body)
+	_, err = tx.Exec(ctx, `
+UPDATE iam.assistant_idempotency
+SET status = 'done',
+    http_status = $6,
+    error_code = NULL,
+    response_body = $7::jsonb,
+    response_hash = $8,
+    finalized_at = now()
+WHERE tenant_uuid = $1::uuid
+  AND conversation_id = $2
+  AND turn_id = $3
+  AND turn_action = $4
+  AND request_id = $5
+`, key.TenantID, key.ConversationID, key.TurnID, key.TurnAction, key.RequestID, httpStatus, string(body), responseHash)
+	return err
+}
+
 func (s *assistantConversationService) finalizeIdempotencyErrorTx(ctx context.Context, tx pgx.Tx, key assistantIdempotencyKey, failure error) error {
 	status, code, ok := assistantIdempotencyErrorPayload(failure)
 	if !ok {
@@ -1525,6 +1590,20 @@ func (s *assistantConversationService) restoreIdempotentResult(claim assistantId
 	}
 	assistantRefreshConversationDerivedFields(&conversation)
 	return &conversation, nil
+}
+
+func assistantRestoreTaskReceiptFromIdempotency(claim assistantIdempotencyClaim) (*assistantTaskAsyncReceipt, error) {
+	if claim.ErrorCode != "" {
+		return nil, assistantErrorFromIdempotencyCode(claim.ErrorCode)
+	}
+	if len(claim.Body) == 0 || string(claim.Body) == "null" {
+		return nil, errAssistantRequestInProgress
+	}
+	var receipt assistantTaskAsyncReceipt
+	if err := json.Unmarshal(claim.Body, &receipt); err != nil {
+		return nil, err
+	}
+	return &receipt, nil
 }
 
 func assistantErrorFromIdempotencyCode(code string) error {

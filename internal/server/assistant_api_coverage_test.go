@@ -581,307 +581,9 @@ func TestAssistantTurnActionHandler_CoverageMatrix(t *testing.T) {
 
 	t.Run("commit branches", func(t *testing.T) {
 		rec := httptest.NewRecorder()
-		handleAssistantTurnActionAPI(rec, assistantReqWithContext(http.MethodPost, "/internal/assistant/conversations/missing/turns/turn-1:commit", `{}`, true, true), svc)
-		if rec.Code != http.StatusNotFound || assistantDecodeErrCode(t, rec) != "conversation_not_found" {
+		handleAssistantTurnActionAPI(rec, assistantReqWithContext(http.MethodPost, baseCommitPath, `{}`, true, true), svc)
+		if rec.Code != http.StatusServiceUnavailable || assistantDecodeErrCode(t, rec) != "assistant_task_workflow_unavailable" {
 			t.Fatalf("status=%d code=%s", rec.Code, assistantDecodeErrCode(t, rec))
-		}
-
-		forbiddenReq := assistantReqWithContext(http.MethodPost, baseCommitPath, `{}`, true, true)
-		forbiddenReq = forbiddenReq.WithContext(withTenant(forbiddenReq.Context(), Tenant{ID: "tenant-x"}))
-		rec = httptest.NewRecorder()
-		handleAssistantTurnActionAPI(rec, forbiddenReq, svc)
-		if rec.Code != http.StatusForbidden || assistantDecodeErrCode(t, rec) != "tenant_mismatch" {
-			t.Fatalf("status=%d code=%s", rec.Code, assistantDecodeErrCode(t, rec))
-		}
-
-		rec = httptest.NewRecorder()
-		handleAssistantTurnActionAPI(rec, assistantReqWithContext(http.MethodPost, "/internal/assistant/conversations/"+conv.ConversationID+"/turns/missing:commit", `{}`, true, true), svc)
-		if rec.Code != http.StatusNotFound || assistantDecodeErrCode(t, rec) != "conversation_turn_not_found" {
-			t.Fatalf("status=%d code=%s", rec.Code, assistantDecodeErrCode(t, rec))
-		}
-
-		unconfirmedSvc := newAssistantConversationService(store, assistantWriteServiceStub{store: store})
-		unconfirmedConv := unconfirmedSvc.createConversation(tenantID, principal)
-		unconfirmedConversation, createErr := unconfirmedSvc.createTurn(context.Background(), tenantID, principal, unconfirmedConv.ConversationID, "在鲜花组织之下，新建一个名为财务部的部门，成立日期是2026-01-01")
-		if createErr != nil {
-			t.Fatal(createErr)
-		}
-		rec = httptest.NewRecorder()
-		handleAssistantTurnActionAPI(rec, assistantReqWithContext(http.MethodPost, "/internal/assistant/conversations/"+unconfirmedConv.ConversationID+"/turns/"+unconfirmedConversation.Turns[0].TurnID+":commit", `{}`, true, true), unconfirmedSvc)
-		if rec.Code != http.StatusConflict || assistantDecodeErrCode(t, rec) != "conversation_confirmation_required" {
-			t.Fatalf("status=%d code=%s", rec.Code, assistantDecodeErrCode(t, rec))
-		}
-
-		expiredSvc := newAssistantConversationService(store, assistantWriteServiceStub{store: store})
-		expiredConv := expiredSvc.createConversation(tenantID, principal)
-		expiredConversation, expiredErr := expiredSvc.createTurn(context.Background(), tenantID, principal, expiredConv.ConversationID, "在鲜花组织之下，新建一个名为法务部的部门，成立日期是2026-01-01")
-		if expiredErr != nil {
-			t.Fatal(expiredErr)
-		}
-		expiredSvc.mu.Lock()
-		expiredSvc.byID[expiredConv.ConversationID].Turns[0].Plan.ExpiresAt = time.Now().UTC().Add(-1 * time.Minute).Format(time.RFC3339)
-		expiredSvc.mu.Unlock()
-		rec = httptest.NewRecorder()
-		handleAssistantTurnActionAPI(rec, assistantReqWithContext(http.MethodPost, "/internal/assistant/conversations/"+expiredConv.ConversationID+"/turns/"+expiredConversation.Turns[0].TurnID+":commit", `{}`, true, true), expiredSvc)
-		if rec.Code != http.StatusConflict || assistantDecodeErrCode(t, rec) != "conversation_confirmation_expired" {
-			t.Fatalf("status=%d code=%s", rec.Code, assistantDecodeErrCode(t, rec))
-		}
-
-		terminalSvc := newAssistantConversationService(store, assistantWriteServiceStub{store: store})
-		terminalConv := terminalSvc.createConversation(tenantID, principal)
-		terminalTurn := &assistantTurn{
-			TurnID:              "turn-terminal",
-			State:               assistantStateCanceled,
-			Intent:              assistantIntentSpec{Action: assistantIntentCreateOrgUnit, EntityName: "运营部", EffectiveDate: "2026-01-01"},
-			ResolvedCandidateID: "FLOWER-A",
-			Candidates:          []assistantCandidate{{CandidateID: "FLOWER-A", CandidateCode: "FLOWER-A", Name: "鲜花组织", IsActive: true}},
-		}
-		terminalSvc.mu.Lock()
-		terminalSvc.byID[terminalConv.ConversationID].Turns = append(terminalSvc.byID[terminalConv.ConversationID].Turns, terminalTurn)
-		terminalSvc.mu.Unlock()
-		rec = httptest.NewRecorder()
-		handleAssistantTurnActionAPI(rec, assistantReqWithContext(http.MethodPost, "/internal/assistant/conversations/"+terminalConv.ConversationID+"/turns/"+terminalTurn.TurnID+":commit", `{}`, true, true), terminalSvc)
-		if rec.Code != http.StatusConflict || assistantDecodeErrCode(t, rec) != "conversation_state_invalid" {
-			t.Fatalf("status=%d code=%s", rec.Code, assistantDecodeErrCode(t, rec))
-		}
-
-		terminalSvc.mu.Lock()
-		terminalSvc.byID[terminalConv.ConversationID].Turns[0].State = assistantStateExpired
-		terminalSvc.mu.Unlock()
-		rec = httptest.NewRecorder()
-		handleAssistantTurnActionAPI(rec, assistantReqWithContext(http.MethodPost, "/internal/assistant/conversations/"+terminalConv.ConversationID+"/turns/"+terminalTurn.TurnID+":commit", `{}`, true, true), terminalSvc)
-		if rec.Code != http.StatusConflict || assistantDecodeErrCode(t, rec) != "conversation_state_invalid" {
-			t.Fatalf("status=%d code=%s", rec.Code, assistantDecodeErrCode(t, rec))
-		}
-
-		driftSvc := newAssistantConversationService(store, assistantWriteServiceStub{store: store})
-		driftConv := driftSvc.createConversation(tenantID, principal)
-		driftTurn := &assistantTurn{
-			TurnID:              "turn-drift",
-			State:               assistantStateConfirmed,
-			Intent:              assistantIntentSpec{Action: assistantIntentCreateOrgUnit, EntityName: "运营部", EffectiveDate: "2026-01-01"},
-			Plan:                assistantBuildPlan(assistantIntentSpec{Action: assistantIntentCreateOrgUnit}),
-			ResolvedCandidateID: "FLOWER-A",
-			Candidates:          []assistantCandidate{{CandidateID: "FLOWER-A", CandidateCode: "FLOWER-A", Name: "鲜花组织", IsActive: true}},
-			PolicyVersion:       "1999-01-01",
-			CompositionVersion:  capabilityPolicyVersionBaseline,
-			MappingVersion:      capabilityPolicyVersionBaseline,
-		}
-		driftSvc.mu.Lock()
-		driftSvc.byID[driftConv.ConversationID].Turns = append(driftSvc.byID[driftConv.ConversationID].Turns, driftTurn)
-		driftSvc.mu.Unlock()
-		rec = httptest.NewRecorder()
-		handleAssistantTurnActionAPI(rec, assistantReqWithContext(http.MethodPost, "/internal/assistant/conversations/"+driftConv.ConversationID+"/turns/"+driftTurn.TurnID+":commit", `{}`, true, true), driftSvc)
-		if rec.Code != http.StatusConflict || assistantDecodeErrCode(t, rec) != "conversation_confirmation_required" {
-			t.Fatalf("status=%d code=%s", rec.Code, assistantDecodeErrCode(t, rec))
-		}
-		driftSvc.mu.RLock()
-		gotDriftState := driftSvc.byID[driftConv.ConversationID].Turns[0].State
-		driftSvc.mu.RUnlock()
-		if gotDriftState != assistantStateValidated {
-			t.Fatalf("drift rollback state=%s", gotDriftState)
-		}
-
-		contractMismatchSvc := newAssistantConversationService(store, assistantWriteServiceStub{store: store})
-		contractMismatchConv := contractMismatchSvc.createConversation(tenantID, principal)
-		contractMismatchTurn := &assistantTurn{
-			TurnID: "turn-contract-mismatch",
-			State:  assistantStateConfirmed,
-			Intent: assistantIntentSpec{
-				Action:              assistantIntentCreateOrgUnit,
-				EntityName:          "运营部",
-				EffectiveDate:       "2026-01-01",
-				IntentSchemaVersion: assistantIntentSchemaVersionV1,
-			},
-			Plan: assistantPlanSummary{
-				Title:                   "创建组织计划",
-				CapabilityKey:           "org.orgunit_create.field_policy",
-				Summary:                 "contract mismatch test",
-				CompilerContractVersion: "assistant.compiler.v0",
-				CapabilityMapVersion:    assistantCapabilityMapVersionV1,
-				SkillManifestDigest:     "digest-v1",
-			},
-			ResolvedCandidateID: "FLOWER-A",
-			Candidates:          []assistantCandidate{{CandidateID: "FLOWER-A", CandidateCode: "FLOWER-A", Name: "鲜花组织", IsActive: true}},
-			PolicyVersion:       capabilityPolicyVersionBaseline,
-			CompositionVersion:  capabilityPolicyVersionBaseline,
-			MappingVersion:      capabilityPolicyVersionBaseline,
-		}
-		contractMismatchSvc.mu.Lock()
-		contractMismatchSvc.byID[contractMismatchConv.ConversationID].Turns = append(contractMismatchSvc.byID[contractMismatchConv.ConversationID].Turns, contractMismatchTurn)
-		contractMismatchSvc.mu.Unlock()
-		rec = httptest.NewRecorder()
-		handleAssistantTurnActionAPI(rec, assistantReqWithContext(http.MethodPost, "/internal/assistant/conversations/"+contractMismatchConv.ConversationID+"/turns/"+contractMismatchTurn.TurnID+":commit", `{}`, true, true), contractMismatchSvc)
-		if rec.Code != http.StatusConflict || assistantDecodeErrCode(t, rec) != "ai_plan_contract_version_mismatch" {
-			t.Fatalf("status=%d code=%s", rec.Code, assistantDecodeErrCode(t, rec))
-		}
-		contractMismatchSvc.mu.RLock()
-		gotContractMismatchState := contractMismatchSvc.byID[contractMismatchConv.ConversationID].Turns[0].State
-		contractMismatchSvc.mu.RUnlock()
-		if gotContractMismatchState != assistantStateValidated {
-			t.Fatalf("contract mismatch rollback state=%s", gotContractMismatchState)
-		}
-
-		reauthSvc := newAssistantConversationService(store, assistantWriteServiceStub{store: store})
-		reauthConv := reauthSvc.createConversation(tenantID, principal)
-		reauthConversation, createErr := reauthSvc.createTurn(context.Background(), tenantID, principal, reauthConv.ConversationID, "在鲜花组织之下，新建一个名为市场部的部门，成立日期是2026-01-01")
-		if createErr != nil {
-			t.Fatal(createErr)
-		}
-		reauthTurn := reauthConversation.Turns[0]
-		reauthTurn.ResolvedCandidateID = reauthTurn.Candidates[0].CandidateID
-		reauthTurn.State = assistantStateConfirmed
-		otherActorReq := assistantReqWithContext(http.MethodPost, "/internal/assistant/conversations/"+reauthConv.ConversationID+"/turns/"+reauthTurn.TurnID+":commit", `{}`, true, true)
-		otherActorReq = otherActorReq.WithContext(withPrincipal(otherActorReq.Context(), Principal{ID: "actor-x", RoleSlug: "tenant-admin"}))
-		rec = httptest.NewRecorder()
-		handleAssistantTurnActionAPI(rec, otherActorReq, reauthSvc)
-		if rec.Code != http.StatusForbidden || assistantDecodeErrCode(t, rec) != "ai_actor_auth_snapshot_expired" {
-			t.Fatalf("status=%d code=%s", rec.Code, assistantDecodeErrCode(t, rec))
-		}
-
-		roleDriftReq := assistantReqWithContext(http.MethodPost, "/internal/assistant/conversations/"+reauthConv.ConversationID+"/turns/"+reauthTurn.TurnID+":commit", `{}`, true, true)
-		roleDriftReq = roleDriftReq.WithContext(withPrincipal(roleDriftReq.Context(), Principal{ID: "actor-1", RoleSlug: "viewer"}))
-		rec = httptest.NewRecorder()
-		handleAssistantTurnActionAPI(rec, roleDriftReq, reauthSvc)
-		if rec.Code != http.StatusForbidden || assistantDecodeErrCode(t, rec) != "ai_actor_role_drift_detected" {
-			t.Fatalf("status=%d code=%s", rec.Code, assistantDecodeErrCode(t, rec))
-		}
-
-		unsupportedSvc := newAssistantConversationService(store, assistantWriteServiceStub{store: store})
-		unsupportedConv := unsupportedSvc.createConversation(tenantID, principal)
-		unsupportedTurn := &assistantTurn{
-			TurnID:              "turn-unsupported",
-			State:               assistantStateConfirmed,
-			Intent:              assistantIntentSpec{Action: "plan_only"},
-			Plan:                assistantBuildPlan(assistantIntentSpec{Action: "plan_only"}),
-			ResolvedCandidateID: "FLOWER-A",
-			PolicyVersion:       capabilityPolicyVersionBaseline,
-			CompositionVersion:  capabilityPolicyVersionBaseline,
-			MappingVersion:      capabilityPolicyVersionBaseline,
-		}
-		unsupportedSvc.mu.Lock()
-		unsupportedSvc.byID[unsupportedConv.ConversationID].Turns = append(unsupportedSvc.byID[unsupportedConv.ConversationID].Turns, unsupportedTurn)
-		unsupportedSvc.mu.Unlock()
-		rec = httptest.NewRecorder()
-		handleAssistantTurnActionAPI(rec, assistantReqWithContext(http.MethodPost, "/internal/assistant/conversations/"+unsupportedConv.ConversationID+"/turns/turn-unsupported:commit", `{}`, true, true), unsupportedSvc)
-		if rec.Code != http.StatusUnprocessableEntity || assistantDecodeErrCode(t, rec) != "assistant_intent_unsupported" {
-			t.Fatalf("status=%d code=%s", rec.Code, assistantDecodeErrCode(t, rec))
-		}
-
-		missingServiceSvc := newAssistantConversationService(store, nil)
-		missingConv := missingServiceSvc.createConversation(tenantID, principal)
-		missingTurn := &assistantTurn{
-			TurnID:              "turn-missing-service",
-			State:               assistantStateConfirmed,
-			Intent:              assistantIntentSpec{Action: assistantIntentCreateOrgUnit, EntityName: "运营部", EffectiveDate: "2026-01-01"},
-			Plan:                assistantBuildPlan(assistantIntentSpec{Action: assistantIntentCreateOrgUnit}),
-			ResolvedCandidateID: "FLOWER-A",
-			Candidates:          []assistantCandidate{{CandidateID: "FLOWER-A", CandidateCode: "FLOWER-A", Name: "鲜花组织", OrgID: 10000000, IsActive: true}},
-			PolicyVersion:       capabilityPolicyVersionBaseline,
-			CompositionVersion:  capabilityPolicyVersionBaseline,
-			MappingVersion:      capabilityPolicyVersionBaseline,
-		}
-		if err := missingServiceSvc.refreshTurnVersionTuple(context.Background(), tenantID, missingTurn); err != nil {
-			t.Fatalf("refresh missing service turn err=%v", err)
-		}
-		missingServiceSvc.mu.Lock()
-		missingServiceSvc.byID[missingConv.ConversationID].Turns = append(missingServiceSvc.byID[missingConv.ConversationID].Turns, missingTurn)
-		missingServiceSvc.mu.Unlock()
-		rec = httptest.NewRecorder()
-		handleAssistantTurnActionAPI(rec, assistantReqWithContext(http.MethodPost, "/internal/assistant/conversations/"+missingConv.ConversationID+"/turns/turn-missing-service:commit", `{}`, true, true), missingServiceSvc)
-		if rec.Code != http.StatusInternalServerError || assistantDecodeErrCode(t, rec) != "orgunit_service_missing" {
-			t.Fatalf("status=%d code=%s", rec.Code, assistantDecodeErrCode(t, rec))
-		}
-
-		missingCandidateSvc := newAssistantConversationService(store, assistantWriteServiceStub{store: store})
-		missingCandidateConv := missingCandidateSvc.createConversation(tenantID, principal)
-		missingCandidateTurn := &assistantTurn{
-			TurnID:              "turn-missing-candidate",
-			State:               assistantStateConfirmed,
-			Intent:              assistantIntentSpec{Action: assistantIntentCreateOrgUnit, EntityName: "运营部", EffectiveDate: "2026-01-01"},
-			Plan:                assistantBuildPlan(assistantIntentSpec{Action: assistantIntentCreateOrgUnit}),
-			ResolvedCandidateID: "UNKNOWN",
-			Candidates:          []assistantCandidate{{CandidateID: "FLOWER-A", CandidateCode: "FLOWER-A", Name: "鲜花组织", IsActive: true}},
-			PolicyVersion:       capabilityPolicyVersionBaseline,
-			CompositionVersion:  capabilityPolicyVersionBaseline,
-			MappingVersion:      capabilityPolicyVersionBaseline,
-		}
-		missingCandidateSvc.mu.Lock()
-		missingCandidateSvc.byID[missingCandidateConv.ConversationID].Turns = append(missingCandidateSvc.byID[missingCandidateConv.ConversationID].Turns, missingCandidateTurn)
-		missingCandidateSvc.mu.Unlock()
-		rec = httptest.NewRecorder()
-		handleAssistantTurnActionAPI(rec, assistantReqWithContext(http.MethodPost, "/internal/assistant/conversations/"+missingCandidateConv.ConversationID+"/turns/turn-missing-candidate:commit", `{}`, true, true), missingCandidateSvc)
-		if rec.Code != http.StatusConflict || assistantDecodeErrCode(t, rec) != "conversation_confirmation_required" {
-			t.Fatalf("status=%d code=%s", rec.Code, assistantDecodeErrCode(t, rec))
-		}
-
-		writeErrSvc := newAssistantConversationService(store, assistantWriteServiceErrorStub{})
-		writeErrConv := writeErrSvc.createConversation(tenantID, principal)
-		writeErrTurn := &assistantTurn{
-			TurnID:              "turn-write-error",
-			State:               assistantStateConfirmed,
-			Intent:              assistantIntentSpec{Action: assistantIntentCreateOrgUnit, EntityName: "运营部", EffectiveDate: "2026-01-01"},
-			Plan:                assistantBuildPlan(assistantIntentSpec{Action: assistantIntentCreateOrgUnit}),
-			ResolvedCandidateID: "FLOWER-A",
-			Candidates:          []assistantCandidate{{CandidateID: "FLOWER-A", CandidateCode: "FLOWER-A", Name: "鲜花组织", OrgID: 10000000, IsActive: true}},
-			RequestID:           "assistant_req_write_error",
-			PolicyVersion:       capabilityPolicyVersionBaseline,
-			CompositionVersion:  capabilityPolicyVersionBaseline,
-			MappingVersion:      capabilityPolicyVersionBaseline,
-		}
-		if err := writeErrSvc.refreshTurnVersionTuple(context.Background(), tenantID, writeErrTurn); err != nil {
-			t.Fatalf("refresh write error turn err=%v", err)
-		}
-		writeErrSvc.mu.Lock()
-		writeErrSvc.byID[writeErrConv.ConversationID].Turns = append(writeErrSvc.byID[writeErrConv.ConversationID].Turns, writeErrTurn)
-		writeErrSvc.mu.Unlock()
-		rec = httptest.NewRecorder()
-		handleAssistantTurnActionAPI(rec, assistantReqWithContext(http.MethodPost, "/internal/assistant/conversations/"+writeErrConv.ConversationID+"/turns/turn-write-error:commit", `{}`, true, true), writeErrSvc)
-		if rec.Code != http.StatusInternalServerError || assistantDecodeErrCode(t, rec) != "assistant_commit_failed" {
-			t.Fatalf("status=%d code=%s", rec.Code, assistantDecodeErrCode(t, rec))
-		}
-
-		fieldPolicyErrSvc := newAssistantConversationService(store, assistantWriteServiceFieldPolicyMissingStub{})
-		fieldPolicyErrConv := fieldPolicyErrSvc.createConversation(tenantID, principal)
-		fieldPolicyErrTurn := &assistantTurn{
-			TurnID:              "turn-field-policy-missing",
-			State:               assistantStateConfirmed,
-			Intent:              assistantIntentSpec{Action: assistantIntentCreateOrgUnit, EntityName: "运营部", EffectiveDate: "2026-01-01"},
-			Plan:                assistantBuildPlan(assistantIntentSpec{Action: assistantIntentCreateOrgUnit}),
-			ResolvedCandidateID: "FLOWER-A",
-			Candidates:          []assistantCandidate{{CandidateID: "FLOWER-A", CandidateCode: "FLOWER-A", Name: "鲜花组织", OrgID: 10000000, IsActive: true}},
-			RequestID:           "assistant_req_field_policy_missing",
-			PolicyVersion:       capabilityPolicyVersionBaseline,
-			CompositionVersion:  capabilityPolicyVersionBaseline,
-			MappingVersion:      capabilityPolicyVersionBaseline,
-		}
-		if err := fieldPolicyErrSvc.refreshTurnVersionTuple(context.Background(), tenantID, fieldPolicyErrTurn); err != nil {
-			t.Fatalf("refresh field policy turn err=%v", err)
-		}
-		fieldPolicyErrSvc.mu.Lock()
-		fieldPolicyErrSvc.byID[fieldPolicyErrConv.ConversationID].Turns = append(fieldPolicyErrSvc.byID[fieldPolicyErrConv.ConversationID].Turns, fieldPolicyErrTurn)
-		fieldPolicyErrSvc.mu.Unlock()
-		rec = httptest.NewRecorder()
-		handleAssistantTurnActionAPI(rec, assistantReqWithContext(http.MethodPost, "/internal/assistant/conversations/"+fieldPolicyErrConv.ConversationID+"/turns/turn-field-policy-missing:commit", `{}`, true, true), fieldPolicyErrSvc)
-		if rec.Code != http.StatusUnprocessableEntity || assistantDecodeErrCode(t, rec) != orgUnitErrFieldPolicyMissing {
-			t.Fatalf("status=%d code=%s", rec.Code, assistantDecodeErrCode(t, rec))
-		}
-
-		commitOKSvc := newAssistantConversationService(store, assistantWriteServiceStub{store: store})
-		commitOKConv := commitOKSvc.createConversation(tenantID, principal)
-		commitOKConversation, err := commitOKSvc.createTurn(context.Background(), tenantID, principal, commitOKConv.ConversationID, "在鲜花组织之下，新建一个名为运营部的部门，成立日期是2026年1月1日。")
-		if err != nil {
-			t.Fatalf("create commit-ok turn err=%v", err)
-		}
-		commitOKTurnID := commitOKConversation.Turns[0].TurnID
-		commitOKCandidateID := commitOKConversation.Turns[0].Candidates[0].CandidateID
-		if _, err := commitOKSvc.confirmTurn(tenantID, principal, commitOKConv.ConversationID, commitOKTurnID, commitOKCandidateID); err != nil {
-			t.Fatalf("confirm commit-ok turn err=%v", err)
-		}
-		rec = httptest.NewRecorder()
-		handleAssistantTurnActionAPI(rec, assistantReqWithContext(http.MethodPost, "/internal/assistant/conversations/"+commitOKConv.ConversationID+"/turns/"+commitOKTurnID+":commit", `{}`, true, true), commitOKSvc)
-		if rec.Code != http.StatusOK {
-			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
 		}
 
 		rec = httptest.NewRecorder()
@@ -1303,7 +1005,7 @@ func TestAssistantServiceHelpersAndUtilities(t *testing.T) {
 		svc.mu.Lock()
 		svc.byID[conv.ConversationID].Turns = append(svc.byID[conv.ConversationID].Turns, expiredCommitTurn)
 		svc.mu.Unlock()
-		if _, err := svc.commitTurn(context.Background(), "tenant-1", principal, conv.ConversationID, expiredCommitTurn.TurnID); !errors.Is(err, errAssistantConfirmationExpired) {
+		if _, err := assistantCommitTurnSyncForTest(svc, context.Background(), "tenant-1", principal, conv.ConversationID, expiredCommitTurn.TurnID); !errors.Is(err, errAssistantConfirmationExpired) {
 			t.Fatalf("want confirmation expired on commit, got %v", err)
 		}
 		svc.mu.RLock()
@@ -1342,34 +1044,34 @@ func TestAssistantServiceHelpersAndUtilities(t *testing.T) {
 		svc.mu.Lock()
 		svc.byID[conv.ConversationID].Turns[0].State = assistantStateConfirmed
 		svc.mu.Unlock()
-		if _, err := svc.commitTurn(context.Background(), "tenant-1", Principal{ID: "actor-1", RoleSlug: "viewer"}, conv.ConversationID, turnID); !errors.Is(err, errAssistantRoleDriftDetected) {
+		if _, err := assistantCommitTurnSyncForTest(svc, context.Background(), "tenant-1", Principal{ID: "actor-1", RoleSlug: "viewer"}, conv.ConversationID, turnID); !errors.Is(err, errAssistantRoleDriftDetected) {
 			t.Fatalf("want role drift, got %v", err)
 		}
-		if _, err := svc.commitTurn(context.Background(), "tenant-1", Principal{ID: "actor-x", RoleSlug: "tenant-admin"}, conv.ConversationID, turnID); !errors.Is(err, errAssistantAuthSnapshotExpired) {
+		if _, err := assistantCommitTurnSyncForTest(svc, context.Background(), "tenant-1", Principal{ID: "actor-x", RoleSlug: "tenant-admin"}, conv.ConversationID, turnID); !errors.Is(err, errAssistantAuthSnapshotExpired) {
 			t.Fatalf("want auth snapshot expired, got %v", err)
 		}
-		if _, err := svc.commitTurn(context.Background(), "tenant-x", principal, conv.ConversationID, turnID); !errors.Is(err, errAssistantTenantMismatch) {
+		if _, err := assistantCommitTurnSyncForTest(svc, context.Background(), "tenant-x", principal, conv.ConversationID, turnID); !errors.Is(err, errAssistantTenantMismatch) {
 			t.Fatalf("want tenant mismatch, got %v", err)
 		}
-		if _, err := svc.commitTurn(context.Background(), "tenant-1", principal, conv.ConversationID, "missing"); !errors.Is(err, errAssistantTurnNotFound) {
+		if _, err := assistantCommitTurnSyncForTest(svc, context.Background(), "tenant-1", principal, conv.ConversationID, "missing"); !errors.Is(err, errAssistantTurnNotFound) {
 			t.Fatalf("want turn not found, got %v", err)
 		}
-		if _, err := svc.commitTurn(context.Background(), "tenant-1", principal, conv.ConversationID, turnID); err != nil {
+		if _, err := assistantCommitTurnSyncForTest(svc, context.Background(), "tenant-1", principal, conv.ConversationID, turnID); err != nil {
 			t.Fatalf("commit failed: %v", err)
 		}
-		if _, err := svc.commitTurn(context.Background(), "tenant-1", principal, conv.ConversationID, turnID); err != nil {
+		if _, err := assistantCommitTurnSyncForTest(svc, context.Background(), "tenant-1", principal, conv.ConversationID, turnID); err != nil {
 			t.Fatalf("idempotent commit failed: %v", err)
 		}
 		svc.mu.Lock()
 		svc.byID[conv.ConversationID].Turns[0].State = assistantStateCanceled
 		svc.mu.Unlock()
-		if _, err := svc.commitTurn(context.Background(), "tenant-1", principal, conv.ConversationID, turnID); !errors.Is(err, errAssistantConversationStateInvalid) {
+		if _, err := assistantCommitTurnSyncForTest(svc, context.Background(), "tenant-1", principal, conv.ConversationID, turnID); !errors.Is(err, errAssistantConversationStateInvalid) {
 			t.Fatalf("want state invalid for canceled commit, got %v", err)
 		}
 		svc.mu.Lock()
 		svc.byID[conv.ConversationID].Turns[0].State = assistantStateExpired
 		svc.mu.Unlock()
-		if _, err := svc.commitTurn(context.Background(), "tenant-1", principal, conv.ConversationID, turnID); !errors.Is(err, errAssistantConversationStateInvalid) {
+		if _, err := assistantCommitTurnSyncForTest(svc, context.Background(), "tenant-1", principal, conv.ConversationID, turnID); !errors.Is(err, errAssistantConversationStateInvalid) {
 			t.Fatalf("want state invalid for expired commit, got %v", err)
 		}
 
@@ -1387,7 +1089,7 @@ func TestAssistantServiceHelpersAndUtilities(t *testing.T) {
 		unsupportedSvc.mu.Lock()
 		unsupportedSvc.byID[unsupportedConv.ConversationID].Turns = append(unsupportedSvc.byID[unsupportedConv.ConversationID].Turns, unsupportedTurn)
 		unsupportedSvc.mu.Unlock()
-		if _, err := unsupportedSvc.commitTurn(context.Background(), "tenant-1", principal, unsupportedConv.ConversationID, unsupportedTurn.TurnID); !errors.Is(err, errAssistantUnsupportedIntent) {
+		if _, err := assistantCommitTurnSyncForTest(unsupportedSvc, context.Background(), "tenant-1", principal, unsupportedConv.ConversationID, unsupportedTurn.TurnID); !errors.Is(err, errAssistantUnsupportedIntent) {
 			t.Fatalf("want unsupported intent, got %v", err)
 		}
 
@@ -1405,7 +1107,7 @@ func TestAssistantServiceHelpersAndUtilities(t *testing.T) {
 		missingCandidateSvc.mu.Lock()
 		missingCandidateSvc.byID[missingCandidateConv.ConversationID].Turns = append(missingCandidateSvc.byID[missingCandidateConv.ConversationID].Turns, missingCandidateTurn)
 		missingCandidateSvc.mu.Unlock()
-		if _, err := missingCandidateSvc.commitTurn(context.Background(), "tenant-1", principal, missingCandidateConv.ConversationID, missingCandidateTurn.TurnID); !errors.Is(err, errAssistantCandidateNotFound) {
+		if _, err := assistantCommitTurnSyncForTest(missingCandidateSvc, context.Background(), "tenant-1", principal, missingCandidateConv.ConversationID, missingCandidateTurn.TurnID); !errors.Is(err, errAssistantCandidateNotFound) {
 			t.Fatalf("want candidate not found, got %v", err)
 		}
 
@@ -1425,7 +1127,7 @@ func TestAssistantServiceHelpersAndUtilities(t *testing.T) {
 		driftSvc.mu.Lock()
 		driftSvc.byID[driftConv.ConversationID].Turns = append(driftSvc.byID[driftConv.ConversationID].Turns, driftTurn)
 		driftSvc.mu.Unlock()
-		if _, err := driftSvc.commitTurn(context.Background(), "tenant-1", principal, driftConv.ConversationID, driftTurn.TurnID); !errors.Is(err, errAssistantConfirmationRequired) {
+		if _, err := assistantCommitTurnSyncForTest(driftSvc, context.Background(), "tenant-1", principal, driftConv.ConversationID, driftTurn.TurnID); !errors.Is(err, errAssistantConfirmationRequired) {
 			t.Fatalf("want confirmation required on drift, got %v", err)
 		}
 		driftSvc.mu.RLock()
@@ -1439,7 +1141,7 @@ func TestAssistantServiceHelpersAndUtilities(t *testing.T) {
 		corruptedSvc.mu.Lock()
 		corruptedSvc.byID["conv-corrupted"] = nil
 		corruptedSvc.mu.Unlock()
-		if _, err := corruptedSvc.commitTurn(context.Background(), "tenant-1", principal, "conv-corrupted", "turn-1"); !errors.Is(err, errAssistantConversationCorrupted) {
+		if _, err := assistantCommitTurnSyncForTest(corruptedSvc, context.Background(), "tenant-1", principal, "conv-corrupted", "turn-1"); !errors.Is(err, errAssistantConversationCorrupted) {
 			t.Fatalf("want conversation corrupted, got %v", err)
 		}
 
@@ -1463,7 +1165,7 @@ func TestAssistantServiceHelpersAndUtilities(t *testing.T) {
 		fallbackNameSvc.mu.Lock()
 		fallbackNameSvc.byID[fallbackConv.ConversationID].Turns = append(fallbackNameSvc.byID[fallbackConv.ConversationID].Turns, fallbackTurn)
 		fallbackNameSvc.mu.Unlock()
-		if _, err := fallbackNameSvc.commitTurn(context.Background(), "tenant-1", principal, fallbackConv.ConversationID, fallbackTurn.TurnID); err != nil {
+		if _, err := assistantCommitTurnSyncForTest(fallbackNameSvc, context.Background(), "tenant-1", principal, fallbackConv.ConversationID, fallbackTurn.TurnID); err != nil {
 			t.Fatalf("commit with fallback name failed: %v", err)
 		}
 	})

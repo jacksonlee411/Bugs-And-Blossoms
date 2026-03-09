@@ -1066,6 +1066,79 @@ func TestAssistantPersistence_CommitTurnPG_ErrorPathMatrix(t *testing.T) {
 	}
 }
 
+func TestAssistantPersistence_ExecuteCommitCoreTx_PersistsCommitState(t *testing.T) {
+	wd := mustGetwd(t)
+	t.Setenv("ALLOWLIST_PATH", mustAllowlistPathFromWd(t, wd))
+	t.Setenv("AUTHZ_MODE", "disabled")
+	t.Setenv("AUTHZ_UNSAFE_ALLOW_DISABLED", "1")
+
+	store := newOrgUnitMemoryStore()
+	if _, err := store.CreateNodeCurrent(context.Background(), "tenant_1", "2026-01-01", "FLOWER-A", "鲜花组织", "", true); err != nil {
+		t.Fatal(err)
+	}
+	svc := newAssistantConversationService(store, nil)
+	svc.commitAdapterRegistry = assistantCommitAdapterRegistryMap{adapters: map[string]assistantCommitAdapter{
+		"orgunit_create_v1": assistantCommitAdapterStub{result: &assistantCommitResult{OrgCode: "ORG_NEW", EventUUID: "evt_1"}},
+	}}
+	now := time.Now().UTC()
+	turn := assistantTaskSampleTurn(now)
+	turn.State = assistantStateConfirmed
+	assistantRefreshTurnDerivedFields(turn)
+	if err := svc.refreshTurnVersionTuple(context.Background(), "tenant_1", turn); err != nil {
+		t.Fatalf("refreshTurnVersionTuple err=%v", err)
+	}
+	assistantRefreshTurnDerivedFields(turn)
+	conversation := &assistantConversation{
+		ConversationID: "conv_1",
+		TenantID:       "tenant_1",
+		ActorID:        "actor_1",
+		ActorRole:      "tenant-admin",
+		State:          turn.State,
+		CurrentPhase:   turn.Phase,
+		CreatedAt:      now,
+		UpdatedAt:      now,
+		Turns:          []*assistantTurn{turn},
+	}
+
+	execSeen := make([]string, 0, 3)
+	tx := &assistFakeTx{}
+	tx.execFn = func(sql string, _ ...any) (pgconn.CommandTag, error) {
+		execSeen = append(execSeen, sql)
+		return pgconn.NewCommandTag(""), nil
+	}
+	tx.queryRowFn = func(sql string, _ ...any) pgx.Row {
+		if strings.Contains(sql, "INSERT INTO iam.assistant_state_transitions") {
+			execSeen = append(execSeen, sql)
+			return &assistFakeRow{vals: []any{int64(1)}}
+		}
+		return &assistFakeRow{err: pgx.ErrNoRows}
+	}
+
+	result, applyErr, execErr := svc.executeCommitCoreTx(context.Background(), tx, "tenant_1", Principal{ID: "actor_1", RoleSlug: "tenant-admin"}, conversation, turn)
+	if execErr != nil {
+		t.Fatalf("executeCommitCoreTx execErr=%v", execErr)
+	}
+	if applyErr != nil {
+		t.Fatalf("executeCommitCoreTx applyErr=%v", applyErr)
+	}
+	if !result.PersistTurn || result.Transition == nil {
+		t.Fatalf("unexpected result=%+v", result)
+	}
+	if turn.State != assistantStateCommitted || turn.CommitResult == nil {
+		t.Fatalf("unexpected committed turn=%+v", turn)
+	}
+	joined := strings.Join(execSeen, "\n")
+	if !strings.Contains(joined, "INSERT INTO iam.assistant_turns") {
+		t.Fatalf("expected turn upsert, sql=%s", joined)
+	}
+	if !strings.Contains(joined, "UPDATE iam.assistant_conversations") {
+		t.Fatalf("expected conversation update, sql=%s", joined)
+	}
+	if !strings.Contains(joined, "INSERT INTO iam.assistant_state_transitions") {
+		t.Fatalf("expected transition insert, sql=%s", joined)
+	}
+}
+
 func TestAssistantPersistence_ConfirmationExpiryPaths(t *testing.T) {
 	store := newOrgUnitMemoryStore()
 	svc := newAssistantConversationService(store, assistantWriteServiceStub{store: store})

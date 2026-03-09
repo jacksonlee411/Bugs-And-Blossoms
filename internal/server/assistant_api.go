@@ -534,7 +534,7 @@ func handleAssistantTurnActionAPI(w http.ResponseWriter, r *http.Request, svc *a
 		writeJSON(w, http.StatusOK, conversation)
 		return
 	case "commit":
-		conversation, err := svc.commitTurn(r.Context(), tenant.ID, principal, conversationID, turnID)
+		receipt, err := svc.submitCommitTask(r.Context(), tenant.ID, principal, conversationID, turnID)
 		if err != nil {
 			switch {
 			case errors.Is(err, errAssistantConversationNotFound):
@@ -548,6 +548,10 @@ func handleAssistantTurnActionAPI(w http.ResponseWriter, r *http.Request, svc *a
 			case errors.Is(err, errAssistantRequestInProgress):
 				w.Header().Set("Retry-After", assistantDefaultRetryAfterSecs)
 				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusConflict, "request_in_progress", "request in progress")
+			case errors.Is(err, errAssistantTaskWorkflowUnavailable):
+				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusServiceUnavailable, "assistant_task_workflow_unavailable", "assistant task workflow unavailable")
+			case errors.Is(err, errAssistantTaskStateInvalid):
+				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusConflict, "assistant_task_state_invalid", "assistant task state invalid")
 			case errors.Is(err, errAssistantConfirmationRequired):
 				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusConflict, "conversation_confirmation_required", "conversation confirmation required")
 			case errors.Is(err, errAssistantConfirmationExpired):
@@ -583,7 +587,7 @@ func handleAssistantTurnActionAPI(w http.ResponseWriter, r *http.Request, svc *a
 			}
 			return
 		}
-		writeJSON(w, http.StatusOK, conversation)
+		writeJSON(w, http.StatusAccepted, receipt)
 		return
 	case "reply":
 		var req assistantRenderReplyRequest
@@ -1050,45 +1054,6 @@ func (s *assistantConversationService) confirmTurn(tenantID string, principal Pr
 		return nil, err
 	}
 	result, applyErr := s.applyConfirmTurn(conversation, turn, principal, candidateID)
-	assistantRefreshConversationDerivedFields(conversation)
-	if applyErr != nil {
-		return nil, applyErr
-	}
-	if result.Transition == nil {
-		return cloneConversation(conversation), nil
-	}
-
-	return cloneConversation(conversation), nil
-}
-
-func (s *assistantConversationService) commitTurn(ctx context.Context, tenantID string, principal Principal, conversationID string, turnID string) (*assistantConversation, error) {
-	if s.pool != nil {
-		return s.commitTurnPG(ctx, tenantID, principal, conversationID, turnID)
-	}
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	conversation, ok := s.byID[conversationID]
-	if !ok {
-		return nil, errAssistantConversationNotFound
-	}
-	if conversation == nil {
-		return nil, errAssistantConversationCorrupted
-	}
-	if conversation.TenantID != tenantID {
-		return nil, errAssistantTenantMismatch
-	}
-	if principal.ID != conversation.ActorID {
-		return nil, errAssistantAuthSnapshotExpired
-	}
-	if strings.TrimSpace(principal.RoleSlug) != strings.TrimSpace(conversation.ActorRole) {
-		return nil, errAssistantRoleDriftDetected
-	}
-	turn := assistantLookupTurn(conversation, turnID)
-	if turn == nil {
-		return nil, errAssistantTurnNotFound
-	}
-	result, applyErr := s.applyCommitTurn(ctx, conversation, turn, principal, tenantID)
 	assistantRefreshConversationDerivedFields(conversation)
 	if applyErr != nil {
 		return nil, applyErr

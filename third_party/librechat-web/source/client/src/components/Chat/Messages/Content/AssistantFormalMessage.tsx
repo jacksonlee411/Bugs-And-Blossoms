@@ -4,6 +4,8 @@ import { useMessagesOperations } from '~/Providers/MessagesViewContext';
 import Container from './Container';
 import {
   AssistantFormalMessage as AssistantFormalMessageType,
+  attachAssistantFormalTaskDetail,
+  attachAssistantFormalTaskReceipt,
   buildAssistantFormalFailurePayload,
   buildAssistantFormalPayload,
   latestAssistantFormalTurn,
@@ -11,10 +13,19 @@ import {
   upsertAssistantFormalMessage,
 } from '~/assistant-formal/runtime';
 import {
+  cancelAssistantFormalTask,
   confirmAssistantFormalTurn,
   commitAssistantFormalTurn,
+  getAssistantFormalConversation,
+  getAssistantFormalTask,
   type AssistantFormalAPIError,
 } from '~/assistant-formal/api';
+
+const assistantFormalTaskTerminalStates = new Set(['succeeded', 'manual_takeover_required', 'canceled']);
+
+function sleep(ms: number) {
+  return new Promise((resolve) => window.setTimeout(resolve, ms));
+}
 
 function AssistantFormalMessage({ message }: { message: AssistantFormalMessageType }) {
   const localize = useLocalize();
@@ -39,7 +50,7 @@ function AssistantFormalMessage({ message }: { message: AssistantFormalMessageTy
   );
 
   const runMutation = useCallback(
-    async (mode: 'confirm' | 'commit', candidateId?: string) => {
+    async (mode: 'confirm' | 'commit' | 'cancel', candidateId?: string) => {
       if (!payload || !payload.backendConversationId || !payload.turnId) {
         return;
       }
@@ -47,29 +58,116 @@ function AssistantFormalMessage({ message }: { message: AssistantFormalMessageTy
       patchMessage({ assistantFormalPending: true });
       let currentPayload = payload;
       try {
-        const conversation =
-          mode === 'confirm'
-            ? await confirmAssistantFormalTurn(
-                payload.backendConversationId,
-                payload.turnId,
-                candidateId ?? '',
-              )
-            : await commitAssistantFormalTurn(payload.backendConversationId, payload.turnId);
-        const turn = latestAssistantFormalTurn(conversation);
-        if (!turn) {
-          throw new Error('assistant turn missing');
+        if (mode === 'confirm') {
+          const conversation = await confirmAssistantFormalTurn(
+            payload.backendConversationId,
+            payload.turnId,
+            candidateId ?? '',
+          );
+          const turn = latestAssistantFormalTurn(conversation);
+          if (!turn) {
+            throw new Error('assistant turn missing');
+          }
+          const nextPayload = buildAssistantFormalPayload(conversation, turn, turn.reply_nlg, {
+            messageId: payload.messageId || message.messageId,
+            frontendUserMessageId: payload.frontendUserMessageId,
+          });
+          currentPayload = nextPayload;
+          patchMessage({
+            text: resolveAssistantFormalText(nextPayload),
+            assistantFormalPayload: nextPayload,
+            assistantFormalPending: false,
+            error: false,
+          });
+        } else if (mode === 'commit') {
+          const receipt = await commitAssistantFormalTurn(payload.backendConversationId, payload.turnId);
+          currentPayload = attachAssistantFormalTaskReceipt(currentPayload, receipt);
+          patchMessage({
+            text: resolveAssistantFormalText(currentPayload),
+            assistantFormalPayload: currentPayload,
+            assistantFormalPending: true,
+            error: false,
+          });
+          let terminalTask = undefined;
+          const deadline = Date.now() + 20000;
+          while (Date.now() < deadline) {
+            const detail = await getAssistantFormalTask(receipt.task_id);
+            currentPayload = attachAssistantFormalTaskDetail(currentPayload, detail);
+            patchMessage({
+              text: resolveAssistantFormalText(currentPayload),
+              assistantFormalPayload: currentPayload,
+              assistantFormalPending: !assistantFormalTaskTerminalStates.has(detail.status),
+              error: false,
+            });
+            if (assistantFormalTaskTerminalStates.has(detail.status)) {
+              terminalTask = detail;
+              break;
+            }
+            await sleep(500);
+          }
+          if (!terminalTask) {
+            currentPayload = attachAssistantFormalTaskDetail(currentPayload, {
+              task_id: currentPayload.taskId || '',
+              task_type: currentPayload.taskType || 'assistant_async_plan',
+              status: currentPayload.taskStatus || 'running',
+              dispatch_status: currentPayload.taskDispatchStatus || 'started',
+              attempt: 0,
+              max_attempts: 0,
+              workflow_id: currentPayload.taskWorkflowId || '',
+              request_id: currentPayload.requestId,
+              trace_id: currentPayload.traceId,
+              conversation_id: currentPayload.backendConversationId,
+              turn_id: currentPayload.turnId,
+              submitted_at: '',
+              updated_at: '',
+            });
+            patchMessage({
+              text: resolveAssistantFormalText(currentPayload),
+              assistantFormalPayload: currentPayload,
+              assistantFormalPending: false,
+              error: false,
+            });
+          } else if (terminalTask.status === 'succeeded' || terminalTask.status === 'manual_takeover_required') {
+            const conversation = await getAssistantFormalConversation(payload.backendConversationId);
+            const turn = latestAssistantFormalTurn(conversation);
+            if (!turn) {
+              throw new Error('assistant turn missing');
+            }
+            currentPayload = attachAssistantFormalTaskDetail(
+              buildAssistantFormalPayload(conversation, turn, turn.reply_nlg, {
+                messageId: payload.messageId || message.messageId,
+                frontendUserMessageId: payload.frontendUserMessageId,
+                task: terminalTask,
+              }),
+              terminalTask,
+            );
+            patchMessage({
+              text: resolveAssistantFormalText(currentPayload),
+              assistantFormalPayload: currentPayload,
+              assistantFormalPending: false,
+              error: false,
+            });
+          } else {
+            patchMessage({
+              text: resolveAssistantFormalText(currentPayload),
+              assistantFormalPayload: currentPayload,
+              assistantFormalPending: false,
+              error: false,
+            });
+          }
+        } else if (mode === 'cancel') {
+          if (!payload.taskId) {
+            return;
+          }
+          const detail = await cancelAssistantFormalTask(payload.taskId);
+          currentPayload = attachAssistantFormalTaskDetail(currentPayload, detail);
+          patchMessage({
+            text: resolveAssistantFormalText(currentPayload),
+            assistantFormalPayload: currentPayload,
+            assistantFormalPending: false,
+            error: false,
+          });
         }
-        const nextPayload = buildAssistantFormalPayload(conversation, turn, turn.reply_nlg, {
-          messageId: payload.messageId || message.messageId,
-          frontendUserMessageId: payload.frontendUserMessageId,
-        });
-        currentPayload = nextPayload;
-        patchMessage({
-          text: resolveAssistantFormalText(nextPayload),
-          assistantFormalPayload: nextPayload,
-          assistantFormalPending: false,
-          error: false,
-        });
       } catch (error) {
         const failurePayload = buildAssistantFormalFailurePayload(
           currentPayload,
@@ -117,6 +215,11 @@ function AssistantFormalMessage({ message }: { message: AssistantFormalMessageTy
     !payload.commitResult &&
     payload.phase === 'await_commit_confirm' &&
     payload.state === 'confirmed';
+  const canCancelTask =
+    !busy &&
+    !message.assistantFormalPending &&
+    !!payload.taskId &&
+    ['queued', 'running', 'manual_takeover_required'].includes(payload.taskStatus || '');
   const toneClasses =
     payload.reply?.kind === 'error' || payload.errorCode
       ? 'border-red-500/20 bg-red-500/5 text-gray-700 dark:text-gray-100'
@@ -133,6 +236,8 @@ function AssistantFormalMessage({ message }: { message: AssistantFormalMessageTy
         data-assistant-request-id={payload.requestId || undefined}
         data-assistant-message-id={payload.messageId || message.messageId}
         data-assistant-binding-key={payload.bindingKey || undefined}
+        data-assistant-task-id={payload.taskId || undefined}
+        data-assistant-task-status={payload.taskStatus || undefined}
       >
         <div className={`rounded-xl border px-3 py-3 text-sm ${toneClasses}`}>
           <div className="whitespace-pre-wrap">{resolveAssistantFormalText(payload)}</div>
@@ -142,6 +247,12 @@ function AssistantFormalMessage({ message }: { message: AssistantFormalMessageTy
           {payload.errorCode && (
             <div className="mt-2 text-xs opacity-70">
               {localize('com_ui_error')}: {payload.errorCode}
+            </div>
+          )}
+          {payload.taskId && (
+            <div className="mt-2 text-xs opacity-70">
+              task_id: {payload.taskId}
+              {payload.taskStatus ? ` · ${payload.taskStatus}` : ''}
             </div>
           )}
         </div>
@@ -221,6 +332,18 @@ function AssistantFormalMessage({ message }: { message: AssistantFormalMessageTy
           </div>
         )}
 
+        {payload.taskStatus === 'manual_takeover_required' && (
+          <div className="rounded-xl border border-red-500/20 bg-red-500/5 px-3 py-3 text-sm text-text-primary">
+            <div className="font-medium">Manual takeover required</div>
+            <div className="mt-1 text-xs text-text-secondary">
+              request_id: {payload.requestId || '-'} · task_id: {payload.taskId || '-'}
+            </div>
+            {payload.taskLastErrorCode && (
+              <div className="mt-1 text-xs text-text-secondary">reason: {payload.taskLastErrorCode}</div>
+            )}
+          </div>
+        )}
+
         {canConfirmCommitDraft && (
           <div>
             <button
@@ -243,6 +366,19 @@ function AssistantFormalMessage({ message }: { message: AssistantFormalMessageTy
               disabled={busy || message.assistantFormalPending}
             >
               {localize('com_ui_submit')}
+            </button>
+          </div>
+        )}
+
+        {canCancelTask && (
+          <div>
+            <button
+              type="button"
+              className="rounded-md border border-border-light px-3 py-2 text-sm font-medium text-text-primary disabled:opacity-50"
+              onClick={() => void runMutation('cancel')}
+              disabled={busy || message.assistantFormalPending}
+            >
+              {localize('com_ui_cancel')}
             </button>
           </div>
         )}
