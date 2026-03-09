@@ -1,0 +1,31 @@
+{
+  "plan": "DEV-PLAN-290B",
+  "status": "blocked",
+  "validated_at": "2026-03-09T11:27:10Z",
+  "tenant_id": "",
+  "as_of": "2026-03-26",
+  "candidate_snapshot": {
+    "source_case": "case4",
+    "conversation_id": "",
+    "candidate_count": 0
+  },
+  "required_orgs": [
+    {
+      "name": "AI治理办公室",
+      "source": "case2-first-turn",
+      "observed_phase": "await_commit_confirm",
+      "observed_parent_ref_text": ""
+    },
+    {
+      "name": "共享服务中心",
+      "source": "case4-first-turn",
+      "observed_phase": "",
+      "candidate_count": 0
+    }
+  ],
+  "notes": [
+    "Case2 真实后端返回 deterministic plan_only，未触发 :confirm/:commit，主验收提交链路阻断。",
+    "Case3 未稳定进入 formal 气泡链路，Case4 因串行提前终止未执行。",
+    "负测已完成：neg-001/003 为有效负例，neg-002/004 在 assistant_intent_unsupported 前置下按 probe_skipped 落盘。"
+  ]
+}

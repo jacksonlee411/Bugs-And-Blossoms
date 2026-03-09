@@ -1,6 +1,9 @@
 import type { TMessage } from 'librechat-data-provider';
 import {
+  assistantFormalIsAffirmativeInput,
   assistantFormalBindingKey,
+  assistantFormalResolveCandidateSelection,
+  assistantFormalResolveDialogIntent,
   buildAssistantFormalFailurePayload,
   buildAssistantFormalPayload,
   isAssistantFormalMessage,
@@ -165,5 +168,113 @@ describe('assistant formal runtime', () => {
 
     expect(isAssistantFormalMessage(next[0])).toBe(true);
     expect(resolveAssistantFormalText((next[0] as any).assistantFormalPayload)).toBe('提交失败');
+  });
+
+  it('detects affirmative input text', () => {
+    expect(assistantFormalIsAffirmativeInput('确认')).toBe(true);
+    expect(assistantFormalIsAffirmativeInput('YES')).toBe(true);
+    expect(assistantFormalIsAffirmativeInput('好的')).toBe(true);
+    expect(assistantFormalIsAffirmativeInput('先看看')).toBe(false);
+  });
+
+  it('resolves candidate selection from ordinal and code', () => {
+    const candidates = [
+      {
+        candidate_id: 'cand-1',
+        candidate_code: 'FLOWER-A',
+        name: '共享服务中心（候选1）',
+        path: '集团/共享服务中心',
+        as_of: '2026-03-26',
+        is_active: true,
+        match_score: 0.91,
+      },
+      {
+        candidate_id: 'cand-2',
+        candidate_code: 'FLOWER-B',
+        name: '共享服务中心（候选2）',
+        path: '集团/共享服务中心/B',
+        as_of: '2026-03-26',
+        is_active: true,
+        match_score: 0.96,
+      },
+    ];
+
+    expect(assistantFormalResolveCandidateSelection('选第2个', candidates)).toBe('cand-2');
+    expect(assistantFormalResolveCandidateSelection('FLOWER-A', candidates)).toBe('cand-1');
+    expect(assistantFormalResolveCandidateSelection('unknown', candidates)).toBe('');
+  });
+
+  it('resolves dialog intent by latest turn phase', () => {
+    const candidates = [
+      {
+        candidate_id: 'cand-1',
+        candidate_code: 'FLOWER-A',
+        name: '共享服务中心（候选1）',
+        path: '集团/共享服务中心',
+        as_of: '2026-03-26',
+        is_active: true,
+        match_score: 0.91,
+      },
+      {
+        candidate_id: 'cand-2',
+        candidate_code: 'FLOWER-B',
+        name: '共享服务中心（候选2）',
+        path: '集团/共享服务中心/B',
+        as_of: '2026-03-26',
+        is_active: true,
+        match_score: 0.96,
+      },
+    ];
+
+    expect(
+      assistantFormalResolveDialogIntent('确认', {
+        conversation_id: 'conv-1',
+        turns: [{ turn_id: 'turn-1', state: 'validated', phase: 'await_commit_confirm' }],
+      }),
+    ).toEqual({ kind: 'confirm_and_commit' });
+
+    expect(
+      assistantFormalResolveDialogIntent('是的', {
+        conversation_id: 'conv-1',
+        turns: [{ turn_id: 'turn-1', state: 'confirmed', phase: 'await_commit_confirm' }],
+      }),
+    ).toEqual({ kind: 'commit_only' });
+
+    expect(
+      assistantFormalResolveDialogIntent('选第2个', {
+        conversation_id: 'conv-1',
+        turns: [{ turn_id: 'turn-1', state: 'validated', phase: 'await_candidate_pick', candidates }],
+      }),
+    ).toEqual({ kind: 'select_candidate', candidateId: 'cand-2' });
+
+    expect(
+      assistantFormalResolveDialogIntent('确认提交', {
+        conversation_id: 'conv-1',
+        turns: [{ turn_id: 'turn-1', state: 'validated', phase: 'await_candidate_confirm', candidates }],
+      }),
+    ).toEqual({ kind: 'confirm_and_commit' });
+  });
+
+  it('renders failed task status as visible failure text', () => {
+    const text = resolveAssistantFormalText({
+      kind: 'assistant_formal',
+      backendConversationId: 'conv-1',
+      turnId: 'turn-1',
+      requestId: 'req-1',
+      traceId: 'trace-1',
+      messageId: 'msg-1',
+      bindingKey: 'conv-1::turn-1::req-1',
+      state: 'failed',
+      missingFields: [],
+      candidates: [],
+      taskId: 'task-1',
+      taskType: 'assistant_async_plan',
+      taskStatus: 'failed',
+      taskDispatchStatus: 'failed',
+      taskWorkflowId: 'wf-1',
+      taskPollUri: '/internal/assistant/tasks/task-1',
+      taskLastErrorCode: 'assistant_task_dispatch_failed',
+    } as any);
+    expect(['任务执行失败。', 'Task failed.']).toContain(text);
   });
 });

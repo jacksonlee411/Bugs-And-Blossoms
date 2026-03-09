@@ -1,6 +1,6 @@
 # DEV-PLAN-288B：tp288 异步任务回执契约收敛与非 Mock 证据计划
 
-**状态**: 规划中（2026-03-09 19:14 CST；已确认根因：tp288 commit mock 仍返回旧会话 DTO，导致前端按新链路轮询 `/internal/assistant/tasks/undefined` 并统一报 `assistant_task_dispatch_failed`）
+**状态**: 规划中（2026-03-09 19:27 CST；`288B` 代码实施尚未启动，已记录与 `290B` 联动阻断）
 
 ## 0. 直接实施 TL;DR
 1. [ ] 先改 `tp288` mock：`POST ...:commit` 只能返回 `202 receipt(task_id/poll_uri)`，禁止回旧 DTO。
@@ -154,3 +154,18 @@
 - `docs/dev-plans/290b-librechat-live-intent-action-chain-evidence-plan.md`
 - `docs/dev-plans/012-ci-quality-gates.md`
 - `AGENTS.md`
+
+## 13. 当前进展（2026-03-09 19:27 CST）
+1. [X] 已完成计划级根因冻结：`tp288` 现存问题聚焦在 commit mock 契约仍有旧 DTO 路径，导致任务轮询契约失真。
+2. [X] 已完成与 `290B` 的边界与职责冻结：`290B` 负责真实 intent/action 闭环主证据，`288B` 负责 async receipt/task 契约一致性专项补强。
+3. [ ] `288B` 尚未进入代码实施阶段：`PR-288B-01 ~ PR-288B-05` 均未开始执行。
+
+## 14. 仍待解决问题（联动阻断）
+1. [ ] `290B` 当前主验收处于阻断状态（Case 2 持续 `plan_only + deterministic`，Case 3 formal 气泡链路不稳定），会影响 `288B` 非 mock 证据联调窗口稳定性。
+2. [ ] 若在运行态未先恢复 `290B` 的主提交链路可用性，`288B` 新增 live 用例可能只能重复命中 `assistant_intent_unsupported`，难以验证 receipt/poll 契约正向闭环。
+3. [ ] 当前 `tp288` 旧证据仍存在“mock 与新契约并行”的历史风险，尚未通过 `288B` 的反回归断言彻底封堵。
+
+## 15. 下一步（执行顺序）
+1. [ ] 先完成 `290B` 运行态阻断治理，确保主链路能稳定进入 `commit -> task poll -> committed`。
+2. [ ] 按本计划 `6.1 -> 6.5` 依次落地 `288B`：先收敛 `tp288` mock 契约，再补反回归，再补 `tp288b-live` 与证据索引。
+3. [ ] `288B` 完成后统一回写 `288/271/285` 的证据引用口径，替换阶段性历史证据。

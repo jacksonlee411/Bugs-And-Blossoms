@@ -21,7 +21,12 @@ import {
   type AssistantFormalAPIError,
 } from '~/assistant-formal/api';
 
-const assistantFormalTaskTerminalStates = new Set(['succeeded', 'manual_takeover_required', 'canceled']);
+const assistantFormalTaskTerminalStates = new Set([
+  'succeeded',
+  'failed',
+  'manual_takeover_required',
+  'canceled',
+]);
 
 function sleep(ms: number) {
   return new Promise((resolve) => window.setTimeout(resolve, ms));

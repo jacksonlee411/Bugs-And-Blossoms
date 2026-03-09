@@ -1,0 +1,19 @@
+{
+  "plan": "DEV-PLAN-290B",
+  "tenant_id": "ab6efa2c-94f5-42f1-a302-36e7fe684f37",
+  "conversation_id": "conv_e376f705f6414ac2a4f4883cb77ae3a1",
+  "turn_id": "turn_ae766e5e4c5449398851c957a797e7bc",
+  "probe_skipped": true,
+  "skip_reason": "assistant_intent_unsupported_on_commit",
+  "commit_status": 422,
+  "error": {
+    "code": "assistant_intent_unsupported",
+    "message": "assistant intent unsupported",
+    "trace_id": "",
+    "meta": {
+      "path": "/internal/assistant/conversations/conv_e376f705f6414ac2a4f4883cb77ae3a1/turns/turn_ae766e5e4c5449398851c957a797e7bc:commit",
+      "method": "POST"
+    }
+  },
+  "captured_at": "2026-03-09T11:25:11.362Z"
+}

@@ -1,0 +1,23 @@
+{
+  "case_id": 1,
+  "status": "passed",
+  "validated_at": "2026-03-09T11:15:32.766Z",
+  "observed_phase_path": [
+    "await_commit_confirm"
+  ],
+  "network_internal_posts": [
+    "/internal/assistant/conversations",
+    "/internal/assistant/conversations/conv_29955620094b42bb98999ff80c591026/turns"
+  ],
+  "task_terminal_status": "",
+  "task_status_poll_count": 0,
+  "stopline_266": {
+    "single_channel": true,
+    "no_official_connection_error": true,
+    "no_external_reply_container": true
+  },
+  "stopline_280": {
+    "single_formal_entry": true,
+    "no_bridge_or_injected_stream": true
+  }
+}

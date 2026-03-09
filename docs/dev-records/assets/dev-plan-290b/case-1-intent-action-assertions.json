@@ -1,0 +1,17 @@
+{
+  "case_id": 1,
+  "conversation_id": "conv_29955620094b42bb98999ff80c591026",
+  "turn_id": "turn_6e243ae9ba82471abaeebcb5a265b7e6",
+  "request_id": "assistant_e40b7e815ba24233a5adbcbe8156f81d",
+  "trace_id": "cd22ddbe8fc649c39151380f8182b1af",
+  "intent_action_expected": "plan_only",
+  "intent_action_actual": "plan_only",
+  "phase_expected_path": [
+    "idle_or_await_commit_confirm_without_commit"
+  ],
+  "phase_observed_path": [
+    "await_commit_confirm"
+  ],
+  "error_code": "",
+  "passed": true
+}

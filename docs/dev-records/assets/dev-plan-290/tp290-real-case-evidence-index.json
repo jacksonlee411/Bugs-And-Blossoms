@@ -2,6 +2,9 @@
   "plan": "DEV-PLAN-290",
   "status": "completed",
   "updated_at": "2026-03-09 10:55 CST",
+  "superseded_by": "docs/dev-records/assets/dev-plan-290b/tp290b-live-evidence-index.json",
+  "superseded_at": "2026-03-09 19:20 CST",
+  "superseded_reason": "主验收证据已迁移到 DEV-PLAN-290B（非 mock、真实 intent/action 执行链路）",
   "formal_entry": "/app/assistant/librechat",
   "aligned_with": [
     "DEV-PLAN-260",
@@ -126,6 +129,7 @@
     "Case 通过必须同时满足 DEV-PLAN-266 共通 stopline 与 DEV-PLAN-280 硬门槛。",
     "若出现双入口、双回复、外挂回执或前端重算业务 FSM，该轮证据直接作废。",
     "2026-03-09 01:54 CST 已在 `290A` 根因修复后执行“重建前端产物 -> 重启服务 -> `tp290` 单 spec 复跑”；Case 1~4 全部通过，Case 2/3/4 已清除 pending placeholder bubble。",
-    "2026-03-09 10:55 CST 已在 `240D-03/04` cutover 后按 `271-S5` 时序要求立刻重跑 `tp290`；Case 1~4 再次全部通过，正式入口继续满足 receipt/poll 主链与 `manual_takeover_required` 可见性相关 stopline。"
+    "2026-03-09 10:55 CST 已在 `240D-03/04` cutover 后按 `271-S5` 时序要求立刻重跑 `tp290`；Case 1~4 再次全部通过，正式入口继续满足 receipt/poll 主链与 `manual_takeover_required` 可见性相关 stopline。",
+    "2026-03-09 19:20 CST 起，本索引降级为历史参考；`DEV-PLAN-290B` 非 mock 链路证据成为当前主判定来源。"
   ]
 }

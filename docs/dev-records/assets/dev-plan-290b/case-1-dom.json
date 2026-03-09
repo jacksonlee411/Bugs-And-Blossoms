@@ -1,0 +1,16 @@
+{
+  "url": "http://localhost:8080/app/assistant/librechat/c/new",
+  "bubble_count": 1,
+  "bubbles": [
+    {
+      "binding_key": "conv_29955620094b42bb98999ff80c591026::turn_6e243ae9ba82471abaeebcb5a265b7e6::assistant_e40b7e815ba24233a5adbcbe8156f81d",
+      "conversation_id": "conv_29955620094b42bb98999ff80c591026",
+      "turn_id": "turn_6e243ae9ba82471abaeebcb5a265b7e6",
+      "request_id": "assistant_e40b7e815ba24233a5adbcbe8156f81d",
+      "message_id": "c4179ca5-5611-4bf7-a8cd-862d36806842_",
+      "text": "计划已生成，等待确认后可提交 Confirm"
+    }
+  ],
+  "external_reply_container_count": 0,
+  "connection_error_count": 0
+}
