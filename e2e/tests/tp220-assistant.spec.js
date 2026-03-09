@@ -84,305 +84,208 @@ async function setupTenantAdminSession(browser, suffix) {
   return { appContext, page };
 }
 
-function assistantConversation({ state = "draft", riskTier = "low", candidates = [], resolvedCandidateID = "", withCommitResult = false }) {
-  const turn =
-    state === "draft"
-      ? []
-      : [
-          {
-            turn_id: "turn_tp220_1",
-            user_input: "input",
-            state,
-            risk_tier: riskTier,
-            request_id: "assistant_req_tp220_1",
-            trace_id: "assistant_trace_tp220_1",
-            policy_version: "v1",
-            composition_version: "v1",
-            mapping_version: "v1",
-            intent: {
-              action: "create_orgunit",
-              parent_ref_text: "鲜花组织",
-              entity_name: "运营部",
-              effective_date: "2026-01-01"
-            },
-            ambiguity_count: candidates.length,
-            confidence: 0.8,
-            candidates,
-            resolved_candidate_id: resolvedCandidateID,
-            resolution_source: resolvedCandidateID ? "user_confirmed" : "",
-            plan: {
-              title: "创建组织计划",
-              capability_key: "org.orgunit_create.field_policy",
-              summary: "在指定父组织下创建部门，提交前需要确认候选主键"
-            },
-            dry_run: {
-              explain: candidates.length > 1 ? "检测到多个同名父组织候选，需先确认候选主键" : "计划已生成，等待确认后可提交",
-              diff: [
-                { field: "name", after: "运营部" },
-                { field: "effective_date", after: "2026-01-01" },
-                { field: "parent_candidate_id", after: resolvedCandidateID || "pending_confirmation" }
-              ]
-            },
-            commit_result: withCommitResult
-              ? {
-                  org_code: "AI2201",
-                  parent_org_code: resolvedCandidateID || "FLOWER-A",
-                  effective_date: "2026-01-01",
-                  event_type: "orgunit_created",
-                  event_uuid: "evt_tp220_1"
-                }
-              : null
-          }
-        ];
+function defaultRuntimeStatus() {
   return {
-    conversation_id: "conv_tp220_1",
-    tenant_id: "tenant_tp220",
-    actor_id: "actor_tp220",
-    actor_role: "tenant-admin",
-    state,
-    created_at: "2026-03-02T00:00:00Z",
-    updated_at: "2026-03-02T00:00:00Z",
-    turns: turn
+    status: "healthy",
+    checked_at: "2026-03-09T00:00:00Z",
+    upstream: { url: "http://localhost:3080" },
+    services: [
+      { name: "api", required: true, healthy: "healthy" },
+      { name: "mongodb", required: true, healthy: "healthy" }
+    ],
+    capabilities: {
+      actions_enabled: true,
+      agents_write_enabled: false,
+      mcp_enabled: true
+    }
   };
 }
 
-async function installAssistantMock(page, options) {
-  const candidateA = {
-    candidate_id: "FLOWER-A",
-    candidate_code: "FLOWER-A",
-    name: "鲜花组织",
-    path: "/鲜花组织/华东",
-    as_of: "2026-01-01",
-    is_active: true,
-    match_score: 0.9
+function defaultConversationList() {
+  return {
+    items: [
+      {
+        conversation_id: "conv_tp220_1",
+        state: "confirmed",
+        updated_at: "2026-03-09T00:00:01Z",
+        last_turn: {
+          turn_id: "turn_tp220_1",
+          user_input: "在鲜花组织下新建运营部",
+          state: "confirmed",
+          risk_tier: "high"
+        }
+      }
+    ],
+    next_cursor: ""
   };
-  const candidateB = {
-    candidate_id: "FLOWER-B",
-    candidate_code: "FLOWER-B",
-    name: "鲜花组织",
-    path: "/鲜花组织/华南",
-    as_of: "2026-01-01",
-    is_active: true,
-    match_score: 0.8
-  };
-  const candidates = options.ambiguousCandidates ? [candidateA, candidateB] : [candidateA];
-  let currentConversation = assistantConversation({ state: "draft" });
+}
 
-  const fulfillJSON = async (route, status, payload) => {
-    await route.fulfill({
-      status,
-      contentType: "application/json",
-      body: JSON.stringify(payload)
-    });
-  };
-  const fulfillError = async (route, status, code, message) => {
-    await fulfillJSON(route, status, {
-      code,
-      message,
-      trace_id: "trace-tp220"
-    });
-  };
+async function fulfillJSON(route, status, payload) {
+  await route.fulfill({
+    status,
+    contentType: "application/json",
+    body: JSON.stringify(payload)
+  });
+}
 
-  await page.route("**/internal/assistant/**", async (route) => {
-    const request = route.request();
-    const pathname = new URL(request.url()).pathname;
-    const method = request.method();
+async function installAssistantLogPageMock(page, overrides = {}) {
+  const runtimeStatus = overrides.runtimeStatus ?? defaultRuntimeStatus();
+  const conversationList = overrides.conversationList ?? defaultConversationList();
 
-    if (method === "POST" && pathname === "/internal/assistant/conversations") {
-      currentConversation = assistantConversation({ state: "draft" });
-      await fulfillJSON(route, 200, currentConversation);
+  await page.route("**/internal/assistant/runtime-status", async (route) => {
+    if (route.request().method() !== "GET") {
+      await route.continue();
       return;
     }
-    if (method === "GET" && pathname === "/internal/assistant/conversations") {
-      const lastTurn = currentConversation.turns[currentConversation.turns.length - 1];
-      await fulfillJSON(route, 200, {
+    await fulfillJSON(route, 200, runtimeStatus);
+  });
+
+  await page.route("**/internal/assistant/conversations*", async (route) => {
+    if (route.request().method() !== "GET") {
+      await route.continue();
+      return;
+    }
+    await fulfillJSON(route, 200, conversationList);
+  });
+}
+
+test("tp220-e2e-101: /app/assistant stays read-only after old bridge retirement", async ({ browser }) => {
+  test.setTimeout(120_000);
+  const { appContext, page } = await setupTenantAdminSession(browser, "101");
+
+  try {
+    await installAssistantLogPageMock(page);
+    await page.goto("/app/assistant?as_of=2026-01-01");
+
+    await expect(page.getByRole("heading", { name: "AI 助手日志" })).toBeVisible();
+    await expect(page.getByText(/旧 `iframe \+ bridge` 对话承载页已按 `DEV-PLAN-282` 退役/)).toBeVisible();
+    await expect(page.getByText(/正式交互入口已统一到 `\/app\/assistant\/librechat`/)).toBeVisible();
+    await expect(page.getByRole("link", { name: "打开 LibreChat" })).toHaveAttribute("href", "/app/assistant/librechat");
+
+    await expect(page.locator('[data-testid="assistant-generate-button"]')).toHaveCount(0);
+    await expect(page.locator('[data-testid="assistant-confirm-button"]')).toHaveCount(0);
+    await expect(page.locator('[data-testid="assistant-commit-button"]')).toHaveCount(0);
+    await expect(page.locator('[data-testid="assistant-librechat-frame"]')).toHaveCount(0);
+  } finally {
+    await appContext.close();
+  }
+});
+
+test("tp220-e2e-102: /app/assistant renders runtime summary and recent conversation logs", async ({ browser }) => {
+  test.setTimeout(120_000);
+  const { appContext, page } = await setupTenantAdminSession(browser, "102");
+
+  try {
+    await installAssistantLogPageMock(page, {
+      runtimeStatus: {
+        status: "degraded",
+        checked_at: "2026-03-09T00:02:00Z",
+        upstream: { url: "http://localhost:3999" },
+        services: [
+          { name: "api", required: true, healthy: "unavailable" },
+          { name: "mongodb", required: true, healthy: "healthy" }
+        ],
+        capabilities: {
+          actions_enabled: true,
+          agents_write_enabled: false,
+          mcp_enabled: true
+        }
+      },
+      conversationList: {
         items: [
           {
-            conversation_id: currentConversation.conversation_id,
-            state: currentConversation.state,
-            updated_at: currentConversation.updated_at,
-            last_turn: lastTurn
-              ? {
-                  turn_id: lastTurn.turn_id,
-                  user_input: lastTurn.user_input,
-                  state: lastTurn.state,
-                  risk_tier: lastTurn.risk_tier
-                }
-              : null
+            conversation_id: "conv_tp220_runtime",
+            state: "confirmed",
+            updated_at: "2026-03-09T00:03:00Z",
+            last_turn: {
+              turn_id: "turn_tp220_runtime",
+              user_input: "在 AI治理办公室 下新建 人力资源部2",
+              state: "confirmed",
+              risk_tier: "high"
+            }
           }
         ],
         next_cursor: ""
-      });
-      return;
-    }
-    if (method === "GET" && pathname === "/internal/assistant/conversations/conv_tp220_1") {
-      await fulfillJSON(route, 200, currentConversation);
-      return;
-    }
-    if (method === "POST" && pathname === "/internal/assistant/conversations/conv_tp220_1/turns") {
-      currentConversation = assistantConversation({
-        state: "validated",
-        riskTier: options.riskTier,
-        candidates,
-        resolvedCandidateID: options.ambiguousCandidates ? "" : "FLOWER-A"
-      });
-      await fulfillJSON(route, 200, currentConversation);
-      return;
-    }
-    if (method === "POST" && pathname === "/internal/assistant/conversations/conv_tp220_1/turns/turn_tp220_1:confirm") {
-      if (currentConversation.turns.length === 0) {
-        await fulfillError(route, 409, "conversation_confirmation_required", "conversation confirmation required");
-        return;
       }
-      const body = request.postDataJSON ? request.postDataJSON() : {};
-      const selectedCandidate = options.ambiguousCandidates
-        ? String(body?.candidate_id || "")
-        : "FLOWER-A";
-      if (options.ambiguousCandidates && selectedCandidate.length === 0) {
-        await fulfillError(route, 409, "conversation_confirmation_required", "conversation confirmation required");
-        return;
-      }
-      currentConversation = assistantConversation({
-        state: "confirmed",
-        riskTier: options.riskTier,
-        candidates,
-        resolvedCandidateID: selectedCandidate
-      });
-      await fulfillJSON(route, 200, currentConversation);
-      return;
-    }
-    if (method === "POST" && pathname === "/internal/assistant/conversations/conv_tp220_1/turns/turn_tp220_1:commit") {
-      if (currentConversation.turns.length === 0 || currentConversation.turns[0].state !== "confirmed") {
-        await fulfillError(route, 409, "conversation_confirmation_required", "conversation confirmation required");
-        return;
-      }
-      if (options.commitError) {
-        if (options.commitError.code === "conversation_confirmation_required") {
-          currentConversation = assistantConversation({
-            state: "validated",
-            riskTier: options.riskTier,
-            candidates,
-            resolvedCandidateID: currentConversation.turns[0].resolved_candidate_id || ""
-          });
-        }
-        await fulfillError(route, options.commitError.status, options.commitError.code, options.commitError.message);
-        return;
-      }
-      currentConversation = assistantConversation({
-        state: "committed",
-        riskTier: options.riskTier,
-        candidates,
-        resolvedCandidateID: currentConversation.turns[0].resolved_candidate_id || "FLOWER-A",
-        withCommitResult: true
-      });
-      await fulfillJSON(route, 200, currentConversation);
-      return;
-    }
+    });
+    await page.goto("/app/assistant");
 
-    await route.continue();
-  });
-}
-
-test("tp220-e2e-101: low-risk happy path (generate -> confirm -> commit)", async ({ browser }) => {
-  test.setTimeout(240_000);
-  const { appContext, page } = await setupTenantAdminSession(browser, "101");
-  await installAssistantMock(page, { riskTier: "low", ambiguousCandidates: false });
-
-  await page.goto("/app/assistant?as_of=2026-01-01");
-  await expect(page.getByRole("heading", { name: "AI 助手" })).toBeVisible();
-  await page.getByTestId("assistant-generate-button").click();
-  await expect(page.getByTestId("assistant-risk-tier")).toContainText("risk=low");
-  await expect(page.getByTestId("assistant-dryrun")).toBeVisible();
-
-  await expect(page.getByTestId("assistant-confirm-button")).toBeEnabled();
-  await page.getByTestId("assistant-confirm-button").click();
-  await expect(page.getByTestId("assistant-commit-button")).toBeEnabled();
-  await page.getByTestId("assistant-commit-button").click();
-
-  await expect(page.getByTestId("assistant-turn-state")).toContainText("committed");
-  await expect(page.getByTestId("assistant-commit-result")).toContainText("org_code=AI2201");
-  await appContext.close();
+    await expect(page.getByTestId("assistant-runtime-status")).toContainText("degraded");
+    await expect(page.getByTestId("assistant-runtime-upstream-url")).toContainText("http://localhost:3999");
+    await expect(page.getByText("api:unavailable")).toBeVisible();
+    await expect(page.getByTestId("assistant-conversation-log-item")).toContainText("conv_tp220_runtime");
+    await expect(page.getByTestId("assistant-conversation-log-item")).toContainText("在 AI治理办公室 下新建 人力资源部2");
+  } finally {
+    await appContext.close();
+  }
 });
 
-test("tp220-e2e-102: high-risk role drift fail-closed", async ({ browser }) => {
-  test.setTimeout(240_000);
-  const { appContext, page } = await setupTenantAdminSession(browser, "102");
-  await installAssistantMock(page, {
-    riskTier: "high",
-    ambiguousCandidates: false,
-    commitError: {
-      status: 403,
-      code: "ai_actor_role_drift_detected",
-      message: "ai actor role drift detected"
-    }
-  });
-
-  await page.goto("/app/assistant?as_of=2026-01-01");
-  await page.getByTestId("assistant-generate-button").click();
-  await expect(page.getByTestId("assistant-risk-tier")).toContainText("risk=high");
-  await expect(page.getByTestId("assistant-risk-blocker")).toBeVisible();
-
-  await page.getByTestId("assistant-confirm-button").click();
-  await page.getByTestId("assistant-commit-button").click();
-  await expect(page.getByTestId("assistant-error-alert")).toContainText(/Role changed during this conversation|角色发生变化/);
-  await expect(page.getByTestId("assistant-turn-state")).not.toContainText("committed");
-  await appContext.close();
-});
-
-test("tp220-e2e-103: fixed prompt create department with trace fields", async ({ browser }) => {
-  test.setTimeout(240_000);
+test("tp220-e2e-103: /app/assistant points users to the formal LibreChat entry", async ({ browser }) => {
+  test.setTimeout(120_000);
   const { appContext, page } = await setupTenantAdminSession(browser, "103");
-  await installAssistantMock(page, { riskTier: "high", ambiguousCandidates: false });
 
-  await page.goto("/app/assistant?as_of=2026-01-01");
-  await page
-    .getByLabel("输入需求")
-    .fill("在鲜花组织之下，新建一个名为运营部的部门，成立日期是2026年1月1日。通过AI对话，调用相关能力完成部门的创建任务。");
-  await page.getByTestId("assistant-generate-button").click();
-  await expect(page.getByTestId("assistant-plan")).toContainText("创建组织计划");
-  await expect(page.getByTestId("assistant-request-id")).toContainText("assistant_req_tp220_1");
-  await expect(page.getByTestId("assistant-trace-id")).toContainText("assistant_trace_tp220_1");
+  try {
+    await installAssistantLogPageMock(page);
+    await page.goto("/app/assistant");
 
-  await page.getByTestId("assistant-confirm-button").click();
-  await page.getByTestId("assistant-commit-button").click();
-  await expect(page.getByTestId("assistant-commit-result")).toContainText("effective_date=2026-01-01");
-  await appContext.close();
+    await expect(page.getByRole("link", { name: "打开 LibreChat" })).toHaveAttribute("href", "/app/assistant/librechat");
+    await expect(page.getByRole("link", { name: "模型配置" })).toHaveAttribute("href", "/app/assistant/models");
+
+    await page.getByRole("link", { name: "打开 LibreChat" }).click();
+    await expect(page).toHaveURL(/\/app\/assistant\/librechat$/);
+    await expect(page).toHaveTitle(/LibreChat/i);
+  } finally {
+    await appContext.close();
+  }
 });
 
-test("tp220-e2e-104: ambiguous candidate must confirm before commit", async ({ browser }) => {
-  test.setTimeout(240_000);
+test("tp220-e2e-104: draft conversation logs stay read-only and never re-enable old actions", async ({ browser }) => {
+  test.setTimeout(120_000);
   const { appContext, page } = await setupTenantAdminSession(browser, "104");
-  await installAssistantMock(page, { riskTier: "high", ambiguousCandidates: true });
 
-  await page.goto("/app/assistant?as_of=2026-01-01");
-  await page.getByTestId("assistant-generate-button").click();
-  await expect(page.getByTestId("assistant-candidate-blocker")).toBeVisible();
-  await expect(page.getByTestId("assistant-commit-button")).toBeDisabled();
+  try {
+    await installAssistantLogPageMock(page, {
+      conversationList: {
+        items: [
+          {
+            conversation_id: "conv_tp220_draft",
+            state: "draft",
+            updated_at: "2026-03-09T00:04:00Z"
+          }
+        ],
+        next_cursor: ""
+      }
+    });
+    await page.goto("/app/assistant?as_of=2026-01-01");
 
-  await page.getByLabel("鲜花组织 / FLOWER-B / /鲜花组织/华南 / 2026-01-01").click();
-  await page.getByTestId("assistant-confirm-button").click();
-  await page.getByTestId("assistant-commit-button").click();
-
-  await expect(page.getByTestId("assistant-commit-result")).toContainText("parent=FLOWER-B");
-  await appContext.close();
+    await expect(page.getByTestId("assistant-conversation-log-item")).toContainText("conv_tp220_draft · draft");
+    await expect(page.getByTestId("assistant-conversation-log-item")).toContainText("暂无轮次记录");
+    await expect(page.locator('[data-testid="assistant-generate-button"]')).toHaveCount(0);
+    await expect(page.locator('[data-testid="assistant-confirm-button"]')).toHaveCount(0);
+    await expect(page.locator('[data-testid="assistant-commit-button"]')).toHaveCount(0);
+  } finally {
+    await appContext.close();
+  }
 });
 
 test("tp220-e2e-007: librechat formal entry cannot bypass business write routes", async ({ browser }) => {
-  test.setTimeout(240_000);
+  test.setTimeout(120_000);
   const { appContext, page } = await setupTenantAdminSession(browser, "007");
 
-  await page.goto("/app/assistant/librechat");
-  await expect(page).toHaveTitle(/LibreChat/i);
+  try {
+    await page.goto("/app/assistant/librechat");
+    await expect(page).toHaveTitle(/LibreChat/i);
 
-  const bypassResp = await appContext.request.post("/assistant-ui/org/api/org-units", {
-    data: {
-      org_code: "BYPASS220",
-      name: "Bypass220",
-      effective_date: "2026-01-01",
-      parent_org_code: ""
-    }
-  });
-  expect([200, 201]).not.toContain(bypassResp.status());
-
-  await appContext.close();
+    const bypassResp = await appContext.request.post("/assistant-ui/org/api/org-units", {
+      data: {
+        org_code: "BYPASS220",
+        name: "Bypass220",
+        effective_date: "2026-01-01",
+        parent_org_code: ""
+      }
+    });
+    expect([200, 201]).not.toContain(bypassResp.status());
+  } finally {
+    await appContext.close();
+  }
 });
