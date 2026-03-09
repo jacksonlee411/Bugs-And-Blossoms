@@ -404,6 +404,7 @@ modules/{module}/
 - DEV-PLAN-266：AI对话官方 UI 单通道与气泡内回写前置子计划：`docs/dev-plans/266-librechat-official-ui-single-dialog-channel-and-in-bubble-gpt52-plan.md`
 - DEV-PLAN-270：项目容器部署分层检讨与收敛方案：`docs/dev-plans/270-project-container-deployment-review-and-layered-convergence-plan.md`
 - DEV-PLAN-271：Assistant/LibreChat 跨计划分阶段推进与封板编排计划（223/240/260/280）：`docs/dev-plans/271-assistant-librechat-cross-plan-sequenced-delivery-plan.md`
+- DEV-PLAN-272：Assistant OrgUnit 七动作纳管实施计划（1-7 全量纳入）：`docs/dev-plans/272-assistant-orgunit-seven-actions-expansion-plan.md`
 - DEV-PLAN-280：LibreChat Web UI 源码纳管与 Runtime 分层复用实施方案：`docs/dev-plans/280-librechat-web-ui-vendoring-and-runtime-layered-reuse-plan.md`
 - DEV-PLAN-281：LibreChat Web UI 源码纳管与新主链路冻结实施计划：`docs/dev-plans/281-librechat-web-ui-source-vendoring-and-mainline-freeze-plan.md`
 - DEV-PLAN-281 执行日志：`docs/archive/dev-records/dev-plan-281-execution-log.md`
