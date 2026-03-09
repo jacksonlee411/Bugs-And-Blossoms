@@ -7,8 +7,8 @@
       "conversation_id": "conv_tp290_3",
       "turn_id": "turn_tp290_3",
       "request_id": "req_tp290_3",
-      "message_id": "7e2b5eca-4fe2-4db9-86b9-172e659d2dec_",
-      "text": "Case 3 提交成功。 补全完成：生效日期 2026-03-25。 org_code: AI2903 parent_org_code: FLOWER-A effective_date: 2026-03-25 event_type: orgunit_created"
+      "message_id": "8c4be4a1-3878-4c34-89d2-95dfee12f694_",
+      "text": "Case 3 提交成功。 task_id: task_turn_tp290_3 · succeeded 补全完成：生效日期 2026-03-25。 org_code: AI2903 parent_org_code: FLOWER-A effective_date: 2026-03-25 event_type: orgunit_created"
     }
   ],
   "external_reply_container_count": 0,
