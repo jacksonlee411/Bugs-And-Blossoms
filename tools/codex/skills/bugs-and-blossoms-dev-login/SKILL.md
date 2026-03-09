@@ -13,7 +13,7 @@ description: Start the Bugs-And-Blossoms local login stack and bring up the tena
 
 > 重要提醒（防遗忘）：`kratosstub` 使用内存存储。**每次重启 `make dev-kratos-stub`（或重启全部服务）后，都必须重新执行 seed 步骤**，否则会出现 `invalid credentials`。
 
-前置：已安装并可用 `docker compose`、Go（能 `go run`）、`make`、`curl`，并完成以下本地环境初始化（对齐当前 Ubuntu/.env 口径）：
+前置：已安装并可用 `docker compose`、Go（能 `go run`）、`make`、`curl`、`jq`，并完成以下本地环境初始化（对齐当前 Ubuntu/.env 口径）：
 
 ```bash
 cd "$(git rev-parse --show-toplevel)"
@@ -123,6 +123,12 @@ DEV_SERVER_ENV_FILE=.env make dev-server
 
 （可选）6) 启动 LibreChat Runtime（用于 `/app/assistant/librechat` 正式入口）
 
+先确认当前 shell 已导出 `OPENAI_API_KEY`（`make assistant-runtime-up` 会做非空校验；为空会直接失败并提示缺少该环境变量）：
+
+```bash
+export OPENAI_API_KEY='<your-openai-api-key>'
+```
+
 ```bash
 cd "$(git rev-parse --show-toplevel)"
 make assistant-runtime-up
@@ -187,6 +193,7 @@ curl -i -X POST -H 'Host: localhost:8080' -H 'Content-Type: application/json' \
    - `http://<对应租户域名>:8080/app/assistant/librechat`（正式聊天入口）
    - 若 runtime healthy：可进入正式聊天页面并发起对话。
    - 若 runtime 未启动：通过会话校验后可能返回 `502`（表示边界已生效，但上游不可用）。
+   - 验收口径优先看“路由与会话行为”（如是否命中 `/app/assistant/librechat`、是否复用 `sid`、是否出现错误码）；页面标题/文案可随产品调整，不应作为唯一通过条件。
 
 （注意）不要用 `http://127.0.0.1:8080/app/login`：租户解析基于 Host，`127.0.0.1` 默认无租户映射，会 404（tenant not found）。
 

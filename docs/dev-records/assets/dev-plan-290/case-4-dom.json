@@ -7,8 +7,8 @@
       "conversation_id": "conv_tp290_4",
       "turn_id": "turn_tp290_4",
       "request_id": "req_tp290_4",
-      "message_id": "482663c5-ac2f-4739-8730-a78eda7bb9d4_",
-      "text": "Case 4 提交成功。 Selected: 共享服务中心（候选2） org_code: AI2904 parent_org_code: FLOWER-B effective_date: 2026-03-26 event_type: orgunit_created"
+      "message_id": "234320a9-ad13-414e-8f59-fc2234328058_",
+      "text": "Case 4 提交成功。 task_id: task_turn_tp290_4 · succeeded Selected: 共享服务中心（候选2） org_code: AI2904 parent_org_code: FLOWER-B effective_date: 2026-03-26 event_type: orgunit_created"
     }
   ],
   "external_reply_container_count": 0,
