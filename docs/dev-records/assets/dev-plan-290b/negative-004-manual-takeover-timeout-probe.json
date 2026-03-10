@@ -1,17 +1,19 @@
 {
   "plan": "DEV-PLAN-290B",
-  "tenant_id": "0a033e03-5e5d-4fbb-b472-b287b27b47de",
+  "tenant_id": "923883f0-9bbd-4454-b665-ec1c8df1c53d",
+  "conversation_id": "conv_755816f737464ccf9fe9f7f4360f7933",
+  "turn_id": "turn_8c74d1d0bf044892b0286615597f6ddf",
   "probe_skipped": true,
-  "skip_reason": "assistant_conversation_create_failed_on_create_conversation",
-  "create_conversation_status": 500,
+  "skip_reason": "conversation_confirmation_required_on_confirm",
+  "confirm_status": 409,
   "error": {
-    "code": "assistant_conversation_create_failed",
-    "message": "Assistant conversation create failed.",
+    "code": "conversation_confirmation_required",
+    "message": "conversation confirmation required",
     "trace_id": "",
     "meta": {
-      "path": "/internal/assistant/conversations",
+      "path": "/internal/assistant/conversations/conv_755816f737464ccf9fe9f7f4360f7933/turns/turn_8c74d1d0bf044892b0286615597f6ddf:confirm",
       "method": "POST"
     }
   },
-  "captured_at": "2026-03-10T00:40:04.239Z"
+  "captured_at": "2026-03-10T23:20:05.219Z"
 }

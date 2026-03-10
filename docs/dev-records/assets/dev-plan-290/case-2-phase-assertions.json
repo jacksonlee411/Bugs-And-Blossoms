@@ -1,7 +1,7 @@
 {
   "case_id": 2,
   "status": "passed",
-  "validated_at": "2026-03-10T00:40:03.046Z",
+  "validated_at": "2026-03-10T23:19:29.779Z",
   "observed_phase_path": [
     "idle",
     "await_commit_confirm",

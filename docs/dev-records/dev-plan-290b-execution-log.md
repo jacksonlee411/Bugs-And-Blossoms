@@ -3,6 +3,8 @@
 ## 1. 执行记录
 | 时间（CST） | 执行人 | 命令 | 结果 | 备注 |
 | --- | --- | --- | --- | --- |
+| 2026-03-11 07:17-07:20 | Codex | `make preflight` | 通过 | 默认 E2E 基线再次覆盖 `tp290b-e2e-000~004` 与负测 `neg-001~004`，全部通过；`tp290b-live-evidence-index.json`、`tp290b-data-baseline.json` 与固定命名资产已刷新到本轮最终时间戳 |
+| 2026-03-11 07:04-07:13 | Codex | `make iam migrate up` + `go test ./internal/server -run 'TestAssistantIntentPipeline_UnsupportedActionUpgradeFromLocalFacts|TestAssistant272PrepareCommitTurn_ActionMatrix|TestAssistant272SubmitCommitTaskWorkflowAndPoll_ActionMatrix' -count=1` + `TRUST_PROXY=1 pnpm --dir /home/lee/Projects/Bugs-And-Blossoms/e2e exec playwright test tests/tp290b-librechat-live-intent-action-chain.spec.js --workers=1 --trace on` | 通过 | 因 `272` 触达 live 主链而按 `271-S5` 规则刷新：先恢复 `assistant` phase snapshot schema，关闭 `assistant_conversation_create_failed`；再补“未知 action 由本地显式事实升级为 `create_orgunit`”，关闭 Case2 / runtime gate 的 `assistant_intent_unsupported`。最终 `tp290b-e2e-000~004` 再次全绿，主索引与 baseline 均刷新为 `passed` |
 | 2026-03-10 02:28-02:47 | Codex | `go test ./internal/server -run 'TestAssistantIntentPipeline|TestAssistantModelGateway' -count=1 -v` + `TRUST_PROXY=1 go run ./cmd/server` + `pnpm --dir /home/lee/Projects/Bugs-And-Blossoms/e2e exec playwright test tests/tp290b-librechat-live-intent-action-chain.spec.js --workers=1 --trace on --grep 'tp290b-e2e-003|tp290b-e2e-004'` + `pnpm --dir /home/lee/Projects/Bugs-And-Blossoms/e2e exec playwright test tests/tp290b-librechat-live-intent-action-chain.spec.js --workers=1 --trace on` | 通过 | 关闭最后两类主阻断：① 修复 `plan_only` 本地升级后被 schema retry 回滚；② 增加“用户显式事实覆盖”以清空模型脑补的当天日期；同时确认 live 运行必须带 `TRUST_PROXY=1`。最终 `tp290b-e2e-000~004` 全绿，证据索引刷新为 `status=passed` |
 | 2026-03-10 02:29-02:37 | Codex | `node /tmp/tp290b-login-repro.js` + `node /tmp/tp290b-login-repro2.js` + `TRUST_PROXY=1 go run ./cmd/server` | 定位完成 / 已修复 | Playwright 复现确认：未开启 `TRUST_PROXY=1` 时，`X-Forwarded-Host` 被忽略，登录请求实际落到 `localhost` 默认租户；重启 `server` 后登录链恢复正常 |
 | 2026-03-09 23:40-23:42 | Codex | `node --check e2e/tests/tp290b-librechat-live-intent-action-chain.spec.js` + `pnpm --dir /home/lee/Projects/Bugs-And-Blossoms/e2e exec playwright test tests/tp290b-librechat-live-intent-action-chain.spec.js --list` + `pnpm --dir /home/lee/Projects/Bugs-And-Blossoms/e2e exec playwright test tests/tp290b-librechat-live-intent-action-chain.spec.js --workers=1 --grep "tp290b-e2e-000|tp290b-e2e-002"` | 部分通过 / 阻断 | 已落地 T0 基线建置与首轮门禁：新租户自动注入 `AI治理办公室`、`共享服务中心` 多候选场景，并在 Case2/4 首轮不满足基线时直接阻断；语法校验与 Playwright 列表通过，但当前 shell 未起本地服务，live 复跑在 `http://localhost:8081/superadmin/login` 命中 `ERR_CONNECTION_REFUSED`，未能完成端到端验证 |
@@ -26,11 +28,11 @@
 - [x] `docs/dev-records/assets/dev-plan-290/tp290-real-case-evidence-index.json`
 
 ## 4. 本轮收口结论
-- `DEV-PLAN-290B` 已闭环：`tp290b-e2e-000~004` 全部 live 通过，`tp290b-live-evidence-index.json` 已刷新为 `status=passed`。
+- `DEV-PLAN-290B` 已闭环：`tp290b-e2e-000~004` 与 `neg-001~004` 在 `2026-03-11 07:20 CST` 再次通过默认 live 基线，`tp290b-live-evidence-index.json` 与 `tp290b-data-baseline.json` 已刷新为 `status=passed`。
 - 认证/租户解析链已稳定：`TRUST_PROXY=1` 生效后，`X-Forwarded-Host` 与 Playwright/API 请求保持一致，不再出现 `invalid_credentials` 或错租户命中。
 - T0 数据基线已稳定：新租户自动注入 `ROOT/集团`、`AI治理办公室`、`共享服务中心` 多候选场景，`tp290b-data-baseline.json` 已独立表达 `t0_baseline_ready=true` 与 `case2/case4` probe 结果。
-- 运行态动作链已稳定：真实模型持续命中 `openai / gpt-5.2`、`fallback_detected=false`；Case 2/3/4 均完成 `create -> confirm -> commit` 并在终态会话回读中落为 `committed`。
-- 本轮关键根因已全部关闭：包括 `TRUST_PROXY` 缺失、租户 baseline 缺播种、SetID resolver 不回退 baseline capability、异步 commit 后 conversation cache 未刷新，以及模型在缺字段场景脑补当天日期。
+- 运行态动作链已稳定：真实模型持续命中 `openai / gpt-5.1`、`fallback_detected=false`；Case 2/3/4 均完成 `create -> confirm -> commit` 并在终态会话回读中落为 `committed`。
+- 本轮关键根因已全部关闭：包括 `TRUST_PROXY` 缺失、租户 baseline 缺播种、SetID resolver 不回退 baseline capability、异步 commit 后 conversation cache 未刷新、模型在缺字段场景脑补当天日期，以及 `assistant` phase snapshot schema 漂移与“未知 action 未被本地显式事实接管”两类 `272` 影响性回归。
 - 负测结论保持有效：`neg-001`（`conversation_confirmation_required`）与 `neg-003`（`assistant_intent_unsupported`）为稳定负例；`neg-002/004` 的 `probe_skipped` 记录继续保留为环境能力不足时的 fail-closed 证据。
 
 

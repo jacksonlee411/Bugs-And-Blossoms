@@ -1,7 +1,16 @@
 {
-  "url": "about:blank",
-  "bubble_count": 0,
-  "bubbles": [],
+  "url": "http://localhost:8080/app/assistant/librechat/c/new",
+  "bubble_count": 1,
+  "bubbles": [
+    {
+      "binding_key": "conv_ffe7daf52ac24cd484d064e7f8bc73d6::turn_d2f46b96316d4c7885a51591141dcf4e::assistant_eca7ff0ffe934df98568dfefacd4505e",
+      "conversation_id": "conv_ffe7daf52ac24cd484d064e7f8bc73d6",
+      "turn_id": "turn_d2f46b96316d4c7885a51591141dcf4e",
+      "request_id": "assistant_eca7ff0ffe934df98568dfefacd4505e",
+      "message_id": "050bf5d5-d4bf-41ca-ab31-e4bb6dd290d1_",
+      "text": "上级组织：共享服务中心；新建组织：239A候选验证部；生效日期：2026-03-26 task_id: 669bc674-5510-45fe-b610-06d4cc3afd65 · succeeded Selected: 共享服务中心 org_code: O000001 parent_org_code: TP290BSSC2 effective_date: 2026-03-26 event_type: CREATE"
+    }
+  ],
   "external_reply_container_count": 0,
   "connection_error_count": 0
 }

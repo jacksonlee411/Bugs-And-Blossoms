@@ -592,6 +592,95 @@ func TestAssistantTurnActionHandler_CoverageMatrix(t *testing.T) {
 			t.Fatalf("status=%d code=%s", rec.Code, assistantDecodeErrCode(t, rec))
 		}
 	})
+
+	t.Run("gate mapping keeps http reason and turn error aligned", func(t *testing.T) {
+		originalAuthorizer := assistantLoadAuthorizerFn
+		assistantLoadAuthorizerFn = func() (authorizer, error) {
+			return assistantGateAuthorizerStub{allowed: true, enforced: true}, nil
+		}
+		defer func() { assistantLoadAuthorizerFn = originalAuthorizer }()
+
+		originalDefinitions := capabilityDefinitionByKey
+		defer func() { capabilityDefinitionByKey = originalDefinitions }()
+		createSpec, ok := assistantLookupDefaultActionSpec(assistantIntentCreateOrgUnit)
+		if !ok {
+			t.Fatal("missing create action spec")
+		}
+		capabilityDefinitionByKey = map[string]capabilityDefinition{
+			createSpec.CapabilityKey: {
+				CapabilityKey:   createSpec.CapabilityKey,
+				Status:          routeCapabilityStatusActive,
+				ActivationState: routeCapabilityStatusActive,
+			},
+		}
+
+		riskStore := newOrgUnitMemoryStore()
+		if _, err := riskStore.CreateNodeCurrent(context.Background(), tenantID, "2026-01-01", "FLOWER-A", "鲜花组织", "", true); err != nil {
+			t.Fatal(err)
+		}
+		riskSvc := newAssistantConversationService(riskStore, assistantWriteServiceStub{store: riskStore})
+		riskSvc.actionRegistry = assistantActionRegistryMap{specs: map[string]assistantActionSpec{
+			assistantIntentCreateOrgUnit: {
+				ID:            assistantIntentCreateOrgUnit,
+				Version:       "v1",
+				CapabilityKey: createSpec.CapabilityKey,
+				Security: assistantActionSecuritySpec{
+					AuthObject:     createSpec.Security.AuthObject,
+					AuthAction:     createSpec.Security.AuthAction,
+					RiskTier:       "extreme",
+					RequiredChecks: createSpec.Security.RequiredChecks,
+				},
+				Handler: assistantActionHandlerSpec{CommitAdapterKey: createSpec.Handler.CommitAdapterKey},
+			},
+		}}
+		riskPrincipal := Principal{ID: "actor-risk", RoleSlug: "tenant-admin"}
+		riskConversation := riskSvc.createConversation(tenantID, riskPrincipal)
+		riskTurn := &assistantTurn{
+			TurnID:              "turn-risk-gate",
+			UserInput:           "在鲜花组织之下，新建一个名为运营部的部门，成立日期是2026-01-01",
+			State:               assistantStateValidated,
+			RequestID:           "req-risk-gate",
+			TraceID:             "trace-risk-gate",
+			PolicyVersion:       capabilityPolicyVersionBaseline,
+			CompositionVersion:  capabilityPolicyVersionBaseline,
+			MappingVersion:      capabilityPolicyVersionBaseline,
+			Intent:              assistantIntentSpec{Action: assistantIntentCreateOrgUnit, ParentRefText: "鲜花组织", EntityName: "运营部", EffectiveDate: "2026-01-01"},
+			Plan:                assistantBuildPlan(assistantIntentSpec{Action: assistantIntentCreateOrgUnit}),
+			Candidates:          []assistantCandidate{{CandidateID: "FLOWER-A", CandidateCode: "FLOWER-A", Name: "鲜花组织"}},
+			ResolvedCandidateID: "FLOWER-A",
+			DryRun:              assistantDryRunResult{Explain: "ok"},
+			CreatedAt:           time.Now().UTC(),
+			UpdatedAt:           time.Now().UTC(),
+		}
+		assistantRefreshTurnDerivedFields(riskTurn)
+		riskSvc.mu.Lock()
+		riskSvc.byID[riskConversation.ConversationID].Turns = append(riskSvc.byID[riskConversation.ConversationID].Turns, riskTurn)
+		riskSvc.mu.Unlock()
+
+		req := assistantReqWithContext(http.MethodPost, "/internal/assistant/conversations/"+riskConversation.ConversationID+"/turns/"+riskTurn.TurnID+":confirm", `{}`, true, true)
+		req = req.WithContext(withPrincipal(req.Context(), riskPrincipal))
+		rec := httptest.NewRecorder()
+		handleAssistantTurnActionAPI(rec, req, riskSvc)
+		if rec.Code != http.StatusConflict || assistantDecodeErrCode(t, rec) != errAssistantActionRiskGateDenied.Error() {
+			t.Fatalf("status=%d code=%s body=%s", rec.Code, assistantDecodeErrCode(t, rec), rec.Body.String())
+		}
+
+		riskSvc.mu.RLock()
+		storedConversation := riskSvc.byID[riskConversation.ConversationID]
+		if storedConversation == nil || len(storedConversation.Turns) == 0 || len(storedConversation.Transitions) == 0 {
+			riskSvc.mu.RUnlock()
+			t.Fatalf("missing stored conversation after gate reject: %+v", storedConversation)
+		}
+		storedTurn := storedConversation.Turns[len(storedConversation.Turns)-1]
+		lastTransition := storedConversation.Transitions[len(storedConversation.Transitions)-1]
+		riskSvc.mu.RUnlock()
+		if storedTurn.ErrorCode != errAssistantActionRiskGateDenied.Error() {
+			t.Fatalf("turn.error_code=%s", storedTurn.ErrorCode)
+		}
+		if lastTransition.ReasonCode != "risk_tier_invalid" || lastTransition.TurnAction != "confirm" {
+			t.Fatalf("transition=%+v", lastTransition)
+		}
+	})
 }
 
 func TestAssistantServiceHelpersAndUtilities(t *testing.T) {

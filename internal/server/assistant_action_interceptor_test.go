@@ -2,6 +2,7 @@ package server
 
 import (
 	"errors"
+	"strings"
 	"testing"
 )
 
@@ -266,6 +267,211 @@ func TestAssistantActionInterceptor_Gates(t *testing.T) {
 		result, err = assistantApplyGateDecision(conversation, turn, Principal{ID: "actor_2"}, "commit", assistantActionGateDecision{Allowed: false, ErrorCode: errAssistantActionRiskGateDenied.Error(), ReasonCode: "blocked"})
 		if err == nil || turn.ErrorCode != errAssistantActionRiskGateDenied.Error() || result.Transition == nil {
 			t.Fatalf("commit decision result=%+v turn=%+v err=%v", result, turn, err)
+		}
+	})
+
+	t.Run("expanded actions plan confirm commit matrix", func(t *testing.T) {
+		type gateMatrixCase struct {
+			name              string
+			action            string
+			intent            assistantIntentSpec
+			requiresCandidate bool
+		}
+		hasRequiredCheck := func(spec assistantActionSpec, check string) bool {
+			target := strings.TrimSpace(check)
+			for _, item := range spec.Security.RequiredChecks {
+				if strings.TrimSpace(item) == target {
+					return true
+				}
+			}
+			return false
+		}
+		cases := []gateMatrixCase{
+			{
+				name:              "add_version",
+				action:            assistantIntentAddOrgUnitVersion,
+				intent:            assistantIntentSpec{Action: assistantIntentAddOrgUnitVersion, OrgCode: "FLOWER-C", EffectiveDate: "2026-02-01", NewName: "运营一部", NewParentRefText: "共享服务中心"},
+				requiresCandidate: true,
+			},
+			{
+				name:              "insert_version",
+				action:            assistantIntentInsertOrgUnitVersion,
+				intent:            assistantIntentSpec{Action: assistantIntentInsertOrgUnitVersion, OrgCode: "FLOWER-C", EffectiveDate: "2026-02-01", NewName: "运营二部", NewParentRefText: "共享服务中心"},
+				requiresCandidate: true,
+			},
+			{
+				name:              "correct",
+				action:            assistantIntentCorrectOrgUnit,
+				intent:            assistantIntentSpec{Action: assistantIntentCorrectOrgUnit, OrgCode: "FLOWER-C", TargetEffectiveDate: "2026-01-01", NewName: "运营中心", NewParentRefText: "共享服务中心"},
+				requiresCandidate: true,
+			},
+			{
+				name:              "move",
+				action:            assistantIntentMoveOrgUnit,
+				intent:            assistantIntentSpec{Action: assistantIntentMoveOrgUnit, OrgCode: "FLOWER-C", EffectiveDate: "2026-04-01", NewParentRefText: "共享服务中心"},
+				requiresCandidate: true,
+			},
+			{
+				name:              "rename",
+				action:            assistantIntentRenameOrgUnit,
+				intent:            assistantIntentSpec{Action: assistantIntentRenameOrgUnit, OrgCode: "FLOWER-C", EffectiveDate: "2026-03-01", NewName: "运营平台部"},
+				requiresCandidate: false,
+			},
+			{
+				name:              "disable",
+				action:            assistantIntentDisableOrgUnit,
+				intent:            assistantIntentSpec{Action: assistantIntentDisableOrgUnit, OrgCode: "FLOWER-C", EffectiveDate: "2026-05-01"},
+				requiresCandidate: false,
+			},
+			{
+				name:              "enable",
+				action:            assistantIntentEnableOrgUnit,
+				intent:            assistantIntentSpec{Action: assistantIntentEnableOrgUnit, OrgCode: "FLOWER-C", EffectiveDate: "2026-06-01"},
+				requiresCandidate: false,
+			},
+		}
+
+		originalDefinitions := capabilityDefinitionByKey
+		originalAuthorizer := assistantLoadAuthorizerFn
+		defer func() {
+			capabilityDefinitionByKey = originalDefinitions
+			assistantLoadAuthorizerFn = originalAuthorizer
+		}()
+		assistantLoadAuthorizerFn = func() (authorizer, error) {
+			return assistantGateAuthorizerStub{allowed: true, enforced: true}, nil
+		}
+		capabilities := map[string]capabilityDefinition{}
+		for _, tc := range cases {
+			spec, ok := assistantLookupDefaultActionSpec(tc.action)
+			if !ok {
+				t.Fatalf("missing default spec for action=%s", tc.action)
+			}
+			capabilities[spec.CapabilityKey] = capabilityDefinition{
+				CapabilityKey:   spec.CapabilityKey,
+				Status:          routeCapabilityStatusActive,
+				ActivationState: routeCapabilityStatusActive,
+			}
+		}
+		capabilityDefinitionByKey = capabilities
+
+		for _, tc := range cases {
+			t.Run(tc.name, func(t *testing.T) {
+				spec, ok := assistantLookupDefaultActionSpec(tc.action)
+				if !ok {
+					t.Fatalf("missing default spec for action=%s", tc.action)
+				}
+				if got := hasRequiredCheck(spec, "candidate_confirmation"); got != tc.requiresCandidate {
+					t.Fatalf("candidate_confirmation required mismatch action=%s got=%v want=%v required_checks=%v", tc.action, got, tc.requiresCandidate, spec.Security.RequiredChecks)
+				}
+
+				decision := assistantEvaluateActionGate(assistantActionGateInput{
+					Stage:     assistantActionStagePlan,
+					TenantID:  "tenant_1",
+					Principal: Principal{ID: "actor_1", RoleSlug: "tenant-admin"},
+					Action:    spec,
+					Intent:    tc.intent,
+					UserInput: "请生成计划",
+				})
+				if !decision.Allowed {
+					t.Fatalf("plan allow decision=%+v", decision)
+				}
+
+				assistantLoadAuthorizerFn = func() (authorizer, error) {
+					return assistantGateAuthorizerStub{allowed: false, enforced: true}, nil
+				}
+				decision = assistantEvaluateActionGate(assistantActionGateInput{
+					Stage:     assistantActionStagePlan,
+					TenantID:  "tenant_1",
+					Principal: Principal{ID: "actor_1", RoleSlug: "tenant-admin"},
+					Action:    spec,
+					Intent:    tc.intent,
+					UserInput: "请生成计划",
+				})
+				if decision.Allowed || !errors.Is(decision.Error, errAssistantActionAuthzDenied) || decision.ReasonCode != "action_authz_denied" {
+					t.Fatalf("plan authz denied decision=%+v", decision)
+				}
+				assistantLoadAuthorizerFn = func() (authorizer, error) {
+					return assistantGateAuthorizerStub{allowed: true, enforced: true}, nil
+				}
+
+				decision = assistantEvaluateActionGate(assistantActionGateInput{
+					Stage:      assistantActionStageConfirm,
+					TenantID:   "tenant_1",
+					Principal:  Principal{ID: "actor_1", RoleSlug: "tenant-admin"},
+					Action:     spec,
+					Intent:     tc.intent,
+					Turn:       &assistantTurn{State: assistantStateValidated},
+					Candidates: []assistantCandidate{{CandidateID: "candidate_1"}},
+					ResolvedID: "",
+					DryRun:     &assistantDryRunResult{Explain: "ok"},
+					UserInput:  "请确认",
+				})
+				if tc.requiresCandidate {
+					if decision.Allowed || !errors.Is(decision.Error, errAssistantConfirmationRequired) || decision.ReasonCode != "candidate_confirmation_required" {
+						t.Fatalf("confirm required decision=%+v", decision)
+					}
+				} else if !decision.Allowed {
+					t.Fatalf("confirm should allow decision=%+v", decision)
+				}
+
+				resolvedForDryRun := ""
+				if tc.requiresCandidate {
+					resolvedForDryRun = "candidate_1"
+				}
+				decision = assistantEvaluateActionGate(assistantActionGateInput{
+					Stage:      assistantActionStageCommit,
+					TenantID:   "tenant_1",
+					Principal:  Principal{ID: "actor_1", RoleSlug: "tenant-admin"},
+					Action:     spec,
+					Intent:     tc.intent,
+					Turn:       &assistantTurn{State: assistantStateConfirmed},
+					Candidates: []assistantCandidate{{CandidateID: "candidate_1"}},
+					ResolvedID: resolvedForDryRun,
+					DryRun:     nil,
+					UserInput:  "请提交",
+				})
+				if decision.Allowed || !errors.Is(decision.Error, errAssistantActionRequiredCheckFailed) || decision.ReasonCode != "dry_run_validation_failed" {
+					t.Fatalf("commit dry run missing decision=%+v", decision)
+				}
+
+				if tc.requiresCandidate {
+					decision = assistantEvaluateActionGate(assistantActionGateInput{
+						Stage:      assistantActionStageCommit,
+						TenantID:   "tenant_1",
+						Principal:  Principal{ID: "actor_1", RoleSlug: "tenant-admin"},
+						Action:     spec,
+						Intent:     tc.intent,
+						Turn:       &assistantTurn{State: assistantStateConfirmed},
+						Candidates: []assistantCandidate{{CandidateID: "candidate_1"}},
+						ResolvedID: "",
+						DryRun:     &assistantDryRunResult{Explain: "ok"},
+						UserInput:  "请提交",
+					})
+					if decision.Allowed || !errors.Is(decision.Error, errAssistantCandidateNotFound) || decision.ReasonCode != "candidate_missing_at_commit" {
+						t.Fatalf("commit candidate missing decision=%+v", decision)
+					}
+				}
+
+				allowResolvedID := ""
+				if tc.requiresCandidate {
+					allowResolvedID = "candidate_1"
+				}
+				decision = assistantEvaluateActionGate(assistantActionGateInput{
+					Stage:      assistantActionStageCommit,
+					TenantID:   "tenant_1",
+					Principal:  Principal{ID: "actor_1", RoleSlug: "tenant-admin"},
+					Action:     spec,
+					Intent:     tc.intent,
+					Turn:       &assistantTurn{State: assistantStateConfirmed},
+					Candidates: []assistantCandidate{{CandidateID: "candidate_1"}},
+					ResolvedID: allowResolvedID,
+					DryRun:     &assistantDryRunResult{Explain: "ok"},
+					UserInput:  "请提交",
+				})
+				if !decision.Allowed {
+					t.Fatalf("commit allow decision=%+v", decision)
+				}
+			})
 		}
 	})
 }

@@ -1,12 +1,12 @@
 # DEV-PLAN-288 -> DEV-PLAN-285 交接清单
 
-- 生成时间：2026-03-09 02:14:00 CST
+- 生成时间：2026-03-11 07:19:00 CST
 - 当前结论：`可作为 285 的 266 子域通过前置件直接引用。`
 - 使用边界：本交接单只证明 `DEV-PLAN-266` 的真实入口 stopline 已闭环；不替代 `DEV-PLAN-290/291`，也不表示 `260` Case 2~4 已通过。
 
 ## 已通过项
 - 真实入口固定为 `/app/assistant/librechat`；证据不再依赖历史 `/assistant-ui` 直链。
-- `tp288-e2e-001/002` 已在 `290A/290` 回灌后按固定命名产物重跑并通过，命令、时间、截图、DOM、网络、trace、断言文件均已入 `docs/dev-records/assets/dev-plan-266/`。
+- `tp288-e2e-001/002` 已在 `272` 影响 runtime gate / 错误码语义后按固定命名产物重跑并通过，命令、时间、截图、DOM、网络、trace、断言文件均已刷新到 `docs/dev-records/assets/dev-plan-266/`。
 - `native_send_emitted=0` 已由两条用例的 `*-network.json` 固化，未出现 `/api/agents/chat` 或 `/api/messages` 原生发送 POST。
 - `official_message_tree_only=true` 已由两条用例的 `*-assertions.json` 固化，用户可见回复仅落在官方消息树中。
 - `single_assistant_bubble=true` 已由两条用例的 `*-assertions.json` 固化；失败内泡、重试新增单新泡均满足 stopline。
@@ -26,6 +26,7 @@
 
 ## 失效条件（对齐 DEV-PLAN-271 S5）
 - `290A` 合入影响 pending placeholder bubble / binding 生命周期（本轮已按该规则完成重跑并刷新索引）。
+- `272` 合入影响 runtime gate、错误码语义、fail-closed 行为或正式动作链稳定性（本轮已按该规则完成重跑并刷新索引）。
 - `240C/240D/240E` 合入影响 runtime gate、durable execution、MCP 写准入、错误码或 fail-closed 语义。
 - send/store/render 主路径、消息绑定 key、正式入口路由/认证链路发生变化。
 

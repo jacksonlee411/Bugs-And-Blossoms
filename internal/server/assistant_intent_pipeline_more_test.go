@@ -486,3 +486,42 @@ func TestAssistantIntentPipeline_RetryPlanOnlyUpgradeAfterInvalidFirstPass(t *te
 		t.Fatalf("unexpected intent=%+v", resolved.Intent)
 	}
 }
+
+func TestAssistantIntentPipeline_UnsupportedActionUpgradeFromLocalFacts(t *testing.T) {
+	t.Setenv("OPENAI_API_KEY", "dummy")
+	svc := newAssistantConversationService(newOrgUnitMemoryStore(), assistantWriteServiceStub{store: newOrgUnitMemoryStore()})
+	svc.modelGateway = &assistantModelGateway{
+		config: assistantModelConfig{
+			ProviderRouting: assistantProviderRouting{Strategy: "priority_failover", FallbackEnabled: true},
+			Providers: []assistantModelProviderConfig{{
+				Name:      "openai",
+				Enabled:   true,
+				Model:     "gpt-5-codex",
+				Endpoint:  "https://api.openai.com/v1",
+				TimeoutMS: 1000,
+				Retries:   0,
+				Priority:  1,
+				KeyRef:    "OPENAI_API_KEY",
+			}},
+		},
+		adapters: map[string]assistantProviderAdapter{
+			"openai": assistantAdapterFunc(func(context.Context, string, assistantModelProviderConfig) ([]byte, error) {
+				return []byte(`{"action":"unsupported_action","effective_date":"2026-01-01"}`), nil
+			}),
+		},
+	}
+
+	resolved, err := svc.resolveIntent(context.Background(), "tenant-1", "conv-1", "在 AI治理办公室 下新建 人力资源部2，生效日期 2026-01-01")
+	if err != nil {
+		t.Fatalf("resolve intent err=%v", err)
+	}
+	if resolved.Intent.Action != assistantIntentCreateOrgUnit {
+		t.Fatalf("expected create_orgunit after unsupported action upgrade, got=%s", resolved.Intent.Action)
+	}
+	if resolved.Intent.ParentRefText != "AI治理办公室" || resolved.Intent.EntityName != "人力资源部2" || resolved.Intent.EffectiveDate != "2026-01-01" {
+		t.Fatalf("unexpected upgraded intent=%+v", resolved.Intent)
+	}
+	if resolved.ProviderName != "openai" || resolved.ModelName != "gpt-5-codex" {
+		t.Fatalf("expected real provider metadata preserved, got=%+v", resolved)
+	}
+}

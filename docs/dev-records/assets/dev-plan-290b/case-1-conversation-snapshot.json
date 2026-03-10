@@ -1,8 +1,70 @@
 {
   "case_id": 1,
-  "tenant_id": "bc915f4b-ec4f-4137-83eb-0627ccf887df",
-  "conversation_id": "",
-  "snapshots": [],
-  "final_conversation": null,
-  "failure_message": "assistant_conversation_create_failed returned by runtime"
+  "tenant_id": "ff111a78-7508-4052-809a-f5cf943cc4aa",
+  "conversation_id": "conv_6095e6cf280c467081a1c184e1613b29",
+  "snapshots": [
+    {
+      "step": 1,
+      "input": "你好",
+      "bubble": {
+        "count": 0,
+        "bindingKey": "",
+        "conversationId": "conv_6095e6cf280c467081a1c184e1613b29",
+        "turnId": "",
+        "requestId": "",
+        "text": ""
+      },
+      "conversation": {
+        "conversation_id": "conv_6095e6cf280c467081a1c184e1613b29",
+        "tenant_id": "ff111a78-7508-4052-809a-f5cf943cc4aa",
+        "actor_id": "c9cdcd25-a785-41b8-b95d-019b7c843dc5",
+        "actor_role": "tenant-admin",
+        "state": "validated",
+        "current_phase": "idle",
+        "state_transitions": [
+          {
+            "id": 1070,
+            "request_id": "assistant_71d91cacdffa4761ade1e4257ede8010",
+            "trace_id": "619b09069c6247f3a3408d3a64b5dca6",
+            "from_state": "init",
+            "to_state": "validated",
+            "from_phase": "init",
+            "to_phase": "idle",
+            "reason_code": "conversation_created",
+            "actor_id": "c9cdcd25-a785-41b8-b95d-019b7c843dc5",
+            "changed_at": "2026-03-10T23:19:26.402909344Z"
+          }
+        ],
+        "created_at": "2026-03-10T23:19:26.402909344Z",
+        "updated_at": "2026-03-10T23:19:26.402909344Z",
+        "turns": []
+      },
+      "latest_turn": null
+    }
+  ],
+  "final_conversation": {
+    "conversation_id": "conv_6095e6cf280c467081a1c184e1613b29",
+    "tenant_id": "ff111a78-7508-4052-809a-f5cf943cc4aa",
+    "actor_id": "c9cdcd25-a785-41b8-b95d-019b7c843dc5",
+    "actor_role": "tenant-admin",
+    "state": "validated",
+    "current_phase": "idle",
+    "state_transitions": [
+      {
+        "id": 1070,
+        "request_id": "assistant_71d91cacdffa4761ade1e4257ede8010",
+        "trace_id": "619b09069c6247f3a3408d3a64b5dca6",
+        "from_state": "init",
+        "to_state": "validated",
+        "from_phase": "init",
+        "to_phase": "idle",
+        "reason_code": "conversation_created",
+        "actor_id": "c9cdcd25-a785-41b8-b95d-019b7c843dc5",
+        "changed_at": "2026-03-10T23:19:26.402909344Z"
+      }
+    ],
+    "created_at": "2026-03-10T23:19:26.402909344Z",
+    "updated_at": "2026-03-10T23:19:26.402909344Z",
+    "turns": []
+  }
 }
