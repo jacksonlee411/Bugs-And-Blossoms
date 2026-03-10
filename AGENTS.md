@@ -388,6 +388,7 @@ modules/{module}/
 - DEV-PLAN-240D：Assistant 耐久执行与人工接管优先计划（承接 240-M5）：`docs/dev-plans/240d-assistant-durable-execution-and-manual-takeover-plan.md`
 - DEV-PLAN-240E：Assistant 内部知识包与只读 Resolver 方案（承接 240-M6）：`docs/dev-plans/240e-assistant-internal-knowledge-pack-and-readonly-resolver-plan.md`
 - DEV-PLAN-240F：Assistant 与 280 主链路对齐封板回归计划（承接 240-M7）：`docs/dev-plans/240f-assistant-280-aligned-closure-and-regression-plan.md`
+- DEV-PLAN-241：Assistant 知识包运行时最小落地计划（承接 240E）：`docs/dev-plans/241-assistant-knowledge-pack-runtime-minimal-implementation-plan.md`
 - DEV-PLAN-250：Go 网关 + PostgreSQL RAG/鉴权接管实施方案（覆盖阶段一至阶段二）：`docs/dev-plans/250-go-gateway-rag-and-authz-phase1-2-plan.md`
 - DEV-PLAN-260：AI对话真实业务闭环主计划（多轮补全 / 候选确认 / 提交回执）：`docs/dev-plans/260-librechat-conversation-first-auto-execution-plan.md`
 - DEV-PLAN-260 执行日志：`docs/archive/dev-records/dev-plan-260-execution-log.md`

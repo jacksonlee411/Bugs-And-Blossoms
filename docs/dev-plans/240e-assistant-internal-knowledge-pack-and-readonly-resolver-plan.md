@@ -270,7 +270,8 @@
 ## 13. 交付物
 1. [ ] 本计划文档。
 2. [ ] 后续若批准实施：知识包契约样例、Resolver 契约样例、上下文装配说明、相邻测试与执行记录。
-3. [ ] 若知识层进入运行时主链并影响 `271-S5` 证据结论：对应证据刷新记录与索引。
+3. [ ] 后续运行时最小实施由 `DEV-PLAN-241` 承接：`docs/dev-plans/241-assistant-knowledge-pack-runtime-minimal-implementation-plan.md`。
+4. [ ] 若知识层进入运行时主链并影响 `271-S5` 证据结论：对应证据刷新记录与索引。
 
 ## 14. 门禁与 SSOT 引用
 1. [ ] 仓库级 Go / 文档 / CI 门禁入口以 `AGENTS.md`、`Makefile`、`.github/workflows/quality-gates.yml` 为准。
@@ -282,6 +283,7 @@
 - `docs/dev-plans/240-assistant-org-transaction-orchestration-modernization-plan.md`
 - `docs/dev-plans/240c-assistant-action-interceptor-and-risk-gate-plan.md`
 - `docs/dev-plans/240d-assistant-durable-execution-and-manual-takeover-plan.md`
+- `docs/dev-plans/241-assistant-knowledge-pack-runtime-minimal-implementation-plan.md`
 - `docs/dev-plans/260-librechat-conversation-first-auto-execution-plan.md`
 - `docs/dev-plans/271-assistant-librechat-cross-plan-sequenced-delivery-plan.md`
 - `docs/dev-plans/280-librechat-web-ui-vendoring-and-runtime-layered-reuse-plan.md`
