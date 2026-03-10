@@ -12,7 +12,14 @@
 - `assistantIntentSpec`、strict decode、OpenAI payload normalize、compile/dry-run/validation 已扩容到七动作最小载荷。
 - `PR-272-04/05` 仍待继续：当前代码与仓库级门禁已通过，但还需补齐更完整的 gate 分支回归、PG/持久化路径对齐与 live/E2E 证据封板。
 
-## 3. 关联文件
+## 3. 下一步实施策略（2026-03-10 评估回写）
+- 顺序冻结：先完成 `PR-272-04` 的服务端确定性回归，再推进 `PR-272-05` 的后端主证据，最后统一刷新 `288 + 290B` live 证据。
+- `PR-272-04` 的首要任务是补齐三类测试：`internal/server/assistant_action_interceptor_test.go`、`internal/server/assistant_api_coverage_test.go`、`internal/server/assistant_persistence_gap_test.go`。
+- `PR-272-05` 的首要任务是按七动作补齐 API/PG 成功与拒绝样例，并补 `:commit -> receipt -> task poll -> conversation refresh` 的终态一致性断言。
+- 证据策略冻结：由于 `272` 继续触达运行时 gate / 错误码语义 / fail-closed 主链，`288/290B` 历史证据在本轮实现稳定前仅可视为阶段参考，不得直接用于 `271-S5/285` 封板判定。
+- 当前完成度判断冻结为：七动作主链已达最小闭环，但封板仍取决于 `PR-272-04/05` 的测试与证据是否补齐。
+
+## 4. 关联文件
 - `docs/dev-plans/272-assistant-orgunit-seven-actions-expansion-plan.md`
 - `internal/server/assistant_action_registry.go`
 - `internal/server/assistant_action_interceptor.go`

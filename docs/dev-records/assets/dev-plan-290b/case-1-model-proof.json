@@ -1,7 +1,7 @@
 {
-  "model_provider": "deterministic",
-  "model_name": "builtin-intent-extractor",
-  "model_revision": "assistant.intent.v1",
-  "fallback_detected": true,
+  "model_provider": "",
+  "model_name": "",
+  "model_revision": "",
+  "fallback_detected": false,
   "proof_source": "case-conversation-snapshot"
 }

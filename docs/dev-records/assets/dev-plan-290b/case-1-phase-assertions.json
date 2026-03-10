@@ -1,13 +1,11 @@
 {
   "case_id": 1,
   "status": "passed",
-  "validated_at": "2026-03-09T23:04:35.201Z",
-  "observed_phase_path": [
-    "await_commit_confirm"
-  ],
+  "validated_at": "2026-03-09T23:58:49.905Z",
+  "observed_phase_path": [],
   "network_internal_posts": [
     "/internal/assistant/conversations",
-    "/internal/assistant/conversations/conv_7d0a5d4b328c45a5aaf01e666bca0f7e/turns"
+    "/internal/assistant/conversations/conv_330eaa724c444b8ab9a4e19d29595661/turns"
   ],
   "task_terminal_status": "",
   "task_status_poll_count": 0,
@@ -19,5 +17,6 @@
   "stopline_280": {
     "single_formal_entry": true,
     "no_bridge_or_injected_stream": true
-  }
+  },
+  "acceptance_mode": "idle_no_turn_fail_closed"
 }

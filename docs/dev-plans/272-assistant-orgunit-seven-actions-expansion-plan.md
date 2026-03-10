@@ -86,6 +86,19 @@
 2. [ ] 按 `271-S5` 新鲜度规则刷新 `288/290` 受影响证据。
 3. [x] 在 `docs/dev-records/` 新增或更新 `dev-plan-272-execution-log.md`。
 
+### 5.6 下一步实施策略（2026-03-10 评估回写）
+1. [x] 实施顺序冻结为：**先关 `PR-272-04`，再关 `PR-272-05`，最后统一刷新跨计划 live 证据**。
+2. [x] `PR-272-04` 当前主目标不是继续扩动作，而是把“动作级 gate 规则已接入”固化为**可复核测试矩阵**：
+   - [ ] `assistant_action_interceptor_test.go`：按七动作补齐 `plan/confirm/commit` 允许与拒绝分支，覆盖 `required_checks` 最小化配置。
+   - [ ] `assistant_api_test.go` / `assistant_api_coverage_test.go`：补齐 `reason_code / turn.error_code / HTTP` 映射断言，防止语义漂移。
+   - [ ] `assistant_persistence_gap_test.go`：补齐 PG 路径下 gate 拒绝不写门、不建 task、不误推进状态的断言。
+3. [x] `PR-272-05` 执行顺序冻结为“**后端主证据优先，live 证据后置**”：
+   - [ ] 先补七动作 API/PG 集成回归：每个动作至少 1 条成功样例 + 1 条关键拒绝路径（权限/校验/状态漂移之一）。
+   - [ ] 再补 `:commit -> receipt -> task poll -> conversation refresh` 的异步终态一致性断言，避免只证明 task 成功、不证明会话终态。
+   - [ ] 仅在服务端回归冻结后，统一重跑 `288 + 290B` 关键用例并刷新索引，满足 `271-S5` 证据新鲜度。
+4. [x] 跨计划证据策略冻结为：`272` 若继续影响运行时 gate、错误码语义、Resolver 行为或 fail-closed 行为，则 `288/290B` 历史证据视为待刷新，不得提前用于 `271-S5/285` 封板判定。
+5. [x] 本计划当前完成度判断冻结为：**主链能力已达“七动作进入正式链路”的最小闭环，但封板状态仍以 `PR-272-04/05` 测试与证据完成为准**。
+
 ## 6. 测试与覆盖率
 1. [ ] 覆盖率口径：沿用仓库 CI 既有口径与阈值，不新增排除项规避。
 2. [ ] 单测最小集：

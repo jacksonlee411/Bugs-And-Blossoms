@@ -3,12 +3,12 @@
   "bubble_count": 1,
   "bubbles": [
     {
-      "binding_key": "conv_0eb9565fe8d444a1830729d0b2e66f56::turn_05106c9c8f9149aaa8cbc47f1274f6dd::assistant_ae7e66009d0f4e58bc3c41170930e70b",
-      "conversation_id": "conv_0eb9565fe8d444a1830729d0b2e66f56",
-      "turn_id": "turn_05106c9c8f9149aaa8cbc47f1274f6dd",
-      "request_id": "assistant_ae7e66009d0f4e58bc3c41170930e70b",
-      "message_id": "452bc4c3-699d-4ddf-91a5-af1f4aef5acb_",
-      "text": "上级组织：共享服务中心；新建组织：239A候选验证部；生效日期：2026-03-26 task_id: 4380478c-d226-4d8c-aab5-17f24352f925 · succeeded Selected: 共享服务中心 org_code: O000001 parent_org_code: TP290BSSC2 effective_date: 2026-03-26 event_type: CREATE"
+      "binding_key": "conv_780a748124cb4051aa69b2b135917a44::turn_7c921d2e24f04affa531d61d971b3c74::assistant_b9a217fa26a64dc896d4c1ef89bd71fa",
+      "conversation_id": "conv_780a748124cb4051aa69b2b135917a44",
+      "turn_id": "turn_7c921d2e24f04affa531d61d971b3c74",
+      "request_id": "assistant_b9a217fa26a64dc896d4c1ef89bd71fa",
+      "message_id": "7346e160-6d43-4b14-b6d7-a0ec2d201db8_",
+      "text": "上级组织：共享服务中心；新建组织：239A候选验证部；生效日期：2026-03-26 task_id: c5775cfd-636a-4b44-8a87-5080337f5fe7 · succeeded Selected: 共享服务中心 org_code: O000001 parent_org_code: TP290BSSC2 effective_date: 2026-03-26 event_type: CREATE"
     }
   ],
   "external_reply_container_count": 0,

@@ -1,6 +1,6 @@
 {
   "case_id": 1,
-  "conversation_id": "",
+  "conversation_id": "conv_a0ff530029c94e3f845553973c747a77",
   "turn_id": "",
   "request_id": "",
   "trace_id": "",
@@ -8,11 +8,11 @@
   "phase": "",
   "error_code": "assistant_intent_unsupported",
   "failure_stage": "runtime_or_case_flow",
-  "failure_message": "\u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoBeVisible\u001b[2m()\u001b[22m failed\n\nLocator:  locator('[data-assistant-binding-key]').first()\nExpected: visible\nReceived: <element(s) not found>\nTimeout:  60000ms\n\nCall log:\n\u001b[2m  - Expect \"toBeVisible\" with timeout 60000ms\u001b[22m\n\u001b[2m  - waiting for locator('[data-assistant-binding-key]').first()\u001b[22m\n",
+  "failure_message": "assistant_intent_unsupported (case=1, phase=unknown, action=unknown)",
   "observed_calls": [
     {
       "method": "POST",
-      "path": "/internal/assistant/conversations/conv_973cf2f5db834a0bbb6fd39e8116892f/turns",
+      "path": "/internal/assistant/conversations/conv_2364108440494fd5b3a64c6619314882/turns",
       "status": 422,
       "body": "",
       "json": {
@@ -20,26 +20,11 @@
         "message": "assistant intent unsupported",
         "trace_id": "",
         "meta": {
-          "path": "/internal/assistant/conversations/conv_973cf2f5db834a0bbb6fd39e8116892f/turns",
-          "method": "POST"
-        }
-      }
-    },
-    {
-      "method": "POST",
-      "path": "/internal/assistant/conversations/conv_f046f589852d47b38cfd4b3f116f759d/turns",
-      "status": 422,
-      "body": "",
-      "json": {
-        "code": "assistant_intent_unsupported",
-        "message": "assistant intent unsupported",
-        "trace_id": "",
-        "meta": {
-          "path": "/internal/assistant/conversations/conv_f046f589852d47b38cfd4b3f116f759d/turns",
+          "path": "/internal/assistant/conversations/conv_2364108440494fd5b3a64c6619314882/turns",
           "method": "POST"
         }
       }
     }
   ],
-  "captured_at": "2026-03-09T22:59:13.295Z"
+  "captured_at": "2026-03-09T23:36:45.135Z"
 }

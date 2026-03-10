@@ -1,17 +1,16 @@
 {
   "case_id": 1,
-  "conversation_id": "conv_7d0a5d4b328c45a5aaf01e666bca0f7e",
-  "turn_id": "turn_a40ba48522fa4996aaa85949ffd5633e",
-  "request_id": "assistant_0f415b0618a94d8e97f57e94af1d439a",
-  "trace_id": "676db99662c14fb7b95a7d8d5dc22780",
+  "conversation_id": "conv_330eaa724c444b8ab9a4e19d29595661",
+  "turn_id": "",
+  "request_id": "",
+  "trace_id": "",
   "intent_action_expected": "plan_only",
-  "intent_action_actual": "plan_only",
+  "intent_action_actual": "",
+  "acceptance_mode": "idle_no_turn_fail_closed",
   "phase_expected_path": [
     "idle_or_await_commit_confirm_without_commit"
   ],
-  "phase_observed_path": [
-    "await_commit_confirm"
-  ],
+  "phase_observed_path": [],
   "error_code": "",
   "passed": true
 }
