@@ -1,18 +1,17 @@
 {
   "plan": "DEV-PLAN-290B",
-  "tenant_id": "bd78328e-2dfb-4119-8999-6a177c25e42f",
-  "conversation_id": "conv_cfd5421253cf45ff816285c761018e4a",
-  "turn_id": "turn_04f4cb88d6d44311ba0844ebb0304c93",
-  "confirm_status": 200,
-  "commit_status": 422,
+  "tenant_id": "2787da29-efb1-418b-9527-6a67bff35eec",
+  "probe_skipped": true,
+  "skip_reason": "assistant_conversation_create_failed_on_create_conversation",
+  "create_conversation_status": 500,
   "error": {
-    "code": "assistant_intent_unsupported",
-    "message": "assistant intent unsupported",
+    "code": "assistant_conversation_create_failed",
+    "message": "Assistant conversation create failed.",
     "trace_id": "",
     "meta": {
-      "path": "/internal/assistant/conversations/conv_cfd5421253cf45ff816285c761018e4a/turns/turn_04f4cb88d6d44311ba0844ebb0304c93:commit",
+      "path": "/internal/assistant/conversations",
       "method": "POST"
     }
   },
-  "captured_at": "2026-03-09T23:59:02.053Z"
+  "captured_at": "2026-03-10T00:40:01.861Z"
 }

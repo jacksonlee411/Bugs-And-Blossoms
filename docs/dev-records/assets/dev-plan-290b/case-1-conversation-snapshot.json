@@ -1,70 +1,8 @@
 {
   "case_id": 1,
-  "tenant_id": "bbeab0a4-f8fa-4fff-b35e-28e5134b8e60",
-  "conversation_id": "conv_330eaa724c444b8ab9a4e19d29595661",
-  "snapshots": [
-    {
-      "step": 1,
-      "input": "你好",
-      "bubble": {
-        "count": 0,
-        "bindingKey": "",
-        "conversationId": "conv_330eaa724c444b8ab9a4e19d29595661",
-        "turnId": "",
-        "requestId": "",
-        "text": ""
-      },
-      "conversation": {
-        "conversation_id": "conv_330eaa724c444b8ab9a4e19d29595661",
-        "tenant_id": "bbeab0a4-f8fa-4fff-b35e-28e5134b8e60",
-        "actor_id": "e93891e7-8a59-4bff-a9e3-fc4f76fd18c4",
-        "actor_role": "tenant-admin",
-        "state": "validated",
-        "current_phase": "idle",
-        "state_transitions": [
-          {
-            "id": 936,
-            "request_id": "assistant_091becc3898b4664aac0d77a51e8cd2e",
-            "trace_id": "075e7817bbb348bb8d1216de76a8ffaf",
-            "from_state": "init",
-            "to_state": "validated",
-            "from_phase": "init",
-            "to_phase": "idle",
-            "reason_code": "conversation_created",
-            "actor_id": "e93891e7-8a59-4bff-a9e3-fc4f76fd18c4",
-            "changed_at": "2026-03-09T23:58:34.760959727Z"
-          }
-        ],
-        "created_at": "2026-03-09T23:58:34.760959727Z",
-        "updated_at": "2026-03-09T23:58:34.760959727Z",
-        "turns": []
-      },
-      "latest_turn": null
-    }
-  ],
-  "final_conversation": {
-    "conversation_id": "conv_330eaa724c444b8ab9a4e19d29595661",
-    "tenant_id": "bbeab0a4-f8fa-4fff-b35e-28e5134b8e60",
-    "actor_id": "e93891e7-8a59-4bff-a9e3-fc4f76fd18c4",
-    "actor_role": "tenant-admin",
-    "state": "validated",
-    "current_phase": "idle",
-    "state_transitions": [
-      {
-        "id": 936,
-        "request_id": "assistant_091becc3898b4664aac0d77a51e8cd2e",
-        "trace_id": "075e7817bbb348bb8d1216de76a8ffaf",
-        "from_state": "init",
-        "to_state": "validated",
-        "from_phase": "init",
-        "to_phase": "idle",
-        "reason_code": "conversation_created",
-        "actor_id": "e93891e7-8a59-4bff-a9e3-fc4f76fd18c4",
-        "changed_at": "2026-03-09T23:58:34.760959727Z"
-      }
-    ],
-    "created_at": "2026-03-09T23:58:34.760959727Z",
-    "updated_at": "2026-03-09T23:58:34.760959727Z",
-    "turns": []
-  }
+  "tenant_id": "bc915f4b-ec4f-4137-83eb-0627ccf887df",
+  "conversation_id": "",
+  "snapshots": [],
+  "final_conversation": null,
+  "failure_message": "assistant_conversation_create_failed returned by runtime"
 }

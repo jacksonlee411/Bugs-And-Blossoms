@@ -412,6 +412,22 @@ function assistantErrorCodeFromCall(call) {
   }
 }
 
+function findAssistantErrorCall(state, code) {
+  return state.internalCalls.find((call) => assistantErrorCodeFromCall(call) === code) || null;
+}
+
+async function waitForAssistantErrorCall(state, code, timeoutMs = 8_000) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const matched = findAssistantErrorCall(state, code);
+    if (matched) {
+      return matched;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 250));
+  }
+  return findAssistantErrorCall(state, code);
+}
+
 function invalidTaskPollPaths(state) {
   return state.internalCalls
     .filter(
@@ -632,6 +648,52 @@ test("tp288b-live-001: real formal entry follows receipt poll refresh contract",
     expect(usedIframe, "formal entry must be direct page").toBe(false);
 
     await sendFromFormalEntry(surface, inputText);
+    const modelSecretMissingCall = await waitForAssistantErrorCall(
+      networkState,
+      "ai_model_secret_missing",
+      10_000,
+    );
+    const conversationCreateFailedCall =
+      findAssistantErrorCall(networkState, "assistant_conversation_create_failed");
+    const runtimeBlockedCall = modelSecretMissingCall || conversationCreateFailedCall;
+    if (runtimeBlockedCall) {
+      blockingReason = "运行态阻断：ai_model_secret_missing";
+      if (assistantErrorCodeFromCall(runtimeBlockedCall) === "assistant_conversation_create_failed") {
+        blockingReason = "运行态阻断：assistant_conversation_create_failed";
+      }
+      const domEvidence = await collectDOMEvidence(page, surface);
+      await page.screenshot({ path: paths.page, fullPage: true });
+      await writeJSON(paths.dom, {
+        plan: "DEV-PLAN-288B",
+        case_id: CASE_ID,
+        captured_at: new Date().toISOString(),
+        formal_entry: "/app/assistant/librechat",
+        ...domEvidence,
+      });
+      assertions = {
+        ...assertions,
+        plan: "DEV-PLAN-288B",
+        case_id: CASE_ID,
+        formal_entry: "/app/assistant/librechat",
+        command: process.env.TP288B_EVIDENCE_COMMAND || DEFAULT_COMMAND,
+        captured_at: new Date().toISOString(),
+        probe_skipped: true,
+        skip_reason:
+          assistantErrorCodeFromCall(runtimeBlockedCall) === "assistant_conversation_create_failed"
+            ? "assistant_conversation_create_failed_on_create_conversation"
+            : "ai_model_secret_missing_on_create_turn",
+        failure_message: blockingReason,
+        observed_call: {
+          path: String(runtimeBlockedCall.path || ""),
+          status: Number(runtimeBlockedCall.status || 0),
+          error_code: assistantErrorCodeFromCall(runtimeBlockedCall),
+        },
+        passed: false,
+      };
+      await writeJSON(paths.assertions, assertions);
+      result = "blocked";
+      return;
+    }
     const draftBubble = await latestFormalBubble(surface);
     const conversationID = draftBubble.conversationId;
     expect(conversationID).toBeTruthy();

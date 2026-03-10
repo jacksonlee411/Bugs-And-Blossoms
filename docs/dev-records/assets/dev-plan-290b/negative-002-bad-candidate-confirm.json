@@ -1,18 +1,17 @@
 {
   "plan": "DEV-PLAN-290B",
-  "tenant_id": "adb4c784-627f-40d0-85ad-b3227925fd21",
-  "conversation_id": "conv_9b86cf0988a642cd8109ed3825abebdc",
+  "tenant_id": "baa5b934-55da-4743-8bd6-16e29c777c2b",
   "probe_skipped": true,
-  "skip_reason": "assistant_intent_unsupported_on_create_turn",
-  "create_turn_status": 422,
+  "skip_reason": "assistant_conversation_create_failed_on_create_conversation",
+  "create_conversation_status": 500,
   "error": {
-    "code": "assistant_intent_unsupported",
-    "message": "assistant intent unsupported",
+    "code": "assistant_conversation_create_failed",
+    "message": "Assistant conversation create failed.",
     "trace_id": "",
     "meta": {
-      "path": "/internal/assistant/conversations/conv_9b86cf0988a642cd8109ed3825abebdc/turns",
+      "path": "/internal/assistant/conversations",
       "method": "POST"
     }
   },
-  "captured_at": "2026-03-09T23:58:36.933Z"
+  "captured_at": "2026-03-10T00:39:59.277Z"
 }

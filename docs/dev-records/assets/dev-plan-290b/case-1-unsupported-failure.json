@@ -1,30 +1,30 @@
 {
   "case_id": 1,
-  "conversation_id": "conv_a0ff530029c94e3f845553973c747a77",
+  "conversation_id": "",
   "turn_id": "",
   "request_id": "",
   "trace_id": "",
   "intent_action": "",
   "phase": "",
-  "error_code": "assistant_intent_unsupported",
-  "failure_stage": "runtime_or_case_flow",
-  "failure_message": "assistant_intent_unsupported (case=1, phase=unknown, action=unknown)",
+  "error_code": "assistant_conversation_create_failed",
+  "failure_stage": "post_turn_assertion",
+  "failure_message": "assistant_conversation_create_failed returned by runtime",
   "observed_calls": [
     {
       "method": "POST",
-      "path": "/internal/assistant/conversations/conv_2364108440494fd5b3a64c6619314882/turns",
-      "status": 422,
+      "path": "/internal/assistant/conversations",
+      "status": 500,
       "body": "",
       "json": {
-        "code": "assistant_intent_unsupported",
-        "message": "assistant intent unsupported",
+        "code": "assistant_conversation_create_failed",
+        "message": "Assistant conversation create failed.",
         "trace_id": "",
         "meta": {
-          "path": "/internal/assistant/conversations/conv_2364108440494fd5b3a64c6619314882/turns",
+          "path": "/internal/assistant/conversations",
           "method": "POST"
         }
       }
     }
   ],
-  "captured_at": "2026-03-09T23:36:45.135Z"
+  "captured_at": "2026-03-10T00:40:45.370Z"
 }
