@@ -323,3 +323,102 @@ func TestAssistantModelGateway_NewGatewayProbeHealthAndURLCoverage(t *testing.T)
 		t.Fatalf("unexpected root models url=%s err=%v", url, err)
 	}
 }
+
+func TestAssistantModelGateway_HelperCoverage_Additional(t *testing.T) {
+	if got := assistantFirstString(map[string]any{"name": " 运营部 "}, "name"); got != "运营部" {
+		t.Fatalf("got=%q", got)
+	}
+	if got := assistantFirstStringFromObjects([]map[string]any{nil, {"intent": map[string]any{"entity_name": "共享服务中心"}}}, "intent.entity_name"); got != "共享服务中心" {
+		t.Fatalf("got=%q", got)
+	}
+	if got := assistantFirstCompositeNameFromObjects([]map[string]any{{"target": map[string]any{"name": "TP290BAIGOV-AI治理办公室", "code": "TP290BAIGOV"}}}, "target"); got != "TP290BAIGOV-AI治理办公室" {
+		t.Fatalf("got=%q", got)
+	}
+	if got := assistantFirstCompositeNameFromObjects([]map[string]any{{"target": map[string]any{"name": "AI治理办公室", "code": "TP290BAIGOV"}}}, "target"); got != "TP290BAIGOVAI治理办公室" {
+		t.Fatalf("got=%q", got)
+	}
+	if got := assistantFirstCompositeNameFromObjects([]map[string]any{{"target": map[string]any{"name": "AI治理办公室"}}}, "target"); got != "AI治理办公室" {
+		t.Fatalf("got=%q", got)
+	}
+	if got := assistantFirstCompositeNameFromObjects([]map[string]any{{"target": map[string]any{"code": "TP290BAIGOV"}}}, "target"); got != "TP290BAIGOV" {
+		t.Fatalf("got=%q", got)
+	}
+	if got := assistantFirstCompositeNameFromObjects([]map[string]any{{"target": "not-map"}}, "target"); got != "" {
+		t.Fatalf("got=%q", got)
+	}
+	objects := assistantIntentCandidateObjects(map[string]any{"actions": []any{map[string]any{"name": "x"}}})
+	if len(objects) != 2 {
+		t.Fatalf("objects=%v", objects)
+	}
+	if _, ok := assistantFirstMapFromSlice(map[string]any{"items": []any{}}, "items"); ok {
+		t.Fatal("expected empty slice miss")
+	}
+	if _, ok := assistantFirstMapFromSlice(map[string]any{"items": []any{"x"}}, "items"); ok {
+		t.Fatal("expected non-map miss")
+	}
+	if got := assistantLookupLooseAny(map[string]any{"org_unit_name": "AI治理办公室"}, "orgUnitName", "missing"); got != "AI治理办公室" {
+		t.Fatalf("got=%v", got)
+	}
+	if got := assistantLookupLooseAny(map[string]any{"x": 1}, "missing"); got != nil {
+		t.Fatalf("got=%v", got)
+	}
+	if value, ok := assistantLookupPathValue(map[string]any{"a": map[string]any{"b": "c"}}, "a.b"); !ok || value != "c" {
+		t.Fatalf("value=%v ok=%v", value, ok)
+	}
+	if _, ok := assistantLookupPathValue(map[string]any{"a": 1}, "a.b"); ok {
+		t.Fatal("expected non-map path miss")
+	}
+	if _, ok := assistantLookupPathValue(map[string]any{"a": map[string]any{"b": "c"}}, "a..b"); ok {
+		t.Fatal("expected empty segment miss")
+	}
+	if _, ok := assistantToNonEmptyString("   "); ok {
+		t.Fatal("expected blank string miss")
+	}
+	if got := assistantNormalizeOpenAIIntentAction("Create Org"); got != assistantIntentCreateOrgUnit {
+		t.Fatalf("got=%q", got)
+	}
+}
+
+func TestAssistantModelGateway_ResolveIntentRetriesTransientInvoke(t *testing.T) {
+	t.Setenv("OPENAI_API_KEY", "dummy")
+	attempts := 0
+	gw := &assistantModelGateway{
+		config: assistantModelConfig{ProviderRouting: assistantProviderRouting{Strategy: "priority_failover", FallbackEnabled: true}, Providers: []assistantModelProviderConfig{{Name: "openai", Enabled: true, Model: "m", Endpoint: "https://api.openai.com/v1", TimeoutMS: 1000, Retries: 1, Priority: 1, KeyRef: "OPENAI_API_KEY"}}},
+		adapters: map[string]assistantProviderAdapter{"openai": assistantAdapterFunc(func(context.Context, string, assistantModelProviderConfig) ([]byte, error) {
+			attempts++
+			if attempts == 1 {
+				return nil, errAssistantModelTimeout
+			}
+			return []byte(`{"action":"plan_only"}`), nil
+		})},
+	}
+	resolved, err := gw.ResolveIntent(context.Background(), assistantResolveIntentRequest{Prompt: "x"})
+	if err != nil {
+		t.Fatalf("err=%v", err)
+	}
+	if attempts != 2 || resolved.Intent.Action != assistantIntentPlanOnly {
+		t.Fatalf("resolved=%+v attempts=%d", resolved, attempts)
+	}
+}
+
+func TestAssistantModelGateway_ResolveIntentRetriesStrictDecodeFailure(t *testing.T) {
+	t.Setenv("OPENAI_API_KEY", "dummy")
+	attempts := 0
+	gw := &assistantModelGateway{
+		config: assistantModelConfig{ProviderRouting: assistantProviderRouting{Strategy: "priority_failover", FallbackEnabled: true}, Providers: []assistantModelProviderConfig{{Name: "openai", Enabled: true, Model: "m", Endpoint: "https://api.openai.com/v1", TimeoutMS: 1000, Retries: 1, Priority: 1, KeyRef: "OPENAI_API_KEY"}}},
+		adapters: map[string]assistantProviderAdapter{"openai": assistantAdapterFunc(func(context.Context, string, assistantModelProviderConfig) ([]byte, error) {
+			attempts++
+			if attempts == 1 {
+				return []byte(`{"choices":[{"message":{"content":"not-json"}}]}`), nil
+			}
+			return []byte(`{"action":"plan_only"}`), nil
+		})},
+	}
+	resolved, err := gw.ResolveIntent(context.Background(), assistantResolveIntentRequest{Prompt: "x"})
+	if err != nil {
+		t.Fatalf("err=%v", err)
+	}
+	if attempts != 2 || resolved.Intent.Action != assistantIntentPlanOnly {
+		t.Fatalf("resolved=%+v attempts=%d", resolved, attempts)
+	}
+}

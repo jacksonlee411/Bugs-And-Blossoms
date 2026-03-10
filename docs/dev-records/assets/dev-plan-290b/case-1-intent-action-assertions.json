@@ -1,0 +1,16 @@
+{
+  "case_id": 1,
+  "conversation_id": "conv_31df5e249d074dd1883c1f2c414a1899",
+  "turn_id": "",
+  "request_id": "",
+  "trace_id": "",
+  "intent_action_expected": "plan_only",
+  "intent_action_actual": "",
+  "acceptance_mode": "idle_no_turn_fail_closed",
+  "phase_expected_path": [
+    "idle_or_await_commit_confirm_without_commit"
+  ],
+  "phase_observed_path": [],
+  "error_code": "",
+  "passed": true
+}

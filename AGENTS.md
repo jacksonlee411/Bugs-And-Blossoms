@@ -388,6 +388,7 @@ modules/{module}/
 - DEV-PLAN-240D：Assistant 耐久执行与人工接管优先计划（承接 240-M5）：`docs/dev-plans/240d-assistant-durable-execution-and-manual-takeover-plan.md`
 - DEV-PLAN-240E：Assistant 内部知识包与只读 Resolver 方案（承接 240-M6）：`docs/dev-plans/240e-assistant-internal-knowledge-pack-and-readonly-resolver-plan.md`
 - DEV-PLAN-240F：Assistant 与 280 主链路对齐封板回归计划（承接 240-M7）：`docs/dev-plans/240f-assistant-280-aligned-closure-and-regression-plan.md`
+- DEV-PLAN-241：Assistant 知识包运行时最小落地计划（承接 240E）：`docs/dev-plans/241-assistant-knowledge-pack-runtime-minimal-implementation-plan.md`
 - DEV-PLAN-250：Go 网关 + PostgreSQL RAG/鉴权接管实施方案（覆盖阶段一至阶段二）：`docs/dev-plans/250-go-gateway-rag-and-authz-phase1-2-plan.md`
 - DEV-PLAN-260：AI对话真实业务闭环主计划（多轮补全 / 候选确认 / 提交回执）：`docs/dev-plans/260-librechat-conversation-first-auto-execution-plan.md`
 - DEV-PLAN-260 执行日志：`docs/archive/dev-records/dev-plan-260-execution-log.md`
@@ -404,6 +405,7 @@ modules/{module}/
 - DEV-PLAN-266：AI对话官方 UI 单通道与气泡内回写前置子计划：`docs/dev-plans/266-librechat-official-ui-single-dialog-channel-and-in-bubble-gpt52-plan.md`
 - DEV-PLAN-270：项目容器部署分层检讨与收敛方案：`docs/dev-plans/270-project-container-deployment-review-and-layered-convergence-plan.md`
 - DEV-PLAN-271：Assistant/LibreChat 跨计划分阶段推进与封板编排计划（223/240/260/280）：`docs/dev-plans/271-assistant-librechat-cross-plan-sequenced-delivery-plan.md`
+- DEV-PLAN-272：Assistant OrgUnit 七动作纳管实施计划（1-7 全量纳入）：`docs/dev-plans/272-assistant-orgunit-seven-actions-expansion-plan.md`
 - DEV-PLAN-280：LibreChat Web UI 源码纳管与 Runtime 分层复用实施方案：`docs/dev-plans/280-librechat-web-ui-vendoring-and-runtime-layered-reuse-plan.md`
 - DEV-PLAN-281：LibreChat Web UI 源码纳管与新主链路冻结实施计划：`docs/dev-plans/281-librechat-web-ui-source-vendoring-and-mainline-freeze-plan.md`
 - DEV-PLAN-281 执行日志：`docs/archive/dev-records/dev-plan-281-execution-log.md`
@@ -414,10 +416,14 @@ modules/{module}/
 - DEV-PLAN-286：266 剩余项 A——官方消息树绑定与同轮单气泡收口：`docs/dev-plans/286-librechat-official-message-binding-and-single-bubble-closure-plan.md`
 - DEV-PLAN-287：266 剩余项 B——失败回包同落点与前端 DTO-only 降权收口：`docs/dev-plans/287-librechat-dto-render-only-and-failure-in-bubble-closure-plan.md`
 - DEV-PLAN-288：266 剩余项 C——真实入口 E2E 与证据封板收口：`docs/dev-plans/288-librechat-266-live-e2e-and-evidence-closure-plan.md`
+- DEV-PLAN-288B：tp288 异步任务回执契约收敛与非 Mock 证据计划：`docs/dev-plans/288b-librechat-tp288-async-task-receipt-and-live-evidence-plan.md`
+- DEV-PLAN-288B 执行日志：`docs/dev-records/dev-plan-288b-execution-log.md`
 - DEV-PLAN-289：260-M2~M4 实施收口专项（事实源推进 + 主链联调）：`docs/dev-plans/289-librechat-260-m2-m4-implementation-closure-plan.md`
 - DEV-PLAN-290：260-M5 真实 Case 验收与证据固化专项：`docs/dev-plans/290-librechat-260-m5-real-case-validation-and-evidence-plan.md`
 - DEV-PLAN-290A：pending placeholder bubble 修复专项（Case 2 优先路径）：`docs/dev-plans/290a-librechat-pending-placeholder-bubble-fix-plan.md`
+- DEV-PLAN-290B：真实 intent/action 执行链路验收与非 Mock 证据收敛计划：`docs/dev-plans/290b-librechat-live-intent-action-chain-evidence-plan.md`
 - DEV-PLAN-290 执行日志：`docs/dev-records/dev-plan-290-execution-log.md`
+- DEV-PLAN-290B 执行日志：`docs/dev-records/dev-plan-290b-execution-log.md`
 - DEV-PLAN-291：237 升级兼容回归前置专项（供 285 封板复核）：`docs/dev-plans/291-librechat-237-upgrade-compatibility-readiness-plan.md`
 - DEV-PLAN-292：LibreChat 正式入口 vendored UI 认证/启动最小兼容层专项：`docs/dev-plans/292-librechat-vendored-ui-auth-startup-compat-plan.md`
 - DEV-PLAN-225 执行日志：`docs/archive/dev-records/dev-plan-225-execution-log.md`

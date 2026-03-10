@@ -136,6 +136,101 @@ export function detectAssistantFormalLocale() {
   return language.toLowerCase().startsWith('zh') ? 'zh' : 'en';
 }
 
+export type AssistantFormalDialogIntent =
+  | { kind: 'create_turn' }
+  | { kind: 'select_candidate'; candidateId: string }
+  | { kind: 'confirm_and_commit' }
+  | { kind: 'commit_only' };
+
+function assistantFormalNormalizeUserInput(input: string) {
+  return input.trim().replace(/\s+/g, ' ').toLowerCase();
+}
+
+const assistantFormalAffirmativeInputRE =
+  /^(确认|确认提交|提交|是|是的|好的|好|ok|okay|yes|confirm|submit)$/i;
+
+export function assistantFormalIsAffirmativeInput(input: string) {
+  return assistantFormalAffirmativeInputRE.test(input.trim());
+}
+
+export function assistantFormalResolveCandidateSelection(
+  input: string,
+  candidates: AssistantFormalCandidate[],
+) {
+  if (!Array.isArray(candidates) || candidates.length === 0) {
+    return '';
+  }
+
+  const trimmed = input.trim();
+  const normalized = assistantFormalNormalizeUserInput(trimmed);
+
+  const pickByIndex =
+    normalized.match(/^选第\s*(\d+)\s*个$/i) ??
+    normalized.match(/^第\s*(\d+)\s*个$/i) ??
+    normalized.match(/^(\d+)$/);
+  if (pickByIndex) {
+    const ordinal = Number.parseInt(pickByIndex[1], 10);
+    if (Number.isFinite(ordinal) && ordinal >= 1 && ordinal <= candidates.length) {
+      return candidates[ordinal - 1].candidate_id.trim();
+    }
+  }
+
+  for (const candidate of candidates) {
+    const candidateID = candidate.candidate_id?.trim() ?? '';
+    const candidateCode = candidate.candidate_code?.trim() ?? '';
+    const candidateName = candidate.name?.trim() ?? '';
+    if (!candidateID) {
+      continue;
+    }
+    if (candidateCode && normalized === candidateCode.toLowerCase()) {
+      return candidateID;
+    }
+    if (candidateName && normalized === assistantFormalNormalizeUserInput(candidateName)) {
+      return candidateID;
+    }
+  }
+
+  return '';
+}
+
+export function assistantFormalResolveDialogIntent(
+  input: string,
+  conversation?: AssistantFormalConversation | null,
+): AssistantFormalDialogIntent {
+  const latestTurn = conversation ? latestAssistantFormalTurn(conversation) : undefined;
+  if (!latestTurn) {
+    return { kind: 'create_turn' };
+  }
+
+  const phase = latestTurn.phase?.trim() ?? '';
+  const state = latestTurn.state?.trim() ?? '';
+
+  if (phase === 'await_candidate_pick') {
+    const candidateID = assistantFormalResolveCandidateSelection(input, latestTurn.candidates ?? []);
+    if (candidateID) {
+      return { kind: 'select_candidate', candidateId: candidateID };
+    }
+    return { kind: 'create_turn' };
+  }
+
+  if (!assistantFormalIsAffirmativeInput(input)) {
+    return { kind: 'create_turn' };
+  }
+
+  if (phase === 'await_commit_confirm') {
+    if (state === 'confirmed') {
+      return { kind: 'commit_only' };
+    }
+    return { kind: 'confirm_and_commit' };
+  }
+
+  if (phase === 'await_candidate_confirm') {
+    return { kind: 'confirm_and_commit' };
+  }
+
+  return { kind: 'create_turn' };
+}
+
 export function latestAssistantFormalTurn(
   conversation: AssistantFormalConversation,
 ): AssistantFormalTurn | undefined {
@@ -349,6 +444,8 @@ function assistantFormalTaskStatusText(payload: AssistantFormalPayload) {
         : '提交已受理，正在执行。';
     case 'manual_takeover_required':
       return assistantFormalManualTakeoverText(payload.taskLastErrorCode || payload.errorCode);
+    case 'failed':
+      return detectAssistantFormalLocale() === 'en' ? 'Task failed.' : '任务执行失败。';
     case 'canceled':
       return detectAssistantFormalLocale() === 'en' ? 'Task canceled.' : '任务已取消。';
     default:
@@ -398,9 +495,21 @@ export function attachAssistantFormalTaskDetail(
       detail.status === 'succeeded'
         ? basePayload.reply
         : {
-            text: assistantFormalTaskStatusText({ ...basePayload, taskStatus: detail.status, taskLastErrorCode: detail.last_error_code?.trim() ?? '' }),
-            kind: detail.status === 'manual_takeover_required' ? 'error' : 'info',
-            stage: detail.status === 'manual_takeover_required' ? 'manual_takeover_required' : 'task_status',
+            text: assistantFormalTaskStatusText({
+              ...basePayload,
+              taskStatus: detail.status,
+              taskLastErrorCode: detail.last_error_code?.trim() ?? '',
+            }),
+            kind:
+              detail.status === 'manual_takeover_required' || detail.status === 'failed'
+                ? 'error'
+                : 'info',
+            stage:
+              detail.status === 'manual_takeover_required'
+                ? 'manual_takeover_required'
+                : detail.status === 'failed'
+                  ? 'task_failed'
+                  : 'task_status',
             conversation_id: detail.conversation_id,
             turn_id: detail.turn_id,
           },

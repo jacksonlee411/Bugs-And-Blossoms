@@ -377,27 +377,228 @@ func assistantNormalizeOpenAIIntentPayload(content string) []byte {
 	if !ok {
 		return []byte(trimmed)
 	}
-	parentRefText := assistantFirstString(obj,
+	objects := assistantIntentCandidateObjects(obj)
+	action := assistantNormalizeOpenAIIntentAction(assistantFirstStringFromObjects(objects,
+		"action",
+		"intent_action",
+		"intentAction",
+		"operationType",
+		"operation",
+		"type"))
+	parentRefText := assistantFirstStringFromObjects(objects,
 		"parent_ref_text",
+		"parentRefText",
 		"parent_department",
+		"parentDepartment",
+		"parent_department_name",
+		"parentDepartmentName",
+		"parent_org_name",
+		"parentOrgName",
 		"parent_org",
+		"parentOrg",
 		"parent_orgunit",
+		"parentOrgunit",
+		"parent_org_unit",
+		"parentOrgUnit",
+		"parent_org_unit_name",
+		"parentOrgUnitName",
 		"parent_unit",
-		"parent")
-	entityName := assistantFirstString(obj,
+		"parentUnit",
+		"parent_organization",
+		"parentOrganization",
+		"parent_organization_name",
+		"parentOrganizationName",
+		"parent",
+		"parent.name",
+		"parent.code",
+		"parentOrg.name",
+		"parentOrg.code",
+		"parent_org.name",
+		"parent_org.code",
+		"parentDepartment.name",
+		"parentDepartment.code",
+		"parent_department.name",
+		"parent_department.code",
+		"parentOrganization.name",
+		"parentOrganization.code",
+		"parent_organization.name",
+		"parent_organization.code",
+		"organizationUnit.parent",
+		"department.parentOrgUnitName",
+		"department.parent_org_unit_name",
+		"department.parentOrgUnit",
+		"department.parent_org_unit",
+		"newDepartment.parentOrgUnitName",
+		"new_department.parent_org_unit_name",
+		"organization.parentOrganization",
+		"organization.parentOrganizationName",
+		"newOrganization.parentOrganization",
+		"newOrganization.parentOrganizationName",
+		"data.parent",
+		"data.parentName",
+		"data.parentOrgName",
+		"data.parentOrganizationName",
+		"data.parent_org_name",
+		"params.parent",
+		"params.parentName",
+		"params.parentOrgName",
+		"params.parentOrganizationName",
+		"params.parent_org_unit_name",
+		"target.parent",
+		"target.parentName",
+		"target.parentOrgName",
+		"orgUnit.parent",
+		"orgUnit.parentName")
+	orgCode := assistantFirstStringFromObjects(objects,
+		"org_code",
+		"orgCode",
+		"code",
+		"target_org_code",
+		"targetOrgCode",
+		"org_unit_code",
+		"orgUnitCode",
+		"organizationCode",
+		"departmentCode",
+		"data.orgCode",
+		"data.org_code",
+		"params.orgCode",
+		"params.org_code",
+		"target.orgCode",
+		"target.org_code",
+		"orgUnit.code")
+	targetEffectiveDate := assistantFirstStringFromObjects(objects,
+		"target_effective_date",
+		"targetEffectiveDate",
+		"as_of_date",
+		"asOfDate",
+		"version_date",
+		"target.effectiveDate",
+		"target.effective_date",
+		"data.targetEffectiveDate",
+		"data.target_effective_date",
+		"params.targetEffectiveDate",
+		"params.target_effective_date")
+	newName := assistantFirstStringFromObjects(objects,
+		"new_name",
+		"newName",
+		"target_name",
+		"targetName",
+		"new_department_name",
+		"newDepartmentName",
+		"data.newName",
+		"data.new_name",
+		"params.newName",
+		"params.new_name",
+		"target.name")
+	newParentRefText := assistantFirstStringFromObjects(objects,
+		"new_parent_ref_text",
+		"newParentRefText",
+		"new_parent_name",
+		"newParentName",
+		"target_parent",
+		"targetParent",
+		"new_parent_org_name",
+		"newParentOrgName",
+		"data.newParent",
+		"data.new_parent",
+		"data.newParentName",
+		"params.newParent",
+		"params.new_parent",
+		"params.newParentName",
+		"target.parent",
+		"target.parentName")
+	entityName := assistantFirstStringFromObjects(objects,
 		"entity_name",
+		"entityName",
 		"department_name",
+		"departmentName",
 		"org_name",
+		"orgName",
 		"orgunit_name",
-		"name")
-	effectiveDate := assistantFirstString(obj,
+		"orgunitName",
+		"new_org_name",
+		"newOrgName",
+		"new_department_name",
+		"newDepartmentName",
+		"new_org_unit_name",
+		"newOrgUnitName",
+		"name",
+		"newOrg.name",
+		"new_org.name",
+		"newDepartment.name",
+		"new_department.name",
+		"newOrgUnit.name",
+		"new_org_unit.name",
+		"org_unit.name",
+		"department.name",
+		"organization.name",
+		"organizationUnit.name",
+		"newOrganization.name",
+		"data.name",
+		"data.orgName",
+		"data.newOrgName",
+		"data.new_org_name",
+		"data.newOrgUnitName",
+		"data.new_org_unit_name",
+		"params.name",
+		"params.orgName",
+		"params.newOrgName",
+		"params.new_org_name",
+		"params.newOrgUnitName",
+		"params.new_org_unit_name",
+		"target.name",
+		"target.orgName",
+		"orgUnit.name")
+	if entityName == "" {
+		entityName = assistantFirstCompositeNameFromObjects(objects,
+			"department",
+			"organization",
+			"organizationUnit",
+			"data",
+			"params",
+			"target",
+			"orgUnit",
+			"newDepartment",
+			"newOrganization",
+			"newOrg",
+			"newOrgUnit")
+	}
+	effectiveDate := assistantFirstStringFromObjects(objects,
 		"effective_date",
+		"effectiveDate",
 		"established_date",
 		"establishment_date",
 		"start_date",
-		"date")
-	action := assistantNormalizeOpenAIIntentAction(assistantFirstString(obj, "action"))
-	if action == "" && parentRefText != "" && entityName != "" {
+		"startDate",
+		"date",
+		"newOrg.effectiveDate",
+		"newOrg.effective_date",
+		"new_org.effective_date",
+		"newDepartment.effectiveDate",
+		"newDepartment.effective_date",
+		"new_department.effective_date",
+		"newOrgUnit.effectiveDate",
+		"newOrgUnit.effective_date",
+		"new_org_unit.effective_date",
+		"department.effectiveDate",
+		"department.effective_date",
+		"organization.effectiveDate",
+		"organization.effective_date",
+		"organizationUnit.effectiveDate",
+		"organizationUnit.effective_date",
+		"org_unit.effectiveDate",
+		"org_unit.effective_date",
+		"newOrganization.effectiveDate",
+		"newOrganization.effective_date",
+		"data.effectiveDate",
+		"data.effective_date",
+		"params.effectiveDate",
+		"params.effective_date",
+		"target.effectiveDate",
+		"target.effective_date",
+		"orgUnit.effectiveDate",
+		"orgUnit.effective_date")
+	if (action == "" || assistantIsGenericCreateAction(action)) && parentRefText != "" && entityName != "" {
 		action = assistantIntentCreateOrgUnit
 	}
 	normalized := map[string]any{}
@@ -412,6 +613,18 @@ func assistantNormalizeOpenAIIntentPayload(content string) []byte {
 	}
 	if effectiveDate != "" {
 		normalized["effective_date"] = effectiveDate
+	}
+	if orgCode != "" {
+		normalized["org_code"] = orgCode
+	}
+	if targetEffectiveDate != "" {
+		normalized["target_effective_date"] = targetEffectiveDate
+	}
+	if newName != "" {
+		normalized["new_name"] = newName
+	}
+	if newParentRefText != "" {
+		normalized["new_parent_ref_text"] = newParentRefText
 	}
 	if len(normalized) == 0 {
 		return []byte(trimmed)
@@ -492,6 +705,153 @@ func assistantFirstString(object map[string]any, keys ...string) string {
 	return ""
 }
 
+func assistantFirstStringByPaths(object map[string]any, paths ...string) string {
+	for _, item := range paths {
+		value, ok := assistantLookupPathValue(object, item)
+		if !ok {
+			continue
+		}
+		if text, ok := assistantToNonEmptyString(value); ok {
+			return text
+		}
+	}
+	return ""
+}
+
+func assistantFirstStringFromObjects(objects []map[string]any, paths ...string) string {
+	for _, object := range objects {
+		if object == nil {
+			continue
+		}
+		if text := assistantFirstStringByPaths(object, paths...); text != "" {
+			return text
+		}
+	}
+	return ""
+}
+
+func assistantFirstCompositeNameFromObjects(objects []map[string]any, objectPaths ...string) string {
+	for _, object := range objects {
+		for _, objectPath := range objectPaths {
+			value, ok := assistantLookupPathValue(object, objectPath)
+			if !ok {
+				continue
+			}
+			asMap, ok := value.(map[string]any)
+			if !ok {
+				continue
+			}
+			name, _ := assistantToNonEmptyString(assistantLookupLooseAny(asMap, "name", "orgUnitName", "org_unit_name", "departmentName", "organizationName"))
+			code, _ := assistantToNonEmptyString(assistantLookupLooseAny(asMap, "code", "orgUnitCode", "org_unit_code", "departmentCode", "organizationCode"))
+			switch {
+			case code != "" && name != "":
+				if strings.Contains(name, code) {
+					return name
+				}
+				return code + name
+			case name != "":
+				return name
+			case code != "":
+				return code
+			}
+		}
+	}
+	return ""
+}
+
+func assistantIntentCandidateObjects(object map[string]any) []map[string]any {
+	objects := []map[string]any{object}
+	for _, key := range []string{"changes", "operations", "items"} {
+		if nested, ok := assistantFirstMapFromSlice(object, key); ok {
+			objects = append([]map[string]any{nested}, objects...)
+		}
+	}
+	for _, key := range []string{"actions"} {
+		if nested, ok := assistantFirstMapFromSlice(object, key); ok {
+			objects = append([]map[string]any{nested}, objects...)
+		}
+	}
+	return objects
+}
+
+func assistantFirstMapFromSlice(object map[string]any, key string) (map[string]any, bool) {
+	value, ok := assistantLookupMapValueLoose(object, key)
+	if !ok {
+		return nil, false
+	}
+	items, ok := value.([]any)
+	if !ok || len(items) == 0 {
+		return nil, false
+	}
+	first, ok := items[0].(map[string]any)
+	if !ok {
+		return nil, false
+	}
+	return first, true
+}
+
+func assistantLookupLooseAny(object map[string]any, keys ...string) any {
+	for _, key := range keys {
+		if value, ok := assistantLookupMapValueLoose(object, key); ok {
+			return value
+		}
+	}
+	return nil
+}
+
+func assistantLookupPathValue(object map[string]any, path string) (any, bool) {
+	current := any(object)
+	segments := strings.Split(strings.TrimSpace(path), ".")
+	for _, segment := range segments {
+		key := strings.TrimSpace(segment)
+		if key == "" {
+			return nil, false
+		}
+		asMap, ok := current.(map[string]any)
+		if !ok {
+			return nil, false
+		}
+		next, ok := assistantLookupMapValueLoose(asMap, key)
+		if !ok {
+			return nil, false
+		}
+		current = next
+	}
+	return current, true
+}
+
+func assistantLookupMapValueLoose(object map[string]any, key string) (any, bool) {
+	if value, ok := object[key]; ok {
+		return value, true
+	}
+	target := assistantLooseKey(key)
+	for candidateKey, candidateValue := range object {
+		if assistantLooseKey(candidateKey) == target {
+			return candidateValue, true
+		}
+	}
+	return nil, false
+}
+
+func assistantLooseKey(key string) string {
+	normalized := strings.ToLower(strings.TrimSpace(key))
+	normalized = strings.ReplaceAll(normalized, "_", "")
+	normalized = strings.ReplaceAll(normalized, "-", "")
+	return normalized
+}
+
+func assistantToNonEmptyString(value any) (string, bool) {
+	text, ok := value.(string)
+	if !ok {
+		return "", false
+	}
+	trimmed := strings.TrimSpace(text)
+	if trimmed == "" {
+		return "", false
+	}
+	return trimmed, true
+}
+
 func assistantNormalizeOpenAIIntentAction(action string) string {
 	trimmed := strings.TrimSpace(action)
 	if trimmed == "" {
@@ -499,17 +859,52 @@ func assistantNormalizeOpenAIIntentAction(action string) string {
 	}
 	normalized := strings.ToLower(trimmed)
 	normalized = strings.ReplaceAll(normalized, "-", "_")
+	normalized = strings.ReplaceAll(normalized, " ", "_")
 	switch normalized {
 	case assistantIntentCreateOrgUnit,
 		"create_department",
 		"createdepartment",
 		"create_org_unit",
+		"create_organization",
 		"create_organization_unit",
 		"createorganizationunit",
 		"orgunit_create":
 		return assistantIntentCreateOrgUnit
+	case assistantIntentAddOrgUnitVersion, "add_version", "add_org_version", "orgunit_add_version":
+		return assistantIntentAddOrgUnitVersion
+	case assistantIntentInsertOrgUnitVersion, "insert_version", "insert_org_version", "orgunit_insert_version":
+		return assistantIntentInsertOrgUnitVersion
+	case assistantIntentCorrectOrgUnit, "correct", "correct_version", "orgunit_correct":
+		return assistantIntentCorrectOrgUnit
+	case assistantIntentRenameOrgUnit, "rename", "rename_department", "orgunit_rename":
+		return assistantIntentRenameOrgUnit
+	case assistantIntentMoveOrgUnit, "move", "move_department", "orgunit_move":
+		return assistantIntentMoveOrgUnit
+	case assistantIntentDisableOrgUnit, "disable", "disable_department", "orgunit_disable":
+		return assistantIntentDisableOrgUnit
+	case assistantIntentEnableOrgUnit, "enable", "enable_department", "orgunit_enable":
+		return assistantIntentEnableOrgUnit
 	default:
+		compact := strings.ReplaceAll(normalized, "_", "")
+		if strings.HasPrefix(compact, "create") &&
+			(strings.Contains(compact, "department") ||
+				strings.Contains(compact, "orgunit") ||
+				strings.Contains(compact, "organizationunit") ||
+				strings.Contains(compact, "organization") ||
+				strings.Contains(compact, "org")) {
+			return assistantIntentCreateOrgUnit
+		}
 		return trimmed
+	}
+}
+
+func assistantIsGenericCreateAction(action string) bool {
+	normalized := assistantLooseKey(action)
+	switch normalized {
+	case "create", "add", "insert", "new":
+		return true
+	default:
+		return false
 	}
 }
 
@@ -749,7 +1144,11 @@ func (g *assistantModelGateway) ResolveIntent(ctx context.Context, req assistant
 			}
 			intent, err := assistantStrictDecodeIntent(raw)
 			if err != nil {
-				return assistantResolveIntentResult{}, errAssistantPlanSchemaConstrainedDecodeFailed
+				invokeErr = errAssistantPlanSchemaConstrainedDecodeFailed
+				if attempt < attempts-1 {
+					continue
+				}
+				break
 			}
 			return assistantResolveIntentResult{
 				Intent:        intent,
@@ -759,7 +1158,7 @@ func (g *assistantModelGateway) ResolveIntent(ctx context.Context, req assistant
 			}, nil
 		}
 		switch {
-		case errorsIsAny(invokeErr, errAssistantModelTimeout, errAssistantModelRateLimited, errAssistantModelProviderUnavailable):
+		case errorsIsAny(invokeErr, errAssistantModelTimeout, errAssistantModelRateLimited, errAssistantModelProviderUnavailable, errAssistantPlanSchemaConstrainedDecodeFailed):
 			lastTransientErr = invokeErr
 			continue
 		default:

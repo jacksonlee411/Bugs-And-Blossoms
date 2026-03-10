@@ -1,0 +1,129 @@
+{
+  "plan": "DEV-PLAN-290B",
+  "scope": "T0_DATA_BASELINE",
+  "status": "blocked",
+  "t0_baseline_ready": false,
+  "validated_at": "2026-03-10T00:41:05.176Z",
+  "runtime_gate_status": "blocked",
+  "t0_baseline": {
+    "tenant_id": "2d199b38-495d-4d30-8347-5f51b94c1632",
+    "tenant_ids": {
+      "case2": "80de7130-e7c7-4309-8045-1c8f777ca394",
+      "case4": "2d199b38-495d-4d30-8347-5f51b94c1632"
+    },
+    "effective_date": "2026-01-01",
+    "as_of": "2026-03-26",
+    "root_org_code": "ROOT",
+    "created_orgs": [
+      {
+        "org_code": "ROOT",
+        "name": "集团",
+        "parent_org_code": "",
+        "effective_date": "2026-01-01",
+        "is_business_unit": true
+      },
+      {
+        "org_code": "TP290BAIGOV",
+        "name": "AI治理办公室",
+        "parent_org_code": "ROOT",
+        "effective_date": "2026-01-01"
+      },
+      {
+        "org_code": "TP290BSSC1",
+        "name": "共享服务中心",
+        "parent_org_code": "ROOT",
+        "effective_date": "2026-01-01"
+      },
+      {
+        "org_code": "TP290BSSB",
+        "name": "B",
+        "parent_org_code": "ROOT",
+        "effective_date": "2026-01-01"
+      },
+      {
+        "org_code": "TP290BSSC2",
+        "name": "共享服务中心",
+        "parent_org_code": "TP290BSSB",
+        "effective_date": "2026-01-01"
+      }
+    ],
+    "required_orgs": [
+      {
+        "name": "AI治理办公室",
+        "expected": "exactly_one_candidate",
+        "matched_count": 1,
+        "matched_org_codes": [
+          "TP290BAIGOV"
+        ],
+        "ready": false
+      },
+      {
+        "name": "共享服务中心",
+        "expected": "multiple_candidates",
+        "matched_count": 2,
+        "matched_org_codes": [
+          "TP290BSSC1",
+          "TP290BSSC2"
+        ],
+        "ready": false
+      }
+    ],
+    "candidate_snapshot": {
+      "source_case": "case4_probe",
+      "conversation_id": "",
+      "candidate_count": 0,
+      "candidates": [
+        {
+          "org_code": "TP290BSSC1",
+          "name": "共享服务中心",
+          "full_name_path": "集团 / 共享服务中心",
+          "parent_org_code": "ROOT"
+        },
+        {
+          "org_code": "TP290BSSC2",
+          "name": "共享服务中心",
+          "full_name_path": "集团 / B / 共享服务中心",
+          "parent_org_code": "TP290BSSB"
+        }
+      ]
+    },
+    "probes": {
+      "case2": {
+        "conversation_id": "",
+        "create_turn_status": 500,
+        "error_code": "assistant_conversation_create_failed",
+        "phase": "",
+        "intent_action": "",
+        "parent_ref_text": "",
+        "candidate_count": 0,
+        "validation_errors": [],
+        "resolved_candidate_id": "",
+        "request_id": "",
+        "trace_id": ""
+      },
+      "case4": {
+        "conversation_id": "",
+        "create_turn_status": 500,
+        "error_code": "assistant_conversation_create_failed",
+        "phase": "",
+        "intent_action": "",
+        "parent_ref_text": "",
+        "candidate_count": 0,
+        "validation_errors": [],
+        "resolved_candidate_id": "",
+        "request_id": "",
+        "trace_id": ""
+      }
+    },
+    "issues": [
+      "Case2 基线探针未就绪（phase=unknown validation=none）",
+      "Case4 基线探针未就绪（phase=unknown candidates=0）"
+    ]
+  },
+  "notes": [
+    "该文件由 tp290b 主验收脚本覆盖写入。",
+    "该文件状态仅表示 T0 数据基线是否就绪，不等价于主验收是否全部通过。",
+    "若 AI治理办公室 不能唯一命中，或 共享服务中心 候选数 <= 1，则基线未达标。",
+    "runtime-admission-gate 的阻断仍由主索引 `tp290b-live-evidence-index.json` 统一表达。"
+  ]
+}

@@ -31,16 +31,25 @@ const (
 	assistantResolutionAuto          = "auto"
 	assistantResolutionUserConfirmed = "user_confirmed"
 
-	assistantIntentCreateOrgUnit = "create_orgunit"
-	assistantIntentPlanOnly      = "plan_only"
+	assistantIntentCreateOrgUnit        = "create_orgunit"
+	assistantIntentAddOrgUnitVersion    = "add_orgunit_version"
+	assistantIntentInsertOrgUnitVersion = "insert_orgunit_version"
+	assistantIntentCorrectOrgUnit       = "correct_orgunit"
+	assistantIntentDisableOrgUnit       = "disable_orgunit"
+	assistantIntentEnableOrgUnit        = "enable_orgunit"
+	assistantIntentMoveOrgUnit          = "move_orgunit"
+	assistantIntentRenameOrgUnit        = "rename_orgunit"
+	assistantIntentPlanOnly             = "plan_only"
 )
 
 var (
-	assistantParentUnderRE = regexp.MustCompile(`在(.+?)之下`)
-	assistantDeptNameRE    = regexp.MustCompile(`名为(.+?)的部门`)
-	assistantDateCNRE      = regexp.MustCompile(`(20\d{2})年(\d{1,2})月(\d{1,2})日`)
-	assistantDateISORE     = regexp.MustCompile(`(20\d{2}-\d{2}-\d{2})`)
-	assistantBoundaryRE    = regexp.MustCompile(`(?i)(\bselect\b|\binsert\s+into\b|\bupdate\s+\S+\s+set\b|\bdelete\s+from\b|\bdrop\s+table\b|\btruncate\s+table\b|\balter\s+table\b|--|/\*|\*/|;)`)
+	assistantParentUnderRE       = regexp.MustCompile(`在(.+?)之下`)
+	assistantParentUnderCreateRE = regexp.MustCompile(`在\s*(.+?)\s*下新建`)
+	assistantDeptNameRE          = regexp.MustCompile(`名为(.+?)的部门`)
+	assistantDeptCreateRE        = regexp.MustCompile(`(?:下新建|新建)\s*(.+?)(?:[，,。]|\s生效日期|\s成立日期|$)`)
+	assistantDateCNRE            = regexp.MustCompile(`(20\d{2})年(\d{1,2})月(\d{1,2})日`)
+	assistantDateISORE           = regexp.MustCompile(`(20\d{2}-\d{2}-\d{2})`)
+	assistantBoundaryRE          = regexp.MustCompile(`(?i)(\bselect\b|\binsert\s+into\b|\bupdate\s+\S+\s+set\b|\bdelete\s+from\b|\bdrop\s+table\b|\btruncate\s+table\b|\balter\s+table\b|--|/\*|\*/|;)`)
 )
 
 type assistantConversationService struct {
@@ -123,6 +132,10 @@ type assistantIntentSpec struct {
 	ParentRefText       string `json:"parent_ref_text,omitempty"`
 	EntityName          string `json:"entity_name,omitempty"`
 	EffectiveDate       string `json:"effective_date,omitempty"`
+	OrgCode             string `json:"org_code,omitempty"`
+	TargetEffectiveDate string `json:"target_effective_date,omitempty"`
+	NewName             string `json:"new_name,omitempty"`
+	NewParentRefText    string `json:"new_parent_ref_text,omitempty"`
 	IntentSchemaVersion string `json:"intent_schema_version,omitempty"`
 	ContextHash         string `json:"context_hash,omitempty"`
 	IntentHash          string `json:"intent_hash,omitempty"`
@@ -881,8 +894,10 @@ func (s *assistantConversationService) createTurn(ctx context.Context, tenantID 
 	resolutionSource := ""
 	ambiguityCount := 0
 	confidence := 0.65
-	if intent.Action == assistantIntentCreateOrgUnit && intent.ParentRefText != "" && len(intentValidationErrors) == 0 {
-		resolved, err := s.resolveCandidates(ctx, tenantID, intent.ParentRefText, intent.EffectiveDate)
+	candidateRefText := assistantIntentCandidateRefText(intent)
+	candidateAsOf := assistantIntentCandidateAsOf(intent)
+	if candidateRefText != "" && candidateAsOf != "" && len(intentValidationErrors) == 0 {
+		resolved, err := s.resolveCandidates(ctx, tenantID, candidateRefText, candidateAsOf)
 		if err != nil {
 			return nil, err
 		}
@@ -1147,9 +1162,10 @@ func assistantBuildPlan(intent assistantIntentSpec) assistantPlanSummary {
 }
 
 func assistantBuildDryRun(intent assistantIntentSpec, candidates []assistantCandidate, resolvedCandidateID string) assistantDryRunResult {
-	diff := make([]map[string]any, 0, 3)
+	diff := make([]map[string]any, 0, 4)
 	validationErrors := assistantIntentValidationErrors(intent)
-	if intent.Action == assistantIntentCreateOrgUnit {
+	switch strings.TrimSpace(intent.Action) {
+	case assistantIntentCreateOrgUnit:
 		diff = append(diff,
 			map[string]any{"field": "name", "after": intent.EntityName},
 			map[string]any{"field": "effective_date", "after": intent.EffectiveDate},
@@ -1159,9 +1175,56 @@ func assistantBuildDryRun(intent assistantIntentSpec, candidates []assistantCand
 		} else if len(candidates) > 1 {
 			diff = append(diff, map[string]any{"field": "parent_candidate_id", "after": "pending_confirmation"})
 		}
+	case assistantIntentAddOrgUnitVersion, assistantIntentInsertOrgUnitVersion:
+		diff = append(diff,
+			map[string]any{"field": "org_code", "after": intent.OrgCode},
+			map[string]any{"field": "effective_date", "after": intent.EffectiveDate},
+		)
+		if strings.TrimSpace(intent.NewName) != "" {
+			diff = append(diff, map[string]any{"field": "new_name", "after": intent.NewName})
+		}
+		if resolvedCandidateID != "" {
+			diff = append(diff, map[string]any{"field": "new_parent_candidate_id", "after": resolvedCandidateID})
+		} else if len(candidates) > 1 {
+			diff = append(diff, map[string]any{"field": "new_parent_candidate_id", "after": "pending_confirmation"})
+		}
+	case assistantIntentCorrectOrgUnit:
+		diff = append(diff,
+			map[string]any{"field": "org_code", "after": intent.OrgCode},
+			map[string]any{"field": "target_effective_date", "after": intent.TargetEffectiveDate},
+		)
+		if strings.TrimSpace(intent.NewName) != "" {
+			diff = append(diff, map[string]any{"field": "new_name", "after": intent.NewName})
+		}
+		if resolvedCandidateID != "" {
+			diff = append(diff, map[string]any{"field": "new_parent_candidate_id", "after": resolvedCandidateID})
+		} else if len(candidates) > 1 {
+			diff = append(diff, map[string]any{"field": "new_parent_candidate_id", "after": "pending_confirmation"})
+		}
+	case assistantIntentRenameOrgUnit:
+		diff = append(diff,
+			map[string]any{"field": "org_code", "after": intent.OrgCode},
+			map[string]any{"field": "effective_date", "after": intent.EffectiveDate},
+			map[string]any{"field": "new_name", "after": intent.NewName},
+		)
+	case assistantIntentMoveOrgUnit:
+		diff = append(diff,
+			map[string]any{"field": "org_code", "after": intent.OrgCode},
+			map[string]any{"field": "effective_date", "after": intent.EffectiveDate},
+		)
+		if resolvedCandidateID != "" {
+			diff = append(diff, map[string]any{"field": "new_parent_candidate_id", "after": resolvedCandidateID})
+		} else if len(candidates) > 1 {
+			diff = append(diff, map[string]any{"field": "new_parent_candidate_id", "after": "pending_confirmation"})
+		}
+	case assistantIntentDisableOrgUnit, assistantIntentEnableOrgUnit:
+		diff = append(diff,
+			map[string]any{"field": "org_code", "after": intent.OrgCode},
+			map[string]any{"field": "effective_date", "after": intent.EffectiveDate},
+		)
 	}
 	explain := "计划已生成，等待确认后可提交"
-	if intent.Action == assistantIntentCreateOrgUnit && strings.TrimSpace(intent.ParentRefText) != "" && strings.TrimSpace(resolvedCandidateID) == "" {
+	if candidateRefText := assistantIntentCandidateRefText(intent); candidateRefText != "" && strings.TrimSpace(resolvedCandidateID) == "" {
 		if len(candidates) == 0 {
 			validationErrors = append(validationErrors, "parent_candidate_not_found")
 		} else if len(candidates) > 1 {
@@ -1172,12 +1235,7 @@ func assistantBuildDryRun(intent assistantIntentSpec, candidates []assistantCand
 	if len(validationErrors) > 0 {
 		explain = assistantDryRunValidationExplain(validationErrors)
 	}
-	return assistantDryRunResult{
-		Diff:             diff,
-		Explain:          explain,
-		ValidationErrors: validationErrors,
-		WouldCommit:      false,
-	}
+	return assistantDryRunResult{Diff: diff, Explain: explain, ValidationErrors: validationErrors, WouldCommit: false}
 }
 
 func assistantDecodeIntent(userInput string) (assistantIntentSpec, error) {
@@ -1210,7 +1268,7 @@ func assistantTurnRequiresIntentClarification(turn *assistantTurn) bool {
 	}
 	for _, code := range assistantNormalizeValidationErrors(turn.DryRun.ValidationErrors) {
 		switch code {
-		case "missing_parent_ref_text", "parent_candidate_not_found", "missing_entity_name", "missing_effective_date", "invalid_effective_date_format":
+		case "missing_parent_ref_text", "missing_new_parent_ref_text", "parent_candidate_not_found", "missing_entity_name", "missing_new_name", "missing_effective_date", "invalid_effective_date_format", "missing_org_code", "missing_target_effective_date", "invalid_target_effective_date_format", "missing_change_fields":
 			return true
 		}
 	}
@@ -1257,23 +1315,68 @@ func assistantLatestPendingTurn(conversation *assistantConversation) *assistantT
 }
 
 func assistantIntentValidationErrors(intent assistantIntentSpec) []string {
-	if intent.Action != assistantIntentCreateOrgUnit {
-		return nil
+	errors := make([]string, 0, 4)
+	appendEffectiveDateError := func(value string) {
+		effectiveDate := strings.TrimSpace(value)
+		if effectiveDate == "" {
+			errors = append(errors, "missing_effective_date")
+		} else if !assistantDateISORE.MatchString(effectiveDate) {
+			errors = append(errors, "invalid_effective_date_format")
+		}
 	}
-	errors := make([]string, 0, 3)
-	if strings.TrimSpace(intent.ParentRefText) == "" {
-		errors = append(errors, "missing_parent_ref_text")
+	appendTargetDateError := func(value string) {
+		targetDate := strings.TrimSpace(value)
+		if targetDate == "" {
+			errors = append(errors, "missing_target_effective_date")
+		} else if !assistantDateISORE.MatchString(targetDate) {
+			errors = append(errors, "invalid_target_effective_date_format")
+		}
 	}
-	if strings.TrimSpace(intent.EntityName) == "" {
-		errors = append(errors, "missing_entity_name")
+	appendOrgCodeError := func(value string) {
+		if strings.TrimSpace(value) == "" {
+			errors = append(errors, "missing_org_code")
+		}
 	}
-	effectiveDate := strings.TrimSpace(intent.EffectiveDate)
-	if effectiveDate == "" {
-		errors = append(errors, "missing_effective_date")
-	} else if !assistantDateISORE.MatchString(effectiveDate) {
-		errors = append(errors, "invalid_effective_date_format")
+	appendChangeFieldsError := func() {
+		if strings.TrimSpace(intent.NewName) == "" && strings.TrimSpace(intent.NewParentRefText) == "" {
+			errors = append(errors, "missing_change_fields")
+		}
 	}
-	return errors
+
+	switch strings.TrimSpace(intent.Action) {
+	case assistantIntentCreateOrgUnit:
+		if strings.TrimSpace(intent.ParentRefText) == "" {
+			errors = append(errors, "missing_parent_ref_text")
+		}
+		if strings.TrimSpace(intent.EntityName) == "" {
+			errors = append(errors, "missing_entity_name")
+		}
+		appendEffectiveDateError(intent.EffectiveDate)
+	case assistantIntentAddOrgUnitVersion, assistantIntentInsertOrgUnitVersion:
+		appendOrgCodeError(intent.OrgCode)
+		appendEffectiveDateError(intent.EffectiveDate)
+		appendChangeFieldsError()
+	case assistantIntentCorrectOrgUnit:
+		appendOrgCodeError(intent.OrgCode)
+		appendTargetDateError(intent.TargetEffectiveDate)
+		appendChangeFieldsError()
+	case assistantIntentRenameOrgUnit:
+		appendOrgCodeError(intent.OrgCode)
+		appendEffectiveDateError(intent.EffectiveDate)
+		if strings.TrimSpace(intent.NewName) == "" {
+			errors = append(errors, "missing_new_name")
+		}
+	case assistantIntentMoveOrgUnit:
+		appendOrgCodeError(intent.OrgCode)
+		appendEffectiveDateError(intent.EffectiveDate)
+		if strings.TrimSpace(intent.NewParentRefText) == "" {
+			errors = append(errors, "missing_new_parent_ref_text")
+		}
+	case assistantIntentDisableOrgUnit, assistantIntentEnableOrgUnit:
+		appendOrgCodeError(intent.OrgCode)
+		appendEffectiveDateError(intent.EffectiveDate)
+	}
+	return assistantNormalizeValidationErrors(errors)
 }
 
 func assistantNormalizeValidationErrors(validationErrors []string) []string {
@@ -1311,14 +1414,26 @@ func assistantDryRunValidationExplain(validationErrors []string) string {
 		switch code {
 		case "missing_parent_ref_text":
 			hints = append(hints, "上级组织（例如：鲜花组织）")
+		case "missing_new_parent_ref_text":
+			hints = append(hints, "新的上级组织（例如：共享服务中心）")
 		case "parent_candidate_not_found":
 			hints = append(hints, "更准确的上级组织名称或编码（例如：鲜花组织 / FLOWER-A）")
 		case "missing_entity_name":
 			hints = append(hints, "部门名称（例如：运营部）")
+		case "missing_new_name":
+			hints = append(hints, "新的组织名称（例如：运营一部）")
+		case "missing_org_code":
+			hints = append(hints, "目标组织编码（例如：FLOWER-A）")
 		case "missing_effective_date":
-			hints = append(hints, "成立日期（YYYY-MM-DD）")
+			hints = append(hints, "生效日期（YYYY-MM-DD）")
 		case "invalid_effective_date_format":
-			hints = append(hints, "成立日期格式（YYYY-MM-DD）")
+			hints = append(hints, "生效日期格式（YYYY-MM-DD）")
+		case "missing_target_effective_date":
+			hints = append(hints, "目标版本日期（YYYY-MM-DD）")
+		case "invalid_target_effective_date_format":
+			hints = append(hints, "目标版本日期格式（YYYY-MM-DD）")
+		case "missing_change_fields":
+			hints = append(hints, "至少一项变更内容（例如：新名称或新上级组织）")
 		}
 	}
 	if len(hints) == 0 {
@@ -1357,14 +1472,23 @@ func assistantTurnVersionDrifted(turn *assistantTurn) bool {
 func assistantExtractIntent(input string) assistantIntentSpec {
 	text := strings.TrimSpace(input)
 	intent := assistantIntentSpec{Action: "plan_only"}
-	if strings.Contains(text, "新建") && strings.Contains(text, "部门") {
-		intent.Action = assistantIntentCreateOrgUnit
+	if strings.Contains(text, "新建") {
+		if strings.Contains(text, "部门") || assistantParentUnderCreateRE.MatchString(text) || assistantDeptCreateRE.MatchString(text) {
+			intent.Action = assistantIntentCreateOrgUnit
+		}
 	}
 	if m := assistantParentUnderRE.FindStringSubmatch(text); len(m) == 2 {
+		intent.ParentRefText = strings.TrimSpace(m[1])
+	} else if m := assistantParentUnderCreateRE.FindStringSubmatch(text); len(m) == 2 {
 		intent.ParentRefText = strings.TrimSpace(m[1])
 	}
 	if m := assistantDeptNameRE.FindStringSubmatch(text); len(m) == 2 {
 		intent.EntityName = strings.TrimSpace(m[1])
+	} else if m := assistantDeptCreateRE.FindStringSubmatch(text); len(m) == 2 {
+		entityName := strings.TrimSpace(m[1])
+		if entityName != "一个部门" && entityName != "部门" {
+			intent.EntityName = entityName
+		}
 	}
 	if m := assistantDateISORE.FindStringSubmatch(text); len(m) == 2 {
 		intent.EffectiveDate = strings.TrimSpace(m[1])
@@ -1384,6 +1508,26 @@ func assistantExtractIntent(input string) assistantIntentSpec {
 		}
 	}
 	return intent
+}
+
+func assistantIntentCandidateRefText(intent assistantIntentSpec) string {
+	switch strings.TrimSpace(intent.Action) {
+	case assistantIntentCreateOrgUnit:
+		return strings.TrimSpace(intent.ParentRefText)
+	case assistantIntentAddOrgUnitVersion, assistantIntentInsertOrgUnitVersion, assistantIntentCorrectOrgUnit, assistantIntentMoveOrgUnit:
+		return strings.TrimSpace(intent.NewParentRefText)
+	default:
+		return ""
+	}
+}
+
+func assistantIntentCandidateAsOf(intent assistantIntentSpec) string {
+	switch strings.TrimSpace(intent.Action) {
+	case assistantIntentCorrectOrgUnit:
+		return strings.TrimSpace(intent.TargetEffectiveDate)
+	default:
+		return strings.TrimSpace(intent.EffectiveDate)
+	}
 }
 
 func assistantCandidateExists(candidates []assistantCandidate, candidateID string) bool {

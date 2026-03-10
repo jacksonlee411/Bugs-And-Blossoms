@@ -233,7 +233,7 @@ test("tp220-e2e-103: /app/assistant points users to the formal LibreChat entry",
 
     await page.getByRole("link", { name: "打开 LibreChat" }).click();
     await expect(page).toHaveURL(/\/app\/assistant\/librechat$/);
-    await expect(page).toHaveTitle(/LibreChat/i);
+    await expect(page).toHaveTitle(/(LibreChat|Bugs \& Blossoms Assistant)/i);
   } finally {
     await appContext.close();
   }
@@ -274,7 +274,7 @@ test("tp220-e2e-007: librechat formal entry cannot bypass business write routes"
 
   try {
     await page.goto("/app/assistant/librechat");
-    await expect(page).toHaveTitle(/LibreChat/i);
+    await expect(page).toHaveTitle(/(LibreChat|Bugs \& Blossoms Assistant)/i);
 
     const bypassResp = await appContext.request.post("/assistant-ui/org/api/org-units", {
       data: {

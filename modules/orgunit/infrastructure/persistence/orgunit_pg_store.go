@@ -419,54 +419,86 @@ func (s *OrgUnitPGStore) ResolveSetIDStrategyFieldDecision(
 	fieldKey = strings.ToLower(strings.TrimSpace(fieldKey))
 	businessUnitID = strings.TrimSpace(businessUnitID)
 	asOf = strings.TrimSpace(asOf)
+	baselineCapabilityKey := orgUnitBaselineCapabilityKeyForSetIDStrategy(capabilityKey)
 
-	var decision types.SetIDStrategyFieldDecision
-	var allowedValueCodesRaw string
-	if err := tx.QueryRow(ctx, `
+	rows, err := tx.Query(ctx, `
 SELECT
   capability_key,
   field_key,
+  org_applicability,
+  business_unit_id,
   required,
   visible,
   maintainable,
   COALESCE(default_rule_ref, ''),
   COALESCE(default_value, ''),
-  COALESCE(allowed_value_codes, '[]'::jsonb)::text
+  COALESCE(allowed_value_codes, '[]'::jsonb)::text,
+  priority,
+  effective_date::text
 FROM orgunit.setid_strategy_registry
 WHERE tenant_uuid = $1::uuid
-  AND capability_key = $2::text
-  AND field_key = $3::text
-  AND effective_date <= $4::date
-  AND (end_date IS NULL OR end_date > $4::date)
+  AND field_key = $2::text
+  AND effective_date <= $3::date
+  AND (end_date IS NULL OR end_date > $3::date)
+  AND (capability_key = $4::text OR capability_key = $5::text)
   AND (
-    (org_applicability = 'business_unit' AND business_unit_id = $5::text)
+    (org_applicability = 'business_unit' AND business_unit_id = $6::text)
     OR (org_applicability = 'tenant' AND business_unit_id = '')
   )
-ORDER BY
-  CASE
-    WHEN org_applicability = 'business_unit' AND business_unit_id = $5::text THEN 2
-    ELSE 1
-  END DESC,
-  priority DESC,
-  effective_date DESC
-LIMIT 1
-`, tenantID, capabilityKey, fieldKey, asOf, businessUnitID).Scan(
-		&decision.CapabilityKey,
-		&decision.FieldKey,
-		&decision.Required,
-		&decision.Visible,
-		&decision.Maintainable,
-		&decision.DefaultRuleRef,
-		&decision.DefaultValue,
-		&allowedValueCodesRaw,
-	); err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return types.SetIDStrategyFieldDecision{}, false, nil
-		}
+`, tenantID, fieldKey, asOf, capabilityKey, baselineCapabilityKey, businessUnitID)
+	if err != nil {
 		return types.SetIDStrategyFieldDecision{}, false, err
 	}
-	if strings.TrimSpace(allowedValueCodesRaw) != "" {
-		if err := json.Unmarshal([]byte(allowedValueCodesRaw), &decision.AllowedValueCodes); err != nil {
+	defer rows.Close()
+
+	var chosen *setIDStrategyFieldDecisionCandidate
+	chosenBucket := -1
+	for rows.Next() {
+		var candidate setIDStrategyFieldDecisionCandidate
+		if err := rows.Scan(
+			&candidate.CapabilityKey,
+			&candidate.FieldKey,
+			&candidate.OrgApplicability,
+			&candidate.BusinessUnitID,
+			&candidate.Required,
+			&candidate.Visible,
+			&candidate.Maintainable,
+			&candidate.DefaultRuleRef,
+			&candidate.DefaultValue,
+			&candidate.AllowedValueCodesRaw,
+			&candidate.Priority,
+			&candidate.EffectiveDate,
+		); err != nil {
+			return types.SetIDStrategyFieldDecision{}, false, err
+		}
+		bucket := orgUnitSetIDStrategyDecisionBucket(candidate, capabilityKey, baselineCapabilityKey, businessUnitID)
+		if bucket < 0 {
+			continue
+		}
+		if chosen == nil || bucket > chosenBucket || (bucket == chosenBucket && orgUnitSetIDStrategyCandidateWins(candidate, *chosen)) {
+			picked := candidate
+			chosen = &picked
+			chosenBucket = bucket
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return types.SetIDStrategyFieldDecision{}, false, err
+	}
+	if chosen == nil {
+		return types.SetIDStrategyFieldDecision{}, false, nil
+	}
+
+	decision := types.SetIDStrategyFieldDecision{
+		CapabilityKey:  chosen.CapabilityKey,
+		FieldKey:       chosen.FieldKey,
+		Required:       chosen.Required,
+		Visible:        chosen.Visible,
+		Maintainable:   chosen.Maintainable,
+		DefaultRuleRef: chosen.DefaultRuleRef,
+		DefaultValue:   chosen.DefaultValue,
+	}
+	if strings.TrimSpace(chosen.AllowedValueCodesRaw) != "" {
+		if err := json.Unmarshal([]byte(chosen.AllowedValueCodesRaw), &decision.AllowedValueCodes); err != nil {
 			return types.SetIDStrategyFieldDecision{}, false, err
 		}
 	}
@@ -476,6 +508,73 @@ LIMIT 1
 		return types.SetIDStrategyFieldDecision{}, false, err
 	}
 	return decision, true, nil
+}
+
+type setIDStrategyFieldDecisionCandidate struct {
+	CapabilityKey        string
+	FieldKey             string
+	OrgApplicability     string
+	BusinessUnitID       string
+	Required             bool
+	Visible              bool
+	Maintainable         bool
+	DefaultRuleRef       string
+	DefaultValue         string
+	AllowedValueCodesRaw string
+	Priority             int
+	EffectiveDate        string
+}
+
+func orgUnitBaselineCapabilityKeyForSetIDStrategy(capabilityKey string) string {
+	capabilityKey = strings.ToLower(strings.TrimSpace(capabilityKey))
+	switch capabilityKey {
+	case "org.orgunit_create.field_policy",
+		"org.orgunit_add_version.field_policy",
+		"org.orgunit_insert_version.field_policy",
+		"org.orgunit_correct.field_policy":
+		return "org.orgunit_write.field_policy"
+	default:
+		return capabilityKey
+	}
+}
+
+func orgUnitSetIDStrategyDecisionBucket(
+	candidate setIDStrategyFieldDecisionCandidate,
+	capabilityKey string,
+	baselineCapabilityKey string,
+	businessUnitID string,
+) int {
+	candidateCapabilityKey := strings.ToLower(strings.TrimSpace(candidate.CapabilityKey))
+	candidateApplicability := strings.ToLower(strings.TrimSpace(candidate.OrgApplicability))
+	candidateBusinessUnitID := strings.TrimSpace(candidate.BusinessUnitID)
+	switch {
+	case candidateCapabilityKey == capabilityKey && candidateApplicability == "business_unit" && candidateBusinessUnitID == businessUnitID && businessUnitID != "":
+		return 4
+	case candidateCapabilityKey == baselineCapabilityKey && candidateApplicability == "business_unit" && candidateBusinessUnitID == businessUnitID && businessUnitID != "":
+		return 3
+	case candidateCapabilityKey == capabilityKey && candidateApplicability == "tenant" && candidateBusinessUnitID == "":
+		return 2
+	case candidateCapabilityKey == baselineCapabilityKey && candidateApplicability == "tenant" && candidateBusinessUnitID == "":
+		return 1
+	default:
+		return -1
+	}
+}
+
+func orgUnitSetIDStrategyCandidateWins(candidate setIDStrategyFieldDecisionCandidate, chosen setIDStrategyFieldDecisionCandidate) bool {
+	if candidate.Priority != chosen.Priority {
+		return candidate.Priority > chosen.Priority
+	}
+	if candidate.EffectiveDate != chosen.EffectiveDate {
+		return candidate.EffectiveDate > chosen.EffectiveDate
+	}
+	if candidate.CapabilityKey != chosen.CapabilityKey {
+		return candidate.CapabilityKey > chosen.CapabilityKey
+	}
+	if candidate.OrgApplicability != chosen.OrgApplicability {
+		return candidate.OrgApplicability > chosen.OrgApplicability
+	}
+	return candidate.BusinessUnitID > chosen.BusinessUnitID
 }
 
 func normalizeAllowedValueCodes(values []string) []string {

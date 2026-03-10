@@ -130,6 +130,23 @@ async function setOrgTypeViaAPI(ctx, { asOf, orgCode, value }) {
   expect(resp.status(), await resp.text()).toBe(200);
 }
 
+async function waitForRowOrder(page, { firstOrgCode, secondOrgCode, timeoutMs = 30_000 }) {
+  const deadline = Date.now() + timeoutMs;
+  let firstIndex = -1;
+  let secondIndex = -1;
+  let rowTexts = [];
+  while (Date.now() < deadline) {
+    rowTexts = await page.locator('[role="rowgroup"] [role="row"]').allTextContents();
+    firstIndex = rowTexts.findIndex((text) => text.includes(firstOrgCode));
+    secondIndex = rowTexts.findIndex((text) => text.includes(secondOrgCode));
+    if (firstIndex >= 0 && secondIndex >= 0 && firstIndex < secondIndex) {
+      return { firstIndex, secondIndex, rowTexts };
+    }
+    await new Promise((resolve) => setTimeout(resolve, 500));
+  }
+  return { firstIndex, secondIndex, rowTexts };
+}
+
 function seedOrgTypeDictForTenant({ tenantID, asOf, runID }) {
   const dbName = process.env.DB_NAME || "bugs_and_blossoms";
   const dbUser = process.env.DB_USER || "app";
@@ -304,14 +321,16 @@ test("tp060-02: orgunit list ext filter/sort (admin)", async ({ browser }) => {
   await expect(companyRow).toBeVisible({ timeout: 30_000 });
   await expect(deptRow).toBeVisible({ timeout: 30_000 });
 
-  const dataRows = page.locator('[role="rowgroup"] [role="row"]');
-  await expect(dataRows.first()).toBeVisible({ timeout: 30_000 });
-  const rowTexts = await dataRows.allTextContents();
-  const deptIndex = rowTexts.findIndex((text) => text.includes(org.dept));
-  const companyIndex = rowTexts.findIndex((text) => text.includes(org.company));
-  expect(deptIndex).toBeGreaterThanOrEqual(0);
-  expect(companyIndex).toBeGreaterThanOrEqual(0);
-  expect(deptIndex).toBeLessThan(companyIndex);
+  const order = await waitForRowOrder(page, {
+    firstOrgCode: org.dept,
+    secondOrgCode: org.company
+  });
+  expect(order.firstIndex, `dept row missing in list: ${org.dept}`).toBeGreaterThanOrEqual(0);
+  expect(order.secondIndex, `company row missing in list: ${org.company}`).toBeGreaterThanOrEqual(0);
+  expect(
+    order.firstIndex,
+    `unexpected row order (rowTexts=${JSON.stringify(order.rowTexts)})`
+  ).toBeLessThan(order.secondIndex);
 
   const extFilterField = page.getByLabel(/Ext Filter Field|扩展筛选字段/);
   await expect(extFilterField).toBeEnabled({ timeout: 30_000 });
@@ -331,7 +350,7 @@ test("tp060-02: orgunit list ext filter/sort (admin)", async ({ browser }) => {
 
   await page.getByRole("row", { name: new RegExp(org.company) }).click();
   await expect(page).toHaveURL(new RegExp(`/app/org/units/${org.company}`));
-  await expect(page.getByText(/Org Type/)).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByText(/^Org Type$/)).toBeVisible({ timeout: 30_000 });
   await expect(page.getByText("单位", { exact: true })).toBeVisible({ timeout: 30_000 });
 
   await appContext.close();

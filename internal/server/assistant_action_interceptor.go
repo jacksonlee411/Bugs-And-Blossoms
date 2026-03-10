@@ -131,7 +131,7 @@ func assistantCheckRequiredChecks(input assistantActionGateInput) assistantActio
 				return assistantRequiredCheckDenied("boundary_lint_failed")
 			}
 		case "candidate_confirmation":
-			if input.Intent.Action == assistantIntentCreateOrgUnit && strings.TrimSpace(input.ResolvedID) == "" {
+			if assistantIntentRequiresCandidateConfirmation(input.Intent) && strings.TrimSpace(input.ResolvedID) == "" {
 				if input.Stage == assistantActionStageCommit {
 					return assistantActionGateDecision{Allowed: false, Error: errAssistantCandidateNotFound, ErrorCode: errAssistantCandidateNotFound.Error(), HTTPStatus: http.StatusUnprocessableEntity, ReasonCode: "candidate_missing_at_commit"}
 				}
@@ -149,10 +149,21 @@ func assistantCheckRequiredChecks(input assistantActionGateInput) assistantActio
 }
 
 func assistantCheckConfirmRequirements(input assistantActionGateInput) assistantActionGateDecision {
-	if input.Intent.Action == assistantIntentCreateOrgUnit && strings.TrimSpace(input.ResolvedID) == "" {
+	if assistantIntentRequiresCandidateConfirmation(input.Intent) && strings.TrimSpace(input.ResolvedID) == "" {
 		return assistantActionGateDecision{Allowed: false, Error: errAssistantConfirmationRequired, ErrorCode: errAssistantConfirmationRequired.Error(), HTTPStatus: http.StatusConflict, ReasonCode: "candidate_confirmation_required"}
 	}
 	return assistantActionGateDecision{Allowed: true}
+}
+
+func assistantIntentRequiresCandidateConfirmation(intent assistantIntentSpec) bool {
+	switch strings.TrimSpace(intent.Action) {
+	case assistantIntentCreateOrgUnit:
+		return true
+	case assistantIntentAddOrgUnitVersion, assistantIntentInsertOrgUnitVersion, assistantIntentCorrectOrgUnit, assistantIntentMoveOrgUnit:
+		return strings.TrimSpace(intent.NewParentRefText) != ""
+	default:
+		return false
+	}
 }
 
 func assistantRequiredCheckDenied(reason string) assistantActionGateDecision {

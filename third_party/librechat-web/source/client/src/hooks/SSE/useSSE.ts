@@ -16,11 +16,18 @@ import type { TResData } from '~/common';
 import { useGenTitleMutation, useGetStartupConfig, useGetUserBalance } from '~/data-provider';
 import { useAuthContext } from '~/hooks/AuthContext';
 import {
+  commitAssistantFormalTurn,
+  confirmAssistantFormalTurn,
   createAssistantFormalConversation,
   createAssistantFormalTurn,
+  getAssistantFormalConversation,
+  getAssistantFormalTask,
   type AssistantFormalAPIError,
 } from '~/assistant-formal/api';
 import {
+  assistantFormalResolveDialogIntent,
+  attachAssistantFormalTaskDetail,
+  attachAssistantFormalTaskReceipt,
   buildAssistantFormalFailurePayload,
   buildAssistantFormalPayload,
   buildAssistantFormalPendingPayload,
@@ -46,6 +53,13 @@ const clearDraft = (conversationId?: string | null) => {
     localStorage.removeItem(`${LocalStorageKeys.FILES_DRAFT}${Constants.NEW_CONVO}`);
   }
 };
+
+const assistantFormalTaskTerminalStates = new Set([
+  'succeeded',
+  'failed',
+  'manual_takeover_required',
+  'canceled',
+]);
 
 type ChatHelpers = Pick<
   EventHandlerParams,
@@ -161,21 +175,47 @@ export default function useSSE(
 
         try {
           let backendConversationId = getStoredAssistantFormalConversationId();
-          if (!backendConversationId) {
-            const conversation = await createAssistantFormalConversation(token);
-            backendConversationId = conversation.conversation_id;
-            setStoredAssistantFormalConversationId(backendConversationId);
-          }
+          const resolveConversation = async () => {
+            if (!backendConversationId) {
+              const conversation = await createAssistantFormalConversation(token);
+              backendConversationId = conversation.conversation_id;
+              setStoredAssistantFormalConversationId(backendConversationId);
+              return conversation;
+            }
+            try {
+              return await getAssistantFormalConversation(backendConversationId, token);
+            } catch {
+              clearStoredAssistantFormalConversationId();
+              const retryConversation = await createAssistantFormalConversation(token);
+              backendConversationId = retryConversation.conversation_id;
+              setStoredAssistantFormalConversationId(backendConversationId);
+              return retryConversation;
+            }
+          };
+
+          const toPayload = (
+            conversation: Awaited<ReturnType<typeof getAssistantFormalConversation>>,
+            turn: NonNullable<ReturnType<typeof latestAssistantFormalTurn>>,
+            task?: Parameters<typeof buildAssistantFormalPayload>[3]['task'],
+          ) =>
+            buildAssistantFormalPayload(conversation, turn, turn.reply_nlg, {
+              messageId: assistantMessageId,
+              frontendUserMessageId,
+              task,
+            });
+
+          const snapshot = await resolveConversation();
+          const dialogIntent = assistantFormalResolveDialogIntent(submission.userMessage.text, snapshot);
 
           let conversation;
-          try {
-            conversation = await createAssistantFormalTurn(
-              backendConversationId,
-              submission.userMessage.text,
-              token,
-            );
-          } catch (error) {
-            if (backendConversationId) {
+          if (dialogIntent.kind === 'create_turn') {
+            try {
+              conversation = await createAssistantFormalTurn(
+                backendConversationId,
+                submission.userMessage.text,
+                token,
+              );
+            } catch (error) {
               clearStoredAssistantFormalConversationId();
               const retryConversation = await createAssistantFormalConversation(token);
               backendConversationId = retryConversation.conversation_id;
@@ -185,8 +225,118 @@ export default function useSSE(
                 submission.userMessage.text,
                 token,
               );
+              if (!conversation) {
+                throw error;
+              }
+            }
+          } else {
+            const latestTurn = latestAssistantFormalTurn(snapshot);
+            if (!latestTurn) {
+              throw new Error('assistant turn missing');
+            }
+
+            if (dialogIntent.kind === 'select_candidate') {
+              conversation = await confirmAssistantFormalTurn(
+                backendConversationId,
+                latestTurn.turn_id,
+                dialogIntent.candidateId,
+                token,
+              );
             } else {
-              throw error;
+              let stagedConversation = snapshot;
+              let stagedTurn = latestTurn;
+              if (dialogIntent.kind === 'confirm_and_commit') {
+                stagedConversation = await confirmAssistantFormalTurn(
+                  backendConversationId,
+                  stagedTurn.turn_id,
+                  '',
+                  token,
+                );
+                const confirmedTurn = latestAssistantFormalTurn(stagedConversation);
+                if (!confirmedTurn) {
+                  throw new Error('assistant turn missing');
+                }
+                stagedTurn = confirmedTurn;
+              }
+
+              const receipt = await commitAssistantFormalTurn(
+                backendConversationId,
+                stagedTurn.turn_id,
+                token,
+              );
+
+              let payload = attachAssistantFormalTaskReceipt(
+                toPayload(stagedConversation, stagedTurn),
+                receipt,
+              );
+              currentPayload = payload;
+              currentBindingKey = payload.bindingKey;
+              if (cancelled) {
+                return;
+              }
+              patchFormalMessage({
+                text: resolveAssistantFormalText(payload),
+                assistantFormalPayload: payload,
+                assistantFormalPending: true,
+                error: false,
+              } as Partial<TMessage>);
+
+              let terminalTask: Awaited<ReturnType<typeof getAssistantFormalTask>> | undefined;
+              const deadline = Date.now() + 20_000;
+              while (Date.now() < deadline) {
+                const detail = await getAssistantFormalTask(receipt.task_id, token);
+                payload = attachAssistantFormalTaskDetail(payload, detail);
+                currentPayload = payload;
+                currentBindingKey = payload.bindingKey;
+                if (cancelled) {
+                  return;
+                }
+                patchFormalMessage({
+                  text: resolveAssistantFormalText(payload),
+                  assistantFormalPayload: payload,
+                  assistantFormalPending: !assistantFormalTaskTerminalStates.has(detail.status),
+                  error: false,
+                } as Partial<TMessage>);
+                if (assistantFormalTaskTerminalStates.has(detail.status)) {
+                  terminalTask = detail;
+                  break;
+                }
+                await new Promise((resolve) => window.setTimeout(resolve, 500));
+              }
+
+              if (terminalTask) {
+                const latestConversation = await getAssistantFormalConversation(backendConversationId, token);
+                const latestCommittedTurn = latestAssistantFormalTurn(latestConversation);
+                if (!latestCommittedTurn) {
+                  throw new Error('assistant turn missing');
+                }
+                payload = attachAssistantFormalTaskDetail(
+                  toPayload(latestConversation, latestCommittedTurn, terminalTask),
+                  terminalTask,
+                );
+                currentPayload = payload;
+                currentBindingKey = payload.bindingKey;
+                if (cancelled) {
+                  return;
+                }
+                clearDraft(submission.conversation?.conversationId);
+                patchFormalMessage({
+                  text: resolveAssistantFormalText(payload),
+                  assistantFormalPayload: payload,
+                  assistantFormalPending: false,
+                  error: false,
+                } as Partial<TMessage>);
+                return;
+              }
+
+              clearDraft(submission.conversation?.conversationId);
+              patchFormalMessage({
+                text: resolveAssistantFormalText(payload),
+                assistantFormalPayload: payload,
+                assistantFormalPending: false,
+                error: false,
+              } as Partial<TMessage>);
+              return;
             }
           }
 
@@ -194,10 +344,7 @@ export default function useSSE(
           if (!turn) {
             throw new Error('assistant turn missing');
           }
-          const payload = buildAssistantFormalPayload(conversation, turn, turn.reply_nlg, {
-            messageId: assistantMessageId,
-            frontendUserMessageId,
-          });
+          const payload = toPayload(conversation, turn);
           currentPayload = payload;
           currentBindingKey = payload.bindingKey;
           if (cancelled) {

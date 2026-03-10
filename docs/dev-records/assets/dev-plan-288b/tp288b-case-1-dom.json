@@ -1,0 +1,11 @@
+{
+  "plan": "DEV-PLAN-288B",
+  "case_id": "tp288b-case-1",
+  "captured_at": "2026-03-10T00:40:06.533Z",
+  "formal_entry": "/app/assistant/librechat",
+  "url": "http://localhost:8080/app/assistant/librechat/c/new",
+  "bubble_count": 0,
+  "bubbles": [],
+  "external_reply_container_count": 0,
+  "connection_error_count": 0
+}

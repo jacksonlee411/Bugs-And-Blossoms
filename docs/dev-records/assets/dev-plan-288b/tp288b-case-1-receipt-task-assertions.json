@@ -1,0 +1,16 @@
+{
+  "case_id": "tp288b-case-1",
+  "passed": false,
+  "plan": "DEV-PLAN-288B",
+  "formal_entry": "/app/assistant/librechat",
+  "command": "pnpm --dir /home/lee/Projects/Bugs-And-Blossoms/e2e exec playwright test tests/tp288b-librechat-live-task-receipt-contract.spec.js --workers=1 --trace on",
+  "captured_at": "2026-03-10T00:40:06.533Z",
+  "probe_skipped": true,
+  "skip_reason": "assistant_conversation_create_failed_on_create_conversation",
+  "failure_message": "运行态阻断：assistant_conversation_create_failed",
+  "observed_call": {
+    "path": "/internal/assistant/conversations",
+    "status": 500,
+    "error_code": "assistant_conversation_create_failed"
+  }
+}

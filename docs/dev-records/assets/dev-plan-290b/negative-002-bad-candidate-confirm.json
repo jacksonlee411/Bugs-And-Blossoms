@@ -1,0 +1,17 @@
+{
+  "plan": "DEV-PLAN-290B",
+  "tenant_id": "baa5b934-55da-4743-8bd6-16e29c777c2b",
+  "probe_skipped": true,
+  "skip_reason": "assistant_conversation_create_failed_on_create_conversation",
+  "create_conversation_status": 500,
+  "error": {
+    "code": "assistant_conversation_create_failed",
+    "message": "Assistant conversation create failed.",
+    "trace_id": "",
+    "meta": {
+      "path": "/internal/assistant/conversations",
+      "method": "POST"
+    }
+  },
+  "captured_at": "2026-03-10T00:39:59.277Z"
+}

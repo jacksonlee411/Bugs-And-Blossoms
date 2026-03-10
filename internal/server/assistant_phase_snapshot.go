@@ -135,10 +135,20 @@ func assistantTurnMissingFields(turn *assistantTurn) []string {
 		switch code {
 		case "missing_parent_ref_text", "parent_candidate_not_found":
 			field = "parent_ref_text"
+		case "missing_new_parent_ref_text":
+			field = "new_parent_ref_text"
 		case "missing_entity_name":
 			field = "entity_name"
+		case "missing_new_name":
+			field = "new_name"
+		case "missing_org_code":
+			field = "org_code"
 		case "missing_effective_date", "invalid_effective_date_format":
 			field = "effective_date"
+		case "missing_target_effective_date", "invalid_target_effective_date_format":
+			field = "target_effective_date"
+		case "missing_change_fields":
+			field = "change_fields"
 		}
 		if field == "" {
 			continue

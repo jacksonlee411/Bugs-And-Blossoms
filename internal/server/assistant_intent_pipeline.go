@@ -15,6 +15,7 @@ var (
 
 func (s *assistantConversationService) resolveIntent(ctx context.Context, tenantID string, conversationID string, userInput string) (assistantResolveIntentResult, error) {
 	text := strings.TrimSpace(userInput)
+	localIntent := assistantExtractIntent(text)
 	if assistantBoundaryViolationDetected(text) {
 		return assistantResolveIntentResult{}, errAssistantPlanBoundaryViolation
 	}
@@ -38,7 +39,11 @@ func (s *assistantConversationService) resolveIntent(ctx context.Context, tenant
 		}
 		return assistantResolveIntentResult{}, err
 	}
+	resolved, upgradedFromPlanOnly := assistantNormalizeResolvedIntentWithLocalFacts(resolved, localIntent)
 	if assistantIntentSchemaInvalid(resolved.Intent) {
+		if upgradedFromPlanOnly {
+			return resolved, nil
+		}
 		// Real provider may occasionally emit partial JSON; retry once with the same runtime path.
 		retryResolved, retryErr := s.modelGateway.ResolveIntent(ctx, assistantResolveIntentRequest{
 			Prompt:         text,
@@ -51,12 +56,43 @@ func (s *assistantConversationService) resolveIntent(ctx context.Context, tenant
 			}
 			return assistantResolveIntentResult{}, retryErr
 		}
+		retryResolved, retryUpgradedFromPlanOnly := assistantNormalizeResolvedIntentWithLocalFacts(retryResolved, localIntent)
 		if assistantIntentSchemaInvalid(retryResolved.Intent) {
+			if retryUpgradedFromPlanOnly {
+				return retryResolved, nil
+			}
 			return assistantResolveIntentLocally(text)
 		}
 		return retryResolved, nil
 	}
 	return resolved, nil
+}
+
+func assistantNormalizeResolvedIntentWithLocalFacts(resolved assistantResolveIntentResult, localIntent assistantIntentSpec) (assistantResolveIntentResult, bool) {
+	resolved.Intent = assistantOverlayExplicitIntentFacts(resolved.Intent, localIntent)
+	if strings.TrimSpace(resolved.Intent.Action) == assistantIntentPlanOnly && strings.TrimSpace(localIntent.Action) == assistantIntentCreateOrgUnit {
+		resolved.Intent = localIntent
+		return resolved, true
+	}
+	return resolved, false
+}
+
+func assistantOverlayExplicitIntentFacts(intent assistantIntentSpec, localIntent assistantIntentSpec) assistantIntentSpec {
+	if strings.TrimSpace(intent.Action) != assistantIntentCreateOrgUnit {
+		return intent
+	}
+	if strings.TrimSpace(intent.ParentRefText) == "" && strings.TrimSpace(localIntent.ParentRefText) != "" {
+		intent.ParentRefText = strings.TrimSpace(localIntent.ParentRefText)
+	}
+	if strings.TrimSpace(intent.EntityName) == "" && strings.TrimSpace(localIntent.EntityName) != "" {
+		intent.EntityName = strings.TrimSpace(localIntent.EntityName)
+	}
+	if strings.TrimSpace(localIntent.EffectiveDate) != "" {
+		intent.EffectiveDate = strings.TrimSpace(localIntent.EffectiveDate)
+		return intent
+	}
+	intent.EffectiveDate = ""
+	return intent
 }
 
 func assistantShouldFallbackIntentLocally(err error) bool {
@@ -92,11 +128,16 @@ func assistantCompileIntentToPlansWithSpec(intent assistantIntentSpec, resolvedC
 	if len(skill.RequiredChecks) == 0 {
 		skill.RequiredChecks = []string{"strict_decode", "boundary_lint"}
 	}
-	delta := assistantConfigDeltaPlan{
-		CapabilityKey: "org.orgunit_create.field_policy",
-		Changes:       make([]assistantConfigChange, 0, 3),
+	capabilityKey := strings.TrimSpace(spec.CapabilityKey)
+	if capabilityKey == "" {
+		capabilityKey = "org.orgunit_create.field_policy"
 	}
-	if intent.Action == assistantIntentCreateOrgUnit {
+	delta := assistantConfigDeltaPlan{
+		CapabilityKey: capabilityKey,
+		Changes:       make([]assistantConfigChange, 0, 4),
+	}
+	switch strings.TrimSpace(intent.Action) {
+	case assistantIntentCreateOrgUnit:
 		skill.SelectedSkills = []string{"org.orgunit_create"}
 		skill.ExecutionOrder = []string{"org.orgunit_create"}
 		delta.Changes = append(delta.Changes,
@@ -106,6 +147,65 @@ func assistantCompileIntentToPlansWithSpec(intent assistantIntentSpec, resolvedC
 		if strings.TrimSpace(resolvedCandidateID) != "" {
 			delta.Changes = append(delta.Changes, assistantConfigChange{Field: "parent_candidate_id", After: resolvedCandidateID})
 		}
+	case assistantIntentAddOrgUnitVersion:
+		skill.SelectedSkills = []string{"org.orgunit_add_version"}
+		skill.ExecutionOrder = []string{"org.orgunit_add_version"}
+		delta.Changes = append(delta.Changes,
+			assistantConfigChange{Field: "org_code", After: intent.OrgCode},
+			assistantConfigChange{Field: "effective_date", After: intent.EffectiveDate},
+		)
+	case assistantIntentInsertOrgUnitVersion:
+		skill.SelectedSkills = []string{"org.orgunit_insert_version"}
+		skill.ExecutionOrder = []string{"org.orgunit_insert_version"}
+		delta.Changes = append(delta.Changes,
+			assistantConfigChange{Field: "org_code", After: intent.OrgCode},
+			assistantConfigChange{Field: "effective_date", After: intent.EffectiveDate},
+		)
+	case assistantIntentCorrectOrgUnit:
+		skill.SelectedSkills = []string{"org.orgunit_correct"}
+		skill.ExecutionOrder = []string{"org.orgunit_correct"}
+		delta.Changes = append(delta.Changes,
+			assistantConfigChange{Field: "org_code", After: intent.OrgCode},
+			assistantConfigChange{Field: "target_effective_date", After: intent.TargetEffectiveDate},
+		)
+	case assistantIntentRenameOrgUnit:
+		skill.SelectedSkills = []string{"org.orgunit_rename"}
+		skill.ExecutionOrder = []string{"org.orgunit_rename"}
+		delta.Changes = append(delta.Changes,
+			assistantConfigChange{Field: "org_code", After: intent.OrgCode},
+			assistantConfigChange{Field: "effective_date", After: intent.EffectiveDate},
+			assistantConfigChange{Field: "new_name", After: intent.NewName},
+		)
+	case assistantIntentMoveOrgUnit:
+		skill.SelectedSkills = []string{"org.orgunit_move"}
+		skill.ExecutionOrder = []string{"org.orgunit_move"}
+		delta.Changes = append(delta.Changes,
+			assistantConfigChange{Field: "org_code", After: intent.OrgCode},
+			assistantConfigChange{Field: "effective_date", After: intent.EffectiveDate},
+		)
+		if strings.TrimSpace(resolvedCandidateID) != "" {
+			delta.Changes = append(delta.Changes, assistantConfigChange{Field: "new_parent_candidate_id", After: resolvedCandidateID})
+		}
+	case assistantIntentDisableOrgUnit:
+		skill.SelectedSkills = []string{"org.orgunit_disable"}
+		skill.ExecutionOrder = []string{"org.orgunit_disable"}
+		delta.Changes = append(delta.Changes,
+			assistantConfigChange{Field: "org_code", After: intent.OrgCode},
+			assistantConfigChange{Field: "effective_date", After: intent.EffectiveDate},
+		)
+	case assistantIntentEnableOrgUnit:
+		skill.SelectedSkills = []string{"org.orgunit_enable"}
+		skill.ExecutionOrder = []string{"org.orgunit_enable"}
+		delta.Changes = append(delta.Changes,
+			assistantConfigChange{Field: "org_code", After: intent.OrgCode},
+			assistantConfigChange{Field: "effective_date", After: intent.EffectiveDate},
+		)
+	}
+	if strings.TrimSpace(intent.NewName) != "" && strings.TrimSpace(intent.Action) != assistantIntentRenameOrgUnit {
+		delta.Changes = append(delta.Changes, assistantConfigChange{Field: "new_name", After: intent.NewName})
+	}
+	if strings.TrimSpace(intent.NewParentRefText) != "" && strings.TrimSpace(resolvedCandidateID) == "" {
+		delta.Changes = append(delta.Changes, assistantConfigChange{Field: "new_parent_ref_text", After: intent.NewParentRefText})
 	}
 	return skill, delta
 }
@@ -134,6 +234,10 @@ func assistantAnnotateIntentPlan(tenantID string, conversationID string, userInp
 		"parent_ref_text":       intent.ParentRefText,
 		"entity_name":           intent.EntityName,
 		"effective_date":        intent.EffectiveDate,
+		"org_code":              intent.OrgCode,
+		"target_effective_date": intent.TargetEffectiveDate,
+		"new_name":              intent.NewName,
+		"new_parent_ref_text":   intent.NewParentRefText,
 		"intent_schema_version": intent.IntentSchemaVersion,
 		"context_hash":          intent.ContextHash,
 	})

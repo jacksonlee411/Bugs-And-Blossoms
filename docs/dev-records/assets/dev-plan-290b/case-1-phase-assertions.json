@@ -1,0 +1,22 @@
+{
+  "case_id": 1,
+  "status": "passed",
+  "validated_at": "2026-03-10T00:14:45.433Z",
+  "observed_phase_path": [],
+  "network_internal_posts": [
+    "/internal/assistant/conversations",
+    "/internal/assistant/conversations/conv_31df5e249d074dd1883c1f2c414a1899/turns"
+  ],
+  "task_terminal_status": "",
+  "task_status_poll_count": 0,
+  "stopline_266": {
+    "single_channel": true,
+    "no_official_connection_error": true,
+    "no_external_reply_container": true
+  },
+  "stopline_280": {
+    "single_formal_entry": true,
+    "no_bridge_or_injected_stream": true
+  },
+  "acceptance_mode": "idle_no_turn_fail_closed"
+}

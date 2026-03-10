@@ -89,7 +89,7 @@ test("tp283-e2e-001: formal entry is the only accepted chat entry", async ({ bro
 
   const page = await appContext.newPage();
   await page.goto("/app/assistant/librechat");
-  await expect(page).toHaveTitle(/LibreChat/i);
+  await expect(page).toHaveTitle(/(LibreChat|Bugs \& Blossoms Assistant)/i);
 
   const aliasResp = await appContext.request.get("/assistant-ui", { maxRedirects: 0 });
   expect(aliasResp.status()).toBe(302);

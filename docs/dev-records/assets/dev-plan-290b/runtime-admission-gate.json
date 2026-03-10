@@ -1,0 +1,31 @@
+{
+  "plan": "DEV-PLAN-290B",
+  "status": "blocked",
+  "tenant_id": "fa6ed058-71a1-4ecb-9d50-20fa9c968606",
+  "probe_input": "在 AI治理办公室 下新建 人力资源部2，生效日期 2026-01-01",
+  "checks": {
+    "create_turn_status_200": false,
+    "intent_action_is_create_orgunit": false,
+    "no_deterministic_fallback": false
+  },
+  "create_conversation": {
+    "status": 500,
+    "conversation_id": "",
+    "error_code": "assistant_conversation_create_failed"
+  },
+  "create_turn": {
+    "status": 0,
+    "error_code": ""
+  },
+  "observed": {
+    "intent_action": "",
+    "phase": "",
+    "model_provider": "",
+    "model_name": "",
+    "model_revision": "",
+    "fallback_detected": false,
+    "request_id": "",
+    "trace_id": ""
+  },
+  "captured_at": "2026-03-10T00:39:55.566Z"
+}

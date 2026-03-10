@@ -1,0 +1,111 @@
+{
+  "plan": "DEV-PLAN-290B",
+  "status": "blocked",
+  "updated_at": "2026-03-10T00:41:05.176Z",
+  "formal_entry": "/app/assistant/librechat",
+  "runtime_admission_gate": {
+    "status": "blocked",
+    "artifact": "docs/dev-records/assets/dev-plan-290b/runtime-admission-gate.json",
+    "network": "docs/dev-records/assets/dev-plan-290b/runtime-admission-gate.har"
+  },
+  "stale_on": [
+    "240C runtime gate semantics changed",
+    "240D durable execution/compensation semantics changed",
+    "240E MCP write admission semantics changed",
+    "routing/authn chain changed",
+    "error code semantics changed",
+    "fail-closed behavior changed",
+    "assistant formal submit pipeline changed"
+  ],
+  "blockers": [
+    "运行态准入闸门失败（intent_action=, provider=, model=, error_code=)",
+    "Case 1: 命中 assistant_conversation_create_failed（运行态不可用）",
+    "Case 2: 数据基线未就绪：Case2 基线探针未就绪（phase=unknown validation=none）",
+    "Case 3: 数据基线未就绪：Case2 基线探针未就绪（phase=unknown validation=none）",
+    "Case 4: 数据基线未就绪：Case2 基线探针未就绪（phase=unknown validation=none）"
+  ],
+  "fixed_assets": {
+    "root": "docs/dev-records/assets/dev-plan-290b",
+    "pattern": [
+      "case-{id}-page.png",
+      "case-{id}-dom.json",
+      "case-{id}-network.har",
+      "case-{id}-trace.zip",
+      "case-{id}-phase-assertions.json",
+      "case-{id}-intent-action-assertions.json",
+      "case-{id}-unsupported-failure.json",
+      "case-{id}-conversation-snapshot.json",
+      "case-{id}-model-proof.json",
+      "runtime-admission-gate.json",
+      "runtime-admission-gate.har"
+    ]
+  },
+  "cases": [
+    {
+      "id": 1,
+      "status": "blocked",
+      "input_sequence": [
+        "你好"
+      ],
+      "blocking_reason": "命中 assistant_conversation_create_failed（运行态不可用）",
+      "artifacts": {
+        "page": "docs/dev-records/assets/dev-plan-290b/case-1-page.png",
+        "dom": "docs/dev-records/assets/dev-plan-290b/case-1-dom.json",
+        "network": "docs/dev-records/assets/dev-plan-290b/case-1-network.har",
+        "trace": "docs/dev-records/assets/dev-plan-290b/case-1-trace.zip",
+        "unsupported": "docs/dev-records/assets/dev-plan-290b/case-1-unsupported-failure.json",
+        "conversation_snapshot": "docs/dev-records/assets/dev-plan-290b/case-1-conversation-snapshot.json"
+      }
+    },
+    {
+      "id": 2,
+      "status": "blocked",
+      "input_sequence": [
+        "在 AI治理办公室 下新建 人力资源部2，生效日期 2026-01-01",
+        "确认"
+      ],
+      "blocking_reason": "数据基线未就绪：Case2 基线探针未就绪（phase=unknown validation=none）",
+      "artifacts": {
+        "page": "docs/dev-records/assets/dev-plan-290b/case-2-page.png",
+        "dom": "docs/dev-records/assets/dev-plan-290b/case-2-dom.json",
+        "network": "docs/dev-records/assets/dev-plan-290b/case-2-network.har",
+        "trace": "docs/dev-records/assets/dev-plan-290b/case-2-trace.zip",
+        "conversation_snapshot": "docs/dev-records/assets/dev-plan-290b/case-2-conversation-snapshot.json"
+      }
+    },
+    {
+      "id": 3,
+      "status": "blocked",
+      "input_sequence": [
+        "在 AI治理办公室 下新建 人力资源部239A补全",
+        "生效日期 2026-03-25",
+        "确认"
+      ],
+      "blocking_reason": "数据基线未就绪：Case2 基线探针未就绪（phase=unknown validation=none）",
+      "artifacts": {
+        "page": "docs/dev-records/assets/dev-plan-290b/case-3-page.png",
+        "dom": "docs/dev-records/assets/dev-plan-290b/case-3-dom.json",
+        "network": "docs/dev-records/assets/dev-plan-290b/case-3-network.har",
+        "trace": "docs/dev-records/assets/dev-plan-290b/case-3-trace.zip",
+        "conversation_snapshot": "docs/dev-records/assets/dev-plan-290b/case-3-conversation-snapshot.json"
+      }
+    },
+    {
+      "id": 4,
+      "status": "blocked",
+      "input_sequence": [
+        "请在父组织共享服务中心下新建239A候选验证部，生效日期2026-03-26",
+        "选第2个",
+        "是的"
+      ],
+      "blocking_reason": "数据基线未就绪：Case2 基线探针未就绪（phase=unknown validation=none）",
+      "artifacts": {
+        "page": "docs/dev-records/assets/dev-plan-290b/case-4-page.png",
+        "dom": "docs/dev-records/assets/dev-plan-290b/case-4-dom.json",
+        "network": "docs/dev-records/assets/dev-plan-290b/case-4-network.har",
+        "trace": "docs/dev-records/assets/dev-plan-290b/case-4-trace.zip",
+        "conversation_snapshot": "docs/dev-records/assets/dev-plan-290b/case-4-conversation-snapshot.json"
+      }
+    }
+  ]
+}

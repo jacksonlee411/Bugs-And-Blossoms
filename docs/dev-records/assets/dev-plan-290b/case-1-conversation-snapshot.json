@@ -1,0 +1,8 @@
+{
+  "case_id": 1,
+  "tenant_id": "bc915f4b-ec4f-4137-83eb-0627ccf887df",
+  "conversation_id": "",
+  "snapshots": [],
+  "final_conversation": null,
+  "failure_message": "assistant_conversation_create_failed returned by runtime"
+}

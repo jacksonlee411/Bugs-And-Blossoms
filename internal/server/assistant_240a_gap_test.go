@@ -219,7 +219,7 @@ func TestAssistant240A_APIAndIntentGaps(t *testing.T) {
 				}),
 			},
 		}
-		resolved, err := svc.resolveIntent(context.Background(), "tenant-1", "conv-1", "在鲜花组织之下，新建一个名为运营部的部门，成立日期是2026-01-01")
+		resolved, err := svc.resolveIntent(context.Background(), "tenant-1", "conv-1", "在鲜花组织之下，新建一个部门，成立日期是2026-01-01")
 		if err != nil {
 			t.Fatalf("resolve intent err=%v", err)
 		}

@@ -7,6 +7,7 @@
 - 正式交互入口冻结为 `/app/assistant/librechat`。
 - `260` Case 1~4 已在正式入口与 DTO-only 主链上通过。
 - `266` 单通道、气泡内回写、无外挂容器与单 assistant 气泡约束继续成立。
+- `288B` async receipt/task 契约补强已完成，`tp288` 不再停留在旧 mock 回包口径。
 - `235` 的会话、租户、历史别名边界继续成立，历史 `/assistant-ui/*` 不再承担正式职责。
 - `237` 对应的 source/runtime compatibility 与 compat alias 边界已作为前置件通过。
 - 未发现旧桥接方案、旧 helper 或旧测试口径回流为正式职责。

@@ -1,0 +1,22 @@
+{
+  "case_id": 4,
+  "conversation_id": "conv_780a748124cb4051aa69b2b135917a44",
+  "turn_id": "turn_7c921d2e24f04affa531d61d971b3c74",
+  "request_id": "assistant_b9a217fa26a64dc896d4c1ef89bd71fa",
+  "trace_id": "4e073966739240b4b099ed53acbe3db4",
+  "intent_action_expected": "create_orgunit",
+  "intent_action_actual": "create_orgunit",
+  "acceptance_mode": "committed_chain",
+  "phase_expected_path": [
+    "await_candidate_pick",
+    "await_commit_confirm",
+    "committed"
+  ],
+  "phase_observed_path": [
+    "await_candidate_pick",
+    "await_commit_confirm",
+    "committed"
+  ],
+  "error_code": "",
+  "passed": true
+}

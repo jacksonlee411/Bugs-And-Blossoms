@@ -1,0 +1,119 @@
+{
+  "case_id": 2,
+  "tenant_id": "80de7130-e7c7-4309-8045-1c8f777ca394",
+  "conversation_id": "",
+  "snapshots": [],
+  "baseline": {
+    "tenant_id": "80de7130-e7c7-4309-8045-1c8f777ca394",
+    "effective_date": "2026-01-01",
+    "validated_at": "2026-03-10T00:40:47.061Z",
+    "status": "blocked",
+    "root_org_code": "ROOT",
+    "created_orgs": [
+      {
+        "org_code": "ROOT",
+        "name": "集团",
+        "parent_org_code": "",
+        "effective_date": "2026-01-01",
+        "is_business_unit": true
+      },
+      {
+        "org_code": "TP290BAIGOV",
+        "name": "AI治理办公室",
+        "parent_org_code": "ROOT",
+        "effective_date": "2026-01-01"
+      },
+      {
+        "org_code": "TP290BSSC1",
+        "name": "共享服务中心",
+        "parent_org_code": "ROOT",
+        "effective_date": "2026-01-01"
+      },
+      {
+        "org_code": "TP290BSSB",
+        "name": "B",
+        "parent_org_code": "ROOT",
+        "effective_date": "2026-01-01"
+      },
+      {
+        "org_code": "TP290BSSC2",
+        "name": "共享服务中心",
+        "parent_org_code": "TP290BSSB",
+        "effective_date": "2026-01-01"
+      }
+    ],
+    "required_orgs": [
+      {
+        "name": "AI治理办公室",
+        "expected": "exactly_one_candidate",
+        "matched_count": 1,
+        "matched_org_codes": [
+          "TP290BAIGOV"
+        ],
+        "ready": false
+      },
+      {
+        "name": "共享服务中心",
+        "expected": "multiple_candidates",
+        "matched_count": 2,
+        "matched_org_codes": [
+          "TP290BSSC1",
+          "TP290BSSC2"
+        ],
+        "ready": false
+      }
+    ],
+    "candidate_snapshot": {
+      "query": "共享服务中心",
+      "as_of": "2026-03-26",
+      "candidate_count": 0,
+      "candidates": [
+        {
+          "org_code": "TP290BSSC1",
+          "name": "共享服务中心",
+          "full_name_path": "集团 / 共享服务中心",
+          "parent_org_code": "ROOT"
+        },
+        {
+          "org_code": "TP290BSSC2",
+          "name": "共享服务中心",
+          "full_name_path": "集团 / B / 共享服务中心",
+          "parent_org_code": "TP290BSSB"
+        }
+      ]
+    },
+    "issues": [
+      "Case2 基线探针未就绪（phase=unknown validation=none）",
+      "Case4 基线探针未就绪（phase=unknown candidates=0）"
+    ],
+    "probes": {
+      "case2": {
+        "conversation_id": "",
+        "create_turn_status": 500,
+        "error_code": "assistant_conversation_create_failed",
+        "phase": "",
+        "intent_action": "",
+        "parent_ref_text": "",
+        "candidate_count": 0,
+        "validation_errors": [],
+        "resolved_candidate_id": "",
+        "request_id": "",
+        "trace_id": ""
+      },
+      "case4": {
+        "conversation_id": "",
+        "create_turn_status": 500,
+        "error_code": "assistant_conversation_create_failed",
+        "phase": "",
+        "intent_action": "",
+        "parent_ref_text": "",
+        "candidate_count": 0,
+        "validation_errors": [],
+        "resolved_candidate_id": "",
+        "request_id": "",
+        "trace_id": ""
+      }
+    }
+  },
+  "failure_message": "数据基线未就绪：Case2 基线探针未就绪（phase=unknown validation=none）"
+}

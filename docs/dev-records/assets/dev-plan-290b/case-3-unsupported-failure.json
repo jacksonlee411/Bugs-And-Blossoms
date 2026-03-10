@@ -1,0 +1,45 @@
+{
+  "case_id": 3,
+  "conversation_id": "conv_57ede2c9f68c4cd4b76c1de96e6d7143",
+  "turn_id": "",
+  "request_id": "",
+  "trace_id": "",
+  "intent_action": "",
+  "phase": "",
+  "error_code": "assistant_intent_unsupported",
+  "failure_stage": "runtime_or_case_flow",
+  "failure_message": "\u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoBeVisible\u001b[2m()\u001b[22m failed\n\nLocator:  getByRole('button', { name: /确认|Confirm/i }).last()\nExpected: visible\nReceived: <element(s) not found>\nTimeout:  30000ms\n\nCall log:\n\u001b[2m  - Expect \"toBeVisible\" with timeout 30000ms\u001b[22m\n\u001b[2m  - waiting for getByRole('button', { name: /确认|Confirm/i }).last()\u001b[22m\n",
+  "observed_calls": [
+    {
+      "method": "POST",
+      "path": "/internal/assistant/conversations/conv_57ede2c9f68c4cd4b76c1de96e6d7143/turns",
+      "status": 422,
+      "body": "",
+      "json": {
+        "code": "assistant_intent_unsupported",
+        "message": "assistant intent unsupported",
+        "trace_id": "",
+        "meta": {
+          "path": "/internal/assistant/conversations/conv_57ede2c9f68c4cd4b76c1de96e6d7143/turns",
+          "method": "POST"
+        }
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/internal/assistant/conversations/conv_57ede2c9f68c4cd4b76c1de96e6d7143/turns",
+      "status": 422,
+      "body": "",
+      "json": {
+        "code": "assistant_intent_unsupported",
+        "message": "assistant intent unsupported",
+        "trace_id": "",
+        "meta": {
+          "path": "/internal/assistant/conversations/conv_57ede2c9f68c4cd4b76c1de96e6d7143/turns",
+          "method": "POST"
+        }
+      }
+    }
+  ],
+  "captured_at": "2026-03-09T23:54:54.222Z"
+}

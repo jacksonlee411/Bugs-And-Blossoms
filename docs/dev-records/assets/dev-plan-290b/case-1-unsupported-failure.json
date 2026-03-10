@@ -1,0 +1,30 @@
+{
+  "case_id": 1,
+  "conversation_id": "",
+  "turn_id": "",
+  "request_id": "",
+  "trace_id": "",
+  "intent_action": "",
+  "phase": "",
+  "error_code": "assistant_conversation_create_failed",
+  "failure_stage": "post_turn_assertion",
+  "failure_message": "assistant_conversation_create_failed returned by runtime",
+  "observed_calls": [
+    {
+      "method": "POST",
+      "path": "/internal/assistant/conversations",
+      "status": 500,
+      "body": "",
+      "json": {
+        "code": "assistant_conversation_create_failed",
+        "message": "Assistant conversation create failed.",
+        "trace_id": "",
+        "meta": {
+          "path": "/internal/assistant/conversations",
+          "method": "POST"
+        }
+      }
+    }
+  ],
+  "captured_at": "2026-03-10T00:40:45.370Z"
+}
