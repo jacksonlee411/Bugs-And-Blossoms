@@ -1,16 +1,52 @@
 {
-  "case_id": "tp288b-case-1",
-  "passed": false,
   "plan": "DEV-PLAN-288B",
+  "case_id": "tp288b-case-1",
+  "tenant_id": "70f4821d-38d4-4ed3-a9c0-7fda94df766e",
+  "scenario": "create -> confirm -> commit(receipt) -> poll(task) -> refresh(conversation)",
   "formal_entry": "/app/assistant/librechat",
   "command": "pnpm --dir /home/lee/Projects/Bugs-And-Blossoms/e2e exec playwright test tests/tp288b-librechat-live-task-receipt-contract.spec.js --workers=1 --trace on",
-  "captured_at": "2026-03-10T00:40:06.533Z",
-  "probe_skipped": true,
-  "skip_reason": "assistant_conversation_create_failed_on_create_conversation",
-  "failure_message": "运行态阻断：assistant_conversation_create_failed",
-  "observed_call": {
-    "path": "/internal/assistant/conversations",
-    "status": 500,
-    "error_code": "assistant_conversation_create_failed"
-  }
+  "captured_at": "2026-03-10T23:19:24.265Z",
+  "conversation_id": "conv_f0d1862af94b4fe28c241efee471e0ac",
+  "turn_id": "turn_8268d6c0e0a6468089aeea9b1093666f",
+  "commit_status": 202,
+  "receipt": {
+    "task_id": "bbb85060-03c8-4e63-a74e-81fd1d64eef8",
+    "poll_uri": "/internal/assistant/tasks/bbb85060-03c8-4e63-a74e-81fd1d64eef8",
+    "task_type": "assistant_async_plan",
+    "status": "queued",
+    "workflow_id": "assistant_async_orchestration_v1:70f4821d-38d4-4ed3-a9c0-7fda94df766e:conv_f0d1862af94b4fe28c241efee471e0ac:turn_8268d6c0e0a6468089aeea9b1093666f:assistant_91b3a483c5404c3490ea4c534b2ac89c",
+    "submitted_at": "2026-03-10T23:19:23.152071863Z"
+  },
+  "poll_status_sequence": [
+    "succeeded"
+  ],
+  "final_task_status": "succeeded",
+  "final_turn_state": "committed",
+  "model_proof": {
+    "model_provider": "openai",
+    "model_name": "gpt-5.1",
+    "model_revision": "r2f31cdf6746a",
+    "fallback_detected": false
+  },
+  "stopline": {
+    "single_channel": true,
+    "single_formal_entry": true,
+    "no_external_reply_container": true,
+    "no_connection_error": true,
+    "single_assistant_bubble": true,
+    "no_invalid_task_poll_path": true,
+    "no_assistant_task_dispatch_failed": true,
+    "frontend_polled_receipt_task": true,
+    "frontend_refreshed_conversation": true,
+    "no_business_mock": true
+  },
+  "final_bubble": {
+    "count": 1,
+    "bindingKey": "conv_f0d1862af94b4fe28c241efee471e0ac::turn_8268d6c0e0a6468089aeea9b1093666f::assistant_91b3a483c5404c3490ea4c534b2ac89c",
+    "conversationId": "conv_f0d1862af94b4fe28c241efee471e0ac",
+    "turnId": "turn_8268d6c0e0a6468089aeea9b1093666f",
+    "requestId": "assistant_91b3a483c5404c3490ea4c534b2ac89c",
+    "text": "上级组织：AI治理办公室；新建组织：人力资源部288B744464；生效日期：2026-01-01 task_id: bbb85060-03c8-4e63-a74e-81fd1d64eef8 · succeeded Selected: AI治理办公室 org_code: O000001 parent_org_code: TP288BAIGOV effective_date: 2026-01-01 event_type: CREATE"
+  },
+  "passed": true
 }

@@ -70,11 +70,23 @@ func (s *assistantConversationService) resolveIntent(ctx context.Context, tenant
 
 func assistantNormalizeResolvedIntentWithLocalFacts(resolved assistantResolveIntentResult, localIntent assistantIntentSpec) (assistantResolveIntentResult, bool) {
 	resolved.Intent = assistantOverlayExplicitIntentFacts(resolved.Intent, localIntent)
-	if strings.TrimSpace(resolved.Intent.Action) == assistantIntentPlanOnly && strings.TrimSpace(localIntent.Action) == assistantIntentCreateOrgUnit {
+	if assistantShouldUpgradeIntentFromLocalFacts(resolved.Intent.Action, localIntent) {
 		resolved.Intent = localIntent
 		return resolved, true
 	}
 	return resolved, false
+}
+
+func assistantShouldUpgradeIntentFromLocalFacts(resolvedAction string, localIntent assistantIntentSpec) bool {
+	if strings.TrimSpace(localIntent.Action) != assistantIntentCreateOrgUnit {
+		return false
+	}
+	action := strings.TrimSpace(resolvedAction)
+	if action == "" || action == assistantIntentPlanOnly {
+		return true
+	}
+	_, ok := assistantLookupDefaultActionSpec(action)
+	return !ok
 }
 
 func assistantOverlayExplicitIntentFacts(intent assistantIntentSpec, localIntent assistantIntentSpec) assistantIntentSpec {

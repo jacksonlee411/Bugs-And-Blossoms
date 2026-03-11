@@ -1,15 +1,15 @@
 {
   "plan": "DEV-PLAN-290B",
   "scope": "T0_DATA_BASELINE",
-  "status": "blocked",
-  "t0_baseline_ready": false,
-  "validated_at": "2026-03-10T00:41:05.176Z",
-  "runtime_gate_status": "blocked",
+  "status": "passed",
+  "t0_baseline_ready": true,
+  "validated_at": "2026-03-10T23:20:41.533Z",
+  "runtime_gate_status": "passed",
   "t0_baseline": {
-    "tenant_id": "2d199b38-495d-4d30-8347-5f51b94c1632",
+    "tenant_id": "e1d42562-432e-4601-ab72-bfa7ded437fa",
     "tenant_ids": {
-      "case2": "80de7130-e7c7-4309-8045-1c8f777ca394",
-      "case4": "2d199b38-495d-4d30-8347-5f51b94c1632"
+      "case2": "6ac5e288-623d-4547-8444-c329bd463501",
+      "case4": "e1d42562-432e-4601-ab72-bfa7ded437fa"
     },
     "effective_date": "2026-01-01",
     "as_of": "2026-03-26",
@@ -55,7 +55,7 @@
         "matched_org_codes": [
           "TP290BAIGOV"
         ],
-        "ready": false
+        "ready": true
       },
       {
         "name": "共享服务中心",
@@ -65,60 +65,63 @@
           "TP290BSSC1",
           "TP290BSSC2"
         ],
-        "ready": false
+        "ready": true
       }
     ],
     "candidate_snapshot": {
       "source_case": "case4_probe",
-      "conversation_id": "",
-      "candidate_count": 0,
+      "conversation_id": "conv_0b39782788c94906a128e29c376f8856",
+      "candidate_count": 2,
       "candidates": [
         {
-          "org_code": "TP290BSSC1",
+          "ordinal": 1,
+          "candidate_id": "TP290BSSC1",
+          "org_code": "",
           "name": "共享服务中心",
-          "full_name_path": "集团 / 共享服务中心",
-          "parent_org_code": "ROOT"
+          "parent_org_code": "",
+          "full_name_path": ""
         },
         {
-          "org_code": "TP290BSSC2",
+          "ordinal": 2,
+          "candidate_id": "TP290BSSC2",
+          "org_code": "",
           "name": "共享服务中心",
-          "full_name_path": "集团 / B / 共享服务中心",
-          "parent_org_code": "TP290BSSB"
+          "parent_org_code": "",
+          "full_name_path": ""
         }
       ]
     },
     "probes": {
       "case2": {
-        "conversation_id": "",
-        "create_turn_status": 500,
-        "error_code": "assistant_conversation_create_failed",
-        "phase": "",
-        "intent_action": "",
-        "parent_ref_text": "",
-        "candidate_count": 0,
+        "conversation_id": "conv_455d2457865745eea52daffe83220381",
+        "create_turn_status": 200,
+        "error_code": "",
+        "phase": "await_commit_confirm",
+        "intent_action": "create_orgunit",
+        "parent_ref_text": "AI治理办公室",
+        "candidate_count": 1,
         "validation_errors": [],
-        "resolved_candidate_id": "",
-        "request_id": "",
-        "trace_id": ""
+        "resolved_candidate_id": "TP290BAIGOV",
+        "request_id": "assistant_64b5e1861267448e992f8251fc97e63e",
+        "trace_id": "3ebfe1a4613746a6a5bf3d415facf217"
       },
       "case4": {
-        "conversation_id": "",
-        "create_turn_status": 500,
-        "error_code": "assistant_conversation_create_failed",
-        "phase": "",
-        "intent_action": "",
-        "parent_ref_text": "",
-        "candidate_count": 0,
-        "validation_errors": [],
+        "conversation_id": "conv_0b39782788c94906a128e29c376f8856",
+        "create_turn_status": 200,
+        "error_code": "",
+        "phase": "await_candidate_pick",
+        "intent_action": "create_orgunit",
+        "parent_ref_text": "共享服务中心",
+        "candidate_count": 2,
+        "validation_errors": [
+          "candidate_confirmation_required"
+        ],
         "resolved_candidate_id": "",
-        "request_id": "",
-        "trace_id": ""
+        "request_id": "assistant_e1e2d6e0b1c14ec8927d0d9111d67956",
+        "trace_id": "db5b0893e3904f979d2d4908d697c693"
       }
     },
-    "issues": [
-      "Case2 基线探针未就绪（phase=unknown validation=none）",
-      "Case4 基线探针未就绪（phase=unknown candidates=0）"
-    ]
+    "issues": []
   },
   "notes": [
     "该文件由 tp290b 主验收脚本覆盖写入。",

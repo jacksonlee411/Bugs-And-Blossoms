@@ -1066,6 +1066,157 @@ func TestAssistantPersistence_CommitTurnPG_ErrorPathMatrix(t *testing.T) {
 	}
 }
 
+func TestAssistantPersistence_SubmitCommitTaskPG_GateRejectNoTaskWrites(t *testing.T) {
+	now := time.Now().UTC()
+	turn := assistantTaskSampleTurn(now)
+	turn.State = assistantStateConfirmed
+	turn.Intent = assistantIntentSpec{
+		Action:              assistantIntentCreateOrgUnit,
+		IntentSchemaVersion: assistantIntentSchemaVersionV1,
+		ContextHash:         "ctx_hash",
+		IntentHash:          "intent_hash",
+		ParentRefText:       "鲜花组织",
+		EntityName:          "运营部",
+		EffectiveDate:       "2026-01-01",
+	}
+	turn.Plan = assistantBuildPlan(turn.Intent)
+	turn.Plan.SkillManifestDigest = "skill_digest"
+	turn.Candidates = []assistantCandidate{{CandidateID: "c1", CandidateCode: "FLOWER-A", Name: "鲜花组织", IsActive: true}}
+	turn.ResolvedCandidateID = "c1"
+	turn.DryRun = assistantDryRunResult{Explain: "计划已确认，等待提交"}
+	turn.RequestID = "req_gate_reject"
+	turn.TraceID = "trace_gate_reject"
+	assistantRefreshTurnDerivedFields(turn)
+
+	svc := newAssistantConversationService(newOrgUnitMemoryStore(), assistantWriteServiceStub{store: newOrgUnitMemoryStore()})
+	createSpec, ok := assistantLookupDefaultActionSpec(assistantIntentCreateOrgUnit)
+	if !ok {
+		t.Fatal("missing create action spec")
+	}
+	svc.actionRegistry = assistantActionRegistryMap{specs: map[string]assistantActionSpec{
+		assistantIntentCreateOrgUnit: {
+			ID:            assistantIntentCreateOrgUnit,
+			Version:       "v1",
+			CapabilityKey: createSpec.CapabilityKey,
+			Security: assistantActionSecuritySpec{
+				AuthObject:     createSpec.Security.AuthObject,
+				AuthAction:     createSpec.Security.AuthAction,
+				RiskTier:       "high",
+				RequiredChecks: []string{"unknown_check"},
+			},
+			Handler: assistantActionHandlerSpec{CommitAdapterKey: createSpec.Handler.CommitAdapterKey},
+		},
+	}}
+
+	execSQL := make([]string, 0, 12)
+	queryRowSQL := make([]string, 0, 12)
+	var upsertState string
+	var upsertErrorCode string
+	var conversationState string
+	var transitionReason string
+	taskWriteSeen := false
+
+	tx := &assistFakeTx{}
+	tx.execFn = func(sql string, args ...any) (pgconn.CommandTag, error) {
+		execSQL = append(execSQL, sql)
+		switch {
+		case strings.Contains(sql, "INSERT INTO iam.assistant_turns"):
+			if len(args) > 26 {
+				if value, ok := args[4].(string); ok {
+					upsertState = strings.TrimSpace(value)
+				}
+				if value, ok := args[26].(string); ok {
+					upsertErrorCode = strings.TrimSpace(value)
+				}
+			}
+		case strings.Contains(sql, "UPDATE iam.assistant_conversations"):
+			if len(args) > 2 {
+				if value, ok := args[2].(string); ok {
+					conversationState = strings.TrimSpace(value)
+				}
+			}
+		case strings.Contains(sql, "INSERT INTO iam.assistant_tasks"),
+			strings.Contains(sql, "INSERT INTO iam.assistant_task_outbox"),
+			strings.Contains(sql, "INSERT INTO iam.assistant_task_events"):
+			taskWriteSeen = true
+		}
+		return pgconn.NewCommandTag(""), nil
+	}
+	tx.queryRowFn = func(sql string, args ...any) pgx.Row {
+		queryRowSQL = append(queryRowSQL, sql)
+		switch {
+		case strings.Contains(sql, "FROM iam.assistant_conversations"):
+			return &assistFakeRow{vals: assistantPersistenceConversationRow("conv_1", "actor_1", assistantStateConfirmed, now)}
+		case strings.Contains(sql, "INSERT INTO iam.assistant_idempotency"):
+			return &assistFakeRow{vals: []any{1}}
+		case strings.Contains(sql, "INSERT INTO iam.assistant_state_transitions"):
+			if len(args) > 10 {
+				if value, ok := args[10].(string); ok {
+					transitionReason = strings.TrimSpace(value)
+				}
+			}
+			return &assistFakeRow{vals: []any{int64(1)}}
+		default:
+			return &assistFakeRow{err: pgx.ErrNoRows}
+		}
+	}
+	tx.queryFn = func(sql string, _ ...any) (pgx.Rows, error) {
+		switch {
+		case strings.Contains(sql, "FROM iam.assistant_turns"):
+			return &assistFakeRows{rows: [][]any{assistantTurnRowValues(turn)}}, nil
+		case strings.Contains(sql, "FROM iam.assistant_state_transitions"):
+			return &assistFakeRows{}, nil
+		default:
+			return &assistFakeRows{}, nil
+		}
+	}
+	svc.pool = assistFakeTxBeginner{tx: tx}
+
+	originalAuthorizer := assistantLoadAuthorizerFn
+	assistantLoadAuthorizerFn = func() (authorizer, error) {
+		return assistantGateAuthorizerStub{allowed: true, enforced: true}, nil
+	}
+	defer func() { assistantLoadAuthorizerFn = originalAuthorizer }()
+
+	originalDefinitions := capabilityDefinitionByKey
+	capabilityDefinitionByKey = map[string]capabilityDefinition{
+		createSpec.CapabilityKey: {
+			CapabilityKey:   createSpec.CapabilityKey,
+			Status:          routeCapabilityStatusActive,
+			ActivationState: routeCapabilityStatusActive,
+		},
+	}
+	defer func() { capabilityDefinitionByKey = originalDefinitions }()
+
+	_, err := svc.submitCommitTaskPG(context.Background(), "tenant_1", Principal{ID: "actor_1", RoleSlug: "tenant-admin"}, "conv_1", turn.TurnID)
+	if !errors.Is(err, errAssistantActionRequiredCheckFailed) {
+		t.Fatalf("unexpected err=%v", err)
+	}
+	if !tx.committed {
+		t.Fatal("expected commit on gate reject path")
+	}
+	if taskWriteSeen {
+		t.Fatalf("task writes should not happen, exec sql=%v", execSQL)
+	}
+	for _, sql := range queryRowSQL {
+		if strings.Contains(sql, "FROM iam.assistant_tasks") {
+			t.Fatalf("task query should not happen, queryRow sql=%v", queryRowSQL)
+		}
+	}
+	if upsertState != assistantStateConfirmed {
+		t.Fatalf("turn state advanced unexpectedly: %s", upsertState)
+	}
+	if conversationState != assistantStateConfirmed {
+		t.Fatalf("conversation state advanced unexpectedly: %s", conversationState)
+	}
+	if upsertErrorCode != errAssistantActionRequiredCheckFailed.Error() {
+		t.Fatalf("turn error_code mismatch: %s", upsertErrorCode)
+	}
+	if transitionReason != "required_check_unknown" {
+		t.Fatalf("transition reason mismatch: %s", transitionReason)
+	}
+}
+
 func TestAssistantPersistence_ExecuteCommitCoreTx_PersistsCommitState(t *testing.T) {
 	wd := mustGetwd(t)
 	t.Setenv("ALLOWLIST_PATH", mustAllowlistPathFromWd(t, wd))

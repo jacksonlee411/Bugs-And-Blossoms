@@ -761,12 +761,16 @@ func (s *assistantConversationService) prepareCommitTurn(
 		conversation.Transitions = append(conversation.Transitions, *transition)
 		return assistantPreparedCommit{}, assistantTurnMutationResult{Transition: transition, PersistTurn: true}, errAssistantConfirmationRequired
 	}
-	if turn.ResolvedCandidateID == "" {
-		return assistantPreparedCommit{}, assistantTurnMutationResult{}, errAssistantCandidateNotFound
-	}
-	resolved, ok := assistantFindCandidate(turn.Candidates, turn.ResolvedCandidateID)
-	if !ok {
-		return assistantPreparedCommit{}, assistantTurnMutationResult{}, errAssistantCandidateNotFound
+	resolved := assistantCandidate{}
+	if assistantIntentRequiresCandidateConfirmation(turn.Intent) {
+		if turn.ResolvedCandidateID == "" {
+			return assistantPreparedCommit{}, assistantTurnMutationResult{}, errAssistantCandidateNotFound
+		}
+		candidate, ok := assistantFindCandidate(turn.Candidates, turn.ResolvedCandidateID)
+		if !ok {
+			return assistantPreparedCommit{}, assistantTurnMutationResult{}, errAssistantCandidateNotFound
+		}
+		resolved = candidate
 	}
 	decision := assistantEvaluateActionGate(assistantActionGateInput{
 		Stage:      assistantActionStageCommit,
@@ -873,9 +877,9 @@ func (s *assistantConversationService) persistConversationCreate(ctx context.Con
 	defer tx.Rollback(ctx)
 	_, err = tx.Exec(ctx, `
 INSERT INTO iam.assistant_conversations (
-  tenant_uuid, conversation_id, actor_id, actor_role, state, created_at, updated_at
-) VALUES ($1::uuid, $2, $3, $4, $5, $6, $7)
-`, conversation.TenantID, conversation.ConversationID, conversation.ActorID, conversation.ActorRole, conversation.State, conversation.CreatedAt, conversation.UpdatedAt)
+	  tenant_uuid, conversation_id, actor_id, actor_role, state, current_phase, created_at, updated_at
+) VALUES ($1::uuid, $2, $3, $4, $5, $6, $7, $8)
+	`, conversation.TenantID, conversation.ConversationID, conversation.ActorID, conversation.ActorRole, conversation.State, conversation.CurrentPhase, conversation.CreatedAt, conversation.UpdatedAt)
 	if err != nil {
 		return err
 	}

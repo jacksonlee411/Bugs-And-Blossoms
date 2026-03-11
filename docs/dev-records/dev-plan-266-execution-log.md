@@ -1,6 +1,6 @@
 # DEV-PLAN-266 执行日志（AI对话官方 UI 单通道与气泡内回写）
 
-**状态**: 已完成（2026-03-09 02:14 CST；已在 `290A/290` 回灌后按真实入口重跑 `tp288-e2e-001/002`，`tp288-real-entry-evidence-index.json`、`tp288-handoff-to-285.md` 与固定命名截图/DOM/网络/trace/断言资产均已刷新，`266` 当前可继续作为 `285` 的已完成输入之一被引用）
+**状态**: 已完成（2026-03-11 07:19 CST；已因 `272` 触达 runtime gate / 错误码语义 / fail-closed 主链而按 `271-S5` 规则重跑 `tp288-e2e-001/002`，并在 `make preflight` 默认 E2E 基线中再次通过；`tp288-real-entry-evidence-index.json`、`tp288-handoff-to-285.md` 与固定命名截图/DOM/网络/trace/断言资产已刷新到最新时间戳，`266` 当前可继续作为 `285` 的已完成输入之一被引用）
 
 ## 1. 本次落地范围
 1. [X] Go 代理：`assistant-ui/bridge.js` 从“监听并转发”升级为“拦截并接管”。
@@ -87,3 +87,8 @@
 1. [X] 因 `290A` 与 `290` 回灌命中消息绑定/渲染链，已按 `271-S5` 规则重跑 `tp288-e2e-001/002`。
 2. [X] 本轮重跑结果保持 `2 passed`，`official_message_tree_only=true`、`single_assistant_bubble=true`、`conversation_turn_request_binding_unique=true`。
 3. [X] 已刷新 `docs/dev-records/assets/dev-plan-266/tp288-real-entry-evidence-index.json` 与 `docs/dev-records/assets/dev-plan-266/tp288-handoff-to-285.md` 的时间戳和引用口径。
+
+## 4.4 新鲜度刷新补记（2026-03-11 07:19 CST）
+1. [X] 因 `DEV-PLAN-272` 本轮继续触达运行时 gate、错误码语义与 fail-closed 主链，已再次按 `271-S5` 规则重跑 `tp288-e2e-001/002`。
+2. [X] 本轮重跑结果保持 `2 passed`，并继续满足 `native_send_emitted=0`、`official_message_tree_only=true`、`single_assistant_bubble=true`、`conversation_turn_request_binding_unique=true`。
+3. [X] 已在 `make preflight` 的默认 E2E 基线中再次通过，并刷新 `docs/dev-records/assets/dev-plan-266/tp288-real-entry-evidence-index.json` 与 `docs/dev-records/assets/dev-plan-266/tp288-handoff-to-285.md` 的生成时间、命令与引用口径。

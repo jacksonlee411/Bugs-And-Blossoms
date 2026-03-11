@@ -1,7 +1,16 @@
 {
-  "url": "about:blank",
-  "bubble_count": 0,
-  "bubbles": [],
+  "url": "http://localhost:8080/app/assistant/librechat/c/new",
+  "bubble_count": 1,
+  "bubbles": [
+    {
+      "binding_key": "conv_05cbef69279c40d19a0f48547db26f1f::turn_d6a5ee4348af465fbf17108b56ca22d2::assistant_67381a83497446399c566c18d18ddb4e",
+      "conversation_id": "conv_05cbef69279c40d19a0f48547db26f1f",
+      "turn_id": "turn_d6a5ee4348af465fbf17108b56ca22d2",
+      "request_id": "assistant_67381a83497446399c566c18d18ddb4e",
+      "message_id": "90a7f91c-9671-42e5-8873-8849d0f9c186_",
+      "text": "上级组织：AI治理办公室；新建组织：人力资源部2；生效日期：2026-01-01 task_id: b5ce4896-cf2f-4251-b62c-0b3e8d25bf28 · succeeded Selected: AI治理办公室 org_code: O000001 parent_org_code: TP290BAIGOV effective_date: 2026-01-01 event_type: CREATE"
+    }
+  ],
   "external_reply_container_count": 0,
   "connection_error_count": 0
 }

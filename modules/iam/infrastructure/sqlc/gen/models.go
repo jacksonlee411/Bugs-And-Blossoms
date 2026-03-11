@@ -14,6 +14,7 @@ type IamAssistantConversation struct {
 	ActorID        string             `json:"actor_id"`
 	ActorRole      string             `json:"actor_role"`
 	State          string             `json:"state"`
+	CurrentPhase   string             `json:"current_phase"`
 	CreatedAt      pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
 }
@@ -45,6 +46,8 @@ type IamAssistantStateTransition struct {
 	TraceID        string             `json:"trace_id"`
 	FromState      string             `json:"from_state"`
 	ToState        string             `json:"to_state"`
+	FromPhase      string             `json:"from_phase"`
+	ToPhase        string             `json:"to_phase"`
 	ReasonCode     *string            `json:"reason_code"`
 	ActorID        string             `json:"actor_id"`
 	ChangedAt      pgtype.Timestamptz `json:"changed_at"`
@@ -111,6 +114,7 @@ type IamAssistantTurn struct {
 	TurnID              string             `json:"turn_id"`
 	UserInput           string             `json:"user_input"`
 	State               string             `json:"state"`
+	Phase               string             `json:"phase"`
 	RiskTier            string             `json:"risk_tier"`
 	RequestID           string             `json:"request_id"`
 	TraceID             string             `json:"trace_id"`
@@ -120,12 +124,18 @@ type IamAssistantTurn struct {
 	IntentJson          []byte             `json:"intent_json"`
 	PlanJson            []byte             `json:"plan_json"`
 	CandidatesJson      []byte             `json:"candidates_json"`
+	CandidateOptions    []byte             `json:"candidate_options"`
 	ResolvedCandidateID *string            `json:"resolved_candidate_id"`
+	SelectedCandidateID *string            `json:"selected_candidate_id"`
 	AmbiguityCount      int32              `json:"ambiguity_count"`
 	Confidence          float64            `json:"confidence"`
 	ResolutionSource    *string            `json:"resolution_source"`
 	DryRunJson          []byte             `json:"dry_run_json"`
+	PendingDraftSummary *string            `json:"pending_draft_summary"`
+	MissingFields       []byte             `json:"missing_fields"`
 	CommitResultJson    []byte             `json:"commit_result_json"`
+	CommitReply         []byte             `json:"commit_reply"`
+	ErrorCode           *string            `json:"error_code"`
 	CreatedAt           pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt           pgtype.Timestamptz `json:"updated_at"`
 }

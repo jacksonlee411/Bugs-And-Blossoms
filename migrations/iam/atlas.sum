@@ -1,4 +1,4 @@
-h1:NepB6XPr6ipmYxua7PdBJfBr48kxoYNN/emmZjUaHv4=
+h1:HNh1r12vUpG0YlxeWyR+/HSqU7FKBzJfPKu9Z6mFI18=
 20260106003000_iam_baseline.sql h1:4cRdz130X33pSQ0tm+LXZ1ptR+zChkscFHWrmYy/UgM=
 20260107120000_iam_tenancy_and_superadmin.sql h1:a0K5XB/KuT+D5L/J87q7Rg7vNFy1Q6p4rHc2Wje3O/k=
 20260107130000_iam_principals_and_sessions.sql h1:WRxrjXjg5rHb2ds5PtPVDhVsI4IiF9SMHqY5pKn0T+U=
@@ -10,3 +10,5 @@ h1:NepB6XPr6ipmYxua7PdBJfBr48kxoYNN/emmZjUaHv4=
 20260303120000_iam_assistant_tasks.sql h1:O7HI1Pqg2qT5HtIgu60TVIRoyidY5KjLBG6ylFD5gUI=
 20260307164000_iam_assistant_conversation_phase_snapshot.sql h1:twjO5pPi9TVHHl899VfdT6nJKmR4sDWjVQfCoZrqtgs=
 20260310093000_iam_assistant_phase_snapshot_cleanup.sql h1:jr1T2Cl0k4wOzdLzJq8RET31zl2hOqWUmvsr1k9BYDc=
+20260311004000_iam_assistant_phase_snapshot_restore.sql h1:/8uZBedqpZCwvZB/DMC7miPdh1gaPTKxEY0k9ZF68Vs=
+20260311005500_iam_assistant_phase_snapshot_hardening.sql h1:zkayWceHWzhwQtgS5Tg1RKzouGYX2XdS/uBrYRkUg4g=
