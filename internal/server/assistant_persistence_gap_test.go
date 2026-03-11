@@ -131,6 +131,26 @@ func TestAssistantPersistence_CreateTurnPGErrorMatrix(t *testing.T) {
 	if _, err := runtimeErrSvc.createTurnPG(context.Background(), "tenant_1", Principal{ID: "actor_1", RoleSlug: "tenant-admin"}, "conv_pg", "仅生成计划"); !errors.Is(err, errAssistantRuntimeConfigInvalid) {
 		t.Fatalf("unexpected err=%v", err)
 	}
+	knowledgeErrSvc := newAssistantConversationService(newOrgUnitMemoryStore(), assistantWriteServiceStub{store: newOrgUnitMemoryStore()})
+	knowledgeErrSvc.knowledgeRuntime = nil
+	knowledgeErrSvc.knowledgeErr = errAssistantRuntimeConfigInvalid
+	knowledgeErrSvc.pool = assistFakeTxBeginner{tx: makeTx("actor_1", "", nil, nil)}
+	if _, err := knowledgeErrSvc.createTurnPG(context.Background(), "tenant_1", Principal{ID: "actor_1", RoleSlug: "tenant-admin"}, "conv_pg", "仅生成计划"); !errors.Is(err, errAssistantRuntimeConfigInvalid) {
+		t.Fatalf("unexpected err=%v", err)
+	}
+
+	contextErrSvc := newAssistantConversationService(store, assistantWriteServiceStub{store: store})
+	contextErrSvc.knowledgeRuntime = &assistantKnowledgeRuntime{
+		RouteCatalogVersion: "2026-03-11.v1",
+		actionView:          map[string]map[string]assistantActionViewPack{},
+		interpretation: map[string]map[string]assistantInterpretationPack{
+			"knowledge.general_qa": {"zh": {PackID: "knowledge.general_qa", Locale: "zh"}},
+		},
+	}
+	contextErrSvc.pool = assistFakeTxBeginner{tx: makeTx("actor_1", "", nil, nil)}
+	if _, err := contextErrSvc.createTurnPG(context.Background(), "tenant_1", Principal{ID: "actor_1", RoleSlug: "tenant-admin"}, "conv_pg", "在鲜花组织之下，新建一个名为运营部的部门，成立日期是2026-01-01"); !errors.Is(err, errAssistantRuntimeConfigInvalid) {
+		t.Fatalf("unexpected err=%v", err)
+	}
 
 	originalDefinitions := capabilityDefinitionByKey
 	capabilityDefinitionByKey = map[string]capabilityDefinition{}
@@ -950,6 +970,34 @@ func TestAssistantPersistence_CommitTurnPG_ErrorPathMatrix(t *testing.T) {
 		return nil
 	}, nil)
 	if _, err := claimErrSvc.commitTurnPG(context.Background(), "tenant_1", principal, "conv_1", "turn_1"); err == nil || !strings.Contains(err.Error(), "claim failed") {
+		t.Fatalf("unexpected err=%v", err)
+	}
+
+	conflictSvc := makeSvc("actor_1", "tenant-admin", [][]any{row}, nil, func(sql string) pgx.Row {
+		switch {
+		case strings.Contains(sql, "INSERT INTO iam.assistant_idempotency"):
+			return &assistFakeRow{err: pgx.ErrNoRows}
+		case strings.Contains(sql, "SELECT request_hash"):
+			return &assistFakeRow{vals: []any{"other_hash", "pending", nil, nil, []byte(nil)}}
+		default:
+			return nil
+		}
+	}, nil)
+	if _, err := conflictSvc.commitTurnPG(context.Background(), "tenant_1", principal, "conv_1", "turn_1"); !errors.Is(err, errAssistantIdempotencyKeyConflict) {
+		t.Fatalf("unexpected err=%v", err)
+	}
+
+	inProgressSvc := makeSvc("actor_1", "tenant-admin", [][]any{row}, nil, func(sql string) pgx.Row {
+		switch {
+		case strings.Contains(sql, "INSERT INTO iam.assistant_idempotency"):
+			return &assistFakeRow{err: pgx.ErrNoRows}
+		case strings.Contains(sql, "SELECT request_hash"):
+			return &assistFakeRow{vals: []any{assistantHashText("commit\n"), "pending", nil, nil, []byte(nil)}}
+		default:
+			return nil
+		}
+	}, nil)
+	if _, err := inProgressSvc.commitTurnPG(context.Background(), "tenant_1", principal, "conv_1", "turn_1"); !errors.Is(err, errAssistantRequestInProgress) {
 		t.Fatalf("unexpected err=%v", err)
 	}
 

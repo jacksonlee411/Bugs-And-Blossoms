@@ -191,6 +191,10 @@ func assistantTurnPendingDraftSummary(turn *assistantTurn) string {
 	if turn == nil {
 		return ""
 	}
+	routeKind := strings.TrimSpace(turn.Intent.RouteKind)
+	if routeKind != "" && routeKind != assistantRouteKindBusinessAction {
+		return ""
+	}
 	if len(assistantTurnMissingFields(turn)) > 0 {
 		return ""
 	}

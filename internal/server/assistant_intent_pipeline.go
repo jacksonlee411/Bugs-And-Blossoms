@@ -243,6 +243,9 @@ func assistantAnnotateIntentPlan(tenantID string, conversationID string, userInp
 
 	intentHash := assistantCanonicalHashFn(map[string]any{
 		"action":                intent.Action,
+		"intent_id":             intent.IntentID,
+		"route_kind":            intent.RouteKind,
+		"route_catalog_version": intent.RouteCatalogVersion,
 		"parent_ref_text":       intent.ParentRefText,
 		"entity_name":           intent.EntityName,
 		"effective_date":        intent.EffectiveDate,
@@ -289,6 +292,11 @@ func assistantPlanHash(intent assistantIntentSpec, plan assistantPlanSummary, dr
 			"model_provider":            plan.ModelProvider,
 			"model_name":                plan.ModelName,
 			"model_revision":            plan.ModelRevision,
+			"knowledge_snapshot_digest": plan.KnowledgeSnapshotDigest,
+			"route_catalog_version":     plan.RouteCatalogVersion,
+			"resolver_contract_version": plan.ResolverContractVersion,
+			"context_template_version":  plan.ContextTemplateVersion,
+			"reply_guidance_version":    plan.ReplyGuidanceVersion,
 			"version_tuple":             plan.VersionTuple,
 			"skill_execution_plan":      plan.SkillExecutionPlan,
 			"config_delta_plan":         plan.ConfigDeltaPlan,

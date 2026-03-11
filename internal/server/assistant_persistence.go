@@ -208,7 +208,12 @@ func (s *assistantConversationService) createTurnPG(ctx context.Context, tenantI
 	if err != nil {
 		return nil, err
 	}
+	knowledgeRuntime, err := s.ensureKnowledgeRuntime()
+	if err != nil {
+		return nil, err
+	}
 	intent := assistantMergeIntentWithPendingTurn(resolvedIntent.Intent, pendingTurn)
+	intent = knowledgeRuntime.routeIntent(userInput, intent)
 	intentValidationErrors := assistantIntentValidationErrors(intent)
 	candidates := make([]assistantCandidate, 0)
 	resolvedCandidateID := ""
@@ -272,6 +277,16 @@ func (s *assistantConversationService) createTurnPG(ctx context.Context, tenantI
 	}
 	plan = tempTurn.Plan
 	dryRun = tempTurn.DryRun
+	planContext, err := knowledgeRuntime.buildPlanContextV1(tenantID, knowledgeRuntime.planContextLocale(), intent, spec, tempTurn)
+	if err != nil {
+		return nil, err
+	}
+	assistantApplyPlanContextV1(&plan, &dryRun, intent, planContext)
+	plan.KnowledgeSnapshotDigest = strings.TrimSpace(knowledgeRuntime.SnapshotDigest)
+	plan.RouteCatalogVersion = firstNonEmpty(strings.TrimSpace(intent.RouteCatalogVersion), strings.TrimSpace(knowledgeRuntime.RouteCatalogVersion))
+	plan.ResolverContractVersion = strings.TrimSpace(knowledgeRuntime.ResolverContractVersion)
+	plan.ContextTemplateVersion = strings.TrimSpace(knowledgeRuntime.ContextTemplateVersion)
+	plan.ReplyGuidanceVersion = strings.TrimSpace(knowledgeRuntime.ReplyGuidanceVersion)
 	if err := assistantAnnotateIntentPlanFn(tenantID, conversationID, userInput, &intent, &plan, &dryRun); err != nil {
 		return nil, err
 	}

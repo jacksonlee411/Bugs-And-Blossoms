@@ -59,6 +59,8 @@ type assistantConversationService struct {
 	commitAdapterRegistry assistantCommitAdapterRegistry
 	modelGateway          *assistantModelGateway
 	gatewayErr            error
+	knowledgeRuntime      *assistantKnowledgeRuntime
+	knowledgeErr          error
 	pool                  assistantTxBeginner
 	mu                    sync.RWMutex
 	byID                  map[string]*assistantConversation
@@ -129,6 +131,9 @@ type assistantTurn struct {
 
 type assistantIntentSpec struct {
 	Action              string `json:"action"`
+	IntentID            string `json:"intent_id,omitempty"`
+	RouteKind           string `json:"route_kind,omitempty"`
+	RouteCatalogVersion string `json:"route_catalog_version,omitempty"`
 	ParentRefText       string `json:"parent_ref_text,omitempty"`
 	EntityName          string `json:"entity_name,omitempty"`
 	EffectiveDate       string `json:"effective_date,omitempty"`
@@ -154,6 +159,11 @@ type assistantPlanSummary struct {
 	ModelProvider           string                      `json:"model_provider,omitempty"`
 	ModelName               string                      `json:"model_name,omitempty"`
 	ModelRevision           string                      `json:"model_revision,omitempty"`
+	KnowledgeSnapshotDigest string                      `json:"knowledge_snapshot_digest,omitempty"`
+	RouteCatalogVersion     string                      `json:"route_catalog_version,omitempty"`
+	ResolverContractVersion string                      `json:"resolver_contract_version,omitempty"`
+	ContextTemplateVersion  string                      `json:"context_template_version,omitempty"`
+	ReplyGuidanceVersion    string                      `json:"reply_guidance_version,omitempty"`
 	VersionTuple            json.RawMessage             `json:"version_tuple,omitempty"`
 	ConfirmTTLSeconds       int                         `json:"confirm_ttl_seconds,omitempty"`
 	ExpiresAt               string                      `json:"expires_at,omitempty"`
@@ -250,13 +260,16 @@ type assistantRenderReplyRequest struct {
 
 func newAssistantConversationService(orgStore OrgUnitStore, writeSvc orgunitservices.OrgUnitWriteService) *assistantConversationService {
 	gateway, err := newAssistantModelGateway()
+	knowledgeRuntime, knowledgeErr := assistantLoadKnowledgeRuntime()
 	return &assistantConversationService{
-		orgStore:     orgStore,
-		writeSvc:     writeSvc,
-		modelGateway: gateway,
-		gatewayErr:   err,
-		byID:         make(map[string]*assistantConversation),
-		byActorID:    make(map[string][]string),
+		orgStore:         orgStore,
+		writeSvc:         writeSvc,
+		modelGateway:     gateway,
+		gatewayErr:       err,
+		knowledgeRuntime: knowledgeRuntime,
+		knowledgeErr:     knowledgeErr,
+		byID:             make(map[string]*assistantConversation),
+		byActorID:        make(map[string][]string),
 	}
 }
 
@@ -887,7 +900,12 @@ func (s *assistantConversationService) createTurn(ctx context.Context, tenantID 
 	if err != nil {
 		return nil, err
 	}
+	knowledgeRuntime, err := s.ensureKnowledgeRuntime()
+	if err != nil {
+		return nil, err
+	}
 	intent := assistantMergeIntentWithPendingTurn(resolvedIntent.Intent, assistantLatestPendingTurn(conversation))
+	intent = knowledgeRuntime.routeIntent(userInput, intent)
 	intentValidationErrors := assistantIntentValidationErrors(intent)
 	candidates := make([]assistantCandidate, 0)
 	resolvedCandidateID := ""
@@ -952,6 +970,16 @@ func (s *assistantConversationService) createTurn(ctx context.Context, tenantID 
 	}
 	plan = tempTurn.Plan
 	dryRun = tempTurn.DryRun
+	planContext, err := knowledgeRuntime.buildPlanContextV1(tenantID, knowledgeRuntime.planContextLocale(), intent, spec, tempTurn)
+	if err != nil {
+		return nil, err
+	}
+	assistantApplyPlanContextV1(&plan, &dryRun, intent, planContext)
+	plan.KnowledgeSnapshotDigest = strings.TrimSpace(knowledgeRuntime.SnapshotDigest)
+	plan.RouteCatalogVersion = firstNonEmpty(strings.TrimSpace(intent.RouteCatalogVersion), strings.TrimSpace(knowledgeRuntime.RouteCatalogVersion))
+	plan.ResolverContractVersion = strings.TrimSpace(knowledgeRuntime.ResolverContractVersion)
+	plan.ContextTemplateVersion = strings.TrimSpace(knowledgeRuntime.ContextTemplateVersion)
+	plan.ReplyGuidanceVersion = strings.TrimSpace(knowledgeRuntime.ReplyGuidanceVersion)
 	if err := assistantAnnotateIntentPlanFn(tenantID, conversationID, userInput, &intent, &plan, &dryRun); err != nil {
 		return nil, err
 	}
@@ -1267,9 +1295,13 @@ func assistantTurnRequiresIntentClarification(turn *assistantTurn) bool {
 	if turn == nil {
 		return false
 	}
+	routeKind := strings.TrimSpace(turn.Intent.RouteKind)
+	if routeKind != "" && routeKind != assistantRouteKindBusinessAction {
+		return true
+	}
 	for _, code := range assistantNormalizeValidationErrors(turn.DryRun.ValidationErrors) {
 		switch code {
-		case "missing_parent_ref_text", "missing_new_parent_ref_text", "parent_candidate_not_found", "missing_entity_name", "missing_new_name", "missing_effective_date", "invalid_effective_date_format", "missing_org_code", "missing_target_effective_date", "invalid_target_effective_date_format", "missing_change_fields", "FIELD_REQUIRED_VALUE_MISSING", "PATCH_FIELD_NOT_ALLOWED":
+		case "missing_parent_ref_text", "missing_new_parent_ref_text", "parent_candidate_not_found", "missing_entity_name", "missing_new_name", "missing_effective_date", "invalid_effective_date_format", "missing_org_code", "missing_target_effective_date", "invalid_target_effective_date_format", "missing_change_fields", "FIELD_REQUIRED_VALUE_MISSING", "PATCH_FIELD_NOT_ALLOWED", "non_business_route":
 			return true
 		}
 	}
@@ -1439,6 +1471,8 @@ func assistantDryRunValidationExplain(validationErrors []string) string {
 			return "当前组织创建策略缺少可用默认值，请联系管理员补齐 org_code / 组织类型策略后重试。"
 		case "PATCH_FIELD_NOT_ALLOWED":
 			return "当前租户未启用创建所需组织字段配置，请联系管理员启用 org_type 字段后重试。"
+		case "non_business_route":
+			hints = append(hints, "当前输入属于非业务动作请求，不会触发提交")
 		}
 	}
 	if len(hints) == 0 {

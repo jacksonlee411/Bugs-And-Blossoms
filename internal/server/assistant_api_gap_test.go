@@ -532,3 +532,47 @@ func TestAssistantHelper_LatestTurnAndTaskActionPathBranches(t *testing.T) {
 		t.Fatal("expected invalid empty task id")
 	}
 }
+
+func TestAssistantCreateTurn_KnowledgeRuntimeErrorBranches(t *testing.T) {
+	store := newOrgUnitMemoryStore()
+	_, _ = store.CreateNodeCurrent(context.Background(), "tenant-1", "2026-01-01", "FLOWER-A", "鲜花组织", "", true)
+	svc := newAssistantConversationService(store, assistantWriteServiceStub{store: store})
+	principal := Principal{ID: "actor-1", RoleSlug: "tenant-admin"}
+
+	conv := svc.createConversation("tenant-1", principal)
+	svc.knowledgeRuntime = nil
+	svc.knowledgeErr = errAssistantRuntimeConfigInvalid
+	if _, err := svc.createTurn(context.Background(), "tenant-1", principal, conv.ConversationID, "仅生成计划"); !errors.Is(err, errAssistantRuntimeConfigInvalid) {
+		t.Fatalf("expected knowledge runtime load error, got=%v", err)
+	}
+
+	conv2 := svc.createConversation("tenant-1", principal)
+	svc.knowledgeErr = nil
+	svc.knowledgeRuntime = &assistantKnowledgeRuntime{
+		RouteCatalogVersion: "2026-03-11.v1",
+		actionView:          map[string]map[string]assistantActionViewPack{},
+		interpretation: map[string]map[string]assistantInterpretationPack{
+			"knowledge.general_qa": {"zh": {PackID: "knowledge.general_qa", Locale: "zh"}},
+		},
+	}
+	if _, err := svc.createTurn(
+		context.Background(),
+		"tenant-1",
+		principal,
+		conv2.ConversationID,
+		"在鲜花组织之下，新建一个名为运营部的部门，成立日期是2026-01-01",
+	); !errors.Is(err, errAssistantRuntimeConfigInvalid) {
+		t.Fatalf("expected plan context build error, got=%v", err)
+	}
+}
+
+func TestAssistantIntentClarificationAndDryRunNonBusinessCoverage(t *testing.T) {
+	if !assistantTurnRequiresIntentClarification(&assistantTurn{
+		Intent: assistantIntentSpec{RouteKind: assistantRouteKindKnowledgeQA},
+	}) {
+		t.Fatal("non-business route should require clarification")
+	}
+	if got := assistantDryRunValidationExplain([]string{"non_business_route"}); !strings.Contains(got, "非业务动作请求") {
+		t.Fatalf("unexpected explain=%q", got)
+	}
+}

@@ -394,6 +394,44 @@ func TestOrgUnitPGStore_ResolveSetIDStrategyFieldDecision(t *testing.T) {
 		}
 	})
 
+	t.Run("rows scan error", func(t *testing.T) {
+		store := newConcreteOrgUnitPGStore(beginFunc(func(context.Context) (pgx.Tx, error) {
+			return &txStub{rows: &rowsWithData{
+				stubRows: &stubRows{},
+				data:     [][]any{{"org.orgunit_create.field_policy", "org_code", "tenant", "", true, true, true, "", "", `[]`, 100, "2026-01-01"}},
+				scanErr:  errors.New("scan"),
+			}}, nil
+		}))
+		if _, found, err := store.ResolveSetIDStrategyFieldDecision(ctx, "t1", "org.orgunit_create.field_policy", "org_code", "", "2026-01-01"); err == nil || found {
+			t.Fatalf("found=%v err=%v", found, err)
+		}
+	})
+
+	t.Run("rows err", func(t *testing.T) {
+		store := newConcreteOrgUnitPGStore(beginFunc(func(context.Context) (pgx.Tx, error) {
+			return &txStub{rows: &rowsWithData{
+				stubRows: &stubRows{},
+				data:     [][]any{{"org.orgunit_create.field_policy", "org_code", "tenant", "", true, true, true, "", "", `[]`, 100, "2026-01-01"}},
+				err:      errors.New("rows"),
+			}}, nil
+		}))
+		if _, found, err := store.ResolveSetIDStrategyFieldDecision(ctx, "t1", "org.orgunit_create.field_policy", "org_code", "", "2026-01-01"); err == nil || found {
+			t.Fatalf("found=%v err=%v", found, err)
+		}
+	})
+
+	t.Run("bucket ignored then not found", func(t *testing.T) {
+		store := newConcreteOrgUnitPGStore(beginFunc(func(context.Context) (pgx.Tx, error) {
+			return &txStub{rows: &rowsWithData{
+				stubRows: &stubRows{},
+				data:     [][]any{{"org.other_policy", "org_code", "other", "x", true, true, true, "", "", `[]`, 100, "2026-01-01"}},
+			}}, nil
+		}))
+		if _, found, err := store.ResolveSetIDStrategyFieldDecision(ctx, "t1", "org.orgunit_create.field_policy", "org_code", "", "2026-01-01"); err != nil || found {
+			t.Fatalf("found=%v err=%v", found, err)
+		}
+	})
+
 	t.Run("allowed_value_codes json invalid", func(t *testing.T) {
 		store := newConcreteOrgUnitPGStore(beginFunc(func(context.Context) (pgx.Tx, error) {
 			return &txStub{rows: &rowsWithData{

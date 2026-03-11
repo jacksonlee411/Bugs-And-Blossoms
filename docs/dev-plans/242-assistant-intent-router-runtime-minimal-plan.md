@@ -179,7 +179,12 @@ func assistantBuildIntentRouteDecision(
     mergedIntent assistantIntentSpec,
     runtime *assistantKnowledgeRuntime,
     pendingTurn *assistantTurn,
-) (assistantIntentRouteDecision, assistantIntentSpec, error)
+) (assistantIntentRouteDecision, error)
+
+func assistantProjectIntentRouteDecision(
+    mergedIntent assistantIntentSpec,
+    decision assistantIntentRouteDecision,
+) assistantIntentSpec
 
 func assistantValidateIntentRouteDecision(decision assistantIntentRouteDecision) error
 
@@ -191,10 +196,11 @@ func assistantTurnRouteClarificationRequired(turn *assistantTurn) bool
 
 func assistantTurnActionChainAllowed(turn *assistantTurn) bool
 ```
-2. [ ] `assistantBuildIntentRouteDecision(...)` 返回投影后的 `assistantIntentSpec`，目的是把 `intent.intent_id / route_kind / route_catalog_version` 的回填收口到单一函数，避免 `createTurn(...)` 与 `createTurnPG(...)` 各自补字段。
+2. [ ] `assistantBuildIntentRouteDecision(...)` 的唯一职责是输出正式 `RouteDecision`；兼容字段回填改由单独的 `assistantProjectIntentRouteDecision(...)` 承担，避免 Router 再次退化成“顺手改 DTO”的混合边界。
 3. [ ] `assistantValidateIntentRouteDecision(...)` 推荐返回仓内 error 变量，而不是 `fmt.Errorf` 拼接字符串；这样可直接进入 API 映射和 idempotency 恢复分支。
 4. [ ] `assistantTurnActionChainAllowed(...)` 应只回答“是否允许进入确认/提交链”，不要顺便计算 phase、回复文案或字段缺失。
 5. [ ] `assistantCheckRouteDecision(...)` 应只在 `StageConfirm / StageCommit` 强阻断；`StagePlan` 允许非动作 create-turn 成功，但不允许非法 decision 混过。
+6. [ ] `pendingTurn` 首期默认为可选上下文输入；若最终实现未证明它保护了明确不变量，应保持未使用或删除，避免提前把 `243` 的多轮澄清状态耦合进 `242`。
 
 ## 6. 路由算法与 builder（冻结）
 
@@ -204,16 +210,16 @@ func assistantTurnActionChainAllowed(turn *assistantTurn) bool
    - [ ] `resolved assistantResolveIntentResult`；
    - [ ] `mergedIntent assistantIntentSpec`；
    - [ ] `knowledgeRuntime *assistantKnowledgeRuntime`；
-   - [ ] `pendingTurn *assistantTurn`（仅用于必要上下文，不得修改 route 真相）。
+   - [ ] `pendingTurn *assistantTurn`（可选；仅在能证明其用于保护明确 route 不变量时启用，不得修改 route 真相）。
 2. [ ] builder 输出：
    - [ ] `assistantIntentRouteDecision`；
-   - [ ] 投影后的 `assistantIntentSpec`（统一从 decision 回填 `intent_id / route_kind / route_catalog_version`）；
    - [ ] 错误仅用于硬失败（catalog/runtime/contract 冲突）。
 3. [ ] builder 必须是**纯计算函数**：
    - [ ] 不做 DB 查询；
    - [ ] 不写日志 side effect；
    - [ ] 不直接生成回复；
    - [ ] 不直接推进 phase。
+4. [ ] 兼容投影必须通过独立 helper 完成：`assistantProjectIntentRouteDecision(...)` 统一从 `decision` 回填 `intent.intent_id / route_kind / route_catalog_version`，但该 helper 不是 Router 本体。
 
 ### 6.2 首期决策规则
 1. [ ] 若 `mergedIntent.Action` 命中已注册 action spec，则：
@@ -343,7 +349,7 @@ buildRouteDecision(userInput, resolved, mergedIntent, runtime, pendingTurn):
    以避免 phase / summary / gate 各自散写 route 判断。
 
 ### 7.4 `internal/server/assistant_action_interceptor.go`
-1. [ ] 在 `assistantEvaluateActionGate(...)` 中新增 route 检查，建议位置在 capability/authz/risk 校验之后、confirm/commit required checks 之前。
+1. [ ] 在 `assistantEvaluateActionGate(...)` 中新增 route 检查，且对 `StageConfirm / StageCommit` 应作为**第一道 gate**执行；只有 route 允许进入动作链后，才继续 capability/authz/risk/required checks。
 2. [ ] 新增检查函数，例如 `assistantCheckRouteDecision(...)`：
    - [ ] `route_kind!=business_action` → 直接阻断 `confirm/commit`；
    - [ ] `clarification_required=true` → 直接阻断 `confirm/commit`；
@@ -352,6 +358,7 @@ buildRouteDecision(userInput, resolved, mergedIntent, runtime, pendingTurn):
 4. [ ] `plan` 阶段是否检查 route：
    - [ ] `StagePlan` 允许非动作 turn 通过，以便 create-turn 成功；
    - [ ] 但若 route decision 自身非法，`StagePlan` 也必须 fail-closed。
+5. [ ] `applyConfirmTurn(...) / prepareCommitTurn(...) / submitCommitTaskPG(...)` 仍应保留断言式 route 检查，作为深层 fail-closed 保险；但这些检查不构成新的业务旁路，也不改变“入口先过 route gate”的主顺序。
 
 ### 7.5 `internal/server/assistant_knowledge_runtime.go`
 1. [ ] 现有 `routeIntent(...)` 可保留，但角色下沉为 builder 内部辅助函数或被重命名为 `routeIntentLegacyProjection(...)`；`242` 完成后它不得继续作为最终 runtime SSOT。
@@ -428,7 +435,7 @@ buildRouteDecision(userInput, resolved, mergedIntent, runtime, pendingTurn):
    - [ ] `chitchat`；
    - [ ] `business_action + clarification_required=true`；
    - [ ] `uncertain`。
-2. [ ] 这些“软分流”场景通过 `turn.route_decision` + `turn.intent.route_kind` + `turn.dry_run.explain` 呈现，但 `phase` 必须保持不可提交态。
+2. [ ] 这些“软分流”场景以 `turn.route_decision` 作为唯一运行时判读主源；`turn.intent.route_kind` 仅作兼容投影，`turn.dry_run.explain` 仅作展示说明，二者都不得再参与“是否可确认/提交”的运行时判断。
 3. [ ] create-turn 响应的最小判读规则：
    - [ ] 看 `route_decision.route_kind` 决定是否为动作；
    - [ ] 看 `route_decision.clarification_required` 决定是否需交给 `243`；
@@ -665,6 +672,7 @@ var (
    - [ ] 待澄清阻断；
    - [ ] action 未注册。
 7. [ ] 非动作/uncertain turn 即使 create 成功，也不会在 UI/API 契约层被误读为“等待你确认提交”。
+8. [ ] 现有 Assistant 消费侧（页面 CTA、接口调用方或等价入口）已明确以 `route_decision` 为唯一可提交判据；对 `knowledge_qa/chitchat/uncertain/business_action+clarification_required=true` 不展示 confirm CTA，并提供对应回归测试、截图或等价证据。
 
 ## 13. 停止线（Fail-Closed）
 1. [ ] 若最终仍只把 `route` 放在 `assistantIntentSpec.RouteKind` 里，而没有独立 `RouteDecision`，本计划失败。
