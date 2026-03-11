@@ -1,6 +1,6 @@
 # DEV-PLAN-242：Assistant Intent Router 运行时最小落地计划
 
-**状态**: 规划中（2026-03-11 CST；本次修订将 `242` 细化为“可按文件直接实施”的运行时蓝图，承接 `240E/241/246`，并显式收口当前 `plan_only/route_kind` 半成品状态）
+**状态**: 已完成（2026-03-11 CST；`assistantIntentRouteDecision`、`route_decision_json` 持久化、route-aware phase/gate、route 错误码与回归测试已落地；`clarification_required` 已按 `243` 评审收紧为 route 级信号，执行记录见 `docs/dev-records/dev-plan-242-execution-log.md`）
 
 ## 1. 背景与定位
 1. [ ] `240E` 已冻结：Assistant 必须先经过 `understand / route`，再决定是否进入正式业务动作链；`241` 已把知识资产、最小 `Intent Route Catalog`、`plan_context_v1` 和版本快照接入运行时，但尚未形成**正式的路由裁决对象**。
@@ -695,13 +695,13 @@ var (
 3. [ ] 若命中 Assistant 路由、错误码或 schema 相关门禁，还需按实际变更补跑对应检查；本文不复制脚本细节，以 SSOT 为准。
 
 ## 15. 交付物
-1. [ ] 本计划文档：`docs/dev-plans/242-assistant-intent-router-runtime-minimal-plan.md`
-2. [ ] 执行记录：`docs/dev-records/dev-plan-242-execution-log.md`
-3. [ ] 代码交付物：
-   - [ ] `assistantIntentRouteDecision` DTO 与 builder；
-   - [ ] `route_decision_json` 持久化；
-   - [ ] phase / confirm / commit route gate；
-   - [ ] route 错误码与回归测试。
+1. [X] 本计划文档：`docs/dev-plans/242-assistant-intent-router-runtime-minimal-plan.md`
+2. [X] 执行记录：`docs/dev-records/dev-plan-242-execution-log.md`
+3. [X] 代码交付物：
+   - [X] `assistantIntentRouteDecision` DTO 与 builder；
+   - [X] `route_decision_json` 持久化；
+   - [X] phase / confirm / commit route gate；
+   - [X] route 错误码与回归测试。
 
 ## 16. 关联文档
 - `docs/dev-plans/240e-assistant-internal-knowledge-pack-and-readonly-resolver-plan.md`
