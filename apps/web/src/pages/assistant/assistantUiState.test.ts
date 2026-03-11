@@ -137,4 +137,43 @@ describe('deriveAssistantActionState', () => {
     expect(result.canCommit).toBe(false)
     expect(result.showRequiredFieldBlocker).toBe(true)
   })
+
+  it('blocks confirm and commit when create policy lacks required defaults', () => {
+    const result = deriveAssistantActionState({
+      hasConversation: true,
+      loading: false,
+      selectedCandidateID: '',
+      turn: makeTurn({
+        dry_run: {
+          explain: '策略缺失',
+          diff: [],
+          validation_errors: ['FIELD_REQUIRED_VALUE_MISSING']
+        }
+      })
+    })
+
+    expect(result.canConfirm).toBe(false)
+    expect(result.canCommit).toBe(false)
+    expect(result.showRequiredFieldBlocker).toBe(true)
+  })
+
+  it('blocks confirm and commit when org_type field config is not enabled', () => {
+    const result = deriveAssistantActionState({
+      hasConversation: true,
+      loading: false,
+      selectedCandidateID: '',
+      turn: makeTurn({
+        state: 'confirmed',
+        dry_run: {
+          explain: '字段未启用',
+          diff: [],
+          validation_errors: ['PATCH_FIELD_NOT_ALLOWED']
+        }
+      })
+    })
+
+    expect(result.canConfirm).toBe(false)
+    expect(result.canCommit).toBe(false)
+    expect(result.showRequiredFieldBlocker).toBe(true)
+  })
 })

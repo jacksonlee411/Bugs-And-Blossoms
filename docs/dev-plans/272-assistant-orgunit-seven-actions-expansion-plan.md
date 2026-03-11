@@ -99,6 +99,12 @@
 4. [x] 跨计划证据策略冻结为：`272` 若继续影响运行时 gate、错误码语义、Resolver 行为或 fail-closed 行为，则 `288/290B` 历史证据视为待刷新，不得提前用于 `271-S5/285` 封板判定。
 5. [x] 本计划当前完成度判断更新为：**七动作正式链路、后端主证据、`288/290B` 新鲜证据、`make preflight` 与重启后 live 复核均已收口，并已通过 `PR #481` 合并入 `main`**。
 
+### 5.7 运行时补充收口（2026-03-11）
+1. [x] `create_orgunit` 的 dry-run 不能只停留在基础意图字段校验；当父组织已唯一解析后，必须前置校验创建字段策略与租户字段启用状态。
+2. [x] 若 `org_code` / `d_org_type` 在创建策略决议后仍无法得到可提交值，`createTurn` 阶段必须直接回填 `FIELD_REQUIRED_VALUE_MISSING`，不得延迟到 commit 才失败。
+3. [x] 若 `d_org_type` 依赖默认值落写但租户未启用对应字段配置，`createTurn` 或“候选确认后再次 dry-run”阶段必须直接回填 `PATCH_FIELD_NOT_ALLOWED`。
+4. [x] 上述错误必须复用现有 `dry_run.validation_errors -> await_missing_fields -> confirm/commit blocker` 主链，不新增第二套阻断机制。
+
 ## 6. 测试与覆盖率
 1. [x] 覆盖率口径：沿用仓库 CI 既有口径与阈值，不新增排除项规避。
 2. [x] 单测最小集：
@@ -110,6 +116,9 @@
    - [x] 七动作至少各 1 条 `plan -> confirm -> commit` 成功样例
    - [x] 七动作至少各 1 条关键拒绝路径（权限/校验/状态漂移之一）
    - [x] `:commit` 异步 receipt 链路下任务终态与 conversation 刷新一致
+4. [x] 运行时补充回归：
+   - [x] `create_orgunit` 在 `createTurn` 阶段命中“必填字段无默认值”时，直接返回 `FIELD_REQUIRED_VALUE_MISSING`
+   - [x] `create_orgunit` 在候选确认后命中“`d_org_type` 未启用”时，直接返回 `PATCH_FIELD_NOT_ALLOWED`，且 turn 不推进到 confirmed
 
 ## 7. 验收标准（DoD）
 1. [x] 七动作均可在正式入口完成受控提交，不再出现“只有 create 能提交”。

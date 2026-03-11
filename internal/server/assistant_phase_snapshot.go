@@ -149,6 +149,8 @@ func assistantTurnMissingFields(turn *assistantTurn) []string {
 			field = "target_effective_date"
 		case "missing_change_fields":
 			field = "change_fields"
+		case "FIELD_REQUIRED_VALUE_MISSING", "PATCH_FIELD_NOT_ALLOWED":
+			field = "field_policy"
 		}
 		if field == "" {
 			continue

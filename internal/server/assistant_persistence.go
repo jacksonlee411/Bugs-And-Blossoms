@@ -265,6 +265,7 @@ func (s *assistantConversationService) createTurnPG(ctx context.Context, tenantI
 		return nil, decision.Error
 	}
 	dryRun := assistantBuildDryRunFn(intent, candidates, resolvedCandidateID)
+	dryRun = s.enrichCreateOrgUnitDryRunWithPolicy(ctx, tenantID, intent, candidates, resolvedCandidateID, dryRun)
 	tempTurn := &assistantTurn{Intent: intent, Plan: plan, Candidates: candidates, ResolvedCandidateID: resolvedCandidateID, DryRun: dryRun}
 	if err := s.refreshTurnVersionTuple(ctx, tenantID, tempTurn); err != nil {
 		return nil, err
@@ -652,6 +653,10 @@ func (s *assistantConversationService) applyConfirmTurn(conversation *assistantC
 	}
 	if turn.Intent.Action == assistantIntentCreateOrgUnit {
 		turn.DryRun = assistantBuildDryRunFn(turn.Intent, turn.Candidates, turn.ResolvedCandidateID)
+		turn.DryRun = s.enrichCreateOrgUnitDryRunWithPolicy(context.Background(), conversation.TenantID, turn.Intent, turn.Candidates, turn.ResolvedCandidateID, turn.DryRun)
+		if assistantTurnHasValidationCode(turn, "FIELD_REQUIRED_VALUE_MISSING") || assistantTurnHasValidationCode(turn, "PATCH_FIELD_NOT_ALLOWED") {
+			return assistantTurnMutationResult{}, errAssistantConfirmationRequired
+		}
 	}
 	if err := s.refreshTurnVersionTuple(context.Background(), conversation.TenantID, turn); err != nil {
 		return assistantTurnMutationResult{}, err
