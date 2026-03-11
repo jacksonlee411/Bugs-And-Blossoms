@@ -86,6 +86,7 @@
 4. [ ] 与 `243` 的关系：`245` 必须把 `Clarification` 作为唯一澄清事实源；澄清文案只可表达 `243` 已裁决出的 `kind / reason_codes / prompt_template_id / current_round / exit_to`，不得自己造第二套追问逻辑。
 5. [ ] 与 `244` 的关系：`244` 负责理解层资产与 prompt 清退，`245` 负责用户可见表达统一；`245` 必须遵守 `244` 对资产引用、版本冻结与散点清退的约束。
 6. [ ] 与 `246` 的关系：`245` 必须后置；若 `243/244` 尚未冻结澄清与理解资产边界，不得提前进行大规模 reply 主链改写。
+7. [ ] 与 `240E` 的 `Context Template Registry` 的关系：`245` 的模板变量白名单只约束 reply 模板插值；凡是进入模型提示或上下文装配的字段，仍必须受 `240E` 已冻结的 `Context Template Registry` 管控，`245` 不得形成第二套注入准入规则。
 
 ## 5. Reply 资产契约（冻结）
 
@@ -146,6 +147,20 @@
    - [ ] 对应实现文件；或
    - [ ] 对应错误码/契约来源。
 
+### 5.6 资产选择与冲突消解（冻结）
+1. [ ] 首期 `Reply Guidance Pack` 的稳定选择键冻结为：`reply_kind + locale + optional error_code`。
+2. [ ] 编译期必须阻断以下歧义：
+   - [ ] 同一 `(reply_kind, locale)` 下最多只允许一份“通用 pack”（`error_codes[]` 为空）；
+   - [ ] 同一 `(reply_kind, locale)` 下，同一 `error_code` 不得同时出现在多个 pack；
+   - [ ] 首期单个 pack 中 `guidance_templates[]` 仅允许一份模板；若多于一份，视为把选择逻辑偷回运行时，必须在编译期失败。
+3. [ ] 运行时选择顺序冻结为：
+   - [ ] `exact locale + exact error_code`；
+   - [ ] `exact locale + generic pack`；
+   - [ ] `default locale + exact error_code`；
+   - [ ] `default locale + generic pack`；
+   - [ ] 若仍未命中，进入受控 fallback。
+4. [ ] `error_codes[]` 的语义是“适用范围白名单”，不是另一套业务判断 DSL；reply 不得根据底层原始异常文本做自由路由。
+
 ## 6. 运行时模型与 Realizer 边界（冻结）
 
 ### 6.1 Reply Realizer 的职责
@@ -157,23 +172,26 @@
    - [ ] task 状态推进；
    - [ ] API 错误码映射。
 3. [ ] 它要做：
-   - [ ] 选择 `reply_kind`；
+   - [ ] 只消费已经规范化的 `reply_kind`；
    - [ ] 装配 reply 输入骨架；
    - [ ] 查找 `Reply Guidance Pack`；
    - [ ] 渲染模板或构造模型提示；
    - [ ] 执行受控 fallback；
    - [ ] 输出用户文本与审计快照。
+4. [ ] `reply_kind` 的归一化职责只能存在一个入口：`assistantBuildReplyRealizerInput(...)`（或等价归一化函数）。
+5. [ ] `assistantRealizeReply(...)` 只能消费已归一化输入，不得再根据原始 `stage / outcome / error text / reply text` 二次重算 `reply_kind`。
+6. [ ] 真相优先级冻结为：结构化事实（`RouteDecision / Clarification / commit/task 只读投影`） > `Machine` 中的只读事实投影 > 兼容期 `StageHint/OutcomeHint`；若发生冲突，必须以结构化事实为准并留下受控审计信号。
 
 ### 6.2 建议数据结构（冻结）
 1. [ ] 建议新增或收敛为以下结构：
 ```go
 type assistantReplyRealizerInput struct {
-    Stage                  string
-    Kind                   string
+    StageHint              string
+    ResolvedReplyKind      string
     Locale                 string
-    Outcome                string
+    OutcomeHint            string
     ErrorCode              string
-    ErrorMessage           string
+    ErrorExplanation       string
     RouteDecision          assistantIntentRouteDecision
     Clarification          *assistantClarificationDecision
     Machine                assistantReplyMachineState
@@ -202,6 +220,8 @@ type assistantReplyRealizerOutput struct {
 ```
 2. [ ] 结构名可按实现调整，但职责必须分离为：输入骨架、资产选择结果、最终输出结果三层。
 3. [ ] `assistantRenderReplyResponse` 可以继续作为 API 出口 DTO，但不应再直接承载所有 realizer 中间语义。
+4. [ ] `assistantBuildReplyRealizerInput(...)` 是唯一允许把 `stage / route / clarification / task / commit` 归一为 `ResolvedReplyKind` 的地方；其他 helper 不得各自再推一遍 reply 分类。
+5. [ ] 若实现确需保留原始错误文本，只能作为内部诊断信号存在，不得进入模板变量白名单，也不得直接进入用户可见文本。
 
 ### 6.3 `assistantReplyMachineState` 扩面方向
 1. [ ] 在不重算事实的前提下，允许把以下只读字段纳入 machine state：
@@ -229,6 +249,7 @@ type assistantReplyRealizerOutput struct {
    - [ ] `{task_status}`
 2. [ ] 禁止模板直接访问任意 JSON 路径、任意 map key 或模型自由推断字段。
 3. [ ] 如需新增变量，必须同步更新测试与执行记录，不得在模型 prompt 中偷偷注入新字段。
+4. [ ] 本白名单只覆盖 reply 模板插值；凡是需要进入模型 prompt 或上下文模板的字段，仍以 `240E` 的 `Context Template Registry` 为唯一准入主源。
 
 ## 7. Reply 场景与阶段映射（冻结）
 1. [ ] `245` 不要求立刻废弃现有 `stage` 字段，但要求建立 `stage -> reply_kind` 的稳定映射表。
@@ -244,6 +265,8 @@ type assistantReplyRealizerOutput struct {
    - [ ] task `manual_takeover_required` → `manual_takeover`
    - [ ] `route_kind != business_action` → `non_business_route`
 3. [ ] 若 stage 与结构化事实冲突，必须以结构化事实优先，并记录受控错误；不得凭文本内容猜测真实状态。
+4. [ ] `stage -> reply_kind` 映射只是一条兼容期归一规则，不是第二套真相源；长期以结构化事实直接产出 `ResolvedReplyKind` 为目标。
+5. [ ] 首期实现中，`reply_kind` 只能在 `assistantBuildReplyRealizerInput(...)` 中归一一次；`assistantReplyStage(...)`、`assistantReplyKind(...)`、`assistantReplyFallbackText(...)` 等既有 helper 若继续存在，只能退化为兼容输入或受控 fallback，不得继续各自维护独立分类表。
 
 ## 8. 直接实施范围与文件落点
 
@@ -284,7 +307,13 @@ type assistantReplyRealizerOutput struct {
 2. [ ] `docs/dev-records/dev-plan-245-execution-log.md`
    - [ ] 记录迁移的 helper 文案、资产样例清单、未清退项与原因。
 
-## 9. 实施顺序（可直接开工）
+## 9. 实施顺序（在 `243/244` 封板后可直接开工）
+
+### 9.0 开工前提（冻结）
+1. [ ] `241` 已提供可复用的 `ReplyGuidanceVersion`、`knowledge_snapshot_digest`、Resolver 与最小知识快照审计口径。
+2. [ ] `243` 已冻结 `Clarification` 的结构化输出、轮次上限、退出语义与恢复后重跑主链口径。
+3. [ ] `244` 已冻结理解资产引用规范、版本口径与散点 prompt/规则清退边界。
+4. [ ] 若以上前提未满足，`245` 只允许继续做文档盘点、迁移矩阵与资产样例准备，不得启动 reply 主链改写。
 
 ### 9.1 PR-245-01：reply 资产盘点与场景矩阵
 1. [ ] 盘点当前用户可见 reply 来源：
@@ -301,8 +330,10 @@ type assistantReplyRealizerOutput struct {
 1. [ ] 在 `assistant_knowledge_runtime.go` 中强化 reply 资产校验：
    - [ ] `reply_kind` 非空且受控；
    - [ ] `guidance_templates[]` 中 `template_id` 唯一；
+   - [ ] 单个 pack 的 `guidance_templates[]` 数量首期强制为 1；
    - [ ] `tone_constraints[] / negative_examples[]` 清洗去空；
    - [ ] `error_codes[]` 全部属于已知错误码；
+   - [ ] 同一 `(reply_kind, locale)` 下 pack 选择不会产生歧义；
    - [ ] `source_refs[]` 全部有效。
 2. [ ] 新增 `findReplyGuidance(replyKind, locale)` 或等价接口，支持 locale fallback。
 3. [ ] 验收：
@@ -370,15 +401,19 @@ type assistantReplyRealizerOutput struct {
 2. [ ] `TestAssistantCompileKnowledgeRuntime_RejectsUnknownReplyGuidanceErrorCode`
 3. [ ] `TestAssistantCompileKnowledgeRuntime_RejectsInvalidReplyGuidanceSourceRefs`
 4. [ ] `TestAssistantCompileKnowledgeRuntime_RejectsEmptyReplyKind`
+5. [ ] `TestAssistantCompileKnowledgeRuntime_RejectsAmbiguousReplyGuidancePackSelection`
+6. [ ] `TestAssistantCompileKnowledgeRuntime_RejectsMultipleTemplatesInSinglePack`
 
 ### 10.3 Realizer 纯函数路径
 1. [ ] `TestAssistantBuildReplyRealizerInput_MissingFields`
 2. [ ] `TestAssistantBuildReplyRealizerInput_ClarificationRequired`
 3. [ ] `TestAssistantBuildReplyRealizerInput_TaskWaiting`
-4. [ ] `TestAssistantRealizeReply_UsesGuidanceTemplate`
-5. [ ] `TestAssistantRealizeReply_FallbackWhenGuidanceMissing`
-6. [ ] `TestAssistantRealizeReply_SanitizesTechnicalSignals`
-7. [ ] `TestAssistantRealizeReply_DoesNotContradictCommitResult`
+4. [ ] `TestAssistantBuildReplyRealizerInput_StructuredFactsOverrideStageHint`
+5. [ ] `TestAssistantRealizeReply_UsesGuidanceTemplate`
+6. [ ] `TestAssistantRealizeReply_FallbackWhenGuidanceMissing`
+7. [ ] `TestAssistantRealizeReply_SanitizesTechnicalSignals`
+8. [ ] `TestAssistantRealizeReply_DoesNotContradictCommitResult`
+9. [ ] `TestAssistantRealizeReply_DoesNotLeakRawErrorMessage`
 
 ### 10.4 Pipeline / API 路径
 1. [ ] `TestAssistantRenderTurnReply_MissingFieldsUsesReplyGuidance`
@@ -404,6 +439,7 @@ type assistantReplyRealizerOutput struct {
 5. [ ] `reply_guidance_version / knowledge_snapshot_digest` 能随资产变化稳定审计。
 6. [ ] 技术错误信号不会大面积直接出现在用户可见文本中。
 7. [ ] 能用代码、资产、测试、执行记录四类证据证明“用户可见反馈已主要由知识主链生成，而不是由散点 helper 拼接”。
+8. [ ] `reply_kind` 已具备唯一归一入口与冲突优先级，不再由多个 helper 并行维护第二套分类真相。
 
 ## 12. 停止线（Fail-Closed）
 1. [ ] 若 `245` 最终只是补几份 reply JSON，而 `assistant_reply_nlg.go` 仍主要依赖硬编码 fallback 拼文案，本计划失败。
@@ -412,6 +448,7 @@ type assistantReplyRealizerOutput struct {
 4. [ ] 若 `245` 为了方便而重新把澄清/缺字段/候选/成功回执拆回多个 helper，各自维护不同表达逻辑，本计划失败。
 5. [ ] 若 fallback 继续成为主入口，而非资产缺失时的受控兜底，本计划失败。
 6. [ ] 若 `245` 反向侵入 `242/243` 去重算 route/clarification 真相，本计划失败。
+7. [ ] 若同一 reply 场景仍可由多个 helper 独立重算 `reply_kind`，或 pack/template 选择存在歧义，本计划失败。
 
 ## 13. 门禁与本地验证入口
 1. [ ] 文档与实现触发器以 `AGENTS.md` 与 `docs/dev-plans/012-ci-quality-gates.md` 为准。
