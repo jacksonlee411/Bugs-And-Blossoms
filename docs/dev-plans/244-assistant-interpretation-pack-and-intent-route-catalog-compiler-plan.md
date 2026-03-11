@@ -79,6 +79,7 @@
 4. [ ] 与 `243` 的关系：`243` 的澄清裁决与恢复仍是唯一主链；`244` 仅负责保证 `clarification_template_id`、`required_slots[]`、`negative_examples[]` 的来源稳定，不得直接替代 `Clarification` builder。
 5. [ ] 与 `245` 的关系：`244` 允许定义理解层模板引用，但不负责最终用户可见回复措辞统一；若发现需求已进入 reply 表达，应转交 `245`。
 6. [ ] 与 `246` 的关系：`244` 必须遵守“**不阻塞 `242/243` 最小 runtime**”原则；若某项治理扩面无法证明会直接降低散点依赖，应后置，不得拖慢前序阶段封板。
+7. [ ] 术语关系冻结：`clarification_template_id` 只在 `Intent Route Catalog` 中作为静态引用键存在；进入 `243` 的 `assistantClarificationDecision` 后，统一落为 `prompt_template_id` 审计字段，避免运行时 DTO 再保留第二套模板 ID 命名。
 
 ## 5. 资产契约（冻结）
 
@@ -146,7 +147,8 @@
 8. [ ] `clarification_template_id` 语义冻结：
    - [ ] 若非空，必须能在目标 interpretation pack 中找到；
    - [ ] 不允许引用 reply guidance 模板或 action view 模板；
-   - [ ] 不允许跨 pack 使用未声明用途的模板。
+   - [ ] 不允许跨 pack 使用未声明用途的模板；
+   - [ ] 其职责仅限“为 `243` 提供可解析模板引用键”，不得直接扩张成运行时状态字段。
 9. [ ] `keywords[]` 语义冻结：
    - [ ] 仅用于当前最小 runtime 的文本匹配辅助；
    - [ ] 不得把 `keywords[]` 膨胀为复杂 DSL；
@@ -254,7 +256,13 @@
    - [ ] 记录每次 `route_catalog_version / knowledge_snapshot_digest` 变化的原因归类。
 2. [ ] 若新增治理附表，必须放在 `docs/dev-records/`，不得在仓库根目录新增 `.md`。
 
-## 8. 实施顺序（可直接开工）
+## 8. 实施顺序（在 `242` 接口冻结后可直接开工）
+
+### 8.0 开工前提（冻结）
+1. [ ] `241` 已冻结 `knowledge_snapshot_digest / route_catalog_version / Resolver / plan_context_v1` 的最小口径，确保 `244` 不会一边做治理一边改动基础审计主线。
+2. [ ] `242` 已冻结最小 route runtime 接口，至少明确 `intent_id / route_kind / reason_codes / clarification_required / route_catalog_version / knowledge_snapshot_digest` 的消费口径。
+3. [ ] 若 `243` 尚未启动，`244` 仍可先做资产盘点、契约加固、编译器分层与迁移清单；但不得要求 `243` 先等待 `244` 全量落地才定义澄清主链。
+4. [ ] 若以上前提未满足，`244` 只允许做文档盘点与样例准备，不得把未冻结的 runtime 假设写死到资产契约中。
 
 ### 8.1 PR-244-01：资产盘点与停止线清单
 1. [ ] 盘点仓内所有理解层散点来源：

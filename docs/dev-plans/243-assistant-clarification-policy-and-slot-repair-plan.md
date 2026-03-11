@@ -66,7 +66,7 @@
    - [ ] `knowledge_snapshot_digest`。
 2. [ ] `241` 已提供最小知识快照与 Resolver 运行时，使 `243` 可以读取：
    - [ ] `required_slots[]`；
-   - [ ] `clarification_template_id`；
+   - [ ] route catalog 中声明的 `clarification_template_id`；
    - [ ] 解释性字段展示或错误解释骨架。
 3. [ ] 若任一 turn 缺少 `route_decision` 或缺少知识版本字段，`243` 必须 fail-closed，而不是回退到旧的 `plan_only` 或本地硬猜逻辑。
 4. [ ] `241/242` 必须已明确以下口径，`243` 只允许消费，不允许重定义：
@@ -98,6 +98,10 @@
    - [ ] `knowledge_snapshot_digest` 为澄清主版本锚点，必须可追溯到当次消费的 `route_catalog / resolver_contract / context_template` 版本集合；
    - [ ] `route_catalog_version` 作为便于审阅的显式字段保留；
    - [ ] 若后续实现发现仅凭 `knowledge_snapshot_digest` 无法稳定复核澄清输入，必须先回写本计划，再扩充 DTO 版本字段。
+5. [ ] 术语关系冻结：
+   - [ ] `clarification_template_id` 是 `Intent Route Catalog` 中的**静态引用键**；
+   - [ ] `prompt_template_id` 是 `assistantClarificationDecision` 中落地到 turn 审计事实的**已解析模板 ID**；
+   - [ ] 首期若无额外重写规则，二者可以取同一值；但运行时与审计层统一使用 `prompt_template_id`，避免 DTO 与资产层再次分叉命名。
 
 ### 5.2 phase 语义冻结
 1. [ ] 保留现有 phase：
