@@ -18,7 +18,7 @@
 ### 2.1 核心目标
 1. [ ] 为 `240E` 定义的四类知识资产落地最小 schema、Loader 与语义校验能力。
 2. [ ] 在运行时建立最小 `Readonly Resolver` 分层，实现对会话快照、业务对象事实、动作契约投影与错误解释的结构化只读查询。
-3. [ ] 在 turn/task 审计链中显式记录 `knowledge_pack_digest / route_catalog_version / resolver_contract_version / context_template_version / reply_guidance_version`。
+3. [ ] 在 turn/task 审计链中显式记录 `knowledge_snapshot_digest / route_catalog_version / resolver_contract_version / context_template_version / reply_guidance_version`。
 4. [ ] 仅在受控模板下，把知识资产与 Resolver 结果接入一个动作、一个阶段的最小闭环，验证知识层不会与执行主链形成双主源。
 5. [ ] 让 `knowledge_qa/chitchat` 非动作样例成为一等公民，验证非动作输入不会误入 `confirm/commit`。
 
@@ -57,6 +57,7 @@
    - [ ] `org.orgunit_create` 的 `Action View Pack`；
    - [ ] `org.orgunit_create` 所需的最小 `Interpretation Pack`；
    - [ ] 一个 `knowledge_qa/chitchat` 的 `Interpretation Pack`；
+   - [ ] 一个最小 `Reply Guidance Pack` 样例（即使首批暂不接入 `reply` 运行时，也必须完成 schema 与版本冻结）；
    - [ ] 对应的 `Intent Route Catalog` 样例。
 3. [ ] 首期支持语言冻结为 `zh/en`。
 4. [ ] 若某项知识无法被结构化进上述资产类型，则视为知识设计未成熟，不得先以原文直塞方式进入运行时。
@@ -109,7 +110,7 @@
 ## 9. 版本快照与审计收口
 1. [ ] 版本快照必须前置，不得等到运行时大面积接线后再补。
 2. [ ] 首期至少纳入以下字段：
-   - [ ] `knowledge_pack_digest`
+   - [ ] `knowledge_snapshot_digest`
    - [ ] `route_catalog_version`
    - [ ] `resolver_contract_version`
    - [ ] `context_template_version`
@@ -129,10 +130,10 @@
    - [ ] 运行时能按资产类型与标识取到唯一工件；
    - [ ] 坏 schema、重复键、非法引用直接 fail-closed；
    - [ ] `source_refs[]` 与 locale 校验通过；
-   - [ ] `knowledge_pack_digest` 可稳定复算。
+   - [ ] `knowledge_snapshot_digest` 可稳定复算。
 
 ### 10.2 PR-241-02：版本快照与审计前置
-1. [ ] 将 `knowledge_pack_digest / route_catalog_version / resolver_contract_version / context_template_version / reply_guidance_version` 纳入 turn/task 快照。
+1. [ ] 将 `knowledge_snapshot_digest / route_catalog_version / resolver_contract_version / context_template_version / reply_guidance_version` 纳入 turn/task 快照。
 2. [ ] DoD：
    - [ ] 任意一次对话都可追溯知识版本；
    - [ ] 知识变更可被证据新鲜度规则识别；
@@ -159,7 +160,7 @@
 
 ### 10.5 PR-241-05：非动作样例与后续扩面准备
 1. [ ] 验证 `knowledge_qa/chitchat` 至少一种样例能被稳定分流。
-2. [ ] 为 `reply_context_v1` 预留资产与版本口径，但不在本批次中强行扩大接线范围。
+2. [ ] 为 `reply_context_v1` 预留资产与版本口径；首批需提供最小 `Reply Guidance Pack` 样例，但不在本批次中强行扩大运行时接线范围。
 3. [ ] DoD：
    - [ ] 非动作样例成为一等公民，而非测试补丁；
    - [ ] 扩面条件清晰：必须以首批证据稳定为前提。
