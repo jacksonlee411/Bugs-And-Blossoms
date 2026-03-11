@@ -97,7 +97,11 @@ func TestAssistantKnowledgeRuntime_CompileValidation(t *testing.T) {
 			PackID:           "knowledge.general_qa",
 			KnowledgeVersion: "2026-03-11.v1",
 			Locale:           "zh",
-			SourceRefs:       []string{"docs/dev-plans/241-assistant-knowledge-pack-runtime-minimal-implementation-plan.md"},
+			IntentClasses:    []string{assistantRouteKindKnowledgeQA},
+			ClarificationPrompts: []assistantKnowledgePrompt{
+				{TemplateID: "clarify.knowledge.general_qa.v1", Text: "这是知识问答场景"},
+			},
+			SourceRefs: []string{"docs/dev-plans/241-assistant-knowledge-pack-runtime-minimal-implementation-plan.md"},
 		},
 	}
 	replyGuidance := []assistantReplyGuidancePack{

@@ -1,6 +1,6 @@
 {
   "asset_type": "intent_route_catalog",
-  "route_catalog_version": "2026-03-11.v1",
+  "route_catalog_version": "2026-03-11.v2",
   "source_refs": [
     "docs/dev-plans/240e-assistant-internal-knowledge-pack-and-readonly-resolver-plan.md",
     "docs/dev-plans/241-assistant-knowledge-pack-runtime-minimal-implementation-plan.md"
@@ -55,6 +55,21 @@
         "hi",
         "hello",
         "thanks"
+      ]
+    },
+    {
+      "intent_id": "route.uncertain",
+      "route_kind": "uncertain",
+      "required_slots": [],
+      "min_confidence": 0.2,
+      "clarification_template_id": "clarify.route.uncertain.v1",
+      "keywords": [
+        "没想好",
+        "不确定",
+        "还在考虑",
+        "not sure",
+        "maybe",
+        "not decided"
       ]
     }
   ]

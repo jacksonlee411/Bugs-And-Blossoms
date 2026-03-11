@@ -149,13 +149,13 @@ func assistantBuildIntentRouteDecision(
 	}
 	if decision.RouteCatalogVersion == "" {
 		decision.ReasonCodes = append(decision.ReasonCodes, assistantRouteReasonCatalogVersionMissing)
-		decision.RouteCatalogVersion = "legacy-route-catalog"
+		decision.RouteCatalogVersion = "fallback-route-catalog"
 	}
 	if decision.KnowledgeSnapshotDigest == "" {
-		decision.KnowledgeSnapshotDigest = "legacy-knowledge-snapshot"
+		decision.KnowledgeSnapshotDigest = "fallback-knowledge-snapshot"
 	}
 	if decision.ResolverContractVersion == "" {
-		decision.ResolverContractVersion = "legacy-resolver-contract"
+		decision.ResolverContractVersion = "fallback-resolver-contract"
 	}
 
 	actionID := strings.TrimSpace(projected.Action)
@@ -289,14 +289,14 @@ func assistantActionGateRouteDecision(input assistantActionGateInput) (assistant
 	if input.Turn != nil && assistantIntentRouteDecisionPresent(input.Turn.RouteDecision) {
 		return input.Turn.RouteDecision, true
 	}
-	legacy := assistantLegacyRouteDecision(input)
-	if assistantIntentRouteDecisionPresent(legacy) {
-		return legacy, true
+	compat := assistantCompatRouteDecision(input)
+	if assistantIntentRouteDecisionPresent(compat) {
+		return compat, true
 	}
 	return assistantIntentRouteDecision{}, false
 }
 
-func assistantLegacyRouteDecision(input assistantActionGateInput) assistantIntentRouteDecision {
+func assistantCompatRouteDecision(input assistantActionGateInput) assistantIntentRouteDecision {
 	intent := input.Intent
 	if input.Turn != nil && strings.TrimSpace(intent.Action) == "" {
 		intent = input.Turn.Intent
@@ -317,16 +317,16 @@ func assistantLegacyRouteDecision(input assistantActionGateInput) assistantInten
 		RouteKind:               routeKind,
 		IntentID:                strings.TrimSpace(intent.IntentID),
 		ConfidenceBand:          assistantRouteConfidenceMedium,
-		RouteCatalogVersion:     "legacy-route-catalog",
-		KnowledgeSnapshotDigest: "legacy-knowledge-snapshot",
-		ResolverContractVersion: "legacy-resolver-contract",
-		DecisionSource:          "legacy_projection",
+		RouteCatalogVersion:     "fallback-route-catalog",
+		KnowledgeSnapshotDigest: "fallback-knowledge-snapshot",
+		ResolverContractVersion: "fallback-resolver-contract",
+		DecisionSource:          "compat_projection",
 	}
 	if decision.IntentID == "" {
 		if actionID := strings.TrimSpace(intent.Action); actionID != "" && actionID != assistantIntentPlanOnly {
 			decision.IntentID = "action." + actionID
 		} else {
-			decision.IntentID = "route.legacy"
+			decision.IntentID = "route.compat"
 		}
 	}
 	if routeKind == assistantRouteKindBusinessAction {

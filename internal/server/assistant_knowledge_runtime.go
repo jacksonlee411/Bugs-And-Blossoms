@@ -19,6 +19,9 @@ const (
 	assistantRouteKindChitchat       = "chitchat"
 	assistantRouteKindUncertain      = "uncertain"
 
+	assistantInterpretationDefaultPackID = "knowledge.general_qa"
+	assistantRouteFallbackUncertainID    = "route.uncertain"
+
 	assistantResolverContractVersionV1 = "resolver_contract_v1"
 	assistantContextTemplateVersionV1  = "plan_context_v1"
 )
@@ -156,11 +159,27 @@ type assistantKnowledgeRuntime struct {
 	ResolverContractVersion string
 	ContextTemplateVersion  string
 
-	routeCatalog   assistantIntentRouteCatalog
-	routeByAction  map[string]assistantIntentRouteEntry
-	interpretation map[string]map[string]assistantInterpretationPack
-	actionView     map[string]map[string]assistantActionViewPack
-	replyGuidance  map[string]map[string]assistantReplyGuidancePack
+	routeCatalog             assistantIntentRouteCatalog
+	routeByIntent            map[string]assistantIntentRouteEntry
+	routeByAction            map[string]assistantIntentRouteEntry
+	interpretation           map[string]map[string]assistantInterpretationPack
+	interpretationTemplateID map[string]map[string]map[string]assistantKnowledgePrompt
+	routePackID              map[string]string
+	actionView               map[string]map[string]assistantActionViewPack
+	replyGuidance            map[string]map[string]assistantReplyGuidancePack
+}
+
+type assistantCompiledInterpretationAssets struct {
+	ByPack     map[string]map[string]assistantInterpretationPack
+	ByTemplate map[string]map[string]map[string]assistantKnowledgePrompt
+}
+
+type assistantCompiledIntentRouteCatalog struct {
+	Catalog         assistantIntentRouteCatalog
+	ByIntent        map[string]assistantIntentRouteEntry
+	ByAction        map[string]assistantIntentRouteEntry
+	PackByIntentID  map[string]string
+	TemplateByRoute map[string]string
 }
 
 type assistantConversationSnapshotResolverResult struct {
@@ -304,71 +323,17 @@ func assistantCompileKnowledgeRuntime(
 	replyGuidance []assistantReplyGuidancePack,
 	rawByPath map[string][]byte,
 ) (*assistantKnowledgeRuntime, error) {
-	if strings.TrimSpace(catalog.AssetType) != "intent_route_catalog" {
-		return nil, fmt.Errorf("%w: intent route catalog asset_type invalid", errAssistantRuntimeConfigInvalid)
-	}
-	if strings.TrimSpace(catalog.RouteCatalogVersion) == "" {
-		return nil, fmt.Errorf("%w: route_catalog_version required", errAssistantRuntimeConfigInvalid)
-	}
-	if err := assistantValidateSourceRefs(catalog.SourceRefs); err != nil {
-		return nil, fmt.Errorf("%w: route catalog source_refs invalid: %v", errAssistantRuntimeConfigInvalid, err)
-	}
 	if err := assistantValidateForbiddenKeys(rawByPath); err != nil {
 		return nil, fmt.Errorf("%w: %v", errAssistantRuntimeConfigInvalid, err)
 	}
 
-	routeByIntentID := make(map[string]assistantIntentRouteEntry, len(catalog.Entries))
-	routeByAction := make(map[string]assistantIntentRouteEntry)
-	for _, entry := range catalog.Entries {
-		if strings.TrimSpace(entry.IntentID) == "" {
-			return nil, fmt.Errorf("%w: intent_id required", errAssistantRuntimeConfigInvalid)
-		}
-		intentID := strings.TrimSpace(entry.IntentID)
-		if _, exists := routeByIntentID[intentID]; exists {
-			return nil, fmt.Errorf("%w: duplicated intent_id %s", errAssistantRuntimeConfigInvalid, intentID)
-		}
-		if !assistantValidRouteKind(entry.RouteKind) {
-			return nil, fmt.Errorf("%w: invalid route_kind %s", errAssistantRuntimeConfigInvalid, entry.RouteKind)
-		}
-		if strings.TrimSpace(entry.RouteKind) == assistantRouteKindBusinessAction {
-			actionID := strings.TrimSpace(entry.ActionID)
-			if actionID == "" {
-				return nil, fmt.Errorf("%w: action_id required for business_action", errAssistantRuntimeConfigInvalid)
-			}
-			if _, ok := assistantLookupDefaultActionSpec(actionID); !ok {
-				return nil, fmt.Errorf("%w: action_id not registered %s", errAssistantRuntimeConfigInvalid, actionID)
-			}
-			routeByAction[actionID] = entry
-		}
-		routeByIntentID[intentID] = entry
+	compiledInterpretation, err := assistantCompileInterpretationAssets(interpretation)
+	if err != nil {
+		return nil, err
 	}
-
-	interpretationIndex := make(map[string]map[string]assistantInterpretationPack)
-	for _, pack := range interpretation {
-		if strings.TrimSpace(pack.AssetType) != "interpretation_pack" {
-			return nil, fmt.Errorf("%w: interpretation asset_type invalid", errAssistantRuntimeConfigInvalid)
-		}
-		if strings.TrimSpace(pack.PackID) == "" {
-			return nil, fmt.Errorf("%w: interpretation pack_id required", errAssistantRuntimeConfigInvalid)
-		}
-		if !assistantValidLocale(pack.Locale) {
-			return nil, fmt.Errorf("%w: interpretation locale invalid %s", errAssistantRuntimeConfigInvalid, pack.Locale)
-		}
-		if len(pack.SourceRefs) == 0 {
-			return nil, fmt.Errorf("%w: interpretation source_refs required", errAssistantRuntimeConfigInvalid)
-		}
-		if err := assistantValidateSourceRefs(pack.SourceRefs); err != nil {
-			return nil, fmt.Errorf("%w: interpretation source_refs invalid: %v", errAssistantRuntimeConfigInvalid, err)
-		}
-		packID := strings.TrimSpace(pack.PackID)
-		locale := strings.TrimSpace(pack.Locale)
-		if _, ok := interpretationIndex[packID]; !ok {
-			interpretationIndex[packID] = make(map[string]assistantInterpretationPack)
-		}
-		if _, duplicated := interpretationIndex[packID][locale]; duplicated {
-			return nil, fmt.Errorf("%w: duplicated interpretation pack %s locale %s", errAssistantRuntimeConfigInvalid, packID, locale)
-		}
-		interpretationIndex[packID][locale] = pack
+	compiledCatalog, err := assistantCompileIntentRouteCatalog(catalog, compiledInterpretation)
+	if err != nil {
+		return nil, err
 	}
 
 	actionViewIndex := make(map[string]map[string]assistantActionViewPack)
@@ -464,7 +429,7 @@ func assistantCompileKnowledgeRuntime(
 	if _, ok := actionViewIndex[assistantIntentCreateOrgUnit]; !ok {
 		return nil, fmt.Errorf("%w: missing create_orgunit action view pack", errAssistantRuntimeConfigInvalid)
 	}
-	if _, ok := interpretationIndex["knowledge.general_qa"]; !ok {
+	if _, ok := compiledInterpretation.ByPack[assistantInterpretationDefaultPackID]; !ok {
 		return nil, fmt.Errorf("%w: missing knowledge.general_qa interpretation pack", errAssistantRuntimeConfigInvalid)
 	}
 	if len(replyGuidanceIndex) == 0 {
@@ -478,12 +443,12 @@ func assistantCompileKnowledgeRuntime(
 	}
 
 	snapshotDigest := assistantKnowledgeCanonicalHashFn(map[string]any{
-		"route_catalog_version":     strings.TrimSpace(catalog.RouteCatalogVersion),
+		"route_catalog_version":     strings.TrimSpace(compiledCatalog.Catalog.RouteCatalogVersion),
 		"resolver_contract_version": assistantResolverContractVersionV1,
 		"context_template_version":  assistantContextTemplateVersionV1,
 		"reply_guidance_version":    replyGuidanceVersion,
-		"catalog":                   catalog,
-		"interpretation":            interpretation,
+		"catalog":                   compiledCatalog.Catalog,
+		"interpretation":            assistantSortedInterpretationPacks(compiledInterpretation.ByPack),
 		"action_view":               actionViews,
 		"reply_guidance":            replyGuidance,
 	})
@@ -492,17 +457,361 @@ func assistantCompileKnowledgeRuntime(
 	}
 
 	return &assistantKnowledgeRuntime{
-		SnapshotDigest:          snapshotDigest,
-		RouteCatalogVersion:     strings.TrimSpace(catalog.RouteCatalogVersion),
-		ReplyGuidanceVersion:    replyGuidanceVersion,
-		ResolverContractVersion: assistantResolverContractVersionV1,
-		ContextTemplateVersion:  assistantContextTemplateVersionV1,
-		routeCatalog:            catalog,
-		routeByAction:           routeByAction,
-		interpretation:          interpretationIndex,
-		actionView:              actionViewIndex,
-		replyGuidance:           replyGuidanceIndex,
+		SnapshotDigest:           snapshotDigest,
+		RouteCatalogVersion:      strings.TrimSpace(compiledCatalog.Catalog.RouteCatalogVersion),
+		ReplyGuidanceVersion:     replyGuidanceVersion,
+		ResolverContractVersion:  assistantResolverContractVersionV1,
+		ContextTemplateVersion:   assistantContextTemplateVersionV1,
+		routeCatalog:             compiledCatalog.Catalog,
+		routeByIntent:            compiledCatalog.ByIntent,
+		routeByAction:            compiledCatalog.ByAction,
+		interpretation:           compiledInterpretation.ByPack,
+		interpretationTemplateID: compiledInterpretation.ByTemplate,
+		routePackID:              compiledCatalog.PackByIntentID,
+		actionView:               actionViewIndex,
+		replyGuidance:            replyGuidanceIndex,
 	}, nil
+}
+
+func assistantCompileInterpretationAssets(interpretation []assistantInterpretationPack) (assistantCompiledInterpretationAssets, error) {
+	byPack := make(map[string]map[string]assistantInterpretationPack)
+	byTemplate := make(map[string]map[string]map[string]assistantKnowledgePrompt)
+	for _, rawPack := range interpretation {
+		if strings.TrimSpace(rawPack.AssetType) != "interpretation_pack" {
+			return assistantCompiledInterpretationAssets{}, fmt.Errorf("%w: interpretation asset_type invalid", errAssistantRuntimeConfigInvalid)
+		}
+		packID := strings.TrimSpace(rawPack.PackID)
+		if packID == "" {
+			return assistantCompiledInterpretationAssets{}, fmt.Errorf("%w: interpretation pack_id required", errAssistantRuntimeConfigInvalid)
+		}
+		knowledgeVersion := strings.TrimSpace(rawPack.KnowledgeVersion)
+		if knowledgeVersion == "" {
+			return assistantCompiledInterpretationAssets{}, fmt.Errorf("%w: interpretation knowledge_version required", errAssistantRuntimeConfigInvalid)
+		}
+		locale := strings.TrimSpace(rawPack.Locale)
+		if !assistantValidLocale(locale) {
+			return assistantCompiledInterpretationAssets{}, fmt.Errorf("%w: interpretation locale invalid %s", errAssistantRuntimeConfigInvalid, rawPack.Locale)
+		}
+		if len(rawPack.SourceRefs) == 0 {
+			return assistantCompiledInterpretationAssets{}, fmt.Errorf("%w: interpretation source_refs required", errAssistantRuntimeConfigInvalid)
+		}
+		if err := assistantValidateSourceRefs(rawPack.SourceRefs); err != nil {
+			return assistantCompiledInterpretationAssets{}, fmt.Errorf("%w: interpretation source_refs invalid: %v", errAssistantRuntimeConfigInvalid, err)
+		}
+
+		intentClasses, err := assistantNormalizeInterpretationIntentClasses(rawPack.IntentClasses)
+		if err != nil {
+			return assistantCompiledInterpretationAssets{}, fmt.Errorf("%w: %v", errAssistantRuntimeConfigInvalid, err)
+		}
+		prompts, templateLookup, err := assistantNormalizeInterpretationPrompts(packID, locale, rawPack.ClarificationPrompts)
+		if err != nil {
+			return assistantCompiledInterpretationAssets{}, fmt.Errorf("%w: %v", errAssistantRuntimeConfigInvalid, err)
+		}
+		negativeExamples, err := assistantNormalizeNegativeExamples(rawPack.NegativeExamples)
+		if err != nil {
+			return assistantCompiledInterpretationAssets{}, fmt.Errorf("%w: %v", errAssistantRuntimeConfigInvalid, err)
+		}
+
+		if _, ok := byPack[packID]; !ok {
+			byPack[packID] = make(map[string]assistantInterpretationPack)
+		}
+		if _, duplicated := byPack[packID][locale]; duplicated {
+			return assistantCompiledInterpretationAssets{}, fmt.Errorf("%w: duplicated interpretation pack %s locale %s", errAssistantRuntimeConfigInvalid, packID, locale)
+		}
+		if _, ok := byTemplate[packID]; !ok {
+			byTemplate[packID] = make(map[string]map[string]assistantKnowledgePrompt)
+		}
+		byTemplate[packID][locale] = templateLookup
+
+		normalized := rawPack
+		normalized.PackID = packID
+		normalized.Locale = locale
+		normalized.KnowledgeVersion = knowledgeVersion
+		normalized.IntentClasses = intentClasses
+		normalized.ClarificationPrompts = prompts
+		normalized.NegativeExamples = negativeExamples
+		byPack[packID][locale] = normalized
+	}
+	return assistantCompiledInterpretationAssets{
+		ByPack:     byPack,
+		ByTemplate: byTemplate,
+	}, nil
+}
+
+func assistantCompileIntentRouteCatalog(
+	catalog assistantIntentRouteCatalog,
+	interpretation assistantCompiledInterpretationAssets,
+) (assistantCompiledIntentRouteCatalog, error) {
+	if strings.TrimSpace(catalog.AssetType) != "intent_route_catalog" {
+		return assistantCompiledIntentRouteCatalog{}, fmt.Errorf("%w: intent route catalog asset_type invalid", errAssistantRuntimeConfigInvalid)
+	}
+	routeCatalogVersion := strings.TrimSpace(catalog.RouteCatalogVersion)
+	if routeCatalogVersion == "" {
+		return assistantCompiledIntentRouteCatalog{}, fmt.Errorf("%w: route_catalog_version required", errAssistantRuntimeConfigInvalid)
+	}
+	if err := assistantValidateSourceRefs(catalog.SourceRefs); err != nil {
+		return assistantCompiledIntentRouteCatalog{}, fmt.Errorf("%w: route catalog source_refs invalid: %v", errAssistantRuntimeConfigInvalid, err)
+	}
+
+	byIntent := make(map[string]assistantIntentRouteEntry, len(catalog.Entries))
+	byAction := make(map[string]assistantIntentRouteEntry)
+	packByIntentID := make(map[string]string, len(catalog.Entries))
+	templateByRoute := make(map[string]string, len(catalog.Entries))
+	normalizedEntries := make([]assistantIntentRouteEntry, 0, len(catalog.Entries))
+	for _, rawEntry := range catalog.Entries {
+		intentID := strings.TrimSpace(rawEntry.IntentID)
+		if intentID == "" {
+			return assistantCompiledIntentRouteCatalog{}, fmt.Errorf("%w: intent_id required", errAssistantRuntimeConfigInvalid)
+		}
+		if _, exists := byIntent[intentID]; exists {
+			return assistantCompiledIntentRouteCatalog{}, fmt.Errorf("%w: duplicated intent_id %s", errAssistantRuntimeConfigInvalid, intentID)
+		}
+
+		routeKind := strings.TrimSpace(rawEntry.RouteKind)
+		if !assistantValidRouteKind(routeKind) {
+			return assistantCompiledIntentRouteCatalog{}, fmt.Errorf("%w: invalid route_kind %s", errAssistantRuntimeConfigInvalid, rawEntry.RouteKind)
+		}
+		if rawEntry.MinConfidence < 0 || rawEntry.MinConfidence > 1 {
+			return assistantCompiledIntentRouteCatalog{}, fmt.Errorf("%w: min_confidence out of range for intent %s", errAssistantRuntimeConfigInvalid, intentID)
+		}
+
+		requiredSlots, err := assistantNormalizeRequiredSlots(rawEntry.RequiredSlots)
+		if err != nil {
+			return assistantCompiledIntentRouteCatalog{}, fmt.Errorf("%w: invalid required_slots for intent %s: %v", errAssistantRuntimeConfigInvalid, intentID, err)
+		}
+
+		actionID := strings.TrimSpace(rawEntry.ActionID)
+		switch routeKind {
+		case assistantRouteKindBusinessAction:
+			if actionID == "" {
+				return assistantCompiledIntentRouteCatalog{}, fmt.Errorf("%w: action_id required for business_action", errAssistantRuntimeConfigInvalid)
+			}
+			if _, ok := assistantLookupDefaultActionSpec(actionID); !ok {
+				return assistantCompiledIntentRouteCatalog{}, fmt.Errorf("%w: action_id not registered %s", errAssistantRuntimeConfigInvalid, actionID)
+			}
+			allowedSlots := assistantAllowedRequiredSlotsByAction(actionID)
+			for _, slot := range requiredSlots {
+				if _, ok := allowedSlots[slot]; !ok {
+					return assistantCompiledIntentRouteCatalog{}, fmt.Errorf("%w: invalid required_slot %s for action %s", errAssistantRuntimeConfigInvalid, slot, actionID)
+				}
+			}
+			if _, duplicated := byAction[actionID]; duplicated {
+				return assistantCompiledIntentRouteCatalog{}, fmt.Errorf("%w: duplicated route action_id %s", errAssistantRuntimeConfigInvalid, actionID)
+			}
+		default:
+			if actionID != "" {
+				return assistantCompiledIntentRouteCatalog{}, fmt.Errorf("%w: action_id must be empty for non-business route %s", errAssistantRuntimeConfigInvalid, intentID)
+			}
+		}
+
+		packID := assistantResolveInterpretationPackIDForIntent(intentID, routeKind, interpretation.ByPack)
+		if routeKind != assistantRouteKindBusinessAction && packID == "" {
+			return assistantCompiledIntentRouteCatalog{}, fmt.Errorf("%w: missing interpretation pack for non-business intent %s", errAssistantRuntimeConfigInvalid, intentID)
+		}
+		if packID != "" {
+			if !assistantInterpretationSupportsRouteKind(interpretation.ByPack[packID], routeKind) {
+				return assistantCompiledIntentRouteCatalog{}, fmt.Errorf("%w: interpretation intent_classes mismatch for intent %s route_kind %s", errAssistantRuntimeConfigInvalid, intentID, routeKind)
+			}
+			packByIntentID[intentID] = packID
+		}
+
+		clarificationTemplateID := strings.TrimSpace(rawEntry.ClarificationTemplateID)
+		if clarificationTemplateID != "" {
+			if packID == "" || !assistantInterpretationTemplateExists(interpretation.ByTemplate, packID, clarificationTemplateID) {
+				return assistantCompiledIntentRouteCatalog{}, fmt.Errorf("%w: unknown clarification_template_id %s for intent %s", errAssistantRuntimeConfigInvalid, clarificationTemplateID, intentID)
+			}
+			templateByRoute[intentID] = clarificationTemplateID
+		}
+
+		normalizedEntry := rawEntry
+		normalizedEntry.IntentID = intentID
+		normalizedEntry.RouteKind = routeKind
+		normalizedEntry.ActionID = actionID
+		normalizedEntry.RequiredSlots = requiredSlots
+		normalizedEntry.ClarificationTemplateID = clarificationTemplateID
+		byIntent[intentID] = normalizedEntry
+		if routeKind == assistantRouteKindBusinessAction {
+			byAction[actionID] = normalizedEntry
+		}
+		normalizedEntries = append(normalizedEntries, normalizedEntry)
+	}
+
+	catalogNormalized := catalog
+	catalogNormalized.RouteCatalogVersion = routeCatalogVersion
+	catalogNormalized.Entries = normalizedEntries
+	return assistantCompiledIntentRouteCatalog{
+		Catalog:         catalogNormalized,
+		ByIntent:        byIntent,
+		ByAction:        byAction,
+		PackByIntentID:  packByIntentID,
+		TemplateByRoute: templateByRoute,
+	}, nil
+}
+
+func assistantNormalizeInterpretationIntentClasses(classes []string) ([]string, error) {
+	if len(classes) == 0 {
+		return nil, errors.New("interpretation intent_classes required")
+	}
+	seen := make(map[string]struct{}, len(classes))
+	out := make([]string, 0, len(classes))
+	for _, item := range classes {
+		intentClass := strings.TrimSpace(item)
+		if intentClass == "" {
+			return nil, errors.New("interpretation intent_classes contains empty value")
+		}
+		if !assistantValidRouteKind(intentClass) {
+			return nil, fmt.Errorf("invalid intent_class %s", intentClass)
+		}
+		if _, exists := seen[intentClass]; exists {
+			continue
+		}
+		seen[intentClass] = struct{}{}
+		out = append(out, intentClass)
+	}
+	return out, nil
+}
+
+func assistantNormalizeInterpretationPrompts(
+	packID string,
+	locale string,
+	prompts []assistantKnowledgePrompt,
+) ([]assistantKnowledgePrompt, map[string]assistantKnowledgePrompt, error) {
+	lookup := make(map[string]assistantKnowledgePrompt, len(prompts))
+	out := make([]assistantKnowledgePrompt, 0, len(prompts))
+	for _, rawPrompt := range prompts {
+		templateID := strings.TrimSpace(rawPrompt.TemplateID)
+		if templateID == "" {
+			return nil, nil, errors.New("interpretation template_id required")
+		}
+		text := strings.TrimSpace(rawPrompt.Text)
+		if text == "" {
+			return nil, nil, fmt.Errorf("interpretation template text required for %s", templateID)
+		}
+		if _, duplicated := lookup[templateID]; duplicated {
+			return nil, nil, fmt.Errorf("duplicated interpretation template_id %s in pack %s locale %s", templateID, packID, locale)
+		}
+		prompt := assistantKnowledgePrompt{TemplateID: templateID, Text: text}
+		lookup[templateID] = prompt
+		out = append(out, prompt)
+	}
+	return out, lookup, nil
+}
+
+func assistantNormalizeNegativeExamples(values []string) ([]string, error) {
+	if len(values) == 0 {
+		return nil, nil
+	}
+	seen := make(map[string]struct{}, len(values))
+	out := make([]string, 0, len(values))
+	for _, value := range values {
+		example := strings.TrimSpace(value)
+		if example == "" {
+			return nil, errors.New("interpretation negative_examples contains empty value")
+		}
+		if _, exists := seen[example]; exists {
+			continue
+		}
+		seen[example] = struct{}{}
+		out = append(out, example)
+	}
+	return out, nil
+}
+
+func assistantNormalizeRequiredSlots(values []string) ([]string, error) {
+	if len(values) == 0 {
+		return nil, nil
+	}
+	seen := make(map[string]struct{}, len(values))
+	out := make([]string, 0, len(values))
+	for _, value := range values {
+		slot := strings.TrimSpace(value)
+		if slot == "" {
+			return nil, errors.New("required_slot empty")
+		}
+		if _, exists := seen[slot]; exists {
+			continue
+		}
+		seen[slot] = struct{}{}
+		out = append(out, slot)
+	}
+	return out, nil
+}
+
+func assistantAllowedRequiredSlotsByAction(actionID string) map[string]struct{} {
+	fields := assistantRequiredFieldsViewByAction(actionID)
+	out := make(map[string]struct{}, len(fields))
+	for _, field := range fields {
+		out[strings.TrimSpace(field)] = struct{}{}
+	}
+	return out
+}
+
+func assistantResolveInterpretationPackIDForIntent(intentID string, routeKind string, byPack map[string]map[string]assistantInterpretationPack) string {
+	if _, ok := byPack[intentID]; ok {
+		return intentID
+	}
+	switch routeKind {
+	case assistantRouteKindKnowledgeQA, assistantRouteKindChitchat, assistantRouteKindUncertain:
+		if _, ok := byPack[assistantInterpretationDefaultPackID]; ok {
+			return assistantInterpretationDefaultPackID
+		}
+	}
+	return ""
+}
+
+func assistantInterpretationSupportsRouteKind(locales map[string]assistantInterpretationPack, routeKind string) bool {
+	if len(locales) == 0 {
+		return false
+	}
+	for _, pack := range locales {
+		for _, intentClass := range pack.IntentClasses {
+			if strings.TrimSpace(intentClass) == strings.TrimSpace(routeKind) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func assistantInterpretationTemplateExists(
+	byTemplate map[string]map[string]map[string]assistantKnowledgePrompt,
+	packID string,
+	templateID string,
+) bool {
+	locales, ok := byTemplate[packID]
+	if !ok {
+		return false
+	}
+	for _, templates := range locales {
+		if _, exists := templates[templateID]; exists {
+			return true
+		}
+	}
+	return false
+}
+
+func assistantSortedInterpretationPacks(byPack map[string]map[string]assistantInterpretationPack) []assistantInterpretationPack {
+	if len(byPack) == 0 {
+		return nil
+	}
+	packIDs := make([]string, 0, len(byPack))
+	for packID := range byPack {
+		packIDs = append(packIDs, packID)
+	}
+	sort.Strings(packIDs)
+	out := make([]assistantInterpretationPack, 0, len(byPack)*2)
+	for _, packID := range packIDs {
+		locales := byPack[packID]
+		localeKeys := make([]string, 0, len(locales))
+		for locale := range locales {
+			localeKeys = append(localeKeys, locale)
+		}
+		sort.Strings(localeKeys)
+		for _, locale := range localeKeys {
+			out = append(out, locales[locale])
+		}
+	}
+	return out
 }
 
 func assistantValidateForbiddenKeys(rawByPath map[string][]byte) error {
@@ -643,6 +952,32 @@ func (runtime *assistantKnowledgeRuntime) findInterpretation(packID string, loca
 	return assistantInterpretationPack{}, false
 }
 
+func (runtime *assistantKnowledgeRuntime) resolveInterpretationPackID(intentID string, routeKind string) string {
+	intentID = strings.TrimSpace(intentID)
+	if runtime == nil {
+		return ""
+	}
+	if packID := strings.TrimSpace(runtime.routePackID[intentID]); packID != "" {
+		return packID
+	}
+	return assistantResolveInterpretationPackIDForIntent(intentID, routeKind, runtime.interpretation)
+}
+
+func (runtime *assistantKnowledgeRuntime) fallbackUncertainRoute() assistantIntentRouteEntry {
+	if runtime == nil {
+		return assistantIntentRouteEntry{IntentID: assistantRouteFallbackUncertainID, RouteKind: assistantRouteKindUncertain}
+	}
+	if entry, ok := runtime.routeByIntent[assistantRouteFallbackUncertainID]; ok {
+		return entry
+	}
+	for _, entry := range runtime.routeCatalog.Entries {
+		if strings.TrimSpace(entry.RouteKind) == assistantRouteKindUncertain {
+			return entry
+		}
+	}
+	return assistantIntentRouteEntry{IntentID: assistantRouteFallbackUncertainID, RouteKind: assistantRouteKindUncertain}
+}
+
 func (runtime *assistantKnowledgeRuntime) routeIntent(userInput string, intent assistantIntentSpec) assistantIntentSpec {
 	out := intent
 	actionID := strings.TrimSpace(out.Action)
@@ -684,9 +1019,16 @@ func (runtime *assistantKnowledgeRuntime) routeIntent(userInput string, intent a
 		out.RouteCatalogVersion = strings.TrimSpace(runtime.RouteCatalogVersion)
 		return out
 	}
+	fallback := runtime.fallbackUncertainRoute()
 	out.Action = assistantIntentPlanOnly
-	out.IntentID = "route.uncertain"
-	out.RouteKind = assistantRouteKindUncertain
+	out.IntentID = strings.TrimSpace(fallback.IntentID)
+	if out.IntentID == "" {
+		out.IntentID = assistantRouteFallbackUncertainID
+	}
+	out.RouteKind = strings.TrimSpace(fallback.RouteKind)
+	if out.RouteKind == "" {
+		out.RouteKind = assistantRouteKindUncertain
+	}
 	out.RouteCatalogVersion = strings.TrimSpace(runtime.RouteCatalogVersion)
 	return out
 }
@@ -756,13 +1098,13 @@ func (runtime *assistantKnowledgeRuntime) buildPlanContextV1(tenantID string, lo
 		intent.RouteKind = assistantRouteKindBusinessAction
 	}
 	if strings.TrimSpace(intent.RouteKind) != assistantRouteKindBusinessAction {
-		packID := strings.TrimSpace(intent.IntentID)
+		packID := runtime.resolveInterpretationPackID(intent.IntentID, intent.RouteKind)
 		if packID == "" {
-			packID = "knowledge.general_qa"
+			packID = assistantInterpretationDefaultPackID
 		}
 		pack, ok := runtime.findInterpretation(packID, locale)
 		if !ok {
-			pack, ok = runtime.findInterpretation("knowledge.general_qa", locale)
+			pack, ok = runtime.findInterpretation(assistantInterpretationDefaultPackID, locale)
 		}
 		if !ok {
 			return assistantPlanContextV1{}, fmt.Errorf("%w: interpretation pack missing for %s", errAssistantRuntimeConfigInvalid, packID)

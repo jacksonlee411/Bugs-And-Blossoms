@@ -1,6 +1,6 @@
 # DEV-PLAN-244：Assistant Interpretation Pack 与 Intent Route Catalog 编译治理计划
 
-**状态**: 规划中（2026-03-11 CST；本次修订将 `244` 细化为“可按文件直接实施”的理解层知识治理蓝图，承接 `240E` 主计划与 `246` 阶段 D，且保持“不阻塞 `242/243` 最小 runtime 落地”的路线约束）
+**状态**: 已完成（2026-03-11 CST；本轮已完成编译器分层、交叉引用 fail-closed 校验、`uncertain` 样例资产扩面、测试矩阵补齐与执行证据沉淀，且未改写 `242/243` 的 runtime 主链）
 
 ## 1. 背景与定位
 1. [ ] `240E` 已冻结：`Interpretation Pack` 与 `Intent Route Catalog` 是 Assistant 理解层主源，职责仅限**意图分流、澄清模板引用、负样例约束、表达解释**，不得越权定义执行真相。

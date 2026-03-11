@@ -17,7 +17,7 @@ func TestAssistantTaskSnapshotCompatible_KnowledgeFields(t *testing.T) {
 		ContextTemplateVersion:  "plan_context_v1",
 		ReplyGuidanceVersion:    "reply_v1",
 	}
-	legacy := assistantTaskContractSnapshot{
+	compat := assistantTaskContractSnapshot{
 		IntentSchemaVersion:     "v1",
 		CompilerContractVersion: "v1",
 		CapabilityMapVersion:    "v1",
@@ -26,10 +26,10 @@ func TestAssistantTaskSnapshotCompatible_KnowledgeFields(t *testing.T) {
 		IntentHash:              "i",
 		PlanHash:                "p",
 	}
-	if !assistantTaskSnapshotCompatible(current, legacy) {
-		t.Fatal("legacy snapshot should remain compatible when new fields are empty")
+	if !assistantTaskSnapshotCompatible(current, compat) {
+		t.Fatal("compat snapshot should remain compatible when new fields are empty")
 	}
-	strict := legacy
+	strict := compat
 	strict.KnowledgeSnapshotDigest = "wrong"
 	if assistantTaskSnapshotCompatible(current, strict) {
 		t.Fatal("snapshot should be incompatible when non-empty knowledge field mismatches")

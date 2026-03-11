@@ -81,6 +81,7 @@ func assistantKnowledgeBaseCompileInput() (
 			PackID:               "knowledge.general_qa",
 			KnowledgeVersion:     "2026-03-11.v1",
 			Locale:               "zh",
+			IntentClasses:        []string{assistantRouteKindKnowledgeQA},
 			ClarificationPrompts: []assistantKnowledgePrompt{{TemplateID: "qa.zh", Text: "你好"}},
 			SourceRefs:           []string{sourceRef},
 		},
@@ -373,12 +374,37 @@ func TestAssistantKnowledgeRuntime_CompileValidationCoverage(t *testing.T) {
 	runCompileError("business action not registered", "action_id not registered", func(c *assistantIntentRouteCatalog, _ *[]assistantInterpretationPack, _ *[]assistantActionViewPack, _ *[]assistantReplyGuidancePack, _ map[string][]byte) {
 		c.Entries[0].ActionID = "org.unknown"
 	})
+	runCompileError("non-business action id must be empty", "action_id must be empty for non-business route", func(c *assistantIntentRouteCatalog, _ *[]assistantInterpretationPack, _ *[]assistantActionViewPack, _ *[]assistantReplyGuidancePack, _ map[string][]byte) {
+		c.Entries[1].ActionID = assistantIntentCreateOrgUnit
+	})
+	runCompileError("duplicated route action id", "duplicated route action_id", func(c *assistantIntentRouteCatalog, _ *[]assistantInterpretationPack, _ *[]assistantActionViewPack, _ *[]assistantReplyGuidancePack, _ map[string][]byte) {
+		c.Entries = append(c.Entries, assistantIntentRouteEntry{
+			IntentID:  "org.orgunit_create_dup",
+			RouteKind: assistantRouteKindBusinessAction,
+			ActionID:  assistantIntentCreateOrgUnit,
+		})
+	})
+	runCompileError("min confidence out of range", "min_confidence out of range", func(c *assistantIntentRouteCatalog, _ *[]assistantInterpretationPack, _ *[]assistantActionViewPack, _ *[]assistantReplyGuidancePack, _ map[string][]byte) {
+		c.Entries[0].MinConfidence = 1.2
+	})
+	runCompileError("required slots empty item", "invalid required_slots", func(c *assistantIntentRouteCatalog, _ *[]assistantInterpretationPack, _ *[]assistantActionViewPack, _ *[]assistantReplyGuidancePack, _ map[string][]byte) {
+		c.Entries[0].RequiredSlots = []string{" "}
+	})
+	runCompileError("invalid required slots", "invalid required_slot", func(c *assistantIntentRouteCatalog, _ *[]assistantInterpretationPack, _ *[]assistantActionViewPack, _ *[]assistantReplyGuidancePack, _ map[string][]byte) {
+		c.Entries[0].RequiredSlots = []string{"unknown_slot"}
+	})
+	runCompileError("unknown clarification template id", "unknown clarification_template_id", func(c *assistantIntentRouteCatalog, _ *[]assistantInterpretationPack, _ *[]assistantActionViewPack, _ *[]assistantReplyGuidancePack, _ map[string][]byte) {
+		c.Entries[1].ClarificationTemplateID = "clarify.unknown.v1"
+	})
 
 	runCompileError("interpretation asset type invalid", "interpretation asset_type invalid", func(_ *assistantIntentRouteCatalog, i *[]assistantInterpretationPack, _ *[]assistantActionViewPack, _ *[]assistantReplyGuidancePack, _ map[string][]byte) {
 		(*i)[0].AssetType = "bad"
 	})
 	runCompileError("interpretation pack id required", "interpretation pack_id required", func(_ *assistantIntentRouteCatalog, i *[]assistantInterpretationPack, _ *[]assistantActionViewPack, _ *[]assistantReplyGuidancePack, _ map[string][]byte) {
 		(*i)[0].PackID = " "
+	})
+	runCompileError("interpretation knowledge version required", "interpretation knowledge_version required", func(_ *assistantIntentRouteCatalog, i *[]assistantInterpretationPack, _ *[]assistantActionViewPack, _ *[]assistantReplyGuidancePack, _ map[string][]byte) {
+		(*i)[0].KnowledgeVersion = " "
 	})
 	runCompileError("interpretation locale invalid", "interpretation locale invalid", func(_ *assistantIntentRouteCatalog, i *[]assistantInterpretationPack, _ *[]assistantActionViewPack, _ *[]assistantReplyGuidancePack, _ map[string][]byte) {
 		(*i)[0].Locale = "jp"
@@ -389,8 +415,26 @@ func TestAssistantKnowledgeRuntime_CompileValidationCoverage(t *testing.T) {
 	runCompileError("interpretation source refs invalid", "interpretation source_refs invalid", func(_ *assistantIntentRouteCatalog, i *[]assistantInterpretationPack, _ *[]assistantActionViewPack, _ *[]assistantReplyGuidancePack, _ map[string][]byte) {
 		(*i)[0].SourceRefs = []string{"not/exist/path.md"}
 	})
+	runCompileError("interpretation intent classes required", "interpretation intent_classes required", func(_ *assistantIntentRouteCatalog, i *[]assistantInterpretationPack, _ *[]assistantActionViewPack, _ *[]assistantReplyGuidancePack, _ map[string][]byte) {
+		(*i)[0].IntentClasses = nil
+	})
+	runCompileError("interpretation intent class invalid", "invalid intent_class", func(_ *assistantIntentRouteCatalog, i *[]assistantInterpretationPack, _ *[]assistantActionViewPack, _ *[]assistantReplyGuidancePack, _ map[string][]byte) {
+		(*i)[0].IntentClasses = []string{"invalid"}
+	})
+	runCompileError("interpretation template id required", "interpretation template_id required", func(_ *assistantIntentRouteCatalog, i *[]assistantInterpretationPack, _ *[]assistantActionViewPack, _ *[]assistantReplyGuidancePack, _ map[string][]byte) {
+		(*i)[0].ClarificationPrompts[0].TemplateID = " "
+	})
+	runCompileError("interpretation duplicate template id", "duplicated interpretation template_id", func(_ *assistantIntentRouteCatalog, i *[]assistantInterpretationPack, _ *[]assistantActionViewPack, _ *[]assistantReplyGuidancePack, _ map[string][]byte) {
+		(*i)[0].ClarificationPrompts = append((*i)[0].ClarificationPrompts, assistantKnowledgePrompt{TemplateID: "qa.zh", Text: "duplicate"})
+	})
+	runCompileError("interpretation negative examples empty", "negative_examples contains empty value", func(_ *assistantIntentRouteCatalog, i *[]assistantInterpretationPack, _ *[]assistantActionViewPack, _ *[]assistantReplyGuidancePack, _ map[string][]byte) {
+		(*i)[0].NegativeExamples = []string{" "}
+	})
 	runCompileError("interpretation duplicate locale", "duplicated interpretation pack", func(_ *assistantIntentRouteCatalog, i *[]assistantInterpretationPack, _ *[]assistantActionViewPack, _ *[]assistantReplyGuidancePack, _ map[string][]byte) {
 		*i = append(*i, (*i)[0])
+	})
+	runCompileError("interpretation intent class mismatch route", "intent_classes mismatch", func(_ *assistantIntentRouteCatalog, i *[]assistantInterpretationPack, _ *[]assistantActionViewPack, _ *[]assistantReplyGuidancePack, _ map[string][]byte) {
+		(*i)[0].IntentClasses = []string{assistantRouteKindBusinessAction}
 	})
 
 	runCompileError("action view asset type invalid", "action view asset_type invalid", func(_ *assistantIntentRouteCatalog, _ *[]assistantInterpretationPack, a *[]assistantActionViewPack, _ *[]assistantReplyGuidancePack, _ map[string][]byte) {
@@ -448,7 +492,19 @@ func TestAssistantKnowledgeRuntime_CompileValidationCoverage(t *testing.T) {
 	runCompileError("missing create action view", "missing create_orgunit action view pack", func(_ *assistantIntentRouteCatalog, _ *[]assistantInterpretationPack, a *[]assistantActionViewPack, _ *[]assistantReplyGuidancePack, _ map[string][]byte) {
 		(*a)[0].ActionID = assistantIntentRenameOrgUnit
 	})
-	runCompileError("missing knowledge interpretation", "missing knowledge.general_qa interpretation pack", func(_ *assistantIntentRouteCatalog, i *[]assistantInterpretationPack, _ *[]assistantActionViewPack, _ *[]assistantReplyGuidancePack, _ map[string][]byte) {
+	runCompileError("missing default interpretation after compile", "missing knowledge.general_qa interpretation pack", func(c *assistantIntentRouteCatalog, i *[]assistantInterpretationPack, _ *[]assistantActionViewPack, _ *[]assistantReplyGuidancePack, _ map[string][]byte) {
+		c.Entries = []assistantIntentRouteEntry{
+			{
+				IntentID:  "org.orgunit_create",
+				RouteKind: assistantRouteKindBusinessAction,
+				ActionID:  assistantIntentCreateOrgUnit,
+			},
+		}
+		(*i)[0].PackID = "org.orgunit_create"
+		(*i)[0].IntentClasses = []string{assistantRouteKindBusinessAction}
+		(*i)[0].ClarificationPrompts = []assistantKnowledgePrompt{{TemplateID: "clarify.org.orgunit_create.v1", Text: "x"}}
+	})
+	runCompileError("missing knowledge interpretation", "missing interpretation pack for non-business intent", func(_ *assistantIntentRouteCatalog, i *[]assistantInterpretationPack, _ *[]assistantActionViewPack, _ *[]assistantReplyGuidancePack, _ map[string][]byte) {
 		(*i)[0].PackID = "knowledge.other"
 	})
 	runCompileError("missing reply guidance", "reply guidance packs missing", func(_ *assistantIntentRouteCatalog, _ *[]assistantInterpretationPack, _ *[]assistantActionViewPack, r *[]assistantReplyGuidancePack, _ map[string][]byte) {

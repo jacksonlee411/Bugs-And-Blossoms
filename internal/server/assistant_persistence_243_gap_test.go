@@ -45,11 +45,13 @@ func assistant243CreateTurnPGTx(now time.Time, actorID string, turnRows pgx.Rows
 func TestAssistantPersistence243_CreateTurnPGBranches(t *testing.T) {
 	origRouteFn := assistantBuildIntentRouteDecisionFn
 	origResumeFn := assistantResumeFromClarificationFn
+	origClarificationFn := assistantBuildClarificationDecisionFn
 	origAuthzFn := assistantLoadAuthorizerFn
 	origCapability := capabilityDefinitionByKey
 	defer func() {
 		assistantBuildIntentRouteDecisionFn = origRouteFn
 		assistantResumeFromClarificationFn = origResumeFn
+		assistantBuildClarificationDecisionFn = origClarificationFn
 		assistantLoadAuthorizerFn = origAuthzFn
 		capabilityDefinitionByKey = origCapability
 	}()
@@ -177,6 +179,27 @@ func TestAssistantPersistence243_CreateTurnPGBranches(t *testing.T) {
 		}
 		if _, err := svc.createTurnPG(context.Background(), "tenant_1", principal, "conv_pg", "在鲜花组织之下，新建一个名为运营部的部门，成立日期是2026-01-01"); !errors.Is(err, errAssistantPlanContractVersionMismatch) {
 			t.Fatalf("expected route audit mismatch err=%v", err)
+		}
+	})
+
+	t.Run("route gate denied returns action gate error", func(t *testing.T) {
+		store := newOrgUnitMemoryStore()
+		if _, err := store.CreateNodeCurrent(context.Background(), "tenant_1", "2026-01-01", "FLOWER-A", "鲜花组织", "", true); err != nil {
+			t.Fatalf("create node err=%v", err)
+		}
+		svc := newAssistantConversationService(store, assistantWriteServiceStub{store: store})
+		svc.pool = assistFakeTxBeginner{tx: assistant243CreateTurnPGTx(now, "actor_1", nil)}
+		assistantBuildIntentRouteDecisionFn = func(string, assistantResolveIntentResult, assistantIntentSpec, *assistantKnowledgeRuntime, *assistantTurn) (assistantIntentRouteDecision, error) {
+			return assistant243BusinessRouteDecision(), nil
+		}
+		assistantLoadAuthorizerFn = func() (authorizer, error) {
+			return assistantGateAuthorizerStub{allowed: false, enforced: true}, nil
+		}
+		if _, err := svc.createTurnPG(context.Background(), "tenant_1", principal, "conv_pg", "在鲜花组织之下，新建一个名为运营部的部门，成立日期是2026-01-01"); !errors.Is(err, errAssistantActionAuthzDenied) {
+			t.Fatalf("expected action authz denied err=%v", err)
+		}
+		assistantLoadAuthorizerFn = func() (authorizer, error) {
+			return assistantGateAuthorizerStub{allowed: true, enforced: true}, nil
 		}
 	})
 }
