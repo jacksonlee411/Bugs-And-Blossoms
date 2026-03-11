@@ -266,3 +266,183 @@ func TestAssistantIntentRouter_RouteAuditVersionConsistency(t *testing.T) {
 		t.Fatal("missing context template version should fail consistency check")
 	}
 }
+
+func TestAssistantIntentRouter_MissingGapBranches(t *testing.T) {
+	t.Run("validate decision candidate blank action id", func(t *testing.T) {
+		err := assistantValidateIntentRouteDecision(assistantIntentRouteDecision{
+			RouteKind:               assistantRouteKindBusinessAction,
+			IntentID:                "org.orgunit_create",
+			CandidateActionIDs:      []string{""},
+			ConfidenceBand:          assistantRouteConfidenceHigh,
+			RouteCatalogVersion:     "v1",
+			KnowledgeSnapshotDigest: "d",
+			ResolverContractVersion: "r",
+			DecisionSource:          "s",
+		})
+		if !errors.Is(err, errAssistantRouteRuntimeInvalid) {
+			t.Fatalf("blank candidate action should be invalid err=%v", err)
+		}
+	})
+
+	t.Run("build decision runtime invalid and validate error path", func(t *testing.T) {
+		runtime := &assistantKnowledgeRuntime{
+			RouteCatalogVersion:     "v1",
+			SnapshotDigest:          "d",
+			ResolverContractVersion: "r",
+			routeByAction: map[string]assistantIntentRouteEntry{
+				assistantIntentCreateOrgUnit: {IntentID: "org.orgunit_create", RouteKind: "bad_kind"},
+			},
+		}
+		if _, err := assistantBuildIntentRouteDecision(
+			"创建组织",
+			assistantResolveIntentResult{Intent: assistantIntentSpec{Action: assistantIntentPlanOnly}},
+			assistantIntentSpec{Action: assistantIntentCreateOrgUnit},
+			runtime,
+			nil,
+		); !errors.Is(err, errAssistantRouteRuntimeInvalid) {
+			t.Fatalf("expected runtime invalid for unsupported route kind, err=%v", err)
+		}
+
+		runtime.routeByAction = map[string]assistantIntentRouteEntry{
+			assistantIntentCreateOrgUnit: {IntentID: "org.orgunit_create", RouteKind: assistantRouteKindBusinessAction, ActionID: assistantIntentCreateOrgUnit},
+		}
+		if _, err := assistantBuildIntentRouteDecision("创建", assistantResolveIntentResult{Intent: assistantIntentSpec{Action: assistantIntentPlanOnly}}, assistantIntentSpec{Action: assistantIntentCreateOrgUnit, EffectiveDate: "bad-date", ParentRefText: "p", EntityName: "n"}, runtime, nil); err != nil {
+			t.Fatalf("validation-warning route should still build, err=%v", err)
+		}
+	})
+
+	t.Run("route audit and action chain status branches", func(t *testing.T) {
+		if !assistantTurnRouteAuditVersionsConsistent(nil) {
+			t.Fatal("nil turn should be consistent")
+		}
+		if !assistantTurnRouteAuditVersionsConsistent(&assistantTurn{}) {
+			t.Fatal("missing route decision should be consistent")
+		}
+		turn := &assistantTurn{
+			RouteDecision: assistantIntentRouteDecision{
+				RouteKind:               assistantRouteKindBusinessAction,
+				IntentID:                "org.orgunit_create",
+				CandidateActionIDs:      []string{assistantIntentCreateOrgUnit},
+				ConfidenceBand:          assistantRouteConfidenceHigh,
+				RouteCatalogVersion:     "v1",
+				KnowledgeSnapshotDigest: "d",
+				ResolverContractVersion: "r",
+				DecisionSource:          "s",
+			},
+			Plan: assistantPlanSummary{
+				KnowledgeSnapshotDigest: "d",
+				RouteCatalogVersion:     "v1",
+				ResolverContractVersion: "r",
+				ContextTemplateVersion:  assistantContextTemplateVersionV1,
+				ReplyGuidanceVersion:    "reply.v1",
+			},
+		}
+		turn.Plan.KnowledgeSnapshotDigest = ""
+		if assistantTurnRouteAuditVersionsConsistent(turn) {
+			t.Fatal("missing plan audit fields should fail")
+		}
+		turn.Plan.KnowledgeSnapshotDigest = "d"
+		turn.Plan.ResolverContractVersion = "r2"
+		if assistantTurnRouteAuditVersionsConsistent(turn) {
+			t.Fatal("resolver drift should fail")
+		}
+
+		exhausted := &assistantTurn{
+			Intent: assistantIntentSpec{Action: assistantIntentCreateOrgUnit},
+			RouteDecision: assistantIntentRouteDecision{
+				RouteKind:               assistantRouteKindBusinessAction,
+				IntentID:                "org.orgunit_create",
+				CandidateActionIDs:      []string{assistantIntentCreateOrgUnit},
+				ConfidenceBand:          assistantRouteConfidenceHigh,
+				RouteCatalogVersion:     "v1",
+				KnowledgeSnapshotDigest: "d",
+				ResolverContractVersion: "r",
+				DecisionSource:          "s",
+			},
+			Clarification: &assistantClarificationDecision{Status: assistantClarificationStatusExhausted},
+		}
+		if assistantTurnActionChainAllowed(exhausted) {
+			t.Fatal("exhausted clarification should block action chain")
+		}
+		aborted := *exhausted
+		aborted.Clarification = &assistantClarificationDecision{Status: assistantClarificationStatusAborted}
+		if assistantTurnActionChainAllowed(&aborted) {
+			t.Fatal("aborted clarification should block action chain")
+		}
+	})
+
+	t.Run("check route decision remaining branches", func(t *testing.T) {
+		spec, ok := assistantLookupDefaultActionSpec(assistantIntentCreateOrgUnit)
+		if !ok {
+			t.Fatal("missing create spec")
+		}
+		planAllow := assistantCheckRouteDecision(assistantActionGateInput{
+			Stage:  assistantActionStagePlan,
+			Action: assistantActionSpec{},
+			RouteDecision: assistantIntentRouteDecision{
+				RouteKind:               assistantRouteKindBusinessAction,
+				IntentID:                "org.orgunit_create",
+				CandidateActionIDs:      []string{assistantIntentCreateOrgUnit},
+				ConfidenceBand:          assistantRouteConfidenceHigh,
+				RouteCatalogVersion:     "v1",
+				KnowledgeSnapshotDigest: "d",
+				ResolverContractVersion: "r",
+				DecisionSource:          "s",
+			},
+		})
+		if !planAllow.Allowed {
+			t.Fatalf("plan stage with missing action id should allow, got=%+v", planAllow)
+		}
+
+		openClarificationTurn := &assistantTurn{
+			RouteDecision: assistantIntentRouteDecision{
+				RouteKind:               assistantRouteKindBusinessAction,
+				IntentID:                "org.orgunit_create",
+				CandidateActionIDs:      []string{assistantIntentCreateOrgUnit},
+				ConfidenceBand:          assistantRouteConfidenceMedium,
+				RouteCatalogVersion:     "v1",
+				KnowledgeSnapshotDigest: "d",
+				ResolverContractVersion: "r",
+				DecisionSource:          "s",
+			},
+			Clarification: &assistantClarificationDecision{
+				Status:                  assistantClarificationStatusOpen,
+				ClarificationKind:       assistantClarificationKindMissingSlots,
+				AwaitPhase:              assistantPhaseAwaitMissingFields,
+				MaxRounds:               2,
+				CurrentRound:            1,
+				ExitTo:                  assistantClarificationExitBusinessResume,
+				KnowledgeSnapshotDigest: "d",
+				RouteCatalogVersion:     "v1",
+			},
+		}
+		denied := assistantCheckRouteDecision(assistantActionGateInput{
+			Stage:  assistantActionStageConfirm,
+			Action: spec,
+			Turn:   openClarificationTurn,
+			RouteDecision: assistantIntentRouteDecision{
+				RouteKind:               assistantRouteKindBusinessAction,
+				IntentID:                "org.orgunit_create",
+				CandidateActionIDs:      []string{assistantIntentCreateOrgUnit},
+				ConfidenceBand:          assistantRouteConfidenceMedium,
+				ClarificationRequired:   true,
+				RouteCatalogVersion:     "v1",
+				KnowledgeSnapshotDigest: "d",
+				ResolverContractVersion: "r",
+				DecisionSource:          "s",
+			},
+		})
+		if denied.Allowed || !errors.Is(denied.Error, errAssistantClarificationRequired) {
+			t.Fatalf("open clarification route gate should return clarification required, got=%+v", denied)
+		}
+	})
+
+	t.Run("http status mapping clarification errors", func(t *testing.T) {
+		if got := httpStatusForAssistantRouteError(errAssistantClarificationRequired); got != 409 {
+			t.Fatalf("clarification required status=%d", got)
+		}
+		if got := httpStatusForAssistantRouteError(errAssistantClarificationRuntimeInvalid); got != 409 {
+			t.Fatalf("clarification runtime invalid status=%d", got)
+		}
+	})
+}

@@ -407,11 +407,15 @@ func TestAssistantServiceHelpers_PoolWrappersAndPathEdges(t *testing.T) {
 		t.Fatalf("unexpected err=%v", err)
 	}
 	original := capabilityDefinitionByKey
+	defer func() { capabilityDefinitionByKey = original }()
 	capabilityDefinitionByKey = map[string]capabilityDefinition{}
-	if _, err := memorySvc.createTurn(context.Background(), "tenant-1", principal, conv.ConversationID, "仅生成计划"); !errors.Is(err, errAssistantPlanBoundaryViolation) {
+	created, err := memorySvc.createTurn(context.Background(), "tenant-1", principal, conv.ConversationID, "仅生成计划")
+	if err != nil {
 		t.Fatalf("unexpected err=%v", err)
 	}
-	capabilityDefinitionByKey = original
+	if len(created.Turns) == 0 || !assistantTurnHasOpenClarification(created.Turns[len(created.Turns)-1]) {
+		t.Fatalf("expected open clarification turn, got=%+v", created.Turns)
+	}
 
 	if _, ok := extractConversationTurnsPathConversationID("/internal/assistant/conversations/conv-1/turns/extra"); ok {
 		t.Fatal("expected invalid turns path length")

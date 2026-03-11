@@ -113,8 +113,13 @@ func assistantValidateIntentRouteDecision(decision assistantIntentRouteDecision)
 		return errAssistantRouteRuntimeInvalid
 	}
 	if strings.TrimSpace(decision.RouteKind) == assistantRouteKindBusinessAction {
-		if len(decision.CandidateActionIDs) != 1 || strings.TrimSpace(decision.CandidateActionIDs[0]) == "" {
+		if len(decision.CandidateActionIDs) == 0 {
 			return errAssistantRouteRuntimeInvalid
+		}
+		for _, actionID := range decision.CandidateActionIDs {
+			if strings.TrimSpace(actionID) == "" {
+				return errAssistantRouteRuntimeInvalid
+			}
 		}
 	} else if len(decision.CandidateActionIDs) != 0 {
 		return errAssistantRouteActionConflict
@@ -159,10 +164,6 @@ func assistantBuildIntentRouteDecision(
 
 	switch decision.RouteKind {
 	case assistantRouteKindBusinessAction:
-		if actionID == "" || actionID == assistantIntentPlanOnly {
-			decision.ReasonCodes = append(decision.ReasonCodes, assistantRouteReasonActionUnregistered)
-			return assistantIntentRouteDecision{}, errAssistantRouteRuntimeInvalid
-		}
 		decision.CandidateActionIDs = []string{actionID}
 		decision.ReasonCodes = append(decision.ReasonCodes, assistantRouteReasonBusinessActionRegistered)
 		if resolvedAction == "" || resolvedAction == assistantIntentPlanOnly {
@@ -193,9 +194,6 @@ func assistantBuildIntentRouteDecision(
 
 	decision.CandidateActionIDs = assistantNormalizeRouteStringSlice(decision.CandidateActionIDs)
 	decision.ReasonCodes = assistantNormalizeRouteStringSlice(decision.ReasonCodes)
-	if err := assistantValidateIntentRouteDecision(decision); err != nil {
-		return assistantIntentRouteDecision{}, err
-	}
 	return decision, nil
 }
 
@@ -270,7 +268,18 @@ func assistantTurnActionChainAllowed(turn *assistantTurn) bool {
 	if turn == nil {
 		return false
 	}
-	return assistantTurnRouteKind(turn) == assistantRouteKindBusinessAction && !assistantTurnHasRouteClarificationSignal(turn)
+	if clarification := turn.Clarification; clarification != nil {
+		status := strings.TrimSpace(clarification.Status)
+		if status == assistantClarificationStatusOpen ||
+			status == assistantClarificationStatusExhausted ||
+			status == assistantClarificationStatusAborted {
+			return false
+		}
+	}
+	if assistantTurnHasRouteClarificationSignal(turn) {
+		return false
+	}
+	return assistantTurnRouteKind(turn) == assistantRouteKindBusinessAction
 }
 
 func assistantActionGateRouteDecision(input assistantActionGateInput) (assistantIntentRouteDecision, bool) {
@@ -380,6 +389,9 @@ func assistantCheckRouteDecision(input assistantActionGateInput) assistantAction
 		return assistantRouteGateDenied(errAssistantRouteNonBusinessBlocked, assistantRouteReasonNonBusinessBlocked)
 	}
 	if decision.ClarificationRequired {
+		if input.Turn != nil && assistantTurnHasOpenClarification(input.Turn) {
+			return assistantRouteGateDenied(errAssistantClarificationRequired, assistantRouteReasonClarificationRequired)
+		}
 		return assistantRouteGateDenied(errAssistantRouteClarificationRequired, assistantRouteReasonClarificationRequired)
 	}
 	return assistantActionGateDecision{Allowed: true}
@@ -398,6 +410,10 @@ func httpStatusForAssistantRouteError(err error) int {
 	case errors.Is(err, errAssistantRouteNonBusinessBlocked):
 		return 409
 	case errors.Is(err, errAssistantRouteClarificationRequired):
+		return 409
+	case errors.Is(err, errAssistantClarificationRequired):
+		return 409
+	case errors.Is(err, errAssistantClarificationRuntimeInvalid):
 		return 409
 	default:
 		return 0

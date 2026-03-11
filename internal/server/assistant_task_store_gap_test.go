@@ -204,6 +204,27 @@ func TestAssistantTaskStore_UtilityAndValidation(t *testing.T) {
 	if err := assistantTaskValidateSnapshotAgainstTurn(badSnap, turn); !errors.Is(err, errAssistantPlanContractVersionMismatch) {
 		t.Fatalf("unexpected mismatch err=%v", err)
 	}
+	routeAuditDriftTurn := *turn
+	routeAuditDriftTurn.Plan = turn.Plan
+	routeAuditDriftTurn.Plan.KnowledgeSnapshotDigest = "sha256:route"
+	routeAuditDriftTurn.Plan.RouteCatalogVersion = "2026-03-11.v1"
+	routeAuditDriftTurn.Plan.ResolverContractVersion = "resolver_contract_v1"
+	routeAuditDriftTurn.Plan.ContextTemplateVersion = assistantContextTemplateVersionV1
+	routeAuditDriftTurn.Plan.ReplyGuidanceVersion = "2026-03-11.v1"
+	routeAuditDriftTurn.RouteDecision = assistantIntentRouteDecision{
+		RouteKind:               assistantRouteKindBusinessAction,
+		IntentID:                "org.orgunit_create",
+		CandidateActionIDs:      []string{assistantIntentCreateOrgUnit},
+		ConfidenceBand:          assistantRouteConfidenceHigh,
+		KnowledgeSnapshotDigest: "sha256:route",
+		RouteCatalogVersion:     "2026-03-11.v1",
+		ResolverContractVersion: "resolver_contract_v1",
+		DecisionSource:          assistantRouteDecisionSourceKnowledgeRuntimeV1,
+	}
+	routeAuditDriftTurn.Plan.ContextTemplateVersion = ""
+	if err := assistantTaskValidateSnapshotAgainstTurn(req.ContractSnapshot, &routeAuditDriftTurn); !errors.Is(err, errAssistantPlanContractVersionMismatch) {
+		t.Fatalf("expected route audit mismatch err=%v", err)
+	}
 	if err := assistantTaskValidateSnapshotAgainstTurn(req.ContractSnapshot, turn); err != nil {
 		t.Fatalf("snapshot should match err=%v", err)
 	}

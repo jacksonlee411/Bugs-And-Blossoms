@@ -1,6 +1,6 @@
 # DEV-PLAN-243：Assistant 澄清策略与槽位补全回路实施计划
 
-**状态**: 规划中（2026-03-11 CST；按 `DEV-PLAN-246` 的阶段 C 细化到可直接实施颗粒度，承接 `241/242`，并作为 `245` 的结构化输入前置）
+**状态**: 已实施（2026-03-11 CST；核心主链、持久化、门禁与 Assistant 回归已落地，收口记录见 `docs/dev-records/dev-plan-243-execution-log.md`）
 
 ## 1. 计划定位（与 246 对齐）
 1. [ ] `243` 是 `DEV-PLAN-246` 的**阶段 C**，只能在 `242` 的 `route decision` 最小 runtime 封板后推进。

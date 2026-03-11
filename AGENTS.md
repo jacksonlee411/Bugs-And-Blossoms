@@ -395,6 +395,7 @@ modules/{module}/
 - DEV-PLAN-242：Assistant Intent Router 运行时最小落地计划：`docs/dev-plans/242-assistant-intent-router-runtime-minimal-plan.md`
 - DEV-PLAN-242 执行日志：`docs/dev-records/dev-plan-242-execution-log.md`
 - DEV-PLAN-243：Assistant 澄清策略与槽位补全回路计划：`docs/dev-plans/243-assistant-clarification-policy-and-slot-repair-plan.md`
+- DEV-PLAN-243 执行日志：`docs/dev-records/dev-plan-243-execution-log.md`
 - DEV-PLAN-244：Assistant Interpretation Pack 与 Intent Route Catalog 编译治理计划：`docs/dev-plans/244-assistant-interpretation-pack-and-intent-route-catalog-compiler-plan.md`
 - DEV-PLAN-245：Assistant Reply Guidance Pack 与 Reply Realizer 计划：`docs/dev-plans/245-assistant-reply-guidance-pack-and-reply-realizer-plan.md`
 - DEV-PLAN-246：Assistant 理解—分流—澄清—表达实施路线图：`docs/dev-plans/246-assistant-understand-route-clarify-roadmap.md`

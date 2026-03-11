@@ -8,6 +8,7 @@ import (
 
 const (
 	assistantPhaseIdle                  = "idle"
+	assistantPhaseAwaitClarification    = "await_clarification"
 	assistantPhaseAwaitMissingFields    = "await_missing_fields"
 	assistantPhaseAwaitCandidatePick    = "await_candidate_pick"
 	assistantPhaseAwaitCandidateConfirm = "await_candidate_confirm"
@@ -107,6 +108,19 @@ func assistantTurnPhase(turn *assistantTurn) string {
 	if strings.TrimSpace(turn.ErrorCode) != "" {
 		return assistantPhaseFailed
 	}
+	if clarification := turn.Clarification; clarification != nil {
+		status := strings.TrimSpace(clarification.Status)
+		if status == assistantClarificationStatusExhausted || status == assistantClarificationStatusAborted {
+			return assistantPhaseFailed
+		}
+	}
+	if open := assistantTurnOpenClarification(turn); open != nil {
+		phase := assistantClarificationKindAwaitPhase(open.ClarificationKind)
+		if phase == "" {
+			return assistantPhaseFailed
+		}
+		return phase
+	}
 	if !assistantTurnActionChainAllowed(turn) {
 		return assistantPhaseIdle
 	}
@@ -192,6 +206,9 @@ func assistantTurnSelectedCandidateID(turn *assistantTurn) string {
 
 func assistantTurnPendingDraftSummary(turn *assistantTurn) string {
 	if turn == nil {
+		return ""
+	}
+	if assistantTurnHasOpenClarification(turn) {
 		return ""
 	}
 	if !assistantTurnActionChainAllowed(turn) {
@@ -346,6 +363,14 @@ func assistantCommitReplyJSON(turn *assistantTurn) any {
 func assistantMissingFieldsJSON(turn *assistantTurn) string {
 	payload, _ := json.Marshal(assistantTurnMissingFields(turn))
 	return string(payload)
+}
+
+func assistantClarificationJSON(turn *assistantTurn) string {
+	if turn == nil || !assistantClarificationDecisionPresent(turn.Clarification) {
+		return "{}"
+	}
+	payload, _ := json.Marshal(turn.Clarification)
+	return strings.TrimSpace(string(payload))
 }
 
 func assistantCandidateOptionsJSON(turn *assistantTurn) string {

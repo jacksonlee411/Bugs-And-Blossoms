@@ -550,9 +550,15 @@ func TestAssistantTurnActionHandler_CoverageMatrix(t *testing.T) {
 
 		rec = httptest.NewRecorder()
 		handleAssistantTurnActionAPI(rec, assistantReqWithContext(http.MethodPost, baseConfirmPath, `{}`, true, true), svc)
-		if rec.Code != http.StatusConflict || assistantDecodeErrCode(t, rec) != "conversation_confirmation_required" {
+		if rec.Code != http.StatusConflict || assistantDecodeErrCode(t, rec) != errAssistantClarificationRequired.Error() {
 			t.Fatalf("status=%d code=%s", rec.Code, assistantDecodeErrCode(t, rec))
 		}
+		svc.mu.Lock()
+		if stored := svc.byID[conv.ConversationID]; stored != nil && len(stored.Turns) > 0 && stored.Turns[0] != nil {
+			stored.Turns[0].Clarification = nil
+			assistantRefreshTurnDerivedFields(stored.Turns[0])
+		}
+		svc.mu.Unlock()
 
 		rec = httptest.NewRecorder()
 		handleAssistantTurnActionAPI(rec, assistantReqWithContext(http.MethodPost, baseConfirmPath, `{"candidate_id":"bad"}`, true, true), svc)
@@ -562,11 +568,27 @@ func TestAssistantTurnActionHandler_CoverageMatrix(t *testing.T) {
 
 		nonBusinessSvc := newAssistantConversationService(store, assistantWriteServiceStub{store: store})
 		nonBusinessConv := nonBusinessSvc.createConversation(tenantID, principal)
-		nonBusinessConversation, nonBusinessErr := nonBusinessSvc.createTurn(context.Background(), tenantID, principal, nonBusinessConv.ConversationID, "系统有哪些功能")
-		if nonBusinessErr != nil {
-			t.Fatalf("create non business turn: %v", nonBusinessErr)
+		nonBusinessTurn := &assistantTurn{
+			TurnID:    "turn-non-business",
+			State:     assistantStateValidated,
+			RequestID: "req-non-business",
+			TraceID:   "trace-non-business",
+			Intent:    assistantIntentSpec{Action: assistantIntentPlanOnly, RouteKind: assistantRouteKindKnowledgeQA},
+			RouteDecision: assistantIntentRouteDecision{
+				RouteKind:               assistantRouteKindKnowledgeQA,
+				IntentID:                "knowledge.general_qa",
+				ConfidenceBand:          assistantRouteConfidenceLow,
+				RouteCatalogVersion:     "2026-03-11.v1",
+				KnowledgeSnapshotDigest: "sha256:test",
+				ResolverContractVersion: "resolver.v1",
+				DecisionSource:          assistantRouteDecisionSourceKnowledgeRuntimeV1,
+			},
+			Plan: assistantBuildPlan(assistantIntentSpec{Action: assistantIntentPlanOnly}),
 		}
-		nonBusinessTurn := nonBusinessConversation.Turns[0]
+		assistantRefreshTurnDerivedFields(nonBusinessTurn)
+		nonBusinessSvc.mu.Lock()
+		nonBusinessSvc.byID[nonBusinessConv.ConversationID].Turns = append(nonBusinessSvc.byID[nonBusinessConv.ConversationID].Turns, nonBusinessTurn)
+		nonBusinessSvc.mu.Unlock()
 		rec = httptest.NewRecorder()
 		handleAssistantTurnActionAPI(rec, assistantReqWithContext(http.MethodPost, "/internal/assistant/conversations/"+nonBusinessConv.ConversationID+"/turns/"+nonBusinessTurn.TurnID+":confirm", `{}`, true, true), nonBusinessSvc)
 		if rec.Code != http.StatusConflict || assistantDecodeErrCode(t, rec) != errAssistantRouteNonBusinessBlocked.Error() {
@@ -852,11 +874,11 @@ func TestAssistantServiceHelpersAndUtilities(t *testing.T) {
 			t.Fatalf("want boundary violation, got %v", err)
 		}
 		originalDefs := capabilityDefinitionByKey
+		defer func() { capabilityDefinitionByKey = originalDefs }()
 		capabilityDefinitionByKey = map[string]capabilityDefinition{}
 		if _, err := assistantDecodeIntent("仅生成计划"); !errors.Is(err, errAssistantPlanBoundaryViolation) {
 			t.Fatalf("want boundary violation for unknown capability, got %v", err)
 		}
-		capabilityDefinitionByKey = originalDefs
 		if !assistantBoundaryViolationDetected("drop table org_unit_nodes") {
 			t.Fatal("expected boundary violation detection")
 		}
@@ -1047,6 +1069,15 @@ func TestAssistantServiceHelpersAndUtilities(t *testing.T) {
 		}
 		turnID := created.Turns[0].TurnID
 
+		if _, err := svc.confirmTurn("tenant-1", principal, conv.ConversationID, turnID, ""); !errors.Is(err, errAssistantClarificationRequired) {
+			t.Fatalf("want clarification required, got %v", err)
+		}
+		svc.mu.Lock()
+		if stored := svc.byID[conv.ConversationID]; stored != nil && len(stored.Turns) > 0 && stored.Turns[0] != nil {
+			stored.Turns[0].Clarification = nil
+			assistantRefreshTurnDerivedFields(stored.Turns[0])
+		}
+		svc.mu.Unlock()
 		if _, err := svc.confirmTurn("tenant-1", principal, conv.ConversationID, turnID, ""); !errors.Is(err, errAssistantConfirmationRequired) {
 			t.Fatalf("want confirmation required, got %v", err)
 		}

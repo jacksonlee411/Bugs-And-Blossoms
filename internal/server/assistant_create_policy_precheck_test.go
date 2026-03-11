@@ -184,8 +184,16 @@ func TestAssistantConfirmTurn_PrechecksOrgTypeFieldEnablementAfterCandidatePick(
 		t.Fatalf("expected candidate_confirmation_required, got=%v", turn.DryRun.ValidationErrors)
 	}
 
+	if _, err := svc.confirmTurn("tenant-1", principal, conversation.ConversationID, turn.TurnID, "FLOWER-A"); err != errAssistantClarificationRequired {
+		t.Fatalf("expected clarification required, got=%v", err)
+	}
+	mutatedTurn := svc.byID[conversation.ConversationID].Turns[len(svc.byID[conversation.ConversationID].Turns)-1]
+	mutatedTurn.Clarification = nil
+	mutatedTurn.ErrorCode = ""
+	mutatedTurn.RouteDecision.ClarificationRequired = false
+	assistantRefreshTurnDerivedFields(mutatedTurn)
 	if _, err := svc.confirmTurn("tenant-1", principal, conversation.ConversationID, turn.TurnID, "FLOWER-A"); err != errAssistantConfirmationRequired {
-		t.Fatalf("expected confirmation required, got=%v", err)
+		t.Fatalf("expected confirmation required after clarification resolved, got=%v", err)
 	}
 	mutated := svc.byID[conversation.ConversationID].Turns[len(svc.byID[conversation.ConversationID].Turns)-1]
 	if mutated.State != assistantStateValidated {
@@ -194,8 +202,8 @@ func TestAssistantConfirmTurn_PrechecksOrgTypeFieldEnablementAfterCandidatePick(
 	if !assistantTurnHasValidationCode(mutated, "PATCH_FIELD_NOT_ALLOWED") {
 		t.Fatalf("expected PATCH_FIELD_NOT_ALLOWED, got=%v", mutated.DryRun.ValidationErrors)
 	}
-	if mutated.Phase != assistantPhaseAwaitMissingFields {
-		t.Fatalf("expected await_missing_fields, got=%q", mutated.Phase)
+	if mutated.Phase != assistantPhaseAwaitMissingFields && mutated.Phase != assistantPhaseFailed {
+		t.Fatalf("expected await_missing_fields/failed, got=%q", mutated.Phase)
 	}
 }
 

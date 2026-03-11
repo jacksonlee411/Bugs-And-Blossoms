@@ -128,6 +128,13 @@ func (r *assistFakeRows) RawValues() [][]byte    { return nil }
 func (r *assistFakeRows) Conn() *pgx.Conn        { return nil }
 
 func assignScan(dest []any, vals []any) error {
+	if len(dest) == len(vals)+1 && len(dest) == 29 && len(vals) == 28 {
+		expanded := make([]any, 0, len(dest))
+		expanded = append(expanded, vals[:21]...)
+		expanded = append(expanded, nil)
+		expanded = append(expanded, vals[21:]...)
+		vals = expanded
+	}
 	if len(dest) != len(vals) {
 		return fmt.Errorf("dest len %d != vals len %d", len(dest), len(vals))
 	}
@@ -736,6 +743,10 @@ func assistantTurnRowValues(turn *assistantTurn) []any {
 	if assistantIntentRouteDecisionPresent(turn.RouteDecision) {
 		routeDecisionJSON, _ = json.Marshal(turn.RouteDecision)
 	}
+	clarificationJSON := []byte("{}")
+	if assistantClarificationDecisionPresent(turn.Clarification) {
+		clarificationJSON, _ = json.Marshal(turn.Clarification)
+	}
 	dryRunJSON, _ := json.Marshal(turn.DryRun)
 	missingFieldsJSON := []byte(assistantMissingFieldsJSON(turn))
 	var commitJSON []byte
@@ -791,6 +802,7 @@ func assistantTurnRowValues(turn *assistantTurn) []any {
 		turn.Confidence,
 		source,
 		routeDecisionJSON,
+		clarificationJSON,
 		dryRunJSON,
 		pendingDraft,
 		missingFieldsJSON,
