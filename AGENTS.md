@@ -153,6 +153,9 @@ modules/{module}/
   - 开工前：`git fetch origin && git status --porcelain=v1` 必须为空，然后 `git merge origin/main`
   - 发 PR 前：再次 `git fetch origin && git merge origin/main`，跑 `make preflight`，再 `git push origin <wt-dev-*>` 并从该分支发起 PR
   - PR 合并后：立刻在“发起该 PR 的固定分支”执行 `git fetch origin && git merge origin/main && git push origin <wt-dev-*>`；并建议另外两个固定分支也各同步一次，避免下次切换时累积冲突
+- GitHub 推送链路约定：若 `https://github.com` 的 443 连通性不稳定或 `git push origin <wt-dev-*>` 长时间无响应，优先改用 **SSH over `ssh.github.com:443`** 这一已验证成功的链路，不要反复卡在 HTTPS 重试。
+  - 优先命令：`git push 'ssh://git@ssh.github.com:443/<owner>/<repo>.git' <wt-dev-*>`
+  - 认证顺序：优先复用本机已有 GitHub SSH key；若账号已通过 `gh auth` 登录且具备 `admin:public_key` scope，可临时生成本机 key、通过 `gh api user/keys` 登记后完成推送；任务结束后应删除不再需要的临时 key。
 - 主线原则：以 `origin/main` 为唯一主线；所有 worktree 分支都应以 `origin/main` 为基线并定期同步，避免把 `origin/wt-dev-*` 当作集成主线。
 - 合并建议：固定 worktree 分支（`wt-dev-*`）向 `origin/main` 合并时优先使用 **merge commit**（GitHub: Create a merge commit），以便后续能通过快进/常规 merge 顺滑同步；`squash`/`rebase` 仅适用于“短生命周期分支”（本仓库日常已禁止创建临时分支），避免出现“内容已进 main 但 hash 不同”的残留分叉。
 - P0 前置条件实施方案（契约优先）：`docs/dev-plans/010-p0-prerequisites-contract.md`
