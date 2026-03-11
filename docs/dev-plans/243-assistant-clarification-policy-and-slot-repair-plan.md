@@ -69,6 +69,10 @@
    - [ ] `clarification_template_id`；
    - [ ] 解释性字段展示或错误解释骨架。
 3. [ ] 若任一 turn 缺少 `route_decision` 或缺少知识版本字段，`243` 必须 fail-closed，而不是回退到旧的 `plan_only` 或本地硬猜逻辑。
+4. [ ] `241/242` 必须已明确以下口径，`243` 只允许消费，不允许重定义：
+   - [ ] 执行前必填/校验真相来自正式执行主链与 `Contract Resolver`；
+   - [ ] `route catalog.required_slots[]` 只用于澄清顺序、提示模板和追问预算，不得单独构成第二套执行真相；
+   - [ ] `knowledge_snapshot_digest` 对应的知识快照中必须可复算本次澄清所依赖的 `route/resolver/template` 版本集合。
 
 ## 5. 运行时模型（冻结）
 
@@ -90,6 +94,10 @@
    - [ ] `route_catalog_version`。
 2. [ ] `assistantClarificationDecision` 是**turn 级审计事实**，不承担业务真相，不得声明正式 `commit` 条件。
 3. [ ] `assistantTurn` 增加 `Clarification *assistantClarificationDecision`，并与 `route_decision` 并列存储，不与 `intent_json` 混装。
+4. [ ] 版本口径冻结：
+   - [ ] `knowledge_snapshot_digest` 为澄清主版本锚点，必须可追溯到当次消费的 `route_catalog / resolver_contract / context_template` 版本集合；
+   - [ ] `route_catalog_version` 作为便于审阅的显式字段保留；
+   - [ ] 若后续实现发现仅凭 `knowledge_snapshot_digest` 无法稳定复核澄清输入，必须先回写本计划，再扩充 DTO 版本字段。
 
 ### 5.2 phase 语义冻结
 1. [ ] 保留现有 phase：
@@ -112,12 +120,22 @@
 
 4. [ ] `state` 在澄清期间保持 `validated`；只有正式确认后才允许进入 `confirmed`。
 5. [ ] 只要 `Clarification.status=open`，`confirm/commit` 必须被 gate 阻断。
+6. [ ] 单一权威表达冻结：
+   - [ ] `assistantTurn.Clarification` 是“当前是否存在 open clarification、属于哪一类、轮次推进到哪里”的唯一主源；
+   - [ ] `assistant_turns.phase` 是对 `Clarification.kind/status` 的派生投影，用于现有 API/UI/状态机兼容；
+   - [ ] `route_decision.clarification_required` 只表示“route 层是否建议进入澄清”，不得单独替代 turn 上的 open clarification 事实；
+   - [ ] 任意时刻若 `Clarification.status=open` 与 `phase/route_decision` 投影不一致，必须视为 `assistant_clarification_runtime_invalid` 并 fail-closed。
 
 ### 5.3 持久化冻结
 1. [ ] 在 `iam.assistant_turns` 增加 `clarification_json jsonb NOT NULL DEFAULT '{}'::jsonb`。
 2. [ ] 增加 JSON shape check：`jsonb_typeof(clarification_json) = 'object'`。
 3. [ ] `assistant_turns.phase_check` 与 `assistant_state_transitions.{from_phase,to_phase}` 增加 `await_clarification`。
 4. [ ] Memory 路径与 PG 路径必须写入同一 `assistantClarificationDecision` 结构，不允许一条路径只保存在内存派生字段中。
+5. [ ] 除数据库 shape check 外，应用层必须补充 semantic validator，至少校验：
+   - [ ] `status=open` 时，`clarification_kind / max_rounds / current_round / exit_to / await_phase / knowledge_snapshot_digest / route_catalog_version` 不得为空；
+   - [ ] `clarification_kind ↔ await_phase` 必须符合第 5.2 节映射；
+   - [ ] `current_round <= max_rounds`；
+   - [ ] `status=resolved/exhausted/aborted` 时不得继续作为 `confirm/commit` 的阻断主因残留。
 
 ## 6. 澄清类型判定顺序（优先级冻结）
 1. [ ] 同一时刻只允许存在**一个 open clarification decision**。
@@ -181,9 +199,13 @@
 ### 7.5 `missing_slots`
 1. [ ] 动作已稳定、候选已稳定、格式已稳定，但执行前仍有必填槽位缺失。
 2. [ ] 缺槽位来源冻结为：
-   - [ ] route catalog 的 `required_slots[]`；
-   - [ ] `assistantIntentValidationErrors` / `assistantTurnMissingFields` 的归一化结果。
-3. [ ] 输出要求：
+   - [ ] **执行真相来源**：正式执行主链 / `Contract Resolver` / `assistantIntentValidationErrors` / `assistantTurnMissingFields` 的归一化结果；
+   - [ ] **追问顺序来源**：route catalog 的 `required_slots[]`。
+3. [ ] 优先级冻结：
+   - [ ] 是否“真的缺字段、缺哪些字段”只由执行真相来源裁决；
+   - [ ] route catalog 只能对已判定为缺失的字段进行排序、裁剪单轮追问顺序与选择模板；
+   - [ ] 若 route catalog 与执行真相来源冲突，以执行真相来源为准，并记录 reason code/审计痕迹；不得为迎合 catalog 而改写执行必填集。
+4. [ ] 输出要求：
    - [ ] `required_slots[]` 保持 route catalog 顺序；
    - [ ] `missing_slots[]` 只保留当前仍缺的字段；
    - [ ] `await_phase=await_missing_fields`。
@@ -230,6 +252,10 @@
    - [ ] 业务上需要人工明确判断；
    - [ ] 连续冲突/推责/上下文丢失导致继续追问无意义；
    - [ ] 轮次耗尽且无法安全恢复业务动作。
+4. [ ] 退出后禁止保留“半恢复、半待确认”的中间态；必须显式落到：
+   - [ ] `business_action_resume`：关闭 open clarification，重新进入正式主链判定；
+   - [ ] `uncertain`：关闭 open clarification，不得生成可提交 plan；
+   - [ ] `manual_hint`：关闭 open clarification，不得继续自动推进行动。
 
 ## 9. 与现有实现的整合策略
 
@@ -238,6 +264,10 @@
 2. [ ] `assistantBuildDryRun` 继续负责执行前校验，但不再直接决定“下一句该问什么”。
 3. [ ] `assistantDryRunValidationExplain` 在 `243` 中只能作为过渡期 fallback，不得继续扩张为策略主入口。
 4. [ ] `assistantTurnMissingFields / assistantIntentValidationErrors / candidate_confirmation_required` 都应变成 `assistantBuildClarificationDecision` 的输入，而不是各自演化。
+5. [ ] 过渡 fallback 退场条件冻结：
+   - [ ] 一旦 `missing_slots / candidate_pick / candidate_confirm / intent_disambiguation / format_confirmation` 五类场景都已由 `assistantBuildClarificationDecision` 覆盖，`assistantDryRunValidationExplain` 不得再参与“下一问”裁决；
+   - [ ] 若实现阶段仍新增依赖 `assistantDryRunValidationExplain` 的澄清分支，应视为偏离本计划并先回写文档；
+   - [ ] 执行记录中必须明确标注 fallback 仍保留的原因与删除时点，避免形成 legacy 双链路。
 
 ### 9.2 新的统一 builder
 1. [ ] 新增 `assistantBuildClarificationDecision(...)`（命名冻结），输入至少包含：
@@ -260,6 +290,11 @@
    - [ ] 针对 `intent_disambiguation`：收敛动作；
    - [ ] 针对 `format_confirmation`：标准化日期。
 2. [ ] 该恢复入口必须返回“是否有进展”的布尔结果，供 `current_round` 与 `exit_to` 决策使用。
+3. [ ] 恢复语义冻结：
+   - [ ] `assistantResumeFromClarification(...)` 只能生成“补充输入/解析结果”，不得直接把 turn 标记为可提交；
+   - [ ] 任一澄清成功后，必须重新执行 `route_decision -> contract/dry_run validation -> clarification rebuild -> phase derive` 主链；
+   - [ ] 只有在重跑主链后 `Clarification=nil` 或 `status!=open`，且正式 `confirm/commit` 条件满足时，才能恢复到正常 `plan/confirm` 链；
+   - [ ] 若恢复结果与原 `route_decision` 冲突，必须重新以最新 route 为准，不得做局部打补丁式放行。
 
 ## 10. 直接实施切片（按 PR 可落地）
 
@@ -295,7 +330,7 @@
 2. [ ] 实现内容：
    - [ ] 用统一恢复入口替代“仅缺字段可 merge”的局部能力；
    - [ ] 计算 `clarification_no_progress`；
-   - [ ] 当恢复成功时清理 `Clarification.status=open`，重新进入正常 `plan` 链。
+   - [ ] 当恢复成功时，不是直接跳过校验，而是清理 open clarification 后重新跑正式主链，再决定是否进入正常 `plan` 链。
 3. [ ] 验收：
    - [ ] 同一会话下连续澄清能逐轮推进；
    - [ ] 恢复成功后 phase 从 `await_*` 回到 `await_commit_confirm` 或正常可执行状态；
@@ -319,7 +354,9 @@
    - [ ] `missing_required_slot`；
    - [ ] `clarification_no_progress`；
    - [ ] `clarification_rounds_exhausted`。
-4. [ ] 验收：
+4. [ ] 运行时一致性要求：
+   - [ ] 若出现 `Clarification` / `phase` / `route_decision` 不一致，统一落到 `assistant_clarification_runtime_invalid`，不得继续隐式放行。
+5. [ ] 验收：
    - [ ] open clarification 时 `confirm/commit` 明确阻断；
    - [ ] 不再把澄清场景压扁成 `assistant_unsupported_intent`。
 
@@ -333,6 +370,8 @@
 2. [ ] 验收：
    - [ ] 覆盖 memory/PG 双路径；
    - [ ] 覆盖 create/continue/confirm/commit 四条入口；
+   - [ ] 覆盖 “route catalog 与执行真相来源冲突时以执行真相为准” 的回归；
+   - [ ] 覆盖 `Clarification/phase/route_decision` 不一致时 fail-closed 的回归；
    - [ ] 至少一条自然语言回归证明系统会追问，而不是 unsupported。
 
 ## 11. 推荐测试矩阵（建议直接采用）
@@ -343,12 +382,14 @@
 3. [ ] `TestAssistantBuildClarificationDecision_FormatConfirmationForRelativeDate`
 4. [ ] `TestAssistantBuildClarificationDecision_MissingSlotsUsesRouteCatalogOrder`
 5. [ ] `TestAssistantBuildClarificationDecision_ReturnsNilWhenResumeReady`
+6. [ ] `TestAssistantBuildClarificationDecision_ExecutionTruthWinsOverRouteCatalog`
 
 ### 11.2 phase / derived fields
 1. [ ] `TestAssistantTurnPhase_OpenIntentDisambiguationUsesAwaitClarification`
 2. [ ] `TestAssistantTurnPhase_OpenFormatConfirmationUsesAwaitClarification`
 3. [ ] `TestAssistantTurnPhase_OpenMissingSlotsUsesAwaitMissingFields`
 4. [ ] `TestAssistantTurnPhase_ResolvedClarificationRestoresCommitConfirm`
+5. [ ] `TestAssistantTurnPhase_RuntimeInvalidWhenClarificationAndPhaseDiverge`
 
 ### 11.3 API / action gate
 1. [ ] `TestAssistantCreateTurn_LowConfidenceBusinessActionReturnsClarification`
@@ -362,6 +403,7 @@
 1. [ ] `TestAssistantUpsertTurnTx_PersistsClarificationJSON`
 2. [ ] `TestAssistantLoadConversationTx_RestoresClarificationJSON`
 3. [ ] `TestAssistantTransitions_PersistsAwaitClarificationPhase`
+4. [ ] `TestAssistantClarificationSemanticValidator_RejectsIncompleteOpenDecision`
 
 ### 11.5 自然语言回归（首批必备）
 1. [ ] “建立一个组织，挂在鲜花组织下面，名字以后再说” → `missing_slots`。
@@ -377,6 +419,9 @@
 5. [ ] open clarification 时，API/UI 契约层不会展示“等待确认提交”的误导性 CTA。
 6. [ ] 澄清成功后可恢复既有 `plan/confirm` 主链；澄清失败后只能进入 `uncertain` 或 `manual_hint`。
 7. [ ] 至少一条中文自然表达回归证明系统会追问、会止损、不会硬猜。
+8. [ ] `Clarification` 成为 turn 级澄清事实唯一主源，`phase` 与 `route_decision` 仅作受控投影，不再并列演化成第二套状态真相。
+9. [ ] `missing_slots` 的“是否缺失”与“缺哪些字段”只由执行真相来源裁决，route catalog 只负责排序与模板引用。
+10. [ ] 任一澄清恢复成功后，系统都会重新跑正式主链，而不是依赖局部 merge 直接放行到可提交态。
 
 ## 13. 停止线（Fail-Closed）
 1. [ ] 若实现结果只是继续扩写 `assistantDryRunValidationExplain` 或页面本地文案，而没有独立 `assistantClarificationDecision`，本计划失败。
@@ -385,6 +430,10 @@
 4. [ ] 若超过轮次上限后仍继续硬猜动作、继续生成可提交 plan，或偷偷回落旧 `plan_only -> create_orgunit` 旁路，本计划失败。
 5. [ ] 若 Memory 路径与 PG 路径的 clarification 行为不一致，本计划失败。
 6. [ ] 若新增 phase / 错误码 / reason code 最终被压扁回 `assistant_unsupported_intent`，本计划失败。
+7. [ ] 若 `Clarification`、`phase`、`route_decision.clarification_required` 三者都能各自独立决定是否可提交，而未冻结唯一主源，本计划失败。
+8. [ ] 若 route catalog 借由 `required_slots[]` 实际重定义了执行必填集，形成第二套执行真相，本计划失败。
+9. [ ] 若澄清恢复成功后未重新跑正式主链，而是通过局部 merge/patch 直接进入可确认或可提交态，本计划失败。
+10. [ ] 若 `assistantDryRunValidationExplain` 在统一 builder 落地后仍持续扩张为策略主入口，本计划失败。
 
 ## 14. 门禁与本地验证入口
 1. [ ] 文档与实现触发器以 `AGENTS.md` 与 `docs/dev-plans/012-ci-quality-gates.md` 为准。

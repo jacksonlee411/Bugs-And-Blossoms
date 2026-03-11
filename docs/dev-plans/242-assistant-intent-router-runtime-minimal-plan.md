@@ -66,6 +66,7 @@
 4. [ ] 对 `knowledge_qa / chitchat / uncertain` 明确实现**不进入 confirm/commit** 的 fail-closed 运行时保护。
 5. [ ] 对 `business_action + clarification_required=true` 输出正式 route 裁决，并把后续追问责任明确留给 `243`。
 6. [ ] 让 turn 审计链能稳定记录本次 route 所用的 `knowledge_snapshot_digest / route_catalog_version / resolver_contract_version` 以及 route decision 本体。
+7. [ ] 冻结边界：`route_decision.clarification_required` 只表示 route 层建议进入澄清；它不是 turn 上 open clarification 的事实主源，`243` 上线后该事实由 `assistantClarificationDecision` 承接。
 
 ### 3.2 非目标
 1. [ ] 不在本计划中实现多轮澄清、轮次上限与退出策略；该部分由 `243` 承接。
@@ -77,6 +78,7 @@
 
 ## 4. 运行时不变量（冻结）
 1. [ ] `assistantIntentRouteDecision` 是 `242` 之后“是否允许进入动作链”的运行时 SSOT；`assistantIntentSpec.RouteKind` 只保留为投影字段，供兼容读取与调试使用。
+1.1 [ ] 该 SSOT 的作用域只限于 route 层：用于判定是否允许进入动作链、以及为后续 `243` 提供受控输入；它不替代 `243` 的 turn 级 `Clarification` 事实。
 2. [ ] `assistantIntentSpec.Action` 不再独自代表“允许执行某动作”；它只能作为 `business_action` route 分支中的候选输入事实之一。
 3. [ ] `knowledge_qa / chitchat / uncertain` 不得进入：
    - [ ] `assistantTurnPendingDraftSummary(...)` 的可确认摘要分支；
@@ -84,7 +86,8 @@
    - [ ] `applyConfirmTurn(...) / prepareCommitTurn(...) / submitCommitTaskPG(...)`。
 4. [ ] `business_action + clarification_required=true` 不得进入 `confirm/commit`，但必须保留足够的 route 决策审计信息，供 `243` 继续追问。
 5. [ ] route 目录缺失、route 结果非法、route 与 action spec 冲突时必须 fail-closed，不能偷偷回退为“当成 `plan_only` 正常确认”。
-6. [ ] create-turn 的成功不代表可提交；“是否已创建 turn”和“是否允许进入动作链”必须显式区分。
+6. [ ] `knowledge_snapshot_digest` 必须可稳定映射到本次 route 所依赖的 `route_catalog / resolver_contract / context_template` 版本集合，避免后续 `243` 无法复核。
+7. [ ] create-turn 的成功不代表可提交；“是否已创建 turn”和“是否允许进入动作链”必须显式区分。
 
 ### 4.1 行为矩阵（冻结）
 | route_kind | clarification_required | create-turn | phase | pending_draft_summary | confirm | commit |
