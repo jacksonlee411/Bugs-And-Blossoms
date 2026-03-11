@@ -1,11 +1,11 @@
 {
   "case_id": 1,
   "status": "passed",
-  "validated_at": "2026-03-10T23:19:41.887Z",
+  "validated_at": "2026-03-11T00:20:55.684Z",
   "observed_phase_path": [],
   "network_internal_posts": [
     "/internal/assistant/conversations",
-    "/internal/assistant/conversations/conv_6095e6cf280c467081a1c184e1613b29/turns"
+    "/internal/assistant/conversations/conv_01698ddb922445deb6741006a5028ec2/turns"
   ],
   "task_terminal_status": "",
   "task_status_poll_count": 0,

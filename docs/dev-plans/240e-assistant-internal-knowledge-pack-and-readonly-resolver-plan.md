@@ -217,12 +217,12 @@
 
 ## 7. 版本、审计与契约编译
 1. [ ] 以下版本字段在主计划层冻结：
-   - [ ] `knowledge_pack_digest`
+   - [ ] `knowledge_snapshot_digest`
    - [ ] `route_catalog_version`
    - [ ] `resolver_contract_version`
    - [ ] `context_template_version`
    - [ ] `reply_guidance_version`
-2. [ ] 任何影响 route / explain / reply 的知识变更，都必须能关联到 `request / trace / turn / task`。
+2. [ ] 任何影响 route / explain / reply 的知识变更，都必须能关联到 `request / trace / turn / task`，并能复算当次对话消费知识资产集合的 `knowledge_snapshot_digest`。
 3. [ ] 新增 `Knowledge Contract Compiler` 概念，用于在启动期或构建期执行语义校验，至少覆盖：
    - [ ] `action_id` 必须已注册；
    - [ ] `intent_id` 必须唯一；
@@ -261,7 +261,7 @@
    - [ ] 明确模板白名单与语义校验要求。
 
 ### 10.2 PR-240E-02：版本与审计规则冻结
-1. [ ] 目标：冻结 `knowledge_pack_digest / route_catalog_version / resolver_contract_version / context_template_version / reply_guidance_version` 的口径。
+1. [ ] 目标：冻结 `knowledge_snapshot_digest / route_catalog_version / resolver_contract_version / context_template_version / reply_guidance_version` 的口径。
 2. [ ] DoD：
    - [ ] 影响 route / explain / reply 的知识变更都有版本字段；
    - [ ] 审计要求能关联 `request / trace / turn / task`；

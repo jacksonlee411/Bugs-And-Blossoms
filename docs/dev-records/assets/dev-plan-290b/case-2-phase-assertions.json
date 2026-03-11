@@ -1,16 +1,16 @@
 {
   "case_id": 2,
   "status": "passed",
-  "validated_at": "2026-03-10T23:20:03.408Z",
+  "validated_at": "2026-03-11T00:21:12.898Z",
   "observed_phase_path": [
     "await_commit_confirm",
     "committed"
   ],
   "network_internal_posts": [
     "/internal/assistant/conversations",
-    "/internal/assistant/conversations/conv_05cbef69279c40d19a0f48547db26f1f/turns",
-    "/internal/assistant/conversations/conv_05cbef69279c40d19a0f48547db26f1f/turns/turn_d6a5ee4348af465fbf17108b56ca22d2:confirm",
-    "/internal/assistant/conversations/conv_05cbef69279c40d19a0f48547db26f1f/turns/turn_d6a5ee4348af465fbf17108b56ca22d2:commit"
+    "/internal/assistant/conversations/conv_d3ad765d5780493ba8230381e2b3f596/turns",
+    "/internal/assistant/conversations/conv_d3ad765d5780493ba8230381e2b3f596/turns/turn_97d6f96cc7ab4da2a3fcd5e62d3711e6:confirm",
+    "/internal/assistant/conversations/conv_d3ad765d5780493ba8230381e2b3f596/turns/turn_97d6f96cc7ab4da2a3fcd5e62d3711e6:commit"
   ],
   "task_terminal_status": "succeeded",
   "task_status_poll_count": 1,

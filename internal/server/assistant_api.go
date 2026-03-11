@@ -945,6 +945,7 @@ func (s *assistantConversationService) createTurn(ctx context.Context, tenantID 
 		return nil, decision.Error
 	}
 	dryRun := assistantBuildDryRunFn(intent, candidates, resolvedCandidateID)
+	dryRun = s.enrichCreateOrgUnitDryRunWithPolicy(ctx, tenantID, intent, candidates, resolvedCandidateID, dryRun)
 	tempTurn := &assistantTurn{Intent: intent, Plan: plan, Candidates: candidates, ResolvedCandidateID: resolvedCandidateID, DryRun: dryRun}
 	if err := s.refreshTurnVersionTuple(ctx, tenantID, tempTurn); err != nil {
 		return nil, err
@@ -1268,7 +1269,7 @@ func assistantTurnRequiresIntentClarification(turn *assistantTurn) bool {
 	}
 	for _, code := range assistantNormalizeValidationErrors(turn.DryRun.ValidationErrors) {
 		switch code {
-		case "missing_parent_ref_text", "missing_new_parent_ref_text", "parent_candidate_not_found", "missing_entity_name", "missing_new_name", "missing_effective_date", "invalid_effective_date_format", "missing_org_code", "missing_target_effective_date", "invalid_target_effective_date_format", "missing_change_fields":
+		case "missing_parent_ref_text", "missing_new_parent_ref_text", "parent_candidate_not_found", "missing_entity_name", "missing_new_name", "missing_effective_date", "invalid_effective_date_format", "missing_org_code", "missing_target_effective_date", "invalid_target_effective_date_format", "missing_change_fields", "FIELD_REQUIRED_VALUE_MISSING", "PATCH_FIELD_NOT_ALLOWED":
 			return true
 		}
 	}
@@ -1434,6 +1435,10 @@ func assistantDryRunValidationExplain(validationErrors []string) string {
 			hints = append(hints, "目标版本日期格式（YYYY-MM-DD）")
 		case "missing_change_fields":
 			hints = append(hints, "至少一项变更内容（例如：新名称或新上级组织）")
+		case "FIELD_REQUIRED_VALUE_MISSING":
+			return "当前组织创建策略缺少可用默认值，请联系管理员补齐 org_code / 组织类型策略后重试。"
+		case "PATCH_FIELD_NOT_ALLOWED":
+			return "当前租户未启用创建所需组织字段配置，请联系管理员启用 org_type 字段后重试。"
 		}
 	}
 	if len(hints) == 0 {

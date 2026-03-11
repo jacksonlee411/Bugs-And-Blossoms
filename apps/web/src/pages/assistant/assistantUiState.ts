@@ -23,7 +23,12 @@ function normalized(value: string | undefined): string {
 }
 
 function requiredFieldValidationError(code: string): boolean {
-  return code === 'missing_parent_ref_text' || code === 'missing_entity_name' || code === 'missing_effective_date' || code === 'invalid_effective_date_format'
+  return code === 'missing_parent_ref_text' ||
+    code === 'missing_entity_name' ||
+    code === 'missing_effective_date' ||
+    code === 'invalid_effective_date_format' ||
+    code === 'FIELD_REQUIRED_VALUE_MISSING' ||
+    code === 'PATCH_FIELD_NOT_ALLOWED'
 }
 
 export function deriveAssistantActionState(input: AssistantActionInput): AssistantActionState {
