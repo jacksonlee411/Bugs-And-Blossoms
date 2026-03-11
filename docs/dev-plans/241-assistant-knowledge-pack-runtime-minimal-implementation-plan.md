@@ -1,6 +1,6 @@
 # DEV-PLAN-241：Assistant 知识资产运行时最小实现计划（承接 240E）
 
-**状态**: 规划中（2026-03-11 CST；本次修订将 `241` 收敛为 `240E` 的最小运行时落地子计划：先落知识资产 schema/语义校验与版本快照，再做单动作、单阶段、单模板接线）
+**状态**: 规划中（2026-03-11 CST；本次修订将 `241` 明确为 `240E` 的“执行前置能力准备 + plan 阶段最小接线”子计划，并把 `Intent Router / Clarification / Reply Guidance` 等扩面能力拆分给 `242~245`）
 
 ## 1. 背景与定位
 1. [ ] `DEV-PLAN-240E` 已冻结为知识治理主契约：明确四类知识资产、主源矩阵、版本审计与模板边界；`241` 只负责最小运行时实现，不再发明新的资产类型或主源分配。
@@ -28,6 +28,16 @@
 3. [ ] 不改变 `260/223/240A~240D` 已冻结的业务 FSM、持久化事实源、confirm/commit/task 正式语义。
 4. [ ] 不允许 `241` 在运行时新增知识资产类型、重分配主源职责或放宽 `240E` 的模板白名单与版本审计要求。
 5. [ ] 首期不追求全阶段覆盖；优先落地单动作、单阶段、单模板闭环，再逐步扩面。
+6. [ ] 不在本计划中承担 `route` 阶段正式 Runtime 重构：`Intent Router` 由 `DEV-PLAN-242` 承接，`Clarification Policy` 由 `DEV-PLAN-243` 承接。
+7. [ ] 不在本计划中承担理解知识资产的大规模治理扩面：`Interpretation Pack + Intent Route Catalog` 编译治理由 `DEV-PLAN-244` 承接。
+8. [ ] 不在本计划中承担 `reply` 主链知识化改造：`Reply Guidance Pack + Reply Realizer` 由 `DEV-PLAN-245` 承接。
+
+## 2.3 与 242~245 的边界冻结
+1. [ ] `241` 只负责为后续扩面打地基：知识资产 schema、语义校验、最小快照、最小 Resolver、`plan_context_v1`。
+2. [ ] `241` 可以为 `242~245` 预留通用接口与快照字段，但不得提前把 `route_context_v1 / confirm_context_v1 / reply_context_v1` 接入运行时主链。
+3. [ ] `241` 中若出现“需要先判断 `route_kind` 再决定是否进入动作链”的需求，应登记到 `242`，而不是在本计划内临时加旁路判断。
+4. [ ] `241` 中若出现“需要根据低置信度自动追问”的需求，应登记到 `243`，而不是继续扩写本地规则兜底。
+5. [ ] `241` 中若出现“需要统一澄清提问/成功失败表达”的需求，应分别登记到 `244/245`，不在本计划内用 helper 文案硬补。
 
 ## 3. 承接 `240E` 的实现约束（冻结）
 1. [ ] `241` 只实现以下四类知识资产，不再回退到“大 Knowledge Pack” 模型：
@@ -46,6 +56,8 @@
 3. [ ] 首期运行时接线阶段：`plan`。
 4. [ ] 首期模板：`plan_context_v1`。
 5. [ ] `reply` 阶段仅保留资产与版本准备，不作为首批运行时硬目标；后续扩面须在首批证据稳定后推进。
+6. [ ] 首期允许补一个“为 `242/243` 准备的 route 输入快照骨架”，但该骨架不得参与本计划运行时裁决。
+7. [ ] 首期允许补一个“为 `245` 准备的 reply 资产索引与版本字段”，但不得切换现有 reply 主链。
 
 ## 5. 知识资产文件结构（首期冻结）
 1. [ ] 建议文件组织（名称可微调，但模型不变）：
@@ -138,6 +150,9 @@
    - [ ] 任意一次对话都可追溯知识版本；
    - [ ] 知识变更可被证据新鲜度规则识别；
    - [ ] 未写入快照时不得启用运行时消费。
+3. [ ] 兼容性约束：
+   - [ ] 新快照字段必须与现有 `intent_schema_version / compiler_contract_version / capability_map_version / skill_manifest_digest / context_hash / intent_hash / plan_hash` 并存，不得覆盖既有执行契约快照；
+   - [ ] `route` 与 `reply` 相关字段即使暂未接线，也必须有稳定空值/默认值语义，避免后续扩面时破坏历史回放。
 
 ### 10.3 PR-241-03：Resolver 最小实现
 1. [ ] 实现 `conversation_snapshot_resolver` 与 `contract_projection_resolver` 的最小组合；必要时再补 `domain_fact_resolver`。
@@ -146,6 +161,10 @@
    - [ ] 输出带租户/请求关联字段；
    - [ ] Resolver 错误能映射为受控错误码；
    - [ ] 不输出推荐决策或写入口信息。
+3. [ ] 可扩展性约束：
+   - [ ] 接口签名必须能被 `242/243/245` 复用；
+   - [ ] `conversation_snapshot_resolver` 需能输出后续 route/clarification 所需的最小上下文字段，但本计划内不消费这些字段做 route 决策；
+   - [ ] `error_catalog_resolver` 至少预留接口与版本字段，便于 `245` 统一失败解释。
 
 ### 10.4 PR-241-04：单动作、单阶段、单模板接线
 1. [ ] 在 `assistantBuildPlan` 前增加 `plan_context_v1` 上下文装配点。
@@ -157,6 +176,10 @@
    - [ ] 原有执行语义与 DTO 字段不变；
    - [ ] 无“整篇原文直塞”痕迹；
    - [ ] 非动作输入不会误入 `confirm/commit`。
+4. [ ] 约束补充：
+   - [ ] `assistantBuildPlan` 与缺字段解释切换后，不得再新增新的硬编码解释入口；
+   - [ ] 候选说明若在本批次一并接线，仍必须归属 `plan_context_v1`，不得提前发明 `reply_context_v1` 旁路；
+   - [ ] 若发现仅靠 `plan_context_v1` 无法承载 route 澄清，应停止扩大 `241` 范围并转交 `242/243`。
 
 ### 10.5 PR-241-05：非动作样例与后续扩面准备
 1. [ ] 验证 `knowledge_qa/chitchat` 至少一种样例能被稳定分流。
@@ -164,6 +187,10 @@
 3. [ ] DoD：
    - [ ] 非动作样例成为一等公民，而非测试补丁；
    - [ ] 扩面条件清晰：必须以首批证据稳定为前提。
+4. [ ] 与后续计划的交接物：
+   - [ ] 向 `242` 输出可消费的 `Intent Route Catalog` 最小样例与 route 快照字段；
+   - [ ] 向 `243` 输出可消费的缺字段/候选/错误码结构化输入；
+   - [ ] 向 `245` 输出可消费的 `Reply Guidance Pack` 样例与 `reply_guidance_version` 口径。
 
 ## 11. 测试与覆盖率
 1. [ ] 覆盖率口径：沿用仓库当前 Go 测试与 CI 门禁，不新增排除项。
@@ -180,6 +207,9 @@
    - [ ] 知识版本变化能被 turn/task 快照识别；
    - [ ] `org.orgunit_create` 的计划摘要与缺字段解释来源统一；
    - [ ] `knowledge_qa/chitchat` 不触发业务动作路径。
+4. [ ] 回归保护（承接本次问题复盘）：
+   - [ ] 现有“自然语言表达不规范但语义明确”的样例，在 `241` 范围内至少不能再因为计划摘要/缺字段解释漂移而恶化；
+   - [ ] `241` 不以扩充 `assistantExtractIntent` 规则作为主要交付，不把“理解僵化”的根因伪装成 `plan` 层收口。
 
 ## 12. 停止线（Fail-Closed）
 1. [ ] 若实现仍直接把 dev-plan、skill 原文全文注入运行时，则本计划失败。
@@ -189,6 +219,7 @@
 5. [ ] 若未写入知识版本快照就进入运行时消费，则本计划失败。
 6. [ ] 若首批实现同时扩到多个动作、多个阶段或多个模板，导致无法证明最小闭环，则本计划失败。
 7. [ ] 若用户可见业务反馈仍主要依赖页面本地拼接 helper，而非统一知识主链，则本计划失败。
+8. [ ] 若 `241` 为追求表面闭环而把 `Intent Router / Clarification / Reply` 临时塞回本计划，导致与 `242~245` 边界混乱，则本计划失败。
 
 ## 13. 验收标准
 1. [ ] 仓库内存在可审阅、可版本冻结的四类知识资产样例，并至少覆盖 `org.orgunit_create` 与一个非动作样例。
@@ -197,6 +228,7 @@
 4. [ ] `assistantBuildPlan` 已消费受控模板装配的知识上下文，而非继续直接依赖零散硬编码文本。
 5. [ ] 非动作输入能稳定被分流，且不会误入 `confirm/commit`。
 6. [ ] 整个实现不引入新的外部工具链前置条件，不改变 `240A~240D` 的正式执行主链。
+7. [ ] `241` 完成后，`242~245` 可在不重写 `241` 产物的前提下继续扩面。
 
 ## 14. 门禁与 SSOT 引用
 1. [ ] 文档与实现触发器以 `AGENTS.md` 与 `docs/dev-plans/012-ci-quality-gates.md` 为准。
@@ -222,5 +254,10 @@
 - `docs/dev-plans/240e-assistant-internal-knowledge-pack-and-readonly-resolver-plan.md`
 - `docs/dev-plans/240f-assistant-280-aligned-closure-and-regression-plan.md`
 - `docs/dev-plans/250-go-gateway-rag-and-authz-phase1-2-plan.md`
-- `docs/dev-plans/260-assistant-conversation-fsm-and-user-visible-contract-plan.md`
+- `docs/dev-plans/242-assistant-intent-router-runtime-minimal-plan.md`
+- `docs/dev-plans/243-assistant-clarification-policy-and-slot-repair-plan.md`
+- `docs/dev-plans/244-assistant-interpretation-pack-and-intent-route-catalog-compiler-plan.md`
+- `docs/dev-plans/245-assistant-reply-guidance-pack-and-reply-realizer-plan.md`
+- `docs/dev-plans/246-assistant-understand-route-clarify-roadmap.md`
+- `docs/dev-plans/260-librechat-conversation-first-auto-execution-plan.md`
 - `docs/dev-plans/223-assistant-conversation-persistence-and-audit-closure-plan.md`
