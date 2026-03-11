@@ -212,8 +212,12 @@ func (s *assistantConversationService) createTurnPG(ctx context.Context, tenantI
 	if err != nil {
 		return nil, err
 	}
-	intent := assistantMergeIntentWithPendingTurn(resolvedIntent.Intent, pendingTurn)
-	intent = knowledgeRuntime.routeIntent(userInput, intent)
+	mergedIntent := assistantMergeIntentWithPendingTurn(resolvedIntent.Intent, pendingTurn)
+	routeDecision, err := assistantBuildIntentRouteDecision(userInput, resolvedIntent, mergedIntent, knowledgeRuntime, pendingTurn)
+	if err != nil {
+		return nil, err
+	}
+	intent := assistantProjectIntentRouteDecision(mergedIntent, routeDecision)
 	intentValidationErrors := assistantIntentValidationErrors(intent)
 	candidates := make([]assistantCandidate, 0)
 	resolvedCandidateID := ""
@@ -254,14 +258,15 @@ func (s *assistantConversationService) createTurnPG(ctx context.Context, tenantI
 	plan.SkillExecutionPlan = skillExecutionPlan
 	plan.ConfigDeltaPlan = configDeltaPlan
 	decision := assistantEvaluateActionGate(assistantActionGateInput{
-		Stage:      assistantActionStagePlan,
-		TenantID:   tenantID,
-		Principal:  principal,
-		Action:     spec,
-		Intent:     intent,
-		Candidates: candidates,
-		ResolvedID: resolvedCandidateID,
-		UserInput:  userInput,
+		Stage:         assistantActionStagePlan,
+		TenantID:      tenantID,
+		Principal:     principal,
+		Action:        spec,
+		Intent:        intent,
+		RouteDecision: routeDecision,
+		Candidates:    candidates,
+		ResolvedID:    resolvedCandidateID,
+		UserInput:     userInput,
 	})
 	if !decision.Allowed {
 		if errors.Is(decision.Error, errAssistantActionCapabilityUnregistered) {
@@ -271,7 +276,7 @@ func (s *assistantConversationService) createTurnPG(ctx context.Context, tenantI
 	}
 	dryRun := assistantBuildDryRunFn(intent, candidates, resolvedCandidateID)
 	dryRun = s.enrichCreateOrgUnitDryRunWithPolicy(ctx, tenantID, intent, candidates, resolvedCandidateID, dryRun)
-	tempTurn := &assistantTurn{Intent: intent, Plan: plan, Candidates: candidates, ResolvedCandidateID: resolvedCandidateID, DryRun: dryRun}
+	tempTurn := &assistantTurn{Intent: intent, RouteDecision: routeDecision, Plan: plan, Candidates: candidates, ResolvedCandidateID: resolvedCandidateID, DryRun: dryRun}
 	if err := s.refreshTurnVersionTuple(ctx, tenantID, tempTurn); err != nil {
 		return nil, err
 	}
@@ -282,9 +287,9 @@ func (s *assistantConversationService) createTurnPG(ctx context.Context, tenantI
 		return nil, err
 	}
 	assistantApplyPlanContextV1(&plan, &dryRun, intent, planContext)
-	plan.KnowledgeSnapshotDigest = strings.TrimSpace(knowledgeRuntime.SnapshotDigest)
-	plan.RouteCatalogVersion = firstNonEmpty(strings.TrimSpace(intent.RouteCatalogVersion), strings.TrimSpace(knowledgeRuntime.RouteCatalogVersion))
-	plan.ResolverContractVersion = strings.TrimSpace(knowledgeRuntime.ResolverContractVersion)
+	plan.KnowledgeSnapshotDigest = strings.TrimSpace(routeDecision.KnowledgeSnapshotDigest)
+	plan.RouteCatalogVersion = strings.TrimSpace(routeDecision.RouteCatalogVersion)
+	plan.ResolverContractVersion = strings.TrimSpace(routeDecision.ResolverContractVersion)
 	plan.ContextTemplateVersion = strings.TrimSpace(knowledgeRuntime.ContextTemplateVersion)
 	plan.ReplyGuidanceVersion = strings.TrimSpace(knowledgeRuntime.ReplyGuidanceVersion)
 	if err := assistantAnnotateIntentPlanFn(tenantID, conversationID, userInput, &intent, &plan, &dryRun); err != nil {
@@ -303,6 +308,7 @@ func (s *assistantConversationService) createTurnPG(ctx context.Context, tenantI
 		CompositionVersion:  compositionVersion,
 		MappingVersion:      mappingVersion,
 		Intent:              intent,
+		RouteDecision:       routeDecision,
 		Plan:                plan,
 		Candidates:          candidates,
 		ResolvedCandidateID: resolvedCandidateID,
@@ -634,7 +640,7 @@ func (s *assistantConversationService) applyConfirmTurn(conversation *assistantC
 	if turn.State != assistantStateValidated {
 		return assistantTurnMutationResult{}, errAssistantConfirmationRequired
 	}
-	if assistantTurnRequiresIntentClarification(turn) {
+	if len(assistantTurnMissingFields(turn)) > 0 {
 		return assistantTurnMutationResult{}, errAssistantConfirmationRequired
 	}
 	spec, ok := s.lookupActionSpec(turn.Intent.Action)
@@ -642,16 +648,17 @@ func (s *assistantConversationService) applyConfirmTurn(conversation *assistantC
 		return assistantTurnMutationResult{}, errAssistantUnsupportedIntent
 	}
 	decision := assistantEvaluateActionGate(assistantActionGateInput{
-		Stage:      assistantActionStageConfirm,
-		TenantID:   conversation.TenantID,
-		Principal:  principal,
-		Action:     spec,
-		Intent:     turn.Intent,
-		Turn:       turn,
-		Candidates: turn.Candidates,
-		ResolvedID: firstNonEmpty(strings.TrimSpace(candidateID), strings.TrimSpace(turn.ResolvedCandidateID)),
-		DryRun:     &turn.DryRun,
-		UserInput:  turn.UserInput,
+		Stage:         assistantActionStageConfirm,
+		TenantID:      conversation.TenantID,
+		Principal:     principal,
+		Action:        spec,
+		Intent:        turn.Intent,
+		RouteDecision: turn.RouteDecision,
+		Turn:          turn,
+		Candidates:    turn.Candidates,
+		ResolvedID:    firstNonEmpty(strings.TrimSpace(candidateID), strings.TrimSpace(turn.ResolvedCandidateID)),
+		DryRun:        &turn.DryRun,
+		UserInput:     turn.UserInput,
 	})
 	if !decision.Allowed {
 		return assistantApplyGateDecision(conversation, turn, principal, "confirm", decision)
@@ -721,7 +728,7 @@ func (s *assistantConversationService) prepareCommitTurn(
 	if turn.State != assistantStateConfirmed {
 		return assistantPreparedCommit{}, assistantTurnMutationResult{}, errAssistantConfirmationRequired
 	}
-	if assistantTurnRequiresIntentClarification(turn) {
+	if len(assistantTurnMissingFields(turn)) > 0 {
 		return assistantPreparedCommit{}, assistantTurnMutationResult{}, errAssistantConfirmationRequired
 	}
 	spec, ok := s.lookupActionSpec(turn.Intent.Action)
@@ -793,16 +800,17 @@ func (s *assistantConversationService) prepareCommitTurn(
 		resolved = candidate
 	}
 	decision := assistantEvaluateActionGate(assistantActionGateInput{
-		Stage:      assistantActionStageCommit,
-		TenantID:   tenantID,
-		Principal:  principal,
-		Action:     spec,
-		Intent:     turn.Intent,
-		Turn:       turn,
-		Candidates: turn.Candidates,
-		ResolvedID: turn.ResolvedCandidateID,
-		DryRun:     &turn.DryRun,
-		UserInput:  turn.UserInput,
+		Stage:         assistantActionStageCommit,
+		TenantID:      tenantID,
+		Principal:     principal,
+		Action:        spec,
+		Intent:        turn.Intent,
+		RouteDecision: turn.RouteDecision,
+		Turn:          turn,
+		Candidates:    turn.Candidates,
+		ResolvedID:    turn.ResolvedCandidateID,
+		DryRun:        &turn.DryRun,
+		UserInput:     turn.UserInput,
 	})
 	if !decision.Allowed {
 		result, err := assistantApplyGateDecision(conversation, turn, principal, "commit", decision)
@@ -988,6 +996,7 @@ func (s *assistantConversationService) loadConversationTx(ctx context.Context, t
 	  ambiguity_count,
 	  confidence,
 	  resolution_source,
+	  route_decision_json,
 	  dry_run_json,
 	  pending_draft_summary,
 	  missing_fields,
@@ -1012,6 +1021,7 @@ func (s *assistantConversationService) loadConversationTx(ctx context.Context, t
 			planJSON             []byte
 			candidatesJSON       []byte
 			candidateOptionsJSON []byte
+			routeDecisionJSON    []byte
 			dryRunJSON           []byte
 			missingFieldsJSON    []byte
 			commitResultJSON     []byte
@@ -1043,6 +1053,7 @@ func (s *assistantConversationService) loadConversationTx(ctx context.Context, t
 			&turn.AmbiguityCount,
 			&turn.Confidence,
 			&resolutionSource,
+			&routeDecisionJSON,
 			&dryRunJSON,
 			&pendingDraftSummary,
 			&missingFieldsJSON,
@@ -1089,6 +1100,11 @@ func (s *assistantConversationService) loadConversationTx(ctx context.Context, t
 		}
 		if len(dryRunJSON) > 0 && string(dryRunJSON) != "null" {
 			if err := json.Unmarshal(dryRunJSON, &turn.DryRun); err != nil {
+				return nil, err
+			}
+		}
+		if len(routeDecisionJSON) > 0 && string(routeDecisionJSON) != "null" {
+			if err := json.Unmarshal(routeDecisionJSON, &turn.RouteDecision); err != nil {
 				return nil, err
 			}
 		}
@@ -1181,7 +1197,23 @@ func (s *assistantConversationService) loadConversationTx(ctx context.Context, t
 
 func (s *assistantConversationService) upsertTurnTx(ctx context.Context, tx pgx.Tx, tenantID string, conversationID string, turn *assistantTurn) error {
 	assistantRefreshTurnDerivedFields(turn)
+	if assistantIntentRouteDecisionPresent(turn.RouteDecision) {
+		if err := assistantValidateIntentRouteDecision(turn.RouteDecision); err != nil {
+			return err
+		}
+		if !assistantTurnRouteAuditVersionsConsistent(turn) {
+			return errAssistantPlanContractVersionMismatch
+		}
+	}
 	intentJSON, _ := json.Marshal(turn.Intent)
+	routeDecisionJSON, err := json.Marshal(turn.RouteDecision)
+	if err != nil {
+		return err
+	}
+	routeDecisionValue := any(nil)
+	if assistantIntentRouteDecisionPresent(turn.RouteDecision) {
+		routeDecisionValue = string(routeDecisionJSON)
+	}
 	planJSON, err := json.Marshal(turn.Plan)
 	if err != nil {
 		return err
@@ -1222,6 +1254,7 @@ INSERT INTO iam.assistant_turns (
   ambiguity_count,
   confidence,
   resolution_source,
+  route_decision_json,
   dry_run_json,
   pending_draft_summary,
   missing_fields,
@@ -1253,13 +1286,14 @@ INSERT INTO iam.assistant_turns (
   $20,
   NULLIF($21, ''),
   $22::jsonb,
-  NULLIF($23, ''),
-  $24::jsonb,
+  $23::jsonb,
+  NULLIF($24, ''),
   $25::jsonb,
   $26::jsonb,
-  NULLIF($27, ''),
-  $28,
-  $29
+  $27::jsonb,
+  NULLIF($28, ''),
+  $29,
+  $30
 )
 ON CONFLICT (tenant_uuid, conversation_id, turn_id)
 DO UPDATE SET
@@ -1281,6 +1315,7 @@ DO UPDATE SET
   ambiguity_count = EXCLUDED.ambiguity_count,
   confidence = EXCLUDED.confidence,
   resolution_source = EXCLUDED.resolution_source,
+  route_decision_json = EXCLUDED.route_decision_json,
   dry_run_json = EXCLUDED.dry_run_json,
   pending_draft_summary = EXCLUDED.pending_draft_summary,
   missing_fields = EXCLUDED.missing_fields,
@@ -1310,6 +1345,7 @@ DO UPDATE SET
 		turn.AmbiguityCount,
 		turn.Confidence,
 		turn.ResolutionSource,
+		routeDecisionValue,
 		string(dryRunJSON),
 		turn.PendingDraftSummary,
 		assistantMissingFieldsJSON(turn),
@@ -1590,6 +1626,18 @@ func assistantIdempotencyErrorPayload(err error) (status int, code string, ok bo
 		return http.StatusConflict, errAssistantActionRiskGateDenied.Error(), true
 	case errors.Is(err, errAssistantActionRequiredCheckFailed):
 		return http.StatusConflict, errAssistantActionRequiredCheckFailed.Error(), true
+	case errors.Is(err, errAssistantRouteRuntimeInvalid):
+		return http.StatusUnprocessableEntity, errAssistantRouteRuntimeInvalid.Error(), true
+	case errors.Is(err, errAssistantRouteCatalogMissing):
+		return http.StatusServiceUnavailable, errAssistantRouteCatalogMissing.Error(), true
+	case errors.Is(err, errAssistantRouteActionConflict):
+		return http.StatusUnprocessableEntity, errAssistantRouteActionConflict.Error(), true
+	case errors.Is(err, errAssistantRouteDecisionMissing):
+		return http.StatusConflict, errAssistantRouteDecisionMissing.Error(), true
+	case errors.Is(err, errAssistantRouteNonBusinessBlocked):
+		return http.StatusConflict, errAssistantRouteNonBusinessBlocked.Error(), true
+	case errors.Is(err, errAssistantRouteClarificationRequired):
+		return http.StatusConflict, errAssistantRouteClarificationRequired.Error(), true
 	case errors.Is(err, errAssistantUnsupportedIntent):
 		return http.StatusUnprocessableEntity, errAssistantUnsupportedIntent.Error(), true
 	case errors.Is(err, errAssistantServiceMissing):
@@ -1658,6 +1706,18 @@ func assistantErrorFromIdempotencyCode(code string) error {
 		return errAssistantActionRiskGateDenied
 	case errAssistantActionRequiredCheckFailed.Error():
 		return errAssistantActionRequiredCheckFailed
+	case errAssistantRouteRuntimeInvalid.Error():
+		return errAssistantRouteRuntimeInvalid
+	case errAssistantRouteCatalogMissing.Error():
+		return errAssistantRouteCatalogMissing
+	case errAssistantRouteActionConflict.Error():
+		return errAssistantRouteActionConflict
+	case errAssistantRouteDecisionMissing.Error():
+		return errAssistantRouteDecisionMissing
+	case errAssistantRouteNonBusinessBlocked.Error():
+		return errAssistantRouteNonBusinessBlocked
+	case errAssistantRouteClarificationRequired.Error():
+		return errAssistantRouteClarificationRequired
 	case errAssistantUnsupportedIntent.Error():
 		return errAssistantUnsupportedIntent
 	case errAssistantServiceMissing.Error():

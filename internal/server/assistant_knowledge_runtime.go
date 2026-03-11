@@ -471,20 +471,24 @@ func assistantCompileKnowledgeRuntime(
 		return nil, fmt.Errorf("%w: reply guidance packs missing", errAssistantRuntimeConfigInvalid)
 	}
 
-	snapshotDigest := assistantKnowledgeCanonicalHashFn(map[string]any{
-		"catalog":        catalog,
-		"interpretation": interpretation,
-		"action_view":    actionViews,
-		"reply_guidance": replyGuidance,
-	})
-	if strings.TrimSpace(snapshotDigest) == "" {
-		return nil, fmt.Errorf("%w: knowledge snapshot digest empty", errAssistantRuntimeConfigInvalid)
-	}
-
 	sort.Strings(replyVersions)
 	replyGuidanceVersion := ""
 	if len(replyVersions) > 0 {
 		replyGuidanceVersion = strings.Join(replyVersions, "+")
+	}
+
+	snapshotDigest := assistantKnowledgeCanonicalHashFn(map[string]any{
+		"route_catalog_version":     strings.TrimSpace(catalog.RouteCatalogVersion),
+		"resolver_contract_version": assistantResolverContractVersionV1,
+		"context_template_version":  assistantContextTemplateVersionV1,
+		"reply_guidance_version":    replyGuidanceVersion,
+		"catalog":                   catalog,
+		"interpretation":            interpretation,
+		"action_view":               actionViews,
+		"reply_guidance":            replyGuidance,
+	})
+	if strings.TrimSpace(snapshotDigest) == "" {
+		return nil, fmt.Errorf("%w: knowledge snapshot digest empty", errAssistantRuntimeConfigInvalid)
 	}
 
 	return &assistantKnowledgeRuntime{

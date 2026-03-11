@@ -107,6 +107,9 @@ func assistantTurnPhase(turn *assistantTurn) string {
 	if strings.TrimSpace(turn.ErrorCode) != "" {
 		return assistantPhaseFailed
 	}
+	if !assistantTurnActionChainAllowed(turn) {
+		return assistantPhaseIdle
+	}
 	if len(assistantTurnMissingFields(turn)) > 0 {
 		return assistantPhaseAwaitMissingFields
 	}
@@ -191,8 +194,7 @@ func assistantTurnPendingDraftSummary(turn *assistantTurn) string {
 	if turn == nil {
 		return ""
 	}
-	routeKind := strings.TrimSpace(turn.Intent.RouteKind)
-	if routeKind != "" && routeKind != assistantRouteKindBusinessAction {
+	if !assistantTurnActionChainAllowed(turn) {
 		return ""
 	}
 	if len(assistantTurnMissingFields(turn)) > 0 {

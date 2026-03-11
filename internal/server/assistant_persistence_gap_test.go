@@ -303,10 +303,11 @@ func TestAssistantPersistence_LoadConversationTxErrorMatrix(t *testing.T) {
 		{name: "intent", idx: 10},
 		{name: "plan", idx: 11},
 		{name: "candidates", idx: 12},
-		{name: "dry_run", idx: 19},
-		{name: "missing_fields", idx: 21},
-		{name: "commit_result", idx: 22},
-		{name: "commit_reply", idx: 23},
+		{name: "route_decision", idx: 19},
+		{name: "dry_run", idx: 20},
+		{name: "missing_fields", idx: 22},
+		{name: "commit_result", idx: 23},
+		{name: "commit_reply", idx: 24},
 	} {
 		row := makeBaseTurnRow()
 		row[tc.idx] = []byte("{")
@@ -522,6 +523,11 @@ func TestAssistantPersistence_UpsertAndMutationBranchCoverage(t *testing.T) {
 	badPlan.Plan.ConfigDeltaPlan.Changes = []assistantConfigChange{{Field: "x", After: func() {}}}
 	if err := svc.upsertTurnTx(ctx, tx, "tenant_1", "conv_1", &badPlan); err == nil {
 		t.Fatal("expected plan marshal error")
+	}
+	badRoute := *turn
+	badRoute.RouteDecision = assistantIntentRouteDecision{RouteKind: "bad"}
+	if err := svc.upsertTurnTx(ctx, tx, "tenant_1", "conv_1", &badRoute); !errors.Is(err, errAssistantRouteRuntimeInvalid) {
+		t.Fatalf("expected route runtime invalid, got=%v", err)
 	}
 
 	principal := Principal{ID: "actor_1", RoleSlug: "tenant-admin"}
@@ -1169,11 +1175,11 @@ func TestAssistantPersistence_SubmitCommitTaskPG_GateRejectNoTaskWrites(t *testi
 		execSQL = append(execSQL, sql)
 		switch {
 		case strings.Contains(sql, "INSERT INTO iam.assistant_turns"):
-			if len(args) > 26 {
+			if len(args) > 27 {
 				if value, ok := args[4].(string); ok {
 					upsertState = strings.TrimSpace(value)
 				}
-				if value, ok := args[26].(string); ok {
+				if value, ok := args[27].(string); ok {
 					upsertErrorCode = strings.TrimSpace(value)
 				}
 			}

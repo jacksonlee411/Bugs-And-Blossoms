@@ -18,16 +18,17 @@ const (
 )
 
 type assistantActionGateInput struct {
-	Stage      assistantActionStage
-	TenantID   string
-	Principal  Principal
-	Action     assistantActionSpec
-	Intent     assistantIntentSpec
-	Turn       *assistantTurn
-	Candidates []assistantCandidate
-	ResolvedID string
-	DryRun     *assistantDryRunResult
-	UserInput  string
+	Stage         assistantActionStage
+	TenantID      string
+	Principal     Principal
+	Action        assistantActionSpec
+	Intent        assistantIntentSpec
+	RouteDecision assistantIntentRouteDecision
+	Turn          *assistantTurn
+	Candidates    []assistantCandidate
+	ResolvedID    string
+	DryRun        *assistantDryRunResult
+	UserInput     string
 }
 
 type assistantActionGateDecision struct {
@@ -43,6 +44,16 @@ var assistantLoadAuthorizerFn = func() (authorizer, error) {
 }
 
 func assistantEvaluateActionGate(input assistantActionGateInput) assistantActionGateDecision {
+	if input.Stage == assistantActionStageConfirm || input.Stage == assistantActionStageCommit {
+		if decision := assistantCheckRouteDecision(input); !decision.Allowed {
+			return decision
+		}
+	}
+	if input.Stage == assistantActionStagePlan {
+		if decision := assistantCheckRouteDecision(input); !decision.Allowed {
+			return decision
+		}
+	}
 	if strings.TrimSpace(input.Action.ID) == "" {
 		return assistantActionGateDecision{Allowed: false, Error: errAssistantActionSpecMissing, ErrorCode: errAssistantActionSpecMissing.Error(), HTTPStatus: http.StatusUnprocessableEntity, ReasonCode: "action_spec_missing"}
 	}

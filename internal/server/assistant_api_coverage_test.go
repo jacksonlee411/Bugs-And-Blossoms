@@ -432,6 +432,24 @@ func TestAssistantConversationHandlers_CoverageMatrix(t *testing.T) {
 			t.Fatalf("status=%d code=%s", rec.Code, assistantDecodeErrCode(t, rec))
 		}
 
+		routeErrSvc := newAssistantConversationService(newOrgUnitMemoryStore(), assistantWriteServiceStub{store: newOrgUnitMemoryStore()})
+		routeErrSvc.knowledgeRuntime = &assistantKnowledgeRuntime{
+			RouteCatalogVersion:     "2026-03-11.v1",
+			SnapshotDigest:          "sha256:test",
+			ResolverContractVersion: "resolver_contract_v1",
+			routeCatalog: assistantIntentRouteCatalog{Entries: []assistantIntentRouteEntry{{
+				IntentID:  "route.bad",
+				RouteKind: "bad_kind",
+				Keywords:  []string{"坏"},
+			}}},
+		}
+		routeErrConv := routeErrSvc.createConversation("tenant-1", principal)
+		rec = httptest.NewRecorder()
+		handleAssistantConversationTurnsAPI(rec, assistantReqWithContext(http.MethodPost, "/internal/assistant/conversations/"+routeErrConv.ConversationID+"/turns", `{"user_input":"坏"}`, true, true), routeErrSvc)
+		if rec.Code != http.StatusUnprocessableEntity || assistantDecodeErrCode(t, rec) != errAssistantRouteRuntimeInvalid.Error() {
+			t.Fatalf("status=%d code=%s body=%s", rec.Code, assistantDecodeErrCode(t, rec), rec.Body.String())
+		}
+
 		rec = httptest.NewRecorder()
 		handleAssistantConversationTurnsAPI(rec, assistantReqWithContext(http.MethodPost, path, `{"user_input":"仅生成计划"}`, true, true), svc)
 		if rec.Code != http.StatusOK {
@@ -540,6 +558,19 @@ func TestAssistantTurnActionHandler_CoverageMatrix(t *testing.T) {
 		handleAssistantTurnActionAPI(rec, assistantReqWithContext(http.MethodPost, baseConfirmPath, `{"candidate_id":"bad"}`, true, true), svc)
 		if rec.Code != http.StatusUnprocessableEntity || assistantDecodeErrCode(t, rec) != "assistant_candidate_not_found" {
 			t.Fatalf("status=%d code=%s", rec.Code, assistantDecodeErrCode(t, rec))
+		}
+
+		nonBusinessSvc := newAssistantConversationService(store, assistantWriteServiceStub{store: store})
+		nonBusinessConv := nonBusinessSvc.createConversation(tenantID, principal)
+		nonBusinessConversation, nonBusinessErr := nonBusinessSvc.createTurn(context.Background(), tenantID, principal, nonBusinessConv.ConversationID, "系统有哪些功能")
+		if nonBusinessErr != nil {
+			t.Fatalf("create non business turn: %v", nonBusinessErr)
+		}
+		nonBusinessTurn := nonBusinessConversation.Turns[0]
+		rec = httptest.NewRecorder()
+		handleAssistantTurnActionAPI(rec, assistantReqWithContext(http.MethodPost, "/internal/assistant/conversations/"+nonBusinessConv.ConversationID+"/turns/"+nonBusinessTurn.TurnID+":confirm", `{}`, true, true), nonBusinessSvc)
+		if rec.Code != http.StatusConflict || assistantDecodeErrCode(t, rec) != errAssistantRouteNonBusinessBlocked.Error() {
+			t.Fatalf("status=%d code=%s body=%s", rec.Code, assistantDecodeErrCode(t, rec), rec.Body.String())
 		}
 
 		candidateID := conversation.Turns[0].Candidates[0].CandidateID

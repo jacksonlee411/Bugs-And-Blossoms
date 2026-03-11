@@ -847,3 +847,37 @@ func TestAssistantKnowledgeRuntime_HelperCoverage(t *testing.T) {
 		})
 	})
 }
+
+func TestAssistantKnowledgeRuntime_SnapshotDigestCarriesVersionSet(t *testing.T) {
+	hooks := captureAssistantKnowledgeHooks()
+	defer hooks.restore()
+	catalog, interpretation, actionViews, replyGuidance, rawByPath := assistantKnowledgeBaseCompileInput()
+	captured := map[string]any{}
+	assistantKnowledgeCanonicalHashFn = func(value any) string {
+		payload, ok := value.(map[string]any)
+		if !ok {
+			t.Fatalf("unexpected digest payload type=%T", value)
+		}
+		captured = payload
+		return "sha256:test"
+	}
+	runtime, err := assistantCompileKnowledgeRuntime(catalog, interpretation, actionViews, replyGuidance, rawByPath)
+	if err != nil {
+		t.Fatalf("compile knowledge runtime err=%v", err)
+	}
+	if runtime == nil || strings.TrimSpace(runtime.SnapshotDigest) == "" {
+		t.Fatal("expected runtime snapshot digest")
+	}
+	if got := strings.TrimSpace(captured["route_catalog_version"].(string)); got != strings.TrimSpace(catalog.RouteCatalogVersion) {
+		t.Fatalf("unexpected route catalog version=%q", got)
+	}
+	if got := strings.TrimSpace(captured["resolver_contract_version"].(string)); got != assistantResolverContractVersionV1 {
+		t.Fatalf("unexpected resolver contract version=%q", got)
+	}
+	if got := strings.TrimSpace(captured["context_template_version"].(string)); got != assistantContextTemplateVersionV1 {
+		t.Fatalf("unexpected context template version=%q", got)
+	}
+	if got := strings.TrimSpace(captured["reply_guidance_version"].(string)); got != "2026-03-11.v1" {
+		t.Fatalf("unexpected reply guidance version=%q", got)
+	}
+}

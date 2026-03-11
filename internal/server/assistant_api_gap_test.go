@@ -572,7 +572,82 @@ func TestAssistantIntentClarificationAndDryRunNonBusinessCoverage(t *testing.T) 
 	}) {
 		t.Fatal("non-business route should require clarification")
 	}
+	if !assistantTurnRequiresIntentClarification(&assistantTurn{
+		RouteDecision: assistantIntentRouteDecision{RouteKind: assistantRouteKindBusinessAction, ClarificationRequired: true},
+	}) {
+		t.Fatal("route decision clarification should require clarification")
+	}
 	if got := assistantDryRunValidationExplain([]string{"non_business_route"}); !strings.Contains(got, "非业务动作请求") {
 		t.Fatalf("unexpected explain=%q", got)
 	}
+}
+
+func TestAssistantRouteHandlerMappings(t *testing.T) {
+	principal := Principal{ID: "actor-1", RoleSlug: "tenant-admin"}
+
+	t.Run("create turn route error mappings", func(t *testing.T) {
+		cases := []struct {
+			err      error
+			status   int
+			wantCode string
+		}{
+			{err: errAssistantRouteRuntimeInvalid, status: http.StatusUnprocessableEntity, wantCode: errAssistantRouteRuntimeInvalid.Error()},
+			{err: errAssistantRouteCatalogMissing, status: http.StatusServiceUnavailable, wantCode: errAssistantRouteCatalogMissing.Error()},
+			{err: errAssistantRouteActionConflict, status: http.StatusUnprocessableEntity, wantCode: errAssistantRouteActionConflict.Error()},
+			{err: errAssistantRouteDecisionMissing, status: http.StatusConflict, wantCode: errAssistantRouteDecisionMissing.Error()},
+		}
+		originalBuildRoute := assistantBuildIntentRouteDecisionFn
+		defer func() { assistantBuildIntentRouteDecisionFn = originalBuildRoute }()
+		for _, tc := range cases {
+			assistantBuildIntentRouteDecisionFn = func(string, assistantResolveIntentResult, assistantIntentSpec, *assistantKnowledgeRuntime, *assistantTurn) (assistantIntentRouteDecision, error) {
+				return assistantIntentRouteDecision{}, tc.err
+			}
+			svc := newAssistantConversationService(newOrgUnitMemoryStore(), assistantWriteServiceStub{store: newOrgUnitMemoryStore()})
+			conv := svc.createConversation("tenant-1", principal)
+			rec := httptest.NewRecorder()
+			handleAssistantConversationTurnsAPI(rec, assistantReqWithContext(http.MethodPost, "/internal/assistant/conversations/"+conv.ConversationID+"/turns", `{"user_input":"测试"}`, true, true), svc)
+			if rec.Code != tc.status || assistantDecodeErrCode(t, rec) != tc.wantCode {
+				t.Fatalf("err=%v status=%d code=%s body=%s", tc.err, rec.Code, assistantDecodeErrCode(t, rec), rec.Body.String())
+			}
+		}
+	})
+
+	t.Run("confirm route error mappings", func(t *testing.T) {
+		cases := []struct {
+			name     string
+			intent   assistantIntentSpec
+			route    assistantIntentRouteDecision
+			status   int
+			wantCode string
+		}{
+			{name: "non business", intent: assistantIntentSpec{Action: assistantIntentPlanOnly}, route: assistantIntentRouteDecision{RouteKind: assistantRouteKindKnowledgeQA, IntentID: "knowledge.general_qa", ConfidenceBand: assistantRouteConfidenceLow, RouteCatalogVersion: "v1", KnowledgeSnapshotDigest: "d", ResolverContractVersion: "r", DecisionSource: "s"}, status: http.StatusConflict, wantCode: errAssistantRouteNonBusinessBlocked.Error()},
+			{name: "clarification", intent: assistantIntentSpec{Action: assistantIntentCreateOrgUnit, ParentRefText: "鲜花组织", EntityName: "运营部", EffectiveDate: "2026-01-01"}, route: assistantIntentRouteDecision{RouteKind: assistantRouteKindBusinessAction, IntentID: "org.orgunit_create", CandidateActionIDs: []string{assistantIntentCreateOrgUnit}, ConfidenceBand: assistantRouteConfidenceMedium, ClarificationRequired: true, RouteCatalogVersion: "v1", KnowledgeSnapshotDigest: "d", ResolverContractVersion: "r", DecisionSource: "s"}, status: http.StatusConflict, wantCode: errAssistantRouteClarificationRequired.Error()},
+			{name: "missing", intent: assistantIntentSpec{Action: assistantIntentPlanOnly}, route: assistantIntentRouteDecision{}, status: http.StatusConflict, wantCode: errAssistantRouteDecisionMissing.Error()},
+			{name: "runtime invalid", intent: assistantIntentSpec{Action: assistantIntentCreateOrgUnit, ParentRefText: "鲜花组织", EntityName: "运营部", EffectiveDate: "2026-01-01"}, route: assistantIntentRouteDecision{RouteKind: "bad"}, status: http.StatusUnprocessableEntity, wantCode: errAssistantRouteRuntimeInvalid.Error()},
+			{name: "action conflict", intent: assistantIntentSpec{Action: assistantIntentCreateOrgUnit, ParentRefText: "鲜花组织", EntityName: "运营部", EffectiveDate: "2026-01-01"}, route: assistantIntentRouteDecision{RouteKind: assistantRouteKindBusinessAction, IntentID: "org.orgunit_create", CandidateActionIDs: []string{assistantIntentRenameOrgUnit}, ConfidenceBand: assistantRouteConfidenceHigh, RouteCatalogVersion: "v1", KnowledgeSnapshotDigest: "d", ResolverContractVersion: "r", DecisionSource: "s"}, status: http.StatusUnprocessableEntity, wantCode: errAssistantRouteActionConflict.Error()},
+		}
+		for _, tc := range cases {
+			svc := newAssistantConversationService(newOrgUnitMemoryStore(), assistantWriteServiceStub{store: newOrgUnitMemoryStore()})
+			conv := svc.createConversation("tenant-1", principal)
+			turn := &assistantTurn{
+				TurnID:              "turn_1",
+				State:               assistantStateValidated,
+				RequestID:           "req_1",
+				TraceID:             "trace_1",
+				Intent:              tc.intent,
+				RouteDecision:       tc.route,
+				Candidates:          []assistantCandidate{{CandidateID: "c1", CandidateCode: "FLOWER-A"}},
+				ResolvedCandidateID: "c1",
+				CreatedAt:           time.Now().UTC(),
+				UpdatedAt:           time.Now().UTC(),
+			}
+			assistantRefreshTurnDerivedFields(turn)
+			svc.byID[conv.ConversationID].Turns = []*assistantTurn{turn}
+			rec := httptest.NewRecorder()
+			handleAssistantTurnActionAPI(rec, assistantReqWithContext(http.MethodPost, "/internal/assistant/conversations/"+conv.ConversationID+"/turns/turn_1:confirm", `{}`, true, true), svc)
+			if rec.Code != tc.status || assistantDecodeErrCode(t, rec) != tc.wantCode {
+				t.Fatalf("%s status=%d code=%s body=%s", tc.name, rec.Code, assistantDecodeErrCode(t, rec), rec.Body.String())
+			}
+		}
+	})
 }

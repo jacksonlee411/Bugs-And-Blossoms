@@ -239,6 +239,12 @@ func TestAssistantPersistence_UtilityFunctions(t *testing.T) {
 		{errAssistantCandidateNotFound.Error(), errAssistantCandidateNotFound},
 		{errAssistantAuthSnapshotExpired.Error(), errAssistantAuthSnapshotExpired},
 		{errAssistantRoleDriftDetected.Error(), errAssistantRoleDriftDetected},
+		{errAssistantRouteRuntimeInvalid.Error(), errAssistantRouteRuntimeInvalid},
+		{errAssistantRouteCatalogMissing.Error(), errAssistantRouteCatalogMissing},
+		{errAssistantRouteActionConflict.Error(), errAssistantRouteActionConflict},
+		{errAssistantRouteDecisionMissing.Error(), errAssistantRouteDecisionMissing},
+		{errAssistantRouteNonBusinessBlocked.Error(), errAssistantRouteNonBusinessBlocked},
+		{errAssistantRouteClarificationRequired.Error(), errAssistantRouteClarificationRequired},
 		{errAssistantUnsupportedIntent.Error(), errAssistantUnsupportedIntent},
 		{errAssistantServiceMissing.Error(), errAssistantServiceMissing},
 	}
@@ -259,6 +265,12 @@ func TestAssistantPersistence_UtilityFunctions(t *testing.T) {
 		errAssistantCandidateNotFound,
 		errAssistantAuthSnapshotExpired,
 		errAssistantRoleDriftDetected,
+		errAssistantRouteRuntimeInvalid,
+		errAssistantRouteCatalogMissing,
+		errAssistantRouteActionConflict,
+		errAssistantRouteDecisionMissing,
+		errAssistantRouteNonBusinessBlocked,
+		errAssistantRouteClarificationRequired,
 		errAssistantUnsupportedIntent,
 		errAssistantServiceMissing,
 	}
@@ -720,6 +732,10 @@ func assistantTurnRowValues(turn *assistantTurn) []any {
 	planJSON, _ := json.Marshal(turn.Plan)
 	candidatesJSON, _ := json.Marshal(turn.Candidates)
 	candidateOptionsJSON := []byte(assistantCandidateOptionsJSON(turn))
+	var routeDecisionJSON []byte
+	if assistantIntentRouteDecisionPresent(turn.RouteDecision) {
+		routeDecisionJSON, _ = json.Marshal(turn.RouteDecision)
+	}
 	dryRunJSON, _ := json.Marshal(turn.DryRun)
 	missingFieldsJSON := []byte(assistantMissingFieldsJSON(turn))
 	var commitJSON []byte
@@ -774,6 +790,7 @@ func assistantTurnRowValues(turn *assistantTurn) []any {
 		turn.AmbiguityCount,
 		turn.Confidence,
 		source,
+		routeDecisionJSON,
 		dryRunJSON,
 		pendingDraft,
 		missingFieldsJSON,

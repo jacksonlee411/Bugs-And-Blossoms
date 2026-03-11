@@ -226,6 +226,9 @@ func assistantTaskValidateSnapshotAgainstTurn(snapshot assistantTaskContractSnap
 	if turn == nil {
 		return errAssistantTurnNotFound
 	}
+	if !assistantTurnRouteAuditVersionsConsistent(turn) {
+		return errAssistantPlanContractVersionMismatch
+	}
 	current := assistantBuildTaskSnapshotFromTurn(turn)
 	if !assistantTaskSnapshotCompatible(current, snapshot) {
 		return errAssistantPlanContractVersionMismatch
@@ -329,6 +332,9 @@ func assistantBuildTaskSnapshotFromTurn(turn *assistantTurn) assistantTaskContra
 func assistantBuildTaskSubmitRequestFromTurn(conversationID string, turn *assistantTurn) (assistantTaskSubmitRequest, error) {
 	if turn == nil {
 		return assistantTaskSubmitRequest{}, errAssistantTurnNotFound
+	}
+	if !assistantTurnRouteAuditVersionsConsistent(turn) {
+		return assistantTaskSubmitRequest{}, errAssistantPlanContractVersionMismatch
 	}
 	req := assistantTaskSubmitRequest{
 		ConversationID:   strings.TrimSpace(conversationID),

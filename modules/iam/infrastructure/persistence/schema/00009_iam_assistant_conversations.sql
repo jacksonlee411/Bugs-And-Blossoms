@@ -48,6 +48,7 @@ CREATE TABLE IF NOT EXISTS iam.assistant_turns (
   ambiguity_count integer NOT NULL,
   confidence double precision NOT NULL,
   resolution_source text NULL,
+  route_decision_json jsonb NULL,
   dry_run_json jsonb NOT NULL,
   pending_draft_summary text NULL,
   missing_fields jsonb NOT NULL DEFAULT '[]'::jsonb,
@@ -70,6 +71,9 @@ CREATE TABLE IF NOT EXISTS iam.assistant_turns (
   CONSTRAINT assistant_turns_candidates_array_check CHECK (jsonb_typeof(candidates_json) = 'array'),
   CONSTRAINT assistant_turns_candidate_options_array_check CHECK (jsonb_typeof(candidate_options) = 'array'),
   CONSTRAINT assistant_turns_dry_run_object_check CHECK (jsonb_typeof(dry_run_json) = 'object'),
+  CONSTRAINT assistant_turns_route_decision_object_or_null_check CHECK (
+    route_decision_json IS NULL OR jsonb_typeof(route_decision_json) = 'object'
+  ),
   CONSTRAINT assistant_turns_missing_fields_array_check CHECK (jsonb_typeof(missing_fields) = 'array'),
   CONSTRAINT assistant_turns_commit_result_object_or_null_check CHECK (
     commit_result_json IS NULL OR jsonb_typeof(commit_result_json) = 'object'
