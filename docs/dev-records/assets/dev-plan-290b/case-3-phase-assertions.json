@@ -1,17 +1,17 @@
 {
   "case_id": 3,
   "status": "passed",
-  "validated_at": "2026-03-11T00:21:31.926Z",
+  "validated_at": "2026-03-12T00:14:54.610Z",
   "observed_phase_path": [
     "await_missing_fields",
     "committed"
   ],
   "network_internal_posts": [
     "/internal/assistant/conversations",
-    "/internal/assistant/conversations/conv_91bebcd0c2b14939a718e64e7d774291/turns",
-    "/internal/assistant/conversations/conv_91bebcd0c2b14939a718e64e7d774291/turns",
-    "/internal/assistant/conversations/conv_91bebcd0c2b14939a718e64e7d774291/turns/turn_3eb8dd182ef14c8b8e1365774881749a:confirm",
-    "/internal/assistant/conversations/conv_91bebcd0c2b14939a718e64e7d774291/turns/turn_3eb8dd182ef14c8b8e1365774881749a:commit"
+    "/internal/assistant/conversations/conv_219190e30b0d4aa396ed6e022726b38a/turns",
+    "/internal/assistant/conversations/conv_219190e30b0d4aa396ed6e022726b38a/turns",
+    "/internal/assistant/conversations/conv_219190e30b0d4aa396ed6e022726b38a/turns/turn_1b0263120f454cb6ab5d09aba73631d1:confirm",
+    "/internal/assistant/conversations/conv_219190e30b0d4aa396ed6e022726b38a/turns/turn_1b0263120f454cb6ab5d09aba73631d1:commit"
   ],
   "task_terminal_status": "succeeded",
   "task_status_poll_count": 1,

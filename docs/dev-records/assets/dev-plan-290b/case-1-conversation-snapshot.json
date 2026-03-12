@@ -1,7 +1,7 @@
 {
   "case_id": 1,
-  "tenant_id": "e3726ab6-3a50-449a-979a-c663f378c6ea",
-  "conversation_id": "conv_01698ddb922445deb6741006a5028ec2",
+  "tenant_id": "1201ba64-6b13-4b58-b43a-014180bc4e02",
+  "conversation_id": "conv_70ee452f7bef43f088dec8c522bb2cce",
   "snapshots": [
     {
       "step": 1,
@@ -9,62 +9,62 @@
       "bubble": {
         "count": 0,
         "bindingKey": "",
-        "conversationId": "conv_01698ddb922445deb6741006a5028ec2",
+        "conversationId": "conv_70ee452f7bef43f088dec8c522bb2cce",
         "turnId": "",
         "requestId": "",
         "text": ""
       },
       "conversation": {
-        "conversation_id": "conv_01698ddb922445deb6741006a5028ec2",
-        "tenant_id": "e3726ab6-3a50-449a-979a-c663f378c6ea",
-        "actor_id": "87aa4f1b-43b5-4a5d-b025-92a475a4380a",
+        "conversation_id": "conv_70ee452f7bef43f088dec8c522bb2cce",
+        "tenant_id": "1201ba64-6b13-4b58-b43a-014180bc4e02",
+        "actor_id": "183c210f-aeae-43ae-b73e-9a81b90d13ff",
         "actor_role": "tenant-admin",
         "state": "validated",
         "current_phase": "idle",
         "state_transitions": [
           {
-            "id": 1107,
-            "request_id": "assistant_e7cc420478b944f98ae88df9f75aeeca",
-            "trace_id": "3dc3f8aff8574c24a5016fddcc1c01c7",
+            "id": 1234,
+            "request_id": "assistant_d96d3cb9a60a43d28eed8bf3180542c5",
+            "trace_id": "0fcca431b64b405d8fd91738d8da6f7c",
             "from_state": "init",
             "to_state": "validated",
             "from_phase": "init",
             "to_phase": "idle",
             "reason_code": "conversation_created",
-            "actor_id": "87aa4f1b-43b5-4a5d-b025-92a475a4380a",
-            "changed_at": "2026-03-11T00:20:40.50486157Z"
+            "actor_id": "183c210f-aeae-43ae-b73e-9a81b90d13ff",
+            "changed_at": "2026-03-12T00:13:59.095138732Z"
           }
         ],
-        "created_at": "2026-03-11T00:20:40.50486157Z",
-        "updated_at": "2026-03-11T00:20:40.50486157Z",
+        "created_at": "2026-03-12T00:13:59.095138732Z",
+        "updated_at": "2026-03-12T00:13:59.095138732Z",
         "turns": []
       },
       "latest_turn": null
     }
   ],
   "final_conversation": {
-    "conversation_id": "conv_01698ddb922445deb6741006a5028ec2",
-    "tenant_id": "e3726ab6-3a50-449a-979a-c663f378c6ea",
-    "actor_id": "87aa4f1b-43b5-4a5d-b025-92a475a4380a",
+    "conversation_id": "conv_70ee452f7bef43f088dec8c522bb2cce",
+    "tenant_id": "1201ba64-6b13-4b58-b43a-014180bc4e02",
+    "actor_id": "183c210f-aeae-43ae-b73e-9a81b90d13ff",
     "actor_role": "tenant-admin",
     "state": "validated",
     "current_phase": "idle",
     "state_transitions": [
       {
-        "id": 1107,
-        "request_id": "assistant_e7cc420478b944f98ae88df9f75aeeca",
-        "trace_id": "3dc3f8aff8574c24a5016fddcc1c01c7",
+        "id": 1234,
+        "request_id": "assistant_d96d3cb9a60a43d28eed8bf3180542c5",
+        "trace_id": "0fcca431b64b405d8fd91738d8da6f7c",
         "from_state": "init",
         "to_state": "validated",
         "from_phase": "init",
         "to_phase": "idle",
         "reason_code": "conversation_created",
-        "actor_id": "87aa4f1b-43b5-4a5d-b025-92a475a4380a",
-        "changed_at": "2026-03-11T00:20:40.50486157Z"
+        "actor_id": "183c210f-aeae-43ae-b73e-9a81b90d13ff",
+        "changed_at": "2026-03-12T00:13:59.095138732Z"
       }
     ],
-    "created_at": "2026-03-11T00:20:40.50486157Z",
-    "updated_at": "2026-03-11T00:20:40.50486157Z",
+    "created_at": "2026-03-12T00:13:59.095138732Z",
+    "updated_at": "2026-03-12T00:13:59.095138732Z",
     "turns": []
   }
 }
