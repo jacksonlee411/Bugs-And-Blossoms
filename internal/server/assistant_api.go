@@ -59,6 +59,8 @@ type assistantConversationService struct {
 	commitAdapterRegistry assistantCommitAdapterRegistry
 	modelGateway          *assistantModelGateway
 	gatewayErr            error
+	knowledgeRuntime      *assistantKnowledgeRuntime
+	knowledgeErr          error
 	pool                  assistantTxBeginner
 	mu                    sync.RWMutex
 	byID                  map[string]*assistantConversation
@@ -98,37 +100,42 @@ type assistantStateTransition struct {
 }
 
 type assistantTurn struct {
-	TurnID              string                        `json:"turn_id"`
-	UserInput           string                        `json:"user_input"`
-	State               string                        `json:"state"`
-	Phase               string                        `json:"phase,omitempty"`
-	RiskTier            string                        `json:"risk_tier"`
-	RequestID           string                        `json:"request_id"`
-	TraceID             string                        `json:"trace_id"`
-	PolicyVersion       string                        `json:"policy_version"`
-	CompositionVersion  string                        `json:"composition_version"`
-	MappingVersion      string                        `json:"mapping_version"`
-	Intent              assistantIntentSpec           `json:"intent"`
-	Plan                assistantPlanSummary          `json:"plan"`
-	PendingDraftSummary string                        `json:"pending_draft_summary,omitempty"`
-	MissingFields       []string                      `json:"missing_fields,omitempty"`
-	Candidates          []assistantCandidate          `json:"candidates"`
-	ResolvedCandidateID string                        `json:"resolved_candidate_id,omitempty"`
-	SelectedCandidateID string                        `json:"selected_candidate_id,omitempty"`
-	AmbiguityCount      int                           `json:"ambiguity_count"`
-	Confidence          float64                       `json:"confidence"`
-	ResolutionSource    string                        `json:"resolution_source,omitempty"`
-	DryRun              assistantDryRunResult         `json:"dry_run"`
-	CommitResult        *assistantCommitResult        `json:"commit_result,omitempty"`
-	CommitReply         *assistantCommitReply         `json:"commit_reply,omitempty"`
-	ErrorCode           string                        `json:"error_code,omitempty"`
-	ReplyNLG            *assistantRenderReplyResponse `json:"reply_nlg,omitempty"`
-	CreatedAt           time.Time                     `json:"created_at"`
-	UpdatedAt           time.Time                     `json:"updated_at"`
+	TurnID              string                          `json:"turn_id"`
+	UserInput           string                          `json:"user_input"`
+	State               string                          `json:"state"`
+	Phase               string                          `json:"phase,omitempty"`
+	RiskTier            string                          `json:"risk_tier"`
+	RequestID           string                          `json:"request_id"`
+	TraceID             string                          `json:"trace_id"`
+	PolicyVersion       string                          `json:"policy_version"`
+	CompositionVersion  string                          `json:"composition_version"`
+	MappingVersion      string                          `json:"mapping_version"`
+	Intent              assistantIntentSpec             `json:"intent"`
+	RouteDecision       assistantIntentRouteDecision    `json:"route_decision,omitempty"`
+	Clarification       *assistantClarificationDecision `json:"clarification,omitempty"`
+	Plan                assistantPlanSummary            `json:"plan"`
+	PendingDraftSummary string                          `json:"pending_draft_summary,omitempty"`
+	MissingFields       []string                        `json:"missing_fields,omitempty"`
+	Candidates          []assistantCandidate            `json:"candidates"`
+	ResolvedCandidateID string                          `json:"resolved_candidate_id,omitempty"`
+	SelectedCandidateID string                          `json:"selected_candidate_id,omitempty"`
+	AmbiguityCount      int                             `json:"ambiguity_count"`
+	Confidence          float64                         `json:"confidence"`
+	ResolutionSource    string                          `json:"resolution_source,omitempty"`
+	DryRun              assistantDryRunResult           `json:"dry_run"`
+	CommitResult        *assistantCommitResult          `json:"commit_result,omitempty"`
+	CommitReply         *assistantCommitReply           `json:"commit_reply,omitempty"`
+	ErrorCode           string                          `json:"error_code,omitempty"`
+	ReplyNLG            *assistantRenderReplyResponse   `json:"reply_nlg,omitempty"`
+	CreatedAt           time.Time                       `json:"created_at"`
+	UpdatedAt           time.Time                       `json:"updated_at"`
 }
 
 type assistantIntentSpec struct {
 	Action              string `json:"action"`
+	IntentID            string `json:"intent_id,omitempty"`
+	RouteKind           string `json:"route_kind,omitempty"`
+	RouteCatalogVersion string `json:"route_catalog_version,omitempty"`
 	ParentRefText       string `json:"parent_ref_text,omitempty"`
 	EntityName          string `json:"entity_name,omitempty"`
 	EffectiveDate       string `json:"effective_date,omitempty"`
@@ -154,6 +161,11 @@ type assistantPlanSummary struct {
 	ModelProvider           string                      `json:"model_provider,omitempty"`
 	ModelName               string                      `json:"model_name,omitempty"`
 	ModelRevision           string                      `json:"model_revision,omitempty"`
+	KnowledgeSnapshotDigest string                      `json:"knowledge_snapshot_digest,omitempty"`
+	RouteCatalogVersion     string                      `json:"route_catalog_version,omitempty"`
+	ResolverContractVersion string                      `json:"resolver_contract_version,omitempty"`
+	ContextTemplateVersion  string                      `json:"context_template_version,omitempty"`
+	ReplyGuidanceVersion    string                      `json:"reply_guidance_version,omitempty"`
 	VersionTuple            json.RawMessage             `json:"version_tuple,omitempty"`
 	ConfirmTTLSeconds       int                         `json:"confirm_ttl_seconds,omitempty"`
 	ExpiresAt               string                      `json:"expires_at,omitempty"`
@@ -250,13 +262,16 @@ type assistantRenderReplyRequest struct {
 
 func newAssistantConversationService(orgStore OrgUnitStore, writeSvc orgunitservices.OrgUnitWriteService) *assistantConversationService {
 	gateway, err := newAssistantModelGateway()
+	knowledgeRuntime, knowledgeErr := assistantLoadKnowledgeRuntime()
 	return &assistantConversationService{
-		orgStore:     orgStore,
-		writeSvc:     writeSvc,
-		modelGateway: gateway,
-		gatewayErr:   err,
-		byID:         make(map[string]*assistantConversation),
-		byActorID:    make(map[string][]string),
+		orgStore:         orgStore,
+		writeSvc:         writeSvc,
+		modelGateway:     gateway,
+		gatewayErr:       err,
+		knowledgeRuntime: knowledgeRuntime,
+		knowledgeErr:     knowledgeErr,
+		byID:             make(map[string]*assistantConversation),
+		byActorID:        make(map[string][]string),
 	}
 }
 
@@ -449,6 +464,14 @@ func handleAssistantConversationTurnsAPI(w http.ResponseWriter, r *http.Request,
 			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusUnprocessableEntity, "ai_runtime_config_invalid", "ai runtime config invalid")
 		case errors.Is(err, errAssistantRuntimeConfigMissing):
 			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusServiceUnavailable, "ai_runtime_config_missing", "ai runtime config missing")
+		case errors.Is(err, errAssistantRouteRuntimeInvalid):
+			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusUnprocessableEntity, errAssistantRouteRuntimeInvalid.Error(), "assistant route runtime invalid")
+		case errors.Is(err, errAssistantRouteCatalogMissing):
+			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusServiceUnavailable, errAssistantRouteCatalogMissing.Error(), "assistant route catalog missing")
+		case errors.Is(err, errAssistantRouteActionConflict):
+			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusUnprocessableEntity, errAssistantRouteActionConflict.Error(), "assistant route action conflict")
+		case errors.Is(err, errAssistantRouteDecisionMissing):
+			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusConflict, errAssistantRouteDecisionMissing.Error(), "assistant route decision missing")
 		case errors.Is(err, errAssistantModelSecretMissing):
 			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusInternalServerError, "ai_model_secret_missing", "ai model secret missing")
 		case errors.Is(err, errAssistantPlanDeterminismViolation):
@@ -527,10 +550,28 @@ func handleAssistantTurnActionAPI(w http.ResponseWriter, r *http.Request, svc *a
 				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusConflict, "conversation_confirmation_required", "conversation confirmation required")
 			case errors.Is(err, errAssistantConfirmationExpired):
 				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusConflict, "conversation_confirmation_expired", "conversation confirmation expired")
+			case errors.Is(err, errAssistantClarificationRequired):
+				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusConflict, errAssistantClarificationRequired.Error(), "assistant clarification required")
+			case errors.Is(err, errAssistantClarificationRoundsExhausted):
+				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusConflict, errAssistantClarificationRoundsExhausted.Error(), "assistant clarification rounds exhausted")
+			case errors.Is(err, errAssistantManualHintRequired):
+				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusConflict, errAssistantManualHintRequired.Error(), "assistant manual hint required")
+			case errors.Is(err, errAssistantClarificationRuntimeInvalid):
+				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusConflict, errAssistantClarificationRuntimeInvalid.Error(), "assistant clarification runtime invalid")
 			case errors.Is(err, errAssistantConversationStateInvalid):
 				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusConflict, "conversation_state_invalid", "conversation state invalid")
 			case errors.Is(err, errAssistantCandidateNotFound):
 				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusUnprocessableEntity, "assistant_candidate_not_found", "assistant candidate not found")
+			case errors.Is(err, errAssistantRouteNonBusinessBlocked):
+				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusConflict, errAssistantRouteNonBusinessBlocked.Error(), "assistant route non business blocked")
+			case errors.Is(err, errAssistantRouteClarificationRequired):
+				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusConflict, errAssistantRouteClarificationRequired.Error(), "assistant route clarification required")
+			case errors.Is(err, errAssistantRouteDecisionMissing):
+				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusConflict, errAssistantRouteDecisionMissing.Error(), "assistant route decision missing")
+			case errors.Is(err, errAssistantRouteRuntimeInvalid):
+				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusUnprocessableEntity, errAssistantRouteRuntimeInvalid.Error(), "assistant route runtime invalid")
+			case errors.Is(err, errAssistantRouteActionConflict):
+				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusUnprocessableEntity, errAssistantRouteActionConflict.Error(), "assistant route action conflict")
 			case errors.Is(err, errAssistantUnsupportedIntent):
 				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusUnprocessableEntity, "assistant_intent_unsupported", "assistant intent unsupported")
 			case errors.Is(err, errAssistantActionAuthzDenied):
@@ -565,6 +606,24 @@ func handleAssistantTurnActionAPI(w http.ResponseWriter, r *http.Request, svc *a
 				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusConflict, "conversation_confirmation_required", "conversation confirmation required")
 			case errors.Is(err, errAssistantConfirmationExpired):
 				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusConflict, "conversation_confirmation_expired", "conversation confirmation expired")
+			case errors.Is(err, errAssistantClarificationRequired):
+				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusConflict, errAssistantClarificationRequired.Error(), "assistant clarification required")
+			case errors.Is(err, errAssistantClarificationRoundsExhausted):
+				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusConflict, errAssistantClarificationRoundsExhausted.Error(), "assistant clarification rounds exhausted")
+			case errors.Is(err, errAssistantManualHintRequired):
+				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusConflict, errAssistantManualHintRequired.Error(), "assistant manual hint required")
+			case errors.Is(err, errAssistantClarificationRuntimeInvalid):
+				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusConflict, errAssistantClarificationRuntimeInvalid.Error(), "assistant clarification runtime invalid")
+			case errors.Is(err, errAssistantRouteNonBusinessBlocked):
+				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusConflict, errAssistantRouteNonBusinessBlocked.Error(), "assistant route non business blocked")
+			case errors.Is(err, errAssistantRouteClarificationRequired):
+				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusConflict, errAssistantRouteClarificationRequired.Error(), "assistant route clarification required")
+			case errors.Is(err, errAssistantRouteDecisionMissing):
+				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusConflict, errAssistantRouteDecisionMissing.Error(), "assistant route decision missing")
+			case errors.Is(err, errAssistantRouteRuntimeInvalid):
+				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusUnprocessableEntity, errAssistantRouteRuntimeInvalid.Error(), "assistant route runtime invalid")
+			case errors.Is(err, errAssistantRouteActionConflict):
+				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusUnprocessableEntity, errAssistantRouteActionConflict.Error(), "assistant route action conflict")
 			case errors.Is(err, errAssistantConversationStateInvalid):
 				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusConflict, "conversation_state_invalid", "conversation state invalid")
 			case errors.Is(err, errAssistantPlanContractVersionMismatch):
@@ -711,6 +770,16 @@ var (
 	errAssistantActionAuthzDenied                 = errors.New("ai_action_authz_denied")
 	errAssistantActionRiskGateDenied              = errors.New("ai_action_risk_gate_denied")
 	errAssistantActionRequiredCheckFailed         = errors.New("ai_action_required_check_failed")
+	errAssistantRouteRuntimeInvalid               = errors.New("ai_route_runtime_invalid")
+	errAssistantRouteCatalogMissing               = errors.New("ai_route_catalog_missing")
+	errAssistantRouteActionConflict               = errors.New("ai_route_action_conflict")
+	errAssistantRouteDecisionMissing              = errors.New("ai_route_decision_missing")
+	errAssistantRouteNonBusinessBlocked           = errors.New("ai_route_non_business_blocked")
+	errAssistantRouteClarificationRequired        = errors.New("ai_route_clarification_required")
+	errAssistantClarificationRequired             = errors.New("assistant_clarification_required")
+	errAssistantClarificationRoundsExhausted      = errors.New("assistant_clarification_rounds_exhausted")
+	errAssistantManualHintRequired                = errors.New("assistant_manual_hint_required")
+	errAssistantClarificationRuntimeInvalid       = errors.New("assistant_clarification_runtime_invalid")
 	errAssistantTaskNotFound                      = errors.New("assistant_task_not_found")
 	errAssistantTaskStateInvalid                  = errors.New("assistant_task_state_invalid")
 	errAssistantTaskCancelNotAllowed              = errors.New("assistant_task_cancel_not_allowed")
@@ -887,10 +956,29 @@ func (s *assistantConversationService) createTurn(ctx context.Context, tenantID 
 	if err != nil {
 		return nil, err
 	}
-	intent := assistantMergeIntentWithPendingTurn(resolvedIntent.Intent, assistantLatestPendingTurn(conversation))
+	knowledgeRuntime, err := s.ensureKnowledgeRuntime()
+	if err != nil {
+		return nil, err
+	}
+	pendingTurn := assistantLatestPendingTurn(conversation)
+	mergedIntent := assistantMergeIntentWithPendingTurn(resolvedIntent.Intent, pendingTurn)
+	resume := assistantClarificationResumeResult{Intent: mergedIntent}
+	if pendingTurn != nil {
+		resume = assistantResumeFromClarificationFn(pendingTurn, userInput, mergedIntent)
+		mergedIntent = resume.Intent
+	}
+	routeDecision, err := assistantBuildIntentRouteDecisionFn(userInput, resolvedIntent, mergedIntent, knowledgeRuntime, pendingTurn)
+	if err != nil {
+		return nil, err
+	}
+	intent := assistantProjectIntentRouteDecision(mergedIntent, routeDecision)
+	if action := strings.TrimSpace(resume.Intent.Action); action != "" && action != assistantIntentPlanOnly && strings.TrimSpace(intent.Action) == assistantIntentPlanOnly {
+		intent.Action = action
+	}
 	intentValidationErrors := assistantIntentValidationErrors(intent)
 	candidates := make([]assistantCandidate, 0)
 	resolvedCandidateID := ""
+	selectedCandidateID := strings.TrimSpace(resume.SelectedCandidateID)
 	resolutionSource := ""
 	ambiguityCount := 0
 	confidence := 0.65
@@ -914,8 +1002,38 @@ func (s *assistantConversationService) createTurn(ctx context.Context, tenantID 
 			confidence = 0.55
 		}
 	}
-	spec, ok := s.lookupActionSpec(intent.Action)
-	if !ok {
+	if resumeCandidateID := strings.TrimSpace(resume.ResolvedCandidateID); resumeCandidateID != "" && assistantCandidateExists(candidates, resumeCandidateID) {
+		resolvedCandidateID = resumeCandidateID
+		selectedCandidateID = resumeCandidateID
+		resolutionSource = assistantResolutionUserConfirmed
+		confidence = 0.95
+	}
+	dryRun := assistantBuildDryRunFn(intent, candidates, resolvedCandidateID)
+	dryRun = s.enrichCreateOrgUnitDryRunWithPolicy(ctx, tenantID, intent, candidates, resolvedCandidateID, dryRun)
+	var pendingClarification *assistantClarificationDecision
+	if pendingTurn != nil {
+		pendingClarification = pendingTurn.Clarification
+	}
+	clarification := assistantBuildClarificationDecisionFn(assistantClarificationBuildInput{
+		UserInput:            userInput,
+		Intent:               intent,
+		RouteDecision:        routeDecision,
+		DryRun:               dryRun,
+		Candidates:           candidates,
+		ResolvedCandidateID:  resolvedCandidateID,
+		SelectedCandidateID:  selectedCandidateID,
+		Runtime:              knowledgeRuntime,
+		PendingClarification: pendingClarification,
+		ResumeProgress:       resume.Progress,
+	})
+	if clarification != nil && strings.TrimSpace(clarification.Status) == assistantClarificationStatusOpen && strings.TrimSpace(clarification.ClarificationKind) == assistantClarificationKindIntentDisambiguate {
+		dryRun.Explain = ""
+		dryRun.ValidationErrors = nil
+	}
+
+	spec, specOK := s.lookupActionSpec(intent.Action)
+	requiresActionSpec := clarification == nil || strings.TrimSpace(clarification.ClarificationKind) != assistantClarificationKindIntentDisambiguate
+	if !specOK && requiresActionSpec {
 		return nil, errAssistantUnsupportedIntent
 	}
 
@@ -925,33 +1043,62 @@ func (s *assistantConversationService) createTurn(ctx context.Context, tenantID 
 	plan.ModelProvider = resolvedIntent.ProviderName
 	plan.ModelName = resolvedIntent.ModelName
 	plan.ModelRevision = resolvedIntent.ModelRevision
-	skillExecutionPlan, configDeltaPlan := assistantCompileIntentToPlansWithSpec(intent, resolvedCandidateID, spec)
-	plan.SkillExecutionPlan = skillExecutionPlan
-	plan.ConfigDeltaPlan = configDeltaPlan
-	decision := assistantEvaluateActionGate(assistantActionGateInput{
-		Stage:      assistantActionStagePlan,
-		TenantID:   tenantID,
-		Principal:  principal,
-		Action:     spec,
-		Intent:     intent,
-		Candidates: candidates,
-		ResolvedID: resolvedCandidateID,
-		UserInput:  userInput,
-	})
-	if !decision.Allowed {
-		if errors.Is(decision.Error, errAssistantActionCapabilityUnregistered) {
-			return nil, errAssistantPlanBoundaryViolation
+	if specOK && (clarification == nil || strings.TrimSpace(clarification.ClarificationKind) != assistantClarificationKindIntentDisambiguate) {
+		skillExecutionPlan, configDeltaPlan := assistantCompileIntentToPlansWithSpec(intent, resolvedCandidateID, spec)
+		plan.SkillExecutionPlan = skillExecutionPlan
+		plan.ConfigDeltaPlan = configDeltaPlan
+		decision := assistantEvaluateActionGate(assistantActionGateInput{
+			Stage:         assistantActionStagePlan,
+			TenantID:      tenantID,
+			Principal:     principal,
+			Action:        spec,
+			Intent:        intent,
+			RouteDecision: routeDecision,
+			Candidates:    candidates,
+			ResolvedID:    resolvedCandidateID,
+			UserInput:     userInput,
+		})
+		if !decision.Allowed {
+			if errors.Is(decision.Error, errAssistantActionCapabilityUnregistered) {
+				return nil, errAssistantPlanBoundaryViolation
+			}
+			return nil, decision.Error
 		}
-		return nil, decision.Error
+		tempTurn := &assistantTurn{
+			Intent:              intent,
+			RouteDecision:       routeDecision,
+			Clarification:       clarification,
+			Plan:                plan,
+			Candidates:          candidates,
+			ResolvedCandidateID: resolvedCandidateID,
+			SelectedCandidateID: selectedCandidateID,
+			DryRun:              dryRun,
+		}
+		if err := s.refreshTurnVersionTuple(ctx, tenantID, tempTurn); err != nil {
+			return nil, err
+		}
+		plan = tempTurn.Plan
+		dryRun = tempTurn.DryRun
+		planContext, err := knowledgeRuntime.buildPlanContextV1(tenantID, knowledgeRuntime.planContextLocale(), intent, spec, tempTurn)
+		if err != nil {
+			return nil, err
+		}
+		assistantApplyPlanContextV1(&plan, &dryRun, intent, planContext)
 	}
-	dryRun := assistantBuildDryRunFn(intent, candidates, resolvedCandidateID)
-	dryRun = s.enrichCreateOrgUnitDryRunWithPolicy(ctx, tenantID, intent, candidates, resolvedCandidateID, dryRun)
-	tempTurn := &assistantTurn{Intent: intent, Plan: plan, Candidates: candidates, ResolvedCandidateID: resolvedCandidateID, DryRun: dryRun}
-	if err := s.refreshTurnVersionTuple(ctx, tenantID, tempTurn); err != nil {
-		return nil, err
+	assistantApplyPlanKnowledgeSnapshot(&plan, routeDecision, knowledgeRuntime)
+	tempTurn := &assistantTurn{
+		Intent:              intent,
+		RouteDecision:       routeDecision,
+		Clarification:       clarification,
+		Plan:                plan,
+		Candidates:          candidates,
+		ResolvedCandidateID: resolvedCandidateID,
+		SelectedCandidateID: selectedCandidateID,
+		DryRun:              dryRun,
 	}
-	plan = tempTurn.Plan
-	dryRun = tempTurn.DryRun
+	if !assistantTurnRouteAuditVersionsConsistent(tempTurn) {
+		return nil, errAssistantPlanContractVersionMismatch
+	}
 	if err := assistantAnnotateIntentPlanFn(tenantID, conversationID, userInput, &intent, &plan, &dryRun); err != nil {
 		return nil, err
 	}
@@ -961,22 +1108,31 @@ func (s *assistantConversationService) createTurn(ctx context.Context, tenantID 
 		TurnID:              "turn_" + strings.ReplaceAll(uuid.NewString(), "-", ""),
 		UserInput:           userInput,
 		State:               assistantStateValidated,
-		RiskTier:            strings.TrimSpace(spec.Security.RiskTier),
+		RiskTier:            "low",
 		RequestID:           "assistant_" + strings.ReplaceAll(uuid.NewString(), "-", ""),
 		TraceID:             strings.ReplaceAll(uuid.NewString(), "-", ""),
 		PolicyVersion:       policyVersion,
 		CompositionVersion:  compositionVersion,
 		MappingVersion:      mappingVersion,
 		Intent:              intent,
+		RouteDecision:       routeDecision,
+		Clarification:       clarification,
 		Plan:                plan,
 		Candidates:          candidates,
 		ResolvedCandidateID: resolvedCandidateID,
+		SelectedCandidateID: selectedCandidateID,
 		AmbiguityCount:      ambiguityCount,
 		Confidence:          confidence,
 		ResolutionSource:    resolutionSource,
 		DryRun:              dryRun,
 		CreatedAt:           turnCreatedAt,
 		UpdatedAt:           turnCreatedAt,
+	}
+	if specOK {
+		turn.RiskTier = strings.TrimSpace(spec.Security.RiskTier)
+		if turn.RiskTier == "" {
+			turn.RiskTier = "low"
+		}
 	}
 	assistantRefreshTurnDerivedFields(turn)
 
@@ -1267,9 +1423,19 @@ func assistantTurnRequiresIntentClarification(turn *assistantTurn) bool {
 	if turn == nil {
 		return false
 	}
+	if assistantTurnHasOpenClarification(turn) {
+		return true
+	}
+	routeKind := assistantTurnRouteKind(turn)
+	if routeKind != "" && routeKind != assistantRouteKindBusinessAction {
+		return true
+	}
+	if assistantTurnHasRouteClarificationSignal(turn) {
+		return true
+	}
 	for _, code := range assistantNormalizeValidationErrors(turn.DryRun.ValidationErrors) {
 		switch code {
-		case "missing_parent_ref_text", "missing_new_parent_ref_text", "parent_candidate_not_found", "missing_entity_name", "missing_new_name", "missing_effective_date", "invalid_effective_date_format", "missing_org_code", "missing_target_effective_date", "invalid_target_effective_date_format", "missing_change_fields", "FIELD_REQUIRED_VALUE_MISSING", "PATCH_FIELD_NOT_ALLOWED":
+		case "missing_parent_ref_text", "missing_new_parent_ref_text", "parent_candidate_not_found", "missing_entity_name", "missing_new_name", "missing_effective_date", "invalid_effective_date_format", "missing_org_code", "missing_target_effective_date", "invalid_target_effective_date_format", "missing_change_fields", "FIELD_REQUIRED_VALUE_MISSING", "PATCH_FIELD_NOT_ALLOWED", "non_business_route":
 			return true
 		}
 	}
@@ -1283,7 +1449,7 @@ func assistantMergeIntentWithPendingTurn(intent assistantIntentSpec, pending *as
 	if strings.TrimSpace(pending.Intent.Action) != assistantIntentCreateOrgUnit {
 		return intent
 	}
-	if strings.TrimSpace(pending.Phase) != assistantPhaseAwaitMissingFields {
+	if !assistantTurnHasOpenClarification(pending) && len(assistantTurnMissingFields(pending)) == 0 {
 		return intent
 	}
 	merged := intent
@@ -1307,12 +1473,16 @@ func assistantLatestPendingTurn(conversation *assistantConversation) *assistantT
 	if turn == nil {
 		return nil
 	}
-	switch strings.TrimSpace(turn.Phase) {
-	case assistantPhaseAwaitMissingFields:
-		return turn
-	default:
+	if strings.TrimSpace(turn.State) != assistantStateValidated {
 		return nil
 	}
+	if assistantTurnHasOpenClarification(turn) {
+		return turn
+	}
+	if len(assistantTurnMissingFields(turn)) > 0 && assistantTurnRouteKind(turn) == assistantRouteKindBusinessAction {
+		return turn
+	}
+	return nil
 }
 
 func assistantIntentValidationErrors(intent assistantIntentSpec) []string {
@@ -1439,6 +1609,8 @@ func assistantDryRunValidationExplain(validationErrors []string) string {
 			return "当前组织创建策略缺少可用默认值，请联系管理员补齐 org_code / 组织类型策略后重试。"
 		case "PATCH_FIELD_NOT_ALLOWED":
 			return "当前租户未启用创建所需组织字段配置，请联系管理员启用 org_type 字段后重试。"
+		case "non_business_route":
+			hints = append(hints, "当前输入属于非业务动作请求，不会触发提交")
 		}
 	}
 	if len(hints) == 0 {
@@ -1681,6 +1853,17 @@ func cloneConversation(in *assistantConversation) *assistantConversation {
 			continue
 		}
 		copyTurn := *turn
+		copyTurn.RouteDecision.CandidateActionIDs = append([]string(nil), turn.RouteDecision.CandidateActionIDs...)
+		copyTurn.RouteDecision.ReasonCodes = append([]string(nil), turn.RouteDecision.ReasonCodes...)
+		if turn.Clarification != nil {
+			copyClarification := *turn.Clarification
+			copyClarification.RequiredSlots = append([]string(nil), turn.Clarification.RequiredSlots...)
+			copyClarification.MissingSlots = append([]string(nil), turn.Clarification.MissingSlots...)
+			copyClarification.CandidateActionIDs = append([]string(nil), turn.Clarification.CandidateActionIDs...)
+			copyClarification.CandidateIDs = append([]string(nil), turn.Clarification.CandidateIDs...)
+			copyClarification.ReasonCodes = append([]string(nil), turn.Clarification.ReasonCodes...)
+			copyTurn.Clarification = &copyClarification
+		}
 		copyTurn.MissingFields = append([]string(nil), turn.MissingFields...)
 		copyTurn.Candidates = append([]assistantCandidate(nil), turn.Candidates...)
 		copyTurn.DryRun.Diff = append([]map[string]any(nil), turn.DryRun.Diff...)

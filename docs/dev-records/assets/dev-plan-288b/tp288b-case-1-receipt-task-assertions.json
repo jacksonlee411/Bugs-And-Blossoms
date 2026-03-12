@@ -1,21 +1,21 @@
 {
   "plan": "DEV-PLAN-288B",
   "case_id": "tp288b-case-1",
-  "tenant_id": "70f4821d-38d4-4ed3-a9c0-7fda94df766e",
+  "tenant_id": "e9c8fab6-00ab-4d4f-95fa-07548883ffba",
   "scenario": "create -> confirm -> commit(receipt) -> poll(task) -> refresh(conversation)",
   "formal_entry": "/app/assistant/librechat",
   "command": "pnpm --dir /home/lee/Projects/Bugs-And-Blossoms/e2e exec playwright test tests/tp288b-librechat-live-task-receipt-contract.spec.js --workers=1 --trace on",
-  "captured_at": "2026-03-10T23:19:24.265Z",
-  "conversation_id": "conv_f0d1862af94b4fe28c241efee471e0ac",
-  "turn_id": "turn_8268d6c0e0a6468089aeea9b1093666f",
+  "captured_at": "2026-03-12T00:13:52.847Z",
+  "conversation_id": "conv_3d221a65bd4f462eb647043e2fb0a2ea",
+  "turn_id": "turn_919ae25bb58349eeb96208b3a922f5d5",
   "commit_status": 202,
   "receipt": {
-    "task_id": "bbb85060-03c8-4e63-a74e-81fd1d64eef8",
-    "poll_uri": "/internal/assistant/tasks/bbb85060-03c8-4e63-a74e-81fd1d64eef8",
+    "task_id": "a89ec561-3c4f-4574-9e07-777c6cd7c8e7",
+    "poll_uri": "/internal/assistant/tasks/a89ec561-3c4f-4574-9e07-777c6cd7c8e7",
     "task_type": "assistant_async_plan",
     "status": "queued",
-    "workflow_id": "assistant_async_orchestration_v1:70f4821d-38d4-4ed3-a9c0-7fda94df766e:conv_f0d1862af94b4fe28c241efee471e0ac:turn_8268d6c0e0a6468089aeea9b1093666f:assistant_91b3a483c5404c3490ea4c534b2ac89c",
-    "submitted_at": "2026-03-10T23:19:23.152071863Z"
+    "workflow_id": "assistant_async_orchestration_v1:e9c8fab6-00ab-4d4f-95fa-07548883ffba:conv_3d221a65bd4f462eb647043e2fb0a2ea:turn_919ae25bb58349eeb96208b3a922f5d5:assistant_af344fe207f54711bdecdd2be2985cc5",
+    "submitted_at": "2026-03-12T00:13:51.616720379Z"
   },
   "poll_status_sequence": [
     "succeeded"
@@ -42,11 +42,11 @@
   },
   "final_bubble": {
     "count": 1,
-    "bindingKey": "conv_f0d1862af94b4fe28c241efee471e0ac::turn_8268d6c0e0a6468089aeea9b1093666f::assistant_91b3a483c5404c3490ea4c534b2ac89c",
-    "conversationId": "conv_f0d1862af94b4fe28c241efee471e0ac",
-    "turnId": "turn_8268d6c0e0a6468089aeea9b1093666f",
-    "requestId": "assistant_91b3a483c5404c3490ea4c534b2ac89c",
-    "text": "上级组织：AI治理办公室；新建组织：人力资源部288B744464；生效日期：2026-01-01 task_id: bbb85060-03c8-4e63-a74e-81fd1d64eef8 · succeeded Selected: AI治理办公室 org_code: O000001 parent_org_code: TP288BAIGOV effective_date: 2026-01-01 event_type: CREATE"
+    "bindingKey": "conv_3d221a65bd4f462eb647043e2fb0a2ea::turn_919ae25bb58349eeb96208b3a922f5d5::assistant_af344fe207f54711bdecdd2be2985cc5",
+    "conversationId": "conv_3d221a65bd4f462eb647043e2fb0a2ea",
+    "turnId": "turn_919ae25bb58349eeb96208b3a922f5d5",
+    "requestId": "assistant_af344fe207f54711bdecdd2be2985cc5",
+    "text": "上级组织：AI治理办公室；新建组织：人力资源部288B415260；生效日期：2026-01-01 task_id: a89ec561-3c4f-4574-9e07-777c6cd7c8e7 · succeeded Selected: AI治理办公室 org_code: O000001 parent_org_code: TP288BAIGOV effective_date: 2026-01-01 event_type: CREATE"
   },
   "passed": true
 }

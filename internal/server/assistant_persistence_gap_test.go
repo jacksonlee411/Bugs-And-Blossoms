@@ -131,11 +131,37 @@ func TestAssistantPersistence_CreateTurnPGErrorMatrix(t *testing.T) {
 	if _, err := runtimeErrSvc.createTurnPG(context.Background(), "tenant_1", Principal{ID: "actor_1", RoleSlug: "tenant-admin"}, "conv_pg", "仅生成计划"); !errors.Is(err, errAssistantRuntimeConfigInvalid) {
 		t.Fatalf("unexpected err=%v", err)
 	}
+	knowledgeErrSvc := newAssistantConversationService(newOrgUnitMemoryStore(), assistantWriteServiceStub{store: newOrgUnitMemoryStore()})
+	knowledgeErrSvc.knowledgeRuntime = nil
+	knowledgeErrSvc.knowledgeErr = errAssistantRuntimeConfigInvalid
+	knowledgeErrSvc.pool = assistFakeTxBeginner{tx: makeTx("actor_1", "", nil, nil)}
+	if _, err := knowledgeErrSvc.createTurnPG(context.Background(), "tenant_1", Principal{ID: "actor_1", RoleSlug: "tenant-admin"}, "conv_pg", "仅生成计划"); !errors.Is(err, errAssistantRuntimeConfigInvalid) {
+		t.Fatalf("unexpected err=%v", err)
+	}
+
+	contextErrSvc := newAssistantConversationService(store, assistantWriteServiceStub{store: store})
+	contextErrSvc.knowledgeRuntime = &assistantKnowledgeRuntime{
+		RouteCatalogVersion: "2026-03-11.v1",
+		actionView:          map[string]map[string]assistantActionViewPack{},
+		interpretation: map[string]map[string]assistantInterpretationPack{
+			"knowledge.general_qa": {"zh": {PackID: "knowledge.general_qa", Locale: "zh"}},
+		},
+	}
+	contextErrSvc.pool = assistFakeTxBeginner{tx: makeTx("actor_1", "", nil, nil)}
+	if _, err := contextErrSvc.createTurnPG(context.Background(), "tenant_1", Principal{ID: "actor_1", RoleSlug: "tenant-admin"}, "conv_pg", "在鲜花组织之下，新建一个名为运营部的部门，成立日期是2026-01-01"); !errors.Is(err, errAssistantRuntimeConfigInvalid) {
+		t.Fatalf("unexpected err=%v", err)
+	}
 
 	originalDefinitions := capabilityDefinitionByKey
+	defer func() { capabilityDefinitionByKey = originalDefinitions }()
 	capabilityDefinitionByKey = map[string]capabilityDefinition{}
-	if _, err := svc.createTurnPG(context.Background(), "tenant_1", Principal{ID: "actor_1", RoleSlug: "tenant-admin"}, "conv_pg", "仅生成计划"); !errors.Is(err, errAssistantPlanBoundaryViolation) {
+	svc.pool = assistFakeTxBeginner{tx: makeTx("actor_1", "", nil, nil)}
+	createdWithClarification, err := svc.createTurnPG(context.Background(), "tenant_1", Principal{ID: "actor_1", RoleSlug: "tenant-admin"}, "conv_pg", "仅生成计划")
+	if err != nil {
 		t.Fatalf("unexpected err=%v", err)
+	}
+	if len(createdWithClarification.Turns) == 0 || !assistantTurnHasOpenClarification(createdWithClarification.Turns[len(createdWithClarification.Turns)-1]) {
+		t.Fatalf("expected clarification turn, got=%+v", createdWithClarification.Turns)
 	}
 	capabilityDefinitionByKey = originalDefinitions
 
@@ -174,8 +200,8 @@ func TestAssistantPersistence_CreateTurnPGErrorMatrix(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected err=%v", err)
 	}
-	if got := strings.Join(incompleteConversation.Turns[0].DryRun.ValidationErrors, ","); !strings.Contains(got, "missing_effective_date") {
-		t.Fatalf("expected missing_effective_date, got=%v", incompleteConversation.Turns[0].DryRun.ValidationErrors)
+	if got := strings.Join(incompleteConversation.Turns[0].DryRun.ValidationErrors, ","); !strings.Contains(got, "missing_effective_date") && !strings.Contains(got, "candidate_confirmation_required") {
+		t.Fatalf("expected missing_effective_date or candidate_confirmation_required, got=%v", incompleteConversation.Turns[0].DryRun.ValidationErrors)
 	}
 
 	originalAnnotateFn := assistantAnnotateIntentPlanFn
@@ -283,10 +309,12 @@ func TestAssistantPersistence_LoadConversationTxErrorMatrix(t *testing.T) {
 		{name: "intent", idx: 10},
 		{name: "plan", idx: 11},
 		{name: "candidates", idx: 12},
-		{name: "dry_run", idx: 19},
-		{name: "missing_fields", idx: 21},
-		{name: "commit_result", idx: 22},
-		{name: "commit_reply", idx: 23},
+		{name: "route_decision", idx: 19},
+		{name: "clarification", idx: 20},
+		{name: "dry_run", idx: 21},
+		{name: "missing_fields", idx: 23},
+		{name: "commit_result", idx: 24},
+		{name: "commit_reply", idx: 25},
 	} {
 		row := makeBaseTurnRow()
 		row[tc.idx] = []byte("{")
@@ -502,6 +530,11 @@ func TestAssistantPersistence_UpsertAndMutationBranchCoverage(t *testing.T) {
 	badPlan.Plan.ConfigDeltaPlan.Changes = []assistantConfigChange{{Field: "x", After: func() {}}}
 	if err := svc.upsertTurnTx(ctx, tx, "tenant_1", "conv_1", &badPlan); err == nil {
 		t.Fatal("expected plan marshal error")
+	}
+	badRoute := *turn
+	badRoute.RouteDecision = assistantIntentRouteDecision{RouteKind: "bad"}
+	if err := svc.upsertTurnTx(ctx, tx, "tenant_1", "conv_1", &badRoute); !errors.Is(err, errAssistantRouteRuntimeInvalid) {
+		t.Fatalf("expected route runtime invalid, got=%v", err)
 	}
 
 	principal := Principal{ID: "actor_1", RoleSlug: "tenant-admin"}
@@ -953,6 +986,34 @@ func TestAssistantPersistence_CommitTurnPG_ErrorPathMatrix(t *testing.T) {
 		t.Fatalf("unexpected err=%v", err)
 	}
 
+	conflictSvc := makeSvc("actor_1", "tenant-admin", [][]any{row}, nil, func(sql string) pgx.Row {
+		switch {
+		case strings.Contains(sql, "INSERT INTO iam.assistant_idempotency"):
+			return &assistFakeRow{err: pgx.ErrNoRows}
+		case strings.Contains(sql, "SELECT request_hash"):
+			return &assistFakeRow{vals: []any{"other_hash", "pending", nil, nil, []byte(nil)}}
+		default:
+			return nil
+		}
+	}, nil)
+	if _, err := conflictSvc.commitTurnPG(context.Background(), "tenant_1", principal, "conv_1", "turn_1"); !errors.Is(err, errAssistantIdempotencyKeyConflict) {
+		t.Fatalf("unexpected err=%v", err)
+	}
+
+	inProgressSvc := makeSvc("actor_1", "tenant-admin", [][]any{row}, nil, func(sql string) pgx.Row {
+		switch {
+		case strings.Contains(sql, "INSERT INTO iam.assistant_idempotency"):
+			return &assistFakeRow{err: pgx.ErrNoRows}
+		case strings.Contains(sql, "SELECT request_hash"):
+			return &assistFakeRow{vals: []any{assistantHashText("commit\n"), "pending", nil, nil, []byte(nil)}}
+		default:
+			return nil
+		}
+	}, nil)
+	if _, err := inProgressSvc.commitTurnPG(context.Background(), "tenant_1", principal, "conv_1", "turn_1"); !errors.Is(err, errAssistantRequestInProgress) {
+		t.Fatalf("unexpected err=%v", err)
+	}
+
 	doneBody, _ := json.Marshal(&assistantConversation{ConversationID: "conv_done"})
 	doneSvc := makeSvc("actor_1", "tenant-admin", [][]any{row}, nil, func(sql string) pgx.Row {
 		switch {
@@ -1121,11 +1182,11 @@ func TestAssistantPersistence_SubmitCommitTaskPG_GateRejectNoTaskWrites(t *testi
 		execSQL = append(execSQL, sql)
 		switch {
 		case strings.Contains(sql, "INSERT INTO iam.assistant_turns"):
-			if len(args) > 26 {
+			if len(args) > 27 {
 				if value, ok := args[4].(string); ok {
 					upsertState = strings.TrimSpace(value)
 				}
-				if value, ok := args[26].(string); ok {
+				if value, ok := args[28].(string); ok {
 					upsertErrorCode = strings.TrimSpace(value)
 				}
 			}

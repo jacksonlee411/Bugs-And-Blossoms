@@ -55,6 +55,42 @@ func TestAssistantPhaseSnapshot_TurnDerivedFields(t *testing.T) {
 		}
 	})
 
+	t.Run("clarification status drives failed phase", func(t *testing.T) {
+		exhausted := &assistantTurn{
+			State: assistantStateValidated,
+			Clarification: &assistantClarificationDecision{
+				Status:            assistantClarificationStatusExhausted,
+				ClarificationKind: assistantClarificationKindMissingSlots,
+			},
+		}
+		if got := assistantTurnPhase(exhausted); got != assistantPhaseFailed {
+			t.Fatalf("exhausted clarification phase=%q", got)
+		}
+		aborted := &assistantTurn{
+			State: assistantStateValidated,
+			Clarification: &assistantClarificationDecision{
+				Status:            assistantClarificationStatusAborted,
+				ClarificationKind: assistantClarificationKindMissingSlots,
+			},
+		}
+		if got := assistantTurnPhase(aborted); got != assistantPhaseFailed {
+			t.Fatalf("aborted clarification phase=%q", got)
+		}
+	})
+
+	t.Run("unknown open clarification kind fails phase", func(t *testing.T) {
+		turn := &assistantTurn{
+			State: assistantStateValidated,
+			Clarification: &assistantClarificationDecision{
+				Status:            assistantClarificationStatusOpen,
+				ClarificationKind: "unknown_kind",
+			},
+		}
+		if got := assistantTurnPhase(turn); got != assistantPhaseFailed {
+			t.Fatalf("unknown clarification kind should fail phase, got=%q", got)
+		}
+	})
+
 	t.Run("await commit confirm", func(t *testing.T) {
 		turn := &assistantTurn{
 			State:               assistantStateValidated,
@@ -239,5 +275,8 @@ func TestAssistantPhaseSnapshot_HelperCoverage(t *testing.T) {
 	}
 	if got := assistantCommitReplyJSON(nil); got != nil {
 		t.Fatalf("nil commit reply json=%v", got)
+	}
+	if got := assistantClarificationJSON(&assistantTurn{Clarification: &assistantClarificationDecision{Status: assistantClarificationStatusOpen}}); !strings.Contains(got, "\"status\":\"open\"") {
+		t.Fatalf("clarification json=%q", got)
 	}
 }

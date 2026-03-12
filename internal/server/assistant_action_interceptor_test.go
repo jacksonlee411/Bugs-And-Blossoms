@@ -119,6 +119,33 @@ func TestAssistantActionInterceptor_Gates(t *testing.T) {
 		}
 	})
 
+	t.Run("route gate branches via evaluate", func(t *testing.T) {
+		planDecision := assistantEvaluateActionGate(assistantActionGateInput{
+			Stage:         assistantActionStagePlan,
+			Action:        spec,
+			RouteDecision: assistantIntentRouteDecision{RouteKind: assistantRouteKindBusinessAction, IntentID: "org.orgunit_create", CandidateActionIDs: []string{assistantIntentRenameOrgUnit}, ConfidenceBand: assistantRouteConfidenceHigh, RouteCatalogVersion: "v1", KnowledgeSnapshotDigest: "d", ResolverContractVersion: "r", DecisionSource: "s"},
+		})
+		if planDecision.Allowed || !errors.Is(planDecision.Error, errAssistantRouteActionConflict) {
+			t.Fatalf("unexpected plan route decision=%+v", planDecision)
+		}
+		confirmDecision := assistantEvaluateActionGate(assistantActionGateInput{
+			Stage:         assistantActionStageConfirm,
+			Action:        spec,
+			RouteDecision: assistantIntentRouteDecision{RouteKind: assistantRouteKindKnowledgeQA, IntentID: "knowledge.general_qa", ConfidenceBand: assistantRouteConfidenceLow, RouteCatalogVersion: "v1", KnowledgeSnapshotDigest: "d", ResolverContractVersion: "r", DecisionSource: "s"},
+		})
+		if confirmDecision.Allowed || !errors.Is(confirmDecision.Error, errAssistantRouteNonBusinessBlocked) {
+			t.Fatalf("unexpected confirm route decision=%+v", confirmDecision)
+		}
+		commitDecision := assistantEvaluateActionGate(assistantActionGateInput{
+			Stage:         assistantActionStageCommit,
+			Action:        spec,
+			RouteDecision: assistantIntentRouteDecision{RouteKind: assistantRouteKindBusinessAction, IntentID: "org.orgunit_create", CandidateActionIDs: []string{assistantIntentCreateOrgUnit}, ConfidenceBand: assistantRouteConfidenceMedium, ClarificationRequired: true, RouteCatalogVersion: "v1", KnowledgeSnapshotDigest: "d", ResolverContractVersion: "r", DecisionSource: "s"},
+		})
+		if commitDecision.Allowed || !errors.Is(commitDecision.Error, errAssistantRouteClarificationRequired) {
+			t.Fatalf("unexpected commit route decision=%+v", commitDecision)
+		}
+	})
+
 	t.Run("capability registration branches", func(t *testing.T) {
 		original := capabilityDefinitionByKey
 		defer func() { capabilityDefinitionByKey = original }()
@@ -474,4 +501,121 @@ func TestAssistantActionInterceptor_Gates(t *testing.T) {
 			})
 		}
 	})
+}
+
+func TestAssistantActionInterceptor_ClarificationAndCapabilityGaps(t *testing.T) {
+	spec, ok := assistantLookupDefaultActionSpec(assistantIntentCreateOrgUnit)
+	if !ok {
+		t.Fatal("missing create spec")
+	}
+	originalDefs := capabilityDefinitionByKey
+	defer func() { capabilityDefinitionByKey = originalDefs }()
+	capabilityDefinitionByKey = map[string]capabilityDefinition{}
+
+	decision := assistantEvaluateActionGate(assistantActionGateInput{
+		Stage: assistantActionStagePlan,
+		Action: assistantActionSpec{
+			ID:            spec.ID,
+			CapabilityKey: spec.CapabilityKey,
+		},
+		RouteDecision: assistantIntentRouteDecision{
+			RouteKind:               assistantRouteKindBusinessAction,
+			IntentID:                "org.orgunit_create",
+			CandidateActionIDs:      []string{assistantIntentCreateOrgUnit},
+			ConfidenceBand:          assistantRouteConfidenceHigh,
+			RouteCatalogVersion:     "v1",
+			KnowledgeSnapshotDigest: "d",
+			ResolverContractVersion: "r",
+			DecisionSource:          assistantRouteDecisionSourceKnowledgeRuntimeV1,
+		},
+	})
+	if decision.Allowed || !errors.Is(decision.Error, errAssistantActionCapabilityUnregistered) {
+		t.Fatalf("capability unregistered decision=%+v", decision)
+	}
+
+	validTurn := &assistantTurn{
+		State: assistantStateValidated,
+		RouteDecision: assistantIntentRouteDecision{
+			RouteKind:               assistantRouteKindBusinessAction,
+			IntentID:                "org.orgunit_create",
+			CandidateActionIDs:      []string{assistantIntentCreateOrgUnit},
+			ConfidenceBand:          assistantRouteConfidenceHigh,
+			RouteCatalogVersion:     "v1",
+			KnowledgeSnapshotDigest: "d",
+			ResolverContractVersion: "r",
+			DecisionSource:          assistantRouteDecisionSourceKnowledgeRuntimeV1,
+		},
+		Clarification: &assistantClarificationDecision{
+			Status:                  assistantClarificationStatusOpen,
+			ClarificationKind:       assistantClarificationKindMissingSlots,
+			AwaitPhase:              assistantPhaseAwaitMissingFields,
+			MaxRounds:               2,
+			CurrentRound:            1,
+			ExitTo:                  assistantClarificationExitBusinessResume,
+			KnowledgeSnapshotDigest: "d",
+			RouteCatalogVersion:     "v1",
+		},
+		Phase: assistantPhaseAwaitMissingFields,
+	}
+	if got := assistantCheckClarificationGate(assistantActionGateInput{Stage: assistantActionStagePlan, Turn: validTurn}); !got.Allowed {
+		t.Fatalf("plan stage should bypass open clarification gate, got=%+v", got)
+	}
+
+	invalidRuntimeTurn := &assistantTurn{
+		State:         assistantStateValidated,
+		RouteDecision: validTurn.RouteDecision,
+		Clarification: &assistantClarificationDecision{
+			Status:            assistantClarificationStatusOpen,
+			ClarificationKind: assistantClarificationKindMissingSlots,
+			AwaitPhase:        assistantPhaseAwaitMissingFields,
+			MaxRounds:         2,
+			CurrentRound:      1,
+		},
+	}
+	if got := assistantCheckClarificationGate(assistantActionGateInput{Stage: assistantActionStageConfirm, Turn: invalidRuntimeTurn}); got.Allowed || !errors.Is(got.Error, errAssistantClarificationRuntimeInvalid) {
+		t.Fatalf("runtime invalid clarification gate=%+v", got)
+	}
+
+	resolved := *validTurn
+	resolved.Clarification = &assistantClarificationDecision{
+		Status:            assistantClarificationStatusResolved,
+		ClarificationKind: assistantClarificationKindMissingSlots,
+		AwaitPhase:        assistantPhaseAwaitMissingFields,
+		MaxRounds:         2,
+		CurrentRound:      1,
+	}
+	if got := assistantCheckClarificationGate(assistantActionGateInput{Stage: assistantActionStageConfirm, Turn: &resolved}); !got.Allowed {
+		t.Fatalf("resolved clarification should pass gate, got=%+v", got)
+	}
+
+	staleOpen := *validTurn
+	staleOpen.Clarification = &assistantClarificationDecision{
+		Status:                  assistantClarificationStatusOpen,
+		ClarificationKind:       assistantClarificationKindMissingSlots,
+		AwaitPhase:              assistantPhaseAwaitMissingFields,
+		MaxRounds:               2,
+		CurrentRound:            1,
+		ExitTo:                  assistantClarificationExitBusinessResume,
+		KnowledgeSnapshotDigest: "d",
+		RouteCatalogVersion:     "v1",
+	}
+	staleOpen.Phase = assistantPhaseIdle
+	if got := assistantCheckClarificationGate(assistantActionGateInput{Stage: assistantActionStageConfirm, Turn: &staleOpen}); got.Allowed {
+		t.Fatalf("phase mismatch should be blocked, got=%+v", got)
+	}
+
+	nonOpen := *validTurn
+	nonOpen.Clarification = &assistantClarificationDecision{
+		Status:                  assistantClarificationStatusResolved,
+		ClarificationKind:       assistantClarificationKindMissingSlots,
+		AwaitPhase:              assistantPhaseAwaitMissingFields,
+		MaxRounds:               2,
+		CurrentRound:            1,
+		ExitTo:                  assistantClarificationExitBusinessResume,
+		KnowledgeSnapshotDigest: "d",
+		RouteCatalogVersion:     "v1",
+	}
+	if got := assistantCheckClarificationGate(assistantActionGateInput{Stage: assistantActionStageCommit, Turn: &nonOpen}); !got.Allowed {
+		t.Fatalf("non-open clarification status should pass gate, got=%+v", got)
+	}
 }

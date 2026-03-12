@@ -894,7 +894,7 @@ CREATE TABLE IF NOT EXISTS iam.assistant_conversations (
     state IN ('validated', 'confirmed', 'committed', 'canceled', 'expired')
   ),
   CONSTRAINT assistant_conversations_current_phase_check CHECK (
-    current_phase IN ('idle', 'await_missing_fields', 'await_candidate_pick', 'await_candidate_confirm', 'await_commit_confirm', 'committing', 'committed', 'failed', 'canceled', 'expired')
+    current_phase IN ('idle', 'await_clarification', 'await_missing_fields', 'await_candidate_pick', 'await_candidate_confirm', 'await_commit_confirm', 'committing', 'committed', 'failed', 'canceled', 'expired')
   )
 );
 
@@ -930,6 +930,8 @@ CREATE TABLE IF NOT EXISTS iam.assistant_turns (
   ambiguity_count integer NOT NULL,
   confidence double precision NOT NULL,
   resolution_source text NULL,
+  route_decision_json jsonb NULL,
+  clarification_json jsonb NOT NULL DEFAULT '{}'::jsonb,
   dry_run_json jsonb NOT NULL,
   pending_draft_summary text NULL,
   missing_fields jsonb NOT NULL DEFAULT '[]'::jsonb,
@@ -945,13 +947,17 @@ CREATE TABLE IF NOT EXISTS iam.assistant_turns (
     state IN ('validated', 'confirmed', 'committed', 'canceled', 'expired')
   ),
   CONSTRAINT assistant_turns_phase_check CHECK (
-    phase IN ('idle', 'await_missing_fields', 'await_candidate_pick', 'await_candidate_confirm', 'await_commit_confirm', 'committing', 'committed', 'failed', 'canceled', 'expired')
+    phase IN ('idle', 'await_clarification', 'await_missing_fields', 'await_candidate_pick', 'await_candidate_confirm', 'await_commit_confirm', 'committing', 'committed', 'failed', 'canceled', 'expired')
   ),
   CONSTRAINT assistant_turns_intent_object_check CHECK (jsonb_typeof(intent_json) = 'object'),
   CONSTRAINT assistant_turns_plan_object_check CHECK (jsonb_typeof(plan_json) = 'object'),
   CONSTRAINT assistant_turns_candidates_array_check CHECK (jsonb_typeof(candidates_json) = 'array'),
   CONSTRAINT assistant_turns_candidate_options_array_check CHECK (jsonb_typeof(candidate_options) = 'array'),
   CONSTRAINT assistant_turns_dry_run_object_check CHECK (jsonb_typeof(dry_run_json) = 'object'),
+  CONSTRAINT assistant_turns_route_decision_object_or_null_check CHECK (
+    route_decision_json IS NULL OR jsonb_typeof(route_decision_json) = 'object'
+  ),
+  CONSTRAINT assistant_turns_clarification_object_check CHECK (jsonb_typeof(clarification_json) = 'object'),
   CONSTRAINT assistant_turns_missing_fields_array_check CHECK (jsonb_typeof(missing_fields) = 'array'),
   CONSTRAINT assistant_turns_commit_result_object_or_null_check CHECK (
     commit_result_json IS NULL OR jsonb_typeof(commit_result_json) = 'object'
@@ -995,10 +1001,10 @@ CREATE TABLE IF NOT EXISTS iam.assistant_state_transitions (
     to_state IN ('validated', 'confirmed', 'committed', 'canceled', 'expired')
   ),
   CONSTRAINT assistant_state_transitions_from_phase_check CHECK (
-    from_phase IN ('init', 'idle', 'await_missing_fields', 'await_candidate_pick', 'await_candidate_confirm', 'await_commit_confirm', 'committing', 'committed', 'failed', 'canceled', 'expired')
+    from_phase IN ('init', 'idle', 'await_clarification', 'await_missing_fields', 'await_candidate_pick', 'await_candidate_confirm', 'await_commit_confirm', 'committing', 'committed', 'failed', 'canceled', 'expired')
   ),
   CONSTRAINT assistant_state_transitions_to_phase_check CHECK (
-    to_phase IN ('idle', 'await_missing_fields', 'await_candidate_pick', 'await_candidate_confirm', 'await_commit_confirm', 'committing', 'committed', 'failed', 'canceled', 'expired')
+    to_phase IN ('idle', 'await_clarification', 'await_missing_fields', 'await_candidate_pick', 'await_candidate_confirm', 'await_commit_confirm', 'committing', 'committed', 'failed', 'canceled', 'expired')
   ),
   CONSTRAINT assistant_state_transitions_turn_action_check CHECK (
     turn_action IS NULL OR turn_action IN ('confirm', 'commit')

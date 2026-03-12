@@ -44,6 +44,11 @@ type assistantTaskContractSnapshot struct {
 	ContextHash             string `json:"context_hash"`
 	IntentHash              string `json:"intent_hash"`
 	PlanHash                string `json:"plan_hash"`
+	KnowledgeSnapshotDigest string `json:"knowledge_snapshot_digest,omitempty"`
+	RouteCatalogVersion     string `json:"route_catalog_version,omitempty"`
+	ResolverContractVersion string `json:"resolver_contract_version,omitempty"`
+	ContextTemplateVersion  string `json:"context_template_version,omitempty"`
+	ReplyGuidanceVersion    string `json:"reply_guidance_version,omitempty"`
 }
 
 type assistantTaskSubmitRequest struct {
@@ -221,16 +226,54 @@ func assistantTaskValidateSnapshotAgainstTurn(snapshot assistantTaskContractSnap
 	if turn == nil {
 		return errAssistantTurnNotFound
 	}
-	if strings.TrimSpace(snapshot.IntentSchemaVersion) != strings.TrimSpace(turn.Intent.IntentSchemaVersion) ||
-		strings.TrimSpace(snapshot.CompilerContractVersion) != strings.TrimSpace(turn.Plan.CompilerContractVersion) ||
-		strings.TrimSpace(snapshot.CapabilityMapVersion) != strings.TrimSpace(turn.Plan.CapabilityMapVersion) ||
-		strings.TrimSpace(snapshot.SkillManifestDigest) != strings.TrimSpace(turn.Plan.SkillManifestDigest) ||
-		strings.TrimSpace(snapshot.ContextHash) != strings.TrimSpace(turn.Intent.ContextHash) ||
-		strings.TrimSpace(snapshot.IntentHash) != strings.TrimSpace(turn.Intent.IntentHash) ||
-		strings.TrimSpace(snapshot.PlanHash) != strings.TrimSpace(turn.DryRun.PlanHash) {
+	if !assistantTurnRouteAuditVersionsConsistent(turn) {
+		return errAssistantPlanContractVersionMismatch
+	}
+	current := assistantBuildTaskSnapshotFromTurn(turn)
+	if !assistantTaskSnapshotCompatible(current, snapshot) {
 		return errAssistantPlanContractVersionMismatch
 	}
 	return nil
+}
+
+func assistantTaskSnapshotCompatible(current assistantTaskContractSnapshot, stored assistantTaskContractSnapshot) bool {
+	if strings.TrimSpace(current.IntentSchemaVersion) != strings.TrimSpace(stored.IntentSchemaVersion) {
+		return false
+	}
+	if strings.TrimSpace(current.CompilerContractVersion) != strings.TrimSpace(stored.CompilerContractVersion) {
+		return false
+	}
+	if strings.TrimSpace(current.CapabilityMapVersion) != strings.TrimSpace(stored.CapabilityMapVersion) {
+		return false
+	}
+	if strings.TrimSpace(current.SkillManifestDigest) != strings.TrimSpace(stored.SkillManifestDigest) {
+		return false
+	}
+	if strings.TrimSpace(current.ContextHash) != strings.TrimSpace(stored.ContextHash) {
+		return false
+	}
+	if strings.TrimSpace(current.IntentHash) != strings.TrimSpace(stored.IntentHash) {
+		return false
+	}
+	if strings.TrimSpace(current.PlanHash) != strings.TrimSpace(stored.PlanHash) {
+		return false
+	}
+	if strings.TrimSpace(stored.KnowledgeSnapshotDigest) != "" && strings.TrimSpace(current.KnowledgeSnapshotDigest) != strings.TrimSpace(stored.KnowledgeSnapshotDigest) {
+		return false
+	}
+	if strings.TrimSpace(stored.RouteCatalogVersion) != "" && strings.TrimSpace(current.RouteCatalogVersion) != strings.TrimSpace(stored.RouteCatalogVersion) {
+		return false
+	}
+	if strings.TrimSpace(stored.ResolverContractVersion) != "" && strings.TrimSpace(current.ResolverContractVersion) != strings.TrimSpace(stored.ResolverContractVersion) {
+		return false
+	}
+	if strings.TrimSpace(stored.ContextTemplateVersion) != "" && strings.TrimSpace(current.ContextTemplateVersion) != strings.TrimSpace(stored.ContextTemplateVersion) {
+		return false
+	}
+	if strings.TrimSpace(stored.ReplyGuidanceVersion) != "" && strings.TrimSpace(current.ReplyGuidanceVersion) != strings.TrimSpace(stored.ReplyGuidanceVersion) {
+		return false
+	}
+	return true
 }
 
 func assistantTaskReceiptFromRecord(record assistantTaskRecord) assistantTaskAsyncReceipt {
@@ -278,12 +321,20 @@ func assistantBuildTaskSnapshotFromTurn(turn *assistantTurn) assistantTaskContra
 		ContextHash:             strings.TrimSpace(turn.Intent.ContextHash),
 		IntentHash:              strings.TrimSpace(turn.Intent.IntentHash),
 		PlanHash:                strings.TrimSpace(turn.DryRun.PlanHash),
+		KnowledgeSnapshotDigest: strings.TrimSpace(turn.Plan.KnowledgeSnapshotDigest),
+		RouteCatalogVersion:     strings.TrimSpace(turn.Plan.RouteCatalogVersion),
+		ResolverContractVersion: strings.TrimSpace(turn.Plan.ResolverContractVersion),
+		ContextTemplateVersion:  strings.TrimSpace(turn.Plan.ContextTemplateVersion),
+		ReplyGuidanceVersion:    strings.TrimSpace(turn.Plan.ReplyGuidanceVersion),
 	}
 }
 
 func assistantBuildTaskSubmitRequestFromTurn(conversationID string, turn *assistantTurn) (assistantTaskSubmitRequest, error) {
 	if turn == nil {
 		return assistantTaskSubmitRequest{}, errAssistantTurnNotFound
+	}
+	if !assistantTurnRouteAuditVersionsConsistent(turn) {
+		return assistantTaskSubmitRequest{}, errAssistantPlanContractVersionMismatch
 	}
 	req := assistantTaskSubmitRequest{
 		ConversationID:   strings.TrimSpace(conversationID),
@@ -755,7 +806,7 @@ func (s *assistantConversationService) executeAssistantTaskWorkflowTx(ctx contex
 		}
 		return err
 	}
-	if currentSnapshot != task.ContractSnapshot {
+	if !assistantTaskSnapshotCompatible(currentSnapshot, task.ContractSnapshot) {
 		return s.markAssistantTaskManualTakeoverTx(ctx, tx, tenantID, task, fromStatus, "ai_plan_contract_version_mismatch", now)
 	}
 	if strings.TrimSpace(task.ContractSnapshot.PlanHash) == "" {
@@ -1286,5 +1337,10 @@ WHERE tenant_uuid = $1::uuid
 		ContextHash:             strings.TrimSpace(intent.ContextHash),
 		IntentHash:              strings.TrimSpace(intent.IntentHash),
 		PlanHash:                strings.TrimSpace(dryRun.PlanHash),
+		KnowledgeSnapshotDigest: strings.TrimSpace(plan.KnowledgeSnapshotDigest),
+		RouteCatalogVersion:     strings.TrimSpace(plan.RouteCatalogVersion),
+		ResolverContractVersion: strings.TrimSpace(plan.ResolverContractVersion),
+		ContextTemplateVersion:  strings.TrimSpace(plan.ContextTemplateVersion),
+		ReplyGuidanceVersion:    strings.TrimSpace(plan.ReplyGuidanceVersion),
 	}, nil
 }

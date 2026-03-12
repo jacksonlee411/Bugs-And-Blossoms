@@ -3,12 +3,12 @@
   "bubble_count": 1,
   "bubbles": [
     {
-      "binding_key": "conv_f50afa3a53b44434b06b61496948a5b8::turn_cfe1b3f8a23b4c4ea005ac9cf3cc1d76::assistant_d97b196ffe1b47609d45abcc72b31ef7",
-      "conversation_id": "conv_f50afa3a53b44434b06b61496948a5b8",
-      "turn_id": "turn_cfe1b3f8a23b4c4ea005ac9cf3cc1d76",
-      "request_id": "assistant_d97b196ffe1b47609d45abcc72b31ef7",
-      "message_id": "70ca6664-ee27-41d0-ac9a-964757cbf89e_",
-      "text": "上级组织：共享服务中心；新建组织：239A候选验证部；生效日期：2026-03-26 task_id: c4b16a13-0a20-44aa-a5c0-490b32b52825 · succeeded Selected: 共享服务中心 org_code: O000001 parent_org_code: TP290BSSC2 effective_date: 2026-03-26 event_type: CREATE"
+      "binding_key": "conv_95177729964d412f806cd4a7d5104d3e::turn_a466697dc216416c85783a7bdc82d481::assistant_2787ede08b7d42d2a8a81d4186428919",
+      "conversation_id": "conv_95177729964d412f806cd4a7d5104d3e",
+      "turn_id": "turn_a466697dc216416c85783a7bdc82d481",
+      "request_id": "assistant_2787ede08b7d42d2a8a81d4186428919",
+      "message_id": "acc47130-cd53-45c1-ad7c-cc654b5315f4_",
+      "text": "assistant clarification runtime invalid Error: assistant_clarification_runtime_invalid 共享服务中心 集团 / 共享服务中心 TP290BSSC1 · score 0.8 共享服务中心 集团 / B / 共享服务中心 TP290BSSC2 · score 0.8"
     }
   ],
   "external_reply_container_count": 0,

@@ -18,16 +18,17 @@ const (
 )
 
 type assistantActionGateInput struct {
-	Stage      assistantActionStage
-	TenantID   string
-	Principal  Principal
-	Action     assistantActionSpec
-	Intent     assistantIntentSpec
-	Turn       *assistantTurn
-	Candidates []assistantCandidate
-	ResolvedID string
-	DryRun     *assistantDryRunResult
-	UserInput  string
+	Stage         assistantActionStage
+	TenantID      string
+	Principal     Principal
+	Action        assistantActionSpec
+	Intent        assistantIntentSpec
+	RouteDecision assistantIntentRouteDecision
+	Turn          *assistantTurn
+	Candidates    []assistantCandidate
+	ResolvedID    string
+	DryRun        *assistantDryRunResult
+	UserInput     string
 }
 
 type assistantActionGateDecision struct {
@@ -43,6 +44,19 @@ var assistantLoadAuthorizerFn = func() (authorizer, error) {
 }
 
 func assistantEvaluateActionGate(input assistantActionGateInput) assistantActionGateDecision {
+	if decision := assistantCheckClarificationGate(input); !decision.Allowed {
+		return decision
+	}
+	if input.Stage == assistantActionStageConfirm || input.Stage == assistantActionStageCommit {
+		if decision := assistantCheckRouteDecision(input); !decision.Allowed {
+			return decision
+		}
+	}
+	if input.Stage == assistantActionStagePlan {
+		if decision := assistantCheckRouteDecision(input); !decision.Allowed {
+			return decision
+		}
+	}
 	if strings.TrimSpace(input.Action.ID) == "" {
 		return assistantActionGateDecision{Allowed: false, Error: errAssistantActionSpecMissing, ErrorCode: errAssistantActionSpecMissing.Error(), HTTPStatus: http.StatusUnprocessableEntity, ReasonCode: "action_spec_missing"}
 	}
@@ -211,6 +225,63 @@ func assistantHydrateTurnForActionGate(turn *assistantTurn) {
 		return
 	}
 	turn.DryRun = assistantHydratedDryRunForGate(turn.State, turn.Intent, turn.Candidates, turn.ResolvedCandidateID)
+}
+
+func assistantCheckClarificationGate(input assistantActionGateInput) assistantActionGateDecision {
+	turn := input.Turn
+	if turn == nil {
+		return assistantActionGateDecision{Allowed: true}
+	}
+	if err := assistantValidateTurnClarificationRuntime(turn); err != nil {
+		return assistantActionGateDecision{
+			Allowed:    false,
+			Error:      errAssistantClarificationRuntimeInvalid,
+			ErrorCode:  errAssistantClarificationRuntimeInvalid.Error(),
+			HTTPStatus: http.StatusConflict,
+			ReasonCode: "clarification_runtime_invalid",
+		}
+	}
+	if input.Stage == assistantActionStagePlan {
+		return assistantActionGateDecision{Allowed: true}
+	}
+	clarification := turn.Clarification
+	if clarification == nil || !assistantClarificationDecisionPresent(clarification) {
+		return assistantActionGateDecision{Allowed: true}
+	}
+	status := strings.TrimSpace(clarification.Status)
+	if status == assistantClarificationStatusExhausted {
+		return assistantActionGateDecision{
+			Allowed:    false,
+			Error:      errAssistantClarificationRoundsExhausted,
+			ErrorCode:  errAssistantClarificationRoundsExhausted.Error(),
+			HTTPStatus: http.StatusConflict,
+			ReasonCode: assistantClarificationReasonRoundsExhausted,
+		}
+	}
+	if status == assistantClarificationStatusAborted || strings.TrimSpace(clarification.ExitTo) == assistantClarificationExitManualHint {
+		return assistantActionGateDecision{
+			Allowed:    false,
+			Error:      errAssistantManualHintRequired,
+			ErrorCode:  errAssistantManualHintRequired.Error(),
+			HTTPStatus: http.StatusConflict,
+			ReasonCode: "manual_hint_required",
+		}
+	}
+	if status != assistantClarificationStatusOpen {
+		return assistantActionGateDecision{Allowed: true}
+	}
+	open := assistantTurnOpenClarification(turn)
+	reason := assistantClarificationReasonMissingRequiredSlot
+	if len(open.ReasonCodes) > 0 {
+		reason = strings.TrimSpace(open.ReasonCodes[0])
+	}
+	return assistantActionGateDecision{
+		Allowed:    false,
+		Error:      errAssistantClarificationRequired,
+		ErrorCode:  errAssistantClarificationRequired.Error(),
+		HTTPStatus: http.StatusConflict,
+		ReasonCode: reason,
+	}
 }
 
 func assistantApplyGateDecision(conversation *assistantConversation, turn *assistantTurn, principal Principal, turnAction string, decision assistantActionGateDecision) (assistantTurnMutationResult, error) {

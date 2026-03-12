@@ -1,0 +1,76 @@
+{
+  "asset_type": "intent_route_catalog",
+  "route_catalog_version": "2026-03-11.v2",
+  "source_refs": [
+    "docs/dev-plans/240e-assistant-internal-knowledge-pack-and-readonly-resolver-plan.md",
+    "docs/dev-plans/241-assistant-knowledge-pack-runtime-minimal-implementation-plan.md"
+  ],
+  "entries": [
+    {
+      "intent_id": "org.orgunit_create",
+      "route_kind": "business_action",
+      "action_id": "create_orgunit",
+      "required_slots": [
+        "parent_ref_text",
+        "entity_name",
+        "effective_date"
+      ],
+      "min_confidence": 0.55,
+      "clarification_template_id": "clarify.org.orgunit_create.v1",
+      "keywords": [
+        "新建",
+        "部门",
+        "组织",
+        "create",
+        "department"
+      ]
+    },
+    {
+      "intent_id": "knowledge.general_qa",
+      "route_kind": "knowledge_qa",
+      "required_slots": [],
+      "min_confidence": 0.4,
+      "clarification_template_id": "clarify.knowledge.general_qa.v1",
+      "keywords": [
+        "?",
+        "？",
+        "什么",
+        "如何",
+        "怎么",
+        "why",
+        "how",
+        "what"
+      ]
+    },
+    {
+      "intent_id": "chat.greeting",
+      "route_kind": "chitchat",
+      "required_slots": [],
+      "min_confidence": 0.4,
+      "clarification_template_id": "clarify.chat.greeting.v1",
+      "keywords": [
+        "你好",
+        "在吗",
+        "谢谢",
+        "hi",
+        "hello",
+        "thanks"
+      ]
+    },
+    {
+      "intent_id": "route.uncertain",
+      "route_kind": "uncertain",
+      "required_slots": [],
+      "min_confidence": 0.2,
+      "clarification_template_id": "clarify.route.uncertain.v1",
+      "keywords": [
+        "没想好",
+        "不确定",
+        "还在考虑",
+        "not sure",
+        "maybe",
+        "not decided"
+      ]
+    }
+  ]
+}

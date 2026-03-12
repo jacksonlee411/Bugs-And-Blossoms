@@ -130,6 +130,8 @@ type IamAssistantTurn struct {
 	AmbiguityCount      int32              `json:"ambiguity_count"`
 	Confidence          float64            `json:"confidence"`
 	ResolutionSource    *string            `json:"resolution_source"`
+	RouteDecisionJson   []byte             `json:"route_decision_json"`
+	ClarificationJson   []byte             `json:"clarification_json"`
 	DryRunJson          []byte             `json:"dry_run_json"`
 	PendingDraftSummary *string            `json:"pending_draft_summary"`
 	MissingFields       []byte             `json:"missing_fields"`

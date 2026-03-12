@@ -510,6 +510,7 @@ func TestAssistant240DSubmitCommitTaskPGCoverage(t *testing.T) {
 		}
 		assistantTaskMarshalFn = origMarshalFn
 
+		existing.RequestHash = "mismatch_hash"
 		conflictFinalizeTx := newAssistantCommitTx(now, principal.ID, principal.RoleSlug, assistantStateConfirmed, makeTurnRows(confirmedTurn))
 		conflictFinalizeTx.queryRowFn = func(sql string, _ ...any) pgx.Row {
 			switch {
@@ -524,7 +525,7 @@ func TestAssistant240DSubmitCommitTaskPGCoverage(t *testing.T) {
 			}
 		}
 		conflictFinalizeTx.execFn = func(sql string, _ ...any) (pgconn.CommandTag, error) {
-			if strings.Contains(sql, "UPDATE iam.assistant_idempotency") {
+			if strings.Contains(sql, "UPDATE iam.assistant_idempotency") || strings.Contains(sql, "DELETE FROM iam.assistant_idempotency") {
 				return pgconn.NewCommandTag(""), errors.New("existing conflict finalize failed")
 			}
 			return pgconn.NewCommandTag(""), nil
@@ -542,6 +543,7 @@ func TestAssistant240DSubmitCommitTaskPGCoverage(t *testing.T) {
 			t.Fatalf("unexpected existing conflict commit err=%v", err)
 		}
 
+		existing.RequestHash = hash
 		existingFinalizeTx := newAssistantCommitTx(now, principal.ID, principal.RoleSlug, assistantStateConfirmed, makeTurnRows(confirmedTurn))
 		existingFinalizeTx.queryRowFn = existingTx.queryRowFn
 		existingFinalizeTx.execFn = func(sql string, _ ...any) (pgconn.CommandTag, error) {

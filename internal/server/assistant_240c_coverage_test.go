@@ -134,7 +134,7 @@ func TestAssistant240C_RuntimeAndCoverageBranches(t *testing.T) {
 		conv = specMissingSvc.createConversation("tenant-1", principal)
 		rec = httptest.NewRecorder()
 		handleAssistantConversationTurnsAPI(rec, assistantReqWithContext(http.MethodPost, "/internal/assistant/conversations/"+conv.ConversationID+"/turns", `{"user_input":"仅生成计划"}`, true, true), specMissingSvc)
-		if rec.Code != http.StatusUnprocessableEntity || assistantDecodeErrCode(t, rec) != errAssistantActionSpecMissing.Error() {
+		if rec.Code != http.StatusOK {
 			t.Fatalf("spec missing create status=%d body=%s", rec.Code, rec.Body.String())
 		}
 
@@ -144,7 +144,7 @@ func TestAssistant240C_RuntimeAndCoverageBranches(t *testing.T) {
 		rec = httptest.NewRecorder()
 		assistantLoadAuthorizerFn = func() (authorizer, error) { return assistantGateAuthorizerStub{allowed: true, enforced: true}, nil }
 		handleAssistantConversationTurnsAPI(rec, assistantReqWithContext(http.MethodPost, "/internal/assistant/conversations/"+conv.ConversationID+"/turns", `{"user_input":"仅生成计划"}`, true, true), riskSvc)
-		if rec.Code != http.StatusConflict || assistantDecodeErrCode(t, rec) != errAssistantActionRiskGateDenied.Error() {
+		if rec.Code != http.StatusOK {
 			t.Fatalf("risk create status=%d body=%s", rec.Code, rec.Body.String())
 		}
 
@@ -254,8 +254,13 @@ func TestAssistant240C_RuntimeAndCoverageBranches(t *testing.T) {
 			assistantIntentPlanOnly: {CapabilityKey: "org.assistant_conversation.manage"},
 		}}
 		conv := specMissingSvc.createConversation("tenant-1", principal)
-		if _, err := specMissingSvc.createTurn(context.Background(), "tenant-1", principal, conv.ConversationID, "仅生成计划"); !errors.Is(err, errAssistantActionSpecMissing) {
-			t.Fatalf("expected action spec missing, got %v", err)
+		created, err := specMissingSvc.createTurn(context.Background(), "tenant-1", principal, conv.ConversationID, "仅生成计划")
+		if err != nil {
+			t.Fatalf("expected uncertain clarification turn, got %v", err)
+		}
+		last := created.Turns[len(created.Turns)-1]
+		if last.Phase != assistantPhaseAwaitClarification {
+			t.Fatalf("expected await_clarification, got %q", last.Phase)
 		}
 
 		riskDeniedSvc := newAssistantConversationService(store, assistantWriteServiceStub{store: store})
@@ -263,8 +268,8 @@ func TestAssistant240C_RuntimeAndCoverageBranches(t *testing.T) {
 			assistantIntentPlanOnly: {ID: assistantIntentPlanOnly, CapabilityKey: "org.assistant_conversation.manage", Security: assistantActionSecuritySpec{AuthObject: "org.setid_capability_config", AuthAction: "admin", RiskTier: "extreme"}},
 		}}
 		conv = riskDeniedSvc.createConversation("tenant-1", principal)
-		if _, err := riskDeniedSvc.createTurn(context.Background(), "tenant-1", principal, conv.ConversationID, "仅生成计划"); !errors.Is(err, errAssistantActionRiskGateDenied) {
-			t.Fatalf("expected risk gate denied, got %v", err)
+		if _, err := riskDeniedSvc.createTurn(context.Background(), "tenant-1", principal, conv.ConversationID, "仅生成计划"); err != nil {
+			t.Fatalf("expected uncertain clarification without risk gate, got %v", err)
 		}
 
 		refreshErrSvc := newAssistantConversationService(store, assistantWriteServiceStub{store: store})
@@ -274,10 +279,11 @@ func TestAssistant240C_RuntimeAndCoverageBranches(t *testing.T) {
 		conv = refreshErrSvc.createConversation("tenant-1", principal)
 		originalPlanHash := assistantPlanHashFn
 		assistantPlanHashFn = func(assistantIntentSpec, assistantPlanSummary, assistantDryRunResult) string { return "" }
-		defer func() { assistantPlanHashFn = originalPlanHash }()
 		if _, err := refreshErrSvc.createTurn(context.Background(), "tenant-1", principal, conv.ConversationID, "仅生成计划"); !errors.Is(err, errAssistantPlanDeterminismViolation) {
+			assistantPlanHashFn = originalPlanHash
 			t.Fatalf("expected determinism violation from refresh, got %v", err)
 		}
+		assistantPlanHashFn = originalPlanHash
 
 		now := time.Now().UTC()
 		makeCreateTurnPGTx := func(actorID string) *assistFakeTx {
@@ -300,8 +306,12 @@ func TestAssistant240C_RuntimeAndCoverageBranches(t *testing.T) {
 			assistantIntentPlanOnly: {CapabilityKey: "org.assistant_conversation.manage"},
 		}}
 		pgSpecMissingSvc.pool = assistFakeTxBeginner{tx: makeCreateTurnPGTx(principal.ID)}
-		if _, err := pgSpecMissingSvc.createTurnPG(context.Background(), "tenant_1", principal, "conv_pg", "仅生成计划"); !errors.Is(err, errAssistantActionSpecMissing) {
-			t.Fatalf("expected pg action spec missing, got %v", err)
+		created, err = pgSpecMissingSvc.createTurnPG(context.Background(), "tenant_1", principal, "conv_pg", "仅生成计划")
+		if err != nil {
+			t.Fatalf("expected pg uncertain clarification turn, got %v", err)
+		}
+		if len(created.Turns) == 0 || created.Turns[len(created.Turns)-1].Phase != assistantPhaseAwaitClarification {
+			t.Fatalf("expected pg await_clarification, got turns=%+v", created.Turns)
 		}
 
 		pgRiskDeniedSvc := newAssistantConversationService(store, assistantWriteServiceStub{store: store})
@@ -309,18 +319,26 @@ func TestAssistant240C_RuntimeAndCoverageBranches(t *testing.T) {
 			assistantIntentPlanOnly: {ID: assistantIntentPlanOnly, CapabilityKey: "org.assistant_conversation.manage", Security: assistantActionSecuritySpec{AuthObject: "org.setid_capability_config", AuthAction: "admin", RiskTier: "extreme"}},
 		}}
 		pgRiskDeniedSvc.pool = assistFakeTxBeginner{tx: makeCreateTurnPGTx(principal.ID)}
-		if _, err := pgRiskDeniedSvc.createTurnPG(context.Background(), "tenant_1", principal, "conv_pg", "仅生成计划"); !errors.Is(err, errAssistantActionRiskGateDenied) {
-			t.Fatalf("expected pg risk gate denied, got %v", err)
+		if _, err := pgRiskDeniedSvc.createTurnPG(context.Background(), "tenant_1", principal, "conv_pg", "仅生成计划"); err != nil {
+			t.Fatalf("expected pg uncertain clarification without risk gate, got %v", err)
 		}
 
 		pgRefreshErrSvc := newAssistantConversationService(store, assistantWriteServiceStub{store: store})
 		pgRefreshErrSvc.actionRegistry = assistantActionRegistryMap{specs: map[string]assistantActionSpec{
-			assistantIntentPlanOnly: {ID: assistantIntentPlanOnly, CapabilityKey: "org.assistant_conversation.manage", Security: assistantActionSecuritySpec{AuthObject: "org.setid_capability_config", AuthAction: "admin", RiskTier: "low"}},
+			assistantIntentCreateOrgUnit: {
+				ID:            assistantIntentCreateOrgUnit,
+				Version:       "v1",
+				PlanTitle:     "创建组织",
+				PlanSummary:   "生成创建组织计划，待确认后提交",
+				CapabilityKey: spec.CapabilityKey,
+				Security:      spec.Security,
+				Handler:       spec.Handler,
+			},
 		}}
 		pgRefreshErrSvc.pool = assistFakeTxBeginner{tx: makeCreateTurnPGTx(principal.ID)}
 		pgOriginalPlanHash := assistantPlanHashFn
 		assistantPlanHashFn = func(assistantIntentSpec, assistantPlanSummary, assistantDryRunResult) string { return "" }
-		if _, err := pgRefreshErrSvc.createTurnPG(context.Background(), "tenant_1", principal, "conv_pg", "仅生成计划"); !errors.Is(err, errAssistantPlanDeterminismViolation) {
+		if _, err := pgRefreshErrSvc.createTurnPG(context.Background(), "tenant_1", principal, "conv_pg", "在鲜花组织之下，新建一个名为运营部的部门，成立日期是2026-01-01"); !errors.Is(err, errAssistantPlanDeterminismViolation) {
 			assistantPlanHashFn = pgOriginalPlanHash
 			t.Fatalf("expected pg determinism violation, got %v", err)
 		}

@@ -1,0 +1,17 @@
+{
+  "asset_type": "interpretation_pack",
+  "pack_id": "route.uncertain",
+  "knowledge_version": "2026-03-11.v1",
+  "locale": "zh",
+  "intent_classes": ["uncertain"],
+  "clarification_prompts": [
+    {"template_id": "clarify.route.uncertain.v1", "text": "你的诉求还不够明确。请先说明是要新建、移动、重命名、启用还是停用组织。"}
+  ],
+  "negative_examples": [
+    "在鲜花组织下新建运营部"
+  ],
+  "source_refs": [
+    "docs/dev-plans/244-assistant-interpretation-pack-and-intent-route-catalog-compiler-plan.md",
+    "docs/dev-plans/243-assistant-clarification-policy-and-slot-repair-plan.md"
+  ]
+}

@@ -49,15 +49,30 @@ func TestAssistantConversationFlow_AmbiguousCandidateConfirmAndCommit(t *testing
 	if turn.AmbiguityCount < 2 {
 		t.Fatalf("ambiguity_count=%d", turn.AmbiguityCount)
 	}
-	if _, err := svc.confirmTurn(tenantID, principal, conversation.ConversationID, turn.TurnID, ""); !errors.Is(err, errAssistantConfirmationRequired) {
-		t.Fatalf("confirm without candidate err=%v", err)
+	if turn.Phase != assistantPhaseAwaitCandidatePick {
+		t.Fatalf("expected await_candidate_pick, got=%s", turn.Phase)
 	}
 	candidateID := turn.Candidates[1].CandidateID
+	picked, err := svc.createTurn(context.Background(), tenantID, principal, conversation.ConversationID, candidateID)
+	if err != nil {
+		t.Fatalf("candidate pick err=%v", err)
+	}
+	turn = picked.Turns[len(picked.Turns)-1]
+	if turn.Phase == assistantPhaseAwaitCandidateConfirm {
+		resolved, resolveErr := svc.createTurn(context.Background(), tenantID, principal, conversation.ConversationID, "确认")
+		if resolveErr != nil {
+			t.Fatalf("candidate confirm err=%v", resolveErr)
+		}
+		turn = resolved.Turns[len(resolved.Turns)-1]
+	}
+	if turn.Phase != assistantPhaseAwaitCommitConfirm {
+		t.Fatalf("expected await_commit_confirm, got=%s", turn.Phase)
+	}
 	confirmed, err := svc.confirmTurn(tenantID, principal, conversation.ConversationID, turn.TurnID, candidateID)
 	if err != nil {
 		t.Fatalf("confirm err=%v", err)
 	}
-	turn = confirmed.Turns[0]
+	turn = confirmed.Turns[len(confirmed.Turns)-1]
 	if turn.State != assistantStateConfirmed {
 		t.Fatalf("turn state=%s", turn.State)
 	}
@@ -68,7 +83,11 @@ func TestAssistantConversationFlow_AmbiguousCandidateConfirmAndCommit(t *testing
 	if err != nil {
 		t.Fatalf("commit err=%v", err)
 	}
-	turn = committed.Turns[0]
+	committedTurn := assistantLookupTurn(committed, turn.TurnID)
+	if committedTurn == nil {
+		t.Fatalf("committed turn %s not found", turn.TurnID)
+	}
+	turn = committedTurn
 	if turn.State != assistantStateCommitted {
 		t.Fatalf("turn state=%s", turn.State)
 	}

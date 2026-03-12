@@ -1,74 +1,116 @@
 {
   "case_id": 3,
-  "tenant_id": "53292087-28f3-4da0-be88-2dfb6911c4d9",
-  "conversation_id": "conv_91bebcd0c2b14939a718e64e7d774291",
+  "tenant_id": "70d9d378-9e14-484d-93ee-1e9c14986954",
+  "conversation_id": "conv_219190e30b0d4aa396ed6e022726b38a",
   "snapshots": [
     {
       "step": 1,
       "input": "在 AI治理办公室 下新建 人力资源部239A补全",
       "bubble": {
         "count": 1,
-        "bindingKey": "conv_91bebcd0c2b14939a718e64e7d774291::turn_f27c383cb6eb4ae990c3777017d34ad7::assistant_8a814d682030495e8e54de9d30b7a0ff",
-        "conversationId": "conv_91bebcd0c2b14939a718e64e7d774291",
-        "turnId": "turn_f27c383cb6eb4ae990c3777017d34ad7",
-        "requestId": "assistant_8a814d682030495e8e54de9d30b7a0ff",
+        "bindingKey": "conv_219190e30b0d4aa396ed6e022726b38a::turn_7c6fcb520e32471292271b28b561b968::assistant_dbc23b80c4d6470e8e018c77c91fefba",
+        "conversationId": "conv_219190e30b0d4aa396ed6e022726b38a",
+        "turnId": "turn_7c6fcb520e32471292271b28b561b968",
+        "requestId": "assistant_dbc23b80c4d6470e8e018c77c91fefba",
         "text": "Missing fields: effective_date、parent_ref_text Missing fields effective_date parent_ref_text"
       },
       "conversation": {
-        "conversation_id": "conv_91bebcd0c2b14939a718e64e7d774291",
-        "tenant_id": "53292087-28f3-4da0-be88-2dfb6911c4d9",
-        "actor_id": "fa701c0e-578a-4e93-ad33-b12334b50cc3",
+        "conversation_id": "conv_219190e30b0d4aa396ed6e022726b38a",
+        "tenant_id": "70d9d378-9e14-484d-93ee-1e9c14986954",
+        "actor_id": "38bc2fc0-b2d5-4215-9ddb-84bdfeff7572",
         "actor_role": "tenant-admin",
         "state": "validated",
         "current_phase": "await_missing_fields",
         "state_transitions": [
           {
-            "id": 1120,
-            "request_id": "assistant_46467c6043c641fda7279528ee8744e4",
-            "trace_id": "e8c7e1b6760642089c73501811a1b8e0",
+            "id": 1251,
+            "request_id": "assistant_ae7e9c363d614804989ef9d2bb503422",
+            "trace_id": "e48322496bb94e10a1295f74b662a874",
             "from_state": "init",
             "to_state": "validated",
             "from_phase": "init",
             "to_phase": "idle",
             "reason_code": "conversation_created",
-            "actor_id": "fa701c0e-578a-4e93-ad33-b12334b50cc3",
-            "changed_at": "2026-03-11T08:21:24.989775+08:00"
+            "actor_id": "38bc2fc0-b2d5-4215-9ddb-84bdfeff7572",
+            "changed_at": "2026-03-12T08:14:42.548568+08:00"
           },
           {
-            "id": 1121,
-            "turn_id": "turn_f27c383cb6eb4ae990c3777017d34ad7",
-            "request_id": "assistant_8a814d682030495e8e54de9d30b7a0ff",
-            "trace_id": "f93bf53705034a1abc2ad913b7b7cebf",
+            "id": 1253,
+            "turn_id": "turn_7c6fcb520e32471292271b28b561b968",
+            "request_id": "assistant_dbc23b80c4d6470e8e018c77c91fefba",
+            "trace_id": "d67b21ed8a8e4d458b622d8bce21b900",
             "from_state": "init",
             "to_state": "validated",
             "from_phase": "idle",
             "to_phase": "await_missing_fields",
             "reason_code": "turn_created",
-            "actor_id": "fa701c0e-578a-4e93-ad33-b12334b50cc3",
-            "changed_at": "2026-03-11T00:21:27.359453337Z"
+            "actor_id": "38bc2fc0-b2d5-4215-9ddb-84bdfeff7572",
+            "changed_at": "2026-03-12T00:14:50.288519812Z"
           }
         ],
-        "created_at": "2026-03-11T08:21:24.989775+08:00",
-        "updated_at": "2026-03-11T00:21:27.359453337Z",
+        "created_at": "2026-03-12T08:14:42.548568+08:00",
+        "updated_at": "2026-03-12T00:14:50.288519812Z",
         "turns": [
           {
-            "turn_id": "turn_f27c383cb6eb4ae990c3777017d34ad7",
+            "turn_id": "turn_7c6fcb520e32471292271b28b561b968",
             "user_input": "在 AI治理办公室 下新建 人力资源部239A补全",
             "state": "validated",
             "phase": "await_missing_fields",
             "risk_tier": "high",
-            "request_id": "assistant_8a814d682030495e8e54de9d30b7a0ff",
-            "trace_id": "f93bf53705034a1abc2ad913b7b7cebf",
+            "request_id": "assistant_dbc23b80c4d6470e8e018c77c91fefba",
+            "trace_id": "d67b21ed8a8e4d458b622d8bce21b900",
             "policy_version": "2026-02-23",
             "composition_version": "2026-02-23",
             "mapping_version": "2026-02-23",
             "intent": {
               "action": "create_orgunit",
+              "intent_id": "org.orgunit_create",
+              "route_kind": "business_action",
+              "route_catalog_version": "2026-03-11.v2",
               "parent_ref_text": "AI治理办公室",
               "entity_name": "人力资源部239A补全",
               "intent_schema_version": "assistant.intent.v1",
-              "context_hash": "4c64ecbe0031aaa0fbda0cc5b459bfd4fa7bd6f0bd86e7126acc50677353cbab",
-              "intent_hash": "381a44cbea856616c430b2f1c3783b9a2e25a985fb4a4c03ea376430badbf51a"
+              "context_hash": "046ed72ae6b74c2cf69c333929aa74e5c32bdaca210eb4415196c8574a1cf8ff",
+              "intent_hash": "2ffea41068a0176be91f3dd4f59ce935e459c9da8c0dddda69dfbbac29019016"
+            },
+            "route_decision": {
+              "route_kind": "business_action",
+              "intent_id": "org.orgunit_create",
+              "candidate_action_ids": [
+                "create_orgunit"
+              ],
+              "confidence_band": "medium",
+              "clarification_required": true,
+              "reason_codes": [
+                "route_business_action_registered",
+                "route_clarification_required"
+              ],
+              "route_catalog_version": "2026-03-11.v2",
+              "knowledge_snapshot_digest": "c346c58cb2f1de3effbfb1752a11f30078e8feda3099cc1f815b6dd1ce5916ef",
+              "resolver_contract_version": "resolver_contract_v1",
+              "decision_source": "knowledge_runtime_v1"
+            },
+            "clarification": {
+              "clarification_kind": "missing_slots",
+              "status": "open",
+              "prompt_template_id": "clarify.org.orgunit_create.v1",
+              "required_slots": [
+                "effective_date",
+                "entity_name",
+                "parent_ref_text"
+              ],
+              "missing_slots": [
+                "effective_date"
+              ],
+              "reason_codes": [
+                "missing_required_slot"
+              ],
+              "max_rounds": 3,
+              "current_round": 1,
+              "exit_to": "business_action_resume",
+              "await_phase": "await_missing_fields",
+              "knowledge_snapshot_digest": "c346c58cb2f1de3effbfb1752a11f30078e8feda3099cc1f815b6dd1ce5916ef",
+              "route_catalog_version": "2026-03-11.v2"
             },
             "plan": {
               "title": "创建组织计划",
@@ -80,9 +122,14 @@
               "capability_map_version": "2026-02-23",
               "compiler_contract_version": "assistant.compiler.v1",
               "skill_manifest_digest": "09d6c1d19112667c2574a3e4013bd4055f2fc285b78a320681869d714c435971",
-              "model_provider": "openai",
-              "model_name": "gpt-5.1",
-              "model_revision": "r2f31cdf6746a",
+              "model_provider": "deterministic",
+              "model_name": "builtin-intent-extractor",
+              "model_revision": "assistant.intent.v1",
+              "knowledge_snapshot_digest": "c346c58cb2f1de3effbfb1752a11f30078e8feda3099cc1f815b6dd1ce5916ef",
+              "route_catalog_version": "2026-03-11.v2",
+              "resolver_contract_version": "resolver_contract_v1",
+              "context_template_version": "plan_context_v1",
+              "reply_guidance_version": "2026-03-11.v1+2026-03-11.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1",
               "skill_execution_plan": {
                 "selected_skills": [
                   "org.orgunit_create"
@@ -130,37 +177,79 @@
                   "field": "effective_date"
                 }
               ],
-              "explain": "信息不完整，请通过下一轮对话补充：生效日期（YYYY-MM-DD）；更准确的上级组织名称或编码（例如：鲜花组织 / FLOWER-A）",
+              "explain": "请补充生效日期（YYYY-MM-DD）。",
               "validation_errors": [
                 "missing_effective_date",
                 "parent_candidate_not_found"
               ],
               "would_commit": false,
-              "plan_hash": "1cc278e9fe53852db7a5d706e9206700e79dae65301191726492d375dd280f22"
+              "plan_hash": "85953feb4c1cb222e77daff058c94f400bcae81a06bc7b79a079ed37d5d3dd7b"
             },
-            "created_at": "2026-03-11T00:21:27.359453337Z",
-            "updated_at": "2026-03-11T00:21:27.359453337Z"
+            "created_at": "2026-03-12T00:14:50.288519812Z",
+            "updated_at": "2026-03-12T00:14:50.288519812Z"
           }
         ]
       },
       "latest_turn": {
-        "turn_id": "turn_f27c383cb6eb4ae990c3777017d34ad7",
+        "turn_id": "turn_7c6fcb520e32471292271b28b561b968",
         "user_input": "在 AI治理办公室 下新建 人力资源部239A补全",
         "state": "validated",
         "phase": "await_missing_fields",
         "risk_tier": "high",
-        "request_id": "assistant_8a814d682030495e8e54de9d30b7a0ff",
-        "trace_id": "f93bf53705034a1abc2ad913b7b7cebf",
+        "request_id": "assistant_dbc23b80c4d6470e8e018c77c91fefba",
+        "trace_id": "d67b21ed8a8e4d458b622d8bce21b900",
         "policy_version": "2026-02-23",
         "composition_version": "2026-02-23",
         "mapping_version": "2026-02-23",
         "intent": {
           "action": "create_orgunit",
+          "intent_id": "org.orgunit_create",
+          "route_kind": "business_action",
+          "route_catalog_version": "2026-03-11.v2",
           "parent_ref_text": "AI治理办公室",
           "entity_name": "人力资源部239A补全",
           "intent_schema_version": "assistant.intent.v1",
-          "context_hash": "4c64ecbe0031aaa0fbda0cc5b459bfd4fa7bd6f0bd86e7126acc50677353cbab",
-          "intent_hash": "381a44cbea856616c430b2f1c3783b9a2e25a985fb4a4c03ea376430badbf51a"
+          "context_hash": "046ed72ae6b74c2cf69c333929aa74e5c32bdaca210eb4415196c8574a1cf8ff",
+          "intent_hash": "2ffea41068a0176be91f3dd4f59ce935e459c9da8c0dddda69dfbbac29019016"
+        },
+        "route_decision": {
+          "route_kind": "business_action",
+          "intent_id": "org.orgunit_create",
+          "candidate_action_ids": [
+            "create_orgunit"
+          ],
+          "confidence_band": "medium",
+          "clarification_required": true,
+          "reason_codes": [
+            "route_business_action_registered",
+            "route_clarification_required"
+          ],
+          "route_catalog_version": "2026-03-11.v2",
+          "knowledge_snapshot_digest": "c346c58cb2f1de3effbfb1752a11f30078e8feda3099cc1f815b6dd1ce5916ef",
+          "resolver_contract_version": "resolver_contract_v1",
+          "decision_source": "knowledge_runtime_v1"
+        },
+        "clarification": {
+          "clarification_kind": "missing_slots",
+          "status": "open",
+          "prompt_template_id": "clarify.org.orgunit_create.v1",
+          "required_slots": [
+            "effective_date",
+            "entity_name",
+            "parent_ref_text"
+          ],
+          "missing_slots": [
+            "effective_date"
+          ],
+          "reason_codes": [
+            "missing_required_slot"
+          ],
+          "max_rounds": 3,
+          "current_round": 1,
+          "exit_to": "business_action_resume",
+          "await_phase": "await_missing_fields",
+          "knowledge_snapshot_digest": "c346c58cb2f1de3effbfb1752a11f30078e8feda3099cc1f815b6dd1ce5916ef",
+          "route_catalog_version": "2026-03-11.v2"
         },
         "plan": {
           "title": "创建组织计划",
@@ -172,9 +261,14 @@
           "capability_map_version": "2026-02-23",
           "compiler_contract_version": "assistant.compiler.v1",
           "skill_manifest_digest": "09d6c1d19112667c2574a3e4013bd4055f2fc285b78a320681869d714c435971",
-          "model_provider": "openai",
-          "model_name": "gpt-5.1",
-          "model_revision": "r2f31cdf6746a",
+          "model_provider": "deterministic",
+          "model_name": "builtin-intent-extractor",
+          "model_revision": "assistant.intent.v1",
+          "knowledge_snapshot_digest": "c346c58cb2f1de3effbfb1752a11f30078e8feda3099cc1f815b6dd1ce5916ef",
+          "route_catalog_version": "2026-03-11.v2",
+          "resolver_contract_version": "resolver_contract_v1",
+          "context_template_version": "plan_context_v1",
+          "reply_guidance_version": "2026-03-11.v1+2026-03-11.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1",
           "skill_execution_plan": {
             "selected_skills": [
               "org.orgunit_create"
@@ -222,16 +316,16 @@
               "field": "effective_date"
             }
           ],
-          "explain": "信息不完整，请通过下一轮对话补充：生效日期（YYYY-MM-DD）；更准确的上级组织名称或编码（例如：鲜花组织 / FLOWER-A）",
+          "explain": "请补充生效日期（YYYY-MM-DD）。",
           "validation_errors": [
             "missing_effective_date",
             "parent_candidate_not_found"
           ],
           "would_commit": false,
-          "plan_hash": "1cc278e9fe53852db7a5d706e9206700e79dae65301191726492d375dd280f22"
+          "plan_hash": "85953feb4c1cb222e77daff058c94f400bcae81a06bc7b79a079ed37d5d3dd7b"
         },
-        "created_at": "2026-03-11T00:21:27.359453337Z",
-        "updated_at": "2026-03-11T00:21:27.359453337Z"
+        "created_at": "2026-03-12T00:14:50.288519812Z",
+        "updated_at": "2026-03-12T00:14:50.288519812Z"
       }
     },
     {
@@ -239,67 +333,109 @@
       "input": "生效日期 2026-03-25",
       "bubble": {
         "count": 1,
-        "bindingKey": "conv_91bebcd0c2b14939a718e64e7d774291::turn_f27c383cb6eb4ae990c3777017d34ad7::assistant_8a814d682030495e8e54de9d30b7a0ff",
-        "conversationId": "conv_91bebcd0c2b14939a718e64e7d774291",
-        "turnId": "turn_f27c383cb6eb4ae990c3777017d34ad7",
-        "requestId": "assistant_8a814d682030495e8e54de9d30b7a0ff",
+        "bindingKey": "conv_219190e30b0d4aa396ed6e022726b38a::turn_7c6fcb520e32471292271b28b561b968::assistant_dbc23b80c4d6470e8e018c77c91fefba",
+        "conversationId": "conv_219190e30b0d4aa396ed6e022726b38a",
+        "turnId": "turn_7c6fcb520e32471292271b28b561b968",
+        "requestId": "assistant_dbc23b80c4d6470e8e018c77c91fefba",
         "text": "Missing fields: effective_date、parent_ref_text Missing fields effective_date parent_ref_text"
       },
       "conversation": {
-        "conversation_id": "conv_91bebcd0c2b14939a718e64e7d774291",
-        "tenant_id": "53292087-28f3-4da0-be88-2dfb6911c4d9",
-        "actor_id": "fa701c0e-578a-4e93-ad33-b12334b50cc3",
+        "conversation_id": "conv_219190e30b0d4aa396ed6e022726b38a",
+        "tenant_id": "70d9d378-9e14-484d-93ee-1e9c14986954",
+        "actor_id": "38bc2fc0-b2d5-4215-9ddb-84bdfeff7572",
         "actor_role": "tenant-admin",
         "state": "validated",
         "current_phase": "await_missing_fields",
         "state_transitions": [
           {
-            "id": 1120,
-            "request_id": "assistant_46467c6043c641fda7279528ee8744e4",
-            "trace_id": "e8c7e1b6760642089c73501811a1b8e0",
+            "id": 1251,
+            "request_id": "assistant_ae7e9c363d614804989ef9d2bb503422",
+            "trace_id": "e48322496bb94e10a1295f74b662a874",
             "from_state": "init",
             "to_state": "validated",
             "from_phase": "init",
             "to_phase": "idle",
             "reason_code": "conversation_created",
-            "actor_id": "fa701c0e-578a-4e93-ad33-b12334b50cc3",
-            "changed_at": "2026-03-11T08:21:24.989775+08:00"
+            "actor_id": "38bc2fc0-b2d5-4215-9ddb-84bdfeff7572",
+            "changed_at": "2026-03-12T08:14:42.548568+08:00"
           },
           {
-            "id": 1121,
-            "turn_id": "turn_f27c383cb6eb4ae990c3777017d34ad7",
-            "request_id": "assistant_8a814d682030495e8e54de9d30b7a0ff",
-            "trace_id": "f93bf53705034a1abc2ad913b7b7cebf",
+            "id": 1253,
+            "turn_id": "turn_7c6fcb520e32471292271b28b561b968",
+            "request_id": "assistant_dbc23b80c4d6470e8e018c77c91fefba",
+            "trace_id": "d67b21ed8a8e4d458b622d8bce21b900",
             "from_state": "init",
             "to_state": "validated",
             "from_phase": "idle",
             "to_phase": "await_missing_fields",
             "reason_code": "turn_created",
-            "actor_id": "fa701c0e-578a-4e93-ad33-b12334b50cc3",
-            "changed_at": "2026-03-11T00:21:27.359453337Z"
+            "actor_id": "38bc2fc0-b2d5-4215-9ddb-84bdfeff7572",
+            "changed_at": "2026-03-12T00:14:50.288519812Z"
           }
         ],
-        "created_at": "2026-03-11T08:21:24.989775+08:00",
-        "updated_at": "2026-03-11T00:21:27.359453337Z",
+        "created_at": "2026-03-12T08:14:42.548568+08:00",
+        "updated_at": "2026-03-12T00:14:50.288519812Z",
         "turns": [
           {
-            "turn_id": "turn_f27c383cb6eb4ae990c3777017d34ad7",
+            "turn_id": "turn_7c6fcb520e32471292271b28b561b968",
             "user_input": "在 AI治理办公室 下新建 人力资源部239A补全",
             "state": "validated",
             "phase": "await_missing_fields",
             "risk_tier": "high",
-            "request_id": "assistant_8a814d682030495e8e54de9d30b7a0ff",
-            "trace_id": "f93bf53705034a1abc2ad913b7b7cebf",
+            "request_id": "assistant_dbc23b80c4d6470e8e018c77c91fefba",
+            "trace_id": "d67b21ed8a8e4d458b622d8bce21b900",
             "policy_version": "2026-02-23",
             "composition_version": "2026-02-23",
             "mapping_version": "2026-02-23",
             "intent": {
               "action": "create_orgunit",
+              "intent_id": "org.orgunit_create",
+              "route_kind": "business_action",
+              "route_catalog_version": "2026-03-11.v2",
               "parent_ref_text": "AI治理办公室",
               "entity_name": "人力资源部239A补全",
               "intent_schema_version": "assistant.intent.v1",
-              "context_hash": "4c64ecbe0031aaa0fbda0cc5b459bfd4fa7bd6f0bd86e7126acc50677353cbab",
-              "intent_hash": "381a44cbea856616c430b2f1c3783b9a2e25a985fb4a4c03ea376430badbf51a"
+              "context_hash": "046ed72ae6b74c2cf69c333929aa74e5c32bdaca210eb4415196c8574a1cf8ff",
+              "intent_hash": "2ffea41068a0176be91f3dd4f59ce935e459c9da8c0dddda69dfbbac29019016"
+            },
+            "route_decision": {
+              "route_kind": "business_action",
+              "intent_id": "org.orgunit_create",
+              "candidate_action_ids": [
+                "create_orgunit"
+              ],
+              "confidence_band": "medium",
+              "clarification_required": true,
+              "reason_codes": [
+                "route_business_action_registered",
+                "route_clarification_required"
+              ],
+              "route_catalog_version": "2026-03-11.v2",
+              "knowledge_snapshot_digest": "c346c58cb2f1de3effbfb1752a11f30078e8feda3099cc1f815b6dd1ce5916ef",
+              "resolver_contract_version": "resolver_contract_v1",
+              "decision_source": "knowledge_runtime_v1"
+            },
+            "clarification": {
+              "clarification_kind": "missing_slots",
+              "status": "open",
+              "prompt_template_id": "clarify.org.orgunit_create.v1",
+              "required_slots": [
+                "effective_date",
+                "entity_name",
+                "parent_ref_text"
+              ],
+              "missing_slots": [
+                "effective_date"
+              ],
+              "reason_codes": [
+                "missing_required_slot"
+              ],
+              "max_rounds": 3,
+              "current_round": 1,
+              "exit_to": "business_action_resume",
+              "await_phase": "await_missing_fields",
+              "knowledge_snapshot_digest": "c346c58cb2f1de3effbfb1752a11f30078e8feda3099cc1f815b6dd1ce5916ef",
+              "route_catalog_version": "2026-03-11.v2"
             },
             "plan": {
               "title": "创建组织计划",
@@ -311,9 +447,14 @@
               "capability_map_version": "2026-02-23",
               "compiler_contract_version": "assistant.compiler.v1",
               "skill_manifest_digest": "09d6c1d19112667c2574a3e4013bd4055f2fc285b78a320681869d714c435971",
-              "model_provider": "openai",
-              "model_name": "gpt-5.1",
-              "model_revision": "r2f31cdf6746a",
+              "model_provider": "deterministic",
+              "model_name": "builtin-intent-extractor",
+              "model_revision": "assistant.intent.v1",
+              "knowledge_snapshot_digest": "c346c58cb2f1de3effbfb1752a11f30078e8feda3099cc1f815b6dd1ce5916ef",
+              "route_catalog_version": "2026-03-11.v2",
+              "resolver_contract_version": "resolver_contract_v1",
+              "context_template_version": "plan_context_v1",
+              "reply_guidance_version": "2026-03-11.v1+2026-03-11.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1",
               "skill_execution_plan": {
                 "selected_skills": [
                   "org.orgunit_create"
@@ -361,37 +502,79 @@
                   "field": "effective_date"
                 }
               ],
-              "explain": "信息不完整，请通过下一轮对话补充：生效日期（YYYY-MM-DD）；更准确的上级组织名称或编码（例如：鲜花组织 / FLOWER-A）",
+              "explain": "请补充生效日期（YYYY-MM-DD）。",
               "validation_errors": [
                 "missing_effective_date",
                 "parent_candidate_not_found"
               ],
               "would_commit": false,
-              "plan_hash": "1cc278e9fe53852db7a5d706e9206700e79dae65301191726492d375dd280f22"
+              "plan_hash": "85953feb4c1cb222e77daff058c94f400bcae81a06bc7b79a079ed37d5d3dd7b"
             },
-            "created_at": "2026-03-11T00:21:27.359453337Z",
-            "updated_at": "2026-03-11T00:21:27.359453337Z"
+            "created_at": "2026-03-12T00:14:50.288519812Z",
+            "updated_at": "2026-03-12T00:14:50.288519812Z"
           }
         ]
       },
       "latest_turn": {
-        "turn_id": "turn_f27c383cb6eb4ae990c3777017d34ad7",
+        "turn_id": "turn_7c6fcb520e32471292271b28b561b968",
         "user_input": "在 AI治理办公室 下新建 人力资源部239A补全",
         "state": "validated",
         "phase": "await_missing_fields",
         "risk_tier": "high",
-        "request_id": "assistant_8a814d682030495e8e54de9d30b7a0ff",
-        "trace_id": "f93bf53705034a1abc2ad913b7b7cebf",
+        "request_id": "assistant_dbc23b80c4d6470e8e018c77c91fefba",
+        "trace_id": "d67b21ed8a8e4d458b622d8bce21b900",
         "policy_version": "2026-02-23",
         "composition_version": "2026-02-23",
         "mapping_version": "2026-02-23",
         "intent": {
           "action": "create_orgunit",
+          "intent_id": "org.orgunit_create",
+          "route_kind": "business_action",
+          "route_catalog_version": "2026-03-11.v2",
           "parent_ref_text": "AI治理办公室",
           "entity_name": "人力资源部239A补全",
           "intent_schema_version": "assistant.intent.v1",
-          "context_hash": "4c64ecbe0031aaa0fbda0cc5b459bfd4fa7bd6f0bd86e7126acc50677353cbab",
-          "intent_hash": "381a44cbea856616c430b2f1c3783b9a2e25a985fb4a4c03ea376430badbf51a"
+          "context_hash": "046ed72ae6b74c2cf69c333929aa74e5c32bdaca210eb4415196c8574a1cf8ff",
+          "intent_hash": "2ffea41068a0176be91f3dd4f59ce935e459c9da8c0dddda69dfbbac29019016"
+        },
+        "route_decision": {
+          "route_kind": "business_action",
+          "intent_id": "org.orgunit_create",
+          "candidate_action_ids": [
+            "create_orgunit"
+          ],
+          "confidence_band": "medium",
+          "clarification_required": true,
+          "reason_codes": [
+            "route_business_action_registered",
+            "route_clarification_required"
+          ],
+          "route_catalog_version": "2026-03-11.v2",
+          "knowledge_snapshot_digest": "c346c58cb2f1de3effbfb1752a11f30078e8feda3099cc1f815b6dd1ce5916ef",
+          "resolver_contract_version": "resolver_contract_v1",
+          "decision_source": "knowledge_runtime_v1"
+        },
+        "clarification": {
+          "clarification_kind": "missing_slots",
+          "status": "open",
+          "prompt_template_id": "clarify.org.orgunit_create.v1",
+          "required_slots": [
+            "effective_date",
+            "entity_name",
+            "parent_ref_text"
+          ],
+          "missing_slots": [
+            "effective_date"
+          ],
+          "reason_codes": [
+            "missing_required_slot"
+          ],
+          "max_rounds": 3,
+          "current_round": 1,
+          "exit_to": "business_action_resume",
+          "await_phase": "await_missing_fields",
+          "knowledge_snapshot_digest": "c346c58cb2f1de3effbfb1752a11f30078e8feda3099cc1f815b6dd1ce5916ef",
+          "route_catalog_version": "2026-03-11.v2"
         },
         "plan": {
           "title": "创建组织计划",
@@ -403,9 +586,14 @@
           "capability_map_version": "2026-02-23",
           "compiler_contract_version": "assistant.compiler.v1",
           "skill_manifest_digest": "09d6c1d19112667c2574a3e4013bd4055f2fc285b78a320681869d714c435971",
-          "model_provider": "openai",
-          "model_name": "gpt-5.1",
-          "model_revision": "r2f31cdf6746a",
+          "model_provider": "deterministic",
+          "model_name": "builtin-intent-extractor",
+          "model_revision": "assistant.intent.v1",
+          "knowledge_snapshot_digest": "c346c58cb2f1de3effbfb1752a11f30078e8feda3099cc1f815b6dd1ce5916ef",
+          "route_catalog_version": "2026-03-11.v2",
+          "resolver_contract_version": "resolver_contract_v1",
+          "context_template_version": "plan_context_v1",
+          "reply_guidance_version": "2026-03-11.v1+2026-03-11.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1",
           "skill_execution_plan": {
             "selected_skills": [
               "org.orgunit_create"
@@ -453,16 +641,16 @@
               "field": "effective_date"
             }
           ],
-          "explain": "信息不完整，请通过下一轮对话补充：生效日期（YYYY-MM-DD）；更准确的上级组织名称或编码（例如：鲜花组织 / FLOWER-A）",
+          "explain": "请补充生效日期（YYYY-MM-DD）。",
           "validation_errors": [
             "missing_effective_date",
             "parent_candidate_not_found"
           ],
           "would_commit": false,
-          "plan_hash": "1cc278e9fe53852db7a5d706e9206700e79dae65301191726492d375dd280f22"
+          "plan_hash": "85953feb4c1cb222e77daff058c94f400bcae81a06bc7b79a079ed37d5d3dd7b"
         },
-        "created_at": "2026-03-11T00:21:27.359453337Z",
-        "updated_at": "2026-03-11T00:21:27.359453337Z"
+        "created_at": "2026-03-12T00:14:50.288519812Z",
+        "updated_at": "2026-03-12T00:14:50.288519812Z"
       }
     },
     {
@@ -470,107 +658,149 @@
       "input": "确认",
       "bubble": {
         "count": 2,
-        "bindingKey": "conv_91bebcd0c2b14939a718e64e7d774291::turn_3eb8dd182ef14c8b8e1365774881749a::assistant_21e425f73d464aa8a056803e0ac8f029",
-        "conversationId": "conv_91bebcd0c2b14939a718e64e7d774291",
-        "turnId": "turn_3eb8dd182ef14c8b8e1365774881749a",
-        "requestId": "assistant_21e425f73d464aa8a056803e0ac8f029",
-        "text": "上级组织：AI治理办公室；新建组织：人力资源部239A补全；生效日期：2026-03-25 task_id: 2269dc47-7295-4e5a-b921-749639e1e5f1 · succeeded Selected: AI治理办公室 org_code: O000001 parent_org_code: TP290BAIGOV effective_date: 2026-03-25 event_type: CREATE"
+        "bindingKey": "conv_219190e30b0d4aa396ed6e022726b38a::turn_1b0263120f454cb6ab5d09aba73631d1::assistant_5b674662622a4b2bb6555da194fb1eeb",
+        "conversationId": "conv_219190e30b0d4aa396ed6e022726b38a",
+        "turnId": "turn_1b0263120f454cb6ab5d09aba73631d1",
+        "requestId": "assistant_5b674662622a4b2bb6555da194fb1eeb",
+        "text": "上级组织：AI治理办公室；新建组织：人力资源部239A补全；生效日期：2026-03-25 task_id: f56006ac-8e57-46dd-8a62-82593e7e158a · succeeded Selected: AI治理办公室 org_code: O000001 parent_org_code: TP290BAIGOV effective_date: 2026-03-25 event_type: CREATE"
       },
       "conversation": {
-        "conversation_id": "conv_91bebcd0c2b14939a718e64e7d774291",
-        "tenant_id": "53292087-28f3-4da0-be88-2dfb6911c4d9",
-        "actor_id": "fa701c0e-578a-4e93-ad33-b12334b50cc3",
+        "conversation_id": "conv_219190e30b0d4aa396ed6e022726b38a",
+        "tenant_id": "70d9d378-9e14-484d-93ee-1e9c14986954",
+        "actor_id": "38bc2fc0-b2d5-4215-9ddb-84bdfeff7572",
         "actor_role": "tenant-admin",
         "state": "committed",
         "current_phase": "committed",
         "state_transitions": [
           {
-            "id": 1120,
-            "request_id": "assistant_46467c6043c641fda7279528ee8744e4",
-            "trace_id": "e8c7e1b6760642089c73501811a1b8e0",
+            "id": 1251,
+            "request_id": "assistant_ae7e9c363d614804989ef9d2bb503422",
+            "trace_id": "e48322496bb94e10a1295f74b662a874",
             "from_state": "init",
             "to_state": "validated",
             "from_phase": "init",
             "to_phase": "idle",
             "reason_code": "conversation_created",
-            "actor_id": "fa701c0e-578a-4e93-ad33-b12334b50cc3",
-            "changed_at": "2026-03-11T08:21:24.989775+08:00"
+            "actor_id": "38bc2fc0-b2d5-4215-9ddb-84bdfeff7572",
+            "changed_at": "2026-03-12T08:14:42.548568+08:00"
           },
           {
-            "id": 1121,
-            "turn_id": "turn_f27c383cb6eb4ae990c3777017d34ad7",
-            "request_id": "assistant_8a814d682030495e8e54de9d30b7a0ff",
-            "trace_id": "f93bf53705034a1abc2ad913b7b7cebf",
+            "id": 1253,
+            "turn_id": "turn_7c6fcb520e32471292271b28b561b968",
+            "request_id": "assistant_dbc23b80c4d6470e8e018c77c91fefba",
+            "trace_id": "d67b21ed8a8e4d458b622d8bce21b900",
             "from_state": "init",
             "to_state": "validated",
             "from_phase": "idle",
             "to_phase": "await_missing_fields",
             "reason_code": "turn_created",
-            "actor_id": "fa701c0e-578a-4e93-ad33-b12334b50cc3",
-            "changed_at": "2026-03-11T08:21:27.359453+08:00"
+            "actor_id": "38bc2fc0-b2d5-4215-9ddb-84bdfeff7572",
+            "changed_at": "2026-03-12T08:14:50.288519+08:00"
           },
           {
-            "id": 1122,
-            "turn_id": "turn_3eb8dd182ef14c8b8e1365774881749a",
-            "request_id": "assistant_21e425f73d464aa8a056803e0ac8f029",
-            "trace_id": "9c5269ace2854bcc92f29121c856373c",
+            "id": 1254,
+            "turn_id": "turn_1b0263120f454cb6ab5d09aba73631d1",
+            "request_id": "assistant_5b674662622a4b2bb6555da194fb1eeb",
+            "trace_id": "503e97af516845c0a7bf1caf39f283d8",
             "from_state": "init",
             "to_state": "validated",
             "from_phase": "idle",
             "to_phase": "await_commit_confirm",
             "reason_code": "turn_created",
-            "actor_id": "fa701c0e-578a-4e93-ad33-b12334b50cc3",
-            "changed_at": "2026-03-11T08:21:30.939595+08:00"
+            "actor_id": "38bc2fc0-b2d5-4215-9ddb-84bdfeff7572",
+            "changed_at": "2026-03-12T08:14:52.969596+08:00"
           },
           {
-            "id": 1123,
-            "turn_id": "turn_3eb8dd182ef14c8b8e1365774881749a",
+            "id": 1255,
+            "turn_id": "turn_1b0263120f454cb6ab5d09aba73631d1",
             "turn_action": "confirm",
-            "request_id": "assistant_21e425f73d464aa8a056803e0ac8f029",
-            "trace_id": "9c5269ace2854bcc92f29121c856373c",
+            "request_id": "assistant_5b674662622a4b2bb6555da194fb1eeb",
+            "trace_id": "503e97af516845c0a7bf1caf39f283d8",
             "from_state": "validated",
             "to_state": "confirmed",
             "from_phase": "await_commit_confirm",
             "to_phase": "await_commit_confirm",
             "reason_code": "confirmed",
-            "actor_id": "fa701c0e-578a-4e93-ad33-b12334b50cc3",
-            "changed_at": "2026-03-11T08:21:31.118971+08:00"
+            "actor_id": "38bc2fc0-b2d5-4215-9ddb-84bdfeff7572",
+            "changed_at": "2026-03-12T08:14:53.927791+08:00"
           },
           {
-            "turn_id": "turn_3eb8dd182ef14c8b8e1365774881749a",
+            "turn_id": "turn_1b0263120f454cb6ab5d09aba73631d1",
             "turn_action": "commit",
-            "request_id": "assistant_21e425f73d464aa8a056803e0ac8f029",
-            "trace_id": "9c5269ace2854bcc92f29121c856373c",
+            "request_id": "assistant_5b674662622a4b2bb6555da194fb1eeb",
+            "trace_id": "503e97af516845c0a7bf1caf39f283d8",
             "from_state": "confirmed",
             "to_state": "committed",
             "from_phase": "await_commit_confirm",
             "to_phase": "committed",
             "reason_code": "committed",
-            "actor_id": "fa701c0e-578a-4e93-ad33-b12334b50cc3",
-            "changed_at": "2026-03-11T00:21:31.322850705Z"
+            "actor_id": "38bc2fc0-b2d5-4215-9ddb-84bdfeff7572",
+            "changed_at": "2026-03-12T00:14:54.126894226Z"
           }
         ],
-        "created_at": "2026-03-11T08:21:24.989775+08:00",
-        "updated_at": "2026-03-11T00:21:31.322850705Z",
+        "created_at": "2026-03-12T08:14:42.548568+08:00",
+        "updated_at": "2026-03-12T00:14:54.126894226Z",
         "turns": [
           {
-            "turn_id": "turn_f27c383cb6eb4ae990c3777017d34ad7",
+            "turn_id": "turn_7c6fcb520e32471292271b28b561b968",
             "user_input": "在 AI治理办公室 下新建 人力资源部239A补全",
             "state": "validated",
             "phase": "await_missing_fields",
             "risk_tier": "high",
-            "request_id": "assistant_8a814d682030495e8e54de9d30b7a0ff",
-            "trace_id": "f93bf53705034a1abc2ad913b7b7cebf",
+            "request_id": "assistant_dbc23b80c4d6470e8e018c77c91fefba",
+            "trace_id": "d67b21ed8a8e4d458b622d8bce21b900",
             "policy_version": "2026-02-23",
             "composition_version": "2026-02-23",
             "mapping_version": "2026-02-23",
             "intent": {
               "action": "create_orgunit",
+              "intent_id": "org.orgunit_create",
+              "route_kind": "business_action",
+              "route_catalog_version": "2026-03-11.v2",
               "parent_ref_text": "AI治理办公室",
               "entity_name": "人力资源部239A补全",
               "intent_schema_version": "assistant.intent.v1",
-              "context_hash": "4c64ecbe0031aaa0fbda0cc5b459bfd4fa7bd6f0bd86e7126acc50677353cbab",
-              "intent_hash": "381a44cbea856616c430b2f1c3783b9a2e25a985fb4a4c03ea376430badbf51a"
+              "context_hash": "046ed72ae6b74c2cf69c333929aa74e5c32bdaca210eb4415196c8574a1cf8ff",
+              "intent_hash": "2ffea41068a0176be91f3dd4f59ce935e459c9da8c0dddda69dfbbac29019016"
+            },
+            "route_decision": {
+              "route_kind": "business_action",
+              "intent_id": "org.orgunit_create",
+              "candidate_action_ids": [
+                "create_orgunit"
+              ],
+              "confidence_band": "medium",
+              "clarification_required": true,
+              "reason_codes": [
+                "route_business_action_registered",
+                "route_clarification_required"
+              ],
+              "route_catalog_version": "2026-03-11.v2",
+              "knowledge_snapshot_digest": "c346c58cb2f1de3effbfb1752a11f30078e8feda3099cc1f815b6dd1ce5916ef",
+              "resolver_contract_version": "resolver_contract_v1",
+              "decision_source": "knowledge_runtime_v1"
+            },
+            "clarification": {
+              "clarification_kind": "missing_slots",
+              "status": "open",
+              "prompt_template_id": "clarify.org.orgunit_create.v1",
+              "required_slots": [
+                "effective_date",
+                "entity_name",
+                "parent_ref_text"
+              ],
+              "missing_slots": [
+                "effective_date"
+              ],
+              "reason_codes": [
+                "missing_required_slot"
+              ],
+              "max_rounds": 3,
+              "current_round": 1,
+              "exit_to": "business_action_resume",
+              "await_phase": "await_missing_fields",
+              "knowledge_snapshot_digest": "c346c58cb2f1de3effbfb1752a11f30078e8feda3099cc1f815b6dd1ce5916ef",
+              "route_catalog_version": "2026-03-11.v2"
             },
             "plan": {
               "title": "创建组织计划",
@@ -582,9 +812,14 @@
               "capability_map_version": "2026-02-23",
               "compiler_contract_version": "assistant.compiler.v1",
               "skill_manifest_digest": "09d6c1d19112667c2574a3e4013bd4055f2fc285b78a320681869d714c435971",
-              "model_provider": "openai",
-              "model_name": "gpt-5.1",
-              "model_revision": "r2f31cdf6746a",
+              "model_provider": "deterministic",
+              "model_name": "builtin-intent-extractor",
+              "model_revision": "assistant.intent.v1",
+              "knowledge_snapshot_digest": "c346c58cb2f1de3effbfb1752a11f30078e8feda3099cc1f815b6dd1ce5916ef",
+              "route_catalog_version": "2026-03-11.v2",
+              "resolver_contract_version": "resolver_contract_v1",
+              "context_template_version": "plan_context_v1",
+              "reply_guidance_version": "2026-03-11.v1+2026-03-11.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1",
               "skill_execution_plan": {
                 "selected_skills": [
                   "org.orgunit_create"
@@ -632,36 +867,56 @@
                   "field": "effective_date"
                 }
               ],
-              "explain": "信息不完整，请通过下一轮对话补充：生效日期（YYYY-MM-DD）；更准确的上级组织名称或编码（例如：鲜花组织 / FLOWER-A）",
+              "explain": "请补充生效日期（YYYY-MM-DD）。",
               "validation_errors": [
                 "missing_effective_date",
                 "parent_candidate_not_found"
               ],
               "would_commit": false,
-              "plan_hash": "1cc278e9fe53852db7a5d706e9206700e79dae65301191726492d375dd280f22"
+              "plan_hash": "85953feb4c1cb222e77daff058c94f400bcae81a06bc7b79a079ed37d5d3dd7b"
             },
-            "created_at": "2026-03-11T08:21:27.359453+08:00",
-            "updated_at": "2026-03-11T08:21:27.359453+08:00"
+            "created_at": "2026-03-12T08:14:50.288519+08:00",
+            "updated_at": "2026-03-12T08:14:50.288519+08:00"
           },
           {
-            "turn_id": "turn_3eb8dd182ef14c8b8e1365774881749a",
+            "turn_id": "turn_1b0263120f454cb6ab5d09aba73631d1",
             "user_input": "生效日期 2026-03-25",
             "state": "committed",
             "phase": "committed",
             "risk_tier": "high",
-            "request_id": "assistant_21e425f73d464aa8a056803e0ac8f029",
-            "trace_id": "9c5269ace2854bcc92f29121c856373c",
+            "request_id": "assistant_5b674662622a4b2bb6555da194fb1eeb",
+            "trace_id": "503e97af516845c0a7bf1caf39f283d8",
             "policy_version": "2026-02-23",
             "composition_version": "2026-02-23",
             "mapping_version": "2026-02-23",
             "intent": {
               "action": "create_orgunit",
+              "intent_id": "org.orgunit_create",
+              "route_kind": "business_action",
+              "route_catalog_version": "2026-03-11.v2",
               "parent_ref_text": "AI治理办公室",
               "entity_name": "人力资源部239A补全",
               "effective_date": "2026-03-25",
               "intent_schema_version": "assistant.intent.v1",
-              "context_hash": "b54d786ba8afc8644e336d861ad2baa521a20602090f5926f2a0c9422a003edd",
-              "intent_hash": "ade37f39ff01ff9025066348a6e567a5059b49544555b7397e84414b442c54f4"
+              "context_hash": "57f28ee229c50590403c3ed40247c30096d3f81174b4502c93bbf1970c027f79",
+              "intent_hash": "2af8be50a24054faaed9b55970b593dfdd2252cd1b487ffbbdd204b1f0ed7992"
+            },
+            "route_decision": {
+              "route_kind": "business_action",
+              "intent_id": "org.orgunit_create",
+              "candidate_action_ids": [
+                "create_orgunit"
+              ],
+              "confidence_band": "medium",
+              "reason_codes": [
+                "route_business_action_registered",
+                "route_local_intent_upgrade",
+                "route_model_plan_only"
+              ],
+              "route_catalog_version": "2026-03-11.v2",
+              "knowledge_snapshot_digest": "c346c58cb2f1de3effbfb1752a11f30078e8feda3099cc1f815b6dd1ce5916ef",
+              "resolver_contract_version": "resolver_contract_v1",
+              "decision_source": "knowledge_runtime_v1"
             },
             "plan": {
               "title": "创建组织计划",
@@ -676,11 +931,16 @@
               "model_provider": "openai",
               "model_name": "gpt-5.1",
               "model_revision": "r2f31cdf6746a",
+              "knowledge_snapshot_digest": "c346c58cb2f1de3effbfb1752a11f30078e8feda3099cc1f815b6dd1ce5916ef",
+              "route_catalog_version": "2026-03-11.v2",
+              "resolver_contract_version": "resolver_contract_v1",
+              "context_template_version": "plan_context_v1",
+              "reply_guidance_version": "2026-03-11.v1+2026-03-11.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1",
               "version_tuple": {
                 "effective_date": "2026-03-25",
                 "parent_org_code": "TP290BAIGOV",
-                "parent_event_uuid": "019cda44-edcd-7740-8d7e-7bebec96a172",
-                "parent_updated_at": "2026-03-11T00:21:16.365718Z",
+                "parent_event_uuid": "019cdf65-2736-7372-96ee-c10423bf2039",
+                "parent_updated_at": "2026-03-12T00:14:34.294949Z",
                 "parent_candidate_id": "TP290BAIGOV"
               },
               "skill_execution_plan": {
@@ -751,43 +1011,63 @@
               ],
               "explain": "计划已生成，等待确认后可提交",
               "would_commit": false,
-              "plan_hash": "ff9800d1ac80788d5d962ca2c7acbf6eda22ec9174d4864287c56cfbf89b0f46"
+              "plan_hash": "7d2bf3a584b4fca26e6c2a9e431694dfa3144bee245d199e3df21cf74e224a87"
             },
             "commit_result": {
               "org_code": "O000001",
               "parent_org_code": "TP290BAIGOV",
               "effective_date": "2026-03-25",
               "event_type": "CREATE",
-              "event_uuid": "019cda45-281f-7b3d-990e-e5797a1a0b2d"
+              "event_uuid": "019cdf65-74a3-7d35-afbc-8f34d1e6f320"
             },
             "commit_reply": {
               "outcome": "success",
               "message": "提交成功：O000001"
             },
-            "created_at": "2026-03-11T08:21:30.939595+08:00",
-            "updated_at": "2026-03-11T00:21:31.322850705Z"
+            "created_at": "2026-03-12T08:14:52.969596+08:00",
+            "updated_at": "2026-03-12T00:14:54.126894226Z"
           }
         ]
       },
       "latest_turn": {
-        "turn_id": "turn_3eb8dd182ef14c8b8e1365774881749a",
+        "turn_id": "turn_1b0263120f454cb6ab5d09aba73631d1",
         "user_input": "生效日期 2026-03-25",
         "state": "committed",
         "phase": "committed",
         "risk_tier": "high",
-        "request_id": "assistant_21e425f73d464aa8a056803e0ac8f029",
-        "trace_id": "9c5269ace2854bcc92f29121c856373c",
+        "request_id": "assistant_5b674662622a4b2bb6555da194fb1eeb",
+        "trace_id": "503e97af516845c0a7bf1caf39f283d8",
         "policy_version": "2026-02-23",
         "composition_version": "2026-02-23",
         "mapping_version": "2026-02-23",
         "intent": {
           "action": "create_orgunit",
+          "intent_id": "org.orgunit_create",
+          "route_kind": "business_action",
+          "route_catalog_version": "2026-03-11.v2",
           "parent_ref_text": "AI治理办公室",
           "entity_name": "人力资源部239A补全",
           "effective_date": "2026-03-25",
           "intent_schema_version": "assistant.intent.v1",
-          "context_hash": "b54d786ba8afc8644e336d861ad2baa521a20602090f5926f2a0c9422a003edd",
-          "intent_hash": "ade37f39ff01ff9025066348a6e567a5059b49544555b7397e84414b442c54f4"
+          "context_hash": "57f28ee229c50590403c3ed40247c30096d3f81174b4502c93bbf1970c027f79",
+          "intent_hash": "2af8be50a24054faaed9b55970b593dfdd2252cd1b487ffbbdd204b1f0ed7992"
+        },
+        "route_decision": {
+          "route_kind": "business_action",
+          "intent_id": "org.orgunit_create",
+          "candidate_action_ids": [
+            "create_orgunit"
+          ],
+          "confidence_band": "medium",
+          "reason_codes": [
+            "route_business_action_registered",
+            "route_local_intent_upgrade",
+            "route_model_plan_only"
+          ],
+          "route_catalog_version": "2026-03-11.v2",
+          "knowledge_snapshot_digest": "c346c58cb2f1de3effbfb1752a11f30078e8feda3099cc1f815b6dd1ce5916ef",
+          "resolver_contract_version": "resolver_contract_v1",
+          "decision_source": "knowledge_runtime_v1"
         },
         "plan": {
           "title": "创建组织计划",
@@ -802,11 +1082,16 @@
           "model_provider": "openai",
           "model_name": "gpt-5.1",
           "model_revision": "r2f31cdf6746a",
+          "knowledge_snapshot_digest": "c346c58cb2f1de3effbfb1752a11f30078e8feda3099cc1f815b6dd1ce5916ef",
+          "route_catalog_version": "2026-03-11.v2",
+          "resolver_contract_version": "resolver_contract_v1",
+          "context_template_version": "plan_context_v1",
+          "reply_guidance_version": "2026-03-11.v1+2026-03-11.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1",
           "version_tuple": {
             "effective_date": "2026-03-25",
             "parent_org_code": "TP290BAIGOV",
-            "parent_event_uuid": "019cda44-edcd-7740-8d7e-7bebec96a172",
-            "parent_updated_at": "2026-03-11T00:21:16.365718Z",
+            "parent_event_uuid": "019cdf65-2736-7372-96ee-c10423bf2039",
+            "parent_updated_at": "2026-03-12T00:14:34.294949Z",
             "parent_candidate_id": "TP290BAIGOV"
           },
           "skill_execution_plan": {
@@ -877,21 +1162,21 @@
           ],
           "explain": "计划已生成，等待确认后可提交",
           "would_commit": false,
-          "plan_hash": "ff9800d1ac80788d5d962ca2c7acbf6eda22ec9174d4864287c56cfbf89b0f46"
+          "plan_hash": "7d2bf3a584b4fca26e6c2a9e431694dfa3144bee245d199e3df21cf74e224a87"
         },
         "commit_result": {
           "org_code": "O000001",
           "parent_org_code": "TP290BAIGOV",
           "effective_date": "2026-03-25",
           "event_type": "CREATE",
-          "event_uuid": "019cda45-281f-7b3d-990e-e5797a1a0b2d"
+          "event_uuid": "019cdf65-74a3-7d35-afbc-8f34d1e6f320"
         },
         "commit_reply": {
           "outcome": "success",
           "message": "提交成功：O000001"
         },
-        "created_at": "2026-03-11T08:21:30.939595+08:00",
-        "updated_at": "2026-03-11T00:21:31.322850705Z"
+        "created_at": "2026-03-12T08:14:52.969596+08:00",
+        "updated_at": "2026-03-12T00:14:54.126894226Z"
       }
     },
     {
@@ -899,107 +1184,149 @@
       "input": "",
       "bubble": {
         "count": 2,
-        "bindingKey": "conv_91bebcd0c2b14939a718e64e7d774291::turn_3eb8dd182ef14c8b8e1365774881749a::assistant_21e425f73d464aa8a056803e0ac8f029",
-        "conversationId": "conv_91bebcd0c2b14939a718e64e7d774291",
-        "turnId": "turn_3eb8dd182ef14c8b8e1365774881749a",
-        "requestId": "assistant_21e425f73d464aa8a056803e0ac8f029",
-        "text": "上级组织：AI治理办公室；新建组织：人力资源部239A补全；生效日期：2026-03-25 task_id: 2269dc47-7295-4e5a-b921-749639e1e5f1 · succeeded Selected: AI治理办公室 org_code: O000001 parent_org_code: TP290BAIGOV effective_date: 2026-03-25 event_type: CREATE"
+        "bindingKey": "conv_219190e30b0d4aa396ed6e022726b38a::turn_1b0263120f454cb6ab5d09aba73631d1::assistant_5b674662622a4b2bb6555da194fb1eeb",
+        "conversationId": "conv_219190e30b0d4aa396ed6e022726b38a",
+        "turnId": "turn_1b0263120f454cb6ab5d09aba73631d1",
+        "requestId": "assistant_5b674662622a4b2bb6555da194fb1eeb",
+        "text": "上级组织：AI治理办公室；新建组织：人力资源部239A补全；生效日期：2026-03-25 task_id: f56006ac-8e57-46dd-8a62-82593e7e158a · succeeded Selected: AI治理办公室 org_code: O000001 parent_org_code: TP290BAIGOV effective_date: 2026-03-25 event_type: CREATE"
       },
       "conversation": {
-        "conversation_id": "conv_91bebcd0c2b14939a718e64e7d774291",
-        "tenant_id": "53292087-28f3-4da0-be88-2dfb6911c4d9",
-        "actor_id": "fa701c0e-578a-4e93-ad33-b12334b50cc3",
+        "conversation_id": "conv_219190e30b0d4aa396ed6e022726b38a",
+        "tenant_id": "70d9d378-9e14-484d-93ee-1e9c14986954",
+        "actor_id": "38bc2fc0-b2d5-4215-9ddb-84bdfeff7572",
         "actor_role": "tenant-admin",
         "state": "committed",
         "current_phase": "committed",
         "state_transitions": [
           {
-            "id": 1120,
-            "request_id": "assistant_46467c6043c641fda7279528ee8744e4",
-            "trace_id": "e8c7e1b6760642089c73501811a1b8e0",
+            "id": 1251,
+            "request_id": "assistant_ae7e9c363d614804989ef9d2bb503422",
+            "trace_id": "e48322496bb94e10a1295f74b662a874",
             "from_state": "init",
             "to_state": "validated",
             "from_phase": "init",
             "to_phase": "idle",
             "reason_code": "conversation_created",
-            "actor_id": "fa701c0e-578a-4e93-ad33-b12334b50cc3",
-            "changed_at": "2026-03-11T08:21:24.989775+08:00"
+            "actor_id": "38bc2fc0-b2d5-4215-9ddb-84bdfeff7572",
+            "changed_at": "2026-03-12T08:14:42.548568+08:00"
           },
           {
-            "id": 1121,
-            "turn_id": "turn_f27c383cb6eb4ae990c3777017d34ad7",
-            "request_id": "assistant_8a814d682030495e8e54de9d30b7a0ff",
-            "trace_id": "f93bf53705034a1abc2ad913b7b7cebf",
+            "id": 1253,
+            "turn_id": "turn_7c6fcb520e32471292271b28b561b968",
+            "request_id": "assistant_dbc23b80c4d6470e8e018c77c91fefba",
+            "trace_id": "d67b21ed8a8e4d458b622d8bce21b900",
             "from_state": "init",
             "to_state": "validated",
             "from_phase": "idle",
             "to_phase": "await_missing_fields",
             "reason_code": "turn_created",
-            "actor_id": "fa701c0e-578a-4e93-ad33-b12334b50cc3",
-            "changed_at": "2026-03-11T08:21:27.359453+08:00"
+            "actor_id": "38bc2fc0-b2d5-4215-9ddb-84bdfeff7572",
+            "changed_at": "2026-03-12T08:14:50.288519+08:00"
           },
           {
-            "id": 1122,
-            "turn_id": "turn_3eb8dd182ef14c8b8e1365774881749a",
-            "request_id": "assistant_21e425f73d464aa8a056803e0ac8f029",
-            "trace_id": "9c5269ace2854bcc92f29121c856373c",
+            "id": 1254,
+            "turn_id": "turn_1b0263120f454cb6ab5d09aba73631d1",
+            "request_id": "assistant_5b674662622a4b2bb6555da194fb1eeb",
+            "trace_id": "503e97af516845c0a7bf1caf39f283d8",
             "from_state": "init",
             "to_state": "validated",
             "from_phase": "idle",
             "to_phase": "await_commit_confirm",
             "reason_code": "turn_created",
-            "actor_id": "fa701c0e-578a-4e93-ad33-b12334b50cc3",
-            "changed_at": "2026-03-11T08:21:30.939595+08:00"
+            "actor_id": "38bc2fc0-b2d5-4215-9ddb-84bdfeff7572",
+            "changed_at": "2026-03-12T08:14:52.969596+08:00"
           },
           {
-            "id": 1123,
-            "turn_id": "turn_3eb8dd182ef14c8b8e1365774881749a",
+            "id": 1255,
+            "turn_id": "turn_1b0263120f454cb6ab5d09aba73631d1",
             "turn_action": "confirm",
-            "request_id": "assistant_21e425f73d464aa8a056803e0ac8f029",
-            "trace_id": "9c5269ace2854bcc92f29121c856373c",
+            "request_id": "assistant_5b674662622a4b2bb6555da194fb1eeb",
+            "trace_id": "503e97af516845c0a7bf1caf39f283d8",
             "from_state": "validated",
             "to_state": "confirmed",
             "from_phase": "await_commit_confirm",
             "to_phase": "await_commit_confirm",
             "reason_code": "confirmed",
-            "actor_id": "fa701c0e-578a-4e93-ad33-b12334b50cc3",
-            "changed_at": "2026-03-11T08:21:31.118971+08:00"
+            "actor_id": "38bc2fc0-b2d5-4215-9ddb-84bdfeff7572",
+            "changed_at": "2026-03-12T08:14:53.927791+08:00"
           },
           {
-            "turn_id": "turn_3eb8dd182ef14c8b8e1365774881749a",
+            "turn_id": "turn_1b0263120f454cb6ab5d09aba73631d1",
             "turn_action": "commit",
-            "request_id": "assistant_21e425f73d464aa8a056803e0ac8f029",
-            "trace_id": "9c5269ace2854bcc92f29121c856373c",
+            "request_id": "assistant_5b674662622a4b2bb6555da194fb1eeb",
+            "trace_id": "503e97af516845c0a7bf1caf39f283d8",
             "from_state": "confirmed",
             "to_state": "committed",
             "from_phase": "await_commit_confirm",
             "to_phase": "committed",
             "reason_code": "committed",
-            "actor_id": "fa701c0e-578a-4e93-ad33-b12334b50cc3",
-            "changed_at": "2026-03-11T00:21:31.322850705Z"
+            "actor_id": "38bc2fc0-b2d5-4215-9ddb-84bdfeff7572",
+            "changed_at": "2026-03-12T00:14:54.126894226Z"
           }
         ],
-        "created_at": "2026-03-11T08:21:24.989775+08:00",
-        "updated_at": "2026-03-11T00:21:31.322850705Z",
+        "created_at": "2026-03-12T08:14:42.548568+08:00",
+        "updated_at": "2026-03-12T00:14:54.126894226Z",
         "turns": [
           {
-            "turn_id": "turn_f27c383cb6eb4ae990c3777017d34ad7",
+            "turn_id": "turn_7c6fcb520e32471292271b28b561b968",
             "user_input": "在 AI治理办公室 下新建 人力资源部239A补全",
             "state": "validated",
             "phase": "await_missing_fields",
             "risk_tier": "high",
-            "request_id": "assistant_8a814d682030495e8e54de9d30b7a0ff",
-            "trace_id": "f93bf53705034a1abc2ad913b7b7cebf",
+            "request_id": "assistant_dbc23b80c4d6470e8e018c77c91fefba",
+            "trace_id": "d67b21ed8a8e4d458b622d8bce21b900",
             "policy_version": "2026-02-23",
             "composition_version": "2026-02-23",
             "mapping_version": "2026-02-23",
             "intent": {
               "action": "create_orgunit",
+              "intent_id": "org.orgunit_create",
+              "route_kind": "business_action",
+              "route_catalog_version": "2026-03-11.v2",
               "parent_ref_text": "AI治理办公室",
               "entity_name": "人力资源部239A补全",
               "intent_schema_version": "assistant.intent.v1",
-              "context_hash": "4c64ecbe0031aaa0fbda0cc5b459bfd4fa7bd6f0bd86e7126acc50677353cbab",
-              "intent_hash": "381a44cbea856616c430b2f1c3783b9a2e25a985fb4a4c03ea376430badbf51a"
+              "context_hash": "046ed72ae6b74c2cf69c333929aa74e5c32bdaca210eb4415196c8574a1cf8ff",
+              "intent_hash": "2ffea41068a0176be91f3dd4f59ce935e459c9da8c0dddda69dfbbac29019016"
+            },
+            "route_decision": {
+              "route_kind": "business_action",
+              "intent_id": "org.orgunit_create",
+              "candidate_action_ids": [
+                "create_orgunit"
+              ],
+              "confidence_band": "medium",
+              "clarification_required": true,
+              "reason_codes": [
+                "route_business_action_registered",
+                "route_clarification_required"
+              ],
+              "route_catalog_version": "2026-03-11.v2",
+              "knowledge_snapshot_digest": "c346c58cb2f1de3effbfb1752a11f30078e8feda3099cc1f815b6dd1ce5916ef",
+              "resolver_contract_version": "resolver_contract_v1",
+              "decision_source": "knowledge_runtime_v1"
+            },
+            "clarification": {
+              "clarification_kind": "missing_slots",
+              "status": "open",
+              "prompt_template_id": "clarify.org.orgunit_create.v1",
+              "required_slots": [
+                "effective_date",
+                "entity_name",
+                "parent_ref_text"
+              ],
+              "missing_slots": [
+                "effective_date"
+              ],
+              "reason_codes": [
+                "missing_required_slot"
+              ],
+              "max_rounds": 3,
+              "current_round": 1,
+              "exit_to": "business_action_resume",
+              "await_phase": "await_missing_fields",
+              "knowledge_snapshot_digest": "c346c58cb2f1de3effbfb1752a11f30078e8feda3099cc1f815b6dd1ce5916ef",
+              "route_catalog_version": "2026-03-11.v2"
             },
             "plan": {
               "title": "创建组织计划",
@@ -1011,9 +1338,14 @@
               "capability_map_version": "2026-02-23",
               "compiler_contract_version": "assistant.compiler.v1",
               "skill_manifest_digest": "09d6c1d19112667c2574a3e4013bd4055f2fc285b78a320681869d714c435971",
-              "model_provider": "openai",
-              "model_name": "gpt-5.1",
-              "model_revision": "r2f31cdf6746a",
+              "model_provider": "deterministic",
+              "model_name": "builtin-intent-extractor",
+              "model_revision": "assistant.intent.v1",
+              "knowledge_snapshot_digest": "c346c58cb2f1de3effbfb1752a11f30078e8feda3099cc1f815b6dd1ce5916ef",
+              "route_catalog_version": "2026-03-11.v2",
+              "resolver_contract_version": "resolver_contract_v1",
+              "context_template_version": "plan_context_v1",
+              "reply_guidance_version": "2026-03-11.v1+2026-03-11.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1",
               "skill_execution_plan": {
                 "selected_skills": [
                   "org.orgunit_create"
@@ -1061,36 +1393,56 @@
                   "field": "effective_date"
                 }
               ],
-              "explain": "信息不完整，请通过下一轮对话补充：生效日期（YYYY-MM-DD）；更准确的上级组织名称或编码（例如：鲜花组织 / FLOWER-A）",
+              "explain": "请补充生效日期（YYYY-MM-DD）。",
               "validation_errors": [
                 "missing_effective_date",
                 "parent_candidate_not_found"
               ],
               "would_commit": false,
-              "plan_hash": "1cc278e9fe53852db7a5d706e9206700e79dae65301191726492d375dd280f22"
+              "plan_hash": "85953feb4c1cb222e77daff058c94f400bcae81a06bc7b79a079ed37d5d3dd7b"
             },
-            "created_at": "2026-03-11T08:21:27.359453+08:00",
-            "updated_at": "2026-03-11T08:21:27.359453+08:00"
+            "created_at": "2026-03-12T08:14:50.288519+08:00",
+            "updated_at": "2026-03-12T08:14:50.288519+08:00"
           },
           {
-            "turn_id": "turn_3eb8dd182ef14c8b8e1365774881749a",
+            "turn_id": "turn_1b0263120f454cb6ab5d09aba73631d1",
             "user_input": "生效日期 2026-03-25",
             "state": "committed",
             "phase": "committed",
             "risk_tier": "high",
-            "request_id": "assistant_21e425f73d464aa8a056803e0ac8f029",
-            "trace_id": "9c5269ace2854bcc92f29121c856373c",
+            "request_id": "assistant_5b674662622a4b2bb6555da194fb1eeb",
+            "trace_id": "503e97af516845c0a7bf1caf39f283d8",
             "policy_version": "2026-02-23",
             "composition_version": "2026-02-23",
             "mapping_version": "2026-02-23",
             "intent": {
               "action": "create_orgunit",
+              "intent_id": "org.orgunit_create",
+              "route_kind": "business_action",
+              "route_catalog_version": "2026-03-11.v2",
               "parent_ref_text": "AI治理办公室",
               "entity_name": "人力资源部239A补全",
               "effective_date": "2026-03-25",
               "intent_schema_version": "assistant.intent.v1",
-              "context_hash": "b54d786ba8afc8644e336d861ad2baa521a20602090f5926f2a0c9422a003edd",
-              "intent_hash": "ade37f39ff01ff9025066348a6e567a5059b49544555b7397e84414b442c54f4"
+              "context_hash": "57f28ee229c50590403c3ed40247c30096d3f81174b4502c93bbf1970c027f79",
+              "intent_hash": "2af8be50a24054faaed9b55970b593dfdd2252cd1b487ffbbdd204b1f0ed7992"
+            },
+            "route_decision": {
+              "route_kind": "business_action",
+              "intent_id": "org.orgunit_create",
+              "candidate_action_ids": [
+                "create_orgunit"
+              ],
+              "confidence_band": "medium",
+              "reason_codes": [
+                "route_business_action_registered",
+                "route_local_intent_upgrade",
+                "route_model_plan_only"
+              ],
+              "route_catalog_version": "2026-03-11.v2",
+              "knowledge_snapshot_digest": "c346c58cb2f1de3effbfb1752a11f30078e8feda3099cc1f815b6dd1ce5916ef",
+              "resolver_contract_version": "resolver_contract_v1",
+              "decision_source": "knowledge_runtime_v1"
             },
             "plan": {
               "title": "创建组织计划",
@@ -1105,11 +1457,16 @@
               "model_provider": "openai",
               "model_name": "gpt-5.1",
               "model_revision": "r2f31cdf6746a",
+              "knowledge_snapshot_digest": "c346c58cb2f1de3effbfb1752a11f30078e8feda3099cc1f815b6dd1ce5916ef",
+              "route_catalog_version": "2026-03-11.v2",
+              "resolver_contract_version": "resolver_contract_v1",
+              "context_template_version": "plan_context_v1",
+              "reply_guidance_version": "2026-03-11.v1+2026-03-11.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1",
               "version_tuple": {
                 "effective_date": "2026-03-25",
                 "parent_org_code": "TP290BAIGOV",
-                "parent_event_uuid": "019cda44-edcd-7740-8d7e-7bebec96a172",
-                "parent_updated_at": "2026-03-11T00:21:16.365718Z",
+                "parent_event_uuid": "019cdf65-2736-7372-96ee-c10423bf2039",
+                "parent_updated_at": "2026-03-12T00:14:34.294949Z",
                 "parent_candidate_id": "TP290BAIGOV"
               },
               "skill_execution_plan": {
@@ -1180,43 +1537,63 @@
               ],
               "explain": "计划已生成，等待确认后可提交",
               "would_commit": false,
-              "plan_hash": "ff9800d1ac80788d5d962ca2c7acbf6eda22ec9174d4864287c56cfbf89b0f46"
+              "plan_hash": "7d2bf3a584b4fca26e6c2a9e431694dfa3144bee245d199e3df21cf74e224a87"
             },
             "commit_result": {
               "org_code": "O000001",
               "parent_org_code": "TP290BAIGOV",
               "effective_date": "2026-03-25",
               "event_type": "CREATE",
-              "event_uuid": "019cda45-281f-7b3d-990e-e5797a1a0b2d"
+              "event_uuid": "019cdf65-74a3-7d35-afbc-8f34d1e6f320"
             },
             "commit_reply": {
               "outcome": "success",
               "message": "提交成功：O000001"
             },
-            "created_at": "2026-03-11T08:21:30.939595+08:00",
-            "updated_at": "2026-03-11T00:21:31.322850705Z"
+            "created_at": "2026-03-12T08:14:52.969596+08:00",
+            "updated_at": "2026-03-12T00:14:54.126894226Z"
           }
         ]
       },
       "latest_turn": {
-        "turn_id": "turn_3eb8dd182ef14c8b8e1365774881749a",
+        "turn_id": "turn_1b0263120f454cb6ab5d09aba73631d1",
         "user_input": "生效日期 2026-03-25",
         "state": "committed",
         "phase": "committed",
         "risk_tier": "high",
-        "request_id": "assistant_21e425f73d464aa8a056803e0ac8f029",
-        "trace_id": "9c5269ace2854bcc92f29121c856373c",
+        "request_id": "assistant_5b674662622a4b2bb6555da194fb1eeb",
+        "trace_id": "503e97af516845c0a7bf1caf39f283d8",
         "policy_version": "2026-02-23",
         "composition_version": "2026-02-23",
         "mapping_version": "2026-02-23",
         "intent": {
           "action": "create_orgunit",
+          "intent_id": "org.orgunit_create",
+          "route_kind": "business_action",
+          "route_catalog_version": "2026-03-11.v2",
           "parent_ref_text": "AI治理办公室",
           "entity_name": "人力资源部239A补全",
           "effective_date": "2026-03-25",
           "intent_schema_version": "assistant.intent.v1",
-          "context_hash": "b54d786ba8afc8644e336d861ad2baa521a20602090f5926f2a0c9422a003edd",
-          "intent_hash": "ade37f39ff01ff9025066348a6e567a5059b49544555b7397e84414b442c54f4"
+          "context_hash": "57f28ee229c50590403c3ed40247c30096d3f81174b4502c93bbf1970c027f79",
+          "intent_hash": "2af8be50a24054faaed9b55970b593dfdd2252cd1b487ffbbdd204b1f0ed7992"
+        },
+        "route_decision": {
+          "route_kind": "business_action",
+          "intent_id": "org.orgunit_create",
+          "candidate_action_ids": [
+            "create_orgunit"
+          ],
+          "confidence_band": "medium",
+          "reason_codes": [
+            "route_business_action_registered",
+            "route_local_intent_upgrade",
+            "route_model_plan_only"
+          ],
+          "route_catalog_version": "2026-03-11.v2",
+          "knowledge_snapshot_digest": "c346c58cb2f1de3effbfb1752a11f30078e8feda3099cc1f815b6dd1ce5916ef",
+          "resolver_contract_version": "resolver_contract_v1",
+          "decision_source": "knowledge_runtime_v1"
         },
         "plan": {
           "title": "创建组织计划",
@@ -1231,11 +1608,16 @@
           "model_provider": "openai",
           "model_name": "gpt-5.1",
           "model_revision": "r2f31cdf6746a",
+          "knowledge_snapshot_digest": "c346c58cb2f1de3effbfb1752a11f30078e8feda3099cc1f815b6dd1ce5916ef",
+          "route_catalog_version": "2026-03-11.v2",
+          "resolver_contract_version": "resolver_contract_v1",
+          "context_template_version": "plan_context_v1",
+          "reply_guidance_version": "2026-03-11.v1+2026-03-11.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1",
           "version_tuple": {
             "effective_date": "2026-03-25",
             "parent_org_code": "TP290BAIGOV",
-            "parent_event_uuid": "019cda44-edcd-7740-8d7e-7bebec96a172",
-            "parent_updated_at": "2026-03-11T00:21:16.365718Z",
+            "parent_event_uuid": "019cdf65-2736-7372-96ee-c10423bf2039",
+            "parent_updated_at": "2026-03-12T00:14:34.294949Z",
             "parent_candidate_id": "TP290BAIGOV"
           },
           "skill_execution_plan": {
@@ -1306,119 +1688,161 @@
           ],
           "explain": "计划已生成，等待确认后可提交",
           "would_commit": false,
-          "plan_hash": "ff9800d1ac80788d5d962ca2c7acbf6eda22ec9174d4864287c56cfbf89b0f46"
+          "plan_hash": "7d2bf3a584b4fca26e6c2a9e431694dfa3144bee245d199e3df21cf74e224a87"
         },
         "commit_result": {
           "org_code": "O000001",
           "parent_org_code": "TP290BAIGOV",
           "effective_date": "2026-03-25",
           "event_type": "CREATE",
-          "event_uuid": "019cda45-281f-7b3d-990e-e5797a1a0b2d"
+          "event_uuid": "019cdf65-74a3-7d35-afbc-8f34d1e6f320"
         },
         "commit_reply": {
           "outcome": "success",
           "message": "提交成功：O000001"
         },
-        "created_at": "2026-03-11T08:21:30.939595+08:00",
-        "updated_at": "2026-03-11T00:21:31.322850705Z"
+        "created_at": "2026-03-12T08:14:52.969596+08:00",
+        "updated_at": "2026-03-12T00:14:54.126894226Z"
       }
     }
   ],
   "final_conversation": {
-    "conversation_id": "conv_91bebcd0c2b14939a718e64e7d774291",
-    "tenant_id": "53292087-28f3-4da0-be88-2dfb6911c4d9",
-    "actor_id": "fa701c0e-578a-4e93-ad33-b12334b50cc3",
+    "conversation_id": "conv_219190e30b0d4aa396ed6e022726b38a",
+    "tenant_id": "70d9d378-9e14-484d-93ee-1e9c14986954",
+    "actor_id": "38bc2fc0-b2d5-4215-9ddb-84bdfeff7572",
     "actor_role": "tenant-admin",
     "state": "committed",
     "current_phase": "committed",
     "state_transitions": [
       {
-        "id": 1120,
-        "request_id": "assistant_46467c6043c641fda7279528ee8744e4",
-        "trace_id": "e8c7e1b6760642089c73501811a1b8e0",
+        "id": 1251,
+        "request_id": "assistant_ae7e9c363d614804989ef9d2bb503422",
+        "trace_id": "e48322496bb94e10a1295f74b662a874",
         "from_state": "init",
         "to_state": "validated",
         "from_phase": "init",
         "to_phase": "idle",
         "reason_code": "conversation_created",
-        "actor_id": "fa701c0e-578a-4e93-ad33-b12334b50cc3",
-        "changed_at": "2026-03-11T08:21:24.989775+08:00"
+        "actor_id": "38bc2fc0-b2d5-4215-9ddb-84bdfeff7572",
+        "changed_at": "2026-03-12T08:14:42.548568+08:00"
       },
       {
-        "id": 1121,
-        "turn_id": "turn_f27c383cb6eb4ae990c3777017d34ad7",
-        "request_id": "assistant_8a814d682030495e8e54de9d30b7a0ff",
-        "trace_id": "f93bf53705034a1abc2ad913b7b7cebf",
+        "id": 1253,
+        "turn_id": "turn_7c6fcb520e32471292271b28b561b968",
+        "request_id": "assistant_dbc23b80c4d6470e8e018c77c91fefba",
+        "trace_id": "d67b21ed8a8e4d458b622d8bce21b900",
         "from_state": "init",
         "to_state": "validated",
         "from_phase": "idle",
         "to_phase": "await_missing_fields",
         "reason_code": "turn_created",
-        "actor_id": "fa701c0e-578a-4e93-ad33-b12334b50cc3",
-        "changed_at": "2026-03-11T08:21:27.359453+08:00"
+        "actor_id": "38bc2fc0-b2d5-4215-9ddb-84bdfeff7572",
+        "changed_at": "2026-03-12T08:14:50.288519+08:00"
       },
       {
-        "id": 1122,
-        "turn_id": "turn_3eb8dd182ef14c8b8e1365774881749a",
-        "request_id": "assistant_21e425f73d464aa8a056803e0ac8f029",
-        "trace_id": "9c5269ace2854bcc92f29121c856373c",
+        "id": 1254,
+        "turn_id": "turn_1b0263120f454cb6ab5d09aba73631d1",
+        "request_id": "assistant_5b674662622a4b2bb6555da194fb1eeb",
+        "trace_id": "503e97af516845c0a7bf1caf39f283d8",
         "from_state": "init",
         "to_state": "validated",
         "from_phase": "idle",
         "to_phase": "await_commit_confirm",
         "reason_code": "turn_created",
-        "actor_id": "fa701c0e-578a-4e93-ad33-b12334b50cc3",
-        "changed_at": "2026-03-11T08:21:30.939595+08:00"
+        "actor_id": "38bc2fc0-b2d5-4215-9ddb-84bdfeff7572",
+        "changed_at": "2026-03-12T08:14:52.969596+08:00"
       },
       {
-        "id": 1123,
-        "turn_id": "turn_3eb8dd182ef14c8b8e1365774881749a",
+        "id": 1255,
+        "turn_id": "turn_1b0263120f454cb6ab5d09aba73631d1",
         "turn_action": "confirm",
-        "request_id": "assistant_21e425f73d464aa8a056803e0ac8f029",
-        "trace_id": "9c5269ace2854bcc92f29121c856373c",
+        "request_id": "assistant_5b674662622a4b2bb6555da194fb1eeb",
+        "trace_id": "503e97af516845c0a7bf1caf39f283d8",
         "from_state": "validated",
         "to_state": "confirmed",
         "from_phase": "await_commit_confirm",
         "to_phase": "await_commit_confirm",
         "reason_code": "confirmed",
-        "actor_id": "fa701c0e-578a-4e93-ad33-b12334b50cc3",
-        "changed_at": "2026-03-11T08:21:31.118971+08:00"
+        "actor_id": "38bc2fc0-b2d5-4215-9ddb-84bdfeff7572",
+        "changed_at": "2026-03-12T08:14:53.927791+08:00"
       },
       {
-        "turn_id": "turn_3eb8dd182ef14c8b8e1365774881749a",
+        "turn_id": "turn_1b0263120f454cb6ab5d09aba73631d1",
         "turn_action": "commit",
-        "request_id": "assistant_21e425f73d464aa8a056803e0ac8f029",
-        "trace_id": "9c5269ace2854bcc92f29121c856373c",
+        "request_id": "assistant_5b674662622a4b2bb6555da194fb1eeb",
+        "trace_id": "503e97af516845c0a7bf1caf39f283d8",
         "from_state": "confirmed",
         "to_state": "committed",
         "from_phase": "await_commit_confirm",
         "to_phase": "committed",
         "reason_code": "committed",
-        "actor_id": "fa701c0e-578a-4e93-ad33-b12334b50cc3",
-        "changed_at": "2026-03-11T00:21:31.322850705Z"
+        "actor_id": "38bc2fc0-b2d5-4215-9ddb-84bdfeff7572",
+        "changed_at": "2026-03-12T00:14:54.126894226Z"
       }
     ],
-    "created_at": "2026-03-11T08:21:24.989775+08:00",
-    "updated_at": "2026-03-11T00:21:31.322850705Z",
+    "created_at": "2026-03-12T08:14:42.548568+08:00",
+    "updated_at": "2026-03-12T00:14:54.126894226Z",
     "turns": [
       {
-        "turn_id": "turn_f27c383cb6eb4ae990c3777017d34ad7",
+        "turn_id": "turn_7c6fcb520e32471292271b28b561b968",
         "user_input": "在 AI治理办公室 下新建 人力资源部239A补全",
         "state": "validated",
         "phase": "await_missing_fields",
         "risk_tier": "high",
-        "request_id": "assistant_8a814d682030495e8e54de9d30b7a0ff",
-        "trace_id": "f93bf53705034a1abc2ad913b7b7cebf",
+        "request_id": "assistant_dbc23b80c4d6470e8e018c77c91fefba",
+        "trace_id": "d67b21ed8a8e4d458b622d8bce21b900",
         "policy_version": "2026-02-23",
         "composition_version": "2026-02-23",
         "mapping_version": "2026-02-23",
         "intent": {
           "action": "create_orgunit",
+          "intent_id": "org.orgunit_create",
+          "route_kind": "business_action",
+          "route_catalog_version": "2026-03-11.v2",
           "parent_ref_text": "AI治理办公室",
           "entity_name": "人力资源部239A补全",
           "intent_schema_version": "assistant.intent.v1",
-          "context_hash": "4c64ecbe0031aaa0fbda0cc5b459bfd4fa7bd6f0bd86e7126acc50677353cbab",
-          "intent_hash": "381a44cbea856616c430b2f1c3783b9a2e25a985fb4a4c03ea376430badbf51a"
+          "context_hash": "046ed72ae6b74c2cf69c333929aa74e5c32bdaca210eb4415196c8574a1cf8ff",
+          "intent_hash": "2ffea41068a0176be91f3dd4f59ce935e459c9da8c0dddda69dfbbac29019016"
+        },
+        "route_decision": {
+          "route_kind": "business_action",
+          "intent_id": "org.orgunit_create",
+          "candidate_action_ids": [
+            "create_orgunit"
+          ],
+          "confidence_band": "medium",
+          "clarification_required": true,
+          "reason_codes": [
+            "route_business_action_registered",
+            "route_clarification_required"
+          ],
+          "route_catalog_version": "2026-03-11.v2",
+          "knowledge_snapshot_digest": "c346c58cb2f1de3effbfb1752a11f30078e8feda3099cc1f815b6dd1ce5916ef",
+          "resolver_contract_version": "resolver_contract_v1",
+          "decision_source": "knowledge_runtime_v1"
+        },
+        "clarification": {
+          "clarification_kind": "missing_slots",
+          "status": "open",
+          "prompt_template_id": "clarify.org.orgunit_create.v1",
+          "required_slots": [
+            "effective_date",
+            "entity_name",
+            "parent_ref_text"
+          ],
+          "missing_slots": [
+            "effective_date"
+          ],
+          "reason_codes": [
+            "missing_required_slot"
+          ],
+          "max_rounds": 3,
+          "current_round": 1,
+          "exit_to": "business_action_resume",
+          "await_phase": "await_missing_fields",
+          "knowledge_snapshot_digest": "c346c58cb2f1de3effbfb1752a11f30078e8feda3099cc1f815b6dd1ce5916ef",
+          "route_catalog_version": "2026-03-11.v2"
         },
         "plan": {
           "title": "创建组织计划",
@@ -1430,9 +1854,14 @@
           "capability_map_version": "2026-02-23",
           "compiler_contract_version": "assistant.compiler.v1",
           "skill_manifest_digest": "09d6c1d19112667c2574a3e4013bd4055f2fc285b78a320681869d714c435971",
-          "model_provider": "openai",
-          "model_name": "gpt-5.1",
-          "model_revision": "r2f31cdf6746a",
+          "model_provider": "deterministic",
+          "model_name": "builtin-intent-extractor",
+          "model_revision": "assistant.intent.v1",
+          "knowledge_snapshot_digest": "c346c58cb2f1de3effbfb1752a11f30078e8feda3099cc1f815b6dd1ce5916ef",
+          "route_catalog_version": "2026-03-11.v2",
+          "resolver_contract_version": "resolver_contract_v1",
+          "context_template_version": "plan_context_v1",
+          "reply_guidance_version": "2026-03-11.v1+2026-03-11.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1",
           "skill_execution_plan": {
             "selected_skills": [
               "org.orgunit_create"
@@ -1480,36 +1909,56 @@
               "field": "effective_date"
             }
           ],
-          "explain": "信息不完整，请通过下一轮对话补充：生效日期（YYYY-MM-DD）；更准确的上级组织名称或编码（例如：鲜花组织 / FLOWER-A）",
+          "explain": "请补充生效日期（YYYY-MM-DD）。",
           "validation_errors": [
             "missing_effective_date",
             "parent_candidate_not_found"
           ],
           "would_commit": false,
-          "plan_hash": "1cc278e9fe53852db7a5d706e9206700e79dae65301191726492d375dd280f22"
+          "plan_hash": "85953feb4c1cb222e77daff058c94f400bcae81a06bc7b79a079ed37d5d3dd7b"
         },
-        "created_at": "2026-03-11T08:21:27.359453+08:00",
-        "updated_at": "2026-03-11T08:21:27.359453+08:00"
+        "created_at": "2026-03-12T08:14:50.288519+08:00",
+        "updated_at": "2026-03-12T08:14:50.288519+08:00"
       },
       {
-        "turn_id": "turn_3eb8dd182ef14c8b8e1365774881749a",
+        "turn_id": "turn_1b0263120f454cb6ab5d09aba73631d1",
         "user_input": "生效日期 2026-03-25",
         "state": "committed",
         "phase": "committed",
         "risk_tier": "high",
-        "request_id": "assistant_21e425f73d464aa8a056803e0ac8f029",
-        "trace_id": "9c5269ace2854bcc92f29121c856373c",
+        "request_id": "assistant_5b674662622a4b2bb6555da194fb1eeb",
+        "trace_id": "503e97af516845c0a7bf1caf39f283d8",
         "policy_version": "2026-02-23",
         "composition_version": "2026-02-23",
         "mapping_version": "2026-02-23",
         "intent": {
           "action": "create_orgunit",
+          "intent_id": "org.orgunit_create",
+          "route_kind": "business_action",
+          "route_catalog_version": "2026-03-11.v2",
           "parent_ref_text": "AI治理办公室",
           "entity_name": "人力资源部239A补全",
           "effective_date": "2026-03-25",
           "intent_schema_version": "assistant.intent.v1",
-          "context_hash": "b54d786ba8afc8644e336d861ad2baa521a20602090f5926f2a0c9422a003edd",
-          "intent_hash": "ade37f39ff01ff9025066348a6e567a5059b49544555b7397e84414b442c54f4"
+          "context_hash": "57f28ee229c50590403c3ed40247c30096d3f81174b4502c93bbf1970c027f79",
+          "intent_hash": "2af8be50a24054faaed9b55970b593dfdd2252cd1b487ffbbdd204b1f0ed7992"
+        },
+        "route_decision": {
+          "route_kind": "business_action",
+          "intent_id": "org.orgunit_create",
+          "candidate_action_ids": [
+            "create_orgunit"
+          ],
+          "confidence_band": "medium",
+          "reason_codes": [
+            "route_business_action_registered",
+            "route_local_intent_upgrade",
+            "route_model_plan_only"
+          ],
+          "route_catalog_version": "2026-03-11.v2",
+          "knowledge_snapshot_digest": "c346c58cb2f1de3effbfb1752a11f30078e8feda3099cc1f815b6dd1ce5916ef",
+          "resolver_contract_version": "resolver_contract_v1",
+          "decision_source": "knowledge_runtime_v1"
         },
         "plan": {
           "title": "创建组织计划",
@@ -1524,11 +1973,16 @@
           "model_provider": "openai",
           "model_name": "gpt-5.1",
           "model_revision": "r2f31cdf6746a",
+          "knowledge_snapshot_digest": "c346c58cb2f1de3effbfb1752a11f30078e8feda3099cc1f815b6dd1ce5916ef",
+          "route_catalog_version": "2026-03-11.v2",
+          "resolver_contract_version": "resolver_contract_v1",
+          "context_template_version": "plan_context_v1",
+          "reply_guidance_version": "2026-03-11.v1+2026-03-11.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1",
           "version_tuple": {
             "effective_date": "2026-03-25",
             "parent_org_code": "TP290BAIGOV",
-            "parent_event_uuid": "019cda44-edcd-7740-8d7e-7bebec96a172",
-            "parent_updated_at": "2026-03-11T00:21:16.365718Z",
+            "parent_event_uuid": "019cdf65-2736-7372-96ee-c10423bf2039",
+            "parent_updated_at": "2026-03-12T00:14:34.294949Z",
             "parent_candidate_id": "TP290BAIGOV"
           },
           "skill_execution_plan": {
@@ -1599,21 +2053,21 @@
           ],
           "explain": "计划已生成，等待确认后可提交",
           "would_commit": false,
-          "plan_hash": "ff9800d1ac80788d5d962ca2c7acbf6eda22ec9174d4864287c56cfbf89b0f46"
+          "plan_hash": "7d2bf3a584b4fca26e6c2a9e431694dfa3144bee245d199e3df21cf74e224a87"
         },
         "commit_result": {
           "org_code": "O000001",
           "parent_org_code": "TP290BAIGOV",
           "effective_date": "2026-03-25",
           "event_type": "CREATE",
-          "event_uuid": "019cda45-281f-7b3d-990e-e5797a1a0b2d"
+          "event_uuid": "019cdf65-74a3-7d35-afbc-8f34d1e6f320"
         },
         "commit_reply": {
           "outcome": "success",
           "message": "提交成功：O000001"
         },
-        "created_at": "2026-03-11T08:21:30.939595+08:00",
-        "updated_at": "2026-03-11T00:21:31.322850705Z"
+        "created_at": "2026-03-12T08:14:52.969596+08:00",
+        "updated_at": "2026-03-12T00:14:54.126894226Z"
       }
     ]
   }

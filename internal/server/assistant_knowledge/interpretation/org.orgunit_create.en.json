@@ -1,0 +1,18 @@
+{
+  "asset_type": "interpretation_pack",
+  "pack_id": "org.orgunit_create",
+  "knowledge_version": "2026-03-11.v1",
+  "locale": "en",
+  "intent_classes": ["business_action"],
+  "clarification_prompts": [
+    {"template_id": "clarify.org.orgunit_create.v1", "text": "Do you want to create a department under a parent org? Please provide parent org, name and effective date."}
+  ],
+  "negative_examples": [
+    "hello",
+    "what time is it"
+  ],
+  "source_refs": [
+    "docs/dev-plans/240e-assistant-internal-knowledge-pack-and-readonly-resolver-plan.md",
+    "docs/dev-plans/241-assistant-knowledge-pack-runtime-minimal-implementation-plan.md"
+  ]
+}

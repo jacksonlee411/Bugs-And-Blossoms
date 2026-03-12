@@ -48,6 +48,29 @@ func TestAssistant240DHelperCoverage(t *testing.T) {
 	if _, err := assistantBuildTaskSubmitRequestFromTurn("conv_1", badTurn); !errors.Is(err, errAssistantPlanContractVersionMismatch) {
 		t.Fatalf("incomplete snapshot err=%v", err)
 	}
+	routeTurn := assistantTaskSampleTurn(now)
+	routeTurn.RouteDecision = assistantIntentRouteDecision{
+		RouteKind:               assistantRouteKindBusinessAction,
+		IntentID:                "org.orgunit_create",
+		CandidateActionIDs:      []string{assistantIntentCreateOrgUnit},
+		ConfidenceBand:          assistantRouteConfidenceHigh,
+		KnowledgeSnapshotDigest: "sha256:route",
+		RouteCatalogVersion:     "2026-03-11.v1",
+		ResolverContractVersion: "resolver_contract_v1",
+		DecisionSource:          assistantRouteDecisionSourceKnowledgeRuntimeV1,
+	}
+	routeTurn.Plan.KnowledgeSnapshotDigest = "sha256:route"
+	routeTurn.Plan.RouteCatalogVersion = "2026-03-11.v1"
+	routeTurn.Plan.ResolverContractVersion = "resolver_contract_v1"
+	routeTurn.Plan.ContextTemplateVersion = assistantContextTemplateVersionV1
+	routeTurn.Plan.ReplyGuidanceVersion = "2026-03-11.v1"
+	if _, err := assistantBuildTaskSubmitRequestFromTurn("conv_1", routeTurn); err != nil {
+		t.Fatalf("route turn submit err=%v", err)
+	}
+	routeTurn.Plan.KnowledgeSnapshotDigest = "sha256:drift"
+	if _, err := assistantBuildTaskSubmitRequestFromTurn("conv_1", routeTurn); !errors.Is(err, errAssistantPlanContractVersionMismatch) {
+		t.Fatalf("route audit mismatch err=%v", err)
+	}
 
 	if principal := assistantTaskExecutionPrincipal(nil); principal != (Principal{}) {
 		t.Fatalf("nil principal=%+v", principal)

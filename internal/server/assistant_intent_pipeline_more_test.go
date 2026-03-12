@@ -244,6 +244,12 @@ func TestAssistantIntentPipeline_MergesPendingTurnContextForMissingFields(t *tes
 	if first.Phase != assistantPhaseAwaitMissingFields {
 		t.Fatalf("expected await_missing_fields, got=%q", first.Phase)
 	}
+	if !first.RouteDecision.ClarificationRequired {
+		t.Fatalf("expected route clarification required, got=%+v", first.RouteDecision)
+	}
+	if !assistantTurnHasOpenClarification(first) {
+		t.Fatalf("expected open clarification turn, got=%+v", first.Clarification)
+	}
 	next, err := svc.createTurn(context.Background(), "tenant-1", principal, conversation.ConversationID, "名为运营部的部门")
 	if err != nil {
 		t.Fatalf("create follow-up turn err=%v", err)
