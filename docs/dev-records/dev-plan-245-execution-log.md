@@ -6,6 +6,7 @@
 
 - 首次实施窗口：2026-03-11 ~ 2026-03-12（CST）
 - 本次证据补齐：2026-03-12（CST）
+- 最终封板与主线合并：2026-03-12（CST）
 - 执行范围：`internal/server` reply realizer 主链、reply guidance 资产、NLG 接线与回归测试
 
 ## 2. 本次落地内容（对齐 245 目标）
@@ -54,10 +55,16 @@
 2. 文档门禁：
 - `make check doc`：通过。
 
+3. 封板门禁与合并证据（2026-03-12 CST）：
+- `go fmt ./... && go vet ./... && make check lint`：通过。
+- `make test`（100% coverage policy）：通过。
+- PR：`#483`（`feat(assistant): 完成 DEV-PLAN-245 Reply Guidance Realizer 实施`）已在 GitHub Actions 全绿后合并到 `main`（merge commit: `0e337799e13b1911a541a7207aec6a2384a82189`）。
+
 ## 4. 当前结论
 
 - DEV-PLAN-245 的核心主链（Reply Guidance Pack + Reply Realizer + pipeline 接线）已落地并可运行。
-- 当前仍保留少量兼容 helper（如 `assistantReplyStage/assistantReplyKind` 在模型解码兼容路径中的使用），后续仍需继续收口以完成最终封板证据。
+- 以“资产扩面 + realizer 接线 + 测试门禁 + CI 跑绿 + 主线合并”为证据，`DEV-PLAN-245` 已满足封板条件并转为已完成状态。
+- 当前保留的少量兼容 helper 不再是主入口，后续仅作为演进优化项处理，不阻断本计划完成判定。
 
 ## 5. 关联文件
 
