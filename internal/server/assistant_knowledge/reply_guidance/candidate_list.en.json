@@ -1,0 +1,25 @@
+{
+  "asset_type": "reply_guidance_pack",
+  "reply_kind": "candidate_list",
+  "knowledge_version": "2026-03-12.v1",
+  "locale": "en",
+  "guidance_templates": [
+    {"template_id": "reply.candidate_list.v1", "text": "Multiple candidates were found. Please choose one candidate to continue:\n{candidate_list}"}
+  ],
+  "tone_constraints": [
+    "explicit",
+    "short",
+    "actionable"
+  ],
+  "negative_examples": [
+    "the system will auto-pick",
+    "pick any one"
+  ],
+  "error_codes": [
+    "candidate_confirmation_required"
+  ],
+  "source_refs": [
+    "docs/dev-plans/245-assistant-reply-guidance-pack-and-reply-realizer-plan.md",
+    "internal/server/assistant_reply_nlg.go"
+  ]
+}

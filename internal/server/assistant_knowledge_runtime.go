@@ -166,7 +166,7 @@ type assistantKnowledgeRuntime struct {
 	interpretationTemplateID map[string]map[string]map[string]assistantKnowledgePrompt
 	routePackID              map[string]string
 	actionView               map[string]map[string]assistantActionViewPack
-	replyGuidance            map[string]map[string]assistantReplyGuidancePack
+	replyGuidance            map[string]map[string][]assistantReplyGuidancePack
 }
 
 type assistantCompiledInterpretationAssets struct {
@@ -388,7 +388,7 @@ func assistantCompileKnowledgeRuntime(
 		actionViewIndex[actionID][locale] = pack
 	}
 
-	replyGuidanceIndex := make(map[string]map[string]assistantReplyGuidancePack)
+	replyGuidanceIndex := make(map[string]map[string][]assistantReplyGuidancePack)
 	replyVersions := make([]string, 0, len(replyGuidance))
 	for _, pack := range replyGuidance {
 		if strings.TrimSpace(pack.AssetType) != "reply_guidance_pack" {
@@ -397,6 +397,10 @@ func assistantCompileKnowledgeRuntime(
 		replyKind := strings.TrimSpace(pack.ReplyKind)
 		if replyKind == "" {
 			return nil, fmt.Errorf("%w: reply guidance reply_kind required", errAssistantRuntimeConfigInvalid)
+		}
+		knowledgeVersion := strings.TrimSpace(pack.KnowledgeVersion)
+		if knowledgeVersion == "" {
+			return nil, fmt.Errorf("%w: reply guidance knowledge_version required", errAssistantRuntimeConfigInvalid)
 		}
 		if !assistantValidLocale(pack.Locale) {
 			return nil, fmt.Errorf("%w: reply guidance locale invalid %s", errAssistantRuntimeConfigInvalid, pack.Locale)
@@ -407,24 +411,51 @@ func assistantCompileKnowledgeRuntime(
 		if err := assistantValidateSourceRefs(pack.SourceRefs); err != nil {
 			return nil, fmt.Errorf("%w: reply guidance source_refs invalid: %v", errAssistantRuntimeConfigInvalid, err)
 		}
-		for _, code := range pack.ErrorCodes {
-			errorCode := strings.TrimSpace(code)
-			if errorCode == "" {
-				continue
-			}
-			if _, ok := assistantKnowledgeKnownErrorCodes[errorCode]; !ok {
-				return nil, fmt.Errorf("%w: unknown reply guidance error_code %s", errAssistantRuntimeConfigInvalid, errorCode)
-			}
+		guidanceTemplates, err := assistantNormalizeReplyGuidanceTemplates(replyKind, strings.TrimSpace(pack.Locale), pack.GuidanceTemplates)
+		if err != nil {
+			return nil, fmt.Errorf("%w: %v", errAssistantRuntimeConfigInvalid, err)
 		}
+		errorCodes, err := assistantNormalizeReplyGuidanceErrorCodes(pack.ErrorCodes)
+		if err != nil {
+			return nil, fmt.Errorf("%w: %v", errAssistantRuntimeConfigInvalid, err)
+		}
+		toneConstraints := assistantNormalizeOptionalTextList(pack.ToneConstraints)
+		negativeExamples := assistantNormalizeOptionalTextList(pack.NegativeExamples)
 		locale := strings.TrimSpace(pack.Locale)
 		if _, ok := replyGuidanceIndex[replyKind]; !ok {
-			replyGuidanceIndex[replyKind] = make(map[string]assistantReplyGuidancePack)
+			replyGuidanceIndex[replyKind] = make(map[string][]assistantReplyGuidancePack)
 		}
-		if _, duplicated := replyGuidanceIndex[replyKind][locale]; duplicated {
-			return nil, fmt.Errorf("%w: duplicated reply guidance %s locale %s", errAssistantRuntimeConfigInvalid, replyKind, locale)
+		normalized := pack
+		normalized.ReplyKind = replyKind
+		normalized.Locale = locale
+		normalized.KnowledgeVersion = knowledgeVersion
+		normalized.GuidanceTemplates = guidanceTemplates
+		normalized.ErrorCodes = errorCodes
+		normalized.ToneConstraints = toneConstraints
+		normalized.NegativeExamples = negativeExamples
+		replyGuidanceIndex[replyKind][locale] = append(replyGuidanceIndex[replyKind][locale], normalized)
+		replyVersions = append(replyVersions, knowledgeVersion)
+	}
+	for replyKind, locales := range replyGuidanceIndex {
+		for locale, packs := range locales {
+			genericCount := 0
+			seenErrorCodes := make(map[string]struct{})
+			for _, pack := range packs {
+				if len(pack.ErrorCodes) == 0 {
+					genericCount++
+					continue
+				}
+				for _, code := range pack.ErrorCodes {
+					if _, duplicated := seenErrorCodes[code]; duplicated {
+						return nil, fmt.Errorf("%w: ambiguous reply guidance selection %s locale %s error_code %s", errAssistantRuntimeConfigInvalid, replyKind, locale, code)
+					}
+					seenErrorCodes[code] = struct{}{}
+				}
+			}
+			if genericCount > 1 {
+				return nil, fmt.Errorf("%w: ambiguous reply guidance selection %s locale %s generic pack duplicated", errAssistantRuntimeConfigInvalid, replyKind, locale)
+			}
 		}
-		replyGuidanceIndex[replyKind][locale] = pack
-		replyVersions = append(replyVersions, strings.TrimSpace(pack.KnowledgeVersion))
 	}
 	if _, ok := actionViewIndex[assistantIntentCreateOrgUnit]; !ok {
 		return nil, fmt.Errorf("%w: missing create_orgunit action view pack", errAssistantRuntimeConfigInvalid)
@@ -886,6 +917,74 @@ func assistantValidateSourceRefs(refs []string) error {
 	return nil
 }
 
+func assistantNormalizeReplyGuidanceTemplates(replyKind string, locale string, templates []assistantKnowledgePrompt) ([]assistantKnowledgePrompt, error) {
+	if len(templates) == 0 {
+		return nil, fmt.Errorf("reply guidance templates required for %s locale %s", replyKind, locale)
+	}
+	if len(templates) > 1 {
+		return nil, fmt.Errorf("reply guidance multiple templates not allowed for %s locale %s", replyKind, locale)
+	}
+	out := make([]assistantKnowledgePrompt, 0, len(templates))
+	for _, rawTemplate := range templates {
+		templateID := strings.TrimSpace(rawTemplate.TemplateID)
+		if templateID == "" {
+			return nil, fmt.Errorf("reply guidance template_id required for %s locale %s", replyKind, locale)
+		}
+		text := strings.TrimSpace(rawTemplate.Text)
+		if text == "" {
+			return nil, fmt.Errorf("reply guidance template text required for %s locale %s", replyKind, locale)
+		}
+		out = append(out, assistantKnowledgePrompt{
+			TemplateID: templateID,
+			Text:       text,
+		})
+	}
+	return out, nil
+}
+
+func assistantNormalizeReplyGuidanceErrorCodes(codes []string) ([]string, error) {
+	out := make([]string, 0, len(codes))
+	seen := make(map[string]struct{}, len(codes))
+	for _, rawCode := range codes {
+		errorCode := strings.TrimSpace(rawCode)
+		if errorCode == "" {
+			continue
+		}
+		if _, ok := assistantKnowledgeKnownErrorCodes[errorCode]; !ok {
+			return nil, fmt.Errorf("unknown reply guidance error_code %s", errorCode)
+		}
+		if _, duplicated := seen[errorCode]; duplicated {
+			return nil, fmt.Errorf("duplicated reply guidance error_code %s", errorCode)
+		}
+		seen[errorCode] = struct{}{}
+		out = append(out, errorCode)
+	}
+	return out, nil
+}
+
+func assistantNormalizeOptionalTextList(items []string) []string {
+	if len(items) == 0 {
+		return nil
+	}
+	out := make([]string, 0, len(items))
+	seen := make(map[string]struct{}, len(items))
+	for _, raw := range items {
+		trimmed := strings.TrimSpace(raw)
+		if trimmed == "" {
+			continue
+		}
+		if _, duplicated := seen[trimmed]; duplicated {
+			continue
+		}
+		seen[trimmed] = struct{}{}
+		out = append(out, trimmed)
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
+}
+
 func assistantRepoPathExists(path string) bool {
 	if path == "" {
 		return false
@@ -934,6 +1033,50 @@ func (runtime *assistantKnowledgeRuntime) findActionView(actionID string, locale
 		}
 	}
 	return assistantActionViewPack{}, false
+}
+
+func assistantReplyGuidanceMatchErrorCode(pack assistantReplyGuidancePack, errorCode string) bool {
+	target := strings.TrimSpace(errorCode)
+	if target == "" {
+		return false
+	}
+	for _, code := range pack.ErrorCodes {
+		if strings.TrimSpace(code) == target {
+			return true
+		}
+	}
+	return false
+}
+
+func assistantReplyGuidanceIsGeneric(pack assistantReplyGuidancePack) bool {
+	return len(pack.ErrorCodes) == 0
+}
+
+func (runtime *assistantKnowledgeRuntime) findReplyGuidance(replyKind string, locale string, errorCode string) (assistantReplyGuidancePack, bool) {
+	if runtime == nil {
+		return assistantReplyGuidancePack{}, false
+	}
+	locales, ok := runtime.replyGuidance[strings.TrimSpace(replyKind)]
+	if !ok {
+		return assistantReplyGuidancePack{}, false
+	}
+	for _, candidateLocale := range runtime.localeCandidates(locale) {
+		packs, exists := locales[candidateLocale]
+		if !exists || len(packs) == 0 {
+			continue
+		}
+		for _, pack := range packs {
+			if assistantReplyGuidanceMatchErrorCode(pack, errorCode) {
+				return pack, true
+			}
+		}
+		for _, pack := range packs {
+			if assistantReplyGuidanceIsGeneric(pack) {
+				return pack, true
+			}
+		}
+	}
+	return assistantReplyGuidancePack{}, false
 }
 
 func (runtime *assistantKnowledgeRuntime) findInterpretation(packID string, locale string) (assistantInterpretationPack, bool) {

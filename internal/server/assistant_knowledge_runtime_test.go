@@ -110,7 +110,10 @@ func TestAssistantKnowledgeRuntime_CompileValidation(t *testing.T) {
 			ReplyKind:        "missing_fields",
 			KnowledgeVersion: "2026-03-11.v1",
 			Locale:           "zh",
-			SourceRefs:       []string{"docs/dev-plans/241-assistant-knowledge-pack-runtime-minimal-implementation-plan.md"},
+			GuidanceTemplates: []assistantKnowledgePrompt{
+				{TemplateID: "reply.missing_fields.v1", Text: "请补充：{missing_fields}"},
+			},
+			SourceRefs: []string{"docs/dev-plans/241-assistant-knowledge-pack-runtime-minimal-implementation-plan.md"},
 		},
 	}
 

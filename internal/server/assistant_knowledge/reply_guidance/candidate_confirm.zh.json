@@ -1,0 +1,23 @@
+{
+  "asset_type": "reply_guidance_pack",
+  "reply_kind": "candidate_confirm",
+  "knowledge_version": "2026-03-12.v1",
+  "locale": "zh",
+  "guidance_templates": [
+    {"template_id": "reply.candidate_confirm.v1", "text": "已选择候选：{selected_candidate}。请确认后继续。"}
+  ],
+  "tone_constraints": [
+    "明确",
+    "简洁",
+    "可执行"
+  ],
+  "negative_examples": [
+    "我已经替你确认",
+    "可以直接提交"
+  ],
+  "error_codes": [],
+  "source_refs": [
+    "docs/dev-plans/245-assistant-reply-guidance-pack-and-reply-realizer-plan.md",
+    "internal/server/assistant_reply_nlg.go"
+  ]
+}

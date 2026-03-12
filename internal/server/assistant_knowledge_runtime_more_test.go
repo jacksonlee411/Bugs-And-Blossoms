@@ -106,8 +106,11 @@ func assistantKnowledgeBaseCompileInput() (
 			ReplyKind:        "missing_fields",
 			KnowledgeVersion: "2026-03-11.v1",
 			Locale:           "zh",
-			ErrorCodes:       []string{"missing_parent_ref_text"},
-			SourceRefs:       []string{sourceRef},
+			GuidanceTemplates: []assistantKnowledgePrompt{
+				{TemplateID: "reply.missing_fields.v1", Text: "请补充：{missing_fields}"},
+			},
+			ErrorCodes: []string{"missing_parent_ref_text"},
+			SourceRefs: []string{sourceRef},
 		},
 	}
 	rawByPath := map[string][]byte{
@@ -474,8 +477,26 @@ func TestAssistantKnowledgeRuntime_CompileValidationCoverage(t *testing.T) {
 	runCompileError("reply guidance kind required", "reply guidance reply_kind required", func(_ *assistantIntentRouteCatalog, _ *[]assistantInterpretationPack, _ *[]assistantActionViewPack, r *[]assistantReplyGuidancePack, _ map[string][]byte) {
 		(*r)[0].ReplyKind = " "
 	})
+	runCompileError("reply guidance knowledge version required", "reply guidance knowledge_version required", func(_ *assistantIntentRouteCatalog, _ *[]assistantInterpretationPack, _ *[]assistantActionViewPack, r *[]assistantReplyGuidancePack, _ map[string][]byte) {
+		(*r)[0].KnowledgeVersion = " "
+	})
 	runCompileError("reply guidance locale invalid", "reply guidance locale invalid", func(_ *assistantIntentRouteCatalog, _ *[]assistantInterpretationPack, _ *[]assistantActionViewPack, r *[]assistantReplyGuidancePack, _ map[string][]byte) {
 		(*r)[0].Locale = "jp"
+	})
+	runCompileError("reply guidance template required", "reply guidance templates required", func(_ *assistantIntentRouteCatalog, _ *[]assistantInterpretationPack, _ *[]assistantActionViewPack, r *[]assistantReplyGuidancePack, _ map[string][]byte) {
+		(*r)[0].GuidanceTemplates = nil
+	})
+	runCompileError("reply guidance template id required", "reply guidance template_id required", func(_ *assistantIntentRouteCatalog, _ *[]assistantInterpretationPack, _ *[]assistantActionViewPack, r *[]assistantReplyGuidancePack, _ map[string][]byte) {
+		(*r)[0].GuidanceTemplates = []assistantKnowledgePrompt{{TemplateID: " ", Text: "x"}}
+	})
+	runCompileError("reply guidance template text required", "reply guidance template text required", func(_ *assistantIntentRouteCatalog, _ *[]assistantInterpretationPack, _ *[]assistantActionViewPack, r *[]assistantReplyGuidancePack, _ map[string][]byte) {
+		(*r)[0].GuidanceTemplates = []assistantKnowledgePrompt{{TemplateID: "reply.missing_fields.v1", Text: " "}}
+	})
+	runCompileError("reply guidance multiple templates not allowed", "reply guidance multiple templates not allowed", func(_ *assistantIntentRouteCatalog, _ *[]assistantInterpretationPack, _ *[]assistantActionViewPack, r *[]assistantReplyGuidancePack, _ map[string][]byte) {
+		(*r)[0].GuidanceTemplates = []assistantKnowledgePrompt{
+			{TemplateID: "reply.missing_fields.v1", Text: "x"},
+			{TemplateID: "reply.missing_fields.v2", Text: "y"},
+		}
 	})
 	runCompileError("reply guidance source refs required", "reply guidance source_refs required", func(_ *assistantIntentRouteCatalog, _ *[]assistantInterpretationPack, _ *[]assistantActionViewPack, r *[]assistantReplyGuidancePack, _ map[string][]byte) {
 		(*r)[0].SourceRefs = nil
@@ -486,8 +507,22 @@ func TestAssistantKnowledgeRuntime_CompileValidationCoverage(t *testing.T) {
 	runCompileError("reply guidance unknown error code", "unknown reply guidance error_code", func(_ *assistantIntentRouteCatalog, _ *[]assistantInterpretationPack, _ *[]assistantActionViewPack, r *[]assistantReplyGuidancePack, _ map[string][]byte) {
 		(*r)[0].ErrorCodes = []string{"UNKNOWN"}
 	})
-	runCompileError("reply guidance duplicate locale", "duplicated reply guidance", func(_ *assistantIntentRouteCatalog, _ *[]assistantInterpretationPack, _ *[]assistantActionViewPack, r *[]assistantReplyGuidancePack, _ map[string][]byte) {
+	runCompileError("reply guidance duplicate generic in locale", "ambiguous reply guidance selection", func(_ *assistantIntentRouteCatalog, _ *[]assistantInterpretationPack, _ *[]assistantActionViewPack, r *[]assistantReplyGuidancePack, _ map[string][]byte) {
+		(*r)[0].ErrorCodes = nil
 		*r = append(*r, (*r)[0])
+	})
+	runCompileError("reply guidance duplicated error code in locale", "ambiguous reply guidance selection", func(_ *assistantIntentRouteCatalog, _ *[]assistantInterpretationPack, _ *[]assistantActionViewPack, r *[]assistantReplyGuidancePack, _ map[string][]byte) {
+		*r = append(*r, assistantReplyGuidancePack{
+			AssetType:        "reply_guidance_pack",
+			ReplyKind:        "missing_fields",
+			KnowledgeVersion: "2026-03-11.v2",
+			Locale:           "zh",
+			GuidanceTemplates: []assistantKnowledgePrompt{
+				{TemplateID: "reply.missing_fields.v2", Text: "x"},
+			},
+			ErrorCodes: []string{"missing_parent_ref_text"},
+			SourceRefs: []string{"internal/server/assistant_knowledge_runtime.go"},
+		})
 	})
 	runCompileError("missing create action view", "missing create_orgunit action view pack", func(_ *assistantIntentRouteCatalog, _ *[]assistantInterpretationPack, a *[]assistantActionViewPack, _ *[]assistantReplyGuidancePack, _ map[string][]byte) {
 		(*a)[0].ActionID = assistantIntentRenameOrgUnit
@@ -532,8 +567,11 @@ func TestAssistantKnowledgeRuntime_CompileValidationCoverage(t *testing.T) {
 			ReplyKind:        "missing_fields",
 			KnowledgeVersion: "2026-03-11.v2",
 			Locale:           "en",
-			ErrorCodes:       []string{"missing_parent_ref_text"},
-			SourceRefs:       []string{"internal/server/assistant_knowledge_runtime.go"},
+			GuidanceTemplates: []assistantKnowledgePrompt{
+				{TemplateID: "reply.missing_fields.v1", Text: "Missing required fields: {missing_fields}"},
+			},
+			ErrorCodes: []string{"missing_parent_ref_text"},
+			SourceRefs: []string{"internal/server/assistant_knowledge_runtime.go"},
 		})
 		runtime, err := assistantCompileKnowledgeRuntime(catalog, interpretation, actionViews, replyGuidance, rawByPath)
 		if err != nil {
@@ -621,6 +659,54 @@ func TestAssistantKnowledgeRuntime_HelperCoverage(t *testing.T) {
 			}
 		})
 
+		t.Run("reply guidance normalization helpers", func(t *testing.T) {
+			if _, err := assistantNormalizeReplyGuidanceTemplates("missing_fields", "zh", nil); err == nil {
+				t.Fatal("expected template required error")
+			}
+			if _, err := assistantNormalizeReplyGuidanceTemplates("missing_fields", "zh", []assistantKnowledgePrompt{{TemplateID: "x", Text: "a"}, {TemplateID: "y", Text: "b"}}); err == nil {
+				t.Fatal("expected multiple template error")
+			}
+			if _, err := assistantNormalizeReplyGuidanceTemplates("missing_fields", "zh", []assistantKnowledgePrompt{{TemplateID: " ", Text: "a"}}); err == nil {
+				t.Fatal("expected template id required error")
+			}
+			if _, err := assistantNormalizeReplyGuidanceTemplates("missing_fields", "zh", []assistantKnowledgePrompt{{TemplateID: "x", Text: " "}}); err == nil {
+				t.Fatal("expected template text required error")
+			}
+			templates, err := assistantNormalizeReplyGuidanceTemplates("missing_fields", "zh", []assistantKnowledgePrompt{{TemplateID: " reply.missing_fields.v1 ", Text: "  请补充  "}})
+			if err != nil || len(templates) != 1 || templates[0].TemplateID != "reply.missing_fields.v1" || templates[0].Text != "请补充" {
+				t.Fatalf("unexpected templates=%+v err=%v", templates, err)
+			}
+
+			if _, err := assistantNormalizeReplyGuidanceErrorCodes([]string{"UNKNOWN"}); err == nil {
+				t.Fatal("expected unknown error code")
+			}
+			if _, err := assistantNormalizeReplyGuidanceErrorCodes([]string{"missing_parent_ref_text", "missing_parent_ref_text"}); err == nil {
+				t.Fatal("expected duplicate error code")
+			}
+			errorCodes, err := assistantNormalizeReplyGuidanceErrorCodes([]string{" missing_parent_ref_text ", " "})
+			if err != nil || len(errorCodes) != 1 || errorCodes[0] != "missing_parent_ref_text" {
+				t.Fatalf("unexpected error codes=%v err=%v", errorCodes, err)
+			}
+
+			normalized := assistantNormalizeOptionalTextList([]string{"  ", "明确", "明确", "简洁"})
+			if len(normalized) != 2 || normalized[0] != "明确" || normalized[1] != "简洁" {
+				t.Fatalf("unexpected optional text list=%v", normalized)
+			}
+			if out := assistantNormalizeOptionalTextList([]string{" ", "  "}); out != nil {
+				t.Fatalf("expected nil for empty optional list, got=%v", out)
+			}
+
+			if assistantReplyGuidanceMatchErrorCode(assistantReplyGuidancePack{ErrorCodes: []string{"missing_parent_ref_text"}}, "missing_effective_date") {
+				t.Fatal("unexpected matched error code")
+			}
+			if !assistantReplyGuidanceMatchErrorCode(assistantReplyGuidancePack{ErrorCodes: []string{"missing_parent_ref_text"}}, "missing_parent_ref_text") {
+				t.Fatal("expected matched error code")
+			}
+			if !assistantReplyGuidanceIsGeneric(assistantReplyGuidancePack{}) {
+				t.Fatal("expected empty error code pack to be generic")
+			}
+		})
+
 		t.Run("caller unavailable", func(t *testing.T) {
 			hooks := captureAssistantKnowledgeHooks()
 			defer hooks.restore()
@@ -665,6 +751,30 @@ func TestAssistantKnowledgeRuntime_HelperCoverage(t *testing.T) {
 					"en": {PackID: "knowledge.general_qa", Locale: "en"},
 				},
 			},
+			replyGuidance: map[string]map[string][]assistantReplyGuidancePack{
+				"missing_fields": {
+					"zh": {
+						{
+							ReplyKind:         "missing_fields",
+							Locale:            "zh",
+							GuidanceTemplates: []assistantKnowledgePrompt{{TemplateID: "reply.missing_fields.zh.v1", Text: "请补充：{missing_fields}"}},
+						},
+						{
+							ReplyKind:         "missing_fields",
+							Locale:            "zh",
+							GuidanceTemplates: []assistantKnowledgePrompt{{TemplateID: "reply.missing_fields.zh.error.v1", Text: "缺少上级组织"}},
+							ErrorCodes:        []string{"missing_parent_ref_text"},
+						},
+					},
+					"en": {
+						{
+							ReplyKind:         "missing_fields",
+							Locale:            "en",
+							GuidanceTemplates: []assistantKnowledgePrompt{{TemplateID: "reply.missing_fields.en.v1", Text: "Missing: {missing_fields}"}},
+						},
+					},
+				},
+			},
 		}
 		candidates := runtime.localeCandidates("en")
 		if len(candidates) != 2 || candidates[0] != "en" || candidates[1] != "zh" {
@@ -699,6 +809,21 @@ func TestAssistantKnowledgeRuntime_HelperCoverage(t *testing.T) {
 		runtime.interpretation["only.ja"] = map[string]assistantInterpretationPack{"ja": {PackID: "only.ja", Locale: "ja"}}
 		if _, ok := runtime.findInterpretation("only.ja", "zh"); ok {
 			t.Fatal("locale not matched should return false")
+		}
+		if got, ok := (*assistantKnowledgeRuntime)(nil).findReplyGuidance("missing_fields", "zh", "missing_parent_ref_text"); ok || got.ReplyKind != "" {
+			t.Fatalf("nil runtime should not find reply guidance, got=%+v ok=%v", got, ok)
+		}
+		if _, ok := runtime.findReplyGuidance("unknown_kind", "zh", ""); ok {
+			t.Fatal("unknown reply kind should not be found")
+		}
+		if got, ok := runtime.findReplyGuidance("missing_fields", "zh", "missing_parent_ref_text"); !ok || got.GuidanceTemplates[0].TemplateID != "reply.missing_fields.zh.error.v1" {
+			t.Fatalf("expected exact error code guidance, got=%+v ok=%v", got, ok)
+		}
+		if got, ok := runtime.findReplyGuidance("missing_fields", "fr", "missing_unknown"); !ok || got.Locale != "zh" || got.GuidanceTemplates[0].TemplateID != "reply.missing_fields.zh.v1" {
+			t.Fatalf("expected locale fallback to zh generic pack, got=%+v ok=%v", got, ok)
+		}
+		if got, ok := runtime.findReplyGuidance("missing_fields", "en", ""); !ok || got.Locale != "en" {
+			t.Fatalf("expected en generic pack, got=%+v ok=%v", got, ok)
 		}
 	})
 
