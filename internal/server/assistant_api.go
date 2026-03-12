@@ -489,8 +489,34 @@ func handleAssistantConversationTurnsAPI(w http.ResponseWriter, r *http.Request,
 		}
 		return
 	}
+	assistantRenderReplyForLatestTurn(r.Context(), svc, tenant.ID, principal, conversationID, conversation)
 
 	writeJSON(w, http.StatusOK, conversation)
+}
+
+func assistantRenderReplyForLatestTurn(
+	ctx context.Context,
+	svc *assistantConversationService,
+	tenantID string,
+	principal Principal,
+	conversationID string,
+	conversation *assistantConversation,
+) {
+	if svc == nil || conversation == nil {
+		return
+	}
+	turn := latestTurn(conversation)
+	if turn == nil {
+		return
+	}
+	if turn.ReplyNLG != nil && strings.TrimSpace(turn.ReplyNLG.Text) != "" {
+		return
+	}
+	reply, err := svc.renderTurnReply(ctx, tenantID, principal, conversationID, turn.TurnID, assistantRenderReplyRequest{})
+	if err != nil || reply == nil {
+		return
+	}
+	assistantSetReplySnapshot(turn, reply, turn.ErrorCode)
 }
 
 func handleAssistantTurnActionAPI(w http.ResponseWriter, r *http.Request, svc *assistantConversationService) {

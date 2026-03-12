@@ -392,6 +392,7 @@ modules/{module}/
 - DEV-PLAN-240E：Assistant 内部知识包与只读 Resolver 方案（承接 240-M6）：`docs/dev-plans/240e-assistant-internal-knowledge-pack-and-readonly-resolver-plan.md`
 - DEV-PLAN-240F：Assistant 与 280 主链路对齐封板回归计划（承接 240-M7）：`docs/dev-plans/240f-assistant-280-aligned-closure-and-regression-plan.md`
 - DEV-PLAN-241：Assistant 知识包运行时最小落地计划（承接 240E）：`docs/dev-plans/241-assistant-knowledge-pack-runtime-minimal-implementation-plan.md`
+- DEV-PLAN-241 执行日志：`docs/dev-records/dev-plan-241-execution-log.md`
 - DEV-PLAN-242：Assistant Intent Router 运行时最小落地计划：`docs/dev-plans/242-assistant-intent-router-runtime-minimal-plan.md`
 - DEV-PLAN-242 执行日志：`docs/dev-records/dev-plan-242-execution-log.md`
 - DEV-PLAN-243：Assistant 澄清策略与槽位补全回路计划：`docs/dev-plans/243-assistant-clarification-policy-and-slot-repair-plan.md`
@@ -399,7 +400,9 @@ modules/{module}/
 - DEV-PLAN-244：Assistant Interpretation Pack 与 Intent Route Catalog 编译治理计划：`docs/dev-plans/244-assistant-interpretation-pack-and-intent-route-catalog-compiler-plan.md`
 - DEV-PLAN-244 执行日志：`docs/dev-records/dev-plan-244-execution-log.md`
 - DEV-PLAN-245：Assistant Reply Guidance Pack 与 Reply Realizer 计划：`docs/dev-plans/245-assistant-reply-guidance-pack-and-reply-realizer-plan.md`
+- DEV-PLAN-245 执行日志：`docs/dev-records/dev-plan-245-execution-log.md`
 - DEV-PLAN-246：Assistant 理解—分流—澄清—表达实施路线图：`docs/dev-plans/246-assistant-understand-route-clarify-roadmap.md`
+- DEV-PLAN-246A：基于 240E/246 的 241-245 目标完成验证报告：`docs/dev-plans/246a-assistant-241-245-goal-completion-validation-report.md`
 - DEV-PLAN-250：Go 网关 + PostgreSQL RAG/鉴权接管实施方案（覆盖阶段一至阶段二）：`docs/dev-plans/250-go-gateway-rag-and-authz-phase1-2-plan.md`
 - DEV-PLAN-260：AI对话真实业务闭环主计划（多轮补全 / 候选确认 / 提交回执）：`docs/dev-plans/260-librechat-conversation-first-auto-execution-plan.md`
 - DEV-PLAN-260 执行日志：`docs/archive/dev-records/dev-plan-260-execution-log.md`
