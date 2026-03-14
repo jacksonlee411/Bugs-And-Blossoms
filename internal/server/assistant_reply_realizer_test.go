@@ -364,7 +364,7 @@ func TestAssistantReplyRealizer_BuildInputAndRenderTurnReply(t *testing.T) {
 		return assistantReplyModelResult{Text: "ok", ReplyModelName: "gpt-4.1"}, nil
 	}
 	assistantRenderReplyWithModelFn = badModel
-	if _, err := svc.renderTurnReply(context.Background(), "tenant_1", principal, conversation.ConversationID, turn.TurnID, assistantRenderReplyRequest{}); !errors.Is(err, errAssistantReplyModelTargetMismatch) {
+	if _, err := svc.renderTurnReply(context.Background(), "tenant_1", principal, conversation.ConversationID, turn.TurnID, assistantRenderReplyRequest{Stage: "draft"}); !errors.Is(err, errAssistantReplyModelTargetMismatch) {
 		t.Fatalf("expected target mismatch, got=%v", err)
 	}
 }

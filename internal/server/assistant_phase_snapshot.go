@@ -388,13 +388,15 @@ func assistantSetReplySnapshot(turn *assistantTurn, reply *assistantRenderReplyR
 	}
 	copyReply := *reply
 	turn.ReplyNLG = &copyReply
+	outcome := "pending"
+	switch {
+	case strings.TrimSpace(errorCode) != "" || strings.TrimSpace(reply.Stage) == "commit_failed":
+		outcome = "failure"
+	case strings.TrimSpace(reply.Stage) == "commit_result":
+		outcome = "success"
+	}
 	turn.CommitReply = &assistantCommitReply{
-		Outcome: func() string {
-			if strings.TrimSpace(errorCode) != "" || strings.TrimSpace(reply.Stage) == "commit_failed" {
-				return "failure"
-			}
-			return "success"
-		}(),
+		Outcome:   outcome,
 		Message:   strings.TrimSpace(reply.Text),
 		ErrorCode: strings.TrimSpace(errorCode),
 	}

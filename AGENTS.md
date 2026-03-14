@@ -403,6 +403,8 @@ modules/{module}/
 - DEV-PLAN-245 执行日志：`docs/dev-records/dev-plan-245-execution-log.md`
 - DEV-PLAN-246：Assistant 理解—分流—澄清—表达实施路线图：`docs/dev-plans/246-assistant-understand-route-clarify-roadmap.md`
 - DEV-PLAN-246A：基于 240E/246 的 241-245 目标完成验证报告：`docs/dev-plans/246a-assistant-241-245-goal-completion-validation-report.md`
+- DEV-PLAN-267：Assistant 对话僵硬问题系统反思与架构纠偏计划（承接 246 系列）：`docs/dev-plans/267-assistant-dialog-rigidity-retrospective-and-architecture-correction-plan.md`
+- DEV-PLAN-268：Assistant 外部大模型单一语义核与本地最小执行边界实施计划：`docs/dev-plans/268-assistant-external-llm-semantic-core-and-runtime-thinning-implementation-plan.md`
 - DEV-PLAN-250：Go 网关 + PostgreSQL RAG/鉴权接管实施方案（覆盖阶段一至阶段二）：`docs/dev-plans/250-go-gateway-rag-and-authz-phase1-2-plan.md`
 - DEV-PLAN-260：AI对话真实业务闭环主计划（多轮补全 / 候选确认 / 提交回执）：`docs/dev-plans/260-librechat-conversation-first-auto-execution-plan.md`
 - DEV-PLAN-260 执行日志：`docs/archive/dev-records/dev-plan-260-execution-log.md`

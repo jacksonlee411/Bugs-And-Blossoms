@@ -88,7 +88,7 @@ func newAssistantFallbackGateway() *assistantModelGateway {
 		},
 		adapters: map[string]assistantProviderAdapter{
 			"openai": assistantAdapterFunc(func(context.Context, string, assistantModelProviderConfig) ([]byte, error) {
-				return []byte(`{"choices":[{"message":{"content":"fallback"}}]}`), nil
+				return []byte(`{"action":"create_orgunit","parent_ref_text":"鲜花组织","entity_name":"运营部","effective_date":"2026-01-01","user_visible_reply":"已生成草案，请确认。","readiness":"ready_for_confirm"}`), nil
 			}),
 		},
 	}

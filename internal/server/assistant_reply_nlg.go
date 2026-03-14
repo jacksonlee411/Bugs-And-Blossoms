@@ -167,6 +167,11 @@ func (s *assistantConversationService) renderTurnReply(ctx context.Context, tena
 	if turn == nil && !req.AllowMissingTurn {
 		return nil, errAssistantTurnNotFound
 	}
+	if turn != nil && assistantReplyRequestIsPassive(req) {
+		if stored := assistantSemanticReplyFromTurn(turn, strings.TrimSpace(conversation.ConversationID), resolvedTurnID); stored != nil {
+			return stored, nil
+		}
+	}
 
 	locale := assistantReplyLocale(req.Locale)
 	runtime, runtimeErr := s.ensureKnowledgeRuntime()
@@ -238,6 +243,18 @@ func (s *assistantConversationService) renderTurnReply(ctx context.Context, tena
 	}
 	s.persistRenderedReply(tenantID, principal.ID, conversationID, resolvedTurnID, reply)
 	return reply, nil
+}
+
+func assistantReplyRequestIsPassive(req assistantRenderReplyRequest) bool {
+	return strings.TrimSpace(req.Stage) == "" &&
+		strings.TrimSpace(req.Kind) == "" &&
+		strings.TrimSpace(req.Outcome) == "" &&
+		strings.TrimSpace(req.ErrorCode) == "" &&
+		strings.TrimSpace(req.ErrorMessage) == "" &&
+		strings.TrimSpace(req.NextAction) == "" &&
+		strings.TrimSpace(req.Locale) == "" &&
+		strings.TrimSpace(req.FallbackText) == "" &&
+		!req.AllowMissingTurn
 }
 
 func assistantRenderReplyWithModel(ctx context.Context, svc *assistantConversationService, prompt assistantReplyRenderPrompt) (assistantReplyModelResult, error) {

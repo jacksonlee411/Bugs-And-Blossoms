@@ -223,7 +223,7 @@ func TestAssistant240A_APIAndIntentGaps(t *testing.T) {
 		if err != nil {
 			t.Fatalf("resolve intent err=%v", err)
 		}
-		if resolved.ProviderName != "deterministic" || attempts != 2 || resolved.Intent.Action != assistantIntentCreateOrgUnit {
+		if resolved.ProviderName != "openai" || attempts != 1 || resolved.Intent.Action != assistantIntentCreateOrgUnit {
 			t.Fatalf("unexpected resolved=%+v attempts=%d", resolved, attempts)
 		}
 	})

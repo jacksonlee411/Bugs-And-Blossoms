@@ -81,7 +81,7 @@ func TestAssistantRenderTurnReplyMoreCoverage(t *testing.T) {
 		assistantRenderReplyWithModelFn = func(_ context.Context, _ *assistantConversationService, prompt assistantReplyRenderPrompt) (assistantReplyModelResult, error) {
 			return assistantReplyModelResult{Text: " ", ReplyModelName: assistantReplyTargetModelName, Stage: prompt.Stage, Kind: prompt.Kind}, nil
 		}
-		_, err := svc.renderTurnReply(context.Background(), "tenant_1", principal, conversation.ConversationID, "turn_reply_1", assistantRenderReplyRequest{})
+		_, err := svc.renderTurnReply(context.Background(), "tenant_1", principal, conversation.ConversationID, "turn_reply_1", assistantRenderReplyRequest{Stage: "draft"})
 		if !errors.Is(err, errAssistantReplyRenderFailed) {
 			t.Fatalf("err=%v", err)
 		}

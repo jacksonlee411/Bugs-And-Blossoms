@@ -61,10 +61,56 @@ type assistantResolveIntentRequest struct {
 }
 
 type assistantResolveIntentResult struct {
-	Intent        assistantIntentSpec
-	ProviderName  string
-	ModelName     string
-	ModelRevision string
+	Intent              assistantIntentSpec
+	ProviderName        string
+	ModelName           string
+	ModelRevision       string
+	GoalSummary         string
+	UserVisibleReply    string
+	NextQuestion        string
+	Readiness           string
+	SelectedCandidateID string
+}
+
+type assistantSemanticIntentPayload struct {
+	Action              string `json:"action"`
+	IntentID            string `json:"intent_id,omitempty"`
+	RouteKind           string `json:"route_kind,omitempty"`
+	RouteCatalogVersion string `json:"route_catalog_version,omitempty"`
+	ParentRefText       string `json:"parent_ref_text,omitempty"`
+	EntityName          string `json:"entity_name,omitempty"`
+	EffectiveDate       string `json:"effective_date,omitempty"`
+	OrgCode             string `json:"org_code,omitempty"`
+	TargetEffectiveDate string `json:"target_effective_date,omitempty"`
+	NewName             string `json:"new_name,omitempty"`
+	NewParentRefText    string `json:"new_parent_ref_text,omitempty"`
+	IntentSchemaVersion string `json:"intent_schema_version,omitempty"`
+	ContextHash         string `json:"context_hash,omitempty"`
+	IntentHash          string `json:"intent_hash,omitempty"`
+	GoalSummary         string `json:"goal_summary,omitempty"`
+	UserVisibleReply    string `json:"user_visible_reply,omitempty"`
+	NextQuestion        string `json:"next_question,omitempty"`
+	Readiness           string `json:"readiness,omitempty"`
+	SelectedCandidateID string `json:"selected_candidate_id,omitempty"`
+}
+
+func (p assistantSemanticIntentPayload) intentSpec() assistantIntentSpec {
+	return assistantIntentSpec{
+		Action:              strings.TrimSpace(p.Action),
+		IntentID:            strings.TrimSpace(p.IntentID),
+		RouteKind:           strings.TrimSpace(p.RouteKind),
+		RouteCatalogVersion: strings.TrimSpace(p.RouteCatalogVersion),
+		ParentRefText:       strings.TrimSpace(p.ParentRefText),
+		EntityName:          strings.TrimSpace(p.EntityName),
+		EffectiveDate:       strings.TrimSpace(p.EffectiveDate),
+		OrgCode:             strings.TrimSpace(p.OrgCode),
+		TargetEffectiveDate: strings.TrimSpace(p.TargetEffectiveDate),
+		NewName:             strings.TrimSpace(p.NewName),
+		NewParentRefText:    strings.TrimSpace(p.NewParentRefText),
+		IntentSchemaVersion: strings.TrimSpace(p.IntentSchemaVersion),
+		ContextHash:         strings.TrimSpace(p.ContextHash),
+		IntentHash:          strings.TrimSpace(p.IntentHash),
+	}
 }
 
 type assistantProviderStatus struct {
@@ -105,8 +151,18 @@ func (assistantDeterministicProviderAdapter) Invoke(_ context.Context, prompt st
 	case assistantIsSimulateEndpoint(endpoint) && strings.HasPrefix(endpoint, "simulate://unavailable"):
 		return nil, errAssistantModelProviderUnavailable
 	}
-	intent := assistantExtractIntent(strings.TrimSpace(prompt))
-	payload, err := assistantIntentMarshalFn(intent)
+	userInput := assistantSemanticCurrentUserInput(prompt)
+	intent := assistantExtractIntent(userInput)
+	payload, err := assistantIntentMarshalFn(assistantSemanticIntentPayload{
+		Action:           intent.Action,
+		ParentRefText:    intent.ParentRefText,
+		EntityName:       intent.EntityName,
+		EffectiveDate:    intent.EffectiveDate,
+		GoalSummary:      strings.TrimSpace(userInput),
+		UserVisibleReply: "",
+		NextQuestion:     "",
+		Readiness:        "",
+	})
 	if err != nil {
 		return nil, errAssistantPlanSchemaConstrainedDecodeFailed
 	}
@@ -203,8 +259,10 @@ func (a assistantOpenAIProviderAdapter) Invoke(ctx context.Context, prompt strin
 			Messages: []assistantOpenAIChatCompletionMessage{
 				{
 					Role: "system",
-					Content: "你是企业 HR 组织变更助手。你必须只输出严格 JSON，禁止输出解释、Markdown 或其他文本。" +
-						"JSON 必须符合 schema 且 additionalProperties=false。",
+					Content: "你是企业 HR 组织变更助手。你会收到一个包含当前用户输入、允许动作、以及可能待续上下文的 JSON。" +
+						"你必须只输出严格 JSON，禁止输出解释、Markdown 或其他文本。" +
+						"你需要同时输出结构化动作槽位、当前给用户看的自然语言回复、下一句追问，以及当前 readiness。" +
+						"所有日期统一输出 YYYY-MM-DD；action 只能从 allowed_actions 中选择。",
 				},
 				{
 					Role:    "user",
@@ -232,6 +290,33 @@ func (a assistantOpenAIProviderAdapter) Invoke(ctx context.Context, prompt strin
 								"type": "string",
 							},
 							"effective_date": map[string]any{
+								"type": "string",
+							},
+							"org_code": map[string]any{
+								"type": "string",
+							},
+							"target_effective_date": map[string]any{
+								"type": "string",
+							},
+							"new_name": map[string]any{
+								"type": "string",
+							},
+							"new_parent_ref_text": map[string]any{
+								"type": "string",
+							},
+							"goal_summary": map[string]any{
+								"type": "string",
+							},
+							"user_visible_reply": map[string]any{
+								"type": "string",
+							},
+							"next_question": map[string]any{
+								"type": "string",
+							},
+							"readiness": map[string]any{
+								"type": "string",
+							},
+							"selected_candidate_id": map[string]any{
 								"type": "string",
 							},
 						},
@@ -626,6 +711,41 @@ func assistantNormalizeOpenAIIntentPayload(content string) []byte {
 	if newParentRefText != "" {
 		normalized["new_parent_ref_text"] = newParentRefText
 	}
+	if goalSummary := assistantFirstStringFromObjects(objects,
+		"goal_summary",
+		"goalSummary",
+		"summary",
+		"intent_summary"); goalSummary != "" {
+		normalized["goal_summary"] = goalSummary
+	}
+	if userVisibleReply := assistantFirstStringFromObjects(objects,
+		"user_visible_reply",
+		"userVisibleReply",
+		"reply",
+		"response",
+		"message"); userVisibleReply != "" {
+		normalized["user_visible_reply"] = userVisibleReply
+	}
+	if nextQuestion := assistantFirstStringFromObjects(objects,
+		"next_question",
+		"nextQuestion",
+		"follow_up_question",
+		"followUpQuestion"); nextQuestion != "" {
+		normalized["next_question"] = nextQuestion
+	}
+	if readiness := assistantNormalizeOpenAIReadiness(assistantFirstStringFromObjects(objects,
+		"readiness",
+		"state",
+		"status")); readiness != "" {
+		normalized["readiness"] = readiness
+	}
+	if selectedCandidateID := assistantFirstStringFromObjects(objects,
+		"selected_candidate_id",
+		"selectedCandidateId",
+		"candidate_id",
+		"candidateId"); selectedCandidateID != "" {
+		normalized["selected_candidate_id"] = selectedCandidateID
+	}
 	if len(normalized) == 0 {
 		return []byte(trimmed)
 	}
@@ -685,6 +805,21 @@ func assistantExtractJSONObject(content string) (string, bool) {
 		}
 	}
 	return "", false
+}
+
+func assistantNormalizeOpenAIReadiness(value string) string {
+	switch strings.TrimSpace(strings.ToLower(value)) {
+	case "ready_for_confirm", "ready_for_confirmation", "ready":
+		return assistantSemanticReadinessReadyForConfirm
+	case "ready_for_dry_run", "draft_ready":
+		return assistantSemanticReadinessReadyForDryRun
+	case "non_business", "knowledge", "qa", "chitchat":
+		return assistantSemanticReadinessNonBusiness
+	case "need_more_info", "missing_info", "clarification_required", "clarify":
+		return assistantSemanticReadinessNeedMoreInfo
+	default:
+		return ""
+	}
 }
 
 func assistantFirstString(object map[string]any, keys ...string) string {
@@ -1142,7 +1277,7 @@ func (g *assistantModelGateway) ResolveIntent(ctx context.Context, req assistant
 				}
 				break
 			}
-			intent, err := assistantStrictDecodeIntent(raw)
+			payload, err := assistantStrictDecodeSemanticIntent(raw)
 			if err != nil {
 				invokeErr = errAssistantPlanSchemaConstrainedDecodeFailed
 				if attempt < attempts-1 {
@@ -1151,10 +1286,15 @@ func (g *assistantModelGateway) ResolveIntent(ctx context.Context, req assistant
 				break
 			}
 			return assistantResolveIntentResult{
-				Intent:        intent,
-				ProviderName:  strings.ToLower(strings.TrimSpace(provider.Name)),
-				ModelName:     strings.TrimSpace(provider.Model),
-				ModelRevision: assistantModelRevision(provider),
+				Intent:              payload.intentSpec(),
+				ProviderName:        strings.ToLower(strings.TrimSpace(provider.Name)),
+				ModelName:           strings.TrimSpace(provider.Model),
+				ModelRevision:       assistantModelRevision(provider),
+				GoalSummary:         strings.TrimSpace(payload.GoalSummary),
+				UserVisibleReply:    strings.TrimSpace(payload.UserVisibleReply),
+				NextQuestion:        strings.TrimSpace(payload.NextQuestion),
+				Readiness:           strings.TrimSpace(payload.Readiness),
+				SelectedCandidateID: strings.TrimSpace(payload.SelectedCandidateID),
 			}, nil
 		}
 		switch {
@@ -1182,6 +1322,19 @@ func assistantStrictDecodeIntent(raw []byte) (assistantIntentSpec, error) {
 		return assistantIntentSpec{}, errAssistantPlanSchemaConstrainedDecodeFailed
 	}
 	return intent, nil
+}
+
+func assistantStrictDecodeSemanticIntent(raw []byte) (assistantSemanticIntentPayload, error) {
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	decoder.DisallowUnknownFields()
+	var payload assistantSemanticIntentPayload
+	if err := decoder.Decode(&payload); err != nil {
+		return assistantSemanticIntentPayload{}, err
+	}
+	if err := decoder.Decode(&struct{}{}); err == nil {
+		return assistantSemanticIntentPayload{}, errAssistantPlanSchemaConstrainedDecodeFailed
+	}
+	return payload, nil
 }
 
 func assistantModelRevision(provider assistantModelProviderConfig) string {

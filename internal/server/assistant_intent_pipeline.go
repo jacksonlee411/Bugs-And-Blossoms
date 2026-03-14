@@ -2,7 +2,6 @@ package server
 
 import (
 	"context"
-	"errors"
 	"strings"
 )
 
@@ -14,6 +13,10 @@ var (
 )
 
 func (s *assistantConversationService) resolveIntent(ctx context.Context, tenantID string, conversationID string, userInput string) (assistantResolveIntentResult, error) {
+	return s.resolveIntentWithPendingTurn(ctx, tenantID, conversationID, userInput, nil)
+}
+
+func (s *assistantConversationService) resolveIntentWithPendingTurn(ctx context.Context, tenantID string, conversationID string, userInput string, pendingTurn *assistantTurn) (assistantResolveIntentResult, error) {
 	text := strings.TrimSpace(userInput)
 	localIntent := assistantExtractIntent(text)
 	if assistantBoundaryViolationDetected(text) {
@@ -28,65 +31,81 @@ func (s *assistantConversationService) resolveIntent(ctx context.Context, tenant
 	if s.modelGateway == nil {
 		return assistantResolveIntentResult{}, errAssistantModelProviderUnavailable
 	}
+	prompt := assistantBuildSemanticPrompt(text, pendingTurn)
 	resolved, err := s.modelGateway.ResolveIntent(ctx, assistantResolveIntentRequest{
-		Prompt:         text,
+		Prompt:         prompt,
 		ConversationID: conversationID,
 		TenantID:       tenantID,
 	})
 	if err != nil {
-		if assistantShouldFallbackIntentLocally(err) {
-			return assistantResolveIntentLocally(text)
-		}
 		return assistantResolveIntentResult{}, err
 	}
-	resolved, upgradedFromPlanOnly := assistantNormalizeResolvedIntentWithLocalFacts(resolved, localIntent)
-	if assistantIntentSchemaInvalid(resolved.Intent) {
-		if upgradedFromPlanOnly {
-			return resolved, nil
-		}
+	resolved.Intent = assistantSanitizeResolvedIntentFacts(resolved.Intent, localIntent, pendingTurn)
+	if assistantModelIntentInvalid(resolved.Intent) {
 		// Real provider may occasionally emit partial JSON; retry once with the same runtime path.
 		retryResolved, retryErr := s.modelGateway.ResolveIntent(ctx, assistantResolveIntentRequest{
-			Prompt:         text,
+			Prompt:         prompt,
 			ConversationID: conversationID,
 			TenantID:       tenantID,
 		})
 		if retryErr != nil {
-			if assistantShouldFallbackIntentLocally(retryErr) {
-				return assistantResolveIntentLocally(text)
-			}
 			return assistantResolveIntentResult{}, retryErr
 		}
-		retryResolved, retryUpgradedFromPlanOnly := assistantNormalizeResolvedIntentWithLocalFacts(retryResolved, localIntent)
-		if assistantIntentSchemaInvalid(retryResolved.Intent) {
-			if retryUpgradedFromPlanOnly {
-				return retryResolved, nil
-			}
-			return assistantResolveIntentLocally(text)
+		retryResolved.Intent = assistantSanitizeResolvedIntentFacts(retryResolved.Intent, localIntent, pendingTurn)
+		if assistantModelIntentInvalid(retryResolved.Intent) {
+			return assistantResolveIntentResult{}, errAssistantPlanSchemaConstrainedDecodeFailed
 		}
 		return retryResolved, nil
 	}
 	return resolved, nil
 }
 
-func assistantNormalizeResolvedIntentWithLocalFacts(resolved assistantResolveIntentResult, localIntent assistantIntentSpec) (assistantResolveIntentResult, bool) {
-	resolved.Intent = assistantOverlayExplicitIntentFacts(resolved.Intent, localIntent)
-	if assistantShouldUpgradeIntentFromLocalFacts(resolved.Intent.Action, localIntent) {
-		resolved.Intent = localIntent
-		return resolved, true
-	}
-	return resolved, false
-}
-
-func assistantShouldUpgradeIntentFromLocalFacts(resolvedAction string, localIntent assistantIntentSpec) bool {
-	if strings.TrimSpace(localIntent.Action) != assistantIntentCreateOrgUnit {
-		return false
-	}
-	action := strings.TrimSpace(resolvedAction)
-	if action == "" || action == assistantIntentPlanOnly {
+func assistantModelIntentInvalid(intent assistantIntentSpec) bool {
+	action := strings.TrimSpace(intent.Action)
+	if action == "" {
 		return true
 	}
-	_, ok := assistantLookupDefaultActionSpec(action)
-	return !ok
+	if action != assistantIntentPlanOnly {
+		if _, ok := assistantLookupDefaultActionSpec(action); !ok {
+			return true
+		}
+	}
+	if effectiveDate := strings.TrimSpace(intent.EffectiveDate); effectiveDate != "" && !assistantDateISOYMD(effectiveDate) {
+		return true
+	}
+	if targetDate := strings.TrimSpace(intent.TargetEffectiveDate); targetDate != "" && !assistantDateISOYMD(targetDate) {
+		return true
+	}
+	return false
+}
+
+func assistantSanitizeResolvedIntentFacts(intent assistantIntentSpec, localIntent assistantIntentSpec, pendingTurn *assistantTurn) assistantIntentSpec {
+	sanitized := assistantOverlayExplicitIntentFacts(intent, localIntent)
+	explicitEffectiveDate := strings.TrimSpace(localIntent.EffectiveDate)
+	explicitTargetDate := strings.TrimSpace(firstNonEmpty(localIntent.TargetEffectiveDate, localIntent.EffectiveDate))
+	pendingEffectiveDate := ""
+	pendingTargetDate := ""
+	if pendingTurn != nil {
+		pendingEffectiveDate = strings.TrimSpace(pendingTurn.Intent.EffectiveDate)
+		pendingTargetDate = strings.TrimSpace(firstNonEmpty(pendingTurn.Intent.TargetEffectiveDate, pendingTurn.Intent.EffectiveDate))
+	}
+	switch strings.TrimSpace(sanitized.Action) {
+	case assistantIntentCreateOrgUnit, assistantIntentAddOrgUnitVersion, assistantIntentInsertOrgUnitVersion, assistantIntentRenameOrgUnit, assistantIntentMoveOrgUnit, assistantIntentDisableOrgUnit, assistantIntentEnableOrgUnit:
+		switch {
+		case explicitEffectiveDate != "":
+			sanitized.EffectiveDate = explicitEffectiveDate
+		case pendingEffectiveDate == "":
+			sanitized.EffectiveDate = ""
+		}
+	case assistantIntentCorrectOrgUnit:
+		switch {
+		case explicitTargetDate != "":
+			sanitized.TargetEffectiveDate = explicitTargetDate
+		case pendingTargetDate == "":
+			sanitized.TargetEffectiveDate = ""
+		}
+	}
+	return sanitized
 }
 
 func assistantOverlayExplicitIntentFacts(intent assistantIntentSpec, localIntent assistantIntentSpec) assistantIntentSpec {
@@ -105,21 +124,6 @@ func assistantOverlayExplicitIntentFacts(intent assistantIntentSpec, localIntent
 	}
 	intent.EffectiveDate = ""
 	return intent
-}
-
-func assistantShouldFallbackIntentLocally(err error) bool {
-	return errors.Is(err, errAssistantPlanSchemaConstrainedDecodeFailed)
-}
-
-func assistantResolveIntentLocally(userInput string) (assistantResolveIntentResult, error) {
-	intent := assistantExtractIntent(strings.TrimSpace(userInput))
-	_ = assistantBuildPlan(intent)
-	return assistantResolveIntentResult{
-		Intent:        intent,
-		ProviderName:  "deterministic",
-		ModelName:     "builtin-intent-extractor",
-		ModelRevision: assistantIntentSchemaVersionV1,
-	}, nil
 }
 
 func assistantCompileIntentToPlans(intent assistantIntentSpec, resolvedCandidateID string) (assistantSkillExecutionPlan, assistantConfigDeltaPlan) {
