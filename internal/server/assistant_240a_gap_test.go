@@ -165,6 +165,7 @@ func TestAssistant240A_APIAndIntentGaps(t *testing.T) {
 		turn.Plan.CompilerContractVersion = assistantCompilerContractVersionV1
 		turn.Plan.CapabilityMapVersion = assistantCapabilityMapVersionV1
 		turn.Plan.SkillManifestDigest = assistantSkillManifestDigest([]string{"org.orgunit_create"})
+		assistantTestAttachBusinessRoute(turn)
 		turn.Plan.VersionTuple = []byte("null")
 		tx := &assistFakeTx{}
 		tx.queryRowFn = func(sql string, _ ...any) pgx.Row {
@@ -300,6 +301,7 @@ func TestAssistant240A_PersistenceGaps(t *testing.T) {
 			ResolvedCandidateID: "c1",
 			AmbiguityCount:      1,
 		}
+		assistantTestAttachBusinessRoute(turn)
 		if _, err := unsupportedSvc.applyConfirmTurn(conversation, turn, principal, "c1"); !errors.Is(err, errAssistantUnsupportedIntent) {
 			t.Fatalf("expected unsupported intent, got %v", err)
 		}
@@ -320,6 +322,7 @@ func TestAssistant240A_PersistenceGaps(t *testing.T) {
 			ResolvedCandidateID: "c1",
 			UpdatedAt:           time.Now().UTC(),
 		}
+		assistantTestAttachBusinessRoute(turn)
 		if err := commitSvc.refreshTurnVersionTuple(ctx, "tenant_1", turn); err != nil {
 			t.Fatalf("refresh tuple err=%v", err)
 		}
@@ -348,6 +351,7 @@ func TestAssistant240A_PersistenceGaps(t *testing.T) {
 			CreatedAt:          now,
 			UpdatedAt:          now,
 		}
+		assistantTestAttachBusinessRoute(turn)
 		row := assistantTurnRowValues(turn)
 		tx := &assistFakeTx{}
 		tx.queryRowFn = func(sql string, _ ...any) pgx.Row {
@@ -417,6 +421,7 @@ func TestAssistant240A_PersistenceGaps(t *testing.T) {
 		turn.Plan.CompilerContractVersion = assistantCompilerContractVersionV1
 		turn.Plan.CapabilityMapVersion = assistantCapabilityMapVersionV1
 		turn.Plan.SkillManifestDigest = assistantSkillManifestDigest([]string{"org.orgunit_create"})
+		assistantTestAttachBusinessRoute(turn)
 		svc := newAssistantConversationService(store, assistantWriteServiceStub{store: store})
 		if err := svc.refreshTurnVersionTuple(ctx, "tenant_1", turn); err != nil {
 			t.Fatalf("refresh tuple err=%v", err)
@@ -476,6 +481,7 @@ func TestAssistant240A_PersistenceGaps(t *testing.T) {
 		baseTurn.Plan.CompilerContractVersion = assistantCompilerContractVersionV1
 		baseTurn.Plan.CapabilityMapVersion = assistantCapabilityMapVersionV1
 		baseTurn.Plan.SkillManifestDigest = assistantSkillManifestDigest([]string{"org.orgunit_create"})
+		assistantTestAttachBusinessRoute(baseTurn)
 		prepareRow := func(t *testing.T) []any {
 			t.Helper()
 			svc := newAssistantConversationService(store, assistantWriteServiceStub{store: store})

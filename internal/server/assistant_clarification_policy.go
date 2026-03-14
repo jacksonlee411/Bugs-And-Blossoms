@@ -199,15 +199,8 @@ func assistantClarificationPromptTemplate(runtime *assistantKnowledgeRuntime, ro
 	return ""
 }
 
-func assistantClarificationActionCandidates(userInput string, routeDecision assistantIntentRouteDecision, intent assistantIntentSpec) []string {
+func assistantClarificationActionCandidates(routeDecision assistantIntentRouteDecision, intent assistantIntentSpec) []string {
 	candidates := append([]string(nil), routeDecision.CandidateActionIDs...)
-	text := strings.ToLower(strings.TrimSpace(userInput))
-	if strings.Contains(text, "新建") || strings.Contains(text, "创建") || strings.Contains(text, "create") {
-		candidates = append(candidates, assistantIntentCreateOrgUnit)
-	}
-	if strings.Contains(text, "移动") || strings.Contains(text, "move") {
-		candidates = append(candidates, assistantIntentMoveOrgUnit)
-	}
 	if action := strings.TrimSpace(intent.Action); action != "" && action != assistantIntentPlanOnly {
 		candidates = append(candidates, action)
 	}
@@ -348,7 +341,7 @@ func assistantBuildClarificationDecision(input assistantClarificationBuildInput)
 	requiredSlots := assistantClarificationRequiredSlots(input.Runtime, input.RouteDecision, input.Intent)
 	selectedCandidateID := strings.TrimSpace(firstNonEmpty(input.SelectedCandidateID, input.ResolvedCandidateID))
 	actionStable := assistantClarificationActionStable(input.Intent, input.RouteDecision)
-	actionCandidates := assistantClarificationActionCandidates(input.UserInput, input.RouteDecision, input.Intent)
+	actionCandidates := assistantClarificationActionCandidates(input.RouteDecision, input.Intent)
 	routeKind := strings.TrimSpace(input.RouteDecision.RouteKind)
 	if routeKind == "" {
 		routeKind = strings.TrimSpace(input.Intent.RouteKind)
@@ -537,12 +530,6 @@ func assistantResumeFromClarification(pending *assistantTurn, userInput string, 
 		return result
 	}
 	switch strings.TrimSpace(open.ClarificationKind) {
-	case assistantClarificationKindIntentDisambiguate:
-		candidates := assistantClarificationActionCandidates(userInput, assistantIntentRouteDecision{}, assistantIntentSpec{})
-		if len(candidates) == 1 {
-			result.Intent.Action = candidates[0]
-			result.Progress = true
-		}
 	case assistantClarificationKindCandidatePick:
 		if id, ok := assistantResolveCandidateSelection(userInput, pending.Candidates); ok {
 			result.ResolvedCandidateID = id

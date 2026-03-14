@@ -55,14 +55,15 @@ func TestAssistantActionInterceptor_Gates(t *testing.T) {
 		defer func() { assistantLoadAuthorizerFn = original }()
 
 		decision := assistantEvaluateActionGate(assistantActionGateInput{
-			Stage:      assistantActionStageCommit,
-			TenantID:   "tenant_1",
-			Principal:  Principal{ID: "actor_1", RoleSlug: "tenant-admin"},
-			Action:     spec,
-			Intent:     assistantIntentSpec{Action: assistantIntentCreateOrgUnit, ParentRefText: "鲜花组织", EntityName: "运营部", EffectiveDate: "2026-01-01"},
-			ResolvedID: "c1",
-			DryRun:     &assistantDryRunResult{ValidationErrors: []string{"candidate_confirmation_required"}},
-			UserInput:  "在鲜花组织之下，新建一个名为运营部的部门，成立日期是2026-01-01",
+			Stage:         assistantActionStageCommit,
+			TenantID:      "tenant_1",
+			Principal:     Principal{ID: "actor_1", RoleSlug: "tenant-admin"},
+			Action:        spec,
+			Intent:        assistantIntentSpec{Action: assistantIntentCreateOrgUnit, ParentRefText: "鲜花组织", EntityName: "运营部", EffectiveDate: "2026-01-01"},
+			RouteDecision: assistantTestBusinessRouteDecision(assistantIntentCreateOrgUnit),
+			ResolvedID:    "c1",
+			DryRun:        &assistantDryRunResult{ValidationErrors: []string{"candidate_confirmation_required"}},
+			UserInput:     "在鲜花组织之下，新建一个名为运营部的部门，成立日期是2026-01-01",
 		})
 		if !decision.Allowed {
 			t.Fatalf("unexpected decision=%+v", decision)
@@ -77,13 +78,14 @@ func TestAssistantActionInterceptor_Gates(t *testing.T) {
 		defer func() { assistantLoadAuthorizerFn = original }()
 
 		decision := assistantEvaluateActionGate(assistantActionGateInput{
-			Stage:     assistantActionStageCommit,
-			TenantID:  "tenant_1",
-			Principal: Principal{ID: "actor_1", RoleSlug: "tenant-admin"},
-			Action:    spec,
-			Intent:    assistantIntentSpec{Action: assistantIntentCreateOrgUnit, ParentRefText: "鲜花组织", EntityName: "运营部", EffectiveDate: "2026-01-01"},
-			DryRun:    &assistantDryRunResult{},
-			UserInput: "在鲜花组织之下，新建一个名为运营部的部门，成立日期是2026-01-01",
+			Stage:         assistantActionStageCommit,
+			TenantID:      "tenant_1",
+			Principal:     Principal{ID: "actor_1", RoleSlug: "tenant-admin"},
+			Action:        spec,
+			Intent:        assistantIntentSpec{Action: assistantIntentCreateOrgUnit, ParentRefText: "鲜花组织", EntityName: "运营部", EffectiveDate: "2026-01-01"},
+			RouteDecision: assistantTestBusinessRouteDecision(assistantIntentCreateOrgUnit),
+			DryRun:        &assistantDryRunResult{},
+			UserInput:     "在鲜花组织之下，新建一个名为运营部的部门，成立日期是2026-01-01",
 		})
 		if decision.Allowed || decision.ErrorCode != errAssistantCandidateNotFound.Error() {
 			t.Fatalf("unexpected decision=%+v", decision)
@@ -98,14 +100,15 @@ func TestAssistantActionInterceptor_Gates(t *testing.T) {
 		defer func() { assistantLoadAuthorizerFn = original }()
 
 		decision := assistantEvaluateActionGate(assistantActionGateInput{
-			Stage:      assistantActionStageCommit,
-			TenantID:   "tenant_1",
-			Principal:  Principal{ID: "actor_1", RoleSlug: "tenant-admin"},
-			Action:     spec,
-			Intent:     assistantIntentSpec{Action: assistantIntentCreateOrgUnit, EffectiveDate: "2026-01-01"},
-			Turn:       &assistantTurn{State: assistantStateConfirmed},
-			ResolvedID: "c1",
-			DryRun:     &assistantDryRunResult{},
+			Stage:         assistantActionStageCommit,
+			TenantID:      "tenant_1",
+			Principal:     Principal{ID: "actor_1", RoleSlug: "tenant-admin"},
+			Action:        spec,
+			Intent:        assistantIntentSpec{Action: assistantIntentCreateOrgUnit, EffectiveDate: "2026-01-01"},
+			RouteDecision: assistantTestBusinessRouteDecision(assistantIntentCreateOrgUnit),
+			Turn:          &assistantTurn{State: assistantStateConfirmed},
+			ResolvedID:    "c1",
+			DryRun:        &assistantDryRunResult{},
 		})
 		if !decision.Allowed {
 			t.Fatalf("unexpected decision=%+v", decision)
@@ -191,7 +194,7 @@ func TestAssistantActionInterceptor_Gates(t *testing.T) {
 		if decision := assistantCheckRiskGate(assistantActionGateInput{Stage: assistantActionStageCommit, Action: spec, Turn: &assistantTurn{State: assistantStateValidated}}); decision.Allowed || decision.ReasonCode != "high_risk_commit_requires_confirmation" {
 			t.Fatalf("high risk decision=%+v", decision)
 		}
-		decision := assistantEvaluateActionGate(assistantActionGateInput{Stage: assistantActionStageCommit, TenantID: "tenant_1", Principal: Principal{RoleSlug: "tenant-admin"}, Action: badSpec})
+		decision := assistantEvaluateActionGate(assistantActionGateInput{Stage: assistantActionStageCommit, TenantID: "tenant_1", Principal: Principal{RoleSlug: "tenant-admin"}, Action: badSpec, RouteDecision: assistantTestBusinessRouteDecision(badSpec.ID)})
 		if decision.Allowed || decision.ReasonCode != "risk_tier_invalid" {
 			t.Fatalf("evaluate risk decision=%+v", decision)
 		}
@@ -422,16 +425,17 @@ func TestAssistantActionInterceptor_Gates(t *testing.T) {
 				}
 
 				decision = assistantEvaluateActionGate(assistantActionGateInput{
-					Stage:      assistantActionStageConfirm,
-					TenantID:   "tenant_1",
-					Principal:  Principal{ID: "actor_1", RoleSlug: "tenant-admin"},
-					Action:     spec,
-					Intent:     tc.intent,
-					Turn:       &assistantTurn{State: assistantStateValidated},
-					Candidates: []assistantCandidate{{CandidateID: "candidate_1"}},
-					ResolvedID: "",
-					DryRun:     &assistantDryRunResult{Explain: "ok"},
-					UserInput:  "请确认",
+					Stage:         assistantActionStageConfirm,
+					TenantID:      "tenant_1",
+					Principal:     Principal{ID: "actor_1", RoleSlug: "tenant-admin"},
+					Action:        spec,
+					Intent:        tc.intent,
+					RouteDecision: assistantTestBusinessRouteDecision(tc.action),
+					Turn:          &assistantTurn{State: assistantStateValidated},
+					Candidates:    []assistantCandidate{{CandidateID: "candidate_1"}},
+					ResolvedID:    "",
+					DryRun:        &assistantDryRunResult{Explain: "ok"},
+					UserInput:     "请确认",
 				})
 				if tc.requiresCandidate {
 					if decision.Allowed || !errors.Is(decision.Error, errAssistantConfirmationRequired) || decision.ReasonCode != "candidate_confirmation_required" {
@@ -446,16 +450,17 @@ func TestAssistantActionInterceptor_Gates(t *testing.T) {
 					resolvedForDryRun = "candidate_1"
 				}
 				decision = assistantEvaluateActionGate(assistantActionGateInput{
-					Stage:      assistantActionStageCommit,
-					TenantID:   "tenant_1",
-					Principal:  Principal{ID: "actor_1", RoleSlug: "tenant-admin"},
-					Action:     spec,
-					Intent:     tc.intent,
-					Turn:       &assistantTurn{State: assistantStateConfirmed},
-					Candidates: []assistantCandidate{{CandidateID: "candidate_1"}},
-					ResolvedID: resolvedForDryRun,
-					DryRun:     nil,
-					UserInput:  "请提交",
+					Stage:         assistantActionStageCommit,
+					TenantID:      "tenant_1",
+					Principal:     Principal{ID: "actor_1", RoleSlug: "tenant-admin"},
+					Action:        spec,
+					Intent:        tc.intent,
+					RouteDecision: assistantTestBusinessRouteDecision(tc.action),
+					Turn:          &assistantTurn{State: assistantStateConfirmed},
+					Candidates:    []assistantCandidate{{CandidateID: "candidate_1"}},
+					ResolvedID:    resolvedForDryRun,
+					DryRun:        nil,
+					UserInput:     "请提交",
 				})
 				if decision.Allowed || !errors.Is(decision.Error, errAssistantActionRequiredCheckFailed) || decision.ReasonCode != "dry_run_validation_failed" {
 					t.Fatalf("commit dry run missing decision=%+v", decision)
@@ -463,16 +468,17 @@ func TestAssistantActionInterceptor_Gates(t *testing.T) {
 
 				if tc.requiresCandidate {
 					decision = assistantEvaluateActionGate(assistantActionGateInput{
-						Stage:      assistantActionStageCommit,
-						TenantID:   "tenant_1",
-						Principal:  Principal{ID: "actor_1", RoleSlug: "tenant-admin"},
-						Action:     spec,
-						Intent:     tc.intent,
-						Turn:       &assistantTurn{State: assistantStateConfirmed},
-						Candidates: []assistantCandidate{{CandidateID: "candidate_1"}},
-						ResolvedID: "",
-						DryRun:     &assistantDryRunResult{Explain: "ok"},
-						UserInput:  "请提交",
+						Stage:         assistantActionStageCommit,
+						TenantID:      "tenant_1",
+						Principal:     Principal{ID: "actor_1", RoleSlug: "tenant-admin"},
+						Action:        spec,
+						Intent:        tc.intent,
+						RouteDecision: assistantTestBusinessRouteDecision(tc.action),
+						Turn:          &assistantTurn{State: assistantStateConfirmed},
+						Candidates:    []assistantCandidate{{CandidateID: "candidate_1"}},
+						ResolvedID:    "",
+						DryRun:        &assistantDryRunResult{Explain: "ok"},
+						UserInput:     "请提交",
 					})
 					if decision.Allowed || !errors.Is(decision.Error, errAssistantCandidateNotFound) || decision.ReasonCode != "candidate_missing_at_commit" {
 						t.Fatalf("commit candidate missing decision=%+v", decision)
@@ -484,16 +490,17 @@ func TestAssistantActionInterceptor_Gates(t *testing.T) {
 					allowResolvedID = "candidate_1"
 				}
 				decision = assistantEvaluateActionGate(assistantActionGateInput{
-					Stage:      assistantActionStageCommit,
-					TenantID:   "tenant_1",
-					Principal:  Principal{ID: "actor_1", RoleSlug: "tenant-admin"},
-					Action:     spec,
-					Intent:     tc.intent,
-					Turn:       &assistantTurn{State: assistantStateConfirmed},
-					Candidates: []assistantCandidate{{CandidateID: "candidate_1"}},
-					ResolvedID: allowResolvedID,
-					DryRun:     &assistantDryRunResult{Explain: "ok"},
-					UserInput:  "请提交",
+					Stage:         assistantActionStageCommit,
+					TenantID:      "tenant_1",
+					Principal:     Principal{ID: "actor_1", RoleSlug: "tenant-admin"},
+					Action:        spec,
+					Intent:        tc.intent,
+					RouteDecision: assistantTestBusinessRouteDecision(tc.action),
+					Turn:          &assistantTurn{State: assistantStateConfirmed},
+					Candidates:    []assistantCandidate{{CandidateID: "candidate_1"}},
+					ResolvedID:    allowResolvedID,
+					DryRun:        &assistantDryRunResult{Explain: "ok"},
+					UserInput:     "请提交",
 				})
 				if !decision.Allowed {
 					t.Fatalf("commit allow decision=%+v", decision)

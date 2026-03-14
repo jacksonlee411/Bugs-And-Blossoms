@@ -348,7 +348,6 @@ func TestAssistantClarificationPolicy_HelperCoverage(t *testing.T) {
 
 	t.Run("action helpers", func(t *testing.T) {
 		candidates := assistantClarificationActionCandidates(
-			"请创建并移动组织",
 			assistantIntentRouteDecision{CandidateActionIDs: []string{assistantIntentMoveOrgUnit}},
 			assistantIntentSpec{Action: assistantIntentCreateOrgUnit},
 		)
@@ -738,8 +737,8 @@ func TestAssistantClarificationPolicy_ParsingAndResumeCoverage(t *testing.T) {
 		}
 
 		intentDisambiguate := &assistantTurn{Clarification: &assistantClarificationDecision{Status: assistantClarificationStatusOpen, ClarificationKind: assistantClarificationKindIntentDisambiguate}}
-		if out := assistantResumeFromClarification(intentDisambiguate, "请创建组织", baseIntent); !out.Progress || out.Intent.Action != assistantIntentCreateOrgUnit {
-			t.Fatalf("intent disambiguate result=%+v", out)
+		if out := assistantResumeFromClarification(intentDisambiguate, "请创建组织", baseIntent); out.Progress || out.Intent.Action != assistantIntentPlanOnly {
+			t.Fatalf("intent disambiguate should wait for semantic model, got=%+v", out)
 		}
 
 		candidatePick := &assistantTurn{

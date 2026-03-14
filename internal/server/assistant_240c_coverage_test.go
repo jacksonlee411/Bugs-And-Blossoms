@@ -41,10 +41,10 @@ func TestAssistant240C_RuntimeAndCoverageBranches(t *testing.T) {
 		if decision := assistantCheckRiskGate(assistantActionGateInput{Stage: assistantActionStageCommit, Action: spec, Turn: &assistantTurn{State: assistantStateValidated}}); decision.Allowed || !errors.Is(decision.Error, errAssistantActionRiskGateDenied) {
 			t.Fatalf("unexpected decision=%+v", decision)
 		}
-		if decision := assistantEvaluateActionGate(assistantActionGateInput{Stage: assistantActionStageConfirm, TenantID: "tenant-1", Principal: principal, Action: spec, Intent: assistantIntentSpec{Action: assistantIntentCreateOrgUnit}}); decision.Allowed || !errors.Is(decision.Error, errAssistantConfirmationRequired) {
+		if decision := assistantEvaluateActionGate(assistantActionGateInput{Stage: assistantActionStageConfirm, TenantID: "tenant-1", Principal: principal, Action: spec, Intent: assistantIntentSpec{Action: assistantIntentCreateOrgUnit}, RouteDecision: assistantTestBusinessRouteDecision(assistantIntentCreateOrgUnit)}); decision.Allowed || !errors.Is(decision.Error, errAssistantConfirmationRequired) {
 			t.Fatalf("unexpected decision=%+v", decision)
 		}
-		full := assistantEvaluateActionGate(assistantActionGateInput{Stage: assistantActionStageCommit, TenantID: "tenant-1", Principal: principal, Action: spec, Intent: assistantIntentSpec{Action: assistantIntentCreateOrgUnit, EffectiveDate: "2026-01-01"}, Turn: &assistantTurn{State: assistantStateConfirmed}, ResolvedID: "c1", DryRun: &assistantDryRunResult{}})
+		full := assistantEvaluateActionGate(assistantActionGateInput{Stage: assistantActionStageCommit, TenantID: "tenant-1", Principal: principal, Action: spec, Intent: assistantIntentSpec{Action: assistantIntentCreateOrgUnit, EffectiveDate: "2026-01-01"}, RouteDecision: assistantTestBusinessRouteDecision(assistantIntentCreateOrgUnit), Turn: &assistantTurn{State: assistantStateConfirmed}, ResolvedID: "c1", DryRun: &assistantDryRunResult{}})
 		if !full.Allowed {
 			t.Fatalf("unexpected decision=%+v", full)
 		}
@@ -151,7 +151,7 @@ func TestAssistant240C_RuntimeAndCoverageBranches(t *testing.T) {
 		confirmUnsupportedSvc := newAssistantConversationService(store, assistantWriteServiceStub{store: store})
 		confirmUnsupportedSvc.actionRegistry = assistantActionRegistryMap{specs: map[string]assistantActionSpec{}}
 		confirmConv := confirmUnsupportedSvc.createConversation("tenant-1", principal)
-		confirmTurn := &assistantTurn{TurnID: "turn-unsupported", State: assistantStateValidated, Intent: assistantIntentSpec{Action: assistantIntentCreateOrgUnit, EffectiveDate: "2026-01-01"}, Plan: assistantBuildPlan(assistantIntentSpec{Action: assistantIntentCreateOrgUnit}), Candidates: []assistantCandidate{{CandidateID: "c1", CandidateCode: "FLOWER-A", OrgID: 1}}, ResolvedCandidateID: "c1"}
+		confirmTurn := assistantTestAttachBusinessRoute(&assistantTurn{TurnID: "turn-unsupported", State: assistantStateValidated, Intent: assistantIntentSpec{Action: assistantIntentCreateOrgUnit, EffectiveDate: "2026-01-01"}, Plan: assistantBuildPlan(assistantIntentSpec{Action: assistantIntentCreateOrgUnit}), Candidates: []assistantCandidate{{CandidateID: "c1", CandidateCode: "FLOWER-A", OrgID: 1}}, ResolvedCandidateID: "c1"})
 		confirmUnsupportedSvc.mu.Lock()
 		confirmUnsupportedSvc.byID[confirmConv.ConversationID].Turns = append(confirmUnsupportedSvc.byID[confirmConv.ConversationID].Turns, confirmTurn)
 		confirmUnsupportedSvc.mu.Unlock()
@@ -163,7 +163,7 @@ func TestAssistant240C_RuntimeAndCoverageBranches(t *testing.T) {
 
 		confirmAuthzSvc := newAssistantConversationService(store, assistantWriteServiceStub{store: store})
 		confirmConv = confirmAuthzSvc.createConversation("tenant-1", principal)
-		confirmTurn = &assistantTurn{TurnID: "turn-authz", State: assistantStateValidated, Intent: assistantIntentSpec{Action: assistantIntentCreateOrgUnit, EffectiveDate: "2026-01-01"}, Plan: assistantBuildPlan(assistantIntentSpec{Action: assistantIntentCreateOrgUnit}), Candidates: []assistantCandidate{{CandidateID: "c1", CandidateCode: "FLOWER-A", OrgID: 1}}, ResolvedCandidateID: "c1"}
+		confirmTurn = assistantTestAttachBusinessRoute(&assistantTurn{TurnID: "turn-authz", State: assistantStateValidated, Intent: assistantIntentSpec{Action: assistantIntentCreateOrgUnit, EffectiveDate: "2026-01-01"}, Plan: assistantBuildPlan(assistantIntentSpec{Action: assistantIntentCreateOrgUnit}), Candidates: []assistantCandidate{{CandidateID: "c1", CandidateCode: "FLOWER-A", OrgID: 1}}, ResolvedCandidateID: "c1"})
 		confirmAuthzSvc.mu.Lock()
 		confirmAuthzSvc.byID[confirmConv.ConversationID].Turns = append(confirmAuthzSvc.byID[confirmConv.ConversationID].Turns, confirmTurn)
 		confirmAuthzSvc.mu.Unlock()
@@ -176,7 +176,7 @@ func TestAssistant240C_RuntimeAndCoverageBranches(t *testing.T) {
 
 		confirmCandidateSvc := newAssistantConversationService(store, assistantWriteServiceStub{store: store})
 		confirmConv = confirmCandidateSvc.createConversation("tenant-1", principal)
-		confirmTurn = &assistantTurn{TurnID: "turn-candidate", State: assistantStateValidated, Intent: assistantIntentSpec{Action: assistantIntentCreateOrgUnit, EffectiveDate: "2026-01-01"}, Plan: assistantBuildPlan(assistantIntentSpec{Action: assistantIntentCreateOrgUnit}), Candidates: []assistantCandidate{{CandidateID: "c1", CandidateCode: "FLOWER-A", OrgID: 1}}, AmbiguityCount: 2, ResolvedCandidateID: "c1"}
+		confirmTurn = assistantTestAttachBusinessRoute(&assistantTurn{TurnID: "turn-candidate", State: assistantStateValidated, Intent: assistantIntentSpec{Action: assistantIntentCreateOrgUnit, EffectiveDate: "2026-01-01"}, Plan: assistantBuildPlan(assistantIntentSpec{Action: assistantIntentCreateOrgUnit}), Candidates: []assistantCandidate{{CandidateID: "c1", CandidateCode: "FLOWER-A", OrgID: 1}}, AmbiguityCount: 2, ResolvedCandidateID: "c1"})
 		confirmCandidateSvc.mu.Lock()
 		confirmCandidateSvc.byID[confirmConv.ConversationID].Turns = append(confirmCandidateSvc.byID[confirmConv.ConversationID].Turns, confirmTurn)
 		confirmCandidateSvc.mu.Unlock()
@@ -189,7 +189,7 @@ func TestAssistant240C_RuntimeAndCoverageBranches(t *testing.T) {
 
 		commitServiceMissingSvc := newAssistantConversationService(store, nil)
 		commitConv := commitServiceMissingSvc.createConversation("tenant-1", principal)
-		commitTurn := &assistantTurn{TurnID: "turn-service", State: assistantStateConfirmed, Intent: assistantIntentSpec{Action: assistantIntentCreateOrgUnit, EntityName: "运营部", EffectiveDate: "2026-01-01"}, Plan: assistantBuildPlan(assistantIntentSpec{Action: assistantIntentCreateOrgUnit}), PolicyVersion: capabilityPolicyVersionBaseline, CompositionVersion: capabilityPolicyVersionBaseline, MappingVersion: capabilityPolicyVersionBaseline, Candidates: []assistantCandidate{{CandidateID: "FLOWER-A", CandidateCode: "FLOWER-A", Name: "鲜花组织", OrgID: 10000000, IsActive: true}}, ResolvedCandidateID: "FLOWER-A"}
+		commitTurn := assistantTestAttachBusinessRoute(&assistantTurn{TurnID: "turn-service", State: assistantStateConfirmed, Intent: assistantIntentSpec{Action: assistantIntentCreateOrgUnit, EntityName: "运营部", EffectiveDate: "2026-01-01"}, Plan: assistantBuildPlan(assistantIntentSpec{Action: assistantIntentCreateOrgUnit}), PolicyVersion: capabilityPolicyVersionBaseline, CompositionVersion: capabilityPolicyVersionBaseline, MappingVersion: capabilityPolicyVersionBaseline, Candidates: []assistantCandidate{{CandidateID: "FLOWER-A", CandidateCode: "FLOWER-A", Name: "鲜花组织", OrgID: 10000000, IsActive: true}}, ResolvedCandidateID: "FLOWER-A"})
 		if err := commitServiceMissingSvc.refreshTurnVersionTuple(context.Background(), "tenant-1", commitTurn); err != nil {
 			t.Fatalf("refresh missing service turn err=%v", err)
 		}
@@ -203,7 +203,7 @@ func TestAssistant240C_RuntimeAndCoverageBranches(t *testing.T) {
 
 		commitCandidateSvc := newAssistantConversationService(store, assistantWriteServiceStub{store: store})
 		commitConv = commitCandidateSvc.createConversation("tenant-1", principal)
-		commitTurn = &assistantTurn{TurnID: "turn-missing-candidate", State: assistantStateConfirmed, Intent: assistantIntentSpec{Action: assistantIntentCreateOrgUnit, ParentRefText: "鲜花组织", EntityName: "运营部", EffectiveDate: "2026-01-01"}, Plan: assistantBuildPlan(assistantIntentSpec{Action: assistantIntentCreateOrgUnit}), PolicyVersion: capabilityPolicyVersionBaseline, CompositionVersion: capabilityPolicyVersionBaseline, MappingVersion: capabilityPolicyVersionBaseline}
+		commitTurn = assistantTestAttachBusinessRoute(&assistantTurn{TurnID: "turn-missing-candidate", State: assistantStateConfirmed, Intent: assistantIntentSpec{Action: assistantIntentCreateOrgUnit, ParentRefText: "鲜花组织", EntityName: "运营部", EffectiveDate: "2026-01-01"}, Plan: assistantBuildPlan(assistantIntentSpec{Action: assistantIntentCreateOrgUnit}), PolicyVersion: capabilityPolicyVersionBaseline, CompositionVersion: capabilityPolicyVersionBaseline, MappingVersion: capabilityPolicyVersionBaseline})
 		commitCandidateSvc.mu.Lock()
 		commitCandidateSvc.byID[commitConv.ConversationID].Turns = append(commitCandidateSvc.byID[commitConv.ConversationID].Turns, commitTurn)
 		commitCandidateSvc.mu.Unlock()
@@ -214,7 +214,7 @@ func TestAssistant240C_RuntimeAndCoverageBranches(t *testing.T) {
 
 		commitAuthzSvc := newAssistantConversationService(store, assistantWriteServiceStub{store: store})
 		commitConv = commitAuthzSvc.createConversation("tenant-1", principal)
-		commitTurn = &assistantTurn{TurnID: "turn-authz", State: assistantStateConfirmed, Intent: assistantIntentSpec{Action: assistantIntentCreateOrgUnit, ParentRefText: "鲜花组织", EntityName: "运营部", EffectiveDate: "2026-01-01"}, Plan: assistantBuildPlan(assistantIntentSpec{Action: assistantIntentCreateOrgUnit}), PolicyVersion: capabilityPolicyVersionBaseline, CompositionVersion: capabilityPolicyVersionBaseline, MappingVersion: capabilityPolicyVersionBaseline, Candidates: []assistantCandidate{{CandidateID: "c1", CandidateCode: "FLOWER-A", OrgID: 1}}, ResolvedCandidateID: "c1"}
+		commitTurn = assistantTestAttachBusinessRoute(&assistantTurn{TurnID: "turn-authz", State: assistantStateConfirmed, Intent: assistantIntentSpec{Action: assistantIntentCreateOrgUnit, ParentRefText: "鲜花组织", EntityName: "运营部", EffectiveDate: "2026-01-01"}, Plan: assistantBuildPlan(assistantIntentSpec{Action: assistantIntentCreateOrgUnit}), PolicyVersion: capabilityPolicyVersionBaseline, CompositionVersion: capabilityPolicyVersionBaseline, MappingVersion: capabilityPolicyVersionBaseline, Candidates: []assistantCandidate{{CandidateID: "c1", CandidateCode: "FLOWER-A", OrgID: 1}}, ResolvedCandidateID: "c1"})
 		commitAuthzSvc.mu.Lock()
 		commitAuthzSvc.byID[commitConv.ConversationID].Turns = append(commitAuthzSvc.byID[commitConv.ConversationID].Turns, commitTurn)
 		commitAuthzSvc.mu.Unlock()
@@ -238,7 +238,7 @@ func TestAssistant240C_RuntimeAndCoverageBranches(t *testing.T) {
 		confirmSvc := newAssistantConversationService(store, assistantWriteServiceStub{store: store})
 		confirmSvc.actionRegistry = assistantActionRegistryMap{specs: map[string]assistantActionSpec{assistantIntentCreateOrgUnit: spec}}
 		conversation := &assistantConversation{TenantID: "tenant_1"}
-		turn := &assistantTurn{State: assistantStateValidated, Intent: assistantIntentSpec{Action: assistantIntentCreateOrgUnit, EffectiveDate: "2026-01-01"}, Plan: assistantBuildPlan(assistantIntentSpec{Action: assistantIntentCreateOrgUnit}), Candidates: []assistantCandidate{{CandidateID: "c1"}, {CandidateID: "c2"}}, AmbiguityCount: 2, ResolvedCandidateID: "c1"}
+		turn := assistantTestAttachBusinessRoute(&assistantTurn{State: assistantStateValidated, Intent: assistantIntentSpec{Action: assistantIntentCreateOrgUnit, EffectiveDate: "2026-01-01"}, Plan: assistantBuildPlan(assistantIntentSpec{Action: assistantIntentCreateOrgUnit}), Candidates: []assistantCandidate{{CandidateID: "c1"}, {CandidateID: "c2"}}, AmbiguityCount: 2, ResolvedCandidateID: "c1"})
 		if _, err := confirmSvc.applyConfirmTurn(conversation, turn, principal, ""); !errors.Is(err, errAssistantConfirmationRequired) {
 			t.Fatalf("expected ambiguity confirm required, got %v", err)
 		}
@@ -347,30 +347,30 @@ func TestAssistant240C_RuntimeAndCoverageBranches(t *testing.T) {
 		confirmSvc := newAssistantConversationService(store, assistantWriteServiceStub{store: store})
 		confirmSvc.actionRegistry = assistantActionRegistryMap{specs: map[string]assistantActionSpec{assistantIntentCreateOrgUnit: spec}}
 		conversation := &assistantConversation{TenantID: "tenant_1"}
-		turn := &assistantTurn{State: assistantStateValidated, Intent: assistantIntentSpec{Action: assistantIntentCreateOrgUnit}, AmbiguityCount: 2}
+		turn := assistantTestAttachBusinessRoute(&assistantTurn{State: assistantStateValidated, Intent: assistantIntentSpec{Action: assistantIntentCreateOrgUnit}, AmbiguityCount: 2})
 		if _, err := confirmSvc.applyConfirmTurn(conversation, turn, principal, ""); !errors.Is(err, errAssistantConfirmationRequired) {
 			t.Fatalf("expected confirm required, got %v", err)
 		}
-		turn = &assistantTurn{State: assistantStateValidated, Intent: assistantIntentSpec{Action: assistantIntentCreateOrgUnit}, AmbiguityCount: 2, Candidates: []assistantCandidate{{CandidateID: "c1"}}}
+		turn = assistantTestAttachBusinessRoute(&assistantTurn{State: assistantStateValidated, Intent: assistantIntentSpec{Action: assistantIntentCreateOrgUnit}, AmbiguityCount: 2, Candidates: []assistantCandidate{{CandidateID: "c1"}}})
 		if _, err := confirmSvc.applyConfirmTurn(conversation, turn, principal, "missing"); !errors.Is(err, errAssistantCandidateNotFound) {
 			t.Fatalf("expected candidate not found, got %v", err)
 		}
 		flakyConfirm := &assistantFlakyActionRegistry{spec: assistantActionSpec{ID: assistantIntentCreateOrgUnit, Version: "v1", CapabilityKey: spec.CapabilityKey, Security: assistantActionSecuritySpec{AuthObject: spec.Security.AuthObject, AuthAction: spec.Security.AuthAction, RiskTier: spec.Security.RiskTier}, Handler: spec.Handler}}
 		confirmSvc.actionRegistry = flakyConfirm
-		turn = &assistantTurn{State: assistantStateValidated, Intent: assistantIntentSpec{Action: assistantIntentCreateOrgUnit, EffectiveDate: "2026-01-01"}, Candidates: []assistantCandidate{{CandidateID: "c1", CandidateCode: "FLOWER-A", OrgID: 1}}, ResolvedCandidateID: "c1", AmbiguityCount: 1}
+		turn = assistantTestAttachBusinessRoute(&assistantTurn{State: assistantStateValidated, Intent: assistantIntentSpec{Action: assistantIntentCreateOrgUnit, EffectiveDate: "2026-01-01"}, Candidates: []assistantCandidate{{CandidateID: "c1", CandidateCode: "FLOWER-A", OrgID: 1}}, ResolvedCandidateID: "c1", AmbiguityCount: 1})
 		if _, err := confirmSvc.applyConfirmTurn(conversation, turn, principal, "c1"); !errors.Is(err, errAssistantUnsupportedIntent) {
 			t.Fatalf("expected refresh unsupported intent, got %v", err)
 		}
 
 		commitSvc := newAssistantConversationService(store, assistantWriteServiceStub{store: store})
 		commitSvc.actionRegistry = assistantActionRegistryMap{specs: map[string]assistantActionSpec{}}
-		turn = &assistantTurn{State: assistantStateConfirmed, Intent: assistantIntentSpec{Action: assistantIntentCreateOrgUnit}}
+		turn = assistantTestAttachBusinessRoute(&assistantTurn{State: assistantStateConfirmed, Intent: assistantIntentSpec{Action: assistantIntentCreateOrgUnit}})
 		if _, err := commitSvc.applyCommitTurn(context.Background(), conversation, turn, principal, "tenant_1"); !errors.Is(err, errAssistantUnsupportedIntent) {
 			t.Fatalf("expected commit unsupported intent, got %v", err)
 		}
 		commitSvc.actionRegistry = assistantActionRegistryMap{specs: map[string]assistantActionSpec{assistantIntentCreateOrgUnit: {ID: assistantIntentCreateOrgUnit, Version: "v1", CapabilityKey: spec.CapabilityKey, Security: assistantActionSecuritySpec{AuthObject: spec.Security.AuthObject, AuthAction: spec.Security.AuthAction, RiskTier: "extreme"}, Handler: spec.Handler}}}
 		policyVersion, compositionVersion, mappingVersion := assistantTurnVersionSnapshot(spec.CapabilityKey)
-		turn = &assistantTurn{TurnID: "turn-risk", RequestID: "req-risk", TraceID: "trace-risk", State: assistantStateConfirmed, Intent: assistantIntentSpec{Action: assistantIntentCreateOrgUnit, ParentRefText: "鲜花组织", EntityName: "运营部", EffectiveDate: "2026-01-01"}, Plan: assistantPlanSummary{CapabilityKey: spec.CapabilityKey}, PolicyVersion: policyVersion, CompositionVersion: compositionVersion, MappingVersion: mappingVersion, Candidates: []assistantCandidate{{CandidateID: "c1", CandidateCode: "FLOWER-A", OrgID: 1}}, ResolvedCandidateID: "c1", DryRun: assistantDryRunResult{}}
+		turn = assistantTestAttachBusinessRoute(&assistantTurn{TurnID: "turn-risk", RequestID: "req-risk", TraceID: "trace-risk", State: assistantStateConfirmed, Intent: assistantIntentSpec{Action: assistantIntentCreateOrgUnit, ParentRefText: "鲜花组织", EntityName: "运营部", EffectiveDate: "2026-01-01"}, Plan: assistantPlanSummary{CapabilityKey: spec.CapabilityKey}, PolicyVersion: policyVersion, CompositionVersion: compositionVersion, MappingVersion: mappingVersion, Candidates: []assistantCandidate{{CandidateID: "c1", CandidateCode: "FLOWER-A", OrgID: 1}}, ResolvedCandidateID: "c1", DryRun: assistantDryRunResult{}})
 		result, err := commitSvc.applyCommitTurn(context.Background(), conversation, turn, principal, "tenant_1")
 		if !errors.Is(err, errAssistantActionRiskGateDenied) || result.Transition == nil {
 			t.Fatalf("expected commit gate denial, result=%+v err=%v", result, err)

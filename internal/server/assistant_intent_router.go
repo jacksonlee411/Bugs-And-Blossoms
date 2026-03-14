@@ -351,58 +351,7 @@ func assistantActionGateRouteDecision(input assistantActionGateInput) (assistant
 	if input.Turn != nil && assistantIntentRouteDecisionPresent(input.Turn.RouteDecision) {
 		return input.Turn.RouteDecision, true
 	}
-	compat := assistantCompatRouteDecision(input)
-	if assistantIntentRouteDecisionPresent(compat) {
-		return compat, true
-	}
 	return assistantIntentRouteDecision{}, false
-}
-
-func assistantCompatRouteDecision(input assistantActionGateInput) assistantIntentRouteDecision {
-	intent := input.Intent
-	if input.Turn != nil && strings.TrimSpace(intent.Action) == "" {
-		intent = input.Turn.Intent
-	}
-	if strings.TrimSpace(intent.Action) == "" {
-		intent.Action = strings.TrimSpace(input.Action.ID)
-	}
-	routeKind := strings.TrimSpace(intent.RouteKind)
-	if !assistantValidRouteKind(routeKind) {
-		if actionID := strings.TrimSpace(intent.Action); actionID != "" && actionID != assistantIntentPlanOnly {
-			routeKind = assistantRouteKindBusinessAction
-		}
-	}
-	if routeKind == "" {
-		return assistantIntentRouteDecision{}
-	}
-	decision := assistantIntentRouteDecision{
-		RouteKind:               routeKind,
-		IntentID:                strings.TrimSpace(intent.IntentID),
-		ConfidenceBand:          assistantRouteConfidenceMedium,
-		RouteCatalogVersion:     "fallback-route-catalog",
-		KnowledgeSnapshotDigest: "fallback-knowledge-snapshot",
-		ResolverContractVersion: "fallback-resolver-contract",
-		DecisionSource:          "compat_projection",
-	}
-	if decision.IntentID == "" {
-		if actionID := strings.TrimSpace(intent.Action); actionID != "" && actionID != assistantIntentPlanOnly {
-			decision.IntentID = "action." + actionID
-		} else {
-			decision.IntentID = "route.compat"
-		}
-	}
-	if routeKind == assistantRouteKindBusinessAction {
-		actionID := strings.TrimSpace(intent.Action)
-		if actionID == "" || actionID == assistantIntentPlanOnly {
-			return assistantIntentRouteDecision{}
-		}
-		decision.CandidateActionIDs = []string{actionID}
-		decision.ConfidenceBand = assistantRouteConfidenceHigh
-	} else {
-		decision.ConfidenceBand = assistantRouteConfidenceLow
-		decision.ClarificationRequired = routeKind == assistantRouteKindUncertain
-	}
-	return decision
 }
 
 func assistantRouteGateDenied(err error, reason string) assistantActionGateDecision {

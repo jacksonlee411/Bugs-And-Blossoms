@@ -231,21 +231,6 @@ func TestAssistantIntentRouter_DecisionCoverage(t *testing.T) {
 
 	t.Run("action gate route helpers", func(t *testing.T) {
 		spec, _ := assistantLookupDefaultActionSpec(assistantIntentCreateOrgUnit)
-		compat := assistantCompatRouteDecision(assistantActionGateInput{Action: spec})
-		if compat.RouteKind != assistantRouteKindBusinessAction {
-			t.Fatalf("unexpected compat decision=%+v", compat)
-		}
-		compatNonBusiness := assistantCompatRouteDecision(assistantActionGateInput{Intent: assistantIntentSpec{RouteKind: assistantRouteKindUncertain}})
-		if compatNonBusiness.RouteKind != assistantRouteKindUncertain || !compatNonBusiness.ClarificationRequired {
-			t.Fatalf("unexpected compat non-business=%+v", compatNonBusiness)
-		}
-		compatFromTurn := assistantCompatRouteDecision(assistantActionGateInput{Turn: &assistantTurn{Intent: assistantIntentSpec{Action: assistantIntentCreateOrgUnit}}})
-		if compatFromTurn.RouteKind != assistantRouteKindBusinessAction {
-			t.Fatalf("unexpected compat from turn=%+v", compatFromTurn)
-		}
-		if decision := assistantCompatRouteDecision(assistantActionGateInput{Intent: assistantIntentSpec{RouteKind: assistantRouteKindBusinessAction}}); assistantIntentRouteDecisionPresent(decision) {
-			t.Fatalf("unexpected incomplete compat decision=%+v", decision)
-		}
 		if _, ok := assistantActionGateRouteDecision(assistantActionGateInput{}); ok {
 			t.Fatal("unexpected route decision")
 		}

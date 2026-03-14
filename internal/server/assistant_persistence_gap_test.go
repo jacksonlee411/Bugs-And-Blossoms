@@ -545,6 +545,7 @@ func TestAssistantPersistence_UpsertAndMutationBranchCoverage(t *testing.T) {
 		Intent:              assistantIntentSpec{Action: assistantIntentCreateOrgUnit},
 		ResolvedCandidateID: "c1",
 	}
+	assistantTestAttachBusinessRoute(confirmedSingle)
 	if _, err := svc.applyConfirmTurn(conversation, confirmedSingle, principal, ""); err != nil {
 		t.Fatalf("unexpected err=%v", err)
 	}
@@ -555,6 +556,7 @@ func TestAssistantPersistence_UpsertAndMutationBranchCoverage(t *testing.T) {
 		Intent:     assistantIntentSpec{Action: assistantIntentCreateOrgUnit},
 		Candidates: []assistantCandidate{{CandidateID: "c1", CandidateCode: "FLOWER-A"}},
 	}
+	assistantTestAttachBusinessRoute(validatedNoCandidate)
 	if _, err := svc.applyConfirmTurn(conversation, validatedNoCandidate, principal, ""); !errors.Is(err, errAssistantConfirmationRequired) {
 		t.Fatalf("unexpected err=%v", err)
 	}
@@ -576,6 +578,7 @@ func TestAssistantPersistence_UpsertAndMutationBranchCoverage(t *testing.T) {
 		MappingVersion:      capabilityPolicyVersionBaseline,
 	}
 	commitTurn.Plan.SkillManifestDigest = "digest"
+	assistantTestAttachBusinessRoute(commitTurn)
 	if err := commitSvc.refreshTurnVersionTuple(context.Background(), "tenant_1", commitTurn); err != nil {
 		t.Fatalf("refresh turn version tuple err=%v", err)
 	}
@@ -619,6 +622,7 @@ func TestAssistantPersistence_ConfirmCommitPGIdempotencyBranches(t *testing.T) {
 		UpdatedAt:           now,
 	}
 	baseTurn.Plan.SkillManifestDigest = "digest"
+	assistantTestAttachBusinessRoute(baseTurn)
 
 	makeTx := func(turn *assistantTurn, idemInsertErr error, idemSelectRow pgx.Row) *assistFakeTx {
 		tx := &assistFakeTx{}
@@ -710,6 +714,7 @@ func TestAssistantPersistence_ConfirmTurnPG_ErrorPathMatrix(t *testing.T) {
 		UpdatedAt:          now,
 	}
 	baseTurn.Plan.SkillManifestDigest = "digest"
+	assistantTestAttachBusinessRoute(baseTurn)
 
 	makeSvc := func(actorID string, turnRows [][]any, execFn func(string) error, queryRowFn func(string) pgx.Row, commitErr error) *assistantConversationService {
 		tx := &assistFakeTx{commitErr: commitErr}
@@ -1147,6 +1152,7 @@ func TestAssistantPersistence_SubmitCommitTaskPG_GateRejectNoTaskWrites(t *testi
 	turn.DryRun = assistantDryRunResult{Explain: "计划已确认，等待提交"}
 	turn.RequestID = "req_gate_reject"
 	turn.TraceID = "trace_gate_reject"
+	assistantTestAttachBusinessRoute(turn)
 	assistantRefreshTurnDerivedFields(turn)
 
 	svc := newAssistantConversationService(newOrgUnitMemoryStore(), assistantWriteServiceStub{store: newOrgUnitMemoryStore()})

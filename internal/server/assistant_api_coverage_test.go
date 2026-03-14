@@ -688,7 +688,7 @@ func TestAssistantTurnActionHandler_CoverageMatrix(t *testing.T) {
 		}}
 		riskPrincipal := Principal{ID: "actor-risk", RoleSlug: "tenant-admin"}
 		riskConversation := riskSvc.createConversation(tenantID, riskPrincipal)
-		riskTurn := &assistantTurn{
+		riskTurn := assistantTestAttachBusinessRoute(&assistantTurn{
 			TurnID:              "turn-risk-gate",
 			UserInput:           "在鲜花组织之下，新建一个名为运营部的部门，成立日期是2026-01-01",
 			State:               assistantStateValidated,
@@ -704,7 +704,7 @@ func TestAssistantTurnActionHandler_CoverageMatrix(t *testing.T) {
 			DryRun:              assistantDryRunResult{Explain: "ok"},
 			CreatedAt:           time.Now().UTC(),
 			UpdatedAt:           time.Now().UTC(),
-		}
+		})
 		assistantRefreshTurnDerivedFields(riskTurn)
 		riskSvc.mu.Lock()
 		riskSvc.byID[riskConversation.ConversationID].Turns = append(riskSvc.byID[riskConversation.ConversationID].Turns, riskTurn)
@@ -1112,7 +1112,7 @@ func TestAssistantServiceHelpersAndUtilities(t *testing.T) {
 		svc.byID[conv.ConversationID].Turns[0].State = assistantStateConfirmed
 		svc.mu.Unlock()
 
-		invalidStateTurn := &assistantTurn{TurnID: "turn-draft", State: assistantStateDraft, Intent: assistantIntentSpec{Action: assistantIntentCreateOrgUnit}}
+		invalidStateTurn := assistantTestAttachBusinessRoute(&assistantTurn{TurnID: "turn-draft", State: assistantStateDraft, Intent: assistantIntentSpec{Action: assistantIntentCreateOrgUnit}, Plan: assistantBuildPlan(assistantIntentSpec{Action: assistantIntentCreateOrgUnit})})
 		svc.mu.Lock()
 		svc.byID[conv.ConversationID].Turns = append(svc.byID[conv.ConversationID].Turns, invalidStateTurn)
 		svc.mu.Unlock()
@@ -1120,7 +1120,7 @@ func TestAssistantServiceHelpersAndUtilities(t *testing.T) {
 			t.Fatalf("want confirmation required for draft, got %v", err)
 		}
 
-		expiredConfirmTurn := &assistantTurn{
+		expiredConfirmTurn := assistantTestAttachBusinessRoute(&assistantTurn{
 			TurnID:    "turn-expired-confirm",
 			State:     assistantStateValidated,
 			RequestID: "req-expired-confirm",
@@ -1129,7 +1129,7 @@ func TestAssistantServiceHelpersAndUtilities(t *testing.T) {
 			Plan:      assistantFreezeConfirmWindow(assistantBuildPlan(assistantIntentSpec{Action: assistantIntentCreateOrgUnit}), time.Now().UTC().Add(-1*time.Hour)),
 			CreatedAt: time.Now().UTC().Add(-1 * time.Hour),
 			UpdatedAt: time.Now().UTC().Add(-1 * time.Hour),
-		}
+		})
 		svc.mu.Lock()
 		svc.byID[conv.ConversationID].Turns = append(svc.byID[conv.ConversationID].Turns, expiredConfirmTurn)
 		svc.mu.Unlock()
@@ -1143,7 +1143,7 @@ func TestAssistantServiceHelpersAndUtilities(t *testing.T) {
 		}
 		svc.mu.RUnlock()
 
-		expiredCommitTurn := &assistantTurn{
+		expiredCommitTurn := assistantTestAttachBusinessRoute(&assistantTurn{
 			TurnID:    "turn-expired-commit",
 			State:     assistantStateValidated,
 			RequestID: "req-expired-commit",
@@ -1152,7 +1152,7 @@ func TestAssistantServiceHelpersAndUtilities(t *testing.T) {
 			Plan:      assistantFreezeConfirmWindow(assistantBuildPlan(assistantIntentSpec{Action: assistantIntentCreateOrgUnit}), time.Now().UTC().Add(-1*time.Hour)),
 			CreatedAt: time.Now().UTC().Add(-1 * time.Hour),
 			UpdatedAt: time.Now().UTC().Add(-1 * time.Hour),
-		}
+		})
 		svc.mu.Lock()
 		svc.byID[conv.ConversationID].Turns = append(svc.byID[conv.ConversationID].Turns, expiredCommitTurn)
 		svc.mu.Unlock()
@@ -1166,7 +1166,7 @@ func TestAssistantServiceHelpersAndUtilities(t *testing.T) {
 		}
 		svc.mu.RUnlock()
 
-		singleChoiceTurn := &assistantTurn{
+		singleChoiceTurn := assistantTestAttachBusinessRoute(&assistantTurn{
 			TurnID:              "turn-single-choice-confirmed",
 			State:               assistantStateConfirmed,
 			Intent:              assistantIntentSpec{Action: assistantIntentCreateOrgUnit, EffectiveDate: "2026-01-01"},
@@ -1176,7 +1176,7 @@ func TestAssistantServiceHelpersAndUtilities(t *testing.T) {
 			PolicyVersion:       capabilityPolicyVersionBaseline,
 			CompositionVersion:  capabilityPolicyVersionBaseline,
 			MappingVersion:      capabilityPolicyVersionBaseline,
-		}
+		})
 		svc.mu.Lock()
 		svc.byID[conv.ConversationID].Turns = append(svc.byID[conv.ConversationID].Turns, singleChoiceTurn)
 		svc.mu.Unlock()
@@ -1184,7 +1184,7 @@ func TestAssistantServiceHelpersAndUtilities(t *testing.T) {
 			t.Fatalf("confirmed turn with single candidate should be idempotent: %v", err)
 		}
 
-		unresolvedTurn := &assistantTurn{TurnID: "turn-unresolved", State: assistantStateValidated, Intent: assistantIntentSpec{Action: assistantIntentCreateOrgUnit}}
+		unresolvedTurn := assistantTestAttachBusinessRoute(&assistantTurn{TurnID: "turn-unresolved", State: assistantStateValidated, Intent: assistantIntentSpec{Action: assistantIntentCreateOrgUnit}, Plan: assistantBuildPlan(assistantIntentSpec{Action: assistantIntentCreateOrgUnit})})
 		svc.mu.Lock()
 		svc.byID[conv.ConversationID].Turns = append(svc.byID[conv.ConversationID].Turns, unresolvedTurn)
 		svc.mu.Unlock()
@@ -1275,6 +1275,7 @@ func TestAssistantServiceHelpersAndUtilities(t *testing.T) {
 			CompositionVersion:  capabilityPolicyVersionBaseline,
 			MappingVersion:      capabilityPolicyVersionBaseline,
 		}
+		assistantTestAttachBusinessRoute(driftTurn)
 		driftSvc.mu.Lock()
 		driftSvc.byID[driftConv.ConversationID].Turns = append(driftSvc.byID[driftConv.ConversationID].Turns, driftTurn)
 		driftSvc.mu.Unlock()
@@ -1298,7 +1299,7 @@ func TestAssistantServiceHelpersAndUtilities(t *testing.T) {
 
 		fallbackNameSvc := newAssistantConversationService(store, assistantWriteServiceStub{store: store})
 		fallbackConv := fallbackNameSvc.createConversation("tenant-1", principal)
-		fallbackTurn := &assistantTurn{
+		fallbackTurn := assistantTestAttachBusinessRoute(&assistantTurn{
 			TurnID:              "turn-empty-name",
 			State:               assistantStateConfirmed,
 			Intent:              assistantIntentSpec{Action: assistantIntentCreateOrgUnit, EffectiveDate: "2026-01-01"},
@@ -1309,7 +1310,7 @@ func TestAssistantServiceHelpersAndUtilities(t *testing.T) {
 			PolicyVersion:       capabilityPolicyVersionBaseline,
 			CompositionVersion:  capabilityPolicyVersionBaseline,
 			MappingVersion:      capabilityPolicyVersionBaseline,
-		}
+		})
 		if err := fallbackNameSvc.refreshTurnVersionTuple(context.Background(), "tenant-1", fallbackTurn); err != nil {
 			t.Fatalf("refresh fallback turn err=%v", err)
 		}
