@@ -100,6 +100,93 @@ func TestAssistantIntentRouter_DecisionCoverage(t *testing.T) {
 		if _, err := assistantBuildIntentRouteDecision("坏", assistantResolveIntentResult{Intent: assistantIntentSpec{Action: assistantIntentPlanOnly}}, assistantIntentSpec{Action: assistantIntentPlanOnly}, runtime, nil); !errors.Is(err, errAssistantRouteRuntimeInvalid) {
 			t.Fatalf("expected invalid route err, got=%v", err)
 		}
+
+		semanticBusiness, err := assistantBuildIntentRouteDecision(
+			"随便写什么都不重要",
+			assistantResolveIntentResult{
+				Intent: assistantIntentSpec{
+					Action:              assistantIntentCreateOrgUnit,
+					IntentID:            "org.orgunit_create",
+					RouteKind:           assistantRouteKindBusinessAction,
+					RouteCatalogVersion: "semantic.v1",
+				},
+				Readiness: assistantSemanticReadinessNeedMoreInfo,
+			},
+			assistantIntentSpec{Action: assistantIntentCreateOrgUnit},
+			runtime,
+			nil,
+		)
+		if err != nil {
+			t.Fatalf("semantic business err=%v", err)
+		}
+		if semanticBusiness.DecisionSource != assistantRouteDecisionSourceSemanticModelV1 || semanticBusiness.RouteCatalogVersion != "semantic.v1" || semanticBusiness.ConfidenceBand != assistantRouteConfidenceMedium {
+			t.Fatalf("unexpected semantic business decision=%+v", semanticBusiness)
+		}
+
+		semanticQA, err := assistantBuildIntentRouteDecision(
+			"系统有哪些功能",
+			assistantResolveIntentResult{
+				Intent: assistantIntentSpec{
+					Action:              assistantIntentPlanOnly,
+					IntentID:            "knowledge.general_qa",
+					RouteKind:           assistantRouteKindKnowledgeQA,
+					RouteCatalogVersion: "semantic.v1",
+				},
+			},
+			assistantIntentSpec{Action: assistantIntentPlanOnly},
+			runtime,
+			nil,
+		)
+		if err != nil || semanticQA.DecisionSource != assistantRouteDecisionSourceSemanticModelV1 || semanticQA.RouteKind != assistantRouteKindKnowledgeQA {
+			t.Fatalf("unexpected semantic qa=%+v err=%v", semanticQA, err)
+		}
+
+		if _, err := assistantBuildIntentRouteDecision(
+			"非法语义路由",
+			assistantResolveIntentResult{Intent: assistantIntentSpec{RouteKind: assistantRouteKindBusinessAction, IntentID: "org.orgunit_create"}},
+			assistantIntentSpec{Action: assistantIntentPlanOnly},
+			runtime,
+			nil,
+		); !errors.Is(err, errAssistantRouteRuntimeInvalid) {
+			t.Fatalf("expected invalid semantic business route err, got=%v", err)
+		}
+
+		if decision, ok, err := assistantBuildSemanticIntentRouteDecision(assistantResolveIntentResult{}, assistantIntentSpec{}, runtime); err != nil || ok || assistantIntentRouteDecisionPresent(decision) {
+			t.Fatalf("expected semantic helper to skip empty metadata, decision=%+v ok=%v err=%v", decision, ok, err)
+		}
+
+		if _, ok, err := assistantBuildSemanticIntentRouteDecision(
+			assistantResolveIntentResult{Intent: assistantIntentSpec{RouteKind: assistantRouteKindKnowledgeQA, IntentID: "knowledge.general_qa"}},
+			assistantIntentSpec{Action: assistantIntentPlanOnly},
+			nil,
+		); !ok || !errors.Is(err, errAssistantRouteCatalogMissing) {
+			t.Fatalf("expected semantic helper catalog missing, ok=%v err=%v", ok, err)
+		}
+
+		if _, ok, err := assistantBuildSemanticIntentRouteDecision(
+			assistantResolveIntentResult{Intent: assistantIntentSpec{RouteKind: assistantRouteKindKnowledgeQA}},
+			assistantIntentSpec{Action: assistantIntentPlanOnly},
+			runtime,
+		); !ok || !errors.Is(err, errAssistantRouteRuntimeInvalid) {
+			t.Fatalf("expected semantic helper missing intent id err, ok=%v err=%v", ok, err)
+		}
+
+		if _, ok, err := assistantBuildSemanticIntentRouteDecision(
+			assistantResolveIntentResult{Intent: assistantIntentSpec{RouteKind: assistantRouteKindBusinessAction, IntentID: "org.orgunit_create"}},
+			assistantIntentSpec{Action: "unsupported"},
+			runtime,
+		); !ok || !errors.Is(err, errAssistantRouteRuntimeInvalid) {
+			t.Fatalf("expected semantic helper unsupported action err, ok=%v err=%v", ok, err)
+		}
+
+		semanticUncertain, ok, err := assistantBuildSemanticIntentRouteDecision(
+			assistantResolveIntentResult{Intent: assistantIntentSpec{RouteKind: assistantRouteKindUncertain, IntentID: "route.uncertain"}},
+			assistantIntentSpec{Action: assistantIntentPlanOnly},
+			runtime,
+		)
+		if err != nil || !ok || semanticUncertain.RouteKind != assistantRouteKindUncertain || !semanticUncertain.ClarificationRequired {
+			t.Fatalf("unexpected semantic uncertain decision=%+v ok=%v err=%v", semanticUncertain, ok, err)
+		}
 	})
 
 	t.Run("projection and turn helpers", func(t *testing.T) {

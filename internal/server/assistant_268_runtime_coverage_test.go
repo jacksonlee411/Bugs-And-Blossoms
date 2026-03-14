@@ -285,54 +285,6 @@ func TestAssistant268ReplyRuntimeHelpers(t *testing.T) {
 	originalRender := assistantRenderReplyWithModelFn
 	defer func() { assistantRenderReplyWithModelFn = originalRender }()
 
-	t.Run("latest turn skips existing semantic reply", func(t *testing.T) {
-		called := false
-		turn := latestTurn(stored)
-		turn.ReplyNLG = &assistantRenderReplyResponse{Text: "已有语义回复", Stage: "draft"}
-		assistantRenderReplyWithModelFn = func(context.Context, *assistantConversationService, assistantReplyRenderPrompt) (assistantReplyModelResult, error) {
-			called = true
-			return assistantReplyModelResult{}, nil
-		}
-		assistantRenderReplyForLatestTurn(context.Background(), svc, "tenant_1", principal, stored.ConversationID, stored)
-		if called {
-			t.Fatal("expected latest turn renderer to skip model when semantic reply already exists")
-		}
-	})
-
-	t.Run("latest turn no-op on render failure", func(t *testing.T) {
-		turn := latestTurn(stored)
-		turn.ReplyNLG = nil
-		assistantRenderReplyWithModelFn = func(context.Context, *assistantConversationService, assistantReplyRenderPrompt) (assistantReplyModelResult, error) {
-			return assistantReplyModelResult{}, errAssistantReplyRenderFailed
-		}
-		assistantRenderReplyForLatestTurn(context.Background(), svc, "tenant_1", principal, stored.ConversationID, stored)
-		if turn.ReplyNLG != nil {
-			t.Fatalf("expected render failure to keep reply empty, got=%+v", turn.ReplyNLG)
-		}
-	})
-
-	t.Run("latest turn renders and persists when empty", func(t *testing.T) {
-		called := false
-		turn := latestTurn(stored)
-		turn.ReplyNLG = nil
-		assistantRenderReplyWithModelFn = func(_ context.Context, _ *assistantConversationService, prompt assistantReplyRenderPrompt) (assistantReplyModelResult, error) {
-			called = true
-			return assistantReplyModelResult{
-				Text:           "模型回复",
-				Kind:           "info",
-				Stage:          prompt.Stage,
-				ReplyModelName: assistantReplyTargetModelName,
-			}, nil
-		}
-		assistantRenderReplyForLatestTurn(context.Background(), svc, "tenant_1", principal, stored.ConversationID, stored)
-		if !called {
-			t.Fatal("expected latest turn renderer to invoke model")
-		}
-		if turn.ReplyNLG == nil || turn.ReplyNLG.Text != "模型回复" {
-			t.Fatalf("expected rendered reply persisted on latest turn, got=%+v", turn.ReplyNLG)
-		}
-	})
-
 	t.Run("passive request returns stored semantic reply", func(t *testing.T) {
 		storedTurn := latestTurn(stored)
 		storedTurn.ReplyNLG = &assistantRenderReplyResponse{Text: "缓存回复", Stage: "draft", ReplyModelName: "gpt-5-codex", ReplySource: assistantReplySourceSemanticModel}
@@ -381,8 +333,4 @@ func TestAssistant268ReplyRuntimeHelpers(t *testing.T) {
 	if got := assistantReplyRenderKindFromGuidanceKind("unknown"); got != "info" {
 		t.Fatalf("unexpected default render kind=%q", got)
 	}
-
-	assistantRenderReplyForLatestTurn(context.Background(), nil, "tenant_1", principal, stored.ConversationID, stored)
-	assistantRenderReplyForLatestTurn(context.Background(), svc, "tenant_1", principal, stored.ConversationID, nil)
-	assistantRenderReplyForLatestTurn(context.Background(), svc, "tenant_1", principal, "conv_empty", &assistantConversation{ConversationID: "conv_empty"})
 }

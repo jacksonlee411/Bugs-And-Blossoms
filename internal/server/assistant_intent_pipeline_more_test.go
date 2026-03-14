@@ -320,6 +320,84 @@ func TestAssistantIntentPipeline_ResolveIntentErrorBranches(t *testing.T) {
 	}
 }
 
+func TestAssistantIntentPipeline_RetryErrorAfterInvalidFirstPass(t *testing.T) {
+	t.Setenv("OPENAI_API_KEY", "dummy")
+	attempt := 0
+	svc := newAssistantConversationService(newOrgUnitMemoryStore(), assistantWriteServiceStub{store: newOrgUnitMemoryStore()})
+	svc.modelGateway = &assistantModelGateway{
+		config: assistantModelConfig{
+			ProviderRouting: assistantProviderRouting{Strategy: "priority_failover", FallbackEnabled: true},
+			Providers: []assistantModelProviderConfig{{
+				Name:      "openai",
+				Enabled:   true,
+				Model:     "gpt-5-codex",
+				Endpoint:  "https://api.openai.com/v1",
+				TimeoutMS: 1000,
+				Retries:   0,
+				Priority:  1,
+				KeyRef:    "OPENAI_API_KEY",
+			}},
+		},
+		adapters: map[string]assistantProviderAdapter{
+			"openai": assistantAdapterFunc(func(context.Context, string, assistantModelProviderConfig) ([]byte, error) {
+				attempt++
+				if attempt == 1 {
+					return []byte(`{"action":"unsupported_action"}`), nil
+				}
+				return nil, errAssistantModelTimeout
+			}),
+		},
+	}
+
+	if _, err := svc.resolveIntent(context.Background(), "tenant-1", "conv-1", "创建一个部门"); !errors.Is(err, errAssistantModelTimeout) {
+		t.Fatalf("expected retry error propagated, got=%v", err)
+	}
+	if attempt != 2 {
+		t.Fatalf("expected retry after invalid first pass, attempts=%d", attempt)
+	}
+}
+
+func TestAssistantIntentPipeline_RetrySuccessAfterInvalidFirstPass(t *testing.T) {
+	t.Setenv("OPENAI_API_KEY", "dummy")
+	attempt := 0
+	svc := newAssistantConversationService(newOrgUnitMemoryStore(), assistantWriteServiceStub{store: newOrgUnitMemoryStore()})
+	svc.modelGateway = &assistantModelGateway{
+		config: assistantModelConfig{
+			ProviderRouting: assistantProviderRouting{Strategy: "priority_failover", FallbackEnabled: true},
+			Providers: []assistantModelProviderConfig{{
+				Name:      "openai",
+				Enabled:   true,
+				Model:     "gpt-5-codex",
+				Endpoint:  "https://api.openai.com/v1",
+				TimeoutMS: 1000,
+				Retries:   0,
+				Priority:  1,
+				KeyRef:    "OPENAI_API_KEY",
+			}},
+		},
+		adapters: map[string]assistantProviderAdapter{
+			"openai": assistantAdapterFunc(func(context.Context, string, assistantModelProviderConfig) ([]byte, error) {
+				attempt++
+				if attempt == 1 {
+					return []byte(`{"action":"unsupported_action"}`), nil
+				}
+				return []byte(`{"action":"plan_only","route_kind":"knowledge_qa","intent_id":"knowledge.general_qa"}`), nil
+			}),
+		},
+	}
+
+	resolved, err := svc.resolveIntent(context.Background(), "tenant-1", "conv-1", "系统有哪些功能")
+	if err != nil {
+		t.Fatalf("resolve intent err=%v", err)
+	}
+	if attempt != 2 {
+		t.Fatalf("expected retry success after invalid first pass, attempts=%d", attempt)
+	}
+	if resolved.Intent.Action != assistantIntentPlanOnly || resolved.Intent.RouteKind != assistantRouteKindKnowledgeQA || resolved.Intent.IntentID != "knowledge.general_qa" {
+		t.Fatalf("unexpected retried intent=%+v", resolved.Intent)
+	}
+}
+
 func TestAssistantIntentPipeline_FailsClosedOnStrictDecodeFailure(t *testing.T) {
 	t.Setenv("OPENAI_API_KEY", "dummy")
 	svc := newAssistantConversationService(newOrgUnitMemoryStore(), assistantWriteServiceStub{store: newOrgUnitMemoryStore()})

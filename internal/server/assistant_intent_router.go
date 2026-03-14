@@ -138,6 +138,9 @@ func assistantBuildIntentRouteDecision(
 	if runtime == nil {
 		return assistantIntentRouteDecision{}, errAssistantRouteCatalogMissing
 	}
+	if semanticDecision, ok, err := assistantBuildSemanticIntentRouteDecision(resolved, mergedIntent, runtime); ok || err != nil {
+		return semanticDecision, err
+	}
 	projected := runtime.routeIntent(userInput, mergedIntent)
 	decision := assistantIntentRouteDecision{
 		RouteKind:               strings.TrimSpace(projected.RouteKind),
@@ -172,12 +175,8 @@ func assistantBuildIntentRouteDecision(
 		if localUpgrade {
 			decision.ReasonCodes = append(decision.ReasonCodes, assistantRouteReasonLocalIntentUpgrade)
 		}
-		if len(assistantIntentValidationErrors(projected)) > 0 {
-			decision.ClarificationRequired = true
-			decision.ReasonCodes = append(decision.ReasonCodes, assistantRouteReasonClarificationRequired)
-		}
 		decision.ConfidenceBand = assistantRouteConfidenceHigh
-		if decision.ClarificationRequired || localUpgrade {
+		if localUpgrade {
 			decision.ConfidenceBand = assistantRouteConfidenceMedium
 		}
 	case assistantRouteKindKnowledgeQA, assistantRouteKindChitchat:
@@ -195,6 +194,71 @@ func assistantBuildIntentRouteDecision(
 	decision.CandidateActionIDs = assistantNormalizeRouteStringSlice(decision.CandidateActionIDs)
 	decision.ReasonCodes = assistantNormalizeRouteStringSlice(decision.ReasonCodes)
 	return decision, nil
+}
+
+func assistantBuildSemanticIntentRouteDecision(
+	resolved assistantResolveIntentResult,
+	mergedIntent assistantIntentSpec,
+	runtime *assistantKnowledgeRuntime,
+) (assistantIntentRouteDecision, bool, error) {
+	routeKind := strings.TrimSpace(resolved.Intent.RouteKind)
+	intentID := strings.TrimSpace(resolved.Intent.IntentID)
+	if routeKind == "" && intentID == "" {
+		return assistantIntentRouteDecision{}, false, nil
+	}
+	if runtime == nil {
+		return assistantIntentRouteDecision{}, true, errAssistantRouteCatalogMissing
+	}
+	if !assistantValidRouteKind(routeKind) || intentID == "" {
+		return assistantIntentRouteDecision{}, true, errAssistantRouteRuntimeInvalid
+	}
+
+	decision := assistantIntentRouteDecision{
+		RouteKind:               routeKind,
+		IntentID:                intentID,
+		RouteCatalogVersion:     strings.TrimSpace(firstNonEmpty(resolved.Intent.RouteCatalogVersion, runtime.RouteCatalogVersion)),
+		KnowledgeSnapshotDigest: strings.TrimSpace(runtime.SnapshotDigest),
+		ResolverContractVersion: strings.TrimSpace(runtime.ResolverContractVersion),
+		DecisionSource:          assistantRouteDecisionSourceSemanticModelV1,
+	}
+	if decision.RouteCatalogVersion == "" {
+		decision.ReasonCodes = append(decision.ReasonCodes, assistantRouteReasonCatalogVersionMissing)
+		decision.RouteCatalogVersion = "fallback-route-catalog"
+	}
+	if decision.KnowledgeSnapshotDigest == "" {
+		decision.KnowledgeSnapshotDigest = "fallback-knowledge-snapshot"
+	}
+	if decision.ResolverContractVersion == "" {
+		decision.ResolverContractVersion = "fallback-resolver-contract"
+	}
+
+	switch decision.RouteKind {
+	case assistantRouteKindBusinessAction:
+		actionID := strings.TrimSpace(firstNonEmpty(mergedIntent.Action, resolved.Intent.Action))
+		if actionID == "" || actionID == assistantIntentPlanOnly {
+			return assistantIntentRouteDecision{}, true, errAssistantRouteRuntimeInvalid
+		}
+		if _, ok := assistantLookupDefaultActionSpec(actionID); !ok {
+			return assistantIntentRouteDecision{}, true, errAssistantRouteRuntimeInvalid
+		}
+		decision.CandidateActionIDs = []string{actionID}
+		decision.ConfidenceBand = assistantRouteConfidenceHigh
+		decision.ReasonCodes = append(decision.ReasonCodes, assistantRouteReasonBusinessActionRegistered)
+		if strings.TrimSpace(resolved.Readiness) == assistantSemanticReadinessNeedMoreInfo {
+			decision.ConfidenceBand = assistantRouteConfidenceMedium
+		}
+	case assistantRouteKindKnowledgeQA, assistantRouteKindChitchat:
+		decision.ConfidenceBand = assistantRouteConfidenceLow
+		decision.ReasonCodes = append(decision.ReasonCodes, assistantRouteReasonNonBusinessCatalogMatch)
+	case assistantRouteKindUncertain:
+		decision.ConfidenceBand = assistantRouteConfidenceLow
+		decision.ClarificationRequired = true
+		decision.ReasonCodes = append(decision.ReasonCodes, assistantRouteReasonUncertainNoMatch, assistantRouteReasonClarificationRequired)
+	}
+
+	decision.CandidateActionIDs = assistantNormalizeRouteStringSlice(decision.CandidateActionIDs)
+	decision.ReasonCodes = assistantNormalizeRouteStringSlice(decision.ReasonCodes)
+	return decision, true, nil
 }
 
 func assistantProjectIntentRouteDecision(intent assistantIntentSpec, decision assistantIntentRouteDecision) assistantIntentSpec {

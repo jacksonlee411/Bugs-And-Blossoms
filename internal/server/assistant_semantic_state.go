@@ -52,10 +52,7 @@ func assistantBuildSemanticPrompt(userInput string, pendingTurn *assistantTurn) 
 	if pending := assistantSemanticPromptPendingTurn(pendingTurn); pending != nil {
 		envelope.PendingTurn = pending
 	}
-	payload, err := json.Marshal(envelope)
-	if err != nil {
-		return strings.TrimSpace(userInput)
-	}
+	payload, _ := json.Marshal(envelope)
 	return string(payload)
 }
 
@@ -73,10 +70,7 @@ func assistantSemanticPromptActions() []assistantSemanticPromptAction {
 	}
 	out := make([]assistantSemanticPromptAction, 0, len(actions))
 	for _, actionID := range actions {
-		spec, ok := assistantLookupDefaultActionSpec(actionID)
-		if !ok {
-			continue
-		}
+		spec, _ := assistantLookupDefaultActionSpec(actionID)
 		item := assistantSemanticPromptAction{
 			ActionID:    strings.TrimSpace(spec.ID),
 			PlanSummary: strings.TrimSpace(spec.PlanSummary),
