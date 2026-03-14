@@ -132,9 +132,7 @@ func assistantBuildIntentRouteDecision(
 	resolved assistantResolveIntentResult,
 	mergedIntent assistantIntentSpec,
 	runtime *assistantKnowledgeRuntime,
-	pendingTurn *assistantTurn,
 ) (assistantIntentRouteDecision, error) {
-	_ = pendingTurn
 	if runtime == nil {
 		return assistantIntentRouteDecision{}, errAssistantRouteCatalogMissing
 	}

@@ -603,7 +603,7 @@ func TestAssistantRouteHandlerMappings(t *testing.T) {
 		originalBuildRoute := assistantBuildIntentRouteDecisionFn
 		defer func() { assistantBuildIntentRouteDecisionFn = originalBuildRoute }()
 		for _, tc := range cases {
-			assistantBuildIntentRouteDecisionFn = func(string, assistantResolveIntentResult, assistantIntentSpec, *assistantKnowledgeRuntime, *assistantTurn) (assistantIntentRouteDecision, error) {
+			assistantBuildIntentRouteDecisionFn = func(string, assistantResolveIntentResult, assistantIntentSpec, *assistantKnowledgeRuntime) (assistantIntentRouteDecision, error) {
 				return assistantIntentRouteDecision{}, tc.err
 			}
 			svc := newAssistantConversationService(newOrgUnitMemoryStore(), assistantWriteServiceStub{store: newOrgUnitMemoryStore()})

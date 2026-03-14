@@ -229,7 +229,7 @@ func (s *assistantConversationService) prepareTurnDraft(
 		mergedIntent = resume.Intent
 	}
 
-	routeDecision, err := assistantBuildIntentRouteDecisionFn(userInput, resolvedIntent, mergedIntent, knowledgeRuntime, pendingTurn)
+	routeDecision, err := assistantBuildIntentRouteDecisionFn(userInput, resolvedIntent, mergedIntent, knowledgeRuntime)
 	if err != nil {
 		return nil, err
 	}

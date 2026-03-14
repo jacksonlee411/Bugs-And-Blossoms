@@ -65,7 +65,7 @@ func TestAssistantPersistence243_CreateTurnPGBranches(t *testing.T) {
 	t.Run("route decision error from builder", func(t *testing.T) {
 		svc := newAssistantConversationService(newOrgUnitMemoryStore(), assistantWriteServiceStub{store: newOrgUnitMemoryStore()})
 		svc.pool = assistFakeTxBeginner{tx: assistant243CreateTurnPGTx(now, "actor_1", nil)}
-		assistantBuildIntentRouteDecisionFn = func(string, assistantResolveIntentResult, assistantIntentSpec, *assistantKnowledgeRuntime, *assistantTurn) (assistantIntentRouteDecision, error) {
+		assistantBuildIntentRouteDecisionFn = func(string, assistantResolveIntentResult, assistantIntentSpec, *assistantKnowledgeRuntime) (assistantIntentRouteDecision, error) {
 			return assistantIntentRouteDecision{}, errAssistantRouteRuntimeInvalid
 		}
 		if _, err := svc.createTurnPG(context.Background(), "tenant_1", principal, "conv_pg", "仅生成计划"); !errors.Is(err, errAssistantRouteRuntimeInvalid) {
@@ -121,7 +121,7 @@ func TestAssistantPersistence243_CreateTurnPGBranches(t *testing.T) {
 				SelectedCandidateID: "FLOWER-A",
 			}
 		}
-		assistantBuildIntentRouteDecisionFn = func(string, assistantResolveIntentResult, assistantIntentSpec, *assistantKnowledgeRuntime, *assistantTurn) (assistantIntentRouteDecision, error) {
+		assistantBuildIntentRouteDecisionFn = func(string, assistantResolveIntentResult, assistantIntentSpec, *assistantKnowledgeRuntime) (assistantIntentRouteDecision, error) {
 			return assistantIntentRouteDecision{
 				RouteKind:               assistantRouteKindKnowledgeQA,
 				IntentID:                "knowledge.general_qa",
@@ -150,7 +150,7 @@ func TestAssistantPersistence243_CreateTurnPGBranches(t *testing.T) {
 		}
 		svc := newAssistantConversationService(store, assistantWriteServiceStub{store: store})
 		svc.pool = assistFakeTxBeginner{tx: assistant243CreateTurnPGTx(now, "actor_1", nil)}
-		assistantBuildIntentRouteDecisionFn = func(string, assistantResolveIntentResult, assistantIntentSpec, *assistantKnowledgeRuntime, *assistantTurn) (assistantIntentRouteDecision, error) {
+		assistantBuildIntentRouteDecisionFn = func(string, assistantResolveIntentResult, assistantIntentSpec, *assistantKnowledgeRuntime) (assistantIntentRouteDecision, error) {
 			return assistant243BusinessRouteDecision(), nil
 		}
 		capabilityDefinitionByKey = map[string]capabilityDefinition{}
@@ -174,7 +174,7 @@ func TestAssistantPersistence243_CreateTurnPGBranches(t *testing.T) {
 		runtime.ReplyGuidanceVersion = ""
 		svc.knowledgeRuntime = runtime
 		svc.pool = assistFakeTxBeginner{tx: assistant243CreateTurnPGTx(now, "actor_1", nil)}
-		assistantBuildIntentRouteDecisionFn = func(string, assistantResolveIntentResult, assistantIntentSpec, *assistantKnowledgeRuntime, *assistantTurn) (assistantIntentRouteDecision, error) {
+		assistantBuildIntentRouteDecisionFn = func(string, assistantResolveIntentResult, assistantIntentSpec, *assistantKnowledgeRuntime) (assistantIntentRouteDecision, error) {
 			return assistant243BusinessRouteDecision(), nil
 		}
 		if _, err := svc.createTurnPG(context.Background(), "tenant_1", principal, "conv_pg", "在鲜花组织之下，新建一个名为运营部的部门，成立日期是2026-01-01"); !errors.Is(err, errAssistantPlanContractVersionMismatch) {
@@ -189,7 +189,7 @@ func TestAssistantPersistence243_CreateTurnPGBranches(t *testing.T) {
 		}
 		svc := newAssistantConversationService(store, assistantWriteServiceStub{store: store})
 		svc.pool = assistFakeTxBeginner{tx: assistant243CreateTurnPGTx(now, "actor_1", nil)}
-		assistantBuildIntentRouteDecisionFn = func(string, assistantResolveIntentResult, assistantIntentSpec, *assistantKnowledgeRuntime, *assistantTurn) (assistantIntentRouteDecision, error) {
+		assistantBuildIntentRouteDecisionFn = func(string, assistantResolveIntentResult, assistantIntentSpec, *assistantKnowledgeRuntime) (assistantIntentRouteDecision, error) {
 			return assistant243BusinessRouteDecision(), nil
 		}
 		assistantLoadAuthorizerFn = func() (authorizer, error) {

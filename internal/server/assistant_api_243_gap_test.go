@@ -30,7 +30,7 @@ func TestAssistantAPI243_CreateTurnHandlerErrorMappings(t *testing.T) {
 		assistantBuildIntentRouteDecisionFn = origRouteFn
 		assistantLoadAuthorizerFn = origAuthzFn
 	}()
-	assistantBuildIntentRouteDecisionFn = func(string, assistantResolveIntentResult, assistantIntentSpec, *assistantKnowledgeRuntime, *assistantTurn) (assistantIntentRouteDecision, error) {
+	assistantBuildIntentRouteDecisionFn = func(string, assistantResolveIntentResult, assistantIntentSpec, *assistantKnowledgeRuntime) (assistantIntentRouteDecision, error) {
 		return assistant243BusinessRouteDecision(), nil
 	}
 	assistantLoadAuthorizerFn = func() (authorizer, error) {
@@ -325,7 +325,7 @@ func TestAssistantAPI243_CreateTurnAndHelperBranches(t *testing.T) {
 				EffectiveDate: "2026-01-01",
 			}}
 		}
-		assistantBuildIntentRouteDecisionFn = func(string, assistantResolveIntentResult, assistantIntentSpec, *assistantKnowledgeRuntime, *assistantTurn) (assistantIntentRouteDecision, error) {
+		assistantBuildIntentRouteDecisionFn = func(string, assistantResolveIntentResult, assistantIntentSpec, *assistantKnowledgeRuntime) (assistantIntentRouteDecision, error) {
 			return assistantIntentRouteDecision{
 				RouteKind:               assistantRouteKindKnowledgeQA,
 				IntentID:                "knowledge.general_qa",
@@ -354,7 +354,7 @@ func TestAssistantAPI243_CreateTurnAndHelperBranches(t *testing.T) {
 		}
 		svc := newAssistantConversationService(store, assistantWriteServiceStub{store: store})
 		conv := svc.createConversation("tenant-1", Principal{ID: "actor-1", RoleSlug: "tenant-admin"})
-		assistantBuildIntentRouteDecisionFn = func(string, assistantResolveIntentResult, assistantIntentSpec, *assistantKnowledgeRuntime, *assistantTurn) (assistantIntentRouteDecision, error) {
+		assistantBuildIntentRouteDecisionFn = func(string, assistantResolveIntentResult, assistantIntentSpec, *assistantKnowledgeRuntime) (assistantIntentRouteDecision, error) {
 			return assistant243BusinessRouteDecision(), nil
 		}
 		capabilityDefinitionByKey = map[string]capabilityDefinition{}
@@ -371,7 +371,7 @@ func TestAssistantAPI243_CreateTurnAndHelperBranches(t *testing.T) {
 		}
 		svc := newAssistantConversationService(store, assistantWriteServiceStub{store: store})
 		conv := svc.createConversation("tenant-1", Principal{ID: "actor-1", RoleSlug: "tenant-admin"})
-		assistantBuildIntentRouteDecisionFn = func(string, assistantResolveIntentResult, assistantIntentSpec, *assistantKnowledgeRuntime, *assistantTurn) (assistantIntentRouteDecision, error) {
+		assistantBuildIntentRouteDecisionFn = func(string, assistantResolveIntentResult, assistantIntentSpec, *assistantKnowledgeRuntime) (assistantIntentRouteDecision, error) {
 			return assistant243BusinessRouteDecision(), nil
 		}
 		assistantPlanHashFn = func(assistantIntentSpec, assistantPlanSummary, assistantDryRunResult) string { return "" }
@@ -394,7 +394,7 @@ func TestAssistantAPI243_CreateTurnAndHelperBranches(t *testing.T) {
 		runtime.ContextTemplateVersion = ""
 		runtime.ReplyGuidanceVersion = ""
 		svc.knowledgeRuntime = runtime
-		assistantBuildIntentRouteDecisionFn = func(string, assistantResolveIntentResult, assistantIntentSpec, *assistantKnowledgeRuntime, *assistantTurn) (assistantIntentRouteDecision, error) {
+		assistantBuildIntentRouteDecisionFn = func(string, assistantResolveIntentResult, assistantIntentSpec, *assistantKnowledgeRuntime) (assistantIntentRouteDecision, error) {
 			return assistant243BusinessRouteDecision(), nil
 		}
 		conv := svc.createConversation("tenant-1", Principal{ID: "actor-1", RoleSlug: "tenant-admin"})

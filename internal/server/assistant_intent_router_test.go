@@ -62,7 +62,7 @@ func TestAssistantIntentRouter_DecisionCoverage(t *testing.T) {
 	})
 
 	t.Run("build decision branches", func(t *testing.T) {
-		if _, err := assistantBuildIntentRouteDecision("x", assistantResolveIntentResult{}, assistantIntentSpec{}, nil, nil); !errors.Is(err, errAssistantRouteCatalogMissing) {
+		if _, err := assistantBuildIntentRouteDecision("x", assistantResolveIntentResult{}, assistantIntentSpec{}, nil); !errors.Is(err, errAssistantRouteCatalogMissing) {
 			t.Fatalf("expected catalog missing, got=%v", err)
 		}
 		runtime := &assistantKnowledgeRuntime{
@@ -78,26 +78,26 @@ func TestAssistantIntentRouter_DecisionCoverage(t *testing.T) {
 				assistantIntentCreateOrgUnit: {IntentID: "org.orgunit_create", RouteKind: assistantRouteKindBusinessAction, ActionID: assistantIntentCreateOrgUnit},
 			},
 		}
-		business, err := assistantBuildIntentRouteDecision("在鲜花组织之下新建部门", assistantResolveIntentResult{Intent: assistantIntentSpec{Action: assistantIntentPlanOnly}}, assistantIntentSpec{Action: assistantIntentCreateOrgUnit, ParentRefText: "鲜花组织", EntityName: "运营部"}, runtime, nil)
+		business, err := assistantBuildIntentRouteDecision("在鲜花组织之下新建部门", assistantResolveIntentResult{Intent: assistantIntentSpec{Action: assistantIntentPlanOnly}}, assistantIntentSpec{Action: assistantIntentCreateOrgUnit, ParentRefText: "鲜花组织", EntityName: "运营部"}, runtime)
 		if err != nil {
 			t.Fatalf("build business err=%v", err)
 		}
 		if business.ConfidenceBand != assistantRouteConfidenceMedium || len(business.CandidateActionIDs) != 1 || business.RouteCatalogVersion == "" || business.KnowledgeSnapshotDigest == "" || business.ResolverContractVersion == "" {
 			t.Fatalf("unexpected business decision=%+v", business)
 		}
-		qa, err := assistantBuildIntentRouteDecision("系统有哪些功能", assistantResolveIntentResult{Intent: assistantIntentSpec{Action: assistantIntentPlanOnly}}, assistantIntentSpec{Action: assistantIntentPlanOnly}, runtime, nil)
+		qa, err := assistantBuildIntentRouteDecision("系统有哪些功能", assistantResolveIntentResult{Intent: assistantIntentSpec{Action: assistantIntentPlanOnly}}, assistantIntentSpec{Action: assistantIntentPlanOnly}, runtime)
 		if err != nil || qa.RouteKind != assistantRouteKindKnowledgeQA || qa.ClarificationRequired {
 			t.Fatalf("unexpected qa=%+v err=%v", qa, err)
 		}
-		chat, err := assistantBuildIntentRouteDecision("你好", assistantResolveIntentResult{Intent: assistantIntentSpec{Action: assistantIntentPlanOnly}}, assistantIntentSpec{Action: assistantIntentPlanOnly}, runtime, nil)
+		chat, err := assistantBuildIntentRouteDecision("你好", assistantResolveIntentResult{Intent: assistantIntentSpec{Action: assistantIntentPlanOnly}}, assistantIntentSpec{Action: assistantIntentPlanOnly}, runtime)
 		if err != nil || chat.RouteKind != assistantRouteKindChitchat {
 			t.Fatalf("unexpected chat=%+v err=%v", chat, err)
 		}
-		uncertain, err := assistantBuildIntentRouteDecision("随机输入", assistantResolveIntentResult{Intent: assistantIntentSpec{Action: assistantIntentPlanOnly}}, assistantIntentSpec{Action: assistantIntentPlanOnly}, runtime, nil)
+		uncertain, err := assistantBuildIntentRouteDecision("随机输入", assistantResolveIntentResult{Intent: assistantIntentSpec{Action: assistantIntentPlanOnly}}, assistantIntentSpec{Action: assistantIntentPlanOnly}, runtime)
 		if err != nil || uncertain.RouteKind != assistantRouteKindUncertain || !uncertain.ClarificationRequired {
 			t.Fatalf("unexpected uncertain=%+v err=%v", uncertain, err)
 		}
-		if _, err := assistantBuildIntentRouteDecision("坏", assistantResolveIntentResult{Intent: assistantIntentSpec{Action: assistantIntentPlanOnly}}, assistantIntentSpec{Action: assistantIntentPlanOnly}, runtime, nil); !errors.Is(err, errAssistantRouteRuntimeInvalid) {
+		if _, err := assistantBuildIntentRouteDecision("坏", assistantResolveIntentResult{Intent: assistantIntentSpec{Action: assistantIntentPlanOnly}}, assistantIntentSpec{Action: assistantIntentPlanOnly}, runtime); !errors.Is(err, errAssistantRouteRuntimeInvalid) {
 			t.Fatalf("expected invalid route err, got=%v", err)
 		}
 
@@ -114,7 +114,6 @@ func TestAssistantIntentRouter_DecisionCoverage(t *testing.T) {
 			},
 			assistantIntentSpec{Action: assistantIntentCreateOrgUnit},
 			runtime,
-			nil,
 		)
 		if err != nil {
 			t.Fatalf("semantic business err=%v", err)
@@ -135,7 +134,6 @@ func TestAssistantIntentRouter_DecisionCoverage(t *testing.T) {
 			},
 			assistantIntentSpec{Action: assistantIntentPlanOnly},
 			runtime,
-			nil,
 		)
 		if err != nil || semanticQA.DecisionSource != assistantRouteDecisionSourceSemanticModelV1 || semanticQA.RouteKind != assistantRouteKindKnowledgeQA {
 			t.Fatalf("unexpected semantic qa=%+v err=%v", semanticQA, err)
@@ -146,7 +144,6 @@ func TestAssistantIntentRouter_DecisionCoverage(t *testing.T) {
 			assistantResolveIntentResult{Intent: assistantIntentSpec{RouteKind: assistantRouteKindBusinessAction, IntentID: "org.orgunit_create"}},
 			assistantIntentSpec{Action: assistantIntentPlanOnly},
 			runtime,
-			nil,
 		); !errors.Is(err, errAssistantRouteRuntimeInvalid) {
 			t.Fatalf("expected invalid semantic business route err, got=%v", err)
 		}
@@ -385,7 +382,6 @@ func TestAssistantIntentRouter_MissingGapBranches(t *testing.T) {
 			assistantResolveIntentResult{Intent: assistantIntentSpec{Action: assistantIntentPlanOnly}},
 			assistantIntentSpec{Action: assistantIntentCreateOrgUnit},
 			runtime,
-			nil,
 		); !errors.Is(err, errAssistantRouteRuntimeInvalid) {
 			t.Fatalf("expected runtime invalid for unsupported route kind, err=%v", err)
 		}
@@ -393,7 +389,7 @@ func TestAssistantIntentRouter_MissingGapBranches(t *testing.T) {
 		runtime.routeByAction = map[string]assistantIntentRouteEntry{
 			assistantIntentCreateOrgUnit: {IntentID: "org.orgunit_create", RouteKind: assistantRouteKindBusinessAction, ActionID: assistantIntentCreateOrgUnit},
 		}
-		if _, err := assistantBuildIntentRouteDecision("创建", assistantResolveIntentResult{Intent: assistantIntentSpec{Action: assistantIntentPlanOnly}}, assistantIntentSpec{Action: assistantIntentCreateOrgUnit, EffectiveDate: "bad-date", ParentRefText: "p", EntityName: "n"}, runtime, nil); err != nil {
+		if _, err := assistantBuildIntentRouteDecision("创建", assistantResolveIntentResult{Intent: assistantIntentSpec{Action: assistantIntentPlanOnly}}, assistantIntentSpec{Action: assistantIntentCreateOrgUnit, EffectiveDate: "bad-date", ParentRefText: "p", EntityName: "n"}, runtime); err != nil {
 			t.Fatalf("validation-warning route should still build, err=%v", err)
 		}
 	})
