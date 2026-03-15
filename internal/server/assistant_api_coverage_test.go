@@ -425,6 +425,7 @@ func TestAssistantConversationHandlers_CoverageMatrix(t *testing.T) {
 		}
 
 		errSvc := newAssistantConversationService(assistantSearchErrStore{orgUnitMemoryStore: newOrgUnitMemoryStore()}, assistantWriteServiceStub{store: newOrgUnitMemoryStore()})
+		errSvc.modelGateway = assistantTestStaticSemanticGateway(`{"action":"create_orgunit","route_kind":"business_action","intent_id":"org.orgunit_create","parent_ref_text":"鲜花组织","entity_name":"运营部","effective_date":"2026-01-01"}`)
 		errConv := errSvc.createConversation("tenant-1", principal)
 		rec = httptest.NewRecorder()
 		handleAssistantConversationTurnsAPI(rec, assistantReqWithContext(http.MethodPost, "/internal/assistant/conversations/"+errConv.ConversationID+"/turns", `{"user_input":"在鲜花组织之下，新建一个名为运营部的部门，成立日期是2026年1月1日。"}`, true, true), errSvc)
@@ -479,6 +480,7 @@ func TestAssistantConversationHandlers_CoverageMatrix(t *testing.T) {
 }
 
 func TestAssistantTurnActionHandler_CoverageMatrix(t *testing.T) {
+	t.Setenv("OPENAI_API_KEY", "dummy")
 	store := newOrgUnitMemoryStore()
 	tenantID := "tenant-1"
 	if _, err := store.CreateNodeCurrent(context.Background(), tenantID, "2026-01-01", "FLOWER-A", "鲜花组织", "", true); err != nil {
@@ -489,6 +491,7 @@ func TestAssistantTurnActionHandler_CoverageMatrix(t *testing.T) {
 	}
 	principal := Principal{ID: "actor-1", RoleSlug: "tenant-admin"}
 	svc := newAssistantConversationService(store, assistantWriteServiceStub{store: store})
+	svc.modelGateway = assistantTestStaticSemanticGateway(`{"action":"create_orgunit","route_kind":"business_action","intent_id":"org.orgunit_create","parent_ref_text":"鲜花组织","entity_name":"运营部","effective_date":"2026-01-01"}`)
 	conv := svc.createConversation(tenantID, principal)
 	conversation, err := svc.createTurn(context.Background(), tenantID, principal, conv.ConversationID, "在鲜花组织之下，新建一个名为运营部的部门，成立日期是2026年1月1日。")
 	if err != nil {
@@ -838,9 +841,11 @@ func TestAssistantServiceHelpersAndUtilities(t *testing.T) {
 
 	t.Run("createTurn candidate confidence branches", func(t *testing.T) {
 		principal := Principal{ID: "actor-1", RoleSlug: "tenant-admin"}
+		t.Setenv("OPENAI_API_KEY", "dummy")
 
 		zeroStore := assistantNoCandidateStore{orgUnitMemoryStore: newOrgUnitMemoryStore()}
 		zeroSvc := newAssistantConversationService(zeroStore, nil)
+		zeroSvc.modelGateway = assistantTestStaticSemanticGateway(`{"action":"create_orgunit","route_kind":"business_action","intent_id":"org.orgunit_create","parent_ref_text":"鲜花组织","entity_name":"运营部","effective_date":"2026-01-01"}`)
 		zeroConv := zeroSvc.createConversation("tenant-1", principal)
 		zeroConversation, err := zeroSvc.createTurn(context.Background(), "tenant-1", principal, zeroConv.ConversationID, "在鲜花组织之下，新建一个名为运营部的部门，成立日期是2026-01-01")
 		if err != nil {
@@ -855,6 +860,7 @@ func TestAssistantServiceHelpersAndUtilities(t *testing.T) {
 			t.Fatal(err)
 		}
 		oneSvc := newAssistantConversationService(oneStore, nil)
+		oneSvc.modelGateway = assistantTestStaticSemanticGateway(`{"action":"create_orgunit","route_kind":"business_action","intent_id":"org.orgunit_create","parent_ref_text":"鲜花组织","entity_name":"运营部","effective_date":"2026-01-01"}`)
 		oneConv := oneSvc.createConversation("tenant-1", principal)
 		oneConversation, err := oneSvc.createTurn(context.Background(), "tenant-1", principal, oneConv.ConversationID, "在鲜花组织之下，新建一个名为运营部的部门，成立日期是2026-01-01")
 		if err != nil {
@@ -874,30 +880,6 @@ func TestAssistantServiceHelpersAndUtilities(t *testing.T) {
 		}
 		if got := assistantRiskTierForIntent(assistantIntentSpec{Action: "plan_only"}); got != "low" {
 			t.Fatalf("risk tier=%s", got)
-		}
-
-		intent := assistantExtractIntent("在鲜花组织之下，新建一个名为运营部的部门，成立日期是2026年1月1日")
-		if intent.ParentRefText != "鲜花组织" || intent.EntityName != "运营部" || intent.EffectiveDate != "2026-01-01" {
-			t.Fatalf("unexpected intent: %+v", intent)
-		}
-		intentISO := assistantExtractIntent("新建一个名为财务部的部门，成立日期是2026-01-02")
-		if intentISO.EffectiveDate != "2026-01-02" {
-			t.Fatalf("unexpected iso date: %+v", intentISO)
-		}
-		if _, err := assistantDecodeIntent("在鲜花组织之下，新建一个名为运营部的部门，成立日期是2026-01-01"); err != nil {
-			t.Fatalf("decode intent failed: %v", err)
-		}
-		if _, err := assistantDecodeIntent("在鲜花组织之下，新建一个名为运营部的部门"); !errors.Is(err, errAssistantPlanSchemaConstrainedDecodeFailed) {
-			t.Fatalf("want schema decode failed, got %v", err)
-		}
-		if _, err := assistantDecodeIntent("请执行 SELECT * FROM org_units"); !errors.Is(err, errAssistantPlanBoundaryViolation) {
-			t.Fatalf("want boundary violation, got %v", err)
-		}
-		originalDefs := capabilityDefinitionByKey
-		defer func() { capabilityDefinitionByKey = originalDefs }()
-		capabilityDefinitionByKey = map[string]capabilityDefinition{}
-		if _, err := assistantDecodeIntent("仅生成计划"); !errors.Is(err, errAssistantPlanBoundaryViolation) {
-			t.Fatalf("want boundary violation for unknown capability, got %v", err)
 		}
 		if !assistantBoundaryViolationDetected("drop table org_unit_nodes") {
 			t.Fatal("expected boundary violation detection")
@@ -946,10 +928,6 @@ func TestAssistantServiceHelpersAndUtilities(t *testing.T) {
 			MappingVersion:     "1999-01-01",
 		}) {
 			t.Fatal("mapping drift should be detected")
-		}
-		planOnly := assistantExtractIntent("hello")
-		if planOnly.Action != "plan_only" {
-			t.Fatalf("unexpected plan only intent: %+v", planOnly)
 		}
 
 		candidates := []assistantCandidate{{CandidateID: "A", CandidateCode: "FLOWER-A"}, {CandidateID: "B", CandidateCode: "FLOWER-B"}}
@@ -1081,6 +1059,7 @@ func TestAssistantServiceHelpersAndUtilities(t *testing.T) {
 			t.Fatal(err)
 		}
 		svc := newAssistantConversationService(store, assistantWriteServiceStub{store: store})
+		svc.modelGateway = assistantTestStaticSemanticGateway(`{"action":"create_orgunit","route_kind":"business_action","intent_id":"org.orgunit_create","parent_ref_text":"鲜花组织","entity_name":"运营部","effective_date":"2026-01-01"}`)
 		principal := Principal{ID: "actor-1", RoleSlug: "tenant-admin"}
 		conv := svc.createConversation("tenant-1", principal)
 		created, err := svc.createTurn(context.Background(), "tenant-1", principal, conv.ConversationID, "在鲜花组织之下，新建一个名为运营部的部门，成立日期是2026-01-01")

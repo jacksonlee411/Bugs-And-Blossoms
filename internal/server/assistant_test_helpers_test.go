@@ -1,6 +1,9 @@
 package server
 
-import "strings"
+import (
+	"context"
+	"strings"
+)
 
 const (
 	assistantTestRouteCatalogVersion     = "2026-03-11.v1"
@@ -74,4 +77,27 @@ func assistantTestAttachBusinessRoute(turn *assistantTurn) *assistantTurn {
 	}
 	assistantRefreshTurnDerivedFields(turn)
 	return turn
+}
+
+func assistantTestStaticSemanticGateway(payload string) *assistantModelGateway {
+	return &assistantModelGateway{
+		config: assistantModelConfig{
+			ProviderRouting: assistantProviderRouting{Strategy: "priority_failover", FallbackEnabled: true},
+			Providers: []assistantModelProviderConfig{{
+				Name:      "openai",
+				Enabled:   true,
+				Model:     "gpt-5-codex",
+				Endpoint:  "https://api.openai.com/v1",
+				TimeoutMS: 1000,
+				Retries:   0,
+				Priority:  1,
+				KeyRef:    "OPENAI_API_KEY",
+			}},
+		},
+		adapters: map[string]assistantProviderAdapter{
+			"openai": assistantAdapterFunc(func(context.Context, string, assistantModelProviderConfig) ([]byte, error) {
+				return []byte(payload), nil
+			}),
+		},
+	}
 }

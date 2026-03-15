@@ -73,6 +73,9 @@ func TestAssistant268SemanticPromptHelpers(t *testing.T) {
 	if synthetic.Action != assistantIntentCreateOrgUnit || synthetic.RouteKind != assistantRouteKindBusinessAction || synthetic.IntentID != "org.orgunit_create" {
 		t.Fatalf("unexpected synthetic payload=%+v", synthetic)
 	}
+	if synthetic.ParentRefText != "" || synthetic.EntityName != "" || synthetic.EffectiveDate != "" {
+		t.Fatalf("synthetic provider should not locally extract slots, got=%+v", synthetic)
+	}
 	confirmPayload := assistantSyntheticSemanticPayloadForPrompt(assistantBuildSemanticPrompt("确认", turn))
 	if confirmPayload.Action != assistantIntentCreateOrgUnit || confirmPayload.RouteKind != assistantRouteKindBusinessAction || confirmPayload.IntentID != "org.orgunit_create" {
 		t.Fatalf("unexpected synthetic confirm payload=%+v", confirmPayload)
@@ -80,6 +83,26 @@ func TestAssistant268SemanticPromptHelpers(t *testing.T) {
 }
 
 func TestAssistant268SyntheticSemanticHelperCoverage(t *testing.T) {
+	actionCases := map[string]string{
+		"请新建组织":  assistantIntentCreateOrgUnit,
+		"请创建部门":  assistantIntentCreateOrgUnit,
+		"请新增版本":  assistantIntentAddOrgUnitVersion,
+		"请插入版本":  assistantIntentInsertOrgUnitVersion,
+		"请更正组织":  assistantIntentCorrectOrgUnit,
+		"请移动组织":  assistantIntentMoveOrgUnit,
+		"请重命名组织": assistantIntentRenameOrgUnit,
+		"请停用组织":  assistantIntentDisableOrgUnit,
+		"请启用组织":  assistantIntentEnableOrgUnit,
+	}
+	for input, want := range actionCases {
+		if got := assistantSyntheticSemanticAction(input); got != want {
+			t.Fatalf("input=%q action=%q want=%q", input, got, want)
+		}
+	}
+	if got := assistantSyntheticSemanticAction("系统有哪些功能"); got != "" {
+		t.Fatalf("non-business input should not map local action, got=%q", got)
+	}
+
 	mappings := map[string]string{
 		assistantIntentCreateOrgUnit:        "org.orgunit_create",
 		assistantIntentAddOrgUnitVersion:    "org.orgunit_add_version",
@@ -102,6 +125,9 @@ func TestAssistant268SyntheticSemanticHelperCoverage(t *testing.T) {
 	business := assistantSyntheticSemanticPayload("在鲜花组织之下新建一个部门，成立日期是2026-01-01")
 	if business.RouteKind != assistantRouteKindBusinessAction || business.IntentID != "org.orgunit_create" {
 		t.Fatalf("unexpected business payload=%+v", business)
+	}
+	if business.ParentRefText != "" || business.EntityName != "" || business.EffectiveDate != "" {
+		t.Fatalf("business synthetic payload should not contain locally extracted slots=%+v", business)
 	}
 	qa := assistantSyntheticSemanticPayload("系统有哪些功能")
 	if qa.RouteKind != assistantRouteKindKnowledgeQA || qa.IntentID != "knowledge.general_qa" {

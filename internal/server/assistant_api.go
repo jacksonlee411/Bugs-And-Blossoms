@@ -43,13 +43,9 @@ const (
 )
 
 var (
-	assistantParentUnderRE       = regexp.MustCompile(`在(.+?)之下`)
-	assistantParentUnderCreateRE = regexp.MustCompile(`在\s*(.+?)\s*下新建`)
-	assistantDeptNameRE          = regexp.MustCompile(`名为(.+?)的部门`)
-	assistantDeptCreateRE        = regexp.MustCompile(`(?:下新建|新建)\s*(.+?)(?:[，,。]|\s生效日期|\s成立日期|$)`)
-	assistantDateCNRE            = regexp.MustCompile(`(20\d{2})年(\d{1,2})月(\d{1,2})日`)
-	assistantDateISORE           = regexp.MustCompile(`(20\d{2}-\d{2}-\d{2})`)
-	assistantBoundaryRE          = regexp.MustCompile(`(?i)(\bselect\b|\binsert\s+into\b|\bupdate\s+\S+\s+set\b|\bdelete\s+from\b|\bdrop\s+table\b|\btruncate\s+table\b|\balter\s+table\b|--|/\*|\*/|;)`)
+	assistantDateCNRE   = regexp.MustCompile(`(20\d{2})年(\d{1,2})月(\d{1,2})日`)
+	assistantDateISORE  = regexp.MustCompile(`(20\d{2}-\d{2}-\d{2})`)
+	assistantBoundaryRE = regexp.MustCompile(`(?i)(\bselect\b|\binsert\s+into\b|\bupdate\s+\S+\s+set\b|\bdelete\s+from\b|\bdrop\s+table\b|\btruncate\s+table\b|\balter\s+table\b|--|/\*|\*/|;)`)
 )
 
 type assistantConversationService struct {
@@ -1215,22 +1211,6 @@ func assistantBuildDryRun(intent assistantIntentSpec, candidates []assistantCand
 	return assistantDryRunResult{Diff: diff, Explain: explain, ValidationErrors: validationErrors, WouldCommit: false}
 }
 
-func assistantDecodeIntent(userInput string) (assistantIntentSpec, error) {
-	text := strings.TrimSpace(userInput)
-	if assistantBoundaryViolationDetected(text) {
-		return assistantIntentSpec{}, errAssistantPlanBoundaryViolation
-	}
-	intent := assistantExtractIntent(text)
-	if assistantIntentSchemaInvalid(intent) {
-		return assistantIntentSpec{}, errAssistantPlanSchemaConstrainedDecodeFailed
-	}
-	plan := assistantBuildPlan(intent)
-	if _, ok := capabilityDefinitionForKey(plan.CapabilityKey); !ok {
-		return assistantIntentSpec{}, errAssistantPlanBoundaryViolation
-	}
-	return intent, nil
-}
-
 func assistantBoundaryViolationDetected(text string) bool {
 	return assistantBoundaryRE.MatchString(strings.TrimSpace(text))
 }
@@ -1464,47 +1444,6 @@ func assistantTurnVersionDrifted(turn *assistantTurn) bool {
 		return true
 	}
 	return strings.TrimSpace(turn.MappingVersion) != strings.TrimSpace(mappingVersion)
-}
-
-func assistantExtractIntent(input string) assistantIntentSpec {
-	text := strings.TrimSpace(input)
-	intent := assistantIntentSpec{Action: "plan_only"}
-	if strings.Contains(text, "新建") {
-		if strings.Contains(text, "部门") || assistantParentUnderCreateRE.MatchString(text) || assistantDeptCreateRE.MatchString(text) {
-			intent.Action = assistantIntentCreateOrgUnit
-		}
-	}
-	if m := assistantParentUnderRE.FindStringSubmatch(text); len(m) == 2 {
-		intent.ParentRefText = strings.TrimSpace(m[1])
-	} else if m := assistantParentUnderCreateRE.FindStringSubmatch(text); len(m) == 2 {
-		intent.ParentRefText = strings.TrimSpace(m[1])
-	}
-	if m := assistantDeptNameRE.FindStringSubmatch(text); len(m) == 2 {
-		intent.EntityName = strings.TrimSpace(m[1])
-	} else if m := assistantDeptCreateRE.FindStringSubmatch(text); len(m) == 2 {
-		entityName := strings.TrimSpace(m[1])
-		if entityName != "一个部门" && entityName != "部门" {
-			intent.EntityName = entityName
-		}
-	}
-	if m := assistantDateISORE.FindStringSubmatch(text); len(m) == 2 {
-		intent.EffectiveDate = strings.TrimSpace(m[1])
-	}
-	if intent.EffectiveDate == "" {
-		if m := assistantDateCNRE.FindStringSubmatch(text); len(m) == 4 {
-			year := strings.TrimSpace(m[1])
-			month := strings.TrimSpace(m[2])
-			day := strings.TrimSpace(m[3])
-			if len(month) == 1 {
-				month = "0" + month
-			}
-			if len(day) == 1 {
-				day = "0" + day
-			}
-			intent.EffectiveDate = year + "-" + month + "-" + day
-		}
-	}
-	return intent
 }
 
 func assistantIntentCandidateRefText(intent assistantIntentSpec) string {

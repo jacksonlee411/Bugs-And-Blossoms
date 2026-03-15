@@ -198,22 +198,14 @@ func assistantSyntheticSemanticPayloadForPrompt(prompt string) assistantSemantic
 
 func assistantSyntheticSemanticPayload(userInput string) assistantSemanticIntentPayload {
 	text := strings.TrimSpace(userInput)
-	intent := assistantExtractIntent(text)
 	payload := assistantSemanticIntentPayload{
-		Action:              intent.Action,
-		ParentRefText:       intent.ParentRefText,
-		EntityName:          intent.EntityName,
-		EffectiveDate:       intent.EffectiveDate,
-		OrgCode:             intent.OrgCode,
-		TargetEffectiveDate: intent.TargetEffectiveDate,
-		NewName:             intent.NewName,
-		NewParentRefText:    intent.NewParentRefText,
-		GoalSummary:         text,
+		GoalSummary: text,
 	}
 
-	actionID := strings.TrimSpace(intent.Action)
+	actionID := assistantSyntheticSemanticAction(text)
 	switch {
-	case actionID != "" && actionID != assistantIntentPlanOnly:
+	case actionID != "":
+		payload.Action = actionID
 		payload.RouteKind = assistantRouteKindBusinessAction
 		payload.IntentID = assistantSemanticIntentIDForAction(actionID)
 	case assistantSyntheticSemanticLooksLikeKnowledgeQA(text):
@@ -230,6 +222,32 @@ func assistantSyntheticSemanticPayload(userInput string) assistantSemanticIntent
 		payload.IntentID = "route.uncertain"
 	}
 	return payload
+}
+
+func assistantSyntheticSemanticAction(userInput string) string {
+	text := strings.TrimSpace(userInput)
+	switch {
+	case text == "":
+		return ""
+	case strings.Contains(text, "插入版本"):
+		return assistantIntentInsertOrgUnitVersion
+	case strings.Contains(text, "新增版本"):
+		return assistantIntentAddOrgUnitVersion
+	case strings.Contains(text, "更正"):
+		return assistantIntentCorrectOrgUnit
+	case strings.Contains(text, "移动"):
+		return assistantIntentMoveOrgUnit
+	case strings.Contains(text, "重命名"):
+		return assistantIntentRenameOrgUnit
+	case strings.Contains(text, "停用"), strings.Contains(text, "禁用"):
+		return assistantIntentDisableOrgUnit
+	case strings.Contains(text, "启用"):
+		return assistantIntentEnableOrgUnit
+	case strings.Contains(text, "新建"), strings.Contains(text, "创建"):
+		return assistantIntentCreateOrgUnit
+	default:
+		return ""
+	}
 }
 
 func assistantSemanticIntentIDForAction(actionID string) string {

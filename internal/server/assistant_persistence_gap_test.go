@@ -61,6 +61,7 @@ func TestAssistantPersistence_CreateAndGetPGErrorBranches(t *testing.T) {
 }
 
 func TestAssistantPersistence_CreateTurnPGErrorMatrix(t *testing.T) {
+	t.Setenv("OPENAI_API_KEY", "dummy")
 	now := time.Now().UTC()
 	makeTx := func(actorID string, execNeedle string, transitionErr error, commitErr error) *assistFakeTx {
 		tx := &assistFakeTx{commitErr: commitErr}
@@ -166,6 +167,7 @@ func TestAssistantPersistence_CreateTurnPGErrorMatrix(t *testing.T) {
 	capabilityDefinitionByKey = originalDefinitions
 
 	zeroSvc := newAssistantConversationService(assistantNoCandidateStore{orgUnitMemoryStore: newOrgUnitMemoryStore()}, assistantWriteServiceStub{store: newOrgUnitMemoryStore()})
+	zeroSvc.modelGateway = assistantTestStaticSemanticGateway(`{"action":"create_orgunit","route_kind":"business_action","intent_id":"org.orgunit_create","parent_ref_text":"鲜花组织","entity_name":"运营部","effective_date":"2026-01-01"}`)
 	zeroSvc.pool = assistFakeTxBeginner{tx: makeTx("actor_1", "", nil, nil)}
 	zeroConversation, err := zeroSvc.createTurnPG(context.Background(), "tenant_1", Principal{ID: "actor_1", RoleSlug: "tenant-admin"}, "conv_pg", "在鲜花组织之下，新建一个名为运营部的部门，成立日期是2026-01-01")
 	if err != nil {
@@ -178,6 +180,7 @@ func TestAssistantPersistence_CreateTurnPGErrorMatrix(t *testing.T) {
 	oneStore := newOrgUnitMemoryStore()
 	_, _ = oneStore.CreateNodeCurrent(context.Background(), "tenant_1", "2026-01-01", "FLOWER-A", "鲜花组织", "", true)
 	oneSvc := newAssistantConversationService(oneStore, assistantWriteServiceStub{store: oneStore})
+	oneSvc.modelGateway = assistantTestStaticSemanticGateway(`{"action":"create_orgunit","route_kind":"business_action","intent_id":"org.orgunit_create","parent_ref_text":"鲜花组织","entity_name":"运营部","effective_date":"2026-01-01"}`)
 	oneSvc.pool = assistFakeTxBeginner{tx: makeTx("actor_1", "", nil, nil)}
 	oneConversation, err := oneSvc.createTurnPG(context.Background(), "tenant_1", Principal{ID: "actor_1", RoleSlug: "tenant-admin"}, "conv_pg", "在鲜花组织之下，新建一个名为运营部的部门，成立日期是2026-01-01")
 	if err != nil {
@@ -188,6 +191,7 @@ func TestAssistantPersistence_CreateTurnPGErrorMatrix(t *testing.T) {
 	}
 
 	svc.pool = assistFakeTxBeginner{tx: makeTx("actor_1", "", nil, nil)}
+	svc.modelGateway = assistantTestStaticSemanticGateway(`{"action":"create_orgunit","route_kind":"business_action","intent_id":"org.orgunit_create","parent_ref_text":"鲜花组织","entity_name":"运营部","effective_date":"2026-01-01"}`)
 	multiConversation, err := svc.createTurnPG(context.Background(), "tenant_1", Principal{ID: "actor_1", RoleSlug: "tenant-admin"}, "conv_pg", "在鲜花组织之下，新建一个名为运营部的部门，成立日期是2026-01-01")
 	if err != nil {
 		t.Fatalf("unexpected err=%v", err)
