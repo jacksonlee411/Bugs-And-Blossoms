@@ -1242,32 +1242,6 @@ func assistantTurnRequiresIntentClarification(turn *assistantTurn) bool {
 	return false
 }
 
-func assistantMergeIntentWithPendingTurn(intent assistantIntentSpec, pending *assistantTurn) assistantIntentSpec {
-	if pending == nil {
-		return intent
-	}
-	if strings.TrimSpace(pending.Intent.Action) != assistantIntentCreateOrgUnit {
-		return intent
-	}
-	if !assistantTurnHasOpenClarification(pending) && len(assistantTurnMissingFields(pending)) == 0 {
-		return intent
-	}
-	merged := intent
-	if strings.TrimSpace(merged.Action) == "" || strings.TrimSpace(merged.Action) == "plan_only" {
-		merged.Action = pending.Intent.Action
-	}
-	if strings.TrimSpace(merged.ParentRefText) == "" {
-		merged.ParentRefText = strings.TrimSpace(pending.Intent.ParentRefText)
-	}
-	if strings.TrimSpace(merged.EntityName) == "" {
-		merged.EntityName = strings.TrimSpace(pending.Intent.EntityName)
-	}
-	if strings.TrimSpace(merged.EffectiveDate) == "" {
-		merged.EffectiveDate = strings.TrimSpace(pending.Intent.EffectiveDate)
-	}
-	return merged
-}
-
 func assistantLatestPendingTurn(conversation *assistantConversation) *assistantTurn {
 	turn := latestTurn(conversation)
 	if turn == nil {

@@ -70,14 +70,14 @@ func TestAssistant268SemanticPromptHelpers(t *testing.T) {
 	}
 
 	synthetic := assistantSyntheticSemanticPayloadForPrompt(prompt)
-	if synthetic.Action != assistantIntentCreateOrgUnit || synthetic.RouteKind != assistantRouteKindBusinessAction || synthetic.IntentID != "org.orgunit_create" {
+	if synthetic.Action != assistantIntentPlanOnly || synthetic.RouteKind != assistantRouteKindUncertain || synthetic.IntentID != "route.uncertain" {
 		t.Fatalf("unexpected synthetic payload=%+v", synthetic)
 	}
 	if synthetic.ParentRefText != "" || synthetic.EntityName != "" || synthetic.EffectiveDate != "" {
 		t.Fatalf("synthetic provider should not locally extract slots, got=%+v", synthetic)
 	}
 	confirmPayload := assistantSyntheticSemanticPayloadForPrompt(assistantBuildSemanticPrompt("确认", turn))
-	if confirmPayload.Action != assistantIntentCreateOrgUnit || confirmPayload.RouteKind != assistantRouteKindBusinessAction || confirmPayload.IntentID != "org.orgunit_create" {
+	if confirmPayload.Action != assistantIntentPlanOnly || confirmPayload.RouteKind != assistantRouteKindUncertain || confirmPayload.IntentID != "route.uncertain" {
 		t.Fatalf("unexpected synthetic confirm payload=%+v", confirmPayload)
 	}
 }
@@ -172,6 +172,10 @@ func TestAssistant268SyntheticSemanticHelperCoverage(t *testing.T) {
 	pendingBusinessPrompt := `{"current_user_input":"在鲜花组织之下新建部门","allowed_actions":[],"pending_turn":{"action":"move_orgunit"}}`
 	if payload := assistantSyntheticSemanticPayloadForPrompt(pendingBusinessPrompt); payload.Action != assistantIntentCreateOrgUnit || payload.IntentID != "org.orgunit_create" {
 		t.Fatalf("business prompt should keep explicit action=%+v", payload)
+	}
+	pendingConfirmPrompt := `{"current_user_input":"确认","allowed_actions":[],"pending_turn":{"action":"create_orgunit"}}`
+	if payload := assistantSyntheticSemanticPayloadForPrompt(pendingConfirmPrompt); payload.Action != assistantIntentPlanOnly || payload.RouteKind != assistantRouteKindUncertain {
+		t.Fatalf("pending confirm should wait for model-owned continuation=%+v", payload)
 	}
 }
 

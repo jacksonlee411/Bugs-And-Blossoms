@@ -175,25 +175,7 @@ func (assistantDeterministicProviderAdapter) Probe(_ context.Context, provider a
 }
 
 func assistantSyntheticSemanticPayloadForPrompt(prompt string) assistantSemanticIntentPayload {
-	payload := assistantSyntheticSemanticPayload(assistantSemanticCurrentUserInput(prompt))
-	var envelope assistantSemanticPromptEnvelope
-	if err := json.Unmarshal([]byte(strings.TrimSpace(prompt)), &envelope); err != nil || envelope.PendingTurn == nil {
-		return payload
-	}
-	pendingAction := strings.TrimSpace(envelope.PendingTurn.Action)
-	if pendingAction == "" || pendingAction == assistantIntentPlanOnly {
-		return payload
-	}
-	switch strings.TrimSpace(payload.RouteKind) {
-	case assistantRouteKindKnowledgeQA, assistantRouteKindChitchat:
-		return payload
-	}
-	if strings.TrimSpace(payload.Action) == "" || strings.TrimSpace(payload.Action) == assistantIntentPlanOnly {
-		payload.Action = pendingAction
-		payload.RouteKind = assistantRouteKindBusinessAction
-		payload.IntentID = assistantSemanticIntentIDForAction(pendingAction)
-	}
-	return payload
+	return assistantSyntheticSemanticPayload(assistantSemanticCurrentUserInput(prompt))
 }
 
 func assistantSyntheticSemanticPayload(userInput string) assistantSemanticIntentPayload {

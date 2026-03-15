@@ -79,19 +79,6 @@ func TestAssistant240C_RuntimeAndCoverageBranches(t *testing.T) {
 		if got := assistantRiskTierForIntent(assistantIntentSpec{Action: "unknown_action"}); got != "low" {
 			t.Fatalf("fallback risk=%s", got)
 		}
-		pending := &assistantTurn{Intent: assistantIntentSpec{Action: assistantIntentCreateOrgUnit, ParentRefText: "鲜花组织"}, Phase: assistantPhaseAwaitCommitConfirm}
-		merged := assistantMergeIntentWithPendingTurn(assistantIntentSpec{Action: assistantIntentPlanOnly}, pending)
-		if merged.Action != assistantIntentPlanOnly {
-			t.Fatalf("unexpected merged=%+v", merged)
-		}
-		merged = assistantMergeIntentWithPendingTurn(assistantIntentSpec{Action: assistantIntentPlanOnly}, &assistantTurn{Intent: assistantIntentSpec{Action: assistantIntentPlanOnly}})
-		if merged.Action != assistantIntentPlanOnly {
-			t.Fatalf("unexpected merged=%+v", merged)
-		}
-		merged = assistantMergeIntentWithPendingTurn(assistantIntentSpec{Action: assistantIntentPlanOnly}, &assistantTurn{Intent: assistantIntentSpec{Action: assistantIntentPlanOnly}, Phase: assistantPhaseAwaitMissingFields})
-		if merged.Action != assistantIntentPlanOnly {
-			t.Fatalf("unexpected merged=%+v", merged)
-		}
 		cases := []error{errAssistantActionSpecMissing, errAssistantActionCapabilityUnregistered, errAssistantActionAuthzDenied, errAssistantActionRiskGateDenied, errAssistantActionRequiredCheckFailed}
 		for _, errValue := range cases {
 			if _, code, ok := assistantIdempotencyErrorPayload(errValue); !ok || code != errValue.Error() {

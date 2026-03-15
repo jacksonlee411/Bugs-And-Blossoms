@@ -342,8 +342,8 @@ func TestAssistantAPI243_CreateTurnAndHelperBranches(t *testing.T) {
 			t.Fatalf("create turn err=%v", err)
 		}
 		last := latestTurn(got)
-		if last == nil || strings.TrimSpace(last.Intent.Action) != assistantIntentCreateOrgUnit {
-			t.Fatalf("expected action restore, turn=%+v", last)
+		if last == nil || strings.TrimSpace(last.Intent.Action) != assistantIntentPlanOnly {
+			t.Fatalf("expected semantic result to remain authoritative, turn=%+v", last)
 		}
 	})
 

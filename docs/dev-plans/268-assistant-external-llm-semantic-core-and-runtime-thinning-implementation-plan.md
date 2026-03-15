@@ -83,7 +83,9 @@
 6. [ ] 本地不得继续保留正则式意图抽取/槽位补全链：
    - [ ] 删除本地 `intent extractor` 与基于用户原始文本的字段正则补写；
    - [ ] clarification 续轮不再本地解析自由文本去补日期/名称/组织字段；
-   - [ ] pending turn 只作为上下文装配输入交给模型，不再充当本地补槽解析器。
+   - [ ] pending turn 只作为上下文装配输入交给模型，不再充当本地补槽解析器；
+   - [ ] 不再把 pending turn 的 `action/slot` 在本地 merge 回新一轮 intent；
+   - [ ] synthetic/deterministic provider 也不得根据 pending turn 在本地升级动作或补齐语义。
 
 ## 5. 本地职责收口与删改范围
 1. [ ] 保留并强化的本地能力：

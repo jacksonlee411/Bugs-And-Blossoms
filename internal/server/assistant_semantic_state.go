@@ -222,21 +222,18 @@ func (s *assistantConversationService) prepareTurnDraft(
 		return nil, err
 	}
 
-	mergedIntent := assistantMergeIntentWithPendingTurn(resolvedIntent.Intent, pendingTurn)
-	resume := assistantClarificationResumeResult{Intent: mergedIntent}
+	intent := resolvedIntent.Intent
+	resume := assistantClarificationResumeResult{Intent: intent}
 	if pendingTurn != nil {
-		resume = assistantResumeFromClarificationFn(pendingTurn, userInput, mergedIntent)
-		mergedIntent = resume.Intent
+		resume = assistantResumeFromClarificationFn(pendingTurn, userInput, intent)
+		intent = resume.Intent
 	}
 
-	routeDecision, err := assistantBuildIntentRouteDecisionFn(userInput, resolvedIntent, mergedIntent, knowledgeRuntime)
+	routeDecision, err := assistantBuildIntentRouteDecisionFn(userInput, resolvedIntent, intent, knowledgeRuntime)
 	if err != nil {
 		return nil, err
 	}
-	intent := assistantProjectIntentRouteDecision(mergedIntent, routeDecision)
-	if action := strings.TrimSpace(resume.Intent.Action); action != "" && action != assistantIntentPlanOnly && strings.TrimSpace(intent.Action) == assistantIntentPlanOnly {
-		intent.Action = action
-	}
+	intent = assistantProjectIntentRouteDecision(intent, routeDecision)
 
 	candidates := make([]assistantCandidate, 0)
 	resolvedCandidateID := ""
