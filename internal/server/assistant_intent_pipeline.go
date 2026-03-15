@@ -18,7 +18,7 @@ func (s *assistantConversationService) resolveIntent(ctx context.Context, tenant
 
 func (s *assistantConversationService) resolveIntentWithPendingTurn(ctx context.Context, tenantID string, conversationID string, userInput string, pendingTurn *assistantTurn) (assistantResolveIntentResult, error) {
 	text := strings.TrimSpace(userInput)
-	localIntent := assistantExtractIntent(text)
+	explicitTemporalHints := assistantExtractExplicitTemporalHints(text)
 	if assistantBoundaryViolationDetected(text) {
 		return assistantResolveIntentResult{}, errAssistantPlanBoundaryViolation
 	}
@@ -40,22 +40,9 @@ func (s *assistantConversationService) resolveIntentWithPendingTurn(ctx context.
 	if err != nil {
 		return assistantResolveIntentResult{}, err
 	}
-	resolved.Intent = assistantSanitizeResolvedIntentFacts(resolved.Intent, localIntent, pendingTurn)
+	resolved.Intent = assistantSanitizeResolvedIntentFacts(resolved.Intent, explicitTemporalHints, pendingTurn)
 	if assistantModelIntentInvalid(resolved.Intent) {
-		// Real provider may occasionally emit partial JSON; retry once with the same runtime path.
-		retryResolved, retryErr := s.modelGateway.ResolveIntent(ctx, assistantResolveIntentRequest{
-			Prompt:         prompt,
-			ConversationID: conversationID,
-			TenantID:       tenantID,
-		})
-		if retryErr != nil {
-			return assistantResolveIntentResult{}, retryErr
-		}
-		retryResolved.Intent = assistantSanitizeResolvedIntentFacts(retryResolved.Intent, localIntent, pendingTurn)
-		if assistantModelIntentInvalid(retryResolved.Intent) {
-			return assistantResolveIntentResult{}, errAssistantPlanSchemaConstrainedDecodeFailed
-		}
-		return retryResolved, nil
+		return assistantResolveIntentResult{}, errAssistantPlanSchemaConstrainedDecodeFailed
 	}
 	return resolved, nil
 }
@@ -70,6 +57,12 @@ func assistantModelIntentInvalid(intent assistantIntentSpec) bool {
 			return true
 		}
 	}
+	if !assistantValidRouteKind(intent.RouteKind) {
+		return true
+	}
+	if strings.TrimSpace(intent.IntentID) == "" {
+		return true
+	}
 	if effectiveDate := strings.TrimSpace(intent.EffectiveDate); effectiveDate != "" && !assistantDateISOYMD(effectiveDate) {
 		return true
 	}
@@ -79,10 +72,41 @@ func assistantModelIntentInvalid(intent assistantIntentSpec) bool {
 	return false
 }
 
-func assistantSanitizeResolvedIntentFacts(intent assistantIntentSpec, localIntent assistantIntentSpec, pendingTurn *assistantTurn) assistantIntentSpec {
-	sanitized := assistantOverlayExplicitIntentFacts(intent, localIntent)
-	explicitEffectiveDate := strings.TrimSpace(localIntent.EffectiveDate)
-	explicitTargetDate := strings.TrimSpace(firstNonEmpty(localIntent.TargetEffectiveDate, localIntent.EffectiveDate))
+type assistantExplicitTemporalHints struct {
+	EffectiveDate       string
+	TargetEffectiveDate string
+}
+
+func assistantExtractExplicitTemporalHints(input string) assistantExplicitTemporalHints {
+	text := strings.TrimSpace(input)
+	date := ""
+	if m := assistantDateISORE.FindStringSubmatch(text); len(m) == 2 {
+		date = strings.TrimSpace(m[1])
+	}
+	if date == "" {
+		if m := assistantDateCNRE.FindStringSubmatch(text); len(m) == 4 {
+			year := strings.TrimSpace(m[1])
+			month := strings.TrimSpace(m[2])
+			day := strings.TrimSpace(m[3])
+			if len(month) == 1 {
+				month = "0" + month
+			}
+			if len(day) == 1 {
+				day = "0" + day
+			}
+			date = year + "-" + month + "-" + day
+		}
+	}
+	return assistantExplicitTemporalHints{
+		EffectiveDate:       date,
+		TargetEffectiveDate: date,
+	}
+}
+
+func assistantSanitizeResolvedIntentFacts(intent assistantIntentSpec, temporalHints assistantExplicitTemporalHints, pendingTurn *assistantTurn) assistantIntentSpec {
+	sanitized := intent
+	explicitEffectiveDate := strings.TrimSpace(temporalHints.EffectiveDate)
+	explicitTargetDate := strings.TrimSpace(firstNonEmpty(temporalHints.TargetEffectiveDate, temporalHints.EffectiveDate))
 	pendingEffectiveDate := ""
 	pendingTargetDate := ""
 	if pendingTurn != nil {
@@ -106,24 +130,6 @@ func assistantSanitizeResolvedIntentFacts(intent assistantIntentSpec, localInten
 		}
 	}
 	return sanitized
-}
-
-func assistantOverlayExplicitIntentFacts(intent assistantIntentSpec, localIntent assistantIntentSpec) assistantIntentSpec {
-	if strings.TrimSpace(intent.Action) != assistantIntentCreateOrgUnit {
-		return intent
-	}
-	if strings.TrimSpace(intent.ParentRefText) == "" && strings.TrimSpace(localIntent.ParentRefText) != "" {
-		intent.ParentRefText = strings.TrimSpace(localIntent.ParentRefText)
-	}
-	if strings.TrimSpace(intent.EntityName) == "" && strings.TrimSpace(localIntent.EntityName) != "" {
-		intent.EntityName = strings.TrimSpace(localIntent.EntityName)
-	}
-	if strings.TrimSpace(localIntent.EffectiveDate) != "" {
-		intent.EffectiveDate = strings.TrimSpace(localIntent.EffectiveDate)
-		return intent
-	}
-	intent.EffectiveDate = ""
-	return intent
 }
 
 func assistantCompileIntentToPlans(intent assistantIntentSpec, resolvedCandidateID string) (assistantSkillExecutionPlan, assistantConfigDeltaPlan) {

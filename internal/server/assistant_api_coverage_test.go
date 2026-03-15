@@ -466,7 +466,7 @@ func TestAssistantConversationHandlers_CoverageMatrix(t *testing.T) {
 		routeErrConv := routeErrSvc.createConversation("tenant-1", principal)
 		rec = httptest.NewRecorder()
 		handleAssistantConversationTurnsAPI(rec, assistantReqWithContext(http.MethodPost, "/internal/assistant/conversations/"+routeErrConv.ConversationID+"/turns", `{"user_input":"坏"}`, true, true), routeErrSvc)
-		if rec.Code != http.StatusUnprocessableEntity || assistantDecodeErrCode(t, rec) != errAssistantRouteRuntimeInvalid.Error() {
+		if rec.Code != http.StatusUnprocessableEntity || assistantDecodeErrCode(t, rec) != "ai_plan_schema_constrained_decode_failed" {
 			t.Fatalf("status=%d code=%s body=%s", rec.Code, assistantDecodeErrCode(t, rec), rec.Body.String())
 		}
 

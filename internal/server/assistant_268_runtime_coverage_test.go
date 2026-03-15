@@ -238,10 +238,13 @@ func TestAssistant268IntentPipelineHelpers(t *testing.T) {
 		want   bool
 	}{
 		{name: "empty action invalid", intent: assistantIntentSpec{}, want: true},
-		{name: "plan only valid", intent: assistantIntentSpec{Action: assistantIntentPlanOnly}, want: false},
+		{name: "plan only valid", intent: assistantIntentSpec{Action: assistantIntentPlanOnly, RouteKind: assistantRouteKindKnowledgeQA, IntentID: "knowledge.general_qa"}, want: false},
 		{name: "unknown action invalid", intent: assistantIntentSpec{Action: "unsupported"}, want: true},
-		{name: "invalid effective date", intent: assistantIntentSpec{Action: assistantIntentCreateOrgUnit, EffectiveDate: "2026/01/01"}, want: true},
-		{name: "invalid target date", intent: assistantIntentSpec{Action: assistantIntentCorrectOrgUnit, TargetEffectiveDate: "2026/01/01"}, want: true},
+		{name: "missing route kind invalid", intent: assistantIntentSpec{Action: assistantIntentCreateOrgUnit, IntentID: "org.orgunit_create"}, want: true},
+		{name: "missing intent id invalid", intent: assistantIntentSpec{Action: assistantIntentCreateOrgUnit, RouteKind: assistantRouteKindBusinessAction}, want: true},
+		{name: "invalid route kind invalid", intent: assistantIntentSpec{Action: assistantIntentCreateOrgUnit, RouteKind: "bad_kind", IntentID: "org.orgunit_create"}, want: true},
+		{name: "invalid effective date", intent: assistantIntentSpec{Action: assistantIntentCreateOrgUnit, RouteKind: assistantRouteKindBusinessAction, IntentID: "org.orgunit_create", EffectiveDate: "2026/01/01"}, want: true},
+		{name: "invalid target date", intent: assistantIntentSpec{Action: assistantIntentCorrectOrgUnit, RouteKind: assistantRouteKindBusinessAction, IntentID: "org.orgunit_correct", TargetEffectiveDate: "2026/01/01"}, want: true},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -251,10 +254,25 @@ func TestAssistant268IntentPipelineHelpers(t *testing.T) {
 		})
 	}
 
+	t.Run("extract explicit temporal hints", func(t *testing.T) {
+		iso := assistantExtractExplicitTemporalHints("成立日期是2026-01-01")
+		if iso.EffectiveDate != "2026-01-01" || iso.TargetEffectiveDate != "2026-01-01" {
+			t.Fatalf("unexpected iso hints=%+v", iso)
+		}
+		cn := assistantExtractExplicitTemporalHints("成立日期是2026年1月2日")
+		if cn.EffectiveDate != "2026-01-02" || cn.TargetEffectiveDate != "2026-01-02" {
+			t.Fatalf("unexpected cn hints=%+v", cn)
+		}
+		empty := assistantExtractExplicitTemporalHints("补充部门名称")
+		if empty.EffectiveDate != "" || empty.TargetEffectiveDate != "" {
+			t.Fatalf("unexpected empty hints=%+v", empty)
+		}
+	})
+
 	t.Run("sanitize create and effective-date actions", func(t *testing.T) {
 		create := assistantSanitizeResolvedIntentFacts(
 			assistantIntentSpec{Action: assistantIntentCreateOrgUnit, EffectiveDate: "2026-03-09"},
-			assistantIntentSpec{},
+			assistantExplicitTemporalHints{},
 			nil,
 		)
 		if create.EffectiveDate != "" {
@@ -263,7 +281,7 @@ func TestAssistant268IntentPipelineHelpers(t *testing.T) {
 
 		rename := assistantSanitizeResolvedIntentFacts(
 			assistantIntentSpec{Action: assistantIntentRenameOrgUnit, EffectiveDate: "2026-03-09"},
-			assistantIntentSpec{EffectiveDate: "2026-04-01"},
+			assistantExplicitTemporalHints{EffectiveDate: "2026-04-01"},
 			nil,
 		)
 		if rename.EffectiveDate != "2026-04-01" {
@@ -274,7 +292,7 @@ func TestAssistant268IntentPipelineHelpers(t *testing.T) {
 	t.Run("sanitize correct target date from local or pending context", func(t *testing.T) {
 		correct := assistantSanitizeResolvedIntentFacts(
 			assistantIntentSpec{Action: assistantIntentCorrectOrgUnit, TargetEffectiveDate: "2026-03-09"},
-			assistantIntentSpec{EffectiveDate: "2026-01-01"},
+			assistantExplicitTemporalHints{TargetEffectiveDate: "2026-01-01"},
 			nil,
 		)
 		if correct.TargetEffectiveDate != "2026-01-01" {
@@ -283,7 +301,7 @@ func TestAssistant268IntentPipelineHelpers(t *testing.T) {
 
 		preserved := assistantSanitizeResolvedIntentFacts(
 			assistantIntentSpec{Action: assistantIntentCorrectOrgUnit, TargetEffectiveDate: "2026-03-09"},
-			assistantIntentSpec{},
+			assistantExplicitTemporalHints{},
 			&assistantTurn{Intent: assistantIntentSpec{TargetEffectiveDate: "2026-02-01"}},
 		)
 		if preserved.TargetEffectiveDate != "2026-03-09" {
@@ -292,7 +310,7 @@ func TestAssistant268IntentPipelineHelpers(t *testing.T) {
 
 		cleared := assistantSanitizeResolvedIntentFacts(
 			assistantIntentSpec{Action: assistantIntentCorrectOrgUnit, TargetEffectiveDate: "2026-03-09"},
-			assistantIntentSpec{},
+			assistantExplicitTemporalHints{},
 			nil,
 		)
 		if cleared.TargetEffectiveDate != "" {
