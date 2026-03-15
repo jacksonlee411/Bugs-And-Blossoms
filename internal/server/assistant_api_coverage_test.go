@@ -573,7 +573,7 @@ func TestAssistantTurnActionHandler_CoverageMatrix(t *testing.T) {
 
 		rec = httptest.NewRecorder()
 		handleAssistantTurnActionAPI(rec, assistantReqWithContext(http.MethodPost, baseConfirmPath, `{}`, true, true), svc)
-		if rec.Code != http.StatusConflict || assistantDecodeErrCode(t, rec) != errAssistantClarificationRequired.Error() {
+		if rec.Code != http.StatusConflict || assistantDecodeErrCode(t, rec) != "conversation_confirmation_required" {
 			t.Fatalf("status=%d code=%s", rec.Code, assistantDecodeErrCode(t, rec))
 		}
 		svc.mu.Lock()
@@ -1068,8 +1068,8 @@ func TestAssistantServiceHelpersAndUtilities(t *testing.T) {
 		}
 		turnID := created.Turns[0].TurnID
 
-		if _, err := svc.confirmTurn("tenant-1", principal, conv.ConversationID, turnID, ""); !errors.Is(err, errAssistantClarificationRequired) {
-			t.Fatalf("want clarification required, got %v", err)
+		if _, err := svc.confirmTurn("tenant-1", principal, conv.ConversationID, turnID, ""); !errors.Is(err, errAssistantConfirmationRequired) {
+			t.Fatalf("want confirmation required, got %v", err)
 		}
 		svc.mu.Lock()
 		if stored := svc.byID[conv.ConversationID]; stored != nil && len(stored.Turns) > 0 && stored.Turns[0] != nil {
@@ -1230,8 +1230,9 @@ func TestAssistantServiceHelpersAndUtilities(t *testing.T) {
 		unsupportedTurn := &assistantTurn{
 			TurnID:             "turn-unsupported",
 			State:              assistantStateConfirmed,
-			Intent:             assistantIntentSpec{Action: "plan_only"},
-			Plan:               assistantBuildPlan(assistantIntentSpec{Action: "plan_only"}),
+			Intent:             assistantIntentSpec{Action: "orgunit_unknown"},
+			RouteDecision:      assistantTestBusinessRouteDecision("orgunit_unknown"),
+			Plan:               assistantBuildPlan(assistantIntentSpec{Action: "orgunit_unknown"}),
 			PolicyVersion:      capabilityPolicyVersionBaseline,
 			CompositionVersion: capabilityPolicyVersionBaseline,
 			MappingVersion:     capabilityPolicyVersionBaseline,
@@ -1254,6 +1255,7 @@ func TestAssistantServiceHelpersAndUtilities(t *testing.T) {
 			CompositionVersion: capabilityPolicyVersionBaseline,
 			MappingVersion:     capabilityPolicyVersionBaseline,
 		}
+		assistantTestAttachBusinessRoute(missingCandidateTurn)
 		missingCandidateSvc.mu.Lock()
 		missingCandidateSvc.byID[missingCandidateConv.ConversationID].Turns = append(missingCandidateSvc.byID[missingCandidateConv.ConversationID].Turns, missingCandidateTurn)
 		missingCandidateSvc.mu.Unlock()

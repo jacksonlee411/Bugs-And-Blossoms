@@ -169,8 +169,7 @@ func TestAssistantClarificationGate_BlocksConfirmAndCommit(t *testing.T) {
 	}
 	defer func() { assistantLoadAuthorizerFn = original }()
 
-	spec, ok := assistantLookupDefaultActionSpec(assistantIntentCreateOrgUnit)
-	if !ok {
+	if _, ok := assistantLookupDefaultActionSpec(assistantIntentCreateOrgUnit); !ok {
 		t.Fatal("missing create action spec")
 	}
 	turn := &assistantTurn{
@@ -200,27 +199,27 @@ func TestAssistantClarificationGate_BlocksConfirmAndCommit(t *testing.T) {
 		Phase: assistantPhaseAwaitMissingFields,
 	}
 
-	confirm := assistantEvaluateActionGate(assistantActionGateInput{Stage: assistantActionStageConfirm, Action: spec, Turn: turn})
-	if confirm.Allowed || !errors.Is(confirm.Error, errAssistantClarificationRequired) {
-		t.Fatalf("expected clarification required on confirm, got=%+v", confirm)
+	confirm := assistantCheckClarificationGate(assistantActionGateInput{Stage: assistantActionStageConfirm, Turn: turn})
+	if !confirm.Allowed {
+		t.Fatalf("clarification should be projection-only on confirm, got=%+v", confirm)
 	}
-	commit := assistantEvaluateActionGate(assistantActionGateInput{Stage: assistantActionStageCommit, Action: spec, Turn: turn})
-	if commit.Allowed || !errors.Is(commit.Error, errAssistantClarificationRequired) {
-		t.Fatalf("expected clarification required on commit, got=%+v", commit)
+	commit := assistantCheckClarificationGate(assistantActionGateInput{Stage: assistantActionStageCommit, Turn: turn})
+	if !commit.Allowed {
+		t.Fatalf("clarification should be projection-only on commit, got=%+v", commit)
 	}
 
 	turn.Clarification.Status = assistantClarificationStatusExhausted
 	turn.Phase = assistantPhaseFailed
-	commit = assistantEvaluateActionGate(assistantActionGateInput{Stage: assistantActionStageCommit, Action: spec, Turn: turn})
-	if commit.Allowed || !errors.Is(commit.Error, errAssistantClarificationRoundsExhausted) {
-		t.Fatalf("expected rounds exhausted, got=%+v", commit)
+	commit = assistantCheckClarificationGate(assistantActionGateInput{Stage: assistantActionStageCommit, Turn: turn})
+	if !commit.Allowed {
+		t.Fatalf("exhausted clarification should remain projection-only, got=%+v", commit)
 	}
 
 	turn.Clarification.Status = assistantClarificationStatusAborted
 	turn.Clarification.ExitTo = assistantClarificationExitManualHint
-	commit = assistantEvaluateActionGate(assistantActionGateInput{Stage: assistantActionStageCommit, Action: spec, Turn: turn})
-	if commit.Allowed || !errors.Is(commit.Error, errAssistantManualHintRequired) {
-		t.Fatalf("expected manual hint required, got=%+v", commit)
+	commit = assistantCheckClarificationGate(assistantActionGateInput{Stage: assistantActionStageCommit, Turn: turn})
+	if !commit.Allowed {
+		t.Fatalf("aborted clarification should remain projection-only, got=%+v", commit)
 	}
 }
 

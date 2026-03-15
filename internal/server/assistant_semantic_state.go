@@ -299,14 +299,9 @@ func (s *assistantConversationService) prepareTurnDraft(
 		PendingClarification: pendingClarification,
 		ResumeProgress:       resume.Progress,
 	})
-	if clarification != nil && strings.TrimSpace(clarification.Status) == assistantClarificationStatusOpen && strings.TrimSpace(clarification.ClarificationKind) == assistantClarificationKindIntentDisambiguate {
-		dryRun.Explain = ""
-		dryRun.ValidationErrors = nil
-	}
-
 	spec, specOK := s.lookupActionSpec(intent.Action)
-	requiresActionSpec := clarification == nil || strings.TrimSpace(clarification.ClarificationKind) != assistantClarificationKindIntentDisambiguate
-	if !specOK && requiresActionSpec {
+	requiresActionSpec := assistantIntentNeedsActionSpec(intent, routeDecision)
+	if requiresActionSpec && !specOK {
 		return nil, errAssistantUnsupportedIntent
 	}
 
@@ -317,7 +312,7 @@ func (s *assistantConversationService) prepareTurnDraft(
 	plan.ModelName = resolvedIntent.ModelName
 	plan.ModelRevision = resolvedIntent.ModelRevision
 
-	if specOK && (clarification == nil || strings.TrimSpace(clarification.ClarificationKind) != assistantClarificationKindIntentDisambiguate) {
+	if requiresActionSpec && specOK {
 		skillExecutionPlan, configDeltaPlan := assistantCompileIntentToPlansWithSpec(intent, resolvedCandidateID, spec)
 		plan.SkillExecutionPlan = skillExecutionPlan
 		plan.ConfigDeltaPlan = configDeltaPlan
@@ -353,11 +348,6 @@ func (s *assistantConversationService) prepareTurnDraft(
 		}
 		plan = tempTurn.Plan
 		dryRun = tempTurn.DryRun
-		planContext, err := knowledgeRuntime.buildPlanContextV1(tenantID, knowledgeRuntime.planContextLocale(), intent, spec, tempTurn)
-		if err != nil {
-			return nil, err
-		}
-		assistantApplyPlanContextV1(&plan, &dryRun, intent, planContext)
 	}
 	assistantApplyPlanKnowledgeSnapshot(&plan, routeDecision, knowledgeRuntime)
 	tempTurn := &assistantTurn{
@@ -370,6 +360,13 @@ func (s *assistantConversationService) prepareTurnDraft(
 		SelectedCandidateID: selectedCandidateID,
 		DryRun:              dryRun,
 	}
+	planContext, err := knowledgeRuntime.buildPlanContextV1(tenantID, knowledgeRuntime.planContextLocale(), intent, spec, tempTurn)
+	if err != nil {
+		return nil, err
+	}
+	assistantApplyPlanContextV1(&plan, &dryRun, intent, planContext)
+	tempTurn.Plan = plan
+	tempTurn.DryRun = dryRun
 	if !assistantTurnRouteAuditVersionsConsistent(tempTurn) {
 		return nil, errAssistantPlanContractVersionMismatch
 	}

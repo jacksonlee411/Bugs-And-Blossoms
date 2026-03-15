@@ -49,18 +49,21 @@ func (s *assistantConversationService) resolveIntentWithPendingTurn(ctx context.
 
 func assistantModelIntentInvalid(intent assistantIntentSpec) bool {
 	action := strings.TrimSpace(intent.Action)
-	if action == "" {
-		return true
-	}
-	if action != assistantIntentPlanOnly {
-		if _, ok := assistantLookupDefaultActionSpec(action); !ok {
-			return true
-		}
-	}
-	if !assistantValidRouteKind(intent.RouteKind) {
+	routeKind := strings.TrimSpace(intent.RouteKind)
+	if !assistantValidRouteKind(routeKind) {
 		return true
 	}
 	if strings.TrimSpace(intent.IntentID) == "" {
+		return true
+	}
+	if routeKind == assistantRouteKindBusinessAction {
+		if action == "" || action == assistantIntentPlanOnly {
+			return true
+		}
+		if _, ok := assistantLookupDefaultActionSpec(action); !ok {
+			return true
+		}
+	} else if action != "" && action != assistantIntentPlanOnly {
 		return true
 	}
 	if effectiveDate := strings.TrimSpace(intent.EffectiveDate); effectiveDate != "" && !assistantDateISOYMD(effectiveDate) {
@@ -139,8 +142,6 @@ func assistantCompileIntentToPlans(intent assistantIntentSpec, resolvedCandidate
 
 func assistantCompileIntentToPlansWithSpec(intent assistantIntentSpec, resolvedCandidateID string, spec assistantActionSpec) (assistantSkillExecutionPlan, assistantConfigDeltaPlan) {
 	skill := assistantSkillExecutionPlan{
-		SelectedSkills: []string{"assistant.plan_only"},
-		ExecutionOrder: []string{"assistant.plan_only"},
 		RiskTier:       strings.TrimSpace(spec.Security.RiskTier),
 		RequiredChecks: append([]string(nil), spec.Security.RequiredChecks...),
 	}
@@ -240,6 +241,13 @@ func assistantAnnotateIntentPlan(tenantID string, conversationID string, userInp
 	plan.CompilerContractVersion = assistantCompilerContractVersionV1
 	plan.CapabilityMapVersion = assistantCapabilityMapVersionV1
 	plan.SkillManifestDigest = assistantSkillManifestDigest(plan.SkillExecutionPlan.SelectedSkills)
+	if strings.TrimSpace(plan.SkillManifestDigest) == "" {
+		plan.SkillManifestDigest = assistantCanonicalHashFn(map[string]any{
+			"projection_only": true,
+			"route_kind":      intent.RouteKind,
+			"intent_id":       intent.IntentID,
+		})
+	}
 
 	contextHash := assistantCanonicalHashFn(map[string]any{
 		"tenant_id":       strings.TrimSpace(tenantID),

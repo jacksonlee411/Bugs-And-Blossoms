@@ -268,7 +268,10 @@ func TestAssistant268IntentPipelineHelpers(t *testing.T) {
 		want   bool
 	}{
 		{name: "empty action invalid", intent: assistantIntentSpec{}, want: true},
+		{name: "non-business empty action valid", intent: assistantIntentSpec{RouteKind: assistantRouteKindKnowledgeQA, IntentID: "knowledge.general_qa"}, want: false},
 		{name: "plan only valid", intent: assistantIntentSpec{Action: assistantIntentPlanOnly, RouteKind: assistantRouteKindKnowledgeQA, IntentID: "knowledge.general_qa"}, want: false},
+		{name: "business plan only invalid", intent: assistantIntentSpec{Action: assistantIntentPlanOnly, RouteKind: assistantRouteKindBusinessAction, IntentID: "org.orgunit_create"}, want: true},
+		{name: "non-business business-action mismatch invalid", intent: assistantIntentSpec{Action: assistantIntentCreateOrgUnit, RouteKind: assistantRouteKindKnowledgeQA, IntentID: "knowledge.general_qa"}, want: true},
 		{name: "unknown action invalid", intent: assistantIntentSpec{Action: "unsupported"}, want: true},
 		{name: "missing route kind invalid", intent: assistantIntentSpec{Action: assistantIntentCreateOrgUnit, IntentID: "org.orgunit_create"}, want: true},
 		{name: "missing intent id invalid", intent: assistantIntentSpec{Action: assistantIntentCreateOrgUnit, RouteKind: assistantRouteKindBusinessAction}, want: true},
@@ -296,6 +299,80 @@ func TestAssistant268IntentPipelineHelpers(t *testing.T) {
 		empty := assistantExtractExplicitTemporalHints("补充部门名称")
 		if empty.EffectiveDate != "" || empty.TargetEffectiveDate != "" {
 			t.Fatalf("unexpected empty hints=%+v", empty)
+		}
+	})
+
+	t.Run("build plan summaries for projection-only routes", func(t *testing.T) {
+		qaPlan := assistantBuildPlan(assistantIntentSpec{RouteKind: assistantRouteKindKnowledgeQA})
+		if qaPlan.Title != "对话回复" || qaPlan.Summary != "当前轮属于知识问答，只返回说明，不触发业务提交。" {
+			t.Fatalf("unexpected qa plan=%+v", qaPlan)
+		}
+		chitchatPlan := assistantBuildPlan(assistantIntentSpec{RouteKind: assistantRouteKindChitchat})
+		if chitchatPlan.Summary != "当前轮属于闲聊响应，不触发业务提交。" {
+			t.Fatalf("unexpected chitchat plan=%+v", chitchatPlan)
+		}
+		uncertainPlan := assistantBuildPlan(assistantIntentSpec{RouteKind: assistantRouteKindUncertain})
+		if uncertainPlan.Summary != "当前轮语义仍不确定，仅保留澄清投影，不触发业务提交。" {
+			t.Fatalf("unexpected uncertain plan=%+v", uncertainPlan)
+		}
+	})
+
+	t.Run("prepare turn draft covers deferred and empty candidate branches", func(t *testing.T) {
+		originalAuthorizer := assistantLoadAuthorizerFn
+		originalDefinitions := capabilityDefinitionByKey
+		defer func() {
+			assistantLoadAuthorizerFn = originalAuthorizer
+			capabilityDefinitionByKey = originalDefinitions
+		}()
+		assistantLoadAuthorizerFn = func() (authorizer, error) {
+			return assistantGateAuthorizerStub{allowed: true, enforced: true}, nil
+		}
+
+		spec, ok := assistantLookupDefaultActionSpec(assistantIntentCreateOrgUnit)
+		if !ok {
+			t.Fatal("missing create spec")
+		}
+		capabilityDefinitionByKey = map[string]capabilityDefinition{
+			spec.CapabilityKey: {CapabilityKey: spec.CapabilityKey, Status: routeCapabilityStatusActive, ActivationState: routeCapabilityStatusActive},
+		}
+		principal := Principal{ID: "actor_1", RoleSlug: "tenant-admin"}
+
+		notFoundStore := assistantOrgStoreStub{orgUnitMemoryStore: newOrgUnitMemoryStore(), searchErr: errOrgUnitNotFound}
+		notFoundSvc := newAssistantConversationService(notFoundStore, assistantWriteServiceStub{store: newOrgUnitMemoryStore()})
+		notFoundSvc.modelGateway = assistantTestStaticSemanticGateway(`{"action":"create_orgunit","route_kind":"business_action","intent_id":"org.orgunit_create","parent_ref_text":"鲜花组织","entity_name":"运营部","effective_date":"2026-01-01"}`)
+		notFoundConv := notFoundSvc.createConversation("tenant_1", principal)
+		notFoundConversation, err := notFoundSvc.createTurn(context.Background(), "tenant_1", principal, notFoundConv.ConversationID, "在鲜花组织之下新建运营部，成立日期是2026-01-01")
+		if err != nil {
+			t.Fatalf("createTurn not-found err=%v", err)
+		}
+		notFoundTurn := latestTurn(notFoundConversation)
+		if len(notFoundTurn.Candidates) != 0 || notFoundTurn.AmbiguityCount != 0 || notFoundTurn.Confidence != 0.3 {
+			t.Fatalf("unexpected not-found turn=%+v", notFoundTurn)
+		}
+
+		deferredSvc := newAssistantConversationService(newOrgUnitMemoryStore(), assistantWriteServiceStub{store: newOrgUnitMemoryStore()})
+		deferredSvc.modelGateway = assistantTestStaticSemanticGateway(`{"action":"create_orgunit","route_kind":"business_action","intent_id":"org.orgunit_create","parent_ref_text":"鲜花组织","entity_name":"运营部"}`)
+		deferredConv := deferredSvc.createConversation("tenant_1", principal)
+		deferredConversation, err := deferredSvc.createTurn(context.Background(), "tenant_1", principal, deferredConv.ConversationID, "在鲜花组织之下新建运营部")
+		if err != nil {
+			t.Fatalf("createTurn deferred err=%v", err)
+		}
+		if got := latestTurn(deferredConversation).ResolutionSource; got != "deferred_candidate_lookup" {
+			t.Fatalf("unexpected deferred resolution source=%q", got)
+		}
+
+		blankRiskSpec := spec
+		blankRiskSpec.Security.RiskTier = ""
+		blankRiskSvc := newAssistantConversationService(newOrgUnitMemoryStore(), assistantWriteServiceStub{store: newOrgUnitMemoryStore()})
+		blankRiskSvc.actionRegistry = assistantActionRegistryMap{specs: map[string]assistantActionSpec{assistantIntentCreateOrgUnit: blankRiskSpec}}
+		blankRiskSvc.modelGateway = assistantTestStaticSemanticGateway(`{"action":"create_orgunit","route_kind":"business_action","intent_id":"org.orgunit_create","parent_ref_text":"鲜花组织","entity_name":"运营部","effective_date":"2026-01-01"}`)
+		blankRiskConv := blankRiskSvc.createConversation("tenant_1", principal)
+		blankRiskConversation, err := blankRiskSvc.createTurn(context.Background(), "tenant_1", principal, blankRiskConv.ConversationID, "在鲜花组织之下新建运营部，成立日期是2026-01-01")
+		if err != nil {
+			t.Fatalf("createTurn blank-risk err=%v", err)
+		}
+		if got := latestTurn(blankRiskConversation).RiskTier; got != "low" {
+			t.Fatalf("expected blank risk tier to fall back low, got=%q", got)
 		}
 	})
 

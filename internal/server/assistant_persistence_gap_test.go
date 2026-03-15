@@ -914,6 +914,7 @@ func TestAssistantPersistence_CommitTurnPG_ErrorPathMatrix(t *testing.T) {
 	}
 	baseTurn.Plan.SkillManifestDigest = "digest"
 	baseTurn.Plan.CompilerContractVersion = "compiler_contract_v0"
+	assistantTestAttachBusinessRoute(baseTurn)
 
 	makeSvc := func(actorID, actorRole string, turnRows [][]any, execFn func(string) error, queryRowFn func(string) pgx.Row, commitErr error) *assistantConversationService {
 		tx := &assistFakeTx{commitErr: commitErr}

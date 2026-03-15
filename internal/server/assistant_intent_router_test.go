@@ -167,7 +167,7 @@ func TestAssistantIntentRouter_DecisionCoverage(t *testing.T) {
 			assistantIntentSpec{Action: assistantIntentPlanOnly},
 			runtime,
 		)
-		if err != nil || !ok || semanticUncertain.RouteKind != assistantRouteKindUncertain || !semanticUncertain.ClarificationRequired {
+		if err != nil || !ok || semanticUncertain.RouteKind != assistantRouteKindUncertain || semanticUncertain.ClarificationRequired {
 			t.Fatalf("unexpected semantic uncertain decision=%+v ok=%v err=%v", semanticUncertain, ok, err)
 		}
 	})
@@ -179,7 +179,7 @@ func TestAssistantIntentRouter_DecisionCoverage(t *testing.T) {
 			t.Fatalf("unexpected projected intent=%+v", projected)
 		}
 		nonBusiness := assistantProjectIntentRouteDecision(assistantIntentSpec{Action: assistantIntentCreateOrgUnit}, assistantIntentRouteDecision{RouteKind: assistantRouteKindKnowledgeQA, IntentID: "knowledge.general_qa", RouteCatalogVersion: "v1"})
-		if nonBusiness.Action != assistantIntentPlanOnly {
+		if nonBusiness.Action != "" {
 			t.Fatalf("unexpected non business projection=%+v", nonBusiness)
 		}
 		if got := assistantTurnRouteKind(nil); got != "" {
@@ -206,12 +206,20 @@ func TestAssistantIntentRouter_DecisionCoverage(t *testing.T) {
 		if !assistantTurnActionChainAllowed(turn) {
 			t.Fatal("business route should allow action chain")
 		}
-		turn.RouteDecision.ClarificationRequired = true
-		if assistantTurnActionChainAllowed(turn) {
-			t.Fatal("clarification route should block action chain")
-		}
 		if assistantTurnHasRouteClarificationSignal(nil) {
 			t.Fatal("nil turn should not require clarification")
+		}
+		if !assistantIntentNeedsActionSpec(assistantIntentSpec{}, decision) {
+			t.Fatal("business decision should require action spec")
+		}
+		if assistantIntentNeedsActionSpec(assistantIntentSpec{RouteKind: assistantRouteKindKnowledgeQA}, assistantIntentRouteDecision{}) {
+			t.Fatal("non-business intent fallback should not require action spec")
+		}
+		if !assistantIntentNeedsActionSpec(assistantIntentSpec{RouteKind: assistantRouteKindBusinessAction}, assistantIntentRouteDecision{}) {
+			t.Fatal("business intent fallback should require action spec")
+		}
+		if assistantIntentNeedsActionSpec(assistantIntentSpec{}, assistantIntentRouteDecision{}) {
+			t.Fatal("empty route metadata should not require action spec")
 		}
 	})
 
@@ -270,7 +278,6 @@ func TestAssistantIntentRouter_DecisionCoverage(t *testing.T) {
 			{name: "commit empty action conflict", input: assistantActionGateInput{Stage: assistantActionStageCommit, RouteDecision: valid}, want: errAssistantRouteActionConflict},
 			{name: "commit candidate missing conflict", input: assistantActionGateInput{Stage: assistantActionStageCommit, RouteDecision: assistantIntentRouteDecision{RouteKind: assistantRouteKindBusinessAction, IntentID: "org.orgunit_create", ConfidenceBand: assistantRouteConfidenceHigh, RouteCatalogVersion: "v1", KnowledgeSnapshotDigest: "d", ResolverContractVersion: "r", DecisionSource: "s"}}, want: errAssistantRouteRuntimeInvalid},
 			{name: "non-business blocked", input: assistantActionGateInput{Stage: assistantActionStageConfirm, Action: spec, RouteDecision: assistantIntentRouteDecision{RouteKind: assistantRouteKindKnowledgeQA, IntentID: "knowledge.general_qa", ConfidenceBand: assistantRouteConfidenceLow, RouteCatalogVersion: "v1", KnowledgeSnapshotDigest: "d", ResolverContractVersion: "r", DecisionSource: "s"}}, want: errAssistantRouteNonBusinessBlocked},
-			{name: "clarification blocked", input: assistantActionGateInput{Stage: assistantActionStageCommit, Action: spec, RouteDecision: assistantIntentRouteDecision{RouteKind: assistantRouteKindBusinessAction, IntentID: "org.orgunit_create", CandidateActionIDs: []string{assistantIntentCreateOrgUnit}, ConfidenceBand: assistantRouteConfidenceMedium, ClarificationRequired: true, RouteCatalogVersion: "v1", KnowledgeSnapshotDigest: "d", ResolverContractVersion: "r", DecisionSource: "s"}}, want: errAssistantRouteClarificationRequired},
 			{name: "allowed", input: assistantActionGateInput{Stage: assistantActionStageCommit, Action: spec, RouteDecision: valid}},
 		}
 		for _, tc := range cases {
@@ -417,13 +424,13 @@ func TestAssistantIntentRouter_MissingGapBranches(t *testing.T) {
 			},
 			Clarification: &assistantClarificationDecision{Status: assistantClarificationStatusExhausted},
 		}
-		if assistantTurnActionChainAllowed(exhausted) {
-			t.Fatal("exhausted clarification should block action chain")
+		if !assistantTurnActionChainAllowed(exhausted) {
+			t.Fatal("business route should remain action-chain eligible despite clarification projection")
 		}
 		aborted := *exhausted
 		aborted.Clarification = &assistantClarificationDecision{Status: assistantClarificationStatusAborted}
-		if assistantTurnActionChainAllowed(&aborted) {
-			t.Fatal("aborted clarification should block action chain")
+		if !assistantTurnActionChainAllowed(&aborted) {
+			t.Fatal("aborted clarification should not block action chain anymore")
 		}
 	})
 
@@ -488,8 +495,8 @@ func TestAssistantIntentRouter_MissingGapBranches(t *testing.T) {
 				DecisionSource:          "s",
 			},
 		})
-		if denied.Allowed || !errors.Is(denied.Error, errAssistantClarificationRequired) {
-			t.Fatalf("open clarification route gate should return clarification required, got=%+v", denied)
+		if !denied.Allowed {
+			t.Fatalf("clarification projection should not block route gate, got=%+v", denied)
 		}
 	})
 
@@ -499,6 +506,30 @@ func TestAssistantIntentRouter_MissingGapBranches(t *testing.T) {
 		}
 		if got := httpStatusForAssistantRouteError(errAssistantClarificationRuntimeInvalid); got != 409 {
 			t.Fatalf("clarification runtime invalid status=%d", got)
+		}
+	})
+
+	t.Run("route execution boundary branches", func(t *testing.T) {
+		valid := &assistantTurn{RouteDecision: assistantTestBusinessRouteDecision(assistantIntentCreateOrgUnit)}
+		if err := assistantTurnRouteExecutionBoundary(valid); err != nil {
+			t.Fatalf("valid business boundary err=%v", err)
+		}
+		if err := assistantTurnRouteExecutionBoundary(&assistantTurn{}); !errors.Is(err, errAssistantRouteDecisionMissing) {
+			t.Fatalf("missing route boundary err=%v", err)
+		}
+		if err := assistantTurnRouteExecutionBoundary(&assistantTurn{RouteDecision: assistantIntentRouteDecision{RouteKind: "bad"}}); !errors.Is(err, errAssistantRouteRuntimeInvalid) {
+			t.Fatalf("invalid route boundary err=%v", err)
+		}
+		if err := assistantTurnRouteExecutionBoundary(&assistantTurn{RouteDecision: assistantIntentRouteDecision{
+			RouteKind:               assistantRouteKindKnowledgeQA,
+			IntentID:                "knowledge.general_qa",
+			ConfidenceBand:          assistantRouteConfidenceLow,
+			RouteCatalogVersion:     "v1",
+			KnowledgeSnapshotDigest: "d",
+			ResolverContractVersion: "r",
+			DecisionSource:          "s",
+		}}); !errors.Is(err, errAssistantRouteNonBusinessBlocked) {
+			t.Fatalf("non-business boundary err=%v", err)
 		}
 	})
 }

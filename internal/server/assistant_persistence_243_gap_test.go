@@ -138,7 +138,7 @@ func TestAssistantPersistence243_CreateTurnPGBranches(t *testing.T) {
 			t.Fatalf("createTurnPG err=%v", err)
 		}
 		last := latestTurn(got)
-		if last == nil || last.Intent.Action != assistantIntentPlanOnly || last.SelectedCandidateID != "FLOWER-A" || last.ResolvedCandidateID != "" || last.ResolutionSource != "" {
+		if last == nil || last.Intent.Action != "" || last.SelectedCandidateID != "FLOWER-A" || last.ResolvedCandidateID != "" || last.ResolutionSource != "" {
 			t.Fatalf("unexpected turn=%+v", last)
 		}
 	})

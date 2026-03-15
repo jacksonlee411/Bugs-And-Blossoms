@@ -139,14 +139,6 @@ func TestAssistantActionInterceptor_Gates(t *testing.T) {
 		if confirmDecision.Allowed || !errors.Is(confirmDecision.Error, errAssistantRouteNonBusinessBlocked) {
 			t.Fatalf("unexpected confirm route decision=%+v", confirmDecision)
 		}
-		commitDecision := assistantEvaluateActionGate(assistantActionGateInput{
-			Stage:         assistantActionStageCommit,
-			Action:        spec,
-			RouteDecision: assistantIntentRouteDecision{RouteKind: assistantRouteKindBusinessAction, IntentID: "org.orgunit_create", CandidateActionIDs: []string{assistantIntentCreateOrgUnit}, ConfidenceBand: assistantRouteConfidenceMedium, ClarificationRequired: true, RouteCatalogVersion: "v1", KnowledgeSnapshotDigest: "d", ResolverContractVersion: "r", DecisionSource: "s"},
-		})
-		if commitDecision.Allowed || !errors.Is(commitDecision.Error, errAssistantRouteClarificationRequired) {
-			t.Fatalf("unexpected commit route decision=%+v", commitDecision)
-		}
 	})
 
 	t.Run("capability registration branches", func(t *testing.T) {
@@ -579,8 +571,8 @@ func TestAssistantActionInterceptor_ClarificationAndCapabilityGaps(t *testing.T)
 			CurrentRound:      1,
 		},
 	}
-	if got := assistantCheckClarificationGate(assistantActionGateInput{Stage: assistantActionStageConfirm, Turn: invalidRuntimeTurn}); got.Allowed || !errors.Is(got.Error, errAssistantClarificationRuntimeInvalid) {
-		t.Fatalf("runtime invalid clarification gate=%+v", got)
+	if got := assistantCheckClarificationGate(assistantActionGateInput{Stage: assistantActionStageConfirm, Turn: invalidRuntimeTurn}); !got.Allowed {
+		t.Fatalf("clarification should be projection-only, got=%+v", got)
 	}
 
 	resolved := *validTurn
@@ -607,8 +599,8 @@ func TestAssistantActionInterceptor_ClarificationAndCapabilityGaps(t *testing.T)
 		RouteCatalogVersion:     "v1",
 	}
 	staleOpen.Phase = assistantPhaseIdle
-	if got := assistantCheckClarificationGate(assistantActionGateInput{Stage: assistantActionStageConfirm, Turn: &staleOpen}); got.Allowed {
-		t.Fatalf("phase mismatch should be blocked, got=%+v", got)
+	if got := assistantCheckClarificationGate(assistantActionGateInput{Stage: assistantActionStageConfirm, Turn: &staleOpen}); !got.Allowed {
+		t.Fatalf("stale clarification should not gate action anymore, got=%+v", got)
 	}
 
 	nonOpen := *validTurn

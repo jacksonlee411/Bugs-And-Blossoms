@@ -533,6 +533,9 @@ func (s *assistantConversationService) applyConfirmTurn(conversation *assistantC
 	if len(assistantTurnMissingFields(turn)) > 0 {
 		return assistantTurnMutationResult{}, errAssistantConfirmationRequired
 	}
+	if err := assistantTurnRouteExecutionBoundary(turn); err != nil {
+		return assistantTurnMutationResult{}, err
+	}
 	spec, ok := s.lookupActionSpec(turn.Intent.Action)
 	if !ok {
 		return assistantTurnMutationResult{}, errAssistantUnsupportedIntent
@@ -620,6 +623,9 @@ func (s *assistantConversationService) prepareCommitTurn(
 	}
 	if len(assistantTurnMissingFields(turn)) > 0 {
 		return assistantPreparedCommit{}, assistantTurnMutationResult{}, errAssistantConfirmationRequired
+	}
+	if err := assistantTurnRouteExecutionBoundary(turn); err != nil {
+		return assistantPreparedCommit{}, assistantTurnMutationResult{}, err
 	}
 	spec, ok := s.lookupActionSpec(turn.Intent.Action)
 	if !ok {

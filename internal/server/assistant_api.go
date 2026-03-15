@@ -545,22 +545,12 @@ func handleAssistantTurnActionAPI(w http.ResponseWriter, r *http.Request, svc *a
 				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusConflict, "conversation_confirmation_required", "conversation confirmation required")
 			case errors.Is(err, errAssistantConfirmationExpired):
 				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusConflict, "conversation_confirmation_expired", "conversation confirmation expired")
-			case errors.Is(err, errAssistantClarificationRequired):
-				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusConflict, errAssistantClarificationRequired.Error(), "assistant clarification required")
-			case errors.Is(err, errAssistantClarificationRoundsExhausted):
-				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusConflict, errAssistantClarificationRoundsExhausted.Error(), "assistant clarification rounds exhausted")
-			case errors.Is(err, errAssistantManualHintRequired):
-				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusConflict, errAssistantManualHintRequired.Error(), "assistant manual hint required")
-			case errors.Is(err, errAssistantClarificationRuntimeInvalid):
-				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusConflict, errAssistantClarificationRuntimeInvalid.Error(), "assistant clarification runtime invalid")
 			case errors.Is(err, errAssistantConversationStateInvalid):
 				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusConflict, "conversation_state_invalid", "conversation state invalid")
 			case errors.Is(err, errAssistantCandidateNotFound):
 				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusUnprocessableEntity, "assistant_candidate_not_found", "assistant candidate not found")
 			case errors.Is(err, errAssistantRouteNonBusinessBlocked):
 				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusConflict, errAssistantRouteNonBusinessBlocked.Error(), "assistant route non business blocked")
-			case errors.Is(err, errAssistantRouteClarificationRequired):
-				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusConflict, errAssistantRouteClarificationRequired.Error(), "assistant route clarification required")
 			case errors.Is(err, errAssistantRouteDecisionMissing):
 				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusConflict, errAssistantRouteDecisionMissing.Error(), "assistant route decision missing")
 			case errors.Is(err, errAssistantRouteRuntimeInvalid):
@@ -601,18 +591,8 @@ func handleAssistantTurnActionAPI(w http.ResponseWriter, r *http.Request, svc *a
 				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusConflict, "conversation_confirmation_required", "conversation confirmation required")
 			case errors.Is(err, errAssistantConfirmationExpired):
 				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusConflict, "conversation_confirmation_expired", "conversation confirmation expired")
-			case errors.Is(err, errAssistantClarificationRequired):
-				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusConflict, errAssistantClarificationRequired.Error(), "assistant clarification required")
-			case errors.Is(err, errAssistantClarificationRoundsExhausted):
-				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusConflict, errAssistantClarificationRoundsExhausted.Error(), "assistant clarification rounds exhausted")
-			case errors.Is(err, errAssistantManualHintRequired):
-				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusConflict, errAssistantManualHintRequired.Error(), "assistant manual hint required")
-			case errors.Is(err, errAssistantClarificationRuntimeInvalid):
-				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusConflict, errAssistantClarificationRuntimeInvalid.Error(), "assistant clarification runtime invalid")
 			case errors.Is(err, errAssistantRouteNonBusinessBlocked):
 				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusConflict, errAssistantRouteNonBusinessBlocked.Error(), "assistant route non business blocked")
-			case errors.Is(err, errAssistantRouteClarificationRequired):
-				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusConflict, errAssistantRouteClarificationRequired.Error(), "assistant route clarification required")
 			case errors.Is(err, errAssistantRouteDecisionMissing):
 				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusConflict, errAssistantRouteDecisionMissing.Error(), "assistant route decision missing")
 			case errors.Is(err, errAssistantRouteRuntimeInvalid):
@@ -1117,9 +1097,9 @@ func assistantRiskTierForIntent(intent assistantIntentSpec) string {
 
 func assistantBuildPlan(intent assistantIntentSpec) assistantPlanSummary {
 	plan := assistantPlanSummary{
-		Title:                   "只读规划",
-		CapabilityKey:           "org.orgunit_create.field_policy",
-		Summary:                 "生成只读计划，不执行提交",
+		Title:                   "对话回复",
+		CapabilityKey:           "org.assistant_conversation.manage",
+		Summary:                 "当前轮仅保留对话语义与执行边界，不生成业务提交计划",
 		CapabilityMapVersion:    assistantCapabilityMapVersionV1,
 		CompilerContractVersion: assistantCompilerContractVersionV1,
 	}
@@ -1130,6 +1110,14 @@ func assistantBuildPlan(intent assistantIntentSpec) assistantPlanSummary {
 		plan.CapabilityKey = spec.CapabilityKey
 		plan.CommitAdapterKey = spec.Handler.CommitAdapterKey
 		plan.Summary = spec.PlanSummary
+	}
+	switch strings.TrimSpace(intent.RouteKind) {
+	case assistantRouteKindKnowledgeQA:
+		plan.Summary = "当前轮属于知识问答，只返回说明，不触发业务提交。"
+	case assistantRouteKindChitchat:
+		plan.Summary = "当前轮属于闲聊响应，不触发业务提交。"
+	case assistantRouteKindUncertain:
+		plan.Summary = "当前轮语义仍不确定，仅保留澄清投影，不触发业务提交。"
 	}
 	return plan
 }

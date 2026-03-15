@@ -1,19 +1,32 @@
 # DEV-PLAN-268：Assistant 外部大模型单一语义核与本地最小执行边界实施计划
 
-**状态**: 规划中（2026-03-14 22:52 CST）
+**状态**: 实施中（2026-03-15 14:32 CST）
+
+## 0. 当前进展（2026-03-15）
+1. [x] 已移除 `plan_only` 作为本地主链伪动作的正式地位：
+   - [x] 非业务路由投影后不再在 `intent.action` 中保留 `plan_only`；
+   - [x] 本地 plan compile / skill digest 不再依赖 `assistant.plan_only` 作为占位能力；
+   - [x] `confirm/commit` 不再把 `plan_only` 视为可执行动作。
+2. [x] 已将 `clarification/reply` 进一步降为投影层：
+   - [x] clarification 不再作为 `confirm/commit` 的主 gate；
+   - [x] `route_kind == business_action` 成为是否进入 action spec / execution chain 的唯一主判断；
+   - [x] `phase/reply/clarification` 仅继续用于 UI、审计与对话投影。
+3. [x] 已统一执行边界：
+   - [x] `confirm/commit` 共享同一套 route execution boundary；
+   - [x] 缺路由、路由非法、显式非业务路由已稳定区分，不再混成单一错误。
 
 ## 1. 背景与上下文
-1. [ ] `DEV-PLAN-267` 已明确：当前 Assistant 的核心问题不是某一层单点失效，而是 `intent -> route -> clarification -> phase -> reply` 多层链路同时保留判断权，导致整体慢、硬、重复、容易误导。
-2. [ ] 当前 runtime 试图在本地维护一套缩小版对话大脑：
-   - [ ] 本地 intent overlay / fallback；
-   - [ ] 本地 route decision；
-   - [ ] 本地 clarification decision；
-   - [ ] 本地 reply kind 与 reply 二次改写。
-3. [ ] 上述结构在“工程可控”层面有收益，但在真实对话体验上形成系统性副作用：
-   - [ ] 多轮重复判断同一件事；
-   - [ ] 任一层保守降级都会把整体拖入 `uncertain/non_business_route`；
-   - [ ] 额外模型调用与本地状态机共同拉长响应链路。
-4. [ ] 本计划的立场是：在当前窄域业务条件下，应更大胆地把语义理解、上下文修复、下一问生成与用户可见回复交给外部大模型；本地系统只保留事实源、只读检索、执行边界和写入主链。
+1. [x] `DEV-PLAN-267` 已明确：当前 Assistant 的核心问题不是某一层单点失效，而是 `intent -> route -> clarification -> phase -> reply` 多层链路同时保留判断权，导致整体慢、硬、重复、容易误导。
+2. [x] 当前 runtime 试图在本地维护一套缩小版对话大脑：
+   - [x] 本地 intent overlay / fallback；
+   - [x] 本地 route decision；
+   - [x] 本地 clarification decision；
+   - [x] 本地 reply kind 与 reply 二次改写。
+3. [x] 上述结构在“工程可控”层面有收益，但在真实对话体验上形成系统性副作用：
+   - [x] 多轮重复判断同一件事；
+   - [x] 任一层保守降级都会把整体拖入 `uncertain/non_business_route`；
+   - [x] 额外模型调用与本地状态机共同拉长响应链路。
+4. [x] 本计划的立场是：在当前窄域业务条件下，应更大胆地把语义理解、上下文修复、下一问生成与用户可见回复交给外部大模型；本地系统只保留事实源、只读检索、执行边界和写入主链。
 
 ## 2. 目标与非目标
 1. [ ] 核心目标：以单一外部大模型语义核替代本地 `intent/route/clarification/reply` 多层主决策链。
@@ -48,7 +61,7 @@
    - [ ] 执行只读检索；
    - [ ] 执行 dry-run、风控、鉴权、确认与提交；
    - [ ] 维护审计、回执、任务与状态投影。
-4. [ ] `phase/reason_codes/reply_kind` 不再充当主控制中心，只允许作为审计或 UI 投影存在。
+4. [x] `phase/reason_codes/reply_kind` 不再充当主控制中心，只允许作为审计或 UI 投影存在。
 
 ## 4. 结构化语义契约
 1. [ ] 新的外部模型主输出至少应包含以下字段：
@@ -97,11 +110,11 @@
    - [ ] `Commit Adapter + OCC + One Door`；
    - [ ] `Task/Audit`。
 2. [ ] 需要删除或降级为投影的本地能力：
-   - [ ] 本地 intent fallback / overlay 主判断链；
+   - [x] 本地 intent fallback / overlay 主判断链；
    - [ ] 以 `route_kind` 为中心的业务/非业务主分流；
-   - [ ] 以 clarification kind 为中心的表单式多状态机；
-   - [ ] reply kind 选择与 reply 二次模型改写主链；
-   - [ ] `plan_only` 作为伪动作参与主链判断。
+   - [x] 以 clarification kind 为中心的表单式多状态机；
+   - [x] reply kind 选择与 reply 二次模型改写主链；
+   - [x] `plan_only` 作为伪动作参与主链判断。
 3. [ ] 需要保留但角色改变的能力：
    - [ ] `knowledge runtime` 从“本地路由中心”转为“上下文资产装配来源”；
    - [ ] `phase` 从“流程控制器”转为“审计和 UI 展示字段”；
@@ -136,8 +149,8 @@
 ### 6.3 M3：收口本地多层判断链
 1. [ ] 删除或旁路 `intent -> route -> clarification -> reply` 作为主链的调用路径。
 2. [ ] `assistant_intent_router`、`assistant_clarification_policy`、`assistant_reply_nlg` 仅允许保留投影、兼容读或过渡期桥接职责，禁止继续承担主判断。
-3. [ ] 退役 `plan_only` 在正式业务主链中的语义地位。
-4. [ ] 停止本地 overlay/fallback 改写外部模型语义结果。
+3. [x] 退役 `plan_only` 在正式业务主链中的语义地位。
+4. [x] 停止本地 overlay/fallback 改写外部模型语义结果。
 
 ### 6.4 M4：检索与错误归因修复
 1. [ ] 本地检索不再硬绑定“所有 intent 校验都已通过”这一前提。
@@ -153,8 +166,8 @@
 ### 6.5 M5：执行边界硬化与 confirm/commit 收口
 1. [ ] 继续以 `ActionSpec` 作为本地动作白名单和安全主源。
 2. [ ] 模型输出的 `ready_for_confirm` 或等价字段，只能触发本地 dry-run 和 confirm summary 生成，不得直接提交。
-3. [ ] confirm 仍必须校验 `plan_hash`、TTL、候选事实与当前上下文一致性。
-4. [ ] commit 仍必须经由受控 `Commit Adapter`、OCC、One Door 和任务审计。
+3. [x] confirm 仍必须校验 `plan_hash`、TTL、候选事实与当前上下文一致性。
+4. [x] commit 仍必须经由受控 `Commit Adapter`、OCC、One Door 和任务审计。
 5. [ ] 本地需要保证：即使模型输出看似正确，只要 dry-run/gate 不通过，系统也必须 fail-closed。
 
 ### 6.6 M6：体验验收与旧链路移除
