@@ -443,6 +443,26 @@ func TestAssistantConversationHandlers_CoverageMatrix(t *testing.T) {
 				Keywords:  []string{"坏"},
 			}}},
 		}
+		routeErrSvc.modelGateway = &assistantModelGateway{
+			config: assistantModelConfig{
+				ProviderRouting: assistantProviderRouting{Strategy: "priority_failover", FallbackEnabled: true},
+				Providers: []assistantModelProviderConfig{{
+					Name:      "openai",
+					Enabled:   true,
+					Model:     "gpt-5-codex",
+					Endpoint:  "https://api.openai.com/v1",
+					TimeoutMS: 1000,
+					Retries:   0,
+					Priority:  1,
+					KeyRef:    "OPENAI_API_KEY",
+				}},
+			},
+			adapters: map[string]assistantProviderAdapter{
+				"openai": assistantAdapterFunc(func(context.Context, string, assistantModelProviderConfig) ([]byte, error) {
+					return []byte(`{"action":"plan_only","route_kind":"bad_kind","intent_id":"route.bad"}`), nil
+				}),
+			},
+		}
 		routeErrConv := routeErrSvc.createConversation("tenant-1", principal)
 		rec = httptest.NewRecorder()
 		handleAssistantConversationTurnsAPI(rec, assistantReqWithContext(http.MethodPost, "/internal/assistant/conversations/"+routeErrConv.ConversationID+"/turns", `{"user_input":"坏"}`, true, true), routeErrSvc)

@@ -128,7 +128,7 @@ func assistantValidateIntentRouteDecision(decision assistantIntentRouteDecision)
 }
 
 func assistantBuildIntentRouteDecision(
-	userInput string,
+	_ string,
 	resolved assistantResolveIntentResult,
 	mergedIntent assistantIntentSpec,
 	runtime *assistantKnowledgeRuntime,
@@ -139,59 +139,7 @@ func assistantBuildIntentRouteDecision(
 	if semanticDecision, ok, err := assistantBuildSemanticIntentRouteDecision(resolved, mergedIntent, runtime); ok || err != nil {
 		return semanticDecision, err
 	}
-	projected := runtime.routeIntent(userInput, mergedIntent)
-	decision := assistantIntentRouteDecision{
-		RouteKind:               strings.TrimSpace(projected.RouteKind),
-		IntentID:                strings.TrimSpace(projected.IntentID),
-		RouteCatalogVersion:     strings.TrimSpace(runtime.RouteCatalogVersion),
-		KnowledgeSnapshotDigest: strings.TrimSpace(runtime.SnapshotDigest),
-		ResolverContractVersion: strings.TrimSpace(runtime.ResolverContractVersion),
-		DecisionSource:          assistantRouteDecisionSourceKnowledgeRuntimeV1,
-	}
-	if decision.RouteCatalogVersion == "" {
-		decision.ReasonCodes = append(decision.ReasonCodes, assistantRouteReasonCatalogVersionMissing)
-		decision.RouteCatalogVersion = "fallback-route-catalog"
-	}
-	if decision.KnowledgeSnapshotDigest == "" {
-		decision.KnowledgeSnapshotDigest = "fallback-knowledge-snapshot"
-	}
-	if decision.ResolverContractVersion == "" {
-		decision.ResolverContractVersion = "fallback-resolver-contract"
-	}
-
-	actionID := strings.TrimSpace(projected.Action)
-	resolvedAction := strings.TrimSpace(resolved.Intent.Action)
-	localUpgrade := actionID != "" && actionID != assistantIntentPlanOnly && (resolvedAction == "" || resolvedAction == assistantIntentPlanOnly)
-
-	switch decision.RouteKind {
-	case assistantRouteKindBusinessAction:
-		decision.CandidateActionIDs = []string{actionID}
-		decision.ReasonCodes = append(decision.ReasonCodes, assistantRouteReasonBusinessActionRegistered)
-		if resolvedAction == "" || resolvedAction == assistantIntentPlanOnly {
-			decision.ReasonCodes = append(decision.ReasonCodes, assistantRouteReasonModelPlanOnly)
-		}
-		if localUpgrade {
-			decision.ReasonCodes = append(decision.ReasonCodes, assistantRouteReasonLocalIntentUpgrade)
-		}
-		decision.ConfidenceBand = assistantRouteConfidenceHigh
-		if localUpgrade {
-			decision.ConfidenceBand = assistantRouteConfidenceMedium
-		}
-	case assistantRouteKindKnowledgeQA, assistantRouteKindChitchat:
-		decision.ConfidenceBand = assistantRouteConfidenceLow
-		decision.ClarificationRequired = false
-		decision.ReasonCodes = append(decision.ReasonCodes, assistantRouteReasonNonBusinessCatalogMatch)
-	case assistantRouteKindUncertain:
-		decision.ConfidenceBand = assistantRouteConfidenceLow
-		decision.ClarificationRequired = true
-		decision.ReasonCodes = append(decision.ReasonCodes, assistantRouteReasonUncertainNoMatch, assistantRouteReasonClarificationRequired)
-	default:
-		return assistantIntentRouteDecision{}, errAssistantRouteRuntimeInvalid
-	}
-
-	decision.CandidateActionIDs = assistantNormalizeRouteStringSlice(decision.CandidateActionIDs)
-	decision.ReasonCodes = assistantNormalizeRouteStringSlice(decision.ReasonCodes)
-	return decision, nil
+	return assistantIntentRouteDecision{}, errAssistantRouteDecisionMissing
 }
 
 func assistantBuildSemanticIntentRouteDecision(

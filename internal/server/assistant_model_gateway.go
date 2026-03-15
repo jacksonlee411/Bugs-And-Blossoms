@@ -151,18 +151,7 @@ func (assistantDeterministicProviderAdapter) Invoke(_ context.Context, prompt st
 	case assistantIsSimulateEndpoint(endpoint) && strings.HasPrefix(endpoint, "simulate://unavailable"):
 		return nil, errAssistantModelProviderUnavailable
 	}
-	userInput := assistantSemanticCurrentUserInput(prompt)
-	intent := assistantExtractIntent(userInput)
-	payload, err := assistantIntentMarshalFn(assistantSemanticIntentPayload{
-		Action:           intent.Action,
-		ParentRefText:    intent.ParentRefText,
-		EntityName:       intent.EntityName,
-		EffectiveDate:    intent.EffectiveDate,
-		GoalSummary:      strings.TrimSpace(userInput),
-		UserVisibleReply: "",
-		NextQuestion:     "",
-		Readiness:        "",
-	})
+	payload, err := assistantIntentMarshalFn(assistantSyntheticSemanticPayloadForPrompt(prompt))
 	if err != nil {
 		return nil, errAssistantPlanSchemaConstrainedDecodeFailed
 	}
@@ -183,6 +172,111 @@ func (assistantDeterministicProviderAdapter) Probe(_ context.Context, provider a
 	default:
 		return nil
 	}
+}
+
+func assistantSyntheticSemanticPayloadForPrompt(prompt string) assistantSemanticIntentPayload {
+	payload := assistantSyntheticSemanticPayload(assistantSemanticCurrentUserInput(prompt))
+	var envelope assistantSemanticPromptEnvelope
+	if err := json.Unmarshal([]byte(strings.TrimSpace(prompt)), &envelope); err != nil || envelope.PendingTurn == nil {
+		return payload
+	}
+	pendingAction := strings.TrimSpace(envelope.PendingTurn.Action)
+	if pendingAction == "" || pendingAction == assistantIntentPlanOnly {
+		return payload
+	}
+	switch strings.TrimSpace(payload.RouteKind) {
+	case assistantRouteKindKnowledgeQA, assistantRouteKindChitchat:
+		return payload
+	}
+	if strings.TrimSpace(payload.Action) == "" || strings.TrimSpace(payload.Action) == assistantIntentPlanOnly {
+		payload.Action = pendingAction
+		payload.RouteKind = assistantRouteKindBusinessAction
+		payload.IntentID = assistantSemanticIntentIDForAction(pendingAction)
+	}
+	return payload
+}
+
+func assistantSyntheticSemanticPayload(userInput string) assistantSemanticIntentPayload {
+	text := strings.TrimSpace(userInput)
+	intent := assistantExtractIntent(text)
+	payload := assistantSemanticIntentPayload{
+		Action:              intent.Action,
+		ParentRefText:       intent.ParentRefText,
+		EntityName:          intent.EntityName,
+		EffectiveDate:       intent.EffectiveDate,
+		OrgCode:             intent.OrgCode,
+		TargetEffectiveDate: intent.TargetEffectiveDate,
+		NewName:             intent.NewName,
+		NewParentRefText:    intent.NewParentRefText,
+		GoalSummary:         text,
+	}
+
+	actionID := strings.TrimSpace(intent.Action)
+	switch {
+	case actionID != "" && actionID != assistantIntentPlanOnly:
+		payload.RouteKind = assistantRouteKindBusinessAction
+		payload.IntentID = assistantSemanticIntentIDForAction(actionID)
+	case assistantSyntheticSemanticLooksLikeKnowledgeQA(text):
+		payload.Action = assistantIntentPlanOnly
+		payload.RouteKind = assistantRouteKindKnowledgeQA
+		payload.IntentID = "knowledge.general_qa"
+	case assistantSyntheticSemanticLooksLikeChitchat(text):
+		payload.Action = assistantIntentPlanOnly
+		payload.RouteKind = assistantRouteKindChitchat
+		payload.IntentID = "chat.greeting"
+	default:
+		payload.Action = assistantIntentPlanOnly
+		payload.RouteKind = assistantRouteKindUncertain
+		payload.IntentID = "route.uncertain"
+	}
+	return payload
+}
+
+func assistantSemanticIntentIDForAction(actionID string) string {
+	switch strings.TrimSpace(actionID) {
+	case assistantIntentCreateOrgUnit:
+		return "org.orgunit_create"
+	case assistantIntentAddOrgUnitVersion:
+		return "org.orgunit_add_version"
+	case assistantIntentInsertOrgUnitVersion:
+		return "org.orgunit_insert_version"
+	case assistantIntentCorrectOrgUnit:
+		return "org.orgunit_correct"
+	case assistantIntentRenameOrgUnit:
+		return "org.orgunit_rename"
+	case assistantIntentMoveOrgUnit:
+		return "org.orgunit_move"
+	case assistantIntentDisableOrgUnit:
+		return "org.orgunit_disable"
+	case assistantIntentEnableOrgUnit:
+		return "org.orgunit_enable"
+	default:
+		return "action." + strings.TrimSpace(actionID)
+	}
+}
+
+func assistantSyntheticSemanticLooksLikeKnowledgeQA(text string) bool {
+	if strings.TrimSpace(text) == "" {
+		return false
+	}
+	for _, keyword := range []string{"功能", "help", "怎么", "如何", "什么", "哪些", "支持", "?", "？"} {
+		if strings.Contains(strings.ToLower(text), strings.ToLower(keyword)) {
+			return true
+		}
+	}
+	return false
+}
+
+func assistantSyntheticSemanticLooksLikeChitchat(text string) bool {
+	if strings.TrimSpace(text) == "" {
+		return false
+	}
+	for _, keyword := range []string{"你好", "您好", "hello", "hi", "thanks", "谢谢"} {
+		if strings.Contains(strings.ToLower(text), strings.ToLower(keyword)) {
+			return true
+		}
+	}
+	return false
 }
 
 type assistantOpenAIProviderAdapter struct {
@@ -261,8 +355,13 @@ func (a assistantOpenAIProviderAdapter) Invoke(ctx context.Context, prompt strin
 					Role: "system",
 					Content: "你是企业 HR 组织变更助手。你会收到一个包含当前用户输入、允许动作、以及可能待续上下文的 JSON。" +
 						"你必须只输出严格 JSON，禁止输出解释、Markdown 或其他文本。" +
-						"你需要同时输出结构化动作槽位、当前给用户看的自然语言回复、下一句追问，以及当前 readiness。" +
-						"所有日期统一输出 YYYY-MM-DD；action 只能从 allowed_actions 中选择。",
+						"你需要同时输出结构化动作槽位、route_kind、intent_id、当前给用户看的自然语言回复、下一句追问，以及当前 readiness。" +
+						"所有日期统一输出 YYYY-MM-DD；action 只能从 allowed_actions 中选择。" +
+						"业务动作必须输出 route_kind=business_action，且 intent_id 必须使用固定映射：" +
+						"create_orgunit=org.orgunit_create；add_orgunit_version=org.orgunit_add_version；insert_orgunit_version=org.orgunit_insert_version；correct_orgunit=org.orgunit_correct；move_orgunit=org.orgunit_move；rename_orgunit=org.orgunit_rename；disable_orgunit=org.orgunit_disable；enable_orgunit=org.orgunit_enable。" +
+						"知识问答输出 action=plan_only、route_kind=knowledge_qa、intent_id=knowledge.general_qa；" +
+						"闲聊输出 action=plan_only、route_kind=chitchat、intent_id=chat.greeting；" +
+						"无法确定时输出 action=plan_only、route_kind=uncertain、intent_id=route.uncertain。",
 				},
 				{
 					Role:    "user",
@@ -281,6 +380,15 @@ func (a assistantOpenAIProviderAdapter) Invoke(ctx context.Context, prompt strin
 						"additionalProperties": false,
 						"properties": map[string]any{
 							"action": map[string]any{
+								"type": "string",
+							},
+							"intent_id": map[string]any{
+								"type": "string",
+							},
+							"route_kind": map[string]any{
+								"type": "string",
+							},
+							"route_catalog_version": map[string]any{
 								"type": "string",
 							},
 							"parent_ref_text": map[string]any{
@@ -320,7 +428,7 @@ func (a assistantOpenAIProviderAdapter) Invoke(ctx context.Context, prompt strin
 								"type": "string",
 							},
 						},
-						"required": []string{"action"},
+						"required": []string{"action", "intent_id", "route_kind"},
 					},
 				},
 			}
@@ -689,6 +797,21 @@ func assistantNormalizeOpenAIIntentPayload(content string) []byte {
 	normalized := map[string]any{}
 	if action != "" {
 		normalized["action"] = action
+	}
+	if intentID := assistantFirstStringFromObjects(objects,
+		"intent_id",
+		"intentId"); intentID != "" {
+		normalized["intent_id"] = intentID
+	}
+	if routeKind := assistantFirstStringFromObjects(objects,
+		"route_kind",
+		"routeKind"); routeKind != "" {
+		normalized["route_kind"] = routeKind
+	}
+	if routeCatalogVersion := assistantFirstStringFromObjects(objects,
+		"route_catalog_version",
+		"routeCatalogVersion"); routeCatalogVersion != "" {
+		normalized["route_catalog_version"] = routeCatalogVersion
 	}
 	if parentRefText != "" {
 		normalized["parent_ref_text"] = parentRefText

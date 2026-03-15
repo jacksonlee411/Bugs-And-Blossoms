@@ -61,7 +61,22 @@ func TestAssistant272TurnAPI_CreateAndConfirmMatrix(t *testing.T) {
 				t.Fatal(err)
 			}
 			svc := newAssistantConversationService(store, assistantWriteServiceStub{store: store})
-			payload, err := json.Marshal(tc.intent)
+			payload, err := json.Marshal(assistantSemanticIntentPayload{
+				Action:              tc.intent.Action,
+				IntentID:            assistantSemanticIntentIDForAction(tc.intent.Action),
+				RouteKind:           assistantRouteKindBusinessAction,
+				ParentRefText:       tc.intent.ParentRefText,
+				EntityName:          tc.intent.EntityName,
+				EffectiveDate:       tc.intent.EffectiveDate,
+				OrgCode:             tc.intent.OrgCode,
+				TargetEffectiveDate: tc.intent.TargetEffectiveDate,
+				NewName:             tc.intent.NewName,
+				NewParentRefText:    tc.intent.NewParentRefText,
+				IntentSchemaVersion: tc.intent.IntentSchemaVersion,
+				ContextHash:         tc.intent.ContextHash,
+				IntentHash:          tc.intent.IntentHash,
+				Readiness:           assistantSemanticReadinessReadyForConfirm,
+			})
 			if err != nil {
 				t.Fatalf("marshal intent action=%s err=%v", tc.action, err)
 			}

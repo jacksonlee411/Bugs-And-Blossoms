@@ -231,9 +231,9 @@ func TestAssistantIntentPipeline_MergesPendingTurnContextForMissingFields(t *tes
 			"openai": assistantAdapterFunc(func(context.Context, string, assistantModelProviderConfig) ([]byte, error) {
 				attempt++
 				if attempt == 1 {
-					return []byte(`{"action":"create_orgunit","parent_ref_text":"鲜花组织","effective_date":"2026-01-01","user_visible_reply":"请补充部门名称。","next_question":"请告诉我部门名称。","readiness":"need_more_info"}`), nil
+					return []byte(`{"action":"create_orgunit","route_kind":"business_action","intent_id":"org.orgunit_create","parent_ref_text":"鲜花组织","effective_date":"2026-01-01","user_visible_reply":"请补充部门名称。","next_question":"请告诉我部门名称。","readiness":"need_more_info"}`), nil
 				}
-				return []byte(`{"action":"create_orgunit","entity_name":"运营部","user_visible_reply":"我已补齐草案，请确认。","readiness":"ready_for_confirm"}`), nil
+				return []byte(`{"action":"create_orgunit","route_kind":"business_action","intent_id":"org.orgunit_create","entity_name":"运营部","user_visible_reply":"我已补齐草案，请确认。","readiness":"ready_for_confirm"}`), nil
 			}),
 		},
 	}

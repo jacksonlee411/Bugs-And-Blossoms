@@ -68,6 +68,85 @@ func TestAssistant268SemanticPromptHelpers(t *testing.T) {
 	if noPending.PendingTurn != nil {
 		t.Fatalf("expected nil pending turn in prompt, got=%+v", noPending.PendingTurn)
 	}
+
+	synthetic := assistantSyntheticSemanticPayloadForPrompt(prompt)
+	if synthetic.Action != assistantIntentCreateOrgUnit || synthetic.RouteKind != assistantRouteKindBusinessAction || synthetic.IntentID != "org.orgunit_create" {
+		t.Fatalf("unexpected synthetic payload=%+v", synthetic)
+	}
+	confirmPayload := assistantSyntheticSemanticPayloadForPrompt(assistantBuildSemanticPrompt("确认", turn))
+	if confirmPayload.Action != assistantIntentCreateOrgUnit || confirmPayload.RouteKind != assistantRouteKindBusinessAction || confirmPayload.IntentID != "org.orgunit_create" {
+		t.Fatalf("unexpected synthetic confirm payload=%+v", confirmPayload)
+	}
+}
+
+func TestAssistant268SyntheticSemanticHelperCoverage(t *testing.T) {
+	mappings := map[string]string{
+		assistantIntentCreateOrgUnit:        "org.orgunit_create",
+		assistantIntentAddOrgUnitVersion:    "org.orgunit_add_version",
+		assistantIntentInsertOrgUnitVersion: "org.orgunit_insert_version",
+		assistantIntentCorrectOrgUnit:       "org.orgunit_correct",
+		assistantIntentRenameOrgUnit:        "org.orgunit_rename",
+		assistantIntentMoveOrgUnit:          "org.orgunit_move",
+		assistantIntentDisableOrgUnit:       "org.orgunit_disable",
+		assistantIntentEnableOrgUnit:        "org.orgunit_enable",
+	}
+	for actionID, want := range mappings {
+		if got := assistantSemanticIntentIDForAction(actionID); got != want {
+			t.Fatalf("action=%s intent_id=%s want=%s", actionID, got, want)
+		}
+	}
+	if got := assistantSemanticIntentIDForAction("custom_action"); got != "action.custom_action" {
+		t.Fatalf("unexpected default intent_id=%s", got)
+	}
+
+	business := assistantSyntheticSemanticPayload("在鲜花组织之下新建一个部门，成立日期是2026-01-01")
+	if business.RouteKind != assistantRouteKindBusinessAction || business.IntentID != "org.orgunit_create" {
+		t.Fatalf("unexpected business payload=%+v", business)
+	}
+	qa := assistantSyntheticSemanticPayload("系统有哪些功能")
+	if qa.RouteKind != assistantRouteKindKnowledgeQA || qa.IntentID != "knowledge.general_qa" {
+		t.Fatalf("unexpected qa payload=%+v", qa)
+	}
+	chat := assistantSyntheticSemanticPayload("你好")
+	if chat.RouteKind != assistantRouteKindChitchat || chat.IntentID != "chat.greeting" {
+		t.Fatalf("unexpected chat payload=%+v", chat)
+	}
+	uncertain := assistantSyntheticSemanticPayload("随便记一下")
+	if uncertain.RouteKind != assistantRouteKindUncertain || uncertain.IntentID != "route.uncertain" {
+		t.Fatalf("unexpected uncertain payload=%+v", uncertain)
+	}
+
+	if assistantSyntheticSemanticLooksLikeKnowledgeQA("   ") {
+		t.Fatal("blank text should not be knowledge qa")
+	}
+	if !assistantSyntheticSemanticLooksLikeKnowledgeQA("help me") {
+		t.Fatal("help should be knowledge qa")
+	}
+	if assistantSyntheticSemanticLooksLikeKnowledgeQA("你好") {
+		t.Fatal("greeting should not be knowledge qa")
+	}
+	if assistantSyntheticSemanticLooksLikeChitchat("   ") {
+		t.Fatal("blank text should not be chitchat")
+	}
+	if !assistantSyntheticSemanticLooksLikeChitchat("hello there") {
+		t.Fatal("hello should be chitchat")
+	}
+	if assistantSyntheticSemanticLooksLikeChitchat("系统有哪些功能") {
+		t.Fatal("knowledge qa should not be chitchat")
+	}
+
+	pendingPlanOnlyPrompt := `{"current_user_input":"确认","allowed_actions":[],"pending_turn":{"action":"plan_only"}}`
+	if payload := assistantSyntheticSemanticPayloadForPrompt(pendingPlanOnlyPrompt); payload.RouteKind != assistantRouteKindUncertain {
+		t.Fatalf("pending plan_only should not override route=%+v", payload)
+	}
+	pendingKnowledgePrompt := `{"current_user_input":"系统有哪些功能","allowed_actions":[],"pending_turn":{"action":"create_orgunit"}}`
+	if payload := assistantSyntheticSemanticPayloadForPrompt(pendingKnowledgePrompt); payload.RouteKind != assistantRouteKindKnowledgeQA {
+		t.Fatalf("knowledge prompt should keep qa route=%+v", payload)
+	}
+	pendingBusinessPrompt := `{"current_user_input":"在鲜花组织之下新建部门","allowed_actions":[],"pending_turn":{"action":"move_orgunit"}}`
+	if payload := assistantSyntheticSemanticPayloadForPrompt(pendingBusinessPrompt); payload.Action != assistantIntentCreateOrgUnit || payload.IntentID != "org.orgunit_create" {
+		t.Fatalf("business prompt should keep explicit action=%+v", payload)
+	}
 }
 
 func TestAssistant268SemanticReplyHelpers(t *testing.T) {
