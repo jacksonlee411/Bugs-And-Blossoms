@@ -409,7 +409,7 @@ modules/{module}/
 - DEV-PLAN-268 执行日志：`docs/dev-records/dev-plan-268-execution-log.md`
 - DEV-PLAN-250：Go 网关 + PostgreSQL RAG/鉴权接管实施方案（覆盖阶段一至阶段二）：`docs/dev-plans/250-go-gateway-rag-and-authz-phase1-2-plan.md`
 - DEV-PLAN-260：AI对话真实业务闭环主计划（多轮补全 / 候选确认 / 提交回执）：`docs/dev-plans/260-librechat-conversation-first-auto-execution-plan.md`
-- DEV-PLAN-260 执行日志：`docs/archive/dev-records/dev-plan-260-execution-log.md`
+- DEV-PLAN-260 执行日志：`docs/dev-records/dev-plan-260-execution-log.md`
 - DEV-PLAN-261：LibreChat 助手对话失败问题排查与修复实施计划：`docs/dev-plans/261-librechat-assistant-conversation-failure-investigation-and-remediation-plan.md`
 - DEV-PLAN-261 执行日志：`docs/archive/dev-records/dev-plan-261-execution-log.md`
 - DEV-PLAN-262【归档】：LibreChat 对话回执渲染越界问题调查与收敛方案（旧桥接阶段缺陷修复记录）：`docs/archive/dev-plans/262-librechat-dialog-render-outside-chat-investigation-and-fix-plan.md`

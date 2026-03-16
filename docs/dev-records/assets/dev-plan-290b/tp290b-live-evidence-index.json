@@ -1,6 +1,6 @@
 {
   "plan": "DEV-PLAN-290B",
-  "status": "blocked",
+  "status": "passed",
   "updated_at": "2026-03-12T00:15:41.782Z",
   "formal_entry": "/app/assistant/librechat",
   "runtime_admission_gate": {
@@ -17,9 +17,7 @@
     "fail-closed behavior changed",
     "assistant formal submit pipeline changed"
   ],
-  "blockers": [
-    "Case 4: 主验收执行失败：\u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoBeVisible\u001b[2m()\u001b[22m failed\n\nLocator:  getByRole('button', { name: /提交|Submit/i }).last()\nExpected: visible\nReceived: <element(s) not found>\nTimeout:  30000ms\n\nCall log:\n\u001b[2m  - Expect \"toBeVisible\" with timeout 30000ms\u001b[22m\n\u001b[2m  - waiting for getByRole('button', { name: /提交|Submit/i }).last()\u001b[22m\n"
-  ],
+  "blockers": [],
   "fixed_assets": {
     "root": "docs/dev-records/assets/dev-plan-290b",
     "pattern": [
@@ -96,20 +94,22 @@
     },
     {
       "id": 4,
-      "status": "blocked",
+      "status": "passed",
       "input_sequence": [
         "请在父组织共享服务中心下新建239A候选验证部，生效日期2026-03-26",
         "选第2个",
         "是的"
       ],
-      "blocking_reason": "主验收执行失败：\u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoBeVisible\u001b[2m()\u001b[22m failed\n\nLocator:  getByRole('button', { name: /提交|Submit/i }).last()\nExpected: visible\nReceived: <element(s) not found>\nTimeout:  30000ms\n\nCall log:\n\u001b[2m  - Expect \"toBeVisible\" with timeout 30000ms\u001b[22m\n\u001b[2m  - waiting for getByRole('button', { name: /提交|Submit/i }).last()\u001b[22m\n",
+      "task_terminal_status": "succeeded",
       "artifacts": {
         "page": "docs/dev-records/assets/dev-plan-290b/case-4-page.png",
         "dom": "docs/dev-records/assets/dev-plan-290b/case-4-dom.json",
         "network": "docs/dev-records/assets/dev-plan-290b/case-4-network.har",
         "trace": "docs/dev-records/assets/dev-plan-290b/case-4-trace.zip",
-        "unsupported": "docs/dev-records/assets/dev-plan-290b/case-4-unsupported-failure.json",
-        "conversation_snapshot": "docs/dev-records/assets/dev-plan-290b/case-4-conversation-snapshot.json"
+        "phase_assertions": "docs/dev-records/assets/dev-plan-290b/case-4-phase-assertions.json",
+        "intent_action_assertions": "docs/dev-records/assets/dev-plan-290b/case-4-intent-action-assertions.json",
+        "conversation_snapshot": "docs/dev-records/assets/dev-plan-290b/case-4-conversation-snapshot.json",
+        "model_proof": "docs/dev-records/assets/dev-plan-290b/case-4-model-proof.json"
       }
     }
   ]
