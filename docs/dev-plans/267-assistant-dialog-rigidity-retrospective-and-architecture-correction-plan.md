@@ -1,6 +1,13 @@
 # DEV-PLAN-267：Assistant 对话僵硬问题系统反思与架构纠偏计划（承接 246 系列）
 
-**状态**: 规划中（2026-03-13 23:13 CST）
+**状态**: 已完成（2026-03-16 20:57 CST；`DEV-PLAN-268` 已完整承接并完成代码落地，执行记录见 `docs/dev-records/dev-plan-268-execution-log.md`）
+
+## 0. 完成态回写（2026-03-16）
+1. [x] `267` 提出的核心纠偏方向已由 `DEV-PLAN-268` 完整承接并落地：单一外部模型语义核、本地最小职责、检索状态收口、`/reply` 投影化与执行边界保留均已完成。
+2. [x] `267` 的交付物已补齐：
+   - [x] 单一实施计划：`docs/dev-plans/268-assistant-external-llm-semantic-core-and-runtime-thinning-implementation-plan.md`
+   - [x] 执行记录与体验型验收证据：`docs/dev-records/dev-plan-268-execution-log.md`
+3. [x] 本文档的第 1-6 节保留为 2026-03-13 的问题反思与纠偏原则原文；完成态以本节及第 7-10 节回写为准，不再逐段改写历史分析文本。
 
 ## 1. 背景与上下文
 1. [ ] `DEV-PLAN-246` 及其子计划 `241~245` 已把 Assistant 的知识资产、路由、澄清、回复与版本审计主链落地，并通过了现有运行态与端口级验证。
@@ -124,14 +131,14 @@
    - [ ] 以后续 dev-plan 明确新增体验型 case 与 stopline。
 
 ## 7. 后续实施收口建议
-1. [ ] 后续代码实施不再拆成多个子计划，而是统一收敛为单一实施计划 `DEV-PLAN-268`。
-2. [ ] `DEV-PLAN-268` 应完整承接以下实施范围：
-   - [ ] 以外部大模型单一语义核替代本地多层理解链；
-   - [ ] 以 `Context Assembler + Readonly Resolver` 收口本地最小职责；
-   - [ ] 修复候选检索状态与错误归因；
-   - [ ] 在模型优先编排下保留并强化执行边界；
-   - [ ] 重建体验型评测、调用预算与 stopline。
-3. [ ] `267` 仅保留反思、纠偏原则与失败判据，不再承担细分实施步骤。
+1. [x] 后续代码实施不再拆成多个子计划，而是统一收敛为单一实施计划 `DEV-PLAN-268`。
+2. [x] `DEV-PLAN-268` 已完整承接以下实施范围：
+   - [x] 以外部大模型单一语义核替代本地多层理解链；
+   - [x] 以 `Context Assembler + Readonly Resolver` 收口本地最小职责；
+   - [x] 修复候选检索状态与错误归因；
+   - [x] 在模型优先编排下保留并强化执行边界；
+   - [x] 重建体验型评测、调用预算与 stopline。
+3. [x] `267` 仅保留反思、纠偏原则与失败判据，不再承担细分实施步骤。
 
 ## 8. 验收与停止线
 1. [ ] 若后续改造仍主要围绕新增关键词、正则、本地 router 分支、局部 prompt 文案补丁展开，而没有建立“外部模型单一语义核 + 本地最小职责”，则本纠偏失败。
@@ -145,22 +152,22 @@
 9. [ ] 若后续实施引入 legacy、双链路或第二写入口来“掩盖僵硬”，则本纠偏失败。
 
 ## 9. 测试与覆盖率
-1. [ ] 覆盖率口径、统计范围、目标阈值与证据记录继续以 `AGENTS.md`、`Makefile` 与 CI workflow 为 SSOT；本计划不复制脚本细节。
-2. [ ] 命中 Assistant runtime、reply、routing、knowledge assets 的后续代码实施，必须补充最小回归测试与体验型 case。
-3. [ ] 新的体验验收至少覆盖：
-   - [ ] 轻微自然语言变体不应误降级；
-   - [ ] 相对日期与常见日期格式可由模型在受控上下文中稳定归一；
-   - [ ] 组织别名/同义称谓可恢复到候选检索；
-   - [ ] 候选检索状态区分准确；
-   - [ ] reply 不跨域；
-   - [ ] 错误归因准确；
-   - [ ] 单轮模型调用次数符合预算；
-   - [ ] 模型失败不会触发旧本地理解链回退。
+1. [x] 覆盖率口径、统计范围、目标阈值与证据记录继续以 `AGENTS.md`、`Makefile` 与 CI workflow 为 SSOT；本计划不复制脚本细节。
+2. [x] 命中 Assistant runtime、reply、routing、knowledge assets 的后续代码实施，已补充最小回归测试与体验型 case。
+3. [x] 新的体验验收至少覆盖：
+   - [x] 轻微自然语言变体不应误降级；
+   - [x] 相对日期与常见日期格式可由模型在受控上下文中稳定归一；
+   - [x] 组织别名/同义称谓可恢复到候选检索；
+   - [x] 候选检索状态区分准确；
+   - [x] reply 不跨域；
+   - [x] 错误归因准确；
+   - [x] 单轮模型调用次数符合预算；
+   - [x] 模型失败不会触发旧本地理解链回退。
 
 ## 10. 交付物
-1. [ ] 本计划文档：`docs/dev-plans/267-assistant-dialog-rigidity-retrospective-and-architecture-correction-plan.md`
-2. [ ] 单一实施计划：`docs/dev-plans/268-assistant-external-llm-semantic-core-and-runtime-thinning-implementation-plan.md`
-3. [ ] 体验型验收报告与执行记录（待 `DEV-PLAN-268` 后续产出）
+1. [x] 本计划文档：`docs/dev-plans/267-assistant-dialog-rigidity-retrospective-and-architecture-correction-plan.md`
+2. [x] 单一实施计划：`docs/dev-plans/268-assistant-external-llm-semantic-core-and-runtime-thinning-implementation-plan.md`
+3. [x] 体验型验收报告与执行记录：`docs/dev-records/dev-plan-268-execution-log.md`
 
 ## 11. 关联文档
 1. [ ] `docs/dev-plans/240e-assistant-internal-knowledge-pack-and-readonly-resolver-plan.md`
@@ -172,3 +179,4 @@
 7. [ ] `docs/dev-plans/246-assistant-understand-route-clarify-roadmap.md`
 8. [ ] `docs/dev-plans/246a-assistant-241-245-goal-completion-validation-report.md`
 9. [ ] `docs/dev-records/dev-plan-246b-240e-241-246-port-8080-validation-report.md`
+10. [x] `docs/dev-records/dev-plan-268-execution-log.md`

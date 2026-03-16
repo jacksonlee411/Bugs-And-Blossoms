@@ -190,50 +190,22 @@ func (s *assistantConversationService) renderTurnReply(ctx context.Context, tena
 	}
 	realizerOutput := assistantRealizeReply(realizerInput, runtime, req, turn)
 
-	prompt := assistantReplyRenderPrompt{
-		ConversationID:          strings.TrimSpace(conversation.ConversationID),
-		TurnID:                  resolvedTurnID,
-		Stage:                   strings.TrimSpace(realizerOutput.Stage),
-		Kind:                    strings.TrimSpace(realizerOutput.Kind),
-		ReplyKind:               strings.TrimSpace(realizerOutput.ReplyKind),
-		Outcome:                 strings.TrimSpace(realizerInput.OutcomeHint),
-		ErrorCode:               strings.TrimSpace(realizerInput.ErrorCode),
-		ErrorMessage:            strings.TrimSpace(realizerInput.ErrorExplanation),
-		NextAction:              strings.TrimSpace(realizerInput.NextAction),
-		Locale:                  locale,
-		FallbackText:            strings.TrimSpace(realizerOutput.Text),
-		TemplateID:              strings.TrimSpace(realizerOutput.TemplateID),
-		ReplyGuidanceVersion:    strings.TrimSpace(realizerOutput.ReplyGuidanceVersion),
-		KnowledgeSnapshotDigest: strings.TrimSpace(realizerInput.KnowledgeSnapshotDigest),
-		ResolverContractVersion: strings.TrimSpace(realizerInput.ResolverContractVersion),
-		Machine:                 realizerInput.Machine,
-	}
-
-	modelResult, err := assistantRenderReplyWithModelFn(ctx, s, prompt)
-	if err != nil {
-		return nil, err
-	}
-	replyModelName := strings.TrimSpace(modelResult.ReplyModelName)
-	if replyModelName != assistantReplyTargetModelName {
-		return nil, errAssistantReplyModelTargetMismatch
-	}
-	text := strings.TrimSpace(modelResult.Text)
+	text := strings.TrimSpace(realizerOutput.Text)
 	if text == "" {
 		return nil, errAssistantReplyRenderFailed
 	}
-
-	replySource := strings.TrimSpace(modelResult.ReplySource)
-	if replySource == "" {
-		replySource = assistantReplySourceModel
+	replySource := assistantReplySourceProjection
+	if realizerOutput.UsedFallback {
+		replySource = assistantReplySourceFallback
 	}
 	reply := &assistantRenderReplyResponse{
 		Text:               text,
-		Kind:               assistantNormalizeReplyRenderKind(modelResult.Kind, realizerOutput.Kind),
-		Stage:              assistantNormalizeReplyRenderStage(modelResult.Stage, realizerOutput.Stage),
-		ReplyModelName:     replyModelName,
+		Kind:               assistantNormalizeReplyRenderKind(realizerOutput.Kind, realizerOutput.Kind),
+		Stage:              assistantNormalizeReplyRenderStage(realizerOutput.Stage, realizerOutput.Stage),
+		ReplyModelName:     strings.TrimSpace(assistantReplyRenderModelName(turn)),
 		ReplyPromptVersion: assistantReplyPromptVersionV1,
 		ReplySource:        replySource,
-		UsedFallback:       realizerOutput.UsedFallback || modelResult.UsedFallback,
+		UsedFallback:       realizerOutput.UsedFallback,
 		ConversationID:     strings.TrimSpace(conversation.ConversationID),
 		TurnID:             resolvedTurnID,
 	}
@@ -255,6 +227,15 @@ func assistantReplyRequestIsPassive(req assistantRenderReplyRequest) bool {
 		strings.TrimSpace(req.Locale) == "" &&
 		strings.TrimSpace(req.FallbackText) == "" &&
 		!req.AllowMissingTurn
+}
+
+func assistantReplyRenderModelName(turn *assistantTurn) string {
+	if turn != nil {
+		if name := strings.TrimSpace(turn.Plan.ModelName); name != "" {
+			return name
+		}
+	}
+	return assistantReplyTargetModelName
 }
 
 func assistantRenderReplyWithModel(ctx context.Context, svc *assistantConversationService, prompt assistantReplyRenderPrompt) (assistantReplyModelResult, error) {

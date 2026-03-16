@@ -2,7 +2,6 @@ package server
 
 import (
 	"context"
-	"errors"
 	"strings"
 	"testing"
 )
@@ -337,17 +336,23 @@ func TestAssistantReplyRealizer_BuildInputAndRenderTurnReply(t *testing.T) {
 
 	svc.knowledgeRuntime = nil
 	svc.knowledgeErr = errAssistantRuntimeConfigInvalid
-	captured := assistantReplyRenderPrompt{}
+	invoked := false
 	assistantRenderReplyWithModelFn = func(_ context.Context, _ *assistantConversationService, prompt assistantReplyRenderPrompt) (assistantReplyModelResult, error) {
-		captured = prompt
+		invoked = true
 		return assistantReplyModelResult{Text: "ok", Kind: "info", Stage: prompt.Stage, ReplyModelName: assistantReplyTargetModelName}, nil
 	}
 	reply, err := svc.renderTurnReply(context.Background(), "tenant_1", principal, conversation.ConversationID, turn.TurnID, assistantRenderReplyRequest{Stage: "draft", Locale: "zh"})
 	if err != nil {
 		t.Fatalf("renderTurnReply err=%v", err)
 	}
-	if reply == nil || strings.TrimSpace(captured.ReplyKind) == "" {
-		t.Fatalf("expected captured reply kind, reply=%+v prompt=%+v", reply, captured)
+	if reply == nil || strings.TrimSpace(reply.Text) == "" {
+		t.Fatalf("expected rendered reply, got=%+v", reply)
+	}
+	if invoked {
+		t.Fatal("reply model hook should not be invoked")
+	}
+	if reply.Stage != "await_clarification" || reply.ReplySource != assistantReplySourceFallback {
+		t.Fatalf("unexpected reply=%+v", reply)
 	}
 
 	if got := assistantNormalizeReplyRenderKind("bad", "warning"); got != "warning" {
@@ -360,11 +365,11 @@ func TestAssistantReplyRealizer_BuildInputAndRenderTurnReply(t *testing.T) {
 		t.Fatalf("unexpected normalized stage=%q", got)
 	}
 
-	badModel := func(_ context.Context, _ *assistantConversationService, _ assistantReplyRenderPrompt) (assistantReplyModelResult, error) {
-		return assistantReplyModelResult{Text: "ok", ReplyModelName: "gpt-4.1"}, nil
+	assistantRenderReplyWithModelFn = func(_ context.Context, _ *assistantConversationService, _ assistantReplyRenderPrompt) (assistantReplyModelResult, error) {
+		t.Fatal("reply model hook should stay unused")
+		return assistantReplyModelResult{}, nil
 	}
-	assistantRenderReplyWithModelFn = badModel
-	if _, err := svc.renderTurnReply(context.Background(), "tenant_1", principal, conversation.ConversationID, turn.TurnID, assistantRenderReplyRequest{Stage: "draft"}); !errors.Is(err, errAssistantReplyModelTargetMismatch) {
-		t.Fatalf("expected target mismatch, got=%v", err)
+	if _, err := svc.renderTurnReply(context.Background(), "tenant_1", principal, conversation.ConversationID, turn.TurnID, assistantRenderReplyRequest{Stage: "draft"}); err != nil {
+		t.Fatalf("expected projection reply without model hook, got=%v", err)
 	}
 }

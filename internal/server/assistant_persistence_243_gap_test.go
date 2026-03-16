@@ -73,7 +73,7 @@ func TestAssistantPersistence243_CreateTurnPGBranches(t *testing.T) {
 		}
 	})
 
-	t.Run("resume restores action and candidate selection", func(t *testing.T) {
+	t.Run("clarification resume hook no longer restores local action and candidate selection", func(t *testing.T) {
 		store := newOrgUnitMemoryStore()
 		if _, err := store.CreateNodeCurrent(context.Background(), "tenant_1", "2026-01-01", "FLOWER-A", "鲜花组织", "", true); err != nil {
 			t.Fatalf("create node err=%v", err)
@@ -108,7 +108,9 @@ func TestAssistantPersistence243_CreateTurnPGBranches(t *testing.T) {
 		svc.pool = assistFakeTxBeginner{
 			tx: assistant243CreateTurnPGTx(now, "actor_1", &assistFakeRows{rows: [][]any{assistantTurnRowValues(pending)}}),
 		}
+		invoked := false
 		assistantResumeFromClarificationFn = func(_ *assistantTurn, _ string, _ assistantIntentSpec) assistantClarificationResumeResult {
+			invoked = true
 			return assistantClarificationResumeResult{
 				Intent: assistantIntentSpec{
 					Action:              assistantIntentCreateOrgUnit,
@@ -138,7 +140,10 @@ func TestAssistantPersistence243_CreateTurnPGBranches(t *testing.T) {
 			t.Fatalf("createTurnPG err=%v", err)
 		}
 		last := latestTurn(got)
-		if last == nil || last.Intent.Action != "" || last.SelectedCandidateID != "FLOWER-A" || last.ResolvedCandidateID != "" || last.ResolutionSource != "" {
+		if invoked {
+			t.Fatal("clarification resume hook should not be invoked by semantic orchestrator path")
+		}
+		if last == nil || last.Intent.Action != "" || last.SelectedCandidateID != "" || last.ResolvedCandidateID != "" || last.ResolutionSource != "" {
 			t.Fatalf("unexpected turn=%+v", last)
 		}
 	})

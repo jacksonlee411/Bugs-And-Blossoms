@@ -41,7 +41,13 @@ func (s *assistantConversationService) resolveIntentWithPendingTurn(ctx context.
 		return assistantResolveIntentResult{}, err
 	}
 	resolved.Intent = assistantSanitizeResolvedIntentFacts(resolved.Intent, explicitTemporalHints, pendingTurn)
-	if assistantModelIntentInvalid(resolved.Intent) {
+	if assistantSemanticStatePresent(resolved.SemanticState) {
+		state := resolved.SemanticState
+		state.Slots = assistantSanitizeResolvedIntentFacts(state.intentSpec(), explicitTemporalHints, pendingTurn)
+		resolved.SemanticState = state
+	}
+	assistantSyncResolvedSemanticResult(&resolved)
+	if assistantModelSemanticStateInvalid(resolved) {
 		return assistantResolveIntentResult{}, errAssistantPlanSchemaConstrainedDecodeFailed
 	}
 	return resolved, nil

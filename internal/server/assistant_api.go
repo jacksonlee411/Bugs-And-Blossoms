@@ -187,11 +187,12 @@ type assistantConfigChange struct {
 }
 
 type assistantDryRunResult struct {
-	Diff             []map[string]any `json:"diff"`
-	Explain          string           `json:"explain"`
-	ValidationErrors []string         `json:"validation_errors,omitempty"`
-	WouldCommit      bool             `json:"would_commit"`
-	PlanHash         string           `json:"plan_hash,omitempty"`
+	Diff             []map[string]any                 `json:"diff"`
+	Explain          string                           `json:"explain"`
+	ValidationErrors []string                         `json:"validation_errors,omitempty"`
+	Retrieval        assistantSemanticRetrievalResult `json:"retrieval,omitempty"`
+	WouldCommit      bool                             `json:"would_commit"`
+	PlanHash         string                           `json:"plan_hash,omitempty"`
 }
 
 type assistantCandidate struct {
@@ -653,24 +654,8 @@ func handleAssistantTurnActionAPI(w http.ResponseWriter, r *http.Request, svc *a
 				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusForbidden, "forbidden", "forbidden")
 			case errors.Is(err, errAssistantTurnNotFound):
 				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusNotFound, "conversation_turn_not_found", "conversation turn not found")
-			case errors.Is(err, errAssistantReplyModelTargetMismatch):
-				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusUnprocessableEntity, "ai_reply_model_target_mismatch", "assistant reply model target mismatch")
 			case errors.Is(err, errAssistantReplyRenderFailed):
 				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusUnprocessableEntity, "ai_reply_render_failed", "assistant reply render failed")
-			case errors.Is(err, errAssistantModelProviderUnavailable):
-				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusServiceUnavailable, "ai_model_provider_unavailable", "ai model provider unavailable")
-			case errors.Is(err, errAssistantModelTimeout):
-				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusGatewayTimeout, "ai_model_timeout", "ai model timeout")
-			case errors.Is(err, errAssistantModelRateLimited):
-				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusTooManyRequests, "ai_model_rate_limited", "ai model rate limited")
-			case errors.Is(err, errAssistantModelConfigInvalid):
-				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusUnprocessableEntity, "ai_model_config_invalid", "ai model config invalid")
-			case errors.Is(err, errAssistantRuntimeConfigInvalid):
-				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusUnprocessableEntity, "ai_runtime_config_invalid", "ai runtime config invalid")
-			case errors.Is(err, errAssistantRuntimeConfigMissing):
-				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusServiceUnavailable, "ai_runtime_config_missing", "ai runtime config missing")
-			case errors.Is(err, errAssistantModelSecretMissing):
-				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusInternalServerError, "ai_model_secret_missing", "ai model secret missing")
 			default:
 				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusInternalServerError, "assistant_reply_render_failed", "assistant reply render failed")
 			}
@@ -1123,6 +1108,10 @@ func assistantBuildPlan(intent assistantIntentSpec) assistantPlanSummary {
 }
 
 func assistantBuildDryRun(intent assistantIntentSpec, candidates []assistantCandidate, resolvedCandidateID string) assistantDryRunResult {
+	return assistantBuildDryRunWithRetrieval(intent, candidates, resolvedCandidateID, assistantSemanticRetrievalResult{})
+}
+
+func assistantBuildDryRunWithRetrieval(intent assistantIntentSpec, candidates []assistantCandidate, resolvedCandidateID string, retrieval assistantSemanticRetrievalResult) assistantDryRunResult {
 	diff := make([]map[string]any, 0, 4)
 	validationErrors := assistantIntentValidationErrors(intent)
 	switch strings.TrimSpace(intent.Action) {
@@ -1186,17 +1175,32 @@ func assistantBuildDryRun(intent assistantIntentSpec, candidates []assistantCand
 	}
 	explain := "计划已生成，等待确认后可提交"
 	if candidateRefText := assistantIntentCandidateRefText(intent); candidateRefText != "" && strings.TrimSpace(resolvedCandidateID) == "" {
-		if len(candidates) == 0 {
+		switch strings.TrimSpace(retrieval.State) {
+		case assistantSemanticRetrievalStateNoMatch:
 			validationErrors = append(validationErrors, "parent_candidate_not_found")
-		} else if len(candidates) > 1 {
+		case assistantSemanticRetrievalStateMultipleMatches:
 			validationErrors = append(validationErrors, "candidate_confirmation_required")
+		case assistantSemanticRetrievalStateSingleMatch:
+		case assistantSemanticRetrievalStateDeferredByBoundary:
+		default:
+			if len(candidates) == 0 {
+				validationErrors = append(validationErrors, "parent_candidate_not_found")
+			} else if len(candidates) > 1 {
+				validationErrors = append(validationErrors, "candidate_confirmation_required")
+			}
 		}
 	}
 	validationErrors = assistantNormalizeValidationErrors(validationErrors)
 	if len(validationErrors) > 0 {
 		explain = assistantDryRunValidationExplain(validationErrors)
 	}
-	return assistantDryRunResult{Diff: diff, Explain: explain, ValidationErrors: validationErrors, WouldCommit: false}
+	return assistantDryRunResult{
+		Diff:             diff,
+		Explain:          explain,
+		ValidationErrors: validationErrors,
+		Retrieval:        retrieval,
+		WouldCommit:      false,
+	}
 }
 
 func assistantBoundaryViolationDetected(text string) bool {

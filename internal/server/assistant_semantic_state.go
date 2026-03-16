@@ -45,13 +45,10 @@ type assistantSemanticPromptEnvelope struct {
 }
 
 func assistantBuildSemanticPrompt(userInput string, pendingTurn *assistantTurn) string {
-	envelope := assistantSemanticPromptEnvelope{
-		CurrentUserInput: strings.TrimSpace(userInput),
-		AllowedActions:   assistantSemanticPromptActions(),
-	}
-	if pending := assistantSemanticPromptPendingTurn(pendingTurn); pending != nil {
-		envelope.PendingTurn = pending
-	}
+	envelope := assistantAssembleSemanticContext(assistantSemanticContextAssemblerInput{
+		UserInput:   userInput,
+		PendingTurn: pendingTurn,
+	})
 	payload, _ := json.Marshal(envelope)
 	return string(payload)
 }
@@ -213,74 +210,29 @@ func (s *assistantConversationService) prepareTurnDraft(
 	userInput string,
 	pendingTurn *assistantTurn,
 ) (*assistantTurn, error) {
-	resolvedIntent, err := s.resolveIntentWithPendingTurn(ctx, tenantID, conversationID, userInput, pendingTurn)
+	semanticTurn, err := s.orchestrateSemanticTurn(ctx, tenantID, principal, conversationID, userInput, pendingTurn)
 	if err != nil {
 		return nil, err
 	}
-	knowledgeRuntime, err := s.ensureKnowledgeRuntime()
-	if err != nil {
-		return nil, err
-	}
-
+	resolvedIntent := semanticTurn.Resolved
+	knowledgeRuntime := semanticTurn.Runtime
 	intent := resolvedIntent.Intent
-	resume := assistantClarificationResumeResult{Intent: intent}
-	if pendingTurn != nil {
-		resume = assistantResumeFromClarificationFn(pendingTurn, userInput, intent)
-		intent = resume.Intent
-	}
 
 	routeDecision, err := assistantBuildIntentRouteDecisionFn(userInput, resolvedIntent, intent, knowledgeRuntime)
 	if err != nil {
 		return nil, err
 	}
 	intent = assistantProjectIntentRouteDecision(intent, routeDecision)
+	resolvedIntent.Intent = intent
 
-	candidates := make([]assistantCandidate, 0)
-	resolvedCandidateID := ""
-	selectedCandidateID := strings.TrimSpace(firstNonEmpty(resolvedIntent.SelectedCandidateID, resume.SelectedCandidateID))
-	resolutionSource := ""
-	ambiguityCount := 0
-	confidence := 0.65
+	candidates := append([]assistantCandidate(nil), semanticTurn.Candidates...)
+	resolvedCandidateID := strings.TrimSpace(semanticTurn.ResolvedCandidateID)
+	selectedCandidateID := strings.TrimSpace(semanticTurn.SelectedCandidateID)
+	resolutionSource := strings.TrimSpace(semanticTurn.ResolutionSource)
+	ambiguityCount := semanticTurn.AmbiguityCount
+	confidence := semanticTurn.Confidence
 
-	candidateRefText := assistantIntentCandidateRefText(intent)
-	candidateAsOf := assistantIntentCandidateAsOf(intent)
-	if candidateRefText != "" && candidateAsOf != "" {
-		resolved, resolveErr := s.resolveCandidates(ctx, tenantID, candidateRefText, candidateAsOf)
-		if resolveErr != nil {
-			if !errorsIsAny(resolveErr, errOrgUnitNotFound) {
-				return nil, resolveErr
-			}
-			resolved = make([]assistantCandidate, 0)
-		}
-		candidates = resolved
-		ambiguityCount = len(candidates)
-		switch len(candidates) {
-		case 0:
-			confidence = 0.3
-		case 1:
-			resolvedCandidateID = candidates[0].CandidateID
-			resolutionSource = assistantResolutionAuto
-			confidence = 0.95
-		default:
-			confidence = 0.55
-		}
-	} else if candidateRefText != "" {
-		resolutionSource = "deferred_candidate_lookup"
-	}
-
-	if selectedCandidateID != "" && assistantCandidateExists(candidates, selectedCandidateID) {
-		resolvedCandidateID = selectedCandidateID
-		resolutionSource = assistantResolutionUserConfirmed
-		confidence = 0.95
-	}
-	if resumeCandidateID := strings.TrimSpace(resume.ResolvedCandidateID); resumeCandidateID != "" && assistantCandidateExists(candidates, resumeCandidateID) {
-		resolvedCandidateID = resumeCandidateID
-		selectedCandidateID = resumeCandidateID
-		resolutionSource = assistantResolutionUserConfirmed
-		confidence = 0.95
-	}
-
-	dryRun := assistantBuildDryRunFn(intent, candidates, resolvedCandidateID)
+	dryRun := assistantBuildDryRunWithRetrieval(intent, candidates, resolvedCandidateID, semanticTurn.Retrieval)
 	dryRun = s.enrichCreateOrgUnitDryRunWithPolicy(ctx, tenantID, intent, candidates, resolvedCandidateID, dryRun)
 
 	var pendingClarification *assistantClarificationDecision
@@ -297,7 +249,7 @@ func (s *assistantConversationService) prepareTurnDraft(
 		SelectedCandidateID:  selectedCandidateID,
 		Runtime:              knowledgeRuntime,
 		PendingClarification: pendingClarification,
-		ResumeProgress:       resume.Progress,
+		ResumeProgress:       false,
 	})
 	spec, specOK := s.lookupActionSpec(intent.Action)
 	requiresActionSpec := assistantIntentNeedsActionSpec(intent, routeDecision)
