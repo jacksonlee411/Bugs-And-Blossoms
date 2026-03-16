@@ -385,6 +385,7 @@ modules/{module}/
 - DEV-PLAN-239B【归档】：239A 直接验证用例测试报告与实现缺口（旧桥接阶段历史报告）：`docs/archive/dev-plans/239b-239a-direct-validation-report-and-implementation-gaps.md`
 - DEV-PLAN-239D：Ubuntu 本地开发环境搭建方案（Clone 后首日）：`docs/dev-plans/239d-ubuntu-local-development-environment-bootstrap-plan.md`
 - DEV-PLAN-240：Assistant 组织架构事务编排现代化方案（去写死 + Skill/知识/LibreChat 对齐）：`docs/dev-plans/240-assistant-org-transaction-orchestration-modernization-plan.md`
+- DEV-PLAN-240 执行日志：`docs/dev-records/dev-plan-240-execution-log.md`
 - DEV-PLAN-240A：Assistant ActionRegistry 与 CommitAdapter 落地计划（承接 240-M2）：`docs/dev-plans/240a-assistant-action-registry-and-commit-adapter-plan.md`
 - DEV-PLAN-240B：Assistant 状态机统一与内存/PG 路径收敛计划（承接 240-M3）：`docs/dev-plans/240b-assistant-state-machine-unification-plan.md`
 - DEV-PLAN-240C：Assistant ActionInterceptor 与风险门左移计划（承接 240-M4）：`docs/dev-plans/240c-assistant-action-interceptor-and-risk-gate-plan.md`

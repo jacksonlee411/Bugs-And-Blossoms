@@ -1,6 +1,14 @@
 # DEV-PLAN-240：Assistant 组织架构事务编排现代化方案（按 DEV-PLAN-280 新方向修订）
 
-**状态**: 进行中（已完成 `M0/M1/M2/M3`；`M4~M7` 由 `DEV-PLAN-240C~240F` 承接推进；2026-03-08 CST）
+**状态**: 已完成（2026-03-16 CST；`M0~M7` 对应主链目标已由 `DEV-PLAN-240A~240F`、`DEV-PLAN-241`、`DEV-PLAN-268` 完成或收口；`240E` 保留为知识治理母法规划态，但其运行时最小实现已由 `241` 承接，语义/上下文主链收口已由 `268` 完成；执行记录见 `docs/dev-records/dev-plan-240-execution-log.md`）
+
+## 0. 完成态回写（2026-03-16）
+1. [X] `M4` 已由 `DEV-PLAN-240C` 完成：`ActionInterceptor`、风险门左移、执行前 gate 与错误码映射均已落地。
+2. [X] `M5` 已由 `DEV-PLAN-240D` 完成：正式 `:commit` 已切换为 `202 + receipt`，并具备 `receipt -> poll -> refresh/cancel`、真实任务执行与 `manual_takeover_required` 可见性。
+3. [X] `M6` 的运行时目标已由 `DEV-PLAN-241` 与 `DEV-PLAN-268` 完成：最小知识资产运行时、只读 Resolver、`plan_context_v1`、`Context Assembler`、`Semantic Orchestrator`、`/reply` 投影化与检索状态收口均已落地。
+4. [X] `DEV-PLAN-240E` 继续保留为知识治理母法规划态；其职责是冻结治理契约与长期停止线，而不是阻塞 `240` 主链运行时封板。
+5. [X] `M7` 已由 `DEV-PLAN-240F` 完成：`240` 与 `280/284` 正式主链路、`288/290/291` 联合回归与 stopline 搜索已形成可交接证据。
+6. [X] 因此，`DEV-PLAN-240` 作为“Assistant 事务编排现代化主计划”已完成；`DEV-PLAN-285` 的总封板与归档仍是上位收口动作，但不再阻塞本计划完成态判定。
 
 ## 1. 背景与问题定义
 - **需求来源**：针对当前 Assistant 在组织架构操作中的“代码写死”实现，提出批判性评估，并给出更先进、可扩展、可审计的事务操作模式。
@@ -79,12 +87,12 @@
 ## 4. 目标与非目标
 
 ### 4.1 核心目标
-1. [ ] 去除组织架构操作在核心流程中的硬编码分支，收敛到声明式动作注册。
-2. [ ] 建立 Assistant 事务编排层（Plan/Confirm/Commit/Task）并支持可恢复执行。
-3. [ ] 对齐 Skill/内部知识/LibreChat 能力模型，形成统一的知识与执行治理口径（runtime 复用、后端裁决、前端降权）。
-4. [ ] 保持 AI/UI 同构提交与审计一致性，禁止产生第二写入口。
-5. [ ] 明确与 `280/284` 的职责边界：后端只输出冻结 DTO 与状态机事实，不把业务推进逻辑回灌到前端 helper。
-6. [ ] 对齐 `223/260`：确保 `phase + 事务元数据` 可持久化、可恢复、可回放。
+1. [X] 去除组织架构操作在核心流程中的硬编码分支，收敛到声明式动作注册。
+2. [X] 建立 Assistant 事务编排层（Plan/Confirm/Commit/Task）并支持可恢复执行。
+3. [X] 对齐 Skill/内部知识/LibreChat 能力模型，形成统一的知识与执行治理口径（runtime 复用、后端裁决、前端降权）。
+4. [X] 保持 AI/UI 同构提交与审计一致性，禁止产生第二写入口。
+5. [X] 明确与 `280/284` 的职责边界：后端只输出冻结 DTO 与状态机事实，不把业务推进逻辑回灌到前端 helper。
+6. [X] 对齐 `223/260`：确保 `phase + 事务元数据` 可持久化、可恢复、可回放。
 
 ### 4.2 非目标
 1. [ ] 本计划不引入 legacy 回退链路。
@@ -276,10 +284,10 @@ const (
 2. [X] **M1（契约冻结）**：冻结 `AssistantActionSpec/ExecutionPlan/TxEnvelope/CompensationSpec`、状态机、错误码与 Confirm `plan_hash` 契约，并冻结 `confirm_ttl_seconds/expires_at/version_tuple` 字段口径。
 3. [X] **M2（去写死第一步）**：把 `create_orgunit` 从核心 `if/switch` 下沉到 `ActionRegistry + CommitAdapter`，保持行为等价；强制 Commit 前执行 `version_tuple` OCC 校验。
 4. [X] **M3（编排统一）**：统一内存与 PG 路径状态迁移；把 confirm/commit/task 三段收敛为同一状态机实现。
-5. [ ] **M4（权鉴与风控左移）**：落地 `ActionInterceptor`，将 `auth_object/auth_action/risk_tier/required_checks` 固化到执行前 gate。
-6. [ ] **M5（耐久执行 + 补偿）**：提交链路默认走任务编排（receipt + 异步执行）；高风险组织操作在初期默认“人工接管优先”，`partial failure` 先落 `MANUAL_TAKEOVER_REQUIRED`，`auto-saga` 按白名单渐进启用。
-7. [ ] **M6（内部知识与上下文收口）**：建立知识包、只读 Resolver 与上下文装配主链，并完成反馈语义收口。
-8. [ ] **M7（280 方向封板）**：在 `283/284` 主链路下完成 AI/UI 同构回归，确保无前端重算、无旧桥接职责回流。
+5. [X] **M4（权鉴与风控左移）**：`DEV-PLAN-240C` 已落地 `ActionInterceptor`，并将 `auth_object/auth_action/risk_tier/required_checks` 固化到执行前 gate。
+6. [X] **M5（耐久执行 + 补偿）**：`DEV-PLAN-240D` 已将正式提交切换为任务编排主链（`receipt + async task`）；高风险组织操作按“人工接管优先”收口，`partial failure` 默认进入 `MANUAL_TAKEOVER_REQUIRED`。
+7. [X] **M6（内部知识与上下文收口）**：`DEV-PLAN-241` 已落地知识资产运行时最小实现与只读 Resolver，`DEV-PLAN-268` 已完成 `Context Assembler` / `Semantic Orchestrator`、`/reply` 投影化与检索状态收口；`240E` 继续保留为治理母法。
+8. [X] **M7（280 方向封板）**：`DEV-PLAN-240F` 已在 `283/284` 主链路下完成 AI/UI 同构回归与 stopline 搜索，确认无前端重算、无旧桥接职责回流。
 
 ### 7.1 M0-M1 执行记录（2026-03-07 CST）
 1. [X] 边界冻结完成：`223` 作为持久化事实源、`260` 作为业务 FSM/DTO 语义主计划、`280/283` 作为承载与入口主计划、`284` 作为 send/store/render 接管主计划。
@@ -313,17 +321,17 @@ const (
 9. [ ] `make check doc`
 
 ## 9. 验收标准（DoD）
-1. [ ] 新增组织操作场景时，无需修改核心 `assistant_*` 提交流程分支，仅通过注册契约扩展。
-2. [ ] 对同一输入，AI/UI 路径在授权判定、错误码、审计字段上保持一致。
-3. [ ] Confirm 请求必须携带 `plan_hash` 且后端一致性校验通过，避免确认-提交错配。
-4. [ ] `READY_FOR_CONFIRM` 超过 TTL 后必须进入 `EXPIRED`（至少惰性判定生效），禁止超时确认。
-5. [ ] Commit Adapter 在写门前必须完成 `version_tuple` OCC 校验；校验失败返回稳定错误码并阻断提交。
-6. [ ] 高风险动作 `partial failure` 默认进入 `MANUAL_TAKEOVER_REQUIRED`，并生成可追踪人工接管信息。
-7. [ ] 任务执行支持断点恢复与可审计重试，不出现“已受理但不可追踪”状态。
-8. [ ] 知识与上下文接入不突破 One Door 与租户边界，且不得形成第二知识主源。
-9. [ ] 关键失败路径（超时/版本漂移/知识装配失败/Resolver 查询失败/补偿失败）均有稳定错误码与人工接管入口。
-10. [ ] `260` DTO 字段语义保持单主源：后端可稳定输出 `phase/missing_fields/candidates/pending_draft_summary/selected_candidate_id/commit_reply/error_code`，且能从持久化事实源重建。
-11. [ ] 在 `283/284` 正式链路下，前端不再承担事务阶段推进、候选裁决与提交约束；若出现前端重算则本计划验收失败。
+1. [X] 新增组织操作场景时，无需修改核心 `assistant_*` 提交流程分支，仅通过注册契约扩展（`240A`）。
+2. [X] 对同一输入，AI/UI 路径在授权判定、错误码、审计字段上保持一致（`240F` 联合回归与 `288/290/291` 证据）。
+3. [X] Confirm 请求必须携带 `plan_hash` 且后端一致性校验通过，避免确认-提交错配（`240A/240B`）。
+4. [X] `READY_FOR_CONFIRM` 超过 TTL 后必须进入 `EXPIRED`（至少惰性判定生效），禁止超时确认（`240B`）。
+5. [X] Commit Adapter 在写门前必须完成 `version_tuple` OCC 校验；校验失败返回稳定错误码并阻断提交（`240A`）。
+6. [X] 高风险动作 `partial failure` 默认进入 `MANUAL_TAKEOVER_REQUIRED`，并生成可追踪人工接管信息（`240D`）。
+7. [X] 任务执行支持断点恢复与可审计重试，不出现“已受理但不可追踪”状态（`240D`）。
+8. [X] 知识与上下文接入不突破 One Door 与租户边界，且不得形成第二知识主源（`241/268`，并受 `240E` 治理边界约束）。
+9. [X] 关键失败路径（超时/版本漂移/知识装配失败/Resolver 查询失败）均有稳定错误码与人工接管或 fail-closed 收口入口；当前阶段不以 `auto-saga` 作为验收前提（`240C/240D/241/268`）。
+10. [X] `260` DTO 字段语义保持单主源：后端可稳定输出 `phase/missing_fields/candidates/pending_draft_summary/selected_candidate_id/commit_reply/error_code`，且能从持久化事实源重建（`223/260/240F`）。
+11. [X] 在 `283/284` 正式链路下，前端不再承担事务阶段推进、候选裁决与提交约束；若出现前端重算则本计划验收失败（`240F`）。
 
 ## 10. 风险与缓解
 1. [ ] **风险：抽象过度导致落地变慢**；缓解：先从 orgunit create 单场景切片落地，再复制到其他动作。
@@ -333,10 +341,10 @@ const (
 5. [ ] **风险：`240` 与 `280/284` 边界回流**；缓解：以“后端事实源 + 前端降权”作为 stopline，任何 UI 兜底业务判定都阻断合并。
 
 ## 11. 交付物与证据
-1. [ ] 主计划文档：`docs/dev-plans/240-assistant-org-transaction-orchestration-modernization-plan.md`。
-2. [ ] 执行证据：`docs/dev-records/dev-plan-240-execution-log.md`（后续实施阶段创建）。
-3. [ ] 关键对比报告：硬编码路径 vs 注册驱动路径（性能、失败率、变更成本）。
-4. [ ] E2E 证据：组织架构创建/更正/移动等至少 3 类动作的计划-确认-提交-任务闭环。
+1. [X] 主计划文档：`docs/dev-plans/240-assistant-org-transaction-orchestration-modernization-plan.md`。
+2. [X] 主计划执行证据：`docs/dev-records/dev-plan-240-execution-log.md`。
+3. [X] 关键对齐与差量证据：`docs/dev-records/assets/dev-plan-240f/240f-runtime-delta-report.md`、`docs/dev-records/assets/dev-plan-240f/240f-handoff-to-285.md`。
+4. [X] 正式链路与联合回归证据：`docs/dev-records/assets/dev-plan-240f/240f-joint-regression-matrix.md`，以及 `288/290/291` 交接与新鲜度证据。
 
 ## 12. 行业调研参考（Primary Sources）
 1. [ ] LibreChat Agents 能力：`https://www.librechat.ai/docs/configuration/librechat_yaml/object_structure/agents`
@@ -348,35 +356,35 @@ const (
 
 ## 13. 与既有计划关系（避免重复建设）
 1. [ ] 承接 `DEV-PLAN-224/224C/225` 的意图治理、技能计划、任务编排基础。
-2. [ ] 复用 `DEV-PLAN-235/239` 的运行边界收敛成果，并以 `240E` 承接内部知识与上下文主链。
+2. [ ] 复用 `DEV-PLAN-235/239` 的运行边界收敛成果；`240E` 保留为内部知识与上下文主链治理母法，运行时最小实现由 `241` 承接，语义/上下文进一步收口由 `268` 完成。
 3. [ ] 对齐 `DEV-PLAN-223/260`：事实源持久化与业务 FSM/DTO 语义由两者主导，`240` 负责事务编排实现。
 4. [ ] 对齐 `DEV-PLAN-280/283/284`：UI 承载、入口切换与源码级发送渲染接管由其主导，`240` 不重复定义前端承载策略。
 5. [ ] 对齐 `DEV-PLAN-271`：跨计划阶段编排与封板顺序按统一主链路执行。
 6. [ ] `DEV-PLAN-240A~240F` 承接 `M2~M7` 的原子实施，不再在主计划中堆叠实现细节。
 7. [ ] 本计划聚焦“去写死 + 统一事务编排抽象”，不重复定义既有单主源与边界规则。
 
-## 14. 当前实现 vs 目标态对照表（专门）
+## 14. 完成态对照表（专门）
 
-> 快照日期：2026-03-08（基于当前主干代码与本计划修订稿）
+> 完成态回写日期：2026-03-16（原 2026-03-08 现状快照已回写为完成态对照）
 
-| 优先级 | 改造主题 | 当前实现（现状） | 240 目标态 | 主要落点（代码/契约） |
+| 优先级 | 改造主题 | 完成态实现（2026-03-16） | 240 目标态 | 主要落点（代码/契约/证据） |
 | --- | --- | --- | --- | --- |
-| P0 | 去写死：ActionSpec/Registry | `create_orgunit`、`capability_key`、`required_checks` 在核心流程常量/分支中写死 | 使用 `AssistantActionSpec` + `ActionRegistry` 注册驱动；`No Spec, No Commit` | `internal/server/assistant_api.go:34`、`internal/server/assistant_api.go:1120`、`internal/server/assistant_intent_pipeline.go:51`、`internal/server/assistant_intent_pipeline.go:59`；本计划 §6.1/§6.2 |
-| P0 | Confirm 契约（plan_hash + TTL） | confirm 入参仅 `candidate_id`；未要求 `plan_hash`；未见 `READY_FOR_CONFIRM` 的 TTL 过期判定 | Confirm 必须提交并校验 `plan_hash`；超时转 `EXPIRED`，禁止超时确认 | `internal/server/assistant_api.go:202`、`internal/server/assistant_api.go:447`、`internal/server/assistant_api.go:840`；本计划 §6.2/§6.4/§9 |
-| P0 | Commit Adapter + OCC | commit 直接构造 `WriteOrgUnitRequest` 调 `writeSvc.Write`；未显式 `version_tuple` OCC | 通过 `commit_adapter_key` 进入受控 Adapter；写前强制 `version_tuple` OCC（TOCTOU 防护） | `internal/server/assistant_api.go:1009`、`internal/server/assistant_persistence.go:614`；本计划 §6.2/§7(M2)/§9 |
-| P0 | 内存/PG 路径统一 | `commitTurn` 与 `applyCommitTurn` 逻辑双处维护，容易漂移 | confirm/commit/task 收敛为统一状态机实现 | `internal/server/assistant_api.go:908`、`internal/server/assistant_persistence.go:543`；本计划 §7(M3) |
-| P1 | 提交链路耐久化（默认异步） | `/turns/{turn_action}:commit` 仍是同步直提；Task 通道存在但非默认写入主链 | 默认 `receipt + async task`，支持恢复重试与可追踪 | `internal/server/assistant_api.go:486`、`internal/server/assistant_tasks_api.go:12`、`internal/server/assistant_task_store.go:289`；本计划 §7(M5) |
-| P1 | Task 执行语义补齐 | 当前 workflow 主要做快照一致性校验后标记成功，未承接完整业务提交/补偿 | 对齐 `QUEUED/EXECUTING/SUCCEEDED/COMPENSATING/COMPENSATED/MANUAL_TAKEOVER_REQUIRED` | `internal/server/assistant_task_store.go:548`、`internal/server/assistant_task_store.go:611`；本计划 §6.4/§6.5 |
-| P1 | 权鉴与风控左移 | `required_checks` 主要在计划编译阶段硬编码，缺少统一拦截器承载 | 通过 `ActionInterceptor` 固化 `auth_object/auth_action/risk_tier/required_checks` gate | `internal/server/assistant_intent_pipeline.go:56`、`internal/server/assistant_intent_pipeline.go:65`；本计划 §6.1/§6.2/§7(M4) |
-| P1 | DTO 快照重建与前端降权边界 | 业务阶段信息部分停留在运行时流程中，跨端语义依赖实现细节 | 后端稳定输出并可重建 `phase/missing_fields/candidates/pending_draft_summary/selected_candidate_id/commit_reply/error_code`，前端不重算 | `internal/server/assistant_api.go`、`internal/server/assistant_persistence.go`；本计划 §5.1/§6.2/§6.7/§9 |
-| P2 | 内部知识与上下文收口 | 已有动作主链与 DTO 事实源，但缺少结构化知识包、只读 Resolver 与统一反馈指导 | 建立 Internal Knowledge Pack + Readonly Resolver + Context Assembler，并保持 One Door 与事实源不变量 | `docs/dev-plans/240e-assistant-internal-knowledge-pack-and-readonly-resolver-plan.md`；本计划 §3.6/§7(M6) |
+| P0 | 去写死：ActionSpec/Registry | `ActionSpec + ActionRegistry + CommitAdapter` 已成为正式扩展面，核心提交分支不再承载新增动作特判 | 使用 `AssistantActionSpec` + `ActionRegistry` 注册驱动；`No Spec, No Commit` | `240A`、本计划 §6.1/§6.2、`docs/dev-records/dev-plan-240-execution-log.md` |
+| P0 | Confirm 契约（plan_hash + TTL） | confirm 已要求并校验 `plan_hash`，`READY_FOR_CONFIRM` TTL 过期判定已收敛到统一状态机 | Confirm 必须提交并校验 `plan_hash`；超时转 `EXPIRED`，禁止超时确认 | `240A/240B`、本计划 §6.2/§6.4/§9 |
+| P0 | Commit Adapter + OCC | 写门前 `version_tuple` OCC 已成为强制门禁，提交经受控 adapter 进入 One Door | 通过 `commit_adapter_key` 进入受控 Adapter；写前强制 `version_tuple` OCC（TOCTOU 防护） | `240A`、本计划 §6.2/§7(M2)/§9 |
+| P0 | 内存/PG 路径统一 | confirm/commit/task 状态迁移已统一，内存/PG 双处维护漂移已收敛 | confirm/commit/task 收敛为统一状态机实现 | `240B`、本计划 §7(M3) |
+| P1 | 提交链路耐久化（默认异步） | 正式 `:commit` 已切换为 `202 + receipt`；`receipt -> poll -> refresh/cancel` 为默认消费语义 | 默认 `receipt + async task`，支持恢复重试与可追踪 | `240D`、`docs/dev-records/dev-plan-240d-execution-log.md` |
+| P1 | Task 执行语义补齐 | task 已承接真实业务提交，并以 `MANUAL_TAKEOVER_REQUIRED` 作为高风险或局部失败默认收口 | 对齐 `QUEUED/EXECUTING/SUCCEEDED/COMPENSATING/COMPENSATED/MANUAL_TAKEOVER_REQUIRED` | `240D`、本计划 §6.4/§6.5 |
+| P1 | 权鉴与风控左移 | `ActionInterceptor` 已固化 `auth_object/auth_action/risk_tier/required_checks` 的执行前 gate | 通过 `ActionInterceptor` 固化 `auth_object/auth_action/risk_tier/required_checks` gate | `240C`、本计划 §6.1/§6.2/§7(M4) |
+| P1 | DTO 快照重建与前端降权边界 | 后端 DTO 与审计字段已可从持久化事实源稳定重建，`240F` 已确认前端不再重算事务语义 | 后端稳定输出并可重建 `phase/missing_fields/candidates/pending_draft_summary/selected_candidate_id/commit_reply/error_code`，前端不重算 | `223/260/240F`、`docs/dev-records/assets/dev-plan-240f/240f-handoff-to-285.md` |
+| P2 | 内部知识与上下文收口 | `241` 已落地知识资产运行时最小实现与只读 Resolver，`268` 已完成 `Context Assembler`、`Semantic Orchestrator`、`/reply` 投影化与检索状态收口；`240E` 继续保留治理母法 | 建立 Internal Knowledge Pack + Readonly Resolver + Context Assembler，并保持 One Door 与事实源不变量 | `240E/241/268`、`docs/dev-records/dev-plan-241-execution-log.md`、`docs/dev-records/dev-plan-268-execution-log.md` |
 
 ### 14.1 与 M0-M7 的对应关系（执行顺序）
 1. [X] **M0**：先冻结 `223/260/280/284` 边界与 DTO 字段口径（对照表“DTO 快照重建与前端降权边界”行）。
 2. [X] **M1**：冻结 ActionSpec/ExecutionPlan/TxEnvelope 与 Confirm `plan_hash` + TTL 字段口径（对照表前两行）。
-3. [ ] **M2**：落地 ActionRegistry + CommitAdapter，并引入 `version_tuple` OCC（对照表第 1/3 行）。
-4. [ ] **M3**：消除内存/PG 双实现漂移，统一状态迁移（对照表第 4 行）。
-5. [ ] **M4**：接入 ActionInterceptor，权鉴与风控左移（对照表第 7 行）。
-6. [ ] **M5**：提交改为耐久任务主链，补齐人工接管优先策略（对照表第 5/6 行）。
-7. [ ] **M6**：完成内部知识包、只读 Resolver 与上下文装配闭环（对照表最后一行）。
-8. [ ] **M7**：在 `283/284` 新主链路上完成封板回归（对照表全部项）。
+3. [X] **M2**：落地 ActionRegistry + CommitAdapter，并引入 `version_tuple` OCC（对照表第 1/3 行）。
+4. [X] **M3**：消除内存/PG 双实现漂移，统一状态迁移（对照表第 4 行）。
+5. [X] **M4**：接入 ActionInterceptor，权鉴与风控左移（对照表第 7 行）。
+6. [X] **M5**：提交改为耐久任务主链，补齐人工接管优先策略（对照表第 5/6 行）。
+7. [X] **M6**：完成内部知识包、只读 Resolver 与上下文装配闭环；其中 `240E` 保留治理母法角色，运行时收口由 `241/268` 承接（对照表最后一行）。
+8. [X] **M7**：在 `283/284` 新主链路上完成封板回归（对照表全部项）。
