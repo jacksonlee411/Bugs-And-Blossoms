@@ -1,12 +1,12 @@
-# DEV-PLAN-320：核心 HR 业务域子计划（Org / JobCatalog / Staffing / Person）
+# DEV-PLAN-360：核心 HR 业务域子计划（Org / JobCatalog / Staffing / Person）
 
 **状态**: 规划中（2026-03-17 03:16 CST）
 
 ## 1. 背景与上下文
 
-本计划承接 [DEV-PLAN-300](/home/lee/Projects/Bugs-And-Blossoms/docs/dev-plans/300-greenfield-csharp-hr-platform-functional-blueprint.md) 的业务蓝图，并默认依赖 [DEV-PLAN-310](/home/lee/Projects/Bugs-And-Blossoms/docs/dev-plans/310-platform-and-iam-foundation-plan.md) 提供的平台基座。
+本计划承接 [DEV-PLAN-300](/home/lee/Projects/Bugs-And-Blossoms/docs/dev-plans/300-greenfield-csharp-hr-platform-functional-blueprint.md) 的业务蓝图，并默认依赖 [DEV-PLAN-320](/home/lee/Projects/Bugs-And-Blossoms/docs/dev-plans/320-shared-data-architecture-and-modeling-conventions-plan.md) 与 [DEV-PLAN-340](/home/lee/Projects/Bugs-And-Blossoms/docs/dev-plans/340-platform-and-iam-foundation-plan.md) 提供的共享建模与平台基座。
 
-`320` 负责平台最核心的 HR 主数据与事务主链：
+`360` 负责平台最核心的 HR 主数据与事务主链：
 
 - 组织架构
 - 岗位分类
@@ -29,8 +29,8 @@
 
 ### 2.2 非目标
 
-- [ ] 本计划不实现复杂审批流，由 `330` 承接。
-- [ ] 本计划不实现完整报表中心，由 `330` 承接汇总与导出。
+- [ ] 本计划不实现复杂审批流，由 `370` 承接。
+- [ ] 本计划不实现完整报表中心，由 `380` 承接汇总与导出。
 - [ ] 本计划不引入事件溯源，不把数据库函数作为默认业务权威。
 
 ## 3. 模块划分
@@ -149,7 +149,6 @@
 - `assignments`
 - `assignment_versions`
 - `persons`
-- `person_versions`（如确有必要）
 
 ### 6.2 建模约束
 
@@ -186,9 +185,12 @@
 
 ## 8. 与其他子计划的关系
 
-- `310` 提供 tenancy、auth、dictionary、audit、jobs。
-- `320` 为 `330` 提供 workflow、assistant、integration 的核心业务对象。
-- `330` 不得重新定义 Org / Person / Staffing / JobCatalog 的写模型。
+- `320` 提供 effective date、历史、审计快照与 EF/Dapper 边界等共享建模约定。
+- `330` 提供敏感数据分级、导出治理与租户隔离等安全治理基线。
+- `340` 提供 tenancy、auth、dictionary、audit、jobs。
+- `350` 提供列表、详情、历史与表单的统一前端交互模式。
+- `360` 为 `370/380/390` 提供 workflow、workbench、assistant 所需的核心业务对象。
+- `370/380/390` 不得重新定义 Org / Person / Staffing / JobCatalog 的主写模型。
 
 ## 9. 验收标准
 
@@ -200,7 +202,7 @@
 
 ## 10. 后续拆分建议
 
-1. [ ] `321`：Org Structure 详细设计
-2. [ ] `322`：Person 详细设计
-3. [ ] `323`：Job Catalog 详细设计
-4. [ ] `324`：Staffing（Position / Assignment）详细设计
+1. [ ] `361`：Org Structure 详细设计
+2. [ ] `362`：Person 详细设计
+3. [ ] `363`：Job Catalog 详细设计
+4. [ ] `364`：Staffing（Position / Assignment）详细设计

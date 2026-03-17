@@ -446,15 +446,15 @@ modules/{module}/
 - DEV-PLAN-291：237 升级兼容回归前置专项（供 285 封板复核）：`docs/dev-plans/291-librechat-237-upgrade-compatibility-readiness-plan.md`
 - DEV-PLAN-292：LibreChat 正式入口 vendored UI 认证/启动最小兼容层专项：`docs/dev-plans/292-librechat-vendored-ui-auth-startup-compat-plan.md`
 - DEV-PLAN-300：功能导向的 Greenfield HR 平台重做蓝图（C#/.NET + React）：`docs/dev-plans/300-greenfield-csharp-hr-platform-functional-blueprint.md`
-- DEV-PLAN-310：平台与 IAM 基座子计划（Tenancy / AuthN / AuthZ / Shell）：`docs/dev-plans/310-platform-and-iam-foundation-plan.md`
-- DEV-PLAN-320：核心 HR 业务域子计划（Org / JobCatalog / Staffing / Person）：`docs/dev-plans/320-core-hr-domains-plan.md`
-- DEV-PLAN-330：工作流、审计增强与集成子计划：`docs/dev-plans/330-workflow-audit-assistant-and-integration-plan.md`
-- DEV-PLAN-340：Chat Assistant 能力子计划：`docs/dev-plans/340-chat-assistant-capability-plan.md`
-- DEV-PLAN-350：数据工作台与运营分析子计划：`docs/dev-plans/350-data-workbench-and-operational-analytics-plan.md`
-- DEV-PLAN-360：共享数据架构与建模约定子计划：`docs/dev-plans/360-shared-data-architecture-and-modeling-conventions-plan.md`
-- DEV-PLAN-370：前端产品壳与交互系统子计划：`docs/dev-plans/370-frontend-product-shell-and-interaction-system-plan.md`
-- DEV-PLAN-380：工程质量、测试与交付子计划：`docs/dev-plans/380-engineering-quality-testing-and-delivery-plan.md`
-- DEV-PLAN-390：安全、合规与数据治理子计划：`docs/dev-plans/390-security-compliance-and-data-governance-plan.md`
+- DEV-PLAN-310：工程质量、测试与交付子计划：`docs/dev-plans/310-engineering-quality-testing-and-delivery-plan.md`
+- DEV-PLAN-320：共享数据架构与建模约定子计划：`docs/dev-plans/320-shared-data-architecture-and-modeling-conventions-plan.md`
+- DEV-PLAN-330：安全、合规与数据治理子计划：`docs/dev-plans/330-security-compliance-and-data-governance-plan.md`
+- DEV-PLAN-340：平台与 IAM 基座子计划（Tenancy / AuthN / AuthZ / Shell）：`docs/dev-plans/340-platform-and-iam-foundation-plan.md`
+- DEV-PLAN-350：前端产品壳与交互系统子计划：`docs/dev-plans/350-frontend-product-shell-and-interaction-system-plan.md`
+- DEV-PLAN-360：核心 HR 业务域子计划（Org / JobCatalog / Staffing / Person）：`docs/dev-plans/360-core-hr-domains-plan.md`
+- DEV-PLAN-370：工作流、审计增强与集成子计划：`docs/dev-plans/370-workflow-audit-and-integration-plan.md`
+- DEV-PLAN-380：数据工作台与运营分析子计划：`docs/dev-plans/380-data-workbench-and-operational-analytics-plan.md`
+- DEV-PLAN-390：Chat Assistant 能力子计划：`docs/dev-plans/390-chat-assistant-capability-plan.md`
 - DEV-PLAN-400：实施路线图与垂直切片编排计划：`docs/dev-plans/400-implementation-roadmap-and-vertical-slice-plan.md`
 - DEV-PLAN-225 执行日志：`docs/archive/dev-records/dev-plan-225-execution-log.md`
 - DEV-PLAN-226：测试指引 TG-004（门禁口径变更审批）：`docs/dev-plans/226-test-guide-tg004-gate-caliber-change-approval.md`

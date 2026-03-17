@@ -1,12 +1,12 @@
-# DEV-PLAN-310：平台与 IAM 基座子计划（Tenancy / AuthN / AuthZ / Shell）
+# DEV-PLAN-340：平台与 IAM 基座子计划（Tenancy / AuthN / AuthZ / Shell）
 
 **状态**: 规划中（2026-03-17 03:16 CST）
 
 ## 1. 背景与上下文
 
-本计划承接 [DEV-PLAN-300](/home/lee/Projects/Bugs-And-Blossoms/docs/dev-plans/300-greenfield-csharp-hr-platform-functional-blueprint.md) 中“从零重做、功能优先”的蓝图，负责落地最先开工的平台基座部分。
+本计划承接 [DEV-PLAN-300](/home/lee/Projects/Bugs-And-Blossoms/docs/dev-plans/300-greenfield-csharp-hr-platform-functional-blueprint.md) 中“从零重做、功能优先”的蓝图，负责在工程、数据与安全基线之上落地平台基座部分。
 
-如果把整个平台比作一栋楼，`310` 负责的是：
+如果把整个平台比作一栋楼，`340` 负责的是：
 
 - 楼的地基
 - 门禁系统
@@ -16,7 +16,7 @@
 - 角色与权限
 - 审计、任务、通知的最小平台能力
 
-没有这一层，后续 `320/330` 的业务域会被迫各自重复实现基础能力，导致系统从第一天开始分叉。
+没有这一层，后续 `350/360/370/380/390` 会被迫各自重复实现基础能力，导致系统从第一天开始分叉。
 
 ## 2. 目标与非目标
 
@@ -165,9 +165,10 @@
 
 ## 8. 依赖关系
 
-- `310` 是 `320` 和 `330` 的前置计划。
-- `320` 中所有核心 HR 模块默认依赖本计划提供的 tenancy、auth、audit、dictionary、jobs。
-- `330` 中 workflow / assistant / integration 依赖本计划提供的 task、notification、auth 基座。
+- `340` 默认依赖 `310/320/330` 提供的工程、数据与安全基线。
+- `340` 是 `350/360/370/380/390` 的平台前置计划。
+- `360` 中所有核心 HR 模块默认依赖本计划提供的 tenancy、auth、audit、dictionary、jobs。
+- `370/380/390` 依赖本计划提供的 task、notification、auth 与应用壳基座。
 
 ## 9. 验收标准
 
@@ -179,7 +180,7 @@
 
 ## 10. 后续拆分建议
 
-1. [ ] `311`：Tenancy / AuthN 详细设计
-2. [ ] `312`：AuthZ 与平台权限矩阵设计
-3. [ ] `313`：Superadmin 控制台与租户生命周期设计
-4. [ ] `314`：Audit / Notification / Background Jobs 基座设计
+1. [ ] `341`：Tenancy / AuthN 详细设计
+2. [ ] `342`：AuthZ 与平台权限矩阵设计
+3. [ ] `343`：Superadmin 控制台与租户生命周期设计
+4. [ ] `344`：Audit / Notification / Background Jobs 基座设计

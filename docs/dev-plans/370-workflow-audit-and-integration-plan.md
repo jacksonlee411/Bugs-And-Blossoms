@@ -1,4 +1,4 @@
-# DEV-PLAN-330：工作流、审计增强与集成子计划
+# DEV-PLAN-370：工作流、审计增强与集成子计划
 
 **状态**: 规划中（2026-03-17 03:16 CST）
 
@@ -7,10 +7,10 @@
 本计划承接：
 
 - [DEV-PLAN-300](/home/lee/Projects/Bugs-And-Blossoms/docs/dev-plans/300-greenfield-csharp-hr-platform-functional-blueprint.md) 的总体蓝图
-- [DEV-PLAN-310](/home/lee/Projects/Bugs-And-Blossoms/docs/dev-plans/310-platform-and-iam-foundation-plan.md) 的平台基座
-- [DEV-PLAN-320](/home/lee/Projects/Bugs-And-Blossoms/docs/dev-plans/320-core-hr-domains-plan.md) 的核心 HR 业务模型
+- [DEV-PLAN-340](/home/lee/Projects/Bugs-And-Blossoms/docs/dev-plans/340-platform-and-iam-foundation-plan.md) 的平台基座
+- [DEV-PLAN-360](/home/lee/Projects/Bugs-And-Blossoms/docs/dev-plans/360-core-hr-domains-plan.md) 的核心 HR 业务模型
 
-`330` 关注的是“让系统从能用，走向可治理、可协同、可对外集成”的那一层能力：
+`370` 关注的是“让系统从能用，走向可治理、可协同、可对外集成”的那一层能力：
 
 - 审批工作流
 - 增强审计
@@ -28,7 +28,7 @@
 
 ### 2.2 非目标
 
-- [ ] 本计划不重写 `310/320` 的平台与业务基础模型。
+- [ ] 本计划不重写 `340/360` 的平台与业务基础模型。
 - [ ] 本计划不承接导入导出、报表工作台与运营数据工作台，它们由后续独立子计划承接。
 - [ ] 本计划不承接 Chat Assistant，对话能力由后续独立子计划承接。
 - [ ] 本计划不引入过重的 BPM 大平台或分布式事件总线作为默认前提。
@@ -71,8 +71,8 @@
 
 ### 4.2 审计策略（选定）
 
-- `310` 提供统一审计底座。
-- `330` 在其上增加：
+- `340` 提供统一审计底座。
+- `370` 在其上增加：
   - 业务前后快照
   - 审批轨迹
   - 集成执行轨迹
@@ -131,11 +131,11 @@
 
 ### 7.2 Reporting 与业务域
 
-- 报表与数据工作台不属于本计划范围，由后续独立子计划承接。
+- 报表与数据工作台不属于本计划范围，由 `380` 独立承接。
 
 ### 7.3 Assistant 与业务域
 
-- Chat Assistant 不属于本计划范围，由后续独立子计划承接。
+- Chat Assistant 不属于本计划范围，由 `390` 独立承接。
 
 ## 8. 前端交付面
 
@@ -152,6 +152,6 @@
 
 ## 10. 后续拆分建议
 
-1. [ ] `331`：Workflow / Approval 详细设计
-2. [ ] `332`：Audit Enhanced 详细设计
-3. [ ] `333`：Integration Hub 详细设计
+1. [ ] `371`：Workflow / Approval 详细设计
+2. [ ] `372`：Audit Enhanced 详细设计
+3. [ ] `373`：Integration Hub 详细设计

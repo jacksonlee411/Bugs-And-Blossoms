@@ -1,12 +1,12 @@
-# DEV-PLAN-350：数据工作台与运营分析子计划
+# DEV-PLAN-380：数据工作台与运营分析子计划
 
 **状态**: 规划中（2026-03-17 07:23 CST）
 
 ## 1. 背景与上下文
 
-本计划承接 [DEV-PLAN-300](/home/lee/Projects/Bugs-And-Blossoms/docs/dev-plans/300-greenfield-csharp-hr-platform-functional-blueprint.md) 的“报表、导入导出、运营分析”能力，但不再把它们混在 `330` 的工作流与集成计划中。
+本计划承接 [DEV-PLAN-300](/home/lee/Projects/Bugs-And-Blossoms/docs/dev-plans/300-greenfield-csharp-hr-platform-functional-blueprint.md) 的“报表、导入导出、运营分析”能力，但不再把它们混在 `370` 的工作流与集成计划中。
 
-`350` 关注的是“系统如何把业务数据变成可运营、可校验、可导出、可观察的工作台能力”：
+`380` 关注的是“系统如何把业务数据变成可运营、可校验、可导出、可观察的工作台能力”：
 
 - 导入
 - 导出
@@ -97,9 +97,9 @@
 
 ## 7. 与其他子计划的关系
 
-- `320` 提供核心业务对象与查询源。
-- `330` 提供审计与回执基础。
-- `350` 只拥有数据工作台与运营视图，不拥有主业务写模型。
+- `360` 提供核心业务对象与查询源。
+- `370` 提供审计与回执基础。
+- `380` 只拥有数据工作台与运营视图，不拥有主业务写模型。
 
 ## 8. 验收标准
 
@@ -109,6 +109,6 @@
 
 ## 9. 后续拆分建议
 
-1. [ ] `351`：Import Center 详细设计
-2. [ ] `352`：Export & Reporting 详细设计
-3. [ ] `353`：Query Workspace 与运营分析详细设计
+1. [ ] `381`：Import Center 详细设计
+2. [ ] `382`：Export & Reporting 详细设计
+3. [ ] `383`：Query Workspace 与运营分析详细设计
