@@ -99,9 +99,10 @@
   - 是插入历史记录
 - 对 effective-dated 对象的查询必须能表达当前、指定日期和全历史三种读取语义。
 
-### 4.5 组织与分类树采用可索引的层级路径方案（选定）
+### 4.5 组织与职位分类采用可索引的层级/归属检索方案（选定）
 
-- `Org` 与 `JobCatalog` 的层级检索必须支持祖先、后代与子树范围查询。
+- `Org` 的层级检索必须支持祖先、后代与子树范围查询。
+- `JobCatalog` 必须支持 Group / Family 层级检索、Profile 对 Family 的归属检索，以及相应的范围查询。
 - 不应把递归 CTE 作为唯一主查询路径。
 - 具体采用哪种 PostgreSQL 路径类型、索引与 ORM 映射方式，下沉到 `361 / 363` 详细设计冻结。
 
@@ -128,11 +129,12 @@
 
 ### 5.3 M3：Job Catalog
 
-- [ ] 分类树/层级管理
-- [ ] 分类树路径检索
-- [ ] Family / Level / Profile CRUD
-- [ ] 有效期版本
-- [ ] 搜索与筛选
+- [ ] 组合分类体系管理（Group / Family / Level / Profile，而非单一树）
+- [ ] 分类包上下文、owner/read-only 与共享基线消费
+- [ ] Family / Level / Profile CRUD 与 Family 归属调整
+- [ ] `current / as_of / history` 统一读取语义
+- [ ] 搜索、筛选与下游引用解释
+- [ ] 可配置属性与动态规则消费（基于 `321 / 345`）
 
 ### 5.4 M4：Staffing
 
@@ -199,11 +201,14 @@
 ## 8. 与其他子计划的关系
 
 - `320` 提供 effective date、历史、审计快照与 EF/Dapper 边界等共享建模约定。
+- `321` 冻结租户可扩展能力的共享业务合同；`360` 各业务域只能消费，不得各自重做第二套动态字段/规则/Explain。
 - `330` 提供敏感数据分级、导出治理与租户隔离等安全治理基线。
 - `340` 提供 tenancy、auth、dictionary、audit、jobs。
+- `345` 提供平台配置与策略蓝图，是 JobCatalog 等业务域的可配置化基座。
 - `350` 提供列表、详情、历史与表单的统一前端交互模式。
 - `360` 为 `370/380/390` 提供 workflow、workbench、assistant 所需的核心业务对象。
 - `361` 负责冻结 Org Structure 的业务规则与业务蓝图，作为 `370/380/390` 的组织域输入。
+- `363` 负责冻结 Job Catalog 的业务规则、组合分类体系与可配置化边界，作为 `345/364/370/380/390` 的职位分类域输入。
 - `370/380/390` 不得重新定义 Org / Person / Staffing / JobCatalog 的主写模型。
 
 ## 9. 验收标准
@@ -211,7 +216,7 @@
 - [ ] 组织、人员、岗位分类、职位、任职均具备最小可用 CRUD 闭环。
 - [ ] 用户可以看到并操作有效期历史，而不是只看到当前状态。
 - [ ] Position 与 Assignment 的关键约束在应用层有明确校验与错误反馈。
-- [ ] 组织树与岗位分类树支持稳定的祖先/后代与子树范围检索能力。
+- [ ] 组织树与职位分类体系支持稳定的层级/归属范围检索能力。
 - [ ] Assignment 等 effective-dated 关键对象不会出现同主体同时间段重叠激活记录。
 - [ ] Person 页面与 Staffing 页面之间组合展示清晰，但不形成写侧越界。
 - [ ] UI 已具备“列表 + 详情 + 历史”统一交互范式。
@@ -220,5 +225,5 @@
 
 1. [ ] [DEV-PLAN-361：组织架构（Org Structure）业务规则优先蓝图与详细设计](/home/lee/Projects/Bugs-And-Blossoms/docs/dev-plans/361-org-structure-business-rules-and-blueprint-plan.md)
 2. [ ] `362`：Person 详细设计
-3. [ ] `363`：Job Catalog 详细设计（分类树层级检索与有效期）
+3. [ ] [DEV-PLAN-363：职位分类（Job Catalog）业务规则优先蓝图与可配置化基座方案](/home/lee/Projects/Bugs-And-Blossoms/docs/dev-plans/363-job-catalog-business-rules-and-configurability-foundation-plan.md)
 4. [ ] `364`：Staffing（Position / Assignment）详细设计（时间区间约束、冲突拦截与查询语义）
