@@ -116,6 +116,8 @@
 - [ ] 后台任务调度
 - [ ] 系统配置
 - [ ] 字典配置基础框架
+- [ ] 配置目录、候选值目录与动态策略基座
+- [ ] 策略预览 / Explain / 激活 / 发布能力
 
 ### 5.4 M4：Superadmin 控制台
 
@@ -188,3 +190,4 @@
 2. [ ] `342`：AuthZ 与平台权限矩阵设计
 3. [ ] `343`：Superadmin 控制台与租户生命周期设计
 4. [ ] `344`：Audit / Notification / Background Jobs 基座设计
+5. [ ] [DEV-PLAN-345：平台配置与策略（Platform Configuration / Policy）业务规则优先蓝图](/home/lee/Projects/Bugs-And-Blossoms/docs/dev-plans/345-platform-configuration-and-policy-business-rules-blueprint.md)
