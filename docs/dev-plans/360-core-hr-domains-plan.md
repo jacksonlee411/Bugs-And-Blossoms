@@ -38,6 +38,7 @@
 ### 3.1 Org Structure
 
 - 组织树
+- 子树检索与祖先/后代定位
 - 组织详情
 - 上下级调整
 - 有效期版本
@@ -96,12 +97,20 @@
   - 是新增未来记录
   - 是修正当前记录
   - 是插入历史记录
+- 对 effective-dated 对象的查询必须能表达当前、指定日期和全历史三种读取语义。
+
+### 4.5 组织与分类树采用可索引的层级路径方案（选定）
+
+- `Org` 与 `JobCatalog` 的层级检索必须支持祖先、后代与子树范围查询。
+- 不应把递归 CTE 作为唯一主查询路径。
+- 具体采用哪种 PostgreSQL 路径类型、索引与 ORM 映射方式，下沉到 `361 / 363` 详细设计冻结。
 
 ## 5. 业务能力拆分
 
 ### 5.1 M1：Org Structure
 
 - [ ] 组织树查询
+- [ ] 子树范围查询与祖先/后代检索
 - [ ] 组织详情页
 - [ ] 组织新建
 - [ ] 组织更名
@@ -120,6 +129,7 @@
 ### 5.3 M3：Job Catalog
 
 - [ ] 分类树/层级管理
+- [ ] 分类树路径检索
 - [ ] Family / Level / Profile CRUD
 - [ ] 有效期版本
 - [ ] 搜索与筛选
@@ -129,8 +139,9 @@
 - [ ] Position CRUD
 - [ ] Assignment CRUD
 - [ ] Position 与 Assignment 关系校验
+- [ ] Assignment 有效期重叠拦截
 - [ ] 当前任职与历史任职展示
-- [ ] 按组织/人员/职位维度查询
+- [ ] 按组织子树/人员/职位维度查询
 
 ## 6. 数据建模原则
 
@@ -155,6 +166,8 @@
 - 所有核心表带 `tenant_id`
 - 所有版本表带 `effective_date` 与 `end_date`
 - 当前行与历史行应有清晰读取路径
+- 同主体、同自然键下不得出现非法重叠的激活有效期区间
+- 树形主数据必须支持可索引的层级路径检索
 - 不允许把业务主字段大规模塞进 JSON
 
 ## 7. API 与 UI 交付面
@@ -190,6 +203,7 @@
 - `340` 提供 tenancy、auth、dictionary、audit、jobs。
 - `350` 提供列表、详情、历史与表单的统一前端交互模式。
 - `360` 为 `370/380/390` 提供 workflow、workbench、assistant 所需的核心业务对象。
+- `361` 负责冻结 Org Structure 的业务规则与业务蓝图，作为 `370/380/390` 的组织域输入。
 - `370/380/390` 不得重新定义 Org / Person / Staffing / JobCatalog 的主写模型。
 
 ## 9. 验收标准
@@ -197,12 +211,14 @@
 - [ ] 组织、人员、岗位分类、职位、任职均具备最小可用 CRUD 闭环。
 - [ ] 用户可以看到并操作有效期历史，而不是只看到当前状态。
 - [ ] Position 与 Assignment 的关键约束在应用层有明确校验与错误反馈。
+- [ ] 组织树与岗位分类树支持稳定的祖先/后代与子树范围检索能力。
+- [ ] Assignment 等 effective-dated 关键对象不会出现同主体同时间段重叠激活记录。
 - [ ] Person 页面与 Staffing 页面之间组合展示清晰，但不形成写侧越界。
 - [ ] UI 已具备“列表 + 详情 + 历史”统一交互范式。
 
 ## 10. 后续拆分建议
 
-1. [ ] `361`：Org Structure 详细设计
+1. [ ] [DEV-PLAN-361：组织架构（Org Structure）业务规则优先蓝图与详细设计](/home/lee/Projects/Bugs-And-Blossoms/docs/dev-plans/361-org-structure-business-rules-and-blueprint-plan.md)
 2. [ ] `362`：Person 详细设计
-3. [ ] `363`：Job Catalog 详细设计
-4. [ ] `364`：Staffing（Position / Assignment）详细设计
+3. [ ] `363`：Job Catalog 详细设计（分类树层级检索与有效期）
+4. [ ] `364`：Staffing（Position / Assignment）详细设计（时间区间约束、冲突拦截与查询语义）
