@@ -83,4 +83,4 @@ HR 平台天然处理大量敏感数据：
 
 1. [ ] `331`：敏感数据分级与访问治理详细设计
 2. [ ] `332`：导出、审计与留存策略详细设计
-3. [ ] `333`：租户隔离、tenant-scoped SQL 治理、密钥与 Assistant 安全治理详细设计
+3. [ ] [DEV-PLAN-333：租户隔离、tenant-scoped SQL、密钥与 Assistant 安全治理详细设计](/home/lee/Projects/Bugs-And-Blossoms/docs/dev-plans/333-tenant-isolation-tenant-scoped-sql-secrets-and-assistant-safety-detailed-design.md)
