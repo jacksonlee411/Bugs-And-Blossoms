@@ -303,6 +303,8 @@ AuthZ 是平台内“**在既定租户边界和可信身份前提下，谁能查
 - Assistant 只能消费与 UI/API 同源的授权决策；
 - Assistant 有建议资格，不等于拥有执行资格；
 - 需要审批、导出、历史更正、平台治理等高风险动作时，Assistant 必须经过同一权限边界与治理边界。
+- 不新增 `assistant_role / assistant_permission / assistant_policy` 并行权限体系；Assistant 仅是操作者的代操作通道。
+- `acting_channel=assistant` 仅用于审计与回放，不参与授权放行条件。
 
 ## 8. 作为后续子计划的业务需求输入
 
@@ -350,6 +352,7 @@ AuthZ 是平台内“**在既定租户边界和可信身份前提下，谁能查
 - [ ] Assistant 的只读检索至少需要 `tenant.read`；
 - [ ] Assistant 发起维护动作需要匹配 `tenant.maintain`；
 - [ ] Assistant 不得因为“对话更自然”而绕过 `tenant.history-maintain / tenant.approve / tenant.export / tenant.govern` 的高风险边界。
+- [ ] Assistant 的授权判断必须与 UI/API 保持同源同结果，不得出现“同 capability 不同入口不同放行”。
 
 ## 9. 建议实施分期
 
