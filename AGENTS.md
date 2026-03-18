@@ -449,6 +449,7 @@ modules/{module}/
 - DEV-PLAN-310：工程质量、测试与交付子计划：`docs/dev-plans/310-engineering-quality-testing-and-delivery-plan.md`
 - DEV-PLAN-320：共享数据架构与建模约定子计划：`docs/dev-plans/320-shared-data-architecture-and-modeling-conventions-plan.md`
 - DEV-PLAN-321：租户可扩展能力（字段/字典/策略）业务规则优先蓝图与共享模型方案：`docs/dev-plans/321-tenant-extensibility-business-rules-and-shared-model-plan.md`
+- DEV-PLAN-322：历史、生效日期、区间完整性与 `current / as_of / history` 详细设计：`docs/dev-plans/322-effective-date-history-and-interval-integrity-detailed-design.md`
 - DEV-PLAN-330：安全、合规与数据治理子计划：`docs/dev-plans/330-security-compliance-and-data-governance-plan.md`
 - DEV-PLAN-340：平台与 IAM 基座子计划（Tenancy / AuthN / AuthZ / Shell）：`docs/dev-plans/340-platform-and-iam-foundation-plan.md`
 - DEV-PLAN-345：平台配置与策略（Platform Configuration / Policy）业务规则优先蓝图：`docs/dev-plans/345-platform-configuration-and-policy-business-rules-blueprint.md`

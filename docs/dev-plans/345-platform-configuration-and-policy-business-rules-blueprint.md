@@ -23,6 +23,7 @@
 现状问题不是“缺少零件”，而是**缺少一份把这些零件收敛成平台模块语言的业务蓝图**：
 
 - 当前成熟样板主要来自 Org，容易让人把配置与策略误认为某个业务域的私有附属能力；
+- 虽然 [DEV-PLAN-363](/home/lee/Projects/Bugs-And-Blossoms/docs/dev-plans/363-job-catalog-business-rules-and-configurability-foundation-plan.md) 已经把 Job Catalog 明确为“组合分类体系 + 可配置化消费域”，但 `345` 还没有把它正式提升为平台首批消费样板之一；
 - “字段配置 / 字典配置 / Strategy Registry / 规则引擎 / Explain / 发布”之间已经形成稳定关系，但还没有被提升为 `340` 的正式 SSOT；
 - `350/360/370/380/390` 尚缺一份统一的业务需求输入，来说明它们应如何消费“可配置化”这项平台基础能力。
 
@@ -175,6 +176,9 @@
 4. **后续子计划尚缺统一输入**  
    `350/360/370/380/390` 都会消费配置与策略能力，但目前没有一份平台计划明确要求它们“必须如何消费”，容易再次长出第二套“局部规则系统”。
 
+5. **缺少首批非 Org 消费域样板的正式平台口径**  
+   现在我们已经知道 Job Catalog 这类“固定骨架强、同时又确实需要共享可配置化能力”的业务域存在，但 `345` 尚未把它正式定义成平台首批消费样板，导致“哪些应该配置化、哪些绝不能元数据化”仍容易在后续设计里摇摆。
+
 ### 4.4 现有文档到 `345` 平台语言的提升关系
 
 | 现有来源 | 现行结论 | `345` 提升后的平台语言 |
@@ -230,6 +234,21 @@
 | `Policy Registry` | 动态策略、版本链、能力上下文裁剪、激活状态 | 业务主数据真值 |
 | `Decision Service` | 决议预览、Explain、版本绑定、Preview/Dry-run 合同 | 直接拥有业务写模型 |
 | `Publication & Governance` | draft/active、发布、回滚、审计、审批输入 | 替代工作流、替代业务模块的最终提交 |
+
+### 5.5 首批消费域样板与边界
+
+`345` 选定两类首批消费样板，用来证明“可配置化是通用能力，但不会吞掉业务骨架”：
+
+| 首批消费域 | 平台配置与策略模块提供什么 | 领域自己必须继续拥有什么 |
+| --- | --- | --- |
+| `Org` | 扩展字段定义、候选值池、动态策略、Explain、发布与版本治理 | 组织身份、层级、生命周期、生效历史、组织主不变量 |
+| `Job Catalog` | Group / Family / Level / Profile 的扩展属性定义、候选值池、动态策略、Explain、共享基线发布 | 分类包、Group/Family/Level/Profile 固定骨架、Family 归属、Profile 主 Family、不同时点的分类事实 |
+
+这条边界非常关键：
+
+- 平台可以决定“某个分类对象的扩展属性如何被定义、裁剪、解释”；
+- 但平台不能把 Job Catalog 的核心分类骨架改造成“任意树 + 任意字段 + 任意脚本”的元数据系统；
+- `Group / Family / Level / Profile`、包 ownership、`current/as_of/history`、Profile 至少一个 Family 且恰好一个主 Family，仍然属于业务域固定骨架。
 
 ## 6. `345` 冻结的目标规则矩阵
 
@@ -315,6 +334,23 @@
 - 工作流、报表、Assistant 可以消费配置与策略模块，但不能重写它的主规则；
 - 平台配置与策略模块也不能反向拥有业务域主数据真值或审批状态真值。
 
+### 7.7 Job Catalog 对平台可配置化的专项护栏
+
+为了避免后续把“可配置化”错误理解成“Job Catalog 全元数据化”，`345` 对 Job Catalog 额外冻结以下护栏：
+
+- 平台可配置化只能覆盖 Job Catalog 的**扩展属性层**，不能替代其**固定分类骨架**；
+- 以下内容不得被配置化侵蚀：
+  - `Group / Family / Level / Profile` 四类核心对象
+  - `Family -> Group` 的归属语义
+  - `Profile -> Families` 的关联语义
+  - 至少一个 Family + 恰好一个主 Family
+  - 包 ownership、只读共享与 tenant-only 运行时
+  - `current / as_of / history` 时间语义
+- 平台需要支持 Job Catalog 的首批共享合同：
+  - 以 `Group / Family / Level / Profile` 作为可扩展对象
+  - 以创建、归属调整、详情编辑、下游引用作为能力上下文
+  - 以共享基线发布到租户本地作为运行前提，而不是 runtime fallback
+
 ## 8. 作为后续子计划的业务需求输入
 
 ### 8.1 对 `340`（平台与 IAM 基座）的输入
@@ -334,6 +370,9 @@
 - [ ] 各业务域只能消费平台配置与策略能力，不重复发明本模块专属的字段策略/字典/Explain 系统。
 - [ ] 各业务域需要显式声明自己支持哪些 `applicability_kind`，以及如何把业务上下文映射到共享合同。
 - [ ] 领域模块拥有业务值本身与领域不变量，但“字段/选项/策略为何如此”由平台模块提供合同。
+- [ ] `360` 中 Job Catalog 必须作为首批正式消费域之一：`Group / Family / Level / Profile` 的扩展属性走平台共享能力，但分类包、分类骨架、Family 归属与 Profile 主 Family 仍由业务域拥有。
+- [ ] `360` 中 Job Catalog 的 `current / as_of / history`、owner/read-only、共享基线发布语义，必须能被平台配置与策略模块消费和 Explain，但不得被平台模块重写为第二主模型。
+- [ ] `360` 中 Job Catalog 与 Staffing 的衔接，必须走“共享决议 + 业务域固定骨架”的双层模式：平台负责解释哪些扩展属性和允许值生效，业务域负责解释哪个 Profile/Level 在某日有效。
 
 ### 8.4 对 `370`（工作流、审计增强与集成）的输入
 
@@ -364,7 +403,7 @@
 4. [ ] `M4`：平台治理能力冻结  
    冻结 `draft/active/rollback/publication/audit/explain` 平台能力与审批输入边界。
 5. [ ] `M5`：首批消费域收敛  
-   以 Org 为样板，把现有字段、字典、策略、Explain 路径正式收敛为平台模块语言与可复用合同。
+   以 Org 与 Job Catalog 为首批样板，把现有字段、字典、策略、Explain 路径正式收敛为平台模块语言与可复用合同，并验证“固定骨架 + 共享可配置层”边界可同时成立。
 6. [ ] `M6`：跨子计划接线  
    将 `350/360/370/380/390` 中涉及配置与策略的描述统一引用 `345`，不再各自重写主规则。
 
@@ -381,6 +420,7 @@
 - [DEV-PLAN-300](/home/lee/Projects/Bugs-And-Blossoms/docs/dev-plans/300-greenfield-csharp-hr-platform-functional-blueprint.md)
 - [DEV-PLAN-320](/home/lee/Projects/Bugs-And-Blossoms/docs/dev-plans/320-shared-data-architecture-and-modeling-conventions-plan.md)
 - [DEV-PLAN-321](/home/lee/Projects/Bugs-And-Blossoms/docs/dev-plans/321-tenant-extensibility-business-rules-and-shared-model-plan.md)
+- [DEV-PLAN-363](/home/lee/Projects/Bugs-And-Blossoms/docs/dev-plans/363-job-catalog-business-rules-and-configurability-foundation-plan.md)
 - [DEV-PLAN-340](/home/lee/Projects/Bugs-And-Blossoms/docs/dev-plans/340-platform-and-iam-foundation-plan.md)
 - [DEV-PLAN-105](/home/lee/Projects/Bugs-And-Blossoms/docs/dev-plans/105-dict-config-platform-module.md)
 - [DEV-PLAN-105B](/home/lee/Projects/Bugs-And-Blossoms/docs/dev-plans/105b-dict-code-management-and-governance.md)
