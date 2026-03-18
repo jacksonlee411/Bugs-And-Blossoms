@@ -28,6 +28,8 @@
 - [ ] 建立前后端统一的应用壳：导航、租户上下文、用户上下文、错误页、空状态、列表与详情页基础组件。
 - [ ] 建立统一审计日志、通知、后台任务基座，供后续业务复用。
 - [ ] 建立 superadmin 控制面最小闭环：租户创建、启停、域名绑定、租户管理员初始化。
+- [ ] 建立平台级路由治理合同（命名空间、`route_class`、全局 responder、暴露面 stopline）。
+- [ ] 建立 capability 与颗粒度治理底座（能力命名、路由映射、颗粒度词汇与 fail-closed 门禁）。
 
 ### 2.2 非目标
 
@@ -106,6 +108,7 @@
 - [ ] 角色与权限模型
 - [ ] API 授权策略
 - [ ] 前端路由守卫
+- [ ] 路由分类与全局 responder 契约接线
 - [ ] 导航、Topbar、用户菜单
 - [ ] 403 / 404 / 500 页面
 
@@ -175,6 +178,8 @@
 - `340` 是 `360/370/380/390` 的平台前置计划。
 - `360` 中所有核心 HR 模块默认依赖本计划提供的 tenancy、auth、audit、dictionary、jobs。
 - `370/380/390` 依赖本计划提供的 task、notification、auth 与应用壳基座。
+- `346` 负责路由治理与返回契约，作为 `340/350/370/390` 的共享输入。
+- `347` 负责 capability 与颗粒度治理底座，作为 `342/345/353/360` 的共享输入。
 
 ## 9. 验收标准
 
@@ -192,3 +197,5 @@
 3. [ ] [DEV-PLAN-343：Superadmin 控制台与租户生命周期业务规则优先蓝图](/home/lee/Projects/Bugs-And-Blossoms/docs/dev-plans/343-superadmin-console-and-tenant-lifecycle-business-rules-plan.md)
 4. [ ] [DEV-PLAN-344：Audit / Notification / Background Jobs 基座详细设计](/home/lee/Projects/Bugs-And-Blossoms/docs/dev-plans/344-audit-notification-and-background-jobs-foundation-detailed-design.md)
 5. [ ] [DEV-PLAN-345：平台配置与策略（Platform Configuration / Policy）业务规则优先蓝图](/home/lee/Projects/Bugs-And-Blossoms/docs/dev-plans/345-platform-configuration-and-policy-business-rules-blueprint.md)
+6. [ ] [DEV-PLAN-346：平台路由治理与返回契约子计划（Route Class / Responder / Exposure Gates）](/home/lee/Projects/Bugs-And-Blossoms/docs/dev-plans/346-platform-routing-governance-and-response-contract-plan.md)
+7. [ ] [DEV-PLAN-347：Capability 与颗粒度治理子计划（Capability Key / Route Mapping / Granularity）](/home/lee/Projects/Bugs-And-Blossoms/docs/dev-plans/347-capability-and-granularity-governance-plan.md)

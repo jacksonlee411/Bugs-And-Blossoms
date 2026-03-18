@@ -12,6 +12,7 @@
 - [DEV-PLAN-345](/home/lee/Projects/Bugs-And-Blossoms/docs/dev-plans/345-platform-configuration-and-policy-business-rules-blueprint.md) 对决议预览、版本锚点、Explain 与提交前后口径一致性的要求；
 - [DEV-PLAN-361](/home/lee/Projects/Bugs-And-Blossoms/docs/dev-plans/361-org-structure-business-rules-and-blueprint-plan.md) 对 capability/policy_version、effective-dated 写语义与 fail-closed 字段编辑的业务输入；
 - [DEV-PLAN-363](/home/lee/Projects/Bugs-And-Blossoms/docs/dev-plans/363-job-catalog-business-rules-and-configurability-foundation-plan.md) 对只读共享包、`as_of + package + read_only` 上下文与“解释为什么不能改”的业务输入；
+- [DEV-PLAN-310](/home/lee/Projects/Bugs-And-Blossoms/docs/dev-plans/310-engineering-quality-testing-and-delivery-plan.md)、[DEV-PLAN-111](/home/lee/Projects/Bugs-And-Blossoms/docs/dev-plans/111-frontend-error-message-accuracy-and-field-level-hints.md)、[DEV-PLAN-140](/home/lee/Projects/Bugs-And-Blossoms/docs/dev-plans/140-error-message-clarity-and-gates.md) 对“稳定错误码 -> 明确提示 -> 字段级反馈 -> 门禁阻断”的质量收敛要求；
 - [DEV-PLAN-002](/home/lee/Projects/Bugs-And-Blossoms/docs/dev-plans/002-ui-design-guidelines.md) 与 [DEV-PLAN-104](/home/lee/Projects/Bugs-And-Blossoms/docs/dev-plans/104-jobcatalog-ui-optimization.md)、[DEV-PLAN-104A](/home/lee/Projects/Bugs-And-Blossoms/docs/dev-plans/104a-jobcatalog-ui-optimization-alignment-with-dev-plan-002.md) 已验证的按钮、表单、日期、错误反馈与危险操作规范。
 
 `352` 已经说明页面骨架该如何统一，但它刻意没有定义：
@@ -33,6 +34,7 @@
 - [ ] 冻结表单生命周期：进入编辑、填写、校验、确认、提交、失败、回执跟踪的统一合同。
 - [ ] 冻结 effective-dated 写操作、危险操作、审批前置操作、只读共享上下文的交互细则。
 - [ ] 为 `360/370/380/390` 提供统一交互输入，避免后续页面各自发明“自己的提交语义”和“自己的权限表达”。
+- [ ] 冻结用户可见错误呈现合同：错误码语义、字段级提示、表单级反馈、trace 关联与未知错误回退路径必须一致。
 
 ### 2.2 非目标
 
@@ -139,6 +141,15 @@
 - [DEV-PLAN-363](/home/lee/Projects/Bugs-And-Blossoms/docs/dev-plans/363-job-catalog-business-rules-and-configurability-foundation-plan.md) 已明确：
   - 共享包是可见但只读；
   - 页面需要解释“为什么当前能看但不能改”。
+
+#### 4.1.6 错误契约与门禁口径已冻结
+
+- [DEV-PLAN-140](/home/lee/Projects/Bugs-And-Blossoms/docs/dev-plans/140-error-message-clarity-and-gates.md) 已冻结：
+  - 用户可见错误必须可解释、可操作；
+  - 错误码与文案完备性需由门禁阻断回归。
+- [DEV-PLAN-111](/home/lee/Projects/Bugs-And-Blossoms/docs/dev-plans/111-frontend-error-message-accuracy-and-field-level-hints.md) 已冻结：
+  - 前端错误翻译必须单点化；
+  - 字段级提示优先级与回退链路必须稳定。
 
 ### 4.2 当前主要缺口
 
@@ -312,6 +323,8 @@
 - 字段错误不要只用全局 toast；
 - 页面错误不要塞进字段 `helperText`；
 - 403、登录失效、租户停用不能与一般业务校验失败混层。
+- 用户可见错误优先消费稳定错误码映射；未知错误按 fail-closed 回退后端 message，不得伪造业务语义。
+- 关键失败反馈必须可关联 `trace_id` 或等效追踪锚点，避免“只看到失败文案、无法定位”。
 
 ### 7.5 重复提交与并发护栏
 
@@ -378,6 +391,7 @@
 - [ ] 后续业务子计划可以直接引用 `353`，不再各自定义“隐藏、只读、禁用、403”。
 - [ ] effective-dated 写入、策略驱动字段、只读共享上下文与危险操作已具备统一的提交与确认语言。
 - [ ] 失败反馈已按字段、表单、页面、全局四层分开，不再互相混用。
+- [ ] 用户可见错误满足“稳定错误码 -> 明确提示 -> 字段级反馈 -> trace 可定位”的统一合同，并与 `310` 门禁口径一致。
 - [ ] `353` 与 `352`、`342`、`351` 边界清晰：不重复页面骨架，不越权拥有授权真值。
 
 ## 11. 关联文档
@@ -388,6 +402,9 @@
 - [DEV-PLAN-341](/home/lee/Projects/Bugs-And-Blossoms/docs/dev-plans/341-tenancy-authn-business-rules-and-entry-boundary-plan.md)
 - [DEV-PLAN-342](/home/lee/Projects/Bugs-And-Blossoms/docs/dev-plans/342-authz-and-platform-permission-matrix-business-rules-plan.md)
 - [DEV-PLAN-345](/home/lee/Projects/Bugs-And-Blossoms/docs/dev-plans/345-platform-configuration-and-policy-business-rules-blueprint.md)
+- [DEV-PLAN-310](/home/lee/Projects/Bugs-And-Blossoms/docs/dev-plans/310-engineering-quality-testing-and-delivery-plan.md)
+- [DEV-PLAN-111](/home/lee/Projects/Bugs-And-Blossoms/docs/dev-plans/111-frontend-error-message-accuracy-and-field-level-hints.md)
+- [DEV-PLAN-140](/home/lee/Projects/Bugs-And-Blossoms/docs/dev-plans/140-error-message-clarity-and-gates.md)
 - [DEV-PLAN-350](/home/lee/Projects/Bugs-And-Blossoms/docs/dev-plans/350-frontend-product-shell-and-interaction-system-plan.md)
 - [DEV-PLAN-352](/home/lee/Projects/Bugs-And-Blossoms/docs/dev-plans/352-list-detail-history-page-patterns-detailed-design.md)
 - [DEV-PLAN-361](/home/lee/Projects/Bugs-And-Blossoms/docs/dev-plans/361-org-structure-business-rules-and-blueprint-plan.md)

@@ -10,6 +10,7 @@
 - [DEV-PLAN-330](/home/lee/Projects/Bugs-And-Blossoms/docs/dev-plans/330-security-compliance-and-data-governance-plan.md) 对“导出是高风险动作、Assistant 纳入治理、租户隔离必须 fail-closed”的治理边界；
 - [DEV-PLAN-341](/home/lee/Projects/Bugs-And-Blossoms/docs/dev-plans/341-tenancy-authn-business-rules-and-entry-boundary-plan.md) 对 `tenant + principal + session` 可信来源的冻结；
 - [DEV-PLAN-350](/home/lee/Projects/Bugs-And-Blossoms/docs/dev-plans/350-frontend-product-shell-and-interaction-system-plan.md) 对“权限感知 UI”的产品交付要求；
+- [DEV-PLAN-347](/home/lee/Projects/Bugs-And-Blossoms/docs/dev-plans/347-capability-and-granularity-governance-plan.md) 对能力命名、路由映射与颗粒度词汇的治理底座冻结；
 - 现仓 [DEV-PLAN-022](/home/lee/Projects/Bugs-And-Blossoms/docs/dev-plans/022-authz-casbin-toolchain.md) 已沉淀出来的 `subject/object/action/domain`、policy SSOT 与门禁经验。
 
 但 `342` 不是把 [DEV-PLAN-022](/home/lee/Projects/Bugs-And-Blossoms/docs/dev-plans/022-authz-casbin-toolchain.md) 改写一遍。  
@@ -32,6 +33,7 @@
 - [ ] 冻结 tenant app 与 control plane 的授权边界，避免 `superadmin` 被误解为“默认拥有所有租户数据面的万能权限”。
 - [ ] 冻结前端与 API 的权限感知表达：隐藏、只读、禁用、403 拒绝各自代表什么业务语义。
 - [ ] 为 `343/345/350/360/370/380/390` 提供统一的权限输入，避免各模块继续发明自己的角色名、动作名和旁路授权规则。
+- [ ] 与 `347` 对齐能力命名与颗粒度语义，避免授权矩阵再长出第二套 capability 与路由映射词汇。
 
 ### 2.2 非目标
 
@@ -360,7 +362,7 @@ AuthZ 是平台内“**在既定租户边界和可信身份前提下，谁能查
 4. [ ] `M4`：UI 与 API 权限表达冻结  
    冻结隐藏/只读/禁用/403 的产品口径，并让 `350` 直接消费。
 5. [ ] `M5`：工具链投影接线  
-   让 `022` 的实现与门禁开始消费 `342` 的角色语义与矩阵，而不是继续停留在最小实验状态。
+   让 `022` 的实现与门禁开始消费 `342 + 347` 的角色语义、能力命名与映射约束，而不是继续停留在最小实验状态。
 
 ## 10. 验收标准
 
@@ -378,5 +380,6 @@ AuthZ 是平台内“**在既定租户边界和可信身份前提下，谁能查
 - [DEV-PLAN-341](/home/lee/Projects/Bugs-And-Blossoms/docs/dev-plans/341-tenancy-authn-business-rules-and-entry-boundary-plan.md)
 - [DEV-PLAN-344](/home/lee/Projects/Bugs-And-Blossoms/docs/dev-plans/344-audit-notification-and-background-jobs-foundation-detailed-design.md)
 - [DEV-PLAN-345](/home/lee/Projects/Bugs-And-Blossoms/docs/dev-plans/345-platform-configuration-and-policy-business-rules-blueprint.md)
+- [DEV-PLAN-347](/home/lee/Projects/Bugs-And-Blossoms/docs/dev-plans/347-capability-and-granularity-governance-plan.md)
 - [DEV-PLAN-350](/home/lee/Projects/Bugs-And-Blossoms/docs/dev-plans/350-frontend-product-shell-and-interaction-system-plan.md)
 - [DEV-PLAN-022](/home/lee/Projects/Bugs-And-Blossoms/docs/dev-plans/022-authz-casbin-toolchain.md)

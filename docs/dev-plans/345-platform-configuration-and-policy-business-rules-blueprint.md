@@ -8,6 +8,7 @@
 
 - [DEV-PLAN-300](/home/lee/Projects/Bugs-And-Blossoms/docs/dev-plans/300-greenfield-csharp-hr-platform-functional-blueprint.md) 关于“业务规则优先”的总蓝图；
 - [DEV-PLAN-320](/home/lee/Projects/Bugs-And-Blossoms/docs/dev-plans/320-shared-data-architecture-and-modeling-conventions-plan.md) 与 [DEV-PLAN-321](/home/lee/Projects/Bugs-And-Blossoms/docs/dev-plans/321-tenant-extensibility-business-rules-and-shared-model-plan.md) 关于共享数据合同与租户可扩展能力的建模基线；
+- [DEV-PLAN-347](/home/lee/Projects/Bugs-And-Blossoms/docs/dev-plans/347-capability-and-granularity-governance-plan.md) 对 capability 命名、路由映射与颗粒度词汇的治理底座冻结；
 - 当前仓库中已经成熟沉淀的配置、字典、动态策略、Explain、版本激活与 tenant-only 运行时规则。
 
 `300` 已明确 `Platform.Configuration` 是 Greenfield HR 平台的核心基座之一，但目前这层能力仍然分散在多个专项文档里：
@@ -40,6 +41,7 @@
 - [ ] 明确配置模块与策略模块的职责分层，以及它们与 `321` 的关系：`321` 冻结共享业务合同，`345` 冻结平台模块蓝图与产品输入。
 - [ ] 为 `350/360/370/380/390` 提供统一的业务需求输入，要求后续子计划消费配置/策略能力，而不是各自发明第二套“动态规则系统”。
 - [ ] 将“可配置化”正式提升为平台基础能力，而不是继续停留在“字段配置页/字典页/某个业务域策略页”的局部经验。
+- [ ] 与 `347` 保持命名与颗粒度一致：`capability_key`、上下文与时间锚点语义不在 `345` 内部再定义第二套口径。
 
 ### 2.2 非目标
 
@@ -422,6 +424,7 @@
 - [DEV-PLAN-321](/home/lee/Projects/Bugs-And-Blossoms/docs/dev-plans/321-tenant-extensibility-business-rules-and-shared-model-plan.md)
 - [DEV-PLAN-363](/home/lee/Projects/Bugs-And-Blossoms/docs/dev-plans/363-job-catalog-business-rules-and-configurability-foundation-plan.md)
 - [DEV-PLAN-340](/home/lee/Projects/Bugs-And-Blossoms/docs/dev-plans/340-platform-and-iam-foundation-plan.md)
+- [DEV-PLAN-347](/home/lee/Projects/Bugs-And-Blossoms/docs/dev-plans/347-capability-and-granularity-governance-plan.md)
 - [DEV-PLAN-105](/home/lee/Projects/Bugs-And-Blossoms/docs/dev-plans/105-dict-config-platform-module.md)
 - [DEV-PLAN-105B](/home/lee/Projects/Bugs-And-Blossoms/docs/dev-plans/105b-dict-code-management-and-governance.md)
 - [DEV-PLAN-120](/home/lee/Projects/Bugs-And-Blossoms/docs/dev-plans/120-org-field-default-values-cel-rule-engine-roadmap.md)
