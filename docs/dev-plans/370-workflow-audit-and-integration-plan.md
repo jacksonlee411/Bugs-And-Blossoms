@@ -9,6 +9,7 @@
 - [DEV-PLAN-300](/home/lee/Projects/Bugs-And-Blossoms/docs/dev-plans/300-greenfield-csharp-hr-platform-functional-blueprint.md) 的总体蓝图
 - [DEV-PLAN-340](/home/lee/Projects/Bugs-And-Blossoms/docs/dev-plans/340-platform-and-iam-foundation-plan.md) 的平台基座
 - [DEV-PLAN-360](/home/lee/Projects/Bugs-And-Blossoms/docs/dev-plans/360-core-hr-domains-plan.md) 的核心 HR 业务模型
+- [DEV-PLAN-362](/home/lee/Projects/Bugs-And-Blossoms/docs/dev-plans/362-person-business-rules-and-detailed-design.md) 的 Person 主档、身份锚点与生命周期合同
 
 `370` 关注的是“让系统从能用，走向可治理、可协同、可对外集成”的那一层能力：
 
@@ -28,7 +29,7 @@
 
 ### 2.2 非目标
 
-- [ ] 本计划不重写 `340/360` 的平台与业务基础模型。
+- [ ] 本计划不重写 `340/360/362` 的平台与业务基础模型。
 - [ ] 本计划不承接导入导出、报表工作台与运营数据工作台，它们由后续独立子计划承接。
 - [ ] 本计划不承接 Chat Assistant，对话能力由后续独立子计划承接。
 - [ ] 本计划不引入过重的 BPM 大平台或分布式事件总线作为默认前提。
@@ -133,6 +134,11 @@
 
 - `Workflow` 不拥有 Org / Person / Staffing 主数据。
 - 审批通过后，由业务应用层执行最终变更。
+- 涉及人员的审批请求，必须直接消费 [DEV-PLAN-362](/home/lee/Projects/Bugs-And-Blossoms/docs/dev-plans/362-person-business-rules-and-detailed-design.md) 冻结的 Person 真值：
+  - `person_uuid` 作为稳定身份锚点；
+  - `pernr` 作为自然键与展示键；
+  - `display_name` 与 `active / inactive` 作为当前主档快照事实。
+- `370` 不得自行重算 `pernr -> person_uuid`、不得把任职历史冒充 Person 主档、不得绕开 Person 的 active/inactive 生命周期语义。
 
 ### 7.2 Reporting 与业务域
 
@@ -142,6 +148,13 @@
 
 - Chat Assistant 不属于本计划范围，由 `390` 独立承接。
 - 当 Assistant 发起需审批或异步执行的动作时，`370` 负责提供可查询的审批状态与执行回执，而不是要求 `390` 直接观察业务主表变化。
+
+### 7.4 `370` 对 `362` 的显式消费
+
+- 人员相关审批摘要至少应稳定包含：`person_uuid / pernr / display_name / status`。
+- 人员相关 before/after 快照必须以 Person 当前主档快照为基准，不得让 Workflow 或 Integration 层发明第二套人员字段真值。
+- 当人员状态变化会影响下游负责人引用、任职资格或集成出站时，`370` 必须把该影响作为治理结果暴露出来，但不拥有决定权；决定权仍由 `362/364/361` 对应业务域拥有。
+- 外部集成若消费人员数据，必须显式声明自己读取的是“当前 Person 快照”还是“人员相关操作历史”，不得混淆为 effective-dated 人员版本线。
 
 ## 8. 前端交付面
 
@@ -156,6 +169,7 @@
 - [ ] 审计增强已能支撑审批、关键动作与集成执行的追踪。
 - [ ] 审批中与异步执行中的动作具备统一状态与回执查询路径，供 UI 与 Assistant 复用。
 - [ ] 外部系统同步不再散落在各模块内部，而有统一的集成边界。
+- [ ] 涉及人员的审批、审计与集成回执已经显式消费 `362` 的身份锚点、当前主档快照与 active/inactive 生命周期，不再各自重写人员语义。
 
 ## 10. 后续拆分建议
 

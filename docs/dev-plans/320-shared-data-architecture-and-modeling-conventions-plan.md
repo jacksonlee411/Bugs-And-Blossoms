@@ -95,4 +95,4 @@
 1. [ ] [DEV-PLAN-321：租户可扩展能力（字段/字典/策略）业务规则优先蓝图与共享模型方案](/home/lee/Projects/Bugs-And-Blossoms/docs/dev-plans/321-tenant-extensibility-business-rules-and-shared-model-plan.md)
 2. [ ] [DEV-PLAN-322：历史、生效日期、区间完整性与 `current / as_of / history` 详细设计](/home/lee/Projects/Bugs-And-Blossoms/docs/dev-plans/322-effective-date-history-and-interval-integrity-detailed-design.md)
 3. [ ] [DEV-PLAN-323：审计、任务、会话与快照模式详细设计](/home/lee/Projects/Bugs-And-Blossoms/docs/dev-plans/323-audit-task-session-and-snapshot-patterns-detailed-design.md)
-4. [ ] `324`：EF Core Query Filter、Dapper/SQL 与数据库原生能力边界详细设计
+4. [ ] [DEV-PLAN-324：EF Core Query Filter、Dapper/SQL 与数据库原生能力边界详细设计](/home/lee/Projects/Bugs-And-Blossoms/docs/dev-plans/324-ef-core-query-filter-dapper-sql-and-database-native-capabilities-boundary-detailed-design.md)

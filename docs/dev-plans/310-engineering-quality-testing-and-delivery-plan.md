@@ -86,6 +86,6 @@
 
 ## 7. 后续拆分建议
 
-1. [ ] `311`：工程结构与本地开发基线详细设计
+1. [ ] [DEV-PLAN-311：工程结构与本地开发基线详细设计](/home/lee/Projects/Bugs-And-Blossoms/docs/dev-plans/311-engineering-structure-and-local-development-baseline-detailed-design.md)
 2. [ ] `312`：测试金字塔与 E2E 策略详细设计（覆盖时间区间约束、租户隔离与 Assistant/审批长链路）
 3. [ ] `313`：CI/CD、Linux 容器平台部署与观测基线详细设计

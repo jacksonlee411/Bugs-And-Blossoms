@@ -447,11 +447,14 @@ modules/{module}/
 - DEV-PLAN-292：LibreChat 正式入口 vendored UI 认证/启动最小兼容层专项：`docs/dev-plans/292-librechat-vendored-ui-auth-startup-compat-plan.md`
 - DEV-PLAN-300：功能导向的 Greenfield HR 平台重做蓝图（C#/.NET + React）：`docs/dev-plans/300-greenfield-csharp-hr-platform-functional-blueprint.md`
 - DEV-PLAN-310：工程质量、测试与交付子计划：`docs/dev-plans/310-engineering-quality-testing-and-delivery-plan.md`
+- DEV-PLAN-311：工程结构与本地开发基线详细设计：`docs/dev-plans/311-engineering-structure-and-local-development-baseline-detailed-design.md`
 - DEV-PLAN-320：共享数据架构与建模约定子计划：`docs/dev-plans/320-shared-data-architecture-and-modeling-conventions-plan.md`
 - DEV-PLAN-321：租户可扩展能力（字段/字典/策略）业务规则优先蓝图与共享模型方案：`docs/dev-plans/321-tenant-extensibility-business-rules-and-shared-model-plan.md`
 - DEV-PLAN-322：历史、生效日期、区间完整性与 `current / as_of / history` 详细设计：`docs/dev-plans/322-effective-date-history-and-interval-integrity-detailed-design.md`
 - DEV-PLAN-323：审计、任务、会话与快照模式详细设计：`docs/dev-plans/323-audit-task-session-and-snapshot-patterns-detailed-design.md`
+- DEV-PLAN-324：EF Core Query Filter、Dapper/SQL 与数据库原生能力边界详细设计：`docs/dev-plans/324-ef-core-query-filter-dapper-sql-and-database-native-capabilities-boundary-detailed-design.md`
 - DEV-PLAN-330：安全、合规与数据治理子计划：`docs/dev-plans/330-security-compliance-and-data-governance-plan.md`
+- DEV-PLAN-331：敏感数据分级与访问治理详细设计：`docs/dev-plans/331-sensitive-data-classification-and-access-governance-detailed-design.md`
 - DEV-PLAN-333：租户隔离、tenant-scoped SQL、密钥与 Assistant 安全治理详细设计：`docs/dev-plans/333-tenant-isolation-tenant-scoped-sql-secrets-and-assistant-safety-detailed-design.md`
 - DEV-PLAN-340：平台与 IAM 基座子计划（Tenancy / AuthN / AuthZ / Shell）：`docs/dev-plans/340-platform-and-iam-foundation-plan.md`
 - DEV-PLAN-341：Tenancy / AuthN 业务规则优先蓝图与入口边界详细设计：`docs/dev-plans/341-tenancy-authn-business-rules-and-entry-boundary-plan.md`
@@ -465,6 +468,7 @@ modules/{module}/
 - DEV-PLAN-353：表单与权限感知交互详细设计：`docs/dev-plans/353-form-patterns-and-permission-aware-interaction-detailed-design.md`
 - DEV-PLAN-360：核心 HR 业务域子计划（Org / JobCatalog / Staffing / Person）：`docs/dev-plans/360-core-hr-domains-plan.md`
 - DEV-PLAN-361：组织架构（Org Structure）业务规则优先蓝图与详细设计：`docs/dev-plans/361-org-structure-business-rules-and-blueprint-plan.md`
+- DEV-PLAN-362：人员主档（Person）业务规则优先蓝图与详细设计：`docs/dev-plans/362-person-business-rules-and-detailed-design.md`
 - DEV-PLAN-363：职位分类（Job Catalog）业务规则优先蓝图与可配置化基座方案：`docs/dev-plans/363-job-catalog-business-rules-and-configurability-foundation-plan.md`
 - DEV-PLAN-364：Staffing（Position / Assignment）业务规则优先蓝图与详细设计：`docs/dev-plans/364-staffing-position-assignment-business-rules-and-detailed-design.md`
 - DEV-PLAN-370：工作流、审计增强与集成子计划：`docs/dev-plans/370-workflow-audit-and-integration-plan.md`
