@@ -226,4 +226,4 @@
 1. [ ] [DEV-PLAN-361：组织架构（Org Structure）业务规则优先蓝图与详细设计](/home/lee/Projects/Bugs-And-Blossoms/docs/dev-plans/361-org-structure-business-rules-and-blueprint-plan.md)
 2. [ ] `362`：Person 详细设计
 3. [ ] [DEV-PLAN-363：职位分类（Job Catalog）业务规则优先蓝图与可配置化基座方案](/home/lee/Projects/Bugs-And-Blossoms/docs/dev-plans/363-job-catalog-business-rules-and-configurability-foundation-plan.md)
-4. [ ] `364`：Staffing（Position / Assignment）详细设计（时间区间约束、冲突拦截与查询语义）
+4. [ ] [DEV-PLAN-364：Staffing（Position / Assignment）业务规则优先蓝图与详细设计](/home/lee/Projects/Bugs-And-Blossoms/docs/dev-plans/364-staffing-position-assignment-business-rules-and-detailed-design.md)

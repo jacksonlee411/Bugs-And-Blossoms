@@ -466,6 +466,7 @@ modules/{module}/
 - DEV-PLAN-360：核心 HR 业务域子计划（Org / JobCatalog / Staffing / Person）：`docs/dev-plans/360-core-hr-domains-plan.md`
 - DEV-PLAN-361：组织架构（Org Structure）业务规则优先蓝图与详细设计：`docs/dev-plans/361-org-structure-business-rules-and-blueprint-plan.md`
 - DEV-PLAN-363：职位分类（Job Catalog）业务规则优先蓝图与可配置化基座方案：`docs/dev-plans/363-job-catalog-business-rules-and-configurability-foundation-plan.md`
+- DEV-PLAN-364：Staffing（Position / Assignment）业务规则优先蓝图与详细设计：`docs/dev-plans/364-staffing-position-assignment-business-rules-and-detailed-design.md`
 - DEV-PLAN-370：工作流、审计增强与集成子计划：`docs/dev-plans/370-workflow-audit-and-integration-plan.md`
 - DEV-PLAN-380：数据工作台与运营分析子计划：`docs/dev-plans/380-data-workbench-and-operational-analytics-plan.md`
 - DEV-PLAN-390：Chat Assistant 能力子计划：`docs/dev-plans/390-chat-assistant-capability-plan.md`
