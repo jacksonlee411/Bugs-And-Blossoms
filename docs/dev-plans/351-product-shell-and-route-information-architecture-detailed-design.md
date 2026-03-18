@@ -11,7 +11,7 @@
 - [DEV-PLAN-342](/home/lee/Projects/Bugs-And-Blossoms/docs/dev-plans/342-authz-and-platform-permission-matrix-business-rules-plan.md) 对“导航、菜单、操作入口必须建立在同一权限矩阵上，且不能靠路由守卫单独承担全部权限表达”的冻结；
 - [DEV-PLAN-343](/home/lee/Projects/Bugs-And-Blossoms/docs/dev-plans/343-superadmin-console-and-tenant-lifecycle-business-rules-plan.md) 对“控制面必须拥有独立信息架构与导航入口，且不允许在 UI 中提供隐式切进 tenant app 的入口”的冻结；
 - [DEV-PLAN-344](/home/lee/Projects/Bugs-And-Blossoms/docs/dev-plans/344-audit-notification-and-background-jobs-foundation-detailed-design.md) 对“审计、通知、任务中心应有统一可发现入口”的冻结；
-- [DEV-PLAN-352](/home/lee/Projects/Bugs-And-Blossoms/docs/dev-plans/352-list-detail-history-page-patterns-detailed-design.md) 对“壳层必须为 `PageHeader + ContextBar + 主内容区` 预留稳定位置，而页面模式负责‘到了以后怎么读’”的冻结。
+- `351` 的输出将作为 [DEV-PLAN-352](/home/lee/Projects/Bugs-And-Blossoms/docs/dev-plans/352-list-detail-history-page-patterns-detailed-design.md) 的前置输入：壳层负责“去哪里”，页面模式负责“到了以后怎么读”。
 
 `350` 已明确前端需要统一的信息架构、导航和 Product Shell，但当前仍缺一份真正拥有“**系统到底分几个壳、路由分组如何命名、公共入口 / tenant app / control plane 如何分层、导航如何与权限和上下文对齐**”的文档。  
 如果没有 `351`，后续计划很容易继续各自发明：

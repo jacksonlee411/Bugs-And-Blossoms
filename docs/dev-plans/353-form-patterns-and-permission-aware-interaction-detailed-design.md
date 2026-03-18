@@ -32,11 +32,11 @@
 - [ ] 冻结 `hidden / read_only / disabled / 403` 四类交互表达的产品语义、适用边界与一致性要求。
 - [ ] 冻结表单生命周期：进入编辑、填写、校验、确认、提交、失败、回执跟踪的统一合同。
 - [ ] 冻结 effective-dated 写操作、危险操作、审批前置操作、只读共享上下文的交互细则。
-- [ ] 为 `351/360/370/380/390` 提供统一交互输入，避免后续页面各自发明“自己的提交语义”和“自己的权限表达”。
+- [ ] 为 `360/370/380/390` 提供统一交互输入，避免后续页面各自发明“自己的提交语义”和“自己的权限表达”。
 
 ### 2.2 非目标
 
-- [ ] 本计划不承接路由树、应用壳、页面骨架与对象页组合方式；这些以 [DEV-PLAN-352](/home/lee/Projects/Bugs-And-Blossoms/docs/dev-plans/352-list-detail-history-page-patterns-detailed-design.md) 与后续 `351` 为准。
+- [ ] 本计划不承接路由树、应用壳、页面骨架与对象页组合方式；这些以 [DEV-PLAN-351](/home/lee/Projects/Bugs-And-Blossoms/docs/dev-plans/351-product-shell-and-route-information-architecture-detailed-design.md) 与 [DEV-PLAN-352](/home/lee/Projects/Bugs-And-Blossoms/docs/dev-plans/352-list-detail-history-page-patterns-detailed-design.md) 为准。
 - [ ] 本计划不替代 [DEV-PLAN-342](/home/lee/Projects/Bugs-And-Blossoms/docs/dev-plans/342-authz-and-platform-permission-matrix-business-rules-plan.md) 的授权矩阵，只定义产品层如何表达它。
 - [ ] 本计划不定义数据库 DDL、后端权限判定算法或前端组件代码实现。
 - [ ] 本计划不把 Assistant 编排、审批状态机或导出批处理规则并入表单层；这些能力只消费本计划冻结的交互合同。
@@ -370,7 +370,7 @@
 4. [ ] `M4`：危险操作与治理前置冻结  
    明确删除、停用、导出、发布、审批前置操作的确认与结果反馈。
 5. [ ] `M5`：下游引用收口  
-   让 `351/360/370/380/390` 正式引用 `353`，不再各自重写权限感知与提交交互规则。
+   让 `360/370/380/390` 正式引用 `353`，不再各自重写权限感知与提交交互规则。
 
 ## 10. 验收标准
 
