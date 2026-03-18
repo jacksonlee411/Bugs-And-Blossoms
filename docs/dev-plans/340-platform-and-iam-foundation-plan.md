@@ -188,6 +188,6 @@
 
 1. [ ] [DEV-PLAN-341：Tenancy / AuthN 业务规则优先蓝图与入口边界详细设计](/home/lee/Projects/Bugs-And-Blossoms/docs/dev-plans/341-tenancy-authn-business-rules-and-entry-boundary-plan.md)
 2. [ ] [DEV-PLAN-342：AuthZ 与平台权限矩阵业务规则优先蓝图](/home/lee/Projects/Bugs-And-Blossoms/docs/dev-plans/342-authz-and-platform-permission-matrix-business-rules-plan.md)
-3. [ ] `343`：Superadmin 控制台与租户生命周期设计
+3. [ ] [DEV-PLAN-343：Superadmin 控制台与租户生命周期业务规则优先蓝图](/home/lee/Projects/Bugs-And-Blossoms/docs/dev-plans/343-superadmin-console-and-tenant-lifecycle-business-rules-plan.md)
 4. [ ] [DEV-PLAN-344：Audit / Notification / Background Jobs 基座详细设计](/home/lee/Projects/Bugs-And-Blossoms/docs/dev-plans/344-audit-notification-and-background-jobs-foundation-detailed-design.md)
 5. [ ] [DEV-PLAN-345：平台配置与策略（Platform Configuration / Policy）业务规则优先蓝图](/home/lee/Projects/Bugs-And-Blossoms/docs/dev-plans/345-platform-configuration-and-policy-business-rules-blueprint.md)
