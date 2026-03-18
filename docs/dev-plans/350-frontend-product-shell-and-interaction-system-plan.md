@@ -87,6 +87,6 @@
 
 ## 7. 后续拆分建议
 
-1. [ ] `351`：Product Shell 与路由信息架构详细设计
-2. [ ] `352`：列表/详情/历史页面模式详细设计
-3. [ ] `353`：表单与权限感知交互详细设计
+1. [ ] [DEV-PLAN-351：Product Shell 与路由信息架构详细设计](/home/lee/Projects/Bugs-And-Blossoms/docs/dev-plans/351-product-shell-and-route-information-architecture-detailed-design.md)
+2. [ ] [DEV-PLAN-352：列表/详情/历史页面模式详细设计](/home/lee/Projects/Bugs-And-Blossoms/docs/dev-plans/352-list-detail-history-page-patterns-detailed-design.md)
+3. [ ] [DEV-PLAN-353：表单与权限感知交互详细设计](/home/lee/Projects/Bugs-And-Blossoms/docs/dev-plans/353-form-patterns-and-permission-aware-interaction-detailed-design.md)

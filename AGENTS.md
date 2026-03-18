@@ -456,9 +456,13 @@ modules/{module}/
 - DEV-PLAN-340：平台与 IAM 基座子计划（Tenancy / AuthN / AuthZ / Shell）：`docs/dev-plans/340-platform-and-iam-foundation-plan.md`
 - DEV-PLAN-341：Tenancy / AuthN 业务规则优先蓝图与入口边界详细设计：`docs/dev-plans/341-tenancy-authn-business-rules-and-entry-boundary-plan.md`
 - DEV-PLAN-342：AuthZ 与平台权限矩阵业务规则优先蓝图：`docs/dev-plans/342-authz-and-platform-permission-matrix-business-rules-plan.md`
+- DEV-PLAN-343：Superadmin 控制台与租户生命周期业务规则优先蓝图：`docs/dev-plans/343-superadmin-console-and-tenant-lifecycle-business-rules-plan.md`
 - DEV-PLAN-344：Audit / Notification / Background Jobs 基座详细设计：`docs/dev-plans/344-audit-notification-and-background-jobs-foundation-detailed-design.md`
 - DEV-PLAN-345：平台配置与策略（Platform Configuration / Policy）业务规则优先蓝图：`docs/dev-plans/345-platform-configuration-and-policy-business-rules-blueprint.md`
 - DEV-PLAN-350：前端产品壳与交互系统子计划：`docs/dev-plans/350-frontend-product-shell-and-interaction-system-plan.md`
+- DEV-PLAN-351：Product Shell 与路由信息架构详细设计：`docs/dev-plans/351-product-shell-and-route-information-architecture-detailed-design.md`
+- DEV-PLAN-352：列表/详情/历史页面模式详细设计：`docs/dev-plans/352-list-detail-history-page-patterns-detailed-design.md`
+- DEV-PLAN-353：表单与权限感知交互详细设计：`docs/dev-plans/353-form-patterns-and-permission-aware-interaction-detailed-design.md`
 - DEV-PLAN-360：核心 HR 业务域子计划（Org / JobCatalog / Staffing / Person）：`docs/dev-plans/360-core-hr-domains-plan.md`
 - DEV-PLAN-361：组织架构（Org Structure）业务规则优先蓝图与详细设计：`docs/dev-plans/361-org-structure-business-rules-and-blueprint-plan.md`
 - DEV-PLAN-363：职位分类（Job Catalog）业务规则优先蓝图与可配置化基座方案：`docs/dev-plans/363-job-catalog-business-rules-and-configurability-foundation-plan.md`
