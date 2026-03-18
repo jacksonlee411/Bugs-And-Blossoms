@@ -82,5 +82,5 @@ HR 平台天然处理大量敏感数据：
 ## 7. 后续拆分建议
 
 1. [ ] [DEV-PLAN-331：敏感数据分级与访问治理详细设计](/home/lee/Projects/Bugs-And-Blossoms/docs/dev-plans/331-sensitive-data-classification-and-access-governance-detailed-design.md)
-2. [ ] `332`：导出、审计与留存策略详细设计
+2. [ ] [DEV-PLAN-332：导出、审计与留存策略详细设计](/home/lee/Projects/Bugs-And-Blossoms/docs/dev-plans/332-export-audit-and-retention-governance-detailed-design.md)
 3. [ ] [DEV-PLAN-333：租户隔离、tenant-scoped SQL、密钥与 Assistant 安全治理详细设计](/home/lee/Projects/Bugs-And-Blossoms/docs/dev-plans/333-tenant-isolation-tenant-scoped-sql-secrets-and-assistant-safety-detailed-design.md)

@@ -448,6 +448,8 @@ modules/{module}/
 - DEV-PLAN-300：功能导向的 Greenfield HR 平台重做蓝图（C#/.NET + React）：`docs/dev-plans/300-greenfield-csharp-hr-platform-functional-blueprint.md`
 - DEV-PLAN-310：工程质量、测试与交付子计划：`docs/dev-plans/310-engineering-quality-testing-and-delivery-plan.md`
 - DEV-PLAN-311：工程结构与本地开发基线详细设计：`docs/dev-plans/311-engineering-structure-and-local-development-baseline-detailed-design.md`
+- DEV-PLAN-312：测试金字塔与 E2E 策略详细设计：`docs/dev-plans/312-testing-pyramid-and-e2e-strategy-detailed-design.md`
+- DEV-PLAN-313：CI/CD、Linux 容器平台部署与观测基线详细设计：`docs/dev-plans/313-ci-cd-linux-container-deployment-and-observability-baseline-detailed-design.md`
 - DEV-PLAN-320：共享数据架构与建模约定子计划：`docs/dev-plans/320-shared-data-architecture-and-modeling-conventions-plan.md`
 - DEV-PLAN-321：租户可扩展能力（字段/字典/策略）业务规则优先蓝图与共享模型方案：`docs/dev-plans/321-tenant-extensibility-business-rules-and-shared-model-plan.md`
 - DEV-PLAN-322：历史、生效日期、区间完整性与 `current / as_of / history` 详细设计：`docs/dev-plans/322-effective-date-history-and-interval-integrity-detailed-design.md`
@@ -455,6 +457,7 @@ modules/{module}/
 - DEV-PLAN-324：EF Core Query Filter、Dapper/SQL 与数据库原生能力边界详细设计：`docs/dev-plans/324-ef-core-query-filter-dapper-sql-and-database-native-capabilities-boundary-detailed-design.md`
 - DEV-PLAN-330：安全、合规与数据治理子计划：`docs/dev-plans/330-security-compliance-and-data-governance-plan.md`
 - DEV-PLAN-331：敏感数据分级与访问治理详细设计：`docs/dev-plans/331-sensitive-data-classification-and-access-governance-detailed-design.md`
+- DEV-PLAN-332：导出、审计与留存策略详细设计：`docs/dev-plans/332-export-audit-and-retention-governance-detailed-design.md`
 - DEV-PLAN-333：租户隔离、tenant-scoped SQL、密钥与 Assistant 安全治理详细设计：`docs/dev-plans/333-tenant-isolation-tenant-scoped-sql-secrets-and-assistant-safety-detailed-design.md`
 - DEV-PLAN-340：平台与 IAM 基座子计划（Tenancy / AuthN / AuthZ / Shell）：`docs/dev-plans/340-platform-and-iam-foundation-plan.md`
 - DEV-PLAN-341：Tenancy / AuthN 业务规则优先蓝图与入口边界详细设计：`docs/dev-plans/341-tenancy-authn-business-rules-and-entry-boundary-plan.md`
