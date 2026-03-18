@@ -467,6 +467,8 @@ modules/{module}/
 - DEV-PLAN-345：平台配置与策略（Platform Configuration / Policy）业务规则优先蓝图：`docs/dev-plans/345-platform-configuration-and-policy-business-rules-blueprint.md`
 - DEV-PLAN-346：平台路由治理与返回契约子计划（Route Class / Responder / Exposure Gates）：`docs/dev-plans/346-platform-routing-governance-and-response-contract-plan.md`
 - DEV-PLAN-347：Capability 与颗粒度治理子计划（Capability Key / Route Mapping / Granularity）：`docs/dev-plans/347-capability-and-granularity-governance-plan.md`
+- DEV-PLAN-348：平台通用键治理规范与评估框架（Key Governance Evaluation Framework）：`docs/dev-plans/348-platform-key-governance-evaluation-framework.md`
+- DEV-PLAN-348A：`setid/package` 单主源治理候选方案（待评估）：`docs/dev-plans/348a-setid-package-single-source-candidate-plan.md`
 - DEV-PLAN-350：前端产品壳与交互系统子计划：`docs/dev-plans/350-frontend-product-shell-and-interaction-system-plan.md`
 - DEV-PLAN-351：Product Shell 与路由信息架构详细设计：`docs/dev-plans/351-product-shell-and-route-information-architecture-detailed-design.md`
 - DEV-PLAN-352：列表/详情/历史页面模式详细设计：`docs/dev-plans/352-list-detail-history-page-patterns-detailed-design.md`
