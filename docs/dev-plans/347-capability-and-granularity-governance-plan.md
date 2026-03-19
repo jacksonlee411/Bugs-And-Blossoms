@@ -28,7 +28,8 @@
 - [ ] 冻结跨计划通用 fail-closed 规则：缺映射、冲突映射、上下文缺失、未注册 key 一律拒绝。
 - [ ] 冻结“权限单轨”不变量：Assistant 不拥有独立权限体系，只能消费操作者同源授权决策。
 - [ ] 冻结统一 capability 目录最小字段：`capability_type / required_permission_bundle / risk_level / approval_required / receipt_type`。
-- [ ] 将 capability 与颗粒度治理检查统一接入门禁，支撑 `342/345/353/360/390` 一致消费。
+- [ ] 冻结 Assistant 覆盖目录最小字段：`support_level / assistant_action_id / handoff_route / receipt_type / risk_level`，并要求正式 capability 与高价值查询面不得形成“无暗面能力”。
+- [ ] 将 capability 与颗粒度治理检查统一接入门禁，支撑 `342/345/353/360/390/395` 一致消费。
 
 ### 2.2 非目标
 
@@ -43,9 +44,10 @@
 - `capability_key` 命名与注册规则
 - 路由与 Assistant 动作到 capability 映射注册表
 - 统一 capability 目录字段合同
+- Assistant 覆盖目录与支持级别字段合同
 - 颗粒度词汇表与边界说明
 - fail-closed 拒绝码与最小 Explain 字段
-- 门禁接线（capability-key / capability-route-map / granularity / assistant-action-capability-map）
+- 门禁接线（capability-key / capability-route-map / granularity / assistant-action-capability-map / assistant-surface-catalog / assistant-handoff-contract）
 
 ## 4. 关键设计决策
 
@@ -85,6 +87,14 @@
 - 第一阶段只做“命名 + 映射 + 门禁 +词汇”最小闭环。
 - 动态关系、功能域开关等增强能力按后续独立里程碑推进，不作为当前前置阻塞。
 
+### 4.6 Assistant 支持级别是 capability 元数据的一部分（选定）
+
+- 对用户可见的正式 capability 与高价值查询面，Assistant 支持级别不是可选注释，而是第一类治理字段。
+- 若 `support_level=action_request`，则必须存在 `assistant_action_id`。
+- 若 `support_level=ui_handoff`，则必须存在 `handoff_route`，且 route 需可被产品壳与路由治理识别。
+- 若 `support_level=status_track`，则必须存在可审计的 `receipt_type` 或等价状态票据语义。
+- `390/395` 负责冻结支持级别语义、触发矩阵与“无暗面能力”目标；`347` 负责冻结目录字段、拒绝语义与静态门禁接线。
+
 ## 5. 建议实施分期
 
 1. [ ] `M1`：命名与词汇冻结  
@@ -92,26 +102,29 @@
 2. [ ] `M2`：映射注册与拒绝语义冻结  
    冻结 `route -> capability` 与 `assistant_action_id -> capability` 注册表及缺失/冲突拒绝码。
 3. [ ] `M3`：目录合同与权限单轨冻结  
-   冻结统一 capability 目录字段合同，并明确 Assistant 不得引入并行权限体系。
+   冻结统一 capability 目录字段合同、Assistant 覆盖目录字段合同，并明确 Assistant 不得引入并行权限体系。
 4. [ ] `M4`：门禁与下游接线  
-   将 `check capability-key / capability-route-map / granularity / assistant-action-capability-map` 与 `342/345/353/390` 的输入对齐。
+   将 `check capability-key / capability-route-map / granularity / assistant-action-capability-map / assistant-surface-catalog / assistant-handoff-contract` 与 `342/345/353/390/395` 的输入对齐。
 
 ## 6. 与其他子计划关系
 
 - `342`：消费 `347` 的 capability 命名与映射底座，专注角色与权限语义。
 - `345`：消费 `347` 的能力键和颗粒度词汇，专注配置/策略决议蓝图。
+- `350`：消费 `347` 的 capability 与颗粒度词汇，把它们翻译为导航、页面主动作、字段状态与权限感知 UI 的统一产品语言，但不得重写语义边界。
 - `353`：消费 `347` 的能力与字段边界，避免 UI 层重算权限语义。
 - `360/370/380/390`：不得自行发明第二套 capability 命名与映射链路。
+- `395`：消费 `347` 的 capability 与目录治理底座，冻结 Assistant 支持级别、变更触发矩阵与门禁证据口径。
 - `390`：必须消费 `347 + 342` 的单轨授权结果，不得通过 channel、prompt、模型分支形成第二放行条件。
 
 ## 7. 验收标准
 
 - [ ] `capability_key` 命名规则与禁用模式已冻结且可被门禁检查。
 - [ ] `route -> capability` 与 `assistant_action_id -> capability` 双映射注册表成为单一事实源，缺失/重复可被阻断。
-- [ ] 颗粒度词汇在 `342/345/353` 中保持一致，不再混用 legacy 术语。
+- [ ] 颗粒度词汇在 `342/345/350/353` 中保持一致，不再混用 legacy 术语。
 - [ ] fail-closed 规则对“缺映射、未注册、上下文缺失”可稳定拒绝并可解释。
 - [ ] “权限单轨（Assistant=操作者同源授权）”已经固化，且无并行 Assistant 权限体系。
 - [ ] 统一 capability 目录字段合同可被检查并被 `360/370/380/390` 直接消费。
+- [ ] Assistant 覆盖目录字段合同可被检查并被 `390/395/350/360/370/380` 直接消费；正式 capability 与高价值查询面不存在未声明支持级别的暗面能力。
 - [ ] 现有治理门禁可直接作为 `347` 的执行入口并纳入 CI required checks。
 
 ## 8. 关联文档
@@ -119,6 +132,7 @@
 - [DEV-PLAN-340](/home/lee/Projects/Bugs-And-Blossoms/docs/dev-plans/340-platform-and-iam-foundation-plan.md)
 - [DEV-PLAN-342](/home/lee/Projects/Bugs-And-Blossoms/docs/dev-plans/342-authz-and-platform-permission-matrix-business-rules-plan.md)
 - [DEV-PLAN-345](/home/lee/Projects/Bugs-And-Blossoms/docs/dev-plans/345-platform-configuration-and-policy-business-rules-blueprint.md)
+- [DEV-PLAN-350](/home/lee/Projects/Bugs-And-Blossoms/docs/dev-plans/350-frontend-product-shell-and-interaction-system-plan.md)
 - [DEV-PLAN-353](/home/lee/Projects/Bugs-And-Blossoms/docs/dev-plans/353-form-patterns-and-permission-aware-interaction-detailed-design.md)
 - [DEV-PLAN-150](/home/lee/Projects/Bugs-And-Blossoms/docs/dev-plans/150-capability-key-workday-alignment-gap-closure-plan.md)
 - [DEV-PLAN-180](/home/lee/Projects/Bugs-And-Blossoms/docs/dev-plans/180-granularity-hierarchy-governance-and-unification.md)

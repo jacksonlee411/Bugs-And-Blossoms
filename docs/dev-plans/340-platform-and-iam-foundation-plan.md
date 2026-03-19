@@ -30,6 +30,7 @@
 - [ ] 建立 superadmin 控制面最小闭环：租户创建、启停、域名绑定、租户管理员初始化。
 - [ ] 建立平台级路由治理合同（命名空间、`route_class`、全局 responder、暴露面 stopline）。
 - [ ] 建立 capability 与颗粒度治理底座（能力命名、路由映射、颗粒度词汇与 fail-closed 门禁）。
+- [ ] 建立平台共享 API 合同基线，确保平台 API 只是 tenancy/auth/authz/platform-rule 的投影，而不是第二套业务语义。
 
 ### 2.2 非目标
 
@@ -83,6 +84,7 @@
 - 默认单库多租户。
 - 所有业务数据显式带 `tenant_id`。
 - 平台层统一注入 tenant context，不允许业务模块自行解析租户。
+- 平台入口同时负责权威装配 `OrgContext` 与统一安全决议输入，业务模块只消费结果，不自行重算第二套上下文。
 - `tenant_id` 在业务生命周期内视为不可变边界字段。
 - 跨租户资源访问必须在平台入口被显式拒绝，而不是交给业务模块各自兜底。
 
@@ -90,6 +92,8 @@
 
 - 审计、通知、任务调度属于平台能力，不归属某个 HR 业务域。
 - 后续业务模块只能复用平台基座，不允许重新实现第二套任务系统、第二套审计日志、第二套路由壳。
+- `340` 负责冻结 UI / API / Integration / Assistant 共享的统一访问模型：`business_object_key + org_context + capability_key + time anchor + one security model`。
+- 平台不引入 `setid/package_uuid` 或任何等价容器键作为跨域治理键、隐藏 alias 或 Explain 中间层。
 
 ## 5. 功能拆分
 
@@ -174,8 +178,10 @@
 ## 8. 依赖关系
 
 - `340` 默认依赖 `310/320/330` 提供的工程、数据与安全基线。
+- `314` 负责普通业务 API 的 contract asset、compatibility diff 与 contract tests，是 `340` 正式 API 面的共享门禁输入。
 - `340` 与 `350` 同属 Phase 1：`350` 可并行推进 IA/页面模式规范，但壳层运行态接线默认依赖 `340` 提供的 tenancy/auth/session 上下文。
 - `340` 是 `360/370/380/390` 的平台前置计划。
+- `340` 还为 `350/360/370/380/390` 提供 `OrgContext` 装配、统一 Explain 输入与同源授权决议，避免不同入口形成第二解释链。
 - `360` 中所有核心 HR 模块默认依赖本计划提供的 tenancy、auth、audit、dictionary、jobs。
 - `370/380/390` 依赖本计划提供的 task、notification、auth 与应用壳基座。
 - `346` 负责路由治理与返回契约，作为 `340/350/370/390` 的共享输入。
@@ -186,6 +192,7 @@
 - [ ] 用户能完成“登录 → 进入应用壳 → 获取当前租户与权限上下文”。
 - [ ] Superadmin 能完成“创建租户 → 绑定域名/基础信息 → 初始化租户管理员”。
 - [ ] 后端 API 已具备统一认证、授权、审计、错误处理基线。
+- [ ] 平台正式 API 已具备显式 contract asset，并与 `346` 的 route/responder contract、`314` 的 payload/compatibility contract 保持一致。
 - [ ] 跨租户资源访问在平台入口即可被一致阻断，业务模块不需要各自重复实现第一道防线。
 - [ ] 前端已有统一应用壳，不再需要业务模块各自拼装导航与会话逻辑。
 - [ ] 字典、通知、任务与审计能力已可被后续业务模块复用。

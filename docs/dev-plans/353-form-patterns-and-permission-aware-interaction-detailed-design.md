@@ -11,7 +11,7 @@
 - [DEV-PLAN-341](/home/lee/Projects/Bugs-And-Blossoms/docs/dev-plans/341-tenancy-authn-business-rules-and-entry-boundary-plan.md) 对“未识别租户 / 登录失效 / 租户停用 / 无访问权限”失败态区分的前端输入；
 - [DEV-PLAN-345](/home/lee/Projects/Bugs-And-Blossoms/docs/dev-plans/345-platform-configuration-and-policy-business-rules-blueprint.md) 对决议预览、版本锚点、Explain 与提交前后口径一致性的要求；
 - [DEV-PLAN-361](/home/lee/Projects/Bugs-And-Blossoms/docs/dev-plans/361-org-structure-business-rules-and-blueprint-plan.md) 对 capability/policy_version、effective-dated 写语义与 fail-closed 字段编辑的业务输入；
-- [DEV-PLAN-363](/home/lee/Projects/Bugs-And-Blossoms/docs/dev-plans/363-job-catalog-business-rules-and-configurability-foundation-plan.md) 对只读共享包、`as_of + package + read_only` 上下文与“解释为什么不能改”的业务输入；
+- [DEV-PLAN-363](/home/lee/Projects/Bugs-And-Blossoms/docs/dev-plans/363-job-catalog-business-rules-and-configurability-foundation-plan.md) 对组织上下文下的只读共享基线、`as_of + org_context + read_only` 上下文与“解释为什么不能改”的业务输入；
 - [DEV-PLAN-310](/home/lee/Projects/Bugs-And-Blossoms/docs/dev-plans/310-engineering-quality-testing-and-delivery-plan.md)、[DEV-PLAN-111](/home/lee/Projects/Bugs-And-Blossoms/docs/dev-plans/111-frontend-error-message-accuracy-and-field-level-hints.md)、[DEV-PLAN-140](/home/lee/Projects/Bugs-And-Blossoms/docs/dev-plans/140-error-message-clarity-and-gates.md) 对“稳定错误码 -> 明确提示 -> 字段级反馈 -> 门禁阻断”的质量收敛要求；
 - [DEV-PLAN-002](/home/lee/Projects/Bugs-And-Blossoms/docs/dev-plans/002-ui-design-guidelines.md) 与 [DEV-PLAN-104](/home/lee/Projects/Bugs-And-Blossoms/docs/dev-plans/104-jobcatalog-ui-optimization.md)、[DEV-PLAN-104A](/home/lee/Projects/Bugs-And-Blossoms/docs/dev-plans/104a-jobcatalog-ui-optimization-alignment-with-dev-plan-002.md) 已验证的按钮、表单、日期、错误反馈与危险操作规范。
 
@@ -21,7 +21,7 @@
 - 为什么某个页面是只读，而不是 403；
 - 表单提交前到底需要预览、确认，还是可以一步保存；
 - 后端拒绝后，用户输入该如何保留、错误应该落在哪一层；
-- effective-dated 写操作、审批态提交、异步回执、只读共享包这些场景在交互上如何一致表达。
+- effective-dated 写操作、审批态提交、异步回执、只读共享基线上下文这些场景在交互上如何一致表达。
 
 `353` 的职责就是把这些问题收敛为 **Greenfield HR 平台的表单与权限感知交互 SSOT**，让后续业务页不再通过“某个模块现在先这么做”的局部经验继续漂移。
 
@@ -139,7 +139,7 @@
   - 字段是否可编辑必须由服务端 capability/policy 决议返回；
   - 写入应带 `policy_version`，防止页面拿旧策略提交。
 - [DEV-PLAN-363](/home/lee/Projects/Bugs-And-Blossoms/docs/dev-plans/363-job-catalog-business-rules-and-configurability-foundation-plan.md) 已明确：
-  - 共享包是可见但只读；
+  - 共享基线在当前 `OrgContext` 下若可见但不可维护，应表达为可见但只读；
   - 页面需要解释“为什么当前能看但不能改”。
 
 #### 4.1.6 错误契约与门禁口径已冻结
@@ -299,7 +299,7 @@
 
 - 对象锚点；
 - 业务意图；
-- 关键上下文锚点，如 `effective_date / as_of / package`；
+- 关键上下文锚点，如 `effective_date / as_of / org_context`；
 - 决议版本锚点，如 `policy_version` 或等效版本；
 - 幂等/回执关联标识（如存在）。
 
@@ -379,7 +379,7 @@
 2. [ ] `M2`：表单生命周期冻结  
    明确草稿、校验、确认、提交、失败、回执跟踪的共享步骤。
 3. [ ] `M3`：effective-dated 与策略驱动写入冻结  
-   明确 `effective_date`、`policy_version`、只读共享上下文与版本过期交互。
+   明确 `effective_date`、`policy_version`、只读共享基线上下文与版本过期交互。
 4. [ ] `M4`：危险操作与治理前置冻结  
    明确删除、停用、导出、发布、审批前置操作的确认与结果反馈。
 5. [ ] `M5`：下游引用收口  

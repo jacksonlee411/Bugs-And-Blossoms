@@ -318,7 +318,7 @@ Greenfield 中：
 
 同时冻结：
 
-- 页面级 `as_of / effective_date / package / read_only` 等观察上下文由 `352` 的 `ContextBar` 进一步承接；
+- 页面级 `as_of / effective_date / org_context / read_only` 等观察上下文由 `352` 的 `ContextBar` 进一步承接；
 - 壳层不得与页面上下文互相覆盖；
 - 不允许每个模块自造“当前租户/当前用户”显示区。
 

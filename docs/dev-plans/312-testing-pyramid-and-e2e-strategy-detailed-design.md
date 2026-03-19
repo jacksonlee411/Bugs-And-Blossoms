@@ -8,6 +8,7 @@
 
 - [DEV-PLAN-300](/home/lee/Projects/Bugs-And-Blossoms/docs/dev-plans/300-greenfield-csharp-hr-platform-functional-blueprint.md) 对“垂直切片验收优先、受控 Assistant、租户隔离 fail-closed、effective-dated 主模型”的冻结；
 - [DEV-PLAN-311](/home/lee/Projects/Bugs-And-Blossoms/docs/dev-plans/311-engineering-structure-and-local-development-baseline-detailed-design.md) 对工程结构、本地运行入口、`SeedDataset` 与 `TestFixtureDataset` 分层的冻结；
+- [DEV-PLAN-314](/home/lee/Projects/Bugs-And-Blossoms/docs/dev-plans/314-api-contract-governance-compatibility-and-quality-gates-detailed-design.md) 对普通业务 API contract asset、compatibility diff 与 contract fixture 语义的冻结；
 - [DEV-PLAN-322](/home/lee/Projects/Bugs-And-Blossoms/docs/dev-plans/322-effective-date-history-and-interval-integrity-detailed-design.md)、[DEV-PLAN-323](/home/lee/Projects/Bugs-And-Blossoms/docs/dev-plans/323-audit-task-session-and-snapshot-patterns-detailed-design.md)、[DEV-PLAN-324](/home/lee/Projects/Bugs-And-Blossoms/docs/dev-plans/324-ef-core-query-filter-dapper-sql-and-database-native-capabilities-boundary-detailed-design.md) 对时间合同、回执合同、持久化边界的冻结；
 - [DEV-PLAN-333](/home/lee/Projects/Bugs-And-Blossoms/docs/dev-plans/333-tenant-isolation-tenant-scoped-sql-secrets-and-assistant-safety-detailed-design.md) 对租户安全、tenant-scoped SQL 与 Assistant 安全护栏的冻结。
 
@@ -29,6 +30,7 @@
 - [ ] 冻结 `SeedDataset` 与 `TestFixtureDataset` 的测试语义边界，确保可重现与可并行。
 - [ ] 冻结时间语义（`current / as_of / history`）、租户隔离、权限拒绝、回执链路的测试合同。
 - [ ] 冻结垂直切片验收的最小 E2E 套件语言，覆盖登录、主链写入、审批、导出、Assistant 关键路径。
+- [ ] 冻结普通业务 API 的 contract fixture 语言与分层职责，确保 schema drift / 兼容性 drift / 业务语义 drift 可以被分别验证。
 - [ ] 冻结 flaky 用例治理与测试失败证据要求，避免“先忽略再说”的质量漂移。
 - [ ] 为 `313` 输出可直接执行的流水线测试分层输入。
 
@@ -92,6 +94,9 @@
 4. [ ] **缺少对 `313` 的直接输入**  
    流水线需要测试分层、并行策略、失败阻断规则，当前仍依赖口头约定。
 
+5. [ ] **缺少普通业务 API contract fixture 语言**  
+   目前只有泛化的 integration/E2E 目标，缺少面向平台与核心业务 API 的稳定 contract fixture 模板。
+
 ## 5. 测试金字塔与 E2E 策略蓝图
 
 ### 5.1 领域使命
@@ -105,6 +110,7 @@
 | `UnitSpec` | 纯规则与纯函数层测试规格 | 是 |
 | `IntegrationSpec` | 基于真实存储/事务/边界的测试规格 | 是 |
 | `E2ESliceSpec` | 面向用户切片的端到端规格 | 是 |
+| `ApiContractFixture` | 面向普通业务 API 的 contract fixture 与断言模板 | 是 |
 | `TestFixtureDataset` | 自动化可重现测试夹具 | 是（语义） |
 | `TestEvidence` | 失败证据与执行摘要 | 是 |
 | `CoverageProfile` | 覆盖率统计口径与阈值引用方式 | 是（口径） |
@@ -125,6 +131,7 @@
 | 持久化/事务变更 | 验证租户、时间、约束与一致性 | 必须有 Integration，覆盖 `tenant + time view + transaction` | 数据边界可验证 |
 | 页面/流程变更 | 验证用户可见闭环 | 必须落到 E2E 切片并包含关键成功/拒绝路径 | 交付可感知 |
 | effective-dated 逻辑 | 验证 `current/as_of/history` | Unit + Integration 联合验证，E2E 验证关键视图切换 | 时间语义不漂移 |
+| API 合同变更 | 验证 schema、错误码与兼容性分级 | contract tests + Integration 联合验证，E2E 仅覆盖关键消费者切片 | API drift 被前移阻断 |
 | 审批/异步长链路 | 验证票据与回执一致性 | 必须验证 `OperationTicket/Receipt`，禁止只看主表结果 | 长链路可解释 |
 | Assistant 动作 | 验证澄清、确认、执行与拒绝 | E2E 必测受控动作链，不允许模型直写旁路 | AI 行为可控 |
 
@@ -159,7 +166,20 @@
   - 失败原因可解释。
 - 禁止只断言“最终主表有数据”。
 
-### 7.5 失败证据合同
+### 7.5 API 合同测试合同
+
+- 普通业务 API 的 contract tests 默认消费 `314` 冻结的 `ApiContractSpec + ApiContractFixture`；
+- contract tests 至少验证：
+  - request/response schema
+  - 错误码与错误 envelope
+  - 鉴权/租户拒绝语义
+  - `current / as_of / history`、`org_context`、`policy_version` 等关键锚点（如适用）
+- contract tests 失败时，应能区分：
+  - schema drift
+  - compatibility drift
+  - 业务语义 drift
+
+### 7.6 失败证据合同
 
 测试失败至少应记录：
 
@@ -169,18 +189,19 @@
 - 关键回执或错误码；
 - 最小可重放步骤。
 
-### 7.6 覆盖率合同
+### 7.7 覆盖率合同
 
 - 覆盖率口径、阈值、统计范围以 `Makefile` 与 CI workflow 为单一事实源。
 - `312` 负责冻结“覆盖率如何服务风险治理”的策略，不在文档里复制门禁实现细节。
 - 对可证明不可达分支优先删分支，不以扩大排除项替代修复。
 
-### 7.7 stopline
+### 7.8 stopline
 
 - 不允许以“E2E 已覆盖”为由跳过核心 Unit/Integration 测试。
 - 不允许测试通过默认租户、默认超级权限、隐式 today 伪造通过。
 - 不允许长期 quarantine flaky 用例而无修复计划与到期清理。
 - 不允许把人工联调结果当作自动化测试通过证据。
+- 不允许把普通业务 API contract tests 全部降级成“只跑 smoke”或“只靠前端切片兜底”。
 
 ## 8. 作为后续子计划的业务需求输入
 
@@ -188,16 +209,19 @@
 
 - [ ] 流水线必须按 `Unit -> Integration -> E2E` 分层执行并保留失败证据。
 - [ ] 测试并行与重试策略不得改变测试语义与失败归因。
+- [ ] API contract tests 与 schema diff 结果必须作为正式门禁输入，而不是手工 review 附件。
 
 ### 8.2 对 `340/350` 的输入
 
 - [ ] 平台入口与前端壳层变更必须接入最小切片 E2E：登录、鉴权、导航、首屏列表。
 - [ ] UI 权限感知与后端拒绝语义需保持一致断言。
+- [ ] 平台共享 API 必须提供可复用的 contract fixtures，覆盖登录、`/me`、当前租户与控制面关键 API。
 
 ### 8.3 对 `360` 的输入
 
 - [ ] `361/362/363/364` 必须声明各自核心对象的 Unit/Integration 必测清单。
 - [ ] effective-dated 对象必须提供 `current/as_of/history` 测试样板。
+- [ ] 核心 HR API 必须提供 request/response 与错误码的 contract fixtures，并覆盖关键时间语义断言。
 
 ### 8.4 对 `370/380` 的输入
 
@@ -235,6 +259,7 @@
 - [DEV-PLAN-300](/home/lee/Projects/Bugs-And-Blossoms/docs/dev-plans/300-greenfield-csharp-hr-platform-functional-blueprint.md)
 - [DEV-PLAN-310](/home/lee/Projects/Bugs-And-Blossoms/docs/dev-plans/310-engineering-quality-testing-and-delivery-plan.md)
 - [DEV-PLAN-311](/home/lee/Projects/Bugs-And-Blossoms/docs/dev-plans/311-engineering-structure-and-local-development-baseline-detailed-design.md)
+- [DEV-PLAN-314](/home/lee/Projects/Bugs-And-Blossoms/docs/dev-plans/314-api-contract-governance-compatibility-and-quality-gates-detailed-design.md)
 - [DEV-PLAN-322](/home/lee/Projects/Bugs-And-Blossoms/docs/dev-plans/322-effective-date-history-and-interval-integrity-detailed-design.md)
 - [DEV-PLAN-323](/home/lee/Projects/Bugs-And-Blossoms/docs/dev-plans/323-audit-task-session-and-snapshot-patterns-detailed-design.md)
 - [DEV-PLAN-324](/home/lee/Projects/Bugs-And-Blossoms/docs/dev-plans/324-ef-core-query-filter-dapper-sql-and-database-native-capabilities-boundary-detailed-design.md)

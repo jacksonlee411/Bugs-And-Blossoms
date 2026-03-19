@@ -164,7 +164,7 @@
 - `Query Filter` 不允许承载：
   - `current = today`；
   - `as_of` 推导；
-  - capability / policy / package / read_only 等业务上下文；
+  - capability / policy / org_context / read_only 等业务上下文；
   - 导出、审批、Assistant 等高层产品语义。
 - `Query Filter` 是 defense-in-depth，不是唯一租户阻断面；入口与调用方仍需显式绑定 tenant。
 

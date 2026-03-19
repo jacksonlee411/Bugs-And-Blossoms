@@ -38,6 +38,7 @@
 - [ ] 用“业务规则优先”的语言重述当前配置与策略体系，不再以页面、表名或历史实现命名作为主叙事。
 - [ ] 全面总结当前仓库中已经稳定沉淀的配置与策略业务规则，区分“现行规则”与“目标平台蓝图”。
 - [ ] 冻结 `Platform.Configuration / Policy` 的目标业务蓝图：使命、对象、边界、不变量、时间语义、Explain、发布与审计要求。
+- [ ] 冻结 `preview / dry-run / commit / explain` 的最小运行时合同，避免 `350/380/390` 再次各自解释一套决议快照。
 - [ ] 明确配置模块与策略模块的职责分层，以及它们与 `321` 的关系：`321` 冻结共享业务合同，`345` 冻结平台模块蓝图与产品输入。
 - [ ] 为 `350/360/370/380/390` 提供统一的业务需求输入，要求后续子计划消费配置/策略能力，而不是各自发明第二套“动态规则系统”。
 - [ ] 将“可配置化”正式提升为平台基础能力，而不是继续停留在“字段配置页/字典页/某个业务域策略页”的局部经验。
@@ -244,13 +245,13 @@
 | 首批消费域 | 平台配置与策略模块提供什么 | 领域自己必须继续拥有什么 |
 | --- | --- | --- |
 | `Org` | 扩展字段定义、候选值池、动态策略、Explain、发布与版本治理 | 组织身份、层级、生命周期、生效历史、组织主不变量 |
-| `Job Catalog` | Group / Family / Level / Profile 的扩展属性定义、候选值池、动态策略、Explain、共享基线发布 | 分类包、Group/Family/Level/Profile 固定骨架、Family 归属、Profile 主 Family、不同时点的分类事实 |
+| `Job Catalog` | Group / Family / Level / Profile 的扩展属性定义、候选值池、动态策略、Explain、共享基线发布 | 统一目录骨架、Group/Family/Level/Profile 固定骨架、Family 归属、Profile 主 Family、按 `OrgContext + as_of` 解释的分类事实 |
 
 这条边界非常关键：
 
 - 平台可以决定“某个分类对象的扩展属性如何被定义、裁剪、解释”；
 - 但平台不能把 Job Catalog 的核心分类骨架改造成“任意树 + 任意字段 + 任意脚本”的元数据系统；
-- `Group / Family / Level / Profile`、包 ownership、`current/as_of/history`、Profile 至少一个 Family 且恰好一个主 Family，仍然属于业务域固定骨架。
+- `Group / Family / Level / Profile`、统一目录骨架、`current/as_of/history`、Profile 至少一个 Family 且恰好一个主 Family，仍然属于业务域固定骨架。
 
 ## 6. `345` 冻结的目标规则矩阵
 
@@ -326,7 +327,61 @@
 
 缺少这些信息，就不能称为平台级配置与策略能力。
 
-### 7.6 领域实现护栏
+### 7.6 运行时合同（Preview / Dry-run / Commit / Explain）
+
+为阻断“页面、报表、Assistant 先各自拼一版决议，再回头对齐”的漂移，`345` 额外冻结以下最小运行时合同：
+
+- 所有消费方都必须共享同一条解析链路：
+  - `DecisionContext`
+  - `DecisionSnapshot`
+  - `Explain`
+  - `commit` 前二次校验
+- `DecisionContext` 至少应稳定承载：
+  - `tenant`
+  - `business_object_key`
+  - `capability_key`
+  - `org_context`（或可映射到 `applicability_kind/ref` 的等价共享表达）
+  - `time anchor`（`as_of` 或 `effective_date`）
+  - 请求对象标识与待校验字段集合
+- `DecisionSnapshot` 至少应稳定回显：
+  - `decision_snapshot_id` 或等价稳定快照标识
+  - `policy_version`
+  - 必要时的组合快照版本指纹 / `snapshot_hash`
+  - 命中的字段决议结果、允许值集合、默认值结果与只读原因
+  - 对应 Explain 引用
+- `preview`、`dry-run` 与最终 `commit` 必须复用同一套决议语义，不允许：
+  - preview 看一套规则
+  - 提交时另走一套本地推导
+  - 导出/Assistant 再各自补默认值或字段可见性
+- 只要提交依赖过运行时决议，`commit` 必须至少绑定：
+  - `policy_version`
+  - `decision_snapshot_id` 或等价 `snapshot_hash`
+  - `org_context + time anchor`
+- 当上述锚点任一失效时，提交必须 fail-closed，并明确返回“需要重新预览/重新确认”的稳定错误语义。
+
+### 7.7 字段退役、替换与迁移生命周期
+
+平台级可配置化不只负责“新增字段”，还必须正式拥有“如何安全退役字段”的治理合同：
+
+- 字段生命周期至少要区分：
+  - `active`
+  - `deprecated`
+  - `disabled`
+  - `archived`（仅历史可读，不再进入当前运行时）
+- `deprecated` 的语义是“未来不再建议新用”，不是立刻删除历史，也不是偷偷从 Explain 中消失。
+- 字段替换必须显式声明：
+  - 被替换字段
+  - 替代字段
+  - 生效窗口
+  - 是否需要历史迁移 / 回填
+  - 对导出、报表、Assistant 的兼容解释窗口
+- 字段停用后必须同时满足：
+  - 当前运行时不再允许新写入
+  - `history` 仍可解释旧值来源
+  - 导出与审计仍能说明“该字段为何出现、何时退役、由谁触发”
+- 任何字段迁移、改键、替换、批量回填都必须进入审计与发布/治理轨道，不允许通过脚本式暗改形成“僵尸字段”。
+
+### 7.8 领域实现护栏
 
 - 各业务域可以拥有各自的值存储实现，但不能拥有第二套：
   - 可配置项目录
@@ -336,7 +391,7 @@
 - 工作流、报表、Assistant 可以消费配置与策略模块，但不能重写它的主规则；
 - 平台配置与策略模块也不能反向拥有业务域主数据真值或审批状态真值。
 
-### 7.7 Job Catalog 对平台可配置化的专项护栏
+### 7.9 Job Catalog 对平台可配置化的专项护栏
 
 为了避免后续把“可配置化”错误理解成“Job Catalog 全元数据化”，`345` 对 Job Catalog 额外冻结以下护栏：
 
@@ -366,11 +421,13 @@
 - [ ] 需要统一的治理页模式：配置目录、候选值目录、策略页、决议预览、Explain/历史、发布/激活记录。
 - [ ] 页面必须显式标识“静态来源 / 动态来源 / 决议快照来源”，防止再次出现“改了但不生效”的认知错位。
 - [ ] 业务表单、详情页、列表页只能消费共享决议，不得自行猜测字段行为。
+- [ ] `350` 必须把 `DecisionContext / DecisionSnapshot / Explain` 翻译为稳定的产品语言与页面槽位，默认通过 `351 / 352 / 353` 接线，不允许在前端层重写第二套规则解释。
 
 ### 8.3 对 `360`（核心 HR 业务域）的输入
 
 - [ ] 各业务域只能消费平台配置与策略能力，不重复发明本模块专属的字段策略/字典/Explain 系统。
 - [ ] 各业务域需要显式声明自己支持哪些 `applicability_kind`，以及如何把业务上下文映射到共享合同。
+- [ ] 每个新接入共享可配置化能力的业务域，都必须提交一份最小接入清单：`business_object_key`、支持的 `applicability_kind`、扩展值承载位置、`current/as_of/history` 语义、导出扁平化方式、Assistant 回落面与所需 Explain 槽位。
 - [ ] 领域模块拥有业务值本身与领域不变量，但“字段/选项/策略为何如此”由平台模块提供合同。
 - [ ] `360` 中 Job Catalog 必须作为首批正式消费域之一：`Group / Family / Level / Profile` 的扩展属性走平台共享能力，但分类包、分类骨架、Family 归属与 Profile 主 Family 仍由业务域拥有。
 - [ ] `360` 中 Job Catalog 的 `current / as_of / history`、owner/read-only、共享基线发布语义，必须能被平台配置与策略模块消费和 Explain，但不得被平台模块重写为第二主模型。
@@ -379,6 +436,7 @@
 ### 8.4 对 `370`（工作流、审计增强与集成）的输入
 
 - [ ] 工作流至少要区分：定义变更、候选池变更、策略变更、发布、激活、回滚六类治理动作。
+- [ ] 工作流/审计还必须正式支持字段退役、字段替换、批量迁移/回填三类治理动作，并在回执中回显受影响 `field_key`、替代关系与生效窗口。
 - [ ] 审计增强不得重写配置与策略模块的主规则，只能叠加审批轨迹、执行回执与外部集成回执。
 - [ ] 外部系统若消费配置与策略结果，必须显式声明采用 `current`、`as_of` 还是 `history` 视图。
 
@@ -387,11 +445,14 @@
 - [ ] 导入、导出、报表和查询工作台必须理解配置/策略的 `current / as_of / history` 语义。
 - [ ] 数据质量工作台至少要能发现：未发布即使用、策略缺失、允许值越界、版本过期、租户基线缺失、Explain 缺失。
 - [ ] 查询与导出不得重新拼出第二套“动态字段字典”或“局部白名单规则”。
+- [ ] 查询与导出必须消费统一的动态字段合同，至少能稳定回显：列标识、展示名、值类型、来源对象、是否可筛选/可排序、字段血缘与退役状态。
+- [ ] 数据工作台应具备“决议健康度”视角，至少能发现：`required=true` 但允许集合为空、字段已退役仍被活跃使用、preview/commit 锚点漂移、基线缺失、Explain 缺失。
 
 ### 8.6 对 `390`（Chat Assistant）的输入
 
 - [ ] Assistant 读取配置与策略时，必须通过目录、预览、Explain、版本和候选池合同，不得凭提示词猜测字段语义。
 - [ ] Assistant 发起可写动作时，必须遵循与 UI 完全一致的版本绑定、Dry-run、Explain 与 fail-closed 约束。
+- [ ] 任何由共享决议驱动的 Assistant 写动作，都必须绑定 `decision_snapshot_id` 或等价 `snapshot_hash`，并与 `policy_version + org_context + time anchor` 一起进入最终确认/提交锚点。
 - [ ] 当字段、候选值、上下文或版本存在歧义时，Assistant 必须先澄清，而不是自行补完。
 
 ## 9. 建议实施分期
@@ -402,11 +463,13 @@
    抽出统一 `ConfigDefinition + OptionCatalog` 合同，并明确 tenant-only + publish-not-fallback 边界。
 3. [ ] `M3`：策略目录与决议合同冻结  
    抽出统一 `PolicySet + PolicyRule + DecisionContext + DecisionSnapshot` 合同，并冻结版本锚点。
-4. [ ] `M4`：平台治理能力冻结  
+4. [ ] `M4`：运行时提交与字段生命周期合同冻结
+   冻结 `preview / dry-run / commit / explain` 最小合同、提交锚点、字段退役/替换/迁移语义与审计边界。
+5. [ ] `M5`：平台治理能力冻结
    冻结 `draft/active/rollback/publication/audit/explain` 平台能力与审批输入边界。
-5. [ ] `M5`：首批消费域收敛  
+6. [ ] `M6`：首批消费域收敛
    以 Org 与 Job Catalog 为首批样板，把现有字段、字典、策略、Explain 路径正式收敛为平台模块语言与可复用合同，并验证“固定骨架 + 共享可配置层”边界可同时成立。
-6. [ ] `M6`：跨子计划接线  
+7. [ ] `M7`：跨子计划接线
    将 `350/360/370/380/390` 中涉及配置与策略的描述统一引用 `345`，不再各自重写主规则。
 
 ## 10. 验收标准
@@ -414,6 +477,8 @@
 - [ ] `Platform.Configuration / Policy` 已能脱离当前 Org 实现细节被独立理解和评审。
 - [ ] 当前仓库中已成熟的配置/策略规则已被系统总结，并明确区分为“配置层 / 候选层 / 策略层 / 决议层 / 治理层”。
 - [ ] `345` 与 `321` 的分工清晰：`321` 冻结共享业务合同，`345` 冻结平台模块蓝图与后续子计划输入。
+- [ ] `preview / dry-run / commit / explain` 已具备单一运行时合同，`350/380/390` 不再各自推导第二套提交锚点或决议快照结构。
+- [ ] 字段退役、字段替换、批量迁移/回填已经具备正式治理语义，不再以脚本暗改或页面隐藏代替生命周期管理。
 - [ ] `350/360/370/380/390` 可直接引用 `345` 作为配置与策略模块的业务需求输入，而不是继续自行发明第二套规则系统。
 - [ ] “可配置化是平台基石之一”已在文档结构、模块边界、产品输入和治理口径上被正式确立。
 
@@ -422,6 +487,7 @@
 - [DEV-PLAN-300](/home/lee/Projects/Bugs-And-Blossoms/docs/dev-plans/300-greenfield-csharp-hr-platform-functional-blueprint.md)
 - [DEV-PLAN-320](/home/lee/Projects/Bugs-And-Blossoms/docs/dev-plans/320-shared-data-architecture-and-modeling-conventions-plan.md)
 - [DEV-PLAN-321](/home/lee/Projects/Bugs-And-Blossoms/docs/dev-plans/321-tenant-extensibility-business-rules-and-shared-model-plan.md)
+- [DEV-PLAN-350](/home/lee/Projects/Bugs-And-Blossoms/docs/dev-plans/350-frontend-product-shell-and-interaction-system-plan.md)
 - [DEV-PLAN-363](/home/lee/Projects/Bugs-And-Blossoms/docs/dev-plans/363-job-catalog-business-rules-and-configurability-foundation-plan.md)
 - [DEV-PLAN-340](/home/lee/Projects/Bugs-And-Blossoms/docs/dev-plans/340-platform-and-iam-foundation-plan.md)
 - [DEV-PLAN-347](/home/lee/Projects/Bugs-And-Blossoms/docs/dev-plans/347-capability-and-granularity-governance-plan.md)

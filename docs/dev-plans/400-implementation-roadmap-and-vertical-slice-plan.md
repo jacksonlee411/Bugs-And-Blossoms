@@ -134,8 +134,9 @@
 
 ## 7. 后续拆分建议
 
-1. [ ] `401`：Phase 0 平台与工程起步计划
+1. [X] [`401`：Phase 0 新线（Ficeae）起步与硬切换执行计划](/home/lee/Projects/Bugs-And-Blossoms/docs/dev-plans/401-phase0-ficeae-bootstrap-execution-plan.md)
 2. [ ] `402`：Phase 1 Org + Person 垂直切片计划
 3. [ ] `403`：Phase 2 JobCatalog + Staffing 垂直切片计划
 4. [ ] `404`：Phase 3 Workflow / Data Workbench / Governance 切片计划
 5. [ ] `405`：Phase 4 Assistant 切片计划
+6. [X] [`401A`：规则矿模板与 Ficeae 验收对照基线（首批 20 条）](/home/lee/Projects/Bugs-And-Blossoms/docs/dev-plans/401a-rule-mining-template-and-ficeae-acceptance-baseline.md)

@@ -1,23 +1,23 @@
 # DEV-PLAN-348D：键治理候选方案并排评估矩阵（348A / 348B / 348C）
 
-**状态**: 草拟中（2026-03-19 CST）
+**状态**: 已裁决（2026-03-19 CST）
 
 ## 1. 背景与定位
 
 本计划是 [DEV-PLAN-348](/home/lee/Projects/Bugs-And-Blossoms/docs/dev-plans/348-platform-key-governance-evaluation-framework.md) 的评估配套文档。  
-职责不是提出新的候选方案，而是把当前已登记的候选方案放到**同一张矩阵**里比较，避免每个候选只讲自己的优点、无法横向裁决。
+职责不是提出新的候选方案，而是把当前已登记的候选方案放到**同一张矩阵**里比较，并在比较完成后保留最终裁决记录，避免每个候选只讲自己的优点、无法横向裁决。
 
 当前纳入比较的候选：
 
 - [DEV-PLAN-348A](/home/lee/Projects/Bugs-And-Blossoms/docs/dev-plans/348a-setid-package-single-source-candidate-plan.md)：`setid/package` 单主源治理候选方案
 - [DEV-PLAN-348B](/home/lee/Projects/Bugs-And-Blossoms/docs/dev-plans/348b-package-uuid-direct-governance-candidate-plan.md)：取消 `setid`、收敛为 `package_uuid` 直达治理候选方案
-- [DEV-PLAN-348C](/home/lee/Projects/Bugs-And-Blossoms/docs/dev-plans/348c-workday-reference-key-governance-candidate-plan.md)：对标 Workday 的“一源数据 + 一安全模型 + 组织上下文”参考治理候选方案
+- [DEV-PLAN-348C](/home/lee/Projects/Bugs-And-Blossoms/docs/dev-plans/348c-workday-reference-key-governance-candidate-plan.md)：对标 Workday 的“一源数据 + 一安全模型 + 组织上下文”治理主线
 
 ## 2. 使用说明
 
-- [ ] 本矩阵是 **M3 证据评估** 的统一载体，不直接替代 `348A/B/C` 的详细论证。
-- [ ] 本矩阵中的“初评”只表达当前文档证据下的暂时判断，不等同最终裁决。
-- [ ] 若后续候选方案正文有实质更新，必须同步刷新本矩阵，避免评估漂移。
+- [x] 本矩阵承担过 **M3 证据评估** 的统一载体角色，但不直接替代 `348A/B/C` 的详细论证。
+- [x] 第 4 节保留的是“初评 v0”历史快照；最终裁决以第 5 节为准。
+- [ ] 若后续主线文档正文有实质更新，仍必须同步刷新本矩阵，避免裁决漂移。
 
 ### 2.1 评分口径
 
@@ -30,7 +30,7 @@
 | --- | --- | --- |
 | `348A` | 保留 `setid` 作为上下文键，`package_uuid` 作为主事实键 | `package_uuid + setid + time` |
 | `348B` | 取消 `setid`，由业务上下文直接解析到 `package_uuid` | `package_uuid + org_context + time` |
-| `348C` | 不把 `setid/package` 升级为平台总词汇，优先以领域主键 + 组织上下文 + 统一安全/流程模型治理 | `business_object_key + org_context + capability + time` |
+| `348C` | 平台与业务域均不再保留 `setid/package_uuid`，统一以领域主键 + 组织上下文 + 统一安全/流程模型治理 | `business_object_key + org_context + capability + time` |
 
 ## 4. 并排评估矩阵（初评 v0）
 
@@ -48,57 +48,47 @@
 | Workday 原则对齐度 | 2 | 3 | 5 | `348C` 明确按 Workday 官方公开原则映射；`348B` 仅在“减概念”上部分接近；`348A` 更偏现仓收敛，不是 Workday 风格主线 |
 | 关键未知数风险（低风险=高分） | 4 | 3 | 2 | `348A` 未知数最少；`348B` 主要风险是域内解析器蔓延；`348C` 主要风险是需要先证明 `OrgContext` 足以承载所有差异 |
 
-## 5. 初评结论（非最终裁决）
+## 5. 最终裁决
 
-### 5.1 面向当前仓库延续性
+### 5.1 选定主线
 
-- [ ] `348A` 当前最稳。
-- [ ] 原因：它与 [DEV-PLAN-363](/home/lee/Projects/Bugs-And-Blossoms/docs/dev-plans/363-job-catalog-business-rules-and-configurability-foundation-plan.md) 和现仓 `package_uuid` 事实主键最接近，迁移与验证成本最低。
-- [ ] 风险：概念层仍保留 `setid + package` 双层心智，认知复杂度不占优。
+- [x] 选定 `348C` 作为平台主线。
+- [x] 选定理由：它最符合 [DEV-PLAN-300](/home/lee/Projects/Bugs-And-Blossoms/docs/dev-plans/300-greenfield-csharp-hr-platform-functional-blueprint.md) 的 Greenfield 简化方向、`345/347/342/333` 的统一访问模型与统一安全模型，以及 Workday 的原则级启发。
+- [x] 本轮裁决附加要求：比原候选稿更彻底，平台与业务域均不再保留 `package_uuid` 作为主事实键、治理容器、隐藏 alias 或降级落点。
 
-### 5.2 面向 `300` 的 Greenfield 简化
+### 5.2 被否决方案
 
-- [ ] `348B` 与 `348C` 更值得认真压力测试。
-- [ ] `348B` 代表“最直接的概念减法”，优点是词汇少、业务语义直达；缺点是很容易把复杂度下沉到各域私有解析器。
-- [ ] `348C` 代表“平台原则级减法”，优点是最接近 Workday 的“一源数据 + 一安全模型 + 组织上下文”叙事；缺点是前提最重，需要先冻结 `OrgContext` 词汇和统一访问模型。
+- [x] 否决 `348A`：虽然最贴近现仓，但仍保留 `setid + package` 双层心智，本质上没有消除第二解释路径。
+- [x] 否决 `348B`：虽然比 `348A` 更简化，但仍保留 `package_uuid` 作为隐藏治理词汇，且容易把复杂度下沉为各域私有解析器。
 
-### 5.3 当前不建议直接跳过的结论
+### 5.3 直接影响
 
-- [ ] 不建议在未完成 `OrgContext` 词汇冻结前，直接宣布 `348C` 为实施主线。
-- [ ] 不建议在未证明“各域不会各自长解析器”前，直接宣布 `348B` 为实施主线。
-- [ ] 也不建议因为 `348A` 最容易落地，就跳过对 `348B/348C` 的完整比较，否则 `348` 会退化成“为既有实现背书”。
+- [x] `348/348C/348D` 需要同步转为“已裁决”口径。
+- [x] `363` 需要去除 `package_uuid/setid` 治理叙事，改写为“统一目录骨架 + OrgContext + as_of + read_only”。
+- [x] 后续实施文档必须默认：`business_object_key + org_context + capability + time` 是唯一治理语法。
 
 ## 6. 各案 stopline 风险摘要
 
 | 候选 | 最需要先证明的 stopline 风险 | 若无法证明，最可能的否决原因 |
 | --- | --- | --- |
-| `348A` | `setid` 是否只是上下文键，而不是事实上的第二写主键 | 双主源未真正消除，只是改名保留双路径 |
-| `348B` | 各域是否会各自实现“上下文 -> package_uuid”私有解析链 | 平台级词汇变少，但整体复杂度反而扩散 |
-| `348C` | `OrgContext` 是否足够稳定、统一且可操作地覆盖核心差异 | 原则漂亮，但落地时变成抽象口号或二次发明 |
+| `348A` | 历史双层心智是否还会以 alias 形式回流 | 双主源未真正消除，只是改名保留双路径 |
+| `348B` | `package_uuid` 是否会以域内私有键继续潜伏 | 平台级词汇变少，但整体复杂度反而扩散 |
+| `348C` | `OrgContext` 是否足够稳定、统一且可操作地覆盖核心差异 | 若无法落成，主线会退化为抽象口号或被旧容器键反向侵蚀 |
 
-## 7. 下一轮补证重点
+## 7. 实施前置收口重点
 
-### 7.1 `348A`
-
-- [ ] 补“用户旅程中的双键暴露面”证据：哪些页面/接口仍同时要求理解 `setid` 与 `package_uuid`。
-- [ ] 补“Explain 是否仍需两段解释”证据。
-
-### 7.2 `348B`
-
-- [ ] 补“各域上下文直达 package 的统一合同”。
-- [ ] 补“禁止域内解析器漂移”的门禁草案。
-
-### 7.3 `348C`
+### 7.1 `348C`
 
 - [ ] 产出 `OrgContext` 最小词汇表。
 - [ ] 证明 Job Catalog / Org / Staffing 至少一条端到端旅程可只靠“对象主键 + 组织上下文 + 时间锚 + 统一安全模型”完成解释。
+- [ ] 清理 `363` 中残留的 `package_uuid/setid` 治理口径。
 - [ ] 明确哪些 Workday 原则只适合作为方法论，不适合直接翻译成实现约束。
 
-## 8. 建议的评审顺序
+## 8. 建议的实施顺序
 
-1. [ ] 先用 `348D` 冻结矩阵维度与评分口径，防止候选各自改题目。
-2. [ ] 先补 `348B` 的“域内解析器蔓延”证据，再补 `348C` 的 `OrgContext` 词汇。
-3. [ ] 待关键缺口补齐后，再进入 `348` 的正式裁决会。
+1. [x] 先用 `348D` 冻结矩阵维度与评分口径，防止候选各自改题目。
+2. [x] 完成 `348` 正式裁决，明确 `348C` 为主线、`348A/B` 为否决方案。
+3. [ ] 冻结 `OrgContext` 最小词汇表，并重写直接冲突的业务域文档。
 4. [ ] 裁决输出时应同时给出：
    - 选中的主线候选；
    - 被否决候选的主要原因；
