@@ -450,6 +450,7 @@ modules/{module}/
 - DEV-PLAN-311：工程结构与本地开发基线详细设计：`docs/dev-plans/311-engineering-structure-and-local-development-baseline-detailed-design.md`
 - DEV-PLAN-312：测试金字塔与 E2E 策略详细设计：`docs/dev-plans/312-testing-pyramid-and-e2e-strategy-detailed-design.md`
 - DEV-PLAN-313：CI/CD、Linux 容器平台部署与观测基线详细设计：`docs/dev-plans/313-ci-cd-linux-container-deployment-and-observability-baseline-detailed-design.md`
+- DEV-PLAN-314：API 合同治理、兼容性分级与质量门禁详细设计：`docs/dev-plans/314-api-contract-governance-compatibility-and-quality-gates-detailed-design.md`
 - DEV-PLAN-320：共享数据架构与建模约定子计划：`docs/dev-plans/320-shared-data-architecture-and-modeling-conventions-plan.md`
 - DEV-PLAN-321：租户可扩展能力（字段/字典/策略）业务规则优先蓝图与共享模型方案：`docs/dev-plans/321-tenant-extensibility-business-rules-and-shared-model-plan.md`
 - DEV-PLAN-322：历史、生效日期、区间完整性与 `current / as_of / history` 详细设计：`docs/dev-plans/322-effective-date-history-and-interval-integrity-detailed-design.md`

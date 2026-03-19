@@ -9,6 +9,7 @@
 - [DEV-PLAN-300](/home/lee/Projects/Bugs-And-Blossoms/docs/dev-plans/300-greenfield-csharp-hr-platform-functional-blueprint.md) 对“默认部署目标是 Linux 容器平台、标准发布物是 OCI image、Kubernetes 不是第一阶段前置”的冻结；
 - [DEV-PLAN-311](/home/lee/Projects/Bugs-And-Blossoms/docs/dev-plans/311-engineering-structure-and-local-development-baseline-detailed-design.md) 对 `Web/Api/Worker` 运行入口与本地闭环画像的冻结；
 - [DEV-PLAN-312](/home/lee/Projects/Bugs-And-Blossoms/docs/dev-plans/312-testing-pyramid-and-e2e-strategy-detailed-design.md) 对测试分层、失败证据与切片验收语言的冻结；
+- [DEV-PLAN-314](/home/lee/Projects/Bugs-And-Blossoms/docs/dev-plans/314-api-contract-governance-compatibility-and-quality-gates-detailed-design.md) 对普通业务 API contract asset、compatibility diff 与 contract gates 的冻结；
 - [DEV-PLAN-333](/home/lee/Projects/Bugs-And-Blossoms/docs/dev-plans/333-tenant-isolation-tenant-scoped-sql-secrets-and-assistant-safety-detailed-design.md) 对租户隔离、密钥注入与安全 stopline 的冻结。
 
 `310` 已定义“要有 CI/CD 与最小观测”，但若没有 `313` 作为执行权威，后续会继续出现：
@@ -31,6 +32,7 @@
 - [ ] 冻结最小观测基线（结构化日志、核心指标、trace 关联、错误码可检索）。
 - [ ] 冻结失败处置与 stopline 规则，确保 fail-closed。
 - [ ] 为 `340/350/360/370/380/390` 提供统一发布与运行基座。
+- [ ] 冻结普通业务 API 合同门禁在流水线中的绑定方式，确保 schema diff、类型一致性与 contract tests 进入稳定 required checks。
 - [ ] 冻结 `390/395` 横切 Assistant 门禁在流水线中的绑定方式，确保结构门禁、contract tests 与 cross-slice smoke 都进入统一 required checks。
 
 ### 2.2 非目标
@@ -94,6 +96,9 @@
 5. [ ] **缺少 390 横切能力的 required check 绑定**  
    `390` 已定义“无暗面能力”与支持级别目录，但还没有一份 CI/CD 计划明确哪些 gate 必须在 `validate/test/smoke` 阶段执行，哪些情况下不得以 `skipped` 或手工联调替代。
 
+6. [ ] **缺少普通业务 API 合同门禁的稳定绑定**  
+   路由/返回契约、payload schema、生成类型与 contract tests 之间尚未形成统一 required checks。
+
 ## 5. CI/CD 与运行观测蓝图
 
 ### 5.1 领域使命
@@ -112,6 +117,7 @@
 | `SmokeVerification` | 部署后最小可用性验证 | 是 |
 | `ObservabilityBaseline` | 日志/指标/追踪最小要求 | 是 |
 | `ReleaseEvidence` | 发布证据与回滚依据 | 是 |
+| `ApiContractGateBinding` | 普通业务 API 合同门禁与 required checks 的绑定规则 | 是 |
 | `AssistantCoverageGateBinding` | `390/395` 门禁与 required checks 的绑定规则 | 是 |
 
 ### 5.3 面向系统的主能力
@@ -146,6 +152,9 @@
 
 其中：
 
+- `validate` 至少应绑定 `314` 定义的 API contract export / schema diff / client type sync / compatibility report。
+- `test` 至少应绑定 `312 + 314` 定义的普通业务 API contract / integration tests。
+- `smoke` 对平台共享 API、关键写 API 与高风险查询 API，应执行最小 smoke，确保部署后正式合同面真实可用。
 - `validate` 至少应绑定 `347/395` 定义的 Assistant 结构门禁，如 capability/surface 目录一致性、`assistant_action_id` 映射与 handoff contract。
 - `test` 至少应绑定 `312` 定义的 Assistant contract / integration / E2E 套件，确保只读检索、受控动作、拒绝与降级路径在自动化中真实执行。
 - `smoke` 对命中 Assistant 触发矩阵的变更，必须执行最小 cross-slice Assistant smoke；不得以 docs-only、手工联调或 `skipped` 视为通过。
@@ -165,6 +174,7 @@
 ### 7.4 测试绑定合同
 
 - `313` 必须消费 `312` 的测试分层与失败证据合同。
+- `313` 必须消费 `314` 的 API contract gate 分层：schema diff、类型一致性、contract tests。
 - 不允许流水线跳过高风险 E2E 而直接发布。
 - 对耗时测试可分层并行，但不得改变验收语义。
 - `313` 必须把 `390/395` 横切 Assistant 门禁绑定为稳定 required checks；Assistant 相关 gate 不得长期停留在“人工验证后补证据”。
@@ -203,11 +213,13 @@
 
 - [ ] 平台入口与前端壳层必须复用统一构建与部署链路。
 - [ ] 平台登录、导航、session 关键路径应成为 smoke 基础切片。
+- [ ] 平台共享 API 的 contract asset、类型投影与 smoke 必须进入同一交付链路。
 
 ### 8.2 对 `360` 的输入
 
 - [ ] 核心业务域需提供可自动化的模块 smoke 与关键回归入口。
 - [ ] 业务模块不得自建私有发布脚本与私有运行画像。
+- [ ] 核心业务 API 的 schema diff 与 contract tests 必须进入统一 required checks，不得由模块自定义绕过。
 
 ### 8.3 对 `370/380` 的输入
 
@@ -223,6 +235,11 @@
 
 - [ ] `395` 定义的 Assistant 结构门禁、contract tests 与 smoke 触发矩阵，必须被 `313` 绑定为统一流水线阶段，不得散落在模块私有脚本或人工清单中。
 - [ ] 命中 Assistant 触发器的变更，不得以 `skipped`、手工联调或“后续再补”绕过 required checks。
+
+### 8.6 对 `314`（API 合同治理、兼容性分级与质量门禁）的输入
+
+- [ ] `314` 定义的 API contract export、compatibility report、client type sync 与普通业务 API contract tests，必须被绑定到稳定 required checks。
+- [ ] 命中 API 合同触发器的变更，不得以“仅人工 review OpenAPI diff”或“后补 contract tests”替代自动化门禁。
 
 ## 9. 建议实施分期
 
@@ -244,6 +261,7 @@
 - [ ] 发布物可复现、可回滚，环境差异可控且不依赖二次构建。
 - [ ] 系统具备最小可观测能力，能快速定位跨入口与异步问题。
 - [ ] `340/350/360/370/380/390` 可直接消费 `313` 交付合同，不再各自发明发布链路。
+- [ ] 普通业务 API 的 contract gates 已被稳定绑定到 required checks，schema diff、类型一致性与 contract tests 均不可被 `skipped` 或手工补证据替代。
 - [ ] `390/395` 定义的 Assistant 横切门禁已被稳定绑定到 required checks，结构门禁、测试门禁与 smoke 门禁都不可被 `skipped` 或手工联调替代。
 
 ## 11. 关联文档
@@ -252,5 +270,6 @@
 - [DEV-PLAN-310](/home/lee/Projects/Bugs-And-Blossoms/docs/dev-plans/310-engineering-quality-testing-and-delivery-plan.md)
 - [DEV-PLAN-311](/home/lee/Projects/Bugs-And-Blossoms/docs/dev-plans/311-engineering-structure-and-local-development-baseline-detailed-design.md)
 - [DEV-PLAN-312](/home/lee/Projects/Bugs-And-Blossoms/docs/dev-plans/312-testing-pyramid-and-e2e-strategy-detailed-design.md)
+- [DEV-PLAN-314](/home/lee/Projects/Bugs-And-Blossoms/docs/dev-plans/314-api-contract-governance-compatibility-and-quality-gates-detailed-design.md)
 - [DEV-PLAN-333](/home/lee/Projects/Bugs-And-Blossoms/docs/dev-plans/333-tenant-isolation-tenant-scoped-sql-secrets-and-assistant-safety-detailed-design.md)
 - [DEV-PLAN-400](/home/lee/Projects/Bugs-And-Blossoms/docs/dev-plans/400-implementation-roadmap-and-vertical-slice-plan.md)

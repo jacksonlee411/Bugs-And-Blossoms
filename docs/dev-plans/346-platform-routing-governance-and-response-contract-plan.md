@@ -26,6 +26,7 @@
 - [ ] 冻结按 `route_class` 的成功/失败返回契约（至少覆盖 404/405/500）。
 - [ ] 冻结路由 allowlist 与暴露面治理规则（生产默认 fail-closed）。
 - [ ] 将路由分类、返回契约、暴露面检查纳入统一质量门禁。
+- [ ] 与 `314` 对齐 route contract 与 payload contract 的职责边界，避免路由治理与 API schema 治理再次混写。
 - [ ] 为 `340/350/370` 提供共享路由治理输入，避免再次出现模块各自定义路由语义。
 
 ### 2.2 非目标
@@ -80,6 +81,7 @@
 ## 6. 与其他子计划关系
 
 - `340`：拥有平台入口、认证与上下文边界；`346` 提供路由治理合同输入。
+- `314`：拥有普通业务 API 的 schema / DTO / compatibility gate；`346` 只拥有 path / `route_class` / responder / exposure contract。
 - `350/351`：拥有 IA 与导航；必须消费 `346` 的路由语义与返回契约边界。
 - `370`：Webhook/Integration 入口必须按 `346` 的 `route_class` 与暴露面规则落地。
 - `390`：Assistant 相关入口同样受 `346` 约束，不可自建旁路入口。
@@ -90,12 +92,14 @@
 - [ ] 404/405/500 等全局失败在不同 `route_class` 下有稳定、可预期返回契约。
 - [ ] 生产暴露面具有默认 fail-closed 约束，dev/test 路径不能被误暴露。
 - [ ] `make check routing` 能阻断路由分类漂移、未登记入口与返回契约漂移。
+- [ ] `346` 与 `314` 的职责边界清晰：路径/暴露面 drift 由 `346` 阻断，payload/schema drift 由 `314` 阻断，二者不再互相吞责。
 - [ ] `340/350/370` 可以直接引用 `346`，不再重复定义同类规则。
 
 ## 8. 关联文档
 
 - [DEV-PLAN-300](/home/lee/Projects/Bugs-And-Blossoms/docs/dev-plans/300-greenfield-csharp-hr-platform-functional-blueprint.md)
 - [DEV-PLAN-340](/home/lee/Projects/Bugs-And-Blossoms/docs/dev-plans/340-platform-and-iam-foundation-plan.md)
+- [DEV-PLAN-314](/home/lee/Projects/Bugs-And-Blossoms/docs/dev-plans/314-api-contract-governance-compatibility-and-quality-gates-detailed-design.md)
 - [DEV-PLAN-350](/home/lee/Projects/Bugs-And-Blossoms/docs/dev-plans/350-frontend-product-shell-and-interaction-system-plan.md)
 - [DEV-PLAN-351](/home/lee/Projects/Bugs-And-Blossoms/docs/dev-plans/351-product-shell-and-route-information-architecture-detailed-design.md)
 - [DEV-PLAN-370](/home/lee/Projects/Bugs-And-Blossoms/docs/dev-plans/370-workflow-audit-and-integration-plan.md)

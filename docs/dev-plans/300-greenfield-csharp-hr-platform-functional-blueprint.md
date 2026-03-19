@@ -589,6 +589,7 @@ src/
 
 - OpenAPI / Swagger
 - API DTO 与前端类型可自动生成或半自动对齐
+- 普通业务 API 的合同冻结、兼容性分级与质量门禁由 `310 -> 314` 承接；Assistant 专项 API / surface gate 仍由 `390 / 395` 承接
 
 ### 10.6 文件与导出
 
