@@ -165,6 +165,7 @@ func TestAssistant240A_APIAndIntentGaps(t *testing.T) {
 		turn.Plan.CompilerContractVersion = assistantCompilerContractVersionV1
 		turn.Plan.CapabilityMapVersion = assistantCapabilityMapVersionV1
 		turn.Plan.SkillManifestDigest = assistantSkillManifestDigest([]string{"org.orgunit_create"})
+		assistantTestAttachBusinessRoute(turn)
 		turn.Plan.VersionTuple = []byte("null")
 		tx := &assistFakeTx{}
 		tx.queryRowFn = func(sql string, _ ...any) pgx.Row {
@@ -200,7 +201,7 @@ func TestAssistant240A_APIAndIntentGaps(t *testing.T) {
 		}
 	})
 
-	t.Run("intent retry fallback uses local extractor", func(t *testing.T) {
+	t.Run("intent invalid first pass fails closed without retry", func(t *testing.T) {
 		t.Setenv("OPENAI_API_KEY", "dummy")
 		attempts := 0
 		svc := newAssistantConversationService(store, assistantWriteServiceStub{store: store})
@@ -212,19 +213,15 @@ func TestAssistant240A_APIAndIntentGaps(t *testing.T) {
 			adapters: map[string]assistantProviderAdapter{
 				"openai": assistantAdapterFunc(func(context.Context, string, assistantModelProviderConfig) ([]byte, error) {
 					attempts++
-					if attempts == 1 {
-						return []byte(`{"action":"create_orgunit"}`), nil
-					}
-					return nil, errAssistantPlanSchemaConstrainedDecodeFailed
+					return []byte(`{"action":"create_orgunit"}`), nil
 				}),
 			},
 		}
-		resolved, err := svc.resolveIntent(context.Background(), "tenant-1", "conv-1", "在鲜花组织之下，新建一个部门，成立日期是2026-01-01")
-		if err != nil {
+		if _, err := svc.resolveIntent(context.Background(), "tenant-1", "conv-1", "在鲜花组织之下，新建一个部门，成立日期是2026-01-01"); !errors.Is(err, errAssistantPlanSchemaConstrainedDecodeFailed) {
 			t.Fatalf("resolve intent err=%v", err)
 		}
-		if resolved.ProviderName != "deterministic" || attempts != 2 || resolved.Intent.Action != assistantIntentCreateOrgUnit {
-			t.Fatalf("unexpected resolved=%+v attempts=%d", resolved, attempts)
+		if attempts != 1 {
+			t.Fatalf("expected no retry, attempts=%d", attempts)
 		}
 	})
 
@@ -300,6 +297,7 @@ func TestAssistant240A_PersistenceGaps(t *testing.T) {
 			ResolvedCandidateID: "c1",
 			AmbiguityCount:      1,
 		}
+		assistantTestAttachBusinessRoute(turn)
 		if _, err := unsupportedSvc.applyConfirmTurn(conversation, turn, principal, "c1"); !errors.Is(err, errAssistantUnsupportedIntent) {
 			t.Fatalf("expected unsupported intent, got %v", err)
 		}
@@ -320,6 +318,7 @@ func TestAssistant240A_PersistenceGaps(t *testing.T) {
 			ResolvedCandidateID: "c1",
 			UpdatedAt:           time.Now().UTC(),
 		}
+		assistantTestAttachBusinessRoute(turn)
 		if err := commitSvc.refreshTurnVersionTuple(ctx, "tenant_1", turn); err != nil {
 			t.Fatalf("refresh tuple err=%v", err)
 		}
@@ -348,6 +347,7 @@ func TestAssistant240A_PersistenceGaps(t *testing.T) {
 			CreatedAt:          now,
 			UpdatedAt:          now,
 		}
+		assistantTestAttachBusinessRoute(turn)
 		row := assistantTurnRowValues(turn)
 		tx := &assistFakeTx{}
 		tx.queryRowFn = func(sql string, _ ...any) pgx.Row {
@@ -417,6 +417,7 @@ func TestAssistant240A_PersistenceGaps(t *testing.T) {
 		turn.Plan.CompilerContractVersion = assistantCompilerContractVersionV1
 		turn.Plan.CapabilityMapVersion = assistantCapabilityMapVersionV1
 		turn.Plan.SkillManifestDigest = assistantSkillManifestDigest([]string{"org.orgunit_create"})
+		assistantTestAttachBusinessRoute(turn)
 		svc := newAssistantConversationService(store, assistantWriteServiceStub{store: store})
 		if err := svc.refreshTurnVersionTuple(ctx, "tenant_1", turn); err != nil {
 			t.Fatalf("refresh tuple err=%v", err)
@@ -476,6 +477,7 @@ func TestAssistant240A_PersistenceGaps(t *testing.T) {
 		baseTurn.Plan.CompilerContractVersion = assistantCompilerContractVersionV1
 		baseTurn.Plan.CapabilityMapVersion = assistantCapabilityMapVersionV1
 		baseTurn.Plan.SkillManifestDigest = assistantSkillManifestDigest([]string{"org.orgunit_create"})
+		assistantTestAttachBusinessRoute(baseTurn)
 		prepareRow := func(t *testing.T) []any {
 			t.Helper()
 			svc := newAssistantConversationService(store, assistantWriteServiceStub{store: store})

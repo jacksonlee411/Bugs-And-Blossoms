@@ -334,6 +334,10 @@ export function AppShell({ navItems }: PropsWithChildren<AppShellProps>) {
             <TextField
               fullWidth
               onKeyDown={(event) => {
+                const nativeEvent = event.nativeEvent
+                if (nativeEvent.isComposing || nativeEvent.keyCode === 229) {
+                  return
+                }
                 if (event.key === 'Enter') {
                   event.preventDefault()
                   void runSearch(searchQuery, true)

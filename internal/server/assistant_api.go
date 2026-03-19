@@ -43,13 +43,9 @@ const (
 )
 
 var (
-	assistantParentUnderRE       = regexp.MustCompile(`在(.+?)之下`)
-	assistantParentUnderCreateRE = regexp.MustCompile(`在\s*(.+?)\s*下新建`)
-	assistantDeptNameRE          = regexp.MustCompile(`名为(.+?)的部门`)
-	assistantDeptCreateRE        = regexp.MustCompile(`(?:下新建|新建)\s*(.+?)(?:[，,。]|\s生效日期|\s成立日期|$)`)
-	assistantDateCNRE            = regexp.MustCompile(`(20\d{2})年(\d{1,2})月(\d{1,2})日`)
-	assistantDateISORE           = regexp.MustCompile(`(20\d{2}-\d{2}-\d{2})`)
-	assistantBoundaryRE          = regexp.MustCompile(`(?i)(\bselect\b|\binsert\s+into\b|\bupdate\s+\S+\s+set\b|\bdelete\s+from\b|\bdrop\s+table\b|\btruncate\s+table\b|\balter\s+table\b|--|/\*|\*/|;)`)
+	assistantDateCNRE   = regexp.MustCompile(`(20\d{2})年(\d{1,2})月(\d{1,2})日`)
+	assistantDateISORE  = regexp.MustCompile(`(20\d{2}-\d{2}-\d{2})`)
+	assistantBoundaryRE = regexp.MustCompile(`(?i)(\bselect\b|\binsert\s+into\b|\bupdate\s+\S+\s+set\b|\bdelete\s+from\b|\bdrop\s+table\b|\btruncate\s+table\b|\balter\s+table\b|--|/\*|\*/|;)`)
 )
 
 type assistantConversationService struct {
@@ -191,11 +187,12 @@ type assistantConfigChange struct {
 }
 
 type assistantDryRunResult struct {
-	Diff             []map[string]any `json:"diff"`
-	Explain          string           `json:"explain"`
-	ValidationErrors []string         `json:"validation_errors,omitempty"`
-	WouldCommit      bool             `json:"would_commit"`
-	PlanHash         string           `json:"plan_hash,omitempty"`
+	Diff             []map[string]any                 `json:"diff"`
+	Explain          string                           `json:"explain"`
+	ValidationErrors []string                         `json:"validation_errors,omitempty"`
+	Retrieval        assistantSemanticRetrievalResult `json:"retrieval,omitempty"`
+	WouldCommit      bool                             `json:"would_commit"`
+	PlanHash         string                           `json:"plan_hash,omitempty"`
 }
 
 type assistantCandidate struct {
@@ -489,7 +486,6 @@ func handleAssistantConversationTurnsAPI(w http.ResponseWriter, r *http.Request,
 		}
 		return
 	}
-
 	writeJSON(w, http.StatusOK, conversation)
 }
 
@@ -550,22 +546,12 @@ func handleAssistantTurnActionAPI(w http.ResponseWriter, r *http.Request, svc *a
 				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusConflict, "conversation_confirmation_required", "conversation confirmation required")
 			case errors.Is(err, errAssistantConfirmationExpired):
 				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusConflict, "conversation_confirmation_expired", "conversation confirmation expired")
-			case errors.Is(err, errAssistantClarificationRequired):
-				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusConflict, errAssistantClarificationRequired.Error(), "assistant clarification required")
-			case errors.Is(err, errAssistantClarificationRoundsExhausted):
-				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusConflict, errAssistantClarificationRoundsExhausted.Error(), "assistant clarification rounds exhausted")
-			case errors.Is(err, errAssistantManualHintRequired):
-				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusConflict, errAssistantManualHintRequired.Error(), "assistant manual hint required")
-			case errors.Is(err, errAssistantClarificationRuntimeInvalid):
-				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusConflict, errAssistantClarificationRuntimeInvalid.Error(), "assistant clarification runtime invalid")
 			case errors.Is(err, errAssistantConversationStateInvalid):
 				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusConflict, "conversation_state_invalid", "conversation state invalid")
 			case errors.Is(err, errAssistantCandidateNotFound):
 				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusUnprocessableEntity, "assistant_candidate_not_found", "assistant candidate not found")
 			case errors.Is(err, errAssistantRouteNonBusinessBlocked):
 				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusConflict, errAssistantRouteNonBusinessBlocked.Error(), "assistant route non business blocked")
-			case errors.Is(err, errAssistantRouteClarificationRequired):
-				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusConflict, errAssistantRouteClarificationRequired.Error(), "assistant route clarification required")
 			case errors.Is(err, errAssistantRouteDecisionMissing):
 				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusConflict, errAssistantRouteDecisionMissing.Error(), "assistant route decision missing")
 			case errors.Is(err, errAssistantRouteRuntimeInvalid):
@@ -606,18 +592,8 @@ func handleAssistantTurnActionAPI(w http.ResponseWriter, r *http.Request, svc *a
 				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusConflict, "conversation_confirmation_required", "conversation confirmation required")
 			case errors.Is(err, errAssistantConfirmationExpired):
 				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusConflict, "conversation_confirmation_expired", "conversation confirmation expired")
-			case errors.Is(err, errAssistantClarificationRequired):
-				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusConflict, errAssistantClarificationRequired.Error(), "assistant clarification required")
-			case errors.Is(err, errAssistantClarificationRoundsExhausted):
-				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusConflict, errAssistantClarificationRoundsExhausted.Error(), "assistant clarification rounds exhausted")
-			case errors.Is(err, errAssistantManualHintRequired):
-				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusConflict, errAssistantManualHintRequired.Error(), "assistant manual hint required")
-			case errors.Is(err, errAssistantClarificationRuntimeInvalid):
-				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusConflict, errAssistantClarificationRuntimeInvalid.Error(), "assistant clarification runtime invalid")
 			case errors.Is(err, errAssistantRouteNonBusinessBlocked):
 				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusConflict, errAssistantRouteNonBusinessBlocked.Error(), "assistant route non business blocked")
-			case errors.Is(err, errAssistantRouteClarificationRequired):
-				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusConflict, errAssistantRouteClarificationRequired.Error(), "assistant route clarification required")
 			case errors.Is(err, errAssistantRouteDecisionMissing):
 				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusConflict, errAssistantRouteDecisionMissing.Error(), "assistant route decision missing")
 			case errors.Is(err, errAssistantRouteRuntimeInvalid):
@@ -678,24 +654,8 @@ func handleAssistantTurnActionAPI(w http.ResponseWriter, r *http.Request, svc *a
 				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusForbidden, "forbidden", "forbidden")
 			case errors.Is(err, errAssistantTurnNotFound):
 				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusNotFound, "conversation_turn_not_found", "conversation turn not found")
-			case errors.Is(err, errAssistantReplyModelTargetMismatch):
-				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusUnprocessableEntity, "ai_reply_model_target_mismatch", "assistant reply model target mismatch")
 			case errors.Is(err, errAssistantReplyRenderFailed):
 				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusUnprocessableEntity, "ai_reply_render_failed", "assistant reply render failed")
-			case errors.Is(err, errAssistantModelProviderUnavailable):
-				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusServiceUnavailable, "ai_model_provider_unavailable", "ai model provider unavailable")
-			case errors.Is(err, errAssistantModelTimeout):
-				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusGatewayTimeout, "ai_model_timeout", "ai model timeout")
-			case errors.Is(err, errAssistantModelRateLimited):
-				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusTooManyRequests, "ai_model_rate_limited", "ai model rate limited")
-			case errors.Is(err, errAssistantModelConfigInvalid):
-				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusUnprocessableEntity, "ai_model_config_invalid", "ai model config invalid")
-			case errors.Is(err, errAssistantRuntimeConfigInvalid):
-				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusUnprocessableEntity, "ai_runtime_config_invalid", "ai runtime config invalid")
-			case errors.Is(err, errAssistantRuntimeConfigMissing):
-				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusServiceUnavailable, "ai_runtime_config_missing", "ai runtime config missing")
-			case errors.Is(err, errAssistantModelSecretMissing):
-				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusInternalServerError, "ai_model_secret_missing", "ai model secret missing")
 			default:
 				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusInternalServerError, "assistant_reply_render_failed", "assistant reply render failed")
 			}
@@ -951,191 +911,12 @@ func (s *assistantConversationService) createTurn(ctx context.Context, tenantID 
 	if conversation.ActorID != principal.ID {
 		return nil, errAssistantConversationForbidden
 	}
-
-	resolvedIntent, err := s.resolveIntent(ctx, tenantID, conversationID, userInput)
-	if err != nil {
-		return nil, err
-	}
-	knowledgeRuntime, err := s.ensureKnowledgeRuntime()
-	if err != nil {
-		return nil, err
-	}
 	pendingTurn := assistantLatestPendingTurn(conversation)
-	mergedIntent := assistantMergeIntentWithPendingTurn(resolvedIntent.Intent, pendingTurn)
-	resume := assistantClarificationResumeResult{Intent: mergedIntent}
-	if pendingTurn != nil {
-		resume = assistantResumeFromClarificationFn(pendingTurn, userInput, mergedIntent)
-		mergedIntent = resume.Intent
-	}
-	routeDecision, err := assistantBuildIntentRouteDecisionFn(userInput, resolvedIntent, mergedIntent, knowledgeRuntime, pendingTurn)
+	turn, err := s.prepareTurnDraft(ctx, tenantID, principal, conversationID, userInput, pendingTurn)
 	if err != nil {
 		return nil, err
 	}
-	intent := assistantProjectIntentRouteDecision(mergedIntent, routeDecision)
-	if action := strings.TrimSpace(resume.Intent.Action); action != "" && action != assistantIntentPlanOnly && strings.TrimSpace(intent.Action) == assistantIntentPlanOnly {
-		intent.Action = action
-	}
-	intentValidationErrors := assistantIntentValidationErrors(intent)
-	candidates := make([]assistantCandidate, 0)
-	resolvedCandidateID := ""
-	selectedCandidateID := strings.TrimSpace(resume.SelectedCandidateID)
-	resolutionSource := ""
-	ambiguityCount := 0
-	confidence := 0.65
-	candidateRefText := assistantIntentCandidateRefText(intent)
-	candidateAsOf := assistantIntentCandidateAsOf(intent)
-	if candidateRefText != "" && candidateAsOf != "" && len(intentValidationErrors) == 0 {
-		resolved, err := s.resolveCandidates(ctx, tenantID, candidateRefText, candidateAsOf)
-		if err != nil {
-			return nil, err
-		}
-		candidates = resolved
-		ambiguityCount = len(candidates)
-		switch len(candidates) {
-		case 0:
-			confidence = 0.3
-		case 1:
-			resolvedCandidateID = candidates[0].CandidateID
-			resolutionSource = assistantResolutionAuto
-			confidence = 0.95
-		default:
-			confidence = 0.55
-		}
-	}
-	if resumeCandidateID := strings.TrimSpace(resume.ResolvedCandidateID); resumeCandidateID != "" && assistantCandidateExists(candidates, resumeCandidateID) {
-		resolvedCandidateID = resumeCandidateID
-		selectedCandidateID = resumeCandidateID
-		resolutionSource = assistantResolutionUserConfirmed
-		confidence = 0.95
-	}
-	dryRun := assistantBuildDryRunFn(intent, candidates, resolvedCandidateID)
-	dryRun = s.enrichCreateOrgUnitDryRunWithPolicy(ctx, tenantID, intent, candidates, resolvedCandidateID, dryRun)
-	var pendingClarification *assistantClarificationDecision
-	if pendingTurn != nil {
-		pendingClarification = pendingTurn.Clarification
-	}
-	clarification := assistantBuildClarificationDecisionFn(assistantClarificationBuildInput{
-		UserInput:            userInput,
-		Intent:               intent,
-		RouteDecision:        routeDecision,
-		DryRun:               dryRun,
-		Candidates:           candidates,
-		ResolvedCandidateID:  resolvedCandidateID,
-		SelectedCandidateID:  selectedCandidateID,
-		Runtime:              knowledgeRuntime,
-		PendingClarification: pendingClarification,
-		ResumeProgress:       resume.Progress,
-	})
-	if clarification != nil && strings.TrimSpace(clarification.Status) == assistantClarificationStatusOpen && strings.TrimSpace(clarification.ClarificationKind) == assistantClarificationKindIntentDisambiguate {
-		dryRun.Explain = ""
-		dryRun.ValidationErrors = nil
-	}
-
-	spec, specOK := s.lookupActionSpec(intent.Action)
-	requiresActionSpec := clarification == nil || strings.TrimSpace(clarification.ClarificationKind) != assistantClarificationKindIntentDisambiguate
-	if !specOK && requiresActionSpec {
-		return nil, errAssistantUnsupportedIntent
-	}
-
-	plan := assistantBuildPlan(intent)
-	turnCreatedAt := time.Now().UTC()
-	plan = assistantFreezeConfirmWindow(plan, turnCreatedAt)
-	plan.ModelProvider = resolvedIntent.ProviderName
-	plan.ModelName = resolvedIntent.ModelName
-	plan.ModelRevision = resolvedIntent.ModelRevision
-	if specOK && (clarification == nil || strings.TrimSpace(clarification.ClarificationKind) != assistantClarificationKindIntentDisambiguate) {
-		skillExecutionPlan, configDeltaPlan := assistantCompileIntentToPlansWithSpec(intent, resolvedCandidateID, spec)
-		plan.SkillExecutionPlan = skillExecutionPlan
-		plan.ConfigDeltaPlan = configDeltaPlan
-		decision := assistantEvaluateActionGate(assistantActionGateInput{
-			Stage:         assistantActionStagePlan,
-			TenantID:      tenantID,
-			Principal:     principal,
-			Action:        spec,
-			Intent:        intent,
-			RouteDecision: routeDecision,
-			Candidates:    candidates,
-			ResolvedID:    resolvedCandidateID,
-			UserInput:     userInput,
-		})
-		if !decision.Allowed {
-			if errors.Is(decision.Error, errAssistantActionCapabilityUnregistered) {
-				return nil, errAssistantPlanBoundaryViolation
-			}
-			return nil, decision.Error
-		}
-		tempTurn := &assistantTurn{
-			Intent:              intent,
-			RouteDecision:       routeDecision,
-			Clarification:       clarification,
-			Plan:                plan,
-			Candidates:          candidates,
-			ResolvedCandidateID: resolvedCandidateID,
-			SelectedCandidateID: selectedCandidateID,
-			DryRun:              dryRun,
-		}
-		if err := s.refreshTurnVersionTuple(ctx, tenantID, tempTurn); err != nil {
-			return nil, err
-		}
-		plan = tempTurn.Plan
-		dryRun = tempTurn.DryRun
-		planContext, err := knowledgeRuntime.buildPlanContextV1(tenantID, knowledgeRuntime.planContextLocale(), intent, spec, tempTurn)
-		if err != nil {
-			return nil, err
-		}
-		assistantApplyPlanContextV1(&plan, &dryRun, intent, planContext)
-	}
-	assistantApplyPlanKnowledgeSnapshot(&plan, routeDecision, knowledgeRuntime)
-	tempTurn := &assistantTurn{
-		Intent:              intent,
-		RouteDecision:       routeDecision,
-		Clarification:       clarification,
-		Plan:                plan,
-		Candidates:          candidates,
-		ResolvedCandidateID: resolvedCandidateID,
-		SelectedCandidateID: selectedCandidateID,
-		DryRun:              dryRun,
-	}
-	if !assistantTurnRouteAuditVersionsConsistent(tempTurn) {
-		return nil, errAssistantPlanContractVersionMismatch
-	}
-	if err := assistantAnnotateIntentPlanFn(tenantID, conversationID, userInput, &intent, &plan, &dryRun); err != nil {
-		return nil, err
-	}
-	policyVersion, compositionVersion, mappingVersion := assistantTurnVersionSnapshot(plan.CapabilityKey)
-
-	turn := &assistantTurn{
-		TurnID:              "turn_" + strings.ReplaceAll(uuid.NewString(), "-", ""),
-		UserInput:           userInput,
-		State:               assistantStateValidated,
-		RiskTier:            "low",
-		RequestID:           "assistant_" + strings.ReplaceAll(uuid.NewString(), "-", ""),
-		TraceID:             strings.ReplaceAll(uuid.NewString(), "-", ""),
-		PolicyVersion:       policyVersion,
-		CompositionVersion:  compositionVersion,
-		MappingVersion:      mappingVersion,
-		Intent:              intent,
-		RouteDecision:       routeDecision,
-		Clarification:       clarification,
-		Plan:                plan,
-		Candidates:          candidates,
-		ResolvedCandidateID: resolvedCandidateID,
-		SelectedCandidateID: selectedCandidateID,
-		AmbiguityCount:      ambiguityCount,
-		Confidence:          confidence,
-		ResolutionSource:    resolutionSource,
-		DryRun:              dryRun,
-		CreatedAt:           turnCreatedAt,
-		UpdatedAt:           turnCreatedAt,
-	}
-	if specOK {
-		turn.RiskTier = strings.TrimSpace(spec.Security.RiskTier)
-		if turn.RiskTier == "" {
-			turn.RiskTier = "low"
-		}
-	}
-	assistantRefreshTurnDerivedFields(turn)
-
+	turnCreatedAt := turn.CreatedAt
 	conversation.Turns = append(conversation.Turns, turn)
 	conversation.UpdatedAt = turnCreatedAt
 	conversation.State = turn.State
@@ -1301,9 +1082,9 @@ func assistantRiskTierForIntent(intent assistantIntentSpec) string {
 
 func assistantBuildPlan(intent assistantIntentSpec) assistantPlanSummary {
 	plan := assistantPlanSummary{
-		Title:                   "只读规划",
-		CapabilityKey:           "org.orgunit_create.field_policy",
-		Summary:                 "生成只读计划，不执行提交",
+		Title:                   "对话回复",
+		CapabilityKey:           "org.assistant_conversation.manage",
+		Summary:                 "当前轮仅保留对话语义与执行边界，不生成业务提交计划",
 		CapabilityMapVersion:    assistantCapabilityMapVersionV1,
 		CompilerContractVersion: assistantCompilerContractVersionV1,
 	}
@@ -1315,10 +1096,22 @@ func assistantBuildPlan(intent assistantIntentSpec) assistantPlanSummary {
 		plan.CommitAdapterKey = spec.Handler.CommitAdapterKey
 		plan.Summary = spec.PlanSummary
 	}
+	switch strings.TrimSpace(intent.RouteKind) {
+	case assistantRouteKindKnowledgeQA:
+		plan.Summary = "当前轮属于知识问答，只返回说明，不触发业务提交。"
+	case assistantRouteKindChitchat:
+		plan.Summary = "当前轮属于闲聊响应，不触发业务提交。"
+	case assistantRouteKindUncertain:
+		plan.Summary = "当前轮语义仍不确定，仅保留澄清投影，不触发业务提交。"
+	}
 	return plan
 }
 
 func assistantBuildDryRun(intent assistantIntentSpec, candidates []assistantCandidate, resolvedCandidateID string) assistantDryRunResult {
+	return assistantBuildDryRunWithRetrieval(intent, candidates, resolvedCandidateID, assistantSemanticRetrievalResult{})
+}
+
+func assistantBuildDryRunWithRetrieval(intent assistantIntentSpec, candidates []assistantCandidate, resolvedCandidateID string, retrieval assistantSemanticRetrievalResult) assistantDryRunResult {
 	diff := make([]map[string]any, 0, 4)
 	validationErrors := assistantIntentValidationErrors(intent)
 	switch strings.TrimSpace(intent.Action) {
@@ -1382,33 +1175,32 @@ func assistantBuildDryRun(intent assistantIntentSpec, candidates []assistantCand
 	}
 	explain := "计划已生成，等待确认后可提交"
 	if candidateRefText := assistantIntentCandidateRefText(intent); candidateRefText != "" && strings.TrimSpace(resolvedCandidateID) == "" {
-		if len(candidates) == 0 {
+		switch strings.TrimSpace(retrieval.State) {
+		case assistantSemanticRetrievalStateNoMatch:
 			validationErrors = append(validationErrors, "parent_candidate_not_found")
-		} else if len(candidates) > 1 {
+		case assistantSemanticRetrievalStateMultipleMatches:
 			validationErrors = append(validationErrors, "candidate_confirmation_required")
+		case assistantSemanticRetrievalStateSingleMatch:
+		case assistantSemanticRetrievalStateDeferredByBoundary:
+		default:
+			if len(candidates) == 0 {
+				validationErrors = append(validationErrors, "parent_candidate_not_found")
+			} else if len(candidates) > 1 {
+				validationErrors = append(validationErrors, "candidate_confirmation_required")
+			}
 		}
 	}
 	validationErrors = assistantNormalizeValidationErrors(validationErrors)
 	if len(validationErrors) > 0 {
 		explain = assistantDryRunValidationExplain(validationErrors)
 	}
-	return assistantDryRunResult{Diff: diff, Explain: explain, ValidationErrors: validationErrors, WouldCommit: false}
-}
-
-func assistantDecodeIntent(userInput string) (assistantIntentSpec, error) {
-	text := strings.TrimSpace(userInput)
-	if assistantBoundaryViolationDetected(text) {
-		return assistantIntentSpec{}, errAssistantPlanBoundaryViolation
+	return assistantDryRunResult{
+		Diff:             diff,
+		Explain:          explain,
+		ValidationErrors: validationErrors,
+		Retrieval:        retrieval,
+		WouldCommit:      false,
 	}
-	intent := assistantExtractIntent(text)
-	if assistantIntentSchemaInvalid(intent) {
-		return assistantIntentSpec{}, errAssistantPlanSchemaConstrainedDecodeFailed
-	}
-	plan := assistantBuildPlan(intent)
-	if _, ok := capabilityDefinitionForKey(plan.CapabilityKey); !ok {
-		return assistantIntentSpec{}, errAssistantPlanBoundaryViolation
-	}
-	return intent, nil
 }
 
 func assistantBoundaryViolationDetected(text string) bool {
@@ -1440,32 +1232,6 @@ func assistantTurnRequiresIntentClarification(turn *assistantTurn) bool {
 		}
 	}
 	return false
-}
-
-func assistantMergeIntentWithPendingTurn(intent assistantIntentSpec, pending *assistantTurn) assistantIntentSpec {
-	if pending == nil {
-		return intent
-	}
-	if strings.TrimSpace(pending.Intent.Action) != assistantIntentCreateOrgUnit {
-		return intent
-	}
-	if !assistantTurnHasOpenClarification(pending) && len(assistantTurnMissingFields(pending)) == 0 {
-		return intent
-	}
-	merged := intent
-	if strings.TrimSpace(merged.Action) == "" || strings.TrimSpace(merged.Action) == "plan_only" {
-		merged.Action = pending.Intent.Action
-	}
-	if strings.TrimSpace(merged.ParentRefText) == "" {
-		merged.ParentRefText = strings.TrimSpace(pending.Intent.ParentRefText)
-	}
-	if strings.TrimSpace(merged.EntityName) == "" {
-		merged.EntityName = strings.TrimSpace(pending.Intent.EntityName)
-	}
-	if strings.TrimSpace(merged.EffectiveDate) == "" {
-		merged.EffectiveDate = strings.TrimSpace(pending.Intent.EffectiveDate)
-	}
-	return merged
 }
 
 func assistantLatestPendingTurn(conversation *assistantConversation) *assistantTurn {
@@ -1644,47 +1410,6 @@ func assistantTurnVersionDrifted(turn *assistantTurn) bool {
 		return true
 	}
 	return strings.TrimSpace(turn.MappingVersion) != strings.TrimSpace(mappingVersion)
-}
-
-func assistantExtractIntent(input string) assistantIntentSpec {
-	text := strings.TrimSpace(input)
-	intent := assistantIntentSpec{Action: "plan_only"}
-	if strings.Contains(text, "新建") {
-		if strings.Contains(text, "部门") || assistantParentUnderCreateRE.MatchString(text) || assistantDeptCreateRE.MatchString(text) {
-			intent.Action = assistantIntentCreateOrgUnit
-		}
-	}
-	if m := assistantParentUnderRE.FindStringSubmatch(text); len(m) == 2 {
-		intent.ParentRefText = strings.TrimSpace(m[1])
-	} else if m := assistantParentUnderCreateRE.FindStringSubmatch(text); len(m) == 2 {
-		intent.ParentRefText = strings.TrimSpace(m[1])
-	}
-	if m := assistantDeptNameRE.FindStringSubmatch(text); len(m) == 2 {
-		intent.EntityName = strings.TrimSpace(m[1])
-	} else if m := assistantDeptCreateRE.FindStringSubmatch(text); len(m) == 2 {
-		entityName := strings.TrimSpace(m[1])
-		if entityName != "一个部门" && entityName != "部门" {
-			intent.EntityName = entityName
-		}
-	}
-	if m := assistantDateISORE.FindStringSubmatch(text); len(m) == 2 {
-		intent.EffectiveDate = strings.TrimSpace(m[1])
-	}
-	if intent.EffectiveDate == "" {
-		if m := assistantDateCNRE.FindStringSubmatch(text); len(m) == 4 {
-			year := strings.TrimSpace(m[1])
-			month := strings.TrimSpace(m[2])
-			day := strings.TrimSpace(m[3])
-			if len(month) == 1 {
-				month = "0" + month
-			}
-			if len(day) == 1 {
-				day = "0" + day
-			}
-			intent.EffectiveDate = year + "-" + month + "-" + day
-		}
-	}
-	return intent
 }
 
 func assistantIntentCandidateRefText(intent assistantIntentSpec) string {

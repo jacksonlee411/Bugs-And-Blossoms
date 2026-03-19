@@ -385,6 +385,7 @@ modules/{module}/
 - DEV-PLAN-239B【归档】：239A 直接验证用例测试报告与实现缺口（旧桥接阶段历史报告）：`docs/archive/dev-plans/239b-239a-direct-validation-report-and-implementation-gaps.md`
 - DEV-PLAN-239D：Ubuntu 本地开发环境搭建方案（Clone 后首日）：`docs/dev-plans/239d-ubuntu-local-development-environment-bootstrap-plan.md`
 - DEV-PLAN-240：Assistant 组织架构事务编排现代化方案（去写死 + Skill/知识/LibreChat 对齐）：`docs/dev-plans/240-assistant-org-transaction-orchestration-modernization-plan.md`
+- DEV-PLAN-240 执行日志：`docs/dev-records/dev-plan-240-execution-log.md`
 - DEV-PLAN-240A：Assistant ActionRegistry 与 CommitAdapter 落地计划（承接 240-M2）：`docs/dev-plans/240a-assistant-action-registry-and-commit-adapter-plan.md`
 - DEV-PLAN-240B：Assistant 状态机统一与内存/PG 路径收敛计划（承接 240-M3）：`docs/dev-plans/240b-assistant-state-machine-unification-plan.md`
 - DEV-PLAN-240C：Assistant ActionInterceptor 与风险门左移计划（承接 240-M4）：`docs/dev-plans/240c-assistant-action-interceptor-and-risk-gate-plan.md`
@@ -392,6 +393,7 @@ modules/{module}/
 - DEV-PLAN-240E：Assistant 内部知识包与只读 Resolver 方案（承接 240-M6）：`docs/dev-plans/240e-assistant-internal-knowledge-pack-and-readonly-resolver-plan.md`
 - DEV-PLAN-240F：Assistant 与 280 主链路对齐封板回归计划（承接 240-M7）：`docs/dev-plans/240f-assistant-280-aligned-closure-and-regression-plan.md`
 - DEV-PLAN-241：Assistant 知识包运行时最小落地计划（承接 240E）：`docs/dev-plans/241-assistant-knowledge-pack-runtime-minimal-implementation-plan.md`
+- DEV-PLAN-241 执行日志：`docs/dev-records/dev-plan-241-execution-log.md`
 - DEV-PLAN-242：Assistant Intent Router 运行时最小落地计划：`docs/dev-plans/242-assistant-intent-router-runtime-minimal-plan.md`
 - DEV-PLAN-242 执行日志：`docs/dev-records/dev-plan-242-execution-log.md`
 - DEV-PLAN-243：Assistant 澄清策略与槽位补全回路计划：`docs/dev-plans/243-assistant-clarification-policy-and-slot-repair-plan.md`
@@ -399,10 +401,15 @@ modules/{module}/
 - DEV-PLAN-244：Assistant Interpretation Pack 与 Intent Route Catalog 编译治理计划：`docs/dev-plans/244-assistant-interpretation-pack-and-intent-route-catalog-compiler-plan.md`
 - DEV-PLAN-244 执行日志：`docs/dev-records/dev-plan-244-execution-log.md`
 - DEV-PLAN-245：Assistant Reply Guidance Pack 与 Reply Realizer 计划：`docs/dev-plans/245-assistant-reply-guidance-pack-and-reply-realizer-plan.md`
+- DEV-PLAN-245 执行日志：`docs/dev-records/dev-plan-245-execution-log.md`
 - DEV-PLAN-246：Assistant 理解—分流—澄清—表达实施路线图：`docs/dev-plans/246-assistant-understand-route-clarify-roadmap.md`
+- DEV-PLAN-246A：基于 240E/246 的 241-245 目标完成验证报告：`docs/dev-plans/246a-assistant-241-245-goal-completion-validation-report.md`
+- DEV-PLAN-267：Assistant 对话僵硬问题系统反思与架构纠偏计划（承接 246 系列）：`docs/dev-plans/267-assistant-dialog-rigidity-retrospective-and-architecture-correction-plan.md`
+- DEV-PLAN-268：Assistant 外部大模型单一语义核与本地最小执行边界实施计划：`docs/dev-plans/268-assistant-external-llm-semantic-core-and-runtime-thinning-implementation-plan.md`
+- DEV-PLAN-268 执行日志：`docs/dev-records/dev-plan-268-execution-log.md`
 - DEV-PLAN-250：Go 网关 + PostgreSQL RAG/鉴权接管实施方案（覆盖阶段一至阶段二）：`docs/dev-plans/250-go-gateway-rag-and-authz-phase1-2-plan.md`
 - DEV-PLAN-260：AI对话真实业务闭环主计划（多轮补全 / 候选确认 / 提交回执）：`docs/dev-plans/260-librechat-conversation-first-auto-execution-plan.md`
-- DEV-PLAN-260 执行日志：`docs/archive/dev-records/dev-plan-260-execution-log.md`
+- DEV-PLAN-260 执行日志：`docs/dev-records/dev-plan-260-execution-log.md`
 - DEV-PLAN-261：LibreChat 助手对话失败问题排查与修复实施计划：`docs/dev-plans/261-librechat-assistant-conversation-failure-investigation-and-remediation-plan.md`
 - DEV-PLAN-261 执行日志：`docs/archive/dev-records/dev-plan-261-execution-log.md`
 - DEV-PLAN-262【归档】：LibreChat 对话回执渲染越界问题调查与收敛方案（旧桥接阶段缺陷修复记录）：`docs/archive/dev-plans/262-librechat-dialog-render-outside-chat-investigation-and-fix-plan.md`
@@ -418,6 +425,7 @@ modules/{module}/
 - DEV-PLAN-271：Assistant/LibreChat 跨计划分阶段推进与封板编排计划（223/240/260/280）：`docs/dev-plans/271-assistant-librechat-cross-plan-sequenced-delivery-plan.md`
 - DEV-PLAN-272：Assistant OrgUnit 七动作纳管实施计划（1-7 全量纳入）：`docs/dev-plans/272-assistant-orgunit-seven-actions-expansion-plan.md`
 - DEV-PLAN-280：LibreChat Web UI 源码纳管与 Runtime 分层复用实施方案：`docs/dev-plans/280-librechat-web-ui-vendoring-and-runtime-layered-reuse-plan.md`
+- DEV-PLAN-280 执行日志：`docs/dev-records/dev-plan-280-execution-log.md`
 - DEV-PLAN-281：LibreChat Web UI 源码纳管与新主链路冻结实施计划：`docs/dev-plans/281-librechat-web-ui-source-vendoring-and-mainline-freeze-plan.md`
 - DEV-PLAN-281 执行日志：`docs/archive/dev-records/dev-plan-281-execution-log.md`
 - DEV-PLAN-282：LibreChat 旧桥接链路删除实施计划：`docs/dev-plans/282-librechat-old-bridge-deletion-plan.md`
@@ -437,6 +445,46 @@ modules/{module}/
 - DEV-PLAN-290B 执行日志：`docs/dev-records/dev-plan-290b-execution-log.md`
 - DEV-PLAN-291：237 升级兼容回归前置专项（供 285 封板复核）：`docs/dev-plans/291-librechat-237-upgrade-compatibility-readiness-plan.md`
 - DEV-PLAN-292：LibreChat 正式入口 vendored UI 认证/启动最小兼容层专项：`docs/dev-plans/292-librechat-vendored-ui-auth-startup-compat-plan.md`
+- DEV-PLAN-300：功能导向的 Greenfield HR 平台重做蓝图（C#/.NET + React）：`docs/dev-plans/300-greenfield-csharp-hr-platform-functional-blueprint.md`
+- DEV-PLAN-310：工程质量、测试与交付子计划：`docs/dev-plans/310-engineering-quality-testing-and-delivery-plan.md`
+- DEV-PLAN-311：工程结构与本地开发基线详细设计：`docs/dev-plans/311-engineering-structure-and-local-development-baseline-detailed-design.md`
+- DEV-PLAN-312：测试金字塔与 E2E 策略详细设计：`docs/dev-plans/312-testing-pyramid-and-e2e-strategy-detailed-design.md`
+- DEV-PLAN-313：CI/CD、Linux 容器平台部署与观测基线详细设计：`docs/dev-plans/313-ci-cd-linux-container-deployment-and-observability-baseline-detailed-design.md`
+- DEV-PLAN-320：共享数据架构与建模约定子计划：`docs/dev-plans/320-shared-data-architecture-and-modeling-conventions-plan.md`
+- DEV-PLAN-321：租户可扩展能力（字段/字典/策略）业务规则优先蓝图与共享模型方案：`docs/dev-plans/321-tenant-extensibility-business-rules-and-shared-model-plan.md`
+- DEV-PLAN-322：历史、生效日期、区间完整性与 `current / as_of / history` 详细设计：`docs/dev-plans/322-effective-date-history-and-interval-integrity-detailed-design.md`
+- DEV-PLAN-323：审计、任务、会话与快照模式详细设计：`docs/dev-plans/323-audit-task-session-and-snapshot-patterns-detailed-design.md`
+- DEV-PLAN-324：EF Core Query Filter、Dapper/SQL 与数据库原生能力边界详细设计：`docs/dev-plans/324-ef-core-query-filter-dapper-sql-and-database-native-capabilities-boundary-detailed-design.md`
+- DEV-PLAN-330：安全、合规与数据治理子计划：`docs/dev-plans/330-security-compliance-and-data-governance-plan.md`
+- DEV-PLAN-331：敏感数据分级与访问治理详细设计：`docs/dev-plans/331-sensitive-data-classification-and-access-governance-detailed-design.md`
+- DEV-PLAN-332：导出、审计与留存策略详细设计：`docs/dev-plans/332-export-audit-and-retention-governance-detailed-design.md`
+- DEV-PLAN-333：租户隔离、tenant-scoped SQL、密钥与 Assistant 安全治理详细设计：`docs/dev-plans/333-tenant-isolation-tenant-scoped-sql-secrets-and-assistant-safety-detailed-design.md`
+- DEV-PLAN-340：平台与 IAM 基座子计划（Tenancy / AuthN / AuthZ / Shell）：`docs/dev-plans/340-platform-and-iam-foundation-plan.md`
+- DEV-PLAN-341：Tenancy / AuthN 业务规则优先蓝图与入口边界详细设计：`docs/dev-plans/341-tenancy-authn-business-rules-and-entry-boundary-plan.md`
+- DEV-PLAN-342：AuthZ 与平台权限矩阵业务规则优先蓝图：`docs/dev-plans/342-authz-and-platform-permission-matrix-business-rules-plan.md`
+- DEV-PLAN-343：Superadmin 控制台与租户生命周期业务规则优先蓝图：`docs/dev-plans/343-superadmin-console-and-tenant-lifecycle-business-rules-plan.md`
+- DEV-PLAN-344：Audit / Notification / Background Jobs 基座详细设计：`docs/dev-plans/344-audit-notification-and-background-jobs-foundation-detailed-design.md`
+- DEV-PLAN-345：平台配置与策略（Platform Configuration / Policy）业务规则优先蓝图：`docs/dev-plans/345-platform-configuration-and-policy-business-rules-blueprint.md`
+- DEV-PLAN-346：平台路由治理与返回契约子计划（Route Class / Responder / Exposure Gates）：`docs/dev-plans/346-platform-routing-governance-and-response-contract-plan.md`
+- DEV-PLAN-347：Capability 与颗粒度治理子计划（Capability Key / Route Mapping / Granularity）：`docs/dev-plans/347-capability-and-granularity-governance-plan.md`
+- DEV-PLAN-348：平台通用键治理规范与评估框架（Key Governance Evaluation Framework）：`docs/dev-plans/348-platform-key-governance-evaluation-framework.md`
+- DEV-PLAN-348A：`setid/package` 单主源治理候选方案（待评估）：`docs/dev-plans/348a-setid-package-single-source-candidate-plan.md`
+- DEV-PLAN-348B：取消 `setid`、收敛为 `package_uuid` 直达治理候选方案（待评估）：`docs/dev-plans/348b-package-uuid-direct-governance-candidate-plan.md`
+- DEV-PLAN-348C：对标 Workday 的“一源数据 + 一安全模型 + 组织上下文”参考治理候选方案（待评估）：`docs/dev-plans/348c-workday-reference-key-governance-candidate-plan.md`
+- DEV-PLAN-348D：键治理候选方案并排评估矩阵（348A / 348B / 348C）：`docs/dev-plans/348d-key-governance-candidate-comparison-matrix.md`
+- DEV-PLAN-350：前端产品壳与交互系统子计划：`docs/dev-plans/350-frontend-product-shell-and-interaction-system-plan.md`
+- DEV-PLAN-351：Product Shell 与路由信息架构详细设计：`docs/dev-plans/351-product-shell-and-route-information-architecture-detailed-design.md`
+- DEV-PLAN-352：列表/详情/历史页面模式详细设计：`docs/dev-plans/352-list-detail-history-page-patterns-detailed-design.md`
+- DEV-PLAN-353：表单与权限感知交互详细设计：`docs/dev-plans/353-form-patterns-and-permission-aware-interaction-detailed-design.md`
+- DEV-PLAN-360：核心 HR 业务域子计划（Org / JobCatalog / Staffing / Person）：`docs/dev-plans/360-core-hr-domains-plan.md`
+- DEV-PLAN-361：组织架构（Org Structure）业务规则优先蓝图与详细设计：`docs/dev-plans/361-org-structure-business-rules-and-blueprint-plan.md`
+- DEV-PLAN-362：人员主档（Person）业务规则优先蓝图与详细设计：`docs/dev-plans/362-person-business-rules-and-detailed-design.md`
+- DEV-PLAN-363：职位分类（Job Catalog）业务规则优先蓝图与可配置化基座方案：`docs/dev-plans/363-job-catalog-business-rules-and-configurability-foundation-plan.md`
+- DEV-PLAN-364：Staffing（Position / Assignment）业务规则优先蓝图与详细设计：`docs/dev-plans/364-staffing-position-assignment-business-rules-and-detailed-design.md`
+- DEV-PLAN-370：工作流、审计增强与集成子计划：`docs/dev-plans/370-workflow-audit-and-integration-plan.md`
+- DEV-PLAN-380：数据工作台与运营分析子计划：`docs/dev-plans/380-data-workbench-and-operational-analytics-plan.md`
+- DEV-PLAN-390：Chat Assistant 能力子计划：`docs/dev-plans/390-chat-assistant-capability-plan.md`
+- DEV-PLAN-400：实施路线图与垂直切片编排计划：`docs/dev-plans/400-implementation-roadmap-and-vertical-slice-plan.md`
 - DEV-PLAN-225 执行日志：`docs/archive/dev-records/dev-plan-225-execution-log.md`
 - DEV-PLAN-226：测试指引 TG-004（门禁口径变更审批）：`docs/dev-plans/226-test-guide-tg004-gate-caliber-change-approval.md`
 - DEV-PLAN-170 执行日志：`docs/archive/dev-records/dev-plan-170-execution-log.md`

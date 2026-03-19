@@ -584,6 +584,37 @@ func TestAssistantOpenAIProviderAdapter_ErrorBranches(t *testing.T) {
 				if !hasResponseFormat {
 					t.Fatalf("first request should include response_format, payload=%s", string(raw))
 				}
+				responseFormat, ok := payload["response_format"].(map[string]any)
+				if !ok {
+					t.Fatalf("response_format type mismatch payload=%s", string(raw))
+				}
+				jsonSchema, ok := responseFormat["json_schema"].(map[string]any)
+				if !ok {
+					t.Fatalf("json_schema missing payload=%s", string(raw))
+				}
+				schema, ok := jsonSchema["schema"].(map[string]any)
+				if !ok {
+					t.Fatalf("schema missing payload=%s", string(raw))
+				}
+				properties, ok := schema["properties"].(map[string]any)
+				if !ok || properties["route_kind"] == nil || properties["intent_id"] == nil {
+					t.Fatalf("route contract missing in response_format payload=%s", string(raw))
+				}
+				required, ok := schema["required"].([]any)
+				if !ok || len(required) < 3 {
+					t.Fatalf("required fields missing payload=%s", string(raw))
+				}
+				requiredSet := map[string]struct{}{}
+				for _, item := range required {
+					text, _ := item.(string)
+					requiredSet[text] = struct{}{}
+				}
+				if _, ok := requiredSet["route_kind"]; !ok {
+					t.Fatalf("route_kind not required payload=%s", string(raw))
+				}
+				if _, ok := requiredSet["intent_id"]; !ok {
+					t.Fatalf("intent_id not required payload=%s", string(raw))
+				}
 				w.WriteHeader(http.StatusBadRequest)
 				_, _ = w.Write([]byte(`{"error":{"message":"invalid response_format"}}`))
 				return
@@ -592,7 +623,7 @@ func TestAssistantOpenAIProviderAdapter_ErrorBranches(t *testing.T) {
 				t.Fatalf("fallback request should not include response_format, payload=%s", string(raw))
 			}
 			w.WriteHeader(http.StatusOK)
-			_, _ = w.Write([]byte(`{"choices":[{"message":{"content":"{\"action\":\"create_department\",\"parent_department\":\"鲜花组织\",\"department_name\":\"测试部\",\"established_date\":\"2026-01-01\"}"}}]}`))
+			_, _ = w.Write([]byte(`{"choices":[{"message":{"content":"{\"action\":\"create_department\",\"route_kind\":\"business_action\",\"intent_id\":\"org.orgunit_create\",\"route_catalog_version\":\"semantic.v1\",\"parent_department\":\"鲜花组织\",\"department_name\":\"测试部\",\"established_date\":\"2026-01-01\"}"}}]}`))
 		}))
 		defer server.Close()
 		adapter := assistantOpenAIProviderAdapter{
@@ -605,12 +636,13 @@ func TestAssistantOpenAIProviderAdapter_ErrorBranches(t *testing.T) {
 		if err != nil {
 			t.Fatalf("fallback invoke err=%v", err)
 		}
-		intent, decodeErr := assistantStrictDecodeIntent(payload)
+		semantic, decodeErr := assistantStrictDecodeSemanticIntent(payload)
 		if decodeErr != nil {
 			t.Fatalf("strict decode fallback payload failed: %v payload=%s", decodeErr, string(payload))
 		}
-		if intent.Action != assistantIntentCreateOrgUnit || intent.ParentRefText != "鲜花组织" || intent.EntityName != "测试部" || intent.EffectiveDate != "2026-01-01" {
-			t.Fatalf("unexpected fallback intent=%+v payload=%s", intent, string(payload))
+		intent := semantic.intentSpec()
+		if intent.Action != assistantIntentCreateOrgUnit || intent.RouteKind != assistantRouteKindBusinessAction || intent.IntentID != "org.orgunit_create" || intent.RouteCatalogVersion != "semantic.v1" || intent.ParentRefText != "鲜花组织" || intent.EntityName != "测试部" || intent.EffectiveDate != "2026-01-01" {
+			t.Fatalf("unexpected fallback intent=%+v semantic=%+v payload=%s", intent, semantic, string(payload))
 		}
 		if calls != 2 {
 			t.Fatalf("expected 2 calls, got=%d", calls)

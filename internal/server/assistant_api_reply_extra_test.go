@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"net/http"
 	"net/http/httptest"
@@ -11,21 +12,19 @@ import (
 func TestHandleAssistantTurnActionAPIReplyErrorBranches(t *testing.T) {
 	principal := Principal{ID: "actor-1", RoleSlug: "tenant-admin"}
 	cases := []struct {
-		name     string
-		stubErr  error
-		wantCode string
-		wantHTTP int
+		name    string
+		stubErr error
 	}{
-		{name: "target mismatch", stubErr: errAssistantReplyModelTargetMismatch, wantCode: "ai_reply_model_target_mismatch", wantHTTP: http.StatusUnprocessableEntity},
-		{name: "render failed", stubErr: errAssistantReplyRenderFailed, wantCode: "ai_reply_render_failed", wantHTTP: http.StatusUnprocessableEntity},
-		{name: "provider unavailable", stubErr: errAssistantModelProviderUnavailable, wantCode: "ai_model_provider_unavailable", wantHTTP: http.StatusServiceUnavailable},
-		{name: "timeout", stubErr: errAssistantModelTimeout, wantCode: "ai_model_timeout", wantHTTP: http.StatusGatewayTimeout},
-		{name: "rate limited", stubErr: errAssistantModelRateLimited, wantCode: "ai_model_rate_limited", wantHTTP: http.StatusTooManyRequests},
-		{name: "config invalid", stubErr: errAssistantModelConfigInvalid, wantCode: "ai_model_config_invalid", wantHTTP: http.StatusUnprocessableEntity},
-		{name: "runtime invalid", stubErr: errAssistantRuntimeConfigInvalid, wantCode: "ai_runtime_config_invalid", wantHTTP: http.StatusUnprocessableEntity},
-		{name: "runtime missing", stubErr: errAssistantRuntimeConfigMissing, wantCode: "ai_runtime_config_missing", wantHTTP: http.StatusServiceUnavailable},
-		{name: "secret missing", stubErr: errAssistantModelSecretMissing, wantCode: "ai_model_secret_missing", wantHTTP: http.StatusInternalServerError},
-		{name: "default", stubErr: errors.New("boom"), wantCode: "assistant_reply_render_failed", wantHTTP: http.StatusInternalServerError},
+		{name: "target mismatch", stubErr: errAssistantReplyModelTargetMismatch},
+		{name: "render failed", stubErr: errAssistantReplyRenderFailed},
+		{name: "provider unavailable", stubErr: errAssistantModelProviderUnavailable},
+		{name: "timeout", stubErr: errAssistantModelTimeout},
+		{name: "rate limited", stubErr: errAssistantModelRateLimited},
+		{name: "config invalid", stubErr: errAssistantModelConfigInvalid},
+		{name: "runtime invalid", stubErr: errAssistantRuntimeConfigInvalid},
+		{name: "runtime missing", stubErr: errAssistantRuntimeConfigMissing},
+		{name: "secret missing", stubErr: errAssistantModelSecretMissing},
+		{name: "default", stubErr: errors.New("boom")},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -37,14 +36,29 @@ func TestHandleAssistantTurnActionAPIReplyErrorBranches(t *testing.T) {
 			svc.mu.Unlock()
 			original := assistantRenderReplyWithModelFn
 			defer func() { assistantRenderReplyWithModelFn = original }()
+			invoked := false
 			assistantRenderReplyWithModelFn = func(_ context.Context, _ *assistantConversationService, _ assistantReplyRenderPrompt) (assistantReplyModelResult, error) {
+				invoked = true
 				return assistantReplyModelResult{}, tc.stubErr
 			}
 			path := "/internal/assistant/conversations/" + conv.ConversationID + "/turns/" + turn.TurnID + ":reply"
 			rec := httptest.NewRecorder()
 			handleAssistantTurnActionAPI(rec, assistantReqWithContext(http.MethodPost, path, `{}`, true, true), svc)
-			if rec.Code != tc.wantHTTP || assistantDecodeErrCode(t, rec) != tc.wantCode {
-				t.Fatalf("status=%d code=%s body=%s", rec.Code, assistantDecodeErrCode(t, rec), rec.Body.String())
+			if invoked {
+				t.Fatalf("reply model hook should not be invoked under projection-only reply path")
+			}
+			if rec.Code != http.StatusOK {
+				t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+			}
+			var reply assistantRenderReplyResponse
+			if err := json.Unmarshal(rec.Body.Bytes(), &reply); err != nil {
+				t.Fatalf("decode reply: %v", err)
+			}
+			if reply.TurnID != turn.TurnID {
+				t.Fatalf("unexpected reply=%+v", reply)
+			}
+			if reply.ReplySource != assistantReplySourceProjection && reply.ReplySource != assistantReplySourceFallback {
+				t.Fatalf("reply should come from local projection/fallback, got=%+v", reply)
 			}
 		})
 	}

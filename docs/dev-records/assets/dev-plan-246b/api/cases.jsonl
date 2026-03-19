@@ -1,0 +1,180 @@
+{
+  "id": "C01",
+  "plan": "240E",
+  "description": "未登录访问 internal assistant fail-closed",
+  "pass": true,
+  "observed": "http=401",
+  "evidence": "docs/dev-records/assets/dev-plan-246b/api/c01-auth-guard.json",
+  "verified_at": "2026-03-12T03:35:01Z"
+}
+{
+  "id": "C02",
+  "plan": "241,242",
+  "description": "orgunit_create 进入 await_commit_confirm 且候选已解析",
+  "pass": true,
+  "observed": "http=200 phase=await_commit_confirm route=business_action candidates=1 resolved=TP246BAIGOV",
+  "evidence": "docs/dev-records/assets/dev-plan-246b/api/c02-action-ready-turn.json",
+  "verified_at": "2026-03-12T03:35:05Z"
+}
+{
+  "id": "C14",
+  "plan": "240E,241,244,245",
+  "description": "plan 快照版本字段齐全",
+  "pass": true,
+  "observed": "digest=64 route_ver=2026-03-11.v2 resolver_ver=resolver_contract_v1 ctx_ver=plan_context_v1 reply_ver=2026-03-11.v1+2026-03-11.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1",
+  "evidence": "docs/dev-records/assets/dev-plan-246b/api/c02-action-ready-turn.json",
+  "verified_at": "2026-03-12T03:35:05Z"
+}
+{
+  "id": "C03",
+  "plan": "242,245",
+  "description": "业务动作 confirm=200 且 commit=202(task receipt)",
+  "pass": true,
+  "observed": "confirm_http=200 commit_http=202",
+  "evidence": "docs/dev-records/assets/dev-plan-246b/api/c03-commit.json",
+  "verified_at": "2026-03-12T03:35:05Z"
+}
+{
+  "id": "C04",
+  "plan": "242",
+  "description": "commit 后任务轮询可达 succeeded",
+  "pass": true,
+  "observed": "task_id=c852e347-b25e-4786-910c-b8d88b8b6d3e",
+  "evidence": "docs/dev-records/assets/dev-plan-246b/api/c04-task-poll-1.json",
+  "verified_at": "2026-03-12T03:35:05Z"
+}
+{
+  "id": "C05",
+  "plan": "245,246",
+  "description": "提交成功后 reply 可读且对齐 committed 事实",
+  "pass": true,
+  "observed": "reply_http=200 turn_state=committed commit_outcome=success",
+  "evidence": "docs/dev-records/assets/dev-plan-246b/api/c05-reply.json",
+  "verified_at": "2026-03-12T03:35:10Z"
+}
+{
+  "id": "C06",
+  "plan": "243",
+  "description": "缺字段场景进入 await_missing_fields 且包含 missing_effective_date",
+  "pass": true,
+  "observed": "http=200 phase=await_missing_fields route=business_action missing_effective_date=true",
+  "evidence": "docs/dev-records/assets/dev-plan-246b/api/c06-missing-fields-turn.json",
+  "verified_at": "2026-03-12T03:35:16Z"
+}
+{
+  "id": "C07",
+  "plan": "245",
+  "description": "missing_fields reply 成功返回用户文本",
+  "pass": true,
+  "observed": "reply_http=200 stage=missing_fields text_len=153",
+  "evidence": "docs/dev-records/assets/dev-plan-246b/api/c07-missing-fields-reply.json",
+  "verified_at": "2026-03-12T03:35:22Z"
+}
+{
+  "id": "C08",
+  "plan": "243",
+  "description": "多候选进入 await_candidate_pick 且候选数>=2",
+  "pass": true,
+  "observed": "http=200 phase=await_candidate_pick candidate_count=2",
+  "evidence": "docs/dev-records/assets/dev-plan-246b/api/c08-candidate-turn.json",
+  "verified_at": "2026-03-12T03:35:25Z"
+}
+{
+  "id": "C09",
+  "plan": "243",
+  "description": "候选确认路径存在受控结果（200 或 clarification_runtime_invalid）",
+  "pass": true,
+  "observed": "http=409 code=assistant_clarification_runtime_invalid candidate_id=TP246BSSC2",
+  "evidence": "docs/dev-records/assets/dev-plan-246b/api/c09-candidate-confirm.json",
+  "verified_at": "2026-03-12T03:35:26Z"
+}
+{
+  "id": "C10",
+  "plan": "242,244",
+  "description": "knowledge_qa 分流到 idle 且 route_kind=knowledge_qa",
+  "pass": true,
+  "observed": "http=200 phase=idle route=knowledge_qa",
+  "evidence": "docs/dev-records/assets/dev-plan-246b/api/c10-knowledge-qa-turn.json",
+  "verified_at": "2026-03-12T03:36:07Z"
+}
+{
+  "id": "C11",
+  "plan": "242",
+  "description": "knowledge_qa 场景 confirm 被 route gate 阻断",
+  "pass": true,
+  "observed": "http=409 code=ai_route_non_business_blocked",
+  "evidence": "docs/dev-records/assets/dev-plan-246b/api/c11-knowledge-confirm.json",
+  "verified_at": "2026-03-12T03:36:07Z"
+}
+{
+  "id": "C12",
+  "plan": "240E,242,243",
+  "description": "低置信度/不确定输入进入 await_clarification 且 clarification_required=true",
+  "pass": true,
+  "observed": "http=200 phase=await_clarification route=uncertain clarification_required=true",
+  "evidence": "docs/dev-records/assets/dev-plan-246b/api/c12-uncertain-turn.json",
+  "verified_at": "2026-03-12T03:37:19Z"
+}
+{
+  "id": "C13",
+  "plan": "243",
+  "description": "意图消歧输入进入 await_clarification",
+  "pass": true,
+  "observed": "http=200 phase=await_clarification route=business_action",
+  "evidence": "docs/dev-records/assets/dev-plan-246b/api/c13-intent-disambiguation-turn.json",
+  "verified_at": "2026-03-12T03:37:25Z"
+}
+{
+  "id": "C15",
+  "plan": "244",
+  "description": "route reason_codes 命中 catalog 与 uncertain 语义",
+  "pass": true,
+  "observed": "knowledge_reason=route_non_business_catalog_match uncertain_reason=route_uncertain_no_match",
+  "evidence": "docs/dev-records/assets/dev-plan-246b/api/c12-uncertain-turn.json",
+  "verified_at": "2026-03-12T03:37:25Z"
+}
+{
+  "id": "C16",
+  "plan": "245",
+  "description": "reply 文本不直出技术信号",
+  "pass": true,
+  "observed": "uncertain_reply_http=200 total_len=380",
+  "evidence": "docs/dev-records/assets/dev-plan-246b/api/c16-uncertain-reply.json",
+  "verified_at": "2026-03-12T03:37:30Z"
+}
+{
+  "id": "C17",
+  "plan": "243",
+  "description": "澄清场景未回退为 assistant_intent_unsupported",
+  "pass": true,
+  "observed": "c12_code=<none> c13_code=<none>",
+  "evidence": "docs/dev-records/assets/dev-plan-246b/api/c13-intent-disambiguation-turn.json",
+  "verified_at": "2026-03-12T03:37:30Z"
+}
+{
+  "id": "C18",
+  "plan": "242",
+  "description": "chitchat 分流到 idle 且 route_kind=chitchat",
+  "pass": true,
+  "observed": "http=200 phase=idle route=chitchat err=",
+  "evidence": "docs/dev-records/assets/dev-plan-246b/api/c18-chitchat-turn.json",
+  "verified_at": "2026-03-12T03:37:52Z"
+}
+{
+  "id": "C19",
+  "plan": "245",
+  "description": "Accept-Language=en 下 reply 可用",
+  "pass": true,
+  "observed": "reply_http=200 text_len=157",
+  "evidence": "docs/dev-records/assets/dev-plan-246b/api/c19-en-reply.json",
+  "verified_at": "2026-03-12T03:38:04Z"
+}
+{
+  "id": "C20",
+  "plan": "246",
+  "description": "路线图阶段 A-E 代表性案例全通过",
+  "pass": false,
+  "observed": "aggregate_from=C02,C14,C10,C11,C06,C08,C12,C13,C15,C05,C07,C16,C19",
+  "evidence": "docs/dev-records/assets/dev-plan-246b/api/summary.json",
+  "verified_at": "2026-03-12T03:38:04Z"
+}

@@ -34,6 +34,7 @@
 - 运行态动作链已稳定：真实模型持续命中 `openai / gpt-5.1`、`fallback_detected=false`；Case 2/3/4 均完成 `create -> confirm -> commit` 并在终态会话回读中落为 `committed`。
 - 本轮关键根因已全部关闭：包括 `TRUST_PROXY` 缺失、租户 baseline 缺播种、SetID resolver 不回退 baseline capability、异步 commit 后 conversation cache 未刷新、模型在缺字段场景脑补当天日期，以及 `assistant` phase snapshot schema 漂移与“未知 action 未被本地显式事实接管”两类 `272` 影响性回归。
 - 负测结论保持有效：`neg-001`（`conversation_confirmation_required`）与 `neg-003`（`assistant_intent_unsupported`）为稳定负例；`neg-002/004` 的 `probe_skipped` 记录继续保留为环境能力不足时的 fail-closed 证据。
+- 2026-03-16 文档纠偏：`tp290b-live-evidence-index.json` 曾残留早期 `status=blocked` / Case 4 失败口径，但与本日志第 6-8 行、`272` 新鲜度重跑记录及当前 `case-4-*.json` 通过资产不一致；现已按既有通过证据回写为 `status=passed`，以恢复索引与执行记录一致性。
 
 
 ## 5. 经验沉淀

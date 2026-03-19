@@ -204,186 +204,11 @@ func (s *assistantConversationService) createTurnPG(ctx context.Context, tenantI
 			return nil, getErr
 		}
 	}
-	resolvedIntent, err := s.resolveIntent(ctx, tenantID, conversationID, userInput)
+	turn, err := s.prepareTurnDraft(ctx, tenantID, principal, conversationID, userInput, pendingTurn)
 	if err != nil {
 		return nil, err
 	}
-	knowledgeRuntime, err := s.ensureKnowledgeRuntime()
-	if err != nil {
-		return nil, err
-	}
-	mergedIntent := assistantMergeIntentWithPendingTurn(resolvedIntent.Intent, pendingTurn)
-	resume := assistantClarificationResumeResult{Intent: mergedIntent}
-	if pendingTurn != nil {
-		resume = assistantResumeFromClarificationFn(pendingTurn, userInput, mergedIntent)
-		mergedIntent = resume.Intent
-	}
-	routeDecision, err := assistantBuildIntentRouteDecisionFn(userInput, resolvedIntent, mergedIntent, knowledgeRuntime, pendingTurn)
-	if err != nil {
-		return nil, err
-	}
-	intent := assistantProjectIntentRouteDecision(mergedIntent, routeDecision)
-	if action := strings.TrimSpace(resume.Intent.Action); action != "" && action != assistantIntentPlanOnly && strings.TrimSpace(intent.Action) == assistantIntentPlanOnly {
-		intent.Action = action
-	}
-	intentValidationErrors := assistantIntentValidationErrors(intent)
-	candidates := make([]assistantCandidate, 0)
-	resolvedCandidateID := ""
-	selectedCandidateID := strings.TrimSpace(resume.SelectedCandidateID)
-	resolutionSource := ""
-	ambiguityCount := 0
-	confidence := 0.65
-	if intent.Action == assistantIntentCreateOrgUnit && intent.ParentRefText != "" && len(intentValidationErrors) == 0 {
-		resolved, resolveErr := s.resolveCandidates(ctx, tenantID, intent.ParentRefText, intent.EffectiveDate)
-		if resolveErr != nil {
-			if !errors.Is(resolveErr, errOrgUnitNotFound) {
-				return nil, resolveErr
-			}
-			resolved = make([]assistantCandidate, 0)
-		}
-		candidates = resolved
-		ambiguityCount = len(candidates)
-		switch len(candidates) {
-		case 0:
-			confidence = 0.3
-		case 1:
-			resolvedCandidateID = candidates[0].CandidateID
-			resolutionSource = assistantResolutionAuto
-			confidence = 0.95
-		default:
-			confidence = 0.55
-		}
-	}
-	if resumeCandidateID := strings.TrimSpace(resume.ResolvedCandidateID); resumeCandidateID != "" && assistantCandidateExists(candidates, resumeCandidateID) {
-		resolvedCandidateID = resumeCandidateID
-		selectedCandidateID = resumeCandidateID
-		resolutionSource = assistantResolutionUserConfirmed
-		confidence = 0.95
-	}
-	dryRun := assistantBuildDryRunFn(intent, candidates, resolvedCandidateID)
-	dryRun = s.enrichCreateOrgUnitDryRunWithPolicy(ctx, tenantID, intent, candidates, resolvedCandidateID, dryRun)
-	var pendingClarification *assistantClarificationDecision
-	if pendingTurn != nil {
-		pendingClarification = pendingTurn.Clarification
-	}
-	clarification := assistantBuildClarificationDecisionFn(assistantClarificationBuildInput{
-		UserInput:            userInput,
-		Intent:               intent,
-		RouteDecision:        routeDecision,
-		DryRun:               dryRun,
-		Candidates:           candidates,
-		ResolvedCandidateID:  resolvedCandidateID,
-		SelectedCandidateID:  selectedCandidateID,
-		Runtime:              knowledgeRuntime,
-		PendingClarification: pendingClarification,
-		ResumeProgress:       resume.Progress,
-	})
-	if clarification != nil && strings.TrimSpace(clarification.Status) == assistantClarificationStatusOpen && strings.TrimSpace(clarification.ClarificationKind) == assistantClarificationKindIntentDisambiguate {
-		dryRun.Explain = ""
-		dryRun.ValidationErrors = nil
-	}
-
-	spec, specOK := s.lookupActionSpec(intent.Action)
-	requiresActionSpec := clarification == nil || strings.TrimSpace(clarification.ClarificationKind) != assistantClarificationKindIntentDisambiguate
-	if !specOK && requiresActionSpec {
-		return nil, errAssistantUnsupportedIntent
-	}
-
-	plan := assistantBuildPlan(intent)
-	plan.ModelProvider = resolvedIntent.ProviderName
-	plan.ModelName = resolvedIntent.ModelName
-	plan.ModelRevision = resolvedIntent.ModelRevision
-	if specOK && (clarification == nil || strings.TrimSpace(clarification.ClarificationKind) != assistantClarificationKindIntentDisambiguate) {
-		skillExecutionPlan, configDeltaPlan := assistantCompileIntentToPlansWithSpec(intent, resolvedCandidateID, spec)
-		plan.SkillExecutionPlan = skillExecutionPlan
-		plan.ConfigDeltaPlan = configDeltaPlan
-		decision := assistantEvaluateActionGate(assistantActionGateInput{
-			Stage:         assistantActionStagePlan,
-			TenantID:      tenantID,
-			Principal:     principal,
-			Action:        spec,
-			Intent:        intent,
-			RouteDecision: routeDecision,
-			Candidates:    candidates,
-			ResolvedID:    resolvedCandidateID,
-			UserInput:     userInput,
-		})
-		if !decision.Allowed {
-			if errors.Is(decision.Error, errAssistantActionCapabilityUnregistered) {
-				return nil, errAssistantPlanBoundaryViolation
-			}
-			return nil, decision.Error
-		}
-		tempTurn := &assistantTurn{
-			Intent:              intent,
-			RouteDecision:       routeDecision,
-			Clarification:       clarification,
-			Plan:                plan,
-			Candidates:          candidates,
-			ResolvedCandidateID: resolvedCandidateID,
-			SelectedCandidateID: selectedCandidateID,
-			DryRun:              dryRun,
-		}
-		if err := s.refreshTurnVersionTuple(ctx, tenantID, tempTurn); err != nil {
-			return nil, err
-		}
-		plan = tempTurn.Plan
-		dryRun = tempTurn.DryRun
-		planContext, err := knowledgeRuntime.buildPlanContextV1(tenantID, knowledgeRuntime.planContextLocale(), intent, spec, tempTurn)
-		if err != nil {
-			return nil, err
-		}
-		assistantApplyPlanContextV1(&plan, &dryRun, intent, planContext)
-	}
-	assistantApplyPlanKnowledgeSnapshot(&plan, routeDecision, knowledgeRuntime)
-	tempTurn := &assistantTurn{
-		Intent:              intent,
-		RouteDecision:       routeDecision,
-		Clarification:       clarification,
-		Plan:                plan,
-		Candidates:          candidates,
-		ResolvedCandidateID: resolvedCandidateID,
-		SelectedCandidateID: selectedCandidateID,
-		DryRun:              dryRun,
-	}
-	if !assistantTurnRouteAuditVersionsConsistent(tempTurn) {
-		return nil, errAssistantPlanContractVersionMismatch
-	}
-	if err := assistantAnnotateIntentPlanFn(tenantID, conversationID, userInput, &intent, &plan, &dryRun); err != nil {
-		return nil, err
-	}
-	policyVersion, compositionVersion, mappingVersion := assistantTurnVersionSnapshot(plan.CapabilityKey)
-	now := time.Now().UTC()
-	turn := &assistantTurn{
-		TurnID:              "turn_" + strings.ReplaceAll(newUUIDString(), "-", ""),
-		UserInput:           userInput,
-		State:               assistantStateValidated,
-		RiskTier:            "low",
-		RequestID:           "assistant_" + strings.ReplaceAll(newUUIDString(), "-", ""),
-		TraceID:             strings.ReplaceAll(newUUIDString(), "-", ""),
-		PolicyVersion:       policyVersion,
-		CompositionVersion:  compositionVersion,
-		MappingVersion:      mappingVersion,
-		Intent:              intent,
-		RouteDecision:       routeDecision,
-		Clarification:       clarification,
-		Plan:                plan,
-		Candidates:          candidates,
-		ResolvedCandidateID: resolvedCandidateID,
-		SelectedCandidateID: selectedCandidateID,
-		AmbiguityCount:      ambiguityCount,
-		Confidence:          confidence,
-		ResolutionSource:    resolutionSource,
-		DryRun:              dryRun,
-		CreatedAt:           now,
-		UpdatedAt:           now,
-	}
-	if specOK {
-		turn.RiskTier = strings.TrimSpace(spec.Security.RiskTier)
-		if turn.RiskTier == "" {
-			turn.RiskTier = "low"
-		}
-	}
+	now := turn.CreatedAt
 
 	tx, err := s.beginAssistantTx(ctx, tenantID)
 	if err != nil {
@@ -708,6 +533,9 @@ func (s *assistantConversationService) applyConfirmTurn(conversation *assistantC
 	if len(assistantTurnMissingFields(turn)) > 0 {
 		return assistantTurnMutationResult{}, errAssistantConfirmationRequired
 	}
+	if err := assistantTurnRouteExecutionBoundary(turn); err != nil {
+		return assistantTurnMutationResult{}, err
+	}
 	spec, ok := s.lookupActionSpec(turn.Intent.Action)
 	if !ok {
 		return assistantTurnMutationResult{}, errAssistantUnsupportedIntent
@@ -795,6 +623,9 @@ func (s *assistantConversationService) prepareCommitTurn(
 	}
 	if len(assistantTurnMissingFields(turn)) > 0 {
 		return assistantPreparedCommit{}, assistantTurnMutationResult{}, errAssistantConfirmationRequired
+	}
+	if err := assistantTurnRouteExecutionBoundary(turn); err != nil {
+		return assistantPreparedCommit{}, assistantTurnMutationResult{}, err
 	}
 	spec, ok := s.lookupActionSpec(turn.Intent.Action)
 	if !ok {

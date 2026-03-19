@@ -128,24 +128,44 @@ func assistantValidateIntentRouteDecision(decision assistantIntentRouteDecision)
 }
 
 func assistantBuildIntentRouteDecision(
-	userInput string,
+	_ string,
 	resolved assistantResolveIntentResult,
 	mergedIntent assistantIntentSpec,
 	runtime *assistantKnowledgeRuntime,
-	pendingTurn *assistantTurn,
 ) (assistantIntentRouteDecision, error) {
-	_ = pendingTurn
 	if runtime == nil {
 		return assistantIntentRouteDecision{}, errAssistantRouteCatalogMissing
 	}
-	projected := runtime.routeIntent(userInput, mergedIntent)
+	if semanticDecision, ok, err := assistantBuildSemanticIntentRouteDecision(resolved, mergedIntent, runtime); ok || err != nil {
+		return semanticDecision, err
+	}
+	return assistantIntentRouteDecision{}, errAssistantRouteDecisionMissing
+}
+
+func assistantBuildSemanticIntentRouteDecision(
+	resolved assistantResolveIntentResult,
+	mergedIntent assistantIntentSpec,
+	runtime *assistantKnowledgeRuntime,
+) (assistantIntentRouteDecision, bool, error) {
+	routeKind := strings.TrimSpace(resolved.Intent.RouteKind)
+	intentID := strings.TrimSpace(resolved.Intent.IntentID)
+	if routeKind == "" && intentID == "" {
+		return assistantIntentRouteDecision{}, false, nil
+	}
+	if runtime == nil {
+		return assistantIntentRouteDecision{}, true, errAssistantRouteCatalogMissing
+	}
+	if !assistantValidRouteKind(routeKind) || intentID == "" {
+		return assistantIntentRouteDecision{}, true, errAssistantRouteRuntimeInvalid
+	}
+
 	decision := assistantIntentRouteDecision{
-		RouteKind:               strings.TrimSpace(projected.RouteKind),
-		IntentID:                strings.TrimSpace(projected.IntentID),
-		RouteCatalogVersion:     strings.TrimSpace(runtime.RouteCatalogVersion),
+		RouteKind:               routeKind,
+		IntentID:                intentID,
+		RouteCatalogVersion:     strings.TrimSpace(firstNonEmpty(resolved.Intent.RouteCatalogVersion, runtime.RouteCatalogVersion)),
 		KnowledgeSnapshotDigest: strings.TrimSpace(runtime.SnapshotDigest),
 		ResolverContractVersion: strings.TrimSpace(runtime.ResolverContractVersion),
-		DecisionSource:          assistantRouteDecisionSourceKnowledgeRuntimeV1,
+		DecisionSource:          assistantRouteDecisionSourceSemanticModelV1,
 	}
 	if decision.RouteCatalogVersion == "" {
 		decision.ReasonCodes = append(decision.ReasonCodes, assistantRouteReasonCatalogVersionMissing)
@@ -158,43 +178,32 @@ func assistantBuildIntentRouteDecision(
 		decision.ResolverContractVersion = "fallback-resolver-contract"
 	}
 
-	actionID := strings.TrimSpace(projected.Action)
-	resolvedAction := strings.TrimSpace(resolved.Intent.Action)
-	localUpgrade := actionID != "" && actionID != assistantIntentPlanOnly && (resolvedAction == "" || resolvedAction == assistantIntentPlanOnly)
-
 	switch decision.RouteKind {
 	case assistantRouteKindBusinessAction:
+		actionID := strings.TrimSpace(firstNonEmpty(mergedIntent.Action, resolved.Intent.Action))
+		if actionID == "" || actionID == assistantIntentPlanOnly {
+			return assistantIntentRouteDecision{}, true, errAssistantRouteRuntimeInvalid
+		}
+		if _, ok := assistantLookupDefaultActionSpec(actionID); !ok {
+			return assistantIntentRouteDecision{}, true, errAssistantRouteRuntimeInvalid
+		}
 		decision.CandidateActionIDs = []string{actionID}
-		decision.ReasonCodes = append(decision.ReasonCodes, assistantRouteReasonBusinessActionRegistered)
-		if resolvedAction == "" || resolvedAction == assistantIntentPlanOnly {
-			decision.ReasonCodes = append(decision.ReasonCodes, assistantRouteReasonModelPlanOnly)
-		}
-		if localUpgrade {
-			decision.ReasonCodes = append(decision.ReasonCodes, assistantRouteReasonLocalIntentUpgrade)
-		}
-		if len(assistantIntentValidationErrors(projected)) > 0 {
-			decision.ClarificationRequired = true
-			decision.ReasonCodes = append(decision.ReasonCodes, assistantRouteReasonClarificationRequired)
-		}
 		decision.ConfidenceBand = assistantRouteConfidenceHigh
-		if decision.ClarificationRequired || localUpgrade {
+		decision.ReasonCodes = append(decision.ReasonCodes, assistantRouteReasonBusinessActionRegistered)
+		if strings.TrimSpace(resolved.Readiness) == assistantSemanticReadinessNeedMoreInfo {
 			decision.ConfidenceBand = assistantRouteConfidenceMedium
 		}
 	case assistantRouteKindKnowledgeQA, assistantRouteKindChitchat:
 		decision.ConfidenceBand = assistantRouteConfidenceLow
-		decision.ClarificationRequired = false
 		decision.ReasonCodes = append(decision.ReasonCodes, assistantRouteReasonNonBusinessCatalogMatch)
 	case assistantRouteKindUncertain:
 		decision.ConfidenceBand = assistantRouteConfidenceLow
-		decision.ClarificationRequired = true
-		decision.ReasonCodes = append(decision.ReasonCodes, assistantRouteReasonUncertainNoMatch, assistantRouteReasonClarificationRequired)
-	default:
-		return assistantIntentRouteDecision{}, errAssistantRouteRuntimeInvalid
+		decision.ReasonCodes = append(decision.ReasonCodes, assistantRouteReasonUncertainNoMatch)
 	}
 
 	decision.CandidateActionIDs = assistantNormalizeRouteStringSlice(decision.CandidateActionIDs)
 	decision.ReasonCodes = assistantNormalizeRouteStringSlice(decision.ReasonCodes)
-	return decision, nil
+	return decision, true, nil
 }
 
 func assistantProjectIntentRouteDecision(intent assistantIntentSpec, decision assistantIntentRouteDecision) assistantIntentSpec {
@@ -203,13 +212,21 @@ func assistantProjectIntentRouteDecision(intent assistantIntentSpec, decision as
 	out.RouteKind = strings.TrimSpace(decision.RouteKind)
 	out.RouteCatalogVersion = strings.TrimSpace(decision.RouteCatalogVersion)
 	if strings.TrimSpace(decision.RouteKind) != assistantRouteKindBusinessAction {
-		out.Action = assistantIntentPlanOnly
+		out.Action = ""
 		return out
 	}
 	if len(decision.CandidateActionIDs) == 1 {
 		out.Action = strings.TrimSpace(decision.CandidateActionIDs[0])
 	}
 	return out
+}
+
+func assistantIntentNeedsActionSpec(intent assistantIntentSpec, decision assistantIntentRouteDecision) bool {
+	routeKind := strings.TrimSpace(decision.RouteKind)
+	if routeKind == "" {
+		routeKind = strings.TrimSpace(intent.RouteKind)
+	}
+	return routeKind == assistantRouteKindBusinessAction
 }
 
 func assistantTurnRouteKind(turn *assistantTurn) string {
@@ -268,17 +285,6 @@ func assistantTurnActionChainAllowed(turn *assistantTurn) bool {
 	if turn == nil {
 		return false
 	}
-	if clarification := turn.Clarification; clarification != nil {
-		status := strings.TrimSpace(clarification.Status)
-		if status == assistantClarificationStatusOpen ||
-			status == assistantClarificationStatusExhausted ||
-			status == assistantClarificationStatusAborted {
-			return false
-		}
-	}
-	if assistantTurnHasRouteClarificationSignal(turn) {
-		return false
-	}
 	return assistantTurnRouteKind(turn) == assistantRouteKindBusinessAction
 }
 
@@ -289,58 +295,21 @@ func assistantActionGateRouteDecision(input assistantActionGateInput) (assistant
 	if input.Turn != nil && assistantIntentRouteDecisionPresent(input.Turn.RouteDecision) {
 		return input.Turn.RouteDecision, true
 	}
-	compat := assistantCompatRouteDecision(input)
-	if assistantIntentRouteDecisionPresent(compat) {
-		return compat, true
-	}
 	return assistantIntentRouteDecision{}, false
 }
 
-func assistantCompatRouteDecision(input assistantActionGateInput) assistantIntentRouteDecision {
-	intent := input.Intent
-	if input.Turn != nil && strings.TrimSpace(intent.Action) == "" {
-		intent = input.Turn.Intent
+func assistantTurnRouteExecutionBoundary(turn *assistantTurn) error {
+	decision, ok := assistantActionGateRouteDecision(assistantActionGateInput{Turn: turn})
+	if !ok {
+		return errAssistantRouteDecisionMissing
 	}
-	if strings.TrimSpace(intent.Action) == "" {
-		intent.Action = strings.TrimSpace(input.Action.ID)
+	if err := assistantValidateIntentRouteDecision(decision); err != nil {
+		return err
 	}
-	routeKind := strings.TrimSpace(intent.RouteKind)
-	if !assistantValidRouteKind(routeKind) {
-		if actionID := strings.TrimSpace(intent.Action); actionID != "" && actionID != assistantIntentPlanOnly {
-			routeKind = assistantRouteKindBusinessAction
-		}
+	if strings.TrimSpace(decision.RouteKind) != assistantRouteKindBusinessAction {
+		return errAssistantRouteNonBusinessBlocked
 	}
-	if routeKind == "" {
-		return assistantIntentRouteDecision{}
-	}
-	decision := assistantIntentRouteDecision{
-		RouteKind:               routeKind,
-		IntentID:                strings.TrimSpace(intent.IntentID),
-		ConfidenceBand:          assistantRouteConfidenceMedium,
-		RouteCatalogVersion:     "fallback-route-catalog",
-		KnowledgeSnapshotDigest: "fallback-knowledge-snapshot",
-		ResolverContractVersion: "fallback-resolver-contract",
-		DecisionSource:          "compat_projection",
-	}
-	if decision.IntentID == "" {
-		if actionID := strings.TrimSpace(intent.Action); actionID != "" && actionID != assistantIntentPlanOnly {
-			decision.IntentID = "action." + actionID
-		} else {
-			decision.IntentID = "route.compat"
-		}
-	}
-	if routeKind == assistantRouteKindBusinessAction {
-		actionID := strings.TrimSpace(intent.Action)
-		if actionID == "" || actionID == assistantIntentPlanOnly {
-			return assistantIntentRouteDecision{}
-		}
-		decision.CandidateActionIDs = []string{actionID}
-		decision.ConfidenceBand = assistantRouteConfidenceHigh
-	} else {
-		decision.ConfidenceBand = assistantRouteConfidenceLow
-		decision.ClarificationRequired = routeKind == assistantRouteKindUncertain
-	}
-	return decision
+	return nil
 }
 
 func assistantRouteGateDenied(err error, reason string) assistantActionGateDecision {
@@ -387,12 +356,6 @@ func assistantCheckRouteDecision(input assistantActionGateInput) assistantAction
 	}
 	if strings.TrimSpace(decision.RouteKind) != assistantRouteKindBusinessAction {
 		return assistantRouteGateDenied(errAssistantRouteNonBusinessBlocked, assistantRouteReasonNonBusinessBlocked)
-	}
-	if decision.ClarificationRequired {
-		if input.Turn != nil && assistantTurnHasOpenClarification(input.Turn) {
-			return assistantRouteGateDenied(errAssistantClarificationRequired, assistantRouteReasonClarificationRequired)
-		}
-		return assistantRouteGateDenied(errAssistantRouteClarificationRequired, assistantRouteReasonClarificationRequired)
 	}
 	return assistantActionGateDecision{Allowed: true}
 }

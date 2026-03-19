@@ -19,7 +19,9 @@ func TestHandleAssistantTurnActionAPIReplySuccessAndValidation(t *testing.T) {
 
 	original := assistantRenderReplyWithModelFn
 	defer func() { assistantRenderReplyWithModelFn = original }()
+	invoked := false
 	assistantRenderReplyWithModelFn = func(_ context.Context, _ *assistantConversationService, _ assistantReplyRenderPrompt) (assistantReplyModelResult, error) {
+		invoked = true
 		return assistantReplyModelResult{Text: "已处理", Kind: "info", Stage: "draft", ReplyModelName: assistantReplyTargetModelName}, nil
 	}
 
@@ -33,8 +35,14 @@ func TestHandleAssistantTurnActionAPIReplySuccessAndValidation(t *testing.T) {
 	if err := json.Unmarshal(rec.Body.Bytes(), &reply); err != nil {
 		t.Fatalf("decode reply: %v", err)
 	}
-	if reply.Text != "已处理" || reply.TurnID != turn.TurnID {
+	if invoked {
+		t.Fatal("reply model hook should not be invoked")
+	}
+	if reply.TurnID != turn.TurnID || reply.Text == "" {
 		t.Fatalf("reply=%+v", reply)
+	}
+	if reply.ReplySource != assistantReplySourceProjection && reply.ReplySource != assistantReplySourceFallback {
+		t.Fatalf("reply should come from local projection/fallback, got=%+v", reply)
 	}
 
 	badJSONRec := httptest.NewRecorder()

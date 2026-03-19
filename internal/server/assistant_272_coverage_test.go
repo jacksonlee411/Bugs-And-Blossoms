@@ -241,6 +241,12 @@ func TestAssistant272Coverage_DryRunAndValidation(t *testing.T) {
 			t.Fatalf("missing spec for %s", intent.Action)
 		}
 		skill, delta := assistantCompileIntentToPlansWithSpec(intent, "FLOWER-B", spec)
+		if intent.Action == assistantIntentPlanOnly {
+			if len(skill.SelectedSkills) != 0 || delta.CapabilityKey == "" {
+				t.Fatalf("plan_only should no longer compile as executable action skill=%+v delta=%+v", skill, delta)
+			}
+			continue
+		}
 		if len(skill.SelectedSkills) == 0 || delta.CapabilityKey == "" {
 			t.Fatalf("unexpected compile output action=%s skill=%+v delta=%+v", intent.Action, skill, delta)
 		}

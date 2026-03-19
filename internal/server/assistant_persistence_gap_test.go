@@ -61,6 +61,7 @@ func TestAssistantPersistence_CreateAndGetPGErrorBranches(t *testing.T) {
 }
 
 func TestAssistantPersistence_CreateTurnPGErrorMatrix(t *testing.T) {
+	t.Setenv("OPENAI_API_KEY", "dummy")
 	now := time.Now().UTC()
 	makeTx := func(actorID string, execNeedle string, transitionErr error, commitErr error) *assistFakeTx {
 		tx := &assistFakeTx{commitErr: commitErr}
@@ -166,6 +167,7 @@ func TestAssistantPersistence_CreateTurnPGErrorMatrix(t *testing.T) {
 	capabilityDefinitionByKey = originalDefinitions
 
 	zeroSvc := newAssistantConversationService(assistantNoCandidateStore{orgUnitMemoryStore: newOrgUnitMemoryStore()}, assistantWriteServiceStub{store: newOrgUnitMemoryStore()})
+	zeroSvc.modelGateway = assistantTestStaticSemanticGateway(`{"action":"create_orgunit","route_kind":"business_action","intent_id":"org.orgunit_create","parent_ref_text":"鲜花组织","entity_name":"运营部","effective_date":"2026-01-01"}`)
 	zeroSvc.pool = assistFakeTxBeginner{tx: makeTx("actor_1", "", nil, nil)}
 	zeroConversation, err := zeroSvc.createTurnPG(context.Background(), "tenant_1", Principal{ID: "actor_1", RoleSlug: "tenant-admin"}, "conv_pg", "在鲜花组织之下，新建一个名为运营部的部门，成立日期是2026-01-01")
 	if err != nil {
@@ -178,6 +180,7 @@ func TestAssistantPersistence_CreateTurnPGErrorMatrix(t *testing.T) {
 	oneStore := newOrgUnitMemoryStore()
 	_, _ = oneStore.CreateNodeCurrent(context.Background(), "tenant_1", "2026-01-01", "FLOWER-A", "鲜花组织", "", true)
 	oneSvc := newAssistantConversationService(oneStore, assistantWriteServiceStub{store: oneStore})
+	oneSvc.modelGateway = assistantTestStaticSemanticGateway(`{"action":"create_orgunit","route_kind":"business_action","intent_id":"org.orgunit_create","parent_ref_text":"鲜花组织","entity_name":"运营部","effective_date":"2026-01-01"}`)
 	oneSvc.pool = assistFakeTxBeginner{tx: makeTx("actor_1", "", nil, nil)}
 	oneConversation, err := oneSvc.createTurnPG(context.Background(), "tenant_1", Principal{ID: "actor_1", RoleSlug: "tenant-admin"}, "conv_pg", "在鲜花组织之下，新建一个名为运营部的部门，成立日期是2026-01-01")
 	if err != nil {
@@ -188,6 +191,7 @@ func TestAssistantPersistence_CreateTurnPGErrorMatrix(t *testing.T) {
 	}
 
 	svc.pool = assistFakeTxBeginner{tx: makeTx("actor_1", "", nil, nil)}
+	svc.modelGateway = assistantTestStaticSemanticGateway(`{"action":"create_orgunit","route_kind":"business_action","intent_id":"org.orgunit_create","parent_ref_text":"鲜花组织","entity_name":"运营部","effective_date":"2026-01-01"}`)
 	multiConversation, err := svc.createTurnPG(context.Background(), "tenant_1", Principal{ID: "actor_1", RoleSlug: "tenant-admin"}, "conv_pg", "在鲜花组织之下，新建一个名为运营部的部门，成立日期是2026-01-01")
 	if err != nil {
 		t.Fatalf("unexpected err=%v", err)
@@ -545,6 +549,7 @@ func TestAssistantPersistence_UpsertAndMutationBranchCoverage(t *testing.T) {
 		Intent:              assistantIntentSpec{Action: assistantIntentCreateOrgUnit},
 		ResolvedCandidateID: "c1",
 	}
+	assistantTestAttachBusinessRoute(confirmedSingle)
 	if _, err := svc.applyConfirmTurn(conversation, confirmedSingle, principal, ""); err != nil {
 		t.Fatalf("unexpected err=%v", err)
 	}
@@ -555,6 +560,7 @@ func TestAssistantPersistence_UpsertAndMutationBranchCoverage(t *testing.T) {
 		Intent:     assistantIntentSpec{Action: assistantIntentCreateOrgUnit},
 		Candidates: []assistantCandidate{{CandidateID: "c1", CandidateCode: "FLOWER-A"}},
 	}
+	assistantTestAttachBusinessRoute(validatedNoCandidate)
 	if _, err := svc.applyConfirmTurn(conversation, validatedNoCandidate, principal, ""); !errors.Is(err, errAssistantConfirmationRequired) {
 		t.Fatalf("unexpected err=%v", err)
 	}
@@ -576,6 +582,7 @@ func TestAssistantPersistence_UpsertAndMutationBranchCoverage(t *testing.T) {
 		MappingVersion:      capabilityPolicyVersionBaseline,
 	}
 	commitTurn.Plan.SkillManifestDigest = "digest"
+	assistantTestAttachBusinessRoute(commitTurn)
 	if err := commitSvc.refreshTurnVersionTuple(context.Background(), "tenant_1", commitTurn); err != nil {
 		t.Fatalf("refresh turn version tuple err=%v", err)
 	}
@@ -619,6 +626,7 @@ func TestAssistantPersistence_ConfirmCommitPGIdempotencyBranches(t *testing.T) {
 		UpdatedAt:           now,
 	}
 	baseTurn.Plan.SkillManifestDigest = "digest"
+	assistantTestAttachBusinessRoute(baseTurn)
 
 	makeTx := func(turn *assistantTurn, idemInsertErr error, idemSelectRow pgx.Row) *assistFakeTx {
 		tx := &assistFakeTx{}
@@ -710,6 +718,7 @@ func TestAssistantPersistence_ConfirmTurnPG_ErrorPathMatrix(t *testing.T) {
 		UpdatedAt:          now,
 	}
 	baseTurn.Plan.SkillManifestDigest = "digest"
+	assistantTestAttachBusinessRoute(baseTurn)
 
 	makeSvc := func(actorID string, turnRows [][]any, execFn func(string) error, queryRowFn func(string) pgx.Row, commitErr error) *assistantConversationService {
 		tx := &assistFakeTx{commitErr: commitErr}
@@ -905,6 +914,7 @@ func TestAssistantPersistence_CommitTurnPG_ErrorPathMatrix(t *testing.T) {
 	}
 	baseTurn.Plan.SkillManifestDigest = "digest"
 	baseTurn.Plan.CompilerContractVersion = "compiler_contract_v0"
+	assistantTestAttachBusinessRoute(baseTurn)
 
 	makeSvc := func(actorID, actorRole string, turnRows [][]any, execFn func(string) error, queryRowFn func(string) pgx.Row, commitErr error) *assistantConversationService {
 		tx := &assistFakeTx{commitErr: commitErr}
@@ -1147,6 +1157,7 @@ func TestAssistantPersistence_SubmitCommitTaskPG_GateRejectNoTaskWrites(t *testi
 	turn.DryRun = assistantDryRunResult{Explain: "计划已确认，等待提交"}
 	turn.RequestID = "req_gate_reject"
 	turn.TraceID = "trace_gate_reject"
+	assistantTestAttachBusinessRoute(turn)
 	assistantRefreshTurnDerivedFields(turn)
 
 	svc := newAssistantConversationService(newOrgUnitMemoryStore(), assistantWriteServiceStub{store: newOrgUnitMemoryStore()})

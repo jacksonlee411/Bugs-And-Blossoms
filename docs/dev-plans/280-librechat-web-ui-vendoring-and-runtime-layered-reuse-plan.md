@@ -1,6 +1,14 @@
 # DEV-PLAN-280：LibreChat Web UI 源码纳管与 Runtime 分层复用实施方案
 
-**状态**: 进行中（2026-03-08 CST；`281/282/283/284` 已完成，当前剩余封板项为 `285`）
+**状态**: 已完成（2026-03-16 CST；`281/282/283/284/285` 已全部完成，vendored Web UI 来源冻结、旧桥职责删除、正式入口唯一化、send/store/render 源码级接管与总封板回归均已收口；执行记录见 `docs/dev-records/dev-plan-280-execution-log.md`）
+
+## 0. 完成态回写（2026-03-16）
+1. [X] `DEV-PLAN-281` 已完成：LibreChat Web UI 来源元数据、patch stack、构建链与静态产物出口已冻结。
+2. [X] `DEV-PLAN-282` 已完成：旧桥接正式职责、`bridge.js`/HTML 注入/页面级业务编排与旧测试主路径已退役。
+3. [X] `DEV-PLAN-283` 已完成：`/app/assistant/librechat` 已成为唯一正式聊天入口，`/assets/librechat-web/**` 已成为唯一正式静态资源前缀。
+4. [X] `DEV-PLAN-284` 已完成：正式入口下的 send/store/render 已切到本仓 Assistant 主链，业务回执统一进入官方消息树，前端降权落地。
+5. [X] `DEV-PLAN-285` 已完成：总封板回归、stopline 搜索、归档一致性复核与最终封板报告均已形成。
+6. [X] 因此，`DEV-PLAN-280` 作为“LibreChat Web UI 源码纳管与 Runtime 分层复用”主计划已完成；后续若有升级或运行时变更，应沿 `237/291`、`271-S5` 与对应专项计划继续推进，不再回退本计划状态。
 
 ## 1. 背景与重开原因
 - `DEV-PLAN-230` 将 LibreChat 集成冻结为“官方运行基线复用 + 本仓边界适配”，这一决策对运行态落地是正确起点；但随着 `DEV-PLAN-260` 将目标提升为“真实业务对话闭环”，现有模式的能力边界已出现结构性错位。
@@ -18,14 +26,14 @@
 ## 2. 目标与非目标
 
 ### 2.1 核心目标
-1. [ ] 保持 `DEV-PLAN-232/234/235/237` 的上游 runtime 复用原则：LibreChat API、MongoDB、Meilisearch、RAG API、VectorDB 仍以上游镜像/compose 为运行事实源。
-2. [ ] 将 LibreChat **Web UI 源码**纳入本仓，并由本仓统一构建、打包、发布与回归验证。
-3. [ ] 将当前依赖 DOM 拦截/注入的发送与回写逻辑，替换为 **源码级发送管线接管 + 源码级消息渲染接入**。
-4. [ ] 让 `260` 所需的缺字段补全、多候选确认、提交确认、成功/失败回执，都落到 **官方消息列表/官方 assistant 气泡体系** 内，而非外挂容器。
-5. [ ] 将 `/app/assistant/librechat` 收敛为单一真实入口，不再依赖 iframe 套壳作为正式交互承载面。
-6. [ ] 保持 One Door：任何业务写入仍只允许经本仓 `/internal/assistant/*` 与业务提交链路完成，绝不把可写业务能力下放到上游 runtime。
-7. [ ] 明确业务事实源：业务真相以本仓 `conversation_id/turn_id/request_id/trace_id` 与其状态流转为准；官方消息树只是唯一用户可见渲染面，不得反客为主成为业务事实源。
-8. [ ] 明确前端降权：vendored UI 只消费后端返回的 `phase/missing_fields/candidates/pending_draft_summary/selected_candidate_id/commit_reply/error_code` DTO，不得在页面 helper / adapter 内重算业务 FSM、候选裁决或提交约束。
+1. [X] 保持 `DEV-PLAN-232/234/235/237` 的上游 runtime 复用原则：LibreChat API、MongoDB、Meilisearch、RAG API、VectorDB 仍以上游镜像/compose 为运行事实源。
+2. [X] 将 LibreChat **Web UI 源码**纳入本仓，并由本仓统一构建、打包、发布与回归验证。
+3. [X] 将当前依赖 DOM 拦截/注入的发送与回写逻辑，替换为 **源码级发送管线接管 + 源码级消息渲染接入**。
+4. [X] 让 `260` 所需的缺字段补全、多候选确认、提交确认、成功/失败回执，都落到 **官方消息列表/官方 assistant 气泡体系** 内，而非外挂容器。
+5. [X] 将 `/app/assistant/librechat` 收敛为单一真实入口，不再依赖 iframe 套壳作为正式交互承载面。
+6. [X] 保持 One Door：任何业务写入仍只允许经本仓 `/internal/assistant/*` 与业务提交链路完成，绝不把可写业务能力下放到上游 runtime。
+7. [X] 明确业务事实源：业务真相以本仓 `conversation_id/turn_id/request_id/trace_id` 与其状态流转为准；官方消息树只是唯一用户可见渲染面，不得反客为主成为业务事实源。
+8. [X] 明确前端降权：vendored UI 只消费后端返回的 `phase/missing_fields/candidates/pending_draft_summary/selected_candidate_id/commit_reply/error_code` DTO，不得在页面 helper / adapter 内重算业务 FSM、候选裁决或提交约束。
 
 ### 2.2 非目标
 1. [ ] **不** vendoring LibreChat 后端 Node 服务，不在本计划中接管上游 API/runtime 实现。
@@ -254,37 +262,37 @@ graph TD
 - 若未来新增 vendored UI patch 代码，必须优先通过更小职责拆分与可测试 adapter 提升可测性，不得以扩大排除范围替代设计修正。
 
 ### 10.2 验收标准（硬门槛）
-1. [ ] `/app/assistant/librechat` 不再依赖 iframe 作为正式聊天承载面。
-2. [ ] 不再依赖运行时注入 `bridge.js` 才能阻断原始发送或显示业务回执。
-3. [ ] 不再存在 `data-assistant-dialog-stream` 或等价外挂消息流承担用户可见业务回执职责。
-4. [ ] 不再存在两个同时有效的正式用户入口、两套正式静态资源前缀、两套正式消息落点或两套正式 E2E 通过口径。
-5. [ ] `260` Case 1~4 中，所有业务回执都由官方消息列表组件树渲染，且每轮仅有唯一 assistant 回复实体。
-6. [ ] 前端只消费后端 `phase/missing_fields/candidates/pending_draft_summary/selected_candidate_id/commit_reply/error_code` DTO；业务事实源仍以本仓 `conversation/turn/request/trace` 与审计状态转移为准。
-7. [ ] 发送、缺字段、多候选、确认、提交成功/失败的关键路径，都能通过源码级单测/组件测 + 真实 E2E 双重验证。
-8. [ ] 旧桥接链路相关代码、测试与文案已删除或明确退役，不再形成持续维护负担。
-9. [ ] 上游 runtime 镜像基线仍可独立启动、健康检查、升级与回滚，不因 UI 源码纳管而退化。
+1. [X] `/app/assistant/librechat` 不再依赖 iframe 作为正式聊天承载面（`283/282`）。
+2. [X] 不再依赖运行时注入 `bridge.js` 才能阻断原始发送或显示业务回执（`282/284`）。
+3. [X] 不再存在 `data-assistant-dialog-stream` 或等价外挂消息流承担用户可见业务回执职责（`282/284/285`）。
+4. [X] 不再存在两个同时有效的正式用户入口、两套正式静态资源前缀、两套正式消息落点或两套正式 E2E 通过口径（`283/285`）。
+5. [X] `260` Case 1~4 中，所有业务回执都由官方消息列表组件树渲染，且每轮仅有唯一 assistant 回复实体（`284/285/290B`）。
+6. [X] 前端只消费后端 `phase/missing_fields/candidates/pending_draft_summary/selected_candidate_id/commit_reply/error_code` DTO；业务事实源仍以本仓 `conversation/turn/request/trace` 与审计状态转移为准（`223/260/284`）。
+7. [X] 发送、缺字段、多候选、确认、提交成功/失败的关键路径，都能通过源码级单测/组件测 + 真实 E2E 双重验证（`284/288/288B/290B/285`）。
+8. [X] 旧桥接链路相关代码、测试与文案已删除或明确退役，不再形成持续维护负担（`282/283/285`）。
+9. [X] 上游 runtime 镜像基线仍可独立启动、健康检查、升级与回滚，不因 UI 源码纳管而退化（`281/291/285`）。
 
 ## 11. 子计划拆分（自本次修订起）
 1. [X] `DEV-PLAN-281`：LibreChat Web UI 源码纳管与新主链路冻结实施计划（已完成，见执行日志）。
 2. [X] `DEV-PLAN-282`：LibreChat 旧桥接链路删除实施计划（已完成，旧桥正式职责与残留实现已收口）。
 3. [X] `DEV-PLAN-283`：LibreChat 正式入口直接切换实施计划（已完成，见该计划内收口证据）。
 4. [X] `DEV-PLAN-284`：LibreChat 发送与渲染主链路源码级接管实施计划（已完成）。
-5. [ ] `DEV-PLAN-285`：LibreChat 切换回归闭环与封板实施计划。
+5. [X] `DEV-PLAN-285`：LibreChat 切换回归闭环与封板实施计划（已完成）。
 
 ### 11.1 执行顺序与并行策略
 1. [X] **必须先做**：`281`（先冻结新主链路与来源元数据，否则后续删除与切换没有稳定目标）。
 2. [X] **可部分并行**：`282` 与 `235` 可在 `281` 完成后并行推进；前者清旧桥职责，后者补新入口边界。
 3. [X] **必须晚于 `282/235`**：`283`（正式入口切换）只能在“旧桥正式职责已去除 + 新入口边界已补齐”后执行。
 4. [X] **必须晚于 `223/260/283`**：`284` 需要业务事实源与 FSM DTO 已冻结，且正式入口已完成切换。
-5. [ ] **最后封板**：`285` 只能在 `281~284`、`235`、`237` 对应 stopline 全部满足后执行。
-6. [ ] **禁止并行**：`283` 与“继续维护旧桥接正式职责”不得并行存在；一旦进入 `283`，旧入口只能是调试/审计角色或直接删除。
-7. [ ] **推荐节奏**：`281 -> (282 || 235) -> 283 -> 284 -> 285`。
+5. [X] **最后封板**：`285` 已在 `281~284`、`235`、`237/291` 对应 stopline 满足后执行完成。
+6. [X] **禁止并行**：执行过程中未出现“`283` 已切换但旧桥接正式职责继续并行维护”的情况；旧入口仅保留历史别名/审计语义或直接退役。
+7. [X] **推荐节奏**：实际执行顺序与 `281 -> (282 || 235) -> 283 -> 284 -> 285` 一致。
 
 ## 12. 交付物
-1. [ ] `DEV-PLAN-280` 主计划文档。
-2. [ ] vendored Web UI 来源元数据与 patch 清单。
-3. [ ] 构建/同步/升级脚本与回归清单。
-4. [ ] 与 `260/266/237` 对齐的测试证据与执行日志。
+1. [X] `DEV-PLAN-280` 主计划文档与主计划执行日志：`docs/dev-plans/280-librechat-web-ui-vendoring-and-runtime-layered-reuse-plan.md`、`docs/dev-records/dev-plan-280-execution-log.md`。
+2. [X] vendored Web UI 来源元数据与 patch 清单：`third_party/librechat-web/UPSTREAM.yaml`、`third_party/librechat-web/patches/`。
+3. [X] 构建/同步/升级脚本与回归清单：`scripts/librechat-web/`、`make librechat-web-build` 相关构建链。
+4. [X] 与 `260/266/237` 对齐的测试证据与执行日志：`281/284/285/288/288B/290B/291` 相关计划、资产与执行记录。
 
 ## 13. 关联文档
 - `docs/dev-plans/230-librechat-project-level-integration-plan.md`
@@ -302,4 +310,5 @@ graph TD
 - `docs/dev-plans/283-librechat-formal-entry-cutover-plan.md`
 - `docs/dev-plans/284-librechat-source-level-send-and-render-takeover-plan.md`
 - `docs/dev-plans/285-librechat-cutover-regression-and-closure-plan.md`
+- `docs/dev-records/dev-plan-280-execution-log.md`
 - `AGENTS.md`

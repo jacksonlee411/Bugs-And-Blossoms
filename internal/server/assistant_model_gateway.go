@@ -61,10 +61,81 @@ type assistantResolveIntentRequest struct {
 }
 
 type assistantResolveIntentResult struct {
-	Intent        assistantIntentSpec
-	ProviderName  string
-	ModelName     string
-	ModelRevision string
+	Intent              assistantIntentSpec
+	SemanticState       assistantConversationSemanticState
+	ProviderName        string
+	ModelName           string
+	ModelRevision       string
+	GoalSummary         string
+	UserVisibleReply    string
+	NextQuestion        string
+	Readiness           string
+	SelectedCandidateID string
+}
+
+type assistantSemanticIntentPayload struct {
+	Action              string                              `json:"action"`
+	IntentID            string                              `json:"intent_id,omitempty"`
+	RouteKind           string                              `json:"route_kind,omitempty"`
+	RouteCatalogVersion string                              `json:"route_catalog_version,omitempty"`
+	ParentRefText       string                              `json:"parent_ref_text,omitempty"`
+	EntityName          string                              `json:"entity_name,omitempty"`
+	EffectiveDate       string                              `json:"effective_date,omitempty"`
+	OrgCode             string                              `json:"org_code,omitempty"`
+	TargetEffectiveDate string                              `json:"target_effective_date,omitempty"`
+	NewName             string                              `json:"new_name,omitempty"`
+	NewParentRefText    string                              `json:"new_parent_ref_text,omitempty"`
+	IntentSchemaVersion string                              `json:"intent_schema_version,omitempty"`
+	ContextHash         string                              `json:"context_hash,omitempty"`
+	IntentHash          string                              `json:"intent_hash,omitempty"`
+	GoalSummary         string                              `json:"goal_summary,omitempty"`
+	UserVisibleReply    string                              `json:"user_visible_reply,omitempty"`
+	NextQuestion        string                              `json:"next_question,omitempty"`
+	Readiness           string                              `json:"readiness,omitempty"`
+	SelectedCandidateID string                              `json:"selected_candidate_id,omitempty"`
+	RetrievalNeeded     bool                                `json:"retrieval_needed,omitempty"`
+	RetrievalRequests   []assistantSemanticRetrievalRequest `json:"retrieval_requests,omitempty"`
+	RetrievalResults    []assistantSemanticRetrievalResult  `json:"retrieval_results,omitempty"`
+	ConfidenceNote      string                              `json:"confidence_note,omitempty"`
+}
+
+func (p assistantSemanticIntentPayload) intentSpec() assistantIntentSpec {
+	return assistantIntentSpec{
+		Action:              strings.TrimSpace(p.Action),
+		IntentID:            strings.TrimSpace(p.IntentID),
+		RouteKind:           strings.TrimSpace(p.RouteKind),
+		RouteCatalogVersion: strings.TrimSpace(p.RouteCatalogVersion),
+		ParentRefText:       strings.TrimSpace(p.ParentRefText),
+		EntityName:          strings.TrimSpace(p.EntityName),
+		EffectiveDate:       strings.TrimSpace(p.EffectiveDate),
+		OrgCode:             strings.TrimSpace(p.OrgCode),
+		TargetEffectiveDate: strings.TrimSpace(p.TargetEffectiveDate),
+		NewName:             strings.TrimSpace(p.NewName),
+		NewParentRefText:    strings.TrimSpace(p.NewParentRefText),
+		IntentSchemaVersion: strings.TrimSpace(p.IntentSchemaVersion),
+		ContextHash:         strings.TrimSpace(p.ContextHash),
+		IntentHash:          strings.TrimSpace(p.IntentHash),
+	}
+}
+
+func (p assistantSemanticIntentPayload) semanticState() assistantConversationSemanticState {
+	intent := p.intentSpec()
+	return assistantConversationSemanticState{
+		GoalSummary:         strings.TrimSpace(p.GoalSummary),
+		Action:              strings.TrimSpace(intent.Action),
+		IntentID:            strings.TrimSpace(intent.IntentID),
+		RouteKind:           strings.TrimSpace(intent.RouteKind),
+		RouteCatalogVersion: strings.TrimSpace(intent.RouteCatalogVersion),
+		Slots:               intent,
+		RetrievalNeeded:     p.RetrievalNeeded,
+		RetrievalRequests:   assistantNormalizeSemanticRetrievalRequests(p.RetrievalRequests),
+		RetrievalResults:    assistantNormalizeSemanticRetrievalResults(p.RetrievalResults),
+		NextQuestion:        strings.TrimSpace(p.NextQuestion),
+		UserVisibleReply:    strings.TrimSpace(p.UserVisibleReply),
+		Readiness:           strings.TrimSpace(p.Readiness),
+		ConfidenceNote:      strings.TrimSpace(p.ConfidenceNote),
+		SelectedCandidateID: strings.TrimSpace(p.SelectedCandidateID),
+	}
 }
 
 type assistantProviderStatus struct {
@@ -105,8 +176,7 @@ func (assistantDeterministicProviderAdapter) Invoke(_ context.Context, prompt st
 	case assistantIsSimulateEndpoint(endpoint) && strings.HasPrefix(endpoint, "simulate://unavailable"):
 		return nil, errAssistantModelProviderUnavailable
 	}
-	intent := assistantExtractIntent(strings.TrimSpace(prompt))
-	payload, err := assistantIntentMarshalFn(intent)
+	payload, err := assistantIntentMarshalFn(assistantSyntheticSemanticPayloadForPrompt(prompt))
 	if err != nil {
 		return nil, errAssistantPlanSchemaConstrainedDecodeFailed
 	}
@@ -127,6 +197,111 @@ func (assistantDeterministicProviderAdapter) Probe(_ context.Context, provider a
 	default:
 		return nil
 	}
+}
+
+func assistantSyntheticSemanticPayloadForPrompt(prompt string) assistantSemanticIntentPayload {
+	return assistantSyntheticSemanticPayload(assistantSemanticCurrentUserInput(prompt))
+}
+
+func assistantSyntheticSemanticPayload(userInput string) assistantSemanticIntentPayload {
+	text := strings.TrimSpace(userInput)
+	payload := assistantSemanticIntentPayload{
+		GoalSummary: text,
+	}
+
+	actionID := assistantSyntheticSemanticAction(text)
+	switch {
+	case actionID != "":
+		payload.Action = actionID
+		payload.RouteKind = assistantRouteKindBusinessAction
+		payload.IntentID = assistantSemanticIntentIDForAction(actionID)
+	case assistantSyntheticSemanticLooksLikeKnowledgeQA(text):
+		payload.Action = assistantIntentPlanOnly
+		payload.RouteKind = assistantRouteKindKnowledgeQA
+		payload.IntentID = "knowledge.general_qa"
+	case assistantSyntheticSemanticLooksLikeChitchat(text):
+		payload.Action = assistantIntentPlanOnly
+		payload.RouteKind = assistantRouteKindChitchat
+		payload.IntentID = "chat.greeting"
+	default:
+		payload.Action = assistantIntentPlanOnly
+		payload.RouteKind = assistantRouteKindUncertain
+		payload.IntentID = "route.uncertain"
+	}
+	return payload
+}
+
+func assistantSyntheticSemanticAction(userInput string) string {
+	text := strings.TrimSpace(userInput)
+	switch {
+	case text == "":
+		return ""
+	case strings.Contains(text, "插入版本"):
+		return assistantIntentInsertOrgUnitVersion
+	case strings.Contains(text, "新增版本"):
+		return assistantIntentAddOrgUnitVersion
+	case strings.Contains(text, "更正"):
+		return assistantIntentCorrectOrgUnit
+	case strings.Contains(text, "移动"):
+		return assistantIntentMoveOrgUnit
+	case strings.Contains(text, "重命名"):
+		return assistantIntentRenameOrgUnit
+	case strings.Contains(text, "停用"), strings.Contains(text, "禁用"):
+		return assistantIntentDisableOrgUnit
+	case strings.Contains(text, "启用"):
+		return assistantIntentEnableOrgUnit
+	case strings.Contains(text, "新建"), strings.Contains(text, "创建"):
+		return assistantIntentCreateOrgUnit
+	default:
+		return ""
+	}
+}
+
+func assistantSemanticIntentIDForAction(actionID string) string {
+	switch strings.TrimSpace(actionID) {
+	case assistantIntentCreateOrgUnit:
+		return "org.orgunit_create"
+	case assistantIntentAddOrgUnitVersion:
+		return "org.orgunit_add_version"
+	case assistantIntentInsertOrgUnitVersion:
+		return "org.orgunit_insert_version"
+	case assistantIntentCorrectOrgUnit:
+		return "org.orgunit_correct"
+	case assistantIntentRenameOrgUnit:
+		return "org.orgunit_rename"
+	case assistantIntentMoveOrgUnit:
+		return "org.orgunit_move"
+	case assistantIntentDisableOrgUnit:
+		return "org.orgunit_disable"
+	case assistantIntentEnableOrgUnit:
+		return "org.orgunit_enable"
+	default:
+		return "action." + strings.TrimSpace(actionID)
+	}
+}
+
+func assistantSyntheticSemanticLooksLikeKnowledgeQA(text string) bool {
+	if strings.TrimSpace(text) == "" {
+		return false
+	}
+	for _, keyword := range []string{"功能", "help", "怎么", "如何", "什么", "哪些", "支持", "?", "？"} {
+		if strings.Contains(strings.ToLower(text), strings.ToLower(keyword)) {
+			return true
+		}
+	}
+	return false
+}
+
+func assistantSyntheticSemanticLooksLikeChitchat(text string) bool {
+	if strings.TrimSpace(text) == "" {
+		return false
+	}
+	for _, keyword := range []string{"你好", "您好", "hello", "hi", "thanks", "谢谢"} {
+		if strings.Contains(strings.ToLower(text), strings.ToLower(keyword)) {
+			return true
+		}
+	}
+	return false
 }
 
 type assistantOpenAIProviderAdapter struct {
@@ -203,8 +378,16 @@ func (a assistantOpenAIProviderAdapter) Invoke(ctx context.Context, prompt strin
 			Messages: []assistantOpenAIChatCompletionMessage{
 				{
 					Role: "system",
-					Content: "你是企业 HR 组织变更助手。你必须只输出严格 JSON，禁止输出解释、Markdown 或其他文本。" +
-						"JSON 必须符合 schema 且 additionalProperties=false。",
+					Content: "你是企业 HR 组织变更助手。你会收到一个包含当前用户输入、允许动作、以及可能待续上下文的 JSON。" +
+						"你必须只输出严格 JSON，禁止输出解释、Markdown 或其他文本。" +
+						"你需要同时输出结构化动作槽位、route_kind、intent_id、当前给用户看的自然语言回复、下一句追问，以及当前 readiness。" +
+						"当你需要本地补充候选组织事实时，必须输出 retrieval_requests，并只允许使用 candidate_lookup。" +
+						"所有日期统一输出 YYYY-MM-DD；action 只能从 allowed_actions 中选择。" +
+						"业务动作必须输出 route_kind=business_action，且 intent_id 必须使用固定映射：" +
+						"create_orgunit=org.orgunit_create；add_orgunit_version=org.orgunit_add_version；insert_orgunit_version=org.orgunit_insert_version；correct_orgunit=org.orgunit_correct；move_orgunit=org.orgunit_move；rename_orgunit=org.orgunit_rename；disable_orgunit=org.orgunit_disable；enable_orgunit=org.orgunit_enable。" +
+						"知识问答输出 action=plan_only、route_kind=knowledge_qa、intent_id=knowledge.general_qa；" +
+						"闲聊输出 action=plan_only、route_kind=chitchat、intent_id=chat.greeting；" +
+						"无法确定时输出 action=plan_only、route_kind=uncertain、intent_id=route.uncertain。",
 				},
 				{
 					Role:    "user",
@@ -225,6 +408,15 @@ func (a assistantOpenAIProviderAdapter) Invoke(ctx context.Context, prompt strin
 							"action": map[string]any{
 								"type": "string",
 							},
+							"intent_id": map[string]any{
+								"type": "string",
+							},
+							"route_kind": map[string]any{
+								"type": "string",
+							},
+							"route_catalog_version": map[string]any{
+								"type": "string",
+							},
 							"parent_ref_text": map[string]any{
 								"type": "string",
 							},
@@ -234,8 +426,66 @@ func (a assistantOpenAIProviderAdapter) Invoke(ctx context.Context, prompt strin
 							"effective_date": map[string]any{
 								"type": "string",
 							},
+							"org_code": map[string]any{
+								"type": "string",
+							},
+							"target_effective_date": map[string]any{
+								"type": "string",
+							},
+							"new_name": map[string]any{
+								"type": "string",
+							},
+							"new_parent_ref_text": map[string]any{
+								"type": "string",
+							},
+							"goal_summary": map[string]any{
+								"type": "string",
+							},
+							"user_visible_reply": map[string]any{
+								"type": "string",
+							},
+							"next_question": map[string]any{
+								"type": "string",
+							},
+							"readiness": map[string]any{
+								"type": "string",
+							},
+							"selected_candidate_id": map[string]any{
+								"type": "string",
+							},
+							"retrieval_needed": map[string]any{
+								"type": "boolean",
+							},
+							"confidence_note": map[string]any{
+								"type": "string",
+							},
+							"retrieval_requests": map[string]any{
+								"type": "array",
+								"items": map[string]any{
+									"type":                 "object",
+									"additionalProperties": false,
+									"properties": map[string]any{
+										"kind": map[string]any{
+											"type": "string",
+										},
+										"slot": map[string]any{
+											"type": "string",
+										},
+										"ref_text": map[string]any{
+											"type": "string",
+										},
+										"as_of": map[string]any{
+											"type": "string",
+										},
+										"limit": map[string]any{
+											"type": "integer",
+										},
+									},
+									"required": []string{"kind"},
+								},
+							},
 						},
-						"required": []string{"action"},
+						"required": []string{"action", "intent_id", "route_kind"},
 					},
 				},
 			}
@@ -380,6 +630,8 @@ func assistantNormalizeOpenAIIntentPayload(content string) []byte {
 	objects := assistantIntentCandidateObjects(obj)
 	action := assistantNormalizeOpenAIIntentAction(assistantFirstStringFromObjects(objects,
 		"action",
+		"proposed_action",
+		"proposedAction",
 		"intent_action",
 		"intentAction",
 		"operationType",
@@ -605,6 +857,21 @@ func assistantNormalizeOpenAIIntentPayload(content string) []byte {
 	if action != "" {
 		normalized["action"] = action
 	}
+	if intentID := assistantFirstStringFromObjects(objects,
+		"intent_id",
+		"intentId"); intentID != "" {
+		normalized["intent_id"] = intentID
+	}
+	if routeKind := assistantFirstStringFromObjects(objects,
+		"route_kind",
+		"routeKind"); routeKind != "" {
+		normalized["route_kind"] = routeKind
+	}
+	if routeCatalogVersion := assistantFirstStringFromObjects(objects,
+		"route_catalog_version",
+		"routeCatalogVersion"); routeCatalogVersion != "" {
+		normalized["route_catalog_version"] = routeCatalogVersion
+	}
 	if parentRefText != "" {
 		normalized["parent_ref_text"] = parentRefText
 	}
@@ -625,6 +892,57 @@ func assistantNormalizeOpenAIIntentPayload(content string) []byte {
 	}
 	if newParentRefText != "" {
 		normalized["new_parent_ref_text"] = newParentRefText
+	}
+	if goalSummary := assistantFirstStringFromObjects(objects,
+		"goal_summary",
+		"goalSummary",
+		"summary",
+		"intent_summary"); goalSummary != "" {
+		normalized["goal_summary"] = goalSummary
+	}
+	if userVisibleReply := assistantFirstStringFromObjects(objects,
+		"user_visible_reply",
+		"userVisibleReply",
+		"reply",
+		"response",
+		"message"); userVisibleReply != "" {
+		normalized["user_visible_reply"] = userVisibleReply
+	}
+	if nextQuestion := assistantFirstStringFromObjects(objects,
+		"next_question",
+		"nextQuestion",
+		"follow_up_question",
+		"followUpQuestion"); nextQuestion != "" {
+		normalized["next_question"] = nextQuestion
+	}
+	if readiness := assistantNormalizeOpenAIReadiness(assistantFirstStringFromObjects(objects,
+		"readiness",
+		"state",
+		"status")); readiness != "" {
+		normalized["readiness"] = readiness
+	}
+	if selectedCandidateID := assistantFirstStringFromObjects(objects,
+		"selected_candidate_id",
+		"selectedCandidateId",
+		"candidate_id",
+		"candidateId"); selectedCandidateID != "" {
+		normalized["selected_candidate_id"] = selectedCandidateID
+	}
+	if retrievalNeeded, ok := assistantFirstBoolFromObjects(objects,
+		"retrieval_needed",
+		"retrievalNeeded"); ok {
+		normalized["retrieval_needed"] = retrievalNeeded
+	}
+	if confidenceNote := assistantFirstStringFromObjects(objects,
+		"confidence_note",
+		"confidenceNote"); confidenceNote != "" {
+		normalized["confidence_note"] = confidenceNote
+	}
+	if retrievalRequests := assistantNormalizeOpenAIRetrievalRequests(obj); len(retrievalRequests) > 0 {
+		normalized["retrieval_requests"] = retrievalRequests
+	}
+	if retrievalResults := assistantNormalizeOpenAIRetrievalResults(obj); len(retrievalResults) > 0 {
+		normalized["retrieval_results"] = retrievalResults
 	}
 	if len(normalized) == 0 {
 		return []byte(trimmed)
@@ -685,6 +1003,21 @@ func assistantExtractJSONObject(content string) (string, bool) {
 		}
 	}
 	return "", false
+}
+
+func assistantNormalizeOpenAIReadiness(value string) string {
+	switch strings.TrimSpace(strings.ToLower(value)) {
+	case "ready_for_confirm", "ready_for_confirmation", "ready":
+		return assistantSemanticReadinessReadyForConfirm
+	case "ready_for_dry_run", "draft_ready":
+		return assistantSemanticReadinessReadyForDryRun
+	case "non_business", "knowledge", "qa", "chitchat":
+		return assistantSemanticReadinessNonBusiness
+	case "need_more_info", "missing_info", "clarification_required", "clarify":
+		return assistantSemanticReadinessNeedMoreInfo
+	default:
+		return ""
+	}
 }
 
 func assistantFirstString(object map[string]any, keys ...string) string {
@@ -761,6 +1094,11 @@ func assistantFirstCompositeNameFromObjects(objects []map[string]any, objectPath
 
 func assistantIntentCandidateObjects(object map[string]any) []map[string]any {
 	objects := []map[string]any{object}
+	for _, key := range []string{"slots", "slot_values", "slotValues", "arguments", "data", "params", "target"} {
+		if nested, ok := assistantLookupLooseMap(object, key); ok {
+			objects = append([]map[string]any{nested}, objects...)
+		}
+	}
 	for _, key := range []string{"changes", "operations", "items"} {
 		if nested, ok := assistantFirstMapFromSlice(object, key); ok {
 			objects = append([]map[string]any{nested}, objects...)
@@ -772,6 +1110,18 @@ func assistantIntentCandidateObjects(object map[string]any) []map[string]any {
 		}
 	}
 	return objects
+}
+
+func assistantLookupLooseMap(object map[string]any, key string) (map[string]any, bool) {
+	value, ok := assistantLookupMapValueLoose(object, key)
+	if !ok {
+		return nil, false
+	}
+	asMap, ok := value.(map[string]any)
+	if !ok {
+		return nil, false
+	}
+	return asMap, true
 }
 
 func assistantFirstMapFromSlice(object map[string]any, key string) (map[string]any, bool) {
@@ -797,6 +1147,171 @@ func assistantLookupLooseAny(object map[string]any, keys ...string) any {
 		}
 	}
 	return nil
+}
+
+func assistantFirstBoolFromObjects(objects []map[string]any, paths ...string) (bool, bool) {
+	for _, object := range objects {
+		for _, path := range paths {
+			value, ok := assistantLookupPathValue(object, path)
+			if !ok {
+				continue
+			}
+			switch typed := value.(type) {
+			case bool:
+				return typed, true
+			case string:
+				switch strings.TrimSpace(strings.ToLower(typed)) {
+				case "true", "yes", "1":
+					return true, true
+				case "false", "no", "0":
+					return false, true
+				}
+			}
+		}
+	}
+	return false, false
+}
+
+func assistantNormalizeOpenAIRetrievalRequests(object map[string]any) []assistantSemanticRetrievalRequest {
+	requests := assistantLooseObjectSlice(object,
+		"retrieval_requests",
+		"retrievalRequests",
+		"lookups",
+		"lookup_requests",
+		"lookupRequests")
+	if len(requests) == 0 {
+		return nil
+	}
+	out := make([]assistantSemanticRetrievalRequest, 0, len(requests))
+	for _, item := range requests {
+		request := assistantSemanticRetrievalRequest{
+			Kind: strings.TrimSpace(firstNonEmpty(
+				assistantFirstString(item, "kind", "type"),
+			)),
+			Slot: strings.TrimSpace(assistantFirstString(item, "slot", "field")),
+			RefText: strings.TrimSpace(assistantFirstString(item,
+				"ref_text",
+				"refText",
+				"query",
+				"query_text",
+				"queryText",
+				"name")),
+			AsOf:  strings.TrimSpace(assistantFirstString(item, "as_of", "asOf")),
+			Limit: assistantFirstInt(item, "limit"),
+		}
+		if request.Kind == "" {
+			continue
+		}
+		out = append(out, request)
+	}
+	return assistantNormalizeSemanticRetrievalRequests(out)
+}
+
+func assistantNormalizeOpenAIRetrievalResults(object map[string]any) []assistantSemanticRetrievalResult {
+	results := assistantLooseObjectSlice(object,
+		"retrieval_results",
+		"retrievalResults",
+		"lookup_results",
+		"lookupResults")
+	if len(results) == 0 {
+		return nil
+	}
+	out := make([]assistantSemanticRetrievalResult, 0, len(results))
+	for _, item := range results {
+		result := assistantSemanticRetrievalResult{
+			Kind:                strings.TrimSpace(assistantFirstString(item, "kind", "type")),
+			Slot:                strings.TrimSpace(assistantFirstString(item, "slot", "field")),
+			State:               strings.TrimSpace(assistantFirstString(item, "state", "status")),
+			RefText:             strings.TrimSpace(assistantFirstString(item, "ref_text", "refText", "query", "query_text", "queryText")),
+			AsOf:                strings.TrimSpace(assistantFirstString(item, "as_of", "asOf")),
+			CandidateCount:      assistantFirstInt(item, "candidate_count", "candidateCount", "count"),
+			SelectedCandidateID: strings.TrimSpace(assistantFirstString(item, "selected_candidate_id", "selectedCandidateId", "candidate_id", "candidateId")),
+		}
+		if ids := assistantLooseStringSlice(item, "candidate_ids", "candidateIds"); len(ids) > 0 {
+			result.CandidateIDs = ids
+		}
+		if result.Kind == "" {
+			continue
+		}
+		out = append(out, result)
+	}
+	return assistantNormalizeSemanticRetrievalResults(out)
+}
+
+func assistantLooseObjectSlice(object map[string]any, keys ...string) []map[string]any {
+	for _, key := range keys {
+		value, ok := assistantLookupMapValueLoose(object, key)
+		if !ok {
+			continue
+		}
+		items, ok := value.([]any)
+		if !ok {
+			continue
+		}
+		out := make([]map[string]any, 0, len(items))
+		for _, item := range items {
+			asMap, ok := item.(map[string]any)
+			if !ok {
+				continue
+			}
+			out = append(out, asMap)
+		}
+		if len(out) > 0 {
+			return out
+		}
+	}
+	return nil
+}
+
+func assistantLooseStringSlice(object map[string]any, keys ...string) []string {
+	for _, key := range keys {
+		value, ok := assistantLookupMapValueLoose(object, key)
+		if !ok {
+			continue
+		}
+		items, ok := value.([]any)
+		if !ok {
+			continue
+		}
+		out := make([]string, 0, len(items))
+		for _, item := range items {
+			text, ok := assistantToNonEmptyString(item)
+			if !ok {
+				continue
+			}
+			out = append(out, text)
+		}
+		if len(out) > 0 {
+			return assistantNormalizeRouteStringSlice(out)
+		}
+	}
+	return nil
+}
+
+func assistantFirstInt(object map[string]any, keys ...string) int {
+	for _, key := range keys {
+		value, ok := assistantLookupMapValueLoose(object, key)
+		if !ok {
+			continue
+		}
+		switch typed := value.(type) {
+		case float64:
+			return int(typed)
+		case int:
+			return typed
+		case int64:
+			return int(typed)
+		case json.Number:
+			if parsed, err := typed.Int64(); err == nil {
+				return int(parsed)
+			}
+		case string:
+			if parsed, err := strconv.Atoi(strings.TrimSpace(typed)); err == nil {
+				return parsed
+			}
+		}
+	}
+	return 0
 }
 
 func assistantLookupPathValue(object map[string]any, path string) (any, bool) {
@@ -1142,7 +1657,7 @@ func (g *assistantModelGateway) ResolveIntent(ctx context.Context, req assistant
 				}
 				break
 			}
-			intent, err := assistantStrictDecodeIntent(raw)
+			payload, err := assistantStrictDecodeSemanticIntent(raw)
 			if err != nil {
 				invokeErr = errAssistantPlanSchemaConstrainedDecodeFailed
 				if attempt < attempts-1 {
@@ -1150,12 +1665,20 @@ func (g *assistantModelGateway) ResolveIntent(ctx context.Context, req assistant
 				}
 				break
 			}
-			return assistantResolveIntentResult{
-				Intent:        intent,
-				ProviderName:  strings.ToLower(strings.TrimSpace(provider.Name)),
-				ModelName:     strings.TrimSpace(provider.Model),
-				ModelRevision: assistantModelRevision(provider),
-			}, nil
+			resolved := assistantResolveIntentResult{
+				Intent:              payload.intentSpec(),
+				SemanticState:       payload.semanticState(),
+				ProviderName:        strings.ToLower(strings.TrimSpace(provider.Name)),
+				ModelName:           strings.TrimSpace(provider.Model),
+				ModelRevision:       assistantModelRevision(provider),
+				GoalSummary:         strings.TrimSpace(payload.GoalSummary),
+				UserVisibleReply:    strings.TrimSpace(payload.UserVisibleReply),
+				NextQuestion:        strings.TrimSpace(payload.NextQuestion),
+				Readiness:           strings.TrimSpace(payload.Readiness),
+				SelectedCandidateID: strings.TrimSpace(payload.SelectedCandidateID),
+			}
+			assistantSyncResolvedSemanticResult(&resolved)
+			return resolved, nil
 		}
 		switch {
 		case errorsIsAny(invokeErr, errAssistantModelTimeout, errAssistantModelRateLimited, errAssistantModelProviderUnavailable, errAssistantPlanSchemaConstrainedDecodeFailed):
@@ -1182,6 +1705,19 @@ func assistantStrictDecodeIntent(raw []byte) (assistantIntentSpec, error) {
 		return assistantIntentSpec{}, errAssistantPlanSchemaConstrainedDecodeFailed
 	}
 	return intent, nil
+}
+
+func assistantStrictDecodeSemanticIntent(raw []byte) (assistantSemanticIntentPayload, error) {
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	decoder.DisallowUnknownFields()
+	var payload assistantSemanticIntentPayload
+	if err := decoder.Decode(&payload); err != nil {
+		return assistantSemanticIntentPayload{}, err
+	}
+	if err := decoder.Decode(&struct{}{}); err == nil {
+		return assistantSemanticIntentPayload{}, errAssistantPlanSchemaConstrainedDecodeFailed
+	}
+	return payload, nil
 }
 
 func assistantModelRevision(provider assistantModelProviderConfig) string {

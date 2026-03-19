@@ -107,6 +107,7 @@ func assistant272BuildConfirmedTurn(t *testing.T, svc *assistantConversationServ
 		UpdatedAt:           now,
 	}
 	turn.Plan.SkillManifestDigest = "skill_" + tc.name
+	assistantTestAttachBusinessRoute(turn)
 	if err := svc.refreshTurnVersionTuple(context.Background(), "tenant_1", turn); err != nil {
 		t.Fatalf("refreshTurnVersionTuple action=%s err=%v", tc.action, err)
 	}
@@ -196,6 +197,18 @@ func TestAssistant272PrepareCommitTurn_ActionMatrix(t *testing.T) {
 			}
 		})
 	}
+
+	t.Run("route boundary failures short-circuit before adapter lookup", func(t *testing.T) {
+		recorder := &assistantWriteServiceRecorder{}
+		svc := newAssistantConversationService(store, recorder)
+		turn := assistant272BuildConfirmedTurn(t, svc, assistant272ActionCases()[0], now)
+		turn.RouteDecision = assistantIntentRouteDecision{}
+		conversation := assistant272Conversation(turn, now)
+		_, result, err := svc.prepareCommitTurn(context.Background(), conversation, turn, Principal{ID: "actor_1", RoleSlug: "tenant-admin"}, "tenant_1")
+		if !errors.Is(err, errAssistantRouteDecisionMissing) {
+			t.Fatalf("prepareCommitTurn missing route err=%v result=%+v", err, result)
+		}
+	})
 }
 
 func TestAssistant272SubmitCommitTaskWorkflowAndPoll_ActionMatrix(t *testing.T) {

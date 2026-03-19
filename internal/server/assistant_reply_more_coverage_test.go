@@ -62,28 +62,38 @@ func TestAssistantRenderTurnReplyMoreCoverage(t *testing.T) {
 	})
 
 	t.Run("latest turn and default source", func(t *testing.T) {
+		invoked := false
 		assistantRenderReplyWithModelFn = func(_ context.Context, _ *assistantConversationService, prompt assistantReplyRenderPrompt) (assistantReplyModelResult, error) {
-			if prompt.TurnID == "" {
-				t.Fatal("expected latest turn id to be resolved")
-			}
+			invoked = true
 			return assistantReplyModelResult{Text: "默认来源", ReplyModelName: assistantReplyTargetModelName}, nil
 		}
 		reply, err := svc.renderTurnReply(nil, "tenant_1", principal, conversation.ConversationID, "", assistantRenderReplyRequest{})
 		if err != nil {
 			t.Fatalf("err=%v", err)
 		}
-		if reply.ReplySource != assistantReplySourceModel || reply.TurnID == "" {
+		if invoked {
+			t.Fatal("reply model hook should not be invoked")
+		}
+		if reply.ReplySource != assistantReplySourceProjection || reply.TurnID == "" {
 			t.Fatalf("reply=%+v", reply)
 		}
 	})
 
 	t.Run("empty text rejected", func(t *testing.T) {
+		invoked := false
 		assistantRenderReplyWithModelFn = func(_ context.Context, _ *assistantConversationService, prompt assistantReplyRenderPrompt) (assistantReplyModelResult, error) {
+			invoked = true
 			return assistantReplyModelResult{Text: " ", ReplyModelName: assistantReplyTargetModelName, Stage: prompt.Stage, Kind: prompt.Kind}, nil
 		}
-		_, err := svc.renderTurnReply(context.Background(), "tenant_1", principal, conversation.ConversationID, "turn_reply_1", assistantRenderReplyRequest{})
-		if !errors.Is(err, errAssistantReplyRenderFailed) {
+		reply, err := svc.renderTurnReply(context.Background(), "tenant_1", principal, conversation.ConversationID, "turn_reply_1", assistantRenderReplyRequest{Stage: "draft"})
+		if err != nil {
 			t.Fatalf("err=%v", err)
+		}
+		if invoked {
+			t.Fatal("reply model hook should not be invoked")
+		}
+		if strings.TrimSpace(reply.Text) == "" {
+			t.Fatalf("expected local projection reply, got=%+v", reply)
 		}
 	})
 

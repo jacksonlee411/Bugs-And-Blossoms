@@ -51,6 +51,7 @@ func newAssistantCommitCoverageEnv(t *testing.T, turnState string) (*assistantCo
 	turn.MappingVersion = capabilityPolicyVersionBaseline
 	turn.CreatedAt = now
 	turn.UpdatedAt = now
+	assistantTestAttachBusinessRoute(turn)
 	if err := svc.refreshTurnVersionTuple(context.Background(), "tenant_1", turn); err != nil {
 		t.Fatalf("refreshTurnVersionTuple err=%v", err)
 	}

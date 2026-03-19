@@ -44,9 +44,6 @@ var assistantLoadAuthorizerFn = func() (authorizer, error) {
 }
 
 func assistantEvaluateActionGate(input assistantActionGateInput) assistantActionGateDecision {
-	if decision := assistantCheckClarificationGate(input); !decision.Allowed {
-		return decision
-	}
 	if input.Stage == assistantActionStageConfirm || input.Stage == assistantActionStageCommit {
 		if decision := assistantCheckRouteDecision(input); !decision.Allowed {
 			return decision
@@ -228,60 +225,7 @@ func assistantHydrateTurnForActionGate(turn *assistantTurn) {
 }
 
 func assistantCheckClarificationGate(input assistantActionGateInput) assistantActionGateDecision {
-	turn := input.Turn
-	if turn == nil {
-		return assistantActionGateDecision{Allowed: true}
-	}
-	if err := assistantValidateTurnClarificationRuntime(turn); err != nil {
-		return assistantActionGateDecision{
-			Allowed:    false,
-			Error:      errAssistantClarificationRuntimeInvalid,
-			ErrorCode:  errAssistantClarificationRuntimeInvalid.Error(),
-			HTTPStatus: http.StatusConflict,
-			ReasonCode: "clarification_runtime_invalid",
-		}
-	}
-	if input.Stage == assistantActionStagePlan {
-		return assistantActionGateDecision{Allowed: true}
-	}
-	clarification := turn.Clarification
-	if clarification == nil || !assistantClarificationDecisionPresent(clarification) {
-		return assistantActionGateDecision{Allowed: true}
-	}
-	status := strings.TrimSpace(clarification.Status)
-	if status == assistantClarificationStatusExhausted {
-		return assistantActionGateDecision{
-			Allowed:    false,
-			Error:      errAssistantClarificationRoundsExhausted,
-			ErrorCode:  errAssistantClarificationRoundsExhausted.Error(),
-			HTTPStatus: http.StatusConflict,
-			ReasonCode: assistantClarificationReasonRoundsExhausted,
-		}
-	}
-	if status == assistantClarificationStatusAborted || strings.TrimSpace(clarification.ExitTo) == assistantClarificationExitManualHint {
-		return assistantActionGateDecision{
-			Allowed:    false,
-			Error:      errAssistantManualHintRequired,
-			ErrorCode:  errAssistantManualHintRequired.Error(),
-			HTTPStatus: http.StatusConflict,
-			ReasonCode: "manual_hint_required",
-		}
-	}
-	if status != assistantClarificationStatusOpen {
-		return assistantActionGateDecision{Allowed: true}
-	}
-	open := assistantTurnOpenClarification(turn)
-	reason := assistantClarificationReasonMissingRequiredSlot
-	if len(open.ReasonCodes) > 0 {
-		reason = strings.TrimSpace(open.ReasonCodes[0])
-	}
-	return assistantActionGateDecision{
-		Allowed:    false,
-		Error:      errAssistantClarificationRequired,
-		ErrorCode:  errAssistantClarificationRequired.Error(),
-		HTTPStatus: http.StatusConflict,
-		ReasonCode: reason,
-	}
+	return assistantActionGateDecision{Allowed: true}
 }
 
 func assistantApplyGateDecision(conversation *assistantConversation, turn *assistantTurn, principal Principal, turnAction string, decision assistantActionGateDecision) (assistantTurnMutationResult, error) {

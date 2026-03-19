@@ -1,6 +1,6 @@
 # DEV-PLAN-245：Assistant Reply Guidance Pack 与 Reply Realizer 计划
 
-**状态**: 规划中（2026-03-11 CST；本次修订将 `245` 细化为“可按文件直接实施”的 reply 表达统一蓝图，承接 `240E` 主计划与 `246` 阶段 E，并保持“事实仍由 turn/task/DTO 决定、reply 只负责表达与解释”的目标不变）
+**状态**: 已完成（2026-03-12 CST；Reply Guidance Pack + Reply Realizer 主链、资产扩面与测试门禁已完成并合入 `main`；执行记录见 `docs/dev-records/dev-plan-245-execution-log.md`）
 
 ## 1. 背景与定位
 1. [ ] `240E` 已冻结：Assistant 的知识主链必须区分“执行真相”和“解释表达”；reply 资产只能负责**用户可见表达、解释、总结、引导**，不得重算业务事实或推进状态机。

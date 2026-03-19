@@ -88,7 +88,7 @@ func newAssistantFallbackGateway() *assistantModelGateway {
 		},
 		adapters: map[string]assistantProviderAdapter{
 			"openai": assistantAdapterFunc(func(context.Context, string, assistantModelProviderConfig) ([]byte, error) {
-				return []byte(`{"choices":[{"message":{"content":"fallback"}}]}`), nil
+				return []byte(`{"action":"create_orgunit","route_kind":"business_action","intent_id":"org.orgunit_create","parent_ref_text":"鲜花组织","entity_name":"运营部","effective_date":"2026-01-01","user_visible_reply":"已生成草案，请确认。","readiness":"ready_for_confirm"}`), nil
 			}),
 		},
 	}
@@ -184,13 +184,12 @@ func TestAssistantConfirmTurn_PrechecksOrgTypeFieldEnablementAfterCandidatePick(
 		t.Fatalf("expected candidate_confirmation_required, got=%v", turn.DryRun.ValidationErrors)
 	}
 
-	if _, err := svc.confirmTurn("tenant-1", principal, conversation.ConversationID, turn.TurnID, "FLOWER-A"); err != errAssistantClarificationRequired {
-		t.Fatalf("expected clarification required, got=%v", err)
+	if _, err := svc.confirmTurn("tenant-1", principal, conversation.ConversationID, turn.TurnID, "FLOWER-A"); err != errAssistantConfirmationRequired {
+		t.Fatalf("expected confirmation required, got=%v", err)
 	}
 	mutatedTurn := svc.byID[conversation.ConversationID].Turns[len(svc.byID[conversation.ConversationID].Turns)-1]
 	mutatedTurn.Clarification = nil
 	mutatedTurn.ErrorCode = ""
-	mutatedTurn.RouteDecision.ClarificationRequired = false
 	assistantRefreshTurnDerivedFields(mutatedTurn)
 	if _, err := svc.confirmTurn("tenant-1", principal, conversation.ConversationID, turn.TurnID, "FLOWER-A"); err != errAssistantConfirmationRequired {
 		t.Fatalf("expected confirmation required after clarification resolved, got=%v", err)

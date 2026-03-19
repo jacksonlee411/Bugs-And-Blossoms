@@ -345,7 +345,7 @@ func TestAssistantPersistence_ApplyConfirmTurnBranches(t *testing.T) {
 	svc := newAssistantConversationService(newOrgUnitMemoryStore(), assistantWriteServiceStub{store: newOrgUnitMemoryStore()})
 	principal := Principal{ID: "actor_1", RoleSlug: "tenant-admin"}
 	mkTurn := func() *assistantTurn {
-		return &assistantTurn{
+		return assistantTestAttachBusinessRoute(&assistantTurn{
 			TurnID:         "turn_1",
 			State:          assistantStateValidated,
 			TraceID:        "trace_1",
@@ -356,7 +356,7 @@ func TestAssistantPersistence_ApplyConfirmTurnBranches(t *testing.T) {
 			},
 			Plan:       assistantBuildPlan(assistantIntentSpec{Action: assistantIntentCreateOrgUnit}),
 			Candidates: []assistantCandidate{{CandidateID: "c1", CandidateCode: "FLOWER-A"}, {CandidateID: "c2", CandidateCode: "FLOWER-B"}},
-		}
+		})
 	}
 	conversation := &assistantConversation{ConversationID: "conv_1"}
 
@@ -431,6 +431,7 @@ func TestAssistantPersistence_ApplyCommitTurnBranches(t *testing.T) {
 			ResolvedCandidateID: "c1",
 			Candidates:          []assistantCandidate{{CandidateID: "c1", CandidateCode: "FLOWER-A"}},
 		}
+		assistantTestAttachBusinessRoute(turn)
 		if err := svc.refreshTurnVersionTuple(context.Background(), "tenant_1", turn); err != nil {
 			t.Fatalf("refresh turn version tuple err=%v", err)
 		}
@@ -690,7 +691,7 @@ func TestAssistantPersistence_DBHelpersAndTxPaths(t *testing.T) {
 		t.Fatalf("transition defaults not populated: %+v", transition)
 	}
 
-	turn := &assistantTurn{TurnID: "turn_1", UserInput: "输入", State: assistantStateValidated, RiskTier: "high", RequestID: "req_1", TraceID: "trace_1", PolicyVersion: "2026-02-23", CompositionVersion: "2026-02-23", MappingVersion: "2026-02-23", Intent: assistantIntentSpec{Action: assistantIntentCreateOrgUnit}, Plan: assistantBuildPlan(assistantIntentSpec{Action: assistantIntentCreateOrgUnit}), Candidates: []assistantCandidate{{CandidateID: "c1", CandidateCode: "FLOWER-A"}}, DryRun: assistantBuildDryRun(assistantIntentSpec{Action: assistantIntentCreateOrgUnit, ParentRefText: "鲜花组织", EntityName: "运营部", EffectiveDate: "2026-01-01"}, nil, ""), CreatedAt: time.Now().UTC(), UpdatedAt: time.Now().UTC()}
+	turn := assistantTestAttachBusinessRoute(&assistantTurn{TurnID: "turn_1", UserInput: "输入", State: assistantStateValidated, RiskTier: "high", RequestID: "req_1", TraceID: "trace_1", PolicyVersion: "2026-02-23", CompositionVersion: "2026-02-23", MappingVersion: "2026-02-23", Intent: assistantIntentSpec{Action: assistantIntentCreateOrgUnit}, Plan: assistantBuildPlan(assistantIntentSpec{Action: assistantIntentCreateOrgUnit}), Candidates: []assistantCandidate{{CandidateID: "c1", CandidateCode: "FLOWER-A"}}, DryRun: assistantBuildDryRun(assistantIntentSpec{Action: assistantIntentCreateOrgUnit, ParentRefText: "鲜花组织", EntityName: "运营部", EffectiveDate: "2026-01-01"}, nil, ""), CreatedAt: time.Now().UTC(), UpdatedAt: time.Now().UTC()})
 	if err := svc.upsertTurnTx(ctx, tx, "tenant_1", "conv_1", turn); err != nil {
 		t.Fatalf("upsert err=%v", err)
 	}
@@ -879,7 +880,7 @@ func TestAssistantPersistence_PGFlowCreateConfirmCommitTurn(t *testing.T) {
 		UpdatedAt:      now,
 	}
 
-	turnForConfirm := &assistantTurn{
+	turnForConfirm := assistantTestAttachBusinessRoute(&assistantTurn{
 		TurnID:             "turn_confirm_1",
 		UserInput:          "请创建部门",
 		State:              assistantStateValidated,
@@ -912,7 +913,7 @@ func TestAssistantPersistence_PGFlowCreateConfirmCommitTurn(t *testing.T) {
 		DryRun:         assistantBuildDryRun(assistantIntentSpec{Action: assistantIntentCreateOrgUnit, ParentRefText: "鲜花组织", EntityName: "运营部", EffectiveDate: "2026-01-01"}, []assistantCandidate{{CandidateID: "c1", CandidateCode: "FLOWER-A"}, {CandidateID: "c2", CandidateCode: "FLOWER-B"}}, ""),
 		CreatedAt:      now,
 		UpdatedAt:      now,
-	}
+	})
 
 	turnForCommit := *turnForConfirm
 	turnForCommit.TurnID = "turn_commit_1"
@@ -921,6 +922,7 @@ func TestAssistantPersistence_PGFlowCreateConfirmCommitTurn(t *testing.T) {
 	turnForCommit.ResolutionSource = assistantResolutionUserConfirmed
 	turnForCommit.RequestID = "req_commit_1"
 	turnForCommit.TraceID = "trace_commit_1"
+	assistantTestAttachBusinessRoute(&turnForCommit)
 	if err := svc.refreshTurnVersionTuple(context.Background(), "tenant_1", &turnForCommit); err != nil {
 		t.Fatalf("refresh commit turn version tuple err=%v", err)
 	}

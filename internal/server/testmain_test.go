@@ -35,15 +35,14 @@ func TestMain(m *testing.M) {
 					} `json:"messages"`
 				}
 				_ = json.NewDecoder(r.Body).Decode(&req)
-				userInput := ""
+				prompt := ""
 				for i := len(req.Messages) - 1; i >= 0; i-- {
 					if strings.TrimSpace(req.Messages[i].Role) == "user" {
-						userInput = strings.TrimSpace(req.Messages[i].Content)
+						prompt = strings.TrimSpace(req.Messages[i].Content)
 						break
 					}
 				}
-				intent := assistantExtractIntent(userInput)
-				payload, _ := json.Marshal(intent)
+				payload, _ := json.Marshal(assistantSyntheticSemanticPayloadForPrompt(prompt))
 				w.Header().Set("Content-Type", "application/json")
 				_, _ = w.Write([]byte(`{"choices":[{"message":{"content":` + strconv.Quote(string(payload)) + `}}]}`))
 				return

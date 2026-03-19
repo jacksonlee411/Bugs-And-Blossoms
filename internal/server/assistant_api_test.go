@@ -22,6 +22,7 @@ func TestAssistantConversationFlow_AmbiguousCandidateConfirmAndCommit(t *testing
 	t.Setenv("ALLOWLIST_PATH", allowlistPath)
 	t.Setenv("AUTHZ_MODE", "disabled")
 	t.Setenv("AUTHZ_UNSAFE_ALLOW_DISABLED", "1")
+	t.Setenv("OPENAI_API_KEY", "dummy")
 
 	orgStore := newOrgUnitMemoryStore()
 	tenantID := "00000000-0000-0000-0000-000000000001"
@@ -33,6 +34,32 @@ func TestAssistantConversationFlow_AmbiguousCandidateConfirmAndCommit(t *testing
 	}
 
 	svc := newAssistantConversationService(orgStore, assistantWriteServiceStub{store: orgStore})
+	svc.modelGateway = &assistantModelGateway{
+		config: assistantModelConfig{
+			ProviderRouting: assistantProviderRouting{Strategy: "priority_failover", FallbackEnabled: true},
+			Providers: []assistantModelProviderConfig{{
+				Name:      "openai",
+				Enabled:   true,
+				Model:     "gpt-5-codex",
+				Endpoint:  "https://api.openai.com/v1",
+				TimeoutMS: 1000,
+				Retries:   0,
+				Priority:  1,
+				KeyRef:    "OPENAI_API_KEY",
+			}},
+		},
+		adapters: map[string]assistantProviderAdapter{
+			"openai": assistantAdapterFunc(func(_ context.Context, prompt string, _ assistantModelProviderConfig) ([]byte, error) {
+				userInput := strings.TrimSpace(assistantSemanticCurrentUserInput(prompt))
+				switch userInput {
+				case "FLOWER-A", "FLOWER-B":
+					return []byte(`{"action":"create_orgunit","route_kind":"business_action","intent_id":"org.orgunit_create","parent_ref_text":"鲜花组织","entity_name":"运营部","effective_date":"2026-01-01","selected_candidate_id":"` + userInput + `"}`), nil
+				default:
+					return []byte(`{"action":"create_orgunit","route_kind":"business_action","intent_id":"org.orgunit_create","parent_ref_text":"鲜花组织","entity_name":"运营部","effective_date":"2026-01-01"}`), nil
+				}
+			}),
+		},
+	}
 	principal := Principal{ID: "00000000-0000-0000-0000-0000000000aa", RoleSlug: "tenant-admin"}
 	conversation := svc.createConversation(tenantID, principal)
 	created, err := svc.createTurn(context.Background(), tenantID, principal, conversation.ConversationID, `在鲜花组织之下，新建一个名为运营部的部门，成立日期是2026年1月1日。通过AI对话，调用相关能力完成部门的创建任务。`)
@@ -108,6 +135,7 @@ func TestAssistantConversationFlow_CommitResultVisibleInOrgList(t *testing.T) {
 	t.Setenv("ALLOWLIST_PATH", allowlistPath)
 	t.Setenv("AUTHZ_MODE", "disabled")
 	t.Setenv("AUTHZ_UNSAFE_ALLOW_DISABLED", "1")
+	t.Setenv("OPENAI_API_KEY", "dummy")
 
 	orgStore := newOrgUnitMemoryStore()
 	tenantID := "00000000-0000-0000-0000-000000000001"
@@ -115,6 +143,7 @@ func TestAssistantConversationFlow_CommitResultVisibleInOrgList(t *testing.T) {
 		t.Fatal(err)
 	}
 	svc := newAssistantConversationService(orgStore, assistantWriteServiceStub{store: orgStore})
+	svc.modelGateway = assistantTestStaticSemanticGateway(`{"action":"create_orgunit","route_kind":"business_action","intent_id":"org.orgunit_create","parent_ref_text":"鲜花组织","entity_name":"人力资源部239A","effective_date":"2026-01-01"}`)
 	principal := Principal{ID: "00000000-0000-0000-0000-0000000000ab", RoleSlug: "tenant-admin"}
 	conversation := svc.createConversation(tenantID, principal)
 	created, err := svc.createTurn(context.Background(), tenantID, principal, conversation.ConversationID, "在鲜花组织之下，新建一个名为人力资源部239A的部门，成立日期是2026年1月1日。通过AI对话，调用相关能力完成部门的创建任务。")

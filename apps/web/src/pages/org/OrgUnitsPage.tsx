@@ -1446,6 +1446,10 @@ export function OrgUnitsPage() {
           label={t('org_search_label')}
           onChange={(event) => setTreeSearchInput(event.target.value)}
           onKeyDown={(event) => {
+            const nativeEvent = event.nativeEvent
+            if (nativeEvent.isComposing || nativeEvent.keyCode === 229) {
+              return
+            }
             if (event.key === 'Enter') {
               event.preventDefault()
               void handleTreeSearch()

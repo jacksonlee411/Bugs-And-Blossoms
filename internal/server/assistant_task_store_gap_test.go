@@ -32,7 +32,7 @@ func assistantTaskSampleTurn(now time.Time) *assistantTurn {
 	}
 	plan := assistantBuildPlan(intent)
 	plan.SkillManifestDigest = "skill_digest"
-	return &assistantTurn{
+	return assistantTestAttachBusinessRoute(&assistantTurn{
 		TurnID:             "turn_1",
 		UserInput:          "创建组织",
 		State:              assistantStateValidated,
@@ -57,7 +57,7 @@ func assistantTaskSampleTurn(now time.Time) *assistantTurn {
 		},
 		CreatedAt: now,
 		UpdatedAt: now,
-	}
+	})
 }
 
 func assistantTaskSnapshotFromTurn(turn *assistantTurn) assistantTaskContractSnapshot {

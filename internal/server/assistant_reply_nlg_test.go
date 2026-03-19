@@ -64,9 +64,9 @@ func TestAssistantReplyNLGPipeline(t *testing.T) {
 	original := assistantRenderReplyWithModelFn
 	defer func() { assistantRenderReplyWithModelFn = original }()
 
-	captured := assistantReplyRenderPrompt{}
+	invoked := false
 	assistantRenderReplyWithModelFn = func(_ context.Context, _ *assistantConversationService, prompt assistantReplyRenderPrompt) (assistantReplyModelResult, error) {
-		captured = prompt
+		invoked = true
 		return assistantReplyModelResult{
 			Text:           "已生成草案，请确认后继续。",
 			Kind:           "info",
@@ -85,23 +85,20 @@ func TestAssistantReplyNLGPipeline(t *testing.T) {
 	if err != nil {
 		t.Fatalf("renderTurnReply err=%v", err)
 	}
-	if reply.Text != "已生成草案，请确认后继续。" {
+	if strings.TrimSpace(reply.Text) == "" {
 		t.Fatalf("unexpected reply text=%q", reply.Text)
 	}
 	if reply.ReplyModelName != assistantReplyTargetModelName {
 		t.Fatalf("unexpected reply model=%q", reply.ReplyModelName)
 	}
-	if reply.ReplySource != assistantReplySourceModel {
+	if invoked {
+		t.Fatal("reply model hook should not be invoked")
+	}
+	if reply.ReplySource != assistantReplySourceProjection {
 		t.Fatalf("unexpected reply source=%q", reply.ReplySource)
 	}
 	if reply.UsedFallback {
 		t.Fatal("reply should not use fallback")
-	}
-	if captured.ConversationID != conversation.ConversationID || captured.TurnID != turn.TurnID {
-		t.Fatalf("unexpected prompt identity: conv=%q turn=%q", captured.ConversationID, captured.TurnID)
-	}
-	if captured.Machine.IntentAction != assistantIntentCreateOrgUnit {
-		t.Fatalf("expected intent action create_orgunit, got=%q", captured.Machine.IntentAction)
 	}
 	storedConversation, err := svc.getConversation("tenant_1", principal.ID, conversation.ConversationID)
 	if err != nil {
@@ -111,7 +108,7 @@ func TestAssistantReplyNLGPipeline(t *testing.T) {
 	if storedTurn == nil || storedTurn.ReplyNLG == nil {
 		t.Fatal("expected reply_nlg persisted on turn")
 	}
-	if storedTurn.ReplyNLG.ReplySource != assistantReplySourceModel {
+	if storedTurn.ReplyNLG.ReplySource != assistantReplySourceProjection {
 		t.Fatalf("unexpected persisted reply source=%q", storedTurn.ReplyNLG.ReplySource)
 	}
 }
@@ -123,7 +120,9 @@ func TestAssistantReplyModelTargetGate(t *testing.T) {
 	original := assistantRenderReplyWithModelFn
 	defer func() { assistantRenderReplyWithModelFn = original }()
 
+	invoked := false
 	assistantRenderReplyWithModelFn = func(_ context.Context, _ *assistantConversationService, _ assistantReplyRenderPrompt) (assistantReplyModelResult, error) {
+		invoked = true
 		return assistantReplyModelResult{
 			Text:           "模型命中失败",
 			Kind:           "error",
@@ -132,13 +131,19 @@ func TestAssistantReplyModelTargetGate(t *testing.T) {
 		}, nil
 	}
 
-	_, err := svc.renderTurnReply(context.Background(), "tenant_1", principal, conversation.ConversationID, turn.TurnID, assistantRenderReplyRequest{
+	reply, err := svc.renderTurnReply(context.Background(), "tenant_1", principal, conversation.ConversationID, turn.TurnID, assistantRenderReplyRequest{
 		Stage:   "commit_failed",
 		Kind:    "error",
 		Outcome: "failure",
 	})
-	if !errors.Is(err, errAssistantReplyModelTargetMismatch) {
-		t.Fatalf("expected errAssistantReplyModelTargetMismatch, got=%v", err)
+	if err != nil {
+		t.Fatalf("renderTurnReply err=%v", err)
+	}
+	if invoked {
+		t.Fatal("reply model hook should not be invoked")
+	}
+	if reply.ReplySource != assistantReplySourceFallback && reply.ReplySource != assistantReplySourceProjection {
+		t.Fatalf("unexpected reply=%+v", reply)
 	}
 }
 
@@ -200,9 +205,9 @@ func TestAssistantRenderReply_AllowsMissingTurnWhenExplicitlyRequested(t *testin
 	original := assistantRenderReplyWithModelFn
 	defer func() { assistantRenderReplyWithModelFn = original }()
 
-	captured := assistantReplyRenderPrompt{}
+	invoked := false
 	assistantRenderReplyWithModelFn = func(_ context.Context, _ *assistantConversationService, prompt assistantReplyRenderPrompt) (assistantReplyModelResult, error) {
-		captured = prompt
+		invoked = true
 		return assistantReplyModelResult{
 			Text:           "请补充成立日期后继续。",
 			Kind:           "warning",
@@ -227,14 +232,17 @@ func TestAssistantRenderReply_AllowsMissingTurnWhenExplicitlyRequested(t *testin
 	if reply == nil || strings.TrimSpace(reply.Text) == "" {
 		t.Fatalf("expected rendered reply, got=%+v", reply)
 	}
-	if captured.ConversationID != conversation.ConversationID {
-		t.Fatalf("unexpected conversation id=%q", captured.ConversationID)
+	if invoked {
+		t.Fatal("reply model hook should not be invoked")
 	}
-	if captured.TurnID != "missing-turn-context" {
-		t.Fatalf("expected missing-turn sentinel id, got=%q", captured.TurnID)
+	if reply.ConversationID != conversation.ConversationID {
+		t.Fatalf("unexpected conversation id=%q", reply.ConversationID)
 	}
-	if captured.Machine.TurnState != "" {
-		t.Fatalf("expected empty machine state without turn, got=%+v", captured.Machine)
+	if reply.TurnID != "missing-turn-context" {
+		t.Fatalf("expected missing-turn sentinel id, got=%q", reply.TurnID)
+	}
+	if !reply.UsedFallback || reply.ReplySource != assistantReplySourceFallback {
+		t.Fatalf("expected fallback reply without turn context, got=%+v", reply)
 	}
 }
 
@@ -245,9 +253,9 @@ func TestAssistantReplyNLGFailurePipeline(t *testing.T) {
 	original := assistantRenderReplyWithModelFn
 	defer func() { assistantRenderReplyWithModelFn = original }()
 
-	captured := assistantReplyRenderPrompt{}
+	invoked := false
 	assistantRenderReplyWithModelFn = func(_ context.Context, _ *assistantConversationService, prompt assistantReplyRenderPrompt) (assistantReplyModelResult, error) {
-		captured = prompt
+		invoked = true
 		return assistantReplyModelResult{
 			Text:           "这次提交暂未成功，请检查条件后重试。",
 			Kind:           "error",
@@ -268,17 +276,14 @@ func TestAssistantReplyNLGFailurePipeline(t *testing.T) {
 	if err != nil {
 		t.Fatalf("renderTurnReply err=%v", err)
 	}
-	if reply.ReplySource != assistantReplySourceModel {
+	if invoked {
+		t.Fatal("reply model hook should not be invoked")
+	}
+	if reply.ReplySource != assistantReplySourceFallback && reply.ReplySource != assistantReplySourceProjection {
 		t.Fatalf("unexpected reply source=%q", reply.ReplySource)
 	}
-	if captured.Outcome != "failure" {
-		t.Fatalf("expected failure outcome, got=%q", captured.Outcome)
-	}
-	if captured.ErrorCode != "conversation_state_invalid" {
-		t.Fatalf("expected error code passed through, got=%q", captured.ErrorCode)
-	}
-	if captured.TurnID != turn.TurnID {
-		t.Fatalf("expected real turn id, got=%q", captured.TurnID)
+	if reply.Stage != "commit_failed" {
+		t.Fatalf("unexpected reply=%+v", reply)
 	}
 }
 

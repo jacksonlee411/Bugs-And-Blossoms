@@ -65,7 +65,7 @@ func TestAssistantPersistence243_CreateTurnPGBranches(t *testing.T) {
 	t.Run("route decision error from builder", func(t *testing.T) {
 		svc := newAssistantConversationService(newOrgUnitMemoryStore(), assistantWriteServiceStub{store: newOrgUnitMemoryStore()})
 		svc.pool = assistFakeTxBeginner{tx: assistant243CreateTurnPGTx(now, "actor_1", nil)}
-		assistantBuildIntentRouteDecisionFn = func(string, assistantResolveIntentResult, assistantIntentSpec, *assistantKnowledgeRuntime, *assistantTurn) (assistantIntentRouteDecision, error) {
+		assistantBuildIntentRouteDecisionFn = func(string, assistantResolveIntentResult, assistantIntentSpec, *assistantKnowledgeRuntime) (assistantIntentRouteDecision, error) {
 			return assistantIntentRouteDecision{}, errAssistantRouteRuntimeInvalid
 		}
 		if _, err := svc.createTurnPG(context.Background(), "tenant_1", principal, "conv_pg", "仅生成计划"); !errors.Is(err, errAssistantRouteRuntimeInvalid) {
@@ -73,7 +73,7 @@ func TestAssistantPersistence243_CreateTurnPGBranches(t *testing.T) {
 		}
 	})
 
-	t.Run("resume restores action and candidate selection", func(t *testing.T) {
+	t.Run("clarification resume hook no longer restores local action and candidate selection", func(t *testing.T) {
 		store := newOrgUnitMemoryStore()
 		if _, err := store.CreateNodeCurrent(context.Background(), "tenant_1", "2026-01-01", "FLOWER-A", "鲜花组织", "", true); err != nil {
 			t.Fatalf("create node err=%v", err)
@@ -108,7 +108,9 @@ func TestAssistantPersistence243_CreateTurnPGBranches(t *testing.T) {
 		svc.pool = assistFakeTxBeginner{
 			tx: assistant243CreateTurnPGTx(now, "actor_1", &assistFakeRows{rows: [][]any{assistantTurnRowValues(pending)}}),
 		}
+		invoked := false
 		assistantResumeFromClarificationFn = func(_ *assistantTurn, _ string, _ assistantIntentSpec) assistantClarificationResumeResult {
+			invoked = true
 			return assistantClarificationResumeResult{
 				Intent: assistantIntentSpec{
 					Action:              assistantIntentCreateOrgUnit,
@@ -121,7 +123,7 @@ func TestAssistantPersistence243_CreateTurnPGBranches(t *testing.T) {
 				SelectedCandidateID: "FLOWER-A",
 			}
 		}
-		assistantBuildIntentRouteDecisionFn = func(string, assistantResolveIntentResult, assistantIntentSpec, *assistantKnowledgeRuntime, *assistantTurn) (assistantIntentRouteDecision, error) {
+		assistantBuildIntentRouteDecisionFn = func(string, assistantResolveIntentResult, assistantIntentSpec, *assistantKnowledgeRuntime) (assistantIntentRouteDecision, error) {
 			return assistantIntentRouteDecision{
 				RouteKind:               assistantRouteKindKnowledgeQA,
 				IntentID:                "knowledge.general_qa",
@@ -138,7 +140,10 @@ func TestAssistantPersistence243_CreateTurnPGBranches(t *testing.T) {
 			t.Fatalf("createTurnPG err=%v", err)
 		}
 		last := latestTurn(got)
-		if last == nil || last.Intent.Action != assistantIntentCreateOrgUnit || last.ResolvedCandidateID != "FLOWER-A" || last.ResolutionSource != assistantResolutionUserConfirmed {
+		if invoked {
+			t.Fatal("clarification resume hook should not be invoked by semantic orchestrator path")
+		}
+		if last == nil || last.Intent.Action != "" || last.SelectedCandidateID != "" || last.ResolvedCandidateID != "" || last.ResolutionSource != "" {
 			t.Fatalf("unexpected turn=%+v", last)
 		}
 	})
@@ -150,7 +155,7 @@ func TestAssistantPersistence243_CreateTurnPGBranches(t *testing.T) {
 		}
 		svc := newAssistantConversationService(store, assistantWriteServiceStub{store: store})
 		svc.pool = assistFakeTxBeginner{tx: assistant243CreateTurnPGTx(now, "actor_1", nil)}
-		assistantBuildIntentRouteDecisionFn = func(string, assistantResolveIntentResult, assistantIntentSpec, *assistantKnowledgeRuntime, *assistantTurn) (assistantIntentRouteDecision, error) {
+		assistantBuildIntentRouteDecisionFn = func(string, assistantResolveIntentResult, assistantIntentSpec, *assistantKnowledgeRuntime) (assistantIntentRouteDecision, error) {
 			return assistant243BusinessRouteDecision(), nil
 		}
 		capabilityDefinitionByKey = map[string]capabilityDefinition{}
@@ -174,7 +179,7 @@ func TestAssistantPersistence243_CreateTurnPGBranches(t *testing.T) {
 		runtime.ReplyGuidanceVersion = ""
 		svc.knowledgeRuntime = runtime
 		svc.pool = assistFakeTxBeginner{tx: assistant243CreateTurnPGTx(now, "actor_1", nil)}
-		assistantBuildIntentRouteDecisionFn = func(string, assistantResolveIntentResult, assistantIntentSpec, *assistantKnowledgeRuntime, *assistantTurn) (assistantIntentRouteDecision, error) {
+		assistantBuildIntentRouteDecisionFn = func(string, assistantResolveIntentResult, assistantIntentSpec, *assistantKnowledgeRuntime) (assistantIntentRouteDecision, error) {
 			return assistant243BusinessRouteDecision(), nil
 		}
 		if _, err := svc.createTurnPG(context.Background(), "tenant_1", principal, "conv_pg", "在鲜花组织之下，新建一个名为运营部的部门，成立日期是2026-01-01"); !errors.Is(err, errAssistantPlanContractVersionMismatch) {
@@ -189,7 +194,7 @@ func TestAssistantPersistence243_CreateTurnPGBranches(t *testing.T) {
 		}
 		svc := newAssistantConversationService(store, assistantWriteServiceStub{store: store})
 		svc.pool = assistFakeTxBeginner{tx: assistant243CreateTurnPGTx(now, "actor_1", nil)}
-		assistantBuildIntentRouteDecisionFn = func(string, assistantResolveIntentResult, assistantIntentSpec, *assistantKnowledgeRuntime, *assistantTurn) (assistantIntentRouteDecision, error) {
+		assistantBuildIntentRouteDecisionFn = func(string, assistantResolveIntentResult, assistantIntentSpec, *assistantKnowledgeRuntime) (assistantIntentRouteDecision, error) {
 			return assistant243BusinessRouteDecision(), nil
 		}
 		assistantLoadAuthorizerFn = func() (authorizer, error) {

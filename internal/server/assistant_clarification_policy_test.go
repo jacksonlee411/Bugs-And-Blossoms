@@ -3,7 +3,6 @@ package server
 import (
 	"errors"
 	"testing"
-	"time"
 )
 
 func assistantClarificationRuntimeFixture() *assistantKnowledgeRuntime {
@@ -170,8 +169,7 @@ func TestAssistantClarificationGate_BlocksConfirmAndCommit(t *testing.T) {
 	}
 	defer func() { assistantLoadAuthorizerFn = original }()
 
-	spec, ok := assistantLookupDefaultActionSpec(assistantIntentCreateOrgUnit)
-	if !ok {
+	if _, ok := assistantLookupDefaultActionSpec(assistantIntentCreateOrgUnit); !ok {
 		t.Fatal("missing create action spec")
 	}
 	turn := &assistantTurn{
@@ -201,27 +199,27 @@ func TestAssistantClarificationGate_BlocksConfirmAndCommit(t *testing.T) {
 		Phase: assistantPhaseAwaitMissingFields,
 	}
 
-	confirm := assistantEvaluateActionGate(assistantActionGateInput{Stage: assistantActionStageConfirm, Action: spec, Turn: turn})
-	if confirm.Allowed || !errors.Is(confirm.Error, errAssistantClarificationRequired) {
-		t.Fatalf("expected clarification required on confirm, got=%+v", confirm)
+	confirm := assistantCheckClarificationGate(assistantActionGateInput{Stage: assistantActionStageConfirm, Turn: turn})
+	if !confirm.Allowed {
+		t.Fatalf("clarification should be projection-only on confirm, got=%+v", confirm)
 	}
-	commit := assistantEvaluateActionGate(assistantActionGateInput{Stage: assistantActionStageCommit, Action: spec, Turn: turn})
-	if commit.Allowed || !errors.Is(commit.Error, errAssistantClarificationRequired) {
-		t.Fatalf("expected clarification required on commit, got=%+v", commit)
+	commit := assistantCheckClarificationGate(assistantActionGateInput{Stage: assistantActionStageCommit, Turn: turn})
+	if !commit.Allowed {
+		t.Fatalf("clarification should be projection-only on commit, got=%+v", commit)
 	}
 
 	turn.Clarification.Status = assistantClarificationStatusExhausted
 	turn.Phase = assistantPhaseFailed
-	commit = assistantEvaluateActionGate(assistantActionGateInput{Stage: assistantActionStageCommit, Action: spec, Turn: turn})
-	if commit.Allowed || !errors.Is(commit.Error, errAssistantClarificationRoundsExhausted) {
-		t.Fatalf("expected rounds exhausted, got=%+v", commit)
+	commit = assistantCheckClarificationGate(assistantActionGateInput{Stage: assistantActionStageCommit, Turn: turn})
+	if !commit.Allowed {
+		t.Fatalf("exhausted clarification should remain projection-only, got=%+v", commit)
 	}
 
 	turn.Clarification.Status = assistantClarificationStatusAborted
 	turn.Clarification.ExitTo = assistantClarificationExitManualHint
-	commit = assistantEvaluateActionGate(assistantActionGateInput{Stage: assistantActionStageCommit, Action: spec, Turn: turn})
-	if commit.Allowed || !errors.Is(commit.Error, errAssistantManualHintRequired) {
-		t.Fatalf("expected manual hint required, got=%+v", commit)
+	commit = assistantCheckClarificationGate(assistantActionGateInput{Stage: assistantActionStageCommit, Turn: turn})
+	if !commit.Allowed {
+		t.Fatalf("aborted clarification should remain projection-only, got=%+v", commit)
 	}
 }
 
@@ -348,7 +346,6 @@ func TestAssistantClarificationPolicy_HelperCoverage(t *testing.T) {
 
 	t.Run("action helpers", func(t *testing.T) {
 		candidates := assistantClarificationActionCandidates(
-			"请创建并移动组织",
 			assistantIntentRouteDecision{CandidateActionIDs: []string{assistantIntentMoveOrgUnit}},
 			assistantIntentSpec{Action: assistantIntentCreateOrgUnit},
 		)
@@ -595,8 +592,8 @@ func TestAssistantClarificationPolicy_HelperCoverage(t *testing.T) {
 			DryRun:        assistantDryRunResult{},
 			Runtime:       runtime,
 		})
-		if formatByRelative == nil || formatByRelative.ClarificationKind != assistantClarificationKindFormatConfirm {
-			t.Fatalf("unexpected relative-date format=%+v", formatByRelative)
+		if formatByRelative != nil {
+			t.Fatalf("relative-date input should wait for semantic model, got=%+v", formatByRelative)
 		}
 
 		missing := assistantBuildClarificationDecision(assistantClarificationBuildInput{
@@ -653,37 +650,9 @@ func TestAssistantClarificationPolicy_HelperCoverage(t *testing.T) {
 }
 
 func TestAssistantClarificationPolicy_ParsingAndResumeCoverage(t *testing.T) {
-	t.Run("date parsing helpers", func(t *testing.T) {
+	t.Run("date validation helper", func(t *testing.T) {
 		if !assistantDateISOYMD("2026-03-11") || assistantDateISOYMD("2026/03/11") || assistantDateISOYMD("") {
 			t.Fatal("date iso validation mismatch")
-		}
-		if !assistantContainsRelativeDateToken("下个月一号生效") || assistantContainsRelativeDateToken("普通文本") {
-			t.Fatal("relative token detection mismatch")
-		}
-		now := time.Date(2026, 3, 11, 9, 0, 0, 0, time.UTC)
-		if got, ok := assistantNormalizeDateFromInput("2026-03-20", now); !ok || got != "2026-03-20" {
-			t.Fatalf("iso extract got=%q ok=%v", got, ok)
-		}
-		if got, ok := assistantNormalizeDateFromInput("今天生效", now); !ok || got != "2026-03-11" {
-			t.Fatalf("today normalize got=%q ok=%v", got, ok)
-		}
-		if got, ok := assistantNormalizeDateFromInput("明天生效", now); !ok || got != "2026-03-12" {
-			t.Fatalf("tomorrow normalize got=%q ok=%v", got, ok)
-		}
-		if got, ok := assistantNormalizeDateFromInput("后天生效", now); !ok || got != "2026-03-13" {
-			t.Fatalf("day after normalize got=%q ok=%v", got, ok)
-		}
-		if got, ok := assistantNormalizeDateFromInput("下个月1号", now); !ok || got != "2026-04-01" {
-			t.Fatalf("next month normalize got=%q ok=%v", got, ok)
-		}
-		if got, ok := assistantNormalizeDateFromInput("今天", time.Time{}); !ok || !assistantDateISOYMD(got) {
-			t.Fatalf("zero-time normalize got=%q ok=%v", got, ok)
-		}
-		if got, ok := assistantNormalizeDateFromInput("无法识别", now); ok || got != "" {
-			t.Fatalf("unexpected normalize result got=%q ok=%v", got, ok)
-		}
-		if got, ok := assistantNormalizeDateFromInput("", now); ok || got != "" {
-			t.Fatalf("empty input normalize got=%q ok=%v", got, ok)
 		}
 	})
 
@@ -738,8 +707,8 @@ func TestAssistantClarificationPolicy_ParsingAndResumeCoverage(t *testing.T) {
 		}
 
 		intentDisambiguate := &assistantTurn{Clarification: &assistantClarificationDecision{Status: assistantClarificationStatusOpen, ClarificationKind: assistantClarificationKindIntentDisambiguate}}
-		if out := assistantResumeFromClarification(intentDisambiguate, "请创建组织", baseIntent); !out.Progress || out.Intent.Action != assistantIntentCreateOrgUnit {
-			t.Fatalf("intent disambiguate result=%+v", out)
+		if out := assistantResumeFromClarification(intentDisambiguate, "请创建组织", baseIntent); out.Progress || out.Intent.Action != assistantIntentPlanOnly {
+			t.Fatalf("intent disambiguate should wait for semantic model, got=%+v", out)
 		}
 
 		candidatePick := &assistantTurn{
@@ -768,8 +737,8 @@ func TestAssistantClarificationPolicy_ParsingAndResumeCoverage(t *testing.T) {
 				MissingSlots:      []string{"target_effective_date"},
 			},
 		}
-		if out := assistantResumeFromClarification(formatTarget, "明天", assistantIntentSpec{Action: assistantIntentCorrectOrgUnit}); !out.Progress || out.Intent.TargetEffectiveDate == "" {
-			t.Fatalf("format target resume=%+v", out)
+		if out := assistantResumeFromClarification(formatTarget, "明天", assistantIntentSpec{Action: assistantIntentCorrectOrgUnit}); out.Progress || out.Intent.TargetEffectiveDate != "" {
+			t.Fatalf("format target should wait for semantic model=%+v", out)
 		}
 		formatDefault := &assistantTurn{
 			Clarification: &assistantClarificationDecision{
@@ -777,66 +746,66 @@ func TestAssistantClarificationPolicy_ParsingAndResumeCoverage(t *testing.T) {
 				ClarificationKind: assistantClarificationKindFormatConfirm,
 			},
 		}
-		if out := assistantResumeFromClarification(formatDefault, "后天", assistantIntentSpec{Action: assistantIntentCreateOrgUnit}); !out.Progress || out.Intent.EffectiveDate == "" {
-			t.Fatalf("format default resume=%+v", out)
+		if out := assistantResumeFromClarification(formatDefault, "后天", assistantIntentSpec{Action: assistantIntentCreateOrgUnit}); out.Progress || out.Intent.EffectiveDate != "" {
+			t.Fatalf("format default should wait for semantic model=%+v", out)
 		}
 
 		if out := assistantResumeFromClarification(&assistantTurn{
 			Clarification: &assistantClarificationDecision{Status: assistantClarificationStatusOpen, ClarificationKind: assistantClarificationKindMissingSlots, MissingSlots: []string{"effective_date"}},
-		}, "今天", assistantIntentSpec{Action: assistantIntentCreateOrgUnit}); !out.Progress || out.Intent.EffectiveDate == "" {
-			t.Fatalf("missing effective_date normalize=%+v", out)
+		}, "今天", assistantIntentSpec{Action: assistantIntentCreateOrgUnit}); out.Progress || out.Intent.EffectiveDate != "" {
+			t.Fatalf("missing effective_date should wait for semantic model=%+v", out)
 		}
 		if out := assistantResumeFromClarification(&assistantTurn{
 			Clarification: &assistantClarificationDecision{Status: assistantClarificationStatusOpen, ClarificationKind: assistantClarificationKindMissingSlots, MissingSlots: []string{"effective_date"}},
-		}, "任意输入", assistantIntentSpec{Action: assistantIntentCreateOrgUnit, EffectiveDate: "2026-03-20"}); !out.Progress {
-			t.Fatalf("existing effective_date should progress=%+v", out)
+		}, "任意输入", assistantIntentSpec{Action: assistantIntentCreateOrgUnit, EffectiveDate: "2026-03-20"}); out.Progress {
+			t.Fatalf("existing effective_date should be observed in next semantic pass, got=%+v", out)
 		}
 		if out := assistantResumeFromClarification(&assistantTurn{
 			Clarification: &assistantClarificationDecision{Status: assistantClarificationStatusOpen, ClarificationKind: assistantClarificationKindMissingSlots, MissingSlots: []string{"target_effective_date"}},
-		}, "明天", assistantIntentSpec{Action: assistantIntentCorrectOrgUnit}); !out.Progress || out.Intent.TargetEffectiveDate == "" {
-			t.Fatalf("missing target normalize=%+v", out)
+		}, "明天", assistantIntentSpec{Action: assistantIntentCorrectOrgUnit}); out.Progress || out.Intent.TargetEffectiveDate != "" {
+			t.Fatalf("missing target should wait for semantic model=%+v", out)
 		}
 		if out := assistantResumeFromClarification(&assistantTurn{
 			Clarification: &assistantClarificationDecision{Status: assistantClarificationStatusOpen, ClarificationKind: assistantClarificationKindMissingSlots, MissingSlots: []string{"target_effective_date"}},
-		}, "任意输入", assistantIntentSpec{Action: assistantIntentCorrectOrgUnit, TargetEffectiveDate: "2026-03-30"}); !out.Progress {
-			t.Fatalf("existing target_effective_date should progress=%+v", out)
+		}, "任意输入", assistantIntentSpec{Action: assistantIntentCorrectOrgUnit, TargetEffectiveDate: "2026-03-30"}); out.Progress {
+			t.Fatalf("existing target_effective_date should be observed in next semantic pass, got=%+v", out)
 		}
 		if out := assistantResumeFromClarification(&assistantTurn{
 			Clarification: &assistantClarificationDecision{Status: assistantClarificationStatusOpen, ClarificationKind: assistantClarificationKindMissingSlots, MissingSlots: []string{"entity_name"}},
-		}, "无关输入", assistantIntentSpec{Action: assistantIntentCreateOrgUnit, EntityName: "运营部"}); !out.Progress {
-			t.Fatalf("entity_name should progress=%+v", out)
+		}, "无关输入", assistantIntentSpec{Action: assistantIntentCreateOrgUnit, EntityName: "运营部"}); out.Progress {
+			t.Fatalf("entity_name should be observed in next semantic pass, got=%+v", out)
 		}
 		if out := assistantResumeFromClarification(&assistantTurn{
 			Clarification: &assistantClarificationDecision{Status: assistantClarificationStatusOpen, ClarificationKind: assistantClarificationKindMissingSlots, MissingSlots: []string{"parent_ref_text"}},
-		}, "无关输入", assistantIntentSpec{Action: assistantIntentCreateOrgUnit, ParentRefText: "鲜花组织"}); !out.Progress {
-			t.Fatalf("parent_ref_text should progress=%+v", out)
+		}, "无关输入", assistantIntentSpec{Action: assistantIntentCreateOrgUnit, ParentRefText: "鲜花组织"}); out.Progress {
+			t.Fatalf("parent_ref_text should be observed in next semantic pass, got=%+v", out)
 		}
 		if out := assistantResumeFromClarification(&assistantTurn{
 			Clarification: &assistantClarificationDecision{Status: assistantClarificationStatusOpen, ClarificationKind: assistantClarificationKindMissingSlots, MissingSlots: []string{"new_parent_ref_text"}},
-		}, "无关输入", assistantIntentSpec{Action: assistantIntentMoveOrgUnit, NewParentRefText: "新上级"}); !out.Progress {
-			t.Fatalf("new_parent_ref_text should progress=%+v", out)
+		}, "无关输入", assistantIntentSpec{Action: assistantIntentMoveOrgUnit, NewParentRefText: "新上级"}); out.Progress {
+			t.Fatalf("new_parent_ref_text should be observed in next semantic pass, got=%+v", out)
 		}
 		if out := assistantResumeFromClarification(&assistantTurn{
 			Clarification: &assistantClarificationDecision{Status: assistantClarificationStatusOpen, ClarificationKind: assistantClarificationKindMissingSlots, MissingSlots: []string{"org_code"}},
-		}, "无关输入", assistantIntentSpec{Action: assistantIntentRenameOrgUnit, OrgCode: "ORG-1"}); !out.Progress {
-			t.Fatalf("org_code should progress=%+v", out)
+		}, "无关输入", assistantIntentSpec{Action: assistantIntentRenameOrgUnit, OrgCode: "ORG-1"}); out.Progress {
+			t.Fatalf("org_code should be observed in next semantic pass, got=%+v", out)
 		}
 		if out := assistantResumeFromClarification(&assistantTurn{
 			Clarification: &assistantClarificationDecision{Status: assistantClarificationStatusOpen, ClarificationKind: assistantClarificationKindMissingSlots, MissingSlots: []string{"new_name"}},
-		}, "无关输入", assistantIntentSpec{Action: assistantIntentRenameOrgUnit, NewName: "新名字"}); !out.Progress {
-			t.Fatalf("new_name should progress=%+v", out)
+		}, "无关输入", assistantIntentSpec{Action: assistantIntentRenameOrgUnit, NewName: "新名字"}); out.Progress {
+			t.Fatalf("new_name should be observed in next semantic pass, got=%+v", out)
 		}
 		if out := assistantResumeFromClarification(&assistantTurn{
 			Clarification: &assistantClarificationDecision{Status: assistantClarificationStatusOpen, ClarificationKind: assistantClarificationKindMissingSlots, MissingSlots: []string{"change_fields"}},
-		}, "无关输入", assistantIntentSpec{Action: assistantIntentCorrectOrgUnit, NewParentRefText: "新上级"}); !out.Progress {
-			t.Fatalf("change_fields should progress=%+v", out)
+		}, "无关输入", assistantIntentSpec{Action: assistantIntentCorrectOrgUnit, NewParentRefText: "新上级"}); out.Progress {
+			t.Fatalf("change_fields should be observed in next semantic pass, got=%+v", out)
 		}
 		fallbackMissing := &assistantTurn{
 			Clarification: &assistantClarificationDecision{Status: assistantClarificationStatusOpen, ClarificationKind: assistantClarificationKindMissingSlots},
 			DryRun:        assistantDryRunResult{ValidationErrors: []string{"missing_org_code"}},
 		}
-		if out := assistantResumeFromClarification(fallbackMissing, "无关输入", assistantIntentSpec{Action: assistantIntentRenameOrgUnit, OrgCode: "ORG-2"}); !out.Progress {
-			t.Fatalf("fallback missing slots should progress=%+v", out)
+		if out := assistantResumeFromClarification(fallbackMissing, "无关输入", assistantIntentSpec{Action: assistantIntentRenameOrgUnit, OrgCode: "ORG-2"}); out.Progress {
+			t.Fatalf("fallback missing slots should wait for semantic model=%+v", out)
 		}
 	})
 

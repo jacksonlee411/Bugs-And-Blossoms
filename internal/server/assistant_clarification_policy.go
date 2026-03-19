@@ -199,15 +199,8 @@ func assistantClarificationPromptTemplate(runtime *assistantKnowledgeRuntime, ro
 	return ""
 }
 
-func assistantClarificationActionCandidates(userInput string, routeDecision assistantIntentRouteDecision, intent assistantIntentSpec) []string {
+func assistantClarificationActionCandidates(routeDecision assistantIntentRouteDecision, intent assistantIntentSpec) []string {
 	candidates := append([]string(nil), routeDecision.CandidateActionIDs...)
-	text := strings.ToLower(strings.TrimSpace(userInput))
-	if strings.Contains(text, "新建") || strings.Contains(text, "创建") || strings.Contains(text, "create") {
-		candidates = append(candidates, assistantIntentCreateOrgUnit)
-	}
-	if strings.Contains(text, "移动") || strings.Contains(text, "move") {
-		candidates = append(candidates, assistantIntentMoveOrgUnit)
-	}
 	if action := strings.TrimSpace(intent.Action); action != "" && action != assistantIntentPlanOnly {
 		candidates = append(candidates, action)
 	}
@@ -348,7 +341,7 @@ func assistantBuildClarificationDecision(input assistantClarificationBuildInput)
 	requiredSlots := assistantClarificationRequiredSlots(input.Runtime, input.RouteDecision, input.Intent)
 	selectedCandidateID := strings.TrimSpace(firstNonEmpty(input.SelectedCandidateID, input.ResolvedCandidateID))
 	actionStable := assistantClarificationActionStable(input.Intent, input.RouteDecision)
-	actionCandidates := assistantClarificationActionCandidates(input.UserInput, input.RouteDecision, input.Intent)
+	actionCandidates := assistantClarificationActionCandidates(input.RouteDecision, input.Intent)
 	routeKind := strings.TrimSpace(input.RouteDecision.RouteKind)
 	if routeKind == "" {
 		routeKind = strings.TrimSpace(input.Intent.RouteKind)
@@ -404,9 +397,6 @@ func assistantBuildClarificationDecision(input assistantClarificationBuildInput)
 		if assistantSliceHas(validationErrors, "invalid_target_effective_date_format") {
 			formatMissing = append(formatMissing, "target_effective_date")
 		}
-		if len(formatMissing) == 0 && assistantContainsRelativeDateToken(input.UserInput) && !assistantDateISOYMD(input.Intent.EffectiveDate) {
-			formatMissing = append(formatMissing, "effective_date")
-		}
 		if len(formatMissing) > 0 {
 			decision := &assistantClarificationDecision{
 				ClarificationKind: assistantClarificationKindFormatConfirm,
@@ -439,47 +429,6 @@ func assistantDateISOYMD(value string) bool {
 	}
 	parsed, err := time.Parse("2006-01-02", text)
 	return err == nil && parsed.Format("2006-01-02") == text
-}
-
-func assistantContainsRelativeDateToken(input string) bool {
-	text := strings.TrimSpace(input)
-	if text == "" {
-		return false
-	}
-	return strings.Contains(text, "今天") ||
-		strings.Contains(text, "明天") ||
-		strings.Contains(text, "后天") ||
-		strings.Contains(text, "下个月一号") ||
-		strings.Contains(text, "下个月1号") ||
-		strings.Contains(text, "下月一号") ||
-		strings.Contains(text, "下月1号")
-}
-
-func assistantNormalizeDateFromInput(input string, now time.Time) (string, bool) {
-	if iso := strings.TrimSpace(assistantDateISORE.FindString(strings.TrimSpace(input))); iso != "" && assistantDateISOYMD(iso) {
-		return iso, true
-	}
-	text := strings.TrimSpace(input)
-	if text == "" {
-		return "", false
-	}
-	base := now.UTC()
-	if base.IsZero() {
-		base = time.Now().UTC()
-	}
-	switch {
-	case strings.Contains(text, "今天"):
-		return base.Format("2006-01-02"), true
-	case strings.Contains(text, "明天"):
-		return base.AddDate(0, 0, 1).Format("2006-01-02"), true
-	case strings.Contains(text, "后天"):
-		return base.AddDate(0, 0, 2).Format("2006-01-02"), true
-	case strings.Contains(text, "下个月一号"), strings.Contains(text, "下个月1号"), strings.Contains(text, "下月一号"), strings.Contains(text, "下月1号"):
-		first := time.Date(base.Year(), base.Month(), 1, 0, 0, 0, 0, time.UTC).AddDate(0, 1, 0)
-		return first.Format("2006-01-02"), true
-	default:
-		return "", false
-	}
 }
 
 func assistantResolveCandidateSelection(input string, candidates []assistantCandidate) (string, bool) {
@@ -537,12 +486,6 @@ func assistantResumeFromClarification(pending *assistantTurn, userInput string, 
 		return result
 	}
 	switch strings.TrimSpace(open.ClarificationKind) {
-	case assistantClarificationKindIntentDisambiguate:
-		candidates := assistantClarificationActionCandidates(userInput, assistantIntentRouteDecision{}, assistantIntentSpec{})
-		if len(candidates) == 1 {
-			result.Intent.Action = candidates[0]
-			result.Progress = true
-		}
 	case assistantClarificationKindCandidatePick:
 		if id, ok := assistantResolveCandidateSelection(userInput, pending.Candidates); ok {
 			result.ResolvedCandidateID = id
@@ -560,68 +503,6 @@ func assistantResumeFromClarification(pending *assistantTurn, userInput string, 
 		if denied {
 			result.Progress = false
 		}
-	case assistantClarificationKindFormatConfirm:
-		if normalized, ok := assistantNormalizeDateFromInput(userInput, time.Now().UTC()); ok {
-			field := "effective_date"
-			if len(open.MissingSlots) > 0 {
-				field = strings.TrimSpace(open.MissingSlots[0])
-			}
-			if field == "target_effective_date" {
-				result.Intent.TargetEffectiveDate = normalized
-			} else {
-				result.Intent.EffectiveDate = normalized
-			}
-			result.Progress = true
-		}
-	case assistantClarificationKindMissingSlots:
-		missing := open.MissingSlots
-		if len(missing) == 0 {
-			missing = assistantTurnMissingFields(pending)
-		}
-		next := result.Intent
-		for _, slot := range missing {
-			switch strings.TrimSpace(slot) {
-			case "effective_date":
-				if assistantDateISOYMD(next.EffectiveDate) {
-					result.Progress = true
-				} else if normalized, ok := assistantNormalizeDateFromInput(userInput, time.Now().UTC()); ok {
-					next.EffectiveDate = normalized
-					result.Progress = true
-				}
-			case "target_effective_date":
-				if assistantDateISOYMD(next.TargetEffectiveDate) {
-					result.Progress = true
-				} else if normalized, ok := assistantNormalizeDateFromInput(userInput, time.Now().UTC()); ok {
-					next.TargetEffectiveDate = normalized
-					result.Progress = true
-				}
-			case "entity_name":
-				if strings.TrimSpace(next.EntityName) != "" {
-					result.Progress = true
-				}
-			case "parent_ref_text":
-				if strings.TrimSpace(next.ParentRefText) != "" {
-					result.Progress = true
-				}
-			case "new_parent_ref_text":
-				if strings.TrimSpace(next.NewParentRefText) != "" {
-					result.Progress = true
-				}
-			case "org_code":
-				if strings.TrimSpace(next.OrgCode) != "" {
-					result.Progress = true
-				}
-			case "new_name":
-				if strings.TrimSpace(next.NewName) != "" {
-					result.Progress = true
-				}
-			case "change_fields":
-				if strings.TrimSpace(next.NewName) != "" || strings.TrimSpace(next.NewParentRefText) != "" {
-					result.Progress = true
-				}
-			}
-		}
-		result.Intent = next
 	}
 	return result
 }

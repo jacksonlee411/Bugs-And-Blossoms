@@ -30,7 +30,7 @@ func TestAssistantAPI243_CreateTurnHandlerErrorMappings(t *testing.T) {
 		assistantBuildIntentRouteDecisionFn = origRouteFn
 		assistantLoadAuthorizerFn = origAuthzFn
 	}()
-	assistantBuildIntentRouteDecisionFn = func(string, assistantResolveIntentResult, assistantIntentSpec, *assistantKnowledgeRuntime, *assistantTurn) (assistantIntentRouteDecision, error) {
+	assistantBuildIntentRouteDecisionFn = func(string, assistantResolveIntentResult, assistantIntentSpec, *assistantKnowledgeRuntime) (assistantIntentRouteDecision, error) {
 		return assistant243BusinessRouteDecision(), nil
 	}
 	assistantLoadAuthorizerFn = func() (authorizer, error) {
@@ -116,7 +116,7 @@ func TestAssistantAPI243_TurnActionHandlerErrorMappings(t *testing.T) {
 	}
 	defer func() { assistantLoadAuthorizerFn = origAuthzFn }()
 
-	t.Run("confirm clarification mappings", func(t *testing.T) {
+	t.Run("confirm clarification no longer owns mappings", func(t *testing.T) {
 		makeTurn := func(clarification *assistantClarificationDecision) *assistantTurn {
 			now := time.Now().UTC()
 			turn := &assistantTurn{
@@ -147,12 +147,12 @@ func TestAssistantAPI243_TurnActionHandlerErrorMappings(t *testing.T) {
 			{
 				name:     "rounds exhausted",
 				clar:     &assistantClarificationDecision{Status: assistantClarificationStatusExhausted, ClarificationKind: assistantClarificationKindMissingSlots},
-				wantCode: errAssistantClarificationRoundsExhausted.Error(),
+				wantCode: errAssistantRouteDecisionMissing.Error(),
 			},
 			{
 				name:     "manual hint required",
 				clar:     &assistantClarificationDecision{Status: assistantClarificationStatusAborted, ClarificationKind: assistantClarificationKindMissingSlots},
-				wantCode: errAssistantManualHintRequired.Error(),
+				wantCode: errAssistantRouteDecisionMissing.Error(),
 			},
 			{
 				name: "clarification runtime invalid",
@@ -163,7 +163,7 @@ func TestAssistantAPI243_TurnActionHandlerErrorMappings(t *testing.T) {
 					CurrentRound:      1,
 					MaxRounds:         2,
 				},
-				wantCode: errAssistantClarificationRuntimeInvalid.Error(),
+				wantCode: errAssistantRouteDecisionMissing.Error(),
 			},
 		}
 
@@ -201,39 +201,9 @@ func TestAssistantAPI243_TurnActionHandlerErrorMappings(t *testing.T) {
 			wantHTTP int
 		}{
 			{
-				name:     "clarification required",
-				err:      errAssistantClarificationRequired,
-				wantCode: errAssistantClarificationRequired.Error(),
-				wantHTTP: http.StatusConflict,
-			},
-			{
-				name:     "clarification rounds exhausted",
-				err:      errAssistantClarificationRoundsExhausted,
-				wantCode: errAssistantClarificationRoundsExhausted.Error(),
-				wantHTTP: http.StatusConflict,
-			},
-			{
-				name:     "manual hint required",
-				err:      errAssistantManualHintRequired,
-				wantCode: errAssistantManualHintRequired.Error(),
-				wantHTTP: http.StatusConflict,
-			},
-			{
-				name:     "clarification runtime invalid",
-				err:      errAssistantClarificationRuntimeInvalid,
-				wantCode: errAssistantClarificationRuntimeInvalid.Error(),
-				wantHTTP: http.StatusConflict,
-			},
-			{
 				name:     "route non business blocked",
 				err:      errAssistantRouteNonBusinessBlocked,
 				wantCode: errAssistantRouteNonBusinessBlocked.Error(),
-				wantHTTP: http.StatusConflict,
-			},
-			{
-				name:     "route clarification required",
-				err:      errAssistantRouteClarificationRequired,
-				wantCode: errAssistantRouteClarificationRequired.Error(),
 				wantHTTP: http.StatusConflict,
 			},
 			{
@@ -325,7 +295,7 @@ func TestAssistantAPI243_CreateTurnAndHelperBranches(t *testing.T) {
 				EffectiveDate: "2026-01-01",
 			}}
 		}
-		assistantBuildIntentRouteDecisionFn = func(string, assistantResolveIntentResult, assistantIntentSpec, *assistantKnowledgeRuntime, *assistantTurn) (assistantIntentRouteDecision, error) {
+		assistantBuildIntentRouteDecisionFn = func(string, assistantResolveIntentResult, assistantIntentSpec, *assistantKnowledgeRuntime) (assistantIntentRouteDecision, error) {
 			return assistantIntentRouteDecision{
 				RouteKind:               assistantRouteKindKnowledgeQA,
 				IntentID:                "knowledge.general_qa",
@@ -342,8 +312,8 @@ func TestAssistantAPI243_CreateTurnAndHelperBranches(t *testing.T) {
 			t.Fatalf("create turn err=%v", err)
 		}
 		last := latestTurn(got)
-		if last == nil || strings.TrimSpace(last.Intent.Action) != assistantIntentCreateOrgUnit {
-			t.Fatalf("expected action restore, turn=%+v", last)
+		if last == nil || strings.TrimSpace(last.Intent.Action) != "" {
+			t.Fatalf("expected semantic result to remain authoritative, turn=%+v", last)
 		}
 	})
 
@@ -354,7 +324,7 @@ func TestAssistantAPI243_CreateTurnAndHelperBranches(t *testing.T) {
 		}
 		svc := newAssistantConversationService(store, assistantWriteServiceStub{store: store})
 		conv := svc.createConversation("tenant-1", Principal{ID: "actor-1", RoleSlug: "tenant-admin"})
-		assistantBuildIntentRouteDecisionFn = func(string, assistantResolveIntentResult, assistantIntentSpec, *assistantKnowledgeRuntime, *assistantTurn) (assistantIntentRouteDecision, error) {
+		assistantBuildIntentRouteDecisionFn = func(string, assistantResolveIntentResult, assistantIntentSpec, *assistantKnowledgeRuntime) (assistantIntentRouteDecision, error) {
 			return assistant243BusinessRouteDecision(), nil
 		}
 		capabilityDefinitionByKey = map[string]capabilityDefinition{}
@@ -371,7 +341,7 @@ func TestAssistantAPI243_CreateTurnAndHelperBranches(t *testing.T) {
 		}
 		svc := newAssistantConversationService(store, assistantWriteServiceStub{store: store})
 		conv := svc.createConversation("tenant-1", Principal{ID: "actor-1", RoleSlug: "tenant-admin"})
-		assistantBuildIntentRouteDecisionFn = func(string, assistantResolveIntentResult, assistantIntentSpec, *assistantKnowledgeRuntime, *assistantTurn) (assistantIntentRouteDecision, error) {
+		assistantBuildIntentRouteDecisionFn = func(string, assistantResolveIntentResult, assistantIntentSpec, *assistantKnowledgeRuntime) (assistantIntentRouteDecision, error) {
 			return assistant243BusinessRouteDecision(), nil
 		}
 		assistantPlanHashFn = func(assistantIntentSpec, assistantPlanSummary, assistantDryRunResult) string { return "" }
@@ -394,7 +364,7 @@ func TestAssistantAPI243_CreateTurnAndHelperBranches(t *testing.T) {
 		runtime.ContextTemplateVersion = ""
 		runtime.ReplyGuidanceVersion = ""
 		svc.knowledgeRuntime = runtime
-		assistantBuildIntentRouteDecisionFn = func(string, assistantResolveIntentResult, assistantIntentSpec, *assistantKnowledgeRuntime, *assistantTurn) (assistantIntentRouteDecision, error) {
+		assistantBuildIntentRouteDecisionFn = func(string, assistantResolveIntentResult, assistantIntentSpec, *assistantKnowledgeRuntime) (assistantIntentRouteDecision, error) {
 			return assistant243BusinessRouteDecision(), nil
 		}
 		conv := svc.createConversation("tenant-1", Principal{ID: "actor-1", RoleSlug: "tenant-admin"})

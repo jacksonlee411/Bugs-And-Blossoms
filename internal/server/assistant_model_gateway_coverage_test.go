@@ -215,6 +215,11 @@ func TestAssistantModelGateway_HelperCoverage(t *testing.T) {
 	if got := assistantNormalizeOpenAIIntentPayload(`{"foo":"bar"}`); string(got) != `{"foo":"bar"}` {
 		t.Fatalf("expected passthrough object payload, got=%q", string(got))
 	}
+	normalizedSemantic := assistantNormalizeOpenAIIntentPayload(`{"action":"plan_only","route_kind":"knowledge_qa","intent_id":"knowledge.general_qa","route_catalog_version":"semantic.v1"}`)
+	semanticPayload, err := assistantStrictDecodeSemanticIntent(normalizedSemantic)
+	if err != nil || semanticPayload.RouteKind != assistantRouteKindKnowledgeQA || semanticPayload.IntentID != "knowledge.general_qa" || semanticPayload.RouteCatalogVersion != "semantic.v1" {
+		t.Fatalf("unexpected normalized semantic payload=%s decoded=%+v err=%v", string(normalizedSemantic), semanticPayload, err)
+	}
 
 	if _, ok := assistantDecodeOpenAIIntentPayloadObject(`prefix {"action":"plan_only"} suffix`); !ok {
 		t.Fatal("expected extracted object decode success")
