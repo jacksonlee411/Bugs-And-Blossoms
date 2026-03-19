@@ -244,13 +244,13 @@
 | 首批消费域 | 平台配置与策略模块提供什么 | 领域自己必须继续拥有什么 |
 | --- | --- | --- |
 | `Org` | 扩展字段定义、候选值池、动态策略、Explain、发布与版本治理 | 组织身份、层级、生命周期、生效历史、组织主不变量 |
-| `Job Catalog` | Group / Family / Level / Profile 的扩展属性定义、候选值池、动态策略、Explain、共享基线发布 | 分类包、Group/Family/Level/Profile 固定骨架、Family 归属、Profile 主 Family、不同时点的分类事实 |
+| `Job Catalog` | Group / Family / Level / Profile 的扩展属性定义、候选值池、动态策略、Explain、共享基线发布 | 统一目录骨架、Group/Family/Level/Profile 固定骨架、Family 归属、Profile 主 Family、按 `OrgContext + as_of` 解释的分类事实 |
 
 这条边界非常关键：
 
 - 平台可以决定“某个分类对象的扩展属性如何被定义、裁剪、解释”；
 - 但平台不能把 Job Catalog 的核心分类骨架改造成“任意树 + 任意字段 + 任意脚本”的元数据系统；
-- `Group / Family / Level / Profile`、包 ownership、`current/as_of/history`、Profile 至少一个 Family 且恰好一个主 Family，仍然属于业务域固定骨架。
+- `Group / Family / Level / Profile`、统一目录骨架、`current/as_of/history`、Profile 至少一个 Family 且恰好一个主 Family，仍然属于业务域固定骨架。
 
 ## 6. `345` 冻结的目标规则矩阵
 
@@ -366,6 +366,7 @@
 - [ ] 需要统一的治理页模式：配置目录、候选值目录、策略页、决议预览、Explain/历史、发布/激活记录。
 - [ ] 页面必须显式标识“静态来源 / 动态来源 / 决议快照来源”，防止再次出现“改了但不生效”的认知错位。
 - [ ] 业务表单、详情页、列表页只能消费共享决议，不得自行猜测字段行为。
+- [ ] `350` 必须把 `DecisionContext / DecisionSnapshot / Explain` 翻译为稳定的产品语言与页面槽位，默认通过 `351 / 352 / 353` 接线，不允许在前端层重写第二套规则解释。
 
 ### 8.3 对 `360`（核心 HR 业务域）的输入
 
@@ -422,6 +423,7 @@
 - [DEV-PLAN-300](/home/lee/Projects/Bugs-And-Blossoms/docs/dev-plans/300-greenfield-csharp-hr-platform-functional-blueprint.md)
 - [DEV-PLAN-320](/home/lee/Projects/Bugs-And-Blossoms/docs/dev-plans/320-shared-data-architecture-and-modeling-conventions-plan.md)
 - [DEV-PLAN-321](/home/lee/Projects/Bugs-And-Blossoms/docs/dev-plans/321-tenant-extensibility-business-rules-and-shared-model-plan.md)
+- [DEV-PLAN-350](/home/lee/Projects/Bugs-And-Blossoms/docs/dev-plans/350-frontend-product-shell-and-interaction-system-plan.md)
 - [DEV-PLAN-363](/home/lee/Projects/Bugs-And-Blossoms/docs/dev-plans/363-job-catalog-business-rules-and-configurability-foundation-plan.md)
 - [DEV-PLAN-340](/home/lee/Projects/Bugs-And-Blossoms/docs/dev-plans/340-platform-and-iam-foundation-plan.md)
 - [DEV-PLAN-347](/home/lee/Projects/Bugs-And-Blossoms/docs/dev-plans/347-capability-and-granularity-governance-plan.md)

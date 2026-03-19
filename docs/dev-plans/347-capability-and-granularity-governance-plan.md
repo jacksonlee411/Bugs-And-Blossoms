@@ -100,6 +100,7 @@
 
 - `342`：消费 `347` 的 capability 命名与映射底座，专注角色与权限语义。
 - `345`：消费 `347` 的能力键和颗粒度词汇，专注配置/策略决议蓝图。
+- `350`：消费 `347` 的 capability 与颗粒度词汇，把它们翻译为导航、页面主动作、字段状态与权限感知 UI 的统一产品语言，但不得重写语义边界。
 - `353`：消费 `347` 的能力与字段边界，避免 UI 层重算权限语义。
 - `360/370/380/390`：不得自行发明第二套 capability 命名与映射链路。
 - `390`：必须消费 `347 + 342` 的单轨授权结果，不得通过 channel、prompt、模型分支形成第二放行条件。
@@ -108,7 +109,7 @@
 
 - [ ] `capability_key` 命名规则与禁用模式已冻结且可被门禁检查。
 - [ ] `route -> capability` 与 `assistant_action_id -> capability` 双映射注册表成为单一事实源，缺失/重复可被阻断。
-- [ ] 颗粒度词汇在 `342/345/353` 中保持一致，不再混用 legacy 术语。
+- [ ] 颗粒度词汇在 `342/345/350/353` 中保持一致，不再混用 legacy 术语。
 - [ ] fail-closed 规则对“缺映射、未注册、上下文缺失”可稳定拒绝并可解释。
 - [ ] “权限单轨（Assistant=操作者同源授权）”已经固化，且无并行 Assistant 权限体系。
 - [ ] 统一 capability 目录字段合同可被检查并被 `360/370/380/390` 直接消费。
@@ -119,6 +120,7 @@
 - [DEV-PLAN-340](/home/lee/Projects/Bugs-And-Blossoms/docs/dev-plans/340-platform-and-iam-foundation-plan.md)
 - [DEV-PLAN-342](/home/lee/Projects/Bugs-And-Blossoms/docs/dev-plans/342-authz-and-platform-permission-matrix-business-rules-plan.md)
 - [DEV-PLAN-345](/home/lee/Projects/Bugs-And-Blossoms/docs/dev-plans/345-platform-configuration-and-policy-business-rules-blueprint.md)
+- [DEV-PLAN-350](/home/lee/Projects/Bugs-And-Blossoms/docs/dev-plans/350-frontend-product-shell-and-interaction-system-plan.md)
 - [DEV-PLAN-353](/home/lee/Projects/Bugs-And-Blossoms/docs/dev-plans/353-form-patterns-and-permission-aware-interaction-detailed-design.md)
 - [DEV-PLAN-150](/home/lee/Projects/Bugs-And-Blossoms/docs/dev-plans/150-capability-key-workday-alignment-gap-closure-plan.md)
 - [DEV-PLAN-180](/home/lee/Projects/Bugs-And-Blossoms/docs/dev-plans/180-granularity-hierarchy-governance-and-unification.md)

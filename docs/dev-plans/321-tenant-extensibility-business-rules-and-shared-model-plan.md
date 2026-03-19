@@ -271,11 +271,12 @@
 - `applicability_kind` 是共享概念，具体业务域可以实例化为：
   - `tenant`
   - `module`
-  - `setid`
+  - `company`
   - `business_unit`
   - `legal_entity`
   - `org_node`
   - 其他被正式计划冻结的业务维度
+- 共享合同若需要表达跨模块组织差异，必须映射到 `348C/340/345` 冻结的 `OrgContext` 词汇，而不是重新发明 `setid/package` 或等价容器键。
 - 不得把这个共享合同重新命名回 legacy 的 `scope_type/scope_key/package` 体系。
 
 ### 7.4 身份、命名与边界合同
@@ -338,7 +339,7 @@
 1. [ ] `M1`：词汇与边界冻结  
    统一“扩展定义 / 候选值池 / 动态策略 / 决议 / Explain / 审计 / 发布”词汇，停止把共享能力写成 Org 私有概念。
 2. [ ] `M2`：共享上下文合同冻结  
-   由各消费域声明自身支持的 `applicability_kind`，并对齐 `capability_key + context + as_of` 决议协议。
+   由各消费域声明自身支持的 `applicability_kind`，并说明如何映射到 `OrgContext`，对齐 `capability_key + org_context + as_of` 决议协议。
 3. [ ] `M3`：共享 API / DTO / Explain 合同冻结  
    抽出通用的元数据读取、候选值读取、策略决议、Explain 与版本一致性协议。
 4. [ ] `M4`：首批消费域收敛  

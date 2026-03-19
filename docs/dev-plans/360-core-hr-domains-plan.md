@@ -130,7 +130,7 @@
 ### 5.3 M3：Job Catalog
 
 - [ ] 组合分类体系管理（Group / Family / Level / Profile，而非单一树）
-- [ ] 分类包上下文、owner/read-only 与共享基线消费
+- [ ] 分类的组织上下文、`read_only` 与共享基线消费
 - [ ] Family / Level / Profile CRUD 与 Family 归属调整
 - [ ] `current / as_of / history` 统一读取语义
 - [ ] 搜索、筛选与下游引用解释

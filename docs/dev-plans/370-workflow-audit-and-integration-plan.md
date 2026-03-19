@@ -127,6 +127,7 @@
 - `operation_receipts`
 
 其中工作流实例与操作回执需要对外提供稳定、可查询的生命周期状态，供 UI、Assistant 和集成调用方消费。
+- 审批摘要、操作回执与集成执行状态至少应显式回显 `business_object_key / org_context / time anchor`；动作类场景还应补充 `capability_key`，不得以隐藏容器键解释命中上下文。
 
 ## 7. 与业务域的关系
 
@@ -134,6 +135,7 @@
 
 - `Workflow` 不拥有 Org / Person / Staffing 主数据。
 - 审批通过后，由业务应用层执行最终变更。
+- 流程路由、审批人与只读/可执行结果必须消费 `340/345/347` 提供的统一访问模型与 `OrgContext` 装配，不得把命中上下文重新包装为 `setid/package` 或其他容器键。
 - 涉及人员的审批请求，必须直接消费 [DEV-PLAN-362](/home/lee/Projects/Bugs-And-Blossoms/docs/dev-plans/362-person-business-rules-and-detailed-design.md) 冻结的 Person 真值：
   - `person_uuid` 作为稳定身份锚点；
   - `pernr` 作为自然键与展示键；
@@ -148,6 +150,7 @@
 
 - Chat Assistant 不属于本计划范围，由 `390` 独立承接。
 - 当 Assistant 发起需审批或异步执行的动作时，`370` 负责提供可查询的审批状态与执行回执，而不是要求 `390` 直接观察业务主表变化。
+- `370` 向 `390` 暴露审批状态、执行回执与失败原因时，必须沿用同一 `OrgContext + time anchor` 解释链，不得发明工作流专用容器键。
 
 ### 7.4 `370` 对 `362` 的显式消费
 
@@ -170,6 +173,7 @@
 - [ ] 审批中与异步执行中的动作具备统一状态与回执查询路径，供 UI 与 Assistant 复用。
 - [ ] 外部系统同步不再散落在各模块内部，而有统一的集成边界。
 - [ ] 涉及人员的审批、审计与集成回执已经显式消费 `362` 的身份锚点、当前主档快照与 active/inactive 生命周期，不再各自重写人员语义。
+- [ ] 审批摘要、回执与集成执行上下文已显式包含 `org_context` 与时间锚点，不存在隐藏容器键或第二解释链。
 
 ## 10. 后续拆分建议
 
