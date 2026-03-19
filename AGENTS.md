@@ -261,7 +261,7 @@ modules/{module}/
 - DEV-PLAN-095【归档】：MUI X 升级子计划 P4（稳定化与性能压测；阶段收尾后不再单列实施）：`docs/archive/dev-plans/095-mui-x-phase4-stability-performance-plan.md`
 - DEV-PLAN-096【归档】：Org 模块全量迁移至 MUI X 与统一体验收口方案（阶段收口并封板）：`docs/archive/dev-plans/096-org-module-full-migration-and-ux-convergence-plan.md`
 - DEV-PLAN-097【归档】：OrgUnit 详情从抽屉（Drawer）迁移为独立页面（page pattern 已沉淀为历史记录）：`docs/archive/dev-plans/097-orgunit-details-drawer-to-page-migration.md`
-- DEV-PLAN-098【归档】：组织架构模块架构评估——多类型宽表预留字段 + 元数据驱动（V2.0；实施已由 `DEV-PLAN-100` 承接）：`docs/archive/dev-plans/098-org-module-wide-table-metadata-driven-architecture-assessment.md`
+- DEV-PLAN-098【归档】：组织架构模块架构评估——多类型宽表预留字段 + 元数据驱动（实施已由 `DEV-PLAN-100` 承接）：`docs/archive/dev-plans/098-org-module-wide-table-metadata-driven-architecture-assessment.md`
 - DEV-PLAN-099【归档】：OrgUnit 信息页双栏化（左生效日期/修改时间，右侧详情；口径已并入 `DEV-PLAN-096`）：`docs/archive/dev-plans/099-orgunit-details-two-pane-info-audit-mui.md`
 - DEV-PLAN-100：Org 模块宽表预留字段 + 元数据驱动落地实施计划与路线图（承接 DEV-PLAN-098）：`docs/dev-plans/100-org-metadata-wide-table-implementation-roadmap.md`
 - DEV-PLAN-100A：Org 模块宽表元数据落地 Phase 0：契约冻结与就绪检查：`docs/dev-plans/100a-org-metadata-wide-table-phase0-contract-freeze-readiness.md`
@@ -487,6 +487,8 @@ modules/{module}/
 - DEV-PLAN-390：Chat Assistant 能力子计划：`docs/dev-plans/390-chat-assistant-capability-plan.md`
 - DEV-PLAN-395：Assistant 全平台覆盖目录与强制门禁详细设计：`docs/dev-plans/395-assistant-surface-registry-and-enforcement-gates-detailed-design.md`
 - DEV-PLAN-400：实施路线图与垂直切片编排计划：`docs/dev-plans/400-implementation-roadmap-and-vertical-slice-plan.md`
+- DEV-PLAN-401：Phase 0 新线（Ficeae）起步与硬切换执行计划：`docs/dev-plans/401-phase0-ficeae-bootstrap-execution-plan.md`
+- DEV-PLAN-401A：规则矿模板与 Ficeae 验收对照基线（首批 20 条）：`docs/dev-plans/401a-rule-mining-template-and-ficeae-acceptance-baseline.md`
 - DEV-PLAN-225 执行日志：`docs/archive/dev-records/dev-plan-225-execution-log.md`
 - DEV-PLAN-226：测试指引 TG-004（门禁口径变更审批）：`docs/dev-plans/226-test-guide-tg004-gate-caliber-change-approval.md`
 - DEV-PLAN-170 执行日志：`docs/archive/dev-records/dev-plan-170-execution-log.md`
