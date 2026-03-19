@@ -31,10 +31,12 @@
 
 ## 3. 当前冲突与待评估问题
 
-当前已出现两类口径并存，需要平台级评估裁决：
+当前已出现多类口径并存，需要平台级评估裁决：
 
 - [ ] “`package_uuid` 作为治理主键，`setid` 作为上下文入口/解析维度”的域内收敛口径（见 `363`）。
 - [ ] “删除 package 概念，直接使用 `capability_key + setid`”的历史候选口径（见 `102C6`）。
+- [ ] “取消 `setid` 平台级治理词汇，直接由业务上下文解析到 `package_uuid`”的候选口径（见 `348B`）。
+- [ ] “对标 Workday 的一源数据 / 一安全模型 / 组织上下文参考口径”的候选方向（见 `348C`）。
 
 `348` 要求先完成评估，再进入全平台实施，不允许在不同模块并行落地相互冲突的主键模型。
 
@@ -58,8 +60,8 @@
 ### 5.2 当前候选清单
 
 - [ ] `348A`：`setid/package` 单主源治理候选方案（待评估）。
-- [ ] `348B`：预留（未创建）。
-- [ ] `348C`：预留（未创建）。
+- [ ] `348B`：取消 `setid`、收敛为 `package_uuid` 直达治理候选方案（待评估）。
+- [ ] `348C`：对标 Workday 的“一源数据 + 一安全模型 + 组织上下文”参考治理候选方案（待评估）。
 
 ## 6. 统一评估维度与停线
 
@@ -67,6 +69,7 @@
 | --- | --- | --- |
 | 一致性 | 是否存在并列写主键或双解释路径 | 不允许双主写入口 |
 | 可解释性 | 用户是否可解释“为何命中该配置/权限/候选值” | Explain 必须包含主键、上下文、时间锚 |
+| 认知复杂度 | 用户、前端与服务端是否需要同时理解多套治理键与隐式解析层 | 常态业务流不得要求用户同时输入或选择两个以上治理键；不得以隐藏 alias 保留第二心智 |
 | 时间确定性 | `current/as_of/history` 是否稳定复算 | 禁止隐式 today；回放结果必须确定 |
 | 安全边界 | 租户隔离/权限边界是否可证明 fail-closed | 缺上下文/缺映射/缺发布必须拒绝 |
 | 迁移成本 | 迁移是否可一次性收口并可验证 | 必须有数据对账与回滚预案 |
@@ -79,7 +82,7 @@
 2. [ ] `M2`：候选方案登记  
    每个候选方案提交“合同 + 风险 + 证据计划”。
 3. [ ] `M3`：证据评估  
-   按第 6 节维度评分，形成评估结论与反例清单。
+   按第 6 节维度评分，形成评估结论与反例清单；并排评估矩阵统一记录在 `348D`。
 4. [ ] `M4`：决策与承接  
    输出平台裁决（选型/否决），并创建实施承接计划（域内编号）。
 
@@ -92,7 +95,8 @@
 ## 9. 验收标准
 
 - [ ] 平台级键治理词汇已冻结并被后续子计划统一引用。
-- [ ] 至少一份候选方案（`348A`）完成标准化登记并进入评估流程。
+- [ ] 至少两份方向明确不同的候选方案（`348A` / `348B`）完成标准化登记并进入评估流程。
+- [ ] 已形成候选并排评估矩阵（`348D`），且能支撑 `348A / 348B / 348C` 在同一维度上比较。
 - [ ] 评估维度、停线与决策流程可被复用，不依赖单一业务域经验。
 - [ ] `340/345/347/360/363` 的引用口径一致，不引入新的第二事实源。
 
@@ -104,3 +108,5 @@
 - [DEV-PLAN-360](/home/lee/Projects/Bugs-And-Blossoms/docs/dev-plans/360-core-hr-domains-plan.md)
 - [DEV-PLAN-363](/home/lee/Projects/Bugs-And-Blossoms/docs/dev-plans/363-job-catalog-business-rules-and-configurability-foundation-plan.md)
 - [DEV-PLAN-102C6](/home/lee/Projects/Bugs-And-Blossoms/docs/dev-plans/102c6-remove-scope-code-and-converge-to-capability-key-plan.md)
+- [DEV-PLAN-348C](/home/lee/Projects/Bugs-And-Blossoms/docs/dev-plans/348c-workday-reference-key-governance-candidate-plan.md)
+- [DEV-PLAN-348D](/home/lee/Projects/Bugs-And-Blossoms/docs/dev-plans/348d-key-governance-candidate-comparison-matrix.md)

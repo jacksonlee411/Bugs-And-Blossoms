@@ -469,6 +469,9 @@ modules/{module}/
 - DEV-PLAN-347：Capability 与颗粒度治理子计划（Capability Key / Route Mapping / Granularity）：`docs/dev-plans/347-capability-and-granularity-governance-plan.md`
 - DEV-PLAN-348：平台通用键治理规范与评估框架（Key Governance Evaluation Framework）：`docs/dev-plans/348-platform-key-governance-evaluation-framework.md`
 - DEV-PLAN-348A：`setid/package` 单主源治理候选方案（待评估）：`docs/dev-plans/348a-setid-package-single-source-candidate-plan.md`
+- DEV-PLAN-348B：取消 `setid`、收敛为 `package_uuid` 直达治理候选方案（待评估）：`docs/dev-plans/348b-package-uuid-direct-governance-candidate-plan.md`
+- DEV-PLAN-348C：对标 Workday 的“一源数据 + 一安全模型 + 组织上下文”参考治理候选方案（待评估）：`docs/dev-plans/348c-workday-reference-key-governance-candidate-plan.md`
+- DEV-PLAN-348D：键治理候选方案并排评估矩阵（348A / 348B / 348C）：`docs/dev-plans/348d-key-governance-candidate-comparison-matrix.md`
 - DEV-PLAN-350：前端产品壳与交互系统子计划：`docs/dev-plans/350-frontend-product-shell-and-interaction-system-plan.md`
 - DEV-PLAN-351：Product Shell 与路由信息架构详细设计：`docs/dev-plans/351-product-shell-and-route-information-architecture-detailed-design.md`
 - DEV-PLAN-352：列表/详情/历史页面模式详细设计：`docs/dev-plans/352-list-detail-history-page-patterns-detailed-design.md`
