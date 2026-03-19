@@ -484,6 +484,7 @@ modules/{module}/
 - DEV-PLAN-370：工作流、审计增强与集成子计划：`docs/dev-plans/370-workflow-audit-and-integration-plan.md`
 - DEV-PLAN-380：数据工作台与运营分析子计划：`docs/dev-plans/380-data-workbench-and-operational-analytics-plan.md`
 - DEV-PLAN-390：Chat Assistant 能力子计划：`docs/dev-plans/390-chat-assistant-capability-plan.md`
+- DEV-PLAN-395：Assistant 全平台覆盖目录与强制门禁详细设计：`docs/dev-plans/395-assistant-surface-registry-and-enforcement-gates-detailed-design.md`
 - DEV-PLAN-400：实施路线图与垂直切片编排计划：`docs/dev-plans/400-implementation-roadmap-and-vertical-slice-plan.md`
 - DEV-PLAN-225 执行日志：`docs/archive/dev-records/dev-plan-225-execution-log.md`
 - DEV-PLAN-226：测试指引 TG-004（门禁口径变更审批）：`docs/dev-plans/226-test-guide-tg004-gate-caliber-change-approval.md`
