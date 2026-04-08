@@ -422,84 +422,6 @@ func TestJobCatalogMemoryStore_ResolvePackage(t *testing.T) {
 	}
 }
 
-func TestJobCatalogView_ListSetID(t *testing.T) {
-	if got := (jobCatalogView{}).listSetID(); got != "" {
-		t.Fatalf("got=%q", got)
-	}
-	view := jobCatalogView{HasSelection: true, ReadOnly: true, SetID: "S1"}
-	if got := view.listSetID(); got != "S1" {
-		t.Fatalf("got=%q", got)
-	}
-	view = jobCatalogView{HasSelection: true, OwnerSetID: "S2"}
-	if got := view.listSetID(); got != "S2" {
-		t.Fatalf("got=%q", got)
-	}
-}
-
-func TestOwnerSetIDEditableAndLoadOwnedPackages(t *testing.T) {
-	ctx := context.Background()
-	if ownerSetIDEditable(ctx, nil, "t1", "S1") {
-		t.Fatal("expected false")
-	}
-	viewerCtx := withPrincipal(context.Background(), Principal{RoleSlug: "tenant-viewer"})
-	if ownerSetIDEditable(viewerCtx, defaultJobCatalogSetIDStore(), "t1", "S1") {
-		t.Fatal("expected false")
-	}
-	adminCtx := withPrincipal(context.Background(), Principal{RoleSlug: "tenant-admin"})
-	if ownerSetIDEditable(adminCtx, nil, "t1", "S1") {
-		t.Fatal("expected false")
-	}
-	if ownerSetIDEditable(adminCtx, defaultJobCatalogSetIDStore(), "t1", "") {
-		t.Fatal("expected false")
-	}
-	if ownerSetIDEditable(adminCtx, jobCatalogSetIDStoreStub{err: errors.New("boom")}, "t1", "S1") {
-		t.Fatal("expected false")
-	}
-	if ownerSetIDEditable(adminCtx, jobCatalogSetIDStoreStub{setids: []SetID{{SetID: "S1", Status: "disabled"}}}, "t1", "S1") {
-		t.Fatal("expected false")
-	}
-	if !ownerSetIDEditable(adminCtx, jobCatalogSetIDStoreStub{setids: []SetID{{SetID: "S1", Status: "active"}}}, "t1", "S1") {
-		t.Fatal("expected true")
-	}
-
-	owned, err := loadOwnedJobCatalogPackages(ctx, nil, "t1", "2026-01-01")
-	if err != nil || len(owned) != 0 {
-		t.Fatalf("owned=%v err=%v", owned, err)
-	}
-	owned, err = loadOwnedJobCatalogPackages(viewerCtx, defaultJobCatalogSetIDStore(), "t1", "2026-01-01")
-	if err != nil || len(owned) != 0 {
-		t.Fatalf("owned=%v err=%v", owned, err)
-	}
-	if _, err := loadOwnedJobCatalogPackages(adminCtx, jobCatalogSetIDStoreStub{err: errors.New("boom")}, "t1", "2026-01-01"); err == nil {
-		t.Fatal("expected error")
-	}
-	owned, err = loadOwnedJobCatalogPackages(adminCtx, jobCatalogSetIDStoreStub{}, "t1", "2026-01-01")
-	if err != nil || len(owned) != 0 {
-		t.Fatalf("owned=%v err=%v", owned, err)
-	}
-
-	owned, err = loadOwnedJobCatalogPackages(adminCtx, jobCatalogSetIDStoreStub{
-		owned: []OwnedScopePackage{{PackageID: "pkg-1", PackageCode: "PKG1", OwnerSetID: "S1"}},
-	}, "t1", "2026-01-01")
-	if err != nil || len(owned) != 1 {
-		t.Fatalf("owned=%v err=%v", owned, err)
-	}
-}
-
-func TestCanEditDefltPackage(t *testing.T) {
-	if canEditDefltPackage(context.Background()) {
-		t.Fatal("expected false")
-	}
-	inactiveCtx := withPrincipal(context.Background(), Principal{RoleSlug: "tenant-admin", Status: "disabled"})
-	if canEditDefltPackage(inactiveCtx) {
-		t.Fatal("expected false")
-	}
-	activeCtx := withPrincipal(context.Background(), Principal{RoleSlug: "tenant-admin", Status: "active"})
-	if !canEditDefltPackage(activeCtx) {
-		t.Fatal("expected true")
-	}
-}
-
 func TestJobCatalogPGStore_SetIDValidation(t *testing.T) {
 	ctx := context.Background()
 
@@ -601,70 +523,6 @@ func TestJobCatalogPGStore_ResolvePackages(t *testing.T) {
 	}
 }
 
-func TestResolveJobCatalogView_Branches(t *testing.T) {
-	adminCtx := withPrincipal(context.Background(), Principal{RoleSlug: "tenant-admin", Status: "active"})
-	inactiveAdminCtx := withPrincipal(context.Background(), Principal{RoleSlug: "tenant-admin", Status: "inactive"})
-	setidStore := jobCatalogSetIDStoreStub{setids: []SetID{{SetID: "S1", Status: "active"}}}
-	store := resolveJobCatalogStoreStub{
-		pkg:              JobCatalogPackage{PackageUUID: "pkg-1", PackageCode: "PKG1", OwnerSetID: "S1"},
-		setidPackageUUID: "pkg-1",
-	}
-
-	view, errMsg := resolveJobCatalogView(context.Background(), store, setidStore, "t1", "2026-01-01", "", "")
-	if view.HasSelection || errMsg != "" {
-		t.Fatalf("unexpected view=%+v err=%s", view, errMsg)
-	}
-
-	view, errMsg = resolveJobCatalogView(context.Background(), store, setidStore, "t1", "2026-01-01", "", "S1")
-	if !view.ReadOnly || view.SetID != "S1" || errMsg != "" {
-		t.Fatalf("unexpected view=%+v err=%s", view, errMsg)
-	}
-
-	_, errMsg = resolveJobCatalogView(context.Background(), store, setidStore, "t1", "2026-01-01", "PKG1", "")
-	if errMsg != "OWNER_SETID_FORBIDDEN" {
-		t.Fatalf("err=%s", errMsg)
-	}
-
-	_, errMsg = resolveJobCatalogView(adminCtx, store, jobCatalogSetIDStoreStub{}, "t1", "2026-01-01", "PKG1", "")
-	if errMsg != "OWNER_SETID_FORBIDDEN" {
-		t.Fatalf("err=%s", errMsg)
-	}
-
-	_, errMsg = resolveJobCatalogView(adminCtx, resolveJobCatalogStoreStub{pkgErr: errors.New("PACKAGE_NOT_FOUND")}, setidStore, "t1", "2026-01-01", "PKG1", "")
-	if errMsg != "PACKAGE_NOT_FOUND" {
-		t.Fatalf("err=%s", errMsg)
-	}
-
-	_, errMsg = resolveJobCatalogView(adminCtx, resolveJobCatalogStoreStub{
-		pkg:              JobCatalogPackage{PackageUUID: "pkg-1", PackageCode: "PKG1", OwnerSetID: "S1"},
-		setidPackageUUID: "pkg-2",
-	}, setidStore, "t1", "2026-01-01", "PKG1", "")
-	if errMsg != "PACKAGE_CODE_MISMATCH" {
-		t.Fatalf("err=%s", errMsg)
-	}
-
-	_, errMsg = resolveJobCatalogView(adminCtx, resolveJobCatalogStoreStub{
-		pkg:      JobCatalogPackage{PackageUUID: "pkg-1", PackageCode: "PKG1", OwnerSetID: "S1"},
-		setidErr: errors.New("resolve failed"),
-	}, setidStore, "t1", "2026-01-01", "PKG1", "")
-	if errMsg != "resolve failed" {
-		t.Fatalf("err=%s", errMsg)
-	}
-
-	_, errMsg = resolveJobCatalogView(inactiveAdminCtx, resolveJobCatalogStoreStub{
-		pkg:              JobCatalogPackage{PackageUUID: "deflt-id", PackageCode: "DEFLT", OwnerSetID: "DEFLT"},
-		setidPackageUUID: "deflt-id",
-	}, jobCatalogSetIDStoreStub{setids: []SetID{{SetID: "DEFLT", Status: "active"}}}, "t1", "2026-01-01", "DEFLT", "")
-	if errMsg != "DEFLT_EDIT_FORBIDDEN" {
-		t.Fatalf("err=%s", errMsg)
-	}
-
-	view, errMsg = resolveJobCatalogView(adminCtx, store, setidStore, "t1", "2026-01-01", "PKG1", "")
-	if errMsg != "" || view.OwnerSetID != "S1" || !view.HasSelection {
-		t.Fatalf("unexpected view=%+v err=%s", view, errMsg)
-	}
-}
-
 func TestJobCatalogStatusForError(t *testing.T) {
 	if jobCatalogStatusForError("OWNER_SETID_FORBIDDEN") != http.StatusForbidden {
 		t.Fatal("expected forbidden")
@@ -677,12 +535,6 @@ func TestJobCatalogStatusForError(t *testing.T) {
 	}
 	if jobCatalogStatusForError("other") != http.StatusUnprocessableEntity {
 		t.Fatal("expected unprocessable")
-	}
-}
-
-func TestNormalizePackageCode(t *testing.T) {
-	if got := normalizePackageCode(" pkg1 "); got != "PKG1" {
-		t.Fatalf("normalizePackageCode=%q", got)
 	}
 }
 

@@ -692,36 +692,6 @@ func TestStaffingPGStore_UpsertPrimaryAssignmentForPerson(t *testing.T) {
 		}
 	})
 
-	t.Run("missing effective_date", func(t *testing.T) {
-		store := newStaffingPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
-			return &stubTx{}, nil
-		}))
-		_, err := store.UpsertPrimaryAssignmentForPerson(context.Background(), "t1", "", "p1", "pos1", "", "")
-		if err == nil {
-			t.Fatal("expected error")
-		}
-	})
-
-	t.Run("missing person_uuid", func(t *testing.T) {
-		store := newStaffingPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
-			return &stubTx{}, nil
-		}))
-		_, err := store.UpsertPrimaryAssignmentForPerson(context.Background(), "t1", "2026-01-01", "", "pos1", "", "")
-		if err == nil {
-			t.Fatal("expected error")
-		}
-	})
-
-	t.Run("missing position_uuid", func(t *testing.T) {
-		store := newStaffingPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
-			return &stubTx{}, nil
-		}))
-		_, err := store.UpsertPrimaryAssignmentForPerson(context.Background(), "t1", "2026-01-01", "p1", "", "", "")
-		if err == nil {
-			t.Fatal("expected error")
-		}
-	})
-
 	t.Run("existing id query error", func(t *testing.T) {
 		store := newStaffingPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
 			return &stubTx{rowErr: errors.New("row")}, nil

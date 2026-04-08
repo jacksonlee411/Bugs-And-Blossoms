@@ -1,6 +1,8 @@
 import { expect, test } from "@playwright/test";
-import fs from "node:fs/promises";
 import path from "node:path";
+
+import { ensureDir, writeJSON } from "./helpers/evidence.js";
+import { setupTenantAdminSession } from "./helpers/superadmin-tenant.js";
 
 const repoRoot = path.resolve(__dirname, "..", "..");
 const EVIDENCE_ROOT = path.join(repoRoot, "docs", "dev-records", "assets", "dev-plan-290");
@@ -30,14 +32,6 @@ function normalizeText(value) {
   return String(value || "").trim().replace(/\s+/g, " ");
 }
 
-async function ensureDir(dirPath) {
-  await fs.mkdir(dirPath, { recursive: true });
-}
-
-async function writeJSON(filePath, payload) {
-  await fs.writeFile(filePath, `${JSON.stringify(payload, null, 2)}\n`, "utf8");
-}
-
 function evidencePaths(caseId) {
   return {
     page: `${EVIDENCE_ROOT}/case-${caseId}-page.png`,
@@ -46,24 +40,6 @@ function evidencePaths(caseId) {
     trace: `${EVIDENCE_ROOT}/case-${caseId}-trace.zip`,
     phase: `${EVIDENCE_ROOT}/case-${caseId}-phase-assertions.json`,
   };
-}
-
-async function ensureKratosIdentity(ctx, kratosAdminURL, { traits, identifier, password }) {
-  const resp = await ctx.request.post(`${kratosAdminURL}/admin/identities`, {
-    data: {
-      schema_id: "default",
-      traits,
-      credentials: {
-        password: {
-          identifiers: [identifier],
-          config: { password },
-        },
-      },
-    },
-  });
-  if (!resp.ok()) {
-    expect(resp.status(), `unexpected status: ${resp.status()} (${await resp.text()})`).toBe(409);
-  }
 }
 
 function buildReply(text, kind, stage, turnId) {
@@ -130,75 +106,22 @@ function buildConversation(conversationID, turns) {
   };
 }
 
-async function setupTenantAdminSession(browser, suffix, harPath) {
+async function createTP290Session(browser, suffix, harPath) {
   const runID = `${Date.now()}-${suffix}`;
-  const tenantHost = `t-tp290-${runID}.localhost`;
-  const tenantName = `TP290 Tenant ${runID}`;
-  const tenantAdminEmail = `tenant-admin+tp290-${runID}@example.invalid`;
-  const tenantAdminPass = process.env.E2E_TENANT_ADMIN_PASS || "pw";
-
-  const superadminBaseURL = process.env.E2E_SUPERADMIN_BASE_URL || "http://localhost:8081";
-  const superadminUser = process.env.E2E_SUPERADMIN_USER || "admin";
-  const superadminPass = process.env.E2E_SUPERADMIN_PASS || "admin";
-  const superadminEmail = process.env.E2E_SUPERADMIN_EMAIL || `admin+tp290-${runID}@example.invalid`;
-  const superadminLoginPass = process.env.E2E_SUPERADMIN_LOGIN_PASS || superadminPass;
-  const kratosAdminURL = process.env.E2E_KRATOS_ADMIN_URL || "http://localhost:4434";
-
-  const superadminContext = await browser.newContext({
-    baseURL: superadminBaseURL,
-    httpCredentials: { username: superadminUser, password: superadminPass },
-  });
-  const superadminPage = await superadminContext.newPage();
-
-  if (!process.env.E2E_SUPERADMIN_EMAIL) {
-    await ensureKratosIdentity(superadminContext, kratosAdminURL, {
-      traits: { email: superadminEmail },
-      identifier: `sa:${superadminEmail.toLowerCase()}`,
-      password: superadminLoginPass,
-    });
-  }
-
-  await superadminPage.goto("/superadmin/login");
-  await superadminPage.locator('input[name="email"]').fill(superadminEmail);
-  await superadminPage.locator('input[name="password"]').fill(superadminLoginPass);
-  await superadminPage.getByRole("button", { name: "Login" }).click();
-  await expect(superadminPage).toHaveURL(/\/superadmin\/tenants$/);
-
-  await superadminPage.locator('form[action="/superadmin/tenants"] input[name="name"]').fill(tenantName);
-  await superadminPage.locator('form[action="/superadmin/tenants"] input[name="hostname"]').fill(tenantHost);
-  await superadminPage.locator('form[action="/superadmin/tenants"] button[type="submit"]').click();
-  await expect(superadminPage).toHaveURL(/\/superadmin\/tenants$/);
-  await expect(superadminPage.locator("tr", { hasText: tenantHost }).first()).toBeVisible({ timeout: 60_000 });
-
-  const tenantRow = superadminPage.locator("tr", { hasText: tenantHost }).first();
-  const tenantID = (await tenantRow.locator("code").first().innerText()).replace(/\s+/g, "").trim();
-  expect(tenantID).not.toBe("");
-
-  await ensureKratosIdentity(superadminContext, kratosAdminURL, {
-    traits: { tenant_uuid: tenantID, email: tenantAdminEmail, role_slug: "tenant-admin" },
-    identifier: `${tenantID}:${tenantAdminEmail}`,
-    password: tenantAdminPass,
-  });
-  await superadminContext.close();
-
-  const appBaseURL = process.env.E2E_BASE_URL || "http://localhost:8080";
-  const appContext = await browser.newContext({
-    baseURL: appBaseURL,
-    extraHTTPHeaders: { "X-Forwarded-Host": tenantHost },
-    recordHar: {
-      path: harPath,
-      content: "embed",
-      mode: "full",
+  return setupTenantAdminSession(browser, {
+    tenantName: `TP290 Tenant ${runID}`,
+    tenantHost: `t-tp290-${runID}.localhost`,
+    tenantAdminEmail: `tenant-admin+tp290-${runID}@example.invalid`,
+    superadminEmail: process.env.E2E_SUPERADMIN_EMAIL || `admin+tp290-${runID}@example.invalid`,
+    createPage: true,
+    appContextOptions: {
+      recordHar: {
+        path: harPath,
+        content: "embed",
+        mode: "full",
+      },
     },
   });
-
-  const loginResp = await appContext.request.post("/iam/api/sessions", {
-    data: { email: tenantAdminEmail, password: tenantAdminPass },
-  });
-  expect(loginResp.status(), await loginResp.text()).toBe(204);
-
-  const page = await appContext.newPage();
-  return { appContext, page };
 }
 
 function safeJSON(request) {
@@ -660,7 +583,7 @@ async function runCaseAndCollectEvidence(browser, caseId) {
   await ensureDir(EVIDENCE_ROOT);
   const paths = evidencePaths(caseId);
 
-  const { appContext, page } = await setupTenantAdminSession(browser, `case-${caseId}`, paths.network);
+  const { appContext, page } = await createTP290Session(browser, `case-${caseId}`, paths.network);
   const state = await installCaseMock(page, caseId);
   let surface;
   let usedIframe = true;

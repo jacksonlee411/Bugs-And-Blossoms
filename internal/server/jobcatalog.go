@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/jackc/pgx/v5"
+	jobcatalogservices "github.com/jacksonlee411/Bugs-And-Blossoms/modules/jobcatalog/services"
 	"github.com/jacksonlee411/Bugs-And-Blossoms/pkg/setid"
 )
 
@@ -964,107 +965,134 @@ type jobCatalogView struct {
 }
 
 func (v jobCatalogView) listSetID() string {
-	if !v.HasSelection {
-		return ""
-	}
-	if v.ReadOnly {
-		return v.SetID
-	}
-	return v.OwnerSetID
+	return jobcatalogservices.JobCatalogView(v).ListSetID()
 }
 
 func normalizePackageCode(input string) string {
-	return strings.ToUpper(strings.TrimSpace(input))
+	return jobcatalogservices.NormalizePackageCode(input)
 }
 
 func canEditDefltPackage(ctx context.Context) bool {
-	if !canEditOwnedScopePackages(ctx) {
-		return false
-	}
-	p, _ := currentPrincipal(ctx)
-	return strings.EqualFold(strings.TrimSpace(p.Status), "active")
+	return jobcatalogservices.CanEditDefltPackage(jobCatalogPrincipalFromContext(ctx))
 }
 
 func ownerSetIDEditable(ctx context.Context, setidStore jobCatalogSetIDStore, tenantID string, ownerSetID string) bool {
-	if !canEditOwnedScopePackages(ctx) {
-		return false
-	}
-	if setidStore == nil {
-		return false
-	}
-	ownerSetID = normalizeSetID(ownerSetID)
-	if ownerSetID == "" {
-		return false
-	}
-	rows, err := setidStore.ListSetIDs(ctx, tenantID)
-	if err != nil {
-		return false
-	}
-	for _, row := range rows {
-		if normalizeSetID(row.SetID) == ownerSetID && strings.EqualFold(strings.TrimSpace(row.Status), "active") {
-			return true
-		}
-	}
-	return false
+	return jobcatalogservices.OwnerSetIDEditable(ctx, jobCatalogPrincipalFromContext(ctx), adaptJobCatalogSetIDStore(setidStore), tenantID, ownerSetID)
 }
 
 func loadOwnedJobCatalogPackages(ctx context.Context, setidStore jobCatalogSetIDStore, tenantID string, asOf string) ([]OwnedScopePackage, error) {
-	if setidStore == nil {
-		return []OwnedScopePackage{}, nil
-	}
-	if !canEditOwnedScopePackages(ctx) {
-		return []OwnedScopePackage{}, nil
-	}
-	rows, err := setidStore.ListOwnedScopePackages(ctx, tenantID, "jobcatalog", asOf)
+	rows, err := jobcatalogservices.LoadOwnedJobCatalogPackages(ctx, jobCatalogPrincipalFromContext(ctx), adaptJobCatalogSetIDStore(setidStore), tenantID, asOf)
 	if err != nil {
 		return nil, err
 	}
-	if rows == nil {
-		return []OwnedScopePackage{}, nil
-	}
-	return rows, nil
+	return toServerOwnedScopePackages(rows), nil
 }
 
 func resolveJobCatalogView(ctx context.Context, store JobCatalogStore, setidStore jobCatalogSetIDStore, tenantID string, asOf string, packageCode string, setID string) (jobCatalogView, string) {
-	view := jobCatalogView{PackageCode: packageCode}
-	if packageCode == "" && setID == "" {
-		return view, ""
-	}
-	if setID != "" {
-		view.SetID = normalizeSetID(setID)
-		view.OwnerSetID = view.SetID
-		view.HasSelection = true
-		if _, err := store.ResolveJobCatalogPackageBySetID(ctx, tenantID, view.SetID, asOf); err != nil {
-			return view, err.Error()
-		}
-		view.ReadOnly = !ownerSetIDEditable(ctx, setidStore, tenantID, view.SetID)
-		return view, ""
-	}
+	view, errMsg := jobcatalogservices.ResolveJobCatalogView(
+		ctx,
+		jobCatalogPrincipalFromContext(ctx),
+		jobCatalogStoreAdapter{store: store},
+		adaptJobCatalogSetIDStore(setidStore),
+		tenantID,
+		asOf,
+		packageCode,
+		setID,
+	)
+	return jobCatalogView(view), errMsg
+}
 
-	view.HasSelection = true
-	if !canEditOwnedScopePackages(ctx) {
-		return view, "OWNER_SETID_FORBIDDEN"
-	}
-	pkg, err := store.ResolveJobCatalogPackageByCode(ctx, tenantID, packageCode, asOf)
+type jobCatalogStoreAdapter struct {
+	store JobCatalogStore
+}
+
+func (a jobCatalogStoreAdapter) ResolveJobCatalogPackageByCode(ctx context.Context, tenantID string, packageCode string, asOfDate string) (jobcatalogservices.JobCatalogPackage, error) {
+	pkg, err := a.store.ResolveJobCatalogPackageByCode(ctx, tenantID, packageCode, asOfDate)
 	if err != nil {
-		return view, err.Error()
+		return jobcatalogservices.JobCatalogPackage{}, err
 	}
-	view.PackageCode = pkg.PackageCode
-	view.OwnerSetID = pkg.OwnerSetID
-	if !ownerSetIDEditable(ctx, setidStore, tenantID, pkg.OwnerSetID) {
-		return view, "OWNER_SETID_FORBIDDEN"
-	}
-	if strings.EqualFold(pkg.PackageCode, "DEFLT") && !canEditDefltPackage(ctx) {
-		return view, "DEFLT_EDIT_FORBIDDEN"
-	}
-	resolvedID, err := store.ResolveJobCatalogPackageBySetID(ctx, tenantID, pkg.OwnerSetID, asOf)
+	return jobcatalogservices.JobCatalogPackage{
+		PackageUUID: pkg.PackageUUID,
+		PackageCode: pkg.PackageCode,
+		OwnerSetID:  pkg.OwnerSetID,
+	}, nil
+}
+
+func (a jobCatalogStoreAdapter) ResolveJobCatalogPackageBySetID(ctx context.Context, tenantID string, setID string, asOfDate string) (string, error) {
+	return a.store.ResolveJobCatalogPackageBySetID(ctx, tenantID, setID, asOfDate)
+}
+
+type jobCatalogSetIDStoreAdapter struct {
+	store jobCatalogSetIDStore
+}
+
+func (a jobCatalogSetIDStoreAdapter) ListSetIDs(ctx context.Context, tenantID string) ([]jobcatalogservices.SetIDRecord, error) {
+	rows, err := a.store.ListSetIDs(ctx, tenantID)
 	if err != nil {
-		return view, err.Error()
+		return nil, err
 	}
-	if resolvedID != pkg.PackageUUID {
-		return view, "PACKAGE_CODE_MISMATCH"
+	out := make([]jobcatalogservices.SetIDRecord, 0, len(rows))
+	for _, row := range rows {
+		out = append(out, jobcatalogservices.SetIDRecord{
+			SetID:  row.SetID,
+			Status: row.Status,
+		})
 	}
-	return view, ""
+	return out, nil
+}
+
+func (a jobCatalogSetIDStoreAdapter) ListOwnedScopePackages(ctx context.Context, tenantID string, scopeCode string, asOfDate string) ([]jobcatalogservices.OwnedScopePackage, error) {
+	rows, err := a.store.ListOwnedScopePackages(ctx, tenantID, scopeCode, asOfDate)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]jobcatalogservices.OwnedScopePackage, 0, len(rows))
+	for _, row := range rows {
+		out = append(out, jobcatalogservices.OwnedScopePackage{
+			PackageID:     row.PackageID,
+			ScopeCode:     row.ScopeCode,
+			PackageCode:   row.PackageCode,
+			OwnerSetID:    row.OwnerSetID,
+			Name:          row.Name,
+			Status:        row.Status,
+			EffectiveDate: row.EffectiveDate,
+		})
+	}
+	return out, nil
+}
+
+func adaptJobCatalogSetIDStore(store jobCatalogSetIDStore) jobcatalogservices.SetIDStore {
+	if store == nil {
+		return nil
+	}
+	return jobCatalogSetIDStoreAdapter{store: store}
+}
+
+func jobCatalogPrincipalFromContext(ctx context.Context) jobcatalogservices.Principal {
+	p, _ := currentPrincipal(ctx)
+	return jobcatalogservices.Principal{
+		RoleSlug: p.RoleSlug,
+		Status:   p.Status,
+	}
+}
+
+func toServerOwnedScopePackages(rows []jobcatalogservices.OwnedScopePackage) []OwnedScopePackage {
+	if rows == nil {
+		return nil
+	}
+	out := make([]OwnedScopePackage, 0, len(rows))
+	for _, row := range rows {
+		out = append(out, OwnedScopePackage{
+			PackageID:     row.PackageID,
+			ScopeCode:     row.ScopeCode,
+			PackageCode:   row.PackageCode,
+			OwnerSetID:    row.OwnerSetID,
+			Name:          row.Name,
+			Status:        row.Status,
+			EffectiveDate: row.EffectiveDate,
+		})
+	}
+	return out
 }
 
 func jobCatalogStatusForError(errMsg string) int {

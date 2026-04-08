@@ -2,6 +2,23 @@ import { expect, test } from "@playwright/test";
 import fs from "node:fs/promises";
 import path from "node:path";
 
+import {
+  latestAssistantTurn,
+  parseJSONSafe,
+  parseResponseBody,
+} from "./helpers/assistant-conversation.js";
+import { ensureDir, writeJSON } from "./helpers/evidence.js";
+import {
+  collectCandidateDetails,
+  collectOrgDetailsBySpecs,
+  createOrgUnit,
+  detectRootOrg,
+  ensureOrgUnitByCode,
+  orgUnitDetailsSnapshot,
+  waitForOrgUnitDetails,
+} from "./helpers/org-baseline.js";
+import { setupTenantAdminSession } from "./helpers/superadmin-tenant.js";
+
 const repoRoot = path.resolve(__dirname, "..", "..");
 const EVIDENCE_ROOT = path.join(repoRoot, "docs", "dev-records", "assets", "dev-plan-290b");
 const INDEX_PATH = path.join(EVIDENCE_ROOT, "tp290b-live-evidence-index.json");
@@ -73,18 +90,6 @@ function normalizeText(value) {
   return String(value || "").trim().replace(/\s+/g, " ");
 }
 
-function parseJSONSafe(raw) {
-  const body = String(raw || "").trim();
-  if (!body) {
-    return null;
-  }
-  try {
-    return JSON.parse(body);
-  } catch {
-    return null;
-  }
-}
-
 function dryRunValidationErrors(turn) {
   if (!Array.isArray(turn?.dry_run?.validation_errors)) {
     return [];
@@ -94,63 +99,6 @@ function dryRunValidationErrors(turn) {
 
 function hasValidationError(turn, code) {
   return dryRunValidationErrors(turn).includes(code);
-}
-
-async function parseResponseBody(response) {
-  const text = await response.text();
-  return { text, json: parseJSONSafe(text) };
-}
-
-async function listOrgUnits(appContext, asOf) {
-  const response = await appContext.request.get(`/org/api/org-units?as_of=${encodeURIComponent(asOf)}`);
-  const { text, json } = await parseResponseBody(response);
-  expect(response.status(), text).toBe(200);
-  return Array.isArray(json?.org_units) ? json.org_units : [];
-}
-
-function orgUnitDetailsSnapshot(details) {
-  if (!details?.org_unit) {
-    return null;
-  }
-  return {
-    org_code: String(details.org_unit.org_code || "").trim(),
-    name: String(details.org_unit.name || "").trim(),
-    parent_org_code: String(details.org_unit.parent_org_code || "").trim(),
-    full_name_path: String(details.org_unit.full_name_path || "").trim(),
-    status: String(details.org_unit.status || "").trim(),
-  };
-}
-
-async function getOrgUnitDetails(appContext, orgCode, asOf) {
-  const response = await appContext.request.get(
-    `/org/api/org-units/details?as_of=${encodeURIComponent(asOf)}&org_code=${encodeURIComponent(orgCode)}`,
-  );
-  const { text, json } = await parseResponseBody(response);
-  if (response.status() === 404) {
-    return null;
-  }
-  expect(response.status(), text).toBe(200);
-  return json;
-}
-
-async function waitForOrgUnitDetails(appContext, orgCode, asOf, timeoutMs = 15_000) {
-  const deadline = Date.now() + timeoutMs;
-  let details = null;
-  while (Date.now() < deadline) {
-    details = await getOrgUnitDetails(appContext, orgCode, asOf);
-    if (details?.org_unit) {
-      return details;
-    }
-    await new Promise((resolve) => setTimeout(resolve, 250));
-  }
-  return details;
-}
-
-async function createOrgUnit(appContext, payload) {
-  const response = await appContext.request.post("/org/api/org-units", { data: payload });
-  const { text, json } = await parseResponseBody(response);
-  expect(response.status(), text).toBe(201);
-  return json;
 }
 
 function orgUnitsByExactName(orgUnits, name) {
@@ -163,51 +111,6 @@ function orgUnitsByNameContains(orgUnits, name) {
   return orgUnits.filter((item) => normalizeText(item?.name).includes(target));
 }
 
-async function detectRootOrg(appContext, asOf) {
-  const orgUnits = await listOrgUnits(appContext, asOf);
-  const preferred = orgUnits.find((item) => String(item?.org_code || "").trim() === BASELINE_ROOT_CODE);
-  if (preferred) {
-    const details = await getOrgUnitDetails(appContext, BASELINE_ROOT_CODE, asOf);
-    if (details?.org_unit && !String(details.org_unit.parent_org_code || "").trim()) {
-      return details.org_unit;
-    }
-  }
-  for (const item of orgUnits) {
-    const orgCode = String(item?.org_code || "").trim();
-    if (!orgCode) {
-      continue;
-    }
-    const details = await getOrgUnitDetails(appContext, orgCode, asOf);
-    if (details?.org_unit && !String(details.org_unit.parent_org_code || "").trim()) {
-      return details.org_unit;
-    }
-  }
-  return null;
-}
-
-async function ensureOrgUnitByCode(appContext, spec, effectiveDate, parentOrgCode, createdOrgs) {
-  const existing = await waitForOrgUnitDetails(appContext, spec.code, effectiveDate, 250);
-  if (existing?.org_unit) {
-    return existing.org_unit;
-  }
-  await createOrgUnit(appContext, {
-    org_code: spec.code,
-    name: spec.name,
-    effective_date: effectiveDate,
-    parent_org_code: parentOrgCode,
-    is_business_unit: false,
-  });
-  const created = await waitForOrgUnitDetails(appContext, spec.code, BASELINE_CASE4_AS_OF);
-  expect(created?.org_unit, `org ${spec.code} should be readable after creation`).toBeTruthy();
-  createdOrgs.push({
-    org_code: spec.code,
-    name: spec.name,
-    parent_org_code: parentOrgCode,
-    effective_date: effectiveDate,
-  });
-  return created.org_unit;
-}
-
 async function createAssistantProbe(appContext, userInput) {
   const createConversation = await appContext.request.post("/internal/assistant/conversations", { data: {} });
   const { text: conversationText, json: conversationJSON } = await parseResponseBody(createConversation);
@@ -218,7 +121,7 @@ async function createAssistantProbe(appContext, userInput) {
       status: createConversation.status(),
       raw_text: conversationText,
       conversation: conversationJSON,
-      latest_turn: latestTurn(conversationJSON || {}),
+      latest_turn: latestAssistantTurn(conversationJSON || {}),
       error_code: String(conversationJSON?.code || "").trim(),
     };
   }
@@ -234,7 +137,7 @@ async function createAssistantProbe(appContext, userInput) {
     status: createTurn.status(),
     raw_text: turnText,
     conversation: turnJSON,
-    latest_turn: latestTurn(turnJSON || {}),
+    latest_turn: latestAssistantTurn(turnJSON || {}),
     error_code: String(turnJSON?.code || "").trim(),
   };
 }
@@ -266,36 +169,6 @@ function baselineProbeSummary(probe) {
     request_id: String(turn?.request_id || ""),
     trace_id: String(turn?.trace_id || ""),
   };
-}
-
-async function collectCandidateDetails(appContext, orgUnits, asOf) {
-  const details = [];
-  for (const item of orgUnits) {
-    const orgCode = String(item?.org_code || "").trim();
-    if (!orgCode) {
-      continue;
-    }
-    const response = await getOrgUnitDetails(appContext, orgCode, asOf);
-    details.push({
-      org_code: orgCode,
-      name: String(item?.name || "").trim(),
-      full_name_path: String(response?.org_unit?.full_name_path || ""),
-      parent_org_code: String(response?.org_unit?.parent_org_code || ""),
-    });
-  }
-  return details;
-}
-
-async function collectOrgDetailsBySpecs(appContext, specs, asOf) {
-  const details = [];
-  for (const spec of specs) {
-    const response = await waitForOrgUnitDetails(appContext, spec.code, asOf, 250);
-    const snapshot = orgUnitDetailsSnapshot(response);
-    if (snapshot) {
-      details.push(snapshot);
-    }
-  }
-  return details;
 }
 
 function assistantCandidateSnapshot(turn) {
@@ -331,7 +204,7 @@ async function ensureTenantBaseline(appContext, tenantID) {
     probes: {},
   };
 
-  let rootOrg = await detectRootOrg(appContext, BASELINE_EFFECTIVE_DATE);
+  let rootOrg = await detectRootOrg(appContext, BASELINE_EFFECTIVE_DATE, BASELINE_ROOT_CODE);
   if (!rootOrg) {
     await createOrgUnit(appContext, {
       org_code: BASELINE_ROOT_CODE,
@@ -363,9 +236,13 @@ async function ensureTenantBaseline(appContext, tenantID) {
     await ensureOrgUnitByCode(
       appContext,
       BASELINE_ORG_SPECS.ai_governance_office,
-      BASELINE_EFFECTIVE_DATE,
-      report.root_org_code,
-      report.created_orgs,
+      {
+        effectiveDate: BASELINE_EFFECTIVE_DATE,
+        parentOrgCode: report.root_org_code,
+        readAsOf: BASELINE_CASE4_AS_OF,
+        lookupTimeoutMs: 250,
+        onCreated: async (created) => report.created_orgs.push(created),
+      },
     );
   }
 
@@ -379,9 +256,13 @@ async function ensureTenantBaseline(appContext, tenantID) {
     await ensureOrgUnitByCode(
       appContext,
       BASELINE_ORG_SPECS.shared_service_center_primary,
-      BASELINE_EFFECTIVE_DATE,
-      report.root_org_code,
-      report.created_orgs,
+      {
+        effectiveDate: BASELINE_EFFECTIVE_DATE,
+        parentOrgCode: report.root_org_code,
+        readAsOf: BASELINE_CASE4_AS_OF,
+        lookupTimeoutMs: 250,
+        onCreated: async (created) => report.created_orgs.push(created),
+      },
     );
   }
 
@@ -397,16 +278,24 @@ async function ensureTenantBaseline(appContext, tenantID) {
     await ensureOrgUnitByCode(
       appContext,
       BASELINE_ORG_SPECS.shared_service_center_branch,
-      BASELINE_EFFECTIVE_DATE,
-      report.root_org_code,
-      report.created_orgs,
+      {
+        effectiveDate: BASELINE_EFFECTIVE_DATE,
+        parentOrgCode: report.root_org_code,
+        readAsOf: BASELINE_CASE4_AS_OF,
+        lookupTimeoutMs: 250,
+        onCreated: async (created) => report.created_orgs.push(created),
+      },
     );
     await ensureOrgUnitByCode(
       appContext,
       BASELINE_ORG_SPECS.shared_service_center_secondary,
-      BASELINE_EFFECTIVE_DATE,
-      BASELINE_ORG_SPECS.shared_service_center_branch.code,
-      report.created_orgs,
+      {
+        effectiveDate: BASELINE_EFFECTIVE_DATE,
+        parentOrgCode: BASELINE_ORG_SPECS.shared_service_center_branch.code,
+        readAsOf: BASELINE_CASE4_AS_OF,
+        lookupTimeoutMs: 250,
+        onCreated: async (created) => report.created_orgs.push(created),
+      },
     );
   }
 
@@ -573,14 +462,6 @@ function captureBaselineHint(caseId, tenantID, baseline, snapshot) {
   };
 }
 
-async function ensureDir(dirPath) {
-  await fs.mkdir(dirPath, { recursive: true });
-}
-
-async function writeJSON(filePath, payload) {
-  await fs.writeFile(filePath, `${JSON.stringify(payload, null, 2)}\n`, "utf8");
-}
-
 function evidencePaths(caseId) {
   return {
     page: `${EVIDENCE_ROOT}/case-${caseId}-page.png`,
@@ -595,111 +476,23 @@ function evidencePaths(caseId) {
   };
 }
 
-async function ensureKratosIdentity(ctx, kratosAdminURL, { traits, identifier, password }) {
-  const resp = await ctx.request.post(`${kratosAdminURL}/admin/identities`, {
-    data: {
-      schema_id: "default",
-      traits,
-      credentials: {
-        password: {
-          identifiers: [identifier],
-          config: { password },
-        },
+async function createTP290BSession(browser, suffix, harPath) {
+  const runID = `${Date.now()}-${suffix}`;
+  return setupTenantAdminSession(browser, {
+    tenantName: `TP290B Tenant ${runID}`,
+    tenantHost: `t-tp290b-${runID}.localhost`,
+    tenantAdminEmail: `tenant-admin+tp290b-${runID}@example.invalid`,
+    superadminEmail: process.env.E2E_SUPERADMIN_EMAIL || `admin+tp290b-${runID}@example.invalid`,
+    createPage: true,
+    appContextOptions: {
+      recordHar: {
+        path: harPath,
+        content: "embed",
+        mode: "full",
       },
     },
+    sessionLoginRetryTimeoutMs: 15_000,
   });
-  if (!resp.ok()) {
-    expect(resp.status(), `unexpected status: ${resp.status()} (${await resp.text()})`).toBe(409);
-  }
-}
-
-async function createIAMSessionWithRetry(appContext, email, password, timeoutMs = 15_000) {
-  const deadline = Date.now() + timeoutMs;
-  let lastStatus = 0;
-  let lastBody = "";
-  while (Date.now() < deadline) {
-    const resp = await appContext.request.post("/iam/api/sessions", {
-      data: { email, password },
-    });
-    lastStatus = resp.status();
-    lastBody = await resp.text();
-    if (lastStatus === 204) {
-      return;
-    }
-    const parsed = parseJSONSafe(lastBody);
-    const code = String(parsed?.code || "").trim();
-    if (!(lastStatus === 422 && code === "invalid_credentials")) {
-      break;
-    }
-    await new Promise((resolve) => setTimeout(resolve, 500));
-  }
-  expect(lastStatus, lastBody).toBe(204);
-}
-
-async function setupTenantAdminSession(browser, suffix, harPath) {
-  const runID = `${Date.now()}-${suffix}`;
-  const tenantHost = `t-tp290b-${runID}.localhost`;
-  const tenantName = `TP290B Tenant ${runID}`;
-  const tenantAdminEmail = `tenant-admin+tp290b-${runID}@example.invalid`;
-  const tenantAdminPass = process.env.E2E_TENANT_ADMIN_PASS || "pw";
-
-  const superadminBaseURL = process.env.E2E_SUPERADMIN_BASE_URL || "http://localhost:8081";
-  const superadminUser = process.env.E2E_SUPERADMIN_USER || "admin";
-  const superadminPass = process.env.E2E_SUPERADMIN_PASS || "admin";
-  const superadminEmail = process.env.E2E_SUPERADMIN_EMAIL || `admin+tp290b-${runID}@example.invalid`;
-  const superadminLoginPass = process.env.E2E_SUPERADMIN_LOGIN_PASS || superadminPass;
-  const kratosAdminURL = process.env.E2E_KRATOS_ADMIN_URL || "http://localhost:4434";
-
-  const superadminContext = await browser.newContext({
-    baseURL: superadminBaseURL,
-    httpCredentials: { username: superadminUser, password: superadminPass },
-  });
-  const superadminPage = await superadminContext.newPage();
-
-  if (!process.env.E2E_SUPERADMIN_EMAIL) {
-    await ensureKratosIdentity(superadminContext, kratosAdminURL, {
-      traits: { email: superadminEmail },
-      identifier: `sa:${superadminEmail.toLowerCase()}`,
-      password: superadminLoginPass,
-    });
-  }
-
-  await superadminPage.goto("/superadmin/login");
-  await superadminPage.locator('input[name="email"]').fill(superadminEmail);
-  await superadminPage.locator('input[name="password"]').fill(superadminLoginPass);
-  await superadminPage.getByRole("button", { name: "Login" }).click();
-  await expect(superadminPage).toHaveURL(/\/superadmin\/tenants$/);
-
-  await superadminPage.locator('form[action="/superadmin/tenants"] input[name="name"]').fill(tenantName);
-  await superadminPage.locator('form[action="/superadmin/tenants"] input[name="hostname"]').fill(tenantHost);
-  await superadminPage.locator('form[action="/superadmin/tenants"] button[type="submit"]').click();
-  await expect(superadminPage).toHaveURL(/\/superadmin\/tenants$/);
-  await expect(superadminPage.locator("tr", { hasText: tenantHost }).first()).toBeVisible({ timeout: 60_000 });
-
-  const tenantRow = superadminPage.locator("tr", { hasText: tenantHost }).first();
-  const tenantID = (await tenantRow.locator("code").first().innerText()).replace(/\s+/g, "").trim();
-  expect(tenantID).not.toBe("");
-
-  await ensureKratosIdentity(superadminContext, kratosAdminURL, {
-    traits: { tenant_uuid: tenantID, email: tenantAdminEmail, role_slug: "tenant-admin" },
-    identifier: `${tenantID}:${tenantAdminEmail}`,
-    password: tenantAdminPass,
-  });
-  await superadminContext.close();
-
-  const appBaseURL = process.env.E2E_BASE_URL || "http://localhost:8080";
-  const appContext = await browser.newContext({
-    baseURL: appBaseURL,
-    extraHTTPHeaders: { "X-Forwarded-Host": tenantHost },
-    recordHar: {
-      path: harPath,
-      content: "embed",
-      mode: "full",
-    },
-  });
-  await createIAMSessionWithRetry(appContext, tenantAdminEmail, tenantAdminPass);
-  const page = await appContext.newPage();
-  return { appContext, page, tenantID };
 }
 
 function installNetworkRecorder(page) {
@@ -878,19 +671,12 @@ async function fetchConversation(appContext, conversationId) {
   return response.json();
 }
 
-function latestTurn(conversation) {
-  if (!conversation || !Array.isArray(conversation.turns) || conversation.turns.length === 0) {
-    return null;
-  }
-  return conversation.turns[conversation.turns.length - 1];
-}
-
 async function waitForCommittedConversation(appContext, conversationId, timeoutMs = 45_000) {
   const deadline = Date.now() + timeoutMs;
   let lastConversation = null;
   while (Date.now() < deadline) {
     lastConversation = await fetchConversation(appContext, conversationId);
-    const turn = latestTurn(lastConversation);
+    const turn = latestAssistantTurn(lastConversation);
     if (turn && turn.state === "committed") {
       return lastConversation;
     }
@@ -942,7 +728,7 @@ function compressPhases(items) {
 }
 
 function modelProofFromConversation(conversation) {
-  const turn = latestTurn(conversation) || {};
+  const turn = latestAssistantTurn(conversation) || {};
   const plan = turn.plan || {};
   const provider = String(plan.model_provider || "").trim();
   const modelName = String(plan.model_name || "").trim();
@@ -1168,7 +954,7 @@ function runtimeBlockedFailurePayload({
 
 async function runRuntimeAdmissionGate(browser) {
   await ensureDir(EVIDENCE_ROOT);
-  const { appContext, tenantID } = await setupTenantAdminSession(browser, "runtime-gate", RUNTIME_GATE_HAR_PATH);
+  const { appContext, tenantID } = await createTP290BSession(browser, "runtime-gate", RUNTIME_GATE_HAR_PATH);
   const report = {
     plan: "DEV-PLAN-290B",
     status: "blocked",
@@ -1235,7 +1021,7 @@ async function runRuntimeAdmissionGate(browser) {
     report.checks.create_turn_status_200 = createTurn.status() === 200;
 
     if (createTurn.status() === 200) {
-      const turn = latestTurn(createTurnJSON || {});
+      const turn = latestAssistantTurn(createTurnJSON || {});
       report.observed.intent_action = String(turn?.intent?.action || "");
       report.observed.phase = String(turn?.phase || "");
       report.observed.model_provider = String(turn?.plan?.model_provider || "");
@@ -1270,7 +1056,7 @@ async function runRuntimeAdmissionGate(browser) {
 async function runCaseAndCollectEvidence(browser, caseId) {
   await ensureDir(EVIDENCE_ROOT);
   const paths = evidencePaths(caseId);
-  const { appContext, page, tenantID } = await setupTenantAdminSession(browser, `case-${caseId}`, paths.network);
+  const { appContext, page, tenantID } = await createTP290BSession(browser, `case-${caseId}`, paths.network);
   const networkState = installNetworkRecorder(page);
   const inputs = CASE_INPUTS[caseId];
   let traceMode = "none";
@@ -1316,7 +1102,7 @@ async function runCaseAndCollectEvidence(browser, caseId) {
       await runFormalCaseStep(surface, caseId, index, inputs[index]);
       const bubble = await latestFormalBubbleMaybe(surface);
       const fallbackConversation = await waitForConversationSnapshotFromState(networkState);
-      const fallbackTurn = latestTurn(fallbackConversation || {});
+      const fallbackTurn = latestAssistantTurn(fallbackConversation || {});
       conversationId =
         conversationId ||
         bubble?.conversationId ||
@@ -1343,7 +1129,7 @@ async function runCaseAndCollectEvidence(browser, caseId) {
               text: "",
             },
           conversation,
-          latest_turn: latestTurn(conversation),
+          latest_turn: latestAssistantTurn(conversation),
         });
         captureBaselineHint(caseId, tenantID, baseline, snapshots[snapshots.length - 1]);
         if (index === 0) {
@@ -1360,11 +1146,11 @@ async function runCaseAndCollectEvidence(browser, caseId) {
         input: "",
         bubble: await latestFormalBubble(surface),
         conversation: finalConversation,
-        latest_turn: latestTurn(finalConversation),
+        latest_turn: latestAssistantTurn(finalConversation),
       });
     }
 
-    const finalTurn = latestTurn(finalConversation || {});
+    const finalTurn = latestAssistantTurn(finalConversation || {});
     const observedPhases = compressPhases(snapshots.map((item) => item.latest_turn?.phase));
     const unsupportedCalls = unsupportedCallsFromState(
       networkState,

@@ -1,17 +1,13 @@
 import { expect, test } from "@playwright/test";
-import fs from "node:fs/promises";
 import path from "node:path";
+
+import { latestAssistantTurn, parseJSONSafe } from "./helpers/assistant-conversation.js";
+import { pollAssistantTask } from "./helpers/assistant-task.js";
+import { ensureDir, writeJSON } from "./helpers/evidence.js";
+import { setupTenantAdminSession } from "./helpers/superadmin-tenant.js";
 
 const repoRoot = path.resolve(__dirname, "..", "..");
 const EVIDENCE_ROOT = path.join(repoRoot, "docs", "dev-records", "assets", "dev-plan-290b");
-
-async function ensureDir(dirPath) {
-  await fs.mkdir(dirPath, { recursive: true });
-}
-
-async function writeJSON(filePath, payload) {
-  await fs.writeFile(filePath, `${JSON.stringify(payload, null, 2)}\n`, "utf8");
-}
 
 function isIgnorableCloseError(error) {
   const message = String(error || "").toLowerCase();
@@ -33,112 +29,16 @@ async function closeContextSafely(context, label) {
   }
 }
 
-async function ensureKratosIdentity(ctx, kratosAdminURL, { traits, identifier, password }) {
-  const resp = await ctx.request.post(`${kratosAdminURL}/admin/identities`, {
-    data: {
-      schema_id: "default",
-      traits,
-      credentials: {
-        password: {
-          identifiers: [identifier],
-          config: { password },
-        },
-      },
-    },
-  });
-  if (!resp.ok()) {
-    expect(resp.status(), `unexpected status: ${resp.status()} (${await resp.text()})`).toBe(409);
-  }
-}
-
-async function setupTenantAdminSession(browser, suffix) {
+async function createNegativeSession(browser, suffix) {
   const runID = `${Date.now()}-${suffix}`;
-  const tenantHost = `t-tp290b-neg-${runID}.localhost`;
-  const tenantName = `TP290B NEG Tenant ${runID}`;
-  const tenantAdminEmail = `tenant-admin+tp290b-neg-${runID}@example.invalid`;
-  const tenantAdminPass = process.env.E2E_TENANT_ADMIN_PASS || "pw";
-
-  const superadminBaseURL = process.env.E2E_SUPERADMIN_BASE_URL || "http://localhost:8081";
-  const superadminUser = process.env.E2E_SUPERADMIN_USER || "admin";
-  const superadminPass = process.env.E2E_SUPERADMIN_PASS || "admin";
-  const superadminEmail =
-    process.env.E2E_SUPERADMIN_EMAIL || `admin+tp290b-neg-${runID}@example.invalid`;
-  const superadminLoginPass = process.env.E2E_SUPERADMIN_LOGIN_PASS || superadminPass;
-  const kratosAdminURL = process.env.E2E_KRATOS_ADMIN_URL || "http://localhost:4434";
-
-  const superadminContext = await browser.newContext({
-    baseURL: superadminBaseURL,
-    httpCredentials: { username: superadminUser, password: superadminPass },
+  const session = await setupTenantAdminSession(browser, {
+    tenantName: `TP290B NEG Tenant ${runID}`,
+    tenantHost: `t-tp290b-neg-${runID}.localhost`,
+    tenantAdminEmail: `tenant-admin+tp290b-neg-${runID}@example.invalid`,
+    superadminEmail: process.env.E2E_SUPERADMIN_EMAIL || `admin+tp290b-neg-${runID}@example.invalid`,
+    closeSuperadminContextWith: async (context) => closeContextSafely(context, "setup-superadmin"),
   });
-  const superadminPage = await superadminContext.newPage();
-
-  if (!process.env.E2E_SUPERADMIN_EMAIL) {
-    await ensureKratosIdentity(superadminContext, kratosAdminURL, {
-      traits: { email: superadminEmail },
-      identifier: `sa:${superadminEmail.toLowerCase()}`,
-      password: superadminLoginPass,
-    });
-  }
-
-  await superadminPage.goto("/superadmin/login");
-  await superadminPage.locator('input[name="email"]').fill(superadminEmail);
-  await superadminPage.locator('input[name="password"]').fill(superadminLoginPass);
-  await superadminPage.getByRole("button", { name: "Login" }).click();
-  await expect(superadminPage).toHaveURL(/\/superadmin\/tenants$/);
-
-  await superadminPage.locator('form[action="/superadmin/tenants"] input[name="name"]').fill(tenantName);
-  await superadminPage
-    .locator('form[action="/superadmin/tenants"] input[name="hostname"]')
-    .fill(tenantHost);
-  await superadminPage
-    .locator('form[action="/superadmin/tenants"] button[type="submit"]')
-    .click();
-  await expect(superadminPage).toHaveURL(/\/superadmin\/tenants$/);
-  await expect(superadminPage.locator("tr", { hasText: tenantHost }).first()).toBeVisible({
-    timeout: 60_000,
-  });
-
-  const tenantRow = superadminPage.locator("tr", { hasText: tenantHost }).first();
-  const tenantID = (await tenantRow.locator("code").first().innerText()).replace(/\s+/g, "").trim();
-  expect(tenantID).not.toBe("");
-
-  await ensureKratosIdentity(superadminContext, kratosAdminURL, {
-    traits: { tenant_uuid: tenantID, email: tenantAdminEmail, role_slug: "tenant-admin" },
-    identifier: `${tenantID}:${tenantAdminEmail}`,
-    password: tenantAdminPass,
-  });
-  await closeContextSafely(superadminContext, "setup-superadmin");
-
-  const appBaseURL = process.env.E2E_BASE_URL || "http://localhost:8080";
-  const appContext = await browser.newContext({
-    baseURL: appBaseURL,
-    extraHTTPHeaders: { "X-Forwarded-Host": tenantHost },
-  });
-  const loginResp = await appContext.request.post("/iam/api/sessions", {
-    data: { email: tenantAdminEmail, password: tenantAdminPass },
-  });
-  expect(loginResp.status(), await loginResp.text()).toBe(204);
-
-  return { appContext, tenantID };
-}
-
-function parseJSONSafe(raw) {
-  const body = String(raw || "").trim();
-  if (!body) {
-    return null;
-  }
-  try {
-    return JSON.parse(body);
-  } catch {
-    return null;
-  }
-}
-
-function latestTurn(conversation) {
-  if (!conversation || !Array.isArray(conversation.turns) || conversation.turns.length === 0) {
-    return null;
-  }
-  return conversation.turns[conversation.turns.length - 1];
+  return { appContext: session.appContext, tenantID: session.tenantID };
 }
 
 async function handleCreateTurnBlockedScenario({
@@ -219,44 +119,12 @@ async function handleCreateConversationBlockedScenario({
   return false;
 }
 
-async function pollTask(appContext, taskID, timeoutMs) {
-  const startAt = Date.now();
-  const terminal = new Set(["succeeded", "failed", "manual_takeover_required", "canceled"]);
-  const statuses = [];
-  while (Date.now() - startAt < timeoutMs) {
-    const resp = await appContext.request.get(
-      `/internal/assistant/tasks/${encodeURIComponent(taskID)}`,
-    );
-    expect(resp.status(), await resp.text()).toBe(200);
-    const detail = await resp.json();
-    statuses.push({
-      status: detail.status || "",
-      dispatch_status: detail.dispatch_status || "",
-      last_error_code: detail.last_error_code || "",
-      updated_at: detail.updated_at || "",
-    });
-    if (terminal.has(detail.status)) {
-      return {
-        timed_out: false,
-        terminal_status: detail.status || "",
-        statuses,
-      };
-    }
-    await new Promise((resolve) => setTimeout(resolve, 500));
-  }
-  return {
-    timed_out: true,
-    terminal_status: "",
-    statuses,
-  };
-}
-
 test("tp290b-neg-001: commit without confirm returns conversation_confirmation_required", async ({
   browser,
 }) => {
   test.setTimeout(240_000);
   await ensureDir(EVIDENCE_ROOT);
-  const { appContext, tenantID } = await setupTenantAdminSession(browser, "001");
+  const { appContext, tenantID } = await createNegativeSession(browser, "001");
   try {
     const createConv = await appContext.request.post("/internal/assistant/conversations", {
       data: {},
@@ -335,7 +203,7 @@ test("tp290b-neg-002: confirm with bad candidate id returns deterministic error"
 }) => {
   test.setTimeout(240_000);
   await ensureDir(EVIDENCE_ROOT);
-  const { appContext, tenantID } = await setupTenantAdminSession(browser, "002");
+  const { appContext, tenantID } = await createNegativeSession(browser, "002");
   try {
     const createConv = await appContext.request.post("/internal/assistant/conversations", {
       data: {},
@@ -418,7 +286,7 @@ test("tp290b-neg-003: plan_only confirm then commit returns assistant_intent_uns
 }) => {
   test.setTimeout(240_000);
   await ensureDir(EVIDENCE_ROOT);
-  const { appContext, tenantID } = await setupTenantAdminSession(browser, "003");
+  const { appContext, tenantID } = await createNegativeSession(browser, "003");
   try {
     const createConv = await appContext.request.post("/internal/assistant/conversations", {
       data: {},
@@ -467,7 +335,7 @@ test("tp290b-neg-003: plan_only confirm then commit returns assistant_intent_uns
       expect(createTurnStatus, rawBody).toBe(200);
     }
     const createdConversation = await createTurn.json();
-    const turn = latestTurn(createdConversation);
+    const turn = latestAssistantTurn(createdConversation);
     expect(turn?.turn_id).toBeTruthy();
 
     const confirmResp = await appContext.request.post(
@@ -502,7 +370,7 @@ test("tp290b-neg-003: plan_only confirm then commit returns assistant_intent_uns
 test("tp290b-neg-004: manual_takeover and timeout attribution probe", async ({ browser }) => {
   test.setTimeout(300_000);
   await ensureDir(EVIDENCE_ROOT);
-  const { appContext, tenantID } = await setupTenantAdminSession(browser, "004");
+  const { appContext, tenantID } = await createNegativeSession(browser, "004");
   try {
     const createConv = await appContext.request.post("/internal/assistant/conversations", {
       data: {},
@@ -551,7 +419,7 @@ test("tp290b-neg-004: manual_takeover and timeout attribution probe", async ({ b
       expect(createTurnStatus, rawBody).toBe(200);
     }
     const firstConversation = await createTurn.json();
-    const firstTurn = latestTurn(firstConversation);
+    const firstTurn = latestAssistantTurn(firstConversation);
     expect(firstTurn?.turn_id).toBeTruthy();
 
     const confirmResp = await appContext.request.post(
@@ -624,8 +492,8 @@ test("tp290b-neg-004: manual_takeover and timeout attribution probe", async ({ b
     const receipt = await commitResp.json();
     expect(receipt.task_id).toBeTruthy();
 
-    const tightProbe = await pollTask(appContext, receipt.task_id, 300);
-    const fullProbe = await pollTask(appContext, receipt.task_id, 30_000);
+    const tightProbe = await pollAssistantTask(appContext, receipt.task_id, 300);
+    const fullProbe = await pollAssistantTask(appContext, receipt.task_id, 30_000);
     if (!fullProbe.timed_out && fullProbe.terminal_status) {
       expect(["succeeded", "failed", "manual_takeover_required", "canceled"]).toContain(
         fullProbe.terminal_status,
