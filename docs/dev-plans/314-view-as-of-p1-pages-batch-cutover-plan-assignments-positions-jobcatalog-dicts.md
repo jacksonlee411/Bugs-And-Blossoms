@@ -332,7 +332,7 @@
 - [x] `JobCatalogPage` 多个 dialog 不再用 `asOf` 预填 `effectiveDate`。
 - [x] `DictConfigsPage` 完成“浏览态 default current / release 工具态显式时间”双轨拆分。
 - [x] 后续若抽 helper，应由 `DEV-PLAN-315` 承接，而不是在本计划内提前引入新层。
-- [ ] 文档门禁通过，且 `AGENTS.md` 文档地图已挂接本计划。
+- [x] 文档门禁通过，且 `AGENTS.md` 文档地图已挂接本计划。
 
 ## 关联文档
 
