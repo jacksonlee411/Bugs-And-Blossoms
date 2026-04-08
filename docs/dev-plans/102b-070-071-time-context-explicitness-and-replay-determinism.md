@@ -15,7 +15,7 @@
      - 071 仍在多个 API/算法处声明“缺省默认 `current_date`”。
   2) 实现层存在隐式默认：070/071 相关 handler、controller、SQL 函数仍有“缺省即今天”的回填。
   3) 测试层已固化默认行为：存在“default as_of/default effective_date”测试，放大了口径漂移风险。
-- **业务价值**：统一“显式时间上下文”后，保证同一输入（包含时间参数）在未来任意时点可重放、可审计、可解释，消除“今天看一个结果、回看历史又是另一个”的不确定性。
+- **业务价值**：统一“显式时间上下文”后，保证同一输入（包含时间参数）在未来任意时点可重放、可审计、可解释，消除“今天看一个结果、回看历史又是另一个”的不确定性。补充说明：本计划的“显式时间”首先面向 **070/071 服务/集成合同**，并不等价于“所有产品页面都必须默认暴露日期控件”。
 
 ### 1.1 调查结论（来源追溯，2026-02-22）
 - **结论 A（基线）**：`DEV-PLAN-070` 已明确“`as_of_date` 必填、禁止默认 `current_date`”，并非缺省 today 的来源（见 070 §6.1/§3.1）。
@@ -29,7 +29,7 @@
 
 ## 2. 目标与非目标 (Goals & Non-Goals)
 ### 2.1 核心目标
-- [x] 070/071 全链路收敛为**显式时间上下文**：读接口强制 `as_of`，写接口强制 `effective_date`（或等价业务生效日字段）。
+- [x] 070/071 服务/集成链路收敛为**显式时间上下文**：历史切片、跨模块、回放相关读接口强制 `as_of`，写接口强制 `effective_date`（或等价业务生效日字段）。
 - [x] 移除 070/071 范围内所有隐式“今天”默认（Go/API/SQL），并以 fail-closed 返回明确错误码。
 - [x] 修订 070/071/071A/071B/102 文档契约，消除“可选默认 today”与“必填禁止默认”冲突。
 - [x] 新增回归门禁：阻断新增 `as_of/effective_date` 的隐式默认逻辑回漂。
@@ -74,10 +74,11 @@
   - 选项 B（选定）：统一返回 `invalid_as_of` / `invalid_effective_date`，其中“缺失”通过 message 明确 `... required`。
 
 ### 3.2 口径冻结（本计划 SSOT）
-- `as_of`：读模型切片时间，**必须显式提供**。
+- `as_of`：读模型切片时间；在 070/071 服务/集成合同内，凡是历史切片、导出、审计、同步、跨模块与回放相关读接口，**必须显式提供**。
 - `effective_date`：写入生效日期，**必须显式提供**。
 - 任何 `target_effective_date` / `enabled_on` / `disabled_on` / `correction_day` 等业务日字段继续保持必填，不得回退到 today。
 - 仅审计时间（`created_at/updated_at/transaction_time`）允许使用系统时钟；业务有效时间一律来自请求显式参数。
+- 产品/UI 层可以采用 current-by-default，但该默认不得实现成下游服务缺参补 today；若进入本计划约束的服务/集成合同，必须先在边界解析为明确的 current/history 语义再下传。
 
 ### 3.3 错误响应冻结（避免 400/422 分叉）
 - HTTP 状态码统一使用 `400`，不在本计划范围内引入 `422`。
@@ -127,7 +128,8 @@
 - `400 invalid_effective_date` + message `effective_date required`（冻结口径，不再引入 `missing_effective_date`）。
 
 ### 5.3 UI 交互约束
-- [x] `/app/org/setid`、`/app/jobcatalog`、`/app/staffing/positions`、`/app/staffing/assignments` 页面请求必须显式携带时间参数；页面内部可以预填“今天”，但提交/请求前必须落到 URL 或 payload。
+- [x] 产品/UI 层允许 current-by-default：默认浏览 current 内容时，页面不必常显日期控件。
+- [x] 当页面进入历史切片、导出、Explain、跨模块读或其它本计划覆盖的显式时间合同前，必须在边界形成明确时间参数或等价 current/history 语义，再进入下游服务。
 - [x] 禁止“页面未显式日期但后端自动 today”的隐式行为。
 
 ## 6. 核心逻辑与算法 (Business Logic & Algorithms)
