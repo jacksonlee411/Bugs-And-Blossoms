@@ -1,6 +1,6 @@
 # DEV-PLAN-012：CI 质量门禁（Quality Gates：Lint/Tests/Routing/E2E）
 
-**状态**: 执行中（四个 required checks 已恢复真实执行；`paths-filter + no-op` 已落地，剩余为细化与外部保护规则收口）（2026-04-09 CST 修订）
+**状态**: 执行中（四个 required checks 与 branch protection 已确认生效；`paths-filter + no-op` 已落地，剩余为细化与排障收口）（2026-04-09 CST 修订）
 
 ## 1. 背景与上下文 (Context)
 
@@ -76,7 +76,7 @@
 1. 继续维持单主源；
 2. 细化 `paths-filter` 分类，避免误跑或漏跑；
 3. 补齐失败排障与 artifact 规范；
-4. 在仓外完成 GitHub branch protection 的最终保护规则收口。
+4. 继续细化 GitHub 侧排障与可观测性，不再存在 branch protection 待确认缺口。
 
 ## 4. 总体方案：四大 Quality Gates 母法保持不变
 
@@ -257,7 +257,7 @@ Gate-4 继续以 `make e2e -> scripts/e2e/run.sh` 为唯一入口，负责：
 - [X] `E2E Tests` 在 CI 中真实执行最小稳定集，失败时具备可用 artifact。
 - [X] required checks 已进入 `paths-filter/no-op` 优化阶段，且 job 继续避免 `skipped`。
 - [X] 覆盖率策略、E2E 入口、专项脚本继续维持单主源，不因恢复 CI 而产生双轨实现。
-- [ ] GitHub 仓外 branch protection 仍需人工确认已将四个 required checks 设为强制通过。
+- [X] GitHub 远端 `main` 分支 branch protection 已确认将四个 required checks 设为强制通过。
 
 ## 10. 参考与链接 (Links)
 
