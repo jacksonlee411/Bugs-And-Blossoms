@@ -1,14 +1,14 @@
-package orgunit
+package orgunit_test
 
 import (
 	"context"
 	"errors"
-	"regexp"
 	"testing"
 	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
+	orgunit "github.com/jacksonlee411/Bugs-And-Blossoms/pkg/orgunit"
 )
 
 type stubTx struct {
@@ -180,108 +180,85 @@ func (r *stubRows) Values() ([]any, error) { return nil, nil }
 func (r *stubRows) RawValues() [][]byte    { return nil }
 func (r *stubRows) Conn() *pgx.Conn        { return nil }
 
-func TestNormalizeOrgCode(t *testing.T) {
-	t.Run("valid normalize", func(t *testing.T) {
-		got, err := NormalizeOrgCode("a_b-1")
-		if err != nil || got != "A_B-1" {
-			t.Fatalf("got=%q err=%v", got, err)
-		}
-	})
+func TestResolveOrgID_BlackBox(t *testing.T) {
+	t.Parallel()
 
-	t.Run("empty invalid", func(t *testing.T) {
-		if _, err := NormalizeOrgCode(""); !errors.Is(err, ErrOrgCodeInvalid) {
-			t.Fatalf("expected ErrOrgCodeInvalid, got %v", err)
-		}
-	})
-
-	t.Run("whitespace only invalid", func(t *testing.T) {
-		if _, err := NormalizeOrgCode(" \t "); !errors.Is(err, ErrOrgCodeInvalid) {
-			t.Fatalf("expected ErrOrgCodeInvalid, got %v", err)
-		}
-	})
-
-	t.Run("leading space allowed", func(t *testing.T) {
-		got, err := NormalizeOrgCode(" a1 ")
-		if err != nil || got != " A1 " {
-			t.Fatalf("got=%q err=%v", got, err)
-		}
-	})
-
-	t.Run("pattern invalid", func(t *testing.T) {
-		if _, err := NormalizeOrgCode("A\n1"); !errors.Is(err, ErrOrgCodeInvalid) {
-			t.Fatalf("expected ErrOrgCodeInvalid, got %v", err)
-		}
-	})
-
-	t.Run("normalized invalid after upper", func(t *testing.T) {
-		origPattern := orgCodePattern
-		t.Cleanup(func() {
-			orgCodePattern = origPattern
-		})
-		orgCodePattern = regexp.MustCompile(`^[a-z]+$`)
-		if _, err := NormalizeOrgCode("abc"); !errors.Is(err, ErrOrgCodeInvalid) {
-			t.Fatalf("expected ErrOrgCodeInvalid, got %v", err)
-		}
-	})
-}
-
-func TestResolveOrgID(t *testing.T) {
 	t.Run("invalid org code", func(t *testing.T) {
-		if _, err := ResolveOrgID(context.Background(), &stubTx{}, "t1", "bad\n"); !errors.Is(err, ErrOrgCodeInvalid) {
+		t.Parallel()
+
+		if _, err := orgunit.ResolveOrgID(context.Background(), &stubTx{}, "t1", "bad\n"); !errors.Is(err, orgunit.ErrOrgCodeInvalid) {
 			t.Fatalf("expected ErrOrgCodeInvalid, got %v", err)
 		}
 	})
 
 	t.Run("assert tenant error", func(t *testing.T) {
+		t.Parallel()
+
 		tx := &stubTx{execErr: errors.New("exec fail")}
-		if _, err := ResolveOrgID(context.Background(), tx, "t1", "A1"); err == nil {
+		if _, err := orgunit.ResolveOrgID(context.Background(), tx, "t1", "A1"); err == nil {
 			t.Fatal("expected error")
 		}
 	})
 
 	t.Run("not found", func(t *testing.T) {
+		t.Parallel()
+
 		tx := &stubTx{rowErr: pgx.ErrNoRows}
-		if _, err := ResolveOrgID(context.Background(), tx, "t1", "A1"); !errors.Is(err, ErrOrgCodeNotFound) {
+		if _, err := orgunit.ResolveOrgID(context.Background(), tx, "t1", "A1"); !errors.Is(err, orgunit.ErrOrgCodeNotFound) {
 			t.Fatalf("expected ErrOrgCodeNotFound, got %v", err)
 		}
 	})
 
 	t.Run("success", func(t *testing.T) {
+		t.Parallel()
+
 		tx := &stubTx{row: stubRow{vals: []any{12345678}}}
-		id, err := ResolveOrgID(context.Background(), tx, "t1", "a1")
+		id, err := orgunit.ResolveOrgID(context.Background(), tx, "t1", "a1")
 		if err != nil || id != 12345678 {
 			t.Fatalf("id=%d err=%v", id, err)
 		}
 	})
 }
 
-func TestResolveOrgCode(t *testing.T) {
+func TestResolveOrgCode_BlackBox(t *testing.T) {
+	t.Parallel()
+
 	t.Run("assert tenant error", func(t *testing.T) {
+		t.Parallel()
+
 		tx := &stubTx{execErr: errors.New("exec fail")}
-		if _, err := ResolveOrgCode(context.Background(), tx, "t1", 1); err == nil {
+		if _, err := orgunit.ResolveOrgCode(context.Background(), tx, "t1", 1); err == nil {
 			t.Fatal("expected error")
 		}
 	})
 
 	t.Run("not found", func(t *testing.T) {
+		t.Parallel()
+
 		tx := &stubTx{rowErr: pgx.ErrNoRows}
-		if _, err := ResolveOrgCode(context.Background(), tx, "t1", 1); !errors.Is(err, ErrOrgIDNotFound) {
+		if _, err := orgunit.ResolveOrgCode(context.Background(), tx, "t1", 1); !errors.Is(err, orgunit.ErrOrgIDNotFound) {
 			t.Fatalf("expected ErrOrgIDNotFound, got %v", err)
 		}
 	})
 
 	t.Run("success", func(t *testing.T) {
+		t.Parallel()
+
 		tx := &stubTx{row: stubRow{vals: []any{"A1"}}}
-		code, err := ResolveOrgCode(context.Background(), tx, "t1", 1)
+		code, err := orgunit.ResolveOrgCode(context.Background(), tx, "t1", 1)
 		if err != nil || code != "A1" {
 			t.Fatalf("code=%q err=%v", code, err)
 		}
 	})
 }
 
-func TestResolveOrgCodes(t *testing.T) {
+func TestResolveOrgCodes_BlackBox(t *testing.T) {
+	t.Parallel()
+
 	t.Run("empty input", func(t *testing.T) {
-		got, err := ResolveOrgCodes(context.Background(), &stubTx{}, "t1", nil)
+		t.Parallel()
+
+		got, err := orgunit.ResolveOrgCodes(context.Background(), &stubTx{}, "t1", nil)
 		if err != nil {
 			t.Fatalf("err=%v", err)
 		}
@@ -291,36 +268,46 @@ func TestResolveOrgCodes(t *testing.T) {
 	})
 
 	t.Run("assert tenant error", func(t *testing.T) {
+		t.Parallel()
+
 		tx := &stubTx{execErr: errors.New("exec fail")}
-		if _, err := ResolveOrgCodes(context.Background(), tx, "t1", []int{1}); err == nil {
+		if _, err := orgunit.ResolveOrgCodes(context.Background(), tx, "t1", []int{1}); err == nil {
 			t.Fatal("expected error")
 		}
 	})
 
 	t.Run("query error", func(t *testing.T) {
+		t.Parallel()
+
 		tx := &stubTx{queryErr: errors.New("query fail")}
-		if _, err := ResolveOrgCodes(context.Background(), tx, "t1", []int{1}); err == nil {
+		if _, err := orgunit.ResolveOrgCodes(context.Background(), tx, "t1", []int{1}); err == nil {
 			t.Fatal("expected error")
 		}
 	})
 
 	t.Run("rows error", func(t *testing.T) {
+		t.Parallel()
+
 		tx := &stubTx{rows: &stubRows{err: errors.New("rows fail")}}
-		if _, err := ResolveOrgCodes(context.Background(), tx, "t1", []int{1}); err == nil {
+		if _, err := orgunit.ResolveOrgCodes(context.Background(), tx, "t1", []int{1}); err == nil {
 			t.Fatal("expected error")
 		}
 	})
 
 	t.Run("scan error", func(t *testing.T) {
+		t.Parallel()
+
 		tx := &stubTx{rows: &stubRows{rows: [][]any{{1, "A1"}}, scanErr: errors.New("scan fail")}}
-		if _, err := ResolveOrgCodes(context.Background(), tx, "t1", []int{1}); err == nil {
+		if _, err := orgunit.ResolveOrgCodes(context.Background(), tx, "t1", []int{1}); err == nil {
 			t.Fatal("expected error")
 		}
 	})
 
 	t.Run("success", func(t *testing.T) {
+		t.Parallel()
+
 		tx := &stubTx{rows: &stubRows{rows: [][]any{{1, "A1"}, {2, "B2"}}}}
-		got, err := ResolveOrgCodes(context.Background(), tx, "t1", []int{1, 2})
+		got, err := orgunit.ResolveOrgCodes(context.Background(), tx, "t1", []int{1, 2})
 		if err != nil {
 			t.Fatalf("err=%v", err)
 		}

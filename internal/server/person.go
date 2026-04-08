@@ -5,13 +5,13 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
-	"regexp"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jacksonlee411/Bugs-And-Blossoms/internal/routing"
+	personservices "github.com/jacksonlee411/Bugs-And-Blossoms/modules/person/services"
 )
 
 type Person struct {
@@ -43,21 +43,8 @@ func newPersonPGStore(pool pgBeginner) PersonStore {
 	return &personPGStore{pool: pool}
 }
 
-var pernrDigitsMax8Re = regexp.MustCompile(`^[0-9]{1,8}$`)
-
 func normalizePernr(raw string) (string, error) {
-	raw = strings.TrimSpace(raw)
-	if raw == "" {
-		return "", errors.New("pernr is required")
-	}
-	if !pernrDigitsMax8Re.MatchString(raw) {
-		return "", errors.New("pernr must be 1-8 digits")
-	}
-	raw = strings.TrimLeft(raw, "0")
-	if raw == "" {
-		raw = "0"
-	}
-	return raw, nil
+	return personservices.NormalizePernr(raw)
 }
 
 func (s *personPGStore) ListPersons(ctx context.Context, tenantID string) ([]Person, error) {
@@ -112,24 +99,20 @@ func (s *personPGStore) CreatePerson(ctx context.Context, tenantID string, pernr
 		return Person{}, err
 	}
 
-	canonical, err := normalizePernr(pernr)
+	prepared, err := personservices.PrepareCreatePerson(pernr, displayName)
 	if err != nil {
 		return Person{}, err
 	}
-	displayName = strings.TrimSpace(displayName)
-	if displayName == "" {
-		return Person{}, errors.New("display_name is required")
-	}
 
 	var p Person
-	p.Pernr = canonical
-	p.DisplayName = displayName
+	p.Pernr = prepared.Pernr
+	p.DisplayName = prepared.DisplayName
 	p.Status = "active"
 	if err := tx.QueryRow(ctx, `
-INSERT INTO person.persons (tenant_uuid, pernr, display_name, status)
-VALUES ($1::uuid, $2::text, $3::text, 'active')
-RETURNING person_uuid::text, created_at
-`, tenantID, canonical, displayName).Scan(&p.UUID, &p.CreatedAt); err != nil {
+	INSERT INTO person.persons (tenant_uuid, pernr, display_name, status)
+	VALUES ($1::uuid, $2::text, $3::text, 'active')
+	RETURNING person_uuid::text, created_at
+	`, tenantID, prepared.Pernr, prepared.DisplayName).Scan(&p.UUID, &p.CreatedAt); err != nil {
 		return Person{}, err
 	}
 
@@ -150,7 +133,7 @@ func (s *personPGStore) FindPersonByPernr(ctx context.Context, tenantID string, 
 		return Person{}, err
 	}
 
-	canonical, err := normalizePernr(pernr)
+	canonical, err := personservices.PrepareFindPersonByPernr(pernr)
 	if err != nil {
 		return Person{}, err
 	}
@@ -248,23 +231,19 @@ func (s *personMemoryStore) ListPersons(_ context.Context, tenantID string) ([]P
 }
 
 func (s *personMemoryStore) CreatePerson(_ context.Context, tenantID string, pernr string, displayName string) (Person, error) {
-	canonical, err := normalizePernr(pernr)
+	prepared, err := personservices.PrepareCreatePerson(pernr, displayName)
 	if err != nil {
 		return Person{}, err
 	}
-	displayName = strings.TrimSpace(displayName)
-	if displayName == "" {
-		return Person{}, errors.New("display_name is required")
-	}
 	for _, p := range s.byTenant[tenantID] {
-		if p.Pernr == canonical {
+		if p.Pernr == prepared.Pernr {
 			return Person{}, errors.New("pernr already exists")
 		}
 	}
 	p := Person{
-		UUID:        "person-" + canonical,
-		Pernr:       canonical,
-		DisplayName: displayName,
+		UUID:        "person-" + prepared.Pernr,
+		Pernr:       prepared.Pernr,
+		DisplayName: prepared.DisplayName,
 		Status:      "active",
 		CreatedAt:   time.Now().UTC(),
 	}
@@ -273,7 +252,7 @@ func (s *personMemoryStore) CreatePerson(_ context.Context, tenantID string, per
 }
 
 func (s *personMemoryStore) FindPersonByPernr(_ context.Context, tenantID string, pernr string) (Person, error) {
-	canonical, err := normalizePernr(pernr)
+	canonical, err := personservices.PrepareFindPersonByPernr(pernr)
 	if err != nil {
 		return Person{}, err
 	}

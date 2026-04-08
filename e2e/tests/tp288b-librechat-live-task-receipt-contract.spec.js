@@ -2,6 +2,16 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { expect, test } from "@playwright/test";
 
+import { latestAssistantTurn, parseJSONSafe, parseResponseBody } from "./helpers/assistant-conversation.js";
+import { ensureDir, writeJSON } from "./helpers/evidence.js";
+import {
+  createOrgUnit,
+  detectRootOrg,
+  ensureOrgUnitByCode,
+  waitForOrgUnitDetails,
+} from "./helpers/org-baseline.js";
+import { setupTenantAdminSession } from "./helpers/superadmin-tenant.js";
+
 const repoRoot = path.resolve(__dirname, "..", "..");
 const EVIDENCE_ROOT = path.join(repoRoot, "docs", "dev-records", "assets", "dev-plan-288b");
 const INDEX_PATH = path.join(EVIDENCE_ROOT, "tp288b-live-evidence-index.json");
@@ -25,33 +35,8 @@ const staleOn = [
   "290B runtime admission baseline changed",
 ];
 
-function parseJSONSafe(raw) {
-  const body = String(raw || "").trim();
-  if (!body) {
-    return null;
-  }
-  try {
-    return JSON.parse(body);
-  } catch {
-    return null;
-  }
-}
-
 function normalizeText(value) {
   return String(value || "").trim().replace(/\s+/g, " ");
-}
-
-async function ensureDir(dirPath) {
-  await fs.mkdir(dirPath, { recursive: true });
-}
-
-async function writeJSON(filePath, payload) {
-  await fs.writeFile(filePath, `${JSON.stringify(payload, null, 2)}\n`, "utf8");
-}
-
-async function parseResponseBody(response) {
-  const text = await response.text();
-  return { text, json: parseJSONSafe(text) };
 }
 
 function evidencePaths() {
@@ -64,193 +49,27 @@ function evidencePaths() {
   };
 }
 
-async function ensureKratosIdentity(ctx, kratosAdminURL, { traits, identifier, password }) {
-  const resp = await ctx.request.post(`${kratosAdminURL}/admin/identities`, {
-    data: {
-      schema_id: "default",
-      traits,
-      credentials: {
-        password: {
-          identifiers: [identifier],
-          config: { password },
-        },
+async function createTP288BSession(browser, suffix, harPath) {
+  const runID = `${Date.now()}-${suffix}`;
+  return setupTenantAdminSession(browser, {
+    tenantName: `TP288B Tenant ${runID}`,
+    tenantHost: `t-tp288b-${runID}.localhost`,
+    tenantAdminEmail: `tenant-admin+tp288b-${runID}@example.invalid`,
+    superadminEmail: process.env.E2E_SUPERADMIN_EMAIL || `admin+tp288b-${runID}@example.invalid`,
+    createPage: true,
+    appContextOptions: {
+      recordHar: {
+        path: harPath,
+        content: "embed",
+        mode: "full",
       },
     },
+    sessionLoginRetryTimeoutMs: 15_000,
   });
-  if (!resp.ok()) {
-    expect(resp.status(), `unexpected status: ${resp.status()} (${await resp.text()})`).toBe(409);
-  }
-}
-
-async function createIAMSessionWithRetry(appContext, email, password, timeoutMs = 15_000) {
-  const deadline = Date.now() + timeoutMs;
-  let lastStatus = 0;
-  let lastBody = "";
-  while (Date.now() < deadline) {
-    const resp = await appContext.request.post("/iam/api/sessions", {
-      data: { email, password },
-    });
-    lastStatus = resp.status();
-    lastBody = await resp.text();
-    if (lastStatus === 204) {
-      return;
-    }
-    const parsed = parseJSONSafe(lastBody);
-    const code = String(parsed?.code || "").trim();
-    if (!(lastStatus === 422 && code === "invalid_credentials")) {
-      break;
-    }
-    await new Promise((resolve) => setTimeout(resolve, 500));
-  }
-  expect(lastStatus, lastBody).toBe(204);
-}
-
-async function setupTenantAdminSession(browser, suffix, harPath) {
-  const runID = `${Date.now()}-${suffix}`;
-  const tenantHost = `t-tp288b-${runID}.localhost`;
-  const tenantName = `TP288B Tenant ${runID}`;
-  const tenantAdminEmail = `tenant-admin+tp288b-${runID}@example.invalid`;
-  const tenantAdminPass = process.env.E2E_TENANT_ADMIN_PASS || "pw";
-
-  const superadminBaseURL = process.env.E2E_SUPERADMIN_BASE_URL || "http://localhost:8081";
-  const superadminUser = process.env.E2E_SUPERADMIN_USER || "admin";
-  const superadminPass = process.env.E2E_SUPERADMIN_PASS || "admin";
-  const superadminEmail = process.env.E2E_SUPERADMIN_EMAIL || `admin+tp288b-${runID}@example.invalid`;
-  const superadminLoginPass = process.env.E2E_SUPERADMIN_LOGIN_PASS || superadminPass;
-  const kratosAdminURL = process.env.E2E_KRATOS_ADMIN_URL || "http://localhost:4434";
-
-  const superadminContext = await browser.newContext({
-    baseURL: superadminBaseURL,
-    httpCredentials: { username: superadminUser, password: superadminPass },
-  });
-  const superadminPage = await superadminContext.newPage();
-
-  if (!process.env.E2E_SUPERADMIN_EMAIL) {
-    await ensureKratosIdentity(superadminContext, kratosAdminURL, {
-      traits: { email: superadminEmail },
-      identifier: `sa:${superadminEmail.toLowerCase()}`,
-      password: superadminLoginPass,
-    });
-  }
-
-  await superadminPage.goto("/superadmin/login");
-  await superadminPage.locator('input[name="email"]').fill(superadminEmail);
-  await superadminPage.locator('input[name="password"]').fill(superadminLoginPass);
-  await superadminPage.getByRole("button", { name: "Login" }).click();
-  await expect(superadminPage).toHaveURL(/\/superadmin\/tenants$/);
-
-  await superadminPage.locator('form[action="/superadmin/tenants"] input[name="name"]').fill(tenantName);
-  await superadminPage.locator('form[action="/superadmin/tenants"] input[name="hostname"]').fill(tenantHost);
-  await superadminPage.locator('form[action="/superadmin/tenants"] button[type="submit"]').click();
-  await expect(superadminPage).toHaveURL(/\/superadmin\/tenants$/);
-  await expect(superadminPage.locator("tr", { hasText: tenantHost }).first()).toBeVisible({ timeout: 60_000 });
-
-  const tenantRow = superadminPage.locator("tr", { hasText: tenantHost }).first();
-  const tenantID = (await tenantRow.locator("code").first().innerText()).replace(/\s+/g, "").trim();
-  expect(tenantID).not.toBe("");
-
-  await ensureKratosIdentity(superadminContext, kratosAdminURL, {
-    traits: { tenant_uuid: tenantID, email: tenantAdminEmail, role_slug: "tenant-admin" },
-    identifier: `${tenantID}:${tenantAdminEmail}`,
-    password: tenantAdminPass,
-  });
-  await superadminContext.close();
-
-  const appBaseURL = process.env.E2E_BASE_URL || "http://localhost:8080";
-  const appContext = await browser.newContext({
-    baseURL: appBaseURL,
-    extraHTTPHeaders: { "X-Forwarded-Host": tenantHost },
-    recordHar: {
-      path: harPath,
-      content: "embed",
-      mode: "full",
-    },
-  });
-  await createIAMSessionWithRetry(appContext, tenantAdminEmail, tenantAdminPass);
-  const page = await appContext.newPage();
-  return { appContext, page, tenantID };
-}
-
-async function listOrgUnits(appContext, asOf) {
-  const response = await appContext.request.get(`/org/api/org-units?as_of=${encodeURIComponent(asOf)}`);
-  const { text, json } = await parseResponseBody(response);
-  expect(response.status(), text).toBe(200);
-  return Array.isArray(json?.org_units) ? json.org_units : [];
-}
-
-async function getOrgUnitDetails(appContext, orgCode, asOf) {
-  const response = await appContext.request.get(
-    `/org/api/org-units/details?as_of=${encodeURIComponent(asOf)}&org_code=${encodeURIComponent(orgCode)}`,
-  );
-  const { text, json } = await parseResponseBody(response);
-  if (response.status() === 404) {
-    return null;
-  }
-  expect(response.status(), text).toBe(200);
-  return json;
-}
-
-async function waitForOrgUnitDetails(appContext, orgCode, asOf, timeoutMs = 15_000) {
-  const deadline = Date.now() + timeoutMs;
-  let details = null;
-  while (Date.now() < deadline) {
-    details = await getOrgUnitDetails(appContext, orgCode, asOf);
-    if (details?.org_unit) {
-      return details;
-    }
-    await new Promise((resolve) => setTimeout(resolve, 250));
-  }
-  return details;
-}
-
-async function createOrgUnit(appContext, payload) {
-  const response = await appContext.request.post("/org/api/org-units", { data: payload });
-  const { text, json } = await parseResponseBody(response);
-  expect(response.status(), text).toBe(201);
-  return json;
-}
-
-async function detectRootOrg(appContext, asOf) {
-  const orgUnits = await listOrgUnits(appContext, asOf);
-  const preferred = orgUnits.find((item) => String(item?.org_code || "").trim() === BASELINE_ROOT_CODE);
-  if (preferred) {
-    const details = await getOrgUnitDetails(appContext, BASELINE_ROOT_CODE, asOf);
-    if (details?.org_unit && !String(details.org_unit.parent_org_code || "").trim()) {
-      return details.org_unit;
-    }
-  }
-  for (const item of orgUnits) {
-    const orgCode = String(item?.org_code || "").trim();
-    if (!orgCode) {
-      continue;
-    }
-    const details = await getOrgUnitDetails(appContext, orgCode, asOf);
-    if (details?.org_unit && !String(details.org_unit.parent_org_code || "").trim()) {
-      return details.org_unit;
-    }
-  }
-  return null;
-}
-
-async function ensureOrgUnitByCode(appContext, spec, effectiveDate, parentOrgCode) {
-  const existing = await waitForOrgUnitDetails(appContext, spec.code, effectiveDate, 500);
-  if (existing?.org_unit) {
-    return existing.org_unit;
-  }
-  await createOrgUnit(appContext, {
-    org_code: spec.code,
-    name: spec.name,
-    effective_date: effectiveDate,
-    parent_org_code: parentOrgCode,
-    is_business_unit: false,
-  });
-  const created = await waitForOrgUnitDetails(appContext, spec.code, effectiveDate);
-  expect(created?.org_unit, `org ${spec.code} should be readable after creation`).toBeTruthy();
-  return created.org_unit;
 }
 
 async function ensureTenantBaseline(appContext) {
-  let rootOrg = await detectRootOrg(appContext, BASELINE_EFFECTIVE_DATE);
+  let rootOrg = await detectRootOrg(appContext, BASELINE_EFFECTIVE_DATE, BASELINE_ROOT_CODE);
   if (!rootOrg) {
     await createOrgUnit(appContext, {
       org_code: BASELINE_ROOT_CODE,
@@ -266,8 +85,10 @@ async function ensureTenantBaseline(appContext) {
   await ensureOrgUnitByCode(
     appContext,
     { code: BASELINE_PARENT_CODE, name: BASELINE_PARENT_NAME },
-    BASELINE_EFFECTIVE_DATE,
-    String(rootOrg?.org_code || "").trim(),
+    {
+      effectiveDate: BASELINE_EFFECTIVE_DATE,
+      parentOrgCode: String(rootOrg?.org_code || "").trim(),
+    },
   );
 }
 
@@ -389,13 +210,6 @@ async function fetchConversation(appContext, conversationId) {
   return response.json();
 }
 
-function latestTurn(conversation) {
-  if (!conversation || !Array.isArray(conversation.turns) || conversation.turns.length === 0) {
-    return null;
-  }
-  return conversation.turns[conversation.turns.length - 1];
-}
-
 function assistantErrorCodeFromCall(call) {
   if (call?.json && typeof call.json === "object" && typeof call.json.code === "string") {
     return call.json.code.trim();
@@ -501,7 +315,7 @@ async function waitForConversationRefresh(state, conversationId, afterSeq, timeo
         item.method === "GET" &&
         item.path === `/internal/assistant/conversations/${conversationId}` &&
         Array.isArray(item?.json?.turns) &&
-        String(latestTurn(item.json)?.state || "").trim() === "committed",
+        String(latestAssistantTurn(item.json)?.state || "").trim() === "committed",
     );
     if (call) {
       return call;
@@ -516,7 +330,7 @@ async function waitForCommittedConversation(appContext, conversationId, timeoutM
   let conversation = null;
   while (Date.now() < deadline) {
     conversation = await fetchConversation(appContext, conversationId);
-    if (String(latestTurn(conversation)?.state || "").trim() === "committed") {
+    if (String(latestAssistantTurn(conversation)?.state || "").trim() === "committed") {
       return conversation;
     }
     await new Promise((resolve) => setTimeout(resolve, 500));
@@ -553,7 +367,7 @@ async function collectDOMEvidence(page, surface) {
 }
 
 function modelProofFromConversation(conversation) {
-  const turn = latestTurn(conversation) || {};
+  const turn = latestAssistantTurn(conversation) || {};
   const plan = turn.plan || {};
   const provider = String(plan.model_provider || "").trim();
   const modelName = String(plan.model_name || "").trim();
@@ -616,7 +430,7 @@ test("tp288b-live-001: real formal entry follows receipt poll refresh contract",
   await ensureDir(EVIDENCE_ROOT);
 
   try {
-    const session = await setupTenantAdminSession(browser, "case-1", paths.network);
+    const session = await createTP288BSession(browser, "case-1", paths.network);
     appContext = session.appContext;
     page = session.page;
     const tenantID = session.tenantID;
@@ -699,7 +513,7 @@ test("tp288b-live-001: real formal entry follows receipt poll refresh contract",
     expect(conversationID).toBeTruthy();
 
     const draftConversation = await fetchConversation(appContext, conversationID);
-    const draftTurn = latestTurn(draftConversation);
+    const draftTurn = latestAssistantTurn(draftConversation);
     expect(String(draftTurn?.intent?.action || "").trim()).toBe("create_orgunit");
     expect(String(draftTurn?.phase || "").trim()).toBe("await_commit_confirm");
 
@@ -720,7 +534,7 @@ test("tp288b-live-001: real formal entry follows receipt poll refresh contract",
     const taskProbe = await waitForTaskTerminal(networkState, receipt.task_id, commitCall.seq);
     const refreshCall = await waitForConversationRefresh(networkState, conversationID, commitCall.seq);
     const finalConversation = await waitForCommittedConversation(appContext, conversationID);
-    const finalTurn = latestTurn(finalConversation || {});
+    const finalTurn = latestAssistantTurn(finalConversation || {});
     const finalBubble = await latestFormalBubble(surface);
     const domEvidence = await collectDOMEvidence(page, surface);
     const modelProof = modelProofFromConversation(finalConversation || {});

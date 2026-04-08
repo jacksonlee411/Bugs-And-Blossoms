@@ -2,123 +2,17 @@ package server
 
 import (
 	"context"
-	"crypto/sha256"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"strconv"
 	"strings"
 	"time"
 
-	"github.com/google/uuid"
 	staffingports "github.com/jacksonlee411/Bugs-And-Blossoms/modules/staffing/domain/ports"
 	staffingtypes "github.com/jacksonlee411/Bugs-And-Blossoms/modules/staffing/domain/types"
 	staffingpersistence "github.com/jacksonlee411/Bugs-And-Blossoms/modules/staffing/infrastructure/persistence"
 	staffingservices "github.com/jacksonlee411/Bugs-And-Blossoms/modules/staffing/services"
 )
-
-var staffingAssignmentEventCorrectionNamespace = uuid.Must(uuid.Parse("28ed309c-cec7-406c-a442-eef4ef9034ce"))
-var staffingAssignmentEventRescindNamespace = uuid.Must(uuid.Parse("fd58b41a-6ccc-451c-b9b4-cb924810fb2d"))
-
-func canonicalizeJSON(b *strings.Builder, v any) error {
-	switch t := v.(type) {
-	case map[string]any:
-		keys := make([]string, 0, len(t))
-		for k := range t {
-			keys = append(keys, k)
-		}
-		sortStrings(keys)
-		b.WriteByte('{')
-		for i, k := range keys {
-			if i > 0 {
-				b.WriteByte(',')
-			}
-			ks, _ := json.Marshal(k)
-			b.Write(ks)
-			b.WriteByte(':')
-			if err := canonicalizeJSON(b, t[k]); err != nil {
-				return err
-			}
-		}
-		b.WriteByte('}')
-		return nil
-	case []any:
-		b.WriteByte('[')
-		for i := range t {
-			if i > 0 {
-				b.WriteByte(',')
-			}
-			if err := canonicalizeJSON(b, t[i]); err != nil {
-				return err
-			}
-		}
-		b.WriteByte(']')
-		return nil
-	case json.Number:
-		b.WriteString(t.String())
-		return nil
-	case string, bool, nil:
-		bb, _ := json.Marshal(t)
-		b.Write(bb)
-		return nil
-	default:
-		bb, err := json.Marshal(t)
-		if err != nil {
-			return err
-		}
-		b.Write(bb)
-		return nil
-	}
-}
-
-func sortStrings(ss []string) {
-	for i := range ss {
-		for j := i + 1; j < len(ss); j++ {
-			if ss[j] < ss[i] {
-				ss[i], ss[j] = ss[j], ss[i]
-			}
-		}
-	}
-}
-
-func canonicalizeJSONObjectRaw(raw json.RawMessage) ([]byte, error) {
-	raw = json.RawMessage(strings.TrimSpace(string(raw)))
-	if len(raw) == 0 {
-		return nil, newBadRequestError("json object is required")
-	}
-
-	dec := json.NewDecoder(strings.NewReader(string(raw)))
-	dec.UseNumber()
-	var v any
-	if err := dec.Decode(&v); err != nil {
-		return nil, newBadRequestError("invalid json")
-	}
-	if _, ok := v.(map[string]any); !ok {
-		return nil, newBadRequestError("json object is required")
-	}
-
-	var b strings.Builder
-	_ = canonicalizeJSON(&b, v)
-	return []byte(b.String()), nil
-}
-
-func canonicalizeJSONObjectOrEmpty(raw json.RawMessage) ([]byte, error) {
-	if len(strings.TrimSpace(string(raw))) == 0 || string(raw) == "null" {
-		return []byte(`{}`), nil
-	}
-	return canonicalizeJSONObjectRaw(raw)
-}
-
-func deterministicStaffingAssignmentCorrectionEventID(tenantID string, assignmentID string, targetEffectiveDate string, canonicalReplacementPayload []byte) string {
-	sum := sha256.Sum256(canonicalReplacementPayload)
-	name := fmt.Sprintf("staffing.assignment_event_correction:%s:%s:%s:%x", tenantID, assignmentID, targetEffectiveDate, sum[:])
-	return uuid.NewSHA1(staffingAssignmentEventCorrectionNamespace, []byte(name)).String()
-}
-
-func deterministicStaffingAssignmentRescindEventID(tenantID string, assignmentID string, targetEffectiveDate string) string {
-	name := fmt.Sprintf("staffing.assignment_event_rescind:%s:%s:%s", tenantID, assignmentID, targetEffectiveDate)
-	return uuid.NewSHA1(staffingAssignmentEventRescindNamespace, []byte(name)).String()
-}
 
 type Position struct {
 	PositionUUID          string
@@ -566,22 +460,14 @@ func (s *staffingMemoryStore) ListAssignmentsForPerson(_ context.Context, tenant
 }
 
 func (s *staffingMemoryStore) UpsertPrimaryAssignmentForPerson(_ context.Context, tenantID string, effectiveDate string, personUUID string, positionUUID string, status string, _ string) (Assignment, error) {
-	effectiveDate = strings.TrimSpace(effectiveDate)
-	if effectiveDate == "" {
-		return Assignment{}, errors.New("effective_date is required")
+	prepared, err := staffingservices.PrepareUpsertPrimaryAssignment(effectiveDate, personUUID, positionUUID, status, "")
+	if err != nil {
+		return Assignment{}, err
 	}
-	personUUID = strings.TrimSpace(personUUID)
-	if personUUID == "" {
-		return Assignment{}, errors.New("person_uuid is required")
-	}
-	positionUUID = strings.TrimSpace(positionUUID)
-	if positionUUID == "" {
-		return Assignment{}, errors.New("position_uuid is required")
-	}
-	status = strings.TrimSpace(status)
-	if status == "" {
-		status = "active"
-	}
+	effectiveDate = prepared.EffectiveDate
+	personUUID = prepared.PersonUUID
+	positionUUID = prepared.PositionUUID
+	status = prepared.Status
 
 	if s.assigns[tenantID] == nil {
 		s.assigns[tenantID] = make(map[string][]Assignment)
@@ -599,18 +485,14 @@ func (s *staffingMemoryStore) UpsertPrimaryAssignmentForPerson(_ context.Context
 }
 
 func (s *staffingMemoryStore) CorrectAssignmentEvent(_ context.Context, tenantID string, assignmentID string, targetEffectiveDate string, replacementPayload json.RawMessage) (string, error) {
-	assignmentID = strings.TrimSpace(assignmentID)
-	targetEffectiveDate = strings.TrimSpace(targetEffectiveDate)
-	if assignmentID == "" || targetEffectiveDate == "" {
-		return "", newBadRequestError("assignment_uuid and target_effective_date are required")
-	}
-
-	canonicalPayload, err := canonicalizeJSONObjectRaw(replacementPayload)
+	prepared, err := staffingservices.PrepareCorrectAssignmentEvent(tenantID, assignmentID, targetEffectiveDate, replacementPayload)
 	if err != nil {
 		return "", err
 	}
-
-	eventID := deterministicStaffingAssignmentCorrectionEventID(tenantID, assignmentID, targetEffectiveDate, canonicalPayload)
+	assignmentID = prepared.AssignmentUUID
+	targetEffectiveDate = prepared.TargetEffectiveDate
+	canonicalPayload := prepared.CanonicalPayload
+	eventID := prepared.EventID
 
 	var payload map[string]any
 	if err := json.Unmarshal(canonicalPayload, &payload); err != nil {
@@ -637,13 +519,13 @@ func (s *staffingMemoryStore) CorrectAssignmentEvent(_ context.Context, tenantID
 }
 
 func (s *staffingMemoryStore) RescindAssignmentEvent(_ context.Context, tenantID string, assignmentID string, targetEffectiveDate string, _ json.RawMessage) (string, error) {
-	assignmentID = strings.TrimSpace(assignmentID)
-	targetEffectiveDate = strings.TrimSpace(targetEffectiveDate)
-	if assignmentID == "" || targetEffectiveDate == "" {
-		return "", newBadRequestError("assignment_uuid and target_effective_date are required")
+	prepared, err := staffingservices.PrepareRescindAssignmentEvent(tenantID, assignmentID, targetEffectiveDate, nil)
+	if err != nil {
+		return "", err
 	}
-
-	eventID := deterministicStaffingAssignmentRescindEventID(tenantID, assignmentID, targetEffectiveDate)
+	assignmentID = prepared.AssignmentUUID
+	targetEffectiveDate = prepared.TargetEffectiveDate
+	eventID := prepared.EventID
 
 	byPerson := s.assigns[tenantID]
 	for personUUID := range byPerson {

@@ -1,22 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-async function ensureKratosIdentity(ctx, kratosAdminURL, { traits, identifier, password }) {
-  const resp = await ctx.request.post(`${kratosAdminURL}/admin/identities`, {
-    data: {
-      schema_id: "default",
-      traits,
-      credentials: {
-        password: {
-          identifiers: [identifier],
-          config: { password }
-        }
-      }
-    }
-  });
-  if (!resp.ok()) {
-    expect(resp.status(), `unexpected status: ${resp.status()} (${await resp.text()})`).toBe(409);
-  }
-}
+import { setupTenantAdminSession } from "./helpers/superadmin-tenant.js";
 
 test("smoke: superadmin -> create tenant -> /app (MUI SPA) -> org/person/staffing vertical slice", async ({ browser }) => {
   test.setTimeout(240_000);
@@ -24,6 +8,7 @@ test("smoke: superadmin -> create tenant -> /app (MUI SPA) -> org/person/staffin
   const asOf = "2026-01-07";
   const runID = `${Date.now()}`;
   const tenantHost = `t-${runID}.localhost`;
+  const tenantName = `E2E Tenant ${runID}`;
 
   const tenantAdminEmail = `tenant-admin+smoke-${runID}@example.invalid`;
   const tenantAdminPass = process.env.E2E_TENANT_ADMIN_PASS || "pw";
@@ -33,60 +18,18 @@ test("smoke: superadmin -> create tenant -> /app (MUI SPA) -> org/person/staffin
   const orgCode = `ORG${runID.slice(-6)}`;
   const posName = `E2E Position ${runID}`;
 
-  const superadminBaseURL = process.env.E2E_SUPERADMIN_BASE_URL || "http://localhost:8081";
-  const superadminUser = process.env.E2E_SUPERADMIN_USER || "admin";
   const superadminPass = process.env.E2E_SUPERADMIN_PASS || "admin";
   const defaultSuperadminEmail = `admin+smoke-${runID}@example.invalid`;
   const superadminEmail = process.env.E2E_SUPERADMIN_EMAIL || defaultSuperadminEmail;
   const superadminLoginPass = process.env.E2E_SUPERADMIN_LOGIN_PASS || superadminPass;
-  const kratosAdminURL = process.env.E2E_KRATOS_ADMIN_URL || "http://localhost:4434";
-
-  const superadminContext = await browser.newContext({
-    baseURL: superadminBaseURL,
-    httpCredentials: { username: superadminUser, password: superadminPass }
-  });
-  const superadminPage = await superadminContext.newPage();
-
-  // If a fixed superadmin email is provided, the identity may already exist.
-  if (!process.env.E2E_SUPERADMIN_EMAIL) {
-    await ensureKratosIdentity(superadminContext, kratosAdminURL, {
-      traits: { email: superadminEmail },
-      identifier: `sa:${superadminEmail.toLowerCase()}`,
-      password: superadminLoginPass
-    });
-  }
-
-  await superadminPage.goto("/superadmin/login");
-  await expect(superadminPage.locator("h1")).toHaveText("SuperAdmin Login");
-  await superadminPage.locator('input[name="email"]').fill(superadminEmail);
-  await superadminPage.locator('input[name="password"]').fill(superadminLoginPass);
-  await superadminPage.getByRole("button", { name: "Login" }).click();
-  await expect(superadminPage).toHaveURL(/\/superadmin\/tenants$/);
-
-  await superadminPage.locator('form[action="/superadmin/tenants"] input[name="name"]').fill(`E2E Tenant ${runID}`);
-  await superadminPage.locator('form[action="/superadmin/tenants"] input[name="hostname"]').fill(tenantHost);
-  await superadminPage.locator('form[action="/superadmin/tenants"] button[type="submit"]').click();
-  await expect(superadminPage).toHaveURL(/\/superadmin\/tenants$/);
-  await expect(superadminPage.locator("tr", { hasText: tenantHost }).first()).toBeVisible({ timeout: 60_000 });
-
-  const tenantRow = superadminPage.locator("tr", { hasText: tenantHost }).first();
-  const tenantID = (await tenantRow.locator("code").first().innerText()).trim();
-  expect(tenantID).not.toBe("");
-
-  await ensureKratosIdentity(superadminContext, kratosAdminURL, {
-    traits: { tenant_uuid: tenantID, email: tenantAdminEmail, role_slug: "tenant-admin" },
-    identifier: `${tenantID}:${tenantAdminEmail}`,
-    password: tenantAdminPass
-  });
-
-  await superadminContext.close();
-
-  const appBaseURL = process.env.E2E_BASE_URL || "http://localhost:8080";
-  const appContext = await browser.newContext({
-    baseURL: appBaseURL,
-    extraHTTPHeaders: {
-      "X-Forwarded-Host": tenantHost
-    }
+  const { appContext, tenantID } = await setupTenantAdminSession(browser, {
+    tenantName,
+    tenantHost,
+    tenantAdminEmail,
+    tenantAdminPass,
+    superadminEmail,
+    superadminLoginPass,
+    superadminHeadingText: "SuperAdmin Login"
   });
   const page = await appContext.newPage();
 

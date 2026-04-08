@@ -11,66 +11,6 @@ import (
 )
 
 func TestStaffingPGStore_CorrectRescindAssignmentEvent(t *testing.T) {
-	t.Run("correct validates inputs before tx", func(t *testing.T) {
-		beginCalled := false
-		store := newStaffingPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
-			beginCalled = true
-			return &stubTx{}, nil
-		}))
-		_, err := store.CorrectAssignmentEvent(context.Background(), "t1", "", "2026-01-01", []byte(`{}`))
-		if err == nil || !isBadRequestError(err) {
-			t.Fatalf("expected bad request, got %v", err)
-		}
-		if beginCalled {
-			t.Fatal("unexpected Begin")
-		}
-	})
-
-	t.Run("correct rejects missing target_effective_date before tx", func(t *testing.T) {
-		beginCalled := false
-		store := newStaffingPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
-			beginCalled = true
-			return &stubTx{}, nil
-		}))
-		_, err := store.CorrectAssignmentEvent(context.Background(), "t1", "a1", "", []byte(`{}`))
-		if err == nil || !isBadRequestError(err) {
-			t.Fatalf("expected bad request, got %v", err)
-		}
-		if beginCalled {
-			t.Fatal("unexpected Begin")
-		}
-	})
-
-	t.Run("correct rejects invalid target_effective_date before tx", func(t *testing.T) {
-		beginCalled := false
-		store := newStaffingPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
-			beginCalled = true
-			return &stubTx{}, nil
-		}))
-		_, err := store.CorrectAssignmentEvent(context.Background(), "t1", "a1", "bad", []byte(`{}`))
-		if err == nil || !isBadRequestError(err) {
-			t.Fatalf("expected bad request, got %v", err)
-		}
-		if beginCalled {
-			t.Fatal("unexpected Begin")
-		}
-	})
-
-	t.Run("correct rejects invalid payload before tx", func(t *testing.T) {
-		beginCalled := false
-		store := newStaffingPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
-			beginCalled = true
-			return &stubTx{}, nil
-		}))
-		_, err := store.CorrectAssignmentEvent(context.Background(), "t1", "a1", "2026-01-01", []byte(`[]`))
-		if err == nil || !isBadRequestError(err) {
-			t.Fatalf("expected bad request, got %v", err)
-		}
-		if beginCalled {
-			t.Fatal("unexpected Begin")
-		}
-	})
-
 	t.Run("correct begin error", func(t *testing.T) {
 		store := newStaffingPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
 			return nil, errors.New("begin")
@@ -121,66 +61,6 @@ func TestStaffingPGStore_CorrectRescindAssignmentEvent(t *testing.T) {
 		}
 		if got == "" {
 			t.Fatal("expected event id")
-		}
-	})
-
-	t.Run("rescind validates inputs before tx", func(t *testing.T) {
-		beginCalled := false
-		store := newStaffingPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
-			beginCalled = true
-			return &stubTx{}, nil
-		}))
-		_, err := store.RescindAssignmentEvent(context.Background(), "t1", "", "2026-01-01", nil)
-		if err == nil || !isBadRequestError(err) {
-			t.Fatalf("expected bad request, got %v", err)
-		}
-		if beginCalled {
-			t.Fatal("unexpected Begin")
-		}
-	})
-
-	t.Run("rescind rejects missing target_effective_date before tx", func(t *testing.T) {
-		beginCalled := false
-		store := newStaffingPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
-			beginCalled = true
-			return &stubTx{}, nil
-		}))
-		_, err := store.RescindAssignmentEvent(context.Background(), "t1", "a1", "", nil)
-		if err == nil || !isBadRequestError(err) {
-			t.Fatalf("expected bad request, got %v", err)
-		}
-		if beginCalled {
-			t.Fatal("unexpected Begin")
-		}
-	})
-
-	t.Run("rescind rejects invalid target_effective_date before tx", func(t *testing.T) {
-		beginCalled := false
-		store := newStaffingPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
-			beginCalled = true
-			return &stubTx{}, nil
-		}))
-		_, err := store.RescindAssignmentEvent(context.Background(), "t1", "a1", "bad", nil)
-		if err == nil || !isBadRequestError(err) {
-			t.Fatalf("expected bad request, got %v", err)
-		}
-		if beginCalled {
-			t.Fatal("unexpected Begin")
-		}
-	})
-
-	t.Run("rescind rejects invalid payload before tx", func(t *testing.T) {
-		beginCalled := false
-		store := newStaffingPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
-			beginCalled = true
-			return &stubTx{}, nil
-		}))
-		_, err := store.RescindAssignmentEvent(context.Background(), "t1", "a1", "2026-01-01", []byte(`[]`))
-		if err == nil || !isBadRequestError(err) {
-			t.Fatalf("expected bad request, got %v", err)
-		}
-		if beginCalled {
-			t.Fatal("unexpected Begin")
 		}
 	})
 
