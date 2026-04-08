@@ -89,8 +89,16 @@ jobs:
     name: Routing Gates
     runs-on: ubuntu-latest
     steps:
-      - name: Routing gates temporarily disabled
-        run: echo "Routing gates temporarily disabled"
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Run routing gates
+        run: make check routing
 
   e2e-tests:
     name: E2E Tests
