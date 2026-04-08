@@ -2,6 +2,12 @@
 
 **状态**: 已完成（2026-04-08 CST）
 
+补记（2026-04-08 CST）：
+
+1. [X] `301` 的首轮目标仍视为已完成。
+2. [X] 但恢复后的当前代码树里，`internal/server` 仍残留 `28` 个 `gap/coverage` 测试文件，其中 `18` 个曾在 `301` 文档中被写成“已收口”。
+3. [X] 上述残留不再回灌到 `301` 范围，统一由 `DEV-PLAN-302` 增量承接：`docs/dev-plans/302-internal-server-residual-gap-coverage-closure-plan.md`
+
 ## 背景
 
 `DEV-PLAN-300` 已完成对全仓测试体系的调查，确认当前存在以下核心问题：
