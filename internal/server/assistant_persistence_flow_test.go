@@ -400,11 +400,27 @@ func TestAssistantPersistence_ApplyConfirmTurnBranches(t *testing.T) {
 	}
 
 	turn = mkTurn()
+	turn.Clarification = &assistantClarificationDecision{
+		Status:                  assistantClarificationStatusOpen,
+		ClarificationKind:       assistantClarificationKindCandidatePick,
+		AwaitPhase:              assistantPhaseAwaitCandidatePick,
+		CurrentRound:            1,
+		MaxRounds:               2,
+		ExitTo:                  assistantClarificationExitBusinessResume,
+		KnowledgeSnapshotDigest: "digest",
+		RouteCatalogVersion:     "2026-03-11.v2",
+	}
 	if _, err := svc.applyConfirmTurn(conversation, turn, principal, "c2"); err != nil {
 		t.Fatalf("confirm should succeed err=%v", err)
 	}
 	if turn.State != assistantStateConfirmed || turn.ResolutionSource != assistantResolutionUserConfirmed {
 		t.Fatalf("unexpected turn=%+v", turn)
+	}
+	if turn.Clarification == nil || turn.Clarification.Status != assistantClarificationStatusResolved {
+		t.Fatalf("expected clarification resolved after candidate pick, got=%+v", turn.Clarification)
+	}
+	if turn.Phase != assistantPhaseAwaitCommitConfirm {
+		t.Fatalf("expected await_commit_confirm after candidate pick, got=%s", turn.Phase)
 	}
 }
 
@@ -520,6 +536,105 @@ func TestAssistantPersistence_ApplyCommitTurnBranches(t *testing.T) {
 	}
 	if turn.State != assistantStateCommitted || turn.CommitResult == nil || turn.CommitResult.ParentOrgCode != "FLOWER-A" {
 		t.Fatalf("unexpected turn=%+v", turn)
+	}
+}
+
+func TestAssistantPersistence_HydrateDeferredCandidateForConfirmBranches(t *testing.T) {
+	mkDeferredTurn := func() *assistantTurn {
+		return &assistantTurn{
+			State:            assistantStateValidated,
+			Intent:           assistantIntentSpec{Action: assistantIntentCreateOrgUnit, ParentRefText: "鲜花组织", EffectiveDate: "2026-01-01"},
+			ResolutionSource: "deferred_candidate_lookup",
+		}
+	}
+
+	if err := (*assistantConversationService)(nil).hydrateDeferredCandidateForConfirm(context.Background(), "tenant_1", mkDeferredTurn()); err != nil {
+		t.Fatalf("nil service err=%v", err)
+	}
+
+	baseSvc := newAssistantConversationService(newOrgUnitMemoryStore(), assistantWriteServiceStub{store: newOrgUnitMemoryStore()})
+	if err := baseSvc.hydrateDeferredCandidateForConfirm(context.Background(), "tenant_1", nil); err != nil {
+		t.Fatalf("nil turn err=%v", err)
+	}
+	if err := baseSvc.hydrateDeferredCandidateForConfirm(context.Background(), "tenant_1", &assistantTurn{Intent: assistantIntentSpec{Action: assistantIntentPlanOnly}}); err != nil {
+		t.Fatalf("plan_only err=%v", err)
+	}
+
+	resolvedTurn := mkDeferredTurn()
+	resolvedTurn.ResolvedCandidateID = "FLOWER-A"
+	if err := baseSvc.hydrateDeferredCandidateForConfirm(context.Background(), "tenant_1", resolvedTurn); err != nil {
+		t.Fatalf("resolved no-op err=%v", err)
+	}
+
+	autoTurn := mkDeferredTurn()
+	autoTurn.ResolutionSource = assistantResolutionAuto
+	if err := baseSvc.hydrateDeferredCandidateForConfirm(context.Background(), "tenant_1", autoTurn); err != nil {
+		t.Fatalf("non-deferred no-op err=%v", err)
+	}
+
+	blankTurn := mkDeferredTurn()
+	blankTurn.Intent.ParentRefText = ""
+	if err := baseSvc.hydrateDeferredCandidateForConfirm(context.Background(), "tenant_1", blankTurn); err != nil {
+		t.Fatalf("blank ref err=%v", err)
+	}
+
+	searchErrSvc := newAssistantConversationService(assistantOrgStoreStub{orgUnitMemoryStore: newOrgUnitMemoryStore(), searchErr: errors.New("search failed")}, assistantWriteServiceStub{store: newOrgUnitMemoryStore()})
+	if err := searchErrSvc.hydrateDeferredCandidateForConfirm(context.Background(), "tenant_1", mkDeferredTurn()); err == nil || !strings.Contains(err.Error(), "search failed") {
+		t.Fatalf("expected search failed err, got=%v", err)
+	}
+
+	notFoundSvc := newAssistantConversationService(assistantOrgStoreStub{orgUnitMemoryStore: newOrgUnitMemoryStore(), searchErr: errOrgUnitNotFound}, assistantWriteServiceStub{store: newOrgUnitMemoryStore()})
+	notFoundTurn := mkDeferredTurn()
+	if err := notFoundSvc.hydrateDeferredCandidateForConfirm(context.Background(), "tenant_1", notFoundTurn); err != nil {
+		t.Fatalf("notFound err=%v", err)
+	}
+	if notFoundTurn.AmbiguityCount != 0 || notFoundTurn.Confidence != 0.3 {
+		t.Fatalf("unexpected notFound turn=%+v", notFoundTurn)
+	}
+
+	multiSvc := newAssistantConversationService(assistantOrgStoreStub{
+		orgUnitMemoryStore: newOrgUnitMemoryStore(),
+		search: []OrgUnitSearchCandidate{
+			{OrgID: 1, OrgCode: "FLOWER-A", Name: "鲜花组织"},
+			{OrgID: 2, OrgCode: "FLOWER-B", Name: "鲜花组织"},
+		},
+	}, assistantWriteServiceStub{store: newOrgUnitMemoryStore()})
+	multiTurn := mkDeferredTurn()
+	if err := multiSvc.hydrateDeferredCandidateForConfirm(context.Background(), "tenant_1", multiTurn); err != nil {
+		t.Fatalf("multi err=%v", err)
+	}
+	if multiTurn.AmbiguityCount != 2 || len(multiTurn.Candidates) != 2 || multiTurn.Confidence != 0.55 {
+		t.Fatalf("unexpected multi turn=%+v", multiTurn)
+	}
+
+	singleSvc := newAssistantConversationService(assistantOrgStoreStub{
+		orgUnitMemoryStore: newOrgUnitMemoryStore(),
+		search:             []OrgUnitSearchCandidate{{OrgID: 1, OrgCode: "FLOWER-A", Name: "鲜花组织"}},
+	}, assistantWriteServiceStub{store: newOrgUnitMemoryStore()})
+	singleTurn := mkDeferredTurn()
+	if err := singleSvc.hydrateDeferredCandidateForConfirm(context.Background(), "tenant_1", singleTurn); err != nil {
+		t.Fatalf("single err=%v", err)
+	}
+	if singleTurn.ResolvedCandidateID != "FLOWER-A" || singleTurn.ResolutionSource != assistantResolutionAuto || singleTurn.Confidence != 0.95 {
+		t.Fatalf("unexpected single turn=%+v", singleTurn)
+	}
+
+	applyErrSvc := newAssistantConversationService(assistantOrgStoreStub{orgUnitMemoryStore: newOrgUnitMemoryStore(), searchErr: errors.New("search failed")}, assistantWriteServiceStub{store: newOrgUnitMemoryStore()})
+	conversation := &assistantConversation{TenantID: "tenant_1"}
+	turn := assistantTestAttachBusinessRoute(&assistantTurn{
+		TurnID:             "turn_deferred_err",
+		State:              assistantStateValidated,
+		RequestID:          "req_deferred_err",
+		TraceID:            "trace_deferred_err",
+		PolicyVersion:      capabilityPolicyVersionBaseline,
+		CompositionVersion: capabilityPolicyVersionBaseline,
+		MappingVersion:     capabilityPolicyVersionBaseline,
+		Intent:             assistantIntentSpec{Action: assistantIntentCreateOrgUnit, ParentRefText: "鲜花组织", EntityName: "运营部", EffectiveDate: "2026-01-01"},
+		Plan:               assistantBuildPlan(assistantIntentSpec{Action: assistantIntentCreateOrgUnit}),
+		ResolutionSource:   "deferred_candidate_lookup",
+	})
+	if _, err := applyErrSvc.applyConfirmTurn(conversation, turn, Principal{ID: "actor_1", RoleSlug: "tenant-admin"}, ""); err == nil || !strings.Contains(err.Error(), "search failed") {
+		t.Fatalf("expected applyConfirmTurn deferred search err, got=%v", err)
 	}
 }
 
@@ -910,9 +1025,19 @@ func TestAssistantPersistence_PGFlowCreateConfirmCommitTurn(t *testing.T) {
 		},
 		AmbiguityCount: 2,
 		Confidence:     0.55,
-		DryRun:         assistantBuildDryRun(assistantIntentSpec{Action: assistantIntentCreateOrgUnit, ParentRefText: "鲜花组织", EntityName: "运营部", EffectiveDate: "2026-01-01"}, []assistantCandidate{{CandidateID: "c1", CandidateCode: "FLOWER-A"}, {CandidateID: "c2", CandidateCode: "FLOWER-B"}}, ""),
-		CreatedAt:      now,
-		UpdatedAt:      now,
+		Clarification: &assistantClarificationDecision{
+			Status:                  assistantClarificationStatusOpen,
+			ClarificationKind:       assistantClarificationKindCandidatePick,
+			AwaitPhase:              assistantPhaseAwaitCandidatePick,
+			CurrentRound:            1,
+			MaxRounds:               2,
+			ExitTo:                  assistantClarificationExitBusinessResume,
+			KnowledgeSnapshotDigest: "digest",
+			RouteCatalogVersion:     "2026-03-11.v2",
+		},
+		DryRun:    assistantBuildDryRun(assistantIntentSpec{Action: assistantIntentCreateOrgUnit, ParentRefText: "鲜花组织", EntityName: "运营部", EffectiveDate: "2026-01-01"}, []assistantCandidate{{CandidateID: "c1", CandidateCode: "FLOWER-A"}, {CandidateID: "c2", CandidateCode: "FLOWER-B"}}, ""),
+		CreatedAt: now,
+		UpdatedAt: now,
 	})
 
 	turnForCommit := *turnForConfirm
@@ -920,6 +1045,11 @@ func TestAssistantPersistence_PGFlowCreateConfirmCommitTurn(t *testing.T) {
 	turnForCommit.State = assistantStateConfirmed
 	turnForCommit.ResolvedCandidateID = "c1"
 	turnForCommit.ResolutionSource = assistantResolutionUserConfirmed
+	if turnForCommit.Clarification != nil {
+		copyClarification := *turnForCommit.Clarification
+		copyClarification.Status = assistantClarificationStatusResolved
+		turnForCommit.Clarification = &copyClarification
+	}
 	turnForCommit.RequestID = "req_commit_1"
 	turnForCommit.TraceID = "trace_commit_1"
 	assistantTestAttachBusinessRoute(&turnForCommit)
@@ -976,6 +1106,9 @@ func TestAssistantPersistence_PGFlowCreateConfirmCommitTurn(t *testing.T) {
 	}
 	if len(confirmed.Turns) != 1 || confirmed.Turns[0].State != assistantStateConfirmed {
 		t.Fatalf("unexpected confirmed conversation=%+v", confirmed)
+	}
+	if confirmed.Turns[0].Clarification == nil || confirmed.Turns[0].Clarification.Status != assistantClarificationStatusResolved {
+		t.Fatalf("expected resolved clarification in confirmed conversation=%+v", confirmed)
 	}
 
 	stage = "commit"

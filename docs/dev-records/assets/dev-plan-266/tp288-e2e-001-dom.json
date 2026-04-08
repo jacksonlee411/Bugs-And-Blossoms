@@ -2,7 +2,7 @@
   "plan": "DEV-PLAN-288",
   "case_id": "tp288-e2e-001",
   "title": "real entry success path stays in one official bubble",
-  "captured_at": "2026-04-08T14:49:04.748Z",
+  "captured_at": "2026-04-08T21:51:51.031Z",
   "formal_entry": "/app/assistant/librechat",
   "bubble_count": 1,
   "bubbles": [
@@ -11,7 +11,7 @@
       "conversation_id": "conv_tp288_1",
       "turn_id": "turn_tp288_1",
       "request_id": "req_tp288_1",
-      "message_id": "9ea349a6-b3c8-4bd7-8cc0-fde1973fc9a5_",
+      "message_id": "affa71f5-033b-4c22-83c9-1eb2a9e7d048_",
       "text": "已创建华东运营部。task_id: task_turn_tp288_1 · succeeded将在鲜花组织下创建华东运营部。org_code: AI2881parent_org_code: FLOWER-Aeffective_date: 2026-03-08event_type: orgunit_created"
     }
   ]

@@ -536,6 +536,9 @@ func (s *assistantConversationService) applyConfirmTurn(conversation *assistantC
 	if err := assistantTurnRouteExecutionBoundary(turn); err != nil {
 		return assistantTurnMutationResult{}, err
 	}
+	if err := s.hydrateDeferredCandidateForConfirm(context.Background(), conversation.TenantID, turn); err != nil {
+		return assistantTurnMutationResult{}, err
+	}
 	spec, ok := s.lookupActionSpec(turn.Intent.Action)
 	if !ok {
 		return assistantTurnMutationResult{}, errAssistantUnsupportedIntent
@@ -565,6 +568,9 @@ func (s *assistantConversationService) applyConfirmTurn(conversation *assistantC
 		}
 		turn.ResolvedCandidateID = candidateID
 		turn.ResolutionSource = assistantResolutionUserConfirmed
+		if turn.Clarification != nil && strings.TrimSpace(turn.Clarification.Status) == assistantClarificationStatusOpen {
+			turn.Clarification.Status = assistantClarificationStatusResolved
+		}
 	}
 	if turn.Intent.Action == assistantIntentCreateOrgUnit {
 		turn.DryRun = assistantBuildDryRunFn(turn.Intent, turn.Candidates, turn.ResolvedCandidateID)
@@ -600,6 +606,46 @@ func (s *assistantConversationService) applyConfirmTurn(conversation *assistantC
 	}
 	conversation.Transitions = append(conversation.Transitions, *transition)
 	return assistantTurnMutationResult{Transition: transition, PersistTurn: true}, nil
+}
+
+func (s *assistantConversationService) hydrateDeferredCandidateForConfirm(ctx context.Context, tenantID string, turn *assistantTurn) error {
+	if s == nil || turn == nil {
+		return nil
+	}
+	if !assistantIntentRequiresCandidateConfirmation(turn.Intent) {
+		return nil
+	}
+	if strings.TrimSpace(turn.ResolvedCandidateID) != "" {
+		return nil
+	}
+	if strings.TrimSpace(turn.ResolutionSource) != "deferred_candidate_lookup" {
+		return nil
+	}
+	refText := assistantIntentCandidateRefText(turn.Intent)
+	asOf := assistantIntentCandidateAsOf(turn.Intent)
+	if refText == "" || asOf == "" {
+		return nil
+	}
+	candidates, err := s.resolveCandidates(ctx, tenantID, refText, asOf)
+	if err != nil {
+		if !errorsIsAny(err, errOrgUnitNotFound) {
+			return err
+		}
+		candidates = nil
+	}
+	turn.Candidates = candidates
+	turn.AmbiguityCount = len(candidates)
+	switch len(candidates) {
+	case 0:
+		turn.Confidence = 0.3
+	case 1:
+		turn.ResolvedCandidateID = strings.TrimSpace(candidates[0].CandidateID)
+		turn.ResolutionSource = assistantResolutionAuto
+		turn.Confidence = 0.95
+	default:
+		turn.Confidence = 0.55
+	}
+	return nil
 }
 
 func (s *assistantConversationService) prepareCommitTurn(

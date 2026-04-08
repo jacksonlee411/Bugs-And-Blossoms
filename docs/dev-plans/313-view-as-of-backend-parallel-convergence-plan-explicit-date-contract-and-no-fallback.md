@@ -1,6 +1,15 @@
 # DEV-PLAN-313：View As Of 后端并行收口计划——显式日期契约、无 fallback、统一错误语义
 
-**状态**: 草拟中（2026-04-08 02:10 UTC）
+**状态**: 已实施（2026-04-09，代码完成并通过本地验证）
+
+## 实施更新（2026-04-09）
+
+- 已新增最小共享 day 合同入口：`internal/server/day_contract.go`
+- 已补齐对应黑盒测试与 stopline：`internal/server/day_contract_test.go`
+- 已移除 Org 写链路 `orgUnitDefaultDate(...)` 及等价请求日期 fallback
+- 已统一 Org / Dict / JobCatalog / Staffing / SetID / Scope / 内部规则等接口的 `as_of` / `effective_date` 解析与错误语义
+- 已删除本次收口后变为不可达的 handler fallback 分支，避免为满足覆盖率保留死代码
+- 已完成回归验证：`go test ./internal/server/...`、`go test ./...`、`make test`
 
 ## 背景
 
@@ -31,10 +40,10 @@
 
 ## 目标
 
-1. [ ] 冻结后端时间合同边界：UI 可以 default current，但浏览器发往后端的读请求必须在边界形成显式日期参数；后端不得自行推断 `current=today`。
-2. [ ] 移除后端残余日期 fallback，尤其是 Org 写链路对 `effective_date` 的默认当天回填。
-3. [ ] 统一 `as_of` / `effective_date` 的解析、缺失处理、非法处理与错误语义，避免各 handler 各写一套。
-4. [ ] 冻结后端实施顺序、测试要点与 stopline，供后续 PR 直接承接。
+1. [x] 冻结后端时间合同边界：UI 可以 default current，但浏览器发往后端的读请求必须在边界形成显式日期参数；后端不得自行推断 `current=today`。
+2. [x] 移除后端残余日期 fallback，尤其是 Org 写链路对 `effective_date` 的默认当天回填。
+3. [x] 统一 `as_of` / `effective_date` 的解析、缺失处理、非法处理与错误语义，避免各 handler 各写一套。
+4. [x] 冻结后端实施顺序、测试要点与 stopline，供后续 PR 直接承接。
 
 ## 非目标
 
@@ -198,16 +207,16 @@
 
 ## 实施步骤
 
-1. [ ] 冻结本计划，确认“UI current / API explicit”的后端边界作为 `DEV-PLAN-312` 的并行前提。
-2. [ ] 为后端 day 粒度参数建立最小共享解析入口，至少覆盖 query `as_of` 与 body `effective_date` 两类场景。
-3. [ ] 在 Org 写链路移除 `orgUnitDefaultDate(...)`，将缺失/非法 `effective_date` 改为显式 400 失败。
-4. [ ] 在 Org 读链路和 Org 字段配置相关接口统一 `as_of` 缺失/非法口径，避免 `missing` 被折叠成泛化 `invalid as_of`。
-5. [ ] 按 P1/P2 顺序迁移 Dict / JobCatalog / Staffing / SetID / 工具态接口，逐步去掉重复的日期解析模板。
-6. [ ] 为后端时间合同补齐回归测试，锁定：
+1. [x] 冻结本计划，确认“UI current / API explicit”的后端边界作为 `DEV-PLAN-312` 的并行前提。
+2. [x] 为后端 day 粒度参数建立最小共享解析入口，至少覆盖 query `as_of` 与 body `effective_date` 两类场景。
+3. [x] 在 Org 写链路移除 `orgUnitDefaultDate(...)`，将缺失/非法 `effective_date` 改为显式 400 失败。
+4. [x] 在 Org 读链路和 Org 字段配置相关接口统一 `as_of` 缺失/非法口径，避免 `missing` 被折叠成泛化 `invalid as_of`。
+5. [x] 按 P1/P2 顺序迁移 Dict / JobCatalog / Staffing / SetID / 工具态接口，逐步去掉重复的日期解析模板。
+6. [x] 为后端时间合同补齐回归测试，锁定：
    - `as_of` 缺失与非法的差异
    - `effective_date` 缺失与非法的差异
    - 不再存在请求日期默认当天回填
-7. [ ] 视需要补充轻量 stopline，阻断 handler 层新增 `time.Now().UTC().Format("2006-01-02")` 用于请求日期默认化。
+7. [x] 补充轻量 stopline，阻断 handler 层新增 `time.Now().UTC().Format("2006-01-02")` 用于请求日期默认化。
 
 ## 配套 stopline
 
@@ -247,20 +256,20 @@
 
 ## 交付物
 
-1. [ ] 一份后端时间合同边界说明：明确 `UI current / API explicit` 的职责分层。
-2. [ ] 一套最小共享 day parser / 校验入口设计说明。
-3. [ ] 一份 Org 写链路 `effective_date` fallback 清理清单。
-4. [ ] 一份公共读接口与工具态接口的迁移清单（P0/P1/P2）。
-5. [ ] 一组后端回归测试与 stopline 约束说明。
+1. [x] 一份后端时间合同边界说明：明确 `UI current / API explicit` 的职责分层。
+2. [x] 一套最小共享 day parser / 校验入口设计说明。
+3. [x] 一份 Org 写链路 `effective_date` fallback 清理清单。
+4. [x] 一份公共读接口与工具态接口的迁移清单（P0/P1/P2）。
+5. [x] 一组后端回归测试与 stopline 约束说明。
 
 ## 验收标准
 
-- [ ] `internal/server` 不再存在用 `time.Now().UTC().Format("2006-01-02")` 为请求日期默认值兜底的 handler 逻辑。
-- [ ] Org 写接口在 `effective_date` 缺失时返回显式 400，而不是自动补当天继续执行。
-- [ ] 公共读接口对 `as_of` 缺失/非法的 code/message 语义一致。
-- [ ] 工具态/内部接口不再依赖字符串匹配推断 `invalid as_of`。
-- [ ] `DEV-PLAN-312` 的前端减法不再需要为了兼容服务端 fallback 而保留额外防御逻辑。
-- [ ] 文档门禁通过，且 `AGENTS.md` 文档地图已挂接本计划。
+- [x] `internal/server` 不再存在用 `time.Now().UTC().Format("2006-01-02")` 为请求日期默认值兜底的 handler 逻辑。
+- [x] Org 写接口在 `effective_date` 缺失时返回显式 400，而不是自动补当天继续执行。
+- [x] 公共读接口对 `as_of` 缺失/非法的 code/message 语义一致。
+- [x] 工具态/内部接口不再依赖字符串匹配推断 `invalid as_of`。
+- [x] `DEV-PLAN-312` 的前端减法不再需要为了兼容服务端 fallback 而保留额外防御逻辑。
+- [x] 文档门禁通过，且 `AGENTS.md` 文档地图已挂接本计划。
 
 ## 关联文档
 

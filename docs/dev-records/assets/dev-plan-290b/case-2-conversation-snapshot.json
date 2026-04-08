@@ -1,12 +1,12 @@
 {
   "case_id": 2,
-  "tenant_id": "2590ba6d-741a-4e6d-8195-4e893d6b3bf0",
+  "tenant_id": "d622864f-5383-488d-bda3-6b3600bd066b",
   "conversation_id": "",
   "snapshots": [],
   "baseline": {
-    "tenant_id": "2590ba6d-741a-4e6d-8195-4e893d6b3bf0",
+    "tenant_id": "d622864f-5383-488d-bda3-6b3600bd066b",
     "effective_date": "2026-01-01",
-    "validated_at": "2026-04-08T14:50:07.363Z",
+    "validated_at": "2026-04-08T21:52:27.881Z",
     "status": "blocked",
     "root_org_code": "ROOT",
     "created_orgs": [
@@ -91,26 +91,27 @@
       ]
     },
     "issues": [
-      "Case2 基线探针未就绪（phase=await_missing_fields validation=parent_candidate_not_found）"
+      "Case2 基线探针未就绪（phase=await_missing_fields validation=missing_parent_ref_text,missing_entity_name）"
     ],
     "probes": {
       "case2": {
-        "conversation_id": "conv_8bb1262e8ece4be38b3109ef019e428e",
+        "conversation_id": "conv_0eeb1d6911944372ab6c28c22173279c",
         "create_turn_status": 200,
         "error_code": "",
         "phase": "await_missing_fields",
         "intent_action": "create_orgunit",
-        "parent_ref_text": "AI治理办公室",
+        "parent_ref_text": "",
         "candidate_count": 0,
         "validation_errors": [
-          "parent_candidate_not_found"
+          "missing_parent_ref_text",
+          "missing_entity_name"
         ],
         "resolved_candidate_id": "",
-        "request_id": "assistant_375b455fc2d24e919f73742ceadf4add",
-        "trace_id": "197c3d109e7546e6886a0b15253024e0"
+        "request_id": "assistant_3eb2ca9be94c463f814c9b649c9593a0",
+        "trace_id": "28100c034077499ca61da02ef8c76112"
       },
       "case4": {
-        "conversation_id": "conv_90a96ae7cf4c46f9a779a9a54301ebd6",
+        "conversation_id": "conv_7d710e8d76634ac09cb62de5a0ef3a51",
         "create_turn_status": 200,
         "error_code": "",
         "phase": "await_candidate_pick",
@@ -121,10 +122,10 @@
           "candidate_confirmation_required"
         ],
         "resolved_candidate_id": "",
-        "request_id": "assistant_28ba50821a784ccf983065f48e965930",
-        "trace_id": "85087c1345834629889f603ffed142d4"
+        "request_id": "assistant_88b6c9cc9014461383e6bcd06c8bae96",
+        "trace_id": "ca6e7be43a37424e90bd565de1a8fe46"
       }
     }
   },
-  "failure_message": "数据基线未就绪：Case2 基线探针未就绪（phase=await_missing_fields validation=parent_candidate_not_found）"
+  "failure_message": "数据基线未就绪：Case2 基线探针未就绪（phase=await_missing_fields validation=missing_parent_ref_text,missing_entity_name）"
 }

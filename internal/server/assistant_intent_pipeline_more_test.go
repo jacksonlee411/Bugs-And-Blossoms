@@ -247,7 +247,7 @@ func TestAssistantIntentPipeline_MergesPendingTurnContextForMissingFields(t *tes
 				if attempt == 1 {
 					return []byte(`{"action":"create_orgunit","route_kind":"business_action","intent_id":"org.orgunit_create","parent_ref_text":"鲜花组织","effective_date":"2026-01-01","user_visible_reply":"请补充部门名称。","next_question":"请告诉我部门名称。","readiness":"need_more_info"}`), nil
 				}
-				return []byte(`{"action":"create_orgunit","route_kind":"business_action","intent_id":"org.orgunit_create","parent_ref_text":"鲜花组织","entity_name":"运营部","effective_date":"2026-01-01","user_visible_reply":"我已补齐草案，请确认。","readiness":"ready_for_confirm"}`), nil
+				return []byte(`{"action":"create_orgunit","route_kind":"business_action","intent_id":"org.orgunit_create","entity_name":"运营部","user_visible_reply":"我已补齐草案，请确认。","readiness":"ready_for_confirm"}`), nil
 			}),
 		},
 	}
@@ -280,6 +280,200 @@ func TestAssistantIntentPipeline_MergesPendingTurnContextForMissingFields(t *tes
 	}
 	if merged.ResolvedCandidateID == "" {
 		t.Fatal("expected candidate resolved from pending context")
+	}
+}
+
+func TestAssistantIntentPipeline_MergesPendingTurnContextForEffectiveDateSupplement(t *testing.T) {
+	t.Setenv("OPENAI_API_KEY", "dummy")
+	store := newOrgUnitMemoryStore()
+	if _, err := store.CreateNodeCurrent(context.Background(), "tenant-1", "2026-01-01", "AIGOV", "AI治理办公室", "", true); err != nil {
+		t.Fatal(err)
+	}
+	svc := newAssistantConversationService(store, assistantWriteServiceStub{store: store})
+	attempt := 0
+	svc.modelGateway = &assistantModelGateway{
+		config: assistantModelConfig{
+			ProviderRouting: assistantProviderRouting{Strategy: "priority_failover", FallbackEnabled: true},
+			Providers: []assistantModelProviderConfig{{
+				Name:      "openai",
+				Enabled:   true,
+				Model:     "gpt-5-codex",
+				Endpoint:  "https://api.openai.com/v1",
+				TimeoutMS: 1000,
+				Retries:   0,
+				Priority:  1,
+				KeyRef:    "OPENAI_API_KEY",
+			}},
+		},
+		adapters: map[string]assistantProviderAdapter{
+			"openai": assistantAdapterFunc(func(context.Context, string, assistantModelProviderConfig) ([]byte, error) {
+				attempt++
+				if attempt == 1 {
+					return []byte(`{"action":"create_orgunit","route_kind":"business_action","intent_id":"org.orgunit_create","parent_ref_text":"AI治理办公室","entity_name":"人力资源部239A补全","user_visible_reply":"请补充生效日期。","next_question":"请告诉我生效日期。","readiness":"need_more_info"}`), nil
+				}
+				return []byte(`{"action":"create_orgunit","route_kind":"business_action","intent_id":"org.orgunit_create","effective_date":"2026-03-25","user_visible_reply":"我已补齐草案，请确认。","readiness":"ready_for_confirm"}`), nil
+			}),
+		},
+	}
+	principal := Principal{ID: "actor-2", RoleSlug: "tenant-admin"}
+	conversation := svc.createConversation("tenant-1", principal)
+	created, err := svc.createTurn(context.Background(), "tenant-1", principal, conversation.ConversationID, "在 AI治理办公室 下新建 人力资源部239A补全")
+	if err != nil {
+		t.Fatalf("create first turn err=%v", err)
+	}
+	first := created.Turns[len(created.Turns)-1]
+	if first.Phase != assistantPhaseAwaitMissingFields {
+		t.Fatalf("expected await_missing_fields, got=%q", first.Phase)
+	}
+
+	next, err := svc.createTurn(context.Background(), "tenant-1", principal, conversation.ConversationID, "生效日期 2026-03-25")
+	if err != nil {
+		t.Fatalf("create follow-up turn err=%v", err)
+	}
+	merged := next.Turns[len(next.Turns)-1]
+	if merged.Intent.ParentRefText != "AI治理办公室" || merged.Intent.EntityName != "人力资源部239A补全" || merged.Intent.EffectiveDate != "2026-03-25" {
+		t.Fatalf("unexpected carried follow-up intent=%+v", merged.Intent)
+	}
+	if merged.Phase != assistantPhaseAwaitCommitConfirm {
+		t.Fatalf("expected await_commit_confirm, got=%q", merged.Phase)
+	}
+	if merged.ResolvedCandidateID != "AIGOV" {
+		t.Fatalf("expected candidate resolved from pending carry-forward, got=%q", merged.ResolvedCandidateID)
+	}
+}
+
+func TestAssistantIntentPipeline_CarryForwardPendingIntentFactsBranches(t *testing.T) {
+	basePending := &assistantTurn{
+		Intent: assistantIntentSpec{
+			Action:              assistantIntentCreateOrgUnit,
+			ParentRefText:       "AI治理办公室",
+			EntityName:          "人力资源部239A补全",
+			EffectiveDate:       "2026-03-25",
+			OrgCode:             "ORG-1",
+			TargetEffectiveDate: "2026-04-01",
+			NewName:             "新名称",
+			NewParentRefText:    "新上级",
+		},
+		Clarification: &assistantClarificationDecision{Status: assistantClarificationStatusOpen},
+	}
+
+	if got := assistantCarryForwardPendingIntentFacts(assistantIntentSpec{Action: assistantIntentCreateOrgUnit}, nil); got.ParentRefText != "" {
+		t.Fatalf("nil pending should not carry=%+v", got)
+	}
+	if got := assistantCarryForwardPendingIntentFacts(assistantIntentSpec{Action: assistantIntentCreateOrgUnit}, &assistantTurn{Intent: basePending.Intent}); got.ParentRefText != "" {
+		t.Fatalf("missing clarification should not carry=%+v", got)
+	}
+	if got := assistantCarryForwardPendingIntentFacts(assistantIntentSpec{Action: assistantIntentCreateOrgUnit}, &assistantTurn{
+		Intent:        basePending.Intent,
+		Clarification: &assistantClarificationDecision{Status: assistantClarificationStatusResolved},
+	}); got.ParentRefText != "" {
+		t.Fatalf("closed clarification should not carry=%+v", got)
+	}
+	if got := assistantCarryForwardPendingIntentFacts(assistantIntentSpec{Action: assistantIntentMoveOrgUnit}, basePending); got.NewParentRefText != "" {
+		t.Fatalf("action mismatch should not carry=%+v", got)
+	}
+
+	create := assistantCarryForwardPendingIntentFacts(assistantIntentSpec{Action: assistantIntentCreateOrgUnit}, basePending)
+	if create.ParentRefText != "AI治理办公室" || create.EntityName != "人力资源部239A补全" || create.EffectiveDate != "2026-03-25" {
+		t.Fatalf("create carry mismatch=%+v", create)
+	}
+
+	version := assistantCarryForwardPendingIntentFacts(assistantIntentSpec{Action: assistantIntentAddOrgUnitVersion}, &assistantTurn{
+		Intent: assistantIntentSpec{
+			Action:        assistantIntentAddOrgUnitVersion,
+			OrgCode:       "ORG-2",
+			EffectiveDate: "2026-05-01",
+		},
+		Clarification: &assistantClarificationDecision{Status: assistantClarificationStatusOpen},
+	})
+	if version.OrgCode != "ORG-2" || version.EffectiveDate != "2026-05-01" {
+		t.Fatalf("add-version carry mismatch=%+v", version)
+	}
+
+	insert := assistantCarryForwardPendingIntentFacts(assistantIntentSpec{Action: assistantIntentInsertOrgUnitVersion}, &assistantTurn{
+		Intent: assistantIntentSpec{
+			Action:        assistantIntentInsertOrgUnitVersion,
+			OrgCode:       "ORG-3",
+			EffectiveDate: "2026-06-01",
+		},
+		Clarification: &assistantClarificationDecision{Status: assistantClarificationStatusOpen},
+	})
+	if insert.OrgCode != "ORG-3" || insert.EffectiveDate != "2026-06-01" {
+		t.Fatalf("insert-version carry mismatch=%+v", insert)
+	}
+
+	correct := assistantCarryForwardPendingIntentFacts(assistantIntentSpec{Action: assistantIntentCorrectOrgUnit}, &assistantTurn{
+		Intent: assistantIntentSpec{
+			Action:              assistantIntentCorrectOrgUnit,
+			OrgCode:             "ORG-4",
+			TargetEffectiveDate: "2026-07-01",
+		},
+		Clarification: &assistantClarificationDecision{Status: assistantClarificationStatusOpen},
+	})
+	if correct.OrgCode != "ORG-4" || correct.TargetEffectiveDate != "2026-07-01" {
+		t.Fatalf("correct carry mismatch=%+v", correct)
+	}
+
+	correctFallback := assistantCarryForwardPendingIntentFacts(assistantIntentSpec{Action: assistantIntentCorrectOrgUnit}, &assistantTurn{
+		Intent: assistantIntentSpec{
+			Action:        assistantIntentCorrectOrgUnit,
+			OrgCode:       "ORG-5",
+			EffectiveDate: "2026-08-01",
+		},
+		Clarification: &assistantClarificationDecision{Status: assistantClarificationStatusOpen},
+	})
+	if correctFallback.TargetEffectiveDate != "2026-08-01" {
+		t.Fatalf("correct fallback target date mismatch=%+v", correctFallback)
+	}
+
+	rename := assistantCarryForwardPendingIntentFacts(assistantIntentSpec{Action: assistantIntentRenameOrgUnit}, &assistantTurn{
+		Intent: assistantIntentSpec{
+			Action:        assistantIntentRenameOrgUnit,
+			OrgCode:       "ORG-6",
+			EffectiveDate: "2026-09-01",
+			NewName:       "品牌运营部",
+		},
+		Clarification: &assistantClarificationDecision{Status: assistantClarificationStatusOpen},
+	})
+	if rename.OrgCode != "ORG-6" || rename.EffectiveDate != "2026-09-01" || rename.NewName != "品牌运营部" {
+		t.Fatalf("rename carry mismatch=%+v", rename)
+	}
+
+	move := assistantCarryForwardPendingIntentFacts(assistantIntentSpec{Action: assistantIntentMoveOrgUnit}, &assistantTurn{
+		Intent: assistantIntentSpec{
+			Action:           assistantIntentMoveOrgUnit,
+			OrgCode:          "ORG-7",
+			EffectiveDate:    "2026-10-01",
+			NewParentRefText: "新上级部门",
+		},
+		Clarification: &assistantClarificationDecision{Status: assistantClarificationStatusOpen},
+	})
+	if move.OrgCode != "ORG-7" || move.EffectiveDate != "2026-10-01" || move.NewParentRefText != "新上级部门" {
+		t.Fatalf("move carry mismatch=%+v", move)
+	}
+
+	disable := assistantCarryForwardPendingIntentFacts(assistantIntentSpec{Action: assistantIntentDisableOrgUnit}, &assistantTurn{
+		Intent: assistantIntentSpec{
+			Action:        assistantIntentDisableOrgUnit,
+			OrgCode:       "ORG-8",
+			EffectiveDate: "2026-11-01",
+		},
+		Clarification: &assistantClarificationDecision{Status: assistantClarificationStatusOpen},
+	})
+	if disable.OrgCode != "ORG-8" || disable.EffectiveDate != "2026-11-01" {
+		t.Fatalf("disable carry mismatch=%+v", disable)
+	}
+
+	enable := assistantCarryForwardPendingIntentFacts(assistantIntentSpec{Action: assistantIntentEnableOrgUnit}, &assistantTurn{
+		Intent: assistantIntentSpec{
+			Action:        assistantIntentEnableOrgUnit,
+			OrgCode:       "ORG-9",
+			EffectiveDate: "2026-12-01",
+		},
+		Clarification: &assistantClarificationDecision{Status: assistantClarificationStatusOpen},
+	})
+	if enable.OrgCode != "ORG-9" || enable.EffectiveDate != "2026-12-01" {
+		t.Fatalf("enable carry mismatch=%+v", enable)
 	}
 }
 
