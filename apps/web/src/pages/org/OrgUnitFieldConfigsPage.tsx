@@ -44,7 +44,8 @@ import { FilterBar } from '../../components/FilterBar'
 import { PageHeader } from '../../components/PageHeader'
 import { StatusChip } from '../../components/StatusChip'
 import { isMessageKey, type MessageKey } from '../../i18n/messages'
-import { resolveAsOfAfterPolicySave, shouldShowFutureEffectiveHint } from './orgUnitFieldPolicyAsOf'
+import { shouldShowFutureEffectiveHint } from './orgUnitFieldPolicyAsOf'
+import { resolveReadViewState, todayISODate } from './readViewState'
 
 type FieldConfigListStatus = 'all' | 'enabled' | 'disabled'
 type DisabledState = 'all' | 'pending' | 'disabled'
@@ -101,27 +102,35 @@ interface PolicyFormState {
 
 function FieldConfigsFilterBar(props: {
   asOf: string
+  historyMode: boolean
   status: FieldConfigListStatus
   disabledState: DisabledState
   keyword: string
   t: ReturnType<typeof useAppPreferences>['t']
-  onApply: (value: { asOf: string; status: FieldConfigListStatus; disabledState: DisabledState; keyword: string }) => void
+  onApply: (value: { asOf: string; historyMode: boolean; status: FieldConfigListStatus; disabledState: DisabledState; keyword: string }) => void
 }) {
   const { t } = props
   const [asOfInput, setAsOfInput] = useState(props.asOf)
+  const [historyModeInput, setHistoryModeInput] = useState(props.historyMode)
   const [statusInput, setStatusInput] = useState<FieldConfigListStatus>(props.status)
   const [disabledStateInput, setDisabledStateInput] = useState<DisabledState>(props.disabledState)
   const [keywordInput, setKeywordInput] = useState(props.keyword)
 
   return (
     <FilterBar>
-      <TextField
-        InputLabelProps={{ shrink: true }}
-        label={t('org_field_configs_filter_as_of')}
-        onChange={(event) => setAsOfInput(event.target.value)}
-        type='date'
-        value={asOfInput}
-      />
+      {historyModeInput ? (
+        <TextField
+          InputLabelProps={{ shrink: true }}
+          label={t('org_field_configs_filter_as_of')}
+          onChange={(event) => setAsOfInput(event.target.value)}
+          type='date'
+          value={asOfInput}
+        />
+      ) : (
+        <Typography color='text.secondary' sx={{ alignSelf: 'center', minWidth: 160 }} variant='body2'>
+          {t('common_view_current_label')}
+        </Typography>
+      )}
       <FormControl sx={{ minWidth: 160 }}>
         <InputLabel id='org-field-configs-status-filter'>{t('org_field_configs_filter_status')}</InputLabel>
         <Select
@@ -166,6 +175,7 @@ function FieldConfigsFilterBar(props: {
         onClick={() =>
           props.onApply({
             asOf: asOfInput,
+            historyMode: historyModeInput,
             status: statusInput,
             disabledState: statusInput === 'disabled' ? disabledStateInput : 'all',
             keyword: keywordInput
@@ -175,23 +185,29 @@ function FieldConfigsFilterBar(props: {
       >
         {t('action_apply_filters')}
       </Button>
+      {historyModeInput ? (
+        <Button
+          onClick={() => {
+            setHistoryModeInput(false)
+            setAsOfInput(props.asOf)
+          }}
+          variant='outlined'
+        >
+          {t('common_view_current')}
+        </Button>
+      ) : (
+        <Button
+          onClick={() => {
+            setHistoryModeInput(true)
+            setAsOfInput(props.asOf)
+          }}
+          variant='outlined'
+        >
+          {t('common_view_history')}
+        </Button>
+      )}
     </FilterBar>
   )
-}
-
-function formatAsOfDate(date: Date): string {
-  return date.toISOString().slice(0, 10)
-}
-
-function parseDateOrDefault(raw: string | null, fallback: string): string {
-  if (!raw) {
-    return fallback
-  }
-  const value = raw.trim()
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) {
-    return fallback
-  }
-  return value
 }
 
 function parseListStatus(raw: string | null): FieldConfigListStatus {
@@ -346,10 +362,11 @@ export function OrgUnitFieldConfigsPage() {
   const queryClient = useQueryClient()
   const { t, tenantId } = useAppPreferences()
   const [searchParams, setSearchParams] = useSearchParams()
-  const fallbackAsOf = useMemo(() => formatAsOfDate(new Date()), [])
-  const todayUtc = useMemo(() => formatAsOfDate(new Date()), [])
+  const todayUtc = useMemo(() => todayISODate(), [])
+  const readView = useMemo(() => resolveReadViewState(searchParams.get('as_of'), todayUtc), [searchParams, todayUtc])
 
-  const asOf = parseDateOrDefault(searchParams.get('as_of'), fallbackAsOf)
+  const asOf = readView.effectiveAsOf
+  const readMode = readView.mode
   const status = parseListStatus(searchParams.get('status'))
   const disabledState = parseDisabledState(searchParams.get('disabled_state'))
   const keyword = (searchParams.get('keyword') ?? '').trim()
@@ -587,7 +604,7 @@ export function OrgUnitFieldConfigsPage() {
     (mode: 'disable' | 'postpone', row: FieldConfigRow) => {
       setDisableError('')
       setSelectedConfig({ mode, row })
-      const base = maxDay(todayUtc, asOf)
+      const base = todayUtc
       if (mode === 'disable') {
         setDisableForm({ disabledOn: maxDay(base, row.enabledOn) })
       } else {
@@ -597,19 +614,21 @@ export function OrgUnitFieldConfigsPage() {
       }
       setDisableRequestID(newRequestID())
     },
-    [asOf, todayUtc]
+    [todayUtc]
   )
 
   const openStrategyRegistry = useCallback(
     (row: FieldConfigRow) => {
       const next = new URLSearchParams()
-      next.set('as_of', asOf)
+      if (readMode === 'history') {
+        next.set('as_of', asOf)
+      }
       next.set('registry_view', 'editor')
       next.set('capability_key', 'org.orgunit_write.field_policy')
       next.set('field_key', row.fieldKey)
       navigate({ pathname: '/org/setid/registry', search: `?${next.toString()}` })
     },
-    [asOf, navigate]
+    [asOf, navigate, readMode]
   )
 
   function closePolicyDialog() {
@@ -651,7 +670,7 @@ export function OrgUnitFieldConfigsPage() {
     }
 
     try {
-      const savedPolicy = await policyMutation.mutateAsync({
+      await policyMutation.mutateAsync({
         field_key: policyRow.fieldKey,
         scope_type: scopeType,
         scope_key: scopeKey,
@@ -661,16 +680,7 @@ export function OrgUnitFieldConfigsPage() {
         enabled_on: enabledOn,
         request_id: policyRequestID
       })
-      const nextAsOf = resolveAsOfAfterPolicySave(asOf, savedPolicy.enabled_on)
-      if (nextAsOf) {
-        updateSearch({ asOf: nextAsOf })
-        setToast({
-          message: t('org_field_configs_toast_policy_saved_as_of_switched', { date: nextAsOf }),
-          severity: 'success'
-        })
-      } else {
-        setToast({ message: t('org_field_configs_toast_policy_saved'), severity: 'success' })
-      }
+      setToast({ message: t('org_field_configs_toast_policy_saved'), severity: 'success' })
       closePolicyDialog()
     } catch (error) {
       setPolicyError(formatApiErrorMessage(error))
@@ -1057,10 +1067,17 @@ export function OrgUnitFieldConfigsPage() {
 
       <FieldConfigsFilterBar
         asOf={asOf}
+        historyMode={readMode === 'history'}
         disabledState={disabledState}
         keyword={keyword}
-        key={`${asOf}|${status}|${disabledState}|${keyword}`}
-        onApply={(next) => updateSearch(next)}
+        key={`${readMode}|${asOf}|${status}|${disabledState}|${keyword}`}
+        onApply={(next) =>
+          updateSearch({
+            asOf: next.historyMode ? next.asOf : null,
+            status: next.status,
+            disabledState: next.disabledState,
+            keyword: next.keyword
+          })}
         status={status}
         t={t}
       />

@@ -3,6 +3,7 @@ package server
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"net/http"
 	"net/http/httptest"
@@ -13,6 +14,7 @@ import (
 	"testing/fstest"
 
 	"github.com/jackc/pgx/v5"
+	orgunitports "github.com/jacksonlee411/Bugs-And-Blossoms/modules/orgunit/domain/ports"
 	orgunittypes "github.com/jacksonlee411/Bugs-And-Blossoms/modules/orgunit/domain/types"
 	orgunitservices "github.com/jacksonlee411/Bugs-And-Blossoms/modules/orgunit/services"
 )
@@ -30,6 +32,46 @@ func (fakePGBeginner) Begin(context.Context) (pgx.Tx, error) {
 
 func (s staticIdentityProvider) AuthenticatePassword(context.Context, Tenant, string, string) (authenticatedIdentity, error) {
 	return s.ident, s.err
+}
+
+type orgUnitMemoryStoreWithWriteStore struct {
+	*orgUnitMemoryStore
+}
+
+func (s orgUnitMemoryStoreWithWriteStore) SubmitEvent(context.Context, string, string, *int, string, string, json.RawMessage, string, string) (int64, error) {
+	return 1, nil
+}
+
+func (s orgUnitMemoryStoreWithWriteStore) SubmitCorrection(context.Context, string, int, string, json.RawMessage, string, string) (string, error) {
+	return "", nil
+}
+
+func (s orgUnitMemoryStoreWithWriteStore) SubmitStatusCorrection(context.Context, string, int, string, string, string, string) (string, error) {
+	return "", nil
+}
+
+func (s orgUnitMemoryStoreWithWriteStore) SubmitRescindEvent(context.Context, string, int, string, string, string, string) (string, error) {
+	return "", nil
+}
+
+func (s orgUnitMemoryStoreWithWriteStore) SubmitRescindOrg(context.Context, string, int, string, string, string) (int, error) {
+	return 0, nil
+}
+
+func (s orgUnitMemoryStoreWithWriteStore) FindEventByUUID(context.Context, string, string) (orgunittypes.OrgUnitEvent, error) {
+	return orgunittypes.OrgUnitEvent{}, orgunitports.ErrOrgEventNotFound
+}
+
+func (s orgUnitMemoryStoreWithWriteStore) FindEventByEffectiveDate(context.Context, string, int, string) (orgunittypes.OrgUnitEvent, error) {
+	return orgunittypes.OrgUnitEvent{}, orgunitports.ErrOrgEventNotFound
+}
+
+func (s orgUnitMemoryStoreWithWriteStore) ListEnabledTenantFieldConfigsAsOf(context.Context, string, string) ([]orgunittypes.TenantFieldConfig, error) {
+	return nil, nil
+}
+
+func (s orgUnitMemoryStoreWithWriteStore) FindPersonByPernr(context.Context, string, string) (orgunittypes.Person, error) {
+	return orgunittypes.Person{}, errors.New("person not found")
 }
 
 func localTenancyResolver() TenancyResolver {
@@ -1278,5 +1320,342 @@ func TestLoginPost_DefaultProviderConfigError(t *testing.T) {
 	h.ServeHTTP(rec, req)
 	if rec.Code != http.StatusInternalServerError {
 		t.Fatalf("status=%d", rec.Code)
+	}
+}
+
+func stringsReader(s string) *strings.Reader { return strings.NewReader(s) }
+
+func mustGetwd(t *testing.T) string {
+	t.Helper()
+	wd, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	return wd
+}
+
+func mustAllowlistPathFromWd(t *testing.T, wd string) string {
+	t.Helper()
+	return filepath.Clean(filepath.Join(wd, "..", "..", "config", "routing", "allowlist.yaml"))
+}
+
+func loginTenantAdminCookie(t *testing.T, h http.Handler) *http.Cookie {
+	t.Helper()
+	login := httptest.NewRequest(http.MethodPost, "http://localhost/iam/api/sessions", stringsReader(`{"email":"tenant-admin@example.invalid","password":"pw"}`))
+	login.Host = "localhost"
+	login.Header.Set("Content-Type", "application/json")
+	loginRec := httptest.NewRecorder()
+	h.ServeHTTP(loginRec, login)
+	if loginRec.Code != http.StatusNoContent {
+		t.Fatalf("login status=%d body=%s", loginRec.Code, loginRec.Body.String())
+	}
+	cookies := loginRec.Result().Cookies()
+	if len(cookies) == 0 {
+		t.Fatal("missing sid cookie")
+	}
+	return cookies[0]
+}
+
+func TestNewHandlerWithOptions_AssistantRoutes_AreWired(t *testing.T) {
+	wd := mustGetwd(t)
+	allowlistPath := mustAllowlistPathFromWd(t, wd)
+	t.Setenv("ALLOWLIST_PATH", allowlistPath)
+	t.Setenv("AUTHZ_MODE", "disabled")
+	t.Setenv("AUTHZ_UNSAFE_ALLOW_DISABLED", "1")
+
+	h, err := NewHandlerWithOptions(HandlerOptions{
+		TenancyResolver: localTenancyResolver(),
+		IdentityProvider: staticIdentityProvider{ident: authenticatedIdentity{
+			KratosIdentityID: "00000000-0000-0000-0000-0000000000aa",
+			Email:            "tenant-admin@example.invalid",
+			RoleSlug:         "tenant-admin",
+		}},
+		OrgUnitStore: newOrgUnitMemoryStore(),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	sidCookie := loginTenantAdminCookie(t, h)
+	call := func(method, path, body string) *httptest.ResponseRecorder {
+		req := httptest.NewRequest(method, "http://localhost"+path, stringsReader(body))
+		req.Host = "localhost"
+		req.Header.Set("Content-Type", "application/json")
+		req.AddCookie(sidCookie)
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, req)
+		return rec
+	}
+
+	if rec := call(http.MethodPost, "/internal/assistant/tasks", `{"conversation_id":"conv_1","turn_id":"turn_1","task_type":"assistant_async_plan","request_id":"req_1","contract_snapshot":{"intent_schema_version":"v1","compiler_contract_version":"v1","capability_map_version":"v1","skill_manifest_digest":"d","context_hash":"c","intent_hash":"i","plan_hash":"p"}}`); rec.Code == http.StatusNotFound {
+		t.Fatalf("assistant tasks route not wired")
+	}
+	if rec := call(http.MethodGet, "/internal/assistant/tasks/task_1", ""); rec.Code == http.StatusNotFound {
+		t.Fatalf("assistant task detail route not wired")
+	} else if rec.Code != http.StatusServiceUnavailable || assistantDecodeErrCode(t, rec) != "assistant_task_workflow_unavailable" {
+		t.Fatalf("assistant task detail status=%d body=%s", rec.Code, rec.Body.String())
+	}
+	if rec := call(http.MethodGet, "/internal/assistant/conversations", ""); rec.Code == http.StatusNotFound {
+		t.Fatalf("assistant conversation list route not wired")
+	}
+	if rec := call(http.MethodPost, "/internal/assistant/conversations/conv_1/turns/turn_1:commit", `{}`); rec.Code == http.StatusNotFound {
+		t.Fatalf("assistant turn action route not wired")
+	} else if rec.Code != http.StatusServiceUnavailable || assistantDecodeErrCode(t, rec) != "assistant_task_workflow_unavailable" {
+		t.Fatalf("assistant turn action status=%d body=%s", rec.Code, rec.Body.String())
+	}
+	if rec := call(http.MethodPost, "/internal/assistant/tasks/task_1:cancel", ""); rec.Code == http.StatusNotFound {
+		t.Fatalf("assistant task action route not wired")
+	} else if rec.Code != http.StatusServiceUnavailable || assistantDecodeErrCode(t, rec) != "assistant_task_workflow_unavailable" {
+		t.Fatalf("assistant task action status=%d body=%s", rec.Code, rec.Body.String())
+	}
+	if rec := call(http.MethodGet, "/internal/assistant/model-providers", ""); rec.Code == http.StatusNotFound {
+		t.Fatalf("assistant model providers route not wired")
+	}
+	if rec := call(http.MethodPost, "/internal/assistant/model-providers:validate", `{"providers":[]}`); rec.Code == http.StatusNotFound {
+		t.Fatalf("assistant model providers validate route not wired")
+	}
+	if rec := call(http.MethodPost, "/internal/assistant/model-providers:apply", `{"providers":[]}`); rec.Code != http.StatusNotFound {
+		t.Fatalf("assistant model providers apply status=%d body=%s", rec.Code, rec.Body.String())
+	}
+	if rec := call(http.MethodGet, "/internal/assistant/models", ""); rec.Code == http.StatusNotFound {
+		t.Fatalf("assistant models route not wired")
+	}
+	if rec := call(http.MethodGet, "/internal/assistant/runtime-status", ""); rec.Code == http.StatusNotFound {
+		t.Fatalf("assistant runtime status route not wired")
+	}
+}
+
+func TestNewHandlerWithOptions_DictRoutes_AreWired(t *testing.T) {
+	wd := mustGetwd(t)
+	allowlistPath := mustAllowlistPathFromWd(t, wd)
+	t.Setenv("ALLOWLIST_PATH", allowlistPath)
+	t.Setenv("AUTHZ_MODE", "disabled")
+	t.Setenv("AUTHZ_UNSAFE_ALLOW_DISABLED", "1")
+
+	h, err := NewHandlerWithOptions(HandlerOptions{
+		TenancyResolver: localTenancyResolver(),
+		IdentityProvider: staticIdentityProvider{ident: authenticatedIdentity{
+			KratosIdentityID: "00000000-0000-0000-0000-0000000000aa",
+			Email:            "tenant-admin@example.invalid",
+			RoleSlug:         "tenant-admin",
+		}},
+		OrgUnitStore: newOrgUnitMemoryStore(),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	sidCookie := loginTenantAdminCookie(t, h)
+	get := func(path string) *httptest.ResponseRecorder {
+		req := httptest.NewRequest(http.MethodGet, "http://localhost"+path, nil)
+		req.Host = "localhost"
+		req.AddCookie(sidCookie)
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, req)
+		return rec
+	}
+	post := func(path string, body string) *httptest.ResponseRecorder {
+		req := httptest.NewRequest(http.MethodPost, "http://localhost"+path, stringsReader(body))
+		req.Host = "localhost"
+		req.AddCookie(sidCookie)
+		req.Header.Set("Content-Type", "application/json")
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, req)
+		return rec
+	}
+
+	if rec := get("/iam/api/dicts?as_of=2026-01-01"); rec.Code != http.StatusOK {
+		t.Fatalf("dicts status=%d body=%s", rec.Code, rec.Body.String())
+	}
+	if rec := post("/iam/api/dicts", `{"dict_code":"expense_type","name":"Expense Type","enabled_on":"2026-01-01","request_id":"r-dict-create"}`); rec.Code != http.StatusCreated {
+		t.Fatalf("dict create status=%d body=%s", rec.Code, rec.Body.String())
+	}
+	if rec := post("/iam/api/dicts:disable", `{"dict_code":"expense_type","disabled_on":"2026-01-02","request_id":"r-dict-disable"}`); rec.Code != http.StatusOK {
+		t.Fatalf("dict disable status=%d body=%s", rec.Code, rec.Body.String())
+	}
+	if rec := get("/iam/api/dicts/values?dict_code=org_type&as_of=2026-01-01&status=all"); rec.Code != http.StatusOK {
+		t.Fatalf("dict values status=%d body=%s", rec.Code, rec.Body.String())
+	}
+	if rec := post("/iam/api/dicts/values", `{"dict_code":"org_type","code":"30","label":"X","enabled_on":"2026-01-01","request_id":"r1"}`); rec.Code != http.StatusConflict {
+		t.Fatalf("create status=%d body=%s", rec.Code, rec.Body.String())
+	}
+	if rec := post("/iam/api/dicts/values:disable", `{"dict_code":"org_type","code":"10","disabled_on":"2026-01-01","request_id":"r1"}`); rec.Code != http.StatusConflict {
+		t.Fatalf("disable status=%d body=%s", rec.Code, rec.Body.String())
+	}
+	if rec := post("/iam/api/dicts/values:correct", `{"dict_code":"org_type","code":"10","label":"X","correction_day":"2026-01-01","request_id":"r1"}`); rec.Code != http.StatusConflict {
+		t.Fatalf("correct status=%d body=%s", rec.Code, rec.Body.String())
+	}
+	if rec := get("/iam/api/dicts/values/audit?dict_code=org_type&code=10&limit=10"); rec.Code != http.StatusOK {
+		t.Fatalf("audit status=%d body=%s", rec.Code, rec.Body.String())
+	}
+	if rec := post("/iam/api/dicts:release:preview", `{"release_id":"r1","as_of":"2026-01-01"}`); rec.Code != http.StatusInternalServerError {
+		t.Fatalf("release preview status=%d body=%s", rec.Code, rec.Body.String())
+	}
+	if rec := post("/iam/api/dicts:release", `{"release_id":"r1","request_id":"req-1","as_of":"2026-01-01"}`); rec.Code != http.StatusInternalServerError {
+		t.Fatalf("release status=%d body=%s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestNewHandlerWithOptions_OrgUnitFieldConfigRoutes_AreWired(t *testing.T) {
+	wd := mustGetwd(t)
+	allowlistPath := mustAllowlistPathFromWd(t, wd)
+	t.Setenv("ALLOWLIST_PATH", allowlistPath)
+	t.Setenv("AUTHZ_MODE", "disabled")
+	t.Setenv("AUTHZ_UNSAFE_ALLOW_DISABLED", "1")
+
+	h, err := NewHandlerWithOptions(HandlerOptions{
+		TenancyResolver: localTenancyResolver(),
+		IdentityProvider: staticIdentityProvider{ident: authenticatedIdentity{
+			KratosIdentityID: "00000000-0000-0000-0000-0000000000aa",
+			Email:            "tenant-admin@example.invalid",
+			RoleSlug:         "tenant-admin",
+		}},
+		OrgUnitStore: newOrgUnitMemoryStore(),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	sidCookie := loginTenantAdminCookie(t, h)
+	req := httptest.NewRequest(http.MethodGet, "http://localhost/org/api/org-units/field-configs:enable-candidates?enabled_on=2026-01-01", nil)
+	req.Host = "localhost"
+	req.AddCookie(sidCookie)
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestNewHandlerWithOptions_OrgUnitFieldPolicyRoutes_AreWired(t *testing.T) {
+	wd := mustGetwd(t)
+	allowlistPath := mustAllowlistPathFromWd(t, wd)
+	t.Setenv("ALLOWLIST_PATH", allowlistPath)
+	t.Setenv("AUTHZ_MODE", "disabled")
+	t.Setenv("AUTHZ_UNSAFE_ALLOW_DISABLED", "1")
+
+	h, err := NewHandlerWithOptions(HandlerOptions{
+		TenancyResolver: localTenancyResolver(),
+		IdentityProvider: staticIdentityProvider{ident: authenticatedIdentity{
+			KratosIdentityID: "00000000-0000-0000-0000-0000000000ab",
+			Email:            "tenant-admin@example.invalid",
+			RoleSlug:         "tenant-admin",
+		}},
+		OrgUnitStore: orgUnitStoreWithFieldPolicies{OrgUnitStore: newOrgUnitMemoryStore()},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	sidCookie := loginTenantAdminCookie(t, h)
+	check := func(method, path, body string, want int) {
+		t.Helper()
+		req := httptest.NewRequest(method, "http://localhost"+path, stringsReader(body))
+		req.Host = "localhost"
+		req.AddCookie(sidCookie)
+		req.Header.Set("Content-Type", "application/json")
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, req)
+		if rec.Code != want {
+			t.Fatalf("%s %s status=%d body=%s", method, path, rec.Code, rec.Body.String())
+		}
+	}
+
+	check(http.MethodPost, "/org/api/org-units/field-policies", `{"field_key":"","enabled_on":"","request_id":""}`, http.StatusUnprocessableEntity)
+	check(http.MethodPost, "/org/api/org-units/field-policies:disable", `{"field_key":"","disabled_on":"","request_id":""}`, http.StatusUnprocessableEntity)
+	check(http.MethodGet, "/org/api/org-units/field-policies:resolve-preview?as_of=2026-01-01", "", http.StatusBadRequest)
+	check(http.MethodGet, "/org/api/org-units/create-field-decisions?effective_date=2026-01-01", "", http.StatusUnprocessableEntity)
+	check(http.MethodGet, "/internal/capabilities/catalog", "", http.StatusOK)
+	check(http.MethodGet, "/internal/capabilities/catalog:by-intent", "", http.StatusOK)
+}
+
+func TestNewHandlerWithOptions_OrgUnitWriteRoutes_AreWired(t *testing.T) {
+	wd := mustGetwd(t)
+	allowlistPath := mustAllowlistPathFromWd(t, wd)
+	t.Setenv("ALLOWLIST_PATH", allowlistPath)
+	t.Setenv("AUTHZ_MODE", "disabled")
+	t.Setenv("AUTHZ_UNSAFE_ALLOW_DISABLED", "1")
+
+	h, err := NewHandlerWithOptions(HandlerOptions{
+		TenancyResolver: localTenancyResolver(),
+		IdentityProvider: staticIdentityProvider{ident: authenticatedIdentity{
+			KratosIdentityID: "00000000-0000-0000-0000-0000000000aa",
+			Email:            "tenant-admin@example.invalid",
+			RoleSlug:         "tenant-admin",
+		}},
+		OrgUnitStore:        newOrgUnitMemoryStore(),
+		OrgUnitWriteService: fakeOrgUnitWriteService{},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	sidCookie := loginTenantAdminCookie(t, h)
+	t.Run("write-capabilities", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "http://localhost/org/api/org-units/write-capabilities?intent=create_org&org_code=A001&effective_date=2026-01-01", nil)
+		req.Host = "localhost"
+		req.AddCookie(sidCookie)
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, req)
+		if rec.Code == http.StatusNotFound {
+			t.Fatalf("expected route to be wired, got 404")
+		}
+	})
+
+	t.Run("write", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "http://localhost/org/api/org-units/write", stringsReader(`{"intent":"create_org","org_code":"ROOT","effective_date":"2026-01-01","request_id":"r1","patch":{"name":"Root A"}}`))
+		req.Host = "localhost"
+		req.AddCookie(sidCookie)
+		req.Header.Set("Content-Type", "application/json")
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, req)
+		if rec.Code == http.StatusNotFound {
+			t.Fatalf("expected route to be wired, got 404")
+		}
+	})
+}
+
+func TestNewHandlerWithOptions_AssistantWriteServiceFallbackForStores(t *testing.T) {
+	wd := mustGetwd(t)
+	t.Setenv("ALLOWLIST_PATH", mustAllowlistPathFromWd(t, wd))
+	t.Setenv("AUTHZ_MODE", "disabled")
+	t.Setenv("AUTHZ_UNSAFE_ALLOW_DISABLED", "1")
+
+	h, err := NewHandlerWithOptions(HandlerOptions{
+		TenancyResolver:  localTenancyResolver(),
+		IdentityProvider: staticIdentityProvider{ident: authenticatedIdentity{KratosIdentityID: "00000000-0000-0000-0000-000000000001", Email: "tenant-admin@example.invalid", RoleSlug: "tenant-admin"}},
+		OrgUnitStore:     &orgUnitPGStore{},
+	})
+	if err != nil {
+		t.Fatalf("new handler failed: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "http://localhost/health", nil)
+	req.Host = "localhost"
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("health status=%d body=%s", rec.Code, rec.Body.String())
+	}
+
+	memoryWithWrite := orgUnitMemoryStoreWithWriteStore{orgUnitMemoryStore: newOrgUnitMemoryStore()}
+	h, err = NewHandlerWithOptions(HandlerOptions{
+		TenancyResolver:  localTenancyResolver(),
+		IdentityProvider: staticIdentityProvider{ident: authenticatedIdentity{KratosIdentityID: "00000000-0000-0000-0000-000000000001", Email: "tenant-admin@example.invalid", RoleSlug: "tenant-admin"}},
+		OrgUnitStore:     memoryWithWrite,
+	})
+	if err != nil {
+		t.Fatalf("new handler with write store failed: %v", err)
+	}
+
+	sid := loginAsTenantAdminForAssistantTests(t, h)
+	conv := createAssistantConversationForTest(t, h, sid)
+	getReq := httptest.NewRequest(http.MethodGet, "http://localhost/internal/assistant/conversations/"+conv.ConversationID, nil)
+	getReq.Host = "localhost"
+	getReq.AddCookie(sid)
+	getRec := httptest.NewRecorder()
+	h.ServeHTTP(getRec, getReq)
+	if getRec.Code != http.StatusOK {
+		t.Fatalf("get conversation status=%d body=%s", getRec.Code, getRec.Body.String())
 	}
 }

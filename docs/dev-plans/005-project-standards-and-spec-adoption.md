@@ -60,18 +60,21 @@
 
 **决策（Normative）**
 
-1. `as_of` 仅表示**读模型切片时点**，中文统一翻译为**“查询时点”**；必须显式提供；缺失/非法统一返回 `400 invalid_as_of`（message：`as_of required`）。
-2. `effective_date` 仅表示**写入生效日**，中文统一翻译为**“生效日期”**；必须显式提供；缺失/非法统一返回 `400 invalid_effective_date`（message：`effective_date required`）。
-3. 业务有效时间统一使用 `date`（`YYYY-MM-DD`，日粒度）；禁止用时分秒表达业务生效语义。
-4. 业务时间不得由服务端默认 today（`time.Now().UTC()` / `current_date`）推断；必须由请求显式传入并透传到 service/store/kernel。
-5. 审计/事务时间与业务有效时间严格分离：`created_at` / `updated_at` / `transaction_time` 可用 `timestamptz`，不得替代业务生效时间。
-6. bootstrap/backfill 必须显式提供 `effective_date`，且需通过 root BU 在该日期有效性校验；不允许固定常量日期兜底。
-7. 同一输入（`tenant + route + payload/query + as_of/effective_date`）在不同运行日必须可重放且结果一致（审计时间戳字段除外）。
+1. `as_of` 仅表示**读模型切片时点**，中文统一翻译为**“查询时点”**；适用于历史切片、导出、审计、同步、跨模块读、可缓存重放等**显式时间读合同**；在这些合同里必须显式提供，缺失/非法统一返回 `400 invalid_as_of`（message：`as_of required`）。
+2. 产品/UI 层采用 **current-by-default**：默认浏览当前内容时，不要求页面常显日期控件，也不要求用户先理解 `as_of`；只有进入历史查看时，才显式进入“查看日期 / View As Of”语义。
+3. current-by-default 只是一条**产品交互规则**，不是“服务端自动补 today”的别名；任何服务端、controller、store、kernel 都不得用 `time.Now().UTC()` / `current_date` 静默推断业务时间。
+4. 若产品/UI 层存在 current 模式，则必须在产品边界显式解析为 current 语义或显式时间锚点后再进入下游合同；禁止把“用户没给日期”直接等价成“服务端自动补 today”。
+5. `effective_date` 仅表示**写入生效日**，中文统一翻译为**“生效日期”**；必须显式提供；缺失/非法统一返回 `400 invalid_effective_date`（message：`effective_date required`）。
+6. 业务有效时间统一使用 `date`（`YYYY-MM-DD`，日粒度）；禁止用时分秒表达业务生效语义。
+7. 审计/事务时间与业务有效时间严格分离：`created_at` / `updated_at` / `transaction_time` 可用 `timestamptz`，不得替代业务生效时间。
+8. bootstrap/backfill 必须显式提供 `effective_date`，且需通过 root BU 在该日期有效性校验；不允许固定常量日期兜底。
+9. 同一输入（`tenant + route + payload/query + as_of/effective_date`）在不同运行日必须可重放且结果一致（审计时间戳字段除外）。
 
 **适用范围**
 
 - API 契约（query/body 字段、错误码、返回语义）；
 - UI 路由与页面请求参数（URL/payload）；
+- 产品层 current/history 入口设计与页面默认交互；
 - 服务层与控制器参数校验；
 - SQL/Kernel 函数、迁移与回填脚本；
 - 自动化测试、静态门禁与文档契约。
@@ -84,6 +87,8 @@
 4. 禁止在 070/071 业务有效期判断中引入 `current_date` 作为隐式输入。
 5. 禁止把业务有效期字段建模为 `timestamptz`。
 6. 禁止“缺失参数自动补齐后继续执行”的 fail-open 行为。
+7. 禁止把“产品默认 current”实现成“下游服务缺参补 today”。
+8. 禁止把历史切片、导出、审计、同步、跨模块读链路降格为 implicit today 语义。
 
 **参考规范**
 

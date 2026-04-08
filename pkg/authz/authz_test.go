@@ -1,57 +1,59 @@
-package authz
+package authz_test
 
 import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	authz "github.com/jacksonlee411/Bugs-And-Blossoms/pkg/authz"
 )
 
-func TestModeFromEnv_Default(t *testing.T) {
+func TestModeFromEnv_Default_BlackBox(t *testing.T) {
 	t.Setenv("AUTHZ_MODE", "")
-	m, err := ModeFromEnv()
+	m, err := authz.ModeFromEnv()
 	if err != nil {
 		t.Fatalf("err=%v", err)
 	}
-	if m != ModeEnforce {
+	if m != authz.ModeEnforce {
 		t.Fatalf("mode=%q", m)
 	}
 }
 
-func TestModeFromEnv_Shadow(t *testing.T) {
+func TestModeFromEnv_Shadow_BlackBox(t *testing.T) {
 	t.Setenv("AUTHZ_MODE", "shadow")
-	m, err := ModeFromEnv()
+	m, err := authz.ModeFromEnv()
 	if err != nil {
 		t.Fatalf("err=%v", err)
 	}
-	if m != ModeShadow {
+	if m != authz.ModeShadow {
 		t.Fatalf("mode=%q", m)
 	}
 }
 
-func TestModeFromEnv_DisabledRequiresUnsafe(t *testing.T) {
+func TestModeFromEnv_DisabledRequiresUnsafe_BlackBox(t *testing.T) {
 	t.Setenv("AUTHZ_MODE", "disabled")
 	t.Setenv("AUTHZ_UNSAFE_ALLOW_DISABLED", "")
-	if _, err := ModeFromEnv(); err == nil {
+	if _, err := authz.ModeFromEnv(); err == nil {
 		t.Fatal("expected error")
 	}
 	t.Setenv("AUTHZ_UNSAFE_ALLOW_DISABLED", "1")
-	m, err := ModeFromEnv()
+	m, err := authz.ModeFromEnv()
 	if err != nil {
 		t.Fatalf("err=%v", err)
 	}
-	if m != ModeDisabled {
+	if m != authz.ModeDisabled {
 		t.Fatalf("mode=%q", m)
 	}
 }
 
-func TestModeFromEnv_Invalid(t *testing.T) {
+func TestModeFromEnv_Invalid_BlackBox(t *testing.T) {
 	t.Setenv("AUTHZ_MODE", "nope")
-	if _, err := ModeFromEnv(); err == nil {
+	if _, err := authz.ModeFromEnv(); err == nil {
 		t.Fatal("expected error")
 	}
 }
 
-func TestNewAuthorizer_AndAuthorize(t *testing.T) {
+func TestNewAuthorizer_AndAuthorize_BlackBox(t *testing.T) {
 	dir := t.TempDir()
 	model := filepath.Join(dir, "model.conf")
 	policy := filepath.Join(dir, "policy.csv")
@@ -75,7 +77,7 @@ m = r.sub == p.sub && r.dom == p.dom && r.obj == p.obj && r.act == p.act
 		t.Fatal(err)
 	}
 
-	a, err := NewAuthorizer(model, policy, ModeEnforce)
+	a, err := authz.NewAuthorizer(model, policy, authz.ModeEnforce)
 	if err != nil {
 		t.Fatalf("err=%v", err)
 	}
@@ -96,7 +98,7 @@ m = r.sub == p.sub && r.dom == p.dom && r.obj == p.obj && r.act == p.act
 		t.Fatalf("allowed=%v enforced=%v", allowed, enforced)
 	}
 
-	aShadow, err := NewAuthorizer(model, policy, ModeShadow)
+	aShadow, err := authz.NewAuthorizer(model, policy, authz.ModeShadow)
 	if err != nil {
 		t.Fatalf("err=%v", err)
 	}
@@ -108,7 +110,7 @@ m = r.sub == p.sub && r.dom == p.dom && r.obj == p.obj && r.act == p.act
 		t.Fatalf("allowed=%v enforced=%v", allowed, enforced)
 	}
 
-	aDisabled, err := NewAuthorizer(model, policy, ModeDisabled)
+	aDisabled, err := authz.NewAuthorizer(model, policy, authz.ModeDisabled)
 	if err != nil {
 		t.Fatalf("err=%v", err)
 	}
@@ -121,13 +123,13 @@ m = r.sub == p.sub && r.dom == p.dom && r.obj == p.obj && r.act == p.act
 	}
 }
 
-func TestNewAuthorizer_Error(t *testing.T) {
+func TestNewAuthorizer_Error_BlackBox(t *testing.T) {
 	dir := t.TempDir()
 	invalidModel := filepath.Join(dir, "invalid.conf")
 	if err := os.WriteFile(invalidModel, []byte("nope"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := NewAuthorizer(invalidModel, "nope-policy.csv", ModeEnforce); err == nil {
+	if _, err := authz.NewAuthorizer(invalidModel, "nope-policy.csv", authz.ModeEnforce); err == nil {
 		t.Fatal("expected error")
 	}
 
@@ -148,12 +150,12 @@ m = r.sub == p.sub && r.dom == p.dom && r.obj == p.obj && r.act == p.act
 	if err := os.MkdirAll(policyDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := NewAuthorizer(model, policyDir, ModeEnforce); err == nil {
+	if _, err := authz.NewAuthorizer(model, policyDir, authz.ModeEnforce); err == nil {
 		t.Fatal("expected error")
 	}
 }
 
-func TestNewAuthorizer_LoadPolicyError(t *testing.T) {
+func TestNewAuthorizer_LoadPolicyError_BlackBox(t *testing.T) {
 	dir := t.TempDir()
 	model := filepath.Join(dir, "model.conf")
 	policy := filepath.Join(dir, "missing-policy.csv")
@@ -171,34 +173,34 @@ m = r.sub == p.sub && r.dom == p.dom && r.obj == p.obj && r.act == p.act
 		t.Fatal(err)
 	}
 
-	if _, err := NewAuthorizer(model, policy, ModeEnforce); err == nil {
+	if _, err := authz.NewAuthorizer(model, policy, authz.ModeEnforce); err == nil {
 		t.Fatal("expected error")
 	}
 }
 
-func TestSubjectFromRoleSlug(t *testing.T) {
-	if got := SubjectFromRoleSlug(""); got != "role:anonymous" {
+func TestSubjectFromRoleSlug_BlackBox(t *testing.T) {
+	if got := authz.SubjectFromRoleSlug(""); got != "role:anonymous" {
 		t.Fatalf("got=%q", got)
 	}
-	if got := SubjectFromRoleSlug("Tenant-Admin"); got != "role:tenant-admin" {
-		t.Fatalf("got=%q", got)
-	}
-}
-
-func TestDomainFromTenantID(t *testing.T) {
-	if got := DomainFromTenantID(" ABC "); got != "abc" {
+	if got := authz.SubjectFromRoleSlug("Tenant-Admin"); got != "role:tenant-admin" {
 		t.Fatalf("got=%q", got)
 	}
 }
 
-func TestAuthorize_UnknownMode(t *testing.T) {
-	a := &Authorizer{mode: Mode("nope")}
+func TestDomainFromTenantID_BlackBox(t *testing.T) {
+	if got := authz.DomainFromTenantID(" ABC "); got != "abc" {
+		t.Fatalf("got=%q", got)
+	}
+}
+
+func TestAuthorize_UnknownMode_BlackBox(t *testing.T) {
+	a := &authz.Authorizer{}
 	if _, _, err := a.Authorize("role:x", "d", "o", "a"); err == nil {
 		t.Fatal("expected error")
 	}
 }
 
-func TestAuthorize_EnforceError(t *testing.T) {
+func TestAuthorize_EnforceError_BlackBox(t *testing.T) {
 	dir := t.TempDir()
 	model := filepath.Join(dir, "model.conf")
 	policy := filepath.Join(dir, "policy.csv")
@@ -218,7 +220,7 @@ m = r.sub ==
 		t.Fatal(err)
 	}
 
-	aShadow, err := NewAuthorizer(model, policy, ModeShadow)
+	aShadow, err := authz.NewAuthorizer(model, policy, authz.ModeShadow)
 	if err != nil {
 		t.Fatalf("err=%v", err)
 	}
@@ -230,7 +232,7 @@ m = r.sub ==
 		t.Fatalf("allowed=%v enforced=%v", allowed, enforced)
 	}
 
-	aEnforce, err := NewAuthorizer(model, policy, ModeEnforce)
+	aEnforce, err := authz.NewAuthorizer(model, policy, authz.ModeEnforce)
 	if err != nil {
 		t.Fatalf("err=%v", err)
 	}
@@ -240,5 +242,11 @@ m = r.sub ==
 	}
 	if allowed || !enforced {
 		t.Fatalf("allowed=%v enforced=%v", allowed, enforced)
+	}
+}
+
+func BenchmarkSubjectFromRoleSlug_BlackBox(b *testing.B) {
+	for i := 0; i < b.N; i++ {
+		_ = authz.SubjectFromRoleSlug("Tenant-Admin")
 	}
 }

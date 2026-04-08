@@ -46,6 +46,12 @@ import { FreeSoloDropdownField, mergeFreeSoloOptions, uniqueNonEmptyStrings } fr
 import { PageHeader } from '../../components/PageHeader'
 import { SetIDExplainPanel } from '../../components/SetIDExplainPanel'
 import { resolveApiErrorMessage } from '../../errors/presentApiError'
+import { resolveReadViewState, todayISODate } from './readViewState'
+import {
+  defaultRegistryEffectiveDate,
+  resolveDisableAsOf,
+  resolveForkEffectiveDate
+} from './setidGovernanceDates'
 
 type SetIDLegacyTab = 'registry' | 'explain' | 'functional-area' | 'activation'
 type SetIDPageSection = 'base' | 'registry' | 'explain' | 'ops'
@@ -125,10 +131,6 @@ interface RegistryCatalogSelection {
   intent: string
 }
 
-function todayISO(): string {
-  return new Date().toISOString().slice(0, 10)
-}
-
 function newRequestID(prefix: string): string {
   return `${prefix}:${Date.now()}`
 }
@@ -200,7 +202,7 @@ function defaultRegistryForm(asOf: string): RegistryFormState {
     explainRequired: true,
     isStable: false,
     changePolicy: 'plan_required',
-    effectiveDate: asOf,
+    effectiveDate: defaultRegistryEffectiveDate(asOf),
     endDate: '',
     requestID: newRequestID('mui-setid-strategy')
   }
@@ -252,15 +254,6 @@ function toRegistryFormFromRow(row: SetIDStrategyRegistryItem): RegistryFormStat
   }
 }
 
-function nextDayISO(baseDate: string): string {
-  const parsed = new Date(`${baseDate}T00:00:00Z`)
-  if (Number.isNaN(parsed.getTime())) {
-    return ''
-  }
-  parsed.setUTCDate(parsed.getUTCDate() + 1)
-  return parsed.toISOString().slice(0, 10)
-}
-
 function strategyRowID(item: SetIDStrategyRegistryItem): string {
   return [
     item.capability_key,
@@ -287,8 +280,12 @@ export function SetIDGovernancePage({ section }: { section: SetIDPageSection }) 
   const queryClient = useQueryClient()
   const [searchParams, setSearchParams] = useSearchParams()
   const legacyTab = parseLegacyTab(searchParams.get('tab'))
+  const currentDate = useMemo(() => todayISODate(), [])
+  const readView = useMemo(() => resolveReadViewState(searchParams.get('as_of'), currentDate), [searchParams, currentDate])
 
-  const [asOf, setAsOf] = useState(searchParams.get('as_of')?.trim() || todayISO())
+  const asOf = readView.effectiveAsOf
+  const readMode = readView.mode
+  const requestedAsOf = readView.requestedAsOf ?? asOf
   const [createSetIDValue, setCreateSetIDValue] = useState('')
   const [createName, setCreateName] = useState('')
   const [bindOrgCode, setBindOrgCode] = useState('')
@@ -298,7 +295,7 @@ export function SetIDGovernancePage({ section }: { section: SetIDPageSection }) 
   const [registryFieldFilter, setRegistryFieldFilter] = useState('')
   const [registryMode, setRegistryMode] = useState<'object_intent' | 'advanced'>('object_intent')
   const [registryCatalog, setRegistryCatalog] = useState<RegistryCatalogSelection>(() => defaultRegistryCatalogSelection())
-  const [registryForm, setRegistryForm] = useState<RegistryFormState>(() => defaultRegistryForm(asOf))
+  const [registryForm, setRegistryForm] = useState<RegistryFormState>(() => defaultRegistryForm(currentDate))
   const [registryFormMode, setRegistryFormMode] = useState<'create' | 'edit' | 'fork'>('create')
   const [registryDisableDialog, setRegistryDisableDialog] = useState<RegistryDisableDialogState>({
     open: false,
@@ -444,7 +441,7 @@ export function SetIDGovernancePage({ section }: { section: SetIDPageSection }) 
       setRegistryNotice('策略已保存')
       await queryClient.invalidateQueries({ queryKey: ['setid-strategy-registry', asOf] })
       await queryClient.invalidateQueries({ queryKey: ['setid-strategy-registry-options', asOf] })
-      setRegistryForm(defaultRegistryForm(asOf))
+      setRegistryForm(defaultRegistryForm(currentDate))
       setRegistryMode('object_intent')
       setRegistryCatalog(defaultRegistryCatalogSelection())
       setRegistryFormMode('create')
@@ -668,7 +665,7 @@ export function SetIDGovernancePage({ section }: { section: SetIDPageSection }) 
   const hasRegistryKeyLock = registryFormMode !== 'create'
 
   function resetRegistryFormState() {
-    setRegistryForm(defaultRegistryForm(asOf))
+    setRegistryForm(defaultRegistryForm(currentDate))
     setRegistryMode('object_intent')
     setRegistryCatalog(defaultRegistryCatalogSelection())
     setRegistryFormMode('create')
@@ -696,10 +693,10 @@ export function SetIDGovernancePage({ section }: { section: SetIDPageSection }) 
   }, [catalogByCapabilityKey, updateSearchParams])
 
   function onForkStrategyFromCurrent() {
-    const nextEffectiveDate = registryForm.effectiveDate.trim().length > 0 ? nextDayISO(registryForm.effectiveDate) : asOf
+    const nextEffectiveDate = resolveForkEffectiveDate(registryForm.effectiveDate, currentDate)
     setRegistryForm((previous) => ({
       ...previous,
-      effectiveDate: nextEffectiveDate || asOf,
+      effectiveDate: nextEffectiveDate || currentDate,
       endDate: '',
       requestID: newRequestID('mui-setid-strategy-fork')
     }))
@@ -708,8 +705,7 @@ export function SetIDGovernancePage({ section }: { section: SetIDPageSection }) 
   }
 
   const onOpenDisableDialog = useCallback((row: SetIDStrategyRegistryItem) => {
-    const fallbackDisableAsOf = nextDayISO(row.effective_date) || asOf
-    const disableAsOf = asOf > row.effective_date ? asOf : fallbackDisableAsOf
+    const disableAsOf = resolveDisableAsOf(row.effective_date, currentDate)
     setRegistryDisableDialog({
       open: true,
       row,
@@ -717,7 +713,7 @@ export function SetIDGovernancePage({ section }: { section: SetIDPageSection }) 
     })
     setError(null)
     setRegistryNotice(null)
-  }, [asOf])
+  }, [currentDate])
 
   const strategyColumns = useMemo<GridColDef[]>(
     () => [
@@ -812,7 +808,7 @@ export function SetIDGovernancePage({ section }: { section: SetIDPageSection }) 
       await createMutation.mutateAsync({
         setid: createSetIDValue.trim(),
         name: createName.trim(),
-        effective_date: asOf,
+        effective_date: currentDate,
         request_id: newRequestID('mui-setid-create')
       })
     } catch (err) {
@@ -827,7 +823,7 @@ export function SetIDGovernancePage({ section }: { section: SetIDPageSection }) 
       await bindMutation.mutateAsync({
         org_code: bindOrgCode.trim(),
         setid: bindSetIDValue.trim(),
-        effective_date: asOf,
+        effective_date: currentDate,
         request_id: newRequestID('mui-setid-bind')
       })
     } catch (err) {
@@ -1004,21 +1000,40 @@ export function SetIDGovernancePage({ section }: { section: SetIDPageSection }) 
 
         <Paper sx={{ p: 2 }} variant='outlined'>
           <Stack alignItems='center' direction={{ xs: 'column', md: 'row' }} spacing={1.5}>
-            <TextField
-              label='as_of'
-              name='as_of'
-              type='date'
-              value={asOf}
-              onChange={(event) => {
-                const nextAsOf = event.target.value
-                setAsOf(nextAsOf)
-                setRegistryForm((previous) => ({ ...previous, effectiveDate: nextAsOf }))
-                updateSearchParams({ as_of: nextAsOf })
-              }}
-            />
+            {readMode === 'history' ? (
+              <TextField
+                label={t('org_filter_as_of')}
+                name='as_of'
+                type='date'
+                value={requestedAsOf}
+                onChange={(event) => {
+                  const nextAsOf = event.target.value
+                  updateSearchParams({ as_of: nextAsOf })
+                }}
+              />
+            ) : (
+              <Typography color='text.secondary' variant='body2'>
+                {t('common_view_current_label')}
+              </Typography>
+            )}
             <Typography color='text.secondary' variant='body2'>
-              当前上下文：{asOf}
+              {readMode === 'history' ? t('org_view_history_context', { date: asOf }) : t('common_view_current_label')}
             </Typography>
+            {readMode === 'history' ? (
+              <Button onClick={() => updateSearchParams({ as_of: null })} size='small' variant='outlined'>
+                {t('common_view_current')}
+              </Button>
+            ) : (
+              <Button
+                onClick={() => {
+                  updateSearchParams({ as_of: asOf })
+                }}
+                size='small'
+                variant='outlined'
+              >
+                {t('common_view_history')}
+              </Button>
+            )}
           </Stack>
         </Paper>
 
@@ -1235,7 +1250,7 @@ export function SetIDGovernancePage({ section }: { section: SetIDPageSection }) 
                 </Button>
                 <Button
                   onClick={() => {
-                    setRegistryForm(defaultRegistryForm(asOf))
+                    setRegistryForm(defaultRegistryForm(currentDate))
                     setRegistryFormMode('create')
                     setRegistryMode('object_intent')
                     setRegistryCatalog(defaultRegistryCatalogSelection())

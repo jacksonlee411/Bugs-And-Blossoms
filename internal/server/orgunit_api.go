@@ -306,7 +306,10 @@ type orgUnitRescindOrgAPIRequest struct {
 	Reason    string `json:"reason"`
 }
 
-var errOrgUnitBadJSON = errors.New("orgunit_bad_json")
+var (
+	errOrgUnitBadJSON      = errors.New("orgunit_bad_json")
+	errOrgUnitAsOfRequired = errors.New("orgunit_as_of_required")
+)
 
 const (
 	orgUnitErrCodeInvalid                 = "ORG_CODE_INVALID"
@@ -683,7 +686,11 @@ func handleOrgUnitsAPI(w http.ResponseWriter, r *http.Request, store OrgUnitStor
 	case http.MethodGet:
 		asOf, err := orgUnitAPIAsOf(r)
 		if err != nil {
-			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "invalid_as_of", "invalid as_of")
+			message := "invalid as_of"
+			if errors.Is(err, errOrgUnitAsOfRequired) {
+				message = "as_of required"
+			}
+			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "invalid_as_of", message)
 			return
 		}
 		q := r.URL.Query()
@@ -901,7 +908,11 @@ func handleOrgUnitsDetailsAPI(w http.ResponseWriter, r *http.Request, store OrgU
 
 	asOf, err := orgUnitAPIAsOf(r)
 	if err != nil {
-		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "invalid_as_of", "invalid as_of")
+		message := "invalid as_of"
+		if errors.Is(err, errOrgUnitAsOfRequired) {
+			message = "as_of required"
+		}
+		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "invalid_as_of", message)
 		return
 	}
 	includeDisabled := parseIncludeDisabled(r.URL.Query().Get("include_disabled"))
@@ -1140,7 +1151,11 @@ func handleOrgUnitsSearchAPI(w http.ResponseWriter, r *http.Request, store OrgUn
 
 	asOf, err := orgUnitAPIAsOf(r)
 	if err != nil {
-		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "invalid_as_of", "invalid as_of")
+		message := "invalid as_of"
+		if errors.Is(err, errOrgUnitAsOfRequired) {
+			message = "as_of required"
+		}
+		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "invalid_as_of", message)
 		return
 	}
 	includeDisabled := parseIncludeDisabled(r.URL.Query().Get("include_disabled"))
@@ -1512,7 +1527,7 @@ func handleOrgUnitWriteAction(
 func orgUnitAPIAsOf(r *http.Request) (string, error) {
 	asOf := strings.TrimSpace(r.URL.Query().Get("as_of"))
 	if asOf == "" {
-		asOf = time.Now().UTC().Format("2006-01-02")
+		return "", errOrgUnitAsOfRequired
 	}
 	if _, err := time.Parse("2006-01-02", asOf); err != nil {
 		return "", err

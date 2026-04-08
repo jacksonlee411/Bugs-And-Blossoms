@@ -252,6 +252,35 @@ func TestHandleOrgUnitFieldPoliciesAPI_ErrorAndRetryBranches(t *testing.T) {
 	}
 }
 
+func TestOrgUnitFieldPolicyAPIItemFromStore(t *testing.T) {
+	disabledOn := "2026-02-01"
+	defaultExpr := "org_code == 'FLOWER'"
+	updatedAt := time.Now().UTC().Truncate(time.Second)
+	item := orgUnitFieldPolicyAPIItemFromStore(orgUnitTenantFieldPolicy{
+		FieldKey:        "name",
+		ScopeType:       "tenant",
+		ScopeKey:        "*",
+		Maintainable:    true,
+		DefaultMode:     "CEL",
+		DefaultRuleExpr: &defaultExpr,
+		EnabledOn:       "2026-01-01",
+		DisabledOn:      &disabledOn,
+		UpdatedAt:       updatedAt,
+	})
+	if item.FieldKey != "name" || item.ScopeType != "tenant" || item.ScopeKey != "*" {
+		t.Fatalf("unexpected basic fields: %+v", item)
+	}
+	if item.DefaultRuleExpr == nil || *item.DefaultRuleExpr != defaultExpr {
+		t.Fatalf("unexpected default rule expr: %+v", item.DefaultRuleExpr)
+	}
+	if item.DisabledOn == nil || *item.DisabledOn != disabledOn {
+		t.Fatalf("unexpected disabled_on: %+v", item.DisabledOn)
+	}
+	if !item.UpdatedAt.Equal(updatedAt) {
+		t.Fatalf("unexpected updated_at: %s != %s", item.UpdatedAt, updatedAt)
+	}
+}
+
 func TestHandleOrgUnitFieldPoliciesDisableAPI_ErrorAndSuccessBranches(t *testing.T) {
 	base := newOrgUnitMemoryStore()
 

@@ -57,6 +57,7 @@ import { isMessageKey, type MessageKey } from '../../i18n/messages'
 import { normalizePlainExtDraft } from './orgUnitPlainExtValidation'
 import { resolveOrgUnitEffectiveDate } from './orgUnitVersionSelection'
 import { buildOrgUnitWritePatch } from './orgUnitWritePatch'
+import { resolveReadViewState, todayISODate } from './readViewState'
 import {
   planRecordEffectiveDate,
   validatePlannedEffectiveDate,
@@ -95,21 +96,6 @@ interface OrgActionForm {
   extDisplayValues: Record<string, string>
   requestID: string
   reason: string
-}
-
-function formatAsOfDate(date: Date): string {
-  return date.toISOString().slice(0, 10)
-}
-
-function parseDateOrDefault(raw: string | null, fallback: string): string {
-  if (!raw) {
-    return fallback
-  }
-  const value = raw.trim()
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) {
-    return fallback
-  }
-  return value
 }
 
 function parseOptionalValue(raw: string | null): string | null {
@@ -503,9 +489,11 @@ export function OrgUnitDetailsPage() {
   const { orgCode } = useParams()
   const { hasPermission, t } = useAppPreferences()
   const [searchParams, setSearchParams] = useSearchParams()
-  const fallbackAsOf = useMemo(() => formatAsOfDate(new Date()), [])
+  const today = useMemo(() => todayISODate(), [])
+  const readView = useMemo(() => resolveReadViewState(searchParams.get('as_of'), today), [searchParams, today])
 
-  const asOf = parseDateOrDefault(searchParams.get('as_of'), fallbackAsOf)
+  const asOf = readView.effectiveAsOf
+  const requestedHistoryAsOf = readView.requestedAsOf
   const includeDisabled = parseBool(searchParams.get('include_disabled'))
   const detailTab = parseDetailTab(searchParams.get('tab'))
   const requestedEffectiveDate = parseOptionalValue(searchParams.get('effective_date'))
@@ -593,6 +581,7 @@ export function OrgUnitDetailsPage() {
       versions: versionItems
     })
   }, [asOf, requestedEffectiveDate, versionItems])
+  const readMode = requestedEffectiveDate ? 'history' : readView.mode
 
   const detailQuery = useQuery({
     enabled: orgCodeValue.length > 0,
@@ -665,6 +654,13 @@ export function OrgUnitDetailsPage() {
     }
     return events[0]
   }, [auditEventUUID, auditQuery.data])
+
+  useEffect(() => {
+    if (!requestedHistoryAsOf || requestedEffectiveDate || versionItems.length === 0) {
+      return
+    }
+    updateSearch({ asOf: null, effectiveDate, tab: 'profile' })
+  }, [effectiveDate, requestedEffectiveDate, requestedHistoryAsOf, updateSearch, versionItems.length])
 
   useEffect(() => {
     if (detailTab !== 'audit') {
@@ -1140,21 +1136,9 @@ export function OrgUnitDetailsPage() {
     },
     onSuccess: async (result) => {
       await refreshAfterWrite()
-      if (actionState?.type === 'correct') {
-        const nextEffectiveDate = actionWriteEffectiveDate
-        if (nextEffectiveDate.length > 0 && nextEffectiveDate !== effectiveDate) {
-          updateSearch({ effectiveDate: nextEffectiveDate, tab: 'profile' })
-        }
-      } else if (actionState?.type === 'add_version' || actionState?.type === 'insert_version') {
-        const nextEffectiveDate = actionForm.effectiveDate.trim()
-        if (nextEffectiveDate.length > 0 && nextEffectiveDate !== effectiveDate) {
-          updateSearch({ effectiveDate: nextEffectiveDate, tab: 'profile' })
-        }
-      } else if (actionState?.type === 'delete') {
+      if (actionState?.type === 'delete') {
         if (result.deletedOrg) {
           navigate({ pathname: '/org/units', search: listLinkSearchValue })
-        } else {
-          updateSearch({ effectiveDate: null, tab: 'profile' })
         }
       }
       setRecordDatePlan(null)
@@ -1183,7 +1167,9 @@ export function OrgUnitDetailsPage() {
   }, [detailQuery.data, orgCodeValue, t])
 
   const listLinkParams = new URLSearchParams()
-  listLinkParams.set('as_of', asOf)
+  if (readMode === 'history') {
+    listLinkParams.set('as_of', effectiveDate)
+  }
   if (includeDisabled) {
     listLinkParams.set('include_disabled', '1')
   }
@@ -1244,6 +1230,15 @@ export function OrgUnitDetailsPage() {
             >
               {t('org_action_create')}
             </Button>
+            {readMode === 'history' ? (
+              <Button
+                onClick={() => updateSearch({ asOf: null, effectiveDate: null, tab: 'profile', auditEventUUID: null })}
+                size='small'
+                variant='outlined'
+              >
+                {t('common_view_current')}
+              </Button>
+            ) : null}
             <Button
               disabled={!canWrite || versionsQuery.isLoading || versionItems.length === 0}
               onClick={() => openRecordWizard('add')}
@@ -1310,6 +1305,11 @@ export function OrgUnitDetailsPage() {
               <Typography sx={{ mb: 1 }} variant='subtitle2'>
                 {t('org_column_effective_date')}
               </Typography>
+              {readMode === 'history' ? (
+                <Alert severity='info' sx={{ mb: 1 }}>
+                  {t('org_view_history_context', { date: effectiveDate })}
+                </Alert>
+              ) : null}
               {versionsQuery.isLoading ? <Typography variant='body2'>{t('text_loading')}</Typography> : null}
               {versionsQuery.error ? <Alert severity='error'>{getErrorMessage(versionsQuery.error)}</Alert> : null}
               {versionItems.length > 0 ? (
@@ -1318,7 +1318,7 @@ export function OrgUnitDetailsPage() {
                     <ListItemButton
                       data-testid={`org-version-${version.effective_date}`}
                       key={`${version.event_id}-${version.effective_date}`}
-                      onClick={() => updateSearch({ effectiveDate: version.effective_date, tab: 'profile' })}
+                      onClick={() => updateSearch({ asOf: null, effectiveDate: version.effective_date, tab: 'profile' })}
                       selected={effectiveDate === version.effective_date}
                       sx={{ borderRadius: 1, mb: 0.5 }}
                     >
@@ -1347,8 +1347,11 @@ export function OrgUnitDetailsPage() {
                       <Button
                         onClick={() => {
                           const params = new URLSearchParams()
-                          params.set('as_of', asOf)
-                          navigate({ pathname: '/org/units/field-configs', search: `?${params.toString()}` })
+                          if (readMode === 'history') {
+                            params.set('as_of', effectiveDate)
+                          }
+                          const nextSearch = params.toString()
+                          navigate({ pathname: '/org/units/field-configs', search: nextSearch.length > 0 ? `?${nextSearch}` : '' })
                         }}
                         size='small'
                         sx={{ mt: 0.5 }}

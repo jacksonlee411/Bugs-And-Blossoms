@@ -2,6 +2,12 @@
 
 **状态**: 已完成（2026-04-08 CST）
 
+补记（2026-04-08 CST）：
+
+1. [X] 本执行日志记录的首轮实施批次仍保持完成态。
+2. [X] 但恢复后的当前代码树里，`internal/server` 仍残留 `28` 个 `gap/coverage` 测试文件，其中 `18` 个在本日志或 `301` 主计划中曾被表述为“已收口”。
+3. [X] 这批残留项不再回灌到 `301`，统一转由 `DEV-PLAN-302` 继续承接：`docs/dev-plans/302-internal-server-residual-gap-coverage-closure-plan.md`
+
 ## 1. 执行范围（与 301 对齐）
 
 1. [X] 为 `DEV-PLAN-301 Phase 0/1` 建立专门执行记录入口。
@@ -215,16 +221,18 @@
 
 ## 10. Phase 2 第四个样板记录
 
-1. [X] 目标：把 `modules/orgunit/services` 中的补洞型 coverage 文件按职责归并回主测试文件，避免继续分散维护。
+1. [X] 目标：把 `modules/orgunit/services` 中的补洞型 coverage 文件按职责收口为正式测试文件，避免继续分散维护。
 2. [X] 执行动作：
-   - 将 `orgunit_write_unified_coverage_test.go` 与 `orgunit_write_unified_more_coverage_test.go` 归并到 `orgunit_write_unified_test.go`；
-   - 将 `orgunit_write_service_dict_coverage_test.go` 归并到 `orgunit_write_service_test.go`。
+   - 将 `orgunit_write_unified_coverage_test.go` 重组为 `orgunit_write_unified_validation_test.go`；
+   - 将 `orgunit_write_unified_more_coverage_test.go` 重组为 `orgunit_write_unified_error_paths_test.go`；
+   - 将 `orgunit_write_service_dict_coverage_test.go` 重组为 `orgunit_write_service_dict_test.go`。
 3. [X] 边界结论：
-   - `orgunit_write_unified_test.go` 负责 `Write(...)` 统一入口的行为与错误分流；
-   - `orgunit_write_service_test.go` 负责 write service 的字典解析、修正日期与 ext payload 规则。
+   - `orgunit_write_unified_validation_test.go` 负责 `Write(...)` 统一入口的校验与基础分流；
+   - `orgunit_write_unified_error_paths_test.go` 负责 `Write(...)` 的错误路径矩阵；
+   - `orgunit_write_service_dict_test.go` 负责 write service 的字典解析、修正日期与 ext payload 规则。
 4. [X] 结果：
-   - `modules/orgunit/services` 目录下当前已无残留 `*_coverage_test.go` / `*_more_coverage_test.go`；
-   - 这是 `DEV-PLAN-301` 中首个“直接删除 coverage 文件并保持职责归位”的服务层样板。
+   - `modules/orgunit/services` 目录下当前已无残留 `orgunit_write_*coverage*_test.go`；
+   - 这是 `DEV-PLAN-301` 中首个“删除 coverage 命名并改为职责测试文件”的服务层样板。
 5. [X] 验证命令：
    - `go test ./modules/orgunit/services -count=1`
 
@@ -244,8 +252,8 @@
 12. [X] `assistant_persistence_gap_test.go` 已成功并回主测试文件，说明 assistant persistence 主簇已经可以在单一主测试文件下继续收口。
 13. [X] `assistant_api_gap_test.go` 已成功并回主测试文件，说明 assistant API 主簇可以继续沿 `assistant_api_test.go` 吸收 handler/helper 子簇。
 14. [X] `assistant_api_coverage_test.go` 已成功并回主测试文件，assistant API 文件族当前已完成主干收口。
-15. [X] `assistant_task_store_gap_test.go` 已收敛为正式主测试文件，assistant task store 文件族不再保留 `gap` 命名入口。
-16. [X] `assistant_task_store_test.go` 已采用单文件细化策略，完成 utility / PG store / dispatch-execute / residual error matrix 的文件内职责重排。
+15. [X] `assistant_task_store_gap_test.go` 已删除，assistant task store 文件族不再保留 `gap` 命名入口。
+16. [X] `assistant_task_store_test.go` 继续作为唯一正式主测试文件，承接 utility / PG store / dispatch-execute / residual error matrix 的单文件职责组织。
 17. [X] 已盘点 `internal/server` 中可下沉到服务层的高频规则测试清单，并锁定下批顺序 `staffing -> jobcatalog -> person`。
 
 ## 12. Phase 3 首个样板记录
@@ -445,16 +453,17 @@
 
 ## 25. Phase 3 第十四个样板记录
 
-1. [X] 目标：处理 `assistant_task_store` 这一类“只有一个测试文件但仍叫 gap”的收口尾项，先把入口命名纠正为正式主测试文件。
+1. [X] 目标：处理 `assistant_task_store` 这一类“重复遗留 gap 入口仍存在”的收口尾项，消除重复定义并收敛到唯一主测试文件。
 2. [X] 执行动作：
-   - 将 `assistant_task_store_gap_test.go` 重命名为 `assistant_task_store_test.go`；
-   - 不改测试内容，不改生产代码，只做文件职责与命名收敛。
+   - 删除 `assistant_task_store_gap_test.go`；
+   - 保留既有 `assistant_task_store_test.go` 作为唯一正式主测试文件；
+   - 不改生产代码，只做测试入口收口。
 3. [X] 边界结论：
    - `assistant_task_store_test.go` 作为 task store 的正式主测试入口，统一承载 utility/validation、record/sql helper、submit/get/cancel/dispatch/execute 分支矩阵；
    - assistant task store 文件族当前不再保留 `gap` 命名测试文件。
 4. [X] 对外契约不变性说明：
-   - 未改动任何测试断言与生产行为；
-   - 仅消除“唯一测试文件仍使用 gap 命名”的结构漂移，为后续是否按子职责进一步细化留出稳定入口。
+   - 未改动生产代码；
+   - 仅删除与主测试文件重复的旧入口，不影响对外行为。
 5. [X] 验证命令：
    - `go test ./internal/server -run 'TestAssistantTaskStore_' -count=1`
 

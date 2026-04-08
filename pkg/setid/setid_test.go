@@ -1,4 +1,4 @@
-package setid
+package setid_test
 
 import (
 	"context"
@@ -7,6 +7,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
+	setid "github.com/jacksonlee411/Bugs-And-Blossoms/pkg/setid"
 )
 
 type fakeExecer struct {
@@ -46,43 +47,59 @@ func (q *fakeQueryRower) QueryRow(_ context.Context, sql string, args ...any) pg
 	return q.row
 }
 
-func TestEnsureBootstrap(t *testing.T) {
-	var e fakeExecer
-	if err := EnsureBootstrap(context.Background(), &e, "t1", "p1"); err != nil {
-		t.Fatalf("err=%v", err)
-	}
-	if e.sql == "" || len(e.args) != 2 {
-		t.Fatalf("unexpected exec call: sql=%q args=%v", e.sql, e.args)
-	}
+func TestEnsureBootstrap_BlackBox(t *testing.T) {
+	t.Parallel()
+
+	t.Run("success", func(t *testing.T) {
+		t.Parallel()
+
+		var e fakeExecer
+		if err := setid.EnsureBootstrap(context.Background(), &e, "t1", "p1"); err != nil {
+			t.Fatalf("err=%v", err)
+		}
+		if e.sql == "" || len(e.args) != 2 {
+			t.Fatalf("unexpected exec call: sql=%q args=%v", e.sql, e.args)
+		}
+	})
+
+	t.Run("exec error", func(t *testing.T) {
+		t.Parallel()
+
+		want := errors.New("boom")
+		e := &fakeExecer{err: want}
+		if err := setid.EnsureBootstrap(context.Background(), e, "t1", "p1"); !errors.Is(err, want) {
+			t.Fatalf("err=%v", err)
+		}
+	})
 }
 
-func TestEnsureBootstrap_Error(t *testing.T) {
-	want := errors.New("boom")
-	e := &fakeExecer{err: want}
-	if err := EnsureBootstrap(context.Background(), e, "t1", "p1"); !errors.Is(err, want) {
-		t.Fatalf("err=%v", err)
-	}
-}
+func TestResolve_BlackBox(t *testing.T) {
+	t.Parallel()
 
-func TestResolve(t *testing.T) {
-	q := &fakeQueryRower{row: fakeRow{val: "SHARE"}}
-	got, err := Resolve(context.Background(), q, "t1", "10000001", "2026-01-01")
-	if err != nil {
-		t.Fatalf("err=%v", err)
-	}
-	if got != "SHARE" {
-		t.Fatalf("got=%q", got)
-	}
-	if q.sql == "" || len(q.args) != 3 {
-		t.Fatalf("unexpected query call: sql=%q args=%v", q.sql, q.args)
-	}
-}
+	t.Run("success", func(t *testing.T) {
+		t.Parallel()
 
-func TestResolve_Error(t *testing.T) {
-	want := errors.New("scan fail")
-	q := &fakeQueryRower{row: fakeRow{err: want}}
-	_, err := Resolve(context.Background(), q, "t1", "10000001", "2026-01-01")
-	if !errors.Is(err, want) {
-		t.Fatalf("err=%v", err)
-	}
+		q := &fakeQueryRower{row: fakeRow{val: "SHARE"}}
+		got, err := setid.Resolve(context.Background(), q, "t1", "10000001", "2026-01-01")
+		if err != nil {
+			t.Fatalf("err=%v", err)
+		}
+		if got != "SHARE" {
+			t.Fatalf("got=%q", got)
+		}
+		if q.sql == "" || len(q.args) != 3 {
+			t.Fatalf("unexpected query call: sql=%q args=%v", q.sql, q.args)
+		}
+	})
+
+	t.Run("scan error", func(t *testing.T) {
+		t.Parallel()
+
+		want := errors.New("scan fail")
+		q := &fakeQueryRower{row: fakeRow{err: want}}
+		_, err := setid.Resolve(context.Background(), q, "t1", "10000001", "2026-01-01")
+		if !errors.Is(err, want) {
+			t.Fatalf("err=%v", err)
+		}
+	})
 }

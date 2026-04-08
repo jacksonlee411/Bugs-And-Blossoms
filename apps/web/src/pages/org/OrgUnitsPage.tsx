@@ -55,7 +55,9 @@ import {
   toGridSortModel
 } from '../../utils/gridQueryState'
 import { normalizePlainExtDraft } from './orgUnitPlainExtValidation'
+import { buildOrgFieldConfigsSearchParams, buildOrgUnitDetailSearchParams } from './orgReadNavigation'
 import { clearExtQueryParams, parseExtSortField, parseSortOrder } from './orgUnitListExtQuery'
+import { resolveReadViewState, todayISODate } from './readViewState'
 
 type OrgStatus = 'active' | 'inactive'
 
@@ -81,21 +83,6 @@ interface CreateOrgUnitForm {
 }
 
 const sortableFields = ['code', 'name', 'status'] as const
-
-function formatAsOfDate(date: Date): string {
-  return date.toISOString().slice(0, 10)
-}
-
-function parseDateOrDefault(raw: string | null, fallback: string): string {
-  if (!raw) {
-    return fallback
-  }
-  const value = raw.trim()
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) {
-    return fallback
-  }
-  return value
-}
 
 function parseOptionalValue(raw: string | null): string | null {
   if (!raw) {
@@ -350,14 +337,14 @@ function ExtFilterValueInput(props: {
   )
 }
 
-function emptyCreateForm(asOf: string, parentOrgCode: string | null): CreateOrgUnitForm {
+function emptyCreateForm(defaultEffectiveDate: string, parentOrgCode: string | null): CreateOrgUnitForm {
   return {
     orgCode: '',
     name: '',
     parentOrgCode: parentOrgCode ?? '',
     status: 'active',
     managerPernr: '',
-    effectiveDate: asOf,
+    effectiveDate: defaultEffectiveDate,
     isBusinessUnit: false,
     requestID: `org-create:${Date.now()}`,
     extValues: {},
@@ -370,7 +357,8 @@ export function OrgUnitsPage() {
   const navigate = useNavigate()
   const { t, tenantId, hasPermission } = useAppPreferences()
   const [searchParams, setSearchParams] = useSearchParams()
-  const fallbackAsOf = useMemo(() => formatAsOfDate(new Date()), [])
+  const currentDate = useMemo(() => todayISODate(), [])
+  const readView = useMemo(() => resolveReadViewState(searchParams.get('as_of'), currentDate), [searchParams, currentDate])
 
   const query = useMemo(
     () =>
@@ -381,7 +369,9 @@ export function OrgUnitsPage() {
     [searchParams]
   )
 
-  const asOf = parseDateOrDefault(searchParams.get('as_of'), fallbackAsOf)
+  const asOf = readView.effectiveAsOf
+  const requestedAsOf = readView.requestedAsOf
+  const readMode = readView.mode
   const includeDisabled = parseBool(searchParams.get('include_disabled'))
   const extFilterFieldKey = parseOptionalValue(searchParams.get('ext_filter_field_key'))
   const extFilterValue = parseOptionalValue(searchParams.get('ext_filter_value'))
@@ -390,7 +380,8 @@ export function OrgUnitsPage() {
 
   const [keywordInput, setKeywordInput] = useState(query.keyword)
   const [statusInput, setStatusInput] = useState<'all' | OrgStatus>(query.status)
-  const [asOfInput, setAsOfInput] = useState(asOf)
+  const [historyModeInput, setHistoryModeInput] = useState(readMode === 'history')
+  const [asOfInput, setAsOfInput] = useState(requestedAsOf ?? asOf)
   const [includeDisabledInput, setIncludeDisabledInput] = useState(includeDisabled)
   const [treeSearchInput, setTreeSearchInput] = useState('')
   const [extFilterFieldInput, setExtFilterFieldInput] = useState(extFilterFieldKey ?? '')
@@ -408,7 +399,7 @@ export function OrgUnitsPage() {
   const [treeSearchErrorMessage, setTreeSearchErrorMessage] = useState('')
 
   const [createOpen, setCreateOpen] = useState(false)
-  const [createForm, setCreateForm] = useState<CreateOrgUnitForm>(() => emptyCreateForm(asOf, null))
+  const [createForm, setCreateForm] = useState<CreateOrgUnitForm>(() => emptyCreateForm(currentDate, null))
   const [createTouchedFields, setCreateTouchedFields] = useState<Record<string, boolean>>({})
   const [createErrorMessage, setCreateErrorMessage] = useState('')
   const [toast, setToast] = useState<{ message: string; severity: 'success' | 'warning' | 'error' } | null>(null)
@@ -416,7 +407,7 @@ export function OrgUnitsPage() {
   const canWrite = hasPermission('orgunit.admin')
   const canUseExt = canWrite
   const createCapabilityOrgCode = createForm.orgCode.trim()
-  const createCapabilityEffectiveDate = createForm.effectiveDate.trim() || asOf
+  const createCapabilityEffectiveDate = createForm.effectiveDate.trim() || currentDate
 
   const formatApiErrorMessage = useCallback(
     (error: unknown): string => {
@@ -467,9 +458,10 @@ export function OrgUnitsPage() {
   }, [query.keyword, query.status])
 
   useEffect(() => {
-    setAsOfInput(asOf)
+    setHistoryModeInput(readMode === 'history')
+    setAsOfInput(requestedAsOf ?? asOf)
     setIncludeDisabledInput(includeDisabled)
-  }, [asOf, includeDisabled])
+  }, [asOf, includeDisabled, readMode, requestedAsOf])
 
   useEffect(() => {
     setExtFilterFieldInput(extFilterFieldKey ?? '')
@@ -691,28 +683,19 @@ export function OrgUnitsPage() {
       return
     }
 
-    const nextParams = new URLSearchParams()
-    nextParams.set('as_of', asOf)
-    if (includeDisabled) {
-      nextParams.set('include_disabled', '1')
-    }
-
-    const legacyEffectiveDate = parseOptionalValue(searchParams.get('effective_date'))
-    if (legacyEffectiveDate) {
-      nextParams.set('effective_date', legacyEffectiveDate)
-    }
-
-    const legacyTab = parseOptionalValue(searchParams.get('tab'))
-    if (legacyTab) {
-      nextParams.set('tab', legacyTab)
-    }
-
+    const nextParams = buildOrgUnitDetailSearchParams({
+      readMode,
+      asOf,
+      includeDisabled,
+      effectiveDate: parseOptionalValue(searchParams.get('effective_date')),
+      tab: parseOptionalValue(searchParams.get('tab'))
+    })
     const nextSearch = nextParams.toString()
     navigate(
       { pathname: `/org/units/${legacyDetailCode}`, search: nextSearch.length > 0 ? `?${nextSearch}` : '' },
       { replace: true }
     )
-  }, [asOf, includeDisabled, legacyDetailCode, navigate, searchParams])
+  }, [asOf, includeDisabled, legacyDetailCode, navigate, readMode, searchParams])
 
   const ensureChildrenLoaded = useCallback(
     async (parentOrgCode: string) => {
@@ -1197,7 +1180,7 @@ export function OrgUnitsPage() {
         sortOrder: coreSortField ? sortOrderInput : null
       },
       {
-        asOf: asOfInput,
+        asOf: historyModeInput ? asOfInput : null,
         includeDisabled: includeDisabledInput,
         extFilter: {
           fieldKey: extFilterFieldInput,
@@ -1220,7 +1203,7 @@ export function OrgUnitsPage() {
       metadata: {
         has_keyword: keywordInput.trim().length > 0,
         status: statusInput,
-        as_of: asOfInput,
+        as_of: historyModeInput ? asOfInput : '',
         include_disabled: includeDisabledInput,
         ext_filter_field: extFilterFieldInput.trim(),
         ext_filter_value: extFilterValueInput.trim(),
@@ -1286,7 +1269,7 @@ export function OrgUnitsPage() {
   function openCreateDialog() {
     setCreateErrorMessage('')
     setCreateTouchedFields({})
-    setCreateForm(() => emptyCreateForm(asOf, selectedNodeCode))
+    setCreateForm(() => emptyCreateForm(currentDate, selectedNodeCode))
     setCreateOpen(true)
   }
 
@@ -1312,9 +1295,9 @@ export function OrgUnitsPage() {
             {canWrite ? (
               <Button
                 onClick={() => {
-                  const params = new URLSearchParams()
-                  params.set('as_of', asOf)
-                  navigate({ pathname: '/org/units/field-configs', search: `?${params.toString()}` })
+                  const params = buildOrgFieldConfigsSearchParams(readMode, asOf)
+                  const nextSearch = params.toString()
+                  navigate({ pathname: '/org/units/field-configs', search: nextSearch.length > 0 ? `?${nextSearch}` : '' })
                 }}
                 size='small'
                 variant='outlined'
@@ -1350,13 +1333,19 @@ export function OrgUnitsPage() {
             <MenuItem value='inactive'>{t('status_inactive')}</MenuItem>
           </Select>
         </FormControl>
-        <TextField
-          InputLabelProps={{ shrink: true }}
-          label={t('org_filter_as_of')}
-          onChange={(event) => setAsOfInput(event.target.value)}
-          type='date'
-          value={asOfInput}
-        />
+        {historyModeInput ? (
+          <TextField
+            InputLabelProps={{ shrink: true }}
+            label={t('org_filter_as_of')}
+            onChange={(event) => setAsOfInput(event.target.value)}
+            type='date'
+            value={asOfInput}
+          />
+        ) : (
+          <Typography color='text.secondary' sx={{ alignSelf: 'center', minWidth: 160 }} variant='body2'>
+            {t('common_view_current_label')}
+          </Typography>
+        )}
         <FormControlLabel
           control={
             <Switch
@@ -1366,6 +1355,28 @@ export function OrgUnitsPage() {
           }
           label={t('org_filter_include_disabled')}
         />
+        {historyModeInput ? (
+          <Button
+            onClick={() => {
+              setHistoryModeInput(false)
+              setAsOfInput(currentDate)
+              updateSearch({ page: 0 }, { asOf: null })
+            }}
+            variant='outlined'
+          >
+            {t('common_view_current')}
+          </Button>
+        ) : (
+          <Button
+            onClick={() => {
+              setHistoryModeInput(true)
+              setAsOfInput(asOf)
+            }}
+            variant='outlined'
+          >
+            {t('common_view_history')}
+          </Button>
+        )}
         <Button onClick={handleApplyFilters} variant='contained'>
           {t('action_apply_filters')}
         </Button>
@@ -1496,12 +1507,7 @@ export function OrgUnitsPage() {
               },
               onRowClick: (params) => {
                 const orgCode = String(params.id)
-                const nextParams = new URLSearchParams()
-                nextParams.set('as_of', asOf)
-                if (includeDisabled) {
-                  nextParams.set('include_disabled', '1')
-                }
-
+                const nextParams = buildOrgUnitDetailSearchParams({ readMode, asOf, includeDisabled })
                 const nextSearch = nextParams.toString()
                 navigate({ pathname: `/org/units/${orgCode}`, search: nextSearch.length > 0 ? `?${nextSearch}` : '' })
                 trackUiEvent({
