@@ -447,12 +447,12 @@ parallel / Setenv 仓库内约束冻结（2026-04-08 CST）：
 
 增量执行记录（2026-04-08 08:40 CST）：
 
-1. [X] 已将 `modules/orgunit/services/orgunit_write_unified_coverage_test.go` 与 `modules/orgunit/services/orgunit_write_unified_more_coverage_test.go` 归并到 `modules/orgunit/services/orgunit_write_unified_test.go`。
-2. [X] 已将 `modules/orgunit/services/orgunit_write_service_dict_coverage_test.go` 归并到 `modules/orgunit/services/orgunit_write_service_test.go`。
-3. [X] 本批次在 `modules/orgunit/services` 首次完成“删除 coverage 文件并按职责并回主测试文件”的样板：
-   - `Write` 统一入口行为留在 `orgunit_write_unified_test.go`；
-   - 字典相关的 write service 行为留在 `orgunit_write_service_test.go`。
-4. [X] `modules/orgunit/services` 目录下当前已无残留 `*_coverage_test.go` / `*_more_coverage_test.go`。
+1. [X] 已将 `modules/orgunit/services/orgunit_write_unified_coverage_test.go` 重组为正式职责文件 `modules/orgunit/services/orgunit_write_unified_validation_test.go`。
+2. [X] 已将 `modules/orgunit/services/orgunit_write_unified_more_coverage_test.go` 重组为正式职责文件 `modules/orgunit/services/orgunit_write_unified_error_paths_test.go`，并将 `modules/orgunit/services/orgunit_write_service_dict_coverage_test.go` 重组为 `modules/orgunit/services/orgunit_write_service_dict_test.go`。
+3. [X] 本批次在 `modules/orgunit/services` 完成“删除 coverage 命名并按职责收口”的样板：
+   - `Write` 统一入口的校验与分流行为分别落在 `orgunit_write_unified_validation_test.go` 与 `orgunit_write_unified_error_paths_test.go`；
+   - 字典相关的 write service 行为落在 `orgunit_write_service_dict_test.go`。
+4. [X] `modules/orgunit/services` 目录下当前已无残留 `orgunit_write_*coverage*_test.go` 文件。
 5. [X] 验证命令：
    - `go test ./modules/orgunit/services -count=1`
 
@@ -661,14 +661,14 @@ parallel / Setenv 仓库内约束冻结（2026-04-08 CST）：
 
 增量执行记录（2026-04-08 10:42 CST）：
 
-1. [X] 已将 `internal/server/assistant_task_store_gap_test.go` 收敛为 `internal/server/assistant_task_store_test.go`。
+1. [X] 已删除重复定义的 `internal/server/assistant_task_store_gap_test.go`，由既有 `internal/server/assistant_task_store_test.go` 继续作为正式主测试入口。
 2. [X] 归并后的职责边界：
    - `assistant_task_store_test.go` 作为 task store 的正式主测试文件，统一承载 utility/validation、record/sql helper、submit/get/cancel/dispatch/execute 的分支矩阵；
    - `assistant_task_store` 文件族当前不再保留 `gap` 命名测试文件。
 3. [X] 本批次补齐的代表性收口说明：
-   - 本次不改测试内容与生产代码，只做命名收敛；
-   - 其目的在于先把“唯一测试文件仍叫 gap”这一明显漂移去除，为后续再按子职责细化创造稳定入口。
-4. [X] 该批次是 `Phase 3` 的第十四个样板，说明“只有单个 gap 文件”的测试族可以直接收敛成正式主测试文件。
+   - 本次不改生产代码，只删除和正式主测试文件重复的旧 `gap` 入口；
+   - 其目的在于消除重复定义编译冲突，并把 task store 文件族稳定收敛到唯一主测试入口。
+4. [X] 该批次是 `Phase 3` 的第十四个样板，说明“重复遗留 gap 文件”可以通过删除旧入口并保留唯一主测试文件完成收口。
 5. [X] 验证命令：
    - `go test ./internal/server -run 'TestAssistantTaskStore_' -count=1`
 
