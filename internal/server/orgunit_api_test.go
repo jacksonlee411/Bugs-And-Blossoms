@@ -464,6 +464,19 @@ func TestHandleOrgUnitsAPI_ListRoots(t *testing.T) {
 	}
 }
 
+func TestHandleOrgUnitsAPI_AsOfRequired(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/org/api/org-units", nil)
+	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "T"}))
+	rec := httptest.NewRecorder()
+	handleOrgUnitsAPI(rec, req, newOrgUnitMemoryStore(), nil)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+	}
+	if !strings.Contains(rec.Body.String(), "as_of required") {
+		t.Fatalf("body=%s", rec.Body.String())
+	}
+}
+
 func TestHandleOrgUnitsAPI_PostMissingService(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/org/api/org-units", strings.NewReader(`{}`))
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "T"}))
@@ -1107,7 +1120,7 @@ func TestHandleOrgUnitsDetailsAPI_Success(t *testing.T) {
 }
 
 func TestHandleOrgUnitsDetailsAPI_BasicErrors(t *testing.T) {
-	req := httptest.NewRequest(http.MethodGet, "/org/api/org-units/details?org_code=bad%7F", nil)
+	req := httptest.NewRequest(http.MethodGet, "/org/api/org-units/details?org_code=bad%7F&as_of=2026-01-01", nil)
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "T"}))
 	rec := httptest.NewRecorder()
 	handleOrgUnitsDetailsAPI(rec, req, newOrgUnitMemoryStore())
@@ -1115,7 +1128,7 @@ func TestHandleOrgUnitsDetailsAPI_BasicErrors(t *testing.T) {
 		t.Fatalf("status=%d", rec.Code)
 	}
 
-	req2 := httptest.NewRequest(http.MethodGet, "/org/api/org-units/details?org_code=A001", nil)
+	req2 := httptest.NewRequest(http.MethodGet, "/org/api/org-units/details?org_code=A001&as_of=2026-01-01", nil)
 	req2 = req2.WithContext(withTenant(req2.Context(), Tenant{ID: "t1", Name: "T"}))
 	rec2 := httptest.NewRecorder()
 	handleOrgUnitsDetailsAPI(rec2, req2, newOrgUnitMemoryStore())
@@ -1229,8 +1242,21 @@ func TestHandleOrgUnitsDetailsAPI_ErrorBranches(t *testing.T) {
 		}
 	})
 
+	t.Run("as_of required", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/org/api/org-units/details?org_code=A001", nil)
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "T"}))
+		rec := httptest.NewRecorder()
+		handleOrgUnitsDetailsAPI(rec, req, &resolveOrgCodeStore{})
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+		}
+		if !strings.Contains(rec.Body.String(), "as_of required") {
+			t.Fatalf("body=%s", rec.Body.String())
+		}
+	})
+
 	t.Run("org_code required", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/org/api/org-units/details", nil)
+		req := httptest.NewRequest(http.MethodGet, "/org/api/org-units/details?as_of=2026-01-01", nil)
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "T"}))
 		rec := httptest.NewRecorder()
 		handleOrgUnitsDetailsAPI(rec, req, &resolveOrgCodeStore{})
@@ -1240,7 +1266,7 @@ func TestHandleOrgUnitsDetailsAPI_ErrorBranches(t *testing.T) {
 	})
 
 	t.Run("resolve invalid", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/org/api/org-units/details?org_code=A001", nil)
+		req := httptest.NewRequest(http.MethodGet, "/org/api/org-units/details?org_code=A001&as_of=2026-01-01", nil)
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "T"}))
 		rec := httptest.NewRecorder()
 		handleOrgUnitsDetailsAPI(rec, req, &resolveOrgCodeStore{resolveErr: orgunitpkg.ErrOrgCodeInvalid})
@@ -1250,7 +1276,7 @@ func TestHandleOrgUnitsDetailsAPI_ErrorBranches(t *testing.T) {
 	})
 
 	t.Run("resolve internal error", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/org/api/org-units/details?org_code=A001", nil)
+		req := httptest.NewRequest(http.MethodGet, "/org/api/org-units/details?org_code=A001&as_of=2026-01-01", nil)
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "T"}))
 		rec := httptest.NewRecorder()
 		handleOrgUnitsDetailsAPI(rec, req, &resolveOrgCodeStore{resolveErr: errBoom{}})
@@ -1589,6 +1615,19 @@ func TestHandleOrgUnitsSearchAPI_ErrorBranches(t *testing.T) {
 		handleOrgUnitsSearchAPI(rec, req, &resolveOrgCodeStore{})
 		if rec.Code != http.StatusBadRequest {
 			t.Fatalf("status=%d", rec.Code)
+		}
+	})
+
+	t.Run("as_of required", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/org/api/org-units/search?query=A001", nil)
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "T"}))
+		rec := httptest.NewRecorder()
+		handleOrgUnitsSearchAPI(rec, req, &resolveOrgCodeStore{})
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+		}
+		if !strings.Contains(rec.Body.String(), "as_of required") {
+			t.Fatalf("body=%s", rec.Body.String())
 		}
 	})
 
