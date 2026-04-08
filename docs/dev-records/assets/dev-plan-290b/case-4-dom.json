@@ -1,16 +1,7 @@
 {
-  "url": "http://localhost:8080/app/assistant/librechat/c/new",
-  "bubble_count": 1,
-  "bubbles": [
-    {
-      "binding_key": "conv_95177729964d412f806cd4a7d5104d3e::turn_a466697dc216416c85783a7bdc82d481::assistant_2787ede08b7d42d2a8a81d4186428919",
-      "conversation_id": "conv_95177729964d412f806cd4a7d5104d3e",
-      "turn_id": "turn_a466697dc216416c85783a7bdc82d481",
-      "request_id": "assistant_2787ede08b7d42d2a8a81d4186428919",
-      "message_id": "acc47130-cd53-45c1-ad7c-cc654b5315f4_",
-      "text": "assistant clarification runtime invalid Error: assistant_clarification_runtime_invalid 共享服务中心 集团 / 共享服务中心 TP290BSSC1 · score 0.8 共享服务中心 集团 / B / 共享服务中心 TP290BSSC2 · score 0.8"
-    }
-  ],
+  "url": "about:blank",
+  "bubble_count": 0,
+  "bubbles": [],
   "external_reply_container_count": 0,
   "connection_error_count": 0
 }

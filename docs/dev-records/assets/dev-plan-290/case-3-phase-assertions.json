@@ -1,7 +1,7 @@
 {
   "case_id": 3,
   "status": "passed",
-  "validated_at": "2026-03-12T00:14:04.279Z",
+  "validated_at": "2026-04-08T14:50:15.110Z",
   "observed_phase_path": [
     "idle",
     "await_missing_fields",

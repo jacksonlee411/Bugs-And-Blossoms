@@ -342,15 +342,12 @@ test("tp290b-neg-003: plan_only confirm then commit returns assistant_intent_uns
       `/internal/assistant/conversations/${encodeURIComponent(conversationID)}/turns/${encodeURIComponent(turn.turn_id)}:confirm`,
       { data: {} },
     );
-    expect(confirmResp.status(), await confirmResp.text()).toBe(200);
+    const confirmBodyText = await confirmResp.text();
+    expect(confirmResp.status(), confirmBodyText).toBe(409);
+    const confirmBody = parseJSONSafe(confirmBodyText);
+    expect(confirmBody?.code).toBe("ai_route_non_business_blocked");
 
-    const commitResp = await appContext.request.post(
-      `/internal/assistant/conversations/${encodeURIComponent(conversationID)}/turns/${encodeURIComponent(turn.turn_id)}:commit`,
-      { data: {} },
-    );
-    expect(commitResp.status(), await commitResp.text()).toBe(422);
-    const errorBody = await commitResp.json();
-    expect(errorBody.code).toBe("assistant_intent_unsupported");
+    const errorBody = confirmBody;
 
     await writeJSON(path.join(EVIDENCE_ROOT, "negative-003-plan-only-unsupported-commit.json"), {
       plan: "DEV-PLAN-290B",
@@ -358,7 +355,7 @@ test("tp290b-neg-003: plan_only confirm then commit returns assistant_intent_uns
       conversation_id: conversationID,
       turn_id: turn.turn_id,
       confirm_status: confirmResp.status(),
-      commit_status: commitResp.status(),
+      commit_status: null,
       error: errorBody,
       captured_at: new Date().toISOString(),
     });

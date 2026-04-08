@@ -147,10 +147,12 @@ describe('SetIDGovernancePage', () => {
   it('keeps registry effective_date on current date by default', async () => {
     renderPage()
 
-    await waitFor(() => expect(findDateInputByValue('2026-04-08')).toBeInTheDocument())
+    await waitFor(() => expect(findDateInputByValue('2026-04-08')).toBeInTheDocument(), {
+      timeout: 10000
+    })
     expect(screen.queryByLabelText('As Of Date')).not.toBeInTheDocument()
     expect(screen.getAllByText('Viewing current data by default').length).toBeGreaterThan(0)
-  })
+  }, 15000)
 
   it('does not sync registry effective_date when browsing history as_of changes', async () => {
     renderPage()

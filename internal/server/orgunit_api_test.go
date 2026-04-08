@@ -1077,11 +1077,11 @@ func TestHandleOrgUnitsAPI_TenantMissing(t *testing.T) {
 	}
 }
 
-func TestHandleOrgUnitsAPI_DefaultAsOf(t *testing.T) {
+func TestHandleOrgUnitsAPI_AsOfSuccess(t *testing.T) {
 	store := &resolveOrgCodeStore{
 		listNodes: []OrgUnitNode{{ID: "10000001", OrgCode: "A001", Name: "Root", HasChildren: true}},
 	}
-	req := httptest.NewRequest(http.MethodGet, "/org/api/org-units", nil)
+	req := httptest.NewRequest(http.MethodGet, "/org/api/org-units?as_of=2026-01-01", nil)
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "T"}))
 	rec := httptest.NewRecorder()
 	handleOrgUnitsAPI(rec, req, store, nil)

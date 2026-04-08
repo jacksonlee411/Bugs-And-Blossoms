@@ -1,7 +1,7 @@
 {
-  "model_provider": "",
-  "model_name": "",
-  "model_revision": "",
+  "model_provider": "openai",
+  "model_name": "gpt-5.1",
+  "model_revision": "r2f31cdf6746a",
   "fallback_detected": false,
   "proof_source": "case-conversation-snapshot"
 }
