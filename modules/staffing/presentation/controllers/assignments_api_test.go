@@ -460,7 +460,7 @@ func TestAssignmentsController_HandleAssignmentEventsCorrectAPI_Branches(t *test
 		}
 	})
 
-	t.Run("replacement_payload invalid json is ignored", func(t *testing.T) {
+	t.Run("replacement_payload invalid json => 400", func(t *testing.T) {
 		c := controllerWithStore(assignmentsStoreStub{
 			correctFn: func(context.Context, string, string, string, json.RawMessage) (string, error) {
 				return "e1", nil
@@ -469,7 +469,7 @@ func TestAssignmentsController_HandleAssignmentEventsCorrectAPI_Branches(t *test
 		req := httptest.NewRequest(http.MethodPost, "/api/assignments/events/correct", strings.NewReader(`{"assignment_uuid":"a1","target_effective_date":"2026-01-01","replacement_payload":"bad"}`))
 		rec := httptest.NewRecorder()
 		c.HandleAssignmentEventsCorrectAPI(rec, req)
-		if rec.Code != http.StatusOK {
+		if rec.Code != http.StatusBadRequest {
 			t.Fatalf("status=%d", rec.Code)
 		}
 	})
@@ -480,7 +480,7 @@ func TestAssignmentsController_HandleAssignmentEventsCorrectAPI_Branches(t *test
 				return "", &pgconn.PgError{Message: "STAFFING_IDEMPOTENCY_REUSED"}
 			},
 		})
-		req := httptest.NewRequest(http.MethodPost, "/api/assignments/events/correct", strings.NewReader(`{"assignment_uuid":"a1","target_effective_date":"2026-01-01"}`))
+		req := httptest.NewRequest(http.MethodPost, "/api/assignments/events/correct", strings.NewReader(`{"assignment_uuid":"a1","target_effective_date":"2026-01-01","replacement_payload":{}}`))
 		rec := httptest.NewRecorder()
 		c.HandleAssignmentEventsCorrectAPI(rec, req)
 		if rec.Code != http.StatusConflict {
@@ -494,7 +494,7 @@ func TestAssignmentsController_HandleAssignmentEventsCorrectAPI_Branches(t *test
 				return "", &pgconn.PgError{Message: "STAFFING_CORRECT_FAILED"}
 			},
 		})
-		req := httptest.NewRequest(http.MethodPost, "/api/assignments/events/correct", strings.NewReader(`{"assignment_uuid":"a1","target_effective_date":"2026-01-01"}`))
+		req := httptest.NewRequest(http.MethodPost, "/api/assignments/events/correct", strings.NewReader(`{"assignment_uuid":"a1","target_effective_date":"2026-01-01","replacement_payload":{}}`))
 		rec := httptest.NewRecorder()
 		c.HandleAssignmentEventsCorrectAPI(rec, req)
 		if rec.Code != http.StatusUnprocessableEntity {
@@ -508,7 +508,7 @@ func TestAssignmentsController_HandleAssignmentEventsCorrectAPI_Branches(t *test
 				return "", &pgconn.PgError{Code: "22P02", Message: "invalid input syntax for type uuid"}
 			},
 		})
-		req := httptest.NewRequest(http.MethodPost, "/api/assignments/events/correct", strings.NewReader(`{"assignment_uuid":"a1","target_effective_date":"2026-01-01"}`))
+		req := httptest.NewRequest(http.MethodPost, "/api/assignments/events/correct", strings.NewReader(`{"assignment_uuid":"a1","target_effective_date":"2026-01-01","replacement_payload":{}}`))
 		rec := httptest.NewRecorder()
 		c.HandleAssignmentEventsCorrectAPI(rec, req)
 		if rec.Code != http.StatusBadRequest {
@@ -522,7 +522,7 @@ func TestAssignmentsController_HandleAssignmentEventsCorrectAPI_Branches(t *test
 				return "", httperr.NewBadRequest("bad")
 			},
 		})
-		req := httptest.NewRequest(http.MethodPost, "/api/assignments/events/correct", strings.NewReader(`{"assignment_uuid":"a1","target_effective_date":"2026-01-01"}`))
+		req := httptest.NewRequest(http.MethodPost, "/api/assignments/events/correct", strings.NewReader(`{"assignment_uuid":"a1","target_effective_date":"2026-01-01","replacement_payload":{}}`))
 		rec := httptest.NewRecorder()
 		c.HandleAssignmentEventsCorrectAPI(rec, req)
 		if rec.Code != http.StatusBadRequest {

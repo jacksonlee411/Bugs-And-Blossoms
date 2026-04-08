@@ -211,6 +211,22 @@ func TestAssignmentsFacade_CorrectAssignmentEvent(t *testing.T) {
 		}
 	})
 
+	t.Run("missing target effective date", func(t *testing.T) {
+		facade := NewAssignmentsFacade(assignmentStoreStub{})
+		_, err := facade.CorrectAssignmentEvent(context.Background(), "t1", "as1", "", json.RawMessage(`{}`))
+		if err == nil || !httperr.IsBadRequest(err) {
+			t.Fatalf("expected bad request, got %v", err)
+		}
+	})
+
+	t.Run("invalid target effective date", func(t *testing.T) {
+		facade := NewAssignmentsFacade(assignmentStoreStub{})
+		_, err := facade.CorrectAssignmentEvent(context.Background(), "t1", "as1", "bad", json.RawMessage(`{}`))
+		if err == nil || !httperr.IsBadRequest(err) {
+			t.Fatalf("expected bad request, got %v", err)
+		}
+	})
+
 	t.Run("canonicalizes payload before store", func(t *testing.T) {
 		called := false
 		facade := NewAssignmentsFacade(assignmentStoreStub{
@@ -243,6 +259,20 @@ func TestAssignmentsFacade_CorrectAssignmentEvent(t *testing.T) {
 			t.Fatalf("got=%q", got)
 		}
 	})
+
+	t.Run("invalid replacement payload rejects", func(t *testing.T) {
+		facade := NewAssignmentsFacade(assignmentStoreStub{
+			correctFn: func(context.Context, string, string, string, json.RawMessage) (string, error) {
+				t.Fatal("unexpected store call")
+				return "", nil
+			},
+		})
+
+		_, err := facade.CorrectAssignmentEvent(context.Background(), "t1", "as1", "2026-01-01", json.RawMessage(`"bad"`))
+		if err == nil || !httperr.IsBadRequest(err) {
+			t.Fatalf("expected bad request, got %v", err)
+		}
+	})
 }
 
 func TestAssignmentsFacade_RescindAssignmentEvent(t *testing.T) {
@@ -261,6 +291,22 @@ func TestAssignmentsFacade_RescindAssignmentEvent(t *testing.T) {
 		}
 		if called {
 			t.Fatal("unexpected store call")
+		}
+	})
+
+	t.Run("missing target effective date", func(t *testing.T) {
+		facade := NewAssignmentsFacade(assignmentStoreStub{})
+		_, err := facade.RescindAssignmentEvent(context.Background(), "t1", "as1", "", json.RawMessage(`{}`))
+		if err == nil || !httperr.IsBadRequest(err) {
+			t.Fatalf("expected bad request, got %v", err)
+		}
+	})
+
+	t.Run("invalid target effective date", func(t *testing.T) {
+		facade := NewAssignmentsFacade(assignmentStoreStub{})
+		_, err := facade.RescindAssignmentEvent(context.Background(), "t1", "as1", "bad", json.RawMessage(`{}`))
+		if err == nil || !httperr.IsBadRequest(err) {
+			t.Fatalf("expected bad request, got %v", err)
 		}
 	})
 
@@ -294,6 +340,20 @@ func TestAssignmentsFacade_RescindAssignmentEvent(t *testing.T) {
 		}
 		if got != "evt2" {
 			t.Fatalf("got=%q", got)
+		}
+	})
+
+	t.Run("invalid payload rejects", func(t *testing.T) {
+		facade := NewAssignmentsFacade(assignmentStoreStub{
+			rescindFn: func(context.Context, string, string, string, json.RawMessage) (string, error) {
+				t.Fatal("unexpected store call")
+				return "", nil
+			},
+		})
+
+		_, err := facade.RescindAssignmentEvent(context.Background(), "t1", "as1", "2026-01-01", json.RawMessage(`"bad"`))
+		if err == nil || !httperr.IsBadRequest(err) {
+			t.Fatalf("expected bad request, got %v", err)
 		}
 	})
 }

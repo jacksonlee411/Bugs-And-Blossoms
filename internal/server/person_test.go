@@ -173,6 +173,16 @@ func TestPersonPGStore_CreatePerson(t *testing.T) {
 		}
 	})
 
+	t.Run("validation error", func(t *testing.T) {
+		store := newPersonPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
+			return &stubTx{}, nil
+		}))
+		_, err := store.CreatePerson(context.Background(), "t1", "BAD", "A")
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
 	t.Run("insert error", func(t *testing.T) {
 		store := newPersonPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
 			return &stubTx{rowErr: errors.New("row")}, nil
@@ -227,6 +237,16 @@ func TestPersonPGStore_FindPersonByPernr(t *testing.T) {
 			return &stubTx{execErr: errors.New("exec")}, nil
 		}))
 		_, err := store.FindPersonByPernr(context.Background(), "t1", "1")
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("validation error", func(t *testing.T) {
+		store := newPersonPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
+			return &stubTx{}, nil
+		}))
+		_, err := store.FindPersonByPernr(context.Background(), "t1", "BAD")
 		if err == nil {
 			t.Fatal("expected error")
 		}
@@ -513,6 +533,12 @@ func TestPersonMemoryStore(t *testing.T) {
 	t.Run("find no rows", func(t *testing.T) {
 		if _, err := store.FindPersonByPernr(context.Background(), "t1", "2"); !errors.Is(err, pgx.ErrNoRows) {
 			t.Fatalf("expected pgx.ErrNoRows, got %v", err)
+		}
+	})
+
+	t.Run("find invalid pernr", func(t *testing.T) {
+		if _, err := store.FindPersonByPernr(context.Background(), "t1", "BAD"); err == nil {
+			t.Fatal("expected error")
 		}
 	})
 

@@ -31,9 +31,6 @@ func NormalizeOrgCode(input string) (string, error) {
 		return "", ErrOrgCodeInvalid
 	}
 	normalized := strings.ToUpper(input)
-	if !orgCodePattern.MatchString(normalized) {
-		return "", ErrOrgCodeInvalid
-	}
 	return normalized, nil
 }
 

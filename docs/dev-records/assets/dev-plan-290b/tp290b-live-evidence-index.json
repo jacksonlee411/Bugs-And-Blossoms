@@ -1,7 +1,7 @@
 {
   "plan": "DEV-PLAN-290B",
-  "status": "passed",
-  "updated_at": "2026-03-12T00:15:41.782Z",
+  "status": "blocked",
+  "updated_at": "2026-04-08T14:53:14.809Z",
   "formal_entry": "/app/assistant/librechat",
   "runtime_admission_gate": {
     "status": "passed",
@@ -17,7 +17,11 @@
     "fail-closed behavior changed",
     "assistant formal submit pipeline changed"
   ],
-  "blockers": [],
+  "blockers": [
+    "Case 2: 数据基线未就绪：Case2 基线探针未就绪（phase=await_missing_fields validation=parent_candidate_not_found）",
+    "Case 3: 数据基线未就绪：Case2 基线探针未就绪（phase=await_commit_confirm validation=none）",
+    "Case 4: 数据基线未就绪：Case2 基线探针未就绪（phase=await_commit_confirm validation=none）"
+  ],
   "fixed_assets": {
     "root": "docs/dev-records/assets/dev-plan-290b",
     "pattern": [
@@ -55,61 +59,52 @@
     },
     {
       "id": 2,
-      "status": "passed",
+      "status": "blocked",
       "input_sequence": [
         "在 AI治理办公室 下新建 人力资源部2，生效日期 2026-01-01",
         "确认"
       ],
-      "task_terminal_status": "succeeded",
+      "blocking_reason": "数据基线未就绪：Case2 基线探针未就绪（phase=await_missing_fields validation=parent_candidate_not_found）",
       "artifacts": {
         "page": "docs/dev-records/assets/dev-plan-290b/case-2-page.png",
         "dom": "docs/dev-records/assets/dev-plan-290b/case-2-dom.json",
         "network": "docs/dev-records/assets/dev-plan-290b/case-2-network.har",
         "trace": "docs/dev-records/assets/dev-plan-290b/case-2-trace.zip",
-        "phase_assertions": "docs/dev-records/assets/dev-plan-290b/case-2-phase-assertions.json",
-        "intent_action_assertions": "docs/dev-records/assets/dev-plan-290b/case-2-intent-action-assertions.json",
-        "conversation_snapshot": "docs/dev-records/assets/dev-plan-290b/case-2-conversation-snapshot.json",
-        "model_proof": "docs/dev-records/assets/dev-plan-290b/case-2-model-proof.json"
+        "conversation_snapshot": "docs/dev-records/assets/dev-plan-290b/case-2-conversation-snapshot.json"
       }
     },
     {
       "id": 3,
-      "status": "passed",
+      "status": "blocked",
       "input_sequence": [
         "在 AI治理办公室 下新建 人力资源部239A补全",
         "生效日期 2026-03-25",
         "确认"
       ],
-      "task_terminal_status": "succeeded",
+      "blocking_reason": "数据基线未就绪：Case2 基线探针未就绪（phase=await_commit_confirm validation=none）",
       "artifacts": {
         "page": "docs/dev-records/assets/dev-plan-290b/case-3-page.png",
         "dom": "docs/dev-records/assets/dev-plan-290b/case-3-dom.json",
         "network": "docs/dev-records/assets/dev-plan-290b/case-3-network.har",
         "trace": "docs/dev-records/assets/dev-plan-290b/case-3-trace.zip",
-        "phase_assertions": "docs/dev-records/assets/dev-plan-290b/case-3-phase-assertions.json",
-        "intent_action_assertions": "docs/dev-records/assets/dev-plan-290b/case-3-intent-action-assertions.json",
-        "conversation_snapshot": "docs/dev-records/assets/dev-plan-290b/case-3-conversation-snapshot.json",
-        "model_proof": "docs/dev-records/assets/dev-plan-290b/case-3-model-proof.json"
+        "conversation_snapshot": "docs/dev-records/assets/dev-plan-290b/case-3-conversation-snapshot.json"
       }
     },
     {
       "id": 4,
-      "status": "passed",
+      "status": "blocked",
       "input_sequence": [
         "请在父组织共享服务中心下新建239A候选验证部，生效日期2026-03-26",
         "选第2个",
         "是的"
       ],
-      "task_terminal_status": "succeeded",
+      "blocking_reason": "数据基线未就绪：Case2 基线探针未就绪（phase=await_commit_confirm validation=none）",
       "artifacts": {
         "page": "docs/dev-records/assets/dev-plan-290b/case-4-page.png",
         "dom": "docs/dev-records/assets/dev-plan-290b/case-4-dom.json",
         "network": "docs/dev-records/assets/dev-plan-290b/case-4-network.har",
         "trace": "docs/dev-records/assets/dev-plan-290b/case-4-trace.zip",
-        "phase_assertions": "docs/dev-records/assets/dev-plan-290b/case-4-phase-assertions.json",
-        "intent_action_assertions": "docs/dev-records/assets/dev-plan-290b/case-4-intent-action-assertions.json",
-        "conversation_snapshot": "docs/dev-records/assets/dev-plan-290b/case-4-conversation-snapshot.json",
-        "model_proof": "docs/dev-records/assets/dev-plan-290b/case-4-model-proof.json"
+        "conversation_snapshot": "docs/dev-records/assets/dev-plan-290b/case-4-conversation-snapshot.json"
       }
     }
   ]

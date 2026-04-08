@@ -1,7 +1,7 @@
 {
   "plan": "DEV-PLAN-288",
   "case_id": "tp288-e2e-002",
-  "captured_at": "2026-03-12T00:13:54.799Z",
+  "captured_at": "2026-04-08T14:49:41.957Z",
   "internal_post_paths": [
     "/internal/assistant/conversations",
     "/internal/assistant/conversations/conv_tp288_1/turns",

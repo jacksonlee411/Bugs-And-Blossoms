@@ -1,18 +1,18 @@
 {
   "plan": "DEV-PLAN-290B",
-  "tenant_id": "7e33430f-122e-46b6-8bb3-9832f240efb3",
-  "conversation_id": "conv_fafaa4e7e5cf4e3d9500f9ede10d839b",
-  "turn_id": "turn_92a448d23b7d4d3fbb1b72b9a025bf21",
-  "confirm_status": 200,
-  "commit_status": 422,
+  "tenant_id": "3dd3822c-ec3d-4814-b18f-8d095a18050d",
+  "conversation_id": "conv_a086e81c5a054e108dd0fd05713721c6",
+  "turn_id": "turn_6f8783b102b445cfa7db7e3024f0a955",
+  "confirm_status": 409,
+  "commit_status": null,
   "error": {
-    "code": "assistant_intent_unsupported",
-    "message": "assistant intent unsupported",
+    "code": "ai_route_non_business_blocked",
+    "message": "assistant route non business blocked",
     "trace_id": "",
     "meta": {
-      "path": "/internal/assistant/conversations/conv_fafaa4e7e5cf4e3d9500f9ede10d839b/turns/turn_92a448d23b7d4d3fbb1b72b9a025bf21:commit",
+      "path": "/internal/assistant/conversations/conv_a086e81c5a054e108dd0fd05713721c6/turns/turn_6f8783b102b445cfa7db7e3024f0a955:confirm",
       "method": "POST"
     }
   },
-  "captured_at": "2026-03-10T23:20:01.222Z"
+  "captured_at": "2026-04-08T14:50:10.146Z"
 }

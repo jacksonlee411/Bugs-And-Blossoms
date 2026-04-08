@@ -15,6 +15,24 @@ jobs:
     steps:
       - name: Gates temporarily disabled
         run: echo "Quality gates temporarily disabled"
+      - name: Assistant config single source gate
+        if: false
+        run: make check assistant-config-single-source
+      - name: Assistant domain allowlist gate
+        if: false
+        run: make check assistant-domain-allowlist
+      - name: No scope package gate
+        if: false
+        run: make check no-scope-package
+      - name: Capability key gate
+        if: false
+        run: make check capability-key
+      - name: Capability contract gate
+        if: false
+        run: make check capability-contract
+      - name: Capability route map gate
+        if: false
+        run: make check capability-route-map
 
   unit-integration-tests:
     name: Unit & Integration Tests

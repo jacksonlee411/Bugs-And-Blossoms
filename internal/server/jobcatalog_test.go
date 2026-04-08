@@ -8,6 +8,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/jacksonlee411/Bugs-And-Blossoms/modules/jobcatalog/services"
 )
 
 type jobcatalogRows struct {
@@ -521,6 +522,151 @@ func TestJobCatalogPGStore_ResolvePackages(t *testing.T) {
 	if resolved != "pkg-2" {
 		t.Fatalf("resolved=%s", resolved)
 	}
+}
+
+func TestJobCatalogAdaptersAndViewRules(t *testing.T) {
+	t.Run("normalize package code wrapper", func(t *testing.T) {
+		if got := normalizePackageCode(" pkg1 "); got != "PKG1" {
+			t.Fatalf("normalizePackageCode=%q", got)
+		}
+	})
+
+	t.Run("can edit deflt package respects principal", func(t *testing.T) {
+		if canEditDefltPackage(context.Background()) {
+			t.Fatal("expected false without principal")
+		}
+		ctx := withPrincipal(context.Background(), Principal{RoleSlug: "tenant-admin", Status: "active"})
+		if !canEditDefltPackage(ctx) {
+			t.Fatal("expected true for active tenant-admin")
+		}
+	})
+
+	t.Run("owner setid editable", func(t *testing.T) {
+		ctx := withPrincipal(context.Background(), Principal{RoleSlug: "tenant-admin", Status: "active"})
+		store := jobCatalogSetIDStoreStub{
+			setids: []SetID{{SetID: "S1", Status: "active"}},
+		}
+		if !ownerSetIDEditable(ctx, store, "t1", "s1") {
+			t.Fatal("expected owner setid editable")
+		}
+		if ownerSetIDEditable(ctx, nil, "t1", "s1") {
+			t.Fatal("expected false when store is nil")
+		}
+	})
+
+	t.Run("load owned jobcatalog packages", func(t *testing.T) {
+		store := jobCatalogSetIDStoreStub{
+			owned: []OwnedScopePackage{{
+				PackageID:     "pkg-1",
+				ScopeCode:     "jobcatalog",
+				PackageCode:   "PKG1",
+				OwnerSetID:    "S1",
+				Name:          "Primary",
+				Status:        "active",
+				EffectiveDate: "2026-01-01",
+			}},
+		}
+		empty, err := loadOwnedJobCatalogPackages(context.Background(), store, "t1", "2026-01-01")
+		if err != nil || len(empty) != 0 {
+			t.Fatalf("expected empty without principal: len=%d err=%v", len(empty), err)
+		}
+		ctx := withPrincipal(context.Background(), Principal{RoleSlug: "tenant-admin", Status: "active"})
+		got, err := loadOwnedJobCatalogPackages(ctx, store, "t1", "2026-01-01")
+		if err != nil {
+			t.Fatalf("err=%v", err)
+		}
+		if len(got) != 1 || got[0].PackageCode != "PKG1" {
+			t.Fatalf("unexpected owned=%+v", got)
+		}
+
+		_, err = loadOwnedJobCatalogPackages(ctx, jobCatalogSetIDStoreStub{err: errors.New("boom")}, "t1", "2026-01-01")
+		if err == nil {
+			t.Fatal("expected error from owned scope package load")
+		}
+	})
+
+	t.Run("resolve jobcatalog view", func(t *testing.T) {
+		ctx := withPrincipal(context.Background(), Principal{RoleSlug: "tenant-admin", Status: "active"})
+		setidStore := jobCatalogSetIDStoreStub{setids: []SetID{{SetID: "S1", Status: "active"}}}
+
+		view, errMsg := resolveJobCatalogView(ctx, resolveJobCatalogStoreStub{}, setidStore, "t1", "2026-01-01", "", "s1")
+		if errMsg != "" || view.SetID != "S1" || view.OwnerSetID != "S1" || view.ReadOnly {
+			t.Fatalf("unexpected setid view=%+v err=%q", view, errMsg)
+		}
+
+		pkg := JobCatalogPackage{PackageUUID: "pkg-1", PackageCode: "PKG1", OwnerSetID: "S1"}
+		store := resolveJobCatalogStoreStub{pkg: pkg, setidPackageUUID: "pkg-1"}
+		view, errMsg = resolveJobCatalogView(ctx, store, setidStore, "t1", "2026-01-01", "PKG1", "")
+		if errMsg != "" || view.PackageCode != "PKG1" || view.OwnerSetID != "S1" || view.ReadOnly || !view.HasSelection {
+			t.Fatalf("unexpected package view=%+v err=%q", view, errMsg)
+		}
+	})
+
+	t.Run("jobcatalog adapters map fields", func(t *testing.T) {
+		ctx := context.Background()
+		pkg := JobCatalogPackage{PackageUUID: "pkg-1", PackageCode: "PKG1", OwnerSetID: "S1"}
+		adapter := jobCatalogStoreAdapter{store: resolveJobCatalogStoreStub{pkg: pkg}}
+		got, err := adapter.ResolveJobCatalogPackageByCode(ctx, "t1", "PKG1", "2026-01-01")
+		if err != nil || got.PackageUUID != "pkg-1" || got.OwnerSetID != "S1" {
+			t.Fatalf("unexpected adapter pkg=%+v err=%v", got, err)
+		}
+		if _, err := adapter.ResolveJobCatalogPackageByCode(ctx, "t1", "PKG1", "2026-01-01"); err != nil {
+			t.Fatalf("unexpected err=%v", err)
+		}
+		adapterErr := jobCatalogStoreAdapter{store: resolveJobCatalogStoreStub{pkgErr: errors.New("boom")}}
+		if _, err := adapterErr.ResolveJobCatalogPackageByCode(ctx, "t1", "PKG1", "2026-01-01"); err == nil {
+			t.Fatal("expected error from adapter")
+		}
+
+		setidAdapter := jobCatalogSetIDStoreAdapter{store: jobCatalogSetIDStoreStub{
+			setids: []SetID{{SetID: "S1", Status: "active"}},
+			owned: []OwnedScopePackage{{
+				PackageID:     "pkg-1",
+				ScopeCode:     "jobcatalog",
+				PackageCode:   "PKG1",
+				OwnerSetID:    "S1",
+				Name:          "Primary",
+				Status:        "active",
+				EffectiveDate: "2026-01-01",
+			}},
+		}}
+
+		setids, err := setidAdapter.ListSetIDs(ctx, "t1")
+		if err != nil || len(setids) != 1 || setids[0].SetID != "S1" {
+			t.Fatalf("unexpected setids=%+v err=%v", setids, err)
+		}
+		owned, err := setidAdapter.ListOwnedScopePackages(ctx, "t1", "jobcatalog", "2026-01-01")
+		if err != nil || len(owned) != 1 || owned[0].PackageCode != "PKG1" {
+			t.Fatalf("unexpected owned=%+v err=%v", owned, err)
+		}
+
+		setidAdapterErr := jobCatalogSetIDStoreAdapter{store: jobCatalogSetIDStoreStub{err: errors.New("boom")}}
+		if _, err := setidAdapterErr.ListSetIDs(ctx, "t1"); err == nil {
+			t.Fatal("expected error from setid adapter")
+		}
+		if _, err := setidAdapterErr.ListOwnedScopePackages(ctx, "t1", "jobcatalog", "2026-01-01"); err == nil {
+			t.Fatal("expected error from owned scope adapter")
+		}
+	})
+
+	t.Run("toServerOwnedScopePackages handles nil and maps fields", func(t *testing.T) {
+		if got := toServerOwnedScopePackages(nil); got != nil {
+			t.Fatalf("expected nil, got=%v", got)
+		}
+		rows := []services.OwnedScopePackage{{
+			PackageID:     "pkg-1",
+			ScopeCode:     "jobcatalog",
+			PackageCode:   "PKG1",
+			OwnerSetID:    "S1",
+			Name:          "Primary",
+			Status:        "active",
+			EffectiveDate: "2026-01-01",
+		}}
+		got := toServerOwnedScopePackages(rows)
+		if len(got) != 1 || got[0].PackageCode != "PKG1" || got[0].OwnerSetID != "S1" {
+			t.Fatalf("unexpected mapped=%+v", got)
+		}
+	})
 }
 
 func TestJobCatalogStatusForError(t *testing.T) {
