@@ -1222,6 +1222,7 @@ export function SetIDGovernancePage({ section }: { section: SetIDPageSection }) 
               initialAsOf={asOf}
               title='Explain'
               subtitle='用于验证 capability 命中/拒绝原因，并展示 trace_id/request_id/policy_version。'
+              asOfHint={t('setid_explain_as_of_hint')}
               defaultLevel={canViewFullExplain ? 'full' : 'brief'}
             />
           </>
@@ -1582,7 +1583,7 @@ export function SetIDGovernancePage({ section }: { section: SetIDPageSection }) 
                     value={registryForm.changePolicy}
                   />
                   <TextField
-                    label='effective_date'
+                    label={t('setid_registry_effective_date')}
                     required
                     size='small'
                     type='date'
@@ -1876,7 +1877,7 @@ export function SetIDGovernancePage({ section }: { section: SetIDPageSection }) 
                 effective_date={registryDisableDialog.row?.effective_date || '-'}
               </Typography>
               <TextField
-                label='disable_as_of'
+                label={t('setid_registry_disable_as_of')}
                 type='date'
                 value={registryDisableDialog.disableAsOf}
                 onChange={(event) =>

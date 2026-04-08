@@ -41,6 +41,14 @@ function LocationProbe() {
   return <div data-testid='location-state'>{`${location.pathname}${location.search}`}</div>
 }
 
+function findReleaseDateInput(value = ''): HTMLInputElement {
+  const input = document.querySelector(`input[type="date"][value="${value}"]`)
+  if (!(input instanceof HTMLInputElement)) {
+    throw new Error(`release date input with value ${value} not found`)
+  }
+  return input
+}
+
 function renderPage(initialEntry = '/dicts') {
   const queryClient = new QueryClient({
     defaultOptions: {
@@ -85,6 +93,7 @@ describe('DictConfigsPage', () => {
         ({
           dict_release_title: '发布',
           dict_release_subtitle: '发布说明',
+          dict_release_task_time_hint: '发布时点只作用于本次发布任务，不会改写列表浏览日期。',
           dict_release_stage_idle: '空闲',
           dict_release_no_permission: '无权限',
           dict_release_field_source_tenant_id: '源租户',
@@ -144,6 +153,8 @@ describe('DictConfigsPage', () => {
 
     expect(screen.queryByLabelText('查看日期')).not.toBeInTheDocument()
     expect(screen.getByText('默认显示当前数据')).toBeInTheDocument()
+    expect(screen.getByText('发布时点')).toBeInTheDocument()
+    expect(screen.getByText('发布时点只作用于本次发布任务，不会改写列表浏览日期。')).toBeInTheDocument()
 
     fireEvent.click(await screen.findByText('默认值'))
 
@@ -167,5 +178,16 @@ describe('DictConfigsPage', () => {
     await waitFor(() =>
       expect(screen.getByTestId('location-state')).toHaveTextContent('/dicts/cost_center/values/A1?as_of=2026-03-01')
     )
+  })
+
+  it('does not push browsing as_of when editing release time', async () => {
+    renderPage()
+
+    await waitFor(() => expect(dictApiMocks.listDicts).toHaveBeenCalled())
+
+    fireEvent.change(findReleaseDateInput(''), { target: { value: '2026-02-01' } })
+
+    expect(screen.getByTestId('location-state')).toHaveTextContent('/dicts')
+    expect(screen.getByTestId('location-state')).not.toHaveTextContent('as_of=')
   })
 })

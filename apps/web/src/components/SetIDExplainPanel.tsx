@@ -31,6 +31,8 @@ interface SetIDExplainPanelProps {
   title: string
   subtitle?: string
   initialAsOf?: string
+  asOfLabel?: string
+  asOfHint?: string
   initialCapabilityKey?: string
   initialFieldKey?: string
   initialBusinessUnitID?: string
@@ -106,6 +108,8 @@ export function SetIDExplainPanel({
   title,
   subtitle,
   initialAsOf,
+  asOfLabel,
+  asOfHint,
   initialCapabilityKey,
   initialFieldKey,
   initialBusinessUnitID,
@@ -114,8 +118,10 @@ export function SetIDExplainPanel({
   defaultLevel = 'brief',
   fullPermissionKey = 'setid.explain.full'
 }: SetIDExplainPanelProps) {
-  const { hasPermission } = useAppPreferences()
+  const { hasPermission, t } = useAppPreferences()
   const canViewFull = hasPermission(fullPermissionKey)
+  const resolvedAsOfLabel = asOfLabel?.trim() || t('setid_explain_as_of_label')
+  const resolvedAsOfHint = asOfHint?.trim() || ''
 
   const [capabilityKey, setCapabilityKey] = useState(initialCapabilityKey ?? '')
   const [fieldKey, setFieldKey] = useState(initialFieldKey ?? '')
@@ -237,6 +243,11 @@ export function SetIDExplainPanel({
               {subtitle}
             </Typography>
           ) : null}
+          {resolvedAsOfHint ? (
+            <Typography color='text.secondary' sx={{ mt: 0.5 }} variant='caption'>
+              {resolvedAsOfHint}
+            </Typography>
+          ) : null}
         </Box>
 
         {!canViewFull ? (
@@ -275,7 +286,14 @@ export function SetIDExplainPanel({
             required
             value={businessUnitID}
           />
-          <TextField label='as_of' required size='small' type='date' value={asOf} onChange={(event) => setAsOf(event.target.value)} />
+          <TextField
+            label={resolvedAsOfLabel}
+            required
+            size='small'
+            type='date'
+            value={asOf}
+            onChange={(event) => setAsOf(event.target.value)}
+          />
           <TextField label='request_id' required size='small' value={requestID} onChange={(event) => setRequestID(event.target.value)} />
           <FreeSoloDropdownField
             label='setid（可选）'

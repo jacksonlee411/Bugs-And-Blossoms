@@ -1,6 +1,6 @@
 # DEV-PLAN-317：View As Of 页面时间语义回归与验收计划
 
-**状态**: 草拟中（2026-04-08 04:00 UTC）
+**状态**: 已完成（2026-04-09 CST）
 
 ## 背景
 
@@ -31,10 +31,10 @@
 
 ## 目标
 
-1. [ ] 建立跨页面统一回归矩阵，覆盖 `default current`、history、写态隔离、工具态例外四类核心行为。
-2. [ ] 建立分层验收策略：最小直接测试、页面级交互测试、跨页面端到端验收各自负责什么。
-3. [ ] 冻结“专项完成”的证据标准，避免只靠单页口头验收判断收口完成。
-4. [ ] 为后续回归与门禁提供统一事实源，而不是每个页面单独维护一套散点验收说明。
+1. [x] 建立跨页面统一回归矩阵，覆盖 `default current`、history、写态隔离、工具态例外四类核心行为。
+2. [x] 建立分层验收策略：最小直接测试、页面级交互测试、跨页面端到端验收各自负责什么。
+3. [x] 冻结“专项完成”的证据标准，避免只靠单页口头验收判断收口完成。
+4. [x] 为后续回归与门禁提供统一事实源，而不是每个页面单独维护一套散点验收说明。
 
 ## 非目标
 
@@ -246,6 +246,30 @@
 - Staffing 读接口
 - SetID Explain / Governance / Release 接口
 
+## 已落地回归基线
+
+### 1. 最小直接测试
+
+- [x] `readViewState`：`apps/web/src/pages/org/readViewState.test.ts`
+- [x] `readNavigation`：`apps/web/src/pages/org/orgReadNavigation.test.ts`
+- [x] 工具态 Explain 文案与 `initialAsOf` 透传：`apps/web/src/components/SetIDExplainPanel.test.tsx`
+
+### 2. 页面级交互测试
+
+- [x] `OrgUnitsPage`：`default current` 与 history 显式 `as_of`
+- [x] `OrgUnitDetailsPage`：单历史锚点、写态日期 sticky、写后不跳日
+- [x] `OrgUnitFieldConfigsPage`：当前模式不显式 `as_of`、跳转 SetID Registry 时 current/history 分流
+- [x] `AssignmentsPage` / `PositionsPage`：history 不改写 `effective_date`
+- [x] `JobCatalogPage`：default current 与 create dialog 不继承 history `as_of`
+- [x] `DictConfigsPage`：default current、history URL、release 工具态时间不回流浏览态
+- [x] `SetIDGovernancePage`：registry 日期不跟随浏览态串线、工具态日期标签收口
+
+### 3. 门禁 / 合同验证
+
+- [x] `scripts/ci/check-as-of-explicit.sh`
+- [x] `scripts/ci/check-view-as-of-frontend.sh`
+- [x] 工具态 allowlist 仅保留 `SetIDExplainPanel`，且注释已与 `DEV-PLAN-316` 对齐
+
 ## 门禁与证据
 
 ### 1. 反回流门禁验收
@@ -273,12 +297,12 @@
 
 ## 实施步骤
 
-1. [ ] 汇总 `312/314/316` 的页面与组件验收点，形成统一回归矩阵。
-2. [ ] 将回归矩阵按“最小直接测试 / 页面交互测试 / E2E”三层分配责任。
-3. [ ] 为 P0 / P1 / 工具态对象分别建立最小必过场景集。
-4. [ ] 将 `313` 的后端显式日期合同验证并入前端专项验收，而不是独立悬空。
-5. [ ] 将 `315` 的反回流门禁与 allowlist 验证纳入回归基线。
-6. [ ] 输出专项完成判定标准：哪些场景通过后，`311` 可视为分解计划已进入可验收状态。
+1. [x] 汇总 `312/314/316` 的页面与组件验收点，形成统一回归矩阵。
+2. [x] 将回归矩阵按“最小直接测试 / 页面交互测试 / E2E”三层分配责任。
+3. [x] 为 P0 / P1 / 工具态对象分别建立最小必过场景集。
+4. [x] 将 `313` 的后端显式日期合同验证并入前端专项验收，而不是独立悬空。
+5. [x] 将 `315` 的反回流门禁与 allowlist 验证纳入回归基线。
+6. [x] 输出专项完成判定标准：哪些场景通过后，`311` 可视为分解计划已进入可验收状态。
 
 ## 测试与覆盖率
 
@@ -302,18 +326,18 @@
 
 ## 交付物
 
-1. [ ] 一份跨页面回归矩阵。
-2. [ ] 一份按层次划分的验收责任表（直接测试 / 页面交互测试 / E2E）。
-3. [ ] 一份专项完成判定清单。
-4. [ ] 一份关键证据记录模板，供后续执行记录承接。
+1. [x] 一份跨页面回归矩阵。
+2. [x] 一份按层次划分的验收责任表（直接测试 / 页面交互测试 / E2E）。
+3. [x] 一份专项完成判定清单。
+4. [x] 一份关键证据记录模板，供后续执行记录承接。
 
 ## 验收标准
 
-- [ ] `default current`、history 不改写写态、写后不跳日、工具态不回流宿主等核心行为已有统一回归矩阵覆盖。
-- [ ] `312/314/316` 的关键页面与组件均已映射到明确的验收层级，而不是重复或遗漏。
-- [ ] `313` 的后端显式日期合同已被纳入前端专项验收，而非独立悬空。
-- [ ] `315` 的反回流门禁与 allowlist 效果已有对应回归验证。
-- [ ] 文档门禁通过，且 `AGENTS.md` 文档地图已挂接本计划。
+- [x] `default current`、history 不改写写态、写后不跳日、工具态不回流宿主等核心行为已有统一回归矩阵覆盖。
+- [x] `312/314/316` 的关键页面与组件均已映射到明确的验收层级，而不是重复或遗漏。
+- [x] `313` 的后端显式日期合同已被纳入前端专项验收，而非独立悬空。
+- [x] `315` 的反回流门禁与 allowlist 效果已有对应回归验证。
+- [x] 文档门禁通过，且 `AGENTS.md` 文档地图已挂接本计划。
 
 ## 关联文档
 

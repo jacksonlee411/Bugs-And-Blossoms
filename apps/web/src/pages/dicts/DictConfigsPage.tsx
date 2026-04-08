@@ -563,6 +563,9 @@ export function DictConfigsPage() {
                 <Typography color='text.secondary' variant='body2'>
                   {t('dict_release_subtitle')}
                 </Typography>
+                <Typography color='text.secondary' sx={{ mt: 0.5 }} variant='caption'>
+                  {t('dict_release_task_time_hint')}
+                </Typography>
               </Box>
               <Chip color={releaseStageColor(releaseStage)} label={t(releaseStageLabelKey(releaseStage))} size='small' variant='outlined' />
             </Stack>

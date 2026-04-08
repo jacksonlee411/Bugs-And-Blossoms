@@ -1,6 +1,6 @@
 # DEV-PLAN-316：View As Of 工具态页面收口计划——Explain / Release / Governance 子区统一任务态时间语义
 
-**状态**: 草拟中（2026-04-08 03:35 UTC）
+**状态**: 已完成（2026-04-09 CST）
 
 ## 背景
 
@@ -30,10 +30,10 @@
 
 ## 目标
 
-1. [ ] 识别并冻结当前需要保留显式时间输入的工具态页面/组件清单。
-2. [ ] 将工具态显式时间从技术字段名 `as_of` 收敛为任务态文案，如“查看日期 / View As Of”“发布时点”“解释时点”。
-3. [ ] 冻结工具态时间与浏览主区、写态默认值之间的隔离规则。
-4. [ ] 为 `DEV-PLAN-315` 的 allowlist 与门禁接线提供事实源。
+1. [x] 识别并冻结当前需要保留显式时间输入的工具态页面/组件清单。
+2. [x] 将工具态显式时间从技术字段名 `as_of` 收敛为任务态文案，如“查看日期 / View As Of”“发布时点”“解释时点”。
+3. [x] 冻结工具态时间与浏览主区、写态默认值之间的隔离规则。
+4. [x] 为 `DEV-PLAN-315` 的 allowlist 与门禁接线提供事实源。
 
 ## 非目标
 
@@ -217,11 +217,19 @@
 
 ## 实施步骤
 
-1. [ ] 盘点所有当前工具态显式时间输入的页面/组件，并登记“保留理由”。
-2. [ ] 先以 `SetIDExplainPanel` 形成首个样板：改任务态文案、明确边界、不改宿主浏览态。
-3. [ ] 再收口 `SetIDGovernancePage` 的工具子区，完成浏览主区与工具区分轨。
-4. [ ] 最后收口 `DictConfigsPage` release 区及嵌入式 Explain 区，统一宿主页/工具区边界。
-5. [ ] 为 `DEV-PLAN-315` 输出 allowlist 候选清单与保留理由。
+1. [x] 盘点所有当前工具态显式时间输入的页面/组件，并登记“保留理由”。
+2. [x] 先以 `SetIDExplainPanel` 形成首个样板：改任务态文案、明确边界、不改宿主浏览态。
+3. [x] 再收口 `SetIDGovernancePage` 的工具子区，完成浏览主区与工具区分轨。
+4. [x] 最后收口 `DictConfigsPage` release 区及嵌入式 Explain 区，统一宿主页/工具区边界。
+5. [x] 为 `DEV-PLAN-315` 输出 allowlist 候选清单与保留理由。
+
+## 实施结果
+
+1. [x] [SetIDExplainPanel.tsx](/home/lee/Projects/Bugs-And-Blossoms/apps/web/src/components/SetIDExplainPanel.tsx) 已新增 `asOfLabel` / `asOfHint`，默认通过 i18n 输出“解释时点”任务态文案，不再裸露 `label='as_of'`。
+2. [x] [SetIDGovernancePage.tsx](/home/lee/Projects/Bugs-And-Blossoms/apps/web/src/pages/org/SetIDGovernancePage.tsx) 的 explain 子区已显式提示“该时间只用于本次命中解释”，registry 相关日期字段已收口为“规则生效日期 / 停用日期”。
+3. [x] [DictConfigsPage.tsx](/home/lee/Projects/Bugs-And-Blossoms/apps/web/src/pages/dicts/DictConfigsPage.tsx) 的 release 区已保留显式时间能力，但通过“发布时点”与区块说明文案明确它只属于发布任务区。
+4. [x] [messages.ts](/home/lee/Projects/Bugs-And-Blossoms/apps/web/src/i18n/messages.ts) 已补齐 `en/zh` 文案，避免任务态时间能力继续以技术字段名暴露。
+5. [x] [view-as-of-frontend-allowlist.txt](/home/lee/Projects/Bugs-And-Blossoms/scripts/ci/view-as-of-frontend-allowlist.txt) 已更新为“允许保留工具态显式时间能力，但必须使用任务态文案”，与 `DEV-PLAN-315` 门禁口径一致。
 
 ## 测试与覆盖率
 
@@ -246,18 +254,18 @@
 
 ## 交付物
 
-1. [ ] 一份工具态显式时间 allowlist 候选清单。
-2. [ ] 一份任务态文案与 IA 规则说明。
-3. [ ] 一份宿主页/工具区边界与禁止串线清单。
-4. [ ] 一组工具态样板测试与回归说明。
+1. [x] 一份工具态显式时间 allowlist 候选清单。
+2. [x] 一份任务态文案与 IA 规则说明。
+3. [x] 一份宿主页/工具区边界与禁止串线清单。
+4. [x] 一组工具态样板测试与回归说明。
 
 ## 验收标准
 
-- [ ] `SetIDExplainPanel` 不再裸露 `as_of` 作为用户可见主标签。
-- [ ] `DictConfigsPage` release 区显式时间保留，但不会重新定义浏览主区模式。
-- [ ] `SetIDGovernancePage` 的工具子区与浏览主区完成分轨，不再互相覆盖时间状态。
-- [ ] 工具态显式时间能力可被 `DEV-PLAN-315` 以最小 allowlist 方式保留。
-- [ ] 工具态例外不会外溢成业务浏览页的通用规则。
+- [x] `SetIDExplainPanel` 不再裸露 `as_of` 作为用户可见主标签。
+- [x] `DictConfigsPage` release 区显式时间保留，但不会重新定义浏览主区模式。
+- [x] `SetIDGovernancePage` 的工具子区与浏览主区完成分轨，不再互相覆盖时间状态。
+- [x] 工具态显式时间能力可被 `DEV-PLAN-315` 以最小 allowlist 方式保留。
+- [x] 工具态例外不会外溢成业务浏览页的通用规则。
 - [ ] 文档门禁通过，且 `AGENTS.md` 文档地图已挂接本计划。
 
 ## 关联文档
