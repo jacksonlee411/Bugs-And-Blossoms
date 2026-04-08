@@ -42,6 +42,7 @@ import { FilterBar } from '../../components/FilterBar'
 import { PageHeader } from '../../components/PageHeader'
 import { SetIDExplainPanel } from '../../components/SetIDExplainPanel'
 import { StatusChip } from '../../components/StatusChip'
+import { resolveReadViewState, todayISODate } from '../../utils/readViewState'
 
 type JobCatalogTab = 'groups' | 'families' | 'levels' | 'profiles'
 
@@ -95,21 +96,6 @@ interface DetailDialogState {
 const TAB_VALUES: JobCatalogTab[] = ['groups', 'families', 'levels', 'profiles']
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/
 
-function todayISO(): string {
-  return format(new Date(), 'yyyy-MM-dd')
-}
-
-function parseDateOrDefault(raw: string | null, fallback: string): string {
-  if (!raw) {
-    return fallback
-  }
-  const value = raw.trim()
-  if (!DATE_PATTERN.test(value)) {
-    return fallback
-  }
-  return value
-}
-
 function parseOptionalValue(raw: string | null): string {
   if (!raw) {
     return ''
@@ -137,6 +123,10 @@ function formatDateValue(value: Date | null): string | null {
     return null
   }
   return format(value, 'yyyy-MM-dd')
+}
+
+function defaultActionEffectiveDate(): Date {
+  return parseISO(todayISODate())
 }
 
 function normalizeCSV(raw: string): string[] {
@@ -206,13 +196,14 @@ export function JobCatalogPage() {
   const { t } = useAppPreferences()
   const queryClient = useQueryClient()
   const [searchParams, setSearchParams] = useSearchParams()
-  const fallbackAsOf = useMemo(() => todayISO(), [])
-
-  const asOf = parseDateOrDefault(searchParams.get('as_of'), fallbackAsOf)
+  const readView = useMemo(() => resolveReadViewState(searchParams.get('as_of')), [searchParams])
+  const readMode = readView.mode
+  const asOf = readView.effectiveAsOf
   const setID = parseOptionalValue(searchParams.get('setid'))
   const selectedTab = parseTabOrDefault(searchParams.get('tab'))
   const selectedGroupCode = parseOptionalValue(searchParams.get('group_code'))
 
+  const [historyModeInput, setHistoryModeInput] = useState(readMode === 'history')
   const [asOfInput, setAsOfInput] = useState<Date | null>(toDateValue(asOf))
   const [setIDInput, setSetIDInput] = useState(setID)
   const [groupKeywordInput, setGroupKeywordInput] = useState('')
@@ -257,19 +248,24 @@ export function JobCatalogPage() {
   })
 
   useEffect(() => {
+    setHistoryModeInput(readMode === 'history')
     setAsOfInput(toDateValue(asOf))
-  }, [asOf])
+  }, [asOf, readMode])
 
   useEffect(() => {
     setSetIDInput(setID)
   }, [setID])
 
   const updateQuery = useCallback(
-    (patch: { asOf?: string; setID?: string | null; tab?: JobCatalogTab; groupCode?: string | null }) => {
+    (patch: { asOf?: string | null; setID?: string | null; tab?: JobCatalogTab; groupCode?: string | null }) => {
       const nextParams = new URLSearchParams(searchParams)
 
-      if (Object.hasOwn(patch, 'asOf') && patch.asOf) {
-        nextParams.set('as_of', patch.asOf)
+      if (Object.hasOwn(patch, 'asOf')) {
+        if (patch.asOf && patch.asOf.trim().length > 0) {
+          nextParams.set('as_of', patch.asOf.trim())
+        } else {
+          nextParams.delete('as_of')
+        }
       }
       if (Object.hasOwn(patch, 'setID')) {
         if (patch.setID && patch.setID.trim().length > 0) {
@@ -534,7 +530,7 @@ export function JobCatalogPage() {
                     open: true,
                     familyCode: params.row.code,
                     groupCode: params.row.groupCode,
-                    effectiveDate: toDateValue(asOf)
+                    effectiveDate: defaultActionEffectiveDate()
                   })
                 }
               },
@@ -561,7 +557,7 @@ export function JobCatalogPage() {
         )
       }
     ],
-    [asOf, disableWriteActions, t]
+    [disableWriteActions, t]
   )
 
   const levelColumns = useMemo<GridColDef<LevelRow>[]>(
@@ -709,8 +705,8 @@ export function JobCatalogPage() {
   }, [familyRows, selectedGroup])
 
   const applyContext = useCallback(() => {
-    const nextAsOf = formatDateValue(asOfInput)
-    if (!nextAsOf) {
+    const nextAsOf = historyModeInput ? formatDateValue(asOfInput) : null
+    if (historyModeInput && !nextAsOf) {
       setPageError(t('jobcatalog_error_invalid_date'))
       return
     }
@@ -720,17 +716,17 @@ export function JobCatalogPage() {
       setID: setIDInput,
       groupCode: selectedGroupCode.length > 0 ? selectedGroupCode : null
     })
-  }, [asOfInput, setIDInput, selectedGroupCode, t, updateQuery])
+  }, [asOfInput, historyModeInput, selectedGroupCode, setIDInput, t, updateQuery])
 
   const resetContext = useCallback(() => {
-    const defaultAsOf = todayISO()
-    setAsOfInput(toDateValue(defaultAsOf))
+    setHistoryModeInput(false)
+    setAsOfInput(toDateValue(todayISODate()))
     setSetIDInput('')
     setGroupKeywordInput('')
     setListKeywordInput('')
     setPageError(null)
     updateQuery({
-      asOf: defaultAsOf,
+      asOf: null,
       setID: null,
       groupCode: null
     })
@@ -935,17 +931,23 @@ export function JobCatalogPage() {
 
         <Box sx={{ position: 'sticky', top: 0, zIndex: 5 }}>
           <FilterBar>
-            <DatePicker
-              label={t('jobcatalog_filter_as_of')}
-              onChange={(value) => setAsOfInput(value)}
-              slotProps={{
-                textField: {
-                  fullWidth: true,
-                  size: 'small'
-                }
-              }}
-              value={asOfInput}
-            />
+            {historyModeInput ? (
+              <DatePicker
+                label={t('jobcatalog_filter_as_of')}
+                onChange={(value) => setAsOfInput(value)}
+                slotProps={{
+                  textField: {
+                    fullWidth: true,
+                    size: 'small'
+                  }
+                }}
+                value={asOfInput}
+              />
+            ) : (
+              <Typography color='text.secondary' sx={{ alignSelf: 'center', minWidth: 180 }} variant='body2'>
+                {t('common_view_current_label')}
+              </Typography>
+            )}
             <Autocomplete
               freeSolo
               onChange={(_, value) => setSetIDInput(value ?? '')}
@@ -964,6 +966,27 @@ export function JobCatalogPage() {
             <Button onClick={applyContext} variant='contained'>
               {t('jobcatalog_filter_apply_context')}
             </Button>
+            {historyModeInput ? (
+              <Button
+                onClick={() => {
+                  setHistoryModeInput(false)
+                  setAsOfInput(toDateValue(asOf))
+                }}
+                variant='outlined'
+              >
+                {t('common_view_current')}
+              </Button>
+            ) : (
+              <Button
+                onClick={() => {
+                  setHistoryModeInput(true)
+                  setAsOfInput(toDateValue(asOf))
+                }}
+                variant='outlined'
+              >
+                {t('common_view_history')}
+              </Button>
+            )}
             <Button onClick={resetContext} variant='outlined'>
               {t('jobcatalog_filter_reset_context')}
             </Button>
@@ -971,12 +994,16 @@ export function JobCatalogPage() {
 
           <Paper sx={{ mb: 2, p: 1.5 }} variant='outlined'>
             <Stack direction='row' flexWrap='wrap' gap={1}>
-              <Chip
-                color='primary'
-                label={`${t('jobcatalog_filter_as_of')}: ${asOf}`}
-                size='small'
-                variant='outlined'
-              />
+              {readMode === 'history' ? (
+                <Chip
+                  color='primary'
+                  label={`${t('jobcatalog_filter_as_of')}: ${asOf}`}
+                  size='small'
+                  variant='outlined'
+                />
+              ) : (
+                <Chip color='default' label={t('common_view_current_label')} size='small' variant='outlined' />
+              )}
               <Chip
                 color='primary'
                 label={`${t('jobcatalog_filter_package_code')}: ${setID || t('jobcatalog_context_no_package')}`}
@@ -1107,7 +1134,7 @@ export function JobCatalogPage() {
                                 code: '',
                                 name: '',
                                 groupCode: selectedGroupCode,
-                                effectiveDate: toDateValue(asOf)
+                                effectiveDate: defaultActionEffectiveDate()
                               })
                               return
                             }
@@ -1117,7 +1144,7 @@ export function JobCatalogPage() {
                               name: '',
                               familyCodes: [],
                               primaryFamilyCode: '',
-                              effectiveDate: toDateValue(asOf)
+                              effectiveDate: defaultActionEffectiveDate()
                             })
                           }}
                           variant='contained'
@@ -1176,7 +1203,7 @@ export function JobCatalogPage() {
                               open: true,
                               code: '',
                               name: '',
-                              effectiveDate: toDateValue(asOf)
+                              effectiveDate: defaultActionEffectiveDate()
                             })
                             return
                           }
@@ -1184,7 +1211,7 @@ export function JobCatalogPage() {
                             open: true,
                             code: '',
                             name: '',
-                            effectiveDate: toDateValue(asOf)
+                            effectiveDate: defaultActionEffectiveDate()
                           })
                         }}
                         variant='contained'

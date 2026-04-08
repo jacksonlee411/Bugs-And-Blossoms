@@ -1,22 +1,20 @@
 import { describe, expect, it } from 'vitest'
-import { buildOrgFieldConfigsSearchParams, buildOrgUnitDetailSearchParams } from './orgReadNavigation'
+import { buildReadSearchParams, trimToNull } from '../../utils/readNavigation'
 
-describe('orgReadNavigation', () => {
+describe('utils/readNavigation', () => {
   it('does not carry as_of in current mode', () => {
-    const params = buildOrgFieldConfigsSearchParams('current', '2026-04-08')
+    const params = buildReadSearchParams('current', '2026-04-08')
     expect(params.get('as_of')).toBeNull()
   })
 
   it('carries as_of in history mode', () => {
-    const params = buildOrgFieldConfigsSearchParams('history', '2026-04-08')
+    const params = buildReadSearchParams('history', '2026-04-08')
     expect(params.get('as_of')).toBe('2026-04-08')
   })
 
   it('builds detail params for current mode without history anchor', () => {
-    const params = buildOrgUnitDetailSearchParams({
-      readMode: 'current',
-      asOf: '2026-04-08',
-      includeDisabled: false
+    const params = buildReadSearchParams('current', '2026-04-08', {
+      include_disabled: false
     })
 
     expect(params.get('as_of')).toBeNull()
@@ -24,10 +22,8 @@ describe('orgReadNavigation', () => {
   })
 
   it('builds detail params for history mode with include_disabled', () => {
-    const params = buildOrgUnitDetailSearchParams({
-      readMode: 'history',
-      asOf: '2026-04-08',
-      includeDisabled: true
+    const params = buildReadSearchParams('history', '2026-04-08', {
+      include_disabled: true
     })
 
     expect(params.get('as_of')).toBe('2026-04-08')
@@ -35,11 +31,9 @@ describe('orgReadNavigation', () => {
   })
 
   it('keeps optional legacy params only when non-empty', () => {
-    const params = buildOrgUnitDetailSearchParams({
-      readMode: 'history',
-      asOf: '2026-04-08',
-      includeDisabled: false,
-      effectiveDate: ' 2026-03-01 ',
+    const params = buildReadSearchParams('history', '2026-04-08', {
+      include_disabled: false,
+      effective_date: ' 2026-03-01 ',
       tab: ' records '
     })
 
@@ -48,15 +42,19 @@ describe('orgReadNavigation', () => {
   })
 
   it('drops blank optional legacy params', () => {
-    const params = buildOrgUnitDetailSearchParams({
-      readMode: 'history',
-      asOf: '2026-04-08',
-      includeDisabled: false,
-      effectiveDate: ' ',
+    const params = buildReadSearchParams('history', '2026-04-08', {
+      include_disabled: false,
+      effective_date: ' ',
       tab: ''
     })
 
     expect(params.get('effective_date')).toBeNull()
     expect(params.get('tab')).toBeNull()
+  })
+
+  it('trims optional values to null', () => {
+    expect(trimToNull('  abc  ')).toBe('abc')
+    expect(trimToNull('')).toBeNull()
+    expect(trimToNull(undefined)).toBeNull()
   })
 })

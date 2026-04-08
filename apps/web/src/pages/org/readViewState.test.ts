@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { isDay, parseRequestedAsOf, resolveReadViewState } from './readViewState'
+import { isDay, parseRequestedAsOf, resolveReadViewState } from '../../utils/readViewState'
 
-describe('readViewState', () => {
+describe('utils/readViewState', () => {
   it('treats null as current mode and uses fallback today', () => {
     expect(resolveReadViewState(null, '2026-04-08')).toEqual({
       mode: 'current',

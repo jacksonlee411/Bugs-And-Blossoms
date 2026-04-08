@@ -1,0 +1,2 @@
+# 工具态显式时间例外：允许保留显式时间能力，但必须使用任务态文案，且不得回流宿主页浏览/写态
+apps/web/src/components/SetIDExplainPanel.tsx

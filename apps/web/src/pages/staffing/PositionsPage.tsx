@@ -4,21 +4,7 @@ import { Alert, Box, Button, Paper, Stack, TextField, Typography } from '@mui/ma
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { getPositionOptions, listPositions, upsertPosition } from '../../api/positions'
 import { PageHeader } from '../../components/PageHeader'
-
-function todayISO(): string {
-  return new Date().toISOString().slice(0, 10)
-}
-
-function parseDateOrDefault(raw: string | null, fallback: string): string {
-  if (!raw) {
-    return fallback
-  }
-  const value = raw.trim()
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) {
-    return fallback
-  }
-  return value
-}
+import { isDay, resolveReadViewState, todayISODate } from '../../utils/readViewState'
 
 function parseOptionalValue(raw: string | null): string {
   if (!raw) {
@@ -30,22 +16,23 @@ function parseOptionalValue(raw: string | null): string {
 export function PositionsPage() {
   const queryClient = useQueryClient()
   const [searchParams, setSearchParams] = useSearchParams()
-  const fallbackAsOf = useMemo(() => todayISO(), [])
-
-  const asOf = parseDateOrDefault(searchParams.get('as_of'), fallbackAsOf)
+  const readView = useMemo(() => resolveReadViewState(searchParams.get('as_of')), [searchParams])
+  const readMode = readView.mode
+  const asOf = readView.effectiveAsOf
   const orgCode = parseOptionalValue(searchParams.get('org_code'))
 
+  const [historyModeInput, setHistoryModeInput] = useState(readMode === 'history')
   const [asOfInput, setAsOfInput] = useState(asOf)
   const [orgCodeInput, setOrgCodeInput] = useState(orgCode)
-  const [effectiveDate, setEffectiveDate] = useState(asOf)
+  const [effectiveDate, setEffectiveDate] = useState(todayISODate())
   const [jobProfileUUID, setJobProfileUUID] = useState('')
   const [name, setName] = useState('')
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
+    setHistoryModeInput(readMode === 'history')
     setAsOfInput(asOf)
-    setEffectiveDate(asOf)
-  }, [asOf])
+  }, [asOf, readMode])
 
   useEffect(() => {
     setOrgCodeInput(orgCode)
@@ -71,8 +58,18 @@ export function PositionsPage() {
   })
 
   function applyFilters() {
+    if (historyModeInput && !isDay(asOfInput)) {
+      setError('as_of invalid')
+      return
+    }
+
+    setError(null)
     const nextParams = new URLSearchParams(searchParams)
-    nextParams.set('as_of', asOfInput)
+    if (historyModeInput) {
+      nextParams.set('as_of', asOfInput)
+    } else {
+      nextParams.delete('as_of')
+    }
     if (orgCodeInput.trim().length > 0) {
       nextParams.set('org_code', orgCodeInput.trim())
     } else {
@@ -126,13 +123,20 @@ export function PositionsPage() {
             Load
           </Typography>
           <Stack direction='row' spacing={1.5} alignItems='center'>
-            <TextField
-              label='as_of'
-              name='as_of'
-              type='date'
-              value={asOfInput}
-              onChange={(e) => setAsOfInput(e.target.value)}
-            />
+            {historyModeInput ? (
+              <TextField
+                InputLabelProps={{ shrink: true }}
+                label='As Of Date'
+                name='as_of'
+                type='date'
+                value={asOfInput}
+                onChange={(e) => setAsOfInput(e.target.value)}
+              />
+            ) : (
+              <Typography color='text.secondary' variant='body2'>
+                Viewing current data by default
+              </Typography>
+            )}
             <TextField
               label='org_code'
               name='org_code'
@@ -143,6 +147,27 @@ export function PositionsPage() {
             <Button onClick={applyFilters} variant='contained'>
               Load
             </Button>
+            {historyModeInput ? (
+              <Button
+                onClick={() => {
+                  setHistoryModeInput(false)
+                  setAsOfInput(asOf)
+                }}
+                variant='outlined'
+              >
+                View Current
+              </Button>
+            ) : (
+              <Button
+                onClick={() => {
+                  setHistoryModeInput(true)
+                  setAsOfInput(asOf)
+                }}
+                variant='outlined'
+              >
+                View History
+              </Button>
+            )}
           </Stack>
         </Paper>
 
@@ -150,7 +175,7 @@ export function PositionsPage() {
           <Typography component='h3' variant='subtitle1' sx={{ mb: 1 }}>
             Context
           </Typography>
-          <Typography variant='body2'>As-of: {asOf}</Typography>
+          <Typography variant='body2'>{readMode === 'history' ? `As-of: ${asOf}` : 'Viewing current data by default'}</Typography>
           <Typography variant='body2'>Org Code: {orgCode || '(none)'}</Typography>
           <Typography variant='body2'>SetID: {options?.jobcatalog_setid ?? '-'}</Typography>
         </Paper>
@@ -231,4 +256,3 @@ export function PositionsPage() {
     </Box>
   )
 }
-

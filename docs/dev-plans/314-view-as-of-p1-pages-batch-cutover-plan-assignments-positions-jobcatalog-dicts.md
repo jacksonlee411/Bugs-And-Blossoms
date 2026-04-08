@@ -1,6 +1,6 @@
 # DEV-PLAN-314：View As Of P1 页面批量收口计划——Assignments / Positions / JobCatalog / DictConfigs
 
-**状态**: 草拟中（2026-04-08 02:45 UTC）
+**状态**: 已实施（2026-04-09，`AssignmentsPage` / `PositionsPage` / `JobCatalogPage` / `DictConfigsPage` 已按计划完成 `default current + 读写解耦` 收口，并补齐页面级回归测试）
 
 ## 背景
 
@@ -38,10 +38,10 @@
 
 ## 目标
 
-1. [ ] 批量完成四张 P1 A 类页面的 `default current` 收口，不再默认常显 `As Of`。
-2. [ ] 批量切断这四页中“读态驱动写态”的默认链路。
-3. [ ] 冻结四页统一的页面模板：浏览区 default current、历史模式按需进入、写表单只围绕业务日期组织。
-4. [ ] 为后续 `DEV-PLAN-315` 的最小 helper 抽取创造稳定重复样本，但本计划本身不提前造层。
+1. [x] 批量完成四张 P1 A 类页面的 `default current` 收口，不再默认常显 `As Of`。
+2. [x] 批量切断这四页中“读态驱动写态”的默认链路。
+3. [x] 冻结四页统一的页面模板：浏览区 default current、历史模式按需进入、写表单只围绕业务日期组织。
+4. [x] 为后续 `DEV-PLAN-315` 的最小 helper 抽取创造稳定重复样本，但本计划本身不提前造层。
 
 ## 非目标
 
@@ -194,16 +194,90 @@
 
 ## 实施顺序
 
-1. [ ] `AssignmentsPage`
-2. [ ] `PositionsPage`
-3. [ ] `JobCatalogPage`
-4. [ ] `DictConfigsPage`
+1. [x] `AssignmentsPage`
+2. [x] `PositionsPage`
+3. [x] `JobCatalogPage`
+4. [x] `DictConfigsPage`
 
 排序原因：
 
 - `AssignmentsPage` / `PositionsPage` 结构最接近，适合作为批量模板验证；
 - `JobCatalogPage` 复杂度更高，但仍是典型 A 类页面；
 - `DictConfigsPage` 混有浏览态与工具态双轨，适合作为本批收尾页。
+
+## 实施分解建议
+
+为避免后续把 `314` 错做成“逐页各自理解”的散点改造，本计划将实施过程进一步分解为 5 个连续步骤。其目标不是增加新抽象，而是把 `312` 已冻结的减法模板按复杂度逐层落地。
+
+### 步骤 1：先冻结统一减法模板，再进入页面改造
+
+本步骤的重点不是改代码，而是先在实现层统一三条判断标准：
+
+- 浏览主区默认进入 `current`，而不是默认常显 `As Of`；
+- 写态日期不再继承浏览态日期，也不再随着 `as_of` 变化持续重置；
+- 写成功后允许刷新 query、显示 toast 或 CTA，但不自动改浏览态。
+
+只有先冻结这三条标准，后续每一页的改造才不会重新争论“这页是否例外”。
+
+### 步骤 2：先完成 A 组同构页面，形成真实重复样本
+
+首批应优先落地：
+
+1. `AssignmentsPage`
+2. `PositionsPage`
+
+原因：
+
+- 两页都属于同一类 staffing A 页面；
+- 都存在 page-local `todayISO()` / `parseDateOrDefault()` / `fallbackAsOf`；
+- 都存在 `effectiveDate` 直接取 `asOf`，以及 `asOf` 变化时持续覆盖写态的逻辑；
+- 先做完这两页，才能为后续 `DEV-PLAN-315` 判断“哪些重复足够真实，值得抽最小 helper”提供事实样本。
+
+本步骤的目标不是立刻抽象，而是先把重复反模式批量删掉。
+
+### 步骤 3：在模板稳定后收口 `JobCatalogPage`
+
+`JobCatalogPage` 应作为第二阶段实施对象，原因不是它不重要，而是它比 staffing 两页多了一层复杂度：
+
+- 顶部 `As Of` 目前仍是默认常显浏览输入；
+- 多个 create / move dialog 直接使用 `asOf` 预填 `effectiveDate`；
+- `tab / group_code / setid` 等导航参数与读态时间同时存在，容易在改造时重新串线。
+
+因此，这一页的收口重点应是：
+
+- 把顶部 `As Of` 从默认筛选器改为 history 模式入口；
+- 把 dialog 默认值从“取页面 `asOf`”改为“按动作规则初始化一次”；
+- 保留 `tab / group_code / setid` 的业务导航职责，但不再让它们与读态时间默认化耦合。
+
+### 步骤 4：最后处理 `DictConfigsPage`，完成浏览态 / 写态 / 工具态三轨拆分
+
+`DictConfigsPage` 应作为本批最后一页，因为它同时包含三种时间语义：
+
+- 浏览主区的列表时间；
+- 业务写态的 `enabled_on / disabled_on`；
+- release 工具区的显式 `as_of`。
+
+这一页不能按“删掉一个日期控件”来理解，而应按“三轨拆分”实施：
+
+- 浏览主区改为 `default current`；
+- `createDictEnabledOn` / `disableDictDay` / `createValueEnabledOn` 保持业务写态独立；
+- release 表单保留显式时间，但明确归类为工具态任务参数，而不是浏览主区时间。
+
+这一步完成后，`314` 与 `316` 的边界也会更稳定：业务浏览规则留在 `314`，工具态例外留给 `316`。
+
+### 步骤 5：以 `314` 的重复样本衔接 `315/316/317`
+
+`314` 的最后一步不是继续加层，而是把结果交给后续计划承接：
+
+- 向 `DEV-PLAN-315` 提供真实重复样本与反模式清单，用于最小 helper 与 stopline 接线；
+- 向 `DEV-PLAN-316` 明确 `DictConfigsPage` release 区与嵌入式 Explain 区的工具态边界；
+- 向 `DEV-PLAN-317` 提供统一验收对象与关键回归场景。
+
+因此，`314` 的完成标准应理解为：
+
+- 四张页面已按统一减法模板收口；
+- 业务浏览页与工具态时间边界已清楚；
+- 已形成足够稳定的重复样本，但尚未在本计划内提前造层。
 
 ## 配套 stopline
 
@@ -245,20 +319,20 @@
 
 ## 交付物
 
-1. [ ] 一份 P1 页面批量收口方案（本计划）。
-2. [ ] 一份四页统一减法模板与局部特例说明。
-3. [ ] 一份按页面排序的实施顺序与验收清单。
-4. [ ] 一份前端反模式 stopline 清单，供 `DEV-PLAN-315` 承接。
+1. [x] 一份 P1 页面批量收口方案（本计划）。
+2. [x] 一份四页统一减法模板与局部特例说明。
+3. [x] 一份按页面排序的实施顺序与验收清单。
+4. [x] 一份前端反模式 stopline 清单，供 `DEV-PLAN-315` 承接。
 
 ## 验收标准
 
-- [ ] 四张 P1 页面默认进入 current，不再默认常显 `As Of`。
-- [ ] 四张页面不再存在 `as_of -> effective_date/enabled_on/disabled_on` 的自动继承链。
-- [ ] 写成功后不再自动跳日、自动切 history 或自动更新浏览态日期。
-- [ ] `JobCatalogPage` 多个 dialog 不再用 `asOf` 预填 `effectiveDate`。
-- [ ] `DictConfigsPage` 完成“浏览态 default current / release 工具态显式时间”双轨拆分。
-- [ ] 后续若抽 helper，应由 `DEV-PLAN-315` 承接，而不是在本计划内提前引入新层。
-- [ ] 文档门禁通过，且 `AGENTS.md` 文档地图已挂接本计划。
+- [x] 四张 P1 页面默认进入 current，不再默认常显 `As Of`。
+- [x] 四张页面不再存在 `as_of -> effective_date/enabled_on/disabled_on` 的自动继承链。
+- [x] 写成功后不再自动跳日、自动切 history 或自动更新浏览态日期。
+- [x] `JobCatalogPage` 多个 dialog 不再用 `asOf` 预填 `effectiveDate`。
+- [x] `DictConfigsPage` 完成“浏览态 default current / release 工具态显式时间”双轨拆分。
+- [x] 后续若抽 helper，应由 `DEV-PLAN-315` 承接，而不是在本计划内提前引入新层。
+- [x] 文档门禁通过，且 `AGENTS.md` 文档地图已挂接本计划。
 
 ## 关联文档
 

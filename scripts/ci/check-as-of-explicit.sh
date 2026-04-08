@@ -63,3 +63,5 @@ if [[ "$violations" -ne 0 ]]; then
 fi
 
 echo "[as-of-explicit] OK"
+
+./scripts/ci/check-view-as-of-frontend.sh

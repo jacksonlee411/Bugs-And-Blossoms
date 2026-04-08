@@ -18,12 +18,9 @@ import {
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { correctDictValue, disableDictValue, listDictAudit, listDictValues, type DictAuditItem, type DictValueItem } from '../../api/dicts'
 import { PageHeader } from '../../components/PageHeader'
+import { parseRequestedAsOf, todayISODate } from '../../utils/readViewState'
 
 type DetailTab = 'profile' | 'audit'
-
-function todayISO(): string {
-  return new Date().toISOString().slice(0, 10)
-}
 
 function newRequestID(prefix: string): string {
   return `${prefix}:${Date.now()}`
@@ -58,16 +55,16 @@ export function DictValueDetailsPage() {
 
   const dictCode = rawDictCode.trim().toLowerCase()
   const code = decodeURIComponent(rawCode).trim()
-  const asOf = (searchParams.get('as_of') ?? '').trim() || todayISO()
+  const asOf = parseRequestedAsOf(searchParams.get('as_of')) ?? todayISODate()
 
   const [tab, setTab] = useState<DetailTab>('profile')
   const [selectedVersionEnabledOn, setSelectedVersionEnabledOn] = useState('')
   const [selectedAuditEventUUID, setSelectedAuditEventUUID] = useState('')
   const [error, setError] = useState<string | null>(null)
 
-  const [disableValueDay, setDisableValueDay] = useState(todayISO())
+  const [disableValueDay, setDisableValueDay] = useState(todayISODate())
   const [correctLabelDraft, setCorrectLabelDraft] = useState<string | null>(null)
-  const [correctDay, setCorrectDay] = useState(todayISO())
+  const [correctDay, setCorrectDay] = useState(todayISODate())
 
   const versionsQuery = useQuery({
     enabled: dictCode.length > 0 && code.length > 0,

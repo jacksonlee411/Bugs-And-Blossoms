@@ -44,7 +44,17 @@ vi.mock('../../components/DataGridPage', () => ({
   DataGridPage: () => <div data-testid='setid-grid'>grid</div>
 }))
 vi.mock('../../components/SetIDExplainPanel', () => ({
-  SetIDExplainPanel: () => <div data-testid='setid-explain'>explain</div>
+  SetIDExplainPanel: ({
+    asOfHint,
+    asOfLabel
+  }: {
+    asOfHint?: string
+    asOfLabel?: string
+  }) => (
+    <div data-testid='setid-explain'>
+      explain|label={asOfLabel ?? '-'}|hint={asOfHint ?? '-'}
+    </div>
+  )
 }))
 vi.mock('./readViewState', async () => {
   const actual = await vi.importActual<typeof import('./readViewState')>('./readViewState')
@@ -59,7 +69,10 @@ function LocationProbe() {
   return <div data-testid='location-search'>{location.search}</div>
 }
 
-function renderPage(initialEntry = '/org/setid/registry?registry_view=editor') {
+function renderPage(
+  initialEntry = '/org/setid/registry?registry_view=editor',
+  section: 'registry' | 'explain' = 'registry'
+) {
   const queryClient = new QueryClient({
     defaultOptions: {
       queries: { retry: false },
@@ -74,8 +87,8 @@ function renderPage(initialEntry = '/org/setid/registry?registry_view=editor') {
           <Route
             path='/org/setid/registry'
             element={
-              <>
-                <SetIDGovernancePage section='registry' />
+                <>
+                <SetIDGovernancePage section={section} />
                 <LocationProbe />
               </>
             }
@@ -114,7 +127,10 @@ describe('SetIDGovernancePage', () => {
           common_view_current_label: 'Viewing current data by default',
           common_view_history: 'View History',
           common_view_current: 'View Current',
-          org_view_history_context: `Viewing history as of ${vars?.date ?? ''}`
+          org_view_history_context: `Viewing history as of ${vars?.date ?? ''}`,
+          setid_explain_as_of_hint: 'This time is only used for the current explain request and will not change the host page browsing date.',
+          setid_registry_effective_date: 'Rule Effective Date',
+          setid_registry_disable_as_of: 'Disable Date'
         })[key] ?? key
     })
 
@@ -169,5 +185,21 @@ describe('SetIDGovernancePage', () => {
     )
     expect(findDateInputByValue('2026-04-08')).toBeInTheDocument()
     expect(screen.getByText('Viewing history as of 2026-03-01')).toBeInTheDocument()
+  })
+
+  it('passes task-time hint into explain tooling section', async () => {
+    renderPage('/org/setid/registry', 'explain')
+
+    await waitFor(() => expect(screen.getByTestId('setid-explain')).toBeInTheDocument())
+    expect(screen.getByTestId('setid-explain')).toHaveTextContent(
+      'hint=This time is only used for the current explain request and will not change the host page browsing date.'
+    )
+  })
+
+  it('uses task-oriented labels for registry editor dates', async () => {
+    renderPage()
+
+    await waitFor(() => expect(screen.getByText('Rule Effective Date')).toBeInTheDocument())
+    expect(screen.queryByText('effective_date')).not.toBeInTheDocument()
   })
 })

@@ -23,6 +23,7 @@ import {
 import { useAppPreferences } from '../app/providers/AppPreferencesContext'
 import { FreeSoloDropdownField, mergeFreeSoloOptions } from './FreeSoloDropdownField'
 import { resolveApiErrorMessage } from '../errors/presentApiError'
+import { todayISODate } from '../utils/readViewState'
 
 type ExplainLevel = 'brief' | 'full'
 
@@ -30,6 +31,8 @@ interface SetIDExplainPanelProps {
   title: string
   subtitle?: string
   initialAsOf?: string
+  asOfLabel?: string
+  asOfHint?: string
   initialCapabilityKey?: string
   initialFieldKey?: string
   initialBusinessUnitID?: string
@@ -43,10 +46,6 @@ interface ExplainErrorView {
   code: string
   message: string
   traceID: string
-}
-
-function todayISO(): string {
-  return new Date().toISOString().slice(0, 10)
 }
 
 function newRequestID(prefix: string): string {
@@ -109,6 +108,8 @@ export function SetIDExplainPanel({
   title,
   subtitle,
   initialAsOf,
+  asOfLabel,
+  asOfHint,
   initialCapabilityKey,
   initialFieldKey,
   initialBusinessUnitID,
@@ -117,13 +118,15 @@ export function SetIDExplainPanel({
   defaultLevel = 'brief',
   fullPermissionKey = 'setid.explain.full'
 }: SetIDExplainPanelProps) {
-  const { hasPermission } = useAppPreferences()
+  const { hasPermission, t } = useAppPreferences()
   const canViewFull = hasPermission(fullPermissionKey)
+  const resolvedAsOfLabel = asOfLabel?.trim() || t('setid_explain_as_of_label')
+  const resolvedAsOfHint = asOfHint?.trim() || ''
 
   const [capabilityKey, setCapabilityKey] = useState(initialCapabilityKey ?? '')
   const [fieldKey, setFieldKey] = useState(initialFieldKey ?? '')
   const [businessUnitID, setBusinessUnitID] = useState(initialBusinessUnitID ?? '')
-  const [asOf, setAsOf] = useState(initialAsOf ?? todayISO())
+  const [asOf, setAsOf] = useState(initialAsOf ?? todayISODate())
   const [setID, setSetID] = useState(initialSetID ?? '')
   const [orgUnitID, setOrgUnitID] = useState(initialOrgUnitID ?? '')
   const [requestID, setRequestID] = useState(newRequestID('mui-setid-explain'))
@@ -240,6 +243,11 @@ export function SetIDExplainPanel({
               {subtitle}
             </Typography>
           ) : null}
+          {resolvedAsOfHint ? (
+            <Typography color='text.secondary' sx={{ mt: 0.5 }} variant='caption'>
+              {resolvedAsOfHint}
+            </Typography>
+          ) : null}
         </Box>
 
         {!canViewFull ? (
@@ -278,7 +286,14 @@ export function SetIDExplainPanel({
             required
             value={businessUnitID}
           />
-          <TextField label='as_of' required size='small' type='date' value={asOf} onChange={(event) => setAsOf(event.target.value)} />
+          <TextField
+            label={resolvedAsOfLabel}
+            required
+            size='small'
+            type='date'
+            value={asOf}
+            onChange={(event) => setAsOf(event.target.value)}
+          />
           <TextField label='request_id' required size='small' value={requestID} onChange={(event) => setRequestID(event.target.value)} />
           <FreeSoloDropdownField
             label='setid（可选）'

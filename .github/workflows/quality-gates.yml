@@ -13,44 +13,247 @@ jobs:
     name: Code Quality & Formatting
     runs-on: ubuntu-latest
     steps:
-      - name: Gates temporarily disabled
-        run: echo "Quality gates temporarily disabled"
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Detect relevant changes
+        id: changes
+        uses: dorny/paths-filter@v3
+        with:
+          filters: |
+            relevant:
+              - '.github/workflows/**'
+              - 'AGENTS.md'
+              - 'Makefile'
+              - '.tool-versions'
+              - 'go.mod'
+              - 'go.sum'
+              - 'docs/**/*.md'
+              - 'scripts/**'
+              - 'config/**'
+              - 'cmd/**'
+              - 'internal/**/*.go'
+              - 'modules/**/*.go'
+              - 'pkg/**/*.go'
+              - 'apps/web/**'
+              - 'internal/server/assets/web/**'
+
+      - name: Setup Go
+        if: steps.changes.outputs.relevant == 'true'
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Setup Node
+        if: steps.changes.outputs.relevant == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20.19.0
+
+      - name: Enable Corepack
+        if: steps.changes.outputs.relevant == 'true'
+        run: corepack enable
+
+      - name: Go version gate
+        if: steps.changes.outputs.relevant == 'true'
+        run: make check go-version
+
+      - name: Error message gate
+        if: steps.changes.outputs.relevant == 'true'
+        run: make check error-message
+
       - name: Assistant config single source gate
-        if: false
+        if: steps.changes.outputs.relevant == 'true'
         run: make check assistant-config-single-source
+
       - name: Assistant domain allowlist gate
-        if: false
+        if: steps.changes.outputs.relevant == 'true'
         run: make check assistant-domain-allowlist
-      - name: No scope package gate
-        if: false
-        run: make check no-scope-package
-      - name: Capability key gate
-        if: false
-        run: make check capability-key
-      - name: Capability contract gate
-        if: false
-        run: make check capability-contract
-      - name: Capability route map gate
-        if: false
-        run: make check capability-route-map
+
+      - name: Docs gate
+        if: steps.changes.outputs.relevant == 'true'
+        run: make check doc
+
+      - name: Format gate
+        if: steps.changes.outputs.relevant == 'true'
+        run: make check fmt
+
+      - name: Lint gate
+        if: steps.changes.outputs.relevant == 'true'
+        run: make check lint
+
+      - name: Assert clean worktree
+        if: steps.changes.outputs.relevant == 'true'
+        run: |
+          if [[ -n "$(git status --porcelain)" ]]; then
+            echo "[quality-gates] worktree is dirty after Code Quality & Formatting" >&2
+            git status --short
+            git diff --stat
+            exit 1
+          fi
+          echo "[quality-gates] worktree clean"
+
+      - name: No-op
+        if: steps.changes.outputs.relevant != 'true'
+        run: echo "[quality-gates] no relevant changes for Code Quality & Formatting"
 
   unit-integration-tests:
     name: Unit & Integration Tests
     runs-on: ubuntu-latest
     steps:
-      - name: Tests temporarily disabled
-        run: echo "Unit and integration tests temporarily disabled"
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Detect relevant changes
+        id: changes
+        uses: dorny/paths-filter@v3
+        with:
+          filters: |
+            relevant:
+              - '.github/workflows/**'
+              - 'Makefile'
+              - '.tool-versions'
+              - 'go.mod'
+              - 'go.sum'
+              - 'scripts/ci/**'
+              - 'scripts/db/**'
+              - 'scripts/sqlc/**'
+              - 'scripts/authz/**'
+              - 'config/coverage/**'
+              - 'cmd/**/*.go'
+              - 'internal/**/*.go'
+              - 'modules/**/*.go'
+              - 'pkg/**/*.go'
+              - '**/*.sql'
+
+      - name: Setup Go
+        if: steps.changes.outputs.relevant == 'true'
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Run tests
+        if: steps.changes.outputs.relevant == 'true'
+        run: make test
+
+      - name: Upload coverage artifact
+        if: always() && steps.changes.outputs.relevant == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-out
+          path: coverage/coverage.out
+          if-no-files-found: ignore
+
+      - name: No-op
+        if: steps.changes.outputs.relevant != 'true'
+        run: echo "[quality-gates] no relevant changes for Unit & Integration Tests"
 
   routing-gates:
     name: Routing Gates
     runs-on: ubuntu-latest
     steps:
-      - name: Routing gates temporarily disabled
-        run: echo "Routing gates temporarily disabled"
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Detect relevant changes
+        id: changes
+        uses: dorny/paths-filter@v3
+        with:
+          filters: |
+            relevant:
+              - '.github/workflows/**'
+              - 'Makefile'
+              - 'scripts/routing/**'
+              - 'cmd/**/*.go'
+              - 'internal/**/*.go'
+              - 'modules/**/*.go'
+              - 'pkg/**/*.go'
+              - 'config/**'
+
+      - name: Setup Go
+        if: steps.changes.outputs.relevant == 'true'
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Run routing gates
+        if: steps.changes.outputs.relevant == 'true'
+        run: make check routing
+
+      - name: No-op
+        if: steps.changes.outputs.relevant != 'true'
+        run: echo "[quality-gates] no relevant changes for Routing Gates"
 
   e2e-tests:
     name: E2E Tests
     runs-on: ubuntu-latest
+    timeout-minutes: 60
     steps:
-      - name: E2E temporarily disabled
-        run: echo "E2E tests temporarily disabled"
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Detect relevant changes
+        id: changes
+        uses: dorny/paths-filter@v3
+        with:
+          filters: |
+            relevant:
+              - '.github/workflows/**'
+              - 'Makefile'
+              - 'e2e/**'
+              - 'scripts/e2e/**'
+              - 'apps/web/**'
+              - 'internal/server/assets/web/**'
+              - 'cmd/**/*.go'
+              - 'internal/**/*.go'
+              - 'modules/**/*.go'
+              - 'pkg/**/*.go'
+              - 'config/**'
+
+      - name: Setup Go
+        if: steps.changes.outputs.relevant == 'true'
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Setup Node
+        if: steps.changes.outputs.relevant == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20.19.0
+
+      - name: Enable Corepack
+        if: steps.changes.outputs.relevant == 'true'
+        run: corepack enable
+
+      - name: Run E2E tests
+        if: steps.changes.outputs.relevant == 'true'
+        run: make e2e
+
+      - name: Upload Playwright report
+        if: always() && steps.changes.outputs.relevant == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: e2e/playwright-report
+          if-no-files-found: ignore
+
+      - name: Upload E2E test results
+        if: always() && steps.changes.outputs.relevant == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-test-results
+          path: e2e/test-results
+          if-no-files-found: ignore
+
+      - name: Upload E2E logs
+        if: always() && steps.changes.outputs.relevant == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-logs
+          path: e2e/_artifacts
+          if-no-files-found: ignore
+
+      - name: No-op
+        if: steps.changes.outputs.relevant != 'true'
+        run: echo "[quality-gates] no relevant changes for E2E Tests"

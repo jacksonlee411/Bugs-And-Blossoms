@@ -1,6 +1,6 @@
 # DEV-PLAN-315：View As Of 最小 helper 与反回流门禁计划
 
-**状态**: 草拟中（2026-04-08 03:10 UTC）
+**状态**: 已实施（2026-04-09，共享 helper 已提纯到 `apps/web/src/utils/readViewState.ts` / `apps/web/src/utils/readNavigation.ts`，前端反回流门禁已接入 `make check as-of-explicit`）
 
 ## 背景
 
@@ -37,10 +37,10 @@
 
 ## 目标
 
-1. [ ] 基于已完成的页面收口结果，评估并抽取最小前端纯函数 helper。
-2. [ ] 冻结 helper 的允许范围、禁止范围与命名边界，防止演化为新时间框架。
-3. [ ] 增加轻量反回流门禁，阻断 page-local 时间默认化与读写串线模式重新扩散。
-4. [ ] 为后续页面持续收口提供可复用、可解释、可测试的最小前端基建。
+1. [x] 基于已完成的页面收口结果，评估并抽取最小前端纯函数 helper。
+2. [x] 冻结 helper 的允许范围、禁止范围与命名边界，防止演化为新时间框架。
+3. [x] 增加轻量反回流门禁，阻断 page-local 时间默认化与读写串线模式重新扩散。
+4. [x] 为后续页面持续收口提供可复用、可解释、可测试的最小前端基建。
 
 ## 非目标
 
@@ -53,11 +53,11 @@
 
 本计划必须满足以下前提后方可进入实施：
 
-1. [ ] `DEV-PLAN-312` 的 `OrgUnitDetailsPage` 样板页已完成首轮收口，且未再回退到双读态。
-2. [ ] `DEV-PLAN-314` 至少完成一组真实重复样本页面的收口，优先是：
+1. [x] `DEV-PLAN-312` 的 `OrgUnitDetailsPage` 样板页已完成首轮收口，且未再回退到双读态。
+2. [x] `DEV-PLAN-314` 至少完成一组真实重复样本页面的收口，优先是：
    - `AssignmentsPage`
    - `PositionsPage`
-3. [ ] 已能证明重复样本不是“看起来相似”，而是至少在两个页面中出现了相同的纯函数需求。
+3. [x] 已能证明重复样本不是“看起来相似”，而是至少在两个页面中出现了相同的纯函数需求。
 
 说明：
 
@@ -69,8 +69,8 @@
 
 当前样板：
 
-- `readViewState.ts`
-- `orgReadNavigation.ts`
+- `apps/web/src/utils/readViewState.ts`
+- `apps/web/src/utils/readNavigation.ts`
 
 它们已经证明以下能力可以被提纯为小函数：
 
@@ -87,11 +87,10 @@
 
 当前重复样本包括：
 
-- page-local `todayISO()`
-- page-local `parseDateOrDefault()`
-- page-local `fallbackAsOf`
-- `effectiveDate` 初始化直接取 `asOf`
-- `useEffect(() => setEffectiveDate(asOf), [asOf])`
+- 已被 `314` 清除的 page-local `todayISO()` / `parseDateOrDefault()` / `fallbackAsOf`
+- 已被 `314` 清除的 `effectiveDate` 初始化直接取 `asOf`
+- 已被 `314` 清除的 `useEffect(() => setEffectiveDate(asOf), [asOf])`
+- 工具态页面中仍需受控保留的显式时间能力（如 `SetIDExplainPanel`）
 
 结论：
 
@@ -161,12 +160,12 @@
 
 本计划建议仅评估以下最小候选项：
 
-1. [ ] `readViewState` 通用化
-   - 从 `org` 范围提升为更通用的页面读态解析 helper
-2. [ ] `readNavigation` 通用化
-   - 将“current 不带 `as_of` / history 才带 `as_of`”提纯成更通用的 search params builder
-3. [ ] `trim / omit-empty` 一类 URL 参数纯函数
-   - 仅当已在两个以上页面出现相同写法时才抽
+1. [x] `readViewState` 通用化
+   - 已从 `org` 范围提升为 `apps/web/src/utils/readViewState.ts`
+2. [x] `readNavigation` 通用化
+   - 已将“current 不带 `as_of` / history 才带 `as_of`”提纯到 `apps/web/src/utils/readNavigation.ts`
+3. [x] `trim / omit-empty` 一类 URL 参数纯函数
+   - 已以 `trimToNull()` 与 `buildReadSearchParams()` 形式落地
 
 不建议列入首批候选：
 
@@ -213,13 +212,26 @@
 
 ## 实施步骤
 
-1. [ ] 确认 `312/314` 的前置页面已形成真实重复样本。
-2. [ ] 盘点现有 `org` 样板与 P1 页面重复逻辑，输出“可抽 / 不可抽”分类表。
-3. [ ] 抽取首批最小纯函数 helper，并保持命名与职责边界最小化。
-4. [ ] 为 helper 增加直接测试，优先围绕纯函数与导航参数构建行为。
-5. [ ] 接入轻量反模式门禁，先阻断最明确的回流模式。
-6. [ ] 为工具态显式时间建立最小 allowlist，避免误伤 `DEV-PLAN-316` 范围。
-7. [ ] 形成“替代路径”说明：发现旧模式时，开发者应改用什么，而不是只看到门禁报错。
+1. [x] 确认 `312/314` 的前置页面已形成真实重复样本。
+2. [x] 盘点现有 `org` 样板与 P1 页面重复逻辑，输出“可抽 / 不可抽”分类表。
+3. [x] 抽取首批最小纯函数 helper，并保持命名与职责边界最小化。
+4. [x] 为 helper 增加直接测试，优先围绕纯函数与导航参数构建行为。
+5. [x] 接入轻量反模式门禁，先阻断最明确的回流模式。
+6. [x] 为工具态显式时间建立最小 allowlist，避免误伤 `DEV-PLAN-316` 范围。
+7. [x] 形成“替代路径”说明：发现旧模式时，开发者应改用什么，而不是只看到门禁报错。
+
+本次实现落点：
+
+- 共享 helper：
+  - `apps/web/src/utils/readViewState.ts`
+  - `apps/web/src/utils/readNavigation.ts`
+- 兼容性薄封装：
+  - `apps/web/src/pages/org/readViewState.ts`
+  - `apps/web/src/pages/org/orgReadNavigation.ts`
+- 门禁：
+  - `scripts/ci/check-view-as-of-frontend.sh`
+  - `scripts/ci/view-as-of-frontend-allowlist.txt`
+  - 接线入口：`scripts/ci/check-as-of-explicit.sh`
 
 ## 测试与覆盖率
 
@@ -243,19 +255,19 @@
 
 ## 交付物
 
-1. [ ] 一份最小 helper 候选清单与“可抽/不可抽”分类表。
-2. [ ] 一份 helper 职责边界说明与命名约束。
-3. [ ] 一份前端反模式门禁清单与 allowlist 规则说明。
-4. [ ] 一组 helper 直接测试与门禁自测说明。
+1. [x] 一份最小 helper 候选清单与“可抽/不可抽”分类表。
+2. [x] 一份 helper 职责边界说明与命名约束。
+3. [x] 一份前端反模式门禁清单与 allowlist 规则说明。
+4. [x] 一组 helper 直接测试与门禁自测说明。
 
 ## 验收标准
 
-- [ ] 首批 helper 仍可在 5 分钟内解释清楚，不引入新的时间框架或全局状态层。
-- [ ] `todayISO()` / `parseDateOrDefault()` / `fallbackAsOf` 等旧模式在业务浏览页不再新增。
-- [ ] `effectiveDate: asOf` 与 `setEffectiveDate(asOf)` 一类读写串线模式被门禁阻断。
-- [ ] 工具态显式时间能力可以通过最小 allowlist 保留，不会误伤 `DEV-PLAN-316` 范围。
-- [ ] helper 测试优先是直接测试，而不是依赖大而重的页面交互脚本间接覆盖。
-- [ ] 文档门禁通过，且 `AGENTS.md` 文档地图已挂接本计划。
+- [x] 首批 helper 仍可在 5 分钟内解释清楚，不引入新的时间框架或全局状态层。
+- [x] `todayISO()` / `parseDateOrDefault()` / `fallbackAsOf` 等旧模式在业务浏览页不再新增。
+- [x] `effectiveDate: asOf` 与 `setEffectiveDate(asOf)` 一类读写串线模式被门禁阻断。
+- [x] 工具态显式时间能力可以通过最小 allowlist 保留，不会误伤 `DEV-PLAN-316` 范围。
+- [x] helper 测试优先是直接测试，而不是依赖大而重的页面交互脚本间接覆盖。
+- [x] 文档门禁通过，且 `AGENTS.md` 文档地图已挂接本计划。
 
 ## 关联文档
 
