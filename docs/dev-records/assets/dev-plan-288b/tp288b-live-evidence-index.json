@@ -1,7 +1,7 @@
 {
   "plan": "DEV-PLAN-288B",
   "status": "passed",
-  "updated_at": "2026-04-08T14:49:22.701Z",
+  "updated_at": "2026-04-08T21:52:08.426Z",
   "formal_entry": "/app/assistant/librechat",
   "stale_on": [
     "240C runtime gate semantics changed",
@@ -18,7 +18,7 @@
       "id": "tp288b-case-1",
       "scenario": "create -> confirm -> commit(receipt) -> poll(task) -> refresh(conversation)",
       "command": "pnpm --dir /home/lee/Projects/Bugs-And-Blossoms/e2e exec playwright test tests/tp288b-librechat-live-task-receipt-contract.spec.js --workers=1 --trace on",
-      "executed_at": "2026-04-08T14:48:27.907Z",
+      "executed_at": "2026-04-08T21:51:30.647Z",
       "result": "passed",
       "artifacts": [
         "docs/dev-records/assets/dev-plan-288b/tp288b-case-1-page.png",
@@ -30,21 +30,21 @@
       "assertions": {
         "plan": "DEV-PLAN-288B",
         "case_id": "tp288b-case-1",
-        "tenant_id": "14cd0fb7-8eb5-4b6a-99a5-ce856aa1d422",
+        "tenant_id": "842192d6-13bf-434f-9ee7-2f2aea68ca53",
         "scenario": "create -> confirm -> commit(receipt) -> poll(task) -> refresh(conversation)",
         "formal_entry": "/app/assistant/librechat",
         "command": "pnpm --dir /home/lee/Projects/Bugs-And-Blossoms/e2e exec playwright test tests/tp288b-librechat-live-task-receipt-contract.spec.js --workers=1 --trace on",
-        "captured_at": "2026-04-08T14:49:20.829Z",
-        "conversation_id": "conv_f4ea7ad0d86448deb5aaf1683c19f95f",
-        "turn_id": "turn_8773d6f65a0e490c9d552351c059c32d",
+        "captured_at": "2026-04-08T21:52:06.684Z",
+        "conversation_id": "conv_505c05cead714bcba5cd7b36ef6e5567",
+        "turn_id": "turn_0aef368b0d314fceba096d7b1bfc4b38",
         "commit_status": 202,
         "receipt": {
-          "task_id": "db82cae8-12bd-49e1-88e8-6cea481b757e",
-          "poll_uri": "/internal/assistant/tasks/db82cae8-12bd-49e1-88e8-6cea481b757e",
+          "task_id": "a4c5ae4e-6a03-4803-91fd-5e570b018b52",
+          "poll_uri": "/internal/assistant/tasks/a4c5ae4e-6a03-4803-91fd-5e570b018b52",
           "task_type": "assistant_async_plan",
           "status": "queued",
-          "workflow_id": "assistant_async_orchestration_v1:14cd0fb7-8eb5-4b6a-99a5-ce856aa1d422:conv_f4ea7ad0d86448deb5aaf1683c19f95f:turn_8773d6f65a0e490c9d552351c059c32d:assistant_b4ba1cac361f45f08f2f7330b4e78488",
-          "submitted_at": "2026-04-08T14:49:18.699945715Z"
+          "workflow_id": "assistant_async_orchestration_v1:842192d6-13bf-434f-9ee7-2f2aea68ca53:conv_505c05cead714bcba5cd7b36ef6e5567:turn_0aef368b0d314fceba096d7b1bfc4b38:assistant_bfa4317b29d448cd9d6fe13247d6b591",
+          "submitted_at": "2026-04-08T21:52:05.663278583Z"
         },
         "poll_status_sequence": [
           "succeeded"
@@ -71,11 +71,11 @@
         },
         "final_bubble": {
           "count": 1,
-          "bindingKey": "conv_f4ea7ad0d86448deb5aaf1683c19f95f::turn_8773d6f65a0e490c9d552351c059c32d::assistant_b4ba1cac361f45f08f2f7330b4e78488",
-          "conversationId": "conv_f4ea7ad0d86448deb5aaf1683c19f95f",
-          "turnId": "turn_8773d6f65a0e490c9d552351c059c32d",
-          "requestId": "assistant_b4ba1cac361f45f08f2f7330b4e78488",
-          "text": "上级组织：AI治理办公室；新建组织：人力资源部288B733531；生效日期：2026-01-01 task_id: db82cae8-12bd-49e1-88e8-6cea481b757e · succeeded Selected: AI治理办公室 org_code: O000001 parent_org_code: TP288BAIGOV effective_date: 2026-01-01 event_type: CREATE"
+          "bindingKey": "conv_505c05cead714bcba5cd7b36ef6e5567::turn_0aef368b0d314fceba096d7b1bfc4b38::assistant_bfa4317b29d448cd9d6fe13247d6b591",
+          "conversationId": "conv_505c05cead714bcba5cd7b36ef6e5567",
+          "turnId": "turn_0aef368b0d314fceba096d7b1bfc4b38",
+          "requestId": "assistant_bfa4317b29d448cd9d6fe13247d6b591",
+          "text": "上级组织：AI治理办公室；新建组织：人力资源部288B107339；生效日期：2026-01-01 task_id: a4c5ae4e-6a03-4803-91fd-5e570b018b52 · succeeded Selected: AI治理办公室 org_code: O000001 parent_org_code: TP288BAIGOV effective_date: 2026-01-01 event_type: CREATE"
         },
         "passed": true
       },

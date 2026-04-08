@@ -70,13 +70,9 @@ func handlePositionsOptionsAPI(w http.ResponseWriter, r *http.Request, orgStore 
 		return
 	}
 
-	asOf := strings.TrimSpace(r.URL.Query().Get("as_of"))
-	if asOf == "" {
-		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "invalid_as_of", "as_of required")
-		return
-	}
-	if _, err := time.Parse("2006-01-02", asOf); err != nil {
-		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "invalid_as_of", "invalid as_of")
+	asOf, err := parseRequiredQueryDay(r, "as_of")
+	if err != nil {
+		writeInternalDayFieldError(w, r, err)
 		return
 	}
 
@@ -155,13 +151,9 @@ func handlePositionsAPI(w http.ResponseWriter, r *http.Request, orgResolver OrgU
 		return
 	}
 
-	asOf := strings.TrimSpace(r.URL.Query().Get("as_of"))
-	if asOf == "" {
-		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "invalid_as_of", "as_of required")
-		return
-	}
-	if _, err := time.Parse("2006-01-02", asOf); err != nil {
-		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "invalid_as_of", "invalid as_of")
+	asOf, err := parseRequiredQueryDay(r, "as_of")
+	if err != nil {
+		writeInternalDayFieldError(w, r, err)
 		return
 	}
 	if deprecatedField := findDeprecatedField(r.URL.Query(), "org_unit_id", "position_id", "reports_to_position_id", "job_profile_id"); deprecatedField != "" {
@@ -266,15 +258,12 @@ func handlePositionsAPI(w http.ResponseWriter, r *http.Request, orgResolver OrgU
 			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "bad_json", "bad json")
 			return
 		}
-		req.EffectiveDate = strings.TrimSpace(req.EffectiveDate)
-		if req.EffectiveDate == "" {
-			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "invalid_effective_date", "effective_date required")
+		effectiveDate, err := parseRequiredDay(req.EffectiveDate, "effective_date")
+		if err != nil {
+			writeInternalDayFieldError(w, r, err)
 			return
 		}
-		if _, err := time.Parse("2006-01-02", req.EffectiveDate); err != nil {
-			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "invalid_effective_date", "invalid effective_date")
-			return
-		}
+		req.EffectiveDate = effectiveDate
 
 		orgUnitID := ""
 		if strings.TrimSpace(req.OrgCode) != "" {

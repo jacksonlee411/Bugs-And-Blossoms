@@ -41,17 +41,18 @@ func handleOrgUnitsBusinessUnitAPI(w http.ResponseWriter, r *http.Request, dep a
 			}
 
 			req.OrgUnitID = strings.TrimSpace(req.OrgUnitID)
-			req.EffectiveDate = strings.TrimSpace(req.EffectiveDate)
 			req.RequestID = strings.TrimSpace(req.RequestID)
-			if req.EffectiveDate == "" {
-				return "", "", newBadRequestError("effective_date required")
+			effectiveDate, err := parseRequiredDay(req.EffectiveDate, "effective_date")
+			if err != nil {
+				return "", "", err
 			}
+			req.EffectiveDate = effectiveDate
 			if req.OrgUnitID != "" || strings.TrimSpace(req.OrgCode) == "" {
 				return "", "", newBadRequestError("org_code required")
 			}
 
 			initiatorUUID := orgUnitInitiatorUUID(ctx, tenantID)
-			err := writeSvc.SetBusinessUnit(ctx, tenantID, orgunitservices.SetBusinessUnitRequest{
+			err = writeSvc.SetBusinessUnit(ctx, tenantID, orgunitservices.SetBusinessUnitRequest{
 				EffectiveDate:  req.EffectiveDate,
 				OrgCode:        req.OrgCode,
 				IsBusinessUnit: req.IsBusinessUnit,
@@ -306,10 +307,7 @@ type orgUnitRescindOrgAPIRequest struct {
 	Reason    string `json:"reason"`
 }
 
-var (
-	errOrgUnitBadJSON      = errors.New("orgunit_bad_json")
-	errOrgUnitAsOfRequired = errors.New("orgunit_as_of_required")
-)
+var errOrgUnitBadJSON = errors.New("orgunit_bad_json")
 
 const (
 	orgUnitErrCodeInvalid                 = "ORG_CODE_INVALID"
@@ -684,13 +682,9 @@ func handleOrgUnitsAPI(w http.ResponseWriter, r *http.Request, store OrgUnitStor
 
 	switch r.Method {
 	case http.MethodGet:
-		asOf, err := orgUnitAPIAsOf(r)
+		asOf, err := parseRequiredQueryDay(r, "as_of")
 		if err != nil {
-			message := "invalid as_of"
-			if errors.Is(err, errOrgUnitAsOfRequired) {
-				message = "as_of required"
-			}
-			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "invalid_as_of", message)
+			writeInternalDayFieldError(w, r, err)
 			return
 		}
 		q := r.URL.Query()
@@ -870,7 +864,12 @@ func handleOrgUnitsAPI(w http.ResponseWriter, r *http.Request, store OrgUnitStor
 			writeOrgUnitServiceError(w, r, newBadRequestError(orgUnitErrPatchFieldNotAllowed), "orgunit_create_failed")
 			return
 		}
-		req.EffectiveDate = orgUnitDefaultDate(req.EffectiveDate)
+		effectiveDate, err := parseRequiredDay(req.EffectiveDate, "effective_date")
+		if err != nil {
+			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "invalid_effective_date", err.Error())
+			return
+		}
+		req.EffectiveDate = effectiveDate
 
 		result, err := writeSvc.Create(r.Context(), tenant.ID, orgunitservices.CreateOrgUnitRequest{
 			EffectiveDate:  req.EffectiveDate,
@@ -906,13 +905,9 @@ func handleOrgUnitsDetailsAPI(w http.ResponseWriter, r *http.Request, store OrgU
 		return
 	}
 
-	asOf, err := orgUnitAPIAsOf(r)
+	asOf, err := parseRequiredQueryDay(r, "as_of")
 	if err != nil {
-		message := "invalid as_of"
-		if errors.Is(err, errOrgUnitAsOfRequired) {
-			message = "as_of required"
-		}
-		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "invalid_as_of", message)
+		writeInternalDayFieldError(w, r, err)
 		return
 	}
 	includeDisabled := parseIncludeDisabled(r.URL.Query().Get("include_disabled"))
@@ -1149,13 +1144,9 @@ func handleOrgUnitsSearchAPI(w http.ResponseWriter, r *http.Request, store OrgUn
 		return
 	}
 
-	asOf, err := orgUnitAPIAsOf(r)
+	asOf, err := parseRequiredQueryDay(r, "as_of")
 	if err != nil {
-		message := "invalid as_of"
-		if errors.Is(err, errOrgUnitAsOfRequired) {
-			message = "as_of required"
-		}
-		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "invalid_as_of", message)
+		writeInternalDayFieldError(w, r, err)
 		return
 	}
 	includeDisabled := parseIncludeDisabled(r.URL.Query().Get("include_disabled"))
@@ -1207,9 +1198,13 @@ func handleOrgUnitsRenameAPI(w http.ResponseWriter, r *http.Request, writeSvc or
 		if len(req.ExtLabelsSnapshot) > 0 {
 			return "", "", newBadRequestError(orgUnitErrPatchFieldNotAllowed)
 		}
-		req.EffectiveDate = orgUnitDefaultDate(req.EffectiveDate)
+		effectiveDate, err := parseRequiredDay(req.EffectiveDate, "effective_date")
+		if err != nil {
+			return "", "", err
+		}
+		req.EffectiveDate = effectiveDate
 		initiatorUUID := orgUnitInitiatorUUID(ctx, tenantID)
-		err := writeSvc.Rename(ctx, tenantID, orgunitservices.RenameOrgUnitRequest{
+		err = writeSvc.Rename(ctx, tenantID, orgunitservices.RenameOrgUnitRequest{
 			EffectiveDate: req.EffectiveDate,
 			OrgCode:       req.OrgCode,
 			NewName:       req.NewName,
@@ -1231,9 +1226,13 @@ func handleOrgUnitsMoveAPI(w http.ResponseWriter, r *http.Request, writeSvc orgu
 		if len(req.ExtLabelsSnapshot) > 0 {
 			return "", "", newBadRequestError(orgUnitErrPatchFieldNotAllowed)
 		}
-		req.EffectiveDate = orgUnitDefaultDate(req.EffectiveDate)
+		effectiveDate, err := parseRequiredDay(req.EffectiveDate, "effective_date")
+		if err != nil {
+			return "", "", err
+		}
+		req.EffectiveDate = effectiveDate
 		initiatorUUID := orgUnitInitiatorUUID(ctx, tenantID)
-		err := writeSvc.Move(ctx, tenantID, orgunitservices.MoveOrgUnitRequest{
+		err = writeSvc.Move(ctx, tenantID, orgunitservices.MoveOrgUnitRequest{
 			EffectiveDate:    req.EffectiveDate,
 			OrgCode:          req.OrgCode,
 			NewParentOrgCode: req.NewParentOrgCode,
@@ -1255,9 +1254,13 @@ func handleOrgUnitsDisableAPI(w http.ResponseWriter, r *http.Request, writeSvc o
 		if len(req.ExtLabelsSnapshot) > 0 {
 			return "", "", newBadRequestError(orgUnitErrPatchFieldNotAllowed)
 		}
-		req.EffectiveDate = orgUnitDefaultDate(req.EffectiveDate)
+		effectiveDate, err := parseRequiredDay(req.EffectiveDate, "effective_date")
+		if err != nil {
+			return "", "", err
+		}
+		req.EffectiveDate = effectiveDate
 		initiatorUUID := orgUnitInitiatorUUID(ctx, tenantID)
-		err := writeSvc.Disable(ctx, tenantID, orgunitservices.DisableOrgUnitRequest{
+		err = writeSvc.Disable(ctx, tenantID, orgunitservices.DisableOrgUnitRequest{
 			EffectiveDate: req.EffectiveDate,
 			OrgCode:       req.OrgCode,
 			Ext:           req.Ext,
@@ -1278,9 +1281,13 @@ func handleOrgUnitsEnableAPI(w http.ResponseWriter, r *http.Request, writeSvc or
 		if len(req.ExtLabelsSnapshot) > 0 {
 			return "", "", newBadRequestError(orgUnitErrPatchFieldNotAllowed)
 		}
-		req.EffectiveDate = orgUnitDefaultDate(req.EffectiveDate)
+		effectiveDate, err := parseRequiredDay(req.EffectiveDate, "effective_date")
+		if err != nil {
+			return "", "", err
+		}
+		req.EffectiveDate = effectiveDate
 		initiatorUUID := orgUnitInitiatorUUID(ctx, tenantID)
-		err := writeSvc.Enable(ctx, tenantID, orgunitservices.EnableOrgUnitRequest{
+		err = writeSvc.Enable(ctx, tenantID, orgunitservices.EnableOrgUnitRequest{
 			EffectiveDate: req.EffectiveDate,
 			OrgCode:       req.OrgCode,
 			Ext:           req.Ext,
@@ -1507,6 +1514,9 @@ func handleOrgUnitWriteAction(
 			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "bad_json", "bad json")
 			return
 		}
+		if writeInternalDayFieldError(w, r, err) {
+			return
+		}
 		writeOrgUnitServiceError(w, r, err, defaultCode)
 		return
 	}
@@ -1522,25 +1532,6 @@ func handleOrgUnitWriteAction(
 		"org_code":       normalizedCode,
 		"effective_date": effectiveDate,
 	})
-}
-
-func orgUnitAPIAsOf(r *http.Request) (string, error) {
-	asOf := strings.TrimSpace(r.URL.Query().Get("as_of"))
-	if asOf == "" {
-		return "", errOrgUnitAsOfRequired
-	}
-	if _, err := time.Parse("2006-01-02", asOf); err != nil {
-		return "", err
-	}
-	return asOf, nil
-}
-
-func orgUnitDefaultDate(raw string) string {
-	value := strings.TrimSpace(raw)
-	if value == "" {
-		return time.Now().UTC().Format("2006-01-02")
-	}
-	return value
 }
 
 func writeOrgUnitResult(w http.ResponseWriter, r *http.Request, status int, result orgunittypes.OrgUnitResult) {

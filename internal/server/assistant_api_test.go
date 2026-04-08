@@ -196,6 +196,54 @@ func TestAssistantConversationFlow_CommitResultVisibleInOrgList(t *testing.T) {
 	}
 }
 
+func TestAssistantConversationFlow_DeferredCandidateLookupConfirmResolvesSingleCandidate(t *testing.T) {
+	wd := mustGetwd(t)
+	allowlistPath := mustAllowlistPathFromWd(t, wd)
+	t.Setenv("ALLOWLIST_PATH", allowlistPath)
+	t.Setenv("AUTHZ_MODE", "disabled")
+	t.Setenv("AUTHZ_UNSAFE_ALLOW_DISABLED", "1")
+	t.Setenv("OPENAI_API_KEY", "dummy")
+
+	orgStore := newOrgUnitMemoryStore()
+	tenantID := "00000000-0000-0000-0000-000000000001"
+	if _, err := orgStore.CreateNodeCurrent(context.Background(), tenantID, "2026-01-01", "FLOWER-A", "鲜花组织", "", true); err != nil {
+		t.Fatal(err)
+	}
+	svc := newAssistantConversationService(orgStore, assistantWriteServiceStub{store: orgStore})
+	svc.modelGateway = assistantTestStaticSemanticGateway(`{"action":"create_orgunit","route_kind":"business_action","intent_id":"org.orgunit_create","parent_ref_text":"鲜花组织","entity_name":"延迟候选验证部","effective_date":"2026-01-01","readiness":"ready_for_dry_run","retrieval_requests":[{"kind":"candidate_lookup","slot":"parent_ref_text","ref_text":"鲜花组织"}]}`)
+	principal := Principal{ID: "00000000-0000-0000-0000-0000000000ac", RoleSlug: "tenant-admin"}
+	conversation := svc.createConversation(tenantID, principal)
+	created, err := svc.createTurn(context.Background(), tenantID, principal, conversation.ConversationID, "在鲜花组织之下，新建一个名为延迟候选验证部的部门，成立日期是2026年1月1日。")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(created.Turns) != 1 {
+		t.Fatalf("turn count=%d", len(created.Turns))
+	}
+	turn := created.Turns[0]
+	if turn.Phase != assistantPhaseAwaitCommitConfirm {
+		t.Fatalf("expected await_commit_confirm, got=%s", turn.Phase)
+	}
+	if turn.ResolvedCandidateID != "" || turn.ResolutionSource != "deferred_candidate_lookup" {
+		t.Fatalf("unexpected deferred turn=%+v", turn)
+	}
+
+	confirmed, err := svc.confirmTurn(tenantID, principal, conversation.ConversationID, turn.TurnID, "")
+	if err != nil {
+		t.Fatalf("confirm err=%v", err)
+	}
+	turn = confirmed.Turns[0]
+	if turn.State != assistantStateConfirmed {
+		t.Fatalf("turn state=%s", turn.State)
+	}
+	if turn.ResolvedCandidateID != "FLOWER-A" || turn.ResolutionSource != assistantResolutionAuto {
+		t.Fatalf("unexpected resolved turn=%+v", turn)
+	}
+	if len(turn.Candidates) != 1 || turn.Candidates[0].CandidateID != "FLOWER-A" {
+		t.Fatalf("unexpected candidates=%+v", turn.Candidates)
+	}
+}
+
 func asString(value any) string {
 	text, _ := value.(string)
 	return text

@@ -696,12 +696,12 @@ func TestHandleDictValuesMutationsAndAudit_Coverage(t *testing.T) {
 func TestDictAPIHelpers_Coverage(t *testing.T) {
 	t.Run("requiredAsOf and isDate", func(t *testing.T) {
 		reqBad := httptest.NewRequest(http.MethodGet, "/x?as_of=bad", nil)
-		if _, ok := requiredAsOf(reqBad); ok {
+		if _, err := requiredAsOf(reqBad); err == nil {
 			t.Fatal("expected invalid")
 		}
 		reqOK := httptest.NewRequest(http.MethodGet, "/x?as_of=2026-01-01", nil)
-		if got, ok := requiredAsOf(reqOK); !ok || got != "2026-01-01" {
-			t.Fatalf("got=%q ok=%v", got, ok)
+		if got, err := requiredAsOf(reqOK); err != nil || got != "2026-01-01" {
+			t.Fatalf("got=%q err=%v", got, err)
 		}
 		if isDate("") || isDate("bad") || !isDate("2026-01-01") {
 			t.Fatal("isDate unexpected")

@@ -1,64 +1,64 @@
 {
   "case_id": 1,
-  "tenant_id": "89bff679-7f8a-46e5-8c8d-b547a28c8bea",
-  "conversation_id": "conv_23a1b2f8620049dc947ee0454b45973a",
+  "tenant_id": "46a47ccf-958f-4543-a8d3-78647c7de90f",
+  "conversation_id": "conv_4ea38c5784564fdeb384e944f3a48e11",
   "snapshots": [
     {
       "step": 1,
       "input": "你好",
       "bubble": {
         "count": 1,
-        "bindingKey": "conv_23a1b2f8620049dc947ee0454b45973a::turn_e9f294ead4d44bd2b425f22237518821::assistant_f3891031a4d24401bf68f4ab8b7567fd",
-        "conversationId": "conv_23a1b2f8620049dc947ee0454b45973a",
-        "turnId": "turn_e9f294ead4d44bd2b425f22237518821",
-        "requestId": "assistant_f3891031a4d24401bf68f4ab8b7567fd",
-        "text": "你好，我是企业组织变更助手，可以帮你创建或调整部门结构，比如新建部门、改名、调整上级、启用停用等。你现在是想做哪一类操作？"
+        "bindingKey": "conv_4ea38c5784564fdeb384e944f3a48e11::turn_75467817de2c49799645475de80c5125::assistant_874f424c45c64785841f88f4f5b26007",
+        "conversationId": "conv_4ea38c5784564fdeb384e944f3a48e11",
+        "turnId": "turn_75467817de2c49799645475de80c5125",
+        "requestId": "assistant_874f424c45c64785841f88f4f5b26007",
+        "text": "你好，我是组织变更助手，可以帮你创建或调整部门结构，比如新建部门、改名、迁移上下级关系、启用/停用等。你现在想做什么操作？"
       },
       "conversation": {
-        "conversation_id": "conv_23a1b2f8620049dc947ee0454b45973a",
-        "tenant_id": "89bff679-7f8a-46e5-8c8d-b547a28c8bea",
-        "actor_id": "a898cb18-98b1-440b-974b-f196c784405c",
+        "conversation_id": "conv_4ea38c5784564fdeb384e944f3a48e11",
+        "tenant_id": "46a47ccf-958f-4543-a8d3-78647c7de90f",
+        "actor_id": "725124e0-4f6c-4909-8ffe-8ec437b94ee4",
         "actor_role": "tenant-admin",
         "state": "validated",
         "current_phase": "idle",
         "state_transitions": [
           {
-            "id": 1472,
-            "request_id": "assistant_4a6a10be1a89475ca03a01e19b621a0f",
-            "trace_id": "1e365b7722c240e891874309327475d8",
+            "id": 1623,
+            "request_id": "assistant_b204e3ee436e4a9d9befa5c3b7b2987e",
+            "trace_id": "87cba31735614f21857ef88107240186",
             "from_state": "init",
             "to_state": "validated",
             "from_phase": "init",
             "to_phase": "idle",
             "reason_code": "conversation_created",
-            "actor_id": "a898cb18-98b1-440b-974b-f196c784405c",
-            "changed_at": "2026-04-08T22:49:42.898133+08:00"
+            "actor_id": "725124e0-4f6c-4909-8ffe-8ec437b94ee4",
+            "changed_at": "2026-04-09T05:52:14.65283+08:00"
           },
           {
-            "id": 1474,
-            "turn_id": "turn_e9f294ead4d44bd2b425f22237518821",
-            "request_id": "assistant_f3891031a4d24401bf68f4ab8b7567fd",
-            "trace_id": "c503c5c1fffe4a8a9cd46ed6d893a330",
+            "id": 1625,
+            "turn_id": "turn_75467817de2c49799645475de80c5125",
+            "request_id": "assistant_874f424c45c64785841f88f4f5b26007",
+            "trace_id": "a9b5ff638bbd4b79bb15778ed6299c46",
             "from_state": "init",
             "to_state": "validated",
             "from_phase": "idle",
             "to_phase": "idle",
             "reason_code": "turn_created",
-            "actor_id": "a898cb18-98b1-440b-974b-f196c784405c",
-            "changed_at": "2026-04-08T14:49:47.76465749Z"
+            "actor_id": "725124e0-4f6c-4909-8ffe-8ec437b94ee4",
+            "changed_at": "2026-04-08T21:52:17.970854898Z"
           }
         ],
-        "created_at": "2026-04-08T22:49:42.898133+08:00",
-        "updated_at": "2026-04-08T14:49:47.76465749Z",
+        "created_at": "2026-04-09T05:52:14.65283+08:00",
+        "updated_at": "2026-04-08T21:52:17.970854898Z",
         "turns": [
           {
-            "turn_id": "turn_e9f294ead4d44bd2b425f22237518821",
+            "turn_id": "turn_75467817de2c49799645475de80c5125",
             "user_input": "你好",
             "state": "validated",
             "phase": "idle",
             "risk_tier": "low",
-            "request_id": "assistant_f3891031a4d24401bf68f4ab8b7567fd",
-            "trace_id": "c503c5c1fffe4a8a9cd46ed6d893a330",
+            "request_id": "assistant_874f424c45c64785841f88f4f5b26007",
+            "trace_id": "a9b5ff638bbd4b79bb15778ed6299c46",
             "policy_version": "2026-02-23",
             "composition_version": "2026-02-23",
             "mapping_version": "2026-02-23",
@@ -68,8 +68,8 @@
               "route_kind": "chitchat",
               "route_catalog_version": "2026-03-11.v2",
               "intent_schema_version": "assistant.intent.v1",
-              "context_hash": "2e915bd932bb599c39bb7e3037fa3933135b2e86007216574b0a7c59d4871373",
-              "intent_hash": "382d134474c3cdcb7e4586a00895bbb1008fcbc4f3a2ca7eef17c0b2463b604c"
+              "context_hash": "b3cf69d7ad743e03b4f7b7fc9e58cd15ae378f8a2251eac8a9e7371710ba960c",
+              "intent_hash": "956464ec0df4ec946a60ecb7ce8a7ff060043d48983b83d1affb1077b693f9bf"
             },
             "route_decision": {
               "route_kind": "chitchat",
@@ -99,7 +99,7 @@
               "context_template_version": "plan_context_v1",
               "reply_guidance_version": "2026-03-11.v1+2026-03-11.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1",
               "confirm_ttl_seconds": 900,
-              "expires_at": "2026-04-08T15:04:47Z",
+              "expires_at": "2026-04-08T22:07:17Z",
               "skill_execution_plan": {
                 "selected_skills": null,
                 "execution_order": null,
@@ -113,7 +113,7 @@
             },
             "candidates": null,
             "ambiguity_count": 0,
-            "confidence": 0.3,
+            "confidence": 0.65,
             "dry_run": {
               "diff": null,
               "explain": "这是知识问答场景，我会先给出说明，不会触发业务提交。",
@@ -125,14 +125,14 @@
                 "state": "not_requested"
               },
               "would_commit": false,
-              "plan_hash": "452b430ba7ae13124c44e7a70a91a06e684046335ec7c7464ed91d365dc02b36"
+              "plan_hash": "2b729b9368cdb2e45edec08df1caa5a27ecf972364d0ed31c7d783cf11251d3f"
             },
             "commit_reply": {
               "outcome": "pending",
-              "message": "你好，我是企业组织变更助手，可以帮你创建或调整部门结构，比如新建部门、改名、调整上级、启用停用等。你现在是想做哪一类操作？"
+              "message": "你好，我是组织变更助手，可以帮你创建或调整部门结构，比如新建部门、改名、迁移上下级关系、启用/停用等。你现在想做什么操作？"
             },
             "reply_nlg": {
-              "text": "你好，我是企业组织变更助手，可以帮你创建或调整部门结构，比如新建部门、改名、调整上级、启用停用等。你现在是想做哪一类操作？",
+              "text": "你好，我是组织变更助手，可以帮你创建或调整部门结构，比如新建部门、改名、迁移上下级关系、启用/停用等。你现在想做什么操作？",
               "kind": "message",
               "stage": "draft",
               "reply_model_name": "gpt-5.1",
@@ -142,19 +142,19 @@
               "conversation_id": "",
               "turn_id": ""
             },
-            "created_at": "2026-04-08T14:49:47.76465749Z",
-            "updated_at": "2026-04-08T14:49:47.76465749Z"
+            "created_at": "2026-04-08T21:52:17.970854898Z",
+            "updated_at": "2026-04-08T21:52:17.970854898Z"
           }
         ]
       },
       "latest_turn": {
-        "turn_id": "turn_e9f294ead4d44bd2b425f22237518821",
+        "turn_id": "turn_75467817de2c49799645475de80c5125",
         "user_input": "你好",
         "state": "validated",
         "phase": "idle",
         "risk_tier": "low",
-        "request_id": "assistant_f3891031a4d24401bf68f4ab8b7567fd",
-        "trace_id": "c503c5c1fffe4a8a9cd46ed6d893a330",
+        "request_id": "assistant_874f424c45c64785841f88f4f5b26007",
+        "trace_id": "a9b5ff638bbd4b79bb15778ed6299c46",
         "policy_version": "2026-02-23",
         "composition_version": "2026-02-23",
         "mapping_version": "2026-02-23",
@@ -164,8 +164,8 @@
           "route_kind": "chitchat",
           "route_catalog_version": "2026-03-11.v2",
           "intent_schema_version": "assistant.intent.v1",
-          "context_hash": "2e915bd932bb599c39bb7e3037fa3933135b2e86007216574b0a7c59d4871373",
-          "intent_hash": "382d134474c3cdcb7e4586a00895bbb1008fcbc4f3a2ca7eef17c0b2463b604c"
+          "context_hash": "b3cf69d7ad743e03b4f7b7fc9e58cd15ae378f8a2251eac8a9e7371710ba960c",
+          "intent_hash": "956464ec0df4ec946a60ecb7ce8a7ff060043d48983b83d1affb1077b693f9bf"
         },
         "route_decision": {
           "route_kind": "chitchat",
@@ -195,7 +195,7 @@
           "context_template_version": "plan_context_v1",
           "reply_guidance_version": "2026-03-11.v1+2026-03-11.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1",
           "confirm_ttl_seconds": 900,
-          "expires_at": "2026-04-08T15:04:47Z",
+          "expires_at": "2026-04-08T22:07:17Z",
           "skill_execution_plan": {
             "selected_skills": null,
             "execution_order": null,
@@ -209,7 +209,7 @@
         },
         "candidates": null,
         "ambiguity_count": 0,
-        "confidence": 0.3,
+        "confidence": 0.65,
         "dry_run": {
           "diff": null,
           "explain": "这是知识问答场景，我会先给出说明，不会触发业务提交。",
@@ -221,14 +221,14 @@
             "state": "not_requested"
           },
           "would_commit": false,
-          "plan_hash": "452b430ba7ae13124c44e7a70a91a06e684046335ec7c7464ed91d365dc02b36"
+          "plan_hash": "2b729b9368cdb2e45edec08df1caa5a27ecf972364d0ed31c7d783cf11251d3f"
         },
         "commit_reply": {
           "outcome": "pending",
-          "message": "你好，我是企业组织变更助手，可以帮你创建或调整部门结构，比如新建部门、改名、调整上级、启用停用等。你现在是想做哪一类操作？"
+          "message": "你好，我是组织变更助手，可以帮你创建或调整部门结构，比如新建部门、改名、迁移上下级关系、启用/停用等。你现在想做什么操作？"
         },
         "reply_nlg": {
-          "text": "你好，我是企业组织变更助手，可以帮你创建或调整部门结构，比如新建部门、改名、调整上级、启用停用等。你现在是想做哪一类操作？",
+          "text": "你好，我是组织变更助手，可以帮你创建或调整部门结构，比如新建部门、改名、迁移上下级关系、启用/停用等。你现在想做什么操作？",
           "kind": "message",
           "stage": "draft",
           "reply_model_name": "gpt-5.1",
@@ -238,56 +238,56 @@
           "conversation_id": "",
           "turn_id": ""
         },
-        "created_at": "2026-04-08T14:49:47.76465749Z",
-        "updated_at": "2026-04-08T14:49:47.76465749Z"
+        "created_at": "2026-04-08T21:52:17.970854898Z",
+        "updated_at": "2026-04-08T21:52:17.970854898Z"
       }
     }
   ],
   "final_conversation": {
-    "conversation_id": "conv_23a1b2f8620049dc947ee0454b45973a",
-    "tenant_id": "89bff679-7f8a-46e5-8c8d-b547a28c8bea",
-    "actor_id": "a898cb18-98b1-440b-974b-f196c784405c",
+    "conversation_id": "conv_4ea38c5784564fdeb384e944f3a48e11",
+    "tenant_id": "46a47ccf-958f-4543-a8d3-78647c7de90f",
+    "actor_id": "725124e0-4f6c-4909-8ffe-8ec437b94ee4",
     "actor_role": "tenant-admin",
     "state": "validated",
     "current_phase": "idle",
     "state_transitions": [
       {
-        "id": 1472,
-        "request_id": "assistant_4a6a10be1a89475ca03a01e19b621a0f",
-        "trace_id": "1e365b7722c240e891874309327475d8",
+        "id": 1623,
+        "request_id": "assistant_b204e3ee436e4a9d9befa5c3b7b2987e",
+        "trace_id": "87cba31735614f21857ef88107240186",
         "from_state": "init",
         "to_state": "validated",
         "from_phase": "init",
         "to_phase": "idle",
         "reason_code": "conversation_created",
-        "actor_id": "a898cb18-98b1-440b-974b-f196c784405c",
-        "changed_at": "2026-04-08T22:49:42.898133+08:00"
+        "actor_id": "725124e0-4f6c-4909-8ffe-8ec437b94ee4",
+        "changed_at": "2026-04-09T05:52:14.65283+08:00"
       },
       {
-        "id": 1474,
-        "turn_id": "turn_e9f294ead4d44bd2b425f22237518821",
-        "request_id": "assistant_f3891031a4d24401bf68f4ab8b7567fd",
-        "trace_id": "c503c5c1fffe4a8a9cd46ed6d893a330",
+        "id": 1625,
+        "turn_id": "turn_75467817de2c49799645475de80c5125",
+        "request_id": "assistant_874f424c45c64785841f88f4f5b26007",
+        "trace_id": "a9b5ff638bbd4b79bb15778ed6299c46",
         "from_state": "init",
         "to_state": "validated",
         "from_phase": "idle",
         "to_phase": "idle",
         "reason_code": "turn_created",
-        "actor_id": "a898cb18-98b1-440b-974b-f196c784405c",
-        "changed_at": "2026-04-08T14:49:47.76465749Z"
+        "actor_id": "725124e0-4f6c-4909-8ffe-8ec437b94ee4",
+        "changed_at": "2026-04-08T21:52:17.970854898Z"
       }
     ],
-    "created_at": "2026-04-08T22:49:42.898133+08:00",
-    "updated_at": "2026-04-08T14:49:47.76465749Z",
+    "created_at": "2026-04-09T05:52:14.65283+08:00",
+    "updated_at": "2026-04-08T21:52:17.970854898Z",
     "turns": [
       {
-        "turn_id": "turn_e9f294ead4d44bd2b425f22237518821",
+        "turn_id": "turn_75467817de2c49799645475de80c5125",
         "user_input": "你好",
         "state": "validated",
         "phase": "idle",
         "risk_tier": "low",
-        "request_id": "assistant_f3891031a4d24401bf68f4ab8b7567fd",
-        "trace_id": "c503c5c1fffe4a8a9cd46ed6d893a330",
+        "request_id": "assistant_874f424c45c64785841f88f4f5b26007",
+        "trace_id": "a9b5ff638bbd4b79bb15778ed6299c46",
         "policy_version": "2026-02-23",
         "composition_version": "2026-02-23",
         "mapping_version": "2026-02-23",
@@ -297,8 +297,8 @@
           "route_kind": "chitchat",
           "route_catalog_version": "2026-03-11.v2",
           "intent_schema_version": "assistant.intent.v1",
-          "context_hash": "2e915bd932bb599c39bb7e3037fa3933135b2e86007216574b0a7c59d4871373",
-          "intent_hash": "382d134474c3cdcb7e4586a00895bbb1008fcbc4f3a2ca7eef17c0b2463b604c"
+          "context_hash": "b3cf69d7ad743e03b4f7b7fc9e58cd15ae378f8a2251eac8a9e7371710ba960c",
+          "intent_hash": "956464ec0df4ec946a60ecb7ce8a7ff060043d48983b83d1affb1077b693f9bf"
         },
         "route_decision": {
           "route_kind": "chitchat",
@@ -328,7 +328,7 @@
           "context_template_version": "plan_context_v1",
           "reply_guidance_version": "2026-03-11.v1+2026-03-11.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1",
           "confirm_ttl_seconds": 900,
-          "expires_at": "2026-04-08T15:04:47Z",
+          "expires_at": "2026-04-08T22:07:17Z",
           "skill_execution_plan": {
             "selected_skills": null,
             "execution_order": null,
@@ -342,7 +342,7 @@
         },
         "candidates": null,
         "ambiguity_count": 0,
-        "confidence": 0.3,
+        "confidence": 0.65,
         "dry_run": {
           "diff": null,
           "explain": "这是知识问答场景，我会先给出说明，不会触发业务提交。",
@@ -354,14 +354,14 @@
             "state": "not_requested"
           },
           "would_commit": false,
-          "plan_hash": "452b430ba7ae13124c44e7a70a91a06e684046335ec7c7464ed91d365dc02b36"
+          "plan_hash": "2b729b9368cdb2e45edec08df1caa5a27ecf972364d0ed31c7d783cf11251d3f"
         },
         "commit_reply": {
           "outcome": "pending",
-          "message": "你好，我是企业组织变更助手，可以帮你创建或调整部门结构，比如新建部门、改名、调整上级、启用停用等。你现在是想做哪一类操作？"
+          "message": "你好，我是组织变更助手，可以帮你创建或调整部门结构，比如新建部门、改名、迁移上下级关系、启用/停用等。你现在想做什么操作？"
         },
         "reply_nlg": {
-          "text": "你好，我是企业组织变更助手，可以帮你创建或调整部门结构，比如新建部门、改名、调整上级、启用停用等。你现在是想做哪一类操作？",
+          "text": "你好，我是组织变更助手，可以帮你创建或调整部门结构，比如新建部门、改名、迁移上下级关系、启用/停用等。你现在想做什么操作？",
           "kind": "message",
           "stage": "draft",
           "reply_model_name": "gpt-5.1",
@@ -371,8 +371,8 @@
           "conversation_id": "",
           "turn_id": ""
         },
-        "created_at": "2026-04-08T14:49:47.76465749Z",
-        "updated_at": "2026-04-08T14:49:47.76465749Z"
+        "created_at": "2026-04-08T21:52:17.970854898Z",
+        "updated_at": "2026-04-08T21:52:17.970854898Z"
       }
     ]
   }

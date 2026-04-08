@@ -102,4 +102,15 @@ func TestHandleAssistantTurnActionAPIReplyNotFoundAndForbidden(t *testing.T) {
 			t.Fatalf("status=%d code=%s body=%s", rec.Code, assistantDecodeErrCode(t, rec), rec.Body.String())
 		}
 	})
+
+	t.Run("conversation corrupted uses default reply error mapping", func(t *testing.T) {
+		svc := &assistantConversationService{byID: map[string]*assistantConversation{
+			"conv-1": nil,
+		}}
+		rec := httptest.NewRecorder()
+		handleAssistantTurnActionAPI(rec, assistantReqWithContext(http.MethodPost, basePath, `{}`, true, true), svc)
+		if rec.Code != http.StatusInternalServerError || assistantDecodeErrCode(t, rec) != "assistant_reply_render_failed" {
+			t.Fatalf("status=%d code=%s body=%s", rec.Code, assistantDecodeErrCode(t, rec), rec.Body.String())
+		}
+	})
 }

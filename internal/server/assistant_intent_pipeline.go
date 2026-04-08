@@ -138,7 +138,41 @@ func assistantSanitizeResolvedIntentFacts(intent assistantIntentSpec, temporalHi
 			sanitized.TargetEffectiveDate = ""
 		}
 	}
-	return sanitized
+	return assistantCarryForwardPendingIntentFacts(sanitized, pendingTurn)
+}
+
+func assistantCarryForwardPendingIntentFacts(intent assistantIntentSpec, pendingTurn *assistantTurn) assistantIntentSpec {
+	if pendingTurn == nil || pendingTurn.Clarification == nil {
+		return intent
+	}
+	if strings.TrimSpace(pendingTurn.Clarification.Status) != assistantClarificationStatusOpen {
+		return intent
+	}
+	if strings.TrimSpace(intent.Action) == "" || strings.TrimSpace(intent.Action) != strings.TrimSpace(pendingTurn.Intent.Action) {
+		return intent
+	}
+	carried := intent
+	switch strings.TrimSpace(intent.Action) {
+	case assistantIntentCreateOrgUnit:
+		carried.ParentRefText = firstNonEmpty(carried.ParentRefText, pendingTurn.Intent.ParentRefText)
+		carried.EntityName = firstNonEmpty(carried.EntityName, pendingTurn.Intent.EntityName)
+		carried.EffectiveDate = firstNonEmpty(carried.EffectiveDate, pendingTurn.Intent.EffectiveDate)
+	case assistantIntentAddOrgUnitVersion, assistantIntentInsertOrgUnitVersion, assistantIntentDisableOrgUnit, assistantIntentEnableOrgUnit:
+		carried.OrgCode = firstNonEmpty(carried.OrgCode, pendingTurn.Intent.OrgCode)
+		carried.EffectiveDate = firstNonEmpty(carried.EffectiveDate, pendingTurn.Intent.EffectiveDate)
+	case assistantIntentCorrectOrgUnit:
+		carried.OrgCode = firstNonEmpty(carried.OrgCode, pendingTurn.Intent.OrgCode)
+		carried.TargetEffectiveDate = firstNonEmpty(carried.TargetEffectiveDate, pendingTurn.Intent.TargetEffectiveDate, pendingTurn.Intent.EffectiveDate)
+	case assistantIntentRenameOrgUnit:
+		carried.OrgCode = firstNonEmpty(carried.OrgCode, pendingTurn.Intent.OrgCode)
+		carried.EffectiveDate = firstNonEmpty(carried.EffectiveDate, pendingTurn.Intent.EffectiveDate)
+		carried.NewName = firstNonEmpty(carried.NewName, pendingTurn.Intent.NewName)
+	case assistantIntentMoveOrgUnit:
+		carried.OrgCode = firstNonEmpty(carried.OrgCode, pendingTurn.Intent.OrgCode)
+		carried.EffectiveDate = firstNonEmpty(carried.EffectiveDate, pendingTurn.Intent.EffectiveDate)
+		carried.NewParentRefText = firstNonEmpty(carried.NewParentRefText, pendingTurn.Intent.NewParentRefText)
+	}
+	return carried
 }
 
 func assistantCompileIntentToPlans(intent assistantIntentSpec, resolvedCandidateID string) (assistantSkillExecutionPlan, assistantConfigDeltaPlan) {

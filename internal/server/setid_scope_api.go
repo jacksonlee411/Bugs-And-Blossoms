@@ -85,17 +85,14 @@ func handleScopePackagesAPI(w http.ResponseWriter, r *http.Request, store SetIDG
 		req.BusinessUnitID = strings.TrimSpace(req.BusinessUnitID)
 		req.Name = strings.TrimSpace(req.Name)
 		req.RequestID = strings.TrimSpace(req.RequestID)
-		req.EffectiveDate = strings.TrimSpace(req.EffectiveDate)
+		effectiveDate, err := parseRequiredDay(req.EffectiveDate, "effective_date")
+		if err != nil {
+			writeInternalDayFieldError(w, r, err)
+			return
+		}
+		req.EffectiveDate = effectiveDate
 		if req.ScopeCode == "" || req.Name == "" || req.RequestID == "" || req.OwnerSetID == "" || req.BusinessUnitID == "" {
 			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "invalid_request", "scope_code/owner_setid/business_unit_id/name/request_id required")
-			return
-		}
-		if req.EffectiveDate == "" {
-			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "invalid_effective_date", "effective_date required")
-			return
-		}
-		if _, err := time.Parse("2006-01-02", req.EffectiveDate); err != nil {
-			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "invalid_effective_date", "invalid effective_date")
 			return
 		}
 		if req.PackageCode == "" {
@@ -151,13 +148,9 @@ func handleOwnedScopePackagesAPI(w http.ResponseWriter, r *http.Request, store S
 		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "invalid_request", "scope_code required")
 		return
 	}
-	asOf := strings.TrimSpace(r.URL.Query().Get("as_of"))
-	if asOf == "" {
-		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "invalid_as_of", "as_of required")
-		return
-	}
-	if _, err := time.Parse("2006-01-02", asOf); err != nil {
-		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "invalid_as_of", "invalid as_of")
+	asOf, err := parseRequiredQueryDay(r, "as_of")
+	if err != nil {
+		writeInternalDayFieldError(w, r, err)
 		return
 	}
 
@@ -203,16 +196,14 @@ func handleScopePackageDisableAPI(w http.ResponseWriter, r *http.Request, store 
 	req.RequestID = strings.TrimSpace(req.RequestID)
 	req.OwnerSetID = strings.ToUpper(strings.TrimSpace(req.OwnerSetID))
 	req.BusinessUnitID = strings.TrimSpace(req.BusinessUnitID)
+	effectiveDate, err := parseRequiredDay(req.EffectiveDate, "effective_date")
+	if err != nil {
+		writeInternalDayFieldError(w, r, err)
+		return
+	}
+	req.EffectiveDate = effectiveDate
 	if req.OwnerSetID == "" || req.BusinessUnitID == "" {
 		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "invalid_request", "owner_setid/business_unit_id required")
-		return
-	}
-	if req.EffectiveDate == "" {
-		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "invalid_effective_date", "effective_date required")
-		return
-	}
-	if _, err := time.Parse("2006-01-02", req.EffectiveDate); err != nil {
-		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "invalid_effective_date", "invalid effective_date")
 		return
 	}
 	if req.RequestID == "" {
@@ -245,17 +236,13 @@ func handleScopeSubscriptionsAPI(w http.ResponseWriter, r *http.Request, store S
 	case http.MethodGet:
 		setID := strings.TrimSpace(r.URL.Query().Get("setid"))
 		scopeCode := strings.TrimSpace(r.URL.Query().Get("scope_code"))
-		asOf := strings.TrimSpace(r.URL.Query().Get("as_of"))
+		asOf, err := parseRequiredQueryDay(r, "as_of")
 		if setID == "" || scopeCode == "" {
 			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "invalid_request", "setid/scope_code required")
 			return
 		}
-		if asOf == "" {
-			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "invalid_as_of", "as_of required")
-			return
-		}
-		if _, err := time.Parse("2006-01-02", asOf); err != nil {
-			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "invalid_as_of", "invalid as_of")
+		if err != nil {
+			writeInternalDayFieldError(w, r, err)
 			return
 		}
 		sub, err := store.GetScopeSubscription(r.Context(), tenant.ID, setID, scopeCode, asOf)
@@ -284,14 +271,15 @@ func handleScopeSubscriptionsAPI(w http.ResponseWriter, r *http.Request, store S
 		req.PackageID = strings.TrimSpace(req.PackageID)
 		req.PackageOwner = strings.TrimSpace(req.PackageOwner)
 		req.BusinessUnitID = strings.TrimSpace(req.BusinessUnitID)
-		req.EffectiveDate = strings.TrimSpace(req.EffectiveDate)
+		effectiveDate, err := parseRequiredDay(req.EffectiveDate, "effective_date")
+		if err != nil {
+			writeInternalDayFieldError(w, r, err)
+			return
+		}
+		req.EffectiveDate = effectiveDate
 		req.RequestID = strings.TrimSpace(req.RequestID)
 		if req.SetID == "" || req.ScopeCode == "" || req.PackageID == "" || req.PackageOwner == "" || req.BusinessUnitID == "" || req.EffectiveDate == "" || req.RequestID == "" {
 			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "invalid_request", "setid/scope_code/package_id/package_owner/business_unit_id/effective_date/request_id required")
-			return
-		}
-		if _, err := time.Parse("2006-01-02", req.EffectiveDate); err != nil {
-			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "invalid_effective_date", "invalid effective_date")
 			return
 		}
 		owner := strings.ToLower(req.PackageOwner)
@@ -365,17 +353,14 @@ func handleGlobalScopePackagesAPI(w http.ResponseWriter, r *http.Request, store 
 		req.PackageCode = strings.ToUpper(strings.TrimSpace(req.PackageCode))
 		req.Name = strings.TrimSpace(req.Name)
 		req.RequestID = strings.TrimSpace(req.RequestID)
-		req.EffectiveDate = strings.TrimSpace(req.EffectiveDate)
+		effectiveDate, err := parseRequiredDay(req.EffectiveDate, "effective_date")
+		if err != nil {
+			writeInternalDayFieldError(w, r, err)
+			return
+		}
+		req.EffectiveDate = effectiveDate
 		if req.ScopeCode == "" || req.Name == "" || req.RequestID == "" {
 			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "invalid_request", "scope_code/name/request_id required")
-			return
-		}
-		if req.EffectiveDate == "" {
-			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "invalid_effective_date", "effective_date required")
-			return
-		}
-		if _, err := time.Parse("2006-01-02", req.EffectiveDate); err != nil {
-			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "invalid_effective_date", "invalid effective_date")
 			return
 		}
 		if req.PackageCode == "" {

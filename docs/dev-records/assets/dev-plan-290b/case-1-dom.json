@@ -3,12 +3,12 @@
   "bubble_count": 1,
   "bubbles": [
     {
-      "binding_key": "conv_23a1b2f8620049dc947ee0454b45973a::turn_e9f294ead4d44bd2b425f22237518821::assistant_f3891031a4d24401bf68f4ab8b7567fd",
-      "conversation_id": "conv_23a1b2f8620049dc947ee0454b45973a",
-      "turn_id": "turn_e9f294ead4d44bd2b425f22237518821",
-      "request_id": "assistant_f3891031a4d24401bf68f4ab8b7567fd",
-      "message_id": "cfc091ba-5641-45fd-907a-f00414b76a63_",
-      "text": "你好，我是企业组织变更助手，可以帮你创建或调整部门结构，比如新建部门、改名、调整上级、启用停用等。你现在是想做哪一类操作？"
+      "binding_key": "conv_4ea38c5784564fdeb384e944f3a48e11::turn_75467817de2c49799645475de80c5125::assistant_874f424c45c64785841f88f4f5b26007",
+      "conversation_id": "conv_4ea38c5784564fdeb384e944f3a48e11",
+      "turn_id": "turn_75467817de2c49799645475de80c5125",
+      "request_id": "assistant_874f424c45c64785841f88f4f5b26007",
+      "message_id": "d3baf264-e828-4959-be66-06d7c0afec3b_",
+      "text": "你好，我是组织变更助手，可以帮你创建或调整部门结构，比如新建部门、改名、迁移上下级关系、启用/停用等。你现在想做什么操作？"
     }
   ],
   "external_reply_container_count": 0,

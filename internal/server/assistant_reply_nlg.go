@@ -191,9 +191,6 @@ func (s *assistantConversationService) renderTurnReply(ctx context.Context, tena
 	realizerOutput := assistantRealizeReply(realizerInput, runtime, req, turn)
 
 	text := strings.TrimSpace(realizerOutput.Text)
-	if text == "" {
-		return nil, errAssistantReplyRenderFailed
-	}
 	replySource := assistantReplySourceProjection
 	if realizerOutput.UsedFallback {
 		replySource = assistantReplySourceFallback

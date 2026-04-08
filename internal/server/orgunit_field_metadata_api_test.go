@@ -151,7 +151,7 @@ func TestHandleOrgUnitFieldOptionsAPI_ResolveOrgIDInvalidBranch(t *testing.T) {
 		cfg:          orgUnitTenantFieldConfig{FieldKey: "org_code", ValueType: "text", DataSourceType: "PLAIN"},
 		ok:           true,
 	}
-	req := httptest.NewRequest(http.MethodGet, "/org/api/org-units/field-options?field_key=org_code&org_code=FLOWER-A", nil)
+	req := httptest.NewRequest(http.MethodGet, "/org/api/org-units/field-options?as_of=2026-01-01&field_key=org_code&org_code=FLOWER-A", nil)
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 	rec := httptest.NewRecorder()
 	handleOrgUnitFieldOptionsAPI(rec, req, store)

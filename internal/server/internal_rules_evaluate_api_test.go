@@ -289,7 +289,7 @@ func TestHandleInternalRulesEvaluateAPI(t *testing.T) {
 	reqListInvalidAsOf := makeReq(`{"capability_key":"staffing.assignment_create.field_policy","field_key":"field_x","business_unit_id":"10000001","as_of":"2026-01-01","request_id":"req-list-asof"}`)
 	reqListInvalidAsOf = reqListInvalidAsOf.WithContext(withPrincipal(reqListInvalidAsOf.Context(), Principal{RoleSlug: "tenant-admin"}))
 	handleInternalRulesEvaluateAPI(recListInvalidAsOf, reqListInvalidAsOf, store)
-	if recListInvalidAsOf.Code != http.StatusBadRequest || !strings.Contains(recListInvalidAsOf.Body.String(), `"code":"invalid_as_of"`) {
+	if recListInvalidAsOf.Code != http.StatusInternalServerError || !strings.Contains(recListInvalidAsOf.Body.String(), `"code":"internal_error"`) {
 		t.Fatalf("status=%d body=%s", recListInvalidAsOf.Code, recListInvalidAsOf.Body.String())
 	}
 

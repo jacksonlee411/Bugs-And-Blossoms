@@ -8,7 +8,6 @@ import (
 	"net/http"
 	"strings"
 	"sync"
-	"time"
 
 	"github.com/google/cel-go/cel"
 	"github.com/jacksonlee411/Bugs-And-Blossoms/internal/routing"
@@ -111,20 +110,23 @@ func handleInternalRulesEvaluateAPI(w http.ResponseWriter, r *http.Request, seti
 	req.FieldKey = strings.ToLower(strings.TrimSpace(req.FieldKey))
 	req.BusinessUnitID = strings.TrimSpace(req.BusinessUnitID)
 	req.TargetOrgUnitID = strings.TrimSpace(req.TargetOrgUnitID)
-	req.AsOf = strings.TrimSpace(req.AsOf)
 	req.RequestID = strings.TrimSpace(req.RequestID)
-	if req.CapabilityKey == "" || req.FieldKey == "" || req.BusinessUnitID == "" || req.AsOf == "" {
-		routingWriteErrorInternal(w, r, http.StatusBadRequest, "invalid_request", "capability_key/field_key/business_unit_id/as_of required")
+	if req.CapabilityKey == "" || req.FieldKey == "" || req.BusinessUnitID == "" {
+		routingWriteErrorInternal(w, r, http.StatusBadRequest, "invalid_request", "capability_key/field_key/business_unit_id required")
 		return
 	}
 	if !fieldKeyPattern.MatchString(req.FieldKey) {
 		routingWriteErrorInternal(w, r, http.StatusBadRequest, "invalid_request", "invalid field_key")
 		return
 	}
-	if _, err := time.Parse("2006-01-02", req.AsOf); err != nil {
-		routingWriteErrorInternal(w, r, http.StatusBadRequest, "invalid_as_of", "invalid as_of")
+	asOf, err := parseRequiredDay(req.AsOf, "as_of")
+	if err != nil {
+		if code, message, ok := dayFieldErrorDetails(err); ok {
+			routingWriteErrorInternal(w, r, http.StatusBadRequest, code, message)
+		}
 		return
 	}
+	req.AsOf = asOf
 	if _, err := parseOrgID8(req.BusinessUnitID); err != nil {
 		routingWriteErrorInternal(w, r, http.StatusBadRequest, "invalid_business_unit_id", "invalid business_unit_id")
 		return
@@ -175,10 +177,6 @@ func handleInternalRulesEvaluateAPI(w http.ResponseWriter, r *http.Request, seti
 
 	items, err := defaultSetIDStrategyRegistryStore.list(r.Context(), tenant.ID, req.CapabilityKey, req.FieldKey, req.AsOf)
 	if err != nil {
-		if strings.Contains(err.Error(), "invalid as_of") {
-			routingWriteErrorInternal(w, r, http.StatusBadRequest, "invalid_as_of", "invalid as_of")
-			return
-		}
 		routingWriteErrorInternal(w, r, http.StatusInternalServerError, "internal_error", "internal error")
 		return
 	}

@@ -207,6 +207,15 @@ func TestAssistant272Coverage_DryRunAndValidation(t *testing.T) {
 	if len(movePending.Diff) < 3 {
 		t.Fatalf("unexpected move pending dryrun=%+v", movePending)
 	}
+	moveSingleMatch := assistantBuildDryRunWithRetrieval(
+		assistantIntentSpec{Action: assistantIntentMoveOrgUnit, OrgCode: "FLOWER-C", EffectiveDate: "2026-04-01", NewParentRefText: "共享服务中心"},
+		nil,
+		"",
+		assistantSemanticRetrievalResult{State: assistantSemanticRetrievalStateSingleMatch},
+	)
+	if len(moveSingleMatch.ValidationErrors) != 0 {
+		t.Fatalf("unexpected single-match dryrun=%+v", moveSingleMatch)
+	}
 	enableDryRun := assistantBuildDryRun(assistantIntentSpec{Action: assistantIntentEnableOrgUnit, OrgCode: "FLOWER-C", EffectiveDate: "2026-06-01"}, nil, "")
 	if len(enableDryRun.Diff) == 0 || len(enableDryRun.ValidationErrors) != 0 {
 		t.Fatalf("unexpected enable dryrun=%+v", enableDryRun)

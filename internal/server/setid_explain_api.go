@@ -8,7 +8,6 @@ import (
 	"log"
 	"net/http"
 	"strings"
-	"time"
 
 	"github.com/jacksonlee411/Bugs-And-Blossoms/internal/routing"
 	"github.com/jacksonlee411/Bugs-And-Blossoms/pkg/authz"
@@ -54,14 +53,14 @@ func handleSetIDExplainAPI(w http.ResponseWriter, r *http.Request, store SetIDGo
 	capabilityKey := strings.ToLower(strings.TrimSpace(r.URL.Query().Get("capability_key")))
 	fieldKey := strings.ToLower(strings.TrimSpace(r.URL.Query().Get("field_key")))
 	businessUnitID := strings.TrimSpace(r.URL.Query().Get("business_unit_id"))
-	asOf := strings.TrimSpace(r.URL.Query().Get("as_of"))
 	requestID := normalizeSetIDExplainRequestID(r)
-	if capabilityKey == "" || fieldKey == "" || businessUnitID == "" || asOf == "" {
-		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "invalid_request", "capability_key/field_key/business_unit_id/as_of required")
+	if capabilityKey == "" || fieldKey == "" || businessUnitID == "" {
+		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "invalid_request", "capability_key/field_key/business_unit_id required")
 		return
 	}
-	if _, err := time.Parse("2006-01-02", asOf); err != nil {
-		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "invalid_as_of", "invalid as_of")
+	asOf, err := parseRequiredQueryDay(r, "as_of")
+	if err != nil {
+		writeInternalDayFieldError(w, r, err)
 		return
 	}
 	if _, err := parseOrgID8(businessUnitID); err != nil {
