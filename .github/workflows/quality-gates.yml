@@ -13,26 +13,54 @@ jobs:
     name: Code Quality & Formatting
     runs-on: ubuntu-latest
     steps:
-      - name: Gates temporarily disabled
-        run: echo "Quality gates temporarily disabled"
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20.19.0
+          cache: pnpm
+          cache-dependency-path: apps/web/pnpm-lock.yaml
+
+      - name: Enable Corepack
+        run: corepack enable
+
+      - name: Go version gate
+        run: make check go-version
+
+      - name: Error message gate
+        run: make check error-message
+
       - name: Assistant config single source gate
-        if: false
         run: make check assistant-config-single-source
+
       - name: Assistant domain allowlist gate
-        if: false
         run: make check assistant-domain-allowlist
-      - name: No scope package gate
-        if: false
-        run: make check no-scope-package
-      - name: Capability key gate
-        if: false
-        run: make check capability-key
-      - name: Capability contract gate
-        if: false
-        run: make check capability-contract
-      - name: Capability route map gate
-        if: false
-        run: make check capability-route-map
+
+      - name: Docs gate
+        run: make check doc
+
+      - name: Format gate
+        run: make check fmt
+
+      - name: Lint gate
+        run: make check lint
+
+      - name: Assert clean worktree
+        run: |
+          if [[ -n "$(git status --porcelain)" ]]; then
+            echo "[quality-gates] worktree is dirty after Code Quality & Formatting" >&2
+            git status --short
+            git diff --stat
+            exit 1
+          fi
+          echo "[quality-gates] worktree clean"
 
   unit-integration-tests:
     name: Unit & Integration Tests
