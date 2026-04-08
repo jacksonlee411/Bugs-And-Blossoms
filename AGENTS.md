@@ -467,6 +467,8 @@ modules/{module}/
 - DEV-PLAN-313：View As Of 后端并行收口计划——显式日期契约、无 fallback、统一错误语义：`docs/dev-plans/313-view-as-of-backend-parallel-convergence-plan-explicit-date-contract-and-no-fallback.md`
 - DEV-PLAN-314：View As Of P1 页面批量收口计划——Assignments / Positions / JobCatalog / DictConfigs：`docs/dev-plans/314-view-as-of-p1-pages-batch-cutover-plan-assignments-positions-jobcatalog-dicts.md`
 - DEV-PLAN-315：View As Of 最小 helper 与反回流门禁计划：`docs/dev-plans/315-view-as-of-minimal-helper-and-anti-regression-gates-plan.md`
+- DEV-PLAN-316：View As Of 工具态页面收口计划——Explain / Release / Governance 子区统一任务态时间语义：`docs/dev-plans/316-view-as-of-tooling-pages-convergence-plan.md`
+- DEV-PLAN-317：View As Of 页面时间语义回归与验收计划：`docs/dev-plans/317-view-as-of-regression-and-acceptance-plan.md`
 - DEV-PLAN-225 执行日志：`docs/archive/dev-records/dev-plan-225-execution-log.md`
 - DEV-PLAN-226：测试指引 TG-004（门禁口径变更审批）：`docs/dev-plans/226-test-guide-tg004-gate-caliber-change-approval.md`
 - DEV-PLAN-170 执行日志：`docs/archive/dev-records/dev-plan-170-execution-log.md`
