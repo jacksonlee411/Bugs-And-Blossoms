@@ -49,8 +49,6 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 20.19.0
-          cache: pnpm
-          cache-dependency-path: apps/web/pnpm-lock.yaml
 
       - name: Enable Corepack
         if: steps.changes.outputs.relevant == 'true'
@@ -223,8 +221,6 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 20.19.0
-          cache: pnpm
-          cache-dependency-path: e2e/pnpm-lock.yaml
 
       - name: Enable Corepack
         if: steps.changes.outputs.relevant == 'true'
