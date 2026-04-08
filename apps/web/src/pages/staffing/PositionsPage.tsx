@@ -4,7 +4,7 @@ import { Alert, Box, Button, Paper, Stack, TextField, Typography } from '@mui/ma
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { getPositionOptions, listPositions, upsertPosition } from '../../api/positions'
 import { PageHeader } from '../../components/PageHeader'
-import { isDay, resolveReadViewState, todayISODate } from '../org/readViewState'
+import { isDay, resolveReadViewState, todayISODate } from '../../utils/readViewState'
 
 function parseOptionalValue(raw: string | null): string {
   if (!raw) {
@@ -126,7 +126,7 @@ export function PositionsPage() {
             {historyModeInput ? (
               <TextField
                 InputLabelProps={{ shrink: true }}
-                label='as_of'
+                label='As Of Date'
                 name='as_of'
                 type='date'
                 value={asOfInput}

@@ -7,7 +7,7 @@ import { getPersonByPernr } from '../../api/persons'
 import { listPositions } from '../../api/positions'
 import { PageHeader } from '../../components/PageHeader'
 import { SetIDExplainPanel } from '../../components/SetIDExplainPanel'
-import { isDay, resolveReadViewState, todayISODate } from '../org/readViewState'
+import { isDay, resolveReadViewState, todayISODate } from '../../utils/readViewState'
 
 function parseOptionalValue(raw: string | null): string {
   if (!raw) {
@@ -132,7 +132,7 @@ export function AssignmentsPage() {
             {historyModeInput ? (
               <TextField
                 InputLabelProps={{ shrink: true }}
-                label='as_of'
+                label='As Of Date'
                 name='as_of'
                 type='date'
                 value={asOfInput}

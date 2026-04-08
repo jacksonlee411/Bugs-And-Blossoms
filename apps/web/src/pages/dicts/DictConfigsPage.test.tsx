@@ -28,8 +28,8 @@ vi.mock('../../components/PageHeader', () => ({
     </div>
   )
 }))
-vi.mock('../org/readViewState', async () => {
-  const actual = await vi.importActual<typeof import('../org/readViewState')>('../org/readViewState')
+vi.mock('../../utils/readViewState', async () => {
+  const actual = await vi.importActual<typeof import('../../utils/readViewState')>('../../utils/readViewState')
   return {
     ...actual,
     todayISODate: () => '2026-04-08'
@@ -142,7 +142,7 @@ describe('DictConfigsPage', () => {
       })
     )
 
-    expect(screen.queryByLabelText('as_of')).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('查看日期')).not.toBeInTheDocument()
     expect(screen.getByText('默认显示当前数据')).toBeInTheDocument()
 
     fireEvent.click(await screen.findByText('默认值'))
@@ -157,7 +157,7 @@ describe('DictConfigsPage', () => {
     await waitFor(() => expect(dictApiMocks.listDicts).toHaveBeenCalled())
 
     fireEvent.click(screen.getByRole('button', { name: '查看历史' }))
-    fireEvent.change(await screen.findByLabelText('as_of'), { target: { value: '2026-03-01' } })
+    fireEvent.change(await screen.findByLabelText('查看日期'), { target: { value: '2026-03-01' } })
     fireEvent.click(screen.getByRole('button', { name: '应用筛选' }))
 
     await waitFor(() => expect(screen.getByTestId('location-state')).toHaveTextContent('/dicts?as_of=2026-03-01'))

@@ -42,7 +42,7 @@ import { FilterBar } from '../../components/FilterBar'
 import { PageHeader } from '../../components/PageHeader'
 import { SetIDExplainPanel } from '../../components/SetIDExplainPanel'
 import { StatusChip } from '../../components/StatusChip'
-import { resolveReadViewState, todayISODate } from '../org/readViewState'
+import { resolveReadViewState, todayISODate } from '../../utils/readViewState'
 
 type JobCatalogTab = 'groups' | 'families' | 'levels' | 'profiles'
 
@@ -557,7 +557,7 @@ export function JobCatalogPage() {
         )
       }
     ],
-    [asOf, disableWriteActions, t]
+    [disableWriteActions, t]
   )
 
   const levelColumns = useMemo<GridColDef<LevelRow>[]>(

@@ -29,8 +29,8 @@ vi.mock('../../components/PageHeader', () => ({
 vi.mock('../../components/SetIDExplainPanel', () => ({
   SetIDExplainPanel: () => <div data-testid='setid-explain-panel'>explain</div>
 }))
-vi.mock('../org/readViewState', async () => {
-  const actual = await vi.importActual<typeof import('../org/readViewState')>('../org/readViewState')
+vi.mock('../../utils/readViewState', async () => {
+  const actual = await vi.importActual<typeof import('../../utils/readViewState')>('../../utils/readViewState')
   return {
     ...actual,
     todayISODate: () => '2026-04-08'
@@ -137,7 +137,7 @@ describe('Staffing view-as-of pages', () => {
 
     await waitFor(() => expect(positionApiMocks.listPositions).toHaveBeenCalledWith({ asOf: '2026-04-08' }))
 
-    expect(screen.queryByLabelText('as_of')).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('As Of Date')).not.toBeInTheDocument()
     expect(screen.getAllByText('Viewing current data by default').length).toBeGreaterThan(0)
     expect(screen.getByTestId('location-search')).toHaveTextContent('')
 
@@ -145,7 +145,7 @@ describe('Staffing view-as-of pages', () => {
     fireEvent.change(effectiveDateInput, { target: { value: '2026-06-10' } })
 
     fireEvent.click(screen.getByRole('button', { name: 'View History' }))
-    fireEvent.change(await screen.findByLabelText('as_of'), { target: { value: '2026-03-01' } })
+    fireEvent.change(await screen.findByLabelText('As Of Date'), { target: { value: '2026-03-01' } })
     fireEvent.click(screen.getByRole('button', { name: 'Load' }))
 
     await waitFor(() => expect(screen.getByTestId('location-search')).toHaveTextContent('as_of=2026-03-01'))
@@ -157,7 +157,7 @@ describe('Staffing view-as-of pages', () => {
 
     await waitFor(() => expect(positionApiMocks.listPositions).toHaveBeenCalledWith({ asOf: '2026-04-08' }))
 
-    expect(screen.queryByLabelText('as_of')).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('As Of Date')).not.toBeInTheDocument()
     expect(screen.getAllByText('Viewing current data by default').length).toBeGreaterThan(0)
     expect(screen.getByTestId('location-search')).toHaveTextContent('')
 
@@ -165,7 +165,7 @@ describe('Staffing view-as-of pages', () => {
     fireEvent.change(effectiveDateInput, { target: { value: '2026-07-15' } })
 
     fireEvent.click(screen.getByRole('button', { name: 'View History' }))
-    fireEvent.change(await screen.findByLabelText('as_of'), { target: { value: '2026-03-01' } })
+    fireEvent.change(await screen.findByLabelText('As Of Date'), { target: { value: '2026-03-01' } })
     fireEvent.click(screen.getByRole('button', { name: 'Load' }))
 
     await waitFor(() => expect(screen.getByTestId('location-search')).toHaveTextContent('as_of=2026-03-01'))

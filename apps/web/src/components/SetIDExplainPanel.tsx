@@ -23,6 +23,7 @@ import {
 import { useAppPreferences } from '../app/providers/AppPreferencesContext'
 import { FreeSoloDropdownField, mergeFreeSoloOptions } from './FreeSoloDropdownField'
 import { resolveApiErrorMessage } from '../errors/presentApiError'
+import { todayISODate } from '../utils/readViewState'
 
 type ExplainLevel = 'brief' | 'full'
 
@@ -43,10 +44,6 @@ interface ExplainErrorView {
   code: string
   message: string
   traceID: string
-}
-
-function todayISO(): string {
-  return new Date().toISOString().slice(0, 10)
 }
 
 function newRequestID(prefix: string): string {
@@ -123,7 +120,7 @@ export function SetIDExplainPanel({
   const [capabilityKey, setCapabilityKey] = useState(initialCapabilityKey ?? '')
   const [fieldKey, setFieldKey] = useState(initialFieldKey ?? '')
   const [businessUnitID, setBusinessUnitID] = useState(initialBusinessUnitID ?? '')
-  const [asOf, setAsOf] = useState(initialAsOf ?? todayISO())
+  const [asOf, setAsOf] = useState(initialAsOf ?? todayISODate())
   const [setID, setSetID] = useState(initialSetID ?? '')
   const [orgUnitID, setOrgUnitID] = useState(initialOrgUnitID ?? '')
   const [requestID, setRequestID] = useState(newRequestID('mui-setid-explain'))

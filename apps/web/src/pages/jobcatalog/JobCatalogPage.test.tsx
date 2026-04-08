@@ -59,8 +59,8 @@ vi.mock('@mui/x-date-pickers/DatePicker', () => ({
     )
   }
 }))
-vi.mock('../org/readViewState', async () => {
-  const actual = await vi.importActual<typeof import('../org/readViewState')>('../org/readViewState')
+vi.mock('../../utils/readViewState', async () => {
+  const actual = await vi.importActual<typeof import('../../utils/readViewState')>('../../utils/readViewState')
   return {
     ...actual,
     todayISODate: () => '2026-04-08'

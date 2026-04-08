@@ -1,4 +1,4 @@
-import { type FormEvent, useEffect, useMemo, useState } from 'react'
+import { type FormEvent, useMemo, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import {
   Alert,
@@ -44,7 +44,7 @@ import {
   type DictReleaseStage,
   type DictReleaseValidationIssue
 } from './dictReleaseFlow'
-import { isDay, resolveReadViewState, todayISODate } from '../org/readViewState'
+import { isDay, resolveReadViewState, todayISODate } from '../../utils/readViewState'
 
 function newRequestID(prefix: string): string {
   return `${prefix}:${Date.now()}`
@@ -181,11 +181,6 @@ export function DictConfigsPage() {
 
   const canDictRelease = hasPermission('dict.release.admin')
   const releaseBusy = releaseStage === 'previewing' || releaseStage === 'releasing'
-
-  useEffect(() => {
-    setHistoryModeInput(readMode === 'history')
-    setAsOfInput(asOf)
-  }, [asOf, readMode])
 
   const dictsQuery = useQuery({
     queryKey: ['dicts', asOf],
@@ -519,7 +514,7 @@ export function DictConfigsPage() {
             {historyModeInput ? (
               <TextField
                 InputLabelProps={{ shrink: true }}
-                label='as_of'
+                label='查看日期'
                 type='date'
                 value={asOfInput}
                 onChange={(event) => setAsOfInput(event.target.value)}

@@ -1,0 +1,2 @@
+# 工具态显式时间例外：允许保留技术字段标签，后续由 DEV-PLAN-316 继续收口文案
+apps/web/src/components/SetIDExplainPanel.tsx
