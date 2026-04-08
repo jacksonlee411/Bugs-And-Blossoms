@@ -368,9 +368,9 @@ func handleOrgUnitFieldConfigsAPI(w http.ResponseWriter, r *http.Request, store 
 
 	switch r.Method {
 	case http.MethodGet:
-		asOf, err := orgUnitAPIAsOf(r)
+		asOf, err := parseRequiredQueryDay(r, "as_of")
 		if err != nil {
-			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "invalid_as_of", "invalid as_of")
+			writeInternalDayFieldError(w, r, err)
 			return
 		}
 
@@ -830,9 +830,9 @@ func handleOrgUnitFieldPoliciesResolvePreviewAPI(w http.ResponseWriter, r *http.
 		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusInternalServerError, "tenant_missing", "tenant missing")
 		return
 	}
-	asOf, err := orgUnitAPIAsOf(r)
+	asOf, err := parseRequiredQueryDay(r, "as_of")
 	if err != nil {
-		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "invalid_as_of", "invalid as_of")
+		writeInternalDayFieldError(w, r, err)
 		return
 	}
 	fieldKey := strings.TrimSpace(r.URL.Query().Get("field_key"))
@@ -945,9 +945,9 @@ func handleOrgUnitFieldOptionsAPI(w http.ResponseWriter, r *http.Request, store 
 		return
 	}
 
-	asOf, err := orgUnitAPIAsOf(r)
+	asOf, err := parseRequiredQueryDay(r, "as_of")
 	if err != nil {
-		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "invalid_as_of", "invalid as_of")
+		writeInternalDayFieldError(w, r, err)
 		return
 	}
 

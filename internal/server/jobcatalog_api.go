@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"net/http"
 	"strings"
-	"time"
 
 	"github.com/jacksonlee411/Bugs-And-Blossoms/internal/routing"
 )
@@ -62,13 +61,9 @@ func handleJobCatalogAPI(w http.ResponseWriter, r *http.Request, setidStore jobC
 		return
 	}
 
-	asOf := strings.TrimSpace(r.URL.Query().Get("as_of"))
-	if asOf == "" {
-		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "invalid_as_of", "as_of required")
-		return
-	}
-	if _, err := time.Parse("2006-01-02", asOf); err != nil {
-		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "invalid_as_of", "invalid as_of")
+	asOf, err := parseRequiredQueryDay(r, "as_of")
+	if err != nil {
+		writeInternalDayFieldError(w, r, err)
 		return
 	}
 
@@ -236,15 +231,12 @@ func handleJobCatalogWriteAPI(w http.ResponseWriter, r *http.Request, setidStore
 	}
 
 	req.SetID = normalizeSetID(req.SetID)
-	req.EffectiveDate = strings.TrimSpace(req.EffectiveDate)
-	if req.EffectiveDate == "" {
-		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "invalid_effective_date", "effective_date required")
+	effectiveDate, err := parseRequiredDay(req.EffectiveDate, "effective_date")
+	if err != nil {
+		writeInternalDayFieldError(w, r, err)
 		return
 	}
-	if _, err := time.Parse("2006-01-02", req.EffectiveDate); err != nil {
-		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "invalid_effective_date", "invalid effective_date")
-		return
-	}
+	req.EffectiveDate = effectiveDate
 
 	action := strings.TrimSpace(strings.ToLower(req.RequestAction))
 	if action == "" {

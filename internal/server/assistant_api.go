@@ -654,8 +654,6 @@ func handleAssistantTurnActionAPI(w http.ResponseWriter, r *http.Request, svc *a
 				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusForbidden, "forbidden", "forbidden")
 			case errors.Is(err, errAssistantTurnNotFound):
 				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusNotFound, "conversation_turn_not_found", "conversation turn not found")
-			case errors.Is(err, errAssistantReplyRenderFailed):
-				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusUnprocessableEntity, "ai_reply_render_failed", "assistant reply render failed")
 			default:
 				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusInternalServerError, "assistant_reply_render_failed", "assistant reply render failed")
 			}

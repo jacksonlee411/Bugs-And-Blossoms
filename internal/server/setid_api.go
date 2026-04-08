@@ -6,7 +6,6 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/jacksonlee411/Bugs-And-Blossoms/internal/routing"
 	orgunitpkg "github.com/jacksonlee411/Bugs-And-Blossoms/pkg/orgunit"
@@ -72,18 +71,15 @@ func handleSetIDsAPI(w http.ResponseWriter, r *http.Request, store SetIDGovernan
 
 		req.SetID = strings.TrimSpace(req.SetID)
 		req.Name = strings.TrimSpace(req.Name)
-		req.EffectiveDate = strings.TrimSpace(req.EffectiveDate)
+		effectiveDate, err := parseRequiredDay(req.EffectiveDate, "effective_date")
+		if err != nil {
+			writeInternalDayFieldError(w, r, err)
+			return
+		}
+		req.EffectiveDate = effectiveDate
 		req.RequestID = strings.TrimSpace(req.RequestID)
 		if req.SetID == "" || req.Name == "" || req.RequestID == "" {
 			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "invalid_request", "setid/name/request_id required")
-			return
-		}
-		if req.EffectiveDate == "" {
-			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "invalid_effective_date", "effective_date required")
-			return
-		}
-		if _, err := time.Parse("2006-01-02", req.EffectiveDate); err != nil {
-			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "invalid_effective_date", "invalid effective_date")
 			return
 		}
 
@@ -128,13 +124,9 @@ func handleSetIDBindingsAPI(w http.ResponseWriter, r *http.Request, store SetIDG
 
 	switch r.Method {
 	case http.MethodGet:
-		asOf := strings.TrimSpace(r.URL.Query().Get("as_of"))
-		if asOf == "" {
-			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "invalid_as_of", "as_of required")
-			return
-		}
-		if _, err := time.Parse("2006-01-02", asOf); err != nil {
-			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "invalid_as_of", "invalid as_of")
+		asOf, err := parseRequiredQueryDay(r, "as_of")
+		if err != nil {
+			writeInternalDayFieldError(w, r, err)
 			return
 		}
 
@@ -181,14 +173,15 @@ func handleSetIDBindingsAPI(w http.ResponseWriter, r *http.Request, store SetIDG
 
 		req.OrgUnitID = strings.TrimSpace(req.OrgUnitID)
 		req.SetID = strings.TrimSpace(req.SetID)
-		req.EffectiveDate = strings.TrimSpace(req.EffectiveDate)
+		effectiveDate, err := parseRequiredDay(req.EffectiveDate, "effective_date")
+		if err != nil {
+			writeInternalDayFieldError(w, r, err)
+			return
+		}
+		req.EffectiveDate = effectiveDate
 		req.RequestID = strings.TrimSpace(req.RequestID)
 		if req.OrgUnitID != "" || req.OrgCode == "" || req.SetID == "" || req.EffectiveDate == "" || req.RequestID == "" {
 			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "invalid_request", "org_code/setid/effective_date/request_id required")
-			return
-		}
-		if _, err := time.Parse("2006-01-02", req.EffectiveDate); err != nil {
-			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "invalid_effective_date", "invalid effective_date")
 			return
 		}
 

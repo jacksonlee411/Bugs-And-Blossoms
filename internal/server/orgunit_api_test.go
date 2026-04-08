@@ -1742,30 +1742,82 @@ func TestHandleOrgUnitsAPI_CreateError(t *testing.T) {
 	}
 }
 
-func TestHandleOrgUnitsRenameAPI_DefaultEffectiveDate(t *testing.T) {
-	called := false
-	svc := orgUnitWriteServiceStub{
-		renameFn: func(_ context.Context, _ string, req orgunitservices.RenameOrgUnitRequest) error {
-			called = true
-			if req.EffectiveDate == "" {
-				t.Fatalf("expected default effective_date")
-			}
-			if req.Ext["org_type"] != "DEPARTMENT" {
-				t.Fatalf("ext=%v", req.Ext)
-			}
-			return nil
+func TestHandleOrgUnitWriteAPIs_RequireExplicitEffectiveDate(t *testing.T) {
+	tests := []struct {
+		name string
+		url  string
+		body string
+		call func(http.ResponseWriter, *http.Request, orgunitservices.OrgUnitWriteService)
+	}{
+		{
+			name: "create",
+			url:  "/org/api/org-units",
+			body: `{"org_code":"A001","name":"Root"}`,
+			call: func(w http.ResponseWriter, r *http.Request, svc orgunitservices.OrgUnitWriteService) {
+				handleOrgUnitsAPI(w, r, newOrgUnitMemoryStore(), svc)
+			},
+		},
+		{
+			name: "rename",
+			url:  "/org/api/org-units/rename",
+			body: `{"org_code":"A001","new_name":"New","ext":{"org_type":"DEPARTMENT"}}`,
+			call: handleOrgUnitsRenameAPI,
+		},
+		{
+			name: "move",
+			url:  "/org/api/org-units/move",
+			body: `{"org_code":"A001","new_parent_org_code":"A0001"}`,
+			call: handleOrgUnitsMoveAPI,
+		},
+		{
+			name: "disable",
+			url:  "/org/api/org-units/disable",
+			body: `{"org_code":"A001"}`,
+			call: handleOrgUnitsDisableAPI,
+		},
+		{
+			name: "enable",
+			url:  "/org/api/org-units/enable",
+			body: `{"org_code":"A001"}`,
+			call: handleOrgUnitsEnableAPI,
 		},
 	}
-	body := strings.NewReader(`{"org_code":"A001","new_name":"New","ext":{"org_type":"DEPARTMENT"}}`)
-	req := httptest.NewRequest(http.MethodPost, "/org/api/org-units/rename", body)
-	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "T"}))
-	rec := httptest.NewRecorder()
-	handleOrgUnitsRenameAPI(rec, req, svc)
-	if rec.Code != http.StatusOK {
-		t.Fatalf("status=%d", rec.Code)
-	}
-	if !called {
-		t.Fatalf("expected rename call")
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			svc := orgUnitWriteServiceStub{
+				createFn: func(context.Context, string, orgunitservices.CreateOrgUnitRequest) (orgunittypes.OrgUnitResult, error) {
+					t.Fatalf("create should not be called when effective_date is missing")
+					return orgunittypes.OrgUnitResult{}, nil
+				},
+				renameFn: func(context.Context, string, orgunitservices.RenameOrgUnitRequest) error {
+					t.Fatalf("rename should not be called when effective_date is missing")
+					return nil
+				},
+				moveFn: func(context.Context, string, orgunitservices.MoveOrgUnitRequest) error {
+					t.Fatalf("move should not be called when effective_date is missing")
+					return nil
+				},
+				disableFn: func(context.Context, string, orgunitservices.DisableOrgUnitRequest) error {
+					t.Fatalf("disable should not be called when effective_date is missing")
+					return nil
+				},
+				enableFn: func(context.Context, string, orgunitservices.EnableOrgUnitRequest) error {
+					t.Fatalf("enable should not be called when effective_date is missing")
+					return nil
+				},
+			}
+			req := httptest.NewRequest(http.MethodPost, tt.url, strings.NewReader(tt.body))
+			req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "T"}))
+			rec := httptest.NewRecorder()
+			tt.call(rec, req, svc)
+			if rec.Code != http.StatusBadRequest {
+				t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+			}
+			if !strings.Contains(rec.Body.String(), `"code":"invalid_effective_date"`) || !strings.Contains(rec.Body.String(), "effective_date required") {
+				t.Fatalf("unexpected body=%s", rec.Body.String())
+			}
+		})
 	}
 }
 

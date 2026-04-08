@@ -96,9 +96,9 @@ func handleDictsListAPI(w http.ResponseWriter, r *http.Request, store DictStore)
 		return
 	}
 
-	asOf, ok := requiredAsOf(r)
-	if !ok {
-		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "invalid_as_of", "invalid as_of")
+	asOf, err := requiredAsOf(r)
+	if err != nil {
+		writeInternalDayFieldError(w, r, err)
 		return
 	}
 
@@ -246,9 +246,9 @@ func handleDictValuesListAPI(w http.ResponseWriter, r *http.Request, store DictS
 		return
 	}
 
-	asOf, ok := requiredAsOf(r)
-	if !ok {
-		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "invalid_as_of", "invalid as_of")
+	asOf, err := requiredAsOf(r)
+	if err != nil {
+		writeInternalDayFieldError(w, r, err)
 		return
 	}
 	dictCode := normalizeDictCode(r.URL.Query().Get("dict_code"))
@@ -554,12 +554,8 @@ func isValidDictCode(code string) bool {
 	return dictCodePattern.MatchString(strings.TrimSpace(strings.ToLower(code)))
 }
 
-func requiredAsOf(r *http.Request) (string, bool) {
-	asOf := strings.TrimSpace(r.URL.Query().Get("as_of"))
-	if !isDate(asOf) {
-		return "", false
-	}
-	return asOf, true
+func requiredAsOf(r *http.Request) (string, error) {
+	return parseRequiredQueryDay(r, "as_of")
 }
 
 func isDate(raw string) bool {

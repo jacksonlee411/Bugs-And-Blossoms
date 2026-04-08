@@ -1274,17 +1274,13 @@ func handleSetIDStrategyRegistryAPI(w http.ResponseWriter, r *http.Request) {
 	}
 	switch r.Method {
 	case http.MethodGet:
-		asOf := strings.TrimSpace(r.URL.Query().Get("as_of"))
-		if asOf == "" {
-			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "invalid_as_of", "as_of required")
+		asOf, err := parseRequiredQueryDay(r, "as_of")
+		if err != nil {
+			writeInternalDayFieldError(w, r, err)
 			return
 		}
 		items, err := defaultSetIDStrategyRegistryStore.list(r.Context(), tenant.ID, r.URL.Query().Get("capability_key"), r.URL.Query().Get("field_key"), asOf)
 		if err != nil {
-			if strings.Contains(err.Error(), "invalid as_of") {
-				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "invalid_as_of", "invalid as_of")
-				return
-			}
 			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusInternalServerError, "setid_strategy_registry_list_failed", "setid strategy registry list failed")
 			return
 		}
