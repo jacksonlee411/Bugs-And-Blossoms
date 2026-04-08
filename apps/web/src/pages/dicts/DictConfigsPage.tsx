@@ -1,5 +1,5 @@
-import { type FormEvent, useMemo, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { type FormEvent, useEffect, useMemo, useState } from 'react'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import {
   Alert,
   Box,
@@ -44,10 +44,7 @@ import {
   type DictReleaseStage,
   type DictReleaseValidationIssue
 } from './dictReleaseFlow'
-
-function todayISO(): string {
-  return new Date().toISOString().slice(0, 10)
-}
+import { isDay, resolveReadViewState, todayISODate } from '../org/readViewState'
 
 function newRequestID(prefix: string): string {
   return `${prefix}:${Date.now()}`
@@ -143,10 +140,15 @@ function extractApiErrorCode(error: unknown): string | null {
 
 export function DictConfigsPage() {
   const navigate = useNavigate()
+  const [searchParams, setSearchParams] = useSearchParams()
   const queryClient = useQueryClient()
   const { hasPermission, t } = useAppPreferences()
+  const readView = useMemo(() => resolveReadViewState(searchParams.get('as_of')), [searchParams])
+  const readMode = readView.mode
+  const asOf = readView.effectiveAsOf
 
-  const [asOf, setAsOf] = useState(todayISO())
+  const [historyModeInput, setHistoryModeInput] = useState(readMode === 'history')
+  const [asOfInput, setAsOfInput] = useState(asOf)
   const [keyword, setKeyword] = useState('')
   const [selectedDictCode, setSelectedDictCode] = useState('')
   const [error, setError] = useState<string | null>(null)
@@ -156,12 +158,12 @@ export function DictConfigsPage() {
 
   const [createDictCode, setCreateDictCode] = useState('')
   const [createDictName, setCreateDictName] = useState('')
-  const [createDictEnabledOn, setCreateDictEnabledOn] = useState(todayISO())
-  const [disableDictDay, setDisableDictDay] = useState(todayISO())
+  const [createDictEnabledOn, setCreateDictEnabledOn] = useState(todayISODate())
+  const [disableDictDay, setDisableDictDay] = useState(todayISODate())
 
   const [createValueCode, setCreateValueCode] = useState('')
   const [createValueLabel, setCreateValueLabel] = useState('')
-  const [createValueEnabledOn, setCreateValueEnabledOn] = useState(todayISO())
+  const [createValueEnabledOn, setCreateValueEnabledOn] = useState(todayISODate())
 
   const [releaseForm, setReleaseForm] = useState<DictReleaseFormValues>(() => ({
     sourceTenantID: GLOBAL_TENANT_ID,
@@ -179,6 +181,11 @@ export function DictConfigsPage() {
 
   const canDictRelease = hasPermission('dict.release.admin')
   const releaseBusy = releaseStage === 'previewing' || releaseStage === 'releasing'
+
+  useEffect(() => {
+    setHistoryModeInput(readMode === 'history')
+    setAsOfInput(asOf)
+  }, [asOf, readMode])
 
   const dictsQuery = useQuery({
     queryKey: ['dicts', asOf],
@@ -243,7 +250,7 @@ export function DictConfigsPage() {
       await queryClient.invalidateQueries({ queryKey: ['dict-values', effectiveSelectedDictCode, asOf] })
       navigate({
         pathname: `/dicts/${variables.dict_code}/values/${encodeURIComponent(variables.code)}`,
-        search: `?as_of=${asOf}`
+        search: readMode === 'history' ? `?as_of=${asOf}` : ''
       })
     }
   })
@@ -308,6 +315,22 @@ export function DictConfigsPage() {
 
   function formatValidationIssues(issues: DictReleaseValidationIssue[]): string {
     return issues.map((issue) => t(issue)).join('；')
+  }
+
+  function applyReadView() {
+    if (historyModeInput && !isDay(asOfInput)) {
+      setError('as_of invalid')
+      return
+    }
+
+    setError(null)
+    const nextParams = new URLSearchParams(searchParams)
+    if (historyModeInput) {
+      nextParams.set('as_of', asOfInput)
+    } else {
+      nextParams.delete('as_of')
+    }
+    setSearchParams(nextParams)
   }
 
   async function onPreviewRelease(event: FormEvent) {
@@ -418,7 +441,7 @@ export function DictConfigsPage() {
       setCreateDictOpen(false)
       setCreateDictCode('')
       setCreateDictName('')
-      setCreateDictEnabledOn(todayISO())
+      setCreateDictEnabledOn(todayISODate())
     } catch (mutationError) {
       setError(parseApiError(mutationError))
     }
@@ -460,7 +483,7 @@ export function DictConfigsPage() {
       setCreateValueOpen(false)
       setCreateValueCode('')
       setCreateValueLabel('')
-      setCreateValueEnabledOn(todayISO())
+      setCreateValueEnabledOn(todayISODate())
     } catch (mutationError) {
       setError(parseApiError(mutationError))
     }
@@ -493,11 +516,47 @@ export function DictConfigsPage() {
 
         <Paper sx={{ p: 1.5 }} variant='outlined'>
           <Stack alignItems='center' direction={{ xs: 'column', md: 'row' }} spacing={1.5}>
-            <TextField label='as_of' type='date' value={asOf} onChange={(event) => setAsOf(event.target.value)} />
+            {historyModeInput ? (
+              <TextField
+                InputLabelProps={{ shrink: true }}
+                label='as_of'
+                type='date'
+                value={asOfInput}
+                onChange={(event) => setAsOfInput(event.target.value)}
+              />
+            ) : (
+              <Typography color='text.secondary' variant='body2'>
+                默认显示当前数据
+              </Typography>
+            )}
             <TextField label='q' value={keyword} onChange={(event) => setKeyword(event.target.value)} />
             <Typography color='text.secondary' variant='body2'>
               当前字典字段数：{dicts.length}
             </Typography>
+            <Button onClick={applyReadView} variant='contained'>
+              应用筛选
+            </Button>
+            {historyModeInput ? (
+              <Button
+                onClick={() => {
+                  setHistoryModeInput(false)
+                  setAsOfInput(asOf)
+                }}
+                variant='outlined'
+              >
+                查看当前
+              </Button>
+            ) : (
+              <Button
+                onClick={() => {
+                  setHistoryModeInput(true)
+                  setAsOfInput(asOf)
+                }}
+                variant='outlined'
+              >
+                查看历史
+              </Button>
+            )}
           </Stack>
         </Paper>
 
@@ -824,7 +883,7 @@ export function DictConfigsPage() {
                       onClick={() =>
                         navigate({
                           pathname: `/dicts/${value.dict_code}/values/${encodeURIComponent(value.code)}`,
-                          search: `?as_of=${asOf}`
+                          search: readMode === 'history' ? `?as_of=${asOf}` : ''
                         })
                       }
                     >
