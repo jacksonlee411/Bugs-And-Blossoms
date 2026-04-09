@@ -15,6 +15,7 @@
 - 禁止新增 scope/package 漂移：`make check no-scope-package`
 - 颗粒度层次门禁（阻断 org_level/scope_type/scope_key 回流）：`make check granularity`
 - DDD 分层 P0 反漂移门禁（阻断 `internal/server` 扩散与 `infrastructure -> services` 回流）：`make check ddd-layering-p0`
+- DDD 分层 P2 组合根门禁（模块扩张时要求 `module.go/links.go` 承接职责）：`make check ddd-layering-p2`
 - capability_key 防退化（禁上下文编码/禁拼接）：`make check capability-key`
 - 路由 capability 映射防漂移（缺映射/重复/未注册阻断）：`make check capability-route-map`
 - 业务幂等字段命名收敛：`make check request-code`
@@ -59,6 +60,7 @@
 | 新增 scope/package 语义引用（`scope_code/scope_package/scope_subscription/package_id`） | `make check no-scope-package` | 增量反漂移门禁（承接 `DEV-PLAN-102C6`） |
 | 颗粒度层次/旧 scope 相关新增（`org_level/scope_type/scope_key`） | `make check granularity` | 颗粒度治理门禁（承接 `DEV-PLAN-180`） |
 | DDD 分层相关新增漂移（`internal/server` 扩散模块实现、`modules/*/infrastructure -> services` 回流） | `make check ddd-layering-p0` | P0 止血门禁（承接 `DEV-PLAN-015B/015C`） |
+| 模块分层扩张且组合根需同步承接（`module.go/links.go` 不得继续空壳） | `make check ddd-layering-p2` | P2 组合根门禁（承接 `DEV-PLAN-015B/015Z4`） |
 | capability_key 命名与生成方式 | `make check capability-key` | 禁止上下文编码与运行时拼接（承接 `DEV-PLAN-102C6/102D`） |
 | 路由/动作到 capability_key 映射 | `make check capability-route-map` | 阻断缺映射、重复映射、未注册 key（承接 `DEV-PLAN-156`） |
 | 幂等与追踪命名（request_id / trace_id） | `make check request-code` | 规则见 `DEV-PLAN-109A` |
@@ -549,6 +551,7 @@ modules/{module}/
 - DEV-PLAN-015Z1：OrgUnit SetID Memory Store 向模块侧收口（承接 DEV-PLAN-015Z）：`docs/dev-plans/015z1-orgunit-setid-memory-module-side-plan.md`
 - DEV-PLAN-015Z2：OrgUnit SetID PG 默认装配入口向模块侧收口（承接 DEV-PLAN-015Z1）：`docs/dev-plans/015z2-orgunit-setid-pg-module-entry-plan.md`
 - DEV-PLAN-015Z3：OrgUnit SetID PG 实现向模块侧收缩为 Server 薄壳（承接 DEV-PLAN-015Z2）：`docs/dev-plans/015z3-orgunit-setid-pg-server-thin-shell-plan.md`
+- DEV-PLAN-015Z4：DDD 分层 P2 组合根门禁封板（承接 DEV-PLAN-015Z）：`docs/dev-plans/015z4-ddd-layering-p2-gate-closure-plan.md`
 - DEV-PLAN-015AA：IAM Dict Store 向模块侧收口（承接 DEV-PLAN-015Z）：`docs/dev-plans/015aa-iam-dict-store-module-side-plan.md`
 - Greenfield HR 模块骨架与契约（OrgUnit/JobCatalog/Staffing/Person）：`docs/dev-plans/016-greenfield-hr-modules-skeleton.md`
 - 任职记录（Job Data / Assignments）（事件 SoT + 同步投射）：`docs/dev-plans/031-greenfield-assignment-job-data.md`
