@@ -54,15 +54,22 @@ type DictDisableValueRequest = iampersistence.DictDisableValueRequest
 type DictCorrectValueRequest = iampersistence.DictCorrectValueRequest
 
 type dictPGStore struct {
+	*iammodule.DictPGStore
 	pool pgBeginner
 }
 
 func newDictPGStore(pool pgBeginner) DictStore {
-	return &dictPGStore{pool: pool}
+	return &dictPGStore{
+		DictPGStore: iammodule.NewDictPGStore(pool),
+		pool:        pool,
+	}
 }
 
-func (s *dictPGStore) delegate() *iampersistence.PGStore {
-	return iammodule.NewDictPGStore(s.pool)
+func (s *dictPGStore) delegate() *iammodule.DictPGStore {
+	if s.DictPGStore == nil {
+		s.DictPGStore = iammodule.NewDictPGStore(s.pool)
+	}
+	return s.DictPGStore
 }
 
 func (s *dictPGStore) ListDicts(ctx context.Context, tenantID string, asOf string) ([]DictItem, error) {
@@ -87,7 +94,7 @@ func (s *dictPGStore) submitDictEvent(
 	requestID string,
 	initiator string,
 ) (DictItem, bool, error) {
-	return iampersistence.SubmitDictEvent(ctx, s.pool, tenantID, dictCode, eventType, day, payload, requestID, initiator)
+	return s.delegate().SubmitDictEvent(ctx, tenantID, dictCode, eventType, day, payload, requestID, initiator)
 }
 
 func (s *dictPGStore) ListDictValues(ctx context.Context, tenantID string, dictCode string, asOf string, keyword string, limit int, status string) ([]DictValueItem, error) {
@@ -115,7 +122,7 @@ func (s *dictPGStore) CorrectDictValue(ctx context.Context, tenantID string, req
 }
 
 func (s *dictPGStore) submitValueEvent(ctx context.Context, tenantID string, dictCode string, code string, eventType string, day string, payload map[string]any, requestID string, initiator string) (DictValueItem, bool, error) {
-	return iampersistence.SubmitValueEvent(ctx, s.pool, tenantID, dictCode, code, eventType, day, payload, requestID, initiator)
+	return s.delegate().SubmitValueEvent(ctx, tenantID, dictCode, code, eventType, day, payload, requestID, initiator)
 }
 
 func (s *dictPGStore) ListDictValueAudit(ctx context.Context, tenantID string, dictCode string, code string, limit int) ([]DictValueAuditItem, error) {
@@ -123,7 +130,7 @@ func (s *dictPGStore) ListDictValueAudit(ctx context.Context, tenantID string, d
 }
 
 type dictMemoryStore struct {
-	*iampersistence.MemoryStore
+	*iammodule.DictMemoryStore
 	dicts  map[string]map[string]DictItem
 	values map[string][]DictValueItem
 }
@@ -131,24 +138,18 @@ type dictMemoryStore struct {
 func newDictMemoryStore() DictStore {
 	core := iammodule.NewDictMemoryStore()
 	return &dictMemoryStore{
-		MemoryStore: core,
-		dicts:       core.Dicts,
-		values:      core.Values,
+		DictMemoryStore: core,
+		dicts:           core.Dicts,
+		values:          core.Values,
 	}
 }
 
 func (s *dictMemoryStore) resolveSourceTenant(tenantID string, dictCode string) (string, bool) {
-	if _, ok := s.dicts[tenantID][dictCode]; ok {
-		return tenantID, true
-	}
-	return "", false
+	return s.DictMemoryStore.ResolveSourceTenant(tenantID, dictCode)
 }
 
 func (s *dictMemoryStore) valuesForTenant(tenantID string) []DictValueItem {
-	if items, ok := s.values[tenantID]; ok {
-		return items
-	}
-	return nil
+	return s.DictMemoryStore.ValuesForTenant(tenantID)
 }
 
 func resolveDictSourceTenantAsOfTx(ctx context.Context, tx pgx.Tx, tenantID string, dictCode string, asOf string) (string, error) {

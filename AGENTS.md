@@ -552,6 +552,7 @@ modules/{module}/
 - DEV-PLAN-015Z2：OrgUnit SetID PG 默认装配入口向模块侧收口（承接 DEV-PLAN-015Z1）：`docs/dev-plans/015z2-orgunit-setid-pg-module-entry-plan.md`
 - DEV-PLAN-015Z3：OrgUnit SetID PG 实现向模块侧收缩为 Server 薄壳（承接 DEV-PLAN-015Z2）：`docs/dev-plans/015z3-orgunit-setid-pg-server-thin-shell-plan.md`
 - DEV-PLAN-015Z4：DDD 分层 P2 组合根门禁封板（承接 DEV-PLAN-015Z）：`docs/dev-plans/015z4-ddd-layering-p2-gate-closure-plan.md`
+- DEV-PLAN-015Z5：IAM Dict Store 向模块侧收缩为 Server 薄壳（承接 DEV-PLAN-015Z）：`docs/dev-plans/015z5-iam-dict-server-thin-shell-plan.md`
 - DEV-PLAN-015AA：IAM Dict Store 向模块侧收口（承接 DEV-PLAN-015Z）：`docs/dev-plans/015aa-iam-dict-store-module-side-plan.md`
 - Greenfield HR 模块骨架与契约（OrgUnit/JobCatalog/Staffing/Person）：`docs/dev-plans/016-greenfield-hr-modules-skeleton.md`
 - 任职记录（Job Data / Assignments）（事件 SoT + 同步投射）：`docs/dev-plans/031-greenfield-assignment-job-data.md`
