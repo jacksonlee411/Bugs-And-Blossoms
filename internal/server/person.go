@@ -11,7 +11,6 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jacksonlee411/Bugs-And-Blossoms/internal/routing"
-	personmodule "github.com/jacksonlee411/Bugs-And-Blossoms/modules/person"
 	personservices "github.com/jacksonlee411/Bugs-And-Blossoms/modules/person/services"
 )
 
@@ -26,16 +25,8 @@ type PersonStore interface {
 	ListPersonOptions(ctx context.Context, tenantID string, q string, limit int) ([]PersonOption, error)
 }
 
-func newPersonPGStore(pool pgBeginner) PersonStore {
-	return personmodule.NewPGStore(pool)
-}
-
 func normalizePernr(raw string) (string, error) {
 	return personservices.NormalizePernr(raw)
-}
-
-func newPersonMemoryStore() PersonStore {
-	return personmodule.NewMemoryStore()
 }
 
 func handlePersonOptionsAPI(w http.ResponseWriter, r *http.Request, store PersonStore) {
