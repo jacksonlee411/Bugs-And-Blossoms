@@ -34,6 +34,8 @@
 - 不在本计划内建立“全对象统一 8 位内部编码”。
 - 不在本计划内把 Person、Position、Assignment、JobCatalog 等对象改为 `char(8)` 主键。
 - 不在本计划内为其他模块新增 `*_node_key`。
+- 不在本计划内推动“全仓外部标识收敛”或一并治理非 Org 对象的 `*_uuid` 对外暴露问题。
+- 不保留切换前 Org 的历史事件账本、历史版本链与历史审计记录。
 - 不通过兼容别名、双写双读或 legacy fallback 来实现平滑过渡。
 - 不把内部编码设计成新的业务编码、可读编码或人工输入编码。
 
@@ -46,26 +48,26 @@
 3. 因此，Org 的结构主键方案不应直接扩大到其他业务对象。
 4. 未来若其他域要引入类似方案，必须单独提交新的调查与实施计划，不得直接引用 320 外推。
 
-### 2.4 与现行标准的关系（STD-003 前置修订）
+### 2.4 与现行标准的关系（STD-003 已对齐）
 
-当前现行标准 `STD-003` 明确冻结：
+现行标准 `STD-003` 已对齐为：
 
 - 对外契约仅使用 `org_code`
-- 内部结构关系仅使用 `org_id`
+- 内部结构关系仅使用 `org_node_key`
 
 见：
 
 - `docs/dev-plans/005-project-standards-and-spec-adoption.md`
 
-因此，`DEV-PLAN-320` 目前属于“拟议中的未来切换方案”，尚不是已生效的现行标准。
+因此，`DEV-PLAN-320` 的标识边界前置条件已在标准层完成同步；后续实施不得再回退到 `org_id` 口径。
 
 本计划明确要求：
 
-1. **在 320 进入实施前，必须先修订 `STD-003`**
-2. 修订后的标准口径必须把 Org 内部结构键从 `org_id` 更新为 `org_node_key`
-3. 若 `STD-003` 未完成修订，则 320 不得进入实施，不得以“先改代码、后补标准”的方式推进
+1. 320 的实施分支必须包含已修订的 `STD-003`
+2. 标准口径要求 Org 内部结构键使用 `org_node_key`
+3. 不得以“先改代码、后补标准”的方式推进
 
-建议修订后的标准目标口径为：
+当前标准目标口径为：
 
 - 对外契约仅使用 `org_code`
 - Org 内部结构关系仅使用 `org_node_key`
@@ -156,8 +158,23 @@
 
 - 不保留运行期 `org_id + org_node_key` 双轨写读
 - 不保留 legacy alias、fallback、compat adapter
-- 切换窗口内完成回填、Schema 替换、Go 代码替换、跨模块联动与验证
-- 回滚只允许数据库快照恢复与前向修复，不允许回到双链路常驻状态
+- 切换窗口内完成当前态导入、Schema 替换、Go 代码替换、跨模块联动与验证
+- 回滚只允许数据库快照恢复与重新发起切换，不允许回到双链路常驻状态
+
+### 3.6 决策 F：不保留历史数据，只保留切换时的当前有效组织树
+
+选定方案：
+
+- 320 **不迁移**切换前的 `org_events` 历史账本、`org_unit_versions` 历史版本链与历史审计记录
+- 320 的唯一导入源是“停写窗口内导出的当前有效 Org 树快照”
+- 切换后重新初始化符合 `org_node_key` 口径的新 Org 账本；旧账本不再参与 replay
+- 切换后的 replay 仅针对新账本产生的事件成立，不承担旧 `org_id` 账本兼容
+
+这意味着：
+
+- 本计划不要求“旧 `org_events` 在新内核上继续可回放”
+- 本计划不要求“旧 payload 中的 `parent_id/new_parent_id` 在新内核上兼容解释”
+- 若未来需要保留或迁移历史账本，必须另起专门计划，不得在 320 实施阶段临时追加
 
 ## 4. 编码规范
 
@@ -235,7 +252,7 @@ orgunit.org_node_key_registry
 
 约束要求：
 
-- `org_node_key_registry` 只承担“分配登记 / 回填核对 / 审计追踪”职责，**不得**承载 `org_code` 映射
+- `org_node_key_registry` 只承担“分配登记 / 当前态导入核对 / 审计追踪”职责，**不得**承载 `org_code` 映射
 - `org_node_key_registry` 必须启用并强制 RLS：`ENABLE ROW LEVEL SECURITY` + `FORCE ROW LEVEL SECURITY`
 - `org_node_key_registry` 必须定义 `tenant_isolation` policy，遵循 `DEV-PLAN-021` 的 fail-closed 口径
 - `allocate_org_node_key(tenant_uuid uuid)` 必须先执行 `assert_current_tenant(...)`
@@ -280,7 +297,7 @@ orgunit.org_node_key_registry
 - 以上映射必须由现有 `orgunit.org_unit_codes` 的演进版本承载，不得在 `org_node_key_registry` 中重复存储
 - `orgunit.org_unit_codes` 应从当前 `(tenant_uuid, org_id)` 主键迁移为 `(tenant_uuid, org_node_key)` 主键
 - `org_code` 唯一约束与现有 kernel-only write trigger 必须继续保留
-- `org_node_key_registry` 不是 `org_code` 映射表，只用于分配登记与回填核对
+- `org_node_key_registry` 不是 `org_code` 映射表，只用于分配登记与当前态导入核对
 
 不得再以 `org_id` 作为对外映射桥梁。
 
@@ -360,7 +377,6 @@ Org 域新边界规则：
 
 - `org_id` 对外完全不可见
 - `org_node_key` 对外完全不可见
-- 其他对象现有内部 UUID 继续保持“仅内部可见”，不得因 320 被回流暴露
 
 这里的“对外”包括：
 
@@ -388,28 +404,31 @@ Org 域新边界规则：
 4. Frontend / Presentation：
    - 不得在页面状态、URL、隐藏字段中持有 `org_id` / `org_node_key`
 
-#### 6.3.3 非 Org 对象的隐藏口径
+### 6.4 历史数据与账本切换契约
 
-虽然 320 不改 Person / Position / Assignment / JobCatalog 的主键策略，但仍要求它们继续遵守“内部键不对外暴露”：
+320 在历史数据上的明确口径如下：
 
-- `person_uuid`
-- `position_uuid`
-- `assignment_uuid`
-- `job_profile_uuid`
-- `job_family_uuid`
-- `job_family_group_uuid`
-- `job_level_uuid`
-
-这些字段在 320 期间不得因为联调、DTO 收口或接口重构而泄露到外部协议中。
+1. 切换前的 Org 历史事件、历史版本链、历史审计记录**不保留**
+2. 切换窗口内仅导出“当前有效组织树快照”作为导入源
+3. 导入源至少包含：
+   - 当前有效节点集合
+   - 父子关系
+   - `org_code`
+   - `name`
+   - `status`
+   - `is_business_unit`
+   - 其余切换后运行所必需的当前态字段
+4. 切换后新账本从导入基线重新开始；旧 `org_id` 事件账本不再 replay
+5. 若当前态快照校验失败、导入后树结构校验失败或链路验收失败，则不得 reopen 写流
 
 ## 7. 实施步骤（Big-Bang，一次发布窗口）
 
 ### 7.1 前置冻结
 
-1. [ ] 先修订 `STD-003`，把 Org 内部结构键口径从 `org_id` 更新为 `org_node_key`。
-2. [ ] 冻结 `STD-003` 的补充口径，新增 Org 域 `org_node_key` 标准条款。
+1. [ ] 确认实施分支已包含修订后的 `STD-003`，并与 320 口径一致。
+2. [ ] 冻结 `STD-003` 的 Org 专项补充口径，不得在实施阶段再次回退到 `org_id` 标准。
 3. [ ] 新增 `DEV-PLAN-320` 并评审通过。
-4. [ ] 明确停写窗口、快照策略、回滚负责人和 stopline。
+4. [ ] 明确停写窗口、当前态导出策略、回滚负责人、reopen 写流条件和 stopline。
 
 ### 7.2 Org 专属基础设施
 
@@ -423,17 +442,32 @@ Org 域新边界规则：
 4. [ ] 为 `org_node_key_registry` 增加 RLS / policy / owner / grant / `SECURITY DEFINER` / `search_path` 约束，并与 `DEV-PLAN-021/025` 对齐
 5. [ ] 增加 DB 级唯一约束与格式校验
 
-### 7.3 Org 回填
+### 7.3 当前态导出与停写
 
-1. [ ] 为 Org 现存对象生成 `org_node_key`
-2. [ ] 将所有回填结果写入 `orgunit.org_node_key_registry`
-3. [ ] 产出只读映射核对结果：
+1. [ ] 进入维护窗口，阻断 Org 写流与引用 Org 的写流
+2. [ ] 在停写状态下导出每个租户的“当前有效 Org 树快照”
+3. [ ] 对导出结果执行只读核对：
    - 总数一致
    - 空值为 0
    - 重复为 0
-   - registry 漏挂为 0
+   - 根节点数量符合约束
+   - 父子关系无悬挂
+4. [ ] 仅在导出核对通过后允许进入下一阶段
 
-### 7.4 Org 域切主
+### 7.4 基线导入与新账本初始化
+
+1. [ ] 基于当前态快照为所有当前有效 Org 分配 `org_node_key`
+2. [ ] 将分配结果写入 `orgunit.org_node_key_registry`
+3. [ ] 清理旧 Org 运行表中的历史数据，不保留旧 `org_id` 账本
+4. [ ] 以当前态快照重建新 `org_trees`、`org_unit_versions`、`org_unit_codes`
+5. [ ] 初始化切换后的新 Org 账本；旧 `org_events` 不再参与 replay
+6. [ ] 对导入结果执行结构核对：
+   - 节点总数一致
+   - `org_code` 唯一约束成立
+   - `node_path` / `path_node_keys` 一致
+   - 根/父子关系一致
+
+### 7.5 Org 域切主
 
 1. [ ] 用 `org_node_key` 替换 Org Schema 中所有结构主键与父子键
 2. [ ] 将 `ltree` 标签函数从 `org_id` 版改为 `org_node_key` 版
@@ -442,7 +476,7 @@ Org 域新边界规则：
 5. [ ] 将事件 payload 中的 `parent_id/new_parent_id` 全部改为 `parent_org_node_key/new_parent_org_node_key`
 6. [ ] 重写 Org 解析器、写服务、读模型、搜索与审计适配
 
-### 7.5 跨模块联动
+### 7.6 跨模块联动与发布 choreography
 
 1. [ ] SetID 绑定和解析全量改为 `org_node_key`
 2. [ ] Staffing 内部对 Org 的引用全量改为 `org_node_key`
@@ -450,13 +484,22 @@ Org 域新边界规则：
 4. [ ] `internal/server` 删除 `org_id` 中心 DTO 与解析接口
 5. [ ] Assistant 候选对象去除 `org_id` 暴露与依赖
 6. [ ] 对外 DTO、前端 API 类型与页面状态中彻底删除 `org_id` / `org_node_key` 暴露
+7. [ ] 发布顺序固定为：DB schema/数据导入完成 -> 后端发布 -> 前端发布 -> smoke 验收 -> reopen 写流
+8. [ ] 维护窗口内不允许新旧后端与新旧 DB 长时间重叠运行；若版本不一致，必须保持停写
+9. [ ] 只有在 smoke、主链路验收、性能 stopline 均通过后，才允许 reopen 写流
 
-### 7.6 切换后清理
+### 7.7 失败语义与恢复
+
+1. [ ] 任一导出核对失败：停止切换，保持停写，修复后重新导出
+2. [ ] 任一导入结构核对失败：恢复数据库快照，不 reopen 写流
+3. [ ] 任一 smoke / 主链路验收 / stopline 失败：恢复数据库快照，不 reopen 写流
+4. [ ] 恢复后只允许在修复并重新完成全量验收后再次发起切换
+
+### 7.8 切换后清理
 
 1. [ ] 删除 `org_id` allocator、旧解析函数、旧 JSON 字段
 2. [ ] 删除残留 `ResolveOrgID` / `ResolveOrgCode(orgID int)` 接口
 3. [ ] 新增反回流门禁，阻断 `org_id` 再进入运行期路径
-4. [ ] 核查非 Org 对象 UUID 未因本次切换被暴露到外部协议
 
 ## 8. 风险与策略
 
@@ -464,19 +507,19 @@ Org 域新边界规则：
 
 1. **Org Kernel 改动面极大**
    - 风险：`org_id` 深嵌 Org SQL 函数、投射与 SetID 逻辑，一次切换容易漏点。
-   - 策略：必须用停写窗口 + 全量快照 + 映射核对 + 端到端回归来执行。
+   - 策略：必须用停写窗口 + 当前态快照导出 + 映射核对 + 端到端回归来执行。
 
 2. **跨模块联动点多**
    - 风险：Staffing / Assistant / `internal/server` / SetID 任一链路遗漏，都会造成运行期断链。
    - 策略：实施前必须先产出全仓引用清单；切换后按链路逐项验证。
 
-3. **不保留双轨意味着回滚成本高**
-   - 风险：一旦切换脚本或运行期验证失败，不能靠 legacy fallback 止血。
-   - 策略：回滚仅允许数据库快照恢复；上线窗口必须足够长，且切换前完成 dry-run。
+3. **不保留历史数据意味着切换失败只能整窗回退**
+   - 风险：一旦导出、导入或链路验收失败，不能依赖旧账本 replay 进行局部修复。
+   - 策略：回滚仅允许数据库快照恢复；上线窗口必须足够长，且切换前完成 dry-run 与当前态导出演练。
 
 4. **现行标准未先修订会导致计划与 SSOT 冲突**
-   - 风险：若仍保留 `STD-003` 的“内部结构关系仅使用 org_id”口径，320 的实现将与现行标准直接冲突。
-   - 策略：把“先修订 `STD-003`”设为硬前置条件；未完成修订不得进入实施。
+   - 风险：若实施分支未包含已修订的 `STD-003`，或代码仍按 `org_id` 口径推进，320 的实现将与现行标准直接冲突。
+   - 策略：把“实施分支必须包含已修订 `STD-003`”设为硬前置条件；未对齐不得进入实施。
 
 ### 8.2 中风险
 
@@ -558,19 +601,19 @@ Org 域新边界规则：
 3. [ ] `full_name_path` 重建 SQL 的总耗时或 shared buffers 读写量明显失控，无法通过索引/SQL 收敛
 4. [ ] `path_node_keys` 索引体积或 vacuum 成本显著超出当前容量预算
 5. [ ] Explain 结果显示关键查询不再命中 `ltree` gist / 预期数组索引，转为大范围 seq scan 且无法在计划内修复
-6. [ ] `STD-003` 尚未完成修订，仍保留“内部结构关系仅使用 `org_id`”的现行口径
+6. [ ] 实施分支未包含已修订的 `STD-003`，或仍按 `org_id` 口径编码
+7. [ ] 当前态导出结果与导入后结构核对无法闭环
 
 ## 10. 反回流门禁
 
 实施完成后，至少新增以下门禁：
 
 1. [ ] 禁止对外 DTO 出现 `json:"org_id"` / `json:"org_node_key"`
-2. [ ] 禁止对外 DTO 出现 `json:".*_uuid"`，除非该字段已在独立契约文档中被明确批准为外部业务标识
-3. [ ] 禁止新增 `ResolveOrgID` / `ResolveOrgCode(...int)` 风格接口
-4. [ ] 禁止 Org 域运行时再写入 `parent_id` / `new_parent_id`
-5. [ ] 禁止应用层自行生成 `org_node_key`
-6. [ ] 禁止 `internal/server` 再持有模块内 PG store 的 `org_id` 中心实现
-7. [ ] 禁止前端页面状态、路由参数和 API client 类型引入 `org_id` / `org_node_key`
+2. [ ] 禁止新增 `ResolveOrgID` / `ResolveOrgCode(...int)` 风格接口
+3. [ ] 禁止 Org 域运行时再写入 `parent_id` / `new_parent_id`
+4. [ ] 禁止应用层自行生成 `org_node_key`
+5. [ ] 禁止 `internal/server` 再持有模块内 PG store 的 `org_id` 中心实现
+6. [ ] 禁止前端页面状态、路由参数和 API client 类型引入 `org_id` / `org_node_key`
 
 ## 11. 测试与覆盖率
 
@@ -585,12 +628,12 @@ Org 域新边界规则：
 
 1. [ ] `org_node_key` 编码/解码纯函数测试
 2. [ ] Org sequence 分配唯一性测试
-3. [ ] Org registry 一致性与回填核对测试
+3. [ ] Org registry 一致性与当前态导入核对测试
 4. [ ] Org tree create/move/rename/disable/enable/correct/rescind 集成测试
 5. [ ] SetID 基于 `org_node_key` 的解析集成测试
 6. [ ] Staffing 引用 `org_node_key` 的联动测试
 7. [ ] Assistant / internal API 不暴露 `org_id` / `org_node_key` 的响应契约测试
-8. [ ] Person / Position / Assignment / JobCatalog 的内部 UUID 未被外泄的契约回归测试
+8. [ ] 当前态导出 / 导入 / 结构核对测试
 9. [ ] 路由、lint、DDD layering、No Legacy 与相关反回流门禁测试
 
 ## 12. 验收标准
@@ -599,10 +642,10 @@ Org 域新边界规则：
 2. [ ] Org 域运行时不再依赖 `org_id`
 3. [ ] `internal/server` 与对外响应不再暴露 `org_id`
 4. [ ] `org_node_key` 也未暴露到任何外部协议、前端状态或 Assistant 回包中
-5. [ ] Person / Position / Assignment / JobCatalog 的内部 UUID 未因 320 被对外暴露
+5. [ ] 旧 Org 历史数据已按计划丢弃，切换后仅保留当前态重建出的新账本
 6. [ ] Org 主链路、SetID、Staffing、Assistant 回归通过
 7. [ ] 无 legacy 双轨、无 fallback、无兼容别名窗口
-8. [ ] 文档地图与门禁已更新，后续新增代码无法回流 `org_id` / `org_node_key` / 非 Org 内部 UUID
+8. [ ] 文档地图与门禁已更新，后续新增代码无法回流 `org_id` / `org_node_key`
 
 ## 13. 最终结论
 
