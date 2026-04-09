@@ -33,6 +33,30 @@ type assistantSemanticRetrievalResult struct {
 	SelectedCandidateID string   `json:"selected_candidate_id,omitempty"`
 }
 
+// assistantRuntimeProposal 表示模型在 runtime 阶段给出的建议性语义，
+// 在 authoritative gate 接受前，不能直接视为 turn 业务真值。
+type assistantRuntimeProposal struct {
+	ActionHint          string                              `json:"action_hint,omitempty"`
+	RouteKindHint       string                              `json:"route_kind_hint,omitempty"`
+	IntentIDHint        string                              `json:"intent_id_hint,omitempty"`
+	RouteCatalogVersion string                              `json:"route_catalog_version,omitempty"`
+	ParentRefText       string                              `json:"parent_ref_text,omitempty"`
+	EntityName          string                              `json:"entity_name,omitempty"`
+	EffectiveDate       string                              `json:"effective_date,omitempty"`
+	OrgCode             string                              `json:"org_code,omitempty"`
+	TargetEffectiveDate string                              `json:"target_effective_date,omitempty"`
+	NewName             string                              `json:"new_name,omitempty"`
+	NewParentRefText    string                              `json:"new_parent_ref_text,omitempty"`
+	SelectedCandidateID string                              `json:"selected_candidate_id,omitempty"`
+	Readiness           string                              `json:"readiness,omitempty"`
+	GoalSummary         string                              `json:"goal_summary,omitempty"`
+	UserVisibleReply    string                              `json:"user_visible_reply,omitempty"`
+	NextQuestion        string                              `json:"next_question,omitempty"`
+	RetrievalNeeded     bool                                `json:"retrieval_needed,omitempty"`
+	RetrievalRequests   []assistantSemanticRetrievalRequest `json:"retrieval_requests,omitempty"`
+	ConfidenceNote      string                              `json:"confidence_note,omitempty"`
+}
+
 type assistantConversationSemanticState struct {
 	GoalSummary         string                              `json:"goal_summary,omitempty"`
 	Action              string                              `json:"action,omitempty"`
@@ -48,6 +72,123 @@ type assistantConversationSemanticState struct {
 	Readiness           string                              `json:"readiness,omitempty"`
 	ConfidenceNote      string                              `json:"confidence_note,omitempty"`
 	SelectedCandidateID string                              `json:"selected_candidate_id,omitempty"`
+}
+
+func assistantNormalizeRuntimeProposal(proposal assistantRuntimeProposal) assistantRuntimeProposal {
+	proposal.ActionHint = strings.TrimSpace(proposal.ActionHint)
+	proposal.RouteKindHint = strings.TrimSpace(proposal.RouteKindHint)
+	proposal.IntentIDHint = strings.TrimSpace(proposal.IntentIDHint)
+	proposal.RouteCatalogVersion = strings.TrimSpace(proposal.RouteCatalogVersion)
+	proposal.ParentRefText = strings.TrimSpace(proposal.ParentRefText)
+	proposal.EntityName = strings.TrimSpace(proposal.EntityName)
+	proposal.EffectiveDate = strings.TrimSpace(proposal.EffectiveDate)
+	proposal.OrgCode = strings.TrimSpace(proposal.OrgCode)
+	proposal.TargetEffectiveDate = strings.TrimSpace(proposal.TargetEffectiveDate)
+	proposal.NewName = strings.TrimSpace(proposal.NewName)
+	proposal.NewParentRefText = strings.TrimSpace(proposal.NewParentRefText)
+	proposal.SelectedCandidateID = strings.TrimSpace(proposal.SelectedCandidateID)
+	proposal.Readiness = strings.TrimSpace(proposal.Readiness)
+	proposal.GoalSummary = strings.TrimSpace(proposal.GoalSummary)
+	proposal.UserVisibleReply = strings.TrimSpace(proposal.UserVisibleReply)
+	proposal.NextQuestion = strings.TrimSpace(proposal.NextQuestion)
+	proposal.RetrievalRequests = assistantNormalizeSemanticRetrievalRequests(proposal.RetrievalRequests)
+	proposal.ConfidenceNote = strings.TrimSpace(proposal.ConfidenceNote)
+	return proposal
+}
+
+func assistantRuntimeProposalPresent(proposal assistantRuntimeProposal) bool {
+	proposal = assistantNormalizeRuntimeProposal(proposal)
+	return proposal.ActionHint != "" ||
+		proposal.RouteKindHint != "" ||
+		proposal.IntentIDHint != "" ||
+		proposal.RouteCatalogVersion != "" ||
+		proposal.ParentRefText != "" ||
+		proposal.EntityName != "" ||
+		proposal.EffectiveDate != "" ||
+		proposal.OrgCode != "" ||
+		proposal.TargetEffectiveDate != "" ||
+		proposal.NewName != "" ||
+		proposal.NewParentRefText != "" ||
+		proposal.SelectedCandidateID != "" ||
+		proposal.Readiness != "" ||
+		proposal.GoalSummary != "" ||
+		proposal.UserVisibleReply != "" ||
+		proposal.NextQuestion != "" ||
+		proposal.RetrievalNeeded ||
+		len(proposal.RetrievalRequests) > 0 ||
+		proposal.ConfidenceNote != ""
+}
+
+func (proposal assistantRuntimeProposal) intentSpec() assistantIntentSpec {
+	normalized := assistantNormalizeRuntimeProposal(proposal)
+	return assistantIntentSpec{
+		Action:              normalized.ActionHint,
+		IntentID:            normalized.IntentIDHint,
+		RouteKind:           normalized.RouteKindHint,
+		RouteCatalogVersion: normalized.RouteCatalogVersion,
+		ParentRefText:       normalized.ParentRefText,
+		EntityName:          normalized.EntityName,
+		EffectiveDate:       normalized.EffectiveDate,
+		OrgCode:             normalized.OrgCode,
+		TargetEffectiveDate: normalized.TargetEffectiveDate,
+		NewName:             normalized.NewName,
+		NewParentRefText:    normalized.NewParentRefText,
+	}
+}
+
+func assistantRuntimeProposalFromIntent(intent assistantIntentSpec) assistantRuntimeProposal {
+	intent = assistantNormalizeIntentSpec(intent)
+	return assistantRuntimeProposal{
+		ActionHint:          intent.Action,
+		RouteKindHint:       intent.RouteKind,
+		IntentIDHint:        intent.IntentID,
+		RouteCatalogVersion: intent.RouteCatalogVersion,
+		ParentRefText:       intent.ParentRefText,
+		EntityName:          intent.EntityName,
+		EffectiveDate:       intent.EffectiveDate,
+		OrgCode:             intent.OrgCode,
+		TargetEffectiveDate: intent.TargetEffectiveDate,
+		NewName:             intent.NewName,
+		NewParentRefText:    intent.NewParentRefText,
+	}
+}
+
+func (proposal assistantRuntimeProposal) semanticState() assistantConversationSemanticState {
+	intent := proposal.intentSpec()
+	normalized := assistantNormalizeRuntimeProposal(proposal)
+	return assistantConversationSemanticState{
+		GoalSummary:         normalized.GoalSummary,
+		Action:              intent.Action,
+		IntentID:            intent.IntentID,
+		RouteKind:           intent.RouteKind,
+		RouteCatalogVersion: intent.RouteCatalogVersion,
+		Slots:               intent,
+		RetrievalNeeded:     normalized.RetrievalNeeded,
+		RetrievalRequests:   normalized.RetrievalRequests,
+		NextQuestion:        normalized.NextQuestion,
+		UserVisibleReply:    normalized.UserVisibleReply,
+		Readiness:           normalized.Readiness,
+		ConfidenceNote:      normalized.ConfidenceNote,
+		SelectedCandidateID: normalized.SelectedCandidateID,
+	}
+}
+
+func assistantNormalizeIntentSpec(intent assistantIntentSpec) assistantIntentSpec {
+	intent.Action = strings.TrimSpace(intent.Action)
+	intent.IntentID = strings.TrimSpace(intent.IntentID)
+	intent.RouteKind = strings.TrimSpace(intent.RouteKind)
+	intent.RouteCatalogVersion = strings.TrimSpace(intent.RouteCatalogVersion)
+	intent.ParentRefText = strings.TrimSpace(intent.ParentRefText)
+	intent.EntityName = strings.TrimSpace(intent.EntityName)
+	intent.EffectiveDate = strings.TrimSpace(intent.EffectiveDate)
+	intent.OrgCode = strings.TrimSpace(intent.OrgCode)
+	intent.TargetEffectiveDate = strings.TrimSpace(intent.TargetEffectiveDate)
+	intent.NewName = strings.TrimSpace(intent.NewName)
+	intent.NewParentRefText = strings.TrimSpace(intent.NewParentRefText)
+	intent.IntentSchemaVersion = strings.TrimSpace(intent.IntentSchemaVersion)
+	intent.ContextHash = strings.TrimSpace(intent.ContextHash)
+	intent.IntentHash = strings.TrimSpace(intent.IntentHash)
+	return intent
 }
 
 func assistantSemanticReadinessKnown(value string) bool {
@@ -162,7 +303,7 @@ func assistantNormalizeSemanticRetrievalResults(results []assistantSemanticRetri
 }
 
 func (state assistantConversationSemanticState) intentSpec() assistantIntentSpec {
-	intent := state.Slots
+	intent := assistantNormalizeIntentSpec(state.Slots)
 	intent.Action = strings.TrimSpace(firstNonEmpty(state.Action, intent.Action))
 	intent.IntentID = strings.TrimSpace(firstNonEmpty(state.IntentID, intent.IntentID))
 	intent.RouteKind = strings.TrimSpace(firstNonEmpty(state.RouteKind, intent.RouteKind))
@@ -182,6 +323,16 @@ func assistantSemanticStateFromResolved(resolved assistantResolveIntentResult) a
 		state.RetrievalResults = assistantNormalizeSemanticRetrievalResults(state.RetrievalResults)
 		return state
 	}
+	proposal := assistantNormalizeRuntimeProposal(resolved.Proposal)
+	if assistantRuntimeProposalPresent(proposal) {
+		state := proposal.semanticState()
+		state.GoalSummary = strings.TrimSpace(firstNonEmpty(state.GoalSummary, resolved.GoalSummary))
+		state.NextQuestion = strings.TrimSpace(firstNonEmpty(state.NextQuestion, resolved.NextQuestion))
+		state.UserVisibleReply = strings.TrimSpace(firstNonEmpty(state.UserVisibleReply, resolved.UserVisibleReply))
+		state.Readiness = strings.TrimSpace(firstNonEmpty(state.Readiness, resolved.Readiness))
+		state.SelectedCandidateID = strings.TrimSpace(firstNonEmpty(state.SelectedCandidateID, resolved.SelectedCandidateID))
+		return state
+	}
 	return assistantConversationSemanticState{
 		GoalSummary:         strings.TrimSpace(resolved.GoalSummary),
 		Action:              strings.TrimSpace(resolved.Intent.Action),
@@ -199,6 +350,10 @@ func assistantSemanticStateFromResolved(resolved assistantResolveIntentResult) a
 func assistantSyncResolvedSemanticResult(resolved *assistantResolveIntentResult) {
 	if resolved == nil {
 		return
+	}
+	resolved.Proposal = assistantNormalizeRuntimeProposal(resolved.Proposal)
+	if !assistantRuntimeProposalPresent(resolved.Proposal) && resolved.Intent != (assistantIntentSpec{}) {
+		resolved.Proposal = assistantRuntimeProposalFromIntent(resolved.Intent)
 	}
 	state := assistantSemanticStateFromResolved(*resolved)
 	resolved.SemanticState = state

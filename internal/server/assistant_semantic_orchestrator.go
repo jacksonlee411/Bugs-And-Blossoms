@@ -190,7 +190,8 @@ func (s *assistantConversationService) orchestrateSemanticTurn(
 	temporalHints := assistantExtractExplicitTemporalHints(strings.TrimSpace(userInput))
 	state := assistantSanitizeSemanticState(assistantSemanticStateFromResolved(resolved), temporalHints, pendingTurn)
 	resolved.SemanticState = state
-	resolved.Intent = state.intentSpec()
+	resolved.Proposal = assistantRuntimeProposalFromIntent(state.intentSpec())
+	assistantSyncResolvedSemanticResult(&resolved)
 
 	retrieval, candidates, err := s.executeSemanticCandidateLookup(ctx, tenantID, state)
 	if err != nil {
@@ -214,6 +215,7 @@ func (s *assistantConversationService) orchestrateSemanticTurn(
 			followupState.SelectedCandidateID = strings.TrimSpace(state.SelectedCandidateID)
 		}
 		followupResolved.SemanticState = followupState
+		followupResolved.Proposal = assistantRuntimeProposalFromIntent(followupState.intentSpec())
 		assistantSyncResolvedSemanticResult(&followupResolved)
 		resolved = followupResolved
 		state = assistantSemanticStateFromResolved(resolved)

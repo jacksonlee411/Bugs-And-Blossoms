@@ -61,6 +61,7 @@ type assistantResolveIntentRequest struct {
 }
 
 type assistantResolveIntentResult struct {
+	Proposal            assistantRuntimeProposal
 	Intent              assistantIntentSpec
 	SemanticState       assistantConversationSemanticState
 	ProviderName        string
@@ -99,11 +100,11 @@ type assistantSemanticIntentPayload struct {
 	ConfidenceNote      string                              `json:"confidence_note,omitempty"`
 }
 
-func (p assistantSemanticIntentPayload) intentSpec() assistantIntentSpec {
-	return assistantIntentSpec{
-		Action:              strings.TrimSpace(p.Action),
-		IntentID:            strings.TrimSpace(p.IntentID),
-		RouteKind:           strings.TrimSpace(p.RouteKind),
+func (p assistantSemanticIntentPayload) proposal() assistantRuntimeProposal {
+	return assistantNormalizeRuntimeProposal(assistantRuntimeProposal{
+		ActionHint:          strings.TrimSpace(p.Action),
+		IntentIDHint:        strings.TrimSpace(p.IntentID),
+		RouteKindHint:       strings.TrimSpace(p.RouteKind),
 		RouteCatalogVersion: strings.TrimSpace(p.RouteCatalogVersion),
 		ParentRefText:       strings.TrimSpace(p.ParentRefText),
 		EntityName:          strings.TrimSpace(p.EntityName),
@@ -112,30 +113,24 @@ func (p assistantSemanticIntentPayload) intentSpec() assistantIntentSpec {
 		TargetEffectiveDate: strings.TrimSpace(p.TargetEffectiveDate),
 		NewName:             strings.TrimSpace(p.NewName),
 		NewParentRefText:    strings.TrimSpace(p.NewParentRefText),
-		IntentSchemaVersion: strings.TrimSpace(p.IntentSchemaVersion),
-		ContextHash:         strings.TrimSpace(p.ContextHash),
-		IntentHash:          strings.TrimSpace(p.IntentHash),
-	}
+		SelectedCandidateID: strings.TrimSpace(p.SelectedCandidateID),
+		Readiness:           strings.TrimSpace(p.Readiness),
+		GoalSummary:         strings.TrimSpace(p.GoalSummary),
+		UserVisibleReply:    strings.TrimSpace(p.UserVisibleReply),
+		NextQuestion:        strings.TrimSpace(p.NextQuestion),
+		RetrievalNeeded:     p.RetrievalNeeded,
+		RetrievalRequests:   assistantNormalizeSemanticRetrievalRequests(p.RetrievalRequests),
+		ConfidenceNote:      strings.TrimSpace(p.ConfidenceNote),
+	})
+}
+
+// 保留旧 helper 作为兼容桥；其返回值仅是 proposal 的投影，不代表 authoritative intent。
+func (p assistantSemanticIntentPayload) intentSpec() assistantIntentSpec {
+	return p.proposal().intentSpec()
 }
 
 func (p assistantSemanticIntentPayload) semanticState() assistantConversationSemanticState {
-	intent := p.intentSpec()
-	return assistantConversationSemanticState{
-		GoalSummary:         strings.TrimSpace(p.GoalSummary),
-		Action:              strings.TrimSpace(intent.Action),
-		IntentID:            strings.TrimSpace(intent.IntentID),
-		RouteKind:           strings.TrimSpace(intent.RouteKind),
-		RouteCatalogVersion: strings.TrimSpace(intent.RouteCatalogVersion),
-		Slots:               intent,
-		RetrievalNeeded:     p.RetrievalNeeded,
-		RetrievalRequests:   assistantNormalizeSemanticRetrievalRequests(p.RetrievalRequests),
-		RetrievalResults:    assistantNormalizeSemanticRetrievalResults(p.RetrievalResults),
-		NextQuestion:        strings.TrimSpace(p.NextQuestion),
-		UserVisibleReply:    strings.TrimSpace(p.UserVisibleReply),
-		Readiness:           strings.TrimSpace(p.Readiness),
-		ConfidenceNote:      strings.TrimSpace(p.ConfidenceNote),
-		SelectedCandidateID: strings.TrimSpace(p.SelectedCandidateID),
-	}
+	return p.proposal().semanticState()
 }
 
 type assistantProviderStatus struct {
@@ -1666,8 +1661,8 @@ func (g *assistantModelGateway) ResolveIntent(ctx context.Context, req assistant
 				break
 			}
 			resolved := assistantResolveIntentResult{
-				Intent:              payload.intentSpec(),
-				SemanticState:       payload.semanticState(),
+				Proposal:            payload.proposal(),
+				SemanticState:       payload.proposal().semanticState(),
 				ProviderName:        strings.ToLower(strings.TrimSpace(provider.Name)),
 				ModelName:           strings.TrimSpace(provider.Model),
 				ModelRevision:       assistantModelRevision(provider),

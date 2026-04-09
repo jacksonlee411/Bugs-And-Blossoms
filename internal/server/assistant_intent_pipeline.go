@@ -40,7 +40,7 @@ func (s *assistantConversationService) resolveIntentWithPendingTurn(ctx context.
 	if err != nil {
 		return assistantResolveIntentResult{}, err
 	}
-	resolved.Intent = assistantSanitizeResolvedIntentFacts(resolved.Intent, explicitTemporalHints, pendingTurn)
+	resolved.Proposal = assistantRuntimeProposalFromIntent(assistantSanitizeResolvedIntentFacts(resolved.Proposal.intentSpec(), explicitTemporalHints, pendingTurn))
 	if assistantSemanticStatePresent(resolved.SemanticState) {
 		state := resolved.SemanticState
 		state.Slots = assistantSanitizeResolvedIntentFacts(state.intentSpec(), explicitTemporalHints, pendingTurn)
