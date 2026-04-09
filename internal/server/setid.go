@@ -139,12 +139,10 @@ func newSetIDMemoryStore() SetIDGovernanceStore {
 }
 
 func (s *setidMemoryStore) EnsureBootstrap(ctx context.Context, tenantID string, initiatorID string) error {
-	if err := s.SetIDMemoryStore.EnsureBootstrap(ctx, tenantID, initiatorID); err != nil {
-		return err
-	}
+	err := s.SetIDMemoryStore.EnsureBootstrap(ctx, tenantID, initiatorID)
 	s.globalSetIDName = s.SetIDMemoryStore.GlobalSetIDName
 	s.seq = s.SetIDMemoryStore.Seq
-	return nil
+	return err
 }
 
 func (s *setidMemoryStore) CreateGlobalSetID(ctx context.Context, name string, requestID string, initiatorID string, actorScope string) error {
