@@ -1,6 +1,6 @@
 # DEV-PLAN-015Z：DDD 分层框架收尾盘点与封板清单（承接 DEV-PLAN-015B）
 
-**状态**: 已完成（2026-04-09 16:36 CST）
+**状态**: 已完成（2026-04-09 18:28 CST，已按 `015Z4/015Z5/015Z6` 更新总账）
 
 ## 背景
 
@@ -46,20 +46,20 @@
 
 1. [X] 已明显走出“只有蓝图、没有收口”的阶段。
 2. [X] 已完成大部分低风险、可稳定切分的默认装配与模块入口收口。
-3. [ ] 尚未完成少数高耦合存量块的退出，尤其是 `setid` / `dict`。
-4. [ ] 尚未完成 `P2` 层面的更细颗粒度门禁封板。
+3. [X] 原先最重的 `setid` / `dict` server store 已收缩为兼容薄壳，不再是主要厚实现入口。
+4. [ ] 尚未完成最后一轮“总账归档 + 口径封板”收尾。
 
 ### 完成度判断
 
 以 `015B` 的 `P0/P1/P2` 路线图为口径，当前完成度可保守判断为：
 
 1. [X] `P0`：基本完成。
-2. [X] `P1`：已完成主要部分，但仍有少量高耦合尾巴未收。
-3. [ ] `P2`：只完成了第一层止血门禁，尚未完成更细规则的系统化兜底。
+2. [X] `P1`：核心结构收口已完成，原先最重的 `setid/dict` 存量已压薄。
+3. [X] `P2`：已完成第一轮可执行封板，新增代码已受更细颗粒度组合根门禁约束。
 
 因此，当前更可辩护的管理口径是：
 
-**`015` 已进入后半程，剩余约 20%~25% 的收尾工作，风险主要集中在 `setid/dict` 两块高耦合 server store，以及 `P2` 门禁封板。**
+**`015` 的主体结构收口已基本完成，剩余约 5%~10% 的工作主要集中在文档口径封板、剩余薄壳是否继续下沉的取舍，以及 `links.go` 名实一致性收尾。**
 
 ## 已完成收口面
 
@@ -68,6 +68,7 @@
 1. [X] `015C` 已新增并接入 DDD layering P0 anti-drift gate。
 2. [X] 当前新增代码已不能继续随意把模块级 PG store / Kernel 访问堆回 `internal/server`。
 3. [X] 本轮后续切片已被该门禁真实约束，说明门禁已进入日常生效状态。
+4. [X] `015Z4` 已补上 `ddd-layering-p2`，使“模块扩张时组合根不得继续空壳”进入实际门禁。
 
 ### 2. Staffing 主要收口已完成
 
@@ -91,48 +92,35 @@
 
 1. [X] `015X` 已使 `modules/orgunit/module.go` 不再为空壳。
 2. [X] `OrgUnitWriteService` 的默认装配已从 `internal/server/handler.go` 收到模块入口。
-3. [ ] 但 `orgunit` 仍未完全实现更广义的模块组合根收口。
+3. [X] `015Z1/015Z2/015Z3/015Z6` 已使 `setid` 的默认装配、PG 实现与兼容包装进一步回收到 `modules/orgunit/module.go`。
+
+### 6. Dict 与 SetID 高耦合尾巴已显著压薄
+
+1. [X] `015Z5` 已将 `dict` 的 PG/Memory helper 包装前移到 `modules/iam/module.go`，`internal/server/dicts_store.go` 收缩为兼容薄壳。
+2. [X] `015Z6` 已将 `setid` 的 PG/Memory helper 包装前移到 `modules/orgunit/module.go`，`internal/server/setid.go` 收缩为兼容薄壳。
+3. [X] `handler` 对 `setid/dict` 的默认装配已主要经模块入口返回实例，而不是继续在 `internal/server` 内堆主实现。
 
 ## 当前剩余尾巴
 
 ### A. 高优先级剩余项
 
-#### A1. SetID 仍是最大未收口块
+#### A1. `internal/server` 仍保留少量兼容薄壳
 
-当前 [`internal/server/setid.go`](/home/lee/Projects/Bugs-And-Blossoms/internal/server/setid.go) 仍保留：
+当前 [`internal/server/setid.go`](/home/lee/Projects/Bugs-And-Blossoms/internal/server/setid.go) 与 [`internal/server/dicts_store.go`](/home/lee/Projects/Bugs-And-Blossoms/internal/server/dicts_store.go) 仍保留：
 
-1. [ ] `setidPGStore`
-2. [ ] `setidMemoryStore`
-3. [ ] `newSetIDPGStore(...)`
-4. [ ] `newSetIDMemoryStore(...)`
-5. [ ] 多处直接 Kernel 写入口：
-   - [ ] `submit_setid_event`
-   - [ ] `submit_global_setid_event`
-   - [ ] `submit_scope_package_event`
-   - [ ] `submit_scope_subscription_event`
-   - [ ] `submit_global_scope_package_event`
+1. [ ] 兼容类型名：
+   - [ ] `setidPGStore` / `setidMemoryStore`
+   - [ ] `dictPGStore` / `dictMemoryStore`
+2. [ ] 兼容构造入口：
+   - [ ] `newSetIDPGStore(...)` / `newSetIDMemoryStore(...)`
+   - [ ] `newDictPGStore(...)` / `newDictMemoryStore(...)`
+3. [ ] 少量为照顾历史测试而保留的 helper / 状态镜像字段。
 
 这意味着：
 
-1. [ ] `setid` 仍是 `internal/server` 中最重的模块内部实现存量。
-2. [ ] `handler` 仍直接承担 `setid` 的默认装配。
-3. [ ] 若要继续推进 `015`，`setid` 几乎不可绕过。
-
-#### A2. Dict 仍是第二块明显存量
-
-当前 [`internal/server/dicts_store.go`](/home/lee/Projects/Bugs-And-Blossoms/internal/server/dicts_store.go) 仍保留：
-
-1. [ ] `dictPGStore`
-2. [ ] `dictMemoryStore`
-3. [ ] `newDictPGStore(...)`
-4. [ ] `newDictMemoryStore(...)`
-
-同时 [`internal/server/handler.go`](/home/lee/Projects/Bugs-And-Blossoms/internal/server/handler.go) 仍直接装配 `DictStore`。
-
-这说明：
-
-1. [ ] `dict` 仍未进入模块侧组合根语义。
-2. [ ] 它与 `setid` 一起构成当前 `internal/server` 最明显的剩余默认装配存量。
+1. [X] 这些块已不再是主要生产实现入口，而是兼容薄壳。
+2. [ ] 若要继续推进到更“纯”的终局，还可以再评估是否把这些兼容壳后移到测试侧。
+3. [ ] 但这一步已不再是高收益主风险项。
 
 ### B. 中优先级剩余项
 
@@ -156,33 +144,34 @@
 1. [ ] 纯 HTTP / 路由 / context / auth / tenant 适配层。
 2. [ ] 完全不持有模块内部 store 具体实现的薄壳。
 
-其主要残量已集中在 `setid`、`dict`，因此这不是“到处零散”的问题，而是“少量剩余块仍偏重”的问题。
+其主要残量已集中在兼容薄壳与少量适配入口，因此这已不是“厚实现未迁走”的问题，而是“是否继续追求更纯边界”的取舍问题。
 
 ### C. P2 门禁剩余项
 
 当前门禁状态可概括为：
 
-1. [X] 已能阻断新增漂移。
-2. [ ] 仍不能系统验证更细颗粒度目标。
+1. [X] 已能阻断新增 `internal/server` 分层漂移。
+2. [X] 已能阻断“模块扩张但 `module.go/links.go` 继续空壳”的新增漂移。
+3. [ ] 仍未把全部理想边界都转成机器可验证规则。
 
 仍待收口的 `P2` 项包括：
 
 1. [ ] 进一步识别哪些规则无法由 `.gocleanarch.yml` 表达。
 2. [ ] 评估是否需要追加脚本门禁来兜底：
-   - [ ] `module.go` / `links.go` 长期空壳扩散
-   - [ ] `internal/server` 继续持有模块内部实现
+   - [X] `module.go` / `links.go` 长期空壳扩散
+   - [ ] `internal/server` 继续持有新的兼容壳/具体实现
    - [ ] 更细的 `infrastructure -> services` 回流
 3. [ ] 将 `015/015B` 与实际 gate 口径做更正式的统一封板。
 
 ## 为什么剩余工作会更难
 
-当前剩余尾巴之所以没有像前几刀一样快速继续收掉，核心原因不是“不知道怎么做”，而是：
+当前剩余尾巴之所以比前几刀更像“收尾”而不是“大块迁移”，核心原因是：
 
-1. [ ] `setid` / `dict` 的测试对具体类型和内部字段耦合明显更深。
-2. [ ] 若直接大搬，容易把“实现迁移”和“测试体系重写”绑成一刀，风险显著上升。
-3. [ ] 这类块更适合先拆成新的专项子计划，再逐步退出，而不是继续沿用纯通用小切片命名直接硬推。
+1. [X] 原先最大的 `setid` / `dict` 厚块已经收薄。
+2. [ ] 剩余问题更多是“兼容壳是否继续后移”“links.go 是否名实一致”“门禁是否继续加严”。
+3. [ ] 这些问题都存在收益递减，需要在“更纯边界”与“继续推进主业务计划”之间做取舍。
 
-因此，当前 `015` 的难点已从“默认装配收口”转移为“高耦合 server store 退出策略”。
+因此，当前 `015` 的难点已从“高耦合 server store 退出策略”转移为“最后一轮封板标准怎么定义”。
 
 ## 建议的封板顺序
 
@@ -190,21 +179,20 @@
 
 若希望继续把 `015` 主体推到更完整状态，建议顺序为：
 
-1. [ ] 先新建 `setid` 专项收口计划。
-2. [ ] 将 `setid` 拆成更小的子域切片，而不是整体迁移。
-   - [ ] 例如：默认装配入口先模块侧化
-   - [ ] PG 实现再分块退出
-   - [ ] 测试兼容壳最后后移
-3. [ ] 再评估 `dict` 是否复用同样策略。
-4. [ ] 最后补 `P2` 封板门禁。
+1. [ ] 先更新 `015Z` 总账与剩余百分比，形成新的封板口径。
+2. [ ] 再决定是否要继续做：
+   - [ ] 兼容壳后移到测试侧
+   - [ ] `links.go` 名实一致性收尾
+   - [ ] 更细的 P2/P3 反漂移门禁
+3. [ ] 若这些收益有限，可直接将 `015` 视为“主体完成，进入维护期”。
 
 ### 方案二：先封板，再开新主计划
 
 若希望避免 `015` 编号继续无限延长，也可以：
 
 1. [ ] 以本文为界，将 `015` 定位为“第一阶段收口已基本完成”。
-2. [ ] 剩余 `setid/dict` 另立新主计划承接。
-3. [ ] `015` 仅保留为“蓝图 + 第一轮结构收口”的总账。
+2. [ ] 将剩余 `links.go` / 薄壳纯化 / 更细门禁另立新主计划承接。
+3. [ ] `015` 保留为“蓝图 + 第一轮结构收口 + 第一轮门禁封板”的总账。
 
 ## 当前推荐判断
 
@@ -213,11 +201,11 @@
 1. [X] `015` 不应再被定性为“只有蓝图”。
 2. [X] `015` 的第一阶段结构收口已经形成连续成果。
 3. [ ] `015` 尚未彻底封板。
-4. [ ] 其剩余工作已集中为少量高耦合尾巴，而非全仓普遍失控。
+4. [X] 其剩余工作已不再是高耦合厚实现迁移，而主要是文档与边界纯化收尾。
 
 因此，当前最稳妥的表述应固定为：
 
-**`015` 已完成大部分结构收口，剩余约 20%~25% 收尾工作，主要集中在 `setid/dict` 两块高耦合 server store 与 `P2` 门禁封板。**
+**`015` 已完成主体结构收口与第一轮门禁封板，剩余约 5%~10% 的工作主要集中在文档口径统一、兼容薄壳是否继续后移，以及 `links.go` 名实一致性收尾。**
 
 ## 测试与覆盖率
 
