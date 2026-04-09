@@ -544,6 +544,7 @@ modules/{module}/
 - DEV-PLAN-015V：Staffing PG Assignment 薄委派移出生产代码（承接 DEV-PLAN-015B P1）：`docs/dev-plans/015v-staffing-pg-assignment-wrapper-test-only-plan.md`
 - DEV-PLAN-015W：Staffing Position PG 实现与默认装配向模块侧收口（承接 DEV-PLAN-015B P1）：`docs/dev-plans/015w-staffing-position-pg-module-side-wiring-plan.md`
 - DEV-PLAN-015X：OrgUnit Write Service 默认装配向模块侧收口（承接 DEV-PLAN-015B P1）：`docs/dev-plans/015x-orgunit-write-service-module-wiring-plan.md`
+- DEV-PLAN-015Y：JobCatalog 视图服务适配入口向模块侧收口（承接 DEV-PLAN-015B P1）：`docs/dev-plans/015y-jobcatalog-view-service-adapter-module-side-plan.md`
 - Greenfield HR 模块骨架与契约（OrgUnit/JobCatalog/Staffing/Person）：`docs/dev-plans/016-greenfield-hr-modules-skeleton.md`
 - 任职记录（Job Data / Assignments）（事件 SoT + 同步投射）：`docs/dev-plans/031-greenfield-assignment-job-data.md`
 - Person 最小身份锚点（Pernr 1-8 位数字字符串）：`docs/dev-plans/027-person-minimal-identity-for-staffing.md`

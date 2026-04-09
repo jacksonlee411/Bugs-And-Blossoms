@@ -8,6 +8,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
+	jobcatalogmodule "github.com/jacksonlee411/Bugs-And-Blossoms/modules/jobcatalog"
 	"github.com/jacksonlee411/Bugs-And-Blossoms/modules/jobcatalog/services"
 )
 
@@ -603,18 +604,32 @@ func TestJobCatalogAdaptersAndViewRules(t *testing.T) {
 	})
 
 	t.Run("jobcatalog adapters map fields", func(t *testing.T) {
-		ctx := context.Background()
+		ctx := withPrincipal(context.Background(), Principal{RoleSlug: "tenant-admin", Status: "active"})
 		pkg := JobCatalogPackage{PackageUUID: "pkg-1", PackageCode: "PKG1", OwnerSetID: "S1"}
-		adapter := jobCatalogStoreAdapter{store: resolveJobCatalogStoreStub{pkg: pkg}}
-		got, err := adapter.ResolveJobCatalogPackageByCode(ctx, "t1", "PKG1", "2026-01-01")
-		if err != nil || got.PackageUUID != "pkg-1" || got.OwnerSetID != "S1" {
-			t.Fatalf("unexpected adapter pkg=%+v err=%v", got, err)
+		view, errMsg := jobcatalogmodule.ResolveView(
+			ctx,
+			jobCatalogPrincipalFromContext(ctx),
+			resolveJobCatalogStoreStub{pkg: pkg, setidPackageUUID: "pkg-1"},
+			jobCatalogSetIDStoreAdapter{store: jobCatalogSetIDStoreStub{setids: []SetID{{SetID: "S1", Status: "active"}}}},
+			"t1",
+			"2026-01-01",
+			"PKG1",
+			"",
+		)
+		if errMsg != "" || view.PackageCode != "PKG1" || view.OwnerSetID != "S1" {
+			t.Fatalf("unexpected view=%+v err=%q", view, errMsg)
 		}
-		if _, err := adapter.ResolveJobCatalogPackageByCode(ctx, "t1", "PKG1", "2026-01-01"); err != nil {
-			t.Fatalf("unexpected err=%v", err)
-		}
-		adapterErr := jobCatalogStoreAdapter{store: resolveJobCatalogStoreStub{pkgErr: errors.New("boom")}}
-		if _, err := adapterErr.ResolveJobCatalogPackageByCode(ctx, "t1", "PKG1", "2026-01-01"); err == nil {
+		_, errMsg = jobcatalogmodule.ResolveView(
+			ctx,
+			jobCatalogPrincipalFromContext(ctx),
+			resolveJobCatalogStoreStub{pkgErr: errors.New("boom")},
+			jobCatalogSetIDStoreAdapter{store: jobCatalogSetIDStoreStub{setids: []SetID{{SetID: "S1", Status: "active"}}}},
+			"t1",
+			"2026-01-01",
+			"PKG1",
+			"",
+		)
+		if errMsg == "" {
 			t.Fatal("expected error from adapter")
 		}
 

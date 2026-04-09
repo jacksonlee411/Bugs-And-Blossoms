@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"strings"
 
+	jobcatalogmodule "github.com/jacksonlee411/Bugs-And-Blossoms/modules/jobcatalog"
 	jobcatalogports "github.com/jacksonlee411/Bugs-And-Blossoms/modules/jobcatalog/domain/ports"
 	jobcatalogtypes "github.com/jacksonlee411/Bugs-And-Blossoms/modules/jobcatalog/domain/types"
 	jobcatalogservices "github.com/jacksonlee411/Bugs-And-Blossoms/modules/jobcatalog/services"
@@ -35,10 +36,10 @@ func (v jobCatalogView) listSetID() string {
 }
 
 func resolveJobCatalogView(ctx context.Context, store JobCatalogStore, setidStore jobCatalogSetIDStore, tenantID string, asOf string, packageCode string, setID string) (jobCatalogView, string) {
-	view, errMsg := jobcatalogservices.ResolveJobCatalogView(
+	view, errMsg := jobcatalogmodule.ResolveView(
 		ctx,
 		jobCatalogPrincipalFromContext(ctx),
-		jobCatalogStoreAdapter{store: store},
+		store,
 		adaptJobCatalogSetIDStore(setidStore),
 		tenantID,
 		asOf,
@@ -46,26 +47,6 @@ func resolveJobCatalogView(ctx context.Context, store JobCatalogStore, setidStor
 		setID,
 	)
 	return jobCatalogView(view), errMsg
-}
-
-type jobCatalogStoreAdapter struct {
-	store JobCatalogStore
-}
-
-func (a jobCatalogStoreAdapter) ResolveJobCatalogPackageByCode(ctx context.Context, tenantID string, packageCode string, asOfDate string) (jobcatalogservices.JobCatalogPackage, error) {
-	pkg, err := a.store.ResolveJobCatalogPackageByCode(ctx, tenantID, packageCode, asOfDate)
-	if err != nil {
-		return jobcatalogservices.JobCatalogPackage{}, err
-	}
-	return jobcatalogservices.JobCatalogPackage{
-		PackageUUID: pkg.PackageUUID,
-		PackageCode: pkg.PackageCode,
-		OwnerSetID:  pkg.OwnerSetID,
-	}, nil
-}
-
-func (a jobCatalogStoreAdapter) ResolveJobCatalogPackageBySetID(ctx context.Context, tenantID string, setID string, asOfDate string) (string, error) {
-	return a.store.ResolveJobCatalogPackageBySetID(ctx, tenantID, setID, asOfDate)
 }
 
 type jobCatalogSetIDStoreAdapter struct {

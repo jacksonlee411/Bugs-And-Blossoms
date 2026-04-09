@@ -30,7 +30,7 @@ func normalizePackageCode(input string) string {
 }
 
 func canEditDefltPackage(ctx context.Context) bool {
-	return jobcatalogservices.CanEditDefltPackage(jobCatalogPrincipalFromContext(ctx))
+	return jobcatalogmodule.CanEditDefltPackage(jobCatalogPrincipalFromContext(ctx))
 }
 
 func ownerSetIDEditable(ctx context.Context, setidStore jobCatalogSetIDStore, tenantID string, ownerSetID string) bool {
@@ -38,7 +38,7 @@ func ownerSetIDEditable(ctx context.Context, setidStore jobCatalogSetIDStore, te
 }
 
 func loadOwnedJobCatalogPackages(ctx context.Context, setidStore jobCatalogSetIDStore, tenantID string, asOf string) ([]OwnedScopePackage, error) {
-	rows, err := jobcatalogservices.LoadOwnedJobCatalogPackages(ctx, jobCatalogPrincipalFromContext(ctx), adaptJobCatalogSetIDStore(setidStore), tenantID, asOf)
+	rows, err := jobcatalogmodule.LoadOwnedPackages(ctx, jobCatalogPrincipalFromContext(ctx), adaptJobCatalogSetIDStore(setidStore), tenantID, asOf)
 	if err != nil {
 		return nil, err
 	}
