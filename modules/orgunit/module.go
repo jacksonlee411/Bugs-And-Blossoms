@@ -63,12 +63,10 @@ type SetIDMemoryStore struct {
 }
 
 func (s *SetIDMemoryStore) EnsureBootstrap(ctx context.Context, tenantID string, initiatorID string) error {
-	if err := s.SetIDMemoryStore.EnsureBootstrap(ctx, tenantID, initiatorID); err != nil {
-		return err
-	}
+	err := s.SetIDMemoryStore.EnsureBootstrap(ctx, tenantID, initiatorID)
 	s.GlobalSetIDName = s.SetIDMemoryStore.GlobalSetIDName
 	s.Seq = s.SetIDMemoryStore.Seq
-	return nil
+	return err
 }
 
 func (s *SetIDMemoryStore) CreateGlobalSetID(ctx context.Context, name string, requestID string, initiatorID string, actorScope string) error {
