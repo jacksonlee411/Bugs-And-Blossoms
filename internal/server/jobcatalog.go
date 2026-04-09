@@ -38,26 +38,6 @@ func (v jobCatalogView) listSetID() string {
 	return jobcatalogservices.JobCatalogView(v).ListSetID()
 }
 
-func normalizePackageCode(input string) string {
-	return jobcatalogservices.NormalizePackageCode(input)
-}
-
-func canEditDefltPackage(ctx context.Context) bool {
-	return jobcatalogservices.CanEditDefltPackage(jobCatalogPrincipalFromContext(ctx))
-}
-
-func ownerSetIDEditable(ctx context.Context, setidStore jobCatalogSetIDStore, tenantID string, ownerSetID string) bool {
-	return jobcatalogservices.OwnerSetIDEditable(ctx, jobCatalogPrincipalFromContext(ctx), adaptJobCatalogSetIDStore(setidStore), tenantID, ownerSetID)
-}
-
-func loadOwnedJobCatalogPackages(ctx context.Context, setidStore jobCatalogSetIDStore, tenantID string, asOf string) ([]OwnedScopePackage, error) {
-	rows, err := jobcatalogservices.LoadOwnedJobCatalogPackages(ctx, jobCatalogPrincipalFromContext(ctx), adaptJobCatalogSetIDStore(setidStore), tenantID, asOf)
-	if err != nil {
-		return nil, err
-	}
-	return toServerOwnedScopePackages(rows), nil
-}
-
 func resolveJobCatalogView(ctx context.Context, store JobCatalogStore, setidStore jobCatalogSetIDStore, tenantID string, asOf string, packageCode string, setID string) (jobCatalogView, string) {
 	view, errMsg := jobcatalogservices.ResolveJobCatalogView(
 		ctx,

@@ -7,6 +7,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	jobcatalogmodule "github.com/jacksonlee411/Bugs-And-Blossoms/modules/jobcatalog"
 	jobcatalogpersistence "github.com/jacksonlee411/Bugs-And-Blossoms/modules/jobcatalog/infrastructure/persistence"
+	jobcatalogservices "github.com/jacksonlee411/Bugs-And-Blossoms/modules/jobcatalog/services"
 )
 
 type jobcatalogMemoryStore = jobcatalogpersistence.MemoryStore
@@ -18,6 +19,26 @@ func newJobCatalogPGStore(pool pgBeginner) JobCatalogStore {
 
 func newJobCatalogMemoryStore() JobCatalogStore {
 	return jobcatalogmodule.NewMemoryStore()
+}
+
+func normalizePackageCode(input string) string {
+	return jobcatalogservices.NormalizePackageCode(input)
+}
+
+func canEditDefltPackage(ctx context.Context) bool {
+	return jobcatalogservices.CanEditDefltPackage(jobCatalogPrincipalFromContext(ctx))
+}
+
+func ownerSetIDEditable(ctx context.Context, setidStore jobCatalogSetIDStore, tenantID string, ownerSetID string) bool {
+	return jobcatalogservices.OwnerSetIDEditable(ctx, jobCatalogPrincipalFromContext(ctx), adaptJobCatalogSetIDStore(setidStore), tenantID, ownerSetID)
+}
+
+func loadOwnedJobCatalogPackages(ctx context.Context, setidStore jobCatalogSetIDStore, tenantID string, asOf string) ([]OwnedScopePackage, error) {
+	rows, err := jobcatalogservices.LoadOwnedJobCatalogPackages(ctx, jobCatalogPrincipalFromContext(ctx), adaptJobCatalogSetIDStore(setidStore), tenantID, asOf)
+	if err != nil {
+		return nil, err
+	}
+	return toServerOwnedScopePackages(rows), nil
 }
 
 func resolveJobCatalogPackageByCode(ctx context.Context, tx pgx.Tx, tenantID string, packageCode string, asOfDate string) (JobCatalogPackage, error) {
