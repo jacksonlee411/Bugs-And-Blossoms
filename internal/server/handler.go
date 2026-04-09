@@ -19,6 +19,7 @@ import (
 	orgunitpersistence "github.com/jacksonlee411/Bugs-And-Blossoms/modules/orgunit/infrastructure/persistence"
 	orgunitservices "github.com/jacksonlee411/Bugs-And-Blossoms/modules/orgunit/services"
 	personmodule "github.com/jacksonlee411/Bugs-And-Blossoms/modules/person"
+	staffingmodule "github.com/jacksonlee411/Bugs-And-Blossoms/modules/staffing"
 	"github.com/jacksonlee411/Bugs-And-Blossoms/pkg/authz"
 	dictpkg "github.com/jacksonlee411/Bugs-And-Blossoms/pkg/dict"
 )
@@ -124,12 +125,11 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, error) {
 
 	if positionStore == nil || assignmentStore == nil {
 		if pgStore, ok := orgStore.(*orgUnitPGStore); ok {
-			s := newStaffingPGStore(pgStore.pool)
 			if positionStore == nil {
-				positionStore = s
+				positionStore = newStaffingPGStore(pgStore.pool)
 			}
 			if assignmentStore == nil {
-				assignmentStore = s
+				assignmentStore = staffingmodule.NewAssignmentPGStore(pgStore.pool)
 			}
 		} else {
 			s := newStaffingMemoryStore()
