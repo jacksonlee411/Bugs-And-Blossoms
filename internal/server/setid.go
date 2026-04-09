@@ -4,7 +4,6 @@ import (
 	"context"
 	orgunitmodule "github.com/jacksonlee411/Bugs-And-Blossoms/modules/orgunit"
 	orgunitports "github.com/jacksonlee411/Bugs-And-Blossoms/modules/orgunit/domain/ports"
-	orgunitpersistence "github.com/jacksonlee411/Bugs-And-Blossoms/modules/orgunit/infrastructure/persistence"
 )
 
 type SetID = orgunitports.SetID
@@ -20,15 +19,22 @@ type businessUnitLister interface {
 }
 
 type setidPGStore struct {
+	*orgunitmodule.SetIDPGStore
 	pool pgBeginner
 }
 
 func newSetIDPGStore(pool pgBeginner) SetIDGovernanceStore {
-	return &setidPGStore{pool: pool}
+	return &setidPGStore{
+		SetIDPGStore: orgunitmodule.NewSetIDPGStore(pool),
+		pool:         pool,
+	}
 }
 
-func (s *setidPGStore) delegate() *orgunitpersistence.SetIDPGStore {
-	return orgunitpersistence.NewSetIDPGStore(s.pool)
+func (s *setidPGStore) delegate() *orgunitmodule.SetIDPGStore {
+	if s.SetIDPGStore == nil {
+		s.SetIDPGStore = orgunitmodule.NewSetIDPGStore(s.pool)
+	}
+	return s.SetIDPGStore
 }
 
 func (s *setidPGStore) EnsureBootstrap(ctx context.Context, tenantID string, initiatorID string) error {
@@ -108,7 +114,7 @@ func (s *setidPGStore) ListGlobalScopePackages(ctx context.Context, scopeCode st
 }
 
 type setidMemoryStore struct {
-	*orgunitpersistence.SetIDMemoryStore
+	*orgunitmodule.SetIDMemoryStore
 	setids              map[string]map[string]SetID
 	bindings            map[string]map[string]SetIDBindingRow
 	scopePackages       map[string]map[string]map[string]ScopePackage
@@ -119,7 +125,7 @@ type setidMemoryStore struct {
 }
 
 func newSetIDMemoryStore() SetIDGovernanceStore {
-	core := orgunitmodule.NewSetIDMemoryStore().(*orgunitpersistence.SetIDMemoryStore)
+	core := orgunitmodule.NewSetIDMemoryStore()
 	return &setidMemoryStore{
 		SetIDMemoryStore:    core,
 		setids:              core.SetIDs,
