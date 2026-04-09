@@ -108,7 +108,7 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, error) {
 
 	if jobcatalogStore == nil {
 		if pgStore, ok := orgStore.(*orgUnitPGStore); ok {
-			jobcatalogStore = newJobCatalogPGStore(pgStore.pool)
+			jobcatalogStore = jobcatalogmodule.NewPGStore(pgStore.pool)
 		} else {
 			jobcatalogStore = jobcatalogmodule.NewMemoryStore()
 		}

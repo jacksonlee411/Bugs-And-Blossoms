@@ -527,6 +527,7 @@ modules/{module}/
 - DEV-PLAN-015E：Person 默认装配向模块侧收口（承接 DEV-PLAN-015B P1）：`docs/dev-plans/015e-person-default-wiring-module-side-plan.md`
 - DEV-PLAN-015F：Person 模块 Composition Root 最小化落地（承接 DEV-PLAN-015B P1）：`docs/dev-plans/015f-person-module-composition-root-minimalization-plan.md`
 - DEV-PLAN-015G：JobCatalog 内存 Store 向模块侧收口（承接 DEV-PLAN-015B P1）：`docs/dev-plans/015g-jobcatalog-memory-store-module-side-plan.md`
+- DEV-PLAN-015H：JobCatalog PG Store 向模块侧收口（承接 DEV-PLAN-015B P1）：`docs/dev-plans/015h-jobcatalog-pg-store-module-side-plan.md`
 - Greenfield HR 模块骨架与契约（OrgUnit/JobCatalog/Staffing/Person）：`docs/dev-plans/016-greenfield-hr-modules-skeleton.md`
 - 任职记录（Job Data / Assignments）（事件 SoT + 同步投射）：`docs/dev-plans/031-greenfield-assignment-job-data.md`
 - Person 最小身份锚点（Pernr 1-8 位数字字符串）：`docs/dev-plans/027-person-minimal-identity-for-staffing.md`
