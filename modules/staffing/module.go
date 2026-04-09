@@ -18,6 +18,10 @@ func NewAssignmentPGStore(pool PGBeginner) ports.AssignmentStore {
 	return persistence.NewAssignmentPGStore(pool)
 }
 
+func NewPositionMemoryStore() ports.PositionStore {
+	return persistence.NewPositionMemoryStore()
+}
+
 func NewAssignmentMemoryStore() ports.AssignmentStore {
 	return persistence.NewAssignmentMemoryStore()
 }

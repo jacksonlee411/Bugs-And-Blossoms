@@ -132,9 +132,8 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, error) {
 				assignmentStore = staffingmodule.NewAssignmentPGStore(pgStore.pool)
 			}
 		} else {
-			s := newStaffingMemoryStore()
 			if positionStore == nil {
-				positionStore = s
+				positionStore = staffingmodule.NewPositionMemoryStore()
 			}
 			if assignmentStore == nil {
 				assignmentStore = staffingmodule.NewAssignmentMemoryStore()
