@@ -13,28 +13,10 @@ import (
 	staffingtypes "github.com/jacksonlee411/Bugs-And-Blossoms/modules/staffing/domain/types"
 )
 
-type Position struct {
-	PositionUUID          string
-	OrgUnitID             string
-	ReportsToPositionUUID string
-	JobCatalogSetID       string
-	JobCatalogSetIDAsOf   string
-	JobProfileUUID        string
-	JobProfileCode        string
-	Name                  string
-	LifecycleStatus       string
-	CapacityFTE           string
-	EffectiveAt           string
-}
-
+type Position = staffingtypes.Position
 type Assignment = staffingtypes.Assignment
 
-type PositionStore interface {
-	ListPositionsCurrent(ctx context.Context, tenantID string, asOfDate string) ([]Position, error)
-	CreatePositionCurrent(ctx context.Context, tenantID string, effectiveDate string, orgUnitID string, jobProfileUUID string, capacityFTE string, name string) (Position, error)
-	UpdatePositionCurrent(ctx context.Context, tenantID string, positionUUID string, effectiveDate string, orgUnitID string, reportsToPositionUUID string, jobProfileUUID string, capacityFTE string, name string, lifecycleStatus string) (Position, error)
-}
-
+type PositionStore = staffingports.PositionStore
 type AssignmentStore = staffingports.AssignmentStore
 
 type staffingPGStore struct {
