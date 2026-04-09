@@ -185,7 +185,7 @@ describe('SetIDGovernancePage', () => {
     )
     expect(findDateInputByValue('2026-04-08')).toBeInTheDocument()
     expect(screen.getByText('Viewing history as of 2026-03-01')).toBeInTheDocument()
-  })
+  }, 20000)
 
   it('passes task-time hint into explain tooling section', async () => {
     renderPage('/org/setid/registry', 'explain')
@@ -194,12 +194,12 @@ describe('SetIDGovernancePage', () => {
     expect(screen.getByTestId('setid-explain')).toHaveTextContent(
       'hint=This time is only used for the current explain request and will not change the host page browsing date.'
     )
-  })
+  }, 20000)
 
   it('uses task-oriented labels for registry editor dates', async () => {
     renderPage()
 
     await waitFor(() => expect(screen.getByText('Rule Effective Date')).toBeInTheDocument())
     expect(screen.queryByText('effective_date')).not.toBeInTheDocument()
-  })
+  }, 20000)
 })

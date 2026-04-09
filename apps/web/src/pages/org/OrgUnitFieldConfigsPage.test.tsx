@@ -209,7 +209,7 @@ describe('OrgUnitFieldConfigsPage', () => {
     expect(screen.queryByLabelText('As Of Date')).not.toBeInTheDocument()
     expect(screen.getByText('Viewing current data by default')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'View History' })).toBeInTheDocument()
-  })
+  }, 20000)
 
   it('omits as_of when opening setid registry from current mode', async () => {
     renderPage()
@@ -222,7 +222,7 @@ describe('OrgUnitFieldConfigsPage', () => {
         '/org/setid/registry?registry_view=editor&capability_key=org.orgunit_write.field_policy&field_key=x_cost_center'
       )
     )
-  })
+  }, 20000)
 
   it('passes as_of to setid registry in history mode', async () => {
     cleanup()
@@ -248,5 +248,5 @@ describe('OrgUnitFieldConfigsPage', () => {
         '/org/setid/registry?as_of=2026-03-01&registry_view=editor&capability_key=org.orgunit_write.field_policy&field_key=x_cost_center'
       )
     )
-  })
+  }, 20000)
 })

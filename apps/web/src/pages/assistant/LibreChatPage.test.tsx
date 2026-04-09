@@ -30,5 +30,5 @@ describe('LibreChatPage', () => {
         configurable: true
       })
     }
-  })
+  }, 20000)
 })

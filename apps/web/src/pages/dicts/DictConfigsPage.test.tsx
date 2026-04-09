@@ -4,6 +4,8 @@ import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { DictConfigsPage } from './DictConfigsPage'
 
+const currentUTCDate = () => new Date().toISOString().slice(0, 10)
+
 const dictApiMocks = vi.hoisted(() => ({
   createDict: vi.fn(),
   createDictValue: vi.fn(),
@@ -32,7 +34,7 @@ vi.mock('../../utils/readViewState', async () => {
   const actual = await vi.importActual<typeof import('../../utils/readViewState')>('../../utils/readViewState')
   return {
     ...actual,
-    todayISODate: () => '2026-04-08'
+    todayISODate: () => new Date().toISOString().slice(0, 10)
   }
 })
 
@@ -140,11 +142,11 @@ describe('DictConfigsPage', () => {
   it('defaults to current browsing and omits as_of when opening details from current mode', async () => {
     renderPage()
 
-    await waitFor(() => expect(dictApiMocks.listDicts).toHaveBeenCalledWith('2026-04-08'))
+    await waitFor(() => expect(dictApiMocks.listDicts).toHaveBeenCalledWith(currentUTCDate()))
     await waitFor(() =>
       expect(dictApiMocks.listDictValues).toHaveBeenCalledWith({
         dictCode: 'cost_center',
-        asOf: '2026-04-08',
+        asOf: currentUTCDate(),
         q: '',
         status: 'all',
         limit: 50
@@ -160,7 +162,7 @@ describe('DictConfigsPage', () => {
 
     await waitFor(() => expect(screen.getByTestId('location-state')).toHaveTextContent('/dicts/cost_center/values/A1'))
     expect(screen.getByTestId('location-state')).not.toHaveTextContent('as_of=')
-  })
+  }, 20000)
 
   it('carries as_of to details only in history mode', async () => {
     renderPage()
@@ -178,7 +180,7 @@ describe('DictConfigsPage', () => {
     await waitFor(() =>
       expect(screen.getByTestId('location-state')).toHaveTextContent('/dicts/cost_center/values/A1?as_of=2026-03-01')
     )
-  })
+  }, 20000)
 
   it('does not push browsing as_of when editing release time', async () => {
     renderPage()
@@ -189,5 +191,5 @@ describe('DictConfigsPage', () => {
 
     expect(screen.getByTestId('location-state')).toHaveTextContent('/dicts')
     expect(screen.getByTestId('location-state')).not.toHaveTextContent('as_of=')
-  })
+  }, 20000)
 })

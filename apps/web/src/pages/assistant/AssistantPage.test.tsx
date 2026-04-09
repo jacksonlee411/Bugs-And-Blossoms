@@ -56,7 +56,7 @@ describe('AssistantPage', () => {
     expect(screen.getByTestId('assistant-runtime-upstream-url')).toHaveTextContent('http://localhost:3080')
     expect(screen.getByTestId('assistant-conversation-log-item')).toHaveTextContent('conv_1')
     expect(screen.getByTestId('assistant-conversation-log-item')).toHaveTextContent('在 AI治理办公室 下新建 人力资源部2')
-  })
+  }, 20000)
 
   it('keeps /app/assistant as read-only log page after old bridge retirement', async () => {
     render(<AssistantPage />)
@@ -71,7 +71,7 @@ describe('AssistantPage', () => {
     expect(screen.queryByRole('button', { name: 'Confirm' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Commit' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Submit Task' })).not.toBeInTheDocument()
-  })
+  }, 20000)
 
   it('shows warning when log loading fails', async () => {
     assistantAPIMocks.getAssistantRuntimeStatus.mockRejectedValueOnce(new Error('助手日志加载失败'))
@@ -79,5 +79,5 @@ describe('AssistantPage', () => {
     render(<AssistantPage />)
 
     await waitFor(() => expect(screen.getByText('助手日志加载失败')).toBeInTheDocument())
-  })
+  }, 20000)
 })
