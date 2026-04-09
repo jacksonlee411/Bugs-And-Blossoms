@@ -4,85 +4,23 @@ import (
 	"context"
 	"errors"
 	"sort"
-	"strconv"
 	"strings"
-	"time"
 
 	"github.com/jackc/pgx/v5"
+	orgunitmodule "github.com/jacksonlee411/Bugs-And-Blossoms/modules/orgunit"
+	orgunitports "github.com/jacksonlee411/Bugs-And-Blossoms/modules/orgunit/domain/ports"
+	orgunitpersistence "github.com/jacksonlee411/Bugs-And-Blossoms/modules/orgunit/infrastructure/persistence"
 	setidresolver "github.com/jacksonlee411/Bugs-And-Blossoms/pkg/setid"
 	"github.com/jacksonlee411/Bugs-And-Blossoms/pkg/uuidv7"
 )
 
-type SetID struct {
-	SetID    string
-	Name     string
-	Status   string
-	IsShared bool
-}
-
-type SetIDBindingRow struct {
-	OrgUnitID string
-	SetID     string
-	ValidFrom string
-	ValidTo   string
-}
-
-type ScopeCode struct {
-	ScopeCode   string
-	OwnerModule string
-	ShareMode   string
-	IsStable    bool
-}
-
-type ScopePackage struct {
-	PackageID     string
-	ScopeCode     string
-	PackageCode   string
-	OwnerSetID    string
-	Name          string
-	Status        string
-	EffectiveDate string `json:"-"`
-	UpdatedAt     string `json:"-"`
-}
-
-type OwnedScopePackage struct {
-	PackageID     string `json:"package_id"`
-	ScopeCode     string `json:"scope_code"`
-	PackageCode   string `json:"package_code"`
-	OwnerSetID    string `json:"owner_setid"`
-	Name          string `json:"name"`
-	Status        string `json:"status"`
-	EffectiveDate string `json:"effective_date"`
-}
-
-type ScopeSubscription struct {
-	SetID         string
-	ScopeCode     string
-	PackageID     string
-	PackageOwner  string
-	EffectiveDate string
-	EndDate       string
-}
-
-type SetIDGovernanceStore interface {
-	EnsureBootstrap(ctx context.Context, tenantID string, initiatorID string) error
-	ListSetIDs(ctx context.Context, tenantID string) ([]SetID, error)
-	ListGlobalSetIDs(ctx context.Context) ([]SetID, error)
-	CreateSetID(ctx context.Context, tenantID string, setID string, name string, effectiveDate string, requestID string, initiatorID string) error
-	ListSetIDBindings(ctx context.Context, tenantID string, asOfDate string) ([]SetIDBindingRow, error)
-	BindSetID(ctx context.Context, tenantID string, orgUnitID string, effectiveDate string, setID string, requestID string, initiatorID string) error
-	ResolveSetID(ctx context.Context, tenantID string, orgUnitID string, asOfDate string) (string, error)
-	CreateGlobalSetID(ctx context.Context, name string, requestID string, initiatorID string, actorScope string) error
-	ListScopeCodes(ctx context.Context, tenantID string) ([]ScopeCode, error)
-	CreateScopePackage(ctx context.Context, tenantID string, scopeCode string, packageCode string, ownerSetID string, name string, effectiveDate string, requestID string, initiatorID string) (ScopePackage, error)
-	DisableScopePackage(ctx context.Context, tenantID string, packageID string, effectiveDate string, requestID string, initiatorID string) (ScopePackage, error)
-	ListScopePackages(ctx context.Context, tenantID string, scopeCode string) ([]ScopePackage, error)
-	ListOwnedScopePackages(ctx context.Context, tenantID string, scopeCode string, asOfDate string) ([]OwnedScopePackage, error)
-	CreateScopeSubscription(ctx context.Context, tenantID string, setID string, scopeCode string, packageID string, packageOwner string, effectiveDate string, requestID string, initiatorID string) (ScopeSubscription, error)
-	GetScopeSubscription(ctx context.Context, tenantID string, setID string, scopeCode string, asOfDate string) (ScopeSubscription, error)
-	CreateGlobalScopePackage(ctx context.Context, scopeCode string, packageCode string, name string, effectiveDate string, requestID string, initiatorID string, actorScope string) (ScopePackage, error)
-	ListGlobalScopePackages(ctx context.Context, scopeCode string) ([]ScopePackage, error)
-}
+type SetID = orgunitports.SetID
+type SetIDBindingRow = orgunitports.SetIDBindingRow
+type ScopeCode = orgunitports.ScopeCode
+type ScopePackage = orgunitports.ScopePackage
+type OwnedScopePackage = orgunitports.OwnedScopePackage
+type ScopeSubscription = orgunitports.ScopeSubscription
+type SetIDGovernanceStore = orgunitports.SetIDGovernanceStore
 
 type businessUnitLister interface {
 	ListBusinessUnitsCurrent(ctx context.Context, tenantID string, asOfDate string) ([]OrgUnitNode, error)
@@ -821,6 +759,7 @@ LIMIT 1
 }
 
 type setidMemoryStore struct {
+	*orgunitpersistence.SetIDMemoryStore
 	setids              map[string]map[string]SetID
 	bindings            map[string]map[string]SetIDBindingRow
 	scopePackages       map[string]map[string]map[string]ScopePackage
@@ -831,253 +770,46 @@ type setidMemoryStore struct {
 }
 
 func newSetIDMemoryStore() SetIDGovernanceStore {
+	core := orgunitmodule.NewSetIDMemoryStore().(*orgunitpersistence.SetIDMemoryStore)
 	return &setidMemoryStore{
-		setids:              make(map[string]map[string]SetID),
-		bindings:            make(map[string]map[string]SetIDBindingRow),
-		scopePackages:       make(map[string]map[string]map[string]ScopePackage),
-		scopeSubscriptions:  make(map[string]map[string]map[string]ScopeSubscription),
-		globalScopePackages: make(map[string]map[string]ScopePackage),
+		SetIDMemoryStore:    core,
+		setids:              core.SetIDs,
+		bindings:            core.Bindings,
+		scopePackages:       core.ScopePackages,
+		scopeSubscriptions:  core.ScopeSubscriptions,
+		globalScopePackages: core.GlobalScopePackages,
+		globalSetIDName:     core.GlobalSetIDName,
+		seq:                 core.Seq,
 	}
 }
 
-func (s *setidMemoryStore) EnsureBootstrap(_ context.Context, tenantID string, _ string) error {
-	if s.setids[tenantID] == nil {
-		s.setids[tenantID] = make(map[string]SetID)
+func (s *setidMemoryStore) EnsureBootstrap(ctx context.Context, tenantID string, initiatorID string) error {
+	if err := s.SetIDMemoryStore.EnsureBootstrap(ctx, tenantID, initiatorID); err != nil {
+		return err
 	}
-	if s.bindings[tenantID] == nil {
-		s.bindings[tenantID] = make(map[string]SetIDBindingRow)
-	}
-	if _, ok := s.setids[tenantID]["DEFLT"]; !ok {
-		s.setids[tenantID]["DEFLT"] = SetID{SetID: "DEFLT", Name: "Default", Status: "active"}
-	}
-	if s.globalSetIDName == "" {
-		s.globalSetIDName = "Shared"
-	}
+	s.globalSetIDName = s.SetIDMemoryStore.GlobalSetIDName
+	s.seq = s.SetIDMemoryStore.Seq
 	return nil
 }
 
-func (s *setidMemoryStore) ListSetIDs(ctx context.Context, tenantID string) ([]SetID, error) {
-	var out []SetID
-	globalSetids, _ := s.ListGlobalSetIDs(ctx)
-	out = append(out, globalSetids...)
-	for _, v := range s.setids[tenantID] {
-		out = append(out, v)
+func (s *setidMemoryStore) CreateGlobalSetID(ctx context.Context, name string, requestID string, initiatorID string, actorScope string) error {
+	if err := s.SetIDMemoryStore.CreateGlobalSetID(ctx, name, requestID, initiatorID, actorScope); err != nil {
+		return err
 	}
-	sort.Slice(out, func(i, j int) bool { return out[i].SetID < out[j].SetID })
-	return out, nil
-}
-
-func (s *setidMemoryStore) ListGlobalSetIDs(_ context.Context) ([]SetID, error) {
-	if s.globalSetIDName == "" {
-		return nil, nil
-	}
-	return []SetID{{SetID: "SHARE", Name: s.globalSetIDName, Status: "active", IsShared: true}}, nil
-}
-
-func (s *setidMemoryStore) CreateSetID(_ context.Context, tenantID string, setID string, name string, _ string, _ string, _ string) error {
-	setID = strings.ToUpper(strings.TrimSpace(setID))
-	if setID == "" {
-		return errors.New("setid is required")
-	}
-	if setID == "SHARE" {
-		return errors.New("SETID_RESERVED: SHARE is reserved")
-	}
-	if s.setids[tenantID] == nil {
-		s.setids[tenantID] = make(map[string]SetID)
-	}
-	if _, ok := s.setids[tenantID][setID]; ok {
-		return errors.New("SETID_ALREADY_EXISTS")
-	}
-	s.setids[tenantID][setID] = SetID{SetID: setID, Name: name, Status: "active"}
+	s.globalSetIDName = s.SetIDMemoryStore.GlobalSetIDName
 	return nil
 }
 
-func (s *setidMemoryStore) ListSetIDBindings(_ context.Context, tenantID string, _ string) ([]SetIDBindingRow, error) {
-	var out []SetIDBindingRow
-	for _, v := range s.bindings[tenantID] {
-		out = append(out, v)
-	}
-	sort.Slice(out, func(i, j int) bool { return out[i].OrgUnitID < out[j].OrgUnitID })
-	return out, nil
+func (s *setidMemoryStore) CreateScopePackage(ctx context.Context, tenantID string, scopeCode string, packageCode string, ownerSetID string, name string, effectiveDate string, requestID string, initiatorID string) (ScopePackage, error) {
+	pkg, err := s.SetIDMemoryStore.CreateScopePackage(ctx, tenantID, scopeCode, packageCode, ownerSetID, name, effectiveDate, requestID, initiatorID)
+	s.seq = s.SetIDMemoryStore.Seq
+	return pkg, err
 }
 
-func (s *setidMemoryStore) BindSetID(_ context.Context, tenantID string, orgUnitID string, effectiveDate string, setID string, _ string, _ string) error {
-	orgUnitID = strings.TrimSpace(orgUnitID)
-	if orgUnitID == "" {
-		return errors.New("org_unit_id is required")
-	}
-	setID = strings.ToUpper(strings.TrimSpace(setID))
-	if setID == "" {
-		return errors.New("setid is required")
-	}
-	if _, ok := s.setids[tenantID][setID]; !ok {
-		return errors.New("SETID_NOT_FOUND")
-	}
-	if s.bindings[tenantID] == nil {
-		s.bindings[tenantID] = make(map[string]SetIDBindingRow)
-	}
-	s.bindings[tenantID][orgUnitID] = SetIDBindingRow{
-		OrgUnitID: orgUnitID,
-		SetID:     setID,
-		ValidFrom: effectiveDate,
-	}
-	return nil
-}
-
-func (s *setidMemoryStore) ResolveSetID(_ context.Context, tenantID string, orgUnitID string, _ string) (string, error) {
-	binding, ok := s.bindings[tenantID][strings.TrimSpace(orgUnitID)]
-	if !ok {
-		return "", errors.New("SETID_NOT_FOUND")
-	}
-	return strings.ToUpper(strings.TrimSpace(binding.SetID)), nil
-}
-
-func (s *setidMemoryStore) CreateGlobalSetID(_ context.Context, name string, _ string, _ string, actorScope string) error {
-	if strings.TrimSpace(actorScope) != "saas" {
-		return errors.New("ACTOR_SCOPE_FORBIDDEN")
-	}
-	if strings.TrimSpace(name) == "" {
-		return errors.New("name is required")
-	}
-	s.globalSetIDName = name
-	return nil
-}
-
-func (s *setidMemoryStore) ListScopeCodes(_ context.Context, _ string) ([]ScopeCode, error) {
-	return []ScopeCode{
-		{ScopeCode: "jobcatalog", OwnerModule: "jobcatalog", ShareMode: "tenant-only", IsStable: true},
-		{ScopeCode: "orgunit_geo_admin", OwnerModule: "orgunit", ShareMode: "shared-only", IsStable: true},
-		{ScopeCode: "orgunit_location", OwnerModule: "orgunit", ShareMode: "shared-only", IsStable: true},
-		{ScopeCode: "person_school", OwnerModule: "person", ShareMode: "shared-only", IsStable: true},
-		{ScopeCode: "person_education_type", OwnerModule: "person", ShareMode: "shared-only", IsStable: true},
-		{ScopeCode: "person_credential_type", OwnerModule: "person", ShareMode: "shared-only", IsStable: true},
-	}, nil
-}
-
-func (s *setidMemoryStore) CreateScopePackage(_ context.Context, tenantID string, scopeCode string, packageCode string, ownerSetID string, name string, effectiveDate string, _ string, _ string) (ScopePackage, error) {
-	if s.scopePackages[tenantID] == nil {
-		s.scopePackages[tenantID] = make(map[string]map[string]ScopePackage)
-	}
-	if s.scopePackages[tenantID][scopeCode] == nil {
-		s.scopePackages[tenantID][scopeCode] = make(map[string]ScopePackage)
-	}
-	s.seq++
-	packageID := "pkg-" + strconv.Itoa(s.seq)
-	pkg := ScopePackage{
-		PackageID:     packageID,
-		ScopeCode:     scopeCode,
-		PackageCode:   packageCode,
-		OwnerSetID:    ownerSetID,
-		Name:          name,
-		Status:        "active",
-		EffectiveDate: effectiveDate,
-		UpdatedAt:     time.Now().UTC().Format(time.RFC3339),
-	}
-	s.scopePackages[tenantID][scopeCode][packageID] = pkg
-	return pkg, nil
-}
-
-func (s *setidMemoryStore) DisableScopePackage(_ context.Context, tenantID string, packageID string, effectiveDate string, _ string, _ string) (ScopePackage, error) {
-	for scopeCode, pkgs := range s.scopePackages[tenantID] {
-		if pkg, ok := pkgs[packageID]; ok {
-			pkg.Status = "disabled"
-			pkg.EffectiveDate = effectiveDate
-			pkg.UpdatedAt = time.Now().UTC().Format(time.RFC3339)
-			s.scopePackages[tenantID][scopeCode][packageID] = pkg
-			return pkg, nil
-		}
-	}
-	return ScopePackage{}, errors.New("PACKAGE_NOT_FOUND")
-}
-
-func (s *setidMemoryStore) ListScopePackages(_ context.Context, tenantID string, scopeCode string) ([]ScopePackage, error) {
-	pkgs := s.scopePackages[tenantID][scopeCode]
-	out := make([]ScopePackage, 0, len(pkgs))
-	for _, p := range pkgs {
-		out = append(out, p)
-	}
-	sort.Slice(out, func(i, j int) bool { return out[i].PackageCode < out[j].PackageCode })
-	return out, nil
-}
-
-func (s *setidMemoryStore) ListOwnedScopePackages(_ context.Context, tenantID string, scopeCode string, asOfDate string) ([]OwnedScopePackage, error) {
-	pkgs := s.scopePackages[tenantID][scopeCode]
-	out := make([]OwnedScopePackage, 0, len(pkgs))
-	for _, p := range pkgs {
-		if p.Status != "active" {
-			continue
-		}
-		if setid, ok := s.setids[tenantID][p.OwnerSetID]; ok && setid.Status != "active" {
-			continue
-		}
-		out = append(out, OwnedScopePackage{
-			PackageID:     p.PackageID,
-			ScopeCode:     p.ScopeCode,
-			PackageCode:   p.PackageCode,
-			OwnerSetID:    p.OwnerSetID,
-			Name:          p.Name,
-			Status:        p.Status,
-			EffectiveDate: asOfDate,
-		})
-	}
-	sort.Slice(out, func(i, j int) bool { return out[i].PackageCode < out[j].PackageCode })
-	return out, nil
-}
-
-func (s *setidMemoryStore) CreateScopeSubscription(_ context.Context, tenantID string, setID string, scopeCode string, packageID string, packageOwner string, effectiveDate string, _ string, _ string) (ScopeSubscription, error) {
-	if s.scopeSubscriptions[tenantID] == nil {
-		s.scopeSubscriptions[tenantID] = make(map[string]map[string]ScopeSubscription)
-	}
-	if s.scopeSubscriptions[tenantID][setID] == nil {
-		s.scopeSubscriptions[tenantID][setID] = make(map[string]ScopeSubscription)
-	}
-	sub := ScopeSubscription{
-		SetID:         strings.ToUpper(setID),
-		ScopeCode:     scopeCode,
-		PackageID:     packageID,
-		PackageOwner:  packageOwner,
-		EffectiveDate: effectiveDate,
-		EndDate:       "",
-	}
-	s.scopeSubscriptions[tenantID][setID][scopeCode] = sub
-	return sub, nil
-}
-
-func (s *setidMemoryStore) GetScopeSubscription(_ context.Context, tenantID string, setID string, scopeCode string, _ string) (ScopeSubscription, error) {
-	if sub, ok := s.scopeSubscriptions[tenantID][setID][scopeCode]; ok {
-		return sub, nil
-	}
-	return ScopeSubscription{}, errors.New("SCOPE_SUBSCRIPTION_MISSING")
-}
-
-func (s *setidMemoryStore) CreateGlobalScopePackage(_ context.Context, scopeCode string, packageCode string, name string, _ string, _ string, _ string, actorScope string) (ScopePackage, error) {
-	if strings.TrimSpace(actorScope) != "saas" {
-		return ScopePackage{}, errors.New("ACTOR_SCOPE_FORBIDDEN")
-	}
-	if s.globalScopePackages[scopeCode] == nil {
-		s.globalScopePackages[scopeCode] = make(map[string]ScopePackage)
-	}
-	s.seq++
-	packageID := "gpk-" + strconv.Itoa(s.seq)
-	pkg := ScopePackage{
-		PackageID:   packageID,
-		ScopeCode:   scopeCode,
-		PackageCode: packageCode,
-		Name:        name,
-		Status:      "active",
-	}
-	s.globalScopePackages[scopeCode][packageID] = pkg
-	return pkg, nil
-}
-
-func (s *setidMemoryStore) ListGlobalScopePackages(_ context.Context, scopeCode string) ([]ScopePackage, error) {
-	pkgs := s.globalScopePackages[scopeCode]
-	out := make([]ScopePackage, 0, len(pkgs))
-	for _, p := range pkgs {
-		out = append(out, p)
-	}
-	sort.Slice(out, func(i, j int) bool { return out[i].PackageCode < out[j].PackageCode })
-	return out, nil
+func (s *setidMemoryStore) CreateGlobalScopePackage(ctx context.Context, scopeCode string, packageCode string, name string, effectiveDate string, requestID string, initiatorID string, actorScope string) (ScopePackage, error) {
+	pkg, err := s.SetIDMemoryStore.CreateGlobalScopePackage(ctx, scopeCode, packageCode, name, effectiveDate, requestID, initiatorID, actorScope)
+	s.seq = s.SetIDMemoryStore.Seq
+	return pkg, err
 }
 
 func listBusinessUnitsCurrent(ctx context.Context, orgStore OrgUnitStore, tenantID string, asOf string) ([]OrgUnitNode, error) {

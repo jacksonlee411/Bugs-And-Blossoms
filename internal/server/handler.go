@@ -99,7 +99,7 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, error) {
 		if pgStore, ok := orgStore.(*orgUnitPGStore); ok {
 			setidStore = newSetIDPGStore(pgStore.pool)
 		} else {
-			setidStore = newSetIDMemoryStore()
+			setidStore = orgunitmodule.NewSetIDMemoryStore()
 		}
 	}
 	if pgStore, ok := orgStore.(*orgUnitPGStore); ok {
