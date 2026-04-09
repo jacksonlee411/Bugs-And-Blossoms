@@ -4,6 +4,7 @@ import (
 	"context"
 	"strings"
 
+	jobcatalogtypes "github.com/jacksonlee411/Bugs-And-Blossoms/modules/jobcatalog/domain/types"
 	"github.com/jacksonlee411/Bugs-And-Blossoms/pkg/authz"
 )
 
@@ -27,11 +28,7 @@ type OwnedScopePackage struct {
 	EffectiveDate string
 }
 
-type JobCatalogPackage struct {
-	PackageUUID string
-	PackageCode string
-	OwnerSetID  string
-}
+type JobCatalogPackage = jobcatalogtypes.JobCatalogPackage
 
 type JobCatalogView struct {
 	PackageCode  string

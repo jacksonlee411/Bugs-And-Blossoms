@@ -14,6 +14,7 @@
 - Assistant 配置单主源门禁（阻断第二写入口/契约回写/SSOT 漂移）：`make check assistant-config-single-source`
 - 禁止新增 scope/package 漂移：`make check no-scope-package`
 - 颗粒度层次门禁（阻断 org_level/scope_type/scope_key 回流）：`make check granularity`
+- DDD 分层 P0 反漂移门禁（阻断 `internal/server` 扩散与 `infrastructure -> services` 回流）：`make check ddd-layering-p0`
 - capability_key 防退化（禁上下文编码/禁拼接）：`make check capability-key`
 - 路由 capability 映射防漂移（缺映射/重复/未注册阻断）：`make check capability-route-map`
 - 业务幂等字段命名收敛：`make check request-code`
@@ -57,6 +58,7 @@
 | Assistant 模型配置主源相关改动（配置写入口/迁移 stopline/门禁接线） | `make check assistant-config-single-source` | 单主源门禁（见 `DEV-PLAN-231`） |
 | 新增 scope/package 语义引用（`scope_code/scope_package/scope_subscription/package_id`） | `make check no-scope-package` | 增量反漂移门禁（承接 `DEV-PLAN-102C6`） |
 | 颗粒度层次/旧 scope 相关新增（`org_level/scope_type/scope_key`） | `make check granularity` | 颗粒度治理门禁（承接 `DEV-PLAN-180`） |
+| DDD 分层相关新增漂移（`internal/server` 扩散模块实现、`modules/*/infrastructure -> services` 回流） | `make check ddd-layering-p0` | P0 止血门禁（承接 `DEV-PLAN-015B/015C`） |
 | capability_key 命名与生成方式 | `make check capability-key` | 禁止上下文编码与运行时拼接（承接 `DEV-PLAN-102C6/102D`） |
 | 路由/动作到 capability_key 映射 | `make check capability-route-map` | 阻断缺映射、重复映射、未注册 key（承接 `DEV-PLAN-156`） |
 | 幂等与追踪命名（request_id / trace_id） | `make check request-code` | 规则见 `DEV-PLAN-109A` |
@@ -520,6 +522,11 @@ modules/{module}/
 - DDD 分层框架（对齐 CleanArchGuard + DB Kernel）：`docs/dev-plans/015-ddd-layering-framework.md`
 - DEV-PLAN-015A：DDD 分层框架履职缺口评估（承接 DEV-PLAN-015）：`docs/dev-plans/015a-ddd-layering-framework-implementation-gap-assessment.md`
 - DEV-PLAN-015B：DDD 分层框架收口整改路线图（P0/P1/P2，承接 DEV-PLAN-015A）：`docs/dev-plans/015b-ddd-layering-framework-remediation-roadmap.md`
+- DEV-PLAN-015C：DDD 分层框架 P0 反漂移门禁实施计划（承接 DEV-PLAN-015B）：`docs/dev-plans/015c-ddd-layering-framework-p0-anti-drift-gate-plan.md`
+- DEV-PLAN-015D：Staffing Assignment 分层回流修复（承接 DEV-PLAN-015B P1）：`docs/dev-plans/015d-staffing-assignment-layering-reversal-fix-plan.md`
+- DEV-PLAN-015E：Person 默认装配向模块侧收口（承接 DEV-PLAN-015B P1）：`docs/dev-plans/015e-person-default-wiring-module-side-plan.md`
+- DEV-PLAN-015F：Person 模块 Composition Root 最小化落地（承接 DEV-PLAN-015B P1）：`docs/dev-plans/015f-person-module-composition-root-minimalization-plan.md`
+- DEV-PLAN-015G：JobCatalog 内存 Store 向模块侧收口（承接 DEV-PLAN-015B P1）：`docs/dev-plans/015g-jobcatalog-memory-store-module-side-plan.md`
 - Greenfield HR 模块骨架与契约（OrgUnit/JobCatalog/Staffing/Person）：`docs/dev-plans/016-greenfield-hr-modules-skeleton.md`
 - 任职记录（Job Data / Assignments）（事件 SoT + 同步投射）：`docs/dev-plans/031-greenfield-assignment-job-data.md`
 - Person 最小身份锚点（Pernr 1-8 位数字字符串）：`docs/dev-plans/027-person-minimal-identity-for-staffing.md`

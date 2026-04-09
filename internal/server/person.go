@@ -11,22 +11,13 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jacksonlee411/Bugs-And-Blossoms/internal/routing"
+	personmodule "github.com/jacksonlee411/Bugs-And-Blossoms/modules/person"
 	personservices "github.com/jacksonlee411/Bugs-And-Blossoms/modules/person/services"
 )
 
-type Person struct {
-	UUID        string
-	Pernr       string
-	DisplayName string
-	Status      string
-	CreatedAt   time.Time
-}
+type Person = personservices.Person
 
-type PersonOption struct {
-	UUID        string
-	Pernr       string
-	DisplayName string
-}
+type PersonOption = personservices.PersonOption
 
 type PersonStore interface {
 	ListPersons(ctx context.Context, tenantID string) ([]Person, error)
@@ -35,253 +26,16 @@ type PersonStore interface {
 	ListPersonOptions(ctx context.Context, tenantID string, q string, limit int) ([]PersonOption, error)
 }
 
-type personPGStore struct {
-	pool pgBeginner
-}
-
 func newPersonPGStore(pool pgBeginner) PersonStore {
-	return &personPGStore{pool: pool}
+	return personmodule.NewPGStore(pool)
 }
 
 func normalizePernr(raw string) (string, error) {
 	return personservices.NormalizePernr(raw)
 }
 
-func (s *personPGStore) ListPersons(ctx context.Context, tenantID string) ([]Person, error) {
-	tx, err := s.pool.Begin(ctx)
-	if err != nil {
-		return nil, err
-	}
-	defer func() { _ = tx.Rollback(context.Background()) }()
-
-	if _, err := tx.Exec(ctx, `SELECT set_config('app.current_tenant', $1, true);`, tenantID); err != nil {
-		return nil, err
-	}
-
-	rows, err := tx.Query(ctx, `
-SELECT person_uuid::text, pernr, display_name, status, created_at
-FROM person.persons
-WHERE tenant_uuid = $1::uuid
-ORDER BY created_at DESC, person_uuid DESC
-LIMIT 200
-`, tenantID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	var out []Person
-	for rows.Next() {
-		var p Person
-		if err := rows.Scan(&p.UUID, &p.Pernr, &p.DisplayName, &p.Status, &p.CreatedAt); err != nil {
-			return nil, err
-		}
-		out = append(out, p)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-
-	if err := tx.Commit(ctx); err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (s *personPGStore) CreatePerson(ctx context.Context, tenantID string, pernr string, displayName string) (Person, error) {
-	tx, err := s.pool.Begin(ctx)
-	if err != nil {
-		return Person{}, err
-	}
-	defer func() { _ = tx.Rollback(context.Background()) }()
-
-	if _, err := tx.Exec(ctx, `SELECT set_config('app.current_tenant', $1, true);`, tenantID); err != nil {
-		return Person{}, err
-	}
-
-	prepared, err := personservices.PrepareCreatePerson(pernr, displayName)
-	if err != nil {
-		return Person{}, err
-	}
-
-	var p Person
-	p.Pernr = prepared.Pernr
-	p.DisplayName = prepared.DisplayName
-	p.Status = "active"
-	if err := tx.QueryRow(ctx, `
-	INSERT INTO person.persons (tenant_uuid, pernr, display_name, status)
-	VALUES ($1::uuid, $2::text, $3::text, 'active')
-	RETURNING person_uuid::text, created_at
-	`, tenantID, prepared.Pernr, prepared.DisplayName).Scan(&p.UUID, &p.CreatedAt); err != nil {
-		return Person{}, err
-	}
-
-	if err := tx.Commit(ctx); err != nil {
-		return Person{}, err
-	}
-	return p, nil
-}
-
-func (s *personPGStore) FindPersonByPernr(ctx context.Context, tenantID string, pernr string) (Person, error) {
-	tx, err := s.pool.Begin(ctx)
-	if err != nil {
-		return Person{}, err
-	}
-	defer func() { _ = tx.Rollback(context.Background()) }()
-
-	if _, err := tx.Exec(ctx, `SELECT set_config('app.current_tenant', $1, true);`, tenantID); err != nil {
-		return Person{}, err
-	}
-
-	canonical, err := personservices.PrepareFindPersonByPernr(pernr)
-	if err != nil {
-		return Person{}, err
-	}
-
-	var p Person
-	if err := tx.QueryRow(ctx, `
-SELECT person_uuid::text, pernr, display_name, status, created_at
-FROM person.persons
-WHERE tenant_uuid = $1::uuid AND pernr = $2::text
-`, tenantID, canonical).Scan(&p.UUID, &p.Pernr, &p.DisplayName, &p.Status, &p.CreatedAt); err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return Person{}, pgx.ErrNoRows
-		}
-		return Person{}, err
-	}
-
-	if err := tx.Commit(ctx); err != nil {
-		return Person{}, err
-	}
-	return p, nil
-}
-
-func (s *personPGStore) ListPersonOptions(ctx context.Context, tenantID string, q string, limit int) ([]PersonOption, error) {
-	tx, err := s.pool.Begin(ctx)
-	if err != nil {
-		return nil, err
-	}
-	defer func() { _ = tx.Rollback(context.Background()) }()
-
-	if _, err := tx.Exec(ctx, `SELECT set_config('app.current_tenant', $1, true);`, tenantID); err != nil {
-		return nil, err
-	}
-
-	q = strings.TrimSpace(q)
-	if limit <= 0 {
-		limit = 10
-	}
-	if limit > 50 {
-		limit = 50
-	}
-
-	pernrPrefix := ""
-	if q != "" {
-		if canonical, err := normalizePernr(q); err == nil {
-			pernrPrefix = canonical
-		}
-	}
-
-	rows, err := tx.Query(ctx, `
-SELECT person_uuid::text, pernr, display_name
-FROM person.persons
-WHERE tenant_uuid = $1::uuid
-  AND (
-    $2::text = '' OR pernr LIKE ($2::text || '%')
-    OR display_name ILIKE ('%' || $3::text || '%')
-  )
-ORDER BY display_name ASC, pernr ASC
-LIMIT $4::int
-`, tenantID, pernrPrefix, q, limit)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	var out []PersonOption
-	for rows.Next() {
-		var p PersonOption
-		if err := rows.Scan(&p.UUID, &p.Pernr, &p.DisplayName); err != nil {
-			return nil, err
-		}
-		out = append(out, p)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-
-	if err := tx.Commit(ctx); err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-type personMemoryStore struct {
-	byTenant map[string][]Person
-}
-
 func newPersonMemoryStore() PersonStore {
-	return &personMemoryStore{
-		byTenant: make(map[string][]Person),
-	}
-}
-
-func (s *personMemoryStore) ListPersons(_ context.Context, tenantID string) ([]Person, error) {
-	return append([]Person(nil), s.byTenant[tenantID]...), nil
-}
-
-func (s *personMemoryStore) CreatePerson(_ context.Context, tenantID string, pernr string, displayName string) (Person, error) {
-	prepared, err := personservices.PrepareCreatePerson(pernr, displayName)
-	if err != nil {
-		return Person{}, err
-	}
-	for _, p := range s.byTenant[tenantID] {
-		if p.Pernr == prepared.Pernr {
-			return Person{}, errors.New("pernr already exists")
-		}
-	}
-	p := Person{
-		UUID:        "person-" + prepared.Pernr,
-		Pernr:       prepared.Pernr,
-		DisplayName: prepared.DisplayName,
-		Status:      "active",
-		CreatedAt:   time.Now().UTC(),
-	}
-	s.byTenant[tenantID] = append(s.byTenant[tenantID], p)
-	return p, nil
-}
-
-func (s *personMemoryStore) FindPersonByPernr(_ context.Context, tenantID string, pernr string) (Person, error) {
-	canonical, err := personservices.PrepareFindPersonByPernr(pernr)
-	if err != nil {
-		return Person{}, err
-	}
-	for _, p := range s.byTenant[tenantID] {
-		if p.Pernr == canonical {
-			return p, nil
-		}
-	}
-	return Person{}, pgx.ErrNoRows
-}
-
-func (s *personMemoryStore) ListPersonOptions(ctx context.Context, tenantID string, q string, limit int) ([]PersonOption, error) {
-	q = strings.TrimSpace(q)
-	if limit <= 0 {
-		limit = 10
-	}
-	if limit > 50 {
-		limit = 50
-	}
-	var out []PersonOption
-	for _, p := range s.byTenant[tenantID] {
-		if q == "" || strings.Contains(strings.ToLower(p.DisplayName), strings.ToLower(q)) || strings.HasPrefix(p.Pernr, strings.TrimLeft(q, "0")) {
-			out = append(out, PersonOption{UUID: p.UUID, Pernr: p.Pernr, DisplayName: p.DisplayName})
-			if len(out) >= limit {
-				break
-			}
-		}
-	}
-	return out, nil
+	return personmodule.NewMemoryStore()
 }
 
 func handlePersonOptionsAPI(w http.ResponseWriter, r *http.Request, store PersonStore) {

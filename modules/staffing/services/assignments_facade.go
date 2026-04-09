@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"strings"
 
+	"github.com/jacksonlee411/Bugs-And-Blossoms/modules/staffing/domain/assignmentrules"
 	"github.com/jacksonlee411/Bugs-And-Blossoms/modules/staffing/domain/ports"
 	"github.com/jacksonlee411/Bugs-And-Blossoms/modules/staffing/domain/types"
 )
@@ -22,7 +23,7 @@ func (f AssignmentsFacade) ListAssignmentsForPerson(ctx context.Context, tenantI
 }
 
 func (f AssignmentsFacade) UpsertPrimaryAssignmentForPerson(ctx context.Context, tenantID string, effectiveDate string, personUUID string, positionUUID string, status string, allocatedFte string) (types.Assignment, error) {
-	prepared, err := PrepareUpsertPrimaryAssignment(effectiveDate, personUUID, positionUUID, status, allocatedFte)
+	prepared, err := assignmentrules.PrepareUpsertPrimaryAssignment(effectiveDate, personUUID, positionUUID, status, allocatedFte)
 	if err != nil {
 		return types.Assignment{}, err
 	}
@@ -46,7 +47,7 @@ func (f AssignmentsFacade) UpsertPrimaryAssignmentForPerson(ctx context.Context,
 }
 
 func (f AssignmentsFacade) CorrectAssignmentEvent(ctx context.Context, tenantID string, assignmentUUID string, targetEffectiveDate string, replacementPayload json.RawMessage) (string, error) {
-	prepared, err := PrepareCorrectAssignmentEvent(tenantID, assignmentUUID, targetEffectiveDate, replacementPayload)
+	prepared, err := assignmentrules.PrepareCorrectAssignmentEvent(tenantID, assignmentUUID, targetEffectiveDate, replacementPayload)
 	if err != nil {
 		return "", err
 	}
@@ -54,7 +55,7 @@ func (f AssignmentsFacade) CorrectAssignmentEvent(ctx context.Context, tenantID 
 }
 
 func (f AssignmentsFacade) RescindAssignmentEvent(ctx context.Context, tenantID string, assignmentUUID string, targetEffectiveDate string, payload json.RawMessage) (string, error) {
-	prepared, err := PrepareRescindAssignmentEvent(tenantID, assignmentUUID, targetEffectiveDate, payload)
+	prepared, err := assignmentrules.PrepareRescindAssignmentEvent(tenantID, assignmentUUID, targetEffectiveDate, payload)
 	if err != nil {
 		return "", err
 	}

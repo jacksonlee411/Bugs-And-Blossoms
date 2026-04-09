@@ -14,9 +14,11 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/jacksonlee411/Bugs-And-Blossoms/internal/routing"
+	jobcatalogmodule "github.com/jacksonlee411/Bugs-And-Blossoms/modules/jobcatalog"
 	orgunitports "github.com/jacksonlee411/Bugs-And-Blossoms/modules/orgunit/domain/ports"
 	orgunitpersistence "github.com/jacksonlee411/Bugs-And-Blossoms/modules/orgunit/infrastructure/persistence"
 	orgunitservices "github.com/jacksonlee411/Bugs-And-Blossoms/modules/orgunit/services"
+	personmodule "github.com/jacksonlee411/Bugs-And-Blossoms/modules/person"
 	"github.com/jacksonlee411/Bugs-And-Blossoms/pkg/authz"
 	dictpkg "github.com/jacksonlee411/Bugs-And-Blossoms/pkg/dict"
 )
@@ -108,15 +110,15 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, error) {
 		if pgStore, ok := orgStore.(*orgUnitPGStore); ok {
 			jobcatalogStore = newJobCatalogPGStore(pgStore.pool)
 		} else {
-			jobcatalogStore = newJobCatalogMemoryStore()
+			jobcatalogStore = jobcatalogmodule.NewMemoryStore()
 		}
 	}
 
 	if personStore == nil {
 		if pgStore, ok := orgStore.(*orgUnitPGStore); ok {
-			personStore = newPersonPGStore(pgStore.pool)
+			personStore = personmodule.NewPGStore(pgStore.pool)
 		} else {
-			personStore = newPersonMemoryStore()
+			personStore = personmodule.NewMemoryStore()
 		}
 	}
 

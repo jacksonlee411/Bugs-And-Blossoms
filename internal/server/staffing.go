@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/jacksonlee411/Bugs-And-Blossoms/modules/staffing/domain/assignmentrules"
 	staffingports "github.com/jacksonlee411/Bugs-And-Blossoms/modules/staffing/domain/ports"
 	staffingtypes "github.com/jacksonlee411/Bugs-And-Blossoms/modules/staffing/domain/types"
 	staffingpersistence "github.com/jacksonlee411/Bugs-And-Blossoms/modules/staffing/infrastructure/persistence"
@@ -460,7 +461,7 @@ func (s *staffingMemoryStore) ListAssignmentsForPerson(_ context.Context, tenant
 }
 
 func (s *staffingMemoryStore) UpsertPrimaryAssignmentForPerson(_ context.Context, tenantID string, effectiveDate string, personUUID string, positionUUID string, status string, _ string) (Assignment, error) {
-	prepared, err := staffingservices.PrepareUpsertPrimaryAssignment(effectiveDate, personUUID, positionUUID, status, "")
+	prepared, err := assignmentrules.PrepareUpsertPrimaryAssignment(effectiveDate, personUUID, positionUUID, status, "")
 	if err != nil {
 		return Assignment{}, err
 	}
@@ -485,7 +486,7 @@ func (s *staffingMemoryStore) UpsertPrimaryAssignmentForPerson(_ context.Context
 }
 
 func (s *staffingMemoryStore) CorrectAssignmentEvent(_ context.Context, tenantID string, assignmentID string, targetEffectiveDate string, replacementPayload json.RawMessage) (string, error) {
-	prepared, err := staffingservices.PrepareCorrectAssignmentEvent(tenantID, assignmentID, targetEffectiveDate, replacementPayload)
+	prepared, err := assignmentrules.PrepareCorrectAssignmentEvent(tenantID, assignmentID, targetEffectiveDate, replacementPayload)
 	if err != nil {
 		return "", err
 	}
@@ -519,7 +520,7 @@ func (s *staffingMemoryStore) CorrectAssignmentEvent(_ context.Context, tenantID
 }
 
 func (s *staffingMemoryStore) RescindAssignmentEvent(_ context.Context, tenantID string, assignmentID string, targetEffectiveDate string, _ json.RawMessage) (string, error) {
-	prepared, err := staffingservices.PrepareRescindAssignmentEvent(tenantID, assignmentID, targetEffectiveDate, nil)
+	prepared, err := assignmentrules.PrepareRescindAssignmentEvent(tenantID, assignmentID, targetEffectiveDate, nil)
 	if err != nil {
 		return "", err
 	}

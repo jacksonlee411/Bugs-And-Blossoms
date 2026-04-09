@@ -1,4 +1,4 @@
-package services
+package assignmentrules
 
 import (
 	"crypto/sha256"

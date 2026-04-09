@@ -9,64 +9,19 @@ import (
 	"strings"
 
 	"github.com/jackc/pgx/v5"
+	jobcatalogmodule "github.com/jacksonlee411/Bugs-And-Blossoms/modules/jobcatalog"
+	jobcatalogports "github.com/jacksonlee411/Bugs-And-Blossoms/modules/jobcatalog/domain/ports"
+	jobcatalogtypes "github.com/jacksonlee411/Bugs-And-Blossoms/modules/jobcatalog/domain/types"
 	jobcatalogservices "github.com/jacksonlee411/Bugs-And-Blossoms/modules/jobcatalog/services"
 	"github.com/jacksonlee411/Bugs-And-Blossoms/pkg/setid"
 )
 
-type JobFamilyGroup struct {
-	JobFamilyGroupUUID string
-	JobFamilyGroupCode string
-	Name               string
-	IsActive           bool
-	EffectiveDay       string
-}
-
-type JobLevel struct {
-	JobLevelUUID string
-	JobLevelCode string
-	Name         string
-	IsActive     bool
-	EffectiveDay string
-}
-
-type JobFamily struct {
-	JobFamilyUUID      string
-	JobFamilyCode      string
-	JobFamilyGroupCode string
-	Name               string
-	IsActive           bool
-	EffectiveDay       string
-}
-
-type JobProfile struct {
-	JobProfileUUID    string
-	JobProfileCode    string
-	Name              string
-	IsActive          bool
-	EffectiveDay      string
-	FamilyCodesCSV    string
-	PrimaryFamilyCode string
-}
-
-type JobCatalogStore interface {
-	ResolveJobCatalogPackageByCode(ctx context.Context, tenantID string, packageCode string, asOfDate string) (JobCatalogPackage, error)
-	ResolveJobCatalogPackageBySetID(ctx context.Context, tenantID string, setID string, asOfDate string) (string, error)
-	CreateJobFamilyGroup(ctx context.Context, tenantID string, setID string, effectiveDate string, code string, name string, description string) error
-	ListJobFamilyGroups(ctx context.Context, tenantID string, setID string, asOfDate string) ([]JobFamilyGroup, error)
-	CreateJobFamily(ctx context.Context, tenantID string, setID string, effectiveDate string, code string, name string, description string, groupCode string) error
-	UpdateJobFamilyGroup(ctx context.Context, tenantID string, setID string, effectiveDate string, familyCode string, groupCode string) error
-	ListJobFamilies(ctx context.Context, tenantID string, setID string, asOfDate string) ([]JobFamily, error)
-	CreateJobLevel(ctx context.Context, tenantID string, setID string, effectiveDate string, code string, name string, description string) error
-	ListJobLevels(ctx context.Context, tenantID string, setID string, asOfDate string) ([]JobLevel, error)
-	CreateJobProfile(ctx context.Context, tenantID string, setID string, effectiveDate string, code string, name string, description string, familyCodes []string, primaryFamilyCode string) error
-	ListJobProfiles(ctx context.Context, tenantID string, setID string, asOfDate string) ([]JobProfile, error)
-}
-
-type JobCatalogPackage struct {
-	PackageUUID string
-	PackageCode string
-	OwnerSetID  string
-}
+type JobFamilyGroup = jobcatalogtypes.JobFamilyGroup
+type JobLevel = jobcatalogtypes.JobLevel
+type JobFamily = jobcatalogtypes.JobFamily
+type JobProfile = jobcatalogtypes.JobProfile
+type JobCatalogStore = jobcatalogports.JobCatalogStore
+type JobCatalogPackage = jobcatalogtypes.JobCatalogPackage
 
 type jobcatalogPGStore struct {
 	pool pgBeginner
@@ -76,186 +31,8 @@ func newJobCatalogPGStore(pool pgBeginner) JobCatalogStore {
 	return &jobcatalogPGStore{pool: pool}
 }
 
-type jobcatalogMemoryStore struct {
-	groups   map[string]map[string][]JobFamilyGroup // tenant -> setid -> groups
-	families map[string]map[string][]JobFamily      // tenant -> setid -> families
-	levels   map[string]map[string][]JobLevel       // tenant -> setid -> levels
-	profiles map[string]map[string][]JobProfile     // tenant -> setid -> profiles
-}
-
 func newJobCatalogMemoryStore() JobCatalogStore {
-	return &jobcatalogMemoryStore{
-		groups:   make(map[string]map[string][]JobFamilyGroup),
-		families: make(map[string]map[string][]JobFamily),
-		levels:   make(map[string]map[string][]JobLevel),
-		profiles: make(map[string]map[string][]JobProfile),
-	}
-}
-
-func (s *jobcatalogMemoryStore) ensure(tenantID string) {
-	if s.groups[tenantID] == nil {
-		s.groups[tenantID] = make(map[string][]JobFamilyGroup)
-	}
-	if s.families[tenantID] == nil {
-		s.families[tenantID] = make(map[string][]JobFamily)
-	}
-	if s.levels[tenantID] == nil {
-		s.levels[tenantID] = make(map[string][]JobLevel)
-	}
-	if s.profiles[tenantID] == nil {
-		s.profiles[tenantID] = make(map[string][]JobProfile)
-	}
-}
-
-func (s *jobcatalogMemoryStore) ResolveJobCatalogPackageByCode(_ context.Context, _ string, packageCode string, _ string) (JobCatalogPackage, error) {
-	packageCode = strings.ToUpper(strings.TrimSpace(packageCode))
-	if packageCode == "" {
-		return JobCatalogPackage{}, errors.New("PACKAGE_CODE_INVALID")
-	}
-	return JobCatalogPackage{
-		PackageUUID: packageCode,
-		PackageCode: packageCode,
-		OwnerSetID:  packageCode,
-	}, nil
-}
-
-func (s *jobcatalogMemoryStore) ResolveJobCatalogPackageBySetID(_ context.Context, _ string, setID string, _ string) (string, error) {
-	setID = normalizeSetID(setID)
-	if setID == "" {
-		return "", errors.New("setid is required")
-	}
-	return setID, nil
-}
-
-func (s *jobcatalogMemoryStore) CreateJobFamilyGroup(_ context.Context, tenantID string, setID string, effectiveDate string, code string, name string, _ string) error {
-	s.ensure(tenantID)
-	setID = normalizeSetID(setID)
-	if setID == "" {
-		return errors.New("setid is required")
-	}
-	if s.groups[tenantID][setID] == nil {
-		s.groups[tenantID][setID] = []JobFamilyGroup{}
-	}
-	s.groups[tenantID][setID] = append(s.groups[tenantID][setID], JobFamilyGroup{
-		JobFamilyGroupUUID: strconv.Itoa(len(s.groups[tenantID][setID]) + 1),
-		JobFamilyGroupCode: code,
-		Name:               name,
-		IsActive:           true,
-		EffectiveDay:       effectiveDate,
-	})
-	return nil
-}
-
-func (s *jobcatalogMemoryStore) ListJobFamilyGroups(_ context.Context, tenantID string, setID string, _ string) ([]JobFamilyGroup, error) {
-	s.ensure(tenantID)
-	setID = normalizeSetID(setID)
-	if setID == "" {
-		return nil, errors.New("setid is required")
-	}
-	return append([]JobFamilyGroup(nil), s.groups[tenantID][setID]...), nil
-}
-
-func (s *jobcatalogMemoryStore) CreateJobFamily(_ context.Context, tenantID string, setID string, effectiveDate string, code string, name string, _ string, groupCode string) error {
-	s.ensure(tenantID)
-	setID = normalizeSetID(setID)
-	if setID == "" {
-		return errors.New("setid is required")
-	}
-	if s.families[tenantID][setID] == nil {
-		s.families[tenantID][setID] = []JobFamily{}
-	}
-	s.families[tenantID][setID] = append(s.families[tenantID][setID], JobFamily{
-		JobFamilyUUID:      strconv.Itoa(len(s.families[tenantID][setID]) + 1),
-		JobFamilyCode:      code,
-		JobFamilyGroupCode: groupCode,
-		Name:               name,
-		IsActive:           true,
-		EffectiveDay:       effectiveDate,
-	})
-	return nil
-}
-
-func (s *jobcatalogMemoryStore) UpdateJobFamilyGroup(_ context.Context, tenantID string, setID string, effectiveDate string, familyCode string, groupCode string) error {
-	s.ensure(tenantID)
-	setID = normalizeSetID(setID)
-	if setID == "" {
-		return errors.New("setid is required")
-	}
-	for i := range s.families[tenantID][setID] {
-		if s.families[tenantID][setID][i].JobFamilyCode == familyCode {
-			s.families[tenantID][setID][i].JobFamilyGroupCode = groupCode
-			s.families[tenantID][setID][i].EffectiveDay = effectiveDate
-			return nil
-		}
-	}
-	return nil
-}
-
-func (s *jobcatalogMemoryStore) ListJobFamilies(_ context.Context, tenantID string, setID string, _ string) ([]JobFamily, error) {
-	s.ensure(tenantID)
-	setID = normalizeSetID(setID)
-	if setID == "" {
-		return nil, errors.New("setid is required")
-	}
-	return append([]JobFamily(nil), s.families[tenantID][setID]...), nil
-}
-
-func (s *jobcatalogMemoryStore) CreateJobLevel(_ context.Context, tenantID string, setID string, effectiveDate string, code string, name string, _ string) error {
-	s.ensure(tenantID)
-	setID = normalizeSetID(setID)
-	if setID == "" {
-		return errors.New("setid is required")
-	}
-	if s.levels[tenantID][setID] == nil {
-		s.levels[tenantID][setID] = []JobLevel{}
-	}
-	s.levels[tenantID][setID] = append(s.levels[tenantID][setID], JobLevel{
-		JobLevelUUID: strconv.Itoa(len(s.levels[tenantID][setID]) + 1),
-		JobLevelCode: code,
-		Name:         name,
-		IsActive:     true,
-		EffectiveDay: effectiveDate,
-	})
-	return nil
-}
-
-func (s *jobcatalogMemoryStore) ListJobLevels(_ context.Context, tenantID string, setID string, _ string) ([]JobLevel, error) {
-	s.ensure(tenantID)
-	setID = normalizeSetID(setID)
-	if setID == "" {
-		return nil, errors.New("setid is required")
-	}
-	return append([]JobLevel(nil), s.levels[tenantID][setID]...), nil
-}
-
-func (s *jobcatalogMemoryStore) CreateJobProfile(_ context.Context, tenantID string, setID string, effectiveDate string, code string, name string, _ string, familyCodes []string, primaryFamilyCode string) error {
-	s.ensure(tenantID)
-	setID = normalizeSetID(setID)
-	if setID == "" {
-		return errors.New("setid is required")
-	}
-	if s.profiles[tenantID][setID] == nil {
-		s.profiles[tenantID][setID] = []JobProfile{}
-	}
-	s.profiles[tenantID][setID] = append(s.profiles[tenantID][setID], JobProfile{
-		JobProfileUUID:    strconv.Itoa(len(s.profiles[tenantID][setID]) + 1),
-		JobProfileCode:    code,
-		Name:              name,
-		IsActive:          true,
-		EffectiveDay:      effectiveDate,
-		FamilyCodesCSV:    strings.Join(familyCodes, ","),
-		PrimaryFamilyCode: primaryFamilyCode,
-	})
-	return nil
-}
-
-func (s *jobcatalogMemoryStore) ListJobProfiles(_ context.Context, tenantID string, setID string, _ string) ([]JobProfile, error) {
-	s.ensure(tenantID)
-	setID = normalizeSetID(setID)
-	if setID == "" {
-		return nil, errors.New("setid is required")
-	}
-	return append([]JobProfile(nil), s.profiles[tenantID][setID]...), nil
+	return jobcatalogmodule.NewMemoryStore()
 }
 
 func (s *jobcatalogPGStore) withTx(ctx context.Context, tenantID string, fn func(tx pgx.Tx) error) error {

@@ -3,10 +3,9 @@ package services
 import (
 	"context"
 	"encoding/json"
-	"strings"
 	"testing"
-	"time"
 
+	"github.com/jacksonlee411/Bugs-And-Blossoms/modules/staffing/domain/assignmentrules"
 	"github.com/jacksonlee411/Bugs-And-Blossoms/modules/staffing/domain/types"
 	"github.com/jacksonlee411/Bugs-And-Blossoms/pkg/httperr"
 )
@@ -39,21 +38,21 @@ func (s assignmentStoreStub) RescindAssignmentEvent(ctx context.Context, tenantI
 
 func TestCanonicalizeJSONObjectRaw(t *testing.T) {
 	t.Run("empty -> bad request", func(t *testing.T) {
-		_, err := CanonicalizeJSONObjectRaw(nil)
+		_, err := assignmentrules.CanonicalizeJSONObjectRaw(nil)
 		if err == nil || !httperr.IsBadRequest(err) {
 			t.Fatalf("expected bad request, got %v", err)
 		}
 	})
 
 	t.Run("invalid json -> bad request", func(t *testing.T) {
-		_, err := CanonicalizeJSONObjectRaw(json.RawMessage("{bad"))
+		_, err := assignmentrules.CanonicalizeJSONObjectRaw(json.RawMessage("{bad"))
 		if err == nil || !httperr.IsBadRequest(err) {
 			t.Fatalf("expected bad request, got %v", err)
 		}
 	})
 
 	t.Run("non-object -> bad request", func(t *testing.T) {
-		_, err := CanonicalizeJSONObjectRaw(json.RawMessage(`[1,2,3]`))
+		_, err := assignmentrules.CanonicalizeJSONObjectRaw(json.RawMessage(`[1,2,3]`))
 		if err == nil || !httperr.IsBadRequest(err) {
 			t.Fatalf("expected bad request, got %v", err)
 		}
@@ -61,7 +60,7 @@ func TestCanonicalizeJSONObjectRaw(t *testing.T) {
 
 	t.Run("mixed types canonicalize", func(t *testing.T) {
 		raw := json.RawMessage(`{"b":true,"a":null,"c":"x","d":1,"e":[2,3]}`)
-		got, err := CanonicalizeJSONObjectRaw(raw)
+		got, err := assignmentrules.CanonicalizeJSONObjectRaw(raw)
 		if err != nil {
 			t.Fatalf("err=%v", err)
 		}
@@ -73,7 +72,7 @@ func TestCanonicalizeJSONObjectRaw(t *testing.T) {
 
 func TestCanonicalizeJSONObjectOrEmpty(t *testing.T) {
 	t.Run("empty => {}", func(t *testing.T) {
-		got, err := CanonicalizeJSONObjectOrEmpty(nil)
+		got, err := assignmentrules.CanonicalizeJSONObjectOrEmpty(nil)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -83,7 +82,7 @@ func TestCanonicalizeJSONObjectOrEmpty(t *testing.T) {
 	})
 
 	t.Run("null => {}", func(t *testing.T) {
-		got, err := CanonicalizeJSONObjectOrEmpty(json.RawMessage(`null`))
+		got, err := assignmentrules.CanonicalizeJSONObjectOrEmpty(json.RawMessage(`null`))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -93,7 +92,7 @@ func TestCanonicalizeJSONObjectOrEmpty(t *testing.T) {
 	})
 
 	t.Run("object => canonicalize", func(t *testing.T) {
-		got, err := CanonicalizeJSONObjectOrEmpty(json.RawMessage(`{"b":1,"a":2}`))
+		got, err := assignmentrules.CanonicalizeJSONObjectOrEmpty(json.RawMessage(`{"b":1,"a":2}`))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -105,36 +104,41 @@ func TestCanonicalizeJSONObjectOrEmpty(t *testing.T) {
 
 func TestCanonicalizeJSON_DefaultBranches(t *testing.T) {
 	t.Run("default marshal ok", func(t *testing.T) {
-		var b strings.Builder
-		if err := canonicalizeJSON(&b, time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)); err != nil {
+		got, err := assignmentrules.CanonicalizeJSONObjectRaw(json.RawMessage(`{"t":"2026-01-01T00:00:00Z"}`))
+		if err != nil {
 			t.Fatalf("err=%v", err)
 		}
-		if b.String() == "" {
-			t.Fatalf("expected non-empty output")
+		if string(got) != `{"t":"2026-01-01T00:00:00Z"}` {
+			t.Fatalf("got=%s", got)
 		}
 	})
 
-	t.Run("default marshal error", func(t *testing.T) {
-		var b strings.Builder
-		ch := make(chan int)
-		if err := canonicalizeJSON(&b, ch); err == nil {
-			t.Fatalf("expected error")
+	t.Run("keeps deterministic event ids stable", func(t *testing.T) {
+		payload := json.RawMessage(`{"b":1,"a":2}`)
+		prepared, err := assignmentrules.PrepareCorrectAssignmentEvent("tenant-1", "as1", "2026-01-01", payload)
+		if err != nil {
+			t.Fatalf("err=%v", err)
+		}
+		again, err := assignmentrules.PrepareCorrectAssignmentEvent("tenant-1", "as1", "2026-01-01", payload)
+		if err != nil {
+			t.Fatalf("err=%v", err)
+		}
+		if prepared.EventID == "" || prepared.EventID != again.EventID {
+			t.Fatalf("event ids not stable: %q vs %q", prepared.EventID, again.EventID)
 		}
 	})
 
-	t.Run("map propagates nested error", func(t *testing.T) {
-		var b strings.Builder
-		ch := make(chan int)
-		if err := canonicalizeJSON(&b, map[string]any{"x": ch}); err == nil {
-			t.Fatalf("expected error")
+	t.Run("rescind event ids stable", func(t *testing.T) {
+		first, err := assignmentrules.PrepareRescindAssignmentEvent("tenant-1", "as1", "2026-01-01", nil)
+		if err != nil {
+			t.Fatalf("err=%v", err)
 		}
-	})
-
-	t.Run("array propagates nested error", func(t *testing.T) {
-		var b strings.Builder
-		ch := make(chan int)
-		if err := canonicalizeJSON(&b, []any{ch}); err == nil {
-			t.Fatalf("expected error")
+		second, err := assignmentrules.PrepareRescindAssignmentEvent("tenant-1", "as1", "2026-01-01", nil)
+		if err != nil {
+			t.Fatalf("err=%v", err)
+		}
+		if first.EventID == "" || first.EventID != second.EventID {
+			t.Fatalf("event ids not stable: %q vs %q", first.EventID, second.EventID)
 		}
 	})
 }
