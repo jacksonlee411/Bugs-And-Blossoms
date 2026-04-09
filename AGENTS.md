@@ -475,6 +475,7 @@ modules/{module}/
 - DEV-PLAN-316：View As Of 工具态页面收口计划——Explain / Release / Governance 子区统一任务态时间语义：`docs/dev-plans/316-view-as-of-tooling-pages-convergence-plan.md`
 - DEV-PLAN-317：View As Of 页面时间语义回归与验收计划：`docs/dev-plans/317-view-as-of-regression-and-acceptance-plan.md`
 - DEV-PLAN-317 执行日志：`docs/dev-records/dev-plan-317-execution-log.md`
+- DEV-PLAN-320：Org 域 8 位非纯数字 `org_node_key` 一步切换方案（不扩大到全对象）：`docs/dev-plans/320-org-node-key-cutover-plan-no-global-expansion.md`
 - DEV-PLAN-225 执行日志：`docs/archive/dev-records/dev-plan-225-execution-log.md`
 - DEV-PLAN-226：测试指引 TG-004（门禁口径变更审批）：`docs/dev-plans/226-test-guide-tg004-gate-caliber-change-approval.md`
 - DEV-PLAN-170 执行日志：`docs/archive/dev-records/dev-plan-170-execution-log.md`

@@ -1,0 +1,616 @@
+# DEV-PLAN-320：Org 域 8 位非纯数字 `org_node_key` 一步切换方案（不扩大到全对象）
+
+**状态**: 规划中（2026-04-09 11:23 UTC）
+
+## 1. 背景
+
+当前仓库中，Org 域是少数把内部结构标识深度嵌入树结构内核的模块：
+
+- `org_id int` 既是内部结构主键，也是 `ltree` 路径标签、父子关系键、SetID 绑定键与多处读模型 join 键。
+- Org 域存在 `node_path ltree`、`parent_id`、`path_ids int[]`、subtree move 等树结构热点路径。
+- `org_id` 与用户常见的 8 位 `org_code` 视觉上高度相似，容易误读。
+
+相比之下，其他业务对象当前并没有出现与 Org 同级别的树结构压力：
+
+- Person 主要使用 `person_uuid`
+- Staffing 中 Position / Assignment 主要使用 `position_uuid` / `assignment_uuid`
+- JobCatalog 主要使用 `*_uuid`
+
+因此，本计划只处理 Org 域：引入固定 8 位、非纯数字、无业务语义的 `org_node_key`，并一次性替换当前运行期 `org_id` 结构主键。
+
+本计划明确不把 Org 的结构主键方案扩大到全对象。若未来其他域要采用类似方案，必须另起新计划并提供独立性能与结构证据。
+
+## 2. 目标与非目标
+
+### 2.1 核心目标
+
+- [ ] 为 Org 域定义 `org_node_key` 标准：固定 8 位、非纯数字、无业务语义、唯一、自增分配。
+- [ ] Org 域一步切换为 `org_node_key` / `parent_org_node_key`，不保留运行期双轨。
+- [ ] 将 Org 内核、SetID、Staffing、Assistant、`internal/server` 等相关链路同步对齐到 `org_node_key`。
+- [ ] 保持对外契约继续只暴露业务编码 `org_code`，不得回流暴露内部结构标识。
+
+### 2.2 非目标
+
+- 不在本计划内建立“全对象统一 8 位内部编码”。
+- 不在本计划内把 Person、Position、Assignment、JobCatalog 等对象改为 `char(8)` 主键。
+- 不在本计划内为其他模块新增 `*_node_key`。
+- 不通过兼容别名、双写双读或 legacy fallback 来实现平滑过渡。
+- 不把内部编码设计成新的业务编码、可读编码或人工输入编码。
+
+### 2.3 扩大化边界
+
+本计划采纳以下边界判断：
+
+1. Org 的 8 位内部结构键方案首先是为了解决树路径、父子结构、索引和 subtree move 的综合问题。
+2. 其他业务对象当前没有看到与 Org 等价的树结构性能压力。
+3. 因此，Org 的结构主键方案不应直接扩大到其他业务对象。
+4. 未来若其他域要引入类似方案，必须单独提交新的调查与实施计划，不得直接引用 320 外推。
+
+### 2.4 与现行标准的关系（STD-003 前置修订）
+
+当前现行标准 `STD-003` 明确冻结：
+
+- 对外契约仅使用 `org_code`
+- 内部结构关系仅使用 `org_id`
+
+见：
+
+- `docs/dev-plans/005-project-standards-and-spec-adoption.md`
+
+因此，`DEV-PLAN-320` 目前属于“拟议中的未来切换方案”，尚不是已生效的现行标准。
+
+本计划明确要求：
+
+1. **在 320 进入实施前，必须先修订 `STD-003`**
+2. 修订后的标准口径必须把 Org 内部结构键从 `org_id` 更新为 `org_node_key`
+3. 若 `STD-003` 未完成修订，则 320 不得进入实施，不得以“先改代码、后补标准”的方式推进
+
+建议修订后的标准目标口径为：
+
+- 对外契约仅使用 `org_code`
+- Org 内部结构关系仅使用 `org_node_key`
+- 请求进入服务边界时必须先做 `org_code -> org_node_key` 解析
+- 对外响应回写标识时必须使用 `org_code`
+
+## 2.5 工具链与门禁（SSOT 引用）
+
+- 触发器矩阵与本地必跑：`AGENTS.md`
+- 命令入口与脚本实现：`Makefile`
+- CI 门禁定义：`.github/workflows/quality-gates.yml`
+- DB / DDD / No Legacy / Routing / 测试分层口径：
+  - `docs/dev-plans/012-ci-quality-gates.md`
+  - `docs/dev-plans/015-ddd-layering-framework.md`
+  - `docs/dev-plans/015a-ddd-layering-framework-implementation-gap-assessment.md`
+  - `docs/dev-plans/004m1-no-legacy-principle-cleanup-and-gates.md`
+  - `docs/dev-plans/300-test-system-investigation-report.md`
+  - `docs/dev-plans/301-go-test-layering-and-best-practices-remediation-plan.md`
+
+## 3. 关键设计决策
+
+### 3.1 决策 A：仅在 Org 域引入 `org_node_key`
+
+选定方案：
+
+- Org 结构键改为 `org_node_key`
+- Org 父节点结构键改为 `parent_org_node_key`
+- 其他模块不在本计划内跟进 `*_node_key`
+
+理由：
+
+- `org_node_key` 能明确表达“Org 内部结构键”，避免继续用 `org_id` 这种默认联想到数字型 ID 的命名。
+- 收窄范围能显著降低切换风险，符合“只为有明确证据的域付出主键迁移成本”原则。
+
+### 3.2 决策 B：不使用对象类型前缀
+
+选定方案：**不使用对象类型前缀**。
+
+本计划采纳用户判断：内部编码不承接业务语义，因此不应把 Org 类型语义编码进内部键本身。
+
+因此：
+
+- `org_node_key` 值本身不表达对象类型、租户、层级或时间语义。
+- 键的归属由字段名、表名和约束表达，而不是由 key 字符串前缀表达。
+
+### 3.3 决策 C：采用“非语义首字母 + 7 位 Base32 体”的 8 位编码
+
+选定格式：
+
+```text
+[A-Z]{1}[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{7}
+```
+
+更精确地说：
+
+- 第 1 位：`alpha_guard`
+  - 字符集：`ABCDEFGHJKLMNPQRSTUVWXYZ`
+  - 作用：保证 key 永远不是纯数字
+  - 语义：无业务语义
+- 第 2~8 位：`base32_body`
+  - 字符集：`ABCDEFGHJKLMNPQRSTUVWXYZ23456789`
+  - 作用：承载自增序列的编码体
+
+示例：
+
+- `AAAAAAAB`
+- `AAAAAAAC`
+- `AAAAAAAD`
+
+### 3.4 决策 D：使用 Org 专属单序列分配
+
+选定方案：
+
+- 引入 `orgunit.org_node_key_seq`
+- 新建 Org 时，从该 sequence 申请下一个 `seq`
+- 由 Org 专属 DB 函数编码为 8 位 `org_node_key`
+- 并写入 `orgunit.org_node_key_registry`
+
+这意味着：
+
+- `org_node_key` 仅保证 Org 域内唯一
+- 该编码空间不与其他业务对象共享
+- “自增”语义体现在 Org 专属 sequence，而不是字符串前缀
+
+### 3.5 决策 E：不做双轨，Org 域一次性切换
+
+选定方案：
+
+- 不保留运行期 `org_id + org_node_key` 双轨写读
+- 不保留 legacy alias、fallback、compat adapter
+- 切换窗口内完成回填、Schema 替换、Go 代码替换、跨模块联动与验证
+- 回滚只允许数据库快照恢复与前向修复，不允许回到双链路常驻状态
+
+## 4. 编码规范
+
+### 4.1 字符集
+
+- `alpha_guard`：`ABCDEFGHJKLMNPQRSTUVWXYZ`
+- `base32_body`：`ABCDEFGHJKLMNPQRSTUVWXYZ23456789`
+
+禁止字符：
+
+- `0`
+- `1`
+- `I`
+- `L`
+- `O`
+
+### 4.2 语法规则
+
+- 长度固定 8
+- 全大写
+- 不允许空格、下划线、连字符、点号
+- 正则：
+
+```regex
+^[ABCDEFGHJKLMNPQRSTUVWXYZ][ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{7}$
+```
+
+### 4.3 分配规则
+
+设：
+
+- `S` 为 `orgunit.org_node_key_seq` 返回的正整数
+- `A = 24`
+- `B = 32`
+
+编码规则：
+
+1. `guard_index = floor(S / B^7) mod A`
+2. `body_value = S mod B^7`
+3. `body_value` 以固定 7 位 Base32 编码，不足左补首字符
+4. `org_node_key = alpha_guard[guard_index] || body[7]`
+
+容量：
+
+- `24 * 32^7 = 824,633,720,832`
+
+对 Org 域容量来说足够大。
+
+### 4.4 禁止事项
+
+1. 禁止在应用层自行拼接/计算 `org_node_key`
+2. 禁止把层级、租户、年份、环境等业务语义编码到 `org_node_key`
+3. 禁止把 `org_node_key` 当作对外业务编码返回给用户
+4. 禁止在运行时同时保留 `org_id` 与 `org_node_key` 双事实源
+
+## 5. 数据模型与约束
+
+### 5.1 Org 专属新增
+
+```sql
+orgunit.org_node_key_registry
+- org_node_key char(8) primary key
+- seq bigint not null unique
+- tenant_uuid uuid not null
+- created_at timestamptz not null default now()
+```
+
+另新增：
+
+- `orgunit.org_node_key_seq`
+- `encode_org_node_key(seq bigint)`
+- `decode_org_node_key(org_node_key char(8))`
+- `allocate_org_node_key(tenant_uuid uuid)`
+- `org_path_node_keys(p_path ltree)`
+
+约束要求：
+
+- `org_node_key_registry` 只承担“分配登记 / 回填核对 / 审计追踪”职责，**不得**承载 `org_code` 映射
+- `org_node_key_registry` 必须启用并强制 RLS：`ENABLE ROW LEVEL SECURITY` + `FORCE ROW LEVEL SECURITY`
+- `org_node_key_registry` 必须定义 `tenant_isolation` policy，遵循 `DEV-PLAN-021` 的 fail-closed 口径
+- `allocate_org_node_key(tenant_uuid uuid)` 必须先执行 `assert_current_tenant(...)`
+- `org_node_key_registry` 与 `allocate_org_node_key(...)` 的 owner / grant / `SECURITY DEFINER` / `search_path` 约束必须与现有 `org_id_allocators` 口径一致
+- 若 `org_node_key_registry` 发生写入，写入口必须限定为 Org kernel；不得引入第二写入口
+
+### 5.2 Org 域替换目标
+
+当前 Org 域以 `org_id int` 为结构主键，并深嵌：
+
+- `orgunit.org_trees.root_org_id`
+- `orgunit.org_events.org_id`
+- `orgunit.org_unit_versions.org_id`
+- `orgunit.org_unit_versions.parent_id`
+- `node_path ltree`
+- `path_ids int[]`
+- SetID 绑定与解析函数
+
+本计划要求替换为：
+
+- `root_org_node_key char(8)`
+- `org_node_key char(8)`
+- `parent_org_node_key char(8)`
+- `path_node_keys text[] generated always as (orgunit.org_path_node_keys(node_path)) stored`
+- `node_path ltree` 保留，但标签从“8 位数字”改为“8 位 `org_node_key`”
+
+事实源约束：
+
+- `node_path` 仍然是 Org 树结构的**唯一事实源**
+- `path_node_keys` 仅作为由 `node_path` 派生出的祖先链辅助列，**不得**作为独立维护列直接写入
+- `move` / `replay` / `rebuild` / 审计快照重建等路径只允许更新 `node_path`，不得同时手工维护第二份祖先链
+
+### 5.3 Org Code 映射
+
+`org_code` 仍是对外业务标识；其权威映射关系改为：
+
+- `tenant_uuid + org_node_key -> org_code`
+- `tenant_uuid + org_code -> org_node_key`
+
+权威承载表要求：
+
+- 以上映射必须由现有 `orgunit.org_unit_codes` 的演进版本承载，不得在 `org_node_key_registry` 中重复存储
+- `orgunit.org_unit_codes` 应从当前 `(tenant_uuid, org_id)` 主键迁移为 `(tenant_uuid, org_node_key)` 主键
+- `org_code` 唯一约束与现有 kernel-only write trigger 必须继续保留
+- `org_node_key_registry` 不是 `org_code` 映射表，只用于分配登记与回填核对
+
+不得再以 `org_id` 作为对外映射桥梁。
+
+### 5.4 跨模块引用替换
+
+受 Org 影响的跨模块结构列同步改为 `org_node_key`：
+
+- `staffing.position_versions.org_unit_id` -> `org_node_key`
+- 与 SetID 绑定相关的 `org_id` 列 / 入参 / payload
+- `internal/server` 中的 `ResolveOrgID/ResolveOrgCode` 风格接口
+
+范围澄清：
+
+- Staffing 不只是“内部联动”；当前 `Position` 外部输入/输出与 DTO 已直接暴露 `org_unit_id`
+- 若 320 继续坚持“内部结构键完全不对外暴露”，则 Staffing 外部契约必须同步迁移为 `org_code`
+- 迁移后的边界规则应为：Staffing 对外请求/响应使用 `org_code`，服务边界内解析为 `org_node_key`
+- 不允许把 `org_node_key` 重新包装成名为 `org_unit_id` 的外部兼容别名继续长期存在；这会形成新的语义漂移
+
+### 5.5 非 Org 对象保持现状
+
+以下对象不在本计划内变更其结构主键策略：
+
+- `person.persons.person_uuid`
+- `staffing.positions.position_uuid`
+- `staffing.assignments.assignment_uuid`
+- `jobcatalog.job_profiles.job_profile_uuid`
+- `jobcatalog.job_families.job_family_uuid`
+- `jobcatalog.job_family_groups.job_family_group_uuid`
+- `jobcatalog.job_levels.job_level_uuid`
+
+理由：
+
+- 当前没有证据表明这些对象存在与 Org 等价的树结构性能需求。
+- 不应为了“一致”而引入不必要的主键迁移成本。
+
+## 6. 接口与边界契约
+
+### 6.1 对外契约
+
+对外继续维持现行规则：
+
+- Org 只暴露 `org_code`
+- 凡跨模块对外协议引用 Org，也只允许使用 `org_code`
+
+禁止事项：
+
+- 禁止外部 JSON/query/form 字段出现 `org_id`
+- 禁止外部 JSON/query/form 字段出现 `org_node_key`
+- 禁止继续把 `staffing.org_unit_id` 作为外部协议字段承载内部结构键
+- 禁止 Assistant、内部 API、页面数据模型向前端回写 `org_id` 或 `org_node_key`
+
+### 6.2 服务边界
+
+Org 域新边界规则：
+
+- 请求进入服务边界时：`org_code -> org_node_key`
+- 领域与内核内部：只使用 `org_node_key`
+- 响应回写时：`org_node_key -> org_code`
+
+不得继续保留：
+
+- `ResolveOrgID`
+- `ResolveOrgCode(... orgID int)`
+- `parent_id`
+- `new_parent_id`
+
+应统一替换为：
+
+- `ResolveOrgNodeKeyByCode`
+- `ResolveOrgCodeByNodeKey`
+- `parent_org_node_key`
+- `new_parent_org_node_key`
+
+### 6.3 内部键完全对外隐藏
+
+本计划要求不仅完成 `org_id -> org_node_key` 的内部切换，还必须做到：
+
+- `org_id` 对外完全不可见
+- `org_node_key` 对外完全不可见
+- 其他对象现有内部 UUID 继续保持“仅内部可见”，不得因 320 被回流暴露
+
+这里的“对外”包括：
+
+- HTTP JSON response
+- query / form / path 参数
+- Assistant 候选项与会话回包
+- 前端页面状态、路由参数、隐藏字段与 API client 类型定义
+
+#### 6.3.1 外部协议要求
+
+1. 对外请求只允许使用业务标识 `org_code`
+2. 对外响应只允许返回 `org_code`，不得返回 `org_id` 或 `org_node_key`
+3. 同时携带 `org_code` 与任一内部键视为契约违规，必须 fail-closed
+
+#### 6.3.2 分层要求
+
+1. Handler / Controller：
+   - 只接收和返回 `org_code`
+   - 不得把 `org_id` / `org_node_key` 写入 response DTO
+2. Service：
+   - 仅在服务边界内做一次 `org_code -> org_node_key` 解析
+   - 进入服务内部后统一使用 `org_node_key`
+3. Repository / Store：
+   - 只认内部结构键，不认对外业务标识
+4. Frontend / Presentation：
+   - 不得在页面状态、URL、隐藏字段中持有 `org_id` / `org_node_key`
+
+#### 6.3.3 非 Org 对象的隐藏口径
+
+虽然 320 不改 Person / Position / Assignment / JobCatalog 的主键策略，但仍要求它们继续遵守“内部键不对外暴露”：
+
+- `person_uuid`
+- `position_uuid`
+- `assignment_uuid`
+- `job_profile_uuid`
+- `job_family_uuid`
+- `job_family_group_uuid`
+- `job_level_uuid`
+
+这些字段在 320 期间不得因为联调、DTO 收口或接口重构而泄露到外部协议中。
+
+## 7. 实施步骤（Big-Bang，一次发布窗口）
+
+### 7.1 前置冻结
+
+1. [ ] 先修订 `STD-003`，把 Org 内部结构键口径从 `org_id` 更新为 `org_node_key`。
+2. [ ] 冻结 `STD-003` 的补充口径，新增 Org 域 `org_node_key` 标准条款。
+3. [ ] 新增 `DEV-PLAN-320` 并评审通过。
+4. [ ] 明确停写窗口、快照策略、回滚负责人和 stopline。
+
+### 7.2 Org 专属基础设施
+
+1. [ ] 新增 `orgunit.org_node_key_seq`
+2. [ ] 新增 `orgunit.org_node_key_registry`
+3. [ ] 新增 Org 专属 DB 函数：
+   - `allocate_org_node_key(...)`
+   - `encode_org_node_key(seq bigint)`
+   - `decode_org_node_key(org_node_key char(8))`
+   - `org_path_node_keys(p_path ltree)`
+4. [ ] 为 `org_node_key_registry` 增加 RLS / policy / owner / grant / `SECURITY DEFINER` / `search_path` 约束，并与 `DEV-PLAN-021/025` 对齐
+5. [ ] 增加 DB 级唯一约束与格式校验
+
+### 7.3 Org 回填
+
+1. [ ] 为 Org 现存对象生成 `org_node_key`
+2. [ ] 将所有回填结果写入 `orgunit.org_node_key_registry`
+3. [ ] 产出只读映射核对结果：
+   - 总数一致
+   - 空值为 0
+   - 重复为 0
+   - registry 漏挂为 0
+
+### 7.4 Org 域切主
+
+1. [ ] 用 `org_node_key` 替换 Org Schema 中所有结构主键与父子键
+2. [ ] 将 `ltree` 标签函数从 `org_id` 版改为 `org_node_key` 版
+3. [ ] 将 `path_ids int[]` 改为由 `node_path` 派生的 `path_node_keys text[]`
+4. [ ] 将 `org_unit_codes` 迁移为 `(tenant_uuid, org_node_key) <-> org_code` 的唯一权威映射表
+5. [ ] 将事件 payload 中的 `parent_id/new_parent_id` 全部改为 `parent_org_node_key/new_parent_org_node_key`
+6. [ ] 重写 Org 解析器、写服务、读模型、搜索与审计适配
+
+### 7.5 跨模块联动
+
+1. [ ] SetID 绑定和解析全量改为 `org_node_key`
+2. [ ] Staffing 内部对 Org 的引用全量改为 `org_node_key`
+3. [ ] Staffing 外部协议从 `org_unit_id` 收敛为 `org_code`
+4. [ ] `internal/server` 删除 `org_id` 中心 DTO 与解析接口
+5. [ ] Assistant 候选对象去除 `org_id` 暴露与依赖
+6. [ ] 对外 DTO、前端 API 类型与页面状态中彻底删除 `org_id` / `org_node_key` 暴露
+
+### 7.6 切换后清理
+
+1. [ ] 删除 `org_id` allocator、旧解析函数、旧 JSON 字段
+2. [ ] 删除残留 `ResolveOrgID` / `ResolveOrgCode(orgID int)` 接口
+3. [ ] 新增反回流门禁，阻断 `org_id` 再进入运行期路径
+4. [ ] 核查非 Org 对象 UUID 未因本次切换被暴露到外部协议
+
+## 8. 风险与策略
+
+### 8.1 高风险
+
+1. **Org Kernel 改动面极大**
+   - 风险：`org_id` 深嵌 Org SQL 函数、投射与 SetID 逻辑，一次切换容易漏点。
+   - 策略：必须用停写窗口 + 全量快照 + 映射核对 + 端到端回归来执行。
+
+2. **跨模块联动点多**
+   - 风险：Staffing / Assistant / `internal/server` / SetID 任一链路遗漏，都会造成运行期断链。
+   - 策略：实施前必须先产出全仓引用清单；切换后按链路逐项验证。
+
+3. **不保留双轨意味着回滚成本高**
+   - 风险：一旦切换脚本或运行期验证失败，不能靠 legacy fallback 止血。
+   - 策略：回滚仅允许数据库快照恢复；上线窗口必须足够长，且切换前完成 dry-run。
+
+4. **现行标准未先修订会导致计划与 SSOT 冲突**
+   - 风险：若仍保留 `STD-003` 的“内部结构关系仅使用 org_id”口径，320 的实现将与现行标准直接冲突。
+   - 策略：把“先修订 `STD-003`”设为硬前置条件；未完成修订不得进入实施。
+
+### 8.2 中风险
+
+1. **无前缀方案在日志里不如“类型前缀”直观**
+   - 风险：排障时单看 key 无法直接知道对象类型。
+   - 策略：通过字段名、表名与日志上下文字段表达类型；不得把类型再编码回 key 本身。
+
+2. **8 位空间终有上界**
+   - 风险：虽空间充足，但不是无限。
+   - 策略：在 Org registry 中保存 `seq` 原值，并预留未来扩容到 9/10 位的单独计划，不在 320 内提前引入 v2 双制式。
+
+3. **路径数组从 `int[]` 切到 `text[]` 后索引特性变化**
+   - 风险：树路径查询、祖先匹配与审计 join 计划可能退化。
+   - 策略：切换前完成 explain 基线；必要时为 `path_node_keys` 建新索引并补专项压测。
+
+## 9. 性能专项与 Stopline
+
+### 9.1 当前性能事实
+
+当前 Org 树路径的核心结构不是“整数树”，而是：
+
+- `node_path ltree`：每层 label 为固定 8 位数字字符串
+- `path_ids int[]`：由 `node_path` 解析出的祖先数组
+- `GIN(path_ids)`：用于祖先链辅助查询
+
+因此，切换到 `org_node_key` 后的性能影响应分开评估：
+
+1. **`ltree` 主路径能力**
+   - 当前 label 已是固定 8 字符，只是内容为数字。
+   - 切换后若仍保持固定 8 字符，`<@`、`nlevel()`、prefix 拼接等主路径能力预计接近持平。
+
+2. **`path_ids int[]` 辅助链路**
+   - 该链路会从 `int[]` 改为 `text[]`
+   - `GIN(text[])` 体积、缓存命中、比较开销与 `unnest -> join` 代价预计都会高于当前 `int[]`
+   - 这是本计划最主要的性能风险点
+
+3. **普通等值 join**
+   - `org_id = ...` / `parent_id = ...` 将变为 `org_node_key = ...` / `parent_org_node_key = ...`
+   - 固定 8 字符等值比较通常仅带来小幅退化，不预计成为首要瓶颈
+
+### 9.2 必测链路
+
+切换前后必须对以下链路分别采集基线：
+
+1. [ ] 树根列表查询
+2. [ ] 指定父节点下的 children 查询
+3. [ ] 节点详情查询
+4. [ ] 搜索候选查询
+5. [ ] 子树 move
+6. [ ] `full_name_path` 重建
+7. [ ] SetID 基于组织祖先链的解析
+8. [ ] Staffing 通过组织引用联查 position
+
+### 9.3 Explain / Analyze 基线清单
+
+实施前后都必须保存 `EXPLAIN (ANALYZE, BUFFERS)` 证据，至少覆盖：
+
+1. [ ] `node_path <@ ...` 子树过滤查询
+2. [ ] `path_ids` / `path_node_keys` 祖先链展开查询
+3. [ ] `full_name_path` 更新 SQL
+4. [ ] `move` 对整棵子树的版本切分与重写 SQL
+5. [ ] 详情页主查询
+6. [ ] 搜索候选主查询
+
+### 9.4 建议的性能补偿策略
+
+1. [ ] 保留 `ltree`，不要因切换 `org_node_key` 而退回邻接表递归
+2. [ ] `org_node_key` 保持固定 8 位，避免路径 label 变长
+3. [ ] 为 `path_node_keys text[]` 建立替代索引，并与当前 `GIN(path_ids)` 做对比验证
+4. [ ] 若祖先链展开显著退化，优先评估“缓存祖先显示链/增量维护 `full_name_path`”，而不是回退到 legacy 双链路
+5. [ ] 对 `move` 场景单独做大子树压测，确认写放大仍在可接受范围内
+
+### 9.5 Stopline
+
+以下任一条件触发，320 不得进入执行或必须暂停切换：
+
+1. [ ] 树根列表、children、详情、搜索任一主读链路的 P95 延迟较基线退化超过 20%
+2. [ ] `move` 大子树场景的总执行时间较基线退化超过 30%
+3. [ ] `full_name_path` 重建 SQL 的总耗时或 shared buffers 读写量明显失控，无法通过索引/SQL 收敛
+4. [ ] `path_node_keys` 索引体积或 vacuum 成本显著超出当前容量预算
+5. [ ] Explain 结果显示关键查询不再命中 `ltree` gist / 预期数组索引，转为大范围 seq scan 且无法在计划内修复
+6. [ ] `STD-003` 尚未完成修订，仍保留“内部结构关系仅使用 `org_id`”的现行口径
+
+## 10. 反回流门禁
+
+实施完成后，至少新增以下门禁：
+
+1. [ ] 禁止对外 DTO 出现 `json:"org_id"` / `json:"org_node_key"`
+2. [ ] 禁止对外 DTO 出现 `json:".*_uuid"`，除非该字段已在独立契约文档中被明确批准为外部业务标识
+3. [ ] 禁止新增 `ResolveOrgID` / `ResolveOrgCode(...int)` 风格接口
+4. [ ] 禁止 Org 域运行时再写入 `parent_id` / `new_parent_id`
+5. [ ] 禁止应用层自行生成 `org_node_key`
+6. [ ] 禁止 `internal/server` 再持有模块内 PG store 的 `org_id` 中心实现
+7. [ ] 禁止前端页面状态、路由参数和 API client 类型引入 `org_id` / `org_node_key`
+
+## 11. 测试与覆盖率
+
+### 11.1 覆盖率口径
+
+- 覆盖率口径与测试分层基线以：
+  - `docs/dev-plans/300-test-system-investigation-report.md`
+  - `docs/dev-plans/301-go-test-layering-and-best-practices-remediation-plan.md`
+  为准。
+
+### 11.2 本计划必须覆盖的测试面
+
+1. [ ] `org_node_key` 编码/解码纯函数测试
+2. [ ] Org sequence 分配唯一性测试
+3. [ ] Org registry 一致性与回填核对测试
+4. [ ] Org tree create/move/rename/disable/enable/correct/rescind 集成测试
+5. [ ] SetID 基于 `org_node_key` 的解析集成测试
+6. [ ] Staffing 引用 `org_node_key` 的联动测试
+7. [ ] Assistant / internal API 不暴露 `org_id` / `org_node_key` 的响应契约测试
+8. [ ] Person / Position / Assignment / JobCatalog 的内部 UUID 未被外泄的契约回归测试
+9. [ ] 路由、lint、DDD layering、No Legacy 与相关反回流门禁测试
+
+## 12. 验收标准
+
+1. [ ] 任意新建 Org 都能拿到唯一 8 位 `org_node_key`
+2. [ ] Org 域运行时不再依赖 `org_id`
+3. [ ] `internal/server` 与对外响应不再暴露 `org_id`
+4. [ ] `org_node_key` 也未暴露到任何外部协议、前端状态或 Assistant 回包中
+5. [ ] Person / Position / Assignment / JobCatalog 的内部 UUID 未因 320 被对外暴露
+6. [ ] Org 主链路、SetID、Staffing、Assistant 回归通过
+7. [ ] 无 legacy 双轨、无 fallback、无兼容别名窗口
+8. [ ] 文档地图与门禁已更新，后续新增代码无法回流 `org_id` / `org_node_key` / 非 Org 内部 UUID
+
+## 13. 最终结论
+
+本计划采纳以下最终口径：
+
+- 仅在 Org 域引入新的内部 surrogate key：`org_node_key`
+- 编码规则为“8 位、非纯数字、无业务语义、Org 域内唯一、自增分配”
+- **不使用对象类型前缀**
+- 通过“非语义首字母保护位 + 7 位 Base32 编码体”满足“8 位非纯数字”要求
+- Org 域一次性切换到 `org_node_key`
+- Person / Position / Assignment / JobCatalog 保持现状，不因 320 被扩大化改造
