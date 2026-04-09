@@ -5,7 +5,6 @@ import (
 	"net/http"
 	"strings"
 
-	jobcatalogmodule "github.com/jacksonlee411/Bugs-And-Blossoms/modules/jobcatalog"
 	jobcatalogports "github.com/jacksonlee411/Bugs-And-Blossoms/modules/jobcatalog/domain/ports"
 	jobcatalogtypes "github.com/jacksonlee411/Bugs-And-Blossoms/modules/jobcatalog/domain/types"
 	jobcatalogservices "github.com/jacksonlee411/Bugs-And-Blossoms/modules/jobcatalog/services"
@@ -17,14 +16,6 @@ type JobFamily = jobcatalogtypes.JobFamily
 type JobProfile = jobcatalogtypes.JobProfile
 type JobCatalogStore = jobcatalogports.JobCatalogStore
 type JobCatalogPackage = jobcatalogtypes.JobCatalogPackage
-
-func newJobCatalogPGStore(pool pgBeginner) JobCatalogStore {
-	return jobcatalogmodule.NewPGStore(pool)
-}
-
-func newJobCatalogMemoryStore() JobCatalogStore {
-	return jobcatalogmodule.NewMemoryStore()
-}
 
 func normalizeSetID(input string) string {
 	return jobcatalogservices.NormalizeSetID(input)
