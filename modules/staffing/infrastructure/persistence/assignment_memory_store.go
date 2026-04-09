@@ -18,8 +18,15 @@ type AssignmentMemoryStore struct {
 }
 
 func NewAssignmentMemoryStore() ports.AssignmentStore {
+	return NewAssignmentMemoryStoreWithState(nil)
+}
+
+func NewAssignmentMemoryStoreWithState(assigns map[string]map[string][]types.Assignment) *AssignmentMemoryStore {
+	if assigns == nil {
+		assigns = make(map[string]map[string][]types.Assignment)
+	}
 	return &AssignmentMemoryStore{
-		assigns: make(map[string]map[string][]types.Assignment),
+		assigns: assigns,
 	}
 }
 

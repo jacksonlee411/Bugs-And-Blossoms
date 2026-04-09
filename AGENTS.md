@@ -536,6 +536,7 @@ modules/{module}/
 - DEV-PLAN-015N：Person Normalize Wrapper 从生产代码移除（承接 DEV-PLAN-015B P1）：`docs/dev-plans/015n-person-normalize-wrapper-elimination-plan.md`
 - DEV-PLAN-015O：Staffing Assignment 默认 PG 装配向模块侧收口（承接 DEV-PLAN-015B P1）：`docs/dev-plans/015o-staffing-assignment-pg-default-wiring-plan.md`
 - DEV-PLAN-015P：Staffing Assignment 默认 Memory 装配向模块侧收口（承接 DEV-PLAN-015B P1）：`docs/dev-plans/015p-staffing-assignment-memory-default-wiring-plan.md`
+- DEV-PLAN-015Q：Staffing Assignment 内存实现向模块侧收口（承接 DEV-PLAN-015B P1）：`docs/dev-plans/015q-staffing-assignment-memory-implementation-module-side-plan.md`
 - Greenfield HR 模块骨架与契约（OrgUnit/JobCatalog/Staffing/Person）：`docs/dev-plans/016-greenfield-hr-modules-skeleton.md`
 - 任职记录（Job Data / Assignments）（事件 SoT + 同步投射）：`docs/dev-plans/031-greenfield-assignment-job-data.md`
 - Person 最小身份锚点（Pernr 1-8 位数字字符串）：`docs/dev-plans/027-person-minimal-identity-for-staffing.md`
