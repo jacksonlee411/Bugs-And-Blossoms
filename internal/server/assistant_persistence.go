@@ -469,6 +469,22 @@ type assistantPreparedCommit struct {
 	SkipExecution bool
 }
 
+func assistantTurnAuthoritativeStateReadyForCommit(turn *assistantTurn) error {
+	if turn == nil {
+		return errAssistantConversationStateInvalid
+	}
+	if turn.State != assistantStateConfirmed {
+		return errAssistantConfirmationRequired
+	}
+	if len(assistantTurnMissingFields(turn)) > 0 {
+		return errAssistantConfirmationRequired
+	}
+	if err := assistantTurnRouteExecutionBoundary(turn); err != nil {
+		return err
+	}
+	return nil
+}
+
 type assistantTurnMutationResult struct {
 	Transition  *assistantStateTransition
 	PersistTurn bool
@@ -664,13 +680,7 @@ func (s *assistantConversationService) prepareCommitTurn(
 	if assistantTurnConfirmExpired(turn, time.Now().UTC()) {
 		return assistantPreparedCommit{}, assistantExpireTurn(conversation, turn, principal, "commit"), errAssistantConfirmationExpired
 	}
-	if turn.State != assistantStateConfirmed {
-		return assistantPreparedCommit{}, assistantTurnMutationResult{}, errAssistantConfirmationRequired
-	}
-	if len(assistantTurnMissingFields(turn)) > 0 {
-		return assistantPreparedCommit{}, assistantTurnMutationResult{}, errAssistantConfirmationRequired
-	}
-	if err := assistantTurnRouteExecutionBoundary(turn); err != nil {
+	if err := assistantTurnAuthoritativeStateReadyForCommit(turn); err != nil {
 		return assistantPreparedCommit{}, assistantTurnMutationResult{}, err
 	}
 	spec, ok := s.lookupActionSpec(turn.Intent.Action)

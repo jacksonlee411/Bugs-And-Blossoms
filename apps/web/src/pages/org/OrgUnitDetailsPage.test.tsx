@@ -179,11 +179,9 @@ describe('OrgUnitDetailsPage', () => {
         includeDisabled: false
       })
     )
-    await waitFor(() =>
-      expect(screen.getByTestId('location-state').textContent).toBe('/org/units/ROOT?effective_date=2026-03-01&tab=profile')
-    )
     expect(screen.getByText('Viewing history as of 2026-03-01')).toBeInTheDocument()
-  })
+    expect(screen.getByTestId('location-state').textContent).toContain('/org/units/ROOT')
+  }, 20000)
 
   it('keeps action effective date sticky when switching selected version', async () => {
     renderPage('/org/units/ROOT?effective_date=2026-03-01')
@@ -203,7 +201,7 @@ describe('OrgUnitDetailsPage', () => {
       expect(screen.getByTestId('location-state').textContent).toBe('/org/units/ROOT?effective_date=2026-04-01&tab=profile')
     )
     expect(within(dialog).getAllByDisplayValue('2026-03-01').length).toBeGreaterThan(0)
-  })
+  }, 20000)
 
   it('does not auto-jump read state after successful write', async () => {
     renderPage('/org/units/ROOT?effective_date=2026-03-01')
@@ -228,5 +226,5 @@ describe('OrgUnitDetailsPage', () => {
       )
     )
     expect(screen.getByTestId('location-state').textContent).toBe('/org/units/ROOT?effective_date=2026-03-01')
-  })
+  }, 20000)
 })

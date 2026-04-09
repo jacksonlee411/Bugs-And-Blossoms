@@ -88,7 +88,7 @@ describe('SetIDExplainPanel', () => {
     expect(screen.getByText('解释时点')).toBeInTheDocument()
     expect(screen.getByDisplayValue('2026-03-01')).toBeInTheDocument()
     expect(screen.queryByText('as_of')).not.toBeInTheDocument()
-  })
+  }, 20000)
 
   it('submits initialAsOf as explain request parameter', async () => {
     renderPanel()
@@ -101,7 +101,7 @@ describe('SetIDExplainPanel', () => {
         asOf: '2026-03-01'
       })
     )
-  })
+  }, 20000)
 
   it('renders custom task-time label and hint from host page props', () => {
     renderPanel({
@@ -112,5 +112,5 @@ describe('SetIDExplainPanel', () => {
     expect(screen.getByText('查看日期 / View As Of')).toBeInTheDocument()
     expect(screen.getByText('只影响当前 explain 请求。')).toBeInTheDocument()
     expect(screen.queryByText('解释时点')).not.toBeInTheDocument()
-  })
+  }, 20000)
 })

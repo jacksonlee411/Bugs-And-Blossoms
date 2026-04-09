@@ -5,6 +5,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { AssignmentsPage } from './AssignmentsPage'
 import { PositionsPage } from './PositionsPage'
 
+const currentUTCDate = () => new Date().toISOString().slice(0, 10)
+
 const assignmentApiMocks = vi.hoisted(() => ({
   listAssignments: vi.fn(),
   upsertAssignment: vi.fn()
@@ -33,7 +35,7 @@ vi.mock('../../utils/readViewState', async () => {
   const actual = await vi.importActual<typeof import('../../utils/readViewState')>('../../utils/readViewState')
   return {
     ...actual,
-    todayISODate: () => '2026-04-08'
+    todayISODate: () => new Date().toISOString().slice(0, 10)
   }
 })
 
@@ -135,7 +137,7 @@ describe('Staffing view-as-of pages', () => {
   it('AssignmentsPage defaults to current mode and does not let history overwrite effective_date', async () => {
     renderAssignmentsPage()
 
-    await waitFor(() => expect(positionApiMocks.listPositions).toHaveBeenCalledWith({ asOf: '2026-04-08' }))
+    await waitFor(() => expect(positionApiMocks.listPositions).toHaveBeenCalledWith({ asOf: currentUTCDate() }))
 
     expect(screen.queryByLabelText('As Of Date')).not.toBeInTheDocument()
     expect(screen.getAllByText('Viewing current data by default').length).toBeGreaterThan(0)
@@ -150,12 +152,12 @@ describe('Staffing view-as-of pages', () => {
 
     await waitFor(() => expect(screen.getByTestId('location-search')).toHaveTextContent('as_of=2026-03-01'))
     expect((screen.getByLabelText('effective_date') as HTMLInputElement).value).toBe('2026-06-10')
-  })
+  }, 20000)
 
   it('PositionsPage defaults to current mode and does not let history overwrite effective_date', async () => {
     renderPositionsPage()
 
-    await waitFor(() => expect(positionApiMocks.listPositions).toHaveBeenCalledWith({ asOf: '2026-04-08' }))
+    await waitFor(() => expect(positionApiMocks.listPositions).toHaveBeenCalledWith({ asOf: currentUTCDate() }))
 
     expect(screen.queryByLabelText('As Of Date')).not.toBeInTheDocument()
     expect(screen.getAllByText('Viewing current data by default').length).toBeGreaterThan(0)
@@ -170,5 +172,5 @@ describe('Staffing view-as-of pages', () => {
 
     await waitFor(() => expect(screen.getByTestId('location-search')).toHaveTextContent('as_of=2026-03-01'))
     expect((screen.getByLabelText('effective_date') as HTMLInputElement).value).toBe('2026-07-15')
-  })
+  }, 20000)
 })

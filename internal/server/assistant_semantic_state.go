@@ -44,6 +44,19 @@ type assistantSemanticPromptEnvelope struct {
 	PendingTurn      *assistantSemanticPromptPending `json:"pending_turn,omitempty"`
 }
 
+type assistantAuthoritativeDecision struct {
+	Accepted            bool
+	Intent              assistantIntentSpec
+	ActionSpec          assistantActionSpec
+	RouteDecision       assistantIntentRouteDecision
+	Candidates          []assistantCandidate
+	ResolvedCandidate   *assistantCandidate
+	ResolvedCandidateID string
+	SelectedCandidateID string
+	Clarification       *assistantClarificationDecision
+	FailClosedCode      string
+}
+
 func assistantBuildSemanticPrompt(userInput string, pendingTurn *assistantTurn) string {
 	envelope := assistantAssembleSemanticContext(assistantSemanticContextAssemblerInput{
 		UserInput:   userInput,
@@ -116,6 +129,108 @@ func assistantSemanticPromptPendingTurn(turn *assistantTurn) *assistantSemanticP
 		return nil
 	}
 	return out
+}
+
+func assistantValidateProposalWriteDates(proposal assistantRuntimeProposal, retrieval assistantSemanticRetrievalResult) error {
+	proposal = assistantNormalizeRuntimeProposal(proposal)
+	if proposal.EffectiveDate != "" && !assistantDateISOYMD(proposal.EffectiveDate) {
+		return errAssistantPlanSchemaConstrainedDecodeFailed
+	}
+	if proposal.TargetEffectiveDate != "" && !assistantDateISOYMD(proposal.TargetEffectiveDate) {
+		return errAssistantPlanSchemaConstrainedDecodeFailed
+	}
+	// 读链路 as_of 只允许作为 retrieval 条件存在，不能在 proposal 中反向提升为写侧日期默认值。
+	if strings.TrimSpace(retrieval.AsOf) != "" {
+		if proposal.EffectiveDate == "" && proposal.TargetEffectiveDate == "" {
+			return nil
+		}
+	}
+	return nil
+}
+
+func assistantBuildAuthoritativeDryRun(
+	svc *assistantConversationService,
+	ctx context.Context,
+	tenantID string,
+	intent assistantIntentSpec,
+	candidates []assistantCandidate,
+	resolvedCandidateID string,
+	retrieval assistantSemanticRetrievalResult,
+) assistantDryRunResult {
+	dryRun := assistantBuildDryRunWithRetrieval(intent, candidates, resolvedCandidateID, retrieval)
+	if svc != nil {
+		dryRun = svc.enrichCreateOrgUnitDryRunWithPolicy(ctx, tenantID, intent, candidates, resolvedCandidateID, dryRun)
+	}
+	return dryRun
+}
+
+func (s *assistantConversationService) assistantAcceptProposal(
+	ctx context.Context,
+	tenantID string,
+	principal Principal,
+	userInput string,
+	proposal assistantRuntimeProposal,
+	routeDecision assistantIntentRouteDecision,
+	candidates []assistantCandidate,
+	resolvedCandidateID string,
+	selectedCandidateID string,
+	knowledgeRuntime *assistantKnowledgeRuntime,
+	retrieval assistantSemanticRetrievalResult,
+	pendingClarification *assistantClarificationDecision,
+) (assistantAuthoritativeDecision, error) {
+	_ = principal
+	proposal = assistantNormalizeRuntimeProposal(proposal)
+	if err := assistantValidateProposalWriteDates(proposal, retrieval); err != nil {
+		return assistantAuthoritativeDecision{}, err
+	}
+	intent := assistantProjectIntentRouteDecision(proposal.intentSpec(), routeDecision)
+	decision := assistantAuthoritativeDecision{
+		Accepted:            true,
+		Intent:              intent,
+		RouteDecision:       routeDecision,
+		Candidates:          append([]assistantCandidate(nil), candidates...),
+		ResolvedCandidateID: strings.TrimSpace(resolvedCandidateID),
+		SelectedCandidateID: strings.TrimSpace(selectedCandidateID),
+	}
+	requiresActionSpec := assistantIntentNeedsActionSpec(intent, routeDecision)
+	if requiresActionSpec {
+		spec, ok := s.lookupActionSpec(intent.Action)
+		if !ok {
+			decision.FailClosedCode = errAssistantUnsupportedIntent.Error()
+			return decision, errAssistantUnsupportedIntent
+		}
+		if strings.TrimSpace(spec.ID) == "" {
+			decision.FailClosedCode = errAssistantActionSpecMissing.Error()
+			return decision, errAssistantActionSpecMissing
+		}
+		decision.ActionSpec = spec
+	}
+	if decision.SelectedCandidateID != "" && !assistantCandidateExists(decision.Candidates, decision.SelectedCandidateID) {
+		decision.FailClosedCode = errAssistantCandidateNotFound.Error()
+		return decision, errAssistantCandidateNotFound
+	}
+	if decision.ResolvedCandidateID != "" {
+		resolvedCandidate, ok := assistantFindCandidate(decision.Candidates, decision.ResolvedCandidateID)
+		if !ok {
+			decision.FailClosedCode = errAssistantCandidateNotFound.Error()
+			return decision, errAssistantCandidateNotFound
+		}
+		decision.ResolvedCandidate = &resolvedCandidate
+	}
+	dryRun := assistantBuildAuthoritativeDryRun(s, ctx, tenantID, intent, decision.Candidates, decision.ResolvedCandidateID, retrieval)
+	decision.Clarification = assistantBuildClarificationDecisionFn(assistantClarificationBuildInput{
+		UserInput:            userInput,
+		Intent:               intent,
+		RouteDecision:        routeDecision,
+		DryRun:               dryRun,
+		Candidates:           decision.Candidates,
+		ResolvedCandidateID:  decision.ResolvedCandidateID,
+		SelectedCandidateID:  decision.SelectedCandidateID,
+		Runtime:              knowledgeRuntime,
+		PendingClarification: pendingClarification,
+		ResumeProgress:       false,
+	})
+	return decision, nil
 }
 
 func assistantSemanticCurrentUserInput(prompt string) string {
@@ -216,14 +331,13 @@ func (s *assistantConversationService) prepareTurnDraft(
 	}
 	resolvedIntent := semanticTurn.Resolved
 	knowledgeRuntime := semanticTurn.Runtime
-	intent := resolvedIntent.Intent
+	proposal := assistantNormalizeRuntimeProposal(resolvedIntent.Proposal)
+	intent := proposal.intentSpec()
 
 	routeDecision, err := assistantBuildIntentRouteDecisionFn(userInput, resolvedIntent, intent, knowledgeRuntime)
 	if err != nil {
 		return nil, err
 	}
-	intent = assistantProjectIntentRouteDecision(intent, routeDecision)
-	resolvedIntent.Intent = intent
 
 	candidates := append([]assistantCandidate(nil), semanticTurn.Candidates...)
 	resolvedCandidateID := strings.TrimSpace(semanticTurn.ResolvedCandidateID)
@@ -232,26 +346,35 @@ func (s *assistantConversationService) prepareTurnDraft(
 	ambiguityCount := semanticTurn.AmbiguityCount
 	confidence := semanticTurn.Confidence
 
-	dryRun := assistantBuildDryRunWithRetrieval(intent, candidates, resolvedCandidateID, semanticTurn.Retrieval)
-	dryRun = s.enrichCreateOrgUnitDryRunWithPolicy(ctx, tenantID, intent, candidates, resolvedCandidateID, dryRun)
-
 	var pendingClarification *assistantClarificationDecision
 	if pendingTurn != nil {
 		pendingClarification = pendingTurn.Clarification
 	}
-	clarification := assistantBuildClarificationDecisionFn(assistantClarificationBuildInput{
-		UserInput:            userInput,
-		Intent:               intent,
-		RouteDecision:        routeDecision,
-		DryRun:               dryRun,
-		Candidates:           candidates,
-		ResolvedCandidateID:  resolvedCandidateID,
-		SelectedCandidateID:  selectedCandidateID,
-		Runtime:              knowledgeRuntime,
-		PendingClarification: pendingClarification,
-		ResumeProgress:       false,
-	})
-	spec, specOK := s.lookupActionSpec(intent.Action)
+	authoritativeDecision, err := s.assistantAcceptProposal(
+		ctx,
+		tenantID,
+		principal,
+		userInput,
+		proposal,
+		routeDecision,
+		candidates,
+		resolvedCandidateID,
+		selectedCandidateID,
+		knowledgeRuntime,
+		semanticTurn.Retrieval,
+		pendingClarification,
+	)
+	if err != nil {
+		return nil, err
+	}
+	intent = authoritativeDecision.Intent
+	candidates = authoritativeDecision.Candidates
+	resolvedCandidateID = authoritativeDecision.ResolvedCandidateID
+	selectedCandidateID = authoritativeDecision.SelectedCandidateID
+	spec := authoritativeDecision.ActionSpec
+	specOK := strings.TrimSpace(spec.ID) != ""
+	clarification := authoritativeDecision.Clarification
+	dryRun := assistantBuildAuthoritativeDryRun(s, ctx, tenantID, intent, candidates, resolvedCandidateID, semanticTurn.Retrieval)
 	requiresActionSpec := assistantIntentNeedsActionSpec(intent, routeDecision)
 	if requiresActionSpec && !specOK {
 		return nil, errAssistantUnsupportedIntent

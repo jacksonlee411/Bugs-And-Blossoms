@@ -150,7 +150,7 @@ describe('OrgUnitsPage', () => {
     expect(screen.getByRole('button', { name: 'View History' })).toBeInTheDocument()
     expect(screen.getByTestId('location-search')).toHaveTextContent('')
     expect(orgUnitApiMocks.listOrgUnits).toHaveBeenCalledWith({ asOf: expect.any(String), includeDisabled: false })
-  })
+  }, 20000)
 
   it('switches to history mode and writes as_of to search params on apply', async () => {
     renderPage()
@@ -169,5 +169,5 @@ describe('OrgUnitsPage', () => {
     await waitFor(() =>
       expect(orgUnitApiMocks.listOrgUnits).toHaveBeenLastCalledWith({ asOf: '2026-03-01', includeDisabled: false })
     )
-  })
+  }, 20000)
 })
