@@ -15,8 +15,8 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/jacksonlee411/Bugs-And-Blossoms/internal/routing"
 	jobcatalogmodule "github.com/jacksonlee411/Bugs-And-Blossoms/modules/jobcatalog"
+	orgunitmodule "github.com/jacksonlee411/Bugs-And-Blossoms/modules/orgunit"
 	orgunitports "github.com/jacksonlee411/Bugs-And-Blossoms/modules/orgunit/domain/ports"
-	orgunitpersistence "github.com/jacksonlee411/Bugs-And-Blossoms/modules/orgunit/infrastructure/persistence"
 	orgunitservices "github.com/jacksonlee411/Bugs-And-Blossoms/modules/orgunit/services"
 	personmodule "github.com/jacksonlee411/Bugs-And-Blossoms/modules/person"
 	staffingmodule "github.com/jacksonlee411/Bugs-And-Blossoms/modules/staffing"
@@ -88,9 +88,9 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, error) {
 
 	if orgUnitWriteService == nil {
 		if writeStore, ok := orgStore.(orgunitports.OrgUnitWriteStore); ok {
-			orgUnitWriteService = orgunitservices.NewOrgUnitWriteService(writeStore)
+			orgUnitWriteService = orgunitmodule.NewWriteService(writeStore)
 		} else if pgStore, ok := orgStore.(*orgUnitPGStore); ok {
-			orgUnitWriteService = orgunitservices.NewOrgUnitWriteService(orgunitpersistence.NewOrgUnitPGStore(pgStore.pool))
+			orgUnitWriteService = orgunitmodule.NewWriteServiceWithPGStore(pgStore.pool)
 		}
 	}
 
