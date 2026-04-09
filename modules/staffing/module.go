@@ -17,6 +17,10 @@ func NewAssignmentPGStore(pool PGBeginner) ports.AssignmentStore {
 	return persistence.NewAssignmentPGStore(pool)
 }
 
+func NewAssignmentMemoryStore() ports.AssignmentStore {
+	return persistence.NewAssignmentMemoryStore()
+}
+
 func NewAssignmentsFacade(store ports.AssignmentStore) services.AssignmentsFacade {
 	return services.NewAssignmentsFacade(store)
 }

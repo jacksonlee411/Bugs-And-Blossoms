@@ -137,7 +137,7 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, error) {
 				positionStore = s
 			}
 			if assignmentStore == nil {
-				assignmentStore = s
+				assignmentStore = staffingmodule.NewAssignmentMemoryStore()
 			}
 		}
 	}
