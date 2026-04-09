@@ -97,7 +97,7 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, error) {
 
 	if setidStore == nil {
 		if pgStore, ok := orgStore.(*orgUnitPGStore); ok {
-			setidStore = newSetIDPGStore(pgStore.pool)
+			setidStore = orgunitmodule.NewSetIDPGStore(pgStore.pool)
 		} else {
 			setidStore = orgunitmodule.NewSetIDMemoryStore()
 		}

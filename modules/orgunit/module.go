@@ -28,3 +28,7 @@ func NewWriteServiceWithPGStore(pool PGBeginner) services.OrgUnitWriteService {
 func NewSetIDMemoryStore() ports.SetIDGovernanceStore {
 	return persistence.NewSetIDMemoryStore()
 }
+
+func NewSetIDPGStore(pool PGBeginner) ports.SetIDGovernanceStore {
+	return persistence.NewSetIDPGStore(pool)
+}
