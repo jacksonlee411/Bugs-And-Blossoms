@@ -75,6 +75,20 @@
 2. [X] 这些概念都合法，但“都叫 policy/strategy”会提高理解成本。
 3. [X] 若不补统一术语表，维护时容易把“字段动态策略”“写入动作策略”“版本激活策略”混为一谈。
 
+#### F. SetID 对策略的影响机制在“目标设计”与“当前实现”之间存在表达落差
+
+1. [X] 按现行契约方向，SetID 应作为动态策略差异化的核心上下文之一；能力模型收敛目标是 `capability_key + setid`，而不是旧的 `scope/package` 体系。
+2. [X] 但在当前 OrgUnit 动态字段策略运行时，很多决策主维度更直接使用的是 `tenant + capability_key + field_key + business_unit_id + as_of`。
+3. [X] 这意味着当前代码里，SetID 对策略的影响在很多场景下是“通过 BU 上下文间接影响”，而不是“处处显式以 setid 为一等入参”。
+4. [X] 这种落差会导致实现阅读中的典型困惑：
+   - 文档说是 `capability_key + setid`；
+   - 代码看起来却更像 `capability_key + business_unit_id + as_of`；
+   - 维护者难以判断“SetID 是正式运行时主键，还是由 BU 代理承载的治理语义”。
+5. [X] 目前可以确认的职责分层是：
+   - SetID/个性化模式：决定某能力是否允许做差异化；
+   - BU/组织上下文：在当前实现中经常承担运行时命中的直接分流键；
+   - capability_key：表达稳定能力，不允许编码 SetID/BU/tenant 上下文。
+
 ## 4. 问题定性
 
 本计划将当前问题定性为：
@@ -83,6 +97,7 @@
 2. **是过渡态混杂**：旧层未彻底退出，新层未完全单点化。
 3. **是语义收口不足**：路由、鉴权、文档、运行时之间仍有命名与归属漂移。
 4. **是实现重复**：关键裁决逻辑没有完全抽成唯一 PDP。
+5. **是上下文主键尚未彻底收口**：SetID 与 `business_unit_id` 在“谁是正式运行时主键”上仍处于过渡态。
 
 ## 5. 目标与非目标
 
@@ -125,10 +140,27 @@
 1. [ ] 抽取唯一决策器，统一承载：
    - baseline vs intent override lookup chain
    - BU vs tenant 优先级
+   - SetID 与 `business_unit_id` 的职责边界
    - `priority_mode / local_override_mode`
    - conflict / missing / explain 输出
 2. [ ] `internal/server` 与 `modules/orgunit/infrastructure` 不得再各自维护平行决策逻辑。
 3. [ ] 所有相关 API 与服务层统一复用该 PDP。
+
+### 6.2A M2 补充：SetID 上下文收口
+
+1. [ ] 冻结“SetID 如何影响策略”的正式口径：
+   - 是运行时显式主键；
+   - 或是通过 `business_unit_id -> setid` 映射间接承载；
+   - 不允许文档与代码长期各说一套。
+2. [ ] 若继续采用“BU 代理承载 SetID 差异”的实现，必须在文档、API 契约、explain 字段中显式说明。
+3. [ ] 若转向 `capability_key + setid` 直接决策，则必须补齐：
+   - SetID 解析前置；
+   - explain 回显 `resolved_setid / setid_source`；
+   - 相关测试与版本签名输入。
+4. [ ] 无论采用哪种路径，都必须让维护者能明确回答：
+   - SetID 是否为正式运行时输入；
+   - `business_unit_id` 与 SetID 是并列上下文还是代理关系；
+   - 哪一层负责从 BU 解析出 SetID。
 
 ### 6.3 M3：路由 capability 与鉴权归属对齐
 
@@ -168,6 +200,7 @@
 3. [ ] `priority_mode / local_override_mode` 的运行时地位不再模糊。
 4. [ ] `tenant_field_policies` 的兼容状态在代码、文档、页面层均表达一致。
 5. [ ] 同一上下文下的字段决策结果只由一条主路径给出，且 explain 可追踪。
+6. [ ] “SetID 如何影响策略”在文档、API、运行时与 explain 中表达一致，不再出现“文档写 setid、代码主要看 BU”的长期歧义。
 
 ## 8. 风险与缓解
 
