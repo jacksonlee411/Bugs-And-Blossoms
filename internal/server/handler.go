@@ -14,6 +14,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/jacksonlee411/Bugs-And-Blossoms/internal/routing"
+	iammodule "github.com/jacksonlee411/Bugs-And-Blossoms/modules/iam"
 	jobcatalogmodule "github.com/jacksonlee411/Bugs-And-Blossoms/modules/jobcatalog"
 	orgunitmodule "github.com/jacksonlee411/Bugs-And-Blossoms/modules/orgunit"
 	orgunitports "github.com/jacksonlee411/Bugs-And-Blossoms/modules/orgunit/domain/ports"
@@ -143,9 +144,9 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, error) {
 
 	if dictStore == nil {
 		if pgStore, ok := orgStore.(*orgUnitPGStore); ok {
-			dictStore = newDictPGStore(pgStore.pool)
+			dictStore = iammodule.NewDictPGStore(pgStore.pool)
 		} else {
-			dictStore = newDictMemoryStore()
+			dictStore = iammodule.NewDictMemoryStore()
 		}
 	}
 	if err := dictpkg.RegisterResolver(dictStore); err != nil {

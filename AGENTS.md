@@ -546,6 +546,7 @@ modules/{module}/
 - DEV-PLAN-015X：OrgUnit Write Service 默认装配向模块侧收口（承接 DEV-PLAN-015B P1）：`docs/dev-plans/015x-orgunit-write-service-module-wiring-plan.md`
 - DEV-PLAN-015Y：JobCatalog 视图服务适配入口向模块侧收口（承接 DEV-PLAN-015B P1）：`docs/dev-plans/015y-jobcatalog-view-service-adapter-module-side-plan.md`
 - DEV-PLAN-015Z：DDD 分层框架收尾盘点与封板清单（承接 DEV-PLAN-015B）：`docs/dev-plans/015z-ddd-layering-framework-closure-summary-and-backlog.md`
+- DEV-PLAN-015AA：IAM Dict Store 向模块侧收口（承接 DEV-PLAN-015Z）：`docs/dev-plans/015aa-iam-dict-store-module-side-plan.md`
 - Greenfield HR 模块骨架与契约（OrgUnit/JobCatalog/Staffing/Person）：`docs/dev-plans/016-greenfield-hr-modules-skeleton.md`
 - 任职记录（Job Data / Assignments）（事件 SoT + 同步投射）：`docs/dev-plans/031-greenfield-assignment-job-data.md`
 - Person 最小身份锚点（Pernr 1-8 位数字字符串）：`docs/dev-plans/027-person-minimal-identity-for-staffing.md`
