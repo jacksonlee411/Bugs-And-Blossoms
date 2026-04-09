@@ -17,8 +17,15 @@ type PositionMemoryStore struct {
 }
 
 func NewPositionMemoryStore() ports.PositionStore {
+	return NewPositionMemoryStoreWithState(nil)
+}
+
+func NewPositionMemoryStoreWithState(positions map[string][]types.Position) *PositionMemoryStore {
+	if positions == nil {
+		positions = make(map[string][]types.Position)
+	}
 	return &PositionMemoryStore{
-		positions: make(map[string][]types.Position),
+		positions: positions,
 	}
 }
 

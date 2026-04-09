@@ -3,10 +3,8 @@ package server
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"strconv"
 	"strings"
-	"time"
 
 	staffingmodule "github.com/jacksonlee411/Bugs-And-Blossoms/modules/staffing"
 	staffingports "github.com/jacksonlee411/Bugs-And-Blossoms/modules/staffing/domain/ports"
@@ -331,16 +329,29 @@ type staffingMemoryStore struct {
 	positions       map[string][]Position
 	assigns         map[string]map[string][]Assignment
 	positions0      []Position
+	positionStore   PositionStore
 	assignmentStore AssignmentStore
 }
 
 func newStaffingMemoryStore() *staffingMemoryStore {
 	assigns := make(map[string]map[string][]Assignment)
+	positions := make(map[string][]Position)
 	return &staffingMemoryStore{
-		positions:       make(map[string][]Position),
+		positions:       positions,
 		assigns:         assigns,
+		positionStore:   staffingmodule.NewPositionMemoryStoreWithState(positions),
 		assignmentStore: staffingmodule.NewAssignmentMemoryStoreWithState(assigns),
 	}
+}
+
+func (s *staffingMemoryStore) positionDelegate() PositionStore {
+	if s.positions == nil {
+		s.positions = make(map[string][]Position)
+	}
+	if s.positionStore == nil {
+		s.positionStore = staffingmodule.NewPositionMemoryStoreWithState(s.positions)
+	}
+	return s.positionStore
 }
 
 func (s *staffingMemoryStore) assignmentDelegate() AssignmentStore {
@@ -354,91 +365,15 @@ func (s *staffingMemoryStore) assignmentDelegate() AssignmentStore {
 }
 
 func (s *staffingMemoryStore) ListPositionsCurrent(_ context.Context, tenantID string, _ string) ([]Position, error) {
-	return append([]Position(nil), s.positions[tenantID]...), nil
+	return s.positionDelegate().ListPositionsCurrent(context.Background(), tenantID, "")
 }
 
 func (s *staffingMemoryStore) CreatePositionCurrent(_ context.Context, tenantID string, effectiveDate string, orgUnitID string, jobProfileUUID string, capacityFTE string, name string) (Position, error) {
-	effectiveDate = strings.TrimSpace(effectiveDate)
-	if effectiveDate == "" {
-		return Position{}, newBadRequestError("effective_date is required")
-	}
-	orgUnitID = strings.TrimSpace(orgUnitID)
-	if orgUnitID == "" {
-		return Position{}, newBadRequestError("org_unit_id is required")
-	}
-	jobProfileUUID = strings.TrimSpace(jobProfileUUID)
-	if jobProfileUUID == "" {
-		return Position{}, newBadRequestError("job_profile_uuid is required")
-	}
-	capacityFTE = strings.TrimSpace(capacityFTE)
-	if capacityFTE == "" {
-		capacityFTE = "1.0"
-	}
-	name = strings.TrimSpace(name)
-
-	id := "pos-" + strconv.FormatInt(time.Now().UnixNano(), 10)
-	p := Position{
-		PositionUUID:          id,
-		OrgUnitID:             orgUnitID,
-		ReportsToPositionUUID: "",
-		JobCatalogSetID:       "",
-		JobCatalogSetIDAsOf:   "",
-		JobProfileUUID:        jobProfileUUID,
-		JobProfileCode:        "",
-		Name:                  name,
-		LifecycleStatus:       "active",
-		CapacityFTE:           capacityFTE,
-		EffectiveAt:           effectiveDate,
-	}
-	s.positions[tenantID] = append(s.positions[tenantID], p)
-	return p, nil
+	return s.positionDelegate().CreatePositionCurrent(context.Background(), tenantID, effectiveDate, orgUnitID, jobProfileUUID, capacityFTE, name)
 }
 
 func (s *staffingMemoryStore) UpdatePositionCurrent(_ context.Context, tenantID string, positionUUID string, effectiveDate string, orgUnitID string, reportsToPositionUUID string, jobProfileUUID string, capacityFTE string, name string, lifecycleStatus string) (Position, error) {
-	effectiveDate = strings.TrimSpace(effectiveDate)
-	if effectiveDate == "" {
-		return Position{}, newBadRequestError("effective_date is required")
-	}
-	positionUUID = strings.TrimSpace(positionUUID)
-	if positionUUID == "" {
-		return Position{}, newBadRequestError("position_uuid is required")
-	}
-	orgUnitID = strings.TrimSpace(orgUnitID)
-	reportsToPositionUUID = strings.TrimSpace(reportsToPositionUUID)
-	jobProfileUUID = strings.TrimSpace(jobProfileUUID)
-	capacityFTE = strings.TrimSpace(capacityFTE)
-	name = strings.TrimSpace(name)
-	lifecycleStatus = strings.TrimSpace(lifecycleStatus)
-	if orgUnitID == "" && reportsToPositionUUID == "" && jobProfileUUID == "" && capacityFTE == "" && name == "" && lifecycleStatus == "" {
-		return Position{}, newBadRequestError("at least one patch field is required")
-	}
-
-	for i := range s.positions[tenantID] {
-		if s.positions[tenantID][i].PositionUUID != positionUUID {
-			continue
-		}
-		if orgUnitID != "" {
-			s.positions[tenantID][i].OrgUnitID = orgUnitID
-		}
-		if reportsToPositionUUID != "" {
-			s.positions[tenantID][i].ReportsToPositionUUID = reportsToPositionUUID
-		}
-		if jobProfileUUID != "" {
-			s.positions[tenantID][i].JobProfileUUID = jobProfileUUID
-		}
-		if capacityFTE != "" {
-			s.positions[tenantID][i].CapacityFTE = capacityFTE
-		}
-		if name != "" {
-			s.positions[tenantID][i].Name = name
-		}
-		if lifecycleStatus != "" {
-			s.positions[tenantID][i].LifecycleStatus = lifecycleStatus
-		}
-		s.positions[tenantID][i].EffectiveAt = effectiveDate
-		return s.positions[tenantID][i], nil
-	}
-	return Position{}, errors.New("position not found")
+	return s.positionDelegate().UpdatePositionCurrent(context.Background(), tenantID, positionUUID, effectiveDate, orgUnitID, reportsToPositionUUID, jobProfileUUID, capacityFTE, name, lifecycleStatus)
 }
 
 func (s *staffingMemoryStore) ListAssignmentsForPerson(_ context.Context, tenantID string, _ string, personUUID string) ([]Assignment, error) {

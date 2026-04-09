@@ -22,6 +22,10 @@ func NewPositionMemoryStore() ports.PositionStore {
 	return persistence.NewPositionMemoryStore()
 }
 
+func NewPositionMemoryStoreWithState(positions map[string][]types.Position) ports.PositionStore {
+	return persistence.NewPositionMemoryStoreWithState(positions)
+}
+
 func NewAssignmentMemoryStore() ports.AssignmentStore {
 	return persistence.NewAssignmentMemoryStore()
 }
