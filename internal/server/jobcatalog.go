@@ -17,10 +17,6 @@ type JobProfile = jobcatalogtypes.JobProfile
 type JobCatalogStore = jobcatalogports.JobCatalogStore
 type JobCatalogPackage = jobcatalogtypes.JobCatalogPackage
 
-func normalizeSetID(input string) string {
-	return jobcatalogservices.NormalizeSetID(input)
-}
-
 type jobCatalogSetIDStore interface {
 	ListSetIDs(ctx context.Context, tenantID string) ([]SetID, error)
 	ListOwnedScopePackages(ctx context.Context, tenantID string, scopeCode string, asOfDate string) ([]OwnedScopePackage, error)

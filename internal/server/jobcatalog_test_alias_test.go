@@ -21,6 +21,10 @@ func newJobCatalogMemoryStore() JobCatalogStore {
 	return jobcatalogmodule.NewMemoryStore()
 }
 
+func normalizeSetID(input string) string {
+	return jobcatalogservices.NormalizeSetID(input)
+}
+
 func normalizePackageCode(input string) string {
 	return jobcatalogservices.NormalizePackageCode(input)
 }
