@@ -8,11 +8,11 @@ import (
 )
 
 type staffingAssignmentPGStore struct {
-	*staffingPGStore
+	pool pgBeginner
 }
 
 func newStaffingAssignmentPGStore(pool pgBeginner) *staffingAssignmentPGStore {
-	return &staffingAssignmentPGStore{staffingPGStore: newStaffingPGStore(pool)}
+	return &staffingAssignmentPGStore{pool: pool}
 }
 
 func (s *staffingAssignmentPGStore) ListAssignmentsForPerson(ctx context.Context, tenantID string, asOfDate string, personUUID string) ([]Assignment, error) {

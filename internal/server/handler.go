@@ -126,7 +126,7 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, error) {
 	if positionStore == nil || assignmentStore == nil {
 		if pgStore, ok := orgStore.(*orgUnitPGStore); ok {
 			if positionStore == nil {
-				positionStore = newStaffingPGStore(pgStore.pool)
+				positionStore = staffingmodule.NewPositionPGStore(pgStore.pool)
 			}
 			if assignmentStore == nil {
 				assignmentStore = staffingmodule.NewAssignmentPGStore(pgStore.pool)
