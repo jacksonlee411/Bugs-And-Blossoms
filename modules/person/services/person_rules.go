@@ -16,6 +16,12 @@ type Person struct {
 	CreatedAt   time.Time
 }
 
+type PersonOption struct {
+	UUID        string
+	Pernr       string
+	DisplayName string
+}
+
 type Store interface {
 	CreatePerson(ctx context.Context, tenantID string, pernr string, displayName string) (Person, error)
 	FindPersonByPernr(ctx context.Context, tenantID string, pernr string) (Person, error)

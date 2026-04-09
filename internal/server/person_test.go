@@ -504,7 +504,7 @@ func TestPersonPGStore_ListPersonOptions(t *testing.T) {
 }
 
 func TestPersonMemoryStore(t *testing.T) {
-	store := newPersonMemoryStore().(*personMemoryStore)
+	store := newPersonMemoryStore()
 
 	t.Run("create invalid pernr", func(t *testing.T) {
 		if _, err := store.CreatePerson(context.Background(), "t1", "BAD", "A"); err == nil {

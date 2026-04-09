@@ -12,7 +12,7 @@ import (
 
 func TestStaffingPGStore_CorrectRescindAssignmentEvent(t *testing.T) {
 	t.Run("correct begin error", func(t *testing.T) {
-		store := newStaffingPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
+		store := newStaffingAssignmentPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
 			return nil, errors.New("begin")
 		}))
 		_, err := store.CorrectAssignmentEvent(context.Background(), "t1", "a1", "2026-01-01", []byte(`{}`))
@@ -22,7 +22,7 @@ func TestStaffingPGStore_CorrectRescindAssignmentEvent(t *testing.T) {
 	})
 
 	t.Run("correct set tenant error", func(t *testing.T) {
-		store := newStaffingPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
+		store := newStaffingAssignmentPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
 			return &stubTx{execErr: errors.New("exec"), execErrAt: 1}, nil
 		}))
 		_, err := store.CorrectAssignmentEvent(context.Background(), "t1", "a1", "2026-01-01", []byte(`{}`))
@@ -32,7 +32,7 @@ func TestStaffingPGStore_CorrectRescindAssignmentEvent(t *testing.T) {
 	})
 
 	t.Run("correct submit error", func(t *testing.T) {
-		store := newStaffingPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
+		store := newStaffingAssignmentPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
 			return &stubTx{execErr: errors.New("exec"), execErrAt: 2}, nil
 		}))
 		_, err := store.CorrectAssignmentEvent(context.Background(), "t1", "a1", "2026-01-01", []byte(`{}`))
@@ -42,7 +42,7 @@ func TestStaffingPGStore_CorrectRescindAssignmentEvent(t *testing.T) {
 	})
 
 	t.Run("correct commit error", func(t *testing.T) {
-		store := newStaffingPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
+		store := newStaffingAssignmentPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
 			return &stubTx{commitErr: errors.New("commit")}, nil
 		}))
 		_, err := store.CorrectAssignmentEvent(context.Background(), "t1", "a1", "2026-01-01", []byte(`{}`))
@@ -52,7 +52,7 @@ func TestStaffingPGStore_CorrectRescindAssignmentEvent(t *testing.T) {
 	})
 
 	t.Run("correct ok", func(t *testing.T) {
-		store := newStaffingPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
+		store := newStaffingAssignmentPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
 			return &stubTx{}, nil
 		}))
 		got, err := store.CorrectAssignmentEvent(context.Background(), "t1", "a1", "2026-01-01", []byte(`{"position_uuid":"p1"}`))
@@ -65,7 +65,7 @@ func TestStaffingPGStore_CorrectRescindAssignmentEvent(t *testing.T) {
 	})
 
 	t.Run("rescind begin error", func(t *testing.T) {
-		store := newStaffingPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
+		store := newStaffingAssignmentPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
 			return nil, errors.New("begin")
 		}))
 		_, err := store.RescindAssignmentEvent(context.Background(), "t1", "a1", "2026-01-01", nil)
@@ -75,7 +75,7 @@ func TestStaffingPGStore_CorrectRescindAssignmentEvent(t *testing.T) {
 	})
 
 	t.Run("rescind set tenant error", func(t *testing.T) {
-		store := newStaffingPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
+		store := newStaffingAssignmentPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
 			return &stubTx{execErr: errors.New("exec"), execErrAt: 1}, nil
 		}))
 		_, err := store.RescindAssignmentEvent(context.Background(), "t1", "a1", "2026-01-01", nil)
@@ -85,7 +85,7 @@ func TestStaffingPGStore_CorrectRescindAssignmentEvent(t *testing.T) {
 	})
 
 	t.Run("rescind submit error", func(t *testing.T) {
-		store := newStaffingPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
+		store := newStaffingAssignmentPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
 			return &stubTx{execErr: errors.New("exec"), execErrAt: 2}, nil
 		}))
 		_, err := store.RescindAssignmentEvent(context.Background(), "t1", "a1", "2026-01-01", nil)
@@ -95,7 +95,7 @@ func TestStaffingPGStore_CorrectRescindAssignmentEvent(t *testing.T) {
 	})
 
 	t.Run("rescind commit error", func(t *testing.T) {
-		store := newStaffingPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
+		store := newStaffingAssignmentPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
 			return &stubTx{commitErr: errors.New("commit")}, nil
 		}))
 		_, err := store.RescindAssignmentEvent(context.Background(), "t1", "a1", "2026-01-01", nil)
@@ -105,7 +105,7 @@ func TestStaffingPGStore_CorrectRescindAssignmentEvent(t *testing.T) {
 	})
 
 	t.Run("rescind ok", func(t *testing.T) {
-		store := newStaffingPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
+		store := newStaffingAssignmentPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
 			return &stubTx{}, nil
 		}))
 		got, err := store.RescindAssignmentEvent(context.Background(), "t1", "a1", "2026-01-01", []byte(`{"note":"x"}`))

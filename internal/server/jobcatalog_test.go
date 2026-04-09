@@ -8,6 +8,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
+	jobcatalogmodule "github.com/jacksonlee411/Bugs-And-Blossoms/modules/jobcatalog"
 	"github.com/jacksonlee411/Bugs-And-Blossoms/modules/jobcatalog/services"
 )
 
@@ -603,18 +604,32 @@ func TestJobCatalogAdaptersAndViewRules(t *testing.T) {
 	})
 
 	t.Run("jobcatalog adapters map fields", func(t *testing.T) {
-		ctx := context.Background()
+		ctx := withPrincipal(context.Background(), Principal{RoleSlug: "tenant-admin", Status: "active"})
 		pkg := JobCatalogPackage{PackageUUID: "pkg-1", PackageCode: "PKG1", OwnerSetID: "S1"}
-		adapter := jobCatalogStoreAdapter{store: resolveJobCatalogStoreStub{pkg: pkg}}
-		got, err := adapter.ResolveJobCatalogPackageByCode(ctx, "t1", "PKG1", "2026-01-01")
-		if err != nil || got.PackageUUID != "pkg-1" || got.OwnerSetID != "S1" {
-			t.Fatalf("unexpected adapter pkg=%+v err=%v", got, err)
+		view, errMsg := jobcatalogmodule.ResolveView(
+			ctx,
+			jobCatalogPrincipalFromContext(ctx),
+			resolveJobCatalogStoreStub{pkg: pkg, setidPackageUUID: "pkg-1"},
+			jobCatalogSetIDStoreAdapter{store: jobCatalogSetIDStoreStub{setids: []SetID{{SetID: "S1", Status: "active"}}}},
+			"t1",
+			"2026-01-01",
+			"PKG1",
+			"",
+		)
+		if errMsg != "" || view.PackageCode != "PKG1" || view.OwnerSetID != "S1" {
+			t.Fatalf("unexpected view=%+v err=%q", view, errMsg)
 		}
-		if _, err := adapter.ResolveJobCatalogPackageByCode(ctx, "t1", "PKG1", "2026-01-01"); err != nil {
-			t.Fatalf("unexpected err=%v", err)
-		}
-		adapterErr := jobCatalogStoreAdapter{store: resolveJobCatalogStoreStub{pkgErr: errors.New("boom")}}
-		if _, err := adapterErr.ResolveJobCatalogPackageByCode(ctx, "t1", "PKG1", "2026-01-01"); err == nil {
+		_, errMsg = jobcatalogmodule.ResolveView(
+			ctx,
+			jobCatalogPrincipalFromContext(ctx),
+			resolveJobCatalogStoreStub{pkgErr: errors.New("boom")},
+			jobCatalogSetIDStoreAdapter{store: jobCatalogSetIDStoreStub{setids: []SetID{{SetID: "S1", Status: "active"}}}},
+			"t1",
+			"2026-01-01",
+			"PKG1",
+			"",
+		)
+		if errMsg == "" {
 			t.Fatal("expected error from adapter")
 		}
 
@@ -1491,9 +1506,9 @@ func TestQuoteAll(t *testing.T) {
 }
 
 func TestJobCatalogPGStore_WithTxAndMethods(t *testing.T) {
-	beginErrStore := &jobcatalogPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) {
+	beginErrStore := newJobCatalogPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
 		return nil, errors.New("begin fail")
-	})}
+	})).(*jobcatalogPGStore)
 	if _, err := beginErrStore.ListJobFamilyGroups(context.Background(), "t1", "S2601", "2026-01-01"); err == nil {
 		t.Fatal("expected error")
 	}
@@ -1504,7 +1519,7 @@ func TestJobCatalogPGStore_WithTxAndMethods(t *testing.T) {
 		row3: fakeRow{vals: []any{"g1"}},
 		row4: fakeRow{vals: []any{"e1"}},
 	}
-	s3 := &jobcatalogPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx3, nil })}
+	s3 := newJobCatalogPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx3, nil })).(*jobcatalogPGStore)
 	if err := s3.CreateJobFamilyGroup(context.Background(), "t1", "S2601", "2026-01-01", "JC1", "Group1", ""); err != nil {
 		t.Fatalf("err=%v", err)
 	}
@@ -1513,19 +1528,19 @@ func TestJobCatalogPGStore_WithTxAndMethods(t *testing.T) {
 		row:  fakeRow{vals: []any{"active"}},
 		row2: fakeRow{vals: []any{"pkg-1", "t2"}},
 	}
-	s3OwnerMismatch := &jobcatalogPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx3OwnerMismatch, nil })}
+	s3OwnerMismatch := newJobCatalogPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx3OwnerMismatch, nil })).(*jobcatalogPGStore)
 	if err := s3OwnerMismatch.CreateJobFamilyGroup(context.Background(), "t1", "S2601", "2026-01-01", "JC1", "Group1", ""); err == nil || err.Error() != "JOBCATALOG_PACKAGE_OWNER_INVALID" {
 		t.Fatalf("expected JOBCATALOG_PACKAGE_OWNER_INVALID, got %v", err)
 	}
 
 	tx3a := &stubTx{execErr: errors.New("bootstrap fail"), execErrAt: 2}
-	s3a := &jobcatalogPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx3a, nil })}
+	s3a := newJobCatalogPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx3a, nil })).(*jobcatalogPGStore)
 	if err := s3a.CreateJobFamilyGroup(context.Background(), "t1", "S2601", "2026-01-01", "JC1", "Group1", "desc"); err == nil {
 		t.Fatal("expected error")
 	}
 
 	tx3ResolveErr := &stubTx{row: fakeRow{vals: []any{"active"}}, row2Err: errors.New("resolve fail")}
-	s3ResolveErr := &jobcatalogPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx3ResolveErr, nil })}
+	s3ResolveErr := newJobCatalogPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx3ResolveErr, nil })).(*jobcatalogPGStore)
 	if err := s3ResolveErr.CreateJobFamilyGroup(context.Background(), "t1", "S2601", "2026-01-01", "JC1", "Group1", "desc"); err == nil {
 		t.Fatal("expected error")
 	}
@@ -1535,7 +1550,7 @@ func TestJobCatalogPGStore_WithTxAndMethods(t *testing.T) {
 		row2:    fakeRow{vals: []any{"pkg-1", "t1"}},
 		row3Err: errors.New("uuid fail"),
 	}
-	s3b := &jobcatalogPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx3b, nil })}
+	s3b := newJobCatalogPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx3b, nil })).(*jobcatalogPGStore)
 	if err := s3b.CreateJobFamilyGroup(context.Background(), "t1", "S2601", "2026-01-01", "JC1", "Group1", "desc"); err == nil {
 		t.Fatal("expected error")
 	}
@@ -1546,7 +1561,7 @@ func TestJobCatalogPGStore_WithTxAndMethods(t *testing.T) {
 		row3:    fakeRow{vals: []any{"g1"}},
 		row4Err: errors.New("event id fail"),
 	}
-	s3EventIDErr := &jobcatalogPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx3EventIDErr, nil })}
+	s3EventIDErr := newJobCatalogPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx3EventIDErr, nil })).(*jobcatalogPGStore)
 	if err := s3EventIDErr.CreateJobFamilyGroup(context.Background(), "t1", "S2601", "2026-01-01", "JC1", "Group1", "desc"); err == nil {
 		t.Fatal("expected error")
 	}
@@ -1559,7 +1574,7 @@ func TestJobCatalogPGStore_WithTxAndMethods(t *testing.T) {
 		row3:      fakeRow{vals: []any{"g1"}},
 		row4:      fakeRow{vals: []any{"e1"}},
 	}
-	s3c := &jobcatalogPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx3c, nil })}
+	s3c := newJobCatalogPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx3c, nil })).(*jobcatalogPGStore)
 	if err := s3c.CreateJobFamilyGroup(context.Background(), "t1", "S2601", "2026-01-01", "JC1", "Group1", "desc"); err == nil {
 		t.Fatal("expected error")
 	}
@@ -1571,20 +1586,20 @@ func TestJobCatalogPGStore_WithTxAndMethods(t *testing.T) {
 			{"g1", "JC1", "Group1", true, "2026-01-01"},
 		}},
 	}
-	s4 := &jobcatalogPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx4, nil })}
+	s4 := newJobCatalogPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx4, nil })).(*jobcatalogPGStore)
 	groups, err := s4.ListJobFamilyGroups(context.Background(), "t1", "S2601", "2026-01-01")
 	if err != nil || len(groups) != 1 {
 		t.Fatalf("len=%d err=%v", len(groups), err)
 	}
 
 	tx4a := &stubTx{execErr: errors.New("bootstrap fail"), execErrAt: 2}
-	s4a := &jobcatalogPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx4a, nil })}
+	s4a := newJobCatalogPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx4a, nil })).(*jobcatalogPGStore)
 	if _, err := s4a.ListJobFamilyGroups(context.Background(), "t1", "S2601", "2026-01-01"); err == nil {
 		t.Fatal("expected error")
 	}
 
 	tx4ResolveErr := &stubTx{row: fakeRow{vals: []any{"active"}}, row2Err: errors.New("resolve fail")}
-	s4ResolveErr := &jobcatalogPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx4ResolveErr, nil })}
+	s4ResolveErr := newJobCatalogPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx4ResolveErr, nil })).(*jobcatalogPGStore)
 	if _, err := s4ResolveErr.ListJobFamilyGroups(context.Background(), "t1", "S2601", "2026-01-01"); err == nil {
 		t.Fatal("expected error")
 	}
@@ -1594,7 +1609,7 @@ func TestJobCatalogPGStore_WithTxAndMethods(t *testing.T) {
 		row2:     fakeRow{vals: []any{"pkg-1", "t1"}},
 		queryErr: errors.New("query fail"),
 	}
-	s4b := &jobcatalogPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx4b, nil })}
+	s4b := newJobCatalogPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx4b, nil })).(*jobcatalogPGStore)
 	if _, err := s4b.ListJobFamilyGroups(context.Background(), "t1", "S2601", "2026-01-01"); err == nil {
 		t.Fatal("expected error")
 	}
@@ -1604,7 +1619,7 @@ func TestJobCatalogPGStore_WithTxAndMethods(t *testing.T) {
 		row2: fakeRow{vals: []any{"pkg-1", "t1"}},
 		rows: &scanErrRows{},
 	}
-	s4c := &jobcatalogPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx4c, nil })}
+	s4c := newJobCatalogPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx4c, nil })).(*jobcatalogPGStore)
 	if _, err := s4c.ListJobFamilyGroups(context.Background(), "t1", "S2601", "2026-01-01"); err == nil {
 		t.Fatal("expected error")
 	}
@@ -1612,13 +1627,13 @@ func TestJobCatalogPGStore_WithTxAndMethods(t *testing.T) {
 
 func TestJobCatalogPGStore_Errors(t *testing.T) {
 	tx := &stubTx{row: fakeRow{vals: []any{"active"}}, row2: fakeRow{vals: []any{"pkg-1", "t1"}}, queryErr: errors.New("query fail")}
-	s := &jobcatalogPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx, nil })}
+	s := newJobCatalogPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx, nil })).(*jobcatalogPGStore)
 	if _, err := s.ListJobFamilyGroups(context.Background(), "t1", "S2601", "2026-01-01"); err == nil {
 		t.Fatal("expected error")
 	}
 
 	tx2 := &stubTx{rowErr: errors.New("row fail")}
-	s2 := &jobcatalogPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx2, nil })}
+	s2 := newJobCatalogPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx2, nil })).(*jobcatalogPGStore)
 	if _, err := s2.ListJobFamilyGroups(context.Background(), "t1", "S2601", "2026-01-01"); err == nil {
 		t.Fatal("expected error")
 	}
@@ -1628,7 +1643,7 @@ func TestJobCatalogPGStore_Errors(t *testing.T) {
 		row2:    fakeRow{vals: []any{"pkg-1", "t1"}},
 		row3Err: errors.New("uuid fail"),
 	}
-	s3 := &jobcatalogPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx3, nil })}
+	s3 := newJobCatalogPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx3, nil })).(*jobcatalogPGStore)
 	if err := s3.CreateJobFamilyGroup(context.Background(), "t1", "S2601", "2026-01-01", "JC1", "Group1", ""); err == nil {
 		t.Fatal("expected error")
 	}
@@ -1638,19 +1653,19 @@ func TestJobCatalogPGStore_Errors(t *testing.T) {
 		row2: fakeRow{vals: []any{"pkg-1", "t1"}},
 		rows: &jobcatalogRows{err: errors.New("rows err")},
 	}
-	s4 := &jobcatalogPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx4, nil })}
+	s4 := newJobCatalogPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx4, nil })).(*jobcatalogPGStore)
 	if _, err := s4.ListJobFamilyGroups(context.Background(), "t1", "S2601", "2026-01-01"); err == nil {
 		t.Fatal("expected error")
 	}
 
 	tx5 := &stubTx{execErr: errors.New("set_config fail"), execErrAt: 1}
-	s5 := &jobcatalogPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx5, nil })}
+	s5 := newJobCatalogPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx5, nil })).(*jobcatalogPGStore)
 	if _, err := s5.ListJobFamilyGroups(context.Background(), "t1", "S2601", "2026-01-01"); err == nil {
 		t.Fatal("expected error")
 	}
 
 	tx6 := &stubTx{execErr: errors.New("bootstrap fail"), execErrAt: 2}
-	s6 := &jobcatalogPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx6, nil })}
+	s6 := newJobCatalogPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx6, nil })).(*jobcatalogPGStore)
 	if err := s6.CreateJobFamilyGroup(context.Background(), "t1", "S2601", "2026-01-01", "JC1", "Group1", ""); err == nil {
 		t.Fatal("expected error")
 	}
@@ -1661,7 +1676,7 @@ func TestJobCatalogPGStore_Errors(t *testing.T) {
 		row2:      fakeRow{vals: []any{"pkg-1", "t1"}},
 		rows:      &jobcatalogRows{rows: [][]any{{"g1", "JC1", "Group1", true, "2026-01-01"}}},
 	}
-	s7 := &jobcatalogPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx7, nil })}
+	s7 := newJobCatalogPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx7, nil })).(*jobcatalogPGStore)
 	if _, err := s7.ListJobFamilyGroups(context.Background(), "t1", "S2601", "2026-01-01"); err == nil {
 		t.Fatal("expected error")
 	}

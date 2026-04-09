@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/jacksonlee411/Bugs-And-Blossoms/internal/routing"
+	jobcatalogservices "github.com/jacksonlee411/Bugs-And-Blossoms/modules/jobcatalog/services"
 )
 
 type jobCatalogViewAPI struct {
@@ -67,7 +68,7 @@ func handleJobCatalogAPI(w http.ResponseWriter, r *http.Request, setidStore jobC
 		return
 	}
 
-	setID := normalizeSetID(r.URL.Query().Get("setid"))
+	setID := jobcatalogservices.NormalizeSetID(r.URL.Query().Get("setid"))
 
 	view := jobCatalogViewAPI{HasSelection: false}
 	if setID != "" {
@@ -230,7 +231,7 @@ func handleJobCatalogWriteAPI(w http.ResponseWriter, r *http.Request, setidStore
 		return
 	}
 
-	req.SetID = normalizeSetID(req.SetID)
+	req.SetID = jobcatalogservices.NormalizeSetID(req.SetID)
 	effectiveDate, err := parseRequiredDay(req.EffectiveDate, "effective_date")
 	if err != nil {
 		writeInternalDayFieldError(w, r, err)
