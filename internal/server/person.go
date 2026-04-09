@@ -25,10 +25,6 @@ type PersonStore interface {
 	ListPersonOptions(ctx context.Context, tenantID string, q string, limit int) ([]PersonOption, error)
 }
 
-func normalizePernr(raw string) (string, error) {
-	return personservices.NormalizePernr(raw)
-}
-
 func handlePersonOptionsAPI(w http.ResponseWriter, r *http.Request, store PersonStore) {
 	tenant, ok := currentTenant(r.Context())
 	if !ok {
@@ -156,7 +152,7 @@ func handlePersonByPernrAPI(w http.ResponseWriter, r *http.Request, store Person
 		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "PERSON_PERNR_INVALID", "pernr invalid")
 		return
 	}
-	if _, err := normalizePernr(raw); err != nil {
+	if _, err := personservices.NormalizePernr(raw); err != nil {
 		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "PERSON_PERNR_INVALID", "pernr invalid")
 		return
 	}
