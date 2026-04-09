@@ -14,9 +14,13 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/jacksonlee411/Bugs-And-Blossoms/internal/routing"
+	iammodule "github.com/jacksonlee411/Bugs-And-Blossoms/modules/iam"
+	jobcatalogmodule "github.com/jacksonlee411/Bugs-And-Blossoms/modules/jobcatalog"
+	orgunitmodule "github.com/jacksonlee411/Bugs-And-Blossoms/modules/orgunit"
 	orgunitports "github.com/jacksonlee411/Bugs-And-Blossoms/modules/orgunit/domain/ports"
-	orgunitpersistence "github.com/jacksonlee411/Bugs-And-Blossoms/modules/orgunit/infrastructure/persistence"
 	orgunitservices "github.com/jacksonlee411/Bugs-And-Blossoms/modules/orgunit/services"
+	personmodule "github.com/jacksonlee411/Bugs-And-Blossoms/modules/person"
+	staffingmodule "github.com/jacksonlee411/Bugs-And-Blossoms/modules/staffing"
 	"github.com/jacksonlee411/Bugs-And-Blossoms/pkg/authz"
 	dictpkg "github.com/jacksonlee411/Bugs-And-Blossoms/pkg/dict"
 )
@@ -85,17 +89,17 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, error) {
 
 	if orgUnitWriteService == nil {
 		if writeStore, ok := orgStore.(orgunitports.OrgUnitWriteStore); ok {
-			orgUnitWriteService = orgunitservices.NewOrgUnitWriteService(writeStore)
+			orgUnitWriteService = orgunitmodule.NewWriteService(writeStore)
 		} else if pgStore, ok := orgStore.(*orgUnitPGStore); ok {
-			orgUnitWriteService = orgunitservices.NewOrgUnitWriteService(orgunitpersistence.NewOrgUnitPGStore(pgStore.pool))
+			orgUnitWriteService = orgunitmodule.NewWriteServiceWithPGStore(pgStore.pool)
 		}
 	}
 
 	if setidStore == nil {
 		if pgStore, ok := orgStore.(*orgUnitPGStore); ok {
-			setidStore = newSetIDPGStore(pgStore.pool)
+			setidStore = orgunitmodule.NewSetIDPGStore(pgStore.pool)
 		} else {
-			setidStore = newSetIDMemoryStore()
+			setidStore = orgunitmodule.NewSetIDMemoryStore()
 		}
 	}
 	if pgStore, ok := orgStore.(*orgUnitPGStore); ok {
@@ -106,45 +110,43 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, error) {
 
 	if jobcatalogStore == nil {
 		if pgStore, ok := orgStore.(*orgUnitPGStore); ok {
-			jobcatalogStore = newJobCatalogPGStore(pgStore.pool)
+			jobcatalogStore = jobcatalogmodule.NewPGStore(pgStore.pool)
 		} else {
-			jobcatalogStore = newJobCatalogMemoryStore()
+			jobcatalogStore = jobcatalogmodule.NewMemoryStore()
 		}
 	}
 
 	if personStore == nil {
 		if pgStore, ok := orgStore.(*orgUnitPGStore); ok {
-			personStore = newPersonPGStore(pgStore.pool)
+			personStore = personmodule.NewPGStore(pgStore.pool)
 		} else {
-			personStore = newPersonMemoryStore()
+			personStore = personmodule.NewMemoryStore()
 		}
 	}
 
 	if positionStore == nil || assignmentStore == nil {
 		if pgStore, ok := orgStore.(*orgUnitPGStore); ok {
-			s := newStaffingPGStore(pgStore.pool)
 			if positionStore == nil {
-				positionStore = s
+				positionStore = staffingmodule.NewPositionPGStore(pgStore.pool)
 			}
 			if assignmentStore == nil {
-				assignmentStore = s
+				assignmentStore = staffingmodule.NewAssignmentPGStore(pgStore.pool)
 			}
 		} else {
-			s := newStaffingMemoryStore()
 			if positionStore == nil {
-				positionStore = s
+				positionStore = staffingmodule.NewPositionMemoryStore()
 			}
 			if assignmentStore == nil {
-				assignmentStore = s
+				assignmentStore = staffingmodule.NewAssignmentMemoryStore()
 			}
 		}
 	}
 
 	if dictStore == nil {
 		if pgStore, ok := orgStore.(*orgUnitPGStore); ok {
-			dictStore = newDictPGStore(pgStore.pool)
+			dictStore = iammodule.NewDictPGStore(pgStore.pool)
 		} else {
-			dictStore = newDictMemoryStore()
+			dictStore = iammodule.NewDictMemoryStore()
 		}
 	}
 	if err := dictpkg.RegisterResolver(dictStore); err != nil {

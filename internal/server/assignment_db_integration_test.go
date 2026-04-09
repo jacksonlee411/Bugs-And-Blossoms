@@ -96,7 +96,7 @@ func TestStaffingAssignmentDB_RerunnableUpsert(t *testing.T) {
 		}
 	}()
 
-	store := newStaffingPGStore(conn)
+	store := newStaffingAssignmentPGStore(conn)
 
 	a1, err := store.UpsertPrimaryAssignmentForPerson(ctx, tenantA, effectiveDate, personUUID, position1, "", "")
 	if err != nil {
@@ -212,7 +212,7 @@ func TestStaffingAssignmentDB_CorrectRescind(t *testing.T) {
 		}
 	}()
 
-	store := newStaffingPGStore(conn)
+	store := newStaffingAssignmentPGStore(conn)
 
 	a1, err := store.UpsertPrimaryAssignmentForPerson(ctx, tenantA, "2026-01-01", personUUID, position1, "", "1.0")
 	if err != nil {

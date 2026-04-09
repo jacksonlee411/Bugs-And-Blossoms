@@ -594,7 +594,7 @@ func TestStaffingPGStore_UpdatePositionCurrent(t *testing.T) {
 
 func TestStaffingPGStore_ListAssignmentsForPerson(t *testing.T) {
 	t.Run("begin error", func(t *testing.T) {
-		store := newStaffingPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
+		store := newStaffingAssignmentPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
 			return nil, errors.New("begin")
 		}))
 		_, err := store.ListAssignmentsForPerson(context.Background(), "t1", "2026-01-01", "p1")
@@ -604,7 +604,7 @@ func TestStaffingPGStore_ListAssignmentsForPerson(t *testing.T) {
 	})
 
 	t.Run("set tenant error", func(t *testing.T) {
-		store := newStaffingPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
+		store := newStaffingAssignmentPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
 			return &stubTx{execErr: errors.New("exec")}, nil
 		}))
 		_, err := store.ListAssignmentsForPerson(context.Background(), "t1", "2026-01-01", "p1")
@@ -614,7 +614,7 @@ func TestStaffingPGStore_ListAssignmentsForPerson(t *testing.T) {
 	})
 
 	t.Run("query error", func(t *testing.T) {
-		store := newStaffingPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
+		store := newStaffingAssignmentPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
 			return &stubTx{queryErr: errors.New("query")}, nil
 		}))
 		_, err := store.ListAssignmentsForPerson(context.Background(), "t1", "2026-01-01", "p1")
@@ -624,7 +624,7 @@ func TestStaffingPGStore_ListAssignmentsForPerson(t *testing.T) {
 	})
 
 	t.Run("scan error", func(t *testing.T) {
-		store := newStaffingPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
+		store := newStaffingAssignmentPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
 			tx := &staffingQueryTx{stubTx: &stubTx{}, rows: &assignmentRows{scanErr: errors.New("scan")}}
 			return tx, nil
 		}))
@@ -635,7 +635,7 @@ func TestStaffingPGStore_ListAssignmentsForPerson(t *testing.T) {
 	})
 
 	t.Run("rows err", func(t *testing.T) {
-		store := newStaffingPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
+		store := newStaffingAssignmentPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
 			tx := &staffingQueryTx{stubTx: &stubTx{}, rows: &assignmentRows{err: errors.New("rows")}}
 			return tx, nil
 		}))
@@ -646,7 +646,7 @@ func TestStaffingPGStore_ListAssignmentsForPerson(t *testing.T) {
 	})
 
 	t.Run("commit error", func(t *testing.T) {
-		store := newStaffingPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
+		store := newStaffingAssignmentPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
 			tx := &staffingQueryTx{stubTx: &stubTx{commitErr: errors.New("commit")}, rows: &assignmentRows{}}
 			return tx, nil
 		}))
@@ -657,7 +657,7 @@ func TestStaffingPGStore_ListAssignmentsForPerson(t *testing.T) {
 	})
 
 	t.Run("ok", func(t *testing.T) {
-		store := newStaffingPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
+		store := newStaffingAssignmentPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
 			tx := &staffingQueryTx{stubTx: &stubTx{}, rows: &assignmentRows{}}
 			return tx, nil
 		}))
@@ -673,7 +673,7 @@ func TestStaffingPGStore_ListAssignmentsForPerson(t *testing.T) {
 
 func TestStaffingPGStore_UpsertPrimaryAssignmentForPerson(t *testing.T) {
 	t.Run("begin error", func(t *testing.T) {
-		store := newStaffingPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
+		store := newStaffingAssignmentPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
 			return nil, errors.New("begin")
 		}))
 		_, err := store.UpsertPrimaryAssignmentForPerson(context.Background(), "t1", "2026-01-01", "p1", "pos1", "", "")
@@ -683,7 +683,7 @@ func TestStaffingPGStore_UpsertPrimaryAssignmentForPerson(t *testing.T) {
 	})
 
 	t.Run("set tenant error", func(t *testing.T) {
-		store := newStaffingPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
+		store := newStaffingAssignmentPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
 			return &stubTx{execErr: errors.New("exec")}, nil
 		}))
 		_, err := store.UpsertPrimaryAssignmentForPerson(context.Background(), "t1", "2026-01-01", "p1", "pos1", "", "")
@@ -693,7 +693,7 @@ func TestStaffingPGStore_UpsertPrimaryAssignmentForPerson(t *testing.T) {
 	})
 
 	t.Run("existing id query error", func(t *testing.T) {
-		store := newStaffingPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
+		store := newStaffingAssignmentPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
 			return &stubTx{rowErr: errors.New("row")}, nil
 		}))
 		_, err := store.UpsertPrimaryAssignmentForPerson(context.Background(), "t1", "2026-01-01", "p1", "pos1", "", "")
@@ -703,7 +703,7 @@ func TestStaffingPGStore_UpsertPrimaryAssignmentForPerson(t *testing.T) {
 	})
 
 	t.Run("gen assignment id error", func(t *testing.T) {
-		store := newStaffingPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
+		store := newStaffingAssignmentPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
 			tx := &staffingAssignmentGenIDErrorTx{stubTx: &stubTx{}}
 			return tx, nil
 		}))
@@ -714,7 +714,7 @@ func TestStaffingPGStore_UpsertPrimaryAssignmentForPerson(t *testing.T) {
 	})
 
 	t.Run("count error", func(t *testing.T) {
-		store := newStaffingPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
+		store := newStaffingAssignmentPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
 			tx := &staffingAssignmentCountErrorTx{stubTx: &stubTx{}}
 			return tx, nil
 		}))
@@ -725,7 +725,7 @@ func TestStaffingPGStore_UpsertPrimaryAssignmentForPerson(t *testing.T) {
 	})
 
 	t.Run("event id error", func(t *testing.T) {
-		store := newStaffingPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
+		store := newStaffingAssignmentPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
 			tx := &staffingAssignmentEventIDErrorTx{stubTx: &stubTx{}}
 			return tx, nil
 		}))
@@ -736,7 +736,7 @@ func TestStaffingPGStore_UpsertPrimaryAssignmentForPerson(t *testing.T) {
 	})
 
 	t.Run("submit error", func(t *testing.T) {
-		store := newStaffingPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
+		store := newStaffingAssignmentPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
 			tx := &staffingAssignmentQueryTx{stubTx: &stubTx{execErr: errors.New("exec"), execErrAt: 2}}
 			return tx, nil
 		}))
@@ -747,7 +747,7 @@ func TestStaffingPGStore_UpsertPrimaryAssignmentForPerson(t *testing.T) {
 	})
 
 	t.Run("commit error", func(t *testing.T) {
-		store := newStaffingPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
+		store := newStaffingAssignmentPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
 			tx := &staffingAssignmentQueryTx{stubTx: &stubTx{commitErr: errors.New("commit")}}
 			return tx, nil
 		}))
@@ -758,7 +758,7 @@ func TestStaffingPGStore_UpsertPrimaryAssignmentForPerson(t *testing.T) {
 	})
 
 	t.Run("ok (create)", func(t *testing.T) {
-		store := newStaffingPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
+		store := newStaffingAssignmentPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
 			tx := &staffingAssignmentQueryTx{stubTx: &stubTx{}}
 			return tx, nil
 		}))
@@ -772,7 +772,7 @@ func TestStaffingPGStore_UpsertPrimaryAssignmentForPerson(t *testing.T) {
 	})
 
 	t.Run("ok (update)", func(t *testing.T) {
-		store := newStaffingPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
+		store := newStaffingAssignmentPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
 			tx := &staffingAssignmentUpdateQueryTx{stubTx: &stubTx{}}
 			return tx, nil
 		}))
@@ -783,7 +783,7 @@ func TestStaffingPGStore_UpsertPrimaryAssignmentForPerson(t *testing.T) {
 	})
 
 	t.Run("ok (with fte)", func(t *testing.T) {
-		store := newStaffingPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
+		store := newStaffingAssignmentPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
 			tx := &staffingAssignmentQueryTx{stubTx: &stubTx{}}
 			return tx, nil
 		}))
@@ -797,7 +797,7 @@ func TestStaffingPGStore_UpsertPrimaryAssignmentForPerson(t *testing.T) {
 	})
 
 	t.Run("ok (with status)", func(t *testing.T) {
-		store := newStaffingPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
+		store := newStaffingAssignmentPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
 			tx := &staffingAssignmentQueryTx{stubTx: &stubTx{}}
 			return tx, nil
 		}))

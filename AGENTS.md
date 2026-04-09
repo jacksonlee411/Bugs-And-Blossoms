@@ -14,6 +14,8 @@
 - Assistant 配置单主源门禁（阻断第二写入口/契约回写/SSOT 漂移）：`make check assistant-config-single-source`
 - 禁止新增 scope/package 漂移：`make check no-scope-package`
 - 颗粒度层次门禁（阻断 org_level/scope_type/scope_key 回流）：`make check granularity`
+- DDD 分层 P0 反漂移门禁（阻断 `internal/server` 扩散与 `infrastructure -> services` 回流）：`make check ddd-layering-p0`
+- DDD 分层 P2 组合根门禁（模块扩张时要求 `module.go/links.go` 承接职责）：`make check ddd-layering-p2`
 - capability_key 防退化（禁上下文编码/禁拼接）：`make check capability-key`
 - 路由 capability 映射防漂移（缺映射/重复/未注册阻断）：`make check capability-route-map`
 - 业务幂等字段命名收敛：`make check request-code`
@@ -57,6 +59,8 @@
 | Assistant 模型配置主源相关改动（配置写入口/迁移 stopline/门禁接线） | `make check assistant-config-single-source` | 单主源门禁（见 `DEV-PLAN-231`） |
 | 新增 scope/package 语义引用（`scope_code/scope_package/scope_subscription/package_id`） | `make check no-scope-package` | 增量反漂移门禁（承接 `DEV-PLAN-102C6`） |
 | 颗粒度层次/旧 scope 相关新增（`org_level/scope_type/scope_key`） | `make check granularity` | 颗粒度治理门禁（承接 `DEV-PLAN-180`） |
+| DDD 分层相关新增漂移（`internal/server` 扩散模块实现、`modules/*/infrastructure -> services` 回流） | `make check ddd-layering-p0` | P0 止血门禁（承接 `DEV-PLAN-015B/015C`） |
+| 模块分层扩张且组合根需同步承接（`module.go/links.go` 不得继续空壳） | `make check ddd-layering-p2` | P2 组合根门禁（承接 `DEV-PLAN-015B/015Z4`） |
 | capability_key 命名与生成方式 | `make check capability-key` | 禁止上下文编码与运行时拼接（承接 `DEV-PLAN-102C6/102D`） |
 | 路由/动作到 capability_key 映射 | `make check capability-route-map` | 阻断缺映射、重复映射、未注册 key（承接 `DEV-PLAN-156`） |
 | 幂等与追踪命名（request_id / trace_id） | `make check request-code` | 规则见 `DEV-PLAN-109A` |
@@ -520,6 +524,37 @@ modules/{module}/
 - DDD 分层框架（对齐 CleanArchGuard + DB Kernel）：`docs/dev-plans/015-ddd-layering-framework.md`
 - DEV-PLAN-015A：DDD 分层框架履职缺口评估（承接 DEV-PLAN-015）：`docs/dev-plans/015a-ddd-layering-framework-implementation-gap-assessment.md`
 - DEV-PLAN-015B：DDD 分层框架收口整改路线图（P0/P1/P2，承接 DEV-PLAN-015A）：`docs/dev-plans/015b-ddd-layering-framework-remediation-roadmap.md`
+- DEV-PLAN-015C：DDD 分层框架 P0 反漂移门禁实施计划（承接 DEV-PLAN-015B）：`docs/dev-plans/015c-ddd-layering-framework-p0-anti-drift-gate-plan.md`
+- DEV-PLAN-015D：Staffing Assignment 分层回流修复（承接 DEV-PLAN-015B P1）：`docs/dev-plans/015d-staffing-assignment-layering-reversal-fix-plan.md`
+- DEV-PLAN-015E：Person 默认装配向模块侧收口（承接 DEV-PLAN-015B P1）：`docs/dev-plans/015e-person-default-wiring-module-side-plan.md`
+- DEV-PLAN-015F：Person 模块 Composition Root 最小化落地（承接 DEV-PLAN-015B P1）：`docs/dev-plans/015f-person-module-composition-root-minimalization-plan.md`
+- DEV-PLAN-015G：JobCatalog 内存 Store 向模块侧收口（承接 DEV-PLAN-015B P1）：`docs/dev-plans/015g-jobcatalog-memory-store-module-side-plan.md`
+- DEV-PLAN-015H：JobCatalog PG Store 向模块侧收口（承接 DEV-PLAN-015B P1）：`docs/dev-plans/015h-jobcatalog-pg-store-module-side-plan.md`
+- DEV-PLAN-015I：Staffing Assignment 组合根最小化收口（承接 DEV-PLAN-015B P1）：`docs/dev-plans/015i-staffing-assignment-composition-root-plan.md`
+- DEV-PLAN-015J：JobCatalog Server 侧冗余构造包装消除（承接 DEV-PLAN-015B P1）：`docs/dev-plans/015j-jobcatalog-server-constructor-elimination-plan.md`
+- DEV-PLAN-015K：Person Server 侧冗余构造包装消除（承接 DEV-PLAN-015B P1）：`docs/dev-plans/015k-person-server-constructor-elimination-plan.md`
+- DEV-PLAN-015L：JobCatalog Test-Only Wrapper 从生产代码移除（承接 DEV-PLAN-015B P1）：`docs/dev-plans/015l-jobcatalog-test-only-wrapper-elimination-plan.md`
+- DEV-PLAN-015M：JobCatalog Normalize Wrapper 从生产代码移除（承接 DEV-PLAN-015B P1）：`docs/dev-plans/015m-jobcatalog-normalize-wrapper-elimination-plan.md`
+- DEV-PLAN-015N：Person Normalize Wrapper 从生产代码移除（承接 DEV-PLAN-015B P1）：`docs/dev-plans/015n-person-normalize-wrapper-elimination-plan.md`
+- DEV-PLAN-015O：Staffing Assignment 默认 PG 装配向模块侧收口（承接 DEV-PLAN-015B P1）：`docs/dev-plans/015o-staffing-assignment-pg-default-wiring-plan.md`
+- DEV-PLAN-015P：Staffing Assignment 默认 Memory 装配向模块侧收口（承接 DEV-PLAN-015B P1）：`docs/dev-plans/015p-staffing-assignment-memory-default-wiring-plan.md`
+- DEV-PLAN-015Q：Staffing Assignment 内存实现向模块侧收口（承接 DEV-PLAN-015B P1）：`docs/dev-plans/015q-staffing-assignment-memory-implementation-module-side-plan.md`
+- DEV-PLAN-015R：Staffing Position 领域类型与 Port 契约前移到模块侧（承接 DEV-PLAN-015B P1）：`docs/dev-plans/015r-staffing-position-domain-contract-plan.md`
+- DEV-PLAN-015S：Staffing Position 默认 Memory 装配向模块侧收口（承接 DEV-PLAN-015B P1）：`docs/dev-plans/015s-staffing-position-memory-default-wiring-plan.md`
+- DEV-PLAN-015T：Staffing Position 内存实现向模块侧收口（承接 DEV-PLAN-015B P1）：`docs/dev-plans/015t-staffing-position-memory-implementation-module-side-plan.md`
+- DEV-PLAN-015U：Staffing Memory 兼容壳移出生产代码（承接 DEV-PLAN-015B P1）：`docs/dev-plans/015u-staffing-memory-compatibility-shell-test-only-plan.md`
+- DEV-PLAN-015V：Staffing PG Assignment 薄委派移出生产代码（承接 DEV-PLAN-015B P1）：`docs/dev-plans/015v-staffing-pg-assignment-wrapper-test-only-plan.md`
+- DEV-PLAN-015W：Staffing Position PG 实现与默认装配向模块侧收口（承接 DEV-PLAN-015B P1）：`docs/dev-plans/015w-staffing-position-pg-module-side-wiring-plan.md`
+- DEV-PLAN-015X：OrgUnit Write Service 默认装配向模块侧收口（承接 DEV-PLAN-015B P1）：`docs/dev-plans/015x-orgunit-write-service-module-wiring-plan.md`
+- DEV-PLAN-015Y：JobCatalog 视图服务适配入口向模块侧收口（承接 DEV-PLAN-015B P1）：`docs/dev-plans/015y-jobcatalog-view-service-adapter-module-side-plan.md`
+- DEV-PLAN-015Z：DDD 分层框架收尾盘点与封板清单（承接 DEV-PLAN-015B）：`docs/dev-plans/015z-ddd-layering-framework-closure-summary-and-backlog.md`
+- DEV-PLAN-015Z1：OrgUnit SetID Memory Store 向模块侧收口（承接 DEV-PLAN-015Z）：`docs/dev-plans/015z1-orgunit-setid-memory-module-side-plan.md`
+- DEV-PLAN-015Z2：OrgUnit SetID PG 默认装配入口向模块侧收口（承接 DEV-PLAN-015Z1）：`docs/dev-plans/015z2-orgunit-setid-pg-module-entry-plan.md`
+- DEV-PLAN-015Z3：OrgUnit SetID PG 实现向模块侧收缩为 Server 薄壳（承接 DEV-PLAN-015Z2）：`docs/dev-plans/015z3-orgunit-setid-pg-server-thin-shell-plan.md`
+- DEV-PLAN-015Z4：DDD 分层 P2 组合根门禁封板（承接 DEV-PLAN-015Z）：`docs/dev-plans/015z4-ddd-layering-p2-gate-closure-plan.md`
+- DEV-PLAN-015Z5：IAM Dict Store 向模块侧收缩为 Server 薄壳（承接 DEV-PLAN-015Z）：`docs/dev-plans/015z5-iam-dict-server-thin-shell-plan.md`
+- DEV-PLAN-015Z6：OrgUnit SetID Store 向模块侧收缩为 Server 薄壳（承接 DEV-PLAN-015Z）：`docs/dev-plans/015z6-orgunit-setid-server-thin-shell-plan.md`
+- DEV-PLAN-015AA：IAM Dict Store 向模块侧收口（承接 DEV-PLAN-015Z）：`docs/dev-plans/015aa-iam-dict-store-module-side-plan.md`
 - Greenfield HR 模块骨架与契约（OrgUnit/JobCatalog/Staffing/Person）：`docs/dev-plans/016-greenfield-hr-modules-skeleton.md`
 - 任职记录（Job Data / Assignments）（事件 SoT + 同步投射）：`docs/dev-plans/031-greenfield-assignment-job-data.md`
 - Person 最小身份锚点（Pernr 1-8 位数字字符串）：`docs/dev-plans/027-person-minimal-identity-for-staffing.md`

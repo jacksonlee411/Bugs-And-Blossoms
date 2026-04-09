@@ -9,9 +9,9 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"github.com/jacksonlee411/Bugs-And-Blossoms/modules/staffing/domain/assignmentrules"
 	"github.com/jacksonlee411/Bugs-And-Blossoms/modules/staffing/domain/ports"
 	"github.com/jacksonlee411/Bugs-And-Blossoms/modules/staffing/domain/types"
-	staffingservices "github.com/jacksonlee411/Bugs-And-Blossoms/modules/staffing/services"
 )
 
 type pgBeginner interface {
@@ -79,7 +79,7 @@ func (s *AssignmentPGStore) ListAssignmentsForPerson(ctx context.Context, tenant
 }
 
 func (s *AssignmentPGStore) UpsertPrimaryAssignmentForPerson(ctx context.Context, tenantID string, effectiveDate string, personUUID string, positionUUID string, status string, allocatedFte string) (types.Assignment, error) {
-	prepared, err := staffingservices.PrepareUpsertPrimaryAssignment(effectiveDate, personUUID, positionUUID, status, allocatedFte)
+	prepared, err := assignmentrules.PrepareUpsertPrimaryAssignment(effectiveDate, personUUID, positionUUID, status, allocatedFte)
 	if err != nil {
 		return types.Assignment{}, err
 	}
@@ -204,7 +204,7 @@ func (s *AssignmentPGStore) UpsertPrimaryAssignmentForPerson(ctx context.Context
 }
 
 func (s *AssignmentPGStore) CorrectAssignmentEvent(ctx context.Context, tenantID string, assignmentID string, targetEffectiveDate string, replacementPayload json.RawMessage) (string, error) {
-	prepared, err := staffingservices.PrepareCorrectAssignmentEvent(tenantID, assignmentID, targetEffectiveDate, replacementPayload)
+	prepared, err := assignmentrules.PrepareCorrectAssignmentEvent(tenantID, assignmentID, targetEffectiveDate, replacementPayload)
 	if err != nil {
 		return "", err
 	}
@@ -247,7 +247,7 @@ func (s *AssignmentPGStore) CorrectAssignmentEvent(ctx context.Context, tenantID
 }
 
 func (s *AssignmentPGStore) RescindAssignmentEvent(ctx context.Context, tenantID string, assignmentID string, targetEffectiveDate string, payload json.RawMessage) (string, error) {
-	prepared, err := staffingservices.PrepareRescindAssignmentEvent(tenantID, assignmentID, targetEffectiveDate, payload)
+	prepared, err := assignmentrules.PrepareRescindAssignmentEvent(tenantID, assignmentID, targetEffectiveDate, payload)
 	if err != nil {
 		return "", err
 	}

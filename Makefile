@@ -7,7 +7,7 @@ export ATLAS_VERSION ?= v0.38.0
 export DEV_COMPOSE_PROJECT ?= bugs-and-blossoms-dev
 export DEV_INFRA_ENV_FILE ?= .env.example
 
-.PHONY: help preflight check pr-branch naming no-legacy assistant-config-single-source assistant-domain-allowlist no-scope-package granularity capability-key capability-contract capability-route-map capability-catalog policy-baseline-dup request-code as-of-explicit dict-tenant-only go-version error-message fmt lint test routing e2e doc tr generate css
+.PHONY: help preflight check pr-branch naming no-legacy assistant-config-single-source assistant-domain-allowlist no-scope-package granularity ddd-layering-p0 ddd-layering-p2 capability-key capability-contract capability-route-map capability-catalog policy-baseline-dup request-code as-of-explicit dict-tenant-only go-version error-message fmt lint test routing e2e doc tr generate css
 .PHONY: sqlc-generate sqlc-verify-schema authz-pack authz-test authz-lint
 .PHONY: plan migrate up
 .PHONY: iam orgunit jobcatalog staffing person
@@ -26,6 +26,8 @@ help:
 					"  make check assistant-domain-allowlist" \
 					"  make check no-scope-package" \
 					"  make check granularity" \
+					"  make check ddd-layering-p0" \
+					"  make check ddd-layering-p2" \
 				"  make check capability-key" \
 				"  make check capability-contract" \
 				"  make check capability-route-map" \
@@ -70,6 +72,8 @@ preflight: ## 本地一键对齐CI（严格版：含 UI build/typecheck）
 	@$(MAKE) check assistant-domain-allowlist
 	@$(MAKE) check no-scope-package
 	@$(MAKE) check granularity
+	@$(MAKE) check ddd-layering-p0
+	@$(MAKE) check ddd-layering-p2
 	@$(MAKE) check capability-key
 	@$(MAKE) check capability-contract
 	@$(MAKE) check capability-route-map
@@ -111,6 +115,12 @@ no-scope-package: ## 反漂移门禁（阻断新增 scope/package 语义）
 
 granularity: ## 颗粒度层次门禁（阻断 org_level/scope_type/scope_key 回流）
 	@./scripts/ci/check-granularity.sh
+
+ddd-layering-p0: ## DDD 分层 P0 反漂移门禁（阻断 internal/server 扩散与 infra->services 回流）
+	@./scripts/ci/check-ddd-layering-p0.sh
+
+ddd-layering-p2: ## DDD 分层 P2 组合根门禁（模块扩张时要求 module.go/links.go 承接职责）
+	@./scripts/ci/check-ddd-layering-p2.sh
 
 capability-key: ## capability_key 命名与拼接门禁（防退化为 scope）
 	@./scripts/ci/check-capability-key.sh
@@ -158,6 +168,10 @@ lint: ## 静态检查（按项目能力渐进接入）
 		go vet ./...; \
 		echo "[lint] go-cleanarch"; \
 		./scripts/ci/cleanarch.sh; \
+		echo "[lint] ddd-layering-p0"; \
+		./scripts/ci/check-ddd-layering-p0.sh; \
+		echo "[lint] ddd-layering-p2"; \
+		./scripts/ci/check-ddd-layering-p2.sh; \
 	else \
 		echo "[lint] no go.mod; no-op"; \
 	fi
