@@ -8,11 +8,10 @@ import (
 	"strings"
 	"time"
 
+	staffingmodule "github.com/jacksonlee411/Bugs-And-Blossoms/modules/staffing"
 	"github.com/jacksonlee411/Bugs-And-Blossoms/modules/staffing/domain/assignmentrules"
 	staffingports "github.com/jacksonlee411/Bugs-And-Blossoms/modules/staffing/domain/ports"
 	staffingtypes "github.com/jacksonlee411/Bugs-And-Blossoms/modules/staffing/domain/types"
-	staffingpersistence "github.com/jacksonlee411/Bugs-And-Blossoms/modules/staffing/infrastructure/persistence"
-	staffingservices "github.com/jacksonlee411/Bugs-And-Blossoms/modules/staffing/services"
 )
 
 type Position struct {
@@ -328,26 +327,22 @@ func (s *staffingPGStore) UpdatePositionCurrent(ctx context.Context, tenantID st
 }
 
 func (s *staffingPGStore) ListAssignmentsForPerson(ctx context.Context, tenantID string, asOfDate string, personUUID string) ([]Assignment, error) {
-	store := staffingpersistence.NewAssignmentPGStore(s.pool)
-	facade := staffingservices.NewAssignmentsFacade(store)
+	facade := staffingmodule.NewAssignmentsFacadeWithPGStore(s.pool)
 	return facade.ListAssignmentsForPerson(ctx, tenantID, asOfDate, personUUID)
 }
 
 func (s *staffingPGStore) UpsertPrimaryAssignmentForPerson(ctx context.Context, tenantID string, effectiveDate string, personUUID string, positionUUID string, status string, allocatedFte string) (Assignment, error) {
-	store := staffingpersistence.NewAssignmentPGStore(s.pool)
-	facade := staffingservices.NewAssignmentsFacade(store)
+	facade := staffingmodule.NewAssignmentsFacadeWithPGStore(s.pool)
 	return facade.UpsertPrimaryAssignmentForPerson(ctx, tenantID, effectiveDate, personUUID, positionUUID, status, allocatedFte)
 }
 
 func (s *staffingPGStore) CorrectAssignmentEvent(ctx context.Context, tenantID string, assignmentUUID string, targetEffectiveDate string, replacementPayload json.RawMessage) (string, error) {
-	store := staffingpersistence.NewAssignmentPGStore(s.pool)
-	facade := staffingservices.NewAssignmentsFacade(store)
+	facade := staffingmodule.NewAssignmentsFacadeWithPGStore(s.pool)
 	return facade.CorrectAssignmentEvent(ctx, tenantID, assignmentUUID, targetEffectiveDate, replacementPayload)
 }
 
 func (s *staffingPGStore) RescindAssignmentEvent(ctx context.Context, tenantID string, assignmentUUID string, targetEffectiveDate string, payload json.RawMessage) (string, error) {
-	store := staffingpersistence.NewAssignmentPGStore(s.pool)
-	facade := staffingservices.NewAssignmentsFacade(store)
+	facade := staffingmodule.NewAssignmentsFacadeWithPGStore(s.pool)
 	return facade.RescindAssignmentEvent(ctx, tenantID, assignmentUUID, targetEffectiveDate, payload)
 }
 
