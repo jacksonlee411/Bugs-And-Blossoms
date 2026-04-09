@@ -26,7 +26,7 @@
 
 - [ ] 为 Org 域定义 `org_node_key` 标准：固定 8 位、非纯数字、无业务语义、唯一、自增分配。
 - [ ] Org 域一步切换为 `org_node_key` / `parent_org_node_key`，不保留运行期双轨。
-- [ ] 将 Org 内核、SetID、Staffing、Assistant、`internal/server` 等相关链路同步对齐到 `org_node_key`。
+- [ ] 将 Org 内核，以及 SetID / Staffing / Assistant / `internal/server` 中**引用 Org 的链路**同步对齐到 `org_node_key`。
 - [ ] 保持对外契约继续只暴露业务编码 `org_code`，不得回流暴露内部结构标识。
 
 ### 2.2 非目标
@@ -35,6 +35,7 @@
 - 不在本计划内把 Person、Position、Assignment、JobCatalog 等对象改为 `char(8)` 主键。
 - 不在本计划内为其他模块新增 `*_node_key`。
 - 不在本计划内推动“全仓外部标识收敛”或一并治理非 Org 对象的 `*_uuid` 对外暴露问题。
+- 不在本计划内改变 Person / Staffing / JobCatalog / Assistant 各自对象的主键策略、历史策略或发布策略；这些模块只处理“引用 Org 时如何解析与传递 Org 标识”。
 - 不保留切换前 Org 的历史事件账本、历史版本链与历史审计记录。
 - 不通过兼容别名、双写双读或 legacy fallback 来实现平滑过渡。
 - 不把内部编码设计成新的业务编码、可读编码或人工输入编码。
@@ -45,8 +46,9 @@
 
 1. Org 的 8 位内部结构键方案首先是为了解决树路径、父子结构、索引和 subtree move 的综合问题。
 2. 其他业务对象当前没有看到与 Org 等价的树结构性能压力。
-3. 因此，Org 的结构主键方案不应直接扩大到其他业务对象。
-4. 未来若其他域要引入类似方案，必须单独提交新的调查与实施计划，不得直接引用 320 外推。
+3. SetID / Staffing / Assistant / `internal/server` 在 320 中只允许修改“消费 Org 引用”的适配层，不得借机引入这些域自己的 `*_node_key`、新历史账本策略或额外 surrogate key 迁移。
+4. 因此，Org 的结构主键方案不应直接扩大到其他业务对象。
+5. 未来若其他域要引入类似方案，必须单独提交新的调查与实施计划，不得直接引用 320 外推。
 
 ### 2.4 与现行标准的关系（STD-003 已对齐）
 
@@ -315,6 +317,7 @@ orgunit.org_node_key_registry
 - 若 320 继续坚持“内部结构键完全不对外暴露”，则 Staffing 外部契约必须同步迁移为 `org_code`
 - 迁移后的边界规则应为：Staffing 对外请求/响应使用 `org_code`，服务边界内解析为 `org_node_key`
 - 不允许把 `org_node_key` 重新包装成名为 `org_unit_id` 的外部兼容别名继续长期存在；这会形成新的语义漂移
+- 本节只处理这些链路中“对 Org 的引用字段 / 解析函数 / DTO / 页面状态”；不改变 Position / Assignment / Person / JobCatalog 自身主键、内部历史模型或独立发布边界
 
 ### 5.5 非 Org 对象保持现状
 
@@ -421,6 +424,23 @@ Org 域新边界规则：
 4. 切换后新账本从导入基线重新开始；旧 `org_id` 事件账本不再 replay
 5. 若当前态快照校验失败、导入后树结构校验失败或链路验收失败，则不得 reopen 写流
 
+### 6.5 发布 choreography 冻结契约
+
+320 的发布 choreography 不是“建议顺序”，而是冻结后的实施契约：
+
+1. 进入维护窗口并停写 Org 写流，以及一切引用 Org 的写流
+2. 固化切换前数据库快照，仅作为整窗回滚介质，不作为运行期兼容双轨的数据源
+3. 在停写状态下导出“当前有效 Org 树快照”，并完成只读核对
+4. 完成 `org_node_key` 分配、导入、新账本初始化与结构核对
+5. 先发布后端，再发布前端；维护窗口内禁止新旧代码与新旧 Schema 长时间混跑
+6. 完成 smoke、主链路验收、性能 stopline 后，才允许 reopen 写流
+7. 任一步失败都只能回到“数据库快照恢复 + 保持停写 + 修复后整窗重来”，不得临时启用 legacy、双写双读、旧账本 replay 或兼容别名窗口
+
+冻结要求：
+
+- 以上顺序、导出源、reopen 条件、失败恢复语义均视为 320 的冻结口径
+- 若实施前需要修改 choreography，必须先更新 320 并重新评审；不得在维护窗口内临时改口径
+
 ## 7. 实施步骤（Big-Bang，一次发布窗口）
 
 ### 7.1 前置冻结
@@ -487,6 +507,8 @@ Org 域新边界规则：
 7. [ ] 发布顺序固定为：DB schema/数据导入完成 -> 后端发布 -> 前端发布 -> smoke 验收 -> reopen 写流
 8. [ ] 维护窗口内不允许新旧后端与新旧 DB 长时间重叠运行；若版本不一致，必须保持停写
 9. [ ] 只有在 smoke、主链路验收、性能 stopline 均通过后，才允许 reopen 写流
+10. [ ] 切换前数据库快照只作为整窗回滚介质，不得被接回运行期双轨或旧账本 replay
+11. [ ] 若发布顺序、导出源或 reopen 条件需要变更，必须先更新 320 并重新评审
 
 ### 7.7 失败语义与恢复
 
@@ -614,6 +636,7 @@ Org 域新边界规则：
 4. [ ] 禁止应用层自行生成 `org_node_key`
 5. [ ] 禁止 `internal/server` 再持有模块内 PG store 的 `org_id` 中心实现
 6. [ ] 禁止前端页面状态、路由参数和 API client 类型引入 `org_id` / `org_node_key`
+7. [ ] 禁止在 Org 域之外新增 `*_node_key`，或把 320 作为“全对象统一内部编码”的先例直接外推
 
 ## 11. 测试与覆盖率
 
@@ -623,6 +646,7 @@ Org 域新边界规则：
   - `docs/dev-plans/300-test-system-investigation-report.md`
   - `docs/dev-plans/301-go-test-layering-and-best-practices-remediation-plan.md`
   为准。
+- 涉及覆盖率统计范围、测试触发条件、paths-filter 触发范围的任何调整，必须遵循 `docs/dev-plans/226-test-guide-tg004-gate-caliber-change-approval.md`；不得通过改门禁口径替代补测试或删死分支。
 
 ### 11.2 本计划必须覆盖的测试面
 
@@ -635,6 +659,14 @@ Org 域新边界规则：
 7. [ ] Assistant / internal API 不暴露 `org_id` / `org_node_key` 的响应契约测试
 8. [ ] 当前态导出 / 导入 / 结构核对测试
 9. [ ] 路由、lint、DDD layering、No Legacy 与相关反回流门禁测试
+10. [ ] `DEV-PLAN-060` 对应全链路业务测试套件同步更新，至少覆盖 Org / SetID / Staffing / Assistant 一条用户可见、仅暴露 `org_code` 的端到端主链路
+
+### 11.3 与 DEV-PLAN-012 四大 Gate 的对齐
+
+- Gate-1 `Code Quality & Formatting`：承载文档更新、No Legacy、DDD layering、错误提示、反回流脚本与生成物一致性检查。
+- Gate-2 `Unit & Integration Tests`：承载 `org_node_key` 编解码、当前态导入核对、Org/SetID/Staffing/Assistant 集成测试与 100% coverage 单主源执行。
+- Gate-3 `Routing Gates`：承载路由 allowlist / 分类 / responder 契约收敛，确保对外不再接受或回写 `org_id` / `org_node_key`。
+- Gate-4 `E2E Tests`：承载 `DEV-PLAN-060` 同步后的用户可见主链路验证，确认外部入口只使用 `org_code`，且切换后主路径可操作。
 
 ## 12. 验收标准
 
@@ -645,7 +677,10 @@ Org 域新边界规则：
 5. [ ] 旧 Org 历史数据已按计划丢弃，切换后仅保留当前态重建出的新账本
 6. [ ] Org 主链路、SetID、Staffing、Assistant 回归通过
 7. [ ] 无 legacy 双轨、无 fallback、无兼容别名窗口
-8. [ ] 文档地图与门禁已更新，后续新增代码无法回流 `org_id` / `org_node_key`
+8. [ ] 边界保持收敛：320 只影响 Org 及其他模块中的 Org 引用面，未把 `*_node_key` 扩大到 Person / Position / Assignment / JobCatalog 等非 Org 对象
+9. [ ] 发布 choreography 已按 6.5 冻结执行：仅允许“停写 -> 当前态导出 -> 导入/核对 -> 后端 -> 前端 -> smoke -> reopen”，失败仅允许整窗回滚
+10. [ ] 门禁与验收已对齐 `DEV-PLAN-012` 四大 Gate 口径；相关变更未通过调整覆盖率/触发范围规避问题，符合 `TG-004`
+11. [ ] 文档地图、`DEV-PLAN-060` 套件与相关反回流门禁已更新；后续新增代码无法把 `org_id` 回流到运行期主路径，也无法把 `org_node_key` 暴露到外部协议
 
 ## 13. 最终结论
 
