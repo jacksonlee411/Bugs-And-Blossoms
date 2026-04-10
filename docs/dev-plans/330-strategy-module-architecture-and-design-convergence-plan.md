@@ -383,6 +383,51 @@
     - 直接拿 `business_unit_org_code` 或 legacy `business_unit_id` 作为 PDP 命中键
     - 将 `resolved_setid` 仅视作前端展示字段，而不进入记录与查询语义
 
+### 4.2.5A 现状差距与既有表演化路径（冻结）
+
+`330` 不仅冻结目标态，也冻结“如何从当前单轴表结构走到双轴契约”的最小演化路径，避免把 schema/index/backfill/query 切换留到实现阶段临场决定。
+
+当前已知差距为：
+
+1. [X] 现有 `orgunit.setid_strategy_registry` 已收口到 `business_unit_node_key`，但记录与唯一键仍未显式承载 `resolved_setid`。
+2. [X] 现有 Registry 写 API 仍主要围绕 `business_unit_org_code -> business_unit_node_key` 工作，尚不能明确表达“`resolved_setid=exact` / `resolved_setid=wildcard`”。
+3. [X] 现有 consumer/runtime 仍存在仅按 BU 轴取候选的过渡实现；若不先冻结切换顺序，后续极易演变成“文档双轴、运行时单轴、explain 事后补轴”的假收口。
+
+基于以上现状，`330` 将既有表的最小演化步骤冻结为：
+
+1. **R0：存量审计先行**
+   - 先盘点现有 Registry 记录，逐条判定其应归属为：
+     - `resolved_setid=exact + business_unit_node_key=exact`
+     - `resolved_setid=exact + business_unit_node_key=wildcard`
+     - `resolved_setid=wildcard + business_unit_node_key=wildcard`
+   - 任一记录若无法被无歧义地归类到上述三种形状之一，必须 stopline；不得带着“以后运行时再猜”的记录继续切主链。
+2. **R1：既有表增量扩展**
+   - 在现有 `orgunit.setid_strategy_registry` 上增量引入 `resolved_setid` 作用域列与对应约束；本计划不要求新建表，也不允许通过平行新表制造第二事实源。
+   - `resolved_setid` 的物理 wildcard 表达必须在实施计划中一次性冻结，并且只能表达 wildcard，不能表达“未知/待解析/兼容态”。
+   - 现有唯一键与冲突检测键必须同步纳入 `resolved_setid`，使“双轴记录契约”在存储层成为硬约束，而不是 explain 附属信息。
+   - 必须新增或重写约束，硬拒绝：
+     - `resolved_setid=wildcard + business_unit_node_key=exact`
+     - 未声明 `resolved_setid` 却试图保存 BU 本地覆盖
+3. **R2：回填与校验**
+   - 所有历史记录必须在切查询前完成 `resolved_setid` 回填或显式 wildcard 判定。
+   - 无法确定唯一 `resolved_setid` 的历史记录必须阻断切换，不得默认写成 wildcard。
+   - 回填完成后，必须有可复查证据证明：
+     - 不存在非法形状记录
+     - 不存在“BU exact 但 setid 缺失”的记录
+     - 新唯一键与冲突检测维度已生效
+4. **R3：写 API 契约切换**
+   - Registry 主写 API 必须显式表达 SetID 轴，至少能区分：
+     - `resolved_setid=exact`
+     - `resolved_setid=wildcard`
+   - 禁止继续依赖“只给 `business_unit_org_code`，由服务层默认猜测 exact setid”的隐式建模。
+   - 若某条策略 intended 为 tenant 全局，则必须由 API 显式声明 wildcard；不得把“字段缺省”解释成“适用于全部 SetID”。
+5. **R4：查询与 PDP 切主链**
+   - 所有候选查询、冲突检测、explain 复算与版本签名必须统一切到 `resolved_setid + business_unit_node_key` 双轴。
+   - 在 R4 完成前，不得宣称 `330` 已完成；“schema 已加列但主查询仍按 BU 单轴”不构成收口。
+6. **R5：旧实现退场**
+   - 任一仍以 legacy `business_unit_id` 或“BU-only 命中”驱动正式裁决的实现，都必须在切主链时移除或降级为显式兼容读证据，不得继续作为 happy path。
+   - 若切换过程中出现风险，只允许采用仓库既定的环境级保护、只读/停写、修复后重试；不得引入兼容别名窗口、双输出口径或旧实现兜底。
+
 ### 4.2.6 双轴 PDP 的确定性裁决算法（冻结）
 
 `330` 不再自造第二套冲突决议规则。双轴 PDP 的确定性算法以 `DEV-PLAN-200 §5.2` 与 `DEV-PLAN-202` 为 SSOT，`330` 在此冻结双轴输入下必须补充的顺序与触发条件：
@@ -428,7 +473,7 @@
 
 ### 4.2.7 失败语义矩阵（冻结）
 
-错误码 canonical 口径以 `DEV-PLAN-200 §7.1` 的 lower snake_case 为准；若某些现有链路仍保留 legacy 大写错误码兼容窗口，应由对应实施计划单独处理，不得在 `330` 中形成第二主源。
+错误码 canonical 口径以 `DEV-PLAN-200 §7.1` 的 lower snake_case 为准；若某些现有链路仍残留 legacy 大写错误码，应由对应实施计划一次性切换并清退，不得在 `330` 中形成第二主源或双输出目标态。
 
 | 失败场景 | 正式错误码 | 是否允许 fallback | explain 最低输出 | 是否构成 stopline |
 | --- | --- | --- | --- | --- |
@@ -465,6 +510,7 @@
 1. [ ] 本计划不直接新增数据库表；如需新表或 destructive migration，必须另起计划并先获用户确认。
 2. [ ] 本计划不在第一阶段重写全部 UI 页面，只聚焦架构收口与契约对齐。
 3. [ ] 本计划不引入 legacy 双链路、回退开关或第二写入口。
+4. [ ] 本计划不保留 API 兼容别名窗口、双错误码输出窗口或“旧主链继续 happy path、新主链逐步试运行”的并行运行策略；如需风险控制，只能使用环境级保护与 fail-closed 语义。
 
 ## 6. 收口方案
 
@@ -531,6 +577,13 @@
    - `business_unit_node_key` 如何承担特异度/本地覆盖语义
    - wildcard 如何表达
    - 哪些 legacy 口径仍存在及其退出路径
+7. [ ] 该里程碑必须按第 `4.2.5A` 节的顺序落地：
+   - 先完成存量记录审计
+   - 再完成既有表增量扩展与约束
+   - 再完成历史记录回填与非法形状清零
+   - 再切 Registry 主写 API 的 SetID 轴表达
+   - 最后切主查询、PDP、explain 与版本签名
+8. [ ] 若任一步骤发现“无法唯一确定 `resolved_setid` 的历史记录”，该问题必须被视为 stopline，而不是通过 wildcard、前端补参或旧查询兜底绕过。
 
 ### 6.2B M2 补充：失败语义与版本契约
 
@@ -541,6 +594,10 @@
    - 负责 `policy_version / effective_policy_version`
    - 负责写前 stale 校验
 4. [ ] 缺上下文、缺策略、非法 mode、非法记录形状均不得 fallback 到 legacy 路径、前端二次裁决或“默认放行”。
+5. [ ] canonical 输出错误码必须以 `DEV-PLAN-200 §7.1` 的 lower snake_case 为准；若当前实现仍存在 legacy 大写错误码，只能作为迁移输入或局部兼容读处理，不得继续作为目标态输出。
+6. [ ] 错误码切换必须具备单独 stopline：
+   - API/前端/用户提示若仍把 legacy 大写错误码当正式输出，则 `330` 不得验收通过
+   - 禁止出现“同一主链同时承诺大写与 lower snake_case 都是正式输出”的双口径窗口
 
 ### 6.3 M3：路由 capability 与鉴权归属对齐
 
@@ -583,6 +640,15 @@
    - `policy_version_required / policy_version_conflict`
 4. [ ] `Mutation Policy` 与 `Policy Activation` 必须各自有最小验证样例，证明其边界没有重新回流到 `Dynamic Policy SoT`。
 5. [ ] 按 `AGENTS.md` 与 `DEV-PLAN-012` 收口相关门禁。
+6. [ ] 既有表演化证据至少必须包含：
+   - 存量记录分类结果
+   - 非法形状清零证据
+   - `resolved_setid` 已进入唯一键/冲突检测键的证据
+   - 双轴主查询已替换单轴 BU 查询的证据
+7. [ ] 错误码收口证据至少必须包含：
+   - canonical 输出为 lower snake_case 的 API 样例
+   - 用户提示层与错误码一一对应的样例
+   - legacy 大写错误码不再作为正式输出的回归样例
 
 ## 7. 验收标准
 
@@ -598,17 +664,20 @@
 10. [ ] 失败语义矩阵已冻结：缺上下文、缺 SetID、缺策略、mode 非法、版本 stale 都有稳定错误码、explain 最低输出与 fail-closed 语义。
 11. [ ] BU 上下文字段分层表达一致：外部只谈 `business_unit_org_code`，规范化上下文谈 `resolved_setid + business_unit_node_key`，legacy `business_unit_id` 仅在兼容说明中出现。
 12. [ ] 维护者能够按第 `4.2` 节统一模型完整解释任一字段决策：输入上下文、命中层次、裁决路径、最终输出与 explain 结果均可对应到同一模型。
+13. [ ] `orgunit.setid_strategy_registry` 现有表已完成双轴化：`resolved_setid` 已进入记录约束、唯一键/冲突检测键与主查询契约；不存在“schema 双轴、查询单轴”的过渡残留。
+14. [ ] Registry 主写 API 已能显式表达 `resolved_setid=exact / wildcard`，不再通过 BU 输入隐式猜测 SetID 作用域。
+15. [ ] 不存在 API 兼容别名窗口、双错误码正式输出窗口或“旧主链 happy path 保留”的并行目标态；若系统需要风险缓解，只通过环境级保护与 fail-closed 语义实现。
 
 ## 8. 风险与缓解
 
 1. **R1：收口时误伤现有页面行为**
-   - 缓解：先冻结术语与主路径，再做运行时替换；对外 API 保持兼容窗口。
+   - 缓解：先冻结术语、双轴契约与主路径，再做运行时替换；若上线风险升高，仅允许使用环境级保护、只读/停写与修复后重试，不允许使用 API 兼容别名窗口或旧实现兜底。
 2. **R2：重复逻辑迁移时出现裁决差异**
    - 缓解：先补双轴 bucket tests、mode matrix tests 与 explain 回放证据，再抽单点实现。
 3. **R3：SetID 轴被继续弱化为 explain 装饰字段**
-   - 缓解：将 `resolved_setid` 直接纳入记录/查询契约，并禁止 `setid wildcard + bu exact` 这类语义偷渡。
+   - 缓解：将 `resolved_setid` 直接纳入记录/查询契约、唯一键与主查询，并禁止 `setid wildcard + bu exact` 这类语义偷渡。
 4. **R4：继续保留“文档比代码领先”的假收口**
-   - 缓解：将 `priority_mode / local_override_mode`、失败矩阵与版本契约一并纳入 stopline，不允许长期停留在“仅 schema/API 存在”状态。
+   - 缓解：将 `priority_mode / local_override_mode`、失败矩阵、双轴 schema 演化与错误码 canonical 输出一并纳入 stopline，不允许长期停留在“仅文档冻结、主链未切”状态。
 
 ## 9. 门禁与验证（SSOT 引用）
 
