@@ -334,7 +334,7 @@ SELECT EXISTS (
     AND capability_key = $2::text
     AND field_key = $3::text
     AND org_applicability = $4::text
-    AND business_unit_id = $5::text
+    AND business_unit_node_key = $5::text
     AND effective_date = $6::date
 )
 `, tenantID, item.CapabilityKey, item.FieldKey, item.OrgApplicability, item.BusinessUnitNodeKey, item.EffectiveDate).Scan(&updated); err != nil {
@@ -348,7 +348,7 @@ INSERT INTO orgunit.setid_strategy_registry (
   field_key,
   personalization_mode,
   org_applicability,
-  business_unit_id,
+  business_unit_node_key,
   required,
   visible,
   maintainable,
@@ -388,7 +388,7 @@ INSERT INTO orgunit.setid_strategy_registry (
   $21::date,
   $22::timestamptz
 )
-ON CONFLICT (tenant_uuid, capability_key, field_key, org_applicability, business_unit_id, effective_date)
+ON CONFLICT (tenant_uuid, capability_key, field_key, org_applicability, business_unit_node_key, effective_date)
 DO UPDATE SET
   owner_module = EXCLUDED.owner_module,
   personalization_mode = EXCLUDED.personalization_mode,
@@ -467,7 +467,7 @@ SELECT
   field_key,
   personalization_mode,
   org_applicability,
-  business_unit_id,
+  business_unit_node_key,
   required,
   visible,
   maintainable,
@@ -488,7 +488,7 @@ WHERE tenant_uuid = $1::uuid
   AND capability_key = $2::text
   AND field_key = $3::text
   AND org_applicability = $4::text
-  AND business_unit_id = $5::text
+  AND business_unit_node_key = $5::text
   AND effective_date = $6::date
 FOR UPDATE
 `, tenantID, req.CapabilityKey, req.FieldKey, req.OrgApplicability, req.BusinessUnitNodeKey, req.EffectiveDate)
@@ -542,7 +542,7 @@ WHERE tenant_uuid = $1::uuid
   AND capability_key = $2::text
   AND field_key = $3::text
   AND org_applicability = $4::text
-  AND business_unit_id = $5::text
+  AND business_unit_node_key = $5::text
   AND effective_date = $6::date
 `, tenantID, req.CapabilityKey, req.FieldKey, req.OrgApplicability, req.BusinessUnitNodeKey, req.EffectiveDate, endDate, nowUTC); err != nil {
 			return err
@@ -554,7 +554,7 @@ SELECT
   field_key,
   personalization_mode,
   org_applicability,
-  business_unit_id,
+  business_unit_node_key,
   required,
   visible,
   maintainable,
@@ -576,7 +576,7 @@ WHERE tenant_uuid = $1::uuid
   AND field_key = $3::text
   AND effective_date <= $4::date
   AND (end_date IS NULL OR end_date > $4::date)
-ORDER BY capability_key ASC, field_key ASC, org_applicability ASC, business_unit_id ASC, effective_date ASC
+ORDER BY capability_key ASC, field_key ASC, org_applicability ASC, business_unit_node_key ASC, effective_date ASC
 `, tenantID, capabilityCandidates, req.FieldKey, endDate)
 		if err != nil {
 			return err
@@ -613,7 +613,7 @@ SELECT
   field_key,
   personalization_mode,
   org_applicability,
-  business_unit_id,
+  business_unit_node_key,
   required,
   visible,
   maintainable,
@@ -635,7 +635,7 @@ WHERE tenant_uuid = $1::uuid
   AND ($3::text = '' OR field_key = $3::text)
   AND effective_date <= $4::date
   AND (end_date IS NULL OR end_date > $4::date)
-ORDER BY capability_key ASC, field_key ASC, org_applicability ASC, business_unit_id ASC, effective_date ASC
+ORDER BY capability_key ASC, field_key ASC, org_applicability ASC, business_unit_node_key ASC, effective_date ASC
 	`, tenantID, capabilityKey, fieldKey, normalizedAsOf)
 		if err != nil {
 			return err

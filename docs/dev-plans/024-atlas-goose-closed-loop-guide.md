@@ -77,7 +77,7 @@ flowchart TD
 | migrations 目录 | `migrations/<module>/` |
 | Atlas env（可选） | `<module>_dev` / `<module>_ci`（用于手工运行 Atlas；门禁以脚本显式参数为准） |
 | Atlas dev URL（门禁使用） | `ATLAS_DEV_URL=docker://postgres/17/dev?search_path=public`（可覆盖；`make <module> plan/lint` 会使用） |
-| 目标库连接（goose apply） | `DATABASE_URL=...` 或 `DB_HOST/DB_PORT/DB_USER/DB_PASSWORD/DB_NAME/DB_SSLMODE`（见 `scripts/db/db_url.sh`） |
+| 目标库连接（goose apply） | 显式 `DATABASE_URL=...` / `MIGRATION_DATABASE_URL=...`，或 `DB_MIGRATION_*`（默认回退到 admin/app 口径，而不是 `app_runtime`；见 `scripts/db/db_url.sh migration`） |
 | goose 版本表（必须） | `goose_db_version_<module>`（由 `scripts/db/migrate.sh` 固定传入） |
 
 ### 3.4 跨模块依赖（冻结口径）

@@ -21,7 +21,7 @@ import (
 
 func main() {
 	if len(os.Args) < 2 {
-		fatalf("usage: dbtool <rls-smoke|orgunit-smoke|orgunit-code-validate|orgunit-snapshot-export|orgunit-snapshot-check|orgunit-snapshot-bootstrap-target|orgunit-snapshot-import|orgunit-snapshot-verify|orgunit-stopline-capture|jobcatalog-smoke|person-smoke|staffing-smoke> [args]")
+		fatalf("usage: dbtool <rls-smoke|orgunit-smoke|orgunit-code-validate|orgunit-snapshot-export|orgunit-snapshot-check|orgunit-snapshot-bootstrap-target|orgunit-snapshot-import|orgunit-snapshot-verify|orgunit-stopline-capture|orgunit-setid-strategy-registry-export|orgunit-setid-strategy-registry-check|orgunit-setid-strategy-registry-import|orgunit-setid-strategy-registry-verify|orgunit-setid-strategy-registry-validate|jobcatalog-smoke|person-smoke|staffing-smoke> [args]")
 	}
 
 	switch os.Args[1] {
@@ -43,6 +43,16 @@ func main() {
 		orgunitSnapshotVerify(os.Args[2:])
 	case "orgunit-stopline-capture":
 		orgunitStoplineCapture(os.Args[2:])
+	case "orgunit-setid-strategy-registry-export":
+		orgunitSetIDStrategyRegistryExport(os.Args[2:])
+	case "orgunit-setid-strategy-registry-check":
+		orgunitSetIDStrategyRegistryCheck(os.Args[2:])
+	case "orgunit-setid-strategy-registry-import":
+		orgunitSetIDStrategyRegistryImport(os.Args[2:])
+	case "orgunit-setid-strategy-registry-verify":
+		orgunitSetIDStrategyRegistryVerify(os.Args[2:])
+	case "orgunit-setid-strategy-registry-validate":
+		orgunitSetIDStrategyRegistryValidate(os.Args[2:])
 	case "jobcatalog-smoke":
 		jobcatalogSmoke(os.Args[2:])
 	case "person-smoke":

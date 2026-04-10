@@ -1,6 +1,6 @@
 # DEV-PLAN-320：Org 域 8 位非纯数字 `org_node_key` 一步切换方案（不扩大到全对象）
 
-**状态**: 实施中（2026-04-09 11:23 UTC；按 7 阶段冻结推进）
+**状态**: 实施中（截至 2026-04-10：`P0/P1/P2` 与 `7.4A` rehearsal 工具链已完成；`P3/P4/P5/P6` 仍未完成）
 
 ## 1. 背景
 
@@ -186,6 +186,107 @@
 - 导入后 `node_path` / `path_node_keys` 不一致，不得 reopen。
 - 任一 Gate-1~Gate-4 不通过，不得 reopen。
 - 任一主读链路或 `move` 链路触发第 9.5 节 stopline，不得进入正式窗口。
+
+## 2.8 当前完成度评估（2026-04-10）
+
+本节用于区分三类状态，避免把“代码/工具链已落地”“本地 rehearsal 已跑通”“正式切主已执行”混为一谈：
+
+- `已完成`：仓库代码、门禁或本地实库证据已经闭环，可由现有记录直接证明
+- `部分完成`：已有部分实现或证据，但仍存在明确缺口，尚不能视为验收完成
+- `未完成`：正式实现、正式验证或正式切换尚未发生
+
+### 2.8.1 阶段总览
+
+1. `P0 契约冻结`：已完成
+   - 本计划已作为 SSOT 生效，且 `STD-003` 对齐口径已写入本计划与标准引用。
+2. `P1 DB 基础设施`：已完成
+   - `org_node_key` 目标态 bootstrap、分配/校验函数、`org_node_key_registry` 与相关约束已在 target bootstrap 中落地。
+3. `P2 当前态导出/导入工具链`：已完成
+   - `cmd/dbtool` 与 `scripts/db/orgunit-node-key-rehearsal.sh` 已形成 committed `export -> check -> bootstrap -> import -> verify` 闭环。
+4. `P3 Org 内核切换`：未完成
+   - 当前 source-real / 运行主链仍是旧 `org_id` 内核加 compat；正式 target-real 切主尚未执行。
+5. `P4 消费方收口`：部分完成
+   - SetID strategy registry 的 schema cutover / rehearsal 链路已完成。
+   - Staffing、Assistant、`internal/server` 与对外 DTO 的全量收口仍未完成。
+6. `P5 验收与门禁收口`：部分完成
+   - 已有 `make check org-node-key-backflow`、本地 stopline explain 与 rehearsal 证据。
+   - `DEV-PLAN-060` 全链路业务测试、consumer runtime target-real explain、完整 Gate 收口仍未完成。
+7. `P6 预演与正式切换`：部分完成
+   - 已完成至少 2 次本地 source/target rehearsal。
+   - 正式维护窗口、停写、发布 choreography 与 reopen 尚未执行。
+
+### 2.8.2 已完成项
+
+1. Org target bootstrap 已落地
+   - 证据：`cmd/dbtool orgunit-snapshot-bootstrap-target`
+   - 现状：支持 fresh target 自动应用 `00023-00025`，并在命中 SetID rehearsal/validate 时一并补齐 `00020-00022`
+2. 当前态导出 / 导入 / 结构核对工具链已落地
+   - 证据：`cmd/dbtool orgunit-snapshot-export/check/import/verify`
+   - 现状：本地 source/target committed rehearsal 已闭环，记录见 `docs/dev-records/dev-plan-320-rehearsal-log.md`
+3. SetID strategy registry 的 target schema 收口与 rehearsal 子链路已落地
+   - 证据：`cmd/dbtool orgunit-setid-strategy-registry-export/check/import/verify/validate`
+   - 现状：target stopline 已 fail-closed；fresh target-only 约束已生效；本地 committed rehearsal 已闭环
+4. 反回流门禁已部分落地
+   - 证据：`make check org-node-key-backflow`
+5. 本地 stopline explain 证据已完成一轮采集
+   - 证据：`docs/dev-records/dev-plan-320-stopline-log.md`
+   - 归档：`docs/dev-records/assets/dev-plan-320-stopline/`
+
+### 2.8.3 部分完成项
+
+1. SetID / Staffing 消费方的性能与运行期收口
+   - 已完成：本地 `target-shadow` explain 证据
+   - 未完成：consumer runtime 的真实 `target-real` explain 与正式 runtime 切主
+2. SetID strategy registry 的 `business_unit` 真实数据分支验证
+   - 已完成：代码、门禁、validate 与 tenant-only 实库 rehearsal
+   - 未完成：真实 source 数据当前 `business_unit_rows=0`，尚未命中 `business_unit_node_key` 的唯一落点 / 无法落点 / 歧义落点实库分支
+3. 四大 Gate 收口
+   - 已完成：局部门禁、dbtool 单测、文档与 stopline 证据
+   - 未完成：`DEV-PLAN-060` 业务套件、跨模块验收与正式 Gate 对齐闭环
+
+### 2.8.4 未完成项
+
+1. Org source-real / runtime 主链的正式切主
+2. Staffing / Assistant / `internal/server` 的全量 `org_id -> org_node_key` 内部收口
+3. 对外协议、前端状态与页面链路的最终契约验收
+4. 正式维护窗口、停写、后端/前端发布与 reopen
+
+### 2.8.5 当前结论
+
+截至 2026-04-10，320 的真实完成状态应判断为：
+
+1. 工具链与 rehearsal readiness 已明显前进，已具备进入更深一步 consumer/runtime 收口的条件。
+2. 320 仍不能判定为“已完成”或“可正式切主”。
+3. 当前最主要缺口不再是 Org target bootstrap 本身，而是：
+   - Org source-real 到 target-real 的正式内核切主
+   - consumer runtime 的真实 target-real 收口
+   - `business_unit` 作用域 SetID strategy registry 的真实数据 stopline 演练
+
+### 2.8.6 从当前状态到“可正式切主”的短清单
+
+后续执行顺序压缩为以下 5 步；只有前一步完成并留痕后，才进入下一步：
+
+1. 完成 `business_unit` 受控 rehearsal
+   - 在独立 `rehearsal/source` + `rehearsal/target` 环境中，显式命中 SetID strategy registry 的三类分支：
+     - 唯一落点
+     - 无法落点
+     - 歧义落点
+   - 验收要求：通过 1 条、stopline 2 条，且不得通过恢复旧列名/旧约束/旧接口绕过
+2. 完成 Org source-real 到 target-real 的正式内核切主准备
+   - 收口 Org kernel 仍残留的 `org_id` 运行路径
+   - 确认 target-real 形态与 `00023-00025` / `path_node_keys` / 新账本初始化口径一致
+   - 重新跑 source/target committed rehearsal，并把结果补入 `docs/dev-records/`
+3. 完成 consumer/runtime 收口
+   - SetID、Staffing、Assistant、`internal/server` 只保留 `org_node_key` 内部语义
+   - 对外协议、前端状态、页面链路继续只暴露 `org_code`
+   - 补齐真实 `target-real` explain，而不再只依赖 `target-shadow`
+4. 完成 Gate 与业务验收收口
+   - 补齐 11.2 与 11.3 所要求的测试面
+   - 同步 `DEV-PLAN-060` 的用户可见主链路
+   - 确认反回流门禁足以阻断 `org_id` 回流和 `org_node_key` 外露
+5. 进入正式维护窗口前的最终 readiness review
+   - 明确停写、数据库快照、发布顺序、smoke、reopen 条件与回滚负责人
+   - 只有在 rehearsal、stopline、consumer/runtime、四大 Gate 都完成后，320 才能从“实施中”升级到“可正式切主”
 
 ## 3. 关键设计决策
 
@@ -730,12 +831,15 @@ Org 域新边界规则：
    - `tenant` 行必须全部为空串
    - `business_unit` 行必须全部是合法 `org_node_key`
    - `business_unit_node_key` 必须能在 target 的 Org 当前态映射中解析到唯一节点
+   - 本地执行入口可使用：`scripts/db/orgunit-setid-strategy-registry-validate.sh --url <target-url> --as-of <YYYY-MM-DD>`
 5. [ ] 预检失败即 stopline；不得通过临时恢复旧列名/旧正则/旧接口绕过
 6. [ ] 导入完成后执行 target verify：
    - 行数与 source 快照一致
    - 唯一键无冲突
    - 不存在非法 `business_unit_node_key`
    - 关键 explain 与 upsert/disable/list 主查询命中新 schema 键
+   - 本地 rehearsal 可通过 `scripts/db/orgunit-node-key-rehearsal.sh --source-url <source> --target-url <target> --as-of <YYYY-MM-DD> --rehearse-setid-strategy-registry --validate-setid-strategy-registry` 串行执行 `source export -> snapshot check -> target import -> target verify -> stopline validate`
+   - 在未传 `--skip-bootstrap` 的 fresh target 路径上，脚本必须自动补齐 320 target 预置：`00023-00025` Org node-key bootstrap，并在启用 SetID registry rehearsal/validate 时一并补齐 `00020-00022` 的 registry target schema
 
 ### 7.5 Org 域切主
 

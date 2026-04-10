@@ -28,7 +28,7 @@ if [[ ! -d "$migrations_dir" ]]; then
   exit 2
 fi
 
-db_url="$("./scripts/db/db_url.sh")"
+db_url="$("./scripts/db/db_url.sh" migration)"
 goose_table="goose_db_version_${module}"
 
 run_goose_with_retry() {
