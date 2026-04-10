@@ -23,10 +23,10 @@ type orgUnitAppendFacts struct {
 }
 
 type orgUnitAppendCapabilitiesStore interface {
-	ResolveOrgID(ctx context.Context, tenantID string, orgCode string) (int, error)
+	ResolveOrgNodeKeyByCode(ctx context.Context, tenantID string, orgCode string) (string, error)
 	ListEnabledTenantFieldConfigsAsOf(ctx context.Context, tenantID string, asOf string) ([]orgUnitTenantFieldConfig, error)
 	IsOrgTreeInitialized(ctx context.Context, tenantID string) (bool, error)
-	ResolveAppendFacts(ctx context.Context, tenantID string, orgID int, effectiveDate string) (orgUnitAppendFacts, error)
+	ResolveAppendFacts(ctx context.Context, tenantID string, orgNodeKey string, effectiveDate string) (orgUnitAppendFacts, error)
 }
 
 type orgUnitAppendCapability struct {
@@ -85,7 +85,7 @@ func handleOrgUnitAppendCapabilitiesAPI(w http.ResponseWriter, r *http.Request, 
 		return
 	}
 
-	orgID, err := appendStore.ResolveOrgID(r.Context(), tenant.ID, normalizedCode)
+	orgNodeKey, err := appendStore.ResolveOrgNodeKeyByCode(r.Context(), tenant.ID, normalizedCode)
 	orgExists := err == nil
 	if err != nil && !errors.Is(err, orgunitpkg.ErrOrgCodeNotFound) {
 		switch {
@@ -132,7 +132,7 @@ func handleOrgUnitAppendCapabilitiesAPI(w http.ResponseWriter, r *http.Request, 
 		TreeInitialized: treeInitialized,
 	}
 	if orgExists {
-		resolvedFacts, err := appendStore.ResolveAppendFacts(r.Context(), tenant.ID, orgID, effectiveDate)
+		resolvedFacts, err := appendStore.ResolveAppendFacts(r.Context(), tenant.ID, orgNodeKey, effectiveDate)
 		if err != nil {
 			writeInternalAPIError(w, r, err, "orgunit_append_facts_failed")
 			return

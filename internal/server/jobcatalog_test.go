@@ -172,7 +172,16 @@ func (s orgStoreStub) SetBusinessUnitCurrent(context.Context, string, string, st
 func (s orgStoreStub) ResolveOrgID(context.Context, string, string) (int, error) {
 	return 0, s.err
 }
+func (s orgStoreStub) ResolveOrgNodeKeyByCode(context.Context, string, string) (string, error) {
+	if s.err != nil {
+		return "", s.err
+	}
+	return "", nil
+}
 func (s orgStoreStub) ResolveOrgCode(context.Context, string, int) (string, error) {
+	return "", s.err
+}
+func (s orgStoreStub) ResolveOrgCodeByNodeKey(context.Context, string, string) (string, error) {
 	return "", s.err
 }
 func (s orgStoreStub) ResolveOrgCodes(context.Context, string, []int) (map[int]string, error) {
@@ -180,6 +189,12 @@ func (s orgStoreStub) ResolveOrgCodes(context.Context, string, []int) (map[int]s
 		return nil, s.err
 	}
 	return map[int]string{}, nil
+}
+func (s orgStoreStub) ResolveOrgCodesByNodeKeys(context.Context, string, []string) (map[string]string, error) {
+	if s.err != nil {
+		return nil, s.err
+	}
+	return map[string]string{}, nil
 }
 func (s orgStoreStub) ListChildren(context.Context, string, int, string) ([]OrgUnitChild, error) {
 	return nil, s.err

@@ -383,7 +383,7 @@ echo "[e2e] install e2e deps (pnpm --frozen-lockfile)"
 (cd e2e && pnpm install --frozen-lockfile)
 
 echo "[e2e] assert tests exist (fail-fast on 0 tests)"
-list_out="$(cd e2e && pnpm exec playwright test --list)"
+list_out="$(cd e2e && pnpm exec playwright test --list "$@")"
 printf "%s\n" "$list_out"
 if ! echo "$list_out" | grep -Eq 'Total: [1-9][0-9]* test'; then
   echo "[e2e] no tests discovered; refusing to pass required check" >&2
@@ -399,7 +399,7 @@ else
 fi
 
 echo "[e2e] run playwright: baseURL=$base_url"
-if ! (cd e2e && E2E_BASE_URL="$base_url" E2E_SUPERADMIN_BASE_URL="${E2E_SUPERADMIN_BASE_URL:-http://localhost:8081}" E2E_SUPERADMIN_USER="${E2E_SUPERADMIN_USER:-admin}" E2E_SUPERADMIN_PASS="${E2E_SUPERADMIN_PASS:-admin}" pnpm exec playwright test); then
+if ! (cd e2e && E2E_BASE_URL="$base_url" E2E_SUPERADMIN_BASE_URL="${E2E_SUPERADMIN_BASE_URL:-http://localhost:8081}" E2E_SUPERADMIN_USER="${E2E_SUPERADMIN_USER:-admin}" E2E_SUPERADMIN_PASS="${E2E_SUPERADMIN_PASS:-admin}" pnpm exec playwright test "$@"); then
   echo "[e2e] reproduce locally: make e2e" >&2
   echo "[e2e] artifacts: e2e/test-results/ e2e/playwright-report/ (server log: $server_log; superadmin log: $superadmin_log)" >&2
   exit 1

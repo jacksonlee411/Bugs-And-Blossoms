@@ -30,11 +30,11 @@ type orgUnitWriteCapabilitiesAPIResponse struct {
 }
 
 type orgUnitWriteCapabilitiesStore interface {
-	ResolveOrgID(ctx context.Context, tenantID string, orgCode string) (int, error)
+	ResolveOrgNodeKeyByCode(ctx context.Context, tenantID string, orgCode string) (string, error)
 	ListEnabledTenantFieldConfigsAsOf(ctx context.Context, tenantID string, asOf string) ([]orgUnitTenantFieldConfig, error)
 	IsOrgTreeInitialized(ctx context.Context, tenantID string) (bool, error)
-	ResolveAppendFacts(ctx context.Context, tenantID string, orgID int, effectiveDate string) (orgUnitAppendFacts, error)
-	ResolveMutationTargetEvent(ctx context.Context, tenantID string, orgID int, effectiveDate string) (orgUnitMutationTargetEvent, error)
+	ResolveAppendFacts(ctx context.Context, tenantID string, orgNodeKey string, effectiveDate string) (orgUnitAppendFacts, error)
+	ResolveMutationTargetEvent(ctx context.Context, tenantID string, orgNodeKey string, effectiveDate string) (orgUnitMutationTargetEvent, error)
 }
 
 var resolveWriteCapabilitiesInAPI = orgunitservices.ResolveWriteCapabilities
@@ -127,7 +127,7 @@ func handleOrgUnitWriteCapabilitiesAPI(w http.ResponseWriter, r *http.Request, s
 	switch intent {
 	case string(orgunitservices.OrgUnitWriteIntentCreateOrg):
 		if normalizedCode != "" {
-			if _, err := capStore.ResolveOrgID(r.Context(), tenant.ID, normalizedCode); err == nil {
+			if _, err := capStore.ResolveOrgNodeKeyByCode(r.Context(), tenant.ID, normalizedCode); err == nil {
 				facts.OrgAlreadyExists = true
 			} else if !errors.Is(err, orgunitpkg.ErrOrgCodeNotFound) {
 				writeInternalAPIError(w, r, err, "orgunit_write_capabilities_resolve_org_failed")
@@ -140,7 +140,7 @@ func handleOrgUnitWriteCapabilitiesAPI(w http.ResponseWriter, r *http.Request, s
 			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "invalid_request", "org_code required")
 			return
 		}
-		orgID, err := capStore.ResolveOrgID(r.Context(), tenant.ID, normalizedCode)
+		orgNodeKey, err := capStore.ResolveOrgNodeKeyByCode(r.Context(), tenant.ID, normalizedCode)
 		if err != nil {
 			if errors.Is(err, orgunitpkg.ErrOrgCodeNotFound) {
 				facts.TargetExistsAsOf = false
@@ -149,7 +149,7 @@ func handleOrgUnitWriteCapabilitiesAPI(w http.ResponseWriter, r *http.Request, s
 			writeInternalAPIError(w, r, err, "orgunit_write_capabilities_resolve_org_failed")
 			return
 		}
-		appendFacts, err := capStore.ResolveAppendFacts(r.Context(), tenant.ID, orgID, effectiveDate)
+		appendFacts, err := capStore.ResolveAppendFacts(r.Context(), tenant.ID, orgNodeKey, effectiveDate)
 		if err != nil {
 			writeInternalAPIError(w, r, err, "orgunit_write_capabilities_facts_failed")
 			return
@@ -165,7 +165,7 @@ func handleOrgUnitWriteCapabilitiesAPI(w http.ResponseWriter, r *http.Request, s
 			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "invalid_request", "target_effective_date required for correct")
 			return
 		}
-		orgID, err := capStore.ResolveOrgID(r.Context(), tenant.ID, normalizedCode)
+		orgNodeKey, err := capStore.ResolveOrgNodeKeyByCode(r.Context(), tenant.ID, normalizedCode)
 		if err != nil {
 			if errors.Is(err, orgunitpkg.ErrOrgCodeNotFound) {
 				facts.TargetExistsAsOf = false
@@ -175,7 +175,7 @@ func handleOrgUnitWriteCapabilitiesAPI(w http.ResponseWriter, r *http.Request, s
 			return
 		}
 		facts.TargetExistsAsOf = true
-		target, err := capStore.ResolveMutationTargetEvent(r.Context(), tenant.ID, orgID, targetEffectiveDate)
+		target, err := capStore.ResolveMutationTargetEvent(r.Context(), tenant.ID, orgNodeKey, targetEffectiveDate)
 		if err != nil {
 			writeInternalAPIError(w, r, err, "orgunit_write_capabilities_target_failed")
 			return

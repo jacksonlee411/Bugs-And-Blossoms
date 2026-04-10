@@ -17,16 +17,16 @@ const (
 
 type capabilityContextInput struct {
 	CapabilityKey       string
-	BusinessUnitID      string
+	BusinessUnitOrgCode string
 	AsOf                string
 	RequireBusinessUnit bool
 }
 
 type capabilityContext struct {
-	CapabilityKey  string
-	BusinessUnitID string
-	AsOf           string
-	ActorScope     string
+	CapabilityKey       string
+	BusinessUnitOrgCode string
+	AsOf                string
+	ActorScope          string
 }
 
 type capabilityContextError struct {
@@ -35,13 +35,13 @@ type capabilityContextError struct {
 }
 
 type capabilityDynamicRelations struct {
-	allowAll      bool
-	managedOrgIDs map[string]struct{}
+	allowAll        bool
+	managedOrgCodes map[string]struct{}
 }
 
 func resolveCapabilityContext(ctx context.Context, r *http.Request, input capabilityContextInput) (capabilityContext, *capabilityContextError) {
 	capabilityKey := strings.ToLower(strings.TrimSpace(input.CapabilityKey))
-	businessUnitID := strings.TrimSpace(input.BusinessUnitID)
+	businessUnitOrgCode := strings.TrimSpace(input.BusinessUnitOrgCode)
 	asOf := strings.TrimSpace(input.AsOf)
 
 	if capabilityKey == "" || asOf == "" {
@@ -50,7 +50,7 @@ func resolveCapabilityContext(ctx context.Context, r *http.Request, input capabi
 			Message: "capability context required",
 		}
 	}
-	if input.RequireBusinessUnit && businessUnitID == "" {
+	if input.RequireBusinessUnit && businessUnitOrgCode == "" {
 		return capabilityContext{}, &capabilityContextError{
 			Code:    capabilityReasonContextRequired,
 			Message: "capability context required",
@@ -67,10 +67,10 @@ func resolveCapabilityContext(ctx context.Context, r *http.Request, input capabi
 	}
 
 	return capabilityContext{
-		CapabilityKey:  capabilityKey,
-		BusinessUnitID: businessUnitID,
-		AsOf:           asOf,
-		ActorScope:     authoritativeScope,
+		CapabilityKey:       capabilityKey,
+		BusinessUnitOrgCode: businessUnitOrgCode,
+		AsOf:                asOf,
+		ActorScope:          authoritativeScope,
 	}, nil
 }
 
@@ -102,13 +102,13 @@ func statusCodeForCapabilityContextError(code string) int {
 	return http.StatusForbidden
 }
 
-func preloadCapabilityDynamicRelations(ctx context.Context, businessUnitID string) capabilityDynamicRelations {
-	businessUnitID = strings.TrimSpace(businessUnitID)
+func preloadCapabilityDynamicRelations(ctx context.Context, businessUnitOrgCode string) capabilityDynamicRelations {
+	businessUnitOrgCode = strings.TrimSpace(businessUnitOrgCode)
 	relations := capabilityDynamicRelations{
-		managedOrgIDs: make(map[string]struct{}, 1),
+		managedOrgCodes: make(map[string]struct{}, 1),
 	}
-	if businessUnitID != "" {
-		relations.managedOrgIDs[businessUnitID] = struct{}{}
+	if businessUnitOrgCode != "" {
+		relations.managedOrgCodes[businessUnitOrgCode] = struct{}{}
 	}
 	p, ok := currentPrincipal(ctx)
 	if !ok {
@@ -121,15 +121,15 @@ func preloadCapabilityDynamicRelations(ctx context.Context, businessUnitID strin
 	return relations
 }
 
-func (r capabilityDynamicRelations) actorManages(targetOrgID string, asOf string) bool {
-	targetOrgID = strings.TrimSpace(targetOrgID)
+func (r capabilityDynamicRelations) actorManages(targetOrgCode string, asOf string) bool {
+	targetOrgCode = strings.TrimSpace(targetOrgCode)
 	asOf = strings.TrimSpace(asOf)
-	if targetOrgID == "" || asOf == "" {
+	if targetOrgCode == "" || asOf == "" {
 		return false
 	}
 	if r.allowAll {
 		return true
 	}
-	_, ok := r.managedOrgIDs[targetOrgID]
+	_, ok := r.managedOrgCodes[targetOrgCode]
 	return ok
 }

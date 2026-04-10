@@ -1,14 +1,14 @@
 {
-  "url": "http://localhost:8080/app/assistant/librechat/c/new",
+  "url": "http://localhost:18080/app/assistant/librechat/c/new",
   "bubble_count": 1,
   "bubbles": [
     {
-      "binding_key": "conv_4ea38c5784564fdeb384e944f3a48e11::turn_75467817de2c49799645475de80c5125::assistant_874f424c45c64785841f88f4f5b26007",
-      "conversation_id": "conv_4ea38c5784564fdeb384e944f3a48e11",
-      "turn_id": "turn_75467817de2c49799645475de80c5125",
-      "request_id": "assistant_874f424c45c64785841f88f4f5b26007",
-      "message_id": "d3baf264-e828-4959-be66-06d7c0afec3b_",
-      "text": "你好，我是组织变更助手，可以帮你创建或调整部门结构，比如新建部门、改名、迁移上下级关系、启用/停用等。你现在想做什么操作？"
+      "binding_key": "conv_5976b287f18140aa86d2da825378c585::turn_7af94af6827449928a0be165f474ee16::assistant_eb9cdcd1adaf4484bbf4f30b413ba166",
+      "conversation_id": "conv_5976b287f18140aa86d2da825378c585",
+      "turn_id": "turn_7af94af6827449928a0be165f474ee16",
+      "request_id": "assistant_eb9cdcd1adaf4484bbf4f30b413ba166",
+      "message_id": "ebd8d1de-db34-496d-820f-503caba3451d_",
+      "text": "你现在最想处理的是哪一类组织变更？可以简单说一下你的需求场景。"
     }
   ],
   "external_reply_container_count": 0,

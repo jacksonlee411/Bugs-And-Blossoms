@@ -1,13 +1,375 @@
 {
   "case_id": 2,
-  "tenant_id": "d622864f-5383-488d-bda3-6b3600bd066b",
-  "conversation_id": "",
-  "snapshots": [],
+  "tenant_id": "855b7ef5-606a-4ec2-a349-7479a6f2926c",
+  "conversation_id": "conv_0bd2b1f276b147e8ab97891cc914ee95",
+  "snapshots": [
+    {
+      "step": 1,
+      "input": "在 AI治理办公室 下新建 人力资源部2，生效日期 2026-01-01",
+      "bubble": {
+        "count": 1,
+        "bindingKey": "conv_0bd2b1f276b147e8ab97891cc914ee95::turn_cfe677c302eb43a2a79445149337363d::assistant_3a8338356e23448bbd99c62909d8128d",
+        "conversationId": "conv_0bd2b1f276b147e8ab97891cc914ee95",
+        "turnId": "turn_cfe677c302eb43a2a79445149337363d",
+        "requestId": "assistant_3a8338356e23448bbd99c62909d8128d",
+        "text": "我将按照你的需求，在“AI治理办公室”下新建“人力资源部2”，生效日期为 2026-01-01。接下来会先在系统中查找“AI治理办公室”的唯一对应组织，以确保挂载的上级部门准确无误。 Missing fields parent_ref_text"
+      },
+      "conversation": {
+        "conversation_id": "conv_0bd2b1f276b147e8ab97891cc914ee95",
+        "tenant_id": "855b7ef5-606a-4ec2-a349-7479a6f2926c",
+        "actor_id": "25d737a5-08f1-4e85-ad76-7d33d63998bc",
+        "actor_role": "tenant-admin",
+        "state": "validated",
+        "current_phase": "await_missing_fields",
+        "state_transitions": [
+          {
+            "id": 1739,
+            "request_id": "assistant_b85e0e2bad3b4d2f9fb61be5df041c28",
+            "trace_id": "511c0346be264d25b0a3ab4def22cc97",
+            "from_state": "init",
+            "to_state": "validated",
+            "from_phase": "init",
+            "to_phase": "idle",
+            "reason_code": "conversation_created",
+            "actor_id": "25d737a5-08f1-4e85-ad76-7d33d63998bc",
+            "changed_at": "2026-04-10T08:23:43.850529+08:00"
+          },
+          {
+            "id": 1740,
+            "turn_id": "turn_cfe677c302eb43a2a79445149337363d",
+            "request_id": "assistant_3a8338356e23448bbd99c62909d8128d",
+            "trace_id": "bb0dbd65c93c416a9eec56f05785262c",
+            "from_state": "init",
+            "to_state": "validated",
+            "from_phase": "idle",
+            "to_phase": "await_missing_fields",
+            "reason_code": "turn_created",
+            "actor_id": "25d737a5-08f1-4e85-ad76-7d33d63998bc",
+            "changed_at": "2026-04-10T00:23:47.683097195Z"
+          }
+        ],
+        "created_at": "2026-04-10T08:23:43.850529+08:00",
+        "updated_at": "2026-04-10T00:23:47.683097195Z",
+        "turns": [
+          {
+            "turn_id": "turn_cfe677c302eb43a2a79445149337363d",
+            "user_input": "在 AI治理办公室 下新建 人力资源部2，生效日期 2026-01-01",
+            "state": "validated",
+            "phase": "await_missing_fields",
+            "risk_tier": "high",
+            "request_id": "assistant_3a8338356e23448bbd99c62909d8128d",
+            "trace_id": "bb0dbd65c93c416a9eec56f05785262c",
+            "policy_version": "2026-02-23",
+            "composition_version": "2026-02-23",
+            "mapping_version": "2026-02-23",
+            "intent": {
+              "action": "create_orgunit",
+              "intent_id": "org.orgunit_create",
+              "route_kind": "business_action",
+              "route_catalog_version": "2026-03-11.v2",
+              "parent_ref_text": "AI治理办公室",
+              "entity_name": "人力资源部2",
+              "effective_date": "2026-01-01",
+              "intent_schema_version": "assistant.intent.v1",
+              "context_hash": "e43e0bdf7977794d8f66876f89f3479ff815ca0ab98283fac4eacfa089143198",
+              "intent_hash": "2be2ad596e764ce119ea5d34562cd84f9f8907399ebe4efdce90b6bfaf6867c8"
+            },
+            "route_decision": {
+              "route_kind": "business_action",
+              "intent_id": "org.orgunit_create",
+              "candidate_action_ids": [
+                "create_orgunit"
+              ],
+              "confidence_band": "high",
+              "reason_codes": [
+                "route_business_action_registered"
+              ],
+              "route_catalog_version": "2026-03-11.v2",
+              "knowledge_snapshot_digest": "c346c58cb2f1de3effbfb1752a11f30078e8feda3099cc1f815b6dd1ce5916ef",
+              "resolver_contract_version": "resolver_contract_v1",
+              "decision_source": "semantic_model_v1"
+            },
+            "clarification": {
+              "clarification_kind": "missing_slots",
+              "status": "open",
+              "prompt_template_id": "clarify.org.orgunit_create.v1",
+              "required_slots": [
+                "effective_date",
+                "entity_name",
+                "parent_ref_text"
+              ],
+              "missing_slots": [
+                "parent_ref_text"
+              ],
+              "reason_codes": [
+                "missing_required_slot"
+              ],
+              "max_rounds": 3,
+              "current_round": 1,
+              "exit_to": "business_action_resume",
+              "await_phase": "await_missing_fields",
+              "knowledge_snapshot_digest": "c346c58cb2f1de3effbfb1752a11f30078e8feda3099cc1f815b6dd1ce5916ef",
+              "route_catalog_version": "2026-03-11.v2"
+            },
+            "plan": {
+              "title": "创建组织计划",
+              "action_id": "create_orgunit",
+              "action_version": "v1",
+              "capability_key": "org.orgunit_create.field_policy",
+              "commit_adapter_key": "orgunit_create_v1",
+              "summary": "在指定父组织下创建部门，提交前需要确认候选主键",
+              "capability_map_version": "2026-02-23",
+              "compiler_contract_version": "assistant.compiler.v1",
+              "skill_manifest_digest": "09d6c1d19112667c2574a3e4013bd4055f2fc285b78a320681869d714c435971",
+              "model_provider": "openai",
+              "model_name": "gpt-5.1",
+              "model_revision": "r2f31cdf6746a",
+              "knowledge_snapshot_digest": "c346c58cb2f1de3effbfb1752a11f30078e8feda3099cc1f815b6dd1ce5916ef",
+              "route_catalog_version": "2026-03-11.v2",
+              "resolver_contract_version": "resolver_contract_v1",
+              "context_template_version": "plan_context_v1",
+              "reply_guidance_version": "2026-03-11.v1+2026-03-11.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1",
+              "confirm_ttl_seconds": 900,
+              "expires_at": "2026-04-10T00:38:47Z",
+              "skill_execution_plan": {
+                "selected_skills": [
+                  "org.orgunit_create"
+                ],
+                "execution_order": [
+                  "org.orgunit_create"
+                ],
+                "risk_tier": "high",
+                "required_checks": [
+                  "strict_decode",
+                  "boundary_lint",
+                  "candidate_confirmation",
+                  "dry_run"
+                ]
+              },
+              "config_delta_plan": {
+                "capability_key": "org.orgunit_create.field_policy",
+                "changes": [
+                  {
+                    "field": "name",
+                    "after": "人力资源部2"
+                  },
+                  {
+                    "field": "effective_date",
+                    "after": "2026-01-01"
+                  }
+                ]
+              }
+            },
+            "missing_fields": [
+              "parent_ref_text"
+            ],
+            "candidates": null,
+            "ambiguity_count": 0,
+            "confidence": 0.65,
+            "dry_run": {
+              "diff": [
+                {
+                  "after": "人力资源部2",
+                  "field": "name"
+                },
+                {
+                  "after": "2026-01-01",
+                  "field": "effective_date"
+                }
+              ],
+              "explain": "未找到匹配上级组织，请补充更准确的组织名称或编码。",
+              "validation_errors": [
+                "parent_candidate_not_found"
+              ],
+              "retrieval": {
+                "kind": "candidate_lookup",
+                "state": "not_requested"
+              },
+              "would_commit": false,
+              "plan_hash": "9c88d5ee643e9a835b47809cb8d4296ecf6a3cab2e8dd9a9fd81426504ea660c"
+            },
+            "commit_reply": {
+              "outcome": "pending",
+              "message": "我将按照你的需求，在“AI治理办公室”下新建“人力资源部2”，生效日期为 2026-01-01。接下来会先在系统中查找“AI治理办公室”的唯一对应组织，以确保挂载的上级部门准确无误。"
+            },
+            "reply_nlg": {
+              "text": "我将按照你的需求，在“AI治理办公室”下新建“人力资源部2”，生效日期为 2026-01-01。接下来会先在系统中查找“AI治理办公室”的唯一对应组织，以确保挂载的上级部门准确无误。",
+              "kind": "message",
+              "stage": "clarification_required",
+              "reply_model_name": "gpt-5.1",
+              "reply_prompt_version": "assistant.reply.v1",
+              "reply_source": "semantic_model",
+              "used_fallback": false,
+              "conversation_id": "",
+              "turn_id": ""
+            },
+            "created_at": "2026-04-10T00:23:47.683097195Z",
+            "updated_at": "2026-04-10T00:23:47.683097195Z"
+          }
+        ]
+      },
+      "latest_turn": {
+        "turn_id": "turn_cfe677c302eb43a2a79445149337363d",
+        "user_input": "在 AI治理办公室 下新建 人力资源部2，生效日期 2026-01-01",
+        "state": "validated",
+        "phase": "await_missing_fields",
+        "risk_tier": "high",
+        "request_id": "assistant_3a8338356e23448bbd99c62909d8128d",
+        "trace_id": "bb0dbd65c93c416a9eec56f05785262c",
+        "policy_version": "2026-02-23",
+        "composition_version": "2026-02-23",
+        "mapping_version": "2026-02-23",
+        "intent": {
+          "action": "create_orgunit",
+          "intent_id": "org.orgunit_create",
+          "route_kind": "business_action",
+          "route_catalog_version": "2026-03-11.v2",
+          "parent_ref_text": "AI治理办公室",
+          "entity_name": "人力资源部2",
+          "effective_date": "2026-01-01",
+          "intent_schema_version": "assistant.intent.v1",
+          "context_hash": "e43e0bdf7977794d8f66876f89f3479ff815ca0ab98283fac4eacfa089143198",
+          "intent_hash": "2be2ad596e764ce119ea5d34562cd84f9f8907399ebe4efdce90b6bfaf6867c8"
+        },
+        "route_decision": {
+          "route_kind": "business_action",
+          "intent_id": "org.orgunit_create",
+          "candidate_action_ids": [
+            "create_orgunit"
+          ],
+          "confidence_band": "high",
+          "reason_codes": [
+            "route_business_action_registered"
+          ],
+          "route_catalog_version": "2026-03-11.v2",
+          "knowledge_snapshot_digest": "c346c58cb2f1de3effbfb1752a11f30078e8feda3099cc1f815b6dd1ce5916ef",
+          "resolver_contract_version": "resolver_contract_v1",
+          "decision_source": "semantic_model_v1"
+        },
+        "clarification": {
+          "clarification_kind": "missing_slots",
+          "status": "open",
+          "prompt_template_id": "clarify.org.orgunit_create.v1",
+          "required_slots": [
+            "effective_date",
+            "entity_name",
+            "parent_ref_text"
+          ],
+          "missing_slots": [
+            "parent_ref_text"
+          ],
+          "reason_codes": [
+            "missing_required_slot"
+          ],
+          "max_rounds": 3,
+          "current_round": 1,
+          "exit_to": "business_action_resume",
+          "await_phase": "await_missing_fields",
+          "knowledge_snapshot_digest": "c346c58cb2f1de3effbfb1752a11f30078e8feda3099cc1f815b6dd1ce5916ef",
+          "route_catalog_version": "2026-03-11.v2"
+        },
+        "plan": {
+          "title": "创建组织计划",
+          "action_id": "create_orgunit",
+          "action_version": "v1",
+          "capability_key": "org.orgunit_create.field_policy",
+          "commit_adapter_key": "orgunit_create_v1",
+          "summary": "在指定父组织下创建部门，提交前需要确认候选主键",
+          "capability_map_version": "2026-02-23",
+          "compiler_contract_version": "assistant.compiler.v1",
+          "skill_manifest_digest": "09d6c1d19112667c2574a3e4013bd4055f2fc285b78a320681869d714c435971",
+          "model_provider": "openai",
+          "model_name": "gpt-5.1",
+          "model_revision": "r2f31cdf6746a",
+          "knowledge_snapshot_digest": "c346c58cb2f1de3effbfb1752a11f30078e8feda3099cc1f815b6dd1ce5916ef",
+          "route_catalog_version": "2026-03-11.v2",
+          "resolver_contract_version": "resolver_contract_v1",
+          "context_template_version": "plan_context_v1",
+          "reply_guidance_version": "2026-03-11.v1+2026-03-11.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1",
+          "confirm_ttl_seconds": 900,
+          "expires_at": "2026-04-10T00:38:47Z",
+          "skill_execution_plan": {
+            "selected_skills": [
+              "org.orgunit_create"
+            ],
+            "execution_order": [
+              "org.orgunit_create"
+            ],
+            "risk_tier": "high",
+            "required_checks": [
+              "strict_decode",
+              "boundary_lint",
+              "candidate_confirmation",
+              "dry_run"
+            ]
+          },
+          "config_delta_plan": {
+            "capability_key": "org.orgunit_create.field_policy",
+            "changes": [
+              {
+                "field": "name",
+                "after": "人力资源部2"
+              },
+              {
+                "field": "effective_date",
+                "after": "2026-01-01"
+              }
+            ]
+          }
+        },
+        "missing_fields": [
+          "parent_ref_text"
+        ],
+        "candidates": null,
+        "ambiguity_count": 0,
+        "confidence": 0.65,
+        "dry_run": {
+          "diff": [
+            {
+              "after": "人力资源部2",
+              "field": "name"
+            },
+            {
+              "after": "2026-01-01",
+              "field": "effective_date"
+            }
+          ],
+          "explain": "未找到匹配上级组织，请补充更准确的组织名称或编码。",
+          "validation_errors": [
+            "parent_candidate_not_found"
+          ],
+          "retrieval": {
+            "kind": "candidate_lookup",
+            "state": "not_requested"
+          },
+          "would_commit": false,
+          "plan_hash": "9c88d5ee643e9a835b47809cb8d4296ecf6a3cab2e8dd9a9fd81426504ea660c"
+        },
+        "commit_reply": {
+          "outcome": "pending",
+          "message": "我将按照你的需求，在“AI治理办公室”下新建“人力资源部2”，生效日期为 2026-01-01。接下来会先在系统中查找“AI治理办公室”的唯一对应组织，以确保挂载的上级部门准确无误。"
+        },
+        "reply_nlg": {
+          "text": "我将按照你的需求，在“AI治理办公室”下新建“人力资源部2”，生效日期为 2026-01-01。接下来会先在系统中查找“AI治理办公室”的唯一对应组织，以确保挂载的上级部门准确无误。",
+          "kind": "message",
+          "stage": "clarification_required",
+          "reply_model_name": "gpt-5.1",
+          "reply_prompt_version": "assistant.reply.v1",
+          "reply_source": "semantic_model",
+          "used_fallback": false,
+          "conversation_id": "",
+          "turn_id": ""
+        },
+        "created_at": "2026-04-10T00:23:47.683097195Z",
+        "updated_at": "2026-04-10T00:23:47.683097195Z"
+      }
+    }
+  ],
   "baseline": {
-    "tenant_id": "d622864f-5383-488d-bda3-6b3600bd066b",
+    "tenant_id": "855b7ef5-606a-4ec2-a349-7479a6f2926c",
     "effective_date": "2026-01-01",
-    "validated_at": "2026-04-08T21:52:27.881Z",
-    "status": "blocked",
+    "validated_at": "2026-04-10T00:23:19.535Z",
+    "status": "passed",
     "root_org_code": "ROOT",
     "created_orgs": [
       {
@@ -54,7 +416,7 @@
         "matched_org_codes": [
           "TP290BAIGOV"
         ],
-        "ready": false
+        "ready": true
       },
       {
         "name": "共享服务中心",
@@ -90,28 +452,23 @@
         }
       ]
     },
-    "issues": [
-      "Case2 基线探针未就绪（phase=await_missing_fields validation=missing_parent_ref_text,missing_entity_name）"
-    ],
+    "issues": [],
     "probes": {
       "case2": {
-        "conversation_id": "conv_0eeb1d6911944372ab6c28c22173279c",
+        "conversation_id": "conv_68674d8dfc7145548a8393ff6b35774a",
         "create_turn_status": 200,
         "error_code": "",
-        "phase": "await_missing_fields",
+        "phase": "await_commit_confirm",
         "intent_action": "create_orgunit",
-        "parent_ref_text": "",
-        "candidate_count": 0,
-        "validation_errors": [
-          "missing_parent_ref_text",
-          "missing_entity_name"
-        ],
-        "resolved_candidate_id": "",
-        "request_id": "assistant_3eb2ca9be94c463f814c9b649c9593a0",
-        "trace_id": "28100c034077499ca61da02ef8c76112"
+        "parent_ref_text": "AI治理办公室",
+        "candidate_count": 1,
+        "validation_errors": [],
+        "resolved_candidate_id": "TP290BAIGOV",
+        "request_id": "assistant_c27a0b951cdd45479d40fa73c5136dbe",
+        "trace_id": "2f9092f8909241be98d0f23a8954d5b4"
       },
       "case4": {
-        "conversation_id": "conv_7d710e8d76634ac09cb62de5a0ef3a51",
+        "conversation_id": "conv_fc02f59db2584c888251318483c1e419",
         "create_turn_status": 200,
         "error_code": "",
         "phase": "await_candidate_pick",
@@ -122,10 +479,10 @@
           "candidate_confirmation_required"
         ],
         "resolved_candidate_id": "",
-        "request_id": "assistant_88b6c9cc9014461383e6bcd06c8bae96",
-        "trace_id": "ca6e7be43a37424e90bd565de1a8fe46"
+        "request_id": "assistant_e0e218c971124aaeb0d34c95e410e422",
+        "trace_id": "c867fd25490b4c68a5951858ae181c69"
       }
     }
   },
-  "failure_message": "数据基线未就绪：Case2 基线探针未就绪（phase=await_missing_fields validation=missing_parent_ref_text,missing_entity_name）"
+  "failure_message": "数据基线未就绪：AI治理办公室 未命中候选（phase=await_missing_fields)"
 }

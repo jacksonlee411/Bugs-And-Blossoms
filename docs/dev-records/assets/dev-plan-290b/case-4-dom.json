@@ -1,14 +1,14 @@
 {
-  "url": "http://localhost:8080/app/assistant/librechat/c/new",
+  "url": "http://localhost:18080/app/assistant/librechat/c/new",
   "bubble_count": 1,
   "bubbles": [
     {
-      "binding_key": "conv_77673e160f5247e594790c35b600cced::turn_706b6844a6a94632a75f54c0a24b7345::assistant_3fcc3bbe65264b07bda617fd5ce0d8bd",
-      "conversation_id": "conv_77673e160f5247e594790c35b600cced",
-      "turn_id": "turn_706b6844a6a94632a75f54c0a24b7345",
-      "request_id": "assistant_3fcc3bbe65264b07bda617fd5ce0d8bd",
-      "message_id": "08f3ff66-86e6-4a18-87da-a84345834b39_",
-      "text": "上级组织：共享服务中心；新建组织：239A候选验证部；生效日期：2026-03-26 task_id: 906f5154-aacd-42f2-b32c-9e34d31d51c9 · succeeded Selected: 共享服务中心 org_code: O000001 parent_org_code: TP290BSSC2 effective_date: 2026-03-26 event_type: CREATE"
+      "binding_key": "conv_74ab4a8e8de443fab687881b1b290fac::turn_e87206d8d6e74399b426799fd60d5723::assistant_33a44a9615ee4165b66f927893f3e8d8",
+      "conversation_id": "conv_74ab4a8e8de443fab687881b1b290fac",
+      "turn_id": "turn_e87206d8d6e74399b426799fd60d5723",
+      "request_id": "assistant_33a44a9615ee4165b66f927893f3e8d8",
+      "message_id": "386f4cf9-ed4d-45ea-924b-f08a1ffed811_",
+      "text": "请确认：“共享服务中心”是否唯一指向一个父组织节点？如果该名称有多个同名组织，我需要你提供上级单位或组织编码来精准定位。 Missing fields parent_ref_text"
     }
   ],
   "external_reply_container_count": 0,

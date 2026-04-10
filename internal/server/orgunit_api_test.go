@@ -157,8 +157,29 @@ func (s *resolveOrgCodeStore) ResolveOrgID(context.Context, string, string) (int
 	}
 	return s.resolveID, nil
 }
-func (s *resolveOrgCodeStore) ResolveOrgCode(context.Context, string, int) (string, error) {
+func (s *resolveOrgCodeStore) ResolveOrgNodeKeyByCode(_ context.Context, _ string, _ string) (string, error) {
+	if s.resolveErr != nil {
+		return "", s.resolveErr
+	}
+	if s.resolveID == 0 {
+		return "", nil
+	}
+	return encodeOrgNodeKeyFromID(s.resolveID)
+}
+func (s *resolveOrgCodeStore) ResolveOrgCode(_ context.Context, _ string, orgID int) (string, error) {
+	if s.resolveCodes != nil {
+		if code, ok := s.resolveCodes[orgID]; ok {
+			return code, nil
+		}
+	}
 	return "", nil
+}
+func (s *resolveOrgCodeStore) ResolveOrgCodeByNodeKey(ctx context.Context, tenantID string, orgNodeKey string) (string, error) {
+	orgID, err := decodeOrgNodeKeyToID(orgNodeKey)
+	if err != nil {
+		return "", err
+	}
+	return s.ResolveOrgCode(ctx, tenantID, orgID)
 }
 func (s *resolveOrgCodeStore) ResolveOrgCodes(context.Context, string, []int) (map[int]string, error) {
 	if s.resolveCodesErr != nil {
@@ -168,6 +189,24 @@ func (s *resolveOrgCodeStore) ResolveOrgCodes(context.Context, string, []int) (m
 		return s.resolveCodes, nil
 	}
 	return map[int]string{}, nil
+}
+func (s *resolveOrgCodeStore) ResolveOrgCodesByNodeKeys(ctx context.Context, tenantID string, orgNodeKeys []string) (map[string]string, error) {
+	if s.resolveCodesErr != nil {
+		return nil, s.resolveCodesErr
+	}
+	out := make(map[string]string, len(orgNodeKeys))
+	for _, orgNodeKey := range orgNodeKeys {
+		orgID, err := decodeOrgNodeKeyToID(orgNodeKey)
+		if err != nil {
+			return nil, err
+		}
+		code, err := s.ResolveOrgCode(ctx, tenantID, orgID)
+		if err != nil {
+			return nil, err
+		}
+		out[orgNodeKey] = code
+	}
+	return out, nil
 }
 func (s *resolveOrgCodeStore) ListChildren(context.Context, string, int, string) ([]OrgUnitChild, error) {
 	if s.listChildrenErr != nil {
@@ -317,7 +356,7 @@ func TestHandleOrgUnitsBusinessUnitAPI_OrgCodeSuccess(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status=%d", rec.Code)
 	}
-	if len(store.setArgs) != 4 || store.setArgs[2] != "10000001" {
+	if len(store.setArgs) != 4 || store.setArgs[2] != "AAAKTFWB" {
 		t.Fatalf("unexpected set args: %+v", store.setArgs)
 	}
 }

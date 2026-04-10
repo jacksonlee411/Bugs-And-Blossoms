@@ -16,18 +16,31 @@ import (
 type orgUnitStoreWithWriteCapabilities struct {
 	OrgUnitStore
 
-	resolveOrgIDFn      func(ctx context.Context, tenantID string, orgCode string) (int, error)
-	listExtConfigsFn    func(ctx context.Context, tenantID string, asOf string) ([]orgUnitTenantFieldConfig, error)
-	isTreeInitializedFn func(ctx context.Context, tenantID string) (bool, error)
-	resolveFactsFn      func(ctx context.Context, tenantID string, orgID int, effectiveDate string) (orgUnitAppendFacts, error)
-	resolveTargetFn     func(ctx context.Context, tenantID string, orgID int, effectiveDate string) (orgUnitMutationTargetEvent, error)
+	resolveOrgIDFn       func(ctx context.Context, tenantID string, orgCode string) (int, error)
+	resolveOrgNodeKeyFn  func(ctx context.Context, tenantID string, orgCode string) (string, error)
+	listExtConfigsFn     func(ctx context.Context, tenantID string, asOf string) ([]orgUnitTenantFieldConfig, error)
+	isTreeInitializedFn  func(ctx context.Context, tenantID string) (bool, error)
+	resolveFactsFn       func(ctx context.Context, tenantID string, orgID int, effectiveDate string) (orgUnitAppendFacts, error)
+	resolveFactsByKeyFn  func(ctx context.Context, tenantID string, orgNodeKey string, effectiveDate string) (orgUnitAppendFacts, error)
+	resolveTargetFn      func(ctx context.Context, tenantID string, orgID int, effectiveDate string) (orgUnitMutationTargetEvent, error)
+	resolveTargetByKeyFn func(ctx context.Context, tenantID string, orgNodeKey string, effectiveDate string) (orgUnitMutationTargetEvent, error)
 }
 
-func (s orgUnitStoreWithWriteCapabilities) ResolveOrgID(ctx context.Context, tenantID string, orgCode string) (int, error) {
-	if s.resolveOrgIDFn != nil {
-		return s.resolveOrgIDFn(ctx, tenantID, orgCode)
+func (s orgUnitStoreWithWriteCapabilities) ResolveOrgNodeKeyByCode(ctx context.Context, tenantID string, orgCode string) (string, error) {
+	if s.resolveOrgNodeKeyFn != nil {
+		return s.resolveOrgNodeKeyFn(ctx, tenantID, orgCode)
 	}
-	return 0, orgunitpkg.ErrOrgCodeNotFound
+	if s.resolveOrgIDFn != nil {
+		orgID, err := s.resolveOrgIDFn(ctx, tenantID, orgCode)
+		if err != nil {
+			return "", err
+		}
+		if orgID <= 0 {
+			return "", orgunitpkg.ErrOrgCodeNotFound
+		}
+		return encodeOrgNodeKeyFromID(orgID)
+	}
+	return "", orgunitpkg.ErrOrgCodeNotFound
 }
 
 func (s orgUnitStoreWithWriteCapabilities) ListEnabledTenantFieldConfigsAsOf(ctx context.Context, tenantID string, asOf string) ([]orgUnitTenantFieldConfig, error) {
@@ -44,15 +57,29 @@ func (s orgUnitStoreWithWriteCapabilities) IsOrgTreeInitialized(ctx context.Cont
 	return true, nil
 }
 
-func (s orgUnitStoreWithWriteCapabilities) ResolveAppendFacts(ctx context.Context, tenantID string, orgID int, effectiveDate string) (orgUnitAppendFacts, error) {
+func (s orgUnitStoreWithWriteCapabilities) ResolveAppendFacts(ctx context.Context, tenantID string, orgNodeKey string, effectiveDate string) (orgUnitAppendFacts, error) {
+	if s.resolveFactsByKeyFn != nil {
+		return s.resolveFactsByKeyFn(ctx, tenantID, orgNodeKey, effectiveDate)
+	}
 	if s.resolveFactsFn != nil {
+		orgID, err := decodeOrgNodeKeyToID(orgNodeKey)
+		if err != nil {
+			return orgUnitAppendFacts{}, err
+		}
 		return s.resolveFactsFn(ctx, tenantID, orgID, effectiveDate)
 	}
 	return orgUnitAppendFacts{TreeInitialized: true, TargetExistsAsOf: true}, nil
 }
 
-func (s orgUnitStoreWithWriteCapabilities) ResolveMutationTargetEvent(ctx context.Context, tenantID string, orgID int, effectiveDate string) (orgUnitMutationTargetEvent, error) {
+func (s orgUnitStoreWithWriteCapabilities) ResolveMutationTargetEvent(ctx context.Context, tenantID string, orgNodeKey string, effectiveDate string) (orgUnitMutationTargetEvent, error) {
+	if s.resolveTargetByKeyFn != nil {
+		return s.resolveTargetByKeyFn(ctx, tenantID, orgNodeKey, effectiveDate)
+	}
 	if s.resolveTargetFn != nil {
+		orgID, err := decodeOrgNodeKeyToID(orgNodeKey)
+		if err != nil {
+			return orgUnitMutationTargetEvent{}, err
+		}
 		return s.resolveTargetFn(ctx, tenantID, orgID, effectiveDate)
 	}
 	return orgUnitMutationTargetEvent{HasEffective: true, EffectiveEventType: "CREATE", HasRaw: true, RawEventType: "CREATE"}, nil

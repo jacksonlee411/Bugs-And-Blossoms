@@ -932,11 +932,14 @@ func TestStaffingMemoryStore(t *testing.T) {
 }
 
 type staffingOrgStoreStub struct {
-	listFn            func(ctx context.Context, tenantID string, asOfDate string) ([]OrgUnitNode, error)
-	resolveFn         func(ctx context.Context, tenantID string, orgUnitID string, asOfDate string) (string, error)
-	resolveOrgIDFn    func(ctx context.Context, tenantID string, orgCode string) (int, error)
-	resolveOrgCodeFn  func(ctx context.Context, tenantID string, orgID int) (string, error)
-	resolveOrgCodesFn func(ctx context.Context, tenantID string, orgIDs []int) (map[int]string, error)
+	listFn                  func(ctx context.Context, tenantID string, asOfDate string) ([]OrgUnitNode, error)
+	resolveFn               func(ctx context.Context, tenantID string, orgUnitID string, asOfDate string) (string, error)
+	resolveOrgIDFn          func(ctx context.Context, tenantID string, orgCode string) (int, error)
+	resolveOrgNodeKeyFn     func(ctx context.Context, tenantID string, orgCode string) (string, error)
+	resolveOrgCodeFn        func(ctx context.Context, tenantID string, orgID int) (string, error)
+	resolveOrgCodeByKeyFn   func(ctx context.Context, tenantID string, orgNodeKey string) (string, error)
+	resolveOrgCodesFn       func(ctx context.Context, tenantID string, orgIDs []int) (map[int]string, error)
+	resolveOrgCodesByKeysFn func(ctx context.Context, tenantID string, orgNodeKeys []string) (map[string]string, error)
 }
 
 func (s staffingOrgStoreStub) ListNodesCurrent(ctx context.Context, tenantID string, asOfDate string) ([]OrgUnitNode, error) {
@@ -963,13 +966,47 @@ func (s staffingOrgStoreStub) ResolveOrgID(ctx context.Context, tenantID string,
 	if s.resolveOrgIDFn != nil {
 		return s.resolveOrgIDFn(ctx, tenantID, orgCode)
 	}
+	if s.resolveOrgNodeKeyFn != nil {
+		orgNodeKey, err := s.resolveOrgNodeKeyFn(ctx, tenantID, orgCode)
+		if err != nil {
+			return 0, err
+		}
+		return decodeOrgNodeKeyToID(orgNodeKey)
+	}
 	return 10000001, nil
+}
+func (s staffingOrgStoreStub) ResolveOrgNodeKeyByCode(ctx context.Context, tenantID string, orgCode string) (string, error) {
+	if s.resolveOrgNodeKeyFn != nil {
+		return s.resolveOrgNodeKeyFn(ctx, tenantID, orgCode)
+	}
+	orgID, err := s.ResolveOrgID(ctx, tenantID, orgCode)
+	if err != nil {
+		return "", err
+	}
+	return encodeOrgNodeKeyFromID(orgID)
 }
 func (s staffingOrgStoreStub) ResolveOrgCode(ctx context.Context, tenantID string, orgID int) (string, error) {
 	if s.resolveOrgCodeFn != nil {
 		return s.resolveOrgCodeFn(ctx, tenantID, orgID)
 	}
+	if s.resolveOrgCodeByKeyFn != nil {
+		orgNodeKey, err := encodeOrgNodeKeyFromID(orgID)
+		if err != nil {
+			return "", err
+		}
+		return s.resolveOrgCodeByKeyFn(ctx, tenantID, orgNodeKey)
+	}
 	return "ORG-1", nil
+}
+func (s staffingOrgStoreStub) ResolveOrgCodeByNodeKey(ctx context.Context, tenantID string, orgNodeKey string) (string, error) {
+	if s.resolveOrgCodeByKeyFn != nil {
+		return s.resolveOrgCodeByKeyFn(ctx, tenantID, orgNodeKey)
+	}
+	orgID, err := decodeOrgNodeKeyToID(orgNodeKey)
+	if err != nil {
+		return "", err
+	}
+	return s.ResolveOrgCode(ctx, tenantID, orgID)
 }
 
 func (s staffingOrgStoreStub) ResolveOrgCodes(ctx context.Context, tenantID string, orgIDs []int) (map[int]string, error) {
@@ -983,6 +1020,46 @@ func (s staffingOrgStoreStub) ResolveOrgCodes(ctx context.Context, tenantID stri
 			return nil, err
 		}
 		out[orgID] = code
+	}
+	return out, nil
+}
+func (s staffingOrgStoreStub) ResolveOrgCodesByNodeKeys(ctx context.Context, tenantID string, orgNodeKeys []string) (map[string]string, error) {
+	if s.resolveOrgCodesByKeysFn != nil {
+		return s.resolveOrgCodesByKeysFn(ctx, tenantID, orgNodeKeys)
+	}
+	if s.resolveOrgCodesFn != nil {
+		orgIDs := make([]int, 0, len(orgNodeKeys))
+		for _, orgNodeKey := range orgNodeKeys {
+			orgID, err := decodeOrgNodeKeyToID(orgNodeKey)
+			if err != nil {
+				return nil, err
+			}
+			orgIDs = append(orgIDs, orgID)
+		}
+		resolved, err := s.resolveOrgCodesFn(ctx, tenantID, orgIDs)
+		if err != nil {
+			return nil, err
+		}
+		out := make(map[string]string, len(orgNodeKeys))
+		for _, orgNodeKey := range orgNodeKeys {
+			orgID, err := decodeOrgNodeKeyToID(orgNodeKey)
+			if err != nil {
+				return nil, err
+			}
+			code, ok := resolved[orgID]
+			if ok {
+				out[orgNodeKey] = code
+			}
+		}
+		return out, nil
+	}
+	out := make(map[string]string, len(orgNodeKeys))
+	for _, orgNodeKey := range orgNodeKeys {
+		code, err := s.ResolveOrgCodeByNodeKey(ctx, tenantID, orgNodeKey)
+		if err != nil {
+			return nil, err
+		}
+		out[orgNodeKey] = code
 	}
 	return out, nil
 }

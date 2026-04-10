@@ -7,7 +7,6 @@ import (
 	"io"
 	"net/http"
 	"net/url"
-	"strconv"
 	"strings"
 	"time"
 
@@ -87,7 +86,7 @@ func handlePositionsOptionsAPI(w http.ResponseWriter, r *http.Request, orgStore 
 		return
 	}
 
-	orgID, err := orgStore.ResolveOrgID(r.Context(), tenant.ID, orgCode)
+	orgNodeKey, err := orgStore.ResolveOrgNodeKeyByCode(r.Context(), tenant.ID, orgCode)
 	if err != nil {
 		switch {
 		case errors.Is(err, orgunitpkg.ErrOrgCodeInvalid):
@@ -105,7 +104,7 @@ func handlePositionsOptionsAPI(w http.ResponseWriter, r *http.Request, orgStore 
 		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusInternalServerError, "setid_resolver_missing", "setid resolver missing")
 		return
 	}
-	setID, err := resolver.ResolveSetID(r.Context(), tenant.ID, strconv.Itoa(orgID), asOf)
+	setID, err := resolver.ResolveSetID(r.Context(), tenant.ID, orgNodeKey, asOf)
 	if err != nil {
 		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusUnprocessableEntity, stablePgMessage(err), "resolve setid failed")
 		return
@@ -177,35 +176,43 @@ func handlePositionsAPI(w http.ResponseWriter, r *http.Request, orgResolver OrgU
 			return
 		}
 		orgCodes := map[string]string{}
-		orgIDByStr := map[string]int{}
-		orgIDs := make([]int, 0)
+		orgNodeKeyByStr := map[string]string{}
+		orgNodeKeys := make([]string, 0)
 		for _, p := range positions {
 			if p.OrgUnitID == "" {
 				continue
 			}
-			if _, ok := orgIDByStr[p.OrgUnitID]; ok {
+			if _, ok := orgNodeKeyByStr[p.OrgUnitID]; ok {
 				continue
 			}
-			orgID, err := strconv.Atoi(p.OrgUnitID)
-			if err != nil {
-				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusInternalServerError, "orgunit_id_invalid", "invalid orgunit id")
-				return
+			orgNodeKey := strings.TrimSpace(p.OrgUnitID)
+			if _, err := parseOrgNodeKey(orgNodeKey); err != nil {
+				orgID, decodeErr := parseOrgID8(orgNodeKey)
+				if decodeErr != nil {
+					routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusInternalServerError, "orgunit_id_invalid", "invalid orgunit id")
+					return
+				}
+				orgNodeKey, err = encodeOrgNodeKeyFromID(orgID)
+				if err != nil {
+					routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusInternalServerError, "orgunit_id_invalid", "invalid orgunit id")
+					return
+				}
 			}
-			orgIDByStr[p.OrgUnitID] = orgID
-			orgIDs = append(orgIDs, orgID)
+			orgNodeKeyByStr[p.OrgUnitID] = orgNodeKey
+			orgNodeKeys = append(orgNodeKeys, orgNodeKey)
 		}
-		if len(orgIDs) > 0 {
+		if len(orgNodeKeys) > 0 {
 			if orgResolver == nil {
 				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusInternalServerError, "orgunit_resolver_missing", "orgunit resolver missing")
 				return
 			}
-			codes, err := orgResolver.ResolveOrgCodes(r.Context(), tenant.ID, orgIDs)
+			codes, err := orgResolver.ResolveOrgCodesByNodeKeys(r.Context(), tenant.ID, orgNodeKeys)
 			if err != nil {
 				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusInternalServerError, "orgunit_resolve_org_code_failed", "resolve org_code failed")
 				return
 			}
-			for orgIDStr, orgID := range orgIDByStr {
-				code, ok := codes[orgID]
+			for orgIDStr, orgNodeKey := range orgNodeKeyByStr {
+				code, ok := codes[orgNodeKey]
 				if !ok {
 					routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusInternalServerError, "orgunit_resolve_org_code_failed", "resolve org_code failed")
 					return
@@ -276,7 +283,7 @@ func handlePositionsAPI(w http.ResponseWriter, r *http.Request, orgResolver OrgU
 				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusInternalServerError, "orgunit_resolver_missing", "orgunit resolver missing")
 				return
 			}
-			resolvedID, err := orgResolver.ResolveOrgID(r.Context(), tenant.ID, normalized)
+			orgNodeKey, err := orgResolver.ResolveOrgNodeKeyByCode(r.Context(), tenant.ID, normalized)
 			if err != nil {
 				switch {
 				case errors.Is(err, orgunitpkg.ErrOrgCodeInvalid):
@@ -288,7 +295,7 @@ func handlePositionsAPI(w http.ResponseWriter, r *http.Request, orgResolver OrgU
 				}
 				return
 			}
-			orgUnitID = strconv.Itoa(resolvedID)
+			orgUnitID = orgNodeKey
 			req.OrgCode = normalized
 		} else if strings.TrimSpace(req.PositionUUID) == "" {
 			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "invalid_request", "org_code required")
@@ -324,12 +331,20 @@ func handlePositionsAPI(w http.ResponseWriter, r *http.Request, orgResolver OrgU
 				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusInternalServerError, "orgunit_resolver_missing", "orgunit resolver missing")
 				return
 			}
-			orgID, err := strconv.Atoi(p.OrgUnitID)
-			if err != nil {
-				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusInternalServerError, "orgunit_id_invalid", "invalid orgunit id")
-				return
+			orgNodeKey := strings.TrimSpace(p.OrgUnitID)
+			if _, err := parseOrgNodeKey(orgNodeKey); err != nil {
+				orgID, decodeErr := parseOrgID8(orgNodeKey)
+				if decodeErr != nil {
+					routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusInternalServerError, "orgunit_id_invalid", "invalid orgunit id")
+					return
+				}
+				orgNodeKey, err = encodeOrgNodeKeyFromID(orgID)
+				if err != nil {
+					routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusInternalServerError, "orgunit_id_invalid", "invalid orgunit id")
+					return
+				}
 			}
-			code, err := orgResolver.ResolveOrgCode(r.Context(), tenant.ID, orgID)
+			code, err := orgResolver.ResolveOrgCodeByNodeKey(r.Context(), tenant.ID, orgNodeKey)
 			if err != nil {
 				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusInternalServerError, "orgunit_resolve_org_code_failed", "resolve org_code failed")
 				return

@@ -111,7 +111,7 @@ func TestOrgUnitPGStore_ResolveOrgID(t *testing.T) {
 	t.Run("commit error", func(t *testing.T) {
 		store := newOrgUnitPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
 			tx := &stubTx{commitErr: errors.New("commit")}
-			tx.row = &stubRow{vals: []any{10000001}}
+			tx.row = &stubRow{vals: []any{"AAAAAAAB"}}
 			return tx, nil
 		})).(*orgUnitPGStore)
 		if _, err := store.ResolveOrgID(ctx, "t1", "A1"); err == nil {
@@ -122,11 +122,11 @@ func TestOrgUnitPGStore_ResolveOrgID(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
 		store := newOrgUnitPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
 			tx := &stubTx{}
-			tx.row = &stubRow{vals: []any{10000001}}
+			tx.row = &stubRow{vals: []any{"AAAAAAAB"}}
 			return tx, nil
 		})).(*orgUnitPGStore)
 		got, err := store.ResolveOrgID(ctx, "t1", "A1")
-		if err != nil || got != 10000001 {
+		if err != nil || got != 1 {
 			t.Fatalf("got=%d err=%v", got, err)
 		}
 	})
@@ -193,7 +193,7 @@ func TestOrgUnitPGStore_ResolveOrgCodes(t *testing.T) {
 		store := newOrgUnitPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
 			return nil, errors.New("begin")
 		})).(*orgUnitPGStore)
-		if _, err := store.ResolveOrgCodes(ctx, "t1", []int{0}); err == nil {
+		if _, err := store.ResolveOrgCodes(ctx, "t1", []int{1}); err == nil {
 			t.Fatal("expected error")
 		}
 	})
@@ -202,7 +202,7 @@ func TestOrgUnitPGStore_ResolveOrgCodes(t *testing.T) {
 		store := newOrgUnitPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
 			return &stubTx{execErr: errors.New("exec")}, nil
 		})).(*orgUnitPGStore)
-		if _, err := store.ResolveOrgCodes(ctx, "t1", []int{0}); err == nil {
+		if _, err := store.ResolveOrgCodes(ctx, "t1", []int{1}); err == nil {
 			t.Fatal("expected error")
 		}
 	})
@@ -211,33 +211,59 @@ func TestOrgUnitPGStore_ResolveOrgCodes(t *testing.T) {
 		store := newOrgUnitPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
 			return &stubTx{queryErr: errors.New("resolve")}, nil
 		})).(*orgUnitPGStore)
-		if _, err := store.ResolveOrgCodes(ctx, "t1", []int{0}); err == nil {
+		if _, err := store.ResolveOrgCodes(ctx, "t1", []int{1}); err == nil {
 			t.Fatal("expected error")
 		}
 	})
 
 	t.Run("commit error", func(t *testing.T) {
 		store := newOrgUnitPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
-			return &stubTx{commitErr: errors.New("commit"), rows: &fakeRows{}}, nil
+			return &stubTx{commitErr: errors.New("commit"), rows: &singleScanRows{vals: []any{"AAAAAAAB", "n1"}}}, nil
 		})).(*orgUnitPGStore)
-		if _, err := store.ResolveOrgCodes(ctx, "t1", []int{0}); err == nil {
+		if _, err := store.ResolveOrgCodes(ctx, "t1", []int{1}); err == nil {
 			t.Fatal("expected error")
 		}
 	})
 
 	t.Run("success", func(t *testing.T) {
 		store := newOrgUnitPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
-			return &stubTx{rows: &fakeRows{}}, nil
+			return &stubTx{rows: &singleScanRows{vals: []any{"AAAAAAAB", "n1"}}}, nil
 		})).(*orgUnitPGStore)
-		got, err := store.ResolveOrgCodes(ctx, "t1", []int{0})
+		got, err := store.ResolveOrgCodes(ctx, "t1", []int{1})
 		if err != nil {
 			t.Fatalf("err=%v", err)
 		}
-		if got[0] != "n1" {
+		if got[1] != "n1" {
 			t.Fatalf("unexpected codes: %v", got)
 		}
 	})
 }
+
+type singleScanRows struct {
+	idx  int
+	vals []any
+	err  error
+}
+
+func (r *singleScanRows) Close()                        {}
+func (r *singleScanRows) Err() error                    { return r.err }
+func (r *singleScanRows) CommandTag() pgconn.CommandTag { return pgconn.CommandTag{} }
+func (r *singleScanRows) FieldDescriptions() []pgconn.FieldDescription {
+	return nil
+}
+func (r *singleScanRows) Next() bool {
+	if r.idx > 0 {
+		return false
+	}
+	r.idx++
+	return true
+}
+func (r *singleScanRows) Scan(dest ...any) error {
+	return fakeRow{vals: r.vals}.Scan(dest...)
+}
+func (r *singleScanRows) Values() ([]any, error) { return nil, nil }
+func (r *singleScanRows) RawValues() [][]byte    { return nil }
+func (r *singleScanRows) Conn() *pgx.Conn        { return nil }
 
 func TestOrgUnitPGStore_SetBusinessUnitCurrent_Errors(t *testing.T) {
 	cases := []struct {
@@ -597,7 +623,7 @@ func TestOrgUnitPGStore_ListNodesCurrent_AndCreateCurrent(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if createdCurrent.ID != "10000001" || createdCurrent.Name != "Current" || !createdCurrent.CreatedAt.Equal(time.Unix(789, 0).UTC()) {
+	if createdCurrent.ID != "AAAKTFWB" || createdCurrent.OrgID != 10000001 || createdCurrent.Name != "Current" || !createdCurrent.CreatedAt.Equal(time.Unix(789, 0).UTC()) {
 		t.Fatalf("created=%+v", createdCurrent)
 	}
 

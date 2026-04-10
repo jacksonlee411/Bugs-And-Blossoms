@@ -775,7 +775,7 @@ LIMIT 1
 	}, nil
 }
 
-func (s *orgUnitPGStore) ResolveMutationTargetEvent(ctx context.Context, tenantID string, orgID int, effectiveDate string) (orgUnitMutationTargetEvent, error) {
+func (s *orgUnitPGStore) ResolveMutationTargetEvent(ctx context.Context, tenantID string, orgNodeKey string, effectiveDate string) (orgUnitMutationTargetEvent, error) {
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
 		return orgUnitMutationTargetEvent{}, err
@@ -783,6 +783,10 @@ func (s *orgUnitPGStore) ResolveMutationTargetEvent(ctx context.Context, tenantI
 	defer func() { _ = tx.Rollback(context.Background()) }()
 
 	if _, err := tx.Exec(ctx, `SELECT set_config('app.current_tenant', $1, true);`, tenantID); err != nil {
+		return orgUnitMutationTargetEvent{}, err
+	}
+	orgID, err := decodeOrgNodeKeyToID(orgNodeKey)
+	if err != nil {
 		return orgUnitMutationTargetEvent{}, err
 	}
 
@@ -857,7 +861,7 @@ LIMIT 1
 	return result, nil
 }
 
-func (s *orgUnitPGStore) EvaluateRescindOrgDenyReasons(ctx context.Context, tenantID string, orgID int) ([]string, error) {
+func (s *orgUnitPGStore) EvaluateRescindOrgDenyReasons(ctx context.Context, tenantID string, orgNodeKey string) ([]string, error) {
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
 		return nil, err
@@ -865,6 +869,10 @@ func (s *orgUnitPGStore) EvaluateRescindOrgDenyReasons(ctx context.Context, tena
 	defer func() { _ = tx.Rollback(context.Background()) }()
 
 	if _, err := tx.Exec(ctx, `SELECT set_config('app.current_tenant', $1, true);`, tenantID); err != nil {
+		return nil, err
+	}
+	orgID, err := decodeOrgNodeKeyToID(orgNodeKey)
+	if err != nil {
 		return nil, err
 	}
 
@@ -965,7 +973,7 @@ LIMIT 1
 	return rootOrgID != nil, nil
 }
 
-func (s *orgUnitPGStore) ResolveAppendFacts(ctx context.Context, tenantID string, orgID int, effectiveDate string) (orgUnitAppendFacts, error) {
+func (s *orgUnitPGStore) ResolveAppendFacts(ctx context.Context, tenantID string, orgNodeKey string, effectiveDate string) (orgUnitAppendFacts, error) {
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
 		return orgUnitAppendFacts{}, err
@@ -973,6 +981,10 @@ func (s *orgUnitPGStore) ResolveAppendFacts(ctx context.Context, tenantID string
 	defer func() { _ = tx.Rollback(context.Background()) }()
 
 	if _, err := tx.Exec(ctx, `SELECT set_config('app.current_tenant', $1, true);`, tenantID); err != nil {
+		return orgUnitAppendFacts{}, err
+	}
+	orgID, err := decodeOrgNodeKeyToID(orgNodeKey)
+	if err != nil {
 		return orgUnitAppendFacts{}, err
 	}
 

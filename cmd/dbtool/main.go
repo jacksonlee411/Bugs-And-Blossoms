@@ -21,7 +21,7 @@ import (
 
 func main() {
 	if len(os.Args) < 2 {
-		fatalf("usage: dbtool <rls-smoke|orgunit-smoke|orgunit-code-validate|jobcatalog-smoke|person-smoke|staffing-smoke> [args]")
+		fatalf("usage: dbtool <rls-smoke|orgunit-smoke|orgunit-code-validate|orgunit-snapshot-export|orgunit-snapshot-check|orgunit-snapshot-bootstrap-target|orgunit-snapshot-import|orgunit-snapshot-verify|orgunit-stopline-capture|jobcatalog-smoke|person-smoke|staffing-smoke> [args]")
 	}
 
 	switch os.Args[1] {
@@ -31,6 +31,18 @@ func main() {
 		orgunitSmoke(os.Args[2:])
 	case "orgunit-code-validate":
 		orgunitCodeValidate(os.Args[2:])
+	case "orgunit-snapshot-export":
+		orgunitSnapshotExport(os.Args[2:])
+	case "orgunit-snapshot-check":
+		orgunitSnapshotCheck(os.Args[2:])
+	case "orgunit-snapshot-bootstrap-target":
+		orgunitSnapshotBootstrapTarget(os.Args[2:])
+	case "orgunit-snapshot-import":
+		orgunitSnapshotImport(os.Args[2:])
+	case "orgunit-snapshot-verify":
+		orgunitSnapshotVerify(os.Args[2:])
+	case "orgunit-stopline-capture":
+		orgunitStoplineCapture(os.Args[2:])
 	case "jobcatalog-smoke":
 		jobcatalogSmoke(os.Args[2:])
 	case "person-smoke":

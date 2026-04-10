@@ -9,6 +9,15 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
+func mustTestOrgNodeKey(tb testing.TB, orgID int) string {
+	tb.Helper()
+	orgNodeKey, err := encodeOrgNodeKeyFromID(orgID)
+	if err != nil {
+		tb.Fatalf("encode org node key: %v", err)
+	}
+	return orgNodeKey
+}
+
 type ptrScanRow struct {
 	vals []any
 	err  error
@@ -174,7 +183,7 @@ func TestOrgUnitPGStore_ResolveMutationTargetEvent(t *testing.T) {
 
 	t.Run("begin error", func(t *testing.T) {
 		store := &orgUnitPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return nil, errors.New("begin") })}
-		if _, err := store.ResolveMutationTargetEvent(ctx, "t1", 10000001, "2026-01-01"); err == nil {
+		if _, err := store.ResolveMutationTargetEvent(ctx, "t1", mustTestOrgNodeKey(t, 10000001), "2026-01-01"); err == nil {
 			t.Fatal("expected error")
 		}
 	})
@@ -182,7 +191,7 @@ func TestOrgUnitPGStore_ResolveMutationTargetEvent(t *testing.T) {
 	t.Run("exec error", func(t *testing.T) {
 		tx := &stubTx{execErr: errors.New("exec")}
 		store := &orgUnitPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx, nil })}
-		if _, err := store.ResolveMutationTargetEvent(ctx, "t1", 10000001, "2026-01-01"); err == nil {
+		if _, err := store.ResolveMutationTargetEvent(ctx, "t1", mustTestOrgNodeKey(t, 10000001), "2026-01-01"); err == nil {
 			t.Fatal("expected error")
 		}
 	})
@@ -190,7 +199,7 @@ func TestOrgUnitPGStore_ResolveMutationTargetEvent(t *testing.T) {
 	t.Run("effective query error", func(t *testing.T) {
 		tx := &stubTx{row: metadataScanRow{err: errors.New("boom")}}
 		store := &orgUnitPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx, nil })}
-		if _, err := store.ResolveMutationTargetEvent(ctx, "t1", 10000001, "2026-01-01"); err == nil {
+		if _, err := store.ResolveMutationTargetEvent(ctx, "t1", mustTestOrgNodeKey(t, 10000001), "2026-01-01"); err == nil {
 			t.Fatal("expected error")
 		}
 	})
@@ -201,7 +210,7 @@ func TestOrgUnitPGStore_ResolveMutationTargetEvent(t *testing.T) {
 			row2: metadataScanRow{err: pgx.ErrNoRows},
 		}
 		store := &orgUnitPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx, nil })}
-		got, err := store.ResolveMutationTargetEvent(ctx, "t1", 10000001, "2026-01-01")
+		got, err := store.ResolveMutationTargetEvent(ctx, "t1", mustTestOrgNodeKey(t, 10000001), "2026-01-01")
 		if err != nil {
 			t.Fatalf("err=%v", err)
 		}
@@ -216,7 +225,7 @@ func TestOrgUnitPGStore_ResolveMutationTargetEvent(t *testing.T) {
 			row2: metadataScanRow{err: errors.New("boom")},
 		}
 		store := &orgUnitPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx, nil })}
-		if _, err := store.ResolveMutationTargetEvent(ctx, "t1", 10000001, "2026-01-01"); err == nil {
+		if _, err := store.ResolveMutationTargetEvent(ctx, "t1", mustTestOrgNodeKey(t, 10000001), "2026-01-01"); err == nil {
 			t.Fatal("expected error")
 		}
 	})
@@ -228,7 +237,7 @@ func TestOrgUnitPGStore_ResolveMutationTargetEvent(t *testing.T) {
 			row3: metadataScanRow{err: errors.New("boom")},
 		}
 		store := &orgUnitPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx, nil })}
-		if _, err := store.ResolveMutationTargetEvent(ctx, "t1", 10000001, "2026-01-01"); err == nil {
+		if _, err := store.ResolveMutationTargetEvent(ctx, "t1", mustTestOrgNodeKey(t, 10000001), "2026-01-01"); err == nil {
 			t.Fatal("expected error")
 		}
 	})
@@ -240,7 +249,7 @@ func TestOrgUnitPGStore_ResolveMutationTargetEvent(t *testing.T) {
 			row3: metadataScanRow{vals: []any{"RENAME"}},
 		}
 		store := &orgUnitPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx, nil })}
-		got, err := store.ResolveMutationTargetEvent(ctx, "t1", 10000001, "2026-01-01")
+		got, err := store.ResolveMutationTargetEvent(ctx, "t1", mustTestOrgNodeKey(t, 10000001), "2026-01-01")
 		if err != nil {
 			t.Fatalf("err=%v", err)
 		}
@@ -255,7 +264,7 @@ func TestOrgUnitPGStore_ResolveMutationTargetEvent(t *testing.T) {
 			row2: metadataScanRow{vals: []any{"CREATE"}},
 		}
 		store := &orgUnitPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx, nil })}
-		got, err := store.ResolveMutationTargetEvent(ctx, "t1", 10000001, "2026-01-01")
+		got, err := store.ResolveMutationTargetEvent(ctx, "t1", mustTestOrgNodeKey(t, 10000001), "2026-01-01")
 		if err != nil {
 			t.Fatalf("err=%v", err)
 		}
@@ -270,7 +279,7 @@ func TestOrgUnitPGStore_ResolveMutationTargetEvent(t *testing.T) {
 			row2: metadataScanRow{vals: []any{"   "}},
 		}
 		store := &orgUnitPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx, nil })}
-		got, err := store.ResolveMutationTargetEvent(ctx, "t1", 10000001, "2026-01-01")
+		got, err := store.ResolveMutationTargetEvent(ctx, "t1", mustTestOrgNodeKey(t, 10000001), "2026-01-01")
 		if err != nil {
 			t.Fatalf("err=%v", err)
 		}
@@ -286,7 +295,7 @@ func TestOrgUnitPGStore_ResolveMutationTargetEvent(t *testing.T) {
 			commitErr: errors.New("commit"),
 		}
 		store := &orgUnitPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx, nil })}
-		if _, err := store.ResolveMutationTargetEvent(ctx, "t1", 10000001, "2026-01-01"); err == nil {
+		if _, err := store.ResolveMutationTargetEvent(ctx, "t1", mustTestOrgNodeKey(t, 10000001), "2026-01-01"); err == nil {
 			t.Fatal("expected error")
 		}
 	})
@@ -298,7 +307,7 @@ func TestOrgUnitPGStore_EvaluateRescindOrgDenyReasons(t *testing.T) {
 
 	t.Run("begin error", func(t *testing.T) {
 		store := &orgUnitPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return nil, errors.New("begin") })}
-		if _, err := store.EvaluateRescindOrgDenyReasons(ctx, "t1", nowOrgID); err == nil {
+		if _, err := store.EvaluateRescindOrgDenyReasons(ctx, "t1", mustTestOrgNodeKey(t, nowOrgID)); err == nil {
 			t.Fatal("expected error")
 		}
 	})
@@ -306,7 +315,7 @@ func TestOrgUnitPGStore_EvaluateRescindOrgDenyReasons(t *testing.T) {
 	t.Run("exec error", func(t *testing.T) {
 		tx := &stubTx{execErr: errors.New("exec")}
 		store := &orgUnitPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx, nil })}
-		if _, err := store.EvaluateRescindOrgDenyReasons(ctx, "t1", nowOrgID); err == nil {
+		if _, err := store.EvaluateRescindOrgDenyReasons(ctx, "t1", mustTestOrgNodeKey(t, nowOrgID)); err == nil {
 			t.Fatal("expected error")
 		}
 	})
@@ -314,7 +323,7 @@ func TestOrgUnitPGStore_EvaluateRescindOrgDenyReasons(t *testing.T) {
 	t.Run("root query error", func(t *testing.T) {
 		tx := &stubTx{row: ptrScanRow{err: errors.New("boom")}}
 		store := &orgUnitPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx, nil })}
-		if _, err := store.EvaluateRescindOrgDenyReasons(ctx, "t1", nowOrgID); err == nil {
+		if _, err := store.EvaluateRescindOrgDenyReasons(ctx, "t1", mustTestOrgNodeKey(t, nowOrgID)); err == nil {
 			t.Fatal("expected error")
 		}
 	})
@@ -325,7 +334,7 @@ func TestOrgUnitPGStore_EvaluateRescindOrgDenyReasons(t *testing.T) {
 			row2: ptrScanRow{err: errors.New("boom")},
 		}
 		store := &orgUnitPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx, nil })}
-		if _, err := store.EvaluateRescindOrgDenyReasons(ctx, "t1", nowOrgID); err == nil {
+		if _, err := store.EvaluateRescindOrgDenyReasons(ctx, "t1", mustTestOrgNodeKey(t, nowOrgID)); err == nil {
 			t.Fatal("expected error")
 		}
 	})
@@ -337,7 +346,7 @@ func TestOrgUnitPGStore_EvaluateRescindOrgDenyReasons(t *testing.T) {
 			row3: ptrScanRow{err: errors.New("boom")},
 		}
 		store := &orgUnitPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx, nil })}
-		if _, err := store.EvaluateRescindOrgDenyReasons(ctx, "t1", nowOrgID); err == nil {
+		if _, err := store.EvaluateRescindOrgDenyReasons(ctx, "t1", mustTestOrgNodeKey(t, nowOrgID)); err == nil {
 			t.Fatal("expected error")
 		}
 	})
@@ -349,7 +358,7 @@ func TestOrgUnitPGStore_EvaluateRescindOrgDenyReasons(t *testing.T) {
 			row3: ptrScanRow{err: errors.New("boom")},
 		}
 		store := &orgUnitPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx, nil })}
-		if _, err := store.EvaluateRescindOrgDenyReasons(ctx, "t1", nowOrgID); err == nil {
+		if _, err := store.EvaluateRescindOrgDenyReasons(ctx, "t1", mustTestOrgNodeKey(t, nowOrgID)); err == nil {
 			t.Fatal("expected error")
 		}
 	})
@@ -362,7 +371,7 @@ func TestOrgUnitPGStore_EvaluateRescindOrgDenyReasons(t *testing.T) {
 			commitErr: errors.New("commit"),
 		}
 		store := &orgUnitPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx, nil })}
-		if _, err := store.EvaluateRescindOrgDenyReasons(ctx, "t1", nowOrgID); err == nil {
+		if _, err := store.EvaluateRescindOrgDenyReasons(ctx, "t1", mustTestOrgNodeKey(t, nowOrgID)); err == nil {
 			t.Fatal("expected error")
 		}
 	})
@@ -374,7 +383,7 @@ func TestOrgUnitPGStore_EvaluateRescindOrgDenyReasons(t *testing.T) {
 			row3: ptrScanRow{vals: []any{false}},
 		}
 		store := &orgUnitPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx, nil })}
-		deny, err := store.EvaluateRescindOrgDenyReasons(ctx, "t1", nowOrgID)
+		deny, err := store.EvaluateRescindOrgDenyReasons(ctx, "t1", mustTestOrgNodeKey(t, nowOrgID))
 		if err != nil {
 			t.Fatalf("err=%v", err)
 		}
@@ -390,7 +399,7 @@ func TestOrgUnitPGStore_EvaluateRescindOrgDenyReasons(t *testing.T) {
 			row3: ptrScanRow{vals: []any{false}},
 		}
 		store := &orgUnitPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx, nil })}
-		deny, err := store.EvaluateRescindOrgDenyReasons(ctx, "t1", nowOrgID)
+		deny, err := store.EvaluateRescindOrgDenyReasons(ctx, "t1", mustTestOrgNodeKey(t, nowOrgID))
 		if err != nil {
 			t.Fatalf("err=%v", err)
 		}
@@ -407,7 +416,7 @@ func TestOrgUnitPGStore_EvaluateRescindOrgDenyReasons(t *testing.T) {
 			row4: ptrScanRow{vals: []any{true}},
 		}
 		store := &orgUnitPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx, nil })}
-		deny, err := store.EvaluateRescindOrgDenyReasons(ctx, "t1", nowOrgID)
+		deny, err := store.EvaluateRescindOrgDenyReasons(ctx, "t1", mustTestOrgNodeKey(t, nowOrgID))
 		if err != nil {
 			t.Fatalf("err=%v", err)
 		}
@@ -487,7 +496,7 @@ func TestOrgUnitPGStore_ResolveAppendFacts(t *testing.T) {
 
 	t.Run("begin error", func(t *testing.T) {
 		store := &orgUnitPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return nil, errors.New("begin") })}
-		if _, err := store.ResolveAppendFacts(ctx, "t1", 10000001, "2026-01-01"); err == nil {
+		if _, err := store.ResolveAppendFacts(ctx, "t1", mustTestOrgNodeKey(t, 10000001), "2026-01-01"); err == nil {
 			t.Fatal("expected error")
 		}
 	})
@@ -495,7 +504,7 @@ func TestOrgUnitPGStore_ResolveAppendFacts(t *testing.T) {
 	t.Run("exec error", func(t *testing.T) {
 		tx := &stubTx{execErr: errors.New("exec")}
 		store := &orgUnitPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx, nil })}
-		if _, err := store.ResolveAppendFacts(ctx, "t1", 10000001, "2026-01-01"); err == nil {
+		if _, err := store.ResolveAppendFacts(ctx, "t1", mustTestOrgNodeKey(t, 10000001), "2026-01-01"); err == nil {
 			t.Fatal("expected error")
 		}
 	})
@@ -503,7 +512,7 @@ func TestOrgUnitPGStore_ResolveAppendFacts(t *testing.T) {
 	t.Run("root query error", func(t *testing.T) {
 		tx := &stubTx{row: ptrScanRow{err: errors.New("boom")}}
 		store := &orgUnitPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx, nil })}
-		if _, err := store.ResolveAppendFacts(ctx, "t1", 10000001, "2026-01-01"); err == nil {
+		if _, err := store.ResolveAppendFacts(ctx, "t1", mustTestOrgNodeKey(t, 10000001), "2026-01-01"); err == nil {
 			t.Fatal("expected error")
 		}
 	})
@@ -514,7 +523,7 @@ func TestOrgUnitPGStore_ResolveAppendFacts(t *testing.T) {
 			row2: metadataScanRow{err: errors.New("boom")},
 		}
 		store := &orgUnitPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx, nil })}
-		if _, err := store.ResolveAppendFacts(ctx, "t1", 10000001, "2026-01-01"); err == nil {
+		if _, err := store.ResolveAppendFacts(ctx, "t1", mustTestOrgNodeKey(t, 10000001), "2026-01-01"); err == nil {
 			t.Fatal("expected error")
 		}
 	})
@@ -525,7 +534,7 @@ func TestOrgUnitPGStore_ResolveAppendFacts(t *testing.T) {
 			row2: metadataScanRow{err: pgx.ErrNoRows},
 		}
 		store := &orgUnitPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx, nil })}
-		facts, err := store.ResolveAppendFacts(ctx, "t1", 10000002, "2026-01-01")
+		facts, err := store.ResolveAppendFacts(ctx, "t1", mustTestOrgNodeKey(t, 10000002), "2026-01-01")
 		if err != nil {
 			t.Fatalf("err=%v", err)
 		}
@@ -540,7 +549,7 @@ func TestOrgUnitPGStore_ResolveAppendFacts(t *testing.T) {
 			row2: metadataScanRow{vals: []any{" disabled "}},
 		}
 		store := &orgUnitPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx, nil })}
-		facts, err := store.ResolveAppendFacts(ctx, "t1", 10000001, "2026-01-01")
+		facts, err := store.ResolveAppendFacts(ctx, "t1", mustTestOrgNodeKey(t, 10000001), "2026-01-01")
 		if err != nil {
 			t.Fatalf("err=%v", err)
 		}
@@ -559,7 +568,7 @@ func TestOrgUnitPGStore_ResolveAppendFacts(t *testing.T) {
 			commitErr: errors.New("commit"),
 		}
 		store := &orgUnitPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx, nil })}
-		if _, err := store.ResolveAppendFacts(ctx, "t1", 10000001, "2026-01-01"); err == nil {
+		if _, err := store.ResolveAppendFacts(ctx, "t1", mustTestOrgNodeKey(t, 10000001), "2026-01-01"); err == nil {
 			t.Fatal("expected error")
 		}
 	})

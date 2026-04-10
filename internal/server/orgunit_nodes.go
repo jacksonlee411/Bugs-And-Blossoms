@@ -19,6 +19,7 @@ import (
 )
 
 type OrgUnitNode struct {
+	OrgID          int
 	ID             string
 	OrgCode        string
 	Name           string
@@ -30,6 +31,7 @@ type OrgUnitNode struct {
 
 type OrgUnitChild struct {
 	OrgID          int
+	OrgNodeKey     string
 	OrgCode        string
 	Name           string
 	Status         string
@@ -38,37 +40,43 @@ type OrgUnitChild struct {
 }
 
 type OrgUnitNodeDetails struct {
-	OrgID          int
-	OrgCode        string
-	Name           string
-	Status         string
-	ParentID       int
-	ParentCode     string
-	ParentName     string
-	IsBusinessUnit bool
-	ManagerPernr   string
-	ManagerName    string
-	PathIDs        []int
-	FullNamePath   string
-	CreatedAt      time.Time
-	UpdatedAt      time.Time
-	EventUUID      string
+	OrgID            int
+	OrgNodeKey       string
+	OrgCode          string
+	Name             string
+	Status           string
+	ParentID         int
+	ParentOrgNodeKey string
+	ParentCode       string
+	ParentName       string
+	IsBusinessUnit   bool
+	ManagerPernr     string
+	ManagerName      string
+	PathIDs          []int
+	PathOrgNodeKeys  []string
+	FullNamePath     string
+	CreatedAt        time.Time
+	UpdatedAt        time.Time
+	EventUUID        string
 }
 
 type OrgUnitSearchResult struct {
-	TargetOrgID   int      `json:"target_org_id"`
-	TargetOrgCode string   `json:"target_org_code"`
-	TargetName    string   `json:"target_name"`
-	PathOrgIDs    []int    `json:"path_org_ids"`
-	PathOrgCodes  []string `json:"path_org_codes,omitempty"`
-	TreeAsOf      string   `json:"tree_as_of"`
+	TargetOrgID      int      `json:"-"`
+	TargetOrgNodeKey string   `json:"-"`
+	TargetOrgCode    string   `json:"target_org_code"`
+	TargetName       string   `json:"target_name"`
+	PathOrgIDs       []int    `json:"-"`
+	PathOrgNodeKeys  []string `json:"-"`
+	PathOrgCodes     []string `json:"path_org_codes,omitempty"`
+	TreeAsOf         string   `json:"tree_as_of"`
 }
 
 type OrgUnitSearchCandidate struct {
-	OrgID   int
-	OrgCode string
-	Name    string
-	Status  string
+	OrgID      int
+	OrgNodeKey string
+	OrgCode    string
+	Name       string
+	Status     string
 }
 
 type OrgUnitNodeVersion struct {
@@ -82,6 +90,7 @@ type OrgUnitNodeAuditEvent struct {
 	EventID              int64
 	EventUUID            string
 	OrgID                int
+	OrgNodeKey           string
 	EventType            string
 	EffectiveDate        string
 	TxTime               time.Time
@@ -222,9 +231,9 @@ type OrgUnitNodesCurrentBusinessUnitSetter interface {
 }
 
 type OrgUnitCodeResolver interface {
-	ResolveOrgID(ctx context.Context, tenantID string, orgCode string) (int, error)
-	ResolveOrgCode(ctx context.Context, tenantID string, orgID int) (string, error)
-	ResolveOrgCodes(ctx context.Context, tenantID string, orgIDs []int) (map[int]string, error)
+	ResolveOrgNodeKeyByCode(ctx context.Context, tenantID string, orgCode string) (string, error)
+	ResolveOrgCodeByNodeKey(ctx context.Context, tenantID string, orgNodeKey string) (string, error)
+	ResolveOrgCodesByNodeKeys(ctx context.Context, tenantID string, orgNodeKeys []string) (map[string]string, error)
 }
 
 type OrgUnitNodeChildrenReader interface {
@@ -272,7 +281,27 @@ func newOrgUnitPGStore(pool pgBeginner) OrgUnitStore {
 	return &orgUnitPGStore{pool: pool}
 }
 
-func parseOrgID8(input string) (int, error) {
+func parseOrgNodeKey(input string) (string, error) {
+	orgNodeKey, err := orgunitpkg.NormalizeOrgNodeKey(input)
+	if err != nil {
+		return "", errors.New("org_node_key invalid")
+	}
+	return orgNodeKey, nil
+}
+
+func parseOptionalOrgNodeKey(input string) (string, bool, error) {
+	trimmed := strings.TrimSpace(input)
+	if trimmed == "" {
+		return "", false, nil
+	}
+	value, err := normalizeOrgNodeKeyInput(trimmed)
+	if err != nil {
+		return "", false, err
+	}
+	return value, true, nil
+}
+
+func parseLegacyOrgID8Digits(input string) (int, error) {
 	trimmed := strings.TrimSpace(input)
 	if trimmed == "" {
 		return 0, errors.New("org_id is required")
@@ -290,6 +319,24 @@ func parseOrgID8(input string) (int, error) {
 	return value, nil
 }
 
+func normalizeOrgNodeKeyInput(input string) (string, error) {
+	if orgNodeKey, err := parseOrgNodeKey(input); err == nil {
+		return orgNodeKey, nil
+	}
+	orgID, err := parseLegacyOrgID8Digits(input)
+	if err != nil {
+		return "", err
+	}
+	return encodeOrgNodeKeyFromID(orgID)
+}
+
+func parseOrgID8(input string) (int, error) {
+	if orgNodeKey, err := parseOrgNodeKey(input); err == nil {
+		return decodeOrgNodeKeyToID(orgNodeKey)
+	}
+	return parseLegacyOrgID8Digits(input)
+}
+
 func parseOptionalOrgID8(input string) (int, bool, error) {
 	trimmed := strings.TrimSpace(input)
 	if trimmed == "" {
@@ -300,6 +347,22 @@ func parseOptionalOrgID8(input string) (int, bool, error) {
 		return 0, false, err
 	}
 	return value, true, nil
+}
+
+func encodeOrgNodeKeyFromID(orgID int) (string, error) {
+	return orgunitpkg.EncodeOrgNodeKey(int64(orgID))
+}
+
+func decodeOrgNodeKeyToID(orgNodeKey string) (int, error) {
+	normalized, err := normalizeOrgNodeKeyInput(orgNodeKey)
+	if err != nil {
+		return 0, err
+	}
+	decoded, err := orgunitpkg.DecodeOrgNodeKey(normalized)
+	if err != nil {
+		return 0, err
+	}
+	return int(decoded), nil
 }
 
 func parseIncludeDisabled(raw string) bool {
@@ -436,28 +499,28 @@ func normalizeOrgUnitTargetStatus(raw string) (string, error) {
 	}
 }
 
-func (s *orgUnitPGStore) ResolveOrgID(ctx context.Context, tenantID string, orgCode string) (int, error) {
+func (s *orgUnitPGStore) ResolveOrgNodeKeyByCode(ctx context.Context, tenantID string, orgCode string) (string, error) {
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
-		return 0, err
+		return "", err
 	}
 	defer func() { _ = tx.Rollback(context.Background()) }()
 
 	if _, err := tx.Exec(ctx, `SELECT set_config('app.current_tenant', $1, true);`, tenantID); err != nil {
-		return 0, err
+		return "", err
 	}
 
-	orgID, err := orgunitpkg.ResolveOrgID(ctx, tx, tenantID, orgCode)
+	orgNodeKey, err := orgunitpkg.ResolveOrgNodeKeyByCode(ctx, tx, tenantID, orgCode)
 	if err != nil {
-		return 0, err
+		return "", err
 	}
 	if err := tx.Commit(ctx); err != nil {
-		return 0, err
+		return "", err
 	}
-	return orgID, nil
+	return orgNodeKey, nil
 }
 
-func (s *orgUnitPGStore) ResolveOrgCode(ctx context.Context, tenantID string, orgID int) (string, error) {
+func (s *orgUnitPGStore) ResolveOrgCodeByNodeKey(ctx context.Context, tenantID string, orgNodeKey string) (string, error) {
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
 		return "", err
@@ -468,7 +531,7 @@ func (s *orgUnitPGStore) ResolveOrgCode(ctx context.Context, tenantID string, or
 		return "", err
 	}
 
-	orgCode, err := orgunitpkg.ResolveOrgCode(ctx, tx, tenantID, orgID)
+	orgCode, err := orgunitpkg.ResolveOrgCodeByNodeKey(ctx, tx, tenantID, orgNodeKey)
 	if err != nil {
 		return "", err
 	}
@@ -478,7 +541,7 @@ func (s *orgUnitPGStore) ResolveOrgCode(ctx context.Context, tenantID string, or
 	return orgCode, nil
 }
 
-func (s *orgUnitPGStore) ResolveOrgCodes(ctx context.Context, tenantID string, orgIDs []int) (map[int]string, error) {
+func (s *orgUnitPGStore) ResolveOrgCodesByNodeKeys(ctx context.Context, tenantID string, orgNodeKeys []string) (map[string]string, error) {
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
 		return nil, err
@@ -489,14 +552,14 @@ func (s *orgUnitPGStore) ResolveOrgCodes(ctx context.Context, tenantID string, o
 		return nil, err
 	}
 
-	codes, err := orgunitpkg.ResolveOrgCodes(ctx, tx, tenantID, orgIDs)
+	resolvedByNodeKey, err := orgunitpkg.ResolveOrgCodesByNodeKeys(ctx, tx, tenantID, orgNodeKeys)
 	if err != nil {
 		return nil, err
 	}
 	if err := tx.Commit(ctx); err != nil {
 		return nil, err
 	}
-	return codes, nil
+	return resolvedByNodeKey, nil
 }
 
 func (s *orgUnitPGStore) ListNodesCurrent(ctx context.Context, tenantID string, asOfDate string) ([]OrgUnitNode, error) {
@@ -747,7 +810,13 @@ func (s *orgUnitPGStore) ListChildren(ctx context.Context, tenantID string, pare
 	var out []OrgUnitChild
 	for rows.Next() {
 		var item OrgUnitChild
-		if err := rows.Scan(&item.OrgID, &item.OrgCode, &item.Name, &item.IsBusinessUnit, &item.HasChildren); err != nil {
+		var orgID int
+		if err := rows.Scan(&orgID, &item.OrgCode, &item.Name, &item.IsBusinessUnit, &item.HasChildren); err != nil {
+			return nil, err
+		}
+		item.OrgID = orgID
+		item.OrgNodeKey, err = encodeOrgNodeKeyFromID(orgID)
+		if err != nil {
 			return nil, err
 		}
 		item.Status = "active"
@@ -824,7 +893,13 @@ func (s *orgUnitPGStore) ListChildrenWithVisibility(ctx context.Context, tenantI
 	var out []OrgUnitChild
 	for rows.Next() {
 		var item OrgUnitChild
-		if err := rows.Scan(&item.OrgID, &item.OrgCode, &item.Name, &item.Status, &item.IsBusinessUnit, &item.HasChildren); err != nil {
+		var orgID int
+		if err := rows.Scan(&orgID, &item.OrgCode, &item.Name, &item.Status, &item.IsBusinessUnit, &item.HasChildren); err != nil {
+			return nil, err
+		}
+		item.OrgID = orgID
+		item.OrgNodeKey, err = encodeOrgNodeKeyFromID(orgID)
+		if err != nil {
 			return nil, err
 		}
 		out = append(out, item)
@@ -850,6 +925,9 @@ func (s *orgUnitPGStore) GetNodeDetails(ctx context.Context, tenantID string, or
 	}
 
 	var details OrgUnitNodeDetails
+	var rawOrgID int
+	var rawParentID int
+	var rawPathIDs []int
 	if err := tx.QueryRow(ctx, `
 	SELECT
 	  v.org_id,
@@ -890,17 +968,17 @@ func (s *orgUnitPGStore) GetNodeDetails(ctx context.Context, tenantID string, or
 	  AND v.validity @> $3::date
 	LIMIT 1
 	`, tenantID, orgID, asOfDate).Scan(
-		&details.OrgID,
+		&rawOrgID,
 		&details.OrgCode,
 		&details.Name,
 		&details.Status,
-		&details.ParentID,
+		&rawParentID,
 		&details.ParentCode,
 		&details.ParentName,
 		&details.IsBusinessUnit,
 		&details.ManagerPernr,
 		&details.ManagerName,
-		&details.PathIDs,
+		&rawPathIDs,
 		&details.FullNamePath,
 		&details.CreatedAt,
 		&details.UpdatedAt,
@@ -910,6 +988,30 @@ func (s *orgUnitPGStore) GetNodeDetails(ctx context.Context, tenantID string, or
 			return OrgUnitNodeDetails{}, errOrgUnitNotFound
 		}
 		return OrgUnitNodeDetails{}, err
+	}
+
+	details.OrgNodeKey, err = encodeOrgNodeKeyFromID(rawOrgID)
+	if err != nil {
+		return OrgUnitNodeDetails{}, err
+	}
+	details.OrgID = rawOrgID
+	if rawParentID > 0 {
+		details.ParentID = rawParentID
+		details.ParentOrgNodeKey, err = encodeOrgNodeKeyFromID(rawParentID)
+		if err != nil {
+			return OrgUnitNodeDetails{}, err
+		}
+	}
+	if len(rawPathIDs) > 0 {
+		details.PathIDs = append([]int(nil), rawPathIDs...)
+		details.PathOrgNodeKeys = make([]string, 0, len(rawPathIDs))
+		for _, pathID := range rawPathIDs {
+			pathKey, encodeErr := encodeOrgNodeKeyFromID(pathID)
+			if encodeErr != nil {
+				return OrgUnitNodeDetails{}, encodeErr
+			}
+			details.PathOrgNodeKeys = append(details.PathOrgNodeKeys, pathKey)
+		}
 	}
 
 	if err := tx.Commit(ctx); err != nil {
@@ -934,6 +1036,9 @@ func (s *orgUnitPGStore) GetNodeDetailsWithVisibility(ctx context.Context, tenan
 	}
 
 	var details OrgUnitNodeDetails
+	var rawOrgID int
+	var rawParentID int
+	var rawPathIDs []int
 	if err := tx.QueryRow(ctx, `
 	SELECT
 	  v.org_id,
@@ -972,17 +1077,17 @@ func (s *orgUnitPGStore) GetNodeDetailsWithVisibility(ctx context.Context, tenan
 	  AND v.validity @> $3::date
 	LIMIT 1
 	`, tenantID, orgID, asOfDate).Scan(
-		&details.OrgID,
+		&rawOrgID,
 		&details.OrgCode,
 		&details.Name,
 		&details.Status,
-		&details.ParentID,
+		&rawParentID,
 		&details.ParentCode,
 		&details.ParentName,
 		&details.IsBusinessUnit,
 		&details.ManagerPernr,
 		&details.ManagerName,
-		&details.PathIDs,
+		&rawPathIDs,
 		&details.FullNamePath,
 		&details.CreatedAt,
 		&details.UpdatedAt,
@@ -992,6 +1097,30 @@ func (s *orgUnitPGStore) GetNodeDetailsWithVisibility(ctx context.Context, tenan
 			return OrgUnitNodeDetails{}, errOrgUnitNotFound
 		}
 		return OrgUnitNodeDetails{}, err
+	}
+
+	details.OrgNodeKey, err = encodeOrgNodeKeyFromID(rawOrgID)
+	if err != nil {
+		return OrgUnitNodeDetails{}, err
+	}
+	details.OrgID = rawOrgID
+	if rawParentID > 0 {
+		details.ParentID = rawParentID
+		details.ParentOrgNodeKey, err = encodeOrgNodeKeyFromID(rawParentID)
+		if err != nil {
+			return OrgUnitNodeDetails{}, err
+		}
+	}
+	if len(rawPathIDs) > 0 {
+		details.PathIDs = append([]int(nil), rawPathIDs...)
+		details.PathOrgNodeKeys = make([]string, 0, len(rawPathIDs))
+		for _, pathID := range rawPathIDs {
+			pathKey, encodeErr := encodeOrgNodeKeyFromID(pathID)
+			if encodeErr != nil {
+				return OrgUnitNodeDetails{}, encodeErr
+			}
+			details.PathOrgNodeKeys = append(details.PathOrgNodeKeys, pathKey)
+		}
 	}
 
 	if err := tx.Commit(ctx); err != nil {
@@ -1018,6 +1147,7 @@ func (s *orgUnitPGStore) SearchNode(ctx context.Context, tenantID string, query 
 
 	var result OrgUnitSearchResult
 	var pathIDs []int
+	var targetOrgID int
 	found := false
 
 	if normalized, err := orgunitpkg.NormalizeOrgCode(trimmed); err == nil {
@@ -1032,7 +1162,7 @@ func (s *orgUnitPGStore) SearchNode(ctx context.Context, tenantID string, query 
 		  AND v.validity @> $3::date
 		  AND c.org_code = $2::text
 		LIMIT 1
-		`, tenantID, normalized, asOfDate).Scan(&result.TargetOrgID, &result.TargetOrgCode, &result.TargetName, &pathIDs); err == nil {
+		`, tenantID, normalized, asOfDate).Scan(&targetOrgID, &result.TargetOrgCode, &result.TargetName, &pathIDs); err == nil {
 			found = true
 		} else if !errors.Is(err, pgx.ErrNoRows) {
 			return OrgUnitSearchResult{}, err
@@ -1052,15 +1182,29 @@ func (s *orgUnitPGStore) SearchNode(ctx context.Context, tenantID string, query 
 		  AND v.name ILIKE $2::text
 		ORDER BY v.node_path
 		LIMIT 1
-		`, tenantID, "%"+trimmed+"%", asOfDate).Scan(&result.TargetOrgID, &result.TargetOrgCode, &result.TargetName, &pathIDs); err != nil {
+		`, tenantID, "%"+trimmed+"%", asOfDate).Scan(&targetOrgID, &result.TargetOrgCode, &result.TargetName, &pathIDs); err != nil {
 			if errors.Is(err, pgx.ErrNoRows) {
 				return OrgUnitSearchResult{}, errOrgUnitNotFound
 			}
 			return OrgUnitSearchResult{}, err
 		}
 	}
-
-	result.PathOrgIDs = append([]int(nil), pathIDs...)
+	result.TargetOrgNodeKey, err = encodeOrgNodeKeyFromID(targetOrgID)
+	if err != nil {
+		return OrgUnitSearchResult{}, err
+	}
+	result.TargetOrgID = targetOrgID
+	if len(pathIDs) > 0 {
+		result.PathOrgIDs = append([]int(nil), pathIDs...)
+		result.PathOrgNodeKeys = make([]string, 0, len(pathIDs))
+		for _, pathID := range pathIDs {
+			pathKey, encodeErr := encodeOrgNodeKeyFromID(pathID)
+			if encodeErr != nil {
+				return OrgUnitSearchResult{}, encodeErr
+			}
+			result.PathOrgNodeKeys = append(result.PathOrgNodeKeys, pathKey)
+		}
+	}
 	result.TreeAsOf = asOfDate
 
 	if err := tx.Commit(ctx); err != nil {
@@ -1091,6 +1235,7 @@ func (s *orgUnitPGStore) SearchNodeWithVisibility(ctx context.Context, tenantID 
 
 	var result OrgUnitSearchResult
 	var pathIDs []int
+	var targetOrgID int
 	found := false
 
 	if normalized, err := orgunitpkg.NormalizeOrgCode(trimmed); err == nil {
@@ -1104,7 +1249,7 @@ func (s *orgUnitPGStore) SearchNodeWithVisibility(ctx context.Context, tenantID 
 		  AND v.validity @> $3::date
 		  AND c.org_code = $2::text
 		LIMIT 1
-		`, tenantID, normalized, asOfDate).Scan(&result.TargetOrgID, &result.TargetOrgCode, &result.TargetName, &pathIDs); err == nil {
+		`, tenantID, normalized, asOfDate).Scan(&targetOrgID, &result.TargetOrgCode, &result.TargetName, &pathIDs); err == nil {
 			found = true
 		} else if !errors.Is(err, pgx.ErrNoRows) {
 			return OrgUnitSearchResult{}, err
@@ -1123,15 +1268,29 @@ func (s *orgUnitPGStore) SearchNodeWithVisibility(ctx context.Context, tenantID 
 		  AND v.name ILIKE $2::text
 		ORDER BY v.node_path
 		LIMIT 1
-		`, tenantID, "%"+trimmed+"%", asOfDate).Scan(&result.TargetOrgID, &result.TargetOrgCode, &result.TargetName, &pathIDs); err != nil {
+		`, tenantID, "%"+trimmed+"%", asOfDate).Scan(&targetOrgID, &result.TargetOrgCode, &result.TargetName, &pathIDs); err != nil {
 			if errors.Is(err, pgx.ErrNoRows) {
 				return OrgUnitSearchResult{}, errOrgUnitNotFound
 			}
 			return OrgUnitSearchResult{}, err
 		}
 	}
-
-	result.PathOrgIDs = append([]int(nil), pathIDs...)
+	result.TargetOrgNodeKey, err = encodeOrgNodeKeyFromID(targetOrgID)
+	if err != nil {
+		return OrgUnitSearchResult{}, err
+	}
+	result.TargetOrgID = targetOrgID
+	if len(pathIDs) > 0 {
+		result.PathOrgIDs = append([]int(nil), pathIDs...)
+		result.PathOrgNodeKeys = make([]string, 0, len(pathIDs))
+		for _, pathID := range pathIDs {
+			pathKey, encodeErr := encodeOrgNodeKeyFromID(pathID)
+			if encodeErr != nil {
+				return OrgUnitSearchResult{}, encodeErr
+			}
+			result.PathOrgNodeKeys = append(result.PathOrgNodeKeys, pathKey)
+		}
+	}
 	result.TreeAsOf = asOfDate
 
 	if err := tx.Commit(ctx); err != nil {
@@ -1180,7 +1339,13 @@ func (s *orgUnitPGStore) SearchNodeCandidates(ctx context.Context, tenantID stri
 		var out []OrgUnitSearchCandidate
 		for rows.Next() {
 			var item OrgUnitSearchCandidate
-			if err := rows.Scan(&item.OrgID, &item.OrgCode, &item.Name); err != nil {
+			var orgID int
+			if err := rows.Scan(&orgID, &item.OrgCode, &item.Name); err != nil {
+				return nil, err
+			}
+			item.OrgID = orgID
+			item.OrgNodeKey, err = encodeOrgNodeKeyFromID(orgID)
+			if err != nil {
 				return nil, err
 			}
 			item.Status = "active"
@@ -1218,7 +1383,13 @@ func (s *orgUnitPGStore) SearchNodeCandidates(ctx context.Context, tenantID stri
 	var out []OrgUnitSearchCandidate
 	for rows.Next() {
 		var item OrgUnitSearchCandidate
-		if err := rows.Scan(&item.OrgID, &item.OrgCode, &item.Name); err != nil {
+		var orgID int
+		if err := rows.Scan(&orgID, &item.OrgCode, &item.Name); err != nil {
+			return nil, err
+		}
+		item.OrgID = orgID
+		item.OrgNodeKey, err = encodeOrgNodeKeyFromID(orgID)
+		if err != nil {
 			return nil, err
 		}
 		item.Status = "active"
@@ -1279,7 +1450,13 @@ func (s *orgUnitPGStore) SearchNodeCandidatesWithVisibility(ctx context.Context,
 		var out []OrgUnitSearchCandidate
 		for rows.Next() {
 			var item OrgUnitSearchCandidate
-			if err := rows.Scan(&item.OrgID, &item.OrgCode, &item.Name, &item.Status); err != nil {
+			var orgID int
+			if err := rows.Scan(&orgID, &item.OrgCode, &item.Name, &item.Status); err != nil {
+				return nil, err
+			}
+			item.OrgID = orgID
+			item.OrgNodeKey, err = encodeOrgNodeKeyFromID(orgID)
+			if err != nil {
 				return nil, err
 			}
 			out = append(out, item)
@@ -1315,7 +1492,13 @@ func (s *orgUnitPGStore) SearchNodeCandidatesWithVisibility(ctx context.Context,
 	var out []OrgUnitSearchCandidate
 	for rows.Next() {
 		var item OrgUnitSearchCandidate
-		if err := rows.Scan(&item.OrgID, &item.OrgCode, &item.Name, &item.Status); err != nil {
+		var orgID int
+		if err := rows.Scan(&orgID, &item.OrgCode, &item.Name, &item.Status); err != nil {
+			return nil, err
+		}
+		item.OrgID = orgID
+		item.OrgNodeKey, err = encodeOrgNodeKeyFromID(orgID)
+		if err != nil {
 			return nil, err
 		}
 		out = append(out, item)
@@ -1440,7 +1623,7 @@ func (s *orgUnitPGStore) ListNodeAuditEvents(ctx context.Context, tenantID strin
 		if err := rows.Scan(
 			&item.EventID,
 			&item.EventUUID,
-			&item.OrgID,
+			&orgID,
 			&item.EventType,
 			&effective,
 			&item.TxTime,
@@ -1467,6 +1650,11 @@ func (s *orgUnitPGStore) ListNodeAuditEvents(ctx context.Context, tenantID strin
 		if len(after) > 0 {
 			item.AfterSnapshot = json.RawMessage(after)
 		}
+		item.OrgNodeKey, err = encodeOrgNodeKeyFromID(orgID)
+		if err != nil {
+			return nil, err
+		}
+		item.OrgID = orgID
 		if !item.IsRescinded {
 			item.RescindedByEventUUID = ""
 			item.RescindedByRequestID = ""
@@ -1543,7 +1731,7 @@ func (s *orgUnitPGStore) MinEffectiveDate(ctx context.Context, tenantID string) 
 	return value.Format(asOfLayout), true, nil
 }
 
-func (s *orgUnitPGStore) ResolveSetID(ctx context.Context, tenantID string, orgUnitID string, asOfDate string) (string, error) {
+func (s *orgUnitPGStore) ResolveSetID(ctx context.Context, tenantID string, orgNodeKey string, asOfDate string) (string, error) {
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
 		return "", err
@@ -1554,11 +1742,12 @@ func (s *orgUnitPGStore) ResolveSetID(ctx context.Context, tenantID string, orgU
 		return "", err
 	}
 
-	if _, err := parseOrgID8(orgUnitID); err != nil {
+	normalizedOrgNodeKey, err := normalizeOrgNodeKeyInput(orgNodeKey)
+	if err != nil {
 		return "", err
 	}
 
-	out, err := setid.Resolve(ctx, tx, tenantID, orgUnitID, asOfDate)
+	out, err := setid.Resolve(ctx, tx, tenantID, normalizedOrgNodeKey, asOfDate)
 	if err != nil {
 		return "", err
 	}
@@ -1588,10 +1777,10 @@ func (s *orgUnitPGStore) CreateNodeCurrent(ctx context.Context, tenantID string,
 		return OrgUnitNode{}, err
 	}
 
-	if _, ok, err := parseOptionalOrgID8(parentID); err != nil {
+	if normalizedParentID, ok, err := parseOptionalOrgNodeKey(parentID); err != nil {
 		return OrgUnitNode{}, err
 	} else if ok {
-		parentID = strings.TrimSpace(parentID)
+		parentID = normalizedParentID
 	}
 
 	eventID, err := uuidv7.NewString()
@@ -1602,7 +1791,7 @@ func (s *orgUnitPGStore) CreateNodeCurrent(ctx context.Context, tenantID string,
 
 	payload := `{"org_code":` + strconv.Quote(normalizedCode) + `,"name":` + strconv.Quote(name)
 	if strings.TrimSpace(parentID) != "" {
-		payload += `,"parent_id":` + strconv.Quote(parentID)
+		payload += `,"parent_org_node_key":` + strconv.Quote(parentID)
 	}
 	payload += `,"is_business_unit":` + strconv.FormatBool(isBusinessUnit)
 	payload += `}`
@@ -1637,10 +1826,14 @@ WHERE tenant_uuid = $1::uuid AND event_uuid = $2::uuid
 		return OrgUnitNode{}, err
 	}
 
-	return OrgUnitNode{ID: strconv.Itoa(orgID), OrgCode: normalizedCode, Name: name, IsBusinessUnit: isBusinessUnit, CreatedAt: createdAt}, nil
+	orgNodeKey, err := encodeOrgNodeKeyFromID(orgID)
+	if err != nil {
+		return OrgUnitNode{}, err
+	}
+	return OrgUnitNode{OrgID: orgID, ID: orgNodeKey, OrgCode: normalizedCode, Name: name, IsBusinessUnit: isBusinessUnit, CreatedAt: createdAt}, nil
 }
 
-func (s *orgUnitPGStore) RenameNodeCurrent(ctx context.Context, tenantID string, effectiveDate string, orgID string, newName string) error {
+func (s *orgUnitPGStore) RenameNodeCurrent(ctx context.Context, tenantID string, effectiveDate string, orgNodeKey string, newName string) error {
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
 		return err
@@ -1655,7 +1848,8 @@ func (s *orgUnitPGStore) RenameNodeCurrent(ctx context.Context, tenantID string,
 		return errors.New("effective_date is required")
 	}
 
-	if _, err := parseOrgID8(orgID); err != nil {
+	orgID, err := decodeOrgNodeKeyToID(orgNodeKey)
+	if err != nil {
 		return err
 	}
 	if strings.TrimSpace(newName) == "" {
@@ -1681,7 +1875,7 @@ SELECT orgunit.submit_org_event(
   $6::text,
   $7::uuid
 )
-	`, eventID, tenantID, orgID, effectiveDate, []byte(payload), eventID, initiatorUUID); err != nil {
+		`, eventID, tenantID, orgID, effectiveDate, []byte(payload), eventID, initiatorUUID); err != nil {
 		return err
 	}
 
@@ -1691,7 +1885,7 @@ SELECT orgunit.submit_org_event(
 	return nil
 }
 
-func (s *orgUnitPGStore) MoveNodeCurrent(ctx context.Context, tenantID string, effectiveDate string, orgID string, newParentID string) error {
+func (s *orgUnitPGStore) MoveNodeCurrent(ctx context.Context, tenantID string, effectiveDate string, orgNodeKey string, newParentID string) error {
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
 		return err
@@ -1706,7 +1900,8 @@ func (s *orgUnitPGStore) MoveNodeCurrent(ctx context.Context, tenantID string, e
 		return errors.New("effective_date is required")
 	}
 
-	if _, err := parseOrgID8(orgID); err != nil {
+	orgID, err := decodeOrgNodeKeyToID(orgNodeKey)
+	if err != nil {
 		return err
 	}
 
@@ -1717,10 +1912,10 @@ func (s *orgUnitPGStore) MoveNodeCurrent(ctx context.Context, tenantID string, e
 	initiatorUUID := orgUnitInitiatorUUID(ctx, tenantID)
 
 	payload := `{}`
-	if _, ok, err := parseOptionalOrgID8(newParentID); err != nil {
+	if _, ok, err := parseOptionalOrgNodeKey(newParentID); err != nil {
 		return err
 	} else if ok {
-		payload = `{"new_parent_id":` + strconv.Quote(newParentID) + `}`
+		payload = `{"new_parent_org_node_key":` + strconv.Quote(newParentID) + `}`
 	}
 
 	if _, err := tx.Exec(ctx, `
@@ -1744,7 +1939,7 @@ SELECT orgunit.submit_org_event(
 	return nil
 }
 
-func (s *orgUnitPGStore) DisableNodeCurrent(ctx context.Context, tenantID string, effectiveDate string, orgID string) error {
+func (s *orgUnitPGStore) DisableNodeCurrent(ctx context.Context, tenantID string, effectiveDate string, orgNodeKey string) error {
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
 		return err
@@ -1759,7 +1954,8 @@ func (s *orgUnitPGStore) DisableNodeCurrent(ctx context.Context, tenantID string
 		return errors.New("effective_date is required")
 	}
 
-	if _, err := parseOrgID8(orgID); err != nil {
+	orgID, err := decodeOrgNodeKeyToID(orgNodeKey)
+	if err != nil {
 		return err
 	}
 
@@ -1833,7 +2029,7 @@ SELECT orgunit.submit_org_event_correction(
 	return nil
 }
 
-func (s *orgUnitPGStore) SetBusinessUnitCurrent(ctx context.Context, tenantID string, effectiveDate string, orgID string, isBusinessUnit bool, requestID string) error {
+func (s *orgUnitPGStore) SetBusinessUnitCurrent(ctx context.Context, tenantID string, effectiveDate string, orgNodeKey string, isBusinessUnit bool, requestID string) error {
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
 		return err
@@ -1847,7 +2043,8 @@ func (s *orgUnitPGStore) SetBusinessUnitCurrent(ctx context.Context, tenantID st
 	if strings.TrimSpace(effectiveDate) == "" {
 		return errors.New("effective_date is required")
 	}
-	if _, err := parseOrgID8(orgID); err != nil {
+	orgID, err := decodeOrgNodeKeyToID(orgNodeKey)
+	if err != nil {
 		return err
 	}
 
@@ -1933,8 +2130,13 @@ func (s *orgUnitMemoryStore) createNode(tenantID string, orgCode string, name st
 	}
 	id := s.nextID
 	s.nextID++
+	orgNodeKey, err := encodeOrgNodeKeyFromID(id)
+	if err != nil {
+		return OrgUnitNode{}, err
+	}
 	n := OrgUnitNode{
-		ID:             strconv.Itoa(id),
+		OrgID:          id,
+		ID:             orgNodeKey,
 		OrgCode:        normalizedCode,
 		Name:           name,
 		Status:         "active",
@@ -1953,8 +2155,8 @@ func (s *orgUnitMemoryStore) ListNodesCurrentWithVisibility(_ context.Context, t
 	return s.listNodes(tenantID)
 }
 
-func (s *orgUnitMemoryStore) ResolveSetID(_ context.Context, _ string, orgUnitID string, _ string) (string, error) {
-	if _, err := parseOrgID8(orgUnitID); err != nil {
+func (s *orgUnitMemoryStore) ResolveSetID(_ context.Context, _ string, orgNodeKey string, _ string) (string, error) {
+	if _, err := normalizeOrgNodeKeyInput(orgNodeKey); err != nil {
 		return "", err
 	}
 	return "S2601", nil
@@ -1964,8 +2166,9 @@ func (s *orgUnitMemoryStore) CreateNodeCurrent(_ context.Context, tenantID strin
 	return s.createNode(tenantID, orgCode, name, isBusinessUnit)
 }
 
-func (s *orgUnitMemoryStore) RenameNodeCurrent(_ context.Context, tenantID string, _ string, orgID string, newName string) error {
-	if _, err := parseOrgID8(orgID); err != nil {
+func (s *orgUnitMemoryStore) RenameNodeCurrent(_ context.Context, tenantID string, _ string, orgNodeKey string, newName string) error {
+	normalizedOrgNodeKey, err := normalizeOrgNodeKeyInput(orgNodeKey)
+	if err != nil {
 		return err
 	}
 	if strings.TrimSpace(newName) == "" {
@@ -1974,93 +2177,120 @@ func (s *orgUnitMemoryStore) RenameNodeCurrent(_ context.Context, tenantID strin
 
 	nodes := s.nodes[tenantID]
 	for i := range nodes {
-		if nodes[i].ID == orgID {
+		if nodes[i].ID == normalizedOrgNodeKey {
 			nodes[i].Name = newName
 			s.nodes[tenantID] = nodes
 			return nil
 		}
 	}
-	return errors.New("org_id not found")
+	return errors.New("org_node_key not found")
 }
 
-func (s *orgUnitMemoryStore) MoveNodeCurrent(_ context.Context, tenantID string, _ string, orgID string, _ string) error {
-	if _, err := parseOrgID8(orgID); err != nil {
+func (s *orgUnitMemoryStore) MoveNodeCurrent(_ context.Context, tenantID string, _ string, orgNodeKey string, _ string) error {
+	normalizedOrgNodeKey, err := normalizeOrgNodeKeyInput(orgNodeKey)
+	if err != nil {
 		return err
 	}
 
 	nodes := s.nodes[tenantID]
 	for i := range nodes {
-		if nodes[i].ID == orgID {
+		if nodes[i].ID == normalizedOrgNodeKey {
 			return nil
 		}
 	}
-	return errors.New("org_id not found")
+	return errors.New("org_node_key not found")
 }
 
-func (s *orgUnitMemoryStore) DisableNodeCurrent(_ context.Context, tenantID string, _ string, orgID string) error {
-	if _, err := parseOrgID8(orgID); err != nil {
+func (s *orgUnitMemoryStore) DisableNodeCurrent(_ context.Context, tenantID string, _ string, orgNodeKey string) error {
+	normalizedOrgNodeKey, err := normalizeOrgNodeKeyInput(orgNodeKey)
+	if err != nil {
 		return err
 	}
 
 	nodes := s.nodes[tenantID]
 	for i := range nodes {
-		if nodes[i].ID == orgID {
+		if nodes[i].ID == normalizedOrgNodeKey {
 			s.nodes[tenantID] = append(nodes[:i], nodes[i+1:]...)
 			return nil
 		}
 	}
-	return errors.New("org_id not found")
+	return errors.New("org_node_key not found")
 }
 
-func (s *orgUnitMemoryStore) SetBusinessUnitCurrent(_ context.Context, tenantID string, _ string, orgID string, isBusinessUnit bool, _ string) error {
-	if _, err := parseOrgID8(orgID); err != nil {
+func (s *orgUnitMemoryStore) SetBusinessUnitCurrent(_ context.Context, tenantID string, _ string, orgNodeKey string, isBusinessUnit bool, _ string) error {
+	normalizedOrgNodeKey, err := normalizeOrgNodeKeyInput(orgNodeKey)
+	if err != nil {
 		return err
 	}
 
 	nodes := s.nodes[tenantID]
 	for i := range nodes {
-		if nodes[i].ID == orgID {
+		if nodes[i].ID == normalizedOrgNodeKey {
 			nodes[i].IsBusinessUnit = isBusinessUnit
 			s.nodes[tenantID] = nodes
 			return nil
 		}
 	}
-	return errors.New("org_id not found")
+	return errors.New("org_node_key not found")
 }
 
-func (s *orgUnitMemoryStore) ResolveOrgID(_ context.Context, tenantID string, orgCode string) (int, error) {
+func orgUnitNodeStoredKey(node OrgUnitNode) (string, bool) {
+	if key, err := normalizeOrgNodeKeyInput(node.ID); err == nil {
+		return key, true
+	}
+	if node.OrgID > 0 {
+		key, err := encodeOrgNodeKeyFromID(node.OrgID)
+		if err == nil {
+			return key, true
+		}
+	}
+	return "", false
+}
+
+func (s *orgUnitMemoryStore) ResolveOrgNodeKeyByCode(_ context.Context, tenantID string, orgCode string) (string, error) {
 	normalizedCode, err := orgunitpkg.NormalizeOrgCode(orgCode)
 	if err != nil {
-		return 0, err
+		return "", err
 	}
 	for _, node := range s.nodes[tenantID] {
 		if node.OrgCode == normalizedCode {
-			return strconv.Atoi(node.ID)
+			if orgNodeKey, ok := orgUnitNodeStoredKey(node); ok {
+				return orgNodeKey, nil
+			}
+			break
 		}
 	}
-	return 0, orgunitpkg.ErrOrgCodeNotFound
+	return "", orgunitpkg.ErrOrgCodeNotFound
 }
 
-func (s *orgUnitMemoryStore) ResolveOrgCode(_ context.Context, tenantID string, orgID int) (string, error) {
+func (s *orgUnitMemoryStore) ResolveOrgCodeByNodeKey(_ context.Context, tenantID string, orgNodeKey string) (string, error) {
+	normalizedOrgNodeKey, err := normalizeOrgNodeKeyInput(orgNodeKey)
+	if err != nil {
+		return "", err
+	}
 	for _, node := range s.nodes[tenantID] {
-		if node.ID == strconv.Itoa(orgID) {
+		storedKey, ok := orgUnitNodeStoredKey(node)
+		if ok && storedKey == normalizedOrgNodeKey {
 			return node.OrgCode, nil
 		}
 	}
-	return "", orgunitpkg.ErrOrgIDNotFound
+	return "", orgunitpkg.ErrOrgNodeKeyNotFound
 }
 
 func (s *orgUnitMemoryStore) IsOrgTreeInitialized(_ context.Context, tenantID string) (bool, error) {
 	return len(s.nodes[tenantID]) > 0, nil
 }
 
-func (s *orgUnitMemoryStore) ResolveAppendFacts(_ context.Context, tenantID string, orgID int, _ string) (orgUnitAppendFacts, error) {
+func (s *orgUnitMemoryStore) ResolveAppendFacts(_ context.Context, tenantID string, orgNodeKey string, _ string) (orgUnitAppendFacts, error) {
 	facts := orgUnitAppendFacts{
 		TreeInitialized: len(s.nodes[tenantID]) > 0,
 	}
-	orgIDStr := strconv.Itoa(orgID)
+	orgID, err := decodeOrgNodeKeyToID(orgNodeKey)
+	if err != nil {
+		return orgUnitAppendFacts{}, err
+	}
 	for _, node := range s.nodes[tenantID] {
-		if node.ID != orgIDStr {
+		if node.OrgID != orgID {
 			continue
 		}
 		facts.TargetExistsAsOf = true
@@ -2074,33 +2304,28 @@ func (s *orgUnitMemoryStore) ResolveAppendFacts(_ context.Context, tenantID stri
 	return facts, nil
 }
 
-func (s *orgUnitMemoryStore) ResolveOrgCodes(_ context.Context, tenantID string, orgIDs []int) (map[int]string, error) {
-	out := make(map[int]string)
-	if len(orgIDs) == 0 {
+func (s *orgUnitMemoryStore) ResolveOrgCodesByNodeKeys(_ context.Context, tenantID string, orgNodeKeys []string) (map[string]string, error) {
+	out := make(map[string]string)
+	if len(orgNodeKeys) == 0 {
 		return out, nil
 	}
-	byID := make(map[int]string)
+	byKey := make(map[string]string)
 	for _, node := range s.nodes[tenantID] {
-		id, err := strconv.Atoi(node.ID)
-		if err != nil {
-			continue
-		}
-		byID[id] = node.OrgCode
+		byKey[node.ID] = node.OrgCode
 	}
-	for _, orgID := range orgIDs {
-		code, ok := byID[orgID]
+	for _, orgNodeKey := range orgNodeKeys {
+		code, ok := byKey[orgNodeKey]
 		if !ok {
-			return nil, orgunitpkg.ErrOrgIDNotFound
+			return nil, orgunitpkg.ErrOrgNodeKeyNotFound
 		}
-		out[orgID] = code
+		out[orgNodeKey] = code
 	}
 	return out, nil
 }
 
 func (s *orgUnitMemoryStore) ListChildren(_ context.Context, tenantID string, parentID int, _ string) ([]OrgUnitChild, error) {
-	parentIDStr := strconv.Itoa(parentID)
 	for _, node := range s.nodes[tenantID] {
-		if node.ID == parentIDStr {
+		if node.OrgID == parentID {
 			return []OrgUnitChild{}, nil
 		}
 	}
@@ -2112,20 +2337,21 @@ func (s *orgUnitMemoryStore) ListChildrenWithVisibility(ctx context.Context, ten
 }
 
 func (s *orgUnitMemoryStore) GetNodeDetails(_ context.Context, tenantID string, orgID int, _ string) (OrgUnitNodeDetails, error) {
-	orgIDStr := strconv.Itoa(orgID)
 	for _, node := range s.nodes[tenantID] {
-		if node.ID == orgIDStr {
+		if node.OrgID == orgID {
 			return OrgUnitNodeDetails{
-				OrgID:          orgID,
-				OrgCode:        node.OrgCode,
-				Name:           node.Name,
-				Status:         strings.TrimSpace(node.Status),
-				IsBusinessUnit: node.IsBusinessUnit,
-				PathIDs:        []int{orgID},
-				FullNamePath:   node.Name,
-				CreatedAt:      node.CreatedAt,
-				UpdatedAt:      node.CreatedAt,
-				EventUUID:      "",
+				OrgID:           orgID,
+				OrgNodeKey:      node.ID,
+				OrgCode:         node.OrgCode,
+				Name:            node.Name,
+				Status:          strings.TrimSpace(node.Status),
+				IsBusinessUnit:  node.IsBusinessUnit,
+				PathIDs:         []int{orgID},
+				PathOrgNodeKeys: []string{node.ID},
+				FullNamePath:    node.Name,
+				CreatedAt:       node.CreatedAt,
+				UpdatedAt:       node.CreatedAt,
+				EventUUID:       "",
 			}, nil
 		}
 	}
@@ -2145,16 +2371,16 @@ func (s *orgUnitMemoryStore) SearchNode(_ context.Context, tenantID string, quer
 	if normalized, err := orgunitpkg.NormalizeOrgCode(trimmed); err == nil {
 		for _, node := range s.nodes[tenantID] {
 			if node.OrgCode == normalized {
-				id, convErr := strconv.Atoi(node.ID)
-				if convErr != nil {
-					break
+				orgNodeKey, ok := orgUnitNodeStoredKey(node)
+				if !ok {
+					continue
 				}
 				return OrgUnitSearchResult{
-					TargetOrgID:   id,
-					TargetOrgCode: node.OrgCode,
-					TargetName:    node.Name,
-					PathOrgIDs:    []int{id},
-					TreeAsOf:      asOfDate,
+					TargetOrgNodeKey: orgNodeKey,
+					TargetOrgCode:    node.OrgCode,
+					TargetName:       node.Name,
+					PathOrgNodeKeys:  []string{orgNodeKey},
+					TreeAsOf:         asOfDate,
 				}, nil
 			}
 		}
@@ -2163,16 +2389,16 @@ func (s *orgUnitMemoryStore) SearchNode(_ context.Context, tenantID string, quer
 	lower := strings.ToLower(trimmed)
 	for _, node := range s.nodes[tenantID] {
 		if strings.Contains(strings.ToLower(node.Name), lower) {
-			id, convErr := strconv.Atoi(node.ID)
-			if convErr != nil {
-				break
+			orgNodeKey, ok := orgUnitNodeStoredKey(node)
+			if !ok {
+				continue
 			}
 			return OrgUnitSearchResult{
-				TargetOrgID:   id,
-				TargetOrgCode: node.OrgCode,
-				TargetName:    node.Name,
-				PathOrgIDs:    []int{id},
-				TreeAsOf:      asOfDate,
+				TargetOrgNodeKey: orgNodeKey,
+				TargetOrgCode:    node.OrgCode,
+				TargetName:       node.Name,
+				PathOrgNodeKeys:  []string{orgNodeKey},
+				TreeAsOf:         asOfDate,
 			}, nil
 		}
 	}
@@ -2195,11 +2421,11 @@ func (s *orgUnitMemoryStore) SearchNodeCandidates(_ context.Context, tenantID st
 	if normalized, err := orgunitpkg.NormalizeOrgCode(trimmed); err == nil {
 		for _, node := range s.nodes[tenantID] {
 			if node.OrgCode == normalized {
-				id, convErr := strconv.Atoi(node.ID)
-				if convErr != nil {
-					break
+				orgNodeKey, ok := orgUnitNodeStoredKey(node)
+				if !ok {
+					continue
 				}
-				return []OrgUnitSearchCandidate{{OrgID: id, OrgCode: node.OrgCode, Name: node.Name, Status: strings.TrimSpace(node.Status)}}, nil
+				return []OrgUnitSearchCandidate{{OrgID: node.OrgID, OrgNodeKey: orgNodeKey, OrgCode: node.OrgCode, Name: node.Name, Status: strings.TrimSpace(node.Status)}}, nil
 			}
 		}
 	}
@@ -2208,11 +2434,11 @@ func (s *orgUnitMemoryStore) SearchNodeCandidates(_ context.Context, tenantID st
 	var out []OrgUnitSearchCandidate
 	for _, node := range s.nodes[tenantID] {
 		if strings.Contains(strings.ToLower(node.Name), lower) {
-			id, convErr := strconv.Atoi(node.ID)
-			if convErr != nil {
+			orgNodeKey, ok := orgUnitNodeStoredKey(node)
+			if !ok {
 				continue
 			}
-			out = append(out, OrgUnitSearchCandidate{OrgID: id, OrgCode: node.OrgCode, Name: node.Name, Status: strings.TrimSpace(node.Status)})
+			out = append(out, OrgUnitSearchCandidate{OrgID: node.OrgID, OrgNodeKey: orgNodeKey, OrgCode: node.OrgCode, Name: node.Name, Status: strings.TrimSpace(node.Status)})
 			if len(out) >= limit {
 				break
 			}
@@ -2229,9 +2455,8 @@ func (s *orgUnitMemoryStore) SearchNodeCandidatesWithVisibility(ctx context.Cont
 }
 
 func (s *orgUnitMemoryStore) ListNodeVersions(_ context.Context, tenantID string, orgID int) ([]OrgUnitNodeVersion, error) {
-	orgIDStr := strconv.Itoa(orgID)
 	for _, node := range s.nodes[tenantID] {
-		if node.ID == orgIDStr {
+		if node.OrgID == orgID {
 			return []OrgUnitNodeVersion{{
 				EventID:       1,
 				EventUUID:     "",
@@ -2244,9 +2469,8 @@ func (s *orgUnitMemoryStore) ListNodeVersions(_ context.Context, tenantID string
 }
 
 func (s *orgUnitMemoryStore) ListNodeAuditEvents(_ context.Context, tenantID string, orgID int, limit int) ([]OrgUnitNodeAuditEvent, error) {
-	orgIDStr := strconv.Itoa(orgID)
 	for _, node := range s.nodes[tenantID] {
-		if node.ID != orgIDStr {
+		if node.OrgID != orgID {
 			continue
 		}
 		if limit <= 0 {
@@ -2256,6 +2480,7 @@ func (s *orgUnitMemoryStore) ListNodeAuditEvents(_ context.Context, tenantID str
 			EventID:             1,
 			EventUUID:           node.ID,
 			OrgID:               orgID,
+			OrgNodeKey:          node.ID,
 			EventType:           "RENAME",
 			EffectiveDate:       "2026-01-01",
 			TxTime:              s.now(),

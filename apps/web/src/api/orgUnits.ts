@@ -275,7 +275,7 @@ export interface OrgUnitCreateFieldDecision {
 export interface OrgUnitCreateFieldDecisionsResponse {
   capability_key: string
   baseline_capability_key?: string
-  business_unit_id: string
+  business_unit_org_code: string
   as_of: string
   policy_version: string
   policy_version_alg?: string

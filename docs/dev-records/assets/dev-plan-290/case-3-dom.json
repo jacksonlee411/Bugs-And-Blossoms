@@ -1,5 +1,5 @@
 {
-  "url": "http://localhost:8080/app/assistant/librechat/c/new",
+  "url": "http://localhost:18080/app/assistant/librechat/c/new",
   "bubble_count": 1,
   "bubbles": [
     {
@@ -7,7 +7,7 @@
       "conversation_id": "conv_tp290_3",
       "turn_id": "turn_tp290_3",
       "request_id": "req_tp290_3",
-      "message_id": "bae5dfe7-ad71-480e-b0c5-a057535440f4_",
+      "message_id": "3edc40f4-06ca-4c36-8a58-00d91f0dc806_",
       "text": "Case 3 提交成功。 task_id: task_turn_tp290_3 · succeeded 补全完成：生效日期 2026-03-25。 org_code: AI2903 parent_org_code: FLOWER-A effective_date: 2026-03-25 event_type: orgunit_created"
     }
   ],

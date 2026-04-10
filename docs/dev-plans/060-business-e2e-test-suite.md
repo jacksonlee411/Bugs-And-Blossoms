@@ -203,8 +203,8 @@
 | --- | --- | --- |
 | 租户/登录 | superadmin 创建租户与域名；tenant app 登录 | TP-060-01 |
 | 权限/隔离 | Authz 403；RLS fail-closed；跨租户不可见 | TP-060-01 |
-| 组织架构 | OrgUnit 树/新增/查询 | TP-060-02 |
-| SetID | SetID/组织绑定/业务单元标记；业务入口通过 org_unit 解析 setid | TP-060-02 |
+| 组织架构 | OrgUnit 树/新增/查询；外部协议仅使用 `org_code` | TP-060-02 |
+| SetID | SetID/组织绑定/业务单元标记；业务入口通过 `org_code -> org_node_key` 解析 setid | TP-060-02 |
 | 职位分类 | Job family group 创建与查询（可选扩展：families/levels/profiles） | TP-060-02 |
 | 职位 | Position 创建与列表 | TP-060-02 |
 | 人员 | Person 创建/查询；pernr 解析一致性 | TP-060-03 |
@@ -258,19 +258,21 @@
 - `docs/dev-plans/029-job-catalog-transactional-event-sourcing-synchronous-projection.md`
 - `docs/dev-plans/030-position-transactional-event-sourcing-synchronous-projection.md`
 - `docs/dev-plans/032-effective-date-day-granularity.md`
+- `docs/dev-plans/320-org-node-key-cutover-plan-no-global-expansion.md`
 
 **数据准备**
 - 按 060-DS1 建立 OrgUnit 树（`/org/units?as_of=2026-01-01`）。
 - 建立 SetID + 业务单元标记 + 组织绑定（`/org/setid` + `/org/units`）。
 - 建立 JobCatalog（`/org/job-catalog?as_of=2026-01-01&setid=S2601`）。
-- 建立 10 个职位（`/org/positions?as_of=2026-01-01&org_unit_id=<R&D>`；Job Profile 必选，列表由 org_unit 解析 setid 提供）。
+- 建立 10 个职位（`/org/positions?as_of=2026-01-01&org_code=<R&D>`；Job Profile 必选，列表由 `org_code` 解析 setid 提供）。
 
 **核心验收点（高层）**
 - OrgUnit：新增节点后树与详情可见；`as_of` 改变时口径符合日粒度有效期。
 - SetID：绑定保存后，JobCatalog 页面展示 `setid`；缺失/非法 `setid` 必须 fail-closed（不允许默认洞）。
 - JobCatalog：至少 1 个实体“写入→列表可见”闭环；`setid` 切换与 `as_of` 变更口径一致。
 - JobCatalog（增强）：groups/families/levels/profiles 均覆盖“写入→as_of 读取→UI 可见”；profile 需覆盖 families+primary 不变量的负例（稳定报错即可）。
-- Position：新增职位后列表可见；职位引用 OrgUnit 的输入/下拉来源可靠。
+- Position：新增职位后列表可见；职位相关外部请求/响应只出现 `org_code`，不出现 `org_unit_id` / `org_node_key`。
+- 060 主链收口：同一租户内完成 `Org -> SetID -> Staffing(Position)` 后，`/app/assistant` 必须可见，且助手侧展示/传递组织引用仅使用 `org_code`。
 
 **问题记录**
 | 时间（UTC） | 环境（Host/as_of/模式） | 复现步骤摘要 | 期望（契约引用） | 实际结果 | 严重级别（P0/P1/P2） | 类型（BUG/CONTRACT_DRIFT/CONTRACT_MISSING/ENV_DRIFT） | 处理建议（改实现/先改契约） | 负责人 | 链接（Issue/PR/日志） |

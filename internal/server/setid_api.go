@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
-	"strconv"
 	"strings"
 
 	"github.com/jacksonlee411/Bugs-And-Blossoms/internal/routing"
@@ -108,7 +107,6 @@ func handleSetIDsAPI(w http.ResponseWriter, r *http.Request, store SetIDGovernan
 }
 
 type setidBindingAPIRequest struct {
-	OrgUnitID     string `json:"org_unit_id"`
 	OrgCode       string `json:"org_code"`
 	SetID         string `json:"setid"`
 	EffectiveDate string `json:"effective_date"`
@@ -140,15 +138,37 @@ func handleSetIDBindingsAPI(w http.ResponseWriter, r *http.Request, store SetIDG
 		}
 
 		type row struct {
-			OrgUnitID string `json:"org_unit_id"`
+			OrgCode   string `json:"org_code"`
 			SetID     string `json:"setid"`
 			ValidFrom string `json:"valid_from"`
 			ValidTo   string `json:"valid_to"`
 		}
 		out := make([]row, 0, len(rows))
 		for _, it := range rows {
+			orgNodeKey := strings.TrimSpace(it.OrgUnitID)
+			if orgNodeKey == "" {
+				writeInternalAPIError(w, r, errors.New("org_node_key missing"), "setid_binding_org_ref_invalid")
+				return
+			}
+			if _, err := parseOrgNodeKey(orgNodeKey); err != nil {
+				orgID, decodeErr := parseOrgID8(orgNodeKey)
+				if decodeErr != nil {
+					writeInternalAPIError(w, r, decodeErr, "setid_binding_org_ref_invalid")
+					return
+				}
+				orgNodeKey, err = encodeOrgNodeKeyFromID(orgID)
+				if err != nil {
+					writeInternalAPIError(w, r, err, "setid_binding_org_ref_invalid")
+					return
+				}
+			}
+			orgCode, err := orgStore.ResolveOrgCodeByNodeKey(r.Context(), tenant.ID, orgNodeKey)
+			if err != nil {
+				writeInternalAPIError(w, r, err, "setid_binding_org_ref_invalid")
+				return
+			}
 			out = append(out, row{
-				OrgUnitID: it.OrgUnitID,
+				OrgCode:   orgCode,
 				SetID:     it.SetID,
 				ValidFrom: it.ValidFrom,
 				ValidTo:   it.ValidTo,
@@ -166,12 +186,13 @@ func handleSetIDBindingsAPI(w http.ResponseWriter, r *http.Request, store SetIDG
 
 	case http.MethodPost:
 		var req setidBindingAPIRequest
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		dec := json.NewDecoder(r.Body)
+		dec.DisallowUnknownFields()
+		if err := dec.Decode(&req); err != nil {
 			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "bad_json", "bad json")
 			return
 		}
 
-		req.OrgUnitID = strings.TrimSpace(req.OrgUnitID)
 		req.SetID = strings.TrimSpace(req.SetID)
 		effectiveDate, err := parseRequiredDay(req.EffectiveDate, "effective_date")
 		if err != nil {
@@ -180,7 +201,7 @@ func handleSetIDBindingsAPI(w http.ResponseWriter, r *http.Request, store SetIDG
 		}
 		req.EffectiveDate = effectiveDate
 		req.RequestID = strings.TrimSpace(req.RequestID)
-		if req.OrgUnitID != "" || req.OrgCode == "" || req.SetID == "" || req.EffectiveDate == "" || req.RequestID == "" {
+		if req.OrgCode == "" || req.SetID == "" || req.EffectiveDate == "" || req.RequestID == "" {
 			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "invalid_request", "org_code/setid/effective_date/request_id required")
 			return
 		}
@@ -190,7 +211,7 @@ func handleSetIDBindingsAPI(w http.ResponseWriter, r *http.Request, store SetIDG
 			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "org_code_invalid", "org_code invalid")
 			return
 		}
-		orgID, err := orgStore.ResolveOrgID(r.Context(), tenant.ID, normalizedCode)
+		orgNodeKey, err := orgStore.ResolveOrgNodeKeyByCode(r.Context(), tenant.ID, normalizedCode)
 		if err != nil {
 			switch {
 			case errors.Is(err, orgunitpkg.ErrOrgCodeInvalid):
@@ -203,7 +224,7 @@ func handleSetIDBindingsAPI(w http.ResponseWriter, r *http.Request, store SetIDG
 			return
 		}
 
-		if err := store.BindSetID(r.Context(), tenant.ID, strconv.Itoa(orgID), req.EffectiveDate, req.SetID, req.RequestID, tenant.ID); err != nil {
+		if err := store.BindSetID(r.Context(), tenant.ID, orgNodeKey, req.EffectiveDate, req.SetID, req.RequestID, tenant.ID); err != nil {
 			writeInternalAPIError(w, r, err, "setid_binding_failed")
 			return
 		}

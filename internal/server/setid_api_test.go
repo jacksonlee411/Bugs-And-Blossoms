@@ -262,11 +262,14 @@ func TestHandleSetIDBindingsAPI_Get_WithRows(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/org/api/setid-bindings?as_of=2026-01-01", nil)
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "T"}))
 	rec := httptest.NewRecorder()
-	handleSetIDBindingsAPI(rec, req, partialSetIDStore{}, newOrgUnitMemoryStore())
+	handleSetIDBindingsAPI(rec, req, partialSetIDStore{}, &resolveOrgCodeStore{
+		resolveID:    10000001,
+		resolveCodes: map[int]string{10000001: "A001"},
+	})
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status=%d body=%q", rec.Code, rec.Body.String())
 	}
-	if !strings.Contains(rec.Body.String(), `"org_unit_id":"10000001"`) || !strings.Contains(rec.Body.String(), `"setid":"DEFLT"`) {
+	if !strings.Contains(rec.Body.String(), `"org_code":"A001"`) || !strings.Contains(rec.Body.String(), `"setid":"DEFLT"`) {
 		t.Fatalf("unexpected body: %q", rec.Body.String())
 	}
 }

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"os"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -74,37 +75,61 @@ type orgUnitWriteStoreStub struct {
 	findPersonByPernrFn      func(ctx context.Context, tenantID string, pernr string) (types.Person, error)
 }
 
-func (s orgUnitWriteStoreStub) SubmitEvent(ctx context.Context, tenantID string, eventUUID string, orgID *int, eventType string, effectiveDate string, payload json.RawMessage, requestID string, initiatorUUID string) (int64, error) {
+func (s orgUnitWriteStoreStub) SubmitEvent(ctx context.Context, tenantID string, eventUUID string, orgNodeKey *string, eventType string, effectiveDate string, payload json.RawMessage, requestID string, initiatorUUID string) (int64, error) {
 	if s.submitEventFn == nil {
 		return 0, errors.New("SubmitEvent not mocked")
+	}
+	var orgID *int
+	if orgNodeKey != nil {
+		value, err := parseTestOrgNodeKey(*orgNodeKey)
+		if err != nil {
+			return 0, err
+		}
+		orgID = &value
 	}
 	return s.submitEventFn(ctx, tenantID, eventUUID, orgID, eventType, effectiveDate, payload, requestID, initiatorUUID)
 }
 
-func (s orgUnitWriteStoreStub) SubmitCorrection(ctx context.Context, tenantID string, orgID int, targetEffectiveDate string, patch json.RawMessage, requestID string, initiatorUUID string) (string, error) {
+func (s orgUnitWriteStoreStub) SubmitCorrection(ctx context.Context, tenantID string, orgNodeKey string, targetEffectiveDate string, patch json.RawMessage, requestID string, initiatorUUID string) (string, error) {
 	if s.submitCorrectionFn == nil {
 		return "", errors.New("SubmitCorrection not mocked")
+	}
+	orgID, err := parseTestOrgNodeKey(orgNodeKey)
+	if err != nil {
+		return "", err
 	}
 	return s.submitCorrectionFn(ctx, tenantID, orgID, targetEffectiveDate, patch, requestID, initiatorUUID)
 }
 
-func (s orgUnitWriteStoreStub) SubmitStatusCorrection(ctx context.Context, tenantID string, orgID int, targetEffectiveDate string, targetStatus string, requestID string, initiatorUUID string) (string, error) {
+func (s orgUnitWriteStoreStub) SubmitStatusCorrection(ctx context.Context, tenantID string, orgNodeKey string, targetEffectiveDate string, targetStatus string, requestID string, initiatorUUID string) (string, error) {
 	if s.submitStatusCorrectionFn == nil {
 		return "", errors.New("SubmitStatusCorrection not mocked")
+	}
+	orgID, err := parseTestOrgNodeKey(orgNodeKey)
+	if err != nil {
+		return "", err
 	}
 	return s.submitStatusCorrectionFn(ctx, tenantID, orgID, targetEffectiveDate, targetStatus, requestID, initiatorUUID)
 }
 
-func (s orgUnitWriteStoreStub) SubmitRescindEvent(ctx context.Context, tenantID string, orgID int, targetEffectiveDate string, reason string, requestID string, initiatorUUID string) (string, error) {
+func (s orgUnitWriteStoreStub) SubmitRescindEvent(ctx context.Context, tenantID string, orgNodeKey string, targetEffectiveDate string, reason string, requestID string, initiatorUUID string) (string, error) {
 	if s.submitRescindEventFn == nil {
 		return "", errors.New("SubmitRescindEvent not mocked")
+	}
+	orgID, err := parseTestOrgNodeKey(orgNodeKey)
+	if err != nil {
+		return "", err
 	}
 	return s.submitRescindEventFn(ctx, tenantID, orgID, targetEffectiveDate, reason, requestID, initiatorUUID)
 }
 
-func (s orgUnitWriteStoreStub) SubmitRescindOrg(ctx context.Context, tenantID string, orgID int, reason string, requestID string, initiatorUUID string) (int, error) {
+func (s orgUnitWriteStoreStub) SubmitRescindOrg(ctx context.Context, tenantID string, orgNodeKey string, reason string, requestID string, initiatorUUID string) (int, error) {
 	if s.submitRescindOrgFn == nil {
 		return 0, errors.New("SubmitRescindOrg not mocked")
+	}
+	orgID, err := parseTestOrgNodeKey(orgNodeKey)
+	if err != nil {
+		return 0, err
 	}
 	return s.submitRescindOrgFn(ctx, tenantID, orgID, reason, requestID, initiatorUUID)
 }
@@ -116,9 +141,13 @@ func (s orgUnitWriteStoreStub) FindEventByUUID(ctx context.Context, tenantID str
 	return s.findEventByUUIDFn(ctx, tenantID, eventUUID)
 }
 
-func (s orgUnitWriteStoreStub) FindEventByEffectiveDate(ctx context.Context, tenantID string, orgID int, effectiveDate string) (types.OrgUnitEvent, error) {
+func (s orgUnitWriteStoreStub) FindEventByEffectiveDate(ctx context.Context, tenantID string, orgNodeKey string, effectiveDate string) (types.OrgUnitEvent, error) {
 	if s.findEventByEffectiveFn == nil {
 		return types.OrgUnitEvent{}, errors.New("FindEventByEffectiveDate not mocked")
+	}
+	orgID, err := parseTestOrgNodeKey(orgNodeKey)
+	if err != nil {
+		return types.OrgUnitEvent{}, err
 	}
 	return s.findEventByEffectiveFn(ctx, tenantID, orgID, effectiveDate)
 }
@@ -130,18 +159,59 @@ func (s orgUnitWriteStoreStub) ListEnabledTenantFieldConfigsAsOf(ctx context.Con
 	return []types.TenantFieldConfig{}, nil
 }
 
-func (s orgUnitWriteStoreStub) ResolveOrgID(ctx context.Context, tenantID string, orgCode string) (int, error) {
+func (s orgUnitWriteStoreStub) ResolveOrgNodeKey(ctx context.Context, tenantID string, orgCode string) (string, error) {
 	if s.resolveOrgIDFn == nil {
-		return 0, errors.New("ResolveOrgID not mocked")
+		return "", errors.New("ResolveOrgNodeKey not mocked")
 	}
-	return s.resolveOrgIDFn(ctx, tenantID, orgCode)
+	orgID, err := s.resolveOrgIDFn(ctx, tenantID, orgCode)
+	if err != nil {
+		return "", err
+	}
+	if orgID < 10000000 || orgID > 99999999 {
+		return strconv.Itoa(orgID), nil
+	}
+	return mustEncodeTestOrgNodeKey(orgID), nil
 }
 
-func (s orgUnitWriteStoreStub) ResolveOrgCode(ctx context.Context, tenantID string, orgID int) (string, error) {
+func (s orgUnitWriteStoreStub) ResolveOrgCodeByNodeKey(ctx context.Context, tenantID string, orgNodeKey string) (string, error) {
 	if s.resolveOrgCodeFn == nil {
-		return "", errors.New("ResolveOrgCode not mocked")
+		return "", errors.New("ResolveOrgCodeByNodeKey not mocked")
+	}
+	orgID, err := parseTestOrgNodeKey(orgNodeKey)
+	if err != nil {
+		return "", err
 	}
 	return s.resolveOrgCodeFn(ctx, tenantID, orgID)
+}
+
+func parseTestOrgNodeKey(input string) (int, error) {
+	value := strings.TrimSpace(input)
+	if value == "" {
+		return 0, errors.New("org_node_key is required")
+	}
+	allDigits := true
+	for _, r := range value {
+		if r < '0' || r > '9' {
+			allDigits = false
+			break
+		}
+	}
+	if allDigits {
+		return strconv.Atoi(value)
+	}
+	decoded, err := orgunitpkg.DecodeOrgNodeKey(value)
+	if err != nil {
+		return 0, err
+	}
+	return int(decoded), nil
+}
+
+func mustEncodeTestOrgNodeKey(orgID int) string {
+	key, err := orgunitpkg.EncodeOrgNodeKey(int64(orgID))
+	if err != nil {
+		panic(err)
+	}
+	return key
 }
 
 func (s orgUnitWriteStoreStub) FindPersonByPernr(ctx context.Context, tenantID string, pernr string) (types.Person, error) {
@@ -247,11 +317,11 @@ func TestCorrectMapsParentForMove(t *testing.T) {
 	if err != nil {
 		t.Fatalf("expected ok, got %v", err)
 	}
-	if captured["new_parent_id"] != float64(20000002) && captured["new_parent_id"] != 20000002 {
-		t.Fatalf("expected new_parent_id mapped, got %#v", captured)
+	if captured["new_parent_org_node_key"] != mustEncodeTestOrgNodeKey(20000002) {
+		t.Fatalf("expected new_parent_org_node_key mapped, got %#v", captured)
 	}
-	if _, ok := captured["parent_id"]; ok {
-		t.Fatalf("unexpected parent_id in patch: %#v", captured)
+	if _, ok := captured["parent_org_node_key"]; ok {
+		t.Fatalf("unexpected parent_org_node_key in patch: %#v", captured)
 	}
 }
 
@@ -318,7 +388,7 @@ func TestCreateManagerPernrInactive(t *testing.T) {
 			return 1, nil
 		},
 		findEventByUUIDFn: func(_ context.Context, _ string, _ string) (types.OrgUnitEvent, error) {
-			return types.OrgUnitEvent{OrgID: 10000001}, nil
+			return types.OrgUnitEvent{OrgNodeKey: "10000001"}, nil
 		},
 	}
 
@@ -831,7 +901,7 @@ func TestAppendActions_ExtPayloadAndLabels(t *testing.T) {
 				return 1, nil
 			},
 			findEventByUUIDFn: func(context.Context, string, string) (types.OrgUnitEvent, error) {
-				return types.OrgUnitEvent{OrgID: 10000001}, nil
+				return types.OrgUnitEvent{OrgNodeKey: "10000001"}, nil
 			},
 		}
 		svc := NewOrgUnitWriteService(store)
@@ -972,7 +1042,7 @@ func TestAppendActions_PolicyFailClosedBranches(t *testing.T) {
 			return []types.TenantFieldConfig{}, nil
 		},
 		findEventByUUIDFn: func(context.Context, string, string) (types.OrgUnitEvent, error) {
-			return types.OrgUnitEvent{OrgID: 10000001}, nil
+			return types.OrgUnitEvent{OrgNodeKey: "10000001"}, nil
 		},
 	}
 	svc := NewOrgUnitWriteService(store)
@@ -1666,11 +1736,11 @@ func TestNamePatchKey(t *testing.T) {
 }
 
 func TestParentPatchKey(t *testing.T) {
-	if key, ok := parentPatchKey(types.OrgUnitEventCreate); !ok || key != "parent_id" {
-		t.Fatalf("expected parent_id key, got %v %v", key, ok)
+	if key, ok := parentPatchKey(types.OrgUnitEventCreate); !ok || key != "parent_org_node_key" {
+		t.Fatalf("expected parent_org_node_key key, got %v %v", key, ok)
 	}
-	if key, ok := parentPatchKey(types.OrgUnitEventMove); !ok || key != "new_parent_id" {
-		t.Fatalf("expected new_parent_id key, got %v %v", key, ok)
+	if key, ok := parentPatchKey(types.OrgUnitEventMove); !ok || key != "new_parent_org_node_key" {
+		t.Fatalf("expected new_parent_org_node_key key, got %v %v", key, ok)
 	}
 	if _, ok := parentPatchKey(types.OrgUnitEventRename); ok {
 		t.Fatalf("expected rename to be unsupported")
@@ -1903,7 +1973,7 @@ func TestCreateSuccess(t *testing.T) {
 			return 1, nil
 		},
 		findEventByUUIDFn: func(_ context.Context, _ string, _ string) (types.OrgUnitEvent, error) {
-			return types.OrgUnitEvent{OrgID: 10000001}, nil
+			return types.OrgUnitEvent{OrgNodeKey: "10000001"}, nil
 		},
 	}
 	svc := NewOrgUnitWriteService(store)
@@ -1918,7 +1988,7 @@ func TestCreateSuccess(t *testing.T) {
 	if err != nil {
 		t.Fatalf("expected ok, got %v", err)
 	}
-	if res.OrgID != "10000001" || res.OrgCode != "ROOT" || res.EffectiveDate != "2026-01-01" {
+	if res.OrgCode != "ROOT" || res.EffectiveDate != "2026-01-01" {
 		t.Fatalf("unexpected result: %#v", res)
 	}
 	if res.Fields["parent_org_code"] != "PARENT" || res.Fields["manager_pernr"] != "1001" || res.Fields["manager_name"] != "Manager" {
@@ -2967,7 +3037,7 @@ func TestBuildCorrectionPatch(t *testing.T) {
 		if err != nil {
 			t.Fatalf("expected ok, got %v", err)
 		}
-		if patchMap["parent_id"] != "" || fields["parent_org_code"] != "" {
+		if patchMap["parent_org_node_key"] != "" || fields["parent_org_code"] != "" {
 			t.Fatalf("unexpected patch map: %#v %#v", patchMap, fields)
 		}
 	})
@@ -3042,7 +3112,7 @@ func TestBuildCorrectionPatch(t *testing.T) {
 		if err != nil {
 			t.Fatalf("expected ok, got %v", err)
 		}
-		if patchMap["parent_id"] != 20000002 || fields["parent_org_code"] != "PARENT" {
+		if patchMap["parent_org_node_key"] != mustEncodeTestOrgNodeKey(20000002) || fields["parent_org_code"] != "PARENT" {
 			t.Fatalf("unexpected patch map: %#v %#v", patchMap, fields)
 		}
 	})

@@ -27,6 +27,37 @@ func (s assistantOrgStoreStub) ResolveOrgID(ctx context.Context, tenantID string
 	return s.orgUnitMemoryStore.ResolveOrgID(ctx, tenantID, orgCode)
 }
 
+func (s assistantOrgStoreStub) ResolveOrgNodeKeyByCode(ctx context.Context, tenantID string, orgCode string) (string, error) {
+	orgID, err := s.ResolveOrgID(ctx, tenantID, orgCode)
+	if err != nil {
+		return "", err
+	}
+	if orgID <= 0 {
+		return "", nil
+	}
+	return encodeOrgNodeKeyFromID(orgID)
+}
+
+func (s assistantOrgStoreStub) ResolveOrgCodeByNodeKey(ctx context.Context, tenantID string, orgNodeKey string) (string, error) {
+	orgID, err := decodeOrgNodeKeyToID(orgNodeKey)
+	if err != nil {
+		return "", err
+	}
+	return s.orgUnitMemoryStore.ResolveOrgCode(ctx, tenantID, orgID)
+}
+
+func (s assistantOrgStoreStub) ResolveOrgCodesByNodeKeys(ctx context.Context, tenantID string, orgNodeKeys []string) (map[string]string, error) {
+	out := make(map[string]string, len(orgNodeKeys))
+	for _, orgNodeKey := range orgNodeKeys {
+		code, err := s.ResolveOrgCodeByNodeKey(ctx, tenantID, orgNodeKey)
+		if err != nil {
+			return nil, err
+		}
+		out[orgNodeKey] = code
+	}
+	return out, nil
+}
+
 func (s assistantOrgStoreStub) SearchNodeCandidates(ctx context.Context, tenantID string, query string, asOfDate string, limit int) ([]OrgUnitSearchCandidate, error) {
 	if s.searchErr != nil || s.search != nil {
 		return s.search, s.searchErr

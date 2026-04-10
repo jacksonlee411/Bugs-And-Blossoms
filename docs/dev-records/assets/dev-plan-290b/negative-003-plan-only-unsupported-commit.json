@@ -1,8 +1,8 @@
 {
   "plan": "DEV-PLAN-290B",
-  "tenant_id": "1bb58c48-b69d-4d25-9cdb-de82ae9a6f61",
-  "conversation_id": "conv_119113442e024940974b16e577b848e6",
-  "turn_id": "turn_e8e497ca422e488d9d48f2c8a721a50c",
+  "tenant_id": "be64224e-0966-40d8-a269-04ac476f72a8",
+  "conversation_id": "conv_582eb4fe4fc84e3ab281f0fac82f8842",
+  "turn_id": "turn_4beb96a60e914aaa946f448a82f297d8",
   "confirm_status": 409,
   "commit_status": null,
   "error": {
@@ -10,9 +10,9 @@
     "message": "assistant route non business blocked",
     "trace_id": "",
     "meta": {
-      "path": "/internal/assistant/conversations/conv_119113442e024940974b16e577b848e6/turns/turn_e8e497ca422e488d9d48f2c8a721a50c:confirm",
+      "path": "/internal/assistant/conversations/conv_582eb4fe4fc84e3ab281f0fac82f8842/turns/turn_4beb96a60e914aaa946f448a82f297d8:confirm",
       "method": "POST"
     }
   },
-  "captured_at": "2026-04-08T21:52:28.056Z"
+  "captured_at": "2026-04-10T00:23:23.077Z"
 }

@@ -8,6 +8,7 @@ import (
 	"github.com/jacksonlee411/Bugs-And-Blossoms/modules/staffing/domain/ports"
 	"github.com/jacksonlee411/Bugs-And-Blossoms/modules/staffing/domain/types"
 	"github.com/jacksonlee411/Bugs-And-Blossoms/pkg/httperr"
+	orgunitpkg "github.com/jacksonlee411/Bugs-And-Blossoms/pkg/orgunit"
 )
 
 type PositionPGStore struct {
@@ -95,12 +96,9 @@ func (s *PositionPGStore) CreatePositionCurrent(ctx context.Context, tenantID st
 	if effectiveDate == "" {
 		return types.Position{}, httperr.NewBadRequest("effective_date is required")
 	}
-	orgUnitID = strings.TrimSpace(orgUnitID)
-	if orgUnitID == "" {
-		return types.Position{}, httperr.NewBadRequest("org_unit_id is required")
-	}
-	if !isOrgUnitID8(orgUnitID) {
-		return types.Position{}, httperr.NewBadRequest("org_unit_id must be 8 digits")
+	orgUnitID, err = normalizePositionOrgUnitID(orgUnitID)
+	if err != nil {
+		return types.Position{}, err
 	}
 	jobProfileUUID = strings.TrimSpace(jobProfileUUID)
 	if jobProfileUUID == "" {
@@ -209,8 +207,11 @@ func (s *PositionPGStore) UpdatePositionCurrent(ctx context.Context, tenantID st
 	name = strings.TrimSpace(name)
 	lifecycleStatus = strings.TrimSpace(lifecycleStatus)
 
-	if orgUnitID != "" && !isOrgUnitID8(orgUnitID) {
-		return types.Position{}, httperr.NewBadRequest("org_unit_id must be 8 digits")
+	if orgUnitID != "" {
+		orgUnitID, err = normalizePositionOrgUnitID(orgUnitID)
+		if err != nil {
+			return types.Position{}, err
+		}
 	}
 
 	payloadParts := make([]string, 0, 6)
@@ -306,4 +307,19 @@ func isOrgUnitID8(input string) bool {
 		}
 	}
 	return true
+}
+
+func normalizePositionOrgUnitID(input string) (string, error) {
+	orgUnitID := strings.TrimSpace(input)
+	if orgUnitID == "" {
+		return "", httperr.NewBadRequest("org_unit_id is required")
+	}
+	if isOrgUnitID8(orgUnitID) {
+		return orgUnitID, nil
+	}
+	orgID, err := orgunitpkg.DecodeOrgNodeKey(orgUnitID)
+	if err != nil {
+		return "", httperr.NewBadRequest("org_unit_id must be 8 digits")
+	}
+	return strconv.FormatInt(orgID, 10), nil
 }

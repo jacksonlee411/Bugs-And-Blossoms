@@ -70,6 +70,10 @@ jobs:
         if: steps.changes.outputs.relevant == 'true'
         run: make check assistant-domain-allowlist
 
+      - name: Org node key backflow gate
+        if: steps.changes.outputs.relevant == 'true'
+        run: make check org-node-key-backflow
+
       - name: Docs gate
         if: steps.changes.outputs.relevant == 'true'
         run: make check doc

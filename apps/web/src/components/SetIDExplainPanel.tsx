@@ -35,9 +35,9 @@ interface SetIDExplainPanelProps {
   asOfHint?: string
   initialCapabilityKey?: string
   initialFieldKey?: string
-  initialBusinessUnitID?: string
+  initialBusinessUnitOrgCode?: string
   initialSetID?: string
-  initialOrgUnitID?: string
+  initialOrgCode?: string
   defaultLevel?: ExplainLevel
   fullPermissionKey?: string
 }
@@ -88,7 +88,7 @@ function parseExplainError(error: unknown): ExplainErrorView {
 function reasonHint(code: string): string {
   switch (code.trim().toUpperCase()) {
     case 'OWNER_CONTEXT_REQUIRED':
-      return '请补齐 owner_setid / business_unit_id 后重试。'
+      return '请补齐 owner_setid / business_unit_org_code 后重试。'
     case 'OWNER_CONTEXT_FORBIDDEN':
       return '当前 BU 上下文无权访问该 SetID，请切换业务单元或联系管理员。'
     case 'ACTOR_SCOPE_FORBIDDEN':
@@ -112,9 +112,9 @@ export function SetIDExplainPanel({
   asOfHint,
   initialCapabilityKey,
   initialFieldKey,
-  initialBusinessUnitID,
+  initialBusinessUnitOrgCode,
   initialSetID,
-  initialOrgUnitID,
+  initialOrgCode,
   defaultLevel = 'brief',
   fullPermissionKey = 'setid.explain.full'
 }: SetIDExplainPanelProps) {
@@ -125,10 +125,10 @@ export function SetIDExplainPanel({
 
   const [capabilityKey, setCapabilityKey] = useState(initialCapabilityKey ?? '')
   const [fieldKey, setFieldKey] = useState(initialFieldKey ?? '')
-  const [businessUnitID, setBusinessUnitID] = useState(initialBusinessUnitID ?? '')
+  const [businessUnitOrgCode, setBusinessUnitOrgCode] = useState(initialBusinessUnitOrgCode ?? '')
   const [asOf, setAsOf] = useState(initialAsOf ?? todayISODate())
   const [setID, setSetID] = useState(initialSetID ?? '')
-  const [orgUnitID, setOrgUnitID] = useState(initialOrgUnitID ?? '')
+  const [orgCode, setOrgCode] = useState(initialOrgCode ?? '')
   const [requestID, setRequestID] = useState(newRequestID('mui-setid-explain'))
   const [level, setLevel] = useState<ExplainLevel>(defaultLevel)
   const [result, setResult] = useState<SetIDExplainResponse | null>(null)
@@ -159,25 +159,22 @@ export function SetIDExplainPanel({
     () => mergeFreeSoloOptions([], strategyQuery.data?.items.map((item) => item.field_key) ?? [], fieldKey),
     [fieldKey, strategyQuery.data?.items]
   )
-  const businessUnitIDOptions = useMemo(
+  const businessUnitOrgCodeOptions = useMemo(
     () =>
       mergeFreeSoloOptions(
         [],
-        [
-          ...(strategyQuery.data?.items.map((item) => item.business_unit_id ?? '') ?? []),
-          ...(bindingsQuery.data?.bindings.map((item) => item.org_unit_id) ?? [])
-        ],
-        businessUnitID
+        bindingsQuery.data?.bindings.map((item) => item.org_code) ?? [],
+        businessUnitOrgCode
       ),
-    [bindingsQuery.data?.bindings, businessUnitID, strategyQuery.data?.items]
+    [bindingsQuery.data?.bindings, businessUnitOrgCode]
   )
   const setIDOptions = useMemo(
     () => mergeFreeSoloOptions([], setIDsQuery.data?.setids.map((item) => item.setid) ?? [], setID),
     [setID, setIDsQuery.data?.setids]
   )
-  const orgUnitIDOptions = useMemo(
-    () => mergeFreeSoloOptions([], bindingsQuery.data?.bindings.map((item) => item.org_unit_id) ?? [], orgUnitID),
-    [bindingsQuery.data?.bindings, orgUnitID]
+  const orgCodeOptions = useMemo(
+    () => mergeFreeSoloOptions([], bindingsQuery.data?.bindings.map((item) => item.org_code) ?? [], orgCode),
+    [bindingsQuery.data?.bindings, orgCode]
   )
 
   const effectiveLevel: ExplainLevel = useMemo(() => {
@@ -221,11 +218,11 @@ export function SetIDExplainPanel({
       await mutation.mutateAsync({
         capabilityKey,
         fieldKey,
-        businessUnitID,
+        businessUnitOrgCode,
         asOf,
         level: effectiveLevel,
         setID,
-        orgUnitID,
+        orgCode,
         requestID
       })
     } catch {
@@ -280,11 +277,11 @@ export function SetIDExplainPanel({
             value={fieldKey}
           />
           <FreeSoloDropdownField
-            label='business_unit_id'
-            onChange={setBusinessUnitID}
-            options={businessUnitIDOptions}
+            label='business_unit_org_code'
+            onChange={setBusinessUnitOrgCode}
+            options={businessUnitOrgCodeOptions}
             required
-            value={businessUnitID}
+            value={businessUnitOrgCode}
           />
           <TextField
             label={resolvedAsOfLabel}
@@ -302,10 +299,10 @@ export function SetIDExplainPanel({
             value={setID}
           />
           <FreeSoloDropdownField
-            label='org_unit_id（可选）'
-            onChange={setOrgUnitID}
-            options={orgUnitIDOptions}
-            value={orgUnitID}
+            label='org_code（可选）'
+            onChange={setOrgCode}
+            options={orgCodeOptions}
+            value={orgCode}
           />
           <Stack spacing={0.5}>
             <Typography color='text.secondary' variant='caption'>

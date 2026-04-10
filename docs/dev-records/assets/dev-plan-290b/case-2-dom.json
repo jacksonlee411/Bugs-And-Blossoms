@@ -1,7 +1,16 @@
 {
-  "url": "about:blank",
-  "bubble_count": 0,
-  "bubbles": [],
+  "url": "http://localhost:18080/app/assistant/librechat/c/new",
+  "bubble_count": 1,
+  "bubbles": [
+    {
+      "binding_key": "conv_0bd2b1f276b147e8ab97891cc914ee95::turn_cfe677c302eb43a2a79445149337363d::assistant_3a8338356e23448bbd99c62909d8128d",
+      "conversation_id": "conv_0bd2b1f276b147e8ab97891cc914ee95",
+      "turn_id": "turn_cfe677c302eb43a2a79445149337363d",
+      "request_id": "assistant_3a8338356e23448bbd99c62909d8128d",
+      "message_id": "cd2dfec0-72de-4866-902c-e20d9d3b4143_",
+      "text": "我将按照你的需求，在“AI治理办公室”下新建“人力资源部2”，生效日期为 2026-01-01。接下来会先在系统中查找“AI治理办公室”的唯一对应组织，以确保挂载的上级部门准确无误。 Missing fields parent_ref_text"
+    }
+  ],
   "external_reply_container_count": 0,
   "connection_error_count": 0
 }

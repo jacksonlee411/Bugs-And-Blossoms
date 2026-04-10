@@ -76,7 +76,7 @@ func TestOrgUnitPGStore_FindEventByRequestID(t *testing.T) {
 	t.Run("commit error", func(t *testing.T) {
 		store := newConcreteOrgUnitPGStore(beginFunc(func(context.Context) (pgx.Tx, error) {
 			return &txStub{
-				row:       stubRow{vals: []any{int64(1), "e1", 10000001, "CREATE", "2026-01-01", []byte(`{"a":"b"}`), time.Unix(1, 0).UTC()}},
+				row:       stubRow{vals: []any{int64(1), "e1", "A2345678", "CREATE", "2026-01-01", []byte(`{"a":"b"}`), time.Unix(1, 0).UTC()}},
 				commitErr: errors.New("commit"),
 			}, nil
 		}))
@@ -87,7 +87,7 @@ func TestOrgUnitPGStore_FindEventByRequestID(t *testing.T) {
 
 	t.Run("success", func(t *testing.T) {
 		store := newConcreteOrgUnitPGStore(beginFunc(func(context.Context) (pgx.Tx, error) {
-			return &txStub{row: stubRow{vals: []any{int64(1), "e1", 10000001, "CREATE", "2026-01-01", []byte(`{"org_code":"ROOT"}`), time.Unix(1, 0).UTC()}}}, nil
+			return &txStub{row: stubRow{vals: []any{int64(1), "e1", "A2345678", "CREATE", "2026-01-01", []byte(`{"org_code":"ROOT"}`), time.Unix(1, 0).UTC()}}}, nil
 		}))
 		event, found, err := store.FindEventByRequestID(ctx, "t1", "r1")
 		if err != nil || !found {

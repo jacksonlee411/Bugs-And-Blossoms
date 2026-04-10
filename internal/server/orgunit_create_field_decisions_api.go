@@ -1,10 +1,10 @@
 package server
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
-	"strconv"
 	"strings"
 	"time"
 
@@ -20,7 +20,7 @@ const (
 type orgUnitCreateFieldDecisionsAPIResponse struct {
 	CapabilityKey         string               `json:"capability_key"`
 	BaselineCapabilityKey string               `json:"baseline_capability_key,omitempty"`
-	BusinessUnitID        string               `json:"business_unit_id"`
+	BusinessUnitOrgCode   string               `json:"business_unit_org_code"`
 	AsOf                  string               `json:"as_of"`
 	PolicyVersion         string               `json:"policy_version"`
 	PolicyVersionAlg      string               `json:"policy_version_alg,omitempty"`
@@ -56,7 +56,7 @@ func handleOrgUnitCreateFieldDecisionsAPI(w http.ResponseWriter, r *http.Request
 	}
 
 	parentOrgCode := strings.TrimSpace(r.URL.Query().Get("parent_org_code"))
-	businessUnitID, err := resolveCreateFieldDecisionBusinessUnitID(r, store, tenant.ID, parentOrgCode)
+	businessUnitRef, err := resolveCreateFieldDecisionBusinessUnitRef(r.Context(), store, tenant.ID, parentOrgCode)
 	if err != nil {
 		switch {
 		case errors.Is(err, orgunitpkg.ErrOrgCodeInvalid):
@@ -71,9 +71,9 @@ func handleOrgUnitCreateFieldDecisionsAPI(w http.ResponseWriter, r *http.Request
 
 	capCtx, capErr := resolveCapabilityContext(r.Context(), r, capabilityContextInput{
 		CapabilityKey:       orgUnitCreateFieldPolicyCapabilityKey,
-		BusinessUnitID:      businessUnitID,
+		BusinessUnitOrgCode: businessUnitRef.OrgCode,
 		AsOf:                effectiveDate,
-		RequireBusinessUnit: businessUnitID != "",
+		RequireBusinessUnit: businessUnitRef.OrgCode != "",
 	})
 	if capErr != nil {
 		routing.WriteError(w, r, routing.RouteClassInternalAPI, statusCodeForCapabilityContextError(capErr.Code), capErr.Code, capErr.Message)
@@ -93,7 +93,7 @@ func handleOrgUnitCreateFieldDecisionsAPI(w http.ResponseWriter, r *http.Request
 			tenant.ID,
 			capCtx.CapabilityKey,
 			fieldKey,
-			capCtx.BusinessUnitID,
+			businessUnitRef.OrgNodeKey,
 			capCtx.AsOf,
 		)
 		if resolveErr != nil {
@@ -109,7 +109,7 @@ func handleOrgUnitCreateFieldDecisionsAPI(w http.ResponseWriter, r *http.Request
 	response := orgUnitCreateFieldDecisionsAPIResponse{
 		CapabilityKey:         capCtx.CapabilityKey,
 		BaselineCapabilityKey: policyParts.BaselineCapabilityKey,
-		BusinessUnitID:        capCtx.BusinessUnitID,
+		BusinessUnitOrgCode:   capCtx.BusinessUnitOrgCode,
 		AsOf:                  capCtx.AsOf,
 		PolicyVersion:         effectivePolicyVersion,
 		PolicyVersionAlg:      orgUnitEffectivePolicyVersionAlgorithm,
@@ -123,22 +123,10 @@ func handleOrgUnitCreateFieldDecisionsAPI(w http.ResponseWriter, r *http.Request
 	_ = json.NewEncoder(w).Encode(response)
 }
 
-func resolveCreateFieldDecisionBusinessUnitID(r *http.Request, store OrgUnitStore, tenantID string, parentOrgCode string) (string, error) {
+func resolveCreateFieldDecisionBusinessUnitRef(ctx context.Context, store OrgUnitStore, tenantID string, parentOrgCode string) (setIDResolvedOrgRef, error) {
 	parentOrgCode = strings.TrimSpace(parentOrgCode)
 	if parentOrgCode == "" {
-		return "", nil
+		return setIDResolvedOrgRef{}, nil
 	}
-	normalizedCode, err := orgunitpkg.NormalizeOrgCode(parentOrgCode)
-	if err != nil {
-		return "", err
-	}
-	orgID, err := store.ResolveOrgID(r.Context(), tenantID, normalizedCode)
-	if err != nil {
-		return "", err
-	}
-	businessUnitID := strconv.Itoa(orgID)
-	if _, err := parseOrgID8(businessUnitID); err != nil {
-		return "", errors.New("invalid business_unit_id")
-	}
-	return businessUnitID, nil
+	return resolveSetIDOrgCodeRef(ctx, tenantID, parentOrgCode, store)
 }

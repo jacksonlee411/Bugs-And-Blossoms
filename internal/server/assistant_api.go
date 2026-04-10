@@ -196,7 +196,8 @@ type assistantDryRunResult struct {
 }
 
 type assistantCandidate struct {
-	OrgID         int     `json:"org_id,omitempty"`
+	OrgID         int     `json:"-"`
+	OrgNodeKey    string  `json:"-"`
 	CandidateID   string  `json:"candidate_id"`
 	CandidateCode string  `json:"candidate_code"`
 	Name          string  `json:"name"`
@@ -1045,18 +1046,33 @@ func (s *assistantConversationService) resolveCandidates(ctx context.Context, te
 	candidates := make([]assistantCandidate, 0, len(rows))
 	for _, item := range rows {
 		path := item.Name
-		if details, detailsErr := s.orgStore.GetNodeDetails(ctx, tenantID, item.OrgID, asOf); detailsErr == nil {
-			path = strings.TrimSpace(details.FullNamePath)
-			if path == "" {
-				path = item.Name
+		orgNodeKey := strings.TrimSpace(item.OrgNodeKey)
+		if orgNodeKey == "" && item.OrgID > 0 {
+			encoded, encodeErr := encodeOrgNodeKeyFromID(item.OrgID)
+			if encodeErr == nil {
+				orgNodeKey = encoded
+			}
+		}
+		if orgID, decodeErr := decodeOrgNodeKeyToID(orgNodeKey); decodeErr == nil {
+			if details, detailsErr := s.orgStore.GetNodeDetails(ctx, tenantID, orgID, asOf); detailsErr == nil {
+				path = strings.TrimSpace(details.FullNamePath)
+				if path == "" {
+					path = item.Name
+				}
 			}
 		}
 		candidateID := strings.TrimSpace(item.OrgCode)
 		if candidateID == "" {
-			candidateID = strconv.Itoa(item.OrgID)
+			if item.OrgID > 0 {
+				candidateID = strconv.Itoa(item.OrgID)
+			}
+		}
+		if candidateID == "" {
+			candidateID = orgNodeKey
 		}
 		candidates = append(candidates, assistantCandidate{
 			OrgID:         item.OrgID,
+			OrgNodeKey:    orgNodeKey,
 			CandidateID:   candidateID,
 			CandidateCode: strings.TrimSpace(item.OrgCode),
 			Name:          strings.TrimSpace(item.Name),

@@ -579,7 +579,6 @@ func TestNewHandler_InternalAPIRoutes(t *testing.T) {
 	writeSvc := orgUnitWriteServiceStub{
 		createFn: func(_ context.Context, _ string, req orgunitservices.CreateOrgUnitRequest) (orgunittypes.OrgUnitResult, error) {
 			return orgunittypes.OrgUnitResult{
-				OrgID:         "10000002",
 				OrgCode:       req.OrgCode,
 				EffectiveDate: req.EffectiveDate,
 			}, nil

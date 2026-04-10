@@ -12,7 +12,6 @@ import (
 var (
 	ErrOrgCodeInvalid  = errors.New("org_code_invalid")
 	ErrOrgCodeNotFound = errors.New("org_code_not_found")
-	ErrOrgIDNotFound   = errors.New("org_id_not_found")
 )
 
 var (
@@ -34,29 +33,33 @@ func NormalizeOrgCode(input string) (string, error) {
 	return normalized, nil
 }
 
-func ResolveOrgID(ctx context.Context, tx pgx.Tx, tenantUUID string, orgCode string) (int, error) {
+func ResolveOrgNodeKeyByCode(ctx context.Context, tx pgx.Tx, tenantUUID string, orgCode string) (string, error) {
 	normalized, err := NormalizeOrgCode(orgCode)
 	if err != nil {
-		return 0, err
+		return "", err
 	}
 	if _, err := tx.Exec(ctx, `SELECT orgunit.assert_current_tenant($1::uuid);`, tenantUUID); err != nil {
-		return 0, err
+		return "", err
 	}
-	var orgID int
+	var orgNodeKey string
 	if err := tx.QueryRow(ctx, `
-SELECT org_id
+SELECT orgunit.encode_org_node_key(org_id::bigint)::text
 FROM orgunit.org_unit_codes
 WHERE tenant_uuid = $1::uuid AND org_code = $2::text
-`, tenantUUID, normalized).Scan(&orgID); err != nil {
+	`, tenantUUID, normalized).Scan(&orgNodeKey); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return 0, ErrOrgCodeNotFound
+			return "", ErrOrgCodeNotFound
 		}
-		return 0, err
+		return "", err
 	}
-	return orgID, nil
+	return NormalizeOrgNodeKey(orgNodeKey)
 }
 
-func ResolveOrgCode(ctx context.Context, tx pgx.Tx, tenantUUID string, orgID int) (string, error) {
+func ResolveOrgCodeByNodeKey(ctx context.Context, tx pgx.Tx, tenantUUID string, orgNodeKey string) (string, error) {
+	normalized, err := NormalizeOrgNodeKey(orgNodeKey)
+	if err != nil {
+		return "", err
+	}
 	if _, err := tx.Exec(ctx, `SELECT orgunit.assert_current_tenant($1::uuid);`, tenantUUID); err != nil {
 		return "", err
 	}
@@ -64,41 +67,62 @@ func ResolveOrgCode(ctx context.Context, tx pgx.Tx, tenantUUID string, orgID int
 	if err := tx.QueryRow(ctx, `
 SELECT org_code
 FROM orgunit.org_unit_codes
-WHERE tenant_uuid = $1::uuid AND org_id = $2::int
-`, tenantUUID, orgID).Scan(&orgCode); err != nil {
+WHERE tenant_uuid = $1::uuid
+  AND org_id = orgunit.decode_org_node_key($2::char(8))::int
+	`, tenantUUID, normalized).Scan(&orgCode); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return "", ErrOrgIDNotFound
+			return "", ErrOrgNodeKeyNotFound
 		}
 		return "", err
 	}
 	return orgCode, nil
 }
 
-func ResolveOrgCodes(ctx context.Context, tx pgx.Tx, tenantUUID string, orgIDs []int) (map[int]string, error) {
-	out := make(map[int]string)
-	if len(orgIDs) == 0 {
+func ResolveOrgCodesByNodeKeys(ctx context.Context, tx pgx.Tx, tenantUUID string, orgNodeKeys []string) (map[string]string, error) {
+	out := make(map[string]string)
+	if len(orgNodeKeys) == 0 {
 		return out, nil
+	}
+	normalized := make([]string, 0, len(orgNodeKeys))
+	for _, orgNodeKey := range orgNodeKeys {
+		key, err := NormalizeOrgNodeKey(orgNodeKey)
+		if err != nil {
+			return nil, err
+		}
+		normalized = append(normalized, key)
 	}
 	if _, err := tx.Exec(ctx, `SELECT orgunit.assert_current_tenant($1::uuid);`, tenantUUID); err != nil {
 		return nil, err
 	}
 	rows, err := tx.Query(ctx, `
-SELECT org_id, org_code
-FROM orgunit.org_unit_codes
-WHERE tenant_uuid = $1::uuid AND org_id = ANY($2::int[])
-`, tenantUUID, orgIDs)
+WITH wanted AS (
+  SELECT DISTINCT
+    k AS org_node_key,
+    orgunit.decode_org_node_key(k::char(8))::int AS org_id
+  FROM unnest($2::text[]) AS t(k)
+)
+SELECT w.org_node_key, c.org_code
+FROM wanted w
+JOIN orgunit.org_unit_codes c
+  ON c.tenant_uuid = $1::uuid
+ AND c.org_id = w.org_id
+	`, tenantUUID, normalized)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 
 	for rows.Next() {
-		var orgID int
+		var orgNodeKey string
 		var orgCode string
-		if err := rows.Scan(&orgID, &orgCode); err != nil {
+		if err := rows.Scan(&orgNodeKey, &orgCode); err != nil {
 			return nil, err
 		}
-		out[orgID] = orgCode
+		normalizedKey, err := NormalizeOrgNodeKey(orgNodeKey)
+		if err != nil {
+			return nil, err
+		}
+		out[normalizedKey] = orgCode
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err

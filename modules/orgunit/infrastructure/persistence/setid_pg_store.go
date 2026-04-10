@@ -8,6 +8,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jacksonlee411/Bugs-And-Blossoms/modules/orgunit/domain/ports"
+	orgunitpkg "github.com/jacksonlee411/Bugs-And-Blossoms/pkg/orgunit"
 	setidresolver "github.com/jacksonlee411/Bugs-And-Blossoms/pkg/setid"
 	"github.com/jacksonlee411/Bugs-And-Blossoms/pkg/uuidv7"
 )
@@ -109,14 +110,14 @@ SELECT orgunit.submit_setid_event(
 
 func (s *SetIDPGStore) ListSetIDBindings(ctx context.Context, tenantID string, asOfDate string) ([]ports.SetIDBindingRow, error) {
 	var out []ports.SetIDBindingRow
-	err := s.withTx(ctx, tenantID, func(tx pgx.Tx) error {
-		rows, err := tx.Query(ctx, `
-SELECT
-  org_id::text,
-  setid,
-  lower(validity)::text,
-  COALESCE(upper(validity)::text, '')
-FROM orgunit.setid_binding_versions
+		err := s.withTx(ctx, tenantID, func(tx pgx.Tx) error {
+			rows, err := tx.Query(ctx, `
+	SELECT
+	  orgunit.encode_org_node_key(org_id::bigint)::text,
+	  setid,
+	  lower(validity)::text,
+	  COALESCE(upper(validity)::text, '')
+	FROM orgunit.setid_binding_versions
 WHERE tenant_uuid = $1::uuid
   AND validity @> $2::date
 ORDER BY org_id::text ASC
@@ -143,7 +144,8 @@ func (s *SetIDPGStore) BindSetID(ctx context.Context, tenantID string, orgUnitID
 		if _, err := tx.Exec(ctx, `SELECT orgunit.ensure_setid_bootstrap($1::uuid, $2::uuid);`, tenantID, initiatorID); err != nil {
 			return err
 		}
-		if _, err := parseOrgID8SetID(orgUnitID); err != nil {
+		orgID, err := parseOrgID8SetID(orgUnitID)
+		if err != nil {
 			return err
 		}
 		eventID, err := uuidv7.NewString()
@@ -157,12 +159,12 @@ SELECT orgunit.submit_setid_binding_event(
   $3::int,
   $4::date,
   $5::text,
-  $6::text,
-  $7::uuid
-);
-`, eventID, tenantID, orgUnitID, effectiveDate, setID, requestID, initiatorID)
-		return err
-	})
+	  $6::text,
+	  $7::uuid
+	);
+	`, eventID, tenantID, orgID, effectiveDate, setID, requestID, initiatorID)
+			return err
+		})
 }
 
 func (s *SetIDPGStore) ResolveSetID(ctx context.Context, tenantID string, orgUnitID string, asOfDate string) (string, error) {
@@ -740,6 +742,13 @@ func parseOrgID8SetID(input string) (int, error) {
 	trimmed := strings.TrimSpace(input)
 	if trimmed == "" {
 		return 0, errors.New("org_id is required")
+	}
+	if orgNodeKey, err := orgunitpkg.NormalizeOrgNodeKey(trimmed); err == nil {
+		orgID, decodeErr := orgunitpkg.DecodeOrgNodeKey(orgNodeKey)
+		if decodeErr != nil || orgID < 10000000 || orgID > 99999999 {
+			return 0, errors.New("org_id must be 8 digits")
+		}
+		return int(orgID), nil
 	}
 	if len(trimmed) != 8 {
 		return 0, errors.New("org_id must be 8 digits")

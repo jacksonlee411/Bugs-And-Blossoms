@@ -441,7 +441,7 @@ func TestOrgUnitMemoryStore_ResolveErrors(t *testing.T) {
 	if _, err := s.ResolveOrgID(context.Background(), "t1", "A001"); !errors.Is(err, orgunitpkg.ErrOrgCodeNotFound) {
 		t.Fatalf("err=%v", err)
 	}
-	if _, err := s.ResolveOrgCode(context.Background(), "t1", 10000001); !errors.Is(err, orgunitpkg.ErrOrgIDNotFound) {
+	if _, err := s.ResolveOrgCode(context.Background(), "t1", 10000001); !errors.Is(err, orgunitpkg.ErrOrgNodeKeyNotFound) {
 		t.Fatalf("err=%v", err)
 	}
 }
@@ -582,13 +582,13 @@ func TestOrgUnitMemoryStore_ResolveOrgCodes(t *testing.T) {
 		t.Fatalf("unexpected codes: %v", codes)
 	}
 
-	if _, err := store.ResolveOrgCodes(ctx, "t1", []int{id1, 99999999}); !errors.Is(err, orgunitpkg.ErrOrgIDNotFound) {
+	if _, err := store.ResolveOrgCodes(ctx, "t1", []int{id1, 99999999}); !errors.Is(err, orgunitpkg.ErrOrgNodeKeyNotFound) {
 		t.Fatalf("err=%v", err)
 	}
 
 	badStore := newOrgUnitMemoryStore()
 	badStore.nodes["t1"] = []OrgUnitNode{{ID: "bad", OrgCode: "A1"}}
-	if _, err := badStore.ResolveOrgCodes(ctx, "t1", []int{10000001}); !errors.Is(err, orgunitpkg.ErrOrgIDNotFound) {
+	if _, err := badStore.ResolveOrgCodes(ctx, "t1", []int{10000001}); !errors.Is(err, orgunitpkg.ErrOrgNodeKeyNotFound) {
 		t.Fatalf("err=%v", err)
 	}
 }
@@ -824,11 +824,40 @@ func (orgUnitStoreStub) SetBusinessUnitCurrent(context.Context, string, string, 
 	return nil
 }
 func (orgUnitStoreStub) ResolveOrgID(context.Context, string, string) (int, error) { return 0, nil }
+func (s orgUnitStoreStub) ResolveOrgNodeKeyByCode(ctx context.Context, tenantID string, orgCode string) (string, error) {
+	orgID, err := s.ResolveOrgID(ctx, tenantID, orgCode)
+	if err != nil || orgID == 0 {
+		return "", err
+	}
+	return encodeOrgNodeKeyFromID(orgID)
+}
 func (orgUnitStoreStub) ResolveOrgCode(context.Context, string, int) (string, error) {
 	return "", nil
 }
+func (s orgUnitStoreStub) ResolveOrgCodeByNodeKey(ctx context.Context, tenantID string, orgNodeKey string) (string, error) {
+	orgID, err := decodeOrgNodeKeyToID(orgNodeKey)
+	if err != nil {
+		return "", err
+	}
+	return s.ResolveOrgCode(ctx, tenantID, orgID)
+}
 func (orgUnitStoreStub) ResolveOrgCodes(context.Context, string, []int) (map[int]string, error) {
 	return nil, nil
+}
+func (s orgUnitStoreStub) ResolveOrgCodesByNodeKeys(ctx context.Context, tenantID string, orgNodeKeys []string) (map[string]string, error) {
+	out := make(map[string]string, len(orgNodeKeys))
+	for _, orgNodeKey := range orgNodeKeys {
+		orgID, err := decodeOrgNodeKeyToID(orgNodeKey)
+		if err != nil {
+			return nil, err
+		}
+		code, err := s.ResolveOrgCode(ctx, tenantID, orgID)
+		if err != nil {
+			return nil, err
+		}
+		out[orgNodeKey] = code
+	}
+	return out, nil
 }
 func (orgUnitStoreStub) ListChildren(context.Context, string, int, string) ([]OrgUnitChild, error) {
 	return nil, nil
@@ -1073,7 +1102,7 @@ func TestOrgUnitMemoryStore_AppendFactsHelpers(t *testing.T) {
 	if err != nil {
 		t.Fatalf("resolve id err=%v", err)
 	}
-	facts, err := store.ResolveAppendFacts(context.Background(), "t1", orgID, "2026-01-01")
+	facts, err := store.ResolveAppendFacts(context.Background(), "t1", node.ID, "2026-01-01")
 	if err != nil {
 		t.Fatalf("facts err=%v", err)
 	}
@@ -1084,7 +1113,11 @@ func TestOrgUnitMemoryStore_AppendFactsHelpers(t *testing.T) {
 		t.Fatalf("status=%q", facts.TargetStatusAsOf)
 	}
 
-	missing, err := store.ResolveAppendFacts(context.Background(), "t1", orgID+999, "2026-01-01")
+	missingOrgNodeKey, err := encodeOrgNodeKeyFromID(orgID + 999)
+	if err != nil {
+		t.Fatalf("encode missing org node key: %v", err)
+	}
+	missing, err := store.ResolveAppendFacts(context.Background(), "t1", missingOrgNodeKey, "2026-01-01")
 	if err != nil {
 		t.Fatalf("missing err=%v", err)
 	}

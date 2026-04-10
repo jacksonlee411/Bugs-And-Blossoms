@@ -8,6 +8,8 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	orgunitpkg "github.com/jacksonlee411/Bugs-And-Blossoms/pkg/orgunit"
 )
 
 func TestStatusCodeForFieldDecisionError(t *testing.T) {
@@ -92,11 +94,11 @@ func TestNormalizeSetIDExplainRequestID(t *testing.T) {
 }
 
 func TestFallbackSetIDExplainTraceID(t *testing.T) {
-	got := fallbackSetIDExplainTraceID("req-1", "staffing.assignment_create.field_policy", "10000001", "2026-01-01")
+	got := fallbackSetIDExplainTraceID("req-1", "staffing.assignment_create.field_policy", "BU-001", "2026-01-01")
 	if len(got) != 32 {
 		t.Fatalf("trace_id=%q", got)
 	}
-	if got != fallbackSetIDExplainTraceID("req-1", "staffing.assignment_create.field_policy", "10000001", "2026-01-01") {
+	if got != fallbackSetIDExplainTraceID("req-1", "staffing.assignment_create.field_policy", "BU-001", "2026-01-01") {
 		t.Fatalf("trace_id should be stable: %q", got)
 	}
 }
@@ -108,6 +110,60 @@ func TestResolveFunctionalAreaKey(t *testing.T) {
 	if got := resolveFunctionalAreaKey("unknown.key"); got != "" {
 		t.Fatalf("functional_area=%q", got)
 	}
+}
+
+func mustOrgNodeKeyForTest(t *testing.T, orgID int) string {
+	t.Helper()
+	orgNodeKey, err := encodeOrgNodeKeyFromID(orgID)
+	if err != nil {
+		t.Fatalf("encode org_node_key: %v", err)
+	}
+	return orgNodeKey
+}
+
+type setIDExplainOrgResolverStub struct {
+	byCode map[string]string
+}
+
+func (s setIDExplainOrgResolverStub) ResolveOrgNodeKeyByCode(_ context.Context, _ string, orgCode string) (string, error) {
+	normalized, err := orgunitpkg.NormalizeOrgCode(orgCode)
+	if err != nil {
+		return "", err
+	}
+	orgNodeKey, ok := s.byCode[normalized]
+	if !ok {
+		return "", orgunitpkg.ErrOrgCodeNotFound
+	}
+	return orgNodeKey, nil
+}
+
+func (s setIDExplainOrgResolverStub) ResolveOrgCodeByNodeKey(_ context.Context, _ string, orgNodeKey string) (string, error) {
+	normalized, err := normalizeOrgNodeKeyInput(orgNodeKey)
+	if err != nil {
+		return "", err
+	}
+	for orgCode, candidate := range s.byCode {
+		candidateKey, candidateErr := normalizeOrgNodeKeyInput(candidate)
+		if candidateErr != nil {
+			return "", candidateErr
+		}
+		if candidateKey == normalized {
+			return orgCode, nil
+		}
+	}
+	return "", orgunitpkg.ErrOrgNodeKeyNotFound
+}
+
+func (s setIDExplainOrgResolverStub) ResolveOrgCodesByNodeKeys(ctx context.Context, tenantID string, orgNodeKeys []string) (map[string]string, error) {
+	out := make(map[string]string, len(orgNodeKeys))
+	for _, orgNodeKey := range orgNodeKeys {
+		orgCode, err := s.ResolveOrgCodeByNodeKey(ctx, tenantID, orgNodeKey)
+		if err != nil {
+			return nil, err
+		}
+		out[orgNodeKey] = orgCode
+	}
+	return out, nil
 }
 
 func TestHandleSetIDExplainAPI(t *testing.T) {
@@ -126,10 +182,16 @@ func TestHandleSetIDExplainAPI(t *testing.T) {
 			return "A0001", nil
 		},
 	}
+	orgResolver := setIDExplainOrgResolverStub{
+		byCode: map[string]string{
+			"BU-001": mustOrgNodeKeyForTest(t, 10000001),
+			"BU-002": mustOrgNodeKeyForTest(t, 10000002),
+		},
+	}
 
 	reqNoTenant := httptest.NewRequest(http.MethodGet, "/org/api/setid-explain", nil)
 	recNoTenant := httptest.NewRecorder()
-	handleSetIDExplainAPI(recNoTenant, reqNoTenant, store)
+	handleSetIDExplainAPI(recNoTenant, reqNoTenant, store, orgResolver)
 	if recNoTenant.Code != http.StatusInternalServerError {
 		t.Fatalf("status=%d", recNoTenant.Code)
 	}
@@ -137,65 +199,65 @@ func TestHandleSetIDExplainAPI(t *testing.T) {
 	reqMethod := httptest.NewRequest(http.MethodPost, "/org/api/setid-explain", nil)
 	reqMethod = reqMethod.WithContext(withTenant(reqMethod.Context(), Tenant{ID: "t1"}))
 	recMethod := httptest.NewRecorder()
-	handleSetIDExplainAPI(recMethod, reqMethod, store)
+	handleSetIDExplainAPI(recMethod, reqMethod, store, orgResolver)
 	if recMethod.Code != http.StatusMethodNotAllowed {
 		t.Fatalf("status=%d", recMethod.Code)
 	}
 
 	recMissing := httptest.NewRecorder()
-	handleSetIDExplainAPI(recMissing, makeReq("/org/api/setid-explain"), store)
+	handleSetIDExplainAPI(recMissing, makeReq("/org/api/setid-explain"), store, orgResolver)
 	if recMissing.Code != http.StatusBadRequest {
 		t.Fatalf("status=%d", recMissing.Code)
 	}
 
 	recBadAsOf := httptest.NewRecorder()
-	handleSetIDExplainAPI(recBadAsOf, makeReq("/org/api/setid-explain?capability_key=staffing.assignment_create.field_policy&field_key=field_x&business_unit_id=10000001&as_of=bad"), store)
+	handleSetIDExplainAPI(recBadAsOf, makeReq("/org/api/setid-explain?capability_key=staffing.assignment_create.field_policy&field_key=field_x&business_unit_org_code=BU-001&as_of=bad"), store, orgResolver)
 	if recBadAsOf.Code != http.StatusBadRequest {
 		t.Fatalf("status=%d", recBadAsOf.Code)
 	}
 
 	recBadBU := httptest.NewRecorder()
-	handleSetIDExplainAPI(recBadBU, makeReq("/org/api/setid-explain?capability_key=staffing.assignment_create.field_policy&field_key=field_x&business_unit_id=bad&as_of=2026-01-01"), store)
+	handleSetIDExplainAPI(recBadBU, makeReq("/org/api/setid-explain?capability_key=staffing.assignment_create.field_policy&field_key=field_x&business_unit_org_code=bad%7F&as_of=2026-01-01"), store, orgResolver)
 	if recBadBU.Code != http.StatusBadRequest {
 		t.Fatalf("status=%d", recBadBU.Code)
 	}
 
 	recAreaMissing := httptest.NewRecorder()
-	handleSetIDExplainAPI(recAreaMissing, makeReq("/org/api/setid-explain?capability_key=unknown.key&field_key=field_x&business_unit_id=10000001&as_of=2026-01-01"), store)
+	handleSetIDExplainAPI(recAreaMissing, makeReq("/org/api/setid-explain?capability_key=unknown.key&field_key=field_x&business_unit_org_code=BU-001&as_of=2026-01-01"), store, orgResolver)
 	if recAreaMissing.Code != http.StatusForbidden || !strings.Contains(recAreaMissing.Body.String(), functionalAreaMissingCode) {
 		t.Fatalf("status=%d body=%s", recAreaMissing.Code, recAreaMissing.Body.String())
 	}
 
 	defaultFunctionalAreaSwitchStore.setEnabled("t1", "staffing", false)
 	recAreaDisabled := httptest.NewRecorder()
-	handleSetIDExplainAPI(recAreaDisabled, makeReq("/org/api/setid-explain?capability_key=staffing.assignment_create.field_policy&field_key=field_x&business_unit_id=10000001&as_of=2026-01-01"), store)
+	handleSetIDExplainAPI(recAreaDisabled, makeReq("/org/api/setid-explain?capability_key=staffing.assignment_create.field_policy&field_key=field_x&business_unit_org_code=BU-001&as_of=2026-01-01"), store, orgResolver)
 	if recAreaDisabled.Code != http.StatusForbidden || !strings.Contains(recAreaDisabled.Body.String(), functionalAreaDisabledCode) {
 		t.Fatalf("status=%d body=%s", recAreaDisabled.Code, recAreaDisabled.Body.String())
 	}
 	defaultFunctionalAreaSwitchStore.setEnabled("t1", "staffing", true)
 
 	recBadLevel := httptest.NewRecorder()
-	handleSetIDExplainAPI(recBadLevel, makeReq("/org/api/setid-explain?capability_key=staffing.assignment_create.field_policy&field_key=field_x&business_unit_id=10000001&as_of=2026-01-01&level=bad"), store)
+	handleSetIDExplainAPI(recBadLevel, makeReq("/org/api/setid-explain?capability_key=staffing.assignment_create.field_policy&field_key=field_x&business_unit_org_code=BU-001&as_of=2026-01-01&level=bad"), store, orgResolver)
 	if recBadLevel.Code != http.StatusBadRequest {
 		t.Fatalf("status=%d", recBadLevel.Code)
 	}
 
 	recFullForbidden := httptest.NewRecorder()
-	handleSetIDExplainAPI(recFullForbidden, makeReq("/org/api/setid-explain?capability_key=staffing.assignment_create.field_policy&field_key=field_x&business_unit_id=10000001&as_of=2026-01-01&level=full"), store)
+	handleSetIDExplainAPI(recFullForbidden, makeReq("/org/api/setid-explain?capability_key=staffing.assignment_create.field_policy&field_key=field_x&business_unit_org_code=BU-001&as_of=2026-01-01&level=full"), store, orgResolver)
 	if recFullForbidden.Code != http.StatusForbidden {
 		t.Fatalf("status=%d", recFullForbidden.Code)
 	}
 
 	recBadOrg := httptest.NewRecorder()
-	handleSetIDExplainAPI(recBadOrg, makeReq("/org/api/setid-explain?capability_key=staffing.assignment_create.field_policy&field_key=field_x&business_unit_id=10000001&org_unit_id=bad&as_of=2026-01-01"), store)
+	handleSetIDExplainAPI(recBadOrg, makeReq("/org/api/setid-explain?capability_key=staffing.assignment_create.field_policy&field_key=field_x&business_unit_org_code=BU-001&org_code=bad%7F&as_of=2026-01-01"), store, orgResolver)
 	if recBadOrg.Code != http.StatusBadRequest {
 		t.Fatalf("status=%d", recBadOrg.Code)
 	}
 
-	recRelationMismatchReq := makeReq("/org/api/setid-explain?capability_key=staffing.assignment_create.field_policy&field_key=field_x&business_unit_id=10000001&org_unit_id=10000002&as_of=2026-01-01")
+	recRelationMismatchReq := makeReq("/org/api/setid-explain?capability_key=staffing.assignment_create.field_policy&field_key=field_x&business_unit_org_code=BU-001&org_code=BU-002&as_of=2026-01-01")
 	recRelationMismatchReq = recRelationMismatchReq.WithContext(withPrincipal(recRelationMismatchReq.Context(), Principal{RoleSlug: "tenant-viewer"}))
 	recRelationMismatch := httptest.NewRecorder()
-	handleSetIDExplainAPI(recRelationMismatch, recRelationMismatchReq, store)
+	handleSetIDExplainAPI(recRelationMismatch, recRelationMismatchReq, store, orgResolver)
 	if recRelationMismatch.Code != http.StatusForbidden {
 		t.Fatalf("status=%d body=%s", recRelationMismatch.Code, recRelationMismatch.Body.String())
 	}
@@ -208,7 +270,7 @@ func TestHandleSetIDExplainAPI(t *testing.T) {
 		return "", errors.New("SETID_NOT_FOUND")
 	}
 	recResolveErr := httptest.NewRecorder()
-	handleSetIDExplainAPI(recResolveErr, makeReq("/org/api/setid-explain?capability_key=staffing.assignment_create.field_policy&field_key=field_x&business_unit_id=10000001&as_of=2026-01-01"), resolveErrStore)
+	handleSetIDExplainAPI(recResolveErr, makeReq("/org/api/setid-explain?capability_key=staffing.assignment_create.field_policy&field_key=field_x&business_unit_org_code=BU-001&as_of=2026-01-01"), resolveErrStore, orgResolver)
 	if recResolveErr.Code != http.StatusForbidden {
 		t.Fatalf("status=%d", recResolveErr.Code)
 	}
@@ -217,7 +279,7 @@ func TestHandleSetIDExplainAPI(t *testing.T) {
 	}
 
 	recSetIDMismatch := httptest.NewRecorder()
-	handleSetIDExplainAPI(recSetIDMismatch, makeReq("/org/api/setid-explain?capability_key=staffing.assignment_create.field_policy&field_key=field_x&business_unit_id=10000001&as_of=2026-01-01&setid=B0001"), store)
+	handleSetIDExplainAPI(recSetIDMismatch, makeReq("/org/api/setid-explain?capability_key=staffing.assignment_create.field_policy&field_key=field_x&business_unit_org_code=BU-001&as_of=2026-01-01&setid=B0001"), store, orgResolver)
 	if recSetIDMismatch.Code != http.StatusForbidden {
 		t.Fatalf("status=%d", recSetIDMismatch.Code)
 	}
@@ -226,7 +288,7 @@ func TestHandleSetIDExplainAPI(t *testing.T) {
 	}
 
 	recMissingPolicy := httptest.NewRecorder()
-	handleSetIDExplainAPI(recMissingPolicy, makeReq("/org/api/setid-explain?capability_key=staffing.assignment_create.field_policy&field_key=field_x&business_unit_id=10000001&as_of=2026-01-01"), store)
+	handleSetIDExplainAPI(recMissingPolicy, makeReq("/org/api/setid-explain?capability_key=staffing.assignment_create.field_policy&field_key=field_x&business_unit_org_code=BU-001&as_of=2026-01-01"), store, orgResolver)
 	if recMissingPolicy.Code != http.StatusUnprocessableEntity {
 		t.Fatalf("status=%d", recMissingPolicy.Code)
 	}
@@ -240,7 +302,7 @@ func TestHandleSetIDExplainAPI(t *testing.T) {
 		FieldKey:            "field_x",
 		PersonalizationMode: personalizationModeSetID,
 		OrgApplicability:    orgApplicabilityBusinessUnit,
-		BusinessUnitID:      "10000001",
+		BusinessUnitNodeKey: "10000001",
 		Required:            true,
 		Visible:             true,
 		DefaultRuleRef:      "rule://a1",
@@ -250,10 +312,10 @@ func TestHandleSetIDExplainAPI(t *testing.T) {
 		Priority:            200,
 	})
 
-	briefReq := makeReq("/org/api/setid-explain?capability_key=staffing.assignment_create.field_policy&field_key=field_x&business_unit_id=10000001&as_of=2026-01-01&level=brief&request_id=req-1")
+	briefReq := makeReq("/org/api/setid-explain?capability_key=staffing.assignment_create.field_policy&field_key=field_x&business_unit_org_code=BU-001&as_of=2026-01-01&level=brief&request_id=req-1")
 	briefReq.Header.Set("traceparent", "00-4bf92f3577b34da6a3ce929d0e0e4736-0000000000000000-01")
 	recBrief := httptest.NewRecorder()
-	handleSetIDExplainAPI(recBrief, briefReq, store)
+	handleSetIDExplainAPI(recBrief, briefReq, store, orgResolver)
 	if recBrief.Code != http.StatusOK {
 		t.Fatalf("status=%d body=%s", recBrief.Code, recBrief.Body.String())
 	}
@@ -266,21 +328,27 @@ func TestHandleSetIDExplainAPI(t *testing.T) {
 	if !strings.Contains(recBrief.Body.String(), `"setid":"A0001"`) ||
 		!strings.Contains(recBrief.Body.String(), `"functional_area_key":"staffing"`) ||
 		!strings.Contains(recBrief.Body.String(), `"policy_version":"2026-02-23"`) ||
+		!strings.Contains(recBrief.Body.String(), `"business_unit_org_code":"BU-001"`) ||
 		!strings.Contains(recBrief.Body.String(), `"reason_code":"`+fieldRequiredInContextCode+`"`) {
 		t.Fatalf("unexpected body: %q", recBrief.Body.String())
 	}
-	if strings.Contains(recBrief.Body.String(), `"tenant_id":"t1"`) || strings.Contains(recBrief.Body.String(), `"org_unit_id":"10000001"`) {
+	if strings.Contains(recBrief.Body.String(), `"tenant_id":"t1"`) ||
+		strings.Contains(recBrief.Body.String(), `"business_unit_id":"10000001"`) ||
+		strings.Contains(recBrief.Body.String(), `"org_code":"BU-001"`) {
 		t.Fatalf("unexpected brief fields: %q", recBrief.Body.String())
 	}
 
-	fullReq := makeReq("/org/api/setid-explain?capability_key=staffing.assignment_create.field_policy&field_key=field_x&business_unit_id=10000001&as_of=2026-01-01&level=full")
+	fullReq := makeReq("/org/api/setid-explain?capability_key=staffing.assignment_create.field_policy&field_key=field_x&business_unit_org_code=BU-001&as_of=2026-01-01&level=full")
 	fullReq = fullReq.WithContext(withPrincipal(fullReq.Context(), Principal{RoleSlug: "tenant-admin"}))
 	recFull := httptest.NewRecorder()
-	handleSetIDExplainAPI(recFull, fullReq, store)
+	handleSetIDExplainAPI(recFull, fullReq, store, orgResolver)
 	if recFull.Code != http.StatusOK {
 		t.Fatalf("status=%d body=%s", recFull.Code, recFull.Body.String())
 	}
-	if !strings.Contains(recFull.Body.String(), `"tenant_id":"t1"`) || !strings.Contains(recFull.Body.String(), `"org_unit_id":"10000001"`) {
+	if !strings.Contains(recFull.Body.String(), `"tenant_id":"t1"`) ||
+		!strings.Contains(recFull.Body.String(), `"business_unit_org_code":"BU-001"`) ||
+		strings.Contains(recFull.Body.String(), `"business_unit_id":"10000001"`) ||
+		strings.Contains(recFull.Body.String(), `"org_code":"BU-001"`) {
 		t.Fatalf("unexpected body: %q", recFull.Body.String())
 	}
 	if !strings.Contains(recFull.Body.String(), `"resolved_config_version":"2026-02-23"`) {
@@ -293,7 +361,7 @@ func TestHandleSetIDExplainAPI(t *testing.T) {
 		FieldKey:            "field_hidden",
 		PersonalizationMode: personalizationModeSetID,
 		OrgApplicability:    orgApplicabilityBusinessUnit,
-		BusinessUnitID:      "10000001",
+		BusinessUnitNodeKey: "10000001",
 		Required:            false,
 		Visible:             false,
 		DefaultRuleRef:      "rule://b2",
@@ -303,7 +371,7 @@ func TestHandleSetIDExplainAPI(t *testing.T) {
 		Priority:            200,
 	})
 	recDeny := httptest.NewRecorder()
-	handleSetIDExplainAPI(recDeny, makeReq("/org/api/setid-explain?capability_key=staffing.assignment_create.field_policy&field_key=field_hidden&business_unit_id=10000001&as_of=2026-01-01"), store)
+	handleSetIDExplainAPI(recDeny, makeReq("/org/api/setid-explain?capability_key=staffing.assignment_create.field_policy&field_key=field_hidden&business_unit_org_code=BU-001&as_of=2026-01-01"), store, orgResolver)
 	if recDeny.Code != http.StatusOK {
 		t.Fatalf("status=%d body=%s", recDeny.Code, recDeny.Body.String())
 	}
@@ -325,7 +393,7 @@ func TestHandleSetIDExplainAPI(t *testing.T) {
 		FieldKey:            "field_masked",
 		PersonalizationMode: personalizationModeSetID,
 		OrgApplicability:    orgApplicabilityBusinessUnit,
-		BusinessUnitID:      "10000001",
+		BusinessUnitNodeKey: "10000001",
 		Required:            false,
 		Visible:             true,
 		DefaultRuleRef:      "mask://redact",
@@ -335,7 +403,7 @@ func TestHandleSetIDExplainAPI(t *testing.T) {
 		Priority:            200,
 	})
 	recMasked := httptest.NewRecorder()
-	handleSetIDExplainAPI(recMasked, makeReq("/org/api/setid-explain?capability_key=staffing.assignment_create.field_policy&field_key=field_masked&business_unit_id=10000001&as_of=2026-01-01"), store)
+	handleSetIDExplainAPI(recMasked, makeReq("/org/api/setid-explain?capability_key=staffing.assignment_create.field_policy&field_key=field_masked&business_unit_org_code=BU-001&as_of=2026-01-01"), store, orgResolver)
 	if recMasked.Code != http.StatusOK {
 		t.Fatalf("status=%d body=%s", recMasked.Code, recMasked.Body.String())
 	}
@@ -347,10 +415,10 @@ func TestHandleSetIDExplainAPI(t *testing.T) {
 		t.Fatalf("unexpected body: %q", recMasked.Body.String())
 	}
 
-	recActorScopeMismatchReq := makeReq("/org/api/setid-explain?capability_key=staffing.assignment_create.field_policy&field_key=field_x&business_unit_id=10000001&as_of=2026-01-01")
+	recActorScopeMismatchReq := makeReq("/org/api/setid-explain?capability_key=staffing.assignment_create.field_policy&field_key=field_x&business_unit_org_code=BU-001&as_of=2026-01-01")
 	recActorScopeMismatchReq.Header.Set("X-Actor-Scope", "saas")
 	recActorScopeMismatch := httptest.NewRecorder()
-	handleSetIDExplainAPI(recActorScopeMismatch, recActorScopeMismatchReq, store)
+	handleSetIDExplainAPI(recActorScopeMismatch, recActorScopeMismatchReq, store, orgResolver)
 	if recActorScopeMismatch.Code != http.StatusForbidden {
 		t.Fatalf("status=%d body=%s", recActorScopeMismatch.Code, recActorScopeMismatch.Body.String())
 	}
@@ -363,16 +431,24 @@ func TestHandleSetIDExplainAPI_BUVarianceAcceptance(t *testing.T) {
 	resetSetIDStrategyRegistryRuntimeForTest()
 	t.Cleanup(resetSetIDStrategyRegistryRuntimeForTest)
 
+	orgNodeKeyA := mustOrgNodeKeyForTest(t, 10000001)
+	orgNodeKeyB := mustOrgNodeKeyForTest(t, 10000002)
 	store := scopeAPIStore{
 		resolveSetIDFn: func(_ context.Context, _ string, orgUnitID string, _ string) (string, error) {
 			switch orgUnitID {
-			case "10000001":
+			case orgNodeKeyA:
 				return "A0001", nil
-			case "10000002":
+			case orgNodeKeyB:
 				return "B0001", nil
 			default:
 				return "", errors.New("SETID_NOT_FOUND")
 			}
+		},
+	}
+	orgResolver := setIDExplainOrgResolverStub{
+		byCode: map[string]string{
+			"BU-001": orgNodeKeyA,
+			"BU-002": orgNodeKeyB,
 		},
 	}
 
@@ -382,7 +458,7 @@ func TestHandleSetIDExplainAPI_BUVarianceAcceptance(t *testing.T) {
 		FieldKey:            "field_x",
 		PersonalizationMode: personalizationModeSetID,
 		OrgApplicability:    orgApplicabilityBusinessUnit,
-		BusinessUnitID:      "10000001",
+		BusinessUnitNodeKey: "10000001",
 		Required:            true,
 		Visible:             true,
 		DefaultRuleRef:      "rule://a1",
@@ -397,7 +473,7 @@ func TestHandleSetIDExplainAPI_BUVarianceAcceptance(t *testing.T) {
 		FieldKey:            "field_x",
 		PersonalizationMode: personalizationModeSetID,
 		OrgApplicability:    orgApplicabilityBusinessUnit,
-		BusinessUnitID:      "10000002",
+		BusinessUnitNodeKey: "10000002",
 		Required:            false,
 		Visible:             false,
 		DefaultRuleRef:      "rule://b2",
@@ -407,17 +483,17 @@ func TestHandleSetIDExplainAPI_BUVarianceAcceptance(t *testing.T) {
 		Priority:            200,
 	})
 
-	makeReq := func(businessUnitID string) *http.Request {
+	makeReq := func(businessUnitOrgCode string) *http.Request {
 		req := httptest.NewRequest(
 			http.MethodGet,
-			"/org/api/setid-explain?capability_key=staffing.assignment_create.field_policy&field_key=field_x&as_of=2026-01-01&business_unit_id="+businessUnitID,
+			"/org/api/setid-explain?capability_key=staffing.assignment_create.field_policy&field_key=field_x&as_of=2026-01-01&business_unit_org_code="+businessUnitOrgCode,
 			nil,
 		)
 		return req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 	}
 
 	recBUA := httptest.NewRecorder()
-	handleSetIDExplainAPI(recBUA, makeReq("10000001"), store)
+	handleSetIDExplainAPI(recBUA, makeReq("BU-001"), store, orgResolver)
 	if recBUA.Code != http.StatusOK {
 		t.Fatalf("status=%d body=%s", recBUA.Code, recBUA.Body.String())
 	}
@@ -428,7 +504,7 @@ func TestHandleSetIDExplainAPI_BUVarianceAcceptance(t *testing.T) {
 	}
 
 	recBUB := httptest.NewRecorder()
-	handleSetIDExplainAPI(recBUB, makeReq("10000002"), store)
+	handleSetIDExplainAPI(recBUB, makeReq("BU-002"), store, orgResolver)
 	if recBUB.Code != http.StatusOK {
 		t.Fatalf("status=%d body=%s", recBUB.Code, recBUB.Body.String())
 	}

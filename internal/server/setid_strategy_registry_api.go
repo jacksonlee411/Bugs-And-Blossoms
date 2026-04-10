@@ -13,6 +13,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jacksonlee411/Bugs-And-Blossoms/internal/routing"
+	orgunitpkg "github.com/jacksonlee411/Bugs-And-Blossoms/pkg/orgunit"
 )
 
 const (
@@ -65,7 +66,7 @@ type setIDStrategyRegistryItem struct {
 	FieldKey            string   `json:"field_key"`
 	PersonalizationMode string   `json:"personalization_mode"`
 	OrgApplicability    string   `json:"org_applicability"`
-	BusinessUnitID      string   `json:"business_unit_id,omitempty"`
+	BusinessUnitNodeKey string   `json:"business_unit_node_key,omitempty"`
 	Required            bool     `json:"required"`
 	Visible             bool     `json:"visible"`
 	Maintainable        bool     `json:"maintainable"`
@@ -89,7 +90,7 @@ type setIDStrategyRegistryUpsertAPIRequest struct {
 	FieldKey            string   `json:"field_key"`
 	PersonalizationMode string   `json:"personalization_mode"`
 	OrgApplicability    string   `json:"org_applicability"`
-	BusinessUnitID      string   `json:"business_unit_id"`
+	BusinessUnitOrgCode string   `json:"business_unit_org_code"`
 	Required            bool     `json:"required"`
 	Visible             bool     `json:"visible"`
 	Maintainable        *bool    `json:"maintainable"`
@@ -108,22 +109,47 @@ type setIDStrategyRegistryUpsertAPIRequest struct {
 }
 
 type setIDStrategyRegistryDisableAPIRequest struct {
-	CapabilityKey    string `json:"capability_key"`
-	FieldKey         string `json:"field_key"`
-	OrgApplicability string `json:"org_applicability"`
-	BusinessUnitID   string `json:"business_unit_id"`
-	EffectiveDate    string `json:"effective_date"`
-	DisableAsOf      string `json:"disable_as_of"`
-	RequestID        string `json:"request_id"`
+	CapabilityKey       string `json:"capability_key"`
+	FieldKey            string `json:"field_key"`
+	OrgApplicability    string `json:"org_applicability"`
+	BusinessUnitOrgCode string `json:"business_unit_org_code"`
+	EffectiveDate       string `json:"effective_date"`
+	DisableAsOf         string `json:"disable_as_of"`
+	RequestID           string `json:"request_id"`
+}
+
+type setIDStrategyRegistryAPIItem struct {
+	CapabilityKey       string   `json:"capability_key"`
+	OwnerModule         string   `json:"owner_module"`
+	SourceType          string   `json:"source_type,omitempty"`
+	FieldKey            string   `json:"field_key"`
+	PersonalizationMode string   `json:"personalization_mode"`
+	OrgApplicability    string   `json:"org_applicability"`
+	BusinessUnitOrgCode string   `json:"business_unit_org_code,omitempty"`
+	Required            bool     `json:"required"`
+	Visible             bool     `json:"visible"`
+	Maintainable        bool     `json:"maintainable"`
+	DefaultRuleRef      string   `json:"default_rule_ref,omitempty"`
+	DefaultValue        string   `json:"default_value,omitempty"`
+	AllowedValueCodes   []string `json:"allowed_value_codes,omitempty"`
+	Priority            int      `json:"priority"`
+	PriorityMode        string   `json:"priority_mode"`
+	LocalOverrideMode   string   `json:"local_override_mode"`
+	ExplainRequired     bool     `json:"explain_required"`
+	IsStable            bool     `json:"is_stable"`
+	ChangePolicy        string   `json:"change_policy"`
+	EffectiveDate       string   `json:"effective_date"`
+	EndDate             string   `json:"end_date,omitempty"`
+	UpdatedAt           string   `json:"updated_at"`
 }
 
 type setIDStrategyRegistryDisableRequest struct {
-	CapabilityKey    string
-	FieldKey         string
-	OrgApplicability string
-	BusinessUnitID   string
-	EffectiveDate    string
-	DisableAsOf      string
+	CapabilityKey       string
+	FieldKey            string
+	OrgApplicability    string
+	BusinessUnitNodeKey string
+	EffectiveDate       string
+	DisableAsOf         string
 }
 
 type setIDFieldDecision struct {
@@ -154,7 +180,7 @@ type setIDStrategyRegistryStore interface {
 	upsert(ctx context.Context, tenantID string, item setIDStrategyRegistryItem) (setIDStrategyRegistryItem, bool, error)
 	disable(ctx context.Context, tenantID string, req setIDStrategyRegistryDisableRequest) (setIDStrategyRegistryItem, bool, error)
 	list(ctx context.Context, tenantID string, capabilityKey string, fieldKey string, asOf string) ([]setIDStrategyRegistryItem, error)
-	resolveFieldDecision(ctx context.Context, tenantID string, capabilityKey string, fieldKey string, businessUnitID string, asOf string) (setIDFieldDecision, error)
+	resolveFieldDecision(ctx context.Context, tenantID string, capabilityKey string, fieldKey string, businessUnitNodeKey string, asOf string) (setIDFieldDecision, error)
 }
 
 type setIDStrategyRegistryRuntimeStore struct {
@@ -213,8 +239,8 @@ func (s *setIDStrategyRegistryRuntimeStore) disable(_ context.Context, tenantID 
 	return s.runtime.disable(tenantID, req)
 }
 
-func (s *setIDStrategyRegistryRuntimeStore) resolveFieldDecision(_ context.Context, tenantID string, capabilityKey string, fieldKey string, businessUnitID string, asOf string) (setIDFieldDecision, error) {
-	return s.runtime.resolveFieldDecision(tenantID, capabilityKey, fieldKey, businessUnitID, asOf)
+func (s *setIDStrategyRegistryRuntimeStore) resolveFieldDecision(_ context.Context, tenantID string, capabilityKey string, fieldKey string, businessUnitNodeKey string, asOf string) (setIDFieldDecision, error) {
+	return s.runtime.resolveFieldDecision(tenantID, capabilityKey, fieldKey, businessUnitNodeKey, asOf)
 }
 
 func (s *setIDStrategyRegistryPGStore) withTx(ctx context.Context, tenantID string, fn func(tx pgx.Tx) error) error {
@@ -253,7 +279,7 @@ func scanSetIDStrategyRegistryRows(rows pgx.Rows) ([]setIDStrategyRegistryItem, 
 			&item.FieldKey,
 			&item.PersonalizationMode,
 			&item.OrgApplicability,
-			&item.BusinessUnitID,
+			&item.BusinessUnitNodeKey,
 			&item.Required,
 			&item.Visible,
 			&item.Maintainable,
@@ -311,7 +337,7 @@ SELECT EXISTS (
     AND business_unit_id = $5::text
     AND effective_date = $6::date
 )
-`, tenantID, item.CapabilityKey, item.FieldKey, item.OrgApplicability, item.BusinessUnitID, item.EffectiveDate).Scan(&updated); err != nil {
+`, tenantID, item.CapabilityKey, item.FieldKey, item.OrgApplicability, item.BusinessUnitNodeKey, item.EffectiveDate).Scan(&updated); err != nil {
 			return err
 		}
 		_, err := tx.Exec(ctx, `
@@ -380,7 +406,7 @@ DO UPDATE SET
   change_policy = EXCLUDED.change_policy,
   end_date = EXCLUDED.end_date,
   updated_at = EXCLUDED.updated_at
-`, tenantID, item.CapabilityKey, item.OwnerModule, item.FieldKey, item.PersonalizationMode, item.OrgApplicability, item.BusinessUnitID, item.Required, item.Visible, item.Maintainable, item.DefaultRuleRef, item.DefaultValue, allowedValueCodesJSON, item.Priority, item.PriorityMode, item.LocalOverrideMode, item.ExplainRequired, item.IsStable, item.ChangePolicy, item.EffectiveDate, endDate, item.UpdatedAt)
+`, tenantID, item.CapabilityKey, item.OwnerModule, item.FieldKey, item.PersonalizationMode, item.OrgApplicability, item.BusinessUnitNodeKey, item.Required, item.Visible, item.Maintainable, item.DefaultRuleRef, item.DefaultValue, allowedValueCodesJSON, item.Priority, item.PriorityMode, item.LocalOverrideMode, item.ExplainRequired, item.IsStable, item.ChangePolicy, item.EffectiveDate, endDate, item.UpdatedAt)
 		return err
 	})
 	return item, updated, err
@@ -414,11 +440,11 @@ func ensureStrategyResolvableAfterDisable(items []setIDStrategyRegistryItem, req
 		}
 		active = append(active, item)
 	}
-	businessUnitID := ""
+	businessUnitNodeKey := ""
 	if req.OrgApplicability == orgApplicabilityBusinessUnit {
-		businessUnitID = req.BusinessUnitID
+		businessUnitNodeKey = req.BusinessUnitNodeKey
 	}
-	if _, err := resolveFieldDecisionFromItems(active, req.CapabilityKey, req.FieldKey, businessUnitID); err != nil {
+	if _, err := resolveFieldDecisionFromItems(active, req.CapabilityKey, req.FieldKey, businessUnitNodeKey); err != nil {
 		return errDisableNotAllowed
 	}
 	return nil
@@ -465,7 +491,7 @@ WHERE tenant_uuid = $1::uuid
   AND business_unit_id = $5::text
   AND effective_date = $6::date
 FOR UPDATE
-`, tenantID, req.CapabilityKey, req.FieldKey, req.OrgApplicability, req.BusinessUnitID, req.EffectiveDate)
+`, tenantID, req.CapabilityKey, req.FieldKey, req.OrgApplicability, req.BusinessUnitNodeKey, req.EffectiveDate)
 		var allowedValueCodesRaw string
 		if err := row.Scan(
 			&target.CapabilityKey,
@@ -473,7 +499,7 @@ FOR UPDATE
 			&target.FieldKey,
 			&target.PersonalizationMode,
 			&target.OrgApplicability,
-			&target.BusinessUnitID,
+			&target.BusinessUnitNodeKey,
 			&target.Required,
 			&target.Visible,
 			&target.Maintainable,
@@ -518,7 +544,7 @@ WHERE tenant_uuid = $1::uuid
   AND org_applicability = $4::text
   AND business_unit_id = $5::text
   AND effective_date = $6::date
-`, tenantID, req.CapabilityKey, req.FieldKey, req.OrgApplicability, req.BusinessUnitID, req.EffectiveDate, endDate, nowUTC); err != nil {
+`, tenantID, req.CapabilityKey, req.FieldKey, req.OrgApplicability, req.BusinessUnitNodeKey, req.EffectiveDate, endDate, nowUTC); err != nil {
 			return err
 		}
 		rows, err := tx.Query(ctx, `
@@ -625,7 +651,7 @@ ORDER BY capability_key ASC, field_key ASC, org_applicability ASC, business_unit
 	return out, err
 }
 
-func (s *setIDStrategyRegistryPGStore) resolveFieldDecision(ctx context.Context, tenantID string, capabilityKey string, fieldKey string, businessUnitID string, asOf string) (setIDFieldDecision, error) {
+func (s *setIDStrategyRegistryPGStore) resolveFieldDecision(ctx context.Context, tenantID string, capabilityKey string, fieldKey string, businessUnitNodeKey string, asOf string) (setIDFieldDecision, error) {
 	items, err := collectCapabilityResolutionItems(
 		func(queryCapabilityKey string) ([]setIDStrategyRegistryItem, error) {
 			return s.list(ctx, tenantID, queryCapabilityKey, fieldKey, asOf)
@@ -635,7 +661,7 @@ func (s *setIDStrategyRegistryPGStore) resolveFieldDecision(ctx context.Context,
 	if err != nil {
 		return setIDFieldDecision{}, err
 	}
-	return resolveFieldDecisionFromItems(items, capabilityKey, fieldKey, businessUnitID)
+	return resolveFieldDecisionFromItems(items, capabilityKey, fieldKey, businessUnitNodeKey)
 }
 
 func collectCapabilityResolutionItems(
@@ -665,12 +691,12 @@ func strategyRegistrySortKey(item setIDStrategyRegistryItem) string {
 		item.CapabilityKey,
 		item.FieldKey,
 		item.OrgApplicability,
-		item.BusinessUnitID,
+		item.BusinessUnitNodeKey,
 		item.EffectiveDate,
 	}, "|")
 }
 
-func normalizeStrategyRegistryItem(req setIDStrategyRegistryUpsertAPIRequest) setIDStrategyRegistryItem {
+func normalizeStrategyRegistryItem(req setIDStrategyRegistryUpsertAPIRequest, businessUnitNodeKey string) setIDStrategyRegistryItem {
 	item := setIDStrategyRegistryItem{
 		CapabilityKey:       strings.ToLower(strings.TrimSpace(req.CapabilityKey)),
 		OwnerModule:         strings.ToLower(strings.TrimSpace(req.OwnerModule)),
@@ -678,7 +704,7 @@ func normalizeStrategyRegistryItem(req setIDStrategyRegistryUpsertAPIRequest) se
 		FieldKey:            strings.ToLower(strings.TrimSpace(req.FieldKey)),
 		PersonalizationMode: strings.ToLower(strings.TrimSpace(req.PersonalizationMode)),
 		OrgApplicability:    strings.ToLower(strings.TrimSpace(req.OrgApplicability)),
-		BusinessUnitID:      strings.TrimSpace(req.BusinessUnitID),
+		BusinessUnitNodeKey: strings.TrimSpace(businessUnitNodeKey),
 		Required:            req.Required,
 		Visible:             req.Visible,
 		Maintainable:        true,
@@ -705,26 +731,97 @@ func normalizeStrategyRegistryItem(req setIDStrategyRegistryUpsertAPIRequest) se
 		item.ChangePolicy = "plan_required"
 	}
 	if item.OrgApplicability == orgApplicabilityTenant {
-		item.BusinessUnitID = ""
+		item.BusinessUnitNodeKey = ""
 	}
 	item.SourceType = strategySourceTypeForCapabilityKey(item.CapabilityKey)
 	item.UpdatedAt = time.Now().UTC().Format(time.RFC3339)
 	return item
 }
 
-func normalizeStrategyRegistryDisableRequest(req setIDStrategyRegistryDisableAPIRequest) setIDStrategyRegistryDisableRequest {
+func normalizeStrategyRegistryDisableRequest(req setIDStrategyRegistryDisableAPIRequest, businessUnitNodeKey string) setIDStrategyRegistryDisableRequest {
 	item := setIDStrategyRegistryDisableRequest{
-		CapabilityKey:    strings.ToLower(strings.TrimSpace(req.CapabilityKey)),
-		FieldKey:         strings.ToLower(strings.TrimSpace(req.FieldKey)),
-		OrgApplicability: strings.ToLower(strings.TrimSpace(req.OrgApplicability)),
-		BusinessUnitID:   strings.TrimSpace(req.BusinessUnitID),
-		EffectiveDate:    strings.TrimSpace(req.EffectiveDate),
-		DisableAsOf:      strings.TrimSpace(req.DisableAsOf),
+		CapabilityKey:       strings.ToLower(strings.TrimSpace(req.CapabilityKey)),
+		FieldKey:            strings.ToLower(strings.TrimSpace(req.FieldKey)),
+		OrgApplicability:    strings.ToLower(strings.TrimSpace(req.OrgApplicability)),
+		BusinessUnitNodeKey: strings.TrimSpace(businessUnitNodeKey),
+		EffectiveDate:       strings.TrimSpace(req.EffectiveDate),
+		DisableAsOf:         strings.TrimSpace(req.DisableAsOf),
 	}
 	if item.OrgApplicability == orgApplicabilityTenant {
-		item.BusinessUnitID = ""
+		item.BusinessUnitNodeKey = ""
 	}
 	return item
+}
+
+func resolveStrategyRegistryBusinessUnit(ctx context.Context, tenantID string, orgApplicability string, businessUnitOrgCode string, orgResolver OrgUnitCodeResolver) (string, string, error) {
+	if strings.ToLower(strings.TrimSpace(orgApplicability)) != orgApplicabilityBusinessUnit {
+		return "", "", nil
+	}
+	if strings.TrimSpace(businessUnitOrgCode) == "" {
+		return "", "", errors.New("business_unit_org_code_required")
+	}
+	ref, err := resolveSetIDOrgCodeRef(ctx, tenantID, businessUnitOrgCode, orgResolver)
+	if err != nil {
+		return "", "", err
+	}
+	return ref.OrgCode, ref.OrgNodeKey, nil
+}
+
+func writeSetIDStrategyRegistryBusinessUnitError(w http.ResponseWriter, r *http.Request, err error) {
+	switch {
+	case err == nil:
+		return
+	case err.Error() == "business_unit_org_code_required":
+		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "invalid_request", "business_unit_org_code required")
+	case errors.Is(err, orgunitpkg.ErrOrgCodeInvalid):
+		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "business_unit_org_code_invalid", "business_unit_org_code invalid")
+	case errors.Is(err, orgunitpkg.ErrOrgCodeNotFound):
+		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusNotFound, "business_unit_org_code_not_found", "business_unit_org_code not found")
+	default:
+		writeInternalAPIError(w, r, err, "setid_strategy_registry_business_unit_org_code_resolve_failed")
+	}
+}
+
+func strategyRegistryAPIItemFromInternal(ctx context.Context, tenantID string, item setIDStrategyRegistryItem, orgResolver OrgUnitCodeResolver) (setIDStrategyRegistryAPIItem, error) {
+	apiItem := setIDStrategyRegistryAPIItem{
+		CapabilityKey:       item.CapabilityKey,
+		OwnerModule:         item.OwnerModule,
+		SourceType:          item.SourceType,
+		FieldKey:            item.FieldKey,
+		PersonalizationMode: item.PersonalizationMode,
+		OrgApplicability:    item.OrgApplicability,
+		Required:            item.Required,
+		Visible:             item.Visible,
+		Maintainable:        item.Maintainable,
+		DefaultRuleRef:      item.DefaultRuleRef,
+		DefaultValue:        item.DefaultValue,
+		AllowedValueCodes:   item.AllowedValueCodes,
+		Priority:            item.Priority,
+		PriorityMode:        item.PriorityMode,
+		LocalOverrideMode:   item.LocalOverrideMode,
+		ExplainRequired:     item.ExplainRequired,
+		IsStable:            item.IsStable,
+		ChangePolicy:        item.ChangePolicy,
+		EffectiveDate:       item.EffectiveDate,
+		EndDate:             item.EndDate,
+		UpdatedAt:           item.UpdatedAt,
+	}
+	if strings.TrimSpace(item.BusinessUnitNodeKey) == "" {
+		return apiItem, nil
+	}
+	if orgResolver == nil {
+		return setIDStrategyRegistryAPIItem{}, errors.New("orgunit resolver missing")
+	}
+	orgNodeKey, err := normalizeOrgNodeKeyInput(item.BusinessUnitNodeKey)
+	if err != nil {
+		return setIDStrategyRegistryAPIItem{}, err
+	}
+	businessUnitOrgCode, err := orgResolver.ResolveOrgCodeByNodeKey(ctx, tenantID, orgNodeKey)
+	if err != nil {
+		return setIDStrategyRegistryAPIItem{}, err
+	}
+	apiItem.BusinessUnitOrgCode = businessUnitOrgCode
+	return apiItem, nil
 }
 
 func normalizeAllowedValueCodes(values []string) []string {
@@ -826,11 +923,11 @@ func validateStrategyRegistryItem(item setIDStrategyRegistryItem) (int, string, 
 	switch item.OrgApplicability {
 	case orgApplicabilityTenant:
 	case orgApplicabilityBusinessUnit:
-		if item.BusinessUnitID == "" {
-			return http.StatusBadRequest, "invalid_business_unit_id", "business_unit_id required"
+		if item.BusinessUnitNodeKey == "" {
+			return http.StatusBadRequest, "business_unit_org_code_invalid", "business_unit_org_code required"
 		}
-		if _, err := parseOrgID8(item.BusinessUnitID); err != nil {
-			return http.StatusBadRequest, "invalid_business_unit_id", "invalid business_unit_id"
+		if _, err := normalizeOrgNodeKeyInput(item.BusinessUnitNodeKey); err != nil {
+			return http.StatusBadRequest, "business_unit_org_code_invalid", "business_unit_org_code invalid"
 		}
 	default:
 		return http.StatusUnprocessableEntity, "org_applicability_invalid", "org_applicability invalid"
@@ -885,11 +982,11 @@ func validateStrategyRegistryDisableRequest(req setIDStrategyRegistryDisableRequ
 	switch req.OrgApplicability {
 	case orgApplicabilityTenant:
 	case orgApplicabilityBusinessUnit:
-		if req.BusinessUnitID == "" {
-			return http.StatusBadRequest, "invalid_business_unit_id", "business_unit_id required"
+		if req.BusinessUnitNodeKey == "" {
+			return http.StatusBadRequest, "business_unit_org_code_invalid", "business_unit_org_code required"
 		}
-		if _, err := parseOrgID8(req.BusinessUnitID); err != nil {
-			return http.StatusBadRequest, "invalid_business_unit_id", "invalid business_unit_id"
+		if _, err := normalizeOrgNodeKeyInput(req.BusinessUnitNodeKey); err != nil {
+			return http.StatusBadRequest, "business_unit_org_code_invalid", "business_unit_org_code invalid"
 		}
 	default:
 		return http.StatusUnprocessableEntity, "org_applicability_invalid", "org_applicability invalid"
@@ -956,7 +1053,7 @@ func (s *setIDStrategyRegistryRuntime) disable(tenantID string, req setIDStrateg
 		req.CapabilityKey,
 		req.FieldKey,
 		req.OrgApplicability,
-		req.BusinessUnitID,
+		req.BusinessUnitNodeKey,
 		req.EffectiveDate,
 	}, "|")
 	targetIndex := -1
@@ -965,7 +1062,7 @@ func (s *setIDStrategyRegistryRuntime) disable(tenantID string, req setIDStrateg
 			items[i].CapabilityKey,
 			items[i].FieldKey,
 			items[i].OrgApplicability,
-			items[i].BusinessUnitID,
+			items[i].BusinessUnitNodeKey,
 			items[i].EffectiveDate,
 		}, "|")
 		if candidateKey == targetKey {
@@ -1037,7 +1134,7 @@ func (s *setIDStrategyRegistryRuntime) resolveFieldDecision(
 	tenantID string,
 	capabilityKey string,
 	fieldKey string,
-	businessUnitID string,
+	businessUnitNodeKey string,
 	asOf string,
 ) (setIDFieldDecision, error) {
 	items, err := collectCapabilityResolutionItems(
@@ -1049,13 +1146,13 @@ func (s *setIDStrategyRegistryRuntime) resolveFieldDecision(
 	if err != nil {
 		return setIDFieldDecision{}, err
 	}
-	return resolveFieldDecisionFromItems(items, capabilityKey, fieldKey, businessUnitID)
+	return resolveFieldDecisionFromItems(items, capabilityKey, fieldKey, businessUnitNodeKey)
 }
 
-func resolveFieldDecisionFromItems(items []setIDStrategyRegistryItem, capabilityKey string, fieldKey string, businessUnitID string) (setIDFieldDecision, error) {
+func resolveFieldDecisionFromItems(items []setIDStrategyRegistryItem, capabilityKey string, fieldKey string, businessUnitNodeKey string) (setIDFieldDecision, error) {
 	capabilityKey = strings.ToLower(strings.TrimSpace(capabilityKey))
 	fieldKey = strings.ToLower(strings.TrimSpace(fieldKey))
-	businessUnitID = strings.TrimSpace(businessUnitID)
+	businessUnitNodeKey = strings.TrimSpace(businessUnitNodeKey)
 
 	baselineCapabilityKey, hasBaseline := orgUnitBaselineCapabilityKeyForIntentCapability(capabilityKey)
 	if !hasBaseline {
@@ -1080,10 +1177,10 @@ func resolveFieldDecisionFromItems(items []setIDStrategyRegistryItem, capability
 		if step.capabilityKey == capabilityKey && step.sourceType == strategySourceBaseline {
 			continue
 		}
-		if step.orgApplicability == orgApplicabilityBusinessUnit && businessUnitID == "" {
+		if step.orgApplicability == orgApplicabilityBusinessUnit && businessUnitNodeKey == "" {
 			continue
 		}
-		decision, found, err := resolveCapabilityBucketDecision(items, step.capabilityKey, fieldKey, step.orgApplicability, businessUnitID, step.sourceType)
+		decision, found, err := resolveCapabilityBucketDecision(items, step.capabilityKey, fieldKey, step.orgApplicability, businessUnitNodeKey, step.sourceType)
 		if err != nil {
 			return setIDFieldDecision{}, err
 		}
@@ -1099,12 +1196,12 @@ func resolveCapabilityBucketDecision(
 	capabilityKey string,
 	fieldKey string,
 	orgApplicability string,
-	businessUnitID string,
+	businessUnitNodeKey string,
 	sourceType string,
 ) (setIDFieldDecision, bool, error) {
 	capabilityKey = strings.ToLower(strings.TrimSpace(capabilityKey))
 	fieldKey = strings.ToLower(strings.TrimSpace(fieldKey))
-	businessUnitID = strings.TrimSpace(businessUnitID)
+	businessUnitNodeKey = strings.TrimSpace(businessUnitNodeKey)
 
 	var chosen *setIDStrategyRegistryItem
 	for _, item := range items {
@@ -1117,7 +1214,7 @@ func resolveCapabilityBucketDecision(
 		if strings.ToLower(strings.TrimSpace(item.OrgApplicability)) != orgApplicability {
 			continue
 		}
-		if orgApplicability == orgApplicabilityBusinessUnit && !strings.EqualFold(strings.TrimSpace(item.BusinessUnitID), businessUnitID) {
+		if orgApplicability == orgApplicabilityBusinessUnit && !strings.EqualFold(strings.TrimSpace(item.BusinessUnitNodeKey), businessUnitNodeKey) {
 			continue
 		}
 		candidate := item
@@ -1214,16 +1311,16 @@ func isRedundantIntentOverride(ctx context.Context, tenantID string, item setIDS
 		return false, err
 	}
 	merged := mergeStrategyItemsWithUpsert(items, item)
-	businessUnitID := ""
+	businessUnitNodeKey := ""
 	if item.OrgApplicability == orgApplicabilityBusinessUnit {
-		businessUnitID = item.BusinessUnitID
+		businessUnitNodeKey = item.BusinessUnitNodeKey
 	}
 	overrideDecision, _, err := resolveCapabilityBucketDecision(
 		merged,
 		item.CapabilityKey,
 		item.FieldKey,
 		item.OrgApplicability,
-		businessUnitID,
+		businessUnitNodeKey,
 		strategySourceIntentOverride,
 	)
 	if err != nil {
@@ -1234,7 +1331,7 @@ func isRedundantIntentOverride(ctx context.Context, tenantID string, item setIDS
 		baselineCapabilityKey,
 		item.FieldKey,
 		item.OrgApplicability,
-		businessUnitID,
+		businessUnitNodeKey,
 		strategySourceBaseline,
 	)
 	if err != nil {
@@ -1255,7 +1352,7 @@ func findStrategyRegistryItemForUpsert(ctx context.Context, tenantID string, ite
 		if candidate.OrgApplicability != item.OrgApplicability {
 			continue
 		}
-		if candidate.BusinessUnitID != item.BusinessUnitID {
+		if candidate.BusinessUnitNodeKey != item.BusinessUnitNodeKey {
 			continue
 		}
 		if candidate.EffectiveDate != item.EffectiveDate {
@@ -1266,7 +1363,7 @@ func findStrategyRegistryItemForUpsert(ctx context.Context, tenantID string, ite
 	return setIDStrategyRegistryItem{}, false, nil
 }
 
-func handleSetIDStrategyRegistryAPI(w http.ResponseWriter, r *http.Request) {
+func handleSetIDStrategyRegistryAPI(w http.ResponseWriter, r *http.Request, orgResolver OrgUnitCodeResolver) {
 	tenant, ok := currentTenant(r.Context())
 	if !ok {
 		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusInternalServerError, "tenant_missing", "tenant missing")
@@ -1284,11 +1381,20 @@ func handleSetIDStrategyRegistryAPI(w http.ResponseWriter, r *http.Request) {
 			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusInternalServerError, "setid_strategy_registry_list_failed", "setid strategy registry list failed")
 			return
 		}
+		apiItems := make([]setIDStrategyRegistryAPIItem, 0, len(items))
+		for _, item := range items {
+			apiItem, err := strategyRegistryAPIItemFromInternal(r.Context(), tenant.ID, item, orgResolver)
+			if err != nil {
+				writeInternalAPIError(w, r, err, "setid_strategy_registry_org_ref_invalid")
+				return
+			}
+			apiItems = append(apiItems, apiItem)
+		}
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		_ = json.NewEncoder(w).Encode(map[string]any{
 			"tenant_id": tenant.ID,
 			"as_of":     asOf,
-			"items":     items,
+			"items":     apiItems,
 		})
 		return
 	case http.MethodPost:
@@ -1302,14 +1408,19 @@ func handleSetIDStrategyRegistryAPI(w http.ResponseWriter, r *http.Request) {
 			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "invalid_request", "request_id required")
 			return
 		}
-		item := normalizeStrategyRegistryItem(req)
+		businessUnitOrgCode, businessUnitNodeKey, err := resolveStrategyRegistryBusinessUnit(r.Context(), tenant.ID, req.OrgApplicability, req.BusinessUnitOrgCode, orgResolver)
+		if err != nil {
+			writeSetIDStrategyRegistryBusinessUnitError(w, r, err)
+			return
+		}
+		item := normalizeStrategyRegistryItem(req, businessUnitNodeKey)
 		if status, code, message := validateStrategyRegistryItem(item); status != 0 {
 			routing.WriteError(w, r, routing.RouteClassInternalAPI, status, code, message)
 			return
 		}
 		_, capErr := resolveCapabilityContext(r.Context(), r, capabilityContextInput{
 			CapabilityKey:       item.CapabilityKey,
-			BusinessUnitID:      item.BusinessUnitID,
+			BusinessUnitOrgCode: businessUnitOrgCode,
 			AsOf:                item.EffectiveDate,
 			RequireBusinessUnit: item.OrgApplicability == orgApplicabilityBusinessUnit,
 		})
@@ -1343,19 +1454,24 @@ func handleSetIDStrategyRegistryAPI(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		apiItem, err := strategyRegistryAPIItemFromInternal(r.Context(), tenant.ID, saved, orgResolver)
+		if err != nil {
+			writeInternalAPIError(w, r, err, "setid_strategy_registry_org_ref_invalid")
+			return
+		}
 		if updated {
 			w.WriteHeader(http.StatusOK)
 		} else {
 			w.WriteHeader(http.StatusCreated)
 		}
-		_ = json.NewEncoder(w).Encode(saved)
+		_ = json.NewEncoder(w).Encode(apiItem)
 		return
 	default:
 		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusMethodNotAllowed, "method_not_allowed", "method not allowed")
 	}
 }
 
-func handleSetIDStrategyRegistryDisableAPI(w http.ResponseWriter, r *http.Request) {
+func handleSetIDStrategyRegistryDisableAPI(w http.ResponseWriter, r *http.Request, orgResolver OrgUnitCodeResolver) {
 	tenant, ok := currentTenant(r.Context())
 	if !ok {
 		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusInternalServerError, "tenant_missing", "tenant missing")
@@ -1375,14 +1491,19 @@ func handleSetIDStrategyRegistryDisableAPI(w http.ResponseWriter, r *http.Reques
 		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "invalid_request", "request_id required")
 		return
 	}
-	item := normalizeStrategyRegistryDisableRequest(req)
+	businessUnitOrgCode, businessUnitNodeKey, err := resolveStrategyRegistryBusinessUnit(r.Context(), tenant.ID, req.OrgApplicability, req.BusinessUnitOrgCode, orgResolver)
+	if err != nil {
+		writeSetIDStrategyRegistryBusinessUnitError(w, r, err)
+		return
+	}
+	item := normalizeStrategyRegistryDisableRequest(req, businessUnitNodeKey)
 	if status, code, message := validateStrategyRegistryDisableRequest(item); status != 0 {
 		routing.WriteError(w, r, routing.RouteClassInternalAPI, status, code, message)
 		return
 	}
 	_, capErr := resolveCapabilityContext(r.Context(), r, capabilityContextInput{
 		CapabilityKey:       item.CapabilityKey,
-		BusinessUnitID:      item.BusinessUnitID,
+		BusinessUnitOrgCode: businessUnitOrgCode,
 		AsOf:                item.DisableAsOf,
 		RequireBusinessUnit: item.OrgApplicability == orgApplicabilityBusinessUnit,
 	})
@@ -1404,7 +1525,12 @@ func handleSetIDStrategyRegistryDisableAPI(w http.ResponseWriter, r *http.Reques
 		}
 		return
 	}
+	apiItem, err := strategyRegistryAPIItemFromInternal(r.Context(), tenant.ID, saved, orgResolver)
+	if err != nil {
+		writeInternalAPIError(w, r, err, "setid_strategy_registry_org_ref_invalid")
+		return
+	}
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
-	_ = json.NewEncoder(w).Encode(saved)
+	_ = json.NewEncoder(w).Encode(apiItem)
 }

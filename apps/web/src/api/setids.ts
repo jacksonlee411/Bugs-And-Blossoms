@@ -17,7 +17,7 @@ export async function listSetIDs(): Promise<SetIDListResponse> {
 }
 
 export interface SetIDBindingAPIItem {
-  org_unit_id: string
+  org_code: string
   setid: string
   valid_from: string
   valid_to: string
@@ -59,7 +59,7 @@ export interface SetIDStrategyRegistryItem {
   field_key: string
   personalization_mode: 'tenant_only' | 'setid'
   org_applicability: 'tenant' | 'business_unit'
-  business_unit_id?: string
+  business_unit_org_code?: string
   required: boolean
   visible: boolean
   maintainable: boolean
@@ -89,7 +89,7 @@ export interface SetIDStrategyRegistryUpsertRequest {
   field_key: string
   personalization_mode: 'tenant_only' | 'setid'
   org_applicability: 'tenant' | 'business_unit'
-  business_unit_id: string
+  business_unit_org_code: string
   required: boolean
   visible: boolean
   maintainable: boolean
@@ -132,7 +132,7 @@ export interface SetIDStrategyRegistryDisableRequest {
   capability_key: string
   field_key: string
   org_applicability: 'tenant' | 'business_unit'
-  business_unit_id: string
+  business_unit_org_code: string
   effective_date: string
   disable_as_of: string
   request_id: string
@@ -166,9 +166,9 @@ export interface SetIDExplainResponse {
   request_id: string
   capability_key: string
   tenant_id?: string
-  business_unit_id: string
+  business_unit_org_code: string
   as_of: string
-  org_unit_id?: string
+  org_code?: string
   resolved_setid: string
   resolved_config_version?: string
   decision: string
@@ -180,17 +180,17 @@ export interface SetIDExplainResponse {
 export async function getSetIDExplain(request: {
   capabilityKey: string
   fieldKey: string
-  businessUnitID: string
+  businessUnitOrgCode: string
   asOf: string
   level?: 'brief' | 'full'
   setID?: string
-  orgUnitID?: string
+  orgCode?: string
   requestID?: string
 }): Promise<SetIDExplainResponse> {
   const query = new URLSearchParams({
     capability_key: request.capabilityKey.trim(),
     field_key: request.fieldKey.trim(),
-    business_unit_id: request.businessUnitID.trim(),
+    business_unit_org_code: request.businessUnitOrgCode.trim(),
     as_of: request.asOf.trim()
   })
   if (request.level) {
@@ -199,8 +199,8 @@ export async function getSetIDExplain(request: {
   if (request.setID && request.setID.trim().length > 0) {
     query.set('setid', request.setID.trim())
   }
-  if (request.orgUnitID && request.orgUnitID.trim().length > 0) {
-    query.set('org_unit_id', request.orgUnitID.trim())
+  if (request.orgCode && request.orgCode.trim().length > 0) {
+    query.set('org_code', request.orgCode.trim())
   }
   if (request.requestID && request.requestID.trim().length > 0) {
     query.set('request_id', request.requestID.trim())

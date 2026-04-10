@@ -24,6 +24,14 @@ func (s orgUnitCreateFieldDecisionStoreStub) ResolveOrgID(ctx context.Context, t
 	return s.orgUnitStoreStub.ResolveOrgID(ctx, tenantID, orgCode)
 }
 
+func (s orgUnitCreateFieldDecisionStoreStub) ResolveOrgNodeKeyByCode(ctx context.Context, tenantID string, orgCode string) (string, error) {
+	orgID, err := s.ResolveOrgID(ctx, tenantID, orgCode)
+	if err != nil || orgID == 0 {
+		return "", err
+	}
+	return encodeOrgNodeKeyFromID(orgID)
+}
+
 func TestHandleOrgUnitCreateFieldDecisionsAPI(t *testing.T) {
 	previousStore := defaultSetIDStrategyRegistryStore
 	t.Cleanup(func() { useSetIDStrategyRegistryStore(previousStore) })
@@ -205,8 +213,8 @@ func TestHandleOrgUnitCreateFieldDecisionsAPI(t *testing.T) {
 		if response.CapabilityKey != orgUnitCreateFieldPolicyCapabilityKey {
 			t.Fatalf("capability_key=%q", response.CapabilityKey)
 		}
-		if response.BusinessUnitID != "" {
-			t.Fatalf("business_unit_id=%q", response.BusinessUnitID)
+		if response.BusinessUnitOrgCode != "" {
+			t.Fatalf("business_unit_org_code=%q", response.BusinessUnitOrgCode)
 		}
 		expectedPolicyVersion, parts := resolveOrgUnitEffectivePolicyVersion("t1", orgUnitCreateFieldPolicyCapabilityKey)
 		if response.PolicyVersion != expectedPolicyVersion {
@@ -225,45 +233,76 @@ func TestHandleOrgUnitCreateFieldDecisionsAPI(t *testing.T) {
 			t.Fatalf("field_decisions=%+v", response.FieldDecisions)
 		}
 	})
+
+	t.Run("success with parent org returns business unit org code", func(t *testing.T) {
+		useSetIDStrategyRegistryStore(setIDStrategyRegistryStoreStub{
+			resolveFieldDecisionFn: func(_ context.Context, _ string, capabilityKey string, fieldKey string, businessUnitNodeKey string, asOf string) (setIDFieldDecision, error) {
+				if businessUnitNodeKey == "" {
+					t.Fatal("business_unit_node_key should not be empty")
+				}
+				return setIDFieldDecision{
+					CapabilityKey: capabilityKey,
+					FieldKey:      fieldKey,
+					Required:      true,
+					Visible:       true,
+					Maintainable:  true,
+				}, nil
+			},
+		})
+
+		req := newReq("/org/api/org-units/create-field-decisions?effective_date=2026-01-01&parent_org_code=ROOT")
+		rec := httptest.NewRecorder()
+		handleOrgUnitCreateFieldDecisionsAPI(rec, req, orgUnitCreateFieldDecisionStoreStub{
+			resolveOrgIDFn: func(context.Context, string, string) (int, error) {
+				return 10000001, nil
+			},
+		})
+		if rec.Code != http.StatusOK {
+			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+		}
+
+		var response orgUnitCreateFieldDecisionsAPIResponse
+		if err := json.Unmarshal(rec.Body.Bytes(), &response); err != nil {
+			t.Fatalf("json err=%v body=%s", err, rec.Body.String())
+		}
+		if response.BusinessUnitOrgCode != "ROOT" {
+			t.Fatalf("business_unit_org_code=%q", response.BusinessUnitOrgCode)
+		}
+	})
 }
 
-func TestResolveCreateFieldDecisionBusinessUnitID(t *testing.T) {
+func TestResolveCreateFieldDecisionBusinessUnitRef(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/org/api/org-units/create-field-decisions", nil)
 
 	t.Run("empty parent uses tenant level", func(t *testing.T) {
-		got, err := resolveCreateFieldDecisionBusinessUnitID(req, orgUnitCreateFieldDecisionStoreStub{}, "t1", "")
-		if err != nil || got != "" {
-			t.Fatalf("got=%q err=%v", got, err)
-		}
-	})
-
-	t.Run("invalid normalized business unit id", func(t *testing.T) {
-		_, err := resolveCreateFieldDecisionBusinessUnitID(req, orgUnitCreateFieldDecisionStoreStub{
-			resolveOrgIDFn: func(context.Context, string, string) (int, error) {
-				return 123, nil
-			},
-		}, "t1", "ROOT")
-		if err == nil || err.Error() != "invalid business_unit_id" {
-			t.Fatalf("err=%v", err)
+		got, err := resolveCreateFieldDecisionBusinessUnitRef(req.Context(), orgUnitCreateFieldDecisionStoreStub{}, "t1", "")
+		if err != nil || got.OrgCode != "" || got.OrgNodeKey != "" {
+			t.Fatalf("got=%+v err=%v", got, err)
 		}
 	})
 
 	t.Run("success with parent org", func(t *testing.T) {
-		got, err := resolveCreateFieldDecisionBusinessUnitID(req, orgUnitCreateFieldDecisionStoreStub{
+		got, err := resolveCreateFieldDecisionBusinessUnitRef(req.Context(), orgUnitCreateFieldDecisionStoreStub{
 			resolveOrgIDFn: func(context.Context, string, string) (int, error) {
 				return 10000001, nil
 			},
 		}, "t1", "ROOT")
-		if err != nil || got != "10000001" {
-			t.Fatalf("got=%q err=%v", got, err)
+		if err != nil {
+			t.Fatalf("err=%v", err)
+		}
+		if got.OrgCode != "ROOT" {
+			t.Fatalf("org_code=%q", got.OrgCode)
+		}
+		if got.OrgNodeKey == "" {
+			t.Fatalf("org_node_key should not be empty")
 		}
 	})
 
 	t.Run("normalize and resolve errors", func(t *testing.T) {
-		if _, err := resolveCreateFieldDecisionBusinessUnitID(req, orgUnitCreateFieldDecisionStoreStub{}, "t1", "bad\x7f"); err == nil {
+		if _, err := resolveCreateFieldDecisionBusinessUnitRef(req.Context(), orgUnitCreateFieldDecisionStoreStub{}, "t1", "bad\x7f"); err == nil {
 			t.Fatal("expected normalize error")
 		}
-		if _, err := resolveCreateFieldDecisionBusinessUnitID(req, orgUnitCreateFieldDecisionStoreStub{
+		if _, err := resolveCreateFieldDecisionBusinessUnitRef(req.Context(), orgUnitCreateFieldDecisionStoreStub{
 			resolveOrgIDFn: func(context.Context, string, string) (int, error) {
 				return 0, errors.New("boom")
 			},
