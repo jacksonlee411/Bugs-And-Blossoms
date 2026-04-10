@@ -857,7 +857,7 @@ type OrgunitSetidStrategyRegistry struct {
 	FieldKey            string             `json:"field_key"`
 	PersonalizationMode string             `json:"personalization_mode"`
 	OrgApplicability    string             `json:"org_applicability"`
-	BusinessUnitID      string             `json:"business_unit_id"`
+	BusinessUnitNodeKey string             `json:"business_unit_node_key"`
 	Required            bool               `json:"required"`
 	Visible             bool               `json:"visible"`
 	DefaultRuleRef      *string            `json:"default_rule_ref"`
@@ -1035,7 +1035,7 @@ type StaffingPositionVersion struct {
 	ID                    int64                     `json:"id"`
 	TenantUuid            pgtype.UUID               `json:"tenant_uuid"`
 	PositionUuid          pgtype.UUID               `json:"position_uuid"`
-	OrgUnitID             int32                     `json:"org_unit_id"`
+	OrgNodeKey            string                    `json:"org_node_key"`
 	ReportsToPositionUuid pgtype.UUID               `json:"reports_to_position_uuid"`
 	Name                  *string                   `json:"name"`
 	LifecycleStatus       string                    `json:"lifecycle_status"`

@@ -17,7 +17,7 @@ import (
 )
 
 type orgUnitSetIDResolver interface {
-	ResolveSetID(ctx context.Context, tenantID string, orgUnitID string, asOfDate string) (string, error)
+	ResolveSetID(ctx context.Context, tenantID string, orgNodeKey string, asOfDate string) (string, error)
 }
 
 type staffingPositionsAPIRequest struct {
@@ -179,18 +179,18 @@ func handlePositionsAPI(w http.ResponseWriter, r *http.Request, orgResolver OrgU
 		orgNodeKeyByStr := map[string]string{}
 		orgNodeKeys := make([]string, 0)
 		for _, p := range positions {
-			if p.OrgUnitID == "" {
+			if p.OrgNodeKey == "" {
 				continue
 			}
-			if _, ok := orgNodeKeyByStr[p.OrgUnitID]; ok {
+			if _, ok := orgNodeKeyByStr[p.OrgNodeKey]; ok {
 				continue
 			}
-			orgNodeKey, err := normalizeOrgNodeKeyInput(strings.TrimSpace(p.OrgUnitID))
+			orgNodeKey, err := normalizeOrgNodeKeyInput(strings.TrimSpace(p.OrgNodeKey))
 			if err != nil {
-				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusInternalServerError, "orgunit_id_invalid", "invalid orgunit id")
+				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusInternalServerError, "orgunit_ref_invalid", "invalid org reference")
 				return
 			}
-			orgNodeKeyByStr[p.OrgUnitID] = orgNodeKey
+			orgNodeKeyByStr[p.OrgNodeKey] = orgNodeKey
 			orgNodeKeys = append(orgNodeKeys, orgNodeKey)
 		}
 		if len(orgNodeKeys) > 0 {
@@ -216,7 +216,7 @@ func handlePositionsAPI(w http.ResponseWriter, r *http.Request, orgResolver OrgU
 		for _, p := range positions {
 			responsePositions = append(responsePositions, staffingPositionAPIResponse{
 				PositionUUID:          p.PositionUUID,
-				OrgCode:               orgCodes[p.OrgUnitID],
+				OrgCode:               orgCodes[p.OrgNodeKey],
 				ReportsToPositionUUID: p.ReportsToPositionUUID,
 				JobCatalogSetID:       p.JobCatalogSetID,
 				JobCatalogSetIDAsOf:   p.JobCatalogSetIDAsOf,
@@ -264,7 +264,7 @@ func handlePositionsAPI(w http.ResponseWriter, r *http.Request, orgResolver OrgU
 		}
 		req.EffectiveDate = effectiveDate
 
-		orgUnitID := ""
+		orgNodeKey := ""
 		if strings.TrimSpace(req.OrgCode) != "" {
 			normalized, err := orgunitpkg.NormalizeOrgCode(req.OrgCode)
 			if err != nil {
@@ -275,7 +275,7 @@ func handlePositionsAPI(w http.ResponseWriter, r *http.Request, orgResolver OrgU
 				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusInternalServerError, "orgunit_resolver_missing", "orgunit resolver missing")
 				return
 			}
-			orgNodeKey, err := orgResolver.ResolveOrgNodeKeyByCode(r.Context(), tenant.ID, normalized)
+			resolvedOrgNodeKey, err := orgResolver.ResolveOrgNodeKeyByCode(r.Context(), tenant.ID, normalized)
 			if err != nil {
 				switch {
 				case errors.Is(err, orgunitpkg.ErrOrgCodeInvalid):
@@ -287,7 +287,7 @@ func handlePositionsAPI(w http.ResponseWriter, r *http.Request, orgResolver OrgU
 				}
 				return
 			}
-			orgUnitID = orgNodeKey
+			orgNodeKey = resolvedOrgNodeKey
 			req.OrgCode = normalized
 		} else if strings.TrimSpace(req.PositionUUID) == "" {
 			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "invalid_request", "org_code required")
@@ -296,9 +296,9 @@ func handlePositionsAPI(w http.ResponseWriter, r *http.Request, orgResolver OrgU
 
 		var p Position
 		if strings.TrimSpace(req.PositionUUID) == "" {
-			p, err = store.CreatePositionCurrent(r.Context(), tenant.ID, req.EffectiveDate, orgUnitID, req.JobProfileUUID, req.CapacityFTE, req.Name)
+			p, err = store.CreatePositionCurrent(r.Context(), tenant.ID, req.EffectiveDate, orgNodeKey, req.JobProfileUUID, req.CapacityFTE, req.Name)
 		} else {
-			p, err = store.UpdatePositionCurrent(r.Context(), tenant.ID, req.PositionUUID, req.EffectiveDate, orgUnitID, req.ReportsToPositionUUID, req.JobProfileUUID, req.CapacityFTE, req.Name, req.LifecycleStatus)
+			p, err = store.UpdatePositionCurrent(r.Context(), tenant.ID, req.PositionUUID, req.EffectiveDate, orgNodeKey, req.ReportsToPositionUUID, req.JobProfileUUID, req.CapacityFTE, req.Name, req.LifecycleStatus)
 		}
 		if err != nil {
 			code := stablePgMessage(err)
@@ -318,17 +318,17 @@ func handlePositionsAPI(w http.ResponseWriter, r *http.Request, orgResolver OrgU
 			return
 		}
 		respOrgCode := ""
-		if p.OrgUnitID != "" {
+		if p.OrgNodeKey != "" {
 			if orgResolver == nil {
 				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusInternalServerError, "orgunit_resolver_missing", "orgunit resolver missing")
 				return
 			}
-			orgNodeKey, err := normalizeOrgNodeKeyInput(strings.TrimSpace(p.OrgUnitID))
+			resolvedOrgNodeKey, err := normalizeOrgNodeKeyInput(strings.TrimSpace(p.OrgNodeKey))
 			if err != nil {
-				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusInternalServerError, "orgunit_id_invalid", "invalid orgunit id")
+				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusInternalServerError, "orgunit_ref_invalid", "invalid org reference")
 				return
 			}
-			code, err := orgResolver.ResolveOrgCodeByNodeKey(r.Context(), tenant.ID, orgNodeKey)
+			code, err := orgResolver.ResolveOrgCodeByNodeKey(r.Context(), tenant.ID, resolvedOrgNodeKey)
 			if err != nil {
 				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusInternalServerError, "orgunit_resolve_org_code_failed", "resolve org_code failed")
 				return

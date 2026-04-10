@@ -847,6 +847,20 @@ errors:
     user_message_key: errors.invalid_org_unit_id
     backend_policy: passthrough
     frontend_policy: mapped
+  - code: business_unit_org_code_invalid
+    module: setid
+    http_status: 400
+    severity: error
+    user_message_key: errors.business_unit_org_code_invalid
+    backend_policy: passthrough
+    frontend_policy: mapped
+  - code: business_unit_org_code_not_found
+    module: setid
+    http_status: 404
+    severity: error
+    user_message_key: errors.business_unit_org_code_not_found
+    backend_policy: passthrough
+    frontend_policy: mapped
   - code: invalid_request
     module: platform
     http_status: 400
@@ -936,6 +950,13 @@ errors:
     http_status: 400
     severity: error
     user_message_key: errors.orgunit_id_invalid
+    backend_policy: passthrough
+    frontend_policy: mapped
+  - code: orgunit_ref_invalid
+    module: staffing
+    http_status: 500
+    severity: error
+    user_message_key: errors.orgunit_ref_invalid
     backend_policy: passthrough
     frontend_policy: mapped
   - code: orgunit_resolve_org_code_failed

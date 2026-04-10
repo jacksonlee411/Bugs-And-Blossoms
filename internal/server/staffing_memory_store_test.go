@@ -50,12 +50,12 @@ func (s *staffingMemoryStore) ListPositionsCurrent(_ context.Context, tenantID s
 	return s.positionDelegate().ListPositionsCurrent(context.Background(), tenantID, "")
 }
 
-func (s *staffingMemoryStore) CreatePositionCurrent(_ context.Context, tenantID string, effectiveDate string, orgUnitID string, jobProfileUUID string, capacityFTE string, name string) (Position, error) {
-	return s.positionDelegate().CreatePositionCurrent(context.Background(), tenantID, effectiveDate, orgUnitID, jobProfileUUID, capacityFTE, name)
+func (s *staffingMemoryStore) CreatePositionCurrent(_ context.Context, tenantID string, effectiveDate string, orgNodeKey string, jobProfileUUID string, capacityFTE string, name string) (Position, error) {
+	return s.positionDelegate().CreatePositionCurrent(context.Background(), tenantID, effectiveDate, orgNodeKey, jobProfileUUID, capacityFTE, name)
 }
 
-func (s *staffingMemoryStore) UpdatePositionCurrent(_ context.Context, tenantID string, positionUUID string, effectiveDate string, orgUnitID string, reportsToPositionUUID string, jobProfileUUID string, capacityFTE string, name string, lifecycleStatus string) (Position, error) {
-	return s.positionDelegate().UpdatePositionCurrent(context.Background(), tenantID, positionUUID, effectiveDate, orgUnitID, reportsToPositionUUID, jobProfileUUID, capacityFTE, name, lifecycleStatus)
+func (s *staffingMemoryStore) UpdatePositionCurrent(_ context.Context, tenantID string, positionUUID string, effectiveDate string, orgNodeKey string, reportsToPositionUUID string, jobProfileUUID string, capacityFTE string, name string, lifecycleStatus string) (Position, error) {
+	return s.positionDelegate().UpdatePositionCurrent(context.Background(), tenantID, positionUUID, effectiveDate, orgNodeKey, reportsToPositionUUID, jobProfileUUID, capacityFTE, name, lifecycleStatus)
 }
 
 func (s *staffingMemoryStore) ListAssignmentsForPerson(_ context.Context, tenantID string, _ string, personUUID string) ([]Assignment, error) {

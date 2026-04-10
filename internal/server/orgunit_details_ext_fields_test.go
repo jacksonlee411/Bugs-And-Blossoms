@@ -104,6 +104,33 @@ func TestBuildOrgUnitDetailsExtFieldsByNodeKey_PrefersByKeyStore(t *testing.T) {
 	}
 }
 
+func TestBuildOrgUnitDetailsExtFields_PrefersNodeKeyPath(t *testing.T) {
+	store := &detailsExtByKeyStoreStub{
+		cfgs: []orgUnitTenantFieldConfig{
+			{FieldKey: "short_name", PhysicalCol: "ext_str_01", ValueType: "text", DataSourceType: "PLAIN"},
+		},
+		snap: orgUnitVersionExtSnapshot{
+			VersionValues: map[string]any{"ext_str_01": "R&D"},
+			VersionLabels: map[string]string{},
+			EventLabels:   map[string]string{},
+		},
+	}
+
+	items, err := buildOrgUnitDetailsExtFields(context.Background(), store, "t1", 10000001, "2026-01-01")
+	if err != nil {
+		t.Fatalf("err=%v", err)
+	}
+	if len(items) != 1 {
+		t.Fatalf("items=%v", items)
+	}
+	if store.snapshotByNodeKeyArg != mustOrgNodeKeyForTest(t, 10000001) {
+		t.Fatalf("snapshotByNodeKeyArg=%q", store.snapshotByNodeKeyArg)
+	}
+	if store.snapshotOrgIDArg != 0 {
+		t.Fatalf("snapshotOrgIDArg=%d want=0", store.snapshotOrgIDArg)
+	}
+}
+
 func TestBuildOrgUnitDetailsExtFields_PlainAndDict_DisplayValueSources(t *testing.T) {
 	if err := dictpkg.RegisterResolver(orgunitDictResolverStub{
 		resolveFn: func(_ context.Context, _ string, _ string, dictCode string, code string) (string, bool, error) {

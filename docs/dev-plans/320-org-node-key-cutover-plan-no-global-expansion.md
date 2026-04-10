@@ -1,6 +1,6 @@
 # DEV-PLAN-320：Org 域 8 位非纯数字 `org_node_key` 一步切换方案（不扩大到全对象）
 
-**状态**: 实施中（截至 2026-04-10：`P0/P1/P2` 与 `7.4A` rehearsal 工具链已完成；`P3/P4/P5/P6` 仍未完成）
+**状态**: 实施中（截至 2026-04-11：`P0/P1/P2` 与 `7.4A` rehearsal 工具链已完成；`P4` 中 Assistant / `internal/server` façade / Staffing Position 的 `org_node_key` 收口已完成；`P3/P5/P6` 仍未完成）
 
 ## 1. 背景
 
@@ -207,7 +207,8 @@
    - 当前 source-real / 运行主链仍是旧 `org_id` 内核加 compat；正式 target-real 切主尚未执行。
 5. `P4 消费方收口`：部分完成
    - SetID strategy registry 的 schema cutover / rehearsal 链路已完成。
-   - Staffing、Assistant、`internal/server` 与对外 DTO 的全量收口仍未完成。
+   - Assistant 候选/响应、OrgUnit details 扩展字段快照 compat bridge、Staffing Position 的运行时/schema/DTO 已完成 `org_node_key` 收口，并继续只对外暴露 `org_code`。
+   - consumer runtime 的真实 `target-real` explain、`DEV-PLAN-060` 业务链路套件与正式 Gate 闭环仍未完成。
 6. `P5 验收与门禁收口`：部分完成
    - 已有 `make check org-node-key-backflow`、本地 stopline explain 与 rehearsal 证据。
    - `DEV-PLAN-060` 全链路业务测试、consumer runtime target-real explain、完整 Gate 收口仍未完成。
@@ -231,11 +232,14 @@
 5. 本地 stopline explain 证据已完成一轮采集
    - 证据：`docs/dev-records/dev-plan-320-stopline-log.md`
    - 归档：`docs/dev-records/assets/dev-plan-320-stopline/`
+6. Assistant / `internal/server` façade / Staffing Position 的 committed 收口已落地
+   - 证据：`go test ./modules/staffing/... ./internal/server -count=1`、`make check org-node-key-backflow`、`scripts/sqlc/verify-schema-consistency.sh`（在 dev postgres 容器 shim 下完成）
+   - 现状：Position 持久化 schema / replay / snapshot 已切到 `org_node_key`，外部请求/响应继续仅使用 `org_code`
 
 ### 2.8.3 部分完成项
 
 1. SetID / Staffing 消费方的性能与运行期收口
-   - 已完成：本地 `target-shadow` explain 证据
+   - 已完成：Staffing committed schema/runtime 已切到 `org_node_key`，并补齐本地 `target-shadow` explain 证据
    - 未完成：consumer runtime 的真实 `target-real` explain 与正式 runtime 切主
 2. SetID strategy registry 的 `business_unit` 真实数据分支验证
    - 已完成：代码、门禁、validate、tenant-only 实库 rehearsal，以及独立 `rehearsal/source + rehearsal/target` 的 `pass / unresolved / ambiguous` 三分支受控 rehearsal
@@ -247,9 +251,8 @@
 ### 2.8.4 未完成项
 
 1. Org source-real / runtime 主链的正式切主
-2. Staffing / Assistant / `internal/server` 的全量 `org_id -> org_node_key` 内部收口
-3. 对外协议、前端状态与页面链路的最终契约验收
-4. 正式维护窗口、停写、后端/前端发布与 reopen
+2. consumer runtime 的真实 `target-real` explain 与最终契约验收
+3. 正式维护窗口、停写、后端/前端发布与 reopen
 
 ### 2.8.5 当前结论
 

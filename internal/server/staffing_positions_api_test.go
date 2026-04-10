@@ -131,27 +131,30 @@ func TestHandlePositionsAPI_Coverage(t *testing.T) {
 		}
 	})
 
-	t.Run("GET parse orgunit id fails", func(t *testing.T) {
+	t.Run("GET invalid org reference fails", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/org/api/positions?as_of=2026-01-01", nil)
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
 		handlePositionsAPI(rec, req, staffingOrgStoreStub{}, positionStoreStub{
 			listFn: func(context.Context, string, string) ([]Position, error) {
-				return []Position{{PositionUUID: "pos1", OrgUnitID: "bad"}}, nil
+				return []Position{{PositionUUID: "pos1", OrgNodeKey: "bad"}}, nil
 			},
 		})
 		if rec.Code != http.StatusInternalServerError {
 			t.Fatalf("status=%d", rec.Code)
 		}
+		if !strings.Contains(rec.Body.String(), `"code":"orgunit_ref_invalid"`) {
+			t.Fatalf("body=%s", rec.Body.String())
+		}
 	})
 
-	t.Run("GET resolver missing when org ids present", func(t *testing.T) {
+	t.Run("GET resolver missing when org refs present", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/org/api/positions?as_of=2026-01-01", nil)
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
 		handlePositionsAPI(rec, req, nil, positionStoreStub{
 			listFn: func(context.Context, string, string) ([]Position, error) {
-				return []Position{{PositionUUID: "pos1", OrgUnitID: "10000001"}}, nil
+				return []Position{{PositionUUID: "pos1", OrgNodeKey: mustOrgNodeKeyForTest(t, 10000001)}}, nil
 			},
 		})
 		if rec.Code != http.StatusInternalServerError {
@@ -169,7 +172,7 @@ func TestHandlePositionsAPI_Coverage(t *testing.T) {
 			},
 		}, positionStoreStub{
 			listFn: func(context.Context, string, string) ([]Position, error) {
-				return []Position{{PositionUUID: "pos1", OrgUnitID: "10000001"}}, nil
+				return []Position{{PositionUUID: "pos1", OrgNodeKey: mustOrgNodeKeyForTest(t, 10000001)}}, nil
 			},
 		})
 		if rec.Code != http.StatusInternalServerError {
@@ -187,7 +190,7 @@ func TestHandlePositionsAPI_Coverage(t *testing.T) {
 			},
 		}, positionStoreStub{
 			listFn: func(context.Context, string, string) ([]Position, error) {
-				return []Position{{PositionUUID: "pos1", OrgUnitID: "10000001"}}, nil
+				return []Position{{PositionUUID: "pos1", OrgNodeKey: mustOrgNodeKeyForTest(t, 10000001)}}, nil
 			},
 		})
 		if rec.Code != http.StatusInternalServerError {
@@ -201,7 +204,7 @@ func TestHandlePositionsAPI_Coverage(t *testing.T) {
 		rec := httptest.NewRecorder()
 		handlePositionsAPI(rec, req, staffingOrgStoreStub{}, positionStoreStub{
 			listFn: func(context.Context, string, string) ([]Position, error) {
-				return []Position{{PositionUUID: "pos1", OrgUnitID: ""}}, nil
+				return []Position{{PositionUUID: "pos1", OrgNodeKey: ""}}, nil
 			},
 		})
 		if rec.Code != http.StatusOK {
@@ -216,9 +219,9 @@ func TestHandlePositionsAPI_Coverage(t *testing.T) {
 		handlePositionsAPI(rec, req, staffingOrgStoreStub{}, positionStoreStub{
 			listFn: func(context.Context, string, string) ([]Position, error) {
 				return []Position{
-					{PositionUUID: "pos1", OrgUnitID: "10000001"},
-					{PositionUUID: "pos2", OrgUnitID: "10000001"},
-					{PositionUUID: "pos3", OrgUnitID: ""},
+					{PositionUUID: "pos1", OrgNodeKey: mustOrgNodeKeyForTest(t, 10000001)},
+					{PositionUUID: "pos2", OrgNodeKey: mustOrgNodeKeyForTest(t, 10000001)},
+					{PositionUUID: "pos3", OrgNodeKey: ""},
 				}, nil
 			},
 		})
@@ -243,7 +246,7 @@ func TestHandlePositionsAPI_Coverage(t *testing.T) {
 			},
 		}, positionStoreStub{
 			listFn: func(context.Context, string, string) ([]Position, error) {
-				return []Position{{PositionUUID: "pos1", OrgUnitID: orgNodeKey}}, nil
+				return []Position{{PositionUUID: "pos1", OrgNodeKey: orgNodeKey}}, nil
 			},
 		})
 		if rec.Code != http.StatusOK {
@@ -391,7 +394,7 @@ func TestHandlePositionsAPI_Coverage(t *testing.T) {
 		}
 	})
 
-	t.Run("POST resolve org_id errors (invalid/not found/internal)", func(t *testing.T) {
+	t.Run("POST resolve org ref errors (invalid/not found/internal)", func(t *testing.T) {
 		cases := []struct {
 			name   string
 			err    error
@@ -407,7 +410,7 @@ func TestHandlePositionsAPI_Coverage(t *testing.T) {
 				req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 				rec := httptest.NewRecorder()
 				handlePositionsAPI(rec, req, staffingOrgStoreStub{
-					resolveOrgIDFn: func(context.Context, string, string) (int, error) { return 0, tc.err },
+					resolveOrgNodeKeyFn: func(context.Context, string, string) (string, error) { return "", tc.err },
 				}, positionStoreStub{
 					createFn: func(context.Context, string, string, string, string, string, string) (Position, error) {
 						return Position{}, nil
@@ -567,12 +570,12 @@ func TestHandlePositionsAPI_Coverage(t *testing.T) {
 			status int
 		}
 		cases := []orgResolveCase{
-			{name: "resolver missing", p: Position{PositionUUID: "pos1", OrgUnitID: "10000001", EffectiveAt: "2026-01-01"}, org: nil, status: http.StatusInternalServerError},
-			{name: "orgunit id invalid", p: Position{PositionUUID: "pos1", OrgUnitID: "bad", EffectiveAt: "2026-01-01"}, org: staffingOrgStoreStub{}, status: http.StatusInternalServerError},
-			{name: "resolve org_code failed", p: Position{PositionUUID: "pos1", OrgUnitID: "10000001", EffectiveAt: "2026-01-01"}, org: staffingOrgStoreStub{
+			{name: "resolver missing", p: Position{PositionUUID: "pos1", OrgNodeKey: mustOrgNodeKeyForTest(t, 10000001), EffectiveAt: "2026-01-01"}, org: nil, status: http.StatusInternalServerError},
+			{name: "org ref invalid", p: Position{PositionUUID: "pos1", OrgNodeKey: "bad", EffectiveAt: "2026-01-01"}, org: staffingOrgStoreStub{}, status: http.StatusInternalServerError},
+			{name: "resolve org_code failed", p: Position{PositionUUID: "pos1", OrgNodeKey: mustOrgNodeKeyForTest(t, 10000001), EffectiveAt: "2026-01-01"}, org: staffingOrgStoreStub{
 				resolveOrgCodeFn: func(context.Context, string, int) (string, error) { return "", errors.New("boom") },
 			}, status: http.StatusInternalServerError},
-			{name: "ok", p: Position{PositionUUID: "pos1", OrgUnitID: "10000001", EffectiveAt: "2026-01-01"}, org: staffingOrgStoreStub{}, status: http.StatusOK},
+			{name: "ok", p: Position{PositionUUID: "pos1", OrgNodeKey: mustOrgNodeKeyForTest(t, 10000001), EffectiveAt: "2026-01-01"}, org: staffingOrgStoreStub{}, status: http.StatusOK},
 		}
 		for _, tc := range cases {
 			t.Run(tc.name, func(t *testing.T) {
@@ -591,6 +594,9 @@ func TestHandlePositionsAPI_Coverage(t *testing.T) {
 				if rec.Code != tc.status {
 					t.Fatalf("status=%d", rec.Code)
 				}
+				if tc.name == "org ref invalid" && !strings.Contains(rec.Body.String(), `"code":"orgunit_ref_invalid"`) {
+					t.Fatalf("body=%s", rec.Body.String())
+				}
 			})
 		}
 	})
@@ -601,7 +607,7 @@ func TestHandlePositionsAPI_Coverage(t *testing.T) {
 		rec := httptest.NewRecorder()
 		handlePositionsAPI(rec, req, staffingOrgStoreStub{}, positionStoreStub{
 			createFn: func(context.Context, string, string, string, string, string, string) (Position, error) {
-				return Position{PositionUUID: "pos1", OrgUnitID: "10000001", EffectiveAt: "2026-01-01"}, nil
+				return Position{PositionUUID: "pos1", OrgNodeKey: mustOrgNodeKeyForTest(t, 10000001), EffectiveAt: "2026-01-01"}, nil
 			},
 			updateFn: func(context.Context, string, string, string, string, string, string, string, string, string) (Position, error) {
 				return Position{}, nil
@@ -616,7 +622,7 @@ func TestHandlePositionsAPI_Coverage(t *testing.T) {
 		}
 	})
 
-	t.Run("POST update ok with empty OrgUnitID does not resolve org code", func(t *testing.T) {
+	t.Run("POST update ok with empty org ref does not resolve org code", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodPost, "/org/api/positions?as_of=2026-01-01", strings.NewReader(`{"position_uuid":"pos1","effective_date":"2026-01-01","name":"A"}`))
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
@@ -625,7 +631,7 @@ func TestHandlePositionsAPI_Coverage(t *testing.T) {
 				return Position{}, nil
 			},
 			updateFn: func(context.Context, string, string, string, string, string, string, string, string, string) (Position, error) {
-				return Position{PositionUUID: "pos1", OrgUnitID: "", EffectiveAt: "2026-01-01"}, nil
+				return Position{PositionUUID: "pos1", OrgNodeKey: "", EffectiveAt: "2026-01-01"}, nil
 			},
 		})
 		if rec.Code != http.StatusOK {
@@ -652,7 +658,7 @@ func TestHandlePositionsAPI_Coverage(t *testing.T) {
 				return Position{}, nil
 			},
 			updateFn: func(context.Context, string, string, string, string, string, string, string, string, string) (Position, error) {
-				return Position{PositionUUID: "pos1", OrgUnitID: orgNodeKey, EffectiveAt: "2026-01-01"}, nil
+				return Position{PositionUUID: "pos1", OrgNodeKey: orgNodeKey, EffectiveAt: "2026-01-01"}, nil
 			},
 		})
 		if rec.Code != http.StatusOK {
@@ -677,7 +683,7 @@ func TestHandlePositionsAPI_Post_ReadAllBranchUsesRequestBody(t *testing.T) {
 			return Position{}, nil
 		},
 		updateFn: func(context.Context, string, string, string, string, string, string, string, string, string) (Position, error) {
-			return Position{PositionUUID: "pos1", OrgUnitID: "", EffectiveAt: "2026-01-01"}, nil
+			return Position{PositionUUID: "pos1", OrgNodeKey: "", EffectiveAt: "2026-01-01"}, nil
 		},
 	})
 	if rec.Code != http.StatusOK {

@@ -847,7 +847,7 @@ func TestAssistantServiceHelpersAndUtilities(t *testing.T) {
 		if err != nil {
 			t.Fatalf("resolve candidates failed: %v", err)
 		}
-		if len(candidates) != 1 || candidates[0].CandidateID != "42" {
+		if len(candidates) != 1 || candidates[0].CandidateID == "" || candidates[0].CandidateID == "42" || candidates[0].CandidateID == candidates[0].OrgNodeKey {
 			t.Fatalf("unexpected candidate: %+v", candidates)
 		}
 

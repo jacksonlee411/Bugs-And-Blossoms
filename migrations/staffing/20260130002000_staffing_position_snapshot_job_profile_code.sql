@@ -6,7 +6,7 @@ CREATE OR REPLACE FUNCTION staffing.get_position_snapshot(
 )
 RETURNS TABLE (
   position_uuid uuid,
-  org_unit_id int,
+  org_node_key char(8),
   reports_to_position_uuid uuid,
   jobcatalog_setid text,
   jobcatalog_setid_as_of date,
@@ -31,7 +31,7 @@ BEGIN
   RETURN QUERY
   SELECT
     pv.position_uuid,
-    pv.org_unit_id,
+    pv.org_node_key,
     pv.reports_to_position_uuid,
     pv.jobcatalog_setid,
     pv.jobcatalog_setid_as_of,

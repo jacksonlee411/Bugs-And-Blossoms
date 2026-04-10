@@ -2,6 +2,8 @@ package server
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -237,6 +239,20 @@ func assistantSearchCandidateOrgNodeKey(item OrgUnitSearchCandidate) (string, bo
 		}
 	}
 	return "", false
+}
+
+func assistantOpaqueCandidateID(orgNodeKey string, name string) string {
+	normalizedOrgNodeKey, _ := normalizeOrgNodeKeyInput(strings.TrimSpace(orgNodeKey))
+	payload := strings.Join([]string{
+		"assistant_candidate",
+		normalizedOrgNodeKey,
+		strings.TrimSpace(name),
+	}, "|")
+	if payload == "assistant_candidate||" {
+		return ""
+	}
+	sum := sha256.Sum256([]byte(payload))
+	return "cand_" + hex.EncodeToString(sum[:6])
 }
 
 type assistantCommitResult struct {
@@ -1089,12 +1105,7 @@ func (s *assistantConversationService) resolveCandidates(ctx context.Context, te
 		}
 		candidateID := strings.TrimSpace(item.OrgCode)
 		if candidateID == "" {
-			if item.OrgID > 0 {
-				candidateID = strconv.Itoa(item.OrgID)
-			}
-		}
-		if candidateID == "" {
-			candidateID = orgNodeKey
+			candidateID = assistantOpaqueCandidateID(orgNodeKey, item.Name)
 		}
 		candidates = append(candidates, assistantCandidate{
 			OrgID:         item.OrgID,
