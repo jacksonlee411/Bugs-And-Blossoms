@@ -410,7 +410,7 @@ func TestOrgUnitPGStore_EvaluateRescindOrgDenyReasons(t *testing.T) {
 
 	t.Run("root/children/dependencies denies", func(t *testing.T) {
 		tx := &stubTx{
-			row:  ptrScanRow{vals: []any{nowOrgID}},
+			row:  ptrScanRow{vals: []any{mustTestOrgNodeKey(t, nowOrgID)}},
 			row2: ptrScanRow{vals: []any{"1.2"}},
 			row3: ptrScanRow{vals: []any{true}},
 			row4: ptrScanRow{vals: []any{true}},
@@ -468,7 +468,7 @@ func TestOrgUnitPGStore_IsOrgTreeInitialized(t *testing.T) {
 	})
 
 	t.Run("root exists means initialized", func(t *testing.T) {
-		tx := &stubTx{row: ptrScanRow{vals: []any{10000001}}}
+		tx := &stubTx{row: ptrScanRow{vals: []any{mustTestOrgNodeKey(t, 10000001)}}}
 		store := &orgUnitPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx, nil })}
 		initialized, err := store.IsOrgTreeInitialized(ctx, "t1")
 		if err != nil {
@@ -519,7 +519,7 @@ func TestOrgUnitPGStore_ResolveAppendFacts(t *testing.T) {
 
 	t.Run("status query error", func(t *testing.T) {
 		tx := &stubTx{
-			row:  ptrScanRow{vals: []any{10000001}},
+			row:  ptrScanRow{vals: []any{mustTestOrgNodeKey(t, 10000001)}},
 			row2: metadataScanRow{err: errors.New("boom")},
 		}
 		store := &orgUnitPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx, nil })}
@@ -530,7 +530,7 @@ func TestOrgUnitPGStore_ResolveAppendFacts(t *testing.T) {
 
 	t.Run("target missing as of", func(t *testing.T) {
 		tx := &stubTx{
-			row:  ptrScanRow{vals: []any{10000001}},
+			row:  ptrScanRow{vals: []any{mustTestOrgNodeKey(t, 10000001)}},
 			row2: metadataScanRow{err: pgx.ErrNoRows},
 		}
 		store := &orgUnitPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx, nil })}
@@ -545,7 +545,7 @@ func TestOrgUnitPGStore_ResolveAppendFacts(t *testing.T) {
 
 	t.Run("target exists and root", func(t *testing.T) {
 		tx := &stubTx{
-			row:  ptrScanRow{vals: []any{10000001}},
+			row:  ptrScanRow{vals: []any{mustTestOrgNodeKey(t, 10000001)}},
 			row2: metadataScanRow{vals: []any{" disabled "}},
 		}
 		store := &orgUnitPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx, nil })}

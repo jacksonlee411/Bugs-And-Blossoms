@@ -59,6 +59,20 @@ var orgUnitExtPhysicalColRe = regexp.MustCompile(`^ext_(str|int|uuid|bool|date|n
 
 var errOrgUnitExtQueryFieldNotAllowed = errors.New("org_ext_query_field_not_allowed")
 
+func orgNodeKeyCompatExpr(alias string) string {
+	return fmt.Sprintf(
+		"CASE WHEN to_jsonb(%[1]s) ? 'org_node_key' THEN btrim(COALESCE(to_jsonb(%[1]s)->>'org_node_key', '')) ELSE orgunit.encode_org_node_key(NULLIF(to_jsonb(%[1]s)->>'org_id', '')::bigint)::text END",
+		alias,
+	)
+}
+
+func rootOrgNodeKeyCompatExpr(alias string) string {
+	return fmt.Sprintf(
+		"CASE WHEN to_jsonb(%[1]s) ? 'root_org_node_key' THEN btrim(COALESCE(to_jsonb(%[1]s)->>'root_org_node_key', '')) ELSE orgunit.encode_org_node_key(NULLIF(to_jsonb(%[1]s)->>'root_org_id', '')::bigint)::text END",
+		alias,
+	)
+}
+
 func (s *orgUnitPGStore) ListTenantFieldConfigs(ctx context.Context, tenantID string) ([]orgUnitTenantFieldConfig, error) {
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
@@ -785,22 +799,22 @@ func (s *orgUnitPGStore) ResolveMutationTargetEvent(ctx context.Context, tenantI
 	if _, err := tx.Exec(ctx, `SELECT set_config('app.current_tenant', $1, true);`, tenantID); err != nil {
 		return orgUnitMutationTargetEvent{}, err
 	}
-	orgID, err := decodeOrgNodeKeyToID(orgNodeKey)
+	normalizedOrgNodeKey, err := normalizeOrgNodeKeyInput(orgNodeKey)
 	if err != nil {
 		return orgUnitMutationTargetEvent{}, err
 	}
 
 	result := orgUnitMutationTargetEvent{}
 	var eventUUID string
-	err = tx.QueryRow(ctx, `
+	err = tx.QueryRow(ctx, fmt.Sprintf(`
 SELECT event_uuid::text, event_type
-FROM orgunit.org_events_effective
+FROM orgunit.org_events_effective e
 WHERE tenant_uuid = $1::uuid
-  AND org_id = $2::int
+  AND %s = $2::text
   AND effective_date = $3::date
 ORDER BY id DESC
 LIMIT 1
-`, tenantID, orgID, effectiveDate).Scan(&eventUUID, &result.EffectiveEventType)
+	`, orgNodeKeyCompatExpr("e")), tenantID, normalizedOrgNodeKey, effectiveDate).Scan(&eventUUID, &result.EffectiveEventType)
 	if err != nil {
 		if !errors.Is(err, pgx.ErrNoRows) {
 			return orgUnitMutationTargetEvent{}, err
@@ -827,16 +841,16 @@ LIMIT 1
 	}
 
 	if !result.HasRaw {
-		err = tx.QueryRow(ctx, `
-	SELECT event_type
-	FROM orgunit.org_events
-	WHERE tenant_uuid = $1::uuid
-	  AND org_id = $2::int
-	  AND effective_date = $3::date
-	  AND event_type IN ('CREATE','MOVE','RENAME','DISABLE','ENABLE','SET_BUSINESS_UNIT')
-	ORDER BY id DESC
-	LIMIT 1
-	`, tenantID, orgID, effectiveDate).Scan(&result.RawEventType)
+		err = tx.QueryRow(ctx, fmt.Sprintf(`
+		SELECT event_type
+		FROM orgunit.org_events e
+		WHERE tenant_uuid = $1::uuid
+		  AND %s = $2::text
+		  AND effective_date = $3::date
+		  AND event_type IN ('CREATE','MOVE','RENAME','DISABLE','ENABLE','SET_BUSINESS_UNIT')
+		ORDER BY id DESC
+		LIMIT 1
+		`, orgNodeKeyCompatExpr("e")), tenantID, normalizedOrgNodeKey, effectiveDate).Scan(&result.RawEventType)
 		if err != nil {
 			if !errors.Is(err, pgx.ErrNoRows) {
 				return orgUnitMutationTargetEvent{}, err
@@ -871,51 +885,51 @@ func (s *orgUnitPGStore) EvaluateRescindOrgDenyReasons(ctx context.Context, tena
 	if _, err := tx.Exec(ctx, `SELECT set_config('app.current_tenant', $1, true);`, tenantID); err != nil {
 		return nil, err
 	}
-	orgID, err := decodeOrgNodeKeyToID(orgNodeKey)
+	normalizedOrgNodeKey, err := normalizeOrgNodeKeyInput(orgNodeKey)
 	if err != nil {
 		return nil, err
 	}
 
 	deny := make([]string, 0)
 
-	var rootOrgID *int
-	if err := tx.QueryRow(ctx, `
-SELECT root_org_id
-FROM orgunit.org_trees
+	var rootOrgNodeKey *string
+	if err := tx.QueryRow(ctx, fmt.Sprintf(`
+SELECT %s AS root_org_node_key
+FROM orgunit.org_trees t
 WHERE tenant_uuid = $1::uuid
 LIMIT 1
-`, tenantID).Scan(&rootOrgID); err != nil && !errors.Is(err, pgx.ErrNoRows) {
+	`, rootOrgNodeKeyCompatExpr("t")), tenantID).Scan(&rootOrgNodeKey); err != nil && !errors.Is(err, pgx.ErrNoRows) {
 		return nil, err
 	}
-	if rootOrgID != nil && *rootOrgID == orgID {
+	if rootOrgNodeKey != nil && strings.TrimSpace(*rootOrgNodeKey) == normalizedOrgNodeKey {
 		deny = append(deny, orgUnitErrRootDeleteForbidden)
 	}
 
 	var nodePath *string
-	if err := tx.QueryRow(ctx, `
+	if err := tx.QueryRow(ctx, fmt.Sprintf(`
 SELECT node_path::text
-FROM orgunit.org_unit_versions
+FROM orgunit.org_unit_versions v
 WHERE tenant_uuid = $1::uuid
-  AND org_id = $2::int
+  AND %s = $2::text
 ORDER BY lower(validity) DESC
 LIMIT 1
-`, tenantID, orgID).Scan(&nodePath); err != nil {
+	`, orgNodeKeyCompatExpr("v")), tenantID, normalizedOrgNodeKey).Scan(&nodePath); err != nil {
 		if !errors.Is(err, pgx.ErrNoRows) {
 			return nil, err
 		}
 	}
 	if nodePath != nil && strings.TrimSpace(*nodePath) != "" {
 		var hasChildren bool
-		if err := tx.QueryRow(ctx, `
+		if err := tx.QueryRow(ctx, fmt.Sprintf(`
 SELECT EXISTS (
   SELECT 1
   FROM orgunit.org_unit_versions c
   WHERE c.tenant_uuid = $1::uuid
     AND c.node_path <@ $2::ltree
-    AND c.org_id <> $3::int
+    AND %s <> $3::text
   LIMIT 1
 )
-`, tenantID, *nodePath, orgID).Scan(&hasChildren); err != nil {
+	`, orgNodeKeyCompatExpr("c")), tenantID, *nodePath, normalizedOrgNodeKey).Scan(&hasChildren); err != nil {
 			return nil, err
 		}
 		if hasChildren {
@@ -924,15 +938,15 @@ SELECT EXISTS (
 	}
 
 	var hasDependencies bool
-	if err := tx.QueryRow(ctx, `
+	if err := tx.QueryRow(ctx, fmt.Sprintf(`
 SELECT EXISTS (
   SELECT 1
   FROM orgunit.setid_binding_versions b
   WHERE b.tenant_uuid = $1::uuid
-    AND b.org_id = $2::int
+    AND %s = $2::text
   LIMIT 1
 )
-`, tenantID, orgID).Scan(&hasDependencies); err != nil {
+	`, orgNodeKeyCompatExpr("b")), tenantID, normalizedOrgNodeKey).Scan(&hasDependencies); err != nil {
 		return nil, err
 	}
 	if hasDependencies {
@@ -956,13 +970,13 @@ func (s *orgUnitPGStore) IsOrgTreeInitialized(ctx context.Context, tenantID stri
 		return false, err
 	}
 
-	var rootOrgID *int
-	err = tx.QueryRow(ctx, `
-SELECT root_org_id
-FROM orgunit.org_trees
+	var rootOrgNodeKey *string
+	err = tx.QueryRow(ctx, fmt.Sprintf(`
+SELECT %s AS root_org_node_key
+FROM orgunit.org_trees t
 WHERE tenant_uuid = $1::uuid
 LIMIT 1
-`, tenantID).Scan(&rootOrgID)
+	`, rootOrgNodeKeyCompatExpr("t")), tenantID).Scan(&rootOrgNodeKey)
 	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 		return false, err
 	}
@@ -970,7 +984,7 @@ LIMIT 1
 	if err := tx.Commit(ctx); err != nil {
 		return false, err
 	}
-	return rootOrgID != nil, nil
+	return rootOrgNodeKey != nil && strings.TrimSpace(*rootOrgNodeKey) != "", nil
 }
 
 func (s *orgUnitPGStore) ResolveAppendFacts(ctx context.Context, tenantID string, orgNodeKey string, effectiveDate string) (orgUnitAppendFacts, error) {
@@ -983,37 +997,37 @@ func (s *orgUnitPGStore) ResolveAppendFacts(ctx context.Context, tenantID string
 	if _, err := tx.Exec(ctx, `SELECT set_config('app.current_tenant', $1, true);`, tenantID); err != nil {
 		return orgUnitAppendFacts{}, err
 	}
-	orgID, err := decodeOrgNodeKeyToID(orgNodeKey)
+	normalizedOrgNodeKey, err := normalizeOrgNodeKeyInput(orgNodeKey)
 	if err != nil {
 		return orgUnitAppendFacts{}, err
 	}
 
 	facts := orgUnitAppendFacts{}
-	var rootOrgID *int
-	err = tx.QueryRow(ctx, `
-SELECT root_org_id
-FROM orgunit.org_trees
+	var rootOrgNodeKey *string
+	err = tx.QueryRow(ctx, fmt.Sprintf(`
+SELECT %s AS root_org_node_key
+FROM orgunit.org_trees t
 WHERE tenant_uuid = $1::uuid
 LIMIT 1
-`, tenantID).Scan(&rootOrgID)
+	`, rootOrgNodeKeyCompatExpr("t")), tenantID).Scan(&rootOrgNodeKey)
 	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 		return orgUnitAppendFacts{}, err
 	}
-	facts.TreeInitialized = rootOrgID != nil
-	if rootOrgID != nil && *rootOrgID == orgID {
+	facts.TreeInitialized = rootOrgNodeKey != nil && strings.TrimSpace(*rootOrgNodeKey) != ""
+	if rootOrgNodeKey != nil && strings.TrimSpace(*rootOrgNodeKey) == normalizedOrgNodeKey {
 		facts.IsRoot = true
 	}
 
 	var status string
-	err = tx.QueryRow(ctx, `
+	err = tx.QueryRow(ctx, fmt.Sprintf(`
 SELECT status
-FROM orgunit.org_unit_versions
+FROM orgunit.org_unit_versions v
 WHERE tenant_uuid = $1::uuid
-  AND org_id = $2::int
+  AND %s = $2::text
   AND validity @> $3::date
 ORDER BY lower(validity) DESC
 LIMIT 1
-`, tenantID, orgID, effectiveDate).Scan(&status)
+	`, orgNodeKeyCompatExpr("v")), tenantID, normalizedOrgNodeKey, effectiveDate).Scan(&status)
 	if err != nil {
 		if !errors.Is(err, pgx.ErrNoRows) {
 			return orgUnitAppendFacts{}, err
