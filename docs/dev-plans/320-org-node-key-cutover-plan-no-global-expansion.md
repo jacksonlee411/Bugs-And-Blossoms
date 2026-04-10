@@ -238,8 +238,8 @@
    - 已完成：本地 `target-shadow` explain 证据
    - 未完成：consumer runtime 的真实 `target-real` explain 与正式 runtime 切主
 2. SetID strategy registry 的 `business_unit` 真实数据分支验证
-   - 已完成：代码、门禁、validate 与 tenant-only 实库 rehearsal
-   - 未完成：真实 source 数据当前 `business_unit_rows=0`，尚未命中 `business_unit_node_key` 的唯一落点 / 无法落点 / 歧义落点实库分支
+   - 已完成：代码、门禁、validate、tenant-only 实库 rehearsal，以及独立 `rehearsal/source + rehearsal/target` 的 `pass / unresolved / ambiguous` 三分支受控 rehearsal
+   - 未完成：真实 source 数据当前仍为 `business_unit_rows=0`，尚未出现“source-real 自然携带 business_unit 当前态”的生产样本
 3. 四大 Gate 收口
    - 已完成：局部门禁、dbtool 单测、文档与 stopline 证据
    - 未完成：`DEV-PLAN-060` 业务套件、跨模块验收与正式 Gate 对齐闭环
@@ -260,33 +260,27 @@
 3. 当前最主要缺口不再是 Org target bootstrap 本身，而是：
    - Org source-real 到 target-real 的正式内核切主
    - consumer runtime 的真实 target-real 收口
-   - `business_unit` 作用域 SetID strategy registry 的真实数据 stopline 演练
+   - 四大 Gate 与用户可见主链路的正式验收闭环
 
 ### 2.8.6 从当前状态到“可正式切主”的短清单
 
-后续执行顺序压缩为以下 5 步；只有前一步完成并留痕后，才进入下一步：
+后续执行顺序压缩为以下 4 步；只有前一步完成并留痕后，才进入下一步：
 
-1. 完成 `business_unit` 受控 rehearsal
-   - 在独立 `rehearsal/source` + `rehearsal/target` 环境中，显式命中 SetID strategy registry 的三类分支：
-     - 唯一落点
-     - 无法落点
-     - 歧义落点
-   - 验收要求：通过 1 条、stopline 2 条，且不得通过恢复旧列名/旧约束/旧接口绕过
-2. 完成 Org source-real 到 target-real 的正式内核切主准备
+1. 完成 Org source-real 到 target-real 的正式内核切主准备
    - 收口 Org kernel 仍残留的 `org_id` 运行路径
    - 确认 target-real 形态与 `00023-00025` / `path_node_keys` / 新账本初始化口径一致
    - 重新跑 source/target committed rehearsal，并把结果补入 `docs/dev-records/`
-3. 完成 consumer/runtime 收口
+2. 完成 consumer/runtime 收口
    - SetID、Staffing、Assistant、`internal/server` 只保留 `org_node_key` 内部语义
    - 对外协议、前端状态、页面链路继续只暴露 `org_code`
    - 补齐真实 `target-real` explain，而不再只依赖 `target-shadow`
-4. 完成 Gate 与业务验收收口
+3. 完成 Gate 与业务验收收口
    - 补齐 11.2 与 11.3 所要求的测试面
    - 同步 `DEV-PLAN-060` 的用户可见主链路
    - 确认反回流门禁足以阻断 `org_id` 回流和 `org_node_key` 外露
-5. 进入正式维护窗口前的最终 readiness review
+4. 进入正式维护窗口前的最终 readiness review
    - 明确停写、数据库快照、发布顺序、smoke、reopen 条件与回滚负责人
-   - 只有在 rehearsal、stopline、consumer/runtime、四大 Gate 都完成后，320 才能从“实施中”升级到“可正式切主”
+   - 只有在正式切主 rehearsal、consumer/runtime、四大 Gate 都完成后，320 才能从“实施中”升级到“可正式切主”
 
 ## 3. 关键设计决策
 
