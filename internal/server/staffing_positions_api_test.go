@@ -227,6 +227,33 @@ func TestHandlePositionsAPI_Coverage(t *testing.T) {
 		}
 	})
 
+	t.Run("GET target org_node_key uses key resolver", func(t *testing.T) {
+		orgNodeKey, err := encodeOrgNodeKeyFromID(10000001)
+		if err != nil {
+			t.Fatalf("encode err=%v", err)
+		}
+		var captured []string
+		req := httptest.NewRequest(http.MethodGet, "/org/api/positions?as_of=2026-01-01", nil)
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
+		rec := httptest.NewRecorder()
+		handlePositionsAPI(rec, req, staffingOrgStoreStub{
+			resolveOrgCodesByKeysFn: func(_ context.Context, _ string, orgNodeKeys []string) (map[string]string, error) {
+				captured = append([]string(nil), orgNodeKeys...)
+				return map[string]string{orgNodeKey: "ORG-1"}, nil
+			},
+		}, positionStoreStub{
+			listFn: func(context.Context, string, string) ([]Position, error) {
+				return []Position{{PositionUUID: "pos1", OrgUnitID: orgNodeKey}}, nil
+			},
+		})
+		if rec.Code != http.StatusOK {
+			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+		}
+		if len(captured) != 1 || captured[0] != orgNodeKey {
+			t.Fatalf("captured=%v want=%q", captured, orgNodeKey)
+		}
+	})
+
 	t.Run("POST body read error", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodPost, "/org/api/positions?as_of=2026-01-01", nil)
 		req.Body = staffingErrReadCloser{}
@@ -603,6 +630,39 @@ func TestHandlePositionsAPI_Coverage(t *testing.T) {
 		})
 		if rec.Code != http.StatusOK {
 			t.Fatalf("status=%d", rec.Code)
+		}
+	})
+
+	t.Run("POST update target org_node_key uses key resolver", func(t *testing.T) {
+		orgNodeKey, err := encodeOrgNodeKeyFromID(10000001)
+		if err != nil {
+			t.Fatalf("encode err=%v", err)
+		}
+		captured := ""
+		req := httptest.NewRequest(http.MethodPost, "/org/api/positions?as_of=2026-01-01", strings.NewReader(`{"position_uuid":"pos1","effective_date":"2026-01-01","name":"A"}`))
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
+		rec := httptest.NewRecorder()
+		handlePositionsAPI(rec, req, staffingOrgStoreStub{
+			resolveOrgCodeByKeyFn: func(_ context.Context, _ string, key string) (string, error) {
+				captured = key
+				return "ORG-1", nil
+			},
+		}, positionStoreStub{
+			createFn: func(context.Context, string, string, string, string, string, string) (Position, error) {
+				return Position{}, nil
+			},
+			updateFn: func(context.Context, string, string, string, string, string, string, string, string, string) (Position, error) {
+				return Position{PositionUUID: "pos1", OrgUnitID: orgNodeKey, EffectiveAt: "2026-01-01"}, nil
+			},
+		})
+		if rec.Code != http.StatusOK {
+			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+		}
+		if captured != orgNodeKey {
+			t.Fatalf("captured=%q want=%q", captured, orgNodeKey)
+		}
+		if !strings.Contains(rec.Body.String(), `"org_code":"ORG-1"`) {
+			t.Fatalf("body=%s", rec.Body.String())
 		}
 	})
 }

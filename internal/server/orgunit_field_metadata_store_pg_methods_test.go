@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -176,6 +177,43 @@ func TestOrgUnitPGStore_GetOrgUnitVersionExtSnapshot(t *testing.T) {
 			t.Fatal("expected error")
 		}
 	})
+}
+
+func TestOrgUnitPGStore_GetOrgUnitVersionExtSnapshotByNodeKey_UsesCompatNodeKeyQuery(t *testing.T) {
+	ctx := context.Background()
+	orgNodeKey := mustTestOrgNodeKey(t, 10000001)
+	tx := &queryRowCaptureTx{
+		stubTx: &stubTx{
+			row: metadataScanRow{vals: []any{[]byte(`{"ext_str_01":"DEPARTMENT"}`), []byte(`{}`), int64(0)}},
+		},
+	}
+	store := &orgUnitPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx, nil })}
+
+	snap, err := store.GetOrgUnitVersionExtSnapshotByNodeKey(ctx, "t1", "  "+orgNodeKey+"  ", "2026-01-01")
+	if err != nil {
+		t.Fatalf("err=%v", err)
+	}
+	if !snap.HasVersionData {
+		t.Fatalf("expected version data")
+	}
+	if len(tx.queryRowSQLs) != 1 {
+		t.Fatalf("queryRowSQLs=%d", len(tx.queryRowSQLs))
+	}
+	if !strings.Contains(tx.queryRowSQLs[0], orgNodeKeyCompatExpr("v")+" = $2::text") {
+		t.Fatalf("unexpected sql=%q", tx.queryRowSQLs[0])
+	}
+	if len(tx.queryRowArgs) != 1 || len(tx.queryRowArgs[0]) != 3 {
+		t.Fatalf("unexpected queryRowArgs=%v", tx.queryRowArgs)
+	}
+	if got := tx.queryRowArgs[0][0]; got != "t1" {
+		t.Fatalf("tenant=%v", got)
+	}
+	if got := tx.queryRowArgs[0][1]; got != orgNodeKey {
+		t.Fatalf("orgNodeKey arg=%v want=%q", got, orgNodeKey)
+	}
+	if got := tx.queryRowArgs[0][2]; got != "2026-01-01" {
+		t.Fatalf("asOf=%v", got)
+	}
 }
 
 func TestOrgUnitPGStore_ResolveMutationTargetEvent(t *testing.T) {
@@ -704,13 +742,16 @@ func TestOrgUnitPGStore_ListOrgUnitsPage(t *testing.T) {
 	})
 
 	t.Run("rows scan error with has_children", func(t *testing.T) {
-		parentID := 123
+		parentOrgNodeKey, err := encodeOrgNodeKeyFromID(123)
+		if err != nil {
+			t.Fatalf("encode err=%v", err)
+		}
 		tx := &stubTx{
 			row:  metadataScanRow{vals: []any{int(1)}},
 			rows: &metadataScanRows{records: [][]any{{"A001", "Child", "active", true, true}}, scanErr: errors.New("scan")},
 		}
 		store := &orgUnitPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx, nil })}
-		if _, _, err := store.ListOrgUnitsPage(ctx, "t1", orgUnitListPageRequest{AsOf: "2026-01-01", ParentID: &parentID}); err == nil {
+		if _, _, err := store.ListOrgUnitsPage(ctx, "t1", orgUnitListPageRequest{AsOf: "2026-01-01", ParentOrgNodeKey: &parentOrgNodeKey}); err == nil {
 			t.Fatal("expected error")
 		}
 	})
@@ -763,19 +804,22 @@ func TestOrgUnitPGStore_ListOrgUnitsPage(t *testing.T) {
 	})
 
 	t.Run("success children list with has_children", func(t *testing.T) {
-		parentID := 123
+		parentOrgNodeKey, err := encodeOrgNodeKeyFromID(123)
+		if err != nil {
+			t.Fatalf("encode err=%v", err)
+		}
 		tx := &stubTx{
 			row:  metadataScanRow{vals: []any{int(1)}},
 			rows: &metadataScanRows{records: [][]any{{"A001", "Child", "active", true, true}}},
 		}
 		store := &orgUnitPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx, nil })}
 		items, total, err := store.ListOrgUnitsPage(ctx, "t1", orgUnitListPageRequest{
-			AsOf:            "2026-01-01",
-			IncludeDisabled: true,
-			ParentID:        &parentID,
-			Status:          orgUnitListStatusDisabled,
-			SortField:       orgUnitListSortCode,
-			SortOrder:       "DESC",
+			AsOf:             "2026-01-01",
+			IncludeDisabled:  true,
+			ParentOrgNodeKey: &parentOrgNodeKey,
+			Status:           orgUnitListStatusDisabled,
+			SortField:        orgUnitListSortCode,
+			SortOrder:        "DESC",
 		})
 		if err != nil {
 			t.Fatalf("err=%v", err)

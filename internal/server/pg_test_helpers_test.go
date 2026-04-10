@@ -237,7 +237,11 @@ func (t *fakeTx) QueryRow(_ context.Context, q string, _ ...any) pgx.Row {
 	}
 	if strings.Contains(q, "FROM orgunit.org_events") {
 		t.orgIDN++
-		return fakeRow{vals: []any{10000000 + t.orgIDN, time.Unix(789, 0).UTC()}}
+		orgNodeKey, err := encodeOrgNodeKeyFromID(10000000 + t.orgIDN)
+		if err != nil {
+			return &stubRow{err: err}
+		}
+		return fakeRow{vals: []any{orgNodeKey, time.Unix(789, 0).UTC()}}
 	}
 	return &stubRow{err: errors.New("unexpected QueryRow")}
 }
@@ -298,6 +302,8 @@ func (r *fakeRows) Scan(dest ...any) error {
 			*v = time.Unix(123, 0).UTC()
 		case *[]int:
 			*v = []int{1, 2}
+		case *[]string:
+			*v = []string{"A0000001", "A0000002"}
 		case *[]byte:
 			*v = []byte(`{}`)
 		case *int:
@@ -328,6 +334,8 @@ func (r fakeRow) Scan(dest ...any) error {
 				*d = time.Time{}
 			case *[]int:
 				*d = nil
+			case *[]string:
+				*d = nil
 			case *[]byte:
 				*d = nil
 			case **time.Time:
@@ -356,6 +364,13 @@ func (r fakeRow) Scan(dest ...any) error {
 					out = append(out, int(n))
 				}
 				*d = out
+			default:
+				*d = nil
+			}
+		case *[]string:
+			switch v := r.vals[i].(type) {
+			case []string:
+				*d = append([]string(nil), v...)
 			default:
 				*d = nil
 			}

@@ -8,7 +8,6 @@ import (
 	"errors"
 	"log"
 	"net/http"
-	"strconv"
 	"strings"
 
 	"github.com/jacksonlee411/Bugs-And-Blossoms/internal/routing"
@@ -43,9 +42,8 @@ type setIDExplainResponse struct {
 }
 
 type setIDResolvedOrgRef struct {
-	OrgCode      string
-	OrgNodeKey   string
-	LegacyOrgID8 string
+	OrgCode    string
+	OrgNodeKey string
 }
 
 func handleSetIDExplainAPI(w http.ResponseWriter, r *http.Request, store SetIDGovernanceStore, orgResolver OrgUnitCodeResolver) {
@@ -72,7 +70,7 @@ func handleSetIDExplainAPI(w http.ResponseWriter, r *http.Request, store SetIDGo
 		writeInternalDayFieldError(w, r, err)
 		return
 	}
-	businessUnitOrgCode, _, businessUnitID, err := resolveSetIDExplainOrgCode(
+	businessUnitOrgCode, businessUnitOrgNodeKey, err := resolveSetIDExplainOrgCode(
 		r.Context(),
 		tenant.ID,
 		businessUnitOrgCode,
@@ -118,7 +116,7 @@ func handleSetIDExplainAPI(w http.ResponseWriter, r *http.Request, store SetIDGo
 	if orgCode == "" {
 		orgCode = businessUnitOrgCode
 	}
-	orgCode, orgNodeKey, _, err := resolveSetIDExplainOrgCode(r.Context(), tenant.ID, orgCode, orgResolver)
+	orgCode, orgNodeKey, err := resolveSetIDExplainOrgCode(r.Context(), tenant.ID, orgCode, orgResolver)
 	if err != nil {
 		writeSetIDExplainOrgCodeError(w, r, "org_code", err)
 		return
@@ -141,7 +139,7 @@ func handleSetIDExplainAPI(w http.ResponseWriter, r *http.Request, store SetIDGo
 		return
 	}
 
-	fieldDecision, err := defaultSetIDStrategyRegistryStore.resolveFieldDecision(r.Context(), tenant.ID, capabilityKey, fieldKey, businessUnitID, asOf)
+	fieldDecision, err := defaultSetIDStrategyRegistryStore.resolveFieldDecision(r.Context(), tenant.ID, capabilityKey, fieldKey, businessUnitOrgNodeKey, asOf)
 	if err != nil {
 		status, code := statusCodeForFieldDecisionError(err)
 		routing.WriteError(w, r, routing.RouteClassInternalAPI, status, code, code)
@@ -203,23 +201,18 @@ func resolveSetIDOrgCodeRef(ctx context.Context, tenantID string, orgCode string
 	if err != nil {
 		return setIDResolvedOrgRef{}, err
 	}
-	orgID, err := decodeOrgNodeKeyToID(normalizedOrgNodeKey)
-	if err != nil {
-		return setIDResolvedOrgRef{}, err
-	}
 	return setIDResolvedOrgRef{
-		OrgCode:      normalizedOrgCode,
-		OrgNodeKey:   normalizedOrgNodeKey,
-		LegacyOrgID8: strconv.Itoa(orgID),
+		OrgCode:    normalizedOrgCode,
+		OrgNodeKey: normalizedOrgNodeKey,
 	}, nil
 }
 
-func resolveSetIDExplainOrgCode(ctx context.Context, tenantID string, orgCode string, orgResolver OrgUnitCodeResolver) (string, string, string, error) {
+func resolveSetIDExplainOrgCode(ctx context.Context, tenantID string, orgCode string, orgResolver OrgUnitCodeResolver) (string, string, error) {
 	ref, err := resolveSetIDOrgCodeRef(ctx, tenantID, orgCode, orgResolver)
 	if err != nil {
-		return "", "", "", err
+		return "", "", err
 	}
-	return ref.OrgCode, ref.OrgNodeKey, ref.LegacyOrgID8, nil
+	return ref.OrgCode, ref.OrgNodeKey, nil
 }
 
 func writeSetIDExplainOrgCodeError(w http.ResponseWriter, r *http.Request, field string, err error) {
@@ -289,11 +282,11 @@ func normalizeSetIDExplainRequestID(r *http.Request) string {
 	return "setid-explain-auto"
 }
 
-func fallbackSetIDExplainTraceID(requestID string, capabilityKey string, businessUnitID string, asOf string) string {
+func fallbackSetIDExplainTraceID(requestID string, capabilityKey string, businessUnitOrgCode string, asOf string) string {
 	sum := sha256.Sum256([]byte(strings.Join([]string{
 		strings.TrimSpace(requestID),
 		strings.ToLower(strings.TrimSpace(capabilityKey)),
-		strings.TrimSpace(businessUnitID),
+		strings.TrimSpace(businessUnitOrgCode),
 		strings.TrimSpace(asOf),
 	}, "|")))
 	return hex.EncodeToString(sum[:16])

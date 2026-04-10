@@ -222,6 +222,15 @@ func (setidBindingsNilStore) ListSetIDBindings(context.Context, string, string) 
 	return nil, nil
 }
 
+type setidBindingsRowsStore struct {
+	partialSetIDStore
+	rows []SetIDBindingRow
+}
+
+func (s setidBindingsRowsStore) ListSetIDBindings(context.Context, string, string) ([]SetIDBindingRow, error) {
+	return append([]SetIDBindingRow(nil), s.rows...), nil
+}
+
 func TestHandleSetIDBindingsAPI_Get_AsOfRequired(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/org/api/setid-bindings", nil)
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "T"}))
@@ -271,6 +280,28 @@ func TestHandleSetIDBindingsAPI_Get_WithRows(t *testing.T) {
 	}
 	if !strings.Contains(rec.Body.String(), `"org_code":"A001"`) || !strings.Contains(rec.Body.String(), `"setid":"DEFLT"`) {
 		t.Fatalf("unexpected body: %q", rec.Body.String())
+	}
+}
+
+func TestHandleSetIDBindingsAPI_Get_WithTargetNodeKeyRow(t *testing.T) {
+	orgNodeKey, err := encodeOrgNodeKeyFromID(10000001)
+	if err != nil {
+		t.Fatalf("encode err=%v", err)
+	}
+	req := httptest.NewRequest(http.MethodGet, "/org/api/setid-bindings?as_of=2026-01-01", nil)
+	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "T"}))
+	rec := httptest.NewRecorder()
+	orgStore := &resolveOrgCodeStore{
+		resolveCodes: map[int]string{10000001: "A001"},
+	}
+	handleSetIDBindingsAPI(rec, req, setidBindingsRowsStore{
+		rows: []SetIDBindingRow{{OrgUnitID: orgNodeKey, SetID: "DEFLT", ValidFrom: "2026-01-01"}},
+	}, orgStore)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%q", rec.Code, rec.Body.String())
+	}
+	if orgStore.resolveCodeByNodeKeyArg != orgNodeKey {
+		t.Fatalf("orgNodeKey=%q want=%q", orgStore.resolveCodeByNodeKeyArg, orgNodeKey)
 	}
 }
 

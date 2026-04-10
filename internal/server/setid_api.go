@@ -150,17 +150,10 @@ func handleSetIDBindingsAPI(w http.ResponseWriter, r *http.Request, store SetIDG
 				writeInternalAPIError(w, r, errors.New("org_node_key missing"), "setid_binding_org_ref_invalid")
 				return
 			}
-			if _, err := parseOrgNodeKey(orgNodeKey); err != nil {
-				orgID, decodeErr := parseOrgID8(orgNodeKey)
-				if decodeErr != nil {
-					writeInternalAPIError(w, r, decodeErr, "setid_binding_org_ref_invalid")
-					return
-				}
-				orgNodeKey, err = encodeOrgNodeKeyFromID(orgID)
-				if err != nil {
-					writeInternalAPIError(w, r, err, "setid_binding_org_ref_invalid")
-					return
-				}
+			orgNodeKey, err = normalizeOrgNodeKeyInput(orgNodeKey)
+			if err != nil {
+				writeInternalAPIError(w, r, err, "setid_binding_org_ref_invalid")
+				return
 			}
 			orgCode, err := orgStore.ResolveOrgCodeByNodeKey(r.Context(), tenant.ID, orgNodeKey)
 			if err != nil {

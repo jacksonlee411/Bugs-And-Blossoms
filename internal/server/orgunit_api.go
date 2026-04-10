@@ -393,7 +393,7 @@ type orgUnitListQueryOptions struct {
 type orgUnitListPageRequest struct {
 	AsOf              string
 	IncludeDisabled   bool
-	ParentID          *int
+	ParentOrgNodeKey  *string
 	Keyword           string
 	Status            string // "", "active", "disabled"
 	SortField         string
@@ -546,8 +546,8 @@ func listOrgUnitListPage(ctx context.Context, store OrgUnitStore, tenantID strin
 	}
 
 	var items []orgUnitListItem
-	if req.ParentID != nil {
-		children, err := listChildrenByVisibility(ctx, store, tenantID, *req.ParentID, req.AsOf, req.IncludeDisabled)
+	if req.ParentOrgNodeKey != nil {
+		children, err := listChildrenByVisibilityByNodeKey(ctx, store, tenantID, *req.ParentOrgNodeKey, req.AsOf, req.IncludeDisabled)
 		if err != nil {
 			return nil, 0, err
 		}
@@ -698,7 +698,7 @@ func handleOrgUnitsAPI(w http.ResponseWriter, r *http.Request, store OrgUnitStor
 			return
 		}
 
-		var parentID *int
+		var parentOrgNodeKey *string
 		parentCode := strings.TrimSpace(q.Get("parent_org_code"))
 		if parentCode != "" {
 			normalized, err := orgunitpkg.NormalizeOrgCode(parentCode)
@@ -718,12 +718,7 @@ func handleOrgUnitsAPI(w http.ResponseWriter, r *http.Request, store OrgUnitStor
 				}
 				return
 			}
-			resolvedID, err := decodeOrgNodeKeyToID(resolvedOrgNodeKey)
-			if err != nil {
-				writeInternalAPIError(w, r, err, "orgunit_resolve_org_code_failed")
-				return
-			}
-			parentID = &resolvedID
+			parentOrgNodeKey = &resolvedOrgNodeKey
 		}
 
 		if hasListOpts {
@@ -737,7 +732,7 @@ func handleOrgUnitsAPI(w http.ResponseWriter, r *http.Request, store OrgUnitStor
 			req := orgUnitListPageRequest{
 				AsOf:              asOf,
 				IncludeDisabled:   includeDisabled,
-				ParentID:          parentID,
+				ParentOrgNodeKey:  parentOrgNodeKey,
 				Keyword:           listOpts.Keyword,
 				Status:            listOpts.Status,
 				SortField:         listOpts.SortField,
@@ -788,8 +783,8 @@ func handleOrgUnitsAPI(w http.ResponseWriter, r *http.Request, store OrgUnitStor
 		}
 
 		// 兼容旧语义：roots/children 请求不带 server-mode 参数时返回全量列表。
-		if parentID != nil {
-			children, err := listChildrenByVisibility(r.Context(), store, tenant.ID, *parentID, asOf, includeDisabled)
+		if parentOrgNodeKey != nil {
+			children, err := listChildrenByVisibilityByNodeKey(r.Context(), store, tenant.ID, *parentOrgNodeKey, asOf, includeDisabled)
 			if err != nil {
 				if errors.Is(err, errOrgUnitNotFound) {
 					routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusNotFound, "org_unit_not_found", "org unit not found")
@@ -943,12 +938,7 @@ func handleOrgUnitsDetailsAPI(w http.ResponseWriter, r *http.Request, store OrgU
 		return
 	}
 
-	orgID, err := decodeOrgNodeKeyToID(orgNodeKey)
-	if err != nil {
-		writeInternalAPIError(w, r, err, "orgunit_resolve_org_code_failed")
-		return
-	}
-	details, err := getNodeDetailsByVisibility(r.Context(), store, tenant.ID, orgID, asOf, includeDisabled)
+	details, err := getNodeDetailsByVisibilityByNodeKey(r.Context(), store, tenant.ID, orgNodeKey, asOf, includeDisabled)
 	if err != nil {
 		if errors.Is(err, errOrgUnitNotFound) {
 			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusNotFound, "org_unit_not_found", "org unit not found")
@@ -982,7 +972,11 @@ func handleOrgUnitsDetailsAPI(w http.ResponseWriter, r *http.Request, store OrgU
 		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusInternalServerError, "orgunit_store_missing", "orgunit store missing")
 		return
 	}
-	extFields, err := buildOrgUnitDetailsExtFields(r.Context(), extStore, tenant.ID, orgID, asOf)
+	detailsOrgNodeKey := strings.TrimSpace(details.OrgNodeKey)
+	if detailsOrgNodeKey == "" {
+		detailsOrgNodeKey = orgNodeKey
+	}
+	extFields, err := buildOrgUnitDetailsExtFieldsByNodeKey(r.Context(), extStore, tenant.ID, detailsOrgNodeKey, asOf)
 	if err != nil {
 		if errors.Is(err, errOrgUnitNotFound) {
 			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusNotFound, "org_unit_not_found", "org unit not found")
@@ -1033,12 +1027,7 @@ func handleOrgUnitsVersionsAPI(w http.ResponseWriter, r *http.Request, store Org
 		return
 	}
 
-	orgID, err := decodeOrgNodeKeyToID(orgNodeKey)
-	if err != nil {
-		writeInternalAPIError(w, r, err, "orgunit_resolve_org_code_failed")
-		return
-	}
-	versions, err := store.ListNodeVersions(r.Context(), tenant.ID, orgID)
+	versions, err := listNodeVersionsByNodeKey(r.Context(), store, tenant.ID, orgNodeKey)
 	if err != nil {
 		if errors.Is(err, errOrgUnitNotFound) {
 			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusNotFound, "org_unit_not_found", "org unit not found")
@@ -1102,12 +1091,7 @@ func handleOrgUnitsAuditAPI(w http.ResponseWriter, r *http.Request, store OrgUni
 	}
 
 	limit := orgNodeAuditLimitFromURL(r)
-	orgID, err := decodeOrgNodeKeyToID(orgNodeKey)
-	if err != nil {
-		writeInternalAPIError(w, r, err, "orgunit_resolve_org_code_failed")
-		return
-	}
-	rows, err := listNodeAuditEvents(r.Context(), store, tenant.ID, orgID, limit+1)
+	rows, err := listNodeAuditEventsByNodeKey(r.Context(), store, tenant.ID, orgNodeKey, limit+1)
 	if err != nil {
 		if errors.Is(err, errOrgUnitNotFound) {
 			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusNotFound, "org_unit_not_found", "org unit not found")
@@ -1189,17 +1173,6 @@ func handleOrgUnitsSearchAPI(w http.ResponseWriter, r *http.Request, store OrgUn
 	}
 
 	pathOrgNodeKeys := append([]string(nil), result.PathOrgNodeKeys...)
-	if len(pathOrgNodeKeys) == 0 && len(result.PathOrgIDs) > 0 {
-		pathOrgNodeKeys = make([]string, 0, len(result.PathOrgIDs))
-		for _, orgID := range result.PathOrgIDs {
-			orgNodeKey, encodeErr := encodeOrgNodeKeyFromID(orgID)
-			if encodeErr != nil {
-				writeInternalAPIError(w, r, encodeErr, "orgunit_resolve_org_codes_failed")
-				return
-			}
-			pathOrgNodeKeys = append(pathOrgNodeKeys, orgNodeKey)
-		}
-	}
 	if len(pathOrgNodeKeys) > 0 {
 		codes, err := store.ResolveOrgCodesByNodeKeys(r.Context(), tenant.ID, pathOrgNodeKeys)
 		if err != nil {

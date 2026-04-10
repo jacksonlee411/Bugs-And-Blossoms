@@ -14,12 +14,13 @@ import (
 
 func TestOrgUnitPGStore_ResolveSetID(t *testing.T) {
 	ctx := context.Background()
+	orgNodeKey := mustOrgNodeKeyForTest(t, 10000001)
 
 	t.Run("begin error", func(t *testing.T) {
 		store := newOrgUnitPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
 			return nil, errors.New("begin")
 		})).(*orgUnitPGStore)
-		if _, err := store.ResolveSetID(ctx, "t1", "10000001", "2026-01-01"); err == nil {
+		if _, err := store.ResolveSetID(ctx, "t1", orgNodeKey, "2026-01-01"); err == nil {
 			t.Fatal("expected error")
 		}
 	})
@@ -28,7 +29,7 @@ func TestOrgUnitPGStore_ResolveSetID(t *testing.T) {
 		store := newOrgUnitPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
 			return &stubTx{execErr: errors.New("exec")}, nil
 		})).(*orgUnitPGStore)
-		if _, err := store.ResolveSetID(ctx, "t1", "10000001", "2026-01-01"); err == nil {
+		if _, err := store.ResolveSetID(ctx, "t1", orgNodeKey, "2026-01-01"); err == nil {
 			t.Fatal("expected error")
 		}
 	})
@@ -46,7 +47,7 @@ func TestOrgUnitPGStore_ResolveSetID(t *testing.T) {
 		store := newOrgUnitPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
 			return &stubTx{rowErr: errors.New("resolve")}, nil
 		})).(*orgUnitPGStore)
-		if _, err := store.ResolveSetID(ctx, "t1", "10000001", "2026-01-01"); err == nil {
+		if _, err := store.ResolveSetID(ctx, "t1", orgNodeKey, "2026-01-01"); err == nil {
 			t.Fatal("expected error")
 		}
 	})
@@ -57,7 +58,7 @@ func TestOrgUnitPGStore_ResolveSetID(t *testing.T) {
 			tx.row = &stubRow{vals: []any{"S2601"}}
 			return tx, nil
 		})).(*orgUnitPGStore)
-		if _, err := store.ResolveSetID(ctx, "t1", "10000001", "2026-01-01"); err == nil {
+		if _, err := store.ResolveSetID(ctx, "t1", orgNodeKey, "2026-01-01"); err == nil {
 			t.Fatal("expected error")
 		}
 	})
@@ -68,7 +69,7 @@ func TestOrgUnitPGStore_ResolveSetID(t *testing.T) {
 			tx.row = &stubRow{vals: []any{"S2601"}}
 			return tx, nil
 		})).(*orgUnitPGStore)
-		got, err := store.ResolveSetID(ctx, "t1", "10000001", "2026-01-01")
+		got, err := store.ResolveSetID(ctx, "t1", orgNodeKey, "2026-01-01")
 		if err != nil {
 			t.Fatalf("err=%v", err)
 		}
@@ -265,7 +266,34 @@ func (r *singleScanRows) Values() ([]any, error) { return nil, nil }
 func (r *singleScanRows) RawValues() [][]byte    { return nil }
 func (r *singleScanRows) Conn() *pgx.Conn        { return nil }
 
+type queryRowCaptureTx struct {
+	*stubTx
+	queryRowSQLs []string
+	queryRowArgs [][]any
+}
+
+func (t *queryRowCaptureTx) QueryRow(ctx context.Context, sql string, args ...any) pgx.Row {
+	copiedArgs := append([]any(nil), args...)
+	t.queryRowSQLs = append(t.queryRowSQLs, sql)
+	t.queryRowArgs = append(t.queryRowArgs, copiedArgs)
+	return t.stubTx.QueryRow(ctx, sql, args...)
+}
+
+type queryCaptureTx struct {
+	*stubTx
+	querySQLs []string
+	queryArgs [][]any
+}
+
+func (t *queryCaptureTx) Query(ctx context.Context, sql string, args ...any) (pgx.Rows, error) {
+	copiedArgs := append([]any(nil), args...)
+	t.querySQLs = append(t.querySQLs, sql)
+	t.queryArgs = append(t.queryArgs, copiedArgs)
+	return t.stubTx.Query(ctx, sql, args...)
+}
+
 func TestOrgUnitPGStore_SetBusinessUnitCurrent_Errors(t *testing.T) {
+	orgNodeKey := mustOrgNodeKeyForTest(t, 10000001)
 	cases := []struct {
 		name          string
 		store         *orgUnitPGStore
@@ -280,7 +308,7 @@ func TestOrgUnitPGStore_SetBusinessUnitCurrent_Errors(t *testing.T) {
 				return nil, errors.New("begin fail")
 			})},
 			effectiveDate: "2026-01-01",
-			orgID:         "10000001",
+			orgID:         orgNodeKey,
 			requestID:     "r1",
 		},
 		{
@@ -289,7 +317,7 @@ func TestOrgUnitPGStore_SetBusinessUnitCurrent_Errors(t *testing.T) {
 				return &stubTx{execErr: errors.New("exec fail"), execErrAt: 1}, nil
 			})},
 			effectiveDate: "2026-01-01",
-			orgID:         "10000001",
+			orgID:         orgNodeKey,
 			requestID:     "r1",
 		},
 		{
@@ -316,7 +344,7 @@ func TestOrgUnitPGStore_SetBusinessUnitCurrent_Errors(t *testing.T) {
 				return &stubTx{}, nil
 			})},
 			effectiveDate: "2026-01-01",
-			orgID:         "10000001",
+			orgID:         orgNodeKey,
 			requestID:     "r1",
 			randError:     true,
 		},
@@ -330,7 +358,7 @@ func TestOrgUnitPGStore_SetBusinessUnitCurrent_Errors(t *testing.T) {
 				}, nil
 			})},
 			effectiveDate: "2026-01-01",
-			orgID:         "10000001",
+			orgID:         orgNodeKey,
 			requestID:     "r1",
 		},
 		{
@@ -339,7 +367,7 @@ func TestOrgUnitPGStore_SetBusinessUnitCurrent_Errors(t *testing.T) {
 				return &stubTx{row: &stubRow{vals: []any{"e1"}}, execErr: errors.New("exec fail"), execErrAt: 3}, nil
 			})},
 			effectiveDate: "2026-01-01",
-			orgID:         "10000001",
+			orgID:         orgNodeKey,
 			requestID:     "r1",
 		},
 		{
@@ -348,7 +376,7 @@ func TestOrgUnitPGStore_SetBusinessUnitCurrent_Errors(t *testing.T) {
 				return &stubTx{row: &stubRow{vals: []any{"e1"}}, commitErr: errors.New("commit fail")}, nil
 			})},
 			effectiveDate: "2026-01-01",
-			orgID:         "10000001",
+			orgID:         orgNodeKey,
 			requestID:     "r1",
 		},
 	}
@@ -370,16 +398,18 @@ func TestOrgUnitPGStore_SetBusinessUnitCurrent_Errors(t *testing.T) {
 }
 
 func TestOrgUnitPGStore_SetBusinessUnitCurrent_Success(t *testing.T) {
+	orgNodeKey := mustOrgNodeKeyForTest(t, 10000001)
 	store := &orgUnitPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) {
 		return &stubTx{row: &stubRow{vals: []any{"e1"}}}, nil
 	})}
-	if err := store.SetBusinessUnitCurrent(context.Background(), "t1", "2026-01-01", "10000001", true, ""); err != nil {
+	if err := store.SetBusinessUnitCurrent(context.Background(), "t1", "2026-01-01", orgNodeKey, true, ""); err != nil {
 		t.Fatalf("err=%v", err)
 	}
 }
 
 func TestOrgUnitPGStore_SetBusinessUnitCurrent_Idempotent(t *testing.T) {
 	dupErr := &pgconn.PgError{Code: "23505", ConstraintName: "org_events_one_per_day_unique"}
+	orgNodeKey := mustOrgNodeKeyForTest(t, 10000001)
 
 	t.Run("already-set", func(t *testing.T) {
 		store := &orgUnitPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) {
@@ -389,7 +419,7 @@ func TestOrgUnitPGStore_SetBusinessUnitCurrent_Idempotent(t *testing.T) {
 				execErrAt: 3,
 			}, nil
 		})}
-		if err := store.SetBusinessUnitCurrent(context.Background(), "t1", "2026-01-01", "10000001", true, "r1"); err != nil {
+		if err := store.SetBusinessUnitCurrent(context.Background(), "t1", "2026-01-01", orgNodeKey, true, "r1"); err != nil {
 			t.Fatalf("err=%v", err)
 		}
 	})
@@ -402,7 +432,7 @@ func TestOrgUnitPGStore_SetBusinessUnitCurrent_Idempotent(t *testing.T) {
 				execErrAt: 3,
 			}, nil
 		})}
-		if err := store.SetBusinessUnitCurrent(context.Background(), "t1", "2026-01-01", "10000001", true, "r1"); err == nil {
+		if err := store.SetBusinessUnitCurrent(context.Background(), "t1", "2026-01-01", orgNodeKey, true, "r1"); err == nil {
 			t.Fatal("expected error")
 		}
 	})
@@ -415,7 +445,7 @@ func TestOrgUnitPGStore_SetBusinessUnitCurrent_Idempotent(t *testing.T) {
 				execErrAt: 3,
 			}, nil
 		})}
-		if err := store.SetBusinessUnitCurrent(context.Background(), "t1", "2026-01-01", "10000001", true, "r1"); err != nil {
+		if err := store.SetBusinessUnitCurrent(context.Background(), "t1", "2026-01-01", orgNodeKey, true, "r1"); err != nil {
 			t.Fatalf("err=%v", err)
 		}
 	})
@@ -428,8 +458,34 @@ func TestOrgUnitPGStore_SetBusinessUnitCurrent_Idempotent(t *testing.T) {
 				execErrAt: 3,
 			}, nil
 		})}
-		if err := store.SetBusinessUnitCurrent(context.Background(), "t1", "2026-01-01", "10000001", true, "r1"); err == nil {
+		if err := store.SetBusinessUnitCurrent(context.Background(), "t1", "2026-01-01", orgNodeKey, true, "r1"); err == nil {
 			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("already-set query matches by org_node_key", func(t *testing.T) {
+		tx := &queryRowCaptureTx{
+			stubTx: &stubTx{
+				row:       &stubRow{vals: []any{true}},
+				execErr:   dupErr,
+				execErrAt: 3,
+			},
+		}
+		store := &orgUnitPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx, nil })}
+		if err := store.SetBusinessUnitCurrent(context.Background(), "t1", "2026-01-01", orgNodeKey, true, "r1"); err != nil {
+			t.Fatalf("err=%v", err)
+		}
+		if len(tx.queryRowSQLs) != 1 {
+			t.Fatalf("queryRowSQLs=%d", len(tx.queryRowSQLs))
+		}
+		if !strings.Contains(tx.queryRowSQLs[0], "$2::text") {
+			t.Fatalf("unexpected sql: %q", tx.queryRowSQLs[0])
+		}
+		if len(tx.queryRowArgs) != 1 || len(tx.queryRowArgs[0]) < 2 {
+			t.Fatalf("queryRowArgs=%v", tx.queryRowArgs)
+		}
+		if got := tx.queryRowArgs[0][1]; got != orgNodeKey {
+			t.Fatalf("arg[1]=%v want=%q", got, orgNodeKey)
 		}
 	})
 }
@@ -447,6 +503,7 @@ func (t *rollbackErrTx) Exec(ctx context.Context, sql string, args ...any) (pgco
 }
 
 func TestOrgUnitPGStore_SetBusinessUnitCurrent_RollbackError(t *testing.T) {
+	orgNodeKey := mustOrgNodeKeyForTest(t, 10000001)
 	tx := &rollbackErrTx{
 		stubTx: &stubTx{
 			row:       &stubRow{vals: []any{"e1"}},
@@ -456,7 +513,7 @@ func TestOrgUnitPGStore_SetBusinessUnitCurrent_RollbackError(t *testing.T) {
 		rollbackErr: errors.New("rollback fail"),
 	}
 	store := &orgUnitPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx, nil })}
-	if err := store.SetBusinessUnitCurrent(context.Background(), "t1", "2026-01-01", "10000001", true, "r1"); err == nil {
+	if err := store.SetBusinessUnitCurrent(context.Background(), "t1", "2026-01-01", orgNodeKey, true, "r1"); err == nil {
 		t.Fatal("expected error")
 	}
 }
@@ -608,14 +665,19 @@ func TestOrgUnitPGStore_UsesQuotedCurrentTenantKey(t *testing.T) {
 }
 
 func TestOrgUnitPGStore_ListNodesCurrent_AndCreateCurrent(t *testing.T) {
+	listOrgNodeKey := mustOrgNodeKeyForTest(t, 10000001)
+	listStore := &orgUnitPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) {
+		return &stubTx{rows: &recordRows{records: [][]any{{listOrgNodeKey, "A001", "Root", true, false, time.Unix(123, 0).UTC()}}}}, nil
+	})}
 	pool := &fakeBeginner{}
 	store := &orgUnitPGStore{pool: pool}
+	parentOrgNodeKey := mustOrgNodeKeyForTest(t, 10000002)
 
-	nodes, err := store.ListNodesCurrent(context.Background(), "t1", "2026-01-06")
+	nodes, err := listStore.ListNodesCurrent(context.Background(), "t1", "2026-01-06")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(nodes) != 1 || nodes[0].ID != "n1" {
+	if len(nodes) != 1 || nodes[0].ID != listOrgNodeKey || nodes[0].OrgID != 10000001 {
 		t.Fatalf("nodes=%+v", nodes)
 	}
 
@@ -627,7 +689,7 @@ func TestOrgUnitPGStore_ListNodesCurrent_AndCreateCurrent(t *testing.T) {
 		t.Fatalf("created=%+v", createdCurrent)
 	}
 
-	createdWithParent, err := store.CreateNodeCurrent(context.Background(), "t1", "2026-01-06", "C002", "CurrentWithParent", "10000002", false)
+	createdWithParent, err := store.CreateNodeCurrent(context.Background(), "t1", "2026-01-06", "C002", "CurrentWithParent", parentOrgNodeKey, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -636,16 +698,112 @@ func TestOrgUnitPGStore_ListNodesCurrent_AndCreateCurrent(t *testing.T) {
 	}
 }
 
+func TestOrgUnitPGStore_CreateNodeCurrent_ReadsCreatedOrgNodeKey(t *testing.T) {
+	createdOrgNodeKey := mustOrgNodeKeyForTest(t, 10000001)
+	tx := &queryRowCaptureTx{
+		stubTx: &stubTx{
+			row: &stubRow{vals: []any{createdOrgNodeKey, time.Unix(789, 0).UTC()}},
+		},
+	}
+	store := &orgUnitPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx, nil })}
+
+	created, err := store.CreateNodeCurrent(context.Background(), "t1", "2026-01-06", "A001", "Created", "", false)
+	if err != nil {
+		t.Fatalf("err=%v", err)
+	}
+	if created.ID != createdOrgNodeKey || created.OrgID != 10000001 {
+		t.Fatalf("created=%+v", created)
+	}
+	if len(tx.queryRowSQLs) != 1 {
+		t.Fatalf("queryRowSQLs=%d", len(tx.queryRowSQLs))
+	}
+	if !strings.Contains(tx.queryRowSQLs[0], "AS org_node_key") {
+		t.Fatalf("unexpected sql: %q", tx.queryRowSQLs[0])
+	}
+}
+
 func TestOrgUnitPGStore_ListBusinessUnitsCurrent(t *testing.T) {
-	pool := &fakeBeginner{}
-	store := &orgUnitPGStore{pool: pool}
+	orgNodeKey := mustOrgNodeKeyForTest(t, 10000001)
+	store := &orgUnitPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) {
+		return &stubTx{rows: &recordRows{records: [][]any{{orgNodeKey, "A001", "Root", true, time.Unix(123, 0).UTC()}}}}, nil
+	})}
 
 	nodes, err := store.ListBusinessUnitsCurrent(context.Background(), "t1", "2026-01-06")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(nodes) != 1 || nodes[0].ID != "n1" {
+	if len(nodes) != 1 || nodes[0].ID != orgNodeKey || nodes[0].OrgID != 10000001 {
 		t.Fatalf("nodes=%+v", nodes)
+	}
+}
+
+func TestOrgUnitPGStore_ListNodesCurrent_UsesNodeKeyCompatQuery(t *testing.T) {
+	tx := &queryCaptureTx{
+		stubTx: &stubTx{
+			rows: &recordRows{records: [][]any{{mustOrgNodeKeyForTest(t, 10000001), "A001", "Root", true, false, time.Unix(123, 0).UTC()}}},
+		},
+	}
+	store := &orgUnitPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx, nil })}
+
+	nodes, err := store.ListNodesCurrent(context.Background(), "t1", "2026-01-06")
+	if err != nil {
+		t.Fatalf("err=%v", err)
+	}
+	if len(nodes) != 1 {
+		t.Fatalf("nodes=%+v", nodes)
+	}
+	if nodes[0].OrgID != 10000001 {
+		t.Fatalf("nodes=%+v", nodes)
+	}
+	if len(tx.querySQLs) != 1 {
+		t.Fatalf("querySQLs=%d", len(tx.querySQLs))
+	}
+	if strings.Contains(tx.querySQLs[0], "get_org_snapshot") {
+		t.Fatalf("unexpected legacy snapshot sql: %q", tx.querySQLs[0])
+	}
+	if !strings.Contains(tx.querySQLs[0], "FROM orgunit.org_unit_versions v") {
+		t.Fatalf("unexpected sql: %q", tx.querySQLs[0])
+	}
+	if !strings.Contains(tx.querySQLs[0], orgNodeKeyCompatExpr("v")+" AS org_node_key") {
+		t.Fatalf("unexpected sql: %q", tx.querySQLs[0])
+	}
+	if len(tx.queryArgs) != 1 || len(tx.queryArgs[0]) != 2 {
+		t.Fatalf("queryArgs=%v", tx.queryArgs)
+	}
+}
+
+func TestOrgUnitPGStore_ListBusinessUnitsCurrent_UsesNodeKeyCompatQuery(t *testing.T) {
+	tx := &queryCaptureTx{
+		stubTx: &stubTx{
+			rows: &recordRows{records: [][]any{{mustOrgNodeKeyForTest(t, 10000001), "A001", "Root", true, time.Unix(123, 0).UTC()}}},
+		},
+	}
+	store := &orgUnitPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx, nil })}
+
+	nodes, err := store.ListBusinessUnitsCurrent(context.Background(), "t1", "2026-01-06")
+	if err != nil {
+		t.Fatalf("err=%v", err)
+	}
+	if len(nodes) != 1 {
+		t.Fatalf("nodes=%+v", nodes)
+	}
+	if nodes[0].OrgID != 10000001 {
+		t.Fatalf("nodes=%+v", nodes)
+	}
+	if len(tx.querySQLs) != 1 {
+		t.Fatalf("querySQLs=%d", len(tx.querySQLs))
+	}
+	if strings.Contains(tx.querySQLs[0], "get_org_snapshot") {
+		t.Fatalf("unexpected legacy snapshot sql: %q", tx.querySQLs[0])
+	}
+	if !strings.Contains(tx.querySQLs[0], "AND v.is_business_unit") {
+		t.Fatalf("unexpected sql: %q", tx.querySQLs[0])
+	}
+	if !strings.Contains(tx.querySQLs[0], orgNodeKeyCompatExpr("v")+" AS org_node_key") {
+		t.Fatalf("unexpected sql: %q", tx.querySQLs[0])
+	}
+	if len(tx.queryArgs) != 1 || len(tx.queryArgs[0]) != 2 {
+		t.Fatalf("queryArgs=%v", tx.queryArgs)
 	}
 }
 
@@ -837,7 +995,7 @@ func TestOrgUnitPGStore_CreateNodeCurrent_Errors(t *testing.T) {
 	t.Run("event_id_error", func(t *testing.T) {
 		store := &orgUnitPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) {
 			tx := &stubTx{}
-			tx.row = &stubRow{vals: []any{10000001}}
+			tx.row = &stubRow{vals: []any{mustOrgNodeKeyForTest(t, 10000001), time.Unix(1, 0).UTC()}}
 			return tx, nil
 		})}
 		withRandReader(t, randErrReader{}, func() {
@@ -850,7 +1008,7 @@ func TestOrgUnitPGStore_CreateNodeCurrent_Errors(t *testing.T) {
 	t.Run("submit_exec", func(t *testing.T) {
 		store := &orgUnitPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) {
 			tx := &stubTx{execErr: errors.New("exec"), execErrAt: 2}
-			tx.row = &stubRow{vals: []any{10000001}}
+			tx.row = &stubRow{vals: []any{mustOrgNodeKeyForTest(t, 10000001), time.Unix(1, 0).UTC()}}
 			return tx, nil
 		})}
 		_, err := store.CreateNodeCurrent(context.Background(), "t1", "2026-01-06", "A001", "A", "", false)
@@ -862,8 +1020,7 @@ func TestOrgUnitPGStore_CreateNodeCurrent_Errors(t *testing.T) {
 	t.Run("commit", func(t *testing.T) {
 		store := &orgUnitPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) {
 			tx := &stubTx{commitErr: errors.New("commit")}
-			tx.row = &stubRow{vals: []any{10000001}}
-			tx.row2 = &stubRow{vals: []any{time.Unix(1, 0).UTC()}}
+			tx.row = &stubRow{vals: []any{mustOrgNodeKeyForTest(t, 10000001), time.Unix(1, 0).UTC()}}
 			return tx, nil
 		})}
 		_, err := store.CreateNodeCurrent(context.Background(), "t1", "2026-01-06", "A001", "A", "", false)

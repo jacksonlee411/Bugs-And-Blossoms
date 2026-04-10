@@ -73,6 +73,24 @@ func rootOrgNodeKeyCompatExpr(alias string) string {
 	)
 }
 
+func parentOrgNodeKeyCompatExpr(alias string) string {
+	return fmt.Sprintf(
+		"CASE WHEN to_jsonb(%[1]s) ? 'parent_org_node_key' THEN btrim(COALESCE(to_jsonb(%[1]s)->>'parent_org_node_key', '')) ELSE CASE WHEN NULLIF(to_jsonb(%[1]s)->>'parent_id', '') IS NULL THEN '' ELSE orgunit.encode_org_node_key(NULLIF(to_jsonb(%[1]s)->>'parent_id', '')::bigint)::text END END",
+		alias,
+	)
+}
+
+func pathOrgNodeKeysCompatExpr(alias string) string {
+	return fmt.Sprintf(
+		"CASE WHEN to_jsonb(%[1]s) ? 'path_node_keys' THEN ARRAY(SELECT btrim(value) FROM jsonb_array_elements_text(COALESCE(to_jsonb(%[1]s)->'path_node_keys', '[]'::jsonb)) AS value) ELSE ARRAY(SELECT orgunit.encode_org_node_key(value::bigint)::text FROM jsonb_array_elements_text(COALESCE(to_jsonb(%[1]s)->'path_ids', '[]'::jsonb)) AS value) END",
+		alias,
+	)
+}
+
+func rootOrgNodeCompatCondition(alias string) string {
+	return fmt.Sprintf("%s = ''", parentOrgNodeKeyCompatExpr(alias))
+}
+
 func (s *orgUnitPGStore) ListTenantFieldConfigs(ctx context.Context, tenantID string) ([]orgUnitTenantFieldConfig, error) {
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
@@ -720,6 +738,14 @@ LIMIT 1
 }
 
 func (s *orgUnitPGStore) GetOrgUnitVersionExtSnapshot(ctx context.Context, tenantID string, orgID int, asOf string) (orgUnitVersionExtSnapshot, error) {
+	orgNodeKey, err := encodeOrgNodeKeyFromID(orgID)
+	if err != nil {
+		return orgUnitVersionExtSnapshot{}, err
+	}
+	return s.GetOrgUnitVersionExtSnapshotByNodeKey(ctx, tenantID, orgNodeKey, asOf)
+}
+
+func (s *orgUnitPGStore) GetOrgUnitVersionExtSnapshotByNodeKey(ctx context.Context, tenantID string, orgNodeKey string, asOf string) (orgUnitVersionExtSnapshot, error) {
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
 		return orgUnitVersionExtSnapshot{}, err
@@ -727,6 +753,10 @@ func (s *orgUnitPGStore) GetOrgUnitVersionExtSnapshot(ctx context.Context, tenan
 	defer func() { _ = tx.Rollback(context.Background()) }()
 
 	if _, err := tx.Exec(ctx, `SELECT set_config('app.current_tenant', $1, true);`, tenantID); err != nil {
+		return orgUnitVersionExtSnapshot{}, err
+	}
+	normalizedOrgNodeKey, err := normalizeOrgNodeKeyInput(orgNodeKey)
+	if err != nil {
 		return orgUnitVersionExtSnapshot{}, err
 	}
 
@@ -737,11 +767,11 @@ func (s *orgUnitPGStore) GetOrgUnitVersionExtSnapshot(ctx context.Context, tenan
 SELECT to_jsonb(v), COALESCE(v.ext_labels_snapshot, '{}'::jsonb), v.last_event_id
 FROM orgunit.org_unit_versions v
 WHERE v.tenant_uuid = $1::uuid
-  AND v.org_id = $2::int
+  AND `+orgNodeKeyCompatExpr("v")+` = $2::text
   AND v.validity @> $3::date
 ORDER BY lower(v.validity) DESC
 LIMIT 1
-`, tenantID, orgID, asOf).Scan(&versionJSON, &labelsJSON, &lastEventID); err != nil {
+`, tenantID, normalizedOrgNodeKey, asOf).Scan(&versionJSON, &labelsJSON, &lastEventID); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return orgUnitVersionExtSnapshot{}, errOrgUnitNotFound
 		}
@@ -1061,12 +1091,20 @@ func (s *orgUnitPGStore) ListOrgUnitsPage(ctx context.Context, tenantID string, 
 	args = append(args, tenantID, req.AsOf)
 	argPos := 3
 
-	if req.ParentID != nil {
-		where = append(where, fmt.Sprintf("v.parent_id = $%d::int", argPos))
-		args = append(args, *req.ParentID)
+	var parentOrgNodeKey string
+	if req.ParentOrgNodeKey != nil {
+		parentOrgNodeKey, err = normalizeOrgNodeKeyInput(*req.ParentOrgNodeKey)
+		if err != nil {
+			return nil, 0, err
+		}
+	}
+
+	if parentOrgNodeKey != "" {
+		where = append(where, fmt.Sprintf("%s = $%d::text", parentOrgNodeKeyCompatExpr("v"), argPos))
+		args = append(args, parentOrgNodeKey)
 		argPos++
 	} else {
-		where = append(where, "v.parent_id IS NULL")
+		where = append(where, rootOrgNodeCompatCondition("v"))
 	}
 
 	if !req.IncludeDisabled {
@@ -1140,7 +1178,7 @@ SELECT COUNT(*)
 FROM orgunit.org_unit_versions v
 JOIN orgunit.org_unit_codes c
   ON c.tenant_uuid = v.tenant_uuid
- AND c.org_id = v.org_id
+ AND ` + orgNodeKeyCompatExpr("c") + ` = ` + orgNodeKeyCompatExpr("v") + `
 WHERE ` + whereSQL
 
 	var total int
@@ -1172,24 +1210,24 @@ SELECT
   v.name,
   v.status,
   v.is_business_unit`
-	if req.ParentID != nil {
+	if parentOrgNodeKey != "" {
 		selectCols += fmt.Sprintf(`,
   EXISTS (
     SELECT 1
     FROM orgunit.org_unit_versions ch
      WHERE ch.tenant_uuid = v.tenant_uuid
-       AND ch.parent_id = v.org_id
+       AND %s = %s
        AND ch.validity @> $2::date
        AND ch.status = 'active'
      LIMIT 1
-   ) AS has_children`)
+   ) AS has_children`, parentOrgNodeKeyCompatExpr("ch"), orgNodeKeyCompatExpr("v"))
 	}
 
 	listSQL := selectCols + `
 FROM orgunit.org_unit_versions v
 JOIN orgunit.org_unit_codes c
   ON c.tenant_uuid = v.tenant_uuid
- AND c.org_id = v.org_id
+ AND ` + orgNodeKeyCompatExpr("c") + ` = ` + orgNodeKeyCompatExpr("v") + `
 WHERE ` + whereSQL + `
 ORDER BY ` + sortExpr + ` ` + sortOrder + `, c.org_code ASC`
 
@@ -1210,7 +1248,7 @@ ORDER BY ` + sortExpr + ` ` + sortOrder + `, c.org_code ASC`
 		item := orgUnitListItem{}
 		var status string
 		var isBusinessUnit bool
-		if req.ParentID != nil {
+		if parentOrgNodeKey != "" {
 			var hasChildren bool
 			if err := rows.Scan(&item.OrgCode, &item.Name, &status, &isBusinessUnit, &hasChildren); err != nil {
 				return nil, 0, err

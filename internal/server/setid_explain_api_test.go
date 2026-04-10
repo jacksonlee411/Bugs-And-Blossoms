@@ -182,10 +182,12 @@ func TestHandleSetIDExplainAPI(t *testing.T) {
 			return "A0001", nil
 		},
 	}
+	orgNodeKeyA := mustOrgNodeKeyForTest(t, 10000001)
+	orgNodeKeyB := mustOrgNodeKeyForTest(t, 10000002)
 	orgResolver := setIDExplainOrgResolverStub{
 		byCode: map[string]string{
-			"BU-001": mustOrgNodeKeyForTest(t, 10000001),
-			"BU-002": mustOrgNodeKeyForTest(t, 10000002),
+			"BU-001": orgNodeKeyA,
+			"BU-002": orgNodeKeyB,
 		},
 	}
 
@@ -302,7 +304,7 @@ func TestHandleSetIDExplainAPI(t *testing.T) {
 		FieldKey:            "field_x",
 		PersonalizationMode: personalizationModeSetID,
 		OrgApplicability:    orgApplicabilityBusinessUnit,
-		BusinessUnitNodeKey: "10000001",
+		BusinessUnitNodeKey: orgNodeKeyA,
 		Required:            true,
 		Visible:             true,
 		DefaultRuleRef:      "rule://a1",
@@ -361,7 +363,7 @@ func TestHandleSetIDExplainAPI(t *testing.T) {
 		FieldKey:            "field_hidden",
 		PersonalizationMode: personalizationModeSetID,
 		OrgApplicability:    orgApplicabilityBusinessUnit,
-		BusinessUnitNodeKey: "10000001",
+		BusinessUnitNodeKey: orgNodeKeyA,
 		Required:            false,
 		Visible:             false,
 		DefaultRuleRef:      "rule://b2",
@@ -393,7 +395,7 @@ func TestHandleSetIDExplainAPI(t *testing.T) {
 		FieldKey:            "field_masked",
 		PersonalizationMode: personalizationModeSetID,
 		OrgApplicability:    orgApplicabilityBusinessUnit,
-		BusinessUnitNodeKey: "10000001",
+		BusinessUnitNodeKey: orgNodeKeyA,
 		Required:            false,
 		Visible:             true,
 		DefaultRuleRef:      "mask://redact",
@@ -424,6 +426,62 @@ func TestHandleSetIDExplainAPI(t *testing.T) {
 	}
 	if !strings.Contains(recActorScopeMismatch.Body.String(), capabilityReasonContextMismatch) {
 		t.Fatalf("unexpected body: %q", recActorScopeMismatch.Body.String())
+	}
+}
+
+func TestHandleSetIDExplainAPI_UsesBusinessUnitOrgNodeKey(t *testing.T) {
+	previousStore := defaultSetIDStrategyRegistryStore
+	t.Cleanup(func() { useSetIDStrategyRegistryStore(previousStore) })
+
+	businessUnitNodeKey := mustOrgNodeKeyForTest(t, 10000001)
+	useSetIDStrategyRegistryStore(setIDStrategyRegistryStoreStub{
+		resolveFieldDecisionFn: func(_ context.Context, _ string, capabilityKey string, fieldKey string, businessUnitNodeKeyArg string, asOf string) (setIDFieldDecision, error) {
+			if capabilityKey != "staffing.assignment_create.field_policy" {
+				t.Fatalf("capability_key=%q", capabilityKey)
+			}
+			if fieldKey != "field_x" {
+				t.Fatalf("field_key=%q", fieldKey)
+			}
+			if businessUnitNodeKeyArg != businessUnitNodeKey {
+				t.Fatalf("business_unit_node_key=%q want=%q", businessUnitNodeKeyArg, businessUnitNodeKey)
+			}
+			if asOf != "2026-01-01" {
+				t.Fatalf("as_of=%q", asOf)
+			}
+			return setIDFieldDecision{
+				CapabilityKey: capabilityKey,
+				FieldKey:      fieldKey,
+				Visible:       true,
+				Maintainable:  true,
+			}, nil
+		},
+	})
+
+	store := scopeAPIStore{
+		resolveSetIDFn: func(_ context.Context, _ string, orgUnitID string, _ string) (string, error) {
+			if orgUnitID != businessUnitNodeKey {
+				t.Fatalf("resolve setid orgUnitID=%q want=%q", orgUnitID, businessUnitNodeKey)
+			}
+			return "A0001", nil
+		},
+	}
+	orgResolver := setIDExplainOrgResolverStub{
+		byCode: map[string]string{
+			"BU-001": businessUnitNodeKey,
+		},
+	}
+
+	req := httptest.NewRequest(
+		http.MethodGet,
+		"/org/api/setid-explain?capability_key=staffing.assignment_create.field_policy&field_key=field_x&business_unit_org_code=BU-001&as_of=2026-01-01",
+		nil,
+	)
+	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
+
+	rec := httptest.NewRecorder()
+	handleSetIDExplainAPI(rec, req, store, orgResolver)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
 	}
 }
 
@@ -458,7 +516,7 @@ func TestHandleSetIDExplainAPI_BUVarianceAcceptance(t *testing.T) {
 		FieldKey:            "field_x",
 		PersonalizationMode: personalizationModeSetID,
 		OrgApplicability:    orgApplicabilityBusinessUnit,
-		BusinessUnitNodeKey: "10000001",
+		BusinessUnitNodeKey: orgNodeKeyA,
 		Required:            true,
 		Visible:             true,
 		DefaultRuleRef:      "rule://a1",
@@ -473,7 +531,7 @@ func TestHandleSetIDExplainAPI_BUVarianceAcceptance(t *testing.T) {
 		FieldKey:            "field_x",
 		PersonalizationMode: personalizationModeSetID,
 		OrgApplicability:    orgApplicabilityBusinessUnit,
-		BusinessUnitNodeKey: "10000002",
+		BusinessUnitNodeKey: orgNodeKeyB,
 		Required:            false,
 		Visible:             false,
 		DefaultRuleRef:      "rule://b2",

@@ -207,6 +207,38 @@ type assistantCandidate struct {
 	MatchScore    float64 `json:"match_score"`
 }
 
+func assistantCandidateNormalizedOrgNodeKey(candidate assistantCandidate) (string, bool) {
+	if orgNodeKey := strings.TrimSpace(candidate.OrgNodeKey); orgNodeKey != "" {
+		normalized, err := normalizeOrgNodeKeyInput(orgNodeKey)
+		if err == nil {
+			return normalized, true
+		}
+	}
+	if candidate.OrgID > 0 {
+		orgNodeKey, err := encodeOrgNodeKeyFromID(candidate.OrgID)
+		if err == nil {
+			return orgNodeKey, true
+		}
+	}
+	return "", false
+}
+
+func assistantSearchCandidateOrgNodeKey(item OrgUnitSearchCandidate) (string, bool) {
+	if orgNodeKey := strings.TrimSpace(item.OrgNodeKey); orgNodeKey != "" {
+		normalized, err := normalizeOrgNodeKeyInput(orgNodeKey)
+		if err == nil {
+			return normalized, true
+		}
+	}
+	if item.OrgID > 0 {
+		orgNodeKey, err := encodeOrgNodeKeyFromID(item.OrgID)
+		if err == nil {
+			return orgNodeKey, true
+		}
+	}
+	return "", false
+}
+
 type assistantCommitResult struct {
 	OrgCode       string `json:"org_code"`
 	ParentOrgCode string `json:"parent_org_code"`
@@ -1046,15 +1078,9 @@ func (s *assistantConversationService) resolveCandidates(ctx context.Context, te
 	candidates := make([]assistantCandidate, 0, len(rows))
 	for _, item := range rows {
 		path := item.Name
-		orgNodeKey := strings.TrimSpace(item.OrgNodeKey)
-		if orgNodeKey == "" && item.OrgID > 0 {
-			encoded, encodeErr := encodeOrgNodeKeyFromID(item.OrgID)
-			if encodeErr == nil {
-				orgNodeKey = encoded
-			}
-		}
-		if orgID, decodeErr := decodeOrgNodeKeyToID(orgNodeKey); decodeErr == nil {
-			if details, detailsErr := s.orgStore.GetNodeDetails(ctx, tenantID, orgID, asOf); detailsErr == nil {
+		orgNodeKey, _ := assistantSearchCandidateOrgNodeKey(item)
+		if orgNodeKey != "" {
+			if details, detailsErr := getNodeDetailsByVisibilityByNodeKey(ctx, s.orgStore, tenantID, orgNodeKey, asOf, false); detailsErr == nil {
 				path = strings.TrimSpace(details.FullNamePath)
 				if path == "" {
 					path = item.Name

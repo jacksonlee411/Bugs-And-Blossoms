@@ -11,6 +11,24 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 )
 
+func mustReadTestOrgNodeKey(t *testing.T, orgID int) string {
+	t.Helper()
+	orgNodeKey, err := encodeOrgNodeKeyFromID(orgID)
+	if err != nil {
+		t.Fatalf("encode org node key: %v", err)
+	}
+	return orgNodeKey
+}
+
+func mustReadTestOrgNodeKeys(t *testing.T, orgIDs ...int) []string {
+	t.Helper()
+	out := make([]string, 0, len(orgIDs))
+	for _, orgID := range orgIDs {
+		out = append(out, mustReadTestOrgNodeKey(t, orgID))
+	}
+	return out
+}
+
 type recordRows struct {
 	records [][]any
 	idx     int
@@ -53,6 +71,8 @@ func (r *recordRows) Scan(dest ...any) error {
 			*d = rec[i].(time.Time)
 		case *[]int:
 			*d = append([]int(nil), rec[i].([]int)...)
+		case *[]string:
+			*d = append([]string(nil), rec[i].([]string)...)
 		case *[]byte:
 			*d = append([]byte(nil), rec[i].([]byte)...)
 		case *json.RawMessage:
@@ -78,9 +98,15 @@ func TestOrgUnitPGStore_ListNodesCurrentWithVisibility_Coverage(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("includeDisabled=false delegates", func(t *testing.T) {
-		store := &orgUnitPGStore{pool: &fakeBeginner{}}
-		if _, err := store.ListNodesCurrentWithVisibility(ctx, "t1", "2026-01-01", false); err != nil {
+		store := &orgUnitPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) {
+			return &stubTx{rows: &recordRows{records: [][]any{{mustReadTestOrgNodeKey(t, 10000001), "A001", "Root", true, false, time.Unix(1, 0).UTC()}}}}, nil
+		})}
+		nodes, err := store.ListNodesCurrentWithVisibility(ctx, "t1", "2026-01-01", false)
+		if err != nil {
 			t.Fatalf("err=%v", err)
+		}
+		if len(nodes) != 1 || nodes[0].OrgID != 10000001 || nodes[0].Status != "active" {
+			t.Fatalf("nodes=%+v", nodes)
 		}
 	})
 
@@ -113,7 +139,7 @@ func TestOrgUnitPGStore_ListNodesCurrentWithVisibility_Coverage(t *testing.T) {
 
 	t.Run("scan error", func(t *testing.T) {
 		store := &orgUnitPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) {
-			return &stubTx{rows: &recordRows{records: [][]any{{"10000001", "A001", "Root", "active", true, true, time.Unix(1, 0).UTC()}}, scanErr: errors.New("scan")}}, nil
+			return &stubTx{rows: &recordRows{records: [][]any{{mustReadTestOrgNodeKey(t, 10000001), "A001", "Root", "active", true, true, time.Unix(1, 0).UTC()}}, scanErr: errors.New("scan")}}, nil
 		})}
 		if _, err := store.ListNodesCurrentWithVisibility(ctx, "t1", "2026-01-01", true); err == nil {
 			t.Fatal("expected error")
@@ -132,7 +158,7 @@ func TestOrgUnitPGStore_ListNodesCurrentWithVisibility_Coverage(t *testing.T) {
 	t.Run("commit error", func(t *testing.T) {
 		store := &orgUnitPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) {
 			return &stubTx{
-				rows:      &recordRows{records: [][]any{{"10000001", "A001", "Root", "active", true, true, time.Unix(1, 0).UTC()}}},
+				rows:      &recordRows{records: [][]any{{mustReadTestOrgNodeKey(t, 10000001), "A001", "Root", "active", true, true, time.Unix(1, 0).UTC()}}},
 				commitErr: errors.New("commit"),
 			}, nil
 		})}
@@ -143,10 +169,10 @@ func TestOrgUnitPGStore_ListNodesCurrentWithVisibility_Coverage(t *testing.T) {
 
 	t.Run("ok", func(t *testing.T) {
 		store := &orgUnitPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) {
-			return &stubTx{rows: &recordRows{records: [][]any{{"10000001", "A001", "Root", "disabled", false, false, time.Unix(1, 0).UTC()}}}}, nil
+			return &stubTx{rows: &recordRows{records: [][]any{{mustReadTestOrgNodeKey(t, 10000001), "A001", "Root", "disabled", false, false, time.Unix(1, 0).UTC()}}}}, nil
 		})}
 		nodes, err := store.ListNodesCurrentWithVisibility(ctx, "t1", "2026-01-01", true)
-		if err != nil || len(nodes) != 1 || nodes[0].Status != "disabled" {
+		if err != nil || len(nodes) != 1 || nodes[0].Status != "disabled" || nodes[0].OrgID != 10000001 {
 			t.Fatalf("nodes=%v err=%v", nodes, err)
 		}
 	})
@@ -206,7 +232,7 @@ func TestOrgUnitPGStore_ListChildren_AndVisibility_Coverage(t *testing.T) {
 
 	t.Run("ListChildren scan error", func(t *testing.T) {
 		store := &orgUnitPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) {
-			tx := &stubTx{rows: &recordRows{records: [][]any{{1, "A001", "Child", true, true}}, scanErr: errors.New("scan")}}
+			tx := &stubTx{rows: &recordRows{records: [][]any{{mustReadTestOrgNodeKey(t, 1), "A001", "Child", true, true}}, scanErr: errors.New("scan")}}
 			tx.row = &stubRow{vals: []any{true}}
 			return tx, nil
 		})}
@@ -228,7 +254,7 @@ func TestOrgUnitPGStore_ListChildren_AndVisibility_Coverage(t *testing.T) {
 
 	t.Run("ListChildren commit error", func(t *testing.T) {
 		store := &orgUnitPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) {
-			tx := &stubTx{rows: &recordRows{records: [][]any{{1, "A001", "Child", true, false}}}, commitErr: errors.New("commit")}
+			tx := &stubTx{rows: &recordRows{records: [][]any{{mustReadTestOrgNodeKey(t, 1), "A001", "Child", true, false}}}, commitErr: errors.New("commit")}
 			tx.row = &stubRow{vals: []any{true}}
 			return tx, nil
 		})}
@@ -239,7 +265,7 @@ func TestOrgUnitPGStore_ListChildren_AndVisibility_Coverage(t *testing.T) {
 
 	t.Run("ListChildren ok", func(t *testing.T) {
 		store := &orgUnitPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) {
-			tx := &stubTx{rows: &recordRows{records: [][]any{{1, "A001", "Child", false, true}}}}
+			tx := &stubTx{rows: &recordRows{records: [][]any{{mustReadTestOrgNodeKey(t, 1), "A001", "Child", false, true}}}}
 			tx.row = &stubRow{vals: []any{true}}
 			return tx, nil
 		})}
@@ -311,7 +337,7 @@ func TestOrgUnitPGStore_ListChildren_AndVisibility_Coverage(t *testing.T) {
 
 	t.Run("ListChildrenWithVisibility scan error", func(t *testing.T) {
 		store := &orgUnitPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) {
-			tx := &stubTx{rows: &recordRows{records: [][]any{{1, "A001", "Child", "disabled", false, true}}, scanErr: errors.New("scan")}}
+			tx := &stubTx{rows: &recordRows{records: [][]any{{mustReadTestOrgNodeKey(t, 1), "A001", "Child", "disabled", false, true}}, scanErr: errors.New("scan")}}
 			tx.row = &stubRow{vals: []any{true}}
 			return tx, nil
 		})}
@@ -333,7 +359,7 @@ func TestOrgUnitPGStore_ListChildren_AndVisibility_Coverage(t *testing.T) {
 
 	t.Run("ListChildrenWithVisibility commit error", func(t *testing.T) {
 		store := &orgUnitPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) {
-			tx := &stubTx{rows: &recordRows{records: [][]any{{1, "A001", "Child", "active", true, false}}}, commitErr: errors.New("commit")}
+			tx := &stubTx{rows: &recordRows{records: [][]any{{mustReadTestOrgNodeKey(t, 1), "A001", "Child", "active", true, false}}}, commitErr: errors.New("commit")}
 			tx.row = &stubRow{vals: []any{true}}
 			return tx, nil
 		})}
@@ -344,7 +370,7 @@ func TestOrgUnitPGStore_ListChildren_AndVisibility_Coverage(t *testing.T) {
 
 	t.Run("ListChildrenWithVisibility ok", func(t *testing.T) {
 		store := &orgUnitPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) {
-			tx := &stubTx{rows: &recordRows{records: [][]any{{1, "A001", "Child", "disabled", false, true}}}}
+			tx := &stubTx{rows: &recordRows{records: [][]any{{mustReadTestOrgNodeKey(t, 1), "A001", "Child", "disabled", false, true}}}}
 			tx.row = &stubRow{vals: []any{true}}
 			return tx, nil
 		})}
@@ -389,17 +415,17 @@ func TestOrgUnitPGStore_GetNodeDetails_AndVisibility_Coverage(t *testing.T) {
 	t.Run("GetNodeDetails commit error", func(t *testing.T) {
 		tx := &stubTx{commitErr: errors.New("commit")}
 		tx.row = &stubRow{vals: []any{
-			1,
+			mustReadTestOrgNodeKey(t, 1),
 			"A001",
 			"Root",
 			"active",
-			0,
+			"",
 			"",
 			"",
 			true,
 			"1",
 			"Mgr",
-			[]int{1},
+			mustReadTestOrgNodeKeys(t, 1),
 			"Root",
 			time.Unix(1, 0).UTC(),
 			time.Unix(2, 0).UTC(),
@@ -414,17 +440,17 @@ func TestOrgUnitPGStore_GetNodeDetails_AndVisibility_Coverage(t *testing.T) {
 	t.Run("GetNodeDetails ok", func(t *testing.T) {
 		tx := &stubTx{}
 		tx.row = &stubRow{vals: []any{
-			1,
+			mustReadTestOrgNodeKey(t, 1),
 			"A001",
 			"Root",
 			"active",
-			0,
+			"",
 			"",
 			"",
 			true,
 			"",
 			"",
-			[]int{1},
+			mustReadTestOrgNodeKeys(t, 1),
 			"Root",
 			time.Unix(1, 0).UTC(),
 			time.Unix(2, 0).UTC(),
@@ -440,17 +466,17 @@ func TestOrgUnitPGStore_GetNodeDetails_AndVisibility_Coverage(t *testing.T) {
 	t.Run("GetNodeDetailsWithVisibility includeDisabled=false delegates", func(t *testing.T) {
 		tx := &stubTx{}
 		tx.row = &stubRow{vals: []any{
-			1,
+			mustReadTestOrgNodeKey(t, 1),
 			"A001",
 			"Root",
 			"active",
-			0,
+			"",
 			"",
 			"",
 			true,
 			"",
 			"",
-			[]int{1},
+			mustReadTestOrgNodeKeys(t, 1),
 			"Root",
 			time.Unix(1, 0).UTC(),
 			time.Unix(2, 0).UTC(),
@@ -465,17 +491,17 @@ func TestOrgUnitPGStore_GetNodeDetails_AndVisibility_Coverage(t *testing.T) {
 	t.Run("GetNodeDetailsWithVisibility ok", func(t *testing.T) {
 		tx := &stubTx{}
 		tx.row = &stubRow{vals: []any{
-			1,
+			mustReadTestOrgNodeKey(t, 1),
 			"A001",
 			"Root",
 			"disabled",
-			0,
+			"",
 			"",
 			"",
 			true,
 			"",
 			"",
-			[]int{1},
+			mustReadTestOrgNodeKeys(t, 1),
 			"Root",
 			time.Unix(1, 0).UTC(),
 			time.Unix(2, 0).UTC(),
@@ -519,17 +545,17 @@ func TestOrgUnitPGStore_GetNodeDetails_AndVisibility_Coverage(t *testing.T) {
 	t.Run("GetNodeDetailsWithVisibility commit error", func(t *testing.T) {
 		tx := &stubTx{commitErr: errors.New("commit")}
 		tx.row = &stubRow{vals: []any{
-			1,
+			mustReadTestOrgNodeKey(t, 1),
 			"A001",
 			"Root",
 			"active",
-			0,
+			"",
 			"",
 			"",
 			true,
 			"",
 			"",
-			[]int{1},
+			mustReadTestOrgNodeKeys(t, 1),
 			"Root",
 			time.Unix(1, 0).UTC(),
 			time.Unix(2, 0).UTC(),
@@ -587,7 +613,7 @@ func TestOrgUnitPGStore_SearchNode_AndCandidates_AndVersions_Coverage(t *testing
 
 	t.Run("SearchNode normalized found", func(t *testing.T) {
 		tx := &stubTx{}
-		tx.row = &stubRow{vals: []any{10000001, "A001", "Root", []int{10000001}}}
+		tx.row = &stubRow{vals: []any{mustReadTestOrgNodeKey(t, 10000001), "A001", "Root", mustReadTestOrgNodeKeys(t, 10000001)}}
 		store := &orgUnitPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx, nil })}
 		got, err := store.SearchNode(ctx, "t1", "A001", "2026-01-01")
 		if err != nil || got.TargetOrgID != 10000001 || got.TreeAsOf != "2026-01-01" {
@@ -598,7 +624,7 @@ func TestOrgUnitPGStore_SearchNode_AndCandidates_AndVersions_Coverage(t *testing
 	t.Run("SearchNode found by name", func(t *testing.T) {
 		tx := &stubTx{}
 		tx.row = &stubRow{err: pgx.ErrNoRows}
-		tx.row2 = &stubRow{vals: []any{10000002, "A002", "Other", []int{10000002}}}
+		tx.row2 = &stubRow{vals: []any{mustReadTestOrgNodeKey(t, 10000002), "A002", "Other", mustReadTestOrgNodeKeys(t, 10000002)}}
 		store := &orgUnitPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx, nil })}
 		got, err := store.SearchNode(ctx, "t1", "Other", "2026-01-01")
 		if err != nil || got.TargetOrgID != 10000002 {
@@ -608,7 +634,7 @@ func TestOrgUnitPGStore_SearchNode_AndCandidates_AndVersions_Coverage(t *testing
 
 	t.Run("SearchNode normalize fails uses name branch", func(t *testing.T) {
 		tx := &stubTx{}
-		tx.row = &stubRow{vals: []any{10000003, "A003", "Name", []int{10000003}}}
+		tx.row = &stubRow{vals: []any{mustReadTestOrgNodeKey(t, 10000003), "A003", "Name", mustReadTestOrgNodeKeys(t, 10000003)}}
 		store := &orgUnitPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx, nil })}
 		if _, err := store.SearchNode(ctx, "t1", "bad\x7f", "2026-01-01"); err != nil {
 			t.Fatalf("err=%v", err)
@@ -624,7 +650,7 @@ func TestOrgUnitPGStore_SearchNode_AndCandidates_AndVersions_Coverage(t *testing
 
 	t.Run("SearchNode commit error", func(t *testing.T) {
 		tx := &stubTx{commitErr: errors.New("commit")}
-		tx.row = &stubRow{vals: []any{10000001, "A001", "Root", []int{10000001}}}
+		tx.row = &stubRow{vals: []any{mustReadTestOrgNodeKey(t, 10000001), "A001", "Root", mustReadTestOrgNodeKeys(t, 10000001)}}
 		store := &orgUnitPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx, nil })}
 		if _, err := store.SearchNode(ctx, "t1", "A001", "2026-01-01"); err == nil {
 			t.Fatal("expected error")
@@ -633,7 +659,7 @@ func TestOrgUnitPGStore_SearchNode_AndCandidates_AndVersions_Coverage(t *testing
 
 	t.Run("SearchNodeWithVisibility includeDisabled=false delegates", func(t *testing.T) {
 		tx := &stubTx{}
-		tx.row = &stubRow{vals: []any{10000001, "A001", "Root", []int{10000001}}}
+		tx.row = &stubRow{vals: []any{mustReadTestOrgNodeKey(t, 10000001), "A001", "Root", mustReadTestOrgNodeKeys(t, 10000001)}}
 		store := &orgUnitPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx, nil })}
 		if _, err := store.SearchNodeWithVisibility(ctx, "t1", "A001", "2026-01-01", false); err != nil {
 			t.Fatalf("err=%v", err)
@@ -663,7 +689,7 @@ func TestOrgUnitPGStore_SearchNode_AndCandidates_AndVersions_Coverage(t *testing
 
 	t.Run("SearchNodeWithVisibility normalize fails uses name branch", func(t *testing.T) {
 		tx := &stubTx{}
-		tx.row = &stubRow{vals: []any{10000003, "A003", "Name", []int{10000003}}}
+		tx.row = &stubRow{vals: []any{mustReadTestOrgNodeKey(t, 10000003), "A003", "Name", mustReadTestOrgNodeKeys(t, 10000003)}}
 		store := &orgUnitPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx, nil })}
 		if _, err := store.SearchNodeWithVisibility(ctx, "t1", "bad\x7f", "2026-01-01", true); err != nil {
 			t.Fatalf("err=%v", err)
@@ -680,7 +706,7 @@ func TestOrgUnitPGStore_SearchNode_AndCandidates_AndVersions_Coverage(t *testing
 	t.Run("SearchNodeWithVisibility found by name", func(t *testing.T) {
 		tx := &stubTx{}
 		tx.row = &stubRow{err: pgx.ErrNoRows} // normalized
-		tx.row2 = &stubRow{vals: []any{10000002, "A002", "Other", []int{10000002}}}
+		tx.row2 = &stubRow{vals: []any{mustReadTestOrgNodeKey(t, 10000002), "A002", "Other", mustReadTestOrgNodeKeys(t, 10000002)}}
 		store := &orgUnitPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx, nil })}
 		got, err := store.SearchNodeWithVisibility(ctx, "t1", "Other", "2026-01-01", true)
 		if err != nil || got.TargetOrgCode != "A002" {
@@ -707,7 +733,7 @@ func TestOrgUnitPGStore_SearchNode_AndCandidates_AndVersions_Coverage(t *testing
 
 	t.Run("SearchNodeWithVisibility commit error", func(t *testing.T) {
 		tx := &stubTx{commitErr: errors.New("commit")}
-		tx.row = &stubRow{vals: []any{10000001, "A001", "Root", []int{10000001}}}
+		tx.row = &stubRow{vals: []any{mustReadTestOrgNodeKey(t, 10000001), "A001", "Root", mustReadTestOrgNodeKeys(t, 10000001)}}
 		store := &orgUnitPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx, nil })}
 		if _, err := store.SearchNodeWithVisibility(ctx, "t1", "A001", "2026-01-01", true); err == nil {
 			t.Fatal("expected error")
@@ -743,7 +769,7 @@ func TestOrgUnitPGStore_SearchNode_AndCandidates_AndVersions_Coverage(t *testing
 	})
 
 	t.Run("SearchNodeCandidates limit defaults", func(t *testing.T) {
-		tx := &stubTx{rows: &recordRows{records: [][]any{{1, "A001", "Root"}}}}
+		tx := &stubTx{rows: &recordRows{records: [][]any{{mustReadTestOrgNodeKey(t, 1), "A001", "Root"}}}}
 		store := &orgUnitPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx, nil })}
 		if _, err := store.SearchNodeCandidates(ctx, "t1", "A001", "2026-01-01", 0); err != nil {
 			t.Fatalf("err=%v", err)
@@ -751,7 +777,7 @@ func TestOrgUnitPGStore_SearchNode_AndCandidates_AndVersions_Coverage(t *testing
 	})
 
 	t.Run("SearchNodeCandidates normalize fails uses name branch", func(t *testing.T) {
-		tx := &stubTx{rows: &recordRows{records: [][]any{{2, "A002", "Other"}}}}
+		tx := &stubTx{rows: &recordRows{records: [][]any{{mustReadTestOrgNodeKey(t, 2), "A002", "Other"}}}}
 		store := &orgUnitPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx, nil })}
 		if _, err := store.SearchNodeCandidates(ctx, "t1", "bad\x7f", "2026-01-01", 1); err != nil {
 			t.Fatalf("err=%v", err)
@@ -759,7 +785,7 @@ func TestOrgUnitPGStore_SearchNode_AndCandidates_AndVersions_Coverage(t *testing
 	})
 
 	t.Run("SearchNodeCandidates name branch scan error", func(t *testing.T) {
-		tx := &stubTx{rows: &recordRows{records: [][]any{{2, "A002", "Other"}}, scanErr: errors.New("scan")}}
+		tx := &stubTx{rows: &recordRows{records: [][]any{{mustReadTestOrgNodeKey(t, 2), "A002", "Other"}}, scanErr: errors.New("scan")}}
 		store := &orgUnitPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx, nil })}
 		if _, err := store.SearchNodeCandidates(ctx, "t1", "bad\x7f", "2026-01-01", 1); err == nil {
 			t.Fatal("expected error")
@@ -775,7 +801,7 @@ func TestOrgUnitPGStore_SearchNode_AndCandidates_AndVersions_Coverage(t *testing
 	})
 
 	t.Run("SearchNodeCandidates name branch commit error", func(t *testing.T) {
-		tx := &stubTx{rows: &recordRows{records: [][]any{{2, "A002", "Other"}}}, commitErr: errors.New("commit")}
+		tx := &stubTx{rows: &recordRows{records: [][]any{{mustReadTestOrgNodeKey(t, 2), "A002", "Other"}}}, commitErr: errors.New("commit")}
 		store := &orgUnitPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx, nil })}
 		if _, err := store.SearchNodeCandidates(ctx, "t1", "bad\x7f", "2026-01-01", 1); err == nil {
 			t.Fatal("expected error")
@@ -783,7 +809,7 @@ func TestOrgUnitPGStore_SearchNode_AndCandidates_AndVersions_Coverage(t *testing
 	})
 
 	t.Run("SearchNodeCandidates normalized hit returns early", func(t *testing.T) {
-		tx := &stubTx{rows: &recordRows{records: [][]any{{1, "A001", "Root"}}}}
+		tx := &stubTx{rows: &recordRows{records: [][]any{{mustReadTestOrgNodeKey(t, 1), "A001", "Root"}}}}
 		store := &orgUnitPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx, nil })}
 		out, err := store.SearchNodeCandidates(ctx, "t1", "A001", "2026-01-01", 1)
 		if err != nil || len(out) != 1 || out[0].Status != "active" {
@@ -794,7 +820,7 @@ func TestOrgUnitPGStore_SearchNode_AndCandidates_AndVersions_Coverage(t *testing
 	t.Run("SearchNodeCandidates normalized empty falls back", func(t *testing.T) {
 		tx := &stubTx{
 			rows:  &recordRows{records: [][]any{}},
-			rows2: &recordRows{records: [][]any{{2, "A002", "Other"}}},
+			rows2: &recordRows{records: [][]any{{mustReadTestOrgNodeKey(t, 2), "A002", "Other"}}},
 		}
 		store := &orgUnitPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx, nil })}
 		out, err := store.SearchNodeCandidates(ctx, "t1", "A001", "2026-01-01", 2)
@@ -816,7 +842,7 @@ func TestOrgUnitPGStore_SearchNode_AndCandidates_AndVersions_Coverage(t *testing
 	})
 
 	t.Run("SearchNodeCandidates scan error", func(t *testing.T) {
-		tx := &stubTx{rows: &recordRows{records: [][]any{{1, "A001", "Root"}}, scanErr: errors.New("scan")}}
+		tx := &stubTx{rows: &recordRows{records: [][]any{{mustReadTestOrgNodeKey(t, 1), "A001", "Root"}}, scanErr: errors.New("scan")}}
 		store := &orgUnitPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx, nil })}
 		if _, err := store.SearchNodeCandidates(ctx, "t1", "A001", "2026-01-01", 1); err == nil {
 			t.Fatal("expected error")
@@ -832,7 +858,7 @@ func TestOrgUnitPGStore_SearchNode_AndCandidates_AndVersions_Coverage(t *testing
 	})
 
 	t.Run("SearchNodeCandidates commit error", func(t *testing.T) {
-		tx := &stubTx{rows: &recordRows{records: [][]any{{1, "A001", "Root"}}}, commitErr: errors.New("commit")}
+		tx := &stubTx{rows: &recordRows{records: [][]any{{mustReadTestOrgNodeKey(t, 1), "A001", "Root"}}}, commitErr: errors.New("commit")}
 		store := &orgUnitPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx, nil })}
 		if _, err := store.SearchNodeCandidates(ctx, "t1", "A001", "2026-01-01", 1); err == nil {
 			t.Fatal("expected error")
@@ -848,7 +874,7 @@ func TestOrgUnitPGStore_SearchNode_AndCandidates_AndVersions_Coverage(t *testing
 	})
 
 	t.Run("SearchNodeCandidatesWithVisibility includeDisabled=false delegates", func(t *testing.T) {
-		tx := &stubTx{rows: &recordRows{records: [][]any{{1, "A001", "Root"}}}}
+		tx := &stubTx{rows: &recordRows{records: [][]any{{mustReadTestOrgNodeKey(t, 1), "A001", "Root"}}}}
 		store := &orgUnitPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx, nil })}
 		if _, err := store.SearchNodeCandidatesWithVisibility(ctx, "t1", "A001", "2026-01-01", 1, false); err != nil {
 			t.Fatalf("err=%v", err)
@@ -884,7 +910,7 @@ func TestOrgUnitPGStore_SearchNode_AndCandidates_AndVersions_Coverage(t *testing
 	})
 
 	t.Run("SearchNodeCandidatesWithVisibility limit defaults", func(t *testing.T) {
-		tx := &stubTx{rows: &recordRows{records: [][]any{{1, "A001", "Root", "active"}}}}
+		tx := &stubTx{rows: &recordRows{records: [][]any{{mustReadTestOrgNodeKey(t, 1), "A001", "Root", "active"}}}}
 		store := &orgUnitPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx, nil })}
 		if _, err := store.SearchNodeCandidatesWithVisibility(ctx, "t1", "A001", "2026-01-01", 0, true); err != nil {
 			t.Fatalf("err=%v", err)
@@ -892,7 +918,7 @@ func TestOrgUnitPGStore_SearchNode_AndCandidates_AndVersions_Coverage(t *testing
 	})
 
 	t.Run("SearchNodeCandidatesWithVisibility normalize fails uses name branch", func(t *testing.T) {
-		tx := &stubTx{rows: &recordRows{records: [][]any{{2, "A002", "Other", "active"}}}}
+		tx := &stubTx{rows: &recordRows{records: [][]any{{mustReadTestOrgNodeKey(t, 2), "A002", "Other", "active"}}}}
 		store := &orgUnitPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx, nil })}
 		if _, err := store.SearchNodeCandidatesWithVisibility(ctx, "t1", "bad\x7f", "2026-01-01", 1, true); err != nil {
 			t.Fatalf("err=%v", err)
@@ -902,7 +928,7 @@ func TestOrgUnitPGStore_SearchNode_AndCandidates_AndVersions_Coverage(t *testing
 	t.Run("SearchNodeCandidatesWithVisibility normalized empty falls back", func(t *testing.T) {
 		tx := &stubTx{
 			rows:  &recordRows{records: [][]any{}},
-			rows2: &recordRows{records: [][]any{{2, "A002", "Other", "active"}}},
+			rows2: &recordRows{records: [][]any{{mustReadTestOrgNodeKey(t, 2), "A002", "Other", "active"}}},
 		}
 		store := &orgUnitPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx, nil })}
 		out, err := store.SearchNodeCandidatesWithVisibility(ctx, "t1", "A001", "2026-01-01", 2, true)
@@ -914,7 +940,7 @@ func TestOrgUnitPGStore_SearchNode_AndCandidates_AndVersions_Coverage(t *testing
 	t.Run("SearchNodeCandidatesWithVisibility fallback scan error", func(t *testing.T) {
 		tx := &stubTx{
 			rows:  &recordRows{records: [][]any{}},
-			rows2: &recordRows{records: [][]any{{2, "A002", "Other", "active"}}, scanErr: errors.New("scan")},
+			rows2: &recordRows{records: [][]any{{mustReadTestOrgNodeKey(t, 2), "A002", "Other", "active"}}, scanErr: errors.New("scan")},
 		}
 		store := &orgUnitPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx, nil })}
 		if _, err := store.SearchNodeCandidatesWithVisibility(ctx, "t1", "A001", "2026-01-01", 2, true); err == nil {
@@ -936,7 +962,7 @@ func TestOrgUnitPGStore_SearchNode_AndCandidates_AndVersions_Coverage(t *testing
 	t.Run("SearchNodeCandidatesWithVisibility fallback commit error", func(t *testing.T) {
 		tx := &stubTx{
 			rows:      &recordRows{records: [][]any{}},
-			rows2:     &recordRows{records: [][]any{{2, "A002", "Other", "active"}}},
+			rows2:     &recordRows{records: [][]any{{mustReadTestOrgNodeKey(t, 2), "A002", "Other", "active"}}},
 			commitErr: errors.New("commit"),
 		}
 		store := &orgUnitPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx, nil })}
@@ -966,7 +992,7 @@ func TestOrgUnitPGStore_SearchNode_AndCandidates_AndVersions_Coverage(t *testing
 	})
 
 	t.Run("SearchNodeCandidatesWithVisibility scan error", func(t *testing.T) {
-		tx := &stubTx{rows: &recordRows{records: [][]any{{1, "A001", "Root", "active"}}, scanErr: errors.New("scan")}}
+		tx := &stubTx{rows: &recordRows{records: [][]any{{mustReadTestOrgNodeKey(t, 1), "A001", "Root", "active"}}, scanErr: errors.New("scan")}}
 		store := &orgUnitPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx, nil })}
 		if _, err := store.SearchNodeCandidatesWithVisibility(ctx, "t1", "A001", "2026-01-01", 1, true); err == nil {
 			t.Fatal("expected error")
@@ -982,7 +1008,7 @@ func TestOrgUnitPGStore_SearchNode_AndCandidates_AndVersions_Coverage(t *testing
 	})
 
 	t.Run("SearchNodeCandidatesWithVisibility commit error", func(t *testing.T) {
-		tx := &stubTx{rows: &recordRows{records: [][]any{{1, "A001", "Root", "active"}}}, commitErr: errors.New("commit")}
+		tx := &stubTx{rows: &recordRows{records: [][]any{{mustReadTestOrgNodeKey(t, 1), "A001", "Root", "active"}}}, commitErr: errors.New("commit")}
 		store := &orgUnitPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx, nil })}
 		if _, err := store.SearchNodeCandidatesWithVisibility(ctx, "t1", "A001", "2026-01-01", 1, true); err == nil {
 			t.Fatal("expected error")
@@ -990,7 +1016,7 @@ func TestOrgUnitPGStore_SearchNode_AndCandidates_AndVersions_Coverage(t *testing
 	})
 
 	t.Run("SearchNodeCandidatesWithVisibility ok", func(t *testing.T) {
-		tx := &stubTx{rows: &recordRows{records: [][]any{{1, "A001", "Root", "disabled"}}}}
+		tx := &stubTx{rows: &recordRows{records: [][]any{{mustReadTestOrgNodeKey(t, 1), "A001", "Root", "disabled"}}}}
 		store := &orgUnitPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx, nil })}
 		out, err := store.SearchNodeCandidatesWithVisibility(ctx, "t1", "A001", "2026-01-01", 1, true)
 		if err != nil || len(out) != 1 || out[0].Status != "disabled" {

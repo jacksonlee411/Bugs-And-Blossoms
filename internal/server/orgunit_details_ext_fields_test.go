@@ -15,6 +15,15 @@ type detailsExtStoreStub struct {
 	snapErr error
 }
 
+type detailsExtByKeyStoreStub struct {
+	cfgs                 []orgUnitTenantFieldConfig
+	cfgErr               error
+	snap                 orgUnitVersionExtSnapshot
+	snapErr              error
+	snapshotOrgIDArg     int
+	snapshotByNodeKeyArg string
+}
+
 func (s detailsExtStoreStub) ListEnabledTenantFieldConfigsAsOf(_ context.Context, _ string, _ string) ([]orgUnitTenantFieldConfig, error) {
 	if s.cfgErr != nil {
 		return nil, s.cfgErr
@@ -23,6 +32,29 @@ func (s detailsExtStoreStub) ListEnabledTenantFieldConfigsAsOf(_ context.Context
 }
 
 func (s detailsExtStoreStub) GetOrgUnitVersionExtSnapshot(_ context.Context, _ string, _ int, _ string) (orgUnitVersionExtSnapshot, error) {
+	if s.snapErr != nil {
+		return orgUnitVersionExtSnapshot{}, s.snapErr
+	}
+	return s.snap, nil
+}
+
+func (s *detailsExtByKeyStoreStub) ListEnabledTenantFieldConfigsAsOf(_ context.Context, _ string, _ string) ([]orgUnitTenantFieldConfig, error) {
+	if s.cfgErr != nil {
+		return nil, s.cfgErr
+	}
+	return append([]orgUnitTenantFieldConfig(nil), s.cfgs...), nil
+}
+
+func (s *detailsExtByKeyStoreStub) GetOrgUnitVersionExtSnapshot(_ context.Context, _ string, orgID int, _ string) (orgUnitVersionExtSnapshot, error) {
+	s.snapshotOrgIDArg = orgID
+	if s.snapErr != nil {
+		return orgUnitVersionExtSnapshot{}, s.snapErr
+	}
+	return s.snap, nil
+}
+
+func (s *detailsExtByKeyStoreStub) GetOrgUnitVersionExtSnapshotByNodeKey(_ context.Context, _ string, orgNodeKey string, _ string) (orgUnitVersionExtSnapshot, error) {
+	s.snapshotByNodeKeyArg = orgNodeKey
 	if s.snapErr != nil {
 		return orgUnitVersionExtSnapshot{}, s.snapErr
 	}
@@ -41,6 +73,34 @@ func TestBuildOrgUnitDetailsExtFields_EmptyConfigs(t *testing.T) {
 	}
 	if len(items) != 0 {
 		t.Fatalf("expected empty, got %d", len(items))
+	}
+}
+
+func TestBuildOrgUnitDetailsExtFieldsByNodeKey_PrefersByKeyStore(t *testing.T) {
+	orgNodeKey := mustOrgNodeKeyForTest(t, 10000001)
+	store := &detailsExtByKeyStoreStub{
+		cfgs: []orgUnitTenantFieldConfig{
+			{FieldKey: "short_name", PhysicalCol: "ext_str_01", ValueType: "text", DataSourceType: "PLAIN"},
+		},
+		snap: orgUnitVersionExtSnapshot{
+			VersionValues: map[string]any{"ext_str_01": "R&D"},
+			VersionLabels: map[string]string{},
+			EventLabels:   map[string]string{},
+		},
+	}
+
+	items, err := buildOrgUnitDetailsExtFieldsByNodeKey(context.Background(), store, "t1", orgNodeKey, "2026-01-01")
+	if err != nil {
+		t.Fatalf("err=%v", err)
+	}
+	if len(items) != 1 {
+		t.Fatalf("items=%v", items)
+	}
+	if store.snapshotByNodeKeyArg != orgNodeKey {
+		t.Fatalf("snapshotByNodeKeyArg=%q want=%q", store.snapshotByNodeKeyArg, orgNodeKey)
+	}
+	if store.snapshotOrgIDArg != 0 {
+		t.Fatalf("snapshotOrgIDArg=%d want=0", store.snapshotOrgIDArg)
 	}
 }
 

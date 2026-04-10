@@ -548,27 +548,16 @@ func (s *assistantConversationService) lookupCandidateDetails(ctx context.Contex
 	if s == nil || s.orgStore == nil {
 		return assistantCandidate{}, OrgUnitNodeDetails{}, errAssistantServiceMissing
 	}
-	orgNodeKey := strings.TrimSpace(candidate.OrgNodeKey)
-	if orgNodeKey == "" && candidate.OrgID > 0 {
-		encodedOrgNodeKey, err := encodeOrgNodeKeyFromID(candidate.OrgID)
-		if err != nil {
-			return assistantCandidate{}, OrgUnitNodeDetails{}, err
-		}
-		orgNodeKey = encodedOrgNodeKey
-	}
-	if orgNodeKey == "" {
+	orgNodeKey, ok := assistantCandidateNormalizedOrgNodeKey(candidate)
+	if !ok {
 		resolvedOrgNodeKey, err := s.resolveAssistantCandidateOrgNodeKey(ctx, tenantID, candidate)
 		if err != nil {
 			return assistantCandidate{}, OrgUnitNodeDetails{}, err
 		}
 		orgNodeKey = resolvedOrgNodeKey
-		candidate.OrgNodeKey = orgNodeKey
 	}
-	orgID, err := decodeOrgNodeKeyToID(orgNodeKey)
-	if err != nil {
-		return assistantCandidate{}, OrgUnitNodeDetails{}, err
-	}
-	details, err := s.orgStore.GetNodeDetails(ctx, tenantID, orgID, asOf)
+	candidate.OrgNodeKey = orgNodeKey
+	details, err := getNodeDetailsByVisibilityByNodeKey(ctx, s.orgStore, tenantID, orgNodeKey, asOf, false)
 	if err != nil {
 		return assistantCandidate{}, OrgUnitNodeDetails{}, err
 	}
@@ -582,12 +571,11 @@ func (s *assistantConversationService) resolveAssistantCandidateOrgNodeKey(ctx c
 	if s == nil || s.orgStore == nil {
 		return "", errAssistantServiceMissing
 	}
-	if orgNodeKey := strings.TrimSpace(candidate.OrgNodeKey); orgNodeKey != "" {
+	if orgNodeKey, ok := assistantCandidateNormalizedOrgNodeKey(candidate); ok {
 		return orgNodeKey, nil
 	}
-	if candidate.OrgID > 0 {
-		orgNodeKey, err := encodeOrgNodeKeyFromID(candidate.OrgID)
-		if err == nil {
+	if candidateID := strings.TrimSpace(candidate.CandidateID); candidateID != "" {
+		if orgNodeKey, err := normalizeOrgNodeKeyInput(candidateID); err == nil {
 			return orgNodeKey, nil
 		}
 	}
@@ -612,14 +600,8 @@ func (s *assistantConversationService) resolveAssistantCandidateOrgNodeKey(ctx c
 		return "", err
 	}
 	for _, row := range rows {
-		orgNodeKey := strings.TrimSpace(row.OrgNodeKey)
-		if orgNodeKey == "" && row.OrgID > 0 {
-			encoded, encodeErr := encodeOrgNodeKeyFromID(row.OrgID)
-			if encodeErr == nil {
-				orgNodeKey = encoded
-			}
-		}
-		if orgNodeKey == "" {
+		orgNodeKey, ok := assistantSearchCandidateOrgNodeKey(row)
+		if !ok {
 			continue
 		}
 		if code := strings.TrimSpace(candidate.CandidateCode); code != "" && strings.TrimSpace(row.OrgCode) == code {
@@ -630,14 +612,7 @@ func (s *assistantConversationService) resolveAssistantCandidateOrgNodeKey(ctx c
 		}
 	}
 	if len(rows) == 1 {
-		orgNodeKey := strings.TrimSpace(rows[0].OrgNodeKey)
-		if orgNodeKey == "" && rows[0].OrgID > 0 {
-			encoded, encodeErr := encodeOrgNodeKeyFromID(rows[0].OrgID)
-			if encodeErr == nil {
-				orgNodeKey = encoded
-			}
-		}
-		if orgNodeKey != "" {
+		if orgNodeKey, ok := assistantSearchCandidateOrgNodeKey(rows[0]); ok {
 			return orgNodeKey, nil
 		}
 	}

@@ -107,6 +107,12 @@ type resolveOrgCodeStore struct {
 	setErr  error
 	setArgs []string
 
+	listChildrenByNodeKeyArg string
+	detailsByNodeKeyArg      string
+	versionsByNodeKeyArg     string
+	auditByNodeKeyArg        string
+	resolveCodeByNodeKeyArg  string
+
 	listNodes    []OrgUnitNode
 	listNodesErr error
 
@@ -175,6 +181,7 @@ func (s *resolveOrgCodeStore) ResolveOrgCode(_ context.Context, _ string, orgID 
 	return "", nil
 }
 func (s *resolveOrgCodeStore) ResolveOrgCodeByNodeKey(ctx context.Context, tenantID string, orgNodeKey string) (string, error) {
+	s.resolveCodeByNodeKeyArg = orgNodeKey
 	orgID, err := decodeOrgNodeKeyToID(orgNodeKey)
 	if err != nil {
 		return "", err
@@ -214,7 +221,21 @@ func (s *resolveOrgCodeStore) ListChildren(context.Context, string, int, string)
 	}
 	return append([]OrgUnitChild(nil), s.listChildren...), nil
 }
+func (s *resolveOrgCodeStore) ListChildrenByNodeKey(_ context.Context, _ string, parentOrgNodeKey string, _ string) ([]OrgUnitChild, error) {
+	s.listChildrenByNodeKeyArg = parentOrgNodeKey
+	if s.listChildrenErr != nil {
+		return nil, s.listChildrenErr
+	}
+	return append([]OrgUnitChild(nil), s.listChildren...), nil
+}
 func (s *resolveOrgCodeStore) GetNodeDetails(context.Context, string, int, string) (OrgUnitNodeDetails, error) {
+	if s.getNodeDetailsErr != nil {
+		return OrgUnitNodeDetails{}, s.getNodeDetailsErr
+	}
+	return s.getNodeDetails, nil
+}
+func (s *resolveOrgCodeStore) GetNodeDetailsByNodeKey(_ context.Context, _ string, orgNodeKey string, _ string) (OrgUnitNodeDetails, error) {
+	s.detailsByNodeKeyArg = orgNodeKey
 	if s.getNodeDetailsErr != nil {
 		return OrgUnitNodeDetails{}, s.getNodeDetailsErr
 	}
@@ -235,7 +256,21 @@ func (s *resolveOrgCodeStore) ListNodeVersions(context.Context, string, int) ([]
 	}
 	return append([]OrgUnitNodeVersion(nil), s.listNodeVersions...), nil
 }
+func (s *resolveOrgCodeStore) ListNodeVersionsByNodeKey(_ context.Context, _ string, orgNodeKey string) ([]OrgUnitNodeVersion, error) {
+	s.versionsByNodeKeyArg = orgNodeKey
+	if s.listNodeVersionsErr != nil {
+		return nil, s.listNodeVersionsErr
+	}
+	return append([]OrgUnitNodeVersion(nil), s.listNodeVersions...), nil
+}
 func (s *resolveOrgCodeStore) ListNodeAuditEvents(context.Context, string, int, int) ([]OrgUnitNodeAuditEvent, error) {
+	if s.auditEventsErr != nil {
+		return nil, s.auditEventsErr
+	}
+	return append([]OrgUnitNodeAuditEvent(nil), s.auditEvents...), nil
+}
+func (s *resolveOrgCodeStore) ListNodeAuditEventsByNodeKey(_ context.Context, _ string, orgNodeKey string, _ int) ([]OrgUnitNodeAuditEvent, error) {
+	s.auditByNodeKeyArg = orgNodeKey
 	if s.auditEventsErr != nil {
 		return nil, s.auditEventsErr
 	}
@@ -266,20 +301,31 @@ func (s *orgUnitListPageReaderStore) ListOrgUnitsPage(_ context.Context, _ strin
 
 type orgUnitDetailsExtStoreStub struct {
 	*resolveOrgCodeStore
-	cfgs        []orgUnitTenantFieldConfig
-	cfgErr      error
-	snapshot    orgUnitVersionExtSnapshot
-	snapshotErr error
+	cfgs                 []orgUnitTenantFieldConfig
+	cfgErr               error
+	snapshot             orgUnitVersionExtSnapshot
+	snapshotErr          error
+	snapshotOrgIDArg     int
+	snapshotByNodeKeyArg string
 }
 
-func (s orgUnitDetailsExtStoreStub) ListEnabledTenantFieldConfigsAsOf(_ context.Context, _ string, _ string) ([]orgUnitTenantFieldConfig, error) {
+func (s *orgUnitDetailsExtStoreStub) ListEnabledTenantFieldConfigsAsOf(_ context.Context, _ string, _ string) ([]orgUnitTenantFieldConfig, error) {
 	if s.cfgErr != nil {
 		return nil, s.cfgErr
 	}
 	return append([]orgUnitTenantFieldConfig(nil), s.cfgs...), nil
 }
 
-func (s orgUnitDetailsExtStoreStub) GetOrgUnitVersionExtSnapshot(_ context.Context, _ string, _ int, _ string) (orgUnitVersionExtSnapshot, error) {
+func (s *orgUnitDetailsExtStoreStub) GetOrgUnitVersionExtSnapshot(_ context.Context, _ string, orgID int, _ string) (orgUnitVersionExtSnapshot, error) {
+	s.snapshotOrgIDArg = orgID
+	if s.snapshotErr != nil {
+		return orgUnitVersionExtSnapshot{}, s.snapshotErr
+	}
+	return s.snapshot, nil
+}
+
+func (s *orgUnitDetailsExtStoreStub) GetOrgUnitVersionExtSnapshotByNodeKey(_ context.Context, _ string, orgNodeKey string, _ string) (orgUnitVersionExtSnapshot, error) {
+	s.snapshotByNodeKeyArg = orgNodeKey
 	if s.snapshotErr != nil {
 		return orgUnitVersionExtSnapshot{}, s.snapshotErr
 	}
@@ -983,7 +1029,10 @@ func TestListOrgUnitListPage(t *testing.T) {
 	})
 
 	t.Run("children and paging", func(t *testing.T) {
-		parentID := 10000001
+		parentOrgNodeKey, err := encodeOrgNodeKeyFromID(10000001)
+		if err != nil {
+			t.Fatalf("encode err=%v", err)
+		}
 		store := &resolveOrgCodeStore{
 			listChildren: []OrgUnitChild{
 				{OrgID: 10000002, OrgCode: "A002", Name: "Two", Status: "", IsBusinessUnit: true, HasChildren: true},
@@ -991,12 +1040,12 @@ func TestListOrgUnitListPage(t *testing.T) {
 			},
 		}
 		items, total, err := listOrgUnitListPage(context.Background(), store, "t1", orgUnitListPageRequest{
-			AsOf:      "2026-01-01",
-			ParentID:  &parentID,
-			SortField: orgUnitListSortCode,
-			SortOrder: orgUnitListSortOrderAsc,
-			Limit:     1,
-			Offset:    -1,
+			AsOf:             "2026-01-01",
+			ParentOrgNodeKey: &parentOrgNodeKey,
+			SortField:        orgUnitListSortCode,
+			SortOrder:        orgUnitListSortOrderAsc,
+			Limit:            1,
+			Offset:           -1,
 		})
 		if err != nil {
 			t.Fatalf("err=%v", err)
@@ -1015,10 +1064,10 @@ func TestListOrgUnitListPage(t *testing.T) {
 		}
 
 		empty, totalAfter, err := listOrgUnitListPage(context.Background(), store, "t1", orgUnitListPageRequest{
-			AsOf:     "2026-01-01",
-			ParentID: &parentID,
-			Limit:    1,
-			Offset:   5,
+			AsOf:             "2026-01-01",
+			ParentOrgNodeKey: &parentOrgNodeKey,
+			Limit:            1,
+			Offset:           5,
 		})
 		if err != nil {
 			t.Fatalf("err=%v", err)
@@ -1028,10 +1077,10 @@ func TestListOrgUnitListPage(t *testing.T) {
 		}
 
 		clamped, totalClamped, err := listOrgUnitListPage(context.Background(), store, "t1", orgUnitListPageRequest{
-			AsOf:     "2026-01-01",
-			ParentID: &parentID,
-			Limit:    5,
-			Offset:   0,
+			AsOf:             "2026-01-01",
+			ParentOrgNodeKey: &parentOrgNodeKey,
+			Limit:            5,
+			Offset:           0,
 		})
 		if err != nil {
 			t.Fatalf("err=%v", err)
@@ -1079,8 +1128,11 @@ func TestListOrgUnitListPage(t *testing.T) {
 		}
 
 		childErrStore := &resolveOrgCodeStore{listChildrenErr: errBoom{}}
-		parentID := 10000001
-		if _, _, err := listOrgUnitListPage(context.Background(), childErrStore, "t1", orgUnitListPageRequest{AsOf: "2026-01-01", ParentID: &parentID}); err == nil {
+		parentOrgNodeKey, err := encodeOrgNodeKeyFromID(10000001)
+		if err != nil {
+			t.Fatalf("encode err=%v", err)
+		}
+		if _, _, err := listOrgUnitListPage(context.Background(), childErrStore, "t1", orgUnitListPageRequest{AsOf: "2026-01-01", ParentOrgNodeKey: &parentOrgNodeKey}); err == nil {
 			t.Fatalf("expected list children error")
 		}
 	})
@@ -1158,6 +1210,27 @@ func TestHandleOrgUnitsDetailsAPI_Success(t *testing.T) {
 	}
 }
 
+func TestHandleOrgUnitsAPI_ParentOrgCodePassesNodeKeyToListReader(t *testing.T) {
+	store := &resolveOrgCodeStore{
+		resolveID:    10000001,
+		listChildren: []OrgUnitChild{{OrgID: 10000002, OrgCode: "A002", Name: "Child", Status: "active"}},
+	}
+	req := httptest.NewRequest(http.MethodGet, "/org/api/org-units?as_of=2026-01-01&parent_org_code=A001", nil)
+	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "T"}))
+	rec := httptest.NewRecorder()
+	handleOrgUnitsAPI(rec, req, store, nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+	}
+	want, err := encodeOrgNodeKeyFromID(10000001)
+	if err != nil {
+		t.Fatalf("encode err=%v", err)
+	}
+	if store.listChildrenByNodeKeyArg != want {
+		t.Fatalf("parentOrgNodeKey=%q want=%q", store.listChildrenByNodeKeyArg, want)
+	}
+}
+
 func TestHandleOrgUnitsDetailsAPI_BasicErrors(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/org/api/org-units/details?org_code=bad%7F&as_of=2026-01-01", nil)
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "T"}))
@@ -1192,6 +1265,111 @@ func TestHandleOrgUnitsVersionsAPI_Success(t *testing.T) {
 	}
 	if !strings.Contains(rec.Body.String(), "2026-01-01") {
 		t.Fatalf("body=%q", rec.Body.String())
+	}
+}
+
+func TestHandleOrgUnitsDetailsAPI_PassesNodeKeyToReader(t *testing.T) {
+	store := &resolveOrgCodeStore{
+		resolveID: 10000001,
+		getNodeDetails: OrgUnitNodeDetails{
+			OrgID:   10000001,
+			OrgCode: "A001",
+			Name:    "Root",
+			Status:  "active",
+		},
+	}
+	req := httptest.NewRequest(http.MethodGet, "/org/api/org-units/details?org_code=A001&as_of=2026-01-01", nil)
+	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "T"}))
+	rec := httptest.NewRecorder()
+	handleOrgUnitsDetailsAPI(rec, req, store)
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+	}
+	want, err := encodeOrgNodeKeyFromID(10000001)
+	if err != nil {
+		t.Fatalf("encode err=%v", err)
+	}
+	if store.detailsByNodeKeyArg != want {
+		t.Fatalf("orgNodeKey=%q want=%q", store.detailsByNodeKeyArg, want)
+	}
+}
+
+func TestHandleOrgUnitsDetailsAPI_PassesNodeKeyToExtSnapshotStore(t *testing.T) {
+	orgNodeKey := mustOrgNodeKeyForTest(t, 10000001)
+	store := &orgUnitDetailsExtStoreStub{
+		resolveOrgCodeStore: &resolveOrgCodeStore{
+			resolveID: 10000001,
+			getNodeDetails: OrgUnitNodeDetails{
+				OrgID:      10000001,
+				OrgNodeKey: orgNodeKey,
+				OrgCode:    "A001",
+				Name:       "Root",
+				Status:     "active",
+			},
+		},
+		cfgs: []orgUnitTenantFieldConfig{
+			{FieldKey: "short_name", PhysicalCol: "ext_str_01"},
+		},
+		snapshot: orgUnitVersionExtSnapshot{
+			VersionValues: map[string]any{"ext_str_01": "R&D"},
+			VersionLabels: map[string]string{},
+			EventLabels:   map[string]string{},
+		},
+	}
+	req := httptest.NewRequest(http.MethodGet, "/org/api/org-units/details?org_code=A001&as_of=2026-01-01", nil)
+	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "T"}))
+	rec := httptest.NewRecorder()
+	handleOrgUnitsDetailsAPI(rec, req, store)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+	}
+	if store.snapshotByNodeKeyArg != orgNodeKey {
+		t.Fatalf("snapshotByNodeKeyArg=%q want=%q", store.snapshotByNodeKeyArg, orgNodeKey)
+	}
+	if store.snapshotOrgIDArg != 0 {
+		t.Fatalf("snapshotOrgIDArg=%d want=0", store.snapshotOrgIDArg)
+	}
+}
+
+func TestHandleOrgUnitsVersionsAPI_PassesNodeKeyToReader(t *testing.T) {
+	store := &resolveOrgCodeStore{
+		resolveID:        10000001,
+		listNodeVersions: []OrgUnitNodeVersion{{EventID: 1, EffectiveDate: "2026-01-01", EventType: "CREATE"}},
+	}
+	req := httptest.NewRequest(http.MethodGet, "/org/api/org-units/versions?org_code=A001", nil)
+	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "T"}))
+	rec := httptest.NewRecorder()
+	handleOrgUnitsVersionsAPI(rec, req, store)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+	}
+	want, err := encodeOrgNodeKeyFromID(10000001)
+	if err != nil {
+		t.Fatalf("encode err=%v", err)
+	}
+	if store.versionsByNodeKeyArg != want {
+		t.Fatalf("orgNodeKey=%q want=%q", store.versionsByNodeKeyArg, want)
+	}
+}
+
+func TestHandleOrgUnitsAuditAPI_PassesNodeKeyToReader(t *testing.T) {
+	store := &resolveOrgCodeStore{
+		resolveID:   10000001,
+		auditEvents: []OrgUnitNodeAuditEvent{{EventID: 1, EventUUID: "e1", EventType: "CREATE", EffectiveDate: "2026-01-01"}},
+	}
+	req := httptest.NewRequest(http.MethodGet, "/org/api/org-units/audit?org_code=A001", nil)
+	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "T"}))
+	rec := httptest.NewRecorder()
+	handleOrgUnitsAuditAPI(rec, req, store)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+	}
+	want, err := encodeOrgNodeKeyFromID(10000001)
+	if err != nil {
+		t.Fatalf("encode err=%v", err)
+	}
+	if store.auditByNodeKeyArg != want {
+		t.Fatalf("orgNodeKey=%q want=%q", store.auditByNodeKeyArg, want)
 	}
 }
 
@@ -1686,11 +1864,11 @@ func TestHandleOrgUnitsSearchAPI_ErrorBranches(t *testing.T) {
 		rec := httptest.NewRecorder()
 		handleOrgUnitsSearchAPI(rec, req, &resolveOrgCodeStore{
 			searchNodeResult: OrgUnitSearchResult{
-				TargetOrgID:   10000001,
-				TargetOrgCode: "A001",
-				TargetName:    "Root",
-				PathOrgIDs:    []int{10000001},
-				TreeAsOf:      "2026-01-01",
+				TargetOrgNodeKey: mustOrgNodeKeyForTest(t, 10000001),
+				TargetOrgCode:    "A001",
+				TargetName:       "Root",
+				PathOrgNodeKeys:  []string{mustOrgNodeKeyForTest(t, 10000001)},
+				TreeAsOf:         "2026-01-01",
 			},
 			resolveCodesErr: errBoom{},
 		})
