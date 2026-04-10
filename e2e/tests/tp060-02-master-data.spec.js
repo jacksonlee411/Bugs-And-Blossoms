@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 import { expectExplicitError } from "./helpers/error-message-assert";
+import { expectNoLegacyOrgFields, legacyOrgFieldPattern } from "./helpers/org-contract-assert";
 
 async function ensureKratosIdentity(ctx, kratosAdminURL, { traits, identifier, password }) {
   const resp = await ctx.request.post(`${kratosAdminURL}/admin/identities`, {
@@ -45,32 +46,6 @@ async function getPositionOptions(ctx, { asOf, orgCode }) {
   );
   expect(resp.status(), await resp.text()).toBe(200);
   return resp.json();
-}
-
-function collectForbiddenOrgFieldPaths(value, path = "$", forbidden = ["org_id", "org_node_key", "org_unit_id"]) {
-  const hits = [];
-  if (Array.isArray(value)) {
-    value.forEach((item, index) => {
-      hits.push(...collectForbiddenOrgFieldPaths(item, `${path}[${index}]`, forbidden));
-    });
-    return hits;
-  }
-  if (!value || typeof value !== "object") {
-    return hits;
-  }
-  for (const [key, nested] of Object.entries(value)) {
-    const nextPath = `${path}.${key}`;
-    if (forbidden.includes(String(key || "").trim())) {
-      hits.push(nextPath);
-    }
-    hits.push(...collectForbiddenOrgFieldPaths(nested, nextPath, forbidden));
-  }
-  return hits;
-}
-
-function expectNoLegacyOrgFields(payload, label) {
-  const hits = collectForbiddenOrgFieldPaths(payload);
-  expect(hits, `${label} unexpectedly exposed legacy org fields`).toEqual([]);
 }
 
 async function fulfillJSON(route, status, payload) {
@@ -279,6 +254,9 @@ test("tp060-02: master data (orgunit -> setid -> jobcatalog -> positions)", asyn
       }
     });
     expect(resp.status(), await resp.text()).toBe(201);
+    const payload = await resp.json();
+    expectNoLegacyOrgFields(payload, "root setid binding response");
+    expect(payload.org_code).toBe(org.root);
   }
 
   // Bind non-BU must fail (HQ is not a BU as of).
@@ -305,6 +283,9 @@ test("tp060-02: master data (orgunit -> setid -> jobcatalog -> positions)", asyn
       }
     });
     expect(resp.status(), await resp.text()).toBe(201);
+    const payload = await resp.json();
+    expectNoLegacyOrgFields(payload, "R&D setid binding response");
+    expect(payload.org_code).toBe(org.rnd);
   }
   {
     const resp = await appContext.request.post("/org/api/setid-bindings", {
@@ -316,7 +297,22 @@ test("tp060-02: master data (orgunit -> setid -> jobcatalog -> positions)", asyn
       }
     });
     expect(resp.status(), await resp.text()).toBe(201);
+    const payload = await resp.json();
+    expectNoLegacyOrgFields(payload, "Sales setid binding response");
+    expect(payload.org_code).toBe(org.sales);
   }
+
+  const listBindingsResp = await appContext.request.get(`/org/api/setid-bindings?as_of=${encodeURIComponent(asOf)}`);
+  expect(listBindingsResp.status(), await listBindingsResp.text()).toBe(200);
+  const listBindingsJSON = await listBindingsResp.json();
+  expectNoLegacyOrgFields(listBindingsJSON, "setid bindings list");
+  expect(listBindingsJSON.bindings).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({ org_code: org.root, setid: "DEFLT" }),
+      expect.objectContaining({ org_code: org.rnd, setid: "S2601" }),
+      expect.objectContaining({ org_code: org.sales, setid: "S2602" })
+    ])
+  );
 
   const s2601SetID = "S2601";
   const s2602SetID = "S2602";
@@ -599,7 +595,7 @@ test("tp060-02: master data (orgunit -> setid -> jobcatalog -> positions)", asyn
   await expect(page.getByRole("link", { name: "打开 LibreChat" })).toHaveAttribute("href", "/app/assistant/librechat");
   await expect(page.getByTestId("assistant-conversation-log-item")).toContainText(`org_code=${org.rnd}`);
   await expect(page.getByTestId("assistant-conversation-log-item")).toContainText("P-ENG-01");
-  await expect(page.getByTestId("assistant-conversation-log-item")).not.toContainText(/org_id|org_node_key|org_unit_id/i);
+  await expect(page.getByTestId("assistant-conversation-log-item")).not.toContainText(legacyOrgFieldPattern);
 
   await appContext.close();
 });

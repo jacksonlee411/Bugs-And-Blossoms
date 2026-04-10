@@ -1,7 +1,7 @@
 {
   "plan": "DEV-PLAN-290B",
-  "status": "blocked",
-  "updated_at": "2026-04-10T00:25:04.371Z",
+  "status": "in_progress",
+  "updated_at": "2026-04-10T23:10:15.353Z",
   "formal_entry": "/app/assistant/librechat",
   "runtime_admission_gate": {
     "status": "passed",
@@ -17,11 +17,7 @@
     "fail-closed behavior changed",
     "assistant formal submit pipeline changed"
   ],
-  "blockers": [
-    "Case 2: 数据基线未就绪：AI治理办公室 未命中候选（phase=await_missing_fields)",
-    "Case 3: 数据基线未就绪：Case4 基线探针未就绪（phase=await_commit_confirm candidates=0）",
-    "Case 4: 数据基线未就绪：共享服务中心 未命中候选（phase=await_missing_fields)"
-  ],
+  "blockers": [],
   "fixed_assets": {
     "root": "docs/dev-records/assets/dev-plan-290b",
     "pattern": [
@@ -41,71 +37,40 @@
   "cases": [
     {
       "id": 1,
-      "status": "passed",
+      "status": "not_run",
       "input_sequence": [
         "你好"
       ],
-      "task_terminal_status": "",
-      "artifacts": {
-        "page": "docs/dev-records/assets/dev-plan-290b/case-1-page.png",
-        "dom": "docs/dev-records/assets/dev-plan-290b/case-1-dom.json",
-        "network": "docs/dev-records/assets/dev-plan-290b/case-1-network.har",
-        "trace": "docs/dev-records/assets/dev-plan-290b/case-1-trace.zip",
-        "phase_assertions": "docs/dev-records/assets/dev-plan-290b/case-1-phase-assertions.json",
-        "intent_action_assertions": "docs/dev-records/assets/dev-plan-290b/case-1-intent-action-assertions.json",
-        "conversation_snapshot": "docs/dev-records/assets/dev-plan-290b/case-1-conversation-snapshot.json",
-        "model_proof": "docs/dev-records/assets/dev-plan-290b/case-1-model-proof.json"
-      }
+      "blocking_reason": "前置用例失败后未执行"
     },
     {
       "id": 2,
-      "status": "blocked",
+      "status": "not_run",
       "input_sequence": [
         "在 AI治理办公室 下新建 人力资源部2，生效日期 2026-01-01",
         "确认"
       ],
-      "blocking_reason": "数据基线未就绪：AI治理办公室 未命中候选（phase=await_missing_fields)",
-      "artifacts": {
-        "page": "docs/dev-records/assets/dev-plan-290b/case-2-page.png",
-        "dom": "docs/dev-records/assets/dev-plan-290b/case-2-dom.json",
-        "network": "docs/dev-records/assets/dev-plan-290b/case-2-network.har",
-        "trace": "docs/dev-records/assets/dev-plan-290b/case-2-trace.zip",
-        "conversation_snapshot": "docs/dev-records/assets/dev-plan-290b/case-2-conversation-snapshot.json"
-      }
+      "blocking_reason": "前置用例失败后未执行"
     },
     {
       "id": 3,
-      "status": "blocked",
+      "status": "not_run",
       "input_sequence": [
         "在 AI治理办公室 下新建 人力资源部239A补全",
         "生效日期 2026-03-25",
         "确认"
       ],
-      "blocking_reason": "数据基线未就绪：Case4 基线探针未就绪（phase=await_commit_confirm candidates=0）",
-      "artifacts": {
-        "page": "docs/dev-records/assets/dev-plan-290b/case-3-page.png",
-        "dom": "docs/dev-records/assets/dev-plan-290b/case-3-dom.json",
-        "network": "docs/dev-records/assets/dev-plan-290b/case-3-network.har",
-        "trace": "docs/dev-records/assets/dev-plan-290b/case-3-trace.zip",
-        "conversation_snapshot": "docs/dev-records/assets/dev-plan-290b/case-3-conversation-snapshot.json"
-      }
+      "blocking_reason": "前置用例失败后未执行"
     },
     {
       "id": 4,
-      "status": "blocked",
+      "status": "not_run",
       "input_sequence": [
         "请在父组织共享服务中心下新建239A候选验证部，生效日期2026-03-26",
         "选第2个",
         "是的"
       ],
-      "blocking_reason": "数据基线未就绪：共享服务中心 未命中候选（phase=await_missing_fields)",
-      "artifacts": {
-        "page": "docs/dev-records/assets/dev-plan-290b/case-4-page.png",
-        "dom": "docs/dev-records/assets/dev-plan-290b/case-4-dom.json",
-        "network": "docs/dev-records/assets/dev-plan-290b/case-4-network.har",
-        "trace": "docs/dev-records/assets/dev-plan-290b/case-4-trace.zip",
-        "conversation_snapshot": "docs/dev-records/assets/dev-plan-290b/case-4-conversation-snapshot.json"
-      }
+      "blocking_reason": "前置用例失败后未执行"
     }
   ]
 }

@@ -1,129 +1,30 @@
 {
   "plan": "DEV-PLAN-290B",
   "scope": "T0_DATA_BASELINE",
-  "status": "passed",
-  "t0_baseline_ready": true,
-  "validated_at": "2026-04-10T00:25:04.372Z",
+  "status": "blocked",
+  "t0_baseline_ready": false,
+  "validated_at": "2026-04-10T23:10:15.354Z",
   "runtime_gate_status": "passed",
   "t0_baseline": {
-    "tenant_id": "d54ea46e-995b-4f9f-87b9-99a881eff8cb",
+    "tenant_id": "f52321b8-8ab6-4aa8-be8c-7a7ef4a79c53",
     "tenant_ids": {
-      "case2": "855b7ef5-606a-4ec2-a349-7479a6f2926c",
-      "case4": "d54ea46e-995b-4f9f-87b9-99a881eff8cb"
+      "case2": "",
+      "case4": ""
     },
     "effective_date": "2026-01-01",
     "as_of": "2026-03-26",
-    "root_org_code": "ROOT",
-    "created_orgs": [
-      {
-        "org_code": "ROOT",
-        "name": "集团",
-        "parent_org_code": "",
-        "effective_date": "2026-01-01",
-        "is_business_unit": true
-      },
-      {
-        "org_code": "TP290BAIGOV",
-        "name": "AI治理办公室",
-        "parent_org_code": "ROOT",
-        "effective_date": "2026-01-01",
-        "is_business_unit": false
-      },
-      {
-        "org_code": "TP290BSSC1",
-        "name": "共享服务中心",
-        "parent_org_code": "ROOT",
-        "effective_date": "2026-01-01",
-        "is_business_unit": false
-      },
-      {
-        "org_code": "TP290BSSB",
-        "name": "B",
-        "parent_org_code": "ROOT",
-        "effective_date": "2026-01-01",
-        "is_business_unit": false
-      },
-      {
-        "org_code": "TP290BSSC2",
-        "name": "共享服务中心",
-        "parent_org_code": "TP290BSSB",
-        "effective_date": "2026-01-01",
-        "is_business_unit": false
-      }
-    ],
-    "required_orgs": [
-      {
-        "name": "AI治理办公室",
-        "expected": "exactly_one_candidate",
-        "matched_count": 1,
-        "matched_org_codes": [
-          "TP290BAIGOV"
-        ],
-        "ready": true
-      },
-      {
-        "name": "共享服务中心",
-        "expected": "multiple_candidates",
-        "matched_count": 2,
-        "matched_org_codes": [
-          "TP290BSSC1",
-          "TP290BSSC2"
-        ],
-        "ready": true
-      }
-    ],
+    "root_org_code": "",
+    "created_orgs": [],
+    "required_orgs": [],
     "candidate_snapshot": {
       "source_case": "case4_probe",
-      "conversation_id": "conv_5c6f26aabb9844fb90ca537707672280",
-      "candidate_count": 2,
-      "candidates": [
-        {
-          "ordinal": 1,
-          "candidate_id": "TP290BSSC1",
-          "org_code": "",
-          "name": "共享服务中心",
-          "parent_org_code": "",
-          "full_name_path": ""
-        },
-        {
-          "ordinal": 2,
-          "candidate_id": "TP290BSSC2",
-          "org_code": "",
-          "name": "共享服务中心",
-          "parent_org_code": "",
-          "full_name_path": ""
-        }
-      ]
+      "conversation_id": "",
+      "candidate_count": 0,
+      "candidates": []
     },
     "probes": {
-      "case2": {
-        "conversation_id": "conv_8b318447729f41a49f8b75d3bbced9b4",
-        "create_turn_status": 200,
-        "error_code": "",
-        "phase": "await_commit_confirm",
-        "intent_action": "create_orgunit",
-        "parent_ref_text": "AI治理办公室",
-        "candidate_count": 1,
-        "validation_errors": [],
-        "resolved_candidate_id": "TP290BAIGOV",
-        "request_id": "assistant_8d59d3a3daa842478e338d2aeee9c75b",
-        "trace_id": "f3f6267b744a4697a26ba46c19db0d32"
-      },
-      "case4": {
-        "conversation_id": "conv_5c6f26aabb9844fb90ca537707672280",
-        "create_turn_status": 200,
-        "error_code": "",
-        "phase": "await_candidate_pick",
-        "intent_action": "create_orgunit",
-        "parent_ref_text": "共享服务中心",
-        "candidate_count": 2,
-        "validation_errors": [
-          "candidate_confirmation_required"
-        ],
-        "resolved_candidate_id": "",
-        "request_id": "assistant_46b929b75e5741be965bd2811e973a52",
-        "trace_id": "138740711eac43698bbf54e4cfd55c1b"
-      }
+      "case2": {},
+      "case4": {}
     },
     "issues": []
   },

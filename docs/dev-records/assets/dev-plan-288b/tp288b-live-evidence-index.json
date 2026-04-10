@@ -1,7 +1,7 @@
 {
   "plan": "DEV-PLAN-288B",
-  "status": "passed",
-  "updated_at": "2026-04-10T00:22:57.854Z",
+  "status": "blocked",
+  "updated_at": "2026-04-10T23:10:16.056Z",
   "formal_entry": "/app/assistant/librechat",
   "stale_on": [
     "240C runtime gate semantics changed",
@@ -18,8 +18,8 @@
       "id": "tp288b-case-1",
       "scenario": "create -> confirm -> commit(receipt) -> poll(task) -> refresh(conversation)",
       "command": "pnpm --dir /home/lee/Projects/Bugs-And-Blossoms/e2e exec playwright test tests/tp288b-librechat-live-task-receipt-contract.spec.js --workers=1 --trace on",
-      "executed_at": "2026-04-10T00:22:24.085Z",
-      "result": "passed",
+      "executed_at": "2026-04-10T23:09:07.608Z",
+      "result": "blocked",
       "artifacts": [
         "docs/dev-records/assets/dev-plan-288b/tp288b-case-1-page.png",
         "docs/dev-records/assets/dev-plan-288b/tp288b-case-1-dom.json",
@@ -28,58 +28,15 @@
         "docs/dev-records/assets/dev-plan-288b/tp288b-case-1-receipt-task-assertions.json"
       ],
       "assertions": {
-        "plan": "DEV-PLAN-288B",
         "case_id": "tp288b-case-1",
-        "tenant_id": "c667ac67-cac6-43d9-938f-fb37418f34ec",
-        "scenario": "create -> confirm -> commit(receipt) -> poll(task) -> refresh(conversation)",
+        "passed": false,
+        "plan": "DEV-PLAN-288B",
         "formal_entry": "/app/assistant/librechat",
         "command": "pnpm --dir /home/lee/Projects/Bugs-And-Blossoms/e2e exec playwright test tests/tp288b-librechat-live-task-receipt-contract.spec.js --workers=1 --trace on",
-        "captured_at": "2026-04-10T00:22:56.747Z",
-        "conversation_id": "conv_c2fd4f4e7f404e42a66ad0630adf517d",
-        "turn_id": "turn_037cb24b7ad0432e923e8fd7dafb53a9",
-        "commit_status": 202,
-        "receipt": {
-          "task_id": "7c3f0315-fdb3-440a-b043-a7becee39b54",
-          "poll_uri": "/internal/assistant/tasks/7c3f0315-fdb3-440a-b043-a7becee39b54",
-          "task_type": "assistant_async_plan",
-          "status": "queued",
-          "workflow_id": "assistant_async_orchestration_v1:c667ac67-cac6-43d9-938f-fb37418f34ec:conv_c2fd4f4e7f404e42a66ad0630adf517d:turn_037cb24b7ad0432e923e8fd7dafb53a9:assistant_a862b3d70b2d4011a9d306f6cf4486b1",
-          "submitted_at": "2026-04-10T00:22:55.67984948Z"
-        },
-        "poll_status_sequence": [
-          "succeeded"
-        ],
-        "final_task_status": "succeeded",
-        "final_turn_state": "committed",
-        "model_proof": {
-          "model_provider": "openai",
-          "model_name": "gpt-5.1",
-          "model_revision": "r2f31cdf6746a",
-          "fallback_detected": false
-        },
-        "stopline": {
-          "single_channel": true,
-          "single_formal_entry": true,
-          "no_external_reply_container": true,
-          "no_connection_error": true,
-          "single_assistant_bubble": true,
-          "no_invalid_task_poll_path": true,
-          "no_assistant_task_dispatch_failed": true,
-          "frontend_polled_receipt_task": true,
-          "frontend_refreshed_conversation": true,
-          "no_business_mock": true
-        },
-        "final_bubble": {
-          "count": 1,
-          "bindingKey": "conv_c2fd4f4e7f404e42a66ad0630adf517d::turn_037cb24b7ad0432e923e8fd7dafb53a9::assistant_a862b3d70b2d4011a9d306f6cf4486b1",
-          "conversationId": "conv_c2fd4f4e7f404e42a66ad0630adf517d",
-          "turnId": "turn_037cb24b7ad0432e923e8fd7dafb53a9",
-          "requestId": "assistant_a862b3d70b2d4011a9d306f6cf4486b1",
-          "text": "上级组织：AI治理办公室；新建组织：人力资源部288B558279；生效日期：2026-01-01 task_id: 7c3f0315-fdb3-440a-b043-a7becee39b54 · succeeded Selected: AI治理办公室 org_code: O000001 parent_org_code: TP288BAIGOV effective_date: 2026-01-01 event_type: CREATE"
-        },
-        "passed": true
+        "captured_at": "2026-04-10T23:10:16.055Z",
+        "failure_message": "\u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoBeVisible\u001b[2m()\u001b[22m failed\n\nLocator:  locator('tr').filter({ hasText: 't-tp288b-1775862547609-case-1.localhost' }).first()\nExpected: visible\nReceived: <element(s) not found>\nTimeout:  60000ms\n\nCall log:\n\u001b[2m  - Expect \"toBeVisible\" with timeout 60000ms\u001b[22m\n\u001b[2m  - waiting for locator('tr').filter({ hasText: 't-tp288b-1775862547609-case-1.localhost' }).first()\u001b[22m\n"
       },
-      "blocking_reason": ""
+      "blocking_reason": "\u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoBeVisible\u001b[2m()\u001b[22m failed\n\nLocator:  locator('tr').filter({ hasText: 't-tp288b-1775862547609-case-1.localhost' }).first()\nExpected: visible\nReceived: <element(s) not found>\nTimeout:  60000ms\n\nCall log:\n\u001b[2m  - Expect \"toBeVisible\" with timeout 60000ms\u001b[22m\n\u001b[2m  - waiting for locator('tr').filter({ hasText: 't-tp288b-1775862547609-case-1.localhost' }).first()\u001b[22m\n"
     }
   ]
 }

@@ -1,11 +1,11 @@
 [
   {
-    "Execution Time": 0.247,
+    "Execution Time": 0.091,
     "Plan": {
       "Actual Loops": 1,
       "Actual Rows": 4,
-      "Actual Startup Time": 0.176,
-      "Actual Total Time": 0.179,
+      "Actual Startup Time": 0.065,
+      "Actual Total Time": 0.066,
       "Async Capable": false,
       "Local Dirtied Blocks": 0,
       "Local Hit Blocks": 0,
@@ -19,8 +19,8 @@
         {
           "Actual Loops": 1,
           "Actual Rows": 4,
-          "Actual Startup Time": 0.088,
-          "Actual Total Time": 0.136,
+          "Actual Startup Time": 0.045,
+          "Actual Total Time": 0.058,
           "Async Capable": false,
           "Inner Unique": true,
           "Join Type": "Inner",
@@ -37,12 +37,12 @@
             {
               "Actual Loops": 1,
               "Actual Rows": 4,
-              "Actual Startup Time": 0.055,
-              "Actual Total Time": 0.069,
+              "Actual Startup Time": 0.026,
+              "Actual Total Time": 0.029,
               "Alias": "v",
               "Async Capable": false,
               "Filter": "(status = 'active'::text)",
-              "Index Cond": "((tenant_uuid = '00000000-0000-0000-0000-000000000001'::uuid) AND (node_path \u003c@ 'AAAAAAAB.AAAAAAAD'::ltree) AND (validity @\u003e '2026-01-01'::date))",
+              "Index Cond": "((tenant_uuid = '00000000-0000-0000-0000-000000000001'::uuid) AND (node_path \u003c@ 'AAAAAAAB.AAAAAAAD'::ltree) AND (validity @\u003e '2026-04-11'::date))",
               "Index Name": "org_unit_versions_search_gist",
               "Local Dirtied Blocks": 0,
               "Local Hit Blocks": 0,
@@ -57,8 +57,8 @@
               "Rows Removed by Filter": 0,
               "Rows Removed by Index Recheck": 0,
               "Scan Direction": "Forward",
-              "Shared Dirtied Blocks": 1,
-              "Shared Hit Blocks": 5,
+              "Shared Dirtied Blocks": 0,
+              "Shared Hit Blocks": 3,
               "Shared Read Blocks": 0,
               "Shared Written Blocks": 0,
               "Startup Cost": 0.14,
@@ -69,8 +69,8 @@
             {
               "Actual Loops": 4,
               "Actual Rows": 1,
-              "Actual Startup Time": 0.011,
-              "Actual Total Time": 0.011,
+              "Actual Startup Time": 0.005,
+              "Actual Total Time": 0.005,
               "Alias": "c",
               "Async Capable": false,
               "Index Cond": "((tenant_uuid = '00000000-0000-0000-0000-000000000001'::uuid) AND (org_node_key = v.org_node_key))",
@@ -97,8 +97,8 @@
               "Total Cost": 8.3
             }
           ],
-          "Shared Dirtied Blocks": 1,
-          "Shared Hit Blocks": 17,
+          "Shared Dirtied Blocks": 0,
+          "Shared Hit Blocks": 15,
           "Shared Read Blocks": 0,
           "Shared Written Blocks": 0,
           "Startup Cost": 0.42,
@@ -107,8 +107,8 @@
           "Total Cost": 17.71
         }
       ],
-      "Shared Dirtied Blocks": 1,
-      "Shared Hit Blocks": 17,
+      "Shared Dirtied Blocks": 0,
+      "Shared Hit Blocks": 15,
       "Shared Read Blocks": 0,
       "Shared Written Blocks": 0,
       "Sort Key": [
@@ -134,7 +134,7 @@
       "Temp Read Blocks": 0,
       "Temp Written Blocks": 0
     },
-    "Planning Time": 0.927,
+    "Planning Time": 0.308,
     "Triggers": []
   }
 ]

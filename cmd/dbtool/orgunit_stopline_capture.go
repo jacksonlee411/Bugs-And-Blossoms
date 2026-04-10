@@ -75,6 +75,13 @@ type orgunitStoplineShadowPositionRow struct {
 	ValidTo         string
 }
 
+const defaultStaffingTargetSchemaDir = "modules/staffing/infrastructure/persistence/schema"
+
+var staffingTargetBootstrapFiles = []string{
+	"00001_staffing_schema.sql",
+	"00002_staffing_tables.sql",
+}
+
 type orgunitStoplineCaptureSpec struct {
 	Key         string   `json:"key"`
 	Stage       string   `json:"stage"`
@@ -580,14 +587,14 @@ ORDER BY nlevel(o.node_path) DESC
 LIMIT 1;
 `
 
-	targetStaffingByOrgSQL = `
+	targetRealStaffingByOrgSQL = `
 SELECT
   pv.position_uuid::text,
   c.org_code,
   COALESCE(pv.jobcatalog_setid, '') AS jobcatalog_setid,
   COALESCE(pv.name, '') AS position_name,
   lower(pv.validity)::text AS effective_date
-FROM stopline.position_versions pv
+FROM staffing.position_versions pv
 JOIN orgunit.org_unit_codes c
   ON c.tenant_uuid = pv.tenant_uuid
  AND c.org_node_key = pv.org_node_key
@@ -1083,14 +1090,14 @@ func buildOrgunitStoplineSpecs(samples orgunitStoplineSamples) []orgunitStopline
 		},
 		{
 			Key:         "staffing-by-org",
-			Stage:       "target-shadow",
-			Description: "target org_node_key 库 + stopline shadow：Staffing 通过组织引用联查 position",
-			SQL:         targetStaffingByOrgSQL,
+			Stage:       "target-real",
+			Description: "target org_node_key 库：Staffing 通过组织引用联查 position",
+			SQL:         targetRealStaffingByOrgSQL,
 			Args:        []any{chainTenant, asOfDate, chainBU.OrgCode},
 			TenantUUID:  chainTenant,
 			Notes: []string{
-				"consumer runtime 的 Staffing schema 尚未切到 org_node_key",
-				"此处使用 stopline shadow 表按 org_code -> org_node_key 导入当前态样本，仅用于 explain 对比",
+				"使用 committed staffing target schema（`staffing.position_versions`）采集 explain",
+				"当前态样本通过 org_code -> org_node_key 映射导入 dedicated target，但不再走 shadow 表",
 			},
 		},
 		{
@@ -1278,12 +1285,12 @@ func renderOrgunitStoplineMarkdown(report orgunitStoplineReport) string {
 				fmt.Fprintf(&b, "\n说明：%s\n\n", strings.Join(result.Notes, "；"))
 			}
 		}
-		fmt.Fprintf(&b, "\n")
+	fmt.Fprintf(&b, "\n")
 	}
 
 	fmt.Fprintf(&b, "## Notes\n\n")
-	fmt.Fprintf(&b, "1. `target-real` 当前只覆盖 `orgunit` 新 schema；SetID / Staffing / Person 相关 post-cutover explain 尚未纳入 dedicated target bootstrap。\n")
-	fmt.Fprintf(&b, "2. `target-shadow` 使用 stopline shadow 表承载 SetID / Staffing 当前态样本，并通过 `org_code -> org_node_key` 映射导入 dedicated target；该证据仅用于 stopline 对比，不等同于 consumer runtime 已完成 cutover。\n")
+	fmt.Fprintf(&b, "1. `target-real` 当前覆盖 `orgunit` 新 schema与 committed `staffing.position_versions`；其中 Staffing 当前态样本通过 `org_code -> org_node_key` 映射导入 dedicated target。\n")
+	fmt.Fprintf(&b, "2. `target-shadow` 目前仅保留 SetID binding explain，对应 consumer runtime 尚未完成 target-real schema cutover 的链路。\n")
 	fmt.Fprintf(&b, "3. `org-move` 与 `org-full-name-rebuild` 均在事务内执行 `EXPLAIN (ANALYZE, BUFFERS)`，采集后由调用侧回滚。\n")
 	fmt.Fprintf(&b, "4. 原始 explain JSON 见同目录 `*.explain.json`。\n")
 	return b.String()
@@ -1431,6 +1438,9 @@ func prepareTargetStoplineShadowData(ctx context.Context, sourceConn *pgx.Conn, 
 	if _, err := targetConn.Exec(ctx, targetStoplineShadowBootstrapSQL); err != nil {
 		return err
 	}
+	if err := bootstrapTargetStaffingExplainSchema(ctx, targetConn); err != nil {
+		return err
+	}
 
 	codeMap, err := loadTargetOrgCodeMap(ctx, targetConn, tenantUUID, samples.AsOfDate)
 	if err != nil {
@@ -1452,10 +1462,23 @@ func prepareTargetStoplineShadowData(ctx context.Context, sourceConn *pgx.Conn, 
 	}
 	defer func() { _ = tx.Rollback(context.Background()) }()
 
+	if _, err := tx.Exec(ctx, `SELECT set_config('app.current_tenant', $1, true);`, tenantUUID); err != nil {
+		return err
+	}
+
 	if _, err := tx.Exec(ctx, `DELETE FROM stopline.setid_binding_versions WHERE tenant_uuid = $1::uuid;`, tenantUUID); err != nil {
 		return err
 	}
 	if _, err := tx.Exec(ctx, `DELETE FROM stopline.position_versions WHERE tenant_uuid = $1::uuid;`, tenantUUID); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(ctx, `DELETE FROM staffing.position_versions WHERE tenant_uuid = $1::uuid;`, tenantUUID); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(ctx, `DELETE FROM staffing.position_events WHERE tenant_uuid = $1::uuid;`, tenantUUID); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(ctx, `DELETE FROM staffing.positions WHERE tenant_uuid = $1::uuid;`, tenantUUID); err != nil {
 		return err
 	}
 
@@ -1507,9 +1530,103 @@ VALUES (
 `, tenantUUID, row.PositionUUID, orgNodeKey, row.JobCatalogSetID, row.Name, row.ValidFrom, nullableDateValue(row.ValidTo)); err != nil {
 			return err
 		}
+		if _, err := tx.Exec(ctx, `
+INSERT INTO staffing.positions (
+  tenant_uuid,
+  position_uuid
+)
+VALUES (
+  $1::uuid,
+  $2::uuid
+);
+`, tenantUUID, row.PositionUUID); err != nil {
+			return err
+		}
+		var eventID int64
+		if err := tx.QueryRow(ctx, `
+INSERT INTO staffing.position_events (
+  tenant_uuid,
+  position_uuid,
+  event_type,
+  effective_date,
+  payload,
+  request_id,
+  initiator_uuid
+)
+VALUES (
+  $1::uuid,
+  $2::uuid,
+  'CREATE',
+  $3::date,
+  jsonb_build_object(
+    'org_node_key', $4::text,
+    'name', $5::text
+  ),
+  $6::text,
+  '00000000-0000-0000-0000-000000000001'::uuid
+)
+RETURNING id;
+`, tenantUUID, row.PositionUUID, row.ValidFrom, orgNodeKey, row.Name, fmt.Sprintf("stopline-staffing-%s-%s", row.PositionUUID, row.ValidFrom)).Scan(&eventID); err != nil {
+			return err
+		}
+		if _, err := tx.Exec(ctx, `
+INSERT INTO staffing.position_versions (
+  tenant_uuid,
+  position_uuid,
+  org_node_key,
+  reports_to_position_uuid,
+  name,
+  lifecycle_status,
+  capacity_fte,
+  profile,
+  validity,
+  last_event_id,
+  jobcatalog_setid,
+  jobcatalog_setid_as_of,
+  job_profile_uuid
+)
+VALUES (
+  $1::uuid,
+  $2::uuid,
+  $3::char(8),
+  NULL,
+  $4::text,
+  'active',
+  1.0,
+  '{}'::jsonb,
+  daterange($5::date, $6::date, '[)'),
+  $7::bigint,
+  NULLIF($8::text, ''),
+  $5::date,
+  NULL
+);
+`, tenantUUID, row.PositionUUID, orgNodeKey, row.Name, row.ValidFrom, nullableDateValue(row.ValidTo), eventID, row.JobCatalogSetID); err != nil {
+			return err
+		}
 	}
 
 	return tx.Commit(ctx)
+}
+
+func bootstrapTargetStaffingExplainSchema(ctx context.Context, targetConn *pgx.Conn) error {
+	for _, path := range targetStaffingBootstrapPaths(defaultStaffingTargetSchemaDir) {
+		data, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		if _, err := targetConn.Exec(ctx, string(data)); err != nil {
+			return fmt.Errorf("apply %s: %w", path, err)
+		}
+	}
+	return nil
+}
+
+func targetStaffingBootstrapPaths(schemaDir string) []string {
+	paths := make([]string, 0, len(staffingTargetBootstrapFiles))
+	for _, name := range staffingTargetBootstrapFiles {
+		paths = append(paths, filepath.Join(schemaDir, name))
+	}
+	return paths
 }
 
 func loadTargetOrgCodeMap(ctx context.Context, targetConn *pgx.Conn, tenantUUID string, asOfDate string) (map[string]string, error) {

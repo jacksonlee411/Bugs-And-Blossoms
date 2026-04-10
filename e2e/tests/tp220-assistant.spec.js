@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 import { setupTenantAdminSession } from "./helpers/superadmin-tenant.js";
+import { legacyOrgFieldPattern } from "./helpers/org-contract-assert";
 
 async function createTP220Session(browser, suffix) {
   const runID = `${Date.now()}-${suffix}`;
@@ -127,7 +128,7 @@ test("tp220-e2e-102: /app/assistant renders runtime summary and recent conversat
             updated_at: "2026-03-09T00:03:00Z",
             last_turn: {
               turn_id: "turn_tp220_runtime",
-              user_input: "在 AI治理办公室 下新建 人力资源部2",
+              user_input: "请为 org_code=BU220 新建 AI治理办公室 下的人力资源部2",
               state: "confirmed",
               risk_tier: "high"
             }
@@ -142,7 +143,9 @@ test("tp220-e2e-102: /app/assistant renders runtime summary and recent conversat
     await expect(page.getByTestId("assistant-runtime-upstream-url")).toContainText("http://localhost:3999");
     await expect(page.getByText("api:unavailable")).toBeVisible();
     await expect(page.getByTestId("assistant-conversation-log-item")).toContainText("conv_tp220_runtime");
-    await expect(page.getByTestId("assistant-conversation-log-item")).toContainText("在 AI治理办公室 下新建 人力资源部2");
+    await expect(page.getByTestId("assistant-conversation-log-item")).toContainText("org_code=BU220");
+    await expect(page.getByTestId("assistant-conversation-log-item")).toContainText("人力资源部2");
+    await expect(page.getByTestId("assistant-conversation-log-item")).not.toContainText(legacyOrgFieldPattern);
   } finally {
     await appContext.close();
   }

@@ -1,11 +1,11 @@
 [
   {
-    "Execution Time": 0.374,
+    "Execution Time": 0.253,
     "Plan": {
       "Actual Loops": 1,
       "Actual Rows": 1,
-      "Actual Startup Time": 0.201,
-      "Actual Total Time": 0.205,
+      "Actual Startup Time": 0.15,
+      "Actual Total Time": 0.152,
       "Async Capable": false,
       "Local Dirtied Blocks": 0,
       "Local Hit Blocks": 0,
@@ -19,8 +19,8 @@
         {
           "Actual Loops": 1,
           "Actual Rows": 1,
-          "Actual Startup Time": 0.199,
-          "Actual Total Time": 0.202,
+          "Actual Startup Time": 0.149,
+          "Actual Total Time": 0.15,
           "Async Capable": false,
           "Local Dirtied Blocks": 0,
           "Local Hit Blocks": 0,
@@ -35,8 +35,8 @@
             {
               "Actual Loops": 1,
               "Actual Rows": 2,
-              "Actual Startup Time": 0.139,
-              "Actual Total Time": 0.186,
+              "Actual Startup Time": 0.101,
+              "Actual Total Time": 0.138,
               "Async Capable": false,
               "Inner Unique": false,
               "Join Filter": "(b.org_id = o.org_id)",
@@ -54,8 +54,8 @@
                 {
                   "Actual Loops": 1,
                   "Actual Rows": 2,
-                  "Actual Startup Time": 0.092,
-                  "Actual Total Time": 0.114,
+                  "Actual Startup Time": 0.067,
+                  "Actual Total Time": 0.094,
                   "Async Capable": false,
                   "Inner Unique": false,
                   "Join Type": "Inner",
@@ -72,8 +72,8 @@
                     {
                       "Actual Loops": 1,
                       "Actual Rows": 1,
-                      "Actual Startup Time": 0.035,
-                      "Actual Total Time": 0.036,
+                      "Actual Startup Time": 0.018,
+                      "Actual Total Time": 0.019,
                       "Async Capable": false,
                       "Local Dirtied Blocks": 0,
                       "Local Hit Blocks": 0,
@@ -88,11 +88,11 @@
                         {
                           "Actual Loops": 1,
                           "Actual Rows": 1,
-                          "Actual Startup Time": 0.033,
-                          "Actual Total Time": 0.034,
+                          "Actual Startup Time": 0.018,
+                          "Actual Total Time": 0.018,
                           "Alias": "v",
                           "Async Capable": false,
-                          "Filter": "(validity @\u003e '2026-01-01'::date)",
+                          "Filter": "(validity @\u003e '2026-04-11'::date)",
                           "Index Cond": "((tenant_uuid = '00d01cf4-7633-4ac6-93c7-748b2a6d6678'::uuid) AND (org_id = 10000002))",
                           "Index Name": "org_unit_versions_lookup_btree",
                           "Local Dirtied Blocks": 0,
@@ -130,12 +130,12 @@
                     {
                       "Actual Loops": 1,
                       "Actual Rows": 2,
-                      "Actual Startup Time": 0.052,
-                      "Actual Total Time": 0.07,
+                      "Actual Startup Time": 0.047,
+                      "Actual Total Time": 0.072,
                       "Alias": "o",
                       "Async Capable": false,
                       "Filter": "(is_business_unit AND (status = 'active'::text))",
-                      "Index Cond": "((tenant_uuid = '00d01cf4-7633-4ac6-93c7-748b2a6d6678'::uuid) AND (node_path @\u003e v.node_path) AND (validity @\u003e '2026-01-01'::date))",
+                      "Index Cond": "((tenant_uuid = '00d01cf4-7633-4ac6-93c7-748b2a6d6678'::uuid) AND (node_path @\u003e v.node_path) AND (validity @\u003e '2026-04-11'::date))",
                       "Index Name": "org_unit_versions_search_gist",
                       "Local Dirtied Blocks": 0,
                       "Local Hit Blocks": 0,
@@ -172,11 +172,11 @@
                 {
                   "Actual Loops": 2,
                   "Actual Rows": 3,
-                  "Actual Startup Time": 0.021,
-                  "Actual Total Time": 0.029,
+                  "Actual Startup Time": 0.014,
+                  "Actual Total Time": 0.019,
                   "Alias": "b",
                   "Async Capable": false,
-                  "Index Cond": "((tenant_uuid = '00d01cf4-7633-4ac6-93c7-748b2a6d6678'::uuid) AND (validity @\u003e '2026-01-01'::date))",
+                  "Index Cond": "((tenant_uuid = '00d01cf4-7633-4ac6-93c7-748b2a6d6678'::uuid) AND (validity @\u003e '2026-04-11'::date))",
                   "Index Name": "setid_binding_no_overlap",
                   "Local Dirtied Blocks": 0,
                   "Local Hit Blocks": 0,
@@ -248,7 +248,7 @@
       "Temp Read Blocks": 0,
       "Temp Written Blocks": 0
     },
-    "Planning Time": 1.501,
+    "Planning Time": 0.897,
     "Triggers": []
   }
 ]

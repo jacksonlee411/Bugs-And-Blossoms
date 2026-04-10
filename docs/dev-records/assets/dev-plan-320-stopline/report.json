@@ -1,8 +1,8 @@
 {
-  "captured_at": "2026-04-10T01:24:38.030567601Z",
-  "as_of_date": "2026-01-01",
+  "captured_at": "2026-04-10T23:00:08.964586715Z",
+  "as_of_date": "2026-04-11",
   "samples": {
-    "as_of_date": "2026-01-01",
+    "as_of_date": "2026-04-11",
     "heavy": {
       "tenant": {
         "tenant_uuid": "00000000-0000-0000-0000-000000000001",
@@ -63,7 +63,7 @@
         "subtree_size": 1
       },
       "search_query": "人力资源部",
-      "move_effective_date": "2026-01-02"
+      "move_effective_date": "2026-04-12"
     },
     "chain": {
       "tenant": {
@@ -81,9 +81,9 @@
       },
       "position_sample": {
         "org_code": "",
-        "name": "P-ENG-01",
+        "name": "P-ENG-02",
         "position_count": 1,
-        "position_uuid": "5f9a34b3-1162-440c-9b0e-0766c94fcfc3",
+        "position_uuid": "d7b3132a-0650-4199-9562-4fac8352808d",
         "effective_date": "2026-01-01",
         "org_unit_id": 10000002,
         "jobcatalog_setid": "S2601"
@@ -99,12 +99,12 @@
       "args": [
         "00000000-0000-0000-0000-000000000001",
         10000001,
-        "2026-01-01"
+        "2026-04-11"
       ],
       "tenant_uuid": "00000000-0000-0000-0000-000000000001",
       "metrics": {
-        "planning_time_ms": 2.379,
-        "execution_time_ms": 0.573,
+        "planning_time_ms": 1.14,
+        "execution_time_ms": 0.206,
         "plan_rows": 1,
         "actual_rows": 1,
         "shared_hit_blocks": 11,
@@ -122,15 +122,15 @@
       "args": [
         "00000000-0000-0000-0000-000000000001",
         10000000,
-        "2026-01-01"
+        "2026-04-11"
       ],
       "tenant_uuid": "00000000-0000-0000-0000-000000000001",
       "metrics": {
-        "planning_time_ms": 2.265,
-        "execution_time_ms": 0.654,
-        "plan_rows": 13,
+        "planning_time_ms": 0.834,
+        "execution_time_ms": 0.361,
+        "plan_rows": 15,
         "actual_rows": 5,
-        "shared_hit_blocks": 19,
+        "shared_hit_blocks": 17,
         "shared_read_blocks": 0,
         "shared_dirtied_blocks": 0,
         "shared_written_blocks": 0
@@ -145,12 +145,12 @@
       "args": [
         "00000000-0000-0000-0000-000000000001",
         10000001,
-        "2026-01-01"
+        "2026-04-11"
       ],
       "tenant_uuid": "00000000-0000-0000-0000-000000000001",
       "metrics": {
-        "planning_time_ms": 2.776,
-        "execution_time_ms": 0.877,
+        "planning_time_ms": 0.811,
+        "execution_time_ms": 0.351,
         "plan_rows": 1,
         "actual_rows": 1,
         "shared_hit_blocks": 12,
@@ -168,12 +168,12 @@
       "args": [
         "00000000-0000-0000-0000-000000000001",
         "AAAAAAAB.AAAAAAAD",
-        "2026-01-01"
+        "2026-04-11"
       ],
       "tenant_uuid": "00000000-0000-0000-0000-000000000001",
       "metrics": {
-        "planning_time_ms": 1.672,
-        "execution_time_ms": 0.586,
+        "planning_time_ms": 0.468,
+        "execution_time_ms": 0.591,
         "plan_rows": 0,
         "actual_rows": 0,
         "shared_hit_blocks": 1,
@@ -192,17 +192,17 @@
         "00000000-0000-0000-0000-000000000001",
         10000002,
         10000001,
-        "2026-01-02"
+        "2026-04-12"
       ],
       "tenant_uuid": "00000000-0000-0000-0000-000000000001",
       "metrics": {
-        "planning_time_ms": 9.075,
-        "execution_time_ms": 5.489,
+        "planning_time_ms": 5.4,
+        "execution_time_ms": 4.067,
         "plan_rows": 0,
         "actual_rows": 0,
-        "shared_hit_blocks": 285,
-        "shared_read_blocks": 0,
-        "shared_dirtied_blocks": 0,
+        "shared_hit_blocks": 276,
+        "shared_read_blocks": 10,
+        "shared_dirtied_blocks": 22,
         "shared_written_blocks": 0
       },
       "raw_json_file": "source-real-org-move.explain.json"
@@ -214,15 +214,15 @@
       "sql": "SELECT\n  v.org_id::text,\n  c.org_code,\n  v.name,\n  v.is_business_unit,\n  EXISTS (\n    SELECT 1\n    FROM orgunit.org_unit_versions child\n    WHERE child.tenant_uuid = $1::uuid\n      AND child.parent_id = v.org_id\n      AND child.status = 'active'\n      AND child.validity @\u003e $2::date\n  ) AS has_children\nFROM orgunit.org_unit_versions v\nJOIN orgunit.org_unit_codes c\n  ON c.tenant_uuid = v.tenant_uuid\n AND c.org_id = v.org_id\nWHERE v.tenant_uuid = $1::uuid\n  AND v.status = 'active'\n  AND v.validity @\u003e $2::date\n  AND v.parent_id IS NULL\nORDER BY v.node_path;",
       "args": [
         "00000000-0000-0000-0000-000000000001",
-        "2026-01-01"
+        "2026-04-11"
       ],
       "tenant_uuid": "00000000-0000-0000-0000-000000000001",
       "metrics": {
-        "planning_time_ms": 2.319,
-        "execution_time_ms": 0.705,
+        "planning_time_ms": 1.103,
+        "execution_time_ms": 0.329,
         "plan_rows": 10,
         "actual_rows": 1,
-        "shared_hit_blocks": 17,
+        "shared_hit_blocks": 15,
         "shared_read_blocks": 0,
         "shared_dirtied_blocks": 0,
         "shared_written_blocks": 0
@@ -237,16 +237,16 @@
       "args": [
         "00000000-0000-0000-0000-000000000001",
         "%人力资源部%",
-        "2026-01-01",
+        "2026-04-11",
         8
       ],
       "tenant_uuid": "00000000-0000-0000-0000-000000000001",
       "metrics": {
-        "planning_time_ms": 1.917,
-        "execution_time_ms": 0.512,
+        "planning_time_ms": 0.592,
+        "execution_time_ms": 0.166,
         "plan_rows": 3,
         "actual_rows": 5,
-        "shared_hit_blocks": 22,
+        "shared_hit_blocks": 21,
         "shared_read_blocks": 0,
         "shared_dirtied_blocks": 0,
         "shared_written_blocks": 0
@@ -260,13 +260,13 @@
       "sql": "SELECT v.org_id::text, c.org_code, v.node_path::text\nFROM orgunit.org_unit_versions v\nJOIN orgunit.org_unit_codes c\n  ON c.tenant_uuid = v.tenant_uuid\n AND c.org_id = v.org_id\nWHERE v.tenant_uuid = $1::uuid\n  AND v.status = 'active'\n  AND v.validity @\u003e $2::date\n  AND v.node_path \u003c@ $3::ltree\nORDER BY v.node_path;",
       "args": [
         "00000000-0000-0000-0000-000000000001",
-        "2026-01-01",
+        "2026-04-11",
         "AAAAAAAB.AAAAAAAD"
       ],
       "tenant_uuid": "00000000-0000-0000-0000-000000000001",
       "metrics": {
-        "planning_time_ms": 1.24,
-        "execution_time_ms": 0.15,
+        "planning_time_ms": 0.404,
+        "execution_time_ms": 0.069,
         "plan_rows": 3,
         "actual_rows": 0,
         "shared_hit_blocks": 1,
@@ -284,12 +284,12 @@
       "args": [
         "00d01cf4-7633-4ac6-93c7-748b2a6d6678",
         10000002,
-        "2026-01-01"
+        "2026-04-11"
       ],
       "tenant_uuid": "00d01cf4-7633-4ac6-93c7-748b2a6d6678",
       "metrics": {
-        "planning_time_ms": 1.501,
-        "execution_time_ms": 0.374,
+        "planning_time_ms": 0.897,
+        "execution_time_ms": 0.253,
         "plan_rows": 1,
         "actual_rows": 1,
         "shared_hit_blocks": 14,
@@ -306,13 +306,13 @@
       "sql": "SELECT\n  pv.position_uuid::text,\n  pv.org_unit_id,\n  COALESCE(pv.jobcatalog_setid, '') AS jobcatalog_setid,\n  COALESCE(pv.name, '') AS position_name,\n  lower(pv.validity)::text AS effective_date\nFROM staffing.position_versions pv\nJOIN orgunit.org_unit_codes c\n  ON c.tenant_uuid = pv.tenant_uuid\n AND c.org_id = pv.org_unit_id\nWHERE pv.tenant_uuid = $1::uuid\n  AND pv.validity @\u003e $2::date\n  AND c.org_code = $3::text\nORDER BY lower(pv.validity), pv.position_uuid;",
       "args": [
         "00d01cf4-7633-4ac6-93c7-748b2a6d6678",
-        "2026-01-01",
+        "2026-04-11",
         "RND9776"
       ],
       "tenant_uuid": "00d01cf4-7633-4ac6-93c7-748b2a6d6678",
       "metrics": {
-        "planning_time_ms": 0.55,
-        "execution_time_ms": 0.239,
+        "planning_time_ms": 0.287,
+        "execution_time_ms": 0.131,
         "plan_rows": 1,
         "actual_rows": 2,
         "shared_hit_blocks": 8,
@@ -330,15 +330,15 @@
       "args": [
         "00000000-0000-0000-0000-000000000001",
         "AAAAAAAC",
-        "2026-01-01"
+        "2026-04-11"
       ],
       "tenant_uuid": "00000000-0000-0000-0000-000000000001",
       "metrics": {
-        "planning_time_ms": 1.999,
-        "execution_time_ms": 0.529,
+        "planning_time_ms": 0.608,
+        "execution_time_ms": 0.182,
         "plan_rows": 1,
         "actual_rows": 1,
-        "shared_hit_blocks": 9,
+        "shared_hit_blocks": 6,
         "shared_read_blocks": 0,
         "shared_dirtied_blocks": 0,
         "shared_written_blocks": 0
@@ -353,15 +353,15 @@
       "args": [
         "00000000-0000-0000-0000-000000000001",
         "AAAAAAAB",
-        "2026-01-01"
+        "2026-04-11"
       ],
       "tenant_uuid": "00000000-0000-0000-0000-000000000001",
       "notes": [
         "target bootstrap 当前仅覆盖 org 纯 schema；无 person/setid/staffing 关联表"
       ],
       "metrics": {
-        "planning_time_ms": 1.455,
-        "execution_time_ms": 0.564,
+        "planning_time_ms": 0.295,
+        "execution_time_ms": 0.128,
         "plan_rows": 1,
         "actual_rows": 5,
         "shared_hit_blocks": 33,
@@ -379,15 +379,15 @@
       "args": [
         "00000000-0000-0000-0000-000000000001",
         "AAAAAAAC",
-        "2026-01-01"
+        "2026-04-11"
       ],
       "tenant_uuid": "00000000-0000-0000-0000-000000000001",
       "notes": [
         "manager/person 关联未纳入当前 target bootstrap"
       ],
       "metrics": {
-        "planning_time_ms": 1.885,
-        "execution_time_ms": 0.401,
+        "planning_time_ms": 0.577,
+        "execution_time_ms": 0.126,
         "plan_rows": 1,
         "actual_rows": 1,
         "shared_hit_blocks": 12,
@@ -405,18 +405,18 @@
       "args": [
         "00000000-0000-0000-0000-000000000001",
         "AAAAAAAB.AAAAAAAD",
-        "2026-01-01"
+        "2026-04-11"
       ],
       "tenant_uuid": "00000000-0000-0000-0000-000000000001",
       "metrics": {
-        "planning_time_ms": 1.08,
-        "execution_time_ms": 4.181,
+        "planning_time_ms": 0.221,
+        "execution_time_ms": 1.08,
         "plan_rows": 0,
         "actual_rows": 0,
-        "shared_hit_blocks": 152,
+        "shared_hit_blocks": 127,
         "shared_read_blocks": 0,
-        "shared_dirtied_blocks": 6,
-        "shared_written_blocks": 0
+        "shared_dirtied_blocks": 1,
+        "shared_written_blocks": 1
       },
       "raw_json_file": "target-real-org-full-name-rebuild.explain.json"
     },
@@ -429,12 +429,12 @@
         "00000000-0000-0000-0000-000000000001",
         "",
         "",
-        "2026-01-02"
+        "2026-04-12"
       ],
       "tenant_uuid": "00000000-0000-0000-0000-000000000001",
       "metrics": {
-        "planning_time_ms": 3.596,
-        "execution_time_ms": 0.582,
+        "planning_time_ms": 0.826,
+        "execution_time_ms": 0.145,
         "plan_rows": 0,
         "actual_rows": 0,
         "shared_hit_blocks": 1,
@@ -451,15 +451,15 @@
       "sql": "SELECT\n  v.org_node_key::text,\n  c.org_code,\n  v.name,\n  v.is_business_unit,\n  EXISTS (\n    SELECT 1\n    FROM orgunit.org_unit_versions child\n    WHERE child.tenant_uuid = $1::uuid\n      AND child.parent_org_node_key = v.org_node_key\n      AND child.status = 'active'\n      AND child.validity @\u003e $2::date\n  ) AS has_children\nFROM orgunit.org_unit_versions v\nJOIN orgunit.org_unit_codes c\n  ON c.tenant_uuid = v.tenant_uuid\n AND c.org_node_key = v.org_node_key\nWHERE v.tenant_uuid = $1::uuid\n  AND v.status = 'active'\n  AND v.validity @\u003e $2::date\n  AND v.parent_org_node_key IS NULL\nORDER BY v.node_path;",
       "args": [
         "00000000-0000-0000-0000-000000000001",
-        "2026-01-01"
+        "2026-04-11"
       ],
       "tenant_uuid": "00000000-0000-0000-0000-000000000001",
       "notes": [
         "target bootstrap 当前仅覆盖 org 纯 schema；无 person/setid/staffing 关联表"
       ],
       "metrics": {
-        "planning_time_ms": 1.153,
-        "execution_time_ms": 0.383,
+        "planning_time_ms": 0.38,
+        "execution_time_ms": 0.201,
         "plan_rows": 1,
         "actual_rows": 1,
         "shared_hit_blocks": 17,
@@ -477,13 +477,13 @@
       "args": [
         "00000000-0000-0000-0000-000000000001",
         "%人力资源部%",
-        "2026-01-01",
+        "2026-04-11",
         8
       ],
       "tenant_uuid": "00000000-0000-0000-0000-000000000001",
       "metrics": {
-        "planning_time_ms": 1.137,
-        "execution_time_ms": 0.256,
+        "planning_time_ms": 0.37,
+        "execution_time_ms": 0.079,
         "plan_rows": 1,
         "actual_rows": 5,
         "shared_hit_blocks": 18,
@@ -500,21 +500,48 @@
       "sql": "SELECT v.org_node_key::text, c.org_code, v.node_path::text\nFROM orgunit.org_unit_versions v\nJOIN orgunit.org_unit_codes c\n  ON c.tenant_uuid = v.tenant_uuid\n AND c.org_node_key = v.org_node_key\nWHERE v.tenant_uuid = $1::uuid\n  AND v.status = 'active'\n  AND v.validity @\u003e $2::date\n  AND v.node_path \u003c@ $3::ltree\nORDER BY v.node_path;",
       "args": [
         "00000000-0000-0000-0000-000000000001",
-        "2026-01-01",
+        "2026-04-11",
         "AAAAAAAB.AAAAAAAD"
       ],
       "tenant_uuid": "00000000-0000-0000-0000-000000000001",
       "metrics": {
-        "planning_time_ms": 0.927,
-        "execution_time_ms": 0.247,
+        "planning_time_ms": 0.308,
+        "execution_time_ms": 0.091,
         "plan_rows": 1,
         "actual_rows": 4,
-        "shared_hit_blocks": 17,
+        "shared_hit_blocks": 15,
         "shared_read_blocks": 0,
-        "shared_dirtied_blocks": 1,
+        "shared_dirtied_blocks": 0,
         "shared_written_blocks": 0
       },
       "raw_json_file": "target-real-org-subtree-filter.explain.json"
+    },
+    {
+      "key": "staffing-by-org",
+      "stage": "target-real",
+      "description": "target org_node_key 库：Staffing 通过组织引用联查 position",
+      "sql": "SELECT\n  pv.position_uuid::text,\n  c.org_code,\n  COALESCE(pv.jobcatalog_setid, '') AS jobcatalog_setid,\n  COALESCE(pv.name, '') AS position_name,\n  lower(pv.validity)::text AS effective_date\nFROM staffing.position_versions pv\nJOIN orgunit.org_unit_codes c\n  ON c.tenant_uuid = pv.tenant_uuid\n AND c.org_node_key = pv.org_node_key\nWHERE pv.tenant_uuid = $1::uuid\n  AND pv.validity @\u003e $2::date\n  AND c.org_code = $3::text\nORDER BY lower(pv.validity), pv.position_uuid;",
+      "args": [
+        "00d01cf4-7633-4ac6-93c7-748b2a6d6678",
+        "2026-04-11",
+        "RND9776"
+      ],
+      "tenant_uuid": "00d01cf4-7633-4ac6-93c7-748b2a6d6678",
+      "notes": [
+        "使用 committed staffing target schema（`staffing.position_versions`）采集 explain",
+        "当前态样本通过 org_code -\u003e org_node_key 映射导入 dedicated target，但不再走 shadow 表"
+      ],
+      "metrics": {
+        "planning_time_ms": 0.275,
+        "execution_time_ms": 0.091,
+        "plan_rows": 1,
+        "actual_rows": 2,
+        "shared_hit_blocks": 17,
+        "shared_read_blocks": 0,
+        "shared_dirtied_blocks": 0,
+        "shared_written_blocks": 0
+      },
+      "raw_json_file": "target-real-staffing-by-org.explain.json"
     },
     {
       "key": "setid-resolve",
@@ -524,7 +551,7 @@
       "args": [
         "00d01cf4-7633-4ac6-93c7-748b2a6d6678",
         "AAAAAAAT",
-        "2026-01-01"
+        "2026-04-11"
       ],
       "tenant_uuid": "00d01cf4-7633-4ac6-93c7-748b2a6d6678",
       "notes": [
@@ -532,43 +559,16 @@
         "此处使用 stopline shadow 表按 org_code -\u003e org_node_key 导入当前态样本，仅用于 explain 对比"
       ],
       "metrics": {
-        "planning_time_ms": 1.735,
-        "execution_time_ms": 0.9,
+        "planning_time_ms": 0.725,
+        "execution_time_ms": 0.426,
         "plan_rows": 1,
         "actual_rows": 1,
-        "shared_hit_blocks": 34,
+        "shared_hit_blocks": 31,
         "shared_read_blocks": 0,
         "shared_dirtied_blocks": 0,
         "shared_written_blocks": 0
       },
       "raw_json_file": "target-shadow-setid-resolve.explain.json"
-    },
-    {
-      "key": "staffing-by-org",
-      "stage": "target-shadow",
-      "description": "target org_node_key 库 + stopline shadow：Staffing 通过组织引用联查 position",
-      "sql": "SELECT\n  pv.position_uuid::text,\n  c.org_code,\n  COALESCE(pv.jobcatalog_setid, '') AS jobcatalog_setid,\n  COALESCE(pv.name, '') AS position_name,\n  lower(pv.validity)::text AS effective_date\nFROM stopline.position_versions pv\nJOIN orgunit.org_unit_codes c\n  ON c.tenant_uuid = pv.tenant_uuid\n AND c.org_node_key = pv.org_node_key\nWHERE pv.tenant_uuid = $1::uuid\n  AND pv.validity @\u003e $2::date\n  AND c.org_code = $3::text\nORDER BY lower(pv.validity), pv.position_uuid;",
-      "args": [
-        "00d01cf4-7633-4ac6-93c7-748b2a6d6678",
-        "2026-01-01",
-        "RND9776"
-      ],
-      "tenant_uuid": "00d01cf4-7633-4ac6-93c7-748b2a6d6678",
-      "notes": [
-        "consumer runtime 的 Staffing schema 尚未切到 org_node_key",
-        "此处使用 stopline shadow 表按 org_code -\u003e org_node_key 导入当前态样本，仅用于 explain 对比"
-      ],
-      "metrics": {
-        "planning_time_ms": 0.642,
-        "execution_time_ms": 0.272,
-        "plan_rows": 1,
-        "actual_rows": 2,
-        "shared_hit_blocks": 23,
-        "shared_read_blocks": 0,
-        "shared_dirtied_blocks": 0,
-        "shared_written_blocks": 0
-      },
-      "raw_json_file": "target-shadow-staffing-by-org.explain.json"
     }
   ]
 }

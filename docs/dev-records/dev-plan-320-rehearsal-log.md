@@ -1,6 +1,6 @@
 # DEV-PLAN-320 执行日志：org_node_key cutover rehearsal
 
-**状态**: 已完成 2 次本地 source/target rehearsal（最近一次：2026-04-10 CST）
+**状态**: 已完成 4 次本地 source/target rehearsal（最近一次：2026-04-11 CST）
 
 ## 1. 范围
 
@@ -246,3 +246,69 @@ scripts/db/orgunit-setid-strategy-registry-business-unit-rehearsal.sh \
 1. [X] 320 在 SetID strategy registry 上要求的 `business_unit` 三类 target 当前态分支，已经通过受控实库 rehearsal 全部命中。
 2. [X] 这补齐了“真实 source 当前态 `business_unit_rows=0` 无法自然覆盖”的证据缺口。
 3. [ ] 仍未改变的一点是：source-real 当前自然数据样本仍全部为 `tenant` 作用域；这不再阻塞 320 的工具链 readiness 判断，但正式切主前仍应继续观察是否出现真实 `business_unit` 当前态样本。
+
+## 10. 2026-04-11 第四轮实库 rehearsal（fresh target 复跑 + P3 准备度复核）
+
+### 10.1 本轮目标
+
+1. [X] 在 fresh target 上复跑 committed `source -> target` rehearsal，确认最新 stopline/consumer 改动未破坏导入闭环。
+2. [X] 继续复跑 SetID strategy registry committed rehearsal，确认 `--rehearse-setid-strategy-registry` / `--validate-setid-strategy-registry` 在 `as_of=2026-04-11` 口径下稳定通过。
+3. [X] 把 P3“正式切主准备”仍未完成的阻塞显式落档，避免把 rehearsal readiness 误写成“可直接切主”。
+
+### 10.2 执行入口
+
+1. [X] 创建 fresh target 库
+
+```bash
+docker exec bugs-and-blossoms-dev-postgres-1 \
+  psql -U app -d postgres -v ON_ERROR_STOP=1 \
+  -c "DROP DATABASE IF EXISTS bugs_and_blossoms_orgnode_rehearsal_20260411;" \
+  -c "CREATE DATABASE bugs_and_blossoms_orgnode_rehearsal_20260411 OWNER app;"
+```
+
+2. [X] 执行 committed rehearsal
+
+```bash
+./scripts/db/orgunit-node-key-rehearsal.sh \
+  --source-url "$(./scripts/db/db_url.sh migration)" \
+  --target-url "postgres://app:<redacted>@127.0.0.1:5438/bugs_and_blossoms_orgnode_rehearsal_20260411?sslmode=disable" \
+  --as-of 2026-04-11 \
+  --rehearse-setid-strategy-registry \
+  --validate-setid-strategy-registry
+```
+
+### 10.3 关键输出
+
+1. [X] Org snapshot
+   - `orgunit-snapshot-export`: `tenants=410`
+   - `orgunit-snapshot-check`: `nodes=1241`
+   - `orgunit-snapshot-bootstrap-target`: `applied_files=6`
+   - `orgunit-snapshot-import`: `tenants=410`
+   - `orgunit-snapshot-verify`: `tenants=410`
+2. [X] SetID strategy registry
+   - `orgunit-setid-strategy-registry-export`: `rows=2162`
+   - `orgunit-setid-strategy-registry-check`: `rows=2162`
+   - `orgunit-setid-strategy-registry-import`: `tenants=1081 rows=2162`
+   - `orgunit-setid-strategy-registry-verify`: `tenants=1081 rows=2162`
+   - `orgunit-setid-strategy-registry-validate`: `rows=2162 business_unit_rows=0`
+3. [X] 产物归档
+   - `.local/orgunit-node-key-rehearsal/orgunit-snapshot-20260410T225940Z.json`
+   - `.local/orgunit-node-key-rehearsal/setid-strategy-registry-20260410T225940Z.json`
+
+### 10.4 P3 准备度复核
+
+1. [X] fresh target 路径与 committed import/verify 依然稳定，可继续作为 P3 正式切主前的 rehearsal 证据。
+2. [X] SetID strategy registry 的 source/target committed 闭环依然稳定，但 source-real 当前自然数据仍为 `business_unit_rows=0`。
+3. [ ] P3 正式切主本身仍未就绪；Org kernel 仍保留大量 `org_id` 运行路径。
+   - 结构与事件账本仍以旧键为核心：`modules/orgunit/infrastructure/persistence/schema/00002_orgunit_org_schema.sql`
+   - 内核 replay / mutation / move / snapshot 主链仍大量使用 `org_id` / `parent_id`：`modules/orgunit/infrastructure/persistence/schema/00003_orgunit_engine.sql`
+   - read model 仍输出 `org_id` / `parent_id`：`modules/orgunit/infrastructure/persistence/schema/00004_orgunit_read.sql`
+   - SetID runtime schema / engine 仍以 `org_id` 为账本口径：`modules/orgunit/infrastructure/persistence/schema/00005_orgunit_setid_schema.sql`、`modules/orgunit/infrastructure/persistence/schema/00006_orgunit_setid_engine.sql`
+   - compat 解析层仍依赖 `org_id` 回读：`pkg/orgunit/resolve.go`
+   - `internal/server` 仍存在 `org_id` 中心解析与 metadata compat：`internal/server/orgunit_nodes.go`、`internal/server/orgunit_field_metadata_store.go`
+
+### 10.5 本轮结论
+
+1. [X] 2026-04-11 的 fresh target 复跑证明：P2 工具链、SetID registry rehearsal 与后续 stopline 采集仍然稳定。
+2. [X] 这足以支撑“P3 正式切主准备已推进到可复跑、可核对、可留证”的判断。
+3. [ ] 但这仍不是“可直接切主”：在正式维护窗口前，必须继续收口 Org kernel source-real 的 `org_id` 主链与 SetID 的真实 `target-real` runtime。

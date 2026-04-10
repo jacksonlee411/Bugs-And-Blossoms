@@ -325,6 +325,7 @@
 **核心验收点（高层）**
 - `/app/assistant` 可发现、可交互，且 FE 状态与后端状态机一致（含终态可见）。
 - 会话与 turn 主链路可复现：create/list/detail/turns/confirm/commit。
+- Assistant 涉及组织引用的用户可见文本、会话日志与提交上下文只允许出现 `org_code`；不得出现 `org_id` / `org_unit_id` / `org_node_key`。
 - 意图治理稳定：候选确认后不得被静默改写；版本漂移必须回退到安全态并返回稳定错误码。
 - 多模型入口可控：provider validate/apply 路径有正负例；失败时错误码与提示可审计。
 - tasks/temporal（若功能已就绪）可追踪、可幂等；若未就绪必须记录为 `CONTRACT_MISSING` 或 `ENV_DRIFT`，不得口径降级绕过。

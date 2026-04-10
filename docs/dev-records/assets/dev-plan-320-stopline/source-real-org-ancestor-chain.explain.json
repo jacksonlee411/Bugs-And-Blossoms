@@ -1,11 +1,11 @@
 [
   {
-    "Execution Time": 0.573,
+    "Execution Time": 0.206,
     "Plan": {
       "Actual Loops": 1,
       "Actual Rows": 1,
-      "Actual Startup Time": 0.336,
-      "Actual Total Time": 0.341,
+      "Actual Startup Time": 0.127,
+      "Actual Total Time": 0.128,
       "Async Capable": false,
       "Local Dirtied Blocks": 0,
       "Local Hit Blocks": 0,
@@ -20,8 +20,8 @@
         {
           "Actual Loops": 1,
           "Actual Rows": 2,
-          "Actual Startup Time": 0.319,
-          "Actual Total Time": 0.323,
+          "Actual Startup Time": 0.117,
+          "Actual Total Time": 0.119,
           "Async Capable": false,
           "Local Dirtied Blocks": 0,
           "Local Hit Blocks": 0,
@@ -36,8 +36,8 @@
             {
               "Actual Loops": 1,
               "Actual Rows": 2,
-              "Actual Startup Time": 0.262,
-              "Actual Total Time": 0.283,
+              "Actual Startup Time": 0.103,
+              "Actual Total Time": 0.109,
               "Async Capable": false,
               "Inner Unique": false,
               "Join Filter": "(t.uid = a.org_id)",
@@ -55,8 +55,8 @@
                 {
                   "Actual Loops": 1,
                   "Actual Rows": 12,
-                  "Actual Startup Time": 0.161,
-                  "Actual Total Time": 0.207,
+                  "Actual Startup Time": 0.058,
+                  "Actual Total Time": 0.075,
                   "Async Capable": false,
                   "Inner Unique": false,
                   "Join Type": "Inner",
@@ -73,8 +73,8 @@
                     {
                       "Actual Loops": 1,
                       "Actual Rows": 1,
-                      "Actual Startup Time": 0.046,
-                      "Actual Total Time": 0.049,
+                      "Actual Startup Time": 0.02,
+                      "Actual Total Time": 0.021,
                       "Alias": "v",
                       "Async Capable": false,
                       "Exact Heap Blocks": 1,
@@ -92,10 +92,10 @@
                         {
                           "Actual Loops": 1,
                           "Actual Rows": 1,
-                          "Actual Startup Time": 0.031,
-                          "Actual Total Time": 0.032,
+                          "Actual Startup Time": 0.013,
+                          "Actual Total Time": 0.013,
                           "Async Capable": false,
-                          "Index Cond": "((tenant_uuid = '00000000-0000-0000-0000-000000000001'::uuid) AND (org_id = 10000001) AND (validity @\u003e '2026-01-01'::date))",
+                          "Index Cond": "((tenant_uuid = '00000000-0000-0000-0000-000000000001'::uuid) AND (org_id = 10000001) AND (validity @\u003e '2026-04-11'::date))",
                           "Index Name": "org_unit_versions_no_overlap",
                           "Local Dirtied Blocks": 0,
                           "Local Hit Blocks": 0,
@@ -116,7 +116,7 @@
                           "Total Cost": 4.17
                         }
                       ],
-                      "Recheck Cond": "((tenant_uuid = '00000000-0000-0000-0000-000000000001'::uuid) AND (org_id = 10000001) AND (validity @\u003e '2026-01-01'::date))",
+                      "Recheck Cond": "((tenant_uuid = '00000000-0000-0000-0000-000000000001'::uuid) AND (org_id = 10000001) AND (validity @\u003e '2026-04-11'::date))",
                       "Relation Name": "org_unit_versions",
                       "Rows Removed by Index Recheck": 0,
                       "Shared Dirtied Blocks": 0,
@@ -131,8 +131,8 @@
                     {
                       "Actual Loops": 1,
                       "Actual Rows": 12,
-                      "Actual Startup Time": 0.107,
-                      "Actual Total Time": 0.144,
+                      "Actual Startup Time": 0.035,
+                      "Actual Total Time": 0.05,
                       "Alias": "a",
                       "Async Capable": false,
                       "Index Cond": "((tenant_uuid = '00000000-0000-0000-0000-000000000001'::uuid) AND (validity @\u003e lower(v.validity)))",
@@ -171,8 +171,8 @@
                 {
                   "Actual Loops": 12,
                   "Actual Rows": 2,
-                  "Actual Startup Time": 0.004,
-                  "Actual Total Time": 0.004,
+                  "Actual Startup Time": 0.002,
+                  "Actual Total Time": 0.002,
                   "Alias": "t",
                   "Async Capable": false,
                   "Function Name": "unnest",
@@ -238,13 +238,13 @@
       "Local Read Blocks": 0,
       "Local Written Blocks": 0,
       "Shared Dirtied Blocks": 0,
-      "Shared Hit Blocks": 250,
-      "Shared Read Blocks": 0,
+      "Shared Hit Blocks": 249,
+      "Shared Read Blocks": 1,
       "Shared Written Blocks": 0,
       "Temp Read Blocks": 0,
       "Temp Written Blocks": 0
     },
-    "Planning Time": 2.379,
+    "Planning Time": 1.14,
     "Triggers": []
   }
 ]

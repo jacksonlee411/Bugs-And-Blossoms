@@ -1,11 +1,11 @@
 [
   {
-    "Execution Time": 0.512,
+    "Execution Time": 0.166,
     "Plan": {
       "Actual Loops": 1,
       "Actual Rows": 5,
-      "Actual Startup Time": 0.387,
-      "Actual Total Time": 0.395,
+      "Actual Startup Time": 0.13,
+      "Actual Total Time": 0.133,
       "Async Capable": false,
       "Local Dirtied Blocks": 0,
       "Local Hit Blocks": 0,
@@ -19,8 +19,8 @@
         {
           "Actual Loops": 1,
           "Actual Rows": 5,
-          "Actual Startup Time": 0.383,
-          "Actual Total Time": 0.388,
+          "Actual Startup Time": 0.129,
+          "Actual Total Time": 0.13,
           "Async Capable": false,
           "Local Dirtied Blocks": 0,
           "Local Hit Blocks": 0,
@@ -35,8 +35,8 @@
             {
               "Actual Loops": 1,
               "Actual Rows": 5,
-              "Actual Startup Time": 0.217,
-              "Actual Total Time": 0.323,
+              "Actual Startup Time": 0.064,
+              "Actual Total Time": 0.097,
               "Async Capable": false,
               "Inner Unique": true,
               "Join Type": "Inner",
@@ -53,11 +53,11 @@
                 {
                   "Actual Loops": 1,
                   "Actual Rows": 5,
-                  "Actual Startup Time": 0.159,
-                  "Actual Total Time": 0.213,
+                  "Actual Startup Time": 0.044,
+                  "Actual Total Time": 0.06,
                   "Alias": "v",
                   "Async Capable": false,
-                  "Exact Heap Blocks": 5,
+                  "Exact Heap Blocks": 4,
                   "Filter": "((name)::text ~~* '%人力资源部%'::text)",
                   "Local Dirtied Blocks": 0,
                   "Local Hit Blocks": 0,
@@ -72,11 +72,11 @@
                   "Plans": [
                     {
                       "Actual Loops": 1,
-                      "Actual Rows": 20,
-                      "Actual Startup Time": 0.089,
-                      "Actual Total Time": 0.09,
+                      "Actual Rows": 12,
+                      "Actual Startup Time": 0.02,
+                      "Actual Total Time": 0.021,
                       "Async Capable": false,
-                      "Index Cond": "((tenant_uuid = '00000000-0000-0000-0000-000000000001'::uuid) AND (validity @\u003e '2026-01-01'::date))",
+                      "Index Cond": "((tenant_uuid = '00000000-0000-0000-0000-000000000001'::uuid) AND (validity @\u003e '2026-04-11'::date))",
                       "Index Name": "org_unit_versions_active_day_gist",
                       "Local Dirtied Blocks": 0,
                       "Local Hit Blocks": 0,
@@ -85,7 +85,7 @@
                       "Node Type": "Bitmap Index Scan",
                       "Parallel Aware": false,
                       "Parent Relationship": "Outer",
-                      "Plan Rows": 10,
+                      "Plan Rows": 11,
                       "Plan Width": 0,
                       "Shared Dirtied Blocks": 0,
                       "Shared Hit Blocks": 2,
@@ -94,27 +94,27 @@
                       "Startup Cost": 0,
                       "Temp Read Blocks": 0,
                       "Temp Written Blocks": 0,
-                      "Total Cost": 4.24
+                      "Total Cost": 4.25
                     }
                   ],
-                  "Recheck Cond": "((tenant_uuid = '00000000-0000-0000-0000-000000000001'::uuid) AND (validity @\u003e '2026-01-01'::date) AND (status = 'active'::text))",
+                  "Recheck Cond": "((tenant_uuid = '00000000-0000-0000-0000-000000000001'::uuid) AND (validity @\u003e '2026-04-11'::date) AND (status = 'active'::text))",
                   "Relation Name": "org_unit_versions",
                   "Rows Removed by Filter": 7,
                   "Rows Removed by Index Recheck": 0,
                   "Shared Dirtied Blocks": 0,
-                  "Shared Hit Blocks": 7,
+                  "Shared Hit Blocks": 6,
                   "Shared Read Blocks": 0,
                   "Shared Written Blocks": 0,
-                  "Startup Cost": 4.25,
+                  "Startup Cost": 4.26,
                   "Temp Read Blocks": 0,
                   "Temp Written Blocks": 0,
-                  "Total Cost": 28.37
+                  "Total Cost": 30.33
                 },
                 {
                   "Actual Loops": 5,
                   "Actual Rows": 1,
-                  "Actual Startup Time": 0.016,
-                  "Actual Total Time": 0.016,
+                  "Actual Startup Time": 0.006,
+                  "Actual Total Time": 0.006,
                   "Alias": "c",
                   "Async Capable": false,
                   "Index Cond": "((tenant_uuid = '00000000-0000-0000-0000-000000000001'::uuid) AND (org_id = v.org_id))",
@@ -142,17 +142,17 @@
                 }
               ],
               "Shared Dirtied Blocks": 0,
-              "Shared Hit Blocks": 22,
+              "Shared Hit Blocks": 21,
               "Shared Read Blocks": 0,
               "Shared Written Blocks": 0,
-              "Startup Cost": 4.52,
+              "Startup Cost": 4.53,
               "Temp Read Blocks": 0,
               "Temp Written Blocks": 0,
-              "Total Cost": 37.92
+              "Total Cost": 39.88
             }
           ],
           "Shared Dirtied Blocks": 0,
-          "Shared Hit Blocks": 22,
+          "Shared Hit Blocks": 21,
           "Shared Read Blocks": 0,
           "Shared Written Blocks": 0,
           "Sort Key": [
@@ -161,20 +161,20 @@
           "Sort Method": "quicksort",
           "Sort Space Type": "Memory",
           "Sort Space Used": 25,
-          "Startup Cost": 37.94,
+          "Startup Cost": 39.9,
           "Temp Read Blocks": 0,
           "Temp Written Blocks": 0,
-          "Total Cost": 37.95
+          "Total Cost": 39.91
         }
       ],
       "Shared Dirtied Blocks": 0,
-      "Shared Hit Blocks": 22,
+      "Shared Hit Blocks": 21,
       "Shared Read Blocks": 0,
       "Shared Written Blocks": 0,
-      "Startup Cost": 37.94,
+      "Startup Cost": 39.9,
       "Temp Read Blocks": 0,
       "Temp Written Blocks": 0,
-      "Total Cost": 37.95
+      "Total Cost": 39.91
     },
     "Planning": {
       "Local Dirtied Blocks": 0,
@@ -188,7 +188,7 @@
       "Temp Read Blocks": 0,
       "Temp Written Blocks": 0
     },
-    "Planning Time": 1.917,
+    "Planning Time": 0.592,
     "Triggers": []
   }
 ]

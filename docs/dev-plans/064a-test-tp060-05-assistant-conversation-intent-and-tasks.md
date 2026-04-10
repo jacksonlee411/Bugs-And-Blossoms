@@ -96,6 +96,11 @@
 | 模型配置应用 | POST | `/internal/assistant/model-providers:apply` | 200；校验失败 422 |
 | 模型列表 | GET | `/internal/assistant/models` | 200 |
 
+补充用户可见契约：
+
+- Assistant 任一涉及组织引用的提示词、候选展示、确认文案、提交日志与页面回显，只允许出现 `org_code`。
+- 不得在用户可见文本、页面 DOM、调试日志或对外响应中泄露 `org_id` / `org_unit_id` / `org_node_key`。
+
 ### 5.2 状态机与错误码（最小闭集）
 
 1. [X] 成功链路：`draft/proposed/validated -> confirmed -> committed`。  
@@ -134,7 +139,7 @@
 
 1. [X] `make e2e` 通过，且包含 `e2e/tests/tp220-assistant.spec.js` 执行记录。  
 2. [X] API 证据：create/turn/confirm/commit 各 1 条成功样例 + 1 条失败样例（含状态码与错误码）。  
-3. [X] UI 证据：`/app/assistant` 入口可见、会话详情可见、状态变化可见。  
+3. [X] UI 证据：`/app/assistant` 入口可见、会话详情可见、状态变化可见，且组织引用仅展示 `org_code`。  
 4. [X] 多模型证据：validate/apply 正负例各 1 条。
 
 ### 6.2 启用后追加证据（Tasks/Temporal）

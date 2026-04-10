@@ -1,11 +1,11 @@
 [
   {
-    "Execution Time": 0.586,
+    "Execution Time": 0.591,
     "Plan": {
       "Actual Loops": 1,
       "Actual Rows": 0,
-      "Actual Startup Time": 0.11,
-      "Actual Total Time": 0.114,
+      "Actual Startup Time": 0.024,
+      "Actual Total Time": 0.026,
       "Alias": "v",
       "Async Capable": false,
       "Local Dirtied Blocks": 0,
@@ -21,11 +21,11 @@
         {
           "Actual Loops": 1,
           "Actual Rows": 0,
-          "Actual Startup Time": 0.106,
-          "Actual Total Time": 0.109,
+          "Actual Startup Time": 0.022,
+          "Actual Total Time": 0.024,
           "Alias": "v",
           "Async Capable": false,
-          "Filter": "(lower(validity) \u003e= '2026-01-01'::date)",
+          "Filter": "(lower(validity) \u003e= '2026-04-11'::date)",
           "Index Cond": "((tenant_uuid = '00000000-0000-0000-0000-000000000001'::uuid) AND (node_path \u003c@ 'AAAAAAAB.AAAAAAAD'::ltree))",
           "Index Name": "org_unit_versions_search_gist",
           "Local Dirtied Blocks": 0,
@@ -216,7 +216,7 @@
       "Temp Read Blocks": 0,
       "Temp Written Blocks": 0
     },
-    "Planning Time": 1.672,
+    "Planning Time": 0.468,
     "Triggers": []
   }
 ]

@@ -1,5 +1,5 @@
 {
-  "as_of_date": "2026-01-01",
+  "as_of_date": "2026-04-11",
   "heavy": {
     "tenant": {
       "tenant_uuid": "00000000-0000-0000-0000-000000000001",
@@ -60,7 +60,7 @@
       "subtree_size": 1
     },
     "search_query": "人力资源部",
-    "move_effective_date": "2026-01-02"
+    "move_effective_date": "2026-04-12"
   },
   "chain": {
     "tenant": {
@@ -78,9 +78,9 @@
     },
     "position_sample": {
       "org_code": "",
-      "name": "P-ENG-01",
+      "name": "P-ENG-02",
       "position_count": 1,
-      "position_uuid": "5f9a34b3-1162-440c-9b0e-0766c94fcfc3",
+      "position_uuid": "d7b3132a-0650-4199-9562-4fac8352808d",
       "effective_date": "2026-01-01",
       "org_unit_id": 10000002,
       "jobcatalog_setid": "S2601"
