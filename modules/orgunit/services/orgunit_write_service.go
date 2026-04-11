@@ -45,8 +45,8 @@ const (
 	errFieldPolicyExprInvalid         = "FIELD_POLICY_EXPR_INVALID"
 	errFieldOptionNotAllowed          = "FIELD_OPTION_NOT_ALLOWED"
 	errFieldRequiredValueMissing      = "FIELD_REQUIRED_VALUE_MISSING"
-	errFieldPolicyMissing             = "FIELD_POLICY_MISSING"
-	errFieldPolicyConflict            = "FIELD_POLICY_CONFLICT"
+	errFieldPolicyMissing             = "policy_missing"
+	errFieldPolicyConflict            = "policy_conflict_ambiguous"
 	errOrgCodeExhausted               = "ORG_CODE_EXHAUSTED"
 	errOrgCodeConflict                = "ORG_CODE_CONFLICT"
 )

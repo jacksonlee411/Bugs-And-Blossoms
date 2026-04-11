@@ -2,7 +2,7 @@
   "plan": "DEV-PLAN-288",
   "case_id": "tp288-e2e-002",
   "title": "failure stays in-bubble and retry creates exactly one new bubble",
-  "captured_at": "2026-04-10T00:23:07.288Z",
+  "captured_at": "2026-04-11T13:09:39.697Z",
   "formal_entry": "/app/assistant/librechat",
   "bubble_count": 2,
   "bubbles": [
@@ -11,7 +11,7 @@
       "conversation_id": "conv_tp288_1",
       "turn_id": "turn_tp288_1",
       "request_id": "req_tp288_1",
-      "message_id": "f600ab22-3e56-46a8-ab16-20c0ce75abbe_",
+      "message_id": "23e32544-676c-4e05-b8ed-6f131829d252_",
       "text": "提交失败，请重试。Error: assistant_commit_failed将在鲜花组织下创建华东运营部。"
     },
     {
@@ -19,7 +19,7 @@
       "conversation_id": "conv_tp288_1",
       "turn_id": "turn_tp288_2",
       "request_id": "req_tp288_2",
-      "message_id": "fedacc0d-c952-4b8c-a23f-5a8ac9a7cae5_",
+      "message_id": "05fa5e9b-bebe-4740-9ad4-ae0e5baad894_",
       "text": "已创建华北运营部。task_id: task_turn_tp288_2 · succeeded将在鲜花组织下创建华北运营部。org_code: AI2882parent_org_code: FLOWER-Aeffective_date: 2026-03-08event_type: orgunit_created"
     }
   ]

@@ -18,15 +18,16 @@ const (
 )
 
 type orgUnitCreateFieldDecisionsAPIResponse struct {
-	CapabilityKey         string               `json:"capability_key"`
-	BaselineCapabilityKey string               `json:"baseline_capability_key,omitempty"`
-	BusinessUnitOrgCode   string               `json:"business_unit_org_code"`
-	AsOf                  string               `json:"as_of"`
-	PolicyVersion         string               `json:"policy_version"`
-	PolicyVersionAlg      string               `json:"policy_version_alg,omitempty"`
-	IntentPolicyVersion   string               `json:"intent_policy_version,omitempty"`
-	BaselinePolicyVersion string               `json:"baseline_policy_version,omitempty"`
-	FieldDecisions        []setIDFieldDecision `json:"field_decisions"`
+	CapabilityKey          string               `json:"capability_key"`
+	BaselineCapabilityKey  string               `json:"baseline_capability_key,omitempty"`
+	BusinessUnitOrgCode    string               `json:"business_unit_org_code"`
+	AsOf                   string               `json:"as_of"`
+	PolicyVersion          string               `json:"policy_version"`
+	EffectivePolicyVersion string               `json:"effective_policy_version"`
+	PolicyVersionAlg       string               `json:"policy_version_alg,omitempty"`
+	IntentPolicyVersion    string               `json:"intent_policy_version,omitempty"`
+	BaselinePolicyVersion  string               `json:"baseline_policy_version,omitempty"`
+	FieldDecisions         []setIDFieldDecision `json:"field_decisions"`
 }
 
 func handleOrgUnitCreateFieldDecisionsAPI(w http.ResponseWriter, r *http.Request, store OrgUnitStore) {
@@ -69,6 +70,22 @@ func handleOrgUnitCreateFieldDecisionsAPI(w http.ResponseWriter, r *http.Request
 		return
 	}
 
+	resolvedSetID := ""
+	if businessUnitRef.OrgCode != "" {
+		setIDResolver, ok := any(store).(orgUnitSetIDResolver)
+		if !ok {
+			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusInternalServerError, setIDContextCodeSetIDResolverMissing, "setid resolver missing")
+			return
+		}
+		contextResolver := newSetIDContextResolver(store, setIDResolver)
+		resolvedCtx, resolveErr := contextResolver.ResolveOrgContext(r.Context(), tenant.ID, businessUnitRef.OrgCode, effectiveDate, "business_unit_org_code")
+		if resolveErr != nil {
+			writeOrgUnitSetIDContextError(w, r, "business_unit_org_code", resolveErr)
+			return
+		}
+		resolvedSetID = resolvedCtx.ResolvedSetID
+	}
+
 	capCtx, capErr := resolveCapabilityContext(r.Context(), r, capabilityContextInput{
 		CapabilityKey:       orgUnitCreateFieldPolicyCapabilityKey,
 		BusinessUnitOrgCode: businessUnitRef.OrgCode,
@@ -93,6 +110,7 @@ func handleOrgUnitCreateFieldDecisionsAPI(w http.ResponseWriter, r *http.Request
 			tenant.ID,
 			capCtx.CapabilityKey,
 			fieldKey,
+			resolvedSetID,
 			businessUnitRef.OrgNodeKey,
 			capCtx.AsOf,
 		)
@@ -107,15 +125,16 @@ func handleOrgUnitCreateFieldDecisionsAPI(w http.ResponseWriter, r *http.Request
 	effectivePolicyVersion, policyParts := resolveOrgUnitEffectivePolicyVersion(tenant.ID, capCtx.CapabilityKey)
 
 	response := orgUnitCreateFieldDecisionsAPIResponse{
-		CapabilityKey:         capCtx.CapabilityKey,
-		BaselineCapabilityKey: policyParts.BaselineCapabilityKey,
-		BusinessUnitOrgCode:   capCtx.BusinessUnitOrgCode,
-		AsOf:                  capCtx.AsOf,
-		PolicyVersion:         effectivePolicyVersion,
-		PolicyVersionAlg:      orgUnitEffectivePolicyVersionAlgorithm,
-		IntentPolicyVersion:   policyParts.IntentPolicyVersion,
-		BaselinePolicyVersion: policyParts.BaselinePolicyVersion,
-		FieldDecisions:        decisions,
+		CapabilityKey:          capCtx.CapabilityKey,
+		BaselineCapabilityKey:  policyParts.BaselineCapabilityKey,
+		BusinessUnitOrgCode:    capCtx.BusinessUnitOrgCode,
+		AsOf:                   capCtx.AsOf,
+		PolicyVersion:          policyParts.IntentPolicyVersion,
+		EffectivePolicyVersion: effectivePolicyVersion,
+		PolicyVersionAlg:       orgUnitEffectivePolicyVersionAlgorithm,
+		IntentPolicyVersion:    policyParts.IntentPolicyVersion,
+		BaselinePolicyVersion:  policyParts.BaselinePolicyVersion,
+		FieldDecisions:         decisions,
 	}
 
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")

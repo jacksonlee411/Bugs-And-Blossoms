@@ -27,15 +27,29 @@ func (s *assistantConversationService) enrichCreateOrgUnitDryRunWithPolicy(
 		return dryRun
 	}
 	parentOrgCode := assistantResolvedCandidateCode(candidates, resolvedCandidateID)
-	businessUnitNodeKey, ok := s.resolveCreateOrgUnitBusinessUnitNodeKey(ctx, tenantID, parentOrgCode)
+	policyCtx, ok := s.resolveCreateOrgUnitPolicyContext(ctx, tenantID, parentOrgCode, intent.EffectiveDate)
 	if !ok {
 		return dryRun
 	}
-	orgCodeDecision, ok := assistantResolveCreateFieldDecision(ctx, tenantID, orgUnitCreateFieldOrgCode, businessUnitNodeKey, intent.EffectiveDate)
+	orgCodeDecision, ok := assistantResolveCreateFieldDecision(
+		ctx,
+		tenantID,
+		orgUnitCreateFieldOrgCode,
+		policyCtx.ResolvedSetID,
+		policyCtx.BusinessUnitNodeKey,
+		intent.EffectiveDate,
+	)
 	if ok && assistantCreateFieldDecisionMissingRequiredValue(orgCodeDecision, strings.TrimSpace(intent.OrgCode)) {
 		dryRun.ValidationErrors = append(dryRun.ValidationErrors, "FIELD_REQUIRED_VALUE_MISSING")
 	}
-	orgTypeDecision, ok := assistantResolveCreateFieldDecision(ctx, tenantID, orgUnitCreateFieldOrgType, businessUnitNodeKey, intent.EffectiveDate)
+	orgTypeDecision, ok := assistantResolveCreateFieldDecision(
+		ctx,
+		tenantID,
+		orgUnitCreateFieldOrgType,
+		policyCtx.ResolvedSetID,
+		policyCtx.BusinessUnitNodeKey,
+		intent.EffectiveDate,
+	)
 	if ok {
 		resolvedOrgType := assistantCreateFieldDecisionResolvedValue(orgTypeDecision, "")
 		if assistantCreateFieldDecisionMissingRequiredValue(orgTypeDecision, "") {
@@ -70,26 +84,37 @@ func assistantResolvedCandidateCode(candidates []assistantCandidate, resolvedCan
 	return needle
 }
 
-func (s *assistantConversationService) resolveCreateOrgUnitBusinessUnitNodeKey(ctx context.Context, tenantID string, parentOrgCode string) (string, bool) {
+func (s *assistantConversationService) resolveCreateOrgUnitPolicyContext(ctx context.Context, tenantID string, parentOrgCode string, effectiveDate string) (setIDPolicyContext, bool) {
 	if s == nil || s.orgStore == nil {
-		return "", false
+		return setIDPolicyContext{}, false
 	}
-	orgNodeKey, err := s.orgStore.ResolveOrgNodeKeyByCode(ctx, tenantID, strings.TrimSpace(parentOrgCode))
+	setIDResolver, ok := any(s.orgStore).(orgUnitSetIDResolver)
+	if !ok {
+		return setIDPolicyContext{}, false
+	}
+	contextResolver := newSetIDContextResolver(s.orgStore, setIDResolver)
+	resolvedCtx, err := contextResolver.ResolveOrgContext(ctx, tenantID, strings.TrimSpace(parentOrgCode), strings.TrimSpace(effectiveDate), "business_unit_org_code")
 	if err != nil {
-		return "", false
+		return setIDPolicyContext{}, false
 	}
-	if _, err := normalizeOrgNodeKeyInput(orgNodeKey); err != nil {
-		return "", false
-	}
-	return orgNodeKey, true
+	return setIDPolicyContext{
+		TenantID:            strings.TrimSpace(tenantID),
+		CapabilityKey:       orgUnitCreateFieldPolicyCapabilityKey,
+		AsOf:                strings.TrimSpace(effectiveDate),
+		BusinessUnitOrgCode: resolvedCtx.OrgCode,
+		BusinessUnitNodeKey: resolvedCtx.OrgNodeKey,
+		ResolvedSetID:       resolvedCtx.ResolvedSetID,
+		SetIDSource:         resolvedCtx.SetIDSource,
+	}, true
 }
 
-func assistantResolveCreateFieldDecision(ctx context.Context, tenantID string, fieldKey string, businessUnitNodeKey string, effectiveDate string) (setIDFieldDecision, bool) {
+func assistantResolveCreateFieldDecision(ctx context.Context, tenantID string, fieldKey string, resolvedSetID string, businessUnitNodeKey string, effectiveDate string) (setIDFieldDecision, bool) {
 	decision, err := defaultSetIDStrategyRegistryStore.resolveFieldDecision(
 		ctx,
 		tenantID,
 		orgUnitCreateFieldPolicyCapabilityKey,
 		fieldKey,
+		strings.TrimSpace(resolvedSetID),
 		strings.TrimSpace(businessUnitNodeKey),
 		strings.TrimSpace(effectiveDate),
 	)

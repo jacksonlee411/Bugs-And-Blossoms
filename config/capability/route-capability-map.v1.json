@@ -80,8 +80,8 @@
       "path": "/org/api/setid-strategy-registry",
       "route_class": "internal_api",
       "action": "read",
-      "capability_key": "staffing.assignment_create.field_policy",
-      "owner_module": "staffing",
+      "capability_key": "org.orgunit_write.field_policy",
+      "owner_module": "orgunit",
       "status": "active"
     },
     {
@@ -89,8 +89,8 @@
       "path": "/org/api/setid-strategy-registry",
       "route_class": "internal_api",
       "action": "admin",
-      "capability_key": "staffing.assignment_create.field_policy",
-      "owner_module": "staffing",
+      "capability_key": "org.orgunit_write.field_policy",
+      "owner_module": "orgunit",
       "status": "active"
     },
     {
@@ -98,8 +98,8 @@
       "path": "/org/api/setid-strategy-registry:disable",
       "route_class": "internal_api",
       "action": "admin",
-      "capability_key": "staffing.assignment_create.field_policy",
-      "owner_module": "staffing",
+      "capability_key": "org.orgunit_write.field_policy",
+      "owner_module": "orgunit",
       "status": "active"
     },
     {
@@ -107,8 +107,8 @@
       "path": "/org/api/setid-explain",
       "route_class": "internal_api",
       "action": "read",
-      "capability_key": "staffing.assignment_create.field_policy",
-      "owner_module": "staffing",
+      "capability_key": "org.orgunit_write.field_policy",
+      "owner_module": "orgunit",
       "status": "active"
     },
     {
@@ -116,8 +116,8 @@
       "path": "/internal/rules/evaluate",
       "route_class": "internal_api",
       "action": "admin",
-      "capability_key": "staffing.assignment_create.field_policy",
-      "owner_module": "staffing",
+      "capability_key": "org.orgunit_write.field_policy",
+      "owner_module": "orgunit",
       "status": "active"
     },
     {

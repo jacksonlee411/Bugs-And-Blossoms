@@ -3,6 +3,7 @@ package persistence
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -18,6 +19,9 @@ func (f beginFunc) Begin(ctx context.Context) (pgx.Tx, error) { return f(ctx) }
 
 type txStub struct {
 	execErr   error
+	execErrAt int
+	execCalls int
+	execSQLs  []string
 	row       pgx.Row
 	commitErr error
 	queryErr  error
@@ -37,8 +41,13 @@ func (t *txStub) Prepare(context.Context, string, string) (*pgconn.StatementDesc
 }
 func (t *txStub) Conn() *pgx.Conn { return nil }
 
-func (t *txStub) Exec(context.Context, string, ...any) (pgconn.CommandTag, error) {
-	return pgconn.CommandTag{}, t.execErr
+func (t *txStub) Exec(_ context.Context, sql string, _ ...any) (pgconn.CommandTag, error) {
+	t.execCalls++
+	t.execSQLs = append(t.execSQLs, sql)
+	if t.execErr != nil && (t.execErrAt == 0 || t.execCalls == t.execErrAt) {
+		return pgconn.CommandTag{}, t.execErr
+	}
+	return pgconn.CommandTag{}, nil
 }
 
 func (t *txStub) Query(context.Context, string, ...any) (pgx.Rows, error) {
@@ -172,11 +181,40 @@ func TestOrgUnitPGStore_SubmitEvent(t *testing.T) {
 	}
 
 	orgNodeKey := "A2345678"
+	renameTx := &txStub{row: stubRow{vals: []any{int64(10)}}}
 	store = NewOrgUnitPGStore(beginFunc(func(context.Context) (pgx.Tx, error) {
-		return &txStub{row: stubRow{vals: []any{int64(10)}}}, nil
+		return renameTx, nil
 	}))
 	if _, err := store.SubmitEvent(ctx, "t1", "e1", &orgNodeKey, "RENAME", "2026-01-01", nil, "r1", "t1"); err != nil {
 		t.Fatalf("unexpected error: %v", err)
+	}
+	if renameTx.execCalls != 1 {
+		t.Fatalf("rename should only set tenant once, exec_calls=%d sql=%v", renameTx.execCalls, renameTx.execSQLs)
+	}
+
+	createTx := &txStub{row: stubRow{vals: []any{int64(11)}}}
+	store = NewOrgUnitPGStore(beginFunc(func(context.Context) (pgx.Tx, error) {
+		return createTx, nil
+	}))
+	if _, err := store.SubmitEvent(ctx, "t1", "e2", nil, "CREATE", "2026-01-01", nil, "r2", "t1"); err != nil {
+		t.Fatalf("unexpected create error: %v", err)
+	}
+	if createTx.execCalls != 2 {
+		t.Fatalf("create should set tenant then ensure bootstrap, exec_calls=%d sql=%v", createTx.execCalls, createTx.execSQLs)
+	}
+	if !strings.Contains(createTx.execSQLs[1], "orgunit.ensure_setid_bootstrap") {
+		t.Fatalf("create should call ensure_setid_bootstrap, sql=%v", createTx.execSQLs)
+	}
+
+	store = NewOrgUnitPGStore(beginFunc(func(context.Context) (pgx.Tx, error) {
+		return &txStub{
+			row:       stubRow{vals: []any{int64(12)}},
+			execErr:   errors.New("bootstrap"),
+			execErrAt: 2,
+		}, nil
+	}))
+	if _, err := store.SubmitEvent(ctx, "t1", "e3", nil, "SET_BUSINESS_UNIT", "2026-01-01", nil, "r3", "t1"); err == nil {
+		t.Fatal("expected bootstrap error")
 	}
 }
 

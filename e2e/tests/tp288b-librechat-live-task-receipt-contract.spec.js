@@ -175,15 +175,33 @@ async function sendFromFormalEntry(surface, text) {
   await surface.getByRole("button", { name: /发送消息|Send message/i }).click();
 }
 
+async function waitForVisibleNamedButton(surface, namePattern, timeoutMs = 30_000) {
+  const buttons = surface.getByRole("button", { name: namePattern });
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const count = await buttons.count();
+    for (let index = count - 1; index >= 0; index -= 1) {
+      const candidate = buttons.nth(index);
+      try {
+        if (await candidate.isVisible()) {
+          return candidate;
+        }
+      } catch {
+        // ignore transient locator detach during surface refresh
+      }
+    }
+    await surface.waitForTimeout(250);
+  }
+  throw new Error(`visible button not found for pattern: ${String(namePattern)}`);
+}
+
 async function clickFormalConfirm(surface) {
-  const button = surface.getByRole("button", { name: /确认|Confirm/i }).last();
-  await expect(button).toBeVisible({ timeout: 30_000 });
+  const button = await waitForVisibleNamedButton(surface, /确认|Confirm/i);
   await button.click();
 }
 
 async function clickFormalSubmit(surface) {
-  const button = surface.getByRole("button", { name: /提交|Submit/i }).last();
-  await expect(button).toBeVisible({ timeout: 30_000 });
+  const button = await waitForVisibleNamedButton(surface, /提交|Submit/i);
   await button.click();
 }
 

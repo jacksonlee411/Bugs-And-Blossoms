@@ -575,27 +575,54 @@ async function sendFromFormalEntry(surface, text) {
   await surface.getByRole("button", { name: /发送消息|Send message/i }).click();
 }
 
+async function waitForVisibleNamedButton(surface, namePattern, timeoutMs = 30_000) {
+  const buttons = surface.getByRole("button", { name: namePattern });
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const count = await buttons.count();
+    for (let index = count - 1; index >= 0; index -= 1) {
+      const candidate = buttons.nth(index);
+      try {
+        if (await candidate.isVisible()) {
+          return candidate;
+        }
+      } catch {
+        // ignore transient locator detach during surface refresh
+      }
+    }
+    await surface.waitForTimeout(250);
+  }
+  throw new Error(`visible button not found for pattern: ${String(namePattern)}`);
+}
+
 async function clickFormalConfirm(surface) {
-  const button = surface.getByRole("button", { name: /确认|Confirm/i }).last();
-  await expect(button).toBeVisible({ timeout: 30_000 });
+  const button = await waitForVisibleNamedButton(surface, /确认|Confirm/i);
   await button.click();
 }
 
 async function maybeClickFormalConfirm(surface, timeoutMs = 5_000) {
-  const button = surface.getByRole("button", { name: /确认|Confirm/i }).last();
   try {
-    await expect(button).toBeVisible({ timeout: timeoutMs });
+    const button = await waitForVisibleNamedButton(surface, /确认|Confirm/i, timeoutMs);
+    await button.click();
+    return true;
   } catch {
     return false;
   }
-  await button.click();
-  return true;
 }
 
 async function clickFormalSubmit(surface) {
-  const button = surface.getByRole("button", { name: /提交|Submit/i }).last();
-  await expect(button).toBeVisible({ timeout: 30_000 });
+  const button = await waitForVisibleNamedButton(surface, /提交|Submit/i);
   await button.click();
+}
+
+async function tryClickFormalSubmit(surface, timeoutMs = 5_000) {
+  try {
+    const button = await waitForVisibleNamedButton(surface, /提交|Submit/i, timeoutMs);
+    await button.click();
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 async function clickFormalCandidateSelect(surface, ordinal) {
@@ -624,6 +651,11 @@ async function runFormalCaseStep(surface, caseId, stepIndex, text) {
 
   if (caseId === 3 && stepIndex === 2) {
     await maybeClickFormalConfirm(surface);
+    if (await tryClickFormalSubmit(surface, 5_000)) {
+      return;
+    }
+    await sendFromFormalEntry(surface, "上级组织 AI治理办公室，下新建 人力资源部239A补全，生效日期 2026-03-25");
+    await maybeClickFormalConfirm(surface, 30_000);
     await clickFormalSubmit(surface);
     return;
   }

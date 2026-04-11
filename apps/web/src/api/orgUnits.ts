@@ -238,6 +238,7 @@ export interface OrgUnitWriteAPIRequest {
   effective_date: string
   target_effective_date?: string
   policy_version?: string
+  effective_policy_version?: string
   request_id: string
   patch: {
     name?: string
@@ -278,6 +279,7 @@ export interface OrgUnitCreateFieldDecisionsResponse {
   business_unit_org_code: string
   as_of: string
   policy_version: string
+  effective_policy_version: string
   policy_version_alg?: string
   intent_policy_version?: string
   baseline_policy_version?: string
@@ -303,6 +305,7 @@ export interface OrgUnitWriteCapabilitiesResponse {
   capability_key: string
   baseline_capability_key?: string
   policy_version: string
+  effective_policy_version: string
   policy_version_alg?: string
   intent_policy_version?: string
   baseline_policy_version?: string
@@ -658,65 +661,4 @@ export async function disableOrgUnitFieldConfig(request: {
   request_id: string
 }): Promise<OrgUnitTenantFieldConfig> {
   return httpClient.post<OrgUnitTenantFieldConfig>('/org/api/org-units/field-configs:disable', request)
-}
-
-export type OrgUnitFieldPolicyScopeType = 'GLOBAL' | 'FORM'
-export type OrgUnitFieldPolicyDefaultMode = 'NONE' | 'CEL'
-
-export interface OrgUnitFieldPolicy {
-  field_key: string
-  scope_type: OrgUnitFieldPolicyScopeType
-  scope_key: string
-  maintainable: boolean
-  default_mode: OrgUnitFieldPolicyDefaultMode
-  default_rule_expr: string | null
-  enabled_on: string
-  disabled_on: string | null
-  updated_at: string
-}
-
-export interface OrgUnitFieldPolicyResolvePreviewResponse {
-  field_key: string
-  as_of: string
-  scope_type: OrgUnitFieldPolicyScopeType
-  scope_key: string
-  resolved_policy: OrgUnitFieldPolicy
-}
-
-export async function upsertOrgUnitFieldPolicy(request: {
-  field_key: string
-  scope_type: OrgUnitFieldPolicyScopeType
-  scope_key: string
-  maintainable: boolean
-  default_mode: OrgUnitFieldPolicyDefaultMode
-  default_rule_expr?: string
-  enabled_on: string
-  request_id: string
-}): Promise<OrgUnitFieldPolicy> {
-  return httpClient.post<OrgUnitFieldPolicy>('/org/api/org-units/field-policies', request)
-}
-
-export async function disableOrgUnitFieldPolicy(request: {
-  field_key: string
-  scope_type: OrgUnitFieldPolicyScopeType
-  scope_key: string
-  disabled_on: string
-  request_id: string
-}): Promise<OrgUnitFieldPolicy> {
-  return httpClient.post<OrgUnitFieldPolicy>('/org/api/org-units/field-policies:disable', request)
-}
-
-export async function resolveOrgUnitFieldPolicyPreview(options: {
-  fieldKey: string
-  asOf: string
-  scopeType: OrgUnitFieldPolicyScopeType
-  scopeKey: string
-}): Promise<OrgUnitFieldPolicyResolvePreviewResponse> {
-  const query = new URLSearchParams({
-    field_key: options.fieldKey,
-    as_of: options.asOf,
-    scope_type: options.scopeType,
-    scope_key: options.scopeKey
-  })
-  return httpClient.get<OrgUnitFieldPolicyResolvePreviewResponse>(`/org/api/org-units/field-policies:resolve-preview?${query.toString()}`)
 }

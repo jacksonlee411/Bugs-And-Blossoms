@@ -3,14 +3,10 @@ package server
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
+	"github.com/jacksonlee411/Bugs-And-Blossoms/internal/routing"
 	"net/http"
 	"strings"
-	"sync"
-
-	"github.com/google/cel-go/cel"
-	"github.com/jacksonlee411/Bugs-And-Blossoms/internal/routing"
 )
 
 const (
@@ -34,6 +30,7 @@ type internalEvaluationContext struct {
 	CapabilityKey       string `json:"capability_key"`
 	FieldKey            string `json:"field_key"`
 	SetID               string `json:"setid"`
+	SetIDSource         string `json:"setid_source,omitempty"`
 	BusinessUnitOrgCode string `json:"business_unit_org_code"`
 	OrgCode             string `json:"org_code"`
 	AsOf                string `json:"as_of"`
@@ -54,35 +51,25 @@ type internalRuleCandidate struct {
 }
 
 type internalRulesEvaluateResponse struct {
-	TraceID             string                    `json:"trace_id"`
-	RequestID           string                    `json:"request_id"`
-	CapabilityKey       string                    `json:"capability_key"`
-	FunctionalAreaKey   string                    `json:"functional_area_key"`
-	FieldKey            string                    `json:"field_key"`
-	SetID               string                    `json:"setid"`
-	PolicyVersion       string                    `json:"policy_version"`
-	Decision            string                    `json:"decision"`
-	ReasonCode          string                    `json:"reason_code"`
-	SelectedRuleID      string                    `json:"selected_rule_id,omitempty"`
-	SelectedRule        *internalRuleCandidate    `json:"selected_rule,omitempty"`
-	BriefExplain        string                    `json:"brief_explain"`
-	Context             internalEvaluationContext `json:"context"`
-	CandidatesEvaluated int                       `json:"candidates_evaluated"`
-	EligibilityMatched  int                       `json:"eligibility_matched"`
-}
-
-var newInternalRulesCELEnv = func() (*cel.Env, error) {
-	return cel.NewEnv(cel.Variable("ctx", cel.MapType(cel.StringType, cel.StringType)))
-}
-
-var newInternalRulesCELProgram = func(env *cel.Env, ast *cel.Ast) (cel.Program, error) {
-	return env.Program(ast)
+	TraceID                string                    `json:"trace_id"`
+	RequestID              string                    `json:"request_id"`
+	CapabilityKey          string                    `json:"capability_key"`
+	FunctionalAreaKey      string                    `json:"functional_area_key"`
+	FieldKey               string                    `json:"field_key"`
+	SetID                  string                    `json:"setid"`
+	PolicyVersion          string                    `json:"policy_version"`
+	EffectivePolicyVersion string                    `json:"effective_policy_version"`
+	Decision               string                    `json:"decision"`
+	ReasonCode             string                    `json:"reason_code"`
+	SelectedRuleID         string                    `json:"selected_rule_id,omitempty"`
+	SelectedRule           *internalRuleCandidate    `json:"selected_rule,omitempty"`
+	BriefExplain           string                    `json:"brief_explain"`
+	Context                internalEvaluationContext `json:"context"`
+	CandidatesEvaluated    int                       `json:"candidates_evaluated"`
+	EligibilityMatched     int                       `json:"eligibility_matched"`
 }
 
 var canViewInternalRulesEvaluate = canViewSetIDFullExplain
-
-var internalRuleEligibilityProgramCache sync.Map
-var internalRuleDecisionProgramCache sync.Map
 
 func handleInternalRulesEvaluateAPI(w http.ResponseWriter, r *http.Request, setidStore SetIDGovernanceStore, orgResolver OrgUnitCodeResolver) {
 	tenant, ok := currentTenant(r.Context())
@@ -135,24 +122,38 @@ func handleInternalRulesEvaluateAPI(w http.ResponseWriter, r *http.Request, seti
 	}
 	req.AsOf = asOf
 
-	businessUnitRef, err := resolveSetIDOrgCodeRef(r.Context(), tenant.ID, req.BusinessUnitOrgCode, orgResolver)
+	contextResolver := newSetIDContextResolver(orgResolver, setidStore)
+	policyCtx, err := contextResolver.ResolvePolicyContext(r.Context(), setIDPolicyContextInput{
+		TenantID:            tenant.ID,
+		CapabilityKey:       req.CapabilityKey,
+		FieldKey:            req.FieldKey,
+		AsOf:                req.AsOf,
+		BusinessUnitOrgCode: req.BusinessUnitOrgCode,
+	})
 	if err != nil {
-		writeSetIDExplainOrgCodeError(w, r, "business_unit_org_code", err)
+		if resolveErr, ok := asSetIDContextResolveError(err); ok {
+			switch resolveErr.Code {
+			case setIDContextCodeBusinessUnitInvalid:
+				writeSetIDExplainOrgCodeError(w, r, "business_unit_org_code", resolveErr.Cause)
+			case setIDContextCodeOrgResolverMissing:
+				routingWriteErrorInternal(w, r, http.StatusInternalServerError, resolveErr.Code, "orgunit resolver missing")
+			case setIDContextCodeSetIDResolverMissing:
+				routingWriteErrorInternal(w, r, http.StatusInternalServerError, resolveErr.Code, "setid resolver missing")
+			default:
+				routingWriteErrorInternal(w, r, http.StatusForbidden, capabilityReasonContextMismatch, "capability context mismatch")
+			}
+			return
+		}
+		routingWriteErrorInternal(w, r, http.StatusInternalServerError, "internal_error", "internal error")
 		return
 	}
-	req.BusinessUnitOrgCode = businessUnitRef.OrgCode
+	req.BusinessUnitOrgCode = policyCtx.BusinessUnitOrgCode
 	if req.OrgCode == "" {
 		req.OrgCode = req.BusinessUnitOrgCode
 	}
-	targetOrgRef, err := resolveSetIDOrgCodeRef(r.Context(), tenant.ID, req.OrgCode, orgResolver)
-	if err != nil {
-		writeSetIDExplainOrgCodeError(w, r, "org_code", err)
-		return
-	}
-	req.OrgCode = targetOrgRef.OrgCode
 
 	capCtx, capErr := resolveCapabilityContext(r.Context(), r, capabilityContextInput{
-		CapabilityKey:       req.CapabilityKey,
+		CapabilityKey:       policyCtx.CapabilityKey,
 		BusinessUnitOrgCode: req.BusinessUnitOrgCode,
 		AsOf:                req.AsOf,
 		RequireBusinessUnit: true,
@@ -170,19 +171,36 @@ func handleInternalRulesEvaluateAPI(w http.ResponseWriter, r *http.Request, seti
 		return
 	}
 
-	dynamicRelations := preloadCapabilityDynamicRelations(r.Context(), req.BusinessUnitOrgCode)
-	if !dynamicRelations.actorManages(req.OrgCode, req.AsOf) {
-		routingWriteErrorInternal(w, r, http.StatusForbidden, capabilityReasonContextMismatch, "capability context mismatch")
-		return
+	targetCtx := resolvedSetIDContext{
+		OrgCode:       policyCtx.BusinessUnitOrgCode,
+		OrgNodeKey:    policyCtx.BusinessUnitNodeKey,
+		ResolvedSetID: policyCtx.ResolvedSetID,
+		SetIDSource:   policyCtx.SetIDSource,
 	}
+	if !strings.EqualFold(req.OrgCode, capCtx.BusinessUnitOrgCode) {
+		targetCtx, err = contextResolver.ResolveOrgContext(r.Context(), tenant.ID, req.OrgCode, req.AsOf, "org_code")
+		if err != nil {
+			if resolveErr, ok := asSetIDContextResolveError(err); ok {
+				switch resolveErr.Code {
+				case setIDContextCodeBusinessUnitInvalid:
+					writeSetIDExplainOrgCodeError(w, r, "org_code", resolveErr.Cause)
+				case setIDContextCodeOrgResolverMissing:
+					routingWriteErrorInternal(w, r, http.StatusInternalServerError, resolveErr.Code, "orgunit resolver missing")
+				case setIDContextCodeSetIDResolverMissing:
+					routingWriteErrorInternal(w, r, http.StatusInternalServerError, resolveErr.Code, "setid resolver missing")
+				default:
+					routingWriteErrorInternal(w, r, http.StatusForbidden, capabilityReasonContextMismatch, "capability context mismatch")
+				}
+				return
+			}
+			routingWriteErrorInternal(w, r, http.StatusInternalServerError, "internal_error", "internal error")
+			return
+		}
+	}
+	req.OrgCode = targetCtx.OrgCode
 
-	resolvedSetID, err := setidStore.ResolveSetID(r.Context(), tenant.ID, targetOrgRef.OrgNodeKey, req.AsOf)
-	if err != nil {
-		routingWriteErrorInternal(w, r, http.StatusForbidden, capabilityReasonContextMismatch, "capability context mismatch")
-		return
-	}
-	resolvedSetID = strings.ToUpper(strings.TrimSpace(resolvedSetID))
-	if resolvedSetID == "" {
+	dynamicRelations := preloadCapabilityDynamicRelations(r.Context(), req.BusinessUnitOrgCode)
+	if !dynamicRelations.actorManages(targetCtx.OrgCode, req.AsOf) {
 		routingWriteErrorInternal(w, r, http.StatusForbidden, capabilityReasonContextMismatch, "capability context mismatch")
 		return
 	}
@@ -202,30 +220,34 @@ func handleInternalRulesEvaluateAPI(w http.ResponseWriter, r *http.Request, seti
 		traceID = fallbackSetIDExplainTraceID(requestID, req.CapabilityKey, req.BusinessUnitOrgCode, req.AsOf)
 	}
 
-	evalCtx := buildInternalEvaluationContext(r.Context(), tenant.ID, req, businessUnitRef.OrgNodeKey, resolvedSetID, requestID, traceID)
-	candidates := buildInternalRuleCandidates(items)
-	ctxMap := evalCtx.celContextMap()
-
-	decision, reasonCode, selectedRule, matched, evalErr := evaluateInternalRuleCandidates(ctxMap, candidates)
+	evalCtx := buildInternalEvaluationContext(r.Context(), tenant.ID, req, policyCtx.BusinessUnitNodeKey, targetCtx.ResolvedSetID, targetCtx.SetIDSource, requestID, traceID)
+	evaluation, evalErr := resolveInternalRulesEvaluation(items, req.CapabilityKey, req.FieldKey, targetCtx.ResolvedSetID, policyCtx.BusinessUnitNodeKey)
 	if evalErr != nil {
 		routingWriteErrorInternal(w, r, http.StatusInternalServerError, "internal_error", "internal error")
 		return
 	}
+	selectedRule := internalRuleCandidateFromResolution(evaluation.Resolution, evaluation.Decision, evaluation.ReasonCode)
+	matched := 0
+	if evaluation.Resolution != nil {
+		matched = len(evaluation.Resolution.MatchedItems)
+	}
+	effectivePolicyVersion, policyParts := resolveOrgUnitEffectivePolicyVersion(tenant.ID, req.CapabilityKey)
 
 	response := internalRulesEvaluateResponse{
-		TraceID:             traceID,
-		RequestID:           requestID,
-		CapabilityKey:       req.CapabilityKey,
-		FunctionalAreaKey:   functionalAreaKey,
-		FieldKey:            req.FieldKey,
-		SetID:               resolvedSetID,
-		PolicyVersion:       capabilityPolicyVersionBaseline,
-		Decision:            decision,
-		ReasonCode:          reasonCode,
-		BriefExplain:        internalRuleBriefExplain(selectedRule, matched),
-		Context:             evalCtx,
-		CandidatesEvaluated: len(candidates),
-		EligibilityMatched:  matched,
+		TraceID:                traceID,
+		RequestID:              requestID,
+		CapabilityKey:          req.CapabilityKey,
+		FunctionalAreaKey:      functionalAreaKey,
+		FieldKey:               req.FieldKey,
+		SetID:                  targetCtx.ResolvedSetID,
+		PolicyVersion:          policyParts.IntentPolicyVersion,
+		EffectivePolicyVersion: effectivePolicyVersion,
+		Decision:               evaluation.Decision,
+		ReasonCode:             evaluation.ReasonCode,
+		BriefExplain:           internalRuleBriefExplain(selectedRule, matched),
+		Context:                evalCtx,
+		CandidatesEvaluated:    len(items),
+		EligibilityMatched:     matched,
 	}
 	if selectedRule != nil {
 		response.SelectedRuleID = selectedRule.RuleID
@@ -240,12 +262,13 @@ func routingWriteErrorInternal(w http.ResponseWriter, r *http.Request, status in
 	routing.WriteError(w, r, routing.RouteClassInternalAPI, status, code, msg)
 }
 
-func buildInternalEvaluationContext(ctx context.Context, tenantID string, req internalRulesEvaluateRequest, businessUnitNodeKey string, resolvedSetID string, requestID string, traceID string) internalEvaluationContext {
+func buildInternalEvaluationContext(ctx context.Context, tenantID string, req internalRulesEvaluateRequest, businessUnitNodeKey string, resolvedSetID string, setIDSource string, requestID string, traceID string) internalEvaluationContext {
 	evalCtx := internalEvaluationContext{
 		TenantID:            tenantID,
 		CapabilityKey:       req.CapabilityKey,
 		FieldKey:            req.FieldKey,
 		SetID:               resolvedSetID,
+		SetIDSource:         strings.TrimSpace(setIDSource),
 		BusinessUnitOrgCode: req.BusinessUnitOrgCode,
 		OrgCode:             req.OrgCode,
 		AsOf:                req.AsOf,
@@ -268,6 +291,7 @@ func (c internalEvaluationContext) celContextMap() map[string]string {
 		"capability_key":         c.CapabilityKey,
 		"field_key":              c.FieldKey,
 		"setid":                  c.SetID,
+		"setid_source":           c.SetIDSource,
 		"business_unit_org_code": c.BusinessUnitOrgCode,
 		"org_code":               c.OrgCode,
 		"business_unit_node_key": c.businessUnitNodeKey,
@@ -277,133 +301,68 @@ func (c internalEvaluationContext) celContextMap() map[string]string {
 	}
 }
 
-func buildInternalRuleCandidates(items []setIDStrategyRegistryItem) []internalRuleCandidate {
-	out := make([]internalRuleCandidate, 0, len(items))
-	for _, item := range items {
-		decisionExpr, reasonCode := buildInternalDecisionAndReason(item)
-		out = append(out, internalRuleCandidate{
-			RuleID:          strategyRegistrySortKey(item),
-			Priority:        item.Priority,
-			EffectiveDate:   item.EffectiveDate,
-			EndDate:         item.EndDate,
-			EligibilityExpr: buildInternalEligibilityExpr(item),
-			DecisionExpr:    decisionExpr,
-			ReasonCode:      reasonCode,
-		})
-	}
-	return out
+type internalRulesEvaluation struct {
+	Decision   string
+	ReasonCode string
+	Resolution *setIDFieldDecisionResolution
 }
 
-func buildInternalEligibilityExpr(item setIDStrategyRegistryItem) string {
-	if item.OrgApplicability == orgApplicabilityBusinessUnit {
-		return fmt.Sprintf("ctx[\"business_unit_node_key\"] == %q", strings.TrimSpace(item.BusinessUnitNodeKey))
-	}
-	return "true"
-}
-
-func buildInternalDecisionAndReason(item setIDStrategyRegistryItem) (string, string) {
-	if !item.Visible {
-		return "\"deny\"", fieldHiddenInContextCode
-	}
-	if item.Required {
-		return "\"allow\"", fieldRequiredInContextCode
-	}
-	return "\"allow\"", fieldVisibleInContextCode
-}
-
-func evaluateInternalRuleCandidates(ctxMap map[string]string, candidates []internalRuleCandidate) (string, string, *internalRuleCandidate, int, error) {
-	matched := 0
-	var selected *internalRuleCandidate
-	for i := range candidates {
-		candidate := candidates[i]
-		eligible, err := evalInternalEligibilityExpr(candidate.EligibilityExpr, ctxMap)
-		if err != nil {
-			return "", "", nil, matched, err
-		}
-		if !eligible {
-			continue
-		}
-		matched++
-		if selected == nil || candidate.Priority > selected.Priority ||
-			(candidate.Priority == selected.Priority && candidate.EffectiveDate > selected.EffectiveDate) {
-			copyCandidate := candidate
-			selected = &copyCandidate
-		}
-	}
-	if selected == nil {
-		return internalRuleDecisionDeny, fieldPolicyMissingCode, nil, matched, nil
-	}
-	decision, err := evalInternalDecisionExpr(selected.DecisionExpr, ctxMap)
+func resolveInternalRulesEvaluation(
+	items []setIDStrategyRegistryItem,
+	capabilityKey string,
+	fieldKey string,
+	resolvedSetID string,
+	businessUnitNodeKey string,
+) (internalRulesEvaluation, error) {
+	resolution, err := resolveFieldDecisionWithTraceFromItems(items, capabilityKey, fieldKey, resolvedSetID, businessUnitNodeKey)
 	if err != nil {
-		return "", "", nil, matched, err
+		if decision, reasonCode, ok := internalRuleDecisionFromError(err); ok {
+			return internalRulesEvaluation{
+				Decision:   decision,
+				ReasonCode: reasonCode,
+			}, nil
+		}
+		return internalRulesEvaluation{}, err
 	}
-	switch decision {
-	case internalRuleDecisionAllow, internalRuleDecisionDeny:
+
+	fieldDecision, decision, reasonCode := applySetIDFieldVisibility(resolution.Decision)
+	fieldDecision.Decision = decision
+	fieldDecision.ReasonCode = reasonCode
+	return internalRulesEvaluation{
+		Decision:   fieldDecision.Decision,
+		ReasonCode: fieldDecision.ReasonCode,
+		Resolution: &resolution,
+	}, nil
+}
+
+func internalRuleDecisionFromError(err error) (string, string, bool) {
+	code := strings.TrimSpace(stablePgMessage(err))
+	switch code {
+	case fieldPolicyMissingCode,
+		fieldPolicyConflictCode,
+		fieldDefaultRuleMissingCode,
+		fieldPolicyPriorityModeCode,
+		fieldPolicyModeComboCode:
+		return internalRuleDecisionDeny, code, true
 	default:
-		decision = internalRuleDecisionDeny
+		return "", "", false
 	}
-	reasonCode := strings.TrimSpace(selected.ReasonCode)
-	if reasonCode == "" {
-		if decision == internalRuleDecisionDeny {
-			reasonCode = fieldPolicyMissingCode
-		} else {
-			reasonCode = fieldVisibleInContextCode
-		}
-	}
-	return decision, reasonCode, selected, matched, nil
 }
 
-func evalInternalEligibilityExpr(expr string, ctxMap map[string]string) (bool, error) {
-	program, err := loadOrCompileInternalProgram(expr, cel.BoolType, &internalRuleEligibilityProgramCache)
-	if err != nil {
-		return false, err
+func internalRuleCandidateFromResolution(resolution *setIDFieldDecisionResolution, decision string, reasonCode string) *internalRuleCandidate {
+	if resolution == nil || resolution.PrimaryItem == nil {
+		return nil
 	}
-	out, _, err := program.Eval(map[string]any{"ctx": ctxMap})
-	if err != nil {
-		return false, err
+	item := *resolution.PrimaryItem
+	return &internalRuleCandidate{
+		RuleID:          resolution.PrimaryPolicyID,
+		Priority:        item.Priority,
+		EffectiveDate:   item.EffectiveDate,
+		EndDate:         item.EndDate,
+		EligibilityExpr: resolution.MatchedBucket,
+		DecisionExpr:    strings.TrimSpace(decision),
+		ReasonCode:      strings.TrimSpace(reasonCode),
 	}
-	v := out.Value().(bool)
-	return v, nil
-}
-
-func evalInternalDecisionExpr(expr string, ctxMap map[string]string) (string, error) {
-	program, err := loadOrCompileInternalProgram(expr, cel.StringType, &internalRuleDecisionProgramCache)
-	if err != nil {
-		return "", err
-	}
-	out, _, err := program.Eval(map[string]any{"ctx": ctxMap})
-	if err != nil {
-		return "", err
-	}
-	v := out.Value().(string)
-	return strings.ToLower(strings.TrimSpace(v)), nil
-}
-
-func loadOrCompileInternalProgram(expr string, outputType *cel.Type, cache *sync.Map) (cel.Program, error) {
-	expr = strings.TrimSpace(expr)
-	if expr == "" {
-		return nil, errors.New("expression required")
-	}
-	if cached, ok := cache.Load(expr); ok {
-		return cached.(cel.Program), nil
-	}
-	env, err := newInternalRulesCELEnv()
-	if err != nil {
-		return nil, err
-	}
-	ast, issues := env.Compile(expr)
-	if issues != nil && issues.Err() != nil {
-		return nil, issues.Err()
-	}
-	if ast.OutputType() != outputType {
-		return nil, errors.New("expression output type mismatch")
-	}
-	program, err := newInternalRulesCELProgram(env, ast)
-	if err != nil {
-		return nil, err
-	}
-	cache.Store(expr, program)
-	return program, nil
 }
 
 func internalRuleBriefExplain(selectedRule *internalRuleCandidate, matched int) string {

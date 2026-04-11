@@ -15,18 +15,19 @@ import (
 )
 
 type orgUnitWriteCapabilitiesAPIResponse struct {
-	Intent                string            `json:"intent"`
-	CapabilityKey         string            `json:"capability_key"`
-	BaselineCapabilityKey string            `json:"baseline_capability_key,omitempty"`
-	PolicyVersion         string            `json:"policy_version"`
-	PolicyVersionAlg      string            `json:"policy_version_alg,omitempty"`
-	IntentPolicyVersion   string            `json:"intent_policy_version,omitempty"`
-	BaselinePolicyVersion string            `json:"baseline_policy_version,omitempty"`
-	TreeInitialized       bool              `json:"tree_initialized"`
-	Enabled               bool              `json:"enabled"`
-	DenyReasons           []string          `json:"deny_reasons"`
-	AllowedFields         []string          `json:"allowed_fields"`
-	FieldPayloadKeys      map[string]string `json:"field_payload_keys"`
+	Intent                 string            `json:"intent"`
+	CapabilityKey          string            `json:"capability_key"`
+	BaselineCapabilityKey  string            `json:"baseline_capability_key,omitempty"`
+	PolicyVersion          string            `json:"policy_version"`
+	EffectivePolicyVersion string            `json:"effective_policy_version"`
+	PolicyVersionAlg       string            `json:"policy_version_alg,omitempty"`
+	IntentPolicyVersion    string            `json:"intent_policy_version,omitempty"`
+	BaselinePolicyVersion  string            `json:"baseline_policy_version,omitempty"`
+	TreeInitialized        bool              `json:"tree_initialized"`
+	Enabled                bool              `json:"enabled"`
+	DenyReasons            []string          `json:"deny_reasons"`
+	AllowedFields          []string          `json:"allowed_fields"`
+	FieldPayloadKeys       map[string]string `json:"field_payload_keys"`
 }
 
 type orgUnitWriteCapabilitiesStore interface {
@@ -196,18 +197,19 @@ func handleOrgUnitWriteCapabilitiesAPI(w http.ResponseWriter, r *http.Request, s
 	effectivePolicyVersion, policyParts := resolveOrgUnitEffectivePolicyVersion(tenant.ID, capabilityKey)
 
 	resp := orgUnitWriteCapabilitiesAPIResponse{
-		Intent:                intent,
-		CapabilityKey:         capabilityKey,
-		BaselineCapabilityKey: policyParts.BaselineCapabilityKey,
-		PolicyVersion:         effectivePolicyVersion,
-		PolicyVersionAlg:      orgUnitEffectivePolicyVersionAlgorithm,
-		IntentPolicyVersion:   policyParts.IntentPolicyVersion,
-		BaselinePolicyVersion: policyParts.BaselinePolicyVersion,
-		TreeInitialized:       treeInitialized,
-		Enabled:               decision.Enabled,
-		DenyReasons:           decision.DenyReasons,
-		AllowedFields:         decision.AllowedFields,
-		FieldPayloadKeys:      decision.FieldPayloadKeys,
+		Intent:                 intent,
+		CapabilityKey:          capabilityKey,
+		BaselineCapabilityKey:  policyParts.BaselineCapabilityKey,
+		PolicyVersion:          policyParts.IntentPolicyVersion,
+		EffectivePolicyVersion: effectivePolicyVersion,
+		PolicyVersionAlg:       orgUnitEffectivePolicyVersionAlgorithm,
+		IntentPolicyVersion:    policyParts.IntentPolicyVersion,
+		BaselinePolicyVersion:  policyParts.BaselinePolicyVersion,
+		TreeInitialized:        treeInitialized,
+		Enabled:                decision.Enabled,
+		DenyReasons:            decision.DenyReasons,
+		AllowedFields:          decision.AllowedFields,
+		FieldPayloadKeys:       decision.FieldPayloadKeys,
 	}
 
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")

@@ -18,7 +18,6 @@ import (
 type orgUnitWriteResolverStoreStub struct {
 	orgUnitWriteStoreStub
 	findByRequestFn func(ctx context.Context, tenantID string, requestID string) (types.OrgUnitEvent, bool, error)
-	resolvePolicyFn func(ctx context.Context, tenantID string, fieldKey string, scopeType string, scopeKey string, asOf string) (types.TenantFieldPolicy, bool, error)
 }
 
 func (s orgUnitWriteResolverStoreStub) FindEventByRequestID(ctx context.Context, tenantID string, requestID string) (types.OrgUnitEvent, bool, error) {
@@ -26,13 +25,6 @@ func (s orgUnitWriteResolverStoreStub) FindEventByRequestID(ctx context.Context,
 		return s.findByRequestFn(ctx, tenantID, requestID)
 	}
 	return types.OrgUnitEvent{}, false, nil
-}
-
-func (s orgUnitWriteResolverStoreStub) ResolveTenantFieldPolicy(ctx context.Context, tenantID string, fieldKey string, scopeType string, scopeKey string, asOf string) (types.TenantFieldPolicy, bool, error) {
-	if s.resolvePolicyFn != nil {
-		return s.resolvePolicyFn(ctx, tenantID, fieldKey, scopeType, scopeKey, asOf)
-	}
-	return types.TenantFieldPolicy{}, false, nil
 }
 
 type orgUnitWriteAutoCodeStoreStub struct {

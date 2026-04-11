@@ -10643,6 +10643,7 @@ CREATE TABLE IF NOT EXISTS orgunit.setid_strategy_registry (
   personalization_mode text NOT NULL,
   org_applicability text NOT NULL,
   business_unit_node_key text NOT NULL DEFAULT '',
+  resolved_setid text NOT NULL DEFAULT '',
   required boolean NOT NULL DEFAULT false,
   visible boolean NOT NULL DEFAULT true,
   default_rule_ref text NULL,
@@ -10674,12 +10675,24 @@ CREATE TABLE IF NOT EXISTS orgunit.setid_strategy_registry (
   CONSTRAINT setid_strategy_registry_org_applicability_check CHECK (
     org_applicability IN ('tenant', 'business_unit')
   ),
-  CONSTRAINT setid_strategy_registry_business_unit_node_key_applicability_check CHECK (
-    (org_applicability = 'tenant' AND business_unit_node_key = '')
+  CONSTRAINT setid_strategy_registry_resolved_setid_format_check CHECK (
+    btrim(resolved_setid) = ''
+    OR btrim(resolved_setid) ~ '^[A-Z0-9]{5}$'
+  ),
+  CONSTRAINT setid_strategy_registry_scope_shape_check CHECK (
+    (
+      org_applicability = 'tenant'
+      AND business_unit_node_key = ''
+      AND (
+        btrim(resolved_setid) = ''
+        OR btrim(resolved_setid) ~ '^[A-Z0-9]{5}$'
+      )
+    )
     OR
     (
       org_applicability = 'business_unit'
       AND orgunit.is_valid_org_node_key(btrim(business_unit_node_key))
+      AND btrim(resolved_setid) ~ '^[A-Z0-9]{5}$'
     )
   ),
   CONSTRAINT setid_strategy_registry_priority_check CHECK (priority > 0),
@@ -10697,6 +10710,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS setid_strategy_registry_key_unique_idx
     capability_key,
     field_key,
     org_applicability,
+    resolved_setid,
     business_unit_node_key,
     effective_date
   );
@@ -10706,6 +10720,8 @@ CREATE INDEX IF NOT EXISTS setid_strategy_registry_lookup_idx
     tenant_uuid,
     capability_key,
     field_key,
+    resolved_setid,
+    business_unit_node_key,
     effective_date DESC
   );
 

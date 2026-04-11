@@ -1,9 +1,9 @@
 {
   "case_id": 1,
-  "conversation_id": "conv_b917951d68de41d1ba32eac7706191c5",
-  "turn_id": "turn_8ee58961d7a7465db8e1bbe78d81f636",
-  "request_id": "assistant_174d0cca313a4819ae9049339f86a946",
-  "trace_id": "b74b4f353ded45ea8ab33c442191efb7",
+  "conversation_id": "conv_bec3267448184b0881350d6afc2dd99c",
+  "turn_id": "turn_8f85ebb5f1a14db981c82554f240a53f",
+  "request_id": "assistant_b2fcc823b15c4d92aee4e616a40025a4",
+  "trace_id": "a06a9a517aba42af9a9dce34e3209898",
   "intent_action_expected": "plan_only",
   "intent_action_actual": "",
   "acceptance_mode": "idle_no_turn_fail_closed",

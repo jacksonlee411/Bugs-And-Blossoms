@@ -8,10 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
-	"sync"
 	"testing"
-
-	"github.com/google/cel-go/cel"
 )
 
 func TestHandleInternalRulesEvaluateAPI(t *testing.T) {
@@ -19,15 +16,15 @@ func TestHandleInternalRulesEvaluateAPI(t *testing.T) {
 	t.Cleanup(resetSetIDStrategyRegistryRuntimeForTest)
 	resetFunctionalAreaSwitchStoreForTest()
 	t.Cleanup(resetFunctionalAreaSwitchStoreForTest)
-	internalRuleEligibilityProgramCache = sync.Map{}
-	internalRuleDecisionProgramCache = sync.Map{}
 
+	orgNodeKeyA := mustOrgNodeKeyForTest(t, 10000001)
+	orgNodeKeyB := mustOrgNodeKeyForTest(t, 10000002)
 	store := scopeAPIStore{
 		resolveSetIDFn: func(_ context.Context, _ string, orgUnitID string, _ string) (string, error) {
 			switch orgUnitID {
-			case "10000001", mustOrgNodeKeyForTest(t, 10000001):
+			case "10000001", orgNodeKeyA:
 				return "A0001", nil
-			case "10000002", mustOrgNodeKeyForTest(t, 10000002):
+			case "10000002", orgNodeKeyB:
 				return "B0001", nil
 			default:
 				return "", errors.New("SETID_NOT_FOUND")
@@ -36,13 +33,13 @@ func TestHandleInternalRulesEvaluateAPI(t *testing.T) {
 	}
 	orgResolver := setIDExplainOrgResolverStub{
 		byCode: map[string]string{
-			"BU-001": mustOrgNodeKeyForTest(t, 10000001),
-			"BU-002": mustOrgNodeKeyForTest(t, 10000002),
+			"BU-001": orgNodeKeyA,
+			"BU-002": orgNodeKeyB,
 			"BU-999": mustOrgNodeKeyForTest(t, 99999999),
 		},
 	}
 
-	_, _ = defaultSetIDStrategyRegistryRuntime.upsert("t1", setIDStrategyRegistryItem{
+	tenantItem, _ := defaultSetIDStrategyRegistryRuntime.upsert("t1", setIDStrategyRegistryItem{
 		CapabilityKey:       "staffing.assignment_create.field_policy",
 		OwnerModule:         "staffing",
 		FieldKey:            "field_x",
@@ -57,13 +54,14 @@ func TestHandleInternalRulesEvaluateAPI(t *testing.T) {
 		EffectiveDate:       "2026-01-01",
 		Priority:            100,
 	})
-	_, _ = defaultSetIDStrategyRegistryRuntime.upsert("t1", setIDStrategyRegistryItem{
+	buAItem, _ := defaultSetIDStrategyRegistryRuntime.upsert("t1", setIDStrategyRegistryItem{
 		CapabilityKey:       "staffing.assignment_create.field_policy",
 		OwnerModule:         "staffing",
 		FieldKey:            "field_x",
 		PersonalizationMode: personalizationModeSetID,
 		OrgApplicability:    orgApplicabilityBusinessUnit,
-		BusinessUnitNodeKey: mustOrgNodeKeyForTest(t, 10000001),
+		BusinessUnitNodeKey: orgNodeKeyA,
+		ResolvedSetID:       "A0001",
 		Required:            true,
 		Visible:             true,
 		DefaultRuleRef:      "rule://bu-a",
@@ -72,13 +70,14 @@ func TestHandleInternalRulesEvaluateAPI(t *testing.T) {
 		EffectiveDate:       "2026-01-01",
 		Priority:            200,
 	})
-	_, _ = defaultSetIDStrategyRegistryRuntime.upsert("t1", setIDStrategyRegistryItem{
+	hiddenItem, _ := defaultSetIDStrategyRegistryRuntime.upsert("t1", setIDStrategyRegistryItem{
 		CapabilityKey:       "staffing.assignment_create.field_policy",
 		OwnerModule:         "staffing",
 		FieldKey:            "field_hidden",
 		PersonalizationMode: personalizationModeSetID,
 		OrgApplicability:    orgApplicabilityBusinessUnit,
-		BusinessUnitNodeKey: mustOrgNodeKeyForTest(t, 10000001),
+		BusinessUnitNodeKey: orgNodeKeyA,
+		ResolvedSetID:       "A0001",
 		Required:            false,
 		Visible:             false,
 		DefaultRuleRef:      "rule://hidden",
@@ -112,21 +111,15 @@ func TestHandleInternalRulesEvaluateAPI(t *testing.T) {
 	reqStoreMissing := makeReq(`{"capability_key":"staffing.assignment_create.field_policy","field_key":"field_x","business_unit_org_code":"BU-001","as_of":"2026-01-01"}`)
 	reqStoreMissing = reqStoreMissing.WithContext(withPrincipal(reqStoreMissing.Context(), Principal{RoleSlug: "tenant-admin"}))
 	handleInternalRulesEvaluateAPI(recStoreMissing, reqStoreMissing, nil, orgResolver)
-	if recStoreMissing.Code != http.StatusInternalServerError {
-		t.Fatalf("status=%d", recStoreMissing.Code)
-	}
-	if !strings.Contains(recStoreMissing.Body.String(), "setid_resolver_missing") {
-		t.Fatalf("unexpected body: %q", recStoreMissing.Body.String())
+	if recStoreMissing.Code != http.StatusInternalServerError || !strings.Contains(recStoreMissing.Body.String(), "setid_resolver_missing") {
+		t.Fatalf("status=%d body=%s", recStoreMissing.Code, recStoreMissing.Body.String())
 	}
 
 	recForbidden := httptest.NewRecorder()
 	reqForbidden := makeReq(`{"capability_key":"staffing.assignment_create.field_policy","field_key":"field_x","business_unit_org_code":"BU-001","as_of":"2026-01-01"}`)
 	handleInternalRulesEvaluateAPI(recForbidden, reqForbidden, store, orgResolver)
-	if recForbidden.Code != http.StatusForbidden {
-		t.Fatalf("status=%d", recForbidden.Code)
-	}
-	if !strings.Contains(recForbidden.Body.String(), scopeReasonActorScopeForbidden) {
-		t.Fatalf("unexpected body: %q", recForbidden.Body.String())
+	if recForbidden.Code != http.StatusForbidden || !strings.Contains(recForbidden.Body.String(), scopeReasonActorScopeForbidden) {
+		t.Fatalf("status=%d body=%s", recForbidden.Code, recForbidden.Body.String())
 	}
 
 	recBadRequest := httptest.NewRecorder()
@@ -141,11 +134,8 @@ func TestHandleInternalRulesEvaluateAPI(t *testing.T) {
 	reqBadJSON := makeReq(`{`)
 	reqBadJSON = reqBadJSON.WithContext(withPrincipal(reqBadJSON.Context(), Principal{RoleSlug: "tenant-admin"}))
 	handleInternalRulesEvaluateAPI(recBadJSON, reqBadJSON, store, orgResolver)
-	if recBadJSON.Code != http.StatusBadRequest {
-		t.Fatalf("status=%d", recBadJSON.Code)
-	}
-	if !strings.Contains(recBadJSON.Body.String(), `"code":"bad_json"`) {
-		t.Fatalf("unexpected body: %q", recBadJSON.Body.String())
+	if recBadJSON.Code != http.StatusBadRequest || !strings.Contains(recBadJSON.Body.String(), `"code":"bad_json"`) {
+		t.Fatalf("status=%d body=%s", recBadJSON.Code, recBadJSON.Body.String())
 	}
 
 	recInvalidField := httptest.NewRecorder()
@@ -203,53 +193,44 @@ func TestHandleInternalRulesEvaluateAPI(t *testing.T) {
 	reqContextMismatch.Header.Set("X-Actor-Scope", "saas")
 	reqContextMismatch = reqContextMismatch.WithContext(withPrincipal(reqContextMismatch.Context(), Principal{RoleSlug: "tenant-admin"}))
 	handleInternalRulesEvaluateAPI(recContextMismatch, reqContextMismatch, store, orgResolver)
-	if recContextMismatch.Code != http.StatusForbidden {
-		t.Fatalf("status=%d", recContextMismatch.Code)
-	}
-	if !strings.Contains(recContextMismatch.Body.String(), capabilityReasonContextMismatch) {
-		t.Fatalf("unexpected body: %q", recContextMismatch.Body.String())
+	if recContextMismatch.Code != http.StatusForbidden || !strings.Contains(recContextMismatch.Body.String(), capabilityReasonContextMismatch) {
+		t.Fatalf("status=%d body=%s", recContextMismatch.Code, recContextMismatch.Body.String())
 	}
 
 	recBUA := httptest.NewRecorder()
 	reqBUA := makeReq(`{"capability_key":"staffing.assignment_create.field_policy","field_key":"field_x","business_unit_org_code":"BU-001","as_of":"2026-01-01","request_id":"req-bu-a"}`)
 	reqBUA = reqBUA.WithContext(withPrincipal(reqBUA.Context(), Principal{ID: "p1", RoleSlug: "tenant-admin"}))
 	handleInternalRulesEvaluateAPI(recBUA, reqBUA, store, orgResolver)
-	if recBUA.Code != http.StatusOK {
-		t.Fatalf("status=%d body=%s", recBUA.Code, recBUA.Body.String())
-	}
-	buANodeKey := mustOrgNodeKeyForTest(t, 10000001)
-	if !strings.Contains(recBUA.Body.String(), `"decision":"allow"`) ||
+	if recBUA.Code != http.StatusOK ||
+		!strings.Contains(recBUA.Body.String(), `"decision":"allow"`) ||
 		!strings.Contains(recBUA.Body.String(), `"reason_code":"`+fieldRequiredInContextCode+`"`) ||
 		!strings.Contains(recBUA.Body.String(), `"functional_area_key":"staffing"`) ||
 		!strings.Contains(recBUA.Body.String(), `"setid":"A0001"`) ||
-		!strings.Contains(recBUA.Body.String(), `"selected_rule_id":"staffing.assignment_create.field_policy|field_x|business_unit|`+buANodeKey+`|2026-01-01"`) {
-		t.Fatalf("unexpected body: %q", recBUA.Body.String())
+		!strings.Contains(recBUA.Body.String(), `"selected_rule_id":"`+strategyRegistryPolicyID(buAItem)+`"`) {
+		t.Fatalf("status=%d body=%s", recBUA.Code, recBUA.Body.String())
 	}
 
 	recBUB := httptest.NewRecorder()
 	reqBUB := makeReq(`{"capability_key":"staffing.assignment_create.field_policy","field_key":"field_x","business_unit_org_code":"BU-002","as_of":"2026-01-01","request_id":"req-bu-b"}`)
 	reqBUB = reqBUB.WithContext(withPrincipal(reqBUB.Context(), Principal{ID: "p1", RoleSlug: "tenant-admin"}))
 	handleInternalRulesEvaluateAPI(recBUB, reqBUB, store, orgResolver)
-	if recBUB.Code != http.StatusOK {
-		t.Fatalf("status=%d body=%s", recBUB.Code, recBUB.Body.String())
-	}
-	if !strings.Contains(recBUB.Body.String(), `"decision":"allow"`) ||
+	if recBUB.Code != http.StatusOK ||
+		!strings.Contains(recBUB.Body.String(), `"decision":"allow"`) ||
 		!strings.Contains(recBUB.Body.String(), `"reason_code":"`+fieldVisibleInContextCode+`"`) ||
 		!strings.Contains(recBUB.Body.String(), `"setid":"B0001"`) ||
-		!strings.Contains(recBUB.Body.String(), `"selected_rule_id":"staffing.assignment_create.field_policy|field_x|tenant||2026-01-01"`) {
-		t.Fatalf("unexpected body: %q", recBUB.Body.String())
+		!strings.Contains(recBUB.Body.String(), `"selected_rule_id":"`+strategyRegistryPolicyID(tenantItem)+`"`) {
+		t.Fatalf("status=%d body=%s", recBUB.Code, recBUB.Body.String())
 	}
 
 	recHidden := httptest.NewRecorder()
 	reqHidden := makeReq(`{"capability_key":"staffing.assignment_create.field_policy","field_key":"field_hidden","business_unit_org_code":"BU-001","as_of":"2026-01-01","request_id":"req-hidden"}`)
 	reqHidden = reqHidden.WithContext(withPrincipal(reqHidden.Context(), Principal{ID: "p1", RoleSlug: "tenant-admin"}))
 	handleInternalRulesEvaluateAPI(recHidden, reqHidden, store, orgResolver)
-	if recHidden.Code != http.StatusOK {
+	if recHidden.Code != http.StatusOK ||
+		!strings.Contains(recHidden.Body.String(), `"decision":"deny"`) ||
+		!strings.Contains(recHidden.Body.String(), `"reason_code":"`+fieldHiddenInContextCode+`"`) ||
+		!strings.Contains(recHidden.Body.String(), `"selected_rule_id":"`+strategyRegistryPolicyID(hiddenItem)+`"`) {
 		t.Fatalf("status=%d body=%s", recHidden.Code, recHidden.Body.String())
-	}
-	if !strings.Contains(recHidden.Body.String(), `"decision":"deny"`) ||
-		!strings.Contains(recHidden.Body.String(), `"reason_code":"`+fieldHiddenInContextCode+`"`) {
-		t.Fatalf("unexpected body: %q", recHidden.Body.String())
 	}
 
 	recResolveErr := httptest.NewRecorder()
@@ -315,24 +296,16 @@ func TestHandleInternalRulesEvaluateAPI(t *testing.T) {
 	}
 	useSetIDStrategyRegistryStore(previousStore)
 
-	internalRuleEligibilityProgramCache = sync.Map{}
-	internalRuleDecisionProgramCache = sync.Map{}
-	prevEnv := newInternalRulesCELEnv
-	newInternalRulesCELEnv = func() (*cel.Env, error) {
-		return nil, errors.New("env not available")
+	recMissingPolicy := httptest.NewRecorder()
+	reqMissingPolicy := makeReq(`{"capability_key":"staffing.assignment_create.field_policy","field_key":"missing_field","business_unit_org_code":"BU-001","as_of":"2026-01-01","request_id":"req-missing"}`)
+	reqMissingPolicy = reqMissingPolicy.WithContext(withPrincipal(reqMissingPolicy.Context(), Principal{RoleSlug: "tenant-admin"}))
+	handleInternalRulesEvaluateAPI(recMissingPolicy, reqMissingPolicy, store, orgResolver)
+	if recMissingPolicy.Code != http.StatusOK ||
+		!strings.Contains(recMissingPolicy.Body.String(), `"decision":"deny"`) ||
+		!strings.Contains(recMissingPolicy.Body.String(), `"reason_code":"`+fieldPolicyMissingCode+`"`) {
+		t.Fatalf("status=%d body=%s", recMissingPolicy.Code, recMissingPolicy.Body.String())
 	}
-	t.Cleanup(func() { newInternalRulesCELEnv = prevEnv })
-	recEvalErr := httptest.NewRecorder()
-	reqEvalErr := makeReq(`{"capability_key":"staffing.assignment_create.field_policy","field_key":"field_x","business_unit_org_code":"BU-001","as_of":"2026-01-01","request_id":"req-eval-err"}`)
-	reqEvalErr = reqEvalErr.WithContext(withPrincipal(reqEvalErr.Context(), Principal{RoleSlug: "tenant-admin"}))
-	handleInternalRulesEvaluateAPI(recEvalErr, reqEvalErr, store, orgResolver)
-	if recEvalErr.Code != http.StatusInternalServerError || !strings.Contains(recEvalErr.Body.String(), `"code":"internal_error"`) {
-		t.Fatalf("status=%d body=%s", recEvalErr.Code, recEvalErr.Body.String())
-	}
-	newInternalRulesCELEnv = prevEnv
 
-	internalRuleEligibilityProgramCache = sync.Map{}
-	internalRuleDecisionProgramCache = sync.Map{}
 	recAutoIDs := httptest.NewRecorder()
 	reqAutoIDs := makeReq(`{"capability_key":"staffing.assignment_create.field_policy","field_key":"field_x","business_unit_org_code":"BU-001","as_of":"2026-01-01"}`)
 	reqAutoIDs = reqAutoIDs.WithContext(withPrincipal(reqAutoIDs.Context(), Principal{RoleSlug: "tenant-admin"}))
@@ -352,173 +325,84 @@ func TestHandleInternalRulesEvaluateAPI(t *testing.T) {
 	}
 }
 
-func TestEvaluateInternalRuleCandidates(t *testing.T) {
-	internalRuleEligibilityProgramCache = sync.Map{}
-	internalRuleDecisionProgramCache = sync.Map{}
-	buANodeKey := mustOrgNodeKeyForTest(t, 10000001)
-	buBNodeKey := mustOrgNodeKeyForTest(t, 10000002)
-
-	candidates := []internalRuleCandidate{
+func TestResolveInternalRulesEvaluation(t *testing.T) {
+	buNodeKey := mustOrgNodeKeyForTest(t, 10000001)
+	items := []setIDStrategyRegistryItem{
 		{
-			RuleID:          "tenant",
-			Priority:        100,
-			EffectiveDate:   "2026-01-01",
-			EligibilityExpr: "true",
-			DecisionExpr:    "\"allow\"",
-			ReasonCode:      fieldVisibleInContextCode,
+			CapabilityKey:    "staffing.assignment_create.field_policy",
+			FieldKey:         "field_x",
+			OrgApplicability: orgApplicabilityTenant,
+			Required:         false,
+			Visible:          true,
+			Maintainable:     true,
+			DefaultValue:     "tenant",
+			Priority:         100,
+			EffectiveDate:    "2026-01-01",
+			UpdatedAt:        "2026-01-01T00:00:00Z",
 		},
 		{
-			RuleID:          "bu",
-			Priority:        200,
-			EffectiveDate:   "2026-01-01",
-			EligibilityExpr: `ctx["business_unit_node_key"] == "` + buANodeKey + `"`,
-			DecisionExpr:    "\"deny\"",
-			ReasonCode:      fieldHiddenInContextCode,
+			CapabilityKey:       "staffing.assignment_create.field_policy",
+			FieldKey:            "field_x",
+			OrgApplicability:    orgApplicabilityBusinessUnit,
+			ResolvedSetID:       "A0001",
+			BusinessUnitNodeKey: buNodeKey,
+			Required:            true,
+			Visible:             true,
+			Maintainable:        true,
+			DefaultValue:        "bu",
+			Priority:            200,
+			EffectiveDate:       "2026-01-01",
+			UpdatedAt:           "2026-01-02T00:00:00Z",
 		},
 	}
 
-	decision, reasonCode, selected, matched, err := evaluateInternalRuleCandidates(map[string]string{"business_unit_node_key": buANodeKey}, candidates)
+	evaluation, err := resolveInternalRulesEvaluation(items, "staffing.assignment_create.field_policy", "field_x", "A0001", buNodeKey)
 	if err != nil {
 		t.Fatalf("err=%v", err)
 	}
-	if decision != internalRuleDecisionDeny || reasonCode != fieldHiddenInContextCode || matched != 2 || selected == nil || selected.RuleID != "bu" {
-		t.Fatalf("unexpected result decision=%s reason=%s matched=%d selected=%+v", decision, reasonCode, matched, selected)
+	if evaluation.Decision != internalRuleDecisionAllow || evaluation.ReasonCode != fieldRequiredInContextCode || evaluation.Resolution == nil {
+		t.Fatalf("evaluation=%+v", evaluation)
+	}
+	selected := internalRuleCandidateFromResolution(evaluation.Resolution, evaluation.Decision, evaluation.ReasonCode)
+	if selected == nil || selected.RuleID != evaluation.Resolution.PrimaryPolicyID || selected.Priority != 200 {
+		t.Fatalf("selected=%+v resolution=%+v", selected, evaluation.Resolution)
 	}
 
-	decision, reasonCode, selected, matched, err = evaluateInternalRuleCandidates(map[string]string{"business_unit_node_key": buBNodeKey}, candidates)
+	missing, err := resolveInternalRulesEvaluation(nil, "staffing.assignment_create.field_policy", "missing", "A0001", buNodeKey)
 	if err != nil {
-		t.Fatalf("err=%v", err)
+		t.Fatalf("missing err=%v", err)
 	}
-	if decision != internalRuleDecisionAllow || reasonCode != fieldVisibleInContextCode || matched != 1 || selected == nil || selected.RuleID != "tenant" {
-		t.Fatalf("unexpected fallback result decision=%s reason=%s matched=%d selected=%+v", decision, reasonCode, matched, selected)
-	}
-
-	_, _, _, _, err = evaluateInternalRuleCandidates(map[string]string{"business_unit_node_key": buANodeKey}, []internalRuleCandidate{{
-		RuleID:          "bad",
-		Priority:        1,
-		EffectiveDate:   "2026-01-01",
-		EligibilityExpr: "",
-		DecisionExpr:    "\"allow\"",
-	}})
-	if err == nil {
-		t.Fatal("expected error")
+	if missing.Decision != internalRuleDecisionDeny || missing.ReasonCode != fieldPolicyMissingCode || missing.Resolution != nil {
+		t.Fatalf("missing=%+v", missing)
 	}
 
-	decision, reasonCode, selected, matched, err = evaluateInternalRuleCandidates(map[string]string{"business_unit_node_key": buANodeKey}, []internalRuleCandidate{{
-		RuleID:          "none",
-		Priority:        1,
-		EffectiveDate:   "2026-01-01",
-		EligibilityExpr: "false",
-		DecisionExpr:    "\"allow\"",
-	}})
+	conflict, err := resolveInternalRulesEvaluation([]setIDStrategyRegistryItem{{
+		CapabilityKey:       "staffing.assignment_create.field_policy",
+		FieldKey:            "field_conflict",
+		OrgApplicability:    orgApplicabilityBusinessUnit,
+		ResolvedSetID:       "A0001",
+		BusinessUnitNodeKey: buNodeKey,
+		Required:            true,
+		Visible:             false,
+		Maintainable:        true,
+		Priority:            1,
+		EffectiveDate:       "2026-01-01",
+		UpdatedAt:           "2026-01-01T00:00:00Z",
+	}}, "staffing.assignment_create.field_policy", "field_conflict", "A0001", buNodeKey)
 	if err != nil {
-		t.Fatalf("err=%v", err)
+		t.Fatalf("conflict err=%v", err)
 	}
-	if decision != internalRuleDecisionDeny || reasonCode != fieldPolicyMissingCode || selected != nil || matched != 0 {
-		t.Fatalf("unexpected no-match decision=%s reason=%s selected=%+v matched=%d", decision, reasonCode, selected, matched)
-	}
-
-	decision, reasonCode, selected, matched, err = evaluateInternalRuleCandidates(map[string]string{"business_unit_node_key": buANodeKey}, []internalRuleCandidate{{
-		RuleID:          "unknown-decision",
-		Priority:        1,
-		EffectiveDate:   "2026-01-01",
-		EligibilityExpr: "true",
-		DecisionExpr:    "\"MAYBE\"",
-		ReasonCode:      "",
-	}})
-	if err != nil {
-		t.Fatalf("err=%v", err)
-	}
-	if decision != internalRuleDecisionDeny || reasonCode != fieldPolicyMissingCode || selected == nil || matched != 1 {
-		t.Fatalf("unexpected unknown decision result decision=%s reason=%s selected=%+v matched=%d", decision, reasonCode, selected, matched)
-	}
-
-	decision, reasonCode, selected, matched, err = evaluateInternalRuleCandidates(map[string]string{"business_unit_node_key": buANodeKey}, []internalRuleCandidate{{
-		RuleID:          "allow-default-reason",
-		Priority:        1,
-		EffectiveDate:   "2026-01-01",
-		EligibilityExpr: "true",
-		DecisionExpr:    "\"allow\"",
-		ReasonCode:      " ",
-	}})
-	if err != nil {
-		t.Fatalf("err=%v", err)
-	}
-	if decision != internalRuleDecisionAllow || reasonCode != fieldVisibleInContextCode || selected == nil || matched != 1 {
-		t.Fatalf("unexpected allow fallback reason decision=%s reason=%s selected=%+v matched=%d", decision, reasonCode, selected, matched)
-	}
-
-	_, _, _, _, err = evaluateInternalRuleCandidates(map[string]string{"business_unit_node_key": buANodeKey}, []internalRuleCandidate{{
-		RuleID:          "bad-decision",
-		Priority:        1,
-		EffectiveDate:   "2026-01-01",
-		EligibilityExpr: "true",
-		DecisionExpr:    "",
-	}})
-	if err == nil {
-		t.Fatal("expected decision expression error")
+	if conflict.Decision != internalRuleDecisionDeny || conflict.ReasonCode != fieldPolicyConflictCode || conflict.Resolution != nil {
+		t.Fatalf("conflict=%+v", conflict)
 	}
 }
 
-func TestEvalInternalExpressionsAndProgramCache(t *testing.T) {
-	internalRuleEligibilityProgramCache = sync.Map{}
-	internalRuleDecisionProgramCache = sync.Map{}
-
-	if _, err := evalInternalEligibilityExpr(`int(ctx["actor_id"]) > 0`, map[string]string{"actor_id": "not-int"}); err == nil {
-		t.Fatal("expected eligibility eval runtime error")
+func TestInternalRuleDecisionFromError(t *testing.T) {
+	if decision, reasonCode, ok := internalRuleDecisionFromError(errors.New(fieldPolicyMissingCode)); !ok || decision != internalRuleDecisionDeny || reasonCode != fieldPolicyMissingCode {
+		t.Fatalf("decision=%q reason_code=%q ok=%v", decision, reasonCode, ok)
 	}
-	if _, err := evalInternalDecisionExpr("", map[string]string{"trace_id": "01"}); err == nil {
-		t.Fatal("expected decision compile error")
-	}
-	if _, err := evalInternalDecisionExpr(`string(1 / int(ctx["trace_id"]))`, map[string]string{"trace_id": "0"}); err == nil {
-		t.Fatal("expected decision eval runtime error")
-	}
-
-	cache := &sync.Map{}
-	if _, err := loadOrCompileInternalProgram("", cel.BoolType, cache); err == nil {
-		t.Fatal("expected empty expression error")
-	}
-	if _, err := loadOrCompileInternalProgram(`ctx[`, cel.BoolType, cache); err == nil {
-		t.Fatal("expected compile error")
-	}
-	if _, err := loadOrCompileInternalProgram(`"allow"`, cel.BoolType, cache); err == nil {
-		t.Fatal("expected output type mismatch")
-	}
-
-	prevEnv := newInternalRulesCELEnv
-	newInternalRulesCELEnv = func() (*cel.Env, error) {
-		return nil, errors.New("env error")
-	}
-	if _, err := loadOrCompileInternalProgram("true", cel.BoolType, cache); err == nil {
-		t.Fatal("expected env error")
-	}
-	newInternalRulesCELEnv = prevEnv
-
-	prevProgram := newInternalRulesCELProgram
-	newInternalRulesCELProgram = func(*cel.Env, *cel.Ast) (cel.Program, error) {
-		return nil, errors.New("program error")
-	}
-	if _, err := loadOrCompileInternalProgram("true", cel.BoolType, cache); err == nil {
-		t.Fatal("expected program error")
-	}
-	newInternalRulesCELProgram = prevProgram
-
-	internalRuleEligibilityProgramCache = sync.Map{}
-	envCalls := 0
-	newInternalRulesCELEnv = func() (*cel.Env, error) {
-		envCalls++
-		return cel.NewEnv(cel.Variable("ctx", cel.MapType(cel.StringType, cel.StringType)))
-	}
-	t.Cleanup(func() { newInternalRulesCELEnv = prevEnv })
-
-	if _, err := loadOrCompileInternalProgram("true", cel.BoolType, &internalRuleEligibilityProgramCache); err != nil {
-		t.Fatalf("first compile err=%v", err)
-	}
-	if _, err := loadOrCompileInternalProgram("true", cel.BoolType, &internalRuleEligibilityProgramCache); err != nil {
-		t.Fatalf("cached compile err=%v", err)
-	}
-	if envCalls != 1 {
-		t.Fatalf("expected env calls=1, got %d", envCalls)
+	if _, _, ok := internalRuleDecisionFromError(errors.New("boom")); ok {
+		t.Fatal("unexpected handled error")
 	}
 }
 

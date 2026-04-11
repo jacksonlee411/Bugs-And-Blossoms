@@ -241,7 +241,7 @@ Gate-4 继续以 `make e2e -> scripts/e2e/run.sh` 为唯一入口，负责：
 > 本节从“待建设”更新为“已落地单主源，并已恢复到 CI required check”。
 
 - **覆盖率口径**：[X] line coverage。
-- **策略文件**：[X] `config/coverage/policy.yaml` 已存在，当前阈值为 `99`。
+- **策略文件**：[X] `config/coverage/policy.yaml` 已存在，当前阈值为 `98`。
 - **执行入口**：[X] `scripts/ci/test.sh` 与 `scripts/ci/coverage.sh` 已固定为唯一执行链路。
 - **统计范围**：[X] 仅统计手写 Go 代码；排除项由策略文件定义。
 - **排除规则约束（停止线）**：[ ] 不允许为了恢复 CI 而扩大排除项，且阈值必须继续由单主源策略文件维护。

@@ -10,7 +10,6 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
-	"time"
 
 	orgunittypes "github.com/jacksonlee411/Bugs-And-Blossoms/modules/orgunit/domain/types"
 	orgunitservices "github.com/jacksonlee411/Bugs-And-Blossoms/modules/orgunit/services"
@@ -61,7 +60,8 @@ func (s fakeOrgUnitWriteService) RescindOrg(context.Context, string, orgunitserv
 func TestHandleOrgUnitsWriteAPI_BasicValidation(t *testing.T) {
 	resetPolicyActivationRuntimeForTest()
 	svc := fakeOrgUnitWriteService{}
-	createPolicyVersion, _ := resolveOrgUnitEffectivePolicyVersion("t1", orgUnitCreateFieldPolicyCapabilityKey)
+	createEffectivePolicyVersion, createPolicyParts := resolveOrgUnitEffectivePolicyVersion("t1", orgUnitCreateFieldPolicyCapabilityKey)
+	createPolicyVersion := createPolicyParts.IntentPolicyVersion
 
 	t.Run("tenant missing", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodPost, "/org/api/org-units/write", bytes.NewBufferString(`{}`))
@@ -104,41 +104,29 @@ func TestHandleOrgUnitsWriteAPI_BasicValidation(t *testing.T) {
 	})
 
 	t.Run("create stale policy_version", func(t *testing.T) {
-		body := `{"intent":"create_org","org_code":"ROOT","effective_date":"2026-01-01","policy_version":"2025-01-01","request_id":"r1","patch":{"name":"X"}}`
+		body := `{"intent":"create_org","org_code":"ROOT","effective_date":"2026-01-01","policy_version":"2025-01-01","effective_policy_version":"epv1:stale","request_id":"r1","patch":{"name":"X"}}`
 		req := httptest.NewRequest(http.MethodPost, "/org/api/org-units/write", bytes.NewBufferString(body))
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
 		handleOrgUnitsWriteAPI(rec, req, svc)
-		if rec.Code != http.StatusConflict || !strings.Contains(rec.Body.String(), orgUnitErrFieldPolicyVersionStale) {
+		if rec.Code != http.StatusConflict || !strings.Contains(rec.Body.String(), orgUnitErrFieldPolicyVersionConflict) {
 			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
 		}
 	})
 
-	t.Run("outdated intent policy_version rejected in compatibility window when baseline exists", func(t *testing.T) {
-		originalNow := nowUTCForOrgUnitPolicyVersion
-		nowUTCForOrgUnitPolicyVersion = func() time.Time {
-			return time.Date(2026, 3, 15, 0, 0, 0, 0, time.UTC)
-		}
-		t.Cleanup(func() { nowUTCForOrgUnitPolicyVersion = originalNow })
-
-		body := `{"intent":"create_org","org_code":"ROOT","effective_date":"2026-01-01","policy_version":"2026-02-23","request_id":"r1","patch":{"name":"X"}}`
-		req := httptest.NewRequest(http.MethodPost, "/org/api/org-units/write", bytes.NewBufferString(body))
-		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
-		rec := httptest.NewRecorder()
-		handleOrgUnitsWriteAPI(rec, req, svc)
-		if rec.Code != http.StatusConflict || !strings.Contains(rec.Body.String(), orgUnitErrFieldPolicyVersionStale) {
-			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
-		}
-	})
-
-	t.Run("effective policy_version accepted in compatibility window", func(t *testing.T) {
-		originalNow := nowUTCForOrgUnitPolicyVersion
-		nowUTCForOrgUnitPolicyVersion = func() time.Time {
-			return time.Date(2026, 3, 15, 0, 0, 0, 0, time.UTC)
-		}
-		t.Cleanup(func() { nowUTCForOrgUnitPolicyVersion = originalNow })
-
+	t.Run("missing effective_policy_version rejected", func(t *testing.T) {
 		body := fmt.Sprintf(`{"intent":"create_org","org_code":"ROOT","effective_date":"2026-01-01","policy_version":"%s","request_id":"r1","patch":{"name":"X"}}`, createPolicyVersion)
+		req := httptest.NewRequest(http.MethodPost, "/org/api/org-units/write", bytes.NewBufferString(body))
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
+		rec := httptest.NewRecorder()
+		handleOrgUnitsWriteAPI(rec, req, svc)
+		if rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), orgUnitErrFieldPolicyVersionRequired) {
+			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+		}
+	})
+
+	t.Run("canonical policy versions accepted", func(t *testing.T) {
+		body := fmt.Sprintf(`{"intent":"create_org","org_code":"ROOT","effective_date":"2026-01-01","policy_version":"%s","effective_policy_version":"%s","request_id":"r1","patch":{"name":"X"}}`, createPolicyVersion, createEffectivePolicyVersion)
 		req := httptest.NewRequest(http.MethodPost, "/org/api/org-units/write", bytes.NewBufferString(body))
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
@@ -160,18 +148,18 @@ func TestHandleOrgUnitsWriteAPI_BasicValidation(t *testing.T) {
 	})
 
 	t.Run("correct stale policy_version", func(t *testing.T) {
-		body := `{"intent":"correct","org_code":"A001","effective_date":"2026-01-02","target_effective_date":"2026-01-01","policy_version":"2025-01-01","request_id":"r1","patch":{"name":"X"}}`
+		body := `{"intent":"correct","org_code":"A001","effective_date":"2026-01-02","target_effective_date":"2026-01-01","policy_version":"2025-01-01","effective_policy_version":"epv1:stale","request_id":"r1","patch":{"name":"X"}}`
 		req := httptest.NewRequest(http.MethodPost, "/org/api/org-units/write", bytes.NewBufferString(body))
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
 		handleOrgUnitsWriteAPI(rec, req, svc)
-		if rec.Code != http.StatusConflict || !strings.Contains(rec.Body.String(), orgUnitErrFieldPolicyVersionStale) {
+		if rec.Code != http.StatusConflict || !strings.Contains(rec.Body.String(), orgUnitErrFieldPolicyVersionConflict) {
 			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
 		}
 	})
 
 	t.Run("forbid ext_labels_snapshot in request", func(t *testing.T) {
-		body := fmt.Sprintf(`{"intent":"create_org","org_code":"ROOT","effective_date":"2026-01-01","policy_version":"%s","request_id":"r1","patch":{"name":"X","ext_labels_snapshot":{"x":"y"}}}`, createPolicyVersion)
+		body := fmt.Sprintf(`{"intent":"create_org","org_code":"ROOT","effective_date":"2026-01-01","policy_version":"%s","effective_policy_version":"%s","request_id":"r1","patch":{"name":"X","ext_labels_snapshot":{"x":"y"}}}`, createPolicyVersion, createEffectivePolicyVersion)
 		req := httptest.NewRequest(http.MethodPost, "/org/api/org-units/write", bytes.NewBufferString(body))
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
@@ -182,7 +170,7 @@ func TestHandleOrgUnitsWriteAPI_BasicValidation(t *testing.T) {
 	})
 
 	t.Run("unknown field rejected by DisallowUnknownFields", func(t *testing.T) {
-		body := fmt.Sprintf(`{"intent":"create_org","org_code":"ROOT","effective_date":"2026-01-01","policy_version":"%s","request_id":"r1","patch":{"name":"X"},"x":1}`, createPolicyVersion)
+		body := fmt.Sprintf(`{"intent":"create_org","org_code":"ROOT","effective_date":"2026-01-01","policy_version":"%s","effective_policy_version":"%s","request_id":"r1","patch":{"name":"X"},"x":1}`, createPolicyVersion, createEffectivePolicyVersion)
 		req := httptest.NewRequest(http.MethodPost, "/org/api/org-units/write", bytes.NewBufferString(body))
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
@@ -195,8 +183,9 @@ func TestHandleOrgUnitsWriteAPI_BasicValidation(t *testing.T) {
 
 func TestHandleOrgUnitsWriteAPI_ResultAndErrorMapping(t *testing.T) {
 	resetPolicyActivationRuntimeForTest()
-	createPolicyVersion, _ := resolveOrgUnitEffectivePolicyVersion("t1", orgUnitCreateFieldPolicyCapabilityKey)
-	body := fmt.Sprintf(`{"intent":"create_org","org_code":"ROOT","effective_date":"2026-01-01","policy_version":"%s","request_id":"r1","patch":{"name":"Root A"}}`, createPolicyVersion)
+	createEffectivePolicyVersion, createPolicyParts := resolveOrgUnitEffectivePolicyVersion("t1", orgUnitCreateFieldPolicyCapabilityKey)
+	createPolicyVersion := createPolicyParts.IntentPolicyVersion
+	body := fmt.Sprintf(`{"intent":"create_org","org_code":"ROOT","effective_date":"2026-01-01","policy_version":"%s","effective_policy_version":"%s","request_id":"r1","patch":{"name":"Root A"}}`, createPolicyVersion, createEffectivePolicyVersion)
 
 	t.Run("service nil", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodPost, "/org/api/org-units/write", bytes.NewBufferString(body))

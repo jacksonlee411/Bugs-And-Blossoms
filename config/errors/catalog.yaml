@@ -28,18 +28,18 @@ errors:
     user_message_key: errors.field_option_not_allowed
     backend_policy: mapped
     frontend_policy: mapped
-  - code: FIELD_POLICY_CONFLICT
+  - code: policy_conflict_ambiguous
     module: orgunit
     http_status: 409
     severity: error
-    user_message_key: errors.field_policy_conflict
+    user_message_key: errors.policy_conflict_ambiguous
     backend_policy: mapped
     frontend_policy: mapped
-  - code: FIELD_POLICY_DISABLE_NOT_ALLOWED
+  - code: policy_disable_not_allowed
     module: setid
     http_status: 422
     severity: error
-    user_message_key: errors.field_policy_disable_not_allowed
+    user_message_key: errors.policy_disable_not_allowed
     backend_policy: mapped
     frontend_policy: mapped
   - code: FIELD_POLICY_EXPR_INVALID
@@ -49,53 +49,46 @@ errors:
     user_message_key: errors.field_policy_expr_invalid
     backend_policy: passthrough
     frontend_policy: mapped
-  - code: FIELD_POLICY_LOCAL_OVERRIDE_MODE_INVALID
+  - code: policy_mode_invalid
     module: setid
     http_status: 422
     severity: error
-    user_message_key: errors.field_policy_local_override_mode_invalid
+    user_message_key: errors.policy_mode_invalid
     backend_policy: passthrough
     frontend_policy: mapped
-  - code: FIELD_POLICY_MODE_COMBINATION_INVALID
+  - code: policy_mode_combination_invalid
     module: setid
     http_status: 422
     severity: error
-    user_message_key: errors.field_policy_mode_combination_invalid
+    user_message_key: errors.policy_mode_combination_invalid
     backend_policy: passthrough
     frontend_policy: mapped
-  - code: FIELD_POLICY_PRIORITY_MODE_INVALID
-    module: setid
-    http_status: 422
-    severity: error
-    user_message_key: errors.field_policy_priority_mode_invalid
-    backend_policy: passthrough
-    frontend_policy: mapped
-  - code: FIELD_POLICY_MISSING
+  - code: policy_missing
     module: orgunit
     http_status: 422
     severity: error
-    user_message_key: errors.field_policy_missing
+    user_message_key: errors.policy_missing
     backend_policy: mapped
     frontend_policy: mapped
-  - code: FIELD_POLICY_REDUNDANT_OVERRIDE
+  - code: policy_redundant_override
     module: setid
     http_status: 422
     severity: error
-    user_message_key: errors.field_policy_redundant_override
+    user_message_key: errors.policy_redundant_override
     backend_policy: mapped
     frontend_policy: mapped
-  - code: FIELD_POLICY_VERSION_REQUIRED
+  - code: policy_version_required
     module: orgunit
     http_status: 400
     severity: error
-    user_message_key: errors.field_policy_version_required
+    user_message_key: errors.policy_version_required
     backend_policy: mapped
     frontend_policy: mapped
-  - code: FIELD_POLICY_VERSION_STALE
+  - code: policy_version_conflict
     module: orgunit
     http_status: 409
     severity: error
-    user_message_key: errors.field_policy_version_stale
+    user_message_key: errors.policy_version_conflict
     backend_policy: mapped
     frontend_policy: mapped
   - code: FIELD_REQUIRED_VALUE_MISSING
@@ -859,6 +852,13 @@ errors:
     http_status: 404
     severity: error
     user_message_key: errors.business_unit_org_code_not_found
+    backend_policy: passthrough
+    frontend_policy: mapped
+  - code: resolved_setid_mismatch
+    module: setid
+    http_status: 409
+    severity: error
+    user_message_key: errors.resolved_setid_mismatch
     backend_policy: passthrough
     frontend_policy: mapped
   - code: invalid_request

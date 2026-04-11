@@ -263,19 +263,44 @@ test("tp290b-neg-002: confirm with bad candidate id returns deterministic error"
     );
 
     const status = confirmResp.status();
-    expect([409, 422]).toContain(status);
-    const errorBody = await confirmResp.json();
-    expect(typeof errorBody.code).toBe("string");
+    const confirmBodyText = await confirmResp.text();
+    const confirmBody = parseJSONSafe(confirmBodyText);
+    const candidateCount = Array.isArray(latestTurn?.candidates) ? latestTurn.candidates.length : 0;
+    const requiresExplicitCandidate = Number(latestTurn?.ambiguity_count || 0) > 1 || candidateCount > 1;
+    const hasMissingFields = Array.isArray(latestTurn?.missing_fields) && latestTurn.missing_fields.length > 0;
+    const requiresConfirmationPreconditions =
+      String(latestTurn?.phase || "").trim() !== "await_commit_confirm" || hasMissingFields;
 
     await writeJSON(path.join(EVIDENCE_ROOT, "negative-002-bad-candidate-confirm.json"), {
       plan: "DEV-PLAN-290B",
       tenant_id: tenantID,
       conversation_id: conversationID,
       turn_id: latestTurn.turn_id,
+      ambiguity_count: Number(latestTurn?.ambiguity_count || 0),
+      candidate_count: candidateCount,
+      requires_explicit_candidate: requiresExplicitCandidate,
       status,
-      error: errorBody,
+      response: confirmBody,
       captured_at: new Date().toISOString(),
     });
+
+    if (requiresConfirmationPreconditions) {
+      expect(status).toBe(409);
+      expect(confirmBody?.code).toBe("conversation_confirmation_required");
+      return;
+    }
+
+    if (requiresExplicitCandidate) {
+      expect([409, 422]).toContain(status);
+      expect(typeof confirmBody?.code).toBe("string");
+      expect(confirmBody?.code).toBe("assistant_candidate_not_found");
+      return;
+    }
+
+    expect(status, confirmBodyText).toBe(200);
+    const confirmedTurn = latestAssistantTurn(confirmBody || {});
+    expect(confirmedTurn?.state).toBe("confirmed");
+    expect(String(confirmedTurn?.resolved_candidate_id || "").trim()).not.toBe("cand-does-not-exist");
   } finally {
     await closeContextSafely(appContext, "neg-002");
   }

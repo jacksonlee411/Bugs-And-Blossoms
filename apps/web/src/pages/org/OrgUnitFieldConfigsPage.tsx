@@ -9,7 +9,6 @@ import {
   DialogContent,
   DialogTitle,
   FormControl,
-  FormControlLabel,
   InputLabel,
   Link,
   MenuItem,
@@ -17,7 +16,6 @@ import {
   Select,
   Snackbar,
   Stack,
-  Switch,
   TextField,
   Typography
 } from '@mui/material'
@@ -29,12 +27,9 @@ import {
   listOrgUnitFieldConfigEnableCandidates,
   listOrgUnitFieldConfigs,
   listOrgUnitFieldDefinitions,
-  upsertOrgUnitFieldPolicy,
   type OrgUnitExtValueType,
   type OrgUnitFieldDefinition,
   type OrgUnitFieldEnableCandidateField,
-  type OrgUnitFieldPolicyDefaultMode,
-  type OrgUnitFieldPolicyScopeType,
   type OrgUnitTenantFieldConfig
 } from '../../api/orgUnits'
 import { ApiClientError } from '../../api/errors'
@@ -44,7 +39,6 @@ import { FilterBar } from '../../components/FilterBar'
 import { PageHeader } from '../../components/PageHeader'
 import { StatusChip } from '../../components/StatusChip'
 import { isMessageKey, type MessageKey } from '../../i18n/messages'
-import { shouldShowFutureEffectiveHint } from './orgUnitFieldPolicyAsOf'
 import { resolveReadViewState, todayISODate } from './readViewState'
 
 type FieldConfigListStatus = 'all' | 'enabled' | 'disabled'
@@ -88,16 +82,6 @@ interface DisableFormState {
 interface SelectedConfigState {
   mode: 'disable' | 'postpone'
   row: FieldConfigRow
-}
-
-interface PolicyFormState {
-  fieldKey: string
-  scopeType: OrgUnitFieldPolicyScopeType
-  scopeKey: string
-  maintainable: boolean
-  defaultMode: OrgUnitFieldPolicyDefaultMode
-  defaultRuleExpr: string
-  enabledOn: string
 }
 
 function FieldConfigsFilterBar(props: {
@@ -325,13 +309,6 @@ function resolveDefinitionLabel(t: ReturnType<typeof useAppPreferences>['t'], de
   return def.field_key
 }
 
-const fieldPolicyFormScopes = [
-  'orgunit.create_dialog',
-  'orgunit.details.add_version_dialog',
-  'orgunit.details.insert_version_dialog',
-  'orgunit.details.correct_dialog'
-] as const
-
 function normalizeFieldClass(value: string | undefined): 'CORE' | 'EXT' {
   const normalized = (value ?? '').trim().toUpperCase()
   return normalized === 'CORE' ? 'CORE' : 'EXT'
@@ -392,19 +369,6 @@ export function OrgUnitFieldConfigsPage() {
   const [disableRequestID, setDisableRequestID] = useState(() => newRequestID())
 
   const [viewRow, setViewRow] = useState<FieldConfigRow | null>(null)
-  const [policyRow, setPolicyRow] = useState<FieldConfigRow | null>(null)
-  const [policyForm, setPolicyForm] = useState<PolicyFormState>({
-    fieldKey: '',
-    scopeType: 'FORM',
-    scopeKey: fieldPolicyFormScopes[0],
-    maintainable: true,
-    defaultMode: 'NONE',
-    defaultRuleExpr: '',
-    enabledOn: todayUtc
-  })
-  const policyWriteDisabled = true
-  const [policyError, setPolicyError] = useState('')
-  const [policyRequestID, setPolicyRequestID] = useState(() => newRequestID())
 
   const formatApiErrorMessage = useCallback(
     (error: unknown): string => {
@@ -575,23 +539,6 @@ export function OrgUnitFieldConfigsPage() {
     }
   })
 
-  const policyMutation = useMutation({
-    mutationFn: (req: {
-      field_key: string
-      scope_type: OrgUnitFieldPolicyScopeType
-      scope_key: string
-      maintainable: boolean
-      default_mode: OrgUnitFieldPolicyDefaultMode
-      default_rule_expr?: string
-      enabled_on: string
-      request_id: string
-    }) => upsertOrgUnitFieldPolicy(req),
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ['org-field-configs'] })
-      await queryClient.invalidateQueries({ queryKey: ['org-units', 'field-configs'] })
-    }
-  })
-
   const requestErrorMessage = fieldDefinitionsQuery.error
     ? formatApiErrorMessage(fieldDefinitionsQuery.error)
     : fieldConfigsQuery.error
@@ -630,62 +577,6 @@ export function OrgUnitFieldConfigsPage() {
     },
     [asOf, navigate, readMode]
   )
-
-  function closePolicyDialog() {
-    setPolicyRow(null)
-    setPolicyError('')
-  }
-
-  async function submitPolicy() {
-    if (!policyRow) {
-      return
-    }
-    if (policyWriteDisabled) {
-      setPolicyError(t('org_field_configs_policy_write_disabled'))
-      return
-    }
-    setPolicyError('')
-    const enabledOn = policyForm.enabledOn.trim()
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(enabledOn)) {
-      setPolicyError(t('org_field_configs_error_invalid_date'))
-      return
-    }
-
-    const scopeType: OrgUnitFieldPolicyScopeType = policyForm.scopeType === 'GLOBAL' ? 'GLOBAL' : 'FORM'
-    const scopeKey = scopeType === 'GLOBAL' ? 'global' : policyForm.scopeKey.trim()
-    if (scopeType === 'FORM' && !fieldPolicyFormScopes.includes(scopeKey as (typeof fieldPolicyFormScopes)[number])) {
-      setPolicyError(t('org_field_configs_policy_error_scope_key_invalid'))
-      return
-    }
-
-    const defaultMode: OrgUnitFieldPolicyDefaultMode = policyForm.defaultMode === 'CEL' ? 'CEL' : 'NONE'
-    const defaultRuleExpr = policyForm.defaultRuleExpr.trim()
-    if (defaultMode === 'CEL' && defaultRuleExpr.length === 0) {
-      setPolicyError(t('org_field_configs_policy_error_expr_required'))
-      return
-    }
-    if (!policyForm.maintainable && defaultMode !== 'CEL') {
-      setPolicyError(t('org_field_policy_error_DEFAULT_RULE_REQUIRED'))
-      return
-    }
-
-    try {
-      await policyMutation.mutateAsync({
-        field_key: policyRow.fieldKey,
-        scope_type: scopeType,
-        scope_key: scopeKey,
-        maintainable: policyForm.maintainable,
-        default_mode: defaultMode,
-        default_rule_expr: defaultMode === 'CEL' ? defaultRuleExpr : undefined,
-        enabled_on: enabledOn,
-        request_id: policyRequestID
-      })
-      setToast({ message: t('org_field_configs_toast_policy_saved'), severity: 'success' })
-      closePolicyDialog()
-    } catch (error) {
-      setPolicyError(formatApiErrorMessage(error))
-    }
-  }
 
   const columns = useMemo<GridColDef<FieldConfigRow>[]>(() => {
     return [
@@ -1359,133 +1250,6 @@ export function OrgUnitFieldConfigsPage() {
         <DialogActions>
           <Button onClick={closeDisableDialog}>{t('common_cancel')}</Button>
           <Button disabled={disableMutation.isPending} onClick={() => void submitDisable()} variant='contained'>
-            {t('common_confirm')}
-          </Button>
-        </DialogActions>
-      </Dialog>
-
-      <Dialog onClose={closePolicyDialog} open={policyRow != null} fullWidth maxWidth='sm'>
-        <DialogTitle>{t('org_field_configs_action_edit_policy')}</DialogTitle>
-        <DialogContent>
-          {policyError.length > 0 ? (
-            <Alert severity='error' sx={{ mb: 2 }}>
-              {policyError}
-            </Alert>
-          ) : null}
-          {policyRow ? (
-            <Stack spacing={2} sx={{ mt: 0.5 }}>
-              <Typography variant='body2'>
-                <strong>{policyRow.fieldLabel}</strong> ({policyRow.fieldKey})
-              </Typography>
-              <FormControl>
-                <InputLabel id='org-field-policy-scope-type-label'>{t('org_field_configs_policy_scope_type')}</InputLabel>
-                <Select
-                  label={t('org_field_configs_policy_scope_type')}
-                  labelId='org-field-policy-scope-type-label'
-                  onChange={(event) => {
-                    const nextScopeType: OrgUnitFieldPolicyScopeType = event.target.value === 'GLOBAL' ? 'GLOBAL' : 'FORM'
-                    setPolicyRequestID(newRequestID())
-                    setPolicyForm((previous) => ({
-                      ...previous,
-                      scopeType: nextScopeType,
-                      scopeKey: nextScopeType === 'GLOBAL' ? 'global' : fieldPolicyFormScopes[0]
-                    }))
-                  }}
-                  value={policyForm.scopeType}
-                >
-                  <MenuItem value='FORM'>FORM</MenuItem>
-                  <MenuItem value='GLOBAL'>GLOBAL</MenuItem>
-                </Select>
-              </FormControl>
-              {policyForm.scopeType === 'FORM' ? (
-                <FormControl>
-                  <InputLabel id='org-field-policy-scope-key-label'>{t('org_field_configs_policy_scope_key')}</InputLabel>
-                  <Select
-                    label={t('org_field_configs_policy_scope_key')}
-                    labelId='org-field-policy-scope-key-label'
-                    onChange={(event) => {
-                      setPolicyRequestID(newRequestID())
-                      setPolicyForm((previous) => ({ ...previous, scopeKey: String(event.target.value) }))
-                    }}
-                    value={policyForm.scopeKey}
-                  >
-                    {fieldPolicyFormScopes.map((scopeKey) => (
-                      <MenuItem key={scopeKey} value={scopeKey}>
-                        {scopeKey}
-                      </MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
-              ) : null}
-              <FormControlLabel
-                control={
-                  <Switch
-                    checked={policyForm.maintainable}
-                    onChange={(event) => {
-                      setPolicyRequestID(newRequestID())
-                      setPolicyForm((previous) => ({ ...previous, maintainable: event.target.checked }))
-                    }}
-                  />
-                }
-                label={t('org_field_configs_column_maintainable')}
-              />
-              <FormControl>
-                <InputLabel id='org-field-policy-default-mode-label'>{t('org_field_configs_policy_default_mode')}</InputLabel>
-                <Select
-                  label={t('org_field_configs_policy_default_mode')}
-                  labelId='org-field-policy-default-mode-label'
-                  onChange={(event) => {
-                    const nextMode: OrgUnitFieldPolicyDefaultMode = event.target.value === 'CEL' ? 'CEL' : 'NONE'
-                    setPolicyRequestID(newRequestID())
-                    setPolicyForm((previous) => ({
-                      ...previous,
-                      defaultMode: nextMode,
-                      defaultRuleExpr: nextMode === 'CEL' ? previous.defaultRuleExpr : ''
-                    }))
-                  }}
-                  value={policyForm.defaultMode}
-                >
-                  <MenuItem value='NONE'>NONE</MenuItem>
-                  <MenuItem value='CEL'>CEL</MenuItem>
-                </Select>
-              </FormControl>
-              {policyForm.defaultMode === 'CEL' ? (
-                <TextField
-                  label={t('org_field_configs_policy_default_rule_expr')}
-                  helperText={t('org_field_configs_policy_default_rule_expr_helper')}
-                  onChange={(event) => {
-                    setPolicyRequestID(newRequestID())
-                    setPolicyForm((previous) => ({ ...previous, defaultRuleExpr: event.target.value }))
-                  }}
-                  placeholder='next_org_code("ORG", 6)'
-                  value={policyForm.defaultRuleExpr}
-                />
-              ) : null}
-              <TextField
-                InputLabelProps={{ shrink: true }}
-                label={t('org_field_configs_form_enabled_on')}
-                onChange={(event) => {
-                  setPolicyRequestID(newRequestID())
-                  setPolicyForm((previous) => ({ ...previous, enabledOn: event.target.value }))
-                }}
-                type='date'
-                value={policyForm.enabledOn}
-              />
-              {shouldShowFutureEffectiveHint(asOf, policyForm.enabledOn) ? (
-                <Alert severity='info'>
-                  {t('org_field_configs_policy_future_effective_hint', { asOf, enabledOn: policyForm.enabledOn })}
-                </Alert>
-              ) : null}
-            </Stack>
-          ) : null}
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={closePolicyDialog}>{t('common_cancel')}</Button>
-          <Button
-            disabled={policyWriteDisabled || policyMutation.isPending}
-            onClick={() => void submitPolicy()}
-            variant='contained'
-          >
             {t('common_confirm')}
           </Button>
         </DialogActions>
