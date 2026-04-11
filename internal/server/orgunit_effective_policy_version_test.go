@@ -3,7 +3,6 @@ package server
 import (
 	"strings"
 	"testing"
-	"time"
 )
 
 func TestBuildOrgUnitEffectivePolicyVersionDeterministic(t *testing.T) {
@@ -31,20 +30,14 @@ func TestIsOrgUnitPolicyVersionAccepted(t *testing.T) {
 		BaselinePolicyVersion: "2026-03-01",
 	}
 	effective := buildOrgUnitEffectivePolicyVersion(parts)
-	if !isOrgUnitPolicyVersionAccepted(effective, effective, parts, time.Date(2026, 6, 1, 0, 0, 0, 0, time.UTC)) {
+	if !isOrgUnitPolicyVersionAccepted("2026-02-23", effective, effective, parts) {
 		t.Fatal("expected effective version accepted")
 	}
-	if isOrgUnitPolicyVersionAccepted("2026-02-23", effective, parts, time.Date(2026, 6, 1, 0, 0, 0, 0, time.UTC)) {
-		t.Fatal("expected old intent version rejected outside window")
+	if isOrgUnitPolicyVersionAccepted("2026-01-01", effective, effective, parts) {
+		t.Fatal("expected stale intent version rejected")
 	}
-
-	parts.BaselinePolicyVersion = ""
-	effective = buildOrgUnitEffectivePolicyVersion(parts)
-	if !isOrgUnitPolicyVersionAccepted("2026-02-23", effective, parts, time.Date(2026, 3, 15, 0, 0, 0, 0, time.UTC)) {
-		t.Fatal("expected old intent version accepted inside compatibility window when baseline missing")
-	}
-	if isOrgUnitPolicyVersionAccepted("2026-02-23", effective, parts, time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC)) {
-		t.Fatal("expected old intent version rejected after hard switch")
+	if isOrgUnitPolicyVersionAccepted("2026-02-23", "", effective, parts) {
+		t.Fatal("expected missing effective version rejected")
 	}
 }
 
@@ -56,25 +49,11 @@ func TestIsOrgUnitPolicyVersionAccepted_AdditionalBranches(t *testing.T) {
 		BaselinePolicyVersion: "",
 	}
 	effective := buildOrgUnitEffectivePolicyVersion(parts)
-	if isOrgUnitPolicyVersionAccepted("", effective, parts, time.Date(2026, 3, 10, 0, 0, 0, 0, time.UTC)) {
+	if isOrgUnitPolicyVersionAccepted("", effective, effective, parts) {
 		t.Fatal("expected empty request_version rejected")
 	}
-	if isOrgUnitPolicyVersionAccepted("2026-01-01", effective, parts, time.Date(2026, 3, 10, 0, 0, 0, 0, time.UTC)) {
-		t.Fatal("expected mismatched intent version rejected in compatibility window")
-	}
-}
-
-func TestOrgUnitPolicyVersionCompatibilityWindow_UsesNowWhenZero(t *testing.T) {
-	origNow := nowUTCForOrgUnitPolicyVersion
-	t.Cleanup(func() {
-		nowUTCForOrgUnitPolicyVersion = origNow
-	})
-
-	nowUTCForOrgUnitPolicyVersion = func() time.Time {
-		return time.Date(2026, 3, 15, 0, 0, 0, 0, time.UTC)
-	}
-	if !orgUnitPolicyVersionCompatibilityWindow(time.Time{}) {
-		t.Fatal("expected zero-time fallback within compatibility window")
+	if isOrgUnitPolicyVersionAccepted("2026-02-23", "epv1:other", effective, parts) {
+		t.Fatal("expected mismatched effective version rejected")
 	}
 }
 

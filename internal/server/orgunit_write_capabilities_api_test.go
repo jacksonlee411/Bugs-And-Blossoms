@@ -188,8 +188,11 @@ func TestHandleOrgUnitWriteCapabilitiesAPI_SuccessEnvelope(t *testing.T) {
 		t.Fatalf("capability_key=%v", resp.CapabilityKey)
 	}
 	effectiveVersion, parts := resolveOrgUnitEffectivePolicyVersion("t1", orgUnitCreateFieldPolicyCapabilityKey)
-	if resp.PolicyVersion != effectiveVersion {
+	if resp.PolicyVersion != parts.IntentPolicyVersion {
 		t.Fatalf("policy_version=%v", resp.PolicyVersion)
+	}
+	if resp.EffectivePolicyVersion != effectiveVersion {
+		t.Fatalf("effective_policy_version=%v", resp.EffectivePolicyVersion)
 	}
 	if resp.BaselineCapabilityKey != orgUnitWriteFieldPolicyCapabilityKey {
 		t.Fatalf("baseline_capability_key=%v", resp.BaselineCapabilityKey)
@@ -292,10 +295,11 @@ func TestHandleOrgUnitWriteCapabilitiesAPI_CoversBranches(t *testing.T) {
 					t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
 				}
 				var resp struct {
-					CapabilityKey         string `json:"capability_key"`
-					BaselineCapabilityKey string `json:"baseline_capability_key"`
-					PolicyVersion         string `json:"policy_version"`
-					PolicyVersionAlg      string `json:"policy_version_alg"`
+					CapabilityKey          string `json:"capability_key"`
+					BaselineCapabilityKey  string `json:"baseline_capability_key"`
+					PolicyVersion          string `json:"policy_version"`
+					EffectivePolicyVersion string `json:"effective_policy_version"`
+					PolicyVersionAlg       string `json:"policy_version_alg"`
 				}
 				if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
 					t.Fatalf("json err=%v", err)
@@ -303,9 +307,12 @@ func TestHandleOrgUnitWriteCapabilitiesAPI_CoversBranches(t *testing.T) {
 				if resp.CapabilityKey != tc.wantCapKey {
 					t.Fatalf("capability_key=%q want=%q", resp.CapabilityKey, tc.wantCapKey)
 				}
-				expectedPolicyVersion, _ := resolveOrgUnitEffectivePolicyVersion("t1", tc.wantCapKey)
-				if resp.PolicyVersion != expectedPolicyVersion {
-					t.Fatalf("policy_version=%q want=%q", resp.PolicyVersion, expectedPolicyVersion)
+				expectedEffectivePolicyVersion, parts := resolveOrgUnitEffectivePolicyVersion("t1", tc.wantCapKey)
+				if resp.PolicyVersion != parts.IntentPolicyVersion {
+					t.Fatalf("policy_version=%q want=%q", resp.PolicyVersion, parts.IntentPolicyVersion)
+				}
+				if resp.EffectivePolicyVersion != expectedEffectivePolicyVersion {
+					t.Fatalf("effective_policy_version=%q want=%q", resp.EffectivePolicyVersion, expectedEffectivePolicyVersion)
 				}
 				if resp.BaselineCapabilityKey != orgUnitWriteFieldPolicyCapabilityKey {
 					t.Fatalf("baseline_capability_key=%q", resp.BaselineCapabilityKey)

@@ -60,6 +60,8 @@ export interface SetIDStrategyRegistryItem {
   personalization_mode: 'tenant_only' | 'setid'
   org_applicability: 'tenant' | 'business_unit'
   business_unit_org_code?: string
+  resolved_setid?: string
+  resolved_setid_scope: 'exact' | 'wildcard'
   required: boolean
   visible: boolean
   maintainable: boolean
@@ -90,6 +92,8 @@ export interface SetIDStrategyRegistryUpsertRequest {
   personalization_mode: 'tenant_only' | 'setid'
   org_applicability: 'tenant' | 'business_unit'
   business_unit_org_code: string
+  resolved_setid: string
+  resolved_setid_scope: 'exact' | 'wildcard'
   required: boolean
   visible: boolean
   maintainable: boolean
@@ -133,6 +137,8 @@ export interface SetIDStrategyRegistryDisableRequest {
   field_key: string
   org_applicability: 'tenant' | 'business_unit'
   business_unit_org_code: string
+  resolved_setid: string
+  resolved_setid_scope: 'exact' | 'wildcard'
   effective_date: string
   disable_as_of: string
   request_id: string
@@ -170,9 +176,14 @@ export interface SetIDExplainResponse {
   as_of: string
   org_code?: string
   resolved_setid: string
-  resolved_config_version?: string
+  setid_source?: string
   decision: string
   reason_code?: string
+  policy_version: string
+  effective_policy_version: string
+  matched_bucket?: string
+  winner_policy_ids?: string[]
+  resolution_trace?: string[]
   level: 'brief' | 'full'
   field_decisions: SetIDExplainFieldDecision[]
 }

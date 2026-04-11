@@ -238,6 +238,7 @@ export interface OrgUnitWriteAPIRequest {
   effective_date: string
   target_effective_date?: string
   policy_version?: string
+  effective_policy_version?: string
   request_id: string
   patch: {
     name?: string
@@ -278,6 +279,7 @@ export interface OrgUnitCreateFieldDecisionsResponse {
   business_unit_org_code: string
   as_of: string
   policy_version: string
+  effective_policy_version: string
   policy_version_alg?: string
   intent_policy_version?: string
   baseline_policy_version?: string
@@ -303,6 +305,7 @@ export interface OrgUnitWriteCapabilitiesResponse {
   capability_key: string
   baseline_capability_key?: string
   policy_version: string
+  effective_policy_version: string
   policy_version_alg?: string
   intent_policy_version?: string
   baseline_policy_version?: string

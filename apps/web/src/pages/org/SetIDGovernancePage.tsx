@@ -66,6 +66,8 @@ interface RegistryFormState {
   personalizationMode: 'tenant_only' | 'setid'
   orgApplicability: 'tenant' | 'business_unit'
   businessUnitOrgCode: string
+  resolvedSetID: string
+  resolvedSetIDScope: 'exact' | 'wildcard'
   required: boolean
   visible: boolean
   maintainable: boolean
@@ -96,6 +98,10 @@ const personalizationModeOptions: DropdownOption[] = [
 const orgApplicabilityOptions: DropdownOption[] = [
   { value: 'business_unit', label: 'business_unit' },
   { value: 'tenant', label: 'tenant' }
+]
+const resolvedSetIDScopeOptions: DropdownOption[] = [
+  { value: 'exact', label: 'exact' },
+  { value: 'wildcard', label: 'wildcard' }
 ]
 const priorityModeOptions: DropdownOption[] = [
   { value: 'blend_custom_first', label: 'blend_custom_first' },
@@ -187,12 +193,14 @@ function defaultRegistryForm(asOf: string): RegistryFormState {
     capabilityKey: '',
     ownerModule: '',
     fieldKey: '',
-    personalizationMode: 'setid',
-    orgApplicability: 'business_unit',
-    businessUnitOrgCode: '',
-    required: true,
-    visible: true,
-    maintainable: true,
+      personalizationMode: 'setid',
+      orgApplicability: 'business_unit',
+      businessUnitOrgCode: '',
+      resolvedSetID: '',
+      resolvedSetIDScope: 'exact',
+      required: true,
+      visible: true,
+      maintainable: true,
     defaultRuleRef: '',
     defaultValue: '',
     allowedValueCodes: '',
@@ -233,12 +241,14 @@ function toRegistryFormFromRow(row: SetIDStrategyRegistryItem): RegistryFormStat
     capabilityKey: row.capability_key,
     ownerModule: row.owner_module,
     fieldKey: row.field_key,
-    personalizationMode: row.personalization_mode,
-    orgApplicability: row.org_applicability,
-    businessUnitOrgCode: row.business_unit_org_code ?? '',
-    required: row.required,
-    visible: row.visible,
-    maintainable: row.maintainable,
+      personalizationMode: row.personalization_mode,
+      orgApplicability: row.org_applicability,
+      businessUnitOrgCode: row.business_unit_org_code ?? '',
+      resolvedSetID: row.resolved_setid ?? '',
+      resolvedSetIDScope: row.resolved_setid_scope,
+      required: row.required,
+      visible: row.visible,
+      maintainable: row.maintainable,
     defaultRuleRef: row.default_rule_ref ?? '',
     defaultValue: row.default_value ?? '',
     allowedValueCodes: toAllowedValueCodesText(row.allowed_value_codes),
@@ -256,12 +266,14 @@ function toRegistryFormFromRow(row: SetIDStrategyRegistryItem): RegistryFormStat
 
 function strategyRowID(item: SetIDStrategyRegistryItem): string {
   return [
-    item.capability_key,
-    item.field_key,
-    item.org_applicability,
-    item.business_unit_org_code ?? '-',
-    item.effective_date
-  ].join(':')
+      item.capability_key,
+      item.field_key,
+      item.org_applicability,
+      item.resolved_setid_scope,
+      item.resolved_setid ?? '-',
+      item.business_unit_org_code ?? '-',
+      item.effective_date
+    ].join(':')
 }
 
 function defaultActivationForm(): ActivationFormState {
@@ -629,18 +641,27 @@ export function SetIDGovernancePage({ section }: { section: SetIDPageSection }) 
       }, {}),
     [capabilityCatalogRows]
   )
-  const businessUnitOptions = useMemo(
-    () =>
-      mergeFreeSoloOptions(
+    const businessUnitOptions = useMemo(
+      () =>
+        mergeFreeSoloOptions(
         [],
         strategyCatalogRows.map((item) => item.business_unit_org_code ?? ''),
         registryForm.businessUnitOrgCode
       ),
-    [registryForm.businessUnitOrgCode, strategyCatalogRows]
-  )
-  const defaultRuleOptions = useMemo(
-    () => mergeFreeSoloOptions([], strategyCatalogRows.map((item) => item.default_rule_ref ?? ''), registryForm.defaultRuleRef),
-    [registryForm.defaultRuleRef, strategyCatalogRows]
+      [registryForm.businessUnitOrgCode, strategyCatalogRows]
+    )
+    const resolvedSetIDOptions = useMemo(
+      () =>
+        mergeFreeSoloOptions(
+          [],
+          strategyCatalogRows.map((item) => item.resolved_setid ?? ''),
+          registryForm.resolvedSetID
+        ),
+      [registryForm.resolvedSetID, strategyCatalogRows]
+    )
+    const defaultRuleOptions = useMemo(
+      () => mergeFreeSoloOptions([], strategyCatalogRows.map((item) => item.default_rule_ref ?? ''), registryForm.defaultRuleRef),
+      [registryForm.defaultRuleRef, strategyCatalogRows]
   )
   const defaultValueOptions = useMemo(
     () => mergeFreeSoloOptions([], strategyCatalogRows.map((item) => item.default_value ?? ''), registryForm.defaultValue),
@@ -743,12 +764,19 @@ export function SetIDGovernancePage({ section }: { section: SetIDPageSection }) 
         valueGetter: (_, row: SetIDStrategyRegistryItem) => catalogByCapabilityKey[row.capability_key]?.intent ?? '-'
       },
       { field: 'field_key', headerName: 'field_key', minWidth: 140 },
-      { field: 'personalization_mode', headerName: 'mode', minWidth: 130 },
-      { field: 'priority_mode', headerName: 'priority_mode', minWidth: 170 },
-      { field: 'local_override_mode', headerName: 'local_override_mode', minWidth: 170 },
-      { field: 'org_applicability', headerName: 'org_applicability', minWidth: 120 },
-      { field: 'business_unit_org_code', headerName: 'business_unit_org_code', minWidth: 160 },
-      {
+        { field: 'personalization_mode', headerName: 'mode', minWidth: 130 },
+        { field: 'priority_mode', headerName: 'priority_mode', minWidth: 170 },
+        { field: 'local_override_mode', headerName: 'local_override_mode', minWidth: 170 },
+        { field: 'org_applicability', headerName: 'org_applicability', minWidth: 120 },
+        { field: 'resolved_setid_scope', headerName: 'resolved_setid_scope', minWidth: 140 },
+        {
+          field: 'resolved_setid',
+          headerName: 'resolved_setid',
+          minWidth: 140,
+          valueGetter: (_, row: SetIDStrategyRegistryItem) => row.resolved_setid || '-'
+        },
+        { field: 'business_unit_org_code', headerName: 'business_unit_org_code', minWidth: 160 },
+        {
         field: 'policy',
         headerName: 'required / visible / default',
         minWidth: 320,
@@ -857,12 +885,14 @@ export function SetIDGovernancePage({ section }: { section: SetIDPageSection }) 
         capability_key: capabilityKey,
         owner_module: ownerModule,
         field_key: registryForm.fieldKey.trim(),
-        personalization_mode: registryForm.personalizationMode,
-        org_applicability: registryForm.orgApplicability,
-        business_unit_org_code: registryForm.businessUnitOrgCode.trim(),
-        required: registryForm.required,
-        visible: registryForm.visible,
-        maintainable: registryForm.maintainable,
+          personalization_mode: registryForm.personalizationMode,
+          org_applicability: registryForm.orgApplicability,
+          business_unit_org_code: registryForm.businessUnitOrgCode.trim(),
+          resolved_setid: registryForm.resolvedSetIDScope === 'wildcard' ? '' : registryForm.resolvedSetID.trim(),
+          resolved_setid_scope: registryForm.resolvedSetIDScope,
+          required: registryForm.required,
+          visible: registryForm.visible,
+          maintainable: registryForm.maintainable,
         default_rule_ref: registryForm.defaultRuleRef.trim(),
         default_value: registryForm.defaultValue.trim(),
         allowed_value_codes: parseAllowedValueCodes(registryForm.allowedValueCodes),
@@ -899,13 +929,15 @@ export function SetIDGovernancePage({ section }: { section: SetIDPageSection }) 
     }
     try {
       await strategyDisableMutation.mutateAsync({
-        capability_key: row.capability_key,
-        field_key: row.field_key,
-        org_applicability: row.org_applicability,
-        business_unit_org_code: row.business_unit_org_code ?? '',
-        effective_date: row.effective_date,
-        disable_as_of: disableAsOf,
-        request_id: newRequestID('mui-setid-strategy-disable')
+          capability_key: row.capability_key,
+          field_key: row.field_key,
+          org_applicability: row.org_applicability,
+          business_unit_org_code: row.business_unit_org_code ?? '',
+          resolved_setid: row.resolved_setid ?? '',
+          resolved_setid_scope: row.resolved_setid_scope,
+          effective_date: row.effective_date,
+          disable_as_of: disableAsOf,
+          request_id: newRequestID('mui-setid-strategy-disable')
       })
     } catch (err) {
       setError(parseApiError(err))
@@ -1474,37 +1506,67 @@ export function SetIDGovernancePage({ section }: { section: SetIDPageSection }) 
                       </MenuItem>
                     ))}
                   </TextField>
-                  <TextField
-                    label='org_applicability'
-                    required
+                    <TextField
+                      label='org_applicability'
+                      required
                     select
                     size='small'
                     value={registryForm.orgApplicability}
                     disabled={hasRegistryKeyLock}
-                    onChange={(event) =>
-                      setRegistryForm((prev) => ({
-                        ...prev,
-                        orgApplicability: event.target.value as RegistryFormState['orgApplicability'],
-                        businessUnitOrgCode: event.target.value === 'tenant' ? '' : prev.businessUnitOrgCode
-                      }))
-                    }
-                  >
+                      onChange={(event) =>
+                        setRegistryForm((prev) => ({
+                          ...prev,
+                          orgApplicability: event.target.value as RegistryFormState['orgApplicability'],
+                          businessUnitOrgCode: event.target.value === 'tenant' ? '' : prev.businessUnitOrgCode,
+                          resolvedSetIDScope:
+                            event.target.value === 'business_unit' ? 'exact' : prev.resolvedSetIDScope
+                        }))
+                      }
+                    >
                     {orgApplicabilityOptions.map((option) => (
                       <MenuItem key={`form-org-level-${option.value}`} value={option.value}>
                         {option.label}
                       </MenuItem>
                     ))}
                   </TextField>
-                  <FreeSoloDropdownField
-                    label='business_unit_org_code'
-                    disabled={hasRegistryKeyLock || registryForm.orgApplicability === 'tenant'}
-                    onChange={(nextValue) => setRegistryForm((prev) => ({ ...prev, businessUnitOrgCode: nextValue }))}
-                    options={businessUnitOptions}
-                    value={registryForm.businessUnitOrgCode}
-                  />
-                  <FreeSoloDropdownField
-                    label='default_rule_ref'
-                    onChange={(nextValue) => setRegistryForm((prev) => ({ ...prev, defaultRuleRef: nextValue }))}
+                    <FreeSoloDropdownField
+                      label='business_unit_org_code'
+                      disabled={hasRegistryKeyLock || registryForm.orgApplicability === 'tenant'}
+                      onChange={(nextValue) => setRegistryForm((prev) => ({ ...prev, businessUnitOrgCode: nextValue }))}
+                      options={businessUnitOptions}
+                      value={registryForm.businessUnitOrgCode}
+                    />
+                    <TextField
+                      label='resolved_setid_scope'
+                      required
+                      select
+                      size='small'
+                      value={registryForm.resolvedSetIDScope}
+                      disabled={hasRegistryKeyLock || registryForm.orgApplicability === 'business_unit'}
+                      onChange={(event) =>
+                        setRegistryForm((prev) => ({
+                          ...prev,
+                          resolvedSetIDScope: event.target.value as RegistryFormState['resolvedSetIDScope'],
+                          resolvedSetID: event.target.value === 'wildcard' ? '' : prev.resolvedSetID
+                        }))
+                      }
+                    >
+                      {resolvedSetIDScopeOptions.map((option) => (
+                        <MenuItem key={`form-resolved-setid-scope-${option.value}`} value={option.value}>
+                          {option.label}
+                        </MenuItem>
+                      ))}
+                    </TextField>
+                    <FreeSoloDropdownField
+                      label='resolved_setid'
+                      disabled={registryForm.resolvedSetIDScope === 'wildcard'}
+                      onChange={(nextValue) => setRegistryForm((prev) => ({ ...prev, resolvedSetID: nextValue }))}
+                      options={resolvedSetIDOptions}
+                      value={registryForm.resolvedSetID}
+                    />
+                    <FreeSoloDropdownField
+                      label='default_rule_ref'
+                      onChange={(nextValue) => setRegistryForm((prev) => ({ ...prev, defaultRuleRef: nextValue }))}
                     options={defaultRuleOptions}
                     value={registryForm.defaultRuleRef}
                   />
@@ -1869,10 +1931,14 @@ export function SetIDGovernancePage({ section }: { section: SetIDPageSection }) 
               <Typography color='text.secondary' variant='body2'>
                 capability_key={registryDisableDialog.row?.capability_key || '-'}
               </Typography>
-              <Typography color='text.secondary' variant='body2'>
-                field_key={registryDisableDialog.row?.field_key || '-'} · org_applicability={registryDisableDialog.row?.org_applicability || '-'} ·
-                business_unit_org_code={registryDisableDialog.row?.business_unit_org_code || '-'}
-              </Typography>
+                <Typography color='text.secondary' variant='body2'>
+                  field_key={registryDisableDialog.row?.field_key || '-'} · org_applicability={registryDisableDialog.row?.org_applicability || '-'} ·
+                  resolved_setid_scope={registryDisableDialog.row?.resolved_setid_scope || '-'} · resolved_setid=
+                  {registryDisableDialog.row?.resolved_setid || '-'}
+                </Typography>
+                <Typography color='text.secondary' variant='body2'>
+                  business_unit_org_code={registryDisableDialog.row?.business_unit_org_code || '-'}
+                </Typography>
               <Typography color='text.secondary' variant='body2'>
                 effective_date={registryDisableDialog.row?.effective_date || '-'}
               </Typography>

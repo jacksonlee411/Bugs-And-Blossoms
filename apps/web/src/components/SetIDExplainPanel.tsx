@@ -86,18 +86,18 @@ function parseExplainError(error: unknown): ExplainErrorView {
 }
 
 function reasonHint(code: string): string {
-  switch (code.trim().toUpperCase()) {
-    case 'OWNER_CONTEXT_REQUIRED':
+  switch (code.trim().toLowerCase()) {
+    case 'owner_context_required':
       return '请补齐 owner_setid / business_unit_org_code 后重试。'
-    case 'OWNER_CONTEXT_FORBIDDEN':
+    case 'owner_context_forbidden':
       return '当前 BU 上下文无权访问该 SetID，请切换业务单元或联系管理员。'
-    case 'ACTOR_SCOPE_FORBIDDEN':
+    case 'actor_scope_forbidden':
       return '当前角色无法查看 full explain，请使用 brief 或申请管理员权限。'
-    case 'FIELD_POLICY_MISSING':
+    case 'policy_missing':
       return '字段策略尚未登记，请到 Strategy Registry 新增 capability_key + field_key。'
-    case 'FIELD_DEFAULT_RULE_MISSING':
+    case 'field_default_rule_missing':
       return '字段默认规则缺失，请补齐 default_rule_ref 或 default_value。'
-    case 'FIELD_POLICY_CONFLICT':
+    case 'policy_conflict_ambiguous':
       return '字段策略冲突（例如 required=true 且 visible=false），请修正后重试。'
     default:
       return '请复制 trace_id/request_id 给管理员排查。'
@@ -368,9 +368,16 @@ export function SetIDExplainPanel({
               />
               <Chip label={`reason_code: ${result.reason_code || '-'}`} size='small' variant='outlined' />
               <Chip label={`resolved_setid: ${result.resolved_setid}`} size='small' variant='outlined' />
-              <Chip label={`resolved_config_version: ${result.resolved_config_version || '-'}`} size='small' variant='outlined' />
+              <Chip label={`policy_version: ${result.policy_version || '-'}`} size='small' variant='outlined' />
+              <Chip label={`effective_policy_version: ${result.effective_policy_version || '-'}`} size='small' variant='outlined' />
               <Chip label={`level: ${result.level}`} size='small' variant='outlined' />
             </Stack>
+            <Typography color='text.secondary' variant='body2'>
+              matched_bucket: {result.matched_bucket || '-'} · winner_policy_ids: {(result.winner_policy_ids ?? []).join(', ') || '-'}
+            </Typography>
+            <Typography color='text.secondary' sx={{ mt: 0.5 }} variant='body2'>
+              resolution_trace: {(result.resolution_trace ?? []).join(' > ') || '-'}
+            </Typography>
 
             <Typography color='text.secondary' variant='body2'>
               trace_id: {result.trace_id || '-'} · request_id: {result.request_id || requestID}

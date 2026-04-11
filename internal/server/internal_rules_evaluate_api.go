@@ -51,21 +51,22 @@ type internalRuleCandidate struct {
 }
 
 type internalRulesEvaluateResponse struct {
-	TraceID             string                    `json:"trace_id"`
-	RequestID           string                    `json:"request_id"`
-	CapabilityKey       string                    `json:"capability_key"`
-	FunctionalAreaKey   string                    `json:"functional_area_key"`
-	FieldKey            string                    `json:"field_key"`
-	SetID               string                    `json:"setid"`
-	PolicyVersion       string                    `json:"policy_version"`
-	Decision            string                    `json:"decision"`
-	ReasonCode          string                    `json:"reason_code"`
-	SelectedRuleID      string                    `json:"selected_rule_id,omitempty"`
-	SelectedRule        *internalRuleCandidate    `json:"selected_rule,omitempty"`
-	BriefExplain        string                    `json:"brief_explain"`
-	Context             internalEvaluationContext `json:"context"`
-	CandidatesEvaluated int                       `json:"candidates_evaluated"`
-	EligibilityMatched  int                       `json:"eligibility_matched"`
+	TraceID                string                    `json:"trace_id"`
+	RequestID              string                    `json:"request_id"`
+	CapabilityKey          string                    `json:"capability_key"`
+	FunctionalAreaKey      string                    `json:"functional_area_key"`
+	FieldKey               string                    `json:"field_key"`
+	SetID                  string                    `json:"setid"`
+	PolicyVersion          string                    `json:"policy_version"`
+	EffectivePolicyVersion string                    `json:"effective_policy_version"`
+	Decision               string                    `json:"decision"`
+	ReasonCode             string                    `json:"reason_code"`
+	SelectedRuleID         string                    `json:"selected_rule_id,omitempty"`
+	SelectedRule           *internalRuleCandidate    `json:"selected_rule,omitempty"`
+	BriefExplain           string                    `json:"brief_explain"`
+	Context                internalEvaluationContext `json:"context"`
+	CandidatesEvaluated    int                       `json:"candidates_evaluated"`
+	EligibilityMatched     int                       `json:"eligibility_matched"`
 }
 
 var canViewInternalRulesEvaluate = canViewSetIDFullExplain
@@ -230,21 +231,23 @@ func handleInternalRulesEvaluateAPI(w http.ResponseWriter, r *http.Request, seti
 	if evaluation.Resolution != nil {
 		matched = len(evaluation.Resolution.MatchedItems)
 	}
+	effectivePolicyVersion, policyParts := resolveOrgUnitEffectivePolicyVersion(tenant.ID, req.CapabilityKey)
 
 	response := internalRulesEvaluateResponse{
-		TraceID:             traceID,
-		RequestID:           requestID,
-		CapabilityKey:       req.CapabilityKey,
-		FunctionalAreaKey:   functionalAreaKey,
-		FieldKey:            req.FieldKey,
-		SetID:               targetCtx.ResolvedSetID,
-		PolicyVersion:       capabilityPolicyVersionBaseline,
-		Decision:            evaluation.Decision,
-		ReasonCode:          evaluation.ReasonCode,
-		BriefExplain:        internalRuleBriefExplain(selectedRule, matched),
-		Context:             evalCtx,
-		CandidatesEvaluated: len(items),
-		EligibilityMatched:  matched,
+		TraceID:                traceID,
+		RequestID:              requestID,
+		CapabilityKey:          req.CapabilityKey,
+		FunctionalAreaKey:      functionalAreaKey,
+		FieldKey:               req.FieldKey,
+		SetID:                  targetCtx.ResolvedSetID,
+		PolicyVersion:          policyParts.IntentPolicyVersion,
+		EffectivePolicyVersion: effectivePolicyVersion,
+		Decision:               evaluation.Decision,
+		ReasonCode:             evaluation.ReasonCode,
+		BriefExplain:           internalRuleBriefExplain(selectedRule, matched),
+		Context:                evalCtx,
+		CandidatesEvaluated:    len(items),
+		EligibilityMatched:     matched,
 	}
 	if selectedRule != nil {
 		response.SelectedRuleID = selectedRule.RuleID
@@ -339,7 +342,6 @@ func internalRuleDecisionFromError(err error) (string, string, bool) {
 		fieldPolicyConflictCode,
 		fieldDefaultRuleMissingCode,
 		fieldPolicyPriorityModeCode,
-		fieldPolicyLocalModeCode,
 		fieldPolicyModeComboCode:
 		return internalRuleDecisionDeny, code, true
 	default:

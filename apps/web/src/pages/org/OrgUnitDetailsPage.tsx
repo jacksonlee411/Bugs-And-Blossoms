@@ -1105,7 +1105,8 @@ export function OrgUnitDetailsPage() {
         throw new Error('write capabilities unavailable')
       }
       const policyVersion = writeCapability.policy_version.trim()
-      if (policyVersion.length === 0) {
+      const effectivePolicyVersion = writeCapability.effective_policy_version.trim()
+      if (policyVersion.length === 0 || effectivePolicyVersion.length === 0) {
         throw new Error('write policy version missing')
       }
       if (hasActionPlainExtErrors) {
@@ -1129,6 +1130,7 @@ export function OrgUnitDetailsPage() {
         effective_date: effectiveDateValue,
         target_effective_date: activeWriteIntent === 'correct' ? actionForm.effectiveDate.trim() : undefined,
         policy_version: policyVersion,
+        effective_policy_version: effectivePolicyVersion,
         request_id: requestID,
         patch: patch as Parameters<typeof writeOrgUnit>[0]['patch']
       })

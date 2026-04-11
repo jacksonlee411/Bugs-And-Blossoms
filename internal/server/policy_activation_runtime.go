@@ -11,6 +11,8 @@ const (
 	policyActivationStateActive = "active"
 	policyActivationStateDraft  = "draft"
 
+	capabilityPolicyVersionBaseline = "2026-02-23"
+
 	policyActivationCodeVersionRequired = "POLICY_VERSION_REQUIRED"
 	policyActivationCodeDraftMissing    = "POLICY_DRAFT_MISSING"
 	policyActivationCodeRollbackMissing = "POLICY_ROLLBACK_UNAVAILABLE"

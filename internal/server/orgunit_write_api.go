@@ -21,13 +21,14 @@ type orgUnitWritePatchAPIRequest struct {
 }
 
 type orgUnitWriteAPIRequest struct {
-	Intent              string                      `json:"intent"`
-	OrgCode             string                      `json:"org_code"`
-	EffectiveDate       string                      `json:"effective_date"`
-	TargetEffectiveDate string                      `json:"target_effective_date"`
-	PolicyVersion       string                      `json:"policy_version"`
-	RequestID           string                      `json:"request_id"`
-	Patch               orgUnitWritePatchAPIRequest `json:"patch"`
+	Intent                 string                      `json:"intent"`
+	OrgCode                string                      `json:"org_code"`
+	EffectiveDate          string                      `json:"effective_date"`
+	TargetEffectiveDate    string                      `json:"target_effective_date"`
+	PolicyVersion          string                      `json:"policy_version"`
+	EffectivePolicyVersion string                      `json:"effective_policy_version"`
+	RequestID              string                      `json:"request_id"`
+	Patch                  orgUnitWritePatchAPIRequest `json:"patch"`
 }
 
 type orgUnitWriteAPIResponse struct {
@@ -69,8 +70,9 @@ func handleOrgUnitsWriteAPI(w http.ResponseWriter, r *http.Request, writeSvc org
 	intent := strings.TrimSpace(req.Intent)
 	effectiveDate := strings.TrimSpace(req.EffectiveDate)
 	policyVersion := strings.TrimSpace(req.PolicyVersion)
+	effectivePolicyVersion := strings.TrimSpace(req.EffectivePolicyVersion)
 	if capabilityBinding, ok := orgUnitFieldPolicyCapabilityBindingForWriteIntent(intent); ok {
-		if policyVersion == "" {
+		if policyVersion == "" || effectivePolicyVersion == "" {
 			routing.WriteError(
 				w,
 				r,
@@ -81,15 +83,15 @@ func handleOrgUnitsWriteAPI(w http.ResponseWriter, r *http.Request, writeSvc org
 			)
 			return
 		}
-		effectivePolicyVersion, policyParts := resolveOrgUnitEffectivePolicyVersion(tenant.ID, capabilityBinding.IntentCapabilityKey)
-		if !isOrgUnitPolicyVersionAccepted(policyVersion, effectivePolicyVersion, policyParts, nowUTCForOrgUnitPolicyVersion()) {
+		expectedEffectivePolicyVersion, policyParts := resolveOrgUnitEffectivePolicyVersion(tenant.ID, capabilityBinding.IntentCapabilityKey)
+		if !isOrgUnitPolicyVersionAccepted(policyVersion, effectivePolicyVersion, expectedEffectivePolicyVersion, policyParts) {
 			routing.WriteError(
 				w,
 				r,
 				routing.RouteClassInternalAPI,
 				http.StatusConflict,
-				orgUnitErrFieldPolicyVersionStale,
-				orgNodeWriteErrorMessage(errors.New(orgUnitErrFieldPolicyVersionStale)),
+				orgUnitErrFieldPolicyVersionConflict,
+				orgNodeWriteErrorMessage(errors.New(orgUnitErrFieldPolicyVersionConflict)),
 			)
 			return
 		}

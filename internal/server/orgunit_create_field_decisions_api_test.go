@@ -227,9 +227,12 @@ func TestHandleOrgUnitCreateFieldDecisionsAPI(t *testing.T) {
 		if response.BusinessUnitOrgCode != "" {
 			t.Fatalf("business_unit_org_code=%q", response.BusinessUnitOrgCode)
 		}
-		expectedPolicyVersion, parts := resolveOrgUnitEffectivePolicyVersion("t1", orgUnitCreateFieldPolicyCapabilityKey)
-		if response.PolicyVersion != expectedPolicyVersion {
-			t.Fatalf("policy_version=%q want=%q", response.PolicyVersion, expectedPolicyVersion)
+		expectedEffectivePolicyVersion, parts := resolveOrgUnitEffectivePolicyVersion("t1", orgUnitCreateFieldPolicyCapabilityKey)
+		if response.PolicyVersion != parts.IntentPolicyVersion {
+			t.Fatalf("policy_version=%q want=%q", response.PolicyVersion, parts.IntentPolicyVersion)
+		}
+		if response.EffectivePolicyVersion != expectedEffectivePolicyVersion {
+			t.Fatalf("effective_policy_version=%q want=%q", response.EffectivePolicyVersion, expectedEffectivePolicyVersion)
 		}
 		if response.BaselineCapabilityKey != orgUnitWriteFieldPolicyCapabilityKey {
 			t.Fatalf("baseline_capability_key=%q", response.BaselineCapabilityKey)

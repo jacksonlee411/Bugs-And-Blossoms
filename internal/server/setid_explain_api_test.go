@@ -21,7 +21,7 @@ func TestStatusCodeForFieldDecisionError(t *testing.T) {
 		{err: errors.New(fieldPolicyMissingCode), wantStatus: http.StatusUnprocessableEntity, wantCode: fieldPolicyMissingCode},
 		{err: errors.New(fieldDefaultRuleMissingCode), wantStatus: http.StatusUnprocessableEntity, wantCode: fieldDefaultRuleMissingCode},
 		{err: errors.New(fieldPolicyConflictCode), wantStatus: http.StatusUnprocessableEntity, wantCode: fieldPolicyConflictCode},
-		{err: errors.New("boom"), wantStatus: http.StatusInternalServerError, wantCode: "FIELD_EXPLAIN_MISSING"},
+		{err: errors.New("boom"), wantStatus: http.StatusInternalServerError, wantCode: "field_explain_missing"},
 	}
 	for _, tc := range cases {
 		status, code := statusCodeForFieldDecisionError(tc.err)
@@ -331,6 +331,7 @@ func TestHandleSetIDExplainAPI(t *testing.T) {
 	if !strings.Contains(recBrief.Body.String(), `"setid":"A0001"`) ||
 		!strings.Contains(recBrief.Body.String(), `"functional_area_key":"staffing"`) ||
 		!strings.Contains(recBrief.Body.String(), `"policy_version":"2026-02-23"`) ||
+		!strings.Contains(recBrief.Body.String(), `"effective_policy_version":"epv1:`) ||
 		!strings.Contains(recBrief.Body.String(), `"business_unit_org_code":"BU-001"`) ||
 		!strings.Contains(recBrief.Body.String(), `"reason_code":"`+fieldRequiredInContextCode+`"`) {
 		t.Fatalf("unexpected body: %q", recBrief.Body.String())
@@ -354,7 +355,10 @@ func TestHandleSetIDExplainAPI(t *testing.T) {
 		strings.Contains(recFull.Body.String(), `"org_code":"BU-001"`) {
 		t.Fatalf("unexpected body: %q", recFull.Body.String())
 	}
-	if !strings.Contains(recFull.Body.String(), `"resolved_config_version":"2026-02-23"`) {
+	if !strings.Contains(recFull.Body.String(), `"effective_policy_version":"epv1:`) ||
+		!strings.Contains(recFull.Body.String(), `"matched_bucket":"intent_setid_exact_business_unit_exact"`) ||
+		!strings.Contains(recFull.Body.String(), `"winner_policy_ids":[`) ||
+		!strings.Contains(recFull.Body.String(), `"resolution_trace":[`) {
 		t.Fatalf("unexpected body: %q", recFull.Body.String())
 	}
 
@@ -433,32 +437,10 @@ func TestHandleSetIDExplainAPI(t *testing.T) {
 }
 
 func TestHandleSetIDExplainAPI_UsesBusinessUnitOrgNodeKey(t *testing.T) {
-	previousStore := defaultSetIDStrategyRegistryStore
-	t.Cleanup(func() { useSetIDStrategyRegistryStore(previousStore) })
+	resetSetIDStrategyRegistryRuntimeForTest()
+	t.Cleanup(resetSetIDStrategyRegistryRuntimeForTest)
 
 	businessUnitNodeKey := mustOrgNodeKeyForTest(t, 10000001)
-	useSetIDStrategyRegistryStore(setIDStrategyRegistryStoreStub{
-		resolveFieldDecisionFn: func(_ context.Context, _ string, capabilityKey string, fieldKey string, resolvedSetID string, businessUnitNodeKeyArg string, asOf string) (setIDFieldDecision, error) {
-			if capabilityKey != "staffing.assignment_create.field_policy" {
-				t.Fatalf("capability_key=%q", capabilityKey)
-			}
-			if fieldKey != "field_x" {
-				t.Fatalf("field_key=%q", fieldKey)
-			}
-			if businessUnitNodeKeyArg != businessUnitNodeKey {
-				t.Fatalf("business_unit_node_key=%q want=%q", businessUnitNodeKeyArg, businessUnitNodeKey)
-			}
-			if asOf != "2026-01-01" {
-				t.Fatalf("as_of=%q", asOf)
-			}
-			return setIDFieldDecision{
-				CapabilityKey: capabilityKey,
-				FieldKey:      fieldKey,
-				Visible:       true,
-				Maintainable:  true,
-			}, nil
-		},
-	})
 
 	store := scopeAPIStore{
 		resolveSetIDFn: func(_ context.Context, _ string, orgUnitID string, _ string) (string, error) {
@@ -473,6 +455,20 @@ func TestHandleSetIDExplainAPI_UsesBusinessUnitOrgNodeKey(t *testing.T) {
 			"BU-001": businessUnitNodeKey,
 		},
 	}
+	_, _ = defaultSetIDStrategyRegistryRuntime.upsert("t1", setIDStrategyRegistryItem{
+		CapabilityKey:       "staffing.assignment_create.field_policy",
+		OwnerModule:         "staffing",
+		FieldKey:            "field_x",
+		PersonalizationMode: personalizationModeSetID,
+		OrgApplicability:    orgApplicabilityBusinessUnit,
+		ResolvedSetID:       "A0001",
+		BusinessUnitNodeKey: businessUnitNodeKey,
+		Visible:             true,
+		Maintainable:        true,
+		ExplainRequired:     true,
+		EffectiveDate:       "2026-01-01",
+		Priority:            200,
+	})
 
 	req := httptest.NewRequest(
 		http.MethodGet,

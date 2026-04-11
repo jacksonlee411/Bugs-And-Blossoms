@@ -25,12 +25,12 @@ const (
 	LocalOverrideModeNoOverride = "no_override"
 	LocalOverrideModeNoLocal    = "no_local"
 
-	ErrorPolicyConflict          = "FIELD_POLICY_CONFLICT"
-	ErrorPolicyMissing           = "FIELD_POLICY_MISSING"
+	ErrorPolicyConflict          = "policy_conflict_ambiguous"
+	ErrorPolicyMissing           = "policy_missing"
 	ErrorDefaultRuleMissing      = "FIELD_DEFAULT_RULE_MISSING"
-	ErrorPolicyPriorityMode      = "FIELD_POLICY_PRIORITY_MODE_INVALID"
-	ErrorPolicyLocalOverrideMode = "FIELD_POLICY_LOCAL_OVERRIDE_MODE_INVALID"
-	ErrorPolicyModeCombination   = "FIELD_POLICY_MODE_COMBINATION_INVALID"
+	ErrorPolicyPriorityMode      = "policy_mode_invalid"
+	ErrorPolicyLocalOverrideMode = "policy_mode_invalid"
+	ErrorPolicyModeCombination   = "policy_mode_combination_invalid"
 
 	BucketIntentSetIDBusinessUnitExact = "intent_setid_exact_business_unit_exact"
 	BucketIntentSetIDWildcard          = "intent_setid_exact_business_unit_wildcard"

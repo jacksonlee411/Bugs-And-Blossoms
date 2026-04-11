@@ -18,28 +18,29 @@ import (
 const (
 	explainLevelBrief = "brief"
 	explainLevelFull  = "full"
-
-	capabilityPolicyVersionBaseline = "2026-02-23"
 )
 
 type setIDExplainResponse struct {
-	TraceID               string               `json:"trace_id"`
-	RequestID             string               `json:"request_id"`
-	CapabilityKey         string               `json:"capability_key"`
-	SetID                 string               `json:"setid"`
-	SetIDSource           string               `json:"setid_source,omitempty"`
-	FunctionalAreaKey     string               `json:"functional_area_key"`
-	PolicyVersion         string               `json:"policy_version"`
-	TenantID              string               `json:"tenant_id"`
-	BusinessUnitOrgCode   string               `json:"business_unit_org_code"`
-	OrgCode               string               `json:"org_code,omitempty"`
-	AsOf                  string               `json:"as_of"`
-	ResolvedSetID         string               `json:"resolved_setid"`
-	ResolvedConfigVersion string               `json:"resolved_config_version,omitempty"`
-	Decision              string               `json:"decision"`
-	ReasonCode            string               `json:"reason_code"`
-	Level                 string               `json:"level"`
-	FieldDecisions        []setIDFieldDecision `json:"field_decisions"`
+	TraceID                string               `json:"trace_id"`
+	RequestID              string               `json:"request_id"`
+	CapabilityKey          string               `json:"capability_key"`
+	SetID                  string               `json:"setid"`
+	SetIDSource            string               `json:"setid_source,omitempty"`
+	FunctionalAreaKey      string               `json:"functional_area_key"`
+	PolicyVersion          string               `json:"policy_version"`
+	EffectivePolicyVersion string               `json:"effective_policy_version"`
+	TenantID               string               `json:"tenant_id"`
+	BusinessUnitOrgCode    string               `json:"business_unit_org_code"`
+	OrgCode                string               `json:"org_code,omitempty"`
+	AsOf                   string               `json:"as_of"`
+	ResolvedSetID          string               `json:"resolved_setid"`
+	Decision               string               `json:"decision"`
+	ReasonCode             string               `json:"reason_code"`
+	MatchedBucket          string               `json:"matched_bucket,omitempty"`
+	WinnerPolicyIDs        []string             `json:"winner_policy_ids,omitempty"`
+	ResolutionTrace        []string             `json:"resolution_trace,omitempty"`
+	Level                  string               `json:"level"`
+	FieldDecisions         []setIDFieldDecision `json:"field_decisions"`
 }
 
 type setIDResolvedOrgRef struct {
@@ -171,20 +172,29 @@ func handleSetIDExplainAPI(w http.ResponseWriter, r *http.Request, store SetIDGo
 		return
 	}
 
-	fieldDecision, err := defaultSetIDStrategyRegistryStore.resolveFieldDecision(
-		r.Context(),
-		tenant.ID,
+	items, err := collectCapabilityResolutionItems(
+		func(queryCapabilityKey string) ([]setIDStrategyRegistryItem, error) {
+			return defaultSetIDStrategyRegistryStore.list(r.Context(), tenant.ID, queryCapabilityKey, fieldKey, capCtx.AsOf)
+		},
+		capCtx.CapabilityKey,
+	)
+	if err != nil {
+		writeInternalAPIError(w, r, err, "setid_explain_items_collect_failed")
+		return
+	}
+	resolution, err := resolveFieldDecisionWithTraceFromItems(
+		items,
 		capCtx.CapabilityKey,
 		fieldKey,
 		targetCtx.ResolvedSetID,
 		policyCtx.BusinessUnitNodeKey,
-		capCtx.AsOf,
 	)
 	if err != nil {
 		status, code := statusCodeForFieldDecisionError(err)
 		routing.WriteError(w, r, routing.RouteClassInternalAPI, status, code, code)
 		return
 	}
+	fieldDecision := resolution.Decision
 	fieldDecision, responseDecision, responseReasonCode := applySetIDFieldVisibility(fieldDecision)
 	fieldDecision.Decision = responseDecision
 	fieldDecision.ReasonCode = responseReasonCode
@@ -193,32 +203,34 @@ func handleSetIDExplainAPI(w http.ResponseWriter, r *http.Request, store SetIDGo
 	if traceID == "" {
 		traceID = fallbackSetIDExplainTraceID(requestID, capabilityKey, businessUnitOrgCode, asOf)
 	}
-	policyVersion := defaultPolicyActivationRuntime.activePolicyVersion(tenant.ID, capabilityKey)
+	effectivePolicyVersion, policyParts := resolveOrgUnitEffectivePolicyVersion(tenant.ID, capabilityKey)
 
 	response := setIDExplainResponse{
-		TraceID:               traceID,
-		RequestID:             requestID,
-		CapabilityKey:         capCtx.CapabilityKey,
-		SetID:                 resolvedSetID,
-		SetIDSource:           targetCtx.SetIDSource,
-		FunctionalAreaKey:     functionalAreaKey,
-		PolicyVersion:         policyVersion,
-		TenantID:              tenant.ID,
-		BusinessUnitOrgCode:   capCtx.BusinessUnitOrgCode,
-		AsOf:                  capCtx.AsOf,
-		ResolvedSetID:         resolvedSetID,
-		ResolvedConfigVersion: policyVersion,
-		Decision:              responseDecision,
-		ReasonCode:            responseReasonCode,
-		Level:                 level,
-		FieldDecisions:        []setIDFieldDecision{fieldDecision},
+		TraceID:                traceID,
+		RequestID:              requestID,
+		CapabilityKey:          capCtx.CapabilityKey,
+		SetID:                  resolvedSetID,
+		SetIDSource:            targetCtx.SetIDSource,
+		FunctionalAreaKey:      functionalAreaKey,
+		PolicyVersion:          policyParts.IntentPolicyVersion,
+		EffectivePolicyVersion: effectivePolicyVersion,
+		TenantID:               tenant.ID,
+		BusinessUnitOrgCode:    capCtx.BusinessUnitOrgCode,
+		AsOf:                   capCtx.AsOf,
+		ResolvedSetID:          resolvedSetID,
+		Decision:               responseDecision,
+		ReasonCode:             responseReasonCode,
+		MatchedBucket:          resolution.MatchedBucket,
+		WinnerPolicyIDs:        append([]string(nil), resolution.WinnerPolicyIDs...),
+		ResolutionTrace:        append([]string(nil), resolution.ResolutionTrace...),
+		Level:                  level,
+		FieldDecisions:         []setIDFieldDecision{fieldDecision},
 	}
 	if !strings.EqualFold(targetCtx.OrgCode, capCtx.BusinessUnitOrgCode) {
 		response.OrgCode = targetCtx.OrgCode
 	}
 	if level == explainLevelBrief {
 		response.TenantID = ""
-		response.ResolvedConfigVersion = ""
 	}
 	logSetIDExplainAudit(response)
 
@@ -269,10 +281,14 @@ func writeSetIDExplainOrgCodeError(w http.ResponseWriter, r *http.Request, field
 
 func statusCodeForFieldDecisionError(err error) (int, string) {
 	switch strings.TrimSpace(err.Error()) {
-	case fieldPolicyMissingCode, fieldDefaultRuleMissingCode, fieldPolicyConflictCode:
+	case fieldPolicyMissingCode,
+		fieldDefaultRuleMissingCode,
+		fieldPolicyConflictCode,
+		fieldPolicyPriorityModeCode,
+		fieldPolicyModeComboCode:
 		return http.StatusUnprocessableEntity, strings.TrimSpace(err.Error())
 	default:
-		return http.StatusInternalServerError, "FIELD_EXPLAIN_MISSING"
+		return http.StatusInternalServerError, "field_explain_missing"
 	}
 }
 

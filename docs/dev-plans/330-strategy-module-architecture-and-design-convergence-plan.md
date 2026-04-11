@@ -549,7 +549,7 @@
 | `PR-2` `Context Resolver` 单点落地 | [X] 已完成 | `R1` + `6.2A` | 建立单一 `Context Resolver`，输出 `business_unit_node_key + resolved_setid + setid_source` | 未完成前不得开始双轴主查询切换 |
 | `PR-3` Schema 双轴化与历史回填 | [X] 已完成 | `R2 + R3` + `6.2B` 记录契约 | 在现有表上引入 `resolved_setid`、约束、唯一键与回填证据 | 若仍存在非法形状或不可判定记录即 stopline |
 | `PR-4` 唯一 PDP 与前置测试 | [X] 已完成 | `R4` + `6.2` + `6.5` | 抽单一 PDP，补 bucket/mode/explain 回放测试 | 未完成前不得切主链 |
-| `PR-5` API / explain / version / 错误码切主链 | [ ] 待开始 | `R5 + R6` + `6.2C` | 显式表达 SetID 轴，统一 explain/version，切 canonical 错误码 | “schema 双轴、查询单轴”不构成收口 |
+| `PR-5` API / explain / version / 错误码切主链 | [X] 已完成 | `R5 + R6` + `6.2C` | 显式表达 SetID 轴，统一 explain/version，切 canonical 错误码 | “schema 双轴、查询单轴”不构成收口 |
 | `PR-6` route/authz、旧层退场与门禁收尾 | [ ] 待开始 | `R7` + `6.3 + 6.4 + 6.6` | 收 capability/authz 归属，冻结 `tenant_field_policies` 定位并完成门禁证据 | 不允许旧主链继续 happy path |
 
 ### 5.3A PR-1 已交付物（2026-04-11）
@@ -605,6 +605,30 @@
    - `internal/server/orgunit_field_metadata_api.go`
 5. [X] 新增 PR-4 实施记录并接入仓库文档地图，作为 `PR-5` 前的证据冻结点：
    `docs/dev-records/dev-plan-330-pr4-unique-pdp-and-prerequisite-tests-log.md`
+
+### 5.3E PR-5 已交付物（2026-04-11）
+
+1. [X] Strategy Registry 主写 / 主读 API 已显式表达 `resolved_setid_scope + resolved_setid`，tenant exact / wildcard 与 business_unit exact 的外部契约不再靠 BU 输入隐式猜测：
+   - `internal/server/setid_strategy_registry_api.go`
+   - `apps/web/src/api/setids.ts`
+   - `apps/web/src/pages/org/SetIDGovernancePage.tsx`
+2. [X] explain、`/internal/rules/evaluate`、OrgUnit create-field-decisions / write-capabilities / write submit 已统一输出与消费 `policy_version + effective_policy_version`，其中 `policy_version` 固定表示 intent active version，`effective_policy_version` 固定表示组合版本签名：
+   - `internal/server/setid_explain_api.go`
+   - `internal/server/internal_rules_evaluate_api.go`
+   - `internal/server/orgunit_create_field_decisions_api.go`
+   - `internal/server/orgunit_write_capabilities_api.go`
+   - `internal/server/orgunit_write_api.go`
+   - `apps/web/src/api/orgUnits.ts`
+   - `apps/web/src/api/setids.ts`
+3. [X] 唯一 PDP 的正式错误码已切为 lower snake_case canonical 主链，`policy_missing / policy_conflict_ambiguous / policy_mode_invalid / policy_mode_combination_invalid / policy_version_required / policy_version_conflict / policy_disable_not_allowed / policy_redundant_override` 已在实现、前端映射与错误目录对齐：
+   - `pkg/fieldpolicy/setid_strategy_pdp.go`
+   - `internal/server/orgunit_api.go`
+   - `internal/server/orgunit_nodes.go`
+   - `apps/web/src/errors/presentApiError.ts`
+   - `config/errors/catalog.yaml`
+4. [X] explain 已正式带出 `matched_bucket / winner_policy_ids / resolution_trace / effective_policy_version`，不再保留 `resolved_config_version` 这一过渡字段。
+5. [X] 新增 PR-5 实施记录并接入仓库文档地图，作为 `PR-6` 前的证据冻结点：
+   `docs/dev-records/dev-plan-330-pr5-api-explain-version-error-cutover-log.md`
 
 ## 6. 收口方案
 
