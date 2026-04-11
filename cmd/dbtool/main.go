@@ -21,7 +21,7 @@ import (
 
 func main() {
 	if len(os.Args) < 2 {
-		fatalf("usage: dbtool <rls-smoke|orgunit-smoke|orgunit-code-validate|jobcatalog-smoke|person-smoke|staffing-smoke> [args]")
+		fatalf("usage: dbtool <rls-smoke|orgunit-smoke|orgunit-code-validate|orgunit-snapshot-export|orgunit-snapshot-check|orgunit-snapshot-bootstrap-target|orgunit-snapshot-import|orgunit-snapshot-verify|orgunit-stopline-capture|orgunit-setid-strategy-registry-export|orgunit-setid-strategy-registry-check|orgunit-setid-strategy-registry-import|orgunit-setid-strategy-registry-verify|orgunit-setid-strategy-registry-validate|jobcatalog-smoke|person-smoke|staffing-smoke> [args]")
 	}
 
 	switch os.Args[1] {
@@ -31,6 +31,28 @@ func main() {
 		orgunitSmoke(os.Args[2:])
 	case "orgunit-code-validate":
 		orgunitCodeValidate(os.Args[2:])
+	case "orgunit-snapshot-export":
+		orgunitSnapshotExport(os.Args[2:])
+	case "orgunit-snapshot-check":
+		orgunitSnapshotCheck(os.Args[2:])
+	case "orgunit-snapshot-bootstrap-target":
+		orgunitSnapshotBootstrapTarget(os.Args[2:])
+	case "orgunit-snapshot-import":
+		orgunitSnapshotImport(os.Args[2:])
+	case "orgunit-snapshot-verify":
+		orgunitSnapshotVerify(os.Args[2:])
+	case "orgunit-stopline-capture":
+		orgunitStoplineCapture(os.Args[2:])
+	case "orgunit-setid-strategy-registry-export":
+		orgunitSetIDStrategyRegistryExport(os.Args[2:])
+	case "orgunit-setid-strategy-registry-check":
+		orgunitSetIDStrategyRegistryCheck(os.Args[2:])
+	case "orgunit-setid-strategy-registry-import":
+		orgunitSetIDStrategyRegistryImport(os.Args[2:])
+	case "orgunit-setid-strategy-registry-verify":
+		orgunitSetIDStrategyRegistryVerify(os.Args[2:])
+	case "orgunit-setid-strategy-registry-validate":
+		orgunitSetIDStrategyRegistryValidate(os.Args[2:])
 	case "jobcatalog-smoke":
 		jobcatalogSmoke(os.Args[2:])
 	case "person-smoke":
@@ -259,6 +281,8 @@ func staffingSmoke(args []string) {
 	var orgEventID string
 	var missingOrgUnitID string
 	var orgUnitID string
+	var missingOrgNodeKey string
+	var orgNodeKey string
 	if err := tx.QueryRow(ctx, `SELECT gen_random_uuid()::text;`).Scan(&positionID); err != nil {
 		fatal(err)
 	}
@@ -320,6 +344,12 @@ func staffingSmoke(args []string) {
 			FROM orgunit.org_unit_versions
 			WHERE tenant_uuid = $1::uuid;
 		`, tenantA).Scan(&missingOrgUnitID); err != nil {
+		fatal(err)
+	}
+	if err := tx.QueryRow(ctx, `SELECT orgunit.encode_org_node_key($1::bigint)::text;`, orgUnitID).Scan(&orgNodeKey); err != nil {
+		fatal(err)
+	}
+	if err := tx.QueryRow(ctx, `SELECT orgunit.encode_org_node_key($1::bigint)::text;`, missingOrgUnitID).Scan(&missingOrgNodeKey); err != nil {
 		fatal(err)
 	}
 
@@ -557,16 +587,16 @@ func staffingSmoke(args []string) {
 			  $3::uuid,
 			  'CREATE',
 			  $4::date,
-			  jsonb_build_object('org_unit_id', $5::text, 'name', 'Smoke Position', 'job_profile_uuid', $6::text),
+			  jsonb_build_object('org_node_key', $5::text, 'name', 'Smoke Position', 'job_profile_uuid', $6::text),
 			  $7::text,
 			  $8::uuid
 			);
-		`, positionEventID, tenantA, positionID, effectiveDate, missingOrgUnitID, jobProfileID, requestID, initiatorID)
+		`, positionEventID, tenantA, positionID, effectiveDate, missingOrgNodeKey, jobProfileID, requestID, initiatorID)
 	if _, rbErr := tx.Exec(ctx, `ROLLBACK TO SAVEPOINT sp_missing_org;`); rbErr != nil {
 		fatal(rbErr)
 	}
 	if err == nil {
-		fatalf("expected submit_position_event to fail when org_unit_id is missing as-of")
+		fatalf("expected submit_position_event to fail when org_node_key is missing as-of")
 	}
 	if msg, ok := pgErrorMessage(err); !ok || msg != "STAFFING_ORG_UNIT_NOT_FOUND_AS_OF" {
 		fatalf("expected pg error message=STAFFING_ORG_UNIT_NOT_FOUND_AS_OF, got ok=%v message=%q err=%v", ok, msg, err)
@@ -580,11 +610,11 @@ func staffingSmoke(args []string) {
 			  $3::uuid,
 			  'CREATE',
 			  $4::date,
-			  jsonb_build_object('org_unit_id', $5::text, 'name', 'Smoke Position', 'job_profile_uuid', $6::text),
+			  jsonb_build_object('org_node_key', $5::text, 'name', 'Smoke Position', 'job_profile_uuid', $6::text),
 			  $7::text,
 			  $8::uuid
 			);
-		`, positionEventID, tenantA, positionID, effectiveDate, orgUnitID, jobProfileID, requestID, initiatorID).Scan(&positionEventDBID); err != nil {
+		`, positionEventID, tenantA, positionID, effectiveDate, orgNodeKey, jobProfileID, requestID, initiatorID).Scan(&positionEventDBID); err != nil {
 		fatal(err)
 	}
 	if positionEventDBID <= 0 {
@@ -803,11 +833,11 @@ func staffingSmoke(args []string) {
 					  $3::uuid,
 					  'CREATE',
 					  $4::date,
-					  jsonb_build_object('org_unit_id', $5::text, 'name', 'Smoke Position 2', 'job_profile_uuid', $6::text),
+					  jsonb_build_object('org_node_key', $5::text, 'name', 'Smoke Position 2', 'job_profile_uuid', $6::text),
 					  $7::text,
 					  $8::uuid
 					);
-				`, positionEventID2, tenantA, positionID2, effectiveDate, orgUnitID, jobProfileID, requestID+"-pos2", initiatorID); err != nil {
+				`, positionEventID2, tenantA, positionID2, effectiveDate, orgNodeKey, jobProfileID, requestID+"-pos2", initiatorID); err != nil {
 			fatal(err)
 		}
 
@@ -979,11 +1009,11 @@ func staffingSmoke(args []string) {
 				  $3::uuid,
 				  'CREATE',
 				  $4::date,
-				  jsonb_build_object('org_unit_id', $5::text, 'name', 'Smoke Disable Test Position', 'job_profile_uuid', $6::text),
+				  jsonb_build_object('org_node_key', $5::text, 'name', 'Smoke Disable Test Position', 'job_profile_uuid', $6::text),
 				  $7::text,
 				  $8::uuid
 				);
-			`, disablePositionEventID, tenantA, disablePositionID, effectiveDate, orgUnitID, jobProfileID, requestID+"-pos-disable-test-create", initiatorID); err != nil {
+			`, disablePositionEventID, tenantA, disablePositionID, effectiveDate, orgNodeKey, jobProfileID, requestID+"-pos-disable-test-create", initiatorID); err != nil {
 		fatal(err)
 	}
 
@@ -1168,11 +1198,11 @@ func staffingSmoke(args []string) {
 					  $3::uuid,
 					  'CREATE',
 					  $4::date,
-					  jsonb_build_object('org_unit_id', $5::text, 'name', $6::text, 'job_profile_uuid', $7::text),
+					  jsonb_build_object('org_node_key', $5::text, 'name', $6::text, 'job_profile_uuid', $7::text),
 					  $8::text,
 					  $9::uuid
 					);
-				`, eventID, tenantA, positionID, effectiveDate, orgUnitID, name, jobProfileID, requestID+"-pos-reports-to-create-"+positionID, initiatorID); err != nil {
+				`, eventID, tenantA, positionID, effectiveDate, orgNodeKey, name, jobProfileID, requestID+"-pos-reports-to-create-"+positionID, initiatorID); err != nil {
 				fatal(err)
 			}
 		}

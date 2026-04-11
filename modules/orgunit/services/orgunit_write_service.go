@@ -330,7 +330,7 @@ func (s *orgUnitWriteService) Write(ctx context.Context, tenantID string, req Wr
 	payload := make(map[string]any)
 	fields := make(map[string]any)
 
-	// parent_org_code -> parent_id (kernel payload)
+	// parent_org_code -> parent_org_node_key (kernel payload)
 	if req.Patch.ParentOrgCode != nil {
 		parentCodeRaw := strings.TrimSpace(*req.Patch.ParentOrgCode)
 		if parentCodeRaw == "" {
@@ -340,14 +340,14 @@ func (s *orgUnitWriteService) Write(ctx context.Context, tenantID string, req Wr
 		if err != nil {
 			return OrgUnitWriteResult{}, err
 		}
-		parentID, err := s.store.ResolveOrgID(ctx, tenantID, parentCode)
+		parentNodeKey, err := s.store.ResolveOrgNodeKey(ctx, tenantID, parentCode)
 		if err != nil {
 			if errors.Is(err, orgunitpkg.ErrOrgCodeNotFound) {
 				return OrgUnitWriteResult{}, errors.New(errParentNotFoundAsOf)
 			}
 			return OrgUnitWriteResult{}, err
 		}
-		payload["parent_id"] = parentID
+		payload["parent_org_node_key"] = parentNodeKey
 		fields["parent_org_code"] = parentCode
 	}
 
@@ -480,7 +480,7 @@ func (s *orgUnitWriteService) Write(ctx context.Context, tenantID string, req Wr
 			return OrgUnitWriteResult{}, httperr.NewBadRequest(errPatchRequired)
 		}
 
-		orgID, err := s.store.ResolveOrgID(ctx, tenantID, orgCode)
+		orgNodeKey, err := s.store.ResolveOrgNodeKey(ctx, tenantID, orgCode)
 		if err != nil {
 			if errors.Is(err, orgunitpkg.ErrOrgCodeNotFound) {
 				return OrgUnitWriteResult{}, errors.New(errOrgCodeNotFound)
@@ -493,7 +493,7 @@ func (s *orgUnitWriteService) Write(ctx context.Context, tenantID string, req Wr
 			return OrgUnitWriteResult{}, err
 		}
 
-		if _, err := s.store.SubmitEvent(ctx, tenantID, eventUUID, &orgID, string(types.OrgUnitEventUpdate), effectiveDate, payloadJSON, requestID, initiatorUUID); err != nil {
+		if _, err := s.store.SubmitEvent(ctx, tenantID, eventUUID, &orgNodeKey, string(types.OrgUnitEventUpdate), effectiveDate, payloadJSON, requestID, initiatorUUID); err != nil {
 			return OrgUnitWriteResult{}, err
 		}
 
@@ -510,7 +510,7 @@ func (s *orgUnitWriteService) Write(ctx context.Context, tenantID string, req Wr
 		if err != nil {
 			return OrgUnitWriteResult{}, err
 		}
-		orgID, err := s.store.ResolveOrgID(ctx, tenantID, orgCode)
+		orgNodeKey, err := s.store.ResolveOrgNodeKey(ctx, tenantID, orgCode)
 		if err != nil {
 			if errors.Is(err, orgunitpkg.ErrOrgCodeNotFound) {
 				return OrgUnitWriteResult{}, errors.New(errOrgCodeNotFound)
@@ -532,7 +532,7 @@ func (s *orgUnitWriteService) Write(ctx context.Context, tenantID string, req Wr
 			return OrgUnitWriteResult{}, err
 		}
 
-		correctionUUID, err := s.store.SubmitCorrection(ctx, tenantID, orgID, targetDate, patchJSON, requestID, initiatorUUID)
+		correctionUUID, err := s.store.SubmitCorrection(ctx, tenantID, orgNodeKey, targetDate, patchJSON, requestID, initiatorUUID)
 		if err != nil {
 			return OrgUnitWriteResult{}, err
 		}
@@ -567,27 +567,27 @@ func (s *orgUnitWriteService) Create(ctx context.Context, tenantID string, req C
 	}
 
 	// Fail-closed: creating an existing org_code should be rejected early.
-	if _, err := s.store.ResolveOrgID(ctx, tenantID, orgCode); err == nil {
+	if _, err := s.store.ResolveOrgNodeKey(ctx, tenantID, orgCode); err == nil {
 		return types.OrgUnitResult{}, errors.New("ORG_ALREADY_EXISTS")
 	} else if !errors.Is(err, orgunitpkg.ErrOrgCodeNotFound) {
 		return types.OrgUnitResult{}, err
 	}
 
-	var parentID *int
+	var parentNodeKey *string
 	var parentCode string
 	if strings.TrimSpace(req.ParentOrgCode) != "" {
 		parentCode, err = normalizeOrgCode(req.ParentOrgCode)
 		if err != nil {
 			return types.OrgUnitResult{}, err
 		}
-		parentIDValue, err := s.store.ResolveOrgID(ctx, tenantID, parentCode)
+		parentNodeKeyValue, err := s.store.ResolveOrgNodeKey(ctx, tenantID, parentCode)
 		if err != nil {
 			if errors.Is(err, orgunitpkg.ErrOrgCodeNotFound) {
 				return types.OrgUnitResult{}, errors.New(errParentNotFoundAsOf)
 			}
 			return types.OrgUnitResult{}, err
 		}
-		parentID = &parentIDValue
+		parentNodeKey = &parentNodeKeyValue
 	}
 
 	var managerUUID string
@@ -625,8 +625,8 @@ func (s *orgUnitWriteService) Create(ctx context.Context, tenantID string, req C
 		"name":             name,
 		"is_business_unit": req.IsBusinessUnit,
 	}
-	if parentID != nil {
-		payload["parent_id"] = *parentID
+	if parentNodeKey != nil {
+		payload["parent_org_node_key"] = *parentNodeKey
 	}
 	if managerUUID != "" {
 		payload["manager_uuid"] = managerUUID
@@ -659,9 +659,7 @@ func (s *orgUnitWriteService) Create(ctx context.Context, tenantID string, req C
 	if _, err := s.store.SubmitEvent(ctx, tenantID, eventUUID, nil, string(types.OrgUnitEventCreate), effectiveDate, payloadJSON, eventUUID, resolveInitiatorUUID(req.InitiatorUUID, tenantID)); err != nil {
 		return types.OrgUnitResult{}, err
 	}
-
-	event, err := s.store.FindEventByUUID(ctx, tenantID, eventUUID)
-	if err != nil {
+	if _, err := s.store.FindEventByUUID(ctx, tenantID, eventUUID); err != nil {
 		return types.OrgUnitResult{}, err
 	}
 
@@ -678,7 +676,6 @@ func (s *orgUnitWriteService) Create(ctx context.Context, tenantID string, req C
 	}
 
 	return types.OrgUnitResult{
-		OrgID:         strconv.Itoa(event.OrgID),
 		OrgCode:       orgCode,
 		EffectiveDate: effectiveDate,
 		Fields:        fields,
@@ -701,7 +698,7 @@ func (s *orgUnitWriteService) Rename(ctx context.Context, tenantID string, req R
 		return httperr.NewBadRequest("new_name is required")
 	}
 
-	orgID, err := s.store.ResolveOrgID(ctx, tenantID, orgCode)
+	orgNodeKey, err := s.store.ResolveOrgNodeKey(ctx, tenantID, orgCode)
 	if err != nil {
 		if errors.Is(err, orgunitpkg.ErrOrgCodeNotFound) {
 			return errors.New(errOrgCodeNotFound)
@@ -752,7 +749,7 @@ func (s *orgUnitWriteService) Rename(ctx context.Context, tenantID string, req R
 		return err
 	}
 
-	_, err = s.store.SubmitEvent(ctx, tenantID, eventUUID, &orgID, string(types.OrgUnitEventRename), effectiveDate, payloadJSON, eventUUID, resolveInitiatorUUID(req.InitiatorUUID, tenantID))
+	_, err = s.store.SubmitEvent(ctx, tenantID, eventUUID, &orgNodeKey, string(types.OrgUnitEventRename), effectiveDate, payloadJSON, eventUUID, resolveInitiatorUUID(req.InitiatorUUID, tenantID))
 	return err
 }
 
@@ -776,7 +773,7 @@ func (s *orgUnitWriteService) Move(ctx context.Context, tenantID string, req Mov
 		return err
 	}
 
-	orgID, err := s.store.ResolveOrgID(ctx, tenantID, orgCode)
+	orgNodeKey, err := s.store.ResolveOrgNodeKey(ctx, tenantID, orgCode)
 	if err != nil {
 		if errors.Is(err, orgunitpkg.ErrOrgCodeNotFound) {
 			return errors.New(errOrgCodeNotFound)
@@ -784,7 +781,7 @@ func (s *orgUnitWriteService) Move(ctx context.Context, tenantID string, req Mov
 		return err
 	}
 
-	parentID, err := s.store.ResolveOrgID(ctx, tenantID, parentCode)
+	parentNodeKey, err := s.store.ResolveOrgNodeKey(ctx, tenantID, parentCode)
 	if err != nil {
 		if errors.Is(err, orgunitpkg.ErrOrgCodeNotFound) {
 			return errors.New(errParentNotFoundAsOf)
@@ -816,7 +813,7 @@ func (s *orgUnitWriteService) Move(ctx context.Context, tenantID string, req Mov
 		return httperr.NewBadRequest(errOrgInvalidArgument)
 	}
 
-	payload := map[string]any{"new_parent_id": parentID}
+	payload := map[string]any{"new_parent_org_node_key": parentNodeKey}
 	if len(req.Ext) > 0 {
 		extPayload, extLabels, err := buildExtPayloadWithContext(ctx, tenantID, effectiveDate, req.Ext, fieldConfigs)
 		if err != nil {
@@ -839,7 +836,7 @@ func (s *orgUnitWriteService) Move(ctx context.Context, tenantID string, req Mov
 		return err
 	}
 
-	_, err = s.store.SubmitEvent(ctx, tenantID, eventUUID, &orgID, string(types.OrgUnitEventMove), effectiveDate, payloadJSON, eventUUID, resolveInitiatorUUID(req.InitiatorUUID, tenantID))
+	_, err = s.store.SubmitEvent(ctx, tenantID, eventUUID, &orgNodeKey, string(types.OrgUnitEventMove), effectiveDate, payloadJSON, eventUUID, resolveInitiatorUUID(req.InitiatorUUID, tenantID))
 	return err
 }
 
@@ -854,7 +851,7 @@ func (s *orgUnitWriteService) Disable(ctx context.Context, tenantID string, req 
 		return err
 	}
 
-	orgID, err := s.store.ResolveOrgID(ctx, tenantID, orgCode)
+	orgNodeKey, err := s.store.ResolveOrgNodeKey(ctx, tenantID, orgCode)
 	if err != nil {
 		if errors.Is(err, orgunitpkg.ErrOrgCodeNotFound) {
 			return errors.New(errOrgCodeNotFound)
@@ -909,7 +906,7 @@ func (s *orgUnitWriteService) Disable(ctx context.Context, tenantID string, req 
 		return err
 	}
 
-	_, err = s.store.SubmitEvent(ctx, tenantID, eventUUID, &orgID, string(types.OrgUnitEventDisable), effectiveDate, payload, eventUUID, resolveInitiatorUUID(req.InitiatorUUID, tenantID))
+	_, err = s.store.SubmitEvent(ctx, tenantID, eventUUID, &orgNodeKey, string(types.OrgUnitEventDisable), effectiveDate, payload, eventUUID, resolveInitiatorUUID(req.InitiatorUUID, tenantID))
 	return err
 }
 
@@ -924,7 +921,7 @@ func (s *orgUnitWriteService) Enable(ctx context.Context, tenantID string, req E
 		return err
 	}
 
-	orgID, err := s.store.ResolveOrgID(ctx, tenantID, orgCode)
+	orgNodeKey, err := s.store.ResolveOrgNodeKey(ctx, tenantID, orgCode)
 	if err != nil {
 		if errors.Is(err, orgunitpkg.ErrOrgCodeNotFound) {
 			return errors.New(errOrgCodeNotFound)
@@ -979,7 +976,7 @@ func (s *orgUnitWriteService) Enable(ctx context.Context, tenantID string, req E
 		return err
 	}
 
-	_, err = s.store.SubmitEvent(ctx, tenantID, eventUUID, &orgID, string(types.OrgUnitEventEnable), effectiveDate, payload, eventUUID, resolveInitiatorUUID(req.InitiatorUUID, tenantID))
+	_, err = s.store.SubmitEvent(ctx, tenantID, eventUUID, &orgNodeKey, string(types.OrgUnitEventEnable), effectiveDate, payload, eventUUID, resolveInitiatorUUID(req.InitiatorUUID, tenantID))
 	return err
 }
 
@@ -994,7 +991,7 @@ func (s *orgUnitWriteService) SetBusinessUnit(ctx context.Context, tenantID stri
 		return err
 	}
 
-	orgID, err := s.store.ResolveOrgID(ctx, tenantID, orgCode)
+	orgNodeKey, err := s.store.ResolveOrgNodeKey(ctx, tenantID, orgCode)
 	if err != nil {
 		if errors.Is(err, orgunitpkg.ErrOrgCodeNotFound) {
 			return errors.New(errOrgCodeNotFound)
@@ -1045,7 +1042,7 @@ func (s *orgUnitWriteService) SetBusinessUnit(ctx context.Context, tenantID stri
 		return err
 	}
 
-	_, err = s.store.SubmitEvent(ctx, tenantID, eventUUID, &orgID, string(types.OrgUnitEventSetBusinessUnit), effectiveDate, payloadJSON, eventUUID, resolveInitiatorUUID(req.InitiatorUUID, tenantID))
+	_, err = s.store.SubmitEvent(ctx, tenantID, eventUUID, &orgNodeKey, string(types.OrgUnitEventSetBusinessUnit), effectiveDate, payloadJSON, eventUUID, resolveInitiatorUUID(req.InitiatorUUID, tenantID))
 	return err
 }
 
@@ -1065,7 +1062,7 @@ func (s *orgUnitWriteService) Correct(ctx context.Context, tenantID string, req 
 		return types.OrgUnitResult{}, httperr.NewBadRequest("request_id is required")
 	}
 
-	orgID, err := s.store.ResolveOrgID(ctx, tenantID, orgCode)
+	orgNodeKey, err := s.store.ResolveOrgNodeKey(ctx, tenantID, orgCode)
 	if err != nil {
 		if errors.Is(err, orgunitpkg.ErrOrgCodeNotFound) {
 			return types.OrgUnitResult{}, errors.New(errOrgCodeNotFound)
@@ -1073,7 +1070,7 @@ func (s *orgUnitWriteService) Correct(ctx context.Context, tenantID string, req 
 		return types.OrgUnitResult{}, err
 	}
 
-	event, err := s.store.FindEventByEffectiveDate(ctx, tenantID, orgID, targetEffectiveDate)
+	event, err := s.store.FindEventByEffectiveDate(ctx, tenantID, orgNodeKey, targetEffectiveDate)
 	if err != nil {
 		if errors.Is(err, ports.ErrOrgEventNotFound) {
 			return types.OrgUnitResult{}, errors.New(errOrgEventNotFound)
@@ -1112,7 +1109,7 @@ func (s *orgUnitWriteService) Correct(ctx context.Context, tenantID string, req 
 		return types.OrgUnitResult{}, err
 	}
 
-	if _, err := s.store.SubmitCorrection(ctx, tenantID, orgID, targetEffectiveDate, patchJSON, requestID, resolveInitiatorUUID(req.InitiatorUUID, tenantID)); err != nil {
+	if _, err := s.store.SubmitCorrection(ctx, tenantID, orgNodeKey, targetEffectiveDate, patchJSON, requestID, resolveInitiatorUUID(req.InitiatorUUID, tenantID)); err != nil {
 		return types.OrgUnitResult{}, err
 	}
 
@@ -1121,7 +1118,6 @@ func (s *orgUnitWriteService) Correct(ctx context.Context, tenantID string, req 
 	}
 
 	return types.OrgUnitResult{
-		OrgID:         strconv.Itoa(orgID),
 		OrgCode:       orgCode,
 		EffectiveDate: correctedDate,
 		Fields:        fields,
@@ -1149,7 +1145,7 @@ func (s *orgUnitWriteService) CorrectStatus(ctx context.Context, tenantID string
 		return types.OrgUnitResult{}, httperr.NewBadRequest("request_id is required")
 	}
 
-	orgID, err := s.store.ResolveOrgID(ctx, tenantID, orgCode)
+	orgNodeKey, err := s.store.ResolveOrgNodeKey(ctx, tenantID, orgCode)
 	if err != nil {
 		if errors.Is(err, orgunitpkg.ErrOrgCodeNotFound) {
 			return types.OrgUnitResult{}, errors.New(errOrgCodeNotFound)
@@ -1157,7 +1153,7 @@ func (s *orgUnitWriteService) CorrectStatus(ctx context.Context, tenantID string
 		return types.OrgUnitResult{}, err
 	}
 
-	if _, err := s.store.SubmitStatusCorrection(ctx, tenantID, orgID, targetEffectiveDate, targetStatus, requestID, resolveInitiatorUUID(req.InitiatorUUID, tenantID)); err != nil {
+	if _, err := s.store.SubmitStatusCorrection(ctx, tenantID, orgNodeKey, targetEffectiveDate, targetStatus, requestID, resolveInitiatorUUID(req.InitiatorUUID, tenantID)); err != nil {
 		return types.OrgUnitResult{}, err
 	}
 
@@ -1168,7 +1164,6 @@ func (s *orgUnitWriteService) CorrectStatus(ctx context.Context, tenantID string
 	}
 
 	return types.OrgUnitResult{
-		OrgID:         strconv.Itoa(orgID),
 		OrgCode:       orgCode,
 		EffectiveDate: targetEffectiveDate,
 		Fields:        fields,
@@ -1196,7 +1191,7 @@ func (s *orgUnitWriteService) RescindRecord(ctx context.Context, tenantID string
 		return types.OrgUnitResult{}, httperr.NewBadRequest("reason is required")
 	}
 
-	orgID, err := s.store.ResolveOrgID(ctx, tenantID, orgCode)
+	orgNodeKey, err := s.store.ResolveOrgNodeKey(ctx, tenantID, orgCode)
 	if err != nil {
 		if errors.Is(err, orgunitpkg.ErrOrgCodeNotFound) {
 			return types.OrgUnitResult{}, errors.New(errOrgCodeNotFound)
@@ -1204,12 +1199,11 @@ func (s *orgUnitWriteService) RescindRecord(ctx context.Context, tenantID string
 		return types.OrgUnitResult{}, err
 	}
 
-	if _, err := s.store.SubmitRescindEvent(ctx, tenantID, orgID, targetEffectiveDate, reason, requestID, resolveInitiatorUUID(req.InitiatorUUID, tenantID)); err != nil {
+	if _, err := s.store.SubmitRescindEvent(ctx, tenantID, orgNodeKey, targetEffectiveDate, reason, requestID, resolveInitiatorUUID(req.InitiatorUUID, tenantID)); err != nil {
 		return types.OrgUnitResult{}, err
 	}
 
 	return types.OrgUnitResult{
-		OrgID:         strconv.Itoa(orgID),
 		OrgCode:       orgCode,
 		EffectiveDate: targetEffectiveDate,
 		Fields: map[string]any{
@@ -1235,7 +1229,7 @@ func (s *orgUnitWriteService) RescindOrg(ctx context.Context, tenantID string, r
 		return types.OrgUnitResult{}, httperr.NewBadRequest("reason is required")
 	}
 
-	orgID, err := s.store.ResolveOrgID(ctx, tenantID, orgCode)
+	orgNodeKey, err := s.store.ResolveOrgNodeKey(ctx, tenantID, orgCode)
 	if err != nil {
 		if errors.Is(err, orgunitpkg.ErrOrgCodeNotFound) {
 			return types.OrgUnitResult{}, errors.New(errOrgCodeNotFound)
@@ -1243,13 +1237,12 @@ func (s *orgUnitWriteService) RescindOrg(ctx context.Context, tenantID string, r
 		return types.OrgUnitResult{}, err
 	}
 
-	rescindedEvents, err := s.store.SubmitRescindOrg(ctx, tenantID, orgID, reason, requestID, resolveInitiatorUUID(req.InitiatorUUID, tenantID))
+	rescindedEvents, err := s.store.SubmitRescindOrg(ctx, tenantID, orgNodeKey, reason, requestID, resolveInitiatorUUID(req.InitiatorUUID, tenantID))
 	if err != nil {
 		return types.OrgUnitResult{}, err
 	}
 
 	return types.OrgUnitResult{
-		OrgID:         strconv.Itoa(orgID),
 		OrgCode:       orgCode,
 		EffectiveDate: "",
 		Fields: map[string]any{
@@ -1305,14 +1298,14 @@ func (s *orgUnitWriteService) buildCorrectionPatch(ctx context.Context, tenantID
 			if err != nil {
 				return nil, nil, "", err
 			}
-			parentID, err := s.store.ResolveOrgID(ctx, tenantID, parentCode)
+			parentNodeKey, err := s.store.ResolveOrgNodeKey(ctx, tenantID, parentCode)
 			if err != nil {
 				if errors.Is(err, orgunitpkg.ErrOrgCodeNotFound) {
 					return nil, nil, "", errors.New(errParentNotFoundAsOf)
 				}
 				return nil, nil, "", err
 			}
-			patchMap[key] = parentID
+			patchMap[key] = parentNodeKey
 			fields["parent_org_code"] = parentCode
 		}
 	}
@@ -1572,7 +1565,7 @@ func (s *orgUnitWriteService) resolveCreateByRequestID(ctx context.Context, tena
 		return OrgUnitWriteResult{}, false, err
 	}
 	if orgCode == "" {
-		resolved, resolveErr := s.store.ResolveOrgCode(ctx, tenantID, event.OrgID)
+		resolved, resolveErr := s.store.ResolveOrgCodeByNodeKey(ctx, tenantID, event.OrgNodeKey)
 		if resolveErr != nil {
 			return OrgUnitWriteResult{}, false, resolveErr
 		}
@@ -1824,18 +1817,17 @@ func (s *orgUnitWriteService) resolveCreateBusinessUnitID(ctx context.Context, t
 	if err != nil {
 		return "", err
 	}
-	parentID, err := s.store.ResolveOrgID(ctx, tenantID, parentCode)
+	parentNodeKey, err := s.store.ResolveOrgNodeKey(ctx, tenantID, parentCode)
 	if err != nil {
 		if errors.Is(err, orgunitpkg.ErrOrgCodeNotFound) {
 			return "", errors.New(errParentNotFoundAsOf)
 		}
 		return "", err
 	}
-	businessUnitID := strconv.Itoa(parentID)
-	if len(businessUnitID) != 8 {
+	if _, err := orgunitpkg.NormalizeOrgNodeKey(parentNodeKey); err != nil {
 		return "", errors.New(errFieldPolicyConflict)
 	}
-	return businessUnitID, nil
+	return parentNodeKey, nil
 }
 
 func parseNextOrgCodeRule(expr string) (*orgUnitAutoCodeSpec, error) {
@@ -1955,9 +1947,9 @@ func namePatchKey(eventType types.OrgUnitEventType) (string, bool) {
 func parentPatchKey(eventType types.OrgUnitEventType) (string, bool) {
 	switch eventType {
 	case types.OrgUnitEventCreate:
-		return "parent_id", true
+		return "parent_org_node_key", true
 	case types.OrgUnitEventMove:
-		return "new_parent_id", true
+		return "new_parent_org_node_key", true
 	default:
 		return "", false
 	}

@@ -36,11 +36,20 @@ func (s assistantNoFieldConfigStore) SetBusinessUnitCurrent(ctx context.Context,
 func (s assistantNoFieldConfigStore) ResolveOrgID(ctx context.Context, tenantID string, orgCode string) (int, error) {
 	return s.inner.ResolveOrgID(ctx, tenantID, orgCode)
 }
+func (s assistantNoFieldConfigStore) ResolveOrgNodeKeyByCode(ctx context.Context, tenantID string, orgCode string) (string, error) {
+	return s.inner.ResolveOrgNodeKeyByCode(ctx, tenantID, orgCode)
+}
 func (s assistantNoFieldConfigStore) ResolveOrgCode(ctx context.Context, tenantID string, orgID int) (string, error) {
 	return s.inner.ResolveOrgCode(ctx, tenantID, orgID)
 }
+func (s assistantNoFieldConfigStore) ResolveOrgCodeByNodeKey(ctx context.Context, tenantID string, orgNodeKey string) (string, error) {
+	return s.inner.ResolveOrgCodeByNodeKey(ctx, tenantID, orgNodeKey)
+}
 func (s assistantNoFieldConfigStore) ResolveOrgCodes(ctx context.Context, tenantID string, orgIDs []int) (map[int]string, error) {
 	return s.inner.ResolveOrgCodes(ctx, tenantID, orgIDs)
+}
+func (s assistantNoFieldConfigStore) ResolveOrgCodesByNodeKeys(ctx context.Context, tenantID string, orgNodeKeys []string) (map[string]string, error) {
+	return s.inner.ResolveOrgCodesByNodeKeys(ctx, tenantID, orgNodeKeys)
 }
 func (s assistantNoFieldConfigStore) ListChildren(ctx context.Context, tenantID string, parentID int, asOfDate string) ([]OrgUnitChild, error) {
 	return s.inner.ListChildren(ctx, tenantID, parentID, asOfDate)
@@ -223,24 +232,25 @@ func TestAssistantCreatePolicyPrecheck_HelperCoverage(t *testing.T) {
 		}
 	})
 
-	t.Run("resolveCreateOrgUnitBusinessUnitID branches", func(t *testing.T) {
-		if _, ok := (*assistantConversationService)(nil).resolveCreateOrgUnitBusinessUnitID(context.Background(), "t1", "FLOWER-A"); ok {
+	t.Run("resolveCreateOrgUnitBusinessUnitNodeKey branches", func(t *testing.T) {
+		if _, ok := (*assistantConversationService)(nil).resolveCreateOrgUnitBusinessUnitNodeKey(context.Background(), "t1", "FLOWER-A"); ok {
 			t.Fatal("expected nil service false")
 		}
-		if _, ok := (&assistantConversationService{}).resolveCreateOrgUnitBusinessUnitID(context.Background(), "t1", "FLOWER-A"); ok {
+		if _, ok := (&assistantConversationService{}).resolveCreateOrgUnitBusinessUnitNodeKey(context.Background(), "t1", "FLOWER-A"); ok {
 			t.Fatal("expected nil store false")
 		}
 		errStore := assistantOrgStoreStub{orgUnitMemoryStore: newOrgUnitMemoryStore(), resolveErr: errors.New("boom")}
-		if _, ok := (&assistantConversationService{orgStore: errStore}).resolveCreateOrgUnitBusinessUnitID(context.Background(), "t1", "FLOWER-A"); ok {
+		if _, ok := (&assistantConversationService{orgStore: errStore}).resolveCreateOrgUnitBusinessUnitNodeKey(context.Background(), "t1", "FLOWER-A"); ok {
 			t.Fatal("expected resolve error false")
 		}
 		zeroStore := assistantOrgStoreStub{orgUnitMemoryStore: newOrgUnitMemoryStore(), resolveOrgID: 0}
-		if _, ok := (&assistantConversationService{orgStore: zeroStore}).resolveCreateOrgUnitBusinessUnitID(context.Background(), "t1", "FLOWER-A"); ok {
+		if _, ok := (&assistantConversationService{orgStore: zeroStore}).resolveCreateOrgUnitBusinessUnitNodeKey(context.Background(), "t1", "FLOWER-A"); ok {
 			t.Fatal("expected zero org id false")
 		}
 		goodStore := assistantOrgStoreStub{orgUnitMemoryStore: newOrgUnitMemoryStore(), resolveOrgID: 10000001}
-		if got, ok := (&assistantConversationService{orgStore: goodStore}).resolveCreateOrgUnitBusinessUnitID(context.Background(), "t1", "FLOWER-A"); !ok || got != "10000001" {
-			t.Fatalf("unexpected business unit id got=%q ok=%v", got, ok)
+		want := mustOrgNodeKeyForTest(t, 10000001)
+		if got, ok := (&assistantConversationService{orgStore: goodStore}).resolveCreateOrgUnitBusinessUnitNodeKey(context.Background(), "t1", "FLOWER-A"); !ok || got != want {
+			t.Fatalf("unexpected business unit node key got=%q want=%q ok=%v", got, want, ok)
 		}
 	})
 

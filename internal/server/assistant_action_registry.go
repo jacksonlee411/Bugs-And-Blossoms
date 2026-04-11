@@ -548,33 +548,41 @@ func (s *assistantConversationService) lookupCandidateDetails(ctx context.Contex
 	if s == nil || s.orgStore == nil {
 		return assistantCandidate{}, OrgUnitNodeDetails{}, errAssistantServiceMissing
 	}
-	orgID := candidate.OrgID
-	if orgID <= 0 {
-		resolvedOrgID, err := s.resolveAssistantCandidateOrgID(ctx, tenantID, candidate)
+	orgNodeKey, ok := assistantCandidateNormalizedOrgNodeKey(candidate)
+	if !ok {
+		resolvedOrgNodeKey, err := s.resolveAssistantCandidateOrgNodeKey(ctx, tenantID, candidate)
 		if err != nil {
 			return assistantCandidate{}, OrgUnitNodeDetails{}, err
 		}
-		orgID = resolvedOrgID
-		candidate.OrgID = orgID
+		orgNodeKey = resolvedOrgNodeKey
 	}
-	details, err := s.orgStore.GetNodeDetails(ctx, tenantID, orgID, asOf)
+	candidate.OrgNodeKey = orgNodeKey
+	details, err := getNodeDetailsByVisibilityByNodeKey(ctx, s.orgStore, tenantID, orgNodeKey, asOf, false)
 	if err != nil {
 		return assistantCandidate{}, OrgUnitNodeDetails{}, err
+	}
+	if candidate.OrgID == 0 {
+		candidate.OrgID = details.OrgID
 	}
 	return candidate, details, nil
 }
 
-func (s *assistantConversationService) resolveAssistantCandidateOrgID(ctx context.Context, tenantID string, candidate assistantCandidate) (int, error) {
+func (s *assistantConversationService) resolveAssistantCandidateOrgNodeKey(ctx context.Context, tenantID string, candidate assistantCandidate) (string, error) {
 	if s == nil || s.orgStore == nil {
-		return 0, errAssistantServiceMissing
+		return "", errAssistantServiceMissing
 	}
-	if candidate.OrgID > 0 {
-		return candidate.OrgID, nil
+	if orgNodeKey, ok := assistantCandidateNormalizedOrgNodeKey(candidate); ok {
+		return orgNodeKey, nil
+	}
+	if candidateID := strings.TrimSpace(candidate.CandidateID); candidateID != "" {
+		if orgNodeKey, err := normalizeOrgNodeKeyInput(candidateID); err == nil {
+			return orgNodeKey, nil
+		}
 	}
 	if code := strings.TrimSpace(candidate.CandidateCode); code != "" {
-		orgID, err := s.orgStore.ResolveOrgID(ctx, tenantID, code)
+		orgNodeKey, err := s.orgStore.ResolveOrgNodeKeyByCode(ctx, tenantID, code)
 		if err == nil {
-			return orgID, nil
+			return orgNodeKey, nil
 		}
 	}
 	query := strings.TrimSpace(candidate.CandidateCode)
@@ -585,25 +593,36 @@ func (s *assistantConversationService) resolveAssistantCandidateOrgID(ctx contex
 		query = strings.TrimSpace(candidate.Name)
 	}
 	if query == "" {
-		return 0, errAssistantCandidateNotFound
+		return "", errAssistantCandidateNotFound
 	}
 	rows, err := s.orgStore.SearchNodeCandidates(ctx, tenantID, query, candidate.AsOf, 10)
 	if err != nil {
-		return 0, err
+		return "", err
 	}
 	for _, row := range rows {
-		if row.OrgID <= 0 {
+		orgNodeKey, ok := assistantSearchCandidateOrgNodeKey(row)
+		if !ok {
 			continue
 		}
 		if code := strings.TrimSpace(candidate.CandidateCode); code != "" && strings.TrimSpace(row.OrgCode) == code {
-			return row.OrgID, nil
+			return orgNodeKey, nil
 		}
 		if name := strings.TrimSpace(candidate.Name); name != "" && strings.TrimSpace(row.Name) == name {
-			return row.OrgID, nil
+			return orgNodeKey, nil
 		}
 	}
-	if len(rows) == 1 && rows[0].OrgID > 0 {
-		return rows[0].OrgID, nil
+	if len(rows) == 1 {
+		if orgNodeKey, ok := assistantSearchCandidateOrgNodeKey(rows[0]); ok {
+			return orgNodeKey, nil
+		}
 	}
-	return 0, errAssistantCandidateNotFound
+	return "", errAssistantCandidateNotFound
+}
+
+func (s *assistantConversationService) resolveAssistantCandidateOrgID(ctx context.Context, tenantID string, candidate assistantCandidate) (int, error) {
+	orgNodeKey, err := s.resolveAssistantCandidateOrgNodeKey(ctx, tenantID, candidate)
+	if err != nil {
+		return 0, err
+	}
+	return decodeOrgNodeKeyToID(orgNodeKey)
 }

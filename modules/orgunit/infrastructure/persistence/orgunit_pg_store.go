@@ -28,7 +28,7 @@ func NewOrgUnitPGStore(pool pgBeginner) ports.OrgUnitWriteStore {
 	return &OrgUnitPGStore{pool: pool}
 }
 
-func (s *OrgUnitPGStore) SubmitEvent(ctx context.Context, tenantID string, eventUUID string, orgID *int, eventType string, effectiveDate string, payload json.RawMessage, requestID string, initiatorUUID string) (int64, error) {
+func (s *OrgUnitPGStore) SubmitEvent(ctx context.Context, tenantID string, eventUUID string, orgNodeKey *string, eventType string, effectiveDate string, payload json.RawMessage, requestID string, initiatorUUID string) (int64, error) {
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
 		return 0, err
@@ -39,9 +39,9 @@ func (s *OrgUnitPGStore) SubmitEvent(ctx context.Context, tenantID string, event
 		return 0, err
 	}
 
-	var orgIDValue any
-	if orgID != nil {
-		orgIDValue = *orgID
+	var orgNodeKeyValue any
+	if orgNodeKey != nil {
+		orgNodeKeyValue = *orgNodeKey
 	}
 
 	var eventID int64
@@ -49,14 +49,14 @@ func (s *OrgUnitPGStore) SubmitEvent(ctx context.Context, tenantID string, event
 SELECT orgunit.submit_org_event(
   $1::uuid,
   $2::uuid,
-  $3::int,
+  $3::char(8),
   $4::text,
   $5::date,
   $6::jsonb,
   $7::text,
   $8::uuid
 )
-`, eventUUID, tenantID, orgIDValue, eventType, effectiveDate, payload, requestID, initiatorUUID).Scan(&eventID); err != nil {
+`, eventUUID, tenantID, orgNodeKeyValue, eventType, effectiveDate, payload, requestID, initiatorUUID).Scan(&eventID); err != nil {
 		return 0, err
 	}
 
@@ -66,7 +66,7 @@ SELECT orgunit.submit_org_event(
 	return eventID, nil
 }
 
-func (s *OrgUnitPGStore) SubmitCorrection(ctx context.Context, tenantID string, orgID int, targetEffectiveDate string, patch json.RawMessage, requestID string, initiatorUUID string) (string, error) {
+func (s *OrgUnitPGStore) SubmitCorrection(ctx context.Context, tenantID string, orgNodeKey string, targetEffectiveDate string, patch json.RawMessage, requestID string, initiatorUUID string) (string, error) {
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
 		return "", err
@@ -81,13 +81,13 @@ func (s *OrgUnitPGStore) SubmitCorrection(ctx context.Context, tenantID string, 
 	if err := tx.QueryRow(ctx, `
 SELECT orgunit.submit_org_event_correction(
   $1::uuid,
-  $2::int,
+  $2::char(8),
   $3::date,
   $4::jsonb,
   $5::text,
   $6::uuid
 )
-`, tenantID, orgID, targetEffectiveDate, patch, requestID, initiatorUUID).Scan(&correctionUUID); err != nil {
+`, tenantID, orgNodeKey, targetEffectiveDate, patch, requestID, initiatorUUID).Scan(&correctionUUID); err != nil {
 		return "", err
 	}
 
@@ -97,7 +97,7 @@ SELECT orgunit.submit_org_event_correction(
 	return correctionUUID, nil
 }
 
-func (s *OrgUnitPGStore) SubmitStatusCorrection(ctx context.Context, tenantID string, orgID int, targetEffectiveDate string, targetStatus string, requestID string, initiatorUUID string) (string, error) {
+func (s *OrgUnitPGStore) SubmitStatusCorrection(ctx context.Context, tenantID string, orgNodeKey string, targetEffectiveDate string, targetStatus string, requestID string, initiatorUUID string) (string, error) {
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
 		return "", err
@@ -112,13 +112,13 @@ func (s *OrgUnitPGStore) SubmitStatusCorrection(ctx context.Context, tenantID st
 	if err := tx.QueryRow(ctx, `
 SELECT orgunit.submit_org_status_correction(
   $1::uuid,
-  $2::int,
+  $2::char(8),
   $3::date,
   $4::text,
   $5::text,
   $6::uuid
 )
-`, tenantID, orgID, targetEffectiveDate, targetStatus, requestID, initiatorUUID).Scan(&correctionUUID); err != nil {
+`, tenantID, orgNodeKey, targetEffectiveDate, targetStatus, requestID, initiatorUUID).Scan(&correctionUUID); err != nil {
 		return "", err
 	}
 
@@ -128,7 +128,7 @@ SELECT orgunit.submit_org_status_correction(
 	return correctionUUID, nil
 }
 
-func (s *OrgUnitPGStore) SubmitRescindEvent(ctx context.Context, tenantID string, orgID int, targetEffectiveDate string, reason string, requestID string, initiatorUUID string) (string, error) {
+func (s *OrgUnitPGStore) SubmitRescindEvent(ctx context.Context, tenantID string, orgNodeKey string, targetEffectiveDate string, reason string, requestID string, initiatorUUID string) (string, error) {
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
 		return "", err
@@ -143,13 +143,13 @@ func (s *OrgUnitPGStore) SubmitRescindEvent(ctx context.Context, tenantID string
 	if err := tx.QueryRow(ctx, `
 SELECT orgunit.submit_org_event_rescind(
   $1::uuid,
-  $2::int,
+  $2::char(8),
   $3::date,
   $4::text,
   $5::text,
   $6::uuid
 )
-`, tenantID, orgID, targetEffectiveDate, reason, requestID, initiatorUUID).Scan(&correctionUUID); err != nil {
+`, tenantID, orgNodeKey, targetEffectiveDate, reason, requestID, initiatorUUID).Scan(&correctionUUID); err != nil {
 		return "", err
 	}
 
@@ -159,7 +159,7 @@ SELECT orgunit.submit_org_event_rescind(
 	return correctionUUID, nil
 }
 
-func (s *OrgUnitPGStore) SubmitRescindOrg(ctx context.Context, tenantID string, orgID int, reason string, requestID string, initiatorUUID string) (int, error) {
+func (s *OrgUnitPGStore) SubmitRescindOrg(ctx context.Context, tenantID string, orgNodeKey string, reason string, requestID string, initiatorUUID string) (int, error) {
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
 		return 0, err
@@ -174,12 +174,12 @@ func (s *OrgUnitPGStore) SubmitRescindOrg(ctx context.Context, tenantID string, 
 	if err := tx.QueryRow(ctx, `
 SELECT orgunit.submit_org_rescind(
   $1::uuid,
-  $2::int,
+  $2::char(8),
   $3::text,
   $4::text,
   $5::uuid
 )
-`, tenantID, orgID, reason, requestID, initiatorUUID).Scan(&rescindedEvents); err != nil {
+`, tenantID, orgNodeKey, reason, requestID, initiatorUUID).Scan(&rescindedEvents); err != nil {
 		return 0, err
 	}
 
@@ -203,10 +203,21 @@ func (s *OrgUnitPGStore) FindEventByUUID(ctx context.Context, tenantID string, e
 	var event types.OrgUnitEvent
 	var payload []byte
 	if err := tx.QueryRow(ctx, `
-SELECT id, event_uuid::text, org_id, event_type, effective_date::text, payload, transaction_time
-FROM orgunit.org_events
-WHERE tenant_uuid = $1::uuid AND event_uuid = $2::uuid
-`, tenantID, eventUUID).Scan(&event.ID, &event.EventUUID, &event.OrgID, &event.EventType, &event.EffectiveDate, &payload, &event.TransactionTime); err != nil {
+SELECT
+  e.id,
+  e.event_uuid::text,
+  CASE
+    WHEN to_jsonb(e) ? 'org_node_key'
+      THEN btrim(COALESCE(to_jsonb(e)->>'org_node_key', ''))
+    ELSE orgunit.encode_org_node_key(NULLIF(to_jsonb(e)->>'org_id', '')::bigint)::text
+  END AS org_node_key,
+  e.event_type,
+  e.effective_date::text,
+  e.payload,
+  e.transaction_time
+FROM orgunit.org_events e
+WHERE e.tenant_uuid = $1::uuid AND e.event_uuid = $2::uuid
+	`, tenantID, eventUUID).Scan(&event.ID, &event.EventUUID, &event.OrgNodeKey, &event.EventType, &event.EffectiveDate, &payload, &event.TransactionTime); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return types.OrgUnitEvent{}, ports.ErrOrgEventNotFound
 		}
@@ -223,7 +234,7 @@ WHERE tenant_uuid = $1::uuid AND event_uuid = $2::uuid
 	return event, nil
 }
 
-func (s *OrgUnitPGStore) FindEventByEffectiveDate(ctx context.Context, tenantID string, orgID int, effectiveDate string) (types.OrgUnitEvent, error) {
+func (s *OrgUnitPGStore) FindEventByEffectiveDate(ctx context.Context, tenantID string, orgNodeKey string, effectiveDate string) (types.OrgUnitEvent, error) {
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
 		return types.OrgUnitEvent{}, err
@@ -237,10 +248,27 @@ func (s *OrgUnitPGStore) FindEventByEffectiveDate(ctx context.Context, tenantID 
 	var event types.OrgUnitEvent
 	var payload []byte
 	if err := tx.QueryRow(ctx, `
-SELECT id, event_uuid::text, org_id, event_type, effective_date::text, payload, transaction_time
-FROM orgunit.org_events_effective
-WHERE tenant_uuid = $1::uuid AND org_id = $2::int AND effective_date = $3::date
-`, tenantID, orgID, effectiveDate).Scan(&event.ID, &event.EventUUID, &event.OrgID, &event.EventType, &event.EffectiveDate, &payload, &event.TransactionTime); err != nil {
+SELECT
+  e.id,
+  e.event_uuid::text,
+  CASE
+    WHEN to_jsonb(e) ? 'org_node_key'
+      THEN btrim(COALESCE(to_jsonb(e)->>'org_node_key', ''))
+    ELSE orgunit.encode_org_node_key(NULLIF(to_jsonb(e)->>'org_id', '')::bigint)::text
+  END AS org_node_key,
+  e.event_type,
+  e.effective_date::text,
+  e.payload,
+  e.transaction_time
+FROM orgunit.org_events_effective e
+WHERE e.tenant_uuid = $1::uuid
+  AND CASE
+    WHEN to_jsonb(e) ? 'org_node_key'
+      THEN btrim(COALESCE(to_jsonb(e)->>'org_node_key', '')) = $2::text
+    ELSE NULLIF(to_jsonb(e)->>'org_id', '')::int = orgunit.decode_org_node_key($2::char(8))::int
+  END
+  AND e.effective_date = $3::date
+	`, tenantID, orgNodeKey, effectiveDate).Scan(&event.ID, &event.EventUUID, &event.OrgNodeKey, &event.EventType, &event.EffectiveDate, &payload, &event.TransactionTime); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return types.OrgUnitEvent{}, ports.ErrOrgEventNotFound
 		}
@@ -271,13 +299,24 @@ func (s *OrgUnitPGStore) FindEventByRequestID(ctx context.Context, tenantID stri
 	var event types.OrgUnitEvent
 	var payload []byte
 	if err := tx.QueryRow(ctx, `
-SELECT id, event_uuid::text, org_id, event_type, effective_date::text, payload, transaction_time
-FROM orgunit.org_events
-WHERE tenant_uuid = $1::uuid
-  AND request_id = $2::text
+SELECT
+  e.id,
+  e.event_uuid::text,
+  CASE
+    WHEN to_jsonb(e) ? 'org_node_key'
+      THEN btrim(COALESCE(to_jsonb(e)->>'org_node_key', ''))
+    ELSE orgunit.encode_org_node_key(NULLIF(to_jsonb(e)->>'org_id', '')::bigint)::text
+  END AS org_node_key,
+  e.event_type,
+  e.effective_date::text,
+  e.payload,
+  e.transaction_time
+FROM orgunit.org_events e
+WHERE e.tenant_uuid = $1::uuid
+  AND e.request_id = $2::text
 ORDER BY id DESC
 LIMIT 1
-`, tenantID, requestID).Scan(&event.ID, &event.EventUUID, &event.OrgID, &event.EventType, &event.EffectiveDate, &payload, &event.TransactionTime); err != nil {
+`, tenantID, requestID).Scan(&event.ID, &event.EventUUID, &event.OrgNodeKey, &event.EventType, &event.EffectiveDate, &payload, &event.TransactionTime); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return types.OrgUnitEvent{}, false, nil
 		}
@@ -426,7 +465,7 @@ SELECT
   capability_key,
   field_key,
   org_applicability,
-  business_unit_id,
+  business_unit_node_key,
   required,
   visible,
   maintainable,
@@ -442,8 +481,8 @@ WHERE tenant_uuid = $1::uuid
   AND (end_date IS NULL OR end_date > $3::date)
   AND (capability_key = $4::text OR capability_key = $5::text)
   AND (
-    (org_applicability = 'business_unit' AND business_unit_id = $6::text)
-    OR (org_applicability = 'tenant' AND business_unit_id = '')
+    (org_applicability = 'business_unit' AND business_unit_node_key = $6::text)
+    OR (org_applicability = 'tenant' AND business_unit_node_key = '')
   )
 `, tenantID, fieldKey, asOf, capabilityKey, baselineCapabilityKey, businessUnitID)
 	if err != nil {
@@ -687,21 +726,21 @@ ORDER BY org_code ASC
 	if err != nil {
 		return 0, "", err
 	}
-	var orgIDValue any
+	var orgNodeKeyValue any
 
 	var eventID int64
 	if err := tx.QueryRow(ctx, `
 SELECT orgunit.submit_org_event(
   $1::uuid,
   $2::uuid,
-  $3::int,
+  $3::char(8),
   $4::text,
   $5::date,
   $6::jsonb,
   $7::text,
   $8::uuid
 )
-`, eventUUID, tenantID, orgIDValue, string(types.OrgUnitEventCreate), effectiveDate, payloadWithCode, requestID, initiatorUUID).Scan(&eventID); err != nil {
+	`, eventUUID, tenantID, orgNodeKeyValue, string(types.OrgUnitEventCreate), effectiveDate, payloadWithCode, requestID, initiatorUUID).Scan(&eventID); err != nil {
 		return 0, "", err
 	}
 
@@ -757,29 +796,29 @@ ORDER BY field_key ASC
 	return out, nil
 }
 
-func (s *OrgUnitPGStore) ResolveOrgID(ctx context.Context, tenantID string, orgCode string) (int, error) {
+func (s *OrgUnitPGStore) ResolveOrgNodeKey(ctx context.Context, tenantID string, orgCode string) (string, error) {
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
-		return 0, err
+		return "", err
 	}
 	defer func() { _ = tx.Rollback(context.Background()) }()
 
 	if _, err := tx.Exec(ctx, `SELECT set_config('app.current_tenant', $1, true);`, tenantID); err != nil {
-		return 0, err
+		return "", err
 	}
 
-	orgID, err := orgunitpkg.ResolveOrgID(ctx, tx, tenantID, orgCode)
+	orgNodeKey, err := orgunitpkg.ResolveOrgNodeKeyByCode(ctx, tx, tenantID, orgCode)
 	if err != nil {
-		return 0, err
+		return "", err
 	}
 
 	if err := tx.Commit(ctx); err != nil {
-		return 0, err
+		return "", err
 	}
-	return orgID, nil
+	return orgNodeKey, nil
 }
 
-func (s *OrgUnitPGStore) ResolveOrgCode(ctx context.Context, tenantID string, orgID int) (string, error) {
+func (s *OrgUnitPGStore) ResolveOrgCodeByNodeKey(ctx context.Context, tenantID string, orgNodeKey string) (string, error) {
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
 		return "", err
@@ -790,7 +829,7 @@ func (s *OrgUnitPGStore) ResolveOrgCode(ctx context.Context, tenantID string, or
 		return "", err
 	}
 
-	orgCode, err := orgunitpkg.ResolveOrgCode(ctx, tx, tenantID, orgID)
+	orgCode, err := orgunitpkg.ResolveOrgCodeByNodeKey(ctx, tx, tenantID, orgNodeKey)
 	if err != nil {
 		return "", err
 	}

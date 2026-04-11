@@ -2,7 +2,7 @@ package types
 
 type Position struct {
 	PositionUUID          string
-	OrgUnitID             string
+	OrgNodeKey            string
 	ReportsToPositionUUID string
 	JobCatalogSetID       string
 	JobCatalogSetIDAsOf   string

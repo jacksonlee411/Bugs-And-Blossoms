@@ -12,7 +12,7 @@ func TestResolveCapabilityContext(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/org/api/setid-explain", nil)
 		_, err := resolveCapabilityContext(context.Background(), req, capabilityContextInput{
 			CapabilityKey:       "",
-			BusinessUnitID:      "10000001",
+			BusinessUnitOrgCode: "BU-001",
 			AsOf:                "2026-01-01",
 			RequireBusinessUnit: true,
 		})
@@ -30,7 +30,7 @@ func TestResolveCapabilityContext(t *testing.T) {
 		ctx := withPrincipal(context.Background(), Principal{RoleSlug: "tenant-admin"})
 		_, err := resolveCapabilityContext(ctx, req, capabilityContextInput{
 			CapabilityKey:       "staffing.assignment_create.field_policy",
-			BusinessUnitID:      "10000001",
+			BusinessUnitOrgCode: "BU-001",
 			AsOf:                "2026-01-01",
 			RequireBusinessUnit: true,
 		})
@@ -60,7 +60,7 @@ func TestResolveCapabilityContext(t *testing.T) {
 		ctx := withPrincipal(context.Background(), Principal{RoleSlug: "superadmin"})
 		got, err := resolveCapabilityContext(ctx, req, capabilityContextInput{
 			CapabilityKey:       "staffing.assignment_create.field_policy",
-			BusinessUnitID:      "10000001",
+			BusinessUnitOrgCode: "BU-001",
 			AsOf:                "2026-01-01",
 			RequireBusinessUnit: true,
 		})
@@ -69,6 +69,9 @@ func TestResolveCapabilityContext(t *testing.T) {
 		}
 		if got.ActorScope != actorScopeSaaS {
 			t.Fatalf("actor_scope=%q", got.ActorScope)
+		}
+		if got.BusinessUnitOrgCode != "BU-001" {
+			t.Fatalf("business_unit_org_code=%q", got.BusinessUnitOrgCode)
 		}
 	})
 

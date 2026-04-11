@@ -120,7 +120,7 @@
 
 ### 3.9 死分支与覆盖率处理原则（强制）
 
-- 100% 覆盖率门禁下，**死分支优先删除，不允许为凑覆盖率长期保留可证明不可达的分支**。
+- 当前覆盖率门禁下，**死分支优先删除，不允许为凑覆盖率长期保留可证明不可达的分支**。
 - 对覆盖率缺口，必须先分类："可构造场景的真实分支" → 补测试；"可证明不可达的死分支" → 删除或前移为更早的不变量约束；不得默认通过改门禁口径、加排除项或伪造 fallback 来绕过。
 - 若某分支当前看似不可达但承担明确业务兜底语义，必须保留，并通过更小职责拆分、纯函数化、接口隔离或可注入依赖提升可测性；不得因测试困难直接删除。
 - 删除死分支时，必须满足：① 能说明不可达原因；② 删除后不改变对外契约；③ 相关测试与文档同步更新。
@@ -464,6 +464,9 @@ modules/{module}/
 - DEV-PLAN-301：Go 测试分层整治与官方最佳实践落地方案：`docs/dev-plans/301-go-test-layering-and-best-practices-remediation-plan.md`
 - DEV-PLAN-301 执行日志：`docs/dev-records/dev-plan-301-execution-log.md`
 - DEV-PLAN-302：`internal/server` 残留 `gap/coverage` 测试文件收口计划：`docs/dev-plans/302-internal-server-residual-gap-coverage-closure-plan.md`
+- DEV-PLAN-330：策略模块架构混乱调查与收口方案：`docs/dev-plans/330-strategy-module-architecture-and-design-convergence-plan.md`
+- DEV-PLAN-340：Assistant 组织架构重复维护调查与收敛方案：`docs/dev-plans/340-assistant-orgunit-duplicate-maintenance-investigation-and-convergence-plan.md`
+- DEV-PLAN-350：Assistant Tooling 对齐统一策略模型实施方案：`docs/dev-plans/350-assistant-tooling-alignment-with-unified-policy-model-plan.md`
 - DEV-PLAN-303：全仓残留 `gap/coverage` 测试尾项清零计划：`docs/dev-plans/303-repo-final-gap-coverage-test-tail-closure-plan.md`
 - DEV-PLAN-310：全项目 view/as_of 时间语义专项检视与最小收敛方案：`docs/dev-plans/310-project-wide-view-as-of-semantics-review-and-minimal-convergence-plan.md`
 - DEV-PLAN-311：View As Of 页面改造矩阵与 OrgUnitDetails 样板实施计划：`docs/dev-plans/311-view-as-of-page-cutover-matrix-and-orgunit-details-sample-plan.md`
@@ -475,6 +478,9 @@ modules/{module}/
 - DEV-PLAN-316：View As Of 工具态页面收口计划——Explain / Release / Governance 子区统一任务态时间语义：`docs/dev-plans/316-view-as-of-tooling-pages-convergence-plan.md`
 - DEV-PLAN-317：View As Of 页面时间语义回归与验收计划：`docs/dev-plans/317-view-as-of-regression-and-acceptance-plan.md`
 - DEV-PLAN-317 执行日志：`docs/dev-records/dev-plan-317-execution-log.md`
+- DEV-PLAN-320：Org 域 8 位非纯数字 `org_node_key` 一步切换方案（不扩大到全对象）：`docs/dev-plans/320-org-node-key-cutover-plan-no-global-expansion.md`
+- DEV-PLAN-320 rehearsal 记录：`docs/dev-records/dev-plan-320-rehearsal-log.md`
+- DEV-PLAN-320 stopline explain 记录：`docs/dev-records/dev-plan-320-stopline-log.md`
 - DEV-PLAN-225 执行日志：`docs/archive/dev-records/dev-plan-225-execution-log.md`
 - DEV-PLAN-226：测试指引 TG-004（门禁口径变更审批）：`docs/dev-plans/226-test-guide-tg004-gate-caliber-change-approval.md`
 - DEV-PLAN-170 执行日志：`docs/archive/dev-records/dev-plan-170-execution-log.md`

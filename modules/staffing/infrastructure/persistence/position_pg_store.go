@@ -8,6 +8,7 @@ import (
 	"github.com/jacksonlee411/Bugs-And-Blossoms/modules/staffing/domain/ports"
 	"github.com/jacksonlee411/Bugs-And-Blossoms/modules/staffing/domain/types"
 	"github.com/jacksonlee411/Bugs-And-Blossoms/pkg/httperr"
+	orgunitpkg "github.com/jacksonlee411/Bugs-And-Blossoms/pkg/orgunit"
 )
 
 type PositionPGStore struct {
@@ -32,7 +33,7 @@ func (s *PositionPGStore) ListPositionsCurrent(ctx context.Context, tenantID str
 	rows, err := tx.Query(ctx, `
 		SELECT
 		  position_uuid::text,
-		  org_unit_id::text,
+		  org_node_key::text,
 		  COALESCE(reports_to_position_uuid::text, '') AS reports_to_position_uuid,
 		  COALESCE(jobcatalog_setid, '') AS jobcatalog_setid,
 		  COALESCE(jobcatalog_setid_as_of::text, '') AS jobcatalog_setid_as_of,
@@ -55,7 +56,7 @@ func (s *PositionPGStore) ListPositionsCurrent(ctx context.Context, tenantID str
 		var p types.Position
 		if err := rows.Scan(
 			&p.PositionUUID,
-			&p.OrgUnitID,
+			&p.OrgNodeKey,
 			&p.ReportsToPositionUUID,
 			&p.JobCatalogSetID,
 			&p.JobCatalogSetIDAsOf,
@@ -80,7 +81,7 @@ func (s *PositionPGStore) ListPositionsCurrent(ctx context.Context, tenantID str
 	return out, nil
 }
 
-func (s *PositionPGStore) CreatePositionCurrent(ctx context.Context, tenantID string, effectiveDate string, orgUnitID string, jobProfileUUID string, capacityFTE string, name string) (types.Position, error) {
+func (s *PositionPGStore) CreatePositionCurrent(ctx context.Context, tenantID string, effectiveDate string, orgNodeKey string, jobProfileUUID string, capacityFTE string, name string) (types.Position, error) {
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
 		return types.Position{}, err
@@ -95,12 +96,9 @@ func (s *PositionPGStore) CreatePositionCurrent(ctx context.Context, tenantID st
 	if effectiveDate == "" {
 		return types.Position{}, httperr.NewBadRequest("effective_date is required")
 	}
-	orgUnitID = strings.TrimSpace(orgUnitID)
-	if orgUnitID == "" {
-		return types.Position{}, httperr.NewBadRequest("org_unit_id is required")
-	}
-	if !isOrgUnitID8(orgUnitID) {
-		return types.Position{}, httperr.NewBadRequest("org_unit_id must be 8 digits")
+	orgNodeKey, err = normalizePositionOrgNodeKey(orgNodeKey)
+	if err != nil {
+		return types.Position{}, err
 	}
 	jobProfileUUID = strings.TrimSpace(jobProfileUUID)
 	if jobProfileUUID == "" {
@@ -118,7 +116,7 @@ func (s *PositionPGStore) CreatePositionCurrent(ctx context.Context, tenantID st
 		return types.Position{}, err
 	}
 
-	payload := `{"org_unit_id":` + strconv.Quote(orgUnitID) +
+	payload := `{"org_node_key":` + strconv.Quote(orgNodeKey) +
 		`,"job_profile_uuid":` + strconv.Quote(jobProfileUUID)
 	if capacityFTE != "" {
 		payload += `,"capacity_fte":` + strconv.Quote(capacityFTE)
@@ -147,7 +145,7 @@ SELECT staffing.submit_position_event(
 	if err := tx.QueryRow(ctx, `
 		SELECT
 		  position_uuid::text,
-		  org_unit_id::text,
+				  org_node_key::text,
 		  COALESCE(reports_to_position_uuid::text, '') AS reports_to_position_uuid,
 		  COALESCE(jobcatalog_setid, '') AS jobcatalog_setid,
 		  COALESCE(jobcatalog_setid_as_of::text, '') AS jobcatalog_setid_as_of,
@@ -162,7 +160,7 @@ SELECT staffing.submit_position_event(
 		LIMIT 1
 	`, tenantID, positionID, effectiveDate).Scan(
 		&out.PositionUUID,
-		&out.OrgUnitID,
+		&out.OrgNodeKey,
 		&out.ReportsToPositionUUID,
 		&out.JobCatalogSetID,
 		&out.JobCatalogSetIDAsOf,
@@ -183,7 +181,7 @@ SELECT staffing.submit_position_event(
 	return out, nil
 }
 
-func (s *PositionPGStore) UpdatePositionCurrent(ctx context.Context, tenantID string, positionUUID string, effectiveDate string, orgUnitID string, reportsToPositionUUID string, jobProfileUUID string, capacityFTE string, name string, lifecycleStatus string) (types.Position, error) {
+func (s *PositionPGStore) UpdatePositionCurrent(ctx context.Context, tenantID string, positionUUID string, effectiveDate string, orgNodeKey string, reportsToPositionUUID string, jobProfileUUID string, capacityFTE string, name string, lifecycleStatus string) (types.Position, error) {
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
 		return types.Position{}, err
@@ -202,20 +200,23 @@ func (s *PositionPGStore) UpdatePositionCurrent(ctx context.Context, tenantID st
 	if positionUUID == "" {
 		return types.Position{}, httperr.NewBadRequest("position_uuid is required")
 	}
-	orgUnitID = strings.TrimSpace(orgUnitID)
+	orgNodeKey = strings.TrimSpace(orgNodeKey)
 	reportsToPositionUUID = strings.TrimSpace(reportsToPositionUUID)
 	jobProfileUUID = strings.TrimSpace(jobProfileUUID)
 	capacityFTE = strings.TrimSpace(capacityFTE)
 	name = strings.TrimSpace(name)
 	lifecycleStatus = strings.TrimSpace(lifecycleStatus)
 
-	if orgUnitID != "" && !isOrgUnitID8(orgUnitID) {
-		return types.Position{}, httperr.NewBadRequest("org_unit_id must be 8 digits")
+	if orgNodeKey != "" {
+		orgNodeKey, err = normalizePositionOrgNodeKey(orgNodeKey)
+		if err != nil {
+			return types.Position{}, err
+		}
 	}
 
 	payloadParts := make([]string, 0, 6)
-	if orgUnitID != "" {
-		payloadParts = append(payloadParts, `"org_unit_id":`+strconv.Quote(orgUnitID))
+	if orgNodeKey != "" {
+		payloadParts = append(payloadParts, `"org_node_key":`+strconv.Quote(orgNodeKey))
 	}
 	if reportsToPositionUUID != "" {
 		payloadParts = append(payloadParts, `"reports_to_position_uuid":`+strconv.Quote(reportsToPositionUUID))
@@ -261,7 +262,7 @@ func (s *PositionPGStore) UpdatePositionCurrent(ctx context.Context, tenantID st
 	if err := tx.QueryRow(ctx, `
 			SELECT
 			  position_uuid::text,
-			  org_unit_id::text,
+			  org_node_key::text,
 			  COALESCE(reports_to_position_uuid::text, '') AS reports_to_position_uuid,
 			  COALESCE(jobcatalog_setid, '') AS jobcatalog_setid,
 			  COALESCE(jobcatalog_setid_as_of::text, '') AS jobcatalog_setid_as_of,
@@ -276,7 +277,7 @@ func (s *PositionPGStore) UpdatePositionCurrent(ctx context.Context, tenantID st
 			LIMIT 1
 		`, tenantID, positionUUID, effectiveDate).Scan(
 		&out.PositionUUID,
-		&out.OrgUnitID,
+		&out.OrgNodeKey,
 		&out.ReportsToPositionUUID,
 		&out.JobCatalogSetID,
 		&out.JobCatalogSetIDAsOf,
@@ -296,14 +297,13 @@ func (s *PositionPGStore) UpdatePositionCurrent(ctx context.Context, tenantID st
 	return out, nil
 }
 
-func isOrgUnitID8(input string) bool {
-	if len(input) != 8 {
-		return false
+func normalizePositionOrgNodeKey(input string) (string, error) {
+	orgNodeKey, err := orgunitpkg.NormalizeOrgNodeKey(strings.TrimSpace(input))
+	if err == nil {
+		return orgNodeKey, nil
 	}
-	for _, ch := range input {
-		if ch < '0' || ch > '9' {
-			return false
-		}
+	if strings.TrimSpace(input) == "" {
+		return "", httperr.NewBadRequest("org_node_key is required")
 	}
-	return true
+	return "", httperr.NewBadRequest("org_node_key invalid")
 }

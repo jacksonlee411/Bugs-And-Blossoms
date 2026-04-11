@@ -141,10 +141,12 @@ for code in sorted(catalog_frontend_mapped):
 print("[error-message] catalog consistency OK")
 PY
 
+pnpm_version="10.24.0"
 pnpm_cmd=()
 if command -v pnpm >/dev/null 2>&1; then
   pnpm_cmd=(pnpm)
 elif command -v corepack >/dev/null 2>&1; then
+  corepack prepare "pnpm@${pnpm_version}" --activate >/dev/null
   pnpm_cmd=(corepack pnpm)
 else
   echo "[error-message] pnpm is required (please enable corepack or install pnpm)." >&2

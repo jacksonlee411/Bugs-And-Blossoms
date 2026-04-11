@@ -40,7 +40,7 @@ function renderPanel(props?: Partial<ComponentProps<typeof SetIDExplainPanel>>) 
         initialAsOf='2026-03-01'
         initialCapabilityKey='org.orgunit_write.field_policy'
         initialFieldKey='cost_center'
-        initialBusinessUnitID='BU-001'
+        initialBusinessUnitOrgCode='BU-001'
         {...props}
       />
     </QueryClientProvider>
@@ -73,7 +73,7 @@ describe('SetIDExplainPanel', () => {
       trace_id: 'trace-1',
       request_id: 'req-1',
       capability_key: 'org.orgunit_write.field_policy',
-      business_unit_id: 'BU-001',
+      business_unit_org_code: 'BU-001',
       as_of: '2026-03-01',
       resolved_setid: 'SHARE',
       decision: 'allow',
@@ -98,7 +98,8 @@ describe('SetIDExplainPanel', () => {
     await waitFor(() => expect(setIDApiMocks.getSetIDExplain).toHaveBeenCalled())
     expect(setIDApiMocks.getSetIDExplain.mock.calls[0]?.[0]).toEqual(
       expect.objectContaining({
-        asOf: '2026-03-01'
+        asOf: '2026-03-01',
+        businessUnitOrgCode: 'BU-001'
       })
     )
   }, 20000)

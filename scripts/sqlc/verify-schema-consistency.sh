@@ -20,10 +20,37 @@ user="${DB_USER:-app}"
 password="${DB_PASSWORD:-app}"
 sslmode="${DB_SSLMODE:-disable}"
 admin_db="${DB_ADMIN_DB:-postgres}"
+pg_client_image="${SQLC_VERIFY_PG_IMAGE:-postgres:17}"
 
 export PGPASSWORD="$password"
 
-if ! pg_isready -h "$host" -p "$port" -U "$user" >/dev/null 2>&1; then
+run_pg_isready() {
+  if command -v pg_isready >/dev/null 2>&1; then
+    PGPASSWORD="$password" pg_isready "$@"
+    return
+  fi
+  if command -v docker >/dev/null 2>&1; then
+    docker run --rm --network host -e PGPASSWORD="$password" "$pg_client_image" pg_isready "$@"
+    return
+  fi
+  echo "[sqlc-verify] missing pg_isready and docker; cannot probe database readiness" >&2
+  return 127
+}
+
+run_psql() {
+  if command -v psql >/dev/null 2>&1; then
+    PGPASSWORD="$password" psql "$@"
+    return
+  fi
+  if command -v docker >/dev/null 2>&1; then
+    docker run --rm --network host -e PGPASSWORD="$password" -v "$root:$root" -w "$root" "$pg_client_image" psql "$@"
+    return
+  fi
+  echo "[sqlc-verify] missing psql and docker; cannot execute postgres client commands" >&2
+  return 127
+}
+
+if ! run_pg_isready -h "$host" -p "$port" -U "$user" -d "$admin_db" >/dev/null 2>&1; then
   echo "[sqlc-verify] database is not ready: host=$host port=$port user=$user" >&2
   echo "[sqlc-verify] set DB_HOST/DB_PORT/DB_USER/DB_PASSWORD and ensure postgres is reachable" >&2
   exit 1
@@ -34,10 +61,10 @@ db_from_migrations="sqlc_verify_m_${suffix}"
 db_from_export="sqlc_verify_e_${suffix}"
 
 cleanup() {
-  psql "postgres://${user}:${password}@${host}:${port}/${admin_db}?sslmode=${sslmode}" \
+  run_psql "postgres://${user}:${password}@${host}:${port}/${admin_db}?sslmode=${sslmode}" \
     -v ON_ERROR_STOP=1 \
     -c "DROP DATABASE IF EXISTS ${db_from_migrations};" >/dev/null 2>&1 || true
-  psql "postgres://${user}:${password}@${host}:${port}/${admin_db}?sslmode=${sslmode}" \
+  run_psql "postgres://${user}:${password}@${host}:${port}/${admin_db}?sslmode=${sslmode}" \
     -v ON_ERROR_STOP=1 \
     -c "DROP DATABASE IF EXISTS ${db_from_export};" >/dev/null 2>&1 || true
 }
@@ -49,8 +76,8 @@ export_db_url="postgres://${user}:${password}@${host}:${port}/${db_from_export}?
 atlas_dev_url="${ATLAS_DEV_URL:-$admin_url}"
 
 echo "[sqlc-verify] create temp databases"
-psql "$admin_url" -v ON_ERROR_STOP=1 -c "CREATE DATABASE ${db_from_migrations};" >/dev/null
-psql "$admin_url" -v ON_ERROR_STOP=1 -c "CREATE DATABASE ${db_from_export};" >/dev/null
+run_psql "$admin_url" -v ON_ERROR_STOP=1 -c "CREATE DATABASE ${db_from_migrations};" >/dev/null
+run_psql "$admin_url" -v ON_ERROR_STOP=1 -c "CREATE DATABASE ${db_from_export};" >/dev/null
 
 echo "[sqlc-verify] apply migrations to ${db_from_migrations}"
 while IFS= read -r module; do
@@ -72,7 +99,7 @@ while IFS= read -r module; do
 done < <(list_modules)
 
 echo "[sqlc-verify] apply exported schema to ${db_from_export}"
-psql "$export_db_url" -v ON_ERROR_STOP=1 -f "$schema_file" >/dev/null
+run_psql "$export_db_url" -v ON_ERROR_STOP=1 -f "$schema_file" >/dev/null
 
 echo "[sqlc-verify] compare schemas with atlas diff"
 if ! drift_sql="$(

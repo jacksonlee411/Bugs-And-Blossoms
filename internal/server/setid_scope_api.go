@@ -14,30 +14,30 @@ import (
 )
 
 type scopePackageCreateAPIRequest struct {
-	ScopeCode      string `json:"scope_code"`
-	PackageCode    string `json:"package_code"`
-	OwnerSetID     string `json:"owner_setid"`
-	BusinessUnitID string `json:"business_unit_id"`
-	Name           string `json:"name"`
-	EffectiveDate  string `json:"effective_date"`
-	RequestID      string `json:"request_id"`
+	ScopeCode           string `json:"scope_code"`
+	PackageCode         string `json:"package_code"`
+	OwnerSetID          string `json:"owner_setid"`
+	BusinessUnitOrgCode string `json:"business_unit_org_code"`
+	Name                string `json:"name"`
+	EffectiveDate       string `json:"effective_date"`
+	RequestID           string `json:"request_id"`
 }
 
 type scopePackageDisableAPIRequest struct {
-	OwnerSetID     string `json:"owner_setid"`
-	BusinessUnitID string `json:"business_unit_id"`
-	EffectiveDate  string `json:"effective_date"`
-	RequestID      string `json:"request_id"`
+	OwnerSetID          string `json:"owner_setid"`
+	BusinessUnitOrgCode string `json:"business_unit_org_code"`
+	EffectiveDate       string `json:"effective_date"`
+	RequestID           string `json:"request_id"`
 }
 
 type scopeSubscriptionAPIRequest struct {
-	SetID          string `json:"setid"`
-	ScopeCode      string `json:"scope_code"`
-	PackageID      string `json:"package_id"`
-	PackageOwner   string `json:"package_owner"`
-	BusinessUnitID string `json:"business_unit_id"`
-	EffectiveDate  string `json:"effective_date"`
-	RequestID      string `json:"request_id"`
+	SetID               string `json:"setid"`
+	ScopeCode           string `json:"scope_code"`
+	PackageID           string `json:"package_id"`
+	PackageOwner        string `json:"package_owner"`
+	BusinessUnitOrgCode string `json:"business_unit_org_code"`
+	EffectiveDate       string `json:"effective_date"`
+	RequestID           string `json:"request_id"`
 }
 
 var packageCodePattern = regexp.MustCompile(`^[A-Z0-9_]{1,16}$`)
@@ -48,12 +48,13 @@ const (
 	scopeReasonActorScopeForbidden   = "ACTOR_SCOPE_FORBIDDEN"
 )
 
-func handleScopePackagesAPI(w http.ResponseWriter, r *http.Request, store SetIDGovernanceStore) {
+func handleScopePackagesAPI(w http.ResponseWriter, r *http.Request, store SetIDGovernanceStore, orgResolvers ...OrgUnitCodeResolver) {
 	tenant, ok := currentTenant(r.Context())
 	if !ok {
 		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusInternalServerError, "tenant_missing", "tenant missing")
 		return
 	}
+	orgResolver := scopeAPIOrgResolver(store, orgResolvers...)
 
 	switch r.Method {
 	case http.MethodGet:
@@ -82,7 +83,7 @@ func handleScopePackagesAPI(w http.ResponseWriter, r *http.Request, store SetIDG
 		req.ScopeCode = strings.TrimSpace(req.ScopeCode)
 		req.PackageCode = strings.ToUpper(strings.TrimSpace(req.PackageCode))
 		req.OwnerSetID = strings.ToUpper(strings.TrimSpace(req.OwnerSetID))
-		req.BusinessUnitID = strings.TrimSpace(req.BusinessUnitID)
+		req.BusinessUnitOrgCode = strings.TrimSpace(req.BusinessUnitOrgCode)
 		req.Name = strings.TrimSpace(req.Name)
 		req.RequestID = strings.TrimSpace(req.RequestID)
 		effectiveDate, err := parseRequiredDay(req.EffectiveDate, "effective_date")
@@ -91,8 +92,8 @@ func handleScopePackagesAPI(w http.ResponseWriter, r *http.Request, store SetIDG
 			return
 		}
 		req.EffectiveDate = effectiveDate
-		if req.ScopeCode == "" || req.Name == "" || req.RequestID == "" || req.OwnerSetID == "" || req.BusinessUnitID == "" {
-			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "invalid_request", "scope_code/owner_setid/business_unit_id/name/request_id required")
+		if req.ScopeCode == "" || req.Name == "" || req.RequestID == "" || req.OwnerSetID == "" || req.BusinessUnitOrgCode == "" {
+			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "invalid_request", "scope_code/owner_setid/business_unit_org_code/name/request_id required")
 			return
 		}
 		if req.PackageCode == "" {
@@ -106,7 +107,7 @@ func handleScopePackagesAPI(w http.ResponseWriter, r *http.Request, store SetIDG
 			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusUnprocessableEntity, "PACKAGE_CODE_INVALID", "PACKAGE_CODE_INVALID")
 			return
 		}
-		if !enforceSetIDWriteContext(w, r, store, tenant.ID, req.BusinessUnitID, req.EffectiveDate, req.OwnerSetID, "") {
+		if !enforceSetIDWriteContext(w, r, store, tenant.ID, req.BusinessUnitOrgCode, req.EffectiveDate, req.OwnerSetID, "", orgResolver) {
 			return
 		}
 
@@ -172,12 +173,13 @@ func handleOwnedScopePackagesAPI(w http.ResponseWriter, r *http.Request, store S
 	_ = json.NewEncoder(w).Encode(rows)
 }
 
-func handleScopePackageDisableAPI(w http.ResponseWriter, r *http.Request, store SetIDGovernanceStore) {
+func handleScopePackageDisableAPI(w http.ResponseWriter, r *http.Request, store SetIDGovernanceStore, orgResolvers ...OrgUnitCodeResolver) {
 	tenant, ok := currentTenant(r.Context())
 	if !ok {
 		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusInternalServerError, "tenant_missing", "tenant missing")
 		return
 	}
+	orgResolver := scopeAPIOrgResolver(store, orgResolvers...)
 	if r.Method != http.MethodPost {
 		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusMethodNotAllowed, "method_not_allowed", "method not allowed")
 		return
@@ -195,22 +197,22 @@ func handleScopePackageDisableAPI(w http.ResponseWriter, r *http.Request, store 
 	req.EffectiveDate = strings.TrimSpace(req.EffectiveDate)
 	req.RequestID = strings.TrimSpace(req.RequestID)
 	req.OwnerSetID = strings.ToUpper(strings.TrimSpace(req.OwnerSetID))
-	req.BusinessUnitID = strings.TrimSpace(req.BusinessUnitID)
+	req.BusinessUnitOrgCode = strings.TrimSpace(req.BusinessUnitOrgCode)
 	effectiveDate, err := parseRequiredDay(req.EffectiveDate, "effective_date")
 	if err != nil {
 		writeInternalDayFieldError(w, r, err)
 		return
 	}
 	req.EffectiveDate = effectiveDate
-	if req.OwnerSetID == "" || req.BusinessUnitID == "" {
-		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "invalid_request", "owner_setid/business_unit_id required")
+	if req.OwnerSetID == "" || req.BusinessUnitOrgCode == "" {
+		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "invalid_request", "owner_setid/business_unit_org_code required")
 		return
 	}
 	if req.RequestID == "" {
 		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "invalid_request", "request_id required")
 		return
 	}
-	if !enforceSetIDWriteContext(w, r, store, tenant.ID, req.BusinessUnitID, req.EffectiveDate, req.OwnerSetID, "") {
+	if !enforceSetIDWriteContext(w, r, store, tenant.ID, req.BusinessUnitOrgCode, req.EffectiveDate, req.OwnerSetID, "", orgResolver) {
 		return
 	}
 	pkg, err := store.DisableScopePackage(r.Context(), tenant.ID, packageID, req.EffectiveDate, req.RequestID, tenant.ID)
@@ -225,12 +227,13 @@ func handleScopePackageDisableAPI(w http.ResponseWriter, r *http.Request, store 
 	})
 }
 
-func handleScopeSubscriptionsAPI(w http.ResponseWriter, r *http.Request, store SetIDGovernanceStore) {
+func handleScopeSubscriptionsAPI(w http.ResponseWriter, r *http.Request, store SetIDGovernanceStore, orgResolvers ...OrgUnitCodeResolver) {
 	tenant, ok := currentTenant(r.Context())
 	if !ok {
 		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusInternalServerError, "tenant_missing", "tenant missing")
 		return
 	}
+	orgResolver := scopeAPIOrgResolver(store, orgResolvers...)
 
 	switch r.Method {
 	case http.MethodGet:
@@ -270,7 +273,7 @@ func handleScopeSubscriptionsAPI(w http.ResponseWriter, r *http.Request, store S
 		req.ScopeCode = strings.TrimSpace(req.ScopeCode)
 		req.PackageID = strings.TrimSpace(req.PackageID)
 		req.PackageOwner = strings.TrimSpace(req.PackageOwner)
-		req.BusinessUnitID = strings.TrimSpace(req.BusinessUnitID)
+		req.BusinessUnitOrgCode = strings.TrimSpace(req.BusinessUnitOrgCode)
 		effectiveDate, err := parseRequiredDay(req.EffectiveDate, "effective_date")
 		if err != nil {
 			writeInternalDayFieldError(w, r, err)
@@ -278,8 +281,8 @@ func handleScopeSubscriptionsAPI(w http.ResponseWriter, r *http.Request, store S
 		}
 		req.EffectiveDate = effectiveDate
 		req.RequestID = strings.TrimSpace(req.RequestID)
-		if req.SetID == "" || req.ScopeCode == "" || req.PackageID == "" || req.PackageOwner == "" || req.BusinessUnitID == "" || req.EffectiveDate == "" || req.RequestID == "" {
-			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "invalid_request", "setid/scope_code/package_id/package_owner/business_unit_id/effective_date/request_id required")
+		if req.SetID == "" || req.ScopeCode == "" || req.PackageID == "" || req.PackageOwner == "" || req.BusinessUnitOrgCode == "" || req.EffectiveDate == "" || req.RequestID == "" {
+			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "invalid_request", "setid/scope_code/package_id/package_owner/business_unit_org_code/effective_date/request_id required")
 			return
 		}
 		owner := strings.ToLower(req.PackageOwner)
@@ -287,7 +290,7 @@ func handleScopeSubscriptionsAPI(w http.ResponseWriter, r *http.Request, store S
 			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusUnprocessableEntity, "PACKAGE_OWNER_INVALID", "PACKAGE_OWNER_INVALID")
 			return
 		}
-		if !enforceSetIDWriteContext(w, r, store, tenant.ID, req.BusinessUnitID, req.EffectiveDate, "", req.SetID) {
+		if !enforceSetIDWriteContext(w, r, store, tenant.ID, req.BusinessUnitOrgCode, req.EffectiveDate, "", req.SetID, orgResolver) {
 			return
 		}
 		sub, err := store.CreateScopeSubscription(r.Context(), tenant.ID, req.SetID, req.ScopeCode, req.PackageID, owner, req.EffectiveDate, req.RequestID, tenant.ID)
@@ -433,26 +436,38 @@ func generatePackageCode() string {
 	return "PKG_" + n
 }
 
+func scopeAPIOrgResolver(store SetIDGovernanceStore, orgResolvers ...OrgUnitCodeResolver) OrgUnitCodeResolver {
+	if len(orgResolvers) > 0 && orgResolvers[0] != nil {
+		return orgResolvers[0]
+	}
+	if resolver, ok := store.(OrgUnitCodeResolver); ok {
+		return resolver
+	}
+	return nil
+}
+
 func enforceSetIDWriteContext(
 	w http.ResponseWriter,
 	r *http.Request,
 	store SetIDGovernanceStore,
 	tenantID string,
-	businessUnitID string,
+	businessUnitOrgCode string,
 	asOf string,
 	ownerSetID string,
 	setID string,
+	orgResolver OrgUnitCodeResolver,
 ) bool {
-	normalizedBusinessUnitID := strings.TrimSpace(businessUnitID)
-	if normalizedBusinessUnitID == "" {
-		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusForbidden, scopeReasonOwnerContextRequired, "business_unit_id required")
+	normalizedBusinessUnitOrgCode := strings.TrimSpace(businessUnitOrgCode)
+	if normalizedBusinessUnitOrgCode == "" {
+		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusForbidden, scopeReasonOwnerContextRequired, "business_unit_org_code required")
 		return false
 	}
-	if _, err := parseOrgID8(normalizedBusinessUnitID); err != nil {
-		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusForbidden, scopeReasonOwnerContextRequired, "business_unit_id invalid")
+	businessUnitRef, err := resolveSetIDOrgCodeRef(r.Context(), tenantID, normalizedBusinessUnitOrgCode, orgResolver)
+	if err != nil {
+		writeSetIDExplainOrgCodeError(w, r, "business_unit_org_code", err)
 		return false
 	}
-	resolvedSetID, err := store.ResolveSetID(r.Context(), tenantID, normalizedBusinessUnitID, asOf)
+	resolvedSetID, err := store.ResolveSetID(r.Context(), tenantID, businessUnitRef.OrgNodeKey, asOf)
 	if err != nil {
 		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusForbidden, scopeReasonOwnerContextForbidden, "business unit context forbidden")
 		return false

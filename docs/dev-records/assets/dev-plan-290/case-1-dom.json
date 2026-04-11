@@ -1,5 +1,5 @@
 {
-  "url": "http://localhost:8080/app/assistant/librechat/c/new",
+  "url": "http://localhost:18080/app/assistant/librechat/c/new",
   "bubble_count": 1,
   "bubbles": [
     {
@@ -7,7 +7,7 @@
       "conversation_id": "conv_tp290_1",
       "turn_id": "turn_tp290_1",
       "request_id": "req_tp290_1",
-      "message_id": "792cc7a0-b218-43f5-b22c-31a42442c1eb_",
+      "message_id": "b53188d8-2885-476a-9409-9815315fd8d1_",
       "text": "你好，我在。"
     }
   ],

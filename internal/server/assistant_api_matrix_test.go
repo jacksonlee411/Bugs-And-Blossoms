@@ -65,6 +65,28 @@ func (s assistantEmptyPathDetailsStore) GetNodeDetails(context.Context, string, 
 	return OrgUnitNodeDetails{FullNamePath: "   "}, nil
 }
 
+type assistantByNodeKeyDetailsStore struct {
+	*orgUnitMemoryStore
+	detailsByNodeKeyArg string
+}
+
+func (s *assistantByNodeKeyDetailsStore) SearchNodeCandidates(context.Context, string, string, string, int) ([]OrgUnitSearchCandidate, error) {
+	orgNodeKey, err := encodeOrgNodeKeyFromID(10000001)
+	if err != nil {
+		return nil, err
+	}
+	return []OrgUnitSearchCandidate{{OrgNodeKey: orgNodeKey, OrgCode: "FLOWER-A", Name: "鲜花组织", Status: "active"}}, nil
+}
+
+func (s *assistantByNodeKeyDetailsStore) GetNodeDetails(context.Context, string, int, string) (OrgUnitNodeDetails, error) {
+	return OrgUnitNodeDetails{}, errors.New("legacy details should not be used")
+}
+
+func (s *assistantByNodeKeyDetailsStore) GetNodeDetailsByNodeKey(_ context.Context, _ string, orgNodeKey string, _ string) (OrgUnitNodeDetails, error) {
+	s.detailsByNodeKeyArg = orgNodeKey
+	return OrgUnitNodeDetails{OrgNodeKey: orgNodeKey, OrgCode: "FLOWER-A", FullNamePath: "总公司/鲜花组织"}, nil
+}
+
 type assistantWriteServiceErrorStub struct{}
 
 func (assistantWriteServiceErrorStub) Write(context.Context, string, orgunitservices.WriteOrgUnitRequest) (orgunitservices.OrgUnitWriteResult, error) {
@@ -825,7 +847,7 @@ func TestAssistantServiceHelpersAndUtilities(t *testing.T) {
 		if err != nil {
 			t.Fatalf("resolve candidates failed: %v", err)
 		}
-		if len(candidates) != 1 || candidates[0].CandidateID != "42" {
+		if len(candidates) != 1 || candidates[0].CandidateID == "" || candidates[0].CandidateID == "42" || candidates[0].CandidateID == candidates[0].OrgNodeKey {
 			t.Fatalf("unexpected candidate: %+v", candidates)
 		}
 
@@ -836,6 +858,19 @@ func TestAssistantServiceHelpersAndUtilities(t *testing.T) {
 		}
 		if len(candidates) != 1 || candidates[0].Path != "鲜花组织" {
 			t.Fatalf("unexpected empty-path fallback candidate: %+v", candidates)
+		}
+
+		byKeyStore := &assistantByNodeKeyDetailsStore{orgUnitMemoryStore: newOrgUnitMemoryStore()}
+		byKeySvc := newAssistantConversationService(byKeyStore, nil)
+		candidates, err = byKeySvc.resolveCandidates(context.Background(), "tenant-1", "鲜花组织", "2026-01-01")
+		if err != nil {
+			t.Fatalf("resolve candidates by key failed: %v", err)
+		}
+		if len(candidates) != 1 || candidates[0].Path != "总公司/鲜花组织" || candidates[0].OrgNodeKey == "" {
+			t.Fatalf("unexpected by-key candidate: %+v", candidates)
+		}
+		if byKeyStore.detailsByNodeKeyArg != candidates[0].OrgNodeKey {
+			t.Fatalf("detailsByNodeKeyArg=%q candidateOrgNodeKey=%q", byKeyStore.detailsByNodeKeyArg, candidates[0].OrgNodeKey)
 		}
 	})
 

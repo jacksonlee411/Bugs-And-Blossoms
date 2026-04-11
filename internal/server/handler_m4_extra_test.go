@@ -129,10 +129,16 @@ func TestHandler_SetIDGovernanceRoutes(t *testing.T) {
 	t.Setenv("AUTHZ_MODE", "disabled")
 	t.Setenv("AUTHZ_UNSAFE_ALLOW_DISABLED", "1")
 
+	orgStore := newOrgUnitMemoryStore()
+	orgStore.nextID = 10000001
+	if _, err := orgStore.createNode("00000000-0000-0000-0000-000000000001", "ROOT", "Root", true); err != nil {
+		t.Fatal(err)
+	}
+
 	h, err := NewHandlerWithOptions(HandlerOptions{
 		TenancyResolver:  localTenancyResolver(),
 		IdentityProvider: staticIdentityProvider{ident: authenticatedIdentity{Email: "tenant-admin@example.invalid", KratosIdentityID: "kid1", RoleSlug: authz.RoleTenantAdmin}},
-		OrgUnitStore:     newOrgUnitMemoryStore(),
+		OrgUnitStore:     orgStore,
 		SetIDStore:       scopeAPIStore{},
 	})
 	if err != nil {
@@ -182,7 +188,7 @@ func TestHandler_SetIDGovernanceRoutes(t *testing.T) {
 		t.Fatalf("scope subscriptions should be retired: status=%d body=%s", rec.Code, rec.Body.String())
 	}
 
-	if rec := doReq(http.MethodPost, "/org/api/setid-strategy-registry", `{"capability_key":"staffing.assignment_create.field_policy","owner_module":"staffing","field_key":"field_x","personalization_mode":"setid","org_applicability":"business_unit","business_unit_id":"10000001","required":true,"visible":true,"default_rule_ref":"rule://a1","default_value":"a1","priority":200,"explain_required":true,"is_stable":true,"change_policy":"plan_required","effective_date":"2026-01-01","request_id":"r1"}`, map[string]string{
+	if rec := doReq(http.MethodPost, "/org/api/setid-strategy-registry", `{"capability_key":"staffing.assignment_create.field_policy","owner_module":"staffing","field_key":"field_x","personalization_mode":"setid","org_applicability":"business_unit","business_unit_org_code":"ROOT","required":true,"visible":true,"default_rule_ref":"rule://a1","default_value":"a1","priority":200,"explain_required":true,"is_stable":true,"change_policy":"plan_required","effective_date":"2026-01-01","request_id":"r1"}`, map[string]string{
 		"Content-Type": "application/json",
 	}); rec.Code != http.StatusCreated {
 		t.Fatalf("setid strategy registry post status=%d body=%s", rec.Code, rec.Body.String())
@@ -195,12 +201,12 @@ func TestHandler_SetIDGovernanceRoutes(t *testing.T) {
 	}); rec.Code != http.StatusCreated {
 		t.Fatalf("setid strategy registry fallback status=%d body=%s", rec.Code, rec.Body.String())
 	}
-	if rec := doReq(http.MethodPost, "/org/api/setid-strategy-registry:disable", `{"capability_key":"staffing.assignment_create.field_policy","field_key":"field_x","org_applicability":"business_unit","business_unit_id":"10000001","effective_date":"2026-01-01","disable_as_of":"2026-01-02","request_id":"r-disable"}`, map[string]string{
+	if rec := doReq(http.MethodPost, "/org/api/setid-strategy-registry:disable", `{"capability_key":"staffing.assignment_create.field_policy","field_key":"field_x","org_applicability":"business_unit","business_unit_org_code":"ROOT","effective_date":"2026-01-01","disable_as_of":"2026-01-02","request_id":"r-disable"}`, map[string]string{
 		"Content-Type": "application/json",
 	}); rec.Code != http.StatusOK {
 		t.Fatalf("setid strategy registry disable status=%d body=%s", rec.Code, rec.Body.String())
 	}
-	if rec := doReq(http.MethodPost, "/internal/rules/evaluate", `{"capability_key":"staffing.assignment_create.field_policy","field_key":"field_x","business_unit_id":"10000001","as_of":"2026-01-01","request_id":"req-eval"}`, map[string]string{
+	if rec := doReq(http.MethodPost, "/internal/rules/evaluate", `{"capability_key":"staffing.assignment_create.field_policy","field_key":"field_x","business_unit_org_code":"ROOT","as_of":"2026-01-01","request_id":"req-eval"}`, map[string]string{
 		"Content-Type": "application/json",
 	}); rec.Code != http.StatusOK {
 		t.Fatalf("internal rules evaluate status=%d body=%s", rec.Code, rec.Body.String())
@@ -236,7 +242,7 @@ func TestHandler_SetIDGovernanceRoutes(t *testing.T) {
 	}); rec.Code != http.StatusOK {
 		t.Fatalf("internal functional area switch on status=%d body=%s", rec.Code, rec.Body.String())
 	}
-	if rec := doReq(http.MethodGet, "/org/api/setid-explain?capability_key=staffing.assignment_create.field_policy&field_key=field_x&business_unit_id=10000001&as_of=2026-01-01&setid=A0001&level=brief", "", nil); rec.Code != http.StatusOK {
+	if rec := doReq(http.MethodGet, "/org/api/setid-explain?capability_key=staffing.assignment_create.field_policy&field_key=field_x&business_unit_org_code=ROOT&as_of=2026-01-01&setid=A0001&level=brief", "", nil); rec.Code != http.StatusOK {
 		t.Fatalf("setid explain get status=%d body=%s", rec.Code, rec.Body.String())
 	}
 }

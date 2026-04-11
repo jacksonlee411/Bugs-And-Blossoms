@@ -23,7 +23,7 @@ CREATE TABLE IF NOT EXISTS staffing.position_events (
   CONSTRAINT position_events_payload_allowed_keys_check CHECK (
     (
       payload
-      - 'org_unit_id'
+      - 'org_node_key'
       - 'name'
       - 'reports_to_position_uuid'
       - 'job_profile_uuid'
@@ -44,7 +44,7 @@ CREATE TABLE IF NOT EXISTS staffing.position_versions (
   id bigserial PRIMARY KEY,
   tenant_uuid uuid NOT NULL,
   position_uuid uuid NOT NULL,
-  org_unit_id int NOT NULL CHECK (org_unit_id BETWEEN 10000000 AND 99999999),
+  org_node_key char(8) NOT NULL CHECK (orgunit.is_valid_org_node_key(btrim(org_node_key::text))),
   reports_to_position_uuid uuid NULL,
   name text NULL,
   lifecycle_status text NOT NULL DEFAULT 'active',

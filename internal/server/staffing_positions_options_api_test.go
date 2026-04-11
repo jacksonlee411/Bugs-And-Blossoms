@@ -33,6 +33,17 @@ func (s resolveOrgIDErrStore) ResolveOrgID(context.Context, string, string) (int
 	return 0, s.err
 }
 
+func (s resolveOrgIDErrStore) ResolveOrgNodeKeyByCode(ctx context.Context, tenantID string, orgCode string) (string, error) {
+	orgID, err := s.ResolveOrgID(ctx, tenantID, orgCode)
+	if err != nil {
+		return "", err
+	}
+	if orgID <= 0 {
+		return "", nil
+	}
+	return encodeOrgNodeKeyFromID(orgID)
+}
+
 type jobStoreListProfilesErr struct {
 	JobCatalogStore
 	err error

@@ -1,0 +1,89 @@
+{
+  "as_of_date": "2026-04-11",
+  "heavy": {
+    "tenant": {
+      "tenant_uuid": "00000000-0000-0000-0000-000000000001",
+      "hostname": "localhost",
+      "name": "Local Tenant"
+    },
+    "root": {
+      "org_id": 10000000,
+      "org_node_key": "AAAAAAAB",
+      "org_code": "1",
+      "name": "高谷集团",
+      "node_path": "10000000",
+      "subtree_size": 12
+    },
+    "children_parent": {
+      "org_id": 10000000,
+      "org_code": "1",
+      "name": "高谷集团",
+      "node_path": "10000000",
+      "subtree_size": 12
+    },
+    "details_target": {
+      "org_id": 10000001,
+      "org_node_key": "AAAAAAAC",
+      "parent_org_id": 10000000,
+      "parent_org_code": "1",
+      "org_code": "2",
+      "name": "飞虫公司",
+      "node_path": "10000000.10000001",
+      "subtree_size": 1
+    },
+    "subtree_filter": {
+      "org_id": 10000002,
+      "org_node_key": "AAAAAAAD",
+      "parent_org_id": 10000000,
+      "parent_org_code": "1",
+      "org_code": "3",
+      "name": "鲜花公司",
+      "node_path": "AAAAAAAB.AAAAAAAD",
+      "subtree_size": 4
+    },
+    "move_target": {
+      "org_id": 10000002,
+      "parent_org_id": 10000000,
+      "parent_org_code": "1",
+      "org_code": "3",
+      "name": "鲜花公司",
+      "node_path": "10000000.10000002",
+      "subtree_size": 4
+    },
+    "move_new_parent": {
+      "org_id": 10000001,
+      "parent_org_id": 10000000,
+      "parent_org_code": "1",
+      "org_code": "2",
+      "name": "飞虫公司",
+      "node_path": "10000000.10000001",
+      "subtree_size": 1
+    },
+    "search_query": "人力资源部",
+    "move_effective_date": "2026-04-12"
+  },
+  "chain": {
+    "tenant": {
+      "tenant_uuid": "00d01cf4-7633-4ac6-93c7-748b2a6d6678",
+      "hostname": "t-tp060-02-1775779599776.localhost",
+      "name": "TP060-02 Tenant 1775779599776"
+    },
+    "business_unit": {
+      "org_id": 10000002,
+      "org_node_key": "AAAAAAAT",
+      "org_code": "RND9776",
+      "name": "R\u0026D",
+      "node_path": "AAAAAAAP.AAAAAAAT",
+      "setid": "S2601"
+    },
+    "position_sample": {
+      "org_code": "",
+      "name": "P-ENG-02",
+      "position_count": 1,
+      "position_uuid": "d7b3132a-0650-4199-9562-4fac8352808d",
+      "effective_date": "2026-01-01",
+      "org_unit_id": 10000002,
+      "jobcatalog_setid": "S2601"
+    }
+  }
+}

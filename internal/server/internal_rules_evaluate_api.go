@@ -19,25 +19,28 @@ const (
 )
 
 type internalRulesEvaluateRequest struct {
-	CapabilityKey   string `json:"capability_key"`
-	FieldKey        string `json:"field_key"`
-	BusinessUnitID  string `json:"business_unit_id"`
-	AsOf            string `json:"as_of"`
-	RequestID       string `json:"request_id"`
-	TargetOrgUnitID string `json:"target_org_unit_id,omitempty"`
+	CapabilityKey       string `json:"capability_key"`
+	FieldKey            string `json:"field_key"`
+	BusinessUnitOrgCode string `json:"business_unit_org_code"`
+	OrgCode             string `json:"org_code,omitempty"`
+	AsOf                string `json:"as_of"`
+	RequestID           string `json:"request_id"`
 }
 
 type internalEvaluationContext struct {
-	TenantID       string `json:"tenant_id"`
-	ActorID        string `json:"actor_id,omitempty"`
-	ActorRole      string `json:"actor_role,omitempty"`
-	CapabilityKey  string `json:"capability_key"`
-	FieldKey       string `json:"field_key"`
-	SetID          string `json:"setid"`
-	BusinessUnitID string `json:"business_unit_id"`
-	AsOf           string `json:"as_of"`
-	RequestID      string `json:"request_id"`
-	TraceID        string `json:"trace_id"`
+	TenantID            string `json:"tenant_id"`
+	ActorID             string `json:"actor_id,omitempty"`
+	ActorRole           string `json:"actor_role,omitempty"`
+	CapabilityKey       string `json:"capability_key"`
+	FieldKey            string `json:"field_key"`
+	SetID               string `json:"setid"`
+	BusinessUnitOrgCode string `json:"business_unit_org_code"`
+	OrgCode             string `json:"org_code"`
+	AsOf                string `json:"as_of"`
+	RequestID           string `json:"request_id"`
+	TraceID             string `json:"trace_id"`
+
+	businessUnitNodeKey string
 }
 
 type internalRuleCandidate struct {
@@ -81,7 +84,7 @@ var canViewInternalRulesEvaluate = canViewSetIDFullExplain
 var internalRuleEligibilityProgramCache sync.Map
 var internalRuleDecisionProgramCache sync.Map
 
-func handleInternalRulesEvaluateAPI(w http.ResponseWriter, r *http.Request, setidStore SetIDGovernanceStore) {
+func handleInternalRulesEvaluateAPI(w http.ResponseWriter, r *http.Request, setidStore SetIDGovernanceStore, orgResolver OrgUnitCodeResolver) {
 	tenant, ok := currentTenant(r.Context())
 	if !ok {
 		routingWriteErrorInternal(w, r, http.StatusInternalServerError, "tenant_missing", "tenant missing")
@@ -93,6 +96,10 @@ func handleInternalRulesEvaluateAPI(w http.ResponseWriter, r *http.Request, seti
 	}
 	if setidStore == nil {
 		routingWriteErrorInternal(w, r, http.StatusInternalServerError, "setid_resolver_missing", "setid resolver missing")
+		return
+	}
+	if orgResolver == nil {
+		routingWriteErrorInternal(w, r, http.StatusInternalServerError, "orgunit_resolver_missing", "orgunit resolver missing")
 		return
 	}
 	if !canViewInternalRulesEvaluate(r.Context()) {
@@ -108,11 +115,11 @@ func handleInternalRulesEvaluateAPI(w http.ResponseWriter, r *http.Request, seti
 
 	req.CapabilityKey = strings.ToLower(strings.TrimSpace(req.CapabilityKey))
 	req.FieldKey = strings.ToLower(strings.TrimSpace(req.FieldKey))
-	req.BusinessUnitID = strings.TrimSpace(req.BusinessUnitID)
-	req.TargetOrgUnitID = strings.TrimSpace(req.TargetOrgUnitID)
+	req.BusinessUnitOrgCode = strings.TrimSpace(req.BusinessUnitOrgCode)
+	req.OrgCode = strings.TrimSpace(req.OrgCode)
 	req.RequestID = strings.TrimSpace(req.RequestID)
-	if req.CapabilityKey == "" || req.FieldKey == "" || req.BusinessUnitID == "" {
-		routingWriteErrorInternal(w, r, http.StatusBadRequest, "invalid_request", "capability_key/field_key/business_unit_id required")
+	if req.CapabilityKey == "" || req.FieldKey == "" || req.BusinessUnitOrgCode == "" {
+		routingWriteErrorInternal(w, r, http.StatusBadRequest, "invalid_request", "capability_key/field_key/business_unit_org_code required")
 		return
 	}
 	if !fieldKeyPattern.MatchString(req.FieldKey) {
@@ -127,21 +134,26 @@ func handleInternalRulesEvaluateAPI(w http.ResponseWriter, r *http.Request, seti
 		return
 	}
 	req.AsOf = asOf
-	if _, err := parseOrgID8(req.BusinessUnitID); err != nil {
-		routingWriteErrorInternal(w, r, http.StatusBadRequest, "invalid_business_unit_id", "invalid business_unit_id")
+
+	businessUnitRef, err := resolveSetIDOrgCodeRef(r.Context(), tenant.ID, req.BusinessUnitOrgCode, orgResolver)
+	if err != nil {
+		writeSetIDExplainOrgCodeError(w, r, "business_unit_org_code", err)
 		return
 	}
-	if req.TargetOrgUnitID == "" {
-		req.TargetOrgUnitID = req.BusinessUnitID
+	req.BusinessUnitOrgCode = businessUnitRef.OrgCode
+	if req.OrgCode == "" {
+		req.OrgCode = req.BusinessUnitOrgCode
 	}
-	if _, err := parseOrgID8(req.TargetOrgUnitID); err != nil {
-		routingWriteErrorInternal(w, r, http.StatusBadRequest, "invalid_org_unit_id", "invalid target_org_unit_id")
+	targetOrgRef, err := resolveSetIDOrgCodeRef(r.Context(), tenant.ID, req.OrgCode, orgResolver)
+	if err != nil {
+		writeSetIDExplainOrgCodeError(w, r, "org_code", err)
 		return
 	}
+	req.OrgCode = targetOrgRef.OrgCode
 
 	capCtx, capErr := resolveCapabilityContext(r.Context(), r, capabilityContextInput{
 		CapabilityKey:       req.CapabilityKey,
-		BusinessUnitID:      req.BusinessUnitID,
+		BusinessUnitOrgCode: req.BusinessUnitOrgCode,
 		AsOf:                req.AsOf,
 		RequireBusinessUnit: true,
 	})
@@ -150,7 +162,7 @@ func handleInternalRulesEvaluateAPI(w http.ResponseWriter, r *http.Request, seti
 		return
 	}
 	req.CapabilityKey = capCtx.CapabilityKey
-	req.BusinessUnitID = capCtx.BusinessUnitID
+	req.BusinessUnitOrgCode = capCtx.BusinessUnitOrgCode
 	req.AsOf = capCtx.AsOf
 	functionalAreaKey, areaReasonCode, areaAllowed := evaluateFunctionalAreaGate(tenant.ID, req.CapabilityKey)
 	if !areaAllowed {
@@ -158,13 +170,13 @@ func handleInternalRulesEvaluateAPI(w http.ResponseWriter, r *http.Request, seti
 		return
 	}
 
-	dynamicRelations := preloadCapabilityDynamicRelations(r.Context(), req.BusinessUnitID)
-	if !dynamicRelations.actorManages(req.TargetOrgUnitID, req.AsOf) {
+	dynamicRelations := preloadCapabilityDynamicRelations(r.Context(), req.BusinessUnitOrgCode)
+	if !dynamicRelations.actorManages(req.OrgCode, req.AsOf) {
 		routingWriteErrorInternal(w, r, http.StatusForbidden, capabilityReasonContextMismatch, "capability context mismatch")
 		return
 	}
 
-	resolvedSetID, err := setidStore.ResolveSetID(r.Context(), tenant.ID, req.TargetOrgUnitID, req.AsOf)
+	resolvedSetID, err := setidStore.ResolveSetID(r.Context(), tenant.ID, targetOrgRef.OrgNodeKey, req.AsOf)
 	if err != nil {
 		routingWriteErrorInternal(w, r, http.StatusForbidden, capabilityReasonContextMismatch, "capability context mismatch")
 		return
@@ -187,10 +199,10 @@ func handleInternalRulesEvaluateAPI(w http.ResponseWriter, r *http.Request, seti
 	}
 	traceID := traceIDFromRequestHeader(r)
 	if traceID == "" {
-		traceID = fallbackSetIDExplainTraceID(requestID, req.CapabilityKey, req.BusinessUnitID, req.AsOf)
+		traceID = fallbackSetIDExplainTraceID(requestID, req.CapabilityKey, req.BusinessUnitOrgCode, req.AsOf)
 	}
 
-	evalCtx := buildInternalEvaluationContext(r.Context(), tenant.ID, req, resolvedSetID, requestID, traceID)
+	evalCtx := buildInternalEvaluationContext(r.Context(), tenant.ID, req, businessUnitRef.OrgNodeKey, resolvedSetID, requestID, traceID)
 	candidates := buildInternalRuleCandidates(items)
 	ctxMap := evalCtx.celContextMap()
 
@@ -228,16 +240,18 @@ func routingWriteErrorInternal(w http.ResponseWriter, r *http.Request, status in
 	routing.WriteError(w, r, routing.RouteClassInternalAPI, status, code, msg)
 }
 
-func buildInternalEvaluationContext(ctx context.Context, tenantID string, req internalRulesEvaluateRequest, resolvedSetID string, requestID string, traceID string) internalEvaluationContext {
+func buildInternalEvaluationContext(ctx context.Context, tenantID string, req internalRulesEvaluateRequest, businessUnitNodeKey string, resolvedSetID string, requestID string, traceID string) internalEvaluationContext {
 	evalCtx := internalEvaluationContext{
-		TenantID:       tenantID,
-		CapabilityKey:  req.CapabilityKey,
-		FieldKey:       req.FieldKey,
-		SetID:          resolvedSetID,
-		BusinessUnitID: req.BusinessUnitID,
-		AsOf:           req.AsOf,
-		RequestID:      requestID,
-		TraceID:        traceID,
+		TenantID:            tenantID,
+		CapabilityKey:       req.CapabilityKey,
+		FieldKey:            req.FieldKey,
+		SetID:               resolvedSetID,
+		BusinessUnitOrgCode: req.BusinessUnitOrgCode,
+		OrgCode:             req.OrgCode,
+		AsOf:                req.AsOf,
+		RequestID:           requestID,
+		TraceID:             traceID,
+		businessUnitNodeKey: businessUnitNodeKey,
 	}
 	if principal, ok := currentPrincipal(ctx); ok {
 		evalCtx.ActorID = strings.TrimSpace(principal.ID)
@@ -248,16 +262,18 @@ func buildInternalEvaluationContext(ctx context.Context, tenantID string, req in
 
 func (c internalEvaluationContext) celContextMap() map[string]string {
 	return map[string]string{
-		"tenant_id":        c.TenantID,
-		"actor_id":         c.ActorID,
-		"actor_role":       c.ActorRole,
-		"capability_key":   c.CapabilityKey,
-		"field_key":        c.FieldKey,
-		"setid":            c.SetID,
-		"business_unit_id": c.BusinessUnitID,
-		"as_of":            c.AsOf,
-		"request_id":       c.RequestID,
-		"trace_id":         c.TraceID,
+		"tenant_id":              c.TenantID,
+		"actor_id":               c.ActorID,
+		"actor_role":             c.ActorRole,
+		"capability_key":         c.CapabilityKey,
+		"field_key":              c.FieldKey,
+		"setid":                  c.SetID,
+		"business_unit_org_code": c.BusinessUnitOrgCode,
+		"org_code":               c.OrgCode,
+		"business_unit_node_key": c.businessUnitNodeKey,
+		"as_of":                  c.AsOf,
+		"request_id":             c.RequestID,
+		"trace_id":               c.TraceID,
 	}
 }
 
@@ -280,7 +296,7 @@ func buildInternalRuleCandidates(items []setIDStrategyRegistryItem) []internalRu
 
 func buildInternalEligibilityExpr(item setIDStrategyRegistryItem) string {
 	if item.OrgApplicability == orgApplicabilityBusinessUnit {
-		return fmt.Sprintf("ctx[\"business_unit_id\"] == %q", strings.TrimSpace(item.BusinessUnitID))
+		return fmt.Sprintf("ctx[\"business_unit_node_key\"] == %q", strings.TrimSpace(item.BusinessUnitNodeKey))
 	}
 	return "true"
 }

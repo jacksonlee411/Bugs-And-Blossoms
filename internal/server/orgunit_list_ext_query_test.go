@@ -54,8 +54,12 @@ func TestHandleOrgUnitsAPI_ExtQueryAllowedWithParentOrgCode(t *testing.T) {
 		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
 	}
 
-	if store.capturedReq.ParentID == nil || *store.capturedReq.ParentID != 42 {
-		t.Fatalf("parentID=%v", store.capturedReq.ParentID)
+	wantParentOrgNodeKey, err := encodeOrgNodeKeyFromID(42)
+	if err != nil {
+		t.Fatalf("encode err=%v", err)
+	}
+	if store.capturedReq.ParentOrgNodeKey == nil || *store.capturedReq.ParentOrgNodeKey != wantParentOrgNodeKey {
+		t.Fatalf("parentOrgNodeKey=%v", store.capturedReq.ParentOrgNodeKey)
 	}
 	if store.capturedReq.ExtSortFieldKey != "org_type" {
 		t.Fatalf("ExtSortFieldKey=%q", store.capturedReq.ExtSortFieldKey)

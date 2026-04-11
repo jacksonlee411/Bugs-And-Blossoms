@@ -804,7 +804,7 @@ parallel / Setenv 仓库内约束冻结（2026-04-08 CST）：
 ### 覆盖率口径
 
 1. [X] 沿用仓库现行 line coverage 口径。
-2. [X] 阈值沿用 `config/coverage/policy.yaml` 的 `100%` 单主源定义。
+2. [X] 阈值沿用 `config/coverage/policy.yaml` 的单主源定义。
 
 ### 统计范围
 

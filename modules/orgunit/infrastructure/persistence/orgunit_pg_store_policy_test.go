@@ -76,7 +76,7 @@ func TestOrgUnitPGStore_FindEventByRequestID(t *testing.T) {
 	t.Run("commit error", func(t *testing.T) {
 		store := newConcreteOrgUnitPGStore(beginFunc(func(context.Context) (pgx.Tx, error) {
 			return &txStub{
-				row:       stubRow{vals: []any{int64(1), "e1", 10000001, "CREATE", "2026-01-01", []byte(`{"a":"b"}`), time.Unix(1, 0).UTC()}},
+				row:       stubRow{vals: []any{int64(1), "e1", "A2345678", "CREATE", "2026-01-01", []byte(`{"a":"b"}`), time.Unix(1, 0).UTC()}},
 				commitErr: errors.New("commit"),
 			}, nil
 		}))
@@ -87,7 +87,7 @@ func TestOrgUnitPGStore_FindEventByRequestID(t *testing.T) {
 
 	t.Run("success", func(t *testing.T) {
 		store := newConcreteOrgUnitPGStore(beginFunc(func(context.Context) (pgx.Tx, error) {
-			return &txStub{row: stubRow{vals: []any{int64(1), "e1", 10000001, "CREATE", "2026-01-01", []byte(`{"org_code":"ROOT"}`), time.Unix(1, 0).UTC()}}}, nil
+			return &txStub{row: stubRow{vals: []any{int64(1), "e1", "A2345678", "CREATE", "2026-01-01", []byte(`{"org_code":"ROOT"}`), time.Unix(1, 0).UTC()}}}, nil
 		}))
 		event, found, err := store.FindEventByRequestID(ctx, "t1", "r1")
 		if err != nil || !found {
@@ -487,12 +487,12 @@ func TestOrgUnitPGStore_ResolveSetIDStrategyFieldDecision(t *testing.T) {
 					stubRows: &stubRows{},
 					data: [][]any{
 						{"org.orgunit_create.field_policy", "org_code", "tenant", "", true, true, false, `next_org_code("T", 6)`, "", `[]`, 100, "2026-01-01"},
-						{"org.orgunit_write.field_policy", "org_code", "business_unit", "10000001", true, true, false, `next_org_code("B", 8)`, "", `[]`, 100, "2026-01-01"},
+						{"org.orgunit_write.field_policy", "org_code", "business_unit", "A0000001", true, true, false, `next_org_code("B", 8)`, "", `[]`, 100, "2026-01-01"},
 					},
 				},
 			}, nil
 		}))
-		decision, found, err := store.ResolveSetIDStrategyFieldDecision(ctx, "t1", "org.orgunit_create.field_policy", "org_code", "10000001", "2026-01-01")
+		decision, found, err := store.ResolveSetIDStrategyFieldDecision(ctx, "t1", "org.orgunit_create.field_policy", "org_code", "A0000001", "2026-01-01")
 		if err != nil || !found {
 			t.Fatalf("decision=%+v found=%v err=%v", decision, found, err)
 		}

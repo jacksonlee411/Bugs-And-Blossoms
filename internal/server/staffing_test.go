@@ -15,9 +15,10 @@ import (
 )
 
 type positionRows struct {
-	nextN   int
-	scanErr error
-	err     error
+	nextN      int
+	orgNodeKey string
+	scanErr    error
+	err        error
 }
 
 func (r *positionRows) Close()                        {}
@@ -38,7 +39,7 @@ func (r *positionRows) Scan(dest ...any) error {
 		return r.scanErr
 	}
 	*(dest[0].(*string)) = "pos1"
-	*(dest[1].(*string)) = "10000001"
+	*(dest[1].(*string)) = r.orgNodeKey
 	*(dest[2].(*string)) = ""
 	*(dest[3].(*string)) = ""
 	*(dest[4].(*string)) = ""
@@ -280,11 +281,13 @@ func TestStaffingPGStore_ListPositionsCurrent(t *testing.T) {
 }
 
 func TestStaffingPGStore_CreatePositionCurrent(t *testing.T) {
+	orgNodeKey := mustOrgNodeKeyForTest(t, 10000001)
+
 	t.Run("begin error", func(t *testing.T) {
 		store := newStaffingPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
 			return nil, errors.New("begin")
 		}))
-		_, err := store.CreatePositionCurrent(context.Background(), "t1", "2026-01-01", "10000001", "", "", "A")
+		_, err := store.CreatePositionCurrent(context.Background(), "t1", "2026-01-01", orgNodeKey, "", "", "A")
 		if err == nil {
 			t.Fatal("expected error")
 		}
@@ -294,7 +297,7 @@ func TestStaffingPGStore_CreatePositionCurrent(t *testing.T) {
 		store := newStaffingPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
 			return &stubTx{execErr: errors.New("exec")}, nil
 		}))
-		_, err := store.CreatePositionCurrent(context.Background(), "t1", "2026-01-01", "10000001", "", "", "A")
+		_, err := store.CreatePositionCurrent(context.Background(), "t1", "2026-01-01", orgNodeKey, "", "", "A")
 		if err == nil {
 			t.Fatal("expected error")
 		}
@@ -304,13 +307,13 @@ func TestStaffingPGStore_CreatePositionCurrent(t *testing.T) {
 		store := newStaffingPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
 			return &stubTx{}, nil
 		}))
-		_, err := store.CreatePositionCurrent(context.Background(), "t1", "", "10000001", "", "", "A")
+		_, err := store.CreatePositionCurrent(context.Background(), "t1", "", orgNodeKey, "", "", "A")
 		if err == nil {
 			t.Fatal("expected error")
 		}
 	})
 
-	t.Run("missing org_unit_id", func(t *testing.T) {
+	t.Run("missing org_node_key", func(t *testing.T) {
 		store := newStaffingPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
 			return &stubTx{}, nil
 		}))
@@ -320,7 +323,7 @@ func TestStaffingPGStore_CreatePositionCurrent(t *testing.T) {
 		}
 	})
 
-	t.Run("invalid org_unit_id", func(t *testing.T) {
+	t.Run("invalid org_node_key", func(t *testing.T) {
 		store := newStaffingPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
 			return &stubTx{}, nil
 		}))
@@ -334,7 +337,7 @@ func TestStaffingPGStore_CreatePositionCurrent(t *testing.T) {
 		store := newStaffingPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
 			return &stubTx{}, nil
 		}))
-		_, err := store.CreatePositionCurrent(context.Background(), "t1", "2026-01-01", "10000001", "", "", "A")
+		_, err := store.CreatePositionCurrent(context.Background(), "t1", "2026-01-01", orgNodeKey, "", "", "A")
 		if err == nil {
 			t.Fatal("expected error")
 		}
@@ -344,7 +347,7 @@ func TestStaffingPGStore_CreatePositionCurrent(t *testing.T) {
 		store := newStaffingPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
 			return &stubTx{rowErr: errors.New("row")}, nil
 		}))
-		_, err := store.CreatePositionCurrent(context.Background(), "t1", "2026-01-01", "10000001", "jp1", "", "A")
+		_, err := store.CreatePositionCurrent(context.Background(), "t1", "2026-01-01", orgNodeKey, "jp1", "", "A")
 		if err == nil {
 			t.Fatal("expected error")
 		}
@@ -356,7 +359,7 @@ func TestStaffingPGStore_CreatePositionCurrent(t *testing.T) {
 			tx.row = &stubRow{vals: []any{"pos1"}}
 			return tx, nil
 		}))
-		_, err := store.CreatePositionCurrent(context.Background(), "t1", "2026-01-01", "10000001", "jp1", "", "A")
+		_, err := store.CreatePositionCurrent(context.Background(), "t1", "2026-01-01", orgNodeKey, "jp1", "", "A")
 		if err == nil {
 			t.Fatal("expected error")
 		}
@@ -369,7 +372,7 @@ func TestStaffingPGStore_CreatePositionCurrent(t *testing.T) {
 			tx.row2 = &stubRow{vals: []any{"evt1"}}
 			return tx, nil
 		}))
-		_, err := store.CreatePositionCurrent(context.Background(), "t1", "2026-01-01", "10000001", "jp1", "", "A")
+		_, err := store.CreatePositionCurrent(context.Background(), "t1", "2026-01-01", orgNodeKey, "jp1", "", "A")
 		if err == nil {
 			t.Fatal("expected error")
 		}
@@ -382,7 +385,7 @@ func TestStaffingPGStore_CreatePositionCurrent(t *testing.T) {
 			tx.row2 = &stubRow{vals: []any{"evt1"}}
 			return tx, nil
 		}))
-		_, err := store.CreatePositionCurrent(context.Background(), "t1", "2026-01-01", "10000001", "jp1", "", "A")
+		_, err := store.CreatePositionCurrent(context.Background(), "t1", "2026-01-01", orgNodeKey, "jp1", "", "A")
 		if err == nil {
 			t.Fatal("expected error")
 		}
@@ -393,10 +396,10 @@ func TestStaffingPGStore_CreatePositionCurrent(t *testing.T) {
 			tx := &stubTx{commitErr: errors.New("commit")}
 			tx.row = &stubRow{vals: []any{"pos1"}}
 			tx.row2 = &stubRow{vals: []any{"evt1"}}
-			tx.row3 = &stubRow{vals: []any{"pos1", "10000001", "", "", "", "jp1", "", "A", "active", "1.0", "2026-01-01"}}
+			tx.row3 = &stubRow{vals: []any{"pos1", orgNodeKey, "", "", "", "jp1", "", "A", "active", "1.0", "2026-01-01"}}
 			return tx, nil
 		}))
-		_, err := store.CreatePositionCurrent(context.Background(), "t1", "2026-01-01", "10000001", "jp1", "", "A")
+		_, err := store.CreatePositionCurrent(context.Background(), "t1", "2026-01-01", orgNodeKey, "jp1", "", "A")
 		if err == nil {
 			t.Fatal("expected error")
 		}
@@ -407,18 +410,18 @@ func TestStaffingPGStore_CreatePositionCurrent(t *testing.T) {
 			tx := &stubTx{}
 			tx.row = &stubRow{vals: []any{"pos1"}}
 			tx.row2 = &stubRow{vals: []any{"evt1"}}
-			tx.row3 = &stubRow{vals: []any{"pos1", "10000001", "", "S2601", "2026-01-01", "00000000-0000-0000-0000-000000000001", "JP1", "A", "active", "2.50", "2026-01-01"}}
+			tx.row3 = &stubRow{vals: []any{"pos1", orgNodeKey, "", "S2601", "2026-01-01", "00000000-0000-0000-0000-000000000001", "JP1", "A", "active", "2.50", "2026-01-01"}}
 			return tx, nil
 		}))
-		p, err := store.CreatePositionCurrent(context.Background(), "t1", "2026-01-01", "10000001", "00000000-0000-0000-0000-000000000001", " 2.50 ", " A ")
+		p, err := store.CreatePositionCurrent(context.Background(), "t1", "2026-01-01", orgNodeKey, "00000000-0000-0000-0000-000000000001", " 2.50 ", " A ")
 		if err != nil {
 			t.Fatal(err)
 		}
 		if p.PositionUUID != "pos1" {
 			t.Fatalf("expected pos1, got %q", p.PositionUUID)
 		}
-		if p.OrgUnitID != "10000001" {
-			t.Fatalf("expected 10000001, got %q", p.OrgUnitID)
+		if p.OrgNodeKey != orgNodeKey {
+			t.Fatalf("expected %s, got %q", orgNodeKey, p.OrgNodeKey)
 		}
 		if p.JobProfileUUID == "" {
 			t.Fatal("expected job_profile_uuid")
@@ -436,10 +439,10 @@ func TestStaffingPGStore_CreatePositionCurrent(t *testing.T) {
 			tx := &stubTx{}
 			tx.row = &stubRow{vals: []any{"pos1"}}
 			tx.row2 = &stubRow{vals: []any{"evt1"}}
-			tx.row3 = &stubRow{vals: []any{"pos1", "10000001", "", "S2601", "2026-01-01", "jp1", "", "A", "active", "1.0", "2026-01-01"}}
+			tx.row3 = &stubRow{vals: []any{"pos1", orgNodeKey, "", "S2601", "2026-01-01", "jp1", "", "A", "active", "1.0", "2026-01-01"}}
 			return tx, nil
 		}))
-		p, err := store.CreatePositionCurrent(context.Background(), "t1", "2026-01-01", "10000001", "jp1", "", "A")
+		p, err := store.CreatePositionCurrent(context.Background(), "t1", "2026-01-01", orgNodeKey, "jp1", "", "A")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -450,11 +453,13 @@ func TestStaffingPGStore_CreatePositionCurrent(t *testing.T) {
 }
 
 func TestStaffingPGStore_UpdatePositionCurrent(t *testing.T) {
+	orgNodeKey := mustOrgNodeKeyForTest(t, 10000001)
+
 	t.Run("begin error", func(t *testing.T) {
 		store := newStaffingPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
 			return nil, errors.New("begin")
 		}))
-		_, err := store.UpdatePositionCurrent(context.Background(), "t1", "pos1", "2026-01-01", "10000001", "", "", "", "A", "disabled")
+		_, err := store.UpdatePositionCurrent(context.Background(), "t1", "pos1", "2026-01-01", orgNodeKey, "", "", "", "A", "disabled")
 		if err == nil {
 			t.Fatal("expected error")
 		}
@@ -464,7 +469,7 @@ func TestStaffingPGStore_UpdatePositionCurrent(t *testing.T) {
 		store := newStaffingPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
 			return &stubTx{execErr: errors.New("exec")}, nil
 		}))
-		_, err := store.UpdatePositionCurrent(context.Background(), "t1", "pos1", "2026-01-01", "10000001", "", "", "", "A", "disabled")
+		_, err := store.UpdatePositionCurrent(context.Background(), "t1", "pos1", "2026-01-01", orgNodeKey, "", "", "", "A", "disabled")
 		if err == nil {
 			t.Fatal("expected error")
 		}
@@ -474,7 +479,7 @@ func TestStaffingPGStore_UpdatePositionCurrent(t *testing.T) {
 		store := newStaffingPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
 			return &stubTx{}, nil
 		}))
-		_, err := store.UpdatePositionCurrent(context.Background(), "t1", "pos1", "", "10000001", "", "", "", "A", "disabled")
+		_, err := store.UpdatePositionCurrent(context.Background(), "t1", "pos1", "", orgNodeKey, "", "", "", "A", "disabled")
 		if err == nil {
 			t.Fatal("expected error")
 		}
@@ -484,7 +489,7 @@ func TestStaffingPGStore_UpdatePositionCurrent(t *testing.T) {
 		store := newStaffingPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
 			return &stubTx{}, nil
 		}))
-		_, err := store.UpdatePositionCurrent(context.Background(), "t1", "", "2026-01-01", "10000001", "", "", "", "A", "disabled")
+		_, err := store.UpdatePositionCurrent(context.Background(), "t1", "", "2026-01-01", orgNodeKey, "", "", "", "A", "disabled")
 		if err == nil {
 			t.Fatal("expected error")
 		}
@@ -500,7 +505,7 @@ func TestStaffingPGStore_UpdatePositionCurrent(t *testing.T) {
 		}
 	})
 
-	t.Run("invalid org_unit_id", func(t *testing.T) {
+	t.Run("invalid org_node_key", func(t *testing.T) {
 		store := newStaffingPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
 			return &stubTx{}, nil
 		}))
@@ -514,7 +519,7 @@ func TestStaffingPGStore_UpdatePositionCurrent(t *testing.T) {
 		store := newStaffingPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
 			return &stubTx{rowErr: errors.New("row")}, nil
 		}))
-		_, err := store.UpdatePositionCurrent(context.Background(), "t1", "pos1", "2026-01-01", "10000001", "", "", "", "A", "disabled")
+		_, err := store.UpdatePositionCurrent(context.Background(), "t1", "pos1", "2026-01-01", orgNodeKey, "", "", "", "A", "disabled")
 		if err == nil {
 			t.Fatal("expected error")
 		}
@@ -526,7 +531,7 @@ func TestStaffingPGStore_UpdatePositionCurrent(t *testing.T) {
 			tx.row = &stubRow{vals: []any{"evt1"}}
 			return tx, nil
 		}))
-		_, err := store.UpdatePositionCurrent(context.Background(), "t1", "pos1", "2026-01-01", "10000001", "", "", "", "A", "disabled")
+		_, err := store.UpdatePositionCurrent(context.Background(), "t1", "pos1", "2026-01-01", orgNodeKey, "", "", "", "A", "disabled")
 		if err == nil {
 			t.Fatal("expected error")
 		}
@@ -538,7 +543,7 @@ func TestStaffingPGStore_UpdatePositionCurrent(t *testing.T) {
 			tx.row = &stubRow{vals: []any{"evt1"}}
 			return tx, nil
 		}))
-		_, err := store.UpdatePositionCurrent(context.Background(), "t1", "pos1", "2026-01-01", "10000001", "", "", "", "A", "disabled")
+		_, err := store.UpdatePositionCurrent(context.Background(), "t1", "pos1", "2026-01-01", orgNodeKey, "", "", "", "A", "disabled")
 		if err == nil {
 			t.Fatal("expected error")
 		}
@@ -548,10 +553,10 @@ func TestStaffingPGStore_UpdatePositionCurrent(t *testing.T) {
 		store := newStaffingPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
 			tx := &stubTx{commitErr: errors.New("commit")}
 			tx.row = &stubRow{vals: []any{"evt1"}}
-			tx.row2 = &stubRow{vals: []any{"pos1", "10000001", "", "", "", "", "", "Name", "disabled", "1.0", "2026-01-01"}}
+			tx.row2 = &stubRow{vals: []any{"pos1", orgNodeKey, "", "", "", "", "", "Name", "disabled", "1.0", "2026-01-01"}}
 			return tx, nil
 		}))
-		_, err := store.UpdatePositionCurrent(context.Background(), "t1", "pos1", "2026-01-01", "10000001", "", "", "", "A", "disabled")
+		_, err := store.UpdatePositionCurrent(context.Background(), "t1", "pos1", "2026-01-01", orgNodeKey, "", "", "", "A", "disabled")
 		if err == nil {
 			t.Fatal("expected error")
 		}
@@ -561,10 +566,10 @@ func TestStaffingPGStore_UpdatePositionCurrent(t *testing.T) {
 		store := newStaffingPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
 			tx := &stubTx{}
 			tx.row = &stubRow{vals: []any{"evt1"}}
-			tx.row2 = &stubRow{vals: []any{"pos1", "10000001", "mgr1", "", "", "", "", "Name", "disabled", "1.25", "2026-01-01"}}
+			tx.row2 = &stubRow{vals: []any{"pos1", orgNodeKey, "mgr1", "", "", "", "", "Name", "disabled", "1.25", "2026-01-01"}}
 			return tx, nil
 		}))
-		p, err := store.UpdatePositionCurrent(context.Background(), "t1", " pos1 ", "2026-01-01", " 10000001 ", " mgr1 ", "", " 1.25 ", " Name ", " disabled ")
+		p, err := store.UpdatePositionCurrent(context.Background(), "t1", " pos1 ", "2026-01-01", " "+orgNodeKey+" ", " mgr1 ", "", " 1.25 ", " Name ", " disabled ")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -583,7 +588,7 @@ func TestStaffingPGStore_UpdatePositionCurrent(t *testing.T) {
 		store := newStaffingPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
 			tx := &stubTx{}
 			tx.row = &stubRow{vals: []any{"evt1"}}
-			tx.row2 = &stubRow{vals: []any{"pos1", "10000001", "mgr1", "", "", "", "", "Name", "disabled", "1.0", "2026-01-01"}}
+			tx.row2 = &stubRow{vals: []any{"pos1", orgNodeKey, "mgr1", "", "", "", "", "Name", "disabled", "1.0", "2026-01-01"}}
 			return tx, nil
 		}))
 		if _, err := store.UpdatePositionCurrent(context.Background(), "t1", "pos1", "2026-01-01", "", "", "00000000-0000-0000-0000-000000000002", "", "", ""); err != nil {
@@ -813,21 +818,23 @@ func TestStaffingPGStore_UpsertPrimaryAssignmentForPerson(t *testing.T) {
 
 func TestStaffingMemoryStore(t *testing.T) {
 	s := newStaffingMemoryStore()
+	orgNodeKey1 := mustOrgNodeKeyForTest(t, 10000001)
+	orgNodeKey2 := mustOrgNodeKeyForTest(t, 10000002)
 
 	t.Run("create position invalid", func(t *testing.T) {
-		if _, err := s.CreatePositionCurrent(context.Background(), "t1", "", "10000001", "", "", "A"); err == nil {
+		if _, err := s.CreatePositionCurrent(context.Background(), "t1", "", orgNodeKey1, "", "", "A"); err == nil {
 			t.Fatal("expected error")
 		}
 		if _, err := s.CreatePositionCurrent(context.Background(), "t1", "2026-01-01", "", "jp1", "", "A"); err == nil {
 			t.Fatal("expected error")
 		}
-		if _, err := s.CreatePositionCurrent(context.Background(), "t1", "2026-01-01", "10000001", "", "", "A"); err == nil {
+		if _, err := s.CreatePositionCurrent(context.Background(), "t1", "2026-01-01", orgNodeKey1, "", "", "A"); err == nil {
 			t.Fatal("expected error")
 		}
 	})
 
 	t.Run("create position ok", func(t *testing.T) {
-		if _, err := s.CreatePositionCurrent(context.Background(), "t1", "2026-01-01", "10000001", "jp1", "", "A"); err != nil {
+		if _, err := s.CreatePositionCurrent(context.Background(), "t1", "2026-01-01", orgNodeKey1, "jp1", "", "A"); err != nil {
 			t.Fatal(err)
 		}
 	})
@@ -869,11 +876,11 @@ func TestStaffingMemoryStore(t *testing.T) {
 			t.Fatalf("expected 1, got %d", len(positions))
 		}
 
-		updated, err := s.UpdatePositionCurrent(context.Background(), "t1", positions[0].PositionUUID, "2026-02-01", "10000002", "mgr1", "jp1", "2.5", "B", "disabled")
+		updated, err := s.UpdatePositionCurrent(context.Background(), "t1", positions[0].PositionUUID, "2026-02-01", orgNodeKey2, "mgr1", "jp1", "2.5", "B", "disabled")
 		if err != nil {
 			t.Fatal(err)
 		}
-		if updated.OrgUnitID != "10000002" || updated.ReportsToPositionUUID != "mgr1" || updated.JobProfileUUID != "jp1" || updated.Name != "B" || updated.LifecycleStatus != "disabled" || updated.EffectiveAt != "2026-02-01" {
+		if updated.OrgNodeKey != orgNodeKey2 || updated.ReportsToPositionUUID != "mgr1" || updated.JobProfileUUID != "jp1" || updated.Name != "B" || updated.LifecycleStatus != "disabled" || updated.EffectiveAt != "2026-02-01" {
 			t.Fatalf("unexpected updated position: %+v", updated)
 		}
 	})
@@ -932,11 +939,14 @@ func TestStaffingMemoryStore(t *testing.T) {
 }
 
 type staffingOrgStoreStub struct {
-	listFn            func(ctx context.Context, tenantID string, asOfDate string) ([]OrgUnitNode, error)
-	resolveFn         func(ctx context.Context, tenantID string, orgUnitID string, asOfDate string) (string, error)
-	resolveOrgIDFn    func(ctx context.Context, tenantID string, orgCode string) (int, error)
-	resolveOrgCodeFn  func(ctx context.Context, tenantID string, orgID int) (string, error)
-	resolveOrgCodesFn func(ctx context.Context, tenantID string, orgIDs []int) (map[int]string, error)
+	listFn                  func(ctx context.Context, tenantID string, asOfDate string) ([]OrgUnitNode, error)
+	resolveFn               func(ctx context.Context, tenantID string, orgNodeKey string, asOfDate string) (string, error)
+	resolveOrgIDFn          func(ctx context.Context, tenantID string, orgCode string) (int, error)
+	resolveOrgNodeKeyFn     func(ctx context.Context, tenantID string, orgCode string) (string, error)
+	resolveOrgCodeFn        func(ctx context.Context, tenantID string, orgID int) (string, error)
+	resolveOrgCodeByKeyFn   func(ctx context.Context, tenantID string, orgNodeKey string) (string, error)
+	resolveOrgCodesFn       func(ctx context.Context, tenantID string, orgIDs []int) (map[int]string, error)
+	resolveOrgCodesByKeysFn func(ctx context.Context, tenantID string, orgNodeKeys []string) (map[string]string, error)
 }
 
 func (s staffingOrgStoreStub) ListNodesCurrent(ctx context.Context, tenantID string, asOfDate string) ([]OrgUnitNode, error) {
@@ -963,13 +973,47 @@ func (s staffingOrgStoreStub) ResolveOrgID(ctx context.Context, tenantID string,
 	if s.resolveOrgIDFn != nil {
 		return s.resolveOrgIDFn(ctx, tenantID, orgCode)
 	}
+	if s.resolveOrgNodeKeyFn != nil {
+		orgNodeKey, err := s.resolveOrgNodeKeyFn(ctx, tenantID, orgCode)
+		if err != nil {
+			return 0, err
+		}
+		return decodeOrgNodeKeyToID(orgNodeKey)
+	}
 	return 10000001, nil
+}
+func (s staffingOrgStoreStub) ResolveOrgNodeKeyByCode(ctx context.Context, tenantID string, orgCode string) (string, error) {
+	if s.resolveOrgNodeKeyFn != nil {
+		return s.resolveOrgNodeKeyFn(ctx, tenantID, orgCode)
+	}
+	orgID, err := s.ResolveOrgID(ctx, tenantID, orgCode)
+	if err != nil {
+		return "", err
+	}
+	return encodeOrgNodeKeyFromID(orgID)
 }
 func (s staffingOrgStoreStub) ResolveOrgCode(ctx context.Context, tenantID string, orgID int) (string, error) {
 	if s.resolveOrgCodeFn != nil {
 		return s.resolveOrgCodeFn(ctx, tenantID, orgID)
 	}
+	if s.resolveOrgCodeByKeyFn != nil {
+		orgNodeKey, err := encodeOrgNodeKeyFromID(orgID)
+		if err != nil {
+			return "", err
+		}
+		return s.resolveOrgCodeByKeyFn(ctx, tenantID, orgNodeKey)
+	}
 	return "ORG-1", nil
+}
+func (s staffingOrgStoreStub) ResolveOrgCodeByNodeKey(ctx context.Context, tenantID string, orgNodeKey string) (string, error) {
+	if s.resolveOrgCodeByKeyFn != nil {
+		return s.resolveOrgCodeByKeyFn(ctx, tenantID, orgNodeKey)
+	}
+	orgID, err := decodeOrgNodeKeyToID(orgNodeKey)
+	if err != nil {
+		return "", err
+	}
+	return s.ResolveOrgCode(ctx, tenantID, orgID)
 }
 
 func (s staffingOrgStoreStub) ResolveOrgCodes(ctx context.Context, tenantID string, orgIDs []int) (map[int]string, error) {
@@ -986,13 +1030,53 @@ func (s staffingOrgStoreStub) ResolveOrgCodes(ctx context.Context, tenantID stri
 	}
 	return out, nil
 }
-
-func (s staffingOrgStoreStub) ResolveSetID(ctx context.Context, tenantID string, orgUnitID string, asOfDate string) (string, error) {
-	if s.resolveFn != nil {
-		return s.resolveFn(ctx, tenantID, orgUnitID, asOfDate)
+func (s staffingOrgStoreStub) ResolveOrgCodesByNodeKeys(ctx context.Context, tenantID string, orgNodeKeys []string) (map[string]string, error) {
+	if s.resolveOrgCodesByKeysFn != nil {
+		return s.resolveOrgCodesByKeysFn(ctx, tenantID, orgNodeKeys)
 	}
-	if strings.TrimSpace(orgUnitID) == "" {
-		return "", errors.New("org_unit_id is required")
+	if s.resolveOrgCodesFn != nil {
+		orgIDs := make([]int, 0, len(orgNodeKeys))
+		for _, orgNodeKey := range orgNodeKeys {
+			orgID, err := decodeOrgNodeKeyToID(orgNodeKey)
+			if err != nil {
+				return nil, err
+			}
+			orgIDs = append(orgIDs, orgID)
+		}
+		resolved, err := s.resolveOrgCodesFn(ctx, tenantID, orgIDs)
+		if err != nil {
+			return nil, err
+		}
+		out := make(map[string]string, len(orgNodeKeys))
+		for _, orgNodeKey := range orgNodeKeys {
+			orgID, err := decodeOrgNodeKeyToID(orgNodeKey)
+			if err != nil {
+				return nil, err
+			}
+			code, ok := resolved[orgID]
+			if ok {
+				out[orgNodeKey] = code
+			}
+		}
+		return out, nil
+	}
+	out := make(map[string]string, len(orgNodeKeys))
+	for _, orgNodeKey := range orgNodeKeys {
+		code, err := s.ResolveOrgCodeByNodeKey(ctx, tenantID, orgNodeKey)
+		if err != nil {
+			return nil, err
+		}
+		out[orgNodeKey] = code
+	}
+	return out, nil
+}
+
+func (s staffingOrgStoreStub) ResolveSetID(ctx context.Context, tenantID string, orgNodeKey string, asOfDate string) (string, error) {
+	if s.resolveFn != nil {
+		return s.resolveFn(ctx, tenantID, orgNodeKey, asOfDate)
+	}
+	if strings.TrimSpace(orgNodeKey) == "" {
+		return "", errors.New("org_node_key is required")
 	}
 	return "S2601", nil
 }
@@ -1029,20 +1113,20 @@ func (jobStoreErrStub) ListJobProfiles(context.Context, string, string, string) 
 
 type positionStoreStub struct {
 	listFn   func(ctx context.Context, tenantID string, asOfDate string) ([]Position, error)
-	createFn func(ctx context.Context, tenantID string, effectiveDate string, orgUnitID string, jobProfileUUID string, capacityFTE string, name string) (Position, error)
-	updateFn func(ctx context.Context, tenantID string, positionUUID string, effectiveDate string, orgUnitID string, reportsToPositionUUID string, jobProfileUUID string, capacityFTE string, name string, lifecycleStatus string) (Position, error)
+	createFn func(ctx context.Context, tenantID string, effectiveDate string, orgNodeKey string, jobProfileUUID string, capacityFTE string, name string) (Position, error)
+	updateFn func(ctx context.Context, tenantID string, positionUUID string, effectiveDate string, orgNodeKey string, reportsToPositionUUID string, jobProfileUUID string, capacityFTE string, name string, lifecycleStatus string) (Position, error)
 }
 
 func (s positionStoreStub) ListPositionsCurrent(ctx context.Context, tenantID string, asOfDate string) ([]Position, error) {
 	return s.listFn(ctx, tenantID, asOfDate)
 }
 
-func (s positionStoreStub) CreatePositionCurrent(ctx context.Context, tenantID string, effectiveDate string, orgUnitID string, jobProfileUUID string, capacityFTE string, name string) (Position, error) {
-	return s.createFn(ctx, tenantID, effectiveDate, orgUnitID, jobProfileUUID, capacityFTE, name)
+func (s positionStoreStub) CreatePositionCurrent(ctx context.Context, tenantID string, effectiveDate string, orgNodeKey string, jobProfileUUID string, capacityFTE string, name string) (Position, error) {
+	return s.createFn(ctx, tenantID, effectiveDate, orgNodeKey, jobProfileUUID, capacityFTE, name)
 }
 
-func (s positionStoreStub) UpdatePositionCurrent(ctx context.Context, tenantID string, positionUUID string, effectiveDate string, orgUnitID string, reportsToPositionUUID string, jobProfileUUID string, capacityFTE string, name string, lifecycleStatus string) (Position, error) {
-	return s.updateFn(ctx, tenantID, positionUUID, effectiveDate, orgUnitID, reportsToPositionUUID, jobProfileUUID, capacityFTE, name, lifecycleStatus)
+func (s positionStoreStub) UpdatePositionCurrent(ctx context.Context, tenantID string, positionUUID string, effectiveDate string, orgNodeKey string, reportsToPositionUUID string, jobProfileUUID string, capacityFTE string, name string, lifecycleStatus string) (Position, error) {
+	return s.updateFn(ctx, tenantID, positionUUID, effectiveDate, orgNodeKey, reportsToPositionUUID, jobProfileUUID, capacityFTE, name, lifecycleStatus)
 }
 
 type assignmentStoreStub struct {
@@ -1081,7 +1165,7 @@ func TestStaffingHandlers_JSONRoundTrip(t *testing.T) {
 
 	handlePositionsAPI(rec, req, staffingOrgStoreStub{}, positionStoreStub{
 		createFn: func(context.Context, string, string, string, string, string, string) (Position, error) {
-			return Position{PositionUUID: "pos1", OrgUnitID: "10000001", Name: "A", EffectiveAt: "2026-01-01"}, nil
+			return Position{PositionUUID: "pos1", OrgNodeKey: mustOrgNodeKeyForTest(t, 10000001), Name: "A", EffectiveAt: "2026-01-01"}, nil
 		},
 	})
 	if rec.Code != http.StatusOK {

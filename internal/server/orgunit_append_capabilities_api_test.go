@@ -17,16 +17,28 @@ type orgUnitStoreWithAppendCapabilities struct {
 	OrgUnitStore
 
 	resolveOrgIDFn      func(ctx context.Context, tenantID string, orgCode string) (int, error)
+	resolveOrgNodeKeyFn func(ctx context.Context, tenantID string, orgCode string) (string, error)
 	listExtConfigsFn    func(ctx context.Context, tenantID string, asOf string) ([]orgUnitTenantFieldConfig, error)
 	isTreeInitializedFn func(ctx context.Context, tenantID string) (bool, error)
 	resolveFactsFn      func(ctx context.Context, tenantID string, orgID int, effectiveDate string) (orgUnitAppendFacts, error)
+	resolveFactsByKeyFn func(ctx context.Context, tenantID string, orgNodeKey string, effectiveDate string) (orgUnitAppendFacts, error)
 }
 
-func (s orgUnitStoreWithAppendCapabilities) ResolveOrgID(ctx context.Context, tenantID string, orgCode string) (int, error) {
-	if s.resolveOrgIDFn != nil {
-		return s.resolveOrgIDFn(ctx, tenantID, orgCode)
+func (s orgUnitStoreWithAppendCapabilities) ResolveOrgNodeKeyByCode(ctx context.Context, tenantID string, orgCode string) (string, error) {
+	if s.resolveOrgNodeKeyFn != nil {
+		return s.resolveOrgNodeKeyFn(ctx, tenantID, orgCode)
 	}
-	return 0, orgunitpkg.ErrOrgCodeNotFound
+	if s.resolveOrgIDFn != nil {
+		orgID, err := s.resolveOrgIDFn(ctx, tenantID, orgCode)
+		if err != nil {
+			return "", err
+		}
+		if orgID <= 0 {
+			return "", orgunitpkg.ErrOrgCodeNotFound
+		}
+		return encodeOrgNodeKeyFromID(orgID)
+	}
+	return "", orgunitpkg.ErrOrgCodeNotFound
 }
 
 func (s orgUnitStoreWithAppendCapabilities) ListEnabledTenantFieldConfigsAsOf(ctx context.Context, tenantID string, asOf string) ([]orgUnitTenantFieldConfig, error) {
@@ -43,8 +55,15 @@ func (s orgUnitStoreWithAppendCapabilities) IsOrgTreeInitialized(ctx context.Con
 	return true, nil
 }
 
-func (s orgUnitStoreWithAppendCapabilities) ResolveAppendFacts(ctx context.Context, tenantID string, orgID int, effectiveDate string) (orgUnitAppendFacts, error) {
+func (s orgUnitStoreWithAppendCapabilities) ResolveAppendFacts(ctx context.Context, tenantID string, orgNodeKey string, effectiveDate string) (orgUnitAppendFacts, error) {
+	if s.resolveFactsByKeyFn != nil {
+		return s.resolveFactsByKeyFn(ctx, tenantID, orgNodeKey, effectiveDate)
+	}
 	if s.resolveFactsFn != nil {
+		orgID, err := decodeOrgNodeKeyToID(orgNodeKey)
+		if err != nil {
+			return orgUnitAppendFacts{}, err
+		}
 		return s.resolveFactsFn(ctx, tenantID, orgID, effectiveDate)
 	}
 	return orgUnitAppendFacts{TreeInitialized: true, TargetExistsAsOf: true}, nil

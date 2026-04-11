@@ -114,7 +114,7 @@ func buildWriteFieldPayloadKeys(allowedFields []string, extFieldKeys []string) m
 			out[field] = "name"
 		case "parent_org_code":
 			// DEV-PLAN-108: capabilities maps UI field -> kernel payload key.
-			out[field] = "parent_id"
+			out[field] = "parent_org_node_key"
 		case "status":
 			out[field] = "status"
 		case "is_business_unit":

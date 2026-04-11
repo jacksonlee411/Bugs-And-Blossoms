@@ -1,9 +1,11 @@
 package server
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
 	"net/url"
 	"sort"
@@ -18,7 +20,6 @@ import (
 )
 
 type orgUnitBusinessUnitAPIRequest struct {
-	OrgUnitID         string          `json:"org_unit_id"`
 	OrgCode           string          `json:"org_code"`
 	EffectiveDate     string          `json:"effective_date"`
 	IsBusinessUnit    bool            `json:"is_business_unit"`
@@ -31,7 +32,11 @@ func handleOrgUnitsBusinessUnitAPI(w http.ResponseWriter, r *http.Request, dep a
 	if writeSvc, ok := dep.(orgunitservices.OrgUnitWriteService); ok {
 		handleOrgUnitWriteAction(w, r, writeSvc, "orgunit_set_business_unit_failed", func(ctx context.Context, tenantID string) (string, string, error) {
 			var req orgUnitBusinessUnitAPIRequest
-			dec := json.NewDecoder(r.Body)
+			body, err := io.ReadAll(r.Body)
+			if err != nil {
+				return "", "", errOrgUnitBadJSON
+			}
+			dec := json.NewDecoder(bytes.NewReader(body))
 			dec.DisallowUnknownFields()
 			if err := dec.Decode(&req); err != nil {
 				return "", "", errOrgUnitBadJSON
@@ -40,14 +45,13 @@ func handleOrgUnitsBusinessUnitAPI(w http.ResponseWriter, r *http.Request, dep a
 				return "", "", newBadRequestError(orgUnitErrPatchFieldNotAllowed)
 			}
 
-			req.OrgUnitID = strings.TrimSpace(req.OrgUnitID)
 			req.RequestID = strings.TrimSpace(req.RequestID)
 			effectiveDate, err := parseRequiredDay(req.EffectiveDate, "effective_date")
 			if err != nil {
 				return "", "", err
 			}
 			req.EffectiveDate = effectiveDate
-			if req.OrgUnitID != "" || strings.TrimSpace(req.OrgCode) == "" {
+			if strings.TrimSpace(req.OrgCode) == "" {
 				return "", "", newBadRequestError("org_code required")
 			}
 
@@ -85,19 +89,20 @@ func handleOrgUnitsBusinessUnitAPIStoreLegacy(w http.ResponseWriter, r *http.Req
 	}
 
 	var req orgUnitBusinessUnitAPIRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	dec := json.NewDecoder(r.Body)
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(&req); err != nil {
 		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "bad_json", "bad json")
 		return
 	}
 
-	req.OrgUnitID = strings.TrimSpace(req.OrgUnitID)
 	req.EffectiveDate = strings.TrimSpace(req.EffectiveDate)
 	req.RequestID = strings.TrimSpace(req.RequestID)
 	if req.EffectiveDate == "" || req.RequestID == "" {
 		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "invalid_request", "effective_date/request_id required")
 		return
 	}
-	if req.OrgUnitID != "" || req.OrgCode == "" {
+	if req.OrgCode == "" {
 		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "invalid_request", "org_code required")
 		return
 	}
@@ -108,7 +113,7 @@ func handleOrgUnitsBusinessUnitAPIStoreLegacy(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	orgID, err := store.ResolveOrgID(r.Context(), tenant.ID, normalizedCode)
+	orgNodeKey, err := store.ResolveOrgNodeKeyByCode(r.Context(), tenant.ID, normalizedCode)
 	if err != nil {
 		switch {
 		case errors.Is(err, orgunitpkg.ErrOrgCodeInvalid):
@@ -120,14 +125,12 @@ func handleOrgUnitsBusinessUnitAPIStoreLegacy(w http.ResponseWriter, r *http.Req
 		}
 		return
 	}
-	orgUnitID := strconv.Itoa(orgID)
-
 	if _, err := time.Parse("2006-01-02", req.EffectiveDate); err != nil {
 		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "invalid_effective_date", "invalid effective_date")
 		return
 	}
 
-	if err := store.SetBusinessUnitCurrent(r.Context(), tenant.ID, req.EffectiveDate, orgUnitID, req.IsBusinessUnit, req.RequestID); err != nil {
+	if err := store.SetBusinessUnitCurrent(r.Context(), tenant.ID, req.EffectiveDate, orgNodeKey, req.IsBusinessUnit, req.RequestID); err != nil {
 		writeInternalAPIError(w, r, err, "orgunit_set_business_unit_failed")
 		return
 	}
@@ -159,7 +162,6 @@ type orgUnitListResponse struct {
 }
 
 type orgUnitDetailsAPIItem struct {
-	OrgID          int       `json:"org_id"`
 	OrgCode        string    `json:"org_code"`
 	Name           string    `json:"name"`
 	Status         string    `json:"status"`
@@ -391,7 +393,7 @@ type orgUnitListQueryOptions struct {
 type orgUnitListPageRequest struct {
 	AsOf              string
 	IncludeDisabled   bool
-	ParentID          *int
+	ParentOrgNodeKey  *string
 	Keyword           string
 	Status            string // "", "active", "disabled"
 	SortField         string
@@ -544,8 +546,8 @@ func listOrgUnitListPage(ctx context.Context, store OrgUnitStore, tenantID strin
 	}
 
 	var items []orgUnitListItem
-	if req.ParentID != nil {
-		children, err := listChildrenByVisibility(ctx, store, tenantID, *req.ParentID, req.AsOf, req.IncludeDisabled)
+	if req.ParentOrgNodeKey != nil {
+		children, err := listChildrenByVisibilityByNodeKey(ctx, store, tenantID, *req.ParentOrgNodeKey, req.AsOf, req.IncludeDisabled)
 		if err != nil {
 			return nil, 0, err
 		}
@@ -696,7 +698,7 @@ func handleOrgUnitsAPI(w http.ResponseWriter, r *http.Request, store OrgUnitStor
 			return
 		}
 
-		var parentID *int
+		var parentOrgNodeKey *string
 		parentCode := strings.TrimSpace(q.Get("parent_org_code"))
 		if parentCode != "" {
 			normalized, err := orgunitpkg.NormalizeOrgCode(parentCode)
@@ -704,7 +706,7 @@ func handleOrgUnitsAPI(w http.ResponseWriter, r *http.Request, store OrgUnitStor
 				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "org_code_invalid", "org_code invalid")
 				return
 			}
-			resolvedID, err := store.ResolveOrgID(r.Context(), tenant.ID, normalized)
+			resolvedOrgNodeKey, err := store.ResolveOrgNodeKeyByCode(r.Context(), tenant.ID, normalized)
 			if err != nil {
 				switch {
 				case errors.Is(err, orgunitpkg.ErrOrgCodeInvalid):
@@ -716,7 +718,7 @@ func handleOrgUnitsAPI(w http.ResponseWriter, r *http.Request, store OrgUnitStor
 				}
 				return
 			}
-			parentID = &resolvedID
+			parentOrgNodeKey = &resolvedOrgNodeKey
 		}
 
 		if hasListOpts {
@@ -730,7 +732,7 @@ func handleOrgUnitsAPI(w http.ResponseWriter, r *http.Request, store OrgUnitStor
 			req := orgUnitListPageRequest{
 				AsOf:              asOf,
 				IncludeDisabled:   includeDisabled,
-				ParentID:          parentID,
+				ParentOrgNodeKey:  parentOrgNodeKey,
 				Keyword:           listOpts.Keyword,
 				Status:            listOpts.Status,
 				SortField:         listOpts.SortField,
@@ -781,8 +783,8 @@ func handleOrgUnitsAPI(w http.ResponseWriter, r *http.Request, store OrgUnitStor
 		}
 
 		// 兼容旧语义：roots/children 请求不带 server-mode 参数时返回全量列表。
-		if parentID != nil {
-			children, err := listChildrenByVisibility(r.Context(), store, tenant.ID, *parentID, asOf, includeDisabled)
+		if parentOrgNodeKey != nil {
+			children, err := listChildrenByVisibilityByNodeKey(r.Context(), store, tenant.ID, *parentOrgNodeKey, asOf, includeDisabled)
 			if err != nil {
 				if errors.Is(err, errOrgUnitNotFound) {
 					routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusNotFound, "org_unit_not_found", "org unit not found")
@@ -923,7 +925,7 @@ func handleOrgUnitsDetailsAPI(w http.ResponseWriter, r *http.Request, store OrgU
 		return
 	}
 
-	orgID, err := store.ResolveOrgID(r.Context(), tenant.ID, normalized)
+	orgNodeKey, err := store.ResolveOrgNodeKeyByCode(r.Context(), tenant.ID, normalized)
 	if err != nil {
 		switch {
 		case errors.Is(err, orgunitpkg.ErrOrgCodeInvalid):
@@ -936,7 +938,7 @@ func handleOrgUnitsDetailsAPI(w http.ResponseWriter, r *http.Request, store OrgU
 		return
 	}
 
-	details, err := getNodeDetailsByVisibility(r.Context(), store, tenant.ID, orgID, asOf, includeDisabled)
+	details, err := getNodeDetailsByVisibilityByNodeKey(r.Context(), store, tenant.ID, orgNodeKey, asOf, includeDisabled)
 	if err != nil {
 		if errors.Is(err, errOrgUnitNotFound) {
 			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusNotFound, "org_unit_not_found", "org unit not found")
@@ -950,7 +952,6 @@ func handleOrgUnitsDetailsAPI(w http.ResponseWriter, r *http.Request, store OrgU
 		AsOf:      asOf,
 		ExtFields: []orgUnitExtFieldAPIItem{},
 		OrgUnit: orgUnitDetailsAPIItem{
-			OrgID:          details.OrgID,
 			OrgCode:        details.OrgCode,
 			Name:           details.Name,
 			Status:         strings.TrimSpace(details.Status),
@@ -971,7 +972,11 @@ func handleOrgUnitsDetailsAPI(w http.ResponseWriter, r *http.Request, store OrgU
 		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusInternalServerError, "orgunit_store_missing", "orgunit store missing")
 		return
 	}
-	extFields, err := buildOrgUnitDetailsExtFields(r.Context(), extStore, tenant.ID, orgID, asOf)
+	detailsOrgNodeKey := strings.TrimSpace(details.OrgNodeKey)
+	if detailsOrgNodeKey == "" {
+		detailsOrgNodeKey = orgNodeKey
+	}
+	extFields, err := buildOrgUnitDetailsExtFieldsByNodeKey(r.Context(), extStore, tenant.ID, detailsOrgNodeKey, asOf)
 	if err != nil {
 		if errors.Is(err, errOrgUnitNotFound) {
 			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusNotFound, "org_unit_not_found", "org unit not found")
@@ -1009,7 +1014,7 @@ func handleOrgUnitsVersionsAPI(w http.ResponseWriter, r *http.Request, store Org
 		return
 	}
 
-	orgID, err := store.ResolveOrgID(r.Context(), tenant.ID, normalized)
+	orgNodeKey, err := store.ResolveOrgNodeKeyByCode(r.Context(), tenant.ID, normalized)
 	if err != nil {
 		switch {
 		case errors.Is(err, orgunitpkg.ErrOrgCodeInvalid):
@@ -1022,7 +1027,7 @@ func handleOrgUnitsVersionsAPI(w http.ResponseWriter, r *http.Request, store Org
 		return
 	}
 
-	versions, err := store.ListNodeVersions(r.Context(), tenant.ID, orgID)
+	versions, err := listNodeVersionsByNodeKey(r.Context(), store, tenant.ID, orgNodeKey)
 	if err != nil {
 		if errors.Is(err, errOrgUnitNotFound) {
 			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusNotFound, "org_unit_not_found", "org unit not found")
@@ -1072,7 +1077,7 @@ func handleOrgUnitsAuditAPI(w http.ResponseWriter, r *http.Request, store OrgUni
 		return
 	}
 
-	orgID, err := store.ResolveOrgID(r.Context(), tenant.ID, normalized)
+	orgNodeKey, err := store.ResolveOrgNodeKeyByCode(r.Context(), tenant.ID, normalized)
 	if err != nil {
 		switch {
 		case errors.Is(err, orgunitpkg.ErrOrgCodeInvalid):
@@ -1086,7 +1091,7 @@ func handleOrgUnitsAuditAPI(w http.ResponseWriter, r *http.Request, store OrgUni
 	}
 
 	limit := orgNodeAuditLimitFromURL(r)
-	rows, err := listNodeAuditEvents(r.Context(), store, tenant.ID, orgID, limit+1)
+	rows, err := listNodeAuditEventsByNodeKey(r.Context(), store, tenant.ID, orgNodeKey, limit+1)
 	if err != nil {
 		if errors.Is(err, errOrgUnitNotFound) {
 			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusNotFound, "org_unit_not_found", "org unit not found")
@@ -1167,15 +1172,16 @@ func handleOrgUnitsSearchAPI(w http.ResponseWriter, r *http.Request, store OrgUn
 		return
 	}
 
-	if len(result.PathOrgIDs) > 0 {
-		codes, err := store.ResolveOrgCodes(r.Context(), tenant.ID, result.PathOrgIDs)
+	pathOrgNodeKeys := append([]string(nil), result.PathOrgNodeKeys...)
+	if len(pathOrgNodeKeys) > 0 {
+		codes, err := store.ResolveOrgCodesByNodeKeys(r.Context(), tenant.ID, pathOrgNodeKeys)
 		if err != nil {
 			writeInternalAPIError(w, r, err, "orgunit_resolve_org_codes_failed")
 			return
 		}
-		pathCodes := make([]string, 0, len(result.PathOrgIDs))
-		for _, id := range result.PathOrgIDs {
-			if code, ok := codes[id]; ok && strings.TrimSpace(code) != "" {
+		pathCodes := make([]string, 0, len(pathOrgNodeKeys))
+		for _, orgNodeKey := range pathOrgNodeKeys {
+			if code, ok := codes[orgNodeKey]; ok && strings.TrimSpace(code) != "" {
 				pathCodes = append(pathCodes, code)
 			}
 		}

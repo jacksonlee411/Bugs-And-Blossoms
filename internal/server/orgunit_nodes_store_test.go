@@ -420,6 +420,9 @@ func TestOrgUnitMemoryStore_BasicCRUDAndResolve(t *testing.T) {
 	if len(nodes) != 1 || nodes[0].Name != "Hello" || nodes[0].OrgCode != "A001" {
 		t.Fatalf("nodes=%v", nodes)
 	}
+	if nodes[0].OrgID != 10000000 {
+		t.Fatalf("nodes=%v", nodes)
+	}
 	if nodes[0].CreatedAt != time.Unix(123, 0).UTC() {
 		t.Fatalf("created_at=%s", nodes[0].CreatedAt)
 	}
@@ -441,7 +444,7 @@ func TestOrgUnitMemoryStore_ResolveErrors(t *testing.T) {
 	if _, err := s.ResolveOrgID(context.Background(), "t1", "A001"); !errors.Is(err, orgunitpkg.ErrOrgCodeNotFound) {
 		t.Fatalf("err=%v", err)
 	}
-	if _, err := s.ResolveOrgCode(context.Background(), "t1", 10000001); !errors.Is(err, orgunitpkg.ErrOrgIDNotFound) {
+	if _, err := s.ResolveOrgCode(context.Background(), "t1", 10000001); !errors.Is(err, orgunitpkg.ErrOrgNodeKeyNotFound) {
 		t.Fatalf("err=%v", err)
 	}
 }
@@ -456,8 +459,12 @@ func TestOrgUnitMemoryStore_VisibilityMethodsAndVersions(t *testing.T) {
 	orgID, _ := parseOrgID8(created.ID)
 
 	// Visibility methods should delegate to their base variants.
-	if _, err := store.ListNodesCurrentWithVisibility(ctx, "t1", "2026-01-01", true); err != nil {
+	nodes, err := store.ListNodesCurrentWithVisibility(ctx, "t1", "2026-01-01", true)
+	if err != nil {
 		t.Fatalf("err=%v", err)
+	}
+	if len(nodes) != 1 || nodes[0].OrgID != orgID || nodes[0].ID != created.ID {
+		t.Fatalf("nodes=%+v", nodes)
 	}
 	if _, err := store.ListChildrenWithVisibility(ctx, "t1", orgID, "2026-01-01", true); err != nil {
 		t.Fatalf("err=%v", err)
@@ -496,7 +503,11 @@ func TestOrgUnitMemoryStore_SearchCandidatesAndRenameErrors(t *testing.T) {
 	if _, err := store.SearchNodeCandidates(ctx, "t1", "missing", "2026-01-01", 0); !errors.Is(err, errOrgUnitNotFound) {
 		t.Fatalf("err=%v", err)
 	}
-	if got, err := store.SearchNodeCandidates(ctx, "t1", "A001", "2026-01-01", 0); err != nil || len(got) != 1 {
+	createdOrgID, err := parseOrgID8(created.ID)
+	if err != nil {
+		t.Fatalf("parse err=%v", err)
+	}
+	if got, err := store.SearchNodeCandidates(ctx, "t1", "A001", "2026-01-01", 0); err != nil || len(got) != 1 || got[0].OrgID != createdOrgID {
 		t.Fatalf("got=%v err=%v", got, err)
 	}
 
@@ -582,24 +593,25 @@ func TestOrgUnitMemoryStore_ResolveOrgCodes(t *testing.T) {
 		t.Fatalf("unexpected codes: %v", codes)
 	}
 
-	if _, err := store.ResolveOrgCodes(ctx, "t1", []int{id1, 99999999}); !errors.Is(err, orgunitpkg.ErrOrgIDNotFound) {
+	if _, err := store.ResolveOrgCodes(ctx, "t1", []int{id1, 99999999}); !errors.Is(err, orgunitpkg.ErrOrgNodeKeyNotFound) {
 		t.Fatalf("err=%v", err)
 	}
 
 	badStore := newOrgUnitMemoryStore()
 	badStore.nodes["t1"] = []OrgUnitNode{{ID: "bad", OrgCode: "A1"}}
-	if _, err := badStore.ResolveOrgCodes(ctx, "t1", []int{10000001}); !errors.Is(err, orgunitpkg.ErrOrgIDNotFound) {
+	if _, err := badStore.ResolveOrgCodes(ctx, "t1", []int{10000001}); !errors.Is(err, orgunitpkg.ErrOrgNodeKeyNotFound) {
 		t.Fatalf("err=%v", err)
 	}
 }
 
 func TestOrgUnitMemoryStore_ResolveSetID(t *testing.T) {
 	store := newOrgUnitMemoryStore()
+	orgNodeKey := mustOrgNodeKeyForTest(t, 10000001)
 
 	if _, err := store.ResolveSetID(context.Background(), "t1", "", "2026-01-01"); err == nil {
 		t.Fatal("expected error")
 	}
-	got, err := store.ResolveSetID(context.Background(), "t1", "10000001", "2026-01-01")
+	got, err := store.ResolveSetID(context.Background(), "t1", orgNodeKey, "2026-01-01")
 	if err != nil {
 		t.Fatalf("err=%v", err)
 	}
@@ -661,7 +673,7 @@ func TestOrgUnitMemoryStore_ListChildrenAndDetailsAndSearch(t *testing.T) {
 	}
 
 	details, err := store.GetNodeDetails(ctx, "t1", orgID, "2026-01-01")
-	if err != nil || details.OrgCode != "A001" {
+	if err != nil || details.OrgCode != "A001" || details.OrgID != orgID || len(details.PathIDs) != 1 || details.PathIDs[0] != orgID {
 		t.Fatalf("details=%+v err=%v", details, err)
 	}
 	if _, err := store.GetNodeDetails(ctx, "t1", orgID+1, "2026-01-01"); !errors.Is(err, errOrgUnitNotFound) {
@@ -671,11 +683,11 @@ func TestOrgUnitMemoryStore_ListChildrenAndDetailsAndSearch(t *testing.T) {
 	if _, err := store.SearchNode(ctx, "t1", "", "2026-01-01"); err == nil {
 		t.Fatal("expected error")
 	}
-	if _, err := store.SearchNode(ctx, "t1", "A001", "2026-01-01"); err != nil {
-		t.Fatalf("unexpected err: %v", err)
+	if got, err := store.SearchNode(ctx, "t1", "A001", "2026-01-01"); err != nil || got.TargetOrgID != orgID || len(got.PathOrgIDs) != 1 || got.PathOrgIDs[0] != orgID {
+		t.Fatalf("got=%+v err=%v", got, err)
 	}
-	if _, err := store.SearchNode(ctx, "t1", "root", "2026-01-01"); err != nil {
-		t.Fatalf("unexpected err: %v", err)
+	if got, err := store.SearchNode(ctx, "t1", "root", "2026-01-01"); err != nil || got.TargetOrgID != orgID || len(got.PathOrgIDs) != 1 || got.PathOrgIDs[0] != orgID {
+		t.Fatalf("got=%+v err=%v", got, err)
 	}
 	if _, err := store.SearchNode(ctx, "t1", "missing", "2026-01-01"); !errors.Is(err, errOrgUnitNotFound) {
 		t.Fatalf("err=%v", err)
@@ -824,11 +836,40 @@ func (orgUnitStoreStub) SetBusinessUnitCurrent(context.Context, string, string, 
 	return nil
 }
 func (orgUnitStoreStub) ResolveOrgID(context.Context, string, string) (int, error) { return 0, nil }
+func (s orgUnitStoreStub) ResolveOrgNodeKeyByCode(ctx context.Context, tenantID string, orgCode string) (string, error) {
+	orgID, err := s.ResolveOrgID(ctx, tenantID, orgCode)
+	if err != nil || orgID == 0 {
+		return "", err
+	}
+	return encodeOrgNodeKeyFromID(orgID)
+}
 func (orgUnitStoreStub) ResolveOrgCode(context.Context, string, int) (string, error) {
 	return "", nil
 }
+func (s orgUnitStoreStub) ResolveOrgCodeByNodeKey(ctx context.Context, tenantID string, orgNodeKey string) (string, error) {
+	orgID, err := decodeOrgNodeKeyToID(orgNodeKey)
+	if err != nil {
+		return "", err
+	}
+	return s.ResolveOrgCode(ctx, tenantID, orgID)
+}
 func (orgUnitStoreStub) ResolveOrgCodes(context.Context, string, []int) (map[int]string, error) {
 	return nil, nil
+}
+func (s orgUnitStoreStub) ResolveOrgCodesByNodeKeys(ctx context.Context, tenantID string, orgNodeKeys []string) (map[string]string, error) {
+	out := make(map[string]string, len(orgNodeKeys))
+	for _, orgNodeKey := range orgNodeKeys {
+		orgID, err := decodeOrgNodeKeyToID(orgNodeKey)
+		if err != nil {
+			return nil, err
+		}
+		code, err := s.ResolveOrgCode(ctx, tenantID, orgID)
+		if err != nil {
+			return nil, err
+		}
+		out[orgNodeKey] = code
+	}
+	return out, nil
 }
 func (orgUnitStoreStub) ListChildren(context.Context, string, int, string) ([]OrgUnitChild, error) {
 	return nil, nil
@@ -911,6 +952,9 @@ func TestListNodeAuditEventsHelper(t *testing.T) {
 	if err != nil || len(events) != 1 {
 		t.Fatalf("events=%v err=%v", events, err)
 	}
+	if events[0].OrgID != id || events[0].OrgNodeKey != created.ID {
+		t.Fatalf("events=%+v", events)
+	}
 	if _, err := store.ListNodeAuditEvents(ctx, "t1", id+1, 1); !errors.Is(err, errOrgUnitNotFound) {
 		t.Fatalf("err=%v", err)
 	}
@@ -969,24 +1013,24 @@ func TestOrgUnitPGStore_ListNodeAuditEvents(t *testing.T) {
 	t.Run("ok", func(t *testing.T) {
 		when := time.Date(2026, 1, 2, 0, 0, 0, 0, time.UTC)
 		rows := &auditRows{records: [][]any{{
-			int64(1),                  // id
-			"e1",                      // event_uuid
-			10000001,                  // org_id
-			"RENAME",                  // event_type
-			when,                      // effective_date
-			when,                      // tx_time
-			"initiator",               // initiator_name
-			"emp",                     // initiator_employee_id
-			"req",                     // request_id
-			"reason",                  // reason
-			[]byte(`{"op":"RENAME"}`), // payload
-			[]byte(`{"before":1}`),    // before_snapshot
-			[]byte(`{"after":2}`),     // after_snapshot
-			"",                        // rescind_outcome
-			false,                     // is_rescinded
-			"",                        // rescinded_by_event_uuid
-			when,                      // rescinded_by_tx_time
-			"",                        // rescinded_by_request_id
+			int64(1),                           // id
+			"e1",                               // event_uuid
+			mustOrgNodeKeyForTest(t, 10000001), // org_node_key
+			"RENAME",                           // event_type
+			when,                               // effective_date
+			when,                               // tx_time
+			"initiator",                        // initiator_name
+			"emp",                              // initiator_employee_id
+			"req",                              // request_id
+			"reason",                           // reason
+			[]byte(`{"op":"RENAME"}`),          // payload
+			[]byte(`{"before":1}`),             // before_snapshot
+			[]byte(`{"after":2}`),              // after_snapshot
+			"",                                 // rescind_outcome
+			false,                              // is_rescinded
+			"",                                 // rescinded_by_event_uuid
+			when,                               // rescinded_by_tx_time
+			"",                                 // rescinded_by_request_id
 		}}}
 		store := &orgUnitPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) {
 			return &stubTx{rows: rows}, nil
@@ -1073,7 +1117,7 @@ func TestOrgUnitMemoryStore_AppendFactsHelpers(t *testing.T) {
 	if err != nil {
 		t.Fatalf("resolve id err=%v", err)
 	}
-	facts, err := store.ResolveAppendFacts(context.Background(), "t1", orgID, "2026-01-01")
+	facts, err := store.ResolveAppendFacts(context.Background(), "t1", node.ID, "2026-01-01")
 	if err != nil {
 		t.Fatalf("facts err=%v", err)
 	}
@@ -1084,7 +1128,11 @@ func TestOrgUnitMemoryStore_AppendFactsHelpers(t *testing.T) {
 		t.Fatalf("status=%q", facts.TargetStatusAsOf)
 	}
 
-	missing, err := store.ResolveAppendFacts(context.Background(), "t1", orgID+999, "2026-01-01")
+	missingOrgNodeKey, err := encodeOrgNodeKeyFromID(orgID + 999)
+	if err != nil {
+		t.Fatalf("encode missing org node key: %v", err)
+	}
+	missing, err := store.ResolveAppendFacts(context.Background(), "t1", missingOrgNodeKey, "2026-01-01")
 	if err != nil {
 		t.Fatalf("missing err=%v", err)
 	}

@@ -3,12 +3,12 @@
   "bubble_count": 1,
   "bubbles": [
     {
-      "binding_key": "conv_4ea38c5784564fdeb384e944f3a48e11::turn_75467817de2c49799645475de80c5125::assistant_874f424c45c64785841f88f4f5b26007",
-      "conversation_id": "conv_4ea38c5784564fdeb384e944f3a48e11",
-      "turn_id": "turn_75467817de2c49799645475de80c5125",
-      "request_id": "assistant_874f424c45c64785841f88f4f5b26007",
-      "message_id": "d3baf264-e828-4959-be66-06d7c0afec3b_",
-      "text": "你好，我是组织变更助手，可以帮你创建或调整部门结构，比如新建部门、改名、迁移上下级关系、启用/停用等。你现在想做什么操作？"
+      "binding_key": "conv_b917951d68de41d1ba32eac7706191c5::turn_8ee58961d7a7465db8e1bbe78d81f636::assistant_174d0cca313a4819ae9049339f86a946",
+      "conversation_id": "conv_b917951d68de41d1ba32eac7706191c5",
+      "turn_id": "turn_8ee58961d7a7465db8e1bbe78d81f636",
+      "request_id": "assistant_174d0cca313a4819ae9049339f86a946",
+      "message_id": "ff23ea11-4c3b-471a-ac34-70bc03dfabe3_",
+      "text": "你好，我是组织变更助手，可以帮你新建部门、调整隶属关系、改名、启用/停用等。你现在想处理哪类组织变更？"
     }
   ],
   "external_reply_container_count": 0,

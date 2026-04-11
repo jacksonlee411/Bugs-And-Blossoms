@@ -1474,29 +1474,124 @@ func (dictOptionsErrResolver) ListOptions(context.Context, string, string, strin
 
 type orgUnitCodeResolverStub struct {
 	OrgUnitCodeResolver
-	resolveOrgIDFn func(ctx context.Context, tenantID string, orgCode string) (int, error)
+	resolveOrgIDFn              func(ctx context.Context, tenantID string, orgCode string) (int, error)
+	resolveOrgNodeKeyByCodeFn   func(ctx context.Context, tenantID string, orgCode string) (string, error)
+	resolveOrgCodeFn            func(ctx context.Context, tenantID string, orgID int) (string, error)
+	resolveOrgCodeByNodeKeyFn   func(ctx context.Context, tenantID string, orgNodeKey string) (string, error)
+	resolveOrgCodesFn           func(ctx context.Context, tenantID string, orgIDs []int) (map[int]string, error)
+	resolveOrgCodesByNodeKeysFn func(ctx context.Context, tenantID string, orgNodeKeys []string) (map[string]string, error)
 }
 
 func (s orgUnitCodeResolverStub) ResolveOrgID(ctx context.Context, tenantID string, orgCode string) (int, error) {
 	if s.resolveOrgIDFn != nil {
 		return s.resolveOrgIDFn(ctx, tenantID, orgCode)
 	}
-	if s.OrgUnitCodeResolver != nil {
-		return s.OrgUnitCodeResolver.ResolveOrgID(ctx, tenantID, orgCode)
+	orgNodeKey, err := s.ResolveOrgNodeKeyByCode(ctx, tenantID, orgCode)
+	if err != nil {
+		return 0, err
 	}
-	return 0, errors.New("org_code_resolver_missing")
+	return decodeOrgNodeKeyToID(orgNodeKey)
+}
+
+func (s orgUnitCodeResolverStub) ResolveOrgNodeKeyByCode(ctx context.Context, tenantID string, orgCode string) (string, error) {
+	if s.resolveOrgNodeKeyByCodeFn != nil {
+		return s.resolveOrgNodeKeyByCodeFn(ctx, tenantID, orgCode)
+	}
+	if s.resolveOrgIDFn != nil {
+		orgID, err := s.resolveOrgIDFn(ctx, tenantID, orgCode)
+		if err != nil {
+			return "", err
+		}
+		return encodeOrgNodeKeyFromID(orgID)
+	}
+	if s.OrgUnitCodeResolver != nil {
+		return s.OrgUnitCodeResolver.ResolveOrgNodeKeyByCode(ctx, tenantID, orgCode)
+	}
+	return "", errors.New("org_code_resolver_missing")
 }
 
 func (s orgUnitCodeResolverStub) ResolveOrgCode(ctx context.Context, tenantID string, orgID int) (string, error) {
+	if s.resolveOrgCodeFn != nil {
+		return s.resolveOrgCodeFn(ctx, tenantID, orgID)
+	}
+	orgNodeKey, err := encodeOrgNodeKeyFromID(orgID)
+	if err != nil {
+		return "", err
+	}
+	return s.ResolveOrgCodeByNodeKey(ctx, tenantID, orgNodeKey)
+}
+
+func (s orgUnitCodeResolverStub) ResolveOrgCodeByNodeKey(ctx context.Context, tenantID string, orgNodeKey string) (string, error) {
+	if s.resolveOrgCodeByNodeKeyFn != nil {
+		return s.resolveOrgCodeByNodeKeyFn(ctx, tenantID, orgNodeKey)
+	}
+	if s.resolveOrgCodeFn != nil {
+		orgID, err := decodeOrgNodeKeyToID(orgNodeKey)
+		if err != nil {
+			return "", err
+		}
+		return s.resolveOrgCodeFn(ctx, tenantID, orgID)
+	}
 	if s.OrgUnitCodeResolver != nil {
-		return s.OrgUnitCodeResolver.ResolveOrgCode(ctx, tenantID, orgID)
+		return s.OrgUnitCodeResolver.ResolveOrgCodeByNodeKey(ctx, tenantID, orgNodeKey)
 	}
 	return "", errors.New("org_code_resolver_missing")
 }
 
 func (s orgUnitCodeResolverStub) ResolveOrgCodes(ctx context.Context, tenantID string, orgIDs []int) (map[int]string, error) {
+	if s.resolveOrgCodesFn != nil {
+		return s.resolveOrgCodesFn(ctx, tenantID, orgIDs)
+	}
+	orgNodeKeys := make([]string, 0, len(orgIDs))
+	keyByID := make(map[int]string, len(orgIDs))
+	for _, orgID := range orgIDs {
+		orgNodeKey, err := encodeOrgNodeKeyFromID(orgID)
+		if err != nil {
+			return nil, err
+		}
+		orgNodeKeys = append(orgNodeKeys, orgNodeKey)
+		keyByID[orgID] = orgNodeKey
+	}
+	resolved, err := s.ResolveOrgCodesByNodeKeys(ctx, tenantID, orgNodeKeys)
+	if err != nil {
+		return nil, err
+	}
+	out := make(map[int]string, len(orgIDs))
+	for _, orgID := range orgIDs {
+		out[orgID] = resolved[keyByID[orgID]]
+	}
+	return out, nil
+}
+
+func (s orgUnitCodeResolverStub) ResolveOrgCodesByNodeKeys(ctx context.Context, tenantID string, orgNodeKeys []string) (map[string]string, error) {
+	if s.resolveOrgCodesByNodeKeysFn != nil {
+		return s.resolveOrgCodesByNodeKeysFn(ctx, tenantID, orgNodeKeys)
+	}
+	if s.resolveOrgCodesFn != nil {
+		orgIDs := make([]int, 0, len(orgNodeKeys))
+		for _, orgNodeKey := range orgNodeKeys {
+			orgID, err := decodeOrgNodeKeyToID(orgNodeKey)
+			if err != nil {
+				return nil, err
+			}
+			orgIDs = append(orgIDs, orgID)
+		}
+		resolved, err := s.resolveOrgCodesFn(ctx, tenantID, orgIDs)
+		if err != nil {
+			return nil, err
+		}
+		out := make(map[string]string, len(orgNodeKeys))
+		for _, orgNodeKey := range orgNodeKeys {
+			orgID, err := decodeOrgNodeKeyToID(orgNodeKey)
+			if err != nil {
+				return nil, err
+			}
+			out[orgNodeKey] = resolved[orgID]
+		}
+		return out, nil
+	}
 	if s.OrgUnitCodeResolver != nil {
-		return s.OrgUnitCodeResolver.ResolveOrgCodes(ctx, tenantID, orgIDs)
+		return s.OrgUnitCodeResolver.ResolveOrgCodesByNodeKeys(ctx, tenantID, orgNodeKeys)
 	}
 	return nil, errors.New("org_code_resolver_missing")
 }
@@ -1545,6 +1640,17 @@ func (s orgUnitMemoryStoreResolveOrgIDErr) ResolveOrgID(context.Context, string,
 		return 0, s.err
 	}
 	return 0, errors.New("resolve_org_id_error")
+}
+
+func (s orgUnitMemoryStoreResolveOrgIDErr) ResolveOrgNodeKeyByCode(ctx context.Context, tenantID string, orgCode string) (string, error) {
+	orgID, err := s.ResolveOrgID(ctx, tenantID, orgCode)
+	if err != nil {
+		return "", err
+	}
+	if orgID <= 0 {
+		return "", errors.New("resolve_org_node_key_error")
+	}
+	return encodeOrgNodeKeyFromID(orgID)
 }
 
 func TestHandleOrgUnitFieldConfigsEnableCandidatesAPI_BranchCoverage(t *testing.T) {

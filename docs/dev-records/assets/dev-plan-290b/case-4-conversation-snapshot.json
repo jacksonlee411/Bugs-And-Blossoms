@@ -1,64 +1,64 @@
 {
   "case_id": 4,
-  "tenant_id": "7a826e0e-cae9-4abc-ac4a-cec17c38169f",
-  "conversation_id": "conv_77673e160f5247e594790c35b600cced",
+  "tenant_id": "0f597b52-82f5-4229-9846-25608521a15d",
+  "conversation_id": "conv_3f72add2c85c43c199868f6f0c9b93ca",
   "snapshots": [
     {
       "step": 1,
-      "input": "请在父组织共享服务中心下新建239A候选验证部，生效日期2026-03-26",
+      "input": "请在父组织共享服务中心下新建候选验证部239A，生效日期2026-03-26",
       "bubble": {
         "count": 1,
-        "bindingKey": "conv_77673e160f5247e594790c35b600cced::turn_706b6844a6a94632a75f54c0a24b7345::assistant_3fcc3bbe65264b07bda617fd5ce0d8bd",
-        "conversationId": "conv_77673e160f5247e594790c35b600cced",
-        "turnId": "turn_706b6844a6a94632a75f54c0a24b7345",
-        "requestId": "assistant_3fcc3bbe65264b07bda617fd5ce0d8bd",
-        "text": "请确认：本次创建的上级组织是否就是名称为“共享服务中心”的部门？如果有多个同名组织，请提供其编码或更多描述信息。 共享服务中心 集团 / 共享服务中心 TP290BSSC1 · score 0.8 Select + Confirm 共享服务中心 集团 / B / 共享服务中心 TP290BSSC2 · score 0.8 Select + Confirm"
+        "bindingKey": "conv_3f72add2c85c43c199868f6f0c9b93ca::turn_d13388e5fef646db9ce2b77d4b504cd1::assistant_896bbfd486194f7bb840f91412c34007",
+        "conversationId": "conv_3f72add2c85c43c199868f6f0c9b93ca",
+        "turnId": "turn_d13388e5fef646db9ce2b77d4b504cd1",
+        "requestId": "assistant_896bbfd486194f7bb840f91412c34007",
+        "text": "请确认：是否以“共享服务中心”作为唯一父组织标识？如果该名称在系统中可能不唯一，是否有对应的组织编码或其他唯一标识可以提供？ 共享服务中心 集团 / 共享服务中心 TP290BSSC1 · score 0.8 Select + Confirm 共享服务中心 集团 / B / 共享服务中心 TP290BSSC2 · score 0.8 Select + Confirm"
       },
       "conversation": {
-        "conversation_id": "conv_77673e160f5247e594790c35b600cced",
-        "tenant_id": "7a826e0e-cae9-4abc-ac4a-cec17c38169f",
-        "actor_id": "d902f936-e7c7-4f45-a3ba-8900c38c02a2",
+        "conversation_id": "conv_3f72add2c85c43c199868f6f0c9b93ca",
+        "tenant_id": "0f597b52-82f5-4229-9846-25608521a15d",
+        "actor_id": "ff0ee258-fbc2-48dd-88c5-cf6b5034ec26",
         "actor_role": "tenant-admin",
         "state": "validated",
         "current_phase": "await_candidate_pick",
         "state_transitions": [
           {
-            "id": 1656,
-            "request_id": "assistant_e2af5aa7fa414203ad014e3cf8e68615",
-            "trace_id": "b01223777fd54a4eadfa09507a830246",
+            "id": 1936,
+            "request_id": "assistant_1bbb460ff45a449b937793a3dbe16425",
+            "trace_id": "3cf42721a8fc4e048ea9b028631ab4b7",
             "from_state": "init",
             "to_state": "validated",
             "from_phase": "init",
             "to_phase": "idle",
             "reason_code": "conversation_created",
-            "actor_id": "d902f936-e7c7-4f45-a3ba-8900c38c02a2",
-            "changed_at": "2026-04-09T05:53:52.018186+08:00"
+            "actor_id": "ff0ee258-fbc2-48dd-88c5-cf6b5034ec26",
+            "changed_at": "2026-04-11T10:07:02.611573+08:00"
           },
           {
-            "id": 1657,
-            "turn_id": "turn_706b6844a6a94632a75f54c0a24b7345",
-            "request_id": "assistant_3fcc3bbe65264b07bda617fd5ce0d8bd",
-            "trace_id": "4355aafb0fc04568bba76b84c5be0e04",
+            "id": 1937,
+            "turn_id": "turn_d13388e5fef646db9ce2b77d4b504cd1",
+            "request_id": "assistant_896bbfd486194f7bb840f91412c34007",
+            "trace_id": "3ac363b3528c4e5ca7bcc972f7130e71",
             "from_state": "init",
             "to_state": "validated",
             "from_phase": "idle",
             "to_phase": "await_candidate_pick",
             "reason_code": "turn_created",
-            "actor_id": "d902f936-e7c7-4f45-a3ba-8900c38c02a2",
-            "changed_at": "2026-04-08T21:54:01.033591989Z"
+            "actor_id": "ff0ee258-fbc2-48dd-88c5-cf6b5034ec26",
+            "changed_at": "2026-04-11T02:07:06.412470715Z"
           }
         ],
-        "created_at": "2026-04-09T05:53:52.018186+08:00",
-        "updated_at": "2026-04-08T21:54:01.033591989Z",
+        "created_at": "2026-04-11T10:07:02.611573+08:00",
+        "updated_at": "2026-04-11T02:07:06.412470715Z",
         "turns": [
           {
-            "turn_id": "turn_706b6844a6a94632a75f54c0a24b7345",
-            "user_input": "请在父组织共享服务中心下新建239A候选验证部，生效日期2026-03-26",
+            "turn_id": "turn_d13388e5fef646db9ce2b77d4b504cd1",
+            "user_input": "请在父组织共享服务中心下新建候选验证部239A，生效日期2026-03-26",
             "state": "validated",
             "phase": "await_candidate_pick",
             "risk_tier": "high",
-            "request_id": "assistant_3fcc3bbe65264b07bda617fd5ce0d8bd",
-            "trace_id": "4355aafb0fc04568bba76b84c5be0e04",
+            "request_id": "assistant_896bbfd486194f7bb840f91412c34007",
+            "trace_id": "3ac363b3528c4e5ca7bcc972f7130e71",
             "policy_version": "2026-02-23",
             "composition_version": "2026-02-23",
             "mapping_version": "2026-02-23",
@@ -68,11 +68,11 @@
               "route_kind": "business_action",
               "route_catalog_version": "2026-03-11.v2",
               "parent_ref_text": "共享服务中心",
-              "entity_name": "239A候选验证部",
+              "entity_name": "候选验证部239A",
               "effective_date": "2026-03-26",
               "intent_schema_version": "assistant.intent.v1",
-              "context_hash": "78671824d722fc280d585216ba36235a04d741bdc8a36a1e816ed9efb2e9dc73",
-              "intent_hash": "7d436c6fb3e77a04d665e3fdc8f5315b550b71201837467290ca74bebb9f112a"
+              "context_hash": "4ad907f99e26a01e4c9ed794f1d3e0194538b5ee12d81267fe0cbd808ec5fe20",
+              "intent_hash": "9a432a64d4a0e1140cda52d00f52caf1e4b2a956295654dad6be2a3b91b40431"
             },
             "route_decision": {
               "route_kind": "business_action",
@@ -131,7 +131,7 @@
               "context_template_version": "plan_context_v1",
               "reply_guidance_version": "2026-03-11.v1+2026-03-11.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1",
               "confirm_ttl_seconds": 900,
-              "expires_at": "2026-04-08T22:09:01Z",
+              "expires_at": "2026-04-11T02:22:06Z",
               "skill_execution_plan": {
                 "selected_skills": [
                   "org.orgunit_create"
@@ -152,7 +152,7 @@
                 "changes": [
                   {
                     "field": "name",
-                    "after": "239A候选验证部"
+                    "after": "候选验证部239A"
                   },
                   {
                     "field": "effective_date",
@@ -163,7 +163,6 @@
             },
             "candidates": [
               {
-                "org_id": 10000002,
                 "candidate_id": "TP290BSSC1",
                 "candidate_code": "TP290BSSC1",
                 "name": "共享服务中心",
@@ -173,7 +172,6 @@
                 "match_score": 0.8
               },
               {
-                "org_id": 10000004,
                 "candidate_id": "TP290BSSC2",
                 "candidate_code": "TP290BSSC2",
                 "name": "共享服务中心",
@@ -188,7 +186,7 @@
             "dry_run": {
               "diff": [
                 {
-                  "after": "239A候选验证部",
+                  "after": "候选验证部239A",
                   "field": "name"
                 },
                 {
@@ -217,14 +215,14 @@
                 ]
               },
               "would_commit": false,
-              "plan_hash": "afd2cfd04148fd0a348bdbf7a0792161cd393474e86b0d80850133263857d3ed"
+              "plan_hash": "ab1aa552add490a65ee92e6c7a77c7f51f0b9d11ee03237b114dbdfd3693d59f"
             },
             "commit_reply": {
               "outcome": "pending",
-              "message": "请确认：本次创建的上级组织是否就是名称为“共享服务中心”的部门？如果有多个同名组织，请提供其编码或更多描述信息。"
+              "message": "请确认：是否以“共享服务中心”作为唯一父组织标识？如果该名称在系统中可能不唯一，是否有对应的组织编码或其他唯一标识可以提供？"
             },
             "reply_nlg": {
-              "text": "请确认：本次创建的上级组织是否就是名称为“共享服务中心”的部门？如果有多个同名组织，请提供其编码或更多描述信息。",
+              "text": "请确认：是否以“共享服务中心”作为唯一父组织标识？如果该名称在系统中可能不唯一，是否有对应的组织编码或其他唯一标识可以提供？",
               "kind": "message",
               "stage": "clarification_required",
               "reply_model_name": "gpt-5.1",
@@ -234,19 +232,19 @@
               "conversation_id": "",
               "turn_id": ""
             },
-            "created_at": "2026-04-08T21:54:01.033591989Z",
-            "updated_at": "2026-04-08T21:54:01.033591989Z"
+            "created_at": "2026-04-11T02:07:06.412470715Z",
+            "updated_at": "2026-04-11T02:07:06.412470715Z"
           }
         ]
       },
       "latest_turn": {
-        "turn_id": "turn_706b6844a6a94632a75f54c0a24b7345",
-        "user_input": "请在父组织共享服务中心下新建239A候选验证部，生效日期2026-03-26",
+        "turn_id": "turn_d13388e5fef646db9ce2b77d4b504cd1",
+        "user_input": "请在父组织共享服务中心下新建候选验证部239A，生效日期2026-03-26",
         "state": "validated",
         "phase": "await_candidate_pick",
         "risk_tier": "high",
-        "request_id": "assistant_3fcc3bbe65264b07bda617fd5ce0d8bd",
-        "trace_id": "4355aafb0fc04568bba76b84c5be0e04",
+        "request_id": "assistant_896bbfd486194f7bb840f91412c34007",
+        "trace_id": "3ac363b3528c4e5ca7bcc972f7130e71",
         "policy_version": "2026-02-23",
         "composition_version": "2026-02-23",
         "mapping_version": "2026-02-23",
@@ -256,11 +254,11 @@
           "route_kind": "business_action",
           "route_catalog_version": "2026-03-11.v2",
           "parent_ref_text": "共享服务中心",
-          "entity_name": "239A候选验证部",
+          "entity_name": "候选验证部239A",
           "effective_date": "2026-03-26",
           "intent_schema_version": "assistant.intent.v1",
-          "context_hash": "78671824d722fc280d585216ba36235a04d741bdc8a36a1e816ed9efb2e9dc73",
-          "intent_hash": "7d436c6fb3e77a04d665e3fdc8f5315b550b71201837467290ca74bebb9f112a"
+          "context_hash": "4ad907f99e26a01e4c9ed794f1d3e0194538b5ee12d81267fe0cbd808ec5fe20",
+          "intent_hash": "9a432a64d4a0e1140cda52d00f52caf1e4b2a956295654dad6be2a3b91b40431"
         },
         "route_decision": {
           "route_kind": "business_action",
@@ -319,7 +317,7 @@
           "context_template_version": "plan_context_v1",
           "reply_guidance_version": "2026-03-11.v1+2026-03-11.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1",
           "confirm_ttl_seconds": 900,
-          "expires_at": "2026-04-08T22:09:01Z",
+          "expires_at": "2026-04-11T02:22:06Z",
           "skill_execution_plan": {
             "selected_skills": [
               "org.orgunit_create"
@@ -340,7 +338,7 @@
             "changes": [
               {
                 "field": "name",
-                "after": "239A候选验证部"
+                "after": "候选验证部239A"
               },
               {
                 "field": "effective_date",
@@ -351,7 +349,6 @@
         },
         "candidates": [
           {
-            "org_id": 10000002,
             "candidate_id": "TP290BSSC1",
             "candidate_code": "TP290BSSC1",
             "name": "共享服务中心",
@@ -361,7 +358,6 @@
             "match_score": 0.8
           },
           {
-            "org_id": 10000004,
             "candidate_id": "TP290BSSC2",
             "candidate_code": "TP290BSSC2",
             "name": "共享服务中心",
@@ -376,7 +372,7 @@
         "dry_run": {
           "diff": [
             {
-              "after": "239A候选验证部",
+              "after": "候选验证部239A",
               "field": "name"
             },
             {
@@ -405,14 +401,14 @@
             ]
           },
           "would_commit": false,
-          "plan_hash": "afd2cfd04148fd0a348bdbf7a0792161cd393474e86b0d80850133263857d3ed"
+          "plan_hash": "ab1aa552add490a65ee92e6c7a77c7f51f0b9d11ee03237b114dbdfd3693d59f"
         },
         "commit_reply": {
           "outcome": "pending",
-          "message": "请确认：本次创建的上级组织是否就是名称为“共享服务中心”的部门？如果有多个同名组织，请提供其编码或更多描述信息。"
+          "message": "请确认：是否以“共享服务中心”作为唯一父组织标识？如果该名称在系统中可能不唯一，是否有对应的组织编码或其他唯一标识可以提供？"
         },
         "reply_nlg": {
-          "text": "请确认：本次创建的上级组织是否就是名称为“共享服务中心”的部门？如果有多个同名组织，请提供其编码或更多描述信息。",
+          "text": "请确认：是否以“共享服务中心”作为唯一父组织标识？如果该名称在系统中可能不唯一，是否有对应的组织编码或其他唯一标识可以提供？",
           "kind": "message",
           "stage": "clarification_required",
           "reply_model_name": "gpt-5.1",
@@ -422,8 +418,8 @@
           "conversation_id": "",
           "turn_id": ""
         },
-        "created_at": "2026-04-08T21:54:01.033591989Z",
-        "updated_at": "2026-04-08T21:54:01.033591989Z"
+        "created_at": "2026-04-11T02:07:06.412470715Z",
+        "updated_at": "2026-04-11T02:07:06.412470715Z"
       }
     },
     {
@@ -431,70 +427,70 @@
       "input": "选第2个",
       "bubble": {
         "count": 1,
-        "bindingKey": "conv_77673e160f5247e594790c35b600cced::turn_706b6844a6a94632a75f54c0a24b7345::assistant_3fcc3bbe65264b07bda617fd5ce0d8bd",
-        "conversationId": "conv_77673e160f5247e594790c35b600cced",
-        "turnId": "turn_706b6844a6a94632a75f54c0a24b7345",
-        "requestId": "assistant_3fcc3bbe65264b07bda617fd5ce0d8bd",
-        "text": "上级组织：共享服务中心；新建组织：239A候选验证部；生效日期：2026-03-26 Selected: 共享服务中心 Submit"
+        "bindingKey": "conv_3f72add2c85c43c199868f6f0c9b93ca::turn_d13388e5fef646db9ce2b77d4b504cd1::assistant_896bbfd486194f7bb840f91412c34007",
+        "conversationId": "conv_3f72add2c85c43c199868f6f0c9b93ca",
+        "turnId": "turn_d13388e5fef646db9ce2b77d4b504cd1",
+        "requestId": "assistant_896bbfd486194f7bb840f91412c34007",
+        "text": "上级组织：共享服务中心；新建组织：候选验证部239A；生效日期：2026-03-26 Selected: 共享服务中心 Submit"
       },
       "conversation": {
-        "conversation_id": "conv_77673e160f5247e594790c35b600cced",
-        "tenant_id": "7a826e0e-cae9-4abc-ac4a-cec17c38169f",
-        "actor_id": "d902f936-e7c7-4f45-a3ba-8900c38c02a2",
+        "conversation_id": "conv_3f72add2c85c43c199868f6f0c9b93ca",
+        "tenant_id": "0f597b52-82f5-4229-9846-25608521a15d",
+        "actor_id": "ff0ee258-fbc2-48dd-88c5-cf6b5034ec26",
         "actor_role": "tenant-admin",
         "state": "confirmed",
         "current_phase": "await_commit_confirm",
         "state_transitions": [
           {
-            "id": 1656,
-            "request_id": "assistant_e2af5aa7fa414203ad014e3cf8e68615",
-            "trace_id": "b01223777fd54a4eadfa09507a830246",
+            "id": 1936,
+            "request_id": "assistant_1bbb460ff45a449b937793a3dbe16425",
+            "trace_id": "3cf42721a8fc4e048ea9b028631ab4b7",
             "from_state": "init",
             "to_state": "validated",
             "from_phase": "init",
             "to_phase": "idle",
             "reason_code": "conversation_created",
-            "actor_id": "d902f936-e7c7-4f45-a3ba-8900c38c02a2",
-            "changed_at": "2026-04-09T05:53:52.018186+08:00"
+            "actor_id": "ff0ee258-fbc2-48dd-88c5-cf6b5034ec26",
+            "changed_at": "2026-04-11T10:07:02.611573+08:00"
           },
           {
-            "id": 1657,
-            "turn_id": "turn_706b6844a6a94632a75f54c0a24b7345",
-            "request_id": "assistant_3fcc3bbe65264b07bda617fd5ce0d8bd",
-            "trace_id": "4355aafb0fc04568bba76b84c5be0e04",
+            "id": 1937,
+            "turn_id": "turn_d13388e5fef646db9ce2b77d4b504cd1",
+            "request_id": "assistant_896bbfd486194f7bb840f91412c34007",
+            "trace_id": "3ac363b3528c4e5ca7bcc972f7130e71",
             "from_state": "init",
             "to_state": "validated",
             "from_phase": "idle",
             "to_phase": "await_candidate_pick",
             "reason_code": "turn_created",
-            "actor_id": "d902f936-e7c7-4f45-a3ba-8900c38c02a2",
-            "changed_at": "2026-04-09T05:54:01.033591+08:00"
+            "actor_id": "ff0ee258-fbc2-48dd-88c5-cf6b5034ec26",
+            "changed_at": "2026-04-11T10:07:06.41247+08:00"
           },
           {
-            "turn_id": "turn_706b6844a6a94632a75f54c0a24b7345",
+            "turn_id": "turn_d13388e5fef646db9ce2b77d4b504cd1",
             "turn_action": "confirm",
-            "request_id": "assistant_3fcc3bbe65264b07bda617fd5ce0d8bd",
-            "trace_id": "4355aafb0fc04568bba76b84c5be0e04",
+            "request_id": "assistant_896bbfd486194f7bb840f91412c34007",
+            "trace_id": "3ac363b3528c4e5ca7bcc972f7130e71",
             "from_state": "validated",
             "to_state": "confirmed",
             "from_phase": "await_candidate_pick",
             "to_phase": "await_commit_confirm",
             "reason_code": "confirmed",
-            "actor_id": "d902f936-e7c7-4f45-a3ba-8900c38c02a2",
-            "changed_at": "2026-04-08T21:54:02.190779033Z"
+            "actor_id": "ff0ee258-fbc2-48dd-88c5-cf6b5034ec26",
+            "changed_at": "2026-04-11T02:07:07.776779481Z"
           }
         ],
-        "created_at": "2026-04-09T05:53:52.018186+08:00",
-        "updated_at": "2026-04-08T21:54:02.190779033Z",
+        "created_at": "2026-04-11T10:07:02.611573+08:00",
+        "updated_at": "2026-04-11T02:07:07.776779481Z",
         "turns": [
           {
-            "turn_id": "turn_706b6844a6a94632a75f54c0a24b7345",
-            "user_input": "请在父组织共享服务中心下新建239A候选验证部，生效日期2026-03-26",
+            "turn_id": "turn_d13388e5fef646db9ce2b77d4b504cd1",
+            "user_input": "请在父组织共享服务中心下新建候选验证部239A，生效日期2026-03-26",
             "state": "confirmed",
             "phase": "await_commit_confirm",
             "risk_tier": "high",
-            "request_id": "assistant_3fcc3bbe65264b07bda617fd5ce0d8bd",
-            "trace_id": "4355aafb0fc04568bba76b84c5be0e04",
+            "request_id": "assistant_896bbfd486194f7bb840f91412c34007",
+            "trace_id": "3ac363b3528c4e5ca7bcc972f7130e71",
             "policy_version": "2026-02-23",
             "composition_version": "2026-02-23",
             "mapping_version": "2026-02-23",
@@ -504,11 +500,11 @@
               "route_kind": "business_action",
               "route_catalog_version": "2026-03-11.v2",
               "parent_ref_text": "共享服务中心",
-              "entity_name": "239A候选验证部",
+              "entity_name": "候选验证部239A",
               "effective_date": "2026-03-26",
               "intent_schema_version": "assistant.intent.v1",
-              "context_hash": "78671824d722fc280d585216ba36235a04d741bdc8a36a1e816ed9efb2e9dc73",
-              "intent_hash": "7d436c6fb3e77a04d665e3fdc8f5315b550b71201837467290ca74bebb9f112a"
+              "context_hash": "4ad907f99e26a01e4c9ed794f1d3e0194538b5ee12d81267fe0cbd808ec5fe20",
+              "intent_hash": "9a432a64d4a0e1140cda52d00f52caf1e4b2a956295654dad6be2a3b91b40431"
             },
             "route_decision": {
               "route_kind": "business_action",
@@ -569,12 +565,12 @@
               "version_tuple": {
                 "parent_candidate_id": "TP290BSSC2",
                 "parent_org_code": "TP290BSSC2",
-                "parent_event_uuid": "019d6f15-efc9-7d29-9e2f-d9500e2bb3f1",
-                "parent_updated_at": "2026-04-08T21:53:21.865598Z",
+                "parent_event_uuid": "019d7a4a-a7cf-77c0-a889-e2a57d74e6c6",
+                "parent_updated_at": "2026-04-11T02:06:46.223518Z",
                 "effective_date": "2026-03-26"
               },
               "confirm_ttl_seconds": 900,
-              "expires_at": "2026-04-08T22:09:01Z",
+              "expires_at": "2026-04-11T02:22:06Z",
               "skill_execution_plan": {
                 "selected_skills": [
                   "org.orgunit_create"
@@ -595,7 +591,7 @@
                 "changes": [
                   {
                     "field": "name",
-                    "after": "239A候选验证部"
+                    "after": "候选验证部239A"
                   },
                   {
                     "field": "effective_date",
@@ -604,10 +600,9 @@
                 ]
               }
             },
-            "pending_draft_summary": "上级组织：共享服务中心；新建组织：239A候选验证部；生效日期：2026-03-26",
+            "pending_draft_summary": "上级组织：共享服务中心；新建组织：候选验证部239A；生效日期：2026-03-26",
             "candidates": [
               {
-                "org_id": 10000002,
                 "candidate_id": "TP290BSSC1",
                 "candidate_code": "TP290BSSC1",
                 "name": "共享服务中心",
@@ -617,7 +612,6 @@
                 "match_score": 0.8
               },
               {
-                "org_id": 10000004,
                 "candidate_id": "TP290BSSC2",
                 "candidate_code": "TP290BSSC2",
                 "name": "共享服务中心",
@@ -635,7 +629,7 @@
             "dry_run": {
               "diff": [
                 {
-                  "after": "239A候选验证部",
+                  "after": "候选验证部239A",
                   "field": "name"
                 },
                 {
@@ -650,25 +644,25 @@
               "explain": "计划已生成，等待确认后可提交",
               "retrieval": {},
               "would_commit": false,
-              "plan_hash": "62ce1ad8073e215454df2e914dbdee5976c5f50f8132b1dd715b6c54bd8c93b4"
+              "plan_hash": "e5094e61220e0bd196afbf20783dbb1f7ec8d1aeafee37154f2dcf146d9a9159"
             },
             "commit_reply": {
               "outcome": "pending",
-              "message": "请确认：本次创建的上级组织是否就是名称为“共享服务中心”的部门？如果有多个同名组织，请提供其编码或更多描述信息。"
+              "message": "请确认：是否以“共享服务中心”作为唯一父组织标识？如果该名称在系统中可能不唯一，是否有对应的组织编码或其他唯一标识可以提供？"
             },
-            "created_at": "2026-04-09T05:54:01.033591+08:00",
-            "updated_at": "2026-04-08T21:54:02.190779033Z"
+            "created_at": "2026-04-11T10:07:06.41247+08:00",
+            "updated_at": "2026-04-11T02:07:07.776779481Z"
           }
         ]
       },
       "latest_turn": {
-        "turn_id": "turn_706b6844a6a94632a75f54c0a24b7345",
-        "user_input": "请在父组织共享服务中心下新建239A候选验证部，生效日期2026-03-26",
+        "turn_id": "turn_d13388e5fef646db9ce2b77d4b504cd1",
+        "user_input": "请在父组织共享服务中心下新建候选验证部239A，生效日期2026-03-26",
         "state": "confirmed",
         "phase": "await_commit_confirm",
         "risk_tier": "high",
-        "request_id": "assistant_3fcc3bbe65264b07bda617fd5ce0d8bd",
-        "trace_id": "4355aafb0fc04568bba76b84c5be0e04",
+        "request_id": "assistant_896bbfd486194f7bb840f91412c34007",
+        "trace_id": "3ac363b3528c4e5ca7bcc972f7130e71",
         "policy_version": "2026-02-23",
         "composition_version": "2026-02-23",
         "mapping_version": "2026-02-23",
@@ -678,11 +672,11 @@
           "route_kind": "business_action",
           "route_catalog_version": "2026-03-11.v2",
           "parent_ref_text": "共享服务中心",
-          "entity_name": "239A候选验证部",
+          "entity_name": "候选验证部239A",
           "effective_date": "2026-03-26",
           "intent_schema_version": "assistant.intent.v1",
-          "context_hash": "78671824d722fc280d585216ba36235a04d741bdc8a36a1e816ed9efb2e9dc73",
-          "intent_hash": "7d436c6fb3e77a04d665e3fdc8f5315b550b71201837467290ca74bebb9f112a"
+          "context_hash": "4ad907f99e26a01e4c9ed794f1d3e0194538b5ee12d81267fe0cbd808ec5fe20",
+          "intent_hash": "9a432a64d4a0e1140cda52d00f52caf1e4b2a956295654dad6be2a3b91b40431"
         },
         "route_decision": {
           "route_kind": "business_action",
@@ -743,12 +737,12 @@
           "version_tuple": {
             "parent_candidate_id": "TP290BSSC2",
             "parent_org_code": "TP290BSSC2",
-            "parent_event_uuid": "019d6f15-efc9-7d29-9e2f-d9500e2bb3f1",
-            "parent_updated_at": "2026-04-08T21:53:21.865598Z",
+            "parent_event_uuid": "019d7a4a-a7cf-77c0-a889-e2a57d74e6c6",
+            "parent_updated_at": "2026-04-11T02:06:46.223518Z",
             "effective_date": "2026-03-26"
           },
           "confirm_ttl_seconds": 900,
-          "expires_at": "2026-04-08T22:09:01Z",
+          "expires_at": "2026-04-11T02:22:06Z",
           "skill_execution_plan": {
             "selected_skills": [
               "org.orgunit_create"
@@ -769,7 +763,7 @@
             "changes": [
               {
                 "field": "name",
-                "after": "239A候选验证部"
+                "after": "候选验证部239A"
               },
               {
                 "field": "effective_date",
@@ -778,10 +772,9 @@
             ]
           }
         },
-        "pending_draft_summary": "上级组织：共享服务中心；新建组织：239A候选验证部；生效日期：2026-03-26",
+        "pending_draft_summary": "上级组织：共享服务中心；新建组织：候选验证部239A；生效日期：2026-03-26",
         "candidates": [
           {
-            "org_id": 10000002,
             "candidate_id": "TP290BSSC1",
             "candidate_code": "TP290BSSC1",
             "name": "共享服务中心",
@@ -791,7 +784,6 @@
             "match_score": 0.8
           },
           {
-            "org_id": 10000004,
             "candidate_id": "TP290BSSC2",
             "candidate_code": "TP290BSSC2",
             "name": "共享服务中心",
@@ -809,7 +801,7 @@
         "dry_run": {
           "diff": [
             {
-              "after": "239A候选验证部",
+              "after": "候选验证部239A",
               "field": "name"
             },
             {
@@ -824,14 +816,14 @@
           "explain": "计划已生成，等待确认后可提交",
           "retrieval": {},
           "would_commit": false,
-          "plan_hash": "62ce1ad8073e215454df2e914dbdee5976c5f50f8132b1dd715b6c54bd8c93b4"
+          "plan_hash": "e5094e61220e0bd196afbf20783dbb1f7ec8d1aeafee37154f2dcf146d9a9159"
         },
         "commit_reply": {
           "outcome": "pending",
-          "message": "请确认：本次创建的上级组织是否就是名称为“共享服务中心”的部门？如果有多个同名组织，请提供其编码或更多描述信息。"
+          "message": "请确认：是否以“共享服务中心”作为唯一父组织标识？如果该名称在系统中可能不唯一，是否有对应的组织编码或其他唯一标识可以提供？"
         },
-        "created_at": "2026-04-09T05:54:01.033591+08:00",
-        "updated_at": "2026-04-08T21:54:02.190779033Z"
+        "created_at": "2026-04-11T10:07:06.41247+08:00",
+        "updated_at": "2026-04-11T02:07:07.776779481Z"
       }
     },
     {
@@ -839,84 +831,84 @@
       "input": "是的",
       "bubble": {
         "count": 1,
-        "bindingKey": "conv_77673e160f5247e594790c35b600cced::turn_706b6844a6a94632a75f54c0a24b7345::assistant_3fcc3bbe65264b07bda617fd5ce0d8bd",
-        "conversationId": "conv_77673e160f5247e594790c35b600cced",
-        "turnId": "turn_706b6844a6a94632a75f54c0a24b7345",
-        "requestId": "assistant_3fcc3bbe65264b07bda617fd5ce0d8bd",
-        "text": "上级组织：共享服务中心；新建组织：239A候选验证部；生效日期：2026-03-26 task_id: 906f5154-aacd-42f2-b32c-9e34d31d51c9 · succeeded Selected: 共享服务中心 org_code: O000001 parent_org_code: TP290BSSC2 effective_date: 2026-03-26 event_type: CREATE"
+        "bindingKey": "conv_3f72add2c85c43c199868f6f0c9b93ca::turn_d13388e5fef646db9ce2b77d4b504cd1::assistant_896bbfd486194f7bb840f91412c34007",
+        "conversationId": "conv_3f72add2c85c43c199868f6f0c9b93ca",
+        "turnId": "turn_d13388e5fef646db9ce2b77d4b504cd1",
+        "requestId": "assistant_896bbfd486194f7bb840f91412c34007",
+        "text": "上级组织：共享服务中心；新建组织：候选验证部239A；生效日期：2026-03-26 task_id: 31ed23e0-d5e5-4933-ae46-20c7d39dfdf2 · succeeded Selected: 共享服务中心 org_code: O000001 parent_org_code: TP290BSSC2 effective_date: 2026-03-26 event_type: CREATE"
       },
       "conversation": {
-        "conversation_id": "conv_77673e160f5247e594790c35b600cced",
-        "tenant_id": "7a826e0e-cae9-4abc-ac4a-cec17c38169f",
-        "actor_id": "d902f936-e7c7-4f45-a3ba-8900c38c02a2",
+        "conversation_id": "conv_3f72add2c85c43c199868f6f0c9b93ca",
+        "tenant_id": "0f597b52-82f5-4229-9846-25608521a15d",
+        "actor_id": "ff0ee258-fbc2-48dd-88c5-cf6b5034ec26",
         "actor_role": "tenant-admin",
         "state": "committed",
         "current_phase": "committed",
         "state_transitions": [
           {
-            "id": 1656,
-            "request_id": "assistant_e2af5aa7fa414203ad014e3cf8e68615",
-            "trace_id": "b01223777fd54a4eadfa09507a830246",
+            "id": 1936,
+            "request_id": "assistant_1bbb460ff45a449b937793a3dbe16425",
+            "trace_id": "3cf42721a8fc4e048ea9b028631ab4b7",
             "from_state": "init",
             "to_state": "validated",
             "from_phase": "init",
             "to_phase": "idle",
             "reason_code": "conversation_created",
-            "actor_id": "d902f936-e7c7-4f45-a3ba-8900c38c02a2",
-            "changed_at": "2026-04-09T05:53:52.018186+08:00"
+            "actor_id": "ff0ee258-fbc2-48dd-88c5-cf6b5034ec26",
+            "changed_at": "2026-04-11T10:07:02.611573+08:00"
           },
           {
-            "id": 1657,
-            "turn_id": "turn_706b6844a6a94632a75f54c0a24b7345",
-            "request_id": "assistant_3fcc3bbe65264b07bda617fd5ce0d8bd",
-            "trace_id": "4355aafb0fc04568bba76b84c5be0e04",
+            "id": 1937,
+            "turn_id": "turn_d13388e5fef646db9ce2b77d4b504cd1",
+            "request_id": "assistant_896bbfd486194f7bb840f91412c34007",
+            "trace_id": "3ac363b3528c4e5ca7bcc972f7130e71",
             "from_state": "init",
             "to_state": "validated",
             "from_phase": "idle",
             "to_phase": "await_candidate_pick",
             "reason_code": "turn_created",
-            "actor_id": "d902f936-e7c7-4f45-a3ba-8900c38c02a2",
-            "changed_at": "2026-04-09T05:54:01.033591+08:00"
+            "actor_id": "ff0ee258-fbc2-48dd-88c5-cf6b5034ec26",
+            "changed_at": "2026-04-11T10:07:06.41247+08:00"
           },
           {
-            "id": 1658,
-            "turn_id": "turn_706b6844a6a94632a75f54c0a24b7345",
+            "id": 1938,
+            "turn_id": "turn_d13388e5fef646db9ce2b77d4b504cd1",
             "turn_action": "confirm",
-            "request_id": "assistant_3fcc3bbe65264b07bda617fd5ce0d8bd",
-            "trace_id": "4355aafb0fc04568bba76b84c5be0e04",
+            "request_id": "assistant_896bbfd486194f7bb840f91412c34007",
+            "trace_id": "3ac363b3528c4e5ca7bcc972f7130e71",
             "from_state": "validated",
             "to_state": "confirmed",
             "from_phase": "await_candidate_pick",
             "to_phase": "await_commit_confirm",
             "reason_code": "confirmed",
-            "actor_id": "d902f936-e7c7-4f45-a3ba-8900c38c02a2",
-            "changed_at": "2026-04-09T05:54:02.190779+08:00"
+            "actor_id": "ff0ee258-fbc2-48dd-88c5-cf6b5034ec26",
+            "changed_at": "2026-04-11T10:07:07.776779+08:00"
           },
           {
-            "turn_id": "turn_706b6844a6a94632a75f54c0a24b7345",
+            "turn_id": "turn_d13388e5fef646db9ce2b77d4b504cd1",
             "turn_action": "commit",
-            "request_id": "assistant_3fcc3bbe65264b07bda617fd5ce0d8bd",
-            "trace_id": "4355aafb0fc04568bba76b84c5be0e04",
+            "request_id": "assistant_896bbfd486194f7bb840f91412c34007",
+            "trace_id": "3ac363b3528c4e5ca7bcc972f7130e71",
             "from_state": "confirmed",
             "to_state": "committed",
             "from_phase": "await_commit_confirm",
             "to_phase": "committed",
             "reason_code": "committed",
-            "actor_id": "d902f936-e7c7-4f45-a3ba-8900c38c02a2",
-            "changed_at": "2026-04-08T21:54:02.493393839Z"
+            "actor_id": "ff0ee258-fbc2-48dd-88c5-cf6b5034ec26",
+            "changed_at": "2026-04-11T02:07:08.755037167Z"
           }
         ],
-        "created_at": "2026-04-09T05:53:52.018186+08:00",
-        "updated_at": "2026-04-08T21:54:02.493393839Z",
+        "created_at": "2026-04-11T10:07:02.611573+08:00",
+        "updated_at": "2026-04-11T02:07:08.755037167Z",
         "turns": [
           {
-            "turn_id": "turn_706b6844a6a94632a75f54c0a24b7345",
-            "user_input": "请在父组织共享服务中心下新建239A候选验证部，生效日期2026-03-26",
+            "turn_id": "turn_d13388e5fef646db9ce2b77d4b504cd1",
+            "user_input": "请在父组织共享服务中心下新建候选验证部239A，生效日期2026-03-26",
             "state": "committed",
             "phase": "committed",
             "risk_tier": "high",
-            "request_id": "assistant_3fcc3bbe65264b07bda617fd5ce0d8bd",
-            "trace_id": "4355aafb0fc04568bba76b84c5be0e04",
+            "request_id": "assistant_896bbfd486194f7bb840f91412c34007",
+            "trace_id": "3ac363b3528c4e5ca7bcc972f7130e71",
             "policy_version": "2026-02-23",
             "composition_version": "2026-02-23",
             "mapping_version": "2026-02-23",
@@ -926,11 +918,11 @@
               "route_kind": "business_action",
               "route_catalog_version": "2026-03-11.v2",
               "parent_ref_text": "共享服务中心",
-              "entity_name": "239A候选验证部",
+              "entity_name": "候选验证部239A",
               "effective_date": "2026-03-26",
               "intent_schema_version": "assistant.intent.v1",
-              "context_hash": "78671824d722fc280d585216ba36235a04d741bdc8a36a1e816ed9efb2e9dc73",
-              "intent_hash": "7d436c6fb3e77a04d665e3fdc8f5315b550b71201837467290ca74bebb9f112a"
+              "context_hash": "4ad907f99e26a01e4c9ed794f1d3e0194538b5ee12d81267fe0cbd808ec5fe20",
+              "intent_hash": "9a432a64d4a0e1140cda52d00f52caf1e4b2a956295654dad6be2a3b91b40431"
             },
             "route_decision": {
               "route_kind": "business_action",
@@ -991,12 +983,12 @@
               "version_tuple": {
                 "effective_date": "2026-03-26",
                 "parent_org_code": "TP290BSSC2",
-                "parent_event_uuid": "019d6f15-efc9-7d29-9e2f-d9500e2bb3f1",
-                "parent_updated_at": "2026-04-08T21:53:21.865598Z",
+                "parent_event_uuid": "019d7a4a-a7cf-77c0-a889-e2a57d74e6c6",
+                "parent_updated_at": "2026-04-11T02:06:46.223518Z",
                 "parent_candidate_id": "TP290BSSC2"
               },
               "confirm_ttl_seconds": 900,
-              "expires_at": "2026-04-08T22:09:01Z",
+              "expires_at": "2026-04-11T02:22:06Z",
               "skill_execution_plan": {
                 "selected_skills": [
                   "org.orgunit_create"
@@ -1017,7 +1009,7 @@
                 "changes": [
                   {
                     "field": "name",
-                    "after": "239A候选验证部"
+                    "after": "候选验证部239A"
                   },
                   {
                     "field": "effective_date",
@@ -1026,10 +1018,9 @@
                 ]
               }
             },
-            "pending_draft_summary": "上级组织：共享服务中心；新建组织：239A候选验证部；生效日期：2026-03-26",
+            "pending_draft_summary": "上级组织：共享服务中心；新建组织：候选验证部239A；生效日期：2026-03-26",
             "candidates": [
               {
-                "org_id": 10000002,
                 "candidate_id": "TP290BSSC1",
                 "candidate_code": "TP290BSSC1",
                 "name": "共享服务中心",
@@ -1039,7 +1030,6 @@
                 "match_score": 0.8
               },
               {
-                "org_id": 10000004,
                 "candidate_id": "TP290BSSC2",
                 "candidate_code": "TP290BSSC2",
                 "name": "共享服务中心",
@@ -1057,7 +1047,7 @@
             "dry_run": {
               "diff": [
                 {
-                  "after": "239A候选验证部",
+                  "after": "候选验证部239A",
                   "field": "name"
                 },
                 {
@@ -1072,32 +1062,32 @@
               "explain": "计划已生成，等待确认后可提交",
               "retrieval": {},
               "would_commit": false,
-              "plan_hash": "62ce1ad8073e215454df2e914dbdee5976c5f50f8132b1dd715b6c54bd8c93b4"
+              "plan_hash": "e5094e61220e0bd196afbf20783dbb1f7ec8d1aeafee37154f2dcf146d9a9159"
             },
             "commit_result": {
               "org_code": "O000001",
               "parent_org_code": "TP290BSSC2",
               "effective_date": "2026-03-26",
               "event_type": "CREATE",
-              "event_uuid": "019d6f16-8e76-7b73-bbea-17b70593aedb"
+              "event_uuid": "019d7a4a-ff9a-77b6-9e2a-623b2022e1fe"
             },
             "commit_reply": {
               "outcome": "pending",
-              "message": "请确认：本次创建的上级组织是否就是名称为“共享服务中心”的部门？如果有多个同名组织，请提供其编码或更多描述信息。"
+              "message": "请确认：是否以“共享服务中心”作为唯一父组织标识？如果该名称在系统中可能不唯一，是否有对应的组织编码或其他唯一标识可以提供？"
             },
-            "created_at": "2026-04-09T05:54:01.033591+08:00",
-            "updated_at": "2026-04-08T21:54:02.493393839Z"
+            "created_at": "2026-04-11T10:07:06.41247+08:00",
+            "updated_at": "2026-04-11T02:07:08.755037167Z"
           }
         ]
       },
       "latest_turn": {
-        "turn_id": "turn_706b6844a6a94632a75f54c0a24b7345",
-        "user_input": "请在父组织共享服务中心下新建239A候选验证部，生效日期2026-03-26",
+        "turn_id": "turn_d13388e5fef646db9ce2b77d4b504cd1",
+        "user_input": "请在父组织共享服务中心下新建候选验证部239A，生效日期2026-03-26",
         "state": "committed",
         "phase": "committed",
         "risk_tier": "high",
-        "request_id": "assistant_3fcc3bbe65264b07bda617fd5ce0d8bd",
-        "trace_id": "4355aafb0fc04568bba76b84c5be0e04",
+        "request_id": "assistant_896bbfd486194f7bb840f91412c34007",
+        "trace_id": "3ac363b3528c4e5ca7bcc972f7130e71",
         "policy_version": "2026-02-23",
         "composition_version": "2026-02-23",
         "mapping_version": "2026-02-23",
@@ -1107,11 +1097,11 @@
           "route_kind": "business_action",
           "route_catalog_version": "2026-03-11.v2",
           "parent_ref_text": "共享服务中心",
-          "entity_name": "239A候选验证部",
+          "entity_name": "候选验证部239A",
           "effective_date": "2026-03-26",
           "intent_schema_version": "assistant.intent.v1",
-          "context_hash": "78671824d722fc280d585216ba36235a04d741bdc8a36a1e816ed9efb2e9dc73",
-          "intent_hash": "7d436c6fb3e77a04d665e3fdc8f5315b550b71201837467290ca74bebb9f112a"
+          "context_hash": "4ad907f99e26a01e4c9ed794f1d3e0194538b5ee12d81267fe0cbd808ec5fe20",
+          "intent_hash": "9a432a64d4a0e1140cda52d00f52caf1e4b2a956295654dad6be2a3b91b40431"
         },
         "route_decision": {
           "route_kind": "business_action",
@@ -1172,12 +1162,12 @@
           "version_tuple": {
             "effective_date": "2026-03-26",
             "parent_org_code": "TP290BSSC2",
-            "parent_event_uuid": "019d6f15-efc9-7d29-9e2f-d9500e2bb3f1",
-            "parent_updated_at": "2026-04-08T21:53:21.865598Z",
+            "parent_event_uuid": "019d7a4a-a7cf-77c0-a889-e2a57d74e6c6",
+            "parent_updated_at": "2026-04-11T02:06:46.223518Z",
             "parent_candidate_id": "TP290BSSC2"
           },
           "confirm_ttl_seconds": 900,
-          "expires_at": "2026-04-08T22:09:01Z",
+          "expires_at": "2026-04-11T02:22:06Z",
           "skill_execution_plan": {
             "selected_skills": [
               "org.orgunit_create"
@@ -1198,7 +1188,7 @@
             "changes": [
               {
                 "field": "name",
-                "after": "239A候选验证部"
+                "after": "候选验证部239A"
               },
               {
                 "field": "effective_date",
@@ -1207,10 +1197,9 @@
             ]
           }
         },
-        "pending_draft_summary": "上级组织：共享服务中心；新建组织：239A候选验证部；生效日期：2026-03-26",
+        "pending_draft_summary": "上级组织：共享服务中心；新建组织：候选验证部239A；生效日期：2026-03-26",
         "candidates": [
           {
-            "org_id": 10000002,
             "candidate_id": "TP290BSSC1",
             "candidate_code": "TP290BSSC1",
             "name": "共享服务中心",
@@ -1220,7 +1209,6 @@
             "match_score": 0.8
           },
           {
-            "org_id": 10000004,
             "candidate_id": "TP290BSSC2",
             "candidate_code": "TP290BSSC2",
             "name": "共享服务中心",
@@ -1238,7 +1226,7 @@
         "dry_run": {
           "diff": [
             {
-              "after": "239A候选验证部",
+              "after": "候选验证部239A",
               "field": "name"
             },
             {
@@ -1253,21 +1241,21 @@
           "explain": "计划已生成，等待确认后可提交",
           "retrieval": {},
           "would_commit": false,
-          "plan_hash": "62ce1ad8073e215454df2e914dbdee5976c5f50f8132b1dd715b6c54bd8c93b4"
+          "plan_hash": "e5094e61220e0bd196afbf20783dbb1f7ec8d1aeafee37154f2dcf146d9a9159"
         },
         "commit_result": {
           "org_code": "O000001",
           "parent_org_code": "TP290BSSC2",
           "effective_date": "2026-03-26",
           "event_type": "CREATE",
-          "event_uuid": "019d6f16-8e76-7b73-bbea-17b70593aedb"
+          "event_uuid": "019d7a4a-ff9a-77b6-9e2a-623b2022e1fe"
         },
         "commit_reply": {
           "outcome": "pending",
-          "message": "请确认：本次创建的上级组织是否就是名称为“共享服务中心”的部门？如果有多个同名组织，请提供其编码或更多描述信息。"
+          "message": "请确认：是否以“共享服务中心”作为唯一父组织标识？如果该名称在系统中可能不唯一，是否有对应的组织编码或其他唯一标识可以提供？"
         },
-        "created_at": "2026-04-09T05:54:01.033591+08:00",
-        "updated_at": "2026-04-08T21:54:02.493393839Z"
+        "created_at": "2026-04-11T10:07:06.41247+08:00",
+        "updated_at": "2026-04-11T02:07:08.755037167Z"
       }
     },
     {
@@ -1275,84 +1263,84 @@
       "input": "",
       "bubble": {
         "count": 1,
-        "bindingKey": "conv_77673e160f5247e594790c35b600cced::turn_706b6844a6a94632a75f54c0a24b7345::assistant_3fcc3bbe65264b07bda617fd5ce0d8bd",
-        "conversationId": "conv_77673e160f5247e594790c35b600cced",
-        "turnId": "turn_706b6844a6a94632a75f54c0a24b7345",
-        "requestId": "assistant_3fcc3bbe65264b07bda617fd5ce0d8bd",
-        "text": "上级组织：共享服务中心；新建组织：239A候选验证部；生效日期：2026-03-26 task_id: 906f5154-aacd-42f2-b32c-9e34d31d51c9 · succeeded Selected: 共享服务中心 org_code: O000001 parent_org_code: TP290BSSC2 effective_date: 2026-03-26 event_type: CREATE"
+        "bindingKey": "conv_3f72add2c85c43c199868f6f0c9b93ca::turn_d13388e5fef646db9ce2b77d4b504cd1::assistant_896bbfd486194f7bb840f91412c34007",
+        "conversationId": "conv_3f72add2c85c43c199868f6f0c9b93ca",
+        "turnId": "turn_d13388e5fef646db9ce2b77d4b504cd1",
+        "requestId": "assistant_896bbfd486194f7bb840f91412c34007",
+        "text": "上级组织：共享服务中心；新建组织：候选验证部239A；生效日期：2026-03-26 task_id: 31ed23e0-d5e5-4933-ae46-20c7d39dfdf2 · succeeded Selected: 共享服务中心 org_code: O000001 parent_org_code: TP290BSSC2 effective_date: 2026-03-26 event_type: CREATE"
       },
       "conversation": {
-        "conversation_id": "conv_77673e160f5247e594790c35b600cced",
-        "tenant_id": "7a826e0e-cae9-4abc-ac4a-cec17c38169f",
-        "actor_id": "d902f936-e7c7-4f45-a3ba-8900c38c02a2",
+        "conversation_id": "conv_3f72add2c85c43c199868f6f0c9b93ca",
+        "tenant_id": "0f597b52-82f5-4229-9846-25608521a15d",
+        "actor_id": "ff0ee258-fbc2-48dd-88c5-cf6b5034ec26",
         "actor_role": "tenant-admin",
         "state": "committed",
         "current_phase": "committed",
         "state_transitions": [
           {
-            "id": 1656,
-            "request_id": "assistant_e2af5aa7fa414203ad014e3cf8e68615",
-            "trace_id": "b01223777fd54a4eadfa09507a830246",
+            "id": 1936,
+            "request_id": "assistant_1bbb460ff45a449b937793a3dbe16425",
+            "trace_id": "3cf42721a8fc4e048ea9b028631ab4b7",
             "from_state": "init",
             "to_state": "validated",
             "from_phase": "init",
             "to_phase": "idle",
             "reason_code": "conversation_created",
-            "actor_id": "d902f936-e7c7-4f45-a3ba-8900c38c02a2",
-            "changed_at": "2026-04-09T05:53:52.018186+08:00"
+            "actor_id": "ff0ee258-fbc2-48dd-88c5-cf6b5034ec26",
+            "changed_at": "2026-04-11T10:07:02.611573+08:00"
           },
           {
-            "id": 1657,
-            "turn_id": "turn_706b6844a6a94632a75f54c0a24b7345",
-            "request_id": "assistant_3fcc3bbe65264b07bda617fd5ce0d8bd",
-            "trace_id": "4355aafb0fc04568bba76b84c5be0e04",
+            "id": 1937,
+            "turn_id": "turn_d13388e5fef646db9ce2b77d4b504cd1",
+            "request_id": "assistant_896bbfd486194f7bb840f91412c34007",
+            "trace_id": "3ac363b3528c4e5ca7bcc972f7130e71",
             "from_state": "init",
             "to_state": "validated",
             "from_phase": "idle",
             "to_phase": "await_candidate_pick",
             "reason_code": "turn_created",
-            "actor_id": "d902f936-e7c7-4f45-a3ba-8900c38c02a2",
-            "changed_at": "2026-04-09T05:54:01.033591+08:00"
+            "actor_id": "ff0ee258-fbc2-48dd-88c5-cf6b5034ec26",
+            "changed_at": "2026-04-11T10:07:06.41247+08:00"
           },
           {
-            "id": 1658,
-            "turn_id": "turn_706b6844a6a94632a75f54c0a24b7345",
+            "id": 1938,
+            "turn_id": "turn_d13388e5fef646db9ce2b77d4b504cd1",
             "turn_action": "confirm",
-            "request_id": "assistant_3fcc3bbe65264b07bda617fd5ce0d8bd",
-            "trace_id": "4355aafb0fc04568bba76b84c5be0e04",
+            "request_id": "assistant_896bbfd486194f7bb840f91412c34007",
+            "trace_id": "3ac363b3528c4e5ca7bcc972f7130e71",
             "from_state": "validated",
             "to_state": "confirmed",
             "from_phase": "await_candidate_pick",
             "to_phase": "await_commit_confirm",
             "reason_code": "confirmed",
-            "actor_id": "d902f936-e7c7-4f45-a3ba-8900c38c02a2",
-            "changed_at": "2026-04-09T05:54:02.190779+08:00"
+            "actor_id": "ff0ee258-fbc2-48dd-88c5-cf6b5034ec26",
+            "changed_at": "2026-04-11T10:07:07.776779+08:00"
           },
           {
-            "turn_id": "turn_706b6844a6a94632a75f54c0a24b7345",
+            "turn_id": "turn_d13388e5fef646db9ce2b77d4b504cd1",
             "turn_action": "commit",
-            "request_id": "assistant_3fcc3bbe65264b07bda617fd5ce0d8bd",
-            "trace_id": "4355aafb0fc04568bba76b84c5be0e04",
+            "request_id": "assistant_896bbfd486194f7bb840f91412c34007",
+            "trace_id": "3ac363b3528c4e5ca7bcc972f7130e71",
             "from_state": "confirmed",
             "to_state": "committed",
             "from_phase": "await_commit_confirm",
             "to_phase": "committed",
             "reason_code": "committed",
-            "actor_id": "d902f936-e7c7-4f45-a3ba-8900c38c02a2",
-            "changed_at": "2026-04-08T21:54:02.493393839Z"
+            "actor_id": "ff0ee258-fbc2-48dd-88c5-cf6b5034ec26",
+            "changed_at": "2026-04-11T02:07:08.755037167Z"
           }
         ],
-        "created_at": "2026-04-09T05:53:52.018186+08:00",
-        "updated_at": "2026-04-08T21:54:02.493393839Z",
+        "created_at": "2026-04-11T10:07:02.611573+08:00",
+        "updated_at": "2026-04-11T02:07:08.755037167Z",
         "turns": [
           {
-            "turn_id": "turn_706b6844a6a94632a75f54c0a24b7345",
-            "user_input": "请在父组织共享服务中心下新建239A候选验证部，生效日期2026-03-26",
+            "turn_id": "turn_d13388e5fef646db9ce2b77d4b504cd1",
+            "user_input": "请在父组织共享服务中心下新建候选验证部239A，生效日期2026-03-26",
             "state": "committed",
             "phase": "committed",
             "risk_tier": "high",
-            "request_id": "assistant_3fcc3bbe65264b07bda617fd5ce0d8bd",
-            "trace_id": "4355aafb0fc04568bba76b84c5be0e04",
+            "request_id": "assistant_896bbfd486194f7bb840f91412c34007",
+            "trace_id": "3ac363b3528c4e5ca7bcc972f7130e71",
             "policy_version": "2026-02-23",
             "composition_version": "2026-02-23",
             "mapping_version": "2026-02-23",
@@ -1362,11 +1350,11 @@
               "route_kind": "business_action",
               "route_catalog_version": "2026-03-11.v2",
               "parent_ref_text": "共享服务中心",
-              "entity_name": "239A候选验证部",
+              "entity_name": "候选验证部239A",
               "effective_date": "2026-03-26",
               "intent_schema_version": "assistant.intent.v1",
-              "context_hash": "78671824d722fc280d585216ba36235a04d741bdc8a36a1e816ed9efb2e9dc73",
-              "intent_hash": "7d436c6fb3e77a04d665e3fdc8f5315b550b71201837467290ca74bebb9f112a"
+              "context_hash": "4ad907f99e26a01e4c9ed794f1d3e0194538b5ee12d81267fe0cbd808ec5fe20",
+              "intent_hash": "9a432a64d4a0e1140cda52d00f52caf1e4b2a956295654dad6be2a3b91b40431"
             },
             "route_decision": {
               "route_kind": "business_action",
@@ -1427,12 +1415,12 @@
               "version_tuple": {
                 "effective_date": "2026-03-26",
                 "parent_org_code": "TP290BSSC2",
-                "parent_event_uuid": "019d6f15-efc9-7d29-9e2f-d9500e2bb3f1",
-                "parent_updated_at": "2026-04-08T21:53:21.865598Z",
+                "parent_event_uuid": "019d7a4a-a7cf-77c0-a889-e2a57d74e6c6",
+                "parent_updated_at": "2026-04-11T02:06:46.223518Z",
                 "parent_candidate_id": "TP290BSSC2"
               },
               "confirm_ttl_seconds": 900,
-              "expires_at": "2026-04-08T22:09:01Z",
+              "expires_at": "2026-04-11T02:22:06Z",
               "skill_execution_plan": {
                 "selected_skills": [
                   "org.orgunit_create"
@@ -1453,7 +1441,7 @@
                 "changes": [
                   {
                     "field": "name",
-                    "after": "239A候选验证部"
+                    "after": "候选验证部239A"
                   },
                   {
                     "field": "effective_date",
@@ -1462,10 +1450,9 @@
                 ]
               }
             },
-            "pending_draft_summary": "上级组织：共享服务中心；新建组织：239A候选验证部；生效日期：2026-03-26",
+            "pending_draft_summary": "上级组织：共享服务中心；新建组织：候选验证部239A；生效日期：2026-03-26",
             "candidates": [
               {
-                "org_id": 10000002,
                 "candidate_id": "TP290BSSC1",
                 "candidate_code": "TP290BSSC1",
                 "name": "共享服务中心",
@@ -1475,7 +1462,6 @@
                 "match_score": 0.8
               },
               {
-                "org_id": 10000004,
                 "candidate_id": "TP290BSSC2",
                 "candidate_code": "TP290BSSC2",
                 "name": "共享服务中心",
@@ -1493,7 +1479,7 @@
             "dry_run": {
               "diff": [
                 {
-                  "after": "239A候选验证部",
+                  "after": "候选验证部239A",
                   "field": "name"
                 },
                 {
@@ -1508,32 +1494,32 @@
               "explain": "计划已生成，等待确认后可提交",
               "retrieval": {},
               "would_commit": false,
-              "plan_hash": "62ce1ad8073e215454df2e914dbdee5976c5f50f8132b1dd715b6c54bd8c93b4"
+              "plan_hash": "e5094e61220e0bd196afbf20783dbb1f7ec8d1aeafee37154f2dcf146d9a9159"
             },
             "commit_result": {
               "org_code": "O000001",
               "parent_org_code": "TP290BSSC2",
               "effective_date": "2026-03-26",
               "event_type": "CREATE",
-              "event_uuid": "019d6f16-8e76-7b73-bbea-17b70593aedb"
+              "event_uuid": "019d7a4a-ff9a-77b6-9e2a-623b2022e1fe"
             },
             "commit_reply": {
               "outcome": "pending",
-              "message": "请确认：本次创建的上级组织是否就是名称为“共享服务中心”的部门？如果有多个同名组织，请提供其编码或更多描述信息。"
+              "message": "请确认：是否以“共享服务中心”作为唯一父组织标识？如果该名称在系统中可能不唯一，是否有对应的组织编码或其他唯一标识可以提供？"
             },
-            "created_at": "2026-04-09T05:54:01.033591+08:00",
-            "updated_at": "2026-04-08T21:54:02.493393839Z"
+            "created_at": "2026-04-11T10:07:06.41247+08:00",
+            "updated_at": "2026-04-11T02:07:08.755037167Z"
           }
         ]
       },
       "latest_turn": {
-        "turn_id": "turn_706b6844a6a94632a75f54c0a24b7345",
-        "user_input": "请在父组织共享服务中心下新建239A候选验证部，生效日期2026-03-26",
+        "turn_id": "turn_d13388e5fef646db9ce2b77d4b504cd1",
+        "user_input": "请在父组织共享服务中心下新建候选验证部239A，生效日期2026-03-26",
         "state": "committed",
         "phase": "committed",
         "risk_tier": "high",
-        "request_id": "assistant_3fcc3bbe65264b07bda617fd5ce0d8bd",
-        "trace_id": "4355aafb0fc04568bba76b84c5be0e04",
+        "request_id": "assistant_896bbfd486194f7bb840f91412c34007",
+        "trace_id": "3ac363b3528c4e5ca7bcc972f7130e71",
         "policy_version": "2026-02-23",
         "composition_version": "2026-02-23",
         "mapping_version": "2026-02-23",
@@ -1543,11 +1529,11 @@
           "route_kind": "business_action",
           "route_catalog_version": "2026-03-11.v2",
           "parent_ref_text": "共享服务中心",
-          "entity_name": "239A候选验证部",
+          "entity_name": "候选验证部239A",
           "effective_date": "2026-03-26",
           "intent_schema_version": "assistant.intent.v1",
-          "context_hash": "78671824d722fc280d585216ba36235a04d741bdc8a36a1e816ed9efb2e9dc73",
-          "intent_hash": "7d436c6fb3e77a04d665e3fdc8f5315b550b71201837467290ca74bebb9f112a"
+          "context_hash": "4ad907f99e26a01e4c9ed794f1d3e0194538b5ee12d81267fe0cbd808ec5fe20",
+          "intent_hash": "9a432a64d4a0e1140cda52d00f52caf1e4b2a956295654dad6be2a3b91b40431"
         },
         "route_decision": {
           "route_kind": "business_action",
@@ -1608,12 +1594,12 @@
           "version_tuple": {
             "effective_date": "2026-03-26",
             "parent_org_code": "TP290BSSC2",
-            "parent_event_uuid": "019d6f15-efc9-7d29-9e2f-d9500e2bb3f1",
-            "parent_updated_at": "2026-04-08T21:53:21.865598Z",
+            "parent_event_uuid": "019d7a4a-a7cf-77c0-a889-e2a57d74e6c6",
+            "parent_updated_at": "2026-04-11T02:06:46.223518Z",
             "parent_candidate_id": "TP290BSSC2"
           },
           "confirm_ttl_seconds": 900,
-          "expires_at": "2026-04-08T22:09:01Z",
+          "expires_at": "2026-04-11T02:22:06Z",
           "skill_execution_plan": {
             "selected_skills": [
               "org.orgunit_create"
@@ -1634,7 +1620,7 @@
             "changes": [
               {
                 "field": "name",
-                "after": "239A候选验证部"
+                "after": "候选验证部239A"
               },
               {
                 "field": "effective_date",
@@ -1643,10 +1629,9 @@
             ]
           }
         },
-        "pending_draft_summary": "上级组织：共享服务中心；新建组织：239A候选验证部；生效日期：2026-03-26",
+        "pending_draft_summary": "上级组织：共享服务中心；新建组织：候选验证部239A；生效日期：2026-03-26",
         "candidates": [
           {
-            "org_id": 10000002,
             "candidate_id": "TP290BSSC1",
             "candidate_code": "TP290BSSC1",
             "name": "共享服务中心",
@@ -1656,7 +1641,6 @@
             "match_score": 0.8
           },
           {
-            "org_id": 10000004,
             "candidate_id": "TP290BSSC2",
             "candidate_code": "TP290BSSC2",
             "name": "共享服务中心",
@@ -1674,7 +1658,7 @@
         "dry_run": {
           "diff": [
             {
-              "after": "239A候选验证部",
+              "after": "候选验证部239A",
               "field": "name"
             },
             {
@@ -1689,96 +1673,96 @@
           "explain": "计划已生成，等待确认后可提交",
           "retrieval": {},
           "would_commit": false,
-          "plan_hash": "62ce1ad8073e215454df2e914dbdee5976c5f50f8132b1dd715b6c54bd8c93b4"
+          "plan_hash": "e5094e61220e0bd196afbf20783dbb1f7ec8d1aeafee37154f2dcf146d9a9159"
         },
         "commit_result": {
           "org_code": "O000001",
           "parent_org_code": "TP290BSSC2",
           "effective_date": "2026-03-26",
           "event_type": "CREATE",
-          "event_uuid": "019d6f16-8e76-7b73-bbea-17b70593aedb"
+          "event_uuid": "019d7a4a-ff9a-77b6-9e2a-623b2022e1fe"
         },
         "commit_reply": {
           "outcome": "pending",
-          "message": "请确认：本次创建的上级组织是否就是名称为“共享服务中心”的部门？如果有多个同名组织，请提供其编码或更多描述信息。"
+          "message": "请确认：是否以“共享服务中心”作为唯一父组织标识？如果该名称在系统中可能不唯一，是否有对应的组织编码或其他唯一标识可以提供？"
         },
-        "created_at": "2026-04-09T05:54:01.033591+08:00",
-        "updated_at": "2026-04-08T21:54:02.493393839Z"
+        "created_at": "2026-04-11T10:07:06.41247+08:00",
+        "updated_at": "2026-04-11T02:07:08.755037167Z"
       }
     }
   ],
   "final_conversation": {
-    "conversation_id": "conv_77673e160f5247e594790c35b600cced",
-    "tenant_id": "7a826e0e-cae9-4abc-ac4a-cec17c38169f",
-    "actor_id": "d902f936-e7c7-4f45-a3ba-8900c38c02a2",
+    "conversation_id": "conv_3f72add2c85c43c199868f6f0c9b93ca",
+    "tenant_id": "0f597b52-82f5-4229-9846-25608521a15d",
+    "actor_id": "ff0ee258-fbc2-48dd-88c5-cf6b5034ec26",
     "actor_role": "tenant-admin",
     "state": "committed",
     "current_phase": "committed",
     "state_transitions": [
       {
-        "id": 1656,
-        "request_id": "assistant_e2af5aa7fa414203ad014e3cf8e68615",
-        "trace_id": "b01223777fd54a4eadfa09507a830246",
+        "id": 1936,
+        "request_id": "assistant_1bbb460ff45a449b937793a3dbe16425",
+        "trace_id": "3cf42721a8fc4e048ea9b028631ab4b7",
         "from_state": "init",
         "to_state": "validated",
         "from_phase": "init",
         "to_phase": "idle",
         "reason_code": "conversation_created",
-        "actor_id": "d902f936-e7c7-4f45-a3ba-8900c38c02a2",
-        "changed_at": "2026-04-09T05:53:52.018186+08:00"
+        "actor_id": "ff0ee258-fbc2-48dd-88c5-cf6b5034ec26",
+        "changed_at": "2026-04-11T10:07:02.611573+08:00"
       },
       {
-        "id": 1657,
-        "turn_id": "turn_706b6844a6a94632a75f54c0a24b7345",
-        "request_id": "assistant_3fcc3bbe65264b07bda617fd5ce0d8bd",
-        "trace_id": "4355aafb0fc04568bba76b84c5be0e04",
+        "id": 1937,
+        "turn_id": "turn_d13388e5fef646db9ce2b77d4b504cd1",
+        "request_id": "assistant_896bbfd486194f7bb840f91412c34007",
+        "trace_id": "3ac363b3528c4e5ca7bcc972f7130e71",
         "from_state": "init",
         "to_state": "validated",
         "from_phase": "idle",
         "to_phase": "await_candidate_pick",
         "reason_code": "turn_created",
-        "actor_id": "d902f936-e7c7-4f45-a3ba-8900c38c02a2",
-        "changed_at": "2026-04-09T05:54:01.033591+08:00"
+        "actor_id": "ff0ee258-fbc2-48dd-88c5-cf6b5034ec26",
+        "changed_at": "2026-04-11T10:07:06.41247+08:00"
       },
       {
-        "id": 1658,
-        "turn_id": "turn_706b6844a6a94632a75f54c0a24b7345",
+        "id": 1938,
+        "turn_id": "turn_d13388e5fef646db9ce2b77d4b504cd1",
         "turn_action": "confirm",
-        "request_id": "assistant_3fcc3bbe65264b07bda617fd5ce0d8bd",
-        "trace_id": "4355aafb0fc04568bba76b84c5be0e04",
+        "request_id": "assistant_896bbfd486194f7bb840f91412c34007",
+        "trace_id": "3ac363b3528c4e5ca7bcc972f7130e71",
         "from_state": "validated",
         "to_state": "confirmed",
         "from_phase": "await_candidate_pick",
         "to_phase": "await_commit_confirm",
         "reason_code": "confirmed",
-        "actor_id": "d902f936-e7c7-4f45-a3ba-8900c38c02a2",
-        "changed_at": "2026-04-09T05:54:02.190779+08:00"
+        "actor_id": "ff0ee258-fbc2-48dd-88c5-cf6b5034ec26",
+        "changed_at": "2026-04-11T10:07:07.776779+08:00"
       },
       {
-        "turn_id": "turn_706b6844a6a94632a75f54c0a24b7345",
+        "turn_id": "turn_d13388e5fef646db9ce2b77d4b504cd1",
         "turn_action": "commit",
-        "request_id": "assistant_3fcc3bbe65264b07bda617fd5ce0d8bd",
-        "trace_id": "4355aafb0fc04568bba76b84c5be0e04",
+        "request_id": "assistant_896bbfd486194f7bb840f91412c34007",
+        "trace_id": "3ac363b3528c4e5ca7bcc972f7130e71",
         "from_state": "confirmed",
         "to_state": "committed",
         "from_phase": "await_commit_confirm",
         "to_phase": "committed",
         "reason_code": "committed",
-        "actor_id": "d902f936-e7c7-4f45-a3ba-8900c38c02a2",
-        "changed_at": "2026-04-08T21:54:02.493393839Z"
+        "actor_id": "ff0ee258-fbc2-48dd-88c5-cf6b5034ec26",
+        "changed_at": "2026-04-11T02:07:08.755037167Z"
       }
     ],
-    "created_at": "2026-04-09T05:53:52.018186+08:00",
-    "updated_at": "2026-04-08T21:54:02.493393839Z",
+    "created_at": "2026-04-11T10:07:02.611573+08:00",
+    "updated_at": "2026-04-11T02:07:08.755037167Z",
     "turns": [
       {
-        "turn_id": "turn_706b6844a6a94632a75f54c0a24b7345",
-        "user_input": "请在父组织共享服务中心下新建239A候选验证部，生效日期2026-03-26",
+        "turn_id": "turn_d13388e5fef646db9ce2b77d4b504cd1",
+        "user_input": "请在父组织共享服务中心下新建候选验证部239A，生效日期2026-03-26",
         "state": "committed",
         "phase": "committed",
         "risk_tier": "high",
-        "request_id": "assistant_3fcc3bbe65264b07bda617fd5ce0d8bd",
-        "trace_id": "4355aafb0fc04568bba76b84c5be0e04",
+        "request_id": "assistant_896bbfd486194f7bb840f91412c34007",
+        "trace_id": "3ac363b3528c4e5ca7bcc972f7130e71",
         "policy_version": "2026-02-23",
         "composition_version": "2026-02-23",
         "mapping_version": "2026-02-23",
@@ -1788,11 +1772,11 @@
           "route_kind": "business_action",
           "route_catalog_version": "2026-03-11.v2",
           "parent_ref_text": "共享服务中心",
-          "entity_name": "239A候选验证部",
+          "entity_name": "候选验证部239A",
           "effective_date": "2026-03-26",
           "intent_schema_version": "assistant.intent.v1",
-          "context_hash": "78671824d722fc280d585216ba36235a04d741bdc8a36a1e816ed9efb2e9dc73",
-          "intent_hash": "7d436c6fb3e77a04d665e3fdc8f5315b550b71201837467290ca74bebb9f112a"
+          "context_hash": "4ad907f99e26a01e4c9ed794f1d3e0194538b5ee12d81267fe0cbd808ec5fe20",
+          "intent_hash": "9a432a64d4a0e1140cda52d00f52caf1e4b2a956295654dad6be2a3b91b40431"
         },
         "route_decision": {
           "route_kind": "business_action",
@@ -1853,12 +1837,12 @@
           "version_tuple": {
             "effective_date": "2026-03-26",
             "parent_org_code": "TP290BSSC2",
-            "parent_event_uuid": "019d6f15-efc9-7d29-9e2f-d9500e2bb3f1",
-            "parent_updated_at": "2026-04-08T21:53:21.865598Z",
+            "parent_event_uuid": "019d7a4a-a7cf-77c0-a889-e2a57d74e6c6",
+            "parent_updated_at": "2026-04-11T02:06:46.223518Z",
             "parent_candidate_id": "TP290BSSC2"
           },
           "confirm_ttl_seconds": 900,
-          "expires_at": "2026-04-08T22:09:01Z",
+          "expires_at": "2026-04-11T02:22:06Z",
           "skill_execution_plan": {
             "selected_skills": [
               "org.orgunit_create"
@@ -1879,7 +1863,7 @@
             "changes": [
               {
                 "field": "name",
-                "after": "239A候选验证部"
+                "after": "候选验证部239A"
               },
               {
                 "field": "effective_date",
@@ -1888,10 +1872,9 @@
             ]
           }
         },
-        "pending_draft_summary": "上级组织：共享服务中心；新建组织：239A候选验证部；生效日期：2026-03-26",
+        "pending_draft_summary": "上级组织：共享服务中心；新建组织：候选验证部239A；生效日期：2026-03-26",
         "candidates": [
           {
-            "org_id": 10000002,
             "candidate_id": "TP290BSSC1",
             "candidate_code": "TP290BSSC1",
             "name": "共享服务中心",
@@ -1901,7 +1884,6 @@
             "match_score": 0.8
           },
           {
-            "org_id": 10000004,
             "candidate_id": "TP290BSSC2",
             "candidate_code": "TP290BSSC2",
             "name": "共享服务中心",
@@ -1919,7 +1901,7 @@
         "dry_run": {
           "diff": [
             {
-              "after": "239A候选验证部",
+              "after": "候选验证部239A",
               "field": "name"
             },
             {
@@ -1934,21 +1916,21 @@
           "explain": "计划已生成，等待确认后可提交",
           "retrieval": {},
           "would_commit": false,
-          "plan_hash": "62ce1ad8073e215454df2e914dbdee5976c5f50f8132b1dd715b6c54bd8c93b4"
+          "plan_hash": "e5094e61220e0bd196afbf20783dbb1f7ec8d1aeafee37154f2dcf146d9a9159"
         },
         "commit_result": {
           "org_code": "O000001",
           "parent_org_code": "TP290BSSC2",
           "effective_date": "2026-03-26",
           "event_type": "CREATE",
-          "event_uuid": "019d6f16-8e76-7b73-bbea-17b70593aedb"
+          "event_uuid": "019d7a4a-ff9a-77b6-9e2a-623b2022e1fe"
         },
         "commit_reply": {
           "outcome": "pending",
-          "message": "请确认：本次创建的上级组织是否就是名称为“共享服务中心”的部门？如果有多个同名组织，请提供其编码或更多描述信息。"
+          "message": "请确认：是否以“共享服务中心”作为唯一父组织标识？如果该名称在系统中可能不唯一，是否有对应的组织编码或其他唯一标识可以提供？"
         },
-        "created_at": "2026-04-09T05:54:01.033591+08:00",
-        "updated_at": "2026-04-08T21:54:02.493393839Z"
+        "created_at": "2026-04-11T10:07:06.41247+08:00",
+        "updated_at": "2026-04-11T02:07:08.755037167Z"
       }
     ]
   }

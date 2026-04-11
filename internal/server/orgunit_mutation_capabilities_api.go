@@ -50,9 +50,10 @@ type orgUnitBasicCapability struct {
 }
 
 type orgUnitMutationCapabilitiesStore interface {
-	ResolveMutationTargetEvent(ctx context.Context, tenantID string, orgID int, effectiveDate string) (orgUnitMutationTargetEvent, error)
+	ResolveOrgNodeKeyByCode(ctx context.Context, tenantID string, orgCode string) (string, error)
+	ResolveMutationTargetEvent(ctx context.Context, tenantID string, orgNodeKey string, effectiveDate string) (orgUnitMutationTargetEvent, error)
 	ListEnabledTenantFieldConfigsAsOf(ctx context.Context, tenantID string, asOf string) ([]orgUnitTenantFieldConfig, error)
-	EvaluateRescindOrgDenyReasons(ctx context.Context, tenantID string, orgID int) ([]string, error)
+	EvaluateRescindOrgDenyReasons(ctx context.Context, tenantID string, orgNodeKey string) ([]string, error)
 }
 
 func handleOrgUnitMutationCapabilitiesAPI(w http.ResponseWriter, r *http.Request, store OrgUnitStore) {
@@ -90,7 +91,7 @@ func handleOrgUnitMutationCapabilitiesAPI(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	orgID, err := store.ResolveOrgID(r.Context(), tenant.ID, normalizedCode)
+	orgNodeKey, err := capStore.ResolveOrgNodeKeyByCode(r.Context(), tenant.ID, normalizedCode)
 	if err != nil {
 		switch {
 		case errors.Is(err, orgunitpkg.ErrOrgCodeInvalid):
@@ -103,7 +104,7 @@ func handleOrgUnitMutationCapabilitiesAPI(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	target, err := capStore.ResolveMutationTargetEvent(r.Context(), tenant.ID, orgID, effectiveDate)
+	target, err := capStore.ResolveMutationTargetEvent(r.Context(), tenant.ID, orgNodeKey, effectiveDate)
 	if err != nil {
 		writeInternalAPIError(w, r, err, "orgunit_mutation_target_resolve_failed")
 		return
@@ -192,7 +193,7 @@ func handleOrgUnitMutationCapabilitiesAPI(w http.ResponseWriter, r *http.Request
 	}
 	rescindEvent := orgUnitBasicCapability{Enabled: rescindEventDecision.Enabled, DenyReasons: rescindEventDecision.DenyReasons}
 
-	rescindOrgDeny, err := capStore.EvaluateRescindOrgDenyReasons(r.Context(), tenant.ID, orgID)
+	rescindOrgDeny, err := capStore.EvaluateRescindOrgDenyReasons(r.Context(), tenant.ID, orgNodeKey)
 	if err != nil {
 		writeInternalAPIError(w, r, err, "orgunit_mutation_rescind_org_failed")
 		return

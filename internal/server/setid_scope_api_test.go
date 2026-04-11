@@ -12,12 +12,14 @@ import (
 	"testing"
 
 	"github.com/jackc/pgx/v5/pgconn"
+	orgunitpkg "github.com/jacksonlee411/Bugs-And-Blossoms/pkg/orgunit"
 )
 
 type scopeAPIStore struct {
 	listScopePackagesFn        func(context.Context, string, string) ([]ScopePackage, error)
 	listOwnedScopePackagesFn   func(context.Context, string, string, string) ([]OwnedScopePackage, error)
 	resolveSetIDFn             func(context.Context, string, string, string) (string, error)
+	resolveOrgNodeKeyByCodeFn  func(context.Context, string, string) (string, error)
 	createScopePackageFn       func(context.Context, string, string, string, string, string, string, string, string) (ScopePackage, error)
 	disableScopePackageFn      func(context.Context, string, string, string, string, string) (ScopePackage, error)
 	createScopeSubscriptionFn  func(context.Context, string, string, string, string, string, string, string, string) (ScopeSubscription, error)
@@ -43,6 +45,56 @@ func (s scopeAPIStore) ResolveSetID(ctx context.Context, tenantID string, orgUni
 		return s.resolveSetIDFn(ctx, tenantID, orgUnitID, asOfDate)
 	}
 	return "A0001", nil
+}
+func (s scopeAPIStore) ResolveOrgNodeKeyByCode(ctx context.Context, tenantID string, orgCode string) (string, error) {
+	if s.resolveOrgNodeKeyByCodeFn != nil {
+		return s.resolveOrgNodeKeyByCodeFn(ctx, tenantID, orgCode)
+	}
+	normalized, err := orgunitpkg.NormalizeOrgCode(orgCode)
+	if err != nil {
+		return "", err
+	}
+	switch normalized {
+	case "BU-001", "ROOT":
+		return encodeOrgNodeKeyFromID(10000001)
+	case "BU-002":
+		return encodeOrgNodeKeyFromID(10000002)
+	default:
+		return "", orgunitpkg.ErrOrgCodeNotFound
+	}
+}
+func (s scopeAPIStore) ResolveOrgCodeByNodeKey(_ context.Context, _ string, orgNodeKey string) (string, error) {
+	normalized, err := normalizeOrgNodeKeyInput(orgNodeKey)
+	if err != nil {
+		return "", err
+	}
+	bu1NodeKey, err := encodeOrgNodeKeyFromID(10000001)
+	if err != nil {
+		return "", err
+	}
+	bu2NodeKey, err := encodeOrgNodeKeyFromID(10000002)
+	if err != nil {
+		return "", err
+	}
+	switch normalized {
+	case bu1NodeKey:
+		return "BU-001", nil
+	case bu2NodeKey:
+		return "BU-002", nil
+	default:
+		return "", orgunitpkg.ErrOrgNodeKeyNotFound
+	}
+}
+func (s scopeAPIStore) ResolveOrgCodesByNodeKeys(ctx context.Context, tenantID string, orgNodeKeys []string) (map[string]string, error) {
+	resolved := make(map[string]string, len(orgNodeKeys))
+	for _, orgNodeKey := range orgNodeKeys {
+		orgCode, err := s.ResolveOrgCodeByNodeKey(ctx, tenantID, orgNodeKey)
+		if err != nil {
+			return nil, err
+		}
+		resolved[orgNodeKey] = orgCode
+	}
+	return resolved, nil
 }
 func (s scopeAPIStore) CreateGlobalSetID(context.Context, string, string, string, string) error {
 	return nil
@@ -385,7 +437,7 @@ func TestHandleScopePackagesAPI_Post(t *testing.T) {
 	})
 
 	t.Run("invalid effective date", func(t *testing.T) {
-		body := bytes.NewBufferString(`{"scope_code":"jobcatalog","owner_setid":"A0001","business_unit_id":"10000001","name":"Pkg","effective_date":"bad","request_id":"r1"}`)
+		body := bytes.NewBufferString(`{"scope_code":"jobcatalog","owner_setid":"A0001","business_unit_org_code":"BU-001","name":"Pkg","effective_date":"bad","request_id":"r1"}`)
 		req := httptest.NewRequest(http.MethodPost, "/org/api/scope-packages", body)
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
@@ -396,7 +448,7 @@ func TestHandleScopePackagesAPI_Post(t *testing.T) {
 	})
 
 	t.Run("effective date required", func(t *testing.T) {
-		body := bytes.NewBufferString(`{"scope_code":"jobcatalog","owner_setid":"A0001","business_unit_id":"10000001","name":"Pkg","effective_date":"","request_id":"r1"}`)
+		body := bytes.NewBufferString(`{"scope_code":"jobcatalog","owner_setid":"A0001","business_unit_org_code":"BU-001","name":"Pkg","effective_date":"","request_id":"r1"}`)
 		req := httptest.NewRequest(http.MethodPost, "/org/api/scope-packages", body)
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
@@ -407,7 +459,7 @@ func TestHandleScopePackagesAPI_Post(t *testing.T) {
 	})
 
 	t.Run("invalid request after effective date parse", func(t *testing.T) {
-		body := bytes.NewBufferString(`{"scope_code":"jobcatalog","owner_setid":"A0001","business_unit_id":"10000001","name":"Pkg","effective_date":"2026-01-01","request_id":""}`)
+		body := bytes.NewBufferString(`{"scope_code":"jobcatalog","owner_setid":"A0001","business_unit_org_code":"BU-001","name":"Pkg","effective_date":"2026-01-01","request_id":""}`)
 		req := httptest.NewRequest(http.MethodPost, "/org/api/scope-packages", body)
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
@@ -421,7 +473,7 @@ func TestHandleScopePackagesAPI_Post(t *testing.T) {
 	})
 
 	t.Run("reserved code", func(t *testing.T) {
-		body := bytes.NewBufferString(`{"scope_code":"jobcatalog","package_code":"DEFLT","owner_setid":"A0001","business_unit_id":"10000001","name":"Pkg","effective_date":"2026-01-01","request_id":"r1"}`)
+		body := bytes.NewBufferString(`{"scope_code":"jobcatalog","package_code":"DEFLT","owner_setid":"A0001","business_unit_org_code":"BU-001","name":"Pkg","effective_date":"2026-01-01","request_id":"r1"}`)
 		req := httptest.NewRequest(http.MethodPost, "/org/api/scope-packages", body)
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
@@ -432,7 +484,7 @@ func TestHandleScopePackagesAPI_Post(t *testing.T) {
 	})
 
 	t.Run("invalid code", func(t *testing.T) {
-		body := bytes.NewBufferString(`{"scope_code":"jobcatalog","package_code":"bad-code","owner_setid":"A0001","business_unit_id":"10000001","name":"Pkg","effective_date":"2026-01-01","request_id":"r1"}`)
+		body := bytes.NewBufferString(`{"scope_code":"jobcatalog","package_code":"bad-code","owner_setid":"A0001","business_unit_org_code":"BU-001","name":"Pkg","effective_date":"2026-01-01","request_id":"r1"}`)
 		req := httptest.NewRequest(http.MethodPost, "/org/api/scope-packages", body)
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
@@ -443,7 +495,7 @@ func TestHandleScopePackagesAPI_Post(t *testing.T) {
 	})
 
 	t.Run("create error", func(t *testing.T) {
-		body := bytes.NewBufferString(`{"scope_code":"jobcatalog","package_code":"PKG1","owner_setid":"A0001","business_unit_id":"10000001","name":"Pkg","effective_date":"2026-01-01","request_id":"r1"}`)
+		body := bytes.NewBufferString(`{"scope_code":"jobcatalog","package_code":"PKG1","owner_setid":"A0001","business_unit_org_code":"BU-001","name":"Pkg","effective_date":"2026-01-01","request_id":"r1"}`)
 		req := httptest.NewRequest(http.MethodPost, "/org/api/scope-packages", body)
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
@@ -458,7 +510,7 @@ func TestHandleScopePackagesAPI_Post(t *testing.T) {
 	})
 
 	t.Run("owner context forbidden", func(t *testing.T) {
-		body := bytes.NewBufferString(`{"scope_code":"jobcatalog","package_code":"PKG1","owner_setid":"B0001","business_unit_id":"10000001","name":"Pkg","effective_date":"2026-01-01","request_id":"r1"}`)
+		body := bytes.NewBufferString(`{"scope_code":"jobcatalog","package_code":"PKG1","owner_setid":"B0001","business_unit_org_code":"BU-001","name":"Pkg","effective_date":"2026-01-01","request_id":"r1"}`)
 		req := httptest.NewRequest(http.MethodPost, "/org/api/scope-packages", body)
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
@@ -472,7 +524,7 @@ func TestHandleScopePackagesAPI_Post(t *testing.T) {
 	})
 
 	t.Run("success", func(t *testing.T) {
-		body := bytes.NewBufferString(`{"scope_code":"jobcatalog","package_code":"","owner_setid":"A0001","business_unit_id":"10000001","name":"Pkg","effective_date":"2026-01-01","request_id":"r1"}`)
+		body := bytes.NewBufferString(`{"scope_code":"jobcatalog","package_code":"","owner_setid":"A0001","business_unit_org_code":"BU-001","name":"Pkg","effective_date":"2026-01-01","request_id":"r1"}`)
 		req := httptest.NewRequest(http.MethodPost, "/org/api/scope-packages", body)
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
@@ -492,7 +544,7 @@ func TestHandleScopePackagesAPI_Post(t *testing.T) {
 
 func TestHandleScopePackageDisableAPI(t *testing.T) {
 	t.Run("tenant missing", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodPost, "/org/api/scope-packages/p1/disable", strings.NewReader(`{"owner_setid":"A0001","business_unit_id":"10000001","effective_date":"2026-01-01","request_id":"r1"}`))
+		req := httptest.NewRequest(http.MethodPost, "/org/api/scope-packages/p1/disable", strings.NewReader(`{"owner_setid":"A0001","business_unit_org_code":"BU-001","effective_date":"2026-01-01","request_id":"r1"}`))
 		rec := httptest.NewRecorder()
 		handleScopePackageDisableAPI(rec, req, scopeAPIStore{})
 		if rec.Code != http.StatusInternalServerError {
@@ -541,7 +593,7 @@ func TestHandleScopePackageDisableAPI(t *testing.T) {
 	})
 
 	t.Run("missing request id", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodPost, "/org/api/scope-packages/p1/disable", strings.NewReader(`{"owner_setid":"A0001","business_unit_id":"10000001","effective_date":"2026-01-01","request_id":""}`))
+		req := httptest.NewRequest(http.MethodPost, "/org/api/scope-packages/p1/disable", strings.NewReader(`{"owner_setid":"A0001","business_unit_org_code":"BU-001","effective_date":"2026-01-01","request_id":""}`))
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
 		handleScopePackageDisableAPI(rec, req, scopeAPIStore{})
@@ -551,7 +603,7 @@ func TestHandleScopePackageDisableAPI(t *testing.T) {
 	})
 
 	t.Run("missing effective date", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodPost, "/org/api/scope-packages/p1/disable", strings.NewReader(`{"owner_setid":"A0001","business_unit_id":"10000001","request_id":"r1"}`))
+		req := httptest.NewRequest(http.MethodPost, "/org/api/scope-packages/p1/disable", strings.NewReader(`{"owner_setid":"A0001","business_unit_org_code":"BU-001","request_id":"r1"}`))
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
 		handleScopePackageDisableAPI(rec, req, scopeAPIStore{})
@@ -561,7 +613,7 @@ func TestHandleScopePackageDisableAPI(t *testing.T) {
 	})
 
 	t.Run("invalid effective date", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodPost, "/org/api/scope-packages/p1/disable", strings.NewReader(`{"owner_setid":"A0001","business_unit_id":"10000001","effective_date":"bad","request_id":"r1"}`))
+		req := httptest.NewRequest(http.MethodPost, "/org/api/scope-packages/p1/disable", strings.NewReader(`{"owner_setid":"A0001","business_unit_org_code":"BU-001","effective_date":"bad","request_id":"r1"}`))
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
 		handleScopePackageDisableAPI(rec, req, scopeAPIStore{})
@@ -571,7 +623,7 @@ func TestHandleScopePackageDisableAPI(t *testing.T) {
 	})
 
 	t.Run("store error", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodPost, "/org/api/scope-packages/p1/disable", strings.NewReader(`{"owner_setid":"A0001","business_unit_id":"10000001","effective_date":"2026-01-01","request_id":"r1"}`))
+		req := httptest.NewRequest(http.MethodPost, "/org/api/scope-packages/p1/disable", strings.NewReader(`{"owner_setid":"A0001","business_unit_org_code":"BU-001","effective_date":"2026-01-01","request_id":"r1"}`))
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
 		handleScopePackageDisableAPI(rec, req, scopeAPIStore{
@@ -585,7 +637,7 @@ func TestHandleScopePackageDisableAPI(t *testing.T) {
 	})
 
 	t.Run("owner context forbidden", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodPost, "/org/api/scope-packages/p1/disable", strings.NewReader(`{"owner_setid":"B0001","business_unit_id":"10000001","effective_date":"2026-01-01","request_id":"r1"}`))
+		req := httptest.NewRequest(http.MethodPost, "/org/api/scope-packages/p1/disable", strings.NewReader(`{"owner_setid":"B0001","business_unit_org_code":"BU-001","effective_date":"2026-01-01","request_id":"r1"}`))
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
 		handleScopePackageDisableAPI(rec, req, scopeAPIStore{})
@@ -598,7 +650,7 @@ func TestHandleScopePackageDisableAPI(t *testing.T) {
 	})
 
 	t.Run("success", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodPost, "/org/api/scope-packages/p1/disable", strings.NewReader(`{"owner_setid":"A0001","business_unit_id":"10000001","effective_date":"2026-01-01","request_id":"r1"}`))
+		req := httptest.NewRequest(http.MethodPost, "/org/api/scope-packages/p1/disable", strings.NewReader(`{"owner_setid":"A0001","business_unit_org_code":"BU-001","effective_date":"2026-01-01","request_id":"r1"}`))
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
 		handleScopePackageDisableAPI(rec, req, scopeAPIStore{
@@ -707,7 +759,7 @@ func TestHandleScopeSubscriptionsAPI(t *testing.T) {
 	})
 
 	t.Run("post invalid date", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodPost, "/org/api/scope-subscriptions", strings.NewReader(`{"setid":"A0001","scope_code":"jobcatalog","package_id":"p1","package_owner":"tenant","business_unit_id":"10000001","effective_date":"bad","request_id":"r1"}`))
+		req := httptest.NewRequest(http.MethodPost, "/org/api/scope-subscriptions", strings.NewReader(`{"setid":"A0001","scope_code":"jobcatalog","package_id":"p1","package_owner":"tenant","business_unit_org_code":"BU-001","effective_date":"bad","request_id":"r1"}`))
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
 		handleScopeSubscriptionsAPI(rec, req, scopeAPIStore{})
@@ -717,7 +769,7 @@ func TestHandleScopeSubscriptionsAPI(t *testing.T) {
 	})
 
 	t.Run("post invalid request after effective date parse", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodPost, "/org/api/scope-subscriptions", strings.NewReader(`{"setid":"A0001","scope_code":"jobcatalog","package_id":"p1","package_owner":"tenant","business_unit_id":"10000001","effective_date":"2026-01-01","request_id":""}`))
+		req := httptest.NewRequest(http.MethodPost, "/org/api/scope-subscriptions", strings.NewReader(`{"setid":"A0001","scope_code":"jobcatalog","package_id":"p1","package_owner":"tenant","business_unit_org_code":"BU-001","effective_date":"2026-01-01","request_id":""}`))
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
 		handleScopeSubscriptionsAPI(rec, req, scopeAPIStore{})
@@ -730,7 +782,7 @@ func TestHandleScopeSubscriptionsAPI(t *testing.T) {
 	})
 
 	t.Run("post owner invalid", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodPost, "/org/api/scope-subscriptions", strings.NewReader(`{"setid":"A0001","scope_code":"jobcatalog","package_id":"p1","package_owner":"nope","business_unit_id":"10000001","effective_date":"2026-01-01","request_id":"r1"}`))
+		req := httptest.NewRequest(http.MethodPost, "/org/api/scope-subscriptions", strings.NewReader(`{"setid":"A0001","scope_code":"jobcatalog","package_id":"p1","package_owner":"nope","business_unit_org_code":"BU-001","effective_date":"2026-01-01","request_id":"r1"}`))
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
 		handleScopeSubscriptionsAPI(rec, req, scopeAPIStore{})
@@ -740,7 +792,7 @@ func TestHandleScopeSubscriptionsAPI(t *testing.T) {
 	})
 
 	t.Run("post context forbidden", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodPost, "/org/api/scope-subscriptions", strings.NewReader(`{"setid":"B0001","scope_code":"jobcatalog","package_id":"p1","package_owner":"tenant","business_unit_id":"10000001","effective_date":"2026-01-01","request_id":"r1"}`))
+		req := httptest.NewRequest(http.MethodPost, "/org/api/scope-subscriptions", strings.NewReader(`{"setid":"B0001","scope_code":"jobcatalog","package_id":"p1","package_owner":"tenant","business_unit_org_code":"BU-001","effective_date":"2026-01-01","request_id":"r1"}`))
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
 		handleScopeSubscriptionsAPI(rec, req, scopeAPIStore{})
@@ -753,7 +805,7 @@ func TestHandleScopeSubscriptionsAPI(t *testing.T) {
 	})
 
 	t.Run("post store error", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodPost, "/org/api/scope-subscriptions", strings.NewReader(`{"setid":"A0001","scope_code":"jobcatalog","package_id":"p1","package_owner":"tenant","business_unit_id":"10000001","effective_date":"2026-01-01","request_id":"r1"}`))
+		req := httptest.NewRequest(http.MethodPost, "/org/api/scope-subscriptions", strings.NewReader(`{"setid":"A0001","scope_code":"jobcatalog","package_id":"p1","package_owner":"tenant","business_unit_org_code":"BU-001","effective_date":"2026-01-01","request_id":"r1"}`))
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
 		handleScopeSubscriptionsAPI(rec, req, scopeAPIStore{
@@ -767,7 +819,7 @@ func TestHandleScopeSubscriptionsAPI(t *testing.T) {
 	})
 
 	t.Run("post success", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodPost, "/org/api/scope-subscriptions", strings.NewReader(`{"setid":"A0001","scope_code":"jobcatalog","package_id":"p1","package_owner":"tenant","business_unit_id":"10000001","effective_date":"2026-01-01","request_id":"r1"}`))
+		req := httptest.NewRequest(http.MethodPost, "/org/api/scope-subscriptions", strings.NewReader(`{"setid":"A0001","scope_code":"jobcatalog","package_id":"p1","package_owner":"tenant","business_unit_org_code":"BU-001","effective_date":"2026-01-01","request_id":"r1"}`))
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
 		handleScopeSubscriptionsAPI(rec, req, scopeAPIStore{
@@ -1068,7 +1120,7 @@ func TestEnforceSetIDWriteContext(t *testing.T) {
 
 	t.Run("business unit required", func(t *testing.T) {
 		rec := httptest.NewRecorder()
-		ok := enforceSetIDWriteContext(rec, newReq(), scopeAPIStore{}, "t1", "", "2026-01-01", "A0001", "")
+		ok := enforceSetIDWriteContext(rec, newReq(), scopeAPIStore{}, "t1", "", "2026-01-01", "A0001", "", scopeAPIStore{})
 		if ok {
 			t.Fatalf("expected false")
 		}
@@ -1082,14 +1134,14 @@ func TestEnforceSetIDWriteContext(t *testing.T) {
 
 	t.Run("business unit invalid", func(t *testing.T) {
 		rec := httptest.NewRecorder()
-		ok := enforceSetIDWriteContext(rec, newReq(), scopeAPIStore{}, "t1", "bad", "2026-01-01", "A0001", "")
+		ok := enforceSetIDWriteContext(rec, newReq(), scopeAPIStore{}, "t1", "bad\x7f", "2026-01-01", "A0001", "", scopeAPIStore{})
 		if ok {
 			t.Fatalf("expected false")
 		}
-		if rec.Code != http.StatusForbidden {
+		if rec.Code != http.StatusBadRequest {
 			t.Fatalf("status=%d", rec.Code)
 		}
-		if !strings.Contains(rec.Body.String(), scopeReasonOwnerContextRequired) {
+		if !strings.Contains(rec.Body.String(), "business_unit_org_code_invalid") {
 			t.Fatalf("unexpected body: %q", rec.Body.String())
 		}
 	})
@@ -1101,7 +1153,7 @@ func TestEnforceSetIDWriteContext(t *testing.T) {
 				return "", errors.New("SETID_NOT_FOUND")
 			},
 		}
-		ok := enforceSetIDWriteContext(rec, newReq(), store, "t1", "10000001", "2026-01-01", "A0001", "")
+		ok := enforceSetIDWriteContext(rec, newReq(), store, "t1", "BU-001", "2026-01-01", "A0001", "", store)
 		if ok {
 			t.Fatalf("expected false")
 		}
@@ -1120,7 +1172,7 @@ func TestEnforceSetIDWriteContext(t *testing.T) {
 				return "", nil
 			},
 		}
-		ok := enforceSetIDWriteContext(rec, newReq(), store, "t1", "10000001", "2026-01-01", "A0001", "")
+		ok := enforceSetIDWriteContext(rec, newReq(), store, "t1", "BU-001", "2026-01-01", "A0001", "", store)
 		if ok {
 			t.Fatalf("expected false")
 		}
@@ -1134,7 +1186,7 @@ func TestEnforceSetIDWriteContext(t *testing.T) {
 
 	t.Run("owner setid mismatch", func(t *testing.T) {
 		rec := httptest.NewRecorder()
-		ok := enforceSetIDWriteContext(rec, newReq(), scopeAPIStore{}, "t1", "10000001", "2026-01-01", "B0001", "")
+		ok := enforceSetIDWriteContext(rec, newReq(), scopeAPIStore{}, "t1", "BU-001", "2026-01-01", "B0001", "", scopeAPIStore{})
 		if ok {
 			t.Fatalf("expected false")
 		}
@@ -1148,7 +1200,7 @@ func TestEnforceSetIDWriteContext(t *testing.T) {
 
 	t.Run("setid mismatch", func(t *testing.T) {
 		rec := httptest.NewRecorder()
-		ok := enforceSetIDWriteContext(rec, newReq(), scopeAPIStore{}, "t1", "10000001", "2026-01-01", "", "B0001")
+		ok := enforceSetIDWriteContext(rec, newReq(), scopeAPIStore{}, "t1", "BU-001", "2026-01-01", "", "B0001", scopeAPIStore{})
 		if ok {
 			t.Fatalf("expected false")
 		}
@@ -1162,7 +1214,7 @@ func TestEnforceSetIDWriteContext(t *testing.T) {
 
 	t.Run("success", func(t *testing.T) {
 		rec := httptest.NewRecorder()
-		ok := enforceSetIDWriteContext(rec, newReq(), scopeAPIStore{}, "t1", "10000001", "2026-01-01", "A0001", "")
+		ok := enforceSetIDWriteContext(rec, newReq(), scopeAPIStore{}, "t1", "BU-001", "2026-01-01", "A0001", "", scopeAPIStore{})
 		if !ok {
 			t.Fatalf("expected true")
 		}

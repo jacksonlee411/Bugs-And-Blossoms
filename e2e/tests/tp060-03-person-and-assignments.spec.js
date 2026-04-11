@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 import { expectExplicitError } from "./helpers/error-message-assert";
+import { expectNoLegacyOrgFields, legacyOrgFieldPattern } from "./helpers/org-contract-assert";
 
 async function ensureKratosIdentity(ctx, kratosAdminURL, { traits, identifier, password }) {
   const resp = await ctx.request.post(`${kratosAdminURL}/admin/identities`, {
@@ -182,6 +183,7 @@ test("tp060-03: person + assignments (with allocated_fte)", async ({ browser }) 
   );
   expect(optionsResp.status(), await optionsResp.text()).toBe(200);
   const options = await optionsResp.json();
+  expectNoLegacyOrgFields(options, "tp060-03 position options");
   const jobProfileOpt = (options.job_profiles || []).find((p) => p.job_profile_code === jobProfileCode);
   expect(jobProfileOpt && jobProfileOpt.job_profile_uuid).toBeTruthy();
 
@@ -204,6 +206,7 @@ test("tp060-03: person + assignments (with allocated_fte)", async ({ browser }) 
       name: positionName
     });
     expect(created.position_uuid).toBeTruthy();
+    expectNoLegacyOrgFields(created, `tp060-03 created position ${pernr}`);
     positionIDsByPernr.set(pernr, created.position_uuid);
   }
 
@@ -248,6 +251,7 @@ test("tp060-03: person + assignments (with allocated_fte)", async ({ browser }) 
   const listLateResp = await appContext.request.get(`/org/api/positions?as_of=${encodeURIComponent(lateEffectiveDate)}`);
   expect(listLateResp.status(), await listLateResp.text()).toBe(200);
   const listLate = await listLateResp.json();
+  expectNoLegacyOrgFields(listLate, "tp060-03 late positions list");
   const disabledLate = (listLate.positions || []).find((p) => p.position_uuid === disabledPositionID);
   expect(disabledLate && disabledLate.lifecycle_status).toBe("disabled");
 
@@ -481,8 +485,10 @@ test("tp060-03: person + assignments (with allocated_fte)", async ({ browser }) 
   // UI sanity checks (MUI-only pages)
   await page.goto(`/app/staffing/positions?as_of=${asOf}&org_code=${rootOrgCode}`);
   await expect(page.getByRole("heading", { level: 2, name: "Staffing / Positions" })).toBeVisible();
+  await expect(page.locator("body")).not.toContainText(legacyOrgFieldPattern);
   await page.goto(`/app/staffing/assignments?as_of=${lateEffectiveDate}&pernr=106`);
   await expect(page.getByRole("heading", { level: 2, name: "Staffing / Assignments" })).toBeVisible();
+  await expect(page.locator("body")).not.toContainText(legacyOrgFieldPattern);
 
   await appContext.close();
 });

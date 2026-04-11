@@ -1,7 +1,7 @@
 {
   "plan": "DEV-PLAN-290B",
-  "status": "blocked",
-  "updated_at": "2026-04-08T21:54:03.387Z",
+  "status": "passed",
+  "updated_at": "2026-04-11T02:07:12.051Z",
   "formal_entry": "/app/assistant/librechat",
   "runtime_admission_gate": {
     "status": "passed",
@@ -17,9 +17,7 @@
     "fail-closed behavior changed",
     "assistant formal submit pipeline changed"
   ],
-  "blockers": [
-    "Case 2: 数据基线未就绪：Case2 基线探针未就绪（phase=await_missing_fields validation=missing_parent_ref_text,missing_entity_name）"
-  ],
+  "blockers": [],
   "fixed_assets": {
     "root": "docs/dev-records/assets/dev-plan-290b",
     "pattern": [
@@ -57,18 +55,21 @@
     },
     {
       "id": 2,
-      "status": "blocked",
+      "status": "passed",
       "input_sequence": [
         "在 AI治理办公室 下新建 人力资源部2，生效日期 2026-01-01",
         "确认"
       ],
-      "blocking_reason": "数据基线未就绪：Case2 基线探针未就绪（phase=await_missing_fields validation=missing_parent_ref_text,missing_entity_name）",
+      "task_terminal_status": "succeeded",
       "artifacts": {
         "page": "docs/dev-records/assets/dev-plan-290b/case-2-page.png",
         "dom": "docs/dev-records/assets/dev-plan-290b/case-2-dom.json",
         "network": "docs/dev-records/assets/dev-plan-290b/case-2-network.har",
         "trace": "docs/dev-records/assets/dev-plan-290b/case-2-trace.zip",
-        "conversation_snapshot": "docs/dev-records/assets/dev-plan-290b/case-2-conversation-snapshot.json"
+        "phase_assertions": "docs/dev-records/assets/dev-plan-290b/case-2-phase-assertions.json",
+        "intent_action_assertions": "docs/dev-records/assets/dev-plan-290b/case-2-intent-action-assertions.json",
+        "conversation_snapshot": "docs/dev-records/assets/dev-plan-290b/case-2-conversation-snapshot.json",
+        "model_proof": "docs/dev-records/assets/dev-plan-290b/case-2-model-proof.json"
       }
     },
     {
@@ -95,7 +96,7 @@
       "id": 4,
       "status": "passed",
       "input_sequence": [
-        "请在父组织共享服务中心下新建239A候选验证部，生效日期2026-03-26",
+        "请在父组织共享服务中心下新建候选验证部239A，生效日期2026-03-26",
         "选第2个",
         "是的"
       ],

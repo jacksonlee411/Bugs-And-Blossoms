@@ -65,7 +65,7 @@ interface RegistryFormState {
   fieldKey: string
   personalizationMode: 'tenant_only' | 'setid'
   orgApplicability: 'tenant' | 'business_unit'
-  businessUnitID: string
+  businessUnitOrgCode: string
   required: boolean
   visible: boolean
   maintainable: boolean
@@ -189,7 +189,7 @@ function defaultRegistryForm(asOf: string): RegistryFormState {
     fieldKey: '',
     personalizationMode: 'setid',
     orgApplicability: 'business_unit',
-    businessUnitID: '',
+    businessUnitOrgCode: '',
     required: true,
     visible: true,
     maintainable: true,
@@ -235,7 +235,7 @@ function toRegistryFormFromRow(row: SetIDStrategyRegistryItem): RegistryFormStat
     fieldKey: row.field_key,
     personalizationMode: row.personalization_mode,
     orgApplicability: row.org_applicability,
-    businessUnitID: row.business_unit_id ?? '',
+    businessUnitOrgCode: row.business_unit_org_code ?? '',
     required: row.required,
     visible: row.visible,
     maintainable: row.maintainable,
@@ -259,7 +259,7 @@ function strategyRowID(item: SetIDStrategyRegistryItem): string {
     item.capability_key,
     item.field_key,
     item.org_applicability,
-    item.business_unit_id ?? '-',
+    item.business_unit_org_code ?? '-',
     item.effective_date
   ].join(':')
 }
@@ -633,10 +633,10 @@ export function SetIDGovernancePage({ section }: { section: SetIDPageSection }) 
     () =>
       mergeFreeSoloOptions(
         [],
-        [...strategyCatalogRows.map((item) => item.business_unit_id ?? ''), ...bindings.map((item) => item.org_unit_id)],
-        registryForm.businessUnitID
+        strategyCatalogRows.map((item) => item.business_unit_org_code ?? ''),
+        registryForm.businessUnitOrgCode
       ),
-    [bindings, registryForm.businessUnitID, strategyCatalogRows]
+    [registryForm.businessUnitOrgCode, strategyCatalogRows]
   )
   const defaultRuleOptions = useMemo(
     () => mergeFreeSoloOptions([], strategyCatalogRows.map((item) => item.default_rule_ref ?? ''), registryForm.defaultRuleRef),
@@ -747,7 +747,7 @@ export function SetIDGovernancePage({ section }: { section: SetIDPageSection }) 
       { field: 'priority_mode', headerName: 'priority_mode', minWidth: 170 },
       { field: 'local_override_mode', headerName: 'local_override_mode', minWidth: 170 },
       { field: 'org_applicability', headerName: 'org_applicability', minWidth: 120 },
-      { field: 'business_unit_id', headerName: 'business_unit_id', minWidth: 140 },
+      { field: 'business_unit_org_code', headerName: 'business_unit_org_code', minWidth: 160 },
       {
         field: 'policy',
         headerName: 'required / visible / default',
@@ -859,7 +859,7 @@ export function SetIDGovernancePage({ section }: { section: SetIDPageSection }) 
         field_key: registryForm.fieldKey.trim(),
         personalization_mode: registryForm.personalizationMode,
         org_applicability: registryForm.orgApplicability,
-        business_unit_id: registryForm.businessUnitID.trim(),
+        business_unit_org_code: registryForm.businessUnitOrgCode.trim(),
         required: registryForm.required,
         visible: registryForm.visible,
         maintainable: registryForm.maintainable,
@@ -902,7 +902,7 @@ export function SetIDGovernancePage({ section }: { section: SetIDPageSection }) 
         capability_key: row.capability_key,
         field_key: row.field_key,
         org_applicability: row.org_applicability,
-        business_unit_id: row.business_unit_id ?? '',
+        business_unit_org_code: row.business_unit_org_code ?? '',
         effective_date: row.effective_date,
         disable_as_of: disableAsOf,
         request_id: newRequestID('mui-setid-strategy-disable')
@@ -1183,7 +1183,7 @@ export function SetIDGovernancePage({ section }: { section: SetIDPageSection }) 
                 <table border={0} cellPadding={8} cellSpacing={0} style={{ borderCollapse: 'collapse', width: '100%' }}>
                   <thead>
                     <tr style={{ background: '#fff' }}>
-                      <th align='left'>org_unit_id</th>
+                      <th align='left'>org_code</th>
                       <th align='left'>setid</th>
                       <th align='left'>valid_from</th>
                       <th align='left'>valid_to</th>
@@ -1191,8 +1191,8 @@ export function SetIDGovernancePage({ section }: { section: SetIDPageSection }) 
                   </thead>
                   <tbody>
                     {bindings.map((item) => (
-                      <tr key={`${item.org_unit_id}:${item.setid}:${item.valid_from}`} style={{ borderTop: '1px solid #eee' }}>
-                        <td>{item.org_unit_id}</td>
+                      <tr key={`${item.org_code}:${item.setid}:${item.valid_from}`} style={{ borderTop: '1px solid #eee' }}>
+                        <td>{item.org_code}</td>
                         <td>{item.setid}</td>
                         <td>{item.valid_from}</td>
                         <td>{item.valid_to}</td>
@@ -1485,7 +1485,7 @@ export function SetIDGovernancePage({ section }: { section: SetIDPageSection }) 
                       setRegistryForm((prev) => ({
                         ...prev,
                         orgApplicability: event.target.value as RegistryFormState['orgApplicability'],
-                        businessUnitID: event.target.value === 'tenant' ? '' : prev.businessUnitID
+                        businessUnitOrgCode: event.target.value === 'tenant' ? '' : prev.businessUnitOrgCode
                       }))
                     }
                   >
@@ -1496,11 +1496,11 @@ export function SetIDGovernancePage({ section }: { section: SetIDPageSection }) 
                     ))}
                   </TextField>
                   <FreeSoloDropdownField
-                    label='business_unit_id'
+                    label='business_unit_org_code'
                     disabled={hasRegistryKeyLock || registryForm.orgApplicability === 'tenant'}
-                    onChange={(nextValue) => setRegistryForm((prev) => ({ ...prev, businessUnitID: nextValue }))}
+                    onChange={(nextValue) => setRegistryForm((prev) => ({ ...prev, businessUnitOrgCode: nextValue }))}
                     options={businessUnitOptions}
-                    value={registryForm.businessUnitID}
+                    value={registryForm.businessUnitOrgCode}
                   />
                   <FreeSoloDropdownField
                     label='default_rule_ref'
@@ -1871,7 +1871,7 @@ export function SetIDGovernancePage({ section }: { section: SetIDPageSection }) 
               </Typography>
               <Typography color='text.secondary' variant='body2'>
                 field_key={registryDisableDialog.row?.field_key || '-'} · org_applicability={registryDisableDialog.row?.org_applicability || '-'} ·
-                business_unit_id={registryDisableDialog.row?.business_unit_id || '-'}
+                business_unit_org_code={registryDisableDialog.row?.business_unit_org_code || '-'}
               </Typography>
               <Typography color='text.secondary' variant='body2'>
                 effective_date={registryDisableDialog.row?.effective_date || '-'}

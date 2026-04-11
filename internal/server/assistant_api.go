@@ -2,6 +2,8 @@ package server
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -196,7 +198,8 @@ type assistantDryRunResult struct {
 }
 
 type assistantCandidate struct {
-	OrgID         int     `json:"org_id,omitempty"`
+	OrgID         int     `json:"-"`
+	OrgNodeKey    string  `json:"-"`
 	CandidateID   string  `json:"candidate_id"`
 	CandidateCode string  `json:"candidate_code"`
 	Name          string  `json:"name"`
@@ -204,6 +207,52 @@ type assistantCandidate struct {
 	AsOf          string  `json:"as_of"`
 	IsActive      bool    `json:"is_active"`
 	MatchScore    float64 `json:"match_score"`
+}
+
+func assistantCandidateNormalizedOrgNodeKey(candidate assistantCandidate) (string, bool) {
+	if orgNodeKey := strings.TrimSpace(candidate.OrgNodeKey); orgNodeKey != "" {
+		normalized, err := normalizeOrgNodeKeyInput(orgNodeKey)
+		if err == nil {
+			return normalized, true
+		}
+	}
+	if candidate.OrgID > 0 {
+		orgNodeKey, err := encodeOrgNodeKeyFromID(candidate.OrgID)
+		if err == nil {
+			return orgNodeKey, true
+		}
+	}
+	return "", false
+}
+
+func assistantSearchCandidateOrgNodeKey(item OrgUnitSearchCandidate) (string, bool) {
+	if orgNodeKey := strings.TrimSpace(item.OrgNodeKey); orgNodeKey != "" {
+		normalized, err := normalizeOrgNodeKeyInput(orgNodeKey)
+		if err == nil {
+			return normalized, true
+		}
+	}
+	if item.OrgID > 0 {
+		orgNodeKey, err := encodeOrgNodeKeyFromID(item.OrgID)
+		if err == nil {
+			return orgNodeKey, true
+		}
+	}
+	return "", false
+}
+
+func assistantOpaqueCandidateID(orgNodeKey string, name string) string {
+	normalizedOrgNodeKey, _ := normalizeOrgNodeKeyInput(strings.TrimSpace(orgNodeKey))
+	payload := strings.Join([]string{
+		"assistant_candidate",
+		normalizedOrgNodeKey,
+		strings.TrimSpace(name),
+	}, "|")
+	if payload == "assistant_candidate||" {
+		return ""
+	}
+	sum := sha256.Sum256([]byte(payload))
+	return "cand_" + hex.EncodeToString(sum[:6])
 }
 
 type assistantCommitResult struct {
@@ -1045,18 +1094,22 @@ func (s *assistantConversationService) resolveCandidates(ctx context.Context, te
 	candidates := make([]assistantCandidate, 0, len(rows))
 	for _, item := range rows {
 		path := item.Name
-		if details, detailsErr := s.orgStore.GetNodeDetails(ctx, tenantID, item.OrgID, asOf); detailsErr == nil {
-			path = strings.TrimSpace(details.FullNamePath)
-			if path == "" {
-				path = item.Name
+		orgNodeKey, _ := assistantSearchCandidateOrgNodeKey(item)
+		if orgNodeKey != "" {
+			if details, detailsErr := getNodeDetailsByVisibilityByNodeKey(ctx, s.orgStore, tenantID, orgNodeKey, asOf, false); detailsErr == nil {
+				path = strings.TrimSpace(details.FullNamePath)
+				if path == "" {
+					path = item.Name
+				}
 			}
 		}
 		candidateID := strings.TrimSpace(item.OrgCode)
 		if candidateID == "" {
-			candidateID = strconv.Itoa(item.OrgID)
+			candidateID = assistantOpaqueCandidateID(orgNodeKey, item.Name)
 		}
 		candidates = append(candidates, assistantCandidate{
 			OrgID:         item.OrgID,
+			OrgNodeKey:    orgNodeKey,
 			CandidateID:   candidateID,
 			CandidateCode: strings.TrimSpace(item.OrgCode),
 			Name:          strings.TrimSpace(item.Name),

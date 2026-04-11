@@ -71,7 +71,7 @@ function LocationProbe() {
 
 function renderPage(
   initialEntry = '/org/setid/registry?registry_view=editor',
-  section: 'registry' | 'explain' = 'registry'
+  section: 'base' | 'registry' | 'explain' = 'registry'
 ) {
   const queryClient = new QueryClient({
     defaultOptions: {
@@ -201,5 +201,24 @@ describe('SetIDGovernancePage', () => {
 
     await waitFor(() => expect(screen.getByText('Rule Effective Date')).toBeInTheDocument())
     expect(screen.queryByText('effective_date')).not.toBeInTheDocument()
+  }, 20000)
+
+  it('renders bindings with org_code-only API payloads', async () => {
+    setIDApiMocks.listSetIDBindings.mockResolvedValue({
+      bindings: [
+        {
+          org_code: 'ROOT',
+          setid: 'S2601',
+          valid_from: '2026-01-01',
+          valid_to: ''
+        }
+      ]
+    })
+
+    renderPage('/org/setid/registry?base_view=bindings', 'base')
+
+    await waitFor(() => expect(screen.getByText('Bindings')).toBeInTheDocument())
+    expect(screen.getByRole('columnheader', { name: 'org_code' })).toBeInTheDocument()
+    await waitFor(() => expect(screen.getByText('ROOT')).toBeInTheDocument())
   }, 20000)
 })

@@ -159,7 +159,7 @@ func TestResolveCreateByRequestID_Branches(t *testing.T) {
 			findByRequestFn: func(context.Context, string, string) (types.OrgUnitEvent, bool, error) {
 				return types.OrgUnitEvent{
 					EventType:     types.OrgUnitEventCreate,
-					OrgID:         10000001,
+					OrgNodeKey:    "10000001",
 					EffectiveDate: "2026-01-01",
 					EventUUID:     "e1",
 					Payload:       json.RawMessage(`{"name":"Root"}`),
@@ -181,7 +181,7 @@ func TestResolveCreateByRequestID_Branches(t *testing.T) {
 			findByRequestFn: func(context.Context, string, string) (types.OrgUnitEvent, bool, error) {
 				return types.OrgUnitEvent{
 					EventType:     types.OrgUnitEventCreate,
-					OrgID:         10000001,
+					OrgNodeKey:    "10000001",
 					EffectiveDate: "2026-01-01",
 					EventUUID:     "e1",
 					Payload:       json.RawMessage(`{"name":"Root"}`),
@@ -203,7 +203,7 @@ func TestResolveCreateByRequestID_Branches(t *testing.T) {
 			findByRequestFn: func(context.Context, string, string) (types.OrgUnitEvent, bool, error) {
 				return types.OrgUnitEvent{
 					EventType:     types.OrgUnitEventCreate,
-					OrgID:         10000001,
+					OrgNodeKey:    "10000001",
 					EffectiveDate: "2026-01-01",
 					EventUUID:     "e1",
 					Payload:       json.RawMessage(`{"org_code":" ROOT "}`),
@@ -601,7 +601,7 @@ func TestApplyCreatePolicyDefaults_FromSetIDRegistry(t *testing.T) {
 				if capabilityKey != orgUnitCreateFieldPolicyCapabilityKey {
 					return types.SetIDStrategyFieldDecision{}, false, errors.New("unexpected capability")
 				}
-				if businessUnitID != "10000001" {
+				if businessUnitID != mustEncodeTestOrgNodeKey(10000001) {
 					return types.SetIDStrategyFieldDecision{}, false, errors.New("unexpected business unit")
 				}
 				switch fieldKey {
@@ -1216,7 +1216,7 @@ func TestResolveCreateBusinessUnitID(t *testing.T) {
 		})
 		parent := "ROOT"
 		got, err := svc.resolveCreateBusinessUnitID(ctx, "t1", &parent)
-		if err != nil || got != "10000001" {
+		if err != nil || got != mustEncodeTestOrgNodeKey(10000001) {
 			t.Fatalf("got=%q err=%v", got, err)
 		}
 	})

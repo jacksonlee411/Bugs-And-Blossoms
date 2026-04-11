@@ -33,14 +33,14 @@ func (s *PositionMemoryStore) ListPositionsCurrent(_ context.Context, tenantID s
 	return append([]types.Position(nil), s.positions[tenantID]...), nil
 }
 
-func (s *PositionMemoryStore) CreatePositionCurrent(_ context.Context, tenantID string, effectiveDate string, orgUnitID string, jobProfileUUID string, capacityFTE string, name string) (types.Position, error) {
+func (s *PositionMemoryStore) CreatePositionCurrent(_ context.Context, tenantID string, effectiveDate string, orgNodeKey string, jobProfileUUID string, capacityFTE string, name string) (types.Position, error) {
 	effectiveDate = strings.TrimSpace(effectiveDate)
 	if effectiveDate == "" {
 		return types.Position{}, httperr.NewBadRequest("effective_date is required")
 	}
-	orgUnitID = strings.TrimSpace(orgUnitID)
-	if orgUnitID == "" {
-		return types.Position{}, httperr.NewBadRequest("org_unit_id is required")
+	orgNodeKey = strings.TrimSpace(orgNodeKey)
+	if orgNodeKey == "" {
+		return types.Position{}, httperr.NewBadRequest("org_node_key is required")
 	}
 	jobProfileUUID = strings.TrimSpace(jobProfileUUID)
 	if jobProfileUUID == "" {
@@ -55,7 +55,7 @@ func (s *PositionMemoryStore) CreatePositionCurrent(_ context.Context, tenantID 
 	id := "pos-" + strconv.FormatInt(time.Now().UnixNano(), 10)
 	p := types.Position{
 		PositionUUID:          id,
-		OrgUnitID:             orgUnitID,
+		OrgNodeKey:            orgNodeKey,
 		ReportsToPositionUUID: "",
 		JobCatalogSetID:       "",
 		JobCatalogSetIDAsOf:   "",
@@ -70,7 +70,7 @@ func (s *PositionMemoryStore) CreatePositionCurrent(_ context.Context, tenantID 
 	return p, nil
 }
 
-func (s *PositionMemoryStore) UpdatePositionCurrent(_ context.Context, tenantID string, positionUUID string, effectiveDate string, orgUnitID string, reportsToPositionUUID string, jobProfileUUID string, capacityFTE string, name string, lifecycleStatus string) (types.Position, error) {
+func (s *PositionMemoryStore) UpdatePositionCurrent(_ context.Context, tenantID string, positionUUID string, effectiveDate string, orgNodeKey string, reportsToPositionUUID string, jobProfileUUID string, capacityFTE string, name string, lifecycleStatus string) (types.Position, error) {
 	effectiveDate = strings.TrimSpace(effectiveDate)
 	if effectiveDate == "" {
 		return types.Position{}, httperr.NewBadRequest("effective_date is required")
@@ -79,13 +79,13 @@ func (s *PositionMemoryStore) UpdatePositionCurrent(_ context.Context, tenantID 
 	if positionUUID == "" {
 		return types.Position{}, httperr.NewBadRequest("position_uuid is required")
 	}
-	orgUnitID = strings.TrimSpace(orgUnitID)
+	orgNodeKey = strings.TrimSpace(orgNodeKey)
 	reportsToPositionUUID = strings.TrimSpace(reportsToPositionUUID)
 	jobProfileUUID = strings.TrimSpace(jobProfileUUID)
 	capacityFTE = strings.TrimSpace(capacityFTE)
 	name = strings.TrimSpace(name)
 	lifecycleStatus = strings.TrimSpace(lifecycleStatus)
-	if orgUnitID == "" && reportsToPositionUUID == "" && jobProfileUUID == "" && capacityFTE == "" && name == "" && lifecycleStatus == "" {
+	if orgNodeKey == "" && reportsToPositionUUID == "" && jobProfileUUID == "" && capacityFTE == "" && name == "" && lifecycleStatus == "" {
 		return types.Position{}, httperr.NewBadRequest("at least one patch field is required")
 	}
 
@@ -93,8 +93,8 @@ func (s *PositionMemoryStore) UpdatePositionCurrent(_ context.Context, tenantID 
 		if s.positions[tenantID][i].PositionUUID != positionUUID {
 			continue
 		}
-		if orgUnitID != "" {
-			s.positions[tenantID][i].OrgUnitID = orgUnitID
+		if orgNodeKey != "" {
+			s.positions[tenantID][i].OrgNodeKey = orgNodeKey
 		}
 		if reportsToPositionUUID != "" {
 			s.positions[tenantID][i].ReportsToPositionUUID = reportsToPositionUUID

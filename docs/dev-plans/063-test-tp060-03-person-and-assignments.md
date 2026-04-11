@@ -38,6 +38,7 @@
 **Done-C（必须，自动化回归）**
 
 - [X] `make e2e` 覆盖本子计划的最小链路（见 `e2e/tests/tp060-03-person-and-assignments.spec.js`）。
+- [X] Staffing 用户可见链路继续只暴露 `org_code`：职位 options、职位列表以及 `/app/staffing/positions`、`/app/staffing/assignments` 页面文本不得出现 `org_unit_id` / `org_node_key`。
 - [ ] 自动化补齐（对齐 `DEV-PLAN-031`）：覆盖“多切片 Valid Time（同一人两次不同 effective_date）”与“同日 upsert 可重复执行（相同输入幂等；不同输入 fail-closed=409 `STAFFING_IDEMPOTENCY_REUSED`）”。
 
 **Done-D（必须，Position/Assignment 交叉不变量：fail-closed）**

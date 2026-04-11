@@ -5,12 +5,14 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"log"
 	"net/http"
 	"strings"
 
 	"github.com/jacksonlee411/Bugs-And-Blossoms/internal/routing"
 	"github.com/jacksonlee411/Bugs-And-Blossoms/pkg/authz"
+	orgunitpkg "github.com/jacksonlee411/Bugs-And-Blossoms/pkg/orgunit"
 )
 
 const (
@@ -28,9 +30,9 @@ type setIDExplainResponse struct {
 	FunctionalAreaKey     string               `json:"functional_area_key"`
 	PolicyVersion         string               `json:"policy_version"`
 	TenantID              string               `json:"tenant_id"`
-	BusinessUnitID        string               `json:"business_unit_id"`
+	BusinessUnitOrgCode   string               `json:"business_unit_org_code"`
+	OrgCode               string               `json:"org_code,omitempty"`
 	AsOf                  string               `json:"as_of"`
-	OrgUnitID             string               `json:"org_unit_id,omitempty"`
 	ResolvedSetID         string               `json:"resolved_setid"`
 	ResolvedConfigVersion string               `json:"resolved_config_version,omitempty"`
 	Decision              string               `json:"decision"`
@@ -39,7 +41,12 @@ type setIDExplainResponse struct {
 	FieldDecisions        []setIDFieldDecision `json:"field_decisions"`
 }
 
-func handleSetIDExplainAPI(w http.ResponseWriter, r *http.Request, store SetIDGovernanceStore) {
+type setIDResolvedOrgRef struct {
+	OrgCode    string
+	OrgNodeKey string
+}
+
+func handleSetIDExplainAPI(w http.ResponseWriter, r *http.Request, store SetIDGovernanceStore, orgResolver OrgUnitCodeResolver) {
 	tenant, ok := currentTenant(r.Context())
 	if !ok {
 		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusInternalServerError, "tenant_missing", "tenant missing")
@@ -52,10 +59,10 @@ func handleSetIDExplainAPI(w http.ResponseWriter, r *http.Request, store SetIDGo
 
 	capabilityKey := strings.ToLower(strings.TrimSpace(r.URL.Query().Get("capability_key")))
 	fieldKey := strings.ToLower(strings.TrimSpace(r.URL.Query().Get("field_key")))
-	businessUnitID := strings.TrimSpace(r.URL.Query().Get("business_unit_id"))
+	businessUnitOrgCode := strings.TrimSpace(r.URL.Query().Get("business_unit_org_code"))
 	requestID := normalizeSetIDExplainRequestID(r)
-	if capabilityKey == "" || fieldKey == "" || businessUnitID == "" {
-		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "invalid_request", "capability_key/field_key/business_unit_id required")
+	if capabilityKey == "" || fieldKey == "" || businessUnitOrgCode == "" {
+		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "invalid_request", "capability_key/field_key/business_unit_org_code required")
 		return
 	}
 	asOf, err := parseRequiredQueryDay(r, "as_of")
@@ -63,13 +70,19 @@ func handleSetIDExplainAPI(w http.ResponseWriter, r *http.Request, store SetIDGo
 		writeInternalDayFieldError(w, r, err)
 		return
 	}
-	if _, err := parseOrgID8(businessUnitID); err != nil {
-		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "invalid_business_unit_id", "invalid business_unit_id")
+	businessUnitOrgCode, businessUnitOrgNodeKey, err := resolveSetIDExplainOrgCode(
+		r.Context(),
+		tenant.ID,
+		businessUnitOrgCode,
+		orgResolver,
+	)
+	if err != nil {
+		writeSetIDExplainOrgCodeError(w, r, "business_unit_org_code", err)
 		return
 	}
 	capCtx, capErr := resolveCapabilityContext(r.Context(), r, capabilityContextInput{
 		CapabilityKey:       capabilityKey,
-		BusinessUnitID:      businessUnitID,
+		BusinessUnitOrgCode: businessUnitOrgCode,
 		AsOf:                asOf,
 		RequireBusinessUnit: true,
 	})
@@ -78,7 +91,7 @@ func handleSetIDExplainAPI(w http.ResponseWriter, r *http.Request, store SetIDGo
 		return
 	}
 	capabilityKey = capCtx.CapabilityKey
-	businessUnitID = capCtx.BusinessUnitID
+	businessUnitOrgCode = capCtx.BusinessUnitOrgCode
 	asOf = capCtx.AsOf
 	functionalAreaKey, areaReasonCode, areaAllowed := evaluateFunctionalAreaGate(tenant.ID, capabilityKey)
 	if !areaAllowed {
@@ -99,21 +112,22 @@ func handleSetIDExplainAPI(w http.ResponseWriter, r *http.Request, store SetIDGo
 		return
 	}
 
-	orgUnitID := strings.TrimSpace(r.URL.Query().Get("org_unit_id"))
-	if orgUnitID == "" {
-		orgUnitID = businessUnitID
+	orgCode := strings.TrimSpace(r.URL.Query().Get("org_code"))
+	if orgCode == "" {
+		orgCode = businessUnitOrgCode
 	}
-	if _, err := parseOrgID8(orgUnitID); err != nil {
-		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "invalid_org_unit_id", "invalid org_unit_id")
+	orgCode, orgNodeKey, err := resolveSetIDExplainOrgCode(r.Context(), tenant.ID, orgCode, orgResolver)
+	if err != nil {
+		writeSetIDExplainOrgCodeError(w, r, "org_code", err)
 		return
 	}
-	dynamicRelations := preloadCapabilityDynamicRelations(r.Context(), businessUnitID)
-	if !dynamicRelations.actorManages(orgUnitID, asOf) {
+	dynamicRelations := preloadCapabilityDynamicRelations(r.Context(), businessUnitOrgCode)
+	if !dynamicRelations.actorManages(orgCode, asOf) {
 		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusForbidden, capabilityReasonContextMismatch, "capability context mismatch")
 		return
 	}
 
-	resolvedSetID, err := store.ResolveSetID(r.Context(), tenant.ID, orgUnitID, asOf)
+	resolvedSetID, err := store.ResolveSetID(r.Context(), tenant.ID, orgNodeKey, asOf)
 	if err != nil {
 		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusForbidden, capabilityReasonContextMismatch, "capability context mismatch")
 		return
@@ -125,7 +139,7 @@ func handleSetIDExplainAPI(w http.ResponseWriter, r *http.Request, store SetIDGo
 		return
 	}
 
-	fieldDecision, err := defaultSetIDStrategyRegistryStore.resolveFieldDecision(r.Context(), tenant.ID, capabilityKey, fieldKey, businessUnitID, asOf)
+	fieldDecision, err := defaultSetIDStrategyRegistryStore.resolveFieldDecision(r.Context(), tenant.ID, capabilityKey, fieldKey, businessUnitOrgNodeKey, asOf)
 	if err != nil {
 		status, code := statusCodeForFieldDecisionError(err)
 		routing.WriteError(w, r, routing.RouteClassInternalAPI, status, code, code)
@@ -137,7 +151,7 @@ func handleSetIDExplainAPI(w http.ResponseWriter, r *http.Request, store SetIDGo
 
 	traceID := traceIDFromRequestHeader(r)
 	if traceID == "" {
-		traceID = fallbackSetIDExplainTraceID(requestID, capabilityKey, businessUnitID, asOf)
+		traceID = fallbackSetIDExplainTraceID(requestID, capabilityKey, businessUnitOrgCode, asOf)
 	}
 	policyVersion := defaultPolicyActivationRuntime.activePolicyVersion(tenant.ID, capabilityKey)
 
@@ -149,9 +163,8 @@ func handleSetIDExplainAPI(w http.ResponseWriter, r *http.Request, store SetIDGo
 		FunctionalAreaKey:     functionalAreaKey,
 		PolicyVersion:         policyVersion,
 		TenantID:              tenant.ID,
-		BusinessUnitID:        businessUnitID,
+		BusinessUnitOrgCode:   businessUnitOrgCode,
 		AsOf:                  asOf,
-		OrgUnitID:             orgUnitID,
 		ResolvedSetID:         resolvedSetID,
 		ResolvedConfigVersion: policyVersion,
 		Decision:              responseDecision,
@@ -159,15 +172,58 @@ func handleSetIDExplainAPI(w http.ResponseWriter, r *http.Request, store SetIDGo
 		Level:                 level,
 		FieldDecisions:        []setIDFieldDecision{fieldDecision},
 	}
+	if !strings.EqualFold(orgCode, businessUnitOrgCode) {
+		response.OrgCode = orgCode
+	}
 	if level == explainLevelBrief {
 		response.TenantID = ""
-		response.OrgUnitID = ""
 		response.ResolvedConfigVersion = ""
 	}
 	logSetIDExplainAudit(response)
 
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	_ = json.NewEncoder(w).Encode(response)
+}
+
+func resolveSetIDOrgCodeRef(ctx context.Context, tenantID string, orgCode string, orgResolver OrgUnitCodeResolver) (setIDResolvedOrgRef, error) {
+	if orgResolver == nil {
+		return setIDResolvedOrgRef{}, errors.New("org code resolver missing")
+	}
+	normalizedOrgCode, err := orgunitpkg.NormalizeOrgCode(orgCode)
+	if err != nil {
+		return setIDResolvedOrgRef{}, err
+	}
+	orgNodeKey, err := orgResolver.ResolveOrgNodeKeyByCode(ctx, tenantID, normalizedOrgCode)
+	if err != nil {
+		return setIDResolvedOrgRef{}, err
+	}
+	normalizedOrgNodeKey, err := normalizeOrgNodeKeyInput(orgNodeKey)
+	if err != nil {
+		return setIDResolvedOrgRef{}, err
+	}
+	return setIDResolvedOrgRef{
+		OrgCode:    normalizedOrgCode,
+		OrgNodeKey: normalizedOrgNodeKey,
+	}, nil
+}
+
+func resolveSetIDExplainOrgCode(ctx context.Context, tenantID string, orgCode string, orgResolver OrgUnitCodeResolver) (string, string, error) {
+	ref, err := resolveSetIDOrgCodeRef(ctx, tenantID, orgCode, orgResolver)
+	if err != nil {
+		return "", "", err
+	}
+	return ref.OrgCode, ref.OrgNodeKey, nil
+}
+
+func writeSetIDExplainOrgCodeError(w http.ResponseWriter, r *http.Request, field string, err error) {
+	switch {
+	case errors.Is(err, orgunitpkg.ErrOrgCodeInvalid):
+		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, field+"_invalid", field+" invalid")
+	case errors.Is(err, orgunitpkg.ErrOrgCodeNotFound):
+		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusNotFound, field+"_not_found", field+" not found")
+	default:
+		writeInternalAPIError(w, r, err, "setid_explain_"+field+"_resolve_failed")
+	}
 }
 
 func statusCodeForFieldDecisionError(err error) (int, string) {
@@ -226,11 +282,11 @@ func normalizeSetIDExplainRequestID(r *http.Request) string {
 	return "setid-explain-auto"
 }
 
-func fallbackSetIDExplainTraceID(requestID string, capabilityKey string, businessUnitID string, asOf string) string {
+func fallbackSetIDExplainTraceID(requestID string, capabilityKey string, businessUnitOrgCode string, asOf string) string {
 	sum := sha256.Sum256([]byte(strings.Join([]string{
 		strings.TrimSpace(requestID),
 		strings.ToLower(strings.TrimSpace(capabilityKey)),
-		strings.TrimSpace(businessUnitID),
+		strings.TrimSpace(businessUnitOrgCode),
 		strings.TrimSpace(asOf),
 	}, "|")))
 	return hex.EncodeToString(sum[:16])

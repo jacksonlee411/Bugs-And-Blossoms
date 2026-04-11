@@ -173,7 +173,7 @@ DECLARE
   v_lock_key text;
   v_prev_effective date;
   v_last_validity daterange;
-  v_org_unit_id int;
+  v_org_node_key text;
   v_reports_to_position_uuid uuid;
   v_jobcatalog_setid text;
   v_jobcatalog_setid_as_of date;
@@ -203,7 +203,7 @@ BEGIN
   DELETE FROM staffing.position_versions
   WHERE tenant_uuid = p_tenant_uuid AND position_uuid = p_position_uuid;
 
-  v_org_unit_id := NULL;
+  v_org_node_key := NULL;
   v_reports_to_position_uuid := NULL;
   v_jobcatalog_setid := NULL;
   v_jobcatalog_setid_as_of := NULL;
@@ -234,20 +234,18 @@ BEGIN
           DETAIL = 'CREATE must be the first event';
       END IF;
 
-      v_tmp_text := NULLIF(btrim(v_row.payload->>'org_unit_id'), '');
+      v_tmp_text := NULLIF(btrim(v_row.payload->>'org_node_key'), '');
       IF v_tmp_text IS NULL THEN
         RAISE EXCEPTION USING
           MESSAGE = 'STAFFING_INVALID_ARGUMENT',
-          DETAIL = 'org_unit_id is required';
+          DETAIL = 'org_node_key is required';
       END IF;
-      BEGIN
-        v_org_unit_id := v_tmp_text::int;
-      EXCEPTION
-        WHEN invalid_text_representation THEN
-          RAISE EXCEPTION USING
-            MESSAGE = 'STAFFING_INVALID_ARGUMENT',
-            DETAIL = format('org_unit_id=%s', v_row.payload->>'org_unit_id');
-      END;
+      IF NOT orgunit.is_valid_org_node_key(v_tmp_text) THEN
+        RAISE EXCEPTION USING
+          MESSAGE = 'STAFFING_INVALID_ARGUMENT',
+          DETAIL = format('org_node_key=%s', v_row.payload->>'org_node_key');
+      END IF;
+      v_org_node_key := v_tmp_text;
 
       v_name := NULLIF(btrim(v_row.payload->>'name'), '');
 
@@ -332,21 +330,19 @@ BEGIN
           DETAIL = 'UPDATE requires prior state';
       END IF;
 
-      IF v_row.payload ? 'org_unit_id' THEN
-        v_tmp_text := NULLIF(btrim(v_row.payload->>'org_unit_id'), '');
+      IF v_row.payload ? 'org_node_key' THEN
+        v_tmp_text := NULLIF(btrim(v_row.payload->>'org_node_key'), '');
         IF v_tmp_text IS NULL THEN
           RAISE EXCEPTION USING
             MESSAGE = 'STAFFING_INVALID_ARGUMENT',
-            DETAIL = 'org_unit_id is required';
+            DETAIL = 'org_node_key is required';
         END IF;
-        BEGIN
-          v_org_unit_id := v_tmp_text::int;
-        EXCEPTION
-          WHEN invalid_text_representation THEN
-            RAISE EXCEPTION USING
-              MESSAGE = 'STAFFING_INVALID_ARGUMENT',
-              DETAIL = format('org_unit_id=%s', v_row.payload->>'org_unit_id');
-        END;
+        IF NOT orgunit.is_valid_org_node_key(v_tmp_text) THEN
+          RAISE EXCEPTION USING
+            MESSAGE = 'STAFFING_INVALID_ARGUMENT',
+            DETAIL = format('org_node_key=%s', v_row.payload->>'org_node_key');
+        END IF;
+        v_org_node_key := v_tmp_text;
       END IF;
 
       IF v_row.payload ? 'reports_to_position_uuid' THEN
@@ -427,12 +423,16 @@ BEGIN
         DETAIL = format('unexpected event_type: %s', v_row.event_type);
     END IF;
 
-    IF v_org_unit_id IS NOT NULL THEN
+    IF v_org_node_key IS NOT NULL THEN
       IF NOT EXISTS (
         SELECT 1
         FROM orgunit.org_unit_versions ouv
         WHERE ouv.tenant_uuid = p_tenant_uuid
-          AND ouv.org_id = v_org_unit_id
+          AND CASE
+            WHEN to_jsonb(ouv) ? 'org_node_key'
+              THEN btrim(COALESCE(to_jsonb(ouv)->>'org_node_key', '')) = v_org_node_key
+            ELSE NULLIF(to_jsonb(ouv)->>'org_id', '')::int = orgunit.decode_org_node_key(v_org_node_key::char(8))::int
+          END
           AND ouv.status = 'active'
           AND ouv.validity @> v_row.effective_date
         LIMIT 1
@@ -440,7 +440,7 @@ BEGIN
         RAISE EXCEPTION USING
           ERRCODE = 'P0001',
           MESSAGE = 'STAFFING_ORG_UNIT_NOT_FOUND_AS_OF',
-          DETAIL = format('org_unit_id=%s as_of=%s', v_org_unit_id, v_row.effective_date);
+          DETAIL = format('org_node_key=%s as_of=%s', v_org_node_key, v_row.effective_date);
       END IF;
     END IF;
 
@@ -451,7 +451,11 @@ BEGIN
         DETAIL = 'job_profile_uuid is required';
     END IF;
 
-    v_jobcatalog_setid := orgunit.resolve_setid(p_tenant_uuid, v_org_unit_id, v_row.effective_date);
+    v_jobcatalog_setid := orgunit.resolve_setid(
+      p_tenant_uuid,
+      v_org_node_key::char(8),
+      v_row.effective_date
+    );
     v_jobcatalog_setid_as_of := v_row.effective_date;
     SELECT package_id
     INTO v_jobcatalog_package_uuid
@@ -556,7 +560,7 @@ BEGIN
     INSERT INTO staffing.position_versions (
       tenant_uuid,
       position_uuid,
-      org_unit_id,
+      org_node_key,
       reports_to_position_uuid,
       name,
       lifecycle_status,
@@ -571,7 +575,7 @@ BEGIN
     VALUES (
       p_tenant_uuid,
       p_position_uuid,
-      v_org_unit_id,
+      v_org_node_key,
       v_reports_to_position_uuid,
       v_name,
       v_lifecycle_status,

@@ -12,12 +12,15 @@ import (
 
 type assistantOrgStoreStub struct {
 	*orgUnitMemoryStore
-	resolveOrgID int
-	resolveErr   error
-	search       []OrgUnitSearchCandidate
-	searchErr    error
-	details      OrgUnitNodeDetails
-	detailsErr   error
+	resolveOrgID        int
+	resolveErr          error
+	search              []OrgUnitSearchCandidate
+	searchErr           error
+	details             OrgUnitNodeDetails
+	detailsErr          error
+	detailsByNodeKey    OrgUnitNodeDetails
+	detailsByNodeKeyErr error
+	detailsByNodeKeyArg string
 }
 
 func (s assistantOrgStoreStub) ResolveOrgID(ctx context.Context, tenantID string, orgCode string) (int, error) {
@@ -25,6 +28,37 @@ func (s assistantOrgStoreStub) ResolveOrgID(ctx context.Context, tenantID string
 		return s.resolveOrgID, s.resolveErr
 	}
 	return s.orgUnitMemoryStore.ResolveOrgID(ctx, tenantID, orgCode)
+}
+
+func (s assistantOrgStoreStub) ResolveOrgNodeKeyByCode(ctx context.Context, tenantID string, orgCode string) (string, error) {
+	orgID, err := s.ResolveOrgID(ctx, tenantID, orgCode)
+	if err != nil {
+		return "", err
+	}
+	if orgID <= 0 {
+		return "", nil
+	}
+	return encodeOrgNodeKeyFromID(orgID)
+}
+
+func (s assistantOrgStoreStub) ResolveOrgCodeByNodeKey(ctx context.Context, tenantID string, orgNodeKey string) (string, error) {
+	orgID, err := decodeOrgNodeKeyToID(orgNodeKey)
+	if err != nil {
+		return "", err
+	}
+	return s.orgUnitMemoryStore.ResolveOrgCode(ctx, tenantID, orgID)
+}
+
+func (s assistantOrgStoreStub) ResolveOrgCodesByNodeKeys(ctx context.Context, tenantID string, orgNodeKeys []string) (map[string]string, error) {
+	out := make(map[string]string, len(orgNodeKeys))
+	for _, orgNodeKey := range orgNodeKeys {
+		code, err := s.ResolveOrgCodeByNodeKey(ctx, tenantID, orgNodeKey)
+		if err != nil {
+			return nil, err
+		}
+		out[orgNodeKey] = code
+	}
+	return out, nil
 }
 
 func (s assistantOrgStoreStub) SearchNodeCandidates(ctx context.Context, tenantID string, query string, asOfDate string, limit int) ([]OrgUnitSearchCandidate, error) {
@@ -39,6 +73,17 @@ func (s assistantOrgStoreStub) GetNodeDetails(ctx context.Context, tenantID stri
 		return s.details, s.detailsErr
 	}
 	return s.orgUnitMemoryStore.GetNodeDetails(ctx, tenantID, orgID, asOfDate)
+}
+
+func (s assistantOrgStoreStub) GetNodeDetailsByNodeKey(ctx context.Context, tenantID string, orgNodeKey string, asOfDate string) (OrgUnitNodeDetails, error) {
+	s.detailsByNodeKeyArg = orgNodeKey
+	if s.detailsByNodeKeyErr != nil || s.detailsByNodeKey.OrgID != 0 || s.detailsByNodeKey.OrgCode != "" {
+		return s.detailsByNodeKey, s.detailsByNodeKeyErr
+	}
+	if s.detailsErr != nil || s.details.OrgID != 0 || s.details.OrgCode != "" || s.orgUnitMemoryStore == nil {
+		return s.details, s.detailsErr
+	}
+	return s.orgUnitMemoryStore.GetNodeDetailsByNodeKey(ctx, tenantID, orgNodeKey, asOfDate)
 }
 
 type assistantCommitAdapterStub struct {
@@ -359,6 +404,30 @@ func TestAssistantActionRegistryAndVersionTupleHelpers(t *testing.T) {
 		stubSvc = &assistantConversationService{orgStore: assistantOrgStoreStub{orgUnitMemoryStore: store, resolveErr: errOrgUnitNotFound, search: []OrgUnitSearchCandidate{{OrgID: 11, OrgCode: "OTHER"}, {OrgID: 12, OrgCode: "DIFF"}}}}
 		if _, err := stubSvc.resolveAssistantCandidateOrgID(context.Background(), "tenant_1", assistantCandidate{CandidateCode: "FLOWER-A", AsOf: "2026-01-01"}); !errors.Is(err, errAssistantCandidateNotFound) {
 			t.Fatalf("expected candidate not found, got %v", err)
+		}
+	})
+
+	t.Run("lookup candidate details prefers node key reader", func(t *testing.T) {
+		orgNodeKey := mustOrgNodeKeyForTest(t, 10000001)
+		svc := &assistantConversationService{orgStore: assistantOrgStoreStub{
+			detailsErr: errors.New("legacy details should not be used"),
+			detailsByNodeKey: OrgUnitNodeDetails{
+				OrgID:      10000001,
+				OrgNodeKey: orgNodeKey,
+				OrgCode:    "FLOWER-A",
+				Name:       "鲜花组织",
+			},
+		}}
+		candidate, details, err := svc.lookupCandidateDetails(context.Background(), "tenant_1", "2026-01-01", []assistantCandidate{{
+			CandidateID:   "c1",
+			CandidateCode: "FLOWER-A",
+			OrgNodeKey:    orgNodeKey,
+		}}, "c1")
+		if err != nil {
+			t.Fatalf("lookup err=%v", err)
+		}
+		if candidate.OrgNodeKey != orgNodeKey || details.OrgCode != "FLOWER-A" {
+			t.Fatalf("candidate=%+v details=%+v", candidate, details)
 		}
 	})
 }

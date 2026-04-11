@@ -328,19 +328,19 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, error) {
 		handleGlobalSetIDsAPI(w, r, setidStore)
 	}))
 	router.Handle(routing.RouteClassInternalAPI, http.MethodGet, "/org/api/setid-strategy-registry", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		handleSetIDStrategyRegistryAPI(w, r)
+		handleSetIDStrategyRegistryAPI(w, r, orgStore)
 	}))
 	router.Handle(routing.RouteClassInternalAPI, http.MethodPost, "/org/api/setid-strategy-registry", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		handleSetIDStrategyRegistryAPI(w, r)
+		handleSetIDStrategyRegistryAPI(w, r, orgStore)
 	}))
 	router.Handle(routing.RouteClassInternalAPI, http.MethodPost, "/org/api/setid-strategy-registry:disable", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		handleSetIDStrategyRegistryDisableAPI(w, r)
+		handleSetIDStrategyRegistryDisableAPI(w, r, orgStore)
 	}))
 	router.Handle(routing.RouteClassInternalAPI, http.MethodGet, "/org/api/setid-explain", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		handleSetIDExplainAPI(w, r, setidStore)
+		handleSetIDExplainAPI(w, r, setidStore, orgStore)
 	}))
 	router.Handle(routing.RouteClassInternalAPI, http.MethodPost, "/internal/rules/evaluate", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		handleInternalRulesEvaluateAPI(w, r, setidStore)
+		handleInternalRulesEvaluateAPI(w, r, setidStore, orgStore)
 	}))
 	router.Handle(routing.RouteClassInternalAPI, http.MethodGet, "/internal/capabilities/catalog", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		handleCapabilityCatalogAPI(w, r)

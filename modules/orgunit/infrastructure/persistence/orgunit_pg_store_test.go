@@ -171,11 +171,11 @@ func TestOrgUnitPGStore_SubmitEvent(t *testing.T) {
 		t.Fatal("expected commit error")
 	}
 
-	orgID := 10000001
+	orgNodeKey := "A2345678"
 	store = NewOrgUnitPGStore(beginFunc(func(context.Context) (pgx.Tx, error) {
 		return &txStub{row: stubRow{vals: []any{int64(10)}}}, nil
 	}))
-	if _, err := store.SubmitEvent(ctx, "t1", "e1", &orgID, "RENAME", "2026-01-01", nil, "r1", "t1"); err != nil {
+	if _, err := store.SubmitEvent(ctx, "t1", "e1", &orgNodeKey, "RENAME", "2026-01-01", nil, "r1", "t1"); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }
@@ -186,35 +186,35 @@ func TestOrgUnitPGStore_SubmitCorrection(t *testing.T) {
 	store := NewOrgUnitPGStore(beginFunc(func(context.Context) (pgx.Tx, error) {
 		return nil, errors.New("begin")
 	}))
-	if _, err := store.SubmitCorrection(ctx, "t1", 1, "2026-01-01", nil, "req", "t1"); err == nil {
+	if _, err := store.SubmitCorrection(ctx, "t1", "A2345678", "2026-01-01", nil, "req", "t1"); err == nil {
 		t.Fatal("expected begin error")
 	}
 
 	store = NewOrgUnitPGStore(beginFunc(func(context.Context) (pgx.Tx, error) {
 		return &txStub{execErr: errors.New("exec")}, nil
 	}))
-	if _, err := store.SubmitCorrection(ctx, "t1", 1, "2026-01-01", nil, "req", "t1"); err == nil {
+	if _, err := store.SubmitCorrection(ctx, "t1", "A2345678", "2026-01-01", nil, "req", "t1"); err == nil {
 		t.Fatal("expected exec error")
 	}
 
 	store = NewOrgUnitPGStore(beginFunc(func(context.Context) (pgx.Tx, error) {
 		return &txStub{row: stubRow{err: errors.New("row")}}, nil
 	}))
-	if _, err := store.SubmitCorrection(ctx, "t1", 1, "2026-01-01", nil, "req", "t1"); err == nil {
+	if _, err := store.SubmitCorrection(ctx, "t1", "A2345678", "2026-01-01", nil, "req", "t1"); err == nil {
 		t.Fatal("expected row error")
 	}
 
 	store = NewOrgUnitPGStore(beginFunc(func(context.Context) (pgx.Tx, error) {
 		return &txStub{row: stubRow{vals: []any{"corr"}}, commitErr: errors.New("commit")}, nil
 	}))
-	if _, err := store.SubmitCorrection(ctx, "t1", 1, "2026-01-01", nil, "req", "t1"); err == nil {
+	if _, err := store.SubmitCorrection(ctx, "t1", "A2345678", "2026-01-01", nil, "req", "t1"); err == nil {
 		t.Fatal("expected commit error")
 	}
 
 	store = NewOrgUnitPGStore(beginFunc(func(context.Context) (pgx.Tx, error) {
 		return &txStub{row: stubRow{vals: []any{"corr"}}}, nil
 	}))
-	if _, err := store.SubmitCorrection(ctx, "t1", 1, "2026-01-01", nil, "req", "t1"); err != nil {
+	if _, err := store.SubmitCorrection(ctx, "t1", "A2345678", "2026-01-01", nil, "req", "t1"); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }
@@ -225,35 +225,35 @@ func TestOrgUnitPGStore_SubmitStatusCorrection(t *testing.T) {
 	store := NewOrgUnitPGStore(beginFunc(func(context.Context) (pgx.Tx, error) {
 		return nil, errors.New("begin")
 	}))
-	if _, err := store.SubmitStatusCorrection(ctx, "t1", 1, "2026-01-01", "disabled", "req", "t1"); err == nil {
+	if _, err := store.SubmitStatusCorrection(ctx, "t1", "A2345678", "2026-01-01", "disabled", "req", "t1"); err == nil {
 		t.Fatal("expected begin error")
 	}
 
 	store = NewOrgUnitPGStore(beginFunc(func(context.Context) (pgx.Tx, error) {
 		return &txStub{execErr: errors.New("exec")}, nil
 	}))
-	if _, err := store.SubmitStatusCorrection(ctx, "t1", 1, "2026-01-01", "disabled", "req", "t1"); err == nil {
+	if _, err := store.SubmitStatusCorrection(ctx, "t1", "A2345678", "2026-01-01", "disabled", "req", "t1"); err == nil {
 		t.Fatal("expected exec error")
 	}
 
 	store = NewOrgUnitPGStore(beginFunc(func(context.Context) (pgx.Tx, error) {
 		return &txStub{row: stubRow{err: errors.New("row")}}, nil
 	}))
-	if _, err := store.SubmitStatusCorrection(ctx, "t1", 1, "2026-01-01", "disabled", "req", "t1"); err == nil {
+	if _, err := store.SubmitStatusCorrection(ctx, "t1", "A2345678", "2026-01-01", "disabled", "req", "t1"); err == nil {
 		t.Fatal("expected row error")
 	}
 
 	store = NewOrgUnitPGStore(beginFunc(func(context.Context) (pgx.Tx, error) {
 		return &txStub{row: stubRow{vals: []any{"corr"}}, commitErr: errors.New("commit")}, nil
 	}))
-	if _, err := store.SubmitStatusCorrection(ctx, "t1", 1, "2026-01-01", "disabled", "req", "t1"); err == nil {
+	if _, err := store.SubmitStatusCorrection(ctx, "t1", "A2345678", "2026-01-01", "disabled", "req", "t1"); err == nil {
 		t.Fatal("expected commit error")
 	}
 
 	store = NewOrgUnitPGStore(beginFunc(func(context.Context) (pgx.Tx, error) {
 		return &txStub{row: stubRow{vals: []any{"corr"}}}, nil
 	}))
-	if _, err := store.SubmitStatusCorrection(ctx, "t1", 1, "2026-01-01", "disabled", "req", "t1"); err != nil {
+	if _, err := store.SubmitStatusCorrection(ctx, "t1", "A2345678", "2026-01-01", "disabled", "req", "t1"); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }
@@ -264,35 +264,35 @@ func TestOrgUnitPGStore_SubmitRescindEvent(t *testing.T) {
 	store := NewOrgUnitPGStore(beginFunc(func(context.Context) (pgx.Tx, error) {
 		return nil, errors.New("begin")
 	}))
-	if _, err := store.SubmitRescindEvent(ctx, "t1", 1, "2026-01-01", "bad", "req", "t1"); err == nil {
+	if _, err := store.SubmitRescindEvent(ctx, "t1", "A2345678", "2026-01-01", "bad", "req", "t1"); err == nil {
 		t.Fatal("expected begin error")
 	}
 
 	store = NewOrgUnitPGStore(beginFunc(func(context.Context) (pgx.Tx, error) {
 		return &txStub{execErr: errors.New("exec")}, nil
 	}))
-	if _, err := store.SubmitRescindEvent(ctx, "t1", 1, "2026-01-01", "bad", "req", "t1"); err == nil {
+	if _, err := store.SubmitRescindEvent(ctx, "t1", "A2345678", "2026-01-01", "bad", "req", "t1"); err == nil {
 		t.Fatal("expected exec error")
 	}
 
 	store = NewOrgUnitPGStore(beginFunc(func(context.Context) (pgx.Tx, error) {
 		return &txStub{row: stubRow{err: errors.New("row")}}, nil
 	}))
-	if _, err := store.SubmitRescindEvent(ctx, "t1", 1, "2026-01-01", "bad", "req", "t1"); err == nil {
+	if _, err := store.SubmitRescindEvent(ctx, "t1", "A2345678", "2026-01-01", "bad", "req", "t1"); err == nil {
 		t.Fatal("expected row error")
 	}
 
 	store = NewOrgUnitPGStore(beginFunc(func(context.Context) (pgx.Tx, error) {
 		return &txStub{row: stubRow{vals: []any{"corr"}}, commitErr: errors.New("commit")}, nil
 	}))
-	if _, err := store.SubmitRescindEvent(ctx, "t1", 1, "2026-01-01", "bad", "req", "t1"); err == nil {
+	if _, err := store.SubmitRescindEvent(ctx, "t1", "A2345678", "2026-01-01", "bad", "req", "t1"); err == nil {
 		t.Fatal("expected commit error")
 	}
 
 	store = NewOrgUnitPGStore(beginFunc(func(context.Context) (pgx.Tx, error) {
 		return &txStub{row: stubRow{vals: []any{"corr"}}}, nil
 	}))
-	if _, err := store.SubmitRescindEvent(ctx, "t1", 1, "2026-01-01", "bad", "req", "t1"); err != nil {
+	if _, err := store.SubmitRescindEvent(ctx, "t1", "A2345678", "2026-01-01", "bad", "req", "t1"); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }
@@ -303,35 +303,35 @@ func TestOrgUnitPGStore_SubmitRescindOrg(t *testing.T) {
 	store := NewOrgUnitPGStore(beginFunc(func(context.Context) (pgx.Tx, error) {
 		return nil, errors.New("begin")
 	}))
-	if _, err := store.SubmitRescindOrg(ctx, "t1", 1, "bad", "req", "t1"); err == nil {
+	if _, err := store.SubmitRescindOrg(ctx, "t1", "A2345678", "bad", "req", "t1"); err == nil {
 		t.Fatal("expected begin error")
 	}
 
 	store = NewOrgUnitPGStore(beginFunc(func(context.Context) (pgx.Tx, error) {
 		return &txStub{execErr: errors.New("exec")}, nil
 	}))
-	if _, err := store.SubmitRescindOrg(ctx, "t1", 1, "bad", "req", "t1"); err == nil {
+	if _, err := store.SubmitRescindOrg(ctx, "t1", "A2345678", "bad", "req", "t1"); err == nil {
 		t.Fatal("expected exec error")
 	}
 
 	store = NewOrgUnitPGStore(beginFunc(func(context.Context) (pgx.Tx, error) {
 		return &txStub{row: stubRow{err: errors.New("row")}}, nil
 	}))
-	if _, err := store.SubmitRescindOrg(ctx, "t1", 1, "bad", "req", "t1"); err == nil {
+	if _, err := store.SubmitRescindOrg(ctx, "t1", "A2345678", "bad", "req", "t1"); err == nil {
 		t.Fatal("expected row error")
 	}
 
 	store = NewOrgUnitPGStore(beginFunc(func(context.Context) (pgx.Tx, error) {
 		return &txStub{row: stubRow{vals: []any{2}}, commitErr: errors.New("commit")}, nil
 	}))
-	if _, err := store.SubmitRescindOrg(ctx, "t1", 1, "bad", "req", "t1"); err == nil {
+	if _, err := store.SubmitRescindOrg(ctx, "t1", "A2345678", "bad", "req", "t1"); err == nil {
 		t.Fatal("expected commit error")
 	}
 
 	store = NewOrgUnitPGStore(beginFunc(func(context.Context) (pgx.Tx, error) {
 		return &txStub{row: stubRow{vals: []any{2}}}, nil
 	}))
-	if _, err := store.SubmitRescindOrg(ctx, "t1", 1, "bad", "req", "t1"); err != nil {
+	if _, err := store.SubmitRescindOrg(ctx, "t1", "A2345678", "bad", "req", "t1"); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }
@@ -368,14 +368,14 @@ func TestOrgUnitPGStore_FindEventByUUID(t *testing.T) {
 	}
 
 	store = NewOrgUnitPGStore(beginFunc(func(context.Context) (pgx.Tx, error) {
-		return &txStub{row: stubRow{vals: []any{int64(1), "e1", 10000001, "CREATE", "2026-01-01", []byte(`{"a":"b"}`), time.Unix(1, 0).UTC()}}, commitErr: errors.New("commit")}, nil
+		return &txStub{row: stubRow{vals: []any{int64(1), "e1", "A2345678", "CREATE", "2026-01-01", []byte(`{"a":"b"}`), time.Unix(1, 0).UTC()}}, commitErr: errors.New("commit")}, nil
 	}))
 	if _, err := store.FindEventByUUID(ctx, "t1", "e1"); err == nil {
 		t.Fatal("expected commit error")
 	}
 
 	store = NewOrgUnitPGStore(beginFunc(func(context.Context) (pgx.Tx, error) {
-		return &txStub{row: stubRow{vals: []any{int64(1), "e1", 10000001, "CREATE", "2026-01-01", []byte(`{"a":"b"}`), time.Unix(1, 0).UTC()}}}, nil
+		return &txStub{row: stubRow{vals: []any{int64(1), "e1", "A2345678", "CREATE", "2026-01-01", []byte(`{"a":"b"}`), time.Unix(1, 0).UTC()}}}, nil
 	}))
 	if _, err := store.FindEventByUUID(ctx, "t1", "e1"); err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -388,120 +388,120 @@ func TestOrgUnitPGStore_FindEventByEffectiveDate(t *testing.T) {
 	store := NewOrgUnitPGStore(beginFunc(func(context.Context) (pgx.Tx, error) {
 		return nil, errors.New("begin")
 	}))
-	if _, err := store.FindEventByEffectiveDate(ctx, "t1", 1, "2026-01-01"); err == nil {
+	if _, err := store.FindEventByEffectiveDate(ctx, "t1", "A2345678", "2026-01-01"); err == nil {
 		t.Fatal("expected begin error")
 	}
 
 	store = NewOrgUnitPGStore(beginFunc(func(context.Context) (pgx.Tx, error) {
 		return &txStub{execErr: errors.New("exec")}, nil
 	}))
-	if _, err := store.FindEventByEffectiveDate(ctx, "t1", 1, "2026-01-01"); err == nil {
+	if _, err := store.FindEventByEffectiveDate(ctx, "t1", "A2345678", "2026-01-01"); err == nil {
 		t.Fatal("expected exec error")
 	}
 
 	store = NewOrgUnitPGStore(beginFunc(func(context.Context) (pgx.Tx, error) {
 		return &txStub{row: stubRow{err: pgx.ErrNoRows}}, nil
 	}))
-	if _, err := store.FindEventByEffectiveDate(ctx, "t1", 1, "2026-01-01"); !errors.Is(err, ports.ErrOrgEventNotFound) {
+	if _, err := store.FindEventByEffectiveDate(ctx, "t1", "A2345678", "2026-01-01"); !errors.Is(err, ports.ErrOrgEventNotFound) {
 		t.Fatalf("expected org event not found, got %v", err)
 	}
 
 	store = NewOrgUnitPGStore(beginFunc(func(context.Context) (pgx.Tx, error) {
 		return &txStub{row: stubRow{err: errors.New("row")}}, nil
 	}))
-	if _, err := store.FindEventByEffectiveDate(ctx, "t1", 1, "2026-01-01"); err == nil {
+	if _, err := store.FindEventByEffectiveDate(ctx, "t1", "A2345678", "2026-01-01"); err == nil {
 		t.Fatal("expected row error")
 	}
 
 	store = NewOrgUnitPGStore(beginFunc(func(context.Context) (pgx.Tx, error) {
-		return &txStub{row: stubRow{vals: []any{int64(1), "e1", 10000001, "CREATE", "2026-01-01", []byte(`{"a":"b"}`), time.Unix(1, 0).UTC()}}, commitErr: errors.New("commit")}, nil
+		return &txStub{row: stubRow{vals: []any{int64(1), "e1", "A2345678", "CREATE", "2026-01-01", []byte(`{"a":"b"}`), time.Unix(1, 0).UTC()}}, commitErr: errors.New("commit")}, nil
 	}))
-	if _, err := store.FindEventByEffectiveDate(ctx, "t1", 1, "2026-01-01"); err == nil {
+	if _, err := store.FindEventByEffectiveDate(ctx, "t1", "A2345678", "2026-01-01"); err == nil {
 		t.Fatal("expected commit error")
 	}
 
 	store = NewOrgUnitPGStore(beginFunc(func(context.Context) (pgx.Tx, error) {
-		return &txStub{row: stubRow{vals: []any{int64(1), "e1", 10000001, "CREATE", "2026-01-01", []byte(`{"a":"b"}`), time.Unix(1, 0).UTC()}}}, nil
+		return &txStub{row: stubRow{vals: []any{int64(1), "e1", "A2345678", "CREATE", "2026-01-01", []byte(`{"a":"b"}`), time.Unix(1, 0).UTC()}}}, nil
 	}))
-	if _, err := store.FindEventByEffectiveDate(ctx, "t1", 1, "2026-01-01"); err != nil {
+	if _, err := store.FindEventByEffectiveDate(ctx, "t1", "A2345678", "2026-01-01"); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }
 
-func TestOrgUnitPGStore_ResolveOrgID(t *testing.T) {
+func TestOrgUnitPGStore_ResolveOrgNodeKey(t *testing.T) {
 	ctx := context.Background()
 
 	store := NewOrgUnitPGStore(beginFunc(func(context.Context) (pgx.Tx, error) {
 		return nil, errors.New("begin")
 	}))
-	if _, err := store.ResolveOrgID(ctx, "t1", "ROOT"); err == nil {
+	if _, err := store.ResolveOrgNodeKey(ctx, "t1", "ROOT"); err == nil {
 		t.Fatal("expected begin error")
 	}
 
 	store = NewOrgUnitPGStore(beginFunc(func(context.Context) (pgx.Tx, error) {
 		return &txStub{execErr: errors.New("exec")}, nil
 	}))
-	if _, err := store.ResolveOrgID(ctx, "t1", "ROOT"); err == nil {
+	if _, err := store.ResolveOrgNodeKey(ctx, "t1", "ROOT"); err == nil {
 		t.Fatal("expected exec error")
 	}
 
 	store = NewOrgUnitPGStore(beginFunc(func(context.Context) (pgx.Tx, error) {
 		return &txStub{row: stubRow{err: pgx.ErrNoRows}}, nil
 	}))
-	if _, err := store.ResolveOrgID(ctx, "t1", "ROOT"); err == nil {
+	if _, err := store.ResolveOrgNodeKey(ctx, "t1", "ROOT"); err == nil {
 		t.Fatal("expected resolve error")
 	}
 
 	store = NewOrgUnitPGStore(beginFunc(func(context.Context) (pgx.Tx, error) {
-		return &txStub{row: stubRow{vals: []any{10000001}}, commitErr: errors.New("commit")}, nil
+		return &txStub{row: stubRow{vals: []any{"A2345678"}}, commitErr: errors.New("commit")}, nil
 	}))
-	if _, err := store.ResolveOrgID(ctx, "t1", "ROOT"); err == nil {
+	if _, err := store.ResolveOrgNodeKey(ctx, "t1", "ROOT"); err == nil {
 		t.Fatal("expected commit error")
 	}
 
 	store = NewOrgUnitPGStore(beginFunc(func(context.Context) (pgx.Tx, error) {
-		return &txStub{row: stubRow{vals: []any{10000001}}}, nil
+		return &txStub{row: stubRow{vals: []any{"A2345678"}}}, nil
 	}))
-	if _, err := store.ResolveOrgID(ctx, "t1", "ROOT"); err != nil {
+	if _, err := store.ResolveOrgNodeKey(ctx, "t1", "ROOT"); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }
 
-func TestOrgUnitPGStore_ResolveOrgCode(t *testing.T) {
+func TestOrgUnitPGStore_ResolveOrgCodeByNodeKey(t *testing.T) {
 	ctx := context.Background()
 
 	store := NewOrgUnitPGStore(beginFunc(func(context.Context) (pgx.Tx, error) {
 		return nil, errors.New("begin")
 	}))
-	if _, err := store.ResolveOrgCode(ctx, "t1", 1); err == nil {
+	if _, err := store.ResolveOrgCodeByNodeKey(ctx, "t1", "A2345678"); err == nil {
 		t.Fatal("expected begin error")
 	}
 
 	store = NewOrgUnitPGStore(beginFunc(func(context.Context) (pgx.Tx, error) {
 		return &txStub{execErr: errors.New("exec")}, nil
 	}))
-	if _, err := store.ResolveOrgCode(ctx, "t1", 1); err == nil {
+	if _, err := store.ResolveOrgCodeByNodeKey(ctx, "t1", "A2345678"); err == nil {
 		t.Fatal("expected exec error")
 	}
 
 	store = NewOrgUnitPGStore(beginFunc(func(context.Context) (pgx.Tx, error) {
 		return &txStub{row: stubRow{err: pgx.ErrNoRows}}, nil
 	}))
-	if _, err := store.ResolveOrgCode(ctx, "t1", 1); err == nil {
+	if _, err := store.ResolveOrgCodeByNodeKey(ctx, "t1", "A2345678"); err == nil {
 		t.Fatal("expected resolve error")
 	}
 
 	store = NewOrgUnitPGStore(beginFunc(func(context.Context) (pgx.Tx, error) {
 		return &txStub{row: stubRow{vals: []any{"ROOT"}}, commitErr: errors.New("commit")}, nil
 	}))
-	if _, err := store.ResolveOrgCode(ctx, "t1", 1); err == nil {
+	if _, err := store.ResolveOrgCodeByNodeKey(ctx, "t1", "A2345678"); err == nil {
 		t.Fatal("expected commit error")
 	}
 
 	store = NewOrgUnitPGStore(beginFunc(func(context.Context) (pgx.Tx, error) {
 		return &txStub{row: stubRow{vals: []any{"ROOT"}}}, nil
 	}))
-	if _, err := store.ResolveOrgCode(ctx, "t1", 1); err != nil {
+	if _, err := store.ResolveOrgCodeByNodeKey(ctx, "t1", "A2345678"); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }

@@ -180,13 +180,13 @@ func (r *stubRows) Values() ([]any, error) { return nil, nil }
 func (r *stubRows) RawValues() [][]byte    { return nil }
 func (r *stubRows) Conn() *pgx.Conn        { return nil }
 
-func TestResolveOrgID_BlackBox(t *testing.T) {
+func TestResolveOrgNodeKeyByCode_BlackBox(t *testing.T) {
 	t.Parallel()
 
 	t.Run("invalid org code", func(t *testing.T) {
 		t.Parallel()
 
-		if _, err := orgunit.ResolveOrgID(context.Background(), &stubTx{}, "t1", "bad\n"); !errors.Is(err, orgunit.ErrOrgCodeInvalid) {
+		if _, err := orgunit.ResolveOrgNodeKeyByCode(context.Background(), &stubTx{}, "t1", "bad\n"); !errors.Is(err, orgunit.ErrOrgCodeInvalid) {
 			t.Fatalf("expected ErrOrgCodeInvalid, got %v", err)
 		}
 	})
@@ -195,7 +195,7 @@ func TestResolveOrgID_BlackBox(t *testing.T) {
 		t.Parallel()
 
 		tx := &stubTx{execErr: errors.New("exec fail")}
-		if _, err := orgunit.ResolveOrgID(context.Background(), tx, "t1", "A1"); err == nil {
+		if _, err := orgunit.ResolveOrgNodeKeyByCode(context.Background(), tx, "t1", "A1"); err == nil {
 			t.Fatal("expected error")
 		}
 	})
@@ -204,7 +204,7 @@ func TestResolveOrgID_BlackBox(t *testing.T) {
 		t.Parallel()
 
 		tx := &stubTx{rowErr: pgx.ErrNoRows}
-		if _, err := orgunit.ResolveOrgID(context.Background(), tx, "t1", "A1"); !errors.Is(err, orgunit.ErrOrgCodeNotFound) {
+		if _, err := orgunit.ResolveOrgNodeKeyByCode(context.Background(), tx, "t1", "A1"); !errors.Is(err, orgunit.ErrOrgCodeNotFound) {
 			t.Fatalf("expected ErrOrgCodeNotFound, got %v", err)
 		}
 	})
@@ -212,22 +212,22 @@ func TestResolveOrgID_BlackBox(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
 		t.Parallel()
 
-		tx := &stubTx{row: stubRow{vals: []any{12345678}}}
-		id, err := orgunit.ResolveOrgID(context.Background(), tx, "t1", "a1")
-		if err != nil || id != 12345678 {
-			t.Fatalf("id=%d err=%v", id, err)
+		tx := &stubTx{row: stubRow{vals: []any{"A2345678"}}}
+		key, err := orgunit.ResolveOrgNodeKeyByCode(context.Background(), tx, "t1", "a1")
+		if err != nil || key != "A2345678" {
+			t.Fatalf("key=%q err=%v", key, err)
 		}
 	})
 }
 
-func TestResolveOrgCode_BlackBox(t *testing.T) {
+func TestResolveOrgCodeByNodeKey_BlackBox(t *testing.T) {
 	t.Parallel()
 
 	t.Run("assert tenant error", func(t *testing.T) {
 		t.Parallel()
 
 		tx := &stubTx{execErr: errors.New("exec fail")}
-		if _, err := orgunit.ResolveOrgCode(context.Background(), tx, "t1", 1); err == nil {
+		if _, err := orgunit.ResolveOrgCodeByNodeKey(context.Background(), tx, "t1", "A2345678"); err == nil {
 			t.Fatal("expected error")
 		}
 	})
@@ -236,8 +236,8 @@ func TestResolveOrgCode_BlackBox(t *testing.T) {
 		t.Parallel()
 
 		tx := &stubTx{rowErr: pgx.ErrNoRows}
-		if _, err := orgunit.ResolveOrgCode(context.Background(), tx, "t1", 1); !errors.Is(err, orgunit.ErrOrgIDNotFound) {
-			t.Fatalf("expected ErrOrgIDNotFound, got %v", err)
+		if _, err := orgunit.ResolveOrgCodeByNodeKey(context.Background(), tx, "t1", "A2345678"); !errors.Is(err, orgunit.ErrOrgNodeKeyNotFound) {
+			t.Fatalf("expected ErrOrgNodeKeyNotFound, got %v", err)
 		}
 	})
 
@@ -245,20 +245,20 @@ func TestResolveOrgCode_BlackBox(t *testing.T) {
 		t.Parallel()
 
 		tx := &stubTx{row: stubRow{vals: []any{"A1"}}}
-		code, err := orgunit.ResolveOrgCode(context.Background(), tx, "t1", 1)
+		code, err := orgunit.ResolveOrgCodeByNodeKey(context.Background(), tx, "t1", "A2345678")
 		if err != nil || code != "A1" {
 			t.Fatalf("code=%q err=%v", code, err)
 		}
 	})
 }
 
-func TestResolveOrgCodes_BlackBox(t *testing.T) {
+func TestResolveOrgCodesByNodeKeys_BlackBox(t *testing.T) {
 	t.Parallel()
 
 	t.Run("empty input", func(t *testing.T) {
 		t.Parallel()
 
-		got, err := orgunit.ResolveOrgCodes(context.Background(), &stubTx{}, "t1", nil)
+		got, err := orgunit.ResolveOrgCodesByNodeKeys(context.Background(), &stubTx{}, "t1", nil)
 		if err != nil {
 			t.Fatalf("err=%v", err)
 		}
@@ -271,7 +271,7 @@ func TestResolveOrgCodes_BlackBox(t *testing.T) {
 		t.Parallel()
 
 		tx := &stubTx{execErr: errors.New("exec fail")}
-		if _, err := orgunit.ResolveOrgCodes(context.Background(), tx, "t1", []int{1}); err == nil {
+		if _, err := orgunit.ResolveOrgCodesByNodeKeys(context.Background(), tx, "t1", []string{"A2345678"}); err == nil {
 			t.Fatal("expected error")
 		}
 	})
@@ -280,7 +280,7 @@ func TestResolveOrgCodes_BlackBox(t *testing.T) {
 		t.Parallel()
 
 		tx := &stubTx{queryErr: errors.New("query fail")}
-		if _, err := orgunit.ResolveOrgCodes(context.Background(), tx, "t1", []int{1}); err == nil {
+		if _, err := orgunit.ResolveOrgCodesByNodeKeys(context.Background(), tx, "t1", []string{"A2345678"}); err == nil {
 			t.Fatal("expected error")
 		}
 	})
@@ -289,7 +289,7 @@ func TestResolveOrgCodes_BlackBox(t *testing.T) {
 		t.Parallel()
 
 		tx := &stubTx{rows: &stubRows{err: errors.New("rows fail")}}
-		if _, err := orgunit.ResolveOrgCodes(context.Background(), tx, "t1", []int{1}); err == nil {
+		if _, err := orgunit.ResolveOrgCodesByNodeKeys(context.Background(), tx, "t1", []string{"A2345678"}); err == nil {
 			t.Fatal("expected error")
 		}
 	})
@@ -297,8 +297,8 @@ func TestResolveOrgCodes_BlackBox(t *testing.T) {
 	t.Run("scan error", func(t *testing.T) {
 		t.Parallel()
 
-		tx := &stubTx{rows: &stubRows{rows: [][]any{{1, "A1"}}, scanErr: errors.New("scan fail")}}
-		if _, err := orgunit.ResolveOrgCodes(context.Background(), tx, "t1", []int{1}); err == nil {
+		tx := &stubTx{rows: &stubRows{rows: [][]any{{"A2345678", "A1"}}, scanErr: errors.New("scan fail")}}
+		if _, err := orgunit.ResolveOrgCodesByNodeKeys(context.Background(), tx, "t1", []string{"A2345678"}); err == nil {
 			t.Fatal("expected error")
 		}
 	})
@@ -306,12 +306,12 @@ func TestResolveOrgCodes_BlackBox(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
 		t.Parallel()
 
-		tx := &stubTx{rows: &stubRows{rows: [][]any{{1, "A1"}, {2, "B2"}}}}
-		got, err := orgunit.ResolveOrgCodes(context.Background(), tx, "t1", []int{1, 2})
+		tx := &stubTx{rows: &stubRows{rows: [][]any{{"A2345678", "A1"}, {"B2345678", "B2"}}}}
+		got, err := orgunit.ResolveOrgCodesByNodeKeys(context.Background(), tx, "t1", []string{"A2345678", "B2345678"})
 		if err != nil {
 			t.Fatalf("err=%v", err)
 		}
-		if got[1] != "A1" || got[2] != "B2" {
+		if got["A2345678"] != "A1" || got["B2345678"] != "B2" {
 			t.Fatalf("unexpected map: %v", got)
 		}
 	})

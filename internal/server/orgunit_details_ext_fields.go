@@ -10,21 +10,54 @@ import (
 
 type orgUnitDetailsExtFieldStore interface {
 	ListEnabledTenantFieldConfigsAsOf(ctx context.Context, tenantID string, asOf string) ([]orgUnitTenantFieldConfig, error)
+}
+
+type orgUnitDetailsExtFieldByKeyStore interface {
+	GetOrgUnitVersionExtSnapshotByNodeKey(ctx context.Context, tenantID string, orgNodeKey string, asOf string) (orgUnitVersionExtSnapshot, error)
+}
+
+type orgUnitDetailsExtFieldCompatStore interface {
 	GetOrgUnitVersionExtSnapshot(ctx context.Context, tenantID string, orgID int, asOf string) (orgUnitVersionExtSnapshot, error)
 }
 
 func buildOrgUnitDetailsExtFields(ctx context.Context, store orgUnitDetailsExtFieldStore, tenantID string, orgID int, asOf string) ([]orgUnitExtFieldAPIItem, error) {
+	orgNodeKey, err := encodeOrgNodeKeyFromID(orgID)
+	if err != nil {
+		return nil, err
+	}
+	return buildOrgUnitDetailsExtFieldsByNodeKey(ctx, store, tenantID, orgNodeKey, asOf)
+}
+
+func buildOrgUnitDetailsExtFieldsByNodeKey(ctx context.Context, store orgUnitDetailsExtFieldStore, tenantID string, orgNodeKey string, asOf string) ([]orgUnitExtFieldAPIItem, error) {
+	snapshot, err := resolveOrgUnitVersionExtSnapshotByNodeKey(ctx, store, tenantID, orgNodeKey, asOf)
+	if err != nil {
+		return nil, err
+	}
+	return buildOrgUnitDetailsExtFieldsFromSnapshot(ctx, store, tenantID, asOf, snapshot)
+}
+
+func resolveOrgUnitVersionExtSnapshotByNodeKey(ctx context.Context, store orgUnitDetailsExtFieldStore, tenantID string, orgNodeKey string, asOf string) (orgUnitVersionExtSnapshot, error) {
+	if byKeyStore, ok := store.(orgUnitDetailsExtFieldByKeyStore); ok {
+		return byKeyStore.GetOrgUnitVersionExtSnapshotByNodeKey(ctx, tenantID, orgNodeKey, asOf)
+	}
+	compatStore, ok := store.(orgUnitDetailsExtFieldCompatStore)
+	if !ok {
+		return orgUnitVersionExtSnapshot{}, errOrgUnitNotFound
+	}
+	orgID, err := decodeOrgNodeKeyToID(orgNodeKey)
+	if err != nil {
+		return orgUnitVersionExtSnapshot{}, err
+	}
+	return compatStore.GetOrgUnitVersionExtSnapshot(ctx, tenantID, orgID, asOf)
+}
+
+func buildOrgUnitDetailsExtFieldsFromSnapshot(ctx context.Context, store orgUnitDetailsExtFieldStore, tenantID string, asOf string, snapshot orgUnitVersionExtSnapshot) ([]orgUnitExtFieldAPIItem, error) {
 	cfgs, err := store.ListEnabledTenantFieldConfigsAsOf(ctx, tenantID, asOf)
 	if err != nil {
 		return nil, err
 	}
 	if len(cfgs) == 0 {
 		return []orgUnitExtFieldAPIItem{}, nil
-	}
-
-	snapshot, err := store.GetOrgUnitVersionExtSnapshot(ctx, tenantID, orgID, asOf)
-	if err != nil {
-		return nil, err
 	}
 
 	items := make([]orgUnitExtFieldAPIItem, 0, len(cfgs))

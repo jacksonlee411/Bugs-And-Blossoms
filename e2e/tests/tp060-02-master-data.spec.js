@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 import { expectExplicitError } from "./helpers/error-message-assert";
+import { expectNoLegacyOrgFields, legacyOrgFieldPattern } from "./helpers/org-contract-assert";
 
 async function ensureKratosIdentity(ctx, kratosAdminURL, { traits, identifier, password }) {
   const resp = await ctx.request.post(`${kratosAdminURL}/admin/identities`, {
@@ -45,6 +46,60 @@ async function getPositionOptions(ctx, { asOf, orgCode }) {
   );
   expect(resp.status(), await resp.text()).toBe(200);
   return resp.json();
+}
+
+async function fulfillJSON(route, status, payload) {
+  await route.fulfill({
+    status,
+    contentType: "application/json",
+    body: JSON.stringify(payload)
+  });
+}
+
+async function installAssistantLogPageMock(page, { orgCode, positionName, runID }) {
+  await page.route("**/internal/assistant/runtime-status", async (route) => {
+    if (route.request().method() !== "GET") {
+      await route.continue();
+      return;
+    }
+    await fulfillJSON(route, 200, {
+      status: "healthy",
+      checked_at: "2026-01-01T00:00:00Z",
+      upstream: { url: "simulate://tp060-02" },
+      services: [
+        { name: "api", required: true, healthy: "healthy" },
+        { name: "model-gateway", required: true, healthy: "healthy" }
+      ],
+      capabilities: {
+        actions_enabled: true,
+        agents_write_enabled: false,
+        mcp_enabled: false
+      }
+    });
+  });
+
+  await page.route("**/internal/assistant/conversations*", async (route) => {
+    if (route.request().method() !== "GET") {
+      await route.continue();
+      return;
+    }
+    await fulfillJSON(route, 200, {
+      items: [
+        {
+          conversation_id: `conv_tp060_02_${runID}`,
+          state: "committed",
+          updated_at: "2026-01-01T00:00:01Z",
+          last_turn: {
+            turn_id: `turn_tp060_02_${runID}`,
+            user_input: `请为 org_code=${orgCode} 的组织准备职位 ${positionName}`,
+            state: "committed",
+            risk_tier: "high"
+          }
+        }
+      ],
+      next_cursor: ""
+    });
+  });
 }
 
 test("tp060-02: master data (orgunit -> setid -> jobcatalog -> positions)", async ({ browser }) => {
@@ -199,6 +254,9 @@ test("tp060-02: master data (orgunit -> setid -> jobcatalog -> positions)", asyn
       }
     });
     expect(resp.status(), await resp.text()).toBe(201);
+    const payload = await resp.json();
+    expectNoLegacyOrgFields(payload, "root setid binding response");
+    expect(payload.org_code).toBe(org.root);
   }
 
   // Bind non-BU must fail (HQ is not a BU as of).
@@ -225,6 +283,9 @@ test("tp060-02: master data (orgunit -> setid -> jobcatalog -> positions)", asyn
       }
     });
     expect(resp.status(), await resp.text()).toBe(201);
+    const payload = await resp.json();
+    expectNoLegacyOrgFields(payload, "R&D setid binding response");
+    expect(payload.org_code).toBe(org.rnd);
   }
   {
     const resp = await appContext.request.post("/org/api/setid-bindings", {
@@ -236,7 +297,22 @@ test("tp060-02: master data (orgunit -> setid -> jobcatalog -> positions)", asyn
       }
     });
     expect(resp.status(), await resp.text()).toBe(201);
+    const payload = await resp.json();
+    expectNoLegacyOrgFields(payload, "Sales setid binding response");
+    expect(payload.org_code).toBe(org.sales);
   }
+
+  const listBindingsResp = await appContext.request.get(`/org/api/setid-bindings?as_of=${encodeURIComponent(asOf)}`);
+  expect(listBindingsResp.status(), await listBindingsResp.text()).toBe(200);
+  const listBindingsJSON = await listBindingsResp.json();
+  expectNoLegacyOrgFields(listBindingsJSON, "setid bindings list");
+  expect(listBindingsJSON.bindings).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({ org_code: org.root, setid: "DEFLT" }),
+      expect.objectContaining({ org_code: org.rnd, setid: "S2601" }),
+      expect.objectContaining({ org_code: org.sales, setid: "S2602" })
+    ])
+  );
 
   const s2601SetID = "S2601";
   const s2602SetID = "S2602";
@@ -356,16 +432,19 @@ test("tp060-02: master data (orgunit -> setid -> jobcatalog -> positions)", asyn
 
   // Resolve Job Profile UUIDs via options API.
   const rndOptions = await getPositionOptions(appContext, { asOf, orgCode: org.rnd });
+  expectNoLegacyOrgFields(rndOptions, "R&D position options");
   expect(rndOptions.jobcatalog_setid).toBe("S2601");
   const jpSweOpt = (rndOptions.job_profiles || []).find((p) => p.job_profile_code === "JP-SWE");
   expect(jpSweOpt && jpSweOpt.job_profile_uuid).toBeTruthy();
 
   const salesOptions = await getPositionOptions(appContext, { asOf, orgCode: org.sales });
+  expectNoLegacyOrgFields(salesOptions, "Sales position options");
   expect(salesOptions.jobcatalog_setid).toBe("S2602");
   const jpOpsOpt = (salesOptions.job_profiles || []).find((p) => p.job_profile_code === "JP-OPS");
   expect(jpOpsOpt && jpOpsOpt.job_profile_uuid).toBeTruthy();
 
   const hqOptions = await getPositionOptions(appContext, { asOf, orgCode: org.hq });
+  expectNoLegacyOrgFields(hqOptions, "HQ position options");
   expect(hqOptions.jobcatalog_setid).toBe("DEFLT");
   const jpDefOpt = (hqOptions.job_profiles || []).find((p) => p.job_profile_code === defltJobProfileCode);
   expect(jpDefOpt && jpDefOpt.job_profile_uuid).toBeTruthy();
@@ -424,10 +503,12 @@ test("tp060-02: master data (orgunit -> setid -> jobcatalog -> positions)", asyn
       })
     );
   }
+  expectNoLegacyOrgFields(createdPositions, "created positions");
 
   const listPositionsResp = await appContext.request.get(`/org/api/positions?as_of=${encodeURIComponent(asOf)}`);
   expect(listPositionsResp.status(), await listPositionsResp.text()).toBe(200);
   const listPositionsJSON = await listPositionsResp.json();
+  expectNoLegacyOrgFields(listPositionsJSON, "positions list");
   const posNames = new Set((listPositionsJSON.positions || []).map((p) => p.name));
   for (const spec of [...positionSpecsS2601, ...positionSpecsS2602, ...positionSpecsDeflt]) {
     expect(posNames.has(spec.name)).toBeTruthy();
@@ -508,6 +589,13 @@ test("tp060-02: master data (orgunit -> setid -> jobcatalog -> positions)", asyn
   await expect(page.getByRole("heading", { level: 2, name: "Job Catalog" })).toBeVisible();
   await page.goto(`/app/staffing/positions?as_of=${asOf}&org_code=${org.rnd}`);
   await expect(page.getByRole("heading", { level: 2, name: "Staffing / Positions" })).toBeVisible();
+  await installAssistantLogPageMock(page, { orgCode: org.rnd, positionName: "P-ENG-01", runID });
+  await page.goto(`/app/assistant?as_of=${asOf}`);
+  await expect(page.getByRole("heading", { name: "AI 助手日志" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "打开 LibreChat" })).toHaveAttribute("href", "/app/assistant/librechat");
+  await expect(page.getByTestId("assistant-conversation-log-item")).toContainText(`org_code=${org.rnd}`);
+  await expect(page.getByTestId("assistant-conversation-log-item")).toContainText("P-ENG-01");
+  await expect(page.getByTestId("assistant-conversation-log-item")).not.toContainText(legacyOrgFieldPattern);
 
   await appContext.close();
 });

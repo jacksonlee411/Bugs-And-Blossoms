@@ -17,13 +17,22 @@ import (
 type mutationCapabilitiesStoreStub struct {
 	*resolveOrgCodeStore
 
-	resolveTargetFn func(ctx context.Context, tenantID string, orgID int, effectiveDate string) (orgUnitMutationTargetEvent, error)
-	listEnabledFn   func(ctx context.Context, tenantID string, asOf string) ([]orgUnitTenantFieldConfig, error)
-	evalRescindFn   func(ctx context.Context, tenantID string, orgID int) ([]string, error)
+	resolveTargetFn      func(ctx context.Context, tenantID string, orgID int, effectiveDate string) (orgUnitMutationTargetEvent, error)
+	resolveTargetByKeyFn func(ctx context.Context, tenantID string, orgNodeKey string, effectiveDate string) (orgUnitMutationTargetEvent, error)
+	listEnabledFn        func(ctx context.Context, tenantID string, asOf string) ([]orgUnitTenantFieldConfig, error)
+	evalRescindFn        func(ctx context.Context, tenantID string, orgID int) ([]string, error)
+	evalRescindByKeyFn   func(ctx context.Context, tenantID string, orgNodeKey string) ([]string, error)
 }
 
-func (s mutationCapabilitiesStoreStub) ResolveMutationTargetEvent(ctx context.Context, tenantID string, orgID int, effectiveDate string) (orgUnitMutationTargetEvent, error) {
+func (s mutationCapabilitiesStoreStub) ResolveMutationTargetEvent(ctx context.Context, tenantID string, orgNodeKey string, effectiveDate string) (orgUnitMutationTargetEvent, error) {
+	if s.resolveTargetByKeyFn != nil {
+		return s.resolveTargetByKeyFn(ctx, tenantID, orgNodeKey, effectiveDate)
+	}
 	if s.resolveTargetFn != nil {
+		orgID, err := decodeOrgNodeKeyToID(orgNodeKey)
+		if err != nil {
+			return orgUnitMutationTargetEvent{}, err
+		}
 		return s.resolveTargetFn(ctx, tenantID, orgID, effectiveDate)
 	}
 	return orgUnitMutationTargetEvent{}, nil
@@ -36,8 +45,15 @@ func (s mutationCapabilitiesStoreStub) ListEnabledTenantFieldConfigsAsOf(ctx con
 	return []orgUnitTenantFieldConfig{}, nil
 }
 
-func (s mutationCapabilitiesStoreStub) EvaluateRescindOrgDenyReasons(ctx context.Context, tenantID string, orgID int) ([]string, error) {
+func (s mutationCapabilitiesStoreStub) EvaluateRescindOrgDenyReasons(ctx context.Context, tenantID string, orgNodeKey string) ([]string, error) {
+	if s.evalRescindByKeyFn != nil {
+		return s.evalRescindByKeyFn(ctx, tenantID, orgNodeKey)
+	}
 	if s.evalRescindFn != nil {
+		orgID, err := decodeOrgNodeKeyToID(orgNodeKey)
+		if err != nil {
+			return nil, err
+		}
 		return s.evalRescindFn(ctx, tenantID, orgID)
 	}
 	return []string{}, nil

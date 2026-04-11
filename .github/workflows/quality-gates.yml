@@ -52,7 +52,9 @@ jobs:
 
       - name: Enable Corepack
         if: steps.changes.outputs.relevant == 'true'
-        run: corepack enable
+        run: |
+          corepack enable
+          corepack prepare pnpm@10.24.0 --activate
 
       - name: Go version gate
         if: steps.changes.outputs.relevant == 'true'
@@ -69,6 +71,10 @@ jobs:
       - name: Assistant domain allowlist gate
         if: steps.changes.outputs.relevant == 'true'
         run: make check assistant-domain-allowlist
+
+      - name: Org node key backflow gate
+        if: steps.changes.outputs.relevant == 'true'
+        run: make check org-node-key-backflow
 
       - name: Docs gate
         if: steps.changes.outputs.relevant == 'true'
@@ -224,7 +230,9 @@ jobs:
 
       - name: Enable Corepack
         if: steps.changes.outputs.relevant == 'true'
-        run: corepack enable
+        run: |
+          corepack enable
+          corepack prepare pnpm@10.24.0 --activate
 
       - name: Run E2E tests
         if: steps.changes.outputs.relevant == 'true'

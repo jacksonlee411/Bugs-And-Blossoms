@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strings"
 	"testing"
 
@@ -459,6 +460,18 @@ func TestTenantsCreate_Success(t *testing.T) {
 	h.h.ServeHTTP(rec, req)
 	if rec.Code != http.StatusFound {
 		t.Fatalf("status=%d", rec.Code)
+	}
+	if len(tx.execSQLs) < 2 {
+		t.Fatalf("expected bootstrap exec to run, got %d execs", len(tx.execSQLs))
+	}
+	bootstrapSQL := tx.execSQLs[1]
+	if !strings.Contains(bootstrapSQL, "business_unit_node_key") {
+		t.Fatalf("bootstrap SQL must write business_unit_node_key, got %q", bootstrapSQL)
+	}
+	if slices.ContainsFunc([]string{"business_unit_id", "seeded.business_unit_id"}, func(needle string) bool {
+		return strings.Contains(bootstrapSQL, needle)
+	}) {
+		t.Fatalf("bootstrap SQL must not reference legacy business_unit_id, got %q", bootstrapSQL)
 	}
 }
 

@@ -4,8 +4,8 @@ import (
 	"context"
 	"errors"
 	"io"
+	"net"
 	"net/http"
-	"net/http/httptest"
 	"strings"
 	"testing"
 )
@@ -287,11 +287,13 @@ func TestAssistantModelGatewayMoreBranches(t *testing.T) {
 	t.Run("adapter nil ctx and nil client provider unavailable", func(t *testing.T) {
 		assistantOpenAIRequestMarshalFn = oldMarshal
 		assistantOpenAINewRequestWithContextFn = oldNewReq
-		server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			_, _ = w.Write([]byte(`{"choices":[{"message":{"content":"plain reply"}}]}`))
-		}))
-		defer server.Close()
-		result, err := (assistantOpenAIProviderAdapter{}).RenderReply(nil, assistantModelProviderConfig{Endpoint: server.URL + "/v1", TimeoutMS: 100, KeyRef: "OPENAI_API_KEY"}, assistantReplyRenderPrompt{})
+		ln, err := net.Listen("tcp", "127.0.0.1:0")
+		if err != nil {
+			t.Fatalf("listen: %v", err)
+		}
+		addr := ln.Addr().String()
+		_ = ln.Close()
+		result, err := (assistantOpenAIProviderAdapter{}).RenderReply(nil, assistantModelProviderConfig{Endpoint: "https://" + addr + "/v1", TimeoutMS: 100, KeyRef: "OPENAI_API_KEY"}, assistantReplyRenderPrompt{})
 		if !errors.Is(err, errAssistantModelProviderUnavailable) {
 			t.Fatalf("result=%+v err=%v", result, err)
 		}

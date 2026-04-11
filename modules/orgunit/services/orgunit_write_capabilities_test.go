@@ -74,7 +74,7 @@ func TestResolveWriteCapabilities_EnabledPayloadKeys(t *testing.T) {
 	if !decision.Enabled {
 		t.Fatalf("expected enabled")
 	}
-	if decision.FieldPayloadKeys["parent_org_code"] != "parent_id" {
+	if decision.FieldPayloadKeys["parent_org_code"] != "parent_org_node_key" {
 		t.Fatalf("field_payload_keys=%v", decision.FieldPayloadKeys)
 	}
 	if decision.FieldPayloadKeys["org_type"] != "ext.org_type" {

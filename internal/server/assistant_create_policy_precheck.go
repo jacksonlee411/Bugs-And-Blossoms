@@ -2,7 +2,6 @@ package server
 
 import (
 	"context"
-	"strconv"
 	"strings"
 )
 
@@ -28,15 +27,15 @@ func (s *assistantConversationService) enrichCreateOrgUnitDryRunWithPolicy(
 		return dryRun
 	}
 	parentOrgCode := assistantResolvedCandidateCode(candidates, resolvedCandidateID)
-	businessUnitID, ok := s.resolveCreateOrgUnitBusinessUnitID(ctx, tenantID, parentOrgCode)
+	businessUnitNodeKey, ok := s.resolveCreateOrgUnitBusinessUnitNodeKey(ctx, tenantID, parentOrgCode)
 	if !ok {
 		return dryRun
 	}
-	orgCodeDecision, ok := assistantResolveCreateFieldDecision(ctx, tenantID, orgUnitCreateFieldOrgCode, businessUnitID, intent.EffectiveDate)
+	orgCodeDecision, ok := assistantResolveCreateFieldDecision(ctx, tenantID, orgUnitCreateFieldOrgCode, businessUnitNodeKey, intent.EffectiveDate)
 	if ok && assistantCreateFieldDecisionMissingRequiredValue(orgCodeDecision, strings.TrimSpace(intent.OrgCode)) {
 		dryRun.ValidationErrors = append(dryRun.ValidationErrors, "FIELD_REQUIRED_VALUE_MISSING")
 	}
-	orgTypeDecision, ok := assistantResolveCreateFieldDecision(ctx, tenantID, orgUnitCreateFieldOrgType, businessUnitID, intent.EffectiveDate)
+	orgTypeDecision, ok := assistantResolveCreateFieldDecision(ctx, tenantID, orgUnitCreateFieldOrgType, businessUnitNodeKey, intent.EffectiveDate)
 	if ok {
 		resolvedOrgType := assistantCreateFieldDecisionResolvedValue(orgTypeDecision, "")
 		if assistantCreateFieldDecisionMissingRequiredValue(orgTypeDecision, "") {
@@ -71,24 +70,27 @@ func assistantResolvedCandidateCode(candidates []assistantCandidate, resolvedCan
 	return needle
 }
 
-func (s *assistantConversationService) resolveCreateOrgUnitBusinessUnitID(ctx context.Context, tenantID string, parentOrgCode string) (string, bool) {
+func (s *assistantConversationService) resolveCreateOrgUnitBusinessUnitNodeKey(ctx context.Context, tenantID string, parentOrgCode string) (string, bool) {
 	if s == nil || s.orgStore == nil {
 		return "", false
 	}
-	orgID, err := s.orgStore.ResolveOrgID(ctx, tenantID, strings.TrimSpace(parentOrgCode))
-	if err != nil || orgID <= 0 {
+	orgNodeKey, err := s.orgStore.ResolveOrgNodeKeyByCode(ctx, tenantID, strings.TrimSpace(parentOrgCode))
+	if err != nil {
 		return "", false
 	}
-	return strconv.Itoa(orgID), true
+	if _, err := normalizeOrgNodeKeyInput(orgNodeKey); err != nil {
+		return "", false
+	}
+	return orgNodeKey, true
 }
 
-func assistantResolveCreateFieldDecision(ctx context.Context, tenantID string, fieldKey string, businessUnitID string, effectiveDate string) (setIDFieldDecision, bool) {
+func assistantResolveCreateFieldDecision(ctx context.Context, tenantID string, fieldKey string, businessUnitNodeKey string, effectiveDate string) (setIDFieldDecision, bool) {
 	decision, err := defaultSetIDStrategyRegistryStore.resolveFieldDecision(
 		ctx,
 		tenantID,
 		orgUnitCreateFieldPolicyCapabilityKey,
 		fieldKey,
-		strings.TrimSpace(businessUnitID),
+		strings.TrimSpace(businessUnitNodeKey),
 		strings.TrimSpace(effectiveDate),
 	)
 	if err != nil {

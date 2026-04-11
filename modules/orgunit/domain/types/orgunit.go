@@ -20,7 +20,7 @@ const (
 type OrgUnitEvent struct {
 	ID              int64
 	EventUUID       string
-	OrgID           int
+	OrgNodeKey      string
 	EventType       OrgUnitEventType
 	EffectiveDate   string
 	Payload         json.RawMessage
@@ -35,7 +35,6 @@ type Person struct {
 }
 
 type OrgUnitResult struct {
-	OrgID         string
 	OrgCode       string
 	EffectiveDate string
 	Fields        map[string]any

@@ -126,7 +126,7 @@ func TestWriteUnified_CoversMoreWriteBranches(t *testing.T) {
 		}
 	})
 
-	t.Run("parent_org_code success sets parent_id and parent_org_code field", func(t *testing.T) {
+	t.Run("parent_org_code success sets parent_org_node_key and parent_org_code field", func(t *testing.T) {
 		var captured map[string]any
 		store := baseStore
 		store.resolveOrgIDFn = func(_ context.Context, _ string, orgCode string) (int, error) {
@@ -161,7 +161,7 @@ func TestWriteUnified_CoversMoreWriteBranches(t *testing.T) {
 		if err != nil {
 			t.Fatalf("err=%v", err)
 		}
-		if captured["parent_id"] != float64(20000002) { // json.Unmarshal uses float64 for numbers.
+		if captured["parent_org_node_key"] != mustEncodeTestOrgNodeKey(20000002) {
 			t.Fatalf("payload=%v", captured)
 		}
 		if result.Fields["parent_org_code"] != "P001" {

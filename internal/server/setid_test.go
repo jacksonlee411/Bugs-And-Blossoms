@@ -228,10 +228,19 @@ func (s errOrgUnitStore) SetBusinessUnitCurrent(context.Context, string, string,
 func (s errOrgUnitStore) ResolveOrgID(context.Context, string, string) (int, error) {
 	return 0, s.err
 }
+func (s errOrgUnitStore) ResolveOrgNodeKeyByCode(context.Context, string, string) (string, error) {
+	return "", s.err
+}
 func (s errOrgUnitStore) ResolveOrgCode(context.Context, string, int) (string, error) {
 	return "", s.err
 }
+func (s errOrgUnitStore) ResolveOrgCodeByNodeKey(context.Context, string, string) (string, error) {
+	return "", s.err
+}
 func (s errOrgUnitStore) ResolveOrgCodes(context.Context, string, []int) (map[int]string, error) {
+	return nil, s.err
+}
+func (s errOrgUnitStore) ResolveOrgCodesByNodeKeys(context.Context, string, []string) (map[string]string, error) {
 	return nil, s.err
 }
 func (s errOrgUnitStore) ListChildren(context.Context, string, int, string) ([]OrgUnitChild, error) {
@@ -355,12 +364,23 @@ func (resolveErrOrgStore) SetBusinessUnitCurrent(context.Context, string, string
 func (s resolveErrOrgStore) ResolveOrgID(context.Context, string, string) (int, error) {
 	return 0, s.err
 }
+func (s resolveErrOrgStore) ResolveOrgNodeKeyByCode(context.Context, string, string) (string, error) {
+	return "", s.err
+}
 func (resolveErrOrgStore) ResolveOrgCode(context.Context, string, int) (string, error) {
+	return "ORG-1", nil
+}
+func (resolveErrOrgStore) ResolveOrgCodeByNodeKey(context.Context, string, string) (string, error) {
 	return "ORG-1", nil
 }
 func (resolveErrOrgStore) ResolveOrgCodes(context.Context, string, []int) (map[int]string, error) {
 	out := make(map[int]string)
 	out[10000001] = "ORG-1"
+	return out, nil
+}
+func (resolveErrOrgStore) ResolveOrgCodesByNodeKeys(context.Context, string, []string) (map[string]string, error) {
+	out := make(map[string]string)
+	out["10000001"] = "ORG-1"
 	return out, nil
 }
 func (resolveErrOrgStore) ListChildren(context.Context, string, int, string) ([]OrgUnitChild, error) {
