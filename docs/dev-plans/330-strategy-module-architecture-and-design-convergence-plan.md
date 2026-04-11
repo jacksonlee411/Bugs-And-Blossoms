@@ -1,6 +1,6 @@
 # DEV-PLAN-330：策略模块架构混乱调查与收口方案
 
-**状态**: 进行中（2026-04-11 14:34 CST，PR-1 审计与契约冻结、PR-2 Context Resolver 单点落地已完成）
+**状态**: 已完成（2026-04-11，`PR-1 ~ PR-6` 已完成并封板）
 
 ## 1. 背景
 
@@ -523,21 +523,21 @@
 
 ### 5.1 核心目标
 
-1. [ ] 将第 `4.2` 节统一模型固定为 `DEV-PLAN-330` 的正式目标架构主口径，后续相关整改必须围绕该模型收口。
-2. [ ] 冻结“策略模块”术语表，明确 `dynamic policy / static metadata / mutation policy / activation` 的唯一中文口径，以及每层的主写入口、消费方和不变量。
-3. [ ] 将 `resolved_setid + business_unit_node_key` 双轴正式写入 Strategy Registry 的记录/查询契约，终结“只靠 BU 命中、SetID 事后解释”的过渡态。
-4. [ ] 让动态字段策略运行时只保留一个 PDP，并显式继承 `DEV-PLAN-200/202` 的确定性裁决算法。
-5. [ ] 对齐 SetID Registry 路由的 capability 归属与 authz object 归属，消除双语义。
-6. [ ] 将 `priority_mode / local_override_mode` 冻结为正式裁决维度，并以有限枚举、合法矩阵与 fail-closed 语义完成运行时兑现。
-7. [ ] 将旧 `tenant_field_policies` 收敛为明确的兼容层或彻底退役路径，避免继续作为“看起来还能写/还能裁决”的影子事实源。
-8. [ ] 补齐 explain、错误码、版本语义、测试与门禁，使策略模块的主路径可追踪、可复算、可审计。
+1. [X] 将第 `4.2` 节统一模型固定为 `DEV-PLAN-330` 的正式目标架构主口径，后续相关整改均已围绕该模型收口。
+2. [X] 已冻结“策略模块”术语表，明确 `dynamic policy / static metadata / mutation policy / activation` 的唯一中文口径，以及每层的主写入口、消费方和不变量。
+3. [X] `resolved_setid + business_unit_node_key` 双轴已正式写入 Strategy Registry 的记录/查询契约，终结“只靠 BU 命中、SetID 事后解释”的过渡态。
+4. [X] 动态字段策略运行时已收口为唯一 PDP，并显式继承 `DEV-PLAN-200/202` 的确定性裁决算法。
+5. [X] SetID Registry 路由的 capability 归属与 authz object 归属已对齐，双语义已消除。
+6. [X] `priority_mode / local_override_mode` 已冻结为正式裁决维度，并以有限枚举、合法矩阵与 fail-closed 语义完成运行时兑现。
+7. [X] 旧 `tenant_field_policies` 已收敛为明确退役路径；数据库历史结构仅保留迁移事实，不再继续作为“看起来还能写/还能裁决”的影子事实源。
+8. [X] explain、错误码、版本语义、测试与门禁已补齐，策略模块主路径可追踪、可复算、可审计。
 
 ### 5.2 非目标
 
-1. [ ] 本计划不直接新增数据库表；如需新表或 destructive migration，必须另起计划并先获用户确认。
-2. [ ] 本计划不在第一阶段重写全部 UI 页面，只聚焦架构收口与契约对齐。
-3. [ ] 本计划不引入 legacy 双链路、回退开关或第二写入口。
-4. [ ] 本计划不保留 API 兼容别名窗口、双错误码输出窗口或“旧主链继续 happy path、新主链逐步试运行”的并行运行策略；如需风险控制，只能使用环境级保护与 fail-closed 语义。
+1. [X] 本计划未直接新增数据库表；如需新表或 destructive migration，仍必须另起计划并先获用户确认。
+2. [X] 本计划未在第一阶段重写全部 UI 页面，仅聚焦架构收口与契约对齐。
+3. [X] 本计划未引入 legacy 双链路、回退开关或第二写入口。
+4. [X] 本计划未保留 API 兼容别名窗口、双错误码输出窗口或“旧主链继续 happy path、新主链逐步试运行”的并行运行策略；风险控制仅使用环境级保护与 fail-closed 语义。
 
 ### 5.3 实施批次与 PR 映射（冻结）
 
@@ -550,7 +550,7 @@
 | `PR-3` Schema 双轴化与历史回填 | [X] 已完成 | `R2 + R3` + `6.2B` 记录契约 | 在现有表上引入 `resolved_setid`、约束、唯一键与回填证据 | 若仍存在非法形状或不可判定记录即 stopline |
 | `PR-4` 唯一 PDP 与前置测试 | [X] 已完成 | `R4` + `6.2` + `6.5` | 抽单一 PDP，补 bucket/mode/explain 回放测试 | 未完成前不得切主链 |
 | `PR-5` API / explain / version / 错误码切主链 | [X] 已完成 | `R5 + R6` + `6.2C` | 显式表达 SetID 轴，统一 explain/version，切 canonical 错误码 | “schema 双轴、查询单轴”不构成收口 |
-| `PR-6` route/authz、旧层退场与门禁收尾 | [ ] 待开始 | `R7` + `6.3 + 6.4 + 6.6` | 收 capability/authz 归属，冻结 `tenant_field_policies` 定位并完成门禁证据 | 不允许旧主链继续 happy path |
+| `PR-6` route/authz、旧层退场与门禁收尾 | [X] 已完成 | `R7` + `6.3 + 6.4 + 6.6` | 收 capability/authz 归属，冻结 `tenant_field_policies` 定位并完成门禁证据 | 不允许旧主链继续 happy path |
 
 ### 5.3A PR-1 已交付物（2026-04-11）
 
@@ -630,22 +630,42 @@
 5. [X] 新增 PR-5 实施记录并接入仓库文档地图，作为 `PR-6` 前的证据冻结点：
    `docs/dev-records/dev-plan-330-pr5-api-explain-version-error-cutover-log.md`
 
+### 5.3F PR-6 已交付物（2026-04-11）
+
+1. [X] SetID 治理台相关 route-level capability 与 owner module 已统一收口到 `org.orgunit_write.field_policy / orgunit`，不再继续挂靠 `staffing.assignment_create.field_policy`：
+   - `internal/server/capability_route_registry.go`
+   - `config/capability/route-capability-map.v1.json`
+2. [X] authz requirement、路由注册与 allowlist 已同步切主并退役旧 `field-policies*` public route；旧路由只保留负向测试中的 `404/未映射` 回归断言，不再保留 runtime/public 写入口：
+   - `internal/server/authz_middleware.go`
+   - `internal/server/handler.go`
+   - `config/routing/allowlist.yaml`
+3. [X] `tenant_field_policies` 旧兼容层已退出 runtime happy path：server 旧 API/store、module 旧 read helper、前端旧 helper 与页面旧 dialog 全部删除；DB 历史表仅保留为历史结构/迁移事实，不再代表正式主链：
+   - `internal/server/orgunit_field_metadata_api.go`
+   - `internal/server/orgunit_field_metadata_store.go`
+   - `modules/orgunit/infrastructure/persistence/orgunit_pg_store.go`
+   - `apps/web/src/api/orgUnits.ts`
+   - `apps/web/src/pages/org/OrgUnitFieldConfigsPage.tsx`
+4. [X] `make check no-legacy` 已补 retired runtime/public symbol 防回流扫描，阻断旧 public route、前端旧 helper 与旧 store API 回流：
+   - `scripts/ci/check-no-legacy.sh`
+5. [X] 新增 PR-6 实施记录并接入仓库文档地图，作为 `DEV-PLAN-330` 当前批次完成证据：
+   `docs/dev-records/dev-plan-330-pr6-route-authz-legacy-retirement-and-gates-log.md`
+
 ## 6. 收口方案
 
 ### 6.1 M1：术语与职责冻结
 
-1. [ ] 在文档中统一以下术语：
+1. [X] 已在文档中统一以下术语：
    - `Static Metadata SoT`
    - `Dynamic Policy SoT`
    - `Mutation Policy`
    - `Policy Activation`
-2. [ ] 明确每个术语的：
+2. [X] 已明确每个术语的：
    - 事实源
    - 主写入口
    - 运行时消费方
    - explain 责任
    - 冻结不变量
-3. [ ] 同步冻结统一模型的正式维度与输入/输出语义，至少包括：
+3. [X] 已同步冻结统一模型的正式维度与输入/输出语义，至少包括：
    - 事实源维度
    - 字段维度
    - 上下文维度
@@ -653,63 +673,63 @@
    - 裁决维度
    - 输出决策维度
    - 解释与审计维度
-4. [ ] 同步冻结 BU 上下文相关术语：
+4. [X] 已同步冻结 BU 上下文相关术语：
    - `business_unit_org_code`：仅用于外部 API / 页面输入与回显
    - `business_unit_node_key`：仅用于内部运行时 / DB / PDP 命中键
    - `business_unit_id`：仅允许用于描述 legacy/compat 痕迹，不再作为目标态术语
-5. [ ] 明确 `resolved_setid` 属于正式语义轴，`business_unit_node_key` 属于正式特异度轴；二者都进入统一模型的正式上下文，而不是“术语说明”层装饰。
-6. [ ] 禁止继续使用会引发混淆的泛称来描述不同层，尤其禁止把 `business_unit_org_code` / `business_unit_node_key` / `business_unit_id` 混写成同一层语义。
+5. [X] 已明确 `resolved_setid` 属于正式语义轴，`business_unit_node_key` 属于正式特异度轴；二者都进入统一模型的正式上下文，而不是“术语说明”层装饰。
+6. [X] 已冻结禁止继续使用会引发混淆的泛称来描述不同层，尤其禁止把 `business_unit_org_code` / `business_unit_node_key` / `business_unit_id` 混写成同一层语义。
 
 ### 6.2 M2：动态字段策略 PDP 单点化
 
-1. [ ] 抽取唯一决策器，统一承载：
+1. [X] 已抽取唯一决策器，统一承载：
    - baseline vs intent override lookup chain
    - `PolicyContext(resolved_setid + business_unit_node_key + as_of + capability_key + field_key)`
    - `DEV-PLAN-200/202` 的确定性裁决算法
    - `priority_mode / local_override_mode`
    - conflict / missing / explain / version 输出
-2. [ ] `internal/server` 与 `modules/orgunit/infrastructure` 不得再各自维护平行决策逻辑。
-3. [ ] 该 PDP 的职责必须显式对应第 `4.2.4` 节统一运行时主链与第 `4.2.6` 节双轴算法，而不是只做局部 lookup helper。
-4. [ ] 所有相关 API、服务层与 explain 链路统一复用该 PDP。
+2. [X] `internal/server` 与 `modules/orgunit/infrastructure` 已不再各自维护平行决策逻辑。
+3. [X] 该 PDP 的职责已显式对应第 `4.2.4` 节统一运行时主链与第 `4.2.6` 节双轴算法，而不是局部 lookup helper。
+4. [X] 所有相关 API、服务层与 explain 链路已统一复用该 PDP。
 
 ### 6.2A M2 前置：`Context Resolver` 单点落地
 
-1. [ ] 在切双轴 schema、主写 API 与 PDP 前，必须先落单一 `Context Resolver`。
-2. [ ] 该 Resolver 的正式输入/输出冻结为：
+1. [X] 已在切双轴 schema、主写 API 与 PDP 前先落单一 `Context Resolver`。
+2. [X] 该 Resolver 的正式输入/输出已冻结为：
    - 输入：`tenant + capability_key + field_key + as_of + business_unit_org_code`
    - 输出：`business_unit_node_key + resolved_setid + setid_source`
-3. [ ] Resolver 的失败语义必须直接对齐第 `4.2.7` 节：
+3. [X] Resolver 的失败语义已直接对齐第 `4.2.7` 节：
    - `business_unit_context_invalid`
    - `setid_binding_missing`
    - `setid_binding_ambiguous`
    - `setid_source_invalid`
-4. [ ] explain、主写 API、双轴主查询、版本签名与回放工具不得复制 Resolver 逻辑；必须统一复用。
-5. [ ] `Context Resolver` 必须具备单独验收样例与回放证据，证明它不是“文档里的逻辑概念”，而是可复用的正式边界。
+4. [X] explain、主写 API、双轴主查询、版本签名与回放工具已统一复用 Resolver 逻辑，不再重复复制。
+5. [X] `Context Resolver` 已具备单独验收样例与回放证据，证明它不是“文档里的逻辑概念”，而是可复用的正式边界。
 
 ### 6.2B M2 补充：SetID 上下文收口
 
-1. [ ] 冻结“SetID 如何影响策略”的正式口径：
+1. [X] 已冻结“SetID 如何影响策略”的正式口径：
    - `business_unit_org_code` 仅属于外部原始请求输入；
    - `Context Resolver` 必须将其解析为 `business_unit_node_key + resolved_setid + setid_source`；
    - `resolved_setid` 作为 PDP 的正式语义输入；
    - `business_unit_node_key` 作为 PDP 的正式特异度/本地覆盖输入。
-2. [ ] 冻结 Strategy Registry 的正式记录契约：
+2. [X] 已冻结 Strategy Registry 的正式记录契约：
    - `resolved_setid` 与 `business_unit_node_key` 都进入记录作用域
    - 只允许 `setid exact + bu exact`、`setid exact + bu wildcard`、`setid wildcard + bu wildcard`
    - `setid wildcard + bu exact` 为非法形状
-3. [ ] 明确该问题属于统一模型“上下文维度 + 记录契约”的收口，而不是零散字段命名修补。
-4. [ ] explain、测试、版本签名与冲突复算必须显式回显或使用：
+3. [X] 已明确该问题属于统一模型“上下文维度 + 记录契约”的收口，而不是零散字段命名修补。
+4. [X] explain、测试、版本签名与冲突复算已显式回显或使用：
    - `resolved_setid`
    - `setid_source`
    - `business_unit_node_key`
-5. [ ] 任何链路都不得再把 `business_unit_org_code` 或 legacy `business_unit_id` 直接当作 PDP 命中键。
-6. [ ] 维护者必须能明确回答：
+5. [X] 任何正式链路已不再把 `business_unit_org_code` 或 legacy `business_unit_id` 直接当作 PDP 命中键。
+6. [X] 维护者现已能明确回答：
    - 哪一层负责从外部输入解析出 `PolicyContext`
    - `resolved_setid` 如何承担统一语义轴
    - `business_unit_node_key` 如何承担特异度/本地覆盖语义
    - wildcard 如何表达
    - 哪些 legacy 口径仍存在及其退出路径
-7. [ ] 该里程碑必须按第 `4.2.5A` 节的顺序落地：
+7. [X] 该里程碑已按第 `4.2.5A` 节的顺序落地：
    - 先完成存量记录审计
    - 再完成 `Context Resolver` 单点落地
    - 再完成既有表增量扩展与约束
@@ -717,94 +737,91 @@
    - 再补齐切主链前置测试与回放证据
    - 再切 Registry 主写 API 的 SetID 轴表达
    - 最后切主查询、PDP、explain 与版本签名
-8. [ ] 若任一步骤发现“无法唯一确定 `resolved_setid` 的历史记录”，该问题必须被视为 stopline，而不是通过 wildcard、前端补参或旧查询兜底绕过。
+8. [X] 已冻结“无法唯一确定 `resolved_setid` 的历史记录”即 stopline；未通过 wildcard、前端补参或旧查询兜底绕过。
 
 ### 6.2C M2 补充：失败语义与版本契约
 
-1. [ ] 失败语义必须直接对齐第 `4.2.7` 节失败矩阵，不再由各接口散落定义。
-2. [ ] `policy_missing / policy_conflict_ambiguous / policy_mode_invalid / policy_version_required / policy_version_conflict` 等正式错误码必须在文档、实现与用户提示层保持一一对应。
-3. [ ] `Policy Activation` 必须成为正式消费层：
+1. [X] 失败语义已直接对齐第 `4.2.7` 节失败矩阵，不再由各接口散落定义。
+2. [X] `policy_missing / policy_conflict_ambiguous / policy_mode_invalid / policy_version_required / policy_version_conflict` 等正式错误码已在文档、实现与用户提示层保持一一对应。
+3. [X] `Policy Activation` 已成为正式消费层：
    - 负责当前激活版本
    - 负责 `policy_version / effective_policy_version`
    - 负责写前 stale 校验
-4. [ ] 缺上下文、缺策略、非法 mode、非法记录形状均不得 fallback 到 legacy 路径、前端二次裁决或“默认放行”。
-5. [ ] canonical 输出错误码必须以 `DEV-PLAN-200 §7.1` 的 lower snake_case 为准；若当前实现仍存在 legacy 大写错误码，只能作为迁移输入或局部兼容读处理，不得继续作为目标态输出。
-6. [ ] 错误码切换必须具备单独 stopline：
+4. [X] 缺上下文、缺策略、非法 mode、非法记录形状均不会 fallback 到 legacy 路径、前端二次裁决或“默认放行”。
+5. [X] canonical 输出错误码已以 `DEV-PLAN-200 §7.1` 的 lower snake_case 为准；legacy 大写错误码仅作为迁移输入或局部兼容读处理。
+6. [X] 错误码切换已具备单独 stopline：
    - API/前端/用户提示若仍把 legacy 大写错误码当正式输出，则 `330` 不得验收通过
    - 禁止出现“同一主链同时承诺大写与 lower snake_case 都是正式输出”的双口径窗口
 
 ### 6.3 M3：路由 capability 与鉴权归属对齐
 
-1. [ ] 重新评估 `SetID Strategy Registry` 是否应继续挂在 `staffing.assignment_create.field_policy`。
-2. [ ] 若该页面本质是治理台，应改为对齐 org SetID governance capability。
-3. [ ] capability-route-map、authz requirement、页面文案、explain 归属必须一次性一起收口。
+1. [X] 已重新评估 `SetID Strategy Registry` 治理台路由归属；正式 route-level capability 不再继续挂在 `staffing.assignment_create.field_policy`。
+2. [X] 已将治理台路由统一收口到 `org.orgunit_write.field_policy`，并同步使用 `orgunit` 作为 owner module / authz 归属。
+3. [X] capability-route-map、authz requirement、页面跳转归属与 explain 入口已一次性对齐 canonical 主链。
 
 ### 6.4 M4：旧 `tenant_field_policies` 兼容层收边
 
-1. [ ] 明确其最终定位：
-   - `read-only compatibility`
-   - `migration source only`
-   - `fully retired`
-2. [ ] 该里程碑不得后置为“主链切完后再盘点”；必须以前置审计结果为输入，明确哪些 consumer/read/explain 路径仍依赖旧层。
-3. [ ] 若仍保留读路径，必须在代码与文档中显式标注其兼容属性，且不得继续参与 happy path 的正式字段裁决。
-4. [ ] 若字段配置页读取动态镜像，应统一经由 Strategy Registry / PDP 输出，不再绕回旧层。
+1. [X] 已明确其最终定位为：数据库历史结构仅保留 `migration source only`，runtime/public 语义为 `fully retired`；不再保留 `read-only compatibility`。
+2. [X] 已以前置审计结果为输入盘清 consumer/read/explain 路径，并在 `PR-6` 直接完成 runtime/public 退役，不再把该问题后置。
+3. [X] server/module/public 旧读写路径已删除，`tenant_field_policies` 不再参与 happy path 正式字段裁决；仅保留历史结构与迁移事实层语义。
+4. [X] 字段配置页动态镜像已统一经由 Strategy Registry / PDP 输出，不再绕回旧层，也不再保留旧 policy dialog / helper 写入口。
 
 ### 6.5 M5：`priority_mode / local_override_mode` 正式裁决维度兑现
 
-1. [ ] 盘点当前真实使用场景与 explain 诉求。
-2. [ ] 冻结其正式语义为：有限枚举、合法矩阵、非法组合 fail-closed；实现口径对齐 `DEV-PLAN-202`。
-3. [ ] 它们必须正式进入第 `4.2.4` 节统一运行时主链并参与第 `4.2.6` 节唯一 PDP 裁决，而不是只停留在 schema/API 回显层。
-4. [ ] explain、测试矩阵与回放证据必须能回答 mode 如何影响最终裁决结果。
-5. [ ] 在运行时兑现完成前，文档与 UI 不得把其宣称为“已完全生效”的稳定能力。
+1. [X] 已盘点当前真实使用场景与 explain 诉求。
+2. [X] 已冻结其正式语义为：有限枚举、合法矩阵、非法组合 fail-closed；实现口径对齐 `DEV-PLAN-202`。
+3. [X] 它们已正式进入第 `4.2.4` 节统一运行时主链并参与第 `4.2.6` 节唯一 PDP 裁决，而不是只停留在 schema/API 回显层。
+4. [X] explain、测试矩阵与回放证据已能回答 mode 如何影响最终裁决结果。
+5. [X] 在运行时兑现完成前，文档与 UI 未将其宣称为“已完全生效”的稳定能力；完成后已按正式主链口径收口。
 
 ### 6.6 M6：测试、证据与门禁
 
-1. [ ] 针对唯一 PDP 增加确定性测试，并作为 `R6` 前置条件而不是收尾工作：
+1. [X] 针对唯一 PDP 的确定性测试已在 `PR-4` 完成，并作为切主链前置条件而非收尾工作：
    - baseline/intent bucket 顺序
    - `resolved_setid exact/wildcard`
    - `business_unit_node_key exact/wildcard`
    - `policy_missing / policy_conflict_ambiguous`
    - mode matrix
-2. [ ] `Context Resolver` 必须有单独测试与回放证据，确保同输入得到同一 `PolicyContext` 输出。
-3. [ ] 补 explain 证据，确保同输入可复算。
-4. [ ] 失败语义回归至少覆盖：
+2. [X] `Context Resolver` 已具备单独测试与回放证据，确保同输入得到同一 `PolicyContext` 输出。
+3. [X] explain 证据已在 `PR-5` 完成补齐，确保同输入可复算。
+4. [X] 失败语义回归已覆盖：
    - `business_unit_context_invalid`
    - `setid_binding_missing / setid_binding_ambiguous`
    - `policy_missing`
    - `policy_conflict_ambiguous`
    - `policy_mode_invalid`
    - `policy_version_required / policy_version_conflict`
-5. [ ] `Mutation Policy` 与 `Policy Activation` 必须各自有最小验证样例，证明其边界没有重新回流到 `Dynamic Policy SoT`。
-6. [ ] 按 `AGENTS.md` 与 `DEV-PLAN-012` 收口相关门禁。
-7. [ ] 既有表演化证据至少必须包含：
+5. [X] `Mutation Policy` 与 `Policy Activation` 已具备最小验证样例，边界未重新回流到 `Dynamic Policy SoT`。
+6. [X] 已按 `AGENTS.md` 与 `DEV-PLAN-012` 收口相关门禁，`PR-6` 额外补齐 retired runtime/public symbol 防回流检查。
+7. [X] 既有表演化证据已包含：
    - 存量记录分类结果
    - 旧层 consumer/read/explain 路径清单
    - 非法形状清零证据
    - `Context Resolver` 已成为唯一规范化入口的证据
    - `resolved_setid` 已进入唯一键/冲突检测键的证据
    - 双轴主查询已替换单轴 BU 查询的证据
-8. [ ] 错误码收口证据至少必须包含：
+8. [X] 错误码收口证据已包含：
    - canonical 输出为 lower snake_case 的 API 样例
    - 用户提示层与错误码一一对应的样例
    - legacy 大写错误码不再作为正式输出的回归样例
 
 ## 7. 验收标准
 
-1. [ ] 仓库内能明确回答“动态字段策略的唯一 PDP 在哪里”。
-2. [ ] `Static Metadata SoT / Dynamic Policy SoT / Mutation Policy / Policy Activation` 四层都能明确说明主写入口、运行时消费方与冻结不变量。
-3. [ ] SetID Registry 路由的 capability 归属、authz object、页面定位三者一致。
-4. [ ] `priority_mode / local_override_mode` 已按有限枚举、冻结矩阵与 fail-closed 语义进入正式裁决维度，运行时地位不再模糊。
-5. [ ] `tenant_field_policies` 的兼容状态在代码、文档、页面层均表达一致。
-6. [ ] 同一上下文下的字段决策结果只由一条主路径给出，且 explain 可追踪。
-7. [ ] `resolved_setid` 已稳定进入 PDP 的正式输入与 Strategy Registry 的正式记录/查询契约，`business_unit_node_key` 已稳定进入 PDP 的正式特异度/本地覆盖输入，`business_unit_org_code` 不再直接参与命中。
-8. [ ] Strategy Registry 的作用域形状只存在本计划允许的三类，不再出现 `setid wildcard + bu exact` 这类语义不清记录。
-9. [ ] 同一 `PolicyContext` 输入下，双轴 PDP 的 bucket 顺序、桶内排序、mode 矩阵与错误码结果可重复复算，且与 `DEV-PLAN-200/202` 保持一致。
-10. [ ] 失败语义矩阵已冻结：缺上下文、缺 SetID、缺策略、mode 非法、版本 stale 都有稳定错误码、explain 最低输出与 fail-closed 语义。
-11. [ ] BU 上下文字段分层表达一致：外部只谈 `business_unit_org_code`，规范化上下文谈 `resolved_setid + business_unit_node_key`，legacy `business_unit_id` 仅在兼容说明中出现。
-12. [ ] 维护者能够按第 `4.2` 节统一模型完整解释任一字段决策：输入上下文、命中层次、裁决路径、最终输出与 explain 结果均可对应到同一模型。
-13. [ ] `orgunit.setid_strategy_registry` 现有表已完成双轴化：`resolved_setid` 已进入记录约束、唯一键/冲突检测键与主查询契约；不存在“schema 双轴、查询单轴”的过渡残留。
-14. [ ] Registry 主写 API 已能显式表达 `resolved_setid=exact / wildcard`，不再通过 BU 输入隐式猜测 SetID 作用域。
-15. [ ] 不存在 API 兼容别名窗口、双错误码正式输出窗口或“旧主链 happy path 保留”的并行目标态；若系统需要风险缓解，只通过环境级保护与 fail-closed 语义实现。
+1. [X] 仓库内已能明确回答“动态字段策略的唯一 PDP 在哪里”。
+2. [X] `Static Metadata SoT / Dynamic Policy SoT / Mutation Policy / Policy Activation` 四层都能明确说明主写入口、运行时消费方与冻结不变量。
+3. [X] SetID Registry 路由的 capability 归属、authz object、页面定位三者一致。
+4. [X] `priority_mode / local_override_mode` 已按有限枚举、冻结矩阵与 fail-closed 语义进入正式裁决维度，运行时地位不再模糊。
+5. [X] `tenant_field_policies` 的兼容状态在代码、文档、页面层均表达一致。
+6. [X] 同一上下文下的字段决策结果只由一条主路径给出，且 explain 可追踪。
+7. [X] `resolved_setid` 已稳定进入 PDP 的正式输入与 Strategy Registry 的正式记录/查询契约，`business_unit_node_key` 已稳定进入 PDP 的正式特异度/本地覆盖输入，`business_unit_org_code` 不再直接参与命中。
+8. [X] Strategy Registry 的作用域形状只存在本计划允许的三类，不再出现 `setid wildcard + bu exact` 这类语义不清记录。
+9. [X] 同一 `PolicyContext` 输入下，双轴 PDP 的 bucket 顺序、桶内排序、mode 矩阵与错误码结果可重复复算，且与 `DEV-PLAN-200/202` 保持一致。
+10. [X] 失败语义矩阵已冻结：缺上下文、缺 SetID、缺策略、mode 非法、版本 stale 都有稳定错误码、explain 最低输出与 fail-closed 语义。
+11. [X] BU 上下文字段分层表达一致：外部只谈 `business_unit_org_code`，规范化上下文谈 `resolved_setid + business_unit_node_key`，legacy `business_unit_id` 仅在兼容说明中出现。
+12. [X] 维护者能够按第 `4.2` 节统一模型完整解释任一字段决策：输入上下文、命中层次、裁决路径、最终输出与 explain 结果均可对应到同一模型。
+13. [X] `orgunit.setid_strategy_registry` 现有表已完成双轴化：`resolved_setid` 已进入记录约束、唯一键/冲突检测键与主查询契约；不存在“schema 双轴、查询单轴”的过渡残留。
+14. [X] Registry 主写 API 已能显式表达 `resolved_setid=exact / wildcard`，不再通过 BU 输入隐式猜测 SetID 作用域。
+15. [X] 不存在 API 兼容别名窗口、双错误码正式输出窗口或“旧主链 happy path 保留”的并行目标态；若系统需要风险缓解，只通过环境级保护与 fail-closed 语义实现。
 
 ## 8. 风险与缓解
 
@@ -819,12 +836,12 @@
 
 ## 9. 门禁与验证（SSOT 引用）
 
-按 `AGENTS.md` 与 `docs/dev-plans/012-ci-quality-gates.md` 执行，不在本文复制脚本实现。预计后续整改将命中：
+按 `AGENTS.md` 与 `docs/dev-plans/012-ci-quality-gates.md` 执行，不在本文复制脚本实现。本批次整改已命中并通过：
 
-1. [ ] Go 代码：`go fmt ./... && go vet ./... && make check lint && make test`
-2. [ ] Routing / capability：`make check routing && make check capability-route-map && make check capability-key`
-3. [ ] 文档：`make check doc`
-4. [ ] Legacy 防回流：`make check no-legacy`
+1. [X] Go 代码：`go fmt ./... && go vet ./... && make check lint && make test`
+2. [X] Routing / capability：`make check routing && make check capability-route-map && make check capability-key`
+3. [X] 文档：`make check doc`
+4. [X] Legacy 防回流：`make check no-legacy`
 
 ## 10. 关联文档
 

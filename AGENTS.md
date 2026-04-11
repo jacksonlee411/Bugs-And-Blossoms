@@ -470,6 +470,7 @@ modules/{module}/
 - DEV-PLAN-330 PR-3 记录：Schema 双轴化与历史回填：`docs/dev-records/dev-plan-330-pr3-schema-dual-axis-and-backfill-implementation-log.md`
 - DEV-PLAN-330 PR-4 记录：唯一 PDP 与前置测试：`docs/dev-records/dev-plan-330-pr4-unique-pdp-and-prerequisite-tests-log.md`
 - DEV-PLAN-330 PR-5 记录：API / explain / version / 错误码切主链：`docs/dev-records/dev-plan-330-pr5-api-explain-version-error-cutover-log.md`
+- DEV-PLAN-330 PR-6 记录：route/authz 收口、旧层退场与门禁封板：`docs/dev-records/dev-plan-330-pr6-route-authz-legacy-retirement-and-gates-log.md`
 - DEV-PLAN-340：Assistant 组织架构重复维护调查与收敛方案：`docs/dev-plans/340-assistant-orgunit-duplicate-maintenance-investigation-and-convergence-plan.md`
 - DEV-PLAN-350：Assistant Tooling 对齐统一策略模型实施方案：`docs/dev-plans/350-assistant-tooling-alignment-with-unified-policy-model-plan.md`
 - DEV-PLAN-303：全仓残留 `gap/coverage` 测试尾项清零计划：`docs/dev-plans/303-repo-final-gap-coverage-test-tail-closure-plan.md`

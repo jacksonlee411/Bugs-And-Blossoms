@@ -10,8 +10,7 @@ const orgUnitApiMocks = vi.hoisted(() => ({
   enableOrgUnitFieldConfig: vi.fn(),
   listOrgUnitFieldConfigEnableCandidates: vi.fn(),
   listOrgUnitFieldConfigs: vi.fn(),
-  listOrgUnitFieldDefinitions: vi.fn(),
-  upsertOrgUnitFieldPolicy: vi.fn()
+  listOrgUnitFieldDefinitions: vi.fn()
 }))
 
 const appPreferencesMocks = vi.hoisted(() => ({

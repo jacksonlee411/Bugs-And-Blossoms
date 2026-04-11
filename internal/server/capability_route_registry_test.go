@@ -23,7 +23,7 @@ func TestCapabilityRouteBindingKey(t *testing.T) {
 }
 
 func TestCapabilityRouteBindingForRoute(t *testing.T) {
-	if definition, ok := capabilityDefinitionForKey(" staffing.assignment_create.field_policy "); !ok || definition.FunctionalAreaKey != "staffing" {
+	if definition, ok := capabilityDefinitionForKey(" org.orgunit_write.field_policy "); !ok || definition.FunctionalAreaKey != "org_foundation" {
 		t.Fatalf("definition=%+v ok=%v", definition, ok)
 	}
 	if _, ok := capabilityDefinitionForKey("unknown.key"); ok {
@@ -34,7 +34,7 @@ func TestCapabilityRouteBindingForRoute(t *testing.T) {
 	if !ok {
 		t.Fatal("expected mapping found")
 	}
-	if binding.CapabilityKey != "staffing.assignment_create.field_policy" || binding.Action != authz.ActionRead {
+	if binding.CapabilityKey != orgUnitWriteFieldPolicyCapabilityKey || binding.Action != authz.ActionRead {
 		t.Fatalf("binding=%+v", binding)
 	}
 

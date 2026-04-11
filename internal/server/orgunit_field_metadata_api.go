@@ -121,65 +121,10 @@ type orgUnitFieldConfigsDisableRequest struct {
 	RequestID  string `json:"request_id"`
 }
 
-type orgUnitFieldPoliciesUpsertRequest struct {
-	FieldKey        string  `json:"field_key"`
-	ScopeType       string  `json:"scope_type"`
-	ScopeKey        string  `json:"scope_key"`
-	Maintainable    *bool   `json:"maintainable"`
-	DefaultMode     string  `json:"default_mode"`
-	DefaultRuleExpr *string `json:"default_rule_expr"`
-	EnabledOn       string  `json:"enabled_on"`
-	RequestID       string  `json:"request_id"`
-}
-
-type orgUnitFieldPoliciesDisableRequest struct {
-	FieldKey   string `json:"field_key"`
-	ScopeType  string `json:"scope_type"`
-	ScopeKey   string `json:"scope_key"`
-	DisabledOn string `json:"disabled_on"`
-	RequestID  string `json:"request_id"`
-}
-
-type orgUnitFieldPoliciesResolvePreviewResponse struct {
-	FieldKey       string                    `json:"field_key"`
-	AsOf           string                    `json:"as_of"`
-	ScopeType      string                    `json:"scope_type"`
-	ScopeKey       string                    `json:"scope_key"`
-	ResolvedPolicy orgUnitFieldPolicyAPIItem `json:"resolved_policy"`
-}
-
 type orgUnitFieldConfigStore interface {
 	ListTenantFieldConfigs(ctx context.Context, tenantID string) ([]orgUnitTenantFieldConfig, error)
 	EnableTenantFieldConfig(ctx context.Context, tenantID string, fieldKey string, valueType string, dataSourceType string, dataSourceConfig json.RawMessage, displayLabel *string, enabledOn string, requestID string, initiatorUUID string) (orgUnitTenantFieldConfig, bool, error)
 	DisableTenantFieldConfig(ctx context.Context, tenantID string, fieldKey string, disabledOn string, requestID string, initiatorUUID string) (orgUnitTenantFieldConfig, bool, error)
-}
-
-type orgUnitFieldPolicyStore interface {
-	ListTenantFieldPolicies(ctx context.Context, tenantID string) ([]orgUnitTenantFieldPolicy, error)
-	ResolveTenantFieldPolicy(ctx context.Context, tenantID string, fieldKey string, scopeType string, scopeKey string, asOf string) (orgUnitTenantFieldPolicy, bool, error)
-	UpsertTenantFieldPolicy(
-		ctx context.Context,
-		tenantID string,
-		fieldKey string,
-		scopeType string,
-		scopeKey string,
-		maintainable bool,
-		defaultMode string,
-		defaultRuleExpr *string,
-		enabledOn string,
-		requestID string,
-		initiatorUUID string,
-	) (orgUnitTenantFieldPolicy, bool, error)
-	DisableTenantFieldPolicy(
-		ctx context.Context,
-		tenantID string,
-		fieldKey string,
-		scopeType string,
-		scopeKey string,
-		disabledOn string,
-		requestID string,
-		initiatorUUID string,
-	) (orgUnitTenantFieldPolicy, bool, error)
 }
 
 type orgUnitDictRegistryStore interface {
@@ -800,93 +745,6 @@ func handleOrgUnitFieldConfigsDisableAPI(w http.ResponseWriter, r *http.Request,
 	})
 }
 
-func handleOrgUnitFieldPoliciesAPI(w http.ResponseWriter, r *http.Request, store OrgUnitStore) {
-	if r.Method != http.MethodPost {
-		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusMethodNotAllowed, "method_not_allowed", "method not allowed")
-		return
-	}
-	routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusUnprocessableEntity, "write_disabled", "tenant_field_policies write disabled (read-only)")
-	_ = store
-}
-
-func handleOrgUnitFieldPoliciesDisableAPI(w http.ResponseWriter, r *http.Request, store OrgUnitStore) {
-	if r.Method != http.MethodPost {
-		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusMethodNotAllowed, "method_not_allowed", "method not allowed")
-		return
-	}
-	routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusUnprocessableEntity, "write_disabled", "tenant_field_policies write disabled (read-only)")
-	_ = store
-}
-
-func handleOrgUnitFieldPoliciesResolvePreviewAPI(w http.ResponseWriter, r *http.Request, store OrgUnitStore) {
-	if r.Method != http.MethodGet {
-		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusMethodNotAllowed, "method_not_allowed", "method not allowed")
-		return
-	}
-	_ = store
-	tenant, ok := currentTenant(r.Context())
-	if !ok {
-		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusInternalServerError, "tenant_missing", "tenant missing")
-		return
-	}
-	asOf, err := parseRequiredQueryDay(r, "as_of")
-	if err != nil {
-		writeInternalDayFieldError(w, r, err)
-		return
-	}
-	fieldKey := strings.TrimSpace(r.URL.Query().Get("field_key"))
-	scopeType := strings.TrimSpace(r.URL.Query().Get("scope_type"))
-	scopeKey := strings.TrimSpace(r.URL.Query().Get("scope_key"))
-	if fieldKey == "" {
-		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "invalid_request", "field_key required")
-		return
-	}
-	scopeType, scopeKey, scopeOK := normalizeFieldPolicyScope(scopeType, scopeKey)
-	if !scopeOK {
-		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "invalid_request", "scope invalid")
-		return
-	}
-	capabilityKey := orgUnitWriteFieldPolicyCapabilityKey
-	policy := orgUnitFieldPolicyAPIItem{
-		FieldKey:     fieldKey,
-		ScopeType:    "SYSTEM_DEFAULT",
-		ScopeKey:     "system",
-		Maintainable: true,
-		DefaultMode:  "NONE",
-		EnabledOn:    "0001-01-01",
-	}
-	decision, resolveErr := defaultSetIDStrategyRegistryStore.resolveFieldDecision(
-		r.Context(),
-		tenant.ID,
-		capabilityKey,
-		fieldKey,
-		"",
-		"",
-		asOf,
-	)
-	if resolveErr != nil && !strings.EqualFold(stablePgMessage(resolveErr), fieldPolicyMissingCode) {
-		writeInternalAPIError(w, r, resolveErr, "orgunit_field_policy_resolve_failed")
-		return
-	}
-	if resolveErr == nil {
-		defaultRuleRef := strings.TrimSpace(decision.DefaultRuleRef)
-		policy.Maintainable = decision.Maintainable
-		if defaultRuleRef != "" {
-			policy.DefaultMode = "CEL"
-			policy.DefaultRuleExpr = &defaultRuleRef
-		}
-	}
-	w.Header().Set("Content-Type", "application/json; charset=utf-8")
-	w.WriteHeader(http.StatusOK)
-	_ = json.NewEncoder(w).Encode(orgUnitFieldPoliciesResolvePreviewResponse{
-		FieldKey:       fieldKey,
-		AsOf:           asOf,
-		ScopeType:      scopeType,
-		ScopeKey:       scopeKey,
-		ResolvedPolicy: policy,
-	})
-}
-
 type orgUnitFieldOptionsAPIResponse struct {
 	FieldKey string               `json:"field_key"`
 	AsOf     string               `json:"as_of"`
@@ -911,20 +769,6 @@ var orgUnitCoreFieldCatalog = []orgUnitCoreFieldDefinition{
 	{FieldKey: "parent_org_code", ValueType: "text", DataSourceType: "PLAIN", LabelI18nKey: "org_column_parent"},
 	{FieldKey: "manager_pernr", ValueType: "text", DataSourceType: "PLAIN", LabelI18nKey: "org_column_manager"},
 	{FieldKey: "is_business_unit", ValueType: "bool", DataSourceType: "PLAIN", LabelI18nKey: "org_column_is_business_unit"},
-}
-
-func orgUnitFieldPolicyAPIItemFromStore(p orgUnitTenantFieldPolicy) orgUnitFieldPolicyAPIItem {
-	return orgUnitFieldPolicyAPIItem{
-		FieldKey:        p.FieldKey,
-		ScopeType:       p.ScopeType,
-		ScopeKey:        p.ScopeKey,
-		Maintainable:    p.Maintainable,
-		DefaultMode:     p.DefaultMode,
-		DefaultRuleExpr: cloneOptionalString(p.DefaultRuleExpr),
-		EnabledOn:       p.EnabledOn,
-		DisabledOn:      cloneOptionalString(p.DisabledOn),
-		UpdatedAt:       p.UpdatedAt,
-	}
 }
 
 func handleOrgUnitFieldOptionsAPI(w http.ResponseWriter, r *http.Request, store OrgUnitStore) {
@@ -1061,44 +905,6 @@ func orgUnitFieldDataSourceConfigOptionsJSON(def orgUnitFieldDefinition) []json.
 	}
 	sort.SliceStable(raws, func(i, j int) bool { return string(raws[i]) < string(raws[j]) })
 	return raws
-}
-
-func isAllowedOrgUnitPolicyFieldKey(fieldKey string) bool {
-	fieldKey = strings.TrimSpace(fieldKey)
-	if fieldKey == "" {
-		return false
-	}
-	for _, core := range orgUnitCoreFieldCatalog {
-		if core.FieldKey == fieldKey {
-			return true
-		}
-	}
-	if _, ok := lookupOrgUnitFieldDefinition(fieldKey); ok {
-		return true
-	}
-	if isCustomOrgUnitDictFieldKey(fieldKey) {
-		return true
-	}
-	return isCustomOrgUnitPlainFieldKey(fieldKey)
-}
-
-func normalizeFieldPolicyScope(scopeType string, scopeKey string) (string, string, bool) {
-	scopeType = strings.ToUpper(strings.TrimSpace(scopeType))
-	scopeKey = strings.TrimSpace(scopeKey)
-	if scopeType == "" {
-		scopeType = "FORM"
-	}
-	switch scopeType {
-	case "GLOBAL":
-		return scopeType, "global", true
-	case "FORM":
-		if _, ok := orgUnitFieldPolicyCapabilityKeyForScope(scopeType, scopeKey); ok {
-			return scopeType, scopeKey, true
-		}
-		return "", "", false
-	default:
-		return "", "", false
-	}
 }
 
 func orgUnitFieldPolicyCELNextOrgCode(_ ...ref.Val) ref.Val {
