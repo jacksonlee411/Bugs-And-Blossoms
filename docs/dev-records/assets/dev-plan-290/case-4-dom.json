@@ -1,5 +1,5 @@
 {
-  "url": "http://localhost:18080/app/assistant/librechat/c/new",
+  "url": "http://localhost:8080/app/assistant/librechat/c/new",
   "bubble_count": 1,
   "bubbles": [
     {
@@ -7,7 +7,7 @@
       "conversation_id": "conv_tp290_4",
       "turn_id": "turn_tp290_4",
       "request_id": "req_tp290_4",
-      "message_id": "f4b53df4-f30f-417e-b78e-aceaaf1b8d79_",
+      "message_id": "ab259c51-c423-4fa1-8589-5c8793f747c0_",
       "text": "Case 4 提交成功。 task_id: task_turn_tp290_4 · succeeded Selected: 共享服务中心（候选2） org_code: AI2904 parent_org_code: FLOWER-B effective_date: 2026-03-26 event_type: orgunit_created"
     }
   ],

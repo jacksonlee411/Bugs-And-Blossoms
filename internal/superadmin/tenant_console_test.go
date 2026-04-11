@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"regexp"
 	"slices"
 	"strings"
 	"testing"
@@ -467,6 +468,13 @@ func TestTenantsCreate_Success(t *testing.T) {
 	bootstrapSQL := tx.execSQLs[1]
 	if !strings.Contains(bootstrapSQL, "business_unit_node_key") {
 		t.Fatalf("bootstrap SQL must write business_unit_node_key, got %q", bootstrapSQL)
+	}
+	if !strings.Contains(bootstrapSQL, "resolved_setid") {
+		t.Fatalf("bootstrap SQL must write resolved_setid, got %q", bootstrapSQL)
+	}
+	canonicalConflictKey := regexp.MustCompile(`(?s)ON CONFLICT \(\s*tenant_uuid,\s*capability_key,\s*field_key,\s*org_applicability,\s*resolved_setid,\s*business_unit_node_key,\s*effective_date\s*\)`)
+	if !canonicalConflictKey.MatchString(bootstrapSQL) {
+		t.Fatalf("bootstrap SQL must use canonical conflict key with resolved_setid, got %q", bootstrapSQL)
 	}
 	if slices.ContainsFunc([]string{"business_unit_id", "seeded.business_unit_id"}, func(needle string) bool {
 		return strings.Contains(bootstrapSQL, needle)

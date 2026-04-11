@@ -58,8 +58,13 @@ SELECT orgunit.submit_org_event(
   $7::text,
   $8::uuid
 )
-`, eventUUID, tenantID, orgNodeKeyValue, eventType, effectiveDate, payload, requestID, initiatorUUID).Scan(&eventID); err != nil {
+	`, eventUUID, tenantID, orgNodeKeyValue, eventType, effectiveDate, payload, requestID, initiatorUUID).Scan(&eventID); err != nil {
 		return 0, err
+	}
+	if eventType == string(types.OrgUnitEventCreate) || eventType == string(types.OrgUnitEventSetBusinessUnit) {
+		if err := setidresolver.EnsureBootstrap(ctx, tx, tenantID, initiatorUUID); err != nil {
+			return 0, err
+		}
 	}
 
 	if err := tx.Commit(ctx); err != nil {

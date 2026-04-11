@@ -3,12 +3,12 @@
   "bubble_count": 1,
   "bubbles": [
     {
-      "binding_key": "conv_b917951d68de41d1ba32eac7706191c5::turn_8ee58961d7a7465db8e1bbe78d81f636::assistant_174d0cca313a4819ae9049339f86a946",
-      "conversation_id": "conv_b917951d68de41d1ba32eac7706191c5",
-      "turn_id": "turn_8ee58961d7a7465db8e1bbe78d81f636",
-      "request_id": "assistant_174d0cca313a4819ae9049339f86a946",
-      "message_id": "ff23ea11-4c3b-471a-ac34-70bc03dfabe3_",
-      "text": "你好，我是组织变更助手，可以帮你新建部门、调整隶属关系、改名、启用/停用等。你现在想处理哪类组织变更？"
+      "binding_key": "conv_bec3267448184b0881350d6afc2dd99c::turn_8f85ebb5f1a14db981c82554f240a53f::assistant_b2fcc823b15c4d92aee4e616a40025a4",
+      "conversation_id": "conv_bec3267448184b0881350d6afc2dd99c",
+      "turn_id": "turn_8f85ebb5f1a14db981c82554f240a53f",
+      "request_id": "assistant_b2fcc823b15c4d92aee4e616a40025a4",
+      "message_id": "9aa144fa-c13e-4609-bf8d-f1abc73a60ed_",
+      "text": "你现在最想先处理哪一类事情？比如：新建部门、调整上级、改名，还是先了解一下变更规则？"
     }
   ],
   "external_reply_container_count": 0,

@@ -75,6 +75,19 @@
 10. [X] `make test`
 11. [X] `make check lint`
 12. [X] `make check doc`
+13. [X] `pnpm --dir e2e exec playwright test tests/tp288b-librechat-live-task-receipt-contract.spec.js --workers=1`
+14. [X] `pnpm --dir e2e exec playwright test tests/tp290b-librechat-live-intent-action-chain.spec.js --workers=1`
+15. [X] `pnpm --dir e2e exec playwright test tests/tp290b-librechat-live-intent-action-negative.spec.js --workers=1`
+
+### 5.1 PR #494 追绿补充
+
+1. [X] 补齐 OrgUnit `CREATE` / `SET_BUSINESS_UNIT` 提交后、事务提交前的 `setidresolver.EnsureBootstrap(...)`，消除租户初始化后正式写链路仍可能命中 `SETID_BINDING_MISSING` 的时序缺口。
+2. [X] superadmin bootstrap registry seed 已显式写入 `resolved_setid`，并将 `ON CONFLICT` canonical key 收敛到 `resolved_setid + business_unit_node_key + effective_date`。
+3. [X] formal surface 的 `Confirm` / `Submit` 点击已改为“找最后一个可见按钮”，消除 DOM refresh / hidden button 抖动导致的误点。
+4. [X] `tp290b-neg-002` 已按 turn 当前相位与候选态分支断言：
+   - 未进入 `await_commit_confirm` 时返回 `conversation_confirmation_required`
+   - 多候选待选时返回 `assistant_candidate_not_found`
+   - 单候选自动解析时 bad candidate 覆盖被忽略，但不会写入错误 candidate
 
 ## 6. 结论
 
