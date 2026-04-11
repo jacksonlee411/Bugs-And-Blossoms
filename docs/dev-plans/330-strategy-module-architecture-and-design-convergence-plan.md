@@ -392,6 +392,8 @@
 1. [X] 现有 `orgunit.setid_strategy_registry` 已收口到 `business_unit_node_key`，但记录与唯一键仍未显式承载 `resolved_setid`。
 2. [X] 现有 Registry 写 API 仍主要围绕 `business_unit_org_code -> business_unit_node_key` 工作，尚不能明确表达“`resolved_setid=exact` / `resolved_setid=wildcard`”。
 3. [X] 现有 consumer/runtime 仍存在仅按 BU 轴取候选的过渡实现；若不先冻结切换顺序，后续极易演变成“文档双轴、运行时单轴、explain 事后补轴”的假收口。
+4. [X] `Context Resolver` 虽已在统一模型中承担“外部输入 -> 规范化 `PolicyContext`”职责，但当前计划尚未把它提升为可单独验收的实施步骤，容易导致 schema/backfill/API/PDP 各自默认依赖一个尚未真正收口的解析层。
+5. [X] 旧 `tenant_field_policies` 与其 consumer/read path 的退场审计若不前置，存在“Registry 已双轴化，但 happy path 仍暗中读旧层”的假收口风险。
 
 基于以上现状，`330` 将既有表的最小演化步骤冻结为：
 
@@ -401,31 +403,56 @@
      - `resolved_setid=exact + business_unit_node_key=wildcard`
      - `resolved_setid=wildcard + business_unit_node_key=wildcard`
    - 任一记录若无法被无歧义地归类到上述三种形状之一，必须 stopline；不得带着“以后运行时再猜”的记录继续切主链。
-2. **R1：既有表增量扩展**
+   - `R0` 还必须同时盘点所有仍参与 happy path 的 consumer/read/explain 路径，明确它们当前是读取：
+     - Strategy Registry 新层
+     - `tenant_field_policies` 旧层
+     - BU-only 单轴 helper / 查询
+   - 任一路径若在切主链后仍需要保留旧层读取，必须在本阶段说明其仅为显式兼容读证据还是仍属 happy path；未说清即 stopline。
+2. **R1：Context Resolver 单点落地**
+   - 必须先落一个可单独验收的 `Context Resolver`，作为所有后续 schema/backfill/API/PDP 切换的统一前提。
+   - 该层的最小职责冻结为：
+     - `business_unit_org_code -> business_unit_node_key`
+     - `business_unit_node_key -> resolved_setid`
+     - 输出 `setid_source`
+     - 对歧义、缺失、非法 source fail-closed
+   - explain、主写 API 校验、主查询与版本签名都必须复用同一 resolver，而不是各自复制解析逻辑。
+   - 在 `R1` 完成前，不得开始双轴主查询切换；否则实现者仍会被迫在 store/API/PDP 内各自补 resolver 逻辑。
+3. **R2：既有表增量扩展**
    - 在现有 `orgunit.setid_strategy_registry` 上增量引入 `resolved_setid` 作用域列与对应约束；本计划不要求新建表，也不允许通过平行新表制造第二事实源。
    - `resolved_setid` 的物理 wildcard 表达必须在实施计划中一次性冻结，并且只能表达 wildcard，不能表达“未知/待解析/兼容态”。
    - 现有唯一键与冲突检测键必须同步纳入 `resolved_setid`，使“双轴记录契约”在存储层成为硬约束，而不是 explain 附属信息。
    - 必须新增或重写约束，硬拒绝：
      - `resolved_setid=wildcard + business_unit_node_key=exact`
      - 未声明 `resolved_setid` 却试图保存 BU 本地覆盖
-3. **R2：回填与校验**
+4. **R3：回填与校验**
    - 所有历史记录必须在切查询前完成 `resolved_setid` 回填或显式 wildcard 判定。
    - 无法确定唯一 `resolved_setid` 的历史记录必须阻断切换，不得默认写成 wildcard。
    - 回填完成后，必须有可复查证据证明：
      - 不存在非法形状记录
      - 不存在“BU exact 但 setid 缺失”的记录
      - 新唯一键与冲突检测维度已生效
-4. **R3：写 API 契约切换**
+5. **R4：测试与证据前置补齐**
+   - 在切 Registry 主写 API 与双轴主查询之前，必须先补齐最小验证资产，至少包括：
+     - `Context Resolver` 的成功/缺失/歧义/非法 source 测试
+     - 双轴 bucket 顺序测试
+     - mode matrix 测试
+     - explain 回放样例
+     - 旧层已被识别且不会继续参与 happy path 的证据
+   - `R4` 的目标不是“全部测试收尾”，而是把会决定切主链正确性的证据前置到实现前半段。
+   - 若未先补齐这些测试与回放证据，不得开始 `R5/R6` 的主链替换。
+6. **R5：写 API 契约切换**
    - Registry 主写 API 必须显式表达 SetID 轴，至少能区分：
      - `resolved_setid=exact`
      - `resolved_setid=wildcard`
    - 禁止继续依赖“只给 `business_unit_org_code`，由服务层默认猜测 exact setid”的隐式建模。
    - 若某条策略 intended 为 tenant 全局，则必须由 API 显式声明 wildcard；不得把“字段缺省”解释成“适用于全部 SetID”。
-5. **R4：查询与 PDP 切主链**
+7. **R6：查询与 PDP 切主链**
    - 所有候选查询、冲突检测、explain 复算与版本签名必须统一切到 `resolved_setid + business_unit_node_key` 双轴。
    - 在 R4 完成前，不得宣称 `330` 已完成；“schema 已加列但主查询仍按 BU 单轴”不构成收口。
-6. **R5：旧实现退场**
+   - `M3` 的 capability/authz 归属调整若会改变 capability bucket 语义，则必须先于 `R6` 完成；若只改变页面归属与 authz object 文案，则不得影响 `R6` 已冻结的 PDP bucket 顺序与输入语义。
+8. **R7：旧实现退场**
    - 任一仍以 legacy `business_unit_id` 或“BU-only 命中”驱动正式裁决的实现，都必须在切主链时移除或降级为显式兼容读证据，不得继续作为 happy path。
+   - 任一仍经由 `tenant_field_policies` 旧层参与正式字段裁决的 consumer/read path，也必须在本阶段移除或明确降级为非 happy path。
    - 若切换过程中出现风险，只允许采用仓库既定的环境级保护、只读/停写、修复后重试；不得引入兼容别名窗口、双输出口径或旧实现兜底。
 
 ### 4.2.6 双轴 PDP 的确定性裁决算法（冻结）
@@ -554,7 +581,21 @@
 3. [ ] 该 PDP 的职责必须显式对应第 `4.2.4` 节统一运行时主链与第 `4.2.6` 节双轴算法，而不是只做局部 lookup helper。
 4. [ ] 所有相关 API、服务层与 explain 链路统一复用该 PDP。
 
-### 6.2A M2 补充：SetID 上下文收口
+### 6.2A M2 前置：`Context Resolver` 单点落地
+
+1. [ ] 在切双轴 schema、主写 API 与 PDP 前，必须先落单一 `Context Resolver`。
+2. [ ] 该 Resolver 的正式输入/输出冻结为：
+   - 输入：`tenant + capability_key + field_key + as_of + business_unit_org_code`
+   - 输出：`business_unit_node_key + resolved_setid + setid_source`
+3. [ ] Resolver 的失败语义必须直接对齐第 `4.2.7` 节：
+   - `business_unit_context_invalid`
+   - `setid_binding_missing`
+   - `setid_binding_ambiguous`
+   - `setid_source_invalid`
+4. [ ] explain、主写 API、双轴主查询、版本签名与回放工具不得复制 Resolver 逻辑；必须统一复用。
+5. [ ] `Context Resolver` 必须具备单独验收样例与回放证据，证明它不是“文档里的逻辑概念”，而是可复用的正式边界。
+
+### 6.2B M2 补充：SetID 上下文收口
 
 1. [ ] 冻结“SetID 如何影响策略”的正式口径：
    - `business_unit_org_code` 仅属于外部原始请求输入；
@@ -579,13 +620,15 @@
    - 哪些 legacy 口径仍存在及其退出路径
 7. [ ] 该里程碑必须按第 `4.2.5A` 节的顺序落地：
    - 先完成存量记录审计
+   - 再完成 `Context Resolver` 单点落地
    - 再完成既有表增量扩展与约束
    - 再完成历史记录回填与非法形状清零
+   - 再补齐切主链前置测试与回放证据
    - 再切 Registry 主写 API 的 SetID 轴表达
    - 最后切主查询、PDP、explain 与版本签名
 8. [ ] 若任一步骤发现“无法唯一确定 `resolved_setid` 的历史记录”，该问题必须被视为 stopline，而不是通过 wildcard、前端补参或旧查询兜底绕过。
 
-### 6.2B M2 补充：失败语义与版本契约
+### 6.2C M2 补充：失败语义与版本契约
 
 1. [ ] 失败语义必须直接对齐第 `4.2.7` 节失败矩阵，不再由各接口散落定义。
 2. [ ] `policy_missing / policy_conflict_ambiguous / policy_mode_invalid / policy_version_required / policy_version_conflict` 等正式错误码必须在文档、实现与用户提示层保持一一对应。
@@ -611,8 +654,9 @@
    - `read-only compatibility`
    - `migration source only`
    - `fully retired`
-2. [ ] 若仍保留读路径，必须在代码与文档中显式标注其兼容属性。
-3. [ ] 若字段配置页读取动态镜像，应统一经由 Strategy Registry / PDP 输出，不再绕回旧层。
+2. [ ] 该里程碑不得后置为“主链切完后再盘点”；必须以前置审计结果为输入，明确哪些 consumer/read/explain 路径仍依赖旧层。
+3. [ ] 若仍保留读路径，必须在代码与文档中显式标注其兼容属性，且不得继续参与 happy path 的正式字段裁决。
+4. [ ] 若字段配置页读取动态镜像，应统一经由 Strategy Registry / PDP 输出，不再绕回旧层。
 
 ### 6.5 M5：`priority_mode / local_override_mode` 正式裁决维度兑现
 
@@ -624,28 +668,31 @@
 
 ### 6.6 M6：测试、证据与门禁
 
-1. [ ] 针对唯一 PDP 增加确定性测试：
+1. [ ] 针对唯一 PDP 增加确定性测试，并作为 `R6` 前置条件而不是收尾工作：
    - baseline/intent bucket 顺序
    - `resolved_setid exact/wildcard`
    - `business_unit_node_key exact/wildcard`
    - `policy_missing / policy_conflict_ambiguous`
    - mode matrix
-2. [ ] 补 explain 证据，确保同输入可复算。
-3. [ ] 失败语义回归至少覆盖：
+2. [ ] `Context Resolver` 必须有单独测试与回放证据，确保同输入得到同一 `PolicyContext` 输出。
+3. [ ] 补 explain 证据，确保同输入可复算。
+4. [ ] 失败语义回归至少覆盖：
    - `business_unit_context_invalid`
    - `setid_binding_missing / setid_binding_ambiguous`
    - `policy_missing`
    - `policy_conflict_ambiguous`
    - `policy_mode_invalid`
    - `policy_version_required / policy_version_conflict`
-4. [ ] `Mutation Policy` 与 `Policy Activation` 必须各自有最小验证样例，证明其边界没有重新回流到 `Dynamic Policy SoT`。
-5. [ ] 按 `AGENTS.md` 与 `DEV-PLAN-012` 收口相关门禁。
-6. [ ] 既有表演化证据至少必须包含：
+5. [ ] `Mutation Policy` 与 `Policy Activation` 必须各自有最小验证样例，证明其边界没有重新回流到 `Dynamic Policy SoT`。
+6. [ ] 按 `AGENTS.md` 与 `DEV-PLAN-012` 收口相关门禁。
+7. [ ] 既有表演化证据至少必须包含：
    - 存量记录分类结果
+   - 旧层 consumer/read/explain 路径清单
    - 非法形状清零证据
+   - `Context Resolver` 已成为唯一规范化入口的证据
    - `resolved_setid` 已进入唯一键/冲突检测键的证据
    - 双轴主查询已替换单轴 BU 查询的证据
-7. [ ] 错误码收口证据至少必须包含：
+8. [ ] 错误码收口证据至少必须包含：
    - canonical 输出为 lower snake_case 的 API 样例
    - 用户提示层与错误码一一对应的样例
    - legacy 大写错误码不再作为正式输出的回归样例
