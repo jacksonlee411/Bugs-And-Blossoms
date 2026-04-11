@@ -858,6 +858,7 @@ type OrgunitSetidStrategyRegistry struct {
 	PersonalizationMode string             `json:"personalization_mode"`
 	OrgApplicability    string             `json:"org_applicability"`
 	BusinessUnitNodeKey string             `json:"business_unit_node_key"`
+	ResolvedSetid       string             `json:"resolved_setid"`
 	Required            bool               `json:"required"`
 	Visible             bool               `json:"visible"`
 	DefaultRuleRef      *string            `json:"default_rule_ref"`

@@ -14,10 +14,12 @@ import (
 )
 
 var orgNodeKeyPattern = regexp.MustCompile(`^[ABCDEFGHJKLMNPQRSTUVWXYZ][ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{7}$`)
+var resolvedSetIDPattern = regexp.MustCompile(`^[A-Z0-9]{5}$`)
 
 type setIDStrategyRegistrySchemaState struct {
 	Columns                map[string]struct{}
 	ConstraintDefs         map[string]string
+	IndexDefs              map[string]string
 	OrgUnitVersionsColumns map[string]struct{}
 }
 
@@ -27,6 +29,7 @@ type setIDStrategyRegistryValidationRow struct {
 	FieldKey            string
 	OrgApplicability    string
 	BusinessUnitNodeKey string
+	ResolvedSetID       string
 	EffectiveDate       string
 }
 
@@ -42,6 +45,7 @@ type setIDStrategyRegistryValidationIssue struct {
 	FieldKey            string
 	OrgApplicability    string
 	BusinessUnitNodeKey string
+	ResolvedSetID       string
 	EffectiveDate       string
 	Detail              string
 }
@@ -116,6 +120,7 @@ func loadSetIDStrategyRegistrySchemaState(ctx context.Context, conn *pgx.Conn) (
 	state := setIDStrategyRegistrySchemaState{
 		Columns:                make(map[string]struct{}),
 		ConstraintDefs:         make(map[string]string),
+		IndexDefs:              make(map[string]string),
 		OrgUnitVersionsColumns: make(map[string]struct{}),
 	}
 
@@ -164,6 +169,28 @@ WHERE n.nspname = 'orgunit'
 		return state, err
 	}
 
+	indexRows, err := conn.Query(ctx, `
+SELECT indexname, indexdef
+FROM pg_indexes
+WHERE schemaname = 'orgunit'
+  AND tablename = 'setid_strategy_registry'
+`)
+	if err != nil {
+		return state, err
+	}
+	defer indexRows.Close()
+	for indexRows.Next() {
+		var name string
+		var def string
+		if err := indexRows.Scan(&name, &def); err != nil {
+			return state, err
+		}
+		state.IndexDefs[strings.TrimSpace(name)] = strings.TrimSpace(def)
+	}
+	if err := indexRows.Err(); err != nil {
+		return state, err
+	}
+
 	orgNodeKeyColumnRows, err := conn.Query(ctx, `
 SELECT column_name
 FROM information_schema.columns
@@ -192,9 +219,10 @@ SELECT
   field_key,
   org_applicability,
   business_unit_node_key,
+  resolved_setid,
   effective_date::text
 FROM orgunit.setid_strategy_registry
-ORDER BY tenant_uuid, capability_key, field_key, org_applicability, business_unit_node_key, effective_date
+ORDER BY tenant_uuid, capability_key, field_key, org_applicability, resolved_setid, business_unit_node_key, effective_date
 `)
 	if err != nil {
 		return nil, err
@@ -210,6 +238,7 @@ ORDER BY tenant_uuid, capability_key, field_key, org_applicability, business_uni
 			&row.FieldKey,
 			&row.OrgApplicability,
 			&row.BusinessUnitNodeKey,
+			&row.ResolvedSetID,
 			&row.EffectiveDate,
 		); err != nil {
 			return nil, err
@@ -219,6 +248,7 @@ ORDER BY tenant_uuid, capability_key, field_key, org_applicability, business_uni
 		row.FieldKey = strings.TrimSpace(row.FieldKey)
 		row.OrgApplicability = strings.TrimSpace(row.OrgApplicability)
 		row.BusinessUnitNodeKey = strings.TrimSpace(row.BusinessUnitNodeKey)
+		row.ResolvedSetID = strings.ToUpper(strings.TrimSpace(row.ResolvedSetID))
 		row.EffectiveDate = strings.TrimSpace(row.EffectiveDate)
 		out = append(out, row)
 	}
@@ -262,6 +292,12 @@ func validateSetIDStrategyRegistrySchemaState(state setIDStrategyRegistrySchemaS
 			Detail: "orgunit.setid_strategy_registry missing column business_unit_node_key",
 		})
 	}
+	if _, ok := state.Columns["resolved_setid"]; !ok {
+		issues = append(issues, setIDStrategyRegistryValidationIssue{
+			Code:   "schema_missing_resolved_setid",
+			Detail: "orgunit.setid_strategy_registry missing column resolved_setid",
+		})
+	}
 	if _, ok := state.Columns["business_unit_id"]; ok {
 		issues = append(issues, setIDStrategyRegistryValidationIssue{
 			Code:   "schema_old_business_unit_id_present",
@@ -276,6 +312,8 @@ func validateSetIDStrategyRegistrySchemaState(state setIDStrategyRegistrySchemaS
 	}
 
 	hasNodeKeyConstraint := false
+	hasResolvedSetIDFormatConstraint := false
+	hasResolvedSetIDShapeConstraint := false
 	for name, def := range state.ConstraintDefs {
 		if strings.Contains(name, "business_unit_applicability_check") && !strings.Contains(name, "node_key") {
 			issues = append(issues, setIDStrategyRegistryValidationIssue{
@@ -292,11 +330,40 @@ func validateSetIDStrategyRegistrySchemaState(state setIDStrategyRegistrySchemaS
 		if strings.Contains(def, "business_unit_node_key") && strings.Contains(def, "orgunit.is_valid_org_node_key") {
 			hasNodeKeyConstraint = true
 		}
+		if strings.Contains(def, "resolved_setid") && strings.Contains(def, "^[A-Z0-9]{5}$") {
+			hasResolvedSetIDFormatConstraint = true
+		}
+		if strings.Contains(def, "resolved_setid") && strings.Contains(def, "business_unit_node_key") && strings.Contains(def, "orgunit.is_valid_org_node_key") {
+			hasResolvedSetIDShapeConstraint = true
+		}
 	}
 	if !hasNodeKeyConstraint {
 		issues = append(issues, setIDStrategyRegistryValidationIssue{
 			Code:   "schema_node_key_constraint_missing",
 			Detail: "business_unit_node_key applicability constraint using orgunit.is_valid_org_node_key is missing",
+		})
+	}
+	if !hasResolvedSetIDFormatConstraint {
+		issues = append(issues, setIDStrategyRegistryValidationIssue{
+			Code:   "schema_resolved_setid_format_constraint_missing",
+			Detail: "resolved_setid format constraint is missing",
+		})
+	}
+	if !hasResolvedSetIDShapeConstraint {
+		issues = append(issues, setIDStrategyRegistryValidationIssue{
+			Code:   "schema_resolved_setid_shape_constraint_missing",
+			Detail: "resolved_setid scope-shape constraint is missing",
+		})
+	}
+	if indexDef, ok := state.IndexDefs["setid_strategy_registry_key_unique_idx"]; !ok {
+		issues = append(issues, setIDStrategyRegistryValidationIssue{
+			Code:   "schema_resolved_setid_unique_index_missing",
+			Detail: "setid_strategy_registry_key_unique_idx is missing",
+		})
+	} else if !strings.Contains(indexDef, "resolved_setid") {
+		issues = append(issues, setIDStrategyRegistryValidationIssue{
+			Code:   "schema_resolved_setid_unique_index_missing",
+			Detail: "setid_strategy_registry_key_unique_idx does not include resolved_setid",
 		})
 	}
 	return issues
@@ -305,7 +372,11 @@ func validateSetIDStrategyRegistrySchemaState(state setIDStrategyRegistrySchemaS
 func hasCriticalSetIDStrategyRegistrySchemaIssue(issues []setIDStrategyRegistryValidationIssue) bool {
 	for _, issue := range issues {
 		switch issue.Code {
-		case "schema_missing_business_unit_node_key", "target_org_node_key_schema_missing":
+		case "schema_missing_business_unit_node_key",
+			"schema_missing_resolved_setid",
+			"schema_resolved_setid_shape_constraint_missing",
+			"schema_resolved_setid_unique_index_missing",
+			"target_org_node_key_schema_missing":
 			return true
 		}
 	}
@@ -316,6 +387,10 @@ func validateSetIDStrategyRegistryRows(rows []setIDStrategyRegistryValidationRow
 	var issues []setIDStrategyRegistryValidationIssue
 	for _, row := range rows {
 		nodeKey := strings.TrimSpace(row.BusinessUnitNodeKey)
+		resolvedSetID := strings.ToUpper(strings.TrimSpace(row.ResolvedSetID))
+		if resolvedSetID != "" && !resolvedSetIDPattern.MatchString(resolvedSetID) {
+			issues = append(issues, issueForRegistryRow("resolved_setid_invalid", row, "resolved_setid must be empty wildcard or 5-char uppercase exact value"))
+		}
 		switch row.OrgApplicability {
 		case "tenant":
 			if nodeKey != "" {
@@ -324,6 +399,10 @@ func validateSetIDStrategyRegistryRows(rows []setIDStrategyRegistryValidationRow
 		case "business_unit":
 			if nodeKey == "" {
 				issues = append(issues, issueForRegistryRow("business_unit_node_key_required", row, "business_unit scope requires business_unit_node_key"))
+				continue
+			}
+			if resolvedSetID == "" {
+				issues = append(issues, issueForRegistryRow("business_unit_resolved_setid_required", row, "business_unit scope requires exact resolved_setid"))
 				continue
 			}
 			if !isValidOrgNodeKey(nodeKey) {
@@ -349,6 +428,7 @@ func issueForRegistryRow(code string, row setIDStrategyRegistryValidationRow, de
 		FieldKey:            row.FieldKey,
 		OrgApplicability:    row.OrgApplicability,
 		BusinessUnitNodeKey: row.BusinessUnitNodeKey,
+		ResolvedSetID:       row.ResolvedSetID,
 		EffectiveDate:       row.EffectiveDate,
 		Detail:              detail,
 	}
@@ -365,6 +445,7 @@ func printSetIDStrategyRegistryValidationIssues(out *os.File, issues []setIDStra
 			left.FieldKey,
 			left.OrgApplicability,
 			left.BusinessUnitNodeKey,
+			left.ResolvedSetID,
 			left.EffectiveDate,
 		}, "|") < strings.Join([]string{
 			right.Code,
@@ -373,17 +454,19 @@ func printSetIDStrategyRegistryValidationIssues(out *os.File, issues []setIDStra
 			right.FieldKey,
 			right.OrgApplicability,
 			right.BusinessUnitNodeKey,
+			right.ResolvedSetID,
 			right.EffectiveDate,
 		}, "|")
 	})
 	for _, issue := range issues {
-		fmt.Fprintf(out, "[orgunit-setid-strategy-registry-validate] issue=%s tenant=%s capability=%s field=%s applicability=%s node_key=%s effective_date=%s detail=%s\n",
+		fmt.Fprintf(out, "[orgunit-setid-strategy-registry-validate] issue=%s tenant=%s capability=%s field=%s applicability=%s node_key=%s resolved_setid=%s effective_date=%s detail=%s\n",
 			issue.Code,
 			emptyDash(issue.TenantUUID),
 			emptyDash(issue.CapabilityKey),
 			emptyDash(issue.FieldKey),
 			emptyDash(issue.OrgApplicability),
 			emptyDash(issue.BusinessUnitNodeKey),
+			emptyDash(issue.ResolvedSetID),
 			emptyDash(issue.EffectiveDate),
 			issue.Detail,
 		)

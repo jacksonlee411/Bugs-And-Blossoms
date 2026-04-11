@@ -55,6 +55,7 @@ const (
 var (
 	capabilityKeyPattern = regexp.MustCompile(`^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)+$`)
 	fieldKeyPattern      = regexp.MustCompile(`^[a-z][a-z0-9_]{0,62}$`)
+	resolvedSetIDPattern = regexp.MustCompile(`^[A-Z0-9]{5}$`)
 	errStrategyNotFound  = errors.New("SETID_STRATEGY_REGISTRY_NOT_FOUND")
 	errDisableNotAllowed = errors.New(fieldPolicyDisableDeniedCode)
 )
@@ -67,6 +68,7 @@ type setIDStrategyRegistryItem struct {
 	PersonalizationMode string   `json:"personalization_mode"`
 	OrgApplicability    string   `json:"org_applicability"`
 	BusinessUnitNodeKey string   `json:"business_unit_node_key,omitempty"`
+	ResolvedSetID       string   `json:"resolved_setid,omitempty"`
 	Required            bool     `json:"required"`
 	Visible             bool     `json:"visible"`
 	Maintainable        bool     `json:"maintainable"`
@@ -148,6 +150,7 @@ type setIDStrategyRegistryDisableRequest struct {
 	FieldKey            string
 	OrgApplicability    string
 	BusinessUnitNodeKey string
+	ResolvedSetID       string
 	EffectiveDate       string
 	DisableAsOf         string
 }
@@ -280,6 +283,7 @@ func scanSetIDStrategyRegistryRows(rows pgx.Rows) ([]setIDStrategyRegistryItem, 
 			&item.PersonalizationMode,
 			&item.OrgApplicability,
 			&item.BusinessUnitNodeKey,
+			&item.ResolvedSetID,
 			&item.Required,
 			&item.Visible,
 			&item.Maintainable,
@@ -298,6 +302,7 @@ func scanSetIDStrategyRegistryRows(rows pgx.Rows) ([]setIDStrategyRegistryItem, 
 		); err != nil {
 			return nil, err
 		}
+		item.ResolvedSetID = normalizeStrategyRegistryResolvedSetID(item.ResolvedSetID)
 		if strings.TrimSpace(allowedValueCodesRaw) != "" {
 			if err := json.Unmarshal([]byte(allowedValueCodesRaw), &item.AllowedValueCodes); err != nil {
 				return nil, err
@@ -335,9 +340,10 @@ SELECT EXISTS (
     AND field_key = $3::text
     AND org_applicability = $4::text
     AND business_unit_node_key = $5::text
-    AND effective_date = $6::date
+    AND resolved_setid = $6::text
+    AND effective_date = $7::date
 )
-`, tenantID, item.CapabilityKey, item.FieldKey, item.OrgApplicability, item.BusinessUnitNodeKey, item.EffectiveDate).Scan(&updated); err != nil {
+`, tenantID, item.CapabilityKey, item.FieldKey, item.OrgApplicability, item.BusinessUnitNodeKey, item.ResolvedSetID, item.EffectiveDate).Scan(&updated); err != nil {
 			return err
 		}
 		_, err := tx.Exec(ctx, `
@@ -349,6 +355,7 @@ INSERT INTO orgunit.setid_strategy_registry (
   personalization_mode,
   org_applicability,
   business_unit_node_key,
+  resolved_setid,
   required,
   visible,
   maintainable,
@@ -372,23 +379,24 @@ INSERT INTO orgunit.setid_strategy_registry (
   $5::text,
   $6::text,
   $7::text,
-  $8::boolean,
+  $8::text,
   $9::boolean,
   $10::boolean,
-  NULLIF($11::text, ''),
+  $11::boolean,
   NULLIF($12::text, ''),
-  $13::jsonb,
-  $14::integer,
-  $15::text,
+  NULLIF($13::text, ''),
+  $14::jsonb,
+  $15::integer,
   $16::text,
-  $17::boolean,
+  $17::text,
   $18::boolean,
-  $19::text,
-  $20::date,
+  $19::boolean,
+  $20::text,
   $21::date,
-  $22::timestamptz
+  $22::date,
+  $23::timestamptz
 )
-ON CONFLICT (tenant_uuid, capability_key, field_key, org_applicability, business_unit_node_key, effective_date)
+ON CONFLICT (tenant_uuid, capability_key, field_key, org_applicability, resolved_setid, business_unit_node_key, effective_date)
 DO UPDATE SET
   owner_module = EXCLUDED.owner_module,
   personalization_mode = EXCLUDED.personalization_mode,
@@ -406,7 +414,7 @@ DO UPDATE SET
   change_policy = EXCLUDED.change_policy,
   end_date = EXCLUDED.end_date,
   updated_at = EXCLUDED.updated_at
-`, tenantID, item.CapabilityKey, item.OwnerModule, item.FieldKey, item.PersonalizationMode, item.OrgApplicability, item.BusinessUnitNodeKey, item.Required, item.Visible, item.Maintainable, item.DefaultRuleRef, item.DefaultValue, allowedValueCodesJSON, item.Priority, item.PriorityMode, item.LocalOverrideMode, item.ExplainRequired, item.IsStable, item.ChangePolicy, item.EffectiveDate, endDate, item.UpdatedAt)
+`, tenantID, item.CapabilityKey, item.OwnerModule, item.FieldKey, item.PersonalizationMode, item.OrgApplicability, item.BusinessUnitNodeKey, item.ResolvedSetID, item.Required, item.Visible, item.Maintainable, item.DefaultRuleRef, item.DefaultValue, allowedValueCodesJSON, item.Priority, item.PriorityMode, item.LocalOverrideMode, item.ExplainRequired, item.IsStable, item.ChangePolicy, item.EffectiveDate, endDate, item.UpdatedAt)
 		return err
 	})
 	return item, updated, err
@@ -468,6 +476,7 @@ SELECT
   personalization_mode,
   org_applicability,
   business_unit_node_key,
+  resolved_setid,
   required,
   visible,
   maintainable,
@@ -489,9 +498,10 @@ WHERE tenant_uuid = $1::uuid
   AND field_key = $3::text
   AND org_applicability = $4::text
   AND business_unit_node_key = $5::text
-  AND effective_date = $6::date
+  AND resolved_setid = $6::text
+  AND effective_date = $7::date
 FOR UPDATE
-`, tenantID, req.CapabilityKey, req.FieldKey, req.OrgApplicability, req.BusinessUnitNodeKey, req.EffectiveDate)
+`, tenantID, req.CapabilityKey, req.FieldKey, req.OrgApplicability, req.BusinessUnitNodeKey, req.ResolvedSetID, req.EffectiveDate)
 		var allowedValueCodesRaw string
 		if err := row.Scan(
 			&target.CapabilityKey,
@@ -500,6 +510,7 @@ FOR UPDATE
 			&target.PersonalizationMode,
 			&target.OrgApplicability,
 			&target.BusinessUnitNodeKey,
+			&target.ResolvedSetID,
 			&target.Required,
 			&target.Visible,
 			&target.Maintainable,
@@ -528,6 +539,7 @@ FOR UPDATE
 		}
 		target.PriorityMode, target.LocalOverrideMode = normalizeStrategyModes(target.PriorityMode, target.LocalOverrideMode)
 		target.AllowedValueCodes = normalizeAllowedValueCodes(target.AllowedValueCodes)
+		target.ResolvedSetID = normalizeStrategyRegistryResolvedSetID(target.ResolvedSetID)
 		if target.EndDate == endDate {
 			return nil
 		}
@@ -536,15 +548,16 @@ FOR UPDATE
 		}
 		if _, err := tx.Exec(ctx, `
 UPDATE orgunit.setid_strategy_registry
-SET end_date = $7::date,
-    updated_at = $8::timestamptz
+SET end_date = $8::date,
+    updated_at = $9::timestamptz
 WHERE tenant_uuid = $1::uuid
   AND capability_key = $2::text
   AND field_key = $3::text
   AND org_applicability = $4::text
   AND business_unit_node_key = $5::text
-  AND effective_date = $6::date
-`, tenantID, req.CapabilityKey, req.FieldKey, req.OrgApplicability, req.BusinessUnitNodeKey, req.EffectiveDate, endDate, nowUTC); err != nil {
+  AND resolved_setid = $6::text
+  AND effective_date = $7::date
+`, tenantID, req.CapabilityKey, req.FieldKey, req.OrgApplicability, req.BusinessUnitNodeKey, req.ResolvedSetID, req.EffectiveDate, endDate, nowUTC); err != nil {
 			return err
 		}
 		rows, err := tx.Query(ctx, `
@@ -555,6 +568,7 @@ SELECT
   personalization_mode,
   org_applicability,
   business_unit_node_key,
+  resolved_setid,
   required,
   visible,
   maintainable,
@@ -576,7 +590,7 @@ WHERE tenant_uuid = $1::uuid
   AND field_key = $3::text
   AND effective_date <= $4::date
   AND (end_date IS NULL OR end_date > $4::date)
-ORDER BY capability_key ASC, field_key ASC, org_applicability ASC, business_unit_node_key ASC, effective_date ASC
+ORDER BY capability_key ASC, field_key ASC, org_applicability ASC, resolved_setid ASC, business_unit_node_key ASC, effective_date ASC
 `, tenantID, capabilityCandidates, req.FieldKey, endDate)
 		if err != nil {
 			return err
@@ -614,6 +628,7 @@ SELECT
   personalization_mode,
   org_applicability,
   business_unit_node_key,
+  resolved_setid,
   required,
   visible,
   maintainable,
@@ -635,7 +650,7 @@ WHERE tenant_uuid = $1::uuid
   AND ($3::text = '' OR field_key = $3::text)
   AND effective_date <= $4::date
   AND (end_date IS NULL OR end_date > $4::date)
-ORDER BY capability_key ASC, field_key ASC, org_applicability ASC, business_unit_node_key ASC, effective_date ASC
+ORDER BY capability_key ASC, field_key ASC, org_applicability ASC, resolved_setid ASC, business_unit_node_key ASC, effective_date ASC
 	`, tenantID, capabilityKey, fieldKey, normalizedAsOf)
 		if err != nil {
 			return err
@@ -691,12 +706,21 @@ func strategyRegistrySortKey(item setIDStrategyRegistryItem) string {
 		item.CapabilityKey,
 		item.FieldKey,
 		item.OrgApplicability,
+		item.ResolvedSetID,
 		item.BusinessUnitNodeKey,
 		item.EffectiveDate,
 	}, "|")
 }
 
-func normalizeStrategyRegistryItem(req setIDStrategyRegistryUpsertAPIRequest, businessUnitNodeKey string) setIDStrategyRegistryItem {
+func normalizeStrategyRegistryResolvedSetID(resolvedSetID string) string {
+	return strings.ToUpper(strings.TrimSpace(resolvedSetID))
+}
+
+func normalizeStrategyRegistryItem(req setIDStrategyRegistryUpsertAPIRequest, businessUnitNodeKey string, resolvedSetIDs ...string) setIDStrategyRegistryItem {
+	resolvedSetID := ""
+	if len(resolvedSetIDs) > 0 {
+		resolvedSetID = resolvedSetIDs[0]
+	}
 	item := setIDStrategyRegistryItem{
 		CapabilityKey:       strings.ToLower(strings.TrimSpace(req.CapabilityKey)),
 		OwnerModule:         strings.ToLower(strings.TrimSpace(req.OwnerModule)),
@@ -705,6 +729,7 @@ func normalizeStrategyRegistryItem(req setIDStrategyRegistryUpsertAPIRequest, bu
 		PersonalizationMode: strings.ToLower(strings.TrimSpace(req.PersonalizationMode)),
 		OrgApplicability:    strings.ToLower(strings.TrimSpace(req.OrgApplicability)),
 		BusinessUnitNodeKey: strings.TrimSpace(businessUnitNodeKey),
+		ResolvedSetID:       normalizeStrategyRegistryResolvedSetID(resolvedSetID),
 		Required:            req.Required,
 		Visible:             req.Visible,
 		Maintainable:        true,
@@ -732,39 +757,32 @@ func normalizeStrategyRegistryItem(req setIDStrategyRegistryUpsertAPIRequest, bu
 	}
 	if item.OrgApplicability == orgApplicabilityTenant {
 		item.BusinessUnitNodeKey = ""
+		item.ResolvedSetID = ""
 	}
 	item.SourceType = strategySourceTypeForCapabilityKey(item.CapabilityKey)
 	item.UpdatedAt = time.Now().UTC().Format(time.RFC3339)
 	return item
 }
 
-func normalizeStrategyRegistryDisableRequest(req setIDStrategyRegistryDisableAPIRequest, businessUnitNodeKey string) setIDStrategyRegistryDisableRequest {
+func normalizeStrategyRegistryDisableRequest(req setIDStrategyRegistryDisableAPIRequest, businessUnitNodeKey string, resolvedSetIDs ...string) setIDStrategyRegistryDisableRequest {
+	resolvedSetID := ""
+	if len(resolvedSetIDs) > 0 {
+		resolvedSetID = resolvedSetIDs[0]
+	}
 	item := setIDStrategyRegistryDisableRequest{
 		CapabilityKey:       strings.ToLower(strings.TrimSpace(req.CapabilityKey)),
 		FieldKey:            strings.ToLower(strings.TrimSpace(req.FieldKey)),
 		OrgApplicability:    strings.ToLower(strings.TrimSpace(req.OrgApplicability)),
 		BusinessUnitNodeKey: strings.TrimSpace(businessUnitNodeKey),
+		ResolvedSetID:       normalizeStrategyRegistryResolvedSetID(resolvedSetID),
 		EffectiveDate:       strings.TrimSpace(req.EffectiveDate),
 		DisableAsOf:         strings.TrimSpace(req.DisableAsOf),
 	}
 	if item.OrgApplicability == orgApplicabilityTenant {
 		item.BusinessUnitNodeKey = ""
+		item.ResolvedSetID = ""
 	}
 	return item
-}
-
-func resolveStrategyRegistryBusinessUnit(ctx context.Context, tenantID string, orgApplicability string, businessUnitOrgCode string, orgResolver OrgUnitCodeResolver) (string, string, error) {
-	if strings.ToLower(strings.TrimSpace(orgApplicability)) != orgApplicabilityBusinessUnit {
-		return "", "", nil
-	}
-	if strings.TrimSpace(businessUnitOrgCode) == "" {
-		return "", "", errors.New("business_unit_org_code_required")
-	}
-	ref, err := resolveSetIDOrgCodeRef(ctx, tenantID, businessUnitOrgCode, orgResolver)
-	if err != nil {
-		return "", "", err
-	}
-	return ref.OrgCode, ref.OrgNodeKey, nil
 }
 
 func writeSetIDStrategyRegistryBusinessUnitError(w http.ResponseWriter, r *http.Request, err error) {
@@ -780,6 +798,65 @@ func writeSetIDStrategyRegistryBusinessUnitError(w http.ResponseWriter, r *http.
 	default:
 		writeInternalAPIError(w, r, err, "setid_strategy_registry_business_unit_org_code_resolve_failed")
 	}
+}
+
+func writeSetIDStrategyRegistryContextError(w http.ResponseWriter, r *http.Request, err error) {
+	if resolveErr, ok := asSetIDContextResolveError(err); ok {
+		switch resolveErr.Code {
+		case setIDContextCodeBusinessUnitInvalid:
+			writeSetIDStrategyRegistryBusinessUnitError(w, r, resolveErr.Cause)
+		case setIDContextCodeOrgResolverMissing:
+			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusInternalServerError, "orgunit_resolver_missing", "orgunit resolver missing")
+		case setIDContextCodeSetIDResolverMissing:
+			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusInternalServerError, "setid_resolver_missing", "setid resolver missing")
+		case setIDContextCodeSetIDBindingMissing:
+			code := resolveErr.Code
+			if resolveErr.Cause != nil {
+				code = stablePgMessage(resolveErr.Cause)
+			}
+			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusUnprocessableEntity, code, "resolve setid failed")
+		case setIDContextCodeSetIDSourceInvalid:
+			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusUnprocessableEntity, resolveErr.Code, "setid source invalid")
+		default:
+			writeInternalAPIError(w, r, err, "setid_strategy_registry_context_resolve_failed")
+		}
+		return
+	}
+	writeInternalAPIError(w, r, err, "setid_strategy_registry_context_resolve_failed")
+}
+
+func resolveStrategyRegistryPolicyContext(
+	ctx context.Context,
+	tenantID string,
+	req setIDStrategyRegistryUpsertAPIRequest,
+	orgResolver OrgUnitCodeResolver,
+	setIDStore SetIDGovernanceStore,
+) (setIDPolicyContext, error) {
+	contextResolver := newSetIDContextResolver(orgResolver, setIDStore)
+	return contextResolver.ResolvePolicyContext(ctx, setIDPolicyContextInput{
+		TenantID:            tenantID,
+		CapabilityKey:       req.CapabilityKey,
+		FieldKey:            req.FieldKey,
+		AsOf:                req.EffectiveDate,
+		BusinessUnitOrgCode: req.BusinessUnitOrgCode,
+	})
+}
+
+func resolveStrategyRegistryDisablePolicyContext(
+	ctx context.Context,
+	tenantID string,
+	req setIDStrategyRegistryDisableAPIRequest,
+	orgResolver OrgUnitCodeResolver,
+	setIDStore SetIDGovernanceStore,
+) (setIDPolicyContext, error) {
+	contextResolver := newSetIDContextResolver(orgResolver, setIDStore)
+	return contextResolver.ResolvePolicyContext(ctx, setIDPolicyContextInput{
+		TenantID:            tenantID,
+		CapabilityKey:       req.CapabilityKey,
+		FieldKey:            req.FieldKey,
+		AsOf:                req.EffectiveDate,
+		BusinessUnitOrgCode: req.BusinessUnitOrgCode,
+	})
 }
 
 func strategyRegistryAPIItemFromInternal(ctx context.Context, tenantID string, item setIDStrategyRegistryItem, orgResolver OrgUnitCodeResolver) (setIDStrategyRegistryAPIItem, error) {
@@ -929,8 +1006,14 @@ func validateStrategyRegistryItem(item setIDStrategyRegistryItem) (int, string, 
 		if _, err := normalizeOrgNodeKeyInput(item.BusinessUnitNodeKey); err != nil {
 			return http.StatusBadRequest, "business_unit_org_code_invalid", "business_unit_org_code invalid"
 		}
+		if item.ResolvedSetID == "" {
+			return http.StatusUnprocessableEntity, setIDContextCodeSetIDBindingMissing, setIDContextCodeSetIDBindingMissing
+		}
 	default:
 		return http.StatusUnprocessableEntity, "org_applicability_invalid", "org_applicability invalid"
+	}
+	if item.ResolvedSetID != "" && !resolvedSetIDPattern.MatchString(item.ResolvedSetID) {
+		return http.StatusUnprocessableEntity, setIDContextCodeSetIDSourceInvalid, setIDContextCodeSetIDSourceInvalid
 	}
 	if item.PersonalizationMode != personalizationModeTenantOnly && !item.ExplainRequired {
 		return http.StatusUnprocessableEntity, explainRequiredCode, "explain_required must be true when personalization_mode is not tenant_only"
@@ -988,8 +1071,14 @@ func validateStrategyRegistryDisableRequest(req setIDStrategyRegistryDisableRequ
 		if _, err := normalizeOrgNodeKeyInput(req.BusinessUnitNodeKey); err != nil {
 			return http.StatusBadRequest, "business_unit_org_code_invalid", "business_unit_org_code invalid"
 		}
+		if req.ResolvedSetID == "" {
+			return http.StatusUnprocessableEntity, setIDContextCodeSetIDBindingMissing, setIDContextCodeSetIDBindingMissing
+		}
 	default:
 		return http.StatusUnprocessableEntity, "org_applicability_invalid", "org_applicability invalid"
+	}
+	if req.ResolvedSetID != "" && !resolvedSetIDPattern.MatchString(req.ResolvedSetID) {
+		return http.StatusUnprocessableEntity, setIDContextCodeSetIDSourceInvalid, setIDContextCodeSetIDSourceInvalid
 	}
 	effectiveDate, err := time.Parse("2006-01-02", req.EffectiveDate)
 	if err != nil {
@@ -1053,6 +1142,7 @@ func (s *setIDStrategyRegistryRuntime) disable(tenantID string, req setIDStrateg
 		req.CapabilityKey,
 		req.FieldKey,
 		req.OrgApplicability,
+		req.ResolvedSetID,
 		req.BusinessUnitNodeKey,
 		req.EffectiveDate,
 	}, "|")
@@ -1062,6 +1152,7 @@ func (s *setIDStrategyRegistryRuntime) disable(tenantID string, req setIDStrateg
 			items[i].CapabilityKey,
 			items[i].FieldKey,
 			items[i].OrgApplicability,
+			items[i].ResolvedSetID,
 			items[i].BusinessUnitNodeKey,
 			items[i].EffectiveDate,
 		}, "|")
@@ -1352,6 +1443,9 @@ func findStrategyRegistryItemForUpsert(ctx context.Context, tenantID string, ite
 		if candidate.OrgApplicability != item.OrgApplicability {
 			continue
 		}
+		if candidate.ResolvedSetID != item.ResolvedSetID {
+			continue
+		}
 		if candidate.BusinessUnitNodeKey != item.BusinessUnitNodeKey {
 			continue
 		}
@@ -1363,7 +1457,11 @@ func findStrategyRegistryItemForUpsert(ctx context.Context, tenantID string, ite
 	return setIDStrategyRegistryItem{}, false, nil
 }
 
-func handleSetIDStrategyRegistryAPI(w http.ResponseWriter, r *http.Request, orgResolver OrgUnitCodeResolver) {
+func handleSetIDStrategyRegistryAPI(w http.ResponseWriter, r *http.Request, orgResolver OrgUnitCodeResolver, setIDStores ...SetIDGovernanceStore) {
+	var setIDStore SetIDGovernanceStore
+	if len(setIDStores) > 0 {
+		setIDStore = setIDStores[0]
+	}
 	tenant, ok := currentTenant(r.Context())
 	if !ok {
 		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusInternalServerError, "tenant_missing", "tenant missing")
@@ -1408,12 +1506,22 @@ func handleSetIDStrategyRegistryAPI(w http.ResponseWriter, r *http.Request, orgR
 			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "invalid_request", "request_id required")
 			return
 		}
-		businessUnitOrgCode, businessUnitNodeKey, err := resolveStrategyRegistryBusinessUnit(r.Context(), tenant.ID, req.OrgApplicability, req.BusinessUnitOrgCode, orgResolver)
-		if err != nil {
-			writeSetIDStrategyRegistryBusinessUnitError(w, r, err)
-			return
+		businessUnitOrgCode := ""
+		businessUnitNodeKey := ""
+		resolvedSetID := ""
+		if strings.EqualFold(strings.TrimSpace(req.OrgApplicability), orgApplicabilityBusinessUnit) {
+			if _, err := time.Parse("2006-01-02", strings.TrimSpace(req.EffectiveDate)); err == nil {
+				policyCtx, resolveErr := resolveStrategyRegistryPolicyContext(r.Context(), tenant.ID, req, orgResolver, setIDStore)
+				if resolveErr != nil {
+					writeSetIDStrategyRegistryContextError(w, r, resolveErr)
+					return
+				}
+				businessUnitOrgCode = policyCtx.BusinessUnitOrgCode
+				businessUnitNodeKey = policyCtx.BusinessUnitNodeKey
+				resolvedSetID = policyCtx.ResolvedSetID
+			}
 		}
-		item := normalizeStrategyRegistryItem(req, businessUnitNodeKey)
+		item := normalizeStrategyRegistryItem(req, businessUnitNodeKey, resolvedSetID)
 		if status, code, message := validateStrategyRegistryItem(item); status != 0 {
 			routing.WriteError(w, r, routing.RouteClassInternalAPI, status, code, message)
 			return
@@ -1471,7 +1579,11 @@ func handleSetIDStrategyRegistryAPI(w http.ResponseWriter, r *http.Request, orgR
 	}
 }
 
-func handleSetIDStrategyRegistryDisableAPI(w http.ResponseWriter, r *http.Request, orgResolver OrgUnitCodeResolver) {
+func handleSetIDStrategyRegistryDisableAPI(w http.ResponseWriter, r *http.Request, orgResolver OrgUnitCodeResolver, setIDStores ...SetIDGovernanceStore) {
+	var setIDStore SetIDGovernanceStore
+	if len(setIDStores) > 0 {
+		setIDStore = setIDStores[0]
+	}
 	tenant, ok := currentTenant(r.Context())
 	if !ok {
 		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusInternalServerError, "tenant_missing", "tenant missing")
@@ -1491,12 +1603,22 @@ func handleSetIDStrategyRegistryDisableAPI(w http.ResponseWriter, r *http.Reques
 		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "invalid_request", "request_id required")
 		return
 	}
-	businessUnitOrgCode, businessUnitNodeKey, err := resolveStrategyRegistryBusinessUnit(r.Context(), tenant.ID, req.OrgApplicability, req.BusinessUnitOrgCode, orgResolver)
-	if err != nil {
-		writeSetIDStrategyRegistryBusinessUnitError(w, r, err)
-		return
+	businessUnitOrgCode := ""
+	businessUnitNodeKey := ""
+	resolvedSetID := ""
+	if strings.EqualFold(strings.TrimSpace(req.OrgApplicability), orgApplicabilityBusinessUnit) {
+		if _, err := time.Parse("2006-01-02", strings.TrimSpace(req.EffectiveDate)); err == nil {
+			policyCtx, resolveErr := resolveStrategyRegistryDisablePolicyContext(r.Context(), tenant.ID, req, orgResolver, setIDStore)
+			if resolveErr != nil {
+				writeSetIDStrategyRegistryContextError(w, r, resolveErr)
+				return
+			}
+			businessUnitOrgCode = policyCtx.BusinessUnitOrgCode
+			businessUnitNodeKey = policyCtx.BusinessUnitNodeKey
+			resolvedSetID = policyCtx.ResolvedSetID
+		}
 	}
-	item := normalizeStrategyRegistryDisableRequest(req, businessUnitNodeKey)
+	item := normalizeStrategyRegistryDisableRequest(req, businessUnitNodeKey, resolvedSetID)
 	if status, code, message := validateStrategyRegistryDisableRequest(item); status != 0 {
 		routing.WriteError(w, r, routing.RouteClassInternalAPI, status, code, message)
 		return

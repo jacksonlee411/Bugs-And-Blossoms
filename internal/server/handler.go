@@ -328,13 +328,13 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, error) {
 		handleGlobalSetIDsAPI(w, r, setidStore)
 	}))
 	router.Handle(routing.RouteClassInternalAPI, http.MethodGet, "/org/api/setid-strategy-registry", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		handleSetIDStrategyRegistryAPI(w, r, orgStore)
+		handleSetIDStrategyRegistryAPI(w, r, orgStore, setidStore)
 	}))
 	router.Handle(routing.RouteClassInternalAPI, http.MethodPost, "/org/api/setid-strategy-registry", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		handleSetIDStrategyRegistryAPI(w, r, orgStore)
+		handleSetIDStrategyRegistryAPI(w, r, orgStore, setidStore)
 	}))
 	router.Handle(routing.RouteClassInternalAPI, http.MethodPost, "/org/api/setid-strategy-registry:disable", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		handleSetIDStrategyRegistryDisableAPI(w, r, orgStore)
+		handleSetIDStrategyRegistryDisableAPI(w, r, orgStore, setidStore)
 	}))
 	router.Handle(routing.RouteClassInternalAPI, http.MethodGet, "/org/api/setid-explain", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		handleSetIDExplainAPI(w, r, setidStore, orgStore)

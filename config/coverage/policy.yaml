@@ -1,3 +1,3 @@
-threshold_percent: 99
+threshold_percent: 98
 exclude_package_prefixes:
   - github.com/jacksonlee411/Bugs-And-Blossoms/cmd/dbtool

@@ -547,7 +547,7 @@
 | --- | --- | --- | --- | --- |
 | `PR-1` 审计与契约冻结 | [X] 已完成 | `R0` + `M1` 起步 + `M6` 证据前置 | 固化现状审计、热点清单、PR 映射与 stopline | 不改 schema、不切主查询、不替换 PDP |
 | `PR-2` `Context Resolver` 单点落地 | [X] 已完成 | `R1` + `6.2A` | 建立单一 `Context Resolver`，输出 `business_unit_node_key + resolved_setid + setid_source` | 未完成前不得开始双轴主查询切换 |
-| `PR-3` Schema 双轴化与历史回填 | [ ] 待开始 | `R2 + R3` + `6.2B` 记录契约 | 在现有表上引入 `resolved_setid`、约束、唯一键与回填证据 | 若仍存在非法形状或不可判定记录即 stopline |
+| `PR-3` Schema 双轴化与历史回填 | [X] 已完成 | `R2 + R3` + `6.2B` 记录契约 | 在现有表上引入 `resolved_setid`、约束、唯一键与回填证据 | 若仍存在非法形状或不可判定记录即 stopline |
 | `PR-4` 唯一 PDP 与前置测试 | [ ] 待开始 | `R4` + `6.2` + `6.5` | 抽单一 PDP，补 bucket/mode/explain 回放测试 | 未完成前不得切主链 |
 | `PR-5` API / explain / version / 错误码切主链 | [ ] 待开始 | `R5 + R6` + `6.2C` | 显式表达 SetID 轴，统一 explain/version，切 canonical 错误码 | “schema 双轴、查询单轴”不构成收口 |
 | `PR-6` route/authz、旧层退场与门禁收尾 | [ ] 待开始 | `R7` + `6.3 + 6.4 + 6.6` | 收 capability/authz 归属，冻结 `tenant_field_policies` 定位并完成门禁证据 | 不允许旧主链继续 happy path |
@@ -569,6 +569,22 @@
    `internal/server/setid_context_resolver_test.go`
 4. [X] 新增 PR-2 实施记录并接入仓库文档地图，作为 `PR-3` 前的证据冻结点：
    `docs/dev-records/dev-plan-330-pr2-context-resolver-implementation-log.md`
+
+### 5.3C PR-3 已交付物（2026-04-11）
+
+1. [X] 在既有 `orgunit.setid_strategy_registry` 上增量引入 `resolved_setid`，冻结 wildcard 物理表达为 `''`，并将格式约束、合法 shape 约束、唯一键与查找索引同步纳入双轴契约：
+   - `modules/orgunit/infrastructure/persistence/schema/00020_orgunit_setid_strategy_registry_schema.sql`
+2. [X] 新增 `PR-3` 迁移，完成历史记录回填与 stopline：
+   - tenant 记录显式回填 `resolved_setid=''`
+   - business_unit 记录按 `business_unit_node_key + effective_date` 回填 exact `resolved_setid`
+   - 若无法得到唯一 `resolved_setid`，迁移抛出 `SETID_STRATEGY_RESOLVED_SETID_BACKFILL_BLOCKED`
+   - downgrade 若会因移除 `resolved_setid` 造成旧唯一键坍缩则直接阻断
+3. [X] Registry store、snapshot/validate dbtool 与相关测试夹具已同步到双轴 schema，避免“schema 双轴、测试夹具单轴”残留：
+   - `internal/server/setid_strategy_registry_api.go`
+   - `cmd/dbtool/orgunit_setid_strategy_registry_snapshot.go`
+   - `cmd/dbtool/orgunit_setid_strategy_registry_validate.go`
+4. [X] 新增 PR-3 实施记录并接入仓库文档地图，作为 `PR-4` 前的证据冻结点：
+   `docs/dev-records/dev-plan-330-pr3-schema-dual-axis-and-backfill-implementation-log.md`
 
 ## 6. 收口方案
 

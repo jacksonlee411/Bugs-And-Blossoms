@@ -64,6 +64,7 @@ func TestHandleInternalRulesEvaluateAPI(t *testing.T) {
 		PersonalizationMode: personalizationModeSetID,
 		OrgApplicability:    orgApplicabilityBusinessUnit,
 		BusinessUnitNodeKey: mustOrgNodeKeyForTest(t, 10000001),
+		ResolvedSetID:       "A0001",
 		Required:            true,
 		Visible:             true,
 		DefaultRuleRef:      "rule://bu-a",
@@ -79,6 +80,7 @@ func TestHandleInternalRulesEvaluateAPI(t *testing.T) {
 		PersonalizationMode: personalizationModeSetID,
 		OrgApplicability:    orgApplicabilityBusinessUnit,
 		BusinessUnitNodeKey: mustOrgNodeKeyForTest(t, 10000001),
+		ResolvedSetID:       "A0001",
 		Required:            false,
 		Visible:             false,
 		DefaultRuleRef:      "rule://hidden",
@@ -218,13 +220,13 @@ func TestHandleInternalRulesEvaluateAPI(t *testing.T) {
 		t.Fatalf("status=%d body=%s", recBUA.Code, recBUA.Body.String())
 	}
 	buANodeKey := mustOrgNodeKeyForTest(t, 10000001)
-	if !strings.Contains(recBUA.Body.String(), `"decision":"allow"`) ||
-		!strings.Contains(recBUA.Body.String(), `"reason_code":"`+fieldRequiredInContextCode+`"`) ||
-		!strings.Contains(recBUA.Body.String(), `"functional_area_key":"staffing"`) ||
-		!strings.Contains(recBUA.Body.String(), `"setid":"A0001"`) ||
-		!strings.Contains(recBUA.Body.String(), `"selected_rule_id":"staffing.assignment_create.field_policy|field_x|business_unit|`+buANodeKey+`|2026-01-01"`) {
-		t.Fatalf("unexpected body: %q", recBUA.Body.String())
-	}
+		if !strings.Contains(recBUA.Body.String(), `"decision":"allow"`) ||
+			!strings.Contains(recBUA.Body.String(), `"reason_code":"`+fieldRequiredInContextCode+`"`) ||
+			!strings.Contains(recBUA.Body.String(), `"functional_area_key":"staffing"`) ||
+			!strings.Contains(recBUA.Body.String(), `"setid":"A0001"`) ||
+			!strings.Contains(recBUA.Body.String(), `"selected_rule_id":"staffing.assignment_create.field_policy|field_x|business_unit|A0001|`+buANodeKey+`|2026-01-01"`) {
+			t.Fatalf("unexpected body: %q", recBUA.Body.String())
+		}
 
 	recBUB := httptest.NewRecorder()
 	reqBUB := makeReq(`{"capability_key":"staffing.assignment_create.field_policy","field_key":"field_x","business_unit_org_code":"BU-002","as_of":"2026-01-01","request_id":"req-bu-b"}`)
@@ -233,12 +235,12 @@ func TestHandleInternalRulesEvaluateAPI(t *testing.T) {
 	if recBUB.Code != http.StatusOK {
 		t.Fatalf("status=%d body=%s", recBUB.Code, recBUB.Body.String())
 	}
-	if !strings.Contains(recBUB.Body.String(), `"decision":"allow"`) ||
-		!strings.Contains(recBUB.Body.String(), `"reason_code":"`+fieldVisibleInContextCode+`"`) ||
-		!strings.Contains(recBUB.Body.String(), `"setid":"B0001"`) ||
-		!strings.Contains(recBUB.Body.String(), `"selected_rule_id":"staffing.assignment_create.field_policy|field_x|tenant||2026-01-01"`) {
-		t.Fatalf("unexpected body: %q", recBUB.Body.String())
-	}
+		if !strings.Contains(recBUB.Body.String(), `"decision":"allow"`) ||
+			!strings.Contains(recBUB.Body.String(), `"reason_code":"`+fieldVisibleInContextCode+`"`) ||
+			!strings.Contains(recBUB.Body.String(), `"setid":"B0001"`) ||
+			!strings.Contains(recBUB.Body.String(), `"selected_rule_id":"staffing.assignment_create.field_policy|field_x|tenant|||2026-01-01"`) {
+			t.Fatalf("unexpected body: %q", recBUB.Body.String())
+		}
 
 	recHidden := httptest.NewRecorder()
 	reqHidden := makeReq(`{"capability_key":"staffing.assignment_create.field_policy","field_key":"field_hidden","business_unit_org_code":"BU-001","as_of":"2026-01-01","request_id":"req-hidden"}`)

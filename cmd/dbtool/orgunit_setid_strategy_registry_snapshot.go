@@ -13,7 +13,7 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-const setIDStrategyRegistrySnapshotVersion = "dev-plan-320-setid-strategy-registry-v1"
+const setIDStrategyRegistrySnapshotVersion = "dev-plan-330-setid-strategy-registry-v2"
 
 type setIDStrategyRegistrySnapshotFile struct {
 	Version    string                             `json:"version"`
@@ -33,6 +33,7 @@ type setIDStrategyRegistrySnapshotRow struct {
 	BusinessUnitSourceValue string   `json:"business_unit_source_value,omitempty"`
 	BusinessUnitOrgCode     string   `json:"business_unit_org_code,omitempty"`
 	BusinessUnitNodeKey     string   `json:"business_unit_node_key,omitempty"`
+	ResolvedSetID           string   `json:"resolved_setid,omitempty"`
 	Required                bool     `json:"required"`
 	Visible                 bool     `json:"visible"`
 	Maintainable            bool     `json:"maintainable"`
@@ -52,6 +53,7 @@ type setIDStrategyRegistrySnapshotRow struct {
 
 type setIDStrategyRegistryExportLayout struct {
 	RegistrySourceColumn string
+	HasResolvedSetID     bool
 	HasOrgCodeOrgID      bool
 	HasOrgCodeNodeKey    bool
 	HasDecodeFunction    bool
@@ -329,6 +331,14 @@ func exportSetIDStrategyRegistrySnapshotRows(ctx context.Context, conn *pgx.Conn
 		return nil, fmt.Errorf("setid strategy registry export unsupported: orgunit.org_unit_codes missing compatible key columns")
 	}
 	joinClause := "LEFT JOIN orgunit.org_unit_codes c ON " + joinPredicates[0] + " AND (" + strings.Join(joinPredicates[1:], " OR ") + ")"
+	resolvedSetIDExpr := "btrim(COALESCE(r.resolved_setid, ''))"
+	if !layout.HasResolvedSetID {
+		resolvedSetIDExpr = fmt.Sprintf(
+			"CASE WHEN r.org_applicability = 'business_unit' AND NULLIF(%s, '') IS NOT NULL THEN orgunit.resolve_setid(r.tenant_uuid, NULLIF(%s, '')::char(8), r.effective_date) ELSE '' END",
+			nodeKeyExpr,
+			nodeKeyExpr,
+		)
+	}
 
 	query := fmt.Sprintf(`
 SELECT
@@ -341,6 +351,7 @@ SELECT
   CASE WHEN r.org_applicability = 'business_unit' THEN btrim(%s) ELSE '' END AS business_unit_source_value,
   CASE WHEN r.org_applicability = 'business_unit' THEN COALESCE(c.org_code, '') ELSE '' END AS business_unit_org_code,
   %s AS business_unit_node_key,
+  %s AS resolved_setid,
   r.required,
   r.visible,
   r.maintainable,
@@ -360,8 +371,8 @@ FROM orgunit.setid_strategy_registry r
 %s
 WHERE r.effective_date <= $1::date
   AND (r.end_date IS NULL OR r.end_date > $1::date)
-ORDER BY r.tenant_uuid, r.capability_key, r.field_key, r.org_applicability, business_unit_org_code, business_unit_node_key, r.effective_date;
-`, sourceExpr, nodeKeyExpr, joinClause)
+ORDER BY r.tenant_uuid, r.capability_key, r.field_key, r.org_applicability, resolved_setid, business_unit_org_code, business_unit_node_key, r.effective_date;
+`, sourceExpr, nodeKeyExpr, resolvedSetIDExpr, joinClause)
 
 	rows, err := conn.Query(ctx, query, asOf)
 	if err != nil {
@@ -383,6 +394,7 @@ ORDER BY r.tenant_uuid, r.capability_key, r.field_key, r.org_applicability, busi
 			&row.BusinessUnitSourceValue,
 			&row.BusinessUnitOrgCode,
 			&row.BusinessUnitNodeKey,
+			&row.ResolvedSetID,
 			&row.Required,
 			&row.Visible,
 			&row.Maintainable,
@@ -426,6 +438,7 @@ func detectSetIDStrategyRegistryExportLayout(ctx context.Context, conn *pgx.Conn
 	}
 
 	layout := setIDStrategyRegistryExportLayout{
+		HasResolvedSetID:  hasColumn(registryColumns, "resolved_setid"),
 		HasOrgCodeOrgID:   hasColumn(orgCodeColumns, "org_id"),
 		HasOrgCodeNodeKey: hasColumn(orgCodeColumns, "org_node_key"),
 		HasDecodeFunction: hasDecodeFunction,
@@ -478,11 +491,15 @@ func validateSetIDStrategyRegistryTargetLayout(layout setIDStrategyRegistryTarge
 func isCriticalSetIDStrategyRegistryTargetLayoutIssue(code string) bool {
 	switch code {
 	case "schema_missing_business_unit_node_key",
+		"schema_missing_resolved_setid",
 		"schema_old_business_unit_id_present",
 		"target_org_node_key_schema_missing",
 		"schema_old_constraint_present",
 		"schema_legacy_regex_present",
-		"schema_node_key_constraint_missing":
+		"schema_node_key_constraint_missing",
+		"schema_resolved_setid_format_constraint_missing",
+		"schema_resolved_setid_shape_constraint_missing",
+		"schema_resolved_setid_unique_index_missing":
 		return true
 	default:
 		return false
@@ -519,6 +536,7 @@ INSERT INTO orgunit.setid_strategy_registry (
   personalization_mode,
   org_applicability,
   business_unit_node_key,
+  resolved_setid,
   required,
   visible,
   maintainable,
@@ -542,23 +560,24 @@ INSERT INTO orgunit.setid_strategy_registry (
   $5::text,
   $6::text,
   $7::text,
-  $8::boolean,
+  $8::text,
   $9::boolean,
   $10::boolean,
-  NULLIF($11::text, ''),
+  $11::boolean,
   NULLIF($12::text, ''),
-  $13::jsonb,
-  $14::integer,
-  $15::text,
+  NULLIF($13::text, ''),
+  $14::jsonb,
+  $15::integer,
   $16::text,
-  $17::boolean,
+  $17::text,
   $18::boolean,
-  $19::text,
-  $20::date,
+  $19::boolean,
+  $20::text,
   $21::date,
-  $22::timestamptz
+  $22::date,
+  $23::timestamptz
 );
-`, row.TenantUUID, row.CapabilityKey, row.OwnerModule, row.FieldKey, row.PersonalizationMode, row.OrgApplicability, row.BusinessUnitNodeKey, row.Required, row.Visible, row.Maintainable, row.DefaultRuleRef, row.DefaultValue, allowedValueCodesJSON, row.Priority, row.PriorityMode, row.LocalOverrideMode, row.ExplainRequired, row.IsStable, row.ChangePolicy, row.EffectiveDate, endDate, row.UpdatedAt); err != nil {
+`, row.TenantUUID, row.CapabilityKey, row.OwnerModule, row.FieldKey, row.PersonalizationMode, row.OrgApplicability, row.BusinessUnitNodeKey, row.ResolvedSetID, row.Required, row.Visible, row.Maintainable, row.DefaultRuleRef, row.DefaultValue, allowedValueCodesJSON, row.Priority, row.PriorityMode, row.LocalOverrideMode, row.ExplainRequired, row.IsStable, row.ChangePolicy, row.EffectiveDate, endDate, row.UpdatedAt); err != nil {
 			return err
 		}
 	}
@@ -631,6 +650,7 @@ SELECT
   '' AS business_unit_source_value,
   CASE WHEN r.org_applicability = 'business_unit' THEN COALESCE(c.org_code, '') ELSE '' END AS business_unit_org_code,
   CASE WHEN r.org_applicability = 'business_unit' THEN r.business_unit_node_key ELSE '' END AS business_unit_node_key,
+  btrim(COALESCE(r.resolved_setid, '')) AS resolved_setid,
   r.required,
   r.visible,
   r.maintainable,
@@ -653,7 +673,7 @@ LEFT JOIN orgunit.org_unit_codes c
 WHERE r.tenant_uuid = $1::uuid
   AND r.effective_date <= $2::date
   AND (r.end_date IS NULL OR r.end_date > $2::date)
-ORDER BY r.capability_key, r.field_key, r.org_applicability, business_unit_org_code, business_unit_node_key, r.effective_date;
+ORDER BY r.capability_key, r.field_key, r.org_applicability, resolved_setid, business_unit_org_code, business_unit_node_key, r.effective_date;
 `, tenantUUID, asOf)
 	if err != nil {
 		return nil, err
@@ -674,6 +694,7 @@ ORDER BY r.capability_key, r.field_key, r.org_applicability, business_unit_org_c
 			&row.BusinessUnitSourceValue,
 			&row.BusinessUnitOrgCode,
 			&row.BusinessUnitNodeKey,
+			&row.ResolvedSetID,
 			&row.Required,
 			&row.Visible,
 			&row.Maintainable,
@@ -898,6 +919,9 @@ func validateSetIDStrategyRegistrySnapshotRow(row setIDStrategyRegistrySnapshotR
 	if _, err := time.Parse(time.RFC3339, row.UpdatedAt); err != nil {
 		return fmt.Errorf("updated_at invalid: %w", err)
 	}
+	if row.ResolvedSetID != "" && !resolvedSetIDPattern.MatchString(row.ResolvedSetID) {
+		return fmt.Errorf("resolved_setid invalid")
+	}
 	switch row.OrgApplicability {
 	case "tenant":
 		if row.BusinessUnitOrgCode != "" || row.BusinessUnitNodeKey != "" {
@@ -906,6 +930,9 @@ func validateSetIDStrategyRegistrySnapshotRow(row setIDStrategyRegistrySnapshotR
 	case "business_unit":
 		if row.BusinessUnitOrgCode == "" && row.BusinessUnitNodeKey == "" {
 			return fmt.Errorf("business_unit row must include business_unit_org_code or business_unit_node_key")
+		}
+		if row.ResolvedSetID == "" {
+			return fmt.Errorf("business_unit row must include exact resolved_setid")
 		}
 		if row.BusinessUnitNodeKey != "" && !orgNodeKeyPattern.MatchString(row.BusinessUnitNodeKey) {
 			return fmt.Errorf("business_unit_node_key invalid")
@@ -926,6 +953,7 @@ func normalizeSetIDStrategyRegistrySnapshotRow(row setIDStrategyRegistrySnapshot
 	row.BusinessUnitSourceValue = strings.TrimSpace(row.BusinessUnitSourceValue)
 	row.BusinessUnitOrgCode = strings.TrimSpace(row.BusinessUnitOrgCode)
 	row.BusinessUnitNodeKey = strings.TrimSpace(row.BusinessUnitNodeKey)
+	row.ResolvedSetID = strings.ToUpper(strings.TrimSpace(row.ResolvedSetID))
 	row.DefaultRuleRef = strings.TrimSpace(row.DefaultRuleRef)
 	row.DefaultValue = strings.TrimSpace(row.DefaultValue)
 	row.PriorityMode = strings.ToLower(strings.TrimSpace(row.PriorityMode))
@@ -965,6 +993,7 @@ func setIDStrategyRegistrySnapshotComparableKey(row setIDStrategyRegistrySnapsho
 		row.OrgApplicability,
 		row.BusinessUnitOrgCode,
 		row.BusinessUnitNodeKey,
+		row.ResolvedSetID,
 		row.EffectiveDate,
 		row.EndDate,
 		row.UpdatedAt,
@@ -990,6 +1019,7 @@ func equalSetIDStrategyRegistrySnapshotRow(left setIDStrategyRegistrySnapshotRow
 		left.OrgApplicability == right.OrgApplicability &&
 		left.BusinessUnitOrgCode == right.BusinessUnitOrgCode &&
 		left.BusinessUnitNodeKey == right.BusinessUnitNodeKey &&
+		left.ResolvedSetID == right.ResolvedSetID &&
 		left.Required == right.Required &&
 		left.Visible == right.Visible &&
 		left.Maintainable == right.Maintainable &&

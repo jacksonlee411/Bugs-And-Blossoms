@@ -20,6 +20,7 @@ func TestValidateSetIDStrategyRegistrySnapshot(t *testing.T) {
 					PersonalizationMode: "setid",
 					OrgApplicability:    "business_unit",
 					BusinessUnitOrgCode: "ROOT-A",
+					ResolvedSetID:       "A0001",
 					Required:            true,
 					Visible:             true,
 					Maintainable:        true,
@@ -104,9 +105,10 @@ func TestEqualSetIDStrategyRegistrySnapshotRow(t *testing.T) {
 		FieldKey:            "location_code",
 		PersonalizationMode: "setid",
 		OrgApplicability:    "business_unit",
-		BusinessUnitOrgCode: "ROOT-A",
-		BusinessUnitNodeKey: "ABCDEFGH",
-		Required:            true,
+			BusinessUnitOrgCode: "ROOT-A",
+			BusinessUnitNodeKey: "ABCDEFGH",
+			ResolvedSetID:       "A0001",
+			Required:            true,
 		Visible:             true,
 		Maintainable:        true,
 		AllowedValueCodes:   []string{"A", "B"},
@@ -126,9 +128,10 @@ func TestEqualSetIDStrategyRegistrySnapshotRow(t *testing.T) {
 		FieldKey:            "location_code",
 		PersonalizationMode: "setid",
 		OrgApplicability:    "business_unit",
-		BusinessUnitOrgCode: "ROOT-A",
-		BusinessUnitNodeKey: "ABCDEFGH",
-		Required:            true,
+			BusinessUnitOrgCode: "ROOT-A",
+			BusinessUnitNodeKey: "ABCDEFGH",
+			ResolvedSetID:       "A0001",
+			Required:            true,
 		Visible:             true,
 		Maintainable:        true,
 		AllowedValueCodes:   []string{"A", "B"},
@@ -153,15 +156,21 @@ func TestEqualSetIDStrategyRegistrySnapshotRow(t *testing.T) {
 func TestValidateSetIDStrategyRegistryTargetLayout(t *testing.T) {
 	t.Run("accepts clean target schema", func(t *testing.T) {
 		err := validateSetIDStrategyRegistryTargetLayout(setIDStrategyRegistryTargetLayout{
-			SchemaState: setIDStrategyRegistrySchemaState{
-				Columns: map[string]struct{}{
-					"business_unit_node_key": {},
-				},
-				ConstraintDefs: map[string]string{
-					"setid_strategy_registry_business_unit_node_key_applicability_check": "CHECK ((((org_applicability = 'tenant'::text) AND (business_unit_node_key = ''::text)) OR ((org_applicability = 'business_unit'::text) AND orgunit.is_valid_org_node_key(btrim(business_unit_node_key)))))",
-				},
-				OrgUnitVersionsColumns: map[string]struct{}{
-					"org_node_key": {},
+				SchemaState: setIDStrategyRegistrySchemaState{
+					Columns: map[string]struct{}{
+						"business_unit_node_key": {},
+						"resolved_setid":        {},
+					},
+					ConstraintDefs: map[string]string{
+						"setid_strategy_registry_business_unit_node_key_applicability_check": "CHECK ((((org_applicability = 'tenant'::text) AND (business_unit_node_key = ''::text)) OR ((org_applicability = 'business_unit'::text) AND orgunit.is_valid_org_node_key(btrim(business_unit_node_key)))))",
+						"setid_strategy_registry_resolved_setid_format_check":               "CHECK ((btrim(resolved_setid) = ''::text) OR (btrim(resolved_setid) ~ '^[A-Z0-9]{5}$'::text))",
+						"setid_strategy_registry_scope_shape_check":                         "CHECK ((((org_applicability = 'tenant'::text) AND (btrim(business_unit_node_key) = ''::text) AND (btrim(resolved_setid) = ''::text)) OR ((org_applicability = 'business_unit'::text) AND orgunit.is_valid_org_node_key(btrim(business_unit_node_key)) AND (btrim(resolved_setid) ~ '^[A-Z0-9]{5}$'::text))))",
+					},
+					IndexDefs: map[string]string{
+						"setid_strategy_registry_key_unique_idx": "CREATE UNIQUE INDEX setid_strategy_registry_key_unique_idx ON orgunit.setid_strategy_registry USING btree (tenant_uuid, capability_key, field_key, org_applicability, resolved_setid, business_unit_node_key, effective_date)",
+					},
+					OrgUnitVersionsColumns: map[string]struct{}{
+						"org_node_key": {},
 				},
 			},
 			OrgUnitCodesColumns: map[string]struct{}{
