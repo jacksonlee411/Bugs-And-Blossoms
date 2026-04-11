@@ -269,8 +269,8 @@ func handleOrgUnitFieldConfigsEnableCandidatesAPI(w http.ResponseWriter, r *http
 			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusInternalServerError, "setid_resolver_missing", "setid resolver missing")
 			return
 		}
-			orgNodeKey, orgErr := orgResolver.ResolveOrgNodeKeyByCode(r.Context(), tenant.ID, orgCode)
-			if orgErr != nil {
+		orgNodeKey, orgErr := orgResolver.ResolveOrgNodeKeyByCode(r.Context(), tenant.ID, orgCode)
+		if orgErr != nil {
 			switch {
 			case errors.Is(orgErr, orgunitpkg.ErrOrgCodeInvalid):
 				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "org_code_invalid", "org_code invalid")
@@ -281,7 +281,7 @@ func handleOrgUnitFieldConfigsEnableCandidatesAPI(w http.ResponseWriter, r *http
 			}
 			return
 		}
-			setID, resolveErr := setIDStore.ResolveSetID(r.Context(), tenant.ID, orgNodeKey, enabledOn)
+		setID, resolveErr := setIDStore.ResolveSetID(r.Context(), tenant.ID, orgNodeKey, enabledOn)
 		if resolveErr != nil {
 			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusUnprocessableEntity, stablePgMessage(resolveErr), "resolve setid failed")
 			return
@@ -977,8 +977,8 @@ func handleOrgUnitFieldOptionsAPI(w http.ResponseWriter, r *http.Request, store 
 			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "org_code_invalid", "org_code invalid")
 			return
 		}
-			orgNodeKey, orgErr := store.ResolveOrgNodeKeyByCode(r.Context(), tenant.ID, orgCode)
-			if orgErr != nil {
+		orgNodeKey, orgErr := store.ResolveOrgNodeKeyByCode(r.Context(), tenant.ID, orgCode)
+		if orgErr != nil {
 			switch {
 			case errors.Is(orgErr, orgunitpkg.ErrOrgCodeInvalid):
 				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "org_code_invalid", "org_code invalid")
@@ -994,7 +994,7 @@ func handleOrgUnitFieldOptionsAPI(w http.ResponseWriter, r *http.Request, store 
 			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusInternalServerError, "setid_resolver_missing", "setid resolver missing")
 			return
 		}
-			setID, resolveErr := setIDResolver.ResolveSetID(r.Context(), tenant.ID, orgNodeKey, asOf)
+		setID, resolveErr := setIDResolver.ResolveSetID(r.Context(), tenant.ID, orgNodeKey, asOf)
 		if resolveErr != nil {
 			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusUnprocessableEntity, stablePgMessage(resolveErr), "resolve setid failed")
 			return

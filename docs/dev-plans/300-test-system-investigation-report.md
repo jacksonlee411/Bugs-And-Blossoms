@@ -37,7 +37,7 @@
 
 ### 2. 覆盖率门禁对测试结构的反向塑形明显
 
-- 覆盖率阈值由 [config/coverage/policy.yaml](../../config/coverage/policy.yaml) 单主源定义，当前阈值为 `100%`。
+- 覆盖率阈值由 [config/coverage/policy.yaml](../../config/coverage/policy.yaml) 单主源定义，当前阈值为 `99%`。
 - 执行入口由 [scripts/ci/coverage.sh](../../scripts/ci/coverage.sh) 与 [scripts/ci/test.sh](../../scripts/ci/test.sh) 固定。
 - 与 `coverage/gap/more/extra/matrix/lifecycle/policy` 命名模式相关的 Go 测试文件：`61`
 - 这类文件代码行数：`28383`

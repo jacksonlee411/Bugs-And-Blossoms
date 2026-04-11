@@ -142,7 +142,7 @@ flowchart TD
 - 必须提供（名称建议与 `docs/dev-plans/012-ci-quality-gates.md` 对齐）：
   - `make preflight`（本地聚合入口）
   - `make check lint` / `make check fmt`
-  - `make test`（含覆盖率门禁口径；100% 口径由 SSOT 固化）
+  - `make test`（含覆盖率门禁口径；阈值由 SSOT 固化）
   - `make check routing`
   - `make e2e`（smoke）
   - `make check doc`（若 dev-plans 同仓）

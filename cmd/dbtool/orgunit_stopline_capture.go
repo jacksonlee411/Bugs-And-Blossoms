@@ -1063,18 +1063,18 @@ func buildOrgunitStoplineSpecs(samples orgunitStoplineSamples) []orgunitStopline
 			Args:        []any{chainTenant, asOfDate, chainBU.OrgCode},
 			TenantUUID:  chainTenant,
 		},
-			{
-				Key:         "setid-resolve",
-				Stage:       "target-real",
-				Description: "target org_node_key 库：SetID 基于组织祖先链解析",
-				SQL:         targetSetIDResolveSQL,
-				Args:        []any{chainTenant, chainBU.OrgNodeKey, asOfDate},
-				TenantUUID:  chainTenant,
-				Notes: []string{
-					"在 dedicated target 的 `orgunit.setid_binding_versions` 内导入当前态样本",
-					"该 explain 已不再依赖 `stopline` shadow 表，但这仍不等于 P3 正式 runtime 切主",
-				},
+		{
+			Key:         "setid-resolve",
+			Stage:       "target-real",
+			Description: "target org_node_key 库：SetID 基于组织祖先链解析",
+			SQL:         targetSetIDResolveSQL,
+			Args:        []any{chainTenant, chainBU.OrgNodeKey, asOfDate},
+			TenantUUID:  chainTenant,
+			Notes: []string{
+				"在 dedicated target 的 `orgunit.setid_binding_versions` 内导入当前态样本",
+				"该 explain 已不再依赖 `stopline` shadow 表，但这仍不等于 P3 正式 runtime 切主",
 			},
+		},
 		{
 			Key:         "staffing-by-org",
 			Stage:       "target-real",
@@ -1272,7 +1272,7 @@ func renderOrgunitStoplineMarkdown(report orgunitStoplineReport) string {
 				fmt.Fprintf(&b, "\n说明：%s\n\n", strings.Join(result.Notes, "；"))
 			}
 		}
-	fmt.Fprintf(&b, "\n")
+		fmt.Fprintf(&b, "\n")
 	}
 
 	fmt.Fprintf(&b, "## Notes\n\n")
@@ -1466,12 +1466,12 @@ func prepareTargetStoplineShadowData(ctx context.Context, sourceConn *pgx.Conn, 
 		return err
 	}
 
-		for _, row := range bindings {
-			orgNodeKey, ok := codeMap[row.OrgCode]
-			if !ok {
-				return fmt.Errorf("target stopline real missing org_code mapping for setid binding tenant=%s org_code=%s", tenantUUID, row.OrgCode)
-			}
-			if _, err := tx.Exec(ctx, `
+	for _, row := range bindings {
+		orgNodeKey, ok := codeMap[row.OrgCode]
+		if !ok {
+			return fmt.Errorf("target stopline real missing org_code mapping for setid binding tenant=%s org_code=%s", tenantUUID, row.OrgCode)
+		}
+		if _, err := tx.Exec(ctx, `
 	INSERT INTO orgunit.setid_binding_versions (
 	  tenant_uuid,
 	  org_node_key,
@@ -1489,12 +1489,12 @@ VALUES (
 		}
 	}
 
-		for _, row := range positions {
-			orgNodeKey, ok := codeMap[row.OrgCode]
-			if !ok {
-				return fmt.Errorf("target stopline real missing org_code mapping for staffing position tenant=%s org_code=%s", tenantUUID, row.OrgCode)
-			}
-			if _, err := tx.Exec(ctx, `
+	for _, row := range positions {
+		orgNodeKey, ok := codeMap[row.OrgCode]
+		if !ok {
+			return fmt.Errorf("target stopline real missing org_code mapping for staffing position tenant=%s org_code=%s", tenantUUID, row.OrgCode)
+		}
+		if _, err := tx.Exec(ctx, `
 	INSERT INTO staffing.positions (
 	  tenant_uuid,
   position_uuid
