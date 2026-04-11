@@ -34,6 +34,7 @@ type internalEvaluationContext struct {
 	CapabilityKey       string `json:"capability_key"`
 	FieldKey            string `json:"field_key"`
 	SetID               string `json:"setid"`
+	SetIDSource         string `json:"setid_source,omitempty"`
 	BusinessUnitOrgCode string `json:"business_unit_org_code"`
 	OrgCode             string `json:"org_code"`
 	AsOf                string `json:"as_of"`
@@ -135,24 +136,38 @@ func handleInternalRulesEvaluateAPI(w http.ResponseWriter, r *http.Request, seti
 	}
 	req.AsOf = asOf
 
-	businessUnitRef, err := resolveSetIDOrgCodeRef(r.Context(), tenant.ID, req.BusinessUnitOrgCode, orgResolver)
+	contextResolver := newSetIDContextResolver(orgResolver, setidStore)
+	policyCtx, err := contextResolver.ResolvePolicyContext(r.Context(), setIDPolicyContextInput{
+		TenantID:            tenant.ID,
+		CapabilityKey:       req.CapabilityKey,
+		FieldKey:            req.FieldKey,
+		AsOf:                req.AsOf,
+		BusinessUnitOrgCode: req.BusinessUnitOrgCode,
+	})
 	if err != nil {
-		writeSetIDExplainOrgCodeError(w, r, "business_unit_org_code", err)
+		if resolveErr, ok := asSetIDContextResolveError(err); ok {
+			switch resolveErr.Code {
+			case setIDContextCodeBusinessUnitInvalid:
+				writeSetIDExplainOrgCodeError(w, r, "business_unit_org_code", resolveErr.Cause)
+			case setIDContextCodeOrgResolverMissing:
+				routingWriteErrorInternal(w, r, http.StatusInternalServerError, resolveErr.Code, "orgunit resolver missing")
+			case setIDContextCodeSetIDResolverMissing:
+				routingWriteErrorInternal(w, r, http.StatusInternalServerError, resolveErr.Code, "setid resolver missing")
+			default:
+				routingWriteErrorInternal(w, r, http.StatusForbidden, capabilityReasonContextMismatch, "capability context mismatch")
+			}
+			return
+		}
+		routingWriteErrorInternal(w, r, http.StatusInternalServerError, "internal_error", "internal error")
 		return
 	}
-	req.BusinessUnitOrgCode = businessUnitRef.OrgCode
+	req.BusinessUnitOrgCode = policyCtx.BusinessUnitOrgCode
 	if req.OrgCode == "" {
 		req.OrgCode = req.BusinessUnitOrgCode
 	}
-	targetOrgRef, err := resolveSetIDOrgCodeRef(r.Context(), tenant.ID, req.OrgCode, orgResolver)
-	if err != nil {
-		writeSetIDExplainOrgCodeError(w, r, "org_code", err)
-		return
-	}
-	req.OrgCode = targetOrgRef.OrgCode
 
 	capCtx, capErr := resolveCapabilityContext(r.Context(), r, capabilityContextInput{
-		CapabilityKey:       req.CapabilityKey,
+		CapabilityKey:       policyCtx.CapabilityKey,
 		BusinessUnitOrgCode: req.BusinessUnitOrgCode,
 		AsOf:                req.AsOf,
 		RequireBusinessUnit: true,
@@ -170,19 +185,36 @@ func handleInternalRulesEvaluateAPI(w http.ResponseWriter, r *http.Request, seti
 		return
 	}
 
-	dynamicRelations := preloadCapabilityDynamicRelations(r.Context(), req.BusinessUnitOrgCode)
-	if !dynamicRelations.actorManages(req.OrgCode, req.AsOf) {
-		routingWriteErrorInternal(w, r, http.StatusForbidden, capabilityReasonContextMismatch, "capability context mismatch")
-		return
+	targetCtx := resolvedSetIDContext{
+		OrgCode:       policyCtx.BusinessUnitOrgCode,
+		OrgNodeKey:    policyCtx.BusinessUnitNodeKey,
+		ResolvedSetID: policyCtx.ResolvedSetID,
+		SetIDSource:   policyCtx.SetIDSource,
 	}
+	if !strings.EqualFold(req.OrgCode, capCtx.BusinessUnitOrgCode) {
+		targetCtx, err = contextResolver.ResolveOrgContext(r.Context(), tenant.ID, req.OrgCode, req.AsOf, "org_code")
+		if err != nil {
+			if resolveErr, ok := asSetIDContextResolveError(err); ok {
+				switch resolveErr.Code {
+				case setIDContextCodeBusinessUnitInvalid:
+					writeSetIDExplainOrgCodeError(w, r, "org_code", resolveErr.Cause)
+				case setIDContextCodeOrgResolverMissing:
+					routingWriteErrorInternal(w, r, http.StatusInternalServerError, resolveErr.Code, "orgunit resolver missing")
+				case setIDContextCodeSetIDResolverMissing:
+					routingWriteErrorInternal(w, r, http.StatusInternalServerError, resolveErr.Code, "setid resolver missing")
+				default:
+					routingWriteErrorInternal(w, r, http.StatusForbidden, capabilityReasonContextMismatch, "capability context mismatch")
+				}
+				return
+			}
+			routingWriteErrorInternal(w, r, http.StatusInternalServerError, "internal_error", "internal error")
+			return
+		}
+	}
+	req.OrgCode = targetCtx.OrgCode
 
-	resolvedSetID, err := setidStore.ResolveSetID(r.Context(), tenant.ID, targetOrgRef.OrgNodeKey, req.AsOf)
-	if err != nil {
-		routingWriteErrorInternal(w, r, http.StatusForbidden, capabilityReasonContextMismatch, "capability context mismatch")
-		return
-	}
-	resolvedSetID = strings.ToUpper(strings.TrimSpace(resolvedSetID))
-	if resolvedSetID == "" {
+	dynamicRelations := preloadCapabilityDynamicRelations(r.Context(), req.BusinessUnitOrgCode)
+	if !dynamicRelations.actorManages(targetCtx.OrgCode, req.AsOf) {
 		routingWriteErrorInternal(w, r, http.StatusForbidden, capabilityReasonContextMismatch, "capability context mismatch")
 		return
 	}
@@ -202,7 +234,7 @@ func handleInternalRulesEvaluateAPI(w http.ResponseWriter, r *http.Request, seti
 		traceID = fallbackSetIDExplainTraceID(requestID, req.CapabilityKey, req.BusinessUnitOrgCode, req.AsOf)
 	}
 
-	evalCtx := buildInternalEvaluationContext(r.Context(), tenant.ID, req, businessUnitRef.OrgNodeKey, resolvedSetID, requestID, traceID)
+	evalCtx := buildInternalEvaluationContext(r.Context(), tenant.ID, req, policyCtx.BusinessUnitNodeKey, targetCtx.ResolvedSetID, targetCtx.SetIDSource, requestID, traceID)
 	candidates := buildInternalRuleCandidates(items)
 	ctxMap := evalCtx.celContextMap()
 
@@ -218,7 +250,7 @@ func handleInternalRulesEvaluateAPI(w http.ResponseWriter, r *http.Request, seti
 		CapabilityKey:       req.CapabilityKey,
 		FunctionalAreaKey:   functionalAreaKey,
 		FieldKey:            req.FieldKey,
-		SetID:               resolvedSetID,
+		SetID:               targetCtx.ResolvedSetID,
 		PolicyVersion:       capabilityPolicyVersionBaseline,
 		Decision:            decision,
 		ReasonCode:          reasonCode,
@@ -240,12 +272,13 @@ func routingWriteErrorInternal(w http.ResponseWriter, r *http.Request, status in
 	routing.WriteError(w, r, routing.RouteClassInternalAPI, status, code, msg)
 }
 
-func buildInternalEvaluationContext(ctx context.Context, tenantID string, req internalRulesEvaluateRequest, businessUnitNodeKey string, resolvedSetID string, requestID string, traceID string) internalEvaluationContext {
+func buildInternalEvaluationContext(ctx context.Context, tenantID string, req internalRulesEvaluateRequest, businessUnitNodeKey string, resolvedSetID string, setIDSource string, requestID string, traceID string) internalEvaluationContext {
 	evalCtx := internalEvaluationContext{
 		TenantID:            tenantID,
 		CapabilityKey:       req.CapabilityKey,
 		FieldKey:            req.FieldKey,
 		SetID:               resolvedSetID,
+		SetIDSource:         strings.TrimSpace(setIDSource),
 		BusinessUnitOrgCode: req.BusinessUnitOrgCode,
 		OrgCode:             req.OrgCode,
 		AsOf:                req.AsOf,
@@ -268,6 +301,7 @@ func (c internalEvaluationContext) celContextMap() map[string]string {
 		"capability_key":         c.CapabilityKey,
 		"field_key":              c.FieldKey,
 		"setid":                  c.SetID,
+		"setid_source":           c.SetIDSource,
 		"business_unit_org_code": c.BusinessUnitOrgCode,
 		"org_code":               c.OrgCode,
 		"business_unit_node_key": c.businessUnitNodeKey,

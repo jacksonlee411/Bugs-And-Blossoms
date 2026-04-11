@@ -226,6 +226,38 @@ func resolveOrgUnitFieldConfigDecision(ctx context.Context, tenantID string, fie
 	return decision, true, nil
 }
 
+func writeOrgUnitSetIDContextError(w http.ResponseWriter, r *http.Request, field string, err error) {
+	if resolveErr, ok := asSetIDContextResolveError(err); ok {
+		switch resolveErr.Code {
+		case setIDContextCodeBusinessUnitInvalid:
+			switch {
+			case errors.Is(resolveErr.Cause, orgunitpkg.ErrOrgCodeInvalid):
+				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, field+"_invalid", field+" invalid")
+			case errors.Is(resolveErr.Cause, orgunitpkg.ErrOrgCodeNotFound):
+				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusNotFound, field+"_not_found", field+" not found")
+			default:
+				writeInternalAPIError(w, r, resolveErr.Cause, "orgunit_resolve_org_code_failed")
+			}
+		case setIDContextCodeOrgResolverMissing:
+			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusInternalServerError, "orgunit_store_missing", "orgunit store missing")
+		case setIDContextCodeSetIDResolverMissing:
+			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusInternalServerError, "setid_resolver_missing", "setid resolver missing")
+		case setIDContextCodeSetIDBindingMissing:
+			if resolveErr.Cause != nil {
+				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusUnprocessableEntity, stablePgMessage(resolveErr.Cause), "resolve setid failed")
+				return
+			}
+			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusUnprocessableEntity, "setid_missing", "setid missing")
+		case setIDContextCodeSetIDSourceInvalid:
+			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusUnprocessableEntity, resolveErr.Code, "setid source invalid")
+		default:
+			writeInternalAPIError(w, r, err, "orgunit_resolve_setid_context_failed")
+		}
+		return
+	}
+	writeInternalAPIError(w, r, err, "orgunit_resolve_setid_context_failed")
+}
+
 func handleOrgUnitFieldConfigsEnableCandidatesAPI(w http.ResponseWriter, r *http.Request, dictStore orgUnitDictRegistryStore, orgResolver OrgUnitCodeResolver, setIDStore SetIDGovernanceStore) {
 	if r.Method != http.MethodGet {
 		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusMethodNotAllowed, "method_not_allowed", "method not allowed")
@@ -256,48 +288,14 @@ func handleOrgUnitFieldConfigsEnableCandidatesAPI(w http.ResponseWriter, r *http
 	resolvedSetIDSource := orgUnitFieldOptionSetIDSourceDeflt
 	rawOrgCode := strings.TrimSpace(r.URL.Query().Get("org_code"))
 	if rawOrgCode != "" {
-		orgCode, normalizeErr := orgunitpkg.NormalizeOrgCode(rawOrgCode)
-		if normalizeErr != nil {
-			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "org_code_invalid", "org_code invalid")
-			return
-		}
-		if orgResolver == nil {
-			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusInternalServerError, "orgunit_store_missing", "orgunit store missing")
-			return
-		}
-		if setIDStore == nil {
-			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusInternalServerError, "setid_resolver_missing", "setid resolver missing")
-			return
-		}
-		orgNodeKey, orgErr := orgResolver.ResolveOrgNodeKeyByCode(r.Context(), tenant.ID, orgCode)
-		if orgErr != nil {
-			switch {
-			case errors.Is(orgErr, orgunitpkg.ErrOrgCodeInvalid):
-				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "org_code_invalid", "org_code invalid")
-			case errors.Is(orgErr, orgunitpkg.ErrOrgCodeNotFound):
-				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusNotFound, "org_code_not_found", "org_code not found")
-			default:
-				writeInternalAPIError(w, r, orgErr, "orgunit_resolve_org_code_failed")
-			}
-			return
-		}
-		setID, resolveErr := setIDStore.ResolveSetID(r.Context(), tenant.ID, orgNodeKey, enabledOn)
+		contextResolver := newSetIDContextResolver(orgResolver, setIDStore)
+		resolvedCtx, resolveErr := contextResolver.ResolveOrgContext(r.Context(), tenant.ID, rawOrgCode, enabledOn, "org_code")
 		if resolveErr != nil {
-			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusUnprocessableEntity, stablePgMessage(resolveErr), "resolve setid failed")
+			writeOrgUnitSetIDContextError(w, r, "org_code", resolveErr)
 			return
 		}
-		setID = strings.ToUpper(strings.TrimSpace(setID))
-		if setID == "" {
-			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusUnprocessableEntity, "setid_missing", "setid missing")
-			return
-		}
-		resolvedSetID = setID
-		resolvedSetIDSource = "custom"
-		if resolvedSetID == orgUnitFieldOptionSetIDDeflt {
-			resolvedSetIDSource = orgUnitFieldOptionSetIDSourceDeflt
-		} else if resolvedSetID == "SHARE" {
-			resolvedSetIDSource = "share_preview"
-		}
+		resolvedSetID = resolvedCtx.ResolvedSetID
+		resolvedSetIDSource = resolvedCtx.SetIDSource
 	}
 
 	dicts, err := listOrgUnitDicts(r.Context(), dictStore, tenant.ID, enabledOn)
@@ -972,45 +970,18 @@ func handleOrgUnitFieldOptionsAPI(w http.ResponseWriter, r *http.Request, store 
 	resolvedSetIDSource := orgUnitFieldOptionSetIDSourceDeflt
 	rawOrgCode := strings.TrimSpace(r.URL.Query().Get("org_code"))
 	if rawOrgCode != "" {
-		orgCode, normalizeErr := orgunitpkg.NormalizeOrgCode(rawOrgCode)
-		if normalizeErr != nil {
-			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "org_code_invalid", "org_code invalid")
-			return
+		var setIDResolver setIDContextSetIDResolver
+		if typedResolver, ok := any(store).(orgUnitSetIDResolver); ok {
+			setIDResolver = typedResolver
 		}
-		orgNodeKey, orgErr := store.ResolveOrgNodeKeyByCode(r.Context(), tenant.ID, orgCode)
-		if orgErr != nil {
-			switch {
-			case errors.Is(orgErr, orgunitpkg.ErrOrgCodeInvalid):
-				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "org_code_invalid", "org_code invalid")
-			case errors.Is(orgErr, orgunitpkg.ErrOrgCodeNotFound):
-				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusNotFound, "org_code_not_found", "org_code not found")
-			default:
-				writeInternalAPIError(w, r, orgErr, "orgunit_resolve_org_code_failed")
-			}
-			return
-		}
-		setIDResolver, resolverOK := any(store).(orgUnitSetIDResolver)
-		if !resolverOK {
-			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusInternalServerError, "setid_resolver_missing", "setid resolver missing")
-			return
-		}
-		setID, resolveErr := setIDResolver.ResolveSetID(r.Context(), tenant.ID, orgNodeKey, asOf)
+		contextResolver := newSetIDContextResolver(store, setIDResolver)
+		resolvedCtx, resolveErr := contextResolver.ResolveOrgContext(r.Context(), tenant.ID, rawOrgCode, asOf, "org_code")
 		if resolveErr != nil {
-			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusUnprocessableEntity, stablePgMessage(resolveErr), "resolve setid failed")
+			writeOrgUnitSetIDContextError(w, r, "org_code", resolveErr)
 			return
 		}
-		setID = strings.ToUpper(strings.TrimSpace(setID))
-		if setID == "" {
-			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusUnprocessableEntity, "setid_missing", "setid missing")
-			return
-		}
-		resolvedSetID = setID
-		resolvedSetIDSource = "custom"
-		if resolvedSetID == orgUnitFieldOptionSetIDDeflt {
-			resolvedSetIDSource = orgUnitFieldOptionSetIDSourceDeflt
-		} else if resolvedSetID == "SHARE" {
-			resolvedSetIDSource = "share_preview"
-		}
+		resolvedSetID = resolvedCtx.ResolvedSetID
+		resolvedSetIDSource = resolvedCtx.SetIDSource
 	}
 
 	cfg, ok, err := reader.GetEnabledTenantFieldConfigAsOf(r.Context(), tenant.ID, fieldKey, asOf)

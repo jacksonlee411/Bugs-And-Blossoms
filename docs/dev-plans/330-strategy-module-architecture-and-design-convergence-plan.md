@@ -1,6 +1,6 @@
 # DEV-PLAN-330：策略模块架构混乱调查与收口方案
 
-**状态**: 进行中（2026-04-11 13:53 CST，PR-1 审计与契约冻结已完成）
+**状态**: 进行中（2026-04-11 14:34 CST，PR-1 审计与契约冻结、PR-2 Context Resolver 单点落地已完成）
 
 ## 1. 背景
 
@@ -546,7 +546,7 @@
 | 批次 | 当前状态 | 对应里程碑 / R 步骤 | 目标 | 本批完成前不得声称完成的事项 |
 | --- | --- | --- | --- | --- |
 | `PR-1` 审计与契约冻结 | [X] 已完成 | `R0` + `M1` 起步 + `M6` 证据前置 | 固化现状审计、热点清单、PR 映射与 stopline | 不改 schema、不切主查询、不替换 PDP |
-| `PR-2` `Context Resolver` 单点落地 | [ ] 待开始 | `R1` + `6.2A` | 建立单一 `Context Resolver`，输出 `business_unit_node_key + resolved_setid + setid_source` | 未完成前不得开始双轴主查询切换 |
+| `PR-2` `Context Resolver` 单点落地 | [X] 已完成 | `R1` + `6.2A` | 建立单一 `Context Resolver`，输出 `business_unit_node_key + resolved_setid + setid_source` | 未完成前不得开始双轴主查询切换 |
 | `PR-3` Schema 双轴化与历史回填 | [ ] 待开始 | `R2 + R3` + `6.2B` 记录契约 | 在现有表上引入 `resolved_setid`、约束、唯一键与回填证据 | 若仍存在非法形状或不可判定记录即 stopline |
 | `PR-4` 唯一 PDP 与前置测试 | [ ] 待开始 | `R4` + `6.2` + `6.5` | 抽单一 PDP，补 bucket/mode/explain 回放测试 | 未完成前不得切主链 |
 | `PR-5` API / explain / version / 错误码切主链 | [ ] 待开始 | `R5 + R6` + `6.2C` | 显式表达 SetID 轴，统一 explain/version，切 canonical 错误码 | “schema 双轴、查询单轴”不构成收口 |
@@ -559,6 +559,16 @@
 2. [X] 将 `R0-R7` 与 `PR-1 ~ PR-6` 的实施顺序写回主计划，作为后续实施 SSOT。
 3. [X] 明确后续批次必须先过 `Context Resolver -> schema/backfill -> 唯一 PDP -> API/explain cutover` 的顺序，不得跳步。
 4. [X] 将新记录接入 `AGENTS.md` 文档地图，满足可发现性要求。
+
+### 5.3B PR-2 已交付物（2026-04-11）
+
+1. [X] 新增统一 `Context Resolver`，将 `business_unit_org_code -> business_unit_node_key -> resolved_setid -> setid_source` 固化为 `internal/server` 正式边界：
+   `internal/server/setid_context_resolver.go`
+2. [X] explain、`/internal/rules/evaluate`、OrgUnit 字段启用候选 / options 预览不再各自重复解析 SetID 上下文，已统一复用同一 Resolver。
+3. [X] 新增 `Context Resolver` 直测，并保留原接口错误口径优先级（`org_code invalid/not_found` 仍先于 `setid_resolver_missing` 暴露）：
+   `internal/server/setid_context_resolver_test.go`
+4. [X] 新增 PR-2 实施记录并接入仓库文档地图，作为 `PR-3` 前的证据冻结点：
+   `docs/dev-records/dev-plan-330-pr2-context-resolver-implementation-log.md`
 
 ## 6. 收口方案
 

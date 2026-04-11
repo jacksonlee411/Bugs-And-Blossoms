@@ -27,6 +27,7 @@ type setIDExplainResponse struct {
 	RequestID             string               `json:"request_id"`
 	CapabilityKey         string               `json:"capability_key"`
 	SetID                 string               `json:"setid"`
+	SetIDSource           string               `json:"setid_source,omitempty"`
 	FunctionalAreaKey     string               `json:"functional_area_key"`
 	PolicyVersion         string               `json:"policy_version"`
 	TenantID              string               `json:"tenant_id"`
@@ -70,20 +71,35 @@ func handleSetIDExplainAPI(w http.ResponseWriter, r *http.Request, store SetIDGo
 		writeInternalDayFieldError(w, r, err)
 		return
 	}
-	businessUnitOrgCode, businessUnitOrgNodeKey, err := resolveSetIDExplainOrgCode(
-		r.Context(),
-		tenant.ID,
-		businessUnitOrgCode,
-		orgResolver,
-	)
+	contextResolver := newSetIDContextResolver(orgResolver, store)
+	policyCtx, err := contextResolver.ResolvePolicyContext(r.Context(), setIDPolicyContextInput{
+		TenantID:            tenant.ID,
+		CapabilityKey:       capabilityKey,
+		FieldKey:            fieldKey,
+		AsOf:                asOf,
+		BusinessUnitOrgCode: businessUnitOrgCode,
+	})
 	if err != nil {
-		writeSetIDExplainOrgCodeError(w, r, "business_unit_org_code", err)
+		if resolveErr, ok := asSetIDContextResolveError(err); ok {
+			switch resolveErr.Code {
+			case setIDContextCodeBusinessUnitInvalid:
+				writeSetIDExplainOrgCodeError(w, r, "business_unit_org_code", resolveErr.Cause)
+			case setIDContextCodeOrgResolverMissing:
+				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusInternalServerError, resolveErr.Code, "orgunit resolver missing")
+			case setIDContextCodeSetIDResolverMissing:
+				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusInternalServerError, resolveErr.Code, "setid resolver missing")
+			default:
+				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusForbidden, capabilityReasonContextMismatch, "capability context mismatch")
+			}
+			return
+		}
+		writeInternalAPIError(w, r, err, "setid_explain_business_unit_context_failed")
 		return
 	}
 	capCtx, capErr := resolveCapabilityContext(r.Context(), r, capabilityContextInput{
-		CapabilityKey:       capabilityKey,
-		BusinessUnitOrgCode: businessUnitOrgCode,
-		AsOf:                asOf,
+		CapabilityKey:       policyCtx.CapabilityKey,
+		BusinessUnitOrgCode: policyCtx.BusinessUnitOrgCode,
+		AsOf:                policyCtx.AsOf,
 		RequireBusinessUnit: true,
 	})
 	if capErr != nil {
@@ -114,32 +130,48 @@ func handleSetIDExplainAPI(w http.ResponseWriter, r *http.Request, store SetIDGo
 
 	orgCode := strings.TrimSpace(r.URL.Query().Get("org_code"))
 	if orgCode == "" {
-		orgCode = businessUnitOrgCode
+		orgCode = capCtx.BusinessUnitOrgCode
 	}
-	orgCode, orgNodeKey, err := resolveSetIDExplainOrgCode(r.Context(), tenant.ID, orgCode, orgResolver)
-	if err != nil {
-		writeSetIDExplainOrgCodeError(w, r, "org_code", err)
-		return
+	targetCtx := resolvedSetIDContext{
+		OrgCode:       policyCtx.BusinessUnitOrgCode,
+		OrgNodeKey:    policyCtx.BusinessUnitNodeKey,
+		ResolvedSetID: policyCtx.ResolvedSetID,
+		SetIDSource:   policyCtx.SetIDSource,
 	}
-	dynamicRelations := preloadCapabilityDynamicRelations(r.Context(), businessUnitOrgCode)
-	if !dynamicRelations.actorManages(orgCode, asOf) {
+	if !strings.EqualFold(orgCode, capCtx.BusinessUnitOrgCode) {
+		targetCtx, err = contextResolver.ResolveOrgContext(r.Context(), tenant.ID, orgCode, capCtx.AsOf, "org_code")
+		if err != nil {
+			if resolveErr, ok := asSetIDContextResolveError(err); ok {
+				switch resolveErr.Code {
+				case setIDContextCodeBusinessUnitInvalid:
+					writeSetIDExplainOrgCodeError(w, r, "org_code", resolveErr.Cause)
+				case setIDContextCodeOrgResolverMissing:
+					routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusInternalServerError, resolveErr.Code, "orgunit resolver missing")
+				case setIDContextCodeSetIDResolverMissing:
+					routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusInternalServerError, resolveErr.Code, "setid resolver missing")
+				default:
+					routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusForbidden, capabilityReasonContextMismatch, "capability context mismatch")
+				}
+				return
+			}
+			writeInternalAPIError(w, r, err, "setid_explain_org_context_failed")
+			return
+		}
+	}
+	dynamicRelations := preloadCapabilityDynamicRelations(r.Context(), capCtx.BusinessUnitOrgCode)
+	if !dynamicRelations.actorManages(targetCtx.OrgCode, capCtx.AsOf) {
 		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusForbidden, capabilityReasonContextMismatch, "capability context mismatch")
 		return
 	}
 
-	resolvedSetID, err := store.ResolveSetID(r.Context(), tenant.ID, orgNodeKey, asOf)
-	if err != nil {
-		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusForbidden, capabilityReasonContextMismatch, "capability context mismatch")
-		return
-	}
 	targetSetID := strings.ToUpper(strings.TrimSpace(r.URL.Query().Get("setid")))
-	resolvedSetID = strings.ToUpper(strings.TrimSpace(resolvedSetID))
+	resolvedSetID := targetCtx.ResolvedSetID
 	if targetSetID != "" && targetSetID != resolvedSetID {
 		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusForbidden, capabilityReasonContextMismatch, "capability context mismatch")
 		return
 	}
 
-	fieldDecision, err := defaultSetIDStrategyRegistryStore.resolveFieldDecision(r.Context(), tenant.ID, capabilityKey, fieldKey, businessUnitOrgNodeKey, asOf)
+	fieldDecision, err := defaultSetIDStrategyRegistryStore.resolveFieldDecision(r.Context(), tenant.ID, capCtx.CapabilityKey, fieldKey, policyCtx.BusinessUnitNodeKey, capCtx.AsOf)
 	if err != nil {
 		status, code := statusCodeForFieldDecisionError(err)
 		routing.WriteError(w, r, routing.RouteClassInternalAPI, status, code, code)
@@ -158,13 +190,14 @@ func handleSetIDExplainAPI(w http.ResponseWriter, r *http.Request, store SetIDGo
 	response := setIDExplainResponse{
 		TraceID:               traceID,
 		RequestID:             requestID,
-		CapabilityKey:         capabilityKey,
+		CapabilityKey:         capCtx.CapabilityKey,
 		SetID:                 resolvedSetID,
+		SetIDSource:           targetCtx.SetIDSource,
 		FunctionalAreaKey:     functionalAreaKey,
 		PolicyVersion:         policyVersion,
 		TenantID:              tenant.ID,
-		BusinessUnitOrgCode:   businessUnitOrgCode,
-		AsOf:                  asOf,
+		BusinessUnitOrgCode:   capCtx.BusinessUnitOrgCode,
+		AsOf:                  capCtx.AsOf,
 		ResolvedSetID:         resolvedSetID,
 		ResolvedConfigVersion: policyVersion,
 		Decision:              responseDecision,
@@ -172,8 +205,8 @@ func handleSetIDExplainAPI(w http.ResponseWriter, r *http.Request, store SetIDGo
 		Level:                 level,
 		FieldDecisions:        []setIDFieldDecision{fieldDecision},
 	}
-	if !strings.EqualFold(orgCode, businessUnitOrgCode) {
-		response.OrgCode = orgCode
+	if !strings.EqualFold(targetCtx.OrgCode, capCtx.BusinessUnitOrgCode) {
+		response.OrgCode = targetCtx.OrgCode
 	}
 	if level == explainLevelBrief {
 		response.TenantID = ""
@@ -186,12 +219,12 @@ func handleSetIDExplainAPI(w http.ResponseWriter, r *http.Request, store SetIDGo
 }
 
 func resolveSetIDOrgCodeRef(ctx context.Context, tenantID string, orgCode string, orgResolver OrgUnitCodeResolver) (setIDResolvedOrgRef, error) {
-	if orgResolver == nil {
-		return setIDResolvedOrgRef{}, errors.New("org code resolver missing")
-	}
 	normalizedOrgCode, err := orgunitpkg.NormalizeOrgCode(orgCode)
 	if err != nil {
 		return setIDResolvedOrgRef{}, err
+	}
+	if orgResolver == nil {
+		return setIDResolvedOrgRef{}, errors.New("org code resolver missing")
 	}
 	orgNodeKey, err := orgResolver.ResolveOrgNodeKeyByCode(ctx, tenantID, normalizedOrgCode)
 	if err != nil {
