@@ -312,3 +312,239 @@ docker exec bugs-and-blossoms-dev-postgres-1 \
 1. [X] 2026-04-11 的 fresh target 复跑证明：P2 工具链、SetID registry rehearsal 与后续 stopline 采集仍然稳定。
 2. [X] 这足以支撑“P3 正式切主准备已推进到可复跑、可核对、可留证”的判断。
 3. [ ] 但这仍不是“可直接切主”：在正式维护窗口前，必须继续收口 Org kernel source-real 的 `org_id` 主链与 SetID 的真实 `target-real` runtime。
+
+## 11. 2026-04-11 用户可见验收与 LibreChat live 证据补齐
+
+### 11.1 本轮目标
+
+1. [X] 将 `DEV-PLAN-060` 主链路从“代码已收口”推进到“用户可见契约已收口”。
+2. [X] 复跑 LibreChat formal/live 证据，确认 `tp288b` receipt contract 与 `tp290b` intent-action chain 不再阻塞。
+3. [X] 为 320 留下“P5 用户可见验收已补齐，但最终 Gate 尚未全量复跑”的仓库内记录。
+
+### 11.2 实际执行
+
+1. [X] 复跑 LibreChat receipt contract
+
+```bash
+./scripts/e2e/run.sh tests/tp288b-librechat-live-task-receipt-contract.spec.js
+```
+
+2. [X] 复跑 LibreChat intent-action chain
+
+```bash
+./scripts/e2e/run.sh tests/tp290b-librechat-live-intent-action-chain.spec.js
+```
+
+3. [X] 复跑用户可见主链
+
+```bash
+./scripts/e2e/run.sh \
+  tests/m3-smoke.spec.js \
+  tests/tp060-02-master-data.spec.js \
+  tests/tp060-03-person-and-assignments.spec.js \
+  tests/tp070b-dict-release-ui.spec.js
+```
+
+### 11.3 关键结果
+
+1. [X] `tp288b` 已转为 `passed`
+   - 证据：`docs/dev-records/assets/dev-plan-288b/tp288b-live-evidence-index.json`
+   - 结果：receipt `task_id -> poll_uri -> conversation refresh` 闭环成立，`final_task_status=succeeded`
+2. [X] `tp290b` 已转为 `passed`
+   - 证据：`docs/dev-records/assets/dev-plan-290b/tp290b-live-evidence-index.json`
+   - 结果：`runtime_admission_gate=passed`，Case 1-4 全部 `passed`，`tp290b-data-baseline.json` 同步转为 `passed`
+3. [X] 用户可见主链复跑通过
+   - 结果：`m3-smoke`、`tp060-02`、`tp060-03`、`tp070b` 全部通过
+4. [X] 文档契约已同步收口
+   - 证据：`docs/dev-plans/060-business-e2e-test-suite.md`、`docs/dev-plans/062-test-tp060-02-master-data-org-setid-jobcatalog-position.md`、`docs/dev-plans/063-test-tp060-03-person-and-assignments.md`、`docs/dev-plans/064a-test-tp060-05-assistant-conversation-intent-and-tasks.md`
+   - 结果：`SetID / Staffing / Assistant` 对外链路明确只允许 `org_code`，不再接受或回写 `org_unit_id / org_node_key`
+
+### 11.4 本轮结论
+
+1. [X] 320 的 `P5` 中“用户可见验收”部分已完成。
+2. [X] 320 的 LibreChat live 证据不再阻塞后续收口。
+3. [X] 截至第 11 节收尾时，320 仍未进入正式维护窗口：当时还需要 `P3` 正式切主准备完成。
+   - 该阻塞已在第 14 节关闭。
+
+## 12. 2026-04-11 最终 Gate 复跑与维护窗口判断
+
+### 12.1 本轮目标
+
+1. [X] 修复 `sqlc-verify-schema` 在 fresh replay 下的真实阻塞，避免只靠“数据库未就绪”掩盖问题。
+2. [X] 完成最终 Gate 复跑：`go test`、`org-node-key-backflow`、`error-message`、`doc`、sqlc 一致性、E2E。
+3. [X] 收敛 `internal/server` 已知脆弱测试，避免 `assistant_model_timeout` 偶发超时继续污染 Gate。
+4. [X] 把“是否进入正式维护窗口”写成仓库内明确判断，而不是口头结论。
+
+### 12.2 实际执行
+
+1. [X] 修复 `sqlc-verify-schema` fresh replay 兼容
+
+```bash
+./scripts/db/run_atlas.sh migrate hash --dir "file://migrations/staffing" --dir-format goose
+DB_HOST=127.0.0.1 DB_PORT=5438 DB_USER=app DB_PASSWORD=app DB_ADMIN_DB=postgres make sqlc-verify-schema
+```
+
+2. [X] 收敛 `internal/server` 脆弱测试
+
+```bash
+go test ./internal/server -run 'TestAssistantModelGatewayMoreBranches/adapter_nil_ctx_and_nil_client_provider_unavailable' -count=20
+go test ./internal/server -count=1
+```
+
+3. [X] 复跑最终 Gate
+
+```bash
+go test ./...
+make check org-node-key-backflow
+make check error-message
+make check doc
+make e2e
+```
+
+### 12.3 关键结果
+
+1. [X] `sqlc-verify-schema` 已恢复为真实 schema 一致性门禁
+   - 修复点：
+     - `scripts/sqlc/verify-schema-consistency.sh` 在无宿主机 `psql/pg_isready` 时自动回退到 `postgres:17` 容器客户端
+     - `migrations/staffing/20260411083000_staffing_position_events_org_node_key_constraint.sql` 改为仅在旧列存在时才执行 `org_unit_id -> org_node_key` 回填
+   - 结果：fresh DB replay 不再因不存在的 `org_unit_id` 直接失败，`make sqlc-verify-schema` 通过
+2. [X] `internal/server` 的已知偶发超时测试已收紧为确定性失败场景
+   - 修复点：`assistant_reply_more_test.go` 不再依赖自签 TLS 握手去命中 `provider_unavailable`，改为本地关闭端口的确定性拒绝连接场景
+   - 结果：目标子测试 `-count=20` 稳定通过，`go test ./internal/server -count=1` 通过
+3. [X] 最终 Gate 全绿
+   - `go test ./...`
+   - `make check org-node-key-backflow`
+   - `make check error-message`
+   - `make check doc`
+   - `make sqlc-verify-schema`
+   - `make e2e`（31 passed）
+
+### 12.4 维护窗口判断
+
+1. [X] `P5` 已完成
+   - 用户可见主链、LibreChat live、sqlc 一致性与最终 Gate 都已收口
+2. [X] 截至第 12 节 Gate 复跑收尾时，2026-04-11 仍不能进入正式维护窗口
+   - 当时阻塞：`P3` 的 Org kernel source-real -> target-real 正式切主准备仍缺
+   - 该阻塞已在第 14 节通过 target runtime overlay 安装验证与 runtime 主链收口关闭
+3. [X] reopen 条件无需改写
+   - 当前保持 `DEV-PLAN-320` 既有 choreography：`停写 -> 快照 -> 导入/核对 -> 后端 -> 前端 -> smoke -> reopen`
+   - 结论是不进入窗口，而不是放宽 reopen 条件或引入 compat/legacy 兜底
+
+## 13. 2026-04-11 SetID `target-real` explain 补齐
+
+### 13.1 本轮目标
+
+1. [X] 把 SetID stopline 从 `target-shadow` 升到真正的 `target-real`。
+2. [X] 修复 stopline source 采样仍引用 `staffing.position_versions.org_unit_id` 的旧口径。
+3. [X] 将新 explain 证据归档到 `docs/dev-records/assets/dev-plan-320-stopline/`，并同步回写 320 文档。
+
+### 13.2 实际执行
+
+1. [X] 更新 [orgunit_stopline_capture.go](/home/lee/Projects/Bugs-And-Blossoms/cmd/dbtool/orgunit_stopline_capture.go)
+   - SetID explain 改为在 dedicated target 的 `orgunit.setid_binding_versions` 内导入当前态样本
+   - source Staffing 采样改为使用 `orgunit.decode_org_node_key(...)` 适配当前 `org_node_key` schema
+   - committed staffing target bootstrap 改为可重复执行，避免已有 target 表时重复应用 `00002` 失败
+2. [X] 回归单测
+
+```bash
+go test ./cmd/dbtool -count=1
+```
+
+3. [X] 重跑 stopline capture
+
+```bash
+go run ./cmd/dbtool orgunit-stopline-capture \
+  --source-url "postgres://app:<redacted>@127.0.0.1:5438/bugs_and_blossoms?sslmode=disable" \
+  --target-url "postgres://app:<redacted>@127.0.0.1:5438/bugs_and_blossoms_orgnode_rehearsal_20260411?sslmode=disable" \
+  --as-of 2026-04-11 \
+  --output-dir .local/orgunit-stopline/2026-04-11-targetreal-setid
+```
+
+### 13.3 关键结果
+
+1. [X] `target-real setid-resolve` 已生成
+   - 证据：`docs/dev-records/assets/dev-plan-320-stopline/target-real-setid-resolve.explain.json`
+   - 指标：`execution_time_ms=0.393`，`shared_hit_blocks=33`，`shared_read_blocks=3`
+2. [X] `target-shadow-setid-resolve.explain.json` 已退出当前口径
+   - 当前归档目录只保留 `source-real-*.explain.json` 与 `target-real-*.explain.json`
+3. [X] 320 文档中的“SetID target-real explain 未完成”缺口已关闭
+   - 证据：`docs/dev-records/dev-plan-320-stopline-log.md`
+   - 结果：当前剩余主缺口收敛为 `P3` Org kernel 正式切主与维护窗口执行
+
+### 13.4 本轮结论
+
+1. [X] 320 的第 2 步“consumer runtime target-real explain 证据”已完成。
+2. [X] 正式维护窗口尚未执行；但阻塞已不再是 `P3/P6` 的仓库侧准备缺口。
+
+## 14. 2026-04-11 P3 仓库侧收口与维护窗口 readiness review
+
+### 14.1 本轮目标
+
+1. [X] 修正 `00023-00032` 作为 target runtime overlay 的真实安装断点，并验证 fresh DB 可顺序安装。
+2. [X] 把 Org / SetID / Staffing / `internal/server` 的核心运行时调用切到 `org_node_key` / `char(8)` 主链。
+3. [X] 收敛 `sqlc` 导出边界，避免把 target bootstrap 误导出到 current runtime schema。
+4. [X] 复跑最终 Gate，明确仓库内是否已经具备进入正式维护窗口的条件。
+
+### 14.2 实际执行
+
+1. [X] 修正 target runtime overlay
+   - 更新 `modules/orgunit/infrastructure/persistence/schema/00023_orgunit_org_node_key_schema.sql`
+   - 更新 `modules/orgunit/infrastructure/persistence/schema/00026_orgunit_org_node_key_engine.sql`
+   - 更新 `modules/orgunit/infrastructure/persistence/schema/00028_orgunit_org_node_key_submit_allocator.sql`
+   - 更新 `modules/orgunit/infrastructure/persistence/schema/00030_orgunit_setid_org_node_key_schema.sql`
+2. [X] 补 source compat runtime 对齐
+   - 新增 `migrations/orgunit/20260411120000_orgunit_setid_org_node_key_runtime_compat.sql`
+   - 将 `pkg/setid/setid.go`、`modules/orgunit/infrastructure/persistence/setid_pg_store.go`、`internal/server/orgunit_nodes.go` 切到 `char(8)` 调用签名
+   - 将 `modules/staffing/infrastructure/persistence/schema/00003_staffing_engine.sql` 与 `migrations/staffing/20260411083000_staffing_position_events_org_node_key_constraint.sql` 改为 `org_node_key` 主链
+3. [X] 校正 sqlc 导出边界
+   - 更新 `scripts/sqlc/export-schema.sh`
+   - 将 `orgunit 00023-00032` 明确排除出 `internal/sqlc/schema.sql`
+4. [X] 执行验证
+
+```bash
+go test ./pkg/setid ./modules/orgunit/infrastructure/persistence ./internal/server -count=1
+go test ./modules/staffing/... -count=1
+
+docker run --rm --network host -e PGPASSWORD=app postgres:17 \
+  psql "postgres://app:app@127.0.0.1:5438/<fresh-db>?sslmode=disable" \
+  -v ON_ERROR_STOP=1 -f modules/orgunit/infrastructure/persistence/schema/00001_orgunit_schema.sql
+# …顺序应用 00001-00032，最终通过
+
+./scripts/db/run_atlas.sh migrate hash --dir "file://migrations/orgunit" --dir-format goose
+./scripts/db/run_atlas.sh migrate hash --dir "file://migrations/staffing" --dir-format goose
+make sqlc-generate
+
+go test ./...
+make check org-node-key-backflow
+make check error-message
+make check doc
+DB_HOST=127.0.0.1 DB_PORT=5438 DB_USER=app DB_PASSWORD=app DB_ADMIN_DB=postgres make sqlc-verify-schema
+make e2e
+```
+
+### 14.3 关键结果
+
+1. [X] `00023-00032` 已通过 fresh DB 顺序安装验证
+   - 首个真实断点是 `00023` 先删 `org_path_ids()`、后删依赖表；修正顺序后全套通过
+2. [X] source compat runtime 与 target runtime 已形成明确分层
+   - source-real：继续通过 compat migration 承接维护窗口前运行
+   - target-real：通过 `00023-00032` 提供纯 `org_node_key` runtime
+3. [X] Org / SetID / Staffing / `internal/server` 的核心运行时调用已切到 `org_node_key` / `char(8)` 主链
+4. [X] `sqlc-verify-schema` 已恢复为 current runtime 一致性校验
+   - `internal/sqlc/schema.sql` 不再混入 target bootstrap overlay
+5. [X] 最终 Gate 复跑通过
+   - `go test ./...`
+   - `make check org-node-key-backflow`
+   - `make check error-message`
+   - `make check doc`
+   - `make sqlc-verify-schema`
+   - `make e2e`
+
+### 14.4 本轮结论
+
+1. [X] `P3` 的仓库侧正式切主准备已经完成。
+2. [X] `P6` 的最终 Gate / readiness review 已完成。
+3. [X] 当前仓库状态已具备进入正式维护窗口条件。
+4. [X] reopen 条件保持不变
+   - 继续执行 `停写 -> 快照 -> 导入/核对 -> 后端 -> 前端 -> smoke -> reopen`
+   - 若任一步失败，仍只允许整窗回滚

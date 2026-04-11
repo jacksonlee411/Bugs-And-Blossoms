@@ -1,18 +1,18 @@
 {
   "plan": "DEV-PLAN-288B",
   "case_id": "tp288b-case-1",
-  "captured_at": "2026-04-10T00:22:56.746Z",
+  "captured_at": "2026-04-11T02:03:51.276Z",
   "formal_entry": "/app/assistant/librechat",
-  "url": "http://localhost:18080/app/assistant/librechat/c/new",
+  "url": "http://localhost:8080/app/assistant/librechat/c/new",
   "bubble_count": 1,
   "bubbles": [
     {
-      "binding_key": "conv_c2fd4f4e7f404e42a66ad0630adf517d::turn_037cb24b7ad0432e923e8fd7dafb53a9::assistant_a862b3d70b2d4011a9d306f6cf4486b1",
-      "conversation_id": "conv_c2fd4f4e7f404e42a66ad0630adf517d",
-      "turn_id": "turn_037cb24b7ad0432e923e8fd7dafb53a9",
-      "request_id": "assistant_a862b3d70b2d4011a9d306f6cf4486b1",
-      "message_id": "cb3ba390-a264-4175-8b93-d15bbfa370e4_",
-      "text": "上级组织：AI治理办公室；新建组织：人力资源部288B558279；生效日期：2026-01-01 task_id: 7c3f0315-fdb3-440a-b043-a7becee39b54 · succeeded Selected: AI治理办公室 org_code: O000001 parent_org_code: TP288BAIGOV effective_date: 2026-01-01 event_type: CREATE"
+      "binding_key": "conv_4f4e36c0efcb4ff6970a287aaf452508::turn_254b6eada28044f89210502a5dd4fbfd::assistant_4a513105c4ec4ac1aead76cc233f1311",
+      "conversation_id": "conv_4f4e36c0efcb4ff6970a287aaf452508",
+      "turn_id": "turn_254b6eada28044f89210502a5dd4fbfd",
+      "request_id": "assistant_4a513105c4ec4ac1aead76cc233f1311",
+      "message_id": "ea7a8e8f-b8c6-4a6a-a865-ba753165b966_",
+      "text": "上级组织：AI治理办公室；新建组织：人力资源部收据验证部；生效日期：2026-01-01 task_id: 9bca6051-3b30-4b8d-9192-a1a6f242a39d · succeeded Selected: AI治理办公室 org_code: O000001 parent_org_code: TP288BAIGOV effective_date: 2026-01-01 event_type: CREATE"
     }
   ],
   "external_reply_container_count": 0,

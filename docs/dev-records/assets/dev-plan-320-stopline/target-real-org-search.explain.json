@@ -1,11 +1,11 @@
 [
   {
-    "Execution Time": 0.079,
+    "Execution Time": 0.186,
     "Plan": {
       "Actual Loops": 1,
       "Actual Rows": 5,
-      "Actual Startup Time": 0.057,
-      "Actual Total Time": 0.059,
+      "Actual Startup Time": 0.134,
+      "Actual Total Time": 0.138,
       "Async Capable": false,
       "Local Dirtied Blocks": 0,
       "Local Hit Blocks": 0,
@@ -19,8 +19,8 @@
         {
           "Actual Loops": 1,
           "Actual Rows": 5,
-          "Actual Startup Time": 0.056,
-          "Actual Total Time": 0.057,
+          "Actual Startup Time": 0.132,
+          "Actual Total Time": 0.135,
           "Async Capable": false,
           "Local Dirtied Blocks": 0,
           "Local Hit Blocks": 0,
@@ -35,8 +35,8 @@
             {
               "Actual Loops": 1,
               "Actual Rows": 5,
-              "Actual Startup Time": 0.024,
-              "Actual Total Time": 0.047,
+              "Actual Startup Time": 0.057,
+              "Actual Total Time": 0.117,
               "Async Capable": false,
               "Inner Unique": true,
               "Join Type": "Inner",
@@ -53,8 +53,8 @@
                 {
                   "Actual Loops": 1,
                   "Actual Rows": 5,
-                  "Actual Startup Time": 0.015,
-                  "Actual Total Time": 0.026,
+                  "Actual Startup Time": 0.036,
+                  "Actual Total Time": 0.063,
                   "Alias": "v",
                   "Async Capable": false,
                   "Filter": "((validity @\u003e '2026-04-11'::date) AND ((name)::text ~~* '%人力资源部%'::text) AND (status = 'active'::text))",
@@ -85,8 +85,8 @@
                 {
                   "Actual Loops": 5,
                   "Actual Rows": 1,
-                  "Actual Startup Time": 0.003,
-                  "Actual Total Time": 0.003,
+                  "Actual Startup Time": 0.008,
+                  "Actual Total Time": 0.008,
                   "Alias": "c",
                   "Async Capable": false,
                   "Index Cond": "((tenant_uuid = '00000000-0000-0000-0000-000000000001'::uuid) AND (org_node_key = v.org_node_key))",
@@ -160,7 +160,7 @@
       "Temp Read Blocks": 0,
       "Temp Written Blocks": 0
     },
-    "Planning Time": 0.37,
+    "Planning Time": 0.803,
     "Triggers": []
   }
 ]

@@ -1981,7 +1981,7 @@ func (s *orgUnitPGStore) CreateNodeCurrent(ctx context.Context, tenantID string,
 SELECT orgunit.submit_org_event(
   $1::uuid,
   $2::uuid,
-  $3::int,
+  $3::char(8),
   'CREATE',
   $4::date,
   $5::jsonb,
@@ -2032,7 +2032,7 @@ func (s *orgUnitPGStore) RenameNodeCurrent(ctx context.Context, tenantID string,
 		return errors.New("effective_date is required")
 	}
 
-	orgID, err := decodeOrgNodeKeyToID(orgNodeKey)
+	normalizedOrgNodeKey, err := normalizeOrgNodeKeyInput(orgNodeKey)
 	if err != nil {
 		return err
 	}
@@ -2052,14 +2052,14 @@ func (s *orgUnitPGStore) RenameNodeCurrent(ctx context.Context, tenantID string,
 SELECT orgunit.submit_org_event(
   $1::uuid,
   $2::uuid,
-  $3::int,
+  $3::char(8),
   'RENAME',
   $4::date,
   $5::jsonb,
   $6::text,
   $7::uuid
 )
-		`, eventID, tenantID, orgID, effectiveDate, []byte(payload), eventID, initiatorUUID); err != nil {
+		`, eventID, tenantID, normalizedOrgNodeKey, effectiveDate, []byte(payload), eventID, initiatorUUID); err != nil {
 		return err
 	}
 
@@ -2084,7 +2084,7 @@ func (s *orgUnitPGStore) MoveNodeCurrent(ctx context.Context, tenantID string, e
 		return errors.New("effective_date is required")
 	}
 
-	orgID, err := decodeOrgNodeKeyToID(orgNodeKey)
+	normalizedOrgNodeKey, err := normalizeOrgNodeKeyInput(orgNodeKey)
 	if err != nil {
 		return err
 	}
@@ -2096,24 +2096,24 @@ func (s *orgUnitPGStore) MoveNodeCurrent(ctx context.Context, tenantID string, e
 	initiatorUUID := orgUnitInitiatorUUID(ctx, tenantID)
 
 	payload := `{}`
-	if _, ok, err := parseOptionalOrgNodeKey(newParentID); err != nil {
+	if normalizedNewParentID, ok, err := parseOptionalOrgNodeKey(newParentID); err != nil {
 		return err
 	} else if ok {
-		payload = `{"new_parent_org_node_key":` + strconv.Quote(newParentID) + `}`
+		payload = `{"new_parent_org_node_key":` + strconv.Quote(normalizedNewParentID) + `}`
 	}
 
 	if _, err := tx.Exec(ctx, `
 SELECT orgunit.submit_org_event(
   $1::uuid,
   $2::uuid,
-  $3::int,
+  $3::char(8),
   'MOVE',
   $4::date,
   $5::jsonb,
   $6::text,
   $7::uuid
 )
-	`, eventID, tenantID, orgID, effectiveDate, []byte(payload), eventID, initiatorUUID); err != nil {
+	`, eventID, tenantID, normalizedOrgNodeKey, effectiveDate, []byte(payload), eventID, initiatorUUID); err != nil {
 		return err
 	}
 
@@ -2138,7 +2138,7 @@ func (s *orgUnitPGStore) DisableNodeCurrent(ctx context.Context, tenantID string
 		return errors.New("effective_date is required")
 	}
 
-	orgID, err := decodeOrgNodeKeyToID(orgNodeKey)
+	normalizedOrgNodeKey, err := normalizeOrgNodeKeyInput(orgNodeKey)
 	if err != nil {
 		return err
 	}
@@ -2153,14 +2153,14 @@ func (s *orgUnitPGStore) DisableNodeCurrent(ctx context.Context, tenantID string
 SELECT orgunit.submit_org_event(
   $1::uuid,
   $2::uuid,
-  $3::int,
+  $3::char(8),
   'DISABLE',
   $4::date,
   '{}'::jsonb,
   $5::text,
   $6::uuid
 )
-	`, eventID, tenantID, orgID, effectiveDate, eventID, initiatorUUID); err != nil {
+	`, eventID, tenantID, normalizedOrgNodeKey, effectiveDate, eventID, initiatorUUID); err != nil {
 		return err
 	}
 
@@ -2191,19 +2191,23 @@ func (s *orgUnitPGStore) CorrectNodeEffectiveDate(ctx context.Context, tenantID 
 		return errors.New("request_id is required")
 	}
 	initiatorUUID := orgUnitInitiatorUUID(ctx, tenantID)
+	orgNodeKey, err := encodeOrgNodeKeyFromID(orgID)
+	if err != nil {
+		return err
+	}
 
 	patch := `{"effective_date":` + strconv.Quote(newEffectiveDate) + `}`
 	var correctionUUID string
 	if err := tx.QueryRow(ctx, `
 SELECT orgunit.submit_org_event_correction(
   $1::uuid,
-  $2::int,
+  $2::char(8),
   $3::date,
   $4::jsonb,
   $5::text,
   $6::uuid
 )
-	`, tenantID, orgID, targetEffectiveDate, []byte(patch), requestID, initiatorUUID).Scan(&correctionUUID); err != nil {
+	`, tenantID, orgNodeKey, targetEffectiveDate, []byte(patch), requestID, initiatorUUID).Scan(&correctionUUID); err != nil {
 		return err
 	}
 
@@ -2231,10 +2235,6 @@ func (s *orgUnitPGStore) SetBusinessUnitCurrent(ctx context.Context, tenantID st
 	if err != nil {
 		return err
 	}
-	orgID, err := decodeOrgNodeKeyToID(normalizedOrgNodeKey)
-	if err != nil {
-		return err
-	}
 
 	eventID, err := uuidv7.NewString()
 	if err != nil {
@@ -2254,14 +2254,14 @@ func (s *orgUnitPGStore) SetBusinessUnitCurrent(ctx context.Context, tenantID st
 	SELECT orgunit.submit_org_event(
 	  $1::uuid,
 	  $2::uuid,
-	  $3::int,
+	  $3::char(8),
 	  'SET_BUSINESS_UNIT',
 	  $4::date,
   $5::jsonb,
 	  $6::text,
 	  $7::uuid
 	)
-		`, eventID, tenantID, orgID, effectiveDate, []byte(payload), requestID, initiatorUUID); err != nil {
+		`, eventID, tenantID, normalizedOrgNodeKey, effectiveDate, []byte(payload), requestID, initiatorUUID); err != nil {
 		if _, rbErr := tx.Exec(ctx, `ROLLBACK TO SAVEPOINT sp_set_business_unit;`); rbErr != nil {
 			return rbErr
 		}

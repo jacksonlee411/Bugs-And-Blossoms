@@ -435,7 +435,7 @@ test("tp288b-live-001: real formal entry follows receipt poll refresh contract",
     page = session.page;
     const tenantID = session.tenantID;
     const networkState = installNetworkRecorder(page);
-    const orgName = `人力资源部288B${String(Date.now()).slice(-6)}`;
+    const orgName = "人力资源部收据验证部";
     const inputText = `在 ${BASELINE_PARENT_NAME} 下新建 ${orgName}，生效日期 ${BASELINE_EFFECTIVE_DATE}`;
 
     try {

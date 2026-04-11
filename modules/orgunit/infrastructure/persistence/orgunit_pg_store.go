@@ -203,9 +203,20 @@ func (s *OrgUnitPGStore) FindEventByUUID(ctx context.Context, tenantID string, e
 	var event types.OrgUnitEvent
 	var payload []byte
 	if err := tx.QueryRow(ctx, `
-SELECT id, event_uuid::text, orgunit.encode_org_node_key(org_id::bigint)::text, event_type, effective_date::text, payload, transaction_time
-FROM orgunit.org_events
-WHERE tenant_uuid = $1::uuid AND event_uuid = $2::uuid
+SELECT
+  e.id,
+  e.event_uuid::text,
+  CASE
+    WHEN to_jsonb(e) ? 'org_node_key'
+      THEN btrim(COALESCE(to_jsonb(e)->>'org_node_key', ''))
+    ELSE orgunit.encode_org_node_key(NULLIF(to_jsonb(e)->>'org_id', '')::bigint)::text
+  END AS org_node_key,
+  e.event_type,
+  e.effective_date::text,
+  e.payload,
+  e.transaction_time
+FROM orgunit.org_events e
+WHERE e.tenant_uuid = $1::uuid AND e.event_uuid = $2::uuid
 	`, tenantID, eventUUID).Scan(&event.ID, &event.EventUUID, &event.OrgNodeKey, &event.EventType, &event.EffectiveDate, &payload, &event.TransactionTime); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return types.OrgUnitEvent{}, ports.ErrOrgEventNotFound
@@ -237,11 +248,26 @@ func (s *OrgUnitPGStore) FindEventByEffectiveDate(ctx context.Context, tenantID 
 	var event types.OrgUnitEvent
 	var payload []byte
 	if err := tx.QueryRow(ctx, `
-SELECT id, event_uuid::text, orgunit.encode_org_node_key(org_id::bigint)::text, event_type, effective_date::text, payload, transaction_time
-FROM orgunit.org_events_effective
-WHERE tenant_uuid = $1::uuid
-  AND org_id = orgunit.decode_org_node_key($2::char(8))::int
-  AND effective_date = $3::date
+SELECT
+  e.id,
+  e.event_uuid::text,
+  CASE
+    WHEN to_jsonb(e) ? 'org_node_key'
+      THEN btrim(COALESCE(to_jsonb(e)->>'org_node_key', ''))
+    ELSE orgunit.encode_org_node_key(NULLIF(to_jsonb(e)->>'org_id', '')::bigint)::text
+  END AS org_node_key,
+  e.event_type,
+  e.effective_date::text,
+  e.payload,
+  e.transaction_time
+FROM orgunit.org_events_effective e
+WHERE e.tenant_uuid = $1::uuid
+  AND CASE
+    WHEN to_jsonb(e) ? 'org_node_key'
+      THEN btrim(COALESCE(to_jsonb(e)->>'org_node_key', '')) = $2::text
+    ELSE NULLIF(to_jsonb(e)->>'org_id', '')::int = orgunit.decode_org_node_key($2::char(8))::int
+  END
+  AND e.effective_date = $3::date
 	`, tenantID, orgNodeKey, effectiveDate).Scan(&event.ID, &event.EventUUID, &event.OrgNodeKey, &event.EventType, &event.EffectiveDate, &payload, &event.TransactionTime); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return types.OrgUnitEvent{}, ports.ErrOrgEventNotFound
@@ -273,10 +299,21 @@ func (s *OrgUnitPGStore) FindEventByRequestID(ctx context.Context, tenantID stri
 	var event types.OrgUnitEvent
 	var payload []byte
 	if err := tx.QueryRow(ctx, `
-SELECT id, event_uuid::text, orgunit.encode_org_node_key(org_id::bigint)::text, event_type, effective_date::text, payload, transaction_time
-FROM orgunit.org_events
-WHERE tenant_uuid = $1::uuid
-  AND request_id = $2::text
+SELECT
+  e.id,
+  e.event_uuid::text,
+  CASE
+    WHEN to_jsonb(e) ? 'org_node_key'
+      THEN btrim(COALESCE(to_jsonb(e)->>'org_node_key', ''))
+    ELSE orgunit.encode_org_node_key(NULLIF(to_jsonb(e)->>'org_id', '')::bigint)::text
+  END AS org_node_key,
+  e.event_type,
+  e.effective_date::text,
+  e.payload,
+  e.transaction_time
+FROM orgunit.org_events e
+WHERE e.tenant_uuid = $1::uuid
+  AND e.request_id = $2::text
 ORDER BY id DESC
 LIMIT 1
 `, tenantID, requestID).Scan(&event.ID, &event.EventUUID, &event.OrgNodeKey, &event.EventType, &event.EffectiveDate, &payload, &event.TransactionTime); err != nil {
@@ -428,7 +465,7 @@ SELECT
   capability_key,
   field_key,
   org_applicability,
-  business_unit_id,
+  business_unit_node_key,
   required,
   visible,
   maintainable,
@@ -444,8 +481,8 @@ WHERE tenant_uuid = $1::uuid
   AND (end_date IS NULL OR end_date > $3::date)
   AND (capability_key = $4::text OR capability_key = $5::text)
   AND (
-    (org_applicability = 'business_unit' AND business_unit_id = $6::text)
-    OR (org_applicability = 'tenant' AND business_unit_id = '')
+    (org_applicability = 'business_unit' AND business_unit_node_key = $6::text)
+    OR (org_applicability = 'tenant' AND business_unit_node_key = '')
   )
 `, tenantID, fieldKey, asOf, capabilityKey, baselineCapabilityKey, businessUnitID)
 	if err != nil {

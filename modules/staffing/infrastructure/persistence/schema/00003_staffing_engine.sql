@@ -428,7 +428,11 @@ BEGIN
         SELECT 1
         FROM orgunit.org_unit_versions ouv
         WHERE ouv.tenant_uuid = p_tenant_uuid
-          AND ouv.org_id = orgunit.decode_org_node_key(v_org_node_key::char(8))::int
+          AND CASE
+            WHEN to_jsonb(ouv) ? 'org_node_key'
+              THEN btrim(COALESCE(to_jsonb(ouv)->>'org_node_key', '')) = v_org_node_key
+            ELSE NULLIF(to_jsonb(ouv)->>'org_id', '')::int = orgunit.decode_org_node_key(v_org_node_key::char(8))::int
+          END
           AND ouv.status = 'active'
           AND ouv.validity @> v_row.effective_date
         LIMIT 1
@@ -449,7 +453,7 @@ BEGIN
 
     v_jobcatalog_setid := orgunit.resolve_setid(
       p_tenant_uuid,
-      orgunit.decode_org_node_key(v_org_node_key::char(8))::int,
+      v_org_node_key::char(8),
       v_row.effective_date
     );
     v_jobcatalog_setid_as_of := v_row.effective_date;

@@ -144,7 +144,7 @@ test("tp070b: dict release ui flow and release authz", async ({ browser }) => {
     });
   });
 
-  await page.getByLabel("as_of").nth(1).fill(asOf);
+  await page.getByRole("textbox", { name: /^(发布时点|as_of)$/ }).fill(asOf);
   await page.getByLabel("release_id").fill(`rel-070b1-${runID}`);
   await page.getByLabel("request_id").fill(`req-070b1-${runID}`);
   await page.getByRole("button", { name: "预检发布" }).click();

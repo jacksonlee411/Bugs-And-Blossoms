@@ -1,11 +1,11 @@
 [
   {
-    "Execution Time": 1.08,
+    "Execution Time": 1.051,
     "Plan": {
       "Actual Loops": 1,
       "Actual Rows": 0,
-      "Actual Startup Time": 0.998,
-      "Actual Total Time": 0.999,
+      "Actual Startup Time": 0.987,
+      "Actual Total Time": 0.989,
       "Alias": "v",
       "Async Capable": false,
       "Local Dirtied Blocks": 0,
@@ -21,8 +21,8 @@
         {
           "Actual Loops": 1,
           "Actual Rows": 4,
-          "Actual Startup Time": 0.099,
-          "Actual Total Time": 0.199,
+          "Actual Startup Time": 0.071,
+          "Actual Total Time": 0.216,
           "Alias": "v",
           "Async Capable": false,
           "Filter": "(lower(validity) \u003e= '2026-04-11'::date)",
@@ -41,8 +41,8 @@
             {
               "Actual Loops": 4,
               "Actual Rows": 1,
-              "Actual Startup Time": 0.039,
-              "Actual Total Time": 0.039,
+              "Actual Startup Time": 0.045,
+              "Actual Total Time": 0.046,
               "Async Capable": false,
               "Local Dirtied Blocks": 0,
               "Local Hit Blocks": 0,
@@ -58,8 +58,8 @@
                 {
                   "Actual Loops": 4,
                   "Actual Rows": 3,
-                  "Actual Startup Time": 0.02,
-                  "Actual Total Time": 0.036,
+                  "Actual Startup Time": 0.018,
+                  "Actual Total Time": 0.042,
                   "Async Capable": false,
                   "Inner Unique": false,
                   "Join Filter": "((t.org_node_key)::character(8) = a.org_node_key)",
@@ -103,8 +103,8 @@
                     {
                       "Actual Loops": 11,
                       "Actual Rows": 12,
-                      "Actual Startup Time": 0.005,
-                      "Actual Total Time": 0.009,
+                      "Actual Startup Time": 0.004,
+                      "Actual Total Time": 0.01,
                       "Async Capable": false,
                       "Local Dirtied Blocks": 0,
                       "Local Hit Blocks": 0,
@@ -119,8 +119,8 @@
                         {
                           "Actual Loops": 4,
                           "Actual Rows": 12,
-                          "Actual Startup Time": 0.012,
-                          "Actual Total Time": 0.017,
+                          "Actual Startup Time": 0.01,
+                          "Actual Total Time": 0.015,
                           "Alias": "a",
                           "Async Capable": false,
                           "Index Cond": "((tenant_uuid = v.tenant_uuid) AND (validity @\u003e lower(v.validity)))",
@@ -195,10 +195,10 @@
         }
       ],
       "Relation Name": "org_unit_versions",
-      "Shared Dirtied Blocks": 1,
-      "Shared Hit Blocks": 127,
-      "Shared Read Blocks": 0,
-      "Shared Written Blocks": 1,
+      "Shared Dirtied Blocks": 6,
+      "Shared Hit Blocks": 114,
+      "Shared Read Blocks": 7,
+      "Shared Written Blocks": 0,
       "Startup Cost": 0.14,
       "Temp Read Blocks": 0,
       "Temp Written Blocks": 0,
@@ -216,7 +216,7 @@
       "Temp Read Blocks": 0,
       "Temp Written Blocks": 0
     },
-    "Planning Time": 0.221,
+    "Planning Time": 0.303,
     "Triggers": []
   }
 ]

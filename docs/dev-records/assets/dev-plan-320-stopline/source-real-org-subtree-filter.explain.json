@@ -1,11 +1,11 @@
 [
   {
-    "Execution Time": 0.069,
+    "Execution Time": 0.054,
     "Plan": {
       "Actual Loops": 1,
       "Actual Rows": 0,
-      "Actual Startup Time": 0.035,
-      "Actual Total Time": 0.035,
+      "Actual Startup Time": 0.022,
+      "Actual Total Time": 0.023,
       "Async Capable": false,
       "Local Dirtied Blocks": 0,
       "Local Hit Blocks": 0,
@@ -19,8 +19,8 @@
         {
           "Actual Loops": 1,
           "Actual Rows": 0,
-          "Actual Startup Time": 0.024,
-          "Actual Total Time": 0.025,
+          "Actual Startup Time": 0.018,
+          "Actual Total Time": 0.018,
           "Async Capable": false,
           "Inner Unique": true,
           "Join Type": "Inner",
@@ -37,8 +37,8 @@
             {
               "Actual Loops": 1,
               "Actual Rows": 0,
-              "Actual Startup Time": 0.024,
-              "Actual Total Time": 0.024,
+              "Actual Startup Time": 0.017,
+              "Actual Total Time": 0.017,
               "Alias": "v",
               "Async Capable": false,
               "Filter": "(status = 'active'::text)",
@@ -104,7 +104,7 @@
           "Startup Cost": 0.42,
           "Temp Read Blocks": 0,
           "Temp Written Blocks": 0,
-          "Total Cost": 17.73
+          "Total Cost": 17.64
         }
       ],
       "Shared Dirtied Blocks": 0,
@@ -117,10 +117,10 @@
       "Sort Method": "quicksort",
       "Sort Space Type": "Memory",
       "Sort Space Used": 25,
-      "Startup Cost": 17.76,
+      "Startup Cost": 17.67,
       "Temp Read Blocks": 0,
       "Temp Written Blocks": 0,
-      "Total Cost": 17.76
+      "Total Cost": 17.67
     },
     "Planning": {
       "Local Dirtied Blocks": 0,
@@ -134,7 +134,7 @@
       "Temp Read Blocks": 0,
       "Temp Written Blocks": 0
     },
-    "Planning Time": 0.404,
+    "Planning Time": 0.316,
     "Triggers": []
   }
 ]

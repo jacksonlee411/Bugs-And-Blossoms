@@ -1,11 +1,11 @@
 [
   {
-    "Execution Time": 0.126,
+    "Execution Time": 0.159,
     "Plan": {
       "Actual Loops": 1,
       "Actual Rows": 1,
-      "Actual Startup Time": 0.088,
-      "Actual Total Time": 0.09,
+      "Actual Startup Time": 0.114,
+      "Actual Total Time": 0.116,
       "Async Capable": false,
       "Local Dirtied Blocks": 0,
       "Local Hit Blocks": 0,
@@ -19,8 +19,8 @@
         {
           "Actual Loops": 1,
           "Actual Rows": 1,
-          "Actual Startup Time": 0.087,
-          "Actual Total Time": 0.088,
+          "Actual Startup Time": 0.113,
+          "Actual Total Time": 0.114,
           "Async Capable": false,
           "Inner Unique": false,
           "Join Type": "Left",
@@ -37,8 +37,8 @@
             {
               "Actual Loops": 1,
               "Actual Rows": 1,
-              "Actual Startup Time": 0.052,
-              "Actual Total Time": 0.053,
+              "Actual Startup Time": 0.068,
+              "Actual Total Time": 0.07,
               "Async Capable": false,
               "Inner Unique": true,
               "Join Type": "Left",
@@ -55,8 +55,8 @@
                 {
                   "Actual Loops": 1,
                   "Actual Rows": 1,
-                  "Actual Startup Time": 0.044,
-                  "Actual Total Time": 0.045,
+                  "Actual Startup Time": 0.061,
+                  "Actual Total Time": 0.062,
                   "Async Capable": false,
                   "Inner Unique": false,
                   "Join Type": "Inner",
@@ -73,8 +73,8 @@
                     {
                       "Actual Loops": 1,
                       "Actual Rows": 1,
-                      "Actual Startup Time": 0.024,
-                      "Actual Total Time": 0.025,
+                      "Actual Startup Time": 0.03,
+                      "Actual Total Time": 0.031,
                       "Alias": "v",
                       "Async Capable": false,
                       "Filter": "(status = 'active'::text)",
@@ -105,8 +105,8 @@
                     {
                       "Actual Loops": 1,
                       "Actual Rows": 1,
-                      "Actual Startup Time": 0.017,
-                      "Actual Total Time": 0.017,
+                      "Actual Startup Time": 0.028,
+                      "Actual Total Time": 0.028,
                       "Alias": "c",
                       "Async Capable": false,
                       "Index Cond": "((tenant_uuid = '00000000-0000-0000-0000-000000000001'::uuid) AND (org_node_key = 'AAAAAAAC'::character(8)))",
@@ -145,8 +145,8 @@
                 {
                   "Actual Loops": 1,
                   "Actual Rows": 1,
-                  "Actual Startup Time": 0.007,
-                  "Actual Total Time": 0.007,
+                  "Actual Startup Time": 0.005,
+                  "Actual Total Time": 0.006,
                   "Alias": "pc",
                   "Async Capable": false,
                   "Index Cond": "((tenant_uuid = '00000000-0000-0000-0000-000000000001'::uuid) AND (org_node_key = v.parent_org_node_key))",
@@ -185,8 +185,8 @@
             {
               "Actual Loops": 1,
               "Actual Rows": 1,
-              "Actual Startup Time": 0.028,
-              "Actual Total Time": 0.028,
+              "Actual Startup Time": 0.036,
+              "Actual Total Time": 0.036,
               "Alias": "pv",
               "Async Capable": false,
               "Filter": "(status = 'active'::text)",
@@ -246,7 +246,7 @@
       "Temp Read Blocks": 0,
       "Temp Written Blocks": 0
     },
-    "Planning Time": 0.577,
+    "Planning Time": 0.742,
     "Triggers": []
   }
 ]

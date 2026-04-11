@@ -218,7 +218,7 @@ ORDER BY v.node_path;
 
 	orgunitStoplineChainBusinessUnitSQL = `
 WITH active_positions AS (
-  SELECT DISTINCT org_unit_id
+  SELECT DISTINCT orgunit.decode_org_node_key(org_node_key)::int AS org_id
   FROM staffing.position_versions
   WHERE tenant_uuid = $1::uuid
     AND validity @> $2::date
@@ -249,7 +249,7 @@ SELECT
   b.setid
 FROM bound_business_units b
 JOIN active_positions p
-  ON p.org_unit_id = b.org_id
+  ON p.org_id = b.org_id
 ORDER BY b.org_code
 LIMIT 1;
 `
@@ -257,14 +257,14 @@ LIMIT 1;
 	orgunitStoplineChainPositionSQL = `
 SELECT
   pv.position_uuid::text,
-  pv.org_unit_id,
+  orgunit.decode_org_node_key(pv.org_node_key)::int AS org_unit_id,
   COALESCE(pv.name, '') AS position_name,
   COALESCE(pv.jobcatalog_setid, '') AS jobcatalog_setid,
   lower(pv.validity)::text AS effective_date
 FROM staffing.position_versions pv
 WHERE pv.tenant_uuid = $1::uuid
   AND pv.validity @> $2::date
-  AND pv.org_unit_id = $3::int
+  AND orgunit.decode_org_node_key(pv.org_node_key)::int = $3::int
 ORDER BY lower(pv.validity), pv.position_uuid
 LIMIT 1;
 `
@@ -509,14 +509,14 @@ LIMIT 1;
 	sourceStaffingByOrgSQL = `
 SELECT
   pv.position_uuid::text,
-  pv.org_unit_id,
+  orgunit.decode_org_node_key(pv.org_node_key)::int AS org_unit_id,
   COALESCE(pv.jobcatalog_setid, '') AS jobcatalog_setid,
   COALESCE(pv.name, '') AS position_name,
   lower(pv.validity)::text AS effective_date
 FROM staffing.position_versions pv
 JOIN orgunit.org_unit_codes c
   ON c.tenant_uuid = pv.tenant_uuid
- AND c.org_id = pv.org_unit_id
+ AND c.org_id = orgunit.decode_org_node_key(pv.org_node_key)::int
 WHERE pv.tenant_uuid = $1::uuid
   AND pv.validity @> $2::date
   AND c.org_code = $3::text
@@ -524,42 +524,29 @@ ORDER BY lower(pv.validity), pv.position_uuid;
 `
 
 	targetStoplineShadowBootstrapSQL = `
-CREATE SCHEMA IF NOT EXISTS stopline;
+	CREATE TABLE IF NOT EXISTS orgunit.setid_binding_versions (
+	  id bigserial PRIMARY KEY,
+	  tenant_uuid uuid NOT NULL,
+	  org_node_key char(8) NOT NULL,
+	  setid text NOT NULL,
+	  validity daterange NOT NULL,
+	  created_at timestamptz NOT NULL DEFAULT now(),
+	  updated_at timestamptz NOT NULL DEFAULT now(),
+	  CONSTRAINT setid_binding_versions_org_node_key_format_check CHECK (
+	    orgunit.is_valid_org_node_key(btrim(org_node_key::text))
+	  ),
+	  CONSTRAINT setid_binding_versions_validity_check CHECK (
+	    lower_inc(validity) AND NOT upper_inc(validity)
+	  )
+	);
 
-CREATE TABLE IF NOT EXISTS stopline.setid_binding_versions (
-  id bigserial PRIMARY KEY,
-  tenant_uuid uuid NOT NULL,
-  org_node_key char(8) NOT NULL,
-  setid text NOT NULL,
-  validity daterange NOT NULL,
-  CONSTRAINT stopline_setid_binding_validity_check CHECK (lower_inc(validity) AND NOT upper_inc(validity))
-);
+	CREATE INDEX IF NOT EXISTS setid_binding_versions_lookup_btree
+	  ON orgunit.setid_binding_versions (tenant_uuid, org_node_key, lower(validity));
 
-CREATE INDEX IF NOT EXISTS stopline_setid_binding_lookup_btree
-  ON stopline.setid_binding_versions (tenant_uuid, org_node_key, lower(validity));
-
-CREATE INDEX IF NOT EXISTS stopline_setid_binding_active_day_gist
-  ON stopline.setid_binding_versions
-  USING gist (tenant_uuid gist_uuid_ops, validity);
-
-CREATE TABLE IF NOT EXISTS stopline.position_versions (
-  id bigserial PRIMARY KEY,
-  tenant_uuid uuid NOT NULL,
-  position_uuid uuid NOT NULL,
-  org_node_key char(8) NOT NULL,
-  jobcatalog_setid text NULL,
-  name text NOT NULL DEFAULT '',
-  validity daterange NOT NULL,
-  CONSTRAINT stopline_position_validity_check CHECK (lower_inc(validity) AND NOT upper_inc(validity))
-);
-
-CREATE INDEX IF NOT EXISTS stopline_position_lookup_btree
-  ON stopline.position_versions (tenant_uuid, org_node_key, lower(validity));
-
-CREATE INDEX IF NOT EXISTS stopline_position_active_day_gist
-  ON stopline.position_versions
-  USING gist (tenant_uuid gist_uuid_ops, validity);
-`
+	CREATE INDEX IF NOT EXISTS setid_binding_versions_active_day_gist
+	  ON orgunit.setid_binding_versions
+	  USING gist (tenant_uuid gist_uuid_ops, validity);
+	`
 
 	targetSetIDResolveSQL = `
 WITH target AS (
@@ -573,7 +560,7 @@ WITH target AS (
 )
 SELECT b.setid
 FROM target t
-JOIN stopline.setid_binding_versions b
+	JOIN orgunit.setid_binding_versions b
   ON b.tenant_uuid = $1::uuid
 JOIN orgunit.org_unit_versions o
   ON o.tenant_uuid = b.tenant_uuid
@@ -1076,18 +1063,18 @@ func buildOrgunitStoplineSpecs(samples orgunitStoplineSamples) []orgunitStopline
 			Args:        []any{chainTenant, asOfDate, chainBU.OrgCode},
 			TenantUUID:  chainTenant,
 		},
-		{
-			Key:         "setid-resolve",
-			Stage:       "target-shadow",
-			Description: "target org_node_key 库 + stopline shadow：SetID 基于组织祖先链解析",
-			SQL:         targetSetIDResolveSQL,
-			Args:        []any{chainTenant, chainBU.OrgNodeKey, asOfDate},
-			TenantUUID:  chainTenant,
-			Notes: []string{
-				"consumer runtime 的 SetID schema 尚未切到 org_node_key",
-				"此处使用 stopline shadow 表按 org_code -> org_node_key 导入当前态样本，仅用于 explain 对比",
+			{
+				Key:         "setid-resolve",
+				Stage:       "target-real",
+				Description: "target org_node_key 库：SetID 基于组织祖先链解析",
+				SQL:         targetSetIDResolveSQL,
+				Args:        []any{chainTenant, chainBU.OrgNodeKey, asOfDate},
+				TenantUUID:  chainTenant,
+				Notes: []string{
+					"在 dedicated target 的 `orgunit.setid_binding_versions` 内导入当前态样本",
+					"该 explain 已不再依赖 `stopline` shadow 表，但这仍不等于 P3 正式 runtime 切主",
+				},
 			},
-		},
 		{
 			Key:         "staffing-by-org",
 			Stage:       "target-real",
@@ -1289,8 +1276,8 @@ func renderOrgunitStoplineMarkdown(report orgunitStoplineReport) string {
 	}
 
 	fmt.Fprintf(&b, "## Notes\n\n")
-	fmt.Fprintf(&b, "1. `target-real` 当前覆盖 `orgunit` 新 schema与 committed `staffing.position_versions`；其中 Staffing 当前态样本通过 `org_code -> org_node_key` 映射导入 dedicated target。\n")
-	fmt.Fprintf(&b, "2. `target-shadow` 目前仅保留 SetID binding explain，对应 consumer runtime 尚未完成 target-real schema cutover 的链路。\n")
+	fmt.Fprintf(&b, "1. `target-real` 当前覆盖 `orgunit` 新 schema、`orgunit.setid_binding_versions` 与 committed `staffing.position_versions`；当前态样本均通过 `org_code -> org_node_key` 映射导入 dedicated target。\n")
+	fmt.Fprintf(&b, "2. `SetID` 的 explain 已不再依赖 `stopline` shadow 表，但这仍不等于 P3 正式 runtime 切主。\n")
 	fmt.Fprintf(&b, "3. `org-move` 与 `org-full-name-rebuild` 均在事务内执行 `EXPLAIN (ANALYZE, BUFFERS)`，采集后由调用侧回滚。\n")
 	fmt.Fprintf(&b, "4. 原始 explain JSON 见同目录 `*.explain.json`。\n")
 	return b.String()
@@ -1466,10 +1453,7 @@ func prepareTargetStoplineShadowData(ctx context.Context, sourceConn *pgx.Conn, 
 		return err
 	}
 
-	if _, err := tx.Exec(ctx, `DELETE FROM stopline.setid_binding_versions WHERE tenant_uuid = $1::uuid;`, tenantUUID); err != nil {
-		return err
-	}
-	if _, err := tx.Exec(ctx, `DELETE FROM stopline.position_versions WHERE tenant_uuid = $1::uuid;`, tenantUUID); err != nil {
+	if _, err := tx.Exec(ctx, `DELETE FROM orgunit.setid_binding_versions WHERE tenant_uuid = $1::uuid;`, tenantUUID); err != nil {
 		return err
 	}
 	if _, err := tx.Exec(ctx, `DELETE FROM staffing.position_versions WHERE tenant_uuid = $1::uuid;`, tenantUUID); err != nil {
@@ -1482,17 +1466,17 @@ func prepareTargetStoplineShadowData(ctx context.Context, sourceConn *pgx.Conn, 
 		return err
 	}
 
-	for _, row := range bindings {
-		orgNodeKey, ok := codeMap[row.OrgCode]
-		if !ok {
-			return fmt.Errorf("target stopline shadow missing org_code mapping for setid binding tenant=%s org_code=%s", tenantUUID, row.OrgCode)
-		}
-		if _, err := tx.Exec(ctx, `
-INSERT INTO stopline.setid_binding_versions (
-  tenant_uuid,
-  org_node_key,
-  setid,
-  validity
+		for _, row := range bindings {
+			orgNodeKey, ok := codeMap[row.OrgCode]
+			if !ok {
+				return fmt.Errorf("target stopline real missing org_code mapping for setid binding tenant=%s org_code=%s", tenantUUID, row.OrgCode)
+			}
+			if _, err := tx.Exec(ctx, `
+	INSERT INTO orgunit.setid_binding_versions (
+	  tenant_uuid,
+	  org_node_key,
+	  setid,
+	  validity
 )
 VALUES (
   $1::uuid,
@@ -1505,34 +1489,14 @@ VALUES (
 		}
 	}
 
-	for _, row := range positions {
-		orgNodeKey, ok := codeMap[row.OrgCode]
-		if !ok {
-			return fmt.Errorf("target stopline shadow missing org_code mapping for staffing position tenant=%s org_code=%s", tenantUUID, row.OrgCode)
-		}
-		if _, err := tx.Exec(ctx, `
-INSERT INTO stopline.position_versions (
-  tenant_uuid,
-  position_uuid,
-  org_node_key,
-  jobcatalog_setid,
-  name,
-  validity
-)
-VALUES (
-  $1::uuid,
-  $2::uuid,
-  $3::char(8),
-  NULLIF($4::text, ''),
-  $5::text,
-  daterange($6::date, $7::date, '[)')
-);
-`, tenantUUID, row.PositionUUID, orgNodeKey, row.JobCatalogSetID, row.Name, row.ValidFrom, nullableDateValue(row.ValidTo)); err != nil {
-			return err
-		}
-		if _, err := tx.Exec(ctx, `
-INSERT INTO staffing.positions (
-  tenant_uuid,
+		for _, row := range positions {
+			orgNodeKey, ok := codeMap[row.OrgCode]
+			if !ok {
+				return fmt.Errorf("target stopline real missing org_code mapping for staffing position tenant=%s org_code=%s", tenantUUID, row.OrgCode)
+			}
+			if _, err := tx.Exec(ctx, `
+	INSERT INTO staffing.positions (
+	  tenant_uuid,
   position_uuid
 )
 VALUES (
@@ -1609,6 +1573,21 @@ VALUES (
 }
 
 func bootstrapTargetStaffingExplainSchema(ctx context.Context, targetConn *pgx.Conn) error {
+	var alreadyBootstrapped bool
+	if err := targetConn.QueryRow(ctx, `
+SELECT EXISTS (
+  SELECT 1
+  FROM information_schema.columns
+  WHERE table_schema = 'staffing'
+    AND table_name = 'position_versions'
+    AND column_name = 'org_node_key'
+);
+`).Scan(&alreadyBootstrapped); err != nil {
+		return err
+	}
+	if alreadyBootstrapped {
+		return nil
+	}
 	for _, path := range targetStaffingBootstrapPaths(defaultStaffingTargetSchemaDir) {
 		data, err := os.ReadFile(path)
 		if err != nil {
@@ -1702,7 +1681,7 @@ SELECT
 FROM staffing.position_versions pv
 JOIN orgunit.org_unit_codes c
   ON c.tenant_uuid = pv.tenant_uuid
- AND c.org_id = pv.org_unit_id
+ AND c.org_id = orgunit.decode_org_node_key(pv.org_node_key)::int
 WHERE pv.tenant_uuid = $1::uuid
   AND pv.validity @> $2::date
 ORDER BY lower(pv.validity) ASC, pv.position_uuid ASC

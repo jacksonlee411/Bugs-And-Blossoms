@@ -1,11 +1,11 @@
 [
   {
-    "Execution Time": 0.591,
+    "Execution Time": 0.162,
     "Plan": {
       "Actual Loops": 1,
       "Actual Rows": 0,
-      "Actual Startup Time": 0.024,
-      "Actual Total Time": 0.026,
+      "Actual Startup Time": 0.032,
+      "Actual Total Time": 0.033,
       "Alias": "v",
       "Async Capable": false,
       "Local Dirtied Blocks": 0,
@@ -21,8 +21,8 @@
         {
           "Actual Loops": 1,
           "Actual Rows": 0,
-          "Actual Startup Time": 0.022,
-          "Actual Total Time": 0.024,
+          "Actual Startup Time": 0.03,
+          "Actual Total Time": 0.031,
           "Alias": "v",
           "Async Capable": false,
           "Filter": "(lower(validity) \u003e= '2026-04-11'::date)",
@@ -72,7 +72,7 @@
                   "Parallel Aware": false,
                   "Parent Relationship": "Outer",
                   "Plan Rows": 1,
-                  "Plan Width": 25,
+                  "Plan Width": 24,
                   "Plans": [
                     {
                       "Actual Loops": 0,
@@ -114,7 +114,7 @@
                       "Parallel Aware": false,
                       "Parent Relationship": "Inner",
                       "Plan Rows": 1,
-                      "Plan Width": 21,
+                      "Plan Width": 20,
                       "Plans": [
                         {
                           "Actual Loops": 0,
@@ -133,7 +133,7 @@
                           "Parallel Aware": false,
                           "Parent Relationship": "Outer",
                           "Plan Rows": 1,
-                          "Plan Width": 21,
+                          "Plan Width": 20,
                           "Relation Name": "org_unit_versions",
                           "Rows Removed by Index Recheck": 0,
                           "Scan Direction": "Forward",
@@ -216,7 +216,7 @@
       "Temp Read Blocks": 0,
       "Temp Written Blocks": 0
     },
-    "Planning Time": 0.468,
+    "Planning Time": 0.478,
     "Triggers": []
   }
 ]

@@ -1,30 +1,129 @@
 {
   "plan": "DEV-PLAN-290B",
   "scope": "T0_DATA_BASELINE",
-  "status": "blocked",
-  "t0_baseline_ready": false,
-  "validated_at": "2026-04-10T23:10:15.354Z",
+  "status": "passed",
+  "t0_baseline_ready": true,
+  "validated_at": "2026-04-11T02:07:12.054Z",
   "runtime_gate_status": "passed",
   "t0_baseline": {
-    "tenant_id": "f52321b8-8ab6-4aa8-be8c-7a7ef4a79c53",
+    "tenant_id": "0f597b52-82f5-4229-9846-25608521a15d",
     "tenant_ids": {
-      "case2": "",
-      "case4": ""
+      "case2": "bcec2b2e-daa1-46ab-8afe-11ccde2e4ec1",
+      "case4": "0f597b52-82f5-4229-9846-25608521a15d"
     },
     "effective_date": "2026-01-01",
     "as_of": "2026-03-26",
-    "root_org_code": "",
-    "created_orgs": [],
-    "required_orgs": [],
+    "root_org_code": "ROOT",
+    "created_orgs": [
+      {
+        "org_code": "ROOT",
+        "name": "集团",
+        "parent_org_code": "",
+        "effective_date": "2026-01-01",
+        "is_business_unit": true
+      },
+      {
+        "org_code": "TP290BAIGOV",
+        "name": "AI治理办公室",
+        "parent_org_code": "ROOT",
+        "effective_date": "2026-01-01",
+        "is_business_unit": false
+      },
+      {
+        "org_code": "TP290BSSC1",
+        "name": "共享服务中心",
+        "parent_org_code": "ROOT",
+        "effective_date": "2026-01-01",
+        "is_business_unit": false
+      },
+      {
+        "org_code": "TP290BSSB",
+        "name": "B",
+        "parent_org_code": "ROOT",
+        "effective_date": "2026-01-01",
+        "is_business_unit": false
+      },
+      {
+        "org_code": "TP290BSSC2",
+        "name": "共享服务中心",
+        "parent_org_code": "TP290BSSB",
+        "effective_date": "2026-01-01",
+        "is_business_unit": false
+      }
+    ],
+    "required_orgs": [
+      {
+        "name": "AI治理办公室",
+        "expected": "exactly_one_candidate",
+        "matched_count": 1,
+        "matched_org_codes": [
+          "TP290BAIGOV"
+        ],
+        "ready": true
+      },
+      {
+        "name": "共享服务中心",
+        "expected": "multiple_candidates",
+        "matched_count": 2,
+        "matched_org_codes": [
+          "TP290BSSC1",
+          "TP290BSSC2"
+        ],
+        "ready": true
+      }
+    ],
     "candidate_snapshot": {
       "source_case": "case4_probe",
-      "conversation_id": "",
-      "candidate_count": 0,
-      "candidates": []
+      "conversation_id": "conv_684abb4d43f04732ae1c14b6bf4a1f08",
+      "candidate_count": 2,
+      "candidates": [
+        {
+          "ordinal": 1,
+          "candidate_id": "TP290BSSC1",
+          "org_code": "",
+          "name": "共享服务中心",
+          "parent_org_code": "",
+          "full_name_path": ""
+        },
+        {
+          "ordinal": 2,
+          "candidate_id": "TP290BSSC2",
+          "org_code": "",
+          "name": "共享服务中心",
+          "parent_org_code": "",
+          "full_name_path": ""
+        }
+      ]
     },
     "probes": {
-      "case2": {},
-      "case4": {}
+      "case2": {
+        "conversation_id": "conv_bc9cade8e5ef41059aa246396ff80e45",
+        "create_turn_status": 200,
+        "error_code": "",
+        "phase": "await_commit_confirm",
+        "intent_action": "create_orgunit",
+        "parent_ref_text": "AI治理办公室",
+        "candidate_count": 1,
+        "validation_errors": [],
+        "resolved_candidate_id": "TP290BAIGOV",
+        "request_id": "assistant_64a7080b3d4747ac961b6d18c174a176",
+        "trace_id": "594c9300c7e144bb82c8ad01c91c0689"
+      },
+      "case4": {
+        "conversation_id": "conv_684abb4d43f04732ae1c14b6bf4a1f08",
+        "create_turn_status": 200,
+        "error_code": "",
+        "phase": "await_candidate_pick",
+        "intent_action": "create_orgunit",
+        "parent_ref_text": "共享服务中心",
+        "candidate_count": 2,
+        "validation_errors": [
+          "candidate_confirmation_required"
+        ],
+        "resolved_candidate_id": "",
+        "request_id": "assistant_cc1e7e3a84b347f688d71ef2c315e683",
+        "trace_id": "4344cb4eb5ea4ced9c83169c27efd70f"
+      }
     },
     "issues": []
   },

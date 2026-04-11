@@ -1,11 +1,11 @@
 [
   {
-    "Execution Time": 0.201,
+    "Execution Time": 0.181,
     "Plan": {
       "Actual Loops": 1,
       "Actual Rows": 1,
-      "Actual Startup Time": 0.166,
-      "Actual Total Time": 0.168,
+      "Actual Startup Time": 0.138,
+      "Actual Total Time": 0.14,
       "Async Capable": false,
       "Local Dirtied Blocks": 0,
       "Local Hit Blocks": 0,
@@ -19,8 +19,8 @@
         {
           "Actual Loops": 1,
           "Actual Rows": 1,
-          "Actual Startup Time": 0.085,
-          "Actual Total Time": 0.09,
+          "Actual Startup Time": 0.056,
+          "Actual Total Time": 0.062,
           "Async Capable": false,
           "Hash Cond": "(v.org_node_key = c.org_node_key)",
           "Inner Unique": true,
@@ -39,7 +39,7 @@
               "Actual Loops": 1,
               "Actual Rows": 1,
               "Actual Startup Time": 0.01,
-              "Actual Total Time": 0.013,
+              "Actual Total Time": 0.014,
               "Alias": "v",
               "Async Capable": false,
               "Filter": "((parent_org_node_key IS NULL) AND (validity @\u003e '2026-04-11'::date) AND (status = 'active'::text))",
@@ -70,8 +70,8 @@
             {
               "Actual Loops": 1,
               "Actual Rows": 12,
-              "Actual Startup Time": 0.035,
-              "Actual Total Time": 0.036,
+              "Actual Startup Time": 0.024,
+              "Actual Total Time": 0.025,
               "Async Capable": false,
               "Hash Batches": 1,
               "Hash Buckets": 1024,
@@ -110,8 +110,8 @@
                     {
                       "Actual Loops": 1,
                       "Actual Rows": 12,
-                      "Actual Startup Time": 0.006,
-                      "Actual Total Time": 0.006,
+                      "Actual Startup Time": 0.005,
+                      "Actual Total Time": 0.005,
                       "Async Capable": false,
                       "Index Cond": "(tenant_uuid = '00000000-0000-0000-0000-000000000001'::uuid)",
                       "Index Name": "org_unit_codes_org_code_unique",
@@ -159,8 +159,8 @@
             {
               "Actual Loops": 1,
               "Actual Rows": 1,
-              "Actual Startup Time": 0.023,
-              "Actual Total Time": 0.023,
+              "Actual Startup Time": 0.011,
+              "Actual Total Time": 0.011,
               "Alias": "child",
               "Async Capable": false,
               "Filter": "((validity @\u003e '2026-04-11'::date) AND (parent_org_node_key = v.org_node_key) AND (status = 'active'::text))",
@@ -201,8 +201,8 @@
         }
       ],
       "Shared Dirtied Blocks": 0,
-      "Shared Hit Blocks": 17,
-      "Shared Read Blocks": 0,
+      "Shared Hit Blocks": 16,
+      "Shared Read Blocks": 1,
       "Shared Written Blocks": 0,
       "Sort Key": [
         "v.node_path"
@@ -227,7 +227,7 @@
       "Temp Read Blocks": 0,
       "Temp Written Blocks": 0
     },
-    "Planning Time": 0.38,
+    "Planning Time": 0.492,
     "Triggers": []
   }
 ]

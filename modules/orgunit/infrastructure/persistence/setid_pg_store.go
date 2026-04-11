@@ -110,17 +110,21 @@ SELECT orgunit.submit_setid_event(
 
 func (s *SetIDPGStore) ListSetIDBindings(ctx context.Context, tenantID string, asOfDate string) ([]ports.SetIDBindingRow, error) {
 	var out []ports.SetIDBindingRow
-		err := s.withTx(ctx, tenantID, func(tx pgx.Tx) error {
-			rows, err := tx.Query(ctx, `
+	err := s.withTx(ctx, tenantID, func(tx pgx.Tx) error {
+		rows, err := tx.Query(ctx, `
 	SELECT
-	  orgunit.encode_org_node_key(org_id::bigint)::text,
+	  CASE
+	    WHEN to_jsonb(v) ? 'org_node_key'
+	      THEN btrim(COALESCE(to_jsonb(v)->>'org_node_key', ''))
+	    ELSE orgunit.encode_org_node_key(NULLIF(to_jsonb(v)->>'org_id', '')::bigint)::text
+	  END AS org_node_key,
 	  setid,
 	  lower(validity)::text,
 	  COALESCE(upper(validity)::text, '')
-	FROM orgunit.setid_binding_versions
+	FROM orgunit.setid_binding_versions v
 WHERE tenant_uuid = $1::uuid
   AND validity @> $2::date
-ORDER BY org_id::text ASC
+ORDER BY org_node_key ASC
 `, tenantID, asOfDate)
 		if err != nil {
 			return err
@@ -144,7 +148,7 @@ func (s *SetIDPGStore) BindSetID(ctx context.Context, tenantID string, orgUnitID
 		if _, err := tx.Exec(ctx, `SELECT orgunit.ensure_setid_bootstrap($1::uuid, $2::uuid);`, tenantID, initiatorID); err != nil {
 			return err
 		}
-		orgID, err := parseOrgID8SetID(orgUnitID)
+		orgNodeKey, err := parseOrgNodeKeySetID(orgUnitID)
 		if err != nil {
 			return err
 		}
@@ -156,15 +160,15 @@ func (s *SetIDPGStore) BindSetID(ctx context.Context, tenantID string, orgUnitID
 SELECT orgunit.submit_setid_binding_event(
   $1::uuid,
   $2::uuid,
-  $3::int,
+  $3::char(8),
   $4::date,
   $5::text,
 	  $6::text,
 	  $7::uuid
 	);
-	`, eventID, tenantID, orgID, effectiveDate, setID, requestID, initiatorID)
-			return err
-		})
+	`, eventID, tenantID, orgNodeKey, effectiveDate, setID, requestID, initiatorID)
+		return err
+	})
 }
 
 func (s *SetIDPGStore) ResolveSetID(ctx context.Context, tenantID string, orgUnitID string, asOfDate string) (string, error) {
@@ -738,30 +742,26 @@ LIMIT 1
 	return out, nil
 }
 
-func parseOrgID8SetID(input string) (int, error) {
+func parseOrgNodeKeySetID(input string) (string, error) {
 	trimmed := strings.TrimSpace(input)
 	if trimmed == "" {
-		return 0, errors.New("org_id is required")
+		return "", errors.New("org_node_key is required")
 	}
 	if orgNodeKey, err := orgunitpkg.NormalizeOrgNodeKey(trimmed); err == nil {
-		orgID, decodeErr := orgunitpkg.DecodeOrgNodeKey(orgNodeKey)
-		if decodeErr != nil || orgID < 10000000 || orgID > 99999999 {
-			return 0, errors.New("org_id must be 8 digits")
-		}
-		return int(orgID), nil
+		return orgNodeKey, nil
 	}
 	if len(trimmed) != 8 {
-		return 0, errors.New("org_id must be 8 digits")
+		return "", errors.New("org_node_key invalid")
 	}
-	value := 0
+	value := int64(0)
 	for _, r := range trimmed {
 		if r < '0' || r > '9' {
-			return 0, errors.New("org_id must be 8 digits")
+			return "", errors.New("org_node_key invalid")
 		}
-		value = value*10 + int(r-'0')
+		value = value*10 + int64(r-'0')
 	}
 	if value < 10000000 || value > 99999999 {
-		return 0, errors.New("org_id must be 8 digits")
+		return "", errors.New("org_node_key invalid")
 	}
-	return value, nil
+	return orgunitpkg.EncodeOrgNodeKey(value)
 }

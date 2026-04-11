@@ -1,11 +1,11 @@
 [
   {
-    "Execution Time": 0.128,
+    "Execution Time": 0.165,
     "Plan": {
       "Actual Loops": 1,
       "Actual Rows": 5,
-      "Actual Startup Time": 0.103,
-      "Actual Total Time": 0.104,
+      "Actual Startup Time": 0.131,
+      "Actual Total Time": 0.133,
       "Async Capable": false,
       "Local Dirtied Blocks": 0,
       "Local Hit Blocks": 0,
@@ -19,8 +19,8 @@
         {
           "Actual Loops": 1,
           "Actual Rows": 5,
-          "Actual Startup Time": 0.039,
-          "Actual Total Time": 0.078,
+          "Actual Startup Time": 0.047,
+          "Actual Total Time": 0.112,
           "Async Capable": false,
           "Inner Unique": true,
           "Join Type": "Inner",
@@ -37,8 +37,8 @@
             {
               "Actual Loops": 1,
               "Actual Rows": 5,
-              "Actual Startup Time": 0.014,
-              "Actual Total Time": 0.019,
+              "Actual Startup Time": 0.018,
+              "Actual Total Time": 0.025,
               "Alias": "v",
               "Async Capable": false,
               "Filter": "((validity @\u003e '2026-04-11'::date) AND (parent_org_node_key = 'AAAAAAAB'::character(8)) AND (status = 'active'::text))",
@@ -69,8 +69,8 @@
             {
               "Actual Loops": 5,
               "Actual Rows": 1,
-              "Actual Startup Time": 0.004,
-              "Actual Total Time": 0.004,
+              "Actual Startup Time": 0.005,
+              "Actual Total Time": 0.005,
               "Alias": "c",
               "Async Capable": false,
               "Index Cond": "((tenant_uuid = '00000000-0000-0000-0000-000000000001'::uuid) AND (org_node_key = v.org_node_key))",
@@ -99,8 +99,8 @@
             {
               "Actual Loops": 5,
               "Actual Rows": 1,
-              "Actual Startup Time": 0.006,
-              "Actual Total Time": 0.006,
+              "Actual Startup Time": 0.01,
+              "Actual Total Time": 0.01,
               "Alias": "child",
               "Async Capable": false,
               "Filter": "((validity @\u003e '2026-04-11'::date) AND (parent_org_node_key = v.org_node_key) AND (status = 'active'::text))",
@@ -167,7 +167,7 @@
       "Temp Read Blocks": 0,
       "Temp Written Blocks": 0
     },
-    "Planning Time": 0.295,
+    "Planning Time": 0.402,
     "Triggers": []
   }
 ]

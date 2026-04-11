@@ -1,14 +1,14 @@
 {
-  "url": "http://localhost:18080/app/assistant/librechat/c/new",
+  "url": "http://localhost:8080/app/assistant/librechat/c/new",
   "bubble_count": 1,
   "bubbles": [
     {
-      "binding_key": "conv_74ab4a8e8de443fab687881b1b290fac::turn_e87206d8d6e74399b426799fd60d5723::assistant_33a44a9615ee4165b66f927893f3e8d8",
-      "conversation_id": "conv_74ab4a8e8de443fab687881b1b290fac",
-      "turn_id": "turn_e87206d8d6e74399b426799fd60d5723",
-      "request_id": "assistant_33a44a9615ee4165b66f927893f3e8d8",
-      "message_id": "386f4cf9-ed4d-45ea-924b-f08a1ffed811_",
-      "text": "请确认：“共享服务中心”是否唯一指向一个父组织节点？如果该名称有多个同名组织，我需要你提供上级单位或组织编码来精准定位。 Missing fields parent_ref_text"
+      "binding_key": "conv_3f72add2c85c43c199868f6f0c9b93ca::turn_d13388e5fef646db9ce2b77d4b504cd1::assistant_896bbfd486194f7bb840f91412c34007",
+      "conversation_id": "conv_3f72add2c85c43c199868f6f0c9b93ca",
+      "turn_id": "turn_d13388e5fef646db9ce2b77d4b504cd1",
+      "request_id": "assistant_896bbfd486194f7bb840f91412c34007",
+      "message_id": "93e9285d-d234-46b3-bec0-ac1e6291ab31_",
+      "text": "上级组织：共享服务中心；新建组织：候选验证部239A；生效日期：2026-03-26 task_id: 31ed23e0-d5e5-4933-ae46-20c7d39dfdf2 · succeeded Selected: 共享服务中心 org_code: O000001 parent_org_code: TP290BSSC2 effective_date: 2026-03-26 event_type: CREATE"
     }
   ],
   "external_reply_container_count": 0,

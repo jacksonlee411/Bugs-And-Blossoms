@@ -2,14 +2,15 @@ package persistence
 
 import "testing"
 
-func TestParseOrgID8SetID(t *testing.T) {
+func TestParseOrgNodeKeySetID(t *testing.T) {
 	tests := []struct {
 		name    string
 		input   string
-		want    int
+		want    string
 		wantErr bool
 	}{
-		{name: "trimmed valid", input: " 12345678 ", want: 12345678},
+		{name: "trimmed valid", input: " 12345678 ", want: "AAAM22LQ"},
+		{name: "org_node_key passthrough", input: "aaaaaaab", want: "AAAAAAAB"},
 		{name: "empty", input: "   ", wantErr: true},
 		{name: "short", input: "123", wantErr: true},
 		{name: "non digit", input: "1234ab78", wantErr: true},
@@ -18,10 +19,10 @@ func TestParseOrgID8SetID(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			got, err := parseOrgID8SetID(tc.input)
+			got, err := parseOrgNodeKeySetID(tc.input)
 			if tc.wantErr {
 				if err == nil {
-					t.Fatalf("expected error, got value=%d", got)
+					t.Fatalf("expected error, got value=%q", got)
 				}
 				return
 			}
@@ -29,7 +30,7 @@ func TestParseOrgID8SetID(t *testing.T) {
 				t.Fatalf("unexpected error: %v", err)
 			}
 			if got != tc.want {
-				t.Fatalf("got=%d want=%d", got, tc.want)
+				t.Fatalf("got=%q want=%q", got, tc.want)
 			}
 		})
 	}

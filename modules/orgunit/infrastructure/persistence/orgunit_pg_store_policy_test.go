@@ -487,12 +487,12 @@ func TestOrgUnitPGStore_ResolveSetIDStrategyFieldDecision(t *testing.T) {
 					stubRows: &stubRows{},
 					data: [][]any{
 						{"org.orgunit_create.field_policy", "org_code", "tenant", "", true, true, false, `next_org_code("T", 6)`, "", `[]`, 100, "2026-01-01"},
-						{"org.orgunit_write.field_policy", "org_code", "business_unit", "10000001", true, true, false, `next_org_code("B", 8)`, "", `[]`, 100, "2026-01-01"},
+						{"org.orgunit_write.field_policy", "org_code", "business_unit", "A0000001", true, true, false, `next_org_code("B", 8)`, "", `[]`, 100, "2026-01-01"},
 					},
 				},
 			}, nil
 		}))
-		decision, found, err := store.ResolveSetIDStrategyFieldDecision(ctx, "t1", "org.orgunit_create.field_policy", "org_code", "10000001", "2026-01-01")
+		decision, found, err := store.ResolveSetIDStrategyFieldDecision(ctx, "t1", "org.orgunit_create.field_policy", "org_code", "A0000001", "2026-01-01")
 		if err != nil || !found {
 			t.Fatalf("decision=%+v found=%v err=%v", decision, found, err)
 		}

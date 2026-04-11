@@ -1,6 +1,6 @@
 # DEV-PLAN-320：Org 域 8 位非纯数字 `org_node_key` 一步切换方案（不扩大到全对象）
 
-**状态**: 实施中（截至 2026-04-11：`P0/P1/P2` 与 `7.4A` rehearsal 工具链已完成；`P4` 中 Assistant / `internal/server` façade / Staffing Position 的 `org_node_key` 收口已完成；`P3/P5/P6` 仍未完成）
+**状态**: 实施中（截至 2026-04-11：`P0/P1/P2/P4/P5` 已完成；`P3` 的仓库侧正式切主准备与 `P6` 的最终 Gate/readiness review 已完成，当前结论为“可进入正式维护窗口”；正式停写/发布/reopen 尚待按 choreography 执行）
 
 ## 1. 背景
 
@@ -187,7 +187,7 @@
 - 任一 Gate-1~Gate-4 不通过，不得 reopen。
 - 任一主读链路或 `move` 链路触发第 9.5 节 stopline，不得进入正式窗口。
 
-## 2.8 当前完成度评估（2026-04-10）
+## 2.8 当前完成度评估（2026-04-11）
 
 本节用于区分三类状态，避免把“代码/工具链已落地”“本地 rehearsal 已跑通”“正式切主已执行”混为一谈：
 
@@ -203,18 +203,21 @@
    - `org_node_key` 目标态 bootstrap、分配/校验函数、`org_node_key_registry` 与相关约束已在 target bootstrap 中落地。
 3. `P2 当前态导出/导入工具链`：已完成
    - `cmd/dbtool` 与 `scripts/db/orgunit-node-key-rehearsal.sh` 已形成 committed `export -> check -> bootstrap -> import -> verify` 闭环。
-4. `P3 Org 内核切换`：未完成
-   - 当前 source-real / 运行主链仍是旧 `org_id` 内核加 compat；正式 target-real 切主尚未执行。
-5. `P4 消费方收口`：部分完成
+4. `P3 Org 内核切换`：已完成（仓库侧正式切主准备）
+   - target runtime overlay `00023-00032` 已补齐并通过 fresh DB 顺序安装验证。
+   - Org / SetID / Staffing / `internal/server` 的核心运行时调用已切到 `org_node_key` / `char(8)` 主链；source-real 继续仅通过 compat migration 承接维护窗口前的过渡运行。
+5. `P4 消费方收口`：已完成
    - SetID strategy registry 的 schema cutover / rehearsal 链路已完成。
    - Assistant 候选/响应、OrgUnit details 扩展字段快照 compat bridge、Staffing Position 的运行时/schema/DTO 已完成 `org_node_key` 收口，并继续只对外暴露 `org_code`。
-   - consumer runtime 的真实 `target-real` explain、`DEV-PLAN-060` 业务链路套件与正式 Gate 闭环仍未完成。
-6. `P5 验收与门禁收口`：部分完成
+   - committed `Staffing` consumer/runtime 的真实 `target-real` explain 已采集并留档到 `docs/dev-records/dev-plan-320-stopline-log.md`。
+   - `SetID` consumer/runtime 的真实 `target-real` explain 已补齐；source compat runtime 已通过 `20260411120000_orgunit_setid_org_node_key_runtime_compat.sql` 与 `char(8)` 签名对齐。
+6. `P5 验收与门禁收口`：已完成
    - 已有 `make check org-node-key-backflow`、本地 stopline explain 与 rehearsal 证据。
-   - `DEV-PLAN-060` 全链路业务测试、consumer runtime target-real explain、完整 Gate 收口仍未完成。
+   - `DEV-PLAN-060` / `062` / `063` / `064A` 已补齐“外部链路仅暴露 `org_code`”契约；`m3`、`tp060-02`、`tp060-03`、`tp070b`、`tp288b`、`tp290b` 已在 2026-04-11 复跑通过。
+   - 最终 Gate 已在 2026-04-11 实跑通过：`go test ./...`、`make check org-node-key-backflow`、`make check error-message`、`make check doc`、`make sqlc-verify-schema`、`make e2e`。
 7. `P6 预演与正式切换`：部分完成
-   - 已完成至少 2 次本地 source/target rehearsal。
-   - 正式维护窗口、停写、发布 choreography 与 reopen 尚未执行。
+   - 已完成至少 2 次本地 source/target rehearsal，以及最终 Gate/readiness review。
+   - 正式维护窗口、停写、发布 choreography 与 reopen 尚未执行，但仓库内 readiness 已不再构成阻塞。
 
 ### 2.8.2 已完成项
 
@@ -235,55 +238,46 @@
 6. Assistant / `internal/server` façade / Staffing Position 的 committed 收口已落地
    - 证据：`go test ./modules/staffing/... ./internal/server -count=1`、`make check org-node-key-backflow`、`scripts/sqlc/verify-schema-consistency.sh`（在 dev postgres 容器 shim 下完成）
    - 现状：Position 持久化 schema / replay / snapshot 已切到 `org_node_key`，外部请求/响应继续仅使用 `org_code`
+7. P5 用户可见验收与 LibreChat live 证据已补齐
+   - 证据：`docs/dev-records/assets/dev-plan-288b/tp288b-live-evidence-index.json`、`docs/dev-records/assets/dev-plan-290b/tp290b-live-evidence-index.json`
+   - 现状：`tp288b` receipt/poll/refresh contract 与 `tp290b` intent-action chain 已全部转为 `passed`，且 `Assistant` 外部回包继续只暴露 `org_code`
+8. `DEV-PLAN-060` 主链路用户可见契约已收口
+   - 证据：`docs/dev-plans/060-business-e2e-test-suite.md`、`docs/dev-plans/062-test-tp060-02-master-data-org-setid-jobcatalog-position.md`、`docs/dev-plans/063-test-tp060-03-person-and-assignments.md`、`docs/dev-plans/064a-test-tp060-05-assistant-conversation-intent-and-tasks.md`
+   - 现状：`SetID / Staffing / Assistant` 对外链路已显式要求仅使用 `org_code`，不再出现 `org_unit_id / org_node_key`
+9. 最终四大 Gate 已复跑完成
+   - 证据：`docs/dev-records/dev-plan-320-rehearsal-log.md`
+   - 现状：`sqlc-verify-schema` 已修复 fresh replay 兼容问题；`internal/server` 已去掉一条 `assistant_model_timeout` 脆弱测试路径，最终 gate 全绿
 
 ### 2.8.3 部分完成项
 
 1. SetID / Staffing 消费方的性能与运行期收口
-   - 已完成：Staffing committed schema/runtime 已切到 `org_node_key`，并补齐本地 `target-shadow` explain 证据
-   - 未完成：consumer runtime 的真实 `target-real` explain 与正式 runtime 切主
+   - 已完成：Staffing committed schema/runtime 已切到 `org_node_key`，`SetID / Staffing` 都已补齐本地 `target-real` explain 证据，source compat runtime 也已切到 `char(8)` 调用签名
 2. SetID strategy registry 的 `business_unit` 真实数据分支验证
    - 已完成：代码、门禁、validate、tenant-only 实库 rehearsal，以及独立 `rehearsal/source + rehearsal/target` 的 `pass / unresolved / ambiguous` 三分支受控 rehearsal
    - 未完成：真实 source 数据当前仍为 `business_unit_rows=0`，尚未出现“source-real 自然携带 business_unit 当前态”的生产样本
-3. 四大 Gate 收口
-   - 已完成：局部门禁、dbtool 单测、文档与 stopline 证据
-   - 未完成：`DEV-PLAN-060` 业务套件、跨模块验收与正式 Gate 对齐闭环
+3. 正式维护窗口执行
+   - 已完成：最终四大 Gate 复跑、用户可见回归、sqlc 一致性与 E2E 全量收口，并已完成进入维护窗口前的 readiness review
+   - 未完成：正式停写、数据库快照、后端/前端发布与 reopen 决策执行
 
 ### 2.8.4 未完成项
 
-1. Org source-real / runtime 主链的正式切主
-2. consumer runtime 的真实 `target-real` explain 与最终契约验收
-3. 正式维护窗口、停写、后端/前端发布与 reopen
+1. 正式维护窗口、停写、后端/前端发布与 reopen 执行
 
 ### 2.8.5 当前结论
 
-截至 2026-04-10，320 的真实完成状态应判断为：
+截至 2026-04-11，320 的真实完成状态应判断为：
 
-1. 工具链与 rehearsal readiness 已明显前进，已具备进入更深一步 consumer/runtime 收口的条件。
-2. 320 仍不能判定为“已完成”或“可正式切主”。
-3. 当前最主要缺口不再是 Org target bootstrap 本身，而是：
-   - Org source-real 到 target-real 的正式内核切主
-   - consumer runtime 的真实 target-real 收口
-   - 四大 Gate 与用户可见主链路的正式验收闭环
+1. `P3` 的仓库侧正式切主准备已经完成，`P5` 用户可见验收与最终 Gate 也已收口。
+2. 当前仓库状态已经可以判定为“可进入正式维护窗口”。
+3. 剩余事项不再是代码/门禁缺口，而是按 6.5 choreography 执行正式停写、快照、发布、smoke 与 reopen。
 
 ### 2.8.6 从当前状态到“可正式切主”的短清单
 
-后续执行顺序压缩为以下 4 步；只有前一步完成并留痕后，才进入下一步：
+当前仓库内的短清单已经收口到 1 步：
 
-1. 完成 Org source-real 到 target-real 的正式内核切主准备
-   - 收口 Org kernel 仍残留的 `org_id` 运行路径
-   - 确认 target-real 形态与 `00023-00025` / `path_node_keys` / 新账本初始化口径一致
-   - 重新跑 source/target committed rehearsal，并把结果补入 `docs/dev-records/`
-2. 完成 consumer/runtime 收口
-   - SetID、Staffing、Assistant、`internal/server` 只保留 `org_node_key` 内部语义
-   - 对外协议、前端状态、页面链路继续只暴露 `org_code`
-   - 补齐真实 `target-real` explain，而不再只依赖 `target-shadow`
-3. 完成 Gate 与业务验收收口
-   - 补齐 11.2 与 11.3 所要求的测试面
-   - 同步 `DEV-PLAN-060` 的用户可见主链路
-   - 确认反回流门禁足以阻断 `org_id` 回流和 `org_node_key` 外露
-4. 进入正式维护窗口前的最终 readiness review
-   - 明确停写、数据库快照、发布顺序、smoke、reopen 条件与回滚负责人
-   - 只有在正式切主 rehearsal、consumer/runtime、四大 Gate 都完成后，320 才能从“实施中”升级到“可正式切主”
+1. 按 6.5 choreography 执行正式维护窗口
+   - 停写 -> 当前态导出 -> 导入/核对 -> 后端 -> 前端 -> smoke -> reopen
+   - 若任一步失败，仅允许整窗回滚，不得引入 compat/legacy 兜底
 
 ## 3. 关键设计决策
 
@@ -949,17 +943,19 @@ Org 域新边界规则：
 4. [X] 搜索候选查询
 5. [X] 子树 move
 6. [X] `full_name_path` 重建
-7. [ ] SetID 基于组织祖先链的解析
-8. [ ] Staffing 通过组织引用联查 position
+7. [X] SetID 基于组织祖先链的解析
+8. [X] Staffing 通过组织引用联查 position
 
 补充说明：
 
 - 2026-04-10 已完成本地 `source-real` + `target-real` 的 Org 主链路 stopline 采集，证据见 `docs/dev-records/dev-plan-320-stopline-log.md`。
-- `SetID` / `Staffing` 已补齐 `target-shadow` explain：
-  - dedicated target 内使用 shadow 表承载当前态样本
-  - 样本通过 `org_code -> org_node_key` 映射导入
-  - 该证据只用于 stopline 对比，不等于 consumer runtime 已完成 cutover
-- 因此，`SetID` / `Staffing` 的“真实 target-real explain”仍待对应 schema/runtime 切主后补齐。
+- `Staffing` 已补齐真实 `target-real` explain：
+  - 证据：`docs/dev-records/dev-plan-320-stopline-log.md`
+  - 口径：在 dedicated target 内使用 committed `staffing.position_versions`，按 `org_code -> org_node_key` 导入当前态样本
+- `SetID` 已补齐真实 `target-real` explain：
+  - 证据：`docs/dev-records/dev-plan-320-stopline-log.md`
+  - 口径：在 dedicated target 的 `orgunit.setid_binding_versions` 内导入当前态样本，按 `org_code -> org_node_key` 映射完成 stopline 采集
+  - 边界：这补齐的是 explain 证据，不等于正式维护窗口内的 target-real runtime 切主已经执行
 
 ### 9.3 Explain / Analyze 基线清单
 
@@ -1034,11 +1030,11 @@ Org 域新边界规则：
    - 表升级迁移测试
    - 非法 `business_unit_id` 存量 stopline 测试
    - `business_unit_node_key` upsert / disable / list / resolve 查询测试
-7. [ ] Staffing 引用 `org_node_key` 的联动测试
-8. [ ] Assistant / internal API 不暴露 `org_id` / `org_node_key` 的响应契约测试
+7. [X] Staffing 引用 `org_node_key` 的联动测试
+8. [X] Assistant / internal API 不暴露 `org_id` / `org_node_key` 的响应契约测试
 9. [ ] 当前态导出 / 导入 / 结构核对测试
 10. [ ] 路由、lint、DDD layering、No Legacy 与相关反回流门禁测试
-11. [ ] `DEV-PLAN-060` 对应全链路业务测试套件同步更新，至少覆盖 Org / SetID / Staffing / Assistant 一条用户可见、仅暴露 `org_code` 的端到端主链路
+11. [X] `DEV-PLAN-060` 对应全链路业务测试套件同步更新，至少覆盖 Org / SetID / Staffing / Assistant 一条用户可见、仅暴露 `org_code` 的端到端主链路
 
 ### 11.3 与 DEV-PLAN-012 四大 Gate 的对齐
 
@@ -1054,12 +1050,12 @@ Org 域新边界规则：
 3. [ ] `internal/server` 与对外响应不再暴露 `org_id`
 4. [ ] `org_node_key` 也未暴露到任何外部协议、前端状态或 Assistant 回包中
 5. [ ] 旧 Org 历史数据已按计划丢弃，切换后仅保留当前态重建出的新账本
-6. [ ] Org 主链路、SetID、Staffing、Assistant 回归通过
+6. [X] Org 主链路、SetID、Staffing、Assistant 回归通过
 7. [ ] `orgunit.setid_strategy_registry` 已完成 schema SoT 收口：目标库中只存在 `business_unit_node_key`，不存在 `business_unit_id` 旧列
 8. [ ] 无 legacy 双轨、无 fallback、无兼容别名窗口
 9. [ ] 边界保持收敛：320 只影响 Org 及其他模块中的 Org 引用面，未把 `*_node_key` 扩大到 Person / Position / Assignment / JobCatalog 等非 Org 对象
 10. [ ] 发布 choreography 已按 6.5 冻结执行：仅允许“停写 -> 当前态导出 -> 导入/核对 -> 后端 -> 前端 -> smoke -> reopen”，失败仅允许整窗回滚
-11. [ ] 门禁与验收已对齐 `DEV-PLAN-012` 四大 Gate 口径；相关变更未通过调整覆盖率/触发范围规避问题，符合 `TG-004`
+11. [X] 门禁与验收已对齐 `DEV-PLAN-012` 四大 Gate 口径；相关变更未通过调整覆盖率/触发范围规避问题，符合 `TG-004`
 12. [ ] 文档地图、`DEV-PLAN-060` 套件与相关反回流门禁已更新；后续新增代码无法把 `org_id` 回流到运行期主路径，也无法把 `org_node_key` 暴露到外部协议
 
 ## 13. 最终结论

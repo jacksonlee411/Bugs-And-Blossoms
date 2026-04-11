@@ -1,11 +1,11 @@
 [
   {
-    "Execution Time": 0.166,
+    "Execution Time": 0.174,
     "Plan": {
       "Actual Loops": 1,
       "Actual Rows": 5,
-      "Actual Startup Time": 0.13,
-      "Actual Total Time": 0.133,
+      "Actual Startup Time": 0.137,
+      "Actual Total Time": 0.139,
       "Async Capable": false,
       "Local Dirtied Blocks": 0,
       "Local Hit Blocks": 0,
@@ -14,13 +14,13 @@
       "Node Type": "Limit",
       "Parallel Aware": false,
       "Plan Rows": 3,
-      "Plan Width": 91,
+      "Plan Width": 90,
       "Plans": [
         {
           "Actual Loops": 1,
           "Actual Rows": 5,
-          "Actual Startup Time": 0.129,
-          "Actual Total Time": 0.13,
+          "Actual Startup Time": 0.126,
+          "Actual Total Time": 0.127,
           "Async Capable": false,
           "Local Dirtied Blocks": 0,
           "Local Hit Blocks": 0,
@@ -30,13 +30,13 @@
           "Parallel Aware": false,
           "Parent Relationship": "Outer",
           "Plan Rows": 3,
-          "Plan Width": 91,
+          "Plan Width": 90,
           "Plans": [
             {
               "Actual Loops": 1,
               "Actual Rows": 5,
-              "Actual Startup Time": 0.064,
-              "Actual Total Time": 0.097,
+              "Actual Startup Time": 0.08,
+              "Actual Total Time": 0.106,
               "Async Capable": false,
               "Inner Unique": true,
               "Join Type": "Inner",
@@ -48,16 +48,16 @@
               "Parallel Aware": false,
               "Parent Relationship": "Outer",
               "Plan Rows": 3,
-              "Plan Width": 91,
+              "Plan Width": 90,
               "Plans": [
                 {
                   "Actual Loops": 1,
                   "Actual Rows": 5,
-                  "Actual Startup Time": 0.044,
-                  "Actual Total Time": 0.06,
+                  "Actual Startup Time": 0.064,
+                  "Actual Total Time": 0.077,
                   "Alias": "v",
                   "Async Capable": false,
-                  "Exact Heap Blocks": 4,
+                  "Exact Heap Blocks": 6,
                   "Filter": "((name)::text ~~* '%人力资源部%'::text)",
                   "Local Dirtied Blocks": 0,
                   "Local Hit Blocks": 0,
@@ -68,13 +68,13 @@
                   "Parallel Aware": false,
                   "Parent Relationship": "Outer",
                   "Plan Rows": 1,
-                  "Plan Width": 70,
+                  "Plan Width": 69,
                   "Plans": [
                     {
                       "Actual Loops": 1,
-                      "Actual Rows": 12,
-                      "Actual Startup Time": 0.02,
-                      "Actual Total Time": 0.021,
+                      "Actual Rows": 20,
+                      "Actual Startup Time": 0.041,
+                      "Actual Total Time": 0.041,
                       "Async Capable": false,
                       "Index Cond": "((tenant_uuid = '00000000-0000-0000-0000-000000000001'::uuid) AND (validity @\u003e '2026-04-11'::date))",
                       "Index Name": "org_unit_versions_active_day_gist",
@@ -102,7 +102,7 @@
                   "Rows Removed by Filter": 7,
                   "Rows Removed by Index Recheck": 0,
                   "Shared Dirtied Blocks": 0,
-                  "Shared Hit Blocks": 6,
+                  "Shared Hit Blocks": 8,
                   "Shared Read Blocks": 0,
                   "Shared Written Blocks": 0,
                   "Startup Cost": 4.26,
@@ -113,8 +113,8 @@
                 {
                   "Actual Loops": 5,
                   "Actual Rows": 1,
-                  "Actual Startup Time": 0.006,
-                  "Actual Total Time": 0.006,
+                  "Actual Startup Time": 0.004,
+                  "Actual Total Time": 0.004,
                   "Alias": "c",
                   "Async Capable": false,
                   "Index Cond": "((tenant_uuid = '00000000-0000-0000-0000-000000000001'::uuid) AND (org_id = v.org_id))",
@@ -142,17 +142,17 @@
                 }
               ],
               "Shared Dirtied Blocks": 0,
-              "Shared Hit Blocks": 21,
+              "Shared Hit Blocks": 23,
               "Shared Read Blocks": 0,
               "Shared Written Blocks": 0,
               "Startup Cost": 4.53,
               "Temp Read Blocks": 0,
               "Temp Written Blocks": 0,
-              "Total Cost": 39.88
+              "Total Cost": 39.79
             }
           ],
           "Shared Dirtied Blocks": 0,
-          "Shared Hit Blocks": 21,
+          "Shared Hit Blocks": 23,
           "Shared Read Blocks": 0,
           "Shared Written Blocks": 0,
           "Sort Key": [
@@ -161,20 +161,20 @@
           "Sort Method": "quicksort",
           "Sort Space Type": "Memory",
           "Sort Space Used": 25,
-          "Startup Cost": 39.9,
+          "Startup Cost": 39.82,
           "Temp Read Blocks": 0,
           "Temp Written Blocks": 0,
-          "Total Cost": 39.91
+          "Total Cost": 39.82
         }
       ],
       "Shared Dirtied Blocks": 0,
-      "Shared Hit Blocks": 21,
+      "Shared Hit Blocks": 23,
       "Shared Read Blocks": 0,
       "Shared Written Blocks": 0,
-      "Startup Cost": 39.9,
+      "Startup Cost": 39.82,
       "Temp Read Blocks": 0,
       "Temp Written Blocks": 0,
-      "Total Cost": 39.91
+      "Total Cost": 39.82
     },
     "Planning": {
       "Local Dirtied Blocks": 0,
@@ -188,7 +188,7 @@
       "Temp Read Blocks": 0,
       "Temp Written Blocks": 0
     },
-    "Planning Time": 0.592,
+    "Planning Time": 0.515,
     "Triggers": []
   }
 ]

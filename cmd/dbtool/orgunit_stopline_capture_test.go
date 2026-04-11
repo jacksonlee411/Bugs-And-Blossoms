@@ -97,17 +97,17 @@ func TestRenderOrgunitStoplineMarkdownNotes(t *testing.T) {
 		},
 		{
 			Key:         "setid-resolve",
-			Stage:       "target-shadow",
-			RawJSONFile: "target-shadow-setid-resolve.explain.json",
+			Stage:       "target-real",
+			RawJSONFile: "target-real-setid-resolve.explain.json",
 		},
 	}
 
 	md := renderOrgunitStoplineMarkdown(report)
-	if !strings.Contains(md, "`target-real` 当前覆盖 `orgunit` 新 schema与 committed `staffing.position_versions`") {
+	if !strings.Contains(md, "`target-real` 当前覆盖 `orgunit` 新 schema、`orgunit.setid_binding_versions` 与 committed `staffing.position_versions`") {
 		t.Fatalf("markdown notes missing target-real staffing note: %s", md)
 	}
-	if !strings.Contains(md, "`target-shadow` 目前仅保留 SetID binding explain") {
-		t.Fatalf("markdown notes missing target-shadow setid note: %s", md)
+	if !strings.Contains(md, "`SetID` 的 explain 已不再依赖 `stopline` shadow 表") {
+		t.Fatalf("markdown notes missing target-real setid note: %s", md)
 	}
 }
 

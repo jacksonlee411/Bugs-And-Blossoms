@@ -1,5 +1,5 @@
 {
-  "captured_at": "2026-04-10T23:00:08.964586715Z",
+  "captured_at": "2026-04-11T01:02:36.036862683Z",
   "as_of_date": "2026-04-11",
   "samples": {
     "as_of_date": "2026-04-11",
@@ -103,8 +103,8 @@
       ],
       "tenant_uuid": "00000000-0000-0000-0000-000000000001",
       "metrics": {
-        "planning_time_ms": 1.14,
-        "execution_time_ms": 0.206,
+        "planning_time_ms": 0.844,
+        "execution_time_ms": 0.202,
         "plan_rows": 1,
         "actual_rows": 1,
         "shared_hit_blocks": 11,
@@ -126,11 +126,11 @@
       ],
       "tenant_uuid": "00000000-0000-0000-0000-000000000001",
       "metrics": {
-        "planning_time_ms": 0.834,
-        "execution_time_ms": 0.361,
-        "plan_rows": 15,
+        "planning_time_ms": 0.669,
+        "execution_time_ms": 0.227,
+        "plan_rows": 17,
         "actual_rows": 5,
-        "shared_hit_blocks": 17,
+        "shared_hit_blocks": 21,
         "shared_read_blocks": 0,
         "shared_dirtied_blocks": 0,
         "shared_written_blocks": 0
@@ -149,8 +149,8 @@
       ],
       "tenant_uuid": "00000000-0000-0000-0000-000000000001",
       "metrics": {
-        "planning_time_ms": 0.811,
-        "execution_time_ms": 0.351,
+        "planning_time_ms": 0.741,
+        "execution_time_ms": 0.222,
         "plan_rows": 1,
         "actual_rows": 1,
         "shared_hit_blocks": 12,
@@ -172,8 +172,8 @@
       ],
       "tenant_uuid": "00000000-0000-0000-0000-000000000001",
       "metrics": {
-        "planning_time_ms": 0.468,
-        "execution_time_ms": 0.591,
+        "planning_time_ms": 0.478,
+        "execution_time_ms": 0.162,
         "plan_rows": 0,
         "actual_rows": 0,
         "shared_hit_blocks": 1,
@@ -196,13 +196,13 @@
       ],
       "tenant_uuid": "00000000-0000-0000-0000-000000000001",
       "metrics": {
-        "planning_time_ms": 5.4,
-        "execution_time_ms": 4.067,
+        "planning_time_ms": 3.308,
+        "execution_time_ms": 2.313,
         "plan_rows": 0,
         "actual_rows": 0,
-        "shared_hit_blocks": 276,
-        "shared_read_blocks": 10,
-        "shared_dirtied_blocks": 22,
+        "shared_hit_blocks": 295,
+        "shared_read_blocks": 0,
+        "shared_dirtied_blocks": 2,
         "shared_written_blocks": 0
       },
       "raw_json_file": "source-real-org-move.explain.json"
@@ -218,11 +218,11 @@
       ],
       "tenant_uuid": "00000000-0000-0000-0000-000000000001",
       "metrics": {
-        "planning_time_ms": 1.103,
-        "execution_time_ms": 0.329,
-        "plan_rows": 10,
+        "planning_time_ms": 1.034,
+        "execution_time_ms": 0.243,
+        "plan_rows": 11,
         "actual_rows": 1,
-        "shared_hit_blocks": 15,
+        "shared_hit_blocks": 19,
         "shared_read_blocks": 0,
         "shared_dirtied_blocks": 0,
         "shared_written_blocks": 0
@@ -242,11 +242,11 @@
       ],
       "tenant_uuid": "00000000-0000-0000-0000-000000000001",
       "metrics": {
-        "planning_time_ms": 0.592,
-        "execution_time_ms": 0.166,
+        "planning_time_ms": 0.515,
+        "execution_time_ms": 0.174,
         "plan_rows": 3,
         "actual_rows": 5,
-        "shared_hit_blocks": 21,
+        "shared_hit_blocks": 23,
         "shared_read_blocks": 0,
         "shared_dirtied_blocks": 0,
         "shared_written_blocks": 0
@@ -265,8 +265,8 @@
       ],
       "tenant_uuid": "00000000-0000-0000-0000-000000000001",
       "metrics": {
-        "planning_time_ms": 0.404,
-        "execution_time_ms": 0.069,
+        "planning_time_ms": 0.316,
+        "execution_time_ms": 0.054,
         "plan_rows": 3,
         "actual_rows": 0,
         "shared_hit_blocks": 1,
@@ -288,8 +288,8 @@
       ],
       "tenant_uuid": "00d01cf4-7633-4ac6-93c7-748b2a6d6678",
       "metrics": {
-        "planning_time_ms": 0.897,
-        "execution_time_ms": 0.253,
+        "planning_time_ms": 0.633,
+        "execution_time_ms": 0.184,
         "plan_rows": 1,
         "actual_rows": 1,
         "shared_hit_blocks": 14,
@@ -303,7 +303,7 @@
       "key": "staffing-by-org",
       "stage": "source-real",
       "description": "旧 org_id 运行库：Staffing 通过组织引用联查 position",
-      "sql": "SELECT\n  pv.position_uuid::text,\n  pv.org_unit_id,\n  COALESCE(pv.jobcatalog_setid, '') AS jobcatalog_setid,\n  COALESCE(pv.name, '') AS position_name,\n  lower(pv.validity)::text AS effective_date\nFROM staffing.position_versions pv\nJOIN orgunit.org_unit_codes c\n  ON c.tenant_uuid = pv.tenant_uuid\n AND c.org_id = pv.org_unit_id\nWHERE pv.tenant_uuid = $1::uuid\n  AND pv.validity @\u003e $2::date\n  AND c.org_code = $3::text\nORDER BY lower(pv.validity), pv.position_uuid;",
+      "sql": "SELECT\n  pv.position_uuid::text,\n  orgunit.decode_org_node_key(pv.org_node_key)::int AS org_unit_id,\n  COALESCE(pv.jobcatalog_setid, '') AS jobcatalog_setid,\n  COALESCE(pv.name, '') AS position_name,\n  lower(pv.validity)::text AS effective_date\nFROM staffing.position_versions pv\nJOIN orgunit.org_unit_codes c\n  ON c.tenant_uuid = pv.tenant_uuid\n AND c.org_id = orgunit.decode_org_node_key(pv.org_node_key)::int\nWHERE pv.tenant_uuid = $1::uuid\n  AND pv.validity @\u003e $2::date\n  AND c.org_code = $3::text\nORDER BY lower(pv.validity), pv.position_uuid;",
       "args": [
         "00d01cf4-7633-4ac6-93c7-748b2a6d6678",
         "2026-04-11",
@@ -311,11 +311,11 @@
       ],
       "tenant_uuid": "00d01cf4-7633-4ac6-93c7-748b2a6d6678",
       "metrics": {
-        "planning_time_ms": 0.287,
-        "execution_time_ms": 0.131,
+        "planning_time_ms": 0.241,
+        "execution_time_ms": 0.247,
         "plan_rows": 1,
         "actual_rows": 2,
-        "shared_hit_blocks": 8,
+        "shared_hit_blocks": 7,
         "shared_read_blocks": 0,
         "shared_dirtied_blocks": 0,
         "shared_written_blocks": 0
@@ -334,11 +334,11 @@
       ],
       "tenant_uuid": "00000000-0000-0000-0000-000000000001",
       "metrics": {
-        "planning_time_ms": 0.608,
-        "execution_time_ms": 0.182,
+        "planning_time_ms": 1.246,
+        "execution_time_ms": 0.16,
         "plan_rows": 1,
         "actual_rows": 1,
-        "shared_hit_blocks": 6,
+        "shared_hit_blocks": 9,
         "shared_read_blocks": 0,
         "shared_dirtied_blocks": 0,
         "shared_written_blocks": 0
@@ -360,8 +360,8 @@
         "target bootstrap 当前仅覆盖 org 纯 schema；无 person/setid/staffing 关联表"
       ],
       "metrics": {
-        "planning_time_ms": 0.295,
-        "execution_time_ms": 0.128,
+        "planning_time_ms": 0.402,
+        "execution_time_ms": 0.165,
         "plan_rows": 1,
         "actual_rows": 5,
         "shared_hit_blocks": 33,
@@ -386,8 +386,8 @@
         "manager/person 关联未纳入当前 target bootstrap"
       ],
       "metrics": {
-        "planning_time_ms": 0.577,
-        "execution_time_ms": 0.126,
+        "planning_time_ms": 0.742,
+        "execution_time_ms": 0.159,
         "plan_rows": 1,
         "actual_rows": 1,
         "shared_hit_blocks": 12,
@@ -409,14 +409,14 @@
       ],
       "tenant_uuid": "00000000-0000-0000-0000-000000000001",
       "metrics": {
-        "planning_time_ms": 0.221,
-        "execution_time_ms": 1.08,
+        "planning_time_ms": 0.303,
+        "execution_time_ms": 1.051,
         "plan_rows": 0,
         "actual_rows": 0,
-        "shared_hit_blocks": 127,
-        "shared_read_blocks": 0,
-        "shared_dirtied_blocks": 1,
-        "shared_written_blocks": 1
+        "shared_hit_blocks": 114,
+        "shared_read_blocks": 7,
+        "shared_dirtied_blocks": 6,
+        "shared_written_blocks": 0
       },
       "raw_json_file": "target-real-org-full-name-rebuild.explain.json"
     },
@@ -433,8 +433,8 @@
       ],
       "tenant_uuid": "00000000-0000-0000-0000-000000000001",
       "metrics": {
-        "planning_time_ms": 0.826,
-        "execution_time_ms": 0.145,
+        "planning_time_ms": 1.11,
+        "execution_time_ms": 0.24,
         "plan_rows": 0,
         "actual_rows": 0,
         "shared_hit_blocks": 1,
@@ -458,12 +458,12 @@
         "target bootstrap 当前仅覆盖 org 纯 schema；无 person/setid/staffing 关联表"
       ],
       "metrics": {
-        "planning_time_ms": 0.38,
-        "execution_time_ms": 0.201,
+        "planning_time_ms": 0.492,
+        "execution_time_ms": 0.181,
         "plan_rows": 1,
         "actual_rows": 1,
-        "shared_hit_blocks": 17,
-        "shared_read_blocks": 0,
+        "shared_hit_blocks": 16,
+        "shared_read_blocks": 1,
         "shared_dirtied_blocks": 0,
         "shared_written_blocks": 0
       },
@@ -482,8 +482,8 @@
       ],
       "tenant_uuid": "00000000-0000-0000-0000-000000000001",
       "metrics": {
-        "planning_time_ms": 0.37,
-        "execution_time_ms": 0.079,
+        "planning_time_ms": 0.803,
+        "execution_time_ms": 0.186,
         "plan_rows": 1,
         "actual_rows": 5,
         "shared_hit_blocks": 18,
@@ -505,16 +505,43 @@
       ],
       "tenant_uuid": "00000000-0000-0000-0000-000000000001",
       "metrics": {
-        "planning_time_ms": 0.308,
-        "execution_time_ms": 0.091,
+        "planning_time_ms": 0.546,
+        "execution_time_ms": 0.168,
         "plan_rows": 1,
         "actual_rows": 4,
-        "shared_hit_blocks": 15,
+        "shared_hit_blocks": 18,
         "shared_read_blocks": 0,
-        "shared_dirtied_blocks": 0,
+        "shared_dirtied_blocks": 1,
         "shared_written_blocks": 0
       },
       "raw_json_file": "target-real-org-subtree-filter.explain.json"
+    },
+    {
+      "key": "setid-resolve",
+      "stage": "target-real",
+      "description": "target org_node_key 库：SetID 基于组织祖先链解析",
+      "sql": "WITH target AS (\n  SELECT v.status, v.node_path\n  FROM orgunit.org_unit_versions v\n  WHERE v.tenant_uuid = $1::uuid\n    AND v.org_node_key = $2::char(8)\n    AND v.validity @\u003e $3::date\n  ORDER BY lower(v.validity) DESC\n  LIMIT 1\n)\nSELECT b.setid\nFROM target t\n\tJOIN orgunit.setid_binding_versions b\n  ON b.tenant_uuid = $1::uuid\nJOIN orgunit.org_unit_versions o\n  ON o.tenant_uuid = b.tenant_uuid\n AND o.org_node_key = b.org_node_key\nWHERE b.validity @\u003e $3::date\n  AND o.validity @\u003e $3::date\n  AND o.status = 'active'\n  AND o.is_business_unit = true\n  AND o.node_path @\u003e t.node_path\nORDER BY nlevel(o.node_path) DESC\nLIMIT 1;",
+      "args": [
+        "00d01cf4-7633-4ac6-93c7-748b2a6d6678",
+        "AAAAAAAT",
+        "2026-04-11"
+      ],
+      "tenant_uuid": "00d01cf4-7633-4ac6-93c7-748b2a6d6678",
+      "notes": [
+        "在 dedicated target 的 `orgunit.setid_binding_versions` 内导入当前态样本",
+        "该 explain 已不再依赖 `stopline` shadow 表，但这仍不等于 P3 正式 runtime 切主"
+      ],
+      "metrics": {
+        "planning_time_ms": 0.767,
+        "execution_time_ms": 0.393,
+        "plan_rows": 1,
+        "actual_rows": 1,
+        "shared_hit_blocks": 33,
+        "shared_read_blocks": 3,
+        "shared_dirtied_blocks": 0,
+        "shared_written_blocks": 0
+      },
+      "raw_json_file": "target-real-setid-resolve.explain.json"
     },
     {
       "key": "staffing-by-org",
@@ -532,43 +559,16 @@
         "当前态样本通过 org_code -\u003e org_node_key 映射导入 dedicated target，但不再走 shadow 表"
       ],
       "metrics": {
-        "planning_time_ms": 0.275,
-        "execution_time_ms": 0.091,
+        "planning_time_ms": 0.272,
+        "execution_time_ms": 0.107,
         "plan_rows": 1,
         "actual_rows": 2,
-        "shared_hit_blocks": 17,
+        "shared_hit_blocks": 23,
         "shared_read_blocks": 0,
         "shared_dirtied_blocks": 0,
         "shared_written_blocks": 0
       },
       "raw_json_file": "target-real-staffing-by-org.explain.json"
-    },
-    {
-      "key": "setid-resolve",
-      "stage": "target-shadow",
-      "description": "target org_node_key 库 + stopline shadow：SetID 基于组织祖先链解析",
-      "sql": "WITH target AS (\n  SELECT v.status, v.node_path\n  FROM orgunit.org_unit_versions v\n  WHERE v.tenant_uuid = $1::uuid\n    AND v.org_node_key = $2::char(8)\n    AND v.validity @\u003e $3::date\n  ORDER BY lower(v.validity) DESC\n  LIMIT 1\n)\nSELECT b.setid\nFROM target t\nJOIN stopline.setid_binding_versions b\n  ON b.tenant_uuid = $1::uuid\nJOIN orgunit.org_unit_versions o\n  ON o.tenant_uuid = b.tenant_uuid\n AND o.org_node_key = b.org_node_key\nWHERE b.validity @\u003e $3::date\n  AND o.validity @\u003e $3::date\n  AND o.status = 'active'\n  AND o.is_business_unit = true\n  AND o.node_path @\u003e t.node_path\nORDER BY nlevel(o.node_path) DESC\nLIMIT 1;",
-      "args": [
-        "00d01cf4-7633-4ac6-93c7-748b2a6d6678",
-        "AAAAAAAT",
-        "2026-04-11"
-      ],
-      "tenant_uuid": "00d01cf4-7633-4ac6-93c7-748b2a6d6678",
-      "notes": [
-        "consumer runtime 的 SetID schema 尚未切到 org_node_key",
-        "此处使用 stopline shadow 表按 org_code -\u003e org_node_key 导入当前态样本，仅用于 explain 对比"
-      ],
-      "metrics": {
-        "planning_time_ms": 0.725,
-        "execution_time_ms": 0.426,
-        "plan_rows": 1,
-        "actual_rows": 1,
-        "shared_hit_blocks": 31,
-        "shared_read_blocks": 0,
-        "shared_dirtied_blocks": 0,
-        "shared_written_blocks": 0
-      },
-      "raw_json_file": "target-shadow-setid-resolve.explain.json"
     }
   ]
 }

@@ -1,15 +1,15 @@
 # DEV-PLAN-320 执行日志：org_node_key cutover stopline explain
 
-**状态**: 已完成 2 次本地 stopline explain 采集（最近一次：2026-04-11 CST；`target-real` 已覆盖 Org + committed Staffing，`target-shadow` 仅保留 SetID）
+**状态**: 已完成 3 次本地 stopline explain 采集（最近一次：2026-04-11 CST；`target-real` 已覆盖 Org + SetID + committed Staffing，`target-shadow` 已移除）
 
 ## 1. 范围
 
 1. [X] 使用当前 `org_id` source 运行库采集 Org / SetID / Staffing 主链路 explain 基线。
-2. [X] 使用 committed `org_node_key` rehearsal target 库采集 Org + committed `staffing.position_versions` 的 `target-real` explain。
-3. [X] 为仍未切到 `target-real` 的 SetID consumer 链路保留最小 `target-shadow` explain：
-   - dedicated target 内维护最小 shadow 表
+2. [X] 使用 committed `org_node_key` rehearsal target 库采集 Org + SetID + committed `staffing.position_versions` 的 `target-real` explain。
+3. [X] 将 SetID explain 从 `target-shadow` 升级为 dedicated target 内真实 `orgunit.setid_binding_versions` 链路：
    - 按 `org_code -> org_node_key` 导入当前态样本
-   - 明确只用于 SetID stopline 对比，不冒充 consumer runtime 已完成 cutover
+   - 不再依赖 `stopline` shadow 表
+   - 同时保留“这不等于 P3 正式 runtime 切主”的边界说明
 4. [X] 将 explain 原始 JSON、样本选择与汇总报告归档到仓库内证据目录。
 
 ## 2. 执行入口
@@ -27,46 +27,44 @@ go run ./cmd/dbtool orgunit-stopline-capture \
   --source-url "postgres://app:<redacted>@127.0.0.1:5438/bugs_and_blossoms?sslmode=disable" \
   --target-url "postgres://app:<redacted>@127.0.0.1:5438/bugs_and_blossoms_orgnode_rehearsal_20260411?sslmode=disable" \
   --as-of 2026-04-11 \
-  --output-dir .local/orgunit-stopline/2026-04-11
+  --output-dir .local/orgunit-stopline/2026-04-11-targetreal-setid
 ```
 
 3. [X] 证据归档
    - 归档目录：`docs/dev-records/assets/dev-plan-320-stopline/`
    - 汇总报告：`report.md` / `report.json`
    - 样本选择：`samples.json`
-   - explain 原始 JSON：`source-real-*.explain.json`、`target-real-*.explain.json`、`target-shadow-*.explain.json`
+   - explain 原始 JSON：`source-real-*.explain.json`、`target-real-*.explain.json`
 
 ## 3. 关键结果
 
 ### 3.1 source-real
 
-1. [X] `org-roots`: `0.329 ms`
-2. [X] `org-children`: `0.361 ms`
-3. [X] `org-details`: `0.351 ms`
-4. [X] `org-search`: `0.166 ms`
-5. [X] `org-subtree-filter`: `0.069 ms`
-6. [X] `org-ancestor-chain`: `0.206 ms`
-7. [X] `org-full-name-rebuild`: `0.591 ms`
-8. [X] `org-move`: `4.067 ms`
-9. [X] `setid-resolve`: `0.253 ms`
-10. [X] `staffing-by-org`: `0.131 ms`
+1. [X] `org-roots`: `0.243 ms`
+2. [X] `org-children`: `0.227 ms`
+3. [X] `org-details`: `0.222 ms`
+4. [X] `org-search`: `0.174 ms`
+5. [X] `org-subtree-filter`: `0.054 ms`
+6. [X] `org-ancestor-chain`: `0.202 ms`
+7. [X] `org-full-name-rebuild`: `0.162 ms`
+8. [X] `org-move`: `2.313 ms`
+9. [X] `setid-resolve`: `0.184 ms`
+10. [X] `staffing-by-org`: `0.247 ms`
 
 ### 3.2 target-real
 
-1. [X] `org-roots`: `0.201 ms`
-2. [X] `org-children`: `0.128 ms`
-3. [X] `org-details`: `0.126 ms`
-4. [X] `org-search`: `0.079 ms`
-5. [X] `org-subtree-filter`: `0.091 ms`
-6. [X] `org-ancestor-chain`: `0.182 ms`
-7. [X] `org-full-name-rebuild`: `1.080 ms`
-8. [X] `org-move`: `0.145 ms`
-9. [X] `staffing-by-org`: `0.091 ms`
-
-### 3.3 target-shadow
-
-1. [X] `setid-resolve`: `0.900 ms`
-   - 2026-04-11 这一轮已不再保留 `target-shadow staffing-by-org`
+1. [X] `org-roots`: `0.181 ms`
+2. [X] `org-children`: `0.165 ms`
+3. [X] `org-details`: `0.159 ms`
+4. [X] `org-search`: `0.186 ms`
+5. [X] `org-subtree-filter`: `0.168 ms`
+6. [X] `org-ancestor-chain`: `0.160 ms`
+7. [X] `org-full-name-rebuild`: `1.051 ms`
+8. [X] `org-move`: `0.240 ms`
+9. [X] `setid-resolve`: `0.393 ms`
+   - 证据：`docs/dev-records/assets/dev-plan-320-stopline/target-real-setid-resolve.explain.json`
+   - 口径：在 dedicated target 的 `orgunit.setid_binding_versions` 内导入当前态样本，不再依赖 `stopline` shadow 表
+10. [X] `staffing-by-org`: `0.107 ms`
 
 ## 4. Stopline 判断
 
@@ -76,10 +74,11 @@ go run ./cmd/dbtool orgunit-stopline-capture \
 4. [X] `Staffing` 的 consumer/runtime `target-real` explain 已完成，且未出现 `Seq Scan`。
    - 证据：`docs/dev-records/assets/dev-plan-320-stopline/target-real-staffing-by-org.explain.json`
    - 口径：使用 committed `staffing.position_versions`，当前态样本通过 `org_code -> org_node_key` 导入 dedicated target。
-5. [X] `SetID` 的 `target-shadow` explain 继续可用，且未出现 `Seq Scan`。
-6. [ ] `SetID` 的 consumer/runtime `target-real` explain 与 Org kernel 正式切主仍未完成。
-   - 当前 source-real / 运行主链仍保留大量 `org_id` 内核路径。
-   - 本次 `target-shadow` 仅剩 SetID 链路，用于 stopline 对比，不等于 P3/P6 已闭环。
+5. [X] `SetID` 的 consumer/runtime `target-real` explain 已完成，且未出现 `Seq Scan`。
+   - 证据：`docs/dev-records/assets/dev-plan-320-stopline/target-real-setid-resolve.explain.json`
+   - 口径：使用 dedicated target 的真实 `orgunit.setid_binding_versions` 当前态样本，不再依赖 `target-shadow`
+6. [X] stopline 证据层面已不再存在 `P3` 仓库侧缺口。
+   - 后续剩余事项是按 choreography 执行正式维护窗口，而不是继续补 stopline/runtime 证据。
 
 ## 5. 本次修复
 
@@ -89,15 +88,17 @@ go run ./cmd/dbtool orgunit-stopline-capture \
 2. [X] 为 `target-real` 增加 committed Staffing explain bootstrap 与样本导入
    - 在 dedicated target 内自动 bootstrap `modules/staffing/infrastructure/persistence/schema/00001-00002`
    - 将 `Staffing` 当前态样本按 `org_code -> org_node_key` 映射写入 committed `staffing.positions / position_events / position_versions`
-3. [X] 为 `target-shadow` 收缩到 SetID-only
-   - `Staffing` explain 已切到 `target-real`
-   - `target-shadow` 只保留 SetID binding explain
-4. [X] 修复 stopline stage 路由
-   - 新增 `target-shadow` 后，采集端必须显式路由到 target 连接，否则会误在 source 库执行并因缺少 `org_node_key` 列失败。
+3. [X] 为 SetID 增加 `target-real` explain bootstrap 与样本导入
+   - 在 dedicated target 的 `orgunit.setid_binding_versions` 中导入当前态样本
+   - `target-real setid-resolve` 已替代 `target-shadow setid-resolve`
+4. [X] 将 stopline source 采样同步到最新 Staffing schema
+   - `staffing.position_versions` 已切到 `org_node_key`，采样 SQL 不能再引用 `org_unit_id`
+   - 已改为通过 `orgunit.decode_org_node_key(...)` 与 source-real 的 `orgunit` 当前态做联查
 
 ## 6. 结论
 
 1. [X] `DEV-PLAN-320` 的 Org 主读链路与写热点，已经具备一组可复现、可归档的本地 stopline explain 基线。
-2. [X] `Staffing` 已具备 `source-real + target-real` 的补充证据；`SetID` 目前保留 `source-real + target-shadow` 证据。
+2. [X] `Staffing` 与 `SetID` 都已具备 `source-real + target-real` 的补充证据。
 3. [X] 当前本地 evidence 不构成 9.5 第 5 条的直接阻塞。
-4. [ ] 在正式 cutover 前，仍需补齐“SetID consumer/runtime 真实 target-real explain”与“Org kernel source-real -> target-real 正式切主”这两个缺口。
+4. [X] stopline 证据已不再阻塞进入正式维护窗口。
+   - `target-real` explain、target runtime overlay 安装验证与 current runtime Gate 已在 2026-04-11 同步闭环。

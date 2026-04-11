@@ -1,11 +1,11 @@
 [
   {
-    "Execution Time": 0.206,
+    "Execution Time": 0.202,
     "Plan": {
       "Actual Loops": 1,
       "Actual Rows": 1,
-      "Actual Startup Time": 0.127,
-      "Actual Total Time": 0.128,
+      "Actual Startup Time": 0.119,
+      "Actual Total Time": 0.121,
       "Async Capable": false,
       "Local Dirtied Blocks": 0,
       "Local Hit Blocks": 0,
@@ -20,8 +20,8 @@
         {
           "Actual Loops": 1,
           "Actual Rows": 2,
-          "Actual Startup Time": 0.117,
-          "Actual Total Time": 0.119,
+          "Actual Startup Time": 0.112,
+          "Actual Total Time": 0.114,
           "Async Capable": false,
           "Local Dirtied Blocks": 0,
           "Local Hit Blocks": 0,
@@ -31,13 +31,13 @@
           "Parallel Aware": false,
           "Parent Relationship": "Outer",
           "Plan Rows": 1,
-          "Plan Width": 29,
+          "Plan Width": 28,
           "Plans": [
             {
               "Actual Loops": 1,
               "Actual Rows": 2,
-              "Actual Startup Time": 0.103,
-              "Actual Total Time": 0.109,
+              "Actual Startup Time": 0.094,
+              "Actual Total Time": 0.099,
               "Async Capable": false,
               "Inner Unique": false,
               "Join Filter": "(t.uid = a.org_id)",
@@ -50,13 +50,13 @@
               "Parallel Aware": false,
               "Parent Relationship": "Outer",
               "Plan Rows": 1,
-              "Plan Width": 29,
+              "Plan Width": 28,
               "Plans": [
                 {
                   "Actual Loops": 1,
                   "Actual Rows": 12,
-                  "Actual Startup Time": 0.058,
-                  "Actual Total Time": 0.075,
+                  "Actual Startup Time": 0.056,
+                  "Actual Total Time": 0.073,
                   "Async Capable": false,
                   "Inner Unique": false,
                   "Join Type": "Inner",
@@ -68,13 +68,13 @@
                   "Parallel Aware": false,
                   "Parent Relationship": "Outer",
                   "Plan Rows": 1,
-                  "Plan Width": 53,
+                  "Plan Width": 52,
                   "Plans": [
                     {
                       "Actual Loops": 1,
                       "Actual Rows": 1,
-                      "Actual Startup Time": 0.02,
-                      "Actual Total Time": 0.021,
+                      "Actual Startup Time": 0.017,
+                      "Actual Total Time": 0.018,
                       "Alias": "v",
                       "Async Capable": false,
                       "Exact Heap Blocks": 1,
@@ -92,8 +92,8 @@
                         {
                           "Actual Loops": 1,
                           "Actual Rows": 1,
-                          "Actual Startup Time": 0.013,
-                          "Actual Total Time": 0.013,
+                          "Actual Startup Time": 0.011,
+                          "Actual Total Time": 0.011,
                           "Async Capable": false,
                           "Index Cond": "((tenant_uuid = '00000000-0000-0000-0000-000000000001'::uuid) AND (org_id = 10000001) AND (validity @\u003e '2026-04-11'::date))",
                           "Index Name": "org_unit_versions_no_overlap",
@@ -131,7 +131,7 @@
                     {
                       "Actual Loops": 1,
                       "Actual Rows": 12,
-                      "Actual Startup Time": 0.035,
+                      "Actual Startup Time": 0.036,
                       "Actual Total Time": 0.05,
                       "Alias": "a",
                       "Async Capable": false,
@@ -145,7 +145,7 @@
                       "Parallel Aware": false,
                       "Parent Relationship": "Inner",
                       "Plan Rows": 1,
-                      "Plan Width": 47,
+                      "Plan Width": 46,
                       "Relation Name": "org_unit_versions",
                       "Rows Removed by Index Recheck": 0,
                       "Scan Direction": "Forward",
@@ -171,7 +171,7 @@
                 {
                   "Actual Loops": 12,
                   "Actual Rows": 2,
-                  "Actual Startup Time": 0.002,
+                  "Actual Startup Time": 0.001,
                   "Actual Total Time": 0.002,
                   "Alias": "t",
                   "Async Capable": false,
@@ -238,13 +238,13 @@
       "Local Read Blocks": 0,
       "Local Written Blocks": 0,
       "Shared Dirtied Blocks": 0,
-      "Shared Hit Blocks": 249,
-      "Shared Read Blocks": 1,
+      "Shared Hit Blocks": 250,
+      "Shared Read Blocks": 0,
       "Shared Written Blocks": 0,
       "Temp Read Blocks": 0,
       "Temp Written Blocks": 0
     },
-    "Planning Time": 1.14,
+    "Planning Time": 0.844,
     "Triggers": []
   }
 ]

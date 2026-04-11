@@ -24,7 +24,7 @@ func EnsureBootstrap(ctx context.Context, e Execer, tenantID string, initiatorID
 }
 
 func Resolve(ctx context.Context, q QueryRower, tenantID string, orgUnitID string, asOfDate string) (string, error) {
-	orgID, err := parseOrgUnitID(orgUnitID)
+	orgNodeKey, err := parseOrgUnitID(orgUnitID)
 	if err != nil {
 		return "", err
 	}
@@ -32,9 +32,9 @@ func Resolve(ctx context.Context, q QueryRower, tenantID string, orgUnitID strin
 	var out string
 	if err := q.QueryRow(
 		ctx,
-		`SELECT orgunit.resolve_setid($1::uuid, $2::int, $3::date);`,
+		`SELECT orgunit.resolve_setid($1::uuid, $2::char(8), $3::date);`,
 		tenantID,
-		orgID,
+		orgNodeKey,
 		asOfDate,
 	).Scan(&out); err != nil {
 		return "", err
@@ -42,30 +42,26 @@ func Resolve(ctx context.Context, q QueryRower, tenantID string, orgUnitID strin
 	return out, nil
 }
 
-func parseOrgUnitID(input string) (int, error) {
+func parseOrgUnitID(input string) (string, error) {
 	trimmed := strings.TrimSpace(input)
 	if trimmed == "" {
-		return 0, errors.New("org_id is required")
+		return "", errors.New("org_node_key is required")
 	}
 	if orgNodeKey, err := orgunitpkg.NormalizeOrgNodeKey(trimmed); err == nil {
-		orgID, decodeErr := orgunitpkg.DecodeOrgNodeKey(orgNodeKey)
-		if decodeErr != nil || orgID < 10000000 || orgID > 99999999 {
-			return 0, errors.New("org_id must be 8 digits")
-		}
-		return int(orgID), nil
+		return orgNodeKey, nil
 	}
 	if len(trimmed) != 8 {
-		return 0, errors.New("org_id must be 8 digits")
+		return "", errors.New("org_node_key invalid")
 	}
-	value := 0
+	value := int64(0)
 	for _, r := range trimmed {
 		if r < '0' || r > '9' {
-			return 0, errors.New("org_id must be 8 digits")
+			return "", errors.New("org_node_key invalid")
 		}
-		value = value*10 + int(r-'0')
+		value = value*10 + int64(r-'0')
 	}
 	if value < 10000000 || value > 99999999 {
-		return 0, errors.New("org_id must be 8 digits")
+		return "", errors.New("org_node_key invalid")
 	}
-	return value, nil
+	return orgunitpkg.EncodeOrgNodeKey(value)
 }
