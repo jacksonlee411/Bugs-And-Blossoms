@@ -395,7 +395,7 @@ func TestHandleOrgUnitFieldPoliciesResolvePreviewAPI_ErrorAndFoundBranches(t *te
 		previousStore := defaultSetIDStrategyRegistryStore
 		t.Cleanup(func() { useSetIDStrategyRegistryStore(previousStore) })
 		useSetIDStrategyRegistryStore(setIDStrategyRegistryStoreStub{
-			resolveFieldDecisionFn: func(context.Context, string, string, string, string, string) (setIDFieldDecision, error) {
+			resolveFieldDecisionFn: func(context.Context, string, string, string, string, string, string) (setIDFieldDecision, error) {
 				return setIDFieldDecision{}, errors.New("boom")
 			},
 		})
@@ -412,7 +412,7 @@ func TestHandleOrgUnitFieldPoliciesResolvePreviewAPI_ErrorAndFoundBranches(t *te
 		previousStore := defaultSetIDStrategyRegistryStore
 		t.Cleanup(func() { useSetIDStrategyRegistryStore(previousStore) })
 		useSetIDStrategyRegistryStore(setIDStrategyRegistryStoreStub{
-			resolveFieldDecisionFn: func(context.Context, string, string, string, string, string) (setIDFieldDecision, error) {
+			resolveFieldDecisionFn: func(context.Context, string, string, string, string, string, string) (setIDFieldDecision, error) {
 				return setIDFieldDecision{
 					FieldKey:       "org_code",
 					Maintainable:   false,
@@ -524,7 +524,7 @@ func TestHandleOrgUnitFieldConfigsAPI_WithPolicyStoreCoverage(t *testing.T) {
 		previousStore := defaultSetIDStrategyRegistryStore
 		t.Cleanup(func() { useSetIDStrategyRegistryStore(previousStore) })
 		useSetIDStrategyRegistryStore(setIDStrategyRegistryStoreStub{
-			resolveFieldDecisionFn: func(_ context.Context, _ string, _ string, fieldKey string, _ string, _ string) (setIDFieldDecision, error) {
+			resolveFieldDecisionFn: func(_ context.Context, _ string, _ string, fieldKey string, _ string, _ string, _ string) (setIDFieldDecision, error) {
 				return setIDFieldDecision{
 					FieldKey:       fieldKey,
 					Maintainable:   false,
@@ -579,7 +579,7 @@ func TestHandleOrgUnitFieldConfigsAPI_WithPolicyStoreCoverage(t *testing.T) {
 		previousStore := defaultSetIDStrategyRegistryStore
 		t.Cleanup(func() { useSetIDStrategyRegistryStore(previousStore) })
 		useSetIDStrategyRegistryStore(setIDStrategyRegistryStoreStub{
-			resolveFieldDecisionFn: func(context.Context, string, string, string, string, string) (setIDFieldDecision, error) {
+			resolveFieldDecisionFn: func(context.Context, string, string, string, string, string, string) (setIDFieldDecision, error) {
 				return setIDFieldDecision{}, errors.New("boom")
 			},
 		})
@@ -603,7 +603,7 @@ func TestHandleOrgUnitFieldConfigsAPI_WithPolicyStoreCoverage(t *testing.T) {
 		previousStore := defaultSetIDStrategyRegistryStore
 		t.Cleanup(func() { useSetIDStrategyRegistryStore(previousStore) })
 		useSetIDStrategyRegistryStore(setIDStrategyRegistryStoreStub{
-			resolveFieldDecisionFn: func(_ context.Context, _ string, _ string, fieldKey string, _ string, _ string) (setIDFieldDecision, error) {
+			resolveFieldDecisionFn: func(_ context.Context, _ string, _ string, fieldKey string, _ string, _ string, _ string) (setIDFieldDecision, error) {
 				callN++
 				if fieldKey == "x_custom_01" {
 					return setIDFieldDecision{}, errors.New("boom")

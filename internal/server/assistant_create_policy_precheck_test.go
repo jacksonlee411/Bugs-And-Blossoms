@@ -108,7 +108,7 @@ func TestAssistantCreateTurn_PrechecksMissingCreatePolicyDefault(t *testing.T) {
 	previous := defaultSetIDStrategyRegistryStore
 	defer func() { defaultSetIDStrategyRegistryStore = previous }()
 	defaultSetIDStrategyRegistryStore = setIDStrategyRegistryStoreStub{
-		resolveFieldDecisionFn: func(_ context.Context, _ string, _ string, fieldKey string, _ string, _ string) (setIDFieldDecision, error) {
+		resolveFieldDecisionFn: func(_ context.Context, _ string, _ string, fieldKey string, _ string, _ string, _ string) (setIDFieldDecision, error) {
 			switch fieldKey {
 			case orgUnitCreateFieldOrgCode:
 				return setIDFieldDecision{FieldKey: fieldKey, Required: true, Maintainable: true}, nil
@@ -155,7 +155,7 @@ func TestAssistantConfirmTurn_PrechecksOrgTypeFieldEnablementAfterCandidatePick(
 	previous := defaultSetIDStrategyRegistryStore
 	defer func() { defaultSetIDStrategyRegistryStore = previous }()
 	defaultSetIDStrategyRegistryStore = setIDStrategyRegistryStoreStub{
-		resolveFieldDecisionFn: func(_ context.Context, _ string, _ string, fieldKey string, _ string, _ string) (setIDFieldDecision, error) {
+		resolveFieldDecisionFn: func(_ context.Context, _ string, _ string, fieldKey string, _ string, _ string, _ string) (setIDFieldDecision, error) {
 			switch fieldKey {
 			case orgUnitCreateFieldOrgCode:
 				return setIDFieldDecision{FieldKey: fieldKey, Required: true, Maintainable: false, DefaultRuleRef: `next_org_code("G", 4)`}, nil
@@ -232,25 +232,35 @@ func TestAssistantCreatePolicyPrecheck_HelperCoverage(t *testing.T) {
 		}
 	})
 
-	t.Run("resolveCreateOrgUnitBusinessUnitNodeKey branches", func(t *testing.T) {
-		if _, ok := (*assistantConversationService)(nil).resolveCreateOrgUnitBusinessUnitNodeKey(context.Background(), "t1", "FLOWER-A"); ok {
+	t.Run("resolveCreateOrgUnitPolicyContext branches", func(t *testing.T) {
+		if _, ok := (*assistantConversationService)(nil).resolveCreateOrgUnitPolicyContext(context.Background(), "t1", "FLOWER-A", "2026-01-01"); ok {
 			t.Fatal("expected nil service false")
 		}
-		if _, ok := (&assistantConversationService{}).resolveCreateOrgUnitBusinessUnitNodeKey(context.Background(), "t1", "FLOWER-A"); ok {
+		if _, ok := (&assistantConversationService{}).resolveCreateOrgUnitPolicyContext(context.Background(), "t1", "FLOWER-A", "2026-01-01"); ok {
 			t.Fatal("expected nil store false")
 		}
 		errStore := assistantOrgStoreStub{orgUnitMemoryStore: newOrgUnitMemoryStore(), resolveErr: errors.New("boom")}
-		if _, ok := (&assistantConversationService{orgStore: errStore}).resolveCreateOrgUnitBusinessUnitNodeKey(context.Background(), "t1", "FLOWER-A"); ok {
+		if _, ok := (&assistantConversationService{orgStore: errStore}).resolveCreateOrgUnitPolicyContext(context.Background(), "t1", "FLOWER-A", "2026-01-01"); ok {
 			t.Fatal("expected resolve error false")
 		}
 		zeroStore := assistantOrgStoreStub{orgUnitMemoryStore: newOrgUnitMemoryStore(), resolveOrgID: 0}
-		if _, ok := (&assistantConversationService{orgStore: zeroStore}).resolveCreateOrgUnitBusinessUnitNodeKey(context.Background(), "t1", "FLOWER-A"); ok {
+		if _, ok := (&assistantConversationService{orgStore: zeroStore}).resolveCreateOrgUnitPolicyContext(context.Background(), "t1", "FLOWER-A", "2026-01-01"); ok {
 			t.Fatal("expected zero org id false")
 		}
 		goodStore := assistantOrgStoreStub{orgUnitMemoryStore: newOrgUnitMemoryStore(), resolveOrgID: 10000001}
 		want := mustOrgNodeKeyForTest(t, 10000001)
-		if got, ok := (&assistantConversationService{orgStore: goodStore}).resolveCreateOrgUnitBusinessUnitNodeKey(context.Background(), "t1", "FLOWER-A"); !ok || got != want {
-			t.Fatalf("unexpected business unit node key got=%q want=%q ok=%v", got, want, ok)
+		got, ok := (&assistantConversationService{orgStore: goodStore}).resolveCreateOrgUnitPolicyContext(context.Background(), "t1", "FLOWER-A", "2026-01-01")
+		if !ok {
+			t.Fatal("expected policy context")
+		}
+		if got.BusinessUnitNodeKey != want {
+			t.Fatalf("business_unit_node_key=%q want=%q", got.BusinessUnitNodeKey, want)
+		}
+		if got.ResolvedSetID != "S2601" {
+			t.Fatalf("resolved_setid=%q", got.ResolvedSetID)
+		}
+		if got.BusinessUnitOrgCode != "FLOWER-A" {
+			t.Fatalf("business_unit_org_code=%q", got.BusinessUnitOrgCode)
 		}
 	})
 
@@ -325,7 +335,7 @@ func TestAssistantCreatePolicyPrecheck_HelperCoverage(t *testing.T) {
 		previous := defaultSetIDStrategyRegistryStore
 		defer func() { defaultSetIDStrategyRegistryStore = previous }()
 		defaultSetIDStrategyRegistryStore = setIDStrategyRegistryStoreStub{
-			resolveFieldDecisionFn: func(_ context.Context, _ string, _ string, fieldKey string, _ string, _ string) (setIDFieldDecision, error) {
+			resolveFieldDecisionFn: func(_ context.Context, _ string, _ string, fieldKey string, _ string, _ string, _ string) (setIDFieldDecision, error) {
 				switch fieldKey {
 				case orgUnitCreateFieldOrgCode:
 					return setIDFieldDecision{FieldKey: fieldKey, Required: true, DefaultRuleRef: `next_org_code("G", 4)`}, nil
@@ -355,7 +365,7 @@ func TestAssistantCreatePolicyPrecheck_HelperCoverage(t *testing.T) {
 		}
 
 		defaultSetIDStrategyRegistryStore = setIDStrategyRegistryStoreStub{
-			resolveFieldDecisionFn: func(_ context.Context, _ string, _ string, fieldKey string, _ string, _ string) (setIDFieldDecision, error) {
+			resolveFieldDecisionFn: func(_ context.Context, _ string, _ string, fieldKey string, _ string, _ string, _ string) (setIDFieldDecision, error) {
 				switch fieldKey {
 				case orgUnitCreateFieldOrgCode:
 					return setIDFieldDecision{FieldKey: fieldKey, Required: false}, nil

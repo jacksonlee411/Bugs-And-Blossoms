@@ -25,7 +25,7 @@ type setIDStrategyRegistryStoreStub struct {
 	upsertFn               func(context.Context, string, setIDStrategyRegistryItem) (setIDStrategyRegistryItem, bool, error)
 	disableFn              func(context.Context, string, setIDStrategyRegistryDisableRequest) (setIDStrategyRegistryItem, bool, error)
 	listFn                 func(context.Context, string, string, string, string) ([]setIDStrategyRegistryItem, error)
-	resolveFieldDecisionFn func(context.Context, string, string, string, string, string) (setIDFieldDecision, error)
+	resolveFieldDecisionFn func(context.Context, string, string, string, string, string, string) (setIDFieldDecision, error)
 }
 
 func (s setIDStrategyRegistryStoreStub) upsert(ctx context.Context, tenantID string, item setIDStrategyRegistryItem) (setIDStrategyRegistryItem, bool, error) {
@@ -53,11 +53,11 @@ func (s setIDStrategyRegistryStoreStub) disable(
 	return s.disableFn(ctx, tenantID, req)
 }
 
-func (s setIDStrategyRegistryStoreStub) resolveFieldDecision(ctx context.Context, tenantID string, capabilityKey string, fieldKey string, businessUnitNodeKey string, asOf string) (setIDFieldDecision, error) {
+func (s setIDStrategyRegistryStoreStub) resolveFieldDecision(ctx context.Context, tenantID string, capabilityKey string, fieldKey string, resolvedSetID string, businessUnitNodeKey string, asOf string) (setIDFieldDecision, error) {
 	if s.resolveFieldDecisionFn == nil {
 		return setIDFieldDecision{}, errors.New(fieldPolicyMissingCode)
 	}
-	return s.resolveFieldDecisionFn(ctx, tenantID, capabilityKey, fieldKey, businessUnitNodeKey, asOf)
+	return s.resolveFieldDecisionFn(ctx, tenantID, capabilityKey, fieldKey, resolvedSetID, businessUnitNodeKey, asOf)
 }
 
 func (r *setIDStrategyRegistryRows) Close()                        {}
@@ -959,6 +959,7 @@ func TestSetIDStrategyRegistryRuntime_UpsertListResolve(t *testing.T) {
 		FieldKey:            "field_x",
 		PersonalizationMode: personalizationModeSetID,
 		OrgApplicability:    orgApplicabilityBusinessUnit,
+		ResolvedSetID:       "B1000",
 		BusinessUnitNodeKey: "10000001",
 		Required:            true,
 		Visible:             true,
@@ -1000,7 +1001,7 @@ func TestSetIDStrategyRegistryRuntime_UpsertListResolve(t *testing.T) {
 		t.Fatalf("len=%d", len(none))
 	}
 
-	decision, err := runtime.resolveFieldDecision("t1", "staffing.assignment_create.field_policy", "field_x", "10000001", "2026-01-01")
+	decision, err := runtime.resolveFieldDecision("t1", "staffing.assignment_create.field_policy", "field_x", "B1000", "10000001", "2026-01-01")
 	if err != nil {
 		t.Fatalf("err=%v", err)
 	}
@@ -1008,7 +1009,7 @@ func TestSetIDStrategyRegistryRuntime_UpsertListResolve(t *testing.T) {
 		t.Fatalf("decision=%+v", decision)
 	}
 
-	tenantDecision, err := runtime.resolveFieldDecision("t1", "staffing.assignment_create.field_policy", "field_x", "10000002", "2026-01-01")
+	tenantDecision, err := runtime.resolveFieldDecision("t1", "staffing.assignment_create.field_policy", "field_x", "B1000", "10000002", "2026-01-01")
 	if err != nil {
 		t.Fatalf("err=%v", err)
 	}
@@ -1016,7 +1017,7 @@ func TestSetIDStrategyRegistryRuntime_UpsertListResolve(t *testing.T) {
 		t.Fatalf("decision=%+v", tenantDecision)
 	}
 
-	if _, err := runtime.resolveFieldDecision("t1", "staffing.assignment_create.field_policy", "missing", "10000001", "2026-01-01"); err == nil || err.Error() != fieldPolicyMissingCode {
+	if _, err := runtime.resolveFieldDecision("t1", "staffing.assignment_create.field_policy", "missing", "B1000", "10000001", "2026-01-01"); err == nil || err.Error() != fieldPolicyMissingCode {
 		t.Fatalf("err=%v", err)
 	}
 
@@ -1026,6 +1027,7 @@ func TestSetIDStrategyRegistryRuntime_UpsertListResolve(t *testing.T) {
 		FieldKey:            "field_conflict",
 		PersonalizationMode: personalizationModeSetID,
 		OrgApplicability:    orgApplicabilityBusinessUnit,
+		ResolvedSetID:       "B1000",
 		BusinessUnitNodeKey: "10000001",
 		Required:            true,
 		Visible:             false,
@@ -1033,7 +1035,7 @@ func TestSetIDStrategyRegistryRuntime_UpsertListResolve(t *testing.T) {
 		EffectiveDate:       "2026-01-01",
 		Priority:            300,
 	})
-	if _, err := runtime.resolveFieldDecision("t1", "staffing.assignment_create.field_policy", "field_conflict", "10000001", "2026-01-01"); err == nil || err.Error() != fieldPolicyConflictCode {
+	if _, err := runtime.resolveFieldDecision("t1", "staffing.assignment_create.field_policy", "field_conflict", "B1000", "10000001", "2026-01-01"); err == nil || err.Error() != fieldPolicyConflictCode {
 		t.Fatalf("err=%v", err)
 	}
 
@@ -1109,7 +1111,7 @@ func TestSetIDStrategyRegistryRuntime_ResolveFieldDecisionBranches(t *testing.T)
 		t.Fatalf("expected empty rows, got=%d", len(rows))
 	}
 
-	if _, err := runtime.resolveFieldDecision("t1", "staffing.assignment_create.field_policy", "field_cap", "10000001", "bad"); err == nil || err.Error() != "invalid as_of" {
+	if _, err := runtime.resolveFieldDecision("t1", "staffing.assignment_create.field_policy", "field_cap", "B1000", "10000001", "bad"); err == nil || err.Error() != "invalid as_of" {
 		t.Fatalf("err=%v", err)
 	}
 
@@ -1126,7 +1128,7 @@ func TestSetIDStrategyRegistryRuntime_ResolveFieldDecisionBranches(t *testing.T)
 		EffectiveDate:       "2026-01-01",
 		Priority:            50,
 	})
-	if _, err := runtime.resolveFieldDecision("t1", "staffing.assignment_create.field_policy", "field_unknown_org", "10000001", "2026-01-01"); err == nil || err.Error() != fieldPolicyMissingCode {
+	if _, err := runtime.resolveFieldDecision("t1", "staffing.assignment_create.field_policy", "field_unknown_org", "B1000", "10000001", "2026-01-01"); err == nil || err.Error() != fieldPolicyMissingCode {
 		t.Fatalf("err=%v", err)
 	}
 
@@ -1136,6 +1138,7 @@ func TestSetIDStrategyRegistryRuntime_ResolveFieldDecisionBranches(t *testing.T)
 		FieldKey:            "field_missing_default",
 		PersonalizationMode: personalizationModeSetID,
 		OrgApplicability:    orgApplicabilityBusinessUnit,
+		ResolvedSetID:       "B1000",
 		BusinessUnitNodeKey: "10000001",
 		Required:            false,
 		Visible:             true,
@@ -1143,7 +1146,7 @@ func TestSetIDStrategyRegistryRuntime_ResolveFieldDecisionBranches(t *testing.T)
 		EffectiveDate:       "2026-01-01",
 		Priority:            100,
 	})
-	if _, err := runtime.resolveFieldDecision("t1", "staffing.assignment_create.field_policy", "field_missing_default", "10000001", "2026-01-01"); err == nil || err.Error() != fieldDefaultRuleMissingCode {
+	if _, err := runtime.resolveFieldDecision("t1", "staffing.assignment_create.field_policy", "field_missing_default", "B1000", "10000001", "2026-01-01"); err == nil || err.Error() != fieldDefaultRuleMissingCode {
 		t.Fatalf("err=%v", err)
 	}
 }
@@ -1154,6 +1157,7 @@ func TestResolveFieldDecisionFromItems_IntentBucketPrecedence(t *testing.T) {
 			CapabilityKey:       orgUnitWriteFieldPolicyCapabilityKey,
 			FieldKey:            "d_org_type",
 			OrgApplicability:    orgApplicabilityBusinessUnit,
+			ResolvedSetID:       "B1000",
 			BusinessUnitNodeKey: "10000001",
 			Required:            true,
 			Visible:             true,
@@ -1166,6 +1170,7 @@ func TestResolveFieldDecisionFromItems_IntentBucketPrecedence(t *testing.T) {
 			CapabilityKey:       orgUnitCreateFieldPolicyCapabilityKey,
 			FieldKey:            "d_org_type",
 			OrgApplicability:    orgApplicabilityBusinessUnit,
+			ResolvedSetID:       "B1000",
 			BusinessUnitNodeKey: "10000001",
 			Required:            true,
 			Visible:             true,
@@ -1175,7 +1180,7 @@ func TestResolveFieldDecisionFromItems_IntentBucketPrecedence(t *testing.T) {
 			EffectiveDate:       "2026-01-01",
 		},
 	}
-	decision, err := resolveFieldDecisionFromItems(items, orgUnitCreateFieldPolicyCapabilityKey, "d_org_type", "10000001")
+	decision, err := resolveFieldDecisionFromItems(items, orgUnitCreateFieldPolicyCapabilityKey, "d_org_type", "B1000", "10000001")
 	if err != nil {
 		t.Fatalf("err=%v", err)
 	}
@@ -1199,6 +1204,7 @@ func TestSetIDStrategyRegistryRuntime_BUFieldVarianceAcceptance(t *testing.T) {
 		FieldKey:            "field_x",
 		PersonalizationMode: personalizationModeSetID,
 		OrgApplicability:    orgApplicabilityBusinessUnit,
+		ResolvedSetID:       "B1000",
 		BusinessUnitNodeKey: "10000001",
 		Required:            true,
 		Visible:             true,
@@ -1214,6 +1220,7 @@ func TestSetIDStrategyRegistryRuntime_BUFieldVarianceAcceptance(t *testing.T) {
 		FieldKey:            "field_x",
 		PersonalizationMode: personalizationModeSetID,
 		OrgApplicability:    orgApplicabilityBusinessUnit,
+		ResolvedSetID:       "B1000",
 		BusinessUnitNodeKey: "10000002",
 		Required:            false,
 		Visible:             false,
@@ -1224,7 +1231,7 @@ func TestSetIDStrategyRegistryRuntime_BUFieldVarianceAcceptance(t *testing.T) {
 		Priority:            200,
 	})
 
-	buA, err := runtime.resolveFieldDecision("t1", "staffing.assignment_create.field_policy", "field_x", "10000001", "2026-01-01")
+	buA, err := runtime.resolveFieldDecision("t1", "staffing.assignment_create.field_policy", "field_x", "B1000", "10000001", "2026-01-01")
 	if err != nil {
 		t.Fatalf("err=%v", err)
 	}
@@ -1232,7 +1239,7 @@ func TestSetIDStrategyRegistryRuntime_BUFieldVarianceAcceptance(t *testing.T) {
 		t.Fatalf("unexpected buA decision: %+v", buA)
 	}
 
-	buB, err := runtime.resolveFieldDecision("t1", "staffing.assignment_create.field_policy", "field_x", "10000002", "2026-01-01")
+	buB, err := runtime.resolveFieldDecision("t1", "staffing.assignment_create.field_policy", "field_x", "B1000", "10000002", "2026-01-01")
 	if err != nil {
 		t.Fatalf("err=%v", err)
 	}
@@ -1262,6 +1269,7 @@ func TestSetIDStrategyRegistryRuntime_Disable(t *testing.T) {
 		FieldKey:            "field_x",
 		PersonalizationMode: personalizationModeSetID,
 		OrgApplicability:    orgApplicabilityBusinessUnit,
+		ResolvedSetID:       "B1000",
 		BusinessUnitNodeKey: "10000001",
 		Required:            true,
 		Visible:             true,
@@ -1277,6 +1285,7 @@ func TestSetIDStrategyRegistryRuntime_Disable(t *testing.T) {
 		CapabilityKey:       "staffing.assignment_create.field_policy",
 		FieldKey:            "field_x",
 		OrgApplicability:    orgApplicabilityBusinessUnit,
+		ResolvedSetID:       "B1000",
 		BusinessUnitNodeKey: "10000001",
 		EffectiveDate:       "2026-01-01",
 		DisableAsOf:         "2026-01-02",
@@ -1290,7 +1299,7 @@ func TestSetIDStrategyRegistryRuntime_Disable(t *testing.T) {
 	if disabled.EndDate != "2026-01-02" {
 		t.Fatalf("end_date=%q", disabled.EndDate)
 	}
-	if _, err := runtime.resolveFieldDecision("t1", "staffing.assignment_create.field_policy", "field_x", "10000001", "2026-01-02"); err != nil {
+	if _, err := runtime.resolveFieldDecision("t1", "staffing.assignment_create.field_policy", "field_x", "B1000", "10000001", "2026-01-02"); err != nil {
 		t.Fatalf("expected tenant fallback after disable, err=%v", err)
 	}
 
@@ -1298,6 +1307,7 @@ func TestSetIDStrategyRegistryRuntime_Disable(t *testing.T) {
 		CapabilityKey:       "staffing.assignment_create.field_policy",
 		FieldKey:            "field_x",
 		OrgApplicability:    orgApplicabilityBusinessUnit,
+		ResolvedSetID:       "B1000",
 		BusinessUnitNodeKey: "10000001",
 		EffectiveDate:       "2026-01-01",
 		DisableAsOf:         "2026-01-02",
@@ -1308,6 +1318,7 @@ func TestSetIDStrategyRegistryRuntime_Disable(t *testing.T) {
 		CapabilityKey:       "staffing.assignment_create.field_policy",
 		FieldKey:            "field_x",
 		OrgApplicability:    orgApplicabilityBusinessUnit,
+		ResolvedSetID:       "B1000",
 		BusinessUnitNodeKey: "10000001",
 		EffectiveDate:       "2026-01-01",
 		DisableAsOf:         "2026-01-03",
@@ -1319,6 +1330,7 @@ func TestSetIDStrategyRegistryRuntime_Disable(t *testing.T) {
 		CapabilityKey:       "staffing.assignment_create.field_policy",
 		FieldKey:            "field_x",
 		OrgApplicability:    orgApplicabilityBusinessUnit,
+		ResolvedSetID:       "B1000",
 		BusinessUnitNodeKey: "10000002",
 		EffectiveDate:       "2026-01-01",
 		DisableAsOf:         "2026-01-02",
@@ -1333,6 +1345,7 @@ func TestSetIDStrategyRegistryRuntime_Disable(t *testing.T) {
 		FieldKey:            "field_x",
 		PersonalizationMode: personalizationModeSetID,
 		OrgApplicability:    orgApplicabilityBusinessUnit,
+		ResolvedSetID:       "B1000",
 		BusinessUnitNodeKey: "10000001",
 		Required:            true,
 		Visible:             true,
@@ -1345,6 +1358,7 @@ func TestSetIDStrategyRegistryRuntime_Disable(t *testing.T) {
 		CapabilityKey:       "staffing.assignment_create.field_policy",
 		FieldKey:            "field_x",
 		OrgApplicability:    orgApplicabilityBusinessUnit,
+		ResolvedSetID:       "B1000",
 		BusinessUnitNodeKey: "10000001",
 		EffectiveDate:       "2026-01-01",
 		DisableAsOf:         "2026-01-02",
@@ -2147,7 +2161,7 @@ func TestSetIDStrategyRegistryPGStore(t *testing.T) {
 			},
 		}
 		resolveStore := newSetIDStrategyRegistryPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) { return &stubTx{rows: rowsForResolve}, nil }))
-		decision, err := resolveStore.resolveFieldDecision(context.Background(), "t1", "staffing.assignment_create.field_policy", "field_x", "10000001", "2026-01-01")
+		decision, err := resolveStore.resolveFieldDecision(context.Background(), "t1", "staffing.assignment_create.field_policy", "field_x", "A0001", "10000001", "2026-01-01")
 		if err != nil {
 			t.Fatalf("err=%v", err)
 		}
@@ -2158,7 +2172,7 @@ func TestSetIDStrategyRegistryPGStore(t *testing.T) {
 		emptyStore := newSetIDStrategyRegistryPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
 			return &stubTx{rows: &setIDStrategyRegistryRows{rows: [][]any{}}}, nil
 		}))
-		if _, err := emptyStore.resolveFieldDecision(context.Background(), "t1", "staffing.assignment_create.field_policy", "field_x", "10000001", "2026-01-01"); err == nil || err.Error() != fieldPolicyMissingCode {
+		if _, err := emptyStore.resolveFieldDecision(context.Background(), "t1", "staffing.assignment_create.field_policy", "field_x", "A0001", "10000001", "2026-01-01"); err == nil || err.Error() != fieldPolicyMissingCode {
 			t.Fatalf("err=%v", err)
 		}
 	})
@@ -2188,7 +2202,7 @@ func TestSetIDStrategyRegistryPGStore(t *testing.T) {
 		store := newSetIDStrategyRegistryPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
 			return &stubTx{}, nil
 		}))
-		if _, err := store.resolveFieldDecision(context.Background(), "t1", "staffing.assignment_create.field_policy", "field_x", "10000001", "bad"); err == nil {
+		if _, err := store.resolveFieldDecision(context.Background(), "t1", "staffing.assignment_create.field_policy", "field_x", "A0001", "10000001", "bad"); err == nil {
 			t.Fatal("expected error")
 		}
 	})
@@ -2298,23 +2312,8 @@ func TestValidateStrategyRegistryDisableRequest_DefinitionAndCatalogBranches(t *
 }
 
 func TestResolveFieldDecisionFromItems_EmptyCapabilityAndFieldMismatch(t *testing.T) {
-	if _, err := resolveFieldDecisionFromItems(nil, "", "d_org_type", ""); err == nil || err.Error() != fieldPolicyMissingCode {
+	if _, err := resolveFieldDecisionFromItems(nil, "", "d_org_type", "", ""); err == nil || err.Error() != fieldPolicyMissingCode {
 		t.Fatalf("err=%v", err)
-	}
-
-	decision, found, err := resolveCapabilityBucketDecision([]setIDStrategyRegistryItem{
-		{
-			CapabilityKey:    orgUnitCreateFieldPolicyCapabilityKey,
-			FieldKey:         "another_field",
-			OrgApplicability: orgApplicabilityTenant,
-			Required:         true,
-			Visible:          true,
-			Maintainable:     true,
-			EffectiveDate:    "2026-01-01",
-		},
-	}, orgUnitCreateFieldPolicyCapabilityKey, "d_org_type", orgApplicabilityTenant, "", strategySourceIntentOverride)
-	if err != nil || found {
-		t.Fatalf("decision=%+v found=%v err=%v", decision, found, err)
 	}
 }
 

@@ -3,14 +3,10 @@ package server
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
+	"github.com/jacksonlee411/Bugs-And-Blossoms/internal/routing"
 	"net/http"
 	"strings"
-	"sync"
-
-	"github.com/google/cel-go/cel"
-	"github.com/jacksonlee411/Bugs-And-Blossoms/internal/routing"
 )
 
 const (
@@ -72,18 +68,7 @@ type internalRulesEvaluateResponse struct {
 	EligibilityMatched  int                       `json:"eligibility_matched"`
 }
 
-var newInternalRulesCELEnv = func() (*cel.Env, error) {
-	return cel.NewEnv(cel.Variable("ctx", cel.MapType(cel.StringType, cel.StringType)))
-}
-
-var newInternalRulesCELProgram = func(env *cel.Env, ast *cel.Ast) (cel.Program, error) {
-	return env.Program(ast)
-}
-
 var canViewInternalRulesEvaluate = canViewSetIDFullExplain
-
-var internalRuleEligibilityProgramCache sync.Map
-var internalRuleDecisionProgramCache sync.Map
 
 func handleInternalRulesEvaluateAPI(w http.ResponseWriter, r *http.Request, setidStore SetIDGovernanceStore, orgResolver OrgUnitCodeResolver) {
 	tenant, ok := currentTenant(r.Context())
@@ -235,13 +220,15 @@ func handleInternalRulesEvaluateAPI(w http.ResponseWriter, r *http.Request, seti
 	}
 
 	evalCtx := buildInternalEvaluationContext(r.Context(), tenant.ID, req, policyCtx.BusinessUnitNodeKey, targetCtx.ResolvedSetID, targetCtx.SetIDSource, requestID, traceID)
-	candidates := buildInternalRuleCandidates(items)
-	ctxMap := evalCtx.celContextMap()
-
-	decision, reasonCode, selectedRule, matched, evalErr := evaluateInternalRuleCandidates(ctxMap, candidates)
+	evaluation, evalErr := resolveInternalRulesEvaluation(items, req.CapabilityKey, req.FieldKey, targetCtx.ResolvedSetID, policyCtx.BusinessUnitNodeKey)
 	if evalErr != nil {
 		routingWriteErrorInternal(w, r, http.StatusInternalServerError, "internal_error", "internal error")
 		return
+	}
+	selectedRule := internalRuleCandidateFromResolution(evaluation.Resolution, evaluation.Decision, evaluation.ReasonCode)
+	matched := 0
+	if evaluation.Resolution != nil {
+		matched = len(evaluation.Resolution.MatchedItems)
 	}
 
 	response := internalRulesEvaluateResponse{
@@ -252,11 +239,11 @@ func handleInternalRulesEvaluateAPI(w http.ResponseWriter, r *http.Request, seti
 		FieldKey:            req.FieldKey,
 		SetID:               targetCtx.ResolvedSetID,
 		PolicyVersion:       capabilityPolicyVersionBaseline,
-		Decision:            decision,
-		ReasonCode:          reasonCode,
+		Decision:            evaluation.Decision,
+		ReasonCode:          evaluation.ReasonCode,
 		BriefExplain:        internalRuleBriefExplain(selectedRule, matched),
 		Context:             evalCtx,
-		CandidatesEvaluated: len(candidates),
+		CandidatesEvaluated: len(items),
 		EligibilityMatched:  matched,
 	}
 	if selectedRule != nil {
@@ -311,133 +298,69 @@ func (c internalEvaluationContext) celContextMap() map[string]string {
 	}
 }
 
-func buildInternalRuleCandidates(items []setIDStrategyRegistryItem) []internalRuleCandidate {
-	out := make([]internalRuleCandidate, 0, len(items))
-	for _, item := range items {
-		decisionExpr, reasonCode := buildInternalDecisionAndReason(item)
-		out = append(out, internalRuleCandidate{
-			RuleID:          strategyRegistrySortKey(item),
-			Priority:        item.Priority,
-			EffectiveDate:   item.EffectiveDate,
-			EndDate:         item.EndDate,
-			EligibilityExpr: buildInternalEligibilityExpr(item),
-			DecisionExpr:    decisionExpr,
-			ReasonCode:      reasonCode,
-		})
-	}
-	return out
+type internalRulesEvaluation struct {
+	Decision   string
+	ReasonCode string
+	Resolution *setIDFieldDecisionResolution
 }
 
-func buildInternalEligibilityExpr(item setIDStrategyRegistryItem) string {
-	if item.OrgApplicability == orgApplicabilityBusinessUnit {
-		return fmt.Sprintf("ctx[\"business_unit_node_key\"] == %q", strings.TrimSpace(item.BusinessUnitNodeKey))
-	}
-	return "true"
-}
-
-func buildInternalDecisionAndReason(item setIDStrategyRegistryItem) (string, string) {
-	if !item.Visible {
-		return "\"deny\"", fieldHiddenInContextCode
-	}
-	if item.Required {
-		return "\"allow\"", fieldRequiredInContextCode
-	}
-	return "\"allow\"", fieldVisibleInContextCode
-}
-
-func evaluateInternalRuleCandidates(ctxMap map[string]string, candidates []internalRuleCandidate) (string, string, *internalRuleCandidate, int, error) {
-	matched := 0
-	var selected *internalRuleCandidate
-	for i := range candidates {
-		candidate := candidates[i]
-		eligible, err := evalInternalEligibilityExpr(candidate.EligibilityExpr, ctxMap)
-		if err != nil {
-			return "", "", nil, matched, err
-		}
-		if !eligible {
-			continue
-		}
-		matched++
-		if selected == nil || candidate.Priority > selected.Priority ||
-			(candidate.Priority == selected.Priority && candidate.EffectiveDate > selected.EffectiveDate) {
-			copyCandidate := candidate
-			selected = &copyCandidate
-		}
-	}
-	if selected == nil {
-		return internalRuleDecisionDeny, fieldPolicyMissingCode, nil, matched, nil
-	}
-	decision, err := evalInternalDecisionExpr(selected.DecisionExpr, ctxMap)
+func resolveInternalRulesEvaluation(
+	items []setIDStrategyRegistryItem,
+	capabilityKey string,
+	fieldKey string,
+	resolvedSetID string,
+	businessUnitNodeKey string,
+) (internalRulesEvaluation, error) {
+	resolution, err := resolveFieldDecisionWithTraceFromItems(items, capabilityKey, fieldKey, resolvedSetID, businessUnitNodeKey)
 	if err != nil {
-		return "", "", nil, matched, err
+		if decision, reasonCode, ok := internalRuleDecisionFromError(err); ok {
+			return internalRulesEvaluation{
+				Decision:   decision,
+				ReasonCode: reasonCode,
+			}, nil
+		}
+		return internalRulesEvaluation{}, err
 	}
-	switch decision {
-	case internalRuleDecisionAllow, internalRuleDecisionDeny:
+
+	fieldDecision, decision, reasonCode := applySetIDFieldVisibility(resolution.Decision)
+	fieldDecision.Decision = decision
+	fieldDecision.ReasonCode = reasonCode
+	return internalRulesEvaluation{
+		Decision:   fieldDecision.Decision,
+		ReasonCode: fieldDecision.ReasonCode,
+		Resolution: &resolution,
+	}, nil
+}
+
+func internalRuleDecisionFromError(err error) (string, string, bool) {
+	code := strings.TrimSpace(stablePgMessage(err))
+	switch code {
+	case fieldPolicyMissingCode,
+		fieldPolicyConflictCode,
+		fieldDefaultRuleMissingCode,
+		fieldPolicyPriorityModeCode,
+		fieldPolicyLocalModeCode,
+		fieldPolicyModeComboCode:
+		return internalRuleDecisionDeny, code, true
 	default:
-		decision = internalRuleDecisionDeny
+		return "", "", false
 	}
-	reasonCode := strings.TrimSpace(selected.ReasonCode)
-	if reasonCode == "" {
-		if decision == internalRuleDecisionDeny {
-			reasonCode = fieldPolicyMissingCode
-		} else {
-			reasonCode = fieldVisibleInContextCode
-		}
-	}
-	return decision, reasonCode, selected, matched, nil
 }
 
-func evalInternalEligibilityExpr(expr string, ctxMap map[string]string) (bool, error) {
-	program, err := loadOrCompileInternalProgram(expr, cel.BoolType, &internalRuleEligibilityProgramCache)
-	if err != nil {
-		return false, err
+func internalRuleCandidateFromResolution(resolution *setIDFieldDecisionResolution, decision string, reasonCode string) *internalRuleCandidate {
+	if resolution == nil || resolution.PrimaryItem == nil {
+		return nil
 	}
-	out, _, err := program.Eval(map[string]any{"ctx": ctxMap})
-	if err != nil {
-		return false, err
+	item := *resolution.PrimaryItem
+	return &internalRuleCandidate{
+		RuleID:          resolution.PrimaryPolicyID,
+		Priority:        item.Priority,
+		EffectiveDate:   item.EffectiveDate,
+		EndDate:         item.EndDate,
+		EligibilityExpr: resolution.MatchedBucket,
+		DecisionExpr:    strings.TrimSpace(decision),
+		ReasonCode:      strings.TrimSpace(reasonCode),
 	}
-	v := out.Value().(bool)
-	return v, nil
-}
-
-func evalInternalDecisionExpr(expr string, ctxMap map[string]string) (string, error) {
-	program, err := loadOrCompileInternalProgram(expr, cel.StringType, &internalRuleDecisionProgramCache)
-	if err != nil {
-		return "", err
-	}
-	out, _, err := program.Eval(map[string]any{"ctx": ctxMap})
-	if err != nil {
-		return "", err
-	}
-	v := out.Value().(string)
-	return strings.ToLower(strings.TrimSpace(v)), nil
-}
-
-func loadOrCompileInternalProgram(expr string, outputType *cel.Type, cache *sync.Map) (cel.Program, error) {
-	expr = strings.TrimSpace(expr)
-	if expr == "" {
-		return nil, errors.New("expression required")
-	}
-	if cached, ok := cache.Load(expr); ok {
-		return cached.(cel.Program), nil
-	}
-	env, err := newInternalRulesCELEnv()
-	if err != nil {
-		return nil, err
-	}
-	ast, issues := env.Compile(expr)
-	if issues != nil && issues.Err() != nil {
-		return nil, issues.Err()
-	}
-	if ast.OutputType() != outputType {
-		return nil, errors.New("expression output type mismatch")
-	}
-	program, err := newInternalRulesCELProgram(env, ast)
-	if err != nil {
-		return nil, err
-	}
-	cache.Store(expr, program)
-	return program, nil
 }
 
 func internalRuleBriefExplain(selectedRule *internalRuleCandidate, matched int) string {

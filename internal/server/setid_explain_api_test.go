@@ -304,6 +304,7 @@ func TestHandleSetIDExplainAPI(t *testing.T) {
 		FieldKey:            "field_x",
 		PersonalizationMode: personalizationModeSetID,
 		OrgApplicability:    orgApplicabilityBusinessUnit,
+		ResolvedSetID:       "A0001",
 		BusinessUnitNodeKey: orgNodeKeyA,
 		Required:            true,
 		Visible:             true,
@@ -363,6 +364,7 @@ func TestHandleSetIDExplainAPI(t *testing.T) {
 		FieldKey:            "field_hidden",
 		PersonalizationMode: personalizationModeSetID,
 		OrgApplicability:    orgApplicabilityBusinessUnit,
+		ResolvedSetID:       "A0001",
 		BusinessUnitNodeKey: orgNodeKeyA,
 		Required:            false,
 		Visible:             false,
@@ -395,6 +397,7 @@ func TestHandleSetIDExplainAPI(t *testing.T) {
 		FieldKey:            "field_masked",
 		PersonalizationMode: personalizationModeSetID,
 		OrgApplicability:    orgApplicabilityBusinessUnit,
+		ResolvedSetID:       "A0001",
 		BusinessUnitNodeKey: orgNodeKeyA,
 		Required:            false,
 		Visible:             true,
@@ -435,7 +438,7 @@ func TestHandleSetIDExplainAPI_UsesBusinessUnitOrgNodeKey(t *testing.T) {
 
 	businessUnitNodeKey := mustOrgNodeKeyForTest(t, 10000001)
 	useSetIDStrategyRegistryStore(setIDStrategyRegistryStoreStub{
-		resolveFieldDecisionFn: func(_ context.Context, _ string, capabilityKey string, fieldKey string, businessUnitNodeKeyArg string, asOf string) (setIDFieldDecision, error) {
+		resolveFieldDecisionFn: func(_ context.Context, _ string, capabilityKey string, fieldKey string, resolvedSetID string, businessUnitNodeKeyArg string, asOf string) (setIDFieldDecision, error) {
 			if capabilityKey != "staffing.assignment_create.field_policy" {
 				t.Fatalf("capability_key=%q", capabilityKey)
 			}
@@ -516,6 +519,7 @@ func TestHandleSetIDExplainAPI_BUVarianceAcceptance(t *testing.T) {
 		FieldKey:            "field_x",
 		PersonalizationMode: personalizationModeSetID,
 		OrgApplicability:    orgApplicabilityBusinessUnit,
+		ResolvedSetID:       "A0001",
 		BusinessUnitNodeKey: orgNodeKeyA,
 		Required:            true,
 		Visible:             true,
@@ -531,6 +535,7 @@ func TestHandleSetIDExplainAPI_BUVarianceAcceptance(t *testing.T) {
 		FieldKey:            "field_x",
 		PersonalizationMode: personalizationModeSetID,
 		OrgApplicability:    orgApplicabilityBusinessUnit,
+		ResolvedSetID:       "B0001",
 		BusinessUnitNodeKey: orgNodeKeyB,
 		Required:            false,
 		Visible:             false,

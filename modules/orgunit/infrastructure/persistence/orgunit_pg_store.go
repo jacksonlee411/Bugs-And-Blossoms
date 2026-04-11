@@ -11,7 +11,9 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jacksonlee411/Bugs-And-Blossoms/modules/orgunit/domain/ports"
 	"github.com/jacksonlee411/Bugs-And-Blossoms/modules/orgunit/domain/types"
+	"github.com/jacksonlee411/Bugs-And-Blossoms/pkg/fieldpolicy"
 	orgunitpkg "github.com/jacksonlee411/Bugs-And-Blossoms/pkg/orgunit"
+	setidresolver "github.com/jacksonlee411/Bugs-And-Blossoms/pkg/setid"
 )
 
 var marshalCreatePayloadJSON = json.Marshal
@@ -459,6 +461,18 @@ func (s *OrgUnitPGStore) ResolveSetIDStrategyFieldDecision(
 	businessUnitID = strings.TrimSpace(businessUnitID)
 	asOf = strings.TrimSpace(asOf)
 	baselineCapabilityKey := orgUnitBaselineCapabilityKeyForSetIDStrategy(capabilityKey)
+	resolvedSetID := ""
+	if businessUnitID != "" {
+		businessUnitID, err = normalizeSetIDStrategyBusinessUnitNodeKey(businessUnitID)
+		if err != nil {
+			return types.SetIDStrategyFieldDecision{}, false, err
+		}
+		resolvedSetID, err = setidresolver.Resolve(ctx, tx, tenantID, businessUnitID, asOf)
+		if err != nil {
+			return types.SetIDStrategyFieldDecision{}, false, err
+		}
+		resolvedSetID = strings.ToUpper(strings.TrimSpace(resolvedSetID))
+	}
 
 	rows, err := tx.Query(ctx, `
 SELECT
@@ -466,6 +480,7 @@ SELECT
   field_key,
   org_applicability,
   business_unit_node_key,
+  COALESCE(resolved_setid, ''),
   required,
   visible,
   maintainable,
@@ -473,7 +488,10 @@ SELECT
   COALESCE(default_value, ''),
   COALESCE(allowed_value_codes, '[]'::jsonb)::text,
   priority,
-  effective_date::text
+  COALESCE(priority_mode, ''),
+  COALESCE(local_override_mode, ''),
+  effective_date::text,
+  COALESCE(updated_at::text, '')
 FROM orgunit.setid_strategy_registry
 WHERE tenant_uuid = $1::uuid
   AND field_key = $2::text
@@ -490,78 +508,103 @@ WHERE tenant_uuid = $1::uuid
 	}
 	defer rows.Close()
 
-	var chosen *setIDStrategyFieldDecisionCandidate
-	chosenBucket := -1
+	records := make([]fieldpolicy.Record, 0, 8)
 	for rows.Next() {
-		var candidate setIDStrategyFieldDecisionCandidate
+		var capability string
+		var field string
+		var applicability string
+		var businessUnitNodeKey string
+		var candidateResolvedSetID string
+		var required bool
+		var visible bool
+		var maintainable bool
+		var defaultRuleRef string
+		var defaultValue string
+		var allowedValueCodesRaw string
+		var priority int
+		var priorityMode string
+		var localOverrideMode string
+		var effectiveDate string
+		var updatedAt string
 		if err := rows.Scan(
-			&candidate.CapabilityKey,
-			&candidate.FieldKey,
-			&candidate.OrgApplicability,
-			&candidate.BusinessUnitID,
-			&candidate.Required,
-			&candidate.Visible,
-			&candidate.Maintainable,
-			&candidate.DefaultRuleRef,
-			&candidate.DefaultValue,
-			&candidate.AllowedValueCodesRaw,
-			&candidate.Priority,
-			&candidate.EffectiveDate,
+			&capability,
+			&field,
+			&applicability,
+			&businessUnitNodeKey,
+			&candidateResolvedSetID,
+			&required,
+			&visible,
+			&maintainable,
+			&defaultRuleRef,
+			&defaultValue,
+			&allowedValueCodesRaw,
+			&priority,
+			&priorityMode,
+			&localOverrideMode,
+			&effectiveDate,
+			&updatedAt,
 		); err != nil {
 			return types.SetIDStrategyFieldDecision{}, false, err
 		}
-		bucket := orgUnitSetIDStrategyDecisionBucket(candidate, capabilityKey, baselineCapabilityKey, businessUnitID)
-		if bucket < 0 {
-			continue
+
+		var allowedValueCodes []string
+		if strings.TrimSpace(allowedValueCodesRaw) != "" {
+			if err := json.Unmarshal([]byte(allowedValueCodesRaw), &allowedValueCodes); err != nil {
+				return types.SetIDStrategyFieldDecision{}, false, err
+			}
 		}
-		if chosen == nil || bucket > chosenBucket || (bucket == chosenBucket && orgUnitSetIDStrategyCandidateWins(candidate, *chosen)) {
-			picked := candidate
-			chosen = &picked
-			chosenBucket = bucket
-		}
+		priorityMode, localOverrideMode = normalizeOrgUnitStrategyModes(priorityMode, localOverrideMode)
+		records = append(records, fieldpolicy.Record{
+			PolicyID:            strings.Join([]string{capability, field, applicability, strings.ToUpper(strings.TrimSpace(candidateResolvedSetID)), strings.TrimSpace(businessUnitNodeKey), effectiveDate, updatedAt}, "|"),
+			CapabilityKey:       capability,
+			FieldKey:            field,
+			OrgApplicability:    applicability,
+			ResolvedSetID:       candidateResolvedSetID,
+			BusinessUnitNodeKey: businessUnitNodeKey,
+			Required:            required,
+			Visible:             visible,
+			Maintainable:        maintainable,
+			DefaultRuleRef:      defaultRuleRef,
+			DefaultValue:        defaultValue,
+			AllowedValueCodes:   allowedValueCodes,
+			Priority:            priority,
+			PriorityMode:        priorityMode,
+			LocalOverrideMode:   localOverrideMode,
+			EffectiveDate:       effectiveDate,
+			CreatedAt:           updatedAt,
+		})
 	}
 	if err := rows.Err(); err != nil {
 		return types.SetIDStrategyFieldDecision{}, false, err
 	}
-	if chosen == nil {
-		return types.SetIDStrategyFieldDecision{}, false, nil
+	decision, err := fieldpolicy.Resolve(fieldpolicy.PolicyContext{
+		CapabilityKey:       capabilityKey,
+		FieldKey:            fieldKey,
+		ResolvedSetID:       resolvedSetID,
+		BusinessUnitNodeKey: businessUnitID,
+	}, baselineCapabilityKey, records)
+	if err != nil {
+		if err.Error() == fieldpolicy.ErrorPolicyMissing {
+			return types.SetIDStrategyFieldDecision{}, false, nil
+		}
+		return types.SetIDStrategyFieldDecision{}, false, err
 	}
 
-	decision := types.SetIDStrategyFieldDecision{
-		CapabilityKey:  chosen.CapabilityKey,
-		FieldKey:       chosen.FieldKey,
-		Required:       chosen.Required,
-		Visible:        chosen.Visible,
-		Maintainable:   chosen.Maintainable,
-		DefaultRuleRef: chosen.DefaultRuleRef,
-		DefaultValue:   chosen.DefaultValue,
+	out := types.SetIDStrategyFieldDecision{
+		CapabilityKey:     decision.CapabilityKey,
+		FieldKey:          decision.FieldKey,
+		Required:          decision.Required,
+		Visible:           decision.Visible,
+		Maintainable:      decision.Maintainable,
+		DefaultRuleRef:    decision.DefaultRuleRef,
+		DefaultValue:      decision.ResolvedDefaultVal,
+		AllowedValueCodes: normalizeAllowedValueCodes(append([]string(nil), decision.AllowedValueCodes...)),
 	}
-	if strings.TrimSpace(chosen.AllowedValueCodesRaw) != "" {
-		if err := json.Unmarshal([]byte(chosen.AllowedValueCodesRaw), &decision.AllowedValueCodes); err != nil {
-			return types.SetIDStrategyFieldDecision{}, false, err
-		}
-	}
-	decision.AllowedValueCodes = normalizeAllowedValueCodes(decision.AllowedValueCodes)
 
 	if err := tx.Commit(ctx); err != nil {
 		return types.SetIDStrategyFieldDecision{}, false, err
 	}
-	return decision, true, nil
-}
-
-type setIDStrategyFieldDecisionCandidate struct {
-	CapabilityKey        string
-	FieldKey             string
-	OrgApplicability     string
-	BusinessUnitID       string
-	Required             bool
-	Visible              bool
-	Maintainable         bool
-	DefaultRuleRef       string
-	DefaultValue         string
-	AllowedValueCodesRaw string
-	Priority             int
-	EffectiveDate        string
+	return out, true, nil
 }
 
 func orgUnitBaselineCapabilityKeyForSetIDStrategy(capabilityKey string) string {
@@ -577,43 +620,34 @@ func orgUnitBaselineCapabilityKeyForSetIDStrategy(capabilityKey string) string {
 	}
 }
 
-func orgUnitSetIDStrategyDecisionBucket(
-	candidate setIDStrategyFieldDecisionCandidate,
-	capabilityKey string,
-	baselineCapabilityKey string,
-	businessUnitID string,
-) int {
-	candidateCapabilityKey := strings.ToLower(strings.TrimSpace(candidate.CapabilityKey))
-	candidateApplicability := strings.ToLower(strings.TrimSpace(candidate.OrgApplicability))
-	candidateBusinessUnitID := strings.TrimSpace(candidate.BusinessUnitID)
-	switch {
-	case candidateCapabilityKey == capabilityKey && candidateApplicability == "business_unit" && candidateBusinessUnitID == businessUnitID && businessUnitID != "":
-		return 4
-	case candidateCapabilityKey == baselineCapabilityKey && candidateApplicability == "business_unit" && candidateBusinessUnitID == businessUnitID && businessUnitID != "":
-		return 3
-	case candidateCapabilityKey == capabilityKey && candidateApplicability == "tenant" && candidateBusinessUnitID == "":
-		return 2
-	case candidateCapabilityKey == baselineCapabilityKey && candidateApplicability == "tenant" && candidateBusinessUnitID == "":
-		return 1
-	default:
-		return -1
+func normalizeOrgUnitStrategyModes(priorityMode string, localOverrideMode string) (string, string) {
+	priorityMode = strings.ToLower(strings.TrimSpace(priorityMode))
+	localOverrideMode = strings.ToLower(strings.TrimSpace(localOverrideMode))
+	if priorityMode == "" {
+		priorityMode = fieldpolicy.PriorityModeBlendCustomFirst
 	}
+	if localOverrideMode == "" {
+		localOverrideMode = fieldpolicy.LocalOverrideModeAllow
+	}
+	return priorityMode, localOverrideMode
 }
 
-func orgUnitSetIDStrategyCandidateWins(candidate setIDStrategyFieldDecisionCandidate, chosen setIDStrategyFieldDecisionCandidate) bool {
-	if candidate.Priority != chosen.Priority {
-		return candidate.Priority > chosen.Priority
+func normalizeSetIDStrategyBusinessUnitNodeKey(input string) (string, error) {
+	trimmed := strings.TrimSpace(input)
+	if trimmed == "" {
+		return "", nil
 	}
-	if candidate.EffectiveDate != chosen.EffectiveDate {
-		return candidate.EffectiveDate > chosen.EffectiveDate
+	if normalized, err := orgunitpkg.NormalizeOrgNodeKey(trimmed); err == nil {
+		return normalized, nil
 	}
-	if candidate.CapabilityKey != chosen.CapabilityKey {
-		return candidate.CapabilityKey > chosen.CapabilityKey
+	if len(trimmed) != 8 {
+		return "", errors.New("org_node_key invalid")
 	}
-	if candidate.OrgApplicability != chosen.OrgApplicability {
-		return candidate.OrgApplicability > chosen.OrgApplicability
+	value, err := strconv.ParseInt(trimmed, 10, 64)
+	if err != nil || value < 10000000 || value > 99999999 {
+		return "", errors.New("org_node_key invalid")
 	}
-	return candidate.BusinessUnitID > chosen.BusinessUnitID
+	return orgunitpkg.EncodeOrgNodeKey(value)
 }
 
 func normalizeAllowedValueCodes(values []string) []string {

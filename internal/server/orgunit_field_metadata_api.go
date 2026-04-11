@@ -215,6 +215,7 @@ func resolveOrgUnitFieldConfigDecision(ctx context.Context, tenantID string, fie
 		orgUnitWriteFieldPolicyCapabilityKey,
 		fieldKey,
 		"",
+		"",
 		asOf,
 	)
 	if err != nil {
@@ -859,6 +860,7 @@ func handleOrgUnitFieldPoliciesResolvePreviewAPI(w http.ResponseWriter, r *http.
 		tenant.ID,
 		capabilityKey,
 		fieldKey,
+		"",
 		"",
 		asOf,
 	)

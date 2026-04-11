@@ -171,7 +171,15 @@ func handleSetIDExplainAPI(w http.ResponseWriter, r *http.Request, store SetIDGo
 		return
 	}
 
-	fieldDecision, err := defaultSetIDStrategyRegistryStore.resolveFieldDecision(r.Context(), tenant.ID, capCtx.CapabilityKey, fieldKey, policyCtx.BusinessUnitNodeKey, capCtx.AsOf)
+	fieldDecision, err := defaultSetIDStrategyRegistryStore.resolveFieldDecision(
+		r.Context(),
+		tenant.ID,
+		capCtx.CapabilityKey,
+		fieldKey,
+		targetCtx.ResolvedSetID,
+		policyCtx.BusinessUnitNodeKey,
+		capCtx.AsOf,
+	)
 	if err != nil {
 		status, code := statusCodeForFieldDecisionError(err)
 		routing.WriteError(w, r, routing.RouteClassInternalAPI, status, code, code)

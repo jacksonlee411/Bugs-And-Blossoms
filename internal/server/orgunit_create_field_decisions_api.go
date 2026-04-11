@@ -69,6 +69,22 @@ func handleOrgUnitCreateFieldDecisionsAPI(w http.ResponseWriter, r *http.Request
 		return
 	}
 
+	resolvedSetID := ""
+	if businessUnitRef.OrgCode != "" {
+		setIDResolver, ok := any(store).(orgUnitSetIDResolver)
+		if !ok {
+			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusInternalServerError, setIDContextCodeSetIDResolverMissing, "setid resolver missing")
+			return
+		}
+		contextResolver := newSetIDContextResolver(store, setIDResolver)
+		resolvedCtx, resolveErr := contextResolver.ResolveOrgContext(r.Context(), tenant.ID, businessUnitRef.OrgCode, effectiveDate, "business_unit_org_code")
+		if resolveErr != nil {
+			writeOrgUnitSetIDContextError(w, r, "business_unit_org_code", resolveErr)
+			return
+		}
+		resolvedSetID = resolvedCtx.ResolvedSetID
+	}
+
 	capCtx, capErr := resolveCapabilityContext(r.Context(), r, capabilityContextInput{
 		CapabilityKey:       orgUnitCreateFieldPolicyCapabilityKey,
 		BusinessUnitOrgCode: businessUnitRef.OrgCode,
@@ -93,6 +109,7 @@ func handleOrgUnitCreateFieldDecisionsAPI(w http.ResponseWriter, r *http.Request
 			tenant.ID,
 			capCtx.CapabilityKey,
 			fieldKey,
+			resolvedSetID,
 			businessUnitRef.OrgNodeKey,
 			capCtx.AsOf,
 		)

@@ -13,6 +13,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jacksonlee411/Bugs-And-Blossoms/internal/routing"
+	"github.com/jacksonlee411/Bugs-And-Blossoms/pkg/fieldpolicy"
 	orgunitpkg "github.com/jacksonlee411/Bugs-And-Blossoms/pkg/orgunit"
 )
 
@@ -183,7 +184,7 @@ type setIDStrategyRegistryStore interface {
 	upsert(ctx context.Context, tenantID string, item setIDStrategyRegistryItem) (setIDStrategyRegistryItem, bool, error)
 	disable(ctx context.Context, tenantID string, req setIDStrategyRegistryDisableRequest) (setIDStrategyRegistryItem, bool, error)
 	list(ctx context.Context, tenantID string, capabilityKey string, fieldKey string, asOf string) ([]setIDStrategyRegistryItem, error)
-	resolveFieldDecision(ctx context.Context, tenantID string, capabilityKey string, fieldKey string, businessUnitNodeKey string, asOf string) (setIDFieldDecision, error)
+	resolveFieldDecision(ctx context.Context, tenantID string, capabilityKey string, fieldKey string, resolvedSetID string, businessUnitNodeKey string, asOf string) (setIDFieldDecision, error)
 }
 
 type setIDStrategyRegistryRuntimeStore struct {
@@ -242,8 +243,8 @@ func (s *setIDStrategyRegistryRuntimeStore) disable(_ context.Context, tenantID 
 	return s.runtime.disable(tenantID, req)
 }
 
-func (s *setIDStrategyRegistryRuntimeStore) resolveFieldDecision(_ context.Context, tenantID string, capabilityKey string, fieldKey string, businessUnitNodeKey string, asOf string) (setIDFieldDecision, error) {
-	return s.runtime.resolveFieldDecision(tenantID, capabilityKey, fieldKey, businessUnitNodeKey, asOf)
+func (s *setIDStrategyRegistryRuntimeStore) resolveFieldDecision(_ context.Context, tenantID string, capabilityKey string, fieldKey string, resolvedSetID string, businessUnitNodeKey string, asOf string) (setIDFieldDecision, error) {
+	return s.runtime.resolveFieldDecision(tenantID, capabilityKey, fieldKey, resolvedSetID, businessUnitNodeKey, asOf)
 }
 
 func (s *setIDStrategyRegistryPGStore) withTx(ctx context.Context, tenantID string, fn func(tx pgx.Tx) error) error {
@@ -452,7 +453,7 @@ func ensureStrategyResolvableAfterDisable(items []setIDStrategyRegistryItem, req
 	if req.OrgApplicability == orgApplicabilityBusinessUnit {
 		businessUnitNodeKey = req.BusinessUnitNodeKey
 	}
-	if _, err := resolveFieldDecisionFromItems(active, req.CapabilityKey, req.FieldKey, businessUnitNodeKey); err != nil {
+	if _, err := resolveFieldDecisionFromItems(active, req.CapabilityKey, req.FieldKey, req.ResolvedSetID, businessUnitNodeKey); err != nil {
 		return errDisableNotAllowed
 	}
 	return nil
@@ -666,7 +667,7 @@ ORDER BY capability_key ASC, field_key ASC, org_applicability ASC, resolved_seti
 	return out, err
 }
 
-func (s *setIDStrategyRegistryPGStore) resolveFieldDecision(ctx context.Context, tenantID string, capabilityKey string, fieldKey string, businessUnitNodeKey string, asOf string) (setIDFieldDecision, error) {
+func (s *setIDStrategyRegistryPGStore) resolveFieldDecision(ctx context.Context, tenantID string, capabilityKey string, fieldKey string, resolvedSetID string, businessUnitNodeKey string, asOf string) (setIDFieldDecision, error) {
 	items, err := collectCapabilityResolutionItems(
 		func(queryCapabilityKey string) ([]setIDStrategyRegistryItem, error) {
 			return s.list(ctx, tenantID, queryCapabilityKey, fieldKey, asOf)
@@ -676,7 +677,7 @@ func (s *setIDStrategyRegistryPGStore) resolveFieldDecision(ctx context.Context,
 	if err != nil {
 		return setIDFieldDecision{}, err
 	}
-	return resolveFieldDecisionFromItems(items, capabilityKey, fieldKey, businessUnitNodeKey)
+	return resolveFieldDecisionFromItems(items, capabilityKey, fieldKey, resolvedSetID, businessUnitNodeKey)
 }
 
 func collectCapabilityResolutionItems(
@@ -1225,6 +1226,7 @@ func (s *setIDStrategyRegistryRuntime) resolveFieldDecision(
 	tenantID string,
 	capabilityKey string,
 	fieldKey string,
+	resolvedSetID string,
 	businessUnitNodeKey string,
 	asOf string,
 ) (setIDFieldDecision, error) {
@@ -1237,109 +1239,130 @@ func (s *setIDStrategyRegistryRuntime) resolveFieldDecision(
 	if err != nil {
 		return setIDFieldDecision{}, err
 	}
-	return resolveFieldDecisionFromItems(items, capabilityKey, fieldKey, businessUnitNodeKey)
+	return resolveFieldDecisionFromItems(items, capabilityKey, fieldKey, resolvedSetID, businessUnitNodeKey)
 }
 
-func resolveFieldDecisionFromItems(items []setIDStrategyRegistryItem, capabilityKey string, fieldKey string, businessUnitNodeKey string) (setIDFieldDecision, error) {
+type setIDFieldDecisionResolution struct {
+	Decision         setIDFieldDecision
+	MatchedBucket    string
+	PrimaryPolicyID  string
+	WinnerPolicyIDs  []string
+	MatchedPolicyIDs []string
+	ResolutionTrace  []string
+	PrimaryItem      *setIDStrategyRegistryItem
+	WinnerItems      []setIDStrategyRegistryItem
+	MatchedItems     []setIDStrategyRegistryItem
+}
+
+func resolveFieldDecisionFromItems(items []setIDStrategyRegistryItem, capabilityKey string, fieldKey string, resolvedSetID string, businessUnitNodeKey string) (setIDFieldDecision, error) {
+	resolution, err := resolveFieldDecisionWithTraceFromItems(items, capabilityKey, fieldKey, resolvedSetID, businessUnitNodeKey)
+	if err != nil {
+		return setIDFieldDecision{}, err
+	}
+	return resolution.Decision, nil
+}
+
+func resolveFieldDecisionWithTraceFromItems(items []setIDStrategyRegistryItem, capabilityKey string, fieldKey string, resolvedSetID string, businessUnitNodeKey string) (setIDFieldDecisionResolution, error) {
 	capabilityKey = strings.ToLower(strings.TrimSpace(capabilityKey))
 	fieldKey = strings.ToLower(strings.TrimSpace(fieldKey))
+	resolvedSetID = normalizeStrategyRegistryResolvedSetID(resolvedSetID)
 	businessUnitNodeKey = strings.TrimSpace(businessUnitNodeKey)
 
 	baselineCapabilityKey, hasBaseline := orgUnitBaselineCapabilityKeyForIntentCapability(capabilityKey)
 	if !hasBaseline {
-		baselineCapabilityKey = capabilityKey
+		baselineCapabilityKey = ""
 	}
 
-	lookupChain := []struct {
-		capabilityKey    string
-		orgApplicability string
-		sourceType       string
-	}{
-		{capabilityKey: capabilityKey, orgApplicability: orgApplicabilityBusinessUnit, sourceType: strategySourceIntentOverride},
-		{capabilityKey: baselineCapabilityKey, orgApplicability: orgApplicabilityBusinessUnit, sourceType: strategySourceBaseline},
-		{capabilityKey: capabilityKey, orgApplicability: orgApplicabilityTenant, sourceType: strategySourceIntentOverride},
-		{capabilityKey: baselineCapabilityKey, orgApplicability: orgApplicabilityTenant, sourceType: strategySourceBaseline},
+	records := make([]fieldpolicy.Record, 0, len(items))
+	itemsByPolicyID := make(map[string]setIDStrategyRegistryItem, len(items))
+	for _, item := range items {
+		policyID := strategyRegistryPolicyID(item)
+		records = append(records, fieldpolicy.Record{
+			PolicyID:            policyID,
+			CapabilityKey:       item.CapabilityKey,
+			FieldKey:            item.FieldKey,
+			OrgApplicability:    item.OrgApplicability,
+			ResolvedSetID:       item.ResolvedSetID,
+			BusinessUnitNodeKey: item.BusinessUnitNodeKey,
+			Required:            item.Required,
+			Visible:             item.Visible,
+			Maintainable:        item.Maintainable,
+			DefaultRuleRef:      item.DefaultRuleRef,
+			DefaultValue:        item.DefaultValue,
+			AllowedValueCodes:   append([]string(nil), item.AllowedValueCodes...),
+			Priority:            item.Priority,
+			PriorityMode:        item.PriorityMode,
+			LocalOverrideMode:   item.LocalOverrideMode,
+			EffectiveDate:       item.EffectiveDate,
+			CreatedAt:           item.UpdatedAt,
+		})
+		itemsByPolicyID[policyID] = item
 	}
 
-	for _, step := range lookupChain {
-		if step.capabilityKey == "" {
-			continue
-		}
-		if step.capabilityKey == capabilityKey && step.sourceType == strategySourceBaseline {
-			continue
-		}
-		if step.orgApplicability == orgApplicabilityBusinessUnit && businessUnitNodeKey == "" {
-			continue
-		}
-		decision, found, err := resolveCapabilityBucketDecision(items, step.capabilityKey, fieldKey, step.orgApplicability, businessUnitNodeKey, step.sourceType)
-		if err != nil {
-			return setIDFieldDecision{}, err
-		}
-		if found {
-			return decision, nil
-		}
+	decision, err := fieldpolicy.Resolve(fieldpolicy.PolicyContext{
+		CapabilityKey:       capabilityKey,
+		FieldKey:            fieldKey,
+		ResolvedSetID:       resolvedSetID,
+		BusinessUnitNodeKey: businessUnitNodeKey,
+	}, baselineCapabilityKey, records)
+	if err != nil {
+		return setIDFieldDecisionResolution{}, err
 	}
-	return setIDFieldDecision{}, errors.New(fieldPolicyMissingCode)
+
+	resolution := setIDFieldDecisionResolution{
+		Decision: setIDFieldDecision{
+			CapabilityKey:      decision.CapabilityKey,
+			SourceType:         decision.SourceType,
+			FieldKey:           decision.FieldKey,
+			Required:           decision.Required,
+			Visible:            decision.Visible,
+			Maintainable:       decision.Maintainable,
+			DefaultRuleRef:     decision.DefaultRuleRef,
+			ResolvedDefaultVal: decision.ResolvedDefaultVal,
+			AllowedValueCodes:  append([]string(nil), decision.AllowedValueCodes...),
+			PriorityMode:       decision.PriorityMode,
+			LocalOverrideMode:  decision.LocalOverrideMode,
+			Decision:           "allow",
+		},
+		MatchedBucket:    decision.MatchedBucket,
+		PrimaryPolicyID:  decision.PrimaryPolicyID,
+		WinnerPolicyIDs:  append([]string(nil), decision.WinnerPolicyIDs...),
+		MatchedPolicyIDs: append([]string(nil), decision.MatchedPolicyIDs...),
+		ResolutionTrace:  append([]string(nil), decision.ResolutionTrace...),
+	}
+	if item, ok := itemsByPolicyID[decision.PrimaryPolicyID]; ok {
+		copyItem := item
+		resolution.PrimaryItem = &copyItem
+	}
+	resolution.WinnerItems = strategyRegistryItemsByPolicyIDs(itemsByPolicyID, decision.WinnerPolicyIDs)
+	resolution.MatchedItems = strategyRegistryItemsByPolicyIDs(itemsByPolicyID, decision.MatchedPolicyIDs)
+	return resolution, nil
 }
 
-func resolveCapabilityBucketDecision(
-	items []setIDStrategyRegistryItem,
-	capabilityKey string,
-	fieldKey string,
-	orgApplicability string,
-	businessUnitNodeKey string,
-	sourceType string,
-) (setIDFieldDecision, bool, error) {
-	capabilityKey = strings.ToLower(strings.TrimSpace(capabilityKey))
-	fieldKey = strings.ToLower(strings.TrimSpace(fieldKey))
-	businessUnitNodeKey = strings.TrimSpace(businessUnitNodeKey)
+func strategyRegistryPolicyID(item setIDStrategyRegistryItem) string {
+	key := strategyRegistrySortKey(item)
+	if item.UpdatedAt == "" {
+		return key
+	}
+	return key + "|" + strings.TrimSpace(item.UpdatedAt)
+}
 
-	var chosen *setIDStrategyRegistryItem
-	for _, item := range items {
-		if strings.ToLower(strings.TrimSpace(item.CapabilityKey)) != capabilityKey {
+func strategyRegistryItemsByPolicyIDs(itemsByPolicyID map[string]setIDStrategyRegistryItem, ids []string) []setIDStrategyRegistryItem {
+	if len(ids) == 0 {
+		return nil
+	}
+	out := make([]setIDStrategyRegistryItem, 0, len(ids))
+	for _, id := range ids {
+		item, ok := itemsByPolicyID[strings.TrimSpace(id)]
+		if !ok {
 			continue
 		}
-		if strings.ToLower(strings.TrimSpace(item.FieldKey)) != fieldKey {
-			continue
-		}
-		if strings.ToLower(strings.TrimSpace(item.OrgApplicability)) != orgApplicability {
-			continue
-		}
-		if orgApplicability == orgApplicabilityBusinessUnit && !strings.EqualFold(strings.TrimSpace(item.BusinessUnitNodeKey), businessUnitNodeKey) {
-			continue
-		}
-		candidate := item
-		if chosen == nil ||
-			candidate.Priority > chosen.Priority ||
-			(candidate.Priority == chosen.Priority && candidate.EffectiveDate > chosen.EffectiveDate) ||
-			(candidate.Priority == chosen.Priority && candidate.EffectiveDate == chosen.EffectiveDate && strategyRegistrySortKey(candidate) > strategyRegistrySortKey(*chosen)) {
-			chosen = &candidate
-		}
+		out = append(out, item)
 	}
-	if chosen == nil {
-		return setIDFieldDecision{}, false, nil
+	if len(out) == 0 {
+		return nil
 	}
-	chosen.PriorityMode, chosen.LocalOverrideMode = normalizeStrategyModes(chosen.PriorityMode, chosen.LocalOverrideMode)
-	if chosen.Required && !chosen.Visible {
-		return setIDFieldDecision{}, false, errors.New(fieldPolicyConflictCode)
-	}
-	if !chosen.Maintainable && strings.TrimSpace(chosen.DefaultRuleRef) == "" && strings.TrimSpace(chosen.DefaultValue) == "" {
-		return setIDFieldDecision{}, false, errors.New(fieldDefaultRuleMissingCode)
-	}
-	return setIDFieldDecision{
-		CapabilityKey:      chosen.CapabilityKey,
-		SourceType:         sourceType,
-		FieldKey:           chosen.FieldKey,
-		Required:           chosen.Required,
-		Visible:            chosen.Visible,
-		Maintainable:       chosen.Maintainable,
-		DefaultRuleRef:     chosen.DefaultRuleRef,
-		ResolvedDefaultVal: chosen.DefaultValue,
-		AllowedValueCodes:  append([]string(nil), chosen.AllowedValueCodes...),
-		PriorityMode:       chosen.PriorityMode,
-		LocalOverrideMode:  chosen.LocalOverrideMode,
-		Decision:           "allow",
-	}, true, nil
+	return out
 }
 
 func fieldDecisionSemanticallyEqual(a setIDFieldDecision, b setIDFieldDecision) bool {
@@ -1406,30 +1429,28 @@ func isRedundantIntentOverride(ctx context.Context, tenantID string, item setIDS
 	if item.OrgApplicability == orgApplicabilityBusinessUnit {
 		businessUnitNodeKey = item.BusinessUnitNodeKey
 	}
-	overrideDecision, _, err := resolveCapabilityBucketDecision(
+	overrideDecision, err := resolveFieldDecisionFromItems(
 		merged,
 		item.CapabilityKey,
 		item.FieldKey,
-		item.OrgApplicability,
+		item.ResolvedSetID,
 		businessUnitNodeKey,
-		strategySourceIntentOverride,
 	)
 	if err != nil {
 		return false, err
 	}
-	baselineDecision, foundBaseline, err := resolveCapabilityBucketDecision(
+	baselineDecision, err := resolveFieldDecisionFromItems(
 		merged,
 		baselineCapabilityKey,
 		item.FieldKey,
-		item.OrgApplicability,
+		item.ResolvedSetID,
 		businessUnitNodeKey,
-		strategySourceBaseline,
 	)
 	if err != nil {
+		if strings.TrimSpace(err.Error()) == fieldPolicyMissingCode {
+			return false, nil
+		}
 		return false, err
-	}
-	if !foundBaseline {
-		return false, nil
 	}
 	return fieldDecisionSemanticallyEqual(overrideDecision, baselineDecision), nil
 }

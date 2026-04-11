@@ -15,6 +15,7 @@ import (
 type orgUnitCreateFieldDecisionStoreStub struct {
 	orgUnitStoreStub
 	resolveOrgIDFn func(ctx context.Context, tenantID string, orgCode string) (int, error)
+	resolveSetIDFn func(ctx context.Context, tenantID string, orgNodeKey string, asOfDate string) (string, error)
 }
 
 func (s orgUnitCreateFieldDecisionStoreStub) ResolveOrgID(ctx context.Context, tenantID string, orgCode string) (int, error) {
@@ -30,6 +31,16 @@ func (s orgUnitCreateFieldDecisionStoreStub) ResolveOrgNodeKeyByCode(ctx context
 		return "", err
 	}
 	return encodeOrgNodeKeyFromID(orgID)
+}
+
+func (s orgUnitCreateFieldDecisionStoreStub) ResolveSetID(ctx context.Context, tenantID string, orgNodeKey string, asOfDate string) (string, error) {
+	if s.resolveSetIDFn != nil {
+		return s.resolveSetIDFn(ctx, tenantID, orgNodeKey, asOfDate)
+	}
+	if _, err := normalizeOrgNodeKeyInput(orgNodeKey); err != nil {
+		return "", err
+	}
+	return "S2601", nil
 }
 
 func TestHandleOrgUnitCreateFieldDecisionsAPI(t *testing.T) {
@@ -168,8 +179,8 @@ func TestHandleOrgUnitCreateFieldDecisionsAPI(t *testing.T) {
 		}
 		var captured []string
 		useSetIDStrategyRegistryStore(setIDStrategyRegistryStoreStub{
-			resolveFieldDecisionFn: func(_ context.Context, _ string, capabilityKey string, fieldKey string, businessUnitID string, asOf string) (setIDFieldDecision, error) {
-				captured = append(captured, capabilityKey+"|"+fieldKey+"|"+businessUnitID+"|"+asOf)
+			resolveFieldDecisionFn: func(_ context.Context, _ string, capabilityKey string, fieldKey string, resolvedSetID string, businessUnitNodeKey string, asOf string) (setIDFieldDecision, error) {
+				captured = append(captured, capabilityKey+"|"+fieldKey+"|"+resolvedSetID+"|"+businessUnitNodeKey+"|"+asOf)
 				switch fieldKey {
 				case orgUnitCreateFieldOrgCode:
 					return setIDFieldDecision{
@@ -236,7 +247,10 @@ func TestHandleOrgUnitCreateFieldDecisionsAPI(t *testing.T) {
 
 	t.Run("success with parent org returns business unit org code", func(t *testing.T) {
 		useSetIDStrategyRegistryStore(setIDStrategyRegistryStoreStub{
-			resolveFieldDecisionFn: func(_ context.Context, _ string, capabilityKey string, fieldKey string, businessUnitNodeKey string, asOf string) (setIDFieldDecision, error) {
+			resolveFieldDecisionFn: func(_ context.Context, _ string, capabilityKey string, fieldKey string, resolvedSetID string, businessUnitNodeKey string, asOf string) (setIDFieldDecision, error) {
+				if resolvedSetID != "S2601" {
+					t.Fatalf("resolved_setid=%q", resolvedSetID)
+				}
 				if businessUnitNodeKey == "" {
 					t.Fatal("business_unit_node_key should not be empty")
 				}

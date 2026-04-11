@@ -1,13 +1,17 @@
 package server
 
-import "strings"
+import (
+	"strings"
+
+	"github.com/jacksonlee411/Bugs-And-Blossoms/pkg/fieldpolicy"
+)
 
 const (
-	orgUnitWriteFieldPolicyCapabilityKey         = "org.orgunit_write.field_policy"
-	orgUnitCreateFieldPolicyCapabilityKey        = "org.orgunit_create.field_policy"
-	orgUnitAddVersionFieldPolicyCapabilityKey    = "org.orgunit_add_version.field_policy"
-	orgUnitInsertVersionFieldPolicyCapabilityKey = "org.orgunit_insert_version.field_policy"
-	orgUnitCorrectFieldPolicyCapabilityKey       = "org.orgunit_correct.field_policy"
+	orgUnitWriteFieldPolicyCapabilityKey         = fieldpolicy.OrgUnitWriteFieldPolicyCapabilityKey
+	orgUnitCreateFieldPolicyCapabilityKey        = fieldpolicy.OrgUnitCreateFieldPolicyCapabilityKey
+	orgUnitAddVersionFieldPolicyCapabilityKey    = fieldpolicy.OrgUnitAddVersionFieldPolicyCapabilityKey
+	orgUnitInsertVersionFieldPolicyCapabilityKey = fieldpolicy.OrgUnitInsertVersionFieldPolicyCapabilityKey
+	orgUnitCorrectFieldPolicyCapabilityKey       = fieldpolicy.OrgUnitCorrectFieldPolicyCapabilityKey
 )
 
 type orgUnitWriteCapabilityBinding struct {
@@ -51,17 +55,7 @@ func orgUnitFieldPolicyCapabilityBindingForWriteIntent(intent string) (orgUnitWr
 }
 
 func orgUnitBaselineCapabilityKeyForIntentCapability(capabilityKey string) (string, bool) {
-	switch strings.ToLower(strings.TrimSpace(capabilityKey)) {
-	case orgUnitCreateFieldPolicyCapabilityKey,
-		orgUnitAddVersionFieldPolicyCapabilityKey,
-		orgUnitInsertVersionFieldPolicyCapabilityKey,
-		orgUnitCorrectFieldPolicyCapabilityKey:
-		return orgUnitWriteFieldPolicyCapabilityKey, true
-	case orgUnitWriteFieldPolicyCapabilityKey:
-		return orgUnitWriteFieldPolicyCapabilityKey, true
-	default:
-		return "", false
-	}
+	return fieldpolicy.OrgUnitBaselineCapabilityKey(strings.ToLower(strings.TrimSpace(capabilityKey)))
 }
 
 func orgUnitFieldPolicyCapabilityKeyForScope(scopeType string, scopeKey string) (string, bool) {

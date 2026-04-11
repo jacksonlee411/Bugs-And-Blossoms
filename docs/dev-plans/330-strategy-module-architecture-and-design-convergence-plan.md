@@ -548,7 +548,7 @@
 | `PR-1` 审计与契约冻结 | [X] 已完成 | `R0` + `M1` 起步 + `M6` 证据前置 | 固化现状审计、热点清单、PR 映射与 stopline | 不改 schema、不切主查询、不替换 PDP |
 | `PR-2` `Context Resolver` 单点落地 | [X] 已完成 | `R1` + `6.2A` | 建立单一 `Context Resolver`，输出 `business_unit_node_key + resolved_setid + setid_source` | 未完成前不得开始双轴主查询切换 |
 | `PR-3` Schema 双轴化与历史回填 | [X] 已完成 | `R2 + R3` + `6.2B` 记录契约 | 在现有表上引入 `resolved_setid`、约束、唯一键与回填证据 | 若仍存在非法形状或不可判定记录即 stopline |
-| `PR-4` 唯一 PDP 与前置测试 | [ ] 待开始 | `R4` + `6.2` + `6.5` | 抽单一 PDP，补 bucket/mode/explain 回放测试 | 未完成前不得切主链 |
+| `PR-4` 唯一 PDP 与前置测试 | [X] 已完成 | `R4` + `6.2` + `6.5` | 抽单一 PDP，补 bucket/mode/explain 回放测试 | 未完成前不得切主链 |
 | `PR-5` API / explain / version / 错误码切主链 | [ ] 待开始 | `R5 + R6` + `6.2C` | 显式表达 SetID 轴，统一 explain/version，切 canonical 错误码 | “schema 双轴、查询单轴”不构成收口 |
 | `PR-6` route/authz、旧层退场与门禁收尾 | [ ] 待开始 | `R7` + `6.3 + 6.4 + 6.6` | 收 capability/authz 归属，冻结 `tenant_field_policies` 定位并完成门禁证据 | 不允许旧主链继续 happy path |
 
@@ -585,6 +585,26 @@
    - `cmd/dbtool/orgunit_setid_strategy_registry_validate.go`
 4. [X] 新增 PR-3 实施记录并接入仓库文档地图，作为 `PR-4` 前的证据冻结点：
    `docs/dev-records/dev-plan-330-pr3-schema-dual-axis-and-backfill-implementation-log.md`
+
+### 5.3D PR-4 已交付物（2026-04-11）
+
+1. [X] 新增共享 PDP，将双轴 bucket 命中顺序、排序、mode 合并、默认值收敛与 explain trace 重算统一收口为单一运行时实现：
+   - `pkg/fieldpolicy/setid_strategy_pdp.go`
+   - `pkg/fieldpolicy/setid_strategy_pdp_test.go`
+2. [X] `internal/server` 已切到共享 PDP 主链，`/internal/rules/evaluate` 不再维持独立 happy-path 裁决实现；遇到 `FIELD_POLICY_*` 解析错误时按 fail-closed 返回 `deny + reason_code`：
+   - `internal/server/setid_strategy_registry_api.go`
+   - `internal/server/internal_rules_evaluate_api.go`
+   - `internal/server/internal_rules_evaluate_api_test.go`
+3. [X] OrgUnit persistence 已切到共享 PDP，按 `resolved_setid + business_unit_node_key` 查询候选并复用同一裁决逻辑，移除 store 侧平行决策实现：
+   - `modules/orgunit/infrastructure/persistence/orgunit_pg_store.go`
+   - `modules/orgunit/infrastructure/persistence/orgunit_pg_store_policy_test.go`
+4. [X] explain、assistant precheck、字段启用/metadata 预览链路已统一把 `resolved_setid + business_unit_node_key` 带入 PDP 输入，避免“解析上下文已统一，但裁决输入仍分叉”：
+   - `internal/server/setid_explain_api.go`
+   - `internal/server/assistant_create_policy_precheck.go`
+   - `internal/server/orgunit_create_field_decisions_api.go`
+   - `internal/server/orgunit_field_metadata_api.go`
+5. [X] 新增 PR-4 实施记录并接入仓库文档地图，作为 `PR-5` 前的证据冻结点：
+   `docs/dev-records/dev-plan-330-pr4-unique-pdp-and-prerequisite-tests-log.md`
 
 ## 6. 收口方案
 
