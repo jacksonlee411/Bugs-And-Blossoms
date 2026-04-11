@@ -15,9 +15,9 @@ describe('resolveApiErrorMessage', () => {
   })
 
   it('returns explicit mapped message for disable-not-allowed', () => {
-    const message = resolveApiErrorMessage('FIELD_POLICY_DISABLE_NOT_ALLOWED', 'FIELD_POLICY_DISABLE_NOT_ALLOWED')
+    const message = resolveApiErrorMessage('policy_disable_not_allowed', 'policy_disable_not_allowed')
     expect(message.length).toBeGreaterThan(0)
-    expect(message).not.toBe('FIELD_POLICY_DISABLE_NOT_ALLOWED')
+    expect(message).not.toBe('policy_disable_not_allowed')
   })
 
   it('returns explicit mapped message for assistant state invalid', () => {
