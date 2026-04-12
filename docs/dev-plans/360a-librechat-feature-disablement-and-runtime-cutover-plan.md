@@ -1,6 +1,6 @@
 # DEV-PLAN-360A：LibreChat 功能禁用清单与 Runtime 主链硬切实施计划
 
-**状态**: 进行中（2026-04-13 07:05 CST；Phase 0/1 已完成，Phase 2 的 compat session API 硬切已完成，cleanup PR 与 runtime fail-closed/error-code 收口待继续）
+**状态**: 进行中（2026-04-13 07:23 CST；Phase 0/1 已完成，Phase 2 的 compat session API 硬切已完成并提交到 `bb5a8568`，cleanup PR 与 runtime fail-closed/error-code 收口待继续）
 
 ## 1. 背景
 
@@ -525,6 +525,7 @@ Vendored LibreChat UI
 5. [X] retired compat path 的短路已前移到 `withTenantAndSession`，确保缺 SID、tenant mismatch、principal invalid 不再暴露 vendored `401` 语义。
 6. [X] 本批次明确不提前处理 `/assistant-ui/*`；该别名仍按 `Phase 4` 保持 `302 -> /app/assistant/librechat`。
 7. [ ] runtime fail-closed 错误码与任务终止语义（如 `assistant_runtime_unavailable / assistant_gate_unavailable`）留到后续 `Phase 2` 收口批次。
+8. [X] 当前 compat session API cutover 的实现与文档证据已回写并提交到 `bb5a8568`，执行记录见 `docs/dev-records/dev-plan-360a-execution-log.md`。
 
 ### Phase 3：依赖去平台化
 

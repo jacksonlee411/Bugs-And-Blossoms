@@ -1,6 +1,6 @@
 # DEV-PLAN-375：Assistant 主线实施路线图（350-370）
 
-**状态**: 进行中（2026-04-13 07:03 CST；`375M1/375M2` 已完成并封账，`350B` 已完成，`360A Phase 2` 的 compat session API 硬切已完成，`375M4` 仍待 cleanup PR 与 runtime fail-closed/error-code 收口，`375M3 / 370A` 可并行启动）
+**状态**: 进行中（2026-04-13 07:23 CST；`375M1/375M2` 已完成并封账，`350B` 已完成，`360A Phase 2` 的 compat session API 硬切已完成并提交到 `bb5a8568`，`375M4` 仍待 cleanup PR 与 runtime fail-closed/error-code 收口，`375M3 / 370A` 可并行启动）
 
 > 目标：为 `DEV-PLAN-350/360/360A/361/370` 提供单一编排入口，冻结当前状态、SSOT 边界、串并行顺序、批次拆分与出口条件。  
 > 本文只做路线图编排，不改写各主题文档的契约裁决权；实现细节与子系统合同仍以对应 dev-plan 为单一事实源。
@@ -18,7 +18,7 @@
 4. [X] `375M1`：successor 执行面稳定（承接 `360 Phase 0/1` + `360A Phase 0/1`）。
 5. [X] `375M2`：`350A` 完成，收口 `add_version / insert_version`。
 6. [ ] `375M3`：`370A` 完成，收口 Markdown compiler + `knowledge_qa / business_query`。
-7. [ ] `375M4`：compat session API 的 `410 Gone` 硬切已完成，但仍待 cleanup PR 与 runtime fail-closed/error-code 收口后封账。
+7. [ ] `375M4`：compat session API 的 `410 Gone` 硬切已完成并提交到 `bb5a8568`，但仍待 cleanup PR 与 runtime fail-closed/error-code 收口后封账。
 8. [ ] `375M5`：`350C` 完成，并完成平台退役封板。
 9. [ ] `375M6`：`370B` 完成，进入总体验收与封板准备。
 
@@ -103,7 +103,7 @@
 3. [ ] 继续完成 `360 Phase 2 / 360A Phase 2` 的 runtime 主链 fail-closed/error-code 收口与 compat cleanup PR。
 4. [ ] 本里程碑完成后，正式运行链只保留 `/internal/assistant/*` 所需的最小 successor 面。
 5. [X] `350B` 实施证据已沉淀到 `docs/dev-records/dev-plan-350b-execution-log.md`。
-6. [X] `360A` 本轮 compat session API cutover 证据已沉淀到 `docs/dev-records/dev-plan-360a-execution-log.md`。
+6. [X] `360A` 本轮 compat session API cutover 证据已沉淀到 `docs/dev-records/dev-plan-360a-execution-log.md`，并已随实现提交 `bb5a8568` 固化。
 
 ### 375M5：业务动作收口批次三 + 平台退役封板
 

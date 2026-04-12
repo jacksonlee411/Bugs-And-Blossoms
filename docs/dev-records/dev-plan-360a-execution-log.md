@@ -1,6 +1,6 @@
 # DEV-PLAN-360A 执行日志：compat session API cutover
 
-**状态**: 已记录本轮推进（2026-04-13 07:03 CST；Phase 2 的 compat session API 硬切已完成，cleanup PR 与 runtime fail-closed/error-code 收口待继续）
+**状态**: 已记录并提交（2026-04-13 07:23 CST；Phase 2 的 compat session API 硬切已完成并提交到 `bb5a8568`，cleanup PR 与 runtime fail-closed/error-code 收口待继续）
 
 ## 1. 本轮交付范围
 
@@ -38,7 +38,12 @@
 2. [X] `npm --prefix apps/web test -- src/errors/presentApiError.test.ts`
 3. [X] `make check doc`
 
-## 5. 结论与后续
+## 5. 提交记录
+
+1. [X] 本轮代码与文档已提交：`bb5a8568`
+2. [X] 提交信息：`feat: cut over dev-plan-360a compat session api`
+
+## 6. 结论与后续
 
 1. [X] `DEV-PLAN-360A Phase 2` 的首个 cutover 批次已完成：旧会话 compat API 已从“继续提供会话语义”切到“统一 retired by design”。
 2. [X] `375M4` 中“compat session API 硬切”子目标已完成，但 `375M4` 仍未整体封账。
