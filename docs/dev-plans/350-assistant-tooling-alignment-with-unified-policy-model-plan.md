@@ -14,6 +14,8 @@
 
 本计划用于承接 `330 + 340 + 361` 的联合落地，冻结 Assistant Tooling 的正式目标边界、迁移路径与验收口径，并把“唯一 PDP 可由 OPA 承接”的实现假设正式纳入主线。
 
+边界补充冻结：`350` 依赖已完成的 `361` Rego-backed PDP adapter；只有在 `361` 完成唯一 PDP 引擎替换并封板后，`350` 才开始 `PrecheckProjection`、Assistant/tool/write service/explain 的统一消费收口。
+
 ## 2. 问题定性
 
 ### 2.1 已确认的问题
@@ -217,16 +219,12 @@ Assistant turn/task 快照新增冻结字段：
    - 求值实现可由 OPA 承接；
    - `Mutation Policy`、写链、策略事实源边界不因此改变。
 
-### Phase 1：建立唯一 PDP 适配层
+### Phase 1：消费已完成的唯一 PDP 适配层
 
-1. [ ] 以 `create_orgunit` 为首个迁移动作。
-2. [ ] 将 `pkg/fieldpolicy/setid_strategy_pdp.go` 从“手写求值器主体”收敛为“统一 PDP 适配层入口”。
-3. [ ] 新增 OPA/PDP 适配内核，负责：
-   - `PolicyContext` 输入适配；
-   - 策略记录装载；
-   - OPA 求值调用；
-   - 输出映射为仓内统一 `Decision` 结构。
-4. [ ] 以现有 `setid_strategy_pdp` 测试结果为基线，确保引擎替换前后 explain、错误码与优先级语义一致。
+1. [ ] 以 `361` 已完成的 Rego-backed `fieldpolicy.Resolve(...)` 作为上游前置，不在 `350` 内再次承担唯一 PDP 引擎替换。
+2. [ ] 以 `create_orgunit` 为首个统一消费动作。
+3. [ ] 基于稳定 `Decision / explain / version` 契约定义 `PrecheckProjection`，只做组合与消费，不重写 PDP 求值逻辑。
+4. [ ] 保证 `PrecheckProjection` 对同一 `PolicyContext` 的解释完全建立在已完成的 PDP adapter 与 `Mutation Policy` 输出之上。
 
 ### Phase 2：切断 Assistant 第二解释器
 
@@ -282,8 +280,8 @@ Assistant turn/task 快照新增冻结字段：
 5. [ ] `internal/server/assistant_task_store.go`
 6. [ ] `internal/server/assistant_create_policy_precheck.go`
 7. [ ] `modules/orgunit/services/orgunit_write_service.go`
-8. [ ] `pkg/fieldpolicy/setid_strategy_pdp.go`
-9. [ ] 后续新增统一 PDP/OPA 适配层文件
+8. [ ] `pkg/fieldpolicy/setid_strategy_pdp.go`（作为 `361` 上游依赖，不属于本计划主要交付）
+9. [ ] `361` 已交付的统一 PDP/OPA 适配层文件（作为消费前置，不在 `350` 重复实现）
 
 说明：
 
@@ -307,7 +305,7 @@ Assistant turn/task 快照新增冻结字段：
    - `business_unit_org_code -> business_unit_node_key -> resolved_setid/setid_source` 稳定可回放。
 3. [ ] `PDP 唯一性` 测试：
    - Assistant 不直接读 registry/store 时，仍能得到 `required/default/allowed/maintainable` 与 explain/version；
-   - 若启用 OPA，OPA 输出与既有统一 PDP 契约保持等价。
+   - `350` 默认依赖已完成的 `361` Rego-backed PDP adapter，只验证消费契约稳定，不重复承担引擎等价替换。
 4. [ ] `340` 回归测试：
    - Assistant 不再直接调用字段决议底层逻辑。
 5. [ ] `Projection 一致性` 测试：

@@ -11,7 +11,7 @@
    - vendored Web UI 来源：`third_party/librechat-web/source/`，静态产物出口：`internal/server/assets/librechat-web/`（见 [third_party/librechat-web/README.md](/home/lee/Projects/Bugs-And-Blossoms/third_party/librechat-web/README.md)）。
    - 运行态能力信号：`mcp_enabled / actions_enabled / agents_write_enabled`（见 [internal/server/assistant_domain_policy.go](/home/lee/Projects/Bugs-And-Blossoms/internal/server/assistant_domain_policy.go)、[internal/server/assistant_runtime_status.go](/home/lee/Projects/Bugs-And-Blossoms/internal/server/assistant_runtime_status.go)、[apps/web/src/pages/assistant/AssistantPage.tsx](/home/lee/Projects/Bugs-And-Blossoms/apps/web/src/pages/assistant/AssistantPage.tsx)）。
 3. [X] 因此，`360A` 的职责不是再讨论“是否降权”，而是把“具体先关什么、改哪些文件、能力信号目标值是什么、依赖何时进入删除批次、哪些测试要改”落成实施清单。
-4. [X] `DEV-PLAN-361` 对 `360A` 的直接影响不是改写 UI/runtime 分层，而是要求 Phase 2 之后的 runtime 接线不得固化新的本地策略解释路径；tool 输出、precheck、dry-run 与正式写链前置解释都应共同消费 `DEV-PLAN-350/361` 定义的 `Context Resolver -> 唯一 PDP -> PrecheckProjection` 主链。
+4. [X] 后端统一策略消费主链由 `DEV-PLAN-350/361` 承接，`360A` 不再定义 PDP 实现细节。
 5. [X] 为避免继续把过渡期文档当现行入口，`220-293` 系列需纳入退出归档治理；`360A` 负责把“从正式入口、运行态说明与 `AGENTS.md` 文档地图中退场”落成执行步骤。
 6. [X] 考虑项目仍处于早期阶段，`360A` 的正式执行口径应从“迁移期兼容”切换为“硬切删除优先”：只要某项能力或依赖不再是 successor 主链唯一必需，就应进入删除队列，而不是继续留在默认主干。
 
@@ -24,7 +24,7 @@
 3. [ ] 冻结 runtime 主链切换顺序：`UI -> /internal/assistant/* -> LangGraph/LangChain runtime -> authoritative gate -> task/receipt/DTO`。
 4. [ ] 冻结运行态能力目标值与硬切删除口径。
 5. [ ] 冻结 Mongo / Meili / RAG / VectorDB 的依赖删除顺序与退役前置条件。
-6. [ ] 明确 `360A` 与 `361` 的联动边界：本计划只细化 LibreChat 降权、旧 API 切断与 runtime 接线步骤，不新增第二策略解释器；统一 PDP 的实现是否由 OPA 承接，属于后端策略消费层实现问题。
+6. [ ] 冻结 runtime 接线边界：本计划只细化 LibreChat 降权、旧 API 切断与 runtime 接线步骤，不新增新的策略旁路。
 7. [ ] 将 `220-293` 系列的退出归档动作细化到正式封板步骤：从 `AGENTS.md` 文档地图移除、形成 successor 映射、按批次迁入 `docs/archive/dev-plans/`。
 8. [ ] 冻结硬切原则：不保留长期 compat runtime、不保留长期 compat API、不保留长期双依赖栈。
 9. [ ] 冻结 compat API 逐端点生死表：每个端点都必须明确“替代者 / 删除批次 / 过渡窗口 / 最终动作”，不允许“先审计、以后再决定”。
@@ -35,7 +35,7 @@
 2. [ ] 不在本计划内新增数据库表或 checkpoint schema。
 3. [ ] 不在本计划内重做已由 successor 主线继承的 authoritative backend 合同（历史来源可追溯至 `223/260/293/350`，但现行收口以 `341/350/360/360A/361` 为准）。
 4. [ ] 不在本计划内接管 LibreChat upstream Node backend 为本仓正式实现面。
-5. [ ] 不因 `361` 采纳 OPA，就把 LibreChat 旧 API、Assistant runtime adapter 或前端运行态页扩张为新的策略裁决入口。
+5. [ ] 不把 LibreChat 旧 API、Assistant runtime adapter 或前端运行态页扩张为新的策略裁决入口。
 6. [ ] 不把“为了先跑起来而保留旧链路”当成主干默认策略；任何短期过渡结构都必须绑定删除任务与停止线。
 
 ## 3. 当前代码落点与正式职责
@@ -416,7 +416,7 @@
 Vendored LibreChat UI
 -> /internal/assistant/*
 -> LangGraph/LangChain proposal runtime
--> backend 统一策略主链（Context Resolver -> 唯一 PDP -> PrecheckProjection）
+-> backend 统一策略消费主链
 -> authoritative gate
 -> conversation/turn/task/audit SoT
 -> DTO / receipt / poll / refresh
@@ -447,7 +447,7 @@ Vendored LibreChat UI
    - `internal/server/assistant_semantic_orchestrator.go`
    - `internal/server/assistant_task_store.go`
    - 后续新增 `LangChain/LangGraph` adapter 文件
-4. [ ] 若 `361` 落地，以上 runtime adapter 边界只允许消费统一 `PrecheckProjection`、dry-run 与 explain 视图，不得各自再解释 `tenant_field_configs`、字段策略 registry 或租户策略表。
+4. [ ] 以上 runtime adapter 边界只允许消费后端统一策略视图，不得各自再解释 `tenant_field_configs`、字段策略 registry 或租户策略表。
 
 ### 8.4 successor 失败语义（冻结版）
 
@@ -521,11 +521,6 @@ Vendored LibreChat UI
 1. [ ] 按生死表切断 `/app/assistant/librechat/api/*` 与 `/assets/librechat-web/api/*` 中的旧端点，不再做开放式审计后再决定。
 2. [ ] 将正式业务链只保留到 `/internal/assistant/*` 所需的最小 successor 适配面，不再保留长期 compat API。
 3. [ ] 会话相关旧端点在 cutover PR 中先返回 `410 Gone`，并在紧随其后的 cleanup PR 删除 handler 分支与路由绑定。
-4. [ ] 若 `361` 已采纳，则在本阶段同步核对：
-   - `assistant_create_policy_precheck.go` 只消费统一 `PrecheckProjection`；
-   - runtime/tooling 不再直接访问底层策略 store；
-   - dry-run 与正式写链前置解释对同一 `PolicyContext` 输出一致结论。
-
 ### Phase 3：依赖去平台化
 
 1. [ ] 盘点 `mongodb/meilisearch/rag_api/vectordb` 与正式产品能力的实际绑定关系。
@@ -554,7 +549,6 @@ Vendored LibreChat UI
 2. [ ] 正式入口 smoke：用户不可见 Agents / MCP / Memory / Search / Code Interpreter 入口。
 3. [ ] 正式聊天闭环仍能通过 `tp288 / tp288b / tp290b` 一类主链 E2E。
 4. [ ] `Phase 0/1` 实施批次中，`/assistant-ui/*` 仍为 `302` alias/redirect，且不能旁路正式业务写接口；`410 Gone -> 删除` 验收留到 `Phase 4`。
-5. [ ] 若 `361` 已采纳，需额外验证 Assistant runtime、tooling、precheck 与正式写链前置解释对同一 `PolicyContext` 不出现分叉结论。
 6. [ ] `AGENTS.md` 文档地图已移除 `220-293` 系列现行入口，正式入口说明只保留 successor 计划链路。
 7. [ ] 默认部署不再依赖 `mongodb/meilisearch/rag_api/vectordb` 提供正式主链能力；若个别依赖尚未删除，必须证明其仍承担 successor 主链唯一职责。
 8. [ ] compat API 生死表中的所有端点都已进入 successor 或删除态，不存在“待审计、待决定”的灰区端点。
@@ -585,7 +579,6 @@ Vendored LibreChat UI
 2. [ ] 若运行态页无法区分“能力关闭”与“依赖异常”，导致运维语义混淆，则 `360A` 失败。
 3. [ ] 若旧 API 继续隐式承接平台能力，但仓内已宣称“LibreChat 仅为 UI 壳”，则 `360A` 失败。
 4. [ ] 若 `mongodb/meilisearch/rag_api/vectordb` 继续长期作为正式能力依赖存在，却没有对应 successor 主链职责说明，则 `360A` 失败。
-5. [ ] 若 runtime 主链切换后，Assistant runtime 或 compat API 仍直接解释底层策略表，未收敛到统一 `PrecheckProjection` 消费，则 `360A` 失败。
 6. [ ] 若 `AGENTS.md` 仍把 `220-293` 系列作为现行主线文档暴露，导致新旧入口并存，则 `360A` 失败。
 7. [ ] 若为了“平滑迁移”继续在默认部署中保留长期 compat 开关、长期双 API 或长期双依赖栈，则 `360A` 失败。
 8. [ ] 若 compat API 仍存在未冻结生死表的灰区端点，则 `360A` 失败。
