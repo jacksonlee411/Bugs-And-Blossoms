@@ -59,7 +59,7 @@
 ### 4.3 文档治理不变量（必须始终成立）
 
 - **SSOT 单一**：端口/命令/版本/编排等“可验证事实”必须有唯一事实源（例如 `Makefile`、`devhub.yml`、`.env.example`、CI workflow）；文档默认只引用，不复制。
-- **可发现性**：仓库级新增文档必须在 `AGENTS.md` 的 Doc Map 中可被发现；避免“孤儿文档”。
+- **可发现性**：仓库级新增活体文档必须在 `AGENTS.md` 的 Doc Map 中可被发现；执行日志/Readiness 证据/过程性 `dev-record` 不逐条进入 `AGENTS.md`，统一通过 `docs/dev-records/README.md`、`docs/archive/dev-records/README.md` 或对应计划文档的关联章节发现，避免“孤儿文档”。
 - **类型边界清晰**：dev-plan 是契约（约束未来实现），dev-record 是证据（记录已执行），runbook 是可复现操作；不要混用导致读者误判可信度/适用期。
 - **活体 vs 归档明确**：过期或仅供历史参考的内容必须迁移到 `docs/archive/` 并标注 `[Archived]`；归档不得作为活体 SSOT 被引用。
 - **过程性计划退场明确**：已经作废、已被替代、已不具有参考意义的过程性开发计划文档，必须迁移到 `docs/archive/dev-plans/`（例如：`DEV-PLAN-018`、`DEV-PLAN-026` 系列）。
@@ -78,10 +78,10 @@
 | 概念/约定/参考 | `docs/guides/**` | 相对稳定的指南/约定 | 强时效 runbook | `kebab-case.md` |
 | 操作/排障/流程 | `docs/runbooks/**` | 可复现操作步骤、排障手册 | 计划决策正文 | `kebab-case.md` |
 | 计划/规格（Contract） | `docs/dev-plans/**` | 目标/非目标/契约/验收/依赖/步骤 | 复制易漂移事实（端口/命令/版本）或脚本实现细节（除非作为执行记录）；把临时 workaround 当契约 | 见 `docs/dev-plans/000-docs-format.md` |
-| 记录/Readiness | `docs/dev-records/**` | 时间戳 + 命令 + 结果 + 链接 | 重新定义计划契约 | 以现有模式为准（如 `DEV-PLAN-XXX-READINESS.md`） |
+| 记录/Readiness | `docs/dev-records/**` | 时间戳 + 命令 + 结果 + 链接；作为执行证据目录入口 | 重新定义计划契约；逐条要求进入 `AGENTS.md` Doc Map | 以现有模式为准（如 `DEV-PLAN-XXX-READINESS.md`） |
 | 仓库级文档资源 | `docs/assets/**` | 截图、图表等 | 代码/配置 | 目录与文件名全小写 `kebab-case` |
 | 归档快照（非活体） | `docs/archive/**` | 历史快照，标题/头部标注 `[Archived]` | 作为活体 SSOT 引用 | `kebab-case.md`（建议） |
-| 历史执行记录归档 | `docs/archive/dev-records/**` | 已封存的证据/执行记录，仅保留历史参考价值 | 作为当前执行记录入口 | 延续原文件名 |
+| 历史执行记录归档 | `docs/archive/dev-records/**` | 已封存的证据/执行记录，仅保留历史参考价值 | 作为当前执行记录入口；逐条要求进入 `AGENTS.md` Doc Map | 延续原文件名 |
 | 模块级文档（豁免） | `modules/{module}/README.md`、`modules/{module}/docs/**` | 模块内部实现与说明 | 仓库级规则/流程 | 目录与文件名建议 `kebab-case` |
 
 ## 6. 文档创建与更新流程（Process）
@@ -100,7 +100,8 @@
 - [ ] 写明适用范围与状态（dev-plan 必须包含状态行；见 `docs/dev-plans/000-docs-format.md`）。
 - [ ] 明确 SSOT 引用：端口/命令/门禁优先写“引用链接”，而不是写死细节。
 - [ ] 更新可发现性（Discovery）：
-  - [ ] 仓库级新增文档必须加入 `AGENTS.md` 的 Doc Map；
+  - [ ] 仓库级新增活体文档必须加入 `AGENTS.md` 的 Doc Map；
+  - [ ] 若新增的是执行日志/Readiness 记录，则更新 `docs/dev-records/README.md` 或对应计划文档的关联章节；不要逐条加入 `AGENTS.md`；
   - [ ] `docs/guides/` 与 `docs/assets/` 建议同步更新各自 `index.md`（作为目录入口）。
 - [ ] 运行文档门禁：`make check doc`。
 
@@ -135,12 +136,12 @@
 - [ ] 目录选择正确（计划/记录/指南/runbook/归档/模块级）。
 - [ ] 文件命名符合约定；根目录未新增 `.md`（白名单除外）。
 - [ ] 若涉及命令/端口/版本，优先引用 `Makefile`/`devhub.yml`/`.env.example` 等 SSOT。
-- [ ] 已更新 `AGENTS.md` Doc Map（仓库级文档）。
+- [ ] 已按文档类型更新发现入口：活体文档更新 `AGENTS.md` Doc Map；执行日志/Readiness 记录更新目录入口或对应计划链接。
 - [ ] `make check doc` 通过。
 
 ### 8.2 评审文档（Reviewer）
 
-- [ ] 可发现：从 `AGENTS.md` Doc Map 能找到；无“孤儿文档”。
+- [ ] 可发现：活体文档能从 `AGENTS.md` Doc Map 找到；执行日志/Readiness 记录能从 `docs/dev-records/README.md`、`docs/archive/dev-records/README.md` 或对应计划文档找到；无“孤儿文档”。
 - [ ] 不漂移：未复制易变事实（端口/命令/版本）或已明确其 SSOT。
 - [ ] 边界清晰：适用范围/非目标明确；不会误导为“活体 SSOT”。
 - [ ] 可复现：runbook/记录类文档步骤完整（必要时含时间戳/环境）。
@@ -153,8 +154,8 @@
 
 ## 10. 常见违规与修复（最小处置）
 
-- `make check doc` 失败：优先检查是否新增文档未进入 `AGENTS.md` Doc Map、命名/落点不符合约定、或资源未归口到 `docs/assets/` / `modules/{module}/docs/`。
-- 出现孤儿文档：把入口补到 `AGENTS.md` Doc Map（仓库级），并视情况补充 `docs/guides/index.md` / `docs/assets/index.md` 的目录入口链接。
+- `make check doc` 失败：优先检查是否把新增活体文档遗漏在 `AGENTS.md` Doc Map、是否遗漏了执行日志目录入口/对应计划链接、命名/落点是否不符合约定、或资源未归口到 `docs/assets/` / `modules/{module}/docs/`。
+- 出现孤儿文档：活体文档补到 `AGENTS.md` Doc Map；执行日志/Readiness 记录补到 `docs/dev-records/README.md`、`docs/archive/dev-records/README.md` 或对应计划文档的关联章节，并视情况补充 `docs/guides/index.md` / `docs/assets/index.md` 的目录入口链接。
 - 文档复制了易漂移事实（端口/命令/版本）：改为引用 `devhub.yml`/`Makefile`/`.env.example`/CI workflow；仅在执行记录中写死命令并带时间戳。
 - 活体/归档混用：把过期内容迁移到 `docs/archive/` 并标注 `[Archived]`；同时修正入口链接，避免归档被当作 SSOT。
 - 文档类型放错目录：按第 5 节迁移到正确目录（guides/runbooks/docs/dev-plans/dev-records），并同步更新入口索引（Doc Map / index）。

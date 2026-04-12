@@ -4,4 +4,5 @@
 
 - 活体入口：`docs/dev-records/`
 - 历史归档：`docs/archive/dev-records/`
+- 文档治理规则：历史执行日志与过程性证据不逐条纳入 `AGENTS.md` 文档地图。
 - 归档目的：避免历史证据与后续新增记录混杂。
