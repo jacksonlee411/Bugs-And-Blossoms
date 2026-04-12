@@ -16,4 +16,5 @@
 0011-formal-new-convo-keep-history.patch
 0012-dedupe-stale-formal-placeholder.patch
 0013-unbound-formal-binding-key-empty.patch
-0014-assistant-successor-bootstrap-and-ui-depower.patch
+# 0014-assistant-successor-bootstrap-and-ui-depower.patch
+# 已在当前 source snapshot 中吸收；构建时不再重复回放，避免 375M1 successor cutover 双重应用。

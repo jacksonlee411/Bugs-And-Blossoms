@@ -12,6 +12,270 @@ import * as s from './schemas';
 import * as r from './roles';
 import * as permissions from './accessPermissions';
 
+const assistantFormalProvider = 'bugs-and-blossoms-sid';
+const assistantFormalEndpointKey = 'assistantFormal';
+const assistantFormalEndpointLabel = 'Assistant';
+const assistantFormalAppTitle = 'Bugs and Blossoms Assistant';
+
+type AssistantFormalViewer = {
+  id: string;
+  username: string;
+  email: string;
+  name: string;
+  role: string;
+};
+
+type AssistantFormalUIBootstrap = {
+  contract_version: string;
+  viewer: AssistantFormalViewer;
+  ui: {
+    model_select: boolean;
+    artifacts_enabled: boolean;
+    agents_ui_enabled: boolean;
+    memory_enabled: boolean;
+    web_search_enabled: boolean;
+    file_search_enabled: boolean;
+    code_interpreter_enabled: boolean;
+  };
+  models: Array<{
+    endpoint_key: string;
+    endpoint_type: string;
+    provider: string;
+    model: string;
+    label: string;
+  }>;
+  runtime: {
+    status: string;
+    runtime_cutover_mode: string;
+    domain_policy_version: string;
+  };
+};
+
+type AssistantFormalSession = {
+  contract_version: string;
+  authenticated: boolean;
+  viewer: AssistantFormalViewer;
+};
+
+let assistantFormalBootstrapPromise: Promise<AssistantFormalUIBootstrap> | null = null;
+
+const assistantFormalRolePermissions = () => ({
+  PROMPTS: {
+    SHARED_GLOBAL: false,
+    USE: true,
+    CREATE: true,
+  },
+  BOOKMARKS: {
+    USE: true,
+  },
+  MEMORIES: {
+    USE: false,
+    CREATE: false,
+    UPDATE: false,
+    READ: false,
+    OPT_OUT: false,
+  },
+  AGENTS: {
+    SHARED_GLOBAL: false,
+    USE: false,
+    CREATE: false,
+  },
+  MULTI_CONVO: {
+    USE: true,
+  },
+  TEMPORARY_CHAT: {
+    USE: false,
+  },
+  RUN_CODE: {
+    USE: false,
+  },
+  WEB_SEARCH: {
+    USE: false,
+  },
+  PEOPLE_PICKER: {
+    VIEW_USERS: false,
+    VIEW_GROUPS: false,
+    VIEW_ROLES: false,
+  },
+  MARKETPLACE: {
+    USE: false,
+  },
+  FILE_SEARCH: {
+    USE: false,
+  },
+  FILE_CITATIONS: {
+    USE: false,
+  },
+});
+
+const assistantFormalRole = (roleName: string): r.TRole => ({
+  name: roleName === r.SystemRoles.ADMIN ? r.SystemRoles.ADMIN : r.SystemRoles.USER,
+  permissions: assistantFormalRolePermissions(),
+});
+
+const assistantFormalUserFromViewer = (viewer?: AssistantFormalViewer | null): t.TUser => ({
+  id: viewer?.id ?? '',
+  username: viewer?.username ?? '',
+  email: viewer?.email ?? '',
+  name: viewer?.name ?? '',
+  avatar: '',
+  role: viewer?.role ?? r.SystemRoles.USER,
+  provider: assistantFormalProvider,
+  plugins: [],
+  personalization: {
+    memories: false,
+  },
+  createdAt: '',
+  updatedAt: '',
+});
+
+const assistantFormalModelIcon = (endpointType?: string) => {
+  switch (endpointType) {
+    case s.EModelEndpoint.openAI:
+    case s.EModelEndpoint.anthropic:
+    case s.EModelEndpoint.google:
+    case s.EModelEndpoint.bedrock:
+    case s.EModelEndpoint.azureOpenAI:
+      return endpointType;
+    default:
+      return undefined;
+  }
+};
+
+const getAssistantFormalBootstrap = async (): Promise<AssistantFormalUIBootstrap> => {
+  if (assistantFormalBootstrapPromise == null) {
+    assistantFormalBootstrapPromise = request
+      .get<AssistantFormalUIBootstrap>(endpoints.assistantUIBootstrap())
+      .catch((error) => {
+        assistantFormalBootstrapPromise = null;
+        throw error;
+      });
+  }
+  return assistantFormalBootstrapPromise;
+};
+
+const getAssistantFormalModelEntries = (bootstrap: AssistantFormalUIBootstrap) => {
+  const seen = new Set<string>();
+  const entries = bootstrap.models.flatMap((model, index) => {
+    const label =
+      model.label?.trim() ||
+      [model.provider?.trim(), model.model?.trim()].filter(Boolean).join(' / ') ||
+      `Assistant Model ${index + 1}`;
+    if (seen.has(label)) {
+      return [];
+    }
+    seen.add(label);
+    return [
+      {
+        label,
+        iconURL: assistantFormalModelIcon(model.endpoint_type),
+      },
+    ];
+  });
+  return entries.length > 0 ? entries : [{ label: assistantFormalEndpointLabel, iconURL: undefined }];
+};
+
+const assistantFormalStartupConfig = (
+  bootstrap: AssistantFormalUIBootstrap,
+): config.TStartupConfig & {
+  mcpCustomUserVars?: Record<string, { title: string; description: string }>;
+} => {
+  const modelEntries = getAssistantFormalModelEntries(bootstrap);
+  const defaultEntry = modelEntries[0];
+  return {
+    appTitle: assistantFormalAppTitle,
+    socialLogins: config.defaultSocialLogins,
+    interface: {
+      endpointsMenu: bootstrap.ui.model_select,
+      modelSelect: bootstrap.ui.model_select,
+      parameters: false,
+      sidePanel: true,
+      multiConvo: true,
+      bookmarks: true,
+      memories: bootstrap.ui.memory_enabled,
+      presets: true,
+      prompts: true,
+      agents: bootstrap.ui.agents_ui_enabled,
+      temporaryChat: false,
+      runCode: bootstrap.ui.code_interpreter_enabled,
+      webSearch: bootstrap.ui.web_search_enabled,
+      marketplace: {
+        use: false,
+      },
+      fileSearch: bootstrap.ui.file_search_enabled,
+      fileCitations: false,
+    },
+    discordLoginEnabled: false,
+    facebookLoginEnabled: false,
+    githubLoginEnabled: false,
+    googleLoginEnabled: false,
+    openidLoginEnabled: false,
+    appleLoginEnabled: false,
+    samlLoginEnabled: false,
+    openidLabel: '',
+    openidImageUrl: '',
+    openidAutoRedirect: false,
+    samlLabel: '',
+    samlImageUrl: '',
+    serverDomain: '',
+    emailLoginEnabled: true,
+    registrationEnabled: false,
+    socialLoginEnabled: false,
+    passwordResetEnabled: false,
+    emailEnabled: false,
+    showBirthdayIcon: false,
+    helpAndFaqURL: '',
+    sharedLinksEnabled: false,
+    publicSharedLinksEnabled: false,
+    instanceProjectId: '',
+    modelSpecs: {
+      enforce: false,
+      prioritize: true,
+      addedEndpoints: [assistantFormalEndpointKey],
+      list: modelEntries.map((entry, index) => ({
+        name: entry.label,
+        label: entry.label,
+        iconURL: entry.iconURL,
+        default: index === 0,
+        showIconInMenu: true,
+        showIconInHeader: true,
+        preset: {
+          endpoint: assistantFormalEndpointKey,
+          endpointType: s.EModelEndpoint.custom,
+          model: entry.label,
+          modelLabel: entry.label,
+          chatGptLabel: entry.label,
+          iconURL: entry.iconURL ?? defaultEntry.iconURL ?? null,
+        },
+      })),
+    },
+  };
+};
+
+const assistantFormalEndpointsConfig = (
+  bootstrap: AssistantFormalUIBootstrap,
+): t.TEndpointsConfig => {
+  const modelEntries = getAssistantFormalModelEntries(bootstrap);
+  return {
+    [assistantFormalEndpointKey]: {
+      name: assistantFormalEndpointLabel,
+      type: s.EModelEndpoint.custom,
+      order: 1,
+      iconURL: modelEntries[0]?.iconURL,
+      modelDisplayLabel: assistantFormalEndpointLabel,
+      userProvide: false,
+      disableBuilder: true,
+    },
+  };
+};
+
+const assistantFormalModelsConfig = (bootstrap: AssistantFormalUIBootstrap): t.TModelsConfig => {
+  const modelEntries = getAssistantFormalModelEntries(bootstrap);
+  return {
+    [assistantFormalEndpointKey]: modelEntries.map((entry) => entry.label),
+  };
+};
+
 export function revokeUserKey(name: string): Promise<unknown> {
   return request.delete(endpoints.revokeUserKey(name));
 }
@@ -84,7 +348,9 @@ export function getSearchEnabled(): Promise<boolean> {
 }
 
 export function getUser(): Promise<t.TUser> {
-  return request.get(endpoints.user());
+  return request
+    .get<AssistantFormalSession>(endpoints.assistantSession())
+    .then((session) => assistantFormalUserFromViewer(session.viewer));
 }
 
 export function getUserBalance(): Promise<t.TBalanceResponse> {
@@ -100,7 +366,10 @@ export const login = (payload: t.TLoginUser): Promise<t.TLoginResponse> => {
 };
 
 export const logout = (): Promise<m.TLogoutResponse> => {
-  return request.post(endpoints.logout());
+  return request.post(endpoints.assistantSessionLogout()).then(() => ({
+    message: 'Logged out',
+    redirect: '/app/login',
+  }));
 };
 
 export const register = (payload: t.TRegisterUser) => {
@@ -171,15 +440,15 @@ export const getStartupConfig = (): Promise<
     mcpCustomUserVars?: Record<string, { title: string; description: string }>;
   }
 > => {
-  return request.get(endpoints.config());
+  return getAssistantFormalBootstrap().then((bootstrap) => assistantFormalStartupConfig(bootstrap));
 };
 
 export const getAIEndpoints = (): Promise<t.TEndpointsConfig> => {
-  return request.get(endpoints.aiEndpoints());
+  return getAssistantFormalBootstrap().then((bootstrap) => assistantFormalEndpointsConfig(bootstrap));
 };
 
 export const getModels = async (): Promise<t.TModelsConfig> => {
-  return request.get(endpoints.models());
+  return getAssistantFormalBootstrap().then((bootstrap) => assistantFormalModelsConfig(bootstrap));
 };
 
 /* Assistants */
@@ -772,7 +1041,7 @@ export function getRandomPrompts(
 
 /* Roles */
 export function getRole(roleName: string): Promise<r.TRole> {
-  return request.get(endpoints.getRole(roleName));
+  return Promise.resolve(assistantFormalRole(roleName));
 }
 
 export function updatePromptPermissions(

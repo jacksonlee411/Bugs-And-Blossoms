@@ -26,6 +26,13 @@ import store from '~/store';
 
 const AuthContext = createContext<TAuthContext | undefined>(undefined);
 
+const redirectToAppLogin = () => {
+  if (window.location.pathname.startsWith('/app/login')) {
+    return;
+  }
+  window.location.assign('/app/login');
+};
+
 const AuthContextProvider = ({
   authConfig,
   children,
@@ -67,7 +74,9 @@ const AuthContextProvider = ({
           return;
         }
 
-        if (finalRedirect.startsWith('http://') || finalRedirect.startsWith('https://')) {
+        if (finalRedirect.startsWith('/app/')) {
+          window.location.href = finalRedirect;
+        } else if (finalRedirect.startsWith('http://') || finalRedirect.startsWith('https://')) {
           window.location.href = finalRedirect;
         } else {
           navigate(finalRedirect, { replace: true });
@@ -100,7 +109,7 @@ const AuthContextProvider = ({
         token: undefined,
         isAuthenticated: false,
         user: undefined,
-        redirect: data.redirect ?? '/login',
+        redirect: data.redirect ?? '/app/login',
       });
     },
     onError: (error) => {
@@ -109,7 +118,7 @@ const AuthContextProvider = ({
         token: undefined,
         isAuthenticated: false,
         user: undefined,
-        redirect: '/login',
+        redirect: '/app/login',
       });
     },
   });
@@ -125,7 +134,7 @@ const AuthContextProvider = ({
     [logoutUser],
   );
 
-  const userQuery = useGetUserQuery({ enabled: !!(token ?? '') });
+  const userQuery = useGetUserQuery({ enabled: isAuthenticated === true });
 
   const login = (data: t.TLoginUser) => {
     loginUser.mutate(data);
@@ -139,14 +148,14 @@ const AuthContextProvider = ({
     refreshToken.mutate(undefined, {
       onSuccess: (data: t.TRefreshTokenResponse | undefined) => {
         const { user, token = '' } = data ?? {};
-        if (token) {
-          setUserContext({ token, isAuthenticated: true, user });
+        if (user) {
+          setUserContext({ token: token || undefined, isAuthenticated: true, user });
         } else {
-          console.log('Token is not present. User is not authenticated.');
+          console.log('Session refresh failed. Redirecting to app login.');
           if (authConfig?.test === true) {
             return;
           }
-          navigate('/login');
+          redirectToAppLogin();
         }
       },
       onError: (error) => {
@@ -154,26 +163,25 @@ const AuthContextProvider = ({
         if (authConfig?.test === true) {
           return;
         }
-        navigate('/login');
+        redirectToAppLogin();
       },
     });
-  }, []);
+  }, [authConfig?.test, refreshToken, setUserContext]);
 
   useEffect(() => {
     if (userQuery.data) {
       setUser(userQuery.data);
     } else if (userQuery.isError) {
       doSetError((userQuery.error as Error).message);
-      navigate('/login', { replace: true });
+      redirectToAppLogin();
     }
     if (error != null && error && isAuthenticated) {
       doSetError(undefined);
     }
-    if (token == null || !token || !isAuthenticated) {
+    if (!isAuthenticated) {
       silentRefresh();
     }
   }, [
-    token,
     isAuthenticated,
     userQuery.data,
     userQuery.isError,
@@ -188,7 +196,7 @@ const AuthContextProvider = ({
   useEffect(() => {
     const handleTokenUpdate = (event) => {
       console.log('tokenUpdated event received event');
-      const newToken = event.detail;
+      const newToken = event.detail || undefined;
       setUserContext({
         token: newToken,
         isAuthenticated: true,

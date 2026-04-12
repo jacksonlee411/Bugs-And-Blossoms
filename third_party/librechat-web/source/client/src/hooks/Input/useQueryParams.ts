@@ -18,6 +18,7 @@ import type {
 } from 'librechat-data-provider';
 import type { ZodAny } from 'zod';
 import { getConvoSwitchLogic, getModelSpecIconURL, removeUnavailableTools, logger } from '~/utils';
+import { isFormalAssistantPath } from '~/assistant-formal/runtime';
 import { useAuthContext, useAgentsMap, useDefaultConvo, useSubmitMessage } from '~/hooks';
 import { useChatContext, useChatFormContext } from '~/Providers';
 import { useGetAgentByIdQuery } from '~/data-provider';
@@ -444,7 +445,8 @@ export default function useQueryParams({
   }, [conversation, processSubmission, areSettingsApplied]);
 
   const { isAuthenticated } = useAuthContext();
-  const agentsMap = useAgentsMap({ isAuthenticated });
+  const formalAssistantMode = isFormalAssistantPath();
+  const agentsMap = useAgentsMap({ isAuthenticated: isAuthenticated && !formalAssistantMode });
   useEffect(() => {
     if (urlAgent) {
       injectAgentIntoAgentsMap(queryClient, urlAgent);

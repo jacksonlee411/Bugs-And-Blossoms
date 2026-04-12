@@ -1,6 +1,6 @@
 # DEV-PLAN-375：Assistant 主线实施路线图（350-370）
 
-**状态**: 进行中（2026-04-12 10:19 UTC；`375M0` 文档基线已建立，后续里程碑待实施）
+**状态**: 进行中（2026-04-12 19:40 CST；`375M1` 已完成，`375M2/375M3` 可并行启动）
 
 > 目标：为 `DEV-PLAN-350/360/360A/361/370` 提供单一编排入口，冻结当前状态、SSOT 边界、串并行顺序、批次拆分与出口条件。  
 > 本文只做路线图编排，不改写各主题文档的契约裁决权；实现细节与子系统合同仍以对应 dev-plan 为单一事实源。
@@ -15,7 +15,7 @@
    - `350C`：`disable / enable`
    - `370A`：Markdown compiler + `knowledge_qa / business_query`
    - `370B`：`business_action` knowledge/runtime 消费收口
-4. [ ] `375M1`：successor 执行面稳定（承接 `360 Phase 0/1` + `360A Phase 0/1`）。
+4. [X] `375M1`：successor 执行面稳定（承接 `360 Phase 0/1` + `360A Phase 0/1`）。
 5. [ ] `375M2`：`350A` 完成，收口 `add_version / insert_version`。
 6. [ ] `375M3`：`370A` 完成，收口 Markdown compiler + `knowledge_qa / business_query`。
 7. [ ] `375M4`：`350B` 完成，并完成 compat API 硬切。
@@ -35,8 +35,8 @@
 | 主题 | 当前状态 | 当前定位 | 备注 |
 | --- | --- | --- | --- |
 | `350` | 进行中 | `business_action` 正式 contract / Tool API / Gate 消费母法 | `create_orgunit / create_org` 样板已完成；Phase 5 未开始 |
-| `360` | 修订中 | LibreChat 剥离与 LangGraph/LangChain 分层接管母法 | `360A` 承接执行面 SSOT |
-| `360A` | 修订中 | successor DTO / `runtime-status` / compat API 生死表 / 删除批次 SSOT | 仍待执行 |
+| `360` | 进行中（Phase 0/1 已完成） | LibreChat 剥离与 LangGraph/LangChain 分层接管母法 | `360A` 承接执行面 SSOT；Phase 2+ 待实施 |
+| `360A` | 进行中（Phase 0/1 已完成） | successor DTO / `runtime-status` / compat API 生死表 / 删除批次 SSOT | `ui-bootstrap/session`、formal smoke、UI 降权已完成；Phase 2+ 待实施 |
 | `361` | 已封板基线 | 唯一 PDP / OPA evaluator 已完成 | 仅保留缺陷修复语义 |
 | `370` | 进行中 | Markdown knowledge runtime / compiler / `knowledge_qa` / `business_query` 收敛母法 | `business_action` 仍依赖 `350` contract |
 
@@ -71,10 +71,11 @@
 
 ### 375M1：Successor 执行面稳定
 
-1. [ ] 承接 `360 Phase 0/1` 与 `360A Phase 0/1`。
-2. [ ] 冻结并落地 `/internal/assistant/ui-bootstrap`、`/internal/assistant/session*`、`AssistantRuntimeStatusResponse` 的 successor 合同与运行态语义。
-3. [ ] 正式入口只保留聊天 UI 壳，不再暴露 Agents / MCP / Memory / Search / Code Interpreter。
-4. [ ] 将此里程碑定义为后续 `370A` 与所有正式 cutover 的前置门槛。
+1. [X] 承接 `360 Phase 0/1` 与 `360A Phase 0/1`。
+2. [X] 冻结并落地 `/internal/assistant/ui-bootstrap`、`/internal/assistant/session*`、`AssistantRuntimeStatusResponse` 的 successor 合同与运行态语义。
+3. [X] 正式入口只保留聊天 UI 壳，不再暴露 Agents / MCP / Memory / Search / Code Interpreter。
+4. [X] 将此里程碑定义为后续 `370A` 与所有正式 cutover 的前置门槛。
+5. [X] 执行证据已沉淀到 `docs/dev-records/dev-plan-375-m1-successor-entry-stabilization-log.md`。
 
 ### 375M2：业务动作收口批次一
 
@@ -164,3 +165,4 @@ flowchart TD
 9. `docs/dev-plans/370-assistant-api-first-and-markdown-knowledge-runtime-plan.md`
 10. `docs/dev-plans/370a-assistant-markdown-knowledge-runtime-phase1-query-and-compiler-plan.md`
 11. `docs/dev-plans/370b-assistant-business-action-knowledge-runtime-consumption-plan.md`
+12. `docs/dev-records/dev-plan-375-m1-successor-entry-stabilization-log.md`

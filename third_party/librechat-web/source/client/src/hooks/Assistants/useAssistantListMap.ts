@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 import { EModelEndpoint } from 'librechat-data-provider';
 import type { AssistantListResponse, AssistantsEndpoint } from 'librechat-data-provider';
 import type { AssistantListItem } from '~/common';
+import { isFormalAssistantPath } from '~/assistant-formal/runtime';
 import { useListAssistantsQuery } from '~/data-provider';
 
 const selectAssistantsResponse = (res: AssistantListResponse): AssistantListItem[] =>
@@ -17,11 +18,13 @@ export default function useAssistantListMap<T = AssistantListItem[] | null>(
     res: AssistantListResponse,
   ) => T,
 ): Record<AssistantsEndpoint, T | null> {
+  const formalAssistantMode = isFormalAssistantPath();
   const { data: assistantsList = null } = useListAssistantsQuery(
     EModelEndpoint.assistants,
     undefined,
     {
       select: selector,
+      enabled: !formalAssistantMode,
     },
   );
 
@@ -30,6 +33,7 @@ export default function useAssistantListMap<T = AssistantListItem[] | null>(
     undefined,
     {
       select: selector,
+      enabled: !formalAssistantMode,
     },
   );
 

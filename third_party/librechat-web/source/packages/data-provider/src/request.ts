@@ -4,6 +4,19 @@ import * as endpoints from './api-endpoints';
 import { setTokenHeader } from './headers-helpers';
 import type * as t from './types';
 
+type AssistantFormalViewer = {
+  id: string;
+  username: string;
+  email: string;
+  name: string;
+  role: string;
+};
+
+type AssistantFormalSessionRefresh = {
+  authenticated?: boolean;
+  viewer?: AssistantFormalViewer;
+};
+
 async function _get<T>(url: string, options?: AxiosRequestConfig): Promise<T> {
   const response = await axios.get(url, { ...options });
   return response.data;
@@ -64,8 +77,50 @@ async function _patch(url: string, data?: any) {
 let isRefreshing = false;
 let failedQueue: { resolve: (value?: any) => void; reject: (reason?: any) => void }[] = [];
 
-const refreshToken = (retry?: boolean): Promise<t.TRefreshTokenResponse | undefined> =>
-  _post(endpoints.refreshToken(retry));
+const assistantFormalUserFromViewer = (viewer?: AssistantFormalViewer | null): t.TUser => ({
+  id: viewer?.id ?? '',
+  username: viewer?.username ?? '',
+  email: viewer?.email ?? '',
+  name: viewer?.name ?? '',
+  avatar: '',
+  role: viewer?.role ?? 'USER',
+  provider: 'bugs-and-blossoms-sid',
+  plugins: [],
+  personalization: {
+    memories: false,
+  },
+  createdAt: '',
+  updatedAt: '',
+});
+
+const refreshToken = async (retry?: boolean): Promise<t.TRefreshTokenResponse | undefined> => {
+  const response = (await _post(
+    endpoints.assistantSessionRefresh(retry),
+  )) as AssistantFormalSessionRefresh | null;
+  if (!response?.authenticated || response.viewer == null) {
+    return undefined;
+  }
+  return {
+    token: '',
+    user: assistantFormalUserFromViewer(response.viewer),
+  };
+};
+
+const setRequestAuthorizationHeader = (headers: Record<string, unknown>, token?: string | null) => {
+  const nextToken = token?.trim() ?? '';
+  if (nextToken) {
+    headers['Authorization'] = `Bearer ${nextToken}`;
+    return;
+  }
+  delete headers['Authorization'];
+};
+
+const redirectToAppLogin = () => {
+  if (window.location.pathname.startsWith('/app/login')) {
+    return;
+  }
+  window.location.href = '/app/login';
+};
 
 const dispatchTokenUpdatedEvent = (token: string) => {
   setTokenHeader(token);
@@ -95,7 +150,7 @@ if (typeof window !== 'undefined') {
       if (originalRequest.url?.includes('/api/auth/2fa') === true) {
         return Promise.reject(error);
       }
-      if (originalRequest.url?.includes('/api/auth/logout') === true) {
+      if (originalRequest.url?.includes('/internal/assistant/session/logout') === true) {
         return Promise.reject(error);
       }
 
@@ -108,7 +163,11 @@ if (typeof window !== 'undefined') {
             const token = await new Promise((resolve, reject) => {
               failedQueue.push({ resolve, reject });
             });
-            originalRequest.headers['Authorization'] = 'Bearer ' + token;
+            originalRequest.headers = originalRequest.headers ?? {};
+            setRequestAuthorizationHeader(
+              originalRequest.headers as Record<string, unknown>,
+              token as string | null,
+            );
             return await axios(originalRequest);
           } catch (err) {
             return Promise.reject(err);
@@ -120,22 +179,31 @@ if (typeof window !== 'undefined') {
         try {
           const response = await refreshToken(
             // Handle edge case where we get a blank screen if the initial 401 error is from a refresh token request
-            originalRequest.url?.includes('api/auth/refresh') === true ? true : false,
+            originalRequest.url?.includes('/internal/assistant/session/refresh') === true
+              ? true
+              : false,
           );
 
           const token = response?.token ?? '';
+          const hasSession = !!response?.user?.id;
 
-          if (token) {
-            originalRequest.headers['Authorization'] = 'Bearer ' + token;
-            dispatchTokenUpdatedEvent(token);
-            processQueue(null, token);
+          if (hasSession) {
+            originalRequest.headers = originalRequest.headers ?? {};
+            setRequestAuthorizationHeader(
+              originalRequest.headers as Record<string, unknown>,
+              token,
+            );
+            if (token) {
+              dispatchTokenUpdatedEvent(token);
+            }
+            processQueue(null, token || null);
             return await axios(originalRequest);
           } else if (window.location.href.includes('share/')) {
             console.log(
               `Refresh token failed from shared link, attempting request to ${originalRequest.url}`,
             );
           } else {
-            window.location.href = '/login';
+            redirectToAppLogin();
           }
         } catch (err) {
           processQueue(err as AxiosError, null);

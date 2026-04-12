@@ -1,6 +1,6 @@
 # DEV-PLAN-360A：LibreChat 功能禁用清单与 Runtime 主链硬切实施计划
 
-**状态**: 修订中（2026-04-12 13:10 CST）
+**状态**: 进行中（2026-04-12 19:40 CST；Phase 0/1 已完成，Phase 2+ 待实施）
 
 ## 1. 背景
 
@@ -498,23 +498,23 @@ Vendored LibreChat UI
 
 ### Phase 0：建立观测、端点生死表与删除批次
 
-1. [ ] 扩展 `assistantRuntimeCapabilities`，补齐 `agents_ui_enabled / memory_enabled / web_search_enabled / file_search_enabled / code_interpreter_enabled / artifacts_enabled / runtime_cutover_mode`。
-2. [ ] 扩展 `AssistantRuntimeStatusResponse` 与 `AssistantPage.tsx`，让运行态页能区分“正式关闭”“依赖异常”“retired_by_design”。
-3. [ ] 冻结 compat API 逐端点生死表，并回写到实现任务单。
-4. [ ] 若确需短命总开关，则在 `deploy/librechat/.env.example` 中一次性写明其删除条件；否则不新增任何 compat 开关。
-5. [ ] 冻结 successor `ui-bootstrap/session` DTO、错误码、鉴权边界与前端 TS 接口，禁止实现阶段临场发明 bootstrap/session 结构。
+1. [X] 扩展 `assistantRuntimeCapabilities`，补齐 `agents_ui_enabled / memory_enabled / web_search_enabled / file_search_enabled / code_interpreter_enabled / artifacts_enabled / runtime_cutover_mode`。
+2. [X] 扩展 `AssistantRuntimeStatusResponse` 与 `AssistantPage.tsx`，让运行态页能区分“正式关闭”“依赖异常”“retired_by_design”。
+3. [X] 冻结 compat API 逐端点生死表，并回写到实现任务单。
+4. [X] 本批次未引入任何新的 compat 开关；successor DTO 直接切主链。
+5. [X] 冻结 successor `ui-bootstrap/session` DTO、错误码、鉴权边界与前端 TS 接口，禁止实现阶段临场发明 bootstrap/session 结构。
 
 ### Phase 1：正式入口下线第二平台入口
 
-1. [ ] 从 vendored Web UI 导航与路由移除或隐藏 Agents、MCP、Search、Memory、Code Interpreter 相关入口。
-2. [ ] 保留聊天 UI 壳、消息树、输入框、基础展示组件。
-3. [ ] 新增针对正式入口的前端 smoke 断言：
+1. [X] 从 vendored Web UI 导航与路由移除或隐藏 Agents、MCP、Search、Memory、Code Interpreter 相关入口。
+2. [X] 保留聊天 UI 壳、消息树、输入框、基础展示组件。
+3. [X] 新增针对正式入口的前端 smoke 断言：
    - 不出现 Agent Marketplace；
    - 不出现 MCP 配置入口；
    - 不出现 Web Search / Memory / Code Interpreter 开关。
-4. [ ] 在同一批次引入 `/internal/assistant/ui-bootstrap`，接管 `/config`、`/endpoints`、`/models` 的职责，并删除这三个 compat 端点。
-5. [ ] 在同一批次引入 `/internal/assistant/session*` successor 端点，并让正式入口不再调用 `/user`、`/roles/*` 与 `/auth/refresh`；这些 compat 端点的 `410 Gone -> 删除` 仍留到 `Phase 2`。
-6. [ ] `Phase 1` 完成后，将 `runtime_cutover_mode` 从 `cutover-prep` 切到 `ui-shell-only`。
+4. [X] 在同一批次引入 `/internal/assistant/ui-bootstrap`，接管 `/config`、`/endpoints`、`/models` 的职责，并删除这三个 compat 端点。
+5. [X] 在同一批次引入 `/internal/assistant/session*` successor 端点，并让正式入口不再调用 `/user`、`/roles/*` 与 `/auth/refresh`；这些 compat 端点的 `410 Gone -> 删除` 仍留到 `Phase 2`。
+6. [X] `Phase 1` 完成后，将 `runtime_cutover_mode` 从 `cutover-prep` 切到 `ui-shell-only`。
 
 ### Phase 2：旧 API 切断与 runtime 主链硬切
 
@@ -545,23 +545,23 @@ Vendored LibreChat UI
 
 ### 10.1 必须补的验证
 
-1. [ ] 运行态页能区分“功能已硬切关闭”“依赖异常”“retired_by_design”。
-2. [ ] 正式入口 smoke：用户不可见 Agents / MCP / Memory / Search / Code Interpreter 入口。
+1. [X] 运行态页能区分“功能已硬切关闭”“依赖异常”“retired_by_design”。
+2. [X] 正式入口 smoke：用户不可见 Agents / MCP / Memory / Search / Code Interpreter 入口。
 3. [ ] 正式聊天闭环仍能通过 `tp288 / tp288b / tp290b` 一类主链 E2E。
-4. [ ] `Phase 0/1` 实施批次中，`/assistant-ui/*` 仍为 `302` alias/redirect，且不能旁路正式业务写接口；`410 Gone -> 删除` 验收留到 `Phase 4`。
+4. [X] `Phase 0/1` 实施批次中，`/assistant-ui/*` 仍为 `302` alias/redirect，且不能旁路正式业务写接口；`410 Gone -> 删除` 验收留到 `Phase 4`。
 6. [ ] `AGENTS.md` 文档地图已移除 `220-293` 系列现行入口，正式入口说明只保留 successor 计划链路。
 7. [ ] 默认部署不再依赖 `mongodb/meilisearch/rag_api/vectordb` 提供正式主链能力；若个别依赖尚未删除，必须证明其仍承担 successor 主链唯一职责。
 8. [ ] compat API 生死表中的所有端点都已进入 successor 或删除态，不存在“待审计、待决定”的灰区端点。
 9. [ ] 若进入 `Phase 4` 收口批次，`/assistant-ui/*` 已按计划返回 `410 Gone` 或完成路由删除，不再作为历史别名长期存活。
-10. [ ] `/internal/assistant/ui-bootstrap` 与 `/internal/assistant/session*` 已按冻结契约返回最小 DTO、错误码与鉴权行为，不存在实现者自定义字段漂移。
+10. [X] `/internal/assistant/ui-bootstrap` 与 `/internal/assistant/session*` 已按冻结契约返回最小 DTO、错误码与鉴权行为，不存在实现者自定义字段漂移。
 11. [ ] successor runtime 不可用时，系统只表现为显式拒绝/只读浏览/任务失败终止，不出现旧平台回退、隐式降级或 bootstrap 旁路。
 
 ### 10.2 需要更新的现有测试
 
-1. [ ] `apps/web/src/pages/assistant/AssistantPage.test.tsx`
+1. [X] `apps/web/src/pages/assistant/AssistantPage.test.tsx`
    - 当前断言仍包含 `assistant-ui` 依赖展示语义；
    - 后续需改为“待删除依赖/硬切关闭能力”口径。
-2. [ ] `e2e/tests/tp283-librechat-formal-entry-cutover.spec.js`
+2. [X] `e2e/tests/tp283-librechat-formal-entry-cutover.spec.js`
    - 增加“正式入口不暴露第二平台能力”断言。
 3. [ ] `e2e/tests/tp288-librechat-real-entry-evidence.spec.js`
 4. [ ] `e2e/tests/tp288b-librechat-live-task-receipt-contract.spec.js`

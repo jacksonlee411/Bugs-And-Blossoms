@@ -1,6 +1,6 @@
 # DEV-PLAN-360：LibreChat 硬切剥离与 LangGraph/LangChain 分层接管方案
 
-**状态**: 修订中（2026-04-12 12:02 CST）
+**状态**: 进行中（2026-04-12 19:40 CST；Phase 0/1 已完成，Phase 2+ 待实施）
 
 ## 1. 背景
 
@@ -212,30 +212,30 @@ graph TD
 
 ### Phase 0：冻结能力矩阵、硬切边界与停止线
 
-1. [ ] 冻结本计划中的“保留 / 下线 / 后移”矩阵。
-2. [ ] 盘点当前正式入口中是否仍暴露：
+1. [X] 冻结本计划中的“保留 / 下线 / 后移”矩阵。
+2. [X] 盘点当前正式入口中是否仍暴露：
    - Agents；
    - MCP UI；
    - Memory；
    - Search；
    - Code Interpreter；
    - File Search / RAG。
-3. [ ] 将这些能力标记为：
+3. [X] 将这些能力标记为：
    - 正式保留；
    - 立即隐藏并删除；
    - 仅开发期临时门控；
    - 立即归档退出。
-4. [ ] `360` 在此阶段只冻结母法，不直接定义 successor DTO、compat API 生死表、runtime-status 枚举扩展或 `/assistant-ui/*` 的退场时点；这些执行合同统一以下列文档为准：
+4. [X] `360` 在此阶段只冻结母法，不直接定义 successor DTO、compat API 生死表、runtime-status 枚举扩展或 `/assistant-ui/*` 的退场时点；这些执行合同统一以下列文档为准：
    - `DEV-PLAN-360A`：`ui-bootstrap/session*` 契约、runtime-status 语义、compat API 生死表、删除批次；
    - `DEV-PLAN-361`：唯一 PDP / OPA 适配层；
    - `DEV-PLAN-350`：Assistant 策略消费链收敛。
 
 ### Phase 1：前端可见层降权
 
-1. [ ] 在正式入口隐藏或禁用 LibreChat 的 Agents / MCP / Memory / Web Search / Code Interpreter / File Search 等用户可见入口。
-2. [ ] 保证用户在正式入口上只能看到“聊天 UI 能力”，而看不到第二套 Agent 平台配置面板。
-3. [ ] `Phase 1` 的目标冻结为“正式入口只保留聊天 UI 壳，不暴露第二平台入口”。
-4. [ ] 若 `/assistant-ui/*` 或上游调试直链仍存在，其角色只允许是短期别名/排障入口，不得作为正式验收入口；其 `410 Gone -> 路由删除` 的具体批次由 `DEV-PLAN-360A Phase 4` 执行，不在 `360` 中复制。
+1. [X] 在正式入口隐藏或禁用 LibreChat 的 Agents / MCP / Memory / Web Search / Code Interpreter / File Search 等用户可见入口。
+2. [X] 保证用户在正式入口上只能看到“聊天 UI 能力”，而看不到第二套 Agent 平台配置面板。
+3. [X] `Phase 1` 的目标冻结为“正式入口只保留聊天 UI 壳，不暴露第二平台入口”。
+4. [X] 若 `/assistant-ui/*` 或上游调试直链仍存在，其角色只允许是短期别名/排障入口，不得作为正式验收入口；其 `410 Gone -> 路由删除` 的具体批次由 `DEV-PLAN-360A Phase 4` 执行，不在 `360` 中复制。
 
 ### Phase 2：runtime 主链切换
 

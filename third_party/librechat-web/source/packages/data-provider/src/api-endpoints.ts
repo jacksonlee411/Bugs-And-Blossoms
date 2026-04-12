@@ -20,6 +20,8 @@ if (BASE_URL && BASE_URL.endsWith('/')) {
 
 export const apiBaseUrl = () => BASE_URL;
 
+const assistantInternalRoot = '/internal/assistant';
+
 // Testing this buildQuery function
 const buildQuery = (params: Record<string, unknown>): string => {
   const query = Object.entries(params)
@@ -134,6 +136,8 @@ export const login = () => `${BASE_URL}/api/auth/login`;
 
 export const logout = () => `${BASE_URL}/api/auth/logout`;
 
+export const assistantSessionLogout = () => `${assistantInternalRoot}/session/logout`;
+
 export const register = () => `${BASE_URL}/api/auth/register`;
 
 export const loginFacebook = () => `${BASE_URL}/api/auth/facebook`;
@@ -142,6 +146,9 @@ export const loginGoogle = () => `${BASE_URL}/api/auth/google`;
 
 export const refreshToken = (retry?: boolean) =>
   `${BASE_URL}/api/auth/refresh${retry === true ? '?retry=true' : ''}`;
+
+export const assistantSessionRefresh = (_retry?: boolean) =>
+  `${assistantInternalRoot}/session/refresh`;
 
 export const requestPasswordReset = () => `${BASE_URL}/api/auth/requestPasswordReset`;
 
@@ -167,6 +174,10 @@ export const cancelMCPOAuth = (serverName: string) => {
 };
 
 export const config = () => `${BASE_URL}/api/config`;
+
+export const assistantUIBootstrap = () => `${assistantInternalRoot}/ui-bootstrap`;
+
+export const assistantSession = () => `${assistantInternalRoot}/session`;
 
 export const prompts = () => `${BASE_URL}/api/prompts`;
 

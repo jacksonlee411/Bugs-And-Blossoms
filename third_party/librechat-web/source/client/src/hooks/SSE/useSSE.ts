@@ -495,15 +495,21 @@ export default function useSSE(
         try {
           const refreshResponse = await request.refreshToken();
           const token = refreshResponse?.token ?? '';
-          if (!token) {
+          if (!refreshResponse?.user) {
             throw new Error('Token refresh failed.');
           }
-          sse.headers = {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`,
-          };
+          sse.headers = token
+            ? {
+                'Content-Type': 'application/json',
+                Authorization: `Bearer ${token}`,
+              }
+            : {
+                'Content-Type': 'application/json',
+              };
 
-          request.dispatchTokenUpdatedEvent(token);
+          if (token) {
+            request.dispatchTokenUpdatedEvent(token);
+          }
           sse.stream();
           return;
         } catch (error) {

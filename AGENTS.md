@@ -381,6 +381,7 @@ modules/{module}/
 - DEV-PLAN-341：Assistant 主线演进与 340/350 问题关联调查报告：`docs/dev-plans/341-assistant-mainline-evolution-and-340-350-correlation-investigation.md`
 - DEV-PLAN-340：Assistant 组织架构重复维护调查与收敛方案：`docs/dev-plans/340-assistant-orgunit-duplicate-maintenance-investigation-and-convergence-plan.md`
 - DEV-PLAN-375：Assistant 主线实施路线图（350-370，编排入口）：`docs/dev-plans/375-assistant-mainline-implementation-roadmap-350-370.md`
+- DEV-PLAN-375 M1 执行记录：Successor 执行面稳定：`docs/dev-records/dev-plan-375-m1-successor-entry-stabilization-log.md`
 - DEV-PLAN-350：Assistant Tooling 对齐统一策略模型实施方案：`docs/dev-plans/350-assistant-tooling-alignment-with-unified-policy-model-plan.md`
 - DEV-PLAN-350A：Assistant OrgUnit 八动作统一收口 Phase 5 P1——`add_version / insert_version`：`docs/dev-plans/350a-assistant-orgunit-phase5-p1-add-insert-version-convergence-plan.md`
 - DEV-PLAN-350B：Assistant OrgUnit 八动作统一收口 Phase 5 P2——`correct / rename / move`：`docs/dev-plans/350b-assistant-orgunit-phase5-p2-correct-rename-move-convergence-plan.md`
