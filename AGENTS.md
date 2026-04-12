@@ -384,6 +384,7 @@ modules/{module}/
 - DEV-PLAN-360：LibreChat 硬切剥离与 LangGraph/LangChain 分层接管方案：`docs/dev-plans/360-librechat-depower-and-langgraph-langchain-layered-takeover-plan.md`
 - DEV-PLAN-360A：LibreChat 功能禁用清单与 Runtime 主链硬切实施计划：`docs/dev-plans/360a-librechat-feature-disablement-and-runtime-cutover-plan.md`
 - DEV-PLAN-361：OPA 作为唯一 PDP 候选引擎的引入边界与迁移方案：`docs/dev-plans/361-opa-pdp-adoption-boundary-and-migration-plan.md`
+- DEV-PLAN-370：Assistant API-First 与 Markdown Knowledge Runtime 主链收敛方案：`docs/dev-plans/370-assistant-api-first-and-markdown-knowledge-runtime-plan.md`
 - DEV-PLAN-303：全仓残留 `gap/coverage` 测试尾项清零计划：`docs/dev-plans/303-repo-final-gap-coverage-test-tail-closure-plan.md`
 - DEV-PLAN-310：全项目 view/as_of 时间语义专项检视与最小收敛方案：`docs/dev-plans/310-project-wide-view-as-of-semantics-review-and-minimal-convergence-plan.md`
 - DEV-PLAN-311：View As Of 页面改造矩阵与 OrgUnitDetails 样板实施计划：`docs/dev-plans/311-view-as-of-page-cutover-matrix-and-orgunit-details-sample-plan.md`
