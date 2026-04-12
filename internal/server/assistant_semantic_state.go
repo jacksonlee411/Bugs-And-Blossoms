@@ -159,7 +159,7 @@ func assistantBuildAuthoritativeDryRun(
 ) assistantDryRunResult {
 	dryRun := assistantBuildDryRunWithRetrieval(intent, candidates, resolvedCandidateID, retrieval)
 	if svc != nil {
-		dryRun = svc.enrichCreateOrgUnitDryRunWithPolicy(ctx, tenantID, intent, candidates, resolvedCandidateID, dryRun)
+		dryRun = svc.enrichAuthoritativeOrgUnitDryRunWithPolicy(ctx, tenantID, intent, candidates, resolvedCandidateID, dryRun)
 	}
 	return dryRun
 }

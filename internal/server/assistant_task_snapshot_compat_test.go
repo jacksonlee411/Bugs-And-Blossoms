@@ -61,3 +61,52 @@ func TestAssistantTaskSnapshotCompatible_KnowledgeFields(t *testing.T) {
 		})
 	}
 }
+
+func TestAssistantTaskSnapshotCompatible_PolicyFields(t *testing.T) {
+	current := assistantTaskContractSnapshot{
+		IntentSchemaVersion:      "v1",
+		CompilerContractVersion:  "v1",
+		CapabilityMapVersion:     "v1",
+		SkillManifestDigest:      "d",
+		ContextHash:              "c",
+		IntentHash:               "i",
+		PlanHash:                 "p",
+		PolicyContextDigest:      "ctx",
+		EffectivePolicyVersion:   "epv1",
+		ResolvedSetID:            "S2601",
+		SetIDSource:              "custom",
+		PrecheckProjectionDigest: "proj",
+		MutationPolicyVersion:    "mpv1",
+	}
+	if !assistantTaskSnapshotCompatible(current, assistantTaskContractSnapshot{
+		IntentSchemaVersion:     "v1",
+		CompilerContractVersion: "v1",
+		CapabilityMapVersion:    "v1",
+		SkillManifestDigest:     "d",
+		ContextHash:             "c",
+		IntentHash:              "i",
+		PlanHash:                "p",
+	}) {
+		t.Fatal("empty policy fields should remain forward-compatible")
+	}
+
+	cases := []struct {
+		name   string
+		mutate func(snapshot *assistantTaskContractSnapshot)
+	}{
+		{name: "policy version mismatch", mutate: func(snapshot *assistantTaskContractSnapshot) { snapshot.EffectivePolicyVersion = "x" }},
+		{name: "resolved setid mismatch", mutate: func(snapshot *assistantTaskContractSnapshot) { snapshot.ResolvedSetID = "x" }},
+		{name: "setid source mismatch", mutate: func(snapshot *assistantTaskContractSnapshot) { snapshot.SetIDSource = "x" }},
+		{name: "projection digest mismatch", mutate: func(snapshot *assistantTaskContractSnapshot) { snapshot.PrecheckProjectionDigest = "x" }},
+		{name: "mutation policy mismatch", mutate: func(snapshot *assistantTaskContractSnapshot) { snapshot.MutationPolicyVersion = "x" }},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			stored := current
+			tc.mutate(&stored)
+			if assistantTaskSnapshotCompatible(current, stored) {
+				t.Fatalf("expected mismatch for case=%s", tc.name)
+			}
+		})
+	}
+}

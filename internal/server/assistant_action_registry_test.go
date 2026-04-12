@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -187,8 +188,18 @@ func TestAssistantActionRegistryAndVersionTupleHelpers(t *testing.T) {
 		}
 		fallbackSvc := &assistantConversationService{}
 		for _, actionID := range []string{assistantIntentCreateOrgUnit, assistantIntentAddOrgUnitVersion, assistantIntentInsertOrgUnitVersion, assistantIntentCorrectOrgUnit, assistantIntentDisableOrgUnit, assistantIntentEnableOrgUnit, assistantIntentMoveOrgUnit, assistantIntentRenameOrgUnit} {
-			if spec, ok := fallbackSvc.lookupActionSpec(actionID); !ok || spec.ID != actionID || spec.Handler.CommitAdapterKey == "" {
+			spec, ok := fallbackSvc.lookupActionSpec(actionID)
+			if !ok || spec.ID != actionID || spec.Handler.CommitAdapterKey == "" {
 				t.Fatalf("unexpected fallback spec action=%s spec=%+v ok=%v", actionID, spec, ok)
+			}
+			if (actionID == assistantIntentAddOrgUnitVersion || actionID == assistantIntentInsertOrgUnitVersion) &&
+				(strings.TrimSpace(spec.PolicyContextContractVersion) == "" ||
+					strings.TrimSpace(spec.PrecheckProjectionContractVersion) == "" ||
+					len(spec.RequiredPolicyFacts) == 0 ||
+					len(spec.ReadonlyTools) == 0 ||
+					strings.TrimSpace(spec.MutationPolicyKey) == "" ||
+					strings.TrimSpace(spec.CapabilityBucketKey) == "") {
+				t.Fatalf("expected append spec contracts populated action=%s spec=%+v", actionID, spec)
 			}
 		}
 	})

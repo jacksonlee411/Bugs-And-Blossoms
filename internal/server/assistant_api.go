@@ -189,13 +189,14 @@ type assistantConfigChange struct {
 }
 
 type assistantDryRunResult struct {
-	Diff                    []map[string]any                          `json:"diff"`
-	Explain                 string                                    `json:"explain"`
-	ValidationErrors        []string                                  `json:"validation_errors,omitempty"`
-	Retrieval               assistantSemanticRetrievalResult          `json:"retrieval,omitempty"`
-	WouldCommit             bool                                      `json:"would_commit"`
-	PlanHash                string                                    `json:"plan_hash,omitempty"`
-	CreateOrgUnitProjection *assistantCreateOrgUnitProjectionSnapshot `json:"create_orgunit_projection,omitempty"`
+	Diff                     []map[string]any                           `json:"diff"`
+	Explain                  string                                     `json:"explain"`
+	ValidationErrors         []string                                   `json:"validation_errors,omitempty"`
+	Retrieval                assistantSemanticRetrievalResult           `json:"retrieval,omitempty"`
+	WouldCommit              bool                                       `json:"would_commit"`
+	PlanHash                 string                                     `json:"plan_hash,omitempty"`
+	CreateOrgUnitProjection  *assistantCreateOrgUnitProjectionSnapshot  `json:"create_orgunit_projection,omitempty"`
+	OrgUnitVersionProjection *assistantOrgUnitVersionProjectionSnapshot `json:"orgunit_version_projection,omitempty"`
 }
 
 type assistantCandidate struct {
@@ -1649,6 +1650,7 @@ func cloneConversation(in *assistantConversation) *assistantConversation {
 		copyTurn.DryRun.Diff = append([]map[string]any(nil), turn.DryRun.Diff...)
 		copyTurn.DryRun.ValidationErrors = append([]string(nil), turn.DryRun.ValidationErrors...)
 		copyTurn.DryRun.CreateOrgUnitProjection = assistantCloneCreateOrgUnitProjectionSnapshot(turn.DryRun.CreateOrgUnitProjection)
+		copyTurn.DryRun.OrgUnitVersionProjection = assistantCloneOrgUnitVersionProjectionSnapshot(turn.DryRun.OrgUnitVersionProjection)
 		if turn.CommitResult != nil {
 			copyResult := *turn.CommitResult
 			copyTurn.CommitResult = &copyResult

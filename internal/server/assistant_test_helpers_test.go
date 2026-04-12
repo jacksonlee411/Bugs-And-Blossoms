@@ -55,6 +55,20 @@ func (s assistantCreatePolicyRegistryStore) resolveFieldDecision(
 			}, nil
 		}
 	}
+	if baselineCapabilityKey, ok := orgUnitBaselineCapabilityKeyForIntentCapability(capabilityKey); ok {
+		switch strings.TrimSpace(baselineCapabilityKey) {
+		case orgUnitWriteFieldPolicyCapabilityKey:
+			switch strings.TrimSpace(fieldKey) {
+			case "name", "parent_org_code", "status", "is_business_unit", "manager_pernr":
+				return setIDFieldDecision{
+					CapabilityKey: capabilityKey,
+					FieldKey:      fieldKey,
+					Visible:       true,
+					Maintainable:  true,
+				}, nil
+			}
+		}
+	}
 	return s.fallback.resolveFieldDecision(ctx, tenantID, capabilityKey, fieldKey, resolvedSetID, businessUnitNodeKey, asOf)
 }
 
@@ -178,6 +192,45 @@ func assistantTestAttachCreateOrgUnitProjection(
 		snapshot = assistantTestCreateOrgUnitProjectionSnapshot()
 	}
 	turn.DryRun.CreateOrgUnitProjection = assistantCloneCreateOrgUnitProjectionSnapshot(snapshot)
+	return assistantTestAttachBusinessRoute(turn)
+}
+
+func assistantTestAttachOrgUnitVersionProjection(
+	turn *assistantTurn,
+	snapshot *assistantOrgUnitVersionProjectionSnapshot,
+) *assistantTurn {
+	if turn == nil {
+		return nil
+	}
+	action := strings.TrimSpace(turn.Intent.Action)
+	if action != assistantIntentAddOrgUnitVersion && action != assistantIntentInsertOrgUnitVersion {
+		return assistantTestAttachBusinessRoute(turn)
+	}
+	if strings.TrimSpace(turn.Intent.IntentSchemaVersion) == "" {
+		turn.Intent.IntentSchemaVersion = assistantIntentSchemaVersionV1
+	}
+	if strings.TrimSpace(turn.Intent.ContextHash) == "" {
+		turn.Intent.ContextHash = "ctx_hash"
+	}
+	if strings.TrimSpace(turn.Intent.IntentHash) == "" {
+		turn.Intent.IntentHash = "intent_hash"
+	}
+	if strings.TrimSpace(turn.Plan.CompilerContractVersion) == "" {
+		turn.Plan.CompilerContractVersion = assistantCompilerContractVersionV1
+	}
+	if strings.TrimSpace(turn.Plan.CapabilityMapVersion) == "" {
+		turn.Plan.CapabilityMapVersion = assistantCapabilityMapVersionV1
+	}
+	if strings.TrimSpace(turn.Plan.SkillManifestDigest) == "" {
+		turn.Plan.SkillManifestDigest = assistantSkillManifestDigest([]string{"org.orgunit_add_version"})
+	}
+	if strings.TrimSpace(turn.DryRun.PlanHash) == "" {
+		turn.DryRun.PlanHash = "plan_hash"
+	}
+	if snapshot == nil {
+		snapshot = assistantTestOrgUnitVersionProjectionSnapshot(action)
+	}
+	turn.DryRun.OrgUnitVersionProjection = assistantCloneOrgUnitVersionProjectionSnapshot(snapshot)
 	return assistantTestAttachBusinessRoute(turn)
 }
 

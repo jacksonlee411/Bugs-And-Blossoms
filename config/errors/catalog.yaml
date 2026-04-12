@@ -476,6 +476,27 @@ errors:
     user_message_key: errors.assistant_reply_render_failed
     backend_policy: passthrough
     frontend_policy: mapped
+  - code: assistant_session_invalid
+    module: assistant
+    http_status: 401
+    severity: error
+    user_message_key: errors.assistant_session_invalid
+    backend_policy: mapped
+    frontend_policy: mapped
+  - code: assistant_principal_invalid
+    module: assistant
+    http_status: 401
+    severity: error
+    user_message_key: errors.assistant_principal_invalid
+    backend_policy: mapped
+    frontend_policy: mapped
+  - code: assistant_ui_bootstrap_unavailable
+    module: assistant
+    http_status: 503
+    severity: error
+    user_message_key: errors.assistant_ui_bootstrap_unavailable
+    backend_policy: mapped
+    frontend_policy: mapped
   - code: assistant_ui_method_not_allowed
     module: assistant
     http_status: 405

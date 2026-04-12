@@ -1,6 +1,6 @@
 # DEV-PLAN-375：Assistant 主线实施路线图（350-370）
 
-**状态**: 进行中（2026-04-12 19:40 CST；`375M1` 已完成，`375M2/375M3` 可并行启动）
+**状态**: 进行中（2026-04-12 21:35 CST；`375M1/375M2` 已完成并封账，主路径转入 `375M4 / 350B`，`375M3 / 370A` 可并行启动）
 
 > 目标：为 `DEV-PLAN-350/360/360A/361/370` 提供单一编排入口，冻结当前状态、SSOT 边界、串并行顺序、批次拆分与出口条件。  
 > 本文只做路线图编排，不改写各主题文档的契约裁决权；实现细节与子系统合同仍以对应 dev-plan 为单一事实源。
@@ -16,11 +16,16 @@
    - `370A`：Markdown compiler + `knowledge_qa / business_query`
    - `370B`：`business_action` knowledge/runtime 消费收口
 4. [X] `375M1`：successor 执行面稳定（承接 `360 Phase 0/1` + `360A Phase 0/1`）。
-5. [ ] `375M2`：`350A` 完成，收口 `add_version / insert_version`。
+5. [X] `375M2`：`350A` 完成，收口 `add_version / insert_version`。
 6. [ ] `375M3`：`370A` 完成，收口 Markdown compiler + `knowledge_qa / business_query`。
 7. [ ] `375M4`：`350B` 完成，并完成 compat API 硬切。
 8. [ ] `375M5`：`350C` 完成，并完成平台退役封板。
 9. [ ] `375M6`：`370B` 完成，进入总体验收与封板准备。
+
+## 0.2 当前下一步
+
+1. [ ] 第一优先级：启动 `375M4 / DEV-PLAN-350B`，覆盖 `correct / rename / move`，承接 compat API 硬切前的下一段关键路径。
+2. [ ] 可并行启动：推进 `375M3 / DEV-PLAN-370A`，落地 Markdown compiler 与 `knowledge_qa / business_query`，但继续只消费 `350` 已冻结 contract。
 
 ## 1. 背景与定位
 
@@ -34,7 +39,7 @@
 
 | 主题 | 当前状态 | 当前定位 | 备注 |
 | --- | --- | --- | --- |
-| `350` | 进行中 | `business_action` 正式 contract / Tool API / Gate 消费母法 | `create_orgunit / create_org` 样板已完成；Phase 5 未开始 |
+| `350` | 进行中 | `business_action` 正式 contract / Tool API / Gate 消费母法 | `create_orgunit / create_org` 与 `350A add_version / insert_version` 已完成；`350B/350C` 待实施 |
 | `360` | 进行中（Phase 0/1 已完成） | LibreChat 剥离与 LangGraph/LangChain 分层接管母法 | `360A` 承接执行面 SSOT；Phase 2+ 待实施 |
 | `360A` | 进行中（Phase 0/1 已完成） | successor DTO / `runtime-status` / compat API 生死表 / 删除批次 SSOT | `ui-bootstrap/session`、formal smoke、UI 降权已完成；Phase 2+ 待实施 |
 | `361` | 已封板基线 | 唯一 PDP / OPA evaluator 已完成 | 仅保留缺陷修复语义 |
@@ -79,10 +84,10 @@
 
 ### 375M2：业务动作收口批次一
 
-1. [ ] 启动 `350A`，仅覆盖 `add_version / insert_version`。
-2. [ ] 为两动作补齐与 create 对齐的 `PolicyContext`、`PrecheckProjection`、digest/version 快照与 `assistantActionSpec` 契约字段。
-3. [ ] 统一 dry-run / confirm / commit / task submit / 写前解释到同一 projection contract。
-4. [ ] 只读工具仍沿用既有 `orgunit_*` 四工具名，不新增写工具。
+1. [X] 启动 `350A`，仅覆盖 `add_version / insert_version`。
+2. [X] 为两动作补齐与 create 对齐的 `PolicyContext`、`PrecheckProjection`、digest/version 快照与 `assistantActionSpec` 契约字段。
+3. [X] 统一 dry-run / confirm / commit / task submit / 写前解释到同一 projection contract。
+4. [X] 只读工具仍沿用既有 `orgunit_*` 四工具名，未新增写工具。
 
 ### 375M3：知识运行时收口批次一
 
@@ -133,11 +138,17 @@
 
 ### 7.2 实施层证据要求
 
-1. [ ] `350A/B/C`：执行并记录  
-   `go test ./pkg/fieldpolicy ./internal/server/... ./modules/orgunit/infrastructure/persistence/... ./modules/orgunit/services/...`
-2. [ ] `360/360A`：补 successor DTO 合同测试、正式入口 smoke、compat API 生死表断言、`/assistant-ui/*` 的 `302 -> 410 -> 删除` 断言。
-3. [ ] `370A/B`：补 compiler/front matter/generate-clean 测试、`knowledge_qa / business_query` 分流回归、`business_action` 只消费已冻结 contract 的回归。
-4. [ ] 实际执行记录应进入对应子计划与 `docs/dev-records/`，`375` 只维护路线图级进度与引用。
+1. [X] `350A`：已执行并记录  
+   `go test ./pkg/fieldpolicy ./internal/server/... ./modules/orgunit/infrastructure/persistence/... ./modules/orgunit/services/...`  
+   `go fmt ./...`  
+   `go vet ./...`  
+   `make check lint`  
+   `make check doc`  
+   `make test`（coverage `98.00% >= 98.00%`）
+2. [ ] `350B/C`：沿用同一命令口径，待后续批次完成。
+3. [ ] `360/360A`：补 successor DTO 合同测试、正式入口 smoke、compat API 生死表断言、`/assistant-ui/*` 的 `302 -> 410 -> 删除` 断言。
+4. [ ] `370A/B`：补 compiler/front matter/generate-clean 测试、`knowledge_qa / business_query` 分流回归、`business_action` 只消费已冻结 contract 的回归。
+5. [X] `350A` 实际执行记录已进入对应子计划与 `docs/dev-records/`，`375` 只维护路线图级进度与引用。
 
 ## 8. 依赖草图（Mermaid）
 
@@ -166,3 +177,4 @@ flowchart TD
 10. `docs/dev-plans/370a-assistant-markdown-knowledge-runtime-phase1-query-and-compiler-plan.md`
 11. `docs/dev-plans/370b-assistant-business-action-knowledge-runtime-consumption-plan.md`
 12. `docs/dev-records/dev-plan-375-m1-successor-entry-stabilization-log.md`
+13. `docs/dev-records/dev-plan-350a-execution-log.md`

@@ -51,6 +51,41 @@ func assistantTestCreateOrgUnitProjectionSnapshot() *assistantCreateOrgUnitProje
 	}
 }
 
+func assistantTestOrgUnitVersionProjectionSnapshot(action string) *assistantOrgUnitVersionProjectionSnapshot {
+	capabilityKey := orgUnitAddVersionFieldPolicyCapabilityKey
+	intent := string(orgunitservices.OrgUnitWriteIntentAddVersion)
+	if strings.TrimSpace(action) == assistantIntentInsertOrgUnitVersion {
+		capabilityKey = orgUnitInsertVersionFieldPolicyCapabilityKey
+		intent = string(orgunitservices.OrgUnitWriteIntentInsertVersion)
+	}
+	return &assistantOrgUnitVersionProjectionSnapshot{
+		PolicyContextContractVersion:      orgunitservices.OrgUnitAppendVersionPolicyContextContractVersionV1,
+		PrecheckProjectionContractVersion: orgunitservices.OrgUnitAppendVersionPrecheckProjectionContractV1,
+		PolicyContext: orgunitservices.OrgUnitAppendVersionPolicyContextV1{
+			TenantID:            "tenant_1",
+			CapabilityKey:       capabilityKey,
+			Intent:              intent,
+			EffectiveDate:       "2026-01-01",
+			OrgCode:             "FLOWER-C",
+			OrgNodeKey:          "10000003",
+			ResolvedSetID:       "S2601",
+			SetIDSource:         "custom",
+			PolicyContextDigest: "ctx_digest_append",
+		},
+		Projection: orgunitservices.OrgUnitAppendVersionPrecheckProjectionV1{
+			Readiness:              "ready",
+			FieldDecisions:         []orgunitservices.OrgUnitAppendVersionFieldDecisionV1{{FieldKey: "name", Visible: true, Maintainable: true, FieldPayloadKey: "name", AllowedValueCodes: []string{}}},
+			PendingDraftSummary:    "目标组织：FLOWER-C；新名称：运营一部；生效日期：2026-01-01",
+			EffectivePolicyVersion: "epv1:append",
+			MutationPolicyVersion:  orgunitservices.OrgUnitAppendVersionMutationPolicyVersionV1,
+			ResolvedSetID:          "S2601",
+			SetIDSource:            "custom",
+			PolicyExplain:          "计划已生成，等待确认后可提交",
+			ProjectionDigest:       "projection_digest_append",
+		},
+	}
+}
+
 func assistantTaskSampleTurn(now time.Time) *assistantTurn {
 	intent := assistantIntentSpec{
 		Action:              assistantIntentCreateOrgUnit,
@@ -88,6 +123,47 @@ func assistantTaskSampleTurn(now time.Time) *assistantTurn {
 		CreatedAt: now,
 		UpdatedAt: now,
 	})
+}
+
+func assistantTaskSampleAppendTurn(now time.Time, action string) *assistantTurn {
+	intent := assistantIntentSpec{
+		Action:              action,
+		IntentSchemaVersion: assistantIntentSchemaVersionV1,
+		ContextHash:         "ctx_hash",
+		IntentHash:          "intent_hash",
+		EffectiveDate:       "2026-01-01",
+		OrgCode:             "FLOWER-C",
+		NewName:             "运营一部",
+	}
+	plan := assistantBuildPlan(intent)
+	plan.SkillManifestDigest = "skill_digest"
+	return assistantTestAttachOrgUnitVersionProjection(&assistantTurn{
+		TurnID:             "turn_append_1",
+		UserInput:          "新增组织版本",
+		State:              assistantStateValidated,
+		RiskTier:           "high",
+		RequestID:          "req_turn",
+		TraceID:            "trace_turn",
+		PolicyVersion:      capabilityPolicyVersionBaseline,
+		CompositionVersion: capabilityPolicyVersionBaseline,
+		MappingVersion:     capabilityPolicyVersionBaseline,
+		Intent:             intent,
+		Plan:               plan,
+		Candidates: []assistantCandidate{
+			{CandidateID: "c1", CandidateCode: "FLOWER-A", Name: "A"},
+		},
+		ResolvedCandidateID: "c1",
+		AmbiguityCount:      0,
+		Confidence:          0.9,
+		ResolutionSource:    "auto",
+		DryRun: assistantDryRunResult{
+			WouldCommit:              false,
+			PlanHash:                 "plan_hash",
+			OrgUnitVersionProjection: assistantTestOrgUnitVersionProjectionSnapshot(action),
+		},
+		CreatedAt: now,
+		UpdatedAt: now,
+	}, nil)
 }
 
 func assistantTaskSnapshotFromTurn(turn *assistantTurn) assistantTaskContractSnapshot {
@@ -263,6 +339,20 @@ func TestAssistantTaskStore_UtilityValidationAndWrappers(t *testing.T) {
 		}
 		if err := assistantTaskValidateSnapshotAgainstTurn(req.ContractSnapshot, turn); err != nil {
 			t.Fatalf("snapshot should match err=%v", err)
+		}
+
+		appendTurn := assistantTaskSampleAppendTurn(now, assistantIntentAddOrgUnitVersion)
+		appendReq, err := assistantBuildTaskSubmitRequestFromTurn("conv_append", appendTurn)
+		if err != nil {
+			t.Fatalf("append submit request err=%v", err)
+		}
+		if appendReq.ContractSnapshot.PolicyContextDigest == "" || appendReq.ContractSnapshot.MutationPolicyVersion == "" {
+			t.Fatalf("append snapshot should include policy contract=%+v", appendReq.ContractSnapshot)
+		}
+		appendBadSnap := appendReq.ContractSnapshot
+		appendBadSnap.MutationPolicyVersion = ""
+		if err := assistantTaskValidateSnapshotAgainstTurn(appendBadSnap, appendTurn); !errors.Is(err, errAssistantPlanContractVersionMismatch) {
+			t.Fatalf("expected append policy mismatch err=%v", err)
 		}
 	})
 
@@ -1135,7 +1225,26 @@ func TestAssistantTaskStore_DispatchAndExecute(t *testing.T) {
 		}
 		emptyPlan := record
 		emptyPlan.ContractSnapshot.PlanHash = ""
-		if err := localSvc.executeAssistantTaskWorkflowTx(context.Background(), execTx, "tenant_1", &emptyPlan, now); err != nil || emptyPlan.Status != assistantTaskStatusManualTakeoverNeeded {
+		blankPlanTurn := *localTurn
+		blankPlanTurn.DryRun = localTurn.DryRun
+		blankPlanTurn.DryRun.PlanHash = ""
+		blankDryRunJSON := mustJSONMarshal(t, blankPlanTurn.DryRun)
+		emptyPlanTx := &assistFakeTx{}
+		emptyPlanTx.execFn = execTx.execFn
+		emptyPlanTx.queryRowFn = func(sql string, _ ...any) pgx.Row {
+			switch {
+			case strings.Contains(sql, "FROM iam.assistant_conversations"):
+				return &assistFakeRow{vals: assistantPersistenceConversationRow("conv_1", "actor_1", assistantStateConfirmed, now)}
+			case strings.Contains(sql, "FROM iam.assistant_turns"):
+				return &assistFakeRow{vals: []any{intentJSON, planJSON, blankDryRunJSON}}
+			case strings.Contains(sql, "INSERT INTO iam.assistant_state_transitions"):
+				return &assistFakeRow{vals: []any{int64(1)}}
+			default:
+				return &assistFakeRow{err: pgx.ErrNoRows}
+			}
+		}
+		emptyPlanTx.queryFn = execTx.queryFn
+		if err := localSvc.executeAssistantTaskWorkflowTx(context.Background(), emptyPlanTx, "tenant_1", &emptyPlan, now); err != nil || emptyPlan.Status != assistantTaskStatusManualTakeoverNeeded {
 			t.Fatalf("execute empty plan err=%v emptyPlan=%+v", err, emptyPlan)
 		}
 

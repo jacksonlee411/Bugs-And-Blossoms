@@ -474,7 +474,7 @@ func assistantTurnAuthoritativeStateReadyForCommit(turn *assistantTurn) error {
 	if turn == nil {
 		return errAssistantConversationStateInvalid
 	}
-	if assistantCreateOrgUnitProjectionContractMissing(turn) {
+	if assistantTurnPolicyProjectionContractMissing(turn) {
 		return errAssistantPlanContractVersionMismatch
 	}
 	if turn.State != assistantStateConfirmed {
@@ -562,7 +562,7 @@ func (s *assistantConversationService) applyConfirmTurn(conversation *assistantC
 		turn.DryRun = assistantBuildDryRunFn(turn.Intent, turn.Candidates, turn.ResolvedCandidateID)
 		turn.DryRun = s.enrichCreateOrgUnitDryRunWithPolicy(confirmCtx, conversation.TenantID, turn.Intent, turn.Candidates, turn.ResolvedCandidateID, turn.DryRun)
 	}
-	if assistantCreateOrgUnitProjectionContractMissing(turn) {
+	if assistantTurnPolicyProjectionContractMissing(turn) {
 		return assistantTurnMutationResult{}, errAssistantPlanContractVersionMismatch
 	}
 	if len(assistantTurnMissingFields(turn)) > 0 {
@@ -604,11 +604,11 @@ func (s *assistantConversationService) applyConfirmTurn(conversation *assistantC
 			turn.Clarification.Status = assistantClarificationStatusResolved
 		}
 	}
-	if turn.Intent.Action == assistantIntentCreateOrgUnit {
+	if assistantActionRequiresPolicyProjection(turn.Intent.Action) {
 		confirmCtx := withPrincipal(context.Background(), principal)
 		turn.DryRun = assistantBuildDryRunFn(turn.Intent, turn.Candidates, turn.ResolvedCandidateID)
-		turn.DryRun = s.enrichCreateOrgUnitDryRunWithPolicy(confirmCtx, conversation.TenantID, turn.Intent, turn.Candidates, turn.ResolvedCandidateID, turn.DryRun)
-		if assistantCreateOrgUnitProjectionContractMissing(turn) {
+		turn.DryRun = s.enrichAuthoritativeOrgUnitDryRunWithPolicy(confirmCtx, conversation.TenantID, turn.Intent, turn.Candidates, turn.ResolvedCandidateID, turn.DryRun)
+		if assistantTurnPolicyProjectionContractMissing(turn) {
 			return assistantTurnMutationResult{}, errAssistantPlanContractVersionMismatch
 		}
 		if len(assistantDryRunValidationErrorsForGate(assistantActionGateInput{

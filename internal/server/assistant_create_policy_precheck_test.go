@@ -190,6 +190,26 @@ func TestAssistantCreatePolicyPrecheck_ProjectionSnapshotCoverage(t *testing.T) 
 		}
 	})
 
+	t.Run("assistantCreateOrgUnitPolicyParentOrgCode and enrich short-circuit", func(t *testing.T) {
+		candidates := []assistantCandidate{{CandidateID: "c1", CandidateCode: "FLOWER-A"}, {CandidateID: "c2", CandidateCode: "FLOWER-B"}}
+		if code, ok := assistantCreateOrgUnitPolicyParentOrgCode(assistantIntentSpec{}, nil, "", nil); code != "" || ok {
+			t.Fatalf("expected empty parent branch, code=%q ok=%v", code, ok)
+		}
+		if code, ok := assistantCreateOrgUnitPolicyParentOrgCode(assistantIntentSpec{ParentRefText: "鲜花组织"}, candidates[:1], "", nil); code != "FLOWER-A" || !ok {
+			t.Fatalf("expected single candidate parent, code=%q ok=%v", code, ok)
+		}
+		svc := &assistantConversationService{orgStore: assistantCreatePolicyStore{orgUnitMemoryStore: newOrgUnitMemoryStore(), fieldConfigsErr: errors.New("boom")}}
+		dry := assistantDryRunResult{Explain: "keep"}
+		if got := svc.enrichCreateOrgUnitDryRunWithPolicy(context.Background(), "t1", assistantIntentSpec{
+			Action:        assistantIntentCreateOrgUnit,
+			ParentRefText: "鲜花组织",
+			EntityName:    "运营部",
+			EffectiveDate: "2026-01-01",
+		}, candidates, "", dry); got.Explain != "keep" {
+			t.Fatalf("expected ambiguous parent short-circuit, got=%+v", got)
+		}
+	})
+
 	t.Run("enrichCreateOrgUnitDryRunWithPolicy early returns and success", func(t *testing.T) {
 		dry := assistantDryRunResult{Explain: "keep"}
 		if got := (*assistantConversationService)(nil).enrichCreateOrgUnitDryRunWithPolicy(context.Background(), "t1", assistantIntentSpec{Action: assistantIntentCreateOrgUnit}, nil, "c1", dry); got.Explain != "keep" {

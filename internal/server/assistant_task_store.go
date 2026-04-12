@@ -361,13 +361,13 @@ func assistantBuildTaskSnapshotFromTurn(turn *assistantTurn) assistantTaskContra
 		ContextTemplateVersion:  strings.TrimSpace(turn.Plan.ContextTemplateVersion),
 		ReplyGuidanceVersion:    strings.TrimSpace(turn.Plan.ReplyGuidanceVersion),
 	}
-	if projection, ok := assistantCreateOrgUnitProjectionForTurn(turn); ok {
-		snapshot.PolicyContextDigest = strings.TrimSpace(projection.PolicyContext.PolicyContextDigest)
-		snapshot.EffectivePolicyVersion = strings.TrimSpace(projection.Projection.EffectivePolicyVersion)
-		snapshot.ResolvedSetID = strings.TrimSpace(projection.Projection.ResolvedSetID)
-		snapshot.SetIDSource = strings.TrimSpace(projection.Projection.SetIDSource)
-		snapshot.PrecheckProjectionDigest = strings.TrimSpace(projection.Projection.ProjectionDigest)
-		snapshot.MutationPolicyVersion = strings.TrimSpace(projection.Projection.MutationPolicyVersion)
+	if values, ok := assistantPolicyContractValuesFromTurn(turn); ok {
+		snapshot.PolicyContextDigest = values.PolicyContextDigest
+		snapshot.EffectivePolicyVersion = values.EffectivePolicyVersion
+		snapshot.ResolvedSetID = values.ResolvedSetID
+		snapshot.SetIDSource = values.SetIDSource
+		snapshot.PrecheckProjectionDigest = values.PrecheckProjectionDigest
+		snapshot.MutationPolicyVersion = values.MutationPolicyVersion
 	}
 	return snapshot
 }
@@ -379,7 +379,7 @@ func assistantBuildTaskSubmitRequestFromTurn(conversationID string, turn *assist
 	if !assistantTurnRouteAuditVersionsConsistent(turn) {
 		return assistantTaskSubmitRequest{}, errAssistantPlanContractVersionMismatch
 	}
-	if assistantCreateOrgUnitProjectionContractMissing(turn) {
+	if assistantTurnPolicyProjectionContractMissing(turn) {
 		return assistantTaskSubmitRequest{}, errAssistantPlanContractVersionMismatch
 	}
 	req := assistantTaskSubmitRequest{
@@ -1375,7 +1375,7 @@ WHERE tenant_uuid = $1::uuid
 	if err := json.Unmarshal(dryRunJSON, &dryRun); err != nil {
 		return assistantTaskContractSnapshot{}, err
 	}
-	return assistantTaskContractSnapshot{
+	snapshot := assistantTaskContractSnapshot{
 		IntentSchemaVersion:     strings.TrimSpace(intent.IntentSchemaVersion),
 		CompilerContractVersion: strings.TrimSpace(plan.CompilerContractVersion),
 		CapabilityMapVersion:    strings.TrimSpace(plan.CapabilityMapVersion),
@@ -1388,44 +1388,14 @@ WHERE tenant_uuid = $1::uuid
 		ResolverContractVersion: strings.TrimSpace(plan.ResolverContractVersion),
 		ContextTemplateVersion:  strings.TrimSpace(plan.ContextTemplateVersion),
 		ReplyGuidanceVersion:    strings.TrimSpace(plan.ReplyGuidanceVersion),
-		PolicyContextDigest: strings.TrimSpace(firstNonEmpty(
-			func() string {
-				if dryRun.CreateOrgUnitProjection == nil {
-					return ""
-				}
-				return dryRun.CreateOrgUnitProjection.PolicyContext.PolicyContextDigest
-			}(),
-			"",
-		)),
-		EffectivePolicyVersion: strings.TrimSpace(func() string {
-			if dryRun.CreateOrgUnitProjection == nil {
-				return ""
-			}
-			return dryRun.CreateOrgUnitProjection.Projection.EffectivePolicyVersion
-		}()),
-		ResolvedSetID: strings.TrimSpace(func() string {
-			if dryRun.CreateOrgUnitProjection == nil {
-				return ""
-			}
-			return dryRun.CreateOrgUnitProjection.Projection.ResolvedSetID
-		}()),
-		SetIDSource: strings.TrimSpace(func() string {
-			if dryRun.CreateOrgUnitProjection == nil {
-				return ""
-			}
-			return dryRun.CreateOrgUnitProjection.Projection.SetIDSource
-		}()),
-		PrecheckProjectionDigest: strings.TrimSpace(func() string {
-			if dryRun.CreateOrgUnitProjection == nil {
-				return ""
-			}
-			return dryRun.CreateOrgUnitProjection.Projection.ProjectionDigest
-		}()),
-		MutationPolicyVersion: strings.TrimSpace(func() string {
-			if dryRun.CreateOrgUnitProjection == nil {
-				return ""
-			}
-			return dryRun.CreateOrgUnitProjection.Projection.MutationPolicyVersion
-		}()),
-	}, nil
+	}
+	if values, ok := assistantPolicyContractValuesFromDryRun(dryRun); ok {
+		snapshot.PolicyContextDigest = values.PolicyContextDigest
+		snapshot.EffectivePolicyVersion = values.EffectivePolicyVersion
+		snapshot.ResolvedSetID = values.ResolvedSetID
+		snapshot.SetIDSource = values.SetIDSource
+		snapshot.PrecheckProjectionDigest = values.PrecheckProjectionDigest
+		snapshot.MutationPolicyVersion = values.MutationPolicyVersion
+	}
+	return snapshot, nil
 }

@@ -141,6 +141,23 @@ func assistantTurnPhase(turn *assistantTurn) string {
 			}
 		}
 	}
+	if projection, ok := assistantOrgUnitVersionProjectionForTurn(turn); ok {
+		switch strings.TrimSpace(projection.Projection.Readiness) {
+		case "candidate_confirmation_required":
+			if strings.TrimSpace(assistantTurnSelectedCandidateID(turn)) != "" && state == assistantStateValidated {
+				return assistantPhaseAwaitCandidateConfirm
+			}
+			return assistantPhaseAwaitCandidatePick
+		case "missing_fields":
+			return assistantPhaseAwaitMissingFields
+		case "rejected":
+			return assistantPhaseFailed
+		case "ready":
+			if strings.TrimSpace(projection.Projection.PendingDraftSummary) != "" {
+				return assistantPhaseAwaitCommitConfirm
+			}
+		}
+	}
 	if len(assistantTurnMissingFields(turn)) > 0 {
 		return assistantPhaseAwaitMissingFields
 	}
@@ -163,6 +180,9 @@ func assistantTurnMissingFields(turn *assistantTurn) []string {
 		return nil
 	}
 	if projection, ok := assistantCreateOrgUnitProjectionForTurn(turn); ok {
+		return append([]string(nil), projection.Projection.MissingFields...)
+	}
+	if projection, ok := assistantOrgUnitVersionProjectionForTurn(turn); ok {
 		return append([]string(nil), projection.Projection.MissingFields...)
 	}
 	out := make([]string, 0, 4)
@@ -241,6 +261,9 @@ func assistantTurnPendingDraftSummary(turn *assistantTurn) string {
 		return ""
 	}
 	if strings.TrimSpace(turn.Intent.Action) != assistantIntentCreateOrgUnit {
+		if projection, ok := assistantOrgUnitVersionProjectionForTurn(turn); ok {
+			return strings.TrimSpace(projection.Projection.PendingDraftSummary)
+		}
 		return strings.TrimSpace(turn.DryRun.Explain)
 	}
 	if projection, ok := assistantCreateOrgUnitProjectionForTurn(turn); ok {
