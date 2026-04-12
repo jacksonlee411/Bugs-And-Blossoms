@@ -280,6 +280,54 @@ func TestOrgUnitAppendVersionPrecheckHelpers(t *testing.T) {
 		if got := CloneOrgUnitAppendVersionFieldDecisions(nil); got != nil {
 			t.Fatalf("nil clone=%v", got)
 		}
+		appendFieldDecisions := []OrgUnitAppendVersionFieldDecisionV1{{
+			FieldKey:             " name ",
+			Visible:              true,
+			Required:             true,
+			Maintainable:         true,
+			FieldPayloadKey:      " new_name ",
+			ResolvedDefaultValue: " 运营一部 ",
+			DefaultRuleRef:       " default_name ",
+			AllowedValueCodes:    []string{"A", "B"},
+		}}
+		clonedFieldDecisions := CloneOrgUnitAppendVersionFieldDecisions(appendFieldDecisions)
+		appendFieldDecisions[0].AllowedValueCodes[0] = "X"
+		if clonedFieldDecisions[0].AllowedValueCodes[0] != "A" {
+			t.Fatalf("cloned field decisions=%+v", clonedFieldDecisions)
+		}
+		appendProjection := OrgUnitAppendVersionPrecheckProjectionV1{
+			Readiness:                         " ready ",
+			MissingFields:                     []string{"effective_date"},
+			FieldDecisions:                    appendFieldDecisions,
+			CandidateConfirmationRequirements: []string{"new_parent_org_code"},
+			PendingDraftSummary:               " 目标组织：FLOWER-C ",
+			EffectivePolicyVersion:            " epv1 ",
+			MutationPolicyVersion:             " mpv1 ",
+			ResolvedSetID:                     " S2601 ",
+			SetIDSource:                       " custom ",
+			PolicyExplain:                     " 已就绪 ",
+			RejectionReasons:                  []string{"FORBIDDEN"},
+			ProjectionDigest:                  " digest ",
+		}
+		clonedProjection := CloneOrgUnitAppendVersionProjectionV1(appendProjection)
+		appendProjection.MissingFields[0] = "changed"
+		appendProjection.FieldDecisions[0].AllowedValueCodes[1] = "Y"
+		appendProjection.CandidateConfirmationRequirements[0] = "changed"
+		appendProjection.RejectionReasons[0] = "changed"
+		if clonedProjection.Readiness != "ready" ||
+			clonedProjection.MissingFields[0] != "effective_date" ||
+			clonedProjection.FieldDecisions[0].AllowedValueCodes[1] != "B" ||
+			clonedProjection.CandidateConfirmationRequirements[0] != "new_parent_org_code" ||
+			clonedProjection.RejectionReasons[0] != "FORBIDDEN" ||
+			clonedProjection.PendingDraftSummary != "目标组织：FLOWER-C" ||
+			clonedProjection.EffectivePolicyVersion != "epv1" ||
+			clonedProjection.MutationPolicyVersion != "mpv1" ||
+			clonedProjection.ResolvedSetID != "S2601" ||
+			clonedProjection.SetIDSource != "custom" ||
+			clonedProjection.PolicyExplain != "已就绪" ||
+			clonedProjection.ProjectionDigest != "digest" {
+			t.Fatalf("cloned projection=%+v", clonedProjection)
+		}
 		if _, _, errMsg := resolveOrgUnitAppendVersionFieldDecision(context.Background(), nil, OrgUnitAppendVersionPrecheckInputV1{}, "", "name"); errMsg != errFieldPolicyMissing {
 			t.Fatalf("nil reader err=%q", errMsg)
 		}

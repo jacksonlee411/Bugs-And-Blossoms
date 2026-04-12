@@ -61,18 +61,167 @@ func TestAssistantOrgUnitVersionProjectionHelpers(t *testing.T) {
 		}
 	})
 
+	t.Run("snapshot builders and field decision helpers deep copy", func(t *testing.T) {
+		if got := assistantCloneOrgUnitVersionFieldDecisions(nil); got != nil {
+			t.Fatalf("nil clone=%v", got)
+		}
+		appendInput := []orgunitservices.OrgUnitAppendVersionFieldDecisionV1{{
+			FieldKey:             " name ",
+			Visible:              true,
+			Required:             true,
+			Maintainable:         true,
+			FieldPayloadKey:      " new_name ",
+			ResolvedDefaultValue: " 运营一部 ",
+			DefaultRuleRef:       " default_name ",
+			AllowedValueCodes:    []string{"A", "B"},
+		}}
+		appendDecisions := assistantOrgUnitVersionFieldDecisionsFromAppend(appendInput)
+		if appendDecisions[0].FieldKey != "name" ||
+			appendDecisions[0].FieldPayloadKey != "new_name" ||
+			appendDecisions[0].ResolvedDefaultValue != "运营一部" ||
+			appendDecisions[0].DefaultRuleRef != "default_name" ||
+			!slices.Equal(appendDecisions[0].AllowedValueCodes, []string{"A", "B"}) {
+			t.Fatalf("append decisions=%+v", appendDecisions)
+		}
+		appendInput[0].AllowedValueCodes[0] = "X"
+		if appendDecisions[0].AllowedValueCodes[0] != "A" {
+			t.Fatalf("append decisions should deep copy: %+v", appendDecisions)
+		}
+		if got := assistantOrgUnitVersionFieldDecisionsFromAppend(nil); got != nil {
+			t.Fatalf("nil append decisions=%v", got)
+		}
+
+		maintainInput := []orgunitservices.OrgUnitMaintainFieldDecisionV1{{
+			FieldKey:             " parent_org_code ",
+			Visible:              true,
+			Maintainable:         true,
+			FieldPayloadKey:      " new_parent_org_code ",
+			ResolvedDefaultValue: " FLOWER-A ",
+			DefaultRuleRef:       " default_parent ",
+			AllowedValueCodes:    []string{"FLOWER-A", "FLOWER-B"},
+		}}
+		maintainDecisions := assistantOrgUnitVersionFieldDecisionsFromMaintain(maintainInput)
+		if maintainDecisions[0].FieldKey != "parent_org_code" ||
+			maintainDecisions[0].FieldPayloadKey != "new_parent_org_code" ||
+			maintainDecisions[0].ResolvedDefaultValue != "FLOWER-A" ||
+			maintainDecisions[0].DefaultRuleRef != "default_parent" ||
+			!slices.Equal(maintainDecisions[0].AllowedValueCodes, []string{"FLOWER-A", "FLOWER-B"}) {
+			t.Fatalf("maintain decisions=%+v", maintainDecisions)
+		}
+		maintainInput[0].AllowedValueCodes[0] = "FLOWER-X"
+		if maintainDecisions[0].AllowedValueCodes[0] != "FLOWER-A" {
+			t.Fatalf("maintain decisions should deep copy: %+v", maintainDecisions)
+		}
+		if got := assistantOrgUnitVersionFieldDecisionsFromMaintain(nil); got != nil {
+			t.Fatalf("nil maintain decisions=%v", got)
+		}
+
+		clonedDecisions := assistantCloneOrgUnitVersionFieldDecisions(appendDecisions)
+		appendDecisions[0].AllowedValueCodes[1] = "Y"
+		if clonedDecisions[0].AllowedValueCodes[1] != "B" {
+			t.Fatalf("cloned decisions=%+v", clonedDecisions)
+		}
+
+		appendSnapshot := assistantOrgUnitVersionProjectionSnapshotFromAppendResult(orgunitservices.OrgUnitAppendVersionPrecheckResultV1{
+			PolicyContext: orgunitservices.OrgUnitAppendVersionPolicyContextV1{
+				TenantID:            " tenant-1 ",
+				CapabilityKey:       " cap.append ",
+				Intent:              " add_version ",
+				EffectiveDate:       " 2026-01-01 ",
+				OrgCode:             " FLOWER-C ",
+				OrgNodeKey:          " 10000003 ",
+				ResolvedSetID:       " S2601 ",
+				SetIDSource:         " custom ",
+				PolicyContextDigest: " digest-ctx ",
+			},
+			Projection: orgunitservices.OrgUnitAppendVersionPrecheckProjectionV1{
+				Readiness:                         " ready ",
+				MissingFields:                     []string{"effective_date"},
+				FieldDecisions:                    appendInput,
+				CandidateConfirmationRequirements: []string{"new_parent_org_code"},
+				PendingDraftSummary:               " 草案摘要 ",
+				EffectivePolicyVersion:            " epv1 ",
+				MutationPolicyVersion:             " mpv1 ",
+				ResolvedSetID:                     " S2601 ",
+				SetIDSource:                       " custom ",
+				PolicyExplain:                     " 已就绪 ",
+				RejectionReasons:                  []string{"FORBIDDEN"},
+				ProjectionDigest:                  " digest-proj ",
+			},
+		})
+		if appendSnapshot.PolicyContextContractVersion != orgunitservices.OrgUnitAppendVersionPolicyContextContractVersionV1 ||
+			appendSnapshot.PrecheckProjectionContractVersion != orgunitservices.OrgUnitAppendVersionPrecheckProjectionContractV1 ||
+			appendSnapshot.PolicyContext.TenantID != "tenant-1" ||
+			appendSnapshot.PolicyContext.OrgCode != "FLOWER-C" ||
+			appendSnapshot.Projection.Readiness != "ready" ||
+			appendSnapshot.Projection.PendingDraftSummary != "草案摘要" ||
+			appendSnapshot.Projection.PolicyExplain != "已就绪" {
+			t.Fatalf("append snapshot=%+v", appendSnapshot)
+		}
+
+		maintainSnapshot := assistantOrgUnitVersionProjectionSnapshotFromMaintainResult(orgunitservices.OrgUnitMaintainPrecheckResultV1{
+			PolicyContext: orgunitservices.OrgUnitMaintainPolicyContextV1{
+				TenantID:            " tenant-1 ",
+				CapabilityKey:       " cap.maintain ",
+				Intent:              " move ",
+				EffectiveDate:       " 2026-04-01 ",
+				TargetEffectiveDate: " 2026-01-01 ",
+				OrgCode:             " FLOWER-C ",
+				OrgNodeKey:          " 10000003 ",
+				ResolvedSetID:       " S2601 ",
+				SetIDSource:         " custom ",
+				PolicyContextDigest: " digest-maintain ",
+			},
+			Projection: orgunitservices.OrgUnitMaintainPrecheckProjectionV1{
+				Readiness:                         " candidate_confirmation_required ",
+				MissingFields:                     []string{"new_parent_ref_text"},
+				FieldDecisions:                    maintainInput,
+				CandidateConfirmationRequirements: []string{"new_parent_org_code"},
+				PendingDraftSummary:               " 待确认草案 ",
+				EffectivePolicyVersion:            " epv2 ",
+				MutationPolicyVersion:             " mpv2 ",
+				ResolvedSetID:                     " S2601 ",
+				SetIDSource:                       " custom ",
+				PolicyExplain:                     " 仍需确认 ",
+				RejectionReasons:                  []string{"PARENT_CANDIDATE_REQUIRED"},
+				ProjectionDigest:                  " digest-maintain-proj ",
+			},
+		})
+		if maintainSnapshot.PolicyContextContractVersion != orgunitservices.OrgUnitMaintainPolicyContextContractVersionV1 ||
+			maintainSnapshot.PrecheckProjectionContractVersion != orgunitservices.OrgUnitMaintainPrecheckProjectionContractV1 ||
+			maintainSnapshot.PolicyContext.TargetEffectiveDate != "2026-01-01" ||
+			maintainSnapshot.Projection.Readiness != "candidate_confirmation_required" ||
+			maintainSnapshot.Projection.PendingDraftSummary != "待确认草案" ||
+			maintainSnapshot.Projection.PolicyExplain != "仍需确认" {
+			t.Fatalf("maintain snapshot=%+v", maintainSnapshot)
+		}
+
+		clonedSnapshot := assistantCloneOrgUnitVersionProjectionSnapshot(maintainSnapshot)
+		maintainSnapshot.Projection.MissingFields[0] = "changed"
+		maintainSnapshot.Projection.FieldDecisions[0].AllowedValueCodes[1] = "FLOWER-Y"
+		maintainSnapshot.Projection.CandidateConfirmationRequirements[0] = "changed"
+		maintainSnapshot.Projection.RejectionReasons[0] = "changed"
+		if clonedSnapshot.Projection.MissingFields[0] != "new_parent_ref_text" ||
+			clonedSnapshot.Projection.FieldDecisions[0].AllowedValueCodes[1] != "FLOWER-B" ||
+			clonedSnapshot.Projection.CandidateConfirmationRequirements[0] != "new_parent_org_code" ||
+			clonedSnapshot.Projection.RejectionReasons[0] != "PARENT_CANDIDATE_REQUIRED" {
+			t.Fatalf("cloned snapshot=%+v", clonedSnapshot)
+		}
+	})
+
 	t.Run("validation errors map missing fields and confirmation", func(t *testing.T) {
 		if got := assistantOrgUnitVersionProjectionValidationErrors(nil); got != nil {
 			t.Fatalf("nil snapshot errors=%v", got)
 		}
 		snapshot := assistantTestOrgUnitVersionProjectionSnapshot(assistantIntentAddOrgUnitVersion)
 		snapshot.Projection.RejectionReasons = []string{"FORBIDDEN"}
-		snapshot.Projection.MissingFields = []string{"effective_date", "org_code", "change_fields", "new_name", "new_parent_ref_text", "custom"}
+		snapshot.Projection.MissingFields = []string{"effective_date", "target_effective_date", "org_code", "change_fields", "new_name", "new_parent_ref_text", "custom"}
 		snapshot.Projection.Readiness = "candidate_confirmation_required"
 		got := assistantOrgUnitVersionProjectionValidationErrors(snapshot)
 		want := []string{
 			"FORBIDDEN",
 			"missing_effective_date",
+			"missing_target_effective_date",
 			"missing_org_code",
 			"missing_change_fields",
 			"missing_new_name",
@@ -166,19 +315,31 @@ func TestAssistantOrgUnitVersionProjectionHelpers(t *testing.T) {
 
 func TestAssistantOrgUnitVersionPolicyHelpers(t *testing.T) {
 	t.Run("binding and required action branches", func(t *testing.T) {
-		if capability, writeIntent, ok := assistantOrgUnitVersionPolicyBinding(assistantIntentAddOrgUnitVersion); !ok || capability != orgUnitAddVersionFieldPolicyCapabilityKey || writeIntent != string(orgunitservices.OrgUnitWriteIntentAddVersion) {
-			t.Fatalf("add binding capability=%q intent=%q ok=%v", capability, writeIntent, ok)
+		if binding, ok := assistantOrgUnitVersionPolicyBinding(assistantIntentAddOrgUnitVersion); !ok || binding.CapabilityKey != orgUnitAddVersionFieldPolicyCapabilityKey || binding.AppendIntent != string(orgunitservices.OrgUnitWriteIntentAddVersion) || binding.MaintainIntent != "" {
+			t.Fatalf("add binding=%+v ok=%v", binding, ok)
 		}
-		if capability, writeIntent, ok := assistantOrgUnitVersionPolicyBinding(assistantIntentInsertOrgUnitVersion); !ok || capability != orgUnitInsertVersionFieldPolicyCapabilityKey || writeIntent != string(orgunitservices.OrgUnitWriteIntentInsertVersion) {
-			t.Fatalf("insert binding capability=%q intent=%q ok=%v", capability, writeIntent, ok)
+		if binding, ok := assistantOrgUnitVersionPolicyBinding(assistantIntentInsertOrgUnitVersion); !ok || binding.CapabilityKey != orgUnitInsertVersionFieldPolicyCapabilityKey || binding.AppendIntent != string(orgunitservices.OrgUnitWriteIntentInsertVersion) || binding.MaintainIntent != "" {
+			t.Fatalf("insert binding=%+v ok=%v", binding, ok)
 		}
-		if _, _, ok := assistantOrgUnitVersionPolicyBinding("other"); ok {
+		if binding, ok := assistantOrgUnitVersionPolicyBinding(assistantIntentCorrectOrgUnit); !ok || binding.CapabilityKey != orgUnitCorrectFieldPolicyCapabilityKey || binding.AppendIntent != "" || binding.MaintainIntent != orgunitservices.OrgUnitMaintainIntentCorrect {
+			t.Fatalf("correct binding=%+v ok=%v", binding, ok)
+		}
+		if binding, ok := assistantOrgUnitVersionPolicyBinding(assistantIntentRenameOrgUnit); !ok || binding.CapabilityKey != orgUnitWriteFieldPolicyCapabilityKey || binding.AppendIntent != "" || binding.MaintainIntent != orgunitservices.OrgUnitMaintainIntentRename {
+			t.Fatalf("rename binding=%+v ok=%v", binding, ok)
+		}
+		if binding, ok := assistantOrgUnitVersionPolicyBinding(assistantIntentMoveOrgUnit); !ok || binding.CapabilityKey != orgUnitWriteFieldPolicyCapabilityKey || binding.AppendIntent != "" || binding.MaintainIntent != orgunitservices.OrgUnitMaintainIntentMove {
+			t.Fatalf("move binding=%+v ok=%v", binding, ok)
+		}
+		if _, ok := assistantOrgUnitVersionPolicyBinding("other"); ok {
 			t.Fatal("unexpected binding for other action")
 		}
 
 		if !assistantActionRequiresPolicyProjection(assistantIntentCreateOrgUnit) ||
 			!assistantActionRequiresPolicyProjection(assistantIntentAddOrgUnitVersion) ||
 			!assistantActionRequiresPolicyProjection(assistantIntentInsertOrgUnitVersion) ||
+			!assistantActionRequiresPolicyProjection(assistantIntentCorrectOrgUnit) ||
+			!assistantActionRequiresPolicyProjection(assistantIntentRenameOrgUnit) ||
+			!assistantActionRequiresPolicyProjection(assistantIntentMoveOrgUnit) ||
 			assistantActionRequiresPolicyProjection("knowledge_qa") {
 			t.Fatal("assistantActionRequiresPolicyProjection branches failed")
 		}

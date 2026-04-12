@@ -57,5 +57,6 @@
 1. [X] `DEV-PLAN-350A` 的范围已完成，`375M2` 出口条件达成。
 2. [X] `add_version / insert_version` 已成为 `business_action` 正式 contract 主链的一部分，可作为后续 `350B / 350C` 的直接样板。
 3. [X] `350A` 的代码、文档、证据与 coverage 门禁已完成同批封账。
-4. [ ] 下一步第一优先级：`375M4 / DEV-PLAN-350B`。
+4. [X] 下一步第一优先级：`375M4 / DEV-PLAN-350B`，已于 2026-04-13 完成动作 contract 收口，执行记录见 `docs/dev-records/dev-plan-350b-execution-log.md`。
 5. [ ] 可并行启动：`375M3 / DEV-PLAN-370A`。
+6. [ ] `375M4` 剩余 compat API 硬切继续由 `360 / 360A Phase 2` 承接。

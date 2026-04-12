@@ -16,6 +16,12 @@ type assistantPolicyContractValues struct {
 	MutationPolicyVersion    string
 }
 
+type assistantOrgUnitVersionPolicyBindingSpec struct {
+	CapabilityKey  string
+	AppendIntent   string
+	MaintainIntent string
+}
+
 func (s *assistantConversationService) enrichAuthoritativeOrgUnitDryRunWithPolicy(
 	ctx context.Context,
 	tenantID string,
@@ -43,7 +49,7 @@ func (s *assistantConversationService) enrichOrgUnitVersionDryRunWithPolicy(
 	if s == nil || s.orgStore == nil {
 		return dryRun
 	}
-	capabilityKey, writeIntent, ok := assistantOrgUnitVersionPolicyBinding(intent.Action)
+	binding, ok := assistantOrgUnitVersionPolicyBinding(intent.Action)
 	if !ok {
 		return dryRun
 	}
@@ -55,23 +61,50 @@ func (s *assistantConversationService) enrichOrgUnitVersionDryRunWithPolicy(
 		return dryRun
 	}
 
-	result, err := buildOrgUnitAppendVersionPrecheckResultV1(ctx, s.orgStore, orgunitservices.OrgUnitAppendVersionPrecheckInputV1{
-		Intent:                        writeIntent,
-		TenantID:                      strings.TrimSpace(tenantID),
-		CapabilityKey:                 capabilityKey,
-		EffectiveDate:                 strings.TrimSpace(intent.EffectiveDate),
-		OrgCode:                       strings.TrimSpace(intent.OrgCode),
-		CanAdmin:                      canEditOrgNodes(ctx),
-		CandidateConfirmationRequired: assistantSliceHas(dryRun.ValidationErrors, "candidate_confirmation_required"),
-		NewName:                       strings.TrimSpace(intent.NewName),
-		NewParentOrgCode:              newParentOrgCode,
-		NewParentRequested:            newParentRequested,
-	})
-	if err != nil {
+	var (
+		snapshot *assistantOrgUnitVersionProjectionSnapshot
+		err      error
+	)
+	switch {
+	case strings.TrimSpace(binding.AppendIntent) != "":
+		var result orgunitservices.OrgUnitAppendVersionPrecheckResultV1
+		result, err = buildOrgUnitAppendVersionPrecheckResultV1(ctx, s.orgStore, orgunitservices.OrgUnitAppendVersionPrecheckInputV1{
+			Intent:                        strings.TrimSpace(binding.AppendIntent),
+			TenantID:                      strings.TrimSpace(tenantID),
+			CapabilityKey:                 strings.TrimSpace(binding.CapabilityKey),
+			EffectiveDate:                 strings.TrimSpace(intent.EffectiveDate),
+			OrgCode:                       strings.TrimSpace(intent.OrgCode),
+			CanAdmin:                      canEditOrgNodes(ctx),
+			CandidateConfirmationRequired: assistantSliceHas(dryRun.ValidationErrors, "candidate_confirmation_required"),
+			NewName:                       strings.TrimSpace(intent.NewName),
+			NewParentOrgCode:              newParentOrgCode,
+			NewParentRequested:            newParentRequested,
+		})
+		if err == nil {
+			snapshot = assistantOrgUnitVersionProjectionSnapshotFromAppendResult(result)
+		}
+	case strings.TrimSpace(binding.MaintainIntent) != "":
+		var result orgunitservices.OrgUnitMaintainPrecheckResultV1
+		result, err = buildOrgUnitMaintainPrecheckResultV1(ctx, s.orgStore, orgunitservices.OrgUnitMaintainPrecheckInputV1{
+			Intent:                        strings.TrimSpace(binding.MaintainIntent),
+			TenantID:                      strings.TrimSpace(tenantID),
+			CapabilityKey:                 strings.TrimSpace(binding.CapabilityKey),
+			EffectiveDate:                 strings.TrimSpace(intent.EffectiveDate),
+			TargetEffectiveDate:           strings.TrimSpace(intent.TargetEffectiveDate),
+			OrgCode:                       strings.TrimSpace(intent.OrgCode),
+			CanAdmin:                      canEditOrgNodes(ctx),
+			CandidateConfirmationRequired: assistantSliceHas(dryRun.ValidationErrors, "candidate_confirmation_required"),
+			NewName:                       strings.TrimSpace(intent.NewName),
+			NewParentOrgCode:              newParentOrgCode,
+			NewParentRequested:            newParentRequested,
+		})
+		if err == nil {
+			snapshot = assistantOrgUnitVersionProjectionSnapshotFromMaintainResult(result)
+		}
+	}
+	if err != nil || snapshot == nil {
 		return dryRun
 	}
-
-	snapshot := assistantOrgUnitVersionProjectionSnapshotFromResult(result)
 	dryRun.OrgUnitVersionProjection = snapshot
 	dryRun.ValidationErrors = assistantOrgUnitVersionProjectionValidationErrors(snapshot)
 	if explain := strings.TrimSpace(snapshot.Projection.PolicyExplain); explain != "" {
@@ -82,14 +115,35 @@ func (s *assistantConversationService) enrichOrgUnitVersionDryRunWithPolicy(
 	return dryRun
 }
 
-func assistantOrgUnitVersionPolicyBinding(action string) (capabilityKey string, writeIntent string, ok bool) {
+func assistantOrgUnitVersionPolicyBinding(action string) (assistantOrgUnitVersionPolicyBindingSpec, bool) {
 	switch strings.TrimSpace(action) {
 	case assistantIntentAddOrgUnitVersion:
-		return orgUnitAddVersionFieldPolicyCapabilityKey, string(orgunitservices.OrgUnitWriteIntentAddVersion), true
+		return assistantOrgUnitVersionPolicyBindingSpec{
+			CapabilityKey: orgUnitAddVersionFieldPolicyCapabilityKey,
+			AppendIntent:  string(orgunitservices.OrgUnitWriteIntentAddVersion),
+		}, true
 	case assistantIntentInsertOrgUnitVersion:
-		return orgUnitInsertVersionFieldPolicyCapabilityKey, string(orgunitservices.OrgUnitWriteIntentInsertVersion), true
+		return assistantOrgUnitVersionPolicyBindingSpec{
+			CapabilityKey: orgUnitInsertVersionFieldPolicyCapabilityKey,
+			AppendIntent:  string(orgunitservices.OrgUnitWriteIntentInsertVersion),
+		}, true
+	case assistantIntentCorrectOrgUnit:
+		return assistantOrgUnitVersionPolicyBindingSpec{
+			CapabilityKey:  orgUnitCorrectFieldPolicyCapabilityKey,
+			MaintainIntent: orgunitservices.OrgUnitMaintainIntentCorrect,
+		}, true
+	case assistantIntentRenameOrgUnit:
+		return assistantOrgUnitVersionPolicyBindingSpec{
+			CapabilityKey:  orgUnitWriteFieldPolicyCapabilityKey,
+			MaintainIntent: orgunitservices.OrgUnitMaintainIntentRename,
+		}, true
+	case assistantIntentMoveOrgUnit:
+		return assistantOrgUnitVersionPolicyBindingSpec{
+			CapabilityKey:  orgUnitWriteFieldPolicyCapabilityKey,
+			MaintainIntent: orgunitservices.OrgUnitMaintainIntentMove,
+		}, true
 	default:
-		return "", "", false
+		return assistantOrgUnitVersionPolicyBindingSpec{}, false
 	}
 }
 
@@ -116,7 +170,12 @@ func assistantOrgUnitVersionPolicyParentOrgCode(
 
 func assistantActionRequiresPolicyProjection(action string) bool {
 	switch strings.TrimSpace(action) {
-	case assistantIntentCreateOrgUnit, assistantIntentAddOrgUnitVersion, assistantIntentInsertOrgUnitVersion:
+	case assistantIntentCreateOrgUnit,
+		assistantIntentAddOrgUnitVersion,
+		assistantIntentInsertOrgUnitVersion,
+		assistantIntentCorrectOrgUnit,
+		assistantIntentRenameOrgUnit,
+		assistantIntentMoveOrgUnit:
 		return true
 	default:
 		return false

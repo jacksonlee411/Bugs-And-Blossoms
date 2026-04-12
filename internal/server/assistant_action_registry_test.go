@@ -192,7 +192,11 @@ func TestAssistantActionRegistryAndVersionTupleHelpers(t *testing.T) {
 			if !ok || spec.ID != actionID || spec.Handler.CommitAdapterKey == "" {
 				t.Fatalf("unexpected fallback spec action=%s spec=%+v ok=%v", actionID, spec, ok)
 			}
-			if (actionID == assistantIntentAddOrgUnitVersion || actionID == assistantIntentInsertOrgUnitVersion) &&
+			if (actionID == assistantIntentAddOrgUnitVersion ||
+				actionID == assistantIntentInsertOrgUnitVersion ||
+				actionID == assistantIntentCorrectOrgUnit ||
+				actionID == assistantIntentMoveOrgUnit ||
+				actionID == assistantIntentRenameOrgUnit) &&
 				(strings.TrimSpace(spec.PolicyContextContractVersion) == "" ||
 					strings.TrimSpace(spec.PrecheckProjectionContractVersion) == "" ||
 					len(spec.RequiredPolicyFacts) == 0 ||

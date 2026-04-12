@@ -10,10 +10,11 @@ import (
 
 type orgUnitStoreWithAdapterMethods struct {
 	orgUnitStoreStub
-	resolveSetIDFn func(context.Context, string, string, string) (string, error)
-	treeInitFn     func(context.Context, string) (bool, error)
-	fieldConfigsFn func(context.Context, string, string) ([]orgUnitTenantFieldConfig, error)
-	resolveFactsFn func(context.Context, string, string, string) (orgUnitAppendFacts, error)
+	resolveSetIDFn       func(context.Context, string, string, string) (string, error)
+	treeInitFn           func(context.Context, string) (bool, error)
+	fieldConfigsFn       func(context.Context, string, string) ([]orgUnitTenantFieldConfig, error)
+	resolveFactsFn       func(context.Context, string, string, string) (orgUnitAppendFacts, error)
+	resolveTargetEventFn func(context.Context, string, string, string) (orgUnitMutationTargetEvent, error)
 }
 
 func (s orgUnitStoreWithAdapterMethods) ResolveSetID(ctx context.Context, tenantID string, orgNodeKey string, asOf string) (string, error) {
@@ -42,6 +43,13 @@ func (s orgUnitStoreWithAdapterMethods) ResolveAppendFacts(ctx context.Context, 
 		return s.resolveFactsFn(ctx, tenantID, orgNodeKey, effectiveDate)
 	}
 	return orgUnitAppendFacts{}, nil
+}
+
+func (s orgUnitStoreWithAdapterMethods) ResolveMutationTargetEvent(ctx context.Context, tenantID string, orgNodeKey string, effectiveDate string) (orgUnitMutationTargetEvent, error) {
+	if s.resolveTargetEventFn != nil {
+		return s.resolveTargetEventFn(ctx, tenantID, orgNodeKey, effectiveDate)
+	}
+	return orgUnitMutationTargetEvent{}, nil
 }
 
 func TestCreateOrgUnitPrecheckServerReader_Branches(t *testing.T) {
@@ -116,5 +124,125 @@ func TestOrgUnitAppendVersionPrecheckServerReader_Branches(t *testing.T) {
 	}}
 	if _, err := appendFactsReader.ResolveAppendFacts(ctx, "tenant-1", "10000001", "2026-01-01"); err == nil || err.Error() != "append facts failed" {
 		t.Fatalf("expected append facts failure, got=%v", err)
+	}
+}
+
+func TestOrgUnitMaintainPrecheckServerReader_Branches(t *testing.T) {
+	ctx := context.Background()
+
+	if ok, err := (orgUnitMaintainPrecheckServerReader{}).ResolveTargetExistsAsOf(ctx, "tenant-1", "10000001", "2026-01-01"); err != nil || ok {
+		t.Fatalf("expected zero target exists fallback, ok=%v err=%v", ok, err)
+	}
+	if target, err := (orgUnitMaintainPrecheckServerReader{orgUnitAppendVersionPrecheckServerReader: orgUnitAppendVersionPrecheckServerReader{store: orgUnitStoreStub{}}}).ResolveMutationTargetEvent(ctx, "tenant-1", "10000001", "2026-01-01"); err != nil || target != (orgunitservices.OrgUnitMaintainTargetEventV1{}) {
+		t.Fatalf("expected zero target fallback, target=%+v err=%v", target, err)
+	}
+
+	targetErrReader := orgUnitMaintainPrecheckServerReader{orgUnitAppendVersionPrecheckServerReader: orgUnitAppendVersionPrecheckServerReader{store: orgUnitStoreWithAdapterMethods{
+		resolveTargetEventFn: func(context.Context, string, string, string) (orgUnitMutationTargetEvent, error) {
+			return orgUnitMutationTargetEvent{}, errors.New("target event failed")
+		},
+	}}}
+	if _, err := targetErrReader.ResolveMutationTargetEvent(ctx, "tenant-1", "10000001", "2026-01-01"); err == nil || err.Error() != "target event failed" {
+		t.Fatalf("expected target event failure, got=%v", err)
+	}
+
+	targetReader := orgUnitMaintainPrecheckServerReader{orgUnitAppendVersionPrecheckServerReader: orgUnitAppendVersionPrecheckServerReader{store: orgUnitStoreWithAdapterMethods{
+		resolveFactsFn: func(context.Context, string, string, string) (orgUnitAppendFacts, error) {
+			return orgUnitAppendFacts{TargetExistsAsOf: true}, nil
+		},
+		resolveTargetEventFn: func(context.Context, string, string, string) (orgUnitMutationTargetEvent, error) {
+			return orgUnitMutationTargetEvent{HasEffective: true, EffectiveEventType: "CREATE", HasRaw: true, RawEventType: "CREATE"}, nil
+		},
+	}}}
+	if ok, err := targetReader.ResolveTargetExistsAsOf(ctx, "tenant-1", "10000001", "2026-01-01"); err != nil || !ok {
+		t.Fatalf("expected target exists, ok=%v err=%v", ok, err)
+	}
+	target, err := targetReader.ResolveMutationTargetEvent(ctx, "tenant-1", "10000001", "2026-01-01")
+	if err != nil {
+		t.Fatalf("target err=%v", err)
+	}
+	if !target.HasEffective || string(target.EffectiveEventType) != "CREATE" || !target.HasRaw || string(target.RawEventType) != "CREATE" {
+		t.Fatalf("target=%+v", target)
+	}
+
+	targetExistsErrReader := orgUnitMaintainPrecheckServerReader{orgUnitAppendVersionPrecheckServerReader: orgUnitAppendVersionPrecheckServerReader{store: orgUnitStoreWithAdapterMethods{
+		resolveFactsFn: func(context.Context, string, string, string) (orgUnitAppendFacts, error) {
+			return orgUnitAppendFacts{}, errors.New("append facts failed")
+		},
+	}}}
+	if _, err := targetExistsErrReader.ResolveTargetExistsAsOf(ctx, "tenant-1", "10000001", "2026-01-01"); err == nil || err.Error() != "append facts failed" {
+		t.Fatalf("expected target exists failure, got=%v", err)
+	}
+}
+
+func TestBuildOrgUnitMaintainPrecheckResultV1_DefaultCapabilityAndPolicyVersion(t *testing.T) {
+	ctx := context.Background()
+	store := newOrgUnitMemoryStore()
+	parent, err := store.CreateNodeCurrent(ctx, "tenant-1", "2026-01-01", "FLOWER-A", "鲜花组织", "", true)
+	if err != nil {
+		t.Fatalf("seed parent err=%v", err)
+	}
+	if _, err := store.CreateNodeCurrent(ctx, "tenant-1", "2026-01-01", "FLOWER-C", "运营中心", parent.ID, false); err != nil {
+		t.Fatalf("seed child err=%v", err)
+	}
+
+	correctResult, err := buildOrgUnitMaintainPrecheckResultV1(ctx, store, orgunitservices.OrgUnitMaintainPrecheckInputV1{
+		Intent:              orgunitservices.OrgUnitMaintainIntentCorrect,
+		TenantID:            "tenant-1",
+		OrgCode:             "FLOWER-C",
+		TargetEffectiveDate: "2026-01-01",
+		CanAdmin:            true,
+		NewName:             "运营平台部",
+	})
+	if err != nil {
+		t.Fatalf("correct result err=%v", err)
+	}
+	if correctResult.PolicyContext.CapabilityKey != orgUnitCorrectFieldPolicyCapabilityKey {
+		t.Fatalf("correct capability=%q", correctResult.PolicyContext.CapabilityKey)
+	}
+	if correctResult.Projection.EffectivePolicyVersion == "" {
+		t.Fatalf("missing effective policy version: %+v", correctResult.Projection)
+	}
+
+	moveResult, err := buildOrgUnitMaintainPrecheckResultV1(ctx, store, orgunitservices.OrgUnitMaintainPrecheckInputV1{
+		Intent:                        orgunitservices.OrgUnitMaintainIntentMove,
+		TenantID:                      "tenant-1",
+		OrgCode:                       "FLOWER-C",
+		EffectiveDate:                 "2026-04-01",
+		CanAdmin:                      true,
+		CandidateConfirmationRequired: true,
+		NewParentRequested:            true,
+	})
+	if err != nil {
+		t.Fatalf("move result err=%v", err)
+	}
+	if moveResult.PolicyContext.CapabilityKey != orgUnitWriteFieldPolicyCapabilityKey {
+		t.Fatalf("move capability=%q", moveResult.PolicyContext.CapabilityKey)
+	}
+	if moveResult.Projection.EffectivePolicyVersion == "" {
+		t.Fatalf("move effective policy version missing: %+v", moveResult.Projection)
+	}
+	if moveResult.Projection.Readiness == "" {
+		t.Fatalf("move readiness=%q", moveResult.Projection.Readiness)
+	}
+
+	explicitResult, err := buildOrgUnitMaintainPrecheckResultV1(ctx, store, orgunitservices.OrgUnitMaintainPrecheckInputV1{
+		Intent:                 " rename ",
+		TenantID:               " tenant-1 ",
+		CapabilityKey:          " " + orgUnitWriteFieldPolicyCapabilityKey + " ",
+		EffectivePolicyVersion: " explicit-epv ",
+		OrgCode:                " FLOWER-C ",
+		TargetEffectiveDate:    " 2026-01-01 ",
+		CanAdmin:               true,
+		NewName:                " 运营支持中心 ",
+	})
+	if err != nil {
+		t.Fatalf("explicit result err=%v", err)
+	}
+	if explicitResult.PolicyContext.CapabilityKey != orgUnitWriteFieldPolicyCapabilityKey {
+		t.Fatalf("explicit capability=%q", explicitResult.PolicyContext.CapabilityKey)
+	}
+	if explicitResult.Projection.EffectivePolicyVersion != "explicit-epv" {
+		t.Fatalf("explicit effective policy version=%q", explicitResult.Projection.EffectivePolicyVersion)
 	}
 }

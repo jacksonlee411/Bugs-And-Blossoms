@@ -1,6 +1,6 @@
 # DEV-PLAN-375：Assistant 主线实施路线图（350-370）
 
-**状态**: 进行中（2026-04-12 21:35 CST；`375M1/375M2` 已完成并封账，主路径转入 `375M4 / 350B`，`375M3 / 370A` 可并行启动）
+**状态**: 进行中（2026-04-13 06:45 CST；`375M1/375M2` 已完成并封账，`350B` 已完成，`375M4` 剩余 compat API 硬切，`375M3 / 370A` 可并行启动）
 
 > 目标：为 `DEV-PLAN-350/360/360A/361/370` 提供单一编排入口，冻结当前状态、SSOT 边界、串并行顺序、批次拆分与出口条件。  
 > 本文只做路线图编排，不改写各主题文档的契约裁决权；实现细节与子系统合同仍以对应 dev-plan 为单一事实源。
@@ -18,14 +18,15 @@
 4. [X] `375M1`：successor 执行面稳定（承接 `360 Phase 0/1` + `360A Phase 0/1`）。
 5. [X] `375M2`：`350A` 完成，收口 `add_version / insert_version`。
 6. [ ] `375M3`：`370A` 完成，收口 Markdown compiler + `knowledge_qa / business_query`。
-7. [ ] `375M4`：`350B` 完成，并完成 compat API 硬切。
+7. [ ] `375M4`：完成 compat API 硬切并封账（`350B` 已完成）。
 8. [ ] `375M5`：`350C` 完成，并完成平台退役封板。
 9. [ ] `375M6`：`370B` 完成，进入总体验收与封板准备。
 
 ## 0.2 当前下一步
 
-1. [ ] 第一优先级：启动 `375M4 / DEV-PLAN-350B`，覆盖 `correct / rename / move`，承接 compat API 硬切前的下一段关键路径。
+1. [ ] 第一优先级：完成 `375M4` 剩余项，承接 `360 Phase 2 / 360A Phase 2` 的 compat API 硬切与 runtime 主链硬切。
 2. [ ] 可并行启动：推进 `375M3 / DEV-PLAN-370A`，落地 Markdown compiler 与 `knowledge_qa / business_query`，但继续只消费 `350` 已冻结 contract。
+3. [ ] `375M4` 封账后，进入 `375M5 / DEV-PLAN-350C`，覆盖 `disable / enable` 并推进平台退役封板。
 
 ## 1. 背景与定位
 
@@ -39,7 +40,7 @@
 
 | 主题 | 当前状态 | 当前定位 | 备注 |
 | --- | --- | --- | --- |
-| `350` | 进行中 | `business_action` 正式 contract / Tool API / Gate 消费母法 | `create_orgunit / create_org` 与 `350A add_version / insert_version` 已完成；`350B/350C` 待实施 |
+| `350` | 进行中 | `business_action` 正式 contract / Tool API / Gate 消费母法 | `create_orgunit / create_org`、`350A add_version / insert_version`、`350B correct / rename / move` 已完成；`350C` 待实施 |
 | `360` | 进行中（Phase 0/1 已完成） | LibreChat 剥离与 LangGraph/LangChain 分层接管母法 | `360A` 承接执行面 SSOT；Phase 2+ 待实施 |
 | `360A` | 进行中（Phase 0/1 已完成） | successor DTO / `runtime-status` / compat API 生死表 / 删除批次 SSOT | `ui-bootstrap/session`、formal smoke、UI 降权已完成；Phase 2+ 待实施 |
 | `361` | 已封板基线 | 唯一 PDP / OPA evaluator 已完成 | 仅保留缺陷修复语义 |
@@ -97,9 +98,10 @@
 
 ### 375M4：业务动作收口批次二 + compat API 硬切
 
-1. [ ] 启动 `350B`，覆盖 `correct / rename / move`。
+1. [X] 启动 `350B`，覆盖 `correct / rename / move`。
 2. [ ] 同步承接 `360 Phase 2` 与 `360A Phase 2`，执行 compat API 切断与 runtime 主链硬切。
 3. [ ] 本里程碑完成后，正式运行链只保留 `/internal/assistant/*` 所需的最小 successor 面。
+4. [X] `350B` 实施证据已沉淀到 `docs/dev-records/dev-plan-350b-execution-log.md`。
 
 ### 375M5：业务动作收口批次三 + 平台退役封板
 
@@ -145,10 +147,17 @@
    `make check lint`  
    `make check doc`  
    `make test`（coverage `98.00% >= 98.00%`）
-2. [ ] `350B/C`：沿用同一命令口径，待后续批次完成。
-3. [ ] `360/360A`：补 successor DTO 合同测试、正式入口 smoke、compat API 生死表断言、`/assistant-ui/*` 的 `302 -> 410 -> 删除` 断言。
-4. [ ] `370A/B`：补 compiler/front matter/generate-clean 测试、`knowledge_qa / business_query` 分流回归、`business_action` 只消费已冻结 contract 的回归。
-5. [X] `350A` 实际执行记录已进入对应子计划与 `docs/dev-records/`，`375` 只维护路线图级进度与引用。
+2. [X] `350B`：已执行并记录  
+   `go test ./modules/orgunit/services/...`  
+   `go test ./internal/server/...`  
+   `go vet ./...`  
+   `make check lint`  
+   `make test`（coverage `98.00% >= 98.00%`）  
+   `make check doc`
+3. [ ] `350C`：沿用同一命令口径，待后续批次完成。
+4. [ ] `360/360A`：补 successor DTO 合同测试、正式入口 smoke、compat API 生死表断言、`/assistant-ui/*` 的 `302 -> 410 -> 删除` 断言。
+5. [ ] `370A/B`：补 compiler/front matter/generate-clean 测试、`knowledge_qa / business_query` 分流回归、`business_action` 只消费已冻结 contract 的回归。
+6. [X] `350A/350B` 实际执行记录已进入对应子计划与 `docs/dev-records/`，`375` 只维护路线图级进度与引用。
 
 ## 8. 依赖草图（Mermaid）
 
@@ -178,3 +187,4 @@ flowchart TD
 11. `docs/dev-plans/370b-assistant-business-action-knowledge-runtime-consumption-plan.md`
 12. `docs/dev-records/dev-plan-375-m1-successor-entry-stabilization-log.md`
 13. `docs/dev-records/dev-plan-350a-execution-log.md`
+14. `docs/dev-records/dev-plan-350b-execution-log.md`

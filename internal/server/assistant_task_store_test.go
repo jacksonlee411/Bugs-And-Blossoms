@@ -52,36 +52,75 @@ func assistantTestCreateOrgUnitProjectionSnapshot() *assistantCreateOrgUnitProje
 }
 
 func assistantTestOrgUnitVersionProjectionSnapshot(action string) *assistantOrgUnitVersionProjectionSnapshot {
+	action = strings.TrimSpace(action)
 	capabilityKey := orgUnitAddVersionFieldPolicyCapabilityKey
 	intent := string(orgunitservices.OrgUnitWriteIntentAddVersion)
-	if strings.TrimSpace(action) == assistantIntentInsertOrgUnitVersion {
+	effectiveDate := "2026-01-01"
+	targetEffectiveDate := ""
+	fieldKey := "name"
+	fieldPayloadKey := "name"
+	pendingDraftSummary := "目标组织：FLOWER-C；新名称：运营一部；生效日期：2026-01-01"
+	policyContextContractVersion := orgunitservices.OrgUnitAppendVersionPolicyContextContractVersionV1
+	precheckProjectionContractVersion := orgunitservices.OrgUnitAppendVersionPrecheckProjectionContractV1
+	mutationPolicyVersion := orgunitservices.OrgUnitAppendVersionMutationPolicyVersionV1
+	switch action {
+	case assistantIntentInsertOrgUnitVersion:
 		capabilityKey = orgUnitInsertVersionFieldPolicyCapabilityKey
 		intent = string(orgunitservices.OrgUnitWriteIntentInsertVersion)
+		pendingDraftSummary = "目标组织：FLOWER-C；插入版本名称：运营二部；生效日期：2026-01-01"
+	case assistantIntentCorrectOrgUnit:
+		capabilityKey = orgUnitCorrectFieldPolicyCapabilityKey
+		intent = orgunitservices.OrgUnitMaintainIntentCorrect
+		effectiveDate = ""
+		targetEffectiveDate = "2026-01-01"
+		pendingDraftSummary = "目标组织：FLOWER-C；目标生效日期：2026-01-01；更正名称：运营中心"
+		policyContextContractVersion = orgunitservices.OrgUnitMaintainPolicyContextContractVersionV1
+		precheckProjectionContractVersion = orgunitservices.OrgUnitMaintainPrecheckProjectionContractV1
+		mutationPolicyVersion = orgunitservices.OrgUnitMaintainMutationPolicyVersionV1
+	case assistantIntentRenameOrgUnit:
+		capabilityKey = orgUnitWriteFieldPolicyCapabilityKey
+		intent = orgunitservices.OrgUnitMaintainIntentRename
+		effectiveDate = "2026-03-01"
+		pendingDraftSummary = "目标组织：FLOWER-C；新名称：运营平台部；生效日期：2026-03-01"
+		policyContextContractVersion = orgunitservices.OrgUnitMaintainPolicyContextContractVersionV1
+		precheckProjectionContractVersion = orgunitservices.OrgUnitMaintainPrecheckProjectionContractV1
+		mutationPolicyVersion = orgunitservices.OrgUnitMaintainMutationPolicyVersionV1
+	case assistantIntentMoveOrgUnit:
+		capabilityKey = orgUnitWriteFieldPolicyCapabilityKey
+		intent = orgunitservices.OrgUnitMaintainIntentMove
+		effectiveDate = "2026-04-01"
+		fieldKey = "parent_org_code"
+		fieldPayloadKey = "new_parent_org_code"
+		pendingDraftSummary = "目标组织：FLOWER-C；新上级：FLOWER-A；生效日期：2026-04-01"
+		policyContextContractVersion = orgunitservices.OrgUnitMaintainPolicyContextContractVersionV1
+		precheckProjectionContractVersion = orgunitservices.OrgUnitMaintainPrecheckProjectionContractV1
+		mutationPolicyVersion = orgunitservices.OrgUnitMaintainMutationPolicyVersionV1
 	}
 	return &assistantOrgUnitVersionProjectionSnapshot{
-		PolicyContextContractVersion:      orgunitservices.OrgUnitAppendVersionPolicyContextContractVersionV1,
-		PrecheckProjectionContractVersion: orgunitservices.OrgUnitAppendVersionPrecheckProjectionContractV1,
-		PolicyContext: orgunitservices.OrgUnitAppendVersionPolicyContextV1{
+		PolicyContextContractVersion:      policyContextContractVersion,
+		PrecheckProjectionContractVersion: precheckProjectionContractVersion,
+		PolicyContext: assistantOrgUnitVersionPolicyContext{
 			TenantID:            "tenant_1",
 			CapabilityKey:       capabilityKey,
 			Intent:              intent,
-			EffectiveDate:       "2026-01-01",
+			EffectiveDate:       effectiveDate,
+			TargetEffectiveDate: targetEffectiveDate,
 			OrgCode:             "FLOWER-C",
 			OrgNodeKey:          "10000003",
 			ResolvedSetID:       "S2601",
 			SetIDSource:         "custom",
-			PolicyContextDigest: "ctx_digest_append",
+			PolicyContextDigest: "ctx_digest_" + action,
 		},
-		Projection: orgunitservices.OrgUnitAppendVersionPrecheckProjectionV1{
+		Projection: assistantOrgUnitVersionProjection{
 			Readiness:              "ready",
-			FieldDecisions:         []orgunitservices.OrgUnitAppendVersionFieldDecisionV1{{FieldKey: "name", Visible: true, Maintainable: true, FieldPayloadKey: "name", AllowedValueCodes: []string{}}},
-			PendingDraftSummary:    "目标组织：FLOWER-C；新名称：运营一部；生效日期：2026-01-01",
-			EffectivePolicyVersion: "epv1:append",
-			MutationPolicyVersion:  orgunitservices.OrgUnitAppendVersionMutationPolicyVersionV1,
+			FieldDecisions:         []assistantOrgUnitVersionFieldDecision{{FieldKey: fieldKey, Visible: true, Maintainable: true, FieldPayloadKey: fieldPayloadKey, AllowedValueCodes: []string{}}},
+			PendingDraftSummary:    pendingDraftSummary,
+			EffectivePolicyVersion: "epv1:" + action,
+			MutationPolicyVersion:  mutationPolicyVersion,
 			ResolvedSetID:          "S2601",
 			SetIDSource:            "custom",
 			PolicyExplain:          "计划已生成，等待确认后可提交",
-			ProjectionDigest:       "projection_digest_append",
+			ProjectionDigest:       "projection_digest_" + action,
 		},
 	}
 }
@@ -126,20 +165,41 @@ func assistantTaskSampleTurn(now time.Time) *assistantTurn {
 }
 
 func assistantTaskSampleAppendTurn(now time.Time, action string) *assistantTurn {
+	action = strings.TrimSpace(action)
 	intent := assistantIntentSpec{
 		Action:              action,
 		IntentSchemaVersion: assistantIntentSchemaVersionV1,
 		ContextHash:         "ctx_hash",
 		IntentHash:          "intent_hash",
-		EffectiveDate:       "2026-01-01",
 		OrgCode:             "FLOWER-C",
-		NewName:             "运营一部",
+	}
+	userInput := "新增组织版本"
+	switch action {
+	case assistantIntentCorrectOrgUnit:
+		intent.TargetEffectiveDate = "2026-01-01"
+		intent.NewName = "运营中心"
+		userInput = "更正组织"
+	case assistantIntentRenameOrgUnit:
+		intent.EffectiveDate = "2026-03-01"
+		intent.NewName = "运营平台部"
+		userInput = "重命名组织"
+	case assistantIntentMoveOrgUnit:
+		intent.EffectiveDate = "2026-04-01"
+		intent.NewParentRefText = "鲜花组织"
+		userInput = "移动组织"
+	case assistantIntentInsertOrgUnitVersion:
+		intent.EffectiveDate = "2026-01-01"
+		intent.NewName = "运营二部"
+		userInput = "插入组织版本"
+	default:
+		intent.EffectiveDate = "2026-01-01"
+		intent.NewName = "运营一部"
 	}
 	plan := assistantBuildPlan(intent)
 	plan.SkillManifestDigest = "skill_digest"
 	return assistantTestAttachOrgUnitVersionProjection(&assistantTurn{
 		TurnID:             "turn_append_1",
-		UserInput:          "新增组织版本",
+		UserInput:          userInput,
 		State:              assistantStateValidated,
 		RiskTier:           "high",
 		RequestID:          "req_turn",

@@ -108,10 +108,16 @@ func assistant272BuildConfirmedTurn(t *testing.T, svc *assistantConversationServ
 	}
 	turn.Plan.SkillManifestDigest = "skill_" + tc.name
 	switch tc.action {
-	case assistantIntentAddOrgUnitVersion, assistantIntentInsertOrgUnitVersion:
+	case assistantIntentCreateOrgUnit:
+		assistantTestAttachCreateOrgUnitProjection(turn, nil)
+	case assistantIntentAddOrgUnitVersion,
+		assistantIntentInsertOrgUnitVersion,
+		assistantIntentCorrectOrgUnit,
+		assistantIntentRenameOrgUnit,
+		assistantIntentMoveOrgUnit:
 		assistantTestAttachOrgUnitVersionProjection(turn, nil)
 	default:
-		assistantTestAttachCreateOrgUnitProjection(turn, nil)
+		assistantTestAttachBusinessRoute(turn)
 	}
 	if err := svc.refreshTurnVersionTuple(context.Background(), "tenant_1", turn); err != nil {
 		t.Fatalf("refreshTurnVersionTuple action=%s err=%v", tc.action, err)

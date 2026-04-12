@@ -203,7 +203,7 @@ func assistantTestAttachOrgUnitVersionProjection(
 		return nil
 	}
 	action := strings.TrimSpace(turn.Intent.Action)
-	if action != assistantIntentAddOrgUnitVersion && action != assistantIntentInsertOrgUnitVersion {
+	if !assistantOrgUnitVersionProjectionActionSupported(action) {
 		return assistantTestAttachBusinessRoute(turn)
 	}
 	if strings.TrimSpace(turn.Intent.IntentSchemaVersion) == "" {
@@ -222,7 +222,7 @@ func assistantTestAttachOrgUnitVersionProjection(
 		turn.Plan.CapabilityMapVersion = assistantCapabilityMapVersionV1
 	}
 	if strings.TrimSpace(turn.Plan.SkillManifestDigest) == "" {
-		turn.Plan.SkillManifestDigest = assistantSkillManifestDigest([]string{"org.orgunit_add_version"})
+		turn.Plan.SkillManifestDigest = assistantSkillManifestDigest([]string{assistantTestBusinessIntentID(action)})
 	}
 	if strings.TrimSpace(turn.DryRun.PlanHash) == "" {
 		turn.DryRun.PlanHash = "plan_hash"

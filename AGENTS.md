@@ -386,6 +386,7 @@ modules/{module}/
 - DEV-PLAN-350A：Assistant OrgUnit 八动作统一收口 Phase 5 P1——`add_version / insert_version`：`docs/dev-plans/350a-assistant-orgunit-phase5-p1-add-insert-version-convergence-plan.md`
 - DEV-PLAN-350A 执行日志：`docs/dev-records/dev-plan-350a-execution-log.md`
 - DEV-PLAN-350B：Assistant OrgUnit 八动作统一收口 Phase 5 P2——`correct / rename / move`：`docs/dev-plans/350b-assistant-orgunit-phase5-p2-correct-rename-move-convergence-plan.md`
+- DEV-PLAN-350B 执行日志：`docs/dev-records/dev-plan-350b-execution-log.md`
 - DEV-PLAN-350C：Assistant OrgUnit 八动作统一收口 Phase 5 P3——`disable / enable`：`docs/dev-plans/350c-assistant-orgunit-phase5-p3-disable-enable-convergence-plan.md`
 - DEV-PLAN-360：LibreChat 硬切剥离与 LangGraph/LangChain 分层接管方案：`docs/dev-plans/360-librechat-depower-and-langgraph-langchain-layered-takeover-plan.md`
 - DEV-PLAN-360A：LibreChat 功能禁用清单与 Runtime 主链硬切实施计划：`docs/dev-plans/360a-librechat-feature-disablement-and-runtime-cutover-plan.md`
