@@ -498,6 +498,19 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, error) {
 	router.Handle(routing.RouteClassInternalAPI, http.MethodGet, "/internal/assistant/runtime-status", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		handleAssistantRuntimeStatusAPI(w, r)
 	}))
+	assistantFormalEntryAPI := newAssistantFormalEntryAPIHandler(assistantSvc, sessions)
+	router.Handle(routing.RouteClassInternalAPI, http.MethodGet, "/internal/assistant/ui-bootstrap", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assistantFormalEntryAPI.handleUIBootstrap(w, r)
+	}))
+	router.Handle(routing.RouteClassInternalAPI, http.MethodGet, "/internal/assistant/session", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assistantFormalEntryAPI.handleSession(w, r)
+	}))
+	router.Handle(routing.RouteClassInternalAPI, http.MethodPost, "/internal/assistant/session/refresh", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assistantFormalEntryAPI.handleSessionRefresh(w, r)
+	}))
+	router.Handle(routing.RouteClassInternalAPI, http.MethodPost, "/internal/assistant/session/logout", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assistantFormalEntryAPI.handleSessionLogout(w, r)
+	}))
 
 	assetsSub, _ := fs.Sub(embeddedAssets, "assets")
 	libreChatAssetsSub, _ := fs.Sub(embeddedAssets, "assets/librechat-web")
@@ -603,6 +616,10 @@ func withTenantAndSession(classifier *routing.Classifier, tenants TenancyResolve
 
 		sid, ok := readSID(r)
 		if !ok {
+			if isAssistantFormalSuccessorAPIPath(path) {
+				assistantWriteSessionInvalid(w, r)
+				return
+			}
 			if isLibreChatCompatAPIPath(path) {
 				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusUnauthorized, "assistant_vendored_sid_missing", "登录会话缺失，请先从正式登录入口登录。")
 				return
@@ -622,6 +639,10 @@ func withTenantAndSession(classifier *routing.Classifier, tenants TenancyResolve
 		}
 		if !ok {
 			clearSIDCookie(w)
+			if isAssistantFormalSuccessorAPIPath(path) {
+				assistantWriteSessionInvalid(w, r)
+				return
+			}
 			if isLibreChatCompatAPIPath(path) {
 				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusUnauthorized, "assistant_vendored_session_invalid", "登录会话已失效，请重新登录。")
 				return
@@ -635,6 +656,10 @@ func withTenantAndSession(classifier *routing.Classifier, tenants TenancyResolve
 		}
 		if sess.TenantID != t.ID {
 			clearSIDCookie(w)
+			if isAssistantFormalSuccessorAPIPath(path) {
+				assistantWritePrincipalInvalid(w, r)
+				return
+			}
 			if isLibreChatCompatAPIPath(path) {
 				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusUnauthorized, "assistant_vendored_tenant_mismatch", "当前登录会话与租户不匹配，请重新登录。")
 				return
@@ -654,6 +679,10 @@ func withTenantAndSession(classifier *routing.Classifier, tenants TenancyResolve
 		}
 		if !ok || p.Status != "active" {
 			clearSIDCookie(w)
+			if isAssistantFormalSuccessorAPIPath(path) {
+				assistantWritePrincipalInvalid(w, r)
+				return
+			}
 			if isLibreChatCompatAPIPath(path) {
 				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusUnauthorized, "assistant_vendored_principal_invalid", "登录主体已失效，请重新登录。")
 				return

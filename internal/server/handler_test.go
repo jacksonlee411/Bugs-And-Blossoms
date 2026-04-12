@@ -1422,6 +1422,24 @@ func TestNewHandlerWithOptions_AssistantRoutes_AreWired(t *testing.T) {
 	if rec := call(http.MethodGet, "/internal/assistant/runtime-status", ""); rec.Code == http.StatusNotFound {
 		t.Fatalf("assistant runtime status route not wired")
 	}
+	if rec := call(http.MethodGet, "/internal/assistant/ui-bootstrap", ""); rec.Code == http.StatusNotFound {
+		t.Fatalf("assistant ui bootstrap route not wired")
+	}
+	if rec := call(http.MethodGet, "/internal/assistant/session", ""); rec.Code == http.StatusNotFound {
+		t.Fatalf("assistant session route not wired")
+	}
+	if rec := call(http.MethodPost, "/internal/assistant/session/refresh", ""); rec.Code == http.StatusNotFound {
+		t.Fatalf("assistant session refresh route not wired")
+	}
+	if rec := call(http.MethodGet, "/assets/librechat-web/api/config", ""); rec.Code != http.StatusNotFound {
+		t.Fatalf("removed librechat config compat route status=%d body=%s", rec.Code, rec.Body.String())
+	}
+	if rec := call(http.MethodGet, "/assets/librechat-web/api/endpoints", ""); rec.Code != http.StatusNotFound {
+		t.Fatalf("removed librechat endpoints compat route status=%d body=%s", rec.Code, rec.Body.String())
+	}
+	if rec := call(http.MethodGet, "/assets/librechat-web/api/models", ""); rec.Code != http.StatusNotFound {
+		t.Fatalf("removed librechat models compat route status=%d body=%s", rec.Code, rec.Body.String())
+	}
 }
 
 func TestNewHandlerWithOptions_DictRoutes_AreWired(t *testing.T) {

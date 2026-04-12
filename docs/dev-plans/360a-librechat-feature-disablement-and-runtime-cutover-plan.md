@@ -1,6 +1,6 @@
 # DEV-PLAN-360A：LibreChat 功能禁用清单与 Runtime 主链硬切实施计划
 
-**状态**: 修订中（2026-04-12 12:07 CST）
+**状态**: 修订中（2026-04-12 13:10 CST）
 
 ## 1. 背景
 
@@ -52,9 +52,9 @@
 补充冻结：
 1. [ ] `/assistant-ui/*` 不再允许作为“长期调试别名”存在。
 2. [ ] `360A` 目标态要求：
-   - cutover PR 中先将 `/assistant-ui/*` 明确改为 `410 Gone`；
-   - 紧随其后的 cleanup PR 删除 [handler.go](/home/lee/Projects/Bugs-And-Blossoms/internal/server/handler.go#L519) 上的路由注册；
-   - 若超过一个清理批次仍保留 `/assistant-ui/*`，按 `DEV-PLAN-004M1` 视为 legacy 回流。
+   - `Phase 0/1` 实施批次中保持现状：继续由 `internal/server/assistant_ui_proxy.go` 做 `302 -> /app/assistant/librechat`；
+   - `Phase 4` 才执行 `410 Gone -> 路由删除` 收口；
+   - 若 `Phase 4` 之后仍保留 `/assistant-ui/*`，按 `DEV-PLAN-004M1` 视为 legacy 回流。
 
 ### 3.2 vendored Web UI 来源
 
@@ -114,6 +114,7 @@
 说明：
 1. [ ] 这些字段仅用于诊断与切换观测，不改变 authoritative backend 合同，也不意味着正式支持长期 compat 模式。
 2. [ ] 若不新增字段，也必须至少在本计划实施记录中维护同等粒度的矩阵。
+3. [ ] 当前实施批次完成后，默认值应从 `cutover-prep` 切到 `ui-shell-only`；若保留环境覆盖，仅允许在这两个枚举之间切换。
 
 ### 4.4 依赖退役的运行态语义
 
@@ -370,8 +371,8 @@
 #### 7.4.3 `POST /internal/assistant/session/refresh`
 
 1. [ ] 正式职责：
-   - 刷新正式入口会话并返回最新 session 摘要；
-   - 不再模拟 LibreChat 风格 refresh token payload。
+   - 校验当前 SID 会话并返回最新 session 摘要；
+   - `Phase 1` 不新增 SID 轮换、续期写入或 refresh token payload。
 2. [ ] `200 OK` 最小 DTO：
    ```json
    {
@@ -512,7 +513,8 @@ Vendored LibreChat UI
    - 不出现 MCP 配置入口；
    - 不出现 Web Search / Memory / Code Interpreter 开关。
 4. [ ] 在同一批次引入 `/internal/assistant/ui-bootstrap`，接管 `/config`、`/endpoints`、`/models` 的职责，并删除这三个 compat 端点。
-5. [ ] 在同一批次引入 `/internal/assistant/session*` successor 端点，替代 `/user`、`/roles/*` 与 `/auth/refresh` 的正式 bootstrap/session 职责。
+5. [ ] 在同一批次引入 `/internal/assistant/session*` successor 端点，并让正式入口不再调用 `/user`、`/roles/*` 与 `/auth/refresh`；这些 compat 端点的 `410 Gone -> 删除` 仍留到 `Phase 2`。
+6. [ ] `Phase 1` 完成后，将 `runtime_cutover_mode` 从 `cutover-prep` 切到 `ui-shell-only`。
 
 ### Phase 2：旧 API 切断与 runtime 主链硬切
 
@@ -551,12 +553,12 @@ Vendored LibreChat UI
 1. [ ] 运行态页能区分“功能已硬切关闭”“依赖异常”“retired_by_design”。
 2. [ ] 正式入口 smoke：用户不可见 Agents / MCP / Memory / Search / Code Interpreter 入口。
 3. [ ] 正式聊天闭环仍能通过 `tp288 / tp288b / tp290b` 一类主链 E2E。
-4. [ ] `/assistant-ui/*` 只允许存在于短窗口 `410 Gone` 退场态，随后必须完成路由删除，不得作为历史别名继续存活。
+4. [ ] `Phase 0/1` 实施批次中，`/assistant-ui/*` 仍为 `302` alias/redirect，且不能旁路正式业务写接口；`410 Gone -> 删除` 验收留到 `Phase 4`。
 5. [ ] 若 `361` 已采纳，需额外验证 Assistant runtime、tooling、precheck 与正式写链前置解释对同一 `PolicyContext` 不出现分叉结论。
 6. [ ] `AGENTS.md` 文档地图已移除 `220-293` 系列现行入口，正式入口说明只保留 successor 计划链路。
 7. [ ] 默认部署不再依赖 `mongodb/meilisearch/rag_api/vectordb` 提供正式主链能力；若个别依赖尚未删除，必须证明其仍承担 successor 主链唯一职责。
 8. [ ] compat API 生死表中的所有端点都已进入 successor 或删除态，不存在“待审计、待决定”的灰区端点。
-9. [ ] `/assistant-ui/*` 已按计划返回 `410 Gone` 或完成路由删除，不再作为历史别名长期存活。
+9. [ ] 若进入 `Phase 4` 收口批次，`/assistant-ui/*` 已按计划返回 `410 Gone` 或完成路由删除，不再作为历史别名长期存活。
 10. [ ] `/internal/assistant/ui-bootstrap` 与 `/internal/assistant/session*` 已按冻结契约返回最小 DTO、错误码与鉴权行为，不存在实现者自定义字段漂移。
 11. [ ] successor runtime 不可用时，系统只表现为显式拒绝/只读浏览/任务失败终止，不出现旧平台回退、隐式降级或 bootstrap 旁路。
 

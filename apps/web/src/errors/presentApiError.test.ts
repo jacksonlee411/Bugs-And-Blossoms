@@ -32,6 +32,15 @@ describe('resolveApiErrorMessage', () => {
     expect(message).not.toBe('conversation_confirmation_expired')
   })
 
+  it('returns explicit mapped message for assistant successor session errors', () => {
+    const sessionMessage = resolveApiErrorMessage('assistant_session_invalid', 'assistant_session_invalid')
+    const principalMessage = resolveApiErrorMessage('assistant_principal_invalid', 'assistant_principal_invalid')
+    const bootstrapMessage = resolveApiErrorMessage('assistant_ui_bootstrap_unavailable', 'assistant_ui_bootstrap_unavailable')
+    expect(sessionMessage).not.toBe('assistant_session_invalid')
+    expect(principalMessage).not.toBe('assistant_principal_invalid')
+    expect(bootstrapMessage).not.toBe('assistant_ui_bootstrap_unavailable')
+  })
+
   it('keeps backend message when it is explicit', () => {
     const fallback = 'default rule evaluation failed. please check the rule.'
     expect(resolveApiErrorMessage('DEFAULT_RULE_EVAL_FAILED', fallback)).toBeTruthy()

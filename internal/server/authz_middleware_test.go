@@ -432,6 +432,18 @@ func TestAuthzRequirementForRoute(t *testing.T) {
 	if object, action, ok := authzRequirementForRoute(http.MethodGet, "/internal/assistant/runtime-status"); !ok || object != authz.ObjectOrgSetIDCapability || action != authz.ActionRead {
 		t.Fatalf("expected assistant runtime status read mapped to org.setid_capability_config read, got ok=%v object=%q action=%q", ok, object, action)
 	}
+	if object, action, ok := authzRequirementForRoute(http.MethodGet, "/internal/assistant/ui-bootstrap"); !ok || object != authz.ObjectOrgSetIDCapability || action != authz.ActionRead {
+		t.Fatalf("expected assistant ui bootstrap read mapped to org.setid_capability_config read, got ok=%v object=%q action=%q", ok, object, action)
+	}
+	if object, action, ok := authzRequirementForRoute(http.MethodGet, "/internal/assistant/session"); !ok || object != authz.ObjectOrgSetIDCapability || action != authz.ActionRead {
+		t.Fatalf("expected assistant session read mapped to org.setid_capability_config read, got ok=%v object=%q action=%q", ok, object, action)
+	}
+	if object, action, ok := authzRequirementForRoute(http.MethodPost, "/internal/assistant/session/refresh"); !ok || object != authz.ObjectOrgSetIDCapability || action != authz.ActionRead {
+		t.Fatalf("expected assistant session refresh mapped to org.setid_capability_config read, got ok=%v object=%q action=%q", ok, object, action)
+	}
+	if object, action, ok := authzRequirementForRoute(http.MethodPost, "/internal/assistant/session/logout"); !ok || object != authz.ObjectOrgSetIDCapability || action != authz.ActionRead {
+		t.Fatalf("expected assistant session logout mapped to org.setid_capability_config read, got ok=%v object=%q action=%q", ok, object, action)
+	}
 	if _, _, ok := authzRequirementForRoute(http.MethodGet, "/org/api/org-units"); !ok {
 		t.Fatal("expected ok=true")
 	}

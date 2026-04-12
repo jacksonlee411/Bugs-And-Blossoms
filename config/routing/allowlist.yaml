@@ -44,15 +44,6 @@ entrypoints:
       - path: /app/assistant/librechat/api/roles/admin
         methods: [GET]
         route_class: internal_api
-      - path: /app/assistant/librechat/api/config
-        methods: [GET]
-        route_class: internal_api
-      - path: /app/assistant/librechat/api/endpoints
-        methods: [GET]
-        route_class: internal_api
-      - path: /app/assistant/librechat/api/models
-        methods: [GET]
-        route_class: internal_api
       - path: /assets/librechat-web/api/auth/refresh
         methods: [POST]
         route_class: internal_api
@@ -66,15 +57,6 @@ entrypoints:
         methods: [GET]
         route_class: internal_api
       - path: /assets/librechat-web/api/roles/admin
-        methods: [GET]
-        route_class: internal_api
-      - path: /assets/librechat-web/api/config
-        methods: [GET]
-        route_class: internal_api
-      - path: /assets/librechat-web/api/endpoints
-        methods: [GET]
-        route_class: internal_api
-      - path: /assets/librechat-web/api/models
         methods: [GET]
         route_class: internal_api
       - path: /assets/librechat-web/{path}
@@ -250,6 +232,18 @@ entrypoints:
         route_class: internal_api
       - path: /internal/assistant/runtime-status
         methods: [GET]
+        route_class: internal_api
+      - path: /internal/assistant/ui-bootstrap
+        methods: [GET]
+        route_class: internal_api
+      - path: /internal/assistant/session
+        methods: [GET]
+        route_class: internal_api
+      - path: /internal/assistant/session/refresh
+        methods: [POST]
+        route_class: internal_api
+      - path: /internal/assistant/session/logout
+        methods: [POST]
         route_class: internal_api
       - path: /org/api/org-units
         methods: [GET, POST]

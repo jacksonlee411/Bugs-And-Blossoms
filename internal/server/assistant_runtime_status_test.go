@@ -94,6 +94,15 @@ services:
 	if !status.Capabilities.MCPEnabled || !status.Capabilities.ActionsEnabled {
 		t.Fatalf("capabilities=%+v", status.Capabilities)
 	}
+	if status.Capabilities.AgentsUIEnabled || status.Capabilities.MemoryEnabled || status.Capabilities.WebSearchEnabled || status.Capabilities.FileSearchEnabled || status.Capabilities.CodeInterpreterEnabled {
+		t.Fatalf("expected formal entry downsized capabilities, got=%+v", status.Capabilities)
+	}
+	if !status.Capabilities.ArtifactsEnabled {
+		t.Fatalf("expected artifacts enabled, got=%+v", status.Capabilities)
+	}
+	if status.Capabilities.RuntimeCutoverMode != assistantRuntimeCutoverModeUIShellOnly {
+		t.Fatalf("runtime_cutover_mode=%q", status.Capabilities.RuntimeCutoverMode)
+	}
 	if status.Capabilities.DomainPolicyVersion != "v1" {
 		t.Fatalf("domain policy version=%q", status.Capabilities.DomainPolicyVersion)
 	}
@@ -254,6 +263,24 @@ func TestAssistantRuntimeHelpers(t *testing.T) {
 	}
 	if got := assistantRuntimeAggregateStatus([]assistantRuntimeService{{Name: "api", Required: true, Healthy: "unavailable"}}); got != assistantRuntimeHealthUnavailable {
 		t.Fatalf("aggregate unavailable=%s", got)
+	}
+	retired := assistantRuntimeNormalizeService(assistantRuntimeService{
+		Name:     "mongodb",
+		Required: true,
+		Healthy:  assistantRuntimeHealthUnavailable,
+		Reason:   assistantRuntimeReasonRetiredByDesign,
+	})
+	if retired.Required {
+		t.Fatalf("retired service should no longer be required: %+v", retired)
+	}
+	if retired.Healthy != assistantRuntimeHealthRetired {
+		t.Fatalf("retired service health=%s", retired.Healthy)
+	}
+	if got := assistantRuntimeAggregateStatus([]assistantRuntimeService{
+		{Name: "api", Required: true, Healthy: assistantRuntimeHealthHealthy},
+		{Name: "mongodb", Required: false, Healthy: assistantRuntimeHealthUnavailable, Reason: assistantRuntimeReasonRetiredByDesign},
+	}); got != assistantRuntimeHealthHealthy {
+		t.Fatalf("aggregate with retired dependency=%s", got)
 	}
 
 	if got := assistantRuntimeLockReadErrorCode(os.ErrNotExist); got != "assistant_runtime_versions_lock_missing" {

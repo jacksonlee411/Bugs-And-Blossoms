@@ -77,12 +77,6 @@ func (h *libreChatCompatAPIHandler) ServeHTTP(w http.ResponseWriter, r *http.Req
 		h.handleRole(w, r, libreChatCompatRoleUser)
 	case "/roles/admin":
 		h.handleRole(w, r, libreChatCompatRoleAdmin)
-	case "/config":
-		h.handleConfig(w, r)
-	case "/endpoints":
-		h.handleEndpoints(w, r)
-	case "/models":
-		h.handleModels(w, r)
 	default:
 		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusNotFound, "not_found", "未找到兼容接口。")
 	}
@@ -141,120 +135,8 @@ func (h *libreChatCompatAPIHandler) handleRole(w http.ResponseWriter, r *http.Re
 	})
 }
 
-func (h *libreChatCompatAPIHandler) handleConfig(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusMethodNotAllowed, "method_not_allowed", "当前请求方法不被允许。")
-		return
-	}
-	if _, _, ok := libreChatCompatUserFromRequest(r); !ok {
-		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusUnauthorized, "assistant_vendored_principal_invalid", "正式入口认证主体缺失，请重新登录。")
-		return
-	}
-	writeJSON(w, http.StatusOK, map[string]any{
-		"appTitle":                 "Bugs & Blossoms Assistant",
-		"serverDomain":             effectiveHost(r),
-		"discordLoginEnabled":      false,
-		"facebookLoginEnabled":     false,
-		"githubLoginEnabled":       false,
-		"googleLoginEnabled":       false,
-		"openidLoginEnabled":       false,
-		"appleLoginEnabled":        false,
-		"samlLoginEnabled":         false,
-		"openidLabel":              "",
-		"openidImageUrl":           "",
-		"openidAutoRedirect":       false,
-		"samlLabel":                "",
-		"samlImageUrl":             "",
-		"emailLoginEnabled":        false,
-		"registrationEnabled":      false,
-		"socialLoginEnabled":       false,
-		"passwordResetEnabled":     false,
-		"emailEnabled":             false,
-		"showBirthdayIcon":         false,
-		"helpAndFaqURL":            libreChatCompatDefaultHelpAndFAQ,
-		"sharedLinksEnabled":       false,
-		"publicSharedLinksEnabled": false,
-		"instanceProjectId":        libreChatCompatProjectID,
-		"interface": map[string]any{
-			"modelSelect": true,
-		},
-	})
-}
-
-func (h *libreChatCompatAPIHandler) handleEndpoints(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusMethodNotAllowed, "method_not_allowed", "当前请求方法不被允许。")
-		return
-	}
-	if _, _, ok := libreChatCompatUserFromRequest(r); !ok {
-		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusUnauthorized, "assistant_vendored_principal_invalid", "正式入口认证主体缺失，请重新登录。")
-		return
-	}
-	providers, errCode, errMessage := h.compatProviders()
-	if len(providers) == 0 {
-		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusServiceUnavailable, errCode, errMessage)
-		return
-	}
-	out := make(map[string]map[string]any, len(providers))
-	for idx, provider := range providers {
-		endpointKey, endpointType := libreChatCompatEndpoint(provider)
-		out[endpointKey] = map[string]any{
-			"order":             idx,
-			"type":              endpointType,
-			"name":              libreChatCompatEndpointLabel(provider, endpointKey),
-			"modelDisplayLabel": provider.Model,
-			"userProvide":       false,
-		}
-	}
-	writeJSON(w, http.StatusOK, out)
-}
-
-func (h *libreChatCompatAPIHandler) handleModels(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusMethodNotAllowed, "method_not_allowed", "当前请求方法不被允许。")
-		return
-	}
-	if _, _, ok := libreChatCompatUserFromRequest(r); !ok {
-		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusUnauthorized, "assistant_vendored_principal_invalid", "正式入口认证主体缺失，请重新登录。")
-		return
-	}
-	providers, errCode, errMessage := h.compatProviders()
-	if len(providers) == 0 {
-		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusServiceUnavailable, errCode, errMessage)
-		return
-	}
-	out := make(map[string][]string, len(providers))
-	for _, provider := range providers {
-		endpointKey, _ := libreChatCompatEndpoint(provider)
-		if strings.TrimSpace(provider.Model) == "" {
-			continue
-		}
-		if !libreChatCompatModelExists(out[endpointKey], provider.Model) {
-			out[endpointKey] = append(out[endpointKey], provider.Model)
-		}
-	}
-	if len(out) == 0 {
-		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusServiceUnavailable, "assistant_startup_models_unavailable", "正式入口缺少可用模型清单，请检查 Assistant 运行时配置。")
-		return
-	}
-	writeJSON(w, http.StatusOK, out)
-}
-
 func (h *libreChatCompatAPIHandler) compatProviders() ([]assistantModelProviderConfig, string, string) {
-	if h.assistantSvc == nil || h.assistantSvc.modelGateway == nil {
-		return nil, "ai_runtime_config_missing", "Assistant 运行时模型配置缺失，请先完成配置。"
-	}
-	providers := h.assistantSvc.modelGateway.listModels()
-	sort.SliceStable(providers, func(i, j int) bool {
-		if providers[i].Priority == providers[j].Priority {
-			return providers[i].Name < providers[j].Name
-		}
-		return providers[i].Priority < providers[j].Priority
-	})
-	if len(providers) == 0 {
-		return nil, "assistant_startup_endpoints_unavailable", "正式入口缺少可用 endpoint 配置，请检查 Assistant 运行时模型配置。"
-	}
-	return providers, "", ""
+	return assistantStartupProviders(h.assistantSvc)
 }
 
 func libreChatCompatUserFromRequest(r *http.Request) (libreChatCompatUserView, string, bool) {
@@ -445,6 +327,23 @@ func libreChatCompatModelExists(models []string, target string) bool {
 		}
 	}
 	return false
+}
+
+func assistantStartupProviders(assistantSvc *assistantConversationService) ([]assistantModelProviderConfig, string, string) {
+	if assistantSvc == nil || assistantSvc.modelGateway == nil {
+		return nil, "ai_runtime_config_missing", "Assistant 运行时模型配置缺失，请先完成配置。"
+	}
+	providers := assistantSvc.modelGateway.listModels()
+	sort.SliceStable(providers, func(i, j int) bool {
+		if providers[i].Priority == providers[j].Priority {
+			return providers[i].Name < providers[j].Name
+		}
+		return providers[i].Priority < providers[j].Priority
+	})
+	if len(providers) == 0 {
+		return nil, "assistant_startup_endpoints_unavailable", "正式入口缺少可用 endpoint 配置，请检查 Assistant 运行时模型配置。"
+	}
+	return providers, "", ""
 }
 
 func libreChatCompatAPISuffix(path string) (string, bool) {

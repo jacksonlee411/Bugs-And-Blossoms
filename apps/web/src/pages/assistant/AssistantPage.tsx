@@ -29,7 +29,7 @@ function errorMessage(err: unknown, fallback: string): string {
   return fallback
 }
 
-function statusColor(status: string): 'success' | 'warning' | 'error' | 'default' {
+function statusColor(status: string): 'success' | 'warning' | 'error' | 'info' | 'default' {
   switch ((status || '').trim()) {
     case 'healthy':
       return 'success'
@@ -37,9 +37,25 @@ function statusColor(status: string): 'success' | 'warning' | 'error' | 'default
       return 'warning'
     case 'unavailable':
       return 'error'
+    case 'retired':
+      return 'info'
     default:
       return 'default'
   }
+}
+
+function capabilityLabel(label: string, enabled: boolean): string {
+  return `${label}:${enabled ? '可用' : '已硬切关闭'}`
+}
+
+function serviceSummary(service: NonNullable<AssistantRuntimeStatusResponse['services']>[number]): string {
+  if (service.reason === 'retired_by_design' || service.healthy === 'retired') {
+    return `${service.name}:按设计退役`
+  }
+  if (service.healthy === 'healthy') {
+    return `${service.name}:正常`
+  }
+  return `${service.name}:依赖异常`
 }
 
 function conversationSummary(item: AssistantConversationListItem): string {
@@ -106,6 +122,7 @@ export function AssistantPage() {
       </Typography>
 
       <Alert severity='info'>正式交互入口已统一到 `/app/assistant/librechat`；本页不再承担正式聊天交互与验收职责。</Alert>
+      <Alert severity='info'>能力关闭表示正式入口已按设计降权；只有依赖异常与 `retired_by_design` 才代表运行态需要额外关注。</Alert>
 
       {pageError ? <Alert severity='warning'>{pageError}</Alert> : null}
 
@@ -124,8 +141,17 @@ export function AssistantPage() {
             <Typography data-testid='assistant-runtime-checked-at' variant='body2'>
               checked_at: {runtimeStatus?.checked_at ?? '-'}
             </Typography>
-            <Typography data-testid='assistant-runtime-upstream-url' variant='body2'>
+            <Typography
+              data-testid='assistant-runtime-upstream-url'
+              variant='body2'
+            >
               upstream: {runtimeStatus?.upstream?.url ?? '-'}
+            </Typography>
+            <Typography
+              data-testid='assistant-runtime-cutover-mode'
+              variant='body2'
+            >
+              runtime_cutover_mode: {runtimeStatus?.capabilities?.runtime_cutover_mode ?? '-'}
             </Typography>
             <Stack direction='row' spacing={1} useFlexGap flexWrap='wrap'>
               <Chip
@@ -143,6 +169,54 @@ export function AssistantPage() {
                 size='small'
                 variant='outlined'
               />
+              <Chip
+                label={capabilityLabel(
+                  'agents_ui',
+                  runtimeStatus?.capabilities?.agents_ui_enabled ?? false
+                )}
+                size='small'
+                variant='outlined'
+              />
+              <Chip
+                label={capabilityLabel(
+                  'memory',
+                  runtimeStatus?.capabilities?.memory_enabled ?? false
+                )}
+                size='small'
+                variant='outlined'
+              />
+              <Chip
+                label={capabilityLabel(
+                  'web_search',
+                  runtimeStatus?.capabilities?.web_search_enabled ?? false
+                )}
+                size='small'
+                variant='outlined'
+              />
+              <Chip
+                label={capabilityLabel(
+                  'file_search',
+                  runtimeStatus?.capabilities?.file_search_enabled ?? false
+                )}
+                size='small'
+                variant='outlined'
+              />
+              <Chip
+                label={capabilityLabel(
+                  'code_interpreter',
+                  runtimeStatus?.capabilities?.code_interpreter_enabled ?? false
+                )}
+                size='small'
+                variant='outlined'
+              />
+              <Chip
+                label={capabilityLabel(
+                  'artifacts',
+                  runtimeStatus?.capabilities?.artifacts_enabled ?? false
+                )}
+                size='small'
+                variant='outlined'
+              />
             </Stack>
             <Divider />
             <Stack spacing={1}>
@@ -152,12 +226,14 @@ export function AssistantPage() {
                   <Chip
                     color={statusColor(service.healthy)}
                     key={service.name}
-                    label={`${service.name}:${service.healthy}`}
+                    label={serviceSummary(service)}
                     size='small'
                     variant='outlined'
                   />
                 ))}
-                {!runtimeStatus?.services?.length ? <Typography variant='body2'>暂无服务记录</Typography> : null}
+                {!runtimeStatus?.services?.length ? (
+                  <Typography variant='body2'>暂无服务记录</Typography>
+                ) : null}
               </Stack>
             </Stack>
           </Stack>

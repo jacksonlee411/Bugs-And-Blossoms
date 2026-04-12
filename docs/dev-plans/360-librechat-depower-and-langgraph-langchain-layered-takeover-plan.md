@@ -225,12 +225,17 @@ graph TD
    - 立即隐藏并删除；
    - 仅开发期临时门控；
    - 立即归档退出。
+4. [ ] `360` 在此阶段只冻结母法，不直接定义 successor DTO、compat API 生死表、runtime-status 枚举扩展或 `/assistant-ui/*` 的退场时点；这些执行合同统一以下列文档为准：
+   - `DEV-PLAN-360A`：`ui-bootstrap/session*` 契约、runtime-status 语义、compat API 生死表、删除批次；
+   - `DEV-PLAN-361`：唯一 PDP / OPA 适配层；
+   - `DEV-PLAN-350`：Assistant 策略消费链收敛。
 
 ### Phase 1：前端可见层降权
 
 1. [ ] 在正式入口隐藏或禁用 LibreChat 的 Agents / MCP / Memory / Web Search / Code Interpreter / File Search 等用户可见入口。
 2. [ ] 保证用户在正式入口上只能看到“聊天 UI 能力”，而看不到第二套 Agent 平台配置面板。
-3. [ ] 若 `/assistant-ui/*` 或上游调试直链仍存在，其角色只允许是调试/排障，不得作为正式验收入口。
+3. [ ] `Phase 1` 的目标冻结为“正式入口只保留聊天 UI 壳，不暴露第二平台入口”。
+4. [ ] 若 `/assistant-ui/*` 或上游调试直链仍存在，其角色只允许是短期别名/排障入口，不得作为正式验收入口；其 `410 Gone -> 路由删除` 的具体批次由 `DEV-PLAN-360A Phase 4` 执行，不在 `360` 中复制。
 
 ### Phase 2：runtime 主链切换
 
@@ -283,6 +288,8 @@ graph TD
    处置：把“兼容”从产品策略降级为短期开发期例外，并要求每个例外都绑定删除任务与失败停止线。
 7. [ ] 风险：successor runtime 不可用时，团队临场发明 bootstrap/session 旁路、错误码或回退语义。  
    处置：在 `360A` 先冻结 successor DTO 与 fail-closed 失败合同；`360` 只允许“显式拒绝/只读浏览/终止任务”，不允许回退旧平台。
+8. [ ] 风险：把 `DEV-PLAN-361` 的唯一 PDP / OPA 适配层理解成“可以重写 LibreChat/LangGraph/backend 的三层职责边界”。  
+   处置：`361` 只影响后端统一策略消费实现，不改 `LibreChat UI 壳 -> LangGraph/LangChain runtime -> authoritative backend` 的角色分工。
 
 ## 9. 验收标准
 

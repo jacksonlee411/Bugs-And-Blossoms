@@ -30,6 +30,7 @@ func (s stubTenancyResolver) ResolveTenant(context.Context, string) (Tenant, boo
 
 type stubSessionStore struct {
 	lookupSID string
+	revokeSID string
 	sess      Session
 	ok        bool
 	err       error
@@ -44,7 +45,10 @@ func (s *stubSessionStore) Lookup(_ context.Context, sid string) (Session, bool,
 	return s.sess, s.ok, s.err
 }
 
-func (*stubSessionStore) Revoke(context.Context, string) error { return nil }
+func (s *stubSessionStore) Revoke(_ context.Context, sid string) error {
+	s.revokeSID = sid
+	return nil
+}
 
 type stubPrincipalStore struct {
 	p   Principal
@@ -93,6 +97,28 @@ func mustLibreChatCompatAPIClassifier(t *testing.T) *routing.Classifier {
 				Routes: []routing.Route{
 					{Path: libreChatCompatAPIPrefix + "/user", Methods: []string{"GET"}, RouteClass: "internal_api"},
 					{Path: libreChatFormalEntryAPIPrefix + "/user", Methods: []string{"GET"}, RouteClass: "internal_api"},
+				},
+			},
+		},
+	}, "server")
+	if err != nil {
+		t.Fatal(err)
+	}
+	return c
+}
+
+func mustAssistantFormalSuccessorAPIClassifier(t *testing.T) *routing.Classifier {
+	t.Helper()
+
+	c, err := routing.NewClassifier(routing.Allowlist{
+		Version: 1,
+		Entrypoints: map[string]routing.Entrypoint{
+			"server": {
+				Routes: []routing.Route{
+					{Path: "/internal/assistant/ui-bootstrap", Methods: []string{"GET"}, RouteClass: "internal_api"},
+					{Path: "/internal/assistant/session", Methods: []string{"GET"}, RouteClass: "internal_api"},
+					{Path: "/internal/assistant/session/refresh", Methods: []string{"POST"}, RouteClass: "internal_api"},
+					{Path: "/internal/assistant/session/logout", Methods: []string{"POST"}, RouteClass: "internal_api"},
 				},
 			},
 		},
@@ -445,6 +471,46 @@ func TestWithTenantAndSession_LibreChatCompatPrincipalInvalid_ReturnsSpecific401
 		t.Fatalf("status=%d body=%q", rec.Code, rec.Body.String())
 	}
 	if !strings.Contains(rec.Body.String(), "assistant_vendored_principal_invalid") {
+		t.Fatalf("body=%q", rec.Body.String())
+	}
+}
+
+func TestWithTenantAndSession_AssistantFormalSuccessorSessionInvalid_ReturnsSpecific401(t *testing.T) {
+	tnt := Tenant{ID: "t1", Domain: "localhost", Name: "Local"}
+	classifier := mustAssistantFormalSuccessorAPIClassifier(t)
+	h := withTenantAndSession(classifier, stubTenancyResolver{tenant: tnt, ok: true}, newMemoryPrincipalStore(), newMemorySessionStore(), http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
+		t.Fatal("unexpected next")
+	}))
+
+	req := httptest.NewRequest(http.MethodGet, "/internal/assistant/session", nil)
+	req.Host = "localhost:8080"
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("status=%d body=%q", rec.Code, rec.Body.String())
+	}
+	if !strings.Contains(rec.Body.String(), assistantSessionInvalidCode) {
+		t.Fatalf("body=%q", rec.Body.String())
+	}
+}
+
+func TestWithTenantAndSession_AssistantFormalSuccessorPrincipalInvalid_ReturnsSpecific401(t *testing.T) {
+	tnt := Tenant{ID: "t1", Domain: "localhost", Name: "Local"}
+	classifier := mustAssistantFormalSuccessorAPIClassifier(t)
+	sessions := &stubSessionStore{ok: true, sess: Session{TenantID: "other-tenant", PrincipalID: "p1", ExpiresAt: time.Now().Add(time.Hour)}}
+	h := withTenantAndSession(classifier, stubTenancyResolver{tenant: tnt, ok: true}, newMemoryPrincipalStore(), sessions, http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
+		t.Fatal("unexpected next")
+	}))
+
+	req := httptest.NewRequest(http.MethodGet, "/internal/assistant/ui-bootstrap", nil)
+	req.Host = "localhost:8080"
+	req.AddCookie(&http.Cookie{Name: sidCookieName, Value: "sid1"})
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("status=%d body=%q", rec.Code, rec.Body.String())
+	}
+	if !strings.Contains(rec.Body.String(), assistantPrincipalInvalidCode) {
 		t.Fatalf("body=%q", rec.Body.String())
 	}
 }

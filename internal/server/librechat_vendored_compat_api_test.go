@@ -147,15 +147,12 @@ func TestLibreChatVendoredCompatAPIWorksWithSIDSession(t *testing.T) {
 		}
 	})
 
-	t.Run("user config endpoints models roles", func(t *testing.T) {
+	t.Run("user roles stay while removed bootstrap compat routes return not found", func(t *testing.T) {
 		cases := []struct {
 			name string
 			path string
 		}{
 			{name: "user", path: libreChatCompatAPIPrefix + "/user"},
-			{name: "config", path: libreChatCompatAPIPrefix + "/config"},
-			{name: "endpoints", path: libreChatCompatAPIPrefix + "/endpoints"},
-			{name: "models", path: libreChatCompatAPIPrefix + "/models"},
 			{name: "role-user", path: libreChatCompatAPIPrefix + "/roles/user"},
 			{name: "role-admin", path: libreChatCompatAPIPrefix + "/roles/admin"},
 		}
@@ -172,43 +169,20 @@ func TestLibreChatVendoredCompatAPIWorksWithSIDSession(t *testing.T) {
 			})
 		}
 
-		var configPayload map[string]any
-		configReq := httptest.NewRequest(http.MethodGet, libreChatCompatAPIPrefix+"/config", nil)
-		configReq.Host = "localhost:8080"
-		configReq.AddCookie(sidCookie)
-		configRec := httptest.NewRecorder()
-		h.ServeHTTP(configRec, configReq)
-		if err := json.Unmarshal(configRec.Body.Bytes(), &configPayload); err != nil {
-			t.Fatal(err)
+		removedBootstrapRoutes := []string{
+			libreChatCompatAPIPrefix + "/config",
+			libreChatCompatAPIPrefix + "/endpoints",
+			libreChatCompatAPIPrefix + "/models",
 		}
-		if configPayload["appTitle"] != "Bugs & Blossoms Assistant" {
-			t.Fatalf("appTitle=%v", configPayload["appTitle"])
-		}
-
-		var endpointsPayload map[string]map[string]any
-		endpointsReq := httptest.NewRequest(http.MethodGet, libreChatCompatAPIPrefix+"/endpoints", nil)
-		endpointsReq.Host = "localhost:8080"
-		endpointsReq.AddCookie(sidCookie)
-		endpointsRec := httptest.NewRecorder()
-		h.ServeHTTP(endpointsRec, endpointsReq)
-		if err := json.Unmarshal(endpointsRec.Body.Bytes(), &endpointsPayload); err != nil {
-			t.Fatal(err)
-		}
-		if _, ok := endpointsPayload["openAI"]; !ok {
-			t.Fatalf("payload=%v", endpointsPayload)
-		}
-
-		var modelsPayload map[string][]string
-		modelsReq := httptest.NewRequest(http.MethodGet, libreChatCompatAPIPrefix+"/models", nil)
-		modelsReq.Host = "localhost:8080"
-		modelsReq.AddCookie(sidCookie)
-		modelsRec := httptest.NewRecorder()
-		h.ServeHTTP(modelsRec, modelsReq)
-		if err := json.Unmarshal(modelsRec.Body.Bytes(), &modelsPayload); err != nil {
-			t.Fatal(err)
-		}
-		if got := modelsPayload["openAI"]; len(got) != 1 || got[0] != "gpt-5-codex" {
-			t.Fatalf("models=%v", modelsPayload)
+		for _, path := range removedBootstrapRoutes {
+			req := httptest.NewRequest(http.MethodGet, path, nil)
+			req.Host = "localhost:8080"
+			req.AddCookie(sidCookie)
+			rec := httptest.NewRecorder()
+			h.ServeHTTP(rec, req)
+			if rec.Code != http.StatusNotFound {
+				t.Fatalf("path=%s status=%d body=%s", path, rec.Code, rec.Body.String())
+			}
 		}
 	})
 
@@ -268,9 +242,6 @@ func TestLibreChatVendoredCompatAPIHandler_UnitCoverage(t *testing.T) {
 			libreChatCompatAPIPrefix + "/auth/refresh",
 			libreChatCompatAPIPrefix + "/user",
 			libreChatCompatAPIPrefix + "/roles/user",
-			libreChatCompatAPIPrefix + "/config",
-			libreChatCompatAPIPrefix + "/endpoints",
-			libreChatCompatAPIPrefix + "/models",
 		}
 		for _, path := range paths {
 			req := httptest.NewRequest(http.MethodDelete, path, nil)
@@ -297,9 +268,6 @@ func TestLibreChatVendoredCompatAPIHandler_UnitCoverage(t *testing.T) {
 			{method: http.MethodPost, path: libreChatCompatAPIPrefix + "/auth/refresh"},
 			{method: http.MethodGet, path: libreChatCompatAPIPrefix + "/user"},
 			{method: http.MethodGet, path: libreChatCompatAPIPrefix + "/roles/user"},
-			{method: http.MethodGet, path: libreChatCompatAPIPrefix + "/config"},
-			{method: http.MethodGet, path: libreChatCompatAPIPrefix + "/endpoints"},
-			{method: http.MethodGet, path: libreChatCompatAPIPrefix + "/models"},
 		}
 		for _, tc := range paths {
 			req := httptest.NewRequest(tc.method, tc.path, nil)
@@ -307,6 +275,23 @@ func TestLibreChatVendoredCompatAPIHandler_UnitCoverage(t *testing.T) {
 			h.ServeHTTP(rec, req)
 			if rec.Code != http.StatusUnauthorized {
 				t.Fatalf("path=%s status=%d", tc.path, rec.Code)
+			}
+		}
+	})
+
+	t.Run("removed bootstrap compat routes stay not found", func(t *testing.T) {
+		h := newLibreChatCompatAPIHandler(nil, nil)
+		paths := []string{
+			libreChatCompatAPIPrefix + "/config",
+			libreChatCompatAPIPrefix + "/endpoints",
+			libreChatCompatAPIPrefix + "/models",
+		}
+		for _, path := range paths {
+			req := httptest.NewRequest(http.MethodGet, path, nil)
+			rec := httptest.NewRecorder()
+			h.ServeHTTP(rec, req)
+			if rec.Code != http.StatusNotFound {
+				t.Fatalf("path=%s status=%d body=%s", path, rec.Code, rec.Body.String())
 			}
 		}
 	})
@@ -330,41 +315,6 @@ func TestLibreChatVendoredCompatAPIHandler_UnitCoverage(t *testing.T) {
 		hEmpty := &libreChatCompatAPIHandler{assistantSvc: &assistantConversationService{modelGateway: &assistantModelGateway{config: assistantModelConfig{}}}}
 		if providers, code, _ := hEmpty.compatProviders(); len(providers) != 0 || code != "assistant_startup_endpoints_unavailable" {
 			t.Fatalf("providers=%v code=%q", providers, code)
-		}
-
-		modelsOnlyEmpty := &libreChatCompatAPIHandler{assistantSvc: &assistantConversationService{modelGateway: &assistantModelGateway{config: assistantModelConfig{Providers: []assistantModelProviderConfig{{Name: "custom-provider", Enabled: true, Model: ""}}}}}}
-		req := httptest.NewRequest(http.MethodGet, libreChatCompatAPIPrefix+"/models", nil)
-		req = req.WithContext(withTenant(withPrincipal(req.Context(), Principal{ID: "p1", Email: "u@example.invalid"}), Tenant{ID: "t1"}))
-		req.AddCookie(&http.Cookie{Name: sidCookieName, Value: "sid-1"})
-		rec := httptest.NewRecorder()
-		modelsOnlyEmpty.ServeHTTP(rec, req)
-		if rec.Code != http.StatusServiceUnavailable {
-			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
-		}
-		var payload map[string]any
-		if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
-			t.Fatal(err)
-		}
-		if payload["code"] != "assistant_startup_models_unavailable" {
-			t.Fatalf("code=%v", payload["code"])
-		}
-
-		authedReq := httptest.NewRequest(http.MethodGet, libreChatCompatAPIPrefix+"/endpoints", nil)
-		authedReq = authedReq.WithContext(withTenant(withPrincipal(authedReq.Context(), Principal{ID: "p1", Email: "u@example.invalid"}), Tenant{ID: "t1"}))
-		authedReq.AddCookie(&http.Cookie{Name: sidCookieName, Value: "sid-1"})
-		authedRec := httptest.NewRecorder()
-		hEmpty.ServeHTTP(authedRec, authedReq)
-		if authedRec.Code != http.StatusServiceUnavailable {
-			t.Fatalf("status=%d body=%s", authedRec.Code, authedRec.Body.String())
-		}
-
-		modelsReqEmptyProviders := httptest.NewRequest(http.MethodGet, libreChatCompatAPIPrefix+"/models", nil)
-		modelsReqEmptyProviders = modelsReqEmptyProviders.WithContext(withTenant(withPrincipal(modelsReqEmptyProviders.Context(), Principal{ID: "p1", Email: "u@example.invalid"}), Tenant{ID: "t1"}))
-		modelsReqEmptyProviders.AddCookie(&http.Cookie{Name: sidCookieName, Value: "sid-1"})
-		modelsRecEmptyProviders := httptest.NewRecorder()
-		hEmpty.ServeHTTP(modelsRecEmptyProviders, modelsReqEmptyProviders)
-		if modelsRecEmptyProviders.Code != http.StatusServiceUnavailable {
-			t.Fatalf("status=%d body=%s", modelsRecEmptyProviders.Code, modelsRecEmptyProviders.Body.String())
 		}
 
 		hSorted := &libreChatCompatAPIHandler{assistantSvc: &assistantConversationService{modelGateway: &assistantModelGateway{config: assistantModelConfig{Providers: []assistantModelProviderConfig{{Name: "zeta", Enabled: true, Model: "m2", Priority: 20}, {Name: "alpha", Enabled: true, Model: "m1", Priority: 10}, {Name: "beta", Enabled: true, Model: "m3", Priority: 10}}}}}}

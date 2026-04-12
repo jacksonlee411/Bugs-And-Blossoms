@@ -14,6 +14,11 @@ import (
 
 const defaultAssistantDomainAllowlistPath = "config/assistant/domain-allowlist.yaml"
 
+const (
+	assistantRuntimeCutoverModeCutoverPrep = "cutover-prep"
+	assistantRuntimeCutoverModeUIShellOnly = "ui-shell-only"
+)
+
 var (
 	errAssistantDomainPolicyMissing = errors.New("assistant_domain_policy_missing")
 	errAssistantDomainPolicyInvalid = errors.New("assistant_domain_policy_invalid")
@@ -33,10 +38,30 @@ type assistantDomainPolicySource struct {
 }
 
 type assistantRuntimeCapabilities struct {
-	MCPEnabled          bool   `json:"mcp_enabled"`
-	ActionsEnabled      bool   `json:"actions_enabled"`
-	AgentsWriteEnabled  bool   `json:"agents_write_enabled"`
-	DomainPolicyVersion string `json:"domain_policy_version,omitempty"`
+	MCPEnabled             bool   `json:"mcp_enabled"`
+	ActionsEnabled         bool   `json:"actions_enabled"`
+	AgentsWriteEnabled     bool   `json:"agents_write_enabled"`
+	AgentsUIEnabled        bool   `json:"agents_ui_enabled"`
+	MemoryEnabled          bool   `json:"memory_enabled"`
+	WebSearchEnabled       bool   `json:"web_search_enabled"`
+	FileSearchEnabled      bool   `json:"file_search_enabled"`
+	CodeInterpreterEnabled bool   `json:"code_interpreter_enabled"`
+	ArtifactsEnabled       bool   `json:"artifacts_enabled"`
+	RuntimeCutoverMode     string `json:"runtime_cutover_mode,omitempty"`
+	DomainPolicyVersion    string `json:"domain_policy_version,omitempty"`
+}
+
+func assistantRuntimeFormalCapabilityMatrix() assistantRuntimeCapabilities {
+	return assistantRuntimeCapabilities{
+		AgentsWriteEnabled:     assistantRuntimeAgentsWriteEnabled(),
+		AgentsUIEnabled:        false,
+		MemoryEnabled:          false,
+		WebSearchEnabled:       false,
+		FileSearchEnabled:      false,
+		CodeInterpreterEnabled: false,
+		ArtifactsEnabled:       true,
+		RuntimeCutoverMode:     assistantRuntimeCutoverMode(),
+	}
 }
 
 func readAssistantDomainPolicy() (assistantDomainPolicy, error) {
@@ -163,9 +188,7 @@ func assistantDomainPatternDangerous(pattern string) bool {
 }
 
 func assistantRuntimeCapabilitiesStatus() (assistantRuntimeCapabilities, error) {
-	capabilities := assistantRuntimeCapabilities{
-		AgentsWriteEnabled: assistantRuntimeAgentsWriteEnabled(),
-	}
+	capabilities := assistantRuntimeFormalCapabilityMatrix()
 	policy, err := readAssistantDomainPolicy()
 	if err != nil {
 		return capabilities, err
@@ -174,6 +197,17 @@ func assistantRuntimeCapabilitiesStatus() (assistantRuntimeCapabilities, error) 
 	capabilities.ActionsEnabled = len(policy.Sources["actions"].AllowedDomains) > 0
 	capabilities.DomainPolicyVersion = fmt.Sprintf("v%d", policy.Version)
 	return capabilities, nil
+}
+
+func assistantRuntimeCutoverMode() string {
+	switch strings.ToLower(strings.TrimSpace(os.Getenv("ASSISTANT_RUNTIME_CUTOVER_MODE"))) {
+	case assistantRuntimeCutoverModeCutoverPrep:
+		return assistantRuntimeCutoverModeCutoverPrep
+	case assistantRuntimeCutoverModeUIShellOnly:
+		return assistantRuntimeCutoverModeUIShellOnly
+	default:
+		return assistantRuntimeCutoverModeUIShellOnly
+	}
 }
 
 func assistantRuntimeAgentsWriteEnabled() bool {
