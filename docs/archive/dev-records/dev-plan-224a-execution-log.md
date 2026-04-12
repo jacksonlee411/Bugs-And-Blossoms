@@ -1,5 +1,7 @@
 # DEV-PLAN-224A 执行日志
 
+> 归档说明（2026-04-12）：本记录已自 `docs/dev-records/` 迁入 `docs/archive/dev-records/`，仅保留为历史执行证据，不再作为活体入口。
+
 ## 2026-03-03（UTC）
 
 - 2026-03-03 04:10 UTC：后端完成真实 OpenAI/Codex adapter 接入与 runtime endpoint 约束（生产仅 `https://`，非生产允许 `builtin://` / `simulate://`）。

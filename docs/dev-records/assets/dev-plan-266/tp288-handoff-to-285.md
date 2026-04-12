@@ -17,7 +17,7 @@
 - 总索引：`docs/dev-records/assets/dev-plan-266/tp288-real-entry-evidence-index.json`
 - Case 001：`docs/dev-records/assets/dev-plan-266/tp288-e2e-001-page.png`、`docs/dev-records/assets/dev-plan-266/tp288-e2e-001-dom.json`、`docs/dev-records/assets/dev-plan-266/tp288-e2e-001-network.json`、`docs/dev-records/assets/dev-plan-266/tp288-e2e-001-trace.zip`、`docs/dev-records/assets/dev-plan-266/tp288-e2e-001-assertions.json`
 - Case 002：`docs/dev-records/assets/dev-plan-266/tp288-e2e-002-page.png`、`docs/dev-records/assets/dev-plan-266/tp288-e2e-002-dom.json`、`docs/dev-records/assets/dev-plan-266/tp288-e2e-002-network.json`、`docs/dev-records/assets/dev-plan-266/tp288-e2e-002-trace.zip`、`docs/dev-records/assets/dev-plan-266/tp288-e2e-002-assertions.json`
-- 执行日志：`docs/dev-records/dev-plan-266-execution-log.md`
+- 执行日志：`docs/archive/dev-records/dev-plan-266-execution-log.md`
 
 ## 对 285 的使用方式
 - 在 `285 §2.3/§3/§4` 中，可将 `tp288-real-entry-evidence-index.json` 作为 `266 stopline 全通过` 的直接引用输入。

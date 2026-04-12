@@ -309,13 +309,13 @@
 **执行记录**：`docs/archive/dev-records/dev-plan-064a-execution-log.md`
 
 **契约引用**
-- `docs/dev-plans/220-chat-assistant-upgrade-implementation-plan.md`
-- `docs/dev-plans/220a-chat-assistant-gap-assessment-and-closure-plan.md`
-- `docs/dev-plans/221-assistant-p1-blocker-closure-plan.md`
+- `docs/archive/dev-plans/220-chat-assistant-upgrade-implementation-plan.md`
+- `docs/archive/dev-plans/220a-chat-assistant-gap-assessment-and-closure-plan.md`
+- `docs/archive/dev-plans/221-assistant-p1-blocker-closure-plan.md`
 - `docs/archive/dev-plans/222-assistant-frontend-e2e-evidence-closure-plan.md`
-- `docs/dev-plans/223-assistant-conversation-persistence-and-audit-closure-plan.md`
-- `docs/dev-plans/224-assistant-multi-model-and-llm-intent-governance-plan.md`
-- `docs/dev-plans/225-assistant-tasks-temporal-p2-implementation-plan.md`
+- `docs/archive/dev-plans/223-assistant-conversation-persistence-and-audit-closure-plan.md`
+- `docs/archive/dev-plans/224-assistant-multi-model-and-llm-intent-governance-plan.md`
+- `docs/archive/dev-plans/225-assistant-tasks-temporal-p2-implementation-plan.md`
 
 **数据准备**
 - 复用 TP-060-01 的租户与登录基线（`T060` + tenant-admin）。

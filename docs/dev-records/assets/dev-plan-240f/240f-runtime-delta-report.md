@@ -18,12 +18,12 @@
 - 结论：未发现双发送、双回复、外挂消息容器或第二消息事实源回退。
 
 ## 差量项 3：DTO-only 与前端降权
-- `docs/dev-plans/284-librechat-source-level-send-and-render-takeover-plan.md` 已冻结：前端只消费 `phase/missing_fields/candidates/pending_draft_summary/selected_candidate_id/commit_reply/error_code` DTO，不再承担业务语义重算。
+- `docs/archive/dev-plans/284-librechat-source-level-send-and-render-takeover-plan.md` 已冻结：前端只消费 `phase/missing_fields/candidates/pending_draft_summary/selected_candidate_id/commit_reply/error_code` DTO，不再承担业务语义重算。
 - `290` 的 Case Matrix 继续以 DTO 驱动的 phase/FSM 为唯一验收口径。
 - 结论：`240F` 未发现需要在正式入口恢复 helper 业务推进或页面补丁式状态机的证据。
 
 ## 差量项 4：receipt -> poll -> refresh 与人工接管
-- `docs/dev-plans/240d-assistant-durable-execution-and-manual-takeover-plan.md` 已完成正式 cutover：
+- `docs/archive/dev-plans/240d-assistant-durable-execution-and-manual-takeover-plan.md` 已完成正式 cutover：
   - `:commit` 返回 `202 + receipt`
   - 客户端轮询 `task`
   - `status=succeeded` 后刷新 conversation

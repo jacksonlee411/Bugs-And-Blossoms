@@ -1,5 +1,7 @@
 # DEV-PLAN-239：LibreChat 聊天可写链路恢复与运行态稳定性收口详细设计
 
+> 归档说明（2026-04-12）：本文件已自 `docs/dev-plans/` 迁入 `docs/archive/dev-plans/`，仅保留为历史参考，不再作为现行 SSOT。
+
 **状态**: 已归档（2026-03-08 CST，旧桥接阶段历史运行基线）
 
 > 归档说明：
@@ -9,10 +11,10 @@
 
 ## 1. 背景与上下文 (Context)
 - **需求来源**:
-  - `docs/dev-plans/230-librechat-project-level-integration-plan.md`
-  - `docs/dev-plans/232-librechat-official-runtime-baseline-plan.md`
-  - `docs/dev-plans/235-librechat-auth-session-and-tenant-boundary-hardening-plan.md`
-  - `docs/dev-plans/238-librechat-mongodb-runtime-failure-hardening-plan.md`
+  - `docs/archive/dev-plans/230-librechat-project-level-integration-plan.md`
+  - `docs/archive/dev-plans/232-librechat-official-runtime-baseline-plan.md`
+  - `docs/archive/dev-plans/235-librechat-auth-session-and-tenant-boundary-hardening-plan.md`
+  - `docs/archive/dev-plans/238-librechat-mongodb-runtime-failure-hardening-plan.md`
 - **当前痛点**（2026-03-04 现场复现）:
   1. `assistant-ui` 代理当前仅允许 `GET`，聊天发送请求被拦截，导致 iframe 可加载但不可交互。
   2. LibreChat 运行态在部分环境会退化为 `unavailable`（典型表现为 `mongodb` 挂载/权限异常与 `rag_api` 未运行）。
@@ -267,6 +269,6 @@ if status != healthy:
 - `scripts/librechat/up.sh`
 - `scripts/librechat/clean.sh`
 - `deploy/librechat/healthcheck.sh`
-- `docs/dev-plans/230-librechat-project-level-integration-plan.md`
-- `docs/dev-plans/235-librechat-auth-session-and-tenant-boundary-hardening-plan.md`
-- `docs/dev-plans/238-librechat-mongodb-runtime-failure-hardening-plan.md`
+- `docs/archive/dev-plans/230-librechat-project-level-integration-plan.md`
+- `docs/archive/dev-plans/235-librechat-auth-session-and-tenant-boundary-hardening-plan.md`
+- `docs/archive/dev-plans/238-librechat-mongodb-runtime-failure-hardening-plan.md`

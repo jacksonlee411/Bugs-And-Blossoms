@@ -1,5 +1,7 @@
 # DEV-PLAN-263 执行日志（LibreChat GPT-5.2 助手对话回复专线）
 
+> 归档说明（2026-04-12）：本记录已自 `docs/dev-records/` 迁入 `docs/archive/dev-records/`，仅保留为历史执行证据，不再作为活体入口。
+
 **状态**: 进行中（2026-03-06 09:35 CST）
 
 ## 1. 目标与验收口径冻结
@@ -33,4 +35,4 @@
 3. [ ] 关键命令与测试结果回填
 
 ## 4. 备注
-- 本日志承接：`docs/dev-plans/263-librechat-gpt52-assistant-dialogue-response-implementation-plan.md`。
+- 本日志承接：`docs/archive/dev-plans/263-librechat-gpt52-assistant-dialogue-response-implementation-plan.md`。

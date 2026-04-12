@@ -11,7 +11,7 @@
 - `internal/server/assistant_ui_proxy_test.go`、`internal/server/assistant_ui_proxy_log_test.go`、`internal/server/handler.go`、`internal/server/handler_test.go`、`internal/server/tenancy_middleware_test.go`：用于验证历史别名边界，不构成第二正式入口。
 - `e2e/tests/tp283-librechat-formal-entry-cutover.spec.js`：显式验证 `/assistant-ui` 仅 `302` 到 `/app/assistant/librechat`，写方法 `405`。
 - `e2e/tests/tp220-assistant.spec.js`：负测 `formal entry cannot bypass business write routes`，属于禁止旁路写入的验证，不是主链路入口声明。
-- `docs/dev-plans/283-librechat-formal-entry-cutover-plan.md`、`docs/dev-plans/285-librechat-cutover-regression-and-closure-plan.md`、`docs/dev-plans/291-librechat-237-upgrade-compatibility-readiness-plan.md`：均以“历史别名/禁止回流/边界复核”语义出现。
+- `docs/archive/dev-plans/283-librechat-formal-entry-cutover-plan.md`、`docs/archive/dev-plans/285-librechat-cutover-regression-and-closure-plan.md`、`docs/archive/dev-plans/291-librechat-237-upgrade-compatibility-readiness-plan.md`：均以“历史别名/禁止回流/边界复核”语义出现。
 ### 历史/调查引用
 - `docs/dev-plans/220/220a/224/230/231/232/233/234/235/261/263/265/266/280/292` 中的命中均用于历史背景、迁移前置、stopline 或兼容边界说明，不构成当前正式入口定义。
 ### 判定

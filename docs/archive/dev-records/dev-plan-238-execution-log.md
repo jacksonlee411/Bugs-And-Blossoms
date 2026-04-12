@@ -1,7 +1,9 @@
 # DEV-PLAN-238 执行记录（LibreChat MongoDB 运行异常修复）
 
+> 归档说明（2026-04-12）：本记录已自 `docs/dev-records/` 迁入 `docs/archive/dev-records/`，仅保留为历史执行证据，不再作为活体入口。
+
 ## 1. 记录信息
-- 计划：`docs/dev-plans/238-librechat-mongodb-runtime-failure-hardening-plan.md`
+- 计划：`docs/archive/dev-plans/238-librechat-mongodb-runtime-failure-hardening-plan.md`
 - 记录时间：2026-03-04 00:47 UTC
 - 记录人：Codex
 

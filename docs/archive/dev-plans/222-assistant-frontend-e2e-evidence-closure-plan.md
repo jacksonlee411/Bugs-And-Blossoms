@@ -1,5 +1,7 @@
 # DEV-PLAN-222：Assistant 前端交互与 E2E 证据闭环详细设计
 
+> 归档说明（2026-04-12）：本文件已自 `docs/dev-plans/` 迁入 `docs/archive/dev-plans/`，仅保留为历史参考，不再作为现行 SSOT。
+
 **状态**: 已归档（2026-03-08 CST，旧桥接安全与 E2E 历史证据）
 
 > 归档说明：
@@ -9,9 +11,9 @@
 
 ## 1. 背景与上下文 (Context)
 - **需求来源**:
-  - `docs/dev-plans/220-chat-assistant-upgrade-implementation-plan.md`
-  - `docs/dev-plans/220a-chat-assistant-gap-assessment-and-closure-plan.md`
-  - `docs/dev-plans/221-assistant-p1-blocker-closure-plan.md`
+  - `docs/archive/dev-plans/220-chat-assistant-upgrade-implementation-plan.md`
+  - `docs/archive/dev-plans/220a-chat-assistant-gap-assessment-and-closure-plan.md`
+  - `docs/archive/dev-plans/221-assistant-p1-blocker-closure-plan.md`
 - **当前痛点**:
   1. `/app/assistant` 可用但 FE 门控与后端状态机仍存在细节偏差。
   2. 事务面板 `plan/diff/explain/risk_tier` 展示与可断言锚点不完整。
@@ -208,9 +210,9 @@ onMessage(event):
 ## 12. 关联文档
 - `docs/dev-plans/001-technical-design-template.md`
 - `docs/dev-plans/003-simple-not-easy-review-guide.md`
-- `docs/dev-plans/220-chat-assistant-upgrade-implementation-plan.md`
-- `docs/dev-plans/220a-chat-assistant-gap-assessment-and-closure-plan.md`
-- `docs/dev-plans/221-assistant-p1-blocker-closure-plan.md`
-- `docs/dev-plans/223-assistant-conversation-persistence-and-audit-closure-plan.md`
-- `docs/dev-plans/224-assistant-multi-model-and-llm-intent-governance-plan.md`
+- `docs/archive/dev-plans/220-chat-assistant-upgrade-implementation-plan.md`
+- `docs/archive/dev-plans/220a-chat-assistant-gap-assessment-and-closure-plan.md`
+- `docs/archive/dev-plans/221-assistant-p1-blocker-closure-plan.md`
+- `docs/archive/dev-plans/223-assistant-conversation-persistence-and-audit-closure-plan.md`
+- `docs/archive/dev-plans/224-assistant-multi-model-and-llm-intent-governance-plan.md`
 - `AGENTS.md`

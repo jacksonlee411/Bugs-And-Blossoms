@@ -366,7 +366,7 @@ modules/{module}/
 - DEV-PLAN-210：200蓝图 Phase 4 会话事务提交与委托授权同构收口：`docs/dev-plans/210-blueprint-conversation-transaction-and-actor-delegated-authz.md`
 - DEV-PLAN-211：200蓝图 Phase 5 自建 Temporal M10D0 最小化落地：`docs/dev-plans/211-blueprint-temporal-m10d0-minimal-orchestration-foundation.md`
 - DEV-PLAN-212：200蓝图 Phase 6 评测门禁与触发式 Temporal 平台化验收：`docs/dev-plans/212-blueprint-eval-gates-and-triggered-temporal-productionization.md`
-- Assistant / LibreChat `220-293` 系列：已纳入 `DEV-PLAN-360/360A` 的退出归档治理，不再作为现行文档地图入口；当前 Assistant 主线请改看 `DEV-PLAN-341`、`DEV-PLAN-350`、`DEV-PLAN-360`、`DEV-PLAN-360A`、`DEV-PLAN-361`，历史材料后续统一迁入 `docs/archive/dev-plans/`。
+- Assistant / LibreChat `220-293` 系列：已纳入 `DEV-PLAN-360/360A` 的退出归档治理，并已统一迁入 `docs/archive/dev-plans/`；相关历史执行记录已按落地情况迁入 `docs/archive/dev-records/`。这些文档不再作为现行文档地图入口；当前 Assistant 主线请改看 `DEV-PLAN-341`、`DEV-PLAN-350`、`DEV-PLAN-360`、`DEV-PLAN-360A`、`DEV-PLAN-361`。
 - DEV-PLAN-300：全仓测试体系问题调查记录：`docs/dev-plans/300-test-system-investigation-report.md`
 - DEV-PLAN-301：Go 测试分层整治与官方最佳实践落地方案：`docs/dev-plans/301-go-test-layering-and-best-practices-remediation-plan.md`
 - DEV-PLAN-301 执行日志：`docs/dev-records/dev-plan-301-execution-log.md`

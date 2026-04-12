@@ -1,7 +1,9 @@
 # DEV-PLAN-235 执行记录（LibreChat 身份/会话/租户边界硬化）
 
+> 归档说明（2026-04-12）：本记录已自 `docs/dev-records/` 迁入 `docs/archive/dev-records/`，仅保留为历史执行证据，不再作为活体入口。
+
 ## 1. 记录信息
-- 计划：`docs/dev-plans/235-librechat-auth-session-and-tenant-boundary-hardening-plan.md`
+- 计划：`docs/archive/dev-plans/235-librechat-auth-session-and-tenant-boundary-hardening-plan.md`
 - 记录时间：2026-03-03 15:10 UTC
 - 记录人：Codex
 
@@ -49,7 +51,7 @@
   3. 历史别名代理进一步收敛为：`GET/HEAD /assistant-ui/* -> 302 /app/assistant/librechat`，非允许方法继续 `405`。
   4. 更新 `DEV-PLAN-235` 契约，把正式入口 stopline、正式静态资源边界与历史别名 cutover 语义写回 SSOT。
 - 关键变更文件：
-  - `docs/dev-plans/235-librechat-auth-session-and-tenant-boundary-hardening-plan.md`
+  - `docs/archive/dev-plans/235-librechat-auth-session-and-tenant-boundary-hardening-plan.md`
   - `internal/server/librechat_web_ui.go`
   - `internal/server/handler.go`
   - `internal/server/assistant_ui_proxy.go`

@@ -1,5 +1,7 @@
 # DEV-PLAN-225 执行日志
 
+> 归档说明（2026-04-12）：本记录已自 `docs/dev-records/` 迁入 `docs/archive/dev-records/`，仅保留为历史执行证据，不再作为活体入口。
+
 ## 变更范围
 
 - 后端：新增 Assistant Tasks 三张表迁移、任务仓储/派发/状态机、Tasks API（submit/get/cancel）、路由挂载与路径解析。

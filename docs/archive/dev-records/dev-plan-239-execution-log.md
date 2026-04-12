@@ -1,5 +1,7 @@
 # DEV-PLAN-239 执行记录（LibreChat 聊天可写链路恢复与运行态稳定性收口）
 
+> 归档说明（2026-04-12）：本记录已自 `docs/dev-records/` 迁入 `docs/archive/dev-records/`，仅保留为历史执行证据，不再作为活体入口。
+
 ## 1. 记录信息
 - 计划：`docs/archive/dev-plans/239-librechat-chat-write-path-recovery-and-runtime-stability-plan.md`
 - 记录时间：2026-03-04 03:43 UTC
