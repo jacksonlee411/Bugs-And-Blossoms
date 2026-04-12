@@ -380,11 +380,17 @@ modules/{module}/
 - DEV-PLAN-330 PR-6 记录：route/authz 收口、旧层退场与门禁封板：`docs/dev-records/dev-plan-330-pr6-route-authz-legacy-retirement-and-gates-log.md`
 - DEV-PLAN-341：Assistant 主线演进与 340/350 问题关联调查报告：`docs/dev-plans/341-assistant-mainline-evolution-and-340-350-correlation-investigation.md`
 - DEV-PLAN-340：Assistant 组织架构重复维护调查与收敛方案：`docs/dev-plans/340-assistant-orgunit-duplicate-maintenance-investigation-and-convergence-plan.md`
+- DEV-PLAN-375：Assistant 主线实施路线图（350-370，编排入口）：`docs/dev-plans/375-assistant-mainline-implementation-roadmap-350-370.md`
 - DEV-PLAN-350：Assistant Tooling 对齐统一策略模型实施方案：`docs/dev-plans/350-assistant-tooling-alignment-with-unified-policy-model-plan.md`
+- DEV-PLAN-350A：Assistant OrgUnit 八动作统一收口 Phase 5 P1——`add_version / insert_version`：`docs/dev-plans/350a-assistant-orgunit-phase5-p1-add-insert-version-convergence-plan.md`
+- DEV-PLAN-350B：Assistant OrgUnit 八动作统一收口 Phase 5 P2——`correct / rename / move`：`docs/dev-plans/350b-assistant-orgunit-phase5-p2-correct-rename-move-convergence-plan.md`
+- DEV-PLAN-350C：Assistant OrgUnit 八动作统一收口 Phase 5 P3——`disable / enable`：`docs/dev-plans/350c-assistant-orgunit-phase5-p3-disable-enable-convergence-plan.md`
 - DEV-PLAN-360：LibreChat 硬切剥离与 LangGraph/LangChain 分层接管方案：`docs/dev-plans/360-librechat-depower-and-langgraph-langchain-layered-takeover-plan.md`
 - DEV-PLAN-360A：LibreChat 功能禁用清单与 Runtime 主链硬切实施计划：`docs/dev-plans/360a-librechat-feature-disablement-and-runtime-cutover-plan.md`
 - DEV-PLAN-361：OPA 作为唯一 PDP 候选引擎的引入边界与迁移方案：`docs/dev-plans/361-opa-pdp-adoption-boundary-and-migration-plan.md`
 - DEV-PLAN-370：Assistant API-First 与 Markdown Knowledge Runtime 主链收敛方案：`docs/dev-plans/370-assistant-api-first-and-markdown-knowledge-runtime-plan.md`
+- DEV-PLAN-370A：Assistant Markdown Knowledge Runtime Phase 1——compiler + `knowledge_qa / business_query`：`docs/dev-plans/370a-assistant-markdown-knowledge-runtime-phase1-query-and-compiler-plan.md`
+- DEV-PLAN-370B：Assistant `business_action` Knowledge Runtime 消费收口计划：`docs/dev-plans/370b-assistant-business-action-knowledge-runtime-consumption-plan.md`
 - DEV-PLAN-303：全仓残留 `gap/coverage` 测试尾项清零计划：`docs/dev-plans/303-repo-final-gap-coverage-test-tail-closure-plan.md`
 - DEV-PLAN-310：全项目 view/as_of 时间语义专项检视与最小收敛方案：`docs/dev-plans/310-project-wide-view-as-of-semantics-review-and-minimal-convergence-plan.md`
 - DEV-PLAN-311：View As Of 页面改造矩阵与 OrgUnitDetails 样板实施计划：`docs/dev-plans/311-view-as-of-page-cutover-matrix-and-orgunit-details-sample-plan.md`

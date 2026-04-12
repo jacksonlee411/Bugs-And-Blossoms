@@ -12,6 +12,15 @@
    - `go test ./pkg/fieldpolicy ./internal/server/... ./modules/orgunit/infrastructure/persistence/... ./modules/orgunit/services/...`
 6. [ ] 本计划 Phase 5“统一八动作”尚未开始；当前仅完成 `create_orgunit` 样板，不应解读为 `350` 全量封板。
 
+## 0.2 与 `DEV-PLAN-375` 的路线图关系
+
+1. [X] `DEV-PLAN-375` 已作为 `350-370` 的编排入口建立；本计划继续是 `business_action` contract / Tool API / Gate 消费边界的母法。
+2. [X] 为避免 Phase 5 一次性摊大，后续实施顺序已按 `375` 冻结为：
+   - `350A`：`add_version / insert_version`
+   - `350B`：`correct / rename / move`
+   - `350C`：`disable / enable`
+3. [X] 上述子计划只承接分批实施与验收，`ActionSchema`、`PolicyContext`、`PrecheckProjection`、`Readonly Tool Registry` 的裁决权仍保留在 `350` 主文档。
+
 ## 1. 背景
 
 在 `DEV-PLAN-340` 中，已经确认 Assistant 当前并不是第二套 OrgUnit 写内核，但确实在 `create_orgunit` dry-run 阶段重复承担了部分领域前置裁决；在 `DEV-PLAN-330` 中，又进一步冻结了统一策略模型，要求所有字段与动作裁决都必须回到：
@@ -62,6 +71,22 @@
 4. [ ] 第一阶段不同时迁移所有领域动作；默认以 `create_orgunit` 作为 `340 + 330` 联合止血样板。
 5. [ ] 不把 OPA 视为本仓策略平台替代品；即便引入 OPA，也只承接唯一 PDP 的求值引擎职责。
 
+### 3.3 API-first 裁决边界（与 `DEV-PLAN-370` 的正式分工）
+
+1. [ ] 凡属于 Assistant Runtime 为获取实时业务事实、策略裁决或提交准入而调用的正式 API / Tool API 契约，一律以 `350` 为裁决母法。
+2. [ ] 上述“正式 API / Tool API 契约”至少包括：
+   - `ActionSchema`
+   - `Readonly Tool Registry`
+   - tool name / tool schema / contract version / error semantics
+   - `PolicyContext`
+   - `PrecheckProjection`
+   - Authoritative Gate / proposal / precheck / commit 的消费边界
+3. [ ] `DEV-PLAN-370` 只负责定义 Runtime / Knowledge 层如何消费这些已冻结契约，不得在 `370` 中单独扩张正式 tool registry、重写 tool schema，或替代 `350` 裁决哪些接口属于正式事实面。
+4. [ ] 若某能力同时涉及“知识编排”与“事实读取”，必须拆成两层：
+   - 事实读取/API 契约层：回写 `350`
+   - Markdown 作者体验、compiler 产物、reply/intention 编排层：回写 `370`
+5. [ ] 因此，任何新工具若要进入 Runtime 正式调用面，必须先在 `350` 冻结其注册名、输入输出 schema、错误语义与版本口径；仅出现在 Markdown/knowledge compiler 中，不等于已成为正式 Tool API。
+
 ## 4. 冻结原则
 
 ### 4.1 角色边界
@@ -84,6 +109,7 @@
 1. [ ] Tooling 第一阶段只允许只读工具，不允许新增写工具或第二提交入口。
 2. [ ] 所有策略类工具必须走 `Context Resolver + 唯一 PDP（可由 OPA 承接） + Mutation Policy` 主链，禁止直接暴露底层 registry/store。
 3. [ ] Tool 输出、dry-run 输出、Precheck Projection 输出必须共享同一语义契约，禁止三套字段口径并存。
+4. [ ] Tool registry 的新增、删减、改名、schema 演进必须先回写 `350`；`370` 或其他运行时/知识计划只能消费，不得平行登记。
 
 ### 4.3 写链原则
 
@@ -265,6 +291,9 @@ Assistant turn/task 快照新增冻结字段：
 
 ### Phase 5：统一八动作
 
+> 为避免“八动作统一”在实现阶段再次变成一批大改，`Phase 5` 的正式执行顺序由 `DEV-PLAN-375` 冻结为 `350A -> 350B -> 350C`。  
+> 本文继续作为总 contract 与最终验收 SSOT；批次级实施细节分别由 `350A/350B/350C` 承接。
+
 1. [ ] 将 `create/add_version/insert_version/correct/move/rename/disable/enable` 全部纳入：
    `ActionSchema -> PolicyContext -> PDP -> Mutation Policy -> PrecheckProjection`
 2. [ ] 将 Assistant 主链收敛为只关心以下编排事实：
@@ -359,9 +388,13 @@ Assistant turn/task 快照新增冻结字段：
 1. `docs/dev-plans/330-strategy-module-architecture-and-design-convergence-plan.md`
 2. `docs/dev-plans/340-assistant-orgunit-duplicate-maintenance-investigation-and-convergence-plan.md`
 3. `docs/dev-plans/341-assistant-mainline-evolution-and-340-350-correlation-investigation.md`
-4. `docs/dev-plans/360-librechat-depower-and-langgraph-langchain-layered-takeover-plan.md`
-5. `docs/dev-plans/360a-librechat-feature-disablement-and-runtime-cutover-plan.md`
-6. `docs/dev-plans/361-opa-pdp-adoption-boundary-and-migration-plan.md`
+4. `docs/dev-plans/375-assistant-mainline-implementation-roadmap-350-370.md`
+5. `docs/dev-plans/350a-assistant-orgunit-phase5-p1-add-insert-version-convergence-plan.md`
+6. `docs/dev-plans/350b-assistant-orgunit-phase5-p2-correct-rename-move-convergence-plan.md`
+7. `docs/dev-plans/350c-assistant-orgunit-phase5-p3-disable-enable-convergence-plan.md`
+8. `docs/dev-plans/360-librechat-depower-and-langgraph-langchain-layered-takeover-plan.md`
+9. `docs/dev-plans/360a-librechat-feature-disablement-and-runtime-cutover-plan.md`
+10. `docs/dev-plans/361-opa-pdp-adoption-boundary-and-migration-plan.md`
 7. `internal/server/assistant_action_registry.go`
 8. `internal/server/assistant_create_policy_precheck.go`
 9. `modules/orgunit/services/orgunit_write_service.go`

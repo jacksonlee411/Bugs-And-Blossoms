@@ -56,6 +56,24 @@ Karpathy 的 LLM Wiki 思路对本仓的启发不在于“让 Markdown 替代业
 5. [ ] `DEV-PLAN-240E/241/244/245`：已有知识包与运行时骨架；本方案将其上游作者体验统一为 Markdown-first，而非推翻现有运行时结构。
 6. [ ] 因此，`DEV-PLAN-370` 的正式定位是“Assistant Runtime / Knowledge Convergence Plan”，而不是覆盖 `350/360/360A/361` 的总母法。
 
+### 2.4 API-first 裁决规则（处理 `350/370` 交叉时的正式口径）
+
+1. [ ] 凡属于 Runtime 获取实时业务事实、策略裁决、预检查结果、提交准入结果所依赖的正式 API / Tool API 契约，一律由 `DEV-PLAN-350` 裁决；`370` 只消费，不单独定义新的事实面权威表达。
+2. [ ] 凡属于 Markdown 作者体验、knowledge compiler、reply guidance、wiki/index、intent route 编排资产的主源、格式与生成方式，一律由 `370` 裁决；`350` 不替代知识资产主源。
+3. [ ] 若某能力同时跨越“知识编排”和“事实读取”，必须拆成两层：
+   - 事实读取/API 契约层：先回写 `350`
+   - Markdown/编译产物/回复编排层：回写 `370`
+4. [ ] 因此，仅在 Markdown 中出现某个 tool、topic、query plan，并不自动赋予其“正式 Tool API”资格；一旦进入 Runtime 正式调用面，其 `tool_name`、schema、错误语义、版本口径必须先由 `350` 或其继承的 registry SSOT 冻结。
+
+### 2.5 与 `DEV-PLAN-375` 的路线图关系
+
+1. [X] `DEV-PLAN-375` 已作为 `350-370` 的编排母法建立；本计划继续是 Runtime / Knowledge 层与 Markdown knowledge runtime 的 SSOT。
+2. [X] 为避免同时扩张 `business_action` contract 与 knowledge runtime，后续实施顺序已按 `375` 冻结为：
+   - `370A`：Markdown source、compiler、`knowledge_qa / business_query`
+   - `370B`：`business_action` 的 knowledge/runtime 消费收口
+3. [X] `370A` 不承接 `assistantActionSpec`、Tool registry、`PolicyContextContractVersion`、`PrecheckProjectionContractVersion` 的裁决；这些仍由 `350` 扩张。
+4. [X] `370B` 必须等 `350A / 350B / 350C` 全部完成后再启动，且只能消费已冻结的动作 contract，不得反向定义新的动作 API / Tool API 主源。
+
 ## 3. 真相矩阵与目标架构
 
 ### 3.1 真相矩阵
@@ -167,16 +185,16 @@ Karpathy 的 LLM Wiki 思路对本仓的启发不在于“让 Markdown 替代业
 ### 5.2 Tool API 分层
 
 1. [ ] 为 Runtime 提供内部只读 API，而不是让 Runtime 直接读底层模块状态。
-2. [ ] 第一阶段最小工具面建议包括：
+2. [ ] 第一阶段最小业务工具面继续继承 `DEV-PLAN-350` 已冻结集合；`370` 不单独扩张正式 registry。当前运行时可消费的正式业务工具以 `350` 为准，例如：
    - `orgunit_candidate_lookup`
    - `orgunit_candidate_snapshot`
    - `orgunit_action_precheck`
    - `orgunit_field_explain`
-   - `wiki_lookup`
-3. [ ] Tool API 只返回受控 DTO，不暴露底层表结构。
-4. [ ] Tool API 可以调用 service / projection / PDP / resolver，但 Runtime 不得感知其内部来源。
-5. [ ] Tool API 的输入输出必须有稳定 schema，允许被 Markdown `tools/*.md` 引用。
-6. [ ] 策略类 Tool API 必须复用 `DEV-PLAN-350` 已冻结的 `PrecheckProjection` 或其受控子视图，不得在 Runtime 侧发明第二套策略 DTO。
+3. [ ] 若后续需要把知识检索能力暴露为正式 Tool API（例如 `wiki_lookup`），必须先回写 `350` 冻结其注册名、schema、错误语义与版本，再由 `370` 在 Markdown `tools/*.md` 中引用；`370` 不作为 registry 新增入口。
+4. [ ] Tool API 只返回受控 DTO，不暴露底层表结构。
+5. [ ] Tool API 可以调用 service / projection / PDP / resolver，但 Runtime 不得感知其内部来源。
+6. [ ] Tool API 的输入输出必须有稳定 schema，允许被 Markdown `tools/*.md` 引用。
+7. [ ] 策略类 Tool API 必须复用 `DEV-PLAN-350` 已冻结的 `PrecheckProjection` 或其受控子视图，不得在 Runtime 侧发明第二套策略 DTO。
 
 ### 5.3 提交链冻结
 
@@ -288,6 +306,9 @@ Karpathy 的 LLM Wiki 思路对本仓的启发不在于“让 Markdown 替代业
 
 ## 8. 分阶段实施
 
+> 为避免 `business_action` contract 扩张与 knowledge/compiler 收口相互缠绕，本计划的后续实施顺序由 `DEV-PLAN-375` 拆分为 `370A -> 370B`。  
+> 本文继续作为总路线与边界 SSOT；`370A/370B` 负责批次级实施与验收。
+
 ### 8.1 Phase 0：契约冻结
 
 1. [ ] 冻结本方案的真相矩阵、目录策略、分类模型、主链边界。
@@ -357,8 +378,11 @@ Karpathy 的 LLM Wiki 思路对本仓的启发不在于“让 Markdown 替代业
 2. [ ] `DEV-PLAN-360`：LibreChat 去能力化与分层接管。
 3. [ ] `DEV-PLAN-360A`：LibreChat 特性禁用与运行时切换。
 4. [ ] `DEV-PLAN-361`：OPA/PDP 采用边界与迁移。
-5. [ ] `DEV-PLAN-240E/241/244/245`：Assistant 知识包、解释包、回复指导包与最小运行时。
-6. [ ] 现状代码参考：
+5. [ ] `DEV-PLAN-375`：Assistant 主线实施路线图（350-370）。
+6. [ ] `DEV-PLAN-370A`：Markdown compiler + `knowledge_qa / business_query` 收口。
+7. [ ] `DEV-PLAN-370B`：`business_action` knowledge/runtime 消费收口。
+8. [ ] `DEV-PLAN-240E/241/244/245`：Assistant 知识包、解释包、回复指导包与最小运行时。
+9. [ ] 现状代码参考：
    - `internal/server/assistant_knowledge_runtime.go`
    - `internal/server/assistant_action_registry.go`
    - `internal/server/assistant_create_policy_precheck.go`
