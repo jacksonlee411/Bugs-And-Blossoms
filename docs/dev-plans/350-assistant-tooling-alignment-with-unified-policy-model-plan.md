@@ -1,6 +1,6 @@
 # DEV-PLAN-350：Assistant Tooling 对齐统一策略模型实施方案
 
-**状态**: 规划中（2026-04-11 08:32 CST）
+**状态**: 修订中（2026-04-12 11:36 CST）
 
 ## 1. 背景
 
@@ -10,7 +10,9 @@
 
 因此，后续整改不能停留在“给 Assistant 新增一个专用预检服务”这一层，而必须把 Assistant 明确收敛为 `330` 统一策略主链的消费方，并将 function calling/tooling 限定为只读事实收集层，而不是新的业务执行架构。
 
-本计划用于承接 `330 + 340` 的联合落地，冻结 Assistant Tooling 的正式目标边界、迁移路径与验收口径。
+`DEV-PLAN-361` 进一步明确：这里的“唯一 PDP”是稳定的主链边界，但其求值实现方式可以由 OPA/Rego 承接；变化点是 PDP 引擎实现，不是策略平台四层事实源，也不是 Assistant/写链/UI 的职责分工。
+
+本计划用于承接 `330 + 340 + 361` 的联合落地，冻结 Assistant Tooling 的正式目标边界、迁移路径与验收口径，并把“唯一 PDP 可由 OPA 承接”的实现假设正式纳入主线。
 
 ## 2. 问题定性
 
@@ -38,6 +40,7 @@
 2. [ ] 让 Assistant 只消费统一 `Precheck Projection`，不再直接读取 `SetID Strategy Registry`、`tenant_field_configs`、`Mutation Policy` 任一底层实现。
 3. [ ] 为 OrgUnit 八动作冻结统一的 `ActionSchema + PolicyContext + PrecheckProjection + CommitAdapter` 扩展框架。
 4. [ ] 让 explain/version、`resolved_setid`、`setid_source`、projection digest 进入 Assistant 快照，满足稳定回放与审计叙事。
+5. [ ] 明确 `唯一 PDP` 的稳定契约与可替换实现边界：`350` 冻结的是 `Context Resolver -> 唯一 PDP -> PrecheckProjection` 主链，而不是限定 PDP 必须继续由手写 Go 求值器实现。
 
 ### 3.2 非目标
 
@@ -45,6 +48,7 @@
 2. [ ] 第一阶段不新增对外公开 API；优先在仓内 Go 服务边界内收敛。
 3. [ ] 第一阶段默认不新增数据库表；如后续发现快照字段无法复用现有结构，再单独立计划获批。
 4. [ ] 第一阶段不同时迁移所有领域动作；默认以 `create_orgunit` 作为 `340 + 330` 联合止血样板。
+5. [ ] 不把 OPA 视为本仓策略平台替代品；即便引入 OPA，也只承接唯一 PDP 的求值引擎职责。
 
 ## 4. 冻结原则
 
@@ -66,7 +70,7 @@
 ### 4.2 Tooling 原则
 
 1. [ ] Tooling 第一阶段只允许只读工具，不允许新增写工具或第二提交入口。
-2. [ ] 所有策略类工具必须走 `Context Resolver + 唯一 PDP + Mutation Policy` 主链，禁止直接暴露底层 registry/store。
+2. [ ] 所有策略类工具必须走 `Context Resolver + 唯一 PDP（可由 OPA 承接） + Mutation Policy` 主链，禁止直接暴露底层 registry/store。
 3. [ ] Tool 输出、dry-run 输出、Precheck Projection 输出必须共享同一语义契约，禁止三套字段口径并存。
 
 ### 4.3 写链原则
@@ -74,6 +78,7 @@
 1. [ ] 最终写入仍必须走 `modules/orgunit/services/orgunit_write_service.go`。
 2. [ ] 写服务保留最终 fail-closed 再校验职责。
 3. [ ] Assistant 可见解释链与写服务前置解释链必须共享同一策略裁决核心，而不是各自维护一套实现。
+4. [ ] 若后续采纳 `DEV-PLAN-361`，则 OPA 只能位于“唯一 PDP 求值引擎”这一层，不能旁路 `Context Resolver`、不能替代 `Mutation Policy`、不能替代 `OrgUnitWriteService -> DB Kernel` 写链。
 
 ## 5. 目标架构
 
@@ -97,7 +102,9 @@
      - `business_unit_node_key -> resolved_setid`
      - `setid_source`
 5. [ ] `唯一 PDP`
-   - 负责输出字段级动态决策、explain 与版本语义。
+   - 负责输出字段级动态决策、explain 与版本语义；
+   - 可由仓内 PDP 适配层 + OPA/Rego 承接求值实现；
+   - 但对上仍保持统一 `Decision`/explain/version 契约。
 6. [ ] `OrgUnit Precheck Projection`
    - 负责组合 PDP 与 Mutation Policy 输出，形成 Assistant 可消费的统一投影，而不是新的领域规则实现。
 7. [ ] `OrgUnitWriteService`
@@ -199,31 +206,45 @@ Assistant turn/task 快照新增冻结字段：
 
 ## 7. 实施步骤
 
-### Phase 0：冻结统一边界
+### Phase 0：冻结统一边界与实现假设
 
 1. [ ] 定义 `PolicyContext` 输入契约，并明确其唯一入口为 `Context Resolver`。
 2. [ ] 定义 `PrecheckProjection` 输出契约，并明确 Assistant 只消费投影，不消费策略底层表与 store。
 3. [ ] 扩展 `assistantActionSpec` 的策略契约字段，形成 `ActionSchema` 冻结版本。
 4. [ ] 明确 `ResolvedSetID / SetIDSource / EffectivePolicyVersion / ProjectionDigest` 的快照固化口径。
+5. [ ] 明确 `唯一 PDP` 的稳定边界与实现假设：
+   - 上层只依赖 `Decision/explain/version` 契约；
+   - 求值实现可由 OPA 承接；
+   - `Mutation Policy`、写链、策略事实源边界不因此改变。
 
-### Phase 1：按 `340` 止血，但实现方式对齐 `330`
+### Phase 1：建立唯一 PDP 适配层
 
 1. [ ] 以 `create_orgunit` 为首个迁移动作。
-2. [ ] 将 `internal/server/assistant_create_policy_precheck.go` 收敛为“调用统一 `Precheck Projection` 的薄适配层”。
-3. [ ] 删除其中对以下内容的本地理解：
+2. [ ] 将 `pkg/fieldpolicy/setid_strategy_pdp.go` 从“手写求值器主体”收敛为“统一 PDP 适配层入口”。
+3. [ ] 新增 OPA/PDP 适配内核，负责：
+   - `PolicyContext` 输入适配；
+   - 策略记录装载；
+   - OPA 求值调用；
+   - 输出映射为仓内统一 `Decision` 结构。
+4. [ ] 以现有 `setid_strategy_pdp` 测试结果为基线，确保引擎替换前后 explain、错误码与优先级语义一致。
+
+### Phase 2：切断 Assistant 第二解释器
+
+1. [ ] 将 `internal/server/assistant_create_policy_precheck.go` 收敛为“调用统一 `PrecheckProjection` 的薄适配层”。
+2. [ ] 删除其中对以下内容的本地理解：
    - `resolveFieldDecision`
    - 租户字段配置开关
    - `org_code` / `d_org_type` 特判
    - `resolved_setid` 拼装
-4. [ ] 保证 `FIELD_REQUIRED_VALUE_MISSING`、`PATCH_FIELD_NOT_ALLOWED` 等 dry-run 结论来源于统一 projection，而不是 Assistant 本地推导。
+3. [ ] 保证 `FIELD_REQUIRED_VALUE_MISSING`、`PATCH_FIELD_NOT_ALLOWED` 等 dry-run 结论来源于统一 projection，而不是 Assistant 本地推导。
 
-### Phase 2：抽出可复用的统一策略消费层
+### Phase 3：收口写服务前置解释
 
 1. [ ] 将 `modules/orgunit/services/orgunit_write_service.go` 中 `applyCreatePolicyDefaults(...)` 所依赖的“策略读取与解释”能力抽为统一只读消费层。
 2. [ ] 保持写服务的最终 fail-closed 校验职责，但不再把“可解释预检”锁死在写服务内部。
-3. [ ] 让 Assistant dry-run 与正式写链前置解释共享同一策略裁决核心。
+3. [ ] 让 Assistant dry-run、explain API 与正式写链前置解释共享同一策略裁决核心。
 
-### Phase 3：引入只读 Tool Loop
+### Phase 4：引入只读 Tool Loop
 
 1. [ ] 在 `ActionSchema` 与 `PrecheckProjection` 稳定后，再向模型开放只读工具。
 2. [ ] Assistant 允许模型请求：
@@ -234,7 +255,7 @@ Assistant turn/task 快照新增冻结字段：
 3. [ ] 工具执行结果必须结构化回填到 Assistant runtime 中，并复用统一投影语义。
 4. [ ] 严禁把 tool loop 扩展成写工具或旁路 commit 链。
 
-### Phase 4：统一八动作
+### Phase 5：统一八动作
 
 1. [ ] 将 `create/add_version/insert_version/correct/move/rename/disable/enable` 全部纳入：
    `ActionSchema -> PolicyContext -> PDP -> Mutation Policy -> PrecheckProjection`
@@ -261,6 +282,8 @@ Assistant turn/task 快照新增冻结字段：
 5. [ ] `internal/server/assistant_task_store.go`
 6. [ ] `internal/server/assistant_create_policy_precheck.go`
 7. [ ] `modules/orgunit/services/orgunit_write_service.go`
+8. [ ] `pkg/fieldpolicy/setid_strategy_pdp.go`
+9. [ ] 后续新增统一 PDP/OPA 适配层文件
 
 说明：
 
@@ -283,7 +306,8 @@ Assistant turn/task 快照新增冻结字段：
 2. [ ] `Context Resolver` 测试：
    - `business_unit_org_code -> business_unit_node_key -> resolved_setid/setid_source` 稳定可回放。
 3. [ ] `PDP 唯一性` 测试：
-   - Assistant 不直接读 registry/store 时，仍能得到 `required/default/allowed/maintainable` 与 explain/version。
+   - Assistant 不直接读 registry/store 时，仍能得到 `required/default/allowed/maintainable` 与 explain/version；
+   - 若启用 OPA，OPA 输出与既有统一 PDP 契约保持等价。
 4. [ ] `340` 回归测试：
    - Assistant 不再直接调用字段决议底层逻辑。
 5. [ ] `Projection 一致性` 测试：
@@ -294,6 +318,8 @@ Assistant turn/task 快照新增冻结字段：
    - `PolicyContext` 解析失败、`resolved_setid` 缺失、PDP 冲突、Mutation Policy 拒绝时，Assistant 不进入 confirm/commit。
 8. [ ] `动作扩展成本` 测试：
    - 新增一个 OrgUnit 动作时，只需补 `ActionSchema + Projection mapping + CommitAdapter`，无需再改多处主链分支。
+9. [ ] `OPA 等价回归` 测试：
+   - `setid_strategy_pdp` 的现有样例在 OPA 适配后仍输出同一 explain、优先级命中与错误码。
 
 ## 10. 风险与缓解
 
@@ -304,7 +330,11 @@ Assistant turn/task 快照新增冻结字段：
 3. [ ] 风险：Assistant 快照未固化策略版本与 digest，导致恢复/回放叙事漂移。
    - 缓解：把快照字段纳入正式契约与回归测试。
 4. [ ] 风险：`create_orgunit` 收敛后，其他七动作继续保留各自动作分支，导致新旧模型长期并存。
-   - 缓解：在 Phase 4 明确八动作统一收口目标，并把新增动作成本测试纳入验收。
+   - 缓解：在 Phase 5 明确八动作统一收口目标，并把新增动作成本测试纳入验收。
+5. [ ] 风险：OPA 只被 Assistant 使用，而写服务前置解释仍停留在另一套本地实现，形成新的旁路。
+   - 缓解：Phase 3 要求写服务前置解释与 Assistant/tooling 共同消费统一 PDP/Projection 主链。
+6. [ ] 风险：团队把 OPA 误当作策略平台替代品，导致 `Context Resolver`、`Mutation Policy`、写链边界被错误下沉。
+   - 缓解：在 Phase 0 冻结 OPA 仅承接唯一 PDP 求值引擎职责，并在验收中显式检查边界未漂移。
 
 ## 11. 验收标准
 
@@ -313,14 +343,18 @@ Assistant turn/task 快照新增冻结字段：
 3. [ ] 所有字段与动作裁决，都可回溯到 `DEV-PLAN-330` 的统一模型输出。
 4. [ ] `create_orgunit` dry-run 与正式写前解释结果一致。
 5. [ ] Function calling/tooling 只增强只读事实收集，不改变业务执行架构。
+6. [ ] 若采纳 OPA，则其角色已被验证为“唯一 PDP 候选求值引擎”，而不是新的策略平台或第二条策略解释支线。
+7. [ ] 同一 `PolicyContext` 下，Assistant dry-run、tool explain、写服务前置解释得到同一字段决策、错误码与 `effective_policy_version`。
 
 ## 12. 关联事实源
 
-1. `docs/dev-plans/240-assistant-org-transaction-orchestration-modernization-plan.md`
-2. `docs/dev-plans/272-assistant-orgunit-seven-actions-expansion-plan.md`
-3. `docs/dev-plans/293-assistant-runtime-proposal-authoritative-gate-minimal-refactor-plan.md`
-4. `docs/dev-plans/330-strategy-module-architecture-and-design-convergence-plan.md`
-5. `docs/dev-plans/340-assistant-orgunit-duplicate-maintenance-investigation-and-convergence-plan.md`
-6. `internal/server/assistant_action_registry.go`
-7. `internal/server/assistant_create_policy_precheck.go`
-8. `modules/orgunit/services/orgunit_write_service.go`
+1. `docs/dev-plans/330-strategy-module-architecture-and-design-convergence-plan.md`
+2. `docs/dev-plans/340-assistant-orgunit-duplicate-maintenance-investigation-and-convergence-plan.md`
+3. `docs/dev-plans/341-assistant-mainline-evolution-and-340-350-correlation-investigation.md`
+4. `docs/dev-plans/360-librechat-depower-and-langgraph-langchain-layered-takeover-plan.md`
+5. `docs/dev-plans/360a-librechat-feature-disablement-and-runtime-cutover-plan.md`
+6. `docs/dev-plans/361-opa-pdp-adoption-boundary-and-migration-plan.md`
+7. `internal/server/assistant_action_registry.go`
+8. `internal/server/assistant_create_policy_precheck.go`
+9. `modules/orgunit/services/orgunit_write_service.go`
+10. `pkg/fieldpolicy/setid_strategy_pdp.go`
