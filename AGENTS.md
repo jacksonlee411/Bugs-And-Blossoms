@@ -390,6 +390,7 @@ modules/{module}/
 - DEV-PLAN-350C：Assistant OrgUnit 八动作统一收口 Phase 5 P3——`disable / enable`：`docs/dev-plans/350c-assistant-orgunit-phase5-p3-disable-enable-convergence-plan.md`
 - DEV-PLAN-360：LibreChat 硬切剥离与 LangGraph/LangChain 分层接管方案：`docs/dev-plans/360-librechat-depower-and-langgraph-langchain-layered-takeover-plan.md`
 - DEV-PLAN-360A：LibreChat 功能禁用清单与 Runtime 主链硬切实施计划：`docs/dev-plans/360a-librechat-feature-disablement-and-runtime-cutover-plan.md`
+- DEV-PLAN-360A 执行日志：compat session API cutover：`docs/dev-records/dev-plan-360a-execution-log.md`
 - DEV-PLAN-361：OPA 作为唯一 PDP 候选引擎的引入边界与迁移方案：`docs/dev-plans/361-opa-pdp-adoption-boundary-and-migration-plan.md`
 - DEV-PLAN-370：Assistant API-First 与 Markdown Knowledge Runtime 主链收敛方案：`docs/dev-plans/370-assistant-api-first-and-markdown-knowledge-runtime-plan.md`
 - DEV-PLAN-370A：Assistant Markdown Knowledge Runtime Phase 1——compiler + `knowledge_qa / business_query`：`docs/dev-plans/370a-assistant-markdown-knowledge-runtime-phase1-query-and-compiler-plan.md`

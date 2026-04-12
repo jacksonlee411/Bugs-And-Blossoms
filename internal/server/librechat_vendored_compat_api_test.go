@@ -10,7 +10,7 @@ import (
 	"testing"
 )
 
-func TestLibreChatVendoredCompatAPIRequiresSession(t *testing.T) {
+func TestLibreChatVendoredCompatAPIRetiredWithoutSession(t *testing.T) {
 	wd, err := os.Getwd()
 	if err != nil {
 		t.Fatal(err)
@@ -32,19 +32,22 @@ func TestLibreChatVendoredCompatAPIRequiresSession(t *testing.T) {
 	req.Header.Set("Accept", "application/json")
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
-	if rec.Code != http.StatusUnauthorized {
+	if rec.Code != http.StatusGone {
 		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
 	}
 	var payload map[string]any
 	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
 		t.Fatal(err)
 	}
-	if payload["code"] != "assistant_vendored_sid_missing" {
+	if payload["code"] != libreChatCompatRetiredCode {
 		t.Fatalf("code=%v", payload["code"])
+	}
+	if !strings.Contains(payload["message"].(string), "/internal/assistant/session") {
+		t.Fatalf("message=%v", payload["message"])
 	}
 }
 
-func TestLibreChatVendoredCompatAPIFormalEntryAliasWorksWithSIDSession(t *testing.T) {
+func TestLibreChatVendoredCompatAPIFormalEntryAliasReturnsGone(t *testing.T) {
 	wd, err := os.Getwd()
 	if err != nil {
 		t.Fatal(err)
@@ -76,12 +79,19 @@ func TestLibreChatVendoredCompatAPIFormalEntryAliasWorksWithSIDSession(t *testin
 	req.AddCookie(sidCookie)
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
-	if rec.Code != http.StatusOK {
+	if rec.Code != http.StatusGone {
 		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+	}
+	var payload map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+		t.Fatal(err)
+	}
+	if payload["code"] != libreChatCompatRetiredCode {
+		t.Fatalf("code=%v", payload["code"])
 	}
 }
 
-func TestLibreChatVendoredCompatAPIWorksWithSIDSession(t *testing.T) {
+func TestLibreChatVendoredCompatAPIRetiredWithSIDSession(t *testing.T) {
 	wd, err := os.Getwd()
 	if err != nil {
 		t.Fatal(err)
@@ -112,63 +122,46 @@ func TestLibreChatVendoredCompatAPIWorksWithSIDSession(t *testing.T) {
 	}
 	sidCookie := result.Cookies()[0]
 
-	t.Run("refresh returns compat token and user", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodPost, libreChatCompatAPIPrefix+"/auth/refresh", http.NoBody)
-		req.Host = "localhost:8080"
-		req.AddCookie(sidCookie)
-		rec := httptest.NewRecorder()
-		h.ServeHTTP(rec, req)
-		if rec.Code != http.StatusOK {
-			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
-		}
-		var payload struct {
-			Token string `json:"token"`
-			User  struct {
-				ID       string `json:"id"`
-				Email    string `json:"email"`
-				Role     string `json:"role"`
-				Provider string `json:"provider"`
-			} `json:"user"`
-		}
-		if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
-			t.Fatal(err)
-		}
-		if !strings.HasPrefix(payload.Token, "compat-sid.") {
-			t.Fatalf("token=%q", payload.Token)
-		}
-		if payload.User.Email != "tenant-admin@example.invalid" {
-			t.Fatalf("email=%q", payload.User.Email)
-		}
-		if payload.User.Role != libreChatCompatRoleUser {
-			t.Fatalf("role=%q", payload.User.Role)
-		}
-		if payload.User.Provider != libreChatCompatProvider {
-			t.Fatalf("provider=%q", payload.User.Provider)
-		}
-	})
-
-	t.Run("user roles stay while removed bootstrap compat routes return not found", func(t *testing.T) {
+	t.Run("session compat endpoints return gone", func(t *testing.T) {
 		cases := []struct {
-			name string
-			path string
+			name      string
+			method    string
+			path      string
+			successor string
 		}{
-			{name: "user", path: libreChatCompatAPIPrefix + "/user"},
-			{name: "role-user", path: libreChatCompatAPIPrefix + "/roles/user"},
-			{name: "role-admin", path: libreChatCompatAPIPrefix + "/roles/admin"},
+			{name: "refresh-compat", method: http.MethodPost, path: libreChatCompatAPIPrefix + "/auth/refresh", successor: "/internal/assistant/session/refresh"},
+			{name: "logout-compat", method: http.MethodPost, path: libreChatCompatAPIPrefix + "/auth/logout", successor: "/internal/assistant/session/logout"},
+			{name: "user-compat", method: http.MethodGet, path: libreChatCompatAPIPrefix + "/user", successor: "/internal/assistant/session"},
+			{name: "role-user-compat", method: http.MethodGet, path: libreChatCompatAPIPrefix + "/roles/user", successor: "/internal/assistant/session"},
+			{name: "role-admin-compat", method: http.MethodGet, path: libreChatCompatAPIPrefix + "/roles/admin", successor: "/internal/assistant/session"},
+			{name: "refresh-formal-alias", method: http.MethodPost, path: libreChatFormalEntryAPIPrefix + "/auth/refresh", successor: "/internal/assistant/session/refresh"},
+			{name: "user-formal-alias", method: http.MethodGet, path: libreChatFormalEntryAPIPrefix + "/user", successor: "/internal/assistant/session"},
 		}
 		for _, tc := range cases {
 			t.Run(tc.name, func(t *testing.T) {
-				req := httptest.NewRequest(http.MethodGet, tc.path, nil)
+				req := httptest.NewRequest(tc.method, tc.path, nil)
 				req.Host = "localhost:8080"
 				req.AddCookie(sidCookie)
 				rec := httptest.NewRecorder()
 				h.ServeHTTP(rec, req)
-				if rec.Code != http.StatusOK {
+				if rec.Code != http.StatusGone {
 					t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+				}
+				var payload map[string]any
+				if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+					t.Fatal(err)
+				}
+				if payload["code"] != libreChatCompatRetiredCode {
+					t.Fatalf("code=%v", payload["code"])
+				}
+				if !strings.Contains(payload["message"].(string), tc.successor) {
+					t.Fatalf("message=%v", payload["message"])
 				}
 			})
 		}
+	})
 
+	t.Run("removed bootstrap compat routes return not found", func(t *testing.T) {
 		removedBootstrapRoutes := []string{
 			libreChatCompatAPIPrefix + "/config",
 			libreChatCompatAPIPrefix + "/endpoints",
@@ -183,34 +176,6 @@ func TestLibreChatVendoredCompatAPIWorksWithSIDSession(t *testing.T) {
 			if rec.Code != http.StatusNotFound {
 				t.Fatalf("path=%s status=%d body=%s", path, rec.Code, rec.Body.String())
 			}
-		}
-	})
-
-	t.Run("logout revokes sid-backed compat session", func(t *testing.T) {
-		logoutReq := httptest.NewRequest(http.MethodPost, libreChatCompatAPIPrefix+"/auth/logout", http.NoBody)
-		logoutReq.Host = "localhost:8080"
-		logoutReq.AddCookie(sidCookie)
-		logoutRec := httptest.NewRecorder()
-		h.ServeHTTP(logoutRec, logoutReq)
-		if logoutRec.Code != http.StatusNoContent {
-			t.Fatalf("status=%d body=%s", logoutRec.Code, logoutRec.Body.String())
-		}
-
-		userReq := httptest.NewRequest(http.MethodGet, libreChatCompatAPIPrefix+"/user", nil)
-		userReq.Host = "localhost:8080"
-		userReq.Header.Set("Accept", "application/json")
-		userReq.AddCookie(sidCookie)
-		userRec := httptest.NewRecorder()
-		h.ServeHTTP(userRec, userReq)
-		if userRec.Code != http.StatusUnauthorized {
-			t.Fatalf("status=%d body=%s", userRec.Code, userRec.Body.String())
-		}
-		var payload map[string]any
-		if err := json.Unmarshal(userRec.Body.Bytes(), &payload); err != nil {
-			t.Fatal(err)
-		}
-		if payload["code"] != "assistant_vendored_session_invalid" {
-			t.Fatalf("code=%v", payload["code"])
 		}
 	})
 }
@@ -236,30 +201,28 @@ func TestLibreChatVendoredCompatAPIHandler_UnitCoverage(t *testing.T) {
 		}
 	})
 
-	t.Run("method not allowed branches", func(t *testing.T) {
+	t.Run("retired session endpoints stay gone regardless of method", func(t *testing.T) {
 		h := newLibreChatCompatAPIHandler(nil, nil)
-		paths := []string{
-			libreChatCompatAPIPrefix + "/auth/refresh",
-			libreChatCompatAPIPrefix + "/user",
-			libreChatCompatAPIPrefix + "/roles/user",
+		paths := []struct {
+			method string
+			path   string
+		}{
+			{method: http.MethodDelete, path: libreChatCompatAPIPrefix + "/auth/refresh"},
+			{method: http.MethodDelete, path: libreChatCompatAPIPrefix + "/user"},
+			{method: http.MethodDelete, path: libreChatCompatAPIPrefix + "/roles/user"},
+			{method: http.MethodGet, path: libreChatCompatAPIPrefix + "/auth/logout"},
 		}
-		for _, path := range paths {
-			req := httptest.NewRequest(http.MethodDelete, path, nil)
+		for _, tc := range paths {
+			req := httptest.NewRequest(tc.method, tc.path, nil)
 			rec := httptest.NewRecorder()
 			h.ServeHTTP(rec, req)
-			if rec.Code != http.StatusMethodNotAllowed {
-				t.Fatalf("path=%s status=%d", path, rec.Code)
+			if rec.Code != http.StatusGone {
+				t.Fatalf("path=%s status=%d", tc.path, rec.Code)
 			}
-		}
-		logoutReq := httptest.NewRequest(http.MethodGet, libreChatCompatAPIPrefix+"/auth/logout", nil)
-		logoutRec := httptest.NewRecorder()
-		h.ServeHTTP(logoutRec, logoutReq)
-		if logoutRec.Code != http.StatusMethodNotAllowed {
-			t.Fatalf("logout status=%d", logoutRec.Code)
 		}
 	})
 
-	t.Run("unauthorized without context", func(t *testing.T) {
+	t.Run("retired endpoints return gone without context", func(t *testing.T) {
 		h := newLibreChatCompatAPIHandler(nil, nil)
 		paths := []struct {
 			method string
@@ -273,7 +236,7 @@ func TestLibreChatVendoredCompatAPIHandler_UnitCoverage(t *testing.T) {
 			req := httptest.NewRequest(tc.method, tc.path, nil)
 			rec := httptest.NewRecorder()
 			h.ServeHTTP(rec, req)
-			if rec.Code != http.StatusUnauthorized {
+			if rec.Code != http.StatusGone {
 				t.Fatalf("path=%s status=%d", tc.path, rec.Code)
 			}
 		}
@@ -293,16 +256,6 @@ func TestLibreChatVendoredCompatAPIHandler_UnitCoverage(t *testing.T) {
 			if rec.Code != http.StatusNotFound {
 				t.Fatalf("path=%s status=%d body=%s", path, rec.Code, rec.Body.String())
 			}
-		}
-	})
-
-	t.Run("logout without sid still clears cookie", func(t *testing.T) {
-		h := newLibreChatCompatAPIHandler(nil, nil)
-		req := httptest.NewRequest(http.MethodPost, libreChatCompatAPIPrefix+"/auth/logout", nil)
-		rec := httptest.NewRecorder()
-		h.ServeHTTP(rec, req)
-		if rec.Code != http.StatusNoContent {
-			t.Fatalf("status=%d", rec.Code)
 		}
 	})
 
@@ -412,6 +365,12 @@ func TestLibreChatVendoredCompatAPIHandler_UnitCoverage(t *testing.T) {
 		}
 		if suffix, ok := libreChatCompatAPISuffix(libreChatFormalEntryAPIPrefix); !ok || suffix != "" {
 			t.Fatalf("formal prefix suffix=%q ok=%v", suffix, ok)
+		}
+		if successor, ok := libreChatCompatRetiredSuccessorForPath(libreChatCompatAPIPrefix + "/auth/refresh"); !ok || successor != "/internal/assistant/session/refresh" {
+			t.Fatalf("successor=%q ok=%v", successor, ok)
+		}
+		if successor, ok := libreChatCompatRetiredSuccessorForSuffix("/roles/admin"); !ok || successor != "/internal/assistant/session" {
+			t.Fatalf("successor=%q ok=%v", successor, ok)
 		}
 	})
 }

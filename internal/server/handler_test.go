@@ -1440,6 +1440,23 @@ func TestNewHandlerWithOptions_AssistantRoutes_AreWired(t *testing.T) {
 	if rec := call(http.MethodGet, "/assets/librechat-web/api/models", ""); rec.Code != http.StatusNotFound {
 		t.Fatalf("removed librechat models compat route status=%d body=%s", rec.Code, rec.Body.String())
 	}
+	retiredCompatRoutes := []struct {
+		method string
+		path   string
+	}{
+		{method: http.MethodPost, path: "/assets/librechat-web/api/auth/refresh"},
+		{method: http.MethodPost, path: "/assets/librechat-web/api/auth/logout"},
+		{method: http.MethodGet, path: "/assets/librechat-web/api/user"},
+		{method: http.MethodGet, path: "/assets/librechat-web/api/roles/user"},
+		{method: http.MethodGet, path: "/assets/librechat-web/api/roles/admin"},
+		{method: http.MethodPost, path: "/app/assistant/librechat/api/auth/refresh"},
+		{method: http.MethodGet, path: "/app/assistant/librechat/api/user"},
+	}
+	for _, tc := range retiredCompatRoutes {
+		if rec := call(tc.method, tc.path, ""); rec.Code != http.StatusGone || assistantDecodeErrCode(t, rec) != libreChatCompatRetiredCode {
+			t.Fatalf("retired compat route %s %s status=%d code=%s body=%s", tc.method, tc.path, rec.Code, assistantDecodeErrCode(t, rec), rec.Body.String())
+		}
+	}
 }
 
 func TestNewHandlerWithOptions_DictRoutes_AreWired(t *testing.T) {

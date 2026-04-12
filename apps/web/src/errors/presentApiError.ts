@@ -78,6 +78,7 @@ const localizedMessages: Record<string, LocalizedErrorMessage> = {
   assistant_ui_method_not_allowed: { en: 'HTTP method is not allowed for assistant chat proxy.', zh: '当前请求方法不被允许，请刷新页面后重试。' },
   assistant_ui_path_invalid: { en: 'Assistant chat proxy path is invalid. Please re-open from assistant page.', zh: '助手聊天路径无效，请从助手页面重新进入。' },
   assistant_ui_upstream_unavailable: { en: 'Assistant chat upstream is unavailable. Please retry later.', zh: '聊天服务暂不可用，请稍后重试。' },
+  assistant_vendored_api_retired: { en: 'Legacy assistant compat API is retired. Please reopen the formal assistant entry.', zh: '旧助手兼容接口已退役，请重新打开正式助手入口。' },
   assistant_vendored_sid_missing: { en: 'Sign-in session is missing. Please sign in from the formal entry first.', zh: '登录会话缺失，请先从正式登录入口登录。' },
   assistant_vendored_session_invalid: { en: 'Sign-in session is no longer valid. Please sign in again.', zh: '登录会话已失效，请重新登录。' },
   assistant_vendored_tenant_mismatch: { en: 'The current session does not match this tenant. Please sign in again.', zh: '当前登录会话与租户不匹配，请重新登录。' },

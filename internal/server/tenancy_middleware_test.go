@@ -432,31 +432,10 @@ func TestWithTenantAndSession_SessionMissingInternalAPI_Returns401(t *testing.T)
 	}
 }
 
-func TestWithTenantAndSession_LibreChatCompatTenantMismatch_ReturnsSpecific401(t *testing.T) {
+func TestWithTenantAndSession_LibreChatCompatRetiredEndpointsShortCircuitBeforeSessionLookup(t *testing.T) {
 	tnt := Tenant{ID: "t1", Domain: "localhost", Name: "Local"}
 	classifier := mustLibreChatCompatAPIClassifier(t)
 	sessions := &stubSessionStore{ok: true, sess: Session{TenantID: "t2", PrincipalID: "p1", ExpiresAt: time.Now().Add(time.Hour)}}
-	h := withTenantAndSession(classifier, stubTenancyResolver{tenant: tnt, ok: true}, newMemoryPrincipalStore(), sessions, http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
-		t.Fatal("unexpected next")
-	}))
-
-	req := httptest.NewRequest(http.MethodGet, libreChatCompatAPIPrefix+"/user", nil)
-	req.Host = "localhost:8080"
-	req.AddCookie(&http.Cookie{Name: sidCookieName, Value: "sid1"})
-	rec := httptest.NewRecorder()
-	h.ServeHTTP(rec, req)
-	if rec.Code != http.StatusUnauthorized {
-		t.Fatalf("status=%d body=%q", rec.Code, rec.Body.String())
-	}
-	if !strings.Contains(rec.Body.String(), "assistant_vendored_tenant_mismatch") {
-		t.Fatalf("body=%q", rec.Body.String())
-	}
-}
-
-func TestWithTenantAndSession_LibreChatCompatPrincipalInvalid_ReturnsSpecific401(t *testing.T) {
-	tnt := Tenant{ID: "t1", Domain: "localhost", Name: "Local"}
-	classifier := mustLibreChatCompatAPIClassifier(t)
-	sessions := &stubSessionStore{ok: true, sess: Session{TenantID: "t1", PrincipalID: "p1", ExpiresAt: time.Now().Add(time.Hour)}}
 	principals := &stubPrincipalStore{ok: true, p: Principal{ID: "p1", TenantID: "t1", Status: "disabled", RoleSlug: "tenant-admin"}}
 	h := withTenantAndSession(classifier, stubTenancyResolver{tenant: tnt, ok: true}, principals, sessions, http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
 		t.Fatal("unexpected next")
@@ -467,11 +446,14 @@ func TestWithTenantAndSession_LibreChatCompatPrincipalInvalid_ReturnsSpecific401
 	req.AddCookie(&http.Cookie{Name: sidCookieName, Value: "sid1"})
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
-	if rec.Code != http.StatusUnauthorized {
+	if rec.Code != http.StatusGone {
 		t.Fatalf("status=%d body=%q", rec.Code, rec.Body.String())
 	}
-	if !strings.Contains(rec.Body.String(), "assistant_vendored_principal_invalid") {
+	if !strings.Contains(rec.Body.String(), libreChatCompatRetiredCode) {
 		t.Fatalf("body=%q", rec.Body.String())
+	}
+	if sessions.lookupSID != "" {
+		t.Fatalf("expected retired compat path to bypass session lookup, got lookupSID=%q", sessions.lookupSID)
 	}
 }
 

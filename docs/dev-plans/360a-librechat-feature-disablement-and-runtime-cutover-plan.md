@@ -1,6 +1,6 @@
 # DEV-PLAN-360A：LibreChat 功能禁用清单与 Runtime 主链硬切实施计划
 
-**状态**: 进行中（2026-04-12 19:40 CST；Phase 0/1 已完成，Phase 2+ 待实施）
+**状态**: 进行中（2026-04-13 07:05 CST；Phase 0/1 已完成，Phase 2 的 compat session API 硬切已完成，cleanup PR 与 runtime fail-closed/error-code 收口待继续）
 
 ## 1. 背景
 
@@ -281,7 +281,7 @@
 
 补充冻结：
 1. [ ] `Phase 1` 必须先定义 successor bootstrap DTO，避免 `config/endpoints/models` 因“还没替代者”而继续滞留。
-2. [ ] `Phase 2` 只允许保留认证/会话相关最小端点，且过渡窗口最多一个清理批次。
+2. [X] `Phase 2` 只允许保留认证/会话相关最小端点，且过渡窗口最多一个清理批次。
 3. [ ] [librechat_vendored_compat_api.go](/home/lee/Projects/Bugs-And-Blossoms/internal/server/librechat_vendored_compat_api.go#L69) 中未列入上表的 suffix，一律视为不允许新增。
 
 ### 7.4 successor DTO 契约冻结（`ui-bootstrap` / `session`）
@@ -518,9 +518,14 @@ Vendored LibreChat UI
 
 ### Phase 2：旧 API 切断与 runtime 主链硬切
 
-1. [ ] 按生死表切断 `/app/assistant/librechat/api/*` 与 `/assets/librechat-web/api/*` 中的旧端点，不再做开放式审计后再决定。
+1. [X] 按生死表切断 `/app/assistant/librechat/api/*` 与 `/assets/librechat-web/api/*` 中的旧会话端点，不再做开放式审计后再决定。
 2. [ ] 将正式业务链只保留到 `/internal/assistant/*` 所需的最小 successor 适配面，不再保留长期 compat API。
-3. [ ] 会话相关旧端点在 cutover PR 中先返回 `410 Gone`，并在紧随其后的 cleanup PR 删除 handler 分支与路由绑定。
+3. [X] 会话相关旧端点在 cutover PR 中已先返回 `410 Gone`，并统一返回错误码 `assistant_vendored_api_retired`。
+4. [ ] cleanup PR 删除 compat handler 分支与路由绑定。
+5. [X] retired compat path 的短路已前移到 `withTenantAndSession`，确保缺 SID、tenant mismatch、principal invalid 不再暴露 vendored `401` 语义。
+6. [X] 本批次明确不提前处理 `/assistant-ui/*`；该别名仍按 `Phase 4` 保持 `302 -> /app/assistant/librechat`。
+7. [ ] runtime fail-closed 错误码与任务终止语义（如 `assistant_runtime_unavailable / assistant_gate_unavailable`）留到后续 `Phase 2` 收口批次。
+
 ### Phase 3：依赖去平台化
 
 1. [ ] 盘点 `mongodb/meilisearch/rag_api/vectordb` 与正式产品能力的实际绑定关系。
@@ -549,9 +554,10 @@ Vendored LibreChat UI
 2. [X] 正式入口 smoke：用户不可见 Agents / MCP / Memory / Search / Code Interpreter 入口。
 3. [ ] 正式聊天闭环仍能通过 `tp288 / tp288b / tp290b` 一类主链 E2E。
 4. [X] `Phase 0/1` 实施批次中，`/assistant-ui/*` 仍为 `302` alias/redirect，且不能旁路正式业务写接口；`410 Gone -> 删除` 验收留到 `Phase 4`。
+5. [X] compat session API 在 `/app/assistant/librechat/api/*` 与 `/assets/librechat-web/api/*` 下统一返回 `410 Gone`，且 retired path 在 session middleware 前已短路，不再泄露 vendored `401` 错误语义。
 6. [ ] `AGENTS.md` 文档地图已移除 `220-293` 系列现行入口，正式入口说明只保留 successor 计划链路。
 7. [ ] 默认部署不再依赖 `mongodb/meilisearch/rag_api/vectordb` 提供正式主链能力；若个别依赖尚未删除，必须证明其仍承担 successor 主链唯一职责。
-8. [ ] compat API 生死表中的所有端点都已进入 successor 或删除态，不存在“待审计、待决定”的灰区端点。
+8. [X] compat API 生死表中的所有端点都已进入 successor 或删除态，不存在“待审计、待决定”的灰区端点。
 9. [ ] 若进入 `Phase 4` 收口批次，`/assistant-ui/*` 已按计划返回 `410 Gone` 或完成路由删除，不再作为历史别名长期存活。
 10. [X] `/internal/assistant/ui-bootstrap` 与 `/internal/assistant/session*` 已按冻结契约返回最小 DTO、错误码与鉴权行为，不存在实现者自定义字段漂移。
 11. [ ] successor runtime 不可用时，系统只表现为显式拒绝/只读浏览/任务失败终止，不出现旧平台回退、隐式降级或 bootstrap 旁路。
@@ -563,13 +569,21 @@ Vendored LibreChat UI
    - 后续需改为“待删除依赖/硬切关闭能力”口径。
 2. [X] `e2e/tests/tp283-librechat-formal-entry-cutover.spec.js`
    - 增加“正式入口不暴露第二平台能力”断言。
-3. [ ] `e2e/tests/tp288-librechat-real-entry-evidence.spec.js`
-4. [ ] `e2e/tests/tp288b-librechat-live-task-receipt-contract.spec.js`
-5. [ ] `e2e/tests/tp290b-librechat-live-intent-action-chain.spec.js`
-6. [ ] 新增运行态断言：
+3. [X] `internal/server/librechat_vendored_compat_api_test.go`
+   - 会话 compat 端点统一改断言为 `410 Gone + assistant_vendored_api_retired`；
+   - `/config`、`/endpoints`、`/models` 继续保持删除态断言。
+4. [X] `internal/server/handler_test.go` 与 `internal/server/tenancy_middleware_test.go`
+   - 增加静态前缀与正式别名路径下 retired compat endpoint 的 `410 Gone` 断言；
+   - 确认 retired path 在 `withTenantAndSession` 中先于 session lookup 短路。
+5. [X] `apps/web/src/errors/presentApiError.test.ts`
+   - 补齐 `assistant_vendored_api_retired` 的显式错误提示断言。
+6. [ ] `e2e/tests/tp288-librechat-real-entry-evidence.spec.js`
+7. [ ] `e2e/tests/tp288b-librechat-live-task-receipt-contract.spec.js`
+8. [ ] `e2e/tests/tp290b-librechat-live-intent-action-chain.spec.js`
+9. [ ] 新增运行态断言：
    - 已退役依赖显示为 `retired_by_design`
    - 不因退役依赖把整体 runtime 标成故障
-7. [ ] 新增 successor 契约断言：
+10. [ ] 新增 successor 契约断言：
    - `ui-bootstrap/session` DTO 字段最小集与 `contract_version=v1`
    - `assistant_session_invalid / assistant_principal_invalid / assistant_ui_bootstrap_unavailable / assistant_runtime_unavailable / assistant_gate_unavailable` 的错误码与 HTTP 状态一致
 
@@ -609,3 +623,4 @@ Vendored LibreChat UI
 2. `docs/dev-plans/360-librechat-depower-and-langgraph-langchain-layered-takeover-plan.md`
 3. `docs/dev-plans/361-opa-pdp-adoption-boundary-and-migration-plan.md`
 4. `AGENTS.md`
+5. `docs/dev-records/dev-plan-360a-execution-log.md`

@@ -36,9 +36,11 @@ describe('resolveApiErrorMessage', () => {
     const sessionMessage = resolveApiErrorMessage('assistant_session_invalid', 'assistant_session_invalid')
     const principalMessage = resolveApiErrorMessage('assistant_principal_invalid', 'assistant_principal_invalid')
     const bootstrapMessage = resolveApiErrorMessage('assistant_ui_bootstrap_unavailable', 'assistant_ui_bootstrap_unavailable')
+    const retiredCompatMessage = resolveApiErrorMessage('assistant_vendored_api_retired', 'assistant_vendored_api_retired')
     expect(sessionMessage).not.toBe('assistant_session_invalid')
     expect(principalMessage).not.toBe('assistant_principal_invalid')
     expect(bootstrapMessage).not.toBe('assistant_ui_bootstrap_unavailable')
+    expect(retiredCompatMessage).not.toBe('assistant_vendored_api_retired')
   })
 
   it('keeps backend message when it is explicit', () => {

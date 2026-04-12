@@ -20,6 +20,7 @@ const (
 	libreChatCompatDefaultTimestamp  = "1970-01-01T00:00:00Z"
 	libreChatCompatDefaultAvatar     = ""
 	libreChatCompatDefaultHelpAndFAQ = ""
+	libreChatCompatRetiredCode       = "assistant_vendored_api_retired"
 )
 
 type libreChatCompatAPIHandler struct {
@@ -66,20 +67,23 @@ func (h *libreChatCompatAPIHandler) ServeHTTP(w http.ResponseWriter, r *http.Req
 		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusNotFound, "not_found", "未找到兼容接口。")
 		return
 	}
+	if successorPath, retired := libreChatCompatRetiredSuccessorForSuffix(suffix); retired {
+		writeLibreChatCompatEndpointRetired(w, r, successorPath)
+		return
+	}
 	switch suffix {
-	case "/auth/refresh":
-		h.handleRefresh(w, r)
-	case "/auth/logout":
-		h.handleLogout(w, r)
-	case "/user":
-		h.handleUser(w, r)
-	case "/roles/user":
-		h.handleRole(w, r, libreChatCompatRoleUser)
-	case "/roles/admin":
-		h.handleRole(w, r, libreChatCompatRoleAdmin)
 	default:
 		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusNotFound, "not_found", "未找到兼容接口。")
 	}
+}
+
+func writeLibreChatCompatEndpointRetired(w http.ResponseWriter, r *http.Request, successorPath string) {
+	message := "旧会话兼容接口已按设计退役，请改用正式 successor 端点。"
+	successorPath = strings.TrimSpace(successorPath)
+	if successorPath != "" {
+		message = "旧会话兼容接口已按设计退役，请改用 " + successorPath + "。"
+	}
+	routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusGone, libreChatCompatRetiredCode, message)
 }
 
 func (h *libreChatCompatAPIHandler) handleRefresh(w http.ResponseWriter, r *http.Request) {
@@ -356,6 +360,27 @@ func libreChatCompatAPISuffix(path string) (string, bool) {
 		}
 	}
 	return "", false
+}
+
+func libreChatCompatRetiredSuccessorForPath(path string) (string, bool) {
+	suffix, ok := libreChatCompatAPISuffix(path)
+	if !ok {
+		return "", false
+	}
+	return libreChatCompatRetiredSuccessorForSuffix(suffix)
+}
+
+func libreChatCompatRetiredSuccessorForSuffix(suffix string) (string, bool) {
+	switch strings.TrimSpace(suffix) {
+	case "/auth/refresh":
+		return "/internal/assistant/session/refresh", true
+	case "/auth/logout":
+		return "/internal/assistant/session/logout", true
+	case "/user", "/roles/user", "/roles/admin":
+		return "/internal/assistant/session", true
+	default:
+		return "", false
+	}
 }
 
 func isLibreChatCompatAPIPath(path string) bool {

@@ -608,6 +608,10 @@ func withTenantAndSession(classifier *routing.Classifier, tenants TenancyResolve
 			next.ServeHTTP(w, r)
 			return
 		}
+		if successorPath, retired := libreChatCompatRetiredSuccessorForPath(path); retired {
+			writeLibreChatCompatEndpointRetired(w, r, successorPath)
+			return
+		}
 
 		if path == "/app/login" || (path == "/iam/api/sessions" && r.Method == http.MethodPost) {
 			next.ServeHTTP(w, r)
