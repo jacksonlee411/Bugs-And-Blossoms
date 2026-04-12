@@ -22,7 +22,7 @@
     "assistant_plan_determinism_violation"
   ],
   "source_refs": [
-    "docs/dev-plans/245-assistant-reply-guidance-pack-and-reply-realizer-plan.md",
+    "docs/archive/dev-plans/245-assistant-reply-guidance-pack-and-reply-realizer-plan.md",
     "internal/server/assistant_reply_nlg.go"
   ]
 }

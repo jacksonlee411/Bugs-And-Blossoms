@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"sync"
 	"testing"
 
@@ -62,6 +63,23 @@ func (s orgUnitWriteAutoCodeStoreStub) SubmitCreateEventWithGeneratedCode(
 type orgUnitWriteSetIDResolverStoreStub struct {
 	orgUnitWriteStoreStub
 	resolveDecisionFn func(ctx context.Context, tenantID string, capabilityKey string, fieldKey string, businessUnitID string, asOf string) (types.SetIDStrategyFieldDecision, bool, error)
+}
+
+func (s orgUnitWriteSetIDResolverStoreStub) ResolveOrgNodeKey(ctx context.Context, tenantID string, orgCode string) (string, error) {
+	if s.orgUnitWriteStoreStub.resolveOrgNodeKeyFn != nil {
+		return s.orgUnitWriteStoreStub.resolveOrgNodeKeyFn(ctx, tenantID, orgCode)
+	}
+	if s.orgUnitWriteStoreStub.resolveOrgIDFn != nil {
+		if strings.TrimSpace(orgCode) != "ROOT" {
+			return "", orgunitpkg.ErrOrgCodeNotFound
+		}
+		orgID, err := s.orgUnitWriteStoreStub.resolveOrgIDFn(ctx, tenantID, orgCode)
+		if err != nil {
+			return "", err
+		}
+		return mustEncodeTestOrgNodeKey(orgID), nil
+	}
+	return s.orgUnitWriteStoreStub.ResolveOrgNodeKey(ctx, tenantID, orgCode)
 }
 
 func (s orgUnitWriteSetIDResolverStoreStub) ResolveSetIDStrategyFieldDecision(
@@ -758,7 +776,12 @@ func TestApplyCreatePolicyDefaults_FromSetIDRegistry(t *testing.T) {
 				ParentOrgCode: stringPtr("ROOT"),
 			},
 		}
-		spec, err := svc.applyCreatePolicyDefaults(ctx, "t1", "2026-01-01", nil, req)
+		spec, err := svc.applyCreatePolicyDefaults(ctx, "t1", "2026-01-01", []types.TenantFieldConfig{{
+			FieldKey:         orgUnitCreateFieldOrgType,
+			ValueType:        "text",
+			DataSourceType:   "DICT",
+			DataSourceConfig: json.RawMessage(`{"dict_code":"org_type"}`),
+		}}, req)
 		if err != nil {
 			t.Fatalf("err=%v", err)
 		}

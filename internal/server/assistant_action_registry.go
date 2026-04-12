@@ -24,13 +24,19 @@ type assistantActionSecuritySpec struct {
 }
 
 type assistantActionSpec struct {
-	ID            string
-	Version       string
-	CapabilityKey string
-	PlanTitle     string
-	PlanSummary   string
-	Security      assistantActionSecuritySpec
-	Handler       assistantActionHandlerSpec
+	ID                                string
+	Version                           string
+	CapabilityKey                     string
+	PlanTitle                         string
+	PlanSummary                       string
+	PolicyContextContractVersion      string
+	PrecheckProjectionContractVersion string
+	RequiredPolicyFacts               []string
+	ReadonlyTools                     []string
+	MutationPolicyKey                 string
+	CapabilityBucketKey               string
+	Security                          assistantActionSecuritySpec
+	Handler                           assistantActionHandlerSpec
 }
 
 type assistantActionRegistry interface {
@@ -61,11 +67,29 @@ var assistantDefaultActionRegistry = assistantActionRegistryMap{specs: map[strin
 		},
 	},
 	assistantIntentCreateOrgUnit: {
-		ID:            assistantIntentCreateOrgUnit,
-		Version:       "v1",
-		CapabilityKey: "org.orgunit_create.field_policy",
-		PlanTitle:     "创建组织计划",
-		PlanSummary:   "在指定父组织下创建部门，提交前需要确认候选主键",
+		ID:                                assistantIntentCreateOrgUnit,
+		Version:                           "v1",
+		CapabilityKey:                     "org.orgunit_create.field_policy",
+		PlanTitle:                         "创建组织计划",
+		PlanSummary:                       "在指定父组织下创建部门，提交前需要确认候选主键",
+		PolicyContextContractVersion:      orgunitservices.CreateOrgUnitPolicyContextContractVersionV1,
+		PrecheckProjectionContractVersion: orgunitservices.CreateOrgUnitPrecheckProjectionContractV1,
+		RequiredPolicyFacts: []string{
+			"resolved_candidate",
+			"effective_date",
+			"tenant_ext_fields",
+			"tree_initialized",
+			"org_exists",
+			"can_admin",
+		},
+		ReadonlyTools: []string{
+			"orgunit_candidate_lookup",
+			"orgunit_candidate_snapshot",
+			"orgunit_action_precheck",
+			"orgunit_field_explain",
+		},
+		MutationPolicyKey:   "orgunit.create.create",
+		CapabilityBucketKey: "org.orgunit_create.field_policy",
 		Security: assistantActionSecuritySpec{
 			AuthObject:     authz.ObjectOrgSetIDCapability,
 			AuthAction:     authz.ActionAdmin,

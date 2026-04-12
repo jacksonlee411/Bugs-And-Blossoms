@@ -71,8 +71,11 @@ type orgUnitWriteStoreStub struct {
 	findEventByEffectiveFn   func(ctx context.Context, tenantID string, orgID int, effectiveDate string) (types.OrgUnitEvent, error)
 	listEnabledFieldCfgsFn   func(ctx context.Context, tenantID string, asOf string) ([]types.TenantFieldConfig, error)
 	resolveOrgIDFn           func(ctx context.Context, tenantID string, orgCode string) (int, error)
+	resolveOrgNodeKeyFn      func(ctx context.Context, tenantID string, orgCode string) (string, error)
 	resolveOrgCodeFn         func(ctx context.Context, tenantID string, orgID int) (string, error)
 	findPersonByPernrFn      func(ctx context.Context, tenantID string, pernr string) (types.Person, error)
+	resolveSetIDFn           func(ctx context.Context, tenantID string, orgNodeKey string, asOf string) (string, error)
+	isOrgTreeInitializedFn   func(ctx context.Context, tenantID string) (bool, error)
 }
 
 func (s orgUnitWriteStoreStub) SubmitEvent(ctx context.Context, tenantID string, eventUUID string, orgNodeKey *string, eventType string, effectiveDate string, payload json.RawMessage, requestID string, initiatorUUID string) (int64, error) {
@@ -160,6 +163,9 @@ func (s orgUnitWriteStoreStub) ListEnabledTenantFieldConfigsAsOf(ctx context.Con
 }
 
 func (s orgUnitWriteStoreStub) ResolveOrgNodeKey(ctx context.Context, tenantID string, orgCode string) (string, error) {
+	if s.resolveOrgNodeKeyFn != nil {
+		return s.resolveOrgNodeKeyFn(ctx, tenantID, orgCode)
+	}
 	if s.resolveOrgIDFn == nil {
 		return "", errors.New("ResolveOrgNodeKey not mocked")
 	}
@@ -182,6 +188,23 @@ func (s orgUnitWriteStoreStub) ResolveOrgCodeByNodeKey(ctx context.Context, tena
 		return "", err
 	}
 	return s.resolveOrgCodeFn(ctx, tenantID, orgID)
+}
+
+func (s orgUnitWriteStoreStub) ResolveSetID(ctx context.Context, tenantID string, orgNodeKey string, asOf string) (string, error) {
+	if s.resolveSetIDFn != nil {
+		return s.resolveSetIDFn(ctx, tenantID, orgNodeKey, asOf)
+	}
+	if _, err := parseTestOrgNodeKey(orgNodeKey); err != nil {
+		return "", err
+	}
+	return "DEFLT", nil
+}
+
+func (s orgUnitWriteStoreStub) IsOrgTreeInitialized(ctx context.Context, tenantID string) (bool, error) {
+	if s.isOrgTreeInitializedFn != nil {
+		return s.isOrgTreeInitializedFn(ctx, tenantID)
+	}
+	return s.resolveOrgIDFn != nil || s.resolveOrgNodeKeyFn != nil, nil
 }
 
 func parseTestOrgNodeKey(input string) (int, error) {
@@ -236,6 +259,16 @@ func withMarshalJSON(t *testing.T, fn func(any) ([]byte, error)) {
 }
 
 func withDefaultCreateFieldDecisions(store orgUnitWriteStoreStub) orgUnitWriteSetIDResolverStoreStub {
+	if store.resolveOrgNodeKeyFn == nil {
+		store.resolveOrgNodeKeyFn = func(context.Context, string, string) (string, error) {
+			return "", orgunitpkg.ErrOrgCodeNotFound
+		}
+	}
+	if store.isOrgTreeInitializedFn == nil {
+		store.isOrgTreeInitializedFn = func(context.Context, string) (bool, error) {
+			return false, nil
+		}
+	}
 	return orgUnitWriteSetIDResolverStoreStub{
 		orgUnitWriteStoreStub: store,
 		resolveDecisionFn: func(_ context.Context, _ string, capabilityKey string, fieldKey string, _ string, _ string) (types.SetIDStrategyFieldDecision, bool, error) {

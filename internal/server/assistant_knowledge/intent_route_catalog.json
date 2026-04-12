@@ -2,8 +2,8 @@
   "asset_type": "intent_route_catalog",
   "route_catalog_version": "2026-03-11.v2",
   "source_refs": [
-    "docs/dev-plans/240e-assistant-internal-knowledge-pack-and-readonly-resolver-plan.md",
-    "docs/dev-plans/241-assistant-knowledge-pack-runtime-minimal-implementation-plan.md"
+    "docs/archive/dev-plans/240e-assistant-internal-knowledge-pack-and-readonly-resolver-plan.md",
+    "docs/archive/dev-plans/241-assistant-knowledge-pack-runtime-minimal-implementation-plan.md"
   ],
   "entries": [
     {

@@ -11,7 +11,7 @@
     "create a department under flower org"
   ],
   "source_refs": [
-    "docs/dev-plans/244-assistant-interpretation-pack-and-intent-route-catalog-compiler-plan.md",
-    "docs/dev-plans/243-assistant-clarification-policy-and-slot-repair-plan.md"
+    "docs/archive/dev-plans/244-assistant-interpretation-pack-and-intent-route-catalog-compiler-plan.md",
+    "docs/archive/dev-plans/243-assistant-clarification-policy-and-slot-repair-plan.md"
   ]
 }

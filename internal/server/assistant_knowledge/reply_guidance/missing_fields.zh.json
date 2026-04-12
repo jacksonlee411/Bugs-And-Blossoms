@@ -22,7 +22,7 @@
     "invalid_effective_date_format"
   ],
   "source_refs": [
-    "docs/dev-plans/241-assistant-knowledge-pack-runtime-minimal-implementation-plan.md",
+    "docs/archive/dev-plans/241-assistant-knowledge-pack-runtime-minimal-implementation-plan.md",
     "internal/server/assistant_api.go"
   ]
 }

@@ -189,12 +189,13 @@ type assistantConfigChange struct {
 }
 
 type assistantDryRunResult struct {
-	Diff             []map[string]any                 `json:"diff"`
-	Explain          string                           `json:"explain"`
-	ValidationErrors []string                         `json:"validation_errors,omitempty"`
-	Retrieval        assistantSemanticRetrievalResult `json:"retrieval,omitempty"`
-	WouldCommit      bool                             `json:"would_commit"`
-	PlanHash         string                           `json:"plan_hash,omitempty"`
+	Diff                    []map[string]any                          `json:"diff"`
+	Explain                 string                                    `json:"explain"`
+	ValidationErrors        []string                                  `json:"validation_errors,omitempty"`
+	Retrieval               assistantSemanticRetrievalResult          `json:"retrieval,omitempty"`
+	WouldCommit             bool                                      `json:"would_commit"`
+	PlanHash                string                                    `json:"plan_hash,omitempty"`
+	CreateOrgUnitProjection *assistantCreateOrgUnitProjectionSnapshot `json:"create_orgunit_projection,omitempty"`
 }
 
 type assistantCandidate struct {
@@ -613,6 +614,8 @@ func handleAssistantTurnActionAPI(w http.ResponseWriter, r *http.Request, svc *a
 				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusForbidden, errAssistantActionAuthzDenied.Error(), "assistant action authz denied")
 			case errors.Is(err, errAssistantActionRiskGateDenied):
 				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusConflict, errAssistantActionRiskGateDenied.Error(), "assistant action risk gate denied")
+			case errors.Is(err, errAssistantPlanContractVersionMismatch):
+				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusConflict, "ai_plan_contract_version_mismatch", "ai plan contract version mismatch")
 			default:
 				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusInternalServerError, "assistant_turn_confirm_failed", "assistant turn confirm failed")
 			}
@@ -942,6 +945,7 @@ func (s *assistantConversationService) getConversation(tenantID string, actorID 
 }
 
 func (s *assistantConversationService) createTurn(ctx context.Context, tenantID string, principal Principal, conversationID string, userInput string) (*assistantConversation, error) {
+	ctx = withPrincipal(ctx, principal)
 	if s.pool != nil {
 		return s.createTurnPG(ctx, tenantID, principal, conversationID, userInput)
 	}
@@ -1643,6 +1647,8 @@ func cloneConversation(in *assistantConversation) *assistantConversation {
 		copyTurn.MissingFields = append([]string(nil), turn.MissingFields...)
 		copyTurn.Candidates = append([]assistantCandidate(nil), turn.Candidates...)
 		copyTurn.DryRun.Diff = append([]map[string]any(nil), turn.DryRun.Diff...)
+		copyTurn.DryRun.ValidationErrors = append([]string(nil), turn.DryRun.ValidationErrors...)
+		copyTurn.DryRun.CreateOrgUnitProjection = assistantCloneCreateOrgUnitProjectionSnapshot(turn.DryRun.CreateOrgUnitProjection)
 		if turn.CommitResult != nil {
 			copyResult := *turn.CommitResult
 			copyTurn.CommitResult = &copyResult

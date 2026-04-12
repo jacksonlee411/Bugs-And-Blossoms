@@ -37,18 +37,24 @@ const (
 var assistantTaskMarshalFn = json.Marshal
 
 type assistantTaskContractSnapshot struct {
-	IntentSchemaVersion     string `json:"intent_schema_version"`
-	CompilerContractVersion string `json:"compiler_contract_version"`
-	CapabilityMapVersion    string `json:"capability_map_version"`
-	SkillManifestDigest     string `json:"skill_manifest_digest"`
-	ContextHash             string `json:"context_hash"`
-	IntentHash              string `json:"intent_hash"`
-	PlanHash                string `json:"plan_hash"`
-	KnowledgeSnapshotDigest string `json:"knowledge_snapshot_digest,omitempty"`
-	RouteCatalogVersion     string `json:"route_catalog_version,omitempty"`
-	ResolverContractVersion string `json:"resolver_contract_version,omitempty"`
-	ContextTemplateVersion  string `json:"context_template_version,omitempty"`
-	ReplyGuidanceVersion    string `json:"reply_guidance_version,omitempty"`
+	IntentSchemaVersion      string `json:"intent_schema_version"`
+	CompilerContractVersion  string `json:"compiler_contract_version"`
+	CapabilityMapVersion     string `json:"capability_map_version"`
+	SkillManifestDigest      string `json:"skill_manifest_digest"`
+	ContextHash              string `json:"context_hash"`
+	IntentHash               string `json:"intent_hash"`
+	PlanHash                 string `json:"plan_hash"`
+	KnowledgeSnapshotDigest  string `json:"knowledge_snapshot_digest,omitempty"`
+	RouteCatalogVersion      string `json:"route_catalog_version,omitempty"`
+	ResolverContractVersion  string `json:"resolver_contract_version,omitempty"`
+	ContextTemplateVersion   string `json:"context_template_version,omitempty"`
+	ReplyGuidanceVersion     string `json:"reply_guidance_version,omitempty"`
+	PolicyContextDigest      string `json:"policy_context_digest,omitempty"`
+	EffectivePolicyVersion   string `json:"effective_policy_version,omitempty"`
+	ResolvedSetID            string `json:"resolved_setid,omitempty"`
+	SetIDSource              string `json:"setid_source,omitempty"`
+	PrecheckProjectionDigest string `json:"precheck_projection_digest,omitempty"`
+	MutationPolicyVersion    string `json:"mutation_policy_version,omitempty"`
 }
 
 type assistantTaskSubmitRequest struct {
@@ -219,6 +225,9 @@ func assistantTaskValidateSubmitRequest(req assistantTaskSubmitRequest) error {
 		strings.TrimSpace(req.ContractSnapshot.PlanHash) == "" {
 		return errors.New("contract_snapshot incomplete")
 	}
+	if assistantTaskCreatePolicyContractIncomplete(req.ContractSnapshot) {
+		return errors.New("contract_snapshot incomplete")
+	}
 	return nil
 }
 
@@ -230,6 +239,13 @@ func assistantTaskValidateSnapshotAgainstTurn(snapshot assistantTaskContractSnap
 		return errAssistantPlanContractVersionMismatch
 	}
 	current := assistantBuildTaskSnapshotFromTurn(turn)
+	if strings.TrimSpace(current.PolicyContextDigest) != "" &&
+		(strings.TrimSpace(snapshot.PolicyContextDigest) == "" ||
+			strings.TrimSpace(snapshot.EffectivePolicyVersion) == "" ||
+			strings.TrimSpace(snapshot.PrecheckProjectionDigest) == "" ||
+			strings.TrimSpace(snapshot.MutationPolicyVersion) == "") {
+		return errAssistantPlanContractVersionMismatch
+	}
 	if !assistantTaskSnapshotCompatible(current, snapshot) {
 		return errAssistantPlanContractVersionMismatch
 	}
@@ -273,6 +289,24 @@ func assistantTaskSnapshotCompatible(current assistantTaskContractSnapshot, stor
 	if strings.TrimSpace(stored.ReplyGuidanceVersion) != "" && strings.TrimSpace(current.ReplyGuidanceVersion) != strings.TrimSpace(stored.ReplyGuidanceVersion) {
 		return false
 	}
+	if strings.TrimSpace(stored.PolicyContextDigest) != "" && strings.TrimSpace(current.PolicyContextDigest) != strings.TrimSpace(stored.PolicyContextDigest) {
+		return false
+	}
+	if strings.TrimSpace(stored.EffectivePolicyVersion) != "" && strings.TrimSpace(current.EffectivePolicyVersion) != strings.TrimSpace(stored.EffectivePolicyVersion) {
+		return false
+	}
+	if strings.TrimSpace(stored.ResolvedSetID) != "" && strings.TrimSpace(current.ResolvedSetID) != strings.TrimSpace(stored.ResolvedSetID) {
+		return false
+	}
+	if strings.TrimSpace(stored.SetIDSource) != "" && strings.TrimSpace(current.SetIDSource) != strings.TrimSpace(stored.SetIDSource) {
+		return false
+	}
+	if strings.TrimSpace(stored.PrecheckProjectionDigest) != "" && strings.TrimSpace(current.PrecheckProjectionDigest) != strings.TrimSpace(stored.PrecheckProjectionDigest) {
+		return false
+	}
+	if strings.TrimSpace(stored.MutationPolicyVersion) != "" && strings.TrimSpace(current.MutationPolicyVersion) != strings.TrimSpace(stored.MutationPolicyVersion) {
+		return false
+	}
 	return true
 }
 
@@ -313,7 +347,7 @@ func assistantBuildTaskSnapshotFromTurn(turn *assistantTurn) assistantTaskContra
 	if turn == nil {
 		return assistantTaskContractSnapshot{}
 	}
-	return assistantTaskContractSnapshot{
+	snapshot := assistantTaskContractSnapshot{
 		IntentSchemaVersion:     strings.TrimSpace(turn.Intent.IntentSchemaVersion),
 		CompilerContractVersion: strings.TrimSpace(turn.Plan.CompilerContractVersion),
 		CapabilityMapVersion:    strings.TrimSpace(turn.Plan.CapabilityMapVersion),
@@ -327,6 +361,15 @@ func assistantBuildTaskSnapshotFromTurn(turn *assistantTurn) assistantTaskContra
 		ContextTemplateVersion:  strings.TrimSpace(turn.Plan.ContextTemplateVersion),
 		ReplyGuidanceVersion:    strings.TrimSpace(turn.Plan.ReplyGuidanceVersion),
 	}
+	if projection, ok := assistantCreateOrgUnitProjectionForTurn(turn); ok {
+		snapshot.PolicyContextDigest = strings.TrimSpace(projection.PolicyContext.PolicyContextDigest)
+		snapshot.EffectivePolicyVersion = strings.TrimSpace(projection.Projection.EffectivePolicyVersion)
+		snapshot.ResolvedSetID = strings.TrimSpace(projection.Projection.ResolvedSetID)
+		snapshot.SetIDSource = strings.TrimSpace(projection.Projection.SetIDSource)
+		snapshot.PrecheckProjectionDigest = strings.TrimSpace(projection.Projection.ProjectionDigest)
+		snapshot.MutationPolicyVersion = strings.TrimSpace(projection.Projection.MutationPolicyVersion)
+	}
+	return snapshot
 }
 
 func assistantBuildTaskSubmitRequestFromTurn(conversationID string, turn *assistantTurn) (assistantTaskSubmitRequest, error) {
@@ -334,6 +377,9 @@ func assistantBuildTaskSubmitRequestFromTurn(conversationID string, turn *assist
 		return assistantTaskSubmitRequest{}, errAssistantTurnNotFound
 	}
 	if !assistantTurnRouteAuditVersionsConsistent(turn) {
+		return assistantTaskSubmitRequest{}, errAssistantPlanContractVersionMismatch
+	}
+	if assistantCreateOrgUnitProjectionContractMissing(turn) {
 		return assistantTaskSubmitRequest{}, errAssistantPlanContractVersionMismatch
 	}
 	req := assistantTaskSubmitRequest{
@@ -1342,5 +1388,44 @@ WHERE tenant_uuid = $1::uuid
 		ResolverContractVersion: strings.TrimSpace(plan.ResolverContractVersion),
 		ContextTemplateVersion:  strings.TrimSpace(plan.ContextTemplateVersion),
 		ReplyGuidanceVersion:    strings.TrimSpace(plan.ReplyGuidanceVersion),
+		PolicyContextDigest: strings.TrimSpace(firstNonEmpty(
+			func() string {
+				if dryRun.CreateOrgUnitProjection == nil {
+					return ""
+				}
+				return dryRun.CreateOrgUnitProjection.PolicyContext.PolicyContextDigest
+			}(),
+			"",
+		)),
+		EffectivePolicyVersion: strings.TrimSpace(func() string {
+			if dryRun.CreateOrgUnitProjection == nil {
+				return ""
+			}
+			return dryRun.CreateOrgUnitProjection.Projection.EffectivePolicyVersion
+		}()),
+		ResolvedSetID: strings.TrimSpace(func() string {
+			if dryRun.CreateOrgUnitProjection == nil {
+				return ""
+			}
+			return dryRun.CreateOrgUnitProjection.Projection.ResolvedSetID
+		}()),
+		SetIDSource: strings.TrimSpace(func() string {
+			if dryRun.CreateOrgUnitProjection == nil {
+				return ""
+			}
+			return dryRun.CreateOrgUnitProjection.Projection.SetIDSource
+		}()),
+		PrecheckProjectionDigest: strings.TrimSpace(func() string {
+			if dryRun.CreateOrgUnitProjection == nil {
+				return ""
+			}
+			return dryRun.CreateOrgUnitProjection.Projection.ProjectionDigest
+		}()),
+		MutationPolicyVersion: strings.TrimSpace(func() string {
+			if dryRun.CreateOrgUnitProjection == nil {
+				return ""
+			}
+			return dryRun.CreateOrgUnitProjection.Projection.MutationPolicyVersion
+		}()),
 	}, nil
 }

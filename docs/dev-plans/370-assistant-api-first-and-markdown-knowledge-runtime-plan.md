@@ -28,6 +28,7 @@ Karpathy 的 LLM Wiki 思路对本仓的启发不在于“让 Markdown 替代业
 - Markdown 只负责“编排知识”，不负责“业务真相”。
 - API 只负责“事实读取/动作提交”，不负责“知识撰写”。
 - 运行时只消费“受控 API + 编译产物”，不消费“底层存储 + 人工散装配置”。
+- `DEV-PLAN-370` 只负责 Assistant Runtime / Knowledge 层的收敛，不作为覆盖 `350/360/360A/361` 的总母法。
 
 ## 2. 目标、非目标与边界
 
@@ -48,10 +49,12 @@ Karpathy 的 LLM Wiki 思路对本仓的启发不在于“让 Markdown 替代业
 
 ### 2.3 与既有计划的边界
 
-1. [ ] `DEV-PLAN-350`：定义“统一策略与 Authoritative Gate 主链”；本方案不改其裁决权，只收敛 Assistant 到该主链。
-2. [ ] `DEV-PLAN-360/360A`：定义“LibreChat 去能力化与运行时接管”；本方案补足接管后的知识主源与查询/操作面规范。
-3. [ ] `DEV-PLAN-361`：定义“OPA/PDP 采用边界”；本方案要求 Assistant 只能通过其暴露的能力边界消费授权判断，不得本地重演授权逻辑。
-4. [ ] `DEV-PLAN-240E/241/244/245`：已有知识包与运行时骨架；本方案将其上游作者体验统一为 Markdown-first，而非推翻现有运行时结构。
+1. [ ] `DEV-PLAN-350`：是策略与 Authoritative Gate 收敛母法，继续拥有 `ActionSchema`、`PolicyContext`、`PrecheckProjection`、`Readonly Tool Registry` 的契约裁决权；本方案只定义这些契约在 Runtime / Knowledge 层如何被消费与生成，不改其权威归属。
+2. [ ] `DEV-PLAN-360`：是 Assistant / LibreChat 分层角色、停线、失败原则与防回流约束的架构母法；本方案只在其冻结边界内定义 Runtime / Knowledge 形态。
+3. [ ] `DEV-PLAN-360A`：是 successor DTO / API / compat 生死表 / `runtime-status` 语义的执行面 SSOT；本方案只消费其单入口与切换约束，不单独定义这些对外契约细节。
+4. [ ] `DEV-PLAN-361`：定义 OPA/PDP 采用边界；本方案要求 Assistant 只能通过其暴露的能力边界消费授权判断，不得本地重演授权逻辑。
+5. [ ] `DEV-PLAN-240E/241/244/245`：已有知识包与运行时骨架；本方案将其上游作者体验统一为 Markdown-first，而非推翻现有运行时结构。
+6. [ ] 因此，`DEV-PLAN-370` 的正式定位是“Assistant Runtime / Knowledge Convergence Plan”，而不是覆盖 `350/360/360A/361` 的总母法。
 
 ## 3. 真相矩阵与目标架构
 
@@ -67,7 +70,7 @@ Karpathy 的 LLM Wiki 思路对本仓的启发不在于“让 Markdown 替代业
 ### 3.2 目标架构
 
 1. [ ] UI 层  
-通过现有 `/internal/assistant/*` 入口承接会话、turn、task、runtime-status，不新增第二套前台协议。
+继承 `DEV-PLAN-360A` 已冻结的 successor 单入口约束，通过现有 `/internal/assistant/*` 入口承接会话、turn、task、runtime-status，不新增第二套前台协议，也不在本文重复定义 DTO / 错误码 / compat 生死表。
 2. [ ] Runtime 编排层  
 负责意图识别、知识读取、工具调用、回复生成、任务推进；只允许访问编译后的知识资产、受控 Tool API、统一提交 API。
 3. [ ] Tool / Query API 层  
@@ -104,7 +107,7 @@ Karpathy 的 LLM Wiki 思路对本仓的启发不在于“让 Markdown 替代业
 1. [ ] `intent/*.md`
 定义用户表达、意图别名、歧义消解、主链归属、需要的上下文槽位。
 2. [ ] `actions/*.md`
-定义动作说明、适用前提、输入槽位、预检查要求、提交摘要模板、失败面说明。
+定义动作说明、适用前提、输入槽位、预检查要求、提交摘要模板、失败面说明；其编译产物必须服从 `DEV-PLAN-350` 已冻结的 `ActionSchema` / `Readonly Tool Registry` / `RequiredChecks` 契约。
 3. [ ] `replies/*.md`
 定义回复指导、错误提示映射、缺字段引导、成功确认模板。
 4. [ ] `tools/*.md`
@@ -147,10 +150,11 @@ Karpathy 的 LLM Wiki 思路对本仓的启发不在于“让 Markdown 替代业
    - `context_template_version`
    - `reply_guidance_version`
 3. [ ] 编译失败必须 fail-closed，任何缺失主键、重复 ID、非法 front matter、未注册 tool、坏链接、版本不一致，都应阻断生成。
+4. [ ] `actions/*.md`、`tools/*.md` 的编译结果不得自行发明策略字段；凡涉及 `PolicyContext`、`PrecheckProjection`、`RequiredChecks`、`Readonly Tool Registry` 的运行时契约，统一对齐 `DEV-PLAN-350`。
 
 ## 5. API-First 运行时收敛
 
-### 5.1 UI API 保持单入口
+### 5.1 UI API 保持单入口（继承 `360A`）
 
 1. [ ] 用户界面继续只使用现有 Assistant API：
    - `/internal/assistant/conversations`
@@ -158,6 +162,7 @@ Karpathy 的 LLM Wiki 思路对本仓的启发不在于“让 Markdown 替代业
    - `/internal/assistant/tasks`
    - `/internal/assistant/runtime-status`
 2. [ ] 不得因 Markdown 知识运行时引入第二套对外 Assistant UI 协议。
+3. [ ] `/internal/assistant/*` successor DTO、错误码、`runtime-status` 字段生死表继续以 `DEV-PLAN-360A` 为准；`370` 只消费其单入口约束，不单独升格为执行面权威。
 
 ### 5.2 Tool API 分层
 
@@ -171,6 +176,7 @@ Karpathy 的 LLM Wiki 思路对本仓的启发不在于“让 Markdown 替代业
 3. [ ] Tool API 只返回受控 DTO，不暴露底层表结构。
 4. [ ] Tool API 可以调用 service / projection / PDP / resolver，但 Runtime 不得感知其内部来源。
 5. [ ] Tool API 的输入输出必须有稳定 schema，允许被 Markdown `tools/*.md` 引用。
+6. [ ] 策略类 Tool API 必须复用 `DEV-PLAN-350` 已冻结的 `PrecheckProjection` 或其受控子视图，不得在 Runtime 侧发明第二套策略 DTO。
 
 ### 5.3 提交链冻结
 
@@ -187,7 +193,7 @@ Karpathy 的 LLM Wiki 思路对本仓的启发不在于“让 Markdown 替代业
 1. [ ] `assistant_create_policy_precheck.go`
 目标：移除直接读取底层策略/字段配置的解释职责，改由统一 Tool/API 返回预检查结果。
 2. [ ] `assistant_action_registry.go`
-目标：从人工注册 spec 逐步迁移为 Markdown 源 + 编译产物驱动。
+目标：在不改写 `DEV-PLAN-350` 已冻结 `ActionSchema` 契约的前提下，从人工注册 spec 逐步迁移为“Markdown 源 + 编译产物 + 统一契约消费”驱动。
 3. [ ] `assistant_knowledge_runtime.go`
 目标：保留运行时消费职责，但上游改为消费编译产物而非人工 JSON。
 4. [ ] `assistant_reply_nlg.go`
@@ -230,6 +236,7 @@ Karpathy 的 LLM Wiki 思路对本仓的启发不在于“让 Markdown 替代业
    - 生成成功/失败回复与 task 追踪状态
 2. [ ] 任何“是否允许做”必须以 API / Authoritative Gate 返回为准。
 3. [ ] Markdown 只能解释“通常需要什么”，不能解释“当前用户一定能不能做”。
+4. [ ] `proposal / precheck / gate / commit` 的正式裁决语义继续以 `DEV-PLAN-350` 为准；本方案只定义 Runtime 如何围绕该主链组织知识与调用顺序。
 
 ## 7. 编译链、门禁与测试
 
@@ -327,13 +334,13 @@ Karpathy 的 LLM Wiki 思路对本仓的启发不在于“让 Markdown 替代业
 1. [ ] `intent route` 需要支持 `business_query`。
 2. [ ] `action view` 需要支持从 Markdown 编译出的 `required_checks`、`proposal template`、`tool_plan`。
 3. [ ] `reply guidance` 需要支持错误码映射与缺字段追问模板。
-4. [ ] `runtime status` 需要暴露知识 digest、编译版本、tool catalog 版本。
+4. [ ] 如需让 `runtime-status` 暴露知识 digest、编译版本、tool catalog 版本，其字段合同应回写 `DEV-PLAN-360A`，由执行面 SSOT 冻结。
 
 ### 9.3 API 兼容性
 
 1. [ ] 对外 Assistant UI API 尽量保持兼容。
 2. [ ] 内部 Tool API 可新增，但不得破坏已有 `/internal/assistant/*` 主协议。
-3. [ ] 如需新增 runtime status 字段，应以向后兼容方式扩展。
+3. [ ] 如需新增 `runtime-status` 字段，应以向后兼容方式扩展，并由 `DEV-PLAN-360A` 统一冻结最小 DTO / 错误码 / 失败语义。
 
 ## 10. 假设与默认决策
 
@@ -342,7 +349,7 @@ Karpathy 的 LLM Wiki 思路对本仓的启发不在于“让 Markdown 替代业
 3. [ ] 默认 `docs/dev-plans/` 不参与运行时知识读取，避免契约文档与运行时知识混源。
 4. [ ] 默认第一阶段只构建最小 Tool API 集，不一次性抽象全仓所有模块。
 5. [ ] 默认优先在 OrgUnit / Assistant 现有链路上完成样板闭环，再向其他模块复制。
-6. [ ] 默认 `DEV-PLAN-370` 作为 `350/360/360A/361` 的收敛母法，不替代其已有职责文档。
+6. [ ] 默认 `DEV-PLAN-370` 作为 Assistant Runtime / Knowledge 层收敛子法：承接 `API-first + Markdown-first + compiler + business_query / knowledge_qa / business_action`，但不改写 `350` 的策略母法、`360` 的架构母法、`360A` 的执行面 SSOT、`361` 的 PDP 边界法。
 
 ## 11. 关联事实源
 

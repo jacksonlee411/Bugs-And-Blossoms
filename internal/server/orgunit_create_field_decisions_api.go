@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/jacksonlee411/Bugs-And-Blossoms/internal/routing"
+	orgunitservices "github.com/jacksonlee411/Bugs-And-Blossoms/modules/orgunit/services"
 	orgunitpkg "github.com/jacksonlee411/Bugs-And-Blossoms/pkg/orgunit"
 )
 
@@ -18,16 +19,18 @@ const (
 )
 
 type orgUnitCreateFieldDecisionsAPIResponse struct {
-	CapabilityKey          string               `json:"capability_key"`
-	BaselineCapabilityKey  string               `json:"baseline_capability_key,omitempty"`
-	BusinessUnitOrgCode    string               `json:"business_unit_org_code"`
-	AsOf                   string               `json:"as_of"`
-	PolicyVersion          string               `json:"policy_version"`
-	EffectivePolicyVersion string               `json:"effective_policy_version"`
-	PolicyVersionAlg       string               `json:"policy_version_alg,omitempty"`
-	IntentPolicyVersion    string               `json:"intent_policy_version,omitempty"`
-	BaselinePolicyVersion  string               `json:"baseline_policy_version,omitempty"`
-	FieldDecisions         []setIDFieldDecision `json:"field_decisions"`
+	CapabilityKey          string                                         `json:"capability_key"`
+	BaselineCapabilityKey  string                                         `json:"baseline_capability_key,omitempty"`
+	BusinessUnitOrgCode    string                                         `json:"business_unit_org_code"`
+	AsOf                   string                                         `json:"as_of"`
+	PolicyVersion          string                                         `json:"policy_version"`
+	EffectivePolicyVersion string                                         `json:"effective_policy_version"`
+	ResolvedSetID          string                                         `json:"resolved_setid,omitempty"`
+	SetIDSource            string                                         `json:"setid_source,omitempty"`
+	PolicyVersionAlg       string                                         `json:"policy_version_alg,omitempty"`
+	IntentPolicyVersion    string                                         `json:"intent_policy_version,omitempty"`
+	BaselinePolicyVersion  string                                         `json:"baseline_policy_version,omitempty"`
+	FieldDecisions         []orgunitservices.CreateOrgUnitFieldDecisionV1 `json:"field_decisions"`
 }
 
 func handleOrgUnitCreateFieldDecisionsAPI(w http.ResponseWriter, r *http.Request, store OrgUnitStore) {
@@ -70,22 +73,6 @@ func handleOrgUnitCreateFieldDecisionsAPI(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	resolvedSetID := ""
-	if businessUnitRef.OrgCode != "" {
-		setIDResolver, ok := any(store).(orgUnitSetIDResolver)
-		if !ok {
-			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusInternalServerError, setIDContextCodeSetIDResolverMissing, "setid resolver missing")
-			return
-		}
-		contextResolver := newSetIDContextResolver(store, setIDResolver)
-		resolvedCtx, resolveErr := contextResolver.ResolveOrgContext(r.Context(), tenant.ID, businessUnitRef.OrgCode, effectiveDate, "business_unit_org_code")
-		if resolveErr != nil {
-			writeOrgUnitSetIDContextError(w, r, "business_unit_org_code", resolveErr)
-			return
-		}
-		resolvedSetID = resolvedCtx.ResolvedSetID
-	}
-
 	capCtx, capErr := resolveCapabilityContext(r.Context(), r, capabilityContextInput{
 		CapabilityKey:       orgUnitCreateFieldPolicyCapabilityKey,
 		BusinessUnitOrgCode: businessUnitRef.OrgCode,
@@ -103,26 +90,45 @@ func handleOrgUnitCreateFieldDecisionsAPI(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	decisions := make([]setIDFieldDecision, 0, 2)
-	for _, fieldKey := range []string{orgUnitCreateFieldOrgCode, orgUnitCreateFieldOrgType} {
-		decision, resolveErr := defaultSetIDStrategyRegistryStore.resolveFieldDecision(
-			r.Context(),
-			tenant.ID,
-			capCtx.CapabilityKey,
-			fieldKey,
-			resolvedSetID,
-			businessUnitRef.OrgNodeKey,
-			capCtx.AsOf,
-		)
-		if resolveErr != nil {
-			status, code := statusCodeForFieldDecisionError(resolveErr)
-			routing.WriteError(w, r, routing.RouteClassInternalAPI, status, code, code)
+	effectivePolicyVersion, policyParts := resolveOrgUnitEffectivePolicyVersion(tenant.ID, capCtx.CapabilityKey)
+	precheck, err := buildCreateOrgUnitPrecheckResultV1(r.Context(), store, orgunitservices.CreateOrgUnitPrecheckInputV1{
+		TenantID:               tenant.ID,
+		CapabilityKey:          capCtx.CapabilityKey,
+		EffectiveDate:          capCtx.AsOf,
+		BusinessUnitOrgCode:    businessUnitRef.OrgCode,
+		EffectivePolicyVersion: effectivePolicyVersion,
+		CanAdmin:               true,
+		Ext:                    map[string]any{},
+	})
+	if err != nil {
+		status, code := statusCodeForFieldDecisionError(err)
+		routing.WriteError(w, r, routing.RouteClassInternalAPI, status, code, code)
+		return
+	}
+	if precheck.ContextError != nil {
+		switch {
+		case errors.Is(precheck.ContextError.Cause, orgunitpkg.ErrOrgCodeInvalid):
+			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "org_code_invalid", "org_code invalid")
+			return
+		case errors.Is(precheck.ContextError.Cause, orgunitpkg.ErrOrgCodeNotFound):
+			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusNotFound, "org_code_not_found", "org_code not found")
+			return
+		case strings.TrimSpace(precheck.ContextError.Code) != "":
+			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusUnprocessableEntity, strings.TrimSpace(precheck.ContextError.Code), strings.TrimSpace(precheck.ContextError.Code))
+			return
+		default:
+			writeInternalAPIError(w, r, precheck.ContextError, "orgunit_create_field_decisions_context_failed")
 			return
 		}
-		decisions = append(decisions, decision)
 	}
-
-	effectivePolicyVersion, policyParts := resolveOrgUnitEffectivePolicyVersion(tenant.ID, capCtx.CapabilityKey)
+	if len(precheck.Projection.RejectionReasons) > 0 {
+		code := strings.TrimSpace(precheck.Projection.RejectionReasons[0])
+		switch code {
+		case fieldPolicyMissingCode, fieldDefaultRuleMissingCode, fieldPolicyConflictCode, fieldPolicyPriorityModeCode, fieldPolicyModeComboCode:
+			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusUnprocessableEntity, code, code)
+			return
+		}
+	}
 
 	response := orgUnitCreateFieldDecisionsAPIResponse{
 		CapabilityKey:          capCtx.CapabilityKey,
@@ -130,11 +136,13 @@ func handleOrgUnitCreateFieldDecisionsAPI(w http.ResponseWriter, r *http.Request
 		BusinessUnitOrgCode:    capCtx.BusinessUnitOrgCode,
 		AsOf:                   capCtx.AsOf,
 		PolicyVersion:          policyParts.IntentPolicyVersion,
-		EffectivePolicyVersion: effectivePolicyVersion,
+		EffectivePolicyVersion: precheck.Projection.EffectivePolicyVersion,
+		ResolvedSetID:          precheck.Projection.ResolvedSetID,
+		SetIDSource:            precheck.Projection.SetIDSource,
 		PolicyVersionAlg:       orgUnitEffectivePolicyVersionAlgorithm,
 		IntentPolicyVersion:    policyParts.IntentPolicyVersion,
 		BaselinePolicyVersion:  policyParts.BaselinePolicyVersion,
-		FieldDecisions:         decisions,
+		FieldDecisions:         append([]orgunitservices.CreateOrgUnitFieldDecisionV1(nil), precheck.Projection.FieldDecisions...),
 	}
 
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")

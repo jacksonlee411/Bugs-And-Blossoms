@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	orgunitservices "github.com/jacksonlee411/Bugs-And-Blossoms/modules/orgunit/services"
 	orgunitpkg "github.com/jacksonlee411/Bugs-And-Blossoms/pkg/orgunit"
 )
 
@@ -243,8 +244,34 @@ func TestHandleOrgUnitCreateFieldDecisionsAPI(t *testing.T) {
 		if response.IntentPolicyVersion != parts.IntentPolicyVersion || response.BaselinePolicyVersion != parts.BaselinePolicyVersion {
 			t.Fatalf("parts mismatch response=%+v parts=%+v", response, parts)
 		}
-		if len(response.FieldDecisions) != 2 {
-			t.Fatalf("field_decisions=%+v", response.FieldDecisions)
+		if response.ResolvedSetID != "" {
+			t.Fatalf("resolved_setid=%q", response.ResolvedSetID)
+		}
+		if response.SetIDSource != "" {
+			t.Fatalf("setid_source=%q", response.SetIDSource)
+		}
+		decisionByKey := make(map[string]orgunitservices.CreateOrgUnitFieldDecisionV1, len(response.FieldDecisions))
+		for _, item := range response.FieldDecisions {
+			decisionByKey[item.FieldKey] = item
+		}
+		for _, key := range []string{
+			"effective_date",
+			"name",
+			"parent_org_code",
+			"is_business_unit",
+			"manager_pernr",
+			orgUnitCreateFieldOrgCode,
+			orgUnitCreateFieldOrgType,
+		} {
+			if _, ok := decisionByKey[key]; !ok {
+				t.Fatalf("missing field decision %q in %+v", key, response.FieldDecisions)
+			}
+		}
+		if got := decisionByKey[orgUnitCreateFieldOrgCode]; !got.Required || got.DefaultRuleRef != `next_org_code("F", 8)` || got.Maintainable {
+			t.Fatalf("unexpected org_code decision=%+v", got)
+		}
+		if got := decisionByKey[orgUnitCreateFieldOrgType]; !got.Required || !got.Visible || got.ResolvedDefaultValue != "11" || len(got.AllowedValueCodes) != 1 || got.AllowedValueCodes[0] != "11" {
+			t.Fatalf("unexpected d_org_type decision=%+v", got)
 		}
 	})
 
@@ -284,6 +311,12 @@ func TestHandleOrgUnitCreateFieldDecisionsAPI(t *testing.T) {
 		}
 		if response.BusinessUnitOrgCode != "ROOT" {
 			t.Fatalf("business_unit_org_code=%q", response.BusinessUnitOrgCode)
+		}
+		if response.ResolvedSetID != "S2601" {
+			t.Fatalf("resolved_setid=%q", response.ResolvedSetID)
+		}
+		if response.SetIDSource != "custom" {
+			t.Fatalf("setid_source=%q", response.SetIDSource)
 		}
 	})
 }

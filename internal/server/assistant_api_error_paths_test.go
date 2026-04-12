@@ -327,7 +327,7 @@ func TestAssistantTurnAction_RequiresIntentClarificationBeforeConfirm(t *testing
 	rec := httptest.NewRecorder()
 	path := "/internal/assistant/conversations/" + conv.ConversationID + "/turns/" + turn.TurnID + ":confirm"
 	handleAssistantTurnActionAPI(rec, assistantReqWithContext(http.MethodPost, path, `{}`, true, true), svc)
-	if rec.Code != http.StatusConflict || assistantDecodeErrCode(t, rec) != "conversation_confirmation_required" {
+	if rec.Code != http.StatusConflict || assistantDecodeErrCode(t, rec) != "ai_plan_contract_version_mismatch" {
 		t.Fatalf("status=%d code=%s body=%s", rec.Code, assistantDecodeErrCode(t, rec), rec.Body.String())
 	}
 
@@ -344,7 +344,7 @@ func TestAssistantTurnAction_RequiresIntentClarificationBeforeConfirm(t *testing
 	liveTurn.DryRun.ValidationErrors = []string{"missing_effective_date"}
 	svc.mu.Unlock()
 
-	if _, err := assistantCommitTurnSyncForTest(svc, context.Background(), "tenant-1", principal, conv.ConversationID, turn.TurnID); !errors.Is(err, errAssistantConfirmationRequired) {
+	if _, err := assistantCommitTurnSyncForTest(svc, context.Background(), "tenant-1", principal, conv.ConversationID, turn.TurnID); !errors.Is(err, errAssistantPlanContractVersionMismatch) {
 		t.Fatalf("commit err=%v", err)
 	}
 }

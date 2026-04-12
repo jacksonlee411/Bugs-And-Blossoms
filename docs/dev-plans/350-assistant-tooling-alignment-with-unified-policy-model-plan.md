@@ -1,6 +1,16 @@
 # DEV-PLAN-350：Assistant Tooling 对齐统一策略模型实施方案
 
-**状态**: 修订中（2026-04-12 11:36 CST）
+**状态**: 进行中（2026-04-12 17:54 CST；`create_orgunit` 首批 `PrecheckProjection + 统一消费` 样板已完成，八动作统一收口未完成）
+
+## 0.1 本批实施状态（2026-04-12）
+
+1. [X] `361` 已作为前置完成唯一 PDP 引擎替换；`350` 本批不再改 OPA/Rego 引擎，只消费既有 `fieldpolicy.Resolve(...)` 主链。
+2. [X] `create_orgunit` / `create_org` 已落地统一 `PolicyContext -> 唯一 PDP -> Mutation Policy -> PrecheckProjection` 样板。
+3. [X] Assistant dry-run / confirm / commit、`orgunit_create_field_decisions` 只读接口、写服务前置 fail-closed 已改为消费同一 projection 或共享裁决结果。
+4. [X] Assistant turn/task create contract 快照已冻结并在缺失时 fail-closed；历史无 projection 的 turn 只允许读展示，不允许继续 confirm/commit/submit。
+5. [X] 本批目标验证已通过：
+   - `go test ./pkg/fieldpolicy ./internal/server/... ./modules/orgunit/infrastructure/persistence/... ./modules/orgunit/services/...`
+6. [ ] 本计划 Phase 5“统一八动作”尚未开始；当前仅完成 `create_orgunit` 样板，不应解读为 `350` 全量封板。
 
 ## 1. 背景
 

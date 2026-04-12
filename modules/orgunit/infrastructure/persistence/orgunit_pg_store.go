@@ -574,6 +574,13 @@ func normalizeAllowedValueCodes(values []string) []string {
 	return out
 }
 
+func rootOrgNodeKeyCompatExpr(alias string) string {
+	return fmt.Sprintf(
+		"CASE WHEN to_jsonb(%[1]s) ? 'root_org_node_key' THEN btrim(COALESCE(to_jsonb(%[1]s)->>'root_org_node_key', '')) ELSE orgunit.encode_org_node_key(NULLIF(to_jsonb(%[1]s)->>'root_org_id', '')::bigint)::text END",
+		alias,
+	)
+}
+
 func (s *OrgUnitPGStore) SubmitCreateEventWithGeneratedCode(
 	ctx context.Context,
 	tenantID string,
@@ -729,6 +736,56 @@ ORDER BY field_key ASC
 		return nil, err
 	}
 	return out, nil
+}
+
+func (s *OrgUnitPGStore) ResolveSetID(ctx context.Context, tenantID string, orgNodeKey string, asOf string) (string, error) {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return "", err
+	}
+	defer func() { _ = tx.Rollback(context.Background()) }()
+
+	if _, err := tx.Exec(ctx, `SELECT set_config('app.current_tenant', $1, true);`, tenantID); err != nil {
+		return "", err
+	}
+	normalizedOrgNodeKey, err := orgunitpkg.NormalizeOrgNodeKey(strings.TrimSpace(orgNodeKey))
+	if err != nil {
+		return "", err
+	}
+	resolvedSetID, err := setidresolver.Resolve(ctx, tx, tenantID, normalizedOrgNodeKey, strings.TrimSpace(asOf))
+	if err != nil {
+		return "", err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return "", err
+	}
+	return resolvedSetID, nil
+}
+
+func (s *OrgUnitPGStore) IsOrgTreeInitialized(ctx context.Context, tenantID string) (bool, error) {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return false, err
+	}
+	defer func() { _ = tx.Rollback(context.Background()) }()
+
+	if _, err := tx.Exec(ctx, `SELECT set_config('app.current_tenant', $1, true);`, tenantID); err != nil {
+		return false, err
+	}
+	var rootOrgNodeKey *string
+	err = tx.QueryRow(ctx, fmt.Sprintf(`
+SELECT %s AS root_org_node_key
+FROM orgunit.org_trees t
+WHERE tenant_uuid = $1::uuid
+LIMIT 1
+	`, rootOrgNodeKeyCompatExpr("t")), tenantID).Scan(&rootOrgNodeKey)
+	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+		return false, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return false, err
+	}
+	return rootOrgNodeKey != nil && strings.TrimSpace(*rootOrgNodeKey) != "", nil
 }
 
 func (s *OrgUnitPGStore) ResolveOrgNodeKey(ctx context.Context, tenantID string, orgCode string) (string, error) {

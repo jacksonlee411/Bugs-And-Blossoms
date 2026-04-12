@@ -12,6 +12,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
+	orgunitservices "github.com/jacksonlee411/Bugs-And-Blossoms/modules/orgunit/services"
 )
 
 type assistTaskTxBeginner struct {
@@ -20,6 +21,34 @@ type assistTaskTxBeginner struct {
 
 func (b assistTaskTxBeginner) BeginTx(ctx context.Context, opts pgx.TxOptions) (pgx.Tx, error) {
 	return b.beginFn(ctx, opts)
+}
+
+func assistantTestCreateOrgUnitProjectionSnapshot() *assistantCreateOrgUnitProjectionSnapshot {
+	return &assistantCreateOrgUnitProjectionSnapshot{
+		PolicyContextContractVersion:      orgunitservices.CreateOrgUnitPolicyContextContractVersionV1,
+		PrecheckProjectionContractVersion: orgunitservices.CreateOrgUnitPrecheckProjectionContractV1,
+		PolicyContext: orgunitservices.CreateOrgUnitPolicyContextV1{
+			TenantID:            "tenant_1",
+			CapabilityKey:       orgUnitCreateFieldPolicyCapabilityKey,
+			EffectiveDate:       "2026-01-01",
+			BusinessUnitOrgCode: "FLOWER-A",
+			BusinessUnitNodeKey: "10000001",
+			ResolvedSetID:       "S2601",
+			SetIDSource:         "custom",
+			PolicyContextDigest: "ctx_digest",
+		},
+		Projection: orgunitservices.CreateOrgUnitPrecheckProjectionV1{
+			Readiness:              "ready",
+			FieldDecisions:         []orgunitservices.CreateOrgUnitFieldDecisionV1{{FieldKey: "name", Visible: true, Maintainable: true, FieldPayloadKey: "name", AllowedValueCodes: []string{}}},
+			PendingDraftSummary:    "上级组织：FLOWER-A；新建组织：运营部；生效日期：2026-01-01",
+			EffectivePolicyVersion: "epv1:test",
+			MutationPolicyVersion:  orgunitservices.CreateOrgUnitMutationPolicyVersionV1,
+			ResolvedSetID:          "S2601",
+			SetIDSource:            "custom",
+			PolicyExplain:          "计划已生成，等待确认后可提交",
+			ProjectionDigest:       "projection_digest",
+		},
+	}
 }
 
 func assistantTaskSampleTurn(now time.Time) *assistantTurn {
@@ -52,8 +81,9 @@ func assistantTaskSampleTurn(now time.Time) *assistantTurn {
 		Confidence:          0.9,
 		ResolutionSource:    "auto",
 		DryRun: assistantDryRunResult{
-			WouldCommit: false,
-			PlanHash:    "plan_hash",
+			WouldCommit:             false,
+			PlanHash:                "plan_hash",
+			CreateOrgUnitProjection: assistantTestCreateOrgUnitProjectionSnapshot(),
 		},
 		CreatedAt: now,
 		UpdatedAt: now,
@@ -61,15 +91,7 @@ func assistantTaskSampleTurn(now time.Time) *assistantTurn {
 }
 
 func assistantTaskSnapshotFromTurn(turn *assistantTurn) assistantTaskContractSnapshot {
-	return assistantTaskContractSnapshot{
-		IntentSchemaVersion:     turn.Intent.IntentSchemaVersion,
-		CompilerContractVersion: turn.Plan.CompilerContractVersion,
-		CapabilityMapVersion:    turn.Plan.CapabilityMapVersion,
-		SkillManifestDigest:     turn.Plan.SkillManifestDigest,
-		ContextHash:             turn.Intent.ContextHash,
-		IntentHash:              turn.Intent.IntentHash,
-		PlanHash:                turn.DryRun.PlanHash,
-	}
+	return assistantBuildTaskSnapshotFromTurn(turn)
 }
 
 func assistantTaskSampleRequest(turn *assistantTurn) assistantTaskSubmitRequest {

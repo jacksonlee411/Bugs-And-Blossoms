@@ -40,6 +40,6 @@
   ],
   "source_refs": [
     "internal/server/assistant_action_registry.go",
-    "docs/dev-plans/241-assistant-knowledge-pack-runtime-minimal-implementation-plan.md"
+    "docs/archive/dev-plans/241-assistant-knowledge-pack-runtime-minimal-implementation-plan.md"
   ]
 }

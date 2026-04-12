@@ -194,6 +194,7 @@ func (s *assistantConversationService) createTurnPG(ctx context.Context, tenantI
 	if ctx == nil {
 		ctx = context.Background()
 	}
+	ctx = withPrincipal(ctx, principal)
 	var pendingTurn *assistantTurn
 	var conversation *assistantConversation
 	if s.pool != nil {
@@ -473,6 +474,9 @@ func assistantTurnAuthoritativeStateReadyForCommit(turn *assistantTurn) error {
 	if turn == nil {
 		return errAssistantConversationStateInvalid
 	}
+	if assistantCreateOrgUnitProjectionContractMissing(turn) {
+		return errAssistantPlanContractVersionMismatch
+	}
 	if turn.State != assistantStateConfirmed {
 		return errAssistantConfirmationRequired
 	}
@@ -546,13 +550,25 @@ func (s *assistantConversationService) applyConfirmTurn(conversation *assistantC
 	if turn.State != assistantStateValidated {
 		return assistantTurnMutationResult{}, errAssistantConfirmationRequired
 	}
+	deferredCreateProjection := strings.TrimSpace(turn.Intent.Action) == assistantIntentCreateOrgUnit &&
+		strings.TrimSpace(turn.ResolvedCandidateID) == "" &&
+		strings.TrimSpace(turn.ResolutionSource) == "deferred_candidate_lookup" &&
+		turn.DryRun.CreateOrgUnitProjection == nil
+	if err := s.hydrateDeferredCandidateForConfirm(context.Background(), conversation.TenantID, turn); err != nil {
+		return assistantTurnMutationResult{}, err
+	}
+	if deferredCreateProjection {
+		confirmCtx := withPrincipal(context.Background(), principal)
+		turn.DryRun = assistantBuildDryRunFn(turn.Intent, turn.Candidates, turn.ResolvedCandidateID)
+		turn.DryRun = s.enrichCreateOrgUnitDryRunWithPolicy(confirmCtx, conversation.TenantID, turn.Intent, turn.Candidates, turn.ResolvedCandidateID, turn.DryRun)
+	}
+	if assistantCreateOrgUnitProjectionContractMissing(turn) {
+		return assistantTurnMutationResult{}, errAssistantPlanContractVersionMismatch
+	}
 	if len(assistantTurnMissingFields(turn)) > 0 {
 		return assistantTurnMutationResult{}, errAssistantConfirmationRequired
 	}
 	if err := assistantTurnRouteExecutionBoundary(turn); err != nil {
-		return assistantTurnMutationResult{}, err
-	}
-	if err := s.hydrateDeferredCandidateForConfirm(context.Background(), conversation.TenantID, turn); err != nil {
 		return assistantTurnMutationResult{}, err
 	}
 	spec, ok := s.lookupActionSpec(turn.Intent.Action)
@@ -589,9 +605,19 @@ func (s *assistantConversationService) applyConfirmTurn(conversation *assistantC
 		}
 	}
 	if turn.Intent.Action == assistantIntentCreateOrgUnit {
+		confirmCtx := withPrincipal(context.Background(), principal)
 		turn.DryRun = assistantBuildDryRunFn(turn.Intent, turn.Candidates, turn.ResolvedCandidateID)
-		turn.DryRun = s.enrichCreateOrgUnitDryRunWithPolicy(context.Background(), conversation.TenantID, turn.Intent, turn.Candidates, turn.ResolvedCandidateID, turn.DryRun)
-		if assistantTurnHasValidationCode(turn, "FIELD_REQUIRED_VALUE_MISSING") || assistantTurnHasValidationCode(turn, "PATCH_FIELD_NOT_ALLOWED") {
+		turn.DryRun = s.enrichCreateOrgUnitDryRunWithPolicy(confirmCtx, conversation.TenantID, turn.Intent, turn.Candidates, turn.ResolvedCandidateID, turn.DryRun)
+		if assistantCreateOrgUnitProjectionContractMissing(turn) {
+			return assistantTurnMutationResult{}, errAssistantPlanContractVersionMismatch
+		}
+		if len(assistantDryRunValidationErrorsForGate(assistantActionGateInput{
+			Intent:     turn.Intent,
+			Candidates: turn.Candidates,
+			ResolvedID: turn.ResolvedCandidateID,
+			DryRun:     &turn.DryRun,
+			Turn:       turn,
+		})) > 0 {
 			return assistantTurnMutationResult{}, errAssistantConfirmationRequired
 		}
 	}

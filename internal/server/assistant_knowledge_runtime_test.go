@@ -86,7 +86,7 @@ func TestAssistantKnowledgeRuntime_CompileValidation(t *testing.T) {
 	catalog := assistantIntentRouteCatalog{
 		AssetType:           "intent_route_catalog",
 		RouteCatalogVersion: "2026-03-11.v1",
-		SourceRefs:          []string{"docs/dev-plans/241-assistant-knowledge-pack-runtime-minimal-implementation-plan.md"},
+		SourceRefs:          []string{"docs/archive/dev-plans/241-assistant-knowledge-pack-runtime-minimal-implementation-plan.md"},
 		Entries: []assistantIntentRouteEntry{
 			{IntentID: "org.orgunit_create", RouteKind: assistantRouteKindBusinessAction, ActionID: assistantIntentCreateOrgUnit},
 		},
@@ -101,7 +101,7 @@ func TestAssistantKnowledgeRuntime_CompileValidation(t *testing.T) {
 			ClarificationPrompts: []assistantKnowledgePrompt{
 				{TemplateID: "clarify.knowledge.general_qa.v1", Text: "这是知识问答场景"},
 			},
-			SourceRefs: []string{"docs/dev-plans/241-assistant-knowledge-pack-runtime-minimal-implementation-plan.md"},
+			SourceRefs: []string{"docs/archive/dev-plans/241-assistant-knowledge-pack-runtime-minimal-implementation-plan.md"},
 		},
 	}
 	replyGuidance := []assistantReplyGuidancePack{
@@ -113,7 +113,7 @@ func TestAssistantKnowledgeRuntime_CompileValidation(t *testing.T) {
 			GuidanceTemplates: []assistantKnowledgePrompt{
 				{TemplateID: "reply.missing_fields.v1", Text: "请补充：{missing_fields}"},
 			},
-			SourceRefs: []string{"docs/dev-plans/241-assistant-knowledge-pack-runtime-minimal-implementation-plan.md"},
+			SourceRefs: []string{"docs/archive/dev-plans/241-assistant-knowledge-pack-runtime-minimal-implementation-plan.md"},
 		},
 	}
 
