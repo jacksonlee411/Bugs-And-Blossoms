@@ -5,33 +5,19 @@ import (
 	"net/http"
 	"sort"
 	"strings"
-	"time"
 
 	"github.com/jacksonlee411/Bugs-And-Blossoms/internal/routing"
 )
 
 const (
-	libreChatCompatAPIPrefix         = libreChatStaticPrefix + "/api"
-	libreChatFormalEntryAPIPrefix    = libreChatFormalEntryPrefix + "/api"
-	libreChatCompatRoleUser          = "USER"
-	libreChatCompatRoleAdmin         = "ADMIN"
-	libreChatCompatProvider          = "bugs-and-blossoms-sid"
-	libreChatCompatProjectID         = "bugs-and-blossoms"
-	libreChatCompatDefaultTimestamp  = "1970-01-01T00:00:00Z"
-	libreChatCompatDefaultAvatar     = ""
-	libreChatCompatDefaultHelpAndFAQ = ""
-	libreChatCompatRetiredCode       = "assistant_vendored_api_retired"
+	libreChatCompatAPIPrefix        = libreChatStaticPrefix + "/api"
+	libreChatFormalEntryAPIPrefix   = libreChatFormalEntryPrefix + "/api"
+	libreChatCompatRoleUser         = "USER"
+	libreChatCompatProvider         = "bugs-and-blossoms-sid"
+	libreChatCompatDefaultTimestamp = "1970-01-01T00:00:00Z"
+	libreChatCompatDefaultAvatar    = ""
+	libreChatCompatRetiredCode      = "assistant_vendored_api_retired"
 )
-
-type libreChatCompatAPIHandler struct {
-	assistantSvc *assistantConversationService
-	sessions     sessionStore
-}
-
-type libreChatCompatRefreshResponse struct {
-	Token string                  `json:"token"`
-	User  libreChatCompatUserView `json:"user"`
-}
 
 type libreChatCompatUserView struct {
 	ID               string                                  `json:"id"`
@@ -52,31 +38,6 @@ type libreChatCompatUserPersonalizationView struct {
 	Memories bool `json:"memories"`
 }
 
-type libreChatCompatRoleView struct {
-	Name        string                     `json:"name"`
-	Permissions map[string]map[string]bool `json:"permissions"`
-}
-
-func newLibreChatCompatAPIHandler(assistantSvc *assistantConversationService, sessions sessionStore) http.Handler {
-	return &libreChatCompatAPIHandler{assistantSvc: assistantSvc, sessions: sessions}
-}
-
-func (h *libreChatCompatAPIHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	suffix, ok := libreChatCompatAPISuffix(r.URL.Path)
-	if !ok {
-		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusNotFound, "not_found", "未找到兼容接口。")
-		return
-	}
-	if successorPath, retired := libreChatCompatRetiredSuccessorForSuffix(suffix); retired {
-		writeLibreChatCompatEndpointRetired(w, r, successorPath)
-		return
-	}
-	switch suffix {
-	default:
-		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusNotFound, "not_found", "未找到兼容接口。")
-	}
-}
-
 func writeLibreChatCompatEndpointRetired(w http.ResponseWriter, r *http.Request, successorPath string) {
 	message := "旧会话兼容接口已按设计退役，请改用正式 successor 端点。"
 	successorPath = strings.TrimSpace(successorPath)
@@ -86,61 +47,8 @@ func writeLibreChatCompatEndpointRetired(w http.ResponseWriter, r *http.Request,
 	routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusGone, libreChatCompatRetiredCode, message)
 }
 
-func (h *libreChatCompatAPIHandler) handleRefresh(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusMethodNotAllowed, "method_not_allowed", "当前请求方法不被允许。")
-		return
-	}
-	user, token, ok := libreChatCompatUserFromRequest(r)
-	if !ok {
-		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusUnauthorized, "assistant_vendored_principal_invalid", "正式入口认证主体缺失，请重新登录。")
-		return
-	}
-	writeJSON(w, http.StatusOK, libreChatCompatRefreshResponse{Token: token, User: user})
-}
-
-func (h *libreChatCompatAPIHandler) handleLogout(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusMethodNotAllowed, "method_not_allowed", "当前请求方法不被允许。")
-		return
-	}
-	if sid, ok := readSID(r); ok && h.sessions != nil {
-		_ = h.sessions.Revoke(r.Context(), sid)
-	}
-	clearSIDCookie(w)
-	w.WriteHeader(http.StatusNoContent)
-}
-
-func (h *libreChatCompatAPIHandler) handleUser(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusMethodNotAllowed, "method_not_allowed", "当前请求方法不被允许。")
-		return
-	}
-	user, _, ok := libreChatCompatUserFromRequest(r)
-	if !ok {
-		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusUnauthorized, "assistant_vendored_principal_invalid", "正式入口认证主体缺失，请重新登录。")
-		return
-	}
-	writeJSON(w, http.StatusOK, user)
-}
-
-func (h *libreChatCompatAPIHandler) handleRole(w http.ResponseWriter, r *http.Request, roleName string) {
-	if r.Method != http.MethodGet {
-		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusMethodNotAllowed, "method_not_allowed", "当前请求方法不被允许。")
-		return
-	}
-	if _, _, ok := libreChatCompatUserFromRequest(r); !ok {
-		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusUnauthorized, "assistant_vendored_principal_invalid", "正式入口认证主体缺失，请重新登录。")
-		return
-	}
-	writeJSON(w, http.StatusOK, libreChatCompatRoleView{
-		Name:        roleName,
-		Permissions: libreChatCompatPermissions(roleName),
-	})
-}
-
-func (h *libreChatCompatAPIHandler) compatProviders() ([]assistantModelProviderConfig, string, string) {
-	return assistantStartupProviders(h.assistantSvc)
+func writeLibreChatCompatEndpointRemoved(w http.ResponseWriter, r *http.Request) {
+	routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusNotFound, "not_found", "未找到兼容接口。")
 }
 
 func libreChatCompatUserFromRequest(r *http.Request) (libreChatCompatUserView, string, bool) {
@@ -208,61 +116,6 @@ func libreChatCompatDisplayName(principal Principal) string {
 
 func libreChatCompatRoleForPrincipal(_ Principal) string {
 	return libreChatCompatRoleUser
-}
-
-func libreChatCompatPermissions(roleName string) map[string]map[string]bool {
-	user := map[string]map[string]bool{
-		"PROMPTS": {
-			"SHARED_GLOBAL": false,
-			"USE":           true,
-			"CREATE":        true,
-		},
-		"BOOKMARKS": {
-			"USE": true,
-		},
-		"MEMORIES": {
-			"USE":     false,
-			"CREATE":  false,
-			"UPDATE":  false,
-			"READ":    false,
-			"OPT_OUT": false,
-		},
-		"AGENTS": {
-			"SHARED_GLOBAL": false,
-			"USE":           false,
-			"CREATE":        false,
-		},
-		"MULTI_CONVO": {
-			"USE": true,
-		},
-		"TEMPORARY_CHAT": {
-			"USE": false,
-		},
-		"RUN_CODE": {
-			"USE": false,
-		},
-		"WEB_SEARCH": {
-			"USE": false,
-		},
-		"PEOPLE_PICKER": {
-			"VIEW_USERS":  false,
-			"VIEW_GROUPS": false,
-			"VIEW_ROLES":  false,
-		},
-		"MARKETPLACE": {
-			"USE": false,
-		},
-		"FILE_SEARCH": {
-			"USE": false,
-		},
-		"FILE_CITATIONS": {
-			"USE": false,
-		},
-	}
-	if roleName == libreChatCompatRoleAdmin {
-		return user
-	}
-	return user
 }
 
 func libreChatCompatEndpoint(provider assistantModelProviderConfig) (string, string) {
@@ -387,5 +240,3 @@ func isLibreChatCompatAPIPath(path string) bool {
 	_, ok := libreChatCompatAPISuffix(path)
 	return ok
 }
-
-var _ = time.RFC3339

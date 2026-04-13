@@ -166,6 +166,9 @@ func TestLibreChatVendoredCompatAPIRetiredWithSIDSession(t *testing.T) {
 			libreChatCompatAPIPrefix + "/config",
 			libreChatCompatAPIPrefix + "/endpoints",
 			libreChatCompatAPIPrefix + "/models",
+			libreChatFormalEntryAPIPrefix + "/config",
+			libreChatFormalEntryAPIPrefix + "/endpoints",
+			libreChatFormalEntryAPIPrefix + "/models",
 		}
 		for _, path := range removedBootstrapRoutes {
 			req := httptest.NewRequest(http.MethodGet, path, nil)
@@ -180,98 +183,28 @@ func TestLibreChatVendoredCompatAPIRetiredWithSIDSession(t *testing.T) {
 	})
 }
 
-func TestLibreChatVendoredCompatAPIHandler_UnitCoverage(t *testing.T) {
-	t.Run("serve http not found", func(t *testing.T) {
-		h := newLibreChatCompatAPIHandler(nil, nil)
-		req := httptest.NewRequest(http.MethodGet, libreChatCompatAPIPrefix+"/unknown", nil)
+func TestLibreChatVendoredCompatAPIHelperCoverage(t *testing.T) {
+	t.Run("removed writer returns not found", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, libreChatCompatAPIPrefix+"/config", nil)
 		rec := httptest.NewRecorder()
-		h.ServeHTTP(rec, req)
-		if rec.Code != http.StatusNotFound {
-			t.Fatalf("status=%d", rec.Code)
-		}
-	})
-
-	t.Run("serve http rejects non compat path", func(t *testing.T) {
-		h := newLibreChatCompatAPIHandler(nil, nil)
-		req := httptest.NewRequest(http.MethodGet, "/totally-different", nil)
-		rec := httptest.NewRecorder()
-		h.ServeHTTP(rec, req)
+		writeLibreChatCompatEndpointRemoved(rec, req)
 		if rec.Code != http.StatusNotFound {
 			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
 		}
 	})
 
-	t.Run("retired session endpoints stay gone regardless of method", func(t *testing.T) {
-		h := newLibreChatCompatAPIHandler(nil, nil)
-		paths := []struct {
-			method string
-			path   string
-		}{
-			{method: http.MethodDelete, path: libreChatCompatAPIPrefix + "/auth/refresh"},
-			{method: http.MethodDelete, path: libreChatCompatAPIPrefix + "/user"},
-			{method: http.MethodDelete, path: libreChatCompatAPIPrefix + "/roles/user"},
-			{method: http.MethodGet, path: libreChatCompatAPIPrefix + "/auth/logout"},
-		}
-		for _, tc := range paths {
-			req := httptest.NewRequest(tc.method, tc.path, nil)
-			rec := httptest.NewRecorder()
-			h.ServeHTTP(rec, req)
-			if rec.Code != http.StatusGone {
-				t.Fatalf("path=%s status=%d", tc.path, rec.Code)
-			}
-		}
-	})
-
-	t.Run("retired endpoints return gone without context", func(t *testing.T) {
-		h := newLibreChatCompatAPIHandler(nil, nil)
-		paths := []struct {
-			method string
-			path   string
-		}{
-			{method: http.MethodPost, path: libreChatCompatAPIPrefix + "/auth/refresh"},
-			{method: http.MethodGet, path: libreChatCompatAPIPrefix + "/user"},
-			{method: http.MethodGet, path: libreChatCompatAPIPrefix + "/roles/user"},
-		}
-		for _, tc := range paths {
-			req := httptest.NewRequest(tc.method, tc.path, nil)
-			rec := httptest.NewRecorder()
-			h.ServeHTTP(rec, req)
-			if rec.Code != http.StatusGone {
-				t.Fatalf("path=%s status=%d", tc.path, rec.Code)
-			}
-		}
-	})
-
-	t.Run("removed bootstrap compat routes stay not found", func(t *testing.T) {
-		h := newLibreChatCompatAPIHandler(nil, nil)
-		paths := []string{
-			libreChatCompatAPIPrefix + "/config",
-			libreChatCompatAPIPrefix + "/endpoints",
-			libreChatCompatAPIPrefix + "/models",
-		}
-		for _, path := range paths {
-			req := httptest.NewRequest(http.MethodGet, path, nil)
-			rec := httptest.NewRecorder()
-			h.ServeHTTP(rec, req)
-			if rec.Code != http.StatusNotFound {
-				t.Fatalf("path=%s status=%d body=%s", path, rec.Code, rec.Body.String())
-			}
-		}
-	})
-
 	t.Run("compat providers and model error branches", func(t *testing.T) {
-		hMissing := &libreChatCompatAPIHandler{}
-		if providers, code, _ := hMissing.compatProviders(); len(providers) != 0 || code != "ai_runtime_config_missing" {
+		if providers, code, _ := assistantStartupProviders(nil); len(providers) != 0 || code != "ai_runtime_config_missing" {
 			t.Fatalf("providers=%v code=%q", providers, code)
 		}
 
-		hEmpty := &libreChatCompatAPIHandler{assistantSvc: &assistantConversationService{modelGateway: &assistantModelGateway{config: assistantModelConfig{}}}}
-		if providers, code, _ := hEmpty.compatProviders(); len(providers) != 0 || code != "assistant_startup_endpoints_unavailable" {
+		emptySvc := &assistantConversationService{modelGateway: &assistantModelGateway{config: assistantModelConfig{}}}
+		if providers, code, _ := assistantStartupProviders(emptySvc); len(providers) != 0 || code != "assistant_startup_endpoints_unavailable" {
 			t.Fatalf("providers=%v code=%q", providers, code)
 		}
 
-		hSorted := &libreChatCompatAPIHandler{assistantSvc: &assistantConversationService{modelGateway: &assistantModelGateway{config: assistantModelConfig{Providers: []assistantModelProviderConfig{{Name: "zeta", Enabled: true, Model: "m2", Priority: 20}, {Name: "alpha", Enabled: true, Model: "m1", Priority: 10}, {Name: "beta", Enabled: true, Model: "m3", Priority: 10}}}}}}
-		providers, code, message := hSorted.compatProviders()
+		sortedSvc := &assistantConversationService{modelGateway: &assistantModelGateway{config: assistantModelConfig{Providers: []assistantModelProviderConfig{{Name: "zeta", Enabled: true, Model: "m2", Priority: 20}, {Name: "alpha", Enabled: true, Model: "m1", Priority: 10}, {Name: "beta", Enabled: true, Model: "m3", Priority: 10}}}}}
+		providers, code, message := assistantStartupProviders(sortedSvc)
 		if code != "" || message != "" || len(providers) != 3 {
 			t.Fatalf("providers=%v code=%q message=%q", providers, code, message)
 		}
@@ -371,6 +304,12 @@ func TestLibreChatVendoredCompatAPIHandler_UnitCoverage(t *testing.T) {
 		}
 		if successor, ok := libreChatCompatRetiredSuccessorForSuffix("/roles/admin"); !ok || successor != "/internal/assistant/session" {
 			t.Fatalf("successor=%q ok=%v", successor, ok)
+		}
+		if successor, ok := libreChatCompatRetiredSuccessorForPath(libreChatFormalEntryAPIPrefix + "/auth/logout"); !ok || successor != "/internal/assistant/session/logout" {
+			t.Fatalf("successor=%q ok=%v", successor, ok)
+		}
+		if !isLibreChatCompatAPIPath(libreChatFormalEntryAPIPrefix + "/models") {
+			t.Fatal("expected formal alias removed path to be recognized as compat api")
 		}
 	})
 }

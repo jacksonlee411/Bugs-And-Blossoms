@@ -517,9 +517,6 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, error) {
 
 	entrypoint := http.NewServeMux()
 	libreChatWebUI := newLibreChatWebUIHandler(embeddedAssets)
-	libreChatCompatAPI := newLibreChatCompatAPIHandler(assistantSvc, sessions)
-	entrypoint.Handle(libreChatFormalEntryAPIPrefix+"/", libreChatCompatAPI)
-	entrypoint.Handle(libreChatCompatAPIPrefix+"/", libreChatCompatAPI)
 	entrypoint.Handle(libreChatFormalEntryPrefix, libreChatWebUI)
 	entrypoint.Handle(libreChatFormalEntryPrefix+"/", libreChatWebUI)
 	entrypoint.Handle(libreChatStaticPrefix+"/", http.StripPrefix(libreChatStaticPrefix+"/", http.FileServer(http.FS(libreChatAssetsSub))))
@@ -610,6 +607,10 @@ func withTenantAndSession(classifier *routing.Classifier, tenants TenancyResolve
 		}
 		if successorPath, retired := libreChatCompatRetiredSuccessorForPath(path); retired {
 			writeLibreChatCompatEndpointRetired(w, r, successorPath)
+			return
+		}
+		if isLibreChatCompatAPIPath(path) {
+			writeLibreChatCompatEndpointRemoved(w, r)
 			return
 		}
 

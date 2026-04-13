@@ -457,6 +457,28 @@ func TestWithTenantAndSession_LibreChatCompatRetiredEndpointsShortCircuitBeforeS
 	}
 }
 
+func TestWithTenantAndSession_LibreChatCompatRemovedEndpointsShortCircuitBeforeSessionLookup(t *testing.T) {
+	tnt := Tenant{ID: "t1", Domain: "localhost", Name: "Local"}
+	classifier := mustLibreChatCompatAPIClassifier(t)
+	sessions := &stubSessionStore{ok: true, sess: Session{TenantID: "t1", PrincipalID: "p1", ExpiresAt: time.Now().Add(time.Hour)}}
+	principals := &stubPrincipalStore{ok: true, p: Principal{ID: "p1", TenantID: "t1", Status: "active", RoleSlug: "tenant-admin"}}
+	h := withTenantAndSession(classifier, stubTenancyResolver{tenant: tnt, ok: true}, principals, sessions, http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
+		t.Fatal("unexpected next")
+	}))
+
+	req := httptest.NewRequest(http.MethodGet, libreChatFormalEntryAPIPrefix+"/models", nil)
+	req.Host = "localhost:8080"
+	req.AddCookie(&http.Cookie{Name: sidCookieName, Value: "sid1"})
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("status=%d body=%q", rec.Code, rec.Body.String())
+	}
+	if sessions.lookupSID != "" {
+		t.Fatalf("expected removed compat path to bypass session lookup, got lookupSID=%q", sessions.lookupSID)
+	}
+}
+
 func TestWithTenantAndSession_AssistantFormalSuccessorSessionInvalid_ReturnsSpecific401(t *testing.T) {
 	tnt := Tenant{ID: "t1", Domain: "localhost", Name: "Local"}
 	classifier := mustAssistantFormalSuccessorAPIClassifier(t)
