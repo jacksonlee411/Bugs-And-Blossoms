@@ -1,6 +1,6 @@
 # DEV-PLAN-375：Assistant 主线实施路线图（350-370）
 
-**状态**: 进行中（2026-04-13 07:23 CST；`375M1/375M2` 已完成并封账，`350B` 已完成，`360A Phase 2` 的 compat session API 硬切已完成并提交到 `bb5a8568`，`375M4` 仍待 cleanup PR 与 runtime fail-closed/error-code 收口，`375M3 / 370A` 可并行启动）
+**状态**: 进行中（2026-04-13 11:24 CST；`375M1/375M2` 已完成并封账，`350B` 已完成，`360A Phase 2` 的 compat session API 硬切已完成并提交到 `bb5a8568`，`375M4` 仍待 cleanup PR 与 runtime fail-closed/error-code 收口，`375M3 / 370A` 可并行启动）
 
 > 目标：为 `DEV-PLAN-350/360/360A/361/370` 提供单一编排入口，冻结当前状态、SSOT 边界、串并行顺序、批次拆分与出口条件。  
 > 本文只做路线图编排，不改写各主题文档的契约裁决权；实现细节与子系统合同仍以对应 dev-plan 为单一事实源。
@@ -13,11 +13,11 @@
    - `350A`：`add_version / insert_version`
    - `350B`：`correct / rename / move`
    - `350C`：`disable / enable`
-   - `370A`：Markdown compiler + `knowledge_qa / business_query`
-   - `370B`：`business_action` knowledge/runtime 消费收口
+   - `370A`：Markdown 单主源、compiler、全量 generated-clean、反回流门禁
+   - `370B`：runtime 一次性 hard cut 与旧知识入口删除
 4. [X] `375M1`：successor 执行面稳定（承接 `360 Phase 0/1` + `360A Phase 0/1`）。
 5. [X] `375M2`：`350A` 完成，收口 `add_version / insert_version`。
-6. [ ] `375M3`：`370A` 完成，收口 Markdown compiler + `knowledge_qa / business_query`。
+6. [ ] `375M3`：`370A` 完成，收口 single-source prep。
 7. [ ] `375M4`：compat session API 的 `410 Gone` 硬切已完成并提交到 `bb5a8568`，但仍待 cleanup PR 与 runtime fail-closed/error-code 收口后封账。
 8. [ ] `375M5`：`350C` 完成，并完成平台退役封板。
 9. [ ] `375M6`：`370B` 完成，进入总体验收与封板准备。
@@ -25,7 +25,7 @@
 ## 0.2 当前下一步
 
 1. [ ] 第一优先级：完成 `375M4` 剩余项，承接 `360 Phase 2 / 360A Phase 2` 的 runtime 主链硬切、fail-closed/error-code 收口与 compat cleanup PR。
-2. [ ] 可并行启动：推进 `375M3 / DEV-PLAN-370A`，落地 Markdown compiler 与 `knowledge_qa / business_query`，但继续只消费 `350` 已冻结 contract。
+2. [ ] 可并行启动：推进 `375M3 / DEV-PLAN-370A`，完成 Markdown 单主源、compiler、generated-clean 与反回流门禁准备。
 3. [ ] `375M4` 封账后，进入 `375M5 / DEV-PLAN-350C`，覆盖 `disable / enable` 并推进平台退役封板。
 
 ## 1. 背景与定位
@@ -33,8 +33,9 @@
 1. [X] `DEV-PLAN-350` 已明确 Assistant 的 `business_action` 必须收敛到统一策略主链，避免第二策略解释器。
 2. [X] `DEV-PLAN-360/360A` 已明确 LibreChat 只能保留 UI 壳，successor 主链必须回到本仓 `/internal/assistant/*` 与 authoritative backend。
 3. [X] `DEV-PLAN-361` 已完成唯一 PDP 的 OPA/Rego-backed evaluator 切换；其职责已封板，不再作为未来路线图泳道。
-4. [X] `DEV-PLAN-370` 已明确 Markdown-first knowledge runtime 的方向，但其 `business_action` 消费面必须继续依赖 `350` 冻结后的正式 contract。
-5. [X] 因此，`375` 的正式定位是：Assistant 主线的“编排母法”，负责回答“先做什么、哪些并行、每个阶段如何验收”，而不是重写 `350/360/360A/361/370` 的内部合同。
+4. [X] `DEV-PLAN-370` 已改为“Markdown 单主源 + compiler 单出口 + runtime 一次性 hard cut”的现行口径。
+5. [X] `docs/archive/dev-plans/240E/241/244/245` 等历史计划仅保留背景价值，不再参与 `375` 的现行裁决与批次设计。
+6. [X] 因此，`375` 的正式定位是：Assistant 主线的“编排母法”，负责回答“先做什么、哪些并行、每个阶段如何验收”，而不是重写 `350/360/360A/361/370` 的内部合同。
 
 ## 2. 当前状态快照（M0 基线）
 
@@ -44,7 +45,7 @@
 | `360` | 进行中（Phase 0/1 已完成） | LibreChat 剥离与 LangGraph/LangChain 分层接管母法 | `360A` 承接执行面 SSOT；Phase 2+ 待实施 |
 | `360A` | 进行中（Phase 0/1 已完成） | successor DTO / `runtime-status` / compat API 生死表 / 删除批次 SSOT | `ui-bootstrap/session`、formal smoke、UI 降权已完成；Phase 2 的 compat session API cutover 已完成，cleanup PR / runtime fail-closed 待实施 |
 | `361` | 已封板基线 | 唯一 PDP / OPA evaluator 已完成 | 仅保留缺陷修复语义 |
-| `370` | 进行中 | Markdown knowledge runtime / compiler / `knowledge_qa` / `business_query` 收敛母法 | `business_action` 仍依赖 `350` contract |
+| `370` | 进行中 | Markdown 单主源、compiler、hard cut 母法 | `370A` 为 single-source prep，`370B` 为 runtime hard cut |
 
 ## 3. SSOT 边界矩阵
 
@@ -54,15 +55,16 @@
 | `360` | 架构分层、stopline、UI 壳/Runtime/authoritative backend 角色边界 | 与 `360A` 保持“母法/执行面”关系 | 在 `360` 里重复 successor DTO 与 compat API 合同 |
 | `360A` | `/internal/assistant/ui-bootstrap`、`/internal/assistant/session*`、`runtime-status`、compat API 生死表与删除批次 | 作为 `375M1/M4/M5` 的执行面前置 | 临场发明 bootstrap/session/失败语义 |
 | `361` | 唯一 PDP 的 OPA/Rego-backed evaluator 与 parity 基线 | 只作为前置完成项写入路线图 | 再把 `PrecheckProjection` 或 consumer convergence 混回 `361` |
-| `370` | Markdown source、compiler、reply/wiki/intent 编排、`knowledge_qa` / `business_query` Runtime 消费 | 拆成 `370A/B`，并受 `350` contract 闸口约束 | 把 `actions/*.md` 升格为动作 API / Tool API 主源 |
+| `370` | Markdown 单主源、compiler、reply/wiki/intent/action 编排、runtime hard cut | 拆成 `370A/B`，并受 `350` contract 闸口约束 | 把 `actions/*.md` 升格为动作 API / Tool API 主源；保留 overlay/pass-through 作为长期方案 |
 
 ## 4. 路线图原则
 
 1. [X] `API-first`：所有实时业务事实、策略裁决、提交准入结果都必须先由正式 API / Tool API 暴露，再由 runtime 消费。
 2. [X] `Simple > Easy`：优先冻结边界、失败语义、出口条件与批次顺序，不在实现阶段临场决定。
 3. [X] `No Legacy`：不以长期 compat API、双运行时、双工具目录或双知识主源作为默认迁移策略。
-4. [X] `One Door / Fail-Closed`：任何缺 projection、缺 digest、缺 version、缺 successor runtime contract 的场景都必须显式拒绝，不得回退旧平台。
-5. [X] `单一权威表达`：`business_action` contract 只由 `350` 扩张，Markdown knowledge 主源只由 `370` 扩张，successor 执行面只由 `360A` 扩张。
+4. [X] `No Overlay`：不以 overlay、pass-through、partial ownership、mixed-source runtime 作为知识迁移方案。
+5. [X] `One Door / Fail-Closed`：任何缺 projection、缺 digest、缺 version、缺 successor runtime contract 的场景都必须显式拒绝，不得回退旧平台。
+6. [X] `单一权威表达`：`business_action` contract 只由 `350` 扩张，Markdown knowledge 主源只由 `370` 扩张，successor 执行面只由 `360A` 扩张。
 
 ## 5. 里程碑与关键路径
 
@@ -90,10 +92,10 @@
 3. [X] 统一 dry-run / confirm / commit / task submit / 写前解释到同一 projection contract。
 4. [X] 只读工具仍沿用既有 `orgunit_*` 四工具名，未新增写工具。
 
-### 375M3：知识运行时收口批次一
+### 375M3：知识运行时单主源准备
 
-1. [ ] 启动 `370A`，仅覆盖 Markdown source、compiler、`assistant_knowledge_md`、编译产物、`knowledge_qa / business_query`。
-2. [ ] 建立 `assistant-knowledge-md`、`assistant-knowledge-generated-clean`、`assistant-no-knowledge-db` 等门禁。
+1. [ ] 启动 `370A`，覆盖 Markdown 单主源、`assistant_knowledge_md`、compiler、完整运行时产物、generated-clean 与反回流门禁。
+2. [ ] 明确 `370A` 不做 query-only partial cutover，也不保留 action/query ownership 分裂。
 3. [ ] 明确 `370A` 不承接 `business_action` contract，不改 `assistantActionSpec`、Tool registry、`PolicyContextContractVersion`、`PrecheckProjectionContractVersion`。
 
 ### 375M4：业务动作收口批次二 + compat API 硬切
@@ -111,11 +113,11 @@
 2. [ ] 同步承接 `360 Phase 3/4` 与 `360A Phase 3/4`，完成依赖去平台化、`retired_by_design` 语义、`/assistant-ui/*` 退场与 `220-293` 系列归档收口。
 3. [ ] 本里程碑完成后，`350` 的八动作 contract 全部冻结，`360/360A` 达到封板条件。
 
-### 375M6：动作知识消费收口与总体验收
+### 375M6：Runtime Knowledge Hard Cut 与总体验收
 
-1. [ ] 启动 `370B`，且必须以 `350A/B/C` 全部完成为前置。
-2. [ ] 将 `business_action` 的 action/reply/tool 知识消费接到 Markdown 编译产物，但继续以 `350` 为正式 contract 母法。
-3. [ ] 允许推进 `assistant_action_registry.go` 的“编译产物驱动消费”收口，但禁止把 `actions/*.md` 升格为动作 API / Tool API 契约主源。
+1. [ ] 启动 `370B`，且必须以 `350A/B/C` 全部完成与 `370A` 完成为前置。
+2. [ ] 将 runtime 全面切到 compiler 产物单消费面，并删除 overlay、pass-through、mixed-source runtime。
+3. [ ] 完成 `assistant_action_registry.go` 的 contract / knowledge 拆离，并清理 `assistant_api.go`、`assistant_reply_nlg.go` 中的业务知识型文本。
 4. [ ] 里程碑出口：`350 / 360 / 360A / 370` 全部状态可更新为完成或仅剩独立缺陷修复，`375` 进入封板准备。
 
 ## 6. 并行泳道与子计划
@@ -124,8 +126,8 @@
 2. [X] `350B`：`correct / rename / move`，作为 `375M4` 的实施 SSOT。
 3. [X] `350C`：`disable / enable`，作为 `375M5` 的实施 SSOT。
 4. [X] `360A`：继续作为 `360` 的执行面 SSOT，覆盖 successor DTO、compat API、生死表、删除批次与运行态语义。
-5. [X] `370A`：Markdown compiler + `knowledge_qa / business_query`，作为 `375M3` 的实施 SSOT。
-6. [X] `370B`：`business_action` knowledge/runtime 消费收口，作为 `375M6` 的实施 SSOT。
+5. [X] `370A`：Markdown 单主源、compiler、generated-clean、反回流门禁，作为 `375M3` 的实施 SSOT。
+6. [X] `370B`：runtime hard cut、旧知识入口删除、contract / knowledge 强分离，作为 `375M6` 的实施 SSOT。
 7. [X] 并行约束：
    - `375M2` 与 `375M3` 可并行；
    - `375M4` 必须等待 `375M2` 完成；
@@ -158,8 +160,9 @@
    `make check doc`
 3. [ ] `350C`：沿用同一命令口径，待后续批次完成。
 4. [ ] `360/360A`：compat session API `410 Gone` 断言与前端 retired error tests 已完成；正式入口 smoke、runtime fail-closed/error-code 收口，以及 `/assistant-ui/*` 的 `302 -> 410 -> 删除` 断言待继续。
-5. [ ] `370A/B`：补 compiler/front matter/generate-clean 测试、`knowledge_qa / business_query` 分流回归、`business_action` 只消费已冻结 contract 的回归。
-6. [X] `350A/350B` 实际执行记录已进入对应子计划与 `docs/dev-records/`，`375` 只维护路线图级进度与引用。
+5. [ ] `370A`：补 compiler/front matter/generated-clean/反回流门禁测试，并证明所有知识资产已由 Markdown 单主源稳定生成。
+6. [ ] `370B`：补 runtime 单消费面、旧知识入口删除、contract / knowledge 强分离、fail-closed 回归。
+7. [X] `350A/350B` 实际执行记录已进入对应子计划与 `docs/dev-records/`，`375` 只维护路线图级进度与引用。
 
 ## 8. 依赖草图（Mermaid）
 
@@ -167,9 +170,9 @@
 flowchart TD
   M0[375M0 基线冻结] --> M1[375M1 successor 执行面稳定]
   M1 --> M2[375M2 350A: add/insert]
-  M1 --> M3[375M3 370A: compiler + query]
+  M1 --> M3[375M3 370A: single-source prep]
   M2 --> M4[375M4 350B + compat API 硬切]
-  M3 --> M6[375M6 370B: business_action knowledge consumption]
+  M3 --> M6[375M6 370B: runtime hard cut]
   M4 --> M5[375M5 350C + 平台退役封板]
   M5 --> M6
 ```
