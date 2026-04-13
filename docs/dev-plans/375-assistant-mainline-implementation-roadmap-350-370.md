@@ -1,6 +1,6 @@
 # DEV-PLAN-375：Assistant 主线实施路线图（350-370）
 
-**状态**: 进行中（2026-04-13 12:26 CST；`375M1/375M2` 已完成并封账，`350B` 已完成，`360A Phase 2` 的 compat session API 硬切已完成并提交到 `bb5a8568`，`375M4` 仍待 cleanup PR 与 runtime fail-closed/error-code 收口，`375M3 / 370A` 可并行启动）
+**状态**: 进行中（2026-04-13 10:48 CST；`375M1/375M2/375M4` 已完成并封账，`350B` 已完成，`360A Phase 2` 的 compat session API cleanup PR 与 runtime fail-closed/error-code 收口已完成，`375M3 / 370A` 与后续 `375M5 / 350C` 可继续推进）
 
 > 目标：为 `DEV-PLAN-350/360/360A/361/370` 提供单一编排入口，冻结当前状态、SSOT 边界、串并行顺序、批次拆分与出口条件。  
 > 本文只做路线图编排，不改写各主题文档的契约裁决权；实现细节与子系统合同仍以对应 dev-plan 为单一事实源。
@@ -18,15 +18,15 @@
 4. [X] `375M1`：successor 执行面稳定（承接 `360 Phase 0/1` + `360A Phase 0/1`）。
 5. [X] `375M2`：`350A` 完成，收口 `add_version / insert_version`。
 6. [ ] `375M3`：`370A` 完成，收口 direct Markdown runtime foundation。
-7. [ ] `375M4`：compat session API 的 `410 Gone` 硬切已完成并提交到 `bb5a8568`，但仍待 cleanup PR 与 runtime fail-closed/error-code 收口后封账。
+7. [X] `375M4`：compat session API 的 `410 Gone` 硬切、cleanup PR 与 runtime fail-closed/error-code 收口均已完成并封账。
 8. [ ] `375M5`：`350C` 完成，并完成平台退役封板。
 9. [ ] `375M6`：`370B` 完成，进入总体验收与封板准备。
 
 ## 0.2 当前下一步
 
-1. [ ] 第一优先级：完成 `375M4` 剩余项，承接 `360 Phase 2 / 360A Phase 2` 的 runtime 主链硬切、fail-closed/error-code 收口与 compat cleanup PR。
-2. [ ] 可并行启动：推进 `375M3 / DEV-PLAN-370A`，完成 Direct Markdown Runtime 基座、Markdown 单主源与 `assistant_knowledge/*.json` 切断。
-3. [ ] `375M4` 封账后，进入 `375M5 / DEV-PLAN-350C`，覆盖 `disable / enable` 并推进平台退役封板。
+1. [ ] 第一优先级：进入 `375M5 / DEV-PLAN-350C`，覆盖 `disable / enable` 并推进平台退役封板。
+2. [ ] 可并行启动：继续推进 `375M3 / DEV-PLAN-370A`，完成 Direct Markdown Runtime 基座、Markdown 单主源与 `assistant_knowledge/*.json` 切断。
+3. [ ] `375M5` 封账后，进入 `375M6 / DEV-PLAN-370B`，推进动作知识散点 hard cut 与总体验收准备。
 
 ## 1. 背景与定位
 
@@ -104,8 +104,8 @@
 
 1. [X] 启动 `350B`，覆盖 `correct / rename / move`。
 2. [X] 同步承接 `360A Phase 2` 的 compat session API 硬切：`/app/assistant/librechat/api/*` 与 `/assets/librechat-web/api/*` 下旧会话端点统一返回 `410 Gone`。
-3. [ ] 继续完成 `360 Phase 2 / 360A Phase 2` 的 runtime 主链 fail-closed/error-code 收口与 compat cleanup PR。
-4. [ ] 本里程碑完成后，正式运行链只保留 `/internal/assistant/*` 所需的最小 successor 面。
+3. [X] 继续完成 `360 Phase 2 / 360A Phase 2` 的 runtime 主链 fail-closed/error-code 收口与 compat cleanup PR。
+4. [X] 本里程碑完成后，正式运行链只保留 `/internal/assistant/*` 所需的最小 successor 面。
 5. [X] `350B` 实施证据已沉淀到 `docs/dev-records/dev-plan-350b-execution-log.md`。
 6. [X] `360A` 本轮 compat session API cutover 证据已沉淀到 `docs/dev-records/dev-plan-360a-execution-log.md`，并已随实现提交 `bb5a8568` 固化。
 
@@ -161,7 +161,7 @@
    `make test`（coverage `98.00% >= 98.00%`）  
    `make check doc`
 3. [ ] `350C`：沿用同一命令口径，待后续批次完成。
-4. [ ] `360/360A`：compat session API `410 Gone` 断言与前端 retired error tests 已完成；正式入口 smoke、runtime fail-closed/error-code 收口，以及 `/assistant-ui/*` 的 `302 -> 410 -> 删除` 断言待继续。
+4. [X] `360/360A`：compat session API `410 Gone` 断言、cleanup PR、正式入口 runtime fail-closed/error-code 收口均已完成；`/assistant-ui/*` 的 `302 -> 410 -> 删除` 断言仍待后续批次继续。
 5. [ ] `370A`：补 Markdown loader/front matter/runtime-load/no-json-runtime/反回流门禁测试，并证明 `assistant_knowledge/*.json` 已被切断。
 6. [ ] `370A`：补 semantic prompt route/action parity 回归。
 7. [ ] `370B`：补动作知识散点清理、contract / knowledge 强分离、fail-closed 回归。

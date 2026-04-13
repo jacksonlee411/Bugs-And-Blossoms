@@ -93,7 +93,7 @@ func assistantCheckCapabilityRegistered(action assistantActionSpec) assistantAct
 func assistantCheckActionAuthz(input assistantActionGateInput) assistantActionGateDecision {
 	authorizer, err := assistantLoadAuthorizerFn()
 	if err != nil {
-		return assistantActionGateDecision{Allowed: false, Error: errAssistantServiceMissing, ErrorCode: errAssistantServiceMissing.Error(), HTTPStatus: http.StatusInternalServerError, ReasonCode: "action_authz_unavailable"}
+		return assistantActionGateDecision{Allowed: false, Error: errAssistantGateUnavailable, ErrorCode: errAssistantGateUnavailable.Error(), HTTPStatus: http.StatusServiceUnavailable, ReasonCode: "action_authz_unavailable"}
 	}
 	subject := authz.SubjectFromRoleSlug(input.Principal.RoleSlug)
 	domain := authz.DomainFromTenantID(input.TenantID)
@@ -101,7 +101,7 @@ func assistantCheckActionAuthz(input assistantActionGateInput) assistantActionGa
 	action := strings.TrimSpace(input.Action.Security.AuthAction)
 	allowed, enforced, err := authorizer.Authorize(subject, domain, object, action)
 	if err != nil {
-		return assistantActionGateDecision{Allowed: false, Error: errAssistantServiceMissing, ErrorCode: errAssistantServiceMissing.Error(), HTTPStatus: http.StatusInternalServerError, ReasonCode: "action_authz_error"}
+		return assistantActionGateDecision{Allowed: false, Error: errAssistantGateUnavailable, ErrorCode: errAssistantGateUnavailable.Error(), HTTPStatus: http.StatusServiceUnavailable, ReasonCode: "action_authz_error"}
 	}
 	if enforced && !allowed {
 		return assistantActionGateDecision{Allowed: false, Error: errAssistantActionAuthzDenied, ErrorCode: errAssistantActionAuthzDenied.Error(), HTTPStatus: http.StatusForbidden, ReasonCode: "action_authz_denied"}

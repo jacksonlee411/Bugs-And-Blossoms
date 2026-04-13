@@ -5,18 +5,13 @@ import (
 	"net/http"
 	"sort"
 	"strings"
-
-	"github.com/jacksonlee411/Bugs-And-Blossoms/internal/routing"
 )
 
 const (
-	libreChatCompatAPIPrefix        = libreChatStaticPrefix + "/api"
-	libreChatFormalEntryAPIPrefix   = libreChatFormalEntryPrefix + "/api"
 	libreChatCompatRoleUser         = "USER"
 	libreChatCompatProvider         = "bugs-and-blossoms-sid"
 	libreChatCompatDefaultTimestamp = "1970-01-01T00:00:00Z"
 	libreChatCompatDefaultAvatar    = ""
-	libreChatCompatRetiredCode      = "assistant_vendored_api_retired"
 )
 
 type libreChatCompatUserView struct {
@@ -36,19 +31,6 @@ type libreChatCompatUserView struct {
 
 type libreChatCompatUserPersonalizationView struct {
 	Memories bool `json:"memories"`
-}
-
-func writeLibreChatCompatEndpointRetired(w http.ResponseWriter, r *http.Request, successorPath string) {
-	message := "旧会话兼容接口已按设计退役，请改用正式 successor 端点。"
-	successorPath = strings.TrimSpace(successorPath)
-	if successorPath != "" {
-		message = "旧会话兼容接口已按设计退役，请改用 " + successorPath + "。"
-	}
-	routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusGone, libreChatCompatRetiredCode, message)
-}
-
-func writeLibreChatCompatEndpointRemoved(w http.ResponseWriter, r *http.Request) {
-	routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusNotFound, "not_found", "未找到兼容接口。")
 }
 
 func libreChatCompatUserFromRequest(r *http.Request) (libreChatCompatUserView, string, bool) {
@@ -201,42 +183,4 @@ func assistantStartupProviders(assistantSvc *assistantConversationService) ([]as
 		return nil, "assistant_startup_endpoints_unavailable", "正式入口缺少可用 endpoint 配置，请检查 Assistant 运行时模型配置。"
 	}
 	return providers, "", ""
-}
-
-func libreChatCompatAPISuffix(path string) (string, bool) {
-	for _, prefix := range []string{libreChatCompatAPIPrefix, libreChatFormalEntryAPIPrefix} {
-		if path == prefix {
-			return "", true
-		}
-		if strings.HasPrefix(path, prefix+"/") {
-			return strings.TrimPrefix(path, prefix), true
-		}
-	}
-	return "", false
-}
-
-func libreChatCompatRetiredSuccessorForPath(path string) (string, bool) {
-	suffix, ok := libreChatCompatAPISuffix(path)
-	if !ok {
-		return "", false
-	}
-	return libreChatCompatRetiredSuccessorForSuffix(suffix)
-}
-
-func libreChatCompatRetiredSuccessorForSuffix(suffix string) (string, bool) {
-	switch strings.TrimSpace(suffix) {
-	case "/auth/refresh":
-		return "/internal/assistant/session/refresh", true
-	case "/auth/logout":
-		return "/internal/assistant/session/logout", true
-	case "/user", "/roles/user", "/roles/admin":
-		return "/internal/assistant/session", true
-	default:
-		return "", false
-	}
-}
-
-func isLibreChatCompatAPIPath(path string) bool {
-	_, ok := libreChatCompatAPISuffix(path)
-	return ok
 }

@@ -87,26 +87,6 @@ func mustInternalAPIClassifier(t *testing.T) *routing.Classifier {
 	return c
 }
 
-func mustLibreChatCompatAPIClassifier(t *testing.T) *routing.Classifier {
-	t.Helper()
-
-	c, err := routing.NewClassifier(routing.Allowlist{
-		Version: 1,
-		Entrypoints: map[string]routing.Entrypoint{
-			"server": {
-				Routes: []routing.Route{
-					{Path: libreChatCompatAPIPrefix + "/user", Methods: []string{"GET"}, RouteClass: "internal_api"},
-					{Path: libreChatFormalEntryAPIPrefix + "/user", Methods: []string{"GET"}, RouteClass: "internal_api"},
-				},
-			},
-		},
-	}, "server")
-	if err != nil {
-		t.Fatal(err)
-	}
-	return c
-}
-
 func mustAssistantFormalSuccessorAPIClassifier(t *testing.T) *routing.Classifier {
 	t.Helper()
 
@@ -429,53 +409,6 @@ func TestWithTenantAndSession_SessionMissingInternalAPI_Returns401(t *testing.T)
 	h.ServeHTTP(rec, req)
 	if rec.Code != http.StatusUnauthorized {
 		t.Fatalf("status=%d body=%q", rec.Code, rec.Body.String())
-	}
-}
-
-func TestWithTenantAndSession_LibreChatCompatRetiredEndpointsShortCircuitBeforeSessionLookup(t *testing.T) {
-	tnt := Tenant{ID: "t1", Domain: "localhost", Name: "Local"}
-	classifier := mustLibreChatCompatAPIClassifier(t)
-	sessions := &stubSessionStore{ok: true, sess: Session{TenantID: "t2", PrincipalID: "p1", ExpiresAt: time.Now().Add(time.Hour)}}
-	principals := &stubPrincipalStore{ok: true, p: Principal{ID: "p1", TenantID: "t1", Status: "disabled", RoleSlug: "tenant-admin"}}
-	h := withTenantAndSession(classifier, stubTenancyResolver{tenant: tnt, ok: true}, principals, sessions, http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
-		t.Fatal("unexpected next")
-	}))
-
-	req := httptest.NewRequest(http.MethodGet, libreChatCompatAPIPrefix+"/user", nil)
-	req.Host = "localhost:8080"
-	req.AddCookie(&http.Cookie{Name: sidCookieName, Value: "sid1"})
-	rec := httptest.NewRecorder()
-	h.ServeHTTP(rec, req)
-	if rec.Code != http.StatusGone {
-		t.Fatalf("status=%d body=%q", rec.Code, rec.Body.String())
-	}
-	if !strings.Contains(rec.Body.String(), libreChatCompatRetiredCode) {
-		t.Fatalf("body=%q", rec.Body.String())
-	}
-	if sessions.lookupSID != "" {
-		t.Fatalf("expected retired compat path to bypass session lookup, got lookupSID=%q", sessions.lookupSID)
-	}
-}
-
-func TestWithTenantAndSession_LibreChatCompatRemovedEndpointsShortCircuitBeforeSessionLookup(t *testing.T) {
-	tnt := Tenant{ID: "t1", Domain: "localhost", Name: "Local"}
-	classifier := mustLibreChatCompatAPIClassifier(t)
-	sessions := &stubSessionStore{ok: true, sess: Session{TenantID: "t1", PrincipalID: "p1", ExpiresAt: time.Now().Add(time.Hour)}}
-	principals := &stubPrincipalStore{ok: true, p: Principal{ID: "p1", TenantID: "t1", Status: "active", RoleSlug: "tenant-admin"}}
-	h := withTenantAndSession(classifier, stubTenancyResolver{tenant: tnt, ok: true}, principals, sessions, http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
-		t.Fatal("unexpected next")
-	}))
-
-	req := httptest.NewRequest(http.MethodGet, libreChatFormalEntryAPIPrefix+"/models", nil)
-	req.Host = "localhost:8080"
-	req.AddCookie(&http.Cookie{Name: sidCookieName, Value: "sid1"})
-	rec := httptest.NewRecorder()
-	h.ServeHTTP(rec, req)
-	if rec.Code != http.StatusNotFound {
-		t.Fatalf("status=%d body=%q", rec.Code, rec.Body.String())
-	}
-	if sessions.lookupSID != "" {
-		t.Fatalf("expected removed compat path to bypass session lookup, got lookupSID=%q", sessions.lookupSID)
 	}
 }
 

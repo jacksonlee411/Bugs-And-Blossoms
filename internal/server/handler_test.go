@@ -1449,7 +1449,7 @@ func TestNewHandlerWithOptions_AssistantRoutes_AreWired(t *testing.T) {
 	if rec := call(http.MethodGet, "/app/assistant/librechat/api/models", ""); rec.Code != http.StatusNotFound {
 		t.Fatalf("removed librechat formal alias models compat route status=%d body=%s", rec.Code, rec.Body.String())
 	}
-	retiredCompatRoutes := []struct {
+	removedCompatRoutes := []struct {
 		method string
 		path   string
 	}{
@@ -1461,9 +1461,9 @@ func TestNewHandlerWithOptions_AssistantRoutes_AreWired(t *testing.T) {
 		{method: http.MethodPost, path: "/app/assistant/librechat/api/auth/refresh"},
 		{method: http.MethodGet, path: "/app/assistant/librechat/api/user"},
 	}
-	for _, tc := range retiredCompatRoutes {
-		if rec := call(tc.method, tc.path, ""); rec.Code != http.StatusGone || assistantDecodeErrCode(t, rec) != libreChatCompatRetiredCode {
-			t.Fatalf("retired compat route %s %s status=%d code=%s body=%s", tc.method, tc.path, rec.Code, assistantDecodeErrCode(t, rec), rec.Body.String())
+	for _, tc := range removedCompatRoutes {
+		if rec := call(tc.method, tc.path, ""); rec.Code != http.StatusNotFound {
+			t.Fatalf("removed compat route %s %s status=%d body=%s", tc.method, tc.path, rec.Code, rec.Body.String())
 		}
 	}
 }

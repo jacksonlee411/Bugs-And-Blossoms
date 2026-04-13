@@ -454,7 +454,7 @@ func handleAssistantConversationTurnsAPI(w http.ResponseWriter, r *http.Request,
 		return
 	}
 	if svc == nil {
-		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusInternalServerError, "assistant_service_missing", "assistant service missing")
+		assistantWriteGateUnavailable(w, r)
 		return
 	}
 	tenant, ok := currentTenant(r.Context())
@@ -502,6 +502,8 @@ func handleAssistantConversationTurnsAPI(w http.ResponseWriter, r *http.Request,
 			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusUnprocessableEntity, "ai_plan_boundary_violation", "ai plan boundary violation")
 		case assistantIsRuntimeUnavailableError(err):
 			assistantWriteRuntimeUnavailable(w, r)
+		case assistantIsGateUnavailableError(err):
+			assistantWriteGateUnavailable(w, r)
 		case errors.Is(err, errAssistantRouteRuntimeInvalid):
 			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusUnprocessableEntity, errAssistantRouteRuntimeInvalid.Error(), "assistant route runtime invalid")
 		case errors.Is(err, errAssistantRouteCatalogMissing):
@@ -534,7 +536,7 @@ func handleAssistantTurnActionAPI(w http.ResponseWriter, r *http.Request, svc *a
 		return
 	}
 	if svc == nil {
-		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusInternalServerError, "assistant_service_missing", "assistant service missing")
+		assistantWriteGateUnavailable(w, r)
 		return
 	}
 	tenant, ok := currentTenant(r.Context())
@@ -695,6 +697,8 @@ func handleAssistantTurnActionAPI(w http.ResponseWriter, r *http.Request, svc *a
 				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusForbidden, "forbidden", "forbidden")
 			case errors.Is(err, errAssistantTurnNotFound):
 				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusNotFound, "conversation_turn_not_found", "conversation turn not found")
+			case assistantIsGateUnavailableError(err):
+				assistantWriteGateUnavailable(w, r)
 			default:
 				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusInternalServerError, "assistant_reply_render_failed", "assistant reply render failed")
 			}

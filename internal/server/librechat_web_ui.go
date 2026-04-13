@@ -17,6 +17,10 @@ const (
 
 func newLibreChatWebUIHandler(assets fs.FS) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if pathHasPrefixSegment(r.URL.Path, libreChatFormalEntryPrefix+"/api") {
+			routing.WriteError(w, r, routing.RouteClassUI, http.StatusNotFound, "not_found", "not found")
+			return
+		}
 		if r.Method != http.MethodGet && r.Method != http.MethodHead {
 			routing.WriteError(w, r, routing.RouteClassUI, http.StatusMethodNotAllowed, "method_not_allowed", "method not allowed")
 			return

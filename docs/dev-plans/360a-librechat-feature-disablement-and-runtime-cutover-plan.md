@@ -1,6 +1,6 @@
 # DEV-PLAN-360A：LibreChat 功能禁用清单与 Runtime 主链硬切实施计划
 
-**状态**: 进行中（2026-04-13 07:23 CST；Phase 0/1 已完成，Phase 2 的 compat session API 硬切已完成并提交到 `bb5a8568`，cleanup PR 与 runtime fail-closed/error-code 收口待继续）
+**状态**: 进行中（2026-04-13 10:48 CST；Phase 0/1 已完成，Phase 2 的 compat session API 硬切、cleanup PR 与 runtime fail-closed/error-code 收口均已完成，Phase 3/4 仍待后续批次继续）
 
 ## 1. 背景
 
@@ -519,12 +519,12 @@ Vendored LibreChat UI
 ### Phase 2：旧 API 切断与 runtime 主链硬切
 
 1. [X] 按生死表切断 `/app/assistant/librechat/api/*` 与 `/assets/librechat-web/api/*` 中的旧会话端点，不再做开放式审计后再决定。
-2. [ ] 将正式业务链只保留到 `/internal/assistant/*` 所需的最小 successor 适配面，不再保留长期 compat API。
+2. [X] 将正式业务链只保留到 `/internal/assistant/*` 所需的最小 successor 适配面，不再保留长期 compat API。
 3. [X] 会话相关旧端点在 cutover PR 中已先返回 `410 Gone`，并统一返回错误码 `assistant_vendored_api_retired`。
-4. [ ] cleanup PR 删除 compat handler 分支与路由绑定。
+4. [X] cleanup PR 删除 compat handler 分支与路由绑定。
 5. [X] retired compat path 的短路已前移到 `withTenantAndSession`，确保缺 SID、tenant mismatch、principal invalid 不再暴露 vendored `401` 语义。
 6. [X] 本批次明确不提前处理 `/assistant-ui/*`；该别名仍按 `Phase 4` 保持 `302 -> /app/assistant/librechat`。
-7. [ ] runtime fail-closed 错误码与任务终止语义（如 `assistant_runtime_unavailable / assistant_gate_unavailable`）留到后续 `Phase 2` 收口批次。
+7. [X] runtime fail-closed 错误码与任务终止语义（如 `assistant_runtime_unavailable / assistant_gate_unavailable`）已在 `Phase 2` 收口批次完成。
 8. [X] 当前 compat session API cutover 的实现与文档证据已回写并提交到 `bb5a8568`，执行记录见 `docs/dev-records/dev-plan-360a-execution-log.md`。
 
 ### Phase 3：依赖去平台化
@@ -561,7 +561,7 @@ Vendored LibreChat UI
 8. [X] compat API 生死表中的所有端点都已进入 successor 或删除态，不存在“待审计、待决定”的灰区端点。
 9. [ ] 若进入 `Phase 4` 收口批次，`/assistant-ui/*` 已按计划返回 `410 Gone` 或完成路由删除，不再作为历史别名长期存活。
 10. [X] `/internal/assistant/ui-bootstrap` 与 `/internal/assistant/session*` 已按冻结契约返回最小 DTO、错误码与鉴权行为，不存在实现者自定义字段漂移。
-11. [ ] successor runtime 不可用时，系统只表现为显式拒绝/只读浏览/任务失败终止，不出现旧平台回退、隐式降级或 bootstrap 旁路。
+11. [X] successor runtime 不可用时，系统只表现为显式拒绝/只读浏览/任务失败终止，不出现旧平台回退、隐式降级或 bootstrap 旁路。
 
 ### 10.2 需要更新的现有测试
 

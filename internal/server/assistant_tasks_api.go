@@ -15,7 +15,7 @@ func handleAssistantTasksAPI(w http.ResponseWriter, r *http.Request, svc *assist
 		return
 	}
 	if svc == nil {
-		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusInternalServerError, "assistant_service_missing", "assistant service missing")
+		assistantWriteGateUnavailable(w, r)
 		return
 	}
 	tenant, ok := currentTenant(r.Context())
@@ -53,7 +53,7 @@ func handleAssistantTaskDetailAPI(w http.ResponseWriter, r *http.Request, svc *a
 		return
 	}
 	if svc == nil {
-		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusInternalServerError, "assistant_service_missing", "assistant service missing")
+		assistantWriteGateUnavailable(w, r)
 		return
 	}
 	tenant, ok := currentTenant(r.Context())
@@ -88,7 +88,7 @@ func handleAssistantTaskActionAPI(w http.ResponseWriter, r *http.Request, svc *a
 		return
 	}
 	if svc == nil {
-		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusInternalServerError, "assistant_service_missing", "assistant service missing")
+		assistantWriteGateUnavailable(w, r)
 		return
 	}
 	tenant, ok := currentTenant(r.Context())

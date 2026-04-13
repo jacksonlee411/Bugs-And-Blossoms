@@ -605,15 +605,6 @@ func withTenantAndSession(classifier *routing.Classifier, tenants TenancyResolve
 			next.ServeHTTP(w, r)
 			return
 		}
-		if successorPath, retired := libreChatCompatRetiredSuccessorForPath(path); retired {
-			writeLibreChatCompatEndpointRetired(w, r, successorPath)
-			return
-		}
-		if isLibreChatCompatAPIPath(path) {
-			writeLibreChatCompatEndpointRemoved(w, r)
-			return
-		}
-
 		if path == "/app/login" || (path == "/iam/api/sessions" && r.Method == http.MethodPost) {
 			next.ServeHTTP(w, r)
 			return
@@ -623,10 +614,6 @@ func withTenantAndSession(classifier *routing.Classifier, tenants TenancyResolve
 		if !ok {
 			if isAssistantFormalSuccessorAPIPath(path) {
 				assistantWriteSessionInvalid(w, r)
-				return
-			}
-			if isLibreChatCompatAPIPath(path) {
-				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusUnauthorized, "assistant_vendored_sid_missing", "登录会话缺失，请先从正式登录入口登录。")
 				return
 			}
 			if rc == routing.RouteClassInternalAPI || rc == routing.RouteClassPublicAPI || rc == routing.RouteClassWebhook {
@@ -648,10 +635,6 @@ func withTenantAndSession(classifier *routing.Classifier, tenants TenancyResolve
 				assistantWriteSessionInvalid(w, r)
 				return
 			}
-			if isLibreChatCompatAPIPath(path) {
-				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusUnauthorized, "assistant_vendored_session_invalid", "登录会话已失效，请重新登录。")
-				return
-			}
 			if rc == routing.RouteClassInternalAPI || rc == routing.RouteClassPublicAPI || rc == routing.RouteClassWebhook {
 				routing.WriteError(w, r, rc, http.StatusUnauthorized, "unauthorized", "unauthorized")
 				return
@@ -663,10 +646,6 @@ func withTenantAndSession(classifier *routing.Classifier, tenants TenancyResolve
 			clearSIDCookie(w)
 			if isAssistantFormalSuccessorAPIPath(path) {
 				assistantWritePrincipalInvalid(w, r)
-				return
-			}
-			if isLibreChatCompatAPIPath(path) {
-				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusUnauthorized, "assistant_vendored_tenant_mismatch", "当前登录会话与租户不匹配，请重新登录。")
 				return
 			}
 			if rc == routing.RouteClassInternalAPI || rc == routing.RouteClassPublicAPI || rc == routing.RouteClassWebhook {
@@ -686,10 +665,6 @@ func withTenantAndSession(classifier *routing.Classifier, tenants TenancyResolve
 			clearSIDCookie(w)
 			if isAssistantFormalSuccessorAPIPath(path) {
 				assistantWritePrincipalInvalid(w, r)
-				return
-			}
-			if isLibreChatCompatAPIPath(path) {
-				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusUnauthorized, "assistant_vendored_principal_invalid", "登录主体已失效，请重新登录。")
 				return
 			}
 			if rc == routing.RouteClassInternalAPI || rc == routing.RouteClassPublicAPI || rc == routing.RouteClassWebhook {
