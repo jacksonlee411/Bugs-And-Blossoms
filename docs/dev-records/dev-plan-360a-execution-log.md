@@ -1,6 +1,6 @@
 # DEV-PLAN-360A 执行日志：compat session API cutover + platform retirement closure
 
-**状态**: 已记录并继续推进（2026-04-13 15:58 CST；Phase 2 已完成并提交到 `bb5a8568`，Phase 3/4 的平台退役代码批次与定向验证已完成；剩余主链 E2E 复验后再宣告总封板）
+**状态**: 已记录并继续推进（2026-04-13 18:42 CST；Phase 2 已完成并提交到 `bb5a8568`，Phase 3/4 的平台退役代码批次与定向验证已完成，`assistant_ui_retired` error catalog 已补齐；剩余主链 E2E 复验与仓库 coverage 收口后再宣告总封板）
 
 ## 1. 本轮交付范围
 
@@ -37,6 +37,8 @@
 1. [X] `go test ./internal/server/...`
 2. [X] `npm --prefix apps/web test -- src/errors/presentApiError.test.ts`
 3. [X] `make check doc`
+4. [X] `make test` 已确认不再因 `assistant_ui_retired` error catalog 缺项失败。
+5. [ ] `make test` 当前仍卡在仓库 coverage 门槛：`97.90% < 98.00%`。
 
 ## 5. 提交记录
 
@@ -50,6 +52,9 @@
 3. [ ] 后续仍需完成 cleanup PR，删除 compat handler 分支与路由绑定。
 4. [ ] 后续仍需收口 successor runtime fail-closed/error-code 语义，包括 `assistant_runtime_unavailable / assistant_gate_unavailable`。
 5. [ ] `375M3 / DEV-PLAN-370A` 仍可并行推进，但不得改写 `350` 已冻结的 `business_action` contract。
+6. [ ] `375M5/360A Phase 3/4` 仍需完成两项总体验收尾项：
+   - 复跑 `tp288 / tp288b / tp290b` 主链 E2E；
+   - 将仓库总 coverage 从 `97.90%` 补回到 `98.00%`。
 
 ## 7. Phase 3/4 平台退役封板批次
 
@@ -71,3 +76,4 @@
    - `e2e/tests/tp220-assistant.spec.js`
    - `e2e/tests/tp283-librechat-formal-entry-cutover.spec.js`
 6. [ ] 尚未在本批次内复跑 `tp288 / tp288b / tp290b` 主链 E2E；因此本执行记录将该批次记为“代码与定向验证完成”，而非“总体验收封板完成”。
+7. [ ] 仓库级 `make test` 仍需把总 coverage 从 `97.90%` 补回到 `98.00%`，之后才能把 `360A Phase 3/4` 从“代码批次完成”升级为“总体验收封板完成”。

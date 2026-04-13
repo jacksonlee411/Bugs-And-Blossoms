@@ -1,6 +1,6 @@
 # DEV-PLAN-360A：LibreChat 功能禁用清单与 Runtime 主链硬切实施计划
 
-**状态**: 进行中（2026-04-13 15:58 CST；Phase 0/1 已完成，Phase 2 已完成，Phase 3/4 的代码与定向测试批次已完成；剩余 `tp288 / tp288b / tp290b` 主链 E2E 复验后再宣告总封板）
+**状态**: 进行中（2026-04-13 18:42 CST；Phase 0/1 已完成，Phase 2 已完成，Phase 3/4 的代码与定向测试批次已完成，`assistant_ui_retired` error catalog 已补齐；剩余 `tp288 / tp288b / tp290b` 主链 E2E 复验，以及全仓 coverage 从 `97.90%` 补回 `98.00%` 后再宣告总封板）
 
 ## 1. 背景
 
@@ -585,6 +585,7 @@ Vendored LibreChat UI
 10. [ ] 新增 successor 契约断言：
    - `ui-bootstrap/session` DTO 字段最小集与 `contract_version=v1`
    - `assistant_session_invalid / assistant_principal_invalid / assistant_ui_bootstrap_unavailable / assistant_runtime_unavailable / assistant_gate_unavailable` 的错误码与 HTTP 状态一致
+11. [ ] 截至 2026-04-13 18:42 CST，`make test` 已越过 `assistant_ui_retired` error catalog 缺项，但总 coverage 仍为 `97.90% < 98.00%`；该项仍属于 `360A` 封板前必须补齐的仓库级门槛。
 
 ### 10.3 停止线
 
