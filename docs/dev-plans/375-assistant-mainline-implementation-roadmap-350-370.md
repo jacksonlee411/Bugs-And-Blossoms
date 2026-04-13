@@ -1,6 +1,6 @@
 # DEV-PLAN-375：Assistant 主线实施路线图（350-370）
 
-**状态**: 进行中（2026-04-13 16:05 CST；`375M1/375M2/375M3/375M4` 已完成并封账，`350C` 已完成并冻结八动作 contract，`375M5` 剩余平台退役封板项，`370B` 可并行推进）
+**状态**: 进行中（2026-04-13 15:13 CST；`375M1/375M2/375M3/375M4` 已完成并封账，`350C` 已完成并冻结八动作 contract，`370B` 已完成 action knowledge hard cut，`375M5` 仍剩平台退役封板项）
 
 > 目标：为 `DEV-PLAN-350/360/360A/361/370` 提供单一编排入口，冻结当前状态、SSOT 边界、串并行顺序、批次拆分与出口条件。  
 > 本文只做路线图编排，不改写各主题文档的契约裁决权；实现细节与子系统合同仍以对应 dev-plan 为单一事实源。
@@ -20,13 +20,13 @@
 6. [X] `375M3`：`370A` 完成，收口 direct Markdown runtime foundation。
 7. [X] `375M4`：compat session API 的 `410 Gone` 硬切、cleanup PR 与 runtime fail-closed/error-code 收口均已完成并封账。
 8. [ ] `375M5`：`350C` 已完成；平台退役封板仍在进行中。
-9. [ ] `375M6`：`370B` 完成，进入总体验收与封板准备。
+9. [ ] `375M6`：`370B` 已完成；待 `375M5` 收口后进入总体验收与封板准备。
 
 ## 0.2 当前下一步
 
 1. [ ] 第一优先级：继续推进 `375M5` 剩余的平台退役封板项（`360 / 360A Phase 3/4`）。
-2. [ ] 可并行推进：进入 `375M6 / DEV-PLAN-370B`，清理更深层动作知识散点并完成 contract / knowledge 强分离。
-3. [ ] `375M5` 与 `370B` 收口后，进入总体验收与封板准备。
+2. [X] `DEV-PLAN-370B` 已完成，动作知识散点 hard cut 与 contract / knowledge 强分离已落地。
+3. [ ] `375M5` 收口后，进入总体验收与封板准备。
 
 ## 1. 背景与定位
 
@@ -117,9 +117,9 @@
 
 ### 375M6：动作知识 Hard Cut 与总体验收
 
-1. [ ] 启动 `370B`，且必须以 `350A/B/C` 全部完成与 `370A` 完成为前置。
-2. [ ] 完成 `business_action` 剩余知识散点清理，并保持 direct Markdown runtime 为唯一知识消费面。
-3. [ ] 完成 `assistant_action_registry.go` 的 contract / knowledge 拆离，并清理 `assistant_api.go`、`assistant_reply_nlg.go` 中的业务知识型文本。
+1. [X] 启动 `370B`，且必须以 `350A/B/C` 全部完成与 `370A` 完成为前置。
+2. [X] 完成 `business_action` 剩余知识散点清理，并保持 direct Markdown runtime 为唯一知识消费面。
+3. [X] 完成 `assistant_action_registry.go` 的 contract / knowledge 拆离，并清理 `assistant_api.go`、`assistant_reply_nlg.go` 中的业务知识型文本。
 4. [ ] 里程碑出口：`350 / 360 / 360A / 370` 全部状态可更新为完成或仅剩独立缺陷修复，`375` 进入封板准备。
 
 ## 6. 并行泳道与子计划
@@ -170,7 +170,7 @@
 4. [X] `360/360A`：compat session API `410 Gone` 断言、cleanup PR、正式入口 runtime fail-closed/error-code 收口均已完成；`/assistant-ui/*` 的 `302 -> 410 -> 删除` 断言仍待后续批次继续。
 5. [X] `370A`：补 Markdown loader/front matter/runtime-load/no-json-runtime/反回流门禁测试，并证明 `assistant_knowledge/*.json` 已被切断。
 6. [X] `370A`：补 semantic prompt route/action parity 回归。
-7. [ ] `370B`：补动作知识散点清理、contract / knowledge 强分离、fail-closed 回归。
+7. [X] `370B`：已补动作知识散点清理、contract / knowledge 强分离、fail-closed 回归；执行记录见 `docs/dev-records/dev-plan-370b-execution-log.md`。
 7. [X] `350A/350B` 实际执行记录已进入对应子计划与 `docs/dev-records/`，`375` 只维护路线图级进度与引用。
 
 ## 8. 依赖草图（Mermaid）
@@ -204,3 +204,4 @@ flowchart TD
 14. `docs/dev-records/dev-plan-350b-execution-log.md`
 15. `docs/dev-records/dev-plan-350c-execution-log.md`
 16. `docs/dev-records/dev-plan-360a-execution-log.md`
+17. `docs/dev-records/dev-plan-370b-execution-log.md`

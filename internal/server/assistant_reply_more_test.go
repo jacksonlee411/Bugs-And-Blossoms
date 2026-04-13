@@ -376,7 +376,7 @@ func TestAssistantReplyNLGMissedBranches(t *testing.T) {
 	if got := assistantReplyFallbackText(assistantRenderReplyRequest{}, "draft", &assistantTurn{}, "en"); !strings.Contains(got, "received") {
 		t.Fatalf("draft en=%q", got)
 	}
-	if got := assistantReplyFallbackText(assistantRenderReplyRequest{}, "candidate_list", &assistantTurn{}, "en"); !strings.Contains(got, "Multiple parent candidates") {
+	if got := assistantReplyFallbackText(assistantRenderReplyRequest{}, "candidate_list", &assistantTurn{}, "en"); !strings.Contains(got, "Candidate confirmation") {
 		t.Fatalf("candidate list en=%q", got)
 	}
 	if got := assistantReplyFallbackText(assistantRenderReplyRequest{}, "candidate_list", &assistantTurn{Candidates: []assistantCandidate{{CandidateID: "cid-1", CandidateCode: "C1"}}}, "zh"); !strings.Contains(got, "cid-1 / C1") {

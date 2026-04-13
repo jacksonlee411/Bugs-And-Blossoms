@@ -51,6 +51,5 @@ template_fields:
   - field_display_map
   - missing_field_guidance
   - contract_projection.required_fields_view
-  - contract_projection.action_spec_summary
 ---
 新增版本只说明写前校验与计划摘要，不拥有写入 contract 裁决权。

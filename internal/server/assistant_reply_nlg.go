@@ -825,27 +825,27 @@ func assistantReplyFallbackText(req assistantRenderReplyRequest, stage string, t
 	}
 	if stage == assistantReplyGuidanceKindTaskWaiting {
 		if locale == "en" {
-			return "The task has been queued and is still running. I will continue to track the progress."
+			return "The task is still running. Please check again later."
 		}
-		return "任务已进入队列并正在处理中，我会继续跟踪进展。"
+		return "任务仍在处理中，请稍后再查看。"
 	}
 	if stage == assistantReplyGuidanceKindManualTakeover {
 		if locale == "en" {
-			return "Manual intervention is required. Please provide clearer instructions or contact an administrator."
+			return "Manual intervention is required before this reply can continue."
 		}
-		return "当前需要人工接管。请补充更明确的信息，或联系管理员处理。"
+		return "当前需要人工接管后才能继续回复。"
 	}
 	if stage == assistantReplyGuidanceKindNonBusinessRoute {
 		if locale == "en" {
-			return "This is a non-business request and will not trigger a business commit."
+			return "This request will stay read-only and will not trigger a business commit."
 		}
-		return "这是非业务动作请求，不会触发业务提交。"
+		return "当前请求保持只读，不会触发业务提交。"
 	}
 	if stage == "await_clarification" {
 		if locale == "en" {
-			return "More clarification is required before proceeding."
+			return "More clarification is required before this reply can continue."
 		}
-		return "继续前需要先澄清关键信息。"
+		return "继续回复前需要先澄清关键信息。"
 	}
 	if turn == nil {
 		if locale == "en" {
@@ -862,35 +862,21 @@ func assistantReplyFallbackText(req assistantRenderReplyRequest, stage string, t
 		)
 	}
 	if stage == "candidate_list" {
-		if len(turn.Candidates) == 0 {
-			if locale == "en" {
-				return "Multiple parent candidates were detected. Please reply with the candidate index or code before confirming."
-			}
-			return "检测到多个候选父组织，请回复候选编号或编码后再确认执行。"
+		if text := strings.TrimSpace(assistantReplyCandidateListText(assistantReplyMachineFromTurn(turn))); text != "" {
+			return text
 		}
-		lines := make([]string, 0, len(turn.Candidates))
-		for idx, candidate := range turn.Candidates {
-			name := strings.TrimSpace(candidate.Name)
-			if name == "" {
-				name = strings.TrimSpace(candidate.CandidateID)
-			}
-			code := strings.TrimSpace(candidate.CandidateCode)
-			path := strings.TrimSpace(candidate.Path)
-			label := name
-			if code != "" {
-				label += " / " + code
-			}
-			if path != "" {
-				label += " (" + path + ")"
-			}
-			lines = append(lines, fmt.Sprintf("%d. %s", idx+1, label))
+		if locale == "en" {
+			return "Candidate confirmation is still required."
 		}
-		return "检测到多个上级组织候选，请在对话中回复候选编号或编码：\n" + strings.Join(lines, "\n")
+		return "当前仍需要候选确认。"
 	}
 	if stage == "missing_fields" {
 		validationErrors := assistantNormalizeValidationErrors(turn.DryRun.ValidationErrors)
 		if len(validationErrors) > 0 {
 			return assistantDryRunValidationExplain(validationErrors)
+		}
+		if text := strings.TrimSpace(assistantReplyMissingFieldsText(assistantReplyMachineFromTurn(turn), locale)); text != "" {
+			return text
 		}
 	}
 	if explain := strings.TrimSpace(turn.DryRun.Explain); explain != "" {

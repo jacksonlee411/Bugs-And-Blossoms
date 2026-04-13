@@ -46,6 +46,5 @@ template_fields:
   - field_display_map
   - missing_field_guidance
   - contract_projection.required_fields_view
-  - contract_projection.action_spec_summary
 ---
 启用动作的说明和模板从 Markdown runtime 提供，正式写入边界仍在后端。

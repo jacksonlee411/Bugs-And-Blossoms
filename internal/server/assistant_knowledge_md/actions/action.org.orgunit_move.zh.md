@@ -62,6 +62,5 @@ template_fields:
   - field_display_map
   - missing_field_guidance
   - contract_projection.required_fields_view
-  - contract_projection.action_spec_summary
 ---
 移动组织需要候选确认与 precheck，Markdown 只描述说明性知识和模板。

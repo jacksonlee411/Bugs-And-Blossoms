@@ -818,7 +818,7 @@ func TestAssistantKnowledgeRuntime_HelperCoverage(t *testing.T) {
 	})
 
 	t.Run("build plan context", func(t *testing.T) {
-		spec := assistantActionSpec{ID: assistantIntentCreateOrgUnit, PlanSummary: "默认摘要", PlanTitle: "默认标题"}
+		spec := assistantActionSpec{ID: assistantIntentCreateOrgUnit}
 		if _, err := (*assistantKnowledgeRuntime)(nil).buildPlanContextV1("tenant_1", "zh", assistantIntentSpec{}, spec, nil); !errors.Is(err, errAssistantRuntimeConfigInvalid) {
 			t.Fatalf("expected runtime missing error, got=%v", err)
 		}
@@ -826,7 +826,7 @@ func TestAssistantKnowledgeRuntime_HelperCoverage(t *testing.T) {
 		nonBusinessRuntime := &assistantKnowledgeRuntime{
 			intentDocs: map[string]map[string]assistantKnowledgeMarkdownDocument{
 				"knowledge.general_qa": {
-					"zh": {ID: "knowledge.general_qa", Locale: "zh", Summary: "这是知识问答摘要"},
+					"zh": {ID: "knowledge.general_qa", Locale: "zh", Title: "知识问答意图", Summary: "这是知识问答摘要"},
 				},
 			},
 		}
@@ -841,21 +841,25 @@ func TestAssistantKnowledgeRuntime_HelperCoverage(t *testing.T) {
 		if !strings.Contains(ctx.ActionViewSummary, "知识问答") {
 			t.Fatalf("unexpected non-business summary=%q", ctx.ActionViewSummary)
 		}
+		if ctx.ActionViewTitle != "知识问答意图" {
+			t.Fatalf("unexpected non-business title=%q", ctx.ActionViewTitle)
+		}
 
 		emptyRuntime := &assistantKnowledgeRuntime{}
-		emptyCtx, err := emptyRuntime.buildPlanContextV1("tenant_1", "zh", assistantIntentSpec{
+		if _, err := emptyRuntime.buildPlanContextV1("tenant_1", "zh", assistantIntentSpec{
 			Action:    assistantIntentPlanOnly,
 			IntentID:  "knowledge.unknown",
 			RouteKind: assistantRouteKindKnowledgeQA,
-		}, assistantActionSpec{}, nil)
-		if err != nil {
-			t.Fatalf("unexpected non-business fallback err=%v", err)
-		}
-		if !strings.Contains(emptyCtx.ActionViewSummary, "非动作请求") {
-			t.Fatalf("unexpected fallback non-business summary=%q", emptyCtx.ActionViewSummary)
+		}, assistantActionSpec{}, nil); err == nil {
+			t.Fatal("expected non-business intent doc missing error")
 		}
 
 		businessRuntime := &assistantKnowledgeRuntime{
+			actionDocsByAction: map[string]map[string]assistantKnowledgeMarkdownDocument{
+				assistantIntentCreateOrgUnit: {
+					"zh": {ID: "action.org.orgunit_create", Locale: "zh", Title: "创建组织动作说明"},
+				},
+			},
 			actionView: map[string]map[string]assistantActionViewPack{
 				assistantIntentCreateOrgUnit: {
 					"zh": {
@@ -875,15 +879,14 @@ func TestAssistantKnowledgeRuntime_HelperCoverage(t *testing.T) {
 		if actionCtx.ActionViewSummary != "创建组织摘要" || len(actionCtx.FieldDisplayMap) == 0 {
 			t.Fatalf("unexpected action context=%+v", actionCtx)
 		}
-
-		fallbackCtx, err := (&assistantKnowledgeRuntime{actionView: map[string]map[string]assistantActionViewPack{}}).buildPlanContextV1("tenant_1", "zh", assistantIntentSpec{
-			Action: assistantIntentRenameOrgUnit,
-		}, assistantActionSpec{PlanSummary: "重命名摘要"}, nil)
-		if err != nil {
-			t.Fatalf("expected non-create fallback summary err=nil, got=%v", err)
+		if actionCtx.ActionViewTitle != "创建组织动作说明" {
+			t.Fatalf("unexpected action title=%q", actionCtx.ActionViewTitle)
 		}
-		if fallbackCtx.ActionViewSummary != "重命名摘要" {
-			t.Fatalf("unexpected fallback summary=%q", fallbackCtx.ActionViewSummary)
+
+		if _, err := (&assistantKnowledgeRuntime{actionView: map[string]map[string]assistantActionViewPack{}}).buildPlanContextV1("tenant_1", "zh", assistantIntentSpec{
+			Action: assistantIntentRenameOrgUnit,
+		}, assistantActionSpec{}, nil); err == nil {
+			t.Fatal("expected rename action view missing error")
 		}
 
 		if _, err := (&assistantKnowledgeRuntime{actionView: map[string]map[string]assistantActionViewPack{}}).buildPlanContextV1("tenant_1", "zh", assistantIntentSpec{
@@ -913,7 +916,7 @@ func TestAssistantKnowledgeRuntime_HelperCoverage(t *testing.T) {
 
 		assistantApplyPlanContextV1(nil, nil, assistantIntentSpec{}, context)
 
-		plan := assistantPlanSummary{Summary: "old"}
+		plan := assistantPlanSummary{Title: "old title", Summary: "old"}
 		dryRun := assistantDryRunResult{ValidationErrors: []string{"missing_parent_ref_text"}, Explain: "old"}
 		assistantApplyPlanContextV1(&plan, &dryRun, assistantIntentSpec{RouteKind: assistantRouteKindBusinessAction}, context)
 		if plan.Summary != "动作摘要" {
@@ -924,11 +927,11 @@ func TestAssistantKnowledgeRuntime_HelperCoverage(t *testing.T) {
 		}
 
 		nonBusinessDryRun := assistantDryRunResult{Explain: "old"}
-		assistantApplyPlanContextV1(&plan, &nonBusinessDryRun, assistantIntentSpec{RouteKind: assistantRouteKindKnowledgeQA}, assistantPlanContextV1{})
+		assistantApplyPlanContextV1(&plan, &nonBusinessDryRun, assistantIntentSpec{RouteKind: assistantRouteKindKnowledgeQA}, assistantPlanContextV1{ActionViewSummary: "知识问答摘要"})
 		if !assistantContainsString(nonBusinessDryRun.ValidationErrors, "non_business_route") {
 			t.Fatalf("expected non_business_route validation, got=%v", nonBusinessDryRun.ValidationErrors)
 		}
-		if !strings.Contains(nonBusinessDryRun.Explain, "不会触发业务提交") {
+		if !strings.Contains(nonBusinessDryRun.Explain, "知识问答摘要") {
 			t.Fatalf("unexpected non-business explain=%q", nonBusinessDryRun.Explain)
 		}
 	})

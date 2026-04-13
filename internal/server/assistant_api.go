@@ -1194,39 +1194,31 @@ func assistantBuildPlan(intent assistantIntentSpec) assistantPlanSummary {
 		CompilerContractVersion: assistantCompilerContractVersionV1,
 	}
 	if spec, ok := assistantLookupDefaultActionSpec(intent.Action); ok {
-		plan.Title = spec.PlanTitle
 		plan.ActionID = spec.ID
 		plan.ActionVersion = spec.Version
 		plan.CapabilityKey = spec.CapabilityKey
 		plan.CommitAdapterKey = spec.Handler.CommitAdapterKey
-		plan.Summary = spec.PlanSummary
 	}
-	if summary := assistantKnowledgePlanSummary(intent); summary != "" {
+	title, summary := assistantKnowledgePlanPresentation(intent)
+	if title != "" {
+		plan.Title = title
+	}
+	if summary != "" {
 		plan.Summary = summary
 	}
 	return plan
 }
 
-func assistantKnowledgePlanSummary(intent assistantIntentSpec) string {
-	routeKind := strings.TrimSpace(intent.RouteKind)
-	if routeKind == "" || routeKind == assistantRouteKindBusinessAction {
-		return ""
-	}
-	intentID := strings.TrimSpace(intent.IntentID)
+func assistantKnowledgePlanPresentation(intent assistantIntentSpec) (string, string) {
 	runtime, err := assistantLoadKnowledgeRuntimeFn()
-	if err == nil && runtime != nil {
-		if intentID == "" {
-			if entry, ok := runtime.findRouteByRouteKind(routeKind); ok {
-				intentID = strings.TrimSpace(entry.IntentID)
-			}
-		}
-		if doc, ok := runtime.findIntentDoc(intentID, runtime.planContextLocale()); ok {
-			if summary := strings.TrimSpace(doc.Summary); summary != "" {
-				return summary
-			}
-		}
+	if err != nil || runtime == nil {
+		return "", ""
 	}
-	return "这是非动作请求，不会触发业务提交。"
+	presentation, err := runtime.resolvePlanPresentation(intent, runtime.planContextLocale())
+	if err != nil {
+		return "", ""
+	}
+	return strings.TrimSpace(presentation.Title), strings.TrimSpace(presentation.Summary)
 }
 
 func assistantBuildDryRun(intent assistantIntentSpec, candidates []assistantCandidate, resolvedCandidateID string) assistantDryRunResult {

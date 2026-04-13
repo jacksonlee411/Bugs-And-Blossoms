@@ -52,6 +52,5 @@ template_fields:
   - field_display_map
   - missing_field_guidance
   - contract_projection.required_fields_view
-  - contract_projection.action_spec_summary
 ---
 重命名动作由正式写服务提交，Markdown 提供计划摘要和缺失字段提示。

@@ -27,8 +27,6 @@ type assistantActionSpec struct {
 	ID                                string
 	Version                           string
 	CapabilityKey                     string
-	PlanTitle                         string
-	PlanSummary                       string
 	PolicyContextContractVersion      string
 	PrecheckProjectionContractVersion string
 	RequiredPolicyFacts               []string
@@ -57,8 +55,6 @@ var assistantDefaultActionRegistry = assistantActionRegistryMap{specs: map[strin
 		ID:            assistantIntentPlanOnly,
 		Version:       "v1",
 		CapabilityKey: "org.assistant_conversation.manage",
-		PlanTitle:     "只读规划",
-		PlanSummary:   "生成只读计划，不执行提交",
 		Security: assistantActionSecuritySpec{
 			AuthObject:     authz.ObjectOrgSetIDCapability,
 			AuthAction:     authz.ActionAdmin,
@@ -70,8 +66,6 @@ var assistantDefaultActionRegistry = assistantActionRegistryMap{specs: map[strin
 		ID:                                assistantIntentCreateOrgUnit,
 		Version:                           "v1",
 		CapabilityKey:                     "org.orgunit_create.field_policy",
-		PlanTitle:                         "创建组织计划",
-		PlanSummary:                       "在指定父组织下创建部门，提交前需要确认候选主键",
 		PolicyContextContractVersion:      orgunitservices.CreateOrgUnitPolicyContextContractVersionV1,
 		PrecheckProjectionContractVersion: orgunitservices.CreateOrgUnitPrecheckProjectionContractV1,
 		RequiredPolicyFacts: []string{
@@ -105,8 +99,6 @@ var assistantDefaultActionRegistry = assistantActionRegistryMap{specs: map[strin
 		ID:                                assistantIntentAddOrgUnitVersion,
 		Version:                           "v1",
 		CapabilityKey:                     "org.orgunit_add_version.field_policy",
-		PlanTitle:                         "新增版本计划",
-		PlanSummary:                       "为指定组织新增未来版本，提交前进行字段校验",
 		PolicyContextContractVersion:      orgunitservices.OrgUnitAppendVersionPolicyContextContractVersionV1,
 		PrecheckProjectionContractVersion: orgunitservices.OrgUnitAppendVersionPrecheckProjectionContractV1,
 		RequiredPolicyFacts: []string{
@@ -137,8 +129,6 @@ var assistantDefaultActionRegistry = assistantActionRegistryMap{specs: map[strin
 		ID:                                assistantIntentInsertOrgUnitVersion,
 		Version:                           "v1",
 		CapabilityKey:                     "org.orgunit_insert_version.field_policy",
-		PlanTitle:                         "插入版本计划",
-		PlanSummary:                       "为指定组织插入历史版本，提交前进行字段校验",
 		PolicyContextContractVersion:      orgunitservices.OrgUnitAppendVersionPolicyContextContractVersionV1,
 		PrecheckProjectionContractVersion: orgunitservices.OrgUnitAppendVersionPrecheckProjectionContractV1,
 		RequiredPolicyFacts: []string{
@@ -169,8 +159,6 @@ var assistantDefaultActionRegistry = assistantActionRegistryMap{specs: map[strin
 		ID:                                assistantIntentCorrectOrgUnit,
 		Version:                           "v1",
 		CapabilityKey:                     "org.orgunit_correct.field_policy",
-		PlanTitle:                         "更正组织计划",
-		PlanSummary:                       "更正指定组织版本的字段内容，提交前进行字段校验",
 		PolicyContextContractVersion:      orgunitservices.OrgUnitMaintainPolicyContextContractVersionV1,
 		PrecheckProjectionContractVersion: orgunitservices.OrgUnitMaintainPrecheckProjectionContractV1,
 		RequiredPolicyFacts: []string{
@@ -201,8 +189,6 @@ var assistantDefaultActionRegistry = assistantActionRegistryMap{specs: map[strin
 		ID:                                assistantIntentDisableOrgUnit,
 		Version:                           "v1",
 		CapabilityKey:                     "org.orgunit_write.field_policy",
-		PlanTitle:                         "停用组织计划",
-		PlanSummary:                       "停用指定组织，提交前进行字段校验",
 		PolicyContextContractVersion:      orgunitservices.OrgUnitMaintainPolicyContextContractVersionV1,
 		PrecheckProjectionContractVersion: orgunitservices.OrgUnitMaintainPrecheckProjectionContractV1,
 		RequiredPolicyFacts: []string{
@@ -231,8 +217,6 @@ var assistantDefaultActionRegistry = assistantActionRegistryMap{specs: map[strin
 		ID:                                assistantIntentEnableOrgUnit,
 		Version:                           "v1",
 		CapabilityKey:                     "org.orgunit_write.field_policy",
-		PlanTitle:                         "启用组织计划",
-		PlanSummary:                       "启用指定组织，提交前进行字段校验",
 		PolicyContextContractVersion:      orgunitservices.OrgUnitMaintainPolicyContextContractVersionV1,
 		PrecheckProjectionContractVersion: orgunitservices.OrgUnitMaintainPrecheckProjectionContractV1,
 		RequiredPolicyFacts: []string{
@@ -261,8 +245,6 @@ var assistantDefaultActionRegistry = assistantActionRegistryMap{specs: map[strin
 		ID:                                assistantIntentMoveOrgUnit,
 		Version:                           "v1",
 		CapabilityKey:                     "org.orgunit_write.field_policy",
-		PlanTitle:                         "移动组织计划",
-		PlanSummary:                       "将组织移动到新的上级组织，提交前需要确认候选主键",
 		PolicyContextContractVersion:      orgunitservices.OrgUnitMaintainPolicyContextContractVersionV1,
 		PrecheckProjectionContractVersion: orgunitservices.OrgUnitMaintainPrecheckProjectionContractV1,
 		RequiredPolicyFacts: []string{
@@ -293,8 +275,6 @@ var assistantDefaultActionRegistry = assistantActionRegistryMap{specs: map[strin
 		ID:                                assistantIntentRenameOrgUnit,
 		Version:                           "v1",
 		CapabilityKey:                     "org.orgunit_write.field_policy",
-		PlanTitle:                         "重命名组织计划",
-		PlanSummary:                       "重命名指定组织，提交前进行字段校验",
 		PolicyContextContractVersion:      orgunitservices.OrgUnitMaintainPolicyContextContractVersionV1,
 		PrecheckProjectionContractVersion: orgunitservices.OrgUnitMaintainPrecheckProjectionContractV1,
 		RequiredPolicyFacts: []string{

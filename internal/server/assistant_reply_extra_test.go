@@ -254,7 +254,7 @@ func TestAssistantReplyFallbackTextCoverage(t *testing.T) {
 	}
 	turn.CommitResult = nil
 	turn.Candidates = nil
-	if got := assistantReplyFallbackText(assistantRenderReplyRequest{}, "candidate_list", turn, "zh"); !strings.Contains(got, "多个候选父组织") {
+	if got := assistantReplyFallbackText(assistantRenderReplyRequest{}, "candidate_list", turn, "zh"); !strings.Contains(got, "候选确认") {
 		t.Fatalf("candidate list empty=%q", got)
 	}
 	turn.Candidates = []assistantCandidate{{Name: "共享服务中心", CandidateCode: "SSC-1", Path: "集团/共享服务中心"}}

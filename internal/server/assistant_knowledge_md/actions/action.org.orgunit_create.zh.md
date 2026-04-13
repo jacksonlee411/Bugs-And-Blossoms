@@ -67,7 +67,6 @@ template_fields:
   - field_display_map
   - missing_field_guidance
   - contract_projection.required_fields_view
-  - contract_projection.action_spec_summary
   - conversation_snapshot.current_phase
 ---
 创建组织的正式写入仍由 authoritative backend 执行，这里只保留说明性知识与模板。

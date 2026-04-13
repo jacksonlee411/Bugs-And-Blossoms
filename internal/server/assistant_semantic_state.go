@@ -72,13 +72,24 @@ func assistantSemanticPromptActions() []assistantSemanticPromptAction {
 	out := make([]assistantSemanticPromptAction, 0, len(actions))
 	for _, actionID := range actions {
 		spec, _ := assistantLookupDefaultActionSpec(actionID)
+		intent := assistantIntentSpec{Action: actionID}
 		item := assistantSemanticPromptAction{
-			ActionID:    strings.TrimSpace(spec.ID),
-			PlanSummary: strings.TrimSpace(spec.PlanSummary),
+			ActionID: strings.TrimSpace(spec.ID),
 		}
 		if runtime != nil {
 			if entry, ok := runtime.routeByAction[actionID]; ok {
+				intent.IntentID = strings.TrimSpace(entry.IntentID)
+				intent.RouteKind = strings.TrimSpace(entry.RouteKind)
 				item.RequiredSlots = append([]string(nil), entry.RequiredSlots...)
+			}
+		}
+		if actionID == assistantIntentPlanOnly {
+			intent.IntentID = assistantInterpretationDefaultPackID
+			intent.RouteKind = assistantRouteKindKnowledgeQA
+		}
+		if runtime != nil {
+			if presentation, err := runtime.resolvePlanPresentation(intent, runtime.planContextLocale()); err == nil {
+				item.PlanSummary = strings.TrimSpace(presentation.Summary)
 			}
 		}
 		if len(item.RequiredSlots) == 0 && actionID != assistantIntentPlanOnly {

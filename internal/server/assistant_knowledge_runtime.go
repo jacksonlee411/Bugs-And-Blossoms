@@ -32,7 +32,6 @@ var assistantTemplateFieldWhitelist = map[string]struct{}{
 	"field_display_map":                        {},
 	"missing_field_guidance":                   {},
 	"contract_projection.required_fields_view": {},
-	"contract_projection.action_spec_summary":  {},
 	"conversation_snapshot.current_phase":      {},
 }
 
@@ -219,11 +218,11 @@ type assistantConversationSnapshotResolverResult struct {
 
 type assistantContractProjectionResolverResult struct {
 	ActionID           string
-	ActionSpecSummary  string
 	RequiredFieldsView []string
 }
 
 type assistantPlanContextV1 struct {
+	ActionViewTitle      string
 	ActionViewSummary    string
 	FieldDisplayMap      []assistantActionViewField
 	MissingFieldGuidance []assistantActionViewGuidance
@@ -1218,13 +1217,8 @@ func assistantContractProjectionResolver(intent assistantIntentSpec, spec assist
 	if actionID == "" {
 		actionID = strings.TrimSpace(intent.Action)
 	}
-	summary := strings.TrimSpace(spec.PlanSummary)
-	if summary == "" {
-		summary = strings.TrimSpace(spec.PlanTitle)
-	}
 	return assistantContractProjectionResolverResult{
 		ActionID:           actionID,
-		ActionSpecSummary:  summary,
 		RequiredFieldsView: assistantRequiredFieldsViewByAction(strings.TrimSpace(intent.Action)),
 	}
 }
@@ -1248,6 +1242,60 @@ func assistantRequiredFieldsViewByAction(action string) []string {
 	}
 }
 
+type assistantPlanPresentation struct {
+	Title   string
+	Summary string
+}
+
+func (runtime *assistantKnowledgeRuntime) resolvePlanPresentation(intent assistantIntentSpec, locale string) (assistantPlanPresentation, error) {
+	if runtime == nil {
+		return assistantPlanPresentation{}, fmt.Errorf("%w: knowledge runtime missing", errAssistantRuntimeConfigInvalid)
+	}
+	routeKind := strings.TrimSpace(intent.RouteKind)
+	if routeKind == "" {
+		routeKind = assistantRouteKindBusinessAction
+	}
+	if routeKind != assistantRouteKindBusinessAction {
+		intentID := strings.TrimSpace(intent.IntentID)
+		if intentID == "" {
+			entry, ok := runtime.findRouteByRouteKind(routeKind)
+			if !ok {
+				return assistantPlanPresentation{}, fmt.Errorf("%w: route intent doc missing for %s", errAssistantRuntimeConfigInvalid, routeKind)
+			}
+			intentID = strings.TrimSpace(entry.IntentID)
+		}
+		doc, ok := runtime.findIntentDoc(intentID, locale)
+		if !ok {
+			return assistantPlanPresentation{}, fmt.Errorf("%w: intent doc missing for %s", errAssistantRuntimeConfigInvalid, intentID)
+		}
+		title := strings.TrimSpace(doc.Title)
+		summary := strings.TrimSpace(doc.Summary)
+		if title == "" || summary == "" {
+			return assistantPlanPresentation{}, fmt.Errorf("%w: intent doc title/summary required for %s", errAssistantRuntimeConfigInvalid, intentID)
+		}
+		return assistantPlanPresentation{Title: title, Summary: summary}, nil
+	}
+
+	actionID := strings.TrimSpace(intent.Action)
+	if actionID == "" {
+		return assistantPlanPresentation{}, fmt.Errorf("%w: action id required for business action", errAssistantRuntimeConfigInvalid)
+	}
+	pack, ok := runtime.findActionView(actionID, locale)
+	if !ok {
+		return assistantPlanPresentation{}, fmt.Errorf("%w: action view pack missing for %s", errAssistantRuntimeConfigInvalid, actionID)
+	}
+	doc, ok := runtime.findActionDocByAction(actionID, locale)
+	if !ok {
+		return assistantPlanPresentation{}, fmt.Errorf("%w: action doc missing for %s", errAssistantRuntimeConfigInvalid, actionID)
+	}
+	title := strings.TrimSpace(doc.Title)
+	summary := strings.TrimSpace(pack.Summary)
+	if title == "" || summary == "" {
+		return assistantPlanPresentation{}, fmt.Errorf("%w: action doc title/summary required for %s", errAssistantRuntimeConfigInvalid, actionID)
+	}
+	return assistantPlanPresentation{Title: title, Summary: summary}, nil
+}
+
 func (runtime *assistantKnowledgeRuntime) buildPlanContextV1(tenantID string, locale string, intent assistantIntentSpec, spec assistantActionSpec, turn *assistantTurn) (assistantPlanContextV1, error) {
 	if runtime == nil {
 		return assistantPlanContextV1{}, fmt.Errorf("%w: knowledge runtime missing", errAssistantRuntimeConfigInvalid)
@@ -1259,23 +1307,18 @@ func (runtime *assistantKnowledgeRuntime) buildPlanContextV1(tenantID string, lo
 	if strings.TrimSpace(intent.RouteKind) == "" {
 		intent.RouteKind = assistantRouteKindBusinessAction
 	}
+	presentation, err := runtime.resolvePlanPresentation(intent, locale)
+	if err != nil {
+		return assistantPlanContextV1{}, err
+	}
+	context.ActionViewTitle = strings.TrimSpace(presentation.Title)
+	context.ActionViewSummary = strings.TrimSpace(presentation.Summary)
 	if strings.TrimSpace(intent.RouteKind) != assistantRouteKindBusinessAction {
-		intentDoc, ok := runtime.findIntentDoc(intent.IntentID, locale)
-		if ok {
-			context.ActionViewSummary = strings.TrimSpace(intentDoc.Summary)
-		}
-		if context.ActionViewSummary == "" {
-			context.ActionViewSummary = "这是非动作请求，不会触发业务提交。"
-		}
 		return context, nil
 	}
 	pack, ok := runtime.findActionView(strings.TrimSpace(intent.Action), locale)
 	if !ok {
-		if strings.TrimSpace(intent.Action) == assistantIntentCreateOrgUnit {
-			return assistantPlanContextV1{}, fmt.Errorf("%w: action view pack missing for %s", errAssistantRuntimeConfigInvalid, strings.TrimSpace(intent.Action))
-		}
-		context.ActionViewSummary = strings.TrimSpace(spec.PlanSummary)
-		return context, nil
+		return assistantPlanContextV1{}, fmt.Errorf("%w: action view pack missing for %s", errAssistantRuntimeConfigInvalid, strings.TrimSpace(intent.Action))
 	}
 	context.ActionViewSummary = strings.TrimSpace(pack.Summary)
 	context.FieldDisplayMap = append([]assistantActionViewField(nil), pack.FieldDisplayMap...)
@@ -1306,6 +1349,9 @@ func assistantKnowledgeGuidanceText(context assistantPlanContextV1, validationEr
 
 func assistantApplyPlanContextV1(plan *assistantPlanSummary, dryRun *assistantDryRunResult, intent assistantIntentSpec, context assistantPlanContextV1) {
 	if plan != nil {
+		if title := strings.TrimSpace(context.ActionViewTitle); title != "" {
+			plan.Title = title
+		}
 		if summary := strings.TrimSpace(context.ActionViewSummary); summary != "" {
 			plan.Summary = summary
 		}
@@ -1320,8 +1366,6 @@ func assistantApplyPlanContextV1(plan *assistantPlanSummary, dryRun *assistantDr
 		dryRun.ValidationErrors = validationErrors
 		if summary := strings.TrimSpace(context.ActionViewSummary); summary != "" {
 			dryRun.Explain = summary
-		} else {
-			dryRun.Explain = "这是非动作请求，不会触发业务提交。"
 		}
 		return
 	}

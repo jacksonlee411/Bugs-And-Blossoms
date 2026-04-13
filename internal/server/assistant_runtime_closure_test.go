@@ -322,8 +322,6 @@ func TestAssistant240C_RuntimeAndCoverageBranches(t *testing.T) {
 			assistantIntentCreateOrgUnit: {
 				ID:            assistantIntentCreateOrgUnit,
 				Version:       "v1",
-				PlanTitle:     "创建组织",
-				PlanSummary:   "生成创建组织计划，待确认后提交",
 				CapabilityKey: spec.CapabilityKey,
 				Security:      spec.Security,
 				Handler:       spec.Handler,

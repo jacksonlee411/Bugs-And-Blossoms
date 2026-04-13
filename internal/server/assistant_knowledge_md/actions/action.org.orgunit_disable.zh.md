@@ -46,6 +46,5 @@ template_fields:
   - field_display_map
   - missing_field_guidance
   - contract_projection.required_fields_view
-  - contract_projection.action_spec_summary
 ---
 停用动作不再维护独立知识真相源，所有说明从 Markdown runtime 提供。

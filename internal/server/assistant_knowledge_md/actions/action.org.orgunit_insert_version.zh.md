@@ -51,6 +51,5 @@ template_fields:
   - field_display_map
   - missing_field_guidance
   - contract_projection.required_fields_view
-  - contract_projection.action_spec_summary
 ---
 插入版本属于历史有效期维护动作，runtime 只提供说明性知识。

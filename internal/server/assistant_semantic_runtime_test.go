@@ -364,15 +364,15 @@ func TestAssistant268IntentPipelineHelpers(t *testing.T) {
 
 	t.Run("build plan summaries for projection-only routes", func(t *testing.T) {
 		qaPlan := assistantBuildPlan(assistantIntentSpec{RouteKind: assistantRouteKindKnowledgeQA})
-		if qaPlan.Title != "对话回复" || qaPlan.Summary != "当前轮属于知识问答，只返回说明，不触发业务提交。" {
+		if qaPlan.Title != "知识问答意图" || qaPlan.Summary != "当前轮属于知识问答，只返回说明，不触发业务提交。" {
 			t.Fatalf("unexpected qa plan=%+v", qaPlan)
 		}
 		chitchatPlan := assistantBuildPlan(assistantIntentSpec{RouteKind: assistantRouteKindChitchat})
-		if chitchatPlan.Summary != "当前轮属于闲聊响应，不触发业务提交。" {
+		if chitchatPlan.Title != "闲聊意图" || chitchatPlan.Summary != "当前轮属于闲聊响应，不触发业务提交。" {
 			t.Fatalf("unexpected chitchat plan=%+v", chitchatPlan)
 		}
 		uncertainPlan := assistantBuildPlan(assistantIntentSpec{RouteKind: assistantRouteKindUncertain})
-		if uncertainPlan.Summary != "当前轮语义仍不确定，仅保留澄清投影，不触发业务提交。" {
+		if uncertainPlan.Title != "未确定意图" || uncertainPlan.Summary != "当前轮语义仍不确定，仅保留澄清投影，不触发业务提交。" {
 			t.Fatalf("unexpected uncertain plan=%+v", uncertainPlan)
 		}
 	})

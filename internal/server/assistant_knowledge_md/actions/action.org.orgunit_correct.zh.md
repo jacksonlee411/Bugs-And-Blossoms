@@ -51,6 +51,5 @@ template_fields:
   - field_display_map
   - missing_field_guidance
   - contract_projection.required_fields_view
-  - contract_projection.action_spec_summary
 ---
 更正动作需要对齐目标版本和字段 patch，Markdown 只描述说明性知识。
