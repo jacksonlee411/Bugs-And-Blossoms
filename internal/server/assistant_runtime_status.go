@@ -65,11 +65,12 @@ type assistantRuntimeVersionsLock struct {
 		RollbackRef string `yaml:"rollback_ref"`
 	} `yaml:"upstream"`
 	Services []struct {
-		Name     string `yaml:"name"`
-		Required bool   `yaml:"required"`
-		Image    string `yaml:"image"`
-		Tag      string `yaml:"tag"`
-		Digest   string `yaml:"digest"`
+		Name            string `yaml:"name"`
+		Required        bool   `yaml:"required"`
+		Image           string `yaml:"image"`
+		Tag             string `yaml:"tag"`
+		Digest          string `yaml:"digest"`
+		RetiredByDesign bool   `yaml:"retired_by_design"`
 	} `yaml:"services"`
 }
 
@@ -180,11 +181,12 @@ func assistantRuntimeDomainPolicyErrorMessage(err error) string {
 }
 
 func assistantRuntimeServicesFromLock(services []struct {
-	Name     string `yaml:"name"`
-	Required bool   `yaml:"required"`
-	Image    string `yaml:"image"`
-	Tag      string `yaml:"tag"`
-	Digest   string `yaml:"digest"`
+	Name            string `yaml:"name"`
+	Required        bool   `yaml:"required"`
+	Image           string `yaml:"image"`
+	Tag             string `yaml:"tag"`
+	Digest          string `yaml:"digest"`
+	RetiredByDesign bool   `yaml:"retired_by_design"`
 }) []assistantRuntimeService {
 	if len(services) == 0 {
 		return nil
@@ -204,6 +206,11 @@ func assistantRuntimeServicesFromLock(services []struct {
 			Tag:      strings.TrimSpace(service.Tag),
 			Digest:   strings.TrimSpace(service.Digest),
 		})
+		if service.RetiredByDesign {
+			out[len(out)-1].Required = false
+			out[len(out)-1].Healthy = assistantRuntimeHealthRetired
+			out[len(out)-1].Reason = assistantRuntimeReasonRetiredByDesign
+		}
 	}
 	for idx := range out {
 		out[idx] = assistantRuntimeNormalizeService(out[idx])
@@ -268,7 +275,7 @@ func assistantRuntimeApplyUpstreamProbe(resp assistantRuntimeStatusResponse) ass
 			Reason:   "upstream_unreachable",
 		})
 		if resp.ErrorCode == "" {
-			resp.ErrorCode = assistantUIProxyUpstreamUnavailable
+			resp.ErrorCode = assistantRuntimeUpstreamUnavailable
 			resp.ErrorMessage = "assistant runtime upstream is unreachable"
 		}
 	}

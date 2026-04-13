@@ -37,25 +37,21 @@
   2. compose 解析出的 bind mount source 与预期路径完全一致；
   3. 缺失或漂移时 fail-fast（阻断启动）。
 
-## rag_api 运行口径（DEV-PLAN-239）
+## 依赖退役口径（DEV-PLAN-360A Phase 3）
 
-- `rag_api` 镜像固定为 `ghcr.io/danny-avila/librechat-rag-api-dev-lite@sha256:201958505e21...`。
-- `rag_api` 统一使用 `atlas-mongo` 模式，默认连接 `mongodb://mongodb:27017/LibreChat`，避免隐式回退到 `db:5432`（pgvector）导致重启风暴。
-- `rag_api` 数据卷挂载目标为 `/app/uploads`（宿主机目录：`${LIBRECHAT_DATA_ROOT}/rag_api`）。
+- 默认部署仅保留 `api` 服务；`mongodb`、`meilisearch`、`rag_api`、`vectordb` 已从 compose 主链移除。
+- 上述四项仍保留在 `versions.lock.yaml` 中，仅用于 `runtime-status` 暴露 `retired_by_design` 语义，不再作为默认运行前置。
+- 若后续调试仍需单独拉起历史依赖，必须通过临时 patch / 私有调试脚本完成，不得回写默认主干 compose。
 
 ## 清理边界
 
-`make assistant-runtime-clean` 仅清理 `${LIBRECHAT_DATA_ROOT}` 下列目录（与运行时同源）：
+`make assistant-runtime-clean` 仅清理 `${LIBRECHAT_DATA_ROOT}` 下列目录（与默认运行时同源）：
 
 - `${LIBRECHAT_DATA_ROOT}/api`
-- `${LIBRECHAT_DATA_ROOT}/mongodb`
-- `${LIBRECHAT_DATA_ROOT}/meilisearch`
-- `${LIBRECHAT_DATA_ROOT}/rag_api`
-- `${LIBRECHAT_DATA_ROOT}/vectordb`
 
 禁止清理上述目录之外的路径（脚本对仓库外路径 fail-closed）。
 
-## 故障处置（MongoDB 挂载异常）
+## 故障处置（API 上游异常）
 
 最小恢复流程（建议按顺序）：
 
@@ -66,6 +62,5 @@
 
 当 `status` 为 `unavailable` 时，`services[].reason` 重点关注：
 
-- `mount_source_missing`：宿主机挂载目录缺失（先执行 `clean -> up`，或检查 `LIBRECHAT_DATA_ROOT`）。
-- `container_not_running`：容器未运行（查看 `docker compose ps`/容器日志）。
 - `upstream_unreachable`：API 容器已运行但上游探针不可达（查看 api 服务日志与端口绑定）。
+- `retired_by_design`：依赖已按设计退役，不参与默认部署故障判定。

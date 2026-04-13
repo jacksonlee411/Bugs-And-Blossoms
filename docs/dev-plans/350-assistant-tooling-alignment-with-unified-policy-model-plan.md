@@ -1,6 +1,6 @@
 # DEV-PLAN-350：Assistant Tooling 对齐统一策略模型实施方案
 
-**状态**: 进行中（2026-04-12 17:54 CST；`create_orgunit` 首批 `PrecheckProjection + 统一消费` 样板已完成，八动作统一收口未完成）
+**状态**: 已完成（2026-04-13 16:08 CST；`350A/350B/350C` 已全部完成，八动作统一 contract 已冻结；后续只保留独立缺陷修复）
 
 ## 0.1 本批实施状态（2026-04-12）
 
@@ -10,7 +10,7 @@
 4. [X] Assistant turn/task create contract 快照已冻结并在缺失时 fail-closed；历史无 projection 的 turn 只允许读展示，不允许继续 confirm/commit/submit。
 5. [X] 本批目标验证已通过：
    - `go test ./pkg/fieldpolicy ./internal/server/... ./modules/orgunit/infrastructure/persistence/... ./modules/orgunit/services/...`
-6. [ ] 本计划 Phase 5“统一八动作”尚未开始；当前仅完成 `create_orgunit` 样板，不应解读为 `350` 全量封板。
+6. [X] 本计划 Phase 5“统一八动作”已通过 `350A/350B/350C` 完成；`350` 现已达到全量封板状态。
 
 ## 0.2 与 `DEV-PLAN-375` 的路线图关系
 

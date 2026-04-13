@@ -214,21 +214,26 @@ func TestWithTenantAndSession_MissingSIDRedirects(t *testing.T) {
 	}
 }
 
-func TestWithTenantAndSession_MissingSIDRedirectsAssistantUI(t *testing.T) {
+func TestWithTenantAndSession_MissingSIDPassesThroughRetiredAssistantUI(t *testing.T) {
 	tnt := Tenant{ID: "t1", Domain: "localhost", Name: "Local"}
-	h := withTenantAndSession(nil, stubTenancyResolver{tenant: tnt, ok: true}, newMemoryPrincipalStore(), newMemorySessionStore(), http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
-		t.Fatal("unexpected next")
+	nextCalled := false
+	h := withTenantAndSession(nil, stubTenancyResolver{tenant: tnt, ok: true}, newMemoryPrincipalStore(), newMemorySessionStore(), http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		nextCalled = true
+		w.WriteHeader(http.StatusGone)
 	}))
 
 	req := httptest.NewRequest(http.MethodGet, "/assistant-ui", nil)
 	req.Host = "localhost:8080"
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
-	if rec.Code != http.StatusFound {
+	if rec.Code != http.StatusGone {
 		t.Fatalf("status=%d", rec.Code)
 	}
-	if loc := rec.Result().Header.Get("Location"); loc != "/app/login" {
+	if loc := rec.Result().Header.Get("Location"); loc != "" {
 		t.Fatalf("location=%q", loc)
+	}
+	if !nextCalled {
+		t.Fatal("expected retired assistant ui path to pass through")
 	}
 }
 
@@ -330,14 +335,16 @@ func TestWithTenantAndSession_SessionTenantMismatchClearsCookie(t *testing.T) {
 	}
 }
 
-func TestWithTenantAndSession_SessionTenantMismatchAssistantUIClearsCookie(t *testing.T) {
+func TestWithTenantAndSession_SessionTenantMismatchAssistantUIFallsThrough(t *testing.T) {
 	tnt := Tenant{ID: "t1", Domain: "localhost", Name: "Local"}
 	sessions := &stubSessionStore{
 		ok:   true,
 		sess: Session{TenantID: "t2", PrincipalID: "p1", ExpiresAt: time.Now().Add(time.Hour)},
 	}
-	h := withTenantAndSession(nil, stubTenancyResolver{tenant: tnt, ok: true}, newMemoryPrincipalStore(), sessions, http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
-		t.Fatal("unexpected next")
+	nextCalled := false
+	h := withTenantAndSession(nil, stubTenancyResolver{tenant: tnt, ok: true}, newMemoryPrincipalStore(), sessions, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		nextCalled = true
+		w.WriteHeader(http.StatusGone)
 	}))
 
 	req := httptest.NewRequest(http.MethodGet, "/assistant-ui", nil)
@@ -345,21 +352,14 @@ func TestWithTenantAndSession_SessionTenantMismatchAssistantUIClearsCookie(t *te
 	req.AddCookie(&http.Cookie{Name: sidCookieName, Value: "sid1"})
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
-	if rec.Code != http.StatusFound {
+	if rec.Code != http.StatusGone {
 		t.Fatalf("status=%d", rec.Code)
 	}
-	if loc := rec.Result().Header.Get("Location"); loc != "/app/login" {
+	if loc := rec.Result().Header.Get("Location"); loc != "" {
 		t.Fatalf("location=%q", loc)
 	}
-	var cleared bool
-	for _, c := range rec.Result().Cookies() {
-		if c.Name == sidCookieName && c.MaxAge < 0 {
-			cleared = true
-			break
-		}
-	}
-	if !cleared {
-		t.Fatalf("expected %s cookie cleared", sidCookieName)
+	if !nextCalled {
+		t.Fatal("expected retired assistant ui path to pass through")
 	}
 }
 

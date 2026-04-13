@@ -77,6 +77,7 @@ const localizedMessages: Record<string, LocalizedErrorMessage> = {
   assistant_session_invalid: { en: 'Your assistant session is no longer valid. Please sign in again.', zh: '助手会话已失效，请重新登录。' },
   assistant_principal_invalid: { en: 'The current assistant principal is no longer valid. Please sign in again.', zh: '当前助手登录主体已失效，请重新登录。' },
   assistant_ui_bootstrap_unavailable: { en: 'Formal assistant bootstrap is unavailable. Please retry later.', zh: '正式助手入口启动信息暂不可用，请稍后重试。' },
+  assistant_ui_retired: { en: 'Legacy assistant entry has been retired. Please use the formal entry.', zh: '旧助手入口已退役，请改用正式入口。' },
   assistant_ui_method_not_allowed: { en: 'HTTP method is not allowed for assistant chat proxy.', zh: '当前请求方法不被允许，请刷新页面后重试。' },
   assistant_ui_path_invalid: { en: 'Assistant chat proxy path is invalid. Please re-open from assistant page.', zh: '助手聊天路径无效，请从助手页面重新进入。' },
   assistant_ui_upstream_unavailable: { en: 'Assistant chat upstream is unavailable. Please retry later.', zh: '聊天服务暂不可用，请稍后重试。' },

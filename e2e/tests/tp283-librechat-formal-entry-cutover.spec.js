@@ -56,15 +56,13 @@ test("tp283-e2e-001: formal entry is the only accepted chat entry", async ({ bro
   expect(sessionPayload.authenticated).toBe(true);
 
   const aliasResp = await appContext.request.get("/assistant-ui", { maxRedirects: 0 });
-  expect(aliasResp.status()).toBe(302);
-  expect(aliasResp.headers()["location"]).toBe("/app/assistant/librechat");
+  expect(aliasResp.status()).toBe(410);
 
   const aliasPathResp = await appContext.request.get("/assistant-ui/some/path", { maxRedirects: 0 });
-  expect(aliasPathResp.status()).toBe(302);
-  expect(aliasPathResp.headers()["location"]).toBe("/app/assistant/librechat");
+  expect(aliasPathResp.status()).toBe(410);
 
   const aliasWriteResp = await appContext.request.post("/assistant-ui", { data: {} });
-  expect(aliasWriteResp.status()).toBe(405);
+  expect(aliasWriteResp.status()).toBe(410);
 
   for (const compatPath of removedBootstrapCompatPaths) {
     const resp = await appContext.request.get(compatPath, { maxRedirects: 0 });

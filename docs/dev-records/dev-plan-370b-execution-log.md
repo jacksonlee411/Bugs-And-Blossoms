@@ -48,4 +48,4 @@
 
 1. [X] `370B` 的核心 hard cut 已完成：动作知识不再从 action registry / API / reply fallback 散点回流。
 2. [X] `370` 侧当前已不再存在“后续再迁 plan summary / reply business prose / action spec summary”的遗留缓冲带。
-3. [ ] `375M6` 仍需等待 `375M5` 的平台退役封板项完成后，再进入总体验收与路线图封板。
+3. [ ] `375M5` 的平台退役代码批次已完成；`375M6` 当前仅剩总体验收、主链 E2E 复验与路线图封板。

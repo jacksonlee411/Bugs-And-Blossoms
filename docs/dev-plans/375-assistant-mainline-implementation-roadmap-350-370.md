@@ -1,6 +1,6 @@
 # DEV-PLAN-375：Assistant 主线实施路线图（350-370）
 
-**状态**: 进行中（2026-04-13 15:13 CST；`375M1/375M2/375M3/375M4` 已完成并封账，`350C` 已完成并冻结八动作 contract，`370B` 已完成 action knowledge hard cut，`375M5` 仍剩平台退役封板项）
+**状态**: 进行中（2026-04-13 16:08 CST；`375M1/375M2/375M3/375M4/375M5` 的代码批次已完成，`370B` 已完成 action knowledge hard cut；当前仅剩总体验收、主链 E2E 复验与路线图封板）
 
 > 目标：为 `DEV-PLAN-350/360/360A/361/370` 提供单一编排入口，冻结当前状态、SSOT 边界、串并行顺序、批次拆分与出口条件。  
 > 本文只做路线图编排，不改写各主题文档的契约裁决权；实现细节与子系统合同仍以对应 dev-plan 为单一事实源。
@@ -19,14 +19,14 @@
 5. [X] `375M2`：`350A` 完成，收口 `add_version / insert_version`。
 6. [X] `375M3`：`370A` 完成，收口 direct Markdown runtime foundation。
 7. [X] `375M4`：compat session API 的 `410 Gone` 硬切、cleanup PR 与 runtime fail-closed/error-code 收口均已完成并封账。
-8. [ ] `375M5`：`350C` 已完成；平台退役封板仍在进行中。
-9. [ ] `375M6`：`370B` 已完成；待 `375M5` 收口后进入总体验收与封板准备。
+8. [X] `375M5`：`350C` 与平台退役代码批次均已完成。
+9. [ ] `375M6`：`370B` 已完成；当前进入总体验收与封板准备阶段。
 
 ## 0.2 当前下一步
 
-1. [ ] 第一优先级：继续推进 `375M5` 剩余的平台退役封板项（`360 / 360A Phase 3/4`）。
+1. [ ] 第一优先级：完成总体验收尾项：`tp288 / tp288b / tp290b` 主链 E2E 复验，以及必要的全仓回归。
 2. [X] `DEV-PLAN-370B` 已完成，动作知识散点 hard cut 与 contract / knowledge 强分离已落地。
-3. [ ] `375M5` 收口后，进入总体验收与封板准备。
+3. [ ] 在总体验收通过后，将 `350 / 360 / 360A / 370 / 375` 收口到“完成或仅剩独立缺陷修复”。
 
 ## 1. 背景与定位
 
@@ -42,8 +42,8 @@
 | 主题 | 当前状态 | 当前定位 | 备注 |
 | --- | --- | --- | --- |
 | `350` | 已完成 | `business_action` 正式 contract / Tool API / Gate 消费母法 | `create_orgunit / create_org`、`350A add_version / insert_version`、`350B correct / rename / move`、`350C disable / enable` 已全部完成并冻结 |
-| `360` | 进行中（Phase 0/1 已完成） | LibreChat 剥离与 LangGraph/LangChain 分层接管母法 | `360A` 承接执行面 SSOT；Phase 2+ 待实施 |
-| `360A` | 进行中（Phase 0/1 已完成） | successor DTO / `runtime-status` / compat API 生死表 / 删除批次 SSOT | `ui-bootstrap/session`、formal smoke、UI 降权已完成；Phase 2 的 compat session API cutover 已完成，cleanup PR / runtime fail-closed 待实施 |
+| `360` | 进行中（Phase 0/1 已完成，待总验收） | LibreChat 剥离与 LangGraph/LangChain 分层接管母法 | `360A` 的 Phase 2/3/4 实现批次已完成；待主链 E2E 复验后更新为完成 |
+| `360A` | 进行中（Phase 0/1/2/3/4 代码批次已完成，待总验收） | successor DTO / `runtime-status` / compat API 生死表 / 删除批次 SSOT | `ui-bootstrap/session`、formal smoke、UI 降权、compat session cutover、依赖去平台化、`retired_by_design`、`/assistant-ui/*` 退场已完成；待 `tp288 / tp288b / tp290b` 复验 |
 | `361` | 已封板基线 | 唯一 PDP / OPA evaluator 已完成 | 仅保留缺陷修复语义 |
 | `370` | 进行中 | Markdown 单主源、direct runtime、JSON cutoff 母法 | `370A` 为 runtime foundation，`370B` 为动作知识散点 hard cut |
 
@@ -112,8 +112,8 @@
 ### 375M5：业务动作收口批次三 + 平台退役封板
 
 1. [X] `350C` 已完成，`disable / enable` 已进入统一 `PolicyContext -> PDP -> PrecheckProjection -> dry-run / confirm / commit / task submit` 主链。
-2. [ ] 同步承接 `360 Phase 3/4` 与 `360A Phase 3/4`，完成依赖去平台化、`retired_by_design` 语义、`/assistant-ui/*` 退场与 `220-293` 系列归档收口。
-3. [ ] 本里程碑完成后，`350` 的八动作 contract 全部冻结，`360/360A` 达到封板条件。
+2. [X] 同步承接 `360 Phase 3/4` 与 `360A Phase 3/4`，已完成依赖去平台化、`retired_by_design` 语义、`/assistant-ui/*` 退场与 `220-293` 系列归档收口。
+3. [X] `350` 的八动作 contract 已全部冻结；`360/360A` 的实现批次已达到封板前状态，当前仅剩 `tp288 / tp288b / tp290b` 主链 E2E 复验作为总体验收尾项。
 
 ### 375M6：动作知识 Hard Cut 与总体验收
 
@@ -167,7 +167,7 @@
    `make check lint`  
    `make test`（coverage `98.00% >= 98.00%`）  
    `make check doc`
-4. [X] `360/360A`：compat session API `410 Gone` 断言、cleanup PR、正式入口 runtime fail-closed/error-code 收口均已完成；`/assistant-ui/*` 的 `302 -> 410 -> 删除` 断言仍待后续批次继续。
+4. [X] `360/360A`：compat session API `410 Gone` 断言、cleanup PR、正式入口 runtime fail-closed/error-code 收口、依赖去平台化、`retired_by_design` 语义与 `/assistant-ui/* -> 410 Gone` 均已完成；剩余主链 E2E 复验继续放在总体验收阶段。
 5. [X] `370A`：补 Markdown loader/front matter/runtime-load/no-json-runtime/反回流门禁测试，并证明 `assistant_knowledge/*.json` 已被切断。
 6. [X] `370A`：补 semantic prompt route/action parity 回归。
 7. [X] `370B`：已补动作知识散点清理、contract / knowledge 强分离、fail-closed 回归；执行记录见 `docs/dev-records/dev-plan-370b-execution-log.md`。

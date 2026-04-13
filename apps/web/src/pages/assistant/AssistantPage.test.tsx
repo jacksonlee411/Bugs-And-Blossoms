@@ -18,7 +18,7 @@ describe('AssistantPage', () => {
       checked_at: '2026-03-07T01:00:00Z',
       upstream: { url: 'http://localhost:3080' },
       services: [
-        { name: 'assistant-ui', required: true, healthy: 'healthy' },
+        { name: 'mongodb', required: false, healthy: 'retired', reason: 'retired_by_design' },
         { name: 'memory', required: false, healthy: 'retired', reason: 'retired_by_design' },
         { name: 'gateway', required: true, healthy: 'degraded' }
       ],
@@ -65,7 +65,7 @@ describe('AssistantPage', () => {
     expect(screen.getByTestId('assistant-runtime-cutover-mode')).toHaveTextContent('ui-shell-only')
     expect(screen.getByText('agents_ui:已硬切关闭')).toBeInTheDocument()
     expect(screen.getByText('artifacts:可用')).toBeInTheDocument()
-    expect(screen.getByText('assistant-ui:正常')).toBeInTheDocument()
+    expect(screen.getByText('mongodb:按设计退役')).toBeInTheDocument()
     expect(screen.getByText('memory:按设计退役')).toBeInTheDocument()
     expect(screen.getByText('gateway:依赖异常')).toBeInTheDocument()
     expect(screen.getByTestId('assistant-conversation-log-item')).toHaveTextContent('conv_1')

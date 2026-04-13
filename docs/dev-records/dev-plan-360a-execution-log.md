@@ -1,6 +1,6 @@
-# DEV-PLAN-360A 执行日志：compat session API cutover
+# DEV-PLAN-360A 执行日志：compat session API cutover + platform retirement closure
 
-**状态**: 已记录并提交（2026-04-13 07:23 CST；Phase 2 的 compat session API 硬切已完成并提交到 `bb5a8568`，cleanup PR 与 runtime fail-closed/error-code 收口待继续）
+**状态**: 已记录并继续推进（2026-04-13 15:58 CST；Phase 2 已完成并提交到 `bb5a8568`，Phase 3/4 的平台退役代码批次与定向验证已完成；剩余主链 E2E 复验后再宣告总封板）
 
 ## 1. 本轮交付范围
 
@@ -50,3 +50,24 @@
 3. [ ] 后续仍需完成 cleanup PR，删除 compat handler 分支与路由绑定。
 4. [ ] 后续仍需收口 successor runtime fail-closed/error-code 语义，包括 `assistant_runtime_unavailable / assistant_gate_unavailable`。
 5. [ ] `375M3 / DEV-PLAN-370A` 仍可并行推进，但不得改写 `350` 已冻结的 `business_action` contract。
+
+## 7. Phase 3/4 平台退役封板批次
+
+1. [X] 默认 runtime 依赖已从 `mongodb/meilisearch/rag_api/vectordb` 收敛为仅保留 `api`：
+   - `deploy/librechat/docker-compose.upstream.yaml`
+   - `deploy/librechat/docker-compose.overlay.yaml`
+   - `scripts/librechat/common.sh`
+2. [X] 退役依赖仍保留在 `deploy/librechat/versions.lock.yaml` 中，但已统一标记为 `retired_by_design`，仅用于 `runtime-status` 暴露退役语义，不再参与默认 compose / health probe。
+3. [X] `/assistant-ui/*` 已从历史 alias/redirect 收口为统一 `410 Gone`，并已从 protected tenant UI 口径中移除，不再触发“无 session 先跳登录”的旧行为。
+4. [X] 定向测试已同步收口：
+   - `go test ./internal/server/...`
+   - `npm -C apps/web test -- src/errors/presentApiError.test.ts src/pages/assistant/AssistantPage.test.tsx`
+5. [X] 同批已更新的测试/断言面包括：
+   - `internal/server/assistant_runtime_status_test.go`
+   - `internal/server/assistant_ui_proxy_test.go`
+   - `internal/server/assistant_ui_proxy_log_test.go`
+   - `internal/server/handler_test.go`
+   - `internal/server/tenancy_middleware_test.go`
+   - `e2e/tests/tp220-assistant.spec.js`
+   - `e2e/tests/tp283-librechat-formal-entry-cutover.spec.js`
+6. [ ] 尚未在本批次内复跑 `tp288 / tp288b / tp290b` 主链 E2E；因此本执行记录将该批次记为“代码与定向验证完成”，而非“总体验收封板完成”。

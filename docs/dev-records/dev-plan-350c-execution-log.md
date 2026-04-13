@@ -51,5 +51,5 @@
 
 1. [X] `DEV-PLAN-350C` 的范围已完成，`disable / enable` 已成为 `business_action` 正式 contract 主链的一部分。
 2. [X] `350` 八动作 contract 已全部冻结，`370B` 所需的动作 contract 前置条件已满足。
-3. [ ] `375M5` 的平台退役封板仍待 `360 / 360A Phase 3/4` 继续承接。
+3. [X] `375M5` 的平台退役代码批次已由 `360 / 360A Phase 3/4` 承接完成；剩余仅主链 E2E 复验作为总体验收尾项。
 4. [ ] 可并行推进 `375M6 / DEV-PLAN-370B`，聚焦更深层动作知识散点 hard cut 与 contract / knowledge 强分离。

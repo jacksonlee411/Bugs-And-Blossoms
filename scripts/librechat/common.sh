@@ -53,7 +53,7 @@ librechat_init() {
   LIBRECHAT_PREFIX="${1:-[librechat-runtime]}"
   LIBRECHAT_REPO_ROOT="$(git rev-parse --show-toplevel)"
   LIBRECHAT_RUNTIME_DIR="${LIBRECHAT_REPO_ROOT}/deploy/librechat"
-  LIBRECHAT_SERVICES=(api mongodb meilisearch rag_api vectordb)
+  LIBRECHAT_SERVICES=(api)
   LIBRECHAT_ENV_FILE_PATH="${LIBRECHAT_ENV_FILE:-${LIBRECHAT_RUNTIME_DIR}/.env}"
   if [[ ! -f "${LIBRECHAT_ENV_FILE_PATH}" ]]; then
     LIBRECHAT_ENV_FILE_PATH="${LIBRECHAT_RUNTIME_DIR}/.env.example"

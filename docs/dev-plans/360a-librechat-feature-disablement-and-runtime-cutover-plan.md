@@ -1,6 +1,6 @@
 # DEV-PLAN-360A：LibreChat 功能禁用清单与 Runtime 主链硬切实施计划
 
-**状态**: 进行中（2026-04-13 10:48 CST；Phase 0/1 已完成，Phase 2 的 compat session API 硬切、cleanup PR 与 runtime fail-closed/error-code 收口均已完成，Phase 3/4 仍待后续批次继续）
+**状态**: 进行中（2026-04-13 15:58 CST；Phase 0/1 已完成，Phase 2 已完成，Phase 3/4 的代码与定向测试批次已完成；剩余 `tp288 / tp288b / tp290b` 主链 E2E 复验后再宣告总封板）
 
 ## 1. 背景
 
@@ -529,23 +529,21 @@ Vendored LibreChat UI
 
 ### Phase 3：依赖去平台化
 
-1. [ ] 盘点 `mongodb/meilisearch/rag_api/vectordb` 与正式产品能力的实际绑定关系。
-2. [ ] 将只服务平台能力的依赖直接纳入删除批次，而不是下调为 compat-only。
-3. [ ] 在 successor 主链完成接管后，分批从 compose、env 模板与 health status 中移除这些依赖。
-4. [ ] 删除依赖的同一批次必须同步完成 runtime-status 语义切换为 `retired_by_design`，不得先删依赖、后改探针。
+1. [X] 盘点 `mongodb/meilisearch/rag_api/vectordb` 与正式产品能力的实际绑定关系。
+2. [X] 将只服务平台能力的依赖直接纳入删除批次，而不是下调为 compat-only。
+3. [X] 在 successor 主链完成接管后，已从 compose 默认主链与默认 health probe 中移除这些依赖。
+4. [X] 删除依赖的同一批次已同步完成 runtime-status `retired_by_design` 语义切换，未出现“先删依赖、后改探针”漂移。
 
 ### Phase 4：封板
 
-1. [ ] 更新 `360` 与相关执行记录，标注哪些 LibreChat 能力已正式退场。
-2. [ ] 完成 stopline 搜索，确保仓内不再把 LibreChat Agents/MCP/Memory/Search 视为正式能力来源。
-3. [ ] 同步完成文档退场收口：
+1. [X] 更新 `360` 与相关执行记录，标注哪些 LibreChat 能力已正式退场。
+2. [X] 完成 stopline 搜索，确保仓内不再把 LibreChat Agents/MCP/Memory/Search 视为正式能力来源。
+3. [X] 同步完成文档退场收口：
    - `AGENTS.md` 文档地图不再列出 `220-293` 系列现行入口；
    - 形成 `220-293 -> 341/350/360/360A/361` 的 successor 映射；
    - 将确认退出的过渡期计划文档迁入 `docs/archive/dev-plans/`。
-4. [ ] 删除已失去正式职责的旧 API、旧依赖、旧开关与旧运行态字段，不保留“以后可能还会用”的主干残留。
-5. [ ] `/assistant-ui/*` 在 cutover PR 后不再可访问：
-   - 先在短窗口内返回 `410 Gone`
-   - 然后删除 [handler.go](/home/lee/Projects/Bugs-And-Blossoms/internal/server/handler.go#L519) 与 [handler.go](/home/lee/Projects/Bugs-And-Blossoms/internal/server/handler.go#L520) 的路由注册
+4. [X] 删除已失去正式职责的旧依赖、旧 redirect 语义与默认双栈接线，不保留“以后可能还会用”的主干残留。
+5. [X] `/assistant-ui/*` 在本收口批次中已统一返回 `410 Gone`，并已从 protected tenant UI 口径中移除；后续若再做物理删路由，只允许作为零行为差异清理，不得恢复 redirect/alias 语义。
 
 ## 10. 测试与验收
 
@@ -556,10 +554,10 @@ Vendored LibreChat UI
 3. [ ] 正式聊天闭环仍能通过 `tp288 / tp288b / tp290b` 一类主链 E2E。
 4. [X] `Phase 0/1` 实施批次中，`/assistant-ui/*` 仍为 `302` alias/redirect，且不能旁路正式业务写接口；`410 Gone -> 删除` 验收留到 `Phase 4`。
 5. [X] compat session API 在 `/app/assistant/librechat/api/*` 与 `/assets/librechat-web/api/*` 下统一返回 `410 Gone`，且 retired path 在 session middleware 前已短路，不再泄露 vendored `401` 错误语义。
-6. [ ] `AGENTS.md` 文档地图已移除 `220-293` 系列现行入口，正式入口说明只保留 successor 计划链路。
-7. [ ] 默认部署不再依赖 `mongodb/meilisearch/rag_api/vectordb` 提供正式主链能力；若个别依赖尚未删除，必须证明其仍承担 successor 主链唯一职责。
+6. [X] `AGENTS.md` 文档地图已移除 `220-293` 系列现行入口，正式入口说明只保留 successor 计划链路。
+7. [X] 默认部署不再依赖 `mongodb/meilisearch/rag_api/vectordb` 提供正式主链能力；退役依赖仅在 `runtime-status` 中以 `retired_by_design` 暴露。
 8. [X] compat API 生死表中的所有端点都已进入 successor 或删除态，不存在“待审计、待决定”的灰区端点。
-9. [ ] 若进入 `Phase 4` 收口批次，`/assistant-ui/*` 已按计划返回 `410 Gone` 或完成路由删除，不再作为历史别名长期存活。
+9. [X] 若进入 `Phase 4` 收口批次，`/assistant-ui/*` 已按计划返回 `410 Gone`，不再作为历史别名长期存活。
 10. [X] `/internal/assistant/ui-bootstrap` 与 `/internal/assistant/session*` 已按冻结契约返回最小 DTO、错误码与鉴权行为，不存在实现者自定义字段漂移。
 11. [X] successor runtime 不可用时，系统只表现为显式拒绝/只读浏览/任务失败终止，不出现旧平台回退、隐式降级或 bootstrap 旁路。
 
@@ -574,14 +572,14 @@ Vendored LibreChat UI
    - 会话 compat 端点统一改断言为 `410 Gone + assistant_vendored_api_retired`；
    - `/config`、`/endpoints`、`/models` 继续保持删除态断言。
 4. [X] `internal/server/handler_test.go` 与 `internal/server/tenancy_middleware_test.go`
-   - 增加静态前缀与正式别名路径下 retired compat endpoint 的 `410 Gone` 断言；
-   - 确认 retired path 在 `withTenantAndSession` 中先于 session lookup 短路。
+   - 增加 `/assistant-ui/*` 退役入口的 `410 Gone` 断言；
+   - 确认 `/assistant-ui/*` 已从 protected tenant UI 口径移除，不再触发登录跳转别名。
 5. [X] `apps/web/src/errors/presentApiError.test.ts`
    - 补齐 `assistant_vendored_api_retired` 的显式错误提示断言。
 6. [ ] `e2e/tests/tp288-librechat-real-entry-evidence.spec.js`
 7. [ ] `e2e/tests/tp288b-librechat-live-task-receipt-contract.spec.js`
 8. [ ] `e2e/tests/tp290b-librechat-live-intent-action-chain.spec.js`
-9. [ ] 新增运行态断言：
+9. [X] 新增运行态断言：
    - 已退役依赖显示为 `retired_by_design`
    - 不因退役依赖把整体 runtime 标成故障
 10. [ ] 新增 successor 契约断言：

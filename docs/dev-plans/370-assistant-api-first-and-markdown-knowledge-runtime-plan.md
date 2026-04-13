@@ -1,6 +1,6 @@
 # DEV-PLAN-370：Assistant API-First 与 Direct Markdown Knowledge Runtime 主链收敛方案
 
-**状态**: 进行中（2026-04-13 12:08 CST）
+**状态**: 进行中（2026-04-13 16:08 CST；`370A/370B` 已完成，当前仅剩 Phase 4 稳定化与 `375` 总体验收联动项）
 
 ## 1. 背景与问题定性
 

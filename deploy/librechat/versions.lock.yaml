@@ -15,28 +15,32 @@ services:
     data_dir: .local/librechat/api
     owner: assistant-platform
   - name: mongodb
-    required: true
+    required: false
+    retired_by_design: true
     image: mongo
     tag: "7.0"
     digest: sha256:2222222222222222222222222222222222222222222222222222222222222222
     data_dir: .local/librechat/mongodb
     owner: assistant-platform
   - name: meilisearch
-    required: true
+    required: false
+    retired_by_design: true
     image: getmeili/meilisearch
     tag: v1.12.0
     digest: sha256:3333333333333333333333333333333333333333333333333333333333333333
     data_dir: .local/librechat/meilisearch
     owner: assistant-platform
   - name: rag_api
-    required: true
+    required: false
+    retired_by_design: true
     image: ghcr.io/danny-avila/librechat-rag-api-dev-lite
     tag: latest
     digest: sha256:201958505e21a1334234df6538713bac204b10d98a72d239b5318ce11f40f20b
     data_dir: .local/librechat/rag_api
     owner: assistant-platform
   - name: vectordb
-    required: true
+    required: false
+    retired_by_design: true
     image: qdrant/qdrant
     tag: v1.13.4
     digest: sha256:5555555555555555555555555555555555555555555555555555555555555555
