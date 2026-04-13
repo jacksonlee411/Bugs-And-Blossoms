@@ -1,6 +1,6 @@
 # DEV-PLAN-360A 执行日志：compat session API cutover + platform retirement closure
 
-**状态**: 已记录并进入封板评估（2026-04-13 18:23 CST；Phase 2 已完成并提交到 `bb5a8568`，Phase 3/4 的平台退役代码批次、`tp288b / tp290b` live successor 复验与仓库 coverage 收口均已完成；当前仅剩 `tp288` 旧 mock 正式入口证据脚本的适配/退役决策）
+**状态**: 已完成（2026-04-13 18:23 CST；Phase 2 已完成并提交到 `bb5a8568`，Phase 3/4 的平台退役代码批次、`tp288b / tp290b` live successor 复验与仓库 coverage 收口均已完成；`tp288` 已按历史 mock 正式入口证据脚本退役归档）
 
 ## 1. 本轮交付范围
 
@@ -54,8 +54,8 @@
 2. [X] `375M4` 中“compat session API 硬切”子目标已完成，且其后续 cleanup PR、successor runtime fail-closed/error-code 收口已在 `375M5` 平台退役批次中补齐。
 3. [X] `375M5/360A Phase 3/4` 所需的 live successor 复验已部分完成：`tp288b / tp290b` 通过，证明正式主链未因平台退役封板而回退。
 4. [X] 仓库级 `make test` 已恢复到 `98.00%` 门槛，不再构成 `360A` 封板阻塞。
-5. [ ] 当前仅剩 `tp288` 旧 mock 正式入口证据脚本待处置：要么按当前页面承载补适配，要么确认其历史证据定位并退役归档。
-6. [ ] 在 `tp288` 处置结论明确前，`360A Phase 3/4` 记为“主链完成、剩余独立证据脚本收尾”，而非最终总封板。
+5. [X] `tp288` 已确认为历史 mock 正式入口证据脚本，并已退役为默认跳过的归档测试文件。
+6. [X] `360A Phase 3/4` 已完成总封板；现行主链验证以 `tp288b / tp290b` live successor 证据为准。
 
 ## 7. Phase 3/4 平台退役封板批次
 
@@ -77,5 +77,5 @@
    - `e2e/tests/tp220-assistant.spec.js`
    - `e2e/tests/tp283-librechat-formal-entry-cutover.spec.js`
 6. [X] 已在本批次内复跑 `tp288b / tp290b` 主链 E2E；live successor 闭环通过。
-7. [ ] `tp288` 仍是旧 mock 正式入口证据脚本，当前页面承载下无法找到输入框，待决定适配还是退役归档。
+7. [X] `tp288` 已退役归档：保留文件路径与既有证据资产，仅用于历史引用；不再参与现行主链 gate。
 8. [X] 仓库级 `make test` 已恢复到 `98.00%` 门槛；`360A Phase 3/4` 的仓库级 coverage 阻塞已解除。
