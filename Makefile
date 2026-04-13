@@ -283,11 +283,20 @@ dev-superadmin:
 assistant-runtime-up: ## LibreChat 官方运行基线上线（compose up + healthcheck）
 	@./scripts/librechat/up.sh
 
+assistant-runtime-up-mongo-debug: ## LibreChat external Mongo 调试模式（使用 deploy/librechat/.env.mongo-debug）
+	@LIBRECHAT_ENV_FILE="$(CURDIR)/deploy/librechat/.env.mongo-debug" ./scripts/librechat/up.sh
+
 assistant-runtime-down: ## LibreChat 官方运行基线下线（compose down）
 	@./scripts/librechat/down.sh
 
+assistant-runtime-down-mongo-debug: ## LibreChat external Mongo 调试模式下线
+	@LIBRECHAT_ENV_FILE="$(CURDIR)/deploy/librechat/.env.mongo-debug" ./scripts/librechat/down.sh
+
 assistant-runtime-status: ## LibreChat 运行健康检查（产出 runtime-status.json）
 	@./scripts/librechat/status.sh
+
+assistant-runtime-status-mongo-debug: ## LibreChat external Mongo 调试模式健康检查
+	@LIBRECHAT_ENV_FILE="$(CURDIR)/deploy/librechat/.env.mongo-debug" ./scripts/librechat/status.sh
 
 assistant-runtime-clean: ## LibreChat 本地数据清理（仅 .local/librechat/*）
 	@./scripts/librechat/clean.sh

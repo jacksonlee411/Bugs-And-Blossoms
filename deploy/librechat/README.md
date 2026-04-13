@@ -7,6 +7,7 @@
 - `docker-compose.upstream.yaml`：官方基线（最小改动）。
 - `docker-compose.overlay.yaml`：本仓覆盖层（卷路径与本地运行参数）。
 - `.env.example`：环境变量模板。
+- `.env.mongo-debug.example`：external Mongo 调试模板（仅在你确实需要启动 upstream backend 时使用）。
 - `versions.lock.yaml`：版本元数据（tag/digest/imported_at/rollback_ref）。
 - `healthcheck.sh`：依赖健康检查并产出 `runtime-status.json`。
 
@@ -23,6 +24,27 @@
    - `make assistant-runtime-status`
 4. 停止：
    - `make assistant-runtime-down`
+
+## external Mongo 调试模式
+
+当你需要真正启动 upstream LibreChat backend（例如排查 vendored upstream 自身行为），请不要改默认 `.env`，而是单独使用 external Mongo 调试模板：
+
+1. `cp deploy/librechat/.env.mongo-debug.example deploy/librechat/.env.mongo-debug`
+2. 填写：
+   - `OPENAI_API_KEY`
+   - `MONGO_URI`（外部可达 Mongo）
+3. 启动：
+   - `make assistant-runtime-up-mongo-debug`
+4. 查看状态：
+   - `make assistant-runtime-status-mongo-debug`
+5. 停止：
+   - `make assistant-runtime-down-mongo-debug`
+
+说明：
+- 调试模式默认使用独立 project：`bugs-and-blossoms-librechat-mongo-debug`
+- 默认端口为 `3081`
+- 默认数据根为 `.local/librechat-mongo-debug`
+- 该模式只用于 upstream 调试，不代表默认开发基线
 
 ## 真实模型能力前置条件（DEV-PLAN-239）
 
@@ -46,6 +68,7 @@
 - 上述四项仍保留在 `versions.lock.yaml` 中，仅用于 `runtime-status` 暴露 `retired_by_design` 语义，不再作为默认运行前置。
 - 若后续调试仍需单独拉起历史依赖，必须通过临时 patch / 私有调试脚本完成，不得回写默认主干 compose。
 - 额外注意：当前 upstream `api` 进程仍在源码层硬依赖 `MONGO_URI`，见容器内 `/app/api/db/connect.js`。因此“默认 compose 只保留 api”并不等于“api 可以在无 Mongo 的情况下健康启动”；现阶段若要让 `3080` 健康，仍需提供一个外部 Mongo 端点。
+- 因此，仓库现提供单独的 external Mongo 调试入口，而不是把 Mongo 重新混回默认 baseline。
 
 ## 清理边界
 
