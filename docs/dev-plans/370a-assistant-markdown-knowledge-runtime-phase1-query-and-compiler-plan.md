@@ -122,7 +122,6 @@
 4. [ ] 加载失败必须 fail-closed；以下情况必须阻断：
    - front matter 缺字段
    - 重复 `id`
-   - `source_refs`/`tool_refs`/`wiki_refs`/`reply_refs` 坏引用
    - `tool_name` 未注册
    - `action_key`、`required_checks` 与正式 contract 冲突
    - archive 引用
@@ -164,7 +163,7 @@
 ### 7.5 `make check assistant-no-knowledge-literals`
 
 1. [ ] 扫描 `assistant_action_registry.go`、`assistant_api.go`、`assistant_reply_nlg.go` 等核心入口。
-2. [ ] 阻断新增业务知识型摘要、解释、模板、长文案常量。
+2. [ ] 阻断新增业务知识型摘要、解释、模板、长文案常量；同时覆盖 `assistant_model_gateway.go` 中独立维护的 route/action 映射与语义提示词真相源。
 3. [ ] 技术型最小 fallback 文案允许保留，但必须与业务知识文本区分开。
 
 ### 7.6 `make check assistant-knowledge-no-archive-ref`
@@ -220,7 +219,8 @@
 
 1. [ ] `370A` 必须把 `assistant_knowledge_runtime.go` 改为直接读取 Markdown。
 2. [ ] `370A` 不要求完全清空所有代码散点知识，但要求禁止新增新的散点入口。
-3. [ ] `370A` 完成后，`370B` 应只剩“清理动作知识散点 + contract / knowledge 强分离”工作，而不再需要回头补 JSON cutoff 或 direct runtime 基座。
+3. [ ] `370A` 必须同步收敛 `assistant_model_gateway.go` 的 semantic route/action 口径，避免 Markdown 与模型提示词并存两套路由真相源。
+4. [ ] `370A` 完成后，`370B` 应只剩“清理动作知识散点 + contract / knowledge 强分离”工作，而不再需要回头补 JSON cutoff 或 direct runtime 基座。
 
 ## 9. 验收与测试
 
@@ -246,12 +246,14 @@
    - Markdown runtime load 失败
    - `assistant_knowledge/*.json` 回流
    - 代码入口新增知识型 literals
+   - semantic prompt route/action 枚举与 active Markdown 索引不一致
 4. [ ] `370A` 验收口径冻结为：
    - `assistant_knowledge_md/` 成为全部运行时知识的唯一人工主源
    - runtime 能直接从 Markdown 建立完整知识索引
    - `assistant_knowledge/*.json` 已被删除
    - 不再存在 query/action 分裂 ownership
    - 不再允许 overlay / pass-through / JSON 快照作为正式方案
+   - semantic prompt 不再形成第二套路由真相源
 
 ## 10. 完成定义（DoD）
 

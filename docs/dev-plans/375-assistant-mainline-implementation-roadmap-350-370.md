@@ -98,6 +98,7 @@
 1. [ ] 启动 `370A`，覆盖 Markdown 单主源、`assistant_knowledge_md`、direct runtime loader、`assistant_knowledge/*.json` 切断与反回流门禁。
 2. [ ] 明确 `370A` 不做 query-only partial cutover，也不保留 action/query ownership 分裂。
 3. [ ] 明确 `370A` 不承接 `business_action` contract，不改 `assistantActionSpec`、Tool registry、`PolicyContextContractVersion`、`PrecheckProjectionContractVersion`。
+4. [ ] 明确 `370A` 同步冻结 semantic prompt 与 active Markdown 索引的一致性。
 
 ### 375M4：业务动作收口批次二 + compat API 硬切
 
@@ -162,7 +163,8 @@
 3. [ ] `350C`：沿用同一命令口径，待后续批次完成。
 4. [ ] `360/360A`：compat session API `410 Gone` 断言与前端 retired error tests 已完成；正式入口 smoke、runtime fail-closed/error-code 收口，以及 `/assistant-ui/*` 的 `302 -> 410 -> 删除` 断言待继续。
 5. [ ] `370A`：补 Markdown loader/front matter/runtime-load/no-json-runtime/反回流门禁测试，并证明 `assistant_knowledge/*.json` 已被切断。
-6. [ ] `370B`：补动作知识散点清理、contract / knowledge 强分离、fail-closed 回归。
+6. [ ] `370A`：补 semantic prompt route/action parity 回归。
+7. [ ] `370B`：补动作知识散点清理、contract / knowledge 强分离、fail-closed 回归。
 7. [X] `350A/350B` 实际执行记录已进入对应子计划与 `docs/dev-records/`，`375` 只维护路线图级进度与引用。
 
 ## 8. 依赖草图（Mermaid）
