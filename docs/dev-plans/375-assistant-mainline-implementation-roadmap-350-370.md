@@ -1,6 +1,6 @@
 # DEV-PLAN-375：Assistant 主线实施路线图（350-370）
 
-**状态**: 进行中（2026-04-13 18:42 CST；`375M1/375M2/375M3/375M4/375M5` 的代码批次已完成，`370B` 已完成 action knowledge hard cut，`assistant_ui_retired` 错误目录已补齐；当前仅剩 `tp288 / tp288b / tp290b` 主链 E2E 复验、全仓 coverage 从 `97.90%` 补回 `98.00%` 门槛，以及路线图封板）
+**状态**: 进行中（2026-04-13 18:23 CST；`375M1/375M2/375M3/375M4/375M5` 的代码批次已完成，`370B` 已完成 action knowledge hard cut，`tp288b / tp290b` live successor 复验已通过，`make test` 已达 `98.00%` coverage 门槛；当前仅剩 `tp288` 旧 mock 正式入口证据脚本的适配/退役决策，以及路线图封板判定）
 
 > 目标：为 `DEV-PLAN-350/360/360A/361/370` 提供单一编排入口，冻结当前状态、SSOT 边界、串并行顺序、批次拆分与出口条件。  
 > 本文只做路线图编排，不改写各主题文档的契约裁决权；实现细节与子系统合同仍以对应 dev-plan 为单一事实源。
@@ -24,10 +24,11 @@
 
 ## 0.2 当前下一步
 
-1. [ ] 第一优先级：完成总体验收尾项：`tp288 / tp288b / tp290b` 主链 E2E 复验，以及必要的全仓回归。
-2. [ ] 第二优先级：补齐全仓 coverage 门槛；截至 2026-04-13 18:42 CST，`make test` 已越过 `assistant_ui_retired` error catalog 缺项，但总 coverage 仍为 `97.90% < 98.00%`。
-3. [X] `DEV-PLAN-370B` 已完成，动作知识散点 hard cut 与 contract / knowledge 强分离已落地。
-4. [ ] 在总体验收通过后，将 `350 / 360 / 360A / 370 / 375` 收口到“完成或仅剩独立缺陷修复”。
+1. [ ] 第一优先级：处理 `tp288` 旧 mock 正式入口证据脚本，明确按当前页面承载补适配，还是按历史 mock 证据退役归档。
+2. [X] 第二优先级已完成：`tp288b / tp290b` 主链 E2E 复验通过，且必要的 live successor 回归已补齐。
+3. [X] `make test` 已恢复到仓库门槛：coverage `98.00% >= 98.00%`。
+4. [X] `DEV-PLAN-370B` 已完成，动作知识散点 hard cut 与 contract / knowledge 强分离已落地。
+5. [ ] 在 `tp288` 处置结论明确后，将 `350 / 360 / 360A / 370 / 375` 收口到“完成或仅剩独立缺陷修复”。
 
 ## 1. 背景与定位
 
@@ -43,10 +44,10 @@
 | 主题 | 当前状态 | 当前定位 | 备注 |
 | --- | --- | --- | --- |
 | `350` | 已完成 | `business_action` 正式 contract / Tool API / Gate 消费母法 | `create_orgunit / create_org`、`350A add_version / insert_version`、`350B correct / rename / move`、`350C disable / enable` 已全部完成并冻结 |
-| `360` | 进行中（Phase 0/1 已完成，待总验收） | LibreChat 剥离与 LangGraph/LangChain 分层接管母法 | `360A` 的 Phase 2/3/4 实现批次已完成；待主链 E2E 复验与全仓 coverage 补回 `98.00%` 后更新为完成 |
-| `360A` | 进行中（Phase 0/1/2/3/4 代码批次已完成，待总验收） | successor DTO / `runtime-status` / compat API 生死表 / 删除批次 SSOT | `ui-bootstrap/session`、formal smoke、UI 降权、compat session cutover、依赖去平台化、`retired_by_design`、`/assistant-ui/*` 退场已完成；待 `tp288 / tp288b / tp290b` 复验与 coverage `98.00%` 收口 |
+| `360` | 进行中（封板准备中） | LibreChat 剥离与 LangGraph/LangChain 分层接管母法 | `360A` 的 Phase 2/3/4 实现批次、`tp288b / tp290b` live successor 复验与仓库 coverage `98.00%` 均已完成；当前仅剩 `tp288` 旧 mock 正式入口证据脚本的处置结论 |
+| `360A` | 进行中（封板准备中） | successor DTO / `runtime-status` / compat API 生死表 / 删除批次 SSOT | `ui-bootstrap/session`、formal smoke、UI 降权、compat session cutover、依赖去平台化、`retired_by_design`、`/assistant-ui/*` 退场已完成；`tp288b / tp290b` 已复验通过，coverage 已收口，剩余仅 `tp288` 旧 mock 证据脚本 |
 | `361` | 已封板基线 | 唯一 PDP / OPA evaluator 已完成 | 仅保留缺陷修复语义 |
-| `370` | 进行中 | Markdown 单主源、direct runtime、JSON cutoff 母法 | `370A` 为 runtime foundation，`370B` 为动作知识散点 hard cut |
+| `370` | 已完成 | Markdown 单主源、direct runtime、JSON cutoff 母法 | `370A` 为 runtime foundation，`370B` 为动作知识散点 hard cut，当前不再阻塞 `375` 总验收 |
 
 ## 3. SSOT 边界矩阵
 
@@ -114,7 +115,7 @@
 
 1. [X] `350C` 已完成，`disable / enable` 已进入统一 `PolicyContext -> PDP -> PrecheckProjection -> dry-run / confirm / commit / task submit` 主链。
 2. [X] 同步承接 `360 Phase 3/4` 与 `360A Phase 3/4`，已完成依赖去平台化、`retired_by_design` 语义、`/assistant-ui/*` 退场与 `220-293` 系列归档收口。
-3. [X] `350` 的八动作 contract 已全部冻结；`360/360A` 的实现批次已达到封板前状态，当前仅剩 `tp288 / tp288b / tp290b` 主链 E2E 复验作为总体验收尾项。
+3. [X] `350` 的八动作 contract 已全部冻结；`360/360A` 的实现批次、`tp288b / tp290b` live successor 复验与 coverage 收口均已完成，当前仅剩 `tp288` 旧 mock 正式入口证据脚本的处置结论。
 
 ### 375M6：动作知识 Hard Cut 与总体验收
 
@@ -122,10 +123,10 @@
 2. [X] 完成 `business_action` 剩余知识散点清理，并保持 direct Markdown runtime 为唯一知识消费面。
 3. [X] 完成 `assistant_action_registry.go` 的 contract / knowledge 拆离，并清理 `assistant_api.go`、`assistant_reply_nlg.go` 中的业务知识型文本。
 4. [ ] 里程碑出口：`350 / 360 / 360A / 370` 全部状态可更新为完成或仅剩独立缺陷修复，`375` 进入封板准备。
-5. [ ] 当前阻塞事实（2026-04-13 18:42 CST）：
-   - `make test` 已不再因 `assistant_ui_retired` error catalog 缺项失败；
-   - 但全仓总 coverage 仍为 `97.90%`，低于仓库门槛 `98.00%`；
-   - `tp288 / tp288b / tp290b` 尚未复跑，因此 `375` 仍不得宣告总封板。
+5. [ ] 当前阻塞事实（2026-04-13 18:23 CST）：
+   - `make test` 已通过，coverage `98.00% >= 98.00%`；
+   - `tp288b / tp290b` 已完成 live successor 复验；
+   - `tp288` 仍因旧 mock 正式入口证据脚本未适配当前页面承载而失败，因此 `375` 当前只能视为“主链完成、剩余独立证据脚本收尾”。
 
 ## 6. 并行泳道与子计划
 
@@ -172,14 +173,13 @@
    `make check lint`  
    `make test`（coverage `98.00% >= 98.00%`）  
    `make check doc`
-4. [X] `360/360A`：compat session API `410 Gone` 断言、cleanup PR、正式入口 runtime fail-closed/error-code 收口、依赖去平台化、`retired_by_design` 语义与 `/assistant-ui/* -> 410 Gone` 均已完成；剩余主链 E2E 复验继续放在总体验收阶段。
+4. [X] `360/360A`：compat session API `410 Gone` 断言、cleanup PR、正式入口 runtime fail-closed/error-code 收口、依赖去平台化、`retired_by_design` 语义与 `/assistant-ui/* -> 410 Gone` 均已完成；`tp288b / tp290b` live successor 复验也已通过。
 5. [X] `370A`：补 Markdown loader/front matter/runtime-load/no-json-runtime/反回流门禁测试，并证明 `assistant_knowledge/*.json` 已被切断。
 6. [X] `370A`：补 semantic prompt route/action parity 回归。
 7. [X] `370B`：已补动作知识散点清理、contract / knowledge 强分离、fail-closed 回归；执行记录见 `docs/dev-records/dev-plan-370b-execution-log.md`。
 7. [X] `350A/350B` 实际执行记录已进入对应子计划与 `docs/dev-records/`，`375` 只维护路线图级进度与引用。
-8. [ ] `375M5/M6` 合并收尾验证仍差两项：
-   - `make test` 需要从当前 `97.90%` 补回到 `98.00%`；
-   - `tp288 / tp288b / tp290b` 主链 E2E 复验尚未完成。
+8. [ ] `375M5/M6` 合并收尾验证当前仅差一项：
+   - `tp288` 旧 mock 正式入口证据脚本需明确“适配当前页面承载”还是“退役归档”，之后再宣告 `375` 总封板。
 
 ## 8. 依赖草图（Mermaid）
 

@@ -159,6 +159,22 @@ func TestAssistantPhaseSnapshot_TurnDerivedFields(t *testing.T) {
 	})
 }
 
+func TestAssistantPhaseSnapshot_MissingFieldsJSONAlwaysArray(t *testing.T) {
+	if got := assistantMissingFieldsJSON(nil); got != "[]" {
+		t.Fatalf("nil turn missing_fields json=%q", got)
+	}
+
+	turn := &assistantTurn{}
+	if got := assistantMissingFieldsJSON(turn); got != "[]" {
+		t.Fatalf("empty turn missing_fields json=%q", got)
+	}
+
+	turn.DryRun.ValidationErrors = []string{"missing_effective_date"}
+	if got := assistantMissingFieldsJSON(turn); got != "[\"effective_date\"]" {
+		t.Fatalf("unexpected populated missing_fields json=%q", got)
+	}
+}
+
 func TestAssistantPhaseSnapshot_ConversationAndReplyDerived(t *testing.T) {
 	turn := &assistantTurn{
 		TurnID:              "turn_1",

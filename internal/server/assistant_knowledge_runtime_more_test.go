@@ -896,6 +896,86 @@ func TestAssistantKnowledgeRuntime_HelperCoverage(t *testing.T) {
 		}
 	})
 
+	t.Run("resolve plan presentation branches", func(t *testing.T) {
+		if _, err := (*assistantKnowledgeRuntime)(nil).resolvePlanPresentation(assistantIntentSpec{}, "zh"); !errors.Is(err, errAssistantRuntimeConfigInvalid) {
+			t.Fatalf("expected runtime missing error, got=%v", err)
+		}
+
+		nonBusinessRuntime := &assistantKnowledgeRuntime{
+			routeCatalog: assistantIntentRouteCatalog{
+				Entries: []assistantIntentRouteEntry{
+					{IntentID: "knowledge.general_qa", RouteKind: assistantRouteKindKnowledgeQA},
+				},
+			},
+			intentDocs: map[string]map[string]assistantKnowledgeMarkdownDocument{
+				"knowledge.general_qa": {
+					"zh": {ID: "knowledge.general_qa", Locale: "zh", Title: "知识问答", Summary: "知识问答摘要"},
+				},
+			},
+		}
+		presentation, err := nonBusinessRuntime.resolvePlanPresentation(assistantIntentSpec{
+			RouteKind: assistantRouteKindKnowledgeQA,
+		}, "zh")
+		if err != nil {
+			t.Fatalf("resolve non-business route presentation err=%v", err)
+		}
+		if presentation.Title != "知识问答" || presentation.Summary != "知识问答摘要" {
+			t.Fatalf("unexpected non-business presentation=%+v", presentation)
+		}
+
+		if _, err := nonBusinessRuntime.resolvePlanPresentation(assistantIntentSpec{
+			RouteKind: assistantRouteKindChitchat,
+		}, "zh"); err == nil || !strings.Contains(err.Error(), "route intent doc missing") {
+			t.Fatalf("expected missing route doc error, got=%v", err)
+		}
+
+		if _, err := (&assistantKnowledgeRuntime{
+			intentDocs: map[string]map[string]assistantKnowledgeMarkdownDocument{
+				"knowledge.general_qa": {
+					"zh": {ID: "knowledge.general_qa", Locale: "zh", Title: "知识问答"},
+				},
+			},
+		}).resolvePlanPresentation(assistantIntentSpec{
+			IntentID:  "knowledge.general_qa",
+			RouteKind: assistantRouteKindKnowledgeQA,
+		}, "zh"); err == nil || !strings.Contains(err.Error(), "title/summary required") {
+			t.Fatalf("expected non-business title/summary required error, got=%v", err)
+		}
+
+		if _, err := (&assistantKnowledgeRuntime{}).resolvePlanPresentation(assistantIntentSpec{}, "zh"); err == nil || !strings.Contains(err.Error(), "action id required") {
+			t.Fatalf("expected business action id required error, got=%v", err)
+		}
+
+		if _, err := (&assistantKnowledgeRuntime{
+			actionView: map[string]map[string]assistantActionViewPack{
+				assistantIntentCreateOrgUnit: {
+					"zh": {Summary: "创建组织摘要"},
+				},
+			},
+		}).resolvePlanPresentation(assistantIntentSpec{
+			Action: assistantIntentCreateOrgUnit,
+		}, "zh"); err == nil || !strings.Contains(err.Error(), "action doc missing") {
+			t.Fatalf("expected action doc missing error, got=%v", err)
+		}
+
+		if _, err := (&assistantKnowledgeRuntime{
+			actionDocsByAction: map[string]map[string]assistantKnowledgeMarkdownDocument{
+				assistantIntentCreateOrgUnit: {
+					"zh": {ID: "action.org.orgunit_create", Locale: "zh", Title: "创建组织"},
+				},
+			},
+			actionView: map[string]map[string]assistantActionViewPack{
+				assistantIntentCreateOrgUnit: {
+					"zh": {},
+				},
+			},
+		}).resolvePlanPresentation(assistantIntentSpec{
+			Action: assistantIntentCreateOrgUnit,
+		}, "zh"); err == nil || !strings.Contains(err.Error(), "title/summary required") {
+			t.Fatalf("expected business title/summary required error, got=%v", err)
+		}
+	})
+
 	t.Run("guidance and apply plan context", func(t *testing.T) {
 		if got := assistantKnowledgeGuidanceText(assistantPlanContextV1{}, nil); got != "" {
 			t.Fatalf("expected empty guidance, got=%q", got)

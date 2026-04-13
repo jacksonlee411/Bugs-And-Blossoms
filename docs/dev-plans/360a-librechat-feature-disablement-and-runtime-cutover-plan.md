@@ -1,6 +1,6 @@
 # DEV-PLAN-360A：LibreChat 功能禁用清单与 Runtime 主链硬切实施计划
 
-**状态**: 进行中（2026-04-13 18:42 CST；Phase 0/1 已完成，Phase 2 已完成，Phase 3/4 的代码与定向测试批次已完成，`assistant_ui_retired` error catalog 已补齐；剩余 `tp288 / tp288b / tp290b` 主链 E2E 复验，以及全仓 coverage 从 `97.90%` 补回 `98.00%` 后再宣告总封板）
+**状态**: 进行中（2026-04-13 18:23 CST；Phase 0/1 已完成，Phase 2 已完成，Phase 3/4 的代码与定向测试批次已完成，`tp288b / tp290b` live successor 复验已通过，`make test` 已达 `98.00%` coverage 门槛；当前仅剩 `tp288` 旧 mock 正式入口证据脚本的适配/退役决策后再宣告总封板）
 
 ## 1. 背景
 
@@ -551,15 +551,16 @@ Vendored LibreChat UI
 
 1. [X] 运行态页能区分“功能已硬切关闭”“依赖异常”“retired_by_design”。
 2. [X] 正式入口 smoke：用户不可见 Agents / MCP / Memory / Search / Code Interpreter 入口。
-3. [ ] 正式聊天闭环仍能通过 `tp288 / tp288b / tp290b` 一类主链 E2E。
-4. [X] `Phase 0/1` 实施批次中，`/assistant-ui/*` 仍为 `302` alias/redirect，且不能旁路正式业务写接口；`410 Gone -> 删除` 验收留到 `Phase 4`。
-5. [X] compat session API 在 `/app/assistant/librechat/api/*` 与 `/assets/librechat-web/api/*` 下统一返回 `410 Gone`，且 retired path 在 session middleware 前已短路，不再泄露 vendored `401` 错误语义。
-6. [X] `AGENTS.md` 文档地图已移除 `220-293` 系列现行入口，正式入口说明只保留 successor 计划链路。
-7. [X] 默认部署不再依赖 `mongodb/meilisearch/rag_api/vectordb` 提供正式主链能力；退役依赖仅在 `runtime-status` 中以 `retired_by_design` 暴露。
-8. [X] compat API 生死表中的所有端点都已进入 successor 或删除态，不存在“待审计、待决定”的灰区端点。
-9. [X] 若进入 `Phase 4` 收口批次，`/assistant-ui/*` 已按计划返回 `410 Gone`，不再作为历史别名长期存活。
-10. [X] `/internal/assistant/ui-bootstrap` 与 `/internal/assistant/session*` 已按冻结契约返回最小 DTO、错误码与鉴权行为，不存在实现者自定义字段漂移。
-11. [X] successor runtime 不可用时，系统只表现为显式拒绝/只读浏览/任务失败终止，不出现旧平台回退、隐式降级或 bootstrap 旁路。
+3. [X] 正式聊天闭环已通过 `tp288b / tp290b` live successor 主链 E2E。
+4. [ ] `tp288` 旧 mock 正式入口证据脚本仍需按当前页面承载补适配，或明确退役归档。
+5. [X] `Phase 0/1` 实施批次中，`/assistant-ui/*` 仍为 `302` alias/redirect，且不能旁路正式业务写接口；`410 Gone -> 删除` 验收留到 `Phase 4`。
+6. [X] compat session API 在 `/app/assistant/librechat/api/*` 与 `/assets/librechat-web/api/*` 下统一返回 `410 Gone`，且 retired path 在 session middleware 前已短路，不再泄露 vendored `401` 错误语义。
+7. [X] `AGENTS.md` 文档地图已移除 `220-293` 系列现行入口，正式入口说明只保留 successor 计划链路。
+8. [X] 默认部署不再依赖 `mongodb/meilisearch/rag_api/vectordb` 提供正式主链能力；退役依赖仅在 `runtime-status` 中以 `retired_by_design` 暴露。
+9. [X] compat API 生死表中的所有端点都已进入 successor 或删除态，不存在“待审计、待决定”的灰区端点。
+10. [X] 若进入 `Phase 4` 收口批次，`/assistant-ui/*` 已按计划返回 `410 Gone`，不再作为历史别名长期存活。
+11. [X] `/internal/assistant/ui-bootstrap` 与 `/internal/assistant/session*` 已按冻结契约返回最小 DTO、错误码与鉴权行为，不存在实现者自定义字段漂移。
+12. [X] successor runtime 不可用时，系统只表现为显式拒绝/只读浏览/任务失败终止，不出现旧平台回退、隐式降级或 bootstrap 旁路。
 
 ### 10.2 需要更新的现有测试
 
@@ -577,15 +578,18 @@ Vendored LibreChat UI
 5. [X] `apps/web/src/errors/presentApiError.test.ts`
    - 补齐 `assistant_vendored_api_retired` 的显式错误提示断言。
 6. [ ] `e2e/tests/tp288-librechat-real-entry-evidence.spec.js`
-7. [ ] `e2e/tests/tp288b-librechat-live-task-receipt-contract.spec.js`
-8. [ ] `e2e/tests/tp290b-librechat-live-intent-action-chain.spec.js`
+   - 旧 mock 正式入口证据脚本；当前页面承载已漂移，待决定“按现状适配”还是“作为历史 mock 证据退役归档”。
+7. [X] `e2e/tests/tp288b-librechat-live-task-receipt-contract.spec.js`
+   - 已完成 live successor 复验并通过。
+8. [X] `e2e/tests/tp290b-librechat-live-intent-action-chain.spec.js`
+   - 已完成 live successor 复验并通过。
 9. [X] 新增运行态断言：
    - 已退役依赖显示为 `retired_by_design`
    - 不因退役依赖把整体 runtime 标成故障
 10. [ ] 新增 successor 契约断言：
    - `ui-bootstrap/session` DTO 字段最小集与 `contract_version=v1`
    - `assistant_session_invalid / assistant_principal_invalid / assistant_ui_bootstrap_unavailable / assistant_runtime_unavailable / assistant_gate_unavailable` 的错误码与 HTTP 状态一致
-11. [ ] 截至 2026-04-13 18:42 CST，`make test` 已越过 `assistant_ui_retired` error catalog 缺项，但总 coverage 仍为 `97.90% < 98.00%`；该项仍属于 `360A` 封板前必须补齐的仓库级门槛。
+11. [X] 截至 2026-04-13 18:23 CST，`make test` 已通过，coverage `98.00% >= 98.00%`；仓库级 coverage 已不再阻塞 `360A` 封板。
 
 ### 10.3 停止线
 

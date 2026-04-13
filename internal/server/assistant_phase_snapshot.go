@@ -407,7 +407,11 @@ func assistantCommitReplyJSON(turn *assistantTurn) any {
 }
 
 func assistantMissingFieldsJSON(turn *assistantTurn) string {
-	payload, _ := json.Marshal(assistantTurnMissingFields(turn))
+	fields := assistantTurnMissingFields(turn)
+	if fields == nil {
+		fields = make([]string, 0)
+	}
+	payload, _ := json.Marshal(fields)
 	return string(payload)
 }
 

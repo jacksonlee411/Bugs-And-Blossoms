@@ -3,20 +3,20 @@
   "bubble_count": 2,
   "bubbles": [
     {
-      "binding_key": "conv_1500e7908b8448bcb998dfcdd9c3450d::turn_32e49cb86a3a4166b1002dd1064339bc::assistant_4116e3f1169946eeb559cc6680f8e8c2",
-      "conversation_id": "conv_1500e7908b8448bcb998dfcdd9c3450d",
-      "turn_id": "turn_32e49cb86a3a4166b1002dd1064339bc",
-      "request_id": "assistant_4116e3f1169946eeb559cc6680f8e8c2",
-      "message_id": "75c85915-f42f-4f54-b389-6d7b505c8c54_",
-      "text": "请提供新建“人力资源部239A”的生效日期（YYYY-MM-DD）。 Missing fields effective_date"
+      "binding_key": "conv_9b517adb5c534a24a9fb13cfe27a8553::turn_c4e31828b9834d6598140339006356b3::assistant_6a4f0ecbc87148f3bd67eb58e12f44a5",
+      "conversation_id": "conv_9b517adb5c534a24a9fb13cfe27a8553",
+      "turn_id": "turn_c4e31828b9834d6598140339006356b3",
+      "request_id": "assistant_6a4f0ecbc87148f3bd67eb58e12f44a5",
+      "message_id": "81effb75-7d79-4afc-a485-8d21fb881bd9_",
+      "text": "我可以帮你在“AI治理办公室”下新建“人力资源部239A”。为了继续，请确认生效日期（effective_date），例如设为今天，或提供一个具体日期（YYYY-MM-DD）。 Missing fields effective_date"
     },
     {
-      "binding_key": "conv_1500e7908b8448bcb998dfcdd9c3450d::turn_e230d792b9514b019f097c5c679dbee1::assistant_be83c9869b6540c8909cce8722bc4456",
-      "conversation_id": "conv_1500e7908b8448bcb998dfcdd9c3450d",
-      "turn_id": "turn_e230d792b9514b019f097c5c679dbee1",
-      "request_id": "assistant_be83c9869b6540c8909cce8722bc4456",
-      "message_id": "098f1262-82e4-45fa-85d1-3b8486f9d653_",
-      "text": "上级组织：AI治理办公室；新建组织：人力资源部239A；生效日期：2026-03-25 task_id: 60ed007f-2627-4439-ad6a-30987324b577 · succeeded Selected: AI治理办公室 org_code: O000001 parent_org_code: TP290BAIGOV effective_date: 2026-03-25 event_type: CREATE"
+      "binding_key": "conv_9b517adb5c534a24a9fb13cfe27a8553::turn_be453247ec4f4b64b0cc1c844b58002d::assistant_07dbada396cb4a8685665daa79e66a20",
+      "conversation_id": "conv_9b517adb5c534a24a9fb13cfe27a8553",
+      "turn_id": "turn_be453247ec4f4b64b0cc1c844b58002d",
+      "request_id": "assistant_07dbada396cb4a8685665daa79e66a20",
+      "message_id": "87bf3e51-7354-49ac-b3f1-eec9b0ef2189_",
+      "text": "上级组织：TP290BAIGOV；新建组织：人力资源部239A；生效日期：2026-03-25 task_id: dc569943-7174-453a-8ff1-a2514d0f944c · succeeded Selected: AI治理办公室 org_code: O000001 parent_org_code: TP290BAIGOV effective_date: 2026-03-25 event_type: CREATE"
     }
   ],
   "external_reply_container_count": 0,

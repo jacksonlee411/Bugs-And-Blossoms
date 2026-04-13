@@ -63,3 +63,27 @@ func TestHandleAssistantTurnActionAPIReplyErrorBranches(t *testing.T) {
 		})
 	}
 }
+
+func TestAssistantRuntimeUnavailableErrorBranches(t *testing.T) {
+	cases := []error{
+		errAssistantRuntimeUnavailable,
+		errAssistantModelProviderUnavailable,
+		errAssistantModelTimeout,
+		errAssistantModelRateLimited,
+		errAssistantModelConfigInvalid,
+		errAssistantRuntimeConfigInvalid,
+		errAssistantRuntimeConfigMissing,
+		errAssistantModelSecretMissing,
+	}
+	for _, err := range cases {
+		if !assistantIsRuntimeUnavailableError(err) {
+			t.Fatalf("expected runtime-unavailable classification for %v", err)
+		}
+		if !assistantIsRuntimeUnavailableError(errors.Join(errors.New("wrapped"), err)) {
+			t.Fatalf("expected wrapped runtime-unavailable classification for %v", err)
+		}
+	}
+	if assistantIsRuntimeUnavailableError(errors.New("boom")) {
+		t.Fatal("unexpected runtime-unavailable classification for generic error")
+	}
+}

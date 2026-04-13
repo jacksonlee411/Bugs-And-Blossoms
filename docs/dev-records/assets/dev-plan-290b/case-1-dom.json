@@ -3,12 +3,12 @@
   "bubble_count": 1,
   "bubbles": [
     {
-      "binding_key": "conv_bec3267448184b0881350d6afc2dd99c::turn_8f85ebb5f1a14db981c82554f240a53f::assistant_b2fcc823b15c4d92aee4e616a40025a4",
-      "conversation_id": "conv_bec3267448184b0881350d6afc2dd99c",
-      "turn_id": "turn_8f85ebb5f1a14db981c82554f240a53f",
-      "request_id": "assistant_b2fcc823b15c4d92aee4e616a40025a4",
-      "message_id": "9aa144fa-c13e-4609-bf8d-f1abc73a60ed_",
-      "text": "你现在最想先处理哪一类事情？比如：新建部门、调整上级、改名，还是先了解一下变更规则？"
+      "binding_key": "conv_2d078d36d77b4645b08890b665605a05::turn_6aaca2dee4154054a100532817a3eb37::assistant_a50359b9ef084dc08959f46b03275340",
+      "conversation_id": "conv_2d078d36d77b4645b08890b665605a05",
+      "turn_id": "turn_6aaca2dee4154054a100532817a3eb37",
+      "request_id": "assistant_a50359b9ef084dc08959f46b03275340",
+      "message_id": "c6747225-7a5d-4c6b-8256-b632c148c5e6_",
+      "text": "你现在想处理哪件事？可以先简单说一下你的目标，比如“想创建一个新部门”或“想调整某个部门的上级”。"
     }
   ],
   "external_reply_container_count": 0,

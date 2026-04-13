@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"log"
 	"net/http"
 	"regexp"
 	"sort"
@@ -523,6 +524,14 @@ func handleAssistantConversationTurnsAPI(w http.ResponseWriter, r *http.Request,
 		case errors.Is(err, errAssistantActionRiskGateDenied):
 			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusConflict, errAssistantActionRiskGateDenied.Error(), "assistant action risk gate denied")
 		default:
+			log.Printf(
+				"assistant create turn failed: tenant=%s actor=%s conversation=%s err=%T %v",
+				tenant.ID,
+				principal.ID,
+				conversationID,
+				err,
+				err,
+			)
 			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusInternalServerError, "assistant_turn_create_failed", "assistant turn create failed")
 		}
 		return
@@ -610,6 +619,16 @@ func handleAssistantTurnActionAPI(w http.ResponseWriter, r *http.Request, svc *a
 			case assistantIsGateUnavailableError(err):
 				assistantWriteGateUnavailable(w, r)
 			default:
+				log.Printf(
+					"assistant confirm failed: tenant=%s actor=%s conversation=%s turn=%s candidate=%q err=%T %v",
+					tenant.ID,
+					principal.ID,
+					conversationID,
+					turnID,
+					strings.TrimSpace(req.CandidateID),
+					err,
+					err,
+				)
 				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusInternalServerError, "assistant_turn_confirm_failed", "assistant turn confirm failed")
 			}
 			return

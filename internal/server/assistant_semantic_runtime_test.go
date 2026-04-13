@@ -82,6 +82,83 @@ func TestAssistant268SemanticPromptHelpers(t *testing.T) {
 	}
 }
 
+func TestAssistant268SemanticPromptActions_Branches(t *testing.T) {
+	hooks := captureAssistantKnowledgeHooks()
+	defer hooks.restore()
+
+	t.Run("falls back without runtime", func(t *testing.T) {
+		assistantLoadKnowledgeRuntimeFn = func() (*assistantKnowledgeRuntime, error) {
+			return nil, errors.New("runtime unavailable")
+		}
+
+		actions := assistantSemanticPromptActions()
+		byID := map[string]assistantSemanticPromptAction{}
+		for _, item := range actions {
+			byID[item.ActionID] = item
+		}
+		if len(byID[assistantIntentCreateOrgUnit].RequiredSlots) == 0 {
+			t.Fatal("expected business action required slots fallback without runtime")
+		}
+		if byID[assistantIntentPlanOnly].PlanSummary != "" {
+			t.Fatalf("expected empty non-business summary without runtime, got=%q", byID[assistantIntentPlanOnly].PlanSummary)
+		}
+	})
+
+	t.Run("uses runtime route metadata and markdown summaries", func(t *testing.T) {
+		assistantLoadKnowledgeRuntimeFn = func() (*assistantKnowledgeRuntime, error) {
+			return &assistantKnowledgeRuntime{
+				routeByAction: map[string]assistantIntentRouteEntry{
+					assistantIntentCreateOrgUnit: {
+						IntentID:      "org.orgunit_create",
+						RouteKind:     assistantRouteKindBusinessAction,
+						RequiredSlots: []string{"parent_ref_text"},
+					},
+				},
+				routeCatalog: assistantIntentRouteCatalog{
+					Entries: []assistantIntentRouteEntry{
+						{IntentID: assistantInterpretationDefaultPackID, RouteKind: assistantRouteKindKnowledgeQA},
+					},
+				},
+				actionDocsByAction: map[string]map[string]assistantKnowledgeMarkdownDocument{
+					assistantIntentCreateOrgUnit: {
+						"zh": {ID: "action.org.orgunit_create", Locale: "zh", Title: "创建组织动作说明"},
+					},
+				},
+				actionView: map[string]map[string]assistantActionViewPack{
+					assistantIntentCreateOrgUnit: {
+						"zh": {Summary: "创建组织摘要"},
+					},
+				},
+				intentDocs: map[string]map[string]assistantKnowledgeMarkdownDocument{
+					assistantInterpretationDefaultPackID: {
+						"zh": {ID: assistantInterpretationDefaultPackID, Locale: "zh", Title: "知识问答", Summary: "知识问答摘要"},
+					},
+				},
+			}, nil
+		}
+
+		actions := assistantSemanticPromptActions()
+		byID := map[string]assistantSemanticPromptAction{}
+		for _, item := range actions {
+			byID[item.ActionID] = item
+		}
+		create := byID[assistantIntentCreateOrgUnit]
+		if create.PlanSummary != "创建组织摘要" {
+			t.Fatalf("unexpected create summary=%q", create.PlanSummary)
+		}
+		if strings.Join(create.RequiredSlots, ",") != "parent_ref_text" {
+			t.Fatalf("unexpected create required slots=%v", create.RequiredSlots)
+		}
+		planOnly := byID[assistantIntentPlanOnly]
+		if planOnly.PlanSummary != "知识问答摘要" {
+			t.Fatalf("unexpected plan_only summary=%q", planOnly.PlanSummary)
+		}
+		if len(planOnly.RequiredSlots) != 0 {
+			t.Fatalf("plan_only should not carry required slots, got=%v", planOnly.RequiredSlots)
+		}
+	})
+}
+
 func TestAssistant268SyntheticSemanticHelperCoverage(t *testing.T) {
 	actionCases := map[string]string{
 		"请新建组织":  assistantIntentCreateOrgUnit,

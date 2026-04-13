@@ -1,6 +1,6 @@
 # DEV-PLAN-360：LibreChat 硬切剥离与 LangGraph/LangChain 分层接管方案
 
-**状态**: 进行中（2026-04-13 18:42 CST；Phase 0/1 已完成，`360A` 已完成 Phase 2/3/4 的实现批次；当前剩余主链 E2E 复验，以及全仓 coverage 从 `97.90%` 补回 `98.00%` 后再宣告总封板）
+**状态**: 进行中（2026-04-13 18:23 CST；Phase 0/1 已完成，`360A` 已完成 Phase 2/3/4 的实现批次，`tp288b / tp290b` live successor 复验已通过，`make test` 已达 `98.00%` coverage 门槛；当前仅剩 `tp288` 旧 mock 正式入口证据脚本的适配/退役决策后再宣告总封板）
 
 ## 1. 背景
 
@@ -326,7 +326,8 @@ graph TD
    - 会话列表、回执、任务刷新仍由本仓 SoT 驱动；
    - `LangGraph/LangChain` runtime 失败时不会绕回 LibreChat Agents / Memory 主链。
 4. [ ] E2E 与 Assistant 主链验证继续以 `341/350/360/360A/361` 对齐后的正式入口、统一策略消费与 stopline 为准。
-5. [ ] 截至 2026-04-13 18:42 CST，`make test` 已越过 `assistant_ui_retired` error catalog 缺项，但仓库总 coverage 仍为 `97.90% < 98.00%`；在补足 coverage 前，`360` 不得宣告封板。
+5. [X] 截至 2026-04-13 18:23 CST，`make test` 已通过，coverage `98.00% >= 98.00%`，`assistant_ui_retired` error catalog 缺项已不再构成阻塞。
+6. [ ] `tp288b / tp290b` 已完成 live successor 复验；`tp288` 仍是旧 mock 正式入口证据脚本，待适配或退役后再宣告 `360` 总封板。
 
 ## 12. 交付物
 
