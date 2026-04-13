@@ -324,6 +324,12 @@ func TestAssistantOrgUnitVersionPolicyHelpers(t *testing.T) {
 		if binding, ok := assistantOrgUnitVersionPolicyBinding(assistantIntentCorrectOrgUnit); !ok || binding.CapabilityKey != orgUnitCorrectFieldPolicyCapabilityKey || binding.AppendIntent != "" || binding.MaintainIntent != orgunitservices.OrgUnitMaintainIntentCorrect {
 			t.Fatalf("correct binding=%+v ok=%v", binding, ok)
 		}
+		if binding, ok := assistantOrgUnitVersionPolicyBinding(assistantIntentDisableOrgUnit); !ok || binding.CapabilityKey != orgUnitWriteFieldPolicyCapabilityKey || binding.AppendIntent != "" || binding.MaintainIntent != orgunitservices.OrgUnitMaintainIntentDisable {
+			t.Fatalf("disable binding=%+v ok=%v", binding, ok)
+		}
+		if binding, ok := assistantOrgUnitVersionPolicyBinding(assistantIntentEnableOrgUnit); !ok || binding.CapabilityKey != orgUnitWriteFieldPolicyCapabilityKey || binding.AppendIntent != "" || binding.MaintainIntent != orgunitservices.OrgUnitMaintainIntentEnable {
+			t.Fatalf("enable binding=%+v ok=%v", binding, ok)
+		}
 		if binding, ok := assistantOrgUnitVersionPolicyBinding(assistantIntentRenameOrgUnit); !ok || binding.CapabilityKey != orgUnitWriteFieldPolicyCapabilityKey || binding.AppendIntent != "" || binding.MaintainIntent != orgunitservices.OrgUnitMaintainIntentRename {
 			t.Fatalf("rename binding=%+v ok=%v", binding, ok)
 		}
@@ -338,6 +344,8 @@ func TestAssistantOrgUnitVersionPolicyHelpers(t *testing.T) {
 			!assistantActionRequiresPolicyProjection(assistantIntentAddOrgUnitVersion) ||
 			!assistantActionRequiresPolicyProjection(assistantIntentInsertOrgUnitVersion) ||
 			!assistantActionRequiresPolicyProjection(assistantIntentCorrectOrgUnit) ||
+			!assistantActionRequiresPolicyProjection(assistantIntentDisableOrgUnit) ||
+			!assistantActionRequiresPolicyProjection(assistantIntentEnableOrgUnit) ||
 			!assistantActionRequiresPolicyProjection(assistantIntentRenameOrgUnit) ||
 			!assistantActionRequiresPolicyProjection(assistantIntentMoveOrgUnit) ||
 			assistantActionRequiresPolicyProjection("knowledge_qa") {
@@ -365,6 +373,38 @@ func TestAssistantOrgUnitVersionPolicyHelpers(t *testing.T) {
 		}
 		if code, requested, ok := assistantOrgUnitVersionPolicyParentOrgCode(intent, candidates, "", nil); code != "" || !requested || ok {
 			t.Fatalf("ambiguous code=%q requested=%v ok=%v", code, requested, ok)
+		}
+	})
+
+	t.Run("policy contract values from turn and dry run", func(t *testing.T) {
+		if values, ok := assistantPolicyContractValuesFromTurn(nil); ok || values != (assistantPolicyContractValues{}) {
+			t.Fatalf("nil turn values=%+v ok=%v", values, ok)
+		}
+
+		createTurn := assistantTestAttachCreateOrgUnitProjection(&assistantTurn{
+			Intent: assistantIntentSpec{Action: assistantIntentCreateOrgUnit},
+		}, nil)
+		if values, ok := assistantPolicyContractValuesFromTurn(createTurn); !ok || values.PolicyContextDigest == "" || values.PrecheckProjectionDigest == "" || values.MutationPolicyVersion == "" {
+			t.Fatalf("create turn values=%+v ok=%v", values, ok)
+		}
+
+		versionTurn := assistantTaskSampleAppendTurn(time.Date(2026, 4, 12, 0, 0, 0, 0, time.UTC), assistantIntentDisableOrgUnit)
+		if values, ok := assistantPolicyContractValuesFromTurn(versionTurn); !ok || values.PolicyContextDigest == "" || values.PrecheckProjectionDigest == "" || values.MutationPolicyVersion == "" {
+			t.Fatalf("version turn values=%+v ok=%v", values, ok)
+		}
+
+		if values, ok := assistantPolicyContractValuesFromTurn(&assistantTurn{Intent: assistantIntentSpec{Action: assistantIntentPlanOnly}}); ok || values != (assistantPolicyContractValues{}) {
+			t.Fatalf("unsupported turn values=%+v ok=%v", values, ok)
+		}
+
+		if values, ok := assistantPolicyContractValuesFromDryRun(assistantDryRunResult{}); ok || values != (assistantPolicyContractValues{}) {
+			t.Fatalf("empty dry run values=%+v ok=%v", values, ok)
+		}
+		if values, ok := assistantPolicyContractValuesFromDryRun(assistantDryRunResult{CreateOrgUnitProjection: createTurn.DryRun.CreateOrgUnitProjection}); !ok || values.PolicyContextDigest == "" || values.PrecheckProjectionDigest == "" || values.MutationPolicyVersion == "" {
+			t.Fatalf("create dry run values=%+v ok=%v", values, ok)
+		}
+		if values, ok := assistantPolicyContractValuesFromDryRun(assistantDryRunResult{OrgUnitVersionProjection: versionTurn.DryRun.OrgUnitVersionProjection}); !ok || values.PolicyContextDigest == "" || values.PrecheckProjectionDigest == "" || values.MutationPolicyVersion == "" {
+			t.Fatalf("version dry run values=%+v ok=%v", values, ok)
 		}
 	})
 
@@ -440,6 +480,36 @@ func TestAssistantOrgUnitVersionPolicyHelpers(t *testing.T) {
 		}
 		if len(result.ValidationErrors) != 0 || result.Explain == "" {
 			t.Fatalf("dry run=%+v", result)
+		}
+
+		disableResult := svc.enrichOrgUnitVersionDryRunWithPolicy(adminCtx, "tenant-1", assistantIntentSpec{
+			Action:        assistantIntentDisableOrgUnit,
+			OrgCode:       "FLOWER-C",
+			EffectiveDate: "2026-05-01",
+		}, nil, "", assistantDryRunResult{})
+		if disableResult.OrgUnitVersionProjection == nil {
+			t.Fatal("expected disable projection")
+		}
+		if got := disableResult.OrgUnitVersionProjection.Projection.PendingDraftSummary; got != "目标组织：FLOWER-C；停用生效日期：2026-05-01" {
+			t.Fatalf("disable summary=%q", got)
+		}
+		if got := disableResult.Explain; got != "计划已生成，等待确认后可提交" {
+			t.Fatalf("disable explain=%q", got)
+		}
+
+		enableResult := svc.enrichOrgUnitVersionDryRunWithPolicy(adminCtx, "tenant-1", assistantIntentSpec{
+			Action:        assistantIntentEnableOrgUnit,
+			OrgCode:       "FLOWER-C",
+			EffectiveDate: "2026-06-01",
+		}, nil, "", assistantDryRunResult{})
+		if enableResult.OrgUnitVersionProjection == nil {
+			t.Fatal("expected enable projection")
+		}
+		if got := enableResult.OrgUnitVersionProjection.Projection.PendingDraftSummary; got != "目标组织：FLOWER-C；启用生效日期：2026-06-01" {
+			t.Fatalf("enable summary=%q", got)
+		}
+		if len(enableResult.ValidationErrors) != 0 || enableResult.Explain == "" {
+			t.Fatalf("enable dry run=%+v", enableResult)
 		}
 	})
 }

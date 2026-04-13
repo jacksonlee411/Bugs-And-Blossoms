@@ -912,9 +912,9 @@ func TestAssistant240DExecuteWorkflowAndAPICommitCoverage(t *testing.T) {
 		serviceMissingSvc.pool = assistFakeTxBeginner{tx: newAssistantCommitTx(now, principal.ID, principal.RoleSlug, assistantStateConfirmed, &assistFakeRows{rows: [][]any{assistantTurnRowValues(serviceTurn)}})}
 		rec = httptest.NewRecorder()
 		handleAssistantTurnActionAPI(rec, baseReq("/internal/assistant/conversations/conv_1/turns/"+serviceTurn.TurnID+":commit", `{}`), serviceMissingSvc)
-			if rec.Code != http.StatusServiceUnavailable || assistantDecodeErrCode(t, rec) != "assistant_gate_unavailable" {
-				t.Fatalf("service missing commit status=%d body=%s", rec.Code, rec.Body.String())
-			}
+		if rec.Code != http.StatusServiceUnavailable || assistantDecodeErrCode(t, rec) != "assistant_gate_unavailable" {
+			t.Fatalf("service missing commit status=%d body=%s", rec.Code, rec.Body.String())
+		}
 
 		candidateSvc, _, candidateTurn, _ := newAssistantCommitCoverageEnv(t, assistantStateConfirmed)
 		candidateTurn.ResolvedCandidateID = ""

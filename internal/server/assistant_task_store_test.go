@@ -95,6 +95,26 @@ func assistantTestOrgUnitVersionProjectionSnapshot(action string) *assistantOrgU
 		policyContextContractVersion = orgunitservices.OrgUnitMaintainPolicyContextContractVersionV1
 		precheckProjectionContractVersion = orgunitservices.OrgUnitMaintainPrecheckProjectionContractV1
 		mutationPolicyVersion = orgunitservices.OrgUnitMaintainMutationPolicyVersionV1
+	case assistantIntentDisableOrgUnit:
+		capabilityKey = orgUnitWriteFieldPolicyCapabilityKey
+		intent = orgunitservices.OrgUnitMaintainIntentDisable
+		effectiveDate = "2026-05-01"
+		fieldKey = "effective_date"
+		fieldPayloadKey = ""
+		pendingDraftSummary = "目标组织：FLOWER-C；停用生效日期：2026-05-01"
+		policyContextContractVersion = orgunitservices.OrgUnitMaintainPolicyContextContractVersionV1
+		precheckProjectionContractVersion = orgunitservices.OrgUnitMaintainPrecheckProjectionContractV1
+		mutationPolicyVersion = orgunitservices.OrgUnitMaintainMutationPolicyVersionV1
+	case assistantIntentEnableOrgUnit:
+		capabilityKey = orgUnitWriteFieldPolicyCapabilityKey
+		intent = orgunitservices.OrgUnitMaintainIntentEnable
+		effectiveDate = "2026-06-01"
+		fieldKey = "effective_date"
+		fieldPayloadKey = ""
+		pendingDraftSummary = "目标组织：FLOWER-C；启用生效日期：2026-06-01"
+		policyContextContractVersion = orgunitservices.OrgUnitMaintainPolicyContextContractVersionV1
+		precheckProjectionContractVersion = orgunitservices.OrgUnitMaintainPrecheckProjectionContractV1
+		mutationPolicyVersion = orgunitservices.OrgUnitMaintainMutationPolicyVersionV1
 	}
 	return &assistantOrgUnitVersionProjectionSnapshot{
 		PolicyContextContractVersion:      policyContextContractVersion,
@@ -179,6 +199,12 @@ func assistantTaskSampleAppendTurn(now time.Time, action string) *assistantTurn 
 		intent.TargetEffectiveDate = "2026-01-01"
 		intent.NewName = "运营中心"
 		userInput = "更正组织"
+	case assistantIntentDisableOrgUnit:
+		intent.EffectiveDate = "2026-05-01"
+		userInput = "停用组织"
+	case assistantIntentEnableOrgUnit:
+		intent.EffectiveDate = "2026-06-01"
+		userInput = "启用组织"
 	case assistantIntentRenameOrgUnit:
 		intent.EffectiveDate = "2026-03-01"
 		intent.NewName = "运营平台部"

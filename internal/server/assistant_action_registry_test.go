@@ -195,6 +195,8 @@ func TestAssistantActionRegistryAndVersionTupleHelpers(t *testing.T) {
 			if (actionID == assistantIntentAddOrgUnitVersion ||
 				actionID == assistantIntentInsertOrgUnitVersion ||
 				actionID == assistantIntentCorrectOrgUnit ||
+				actionID == assistantIntentDisableOrgUnit ||
+				actionID == assistantIntentEnableOrgUnit ||
 				actionID == assistantIntentMoveOrgUnit ||
 				actionID == assistantIntentRenameOrgUnit) &&
 				(strings.TrimSpace(spec.PolicyContextContractVersion) == "" ||

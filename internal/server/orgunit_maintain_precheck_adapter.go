@@ -63,7 +63,10 @@ func buildOrgUnitMaintainPrecheckResultV1(
 		switch strings.TrimSpace(input.Intent) {
 		case orgunitservices.OrgUnitMaintainIntentCorrect:
 			input.CapabilityKey = orgUnitCorrectFieldPolicyCapabilityKey
-		case orgunitservices.OrgUnitMaintainIntentRename, orgunitservices.OrgUnitMaintainIntentMove:
+		case orgunitservices.OrgUnitMaintainIntentRename,
+			orgunitservices.OrgUnitMaintainIntentMove,
+			orgunitservices.OrgUnitMaintainIntentDisable,
+			orgunitservices.OrgUnitMaintainIntentEnable:
 			input.CapabilityKey = orgUnitWriteFieldPolicyCapabilityKey
 		}
 	}

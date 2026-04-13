@@ -226,6 +226,23 @@ func TestBuildOrgUnitMaintainPrecheckResultV1_DefaultCapabilityAndPolicyVersion(
 		t.Fatalf("move readiness=%q", moveResult.Projection.Readiness)
 	}
 
+	disableResult, err := buildOrgUnitMaintainPrecheckResultV1(ctx, store, orgunitservices.OrgUnitMaintainPrecheckInputV1{
+		Intent:        orgunitservices.OrgUnitMaintainIntentDisable,
+		TenantID:      "tenant-1",
+		OrgCode:       "FLOWER-C",
+		EffectiveDate: "2026-05-01",
+		CanAdmin:      true,
+	})
+	if err != nil {
+		t.Fatalf("disable result err=%v", err)
+	}
+	if disableResult.PolicyContext.CapabilityKey != orgUnitWriteFieldPolicyCapabilityKey {
+		t.Fatalf("disable capability=%q", disableResult.PolicyContext.CapabilityKey)
+	}
+	if disableResult.Projection.EffectivePolicyVersion == "" {
+		t.Fatalf("disable effective policy version missing: %+v", disableResult.Projection)
+	}
+
 	explicitResult, err := buildOrgUnitMaintainPrecheckResultV1(ctx, store, orgunitservices.OrgUnitMaintainPrecheckInputV1{
 		Intent:                 " rename ",
 		TenantID:               " tenant-1 ",

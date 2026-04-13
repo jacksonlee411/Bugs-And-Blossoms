@@ -9,61 +9,61 @@ import (
 )
 
 type assistantKnowledgeMarkdownDocument struct {
-	Path                           string                        `yaml:"-"`
-	BodyMarkdown                   string                        `yaml:"-"`
-	ID                             string                        `yaml:"id"`
-	Title                          string                        `yaml:"title"`
-	Locale                         string                        `yaml:"locale"`
-	Kind                           string                        `yaml:"kind"`
-	Version                        string                        `yaml:"version"`
-	Status                         string                        `yaml:"status"`
-	SourceRefs                     []string                      `yaml:"source_refs"`
-	AppliesTo                      []string                      `yaml:"applies_to"`
-	Summary                        string                        `yaml:"summary"`
-	RouteKind                      string                        `yaml:"route_kind"`
-	ActionKey                      string                        `yaml:"action_key"`
-	IntentClasses                  []string                      `yaml:"intent_classes"`
-	RequiredSlots                  []string                      `yaml:"required_slots"`
-	MinConfidence                  float64                       `yaml:"min_confidence"`
-	ClarificationPrompts           []assistantKnowledgePrompt     `yaml:"clarification_prompts"`
-	Keywords                       []string                      `yaml:"keywords"`
-	ToolRefs                       []string                      `yaml:"tool_refs"`
-	WikiRefs                       []string                      `yaml:"wiki_refs"`
-	RequiredChecks                 []string                      `yaml:"required_checks"`
-	ProposalTemplate               string                        `yaml:"proposal_template"`
-	ReplyRefs                      []string                      `yaml:"reply_refs"`
-	FieldDisplayMap                []assistantActionViewField    `yaml:"field_display_map"`
-	MissingFieldGuidance           []assistantActionViewGuidance `yaml:"missing_field_guidance"`
-	FieldExamples                  []assistantActionViewExample  `yaml:"field_examples"`
-	CandidateExplanationTemplates  []string                      `yaml:"candidate_explanation_templates"`
-	ConfirmationSummaryTemplates   []string                      `yaml:"confirmation_summary_templates"`
-	TemplateFields                 []string                      `yaml:"template_fields"`
-	ReplyKind                      string                        `yaml:"reply_kind"`
-	GuidanceTemplates              []assistantKnowledgePrompt     `yaml:"guidance_templates"`
-	ToneConstraints                []string                      `yaml:"tone_constraints"`
-	NegativeExamples               []string                      `yaml:"negative_examples"`
-	ErrorCodes                     []string                      `yaml:"error_codes"`
-	ToolName                       string                        `yaml:"tool_name"`
-	AllowedRouteKinds              []string                      `yaml:"allowed_route_kinds"`
-	InputSchemaRef                 string                        `yaml:"input_schema_ref"`
-	OutputSchemaRef                string                        `yaml:"output_schema_ref"`
-	UsageConstraints               []string                      `yaml:"usage_constraints"`
-	TopicKey                       string                        `yaml:"topic_key"`
-	RetrievalTerms                 []string                      `yaml:"retrieval_terms"`
-	RelatedTopics                  []string                      `yaml:"related_topics"`
+	Path                          string                        `yaml:"-"`
+	BodyMarkdown                  string                        `yaml:"-"`
+	ID                            string                        `yaml:"id"`
+	Title                         string                        `yaml:"title"`
+	Locale                        string                        `yaml:"locale"`
+	Kind                          string                        `yaml:"kind"`
+	Version                       string                        `yaml:"version"`
+	Status                        string                        `yaml:"status"`
+	SourceRefs                    []string                      `yaml:"source_refs"`
+	AppliesTo                     []string                      `yaml:"applies_to"`
+	Summary                       string                        `yaml:"summary"`
+	RouteKind                     string                        `yaml:"route_kind"`
+	ActionKey                     string                        `yaml:"action_key"`
+	IntentClasses                 []string                      `yaml:"intent_classes"`
+	RequiredSlots                 []string                      `yaml:"required_slots"`
+	MinConfidence                 float64                       `yaml:"min_confidence"`
+	ClarificationPrompts          []assistantKnowledgePrompt    `yaml:"clarification_prompts"`
+	Keywords                      []string                      `yaml:"keywords"`
+	ToolRefs                      []string                      `yaml:"tool_refs"`
+	WikiRefs                      []string                      `yaml:"wiki_refs"`
+	RequiredChecks                []string                      `yaml:"required_checks"`
+	ProposalTemplate              string                        `yaml:"proposal_template"`
+	ReplyRefs                     []string                      `yaml:"reply_refs"`
+	FieldDisplayMap               []assistantActionViewField    `yaml:"field_display_map"`
+	MissingFieldGuidance          []assistantActionViewGuidance `yaml:"missing_field_guidance"`
+	FieldExamples                 []assistantActionViewExample  `yaml:"field_examples"`
+	CandidateExplanationTemplates []string                      `yaml:"candidate_explanation_templates"`
+	ConfirmationSummaryTemplates  []string                      `yaml:"confirmation_summary_templates"`
+	TemplateFields                []string                      `yaml:"template_fields"`
+	ReplyKind                     string                        `yaml:"reply_kind"`
+	GuidanceTemplates             []assistantKnowledgePrompt    `yaml:"guidance_templates"`
+	ToneConstraints               []string                      `yaml:"tone_constraints"`
+	NegativeExamples              []string                      `yaml:"negative_examples"`
+	ErrorCodes                    []string                      `yaml:"error_codes"`
+	ToolName                      string                        `yaml:"tool_name"`
+	AllowedRouteKinds             []string                      `yaml:"allowed_route_kinds"`
+	InputSchemaRef                string                        `yaml:"input_schema_ref"`
+	OutputSchemaRef               string                        `yaml:"output_schema_ref"`
+	UsageConstraints              []string                      `yaml:"usage_constraints"`
+	TopicKey                      string                        `yaml:"topic_key"`
+	RetrievalTerms                []string                      `yaml:"retrieval_terms"`
+	RelatedTopics                 []string                      `yaml:"related_topics"`
 }
 
 type assistantMarkdownKnowledgeCompilation struct {
-	Catalog           assistantIntentRouteCatalog
-	Interpretation    []assistantInterpretationPack
-	ActionViews       []assistantActionViewPack
-	ReplyGuidance     []assistantReplyGuidancePack
-	RawByPath         map[string][]byte
-	IntentDocs        map[string]map[string]assistantKnowledgeMarkdownDocument
+	Catalog            assistantIntentRouteCatalog
+	Interpretation     []assistantInterpretationPack
+	ActionViews        []assistantActionViewPack
+	ReplyGuidance      []assistantReplyGuidancePack
+	RawByPath          map[string][]byte
+	IntentDocs         map[string]map[string]assistantKnowledgeMarkdownDocument
 	ActionDocsByAction map[string]map[string]assistantKnowledgeMarkdownDocument
 	ActionDocsByIntent map[string]map[string]assistantKnowledgeMarkdownDocument
-	ToolDocs          map[string]map[string]assistantKnowledgeMarkdownDocument
-	WikiDocs          map[string]map[string]assistantKnowledgeMarkdownDocument
+	ToolDocs           map[string]map[string]assistantKnowledgeMarkdownDocument
+	WikiDocs           map[string]map[string]assistantKnowledgeMarkdownDocument
 }
 
 func assistantLoadMarkdownKnowledgeCompilation() (assistantMarkdownKnowledgeCompilation, error) {

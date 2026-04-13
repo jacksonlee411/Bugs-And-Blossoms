@@ -17,6 +17,8 @@ const (
 	OrgUnitMaintainPrecheckProjectionContractV1   = "orgunit.maintain.precheck_projection.v1"
 
 	OrgUnitMaintainIntentCorrect = "correct"
+	OrgUnitMaintainIntentDisable = "disable"
+	OrgUnitMaintainIntentEnable  = "enable"
 	OrgUnitMaintainIntentRename  = "rename"
 	OrgUnitMaintainIntentMove    = "move"
 
@@ -372,7 +374,7 @@ func resolveOrgUnitMaintainTargetExistsAsOf(
 		return false, nil
 	}
 	switch strings.TrimSpace(input.Intent) {
-	case OrgUnitMaintainIntentRename, OrgUnitMaintainIntentMove:
+	case OrgUnitMaintainIntentRename, OrgUnitMaintainIntentMove, OrgUnitMaintainIntentDisable, OrgUnitMaintainIntentEnable:
 		return reader.ResolveTargetExistsAsOf(ctx, input.TenantID, orgNodeKey, strings.TrimSpace(input.EffectiveDate))
 	case OrgUnitMaintainIntentCorrect:
 		return true, nil
@@ -440,6 +442,28 @@ func resolveOrgUnitMaintainMutationDecision(
 ) (OrgUnitMutationPolicyDecision, OrgUnitMaintainTargetEventV1, error) {
 	intent := strings.TrimSpace(input.Intent)
 	switch intent {
+	case OrgUnitMaintainIntentDisable:
+		decision, err := ResolvePolicy(OrgUnitMutationPolicyKey{
+			ActionKind:       OrgUnitActionEventUpdate,
+			EmittedEventType: OrgUnitEmittedDisable,
+		}, OrgUnitMutationPolicyFacts{
+			CanAdmin:            input.CanAdmin,
+			TreeInitialized:     treeInitialized,
+			TargetExistsAsOf:    targetExistsAsOf,
+			EnabledExtFieldKeys: enabledExtFieldKeys,
+		})
+		return decision, OrgUnitMaintainTargetEventV1{}, err
+	case OrgUnitMaintainIntentEnable:
+		decision, err := ResolvePolicy(OrgUnitMutationPolicyKey{
+			ActionKind:       OrgUnitActionEventUpdate,
+			EmittedEventType: OrgUnitEmittedEnable,
+		}, OrgUnitMutationPolicyFacts{
+			CanAdmin:            input.CanAdmin,
+			TreeInitialized:     treeInitialized,
+			TargetExistsAsOf:    targetExistsAsOf,
+			EnabledExtFieldKeys: enabledExtFieldKeys,
+		})
+		return decision, OrgUnitMaintainTargetEventV1{}, err
 	case OrgUnitMaintainIntentRename:
 		decision, err := ResolvePolicy(OrgUnitMutationPolicyKey{
 			ActionKind:       OrgUnitActionEventUpdate,
@@ -544,7 +568,7 @@ func normalizeOrgUnitMaintainMissingFields(
 		if strings.TrimSpace(input.NewName) == "" && !input.NewParentRequested {
 			candidates = append(candidates, "change_fields")
 		}
-	case OrgUnitMaintainIntentRename, OrgUnitMaintainIntentMove:
+	case OrgUnitMaintainIntentRename, OrgUnitMaintainIntentMove, OrgUnitMaintainIntentDisable, OrgUnitMaintainIntentEnable:
 		if strings.TrimSpace(input.EffectiveDate) == "" {
 			candidates = append(candidates, "effective_date")
 		}
@@ -709,6 +733,8 @@ func orgUnitMaintainFieldDecisionOrder(intent string) []string {
 		return []string{"org_code", "target_effective_date", "name", "parent_org_code"}
 	case OrgUnitMaintainIntentMove:
 		return []string{"org_code", "effective_date", "parent_org_code"}
+	case OrgUnitMaintainIntentDisable, OrgUnitMaintainIntentEnable:
+		return []string{"org_code", "effective_date"}
 	case OrgUnitMaintainIntentRename:
 		return []string{"org_code", "effective_date", "name"}
 	default:
@@ -753,6 +779,14 @@ func buildOrgUnitMaintainPendingDraftSummary(input OrgUnitMaintainPrecheckInputV
 	case OrgUnitMaintainIntentCorrect:
 		if targetDate := strings.TrimSpace(input.TargetEffectiveDate); targetDate != "" {
 			parts = append(parts, "目标版本："+targetDate)
+		}
+	case OrgUnitMaintainIntentDisable:
+		if effectiveDate := strings.TrimSpace(input.EffectiveDate); effectiveDate != "" {
+			parts = append(parts, "停用生效日期："+effectiveDate)
+		}
+	case OrgUnitMaintainIntentEnable:
+		if effectiveDate := strings.TrimSpace(input.EffectiveDate); effectiveDate != "" {
+			parts = append(parts, "启用生效日期："+effectiveDate)
 		}
 	default:
 		if effectiveDate := strings.TrimSpace(input.EffectiveDate); effectiveDate != "" {

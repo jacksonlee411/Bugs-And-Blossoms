@@ -113,6 +113,8 @@ func assistant272BuildConfirmedTurn(t *testing.T, svc *assistantConversationServ
 	case assistantIntentAddOrgUnitVersion,
 		assistantIntentInsertOrgUnitVersion,
 		assistantIntentCorrectOrgUnit,
+		assistantIntentDisableOrgUnit,
+		assistantIntentEnableOrgUnit,
 		assistantIntentRenameOrgUnit,
 		assistantIntentMoveOrgUnit:
 		assistantTestAttachOrgUnitVersionProjection(turn, nil)

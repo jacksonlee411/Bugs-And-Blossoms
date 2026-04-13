@@ -215,6 +215,49 @@ func TestBuildOrgUnitMaintainPrecheckProjectionV1_MoveCandidateConfirmationAndRe
 	}
 }
 
+func TestBuildOrgUnitMaintainPrecheckProjectionV1_DisableEnableReady(t *testing.T) {
+	disableResult, err := BuildOrgUnitMaintainPrecheckProjectionV1(context.Background(), testMaintainReaderReady(), OrgUnitMaintainPrecheckInputV1{
+		Intent:                 OrgUnitMaintainIntentDisable,
+		TenantID:               "tenant_1",
+		CapabilityKey:          "org.orgunit_write.field_policy",
+		EffectiveDate:          "2026-05-01",
+		OrgCode:                "FLOWER-C",
+		EffectivePolicyVersion: "epv1:test",
+		CanAdmin:               true,
+	})
+	if err != nil {
+		t.Fatalf("disable build err=%v", err)
+	}
+	if disableResult.Projection.Readiness != orgUnitMaintainReadinessReady {
+		t.Fatalf("disable readiness=%q", disableResult.Projection.Readiness)
+	}
+	if disableResult.Projection.PendingDraftSummary != "目标组织：FLOWER-C；停用生效日期：2026-05-01" {
+		t.Fatalf("disable summary=%q", disableResult.Projection.PendingDraftSummary)
+	}
+	if !slices.Equal(disableResult.Projection.MissingFields, []string{}) || !slices.Equal(disableResult.Projection.RejectionReasons, []string{}) {
+		t.Fatalf("disable projection=%+v", disableResult.Projection)
+	}
+
+	enableResult, err := BuildOrgUnitMaintainPrecheckProjectionV1(context.Background(), testMaintainReaderReady(), OrgUnitMaintainPrecheckInputV1{
+		Intent:                 OrgUnitMaintainIntentEnable,
+		TenantID:               "tenant_1",
+		CapabilityKey:          "org.orgunit_write.field_policy",
+		EffectiveDate:          "2026-06-01",
+		OrgCode:                "FLOWER-C",
+		EffectivePolicyVersion: "epv1:test",
+		CanAdmin:               true,
+	})
+	if err != nil {
+		t.Fatalf("enable build err=%v", err)
+	}
+	if enableResult.Projection.Readiness != orgUnitMaintainReadinessReady {
+		t.Fatalf("enable readiness=%q", enableResult.Projection.Readiness)
+	}
+	if enableResult.Projection.PendingDraftSummary != "目标组织：FLOWER-C；启用生效日期：2026-06-01" {
+		t.Fatalf("enable summary=%q", enableResult.Projection.PendingDraftSummary)
+	}
+}
+
 func TestOrgUnitMaintainPrecheckHelpers(t *testing.T) {
 	t.Run("policy context error and clone helpers", func(t *testing.T) {
 		var nilErr *OrgUnitMaintainPolicyContextErrorV1
@@ -271,6 +314,9 @@ func TestOrgUnitMaintainPrecheckHelpers(t *testing.T) {
 		reasons := normalizeOrgUnitMaintainRejectionReasons([]string{"PATCH_FIELD_NOT_ALLOWED", "ORG_EVENT_RESCINDED", orgUnitMaintainContextCodeOrgInvalid, "PATCH_FIELD_NOT_ALLOWED"})
 		if !slices.Equal(reasons, []string{orgUnitMaintainContextCodeOrgInvalid, "ORG_EVENT_RESCINDED", "PATCH_FIELD_NOT_ALLOWED"}) {
 			t.Fatalf("reasons=%v", reasons)
+		}
+		if reasons := normalizeOrgUnitMaintainRejectionReasons([]string{"", "FORBIDDEN"}); !slices.Equal(reasons, []string{"FORBIDDEN"}) {
+			t.Fatalf("blank reasons=%v", reasons)
 		}
 
 		if got := resolveOrgUnitMaintainReadiness(OrgUnitMaintainPrecheckProjectionV1{}); got != orgUnitMaintainReadinessReady {
@@ -329,6 +375,12 @@ func TestOrgUnitMaintainPrecheckHelpers(t *testing.T) {
 		if !slices.Equal(orgUnitMaintainFieldDecisionOrder(OrgUnitMaintainIntentMove), []string{"org_code", "effective_date", "parent_org_code"}) {
 			t.Fatalf("move order=%v", orgUnitMaintainFieldDecisionOrder(OrgUnitMaintainIntentMove))
 		}
+		if !slices.Equal(orgUnitMaintainFieldDecisionOrder(OrgUnitMaintainIntentDisable), []string{"org_code", "effective_date"}) {
+			t.Fatalf("disable order=%v", orgUnitMaintainFieldDecisionOrder(OrgUnitMaintainIntentDisable))
+		}
+		if !slices.Equal(orgUnitMaintainFieldDecisionOrder(OrgUnitMaintainIntentEnable), []string{"org_code", "effective_date"}) {
+			t.Fatalf("enable order=%v", orgUnitMaintainFieldDecisionOrder(OrgUnitMaintainIntentEnable))
+		}
 		if !slices.Equal(orgUnitMaintainFieldDecisionOrder(OrgUnitMaintainIntentRename), []string{"org_code", "effective_date", "name"}) {
 			t.Fatalf("rename order=%v", orgUnitMaintainFieldDecisionOrder(OrgUnitMaintainIntentRename))
 		}
@@ -356,6 +408,32 @@ func TestOrgUnitMaintainPrecheckHelpers(t *testing.T) {
 		}, orgUnitMaintainPrecheckEvaluation{})
 		if !slices.Equal(moveMissing, []string{"new_parent_ref_text"}) {
 			t.Fatalf("move missing=%v", moveMissing)
+		}
+		disableMissing := normalizeOrgUnitMaintainMissingFields(OrgUnitMaintainPrecheckInputV1{
+			Intent:  OrgUnitMaintainIntentDisable,
+			OrgCode: "FLOWER-C",
+		}, orgUnitMaintainPrecheckEvaluation{})
+		if !slices.Equal(disableMissing, []string{"effective_date"}) {
+			t.Fatalf("disable missing=%v", disableMissing)
+		}
+		enableMissing := normalizeOrgUnitMaintainMissingFields(OrgUnitMaintainPrecheckInputV1{
+			Intent:  OrgUnitMaintainIntentEnable,
+			OrgCode: "FLOWER-C",
+		}, orgUnitMaintainPrecheckEvaluation{})
+		if !slices.Equal(enableMissing, []string{"effective_date"}) {
+			t.Fatalf("enable missing=%v", enableMissing)
+		}
+		requiredFieldMissing := normalizeOrgUnitMaintainMissingFields(OrgUnitMaintainPrecheckInputV1{
+			Intent:              OrgUnitMaintainIntentCorrect,
+			OrgCode:             "FLOWER-C",
+			TargetEffectiveDate: "2026-01-01",
+			NewParentRequested:  true,
+		}, orgUnitMaintainPrecheckEvaluation{
+			NameFound:    true,
+			NameDecision: orgunittypes.SetIDStrategyFieldDecision{Required: true},
+		})
+		if !slices.Equal(requiredFieldMissing, []string{"new_name"}) {
+			t.Fatalf("required field missing=%v", requiredFieldMissing)
 		}
 		dedupMissing := normalizeOrgUnitMaintainMissingFields(OrgUnitMaintainPrecheckInputV1{
 			Intent:  OrgUnitMaintainIntentMove,
@@ -406,6 +484,22 @@ func TestOrgUnitMaintainPrecheckHelpers(t *testing.T) {
 		}
 		if !slices.Equal(fieldReasons, wantFieldReasons) {
 			t.Fatalf("field reasons=%v want=%v", fieldReasons, wantFieldReasons)
+		}
+		if summary := buildOrgUnitMaintainPendingDraftSummary(OrgUnitMaintainPrecheckInputV1{
+			Intent:           OrgUnitMaintainIntentMove,
+			OrgCode:          "FLOWER-C",
+			EffectiveDate:    "2026-04-01",
+			NewParentOrgCode: "FLOWER-A",
+		}); summary != "目标组织：FLOWER-C；生效日期：2026-04-01；新上级组织：FLOWER-A" {
+			t.Fatalf("move summary=%q", summary)
+		}
+		if summary := buildOrgUnitMaintainPendingDraftSummary(OrgUnitMaintainPrecheckInputV1{
+			Intent:              OrgUnitMaintainIntentCorrect,
+			OrgCode:             "FLOWER-C",
+			TargetEffectiveDate: "2026-01-01",
+			NewName:             "运营中心",
+		}); summary != "目标组织：FLOWER-C；目标版本：2026-01-01；新名称：运营中心" {
+			t.Fatalf("correct summary=%q", summary)
 		}
 	})
 
@@ -469,6 +563,11 @@ func TestOrgUnitMaintainPrecheckHelpers(t *testing.T) {
 		}, "2026-01-01"); ctxErr != nil || ctxValue.ResolvedSetID != "" || ctxValue.SetIDSource != "none" || ctxValue.PolicyContextDigest == "" {
 			t.Fatalf("setid none ctx=%+v err=%v", ctxValue, ctxErr)
 		}
+		if ctxValue, ctxErr = resolveOrgUnitMaintainPolicyContextV1(context.Background(), orgUnitMaintainPrecheckReaderStub{}, OrgUnitMaintainPrecheckInputV1{
+			TenantID: "tenant_1",
+		}, "2026-01-01"); ctxErr != nil || ctxValue.OrgCode != "" || ctxValue.PolicyContextDigest == "" {
+			t.Fatalf("empty org code ctx=%+v err=%v", ctxValue, ctxErr)
+		}
 
 		if initialized, err := resolveOrgUnitMaintainTreeInitialized(context.Background(), nil, "tenant_1"); err != nil || initialized {
 			t.Fatalf("nil tree initialized=%v err=%v", initialized, err)
@@ -494,6 +593,33 @@ func TestOrgUnitMaintainPrecheckHelpers(t *testing.T) {
 			EffectiveDate: "2026-01-01",
 		}, "10000003"); err != nil || !exists {
 			t.Fatalf("rename target exists=%v err=%v", exists, err)
+		}
+		if exists, err := resolveOrgUnitMaintainTargetExistsAsOf(context.Background(), targetReader, OrgUnitMaintainPrecheckInputV1{
+			Intent:        OrgUnitMaintainIntentDisable,
+			OrgCode:       "FLOWER-C",
+			EffectiveDate: "2026-01-01",
+		}, "10000003"); err != nil || !exists {
+			t.Fatalf("disable target exists=%v err=%v", exists, err)
+		}
+		if exists, err := resolveOrgUnitMaintainTargetExistsAsOf(context.Background(), targetReader, OrgUnitMaintainPrecheckInputV1{
+			Intent:        OrgUnitMaintainIntentEnable,
+			OrgCode:       "FLOWER-C",
+			EffectiveDate: "2026-01-01",
+		}, "10000003"); err != nil || !exists {
+			t.Fatalf("enable target exists=%v err=%v", exists, err)
+		}
+		if exists, err := resolveOrgUnitMaintainTargetExistsAsOf(context.Background(), targetReader, OrgUnitMaintainPrecheckInputV1{
+			Intent:        OrgUnitMaintainIntentRename,
+			EffectiveDate: "2026-01-01",
+		}, "10000003"); err != nil || exists {
+			t.Fatalf("empty org code target exists=%v err=%v", exists, err)
+		}
+		if exists, err := resolveOrgUnitMaintainTargetExistsAsOf(context.Background(), targetReader, OrgUnitMaintainPrecheckInputV1{
+			Intent:        OrgUnitMaintainIntentRename,
+			OrgCode:       "FLOWER-C",
+			EffectiveDate: "2026-01-01",
+		}, " "); err != nil || exists {
+			t.Fatalf("empty org node key target exists=%v err=%v", exists, err)
 		}
 		if exists, err := resolveOrgUnitMaintainTargetExistsAsOf(context.Background(), targetReader, OrgUnitMaintainPrecheckInputV1{
 			Intent:  "other",
@@ -523,6 +649,143 @@ func TestOrgUnitMaintainPrecheckHelpers(t *testing.T) {
 		}, OrgUnitMaintainPrecheckInputV1{Intent: OrgUnitMaintainIntentRename})
 		if err == nil || err.Error() != "field configs boom" {
 			t.Fatalf("err=%v", err)
+		}
+	})
+
+	t.Run("top level build without org code still returns projection digest", func(t *testing.T) {
+		result, err := BuildOrgUnitMaintainPrecheckProjectionV1(context.Background(), nil, OrgUnitMaintainPrecheckInputV1{
+			Intent: OrgUnitMaintainIntentDisable,
+		})
+		if err != nil {
+			t.Fatalf("build err=%v", err)
+		}
+		if result.PolicyContext.PolicyContextDigest == "" || result.Projection.ProjectionDigest == "" {
+			t.Fatalf("missing digests result=%+v", result)
+		}
+		if result.Projection.Readiness != orgUnitMaintainReadinessRejected {
+			t.Fatalf("readiness=%q", result.Projection.Readiness)
+		}
+		if !slices.Equal(result.Projection.MissingFields, []string{"org_code", "effective_date"}) {
+			t.Fatalf("missing fields=%v", result.Projection.MissingFields)
+		}
+		if !slices.Contains(result.Projection.RejectionReasons, "FORBIDDEN") {
+			t.Fatalf("rejection reasons=%v", result.Projection.RejectionReasons)
+		}
+	})
+
+	t.Run("top level evaluation branches", func(t *testing.T) {
+		contextErrResult, err := BuildOrgUnitMaintainPrecheckProjectionV1(context.Background(), orgUnitMaintainPrecheckReaderStub{
+			resolveOrgNodeKeyFn: func(context.Context, string, string) (string, error) {
+				return "", errors.New("org invalid")
+			},
+			isOrgTreeInitializedFn: func(context.Context, string) (bool, error) {
+				return true, nil
+			},
+		}, OrgUnitMaintainPrecheckInputV1{
+			Intent:        OrgUnitMaintainIntentRename,
+			TenantID:      "tenant_1",
+			OrgCode:       "FLOWER-C",
+			EffectiveDate: "2026-01-01",
+			CanAdmin:      true,
+		})
+		if err != nil {
+			t.Fatalf("context err build=%v", err)
+		}
+		if !slices.Contains(contextErrResult.Projection.RejectionReasons, orgUnitMaintainContextCodeOrgInvalid) {
+			t.Fatalf("context err projection=%+v", contextErrResult.Projection)
+		}
+
+		_, err = BuildOrgUnitMaintainPrecheckProjectionV1(context.Background(), orgUnitMaintainPrecheckReaderStub{
+			isOrgTreeInitializedFn: func(context.Context, string) (bool, error) {
+				return false, errors.New("tree failed")
+			},
+		}, OrgUnitMaintainPrecheckInputV1{
+			Intent: OrgUnitMaintainIntentDisable,
+		})
+		if err == nil || err.Error() != "tree failed" {
+			t.Fatalf("tree init err=%v", err)
+		}
+
+		_, err = BuildOrgUnitMaintainPrecheckProjectionV1(context.Background(), orgUnitMaintainPrecheckReaderStub{
+			resolveOrgNodeKeyFn: func(context.Context, string, string) (string, error) {
+				return "10000003", nil
+			},
+			isOrgTreeInitializedFn: func(context.Context, string) (bool, error) {
+				return true, nil
+			},
+			resolveTargetExistsAsOfFn: func(context.Context, string, string, string) (bool, error) {
+				return false, errors.New("target exists failed")
+			},
+		}, OrgUnitMaintainPrecheckInputV1{
+			Intent:        OrgUnitMaintainIntentDisable,
+			TenantID:      "tenant_1",
+			OrgCode:       "FLOWER-C",
+			EffectiveDate: "2026-01-01",
+			CanAdmin:      true,
+		})
+		if err == nil || err.Error() != "target exists failed" {
+			t.Fatalf("target exists err=%v", err)
+		}
+
+		fieldErrResult, err := BuildOrgUnitMaintainPrecheckProjectionV1(context.Background(), orgUnitMaintainPrecheckReaderStub{
+			resolveOrgNodeKeyFn: func(context.Context, string, string) (string, error) {
+				return "10000003", nil
+			},
+			resolveSetIDFn: func(context.Context, string, string, string) (string, error) {
+				return "S2601", nil
+			},
+			isOrgTreeInitializedFn: func(context.Context, string) (bool, error) {
+				return true, nil
+			},
+			resolveFieldDecisionFn: func(context.Context, string, string, string, string, string) (orgunittypes.SetIDStrategyFieldDecision, bool, error) {
+				return orgunittypes.SetIDStrategyFieldDecision{}, false, errors.New(errPatchFieldNotAllowed)
+			},
+			resolveMutationTargetEventFn: func(context.Context, string, string, string) (OrgUnitMaintainTargetEventV1, error) {
+				return OrgUnitMaintainTargetEventV1{
+					HasEffective:       true,
+					EffectiveEventType: orgunittypes.OrgUnitEventCreate,
+				}, nil
+			},
+		}, OrgUnitMaintainPrecheckInputV1{
+			Intent:              OrgUnitMaintainIntentCorrect,
+			TenantID:            "tenant_1",
+			CapabilityKey:       "org.orgunit_correct.field_policy",
+			OrgCode:             "FLOWER-C",
+			TargetEffectiveDate: "2026-01-01",
+			NewName:             "运营中心",
+			NewParentRequested:  true,
+			CanAdmin:            true,
+		})
+		if err != nil {
+			t.Fatalf("field err build=%v", err)
+		}
+		if count := slices.Index(fieldErrResult.Projection.RejectionReasons, errPatchFieldNotAllowed); count < 0 {
+			t.Fatalf("field err projection=%+v", fieldErrResult.Projection)
+		}
+
+		_, err = BuildOrgUnitMaintainPrecheckProjectionV1(context.Background(), orgUnitMaintainPrecheckReaderStub{
+			resolveOrgNodeKeyFn: func(context.Context, string, string) (string, error) {
+				return "10000003", nil
+			},
+			resolveSetIDFn: func(context.Context, string, string, string) (string, error) {
+				return "S2601", nil
+			},
+			isOrgTreeInitializedFn: func(context.Context, string) (bool, error) {
+				return true, nil
+			},
+			resolveMutationTargetEventFn: func(context.Context, string, string, string) (OrgUnitMaintainTargetEventV1, error) {
+				return OrgUnitMaintainTargetEventV1{}, errors.New("target event failed")
+			},
+		}, OrgUnitMaintainPrecheckInputV1{
+			Intent:              OrgUnitMaintainIntentCorrect,
+			TenantID:            "tenant_1",
+			CapabilityKey:       "org.orgunit_correct.field_policy",
+			OrgCode:             "FLOWER-C",
+			TargetEffectiveDate: "2026-01-01",
+			CanAdmin:            true,
+		})
+		if err == nil || err.Error() != "target event failed" {
+			t.Fatalf("mutation err=%v", err)
 		}
 	})
 
@@ -559,6 +822,22 @@ func TestOrgUnitMaintainPrecheckHelpers(t *testing.T) {
 			t.Fatalf("move decision=%+v target=%+v err=%v", moveDecision, targetEvent, err)
 		}
 
+		disableDecision, targetEvent, err := resolveOrgUnitMaintainMutationDecision(context.Background(), nil, OrgUnitMaintainPrecheckInputV1{
+			Intent:   OrgUnitMaintainIntentDisable,
+			CanAdmin: true,
+		}, "10000003", true, true, []string{"ext_str_01"})
+		if err != nil || !disableDecision.Enabled || targetEvent != (OrgUnitMaintainTargetEventV1{}) {
+			t.Fatalf("disable decision=%+v target=%+v err=%v", disableDecision, targetEvent, err)
+		}
+
+		enableDecision, targetEvent, err := resolveOrgUnitMaintainMutationDecision(context.Background(), nil, OrgUnitMaintainPrecheckInputV1{
+			Intent:   OrgUnitMaintainIntentEnable,
+			CanAdmin: true,
+		}, "10000003", true, true, []string{"ext_str_01"})
+		if err != nil || !enableDecision.Enabled || targetEvent != (OrgUnitMaintainTargetEventV1{}) {
+			t.Fatalf("enable decision=%+v target=%+v err=%v", enableDecision, targetEvent, err)
+		}
+
 		correctDecision, targetEvent, err := resolveOrgUnitMaintainMutationDecision(context.Background(), nil, OrgUnitMaintainPrecheckInputV1{
 			Intent:              OrgUnitMaintainIntentCorrect,
 			TargetEffectiveDate: "2026-01-01",
@@ -566,6 +845,21 @@ func TestOrgUnitMaintainPrecheckHelpers(t *testing.T) {
 		}, "", false, false, nil)
 		if err != nil || correctDecision.Enabled || !slices.Contains(correctDecision.DenyReasons, "FORBIDDEN") || targetEvent != (OrgUnitMaintainTargetEventV1{}) {
 			t.Fatalf("correct decision=%+v target=%+v err=%v", correctDecision, targetEvent, err)
+		}
+
+		notFoundReader := orgUnitMaintainPrecheckReaderStub{
+			resolveMutationTargetEventFn: func(context.Context, string, string, string) (OrgUnitMaintainTargetEventV1, error) {
+				return OrgUnitMaintainTargetEventV1{}, nil
+			},
+		}
+		correctDecision, targetEvent, err = resolveOrgUnitMaintainMutationDecision(context.Background(), notFoundReader, OrgUnitMaintainPrecheckInputV1{
+			Intent:              OrgUnitMaintainIntentCorrect,
+			CanAdmin:            true,
+			TargetEffectiveDate: "2026-01-01",
+			OrgCode:             "FLOWER-C",
+		}, "10000003", true, true, nil)
+		if err != nil || correctDecision.Enabled || !slices.Contains(correctDecision.DenyReasons, "ORG_EVENT_NOT_FOUND") || targetEvent != (OrgUnitMaintainTargetEventV1{}) {
+			t.Fatalf("not found correct decision=%+v target=%+v err=%v", correctDecision, targetEvent, err)
 		}
 
 		errorReader := orgUnitMaintainPrecheckReaderStub{

@@ -226,6 +226,8 @@ func assistantOrgUnitVersionProjectionActionSupported(action string) bool {
 	case assistantIntentAddOrgUnitVersion,
 		assistantIntentInsertOrgUnitVersion,
 		assistantIntentCorrectOrgUnit,
+		assistantIntentDisableOrgUnit,
+		assistantIntentEnableOrgUnit,
 		assistantIntentRenameOrgUnit,
 		assistantIntentMoveOrgUnit:
 		return true
@@ -302,7 +304,11 @@ func assistantOrgUnitVersionProjectionExpectedContracts(action string) (string, 
 	switch strings.TrimSpace(action) {
 	case assistantIntentAddOrgUnitVersion, assistantIntentInsertOrgUnitVersion:
 		return orgunitservices.OrgUnitAppendVersionPolicyContextContractVersionV1, orgunitservices.OrgUnitAppendVersionPrecheckProjectionContractV1, true
-	case assistantIntentCorrectOrgUnit, assistantIntentRenameOrgUnit, assistantIntentMoveOrgUnit:
+	case assistantIntentCorrectOrgUnit,
+		assistantIntentDisableOrgUnit,
+		assistantIntentEnableOrgUnit,
+		assistantIntentRenameOrgUnit,
+		assistantIntentMoveOrgUnit:
 		return orgunitservices.OrgUnitMaintainPolicyContextContractVersionV1, orgunitservices.OrgUnitMaintainPrecheckProjectionContractV1, true
 	default:
 		return "", "", false

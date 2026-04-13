@@ -436,7 +436,7 @@ func (a assistantOpenAIProviderAdapter) Invoke(ctx context.Context, prompt strin
 			N:           1,
 			Messages: []assistantOpenAIChatCompletionMessage{
 				{
-					Role: "system",
+					Role:    "system",
 					Content: assistantOpenAISystemPrompt(),
 				},
 				{

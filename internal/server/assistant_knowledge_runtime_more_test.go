@@ -441,6 +441,9 @@ func TestAssistantKnowledgeRuntime_HelperCoverage(t *testing.T) {
 		if err := assistantValidateForbiddenKeys(map[string][]byte{"bad.json": []byte(`{`)}); err == nil {
 			t.Fatal("expected decode error")
 		}
+		if err := assistantValidateForbiddenKeys(map[string][]byte{"bad.md": []byte("not-front-matter")}); err == nil {
+			t.Fatal("expected markdown decode error")
+		}
 		if err := assistantValidateForbiddenKeys(map[string][]byte{"bad.json": []byte(`{"confirm_conditions":["x"]}`)}); err == nil {
 			t.Fatal("expected forbidden key error")
 		}
@@ -470,6 +473,10 @@ func TestAssistantKnowledgeRuntime_HelperCoverage(t *testing.T) {
 		}
 		if assistantValidLocale("jp") {
 			t.Fatal("jp should be invalid locale")
+		}
+		promptActions := assistantOrderedPromptActionIDs()
+		if len(promptActions) == 0 {
+			t.Fatal("expected ordered prompt action ids")
 		}
 	})
 
@@ -586,6 +593,22 @@ func TestAssistantKnowledgeRuntime_HelperCoverage(t *testing.T) {
 
 	t.Run("locale candidates and finders", func(t *testing.T) {
 		runtime := &assistantKnowledgeRuntime{
+			intentDocs: map[string]map[string]assistantKnowledgeMarkdownDocument{
+				"org.orgunit_create": {
+					"zh": {ID: "intent.zh", Locale: "zh"},
+					"en": {ID: "intent.en", Locale: "en"},
+				},
+			},
+			actionDocsByAction: map[string]map[string]assistantKnowledgeMarkdownDocument{
+				assistantIntentCreateOrgUnit: {
+					"zh": {ID: "action.zh", Locale: "zh"},
+				},
+			},
+			actionDocsByIntent: map[string]map[string]assistantKnowledgeMarkdownDocument{
+				"org.orgunit_create": {
+					"en": {ID: "action-intent.en", Locale: "en"},
+				},
+			},
 			actionView: map[string]map[string]assistantActionViewPack{
 				assistantIntentCreateOrgUnit: {
 					"zh": {Summary: "中文摘要"},
@@ -631,6 +654,45 @@ func TestAssistantKnowledgeRuntime_HelperCoverage(t *testing.T) {
 		if len(defaultCandidates) != 2 || defaultCandidates[0] != "zh" || defaultCandidates[1] != "en" {
 			t.Fatalf("unexpected default locale candidates=%v", defaultCandidates)
 		}
+		if got, ok := (*assistantKnowledgeRuntime)(nil).findIntentDoc("org.orgunit_create", "zh"); ok || got.ID != "" {
+			t.Fatalf("nil runtime should not find intent doc, got=%+v ok=%v", got, ok)
+		}
+		if _, ok := runtime.findIntentDoc("unknown.intent", "zh"); ok {
+			t.Fatal("unknown intent doc should not be found")
+		}
+		if got, ok := runtime.findIntentDoc("org.orgunit_create", "fr"); !ok || got.ID != "intent.zh" {
+			t.Fatalf("expected zh fallback intent doc, got=%+v ok=%v", got, ok)
+		}
+		runtime.intentDocs["only.ja"] = map[string]assistantKnowledgeMarkdownDocument{"ja": {ID: "intent.ja", Locale: "ja"}}
+		if _, ok := runtime.findIntentDoc("only.ja", "zh"); ok {
+			t.Fatal("locale not matched intent doc should return false")
+		}
+		if got, ok := (*assistantKnowledgeRuntime)(nil).findActionDocByAction(assistantIntentCreateOrgUnit, "zh"); ok || got.ID != "" {
+			t.Fatalf("nil runtime should not find action doc by action, got=%+v ok=%v", got, ok)
+		}
+		if _, ok := runtime.findActionDocByAction("unknown.action", "zh"); ok {
+			t.Fatal("unknown action doc should not be found")
+		}
+		if got, ok := runtime.findActionDocByAction(assistantIntentCreateOrgUnit, "fr"); !ok || got.ID != "action.zh" {
+			t.Fatalf("expected zh fallback action doc, got=%+v ok=%v", got, ok)
+		}
+		runtime.actionDocsByAction["only.ja"] = map[string]assistantKnowledgeMarkdownDocument{"ja": {ID: "action.ja", Locale: "ja"}}
+		if _, ok := runtime.findActionDocByAction("only.ja", "zh"); ok {
+			t.Fatal("locale not matched action doc should return false")
+		}
+		if got, ok := (*assistantKnowledgeRuntime)(nil).findActionDocByIntent("org.orgunit_create", "zh"); ok || got.ID != "" {
+			t.Fatalf("nil runtime should not find action doc by intent, got=%+v ok=%v", got, ok)
+		}
+		if _, ok := runtime.findActionDocByIntent("unknown.intent", "zh"); ok {
+			t.Fatal("unknown action doc by intent should not be found")
+		}
+		if got, ok := runtime.findActionDocByIntent("org.orgunit_create", "fr"); !ok || got.ID != "action-intent.en" {
+			t.Fatalf("expected locale fallback action doc by intent, got=%+v ok=%v", got, ok)
+		}
+		runtime.actionDocsByIntent["only.ja"] = map[string]assistantKnowledgeMarkdownDocument{"ja": {ID: "action-intent.ja", Locale: "ja"}}
+		if _, ok := runtime.findActionDocByIntent("only.ja", "zh"); ok {
+			t.Fatal("locale not matched action doc by intent should return false")
+		}
 		if got, ok := (*assistantKnowledgeRuntime)(nil).findActionView(assistantIntentCreateOrgUnit, "zh"); ok || got.Summary != "" {
 			t.Fatalf("nil runtime should not find action view, got=%+v ok=%v", got, ok)
 		}
@@ -672,6 +734,12 @@ func TestAssistantKnowledgeRuntime_HelperCoverage(t *testing.T) {
 		if got, ok := runtime.findReplyGuidance("missing_fields", "en", ""); !ok || got.Locale != "en" {
 			t.Fatalf("expected en generic pack, got=%+v ok=%v", got, ok)
 		}
+		runtime.replyGuidance["only_ja"] = map[string][]assistantReplyGuidancePack{
+			"ja": {{ReplyKind: "only_ja", Locale: "ja", GuidanceTemplates: []assistantKnowledgePrompt{{TemplateID: "reply.only_ja.ja.v1", Text: "ja"}}}},
+		}
+		if _, ok := runtime.findReplyGuidance("only_ja", "zh", ""); ok {
+			t.Fatal("locale not matched reply guidance should return false")
+		}
 	})
 
 	t.Run("route intent", func(t *testing.T) {
@@ -685,6 +753,7 @@ func TestAssistantKnowledgeRuntime_HelperCoverage(t *testing.T) {
 			},
 			routeCatalog: assistantIntentRouteCatalog{
 				Entries: []assistantIntentRouteEntry{
+					{IntentID: "org.orgunit_create", RouteKind: assistantRouteKindBusinessAction, ActionID: assistantIntentCreateOrgUnit},
 					{IntentID: "knowledge.general_qa", RouteKind: assistantRouteKindKnowledgeQA, Keywords: []string{"功能", "help", " "}},
 					{IntentID: "route.chitchat", RouteKind: assistantRouteKindChitchat, Keywords: []string{"你好"}},
 				},
@@ -705,6 +774,46 @@ func TestAssistantKnowledgeRuntime_HelperCoverage(t *testing.T) {
 		uncertain := runtime.routeIntent("随机输入", assistantIntentSpec{Action: assistantIntentPlanOnly})
 		if uncertain.RouteKind != assistantRouteKindUncertain || uncertain.IntentID != "route.uncertain" {
 			t.Fatalf("uncertain route invalid: %+v", uncertain)
+		}
+		if entry, ok := (*assistantKnowledgeRuntime)(nil).findRouteByRouteKind(assistantRouteKindKnowledgeQA); ok || entry.IntentID != "" {
+			t.Fatalf("nil runtime route=%+v ok=%v", entry, ok)
+		}
+		if entry, ok := runtime.findRouteByRouteKind(""); ok || entry.IntentID != "" {
+			t.Fatalf("empty route kind route=%+v ok=%v", entry, ok)
+		}
+		if entry, ok := runtime.findRouteByRouteKind(assistantRouteKindKnowledgeQA); !ok || entry.IntentID != "knowledge.general_qa" {
+			t.Fatalf("knowledge route=%+v ok=%v", entry, ok)
+		}
+		if entry, ok := runtime.findRouteByRouteKind(assistantRouteKindUncertain); !ok || entry.RouteKind != assistantRouteKindUncertain {
+			t.Fatalf("uncertain route lookup=%+v ok=%v", entry, ok)
+		}
+		if entry, ok := runtime.findRouteByRouteKind("missing"); ok || entry.IntentID != "" {
+			t.Fatalf("missing route=%+v ok=%v", entry, ok)
+		}
+		if entry, ok := runtime.findRouteByRouteKind(assistantRouteKindBusinessAction); ok || entry.IntentID != "" {
+			t.Fatalf("business action route without standalone entry should fail, got=%+v ok=%v", entry, ok)
+		}
+	})
+
+	t.Run("interpretation pack helpers", func(t *testing.T) {
+		if packID := assistantResolveInterpretationPackIDForIntent("unknown.intent", assistantRouteKindKnowledgeQA, map[string]map[string]assistantInterpretationPack{
+			assistantInterpretationDefaultPackID: {
+				"zh": {PackID: assistantInterpretationDefaultPackID, IntentClasses: []string{assistantRouteKindKnowledgeQA}},
+			},
+		}); packID != assistantInterpretationDefaultPackID {
+			t.Fatalf("expected default interpretation pack, got=%q", packID)
+		}
+
+		runtime := &assistantKnowledgeRuntime{
+			routePackID: map[string]string{},
+			interpretation: map[string]map[string]assistantInterpretationPack{
+				assistantInterpretationDefaultPackID: {
+					"zh": {PackID: assistantInterpretationDefaultPackID, IntentClasses: []string{assistantRouteKindKnowledgeQA}},
+				},
+			},
+		}
+		if packID := runtime.resolveInterpretationPackID("unknown.intent", assistantRouteKindKnowledgeQA); packID != assistantInterpretationDefaultPackID {
+			t.Fatalf("expected runtime fallback interpretation pack, got=%q", packID)
 		}
 	})
 

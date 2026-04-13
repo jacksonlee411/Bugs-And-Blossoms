@@ -132,6 +132,16 @@ func assistantOrgUnitVersionPolicyBinding(action string) (assistantOrgUnitVersio
 			CapabilityKey:  orgUnitCorrectFieldPolicyCapabilityKey,
 			MaintainIntent: orgunitservices.OrgUnitMaintainIntentCorrect,
 		}, true
+	case assistantIntentDisableOrgUnit:
+		return assistantOrgUnitVersionPolicyBindingSpec{
+			CapabilityKey:  orgUnitWriteFieldPolicyCapabilityKey,
+			MaintainIntent: orgunitservices.OrgUnitMaintainIntentDisable,
+		}, true
+	case assistantIntentEnableOrgUnit:
+		return assistantOrgUnitVersionPolicyBindingSpec{
+			CapabilityKey:  orgUnitWriteFieldPolicyCapabilityKey,
+			MaintainIntent: orgunitservices.OrgUnitMaintainIntentEnable,
+		}, true
 	case assistantIntentRenameOrgUnit:
 		return assistantOrgUnitVersionPolicyBindingSpec{
 			CapabilityKey:  orgUnitWriteFieldPolicyCapabilityKey,
@@ -174,6 +184,8 @@ func assistantActionRequiresPolicyProjection(action string) bool {
 		assistantIntentAddOrgUnitVersion,
 		assistantIntentInsertOrgUnitVersion,
 		assistantIntentCorrectOrgUnit,
+		assistantIntentDisableOrgUnit,
+		assistantIntentEnableOrgUnit,
 		assistantIntentRenameOrgUnit,
 		assistantIntentMoveOrgUnit:
 		return true
