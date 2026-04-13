@@ -14,6 +14,9 @@
 
 1. 复制环境变量模板：
    - `cp deploy/librechat/.env.example deploy/librechat/.env`
+   - 然后至少补齐：
+     - `OPENAI_API_KEY`
+     - `MONGO_URI`：必须指向一个外部可达的 Mongo；当前 upstream LibreChat backend 仍把它当启动硬依赖
 2. 启动：
    - `make assistant-runtime-up`
 3. 查看状态：
@@ -42,6 +45,7 @@
 - 默认部署仅保留 `api` 服务；`mongodb`、`meilisearch`、`rag_api`、`vectordb` 已从 compose 主链移除。
 - 上述四项仍保留在 `versions.lock.yaml` 中，仅用于 `runtime-status` 暴露 `retired_by_design` 语义，不再作为默认运行前置。
 - 若后续调试仍需单独拉起历史依赖，必须通过临时 patch / 私有调试脚本完成，不得回写默认主干 compose。
+- 额外注意：当前 upstream `api` 进程仍在源码层硬依赖 `MONGO_URI`，见容器内 `/app/api/db/connect.js`。因此“默认 compose 只保留 api”并不等于“api 可以在无 Mongo 的情况下健康启动”；现阶段若要让 `3080` 健康，仍需提供一个外部 Mongo 端点。
 
 ## 清理边界
 
@@ -64,3 +68,6 @@
 
 - `upstream_unreachable`：API 容器已运行但上游探针不可达（查看 api 服务日志与端口绑定）。
 - `retired_by_design`：依赖已按设计退役，不参与默认部署故障判定。
+- 若 `make assistant-runtime-up` 在启动前直接失败：
+  - `retired dependency env drift detected`：说明 `.env` 里仍保留 `MEILI/RAG/QDRANT` 这类已退役依赖变量；
+  - `MONGO_URI still points at removed compose service 'mongodb'`：说明当前 `.env` 仍在引用已从默认 compose 移除的 `mongodb` 服务名，需要改成外部 Mongo 地址。
