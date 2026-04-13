@@ -1127,6 +1127,13 @@ func TestOrgUnitMemoryStore_AppendFactsHelpers(t *testing.T) {
 	if facts.TargetStatusAsOf != "active" {
 		t.Fatalf("status=%q", facts.TargetStatusAsOf)
 	}
+	targetEvent, err := store.ResolveMutationTargetEvent(context.Background(), "t1", node.ID, "2026-01-01")
+	if err != nil {
+		t.Fatalf("target event err=%v", err)
+	}
+	if !targetEvent.HasEffective || targetEvent.EffectiveEventType != "CREATE" || !targetEvent.HasRaw || targetEvent.RawEventType != "CREATE" {
+		t.Fatalf("target event=%+v", targetEvent)
+	}
 
 	missingOrgNodeKey, err := encodeOrgNodeKeyFromID(orgID + 999)
 	if err != nil {
@@ -1138,5 +1145,15 @@ func TestOrgUnitMemoryStore_AppendFactsHelpers(t *testing.T) {
 	}
 	if !missing.TreeInitialized || missing.TargetExistsAsOf {
 		t.Fatalf("missing facts=%+v", missing)
+	}
+	missingTargetEvent, err := store.ResolveMutationTargetEvent(context.Background(), "t1", missingOrgNodeKey, "2026-01-01")
+	if err != nil {
+		t.Fatalf("missing target event err=%v", err)
+	}
+	if missingTargetEvent != (orgUnitMutationTargetEvent{}) {
+		t.Fatalf("missing target event=%+v", missingTargetEvent)
+	}
+	if _, err := store.ResolveMutationTargetEvent(context.Background(), "t1", "bad-node-key", "2026-01-01"); err == nil {
+		t.Fatal("expected invalid node key error")
 	}
 }

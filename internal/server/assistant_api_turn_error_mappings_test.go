@@ -49,8 +49,6 @@ func TestAssistantAPI243_CreateTurnHandlerErrorMappings(t *testing.T) {
 				ID:            "",
 				Version:       "v1",
 				CapabilityKey: "org.orgunit_create.field_policy",
-				PlanTitle:     "create",
-				PlanSummary:   "create",
 				Security: assistantActionSecuritySpec{
 					AuthObject: "org.setid_capability_config",
 					AuthAction: "admin",
@@ -67,8 +65,6 @@ func TestAssistantAPI243_CreateTurnHandlerErrorMappings(t *testing.T) {
 				ID:            assistantIntentCreateOrgUnit,
 				Version:       "v1",
 				CapabilityKey: "org.orgunit_create.field_policy",
-				PlanTitle:     "create",
-				PlanSummary:   "create",
 				Security: assistantActionSecuritySpec{
 					AuthObject: "org.setid_capability_config",
 					AuthAction: "admin",

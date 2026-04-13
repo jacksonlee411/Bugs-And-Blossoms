@@ -72,6 +72,38 @@ jobs:
         if: steps.changes.outputs.relevant == 'true'
         run: make check assistant-domain-allowlist
 
+      - name: Assistant knowledge single source gate
+        if: steps.changes.outputs.relevant == 'true'
+        run: make check assistant-knowledge-single-source
+
+      - name: Assistant knowledge runtime load gate
+        if: steps.changes.outputs.relevant == 'true'
+        run: make check assistant-knowledge-runtime-load
+
+      - name: Assistant knowledge no JSON runtime gate
+        if: steps.changes.outputs.relevant == 'true'
+        run: make check assistant-knowledge-no-json-runtime
+
+      - name: Assistant no legacy overlay gate
+        if: steps.changes.outputs.relevant == 'true'
+        run: make check assistant-no-legacy-overlay
+
+      - name: Assistant no knowledge literals gate
+        if: steps.changes.outputs.relevant == 'true'
+        run: make check assistant-no-knowledge-literals
+
+      - name: Assistant knowledge no archive ref gate
+        if: steps.changes.outputs.relevant == 'true'
+        run: make check assistant-knowledge-no-archive-ref
+
+      - name: Assistant knowledge contract separation gate
+        if: steps.changes.outputs.relevant == 'true'
+        run: make check assistant-knowledge-contract-separation
+
+      - name: Assistant no knowledge DB gate
+        if: steps.changes.outputs.relevant == 'true'
+        run: make check assistant-no-knowledge-db
+
       - name: Org node key backflow gate
         if: steps.changes.outputs.relevant == 'true'
         run: make check org-node-key-backflow

@@ -62,21 +62,40 @@ services:
     image: "ghcr.io/danny-avila/librechat"
     tag: "v0.0.1"
     digest: "sha256:1111111111111111111111111111111111111111111111111111111111111111"
+  - name: "mongodb"
+    required: false
+    retired_by_design: true
+    image: "mongo"
+    tag: "7.0"
+    digest: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
   - name: "meilisearch"
     required: false
+    retired_by_design: true
     image: "getmeili/meilisearch"
     tag: "v1.12.0"
     digest: "sha256:2222222222222222222222222222222222222222222222222222222222222222"
+  - name: "rag_api"
+    required: false
+    retired_by_design: true
+    image: "ghcr.io/danny-avila/librechat-rag-api-dev-lite"
+    tag: "latest"
+    digest: "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+  - name: "vectordb"
+    required: false
+    retired_by_design: true
+    image: "qdrant/qdrant"
+    tag: "v1.13.4"
+    digest: "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
 `
 	if err := os.WriteFile(lockPath, []byte(lock), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	snapshot := `{
-  "status": "degraded",
+  "status": "healthy",
   "checked_at": "2026-03-03T17:01:00Z",
   "services": [
     {"name":"api","required":true,"healthy":"healthy"},
-    {"name":"meilisearch","required":false,"healthy":"unavailable","reason":"container_not_running"}
+    {"name":"meilisearch","required":false,"healthy":"retired","reason":"retired_by_design"}
   ]
 }`
 	if err := os.WriteFile(snapshotPath, []byte(snapshot), 0o644); err != nil {
@@ -88,11 +107,20 @@ services:
 	t.Setenv("ASSISTANT_RUNTIME_STATUS_FILE", snapshotPath)
 
 	status := assistantRuntimeStatus()
-	if status.Status != assistantRuntimeHealthDegraded {
+	if status.Status != assistantRuntimeHealthHealthy {
 		t.Fatalf("status=%s", status.Status)
 	}
 	if !status.Capabilities.MCPEnabled || !status.Capabilities.ActionsEnabled {
 		t.Fatalf("capabilities=%+v", status.Capabilities)
+	}
+	if status.Capabilities.AgentsUIEnabled || status.Capabilities.MemoryEnabled || status.Capabilities.WebSearchEnabled || status.Capabilities.FileSearchEnabled || status.Capabilities.CodeInterpreterEnabled {
+		t.Fatalf("expected formal entry downsized capabilities, got=%+v", status.Capabilities)
+	}
+	if !status.Capabilities.ArtifactsEnabled {
+		t.Fatalf("expected artifacts enabled, got=%+v", status.Capabilities)
+	}
+	if status.Capabilities.RuntimeCutoverMode != assistantRuntimeCutoverModeUIShellOnly {
+		t.Fatalf("runtime_cutover_mode=%q", status.Capabilities.RuntimeCutoverMode)
 	}
 	if status.Capabilities.DomainPolicyVersion != "v1" {
 		t.Fatalf("domain policy version=%q", status.Capabilities.DomainPolicyVersion)
@@ -100,11 +128,14 @@ services:
 	if status.Upstream.Repo != "danny-avila/LibreChat" || status.Upstream.Ref != "main" {
 		t.Fatalf("unexpected upstream=%+v", status.Upstream)
 	}
-	if len(status.Services) != 2 {
+	if len(status.Services) != 5 {
 		t.Fatalf("services=%d", len(status.Services))
 	}
 	if status.Services[0].Image == "" || status.Services[0].Digest == "" {
 		t.Fatalf("lock metadata not merged: %+v", status.Services[0])
+	}
+	if status.Services[1].Healthy != assistantRuntimeHealthRetired || status.Services[1].Reason != assistantRuntimeReasonRetiredByDesign {
+		t.Fatalf("expected retired dependency, got=%+v", status.Services[1])
 	}
 }
 
@@ -130,7 +161,7 @@ func TestAssistantRuntimeStatus_UpstreamProbeFailsClosed(t *testing.T) {
 	if status.Status != assistantRuntimeHealthUnavailable {
 		t.Fatalf("status=%s", status.Status)
 	}
-	if status.ErrorCode != assistantUIProxyUpstreamUnavailable {
+	if status.ErrorCode != assistantRuntimeUpstreamUnavailable {
 		t.Fatalf("error_code=%s", status.ErrorCode)
 	}
 	if len(status.Services) == 0 || status.Services[0].Reason != "upstream_unreachable" {
@@ -199,11 +230,12 @@ func TestAssistantRuntimeHelpers(t *testing.T) {
 	}
 
 	services := assistantRuntimeServicesFromLock([]struct {
-		Name     string `yaml:"name"`
-		Required bool   `yaml:"required"`
-		Image    string `yaml:"image"`
-		Tag      string `yaml:"tag"`
-		Digest   string `yaml:"digest"`
+		Name            string `yaml:"name"`
+		Required        bool   `yaml:"required"`
+		Image           string `yaml:"image"`
+		Tag             string `yaml:"tag"`
+		Digest          string `yaml:"digest"`
+		RetiredByDesign bool   `yaml:"retired_by_design"`
 	}{
 		{Name: "", Required: true},
 		{Name: "api", Required: true, Image: "img", Tag: "tag", Digest: "digest"},
@@ -252,8 +284,29 @@ func TestAssistantRuntimeHelpers(t *testing.T) {
 	if got := assistantRuntimeAggregateStatus([]assistantRuntimeService{{Name: "api", Required: true, Healthy: "healthy"}, {Name: "optional", Required: false, Healthy: "degraded"}}); got != assistantRuntimeHealthDegraded {
 		t.Fatalf("aggregate degraded=%s", got)
 	}
+	if got := assistantRuntimeAggregateStatus([]assistantRuntimeService{{Name: "api", Required: true, Healthy: "healthy"}, {Name: "optional", Required: false, Healthy: assistantRuntimeHealthRetired, Reason: assistantRuntimeReasonRetiredByDesign}}); got != assistantRuntimeHealthHealthy {
+		t.Fatalf("aggregate retired=%s", got)
+	}
 	if got := assistantRuntimeAggregateStatus([]assistantRuntimeService{{Name: "api", Required: true, Healthy: "unavailable"}}); got != assistantRuntimeHealthUnavailable {
 		t.Fatalf("aggregate unavailable=%s", got)
+	}
+	retired := assistantRuntimeNormalizeService(assistantRuntimeService{
+		Name:     "mongodb",
+		Required: true,
+		Healthy:  assistantRuntimeHealthUnavailable,
+		Reason:   assistantRuntimeReasonRetiredByDesign,
+	})
+	if retired.Required {
+		t.Fatalf("retired service should no longer be required: %+v", retired)
+	}
+	if retired.Healthy != assistantRuntimeHealthRetired {
+		t.Fatalf("retired service health=%s", retired.Healthy)
+	}
+	if got := assistantRuntimeAggregateStatus([]assistantRuntimeService{
+		{Name: "api", Required: true, Healthy: assistantRuntimeHealthHealthy},
+		{Name: "mongodb", Required: false, Healthy: assistantRuntimeHealthUnavailable, Reason: assistantRuntimeReasonRetiredByDesign},
+	}); got != assistantRuntimeHealthHealthy {
+		t.Fatalf("aggregate with retired dependency=%s", got)
 	}
 
 	if got := assistantRuntimeLockReadErrorCode(os.ErrNotExist); got != "assistant_runtime_versions_lock_missing" {

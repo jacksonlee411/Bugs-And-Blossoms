@@ -1,5 +1,7 @@
 # DEV-PLAN-262：LibreChat 对话回执渲染越界问题调查与收敛方案
 
+> 归档说明（2026-04-12）：本文件已自 `docs/dev-plans/` 迁入 `docs/archive/dev-plans/`，仅保留为历史参考，不再作为现行 SSOT。
+
 **状态**: 已归档（2026-03-08 CST，旧桥接阶段缺陷修复记录）
 
 > 归档说明：
@@ -83,10 +85,10 @@
 3. [X] 修复代码与测试清单（执行阶段回填）。
 
 ## 8. 关联文档
-- `docs/dev-plans/260-librechat-conversation-first-auto-execution-plan.md`
-- `docs/dev-plans/261-librechat-assistant-conversation-failure-investigation-and-remediation-plan.md`
+- `docs/archive/dev-plans/260-librechat-conversation-first-auto-execution-plan.md`
+- `docs/archive/dev-plans/261-librechat-assistant-conversation-failure-investigation-and-remediation-plan.md`
 - `docs/archive/dev-records/dev-plan-261-execution-log.md`
 - `docs/archive/dev-records/dev-plan-262-execution-log.md`
-- `docs/dev-plans/231-librechat-prerequisites-contract-and-gates-plan.md`
+- `docs/archive/dev-plans/231-librechat-prerequisites-contract-and-gates-plan.md`
 - `docs/dev-plans/012-ci-quality-gates.md`
 - `AGENTS.md`

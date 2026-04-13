@@ -2498,6 +2498,25 @@ func (s *orgUnitMemoryStore) ResolveAppendFacts(_ context.Context, tenantID stri
 	return facts, nil
 }
 
+func (s *orgUnitMemoryStore) ResolveMutationTargetEvent(_ context.Context, tenantID string, orgNodeKey string, _ string) (orgUnitMutationTargetEvent, error) {
+	orgID, err := decodeOrgNodeKeyToID(orgNodeKey)
+	if err != nil {
+		return orgUnitMutationTargetEvent{}, err
+	}
+	for _, node := range s.nodes[tenantID] {
+		if node.OrgID != orgID {
+			continue
+		}
+		return orgUnitMutationTargetEvent{
+			HasEffective:       true,
+			EffectiveEventType: "CREATE",
+			HasRaw:             true,
+			RawEventType:       "CREATE",
+		}, nil
+	}
+	return orgUnitMutationTargetEvent{}, nil
+}
+
 func (s *orgUnitMemoryStore) ResolveOrgCodesByNodeKeys(_ context.Context, tenantID string, orgNodeKeys []string) (map[string]string, error) {
 	out := make(map[string]string)
 	if len(orgNodeKeys) == 0 {
@@ -2804,7 +2823,12 @@ func (s *orgUnitMemoryStore) MinEffectiveDate(_ context.Context, tenantID string
 }
 
 func (s *orgUnitMemoryStore) ListEnabledTenantFieldConfigsAsOf(_ context.Context, _ string, _ string) ([]orgUnitTenantFieldConfig, error) {
-	return []orgUnitTenantFieldConfig{}, nil
+	return []orgUnitTenantFieldConfig{{
+		FieldKey:         orgUnitCreateFieldOrgType,
+		ValueType:        "text",
+		DataSourceType:   "DICT",
+		DataSourceConfig: json.RawMessage(`{"dict_code":"org_type"}`),
+	}}, nil
 }
 
 func (s *orgUnitMemoryStore) GetOrgUnitVersionExtSnapshot(_ context.Context, _ string, _ int, _ string) (orgUnitVersionExtSnapshot, error) {

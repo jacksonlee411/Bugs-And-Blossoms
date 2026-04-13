@@ -253,6 +253,7 @@ func TestAssistantPersistence_UtilityFunctions(t *testing.T) {
 		{errAssistantRouteNonBusinessBlocked.Error(), errAssistantRouteNonBusinessBlocked},
 		{errAssistantRouteClarificationRequired.Error(), errAssistantRouteClarificationRequired},
 		{errAssistantUnsupportedIntent.Error(), errAssistantUnsupportedIntent},
+		{errAssistantGateUnavailable.Error(), errAssistantGateUnavailable},
 		{errAssistantServiceMissing.Error(), errAssistantServiceMissing},
 	}
 	for _, item := range idemCodes {
@@ -285,6 +286,9 @@ func TestAssistantPersistence_UtilityFunctions(t *testing.T) {
 		if _, _, ok := assistantIdempotencyErrorPayload(e); !ok {
 			t.Fatalf("expected mapped idempotency error for %v", e)
 		}
+	}
+	if status, code, ok := assistantIdempotencyErrorPayload(errAssistantServiceMissing); !ok || status != http.StatusServiceUnavailable || code != errAssistantGateUnavailable.Error() {
+		t.Fatalf("service missing payload status=%d code=%s ok=%v", status, code, ok)
 	}
 	if status, code, ok := assistantIdempotencyErrorPayload(errors.New(orgUnitErrFieldPolicyMissing)); !ok || status != http.StatusUnprocessableEntity || code != orgUnitErrFieldPolicyMissing {
 		t.Fatalf("unexpected mapped payload status=%d code=%s ok=%v", status, code, ok)
@@ -342,23 +346,34 @@ func TestAssistantPersistence_UtilityFunctions(t *testing.T) {
 }
 
 func TestAssistantPersistence_ApplyConfirmTurnBranches(t *testing.T) {
-	svc := newAssistantConversationService(newOrgUnitMemoryStore(), assistantWriteServiceStub{store: newOrgUnitMemoryStore()})
+	assistantResetCreatePolicyRegistryStoreForTest()
+	store := newOrgUnitMemoryStore()
+	_, _ = store.CreateNodeCurrent(context.Background(), "tenant_1", "2026-01-01", "FLOWER-A", "鲜花组织A", "", true)
+	_, _ = store.CreateNodeCurrent(context.Background(), "tenant_1", "2026-01-01", "FLOWER-B", "鲜花组织B", "", true)
+	svc := newAssistantConversationService(store, assistantWriteServiceStub{store: store})
 	principal := Principal{ID: "actor_1", RoleSlug: "tenant-admin"}
 	mkTurn := func() *assistantTurn {
-		return assistantTestAttachBusinessRoute(&assistantTurn{
+		snapshot := assistantTestCreateOrgUnitProjectionSnapshot()
+		snapshot.Projection.Readiness = "candidate_confirmation_required"
+		snapshot.Projection.CandidateConfirmationRequirements = []string{"resolved_candidate"}
+		snapshot.Projection.PolicyExplain = "请选择上级组织后再确认"
+		return assistantTestAttachCreateOrgUnitProjection(&assistantTurn{
 			TurnID:         "turn_1",
 			State:          assistantStateValidated,
 			TraceID:        "trace_1",
 			RequestID:      "req_1",
 			AmbiguityCount: 2,
 			Intent: assistantIntentSpec{
-				Action: assistantIntentCreateOrgUnit,
+				Action:        assistantIntentCreateOrgUnit,
+				ParentRefText: "鲜花组织",
+				EntityName:    "运营部",
+				EffectiveDate: "2026-01-01",
 			},
 			Plan:       assistantBuildPlan(assistantIntentSpec{Action: assistantIntentCreateOrgUnit}),
 			Candidates: []assistantCandidate{{CandidateID: "c1", CandidateCode: "FLOWER-A"}, {CandidateID: "c2", CandidateCode: "FLOWER-B"}},
-		})
+		}, snapshot)
 	}
-	conversation := &assistantConversation{ConversationID: "conv_1"}
+	conversation := &assistantConversation{ConversationID: "conv_1", TenantID: "tenant_1"}
 
 	turn := mkTurn()
 	turn.State = assistantStateCommitted
@@ -447,13 +462,13 @@ func TestAssistantPersistence_ApplyCommitTurnBranches(t *testing.T) {
 			ResolvedCandidateID: "c1",
 			Candidates:          []assistantCandidate{{CandidateID: "c1", CandidateCode: "FLOWER-A"}},
 		}
-		assistantTestAttachBusinessRoute(turn)
+		assistantTestAttachCreateOrgUnitProjection(turn, nil)
 		if err := svc.refreshTurnVersionTuple(context.Background(), "tenant_1", turn); err != nil {
 			t.Fatalf("refresh turn version tuple err=%v", err)
 		}
 		return turn
 	}
-	conversation := &assistantConversation{ConversationID: "conv_1"}
+	conversation := &assistantConversation{ConversationID: "conv_1", TenantID: "tenant_1"}
 
 	turn := mkTurn()
 	turn.State = assistantStateCommitted
@@ -621,7 +636,7 @@ func TestAssistantPersistence_HydrateDeferredCandidateForConfirmBranches(t *test
 
 	applyErrSvc := newAssistantConversationService(assistantOrgStoreStub{orgUnitMemoryStore: newOrgUnitMemoryStore(), searchErr: errors.New("search failed")}, assistantWriteServiceStub{store: newOrgUnitMemoryStore()})
 	conversation := &assistantConversation{TenantID: "tenant_1"}
-	turn := assistantTestAttachBusinessRoute(&assistantTurn{
+	turn := assistantTestAttachCreateOrgUnitProjection(&assistantTurn{
 		TurnID:             "turn_deferred_err",
 		State:              assistantStateValidated,
 		RequestID:          "req_deferred_err",
@@ -632,7 +647,7 @@ func TestAssistantPersistence_HydrateDeferredCandidateForConfirmBranches(t *test
 		Intent:             assistantIntentSpec{Action: assistantIntentCreateOrgUnit, ParentRefText: "鲜花组织", EntityName: "运营部", EffectiveDate: "2026-01-01"},
 		Plan:               assistantBuildPlan(assistantIntentSpec{Action: assistantIntentCreateOrgUnit}),
 		ResolutionSource:   "deferred_candidate_lookup",
-	})
+	}, assistantTestCreateOrgUnitProjectionSnapshot())
 	if _, err := applyErrSvc.applyConfirmTurn(conversation, turn, Principal{ID: "actor_1", RoleSlug: "tenant-admin"}, ""); err == nil || !strings.Contains(err.Error(), "search failed") {
 		t.Fatalf("expected applyConfirmTurn deferred search err, got=%v", err)
 	}
@@ -979,6 +994,7 @@ func TestAssistantPersistence_PGFlowCreateConversation(t *testing.T) {
 }
 
 func TestAssistantPersistence_PGFlowCreateConfirmCommitTurn(t *testing.T) {
+	assistantResetCreatePolicyRegistryStoreForTest()
 	store := newOrgUnitMemoryStore()
 	_, _ = store.CreateNodeCurrent(context.Background(), "tenant_1", "2026-01-01", "FLOWER-A", "鲜花组织", "", true)
 	svc := newAssistantConversationService(store, assistantWriteServiceStub{store: store})
@@ -995,7 +1011,10 @@ func TestAssistantPersistence_PGFlowCreateConfirmCommitTurn(t *testing.T) {
 		UpdatedAt:      now,
 	}
 
-	turnForConfirm := assistantTestAttachBusinessRoute(&assistantTurn{
+	confirmSnapshot := assistantTestCreateOrgUnitProjectionSnapshot()
+	confirmSnapshot.Projection.Readiness = "candidate_confirmation_required"
+	confirmSnapshot.Projection.CandidateConfirmationRequirements = []string{"resolved_candidate"}
+	turnForConfirm := assistantTestAttachCreateOrgUnitProjection(&assistantTurn{
 		TurnID:             "turn_confirm_1",
 		UserInput:          "请创建部门",
 		State:              assistantStateValidated,
@@ -1038,7 +1057,7 @@ func TestAssistantPersistence_PGFlowCreateConfirmCommitTurn(t *testing.T) {
 		DryRun:    assistantBuildDryRun(assistantIntentSpec{Action: assistantIntentCreateOrgUnit, ParentRefText: "鲜花组织", EntityName: "运营部", EffectiveDate: "2026-01-01"}, []assistantCandidate{{CandidateID: "c1", CandidateCode: "FLOWER-A"}, {CandidateID: "c2", CandidateCode: "FLOWER-B"}}, ""),
 		CreatedAt: now,
 		UpdatedAt: now,
-	})
+	}, confirmSnapshot)
 
 	turnForCommit := *turnForConfirm
 	turnForCommit.TurnID = "turn_commit_1"
@@ -1052,7 +1071,7 @@ func TestAssistantPersistence_PGFlowCreateConfirmCommitTurn(t *testing.T) {
 	}
 	turnForCommit.RequestID = "req_commit_1"
 	turnForCommit.TraceID = "trace_commit_1"
-	assistantTestAttachBusinessRoute(&turnForCommit)
+	assistantTestAttachCreateOrgUnitProjection(&turnForCommit, nil)
 	if err := svc.refreshTurnVersionTuple(context.Background(), "tenant_1", &turnForCommit); err != nil {
 		t.Fatalf("refresh commit turn version tuple err=%v", err)
 	}

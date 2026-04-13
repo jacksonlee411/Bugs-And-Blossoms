@@ -1,5 +1,7 @@
 # DEV-PLAN-231 执行日志
 
+> 归档说明（2026-04-12）：本记录已自 `docs/dev-records/` 迁入 `docs/archive/dev-records/`，仅保留为历史执行证据，不再作为活体入口。
+
 ## 2026-03-03（UTC）
 
 - 2026-03-03 07:56 UTC：新增门禁脚本 `scripts/ci/check-assistant-config-single-source.sh`，实现 R1/R2/R3 规则、allowlist 过期检查与统一错误码输出前缀。

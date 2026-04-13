@@ -32,6 +32,23 @@ describe('resolveApiErrorMessage', () => {
     expect(message).not.toBe('conversation_confirmation_expired')
   })
 
+  it('returns explicit mapped message for assistant successor session errors', () => {
+    const sessionMessage = resolveApiErrorMessage('assistant_session_invalid', 'assistant_session_invalid')
+    const principalMessage = resolveApiErrorMessage('assistant_principal_invalid', 'assistant_principal_invalid')
+    const bootstrapMessage = resolveApiErrorMessage('assistant_ui_bootstrap_unavailable', 'assistant_ui_bootstrap_unavailable')
+    const retiredEntryMessage = resolveApiErrorMessage('assistant_ui_retired', 'assistant_ui_retired')
+    const runtimeMessage = resolveApiErrorMessage('assistant_runtime_unavailable', 'assistant_runtime_unavailable')
+    const gateMessage = resolveApiErrorMessage('assistant_gate_unavailable', 'assistant_gate_unavailable')
+    const retiredCompatMessage = resolveApiErrorMessage('assistant_vendored_api_retired', 'assistant_vendored_api_retired')
+    expect(sessionMessage).not.toBe('assistant_session_invalid')
+    expect(principalMessage).not.toBe('assistant_principal_invalid')
+    expect(bootstrapMessage).not.toBe('assistant_ui_bootstrap_unavailable')
+    expect(retiredEntryMessage).not.toBe('assistant_ui_retired')
+    expect(runtimeMessage).not.toBe('assistant_runtime_unavailable')
+    expect(gateMessage).not.toBe('assistant_gate_unavailable')
+    expect(retiredCompatMessage).not.toBe('assistant_vendored_api_retired')
+  })
+
   it('keeps backend message when it is explicit', () => {
     const fallback = 'default rule evaluation failed. please check the rule.'
     expect(resolveApiErrorMessage('DEFAULT_RULE_EVAL_FAILED', fallback)).toBeTruthy()

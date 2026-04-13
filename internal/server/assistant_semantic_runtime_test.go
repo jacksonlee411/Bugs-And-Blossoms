@@ -82,6 +82,83 @@ func TestAssistant268SemanticPromptHelpers(t *testing.T) {
 	}
 }
 
+func TestAssistant268SemanticPromptActions_Branches(t *testing.T) {
+	hooks := captureAssistantKnowledgeHooks()
+	defer hooks.restore()
+
+	t.Run("falls back without runtime", func(t *testing.T) {
+		assistantLoadKnowledgeRuntimeFn = func() (*assistantKnowledgeRuntime, error) {
+			return nil, errors.New("runtime unavailable")
+		}
+
+		actions := assistantSemanticPromptActions()
+		byID := map[string]assistantSemanticPromptAction{}
+		for _, item := range actions {
+			byID[item.ActionID] = item
+		}
+		if len(byID[assistantIntentCreateOrgUnit].RequiredSlots) == 0 {
+			t.Fatal("expected business action required slots fallback without runtime")
+		}
+		if byID[assistantIntentPlanOnly].PlanSummary != "" {
+			t.Fatalf("expected empty non-business summary without runtime, got=%q", byID[assistantIntentPlanOnly].PlanSummary)
+		}
+	})
+
+	t.Run("uses runtime route metadata and markdown summaries", func(t *testing.T) {
+		assistantLoadKnowledgeRuntimeFn = func() (*assistantKnowledgeRuntime, error) {
+			return &assistantKnowledgeRuntime{
+				routeByAction: map[string]assistantIntentRouteEntry{
+					assistantIntentCreateOrgUnit: {
+						IntentID:      "org.orgunit_create",
+						RouteKind:     assistantRouteKindBusinessAction,
+						RequiredSlots: []string{"parent_ref_text"},
+					},
+				},
+				routeCatalog: assistantIntentRouteCatalog{
+					Entries: []assistantIntentRouteEntry{
+						{IntentID: assistantInterpretationDefaultPackID, RouteKind: assistantRouteKindKnowledgeQA},
+					},
+				},
+				actionDocsByAction: map[string]map[string]assistantKnowledgeMarkdownDocument{
+					assistantIntentCreateOrgUnit: {
+						"zh": {ID: "action.org.orgunit_create", Locale: "zh", Title: "创建组织动作说明"},
+					},
+				},
+				actionView: map[string]map[string]assistantActionViewPack{
+					assistantIntentCreateOrgUnit: {
+						"zh": {Summary: "创建组织摘要"},
+					},
+				},
+				intentDocs: map[string]map[string]assistantKnowledgeMarkdownDocument{
+					assistantInterpretationDefaultPackID: {
+						"zh": {ID: assistantInterpretationDefaultPackID, Locale: "zh", Title: "知识问答", Summary: "知识问答摘要"},
+					},
+				},
+			}, nil
+		}
+
+		actions := assistantSemanticPromptActions()
+		byID := map[string]assistantSemanticPromptAction{}
+		for _, item := range actions {
+			byID[item.ActionID] = item
+		}
+		create := byID[assistantIntentCreateOrgUnit]
+		if create.PlanSummary != "创建组织摘要" {
+			t.Fatalf("unexpected create summary=%q", create.PlanSummary)
+		}
+		if strings.Join(create.RequiredSlots, ",") != "parent_ref_text" {
+			t.Fatalf("unexpected create required slots=%v", create.RequiredSlots)
+		}
+		planOnly := byID[assistantIntentPlanOnly]
+		if planOnly.PlanSummary != "知识问答摘要" {
+			t.Fatalf("unexpected plan_only summary=%q", planOnly.PlanSummary)
+		}
+		if len(planOnly.RequiredSlots) != 0 {
+			t.Fatalf("plan_only should not carry required slots, got=%v", planOnly.RequiredSlots)
+		}
+	})
+}
+
 func TestAssistant268SyntheticSemanticHelperCoverage(t *testing.T) {
 	actionCases := map[string]string{
 		"请新建组织":  assistantIntentCreateOrgUnit,
@@ -121,6 +198,66 @@ func TestAssistant268SyntheticSemanticHelperCoverage(t *testing.T) {
 	if got := assistantSemanticIntentIDForAction("custom_action"); got != "action.custom_action" {
 		t.Fatalf("unexpected default intent_id=%s", got)
 	}
+
+	t.Run("non business route helpers and system prompt", func(t *testing.T) {
+		hooks := captureAssistantKnowledgeHooks()
+		defer hooks.restore()
+
+		assistantLoadKnowledgeRuntimeFn = func() (*assistantKnowledgeRuntime, error) {
+			return nil, errors.New("runtime unavailable")
+		}
+		if intentID, routeKind := assistantSemanticIntentRouteForNonBusiness(assistantRouteKindUncertain); intentID != assistantRouteFallbackUncertainID || routeKind != assistantRouteKindUncertain {
+			t.Fatalf("unexpected uncertain fallback intent=%q route=%q", intentID, routeKind)
+		}
+		if prompt := assistantOpenAISystemPrompt(); !strings.Contains(prompt, "你必须只输出严格 JSON") {
+			t.Fatalf("fallback system prompt=%q", prompt)
+		}
+
+		assistantLoadKnowledgeRuntimeFn = func() (*assistantKnowledgeRuntime, error) {
+			return &assistantKnowledgeRuntime{
+				routeByAction: map[string]assistantIntentRouteEntry{
+					assistantIntentCreateOrgUnit:  {IntentID: "org.orgunit_create", RouteKind: assistantRouteKindBusinessAction},
+					assistantIntentDisableOrgUnit: {IntentID: "org.orgunit_disable", RouteKind: assistantRouteKindBusinessAction},
+				},
+				routeCatalog: assistantIntentRouteCatalog{
+					Entries: []assistantIntentRouteEntry{
+						{IntentID: "knowledge.general_qa", RouteKind: assistantRouteKindKnowledgeQA},
+						{IntentID: "chat.greeting", RouteKind: assistantRouteKindChitchat},
+						{IntentID: "route.uncertain", RouteKind: assistantRouteKindUncertain},
+					},
+				},
+				intentDocs: map[string]map[string]assistantKnowledgeMarkdownDocument{
+					"knowledge.general_qa": {
+						"zh": {ID: "knowledge.general_qa", Locale: "zh", Title: "知识问答"},
+					},
+					"chat.greeting": {
+						"zh": {ID: "chat.greeting", Locale: "zh", Title: "问候"},
+					},
+					"route.uncertain": {
+						"zh": {ID: "route.uncertain", Locale: "zh", Title: "待澄清"},
+					},
+				},
+			}, nil
+		}
+		if intentID, routeKind := assistantSemanticIntentRouteForNonBusiness(assistantRouteKindKnowledgeQA); intentID != "knowledge.general_qa" || routeKind != assistantRouteKindKnowledgeQA {
+			t.Fatalf("unexpected knowledge route intent=%q route=%q", intentID, routeKind)
+		}
+		if intentID, routeKind := assistantSemanticIntentRouteForNonBusiness("other"); intentID != "" || routeKind != "other" {
+			t.Fatalf("unexpected unknown route intent=%q route=%q", intentID, routeKind)
+		}
+		prompt := assistantOpenAISystemPrompt()
+		for _, want := range []string{
+			"create_orgunit=org.orgunit_create",
+			"disable_orgunit=org.orgunit_disable",
+			"知识问答 输出 action=plan_only、route_kind=knowledge_qa、intent_id=knowledge.general_qa",
+			"问候 输出 action=plan_only、route_kind=chitchat、intent_id=chat.greeting",
+			"待澄清 输出 action=plan_only、route_kind=uncertain、intent_id=route.uncertain",
+		} {
+			if !strings.Contains(prompt, want) {
+				t.Fatalf("system prompt missing %q in %q", want, prompt)
+			}
+		}
+	})
 
 	business := assistantSyntheticSemanticPayload("在鲜花组织之下新建一个部门，成立日期是2026-01-01")
 	if business.RouteKind != assistantRouteKindBusinessAction || business.IntentID != "org.orgunit_create" {
@@ -304,15 +441,15 @@ func TestAssistant268IntentPipelineHelpers(t *testing.T) {
 
 	t.Run("build plan summaries for projection-only routes", func(t *testing.T) {
 		qaPlan := assistantBuildPlan(assistantIntentSpec{RouteKind: assistantRouteKindKnowledgeQA})
-		if qaPlan.Title != "对话回复" || qaPlan.Summary != "当前轮属于知识问答，只返回说明，不触发业务提交。" {
+		if qaPlan.Title != "知识问答意图" || qaPlan.Summary != "当前轮属于知识问答，只返回说明，不触发业务提交。" {
 			t.Fatalf("unexpected qa plan=%+v", qaPlan)
 		}
 		chitchatPlan := assistantBuildPlan(assistantIntentSpec{RouteKind: assistantRouteKindChitchat})
-		if chitchatPlan.Summary != "当前轮属于闲聊响应，不触发业务提交。" {
+		if chitchatPlan.Title != "闲聊意图" || chitchatPlan.Summary != "当前轮属于闲聊响应，不触发业务提交。" {
 			t.Fatalf("unexpected chitchat plan=%+v", chitchatPlan)
 		}
 		uncertainPlan := assistantBuildPlan(assistantIntentSpec{RouteKind: assistantRouteKindUncertain})
-		if uncertainPlan.Summary != "当前轮语义仍不确定，仅保留澄清投影，不触发业务提交。" {
+		if uncertainPlan.Title != "未确定意图" || uncertainPlan.Summary != "当前轮语义仍不确定，仅保留澄清投影，不触发业务提交。" {
 			t.Fatalf("unexpected uncertain plan=%+v", uncertainPlan)
 		}
 	})

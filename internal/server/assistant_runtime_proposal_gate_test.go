@@ -50,6 +50,14 @@ func TestAssistantAcceptProposalCandidateFailClosedCoverage(t *testing.T) {
 	if _, err := svc.assistantAcceptProposal(context.Background(), "tenant-1", Principal{}, "创建运营部", proposal, routeDecision, candidates, "missing", "", nil, assistantSemanticRetrievalResult{}, nil); !errors.Is(err, errAssistantCandidateNotFound) {
 		t.Fatalf("expected resolved candidate not found, got=%v", err)
 	}
+	if _, err := svc.assistantAcceptProposal(context.Background(), "tenant-1", Principal{}, "创建运营部", assistantRuntimeProposal{
+		ActionHint:    assistantIntentCreateOrgUnit,
+		IntentIDHint:  "org.orgunit_create",
+		RouteKindHint: assistantRouteKindBusinessAction,
+		EffectiveDate: "2026/01/01",
+	}, routeDecision, candidates, "", "", nil, assistantSemanticRetrievalResult{}, nil); !errors.Is(err, errAssistantPlanSchemaConstrainedDecodeFailed) {
+		t.Fatalf("expected invalid write date fail-closed, got=%v", err)
+	}
 }
 
 func TestAssistantTurnAuthoritativeStateReadyForCommitCoverage(t *testing.T) {
@@ -100,5 +108,32 @@ func TestAssistantTurnAuthoritativeStateReadyForCommitCoverage(t *testing.T) {
 	})
 	if err := assistantTurnAuthoritativeStateReadyForCommit(successTurn); err != nil {
 		t.Fatalf("expected successful authoritative commit readiness, got=%v", err)
+	}
+
+	addTurn := assistantTestAttachOrgUnitVersionProjection(&assistantTurn{
+		State: assistantStateConfirmed,
+		Intent: assistantIntentSpec{
+			Action:        assistantIntentAddOrgUnitVersion,
+			OrgCode:       "FLOWER-C",
+			EffectiveDate: "2026-01-01",
+			NewName:       "运营一部",
+		},
+	}, nil)
+	if err := assistantTurnAuthoritativeStateReadyForCommit(addTurn); err != nil {
+		t.Fatalf("expected add-version authoritative commit readiness, got=%v", err)
+	}
+
+	missingProjectionTurn := assistantTestAttachBusinessRoute(&assistantTurn{
+		State: assistantStateConfirmed,
+		Intent: assistantIntentSpec{
+			Action:              assistantIntentAddOrgUnitVersion,
+			OrgCode:             "FLOWER-C",
+			EffectiveDate:       "2026-01-01",
+			NewName:             "运营一部",
+			IntentSchemaVersion: assistantIntentSchemaVersionV1,
+		},
+	})
+	if err := assistantTurnAuthoritativeStateReadyForCommit(missingProjectionTurn); !errors.Is(err, errAssistantPlanContractVersionMismatch) {
+		t.Fatalf("expected add-version projection mismatch, got=%v", err)
 	}
 }

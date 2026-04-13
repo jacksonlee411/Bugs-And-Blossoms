@@ -1,64 +1,64 @@
 {
   "case_id": 1,
-  "tenant_id": "77bd468c-8295-4f0b-a9d3-fff3db761e04",
-  "conversation_id": "conv_bec3267448184b0881350d6afc2dd99c",
+  "tenant_id": "8ef91f7f-9cc1-4103-abac-b79ec5fc76c1",
+  "conversation_id": "conv_2d078d36d77b4645b08890b665605a05",
   "snapshots": [
     {
       "step": 1,
       "input": "你好",
       "bubble": {
         "count": 1,
-        "bindingKey": "conv_bec3267448184b0881350d6afc2dd99c::turn_8f85ebb5f1a14db981c82554f240a53f::assistant_b2fcc823b15c4d92aee4e616a40025a4",
-        "conversationId": "conv_bec3267448184b0881350d6afc2dd99c",
-        "turnId": "turn_8f85ebb5f1a14db981c82554f240a53f",
-        "requestId": "assistant_b2fcc823b15c4d92aee4e616a40025a4",
-        "text": "你现在最想先处理哪一类事情？比如：新建部门、调整上级、改名，还是先了解一下变更规则？"
+        "bindingKey": "conv_2d078d36d77b4645b08890b665605a05::turn_6aaca2dee4154054a100532817a3eb37::assistant_a50359b9ef084dc08959f46b03275340",
+        "conversationId": "conv_2d078d36d77b4645b08890b665605a05",
+        "turnId": "turn_6aaca2dee4154054a100532817a3eb37",
+        "requestId": "assistant_a50359b9ef084dc08959f46b03275340",
+        "text": "你现在想处理哪件事？可以先简单说一下你的目标，比如“想创建一个新部门”或“想调整某个部门的上级”。"
       },
       "conversation": {
-        "conversation_id": "conv_bec3267448184b0881350d6afc2dd99c",
-        "tenant_id": "77bd468c-8295-4f0b-a9d3-fff3db761e04",
-        "actor_id": "be6d8364-a274-4d3d-9e30-d288cd3c5e97",
+        "conversation_id": "conv_2d078d36d77b4645b08890b665605a05",
+        "tenant_id": "8ef91f7f-9cc1-4103-abac-b79ec5fc76c1",
+        "actor_id": "457be879-56bf-4fcd-a921-64495664e2d6",
         "actor_role": "tenant-admin",
         "state": "validated",
         "current_phase": "idle",
         "state_transitions": [
           {
-            "id": 2003,
-            "request_id": "assistant_97184a8e61ce4426bd90b507380a46e6",
-            "trace_id": "56c3ebca9ccf428d98cf62cd4490830f",
+            "id": 2114,
+            "request_id": "assistant_7525b6d7b4fb49b2bbccdfc43e5ab6df",
+            "trace_id": "5590afe05c294b7ab6196c709dbb376e",
             "from_state": "init",
             "to_state": "validated",
             "from_phase": "init",
             "to_phase": "idle",
             "reason_code": "conversation_created",
-            "actor_id": "be6d8364-a274-4d3d-9e30-d288cd3c5e97",
-            "changed_at": "2026-04-11T22:38:46.142877+08:00"
+            "actor_id": "457be879-56bf-4fcd-a921-64495664e2d6",
+            "changed_at": "2026-04-13T18:13:23.555366+08:00"
           },
           {
-            "id": 2004,
-            "turn_id": "turn_8f85ebb5f1a14db981c82554f240a53f",
-            "request_id": "assistant_b2fcc823b15c4d92aee4e616a40025a4",
-            "trace_id": "a06a9a517aba42af9a9dce34e3209898",
+            "id": 2116,
+            "turn_id": "turn_6aaca2dee4154054a100532817a3eb37",
+            "request_id": "assistant_a50359b9ef084dc08959f46b03275340",
+            "trace_id": "e3b38249c78a4ea2a13d55e1bd21bbef",
             "from_state": "init",
             "to_state": "validated",
             "from_phase": "idle",
             "to_phase": "idle",
             "reason_code": "turn_created",
-            "actor_id": "be6d8364-a274-4d3d-9e30-d288cd3c5e97",
-            "changed_at": "2026-04-11T14:38:50.441857535Z"
+            "actor_id": "457be879-56bf-4fcd-a921-64495664e2d6",
+            "changed_at": "2026-04-13T10:13:28.660604111Z"
           }
         ],
-        "created_at": "2026-04-11T22:38:46.142877+08:00",
-        "updated_at": "2026-04-11T14:38:50.441857535Z",
+        "created_at": "2026-04-13T18:13:23.555366+08:00",
+        "updated_at": "2026-04-13T10:13:28.660604111Z",
         "turns": [
           {
-            "turn_id": "turn_8f85ebb5f1a14db981c82554f240a53f",
+            "turn_id": "turn_6aaca2dee4154054a100532817a3eb37",
             "user_input": "你好",
             "state": "validated",
             "phase": "idle",
             "risk_tier": "low",
-            "request_id": "assistant_b2fcc823b15c4d92aee4e616a40025a4",
-            "trace_id": "a06a9a517aba42af9a9dce34e3209898",
+            "request_id": "assistant_a50359b9ef084dc08959f46b03275340",
+            "trace_id": "e3b38249c78a4ea2a13d55e1bd21bbef",
             "policy_version": "2026-02-23",
             "composition_version": "2026-02-23",
             "mapping_version": "2026-02-23",
@@ -66,10 +66,10 @@
               "action": "",
               "intent_id": "chat.greeting",
               "route_kind": "chitchat",
-              "route_catalog_version": "2026-03-11.v2",
+              "route_catalog_version": "2026-04-13.v1",
               "intent_schema_version": "assistant.intent.v1",
-              "context_hash": "d478dd7c9171c3d40a3336587f3ca600d9b91ef8487475a02f0c8b42d40b3ced",
-              "intent_hash": "486a93b003302ea57be503bc15170e6ab0cf0be3d23716ca52d94c5808848029"
+              "context_hash": "c5345a91842f83c880aca7c74475e5ec7275f4d08582eed55d5c0aee589af8b3",
+              "intent_hash": "763125cb84ce91c70e018819654c4f84e7e4467ee7561b353b1aa59c789b99a8"
             },
             "route_decision": {
               "route_kind": "chitchat",
@@ -78,28 +78,28 @@
               "reason_codes": [
                 "route_non_business_catalog_match"
               ],
-              "route_catalog_version": "2026-03-11.v2",
-              "knowledge_snapshot_digest": "c346c58cb2f1de3effbfb1752a11f30078e8feda3099cc1f815b6dd1ce5916ef",
+              "route_catalog_version": "2026-04-13.v1",
+              "knowledge_snapshot_digest": "8ffc9befa42a8d7744cc5467908cb0663d4059e5c5bd06b2e71ade1a1266942e",
               "resolver_contract_version": "resolver_contract_v1",
               "decision_source": "semantic_model_v1"
             },
             "plan": {
-              "title": "对话回复",
+              "title": "闲聊意图",
               "capability_key": "org.assistant_conversation.manage",
-              "summary": "这是知识问答场景，我会先给出说明，不会触发业务提交。",
+              "summary": "当前轮属于闲聊响应，不触发业务提交。",
               "capability_map_version": "2026-02-23",
               "compiler_contract_version": "assistant.compiler.v1",
               "skill_manifest_digest": "01c824afbcbbab20910cb0595c82e2b4272a8de0f9bf5cd17a9c71375868f912",
               "model_provider": "openai",
               "model_name": "gpt-5.1",
               "model_revision": "r2f31cdf6746a",
-              "knowledge_snapshot_digest": "c346c58cb2f1de3effbfb1752a11f30078e8feda3099cc1f815b6dd1ce5916ef",
-              "route_catalog_version": "2026-03-11.v2",
+              "knowledge_snapshot_digest": "8ffc9befa42a8d7744cc5467908cb0663d4059e5c5bd06b2e71ade1a1266942e",
+              "route_catalog_version": "2026-04-13.v1",
               "resolver_contract_version": "resolver_contract_v1",
               "context_template_version": "plan_context_v1",
-              "reply_guidance_version": "2026-03-11.v1+2026-03-11.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1",
+              "reply_guidance_version": "2026-04-13.v1+2026-04-13.v1+2026-04-13.v1+2026-04-13.v1+2026-04-13.v1+2026-04-13.v1+2026-04-13.v1+2026-04-13.v1+2026-04-13.v1+2026-04-13.v1",
               "confirm_ttl_seconds": 900,
-              "expires_at": "2026-04-11T14:53:50Z",
+              "expires_at": "2026-04-13T10:28:28Z",
               "skill_execution_plan": {
                 "selected_skills": null,
                 "execution_order": null,
@@ -116,7 +116,7 @@
             "confidence": 0.3,
             "dry_run": {
               "diff": null,
-              "explain": "这是知识问答场景，我会先给出说明，不会触发业务提交。",
+              "explain": "当前轮属于闲聊响应，不触发业务提交。",
               "validation_errors": [
                 "non_business_route"
               ],
@@ -125,14 +125,14 @@
                 "state": "not_requested"
               },
               "would_commit": false,
-              "plan_hash": "7e26bc17a9c6a1f6cdeab8559704b57f481105b98944bb705c42466e49a718f7"
+              "plan_hash": "19c4bc4316e429f79eca5618ff3ce8111a3cf28b70355e1ce731b3bac22b89c3"
             },
             "commit_reply": {
               "outcome": "pending",
-              "message": "你现在最想先处理哪一类事情？比如：新建部门、调整上级、改名，还是先了解一下变更规则？"
+              "message": "你现在想处理哪件事？可以先简单说一下你的目标，比如“想创建一个新部门”或“想调整某个部门的上级”。"
             },
             "reply_nlg": {
-              "text": "你现在最想先处理哪一类事情？比如：新建部门、调整上级、改名，还是先了解一下变更规则？",
+              "text": "你现在想处理哪件事？可以先简单说一下你的目标，比如“想创建一个新部门”或“想调整某个部门的上级”。",
               "kind": "message",
               "stage": "draft",
               "reply_model_name": "gpt-5.1",
@@ -142,19 +142,19 @@
               "conversation_id": "",
               "turn_id": ""
             },
-            "created_at": "2026-04-11T14:38:50.441857535Z",
-            "updated_at": "2026-04-11T14:38:50.441857535Z"
+            "created_at": "2026-04-13T10:13:28.660604111Z",
+            "updated_at": "2026-04-13T10:13:28.660604111Z"
           }
         ]
       },
       "latest_turn": {
-        "turn_id": "turn_8f85ebb5f1a14db981c82554f240a53f",
+        "turn_id": "turn_6aaca2dee4154054a100532817a3eb37",
         "user_input": "你好",
         "state": "validated",
         "phase": "idle",
         "risk_tier": "low",
-        "request_id": "assistant_b2fcc823b15c4d92aee4e616a40025a4",
-        "trace_id": "a06a9a517aba42af9a9dce34e3209898",
+        "request_id": "assistant_a50359b9ef084dc08959f46b03275340",
+        "trace_id": "e3b38249c78a4ea2a13d55e1bd21bbef",
         "policy_version": "2026-02-23",
         "composition_version": "2026-02-23",
         "mapping_version": "2026-02-23",
@@ -162,10 +162,10 @@
           "action": "",
           "intent_id": "chat.greeting",
           "route_kind": "chitchat",
-          "route_catalog_version": "2026-03-11.v2",
+          "route_catalog_version": "2026-04-13.v1",
           "intent_schema_version": "assistant.intent.v1",
-          "context_hash": "d478dd7c9171c3d40a3336587f3ca600d9b91ef8487475a02f0c8b42d40b3ced",
-          "intent_hash": "486a93b003302ea57be503bc15170e6ab0cf0be3d23716ca52d94c5808848029"
+          "context_hash": "c5345a91842f83c880aca7c74475e5ec7275f4d08582eed55d5c0aee589af8b3",
+          "intent_hash": "763125cb84ce91c70e018819654c4f84e7e4467ee7561b353b1aa59c789b99a8"
         },
         "route_decision": {
           "route_kind": "chitchat",
@@ -174,28 +174,28 @@
           "reason_codes": [
             "route_non_business_catalog_match"
           ],
-          "route_catalog_version": "2026-03-11.v2",
-          "knowledge_snapshot_digest": "c346c58cb2f1de3effbfb1752a11f30078e8feda3099cc1f815b6dd1ce5916ef",
+          "route_catalog_version": "2026-04-13.v1",
+          "knowledge_snapshot_digest": "8ffc9befa42a8d7744cc5467908cb0663d4059e5c5bd06b2e71ade1a1266942e",
           "resolver_contract_version": "resolver_contract_v1",
           "decision_source": "semantic_model_v1"
         },
         "plan": {
-          "title": "对话回复",
+          "title": "闲聊意图",
           "capability_key": "org.assistant_conversation.manage",
-          "summary": "这是知识问答场景，我会先给出说明，不会触发业务提交。",
+          "summary": "当前轮属于闲聊响应，不触发业务提交。",
           "capability_map_version": "2026-02-23",
           "compiler_contract_version": "assistant.compiler.v1",
           "skill_manifest_digest": "01c824afbcbbab20910cb0595c82e2b4272a8de0f9bf5cd17a9c71375868f912",
           "model_provider": "openai",
           "model_name": "gpt-5.1",
           "model_revision": "r2f31cdf6746a",
-          "knowledge_snapshot_digest": "c346c58cb2f1de3effbfb1752a11f30078e8feda3099cc1f815b6dd1ce5916ef",
-          "route_catalog_version": "2026-03-11.v2",
+          "knowledge_snapshot_digest": "8ffc9befa42a8d7744cc5467908cb0663d4059e5c5bd06b2e71ade1a1266942e",
+          "route_catalog_version": "2026-04-13.v1",
           "resolver_contract_version": "resolver_contract_v1",
           "context_template_version": "plan_context_v1",
-          "reply_guidance_version": "2026-03-11.v1+2026-03-11.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1",
+          "reply_guidance_version": "2026-04-13.v1+2026-04-13.v1+2026-04-13.v1+2026-04-13.v1+2026-04-13.v1+2026-04-13.v1+2026-04-13.v1+2026-04-13.v1+2026-04-13.v1+2026-04-13.v1",
           "confirm_ttl_seconds": 900,
-          "expires_at": "2026-04-11T14:53:50Z",
+          "expires_at": "2026-04-13T10:28:28Z",
           "skill_execution_plan": {
             "selected_skills": null,
             "execution_order": null,
@@ -212,7 +212,7 @@
         "confidence": 0.3,
         "dry_run": {
           "diff": null,
-          "explain": "这是知识问答场景，我会先给出说明，不会触发业务提交。",
+          "explain": "当前轮属于闲聊响应，不触发业务提交。",
           "validation_errors": [
             "non_business_route"
           ],
@@ -221,14 +221,14 @@
             "state": "not_requested"
           },
           "would_commit": false,
-          "plan_hash": "7e26bc17a9c6a1f6cdeab8559704b57f481105b98944bb705c42466e49a718f7"
+          "plan_hash": "19c4bc4316e429f79eca5618ff3ce8111a3cf28b70355e1ce731b3bac22b89c3"
         },
         "commit_reply": {
           "outcome": "pending",
-          "message": "你现在最想先处理哪一类事情？比如：新建部门、调整上级、改名，还是先了解一下变更规则？"
+          "message": "你现在想处理哪件事？可以先简单说一下你的目标，比如“想创建一个新部门”或“想调整某个部门的上级”。"
         },
         "reply_nlg": {
-          "text": "你现在最想先处理哪一类事情？比如：新建部门、调整上级、改名，还是先了解一下变更规则？",
+          "text": "你现在想处理哪件事？可以先简单说一下你的目标，比如“想创建一个新部门”或“想调整某个部门的上级”。",
           "kind": "message",
           "stage": "draft",
           "reply_model_name": "gpt-5.1",
@@ -238,56 +238,56 @@
           "conversation_id": "",
           "turn_id": ""
         },
-        "created_at": "2026-04-11T14:38:50.441857535Z",
-        "updated_at": "2026-04-11T14:38:50.441857535Z"
+        "created_at": "2026-04-13T10:13:28.660604111Z",
+        "updated_at": "2026-04-13T10:13:28.660604111Z"
       }
     }
   ],
   "final_conversation": {
-    "conversation_id": "conv_bec3267448184b0881350d6afc2dd99c",
-    "tenant_id": "77bd468c-8295-4f0b-a9d3-fff3db761e04",
-    "actor_id": "be6d8364-a274-4d3d-9e30-d288cd3c5e97",
+    "conversation_id": "conv_2d078d36d77b4645b08890b665605a05",
+    "tenant_id": "8ef91f7f-9cc1-4103-abac-b79ec5fc76c1",
+    "actor_id": "457be879-56bf-4fcd-a921-64495664e2d6",
     "actor_role": "tenant-admin",
     "state": "validated",
     "current_phase": "idle",
     "state_transitions": [
       {
-        "id": 2003,
-        "request_id": "assistant_97184a8e61ce4426bd90b507380a46e6",
-        "trace_id": "56c3ebca9ccf428d98cf62cd4490830f",
+        "id": 2114,
+        "request_id": "assistant_7525b6d7b4fb49b2bbccdfc43e5ab6df",
+        "trace_id": "5590afe05c294b7ab6196c709dbb376e",
         "from_state": "init",
         "to_state": "validated",
         "from_phase": "init",
         "to_phase": "idle",
         "reason_code": "conversation_created",
-        "actor_id": "be6d8364-a274-4d3d-9e30-d288cd3c5e97",
-        "changed_at": "2026-04-11T22:38:46.142877+08:00"
+        "actor_id": "457be879-56bf-4fcd-a921-64495664e2d6",
+        "changed_at": "2026-04-13T18:13:23.555366+08:00"
       },
       {
-        "id": 2004,
-        "turn_id": "turn_8f85ebb5f1a14db981c82554f240a53f",
-        "request_id": "assistant_b2fcc823b15c4d92aee4e616a40025a4",
-        "trace_id": "a06a9a517aba42af9a9dce34e3209898",
+        "id": 2116,
+        "turn_id": "turn_6aaca2dee4154054a100532817a3eb37",
+        "request_id": "assistant_a50359b9ef084dc08959f46b03275340",
+        "trace_id": "e3b38249c78a4ea2a13d55e1bd21bbef",
         "from_state": "init",
         "to_state": "validated",
         "from_phase": "idle",
         "to_phase": "idle",
         "reason_code": "turn_created",
-        "actor_id": "be6d8364-a274-4d3d-9e30-d288cd3c5e97",
-        "changed_at": "2026-04-11T14:38:50.441857535Z"
+        "actor_id": "457be879-56bf-4fcd-a921-64495664e2d6",
+        "changed_at": "2026-04-13T10:13:28.660604111Z"
       }
     ],
-    "created_at": "2026-04-11T22:38:46.142877+08:00",
-    "updated_at": "2026-04-11T14:38:50.441857535Z",
+    "created_at": "2026-04-13T18:13:23.555366+08:00",
+    "updated_at": "2026-04-13T10:13:28.660604111Z",
     "turns": [
       {
-        "turn_id": "turn_8f85ebb5f1a14db981c82554f240a53f",
+        "turn_id": "turn_6aaca2dee4154054a100532817a3eb37",
         "user_input": "你好",
         "state": "validated",
         "phase": "idle",
         "risk_tier": "low",
-        "request_id": "assistant_b2fcc823b15c4d92aee4e616a40025a4",
-        "trace_id": "a06a9a517aba42af9a9dce34e3209898",
+        "request_id": "assistant_a50359b9ef084dc08959f46b03275340",
+        "trace_id": "e3b38249c78a4ea2a13d55e1bd21bbef",
         "policy_version": "2026-02-23",
         "composition_version": "2026-02-23",
         "mapping_version": "2026-02-23",
@@ -295,10 +295,10 @@
           "action": "",
           "intent_id": "chat.greeting",
           "route_kind": "chitchat",
-          "route_catalog_version": "2026-03-11.v2",
+          "route_catalog_version": "2026-04-13.v1",
           "intent_schema_version": "assistant.intent.v1",
-          "context_hash": "d478dd7c9171c3d40a3336587f3ca600d9b91ef8487475a02f0c8b42d40b3ced",
-          "intent_hash": "486a93b003302ea57be503bc15170e6ab0cf0be3d23716ca52d94c5808848029"
+          "context_hash": "c5345a91842f83c880aca7c74475e5ec7275f4d08582eed55d5c0aee589af8b3",
+          "intent_hash": "763125cb84ce91c70e018819654c4f84e7e4467ee7561b353b1aa59c789b99a8"
         },
         "route_decision": {
           "route_kind": "chitchat",
@@ -307,28 +307,28 @@
           "reason_codes": [
             "route_non_business_catalog_match"
           ],
-          "route_catalog_version": "2026-03-11.v2",
-          "knowledge_snapshot_digest": "c346c58cb2f1de3effbfb1752a11f30078e8feda3099cc1f815b6dd1ce5916ef",
+          "route_catalog_version": "2026-04-13.v1",
+          "knowledge_snapshot_digest": "8ffc9befa42a8d7744cc5467908cb0663d4059e5c5bd06b2e71ade1a1266942e",
           "resolver_contract_version": "resolver_contract_v1",
           "decision_source": "semantic_model_v1"
         },
         "plan": {
-          "title": "对话回复",
+          "title": "闲聊意图",
           "capability_key": "org.assistant_conversation.manage",
-          "summary": "这是知识问答场景，我会先给出说明，不会触发业务提交。",
+          "summary": "当前轮属于闲聊响应，不触发业务提交。",
           "capability_map_version": "2026-02-23",
           "compiler_contract_version": "assistant.compiler.v1",
           "skill_manifest_digest": "01c824afbcbbab20910cb0595c82e2b4272a8de0f9bf5cd17a9c71375868f912",
           "model_provider": "openai",
           "model_name": "gpt-5.1",
           "model_revision": "r2f31cdf6746a",
-          "knowledge_snapshot_digest": "c346c58cb2f1de3effbfb1752a11f30078e8feda3099cc1f815b6dd1ce5916ef",
-          "route_catalog_version": "2026-03-11.v2",
+          "knowledge_snapshot_digest": "8ffc9befa42a8d7744cc5467908cb0663d4059e5c5bd06b2e71ade1a1266942e",
+          "route_catalog_version": "2026-04-13.v1",
           "resolver_contract_version": "resolver_contract_v1",
           "context_template_version": "plan_context_v1",
-          "reply_guidance_version": "2026-03-11.v1+2026-03-11.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1+2026-03-12.v1",
+          "reply_guidance_version": "2026-04-13.v1+2026-04-13.v1+2026-04-13.v1+2026-04-13.v1+2026-04-13.v1+2026-04-13.v1+2026-04-13.v1+2026-04-13.v1+2026-04-13.v1+2026-04-13.v1",
           "confirm_ttl_seconds": 900,
-          "expires_at": "2026-04-11T14:53:50Z",
+          "expires_at": "2026-04-13T10:28:28Z",
           "skill_execution_plan": {
             "selected_skills": null,
             "execution_order": null,
@@ -345,7 +345,7 @@
         "confidence": 0.3,
         "dry_run": {
           "diff": null,
-          "explain": "这是知识问答场景，我会先给出说明，不会触发业务提交。",
+          "explain": "当前轮属于闲聊响应，不触发业务提交。",
           "validation_errors": [
             "non_business_route"
           ],
@@ -354,14 +354,14 @@
             "state": "not_requested"
           },
           "would_commit": false,
-          "plan_hash": "7e26bc17a9c6a1f6cdeab8559704b57f481105b98944bb705c42466e49a718f7"
+          "plan_hash": "19c4bc4316e429f79eca5618ff3ce8111a3cf28b70355e1ce731b3bac22b89c3"
         },
         "commit_reply": {
           "outcome": "pending",
-          "message": "你现在最想先处理哪一类事情？比如：新建部门、调整上级、改名，还是先了解一下变更规则？"
+          "message": "你现在想处理哪件事？可以先简单说一下你的目标，比如“想创建一个新部门”或“想调整某个部门的上级”。"
         },
         "reply_nlg": {
-          "text": "你现在最想先处理哪一类事情？比如：新建部门、调整上级、改名，还是先了解一下变更规则？",
+          "text": "你现在想处理哪件事？可以先简单说一下你的目标，比如“想创建一个新部门”或“想调整某个部门的上级”。",
           "kind": "message",
           "stage": "draft",
           "reply_model_name": "gpt-5.1",
@@ -371,8 +371,8 @@
           "conversation_id": "",
           "turn_id": ""
         },
-        "created_at": "2026-04-11T14:38:50.441857535Z",
-        "updated_at": "2026-04-11T14:38:50.441857535Z"
+        "created_at": "2026-04-13T10:13:28.660604111Z",
+        "updated_at": "2026-04-13T10:13:28.660604111Z"
       }
     ]
   }

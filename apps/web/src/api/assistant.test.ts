@@ -24,6 +24,10 @@ import {
   getAssistantModelProviders,
   getAssistantModels,
   getAssistantRuntimeStatus,
+  getAssistantSession,
+  getAssistantUIBootstrap,
+  logoutAssistantSession,
+  refreshAssistantSession,
   submitAssistantTask,
   validateAssistantModelProviders
 } from './assistant'
@@ -111,6 +115,23 @@ describe('assistant api', () => {
     })
     await getAssistantRuntimeStatus()
     expect(getMock).toHaveBeenCalledWith('/internal/assistant/runtime-status')
+  })
+
+  it('calls successor bootstrap and session endpoints', async () => {
+    getMock.mockResolvedValue({ contract_version: 'v1' })
+    postMock.mockResolvedValue({ contract_version: 'v1', authenticated: true })
+
+    await getAssistantUIBootstrap()
+    expect(getMock).toHaveBeenNthCalledWith(1, '/internal/assistant/ui-bootstrap')
+
+    await getAssistantSession()
+    expect(getMock).toHaveBeenNthCalledWith(2, '/internal/assistant/session')
+
+    await refreshAssistantSession()
+    expect(postMock).toHaveBeenNthCalledWith(1, '/internal/assistant/session/refresh', {})
+
+    await logoutAssistantSession()
+    expect(postMock).toHaveBeenNthCalledWith(2, '/internal/assistant/session/logout', {})
   })
 
   it('calls assistant task lifecycle endpoints', async () => {

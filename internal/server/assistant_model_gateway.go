@@ -212,16 +212,13 @@ func assistantSyntheticSemanticPayload(userInput string) assistantSemanticIntent
 		payload.IntentID = assistantSemanticIntentIDForAction(actionID)
 	case assistantSyntheticSemanticLooksLikeKnowledgeQA(text):
 		payload.Action = assistantIntentPlanOnly
-		payload.RouteKind = assistantRouteKindKnowledgeQA
-		payload.IntentID = "knowledge.general_qa"
+		payload.IntentID, payload.RouteKind = assistantSemanticIntentRouteForNonBusiness(assistantRouteKindKnowledgeQA)
 	case assistantSyntheticSemanticLooksLikeChitchat(text):
 		payload.Action = assistantIntentPlanOnly
-		payload.RouteKind = assistantRouteKindChitchat
-		payload.IntentID = "chat.greeting"
+		payload.IntentID, payload.RouteKind = assistantSemanticIntentRouteForNonBusiness(assistantRouteKindChitchat)
 	default:
 		payload.Action = assistantIntentPlanOnly
-		payload.RouteKind = assistantRouteKindUncertain
-		payload.IntentID = "route.uncertain"
+		payload.IntentID, payload.RouteKind = assistantSemanticIntentRouteForNonBusiness(assistantRouteKindUncertain)
 	}
 	return payload
 }
@@ -253,26 +250,93 @@ func assistantSyntheticSemanticAction(userInput string) string {
 }
 
 func assistantSemanticIntentIDForAction(actionID string) string {
-	switch strings.TrimSpace(actionID) {
-	case assistantIntentCreateOrgUnit:
-		return "org.orgunit_create"
-	case assistantIntentAddOrgUnitVersion:
-		return "org.orgunit_add_version"
-	case assistantIntentInsertOrgUnitVersion:
-		return "org.orgunit_insert_version"
-	case assistantIntentCorrectOrgUnit:
-		return "org.orgunit_correct"
-	case assistantIntentRenameOrgUnit:
-		return "org.orgunit_rename"
-	case assistantIntentMoveOrgUnit:
-		return "org.orgunit_move"
-	case assistantIntentDisableOrgUnit:
-		return "org.orgunit_disable"
-	case assistantIntentEnableOrgUnit:
-		return "org.orgunit_enable"
-	default:
-		return "action." + strings.TrimSpace(actionID)
+	actionID = strings.TrimSpace(actionID)
+	if actionID == "" {
+		return ""
 	}
+	runtime, err := assistantLoadKnowledgeRuntimeFn()
+	if err == nil && runtime != nil {
+		if entry, ok := runtime.routeByAction[actionID]; ok {
+			if intentID := strings.TrimSpace(entry.IntentID); intentID != "" {
+				return intentID
+			}
+		}
+	}
+	return "action." + actionID
+}
+
+func assistantSemanticIntentRouteForNonBusiness(routeKind string) (string, string) {
+	routeKind = strings.TrimSpace(routeKind)
+	runtime, err := assistantLoadKnowledgeRuntimeFn()
+	if err == nil && runtime != nil {
+		if entry, ok := runtime.findRouteByRouteKind(routeKind); ok {
+			intentID := strings.TrimSpace(entry.IntentID)
+			resolvedRouteKind := strings.TrimSpace(entry.RouteKind)
+			if resolvedRouteKind == "" {
+				resolvedRouteKind = routeKind
+			}
+			if intentID != "" && resolvedRouteKind != "" {
+				return intentID, resolvedRouteKind
+			}
+		}
+	}
+	if routeKind == assistantRouteKindUncertain {
+		return assistantRouteFallbackUncertainID, assistantRouteKindUncertain
+	}
+	return "", routeKind
+}
+
+func assistantOpenAISystemPrompt() string {
+	runtime, err := assistantLoadKnowledgeRuntimeFn()
+	if err != nil || runtime == nil {
+		return "你是企业 HR 组织变更助手。你会收到一个包含当前用户输入、允许动作、以及可能待续上下文的 JSON。" +
+			"你必须只输出严格 JSON，禁止输出解释、Markdown 或其他文本。" +
+			"你需要同时输出结构化动作槽位、route_kind、intent_id、当前给用户看的自然语言回复、下一句追问，以及当前 readiness。" +
+			"当你需要本地补充候选组织事实时，必须输出 retrieval_requests，并只允许使用 candidate_lookup。" +
+			"所有日期统一输出 YYYY-MM-DD；action 只能从 allowed_actions 中选择。"
+	}
+
+	businessMappings := make([]string, 0, len(runtime.routeByAction))
+	for _, actionID := range assistantOrderedBusinessActionIDs() {
+		intentID := assistantSemanticIntentIDForAction(actionID)
+		if intentID == "" {
+			continue
+		}
+		businessMappings = append(businessMappings, actionID+"="+intentID)
+	}
+	sort.Strings(businessMappings)
+
+	nonBusinessMappings := make([]string, 0, 3)
+	for _, routeKind := range []string{assistantRouteKindKnowledgeQA, assistantRouteKindChitchat, assistantRouteKindUncertain} {
+		entry, ok := runtime.findRouteByRouteKind(routeKind)
+		if !ok {
+			continue
+		}
+		intentID := strings.TrimSpace(entry.IntentID)
+		if intentID == "" {
+			continue
+		}
+		label := routeKind
+		if doc, ok := runtime.findIntentDoc(intentID, "zh"); ok {
+			if title := strings.TrimSpace(doc.Title); title != "" {
+				label = title
+			}
+		}
+		nonBusinessMappings = append(nonBusinessMappings, label+" 输出 action=plan_only、route_kind="+routeKind+"、intent_id="+intentID)
+	}
+
+	prompt := "你是企业 HR 组织变更助手。你会收到一个包含当前用户输入、允许动作、以及可能待续上下文的 JSON。" +
+		"你必须只输出严格 JSON，禁止输出解释、Markdown 或其他文本。" +
+		"你需要同时输出结构化动作槽位、route_kind、intent_id、当前给用户看的自然语言回复、下一句追问，以及当前 readiness。" +
+		"当你需要本地补充候选组织事实时，必须输出 retrieval_requests，并只允许使用 candidate_lookup。" +
+		"所有日期统一输出 YYYY-MM-DD；action 只能从 allowed_actions 中选择。"
+	if len(businessMappings) > 0 {
+		prompt += "业务动作必须输出 route_kind=business_action，且 intent_id 必须使用运行时映射：" + strings.Join(businessMappings, "；") + "。"
+	}
+	if len(nonBusinessMappings) > 0 {
+		prompt += strings.Join(nonBusinessMappings, "；") + "。"
+	}
+	return prompt
 }
 
 func assistantSyntheticSemanticLooksLikeKnowledgeQA(text string) bool {
@@ -372,17 +436,8 @@ func (a assistantOpenAIProviderAdapter) Invoke(ctx context.Context, prompt strin
 			N:           1,
 			Messages: []assistantOpenAIChatCompletionMessage{
 				{
-					Role: "system",
-					Content: "你是企业 HR 组织变更助手。你会收到一个包含当前用户输入、允许动作、以及可能待续上下文的 JSON。" +
-						"你必须只输出严格 JSON，禁止输出解释、Markdown 或其他文本。" +
-						"你需要同时输出结构化动作槽位、route_kind、intent_id、当前给用户看的自然语言回复、下一句追问，以及当前 readiness。" +
-						"当你需要本地补充候选组织事实时，必须输出 retrieval_requests，并只允许使用 candidate_lookup。" +
-						"所有日期统一输出 YYYY-MM-DD；action 只能从 allowed_actions 中选择。" +
-						"业务动作必须输出 route_kind=business_action，且 intent_id 必须使用固定映射：" +
-						"create_orgunit=org.orgunit_create；add_orgunit_version=org.orgunit_add_version；insert_orgunit_version=org.orgunit_insert_version；correct_orgunit=org.orgunit_correct；move_orgunit=org.orgunit_move；rename_orgunit=org.orgunit_rename；disable_orgunit=org.orgunit_disable；enable_orgunit=org.orgunit_enable。" +
-						"知识问答输出 action=plan_only、route_kind=knowledge_qa、intent_id=knowledge.general_qa；" +
-						"闲聊输出 action=plan_only、route_kind=chitchat、intent_id=chat.greeting；" +
-						"无法确定时输出 action=plan_only、route_kind=uncertain、intent_id=route.uncertain。",
+					Role:    "system",
+					Content: assistantOpenAISystemPrompt(),
 				},
 				{
 					Role:    "user",

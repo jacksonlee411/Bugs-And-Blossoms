@@ -1,0 +1,1412 @@
+diff --git a/client/src/components/Chat/Input/ToolsDropdown.tsx b/client/src/components/Chat/Input/ToolsDropdown.tsx
+index 003faf2c..01813d3d 100644
+--- a/client/src/components/Chat/Input/ToolsDropdown.tsx
++++ b/client/src/components/Chat/Input/ToolsDropdown.tsx
+@@ -1,19 +1,11 @@
+-import React, { useState, useMemo, useCallback } from 'react';
++import React, { useState, useCallback } from 'react';
+ import * as Ariakit from '@ariakit/react';
+-import { Globe, Settings, Settings2, TerminalSquareIcon } from 'lucide-react';
+-import { TooltipAnchor, DropdownPopup, PinIcon, VectorIcon } from '@librechat/client';
++import { Settings2 } from 'lucide-react';
++import { TooltipAnchor, DropdownPopup } from '@librechat/client';
+ import type { MenuItemProps } from '~/common';
+-import {
+-  AuthType,
+-  Permissions,
+-  ArtifactModes,
+-  PermissionTypes,
+-  defaultAgentCapabilities,
+-} from 'librechat-data-provider';
+-import { useLocalize, useHasAccess, useAgentCapabilities } from '~/hooks';
++import { ArtifactModes, defaultAgentCapabilities } from 'librechat-data-provider';
++import { useLocalize, useAgentCapabilities } from '~/hooks';
+ import ArtifactsSubMenu from '~/components/Chat/Input/ArtifactsSubMenu';
+-import MCPSubMenu from '~/components/Chat/Input/MCPSubMenu';
+-import { useGetStartupConfig } from '~/data-provider';
+ import { useBadgeRowContext } from '~/Providers';
+ import { cn } from '~/utils';
+ 
+@@ -26,78 +18,12 @@ const ToolsDropdown = ({ disabled }: ToolsDropdownProps) => {
+   const isDisabled = disabled ?? false;
+   const [isPopoverActive, setIsPopoverActive] = useState(false);
+   const {
+-    webSearch,
+     artifacts,
+-    fileSearch,
+     agentsConfig,
+-    mcpServerManager,
+-    codeApiKeyForm,
+-    codeInterpreter,
+-    searchApiKeyForm,
+   } = useBadgeRowContext();
+-  const { data: startupConfig } = useGetStartupConfig();
+-
+-  const { codeEnabled, webSearchEnabled, artifactsEnabled, fileSearchEnabled } =
+-    useAgentCapabilities(agentsConfig?.capabilities ?? defaultAgentCapabilities);
+-
+-  const { setIsDialogOpen: setIsCodeDialogOpen, menuTriggerRef: codeMenuTriggerRef } =
+-    codeApiKeyForm;
+-  const { setIsDialogOpen: setIsSearchDialogOpen, menuTriggerRef: searchMenuTriggerRef } =
+-    searchApiKeyForm;
+-  const {
+-    isPinned: isSearchPinned,
+-    setIsPinned: setIsSearchPinned,
+-    authData: webSearchAuthData,
+-  } = webSearch;
+-  const {
+-    isPinned: isCodePinned,
+-    setIsPinned: setIsCodePinned,
+-    authData: codeAuthData,
+-  } = codeInterpreter;
+-  const { isPinned: isFileSearchPinned, setIsPinned: setIsFileSearchPinned } = fileSearch;
++  const { artifactsEnabled } = useAgentCapabilities(agentsConfig?.capabilities ?? defaultAgentCapabilities);
+   const { isPinned: isArtifactsPinned, setIsPinned: setIsArtifactsPinned } = artifacts;
+ 
+-  const canUseWebSearch = useHasAccess({
+-    permissionType: PermissionTypes.WEB_SEARCH,
+-    permission: Permissions.USE,
+-  });
+-
+-  const canRunCode = useHasAccess({
+-    permissionType: PermissionTypes.RUN_CODE,
+-    permission: Permissions.USE,
+-  });
+-
+-  const canUseFileSearch = useHasAccess({
+-    permissionType: PermissionTypes.FILE_SEARCH,
+-    permission: Permissions.USE,
+-  });
+-
+-  const showWebSearchSettings = useMemo(() => {
+-    const authTypes = webSearchAuthData?.authTypes ?? [];
+-    if (authTypes.length === 0) return true;
+-    return !authTypes.every(([, authType]) => authType === AuthType.SYSTEM_DEFINED);
+-  }, [webSearchAuthData?.authTypes]);
+-
+-  const showCodeSettings = useMemo(
+-    () => codeAuthData?.message !== AuthType.SYSTEM_DEFINED,
+-    [codeAuthData?.message],
+-  );
+-
+-  const handleWebSearchToggle = useCallback(() => {
+-    const newValue = !webSearch.toggleState;
+-    webSearch.debouncedChange({ value: newValue });
+-  }, [webSearch]);
+-
+-  const handleCodeInterpreterToggle = useCallback(() => {
+-    const newValue = !codeInterpreter.toggleState;
+-    codeInterpreter.debouncedChange({ value: newValue });
+-  }, [codeInterpreter]);
+-
+-  const handleFileSearchToggle = useCallback(() => {
+-    const newValue = !fileSearch.toggleState;
+-    fileSearch.debouncedChange({ value: newValue });
+-  }, [fileSearch]);
+-
+   const handleArtifactsToggle = useCallback(() => {
+     const currentState = artifacts.toggleState;
+     if (!currentState || currentState === '') {
+@@ -125,150 +51,8 @@ const ToolsDropdown = ({ disabled }: ToolsDropdownProps) => {
+     }
+   }, [artifacts]);
+ 
+-  const mcpPlaceholder = startupConfig?.interface?.mcpServers?.placeholder;
+-
+   const dropdownItems: MenuItemProps[] = [];
+ 
+-  if (fileSearchEnabled && canUseFileSearch) {
+-    dropdownItems.push({
+-      onClick: handleFileSearchToggle,
+-      hideOnClick: false,
+-      render: (props) => (
+-        <div {...props}>
+-          <div className="flex items-center gap-2">
+-            <VectorIcon className="icon-md" />
+-            <span>{localize('com_assistants_file_search')}</span>
+-          </div>
+-          <button
+-            type="button"
+-            onClick={(e) => {
+-              e.stopPropagation();
+-              setIsFileSearchPinned(!isFileSearchPinned);
+-            }}
+-            className={cn(
+-              'rounded p-1 transition-all duration-200',
+-              'hover:bg-surface-secondary hover:shadow-sm',
+-              !isFileSearchPinned && 'text-text-secondary hover:text-text-primary',
+-            )}
+-            aria-label={isFileSearchPinned ? 'Unpin' : 'Pin'}
+-          >
+-            <div className="h-4 w-4">
+-              <PinIcon unpin={isFileSearchPinned} />
+-            </div>
+-          </button>
+-        </div>
+-      ),
+-    });
+-  }
+-
+-  if (canUseWebSearch && webSearchEnabled) {
+-    dropdownItems.push({
+-      onClick: handleWebSearchToggle,
+-      hideOnClick: false,
+-      render: (props) => (
+-        <div {...props}>
+-          <div className="flex items-center gap-2">
+-            <Globe className="icon-md" />
+-            <span>{localize('com_ui_web_search')}</span>
+-          </div>
+-          <div className="flex items-center gap-1">
+-            {showWebSearchSettings && (
+-              <button
+-                type="button"
+-                onClick={(e) => {
+-                  e.stopPropagation();
+-                  setIsSearchDialogOpen(true);
+-                }}
+-                className={cn(
+-                  'rounded p-1 transition-all duration-200',
+-                  'hover:bg-surface-secondary hover:shadow-sm',
+-                  'text-text-secondary hover:text-text-primary',
+-                )}
+-                aria-label="Configure web search"
+-                ref={searchMenuTriggerRef}
+-              >
+-                <div className="h-4 w-4">
+-                  <Settings className="h-4 w-4" />
+-                </div>
+-              </button>
+-            )}
+-            <button
+-              type="button"
+-              onClick={(e) => {
+-                e.stopPropagation();
+-                setIsSearchPinned(!isSearchPinned);
+-              }}
+-              className={cn(
+-                'rounded p-1 transition-all duration-200',
+-                'hover:bg-surface-secondary hover:shadow-sm',
+-                !isSearchPinned && 'text-text-secondary hover:text-text-primary',
+-              )}
+-              aria-label={isSearchPinned ? 'Unpin' : 'Pin'}
+-            >
+-              <div className="h-4 w-4">
+-                <PinIcon unpin={isSearchPinned} />
+-              </div>
+-            </button>
+-          </div>
+-        </div>
+-      ),
+-    });
+-  }
+-
+-  if (canRunCode && codeEnabled) {
+-    dropdownItems.push({
+-      onClick: handleCodeInterpreterToggle,
+-      hideOnClick: false,
+-      render: (props) => (
+-        <div {...props}>
+-          <div className="flex items-center gap-2">
+-            <TerminalSquareIcon className="icon-md" />
+-            <span>{localize('com_assistants_code_interpreter')}</span>
+-          </div>
+-          <div className="flex items-center gap-1">
+-            {showCodeSettings && (
+-              <button
+-                type="button"
+-                onClick={(e) => {
+-                  e.stopPropagation();
+-                  setIsCodeDialogOpen(true);
+-                }}
+-                ref={codeMenuTriggerRef}
+-                className={cn(
+-                  'rounded p-1 transition-all duration-200',
+-                  'hover:bg-surface-secondary hover:shadow-sm',
+-                  'text-text-secondary hover:text-text-primary',
+-                )}
+-                aria-label="Configure code interpreter"
+-              >
+-                <div className="h-4 w-4">
+-                  <Settings className="h-4 w-4" />
+-                </div>
+-              </button>
+-            )}
+-            <button
+-              type="button"
+-              onClick={(e) => {
+-                e.stopPropagation();
+-                setIsCodePinned(!isCodePinned);
+-              }}
+-              className={cn(
+-                'rounded p-1 transition-all duration-200',
+-                'hover:bg-surface-secondary hover:shadow-sm',
+-                !isCodePinned && 'text-text-primary hover:text-text-primary',
+-              )}
+-              aria-label={isCodePinned ? 'Unpin' : 'Pin'}
+-            >
+-              <div className="h-4 w-4">
+-                <PinIcon unpin={isCodePinned} />
+-              </div>
+-            </button>
+-          </div>
+-        </div>
+-      ),
+-    });
+-  }
+-
+   if (artifactsEnabled) {
+     dropdownItems.push({
+       hideOnClick: false,
+@@ -286,14 +70,6 @@ const ToolsDropdown = ({ disabled }: ToolsDropdownProps) => {
+     });
+   }
+ 
+-  const { configuredServers } = mcpServerManager;
+-  if (configuredServers && configuredServers.length > 0) {
+-    dropdownItems.push({
+-      hideOnClick: false,
+-      render: (props) => <MCPSubMenu {...props} placeholder={mcpPlaceholder} />,
+-    });
+-  }
+-
+   if (dropdownItems.length === 0) {
+     return null;
+   }
+diff --git a/client/src/components/Chat/Menus/Endpoints/ModelSelectorContext.tsx b/client/src/components/Chat/Menus/Endpoints/ModelSelectorContext.tsx
+index a4527d56..38d3005f 100644
+--- a/client/src/components/Chat/Menus/Endpoints/ModelSelectorContext.tsx
++++ b/client/src/components/Chat/Menus/Endpoints/ModelSelectorContext.tsx
+@@ -3,6 +3,7 @@ import React, { createContext, useContext, useState, useMemo } from 'react';
+ import { EModelEndpoint, isAgentsEndpoint, isAssistantsEndpoint } from 'librechat-data-provider';
+ import type * as t from 'librechat-data-provider';
+ import type { Endpoint, SelectedValues } from '~/common';
++import { isFormalAssistantPath } from '~/assistant-formal/runtime';
+ import {
+   useAgentDefaultPermissionLevel,
+   useSelectorEffects,
+@@ -54,6 +55,7 @@ interface ModelSelectorProviderProps {
+ }
+ 
+ export function ModelSelectorProvider({ children, startupConfig }: ModelSelectorProviderProps) {
++  const formalAssistantMode = isFormalAssistantPath();
+   const agentsMap = useAgentsMapContext();
+   const assistantsMap = useAssistantsMapContext();
+   const { data: endpointsConfig } = useGetEndpointsQuery();
+@@ -83,6 +85,7 @@ export function ModelSelectorProvider({ children, startupConfig }: ModelSelector
+     { requiredPermission: permissionLevel },
+     {
+       select: (data) => data?.data,
++      enabled: !formalAssistantMode,
+     },
+   );
+ 
+diff --git a/client/src/components/Chat/Messages/Content/ContentParts.tsx b/client/src/components/Chat/Messages/Content/ContentParts.tsx
+index d9efa34c..588c87dd 100644
+--- a/client/src/components/Chat/Messages/Content/ContentParts.tsx
++++ b/client/src/components/Chat/Messages/Content/ContentParts.tsx
+@@ -8,6 +8,7 @@ import type {
+   Agents,
+ } from 'librechat-data-provider';
+ import { ThinkingButton } from '~/components/Artifacts/Thinking';
++import { isFormalAssistantPath } from '~/assistant-formal/runtime';
+ import { MessageContext, SearchContext } from '~/Providers';
+ import MemoryArtifacts from './MemoryArtifacts';
+ import Sources from '~/components/Web/Sources';
+@@ -56,6 +57,7 @@ const ContentParts = memo(
+     const [showThinking, setShowThinking] = useRecoilState<boolean>(store.showThinking);
+     const [isExpanded, setIsExpanded] = useState(showThinking);
+     const attachmentMap = useMemo(() => mapAttachments(attachments ?? []), [attachments]);
++    const formalAssistantMode = isFormalAssistantPath();
+ 
+     const effectiveIsSubmitting = isLatestMessage ? isSubmitting : false;
+ 
+@@ -124,8 +126,10 @@ const ContentParts = memo(
+     return (
+       <>
+         <SearchContext.Provider value={{ searchResults }}>
+-          <MemoryArtifacts attachments={attachments} />
+-          <Sources messageId={messageId} conversationId={conversationId || undefined} />
++          {!formalAssistantMode && <MemoryArtifacts attachments={attachments} />}
++          {!formalAssistantMode && (
++            <Sources messageId={messageId} conversationId={conversationId || undefined} />
++          )}
+           {hasReasoningParts && (
+             <div className="mb-5">
+               <ThinkingButton
+diff --git a/client/src/components/Chat/Messages/Content/Part.tsx b/client/src/components/Chat/Messages/Content/Part.tsx
+index 5d98b5ac..2b67cbcd 100644
+--- a/client/src/components/Chat/Messages/Content/Part.tsx
++++ b/client/src/components/Chat/Messages/Content/Part.tsx
+@@ -7,12 +7,9 @@ import {
+ } from 'librechat-data-provider';
+ import { memo } from 'react';
+ import type { TMessageContentParts, TAttachment } from 'librechat-data-provider';
+-import { OpenAIImageGen, EmptyText, Reasoning, ExecuteCode, AgentUpdate, Text } from './Parts';
++import { OpenAIImageGen, EmptyText, Reasoning, AgentUpdate, Text } from './Parts';
+ import { ErrorMessage } from './MessageContent';
+-import RetrievalCall from './RetrievalCall';
+-import CodeAnalyze from './CodeAnalyze';
+ import Container from './Container';
+-import WebSearch from './WebSearch';
+ import ToolCall from './ToolCall';
+ import ImageGen from './ImageGen';
+ import Image from './Image';
+@@ -86,15 +83,7 @@ const Part = memo(
+       const isToolCall =
+         'args' in toolCall && (!toolCall.type || toolCall.type === ToolCallTypes.TOOL_CALL);
+       if (isToolCall && toolCall.name === Tools.execute_code) {
+-        return (
+-          <ExecuteCode
+-            attachments={attachments}
+-            isSubmitting={isSubmitting}
+-            output={toolCall.output ?? ''}
+-            initialProgress={toolCall.progress ?? 0.1}
+-            args={typeof toolCall.args === 'string' ? toolCall.args : ''}
+-          />
+-        );
++        return null;
+       } else if (
+         isToolCall &&
+         (toolCall.name === 'image_gen_oai' || toolCall.name === 'image_edit_oai')
+@@ -110,15 +99,7 @@ const Part = memo(
+           />
+         );
+       } else if (isToolCall && toolCall.name === Tools.web_search) {
+-        return (
+-          <WebSearch
+-            output={toolCall.output ?? ''}
+-            initialProgress={toolCall.progress ?? 0.1}
+-            isSubmitting={isSubmitting}
+-            attachments={attachments}
+-            isLast={isLast}
+-          />
+-        );
++        return null;
+       } else if (isToolCall) {
+         return (
+           <ToolCall
+@@ -133,21 +114,12 @@ const Part = memo(
+           />
+         );
+       } else if (toolCall.type === ToolCallTypes.CODE_INTERPRETER) {
+-        const code_interpreter = toolCall[ToolCallTypes.CODE_INTERPRETER];
+-        return (
+-          <CodeAnalyze
+-            initialProgress={toolCall.progress ?? 0.1}
+-            code={code_interpreter.input}
+-            outputs={code_interpreter.outputs ?? []}
+-          />
+-        );
++        return null;
+       } else if (
+         toolCall.type === ToolCallTypes.RETRIEVAL ||
+         toolCall.type === ToolCallTypes.FILE_SEARCH
+       ) {
+-        return (
+-          <RetrievalCall initialProgress={toolCall.progress ?? 0.1} isSubmitting={isSubmitting} />
+-        );
++        return null;
+       } else if (
+         toolCall.type === ToolCallTypes.FUNCTION &&
+         ToolCallTypes.FUNCTION in toolCall &&
+diff --git a/client/src/hooks/Assistants/useAssistantListMap.ts b/client/src/hooks/Assistants/useAssistantListMap.ts
+index bd6c84b7..36dc27d0 100644
+--- a/client/src/hooks/Assistants/useAssistantListMap.ts
++++ b/client/src/hooks/Assistants/useAssistantListMap.ts
+@@ -2,6 +2,7 @@ import { useMemo } from 'react';
+ import { EModelEndpoint } from 'librechat-data-provider';
+ import type { AssistantListResponse, AssistantsEndpoint } from 'librechat-data-provider';
+ import type { AssistantListItem } from '~/common';
++import { isFormalAssistantPath } from '~/assistant-formal/runtime';
+ import { useListAssistantsQuery } from '~/data-provider';
+ 
+ const selectAssistantsResponse = (res: AssistantListResponse): AssistantListItem[] =>
+@@ -17,11 +18,13 @@ export default function useAssistantListMap<T = AssistantListItem[] | null>(
+     res: AssistantListResponse,
+   ) => T,
+ ): Record<AssistantsEndpoint, T | null> {
++  const formalAssistantMode = isFormalAssistantPath();
+   const { data: assistantsList = null } = useListAssistantsQuery(
+     EModelEndpoint.assistants,
+     undefined,
+     {
+       select: selector,
++      enabled: !formalAssistantMode,
+     },
+   );
+ 
+@@ -30,6 +33,7 @@ export default function useAssistantListMap<T = AssistantListItem[] | null>(
+     undefined,
+     {
+       select: selector,
++      enabled: !formalAssistantMode,
+     },
+   );
+ 
+diff --git a/client/src/hooks/AuthContext.tsx b/client/src/hooks/AuthContext.tsx
+index d9d58378..50f991dd 100644
+--- a/client/src/hooks/AuthContext.tsx
++++ b/client/src/hooks/AuthContext.tsx
+@@ -26,6 +26,13 @@ import store from '~/store';
+ 
+ const AuthContext = createContext<TAuthContext | undefined>(undefined);
+ 
++const redirectToAppLogin = () => {
++  if (window.location.pathname.startsWith('/app/login')) {
++    return;
++  }
++  window.location.assign('/app/login');
++};
++
+ const AuthContextProvider = ({
+   authConfig,
+   children,
+@@ -67,7 +74,9 @@ const AuthContextProvider = ({
+           return;
+         }
+ 
+-        if (finalRedirect.startsWith('http://') || finalRedirect.startsWith('https://')) {
++        if (finalRedirect.startsWith('/app/')) {
++          window.location.href = finalRedirect;
++        } else if (finalRedirect.startsWith('http://') || finalRedirect.startsWith('https://')) {
+           window.location.href = finalRedirect;
+         } else {
+           navigate(finalRedirect, { replace: true });
+@@ -100,7 +109,7 @@ const AuthContextProvider = ({
+         token: undefined,
+         isAuthenticated: false,
+         user: undefined,
+-        redirect: data.redirect ?? '/login',
++        redirect: data.redirect ?? '/app/login',
+       });
+     },
+     onError: (error) => {
+@@ -109,7 +118,7 @@ const AuthContextProvider = ({
+         token: undefined,
+         isAuthenticated: false,
+         user: undefined,
+-        redirect: '/login',
++        redirect: '/app/login',
+       });
+     },
+   });
+@@ -125,7 +134,7 @@ const AuthContextProvider = ({
+     [logoutUser],
+   );
+ 
+-  const userQuery = useGetUserQuery({ enabled: !!(token ?? '') });
++  const userQuery = useGetUserQuery({ enabled: isAuthenticated === true });
+ 
+   const login = (data: t.TLoginUser) => {
+     loginUser.mutate(data);
+@@ -139,14 +148,14 @@ const AuthContextProvider = ({
+     refreshToken.mutate(undefined, {
+       onSuccess: (data: t.TRefreshTokenResponse | undefined) => {
+         const { user, token = '' } = data ?? {};
+-        if (token) {
+-          setUserContext({ token, isAuthenticated: true, user });
++        if (user) {
++          setUserContext({ token: token || undefined, isAuthenticated: true, user });
+         } else {
+-          console.log('Token is not present. User is not authenticated.');
++          console.log('Session refresh failed. Redirecting to app login.');
+           if (authConfig?.test === true) {
+             return;
+           }
+-          navigate('/login');
++          redirectToAppLogin();
+         }
+       },
+       onError: (error) => {
+@@ -154,26 +163,25 @@ const AuthContextProvider = ({
+         if (authConfig?.test === true) {
+           return;
+         }
+-        navigate('/login');
++        redirectToAppLogin();
+       },
+     });
+-  }, []);
++  }, [authConfig?.test, refreshToken, setUserContext]);
+ 
+   useEffect(() => {
+     if (userQuery.data) {
+       setUser(userQuery.data);
+     } else if (userQuery.isError) {
+       doSetError((userQuery.error as Error).message);
+-      navigate('/login', { replace: true });
++      redirectToAppLogin();
+     }
+     if (error != null && error && isAuthenticated) {
+       doSetError(undefined);
+     }
+-    if (token == null || !token || !isAuthenticated) {
++    if (!isAuthenticated) {
+       silentRefresh();
+     }
+   }, [
+-    token,
+     isAuthenticated,
+     userQuery.data,
+     userQuery.isError,
+@@ -188,7 +196,7 @@ const AuthContextProvider = ({
+   useEffect(() => {
+     const handleTokenUpdate = (event) => {
+       console.log('tokenUpdated event received event');
+-      const newToken = event.detail;
++      const newToken = event.detail || undefined;
+       setUserContext({
+         token: newToken,
+         isAuthenticated: true,
+diff --git a/client/src/hooks/Input/useQueryParams.ts b/client/src/hooks/Input/useQueryParams.ts
+index d2d1f66a..997196e5 100644
+--- a/client/src/hooks/Input/useQueryParams.ts
++++ b/client/src/hooks/Input/useQueryParams.ts
+@@ -18,6 +18,7 @@ import type {
+ } from 'librechat-data-provider';
+ import type { ZodAny } from 'zod';
+ import { getConvoSwitchLogic, getModelSpecIconURL, removeUnavailableTools, logger } from '~/utils';
++import { isFormalAssistantPath } from '~/assistant-formal/runtime';
+ import { useAuthContext, useAgentsMap, useDefaultConvo, useSubmitMessage } from '~/hooks';
+ import { useChatContext, useChatFormContext } from '~/Providers';
+ import { useGetAgentByIdQuery } from '~/data-provider';
+@@ -444,7 +445,8 @@ export default function useQueryParams({
+   }, [conversation, processSubmission, areSettingsApplied]);
+ 
+   const { isAuthenticated } = useAuthContext();
+-  const agentsMap = useAgentsMap({ isAuthenticated });
++  const formalAssistantMode = isFormalAssistantPath();
++  const agentsMap = useAgentsMap({ isAuthenticated: isAuthenticated && !formalAssistantMode });
+   useEffect(() => {
+     if (urlAgent) {
+       injectAgentIntoAgentsMap(queryClient, urlAgent);
+diff --git a/client/src/hooks/Nav/useSideNavLinks.ts b/client/src/hooks/Nav/useSideNavLinks.ts
+index 36957473..24c26249 100644
+--- a/client/src/hooks/Nav/useSideNavLinks.ts
++++ b/client/src/hooks/Nav/useSideNavLinks.ts
+@@ -1,25 +1,20 @@
+ import { useMemo } from 'react';
+-import { Blocks, MCPIcon, AttachmentIcon } from '@librechat/client';
+-import { Database, Bookmark, Settings2, ArrowRightToLine, MessageSquareQuote } from 'lucide-react';
++import { Blocks, AttachmentIcon } from '@librechat/client';
++import { Bookmark, Settings2, ArrowRightToLine, MessageSquareQuote } from 'lucide-react';
+ import {
+   Permissions,
+   EModelEndpoint,
+   PermissionTypes,
+   isParamEndpoint,
+-  isAgentsEndpoint,
+   isAssistantsEndpoint,
+ } from 'librechat-data-provider';
+ import type { TInterfaceConfig, TEndpointsConfig } from 'librechat-data-provider';
+ import type { NavLink } from '~/common';
+-import AgentPanelSwitch from '~/components/SidePanel/Agents/AgentPanelSwitch';
+ import BookmarkPanel from '~/components/SidePanel/Bookmarks/BookmarkPanel';
+-import MemoryViewer from '~/components/SidePanel/Memories/MemoryViewer';
+ import PanelSwitch from '~/components/SidePanel/Builder/PanelSwitch';
+ import PromptsAccordion from '~/components/Prompts/PromptsAccordion';
+ import Parameters from '~/components/SidePanel/Parameters/Panel';
+ import FilesPanel from '~/components/SidePanel/Files/Panel';
+-import MCPPanel from '~/components/SidePanel/MCP/MCPPanel';
+-import { useGetStartupConfig } from '~/data-provider';
+ import { useHasAccess } from '~/hooks';
+ 
+ export default function useSideNavLinks({
+@@ -45,24 +40,6 @@ export default function useSideNavLinks({
+     permissionType: PermissionTypes.BOOKMARKS,
+     permission: Permissions.USE,
+   });
+-  const hasAccessToMemories = useHasAccess({
+-    permissionType: PermissionTypes.MEMORIES,
+-    permission: Permissions.USE,
+-  });
+-  const hasAccessToReadMemories = useHasAccess({
+-    permissionType: PermissionTypes.MEMORIES,
+-    permission: Permissions.READ,
+-  });
+-  const hasAccessToAgents = useHasAccess({
+-    permissionType: PermissionTypes.AGENTS,
+-    permission: Permissions.USE,
+-  });
+-  const hasAccessToCreateAgents = useHasAccess({
+-    permissionType: PermissionTypes.AGENTS,
+-    permission: Permissions.CREATE,
+-  });
+-  const { data: startupConfig } = useGetStartupConfig();
+-
+   const Links = useMemo(() => {
+     const links: NavLink[] = [];
+     if (
+@@ -84,21 +61,6 @@ export default function useSideNavLinks({
+       });
+     }
+ 
+-    if (
+-      endpointsConfig?.[EModelEndpoint.agents] &&
+-      hasAccessToAgents &&
+-      hasAccessToCreateAgents &&
+-      endpointsConfig[EModelEndpoint.agents].disableBuilder !== true
+-    ) {
+-      links.push({
+-        title: 'com_sidepanel_agent_builder',
+-        label: '',
+-        icon: Blocks,
+-        id: EModelEndpoint.agents,
+-        Component: AgentPanelSwitch,
+-      });
+-    }
+-
+     if (hasAccessToPrompts) {
+       links.push({
+         title: 'com_ui_prompts',
+@@ -109,20 +71,9 @@ export default function useSideNavLinks({
+       });
+     }
+ 
+-    if (hasAccessToMemories && hasAccessToReadMemories) {
+-      links.push({
+-        title: 'com_ui_memories',
+-        label: '',
+-        icon: Database,
+-        id: 'memories',
+-        Component: MemoryViewer,
+-      });
+-    }
+-
+     if (
+       interfaceConfig.parameters === true &&
+       isParamEndpoint(endpoint ?? '', endpointType ?? '') === true &&
+-      !isAgentsEndpoint(endpoint) &&
+       keyProvided
+     ) {
+       links.push({
+@@ -152,24 +103,6 @@ export default function useSideNavLinks({
+       });
+     }
+ 
+-    if (
+-      startupConfig?.mcpServers &&
+-      Object.values(startupConfig.mcpServers).some(
+-        (server: any) =>
+-          (server.customUserVars && Object.keys(server.customUserVars).length > 0) ||
+-          server.isOAuth ||
+-          server.startup === false,
+-      )
+-    ) {
+-      links.push({
+-        title: 'com_nav_setting_mcp',
+-        label: '',
+-        icon: MCPIcon,
+-        id: 'mcp-settings',
+-        Component: MCPPanel,
+-      });
+-    }
+-
+     links.push({
+       title: 'com_sidepanel_hide_panel',
+       label: '',
+@@ -185,14 +118,9 @@ export default function useSideNavLinks({
+     keyProvided,
+     endpointType,
+     endpoint,
+-    hasAccessToAgents,
+     hasAccessToPrompts,
+-    hasAccessToMemories,
+-    hasAccessToReadMemories,
+     hasAccessToBookmarks,
+-    hasAccessToCreateAgents,
+     hidePanel,
+-    startupConfig,
+   ]);
+ 
+   return Links;
+diff --git a/client/src/hooks/SSE/useSSE.ts b/client/src/hooks/SSE/useSSE.ts
+index 4b5d9204..b8fb5364 100644
+--- a/client/src/hooks/SSE/useSSE.ts
++++ b/client/src/hooks/SSE/useSSE.ts
+@@ -538,15 +538,21 @@ export default function useSSE(
+         try {
+           const refreshResponse = await request.refreshToken();
+           const token = refreshResponse?.token ?? '';
+-          if (!token) {
++          if (!refreshResponse?.user) {
+             throw new Error('Token refresh failed.');
+           }
+-          sse.headers = {
+-            'Content-Type': 'application/json',
+-            Authorization: `Bearer ${token}`,
+-          };
++          sse.headers = token
++            ? {
++                'Content-Type': 'application/json',
++                Authorization: `Bearer ${token}`,
++              }
++            : {
++                'Content-Type': 'application/json',
++              };
+ 
+-          request.dispatchTokenUpdatedEvent(token);
++          if (token) {
++            request.dispatchTokenUpdatedEvent(token);
++          }
+           sse.stream();
+           return;
+         } catch (error) {
+diff --git a/client/src/routes/Root.tsx b/client/src/routes/Root.tsx
+index ab845375..94dd340a 100644
+--- a/client/src/routes/Root.tsx
++++ b/client/src/routes/Root.tsx
+@@ -1,13 +1,8 @@
+ import React, { useState, useEffect } from 'react';
+ import { Outlet } from 'react-router-dom';
++import { EModelEndpoint } from 'librechat-data-provider';
+ import type { ContextType } from '~/common';
+-import {
+-  useSearchEnabled,
+-  useAssistantsMap,
+-  useAuthContext,
+-  useAgentsMap,
+-  useFileMap,
+-} from '~/hooks';
++import { useAuthContext, useFileMap } from '~/hooks';
+ import {
+   PromptGroupsProvider,
+   AssistantsMapContext,
+@@ -21,6 +16,13 @@ import { Nav, MobileNav } from '~/components/Nav';
+ import { useHealthCheck } from '~/data-provider';
+ import { Banner } from '~/components/Banners';
+ 
++const emptyAssistantsMap = {
++  [EModelEndpoint.assistants]: {},
++  [EModelEndpoint.azureAssistants]: {},
++};
++
++const emptyAgentsMap = {};
++
+ export default function Root() {
+   const [showTerms, setShowTerms] = useState(false);
+   const [bannerHeight, setBannerHeight] = useState(0);
+@@ -34,8 +36,6 @@ export default function Root() {
+   // Global health check - runs once per authenticated session
+   useHealthCheck(isAuthenticated);
+ 
+-  const assistantsMap = useAssistantsMap({ isAuthenticated });
+-  const agentsMap = useAgentsMap({ isAuthenticated });
+   const fileMap = useFileMap({ isAuthenticated });
+ 
+   const { data: config } = useGetStartupConfig();
+@@ -43,8 +43,6 @@ export default function Root() {
+     enabled: isAuthenticated && config?.interface?.termsOfService?.modalAcceptance === true,
+   });
+ 
+-  useSearchEnabled(isAuthenticated);
+-
+   useEffect(() => {
+     if (termsData) {
+       setShowTerms(!termsData.termsAccepted);
+@@ -57,7 +55,7 @@ export default function Root() {
+ 
+   const handleDeclineTerms = () => {
+     setShowTerms(false);
+-    logout('/login?redirect=false');
++    logout('/app/login?redirect=false');
+   };
+ 
+   if (!isAuthenticated) {
+@@ -67,8 +65,8 @@ export default function Root() {
+   return (
+     <SetConvoProvider>
+       <FileMapContext.Provider value={fileMap}>
+-        <AssistantsMapContext.Provider value={assistantsMap}>
+-          <AgentsMapContext.Provider value={agentsMap}>
++        <AssistantsMapContext.Provider value={emptyAssistantsMap}>
++          <AgentsMapContext.Provider value={emptyAgentsMap}>
+             <PromptGroupsProvider>
+               <Banner onHeightChange={setBannerHeight} />
+               <div className="flex" style={{ height: `calc(100dvh - ${bannerHeight}px)` }}>
+diff --git a/client/src/routes/index.tsx b/client/src/routes/index.tsx
+index 871fd3ff..2c04701b 100644
+--- a/client/src/routes/index.tsx
++++ b/client/src/routes/index.tsx
+@@ -8,8 +8,6 @@ import {
+   TwoFactorScreen,
+   RequestPasswordReset,
+ } from '~/components/Auth';
+-import { MarketplaceProvider } from '~/components/Agents/MarketplaceContext';
+-import AgentMarketplace from '~/components/Agents/Marketplace';
+ import { OAuthSuccess, OAuthError } from '~/components/OAuth';
+ import { AuthContextProvider } from '~/hooks/AuthContext';
+ import RouteErrorBoundary from './RouteErrorBoundary';
+@@ -18,7 +16,6 @@ import LoginLayout from './Layouts/Login';
+ import dashboardRoutes from './Dashboard';
+ import ShareRoute from './ShareRoute';
+ import ChatRoute from './ChatRoute';
+-import Search from './Search';
+ import Root from './Root';
+ 
+ const AuthLayout = () => (
+@@ -107,26 +104,6 @@ export const router = createBrowserRouter(
+               path: 'c/:conversationId?',
+               element: <ChatRoute />,
+             },
+-            {
+-              path: 'search',
+-              element: <Search />,
+-            },
+-            {
+-              path: 'agents',
+-              element: (
+-                <MarketplaceProvider>
+-                  <AgentMarketplace />
+-                </MarketplaceProvider>
+-              ),
+-            },
+-            {
+-              path: 'agents/:category',
+-              element: (
+-                <MarketplaceProvider>
+-                  <AgentMarketplace />
+-                </MarketplaceProvider>
+-              ),
+-            },
+           ],
+         },
+       ],
+diff --git a/client/src/routes/useAuthRedirect.ts b/client/src/routes/useAuthRedirect.ts
+index f4d2d858..0e4980ac 100644
+--- a/client/src/routes/useAuthRedirect.ts
++++ b/client/src/routes/useAuthRedirect.ts
+@@ -1,22 +1,22 @@
+ import { useEffect } from 'react';
+-import { useNavigate } from 'react-router-dom';
+ import { useAuthContext } from '~/hooks';
+ 
+ export default function useAuthRedirect() {
+   const { user, isAuthenticated } = useAuthContext();
+-  const navigate = useNavigate();
+ 
+   useEffect(() => {
+     const timeout = setTimeout(() => {
+       if (!isAuthenticated) {
+-        navigate('/login', { replace: true });
++        if (!window.location.pathname.startsWith('/app/login')) {
++          window.location.assign('/app/login');
++        }
+       }
+     }, 300);
+ 
+     return () => {
+       clearTimeout(timeout);
+     };
+-  }, [isAuthenticated, navigate]);
++  }, [isAuthenticated]);
+ 
+   return {
+     user,
+diff --git a/packages/data-provider/src/api-endpoints.ts b/packages/data-provider/src/api-endpoints.ts
+index 8c1447ab..2a1f20eb 100644
+--- a/packages/data-provider/src/api-endpoints.ts
++++ b/packages/data-provider/src/api-endpoints.ts
+@@ -20,6 +20,8 @@ if (BASE_URL && BASE_URL.endsWith('/')) {
+ 
+ export const apiBaseUrl = () => BASE_URL;
+ 
++const assistantInternalRoot = '/internal/assistant';
++
+ // Testing this buildQuery function
+ const buildQuery = (params: Record<string, unknown>): string => {
+   const query = Object.entries(params)
+@@ -134,6 +136,8 @@ export const login = () => `${BASE_URL}/api/auth/login`;
+ 
+ export const logout = () => `${BASE_URL}/api/auth/logout`;
+ 
++export const assistantSessionLogout = () => `${assistantInternalRoot}/session/logout`;
++
+ export const register = () => `${BASE_URL}/api/auth/register`;
+ 
+ export const loginFacebook = () => `${BASE_URL}/api/auth/facebook`;
+@@ -143,6 +147,9 @@ export const loginGoogle = () => `${BASE_URL}/api/auth/google`;
+ export const refreshToken = (retry?: boolean) =>
+   `${BASE_URL}/api/auth/refresh${retry === true ? '?retry=true' : ''}`;
+ 
++export const assistantSessionRefresh = (_retry?: boolean) =>
++  `${assistantInternalRoot}/session/refresh`;
++
+ export const requestPasswordReset = () => `${BASE_URL}/api/auth/requestPasswordReset`;
+ 
+ export const resetPassword = () => `${BASE_URL}/api/auth/resetPassword`;
+@@ -168,6 +175,10 @@ export const cancelMCPOAuth = (serverName: string) => {
+ 
+ export const config = () => `${BASE_URL}/api/config`;
+ 
++export const assistantUIBootstrap = () => `${assistantInternalRoot}/ui-bootstrap`;
++
++export const assistantSession = () => `${assistantInternalRoot}/session`;
++
+ export const prompts = () => `${BASE_URL}/api/prompts`;
+ 
+ export const addPromptToGroup = (groupId: string) =>
+diff --git a/packages/data-provider/src/data-service.ts b/packages/data-provider/src/data-service.ts
+index c45ab4e0..52acc52f 100644
+--- a/packages/data-provider/src/data-service.ts
++++ b/packages/data-provider/src/data-service.ts
+@@ -12,6 +12,270 @@ import * as s from './schemas';
+ import * as r from './roles';
+ import * as permissions from './accessPermissions';
+ 
++const assistantFormalProvider = 'bugs-and-blossoms-sid';
++const assistantFormalEndpointKey = 'assistantFormal';
++const assistantFormalEndpointLabel = 'Assistant';
++const assistantFormalAppTitle = 'Bugs and Blossoms Assistant';
++
++type AssistantFormalViewer = {
++  id: string;
++  username: string;
++  email: string;
++  name: string;
++  role: string;
++};
++
++type AssistantFormalUIBootstrap = {
++  contract_version: string;
++  viewer: AssistantFormalViewer;
++  ui: {
++    model_select: boolean;
++    artifacts_enabled: boolean;
++    agents_ui_enabled: boolean;
++    memory_enabled: boolean;
++    web_search_enabled: boolean;
++    file_search_enabled: boolean;
++    code_interpreter_enabled: boolean;
++  };
++  models: Array<{
++    endpoint_key: string;
++    endpoint_type: string;
++    provider: string;
++    model: string;
++    label: string;
++  }>;
++  runtime: {
++    status: string;
++    runtime_cutover_mode: string;
++    domain_policy_version: string;
++  };
++};
++
++type AssistantFormalSession = {
++  contract_version: string;
++  authenticated: boolean;
++  viewer: AssistantFormalViewer;
++};
++
++let assistantFormalBootstrapPromise: Promise<AssistantFormalUIBootstrap> | null = null;
++
++const assistantFormalRolePermissions = () => ({
++  PROMPTS: {
++    SHARED_GLOBAL: false,
++    USE: true,
++    CREATE: true,
++  },
++  BOOKMARKS: {
++    USE: true,
++  },
++  MEMORIES: {
++    USE: false,
++    CREATE: false,
++    UPDATE: false,
++    READ: false,
++    OPT_OUT: false,
++  },
++  AGENTS: {
++    SHARED_GLOBAL: false,
++    USE: false,
++    CREATE: false,
++  },
++  MULTI_CONVO: {
++    USE: true,
++  },
++  TEMPORARY_CHAT: {
++    USE: false,
++  },
++  RUN_CODE: {
++    USE: false,
++  },
++  WEB_SEARCH: {
++    USE: false,
++  },
++  PEOPLE_PICKER: {
++    VIEW_USERS: false,
++    VIEW_GROUPS: false,
++    VIEW_ROLES: false,
++  },
++  MARKETPLACE: {
++    USE: false,
++  },
++  FILE_SEARCH: {
++    USE: false,
++  },
++  FILE_CITATIONS: {
++    USE: false,
++  },
++});
++
++const assistantFormalRole = (roleName: string): r.TRole => ({
++  name: roleName === r.SystemRoles.ADMIN ? r.SystemRoles.ADMIN : r.SystemRoles.USER,
++  permissions: assistantFormalRolePermissions(),
++});
++
++const assistantFormalUserFromViewer = (viewer?: AssistantFormalViewer | null): t.TUser => ({
++  id: viewer?.id ?? '',
++  username: viewer?.username ?? '',
++  email: viewer?.email ?? '',
++  name: viewer?.name ?? '',
++  avatar: '',
++  role: viewer?.role ?? r.SystemRoles.USER,
++  provider: assistantFormalProvider,
++  plugins: [],
++  personalization: {
++    memories: false,
++  },
++  createdAt: '',
++  updatedAt: '',
++});
++
++const assistantFormalModelIcon = (endpointType?: string) => {
++  switch (endpointType) {
++    case s.EModelEndpoint.openAI:
++    case s.EModelEndpoint.anthropic:
++    case s.EModelEndpoint.google:
++    case s.EModelEndpoint.bedrock:
++    case s.EModelEndpoint.azureOpenAI:
++      return endpointType;
++    default:
++      return undefined;
++  }
++};
++
++const getAssistantFormalBootstrap = async (): Promise<AssistantFormalUIBootstrap> => {
++  if (assistantFormalBootstrapPromise == null) {
++    assistantFormalBootstrapPromise = request
++      .get<AssistantFormalUIBootstrap>(endpoints.assistantUIBootstrap())
++      .catch((error) => {
++        assistantFormalBootstrapPromise = null;
++        throw error;
++      });
++  }
++  return assistantFormalBootstrapPromise;
++};
++
++const getAssistantFormalModelEntries = (bootstrap: AssistantFormalUIBootstrap) => {
++  const seen = new Set<string>();
++  const entries = bootstrap.models.flatMap((model, index) => {
++    const label =
++      model.label?.trim() ||
++      [model.provider?.trim(), model.model?.trim()].filter(Boolean).join(' / ') ||
++      `Assistant Model ${index + 1}`;
++    if (seen.has(label)) {
++      return [];
++    }
++    seen.add(label);
++    return [
++      {
++        label,
++        iconURL: assistantFormalModelIcon(model.endpoint_type),
++      },
++    ];
++  });
++  return entries.length > 0 ? entries : [{ label: assistantFormalEndpointLabel, iconURL: undefined }];
++};
++
++const assistantFormalStartupConfig = (
++  bootstrap: AssistantFormalUIBootstrap,
++): config.TStartupConfig & {
++  mcpCustomUserVars?: Record<string, { title: string; description: string }>;
++} => {
++  const modelEntries = getAssistantFormalModelEntries(bootstrap);
++  const defaultEntry = modelEntries[0];
++  return {
++    appTitle: assistantFormalAppTitle,
++    socialLogins: config.defaultSocialLogins,
++    interface: {
++      endpointsMenu: bootstrap.ui.model_select,
++      modelSelect: bootstrap.ui.model_select,
++      parameters: false,
++      sidePanel: true,
++      multiConvo: true,
++      bookmarks: true,
++      memories: bootstrap.ui.memory_enabled,
++      presets: true,
++      prompts: true,
++      agents: bootstrap.ui.agents_ui_enabled,
++      temporaryChat: false,
++      runCode: bootstrap.ui.code_interpreter_enabled,
++      webSearch: bootstrap.ui.web_search_enabled,
++      marketplace: {
++        use: false,
++      },
++      fileSearch: bootstrap.ui.file_search_enabled,
++      fileCitations: false,
++    },
++    discordLoginEnabled: false,
++    facebookLoginEnabled: false,
++    githubLoginEnabled: false,
++    googleLoginEnabled: false,
++    openidLoginEnabled: false,
++    appleLoginEnabled: false,
++    samlLoginEnabled: false,
++    openidLabel: '',
++    openidImageUrl: '',
++    openidAutoRedirect: false,
++    samlLabel: '',
++    samlImageUrl: '',
++    serverDomain: '',
++    emailLoginEnabled: true,
++    registrationEnabled: false,
++    socialLoginEnabled: false,
++    passwordResetEnabled: false,
++    emailEnabled: false,
++    showBirthdayIcon: false,
++    helpAndFaqURL: '',
++    sharedLinksEnabled: false,
++    publicSharedLinksEnabled: false,
++    instanceProjectId: '',
++    modelSpecs: {
++      enforce: false,
++      prioritize: true,
++      addedEndpoints: [assistantFormalEndpointKey],
++      list: modelEntries.map((entry, index) => ({
++        name: entry.label,
++        label: entry.label,
++        iconURL: entry.iconURL,
++        default: index === 0,
++        showIconInMenu: true,
++        showIconInHeader: true,
++        preset: {
++          endpoint: assistantFormalEndpointKey,
++          endpointType: s.EModelEndpoint.custom,
++          model: entry.label,
++          modelLabel: entry.label,
++          chatGptLabel: entry.label,
++          iconURL: entry.iconURL ?? defaultEntry.iconURL ?? null,
++        },
++      })),
++    },
++  };
++};
++
++const assistantFormalEndpointsConfig = (
++  bootstrap: AssistantFormalUIBootstrap,
++): t.TEndpointsConfig => {
++  const modelEntries = getAssistantFormalModelEntries(bootstrap);
++  return {
++    [assistantFormalEndpointKey]: {
++      name: assistantFormalEndpointLabel,
++      type: s.EModelEndpoint.custom,
++      order: 1,
++      iconURL: modelEntries[0]?.iconURL,
++      modelDisplayLabel: assistantFormalEndpointLabel,
++      userProvide: false,
++      disableBuilder: true,
++    },
++  };
++};
++
++const assistantFormalModelsConfig = (bootstrap: AssistantFormalUIBootstrap): t.TModelsConfig => {
++  const modelEntries = getAssistantFormalModelEntries(bootstrap);
++  return {
++    [assistantFormalEndpointKey]: modelEntries.map((entry) => entry.label),
++  };
++};
++
+ export function revokeUserKey(name: string): Promise<unknown> {
+   return request.delete(endpoints.revokeUserKey(name));
+ }
+@@ -84,7 +348,9 @@ export function getSearchEnabled(): Promise<boolean> {
+ }
+ 
+ export function getUser(): Promise<t.TUser> {
+-  return request.get(endpoints.user());
++  return request
++    .get<AssistantFormalSession>(endpoints.assistantSession())
++    .then((session) => assistantFormalUserFromViewer(session.viewer));
+ }
+ 
+ export function getUserBalance(): Promise<t.TBalanceResponse> {
+@@ -100,7 +366,10 @@ export const login = (payload: t.TLoginUser): Promise<t.TLoginResponse> => {
+ };
+ 
+ export const logout = (): Promise<m.TLogoutResponse> => {
+-  return request.post(endpoints.logout());
++  return request.post(endpoints.assistantSessionLogout()).then(() => ({
++    message: 'Logged out',
++    redirect: '/app/login',
++  }));
+ };
+ 
+ export const register = (payload: t.TRegisterUser) => {
+@@ -171,15 +440,15 @@ export const getStartupConfig = (): Promise<
+     mcpCustomUserVars?: Record<string, { title: string; description: string }>;
+   }
+ > => {
+-  return request.get(endpoints.config());
++  return getAssistantFormalBootstrap().then((bootstrap) => assistantFormalStartupConfig(bootstrap));
+ };
+ 
+ export const getAIEndpoints = (): Promise<t.TEndpointsConfig> => {
+-  return request.get(endpoints.aiEndpoints());
++  return getAssistantFormalBootstrap().then((bootstrap) => assistantFormalEndpointsConfig(bootstrap));
+ };
+ 
+ export const getModels = async (): Promise<t.TModelsConfig> => {
+-  return request.get(endpoints.models());
++  return getAssistantFormalBootstrap().then((bootstrap) => assistantFormalModelsConfig(bootstrap));
+ };
+ 
+ /* Assistants */
+@@ -772,7 +1041,7 @@ export function getRandomPrompts(
+ 
+ /* Roles */
+ export function getRole(roleName: string): Promise<r.TRole> {
+-  return request.get(endpoints.getRole(roleName));
++  return Promise.resolve(assistantFormalRole(roleName));
+ }
+ 
+ export function updatePromptPermissions(
+diff --git a/packages/data-provider/src/request.ts b/packages/data-provider/src/request.ts
+index 6e794c56..0851538a 100644
+--- a/packages/data-provider/src/request.ts
++++ b/packages/data-provider/src/request.ts
+@@ -4,6 +4,19 @@ import * as endpoints from './api-endpoints';
+ import { setTokenHeader } from './headers-helpers';
+ import type * as t from './types';
+ 
++type AssistantFormalViewer = {
++  id: string;
++  username: string;
++  email: string;
++  name: string;
++  role: string;
++};
++
++type AssistantFormalSessionRefresh = {
++  authenticated?: boolean;
++  viewer?: AssistantFormalViewer;
++};
++
+ if (typeof window !== 'undefined') {
+   axios.defaults.withCredentials = true;
+ }
+@@ -68,8 +81,50 @@ async function _patch(url: string, data?: any) {
+ let isRefreshing = false;
+ let failedQueue: { resolve: (value?: any) => void; reject: (reason?: any) => void }[] = [];
+ 
+-const refreshToken = (retry?: boolean): Promise<t.TRefreshTokenResponse | undefined> =>
+-  _post(endpoints.refreshToken(retry));
++const assistantFormalUserFromViewer = (viewer?: AssistantFormalViewer | null): t.TUser => ({
++  id: viewer?.id ?? '',
++  username: viewer?.username ?? '',
++  email: viewer?.email ?? '',
++  name: viewer?.name ?? '',
++  avatar: '',
++  role: viewer?.role ?? 'USER',
++  provider: 'bugs-and-blossoms-sid',
++  plugins: [],
++  personalization: {
++    memories: false,
++  },
++  createdAt: '',
++  updatedAt: '',
++});
++
++const refreshToken = async (retry?: boolean): Promise<t.TRefreshTokenResponse | undefined> => {
++  const response = (await _post(
++    endpoints.assistantSessionRefresh(retry),
++  )) as AssistantFormalSessionRefresh | null;
++  if (!response?.authenticated || response.viewer == null) {
++    return undefined;
++  }
++  return {
++    token: '',
++    user: assistantFormalUserFromViewer(response.viewer),
++  };
++};
++
++const setRequestAuthorizationHeader = (headers: Record<string, unknown>, token?: string | null) => {
++  const nextToken = token?.trim() ?? '';
++  if (nextToken) {
++    headers['Authorization'] = `Bearer ${nextToken}`;
++    return;
++  }
++  delete headers['Authorization'];
++};
++
++const redirectToAppLogin = () => {
++  if (window.location.pathname.startsWith('/app/login')) {
++    return;
++  }
++  window.location.href = '/app/login';
++};
+ 
+ const dispatchTokenUpdatedEvent = (token: string) => {
+   setTokenHeader(token);
+@@ -99,7 +154,7 @@ if (typeof window !== 'undefined') {
+       if (originalRequest.url?.includes('/api/auth/2fa') === true) {
+         return Promise.reject(error);
+       }
+-      if (originalRequest.url?.includes('/api/auth/logout') === true) {
++      if (originalRequest.url?.includes('/internal/assistant/session/logout') === true) {
+         return Promise.reject(error);
+       }
+ 
+@@ -112,7 +167,11 @@ if (typeof window !== 'undefined') {
+             const token = await new Promise((resolve, reject) => {
+               failedQueue.push({ resolve, reject });
+             });
+-            originalRequest.headers['Authorization'] = 'Bearer ' + token;
++            originalRequest.headers = originalRequest.headers ?? {};
++            setRequestAuthorizationHeader(
++              originalRequest.headers as Record<string, unknown>,
++              token as string | null,
++            );
+             return await axios(originalRequest);
+           } catch (err) {
+             return Promise.reject(err);
+@@ -124,22 +183,31 @@ if (typeof window !== 'undefined') {
+         try {
+           const response = await refreshToken(
+             // Handle edge case where we get a blank screen if the initial 401 error is from a refresh token request
+-            originalRequest.url?.includes('api/auth/refresh') === true ? true : false,
++            originalRequest.url?.includes('/internal/assistant/session/refresh') === true
++              ? true
++              : false,
+           );
+ 
+           const token = response?.token ?? '';
++          const hasSession = !!response?.user?.id;
+ 
+-          if (token) {
+-            originalRequest.headers['Authorization'] = 'Bearer ' + token;
+-            dispatchTokenUpdatedEvent(token);
+-            processQueue(null, token);
++          if (hasSession) {
++            originalRequest.headers = originalRequest.headers ?? {};
++            setRequestAuthorizationHeader(
++              originalRequest.headers as Record<string, unknown>,
++              token,
++            );
++            if (token) {
++              dispatchTokenUpdatedEvent(token);
++            }
++            processQueue(null, token || null);
+             return await axios(originalRequest);
+           } else if (window.location.href.includes('share/')) {
+             console.log(
+               `Refresh token failed from shared link, attempting request to ${originalRequest.url}`,
+             );
+           } else {
+-            window.location.href = '/login';
++            redirectToAppLogin();
+           }
+         } catch (err) {
+           processQueue(err as AxiosError, null);

@@ -6,9 +6,16 @@ import { setupTenantAdminSession } from "./helpers/superadmin-tenant.js";
 
 const repoRoot = path.resolve(__dirname, "..", "..");
 const tp288EvidenceRoot = path.join(repoRoot, "docs", "dev-records", "assets", "dev-plan-266");
+const tp288RetiredReason =
+  "historical mock evidence retired; active live successor coverage is owned by tp288b/tp290b";
 
 const tp288DefaultCommand =
   `pnpm --dir ${path.join(repoRoot, "e2e")} exec playwright test tests/tp288-librechat-real-entry-evidence.spec.js --workers=1`;
+
+// Keep this file path stable for historical doc references, but retire it from active E2E gates.
+test.beforeEach(async () => {
+  test.skip(true, tp288RetiredReason);
+});
 
 const tp288StaleOn = [
   "290A pending placeholder bubble fix merged",

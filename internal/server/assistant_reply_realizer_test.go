@@ -286,10 +286,10 @@ func TestAssistantReplyRealizer_SelectAndFallback(t *testing.T) {
 	}
 
 	turn := &assistantTurn{DryRun: assistantDryRunResult{Explain: "继续处理"}}
-	if got := assistantReplyFallbackText(assistantRenderReplyRequest{}, assistantReplyGuidanceKindTaskWaiting, turn, "en"); !strings.Contains(strings.ToLower(got), "queued") {
+	if got := assistantReplyFallbackText(assistantRenderReplyRequest{}, assistantReplyGuidanceKindTaskWaiting, turn, "en"); !strings.Contains(strings.ToLower(got), "still running") {
 		t.Fatalf("unexpected task_waiting en fallback=%q", got)
 	}
-	if got := assistantReplyFallbackText(assistantRenderReplyRequest{}, assistantReplyGuidanceKindTaskWaiting, turn, "zh"); !strings.Contains(got, "处理中") {
+	if got := assistantReplyFallbackText(assistantRenderReplyRequest{}, assistantReplyGuidanceKindTaskWaiting, turn, "zh"); !strings.Contains(got, "仍在处理中") {
 		t.Fatalf("unexpected task_waiting fallback=%q", got)
 	}
 	if got := assistantReplyFallbackText(assistantRenderReplyRequest{}, assistantReplyGuidanceKindManualTakeover, turn, "en"); !strings.Contains(strings.ToLower(got), "manual") {
@@ -298,13 +298,13 @@ func TestAssistantReplyRealizer_SelectAndFallback(t *testing.T) {
 	if got := assistantReplyFallbackText(assistantRenderReplyRequest{}, assistantReplyGuidanceKindManualTakeover, turn, "zh"); !strings.Contains(got, "人工接管") {
 		t.Fatalf("unexpected manual_takeover zh fallback=%q", got)
 	}
-	if got := assistantReplyFallbackText(assistantRenderReplyRequest{}, assistantReplyGuidanceKindNonBusinessRoute, turn, "en"); !strings.Contains(strings.ToLower(got), "non-business") {
+	if got := assistantReplyFallbackText(assistantRenderReplyRequest{}, assistantReplyGuidanceKindNonBusinessRoute, turn, "en"); !strings.Contains(strings.ToLower(got), "read-only") {
 		t.Fatalf("unexpected non_business_route en fallback=%q", got)
 	}
-	if got := assistantReplyFallbackText(assistantRenderReplyRequest{}, assistantReplyGuidanceKindNonBusinessRoute, turn, "zh"); !strings.Contains(got, "非业务动作") {
+	if got := assistantReplyFallbackText(assistantRenderReplyRequest{}, assistantReplyGuidanceKindNonBusinessRoute, turn, "zh"); !strings.Contains(got, "保持只读") {
 		t.Fatalf("unexpected non_business_route fallback=%q", got)
 	}
-	if got := assistantReplyFallbackText(assistantRenderReplyRequest{}, "await_clarification", turn, "en"); !strings.Contains(strings.ToLower(got), "clarification") {
+	if got := assistantReplyFallbackText(assistantRenderReplyRequest{}, "await_clarification", turn, "en"); !strings.Contains(strings.ToLower(got), "reply can continue") {
 		t.Fatalf("unexpected await_clarification fallback=%q", got)
 	}
 }

@@ -53,7 +53,7 @@ librechat_init() {
   LIBRECHAT_PREFIX="${1:-[librechat-runtime]}"
   LIBRECHAT_REPO_ROOT="$(git rev-parse --show-toplevel)"
   LIBRECHAT_RUNTIME_DIR="${LIBRECHAT_REPO_ROOT}/deploy/librechat"
-  LIBRECHAT_SERVICES=(api mongodb meilisearch rag_api vectordb)
+  LIBRECHAT_SERVICES=(api)
   LIBRECHAT_ENV_FILE_PATH="${LIBRECHAT_ENV_FILE:-${LIBRECHAT_RUNTIME_DIR}/.env}"
   if [[ ! -f "${LIBRECHAT_ENV_FILE_PATH}" ]]; then
     LIBRECHAT_ENV_FILE_PATH="${LIBRECHAT_RUNTIME_DIR}/.env.example"
@@ -77,6 +77,7 @@ librechat_init() {
   fi
   export LIBRECHAT_DATA_ROOT="${LIBRECHAT_DATA_ROOT_ABS}"
   export LIBRECHAT_COMPOSE_PROJECT
+  export LIBRECHAT_RUNTIME_ENV_FILE="${LIBRECHAT_ENV_FILE_PATH}"
 
   LIBRECHAT_COMPOSE_CMD=(
     docker compose
@@ -107,6 +108,73 @@ librechat_require_env_nonempty() {
     echo "${LIBRECHAT_PREFIX} ${hint}" >&2
   fi
   return 2
+}
+
+librechat_env_trimmed() {
+  local name="${1:?}"
+  local value="${!name:-}"
+  value="${value#"${value%%[![:space:]]*}"}"
+  value="${value%"${value##*[![:space:]]}"}"
+  printf '%s\n' "${value}"
+}
+
+librechat_has_retired_dependency_env() {
+  local retired_vars=(
+    MEILI_HOST
+    MEILI_MASTER_KEY
+    RAG_API_URL
+    VECTOR_DB_PROVIDER
+    QDRANT_URL
+    RAG_API_VECTOR_DB_TYPE
+    RAG_API_ATLAS_MONGO_DB_URI
+    RAG_API_ATLAS_SEARCH_INDEX
+    RAG_API_COLLECTION_NAME
+  )
+  local name
+  for name in "${retired_vars[@]}"; do
+    if [[ -n "$(librechat_env_trimmed "${name}")" ]]; then
+      return 0
+    fi
+  done
+  return 1
+}
+
+librechat_retired_dependency_env_report() {
+  local retired_vars=(
+    MEILI_HOST
+    MEILI_MASTER_KEY
+    RAG_API_URL
+    VECTOR_DB_PROVIDER
+    QDRANT_URL
+    RAG_API_VECTOR_DB_TYPE
+    RAG_API_ATLAS_MONGO_DB_URI
+    RAG_API_ATLAS_SEARCH_INDEX
+    RAG_API_COLLECTION_NAME
+  )
+  local first="1"
+  local name value
+  for name in "${retired_vars[@]}"; do
+    value="$(librechat_env_trimmed "${name}")"
+    if [[ -z "${value}" ]]; then
+      continue
+    fi
+    if [[ "${first}" == "1" ]]; then
+      first="0"
+    else
+      printf ', '
+    fi
+    printf '%s=%q' "${name}" "${value}"
+  done
+  printf '\n'
+}
+
+librechat_mongo_uri_targets_removed_service() {
+  local mongo_uri
+  mongo_uri="$(librechat_env_trimmed MONGO_URI)"
+  if [[ -z "${mongo_uri}" ]]; then
+    return 1
+  fi
+  [[ "${mongo_uri}" == *"://mongodb:"* || "${mongo_uri}" == *"://mongodb/"* || "${mongo_uri}" == *"@mongodb:"* || "${mongo_uri}" == *"@mongodb/"* ]]
 }
 
 librechat_require_container_env_nonempty() {

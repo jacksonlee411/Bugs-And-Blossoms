@@ -5,72 +5,14 @@ import (
 	"encoding/json"
 	"errors"
 	"testing"
+
+	orgunitservices "github.com/jacksonlee411/Bugs-And-Blossoms/modules/orgunit/services"
 )
 
 type assistantCreatePolicyStore struct {
 	*orgUnitMemoryStore
 	fieldConfigs    []orgUnitTenantFieldConfig
 	fieldConfigsErr error
-}
-
-type assistantNoFieldConfigStore struct{ inner *orgUnitMemoryStore }
-
-func (s assistantNoFieldConfigStore) ListNodesCurrent(ctx context.Context, tenantID string, asOfDate string) ([]OrgUnitNode, error) {
-	return s.inner.ListNodesCurrent(ctx, tenantID, asOfDate)
-}
-func (s assistantNoFieldConfigStore) CreateNodeCurrent(ctx context.Context, tenantID string, effectiveDate string, orgCode string, name string, parentID string, isBusinessUnit bool) (OrgUnitNode, error) {
-	return s.inner.CreateNodeCurrent(ctx, tenantID, effectiveDate, orgCode, name, parentID, isBusinessUnit)
-}
-func (s assistantNoFieldConfigStore) RenameNodeCurrent(ctx context.Context, tenantID string, effectiveDate string, orgID string, newName string) error {
-	return s.inner.RenameNodeCurrent(ctx, tenantID, effectiveDate, orgID, newName)
-}
-func (s assistantNoFieldConfigStore) MoveNodeCurrent(ctx context.Context, tenantID string, effectiveDate string, orgID string, newParentID string) error {
-	return s.inner.MoveNodeCurrent(ctx, tenantID, effectiveDate, orgID, newParentID)
-}
-func (s assistantNoFieldConfigStore) DisableNodeCurrent(ctx context.Context, tenantID string, effectiveDate string, orgID string) error {
-	return s.inner.DisableNodeCurrent(ctx, tenantID, effectiveDate, orgID)
-}
-func (s assistantNoFieldConfigStore) SetBusinessUnitCurrent(ctx context.Context, tenantID string, effectiveDate string, orgID string, isBusinessUnit bool, requestID string) error {
-	return s.inner.SetBusinessUnitCurrent(ctx, tenantID, effectiveDate, orgID, isBusinessUnit, requestID)
-}
-func (s assistantNoFieldConfigStore) ResolveOrgID(ctx context.Context, tenantID string, orgCode string) (int, error) {
-	return s.inner.ResolveOrgID(ctx, tenantID, orgCode)
-}
-func (s assistantNoFieldConfigStore) ResolveOrgNodeKeyByCode(ctx context.Context, tenantID string, orgCode string) (string, error) {
-	return s.inner.ResolveOrgNodeKeyByCode(ctx, tenantID, orgCode)
-}
-func (s assistantNoFieldConfigStore) ResolveOrgCode(ctx context.Context, tenantID string, orgID int) (string, error) {
-	return s.inner.ResolveOrgCode(ctx, tenantID, orgID)
-}
-func (s assistantNoFieldConfigStore) ResolveOrgCodeByNodeKey(ctx context.Context, tenantID string, orgNodeKey string) (string, error) {
-	return s.inner.ResolveOrgCodeByNodeKey(ctx, tenantID, orgNodeKey)
-}
-func (s assistantNoFieldConfigStore) ResolveOrgCodes(ctx context.Context, tenantID string, orgIDs []int) (map[int]string, error) {
-	return s.inner.ResolveOrgCodes(ctx, tenantID, orgIDs)
-}
-func (s assistantNoFieldConfigStore) ResolveOrgCodesByNodeKeys(ctx context.Context, tenantID string, orgNodeKeys []string) (map[string]string, error) {
-	return s.inner.ResolveOrgCodesByNodeKeys(ctx, tenantID, orgNodeKeys)
-}
-func (s assistantNoFieldConfigStore) ListChildren(ctx context.Context, tenantID string, parentID int, asOfDate string) ([]OrgUnitChild, error) {
-	return s.inner.ListChildren(ctx, tenantID, parentID, asOfDate)
-}
-func (s assistantNoFieldConfigStore) GetNodeDetails(ctx context.Context, tenantID string, orgID int, asOfDate string) (OrgUnitNodeDetails, error) {
-	return s.inner.GetNodeDetails(ctx, tenantID, orgID, asOfDate)
-}
-func (s assistantNoFieldConfigStore) SearchNode(ctx context.Context, tenantID string, query string, asOfDate string) (OrgUnitSearchResult, error) {
-	return s.inner.SearchNode(ctx, tenantID, query, asOfDate)
-}
-func (s assistantNoFieldConfigStore) SearchNodeCandidates(ctx context.Context, tenantID string, query string, asOfDate string, limit int) ([]OrgUnitSearchCandidate, error) {
-	return s.inner.SearchNodeCandidates(ctx, tenantID, query, asOfDate, limit)
-}
-func (s assistantNoFieldConfigStore) ListNodeVersions(ctx context.Context, tenantID string, orgID int) ([]OrgUnitNodeVersion, error) {
-	return s.inner.ListNodeVersions(ctx, tenantID, orgID)
-}
-func (s assistantNoFieldConfigStore) MaxEffectiveDateOnOrBefore(ctx context.Context, tenantID string, asOfDate string) (string, bool, error) {
-	return s.inner.MaxEffectiveDateOnOrBefore(ctx, tenantID, asOfDate)
-}
-func (s assistantNoFieldConfigStore) MinEffectiveDate(ctx context.Context, tenantID string) (string, bool, error) {
-	return s.inner.MinEffectiveDate(ctx, tenantID)
 }
 
 func (s assistantCreatePolicyStore) ListEnabledTenantFieldConfigsAsOf(_ context.Context, _ string, _ string) ([]orgUnitTenantFieldConfig, error) {
@@ -145,8 +87,14 @@ func TestAssistantCreateTurn_PrechecksMissingCreatePolicyDefault(t *testing.T) {
 	if turn.Phase != assistantPhaseAwaitMissingFields {
 		t.Fatalf("expected await_missing_fields, got=%q", turn.Phase)
 	}
-	if len(turn.MissingFields) != 1 || turn.MissingFields[0] != "field_policy" {
+	if len(turn.MissingFields) != 1 || turn.MissingFields[0] != "org_code" {
 		t.Fatalf("unexpected missing fields=%v", turn.MissingFields)
+	}
+	if turn.DryRun.CreateOrgUnitProjection == nil {
+		t.Fatal("expected create projection snapshot")
+	}
+	if got := turn.DryRun.CreateOrgUnitProjection.Projection.Readiness; got != "missing_fields" {
+		t.Fatalf("readiness=%q", got)
 	}
 }
 
@@ -192,6 +140,12 @@ func TestAssistantConfirmTurn_PrechecksOrgTypeFieldEnablementAfterCandidatePick(
 	if !assistantTurnHasValidationCode(turn, "candidate_confirmation_required") {
 		t.Fatalf("expected candidate_confirmation_required, got=%v", turn.DryRun.ValidationErrors)
 	}
+	if turn.DryRun.CreateOrgUnitProjection == nil {
+		t.Fatal("expected create projection snapshot before confirm")
+	}
+	if got := turn.DryRun.CreateOrgUnitProjection.Projection.Readiness; got != "candidate_confirmation_required" {
+		t.Fatalf("readiness=%q", got)
+	}
 
 	if _, err := svc.confirmTurn("tenant-1", principal, conversation.ConversationID, turn.TurnID, "FLOWER-A"); err != errAssistantConfirmationRequired {
 		t.Fatalf("expected confirmation required, got=%v", err)
@@ -203,6 +157,7 @@ func TestAssistantConfirmTurn_PrechecksOrgTypeFieldEnablementAfterCandidatePick(
 	if _, err := svc.confirmTurn("tenant-1", principal, conversation.ConversationID, turn.TurnID, "FLOWER-A"); err != errAssistantConfirmationRequired {
 		t.Fatalf("expected confirmation required after clarification resolved, got=%v", err)
 	}
+
 	mutated := svc.byID[conversation.ConversationID].Turns[len(svc.byID[conversation.ConversationID].Turns)-1]
 	if mutated.State != assistantStateValidated {
 		t.Fatalf("expected validated state, got=%q", mutated.State)
@@ -210,12 +165,15 @@ func TestAssistantConfirmTurn_PrechecksOrgTypeFieldEnablementAfterCandidatePick(
 	if !assistantTurnHasValidationCode(mutated, "PATCH_FIELD_NOT_ALLOWED") {
 		t.Fatalf("expected PATCH_FIELD_NOT_ALLOWED, got=%v", mutated.DryRun.ValidationErrors)
 	}
-	if mutated.Phase != assistantPhaseAwaitMissingFields && mutated.Phase != assistantPhaseFailed {
-		t.Fatalf("expected await_missing_fields/failed, got=%q", mutated.Phase)
+	if mutated.DryRun.CreateOrgUnitProjection == nil {
+		t.Fatal("expected projection snapshot after candidate pick")
+	}
+	if got := mutated.DryRun.CreateOrgUnitProjection.Projection.RejectionReasons; len(got) != 1 || got[0] != "PATCH_FIELD_NOT_ALLOWED" {
+		t.Fatalf("unexpected rejection reasons=%v", got)
 	}
 }
 
-func TestAssistantCreatePolicyPrecheck_HelperCoverage(t *testing.T) {
+func TestAssistantCreatePolicyPrecheck_ProjectionSnapshotCoverage(t *testing.T) {
 	t.Run("assistantResolvedCandidateCode branches", func(t *testing.T) {
 		if got := assistantResolvedCandidateCode(nil, ""); got != "" {
 			t.Fatalf("expected empty, got=%q", got)
@@ -232,84 +190,23 @@ func TestAssistantCreatePolicyPrecheck_HelperCoverage(t *testing.T) {
 		}
 	})
 
-	t.Run("resolveCreateOrgUnitPolicyContext branches", func(t *testing.T) {
-		if _, ok := (*assistantConversationService)(nil).resolveCreateOrgUnitPolicyContext(context.Background(), "t1", "FLOWER-A", "2026-01-01"); ok {
-			t.Fatal("expected nil service false")
+	t.Run("assistantCreateOrgUnitPolicyParentOrgCode and enrich short-circuit", func(t *testing.T) {
+		candidates := []assistantCandidate{{CandidateID: "c1", CandidateCode: "FLOWER-A"}, {CandidateID: "c2", CandidateCode: "FLOWER-B"}}
+		if code, ok := assistantCreateOrgUnitPolicyParentOrgCode(assistantIntentSpec{}, nil, "", nil); code != "" || ok {
+			t.Fatalf("expected empty parent branch, code=%q ok=%v", code, ok)
 		}
-		if _, ok := (&assistantConversationService{}).resolveCreateOrgUnitPolicyContext(context.Background(), "t1", "FLOWER-A", "2026-01-01"); ok {
-			t.Fatal("expected nil store false")
+		if code, ok := assistantCreateOrgUnitPolicyParentOrgCode(assistantIntentSpec{ParentRefText: "鲜花组织"}, candidates[:1], "", nil); code != "FLOWER-A" || !ok {
+			t.Fatalf("expected single candidate parent, code=%q ok=%v", code, ok)
 		}
-		errStore := assistantOrgStoreStub{orgUnitMemoryStore: newOrgUnitMemoryStore(), resolveErr: errors.New("boom")}
-		if _, ok := (&assistantConversationService{orgStore: errStore}).resolveCreateOrgUnitPolicyContext(context.Background(), "t1", "FLOWER-A", "2026-01-01"); ok {
-			t.Fatal("expected resolve error false")
-		}
-		zeroStore := assistantOrgStoreStub{orgUnitMemoryStore: newOrgUnitMemoryStore(), resolveOrgID: 0}
-		if _, ok := (&assistantConversationService{orgStore: zeroStore}).resolveCreateOrgUnitPolicyContext(context.Background(), "t1", "FLOWER-A", "2026-01-01"); ok {
-			t.Fatal("expected zero org id false")
-		}
-		goodStore := assistantOrgStoreStub{orgUnitMemoryStore: newOrgUnitMemoryStore(), resolveOrgID: 10000001}
-		want := mustOrgNodeKeyForTest(t, 10000001)
-		got, ok := (&assistantConversationService{orgStore: goodStore}).resolveCreateOrgUnitPolicyContext(context.Background(), "t1", "FLOWER-A", "2026-01-01")
-		if !ok {
-			t.Fatal("expected policy context")
-		}
-		if got.BusinessUnitNodeKey != want {
-			t.Fatalf("business_unit_node_key=%q want=%q", got.BusinessUnitNodeKey, want)
-		}
-		if got.ResolvedSetID != "S2601" {
-			t.Fatalf("resolved_setid=%q", got.ResolvedSetID)
-		}
-		if got.BusinessUnitOrgCode != "FLOWER-A" {
-			t.Fatalf("business_unit_org_code=%q", got.BusinessUnitOrgCode)
-		}
-	})
-
-	t.Run("assistantCreateFieldDecisionResolvedValue branches", func(t *testing.T) {
-		if got := assistantCreateFieldDecisionResolvedValue(setIDFieldDecision{ResolvedDefaultVal: "10"}, "20"); got != "20" {
-			t.Fatalf("expected provided value, got=%q", got)
-		}
-		if got := assistantCreateFieldDecisionResolvedValue(setIDFieldDecision{ResolvedDefaultVal: "10"}, ""); got != "10" {
-			t.Fatalf("expected default value, got=%q", got)
-		}
-		if got := assistantCreateFieldDecisionResolvedValue(setIDFieldDecision{DefaultRuleRef: `next_org_code("G", 4)`}, ""); got != "__rule__" {
-			t.Fatalf("expected rule sentinel, got=%q", got)
-		}
-		if got := assistantCreateFieldDecisionResolvedValue(setIDFieldDecision{}, ""); got != "" {
-			t.Fatalf("expected empty, got=%q", got)
-		}
-	})
-
-	t.Run("isCreateOrgTypeFieldEnabled branches", func(t *testing.T) {
-		if (&assistantConversationService{}).isCreateOrgTypeFieldEnabled(context.Background(), "t1", "2026-01-01") {
-			t.Fatal("expected nil store false")
-		}
-		noReader := &assistantConversationService{orgStore: assistantNoFieldConfigStore{inner: newOrgUnitMemoryStore()}}
-		if noReader.isCreateOrgTypeFieldEnabled(context.Background(), "t1", "2026-01-01") {
-			t.Fatal("expected no reader false")
-		}
-		errReader := &assistantConversationService{orgStore: assistantCreatePolicyStore{orgUnitMemoryStore: newOrgUnitMemoryStore(), fieldConfigsErr: errors.New("boom")}}
-		if errReader.isCreateOrgTypeFieldEnabled(context.Background(), "t1", "2026-01-01") {
-			t.Fatal("expected reader error false")
-		}
-		wrongKey := &assistantConversationService{orgStore: assistantCreatePolicyStore{orgUnitMemoryStore: newOrgUnitMemoryStore(), fieldConfigs: []orgUnitTenantFieldConfig{{FieldKey: "x_other", ValueType: "text", DataSourceType: "DICT"}}}}
-		if wrongKey.isCreateOrgTypeFieldEnabled(context.Background(), "t1", "2026-01-01") {
-			t.Fatal("expected wrong key false")
-		}
-		wrongType := &assistantConversationService{orgStore: assistantCreatePolicyStore{orgUnitMemoryStore: newOrgUnitMemoryStore(), fieldConfigs: []orgUnitTenantFieldConfig{{FieldKey: orgUnitCreateFieldOrgType, ValueType: "int", DataSourceType: "DICT"}}}}
-		if wrongType.isCreateOrgTypeFieldEnabled(context.Background(), "t1", "2026-01-01") {
-			t.Fatal("expected wrong value type false")
-		}
-		wrongSource := &assistantConversationService{orgStore: assistantCreatePolicyStore{orgUnitMemoryStore: newOrgUnitMemoryStore(), fieldConfigs: []orgUnitTenantFieldConfig{{FieldKey: orgUnitCreateFieldOrgType, ValueType: "text", DataSourceType: "PLAIN"}}}}
-		if wrongSource.isCreateOrgTypeFieldEnabled(context.Background(), "t1", "2026-01-01") {
-			t.Fatal("expected wrong source false")
-		}
-		badDictConfig := &assistantConversationService{orgStore: assistantCreatePolicyStore{orgUnitMemoryStore: newOrgUnitMemoryStore(), fieldConfigs: []orgUnitTenantFieldConfig{{FieldKey: orgUnitCreateFieldOrgType, ValueType: "text", DataSourceType: "DICT", DataSourceConfig: json.RawMessage(`{"dict_code":1}`)}}}}
-		if badDictConfig.isCreateOrgTypeFieldEnabled(context.Background(), "t1", "2026-01-01") {
-			t.Fatal("expected bad dict config false")
-		}
-		good := &assistantConversationService{orgStore: assistantCreatePolicyStore{orgUnitMemoryStore: newOrgUnitMemoryStore(), fieldConfigs: []orgUnitTenantFieldConfig{{FieldKey: orgUnitCreateFieldOrgType, ValueType: "text", DataSourceType: "DICT", DataSourceConfig: json.RawMessage(`{"dict_code":"org_type"}`)}}}}
-		if !good.isCreateOrgTypeFieldEnabled(context.Background(), "t1", "2026-01-01") {
-			t.Fatal("expected enabled true")
+		svc := &assistantConversationService{orgStore: assistantCreatePolicyStore{orgUnitMemoryStore: newOrgUnitMemoryStore(), fieldConfigsErr: errors.New("boom")}}
+		dry := assistantDryRunResult{Explain: "keep"}
+		if got := svc.enrichCreateOrgUnitDryRunWithPolicy(context.Background(), "t1", assistantIntentSpec{
+			Action:        assistantIntentCreateOrgUnit,
+			ParentRefText: "鲜花组织",
+			EntityName:    "运营部",
+			EffectiveDate: "2026-01-01",
+		}, candidates, "", dry); got.Explain != "keep" {
+			t.Fatalf("expected ambiguous parent short-circuit, got=%+v", got)
 		}
 	})
 
@@ -318,18 +215,15 @@ func TestAssistantCreatePolicyPrecheck_HelperCoverage(t *testing.T) {
 		if got := (*assistantConversationService)(nil).enrichCreateOrgUnitDryRunWithPolicy(context.Background(), "t1", assistantIntentSpec{Action: assistantIntentCreateOrgUnit}, nil, "c1", dry); got.Explain != "keep" {
 			t.Fatalf("expected unchanged explain, got=%q", got.Explain)
 		}
-		svc := &assistantConversationService{orgStore: assistantOrgStoreStub{orgUnitMemoryStore: newOrgUnitMemoryStore(), resolveErr: errors.New("boom")}}
+		svc := &assistantConversationService{orgStore: assistantCreatePolicyStore{orgUnitMemoryStore: newOrgUnitMemoryStore(), fieldConfigsErr: errors.New("boom")}}
 		if got := svc.enrichCreateOrgUnitDryRunWithPolicy(context.Background(), "t1", assistantIntentSpec{Action: assistantIntentPlanOnly}, nil, "c1", dry); got.Explain != "keep" {
 			t.Fatalf("expected other action unchanged, got=%q", got.Explain)
 		}
-		if got := svc.enrichCreateOrgUnitDryRunWithPolicy(context.Background(), "t1", assistantIntentSpec{Action: assistantIntentCreateOrgUnit}, nil, "c1", dry); got.Explain != "keep" {
-			t.Fatalf("expected invalid intent unchanged, got=%q", got.Explain)
+		if got := svc.enrichCreateOrgUnitDryRunWithPolicy(context.Background(), "t1", assistantIntentSpec{Action: assistantIntentCreateOrgUnit, EntityName: "运营部"}, nil, "c1", dry); got.Explain != "keep" {
+			t.Fatalf("expected missing effective date unchanged, got=%q", got.Explain)
 		}
 		if got := svc.enrichCreateOrgUnitDryRunWithPolicy(context.Background(), "t1", assistantIntentSpec{Action: assistantIntentCreateOrgUnit, EntityName: "运营部", EffectiveDate: "2026-01-01"}, nil, "", dry); got.Explain != "keep" {
-			t.Fatalf("expected missing candidate unchanged, got=%q", got.Explain)
-		}
-		if got := svc.enrichCreateOrgUnitDryRunWithPolicy(context.Background(), "t1", assistantIntentSpec{Action: assistantIntentCreateOrgUnit, ParentRefText: "鲜花组织", EntityName: "运营部", EffectiveDate: "2026-01-01"}, []assistantCandidate{{CandidateID: "c1"}}, "c1", dry); got.Explain != "keep" {
-			t.Fatalf("expected resolve failure unchanged, got=%q", got.Explain)
+			t.Fatalf("expected unresolved candidate unchanged, got=%q", got.Explain)
 		}
 
 		previous := defaultSetIDStrategyRegistryStore
@@ -359,35 +253,58 @@ func TestAssistantCreatePolicyPrecheck_HelperCoverage(t *testing.T) {
 			t.Fatalf("seed good store err=%v", err)
 		}
 		goodSvc := &assistantConversationService{orgStore: goodStore}
-		result := goodSvc.enrichCreateOrgUnitDryRunWithPolicy(context.Background(), "t1", assistantIntentSpec{Action: assistantIntentCreateOrgUnit, ParentRefText: "鲜花组织", EntityName: "运营部", EffectiveDate: "2026-01-01"}, []assistantCandidate{{CandidateID: "c1", CandidateCode: "FLOWER-A"}}, "c1", assistantDryRunResult{})
+		adminCtx := withPrincipal(context.Background(), Principal{ID: "actor-1", RoleSlug: "tenant-admin"})
+		result := goodSvc.enrichCreateOrgUnitDryRunWithPolicy(adminCtx, "t1", assistantIntentSpec{
+			Action:        assistantIntentCreateOrgUnit,
+			ParentRefText: "鲜花组织",
+			EntityName:    "运营部",
+			EffectiveDate: "2026-01-01",
+		}, []assistantCandidate{{CandidateID: "c1", CandidateCode: "FLOWER-A"}}, "c1", assistantDryRunResult{})
 		if len(result.ValidationErrors) != 0 || result.Explain != "计划已生成，等待确认后可提交" {
 			t.Fatalf("expected success dry run, got=%+v", result)
 		}
-
-		defaultSetIDStrategyRegistryStore = setIDStrategyRegistryStoreStub{
-			resolveFieldDecisionFn: func(_ context.Context, _ string, _ string, fieldKey string, _ string, _ string, _ string) (setIDFieldDecision, error) {
-				switch fieldKey {
-				case orgUnitCreateFieldOrgCode:
-					return setIDFieldDecision{FieldKey: fieldKey, Required: false}, nil
-				case orgUnitCreateFieldOrgType:
-					return setIDFieldDecision{FieldKey: fieldKey, Required: true}, nil
-				default:
-					return setIDFieldDecision{}, nil
-				}
-			},
+		if result.CreateOrgUnitProjection == nil {
+			t.Fatal("expected projection snapshot")
 		}
-		missingOrgType := goodSvc.enrichCreateOrgUnitDryRunWithPolicy(context.Background(), "t1", assistantIntentSpec{Action: assistantIntentCreateOrgUnit, ParentRefText: "鲜花组织", EntityName: "运营部", EffectiveDate: "2026-01-01"}, []assistantCandidate{{CandidateID: "c1", CandidateCode: "FLOWER-A"}}, "c1", assistantDryRunResult{})
-		if !containsString(missingOrgType.ValidationErrors, "FIELD_REQUIRED_VALUE_MISSING") {
-			t.Fatalf("expected org type missing default blocker, got=%v", missingOrgType.ValidationErrors)
+		if result.CreateOrgUnitProjection.PolicyContextContractVersion != orgunitservices.CreateOrgUnitPolicyContextContractVersionV1 {
+			t.Fatalf("policy context contract=%q", result.CreateOrgUnitProjection.PolicyContextContractVersion)
+		}
+		if result.CreateOrgUnitProjection.PrecheckProjectionContractVersion != orgunitservices.CreateOrgUnitPrecheckProjectionContractV1 {
+			t.Fatalf("projection contract=%q", result.CreateOrgUnitProjection.PrecheckProjectionContractVersion)
+		}
+		if result.CreateOrgUnitProjection.PolicyContext.PolicyContextDigest == "" {
+			t.Fatal("expected policy_context_digest")
+		}
+		if result.CreateOrgUnitProjection.Projection.ProjectionDigest == "" {
+			t.Fatal("expected projection_digest")
+		}
+
+		missingDate := goodSvc.enrichCreateOrgUnitDryRunWithPolicy(adminCtx, "t1", assistantIntentSpec{
+			Action:        assistantIntentCreateOrgUnit,
+			ParentRefText: "鲜花组织",
+			EntityName:    "运营部",
+		}, []assistantCandidate{{CandidateID: "c1", CandidateCode: "FLOWER-A"}}, "c1", assistantDryRunResult{ValidationErrors: []string{"missing_effective_date"}})
+		if missingDate.CreateOrgUnitProjection == nil {
+			t.Fatal("expected projection snapshot for missing effective date")
+		}
+		if got := missingDate.CreateOrgUnitProjection.Projection.Readiness; got != "missing_fields" {
+			t.Fatalf("missing date readiness=%q", got)
+		}
+		if !assistantSliceHas(missingDate.ValidationErrors, "missing_effective_date") {
+			t.Fatalf("expected missing_effective_date validation, got=%v", missingDate.ValidationErrors)
+		}
+
+		confirmPending := goodSvc.enrichCreateOrgUnitDryRunWithPolicy(adminCtx, "t1", assistantIntentSpec{
+			Action:        assistantIntentCreateOrgUnit,
+			ParentRefText: "鲜花组织",
+			EntityName:    "运营部",
+			EffectiveDate: "2026-01-01",
+		}, []assistantCandidate{{CandidateID: "c1", CandidateCode: "FLOWER-A"}, {CandidateID: "c2", CandidateCode: "FLOWER-B"}}, "", assistantDryRunResult{ValidationErrors: []string{"candidate_confirmation_required"}})
+		if confirmPending.CreateOrgUnitProjection == nil {
+			t.Fatal("expected projection snapshot for candidate confirmation")
+		}
+		if got := confirmPending.CreateOrgUnitProjection.Projection.Readiness; got != "candidate_confirmation_required" {
+			t.Fatalf("readiness=%q", got)
 		}
 	})
-}
-
-func containsString(items []string, needle string) bool {
-	for _, item := range items {
-		if item == needle {
-			return true
-		}
-	}
-	return false
 }

@@ -20,9 +20,11 @@ const (
 )
 
 const (
-	assistantRuntimeHealthHealthy     = "healthy"
-	assistantRuntimeHealthDegraded    = "degraded"
-	assistantRuntimeHealthUnavailable = "unavailable"
+	assistantRuntimeHealthHealthy         = "healthy"
+	assistantRuntimeHealthDegraded        = "degraded"
+	assistantRuntimeHealthUnavailable     = "unavailable"
+	assistantRuntimeHealthRetired         = "retired"
+	assistantRuntimeReasonRetiredByDesign = "retired_by_design"
 )
 
 type assistantRuntimeStatusResponse struct {
@@ -63,11 +65,12 @@ type assistantRuntimeVersionsLock struct {
 		RollbackRef string `yaml:"rollback_ref"`
 	} `yaml:"upstream"`
 	Services []struct {
-		Name     string `yaml:"name"`
-		Required bool   `yaml:"required"`
-		Image    string `yaml:"image"`
-		Tag      string `yaml:"tag"`
-		Digest   string `yaml:"digest"`
+		Name            string `yaml:"name"`
+		Required        bool   `yaml:"required"`
+		Image           string `yaml:"image"`
+		Tag             string `yaml:"tag"`
+		Digest          string `yaml:"digest"`
+		RetiredByDesign bool   `yaml:"retired_by_design"`
 	} `yaml:"services"`
 }
 
@@ -92,11 +95,9 @@ func routingWriteMethodNotAllowed(w http.ResponseWriter, r *http.Request) {
 
 func assistantRuntimeStatus() assistantRuntimeStatusResponse {
 	resp := assistantRuntimeStatusResponse{
-		Status:    assistantRuntimeHealthUnavailable,
-		CheckedAt: time.Now().UTC().Format(time.RFC3339Nano),
-		Capabilities: assistantRuntimeCapabilities{
-			AgentsWriteEnabled: assistantRuntimeAgentsWriteEnabled(),
-		},
+		Status:       assistantRuntimeHealthUnavailable,
+		CheckedAt:    time.Now().UTC().Format(time.RFC3339Nano),
+		Capabilities: assistantRuntimeFormalCapabilityMatrix(),
 	}
 	resp.Upstream.URL = assistantRuntimeDefaultUpstreamURL()
 	if _, err := url.ParseRequestURI(resp.Upstream.URL); err != nil {
@@ -180,11 +181,12 @@ func assistantRuntimeDomainPolicyErrorMessage(err error) string {
 }
 
 func assistantRuntimeServicesFromLock(services []struct {
-	Name     string `yaml:"name"`
-	Required bool   `yaml:"required"`
-	Image    string `yaml:"image"`
-	Tag      string `yaml:"tag"`
-	Digest   string `yaml:"digest"`
+	Name            string `yaml:"name"`
+	Required        bool   `yaml:"required"`
+	Image           string `yaml:"image"`
+	Tag             string `yaml:"tag"`
+	Digest          string `yaml:"digest"`
+	RetiredByDesign bool   `yaml:"retired_by_design"`
 }) []assistantRuntimeService {
 	if len(services) == 0 {
 		return nil
@@ -204,6 +206,14 @@ func assistantRuntimeServicesFromLock(services []struct {
 			Tag:      strings.TrimSpace(service.Tag),
 			Digest:   strings.TrimSpace(service.Digest),
 		})
+		if service.RetiredByDesign {
+			out[len(out)-1].Required = false
+			out[len(out)-1].Healthy = assistantRuntimeHealthRetired
+			out[len(out)-1].Reason = assistantRuntimeReasonRetiredByDesign
+		}
+	}
+	for idx := range out {
+		out[idx] = assistantRuntimeNormalizeService(out[idx])
 	}
 	return out
 }
@@ -216,7 +226,7 @@ func mergeAssistantRuntimeServices(base []assistantRuntimeService, snapshot []as
 		out := make([]assistantRuntimeService, len(snapshot))
 		copy(out, snapshot)
 		for idx := range out {
-			out[idx].Healthy = normalizeAssistantRuntimeHealth(out[idx].Healthy)
+			out[idx] = assistantRuntimeNormalizeService(out[idx])
 		}
 		return out
 	}
@@ -232,8 +242,9 @@ func mergeAssistantRuntimeServices(base []assistantRuntimeService, snapshot []as
 		if nameKey == "" {
 			continue
 		}
-		service.Healthy = normalizeAssistantRuntimeHealth(service.Healthy)
+		service = assistantRuntimeNormalizeService(service)
 		if idx, ok := byName[nameKey]; ok {
+			merged[idx].Required = service.Required
 			merged[idx].Healthy = service.Healthy
 			merged[idx].Reason = strings.TrimSpace(service.Reason)
 			if merged[idx].Image == "" {
@@ -264,7 +275,7 @@ func assistantRuntimeApplyUpstreamProbe(resp assistantRuntimeStatusResponse) ass
 			Reason:   "upstream_unreachable",
 		})
 		if resp.ErrorCode == "" {
-			resp.ErrorCode = assistantUIProxyUpstreamUnavailable
+			resp.ErrorCode = assistantRuntimeUpstreamUnavailable
 			resp.ErrorMessage = "assistant runtime upstream is unreachable"
 		}
 	}
@@ -291,16 +302,16 @@ func assistantRuntimeUpsertService(services []assistantRuntimeService, next assi
 	if nameKey == "" {
 		return services
 	}
+	next = assistantRuntimeNormalizeService(next)
 	for idx := range services {
 		if strings.ToLower(strings.TrimSpace(services[idx].Name)) != nameKey {
 			continue
 		}
 		services[idx].Required = next.Required
-		services[idx].Healthy = normalizeAssistantRuntimeHealth(next.Healthy)
+		services[idx].Healthy = next.Healthy
 		services[idx].Reason = strings.TrimSpace(next.Reason)
 		return services
 	}
-	next.Healthy = normalizeAssistantRuntimeHealth(next.Healthy)
 	return append(services, next)
 }
 
@@ -311,6 +322,9 @@ func assistantRuntimeAggregateStatus(services []assistantRuntimeService) string 
 	hasDegraded := false
 	for _, service := range services {
 		healthy := normalizeAssistantRuntimeHealth(service.Healthy)
+		if strings.EqualFold(strings.TrimSpace(service.Reason), assistantRuntimeReasonRetiredByDesign) {
+			continue
+		}
 		if service.Required && healthy != assistantRuntimeHealthHealthy {
 			return assistantRuntimeHealthUnavailable
 		}
@@ -330,9 +344,21 @@ func normalizeAssistantRuntimeHealth(raw string) string {
 		return assistantRuntimeHealthHealthy
 	case assistantRuntimeHealthDegraded:
 		return assistantRuntimeHealthDegraded
+	case assistantRuntimeHealthRetired:
+		return assistantRuntimeHealthRetired
 	default:
 		return assistantRuntimeHealthUnavailable
 	}
+}
+
+func assistantRuntimeNormalizeService(service assistantRuntimeService) assistantRuntimeService {
+	service.Healthy = normalizeAssistantRuntimeHealth(service.Healthy)
+	service.Reason = strings.TrimSpace(service.Reason)
+	if strings.EqualFold(service.Reason, assistantRuntimeReasonRetiredByDesign) {
+		service.Required = false
+		service.Healthy = assistantRuntimeHealthRetired
+	}
+	return service
 }
 
 func assistantRuntimeDefaultUpstreamURL() string {

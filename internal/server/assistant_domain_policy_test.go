@@ -131,6 +131,17 @@ func TestAssistantRuntimeAgentsWriteEnabled(t *testing.T) {
 	}
 }
 
+func TestAssistantRuntimeCutoverMode(t *testing.T) {
+	t.Setenv("ASSISTANT_RUNTIME_CUTOVER_MODE", assistantRuntimeCutoverModeCutoverPrep)
+	if got := assistantRuntimeCutoverMode(); got != assistantRuntimeCutoverModeCutoverPrep {
+		t.Fatalf("cutover prep mode=%q", got)
+	}
+	t.Setenv("ASSISTANT_RUNTIME_CUTOVER_MODE", assistantRuntimeCutoverModeUIShellOnly)
+	if got := assistantRuntimeCutoverMode(); got != assistantRuntimeCutoverModeUIShellOnly {
+		t.Fatalf("ui shell only mode=%q", got)
+	}
+}
+
 func TestReadAssistantDomainPolicy_ErrorAndSuccess(t *testing.T) {
 	dir := t.TempDir()
 

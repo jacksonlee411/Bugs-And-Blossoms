@@ -1,8 +1,6 @@
 package fieldpolicy
 
 import (
-	"errors"
-	"fmt"
 	"slices"
 	"strings"
 )
@@ -114,229 +112,12 @@ func OrgUnitBaselineCapabilityKey(capabilityKey string) (string, bool) {
 }
 
 func Resolve(ctx PolicyContext, baselineCapabilityKey string, records []Record) (Decision, error) {
-	ctx = normalizePolicyContext(ctx)
-	records = normalizeRecords(records)
-	buckets := buildBucketSpecs(ctx, baselineCapabilityKey)
-	trace := make([]string, 0, len(buckets)+4)
-
-	for idx, bucket := range buckets {
-		matches := matchBucketRecords(records, ctx.FieldKey, bucket)
-		if len(matches) == 0 {
-			trace = append(trace, fmt.Sprintf("bucket:%s:miss", bucket.name))
-			continue
-		}
-		sortRecords(matches)
-
-		matchedPolicyIDs := recordPolicyIDs(matches)
-		trace = append(trace, fmt.Sprintf("bucket:%s:hit:%d", bucket.name, len(matches)))
-
-		primary := matches[0]
-		if err := validateModes(primary.PriorityMode, primary.LocalOverrideMode); err != nil {
-			return Decision{}, err
-		}
-
-		fallbackBuckets := collectFallbackBucketWinners(records, ctx.FieldKey, buckets[idx+1:])
-		fallbackCodes := make([]string, 0, 8)
-		winnerPolicyIDs := []string{primary.PolicyID}
-		for _, fallback := range fallbackBuckets {
-			trace = append(trace, fmt.Sprintf("fallback:%s:%s", fallback.bucketName, fallback.record.PolicyID))
-			fallbackCodes = append(fallbackCodes, fallback.record.AllowedValueCodes...)
-			winnerPolicyIDs = append(winnerPolicyIDs, fallback.record.PolicyID)
-		}
-		winnerPolicyIDs = normalizePolicyIDs(winnerPolicyIDs)
-		allowedValueCodes, err := mergeAllowedValueCodes(
-			primary.AllowedValueCodes,
-			fallbackCodes,
-			bucket.setIDExact,
-			primary.PriorityMode,
-			primary.LocalOverrideMode,
-		)
-		if err != nil {
-			return Decision{}, err
-		}
-		trace = append(trace, fmt.Sprintf(
-			"mode:%s/%s:allowed=%s",
-			primary.PriorityMode,
-			primary.LocalOverrideMode,
-			strings.Join(allowedValueCodes, ","),
-		))
-		resolvedDefaultValue := resolveDefaultValue(primary, fallbackBuckets, allowedValueCodes, bucket.setIDExact)
-
-		if primary.Required && !primary.Visible {
-			return Decision{}, errors.New(ErrorPolicyConflict)
-		}
-		if !primary.Maintainable && strings.TrimSpace(primary.DefaultRuleRef) == "" && strings.TrimSpace(resolvedDefaultValue) == "" {
-			return Decision{}, errors.New(ErrorDefaultRuleMissing)
-		}
-		if primary.Required && len(primary.AllowedValueCodes) > 0 && len(allowedValueCodes) == 0 {
-			return Decision{}, errors.New(ErrorPolicyConflict)
-		}
-		if strings.TrimSpace(resolvedDefaultValue) != "" && len(allowedValueCodes) > 0 && !containsValue(allowedValueCodes, resolvedDefaultValue) {
-			return Decision{}, errors.New(ErrorPolicyConflict)
-		}
-
-		return Decision{
-			CapabilityKey:      primary.CapabilityKey,
-			FieldKey:           primary.FieldKey,
-			SourceType:         bucket.sourceType,
-			Required:           primary.Required,
-			Visible:            primary.Visible,
-			Maintainable:       primary.Maintainable,
-			DefaultRuleRef:     primary.DefaultRuleRef,
-			ResolvedDefaultVal: resolvedDefaultValue,
-			AllowedValueCodes:  allowedValueCodes,
-			PriorityMode:       primary.PriorityMode,
-			LocalOverrideMode:  primary.LocalOverrideMode,
-			MatchedBucket:      bucket.name,
-			PrimaryPolicyID:    primary.PolicyID,
-			WinnerPolicyIDs:    winnerPolicyIDs,
-			MatchedPolicyIDs:   matchedPolicyIDs,
-			ResolutionTrace:    trace,
-		}, nil
-	}
-
-	return Decision{}, errors.New(ErrorPolicyMissing)
+	return resolveWithOPA(ctx, baselineCapabilityKey, records)
 }
 
 type fallbackBucketWinner struct {
 	bucketName string
 	record     Record
-}
-
-func buildBucketSpecs(ctx PolicyContext, baselineCapabilityKey string) []bucketSpec {
-	intent := normalizeCapabilityKey(ctx.CapabilityKey)
-	baseline := normalizeCapabilityKey(baselineCapabilityKey)
-	if baseline == "" || baseline == intent {
-		return []bucketSpec{
-			{
-				name:                BucketIntentSetIDBusinessUnitExact,
-				sourceType:          SourceTypeIntentOverride,
-				capabilityKey:       intent,
-				resolvedSetID:       ctx.ResolvedSetID,
-				businessUnitNodeKey: ctx.BusinessUnitNodeKey,
-				setIDExact:          true,
-				businessUnitExact:   true,
-			},
-			{
-				name:          BucketIntentSetIDWildcard,
-				sourceType:    SourceTypeIntentOverride,
-				capabilityKey: intent,
-				resolvedSetID: ctx.ResolvedSetID,
-				setIDExact:    true,
-			},
-			{
-				name:          BucketIntentWildcard,
-				sourceType:    SourceTypeIntentOverride,
-				capabilityKey: intent,
-			},
-		}
-	}
-	return []bucketSpec{
-		{
-			name:                BucketIntentSetIDBusinessUnitExact,
-			sourceType:          SourceTypeIntentOverride,
-			capabilityKey:       intent,
-			resolvedSetID:       ctx.ResolvedSetID,
-			businessUnitNodeKey: ctx.BusinessUnitNodeKey,
-			setIDExact:          true,
-			businessUnitExact:   true,
-		},
-		{
-			name:          BucketIntentSetIDWildcard,
-			sourceType:    SourceTypeIntentOverride,
-			capabilityKey: intent,
-			resolvedSetID: ctx.ResolvedSetID,
-			setIDExact:    true,
-		},
-		{
-			name:          BucketIntentWildcard,
-			sourceType:    SourceTypeIntentOverride,
-			capabilityKey: intent,
-		},
-		{
-			name:                BucketBaselineSetIDBusinessUnit,
-			sourceType:          SourceTypeBaseline,
-			capabilityKey:       baseline,
-			resolvedSetID:       ctx.ResolvedSetID,
-			businessUnitNodeKey: ctx.BusinessUnitNodeKey,
-			setIDExact:          true,
-			businessUnitExact:   true,
-		},
-		{
-			name:          BucketBaselineSetIDWildcard,
-			sourceType:    SourceTypeBaseline,
-			capabilityKey: baseline,
-			resolvedSetID: ctx.ResolvedSetID,
-			setIDExact:    true,
-		},
-		{
-			name:          BucketBaselineWildcard,
-			sourceType:    SourceTypeBaseline,
-			capabilityKey: baseline,
-		},
-	}
-}
-
-func matchBucketRecords(records []Record, fieldKey string, bucket bucketSpec) []Record {
-	out := make([]Record, 0, len(records))
-	for _, record := range records {
-		if record.CapabilityKey != bucket.capabilityKey {
-			continue
-		}
-		if record.FieldKey != fieldKey {
-			continue
-		}
-		if bucket.businessUnitExact {
-			if record.OrgApplicability != OrgApplicabilityBusinessUnit {
-				continue
-			}
-			if record.ResolvedSetID != bucket.resolvedSetID {
-				continue
-			}
-			if record.BusinessUnitNodeKey != bucket.businessUnitNodeKey {
-				continue
-			}
-			out = append(out, record)
-			continue
-		}
-		if bucket.setIDExact {
-			if record.OrgApplicability != OrgApplicabilityTenant {
-				continue
-			}
-			if record.BusinessUnitNodeKey != "" {
-				continue
-			}
-			if record.ResolvedSetID != bucket.resolvedSetID {
-				continue
-			}
-			out = append(out, record)
-			continue
-		}
-		if record.OrgApplicability != OrgApplicabilityTenant {
-			continue
-		}
-		if record.BusinessUnitNodeKey != "" || record.ResolvedSetID != "" {
-			continue
-		}
-		out = append(out, record)
-	}
-	return out
-}
-
-func collectFallbackBucketWinners(records []Record, fieldKey string, buckets []bucketSpec) []fallbackBucketWinner {
-	out := make([]fallbackBucketWinner, 0, len(buckets))
-	for _, bucket := range buckets {
-		matches := matchBucketRecords(records, fieldKey, bucket)
-		if len(matches) == 0 {
-			continue
-		}
-		sortRecords(matches)
-		out = append(out, fallbackBucketWinner{
-			bucketName: bucket.name,
-			record:     matches[0],
-		})
-	}
-	return out
 }
 
 func sortRecords(records []Record) {
@@ -352,91 +133,6 @@ func sortRecords(records []Record) {
 		}
 		return strings.Compare(a.PolicyID, b.PolicyID)
 	})
-}
-
-func mergeAllowedValueCodes(localCodes []string, fallbackCodes []string, localExact bool, priorityMode string, localOverrideMode string) ([]string, error) {
-	localCodes = normalizeAllowedValueCodes(localCodes)
-	fallbackCodes = normalizeAllowedValueCodes(fallbackCodes)
-	priorityMode = normalizePriorityMode(priorityMode)
-	localOverrideMode = normalizeLocalOverrideMode(localOverrideMode)
-
-	if err := validateModes(priorityMode, localOverrideMode); err != nil {
-		return nil, err
-	}
-	if !localExact || len(fallbackCodes) == 0 {
-		return localCodes, nil
-	}
-
-	switch priorityMode {
-	case PriorityModeBlendCustomFirst:
-		switch localOverrideMode {
-		case LocalOverrideModeAllow:
-			return mergePreferPrimary(localCodes, fallbackCodes), nil
-		case LocalOverrideModeNoOverride:
-			return mergePreferPrimary(fallbackCodes, localCodes), nil
-		case LocalOverrideModeNoLocal:
-			return fallbackCodes, nil
-		}
-	case PriorityModeBlendDefltFirst:
-		switch localOverrideMode {
-		case LocalOverrideModeAllow, LocalOverrideModeNoOverride:
-			return mergePreferPrimary(fallbackCodes, localCodes), nil
-		case LocalOverrideModeNoLocal:
-			return fallbackCodes, nil
-		}
-	case PriorityModeDefltUnsubscribed:
-		switch localOverrideMode {
-		case LocalOverrideModeAllow, LocalOverrideModeNoOverride:
-			return localCodes, nil
-		case LocalOverrideModeNoLocal:
-			return nil, errors.New(ErrorPolicyModeCombination)
-		}
-	}
-	return nil, errors.New(ErrorPolicyConflict)
-}
-
-func mergePreferPrimary(primary []string, secondary []string) []string {
-	merged := make([]string, 0, len(primary)+len(secondary))
-	merged = append(merged, primary...)
-	merged = append(merged, secondary...)
-	return normalizeAllowedValueCodes(merged)
-}
-
-func resolveDefaultValue(primary Record, fallbacks []fallbackBucketWinner, allowedValueCodes []string, localExact bool) string {
-	defaultValue := strings.TrimSpace(primary.DefaultValue)
-	if defaultValue != "" && (len(allowedValueCodes) == 0 || containsValue(allowedValueCodes, defaultValue)) {
-		return defaultValue
-	}
-	if !localExact {
-		return defaultValue
-	}
-	for _, fallback := range fallbacks {
-		candidate := strings.TrimSpace(fallback.record.DefaultValue)
-		if candidate == "" {
-			continue
-		}
-		if len(allowedValueCodes) == 0 || containsValue(allowedValueCodes, candidate) {
-			return candidate
-		}
-	}
-	return defaultValue
-}
-
-func validateModes(priorityMode string, localOverrideMode string) error {
-	switch priorityMode {
-	case PriorityModeBlendCustomFirst, PriorityModeBlendDefltFirst, PriorityModeDefltUnsubscribed:
-	default:
-		return errors.New(ErrorPolicyPriorityMode)
-	}
-	switch localOverrideMode {
-	case LocalOverrideModeAllow, LocalOverrideModeNoOverride, LocalOverrideModeNoLocal:
-	default:
-		return errors.New(ErrorPolicyLocalOverrideMode)
-	}
-	if priorityMode == PriorityModeDefltUnsubscribed && localOverrideMode == LocalOverrideModeNoLocal {
-		return errors.New(ErrorPolicyModeCombination)
-	}
-	return nil
 }
 
 func normalizePolicyContext(ctx PolicyContext) PolicyContext {
@@ -530,14 +226,6 @@ func normalizeLocalOverrideMode(value string) string {
 	return value
 }
 
-func recordPolicyIDs(records []Record) []string {
-	out := make([]string, 0, len(records))
-	for _, record := range records {
-		out = append(out, record.PolicyID)
-	}
-	return normalizePolicyIDs(out)
-}
-
 func normalizePolicyIDs(ids []string) []string {
 	if len(ids) == 0 {
 		return nil
@@ -559,14 +247,4 @@ func normalizePolicyIDs(ids []string) []string {
 		return nil
 	}
 	return out
-}
-
-func containsValue(values []string, value string) bool {
-	value = strings.TrimSpace(value)
-	for _, candidate := range values {
-		if strings.TrimSpace(candidate) == value {
-			return true
-		}
-	}
-	return false
 }

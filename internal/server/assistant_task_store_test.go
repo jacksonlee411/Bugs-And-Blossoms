@@ -12,6 +12,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
+	orgunitservices "github.com/jacksonlee411/Bugs-And-Blossoms/modules/orgunit/services"
 )
 
 type assistTaskTxBeginner struct {
@@ -20,6 +21,128 @@ type assistTaskTxBeginner struct {
 
 func (b assistTaskTxBeginner) BeginTx(ctx context.Context, opts pgx.TxOptions) (pgx.Tx, error) {
 	return b.beginFn(ctx, opts)
+}
+
+func assistantTestCreateOrgUnitProjectionSnapshot() *assistantCreateOrgUnitProjectionSnapshot {
+	return &assistantCreateOrgUnitProjectionSnapshot{
+		PolicyContextContractVersion:      orgunitservices.CreateOrgUnitPolicyContextContractVersionV1,
+		PrecheckProjectionContractVersion: orgunitservices.CreateOrgUnitPrecheckProjectionContractV1,
+		PolicyContext: orgunitservices.CreateOrgUnitPolicyContextV1{
+			TenantID:            "tenant_1",
+			CapabilityKey:       orgUnitCreateFieldPolicyCapabilityKey,
+			EffectiveDate:       "2026-01-01",
+			BusinessUnitOrgCode: "FLOWER-A",
+			BusinessUnitNodeKey: "10000001",
+			ResolvedSetID:       "S2601",
+			SetIDSource:         "custom",
+			PolicyContextDigest: "ctx_digest",
+		},
+		Projection: orgunitservices.CreateOrgUnitPrecheckProjectionV1{
+			Readiness:              "ready",
+			FieldDecisions:         []orgunitservices.CreateOrgUnitFieldDecisionV1{{FieldKey: "name", Visible: true, Maintainable: true, FieldPayloadKey: "name", AllowedValueCodes: []string{}}},
+			PendingDraftSummary:    "上级组织：FLOWER-A；新建组织：运营部；生效日期：2026-01-01",
+			EffectivePolicyVersion: "epv1:test",
+			MutationPolicyVersion:  orgunitservices.CreateOrgUnitMutationPolicyVersionV1,
+			ResolvedSetID:          "S2601",
+			SetIDSource:            "custom",
+			PolicyExplain:          "计划已生成，等待确认后可提交",
+			ProjectionDigest:       "projection_digest",
+		},
+	}
+}
+
+func assistantTestOrgUnitVersionProjectionSnapshot(action string) *assistantOrgUnitVersionProjectionSnapshot {
+	action = strings.TrimSpace(action)
+	capabilityKey := orgUnitAddVersionFieldPolicyCapabilityKey
+	intent := string(orgunitservices.OrgUnitWriteIntentAddVersion)
+	effectiveDate := "2026-01-01"
+	targetEffectiveDate := ""
+	fieldKey := "name"
+	fieldPayloadKey := "name"
+	pendingDraftSummary := "目标组织：FLOWER-C；新名称：运营一部；生效日期：2026-01-01"
+	policyContextContractVersion := orgunitservices.OrgUnitAppendVersionPolicyContextContractVersionV1
+	precheckProjectionContractVersion := orgunitservices.OrgUnitAppendVersionPrecheckProjectionContractV1
+	mutationPolicyVersion := orgunitservices.OrgUnitAppendVersionMutationPolicyVersionV1
+	switch action {
+	case assistantIntentInsertOrgUnitVersion:
+		capabilityKey = orgUnitInsertVersionFieldPolicyCapabilityKey
+		intent = string(orgunitservices.OrgUnitWriteIntentInsertVersion)
+		pendingDraftSummary = "目标组织：FLOWER-C；插入版本名称：运营二部；生效日期：2026-01-01"
+	case assistantIntentCorrectOrgUnit:
+		capabilityKey = orgUnitCorrectFieldPolicyCapabilityKey
+		intent = orgunitservices.OrgUnitMaintainIntentCorrect
+		effectiveDate = ""
+		targetEffectiveDate = "2026-01-01"
+		pendingDraftSummary = "目标组织：FLOWER-C；目标生效日期：2026-01-01；更正名称：运营中心"
+		policyContextContractVersion = orgunitservices.OrgUnitMaintainPolicyContextContractVersionV1
+		precheckProjectionContractVersion = orgunitservices.OrgUnitMaintainPrecheckProjectionContractV1
+		mutationPolicyVersion = orgunitservices.OrgUnitMaintainMutationPolicyVersionV1
+	case assistantIntentRenameOrgUnit:
+		capabilityKey = orgUnitWriteFieldPolicyCapabilityKey
+		intent = orgunitservices.OrgUnitMaintainIntentRename
+		effectiveDate = "2026-03-01"
+		pendingDraftSummary = "目标组织：FLOWER-C；新名称：运营平台部；生效日期：2026-03-01"
+		policyContextContractVersion = orgunitservices.OrgUnitMaintainPolicyContextContractVersionV1
+		precheckProjectionContractVersion = orgunitservices.OrgUnitMaintainPrecheckProjectionContractV1
+		mutationPolicyVersion = orgunitservices.OrgUnitMaintainMutationPolicyVersionV1
+	case assistantIntentMoveOrgUnit:
+		capabilityKey = orgUnitWriteFieldPolicyCapabilityKey
+		intent = orgunitservices.OrgUnitMaintainIntentMove
+		effectiveDate = "2026-04-01"
+		fieldKey = "parent_org_code"
+		fieldPayloadKey = "new_parent_org_code"
+		pendingDraftSummary = "目标组织：FLOWER-C；新上级：FLOWER-A；生效日期：2026-04-01"
+		policyContextContractVersion = orgunitservices.OrgUnitMaintainPolicyContextContractVersionV1
+		precheckProjectionContractVersion = orgunitservices.OrgUnitMaintainPrecheckProjectionContractV1
+		mutationPolicyVersion = orgunitservices.OrgUnitMaintainMutationPolicyVersionV1
+	case assistantIntentDisableOrgUnit:
+		capabilityKey = orgUnitWriteFieldPolicyCapabilityKey
+		intent = orgunitservices.OrgUnitMaintainIntentDisable
+		effectiveDate = "2026-05-01"
+		fieldKey = "effective_date"
+		fieldPayloadKey = ""
+		pendingDraftSummary = "目标组织：FLOWER-C；停用生效日期：2026-05-01"
+		policyContextContractVersion = orgunitservices.OrgUnitMaintainPolicyContextContractVersionV1
+		precheckProjectionContractVersion = orgunitservices.OrgUnitMaintainPrecheckProjectionContractV1
+		mutationPolicyVersion = orgunitservices.OrgUnitMaintainMutationPolicyVersionV1
+	case assistantIntentEnableOrgUnit:
+		capabilityKey = orgUnitWriteFieldPolicyCapabilityKey
+		intent = orgunitservices.OrgUnitMaintainIntentEnable
+		effectiveDate = "2026-06-01"
+		fieldKey = "effective_date"
+		fieldPayloadKey = ""
+		pendingDraftSummary = "目标组织：FLOWER-C；启用生效日期：2026-06-01"
+		policyContextContractVersion = orgunitservices.OrgUnitMaintainPolicyContextContractVersionV1
+		precheckProjectionContractVersion = orgunitservices.OrgUnitMaintainPrecheckProjectionContractV1
+		mutationPolicyVersion = orgunitservices.OrgUnitMaintainMutationPolicyVersionV1
+	}
+	return &assistantOrgUnitVersionProjectionSnapshot{
+		PolicyContextContractVersion:      policyContextContractVersion,
+		PrecheckProjectionContractVersion: precheckProjectionContractVersion,
+		PolicyContext: assistantOrgUnitVersionPolicyContext{
+			TenantID:            "tenant_1",
+			CapabilityKey:       capabilityKey,
+			Intent:              intent,
+			EffectiveDate:       effectiveDate,
+			TargetEffectiveDate: targetEffectiveDate,
+			OrgCode:             "FLOWER-C",
+			OrgNodeKey:          "10000003",
+			ResolvedSetID:       "S2601",
+			SetIDSource:         "custom",
+			PolicyContextDigest: "ctx_digest_" + action,
+		},
+		Projection: assistantOrgUnitVersionProjection{
+			Readiness:              "ready",
+			FieldDecisions:         []assistantOrgUnitVersionFieldDecision{{FieldKey: fieldKey, Visible: true, Maintainable: true, FieldPayloadKey: fieldPayloadKey, AllowedValueCodes: []string{}}},
+			PendingDraftSummary:    pendingDraftSummary,
+			EffectivePolicyVersion: "epv1:" + action,
+			MutationPolicyVersion:  mutationPolicyVersion,
+			ResolvedSetID:          "S2601",
+			SetIDSource:            "custom",
+			PolicyExplain:          "计划已生成，等待确认后可提交",
+			ProjectionDigest:       "projection_digest_" + action,
+		},
+	}
 }
 
 func assistantTaskSampleTurn(now time.Time) *assistantTurn {
@@ -52,24 +175,85 @@ func assistantTaskSampleTurn(now time.Time) *assistantTurn {
 		Confidence:          0.9,
 		ResolutionSource:    "auto",
 		DryRun: assistantDryRunResult{
-			WouldCommit: false,
-			PlanHash:    "plan_hash",
+			WouldCommit:             false,
+			PlanHash:                "plan_hash",
+			CreateOrgUnitProjection: assistantTestCreateOrgUnitProjectionSnapshot(),
 		},
 		CreatedAt: now,
 		UpdatedAt: now,
 	})
 }
 
-func assistantTaskSnapshotFromTurn(turn *assistantTurn) assistantTaskContractSnapshot {
-	return assistantTaskContractSnapshot{
-		IntentSchemaVersion:     turn.Intent.IntentSchemaVersion,
-		CompilerContractVersion: turn.Plan.CompilerContractVersion,
-		CapabilityMapVersion:    turn.Plan.CapabilityMapVersion,
-		SkillManifestDigest:     turn.Plan.SkillManifestDigest,
-		ContextHash:             turn.Intent.ContextHash,
-		IntentHash:              turn.Intent.IntentHash,
-		PlanHash:                turn.DryRun.PlanHash,
+func assistantTaskSampleAppendTurn(now time.Time, action string) *assistantTurn {
+	action = strings.TrimSpace(action)
+	intent := assistantIntentSpec{
+		Action:              action,
+		IntentSchemaVersion: assistantIntentSchemaVersionV1,
+		ContextHash:         "ctx_hash",
+		IntentHash:          "intent_hash",
+		OrgCode:             "FLOWER-C",
 	}
+	userInput := "新增组织版本"
+	switch action {
+	case assistantIntentCorrectOrgUnit:
+		intent.TargetEffectiveDate = "2026-01-01"
+		intent.NewName = "运营中心"
+		userInput = "更正组织"
+	case assistantIntentDisableOrgUnit:
+		intent.EffectiveDate = "2026-05-01"
+		userInput = "停用组织"
+	case assistantIntentEnableOrgUnit:
+		intent.EffectiveDate = "2026-06-01"
+		userInput = "启用组织"
+	case assistantIntentRenameOrgUnit:
+		intent.EffectiveDate = "2026-03-01"
+		intent.NewName = "运营平台部"
+		userInput = "重命名组织"
+	case assistantIntentMoveOrgUnit:
+		intent.EffectiveDate = "2026-04-01"
+		intent.NewParentRefText = "鲜花组织"
+		userInput = "移动组织"
+	case assistantIntentInsertOrgUnitVersion:
+		intent.EffectiveDate = "2026-01-01"
+		intent.NewName = "运营二部"
+		userInput = "插入组织版本"
+	default:
+		intent.EffectiveDate = "2026-01-01"
+		intent.NewName = "运营一部"
+	}
+	plan := assistantBuildPlan(intent)
+	plan.SkillManifestDigest = "skill_digest"
+	return assistantTestAttachOrgUnitVersionProjection(&assistantTurn{
+		TurnID:             "turn_append_1",
+		UserInput:          userInput,
+		State:              assistantStateValidated,
+		RiskTier:           "high",
+		RequestID:          "req_turn",
+		TraceID:            "trace_turn",
+		PolicyVersion:      capabilityPolicyVersionBaseline,
+		CompositionVersion: capabilityPolicyVersionBaseline,
+		MappingVersion:     capabilityPolicyVersionBaseline,
+		Intent:             intent,
+		Plan:               plan,
+		Candidates: []assistantCandidate{
+			{CandidateID: "c1", CandidateCode: "FLOWER-A", Name: "A"},
+		},
+		ResolvedCandidateID: "c1",
+		AmbiguityCount:      0,
+		Confidence:          0.9,
+		ResolutionSource:    "auto",
+		DryRun: assistantDryRunResult{
+			WouldCommit:              false,
+			PlanHash:                 "plan_hash",
+			OrgUnitVersionProjection: assistantTestOrgUnitVersionProjectionSnapshot(action),
+		},
+		CreatedAt: now,
+		UpdatedAt: now,
+	}, nil)
+}
+
+func assistantTaskSnapshotFromTurn(turn *assistantTurn) assistantTaskContractSnapshot {
+	return assistantBuildTaskSnapshotFromTurn(turn)
 }
 
 func assistantTaskSampleRequest(turn *assistantTurn) assistantTaskSubmitRequest {
@@ -241,6 +425,20 @@ func TestAssistantTaskStore_UtilityValidationAndWrappers(t *testing.T) {
 		}
 		if err := assistantTaskValidateSnapshotAgainstTurn(req.ContractSnapshot, turn); err != nil {
 			t.Fatalf("snapshot should match err=%v", err)
+		}
+
+		appendTurn := assistantTaskSampleAppendTurn(now, assistantIntentAddOrgUnitVersion)
+		appendReq, err := assistantBuildTaskSubmitRequestFromTurn("conv_append", appendTurn)
+		if err != nil {
+			t.Fatalf("append submit request err=%v", err)
+		}
+		if appendReq.ContractSnapshot.PolicyContextDigest == "" || appendReq.ContractSnapshot.MutationPolicyVersion == "" {
+			t.Fatalf("append snapshot should include policy contract=%+v", appendReq.ContractSnapshot)
+		}
+		appendBadSnap := appendReq.ContractSnapshot
+		appendBadSnap.MutationPolicyVersion = ""
+		if err := assistantTaskValidateSnapshotAgainstTurn(appendBadSnap, appendTurn); !errors.Is(err, errAssistantPlanContractVersionMismatch) {
+			t.Fatalf("expected append policy mismatch err=%v", err)
 		}
 	})
 
@@ -1113,7 +1311,26 @@ func TestAssistantTaskStore_DispatchAndExecute(t *testing.T) {
 		}
 		emptyPlan := record
 		emptyPlan.ContractSnapshot.PlanHash = ""
-		if err := localSvc.executeAssistantTaskWorkflowTx(context.Background(), execTx, "tenant_1", &emptyPlan, now); err != nil || emptyPlan.Status != assistantTaskStatusManualTakeoverNeeded {
+		blankPlanTurn := *localTurn
+		blankPlanTurn.DryRun = localTurn.DryRun
+		blankPlanTurn.DryRun.PlanHash = ""
+		blankDryRunJSON := mustJSONMarshal(t, blankPlanTurn.DryRun)
+		emptyPlanTx := &assistFakeTx{}
+		emptyPlanTx.execFn = execTx.execFn
+		emptyPlanTx.queryRowFn = func(sql string, _ ...any) pgx.Row {
+			switch {
+			case strings.Contains(sql, "FROM iam.assistant_conversations"):
+				return &assistFakeRow{vals: assistantPersistenceConversationRow("conv_1", "actor_1", assistantStateConfirmed, now)}
+			case strings.Contains(sql, "FROM iam.assistant_turns"):
+				return &assistFakeRow{vals: []any{intentJSON, planJSON, blankDryRunJSON}}
+			case strings.Contains(sql, "INSERT INTO iam.assistant_state_transitions"):
+				return &assistFakeRow{vals: []any{int64(1)}}
+			default:
+				return &assistFakeRow{err: pgx.ErrNoRows}
+			}
+		}
+		emptyPlanTx.queryFn = execTx.queryFn
+		if err := localSvc.executeAssistantTaskWorkflowTx(context.Background(), emptyPlanTx, "tenant_1", &emptyPlan, now); err != nil || emptyPlan.Status != assistantTaskStatusManualTakeoverNeeded {
 			t.Fatalf("execute empty plan err=%v emptyPlan=%+v", err, emptyPlan)
 		}
 

@@ -11,7 +11,7 @@
 - `DEV-PLAN-221` 与 `DEV-PLAN-222` 已完成 Assistant P1 收口与 FE/E2E 证据闭环，但 `DEV-PLAN-060` 之前未纳入 Assistant 子套件。  
 - `DEV-PLAN-224` 正在实施多模型与意图治理，`DEV-PLAN-225` 规划 Tasks API + Temporal（P2）；需要统一纳入 TP-060 主套件，避免“功能已交付但主套件缺失”的漂移。  
 - 为避免与既有 `tp060-04`（OrgUnit 双栏回归）编号冲突，本子计划编号固定为 `TP-060-05`。  
-- 对齐 TG-004（`docs/dev-plans/226-test-guide-tg004-gate-caliber-change-approval.md`）：功能交付后必须同步更新 `DEV-PLAN-060` 套件。
+- 对齐 TG-004（`docs/archive/dev-plans/226-test-guide-tg004-gate-caliber-change-approval.md`）：功能交付后必须同步更新 `DEV-PLAN-060` 套件。
 
 ## 2. 目标与非目标
 
@@ -54,18 +54,18 @@
   - [ ] 路由治理（`make check routing`；涉及 allowlist/route_class/responder 时）
   - [X] E2E（`make e2e`；重点用例 `e2e/tests/tp220-assistant.spec.js`；2026-03-03 13/13 全通过）
   - [X] 文档（`make check doc`）
-  - [ ] 覆盖率口径（如需改 `config/coverage/policy.yaml`，必须先获你确认，遵循 `docs/dev-plans/226-test-guide-tg004-gate-caliber-change-approval.md`）
+  - [ ] 覆盖率口径（如需改 `config/coverage/policy.yaml`，必须先获你确认，遵循 `docs/archive/dev-plans/226-test-guide-tg004-gate-caliber-change-approval.md`）
 
 ## 3. 契约引用（SSOT）
 
-- `docs/dev-plans/220-chat-assistant-upgrade-implementation-plan.md`
-- `docs/dev-plans/220a-chat-assistant-gap-assessment-and-closure-plan.md`
-- `docs/dev-plans/221-assistant-p1-blocker-closure-plan.md`
+- `docs/archive/dev-plans/220-chat-assistant-upgrade-implementation-plan.md`
+- `docs/archive/dev-plans/220a-chat-assistant-gap-assessment-and-closure-plan.md`
+- `docs/archive/dev-plans/221-assistant-p1-blocker-closure-plan.md`
 - `docs/archive/dev-plans/222-assistant-frontend-e2e-evidence-closure-plan.md`
-- `docs/dev-plans/223-assistant-conversation-persistence-and-audit-closure-plan.md`
-- `docs/dev-plans/224-assistant-multi-model-and-llm-intent-governance-plan.md`
-- `docs/dev-plans/225-assistant-tasks-temporal-p2-implementation-plan.md`
-- `docs/dev-plans/226-test-guide-tg004-gate-caliber-change-approval.md`
+- `docs/archive/dev-plans/223-assistant-conversation-persistence-and-audit-closure-plan.md`
+- `docs/archive/dev-plans/224-assistant-multi-model-and-llm-intent-governance-plan.md`
+- `docs/archive/dev-plans/225-assistant-tasks-temporal-p2-implementation-plan.md`
+- `docs/archive/dev-plans/226-test-guide-tg004-gate-caliber-change-approval.md`
 
 ## 4. 前置条件与数据准备
 

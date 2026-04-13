@@ -6,6 +6,13 @@ import { setupTenantAdminSession } from "./helpers/superadmin-tenant.js";
 
 const repoRoot = path.resolve(__dirname, "..", "..");
 const EVIDENCE_ROOT = path.join(repoRoot, "docs", "dev-records", "assets", "dev-plan-290");
+const tp290RetiredReason =
+  "historical mock matrix retired from active gates; live successor coverage is owned by tp290b";
+
+// Keep this file path stable for historical doc references, but retire it from active E2E gates.
+test.beforeEach(async () => {
+  test.skip(true, tp290RetiredReason);
+});
 
 const CASE_INPUTS = {
   1: ["你好"],

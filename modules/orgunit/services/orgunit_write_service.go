@@ -226,6 +226,14 @@ type orgUnitSetIDStrategyFieldDecisionResolver interface {
 	) (types.SetIDStrategyFieldDecision, bool, error)
 }
 
+type orgUnitSetIDResolver interface {
+	ResolveSetID(ctx context.Context, tenantID string, orgNodeKey string, asOf string) (string, error)
+}
+
+type orgUnitTreeInitializationReader interface {
+	IsOrgTreeInitialized(ctx context.Context, tenantID string) (bool, error)
+}
+
 type orgUnitCreateAutoCodeSubmitter interface {
 	SubmitCreateEventWithGeneratedCode(
 		ctx context.Context,
@@ -248,6 +256,49 @@ type orgUnitRuleRuntimeContext struct {
 type orgUnitAutoCodeSpec struct {
 	Prefix string
 	Width  int
+}
+
+type createOrgUnitPrecheckWriteStoreReader struct {
+	store ports.OrgUnitWriteStore
+}
+
+func (r createOrgUnitPrecheckWriteStoreReader) ResolveOrgNodeKey(ctx context.Context, tenantID string, orgCode string) (string, error) {
+	return r.store.ResolveOrgNodeKey(ctx, tenantID, orgCode)
+}
+
+func (r createOrgUnitPrecheckWriteStoreReader) ResolveSetID(ctx context.Context, tenantID string, orgNodeKey string, asOf string) (string, error) {
+	resolver, ok := r.store.(orgUnitSetIDResolver)
+	if !ok {
+		return "", errors.New(createOrgUnitContextCodeSetIDBindingMissing)
+	}
+	return resolver.ResolveSetID(ctx, tenantID, orgNodeKey, asOf)
+}
+
+func (r createOrgUnitPrecheckWriteStoreReader) IsOrgTreeInitialized(ctx context.Context, tenantID string) (bool, error) {
+	reader, ok := r.store.(orgUnitTreeInitializationReader)
+	if !ok {
+		return false, nil
+	}
+	return reader.IsOrgTreeInitialized(ctx, tenantID)
+}
+
+func (r createOrgUnitPrecheckWriteStoreReader) ResolveSetIDStrategyFieldDecision(
+	ctx context.Context,
+	tenantID string,
+	capabilityKey string,
+	fieldKey string,
+	businessUnitNodeKey string,
+	asOf string,
+) (types.SetIDStrategyFieldDecision, bool, error) {
+	resolver, ok := r.store.(orgUnitSetIDStrategyFieldDecisionResolver)
+	if !ok {
+		return types.SetIDStrategyFieldDecision{}, false, errors.New(errFieldPolicyMissing)
+	}
+	return resolver.ResolveSetIDStrategyFieldDecision(ctx, tenantID, capabilityKey, fieldKey, businessUnitNodeKey, asOf)
+}
+
+func (r createOrgUnitPrecheckWriteStoreReader) ListEnabledTenantFieldConfigsAsOf(ctx context.Context, tenantID string, asOf string) ([]types.TenantFieldConfig, error) {
+	return r.store.ListEnabledTenantFieldConfigsAsOf(ctx, tenantID, asOf)
 }
 
 const (
@@ -1408,40 +1459,7 @@ func (s *orgUnitWriteService) listEnabledExtFieldConfigs(ctx context.Context, te
 	if err != nil {
 		return nil, nil, err
 	}
-	outCfgs := make([]types.TenantFieldConfig, 0, len(cfgs))
-	keys := make([]string, 0, len(cfgs))
-	for _, cfg := range cfgs {
-		key := strings.TrimSpace(cfg.FieldKey)
-		if key == "" {
-			continue
-		}
-		if isReservedExtFieldKey(key) {
-			continue
-		}
-		if _, ok := fieldmeta.LookupFieldDefinition(key); !ok && !fieldmeta.IsCustomPlainFieldKey(key) && !fieldmeta.IsCustomDictFieldKey(key) {
-			continue
-		}
-
-		// Defense-in-depth for dict namespace keys: ensure key <-> config consistency.
-		if fieldmeta.IsCustomDictFieldKey(key) {
-			if !strings.EqualFold(strings.TrimSpace(cfg.ValueType), "text") {
-				continue
-			}
-			if !strings.EqualFold(strings.TrimSpace(cfg.DataSourceType), "DICT") {
-				continue
-			}
-			wantDictCode, _ := fieldmeta.DictCodeFromDictFieldKey(key)
-			gotDictCode, ok := fieldmeta.DictCodeFromDataSourceConfig(cfg.DataSourceConfig)
-			if !ok || !strings.EqualFold(strings.TrimSpace(gotDictCode), strings.TrimSpace(wantDictCode)) {
-				continue
-			}
-		}
-
-		cfg.FieldKey = key
-		outCfgs = append(outCfgs, cfg)
-		keys = append(keys, key)
-	}
-	return outCfgs, keys, nil
+	return filterEnabledOrgUnitExtFieldConfigs(cfgs)
 }
 
 func buildExtPayload(ext map[string]any, fieldConfigs []types.TenantFieldConfig) (map[string]any, map[string]string, error) {
@@ -1601,100 +1619,42 @@ func (s *orgUnitWriteService) applyCreatePolicyDefaults(
 	fieldConfigs []types.TenantFieldConfig,
 	req *WriteOrgUnitRequest,
 ) (*orgUnitAutoCodeSpec, error) {
-	_ = fieldConfigs
-	resolver, ok := s.store.(orgUnitSetIDStrategyFieldDecisionResolver)
-	if !ok {
-		return nil, errors.New(errFieldPolicyMissing)
+	if req == nil {
+		return nil, errors.New(errOrgInvalidArgument)
 	}
-	return s.applyCreatePolicyDefaultsFromSetIDRegistry(ctx, tenantID, effectiveDate, req, resolver)
-}
-
-func (s *orgUnitWriteService) applyCreatePolicyDefaultsFromSetIDRegistry(
-	ctx context.Context,
-	tenantID string,
-	effectiveDate string,
-	req *WriteOrgUnitRequest,
-	resolver orgUnitSetIDStrategyFieldDecisionResolver,
-) (*orgUnitAutoCodeSpec, error) {
-	businessUnitID, err := s.resolveCreateBusinessUnitID(ctx, tenantID, req.Patch.ParentOrgCode)
+	precheckReader := createOrgUnitPrecheckWriteStoreReader{store: s.store}
+	input := CreateOrgUnitPrecheckInputV1{
+		TenantID:            tenantID,
+		CapabilityKey:       orgUnitCreateFieldPolicyCapabilityKey,
+		EffectiveDate:       effectiveDate,
+		BusinessUnitOrgCode: stringValue(req.Patch.ParentOrgCode),
+		CanAdmin:            true,
+		Name:                stringValue(req.Patch.Name),
+		OrgCode:             strings.TrimSpace(req.OrgCode),
+		ManagerPernr:        stringValue(req.Patch.ManagerPernr),
+		IsBusinessUnit:      req.Patch.IsBusinessUnit,
+		Ext:                 req.Patch.Ext,
+		EnabledFieldConfigs: fieldConfigs,
+	}
+	eval, err := evaluateCreateOrgUnitPrecheckV1(ctx, precheckReader, input)
 	if err != nil {
 		return nil, err
 	}
-
-	orgCodeDecision, found, err := resolver.ResolveSetIDStrategyFieldDecision(
-		ctx,
-		tenantID,
-		orgUnitCreateFieldPolicyCapabilityKey,
-		orgUnitCreateFieldOrgCode,
-		businessUnitID,
-		effectiveDate,
-	)
-	if err != nil {
-		return nil, mapSetIDFieldDecisionError(err)
+	if eval.Result.ContextError != nil {
+		return nil, mapCreateOrgUnitPolicyContextError(eval.Result.ContextError)
 	}
-	if !found {
-		return nil, errors.New(errFieldPolicyMissing)
+	if len(eval.Result.Projection.RejectionReasons) > 0 {
+		return nil, errors.New(eval.Result.Projection.RejectionReasons[0])
 	}
-	orgCodeInput := strings.TrimSpace(req.OrgCode)
-	orgCodeResult, err := resolveCreateFieldDecisionValue(orgUnitCreateFieldOrgCode, orgCodeInput, orgCodeInput != "", orgCodeDecision)
-	if err != nil {
-		return nil, err
-	}
-	if orgCodeDecision.Required && orgCodeResult.value == "" && orgCodeResult.autoCodeSpec == nil {
+	if createOrgUnitFieldDecisionMissingForWrite(eval.Result.Projection.MissingFields) {
 		return nil, errors.New(errFieldRequiredValueMissing)
 	}
-	if err := validateFieldOptionAllowed(orgCodeResult.value, orgCodeDecision.AllowedValueCodes); err != nil {
-		return nil, err
-	}
-	req.OrgCode = orgCodeResult.value
-	if orgCodeResult.autoCodeSpec != nil {
+	req.OrgCode = strings.TrimSpace(eval.OrgCodeValue.value)
+	if eval.OrgCodeValue.autoCodeSpec != nil {
 		req.OrgCode = ""
 	}
-
-	orgTypeDecision, found, err := resolver.ResolveSetIDStrategyFieldDecision(
-		ctx,
-		tenantID,
-		orgUnitCreateFieldPolicyCapabilityKey,
-		orgUnitCreateFieldOrgType,
-		businessUnitID,
-		effectiveDate,
-	)
-	if err != nil {
-		return nil, mapSetIDFieldDecisionError(err)
-	}
-	if !found {
-		return nil, errors.New(errFieldPolicyMissing)
-	}
-
-	providedOrgType, orgTypeProvided, err := readCreateExtFieldString(req.Patch.Ext, orgUnitCreateFieldOrgType)
-	if err != nil {
-		return nil, err
-	}
-	orgTypeResult, err := resolveCreateFieldDecisionValue(orgUnitCreateFieldOrgType, providedOrgType, orgTypeProvided, orgTypeDecision)
-	if err != nil {
-		return nil, err
-	}
-	if orgTypeDecision.Required && orgTypeResult.value == "" {
-		return nil, errors.New(errFieldRequiredValueMissing)
-	}
-	if err := validateFieldOptionAllowed(orgTypeResult.value, orgTypeDecision.AllowedValueCodes); err != nil {
-		return nil, err
-	}
-	if strings.TrimSpace(orgTypeResult.value) == "" {
-		if len(req.Patch.Ext) > 0 {
-			delete(req.Patch.Ext, orgUnitCreateFieldOrgType)
-			if len(req.Patch.Ext) == 0 {
-				req.Patch.Ext = nil
-			}
-		}
-	} else {
-		if req.Patch.Ext == nil {
-			req.Patch.Ext = make(map[string]any, 1)
-		}
-		req.Patch.Ext[orgUnitCreateFieldOrgType] = orgTypeResult.value
-	}
-
-	return orgCodeResult.autoCodeSpec, nil
+	applyCreateOrgUnitOrgTypeValue(req, strings.TrimSpace(eval.OrgTypeValue.value))
+	return eval.OrgCodeValue.autoCodeSpec, nil
 }
 
 type createFieldDecisionValue struct {
@@ -1803,6 +1763,66 @@ func mapSetIDFieldDecisionError(err error) error {
 	default:
 		return err
 	}
+}
+
+func mapCreateOrgUnitPolicyContextError(err *CreateOrgUnitPolicyContextErrorV1) error {
+	if err == nil {
+		return nil
+	}
+	switch strings.TrimSpace(err.Code) {
+	case createOrgUnitContextCodeBusinessUnitInvalid:
+		if err.Cause != nil {
+			if errors.Is(err.Cause, orgunitpkg.ErrOrgCodeNotFound) {
+				return errors.New(errParentNotFoundAsOf)
+			}
+			return err.Cause
+		}
+		return errors.New(errOrgCodeInvalid)
+	case createOrgUnitContextCodeSetIDBindingMissing, createOrgUnitContextCodeSetIDSourceInvalid:
+		return errors.New(errFieldPolicyMissing)
+	default:
+		if err.Cause != nil {
+			return err.Cause
+		}
+		return errors.New(strings.TrimSpace(err.Code))
+	}
+}
+
+func applyCreateOrgUnitOrgTypeValue(req *WriteOrgUnitRequest, value string) {
+	if req == nil {
+		return
+	}
+	value = strings.TrimSpace(value)
+	if value == "" {
+		if len(req.Patch.Ext) > 0 {
+			delete(req.Patch.Ext, orgUnitCreateFieldOrgType)
+			if len(req.Patch.Ext) == 0 {
+				req.Patch.Ext = nil
+			}
+		}
+		return
+	}
+	if req.Patch.Ext == nil {
+		req.Patch.Ext = make(map[string]any, 1)
+	}
+	req.Patch.Ext[orgUnitCreateFieldOrgType] = value
+}
+
+func stringValue(input *string) string {
+	if input == nil {
+		return ""
+	}
+	return strings.TrimSpace(*input)
+}
+
+func createOrgUnitFieldDecisionMissingForWrite(missingFields []string) bool {
+	for _, fieldKey := range missingFields {
+		switch strings.TrimSpace(fieldKey) {
+		case orgUnitCreateFieldOrgCode, orgUnitCreateFieldOrgType:
+			return true
+		}
+	}
+	return false
 }
 
 func (s *orgUnitWriteService) resolveCreateBusinessUnitID(ctx context.Context, tenantID string, parentOrgCode *string) (string, error) {

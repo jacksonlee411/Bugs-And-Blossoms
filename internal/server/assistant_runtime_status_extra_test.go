@@ -12,7 +12,7 @@ func TestAssistantRuntimeHelperCoverage(t *testing.T) {
 		t.Fatalf("unexpected resp=%+v", resp)
 	}
 	resp = assistantRuntimeApplyUpstreamProbe(assistantRuntimeStatusResponse{Upstream: assistantRuntimeUpstreamStatus{URL: "://bad"}})
-	if resp.ErrorCode != assistantUIProxyUpstreamUnavailable {
+	if resp.ErrorCode != assistantRuntimeUpstreamUnavailable {
 		t.Fatalf("unexpected resp=%+v", resp)
 	}
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusOK) }))

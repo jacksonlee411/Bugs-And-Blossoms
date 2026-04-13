@@ -107,7 +107,20 @@ func assistant272BuildConfirmedTurn(t *testing.T, svc *assistantConversationServ
 		UpdatedAt:           now,
 	}
 	turn.Plan.SkillManifestDigest = "skill_" + tc.name
-	assistantTestAttachBusinessRoute(turn)
+	switch tc.action {
+	case assistantIntentCreateOrgUnit:
+		assistantTestAttachCreateOrgUnitProjection(turn, nil)
+	case assistantIntentAddOrgUnitVersion,
+		assistantIntentInsertOrgUnitVersion,
+		assistantIntentCorrectOrgUnit,
+		assistantIntentDisableOrgUnit,
+		assistantIntentEnableOrgUnit,
+		assistantIntentRenameOrgUnit,
+		assistantIntentMoveOrgUnit:
+		assistantTestAttachOrgUnitVersionProjection(turn, nil)
+	default:
+		assistantTestAttachBusinessRoute(turn)
+	}
 	if err := svc.refreshTurnVersionTuple(context.Background(), "tenant_1", turn); err != nil {
 		t.Fatalf("refreshTurnVersionTuple action=%s err=%v", tc.action, err)
 	}
@@ -159,6 +172,9 @@ func TestAssistant272PrepareCommitTurn_ActionMatrix(t *testing.T) {
 
 	store := newOrgUnitMemoryStore()
 	if _, err := store.CreateNodeCurrent(context.Background(), "tenant_1", "2026-01-01", "FLOWER-A", "鲜花组织", "", true); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.CreateNodeCurrent(context.Background(), "tenant_1", "2026-01-01", "FLOWER-C", "运营中心", "FLOWER-A", false); err != nil {
 		t.Fatal(err)
 	}
 	capabilityDefinitionByKey = map[string]capabilityDefinition{}
@@ -224,6 +240,9 @@ func TestAssistant272SubmitCommitTaskWorkflowAndPoll_ActionMatrix(t *testing.T) 
 
 	store := newOrgUnitMemoryStore()
 	if _, err := store.CreateNodeCurrent(context.Background(), "tenant_1", "2026-01-01", "FLOWER-A", "鲜花组织", "", true); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.CreateNodeCurrent(context.Background(), "tenant_1", "2026-01-01", "FLOWER-C", "运营中心", "FLOWER-A", false); err != nil {
 		t.Fatal(err)
 	}
 	capabilityDefinitionByKey = map[string]capabilityDefinition{}

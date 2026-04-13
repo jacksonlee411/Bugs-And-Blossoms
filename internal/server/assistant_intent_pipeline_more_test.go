@@ -220,6 +220,7 @@ func TestAssistantIntentPipeline_RetryOnSchemaInvalid(t *testing.T) {
 }
 
 func TestAssistantIntentPipeline_MergesPendingTurnContextForMissingFields(t *testing.T) {
+	assistantResetCreatePolicyRegistryStoreForTest()
 	t.Setenv("OPENAI_API_KEY", "dummy")
 	store := newOrgUnitMemoryStore()
 	if _, err := store.CreateNodeCurrent(context.Background(), "tenant-1", "2026-01-01", "FLOWER-A", "鲜花组织", "", true); err != nil {
@@ -284,6 +285,7 @@ func TestAssistantIntentPipeline_MergesPendingTurnContextForMissingFields(t *tes
 }
 
 func TestAssistantIntentPipeline_MergesPendingTurnContextForEffectiveDateSupplement(t *testing.T) {
+	assistantResetCreatePolicyRegistryStoreForTest()
 	t.Setenv("OPENAI_API_KEY", "dummy")
 	store := newOrgUnitMemoryStore()
 	if _, err := store.CreateNodeCurrent(context.Background(), "tenant-1", "2026-01-01", "AIGOV", "AI治理办公室", "", true); err != nil {

@@ -5,6 +5,84 @@ import (
 	"strings"
 )
 
+type assistantCreatePolicyRegistryStore struct {
+	fallback setIDStrategyRegistryStore
+}
+
+var assistantCreatePolicyRegistryBaseStore setIDStrategyRegistryStore
+
+func (s assistantCreatePolicyRegistryStore) upsert(ctx context.Context, tenantID string, item setIDStrategyRegistryItem) (setIDStrategyRegistryItem, bool, error) {
+	return s.fallback.upsert(ctx, tenantID, item)
+}
+
+func (s assistantCreatePolicyRegistryStore) disable(ctx context.Context, tenantID string, req setIDStrategyRegistryDisableRequest) (setIDStrategyRegistryItem, bool, error) {
+	return s.fallback.disable(ctx, tenantID, req)
+}
+
+func (s assistantCreatePolicyRegistryStore) list(ctx context.Context, tenantID string, capabilityKey string, fieldKey string, asOf string) ([]setIDStrategyRegistryItem, error) {
+	return s.fallback.list(ctx, tenantID, capabilityKey, fieldKey, asOf)
+}
+
+func (s assistantCreatePolicyRegistryStore) resolveFieldDecision(
+	ctx context.Context,
+	tenantID string,
+	capabilityKey string,
+	fieldKey string,
+	resolvedSetID string,
+	businessUnitNodeKey string,
+	asOf string,
+) (setIDFieldDecision, error) {
+	if strings.TrimSpace(capabilityKey) == orgUnitCreateFieldPolicyCapabilityKey {
+		switch strings.TrimSpace(fieldKey) {
+		case orgUnitCreateFieldOrgCode:
+			return setIDFieldDecision{
+				CapabilityKey:  capabilityKey,
+				FieldKey:       fieldKey,
+				Required:       true,
+				Visible:        true,
+				Maintainable:   false,
+				DefaultRuleRef: `next_org_code("F", 8)`,
+			}, nil
+		case orgUnitCreateFieldOrgType:
+			return setIDFieldDecision{
+				CapabilityKey:      capabilityKey,
+				FieldKey:           fieldKey,
+				Required:           true,
+				Visible:            true,
+				Maintainable:       true,
+				ResolvedDefaultVal: "10",
+				AllowedValueCodes:  []string{"10"},
+			}, nil
+		}
+	}
+	if baselineCapabilityKey, ok := orgUnitBaselineCapabilityKeyForIntentCapability(capabilityKey); ok {
+		switch strings.TrimSpace(baselineCapabilityKey) {
+		case orgUnitWriteFieldPolicyCapabilityKey:
+			switch strings.TrimSpace(fieldKey) {
+			case "name", "parent_org_code", "status", "is_business_unit", "manager_pernr":
+				return setIDFieldDecision{
+					CapabilityKey: capabilityKey,
+					FieldKey:      fieldKey,
+					Visible:       true,
+					Maintainable:  true,
+				}, nil
+			}
+		}
+	}
+	return s.fallback.resolveFieldDecision(ctx, tenantID, capabilityKey, fieldKey, resolvedSetID, businessUnitNodeKey, asOf)
+}
+
+func init() {
+	assistantCreatePolicyRegistryBaseStore = defaultSetIDStrategyRegistryStore
+	assistantResetCreatePolicyRegistryStoreForTest()
+}
+
+func assistantResetCreatePolicyRegistryStoreForTest() {
+	defaultSetIDStrategyRegistryStore = assistantCreatePolicyRegistryStore{
+		fallback: assistantCreatePolicyRegistryBaseStore,
+	}
+}
+
 const (
 	assistantTestRouteCatalogVersion     = "2026-03-11.v1"
 	assistantTestKnowledgeSnapshotDigest = "sha256:test"
@@ -77,6 +155,83 @@ func assistantTestAttachBusinessRoute(turn *assistantTurn) *assistantTurn {
 	}
 	assistantRefreshTurnDerivedFields(turn)
 	return turn
+}
+
+func assistantTestAttachCreateOrgUnitProjection(
+	turn *assistantTurn,
+	snapshot *assistantCreateOrgUnitProjectionSnapshot,
+) *assistantTurn {
+	if turn == nil {
+		return nil
+	}
+	if strings.TrimSpace(turn.Intent.Action) != assistantIntentCreateOrgUnit {
+		return assistantTestAttachBusinessRoute(turn)
+	}
+	if strings.TrimSpace(turn.Intent.IntentSchemaVersion) == "" {
+		turn.Intent.IntentSchemaVersion = assistantIntentSchemaVersionV1
+	}
+	if strings.TrimSpace(turn.Intent.ContextHash) == "" {
+		turn.Intent.ContextHash = "ctx_hash"
+	}
+	if strings.TrimSpace(turn.Intent.IntentHash) == "" {
+		turn.Intent.IntentHash = "intent_hash"
+	}
+	if strings.TrimSpace(turn.Plan.CompilerContractVersion) == "" {
+		turn.Plan.CompilerContractVersion = assistantCompilerContractVersionV1
+	}
+	if strings.TrimSpace(turn.Plan.CapabilityMapVersion) == "" {
+		turn.Plan.CapabilityMapVersion = assistantCapabilityMapVersionV1
+	}
+	if strings.TrimSpace(turn.Plan.SkillManifestDigest) == "" {
+		turn.Plan.SkillManifestDigest = assistantSkillManifestDigest([]string{"org.orgunit_create"})
+	}
+	if strings.TrimSpace(turn.DryRun.PlanHash) == "" {
+		turn.DryRun.PlanHash = "plan_hash"
+	}
+	if snapshot == nil {
+		snapshot = assistantTestCreateOrgUnitProjectionSnapshot()
+	}
+	turn.DryRun.CreateOrgUnitProjection = assistantCloneCreateOrgUnitProjectionSnapshot(snapshot)
+	return assistantTestAttachBusinessRoute(turn)
+}
+
+func assistantTestAttachOrgUnitVersionProjection(
+	turn *assistantTurn,
+	snapshot *assistantOrgUnitVersionProjectionSnapshot,
+) *assistantTurn {
+	if turn == nil {
+		return nil
+	}
+	action := strings.TrimSpace(turn.Intent.Action)
+	if !assistantOrgUnitVersionProjectionActionSupported(action) {
+		return assistantTestAttachBusinessRoute(turn)
+	}
+	if strings.TrimSpace(turn.Intent.IntentSchemaVersion) == "" {
+		turn.Intent.IntentSchemaVersion = assistantIntentSchemaVersionV1
+	}
+	if strings.TrimSpace(turn.Intent.ContextHash) == "" {
+		turn.Intent.ContextHash = "ctx_hash"
+	}
+	if strings.TrimSpace(turn.Intent.IntentHash) == "" {
+		turn.Intent.IntentHash = "intent_hash"
+	}
+	if strings.TrimSpace(turn.Plan.CompilerContractVersion) == "" {
+		turn.Plan.CompilerContractVersion = assistantCompilerContractVersionV1
+	}
+	if strings.TrimSpace(turn.Plan.CapabilityMapVersion) == "" {
+		turn.Plan.CapabilityMapVersion = assistantCapabilityMapVersionV1
+	}
+	if strings.TrimSpace(turn.Plan.SkillManifestDigest) == "" {
+		turn.Plan.SkillManifestDigest = assistantSkillManifestDigest([]string{assistantTestBusinessIntentID(action)})
+	}
+	if strings.TrimSpace(turn.DryRun.PlanHash) == "" {
+		turn.DryRun.PlanHash = "plan_hash"
+	}
+	if snapshot == nil {
+		snapshot = assistantTestOrgUnitVersionProjectionSnapshot(action)
+	}
+	turn.DryRun.OrgUnitVersionProjection = assistantCloneOrgUnitVersionProjectionSnapshot(snapshot)
+	return assistantTestAttachBusinessRoute(turn)
 }
 
 func assistantTestStaticSemanticGateway(payload string) *assistantModelGateway {

@@ -1,7 +1,9 @@
 # DEV-PLAN-233 执行记录（单主源配置收口）
 
+> 归档说明（2026-04-12）：本记录已自 `docs/dev-records/` 迁入 `docs/archive/dev-records/`，仅保留为历史执行证据，不再作为活体入口。
+
 ## 1. 记录信息
-- 计划：`docs/dev-plans/233-librechat-single-source-config-convergence-plan.md`
+- 计划：`docs/archive/dev-plans/233-librechat-single-source-config-convergence-plan.md`
 - 记录时间：2026-03-03 15:30 UTC
 - 记录人：Codex
 

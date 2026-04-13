@@ -60,6 +60,9 @@ func TestAssistant272TurnAPI_CreateAndConfirmMatrix(t *testing.T) {
 			if _, err := store.CreateNodeCurrent(context.Background(), "tenant-1", "2026-01-01", "FLOWER-A", "鲜花组织", "", true); err != nil {
 				t.Fatal(err)
 			}
+			if _, err := store.CreateNodeCurrent(context.Background(), "tenant-1", "2026-01-01", "FLOWER-C", "运营中心", "FLOWER-A", false); err != nil {
+				t.Fatal(err)
+			}
 			svc := newAssistantConversationService(store, assistantWriteServiceStub{store: store})
 			payload, err := json.Marshal(assistantSemanticIntentPayload{
 				Action:              tc.intent.Action,

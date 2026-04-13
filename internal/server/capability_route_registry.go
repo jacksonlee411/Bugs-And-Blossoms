@@ -340,6 +340,42 @@ var capabilityRouteBindings = []capabilityRouteBinding{
 		OwnerModule:   "orgunit",
 		Status:        routeCapabilityStatusActive,
 	},
+	{
+		Method:        "GET",
+		Path:          "/internal/assistant/ui-bootstrap",
+		RouteClass:    "internal_api",
+		Action:        authz.ActionRead,
+		CapabilityKey: "org.assistant_conversation.manage",
+		OwnerModule:   "orgunit",
+		Status:        routeCapabilityStatusActive,
+	},
+	{
+		Method:        "GET",
+		Path:          "/internal/assistant/session",
+		RouteClass:    "internal_api",
+		Action:        authz.ActionRead,
+		CapabilityKey: "org.assistant_conversation.manage",
+		OwnerModule:   "orgunit",
+		Status:        routeCapabilityStatusActive,
+	},
+	{
+		Method:        "POST",
+		Path:          "/internal/assistant/session/refresh",
+		RouteClass:    "internal_api",
+		Action:        authz.ActionRead,
+		CapabilityKey: "org.assistant_conversation.manage",
+		OwnerModule:   "orgunit",
+		Status:        routeCapabilityStatusActive,
+	},
+	{
+		Method:        "POST",
+		Path:          "/internal/assistant/session/logout",
+		RouteClass:    "internal_api",
+		Action:        authz.ActionRead,
+		CapabilityKey: "org.assistant_conversation.manage",
+		OwnerModule:   "orgunit",
+		Status:        routeCapabilityStatusActive,
+	},
 }
 
 var capabilityRouteBindingByKey = buildCapabilityRouteBindingIndex(capabilityRouteBindings)

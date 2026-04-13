@@ -37,18 +37,24 @@ const (
 var assistantTaskMarshalFn = json.Marshal
 
 type assistantTaskContractSnapshot struct {
-	IntentSchemaVersion     string `json:"intent_schema_version"`
-	CompilerContractVersion string `json:"compiler_contract_version"`
-	CapabilityMapVersion    string `json:"capability_map_version"`
-	SkillManifestDigest     string `json:"skill_manifest_digest"`
-	ContextHash             string `json:"context_hash"`
-	IntentHash              string `json:"intent_hash"`
-	PlanHash                string `json:"plan_hash"`
-	KnowledgeSnapshotDigest string `json:"knowledge_snapshot_digest,omitempty"`
-	RouteCatalogVersion     string `json:"route_catalog_version,omitempty"`
-	ResolverContractVersion string `json:"resolver_contract_version,omitempty"`
-	ContextTemplateVersion  string `json:"context_template_version,omitempty"`
-	ReplyGuidanceVersion    string `json:"reply_guidance_version,omitempty"`
+	IntentSchemaVersion      string `json:"intent_schema_version"`
+	CompilerContractVersion  string `json:"compiler_contract_version"`
+	CapabilityMapVersion     string `json:"capability_map_version"`
+	SkillManifestDigest      string `json:"skill_manifest_digest"`
+	ContextHash              string `json:"context_hash"`
+	IntentHash               string `json:"intent_hash"`
+	PlanHash                 string `json:"plan_hash"`
+	KnowledgeSnapshotDigest  string `json:"knowledge_snapshot_digest,omitempty"`
+	RouteCatalogVersion      string `json:"route_catalog_version,omitempty"`
+	ResolverContractVersion  string `json:"resolver_contract_version,omitempty"`
+	ContextTemplateVersion   string `json:"context_template_version,omitempty"`
+	ReplyGuidanceVersion     string `json:"reply_guidance_version,omitempty"`
+	PolicyContextDigest      string `json:"policy_context_digest,omitempty"`
+	EffectivePolicyVersion   string `json:"effective_policy_version,omitempty"`
+	ResolvedSetID            string `json:"resolved_setid,omitempty"`
+	SetIDSource              string `json:"setid_source,omitempty"`
+	PrecheckProjectionDigest string `json:"precheck_projection_digest,omitempty"`
+	MutationPolicyVersion    string `json:"mutation_policy_version,omitempty"`
 }
 
 type assistantTaskSubmitRequest struct {
@@ -219,6 +225,9 @@ func assistantTaskValidateSubmitRequest(req assistantTaskSubmitRequest) error {
 		strings.TrimSpace(req.ContractSnapshot.PlanHash) == "" {
 		return errors.New("contract_snapshot incomplete")
 	}
+	if assistantTaskCreatePolicyContractIncomplete(req.ContractSnapshot) {
+		return errors.New("contract_snapshot incomplete")
+	}
 	return nil
 }
 
@@ -230,6 +239,13 @@ func assistantTaskValidateSnapshotAgainstTurn(snapshot assistantTaskContractSnap
 		return errAssistantPlanContractVersionMismatch
 	}
 	current := assistantBuildTaskSnapshotFromTurn(turn)
+	if strings.TrimSpace(current.PolicyContextDigest) != "" &&
+		(strings.TrimSpace(snapshot.PolicyContextDigest) == "" ||
+			strings.TrimSpace(snapshot.EffectivePolicyVersion) == "" ||
+			strings.TrimSpace(snapshot.PrecheckProjectionDigest) == "" ||
+			strings.TrimSpace(snapshot.MutationPolicyVersion) == "") {
+		return errAssistantPlanContractVersionMismatch
+	}
 	if !assistantTaskSnapshotCompatible(current, snapshot) {
 		return errAssistantPlanContractVersionMismatch
 	}
@@ -273,6 +289,24 @@ func assistantTaskSnapshotCompatible(current assistantTaskContractSnapshot, stor
 	if strings.TrimSpace(stored.ReplyGuidanceVersion) != "" && strings.TrimSpace(current.ReplyGuidanceVersion) != strings.TrimSpace(stored.ReplyGuidanceVersion) {
 		return false
 	}
+	if strings.TrimSpace(stored.PolicyContextDigest) != "" && strings.TrimSpace(current.PolicyContextDigest) != strings.TrimSpace(stored.PolicyContextDigest) {
+		return false
+	}
+	if strings.TrimSpace(stored.EffectivePolicyVersion) != "" && strings.TrimSpace(current.EffectivePolicyVersion) != strings.TrimSpace(stored.EffectivePolicyVersion) {
+		return false
+	}
+	if strings.TrimSpace(stored.ResolvedSetID) != "" && strings.TrimSpace(current.ResolvedSetID) != strings.TrimSpace(stored.ResolvedSetID) {
+		return false
+	}
+	if strings.TrimSpace(stored.SetIDSource) != "" && strings.TrimSpace(current.SetIDSource) != strings.TrimSpace(stored.SetIDSource) {
+		return false
+	}
+	if strings.TrimSpace(stored.PrecheckProjectionDigest) != "" && strings.TrimSpace(current.PrecheckProjectionDigest) != strings.TrimSpace(stored.PrecheckProjectionDigest) {
+		return false
+	}
+	if strings.TrimSpace(stored.MutationPolicyVersion) != "" && strings.TrimSpace(current.MutationPolicyVersion) != strings.TrimSpace(stored.MutationPolicyVersion) {
+		return false
+	}
 	return true
 }
 
@@ -313,7 +347,7 @@ func assistantBuildTaskSnapshotFromTurn(turn *assistantTurn) assistantTaskContra
 	if turn == nil {
 		return assistantTaskContractSnapshot{}
 	}
-	return assistantTaskContractSnapshot{
+	snapshot := assistantTaskContractSnapshot{
 		IntentSchemaVersion:     strings.TrimSpace(turn.Intent.IntentSchemaVersion),
 		CompilerContractVersion: strings.TrimSpace(turn.Plan.CompilerContractVersion),
 		CapabilityMapVersion:    strings.TrimSpace(turn.Plan.CapabilityMapVersion),
@@ -327,6 +361,15 @@ func assistantBuildTaskSnapshotFromTurn(turn *assistantTurn) assistantTaskContra
 		ContextTemplateVersion:  strings.TrimSpace(turn.Plan.ContextTemplateVersion),
 		ReplyGuidanceVersion:    strings.TrimSpace(turn.Plan.ReplyGuidanceVersion),
 	}
+	if values, ok := assistantPolicyContractValuesFromTurn(turn); ok {
+		snapshot.PolicyContextDigest = values.PolicyContextDigest
+		snapshot.EffectivePolicyVersion = values.EffectivePolicyVersion
+		snapshot.ResolvedSetID = values.ResolvedSetID
+		snapshot.SetIDSource = values.SetIDSource
+		snapshot.PrecheckProjectionDigest = values.PrecheckProjectionDigest
+		snapshot.MutationPolicyVersion = values.MutationPolicyVersion
+	}
+	return snapshot
 }
 
 func assistantBuildTaskSubmitRequestFromTurn(conversationID string, turn *assistantTurn) (assistantTaskSubmitRequest, error) {
@@ -334,6 +377,9 @@ func assistantBuildTaskSubmitRequestFromTurn(conversationID string, turn *assist
 		return assistantTaskSubmitRequest{}, errAssistantTurnNotFound
 	}
 	if !assistantTurnRouteAuditVersionsConsistent(turn) {
+		return assistantTaskSubmitRequest{}, errAssistantPlanContractVersionMismatch
+	}
+	if assistantTurnPolicyProjectionContractMissing(turn) {
 		return assistantTaskSubmitRequest{}, errAssistantPlanContractVersionMismatch
 	}
 	req := assistantTaskSubmitRequest{
@@ -739,6 +785,7 @@ func (s *assistantConversationService) dispatchAssistantTasks(ctx context.Contex
 		task.DispatchAttempt = attempt
 		task.UpdatedAt = now
 		if now.After(task.DispatchDeadlineAt) {
+			task.LastErrorCode = assistantTaskTerminalErrorCode(task.LastErrorCode)
 			if err := s.markAssistantTaskDispatchDeadlineExceededTx(ctx, tx, &task, now); err != nil {
 				return err
 			}
@@ -748,6 +795,7 @@ func (s *assistantConversationService) dispatchAssistantTasks(ctx context.Contex
 			continue
 		}
 		if err := s.executeAssistantTaskWorkflowTx(ctx, tx, tenantID, &task, now); err != nil {
+			task.LastErrorCode = assistantTaskErrorCode(err)
 			nextRetryAt := now.Add(assistantTaskDispatchBackoff(attempt))
 			if attempt >= task.MaxAttempts || nextRetryAt.After(task.DispatchDeadlineAt) {
 				if err := s.markAssistantTaskDispatchFailureTx(ctx, tx, &task, now); err != nil {
@@ -759,7 +807,6 @@ func (s *assistantConversationService) dispatchAssistantTasks(ctx context.Contex
 				continue
 			}
 			task.DispatchStatus = assistantTaskDispatchPending
-			task.LastErrorCode = "assistant_task_workflow_unavailable"
 			task.UpdatedAt = now
 			if err := s.updateAssistantTaskStateTx(ctx, tx, task); err != nil {
 				return err
@@ -863,7 +910,18 @@ func assistantTaskErrorCode(err error) string {
 	if err == nil {
 		return ""
 	}
+	if code, ok := assistantPublicFailureCode(err); ok {
+		return code
+	}
 	return strings.TrimSpace(err.Error())
+}
+
+func assistantTaskTerminalErrorCode(code string) string {
+	code = strings.TrimSpace(code)
+	if code != "" {
+		return code
+	}
+	return errAssistantGateUnavailable.Error()
 }
 
 func (s *assistantConversationService) markAssistantTaskManualTakeoverTx(ctx context.Context, tx pgx.Tx, tenantID string, task *assistantTaskRecord, fromStatus string, errorCode string, now time.Time) error {
@@ -886,7 +944,7 @@ func (s *assistantConversationService) markAssistantTaskManualTakeoverTx(ctx con
 func (s *assistantConversationService) markAssistantTaskDispatchFailureTx(ctx context.Context, tx pgx.Tx, task *assistantTaskRecord, now time.Time) error {
 	task.Status = assistantTaskStatusManualTakeoverNeeded
 	task.DispatchStatus = assistantTaskDispatchFailed
-	task.LastErrorCode = "assistant_task_dispatch_failed"
+	task.LastErrorCode = assistantTaskTerminalErrorCode(task.LastErrorCode)
 	task.CompletedAt = &now
 	task.UpdatedAt = now
 	if err := s.updateAssistantTaskStateTx(ctx, tx, *task); err != nil {
@@ -901,7 +959,7 @@ func (s *assistantConversationService) markAssistantTaskDispatchFailureTx(ctx co
 func (s *assistantConversationService) markAssistantTaskDispatchDeadlineExceededTx(ctx context.Context, tx pgx.Tx, task *assistantTaskRecord, now time.Time) error {
 	task.Status = assistantTaskStatusManualTakeoverNeeded
 	task.DispatchStatus = assistantTaskDispatchFailed
-	task.LastErrorCode = "assistant_task_dispatch_failed"
+	task.LastErrorCode = assistantTaskTerminalErrorCode(task.LastErrorCode)
 	task.CompletedAt = &now
 	task.UpdatedAt = now
 	if err := s.updateAssistantTaskStateTx(ctx, tx, *task); err != nil {
@@ -1329,7 +1387,7 @@ WHERE tenant_uuid = $1::uuid
 	if err := json.Unmarshal(dryRunJSON, &dryRun); err != nil {
 		return assistantTaskContractSnapshot{}, err
 	}
-	return assistantTaskContractSnapshot{
+	snapshot := assistantTaskContractSnapshot{
 		IntentSchemaVersion:     strings.TrimSpace(intent.IntentSchemaVersion),
 		CompilerContractVersion: strings.TrimSpace(plan.CompilerContractVersion),
 		CapabilityMapVersion:    strings.TrimSpace(plan.CapabilityMapVersion),
@@ -1342,5 +1400,14 @@ WHERE tenant_uuid = $1::uuid
 		ResolverContractVersion: strings.TrimSpace(plan.ResolverContractVersion),
 		ContextTemplateVersion:  strings.TrimSpace(plan.ContextTemplateVersion),
 		ReplyGuidanceVersion:    strings.TrimSpace(plan.ReplyGuidanceVersion),
-	}, nil
+	}
+	if values, ok := assistantPolicyContractValuesFromDryRun(dryRun); ok {
+		snapshot.PolicyContextDigest = values.PolicyContextDigest
+		snapshot.EffectivePolicyVersion = values.EffectivePolicyVersion
+		snapshot.ResolvedSetID = values.ResolvedSetID
+		snapshot.SetIDSource = values.SetIDSource
+		snapshot.PrecheckProjectionDigest = values.PrecheckProjectionDigest
+		snapshot.MutationPolicyVersion = values.MutationPolicyVersion
+	}
+	return snapshot, nil
 }

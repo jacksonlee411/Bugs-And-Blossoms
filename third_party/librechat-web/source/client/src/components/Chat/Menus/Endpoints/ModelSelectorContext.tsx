@@ -3,6 +3,7 @@ import React, { createContext, useContext, useState, useMemo } from 'react';
 import { EModelEndpoint, isAgentsEndpoint, isAssistantsEndpoint } from 'librechat-data-provider';
 import type * as t from 'librechat-data-provider';
 import type { Endpoint, SelectedValues } from '~/common';
+import { isFormalAssistantPath } from '~/assistant-formal/runtime';
 import {
   useAgentDefaultPermissionLevel,
   useSelectorEffects,
@@ -54,6 +55,7 @@ interface ModelSelectorProviderProps {
 }
 
 export function ModelSelectorProvider({ children, startupConfig }: ModelSelectorProviderProps) {
+  const formalAssistantMode = isFormalAssistantPath();
   const agentsMap = useAgentsMapContext();
   const assistantsMap = useAssistantsMapContext();
   const { data: endpointsConfig } = useGetEndpointsQuery();
@@ -83,6 +85,7 @@ export function ModelSelectorProvider({ children, startupConfig }: ModelSelector
     { requiredPermission: permissionLevel },
     {
       select: (data) => data?.data,
+      enabled: !formalAssistantMode,
     },
   );
 

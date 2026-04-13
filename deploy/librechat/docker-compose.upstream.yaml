@@ -3,56 +3,11 @@ services:
     image: ghcr.io/danny-avila/librechat:v0.8.0
     restart: unless-stopped
     env_file:
-      - .env
+      - ${LIBRECHAT_RUNTIME_ENV_FILE:-.env}
     environment:
       HOST: 0.0.0.0
       PORT: ${LIBRECHAT_PORT:-3080}
-      MONGO_URI: ${MONGO_URI:-mongodb://mongodb:27017/LibreChat}
-      MEILI_HOST: ${MEILI_HOST:-http://meilisearch:7700}
-      MEILI_MASTER_KEY: ${MEILI_MASTER_KEY:-}
-      RAG_API_URL: ${RAG_API_URL:-http://rag_api:8000}
-      VECTOR_DB_PROVIDER: ${VECTOR_DB_PROVIDER:-qdrant}
-      QDRANT_URL: ${QDRANT_URL:-http://vectordb:6333}
     ports:
-      - "${LIBRECHAT_PORT:-3080}:3080"
-    depends_on:
-      mongodb:
-        condition: service_started
-      meilisearch:
-        condition: service_started
-      rag_api:
-        condition: service_started
-      vectordb:
-        condition: service_started
-
-  mongodb:
-    image: mongo:7.0
-    restart: unless-stopped
-
-  meilisearch:
-    image: getmeili/meilisearch:v1.12.0
-    restart: unless-stopped
-    environment:
-      MEILI_ENV: production
-      MEILI_MASTER_KEY: ${MEILI_MASTER_KEY:-}
-
-  rag_api:
-    image: ghcr.io/danny-avila/librechat-rag-api-dev-lite@sha256:201958505e21a1334234df6538713bac204b10d98a72d239b5318ce11f40f20b
-    restart: unless-stopped
-    environment:
-      RAG_PORT: 8000
-      RAG_UPLOAD_DIR: /app/uploads
-      VECTOR_DB_TYPE: ${RAG_API_VECTOR_DB_TYPE:-atlas-mongo}
-      ATLAS_MONGO_DB_URI: ${RAG_API_ATLAS_MONGO_DB_URI:-mongodb://mongodb:27017/LibreChat}
-      ATLAS_SEARCH_INDEX: ${RAG_API_ATLAS_SEARCH_INDEX:-vector_index}
-      COLLECTION_NAME: ${RAG_API_COLLECTION_NAME:-rag_chunks}
-      EMBEDDINGS_PROVIDER: ${RAG_API_EMBEDDINGS_PROVIDER:-openai}
-      EMBEDDINGS_MODEL: ${RAG_API_EMBEDDINGS_MODEL:-text-embedding-3-small}
-      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
-    depends_on:
-      mongodb:
-        condition: service_started
-
-  vectordb:
-    image: qdrant/qdrant:v1.13.4
-    restart: unless-stopped
+      - "${LIBRECHAT_PORT:-3080}:${LIBRECHAT_PORT:-3080}"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"

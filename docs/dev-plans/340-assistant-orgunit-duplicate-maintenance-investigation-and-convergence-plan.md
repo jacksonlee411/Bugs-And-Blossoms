@@ -148,8 +148,8 @@
 
 ## 10. 关联事实源
 
-1. `docs/dev-plans/240-assistant-org-transaction-orchestration-modernization-plan.md`
-2. `docs/dev-plans/272-assistant-orgunit-seven-actions-expansion-plan.md`
+1. `docs/archive/dev-plans/240-assistant-org-transaction-orchestration-modernization-plan.md`
+2. `docs/archive/dev-plans/272-assistant-orgunit-seven-actions-expansion-plan.md`
 3. `modules/orgunit/services/orgunit_write_service.go`
 4. `internal/server/assistant_action_registry.go`
 5. `internal/server/assistant_create_policy_precheck.go`

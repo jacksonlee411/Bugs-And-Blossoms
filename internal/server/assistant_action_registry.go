@@ -24,13 +24,17 @@ type assistantActionSecuritySpec struct {
 }
 
 type assistantActionSpec struct {
-	ID            string
-	Version       string
-	CapabilityKey string
-	PlanTitle     string
-	PlanSummary   string
-	Security      assistantActionSecuritySpec
-	Handler       assistantActionHandlerSpec
+	ID                                string
+	Version                           string
+	CapabilityKey                     string
+	PolicyContextContractVersion      string
+	PrecheckProjectionContractVersion string
+	RequiredPolicyFacts               []string
+	ReadonlyTools                     []string
+	MutationPolicyKey                 string
+	CapabilityBucketKey               string
+	Security                          assistantActionSecuritySpec
+	Handler                           assistantActionHandlerSpec
 }
 
 type assistantActionRegistry interface {
@@ -51,8 +55,6 @@ var assistantDefaultActionRegistry = assistantActionRegistryMap{specs: map[strin
 		ID:            assistantIntentPlanOnly,
 		Version:       "v1",
 		CapabilityKey: "org.assistant_conversation.manage",
-		PlanTitle:     "只读规划",
-		PlanSummary:   "生成只读计划，不执行提交",
 		Security: assistantActionSecuritySpec{
 			AuthObject:     authz.ObjectOrgSetIDCapability,
 			AuthAction:     authz.ActionAdmin,
@@ -61,11 +63,27 @@ var assistantDefaultActionRegistry = assistantActionRegistryMap{specs: map[strin
 		},
 	},
 	assistantIntentCreateOrgUnit: {
-		ID:            assistantIntentCreateOrgUnit,
-		Version:       "v1",
-		CapabilityKey: "org.orgunit_create.field_policy",
-		PlanTitle:     "创建组织计划",
-		PlanSummary:   "在指定父组织下创建部门，提交前需要确认候选主键",
+		ID:                                assistantIntentCreateOrgUnit,
+		Version:                           "v1",
+		CapabilityKey:                     "org.orgunit_create.field_policy",
+		PolicyContextContractVersion:      orgunitservices.CreateOrgUnitPolicyContextContractVersionV1,
+		PrecheckProjectionContractVersion: orgunitservices.CreateOrgUnitPrecheckProjectionContractV1,
+		RequiredPolicyFacts: []string{
+			"resolved_candidate",
+			"effective_date",
+			"tenant_ext_fields",
+			"tree_initialized",
+			"org_exists",
+			"can_admin",
+		},
+		ReadonlyTools: []string{
+			"orgunit_candidate_lookup",
+			"orgunit_candidate_snapshot",
+			"orgunit_action_precheck",
+			"orgunit_field_explain",
+		},
+		MutationPolicyKey:   "orgunit.create.create",
+		CapabilityBucketKey: "org.orgunit_create.field_policy",
 		Security: assistantActionSecuritySpec{
 			AuthObject:     authz.ObjectOrgSetIDCapability,
 			AuthAction:     authz.ActionAdmin,
@@ -78,11 +96,27 @@ var assistantDefaultActionRegistry = assistantActionRegistryMap{specs: map[strin
 		},
 	},
 	assistantIntentAddOrgUnitVersion: {
-		ID:            assistantIntentAddOrgUnitVersion,
-		Version:       "v1",
-		CapabilityKey: "org.orgunit_add_version.field_policy",
-		PlanTitle:     "新增版本计划",
-		PlanSummary:   "为指定组织新增未来版本，提交前进行字段校验",
+		ID:                                assistantIntentAddOrgUnitVersion,
+		Version:                           "v1",
+		CapabilityKey:                     "org.orgunit_add_version.field_policy",
+		PolicyContextContractVersion:      orgunitservices.OrgUnitAppendVersionPolicyContextContractVersionV1,
+		PrecheckProjectionContractVersion: orgunitservices.OrgUnitAppendVersionPrecheckProjectionContractV1,
+		RequiredPolicyFacts: []string{
+			"resolved_candidate",
+			"effective_date",
+			"tenant_ext_fields",
+			"tree_initialized",
+			"org_exists",
+			"can_admin",
+		},
+		ReadonlyTools: []string{
+			"orgunit_candidate_lookup",
+			"orgunit_candidate_snapshot",
+			"orgunit_action_precheck",
+			"orgunit_field_explain",
+		},
+		MutationPolicyKey:   "orgunit.append_version.add_version",
+		CapabilityBucketKey: "org.orgunit_add_version.field_policy",
 		Security: assistantActionSecuritySpec{
 			AuthObject:     authz.ObjectOrgSetIDCapability,
 			AuthAction:     authz.ActionAdmin,
@@ -92,11 +126,27 @@ var assistantDefaultActionRegistry = assistantActionRegistryMap{specs: map[strin
 		Handler: assistantActionHandlerSpec{DryRunKey: "orgunit_add_version_dry_run_v1", CommitAdapterKey: "orgunit_add_version_v1"},
 	},
 	assistantIntentInsertOrgUnitVersion: {
-		ID:            assistantIntentInsertOrgUnitVersion,
-		Version:       "v1",
-		CapabilityKey: "org.orgunit_insert_version.field_policy",
-		PlanTitle:     "插入版本计划",
-		PlanSummary:   "为指定组织插入历史版本，提交前进行字段校验",
+		ID:                                assistantIntentInsertOrgUnitVersion,
+		Version:                           "v1",
+		CapabilityKey:                     "org.orgunit_insert_version.field_policy",
+		PolicyContextContractVersion:      orgunitservices.OrgUnitAppendVersionPolicyContextContractVersionV1,
+		PrecheckProjectionContractVersion: orgunitservices.OrgUnitAppendVersionPrecheckProjectionContractV1,
+		RequiredPolicyFacts: []string{
+			"resolved_candidate",
+			"effective_date",
+			"tenant_ext_fields",
+			"tree_initialized",
+			"org_exists",
+			"can_admin",
+		},
+		ReadonlyTools: []string{
+			"orgunit_candidate_lookup",
+			"orgunit_candidate_snapshot",
+			"orgunit_action_precheck",
+			"orgunit_field_explain",
+		},
+		MutationPolicyKey:   "orgunit.append_version.insert_version",
+		CapabilityBucketKey: "org.orgunit_insert_version.field_policy",
 		Security: assistantActionSecuritySpec{
 			AuthObject:     authz.ObjectOrgSetIDCapability,
 			AuthAction:     authz.ActionAdmin,
@@ -106,11 +156,27 @@ var assistantDefaultActionRegistry = assistantActionRegistryMap{specs: map[strin
 		Handler: assistantActionHandlerSpec{DryRunKey: "orgunit_insert_version_dry_run_v1", CommitAdapterKey: "orgunit_insert_version_v1"},
 	},
 	assistantIntentCorrectOrgUnit: {
-		ID:            assistantIntentCorrectOrgUnit,
-		Version:       "v1",
-		CapabilityKey: "org.orgunit_correct.field_policy",
-		PlanTitle:     "更正组织计划",
-		PlanSummary:   "更正指定组织版本的字段内容，提交前进行字段校验",
+		ID:                                assistantIntentCorrectOrgUnit,
+		Version:                           "v1",
+		CapabilityKey:                     "org.orgunit_correct.field_policy",
+		PolicyContextContractVersion:      orgunitservices.OrgUnitMaintainPolicyContextContractVersionV1,
+		PrecheckProjectionContractVersion: orgunitservices.OrgUnitMaintainPrecheckProjectionContractV1,
+		RequiredPolicyFacts: []string{
+			"target_effective_date",
+			"tenant_ext_fields",
+			"tree_initialized",
+			"org_exists",
+			"target_event_state",
+			"can_admin",
+		},
+		ReadonlyTools: []string{
+			"orgunit_candidate_lookup",
+			"orgunit_candidate_snapshot",
+			"orgunit_action_precheck",
+			"orgunit_field_explain",
+		},
+		MutationPolicyKey:   "orgunit.maintain.correct",
+		CapabilityBucketKey: "org.orgunit_correct.field_policy",
 		Security: assistantActionSecuritySpec{
 			AuthObject:     authz.ObjectOrgSetIDCapability,
 			AuthAction:     authz.ActionAdmin,
@@ -120,11 +186,25 @@ var assistantDefaultActionRegistry = assistantActionRegistryMap{specs: map[strin
 		Handler: assistantActionHandlerSpec{DryRunKey: "orgunit_correct_dry_run_v1", CommitAdapterKey: "orgunit_correct_v1"},
 	},
 	assistantIntentDisableOrgUnit: {
-		ID:            assistantIntentDisableOrgUnit,
-		Version:       "v1",
-		CapabilityKey: "org.orgunit_write.field_policy",
-		PlanTitle:     "停用组织计划",
-		PlanSummary:   "停用指定组织，提交前进行字段校验",
+		ID:                                assistantIntentDisableOrgUnit,
+		Version:                           "v1",
+		CapabilityKey:                     "org.orgunit_write.field_policy",
+		PolicyContextContractVersion:      orgunitservices.OrgUnitMaintainPolicyContextContractVersionV1,
+		PrecheckProjectionContractVersion: orgunitservices.OrgUnitMaintainPrecheckProjectionContractV1,
+		RequiredPolicyFacts: []string{
+			"effective_date",
+			"tenant_ext_fields",
+			"tree_initialized",
+			"org_exists",
+			"target_event_state",
+			"can_admin",
+		},
+		ReadonlyTools: []string{
+			"orgunit_action_precheck",
+			"orgunit_field_explain",
+		},
+		MutationPolicyKey:   "orgunit.maintain.disable",
+		CapabilityBucketKey: "org.orgunit_write.field_policy",
 		Security: assistantActionSecuritySpec{
 			AuthObject:     authz.ObjectOrgSetIDCapability,
 			AuthAction:     authz.ActionAdmin,
@@ -134,11 +214,25 @@ var assistantDefaultActionRegistry = assistantActionRegistryMap{specs: map[strin
 		Handler: assistantActionHandlerSpec{DryRunKey: "orgunit_disable_dry_run_v1", CommitAdapterKey: "orgunit_disable_v1"},
 	},
 	assistantIntentEnableOrgUnit: {
-		ID:            assistantIntentEnableOrgUnit,
-		Version:       "v1",
-		CapabilityKey: "org.orgunit_write.field_policy",
-		PlanTitle:     "启用组织计划",
-		PlanSummary:   "启用指定组织，提交前进行字段校验",
+		ID:                                assistantIntentEnableOrgUnit,
+		Version:                           "v1",
+		CapabilityKey:                     "org.orgunit_write.field_policy",
+		PolicyContextContractVersion:      orgunitservices.OrgUnitMaintainPolicyContextContractVersionV1,
+		PrecheckProjectionContractVersion: orgunitservices.OrgUnitMaintainPrecheckProjectionContractV1,
+		RequiredPolicyFacts: []string{
+			"effective_date",
+			"tenant_ext_fields",
+			"tree_initialized",
+			"org_exists",
+			"target_event_state",
+			"can_admin",
+		},
+		ReadonlyTools: []string{
+			"orgunit_action_precheck",
+			"orgunit_field_explain",
+		},
+		MutationPolicyKey:   "orgunit.maintain.enable",
+		CapabilityBucketKey: "org.orgunit_write.field_policy",
 		Security: assistantActionSecuritySpec{
 			AuthObject:     authz.ObjectOrgSetIDCapability,
 			AuthAction:     authz.ActionAdmin,
@@ -148,11 +242,27 @@ var assistantDefaultActionRegistry = assistantActionRegistryMap{specs: map[strin
 		Handler: assistantActionHandlerSpec{DryRunKey: "orgunit_enable_dry_run_v1", CommitAdapterKey: "orgunit_enable_v1"},
 	},
 	assistantIntentMoveOrgUnit: {
-		ID:            assistantIntentMoveOrgUnit,
-		Version:       "v1",
-		CapabilityKey: "org.orgunit_write.field_policy",
-		PlanTitle:     "移动组织计划",
-		PlanSummary:   "将组织移动到新的上级组织，提交前需要确认候选主键",
+		ID:                                assistantIntentMoveOrgUnit,
+		Version:                           "v1",
+		CapabilityKey:                     "org.orgunit_write.field_policy",
+		PolicyContextContractVersion:      orgunitservices.OrgUnitMaintainPolicyContextContractVersionV1,
+		PrecheckProjectionContractVersion: orgunitservices.OrgUnitMaintainPrecheckProjectionContractV1,
+		RequiredPolicyFacts: []string{
+			"effective_date",
+			"resolved_candidate",
+			"tenant_ext_fields",
+			"tree_initialized",
+			"org_exists",
+			"can_admin",
+		},
+		ReadonlyTools: []string{
+			"orgunit_candidate_lookup",
+			"orgunit_candidate_snapshot",
+			"orgunit_action_precheck",
+			"orgunit_field_explain",
+		},
+		MutationPolicyKey:   "orgunit.maintain.move",
+		CapabilityBucketKey: "org.orgunit_write.field_policy",
 		Security: assistantActionSecuritySpec{
 			AuthObject:     authz.ObjectOrgSetIDCapability,
 			AuthAction:     authz.ActionAdmin,
@@ -162,11 +272,26 @@ var assistantDefaultActionRegistry = assistantActionRegistryMap{specs: map[strin
 		Handler: assistantActionHandlerSpec{DryRunKey: "orgunit_move_dry_run_v1", CommitAdapterKey: "orgunit_move_v1"},
 	},
 	assistantIntentRenameOrgUnit: {
-		ID:            assistantIntentRenameOrgUnit,
-		Version:       "v1",
-		CapabilityKey: "org.orgunit_write.field_policy",
-		PlanTitle:     "重命名组织计划",
-		PlanSummary:   "重命名指定组织，提交前进行字段校验",
+		ID:                                assistantIntentRenameOrgUnit,
+		Version:                           "v1",
+		CapabilityKey:                     "org.orgunit_write.field_policy",
+		PolicyContextContractVersion:      orgunitservices.OrgUnitMaintainPolicyContextContractVersionV1,
+		PrecheckProjectionContractVersion: orgunitservices.OrgUnitMaintainPrecheckProjectionContractV1,
+		RequiredPolicyFacts: []string{
+			"effective_date",
+			"tenant_ext_fields",
+			"tree_initialized",
+			"org_exists",
+			"can_admin",
+		},
+		ReadonlyTools: []string{
+			"orgunit_candidate_lookup",
+			"orgunit_candidate_snapshot",
+			"orgunit_action_precheck",
+			"orgunit_field_explain",
+		},
+		MutationPolicyKey:   "orgunit.maintain.rename",
+		CapabilityBucketKey: "org.orgunit_write.field_policy",
 		Security: assistantActionSecuritySpec{
 			AuthObject:     authz.ObjectOrgSetIDCapability,
 			AuthAction:     authz.ActionAdmin,

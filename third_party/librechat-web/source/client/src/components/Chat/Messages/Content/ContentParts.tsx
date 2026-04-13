@@ -8,6 +8,7 @@ import type {
   Agents,
 } from 'librechat-data-provider';
 import { ThinkingButton } from '~/components/Artifacts/Thinking';
+import { isFormalAssistantPath } from '~/assistant-formal/runtime';
 import { MessageContext, SearchContext } from '~/Providers';
 import MemoryArtifacts from './MemoryArtifacts';
 import Sources from '~/components/Web/Sources';
@@ -56,6 +57,7 @@ const ContentParts = memo(
     const [showThinking, setShowThinking] = useRecoilState<boolean>(store.showThinking);
     const [isExpanded, setIsExpanded] = useState(showThinking);
     const attachmentMap = useMemo(() => mapAttachments(attachments ?? []), [attachments]);
+    const formalAssistantMode = isFormalAssistantPath();
 
     const effectiveIsSubmitting = isLatestMessage ? isSubmitting : false;
 
@@ -124,8 +126,10 @@ const ContentParts = memo(
     return (
       <>
         <SearchContext.Provider value={{ searchResults }}>
-          <MemoryArtifacts attachments={attachments} />
-          <Sources messageId={messageId} conversationId={conversationId || undefined} />
+          {!formalAssistantMode && <MemoryArtifacts attachments={attachments} />}
+          {!formalAssistantMode && (
+            <Sources messageId={messageId} conversationId={conversationId || undefined} />
+          )}
           {hasReasoningParts && (
             <div className="mb-5">
               <ThinkingButton

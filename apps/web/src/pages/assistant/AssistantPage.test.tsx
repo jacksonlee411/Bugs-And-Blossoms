@@ -18,13 +18,21 @@ describe('AssistantPage', () => {
       checked_at: '2026-03-07T01:00:00Z',
       upstream: { url: 'http://localhost:3080' },
       services: [
-        { name: 'assistant-ui', required: true, healthy: 'healthy' },
-        { name: 'gateway', required: true, healthy: 'healthy' }
+        { name: 'mongodb', required: false, healthy: 'retired', reason: 'retired_by_design' },
+        { name: 'memory', required: false, healthy: 'retired', reason: 'retired_by_design' },
+        { name: 'gateway', required: true, healthy: 'degraded' }
       ],
       capabilities: {
         mcp_enabled: false,
         actions_enabled: true,
-        agents_write_enabled: true
+        agents_write_enabled: true,
+        agents_ui_enabled: false,
+        memory_enabled: false,
+        web_search_enabled: false,
+        file_search_enabled: false,
+        code_interpreter_enabled: false,
+        artifacts_enabled: true,
+        runtime_cutover_mode: 'ui-shell-only'
       }
     })
     assistantAPIMocks.listAssistantConversations.mockResolvedValue({
@@ -54,6 +62,12 @@ describe('AssistantPage', () => {
     expect(screen.getByRole('heading', { name: 'AI 助手日志' })).toBeInTheDocument()
     expect(screen.getByTestId('assistant-runtime-status')).toHaveTextContent('healthy')
     expect(screen.getByTestId('assistant-runtime-upstream-url')).toHaveTextContent('http://localhost:3080')
+    expect(screen.getByTestId('assistant-runtime-cutover-mode')).toHaveTextContent('ui-shell-only')
+    expect(screen.getByText('agents_ui:已硬切关闭')).toBeInTheDocument()
+    expect(screen.getByText('artifacts:可用')).toBeInTheDocument()
+    expect(screen.getByText('mongodb:按设计退役')).toBeInTheDocument()
+    expect(screen.getByText('memory:按设计退役')).toBeInTheDocument()
+    expect(screen.getByText('gateway:依赖异常')).toBeInTheDocument()
     expect(screen.getByTestId('assistant-conversation-log-item')).toHaveTextContent('conv_1')
     expect(screen.getByTestId('assistant-conversation-log-item')).toHaveTextContent('在 AI治理办公室 下新建 人力资源部2')
   }, 20000)
@@ -66,6 +80,7 @@ describe('AssistantPage', () => {
     expect(screen.getByRole('link', { name: '打开 LibreChat' })).toHaveAttribute('href', '/app/assistant/librechat')
     expect(screen.getByText(/旧 `iframe \+ bridge` 对话承载页已按 `DEV-PLAN-282` 退役/)).toBeInTheDocument()
     expect(screen.getByText(/正式交互入口已统一到 `\/app\/assistant\/librechat`/)).toBeInTheDocument()
+    expect(screen.getByText(/能力关闭表示正式入口已按设计降权/)).toBeInTheDocument()
     expect(screen.queryByTestId('assistant-librechat-frame')).not.toBeInTheDocument()
     expect(screen.queryByRole('textbox')).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Confirm' })).not.toBeInTheDocument()

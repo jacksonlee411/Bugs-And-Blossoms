@@ -7,6 +7,7 @@
 - `docker-compose.upstream.yaml`：官方基线（最小改动）。
 - `docker-compose.overlay.yaml`：本仓覆盖层（卷路径与本地运行参数）。
 - `.env.example`：环境变量模板。
+- `.env.mongo-debug.example`：external Mongo 调试模板（仅在你确实需要启动 upstream backend 时使用）。
 - `versions.lock.yaml`：版本元数据（tag/digest/imported_at/rollback_ref）。
 - `healthcheck.sh`：依赖健康检查并产出 `runtime-status.json`。
 
@@ -14,12 +15,36 @@
 
 1. 复制环境变量模板：
    - `cp deploy/librechat/.env.example deploy/librechat/.env`
+   - 然后至少补齐：
+     - `OPENAI_API_KEY`
+     - `MONGO_URI`：必须指向一个外部可达的 Mongo；当前 upstream LibreChat backend 仍把它当启动硬依赖
 2. 启动：
    - `make assistant-runtime-up`
 3. 查看状态：
    - `make assistant-runtime-status`
 4. 停止：
    - `make assistant-runtime-down`
+
+## external Mongo 调试模式
+
+当你需要真正启动 upstream LibreChat backend（例如排查 vendored upstream 自身行为），请不要改默认 `.env`，而是单独使用 external Mongo 调试模板：
+
+1. `cp deploy/librechat/.env.mongo-debug.example deploy/librechat/.env.mongo-debug`
+2. 填写：
+   - `OPENAI_API_KEY`
+   - `MONGO_URI`（外部可达 Mongo）
+3. 启动：
+   - `make assistant-runtime-up-mongo-debug`
+4. 查看状态：
+   - `make assistant-runtime-status-mongo-debug`
+5. 停止：
+   - `make assistant-runtime-down-mongo-debug`
+
+说明：
+- 调试模式默认使用独立 project：`bugs-and-blossoms-librechat-mongo-debug`
+- 默认端口为 `3081`
+- 默认数据根为 `.local/librechat-mongo-debug`
+- 该模式只用于 upstream 调试，不代表默认开发基线
 
 ## 真实模型能力前置条件（DEV-PLAN-239）
 
@@ -37,25 +62,23 @@
   2. compose 解析出的 bind mount source 与预期路径完全一致；
   3. 缺失或漂移时 fail-fast（阻断启动）。
 
-## rag_api 运行口径（DEV-PLAN-239）
+## 依赖退役口径（DEV-PLAN-360A Phase 3）
 
-- `rag_api` 镜像固定为 `ghcr.io/danny-avila/librechat-rag-api-dev-lite@sha256:201958505e21...`。
-- `rag_api` 统一使用 `atlas-mongo` 模式，默认连接 `mongodb://mongodb:27017/LibreChat`，避免隐式回退到 `db:5432`（pgvector）导致重启风暴。
-- `rag_api` 数据卷挂载目标为 `/app/uploads`（宿主机目录：`${LIBRECHAT_DATA_ROOT}/rag_api`）。
+- 默认部署仅保留 `api` 服务；`mongodb`、`meilisearch`、`rag_api`、`vectordb` 已从 compose 主链移除。
+- 上述四项仍保留在 `versions.lock.yaml` 中，仅用于 `runtime-status` 暴露 `retired_by_design` 语义，不再作为默认运行前置。
+- 若后续调试仍需单独拉起历史依赖，必须通过临时 patch / 私有调试脚本完成，不得回写默认主干 compose。
+- 额外注意：当前 upstream `api` 进程仍在源码层硬依赖 `MONGO_URI`，见容器内 `/app/api/db/connect.js`。因此“默认 compose 只保留 api”并不等于“api 可以在无 Mongo 的情况下健康启动”；现阶段若要让 `3080` 健康，仍需提供一个外部 Mongo 端点。
+- 因此，仓库现提供单独的 external Mongo 调试入口，而不是把 Mongo 重新混回默认 baseline。
 
 ## 清理边界
 
-`make assistant-runtime-clean` 仅清理 `${LIBRECHAT_DATA_ROOT}` 下列目录（与运行时同源）：
+`make assistant-runtime-clean` 仅清理 `${LIBRECHAT_DATA_ROOT}` 下列目录（与默认运行时同源）：
 
 - `${LIBRECHAT_DATA_ROOT}/api`
-- `${LIBRECHAT_DATA_ROOT}/mongodb`
-- `${LIBRECHAT_DATA_ROOT}/meilisearch`
-- `${LIBRECHAT_DATA_ROOT}/rag_api`
-- `${LIBRECHAT_DATA_ROOT}/vectordb`
 
 禁止清理上述目录之外的路径（脚本对仓库外路径 fail-closed）。
 
-## 故障处置（MongoDB 挂载异常）
+## 故障处置（API 上游异常）
 
 最小恢复流程（建议按顺序）：
 
@@ -66,6 +89,8 @@
 
 当 `status` 为 `unavailable` 时，`services[].reason` 重点关注：
 
-- `mount_source_missing`：宿主机挂载目录缺失（先执行 `clean -> up`，或检查 `LIBRECHAT_DATA_ROOT`）。
-- `container_not_running`：容器未运行（查看 `docker compose ps`/容器日志）。
 - `upstream_unreachable`：API 容器已运行但上游探针不可达（查看 api 服务日志与端口绑定）。
+- `retired_by_design`：依赖已按设计退役，不参与默认部署故障判定。
+- 若 `make assistant-runtime-up` 在启动前直接失败：
+  - `retired dependency env drift detected`：说明 `.env` 里仍保留 `MEILI/RAG/QDRANT` 这类已退役依赖变量；
+  - `MONGO_URI still points at removed compose service 'mongodb'`：说明当前 `.env` 仍在引用已从默认 compose 移除的 `mongodb` 服务名，需要改成外部 Mongo 地址。

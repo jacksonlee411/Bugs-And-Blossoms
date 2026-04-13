@@ -2,7 +2,7 @@
 
 > 对应计划：`docs/dev-plans/064a-test-tp060-05-assistant-conversation-intent-and-tasks.md`  
 > 关联总纲：`docs/dev-plans/060-business-e2e-test-suite.md`  
-> 指引约束：`docs/dev-plans/226-test-guide-tg004-gate-caliber-change-approval.md`
+> 指引约束：`docs/archive/dev-plans/226-test-guide-tg004-gate-caliber-change-approval.md`
 
 ## 1. 记录范围与时间
 

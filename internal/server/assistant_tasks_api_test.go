@@ -26,7 +26,7 @@ func TestAssistantTaskHandlers_CoverageMatrix(t *testing.T) {
 
 		rec = httptest.NewRecorder()
 		handleAssistantTasksAPI(rec, assistantReqWithContext(http.MethodPost, "/internal/assistant/tasks", "{}", true, true), nil)
-		if rec.Code != http.StatusInternalServerError || assistantDecodeErrCode(t, rec) != "assistant_service_missing" {
+		if rec.Code != http.StatusServiceUnavailable || assistantDecodeErrCode(t, rec) != "assistant_gate_unavailable" {
 			t.Fatalf("status=%d code=%s", rec.Code, assistantDecodeErrCode(t, rec))
 		}
 
@@ -50,7 +50,7 @@ func TestAssistantTaskHandlers_CoverageMatrix(t *testing.T) {
 
 		rec = httptest.NewRecorder()
 		handleAssistantTasksAPI(rec, assistantReqWithContext(http.MethodPost, "/internal/assistant/tasks", `{"conversation_id":"conv","turn_id":"turn","task_type":"assistant_async_plan","request_id":"req","contract_snapshot":{"intent_schema_version":"v1","compiler_contract_version":"v1","capability_map_version":"v1","skill_manifest_digest":"d","context_hash":"c","intent_hash":"i","plan_hash":"p"}}`, true, true), svc)
-		if rec.Code != http.StatusServiceUnavailable || assistantDecodeErrCode(t, rec) != "assistant_task_workflow_unavailable" {
+		if rec.Code != http.StatusServiceUnavailable || assistantDecodeErrCode(t, rec) != "assistant_gate_unavailable" {
 			t.Fatalf("status=%d code=%s body=%s", rec.Code, assistantDecodeErrCode(t, rec), rec.Body.String())
 		}
 
@@ -72,7 +72,7 @@ func TestAssistantTaskHandlers_CoverageMatrix(t *testing.T) {
 
 		rec = httptest.NewRecorder()
 		handleAssistantTaskDetailAPI(rec, assistantReqWithContext(http.MethodGet, "/internal/assistant/tasks/task-1", "", true, true), nil)
-		if rec.Code != http.StatusInternalServerError || assistantDecodeErrCode(t, rec) != "assistant_service_missing" {
+		if rec.Code != http.StatusServiceUnavailable || assistantDecodeErrCode(t, rec) != "assistant_gate_unavailable" {
 			t.Fatalf("status=%d code=%s", rec.Code, assistantDecodeErrCode(t, rec))
 		}
 
@@ -96,7 +96,7 @@ func TestAssistantTaskHandlers_CoverageMatrix(t *testing.T) {
 
 		rec = httptest.NewRecorder()
 		handleAssistantTaskDetailAPI(rec, assistantReqWithContext(http.MethodGet, "/internal/assistant/tasks/task-1", "", true, true), svc)
-		if rec.Code != http.StatusServiceUnavailable || assistantDecodeErrCode(t, rec) != "assistant_task_workflow_unavailable" {
+		if rec.Code != http.StatusServiceUnavailable || assistantDecodeErrCode(t, rec) != "assistant_gate_unavailable" {
 			t.Fatalf("status=%d code=%s body=%s", rec.Code, assistantDecodeErrCode(t, rec), rec.Body.String())
 		}
 
@@ -118,7 +118,7 @@ func TestAssistantTaskHandlers_CoverageMatrix(t *testing.T) {
 
 		rec = httptest.NewRecorder()
 		handleAssistantTaskActionAPI(rec, assistantReqWithContext(http.MethodPost, "/internal/assistant/tasks/task-1:cancel", "", true, true), nil)
-		if rec.Code != http.StatusInternalServerError || assistantDecodeErrCode(t, rec) != "assistant_service_missing" {
+		if rec.Code != http.StatusServiceUnavailable || assistantDecodeErrCode(t, rec) != "assistant_gate_unavailable" {
 			t.Fatalf("status=%d code=%s", rec.Code, assistantDecodeErrCode(t, rec))
 		}
 
@@ -142,7 +142,7 @@ func TestAssistantTaskHandlers_CoverageMatrix(t *testing.T) {
 
 		rec = httptest.NewRecorder()
 		handleAssistantTaskActionAPI(rec, assistantReqWithContext(http.MethodPost, "/internal/assistant/tasks/task-1:cancel", "", true, true), svc)
-		if rec.Code != http.StatusServiceUnavailable || assistantDecodeErrCode(t, rec) != "assistant_task_workflow_unavailable" {
+		if rec.Code != http.StatusServiceUnavailable || assistantDecodeErrCode(t, rec) != "assistant_gate_unavailable" {
 			t.Fatalf("status=%d code=%s body=%s", rec.Code, assistantDecodeErrCode(t, rec), rec.Body.String())
 		}
 
@@ -224,7 +224,9 @@ func TestAssistantWriteTaskError_Mappings(t *testing.T) {
 		{name: "task_not_found", err: errAssistantTaskNotFound, wantCode: "assistant_task_not_found", wantHTTP: http.StatusNotFound},
 		{name: "forbidden", err: errAssistantConversationForbidden, wantCode: "forbidden", wantHTTP: http.StatusForbidden},
 		{name: "tenant_mismatch", err: errAssistantTenantMismatch, wantCode: "tenant_mismatch", wantHTTP: http.StatusForbidden},
-		{name: "workflow_unavailable", err: errAssistantTaskWorkflowUnavailable, wantCode: "assistant_task_workflow_unavailable", wantHTTP: http.StatusServiceUnavailable},
+		{name: "workflow_unavailable", err: errAssistantTaskWorkflowUnavailable, wantCode: "assistant_gate_unavailable", wantHTTP: http.StatusServiceUnavailable},
+		{name: "gate_unavailable", err: errAssistantGateUnavailable, wantCode: "assistant_gate_unavailable", wantHTTP: http.StatusServiceUnavailable},
+		{name: "service_missing", err: errAssistantServiceMissing, wantCode: "assistant_gate_unavailable", wantHTTP: http.StatusServiceUnavailable},
 		{name: "idempotency_conflict", err: errAssistantIdempotencyKeyConflict, wantCode: "idempotency_key_conflict", wantHTTP: http.StatusConflict},
 		{name: "request_in_progress", err: errAssistantRequestInProgress, wantCode: "request_in_progress", wantHTTP: http.StatusConflict},
 		{name: "cancel_not_allowed", err: errAssistantTaskCancelNotAllowed, wantCode: "assistant_task_cancel_not_allowed", wantHTTP: http.StatusConflict},

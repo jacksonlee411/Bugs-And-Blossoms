@@ -15,7 +15,7 @@ func handleAssistantTasksAPI(w http.ResponseWriter, r *http.Request, svc *assist
 		return
 	}
 	if svc == nil {
-		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusInternalServerError, "assistant_service_missing", "assistant service missing")
+		assistantWriteGateUnavailable(w, r)
 		return
 	}
 	tenant, ok := currentTenant(r.Context())
@@ -53,7 +53,7 @@ func handleAssistantTaskDetailAPI(w http.ResponseWriter, r *http.Request, svc *a
 		return
 	}
 	if svc == nil {
-		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusInternalServerError, "assistant_service_missing", "assistant service missing")
+		assistantWriteGateUnavailable(w, r)
 		return
 	}
 	tenant, ok := currentTenant(r.Context())
@@ -88,7 +88,7 @@ func handleAssistantTaskActionAPI(w http.ResponseWriter, r *http.Request, svc *a
 		return
 	}
 	if svc == nil {
-		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusInternalServerError, "assistant_service_missing", "assistant service missing")
+		assistantWriteGateUnavailable(w, r)
 		return
 	}
 	tenant, ok := currentTenant(r.Context())
@@ -129,8 +129,8 @@ func assistantWriteTaskError(w http.ResponseWriter, r *http.Request, err error) 
 		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusForbidden, "forbidden", "forbidden")
 	case errors.Is(err, errAssistantTenantMismatch):
 		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusForbidden, "tenant_mismatch", "tenant mismatch")
-	case errors.Is(err, errAssistantTaskWorkflowUnavailable):
-		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusServiceUnavailable, "assistant_task_workflow_unavailable", "assistant task workflow unavailable")
+	case assistantIsGateUnavailableError(err):
+		assistantWriteGateUnavailable(w, r)
 	case errors.Is(err, errAssistantIdempotencyKeyConflict):
 		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusConflict, "idempotency_key_conflict", "idempotency key conflict")
 	case errors.Is(err, errAssistantRequestInProgress):

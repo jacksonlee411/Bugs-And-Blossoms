@@ -1,5 +1,7 @@
 # DEV-PLAN-281 执行日志（LibreChat Web UI 源码纳管与新主链路冻结）
 
+> 归档说明（2026-04-12）：本记录已自 `docs/dev-records/` 迁入 `docs/archive/dev-records/`，仅保留为历史执行证据，不再作为活体入口。
+
 ## 1. 执行范围
 - 冻结 `third_party/librechat-web/` 单一来源目录与 `UPSTREAM.yaml` 来源元数据。
 - 落地 `patches/series` 与首个补丁 `0001-use-node-fs-in-post-build.patch`。

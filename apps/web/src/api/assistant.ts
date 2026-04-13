@@ -232,6 +232,50 @@ export interface AssistantModelsResponse {
   }>
 }
 
+export interface AssistantFormalViewer {
+  id: string
+  username: string
+  email: string
+  name: string
+  role: 'USER' | 'ADMIN' | string
+}
+
+export interface AssistantUIBootstrapResponse {
+  contract_version: 'v1' | string
+  viewer: AssistantFormalViewer
+  ui: {
+    model_select: boolean
+    artifacts_enabled: boolean
+    agents_ui_enabled: boolean
+    memory_enabled: boolean
+    web_search_enabled: boolean
+    file_search_enabled: boolean
+    code_interpreter_enabled: boolean
+  }
+  models: Array<{
+    endpoint_key: string
+    endpoint_type: string
+    provider: string
+    model: string
+    label: string
+  }>
+  runtime: {
+    status: 'healthy' | 'degraded' | 'unavailable'
+    runtime_cutover_mode: 'cutover-prep' | 'ui-shell-only' | string
+    domain_policy_version: string
+  }
+}
+
+export interface AssistantSessionResponse {
+  contract_version: 'v1' | string
+  authenticated: boolean
+  viewer: AssistantFormalViewer
+}
+
+export interface AssistantSessionRefreshResponse extends AssistantSessionResponse {
+  refreshed_at: string
+}
+
 export interface AssistantRuntimeUpstream {
   url?: string
   repo?: string
@@ -243,7 +287,7 @@ export interface AssistantRuntimeUpstream {
 export interface AssistantRuntimeService {
   name: string
   required: boolean
-  healthy: 'healthy' | 'degraded' | 'unavailable'
+  healthy: 'healthy' | 'degraded' | 'unavailable' | 'retired'
   reason?: string
   image?: string
   tag?: string
@@ -263,6 +307,13 @@ export interface AssistantRuntimeStatusResponse {
     mcp_enabled: boolean
     actions_enabled: boolean
     agents_write_enabled: boolean
+    agents_ui_enabled: boolean
+    memory_enabled: boolean
+    web_search_enabled: boolean
+    file_search_enabled: boolean
+    code_interpreter_enabled: boolean
+    artifacts_enabled: boolean
+    runtime_cutover_mode?: 'cutover-prep' | 'ui-shell-only' | string
     domain_policy_version?: string
   }
 }
@@ -356,6 +407,22 @@ export async function cancelAssistantTask(taskID: string): Promise<AssistantTask
 
 export async function getAssistantModelProviders(): Promise<AssistantModelProvidersResponse> {
   return httpClient.get<AssistantModelProvidersResponse>('/internal/assistant/model-providers')
+}
+
+export async function getAssistantUIBootstrap(): Promise<AssistantUIBootstrapResponse> {
+  return httpClient.get<AssistantUIBootstrapResponse>('/internal/assistant/ui-bootstrap')
+}
+
+export async function getAssistantSession(): Promise<AssistantSessionResponse> {
+  return httpClient.get<AssistantSessionResponse>('/internal/assistant/session')
+}
+
+export async function refreshAssistantSession(): Promise<AssistantSessionRefreshResponse> {
+  return httpClient.post<AssistantSessionRefreshResponse>('/internal/assistant/session/refresh', {})
+}
+
+export async function logoutAssistantSession(): Promise<void> {
+  return httpClient.post<void>('/internal/assistant/session/logout', {})
 }
 
 export async function validateAssistantModelProviders(

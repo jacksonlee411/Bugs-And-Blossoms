@@ -2,7 +2,6 @@ package server
 
 import (
 	"embed"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -11,6 +10,8 @@ import (
 	"runtime"
 	"sort"
 	"strings"
+
+	"gopkg.in/yaml.v3"
 )
 
 const (
@@ -31,7 +32,6 @@ var assistantTemplateFieldWhitelist = map[string]struct{}{
 	"field_display_map":                        {},
 	"missing_field_guidance":                   {},
 	"contract_projection.required_fields_view": {},
-	"contract_projection.action_spec_summary":  {},
 	"conversation_snapshot.current_phase":      {},
 }
 
@@ -66,20 +66,20 @@ var assistantKnowledgeKnownErrorCodes = map[string]struct{}{
 	errAssistantPlanDeterminismViolation.Error():    {},
 }
 
-//go:embed assistant_knowledge/*.json assistant_knowledge/*/*.json
+//go:embed assistant_knowledge_md/*/*.md
 var assistantKnowledgeFS embed.FS
 
 var assistantKnowledgeReadFileFn = fs.ReadFile
 var assistantKnowledgeGlobFn = fs.Glob
-var assistantKnowledgeJSONUnmarshalFn = json.Unmarshal
+var assistantKnowledgeJSONUnmarshalFn = yaml.Unmarshal
 var assistantKnowledgeRepoStatFn = os.Stat
 var assistantKnowledgeRuntimeCallerFn = runtime.Caller
 var assistantKnowledgeCanonicalHashFn = assistantCanonicalHash
 var assistantLoadKnowledgeRuntimeFn = assistantLoadKnowledgeRuntime
 
 type assistantKnowledgePrompt struct {
-	TemplateID string `json:"template_id"`
-	Text       string `json:"text"`
+	TemplateID string `json:"template_id" yaml:"template_id"`
+	Text       string `json:"text" yaml:"text"`
 }
 
 type assistantInterpretationPack struct {
@@ -99,13 +99,31 @@ type assistantActionViewField struct {
 }
 
 type assistantActionViewGuidance struct {
-	ErrorCode string `json:"error_code"`
-	Text      string `json:"text"`
+	ErrorCode string `json:"error_code" yaml:"error_code"`
+	Text      string `json:"text" yaml:"text"`
 }
 
 type assistantActionViewExample struct {
 	Field   string `json:"field"`
 	Example string `json:"example"`
+}
+
+func assistantOrderedBusinessActionIDs() []string {
+	return []string{
+		assistantIntentCreateOrgUnit,
+		assistantIntentAddOrgUnitVersion,
+		assistantIntentInsertOrgUnitVersion,
+		assistantIntentCorrectOrgUnit,
+		assistantIntentMoveOrgUnit,
+		assistantIntentRenameOrgUnit,
+		assistantIntentDisableOrgUnit,
+		assistantIntentEnableOrgUnit,
+	}
+}
+
+func assistantOrderedPromptActionIDs() []string {
+	actions := assistantOrderedBusinessActionIDs()
+	return append(actions, assistantIntentPlanOnly)
 }
 
 type assistantActionViewPack struct {
@@ -167,6 +185,11 @@ type assistantKnowledgeRuntime struct {
 	routePackID              map[string]string
 	actionView               map[string]map[string]assistantActionViewPack
 	replyGuidance            map[string]map[string][]assistantReplyGuidancePack
+	intentDocs               map[string]map[string]assistantKnowledgeMarkdownDocument
+	actionDocsByAction       map[string]map[string]assistantKnowledgeMarkdownDocument
+	actionDocsByIntent       map[string]map[string]assistantKnowledgeMarkdownDocument
+	toolDocs                 map[string]map[string]assistantKnowledgeMarkdownDocument
+	wikiDocs                 map[string]map[string]assistantKnowledgeMarkdownDocument
 }
 
 type assistantCompiledInterpretationAssets struct {
@@ -195,11 +218,11 @@ type assistantConversationSnapshotResolverResult struct {
 
 type assistantContractProjectionResolverResult struct {
 	ActionID           string
-	ActionSpecSummary  string
 	RequiredFieldsView []string
 }
 
 type assistantPlanContextV1 struct {
+	ActionViewTitle      string
 	ActionViewSummary    string
 	FieldDisplayMap      []assistantActionViewField
 	MissingFieldGuidance []assistantActionViewGuidance
@@ -208,112 +231,26 @@ type assistantPlanContextV1 struct {
 }
 
 func assistantLoadKnowledgeRuntime() (*assistantKnowledgeRuntime, error) {
-	catalogRaw, err := assistantKnowledgeReadFileFn(assistantKnowledgeFS, "assistant_knowledge/intent_route_catalog.json")
-	if err != nil {
-		return nil, fmt.Errorf("%w: load intent_route_catalog failed", errAssistantRuntimeConfigInvalid)
-	}
-	var catalog assistantIntentRouteCatalog
-	if err := assistantKnowledgeJSONUnmarshalFn(catalogRaw, &catalog); err != nil {
-		return nil, fmt.Errorf("%w: decode intent_route_catalog failed", errAssistantRuntimeConfigInvalid)
-	}
-
-	interpretation, interpretationRaw, err := assistantLoadInterpretationPacks()
+	compilation, err := assistantLoadMarkdownKnowledgeCompilation()
 	if err != nil {
 		return nil, err
 	}
-	actionViews, actionViewRaw, err := assistantLoadActionViewPacks()
+	runtime, err := assistantCompileKnowledgeRuntime(
+		compilation.Catalog,
+		compilation.Interpretation,
+		compilation.ActionViews,
+		compilation.ReplyGuidance,
+		compilation.RawByPath,
+	)
 	if err != nil {
 		return nil, err
 	}
-	replyGuidance, replyGuidanceRaw, err := assistantLoadReplyGuidancePacks()
-	if err != nil {
-		return nil, err
-	}
-
-	rawByPath := map[string][]byte{
-		"assistant_knowledge/intent_route_catalog.json": catalogRaw,
-	}
-	for k, v := range interpretationRaw {
-		rawByPath[k] = v
-	}
-	for k, v := range actionViewRaw {
-		rawByPath[k] = v
-	}
-	for k, v := range replyGuidanceRaw {
-		rawByPath[k] = v
-	}
-
-	runtime, err := assistantCompileKnowledgeRuntime(catalog, interpretation, actionViews, replyGuidance, rawByPath)
-	if err != nil {
-		return nil, err
-	}
+	runtime.intentDocs = compilation.IntentDocs
+	runtime.actionDocsByAction = compilation.ActionDocsByAction
+	runtime.actionDocsByIntent = compilation.ActionDocsByIntent
+	runtime.toolDocs = compilation.ToolDocs
+	runtime.wikiDocs = compilation.WikiDocs
 	return runtime, nil
-}
-
-func assistantLoadInterpretationPacks() ([]assistantInterpretationPack, map[string][]byte, error) {
-	files, err := assistantKnowledgeGlobFn(assistantKnowledgeFS, "assistant_knowledge/interpretation/*.json")
-	if err != nil {
-		return nil, nil, fmt.Errorf("%w: list interpretation packs failed", errAssistantRuntimeConfigInvalid)
-	}
-	packs := make([]assistantInterpretationPack, 0, len(files))
-	rawByPath := make(map[string][]byte, len(files))
-	for _, file := range files {
-		raw, err := assistantKnowledgeReadFileFn(assistantKnowledgeFS, file)
-		if err != nil {
-			return nil, nil, fmt.Errorf("%w: read interpretation pack failed", errAssistantRuntimeConfigInvalid)
-		}
-		var pack assistantInterpretationPack
-		if err := assistantKnowledgeJSONUnmarshalFn(raw, &pack); err != nil {
-			return nil, nil, fmt.Errorf("%w: decode interpretation pack failed", errAssistantRuntimeConfigInvalid)
-		}
-		packs = append(packs, pack)
-		rawByPath[file] = raw
-	}
-	return packs, rawByPath, nil
-}
-
-func assistantLoadActionViewPacks() ([]assistantActionViewPack, map[string][]byte, error) {
-	files, err := assistantKnowledgeGlobFn(assistantKnowledgeFS, "assistant_knowledge/action_view/*.json")
-	if err != nil {
-		return nil, nil, fmt.Errorf("%w: list action view packs failed", errAssistantRuntimeConfigInvalid)
-	}
-	packs := make([]assistantActionViewPack, 0, len(files))
-	rawByPath := make(map[string][]byte, len(files))
-	for _, file := range files {
-		raw, err := assistantKnowledgeReadFileFn(assistantKnowledgeFS, file)
-		if err != nil {
-			return nil, nil, fmt.Errorf("%w: read action view pack failed", errAssistantRuntimeConfigInvalid)
-		}
-		var pack assistantActionViewPack
-		if err := assistantKnowledgeJSONUnmarshalFn(raw, &pack); err != nil {
-			return nil, nil, fmt.Errorf("%w: decode action view pack failed", errAssistantRuntimeConfigInvalid)
-		}
-		packs = append(packs, pack)
-		rawByPath[file] = raw
-	}
-	return packs, rawByPath, nil
-}
-
-func assistantLoadReplyGuidancePacks() ([]assistantReplyGuidancePack, map[string][]byte, error) {
-	files, err := assistantKnowledgeGlobFn(assistantKnowledgeFS, "assistant_knowledge/reply_guidance/*.json")
-	if err != nil {
-		return nil, nil, fmt.Errorf("%w: list reply guidance packs failed", errAssistantRuntimeConfigInvalid)
-	}
-	packs := make([]assistantReplyGuidancePack, 0, len(files))
-	rawByPath := make(map[string][]byte, len(files))
-	for _, file := range files {
-		raw, err := assistantKnowledgeReadFileFn(assistantKnowledgeFS, file)
-		if err != nil {
-			return nil, nil, fmt.Errorf("%w: read reply guidance pack failed", errAssistantRuntimeConfigInvalid)
-		}
-		var pack assistantReplyGuidancePack
-		if err := assistantKnowledgeJSONUnmarshalFn(raw, &pack); err != nil {
-			return nil, nil, fmt.Errorf("%w: decode reply guidance pack failed", errAssistantRuntimeConfigInvalid)
-		}
-		packs = append(packs, pack)
-		rawByPath[file] = raw
-	}
-	return packs, rawByPath, nil
 }
 
 func assistantCompileKnowledgeRuntime(
@@ -850,6 +787,13 @@ func assistantValidateForbiddenKeys(rawByPath map[string][]byte) error {
 		if len(raw) == 0 {
 			continue
 		}
+		if strings.HasSuffix(strings.TrimSpace(path), ".md") {
+			frontMatter, _, err := assistantSplitMarkdownFrontMatter(raw)
+			if err != nil {
+				return fmt.Errorf("decode %s failed: %w", path, err)
+			}
+			raw = frontMatter
+		}
 		var obj any
 		if err := assistantKnowledgeJSONUnmarshalFn(raw, &obj); err != nil {
 			return fmt.Errorf("decode %s failed: %w", path, err)
@@ -909,6 +853,9 @@ func assistantValidateSourceRefs(refs []string) error {
 		path := strings.TrimSpace(ref)
 		if path == "" {
 			return errors.New("source_ref empty")
+		}
+		if strings.HasPrefix(path, "docs/archive/") {
+			return fmt.Errorf("source_ref must not target archive: %s", path)
 		}
 		if !assistantRepoPathExists(path) {
 			return fmt.Errorf("source_ref not found: %s", path)
@@ -1019,6 +966,54 @@ func (runtime *assistantKnowledgeRuntime) localeCandidates(locale string) []stri
 	return out
 }
 
+func (runtime *assistantKnowledgeRuntime) findIntentDoc(intentID string, locale string) (assistantKnowledgeMarkdownDocument, bool) {
+	if runtime == nil {
+		return assistantKnowledgeMarkdownDocument{}, false
+	}
+	locales, ok := runtime.intentDocs[strings.TrimSpace(intentID)]
+	if !ok {
+		return assistantKnowledgeMarkdownDocument{}, false
+	}
+	for _, candidate := range runtime.localeCandidates(locale) {
+		if doc, exists := locales[candidate]; exists {
+			return doc, true
+		}
+	}
+	return assistantKnowledgeMarkdownDocument{}, false
+}
+
+func (runtime *assistantKnowledgeRuntime) findActionDocByAction(actionID string, locale string) (assistantKnowledgeMarkdownDocument, bool) {
+	if runtime == nil {
+		return assistantKnowledgeMarkdownDocument{}, false
+	}
+	locales, ok := runtime.actionDocsByAction[strings.TrimSpace(actionID)]
+	if !ok {
+		return assistantKnowledgeMarkdownDocument{}, false
+	}
+	for _, candidate := range runtime.localeCandidates(locale) {
+		if doc, exists := locales[candidate]; exists {
+			return doc, true
+		}
+	}
+	return assistantKnowledgeMarkdownDocument{}, false
+}
+
+func (runtime *assistantKnowledgeRuntime) findActionDocByIntent(intentID string, locale string) (assistantKnowledgeMarkdownDocument, bool) {
+	if runtime == nil {
+		return assistantKnowledgeMarkdownDocument{}, false
+	}
+	locales, ok := runtime.actionDocsByIntent[strings.TrimSpace(intentID)]
+	if !ok {
+		return assistantKnowledgeMarkdownDocument{}, false
+	}
+	for _, candidate := range runtime.localeCandidates(locale) {
+		if doc, exists := locales[candidate]; exists {
+			return doc, true
+		}
+	}
+	return assistantKnowledgeMarkdownDocument{}, false
+}
+
 func (runtime *assistantKnowledgeRuntime) findActionView(actionID string, locale string) (assistantActionViewPack, bool) {
 	if runtime == nil {
 		return assistantActionViewPack{}, false
@@ -1104,6 +1099,29 @@ func (runtime *assistantKnowledgeRuntime) resolveInterpretationPackID(intentID s
 		return packID
 	}
 	return assistantResolveInterpretationPackIDForIntent(intentID, routeKind, runtime.interpretation)
+}
+
+func (runtime *assistantKnowledgeRuntime) findRouteByRouteKind(routeKind string) (assistantIntentRouteEntry, bool) {
+	if runtime == nil {
+		return assistantIntentRouteEntry{}, false
+	}
+	target := strings.TrimSpace(routeKind)
+	if target == "" {
+		return assistantIntentRouteEntry{}, false
+	}
+	for _, entry := range runtime.routeCatalog.Entries {
+		if strings.TrimSpace(entry.RouteKind) != target {
+			continue
+		}
+		if strings.TrimSpace(entry.ActionID) != "" {
+			continue
+		}
+		return entry, true
+	}
+	if target == assistantRouteKindUncertain {
+		return runtime.fallbackUncertainRoute(), true
+	}
+	return assistantIntentRouteEntry{}, false
 }
 
 func (runtime *assistantKnowledgeRuntime) fallbackUncertainRoute() assistantIntentRouteEntry {
@@ -1199,13 +1217,8 @@ func assistantContractProjectionResolver(intent assistantIntentSpec, spec assist
 	if actionID == "" {
 		actionID = strings.TrimSpace(intent.Action)
 	}
-	summary := strings.TrimSpace(spec.PlanSummary)
-	if summary == "" {
-		summary = strings.TrimSpace(spec.PlanTitle)
-	}
 	return assistantContractProjectionResolverResult{
 		ActionID:           actionID,
-		ActionSpecSummary:  summary,
 		RequiredFieldsView: assistantRequiredFieldsViewByAction(strings.TrimSpace(intent.Action)),
 	}
 }
@@ -1229,6 +1242,60 @@ func assistantRequiredFieldsViewByAction(action string) []string {
 	}
 }
 
+type assistantPlanPresentation struct {
+	Title   string
+	Summary string
+}
+
+func (runtime *assistantKnowledgeRuntime) resolvePlanPresentation(intent assistantIntentSpec, locale string) (assistantPlanPresentation, error) {
+	if runtime == nil {
+		return assistantPlanPresentation{}, fmt.Errorf("%w: knowledge runtime missing", errAssistantRuntimeConfigInvalid)
+	}
+	routeKind := strings.TrimSpace(intent.RouteKind)
+	if routeKind == "" {
+		routeKind = assistantRouteKindBusinessAction
+	}
+	if routeKind != assistantRouteKindBusinessAction {
+		intentID := strings.TrimSpace(intent.IntentID)
+		if intentID == "" {
+			entry, ok := runtime.findRouteByRouteKind(routeKind)
+			if !ok {
+				return assistantPlanPresentation{}, fmt.Errorf("%w: route intent doc missing for %s", errAssistantRuntimeConfigInvalid, routeKind)
+			}
+			intentID = strings.TrimSpace(entry.IntentID)
+		}
+		doc, ok := runtime.findIntentDoc(intentID, locale)
+		if !ok {
+			return assistantPlanPresentation{}, fmt.Errorf("%w: intent doc missing for %s", errAssistantRuntimeConfigInvalid, intentID)
+		}
+		title := strings.TrimSpace(doc.Title)
+		summary := strings.TrimSpace(doc.Summary)
+		if title == "" || summary == "" {
+			return assistantPlanPresentation{}, fmt.Errorf("%w: intent doc title/summary required for %s", errAssistantRuntimeConfigInvalid, intentID)
+		}
+		return assistantPlanPresentation{Title: title, Summary: summary}, nil
+	}
+
+	actionID := strings.TrimSpace(intent.Action)
+	if actionID == "" {
+		return assistantPlanPresentation{}, fmt.Errorf("%w: action id required for business action", errAssistantRuntimeConfigInvalid)
+	}
+	pack, ok := runtime.findActionView(actionID, locale)
+	if !ok {
+		return assistantPlanPresentation{}, fmt.Errorf("%w: action view pack missing for %s", errAssistantRuntimeConfigInvalid, actionID)
+	}
+	doc, ok := runtime.findActionDocByAction(actionID, locale)
+	if !ok {
+		return assistantPlanPresentation{}, fmt.Errorf("%w: action doc missing for %s", errAssistantRuntimeConfigInvalid, actionID)
+	}
+	title := strings.TrimSpace(doc.Title)
+	summary := strings.TrimSpace(pack.Summary)
+	if title == "" || summary == "" {
+		return assistantPlanPresentation{}, fmt.Errorf("%w: action doc title/summary required for %s", errAssistantRuntimeConfigInvalid, actionID)
+	}
+	return assistantPlanPresentation{Title: title, Summary: summary}, nil
+}
+
 func (runtime *assistantKnowledgeRuntime) buildPlanContextV1(tenantID string, locale string, intent assistantIntentSpec, spec assistantActionSpec, turn *assistantTurn) (assistantPlanContextV1, error) {
 	if runtime == nil {
 		return assistantPlanContextV1{}, fmt.Errorf("%w: knowledge runtime missing", errAssistantRuntimeConfigInvalid)
@@ -1240,33 +1307,18 @@ func (runtime *assistantKnowledgeRuntime) buildPlanContextV1(tenantID string, lo
 	if strings.TrimSpace(intent.RouteKind) == "" {
 		intent.RouteKind = assistantRouteKindBusinessAction
 	}
+	presentation, err := runtime.resolvePlanPresentation(intent, locale)
+	if err != nil {
+		return assistantPlanContextV1{}, err
+	}
+	context.ActionViewTitle = strings.TrimSpace(presentation.Title)
+	context.ActionViewSummary = strings.TrimSpace(presentation.Summary)
 	if strings.TrimSpace(intent.RouteKind) != assistantRouteKindBusinessAction {
-		packID := runtime.resolveInterpretationPackID(intent.IntentID, intent.RouteKind)
-		if packID == "" {
-			packID = assistantInterpretationDefaultPackID
-		}
-		pack, ok := runtime.findInterpretation(packID, locale)
-		if !ok {
-			pack, ok = runtime.findInterpretation(assistantInterpretationDefaultPackID, locale)
-		}
-		if !ok {
-			return assistantPlanContextV1{}, fmt.Errorf("%w: interpretation pack missing for %s", errAssistantRuntimeConfigInvalid, packID)
-		}
-		if len(pack.ClarificationPrompts) > 0 {
-			context.ActionViewSummary = strings.TrimSpace(pack.ClarificationPrompts[0].Text)
-		}
-		if context.ActionViewSummary == "" {
-			context.ActionViewSummary = "这是非动作请求，不会触发业务提交。"
-		}
 		return context, nil
 	}
 	pack, ok := runtime.findActionView(strings.TrimSpace(intent.Action), locale)
 	if !ok {
-		if strings.TrimSpace(intent.Action) == assistantIntentCreateOrgUnit {
-			return assistantPlanContextV1{}, fmt.Errorf("%w: action view pack missing for %s", errAssistantRuntimeConfigInvalid, strings.TrimSpace(intent.Action))
-		}
-		context.ActionViewSummary = strings.TrimSpace(spec.PlanSummary)
-		return context, nil
+		return assistantPlanContextV1{}, fmt.Errorf("%w: action view pack missing for %s", errAssistantRuntimeConfigInvalid, strings.TrimSpace(intent.Action))
 	}
 	context.ActionViewSummary = strings.TrimSpace(pack.Summary)
 	context.FieldDisplayMap = append([]assistantActionViewField(nil), pack.FieldDisplayMap...)
@@ -1297,6 +1349,9 @@ func assistantKnowledgeGuidanceText(context assistantPlanContextV1, validationEr
 
 func assistantApplyPlanContextV1(plan *assistantPlanSummary, dryRun *assistantDryRunResult, intent assistantIntentSpec, context assistantPlanContextV1) {
 	if plan != nil {
+		if title := strings.TrimSpace(context.ActionViewTitle); title != "" {
+			plan.Title = title
+		}
 		if summary := strings.TrimSpace(context.ActionViewSummary); summary != "" {
 			plan.Summary = summary
 		}
@@ -1311,8 +1366,6 @@ func assistantApplyPlanContextV1(plan *assistantPlanSummary, dryRun *assistantDr
 		dryRun.ValidationErrors = validationErrors
 		if summary := strings.TrimSpace(context.ActionViewSummary); summary != "" {
 			dryRun.Explain = summary
-		} else {
-			dryRun.Explain = "这是非动作请求，不会触发业务提交。"
 		}
 		return
 	}

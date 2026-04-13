@@ -3,12 +3,12 @@
   "bubble_count": 1,
   "bubbles": [
     {
-      "binding_key": "conv_f55151ffd887436592c634c5512afcc6::turn_2873e2f275994853938fe031368117cf::assistant_2f2154459cd9451791fce5d3f26fac9e",
-      "conversation_id": "conv_f55151ffd887436592c634c5512afcc6",
-      "turn_id": "turn_2873e2f275994853938fe031368117cf",
-      "request_id": "assistant_2f2154459cd9451791fce5d3f26fac9e",
-      "message_id": "07637b76-ff90-4216-a67c-0a39d86afa67_",
-      "text": "上级组织：AI治理办公室；新建组织：人力资源部2；生效日期：2026-01-01 task_id: fb7f0d57-c210-4d7b-9f5e-d7638273df73 · succeeded Selected: AI治理办公室 org_code: O000001 parent_org_code: TP290BAIGOV effective_date: 2026-01-01 event_type: CREATE"
+      "binding_key": "conv_81801261683e463aada2c1ee3a8fc293::turn_a2846536056c439d8f8b718bf9839093::assistant_ed52416126304e38ae2ebcc589678961",
+      "conversation_id": "conv_81801261683e463aada2c1ee3a8fc293",
+      "turn_id": "turn_a2846536056c439d8f8b718bf9839093",
+      "request_id": "assistant_ed52416126304e38ae2ebcc589678961",
+      "message_id": "c6c9f511-50ae-4912-9509-6017c58e23f4_",
+      "text": "上级组织：TP290BAIGOV；新建组织：人力资源部2；生效日期：2026-01-01 task_id: 4b31279e-c52e-4f34-bd9f-1b91a3438794 · succeeded Selected: AI治理办公室 org_code: O000001 parent_org_code: TP290BAIGOV effective_date: 2026-01-01 event_type: CREATE"
     }
   ],
   "external_reply_container_count": 0,

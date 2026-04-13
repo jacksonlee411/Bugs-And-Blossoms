@@ -238,19 +238,19 @@ else
     add_violation "R3" ".github/workflows/quality-gates.yml" "assistant_config_ssot_drift_detected" "missing CI step for assistant-config-single-source gate"
 fi
 
-docs_with_gate=0
-for doc in \
-  docs/dev-plans/012-ci-quality-gates.md \
-  docs/dev-plans/230-librechat-project-level-integration-plan.md \
-  docs/dev-plans/231-librechat-prerequisites-contract-and-gates-plan.md; do
-  if [[ -f "$doc" ]] && grep -q 'assistant-config-single-source' "$doc"; then
-    docs_with_gate=$((docs_with_gate + 1))
-  fi
-done
-if ((docs_with_gate < 2)); then
-  add_violation "R3" "docs/dev-plans" "assistant_config_ssot_drift_detected" \
-    "assistant-config-single-source must be documented in at least two plan docs (012/230/231)"
-fi
+	docs_with_gate=0
+	for doc in \
+	  docs/dev-plans/012-ci-quality-gates.md \
+	  docs/archive/dev-plans/230-librechat-project-level-integration-plan.md \
+	  docs/archive/dev-plans/231-librechat-prerequisites-contract-and-gates-plan.md; do
+	  if [[ -f "$doc" ]] && grep -q 'assistant-config-single-source' "$doc"; then
+	    docs_with_gate=$((docs_with_gate + 1))
+	  fi
+	done
+	if ((docs_with_gate < 2)); then
+	  add_violation "R3" "docs/dev-plans" "assistant_config_ssot_drift_detected" \
+	    "assistant-config-single-source must be documented in at least two plan docs (012/archive-230/archive-231)"
+	fi
 
 resolve_mode_value=""
 ref_a=""

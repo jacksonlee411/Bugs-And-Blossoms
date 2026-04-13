@@ -1,13 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Outlet } from 'react-router-dom';
+import { EModelEndpoint } from 'librechat-data-provider';
 import type { ContextType } from '~/common';
-import {
-  useSearchEnabled,
-  useAssistantsMap,
-  useAuthContext,
-  useAgentsMap,
-  useFileMap,
-} from '~/hooks';
+import { useAuthContext, useFileMap } from '~/hooks';
 import {
   PromptGroupsProvider,
   AssistantsMapContext,
@@ -20,6 +15,13 @@ import { TermsAndConditionsModal } from '~/components/ui';
 import { Nav, MobileNav } from '~/components/Nav';
 import { useHealthCheck } from '~/data-provider';
 import { Banner } from '~/components/Banners';
+
+const emptyAssistantsMap = {
+  [EModelEndpoint.assistants]: {},
+  [EModelEndpoint.azureAssistants]: {},
+};
+
+const emptyAgentsMap = {};
 
 export default function Root() {
   const [showTerms, setShowTerms] = useState(false);
@@ -34,16 +36,12 @@ export default function Root() {
   // Global health check - runs once per authenticated session
   useHealthCheck(isAuthenticated);
 
-  const assistantsMap = useAssistantsMap({ isAuthenticated });
-  const agentsMap = useAgentsMap({ isAuthenticated });
   const fileMap = useFileMap({ isAuthenticated });
 
   const { data: config } = useGetStartupConfig();
   const { data: termsData } = useUserTermsQuery({
     enabled: isAuthenticated && config?.interface?.termsOfService?.modalAcceptance === true,
   });
-
-  useSearchEnabled(isAuthenticated);
 
   useEffect(() => {
     if (termsData) {
@@ -57,7 +55,7 @@ export default function Root() {
 
   const handleDeclineTerms = () => {
     setShowTerms(false);
-    logout('/login?redirect=false');
+    logout('/app/login?redirect=false');
   };
 
   if (!isAuthenticated) {
@@ -67,8 +65,8 @@ export default function Root() {
   return (
     <SetConvoProvider>
       <FileMapContext.Provider value={fileMap}>
-        <AssistantsMapContext.Provider value={assistantsMap}>
-          <AgentsMapContext.Provider value={agentsMap}>
+        <AssistantsMapContext.Provider value={emptyAssistantsMap}>
+          <AgentsMapContext.Provider value={emptyAgentsMap}>
             <PromptGroupsProvider>
               <Banner onHeightChange={setBannerHeight} />
               <div className="flex" style={{ height: `calc(100dvh - ${bannerHeight}px)` }}>

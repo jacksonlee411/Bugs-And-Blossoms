@@ -1,5 +1,7 @@
 # DEV-PLAN-232 执行日志
 
+> 归档说明（2026-04-12）：本记录已自 `docs/dev-records/` 迁入 `docs/archive/dev-records/`，仅保留为历史执行证据，不再作为活体入口。
+
 ## 2026-03-03（UTC）
 
 - 2026-03-03 12:37 UTC：新增运行基线资产目录 `deploy/librechat/`，包含 `docker-compose.upstream.yaml`、`docker-compose.overlay.yaml`、`.env.example`、`versions.lock.yaml`、`healthcheck.sh`、`README.md`。

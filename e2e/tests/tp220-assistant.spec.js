@@ -20,7 +20,7 @@ function defaultRuntimeStatus() {
     upstream: { url: "http://localhost:3080" },
     services: [
       { name: "api", required: true, healthy: "healthy" },
-      { name: "mongodb", required: true, healthy: "healthy" }
+      { name: "mongodb", required: false, healthy: "retired", reason: "retired_by_design" }
     ],
     capabilities: {
       actions_enabled: true,
@@ -112,7 +112,7 @@ test("tp220-e2e-102: /app/assistant renders runtime summary and recent conversat
         upstream: { url: "http://localhost:3999" },
         services: [
           { name: "api", required: true, healthy: "unavailable" },
-          { name: "mongodb", required: true, healthy: "healthy" }
+          { name: "mongodb", required: false, healthy: "retired", reason: "retired_by_design" }
         ],
         capabilities: {
           actions_enabled: true,
@@ -215,7 +215,7 @@ test("tp220-e2e-007: librechat formal entry cannot bypass business write routes"
         parent_org_code: ""
       }
     });
-    expect([200, 201]).not.toContain(bypassResp.status());
+    expect(bypassResp.status()).toBe(410);
   } finally {
     await appContext.close();
   }

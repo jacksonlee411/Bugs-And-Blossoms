@@ -107,6 +107,43 @@ func TestAssistantPhaseSnapshot_TurnDerivedFields(t *testing.T) {
 		}
 	})
 
+	t.Run("append version projection drives pending summary", func(t *testing.T) {
+		turn := assistantTestAttachOrgUnitVersionProjection(&assistantTurn{
+			State: assistantStateValidated,
+			Intent: assistantIntentSpec{
+				Action:           assistantIntentAddOrgUnitVersion,
+				OrgCode:          "FLOWER-C",
+				EffectiveDate:    "2026-01-01",
+				NewName:          "运营一部",
+				NewParentRefText: "鲜花组织",
+			},
+			Candidates:          []assistantCandidate{{CandidateID: "c1", Name: "鲜花组织", CandidateCode: "FLOWER-A"}},
+			ResolvedCandidateID: "c1",
+		}, nil)
+		assistantRefreshTurnDerivedFields(turn)
+		if turn.Phase != assistantPhaseAwaitCommitConfirm {
+			t.Fatalf("expected await_commit_confirm, got=%q", turn.Phase)
+		}
+		if !strings.Contains(turn.PendingDraftSummary, "目标组织：FLOWER-C") {
+			t.Fatalf("expected append pending draft summary populated, got=%q", turn.PendingDraftSummary)
+		}
+	})
+
+	t.Run("create projection missing fields drives phase", func(t *testing.T) {
+		turn := assistantTestAttachCreateOrgUnitProjection(&assistantTurn{
+			State:  assistantStateValidated,
+			Intent: assistantIntentSpec{Action: assistantIntentCreateOrgUnit},
+		}, nil)
+		snapshot := assistantCloneCreateOrgUnitProjectionSnapshot(turn.DryRun.CreateOrgUnitProjection)
+		snapshot.Projection.Readiness = "missing_fields"
+		snapshot.Projection.PendingDraftSummary = ""
+		turn.DryRun.CreateOrgUnitProjection = snapshot
+		assistantRefreshTurnDerivedFields(turn)
+		if turn.Phase != assistantPhaseAwaitMissingFields {
+			t.Fatalf("expected await_missing_fields, got=%q", turn.Phase)
+		}
+	})
+
 	t.Run("committed reply", func(t *testing.T) {
 		turn := &assistantTurn{
 			State:        assistantStateCommitted,
@@ -120,6 +157,22 @@ func TestAssistantPhaseSnapshot_TurnDerivedFields(t *testing.T) {
 			t.Fatalf("expected success commit reply, got=%+v", turn.CommitReply)
 		}
 	})
+}
+
+func TestAssistantPhaseSnapshot_MissingFieldsJSONAlwaysArray(t *testing.T) {
+	if got := assistantMissingFieldsJSON(nil); got != "[]" {
+		t.Fatalf("nil turn missing_fields json=%q", got)
+	}
+
+	turn := &assistantTurn{}
+	if got := assistantMissingFieldsJSON(turn); got != "[]" {
+		t.Fatalf("empty turn missing_fields json=%q", got)
+	}
+
+	turn.DryRun.ValidationErrors = []string{"missing_effective_date"}
+	if got := assistantMissingFieldsJSON(turn); got != "[\"effective_date\"]" {
+		t.Fatalf("unexpected populated missing_fields json=%q", got)
+	}
 }
 
 func TestAssistantPhaseSnapshot_ConversationAndReplyDerived(t *testing.T) {

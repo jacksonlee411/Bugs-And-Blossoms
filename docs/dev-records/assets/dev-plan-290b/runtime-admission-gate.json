@@ -1,7 +1,7 @@
 {
   "plan": "DEV-PLAN-290B",
   "status": "passed",
-  "tenant_id": "a46671f7-dba5-4e51-99be-e5c43ca7909a",
+  "tenant_id": "c0ce3448-08a1-4e34-a930-52614454f3c5",
   "probe_input": "在 AI治理办公室 下新建 人力资源部2，生效日期 2026-01-01",
   "checks": {
     "create_turn_status_200": true,
@@ -10,7 +10,7 @@
   },
   "create_conversation": {
     "status": 200,
-    "conversation_id": "conv_fc9d37b5521c497cad19b2749602df1a",
+    "conversation_id": "conv_c7f6bd041b59497b83293d16df2b833e",
     "error_code": ""
   },
   "create_turn": {
@@ -19,13 +19,13 @@
   },
   "observed": {
     "intent_action": "create_orgunit",
-    "phase": "await_missing_fields",
+    "phase": "await_commit_confirm",
     "model_provider": "openai",
     "model_name": "gpt-5.1",
     "model_revision": "r2f31cdf6746a",
     "fallback_detected": false,
-    "request_id": "assistant_54ac06317db9456e8925d7407fc50196",
-    "trace_id": "de60eff914ee4f2fa2b134bdce4d1e04"
+    "request_id": "assistant_4c4706f5a7194c5d8bea9253f66b300d",
+    "trace_id": "354830c373314017a0853894f5d38971"
   },
-  "captured_at": "2026-04-11T14:38:12.656Z"
+  "captured_at": "2026-04-13T10:12:57.613Z"
 }

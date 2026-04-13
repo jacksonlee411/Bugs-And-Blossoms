@@ -537,7 +537,7 @@ func TestAssistant268TurnActionAPIClosureCoverage(t *testing.T) {
 
 	serviceMissingRec := httptest.NewRecorder()
 	handleAssistantTurnActionAPI(serviceMissingRec, assistantReqWithContext(http.MethodPost, "/internal/assistant/conversations/conv/turns/turn:reply", `{}`, true, true), nil)
-	if serviceMissingRec.Code != http.StatusInternalServerError || assistantDecodeErrCode(t, serviceMissingRec) != "assistant_service_missing" {
+	if serviceMissingRec.Code != http.StatusServiceUnavailable || assistantDecodeErrCode(t, serviceMissingRec) != "assistant_gate_unavailable" {
 		t.Fatalf("unexpected service missing response=%d body=%s", serviceMissingRec.Code, serviceMissingRec.Body.String())
 	}
 

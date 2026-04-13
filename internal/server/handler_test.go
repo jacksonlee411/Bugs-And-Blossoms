@@ -530,10 +530,10 @@ func TestUI_MUIOnly(t *testing.T) {
 	reqAssistantUINoSession.Host = "localhost:8080"
 	recAssistantUINoSession := httptest.NewRecorder()
 	h.ServeHTTP(recAssistantUINoSession, reqAssistantUINoSession)
-	if recAssistantUINoSession.Code != http.StatusFound {
+	if recAssistantUINoSession.Code != http.StatusGone {
 		t.Fatalf("assistant-ui (no session) status=%d", recAssistantUINoSession.Code)
 	}
-	if loc := recAssistantUINoSession.Result().Header.Get("Location"); loc != "/app/login" {
+	if loc := recAssistantUINoSession.Result().Header.Get("Location"); loc != "" {
 		t.Fatalf("unexpected assistant-ui redirect location=%q", loc)
 	}
 
@@ -1391,7 +1391,7 @@ func TestNewHandlerWithOptions_AssistantRoutes_AreWired(t *testing.T) {
 	}
 	if rec := call(http.MethodGet, "/internal/assistant/tasks/task_1", ""); rec.Code == http.StatusNotFound {
 		t.Fatalf("assistant task detail route not wired")
-	} else if rec.Code != http.StatusServiceUnavailable || assistantDecodeErrCode(t, rec) != "assistant_task_workflow_unavailable" {
+	} else if rec.Code != http.StatusServiceUnavailable || assistantDecodeErrCode(t, rec) != "assistant_gate_unavailable" {
 		t.Fatalf("assistant task detail status=%d body=%s", rec.Code, rec.Body.String())
 	}
 	if rec := call(http.MethodGet, "/internal/assistant/conversations", ""); rec.Code == http.StatusNotFound {
@@ -1399,12 +1399,12 @@ func TestNewHandlerWithOptions_AssistantRoutes_AreWired(t *testing.T) {
 	}
 	if rec := call(http.MethodPost, "/internal/assistant/conversations/conv_1/turns/turn_1:commit", `{}`); rec.Code == http.StatusNotFound {
 		t.Fatalf("assistant turn action route not wired")
-	} else if rec.Code != http.StatusServiceUnavailable || assistantDecodeErrCode(t, rec) != "assistant_task_workflow_unavailable" {
+	} else if rec.Code != http.StatusServiceUnavailable || assistantDecodeErrCode(t, rec) != "assistant_gate_unavailable" {
 		t.Fatalf("assistant turn action status=%d body=%s", rec.Code, rec.Body.String())
 	}
 	if rec := call(http.MethodPost, "/internal/assistant/tasks/task_1:cancel", ""); rec.Code == http.StatusNotFound {
 		t.Fatalf("assistant task action route not wired")
-	} else if rec.Code != http.StatusServiceUnavailable || assistantDecodeErrCode(t, rec) != "assistant_task_workflow_unavailable" {
+	} else if rec.Code != http.StatusServiceUnavailable || assistantDecodeErrCode(t, rec) != "assistant_gate_unavailable" {
 		t.Fatalf("assistant task action status=%d body=%s", rec.Code, rec.Body.String())
 	}
 	if rec := call(http.MethodGet, "/internal/assistant/model-providers", ""); rec.Code == http.StatusNotFound {
@@ -1421,6 +1421,50 @@ func TestNewHandlerWithOptions_AssistantRoutes_AreWired(t *testing.T) {
 	}
 	if rec := call(http.MethodGet, "/internal/assistant/runtime-status", ""); rec.Code == http.StatusNotFound {
 		t.Fatalf("assistant runtime status route not wired")
+	}
+	if rec := call(http.MethodGet, "/internal/assistant/ui-bootstrap", ""); rec.Code == http.StatusNotFound {
+		t.Fatalf("assistant ui bootstrap route not wired")
+	}
+	if rec := call(http.MethodGet, "/internal/assistant/session", ""); rec.Code == http.StatusNotFound {
+		t.Fatalf("assistant session route not wired")
+	}
+	if rec := call(http.MethodPost, "/internal/assistant/session/refresh", ""); rec.Code == http.StatusNotFound {
+		t.Fatalf("assistant session refresh route not wired")
+	}
+	if rec := call(http.MethodGet, "/assets/librechat-web/api/config", ""); rec.Code != http.StatusNotFound {
+		t.Fatalf("removed librechat config compat route status=%d body=%s", rec.Code, rec.Body.String())
+	}
+	if rec := call(http.MethodGet, "/assets/librechat-web/api/endpoints", ""); rec.Code != http.StatusNotFound {
+		t.Fatalf("removed librechat endpoints compat route status=%d body=%s", rec.Code, rec.Body.String())
+	}
+	if rec := call(http.MethodGet, "/assets/librechat-web/api/models", ""); rec.Code != http.StatusNotFound {
+		t.Fatalf("removed librechat models compat route status=%d body=%s", rec.Code, rec.Body.String())
+	}
+	if rec := call(http.MethodGet, "/app/assistant/librechat/api/config", ""); rec.Code != http.StatusNotFound {
+		t.Fatalf("removed librechat formal alias config compat route status=%d body=%s", rec.Code, rec.Body.String())
+	}
+	if rec := call(http.MethodGet, "/app/assistant/librechat/api/endpoints", ""); rec.Code != http.StatusNotFound {
+		t.Fatalf("removed librechat formal alias endpoints compat route status=%d body=%s", rec.Code, rec.Body.String())
+	}
+	if rec := call(http.MethodGet, "/app/assistant/librechat/api/models", ""); rec.Code != http.StatusNotFound {
+		t.Fatalf("removed librechat formal alias models compat route status=%d body=%s", rec.Code, rec.Body.String())
+	}
+	removedCompatRoutes := []struct {
+		method string
+		path   string
+	}{
+		{method: http.MethodPost, path: "/assets/librechat-web/api/auth/refresh"},
+		{method: http.MethodPost, path: "/assets/librechat-web/api/auth/logout"},
+		{method: http.MethodGet, path: "/assets/librechat-web/api/user"},
+		{method: http.MethodGet, path: "/assets/librechat-web/api/roles/user"},
+		{method: http.MethodGet, path: "/assets/librechat-web/api/roles/admin"},
+		{method: http.MethodPost, path: "/app/assistant/librechat/api/auth/refresh"},
+		{method: http.MethodGet, path: "/app/assistant/librechat/api/user"},
+	}
+	for _, tc := range removedCompatRoutes {
+		if rec := call(tc.method, tc.path, ""); rec.Code != http.StatusNotFound {
+			t.Fatalf("removed compat route %s %s status=%d body=%s", tc.method, tc.path, rec.Code, rec.Body.String())
+		}
 	}
 }
 

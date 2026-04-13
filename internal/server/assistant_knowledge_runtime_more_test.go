@@ -120,208 +120,55 @@ func assistantKnowledgeBaseCompileInput() (
 }
 
 func TestAssistantKnowledgeRuntime_LoadersErrorPaths(t *testing.T) {
-	t.Run("load knowledge runtime errors", func(t *testing.T) {
-		t.Run("catalog read failed", func(t *testing.T) {
-			hooks := captureAssistantKnowledgeHooks()
-			defer hooks.restore()
-			assistantKnowledgeReadFileFn = func(_ fs.FS, path string) ([]byte, error) {
-				if path == "assistant_knowledge/intent_route_catalog.json" {
-					return nil, errors.New("read failed")
-				}
-				return hooks.readFileFn(assistantKnowledgeFS, path)
-			}
-			if _, err := assistantLoadKnowledgeRuntime(); !errors.Is(err, errAssistantRuntimeConfigInvalid) {
-				t.Fatalf("expected runtime config invalid, got=%v", err)
-			}
-		})
-
-		t.Run("catalog decode failed", func(t *testing.T) {
-			hooks := captureAssistantKnowledgeHooks()
-			defer hooks.restore()
-			assistantKnowledgeReadFileFn = func(_ fs.FS, path string) ([]byte, error) {
-				if path == "assistant_knowledge/intent_route_catalog.json" {
-					return []byte(`{`), nil
-				}
-				return hooks.readFileFn(assistantKnowledgeFS, path)
-			}
-			if _, err := assistantLoadKnowledgeRuntime(); !errors.Is(err, errAssistantRuntimeConfigInvalid) {
-				t.Fatalf("expected runtime config invalid, got=%v", err)
-			}
-		})
-
-		t.Run("compile failed", func(t *testing.T) {
-			hooks := captureAssistantKnowledgeHooks()
-			defer hooks.restore()
-			assistantKnowledgeCanonicalHashFn = func(any) string { return "" }
-			if _, err := assistantLoadKnowledgeRuntime(); !errors.Is(err, errAssistantRuntimeConfigInvalid) {
-				t.Fatalf("expected runtime config invalid, got=%v", err)
-			}
-		})
-
-		t.Run("interpretation load failed", func(t *testing.T) {
-			hooks := captureAssistantKnowledgeHooks()
-			defer hooks.restore()
-			assistantKnowledgeGlobFn = func(fsys fs.FS, pattern string) ([]string, error) {
-				if pattern == "assistant_knowledge/interpretation/*.json" {
-					return nil, errors.New("glob failed")
-				}
-				return hooks.globFn(fsys, pattern)
-			}
-			if _, err := assistantLoadKnowledgeRuntime(); !errors.Is(err, errAssistantRuntimeConfigInvalid) {
-				t.Fatalf("expected runtime config invalid, got=%v", err)
-			}
-		})
-
-		t.Run("action view load failed", func(t *testing.T) {
-			hooks := captureAssistantKnowledgeHooks()
-			defer hooks.restore()
-			assistantKnowledgeGlobFn = func(fsys fs.FS, pattern string) ([]string, error) {
-				if pattern == "assistant_knowledge/action_view/*.json" {
-					return nil, errors.New("glob failed")
-				}
-				return hooks.globFn(fsys, pattern)
-			}
-			if _, err := assistantLoadKnowledgeRuntime(); !errors.Is(err, errAssistantRuntimeConfigInvalid) {
-				t.Fatalf("expected runtime config invalid, got=%v", err)
-			}
-		})
-
-		t.Run("reply guidance load failed", func(t *testing.T) {
-			hooks := captureAssistantKnowledgeHooks()
-			defer hooks.restore()
-			assistantKnowledgeGlobFn = func(fsys fs.FS, pattern string) ([]string, error) {
-				if pattern == "assistant_knowledge/reply_guidance/*.json" {
-					return nil, errors.New("glob failed")
-				}
-				return hooks.globFn(fsys, pattern)
-			}
-			if _, err := assistantLoadKnowledgeRuntime(); !errors.Is(err, errAssistantRuntimeConfigInvalid) {
-				t.Fatalf("expected runtime config invalid, got=%v", err)
-			}
-		})
-	})
-
-	t.Run("interpretation loader failures", func(t *testing.T) {
-		t.Run("glob failed", func(t *testing.T) {
-			hooks := captureAssistantKnowledgeHooks()
-			defer hooks.restore()
-			assistantKnowledgeGlobFn = func(_ fs.FS, pattern string) ([]string, error) {
-				return nil, errors.New("glob failed")
-			}
-			if _, _, err := assistantLoadInterpretationPacks(); !errors.Is(err, errAssistantRuntimeConfigInvalid) {
-				t.Fatalf("expected runtime config invalid, got=%v", err)
-			}
-		})
-
-		t.Run("read failed", func(t *testing.T) {
-			hooks := captureAssistantKnowledgeHooks()
-			defer hooks.restore()
-			assistantKnowledgeGlobFn = func(_ fs.FS, pattern string) ([]string, error) {
-				return []string{"assistant_knowledge/interpretation/mock.json"}, nil
-			}
-			assistantKnowledgeReadFileFn = func(_ fs.FS, path string) ([]byte, error) {
+	t.Run("markdown runtime read failed", func(t *testing.T) {
+		hooks := captureAssistantKnowledgeHooks()
+		defer hooks.restore()
+		assistantKnowledgeReadFileFn = func(_ fs.FS, path string) ([]byte, error) {
+			if path == "assistant_knowledge_md/intent/org.orgunit_create.zh.md" {
 				return nil, errors.New("read failed")
 			}
-			if _, _, err := assistantLoadInterpretationPacks(); !errors.Is(err, errAssistantRuntimeConfigInvalid) {
-				t.Fatalf("expected runtime config invalid, got=%v", err)
-			}
-		})
-
-		t.Run("decode failed", func(t *testing.T) {
-			hooks := captureAssistantKnowledgeHooks()
-			defer hooks.restore()
-			assistantKnowledgeGlobFn = func(_ fs.FS, pattern string) ([]string, error) {
-				return []string{"assistant_knowledge/interpretation/mock.json"}, nil
-			}
-			assistantKnowledgeReadFileFn = func(_ fs.FS, path string) ([]byte, error) {
-				return []byte(`{`), nil
-			}
-			if _, _, err := assistantLoadInterpretationPacks(); !errors.Is(err, errAssistantRuntimeConfigInvalid) {
-				t.Fatalf("expected runtime config invalid, got=%v", err)
-			}
-		})
+			return hooks.readFileFn(assistantKnowledgeFS, path)
+		}
+		if _, err := assistantLoadKnowledgeRuntime(); !errors.Is(err, errAssistantRuntimeConfigInvalid) {
+			t.Fatalf("expected runtime config invalid, got=%v", err)
+		}
 	})
 
-	t.Run("action view loader failures", func(t *testing.T) {
-		t.Run("glob failed", func(t *testing.T) {
-			hooks := captureAssistantKnowledgeHooks()
-			defer hooks.restore()
-			assistantKnowledgeGlobFn = func(_ fs.FS, pattern string) ([]string, error) {
-				return nil, errors.New("glob failed")
+	t.Run("markdown runtime front matter decode failed", func(t *testing.T) {
+		hooks := captureAssistantKnowledgeHooks()
+		defer hooks.restore()
+		assistantKnowledgeReadFileFn = func(_ fs.FS, path string) ([]byte, error) {
+			if path == "assistant_knowledge_md/intent/org.orgunit_create.zh.md" {
+				return []byte("---\nid: org.orgunit_create\nlocale: zh\nkind: intent\nversion:\n  - bad\n---\nbody"), nil
 			}
-			if _, _, err := assistantLoadActionViewPacks(); !errors.Is(err, errAssistantRuntimeConfigInvalid) {
-				t.Fatalf("expected runtime config invalid, got=%v", err)
-			}
-		})
-
-		t.Run("read failed", func(t *testing.T) {
-			hooks := captureAssistantKnowledgeHooks()
-			defer hooks.restore()
-			assistantKnowledgeGlobFn = func(_ fs.FS, pattern string) ([]string, error) {
-				return []string{"assistant_knowledge/action_view/mock.json"}, nil
-			}
-			assistantKnowledgeReadFileFn = func(_ fs.FS, path string) ([]byte, error) {
-				return nil, errors.New("read failed")
-			}
-			if _, _, err := assistantLoadActionViewPacks(); !errors.Is(err, errAssistantRuntimeConfigInvalid) {
-				t.Fatalf("expected runtime config invalid, got=%v", err)
-			}
-		})
-
-		t.Run("decode failed", func(t *testing.T) {
-			hooks := captureAssistantKnowledgeHooks()
-			defer hooks.restore()
-			assistantKnowledgeGlobFn = func(_ fs.FS, pattern string) ([]string, error) {
-				return []string{"assistant_knowledge/action_view/mock.json"}, nil
-			}
-			assistantKnowledgeReadFileFn = func(_ fs.FS, path string) ([]byte, error) {
-				return []byte(`{`), nil
-			}
-			if _, _, err := assistantLoadActionViewPacks(); !errors.Is(err, errAssistantRuntimeConfigInvalid) {
-				t.Fatalf("expected runtime config invalid, got=%v", err)
-			}
-		})
+			return hooks.readFileFn(assistantKnowledgeFS, path)
+		}
+		if _, err := assistantLoadKnowledgeRuntime(); !errors.Is(err, errAssistantRuntimeConfigInvalid) {
+			t.Fatalf("expected runtime config invalid, got=%v", err)
+		}
 	})
 
-	t.Run("reply guidance loader failures", func(t *testing.T) {
-		t.Run("glob failed", func(t *testing.T) {
-			hooks := captureAssistantKnowledgeHooks()
-			defer hooks.restore()
-			assistantKnowledgeGlobFn = func(_ fs.FS, pattern string) ([]string, error) {
+	t.Run("markdown runtime glob failed", func(t *testing.T) {
+		hooks := captureAssistantKnowledgeHooks()
+		defer hooks.restore()
+		assistantKnowledgeGlobFn = func(fsys fs.FS, pattern string) ([]string, error) {
+			if pattern == "assistant_knowledge_md/intent/*.md" {
 				return nil, errors.New("glob failed")
 			}
-			if _, _, err := assistantLoadReplyGuidancePacks(); !errors.Is(err, errAssistantRuntimeConfigInvalid) {
-				t.Fatalf("expected runtime config invalid, got=%v", err)
-			}
-		})
+			return hooks.globFn(fsys, pattern)
+		}
+		if _, err := assistantLoadKnowledgeRuntime(); !errors.Is(err, errAssistantRuntimeConfigInvalid) {
+			t.Fatalf("expected runtime config invalid, got=%v", err)
+		}
+	})
 
-		t.Run("read failed", func(t *testing.T) {
-			hooks := captureAssistantKnowledgeHooks()
-			defer hooks.restore()
-			assistantKnowledgeGlobFn = func(_ fs.FS, pattern string) ([]string, error) {
-				return []string{"assistant_knowledge/reply_guidance/mock.json"}, nil
-			}
-			assistantKnowledgeReadFileFn = func(_ fs.FS, path string) ([]byte, error) {
-				return nil, errors.New("read failed")
-			}
-			if _, _, err := assistantLoadReplyGuidancePacks(); !errors.Is(err, errAssistantRuntimeConfigInvalid) {
-				t.Fatalf("expected runtime config invalid, got=%v", err)
-			}
-		})
-
-		t.Run("decode failed", func(t *testing.T) {
-			hooks := captureAssistantKnowledgeHooks()
-			defer hooks.restore()
-			assistantKnowledgeGlobFn = func(_ fs.FS, pattern string) ([]string, error) {
-				return []string{"assistant_knowledge/reply_guidance/mock.json"}, nil
-			}
-			assistantKnowledgeReadFileFn = func(_ fs.FS, path string) ([]byte, error) {
-				return []byte(`{`), nil
-			}
-			if _, _, err := assistantLoadReplyGuidancePacks(); !errors.Is(err, errAssistantRuntimeConfigInvalid) {
-				t.Fatalf("expected runtime config invalid, got=%v", err)
-			}
-		})
+	t.Run("markdown runtime compile failed", func(t *testing.T) {
+		hooks := captureAssistantKnowledgeHooks()
+		defer hooks.restore()
+		assistantKnowledgeCanonicalHashFn = func(any) string { return "" }
+		if _, err := assistantLoadKnowledgeRuntime(); !errors.Is(err, errAssistantRuntimeConfigInvalid) {
+			t.Fatalf("expected runtime config invalid, got=%v", err)
+		}
 	})
 }
 
@@ -594,6 +441,9 @@ func TestAssistantKnowledgeRuntime_HelperCoverage(t *testing.T) {
 		if err := assistantValidateForbiddenKeys(map[string][]byte{"bad.json": []byte(`{`)}); err == nil {
 			t.Fatal("expected decode error")
 		}
+		if err := assistantValidateForbiddenKeys(map[string][]byte{"bad.md": []byte("not-front-matter")}); err == nil {
+			t.Fatal("expected markdown decode error")
+		}
 		if err := assistantValidateForbiddenKeys(map[string][]byte{"bad.json": []byte(`{"confirm_conditions":["x"]}`)}); err == nil {
 			t.Fatal("expected forbidden key error")
 		}
@@ -623,6 +473,10 @@ func TestAssistantKnowledgeRuntime_HelperCoverage(t *testing.T) {
 		}
 		if assistantValidLocale("jp") {
 			t.Fatal("jp should be invalid locale")
+		}
+		promptActions := assistantOrderedPromptActionIDs()
+		if len(promptActions) == 0 {
+			t.Fatal("expected ordered prompt action ids")
 		}
 	})
 
@@ -739,6 +593,22 @@ func TestAssistantKnowledgeRuntime_HelperCoverage(t *testing.T) {
 
 	t.Run("locale candidates and finders", func(t *testing.T) {
 		runtime := &assistantKnowledgeRuntime{
+			intentDocs: map[string]map[string]assistantKnowledgeMarkdownDocument{
+				"org.orgunit_create": {
+					"zh": {ID: "intent.zh", Locale: "zh"},
+					"en": {ID: "intent.en", Locale: "en"},
+				},
+			},
+			actionDocsByAction: map[string]map[string]assistantKnowledgeMarkdownDocument{
+				assistantIntentCreateOrgUnit: {
+					"zh": {ID: "action.zh", Locale: "zh"},
+				},
+			},
+			actionDocsByIntent: map[string]map[string]assistantKnowledgeMarkdownDocument{
+				"org.orgunit_create": {
+					"en": {ID: "action-intent.en", Locale: "en"},
+				},
+			},
 			actionView: map[string]map[string]assistantActionViewPack{
 				assistantIntentCreateOrgUnit: {
 					"zh": {Summary: "中文摘要"},
@@ -784,6 +654,45 @@ func TestAssistantKnowledgeRuntime_HelperCoverage(t *testing.T) {
 		if len(defaultCandidates) != 2 || defaultCandidates[0] != "zh" || defaultCandidates[1] != "en" {
 			t.Fatalf("unexpected default locale candidates=%v", defaultCandidates)
 		}
+		if got, ok := (*assistantKnowledgeRuntime)(nil).findIntentDoc("org.orgunit_create", "zh"); ok || got.ID != "" {
+			t.Fatalf("nil runtime should not find intent doc, got=%+v ok=%v", got, ok)
+		}
+		if _, ok := runtime.findIntentDoc("unknown.intent", "zh"); ok {
+			t.Fatal("unknown intent doc should not be found")
+		}
+		if got, ok := runtime.findIntentDoc("org.orgunit_create", "fr"); !ok || got.ID != "intent.zh" {
+			t.Fatalf("expected zh fallback intent doc, got=%+v ok=%v", got, ok)
+		}
+		runtime.intentDocs["only.ja"] = map[string]assistantKnowledgeMarkdownDocument{"ja": {ID: "intent.ja", Locale: "ja"}}
+		if _, ok := runtime.findIntentDoc("only.ja", "zh"); ok {
+			t.Fatal("locale not matched intent doc should return false")
+		}
+		if got, ok := (*assistantKnowledgeRuntime)(nil).findActionDocByAction(assistantIntentCreateOrgUnit, "zh"); ok || got.ID != "" {
+			t.Fatalf("nil runtime should not find action doc by action, got=%+v ok=%v", got, ok)
+		}
+		if _, ok := runtime.findActionDocByAction("unknown.action", "zh"); ok {
+			t.Fatal("unknown action doc should not be found")
+		}
+		if got, ok := runtime.findActionDocByAction(assistantIntentCreateOrgUnit, "fr"); !ok || got.ID != "action.zh" {
+			t.Fatalf("expected zh fallback action doc, got=%+v ok=%v", got, ok)
+		}
+		runtime.actionDocsByAction["only.ja"] = map[string]assistantKnowledgeMarkdownDocument{"ja": {ID: "action.ja", Locale: "ja"}}
+		if _, ok := runtime.findActionDocByAction("only.ja", "zh"); ok {
+			t.Fatal("locale not matched action doc should return false")
+		}
+		if got, ok := (*assistantKnowledgeRuntime)(nil).findActionDocByIntent("org.orgunit_create", "zh"); ok || got.ID != "" {
+			t.Fatalf("nil runtime should not find action doc by intent, got=%+v ok=%v", got, ok)
+		}
+		if _, ok := runtime.findActionDocByIntent("unknown.intent", "zh"); ok {
+			t.Fatal("unknown action doc by intent should not be found")
+		}
+		if got, ok := runtime.findActionDocByIntent("org.orgunit_create", "fr"); !ok || got.ID != "action-intent.en" {
+			t.Fatalf("expected locale fallback action doc by intent, got=%+v ok=%v", got, ok)
+		}
+		runtime.actionDocsByIntent["only.ja"] = map[string]assistantKnowledgeMarkdownDocument{"ja": {ID: "action-intent.ja", Locale: "ja"}}
+		if _, ok := runtime.findActionDocByIntent("only.ja", "zh"); ok {
+			t.Fatal("locale not matched action doc by intent should return false")
+		}
 		if got, ok := (*assistantKnowledgeRuntime)(nil).findActionView(assistantIntentCreateOrgUnit, "zh"); ok || got.Summary != "" {
 			t.Fatalf("nil runtime should not find action view, got=%+v ok=%v", got, ok)
 		}
@@ -825,6 +734,12 @@ func TestAssistantKnowledgeRuntime_HelperCoverage(t *testing.T) {
 		if got, ok := runtime.findReplyGuidance("missing_fields", "en", ""); !ok || got.Locale != "en" {
 			t.Fatalf("expected en generic pack, got=%+v ok=%v", got, ok)
 		}
+		runtime.replyGuidance["only_ja"] = map[string][]assistantReplyGuidancePack{
+			"ja": {{ReplyKind: "only_ja", Locale: "ja", GuidanceTemplates: []assistantKnowledgePrompt{{TemplateID: "reply.only_ja.ja.v1", Text: "ja"}}}},
+		}
+		if _, ok := runtime.findReplyGuidance("only_ja", "zh", ""); ok {
+			t.Fatal("locale not matched reply guidance should return false")
+		}
 	})
 
 	t.Run("route intent", func(t *testing.T) {
@@ -838,6 +753,7 @@ func TestAssistantKnowledgeRuntime_HelperCoverage(t *testing.T) {
 			},
 			routeCatalog: assistantIntentRouteCatalog{
 				Entries: []assistantIntentRouteEntry{
+					{IntentID: "org.orgunit_create", RouteKind: assistantRouteKindBusinessAction, ActionID: assistantIntentCreateOrgUnit},
 					{IntentID: "knowledge.general_qa", RouteKind: assistantRouteKindKnowledgeQA, Keywords: []string{"功能", "help", " "}},
 					{IntentID: "route.chitchat", RouteKind: assistantRouteKindChitchat, Keywords: []string{"你好"}},
 				},
@@ -859,42 +775,91 @@ func TestAssistantKnowledgeRuntime_HelperCoverage(t *testing.T) {
 		if uncertain.RouteKind != assistantRouteKindUncertain || uncertain.IntentID != "route.uncertain" {
 			t.Fatalf("uncertain route invalid: %+v", uncertain)
 		}
+		if entry, ok := (*assistantKnowledgeRuntime)(nil).findRouteByRouteKind(assistantRouteKindKnowledgeQA); ok || entry.IntentID != "" {
+			t.Fatalf("nil runtime route=%+v ok=%v", entry, ok)
+		}
+		if entry, ok := runtime.findRouteByRouteKind(""); ok || entry.IntentID != "" {
+			t.Fatalf("empty route kind route=%+v ok=%v", entry, ok)
+		}
+		if entry, ok := runtime.findRouteByRouteKind(assistantRouteKindKnowledgeQA); !ok || entry.IntentID != "knowledge.general_qa" {
+			t.Fatalf("knowledge route=%+v ok=%v", entry, ok)
+		}
+		if entry, ok := runtime.findRouteByRouteKind(assistantRouteKindUncertain); !ok || entry.RouteKind != assistantRouteKindUncertain {
+			t.Fatalf("uncertain route lookup=%+v ok=%v", entry, ok)
+		}
+		if entry, ok := runtime.findRouteByRouteKind("missing"); ok || entry.IntentID != "" {
+			t.Fatalf("missing route=%+v ok=%v", entry, ok)
+		}
+		if entry, ok := runtime.findRouteByRouteKind(assistantRouteKindBusinessAction); ok || entry.IntentID != "" {
+			t.Fatalf("business action route without standalone entry should fail, got=%+v ok=%v", entry, ok)
+		}
+	})
+
+	t.Run("interpretation pack helpers", func(t *testing.T) {
+		if packID := assistantResolveInterpretationPackIDForIntent("unknown.intent", assistantRouteKindKnowledgeQA, map[string]map[string]assistantInterpretationPack{
+			assistantInterpretationDefaultPackID: {
+				"zh": {PackID: assistantInterpretationDefaultPackID, IntentClasses: []string{assistantRouteKindKnowledgeQA}},
+			},
+		}); packID != assistantInterpretationDefaultPackID {
+			t.Fatalf("expected default interpretation pack, got=%q", packID)
+		}
+
+		runtime := &assistantKnowledgeRuntime{
+			routePackID: map[string]string{},
+			interpretation: map[string]map[string]assistantInterpretationPack{
+				assistantInterpretationDefaultPackID: {
+					"zh": {PackID: assistantInterpretationDefaultPackID, IntentClasses: []string{assistantRouteKindKnowledgeQA}},
+				},
+			},
+		}
+		if packID := runtime.resolveInterpretationPackID("unknown.intent", assistantRouteKindKnowledgeQA); packID != assistantInterpretationDefaultPackID {
+			t.Fatalf("expected runtime fallback interpretation pack, got=%q", packID)
+		}
 	})
 
 	t.Run("build plan context", func(t *testing.T) {
-		spec := assistantActionSpec{ID: assistantIntentCreateOrgUnit, PlanSummary: "默认摘要", PlanTitle: "默认标题"}
+		spec := assistantActionSpec{ID: assistantIntentCreateOrgUnit}
 		if _, err := (*assistantKnowledgeRuntime)(nil).buildPlanContextV1("tenant_1", "zh", assistantIntentSpec{}, spec, nil); !errors.Is(err, errAssistantRuntimeConfigInvalid) {
 			t.Fatalf("expected runtime missing error, got=%v", err)
 		}
 
 		nonBusinessRuntime := &assistantKnowledgeRuntime{
-			interpretation: map[string]map[string]assistantInterpretationPack{
+			intentDocs: map[string]map[string]assistantKnowledgeMarkdownDocument{
 				"knowledge.general_qa": {
-					"zh": {PackID: "knowledge.general_qa", Locale: "zh"},
+					"zh": {ID: "knowledge.general_qa", Locale: "zh", Title: "知识问答意图", Summary: "这是知识问答摘要"},
 				},
 			},
 		}
 		ctx, err := nonBusinessRuntime.buildPlanContextV1("tenant_1", "zh", assistantIntentSpec{
 			Action:    assistantIntentPlanOnly,
+			IntentID:  "knowledge.general_qa",
 			RouteKind: assistantRouteKindKnowledgeQA,
 		}, assistantActionSpec{}, nil)
 		if err != nil {
 			t.Fatalf("build non-business context err=%v", err)
 		}
-		if !strings.Contains(ctx.ActionViewSummary, "非动作请求") {
+		if !strings.Contains(ctx.ActionViewSummary, "知识问答") {
 			t.Fatalf("unexpected non-business summary=%q", ctx.ActionViewSummary)
 		}
+		if ctx.ActionViewTitle != "知识问答意图" {
+			t.Fatalf("unexpected non-business title=%q", ctx.ActionViewTitle)
+		}
 
-		emptyRuntime := &assistantKnowledgeRuntime{interpretation: map[string]map[string]assistantInterpretationPack{}}
+		emptyRuntime := &assistantKnowledgeRuntime{}
 		if _, err := emptyRuntime.buildPlanContextV1("tenant_1", "zh", assistantIntentSpec{
 			Action:    assistantIntentPlanOnly,
 			IntentID:  "knowledge.unknown",
 			RouteKind: assistantRouteKindKnowledgeQA,
 		}, assistantActionSpec{}, nil); err == nil {
-			t.Fatal("expected interpretation missing error")
+			t.Fatal("expected non-business intent doc missing error")
 		}
 
 		businessRuntime := &assistantKnowledgeRuntime{
+			actionDocsByAction: map[string]map[string]assistantKnowledgeMarkdownDocument{
+				assistantIntentCreateOrgUnit: {
+					"zh": {ID: "action.org.orgunit_create", Locale: "zh", Title: "创建组织动作说明"},
+				},
+			},
 			actionView: map[string]map[string]assistantActionViewPack{
 				assistantIntentCreateOrgUnit: {
 					"zh": {
@@ -914,21 +879,100 @@ func TestAssistantKnowledgeRuntime_HelperCoverage(t *testing.T) {
 		if actionCtx.ActionViewSummary != "创建组织摘要" || len(actionCtx.FieldDisplayMap) == 0 {
 			t.Fatalf("unexpected action context=%+v", actionCtx)
 		}
-
-		fallbackCtx, err := (&assistantKnowledgeRuntime{actionView: map[string]map[string]assistantActionViewPack{}}).buildPlanContextV1("tenant_1", "zh", assistantIntentSpec{
-			Action: assistantIntentRenameOrgUnit,
-		}, assistantActionSpec{PlanSummary: "重命名摘要"}, nil)
-		if err != nil {
-			t.Fatalf("expected non-create fallback summary err=nil, got=%v", err)
+		if actionCtx.ActionViewTitle != "创建组织动作说明" {
+			t.Fatalf("unexpected action title=%q", actionCtx.ActionViewTitle)
 		}
-		if fallbackCtx.ActionViewSummary != "重命名摘要" {
-			t.Fatalf("unexpected fallback summary=%q", fallbackCtx.ActionViewSummary)
+
+		if _, err := (&assistantKnowledgeRuntime{actionView: map[string]map[string]assistantActionViewPack{}}).buildPlanContextV1("tenant_1", "zh", assistantIntentSpec{
+			Action: assistantIntentRenameOrgUnit,
+		}, assistantActionSpec{}, nil); err == nil {
+			t.Fatal("expected rename action view missing error")
 		}
 
 		if _, err := (&assistantKnowledgeRuntime{actionView: map[string]map[string]assistantActionViewPack{}}).buildPlanContextV1("tenant_1", "zh", assistantIntentSpec{
 			Action: assistantIntentCreateOrgUnit,
 		}, spec, nil); err == nil {
 			t.Fatal("expected create action view missing error")
+		}
+	})
+
+	t.Run("resolve plan presentation branches", func(t *testing.T) {
+		if _, err := (*assistantKnowledgeRuntime)(nil).resolvePlanPresentation(assistantIntentSpec{}, "zh"); !errors.Is(err, errAssistantRuntimeConfigInvalid) {
+			t.Fatalf("expected runtime missing error, got=%v", err)
+		}
+
+		nonBusinessRuntime := &assistantKnowledgeRuntime{
+			routeCatalog: assistantIntentRouteCatalog{
+				Entries: []assistantIntentRouteEntry{
+					{IntentID: "knowledge.general_qa", RouteKind: assistantRouteKindKnowledgeQA},
+				},
+			},
+			intentDocs: map[string]map[string]assistantKnowledgeMarkdownDocument{
+				"knowledge.general_qa": {
+					"zh": {ID: "knowledge.general_qa", Locale: "zh", Title: "知识问答", Summary: "知识问答摘要"},
+				},
+			},
+		}
+		presentation, err := nonBusinessRuntime.resolvePlanPresentation(assistantIntentSpec{
+			RouteKind: assistantRouteKindKnowledgeQA,
+		}, "zh")
+		if err != nil {
+			t.Fatalf("resolve non-business route presentation err=%v", err)
+		}
+		if presentation.Title != "知识问答" || presentation.Summary != "知识问答摘要" {
+			t.Fatalf("unexpected non-business presentation=%+v", presentation)
+		}
+
+		if _, err := nonBusinessRuntime.resolvePlanPresentation(assistantIntentSpec{
+			RouteKind: assistantRouteKindChitchat,
+		}, "zh"); err == nil || !strings.Contains(err.Error(), "route intent doc missing") {
+			t.Fatalf("expected missing route doc error, got=%v", err)
+		}
+
+		if _, err := (&assistantKnowledgeRuntime{
+			intentDocs: map[string]map[string]assistantKnowledgeMarkdownDocument{
+				"knowledge.general_qa": {
+					"zh": {ID: "knowledge.general_qa", Locale: "zh", Title: "知识问答"},
+				},
+			},
+		}).resolvePlanPresentation(assistantIntentSpec{
+			IntentID:  "knowledge.general_qa",
+			RouteKind: assistantRouteKindKnowledgeQA,
+		}, "zh"); err == nil || !strings.Contains(err.Error(), "title/summary required") {
+			t.Fatalf("expected non-business title/summary required error, got=%v", err)
+		}
+
+		if _, err := (&assistantKnowledgeRuntime{}).resolvePlanPresentation(assistantIntentSpec{}, "zh"); err == nil || !strings.Contains(err.Error(), "action id required") {
+			t.Fatalf("expected business action id required error, got=%v", err)
+		}
+
+		if _, err := (&assistantKnowledgeRuntime{
+			actionView: map[string]map[string]assistantActionViewPack{
+				assistantIntentCreateOrgUnit: {
+					"zh": {Summary: "创建组织摘要"},
+				},
+			},
+		}).resolvePlanPresentation(assistantIntentSpec{
+			Action: assistantIntentCreateOrgUnit,
+		}, "zh"); err == nil || !strings.Contains(err.Error(), "action doc missing") {
+			t.Fatalf("expected action doc missing error, got=%v", err)
+		}
+
+		if _, err := (&assistantKnowledgeRuntime{
+			actionDocsByAction: map[string]map[string]assistantKnowledgeMarkdownDocument{
+				assistantIntentCreateOrgUnit: {
+					"zh": {ID: "action.org.orgunit_create", Locale: "zh", Title: "创建组织"},
+				},
+			},
+			actionView: map[string]map[string]assistantActionViewPack{
+				assistantIntentCreateOrgUnit: {
+					"zh": {},
+				},
+			},
+		}).resolvePlanPresentation(assistantIntentSpec{
+			Action: assistantIntentCreateOrgUnit,
+		}, "zh"); err == nil || !strings.Contains(err.Error(), "title/summary required") {
+			t.Fatalf("expected business title/summary required error, got=%v", err)
 		}
 	})
 
@@ -952,7 +996,7 @@ func TestAssistantKnowledgeRuntime_HelperCoverage(t *testing.T) {
 
 		assistantApplyPlanContextV1(nil, nil, assistantIntentSpec{}, context)
 
-		plan := assistantPlanSummary{Summary: "old"}
+		plan := assistantPlanSummary{Title: "old title", Summary: "old"}
 		dryRun := assistantDryRunResult{ValidationErrors: []string{"missing_parent_ref_text"}, Explain: "old"}
 		assistantApplyPlanContextV1(&plan, &dryRun, assistantIntentSpec{RouteKind: assistantRouteKindBusinessAction}, context)
 		if plan.Summary != "动作摘要" {
@@ -963,11 +1007,11 @@ func TestAssistantKnowledgeRuntime_HelperCoverage(t *testing.T) {
 		}
 
 		nonBusinessDryRun := assistantDryRunResult{Explain: "old"}
-		assistantApplyPlanContextV1(&plan, &nonBusinessDryRun, assistantIntentSpec{RouteKind: assistantRouteKindKnowledgeQA}, assistantPlanContextV1{})
+		assistantApplyPlanContextV1(&plan, &nonBusinessDryRun, assistantIntentSpec{RouteKind: assistantRouteKindKnowledgeQA}, assistantPlanContextV1{ActionViewSummary: "知识问答摘要"})
 		if !assistantContainsString(nonBusinessDryRun.ValidationErrors, "non_business_route") {
 			t.Fatalf("expected non_business_route validation, got=%v", nonBusinessDryRun.ValidationErrors)
 		}
-		if !strings.Contains(nonBusinessDryRun.Explain, "不会触发业务提交") {
+		if !strings.Contains(nonBusinessDryRun.Explain, "知识问答摘要") {
 			t.Fatalf("unexpected non-business explain=%q", nonBusinessDryRun.Explain)
 		}
 	})

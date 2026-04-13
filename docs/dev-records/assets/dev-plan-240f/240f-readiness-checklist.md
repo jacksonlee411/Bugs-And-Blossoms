@@ -5,12 +5,12 @@
 - 当前判定：`240F` 的硬前置已齐备，且可以直接作为 `285` 的输入包来源。
 
 ## 前置计划状态
-- [X] `240C` 已完成：`docs/dev-plans/240c-assistant-action-interceptor-and-risk-gate-plan.md`
-- [X] `240D` 已完成：`docs/dev-plans/240d-assistant-durable-execution-and-manual-takeover-plan.md`
-- [X] `288` 已完成：`docs/dev-plans/288-librechat-266-live-e2e-and-evidence-closure-plan.md`
-- [X] `290` 已完成：`docs/dev-plans/290-librechat-260-m5-real-case-validation-and-evidence-plan.md`
-- [X] `291` 已完成：`docs/dev-plans/291-librechat-237-upgrade-compatibility-readiness-plan.md`
-- [X] `240E` 已降级为非阻塞增强项：`docs/dev-plans/240e-assistant-internal-knowledge-pack-and-readonly-resolver-plan.md`
+- [X] `240C` 已完成：`docs/archive/dev-plans/240c-assistant-action-interceptor-and-risk-gate-plan.md`
+- [X] `240D` 已完成：`docs/archive/dev-plans/240d-assistant-durable-execution-and-manual-takeover-plan.md`
+- [X] `288` 已完成：`docs/archive/dev-plans/288-librechat-266-live-e2e-and-evidence-closure-plan.md`
+- [X] `290` 已完成：`docs/archive/dev-plans/290-librechat-260-m5-real-case-validation-and-evidence-plan.md`
+- [X] `291` 已完成：`docs/archive/dev-plans/291-librechat-237-upgrade-compatibility-readiness-plan.md`
+- [X] `240E` 已降级为非阻塞增强项：`docs/archive/dev-plans/240e-assistant-internal-knowledge-pack-and-readonly-resolver-plan.md`
 
 ## 固定输入资产
 - [X] `docs/dev-records/assets/dev-plan-266/tp288-real-entry-evidence-index.json`

@@ -124,6 +124,40 @@ func assistantTurnPhase(turn *assistantTurn) string {
 	if !assistantTurnActionChainAllowed(turn) {
 		return assistantPhaseIdle
 	}
+	if projection, ok := assistantCreateOrgUnitProjectionForTurn(turn); ok {
+		switch strings.TrimSpace(projection.Projection.Readiness) {
+		case "candidate_confirmation_required":
+			if strings.TrimSpace(assistantTurnSelectedCandidateID(turn)) != "" && state == assistantStateValidated {
+				return assistantPhaseAwaitCandidateConfirm
+			}
+			return assistantPhaseAwaitCandidatePick
+		case "missing_fields":
+			return assistantPhaseAwaitMissingFields
+		case "rejected":
+			return assistantPhaseFailed
+		case "ready":
+			if strings.TrimSpace(projection.Projection.PendingDraftSummary) != "" {
+				return assistantPhaseAwaitCommitConfirm
+			}
+		}
+	}
+	if projection, ok := assistantOrgUnitVersionProjectionForTurn(turn); ok {
+		switch strings.TrimSpace(projection.Projection.Readiness) {
+		case "candidate_confirmation_required":
+			if strings.TrimSpace(assistantTurnSelectedCandidateID(turn)) != "" && state == assistantStateValidated {
+				return assistantPhaseAwaitCandidateConfirm
+			}
+			return assistantPhaseAwaitCandidatePick
+		case "missing_fields":
+			return assistantPhaseAwaitMissingFields
+		case "rejected":
+			return assistantPhaseFailed
+		case "ready":
+			if strings.TrimSpace(projection.Projection.PendingDraftSummary) != "" {
+				return assistantPhaseAwaitCommitConfirm
+			}
+		}
+	}
 	if len(assistantTurnMissingFields(turn)) > 0 {
 		return assistantPhaseAwaitMissingFields
 	}
@@ -144,6 +178,12 @@ func assistantTurnPhase(turn *assistantTurn) string {
 func assistantTurnMissingFields(turn *assistantTurn) []string {
 	if turn == nil {
 		return nil
+	}
+	if projection, ok := assistantCreateOrgUnitProjectionForTurn(turn); ok {
+		return append([]string(nil), projection.Projection.MissingFields...)
+	}
+	if projection, ok := assistantOrgUnitVersionProjectionForTurn(turn); ok {
+		return append([]string(nil), projection.Projection.MissingFields...)
 	}
 	out := make([]string, 0, 4)
 	seen := map[string]struct{}{}
@@ -221,7 +261,13 @@ func assistantTurnPendingDraftSummary(turn *assistantTurn) string {
 		return ""
 	}
 	if strings.TrimSpace(turn.Intent.Action) != assistantIntentCreateOrgUnit {
+		if projection, ok := assistantOrgUnitVersionProjectionForTurn(turn); ok {
+			return strings.TrimSpace(projection.Projection.PendingDraftSummary)
+		}
 		return strings.TrimSpace(turn.DryRun.Explain)
+	}
+	if projection, ok := assistantCreateOrgUnitProjectionForTurn(turn); ok {
+		return strings.TrimSpace(projection.Projection.PendingDraftSummary)
 	}
 	parts := make([]string, 0, 3)
 	if parent := strings.TrimSpace(assistantTurnParentLabel(turn)); parent != "" {
@@ -361,7 +407,11 @@ func assistantCommitReplyJSON(turn *assistantTurn) any {
 }
 
 func assistantMissingFieldsJSON(turn *assistantTurn) string {
-	payload, _ := json.Marshal(assistantTurnMissingFields(turn))
+	fields := assistantTurnMissingFields(turn)
+	if fields == nil {
+		fields = make([]string, 0)
+	}
+	payload, _ := json.Marshal(fields)
 	return string(payload)
 }
 

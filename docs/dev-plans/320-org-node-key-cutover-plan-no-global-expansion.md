@@ -1017,7 +1017,7 @@ Org 域新边界规则：
   - `docs/dev-plans/300-test-system-investigation-report.md`
   - `docs/dev-plans/301-go-test-layering-and-best-practices-remediation-plan.md`
   为准。
-- 涉及覆盖率统计范围、测试触发条件、paths-filter 触发范围的任何调整，必须遵循 `docs/dev-plans/226-test-guide-tg004-gate-caliber-change-approval.md`；不得通过改门禁口径替代补测试或删死分支。
+- 涉及覆盖率统计范围、测试触发条件、paths-filter 触发范围的任何调整，必须遵循 `docs/archive/dev-plans/226-test-guide-tg004-gate-caliber-change-approval.md`；不得通过改门禁口径替代补测试或删死分支。
 
 ### 11.2 本计划必须覆盖的测试面
 

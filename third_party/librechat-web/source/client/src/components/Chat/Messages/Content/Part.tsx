@@ -7,12 +7,9 @@ import {
 } from 'librechat-data-provider';
 import { memo } from 'react';
 import type { TMessageContentParts, TAttachment } from 'librechat-data-provider';
-import { OpenAIImageGen, EmptyText, Reasoning, ExecuteCode, AgentUpdate, Text } from './Parts';
+import { OpenAIImageGen, EmptyText, Reasoning, AgentUpdate, Text } from './Parts';
 import { ErrorMessage } from './MessageContent';
-import RetrievalCall from './RetrievalCall';
-import CodeAnalyze from './CodeAnalyze';
 import Container from './Container';
-import WebSearch from './WebSearch';
 import ToolCall from './ToolCall';
 import ImageGen from './ImageGen';
 import Image from './Image';
@@ -86,15 +83,7 @@ const Part = memo(
       const isToolCall =
         'args' in toolCall && (!toolCall.type || toolCall.type === ToolCallTypes.TOOL_CALL);
       if (isToolCall && toolCall.name === Tools.execute_code) {
-        return (
-          <ExecuteCode
-            attachments={attachments}
-            isSubmitting={isSubmitting}
-            output={toolCall.output ?? ''}
-            initialProgress={toolCall.progress ?? 0.1}
-            args={typeof toolCall.args === 'string' ? toolCall.args : ''}
-          />
-        );
+        return null;
       } else if (
         isToolCall &&
         (toolCall.name === 'image_gen_oai' || toolCall.name === 'image_edit_oai')
@@ -110,15 +99,7 @@ const Part = memo(
           />
         );
       } else if (isToolCall && toolCall.name === Tools.web_search) {
-        return (
-          <WebSearch
-            output={toolCall.output ?? ''}
-            initialProgress={toolCall.progress ?? 0.1}
-            isSubmitting={isSubmitting}
-            attachments={attachments}
-            isLast={isLast}
-          />
-        );
+        return null;
       } else if (isToolCall) {
         return (
           <ToolCall
@@ -133,21 +114,12 @@ const Part = memo(
           />
         );
       } else if (toolCall.type === ToolCallTypes.CODE_INTERPRETER) {
-        const code_interpreter = toolCall[ToolCallTypes.CODE_INTERPRETER];
-        return (
-          <CodeAnalyze
-            initialProgress={toolCall.progress ?? 0.1}
-            code={code_interpreter.input}
-            outputs={code_interpreter.outputs ?? []}
-          />
-        );
+        return null;
       } else if (
         toolCall.type === ToolCallTypes.RETRIEVAL ||
         toolCall.type === ToolCallTypes.FILE_SEARCH
       ) {
-        return (
-          <RetrievalCall initialProgress={toolCall.progress ?? 0.1} isSubmitting={isSubmitting} />
-        );
+        return null;
       } else if (
         toolCall.type === ToolCallTypes.FUNCTION &&
         ToolCallTypes.FUNCTION in toolCall &&

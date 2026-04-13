@@ -48,6 +48,7 @@ async function handleCreateTurnBlockedScenario({
   createTurnStatus,
   parsedBody,
 }) {
+  const runtimeErrorCode = String(parsedBody?.code || "").trim();
   if (createTurnStatus === 422 && parsedBody?.code === "assistant_intent_unsupported") {
     await writeJSON(path.join(EVIDENCE_ROOT, evidenceFile), {
       plan: "DEV-PLAN-290B",
@@ -62,15 +63,15 @@ async function handleCreateTurnBlockedScenario({
     return true;
   }
   if (
-    (createTurnStatus === 500 || createTurnStatus === 422) &&
-    parsedBody?.code === "ai_model_secret_missing"
+    (createTurnStatus === 500 || createTurnStatus === 503 || createTurnStatus === 422) &&
+    (runtimeErrorCode === "ai_model_secret_missing" || runtimeErrorCode === "assistant_runtime_unavailable")
   ) {
     await writeJSON(path.join(EVIDENCE_ROOT, evidenceFile), {
       plan: "DEV-PLAN-290B",
       tenant_id: tenantID,
       conversation_id: conversationID,
       probe_skipped: true,
-      skip_reason: "ai_model_secret_missing_on_create_turn",
+      skip_reason: `${runtimeErrorCode}_on_create_turn`,
       create_turn_status: createTurnStatus,
       error: parsedBody,
       captured_at: new Date().toISOString(),
@@ -86,15 +87,17 @@ async function handleCreateConversationBlockedScenario({
   createConversationStatus,
   parsedBody,
 }) {
+  const runtimeErrorCode = String(parsedBody?.code || "").trim();
   if (
-    (createConversationStatus === 500 || createConversationStatus === 422) &&
-    parsedBody?.code === "assistant_conversation_create_failed"
+    (createConversationStatus === 500 || createConversationStatus === 503 || createConversationStatus === 422) &&
+    (runtimeErrorCode === "assistant_conversation_create_failed" ||
+      runtimeErrorCode === "assistant_runtime_unavailable")
   ) {
     await writeJSON(path.join(EVIDENCE_ROOT, evidenceFile), {
       plan: "DEV-PLAN-290B",
       tenant_id: tenantID,
       probe_skipped: true,
-      skip_reason: "assistant_conversation_create_failed_on_create_conversation",
+      skip_reason: `${runtimeErrorCode}_on_create_conversation`,
       create_conversation_status: createConversationStatus,
       error: parsedBody,
       captured_at: new Date().toISOString(),
@@ -102,8 +105,8 @@ async function handleCreateConversationBlockedScenario({
     return true;
   }
   if (
-    (createConversationStatus === 500 || createConversationStatus === 422) &&
-    parsedBody?.code === "ai_model_secret_missing"
+    (createConversationStatus === 500 || createConversationStatus === 503 || createConversationStatus === 422) &&
+    runtimeErrorCode === "ai_model_secret_missing"
   ) {
     await writeJSON(path.join(EVIDENCE_ROOT, evidenceFile), {
       plan: "DEV-PLAN-290B",
@@ -495,14 +498,18 @@ test("tp290b-neg-004: manual_takeover and timeout attribution probe", async ({ b
         });
         return;
       }
-      if ((commitStatus === 500 || commitStatus === 422) && parsedBody?.code === "ai_model_secret_missing") {
+      if (
+        (commitStatus === 500 || commitStatus === 503 || commitStatus === 422) &&
+        (parsedBody?.code === "ai_model_secret_missing" || parsedBody?.code === "assistant_runtime_unavailable")
+      ) {
+        const runtimeErrorCode = String(parsedBody?.code || "").trim();
         await writeJSON(path.join(EVIDENCE_ROOT, "negative-004-manual-takeover-timeout-probe.json"), {
           plan: "DEV-PLAN-290B",
           tenant_id: tenantID,
           conversation_id: conversationID,
           turn_id: firstTurn.turn_id,
           probe_skipped: true,
-          skip_reason: "ai_model_secret_missing_on_commit",
+          skip_reason: `${runtimeErrorCode}_on_commit`,
           commit_status: commitStatus,
           error: parsedBody,
           captured_at: new Date().toISOString(),

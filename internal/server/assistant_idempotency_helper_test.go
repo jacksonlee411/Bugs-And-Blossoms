@@ -86,6 +86,12 @@ func TestAssistant240DHelperCoverage(t *testing.T) {
 	if code := assistantTaskErrorCode(errors.New(" code_x ")); code != "code_x" {
 		t.Fatalf("trimmed error code=%q", code)
 	}
+	if code := assistantTaskErrorCode(errAssistantTaskWorkflowUnavailable); code != errAssistantGateUnavailable.Error() {
+		t.Fatalf("workflow unavailable code=%q", code)
+	}
+	if code := assistantTaskErrorCode(errAssistantModelTimeout); code != errAssistantRuntimeUnavailable.Error() {
+		t.Fatalf("runtime unavailable code=%q", code)
+	}
 }
 
 func TestAssistantIdempotencyTaskReceiptRestoreCoverage(t *testing.T) {

@@ -194,6 +194,7 @@ func (s *assistantConversationService) createTurnPG(ctx context.Context, tenantI
 	if ctx == nil {
 		ctx = context.Background()
 	}
+	ctx = withPrincipal(ctx, principal)
 	var pendingTurn *assistantTurn
 	var conversation *assistantConversation
 	if s.pool != nil {
@@ -473,6 +474,9 @@ func assistantTurnAuthoritativeStateReadyForCommit(turn *assistantTurn) error {
 	if turn == nil {
 		return errAssistantConversationStateInvalid
 	}
+	if assistantTurnPolicyProjectionContractMissing(turn) {
+		return errAssistantPlanContractVersionMismatch
+	}
 	if turn.State != assistantStateConfirmed {
 		return errAssistantConfirmationRequired
 	}
@@ -546,13 +550,25 @@ func (s *assistantConversationService) applyConfirmTurn(conversation *assistantC
 	if turn.State != assistantStateValidated {
 		return assistantTurnMutationResult{}, errAssistantConfirmationRequired
 	}
+	deferredCreateProjection := strings.TrimSpace(turn.Intent.Action) == assistantIntentCreateOrgUnit &&
+		strings.TrimSpace(turn.ResolvedCandidateID) == "" &&
+		strings.TrimSpace(turn.ResolutionSource) == "deferred_candidate_lookup" &&
+		turn.DryRun.CreateOrgUnitProjection == nil
+	if err := s.hydrateDeferredCandidateForConfirm(context.Background(), conversation.TenantID, turn); err != nil {
+		return assistantTurnMutationResult{}, err
+	}
+	if deferredCreateProjection {
+		confirmCtx := withPrincipal(context.Background(), principal)
+		turn.DryRun = assistantBuildDryRunFn(turn.Intent, turn.Candidates, turn.ResolvedCandidateID)
+		turn.DryRun = s.enrichCreateOrgUnitDryRunWithPolicy(confirmCtx, conversation.TenantID, turn.Intent, turn.Candidates, turn.ResolvedCandidateID, turn.DryRun)
+	}
+	if assistantTurnPolicyProjectionContractMissing(turn) {
+		return assistantTurnMutationResult{}, errAssistantPlanContractVersionMismatch
+	}
 	if len(assistantTurnMissingFields(turn)) > 0 {
 		return assistantTurnMutationResult{}, errAssistantConfirmationRequired
 	}
 	if err := assistantTurnRouteExecutionBoundary(turn); err != nil {
-		return assistantTurnMutationResult{}, err
-	}
-	if err := s.hydrateDeferredCandidateForConfirm(context.Background(), conversation.TenantID, turn); err != nil {
 		return assistantTurnMutationResult{}, err
 	}
 	spec, ok := s.lookupActionSpec(turn.Intent.Action)
@@ -588,10 +604,20 @@ func (s *assistantConversationService) applyConfirmTurn(conversation *assistantC
 			turn.Clarification.Status = assistantClarificationStatusResolved
 		}
 	}
-	if turn.Intent.Action == assistantIntentCreateOrgUnit {
+	if assistantActionRequiresPolicyProjection(turn.Intent.Action) {
+		confirmCtx := withPrincipal(context.Background(), principal)
 		turn.DryRun = assistantBuildDryRunFn(turn.Intent, turn.Candidates, turn.ResolvedCandidateID)
-		turn.DryRun = s.enrichCreateOrgUnitDryRunWithPolicy(context.Background(), conversation.TenantID, turn.Intent, turn.Candidates, turn.ResolvedCandidateID, turn.DryRun)
-		if assistantTurnHasValidationCode(turn, "FIELD_REQUIRED_VALUE_MISSING") || assistantTurnHasValidationCode(turn, "PATCH_FIELD_NOT_ALLOWED") {
+		turn.DryRun = s.enrichAuthoritativeOrgUnitDryRunWithPolicy(confirmCtx, conversation.TenantID, turn.Intent, turn.Candidates, turn.ResolvedCandidateID, turn.DryRun)
+		if assistantTurnPolicyProjectionContractMissing(turn) {
+			return assistantTurnMutationResult{}, errAssistantPlanContractVersionMismatch
+		}
+		if len(assistantDryRunValidationErrorsForGate(assistantActionGateInput{
+			Intent:     turn.Intent,
+			Candidates: turn.Candidates,
+			ResolvedID: turn.ResolvedCandidateID,
+			DryRun:     &turn.DryRun,
+			Turn:       turn,
+		})) > 0 {
 			return assistantTurnMutationResult{}, errAssistantConfirmationRequired
 		}
 	}
@@ -1568,6 +1594,10 @@ WHERE tenant_uuid = $1::uuid
 
 func assistantIdempotencyErrorPayload(err error) (status int, code string, ok bool) {
 	switch {
+	case assistantIsRuntimeUnavailableError(err):
+		return http.StatusServiceUnavailable, errAssistantRuntimeUnavailable.Error(), true
+	case assistantIsGateUnavailableError(err):
+		return http.StatusServiceUnavailable, errAssistantGateUnavailable.Error(), true
 	case errors.Is(err, errAssistantConfirmationRequired):
 		return http.StatusConflict, errAssistantConfirmationRequired.Error(), true
 	case errors.Is(err, errAssistantConfirmationExpired):
@@ -1648,6 +1678,10 @@ func assistantRestoreTaskReceiptFromIdempotency(claim assistantIdempotencyClaim)
 
 func assistantErrorFromIdempotencyCode(code string) error {
 	switch strings.TrimSpace(code) {
+	case errAssistantRuntimeUnavailable.Error():
+		return errAssistantRuntimeUnavailable
+	case errAssistantGateUnavailable.Error():
+		return errAssistantGateUnavailable
 	case errAssistantConfirmationRequired.Error():
 		return errAssistantConfirmationRequired
 	case errAssistantConfirmationExpired.Error():
