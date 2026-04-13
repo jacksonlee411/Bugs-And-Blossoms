@@ -190,10 +190,24 @@ func knownErrorMessage(code string) string {
 		return "会话分页游标无效或已过期，请刷新列表后重试。"
 	case "assistant_conversation_list_failed":
 		return "加载助手会话列表失败，请稍后重试。"
+	case "assistant_runtime_unavailable":
+		return "助手运行主链暂不可用，请稍后重试。"
+	case "assistant_gate_unavailable":
+		return "助手确认或提交流程暂不可用，请稍后重试。"
 	case "assistant_ui_method_not_allowed":
 		return "当前请求方法不被允许，请刷新页面后重试。"
 	case "assistant_ui_path_invalid":
 		return "助手聊天路径无效，请从助手页面重新进入。"
+	case "assistant_session_invalid":
+		return "助手会话已失效，请重新登录。"
+	case "assistant_principal_invalid":
+		return "当前助手登录主体已失效，请重新登录。"
+	case "assistant_ui_bootstrap_unavailable":
+		return "正式助手入口启动信息暂不可用，请稍后重试。"
+	case "assistant_ui_retired":
+		return "旧助手入口已退役，请改用正式入口。"
+	case "assistant_vendored_api_retired":
+		return "旧助手兼容接口已退役，请重新打开正式助手入口。"
 	case "assistant_ui_upstream_unavailable":
 		return "聊天服务暂不可用，请稍后重试。"
 	case "assistant_vendored_sid_missing":
