@@ -106,39 +106,39 @@ func TestAssistantConversationTurns_ModelGatewayErrorMappings(t *testing.T) {
 			name:       "provider unavailable",
 			config:     assistantModelConfig{ProviderRouting: assistantProviderRouting{Strategy: "priority_failover", FallbackEnabled: true}, Providers: nil},
 			wantStatus: http.StatusServiceUnavailable,
-			wantCode:   "ai_model_provider_unavailable",
+			wantCode:   "assistant_runtime_unavailable",
 		},
 		{
 			name: "timeout",
 			config: assistantModelConfig{ProviderRouting: assistantProviderRouting{Strategy: "priority_failover", FallbackEnabled: true}, Providers: []assistantModelProviderConfig{
 				{Name: "openai", Enabled: true, Model: "timeout", Endpoint: "https://api.openai.com/v1", TimeoutMS: 1, Retries: 0, Priority: 1, KeyRef: "OPENAI_API_KEY"},
 			}},
-			wantStatus: http.StatusGatewayTimeout,
-			wantCode:   "ai_model_timeout",
+			wantStatus: http.StatusServiceUnavailable,
+			wantCode:   "assistant_runtime_unavailable",
 		},
 		{
 			name: "rate limited",
 			config: assistantModelConfig{ProviderRouting: assistantProviderRouting{Strategy: "priority_failover", FallbackEnabled: true}, Providers: []assistantModelProviderConfig{
 				{Name: "openai", Enabled: true, Model: "rate_limited", Endpoint: "https://api.openai.com/v1", TimeoutMS: 1, Retries: 0, Priority: 1, KeyRef: "OPENAI_API_KEY"},
 			}},
-			wantStatus: http.StatusTooManyRequests,
-			wantCode:   "ai_model_rate_limited",
+			wantStatus: http.StatusServiceUnavailable,
+			wantCode:   "assistant_runtime_unavailable",
 		},
 		{
 			name: "config invalid",
 			config: assistantModelConfig{ProviderRouting: assistantProviderRouting{Strategy: "priority_failover", FallbackEnabled: true}, Providers: []assistantModelProviderConfig{
 				{Name: "bad-provider", Enabled: true, Model: "m", Endpoint: "builtin://openai", TimeoutMS: 1, Retries: 0, Priority: 1, KeyRef: "OPENAI_API_KEY"},
 			}},
-			wantStatus: http.StatusUnprocessableEntity,
-			wantCode:   "ai_model_config_invalid",
+			wantStatus: http.StatusServiceUnavailable,
+			wantCode:   "assistant_runtime_unavailable",
 		},
 		{
 			name: "secret missing",
 			config: assistantModelConfig{ProviderRouting: assistantProviderRouting{Strategy: "priority_failover", FallbackEnabled: true}, Providers: []assistantModelProviderConfig{
 				{Name: "openai", Enabled: true, Model: "m", Endpoint: "https://example.invalid", TimeoutMS: 1, Retries: 0, Priority: 1, KeyRef: "MISSING_OPENAI_KEY"},
 			}},
-			wantStatus: http.StatusInternalServerError,
-			wantCode:   "ai_model_secret_missing",
+			wantStatus: http.StatusServiceUnavailable,
+			wantCode:   "assistant_runtime_unavailable",
 		},
 	}
 
@@ -363,7 +363,7 @@ func TestAssistantConversationTurns_RuntimeConfigErrorMappings(t *testing.T) {
 		conv := svc.createConversation("tenant-1", principal)
 		rec := httptest.NewRecorder()
 		handleAssistantConversationTurnsAPI(rec, makeReq(conv.ConversationID), svc)
-		if rec.Code != http.StatusUnprocessableEntity || assistantDecodeErrCode(t, rec) != "ai_runtime_config_invalid" {
+		if rec.Code != http.StatusServiceUnavailable || assistantDecodeErrCode(t, rec) != "assistant_runtime_unavailable" {
 			t.Fatalf("status=%d code=%s body=%s", rec.Code, assistantDecodeErrCode(t, rec), rec.Body.String())
 		}
 	})
@@ -374,7 +374,7 @@ func TestAssistantConversationTurns_RuntimeConfigErrorMappings(t *testing.T) {
 		conv := svc.createConversation("tenant-1", principal)
 		rec := httptest.NewRecorder()
 		handleAssistantConversationTurnsAPI(rec, makeReq(conv.ConversationID), svc)
-		if rec.Code != http.StatusServiceUnavailable || assistantDecodeErrCode(t, rec) != "ai_runtime_config_missing" {
+		if rec.Code != http.StatusServiceUnavailable || assistantDecodeErrCode(t, rec) != "assistant_runtime_unavailable" {
 			t.Fatalf("status=%d code=%s body=%s", rec.Code, assistantDecodeErrCode(t, rec), rec.Body.String())
 		}
 	})

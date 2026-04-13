@@ -785,6 +785,7 @@ func (s *assistantConversationService) dispatchAssistantTasks(ctx context.Contex
 		task.DispatchAttempt = attempt
 		task.UpdatedAt = now
 		if now.After(task.DispatchDeadlineAt) {
+			task.LastErrorCode = assistantTaskTerminalErrorCode(task.LastErrorCode)
 			if err := s.markAssistantTaskDispatchDeadlineExceededTx(ctx, tx, &task, now); err != nil {
 				return err
 			}
@@ -794,6 +795,7 @@ func (s *assistantConversationService) dispatchAssistantTasks(ctx context.Contex
 			continue
 		}
 		if err := s.executeAssistantTaskWorkflowTx(ctx, tx, tenantID, &task, now); err != nil {
+			task.LastErrorCode = assistantTaskErrorCode(err)
 			nextRetryAt := now.Add(assistantTaskDispatchBackoff(attempt))
 			if attempt >= task.MaxAttempts || nextRetryAt.After(task.DispatchDeadlineAt) {
 				if err := s.markAssistantTaskDispatchFailureTx(ctx, tx, &task, now); err != nil {
@@ -805,7 +807,6 @@ func (s *assistantConversationService) dispatchAssistantTasks(ctx context.Contex
 				continue
 			}
 			task.DispatchStatus = assistantTaskDispatchPending
-			task.LastErrorCode = "assistant_task_workflow_unavailable"
 			task.UpdatedAt = now
 			if err := s.updateAssistantTaskStateTx(ctx, tx, task); err != nil {
 				return err
@@ -909,7 +910,18 @@ func assistantTaskErrorCode(err error) string {
 	if err == nil {
 		return ""
 	}
+	if code, ok := assistantPublicFailureCode(err); ok {
+		return code
+	}
 	return strings.TrimSpace(err.Error())
+}
+
+func assistantTaskTerminalErrorCode(code string) string {
+	code = strings.TrimSpace(code)
+	if code != "" {
+		return code
+	}
+	return errAssistantGateUnavailable.Error()
 }
 
 func (s *assistantConversationService) markAssistantTaskManualTakeoverTx(ctx context.Context, tx pgx.Tx, tenantID string, task *assistantTaskRecord, fromStatus string, errorCode string, now time.Time) error {
@@ -932,7 +944,7 @@ func (s *assistantConversationService) markAssistantTaskManualTakeoverTx(ctx con
 func (s *assistantConversationService) markAssistantTaskDispatchFailureTx(ctx context.Context, tx pgx.Tx, task *assistantTaskRecord, now time.Time) error {
 	task.Status = assistantTaskStatusManualTakeoverNeeded
 	task.DispatchStatus = assistantTaskDispatchFailed
-	task.LastErrorCode = "assistant_task_dispatch_failed"
+	task.LastErrorCode = assistantTaskTerminalErrorCode(task.LastErrorCode)
 	task.CompletedAt = &now
 	task.UpdatedAt = now
 	if err := s.updateAssistantTaskStateTx(ctx, tx, *task); err != nil {
@@ -947,7 +959,7 @@ func (s *assistantConversationService) markAssistantTaskDispatchFailureTx(ctx co
 func (s *assistantConversationService) markAssistantTaskDispatchDeadlineExceededTx(ctx context.Context, tx pgx.Tx, task *assistantTaskRecord, now time.Time) error {
 	task.Status = assistantTaskStatusManualTakeoverNeeded
 	task.DispatchStatus = assistantTaskDispatchFailed
-	task.LastErrorCode = "assistant_task_dispatch_failed"
+	task.LastErrorCode = assistantTaskTerminalErrorCode(task.LastErrorCode)
 	task.CompletedAt = &now
 	task.UpdatedAt = now
 	if err := s.updateAssistantTaskStateTx(ctx, tx, *task); err != nil {

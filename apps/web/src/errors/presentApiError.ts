@@ -68,6 +68,8 @@ const localizedMessages: Record<string, LocalizedErrorMessage> = {
   assistant_conversation_create_failed: { en: 'Failed to create assistant conversation.', zh: '创建助手会话失败，请稍后重试。' },
   assistant_conversation_load_failed: { en: 'Failed to load assistant conversation.', zh: '加载助手会话失败，请刷新后重试。' },
   assistant_intent_unsupported: { en: 'Assistant intent is not supported.', zh: '当前意图暂不支持，请调整输入后重试。' },
+  assistant_runtime_unavailable: { en: 'Assistant runtime is temporarily unavailable. Please retry later.', zh: '助手运行主链暂不可用，请稍后重试。' },
+  assistant_gate_unavailable: { en: 'Assistant gate is temporarily unavailable. Please retry later.', zh: '助手确认或提交流程暂不可用，请稍后重试。' },
   assistant_service_missing: { en: 'Assistant service is missing.', zh: '助手服务未就绪，请联系管理员。' },
   assistant_turn_confirm_failed: { en: 'Assistant confirm failed. Please retry later.', zh: '助手确认失败，请稍后重试。' },
   assistant_turn_create_failed: { en: 'Assistant plan creation failed. Please retry later.', zh: '助手计划生成失败，请稍后重试。' },

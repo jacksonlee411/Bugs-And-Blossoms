@@ -253,6 +253,7 @@ func TestAssistantPersistence_UtilityFunctions(t *testing.T) {
 		{errAssistantRouteNonBusinessBlocked.Error(), errAssistantRouteNonBusinessBlocked},
 		{errAssistantRouteClarificationRequired.Error(), errAssistantRouteClarificationRequired},
 		{errAssistantUnsupportedIntent.Error(), errAssistantUnsupportedIntent},
+		{errAssistantGateUnavailable.Error(), errAssistantGateUnavailable},
 		{errAssistantServiceMissing.Error(), errAssistantServiceMissing},
 	}
 	for _, item := range idemCodes {
@@ -285,6 +286,9 @@ func TestAssistantPersistence_UtilityFunctions(t *testing.T) {
 		if _, _, ok := assistantIdempotencyErrorPayload(e); !ok {
 			t.Fatalf("expected mapped idempotency error for %v", e)
 		}
+	}
+	if status, code, ok := assistantIdempotencyErrorPayload(errAssistantServiceMissing); !ok || status != http.StatusServiceUnavailable || code != errAssistantGateUnavailable.Error() {
+		t.Fatalf("service missing payload status=%d code=%s ok=%v", status, code, ok)
 	}
 	if status, code, ok := assistantIdempotencyErrorPayload(errors.New(orgUnitErrFieldPolicyMissing)); !ok || status != http.StatusUnprocessableEntity || code != orgUnitErrFieldPolicyMissing {
 		t.Fatalf("unexpected mapped payload status=%d code=%s ok=%v", status, code, ok)

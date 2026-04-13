@@ -500,18 +500,8 @@ func handleAssistantConversationTurnsAPI(w http.ResponseWriter, r *http.Request,
 			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusUnprocessableEntity, "ai_plan_schema_constrained_decode_failed", "ai plan schema constrained decode failed")
 		case errors.Is(err, errAssistantPlanBoundaryViolation):
 			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusUnprocessableEntity, "ai_plan_boundary_violation", "ai plan boundary violation")
-		case errors.Is(err, errAssistantModelProviderUnavailable):
-			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusServiceUnavailable, "ai_model_provider_unavailable", "ai model provider unavailable")
-		case errors.Is(err, errAssistantModelTimeout):
-			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusGatewayTimeout, "ai_model_timeout", "ai model timeout")
-		case errors.Is(err, errAssistantModelRateLimited):
-			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusTooManyRequests, "ai_model_rate_limited", "ai model rate limited")
-		case errors.Is(err, errAssistantModelConfigInvalid):
-			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusUnprocessableEntity, "ai_model_config_invalid", "ai model config invalid")
-		case errors.Is(err, errAssistantRuntimeConfigInvalid):
-			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusUnprocessableEntity, "ai_runtime_config_invalid", "ai runtime config invalid")
-		case errors.Is(err, errAssistantRuntimeConfigMissing):
-			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusServiceUnavailable, "ai_runtime_config_missing", "ai runtime config missing")
+		case assistantIsRuntimeUnavailableError(err):
+			assistantWriteRuntimeUnavailable(w, r)
 		case errors.Is(err, errAssistantRouteRuntimeInvalid):
 			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusUnprocessableEntity, errAssistantRouteRuntimeInvalid.Error(), "assistant route runtime invalid")
 		case errors.Is(err, errAssistantRouteCatalogMissing):
@@ -520,8 +510,6 @@ func handleAssistantConversationTurnsAPI(w http.ResponseWriter, r *http.Request,
 			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusUnprocessableEntity, errAssistantRouteActionConflict.Error(), "assistant route action conflict")
 		case errors.Is(err, errAssistantRouteDecisionMissing):
 			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusConflict, errAssistantRouteDecisionMissing.Error(), "assistant route decision missing")
-		case errors.Is(err, errAssistantModelSecretMissing):
-			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusInternalServerError, "ai_model_secret_missing", "ai model secret missing")
 		case errors.Is(err, errAssistantPlanDeterminismViolation):
 			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusConflict, "ai_plan_determinism_violation", "ai plan determinism violation")
 		case errors.Is(err, errAssistantUnsupportedIntent):
@@ -617,6 +605,8 @@ func handleAssistantTurnActionAPI(w http.ResponseWriter, r *http.Request, svc *a
 				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusConflict, errAssistantActionRiskGateDenied.Error(), "assistant action risk gate denied")
 			case errors.Is(err, errAssistantPlanContractVersionMismatch):
 				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusConflict, "ai_plan_contract_version_mismatch", "ai plan contract version mismatch")
+			case assistantIsGateUnavailableError(err):
+				assistantWriteGateUnavailable(w, r)
 			default:
 				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusInternalServerError, "assistant_turn_confirm_failed", "assistant turn confirm failed")
 			}
@@ -637,8 +627,8 @@ func handleAssistantTurnActionAPI(w http.ResponseWriter, r *http.Request, svc *a
 			case errors.Is(err, errAssistantRequestInProgress):
 				w.Header().Set("Retry-After", assistantDefaultRetryAfterSecs)
 				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusConflict, "request_in_progress", "request in progress")
-			case errors.Is(err, errAssistantTaskWorkflowUnavailable):
-				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusServiceUnavailable, "assistant_task_workflow_unavailable", "assistant task workflow unavailable")
+			case assistantIsGateUnavailableError(err):
+				assistantWriteGateUnavailable(w, r)
 			case errors.Is(err, errAssistantTaskStateInvalid):
 				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusConflict, "assistant_task_state_invalid", "assistant task state invalid")
 			case errors.Is(err, errAssistantConfirmationRequired):
@@ -665,8 +655,6 @@ func handleAssistantTurnActionAPI(w http.ResponseWriter, r *http.Request, svc *a
 				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusForbidden, "ai_actor_role_drift_detected", "ai actor role drift detected")
 			case errors.Is(err, errAssistantUnsupportedIntent):
 				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusUnprocessableEntity, "assistant_intent_unsupported", "assistant intent unsupported")
-			case errors.Is(err, errAssistantServiceMissing):
-				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusInternalServerError, "orgunit_service_missing", "orgunit service missing")
 			case errors.Is(err, errAssistantCandidateNotFound):
 				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusConflict, "conversation_confirmation_required", "conversation confirmation required")
 			case errors.Is(err, errAssistantActionAuthzDenied):
@@ -747,6 +735,61 @@ func assistantResolveCommitError(err error) (status int, code string, message st
 	return status, code, message, true
 }
 
+func assistantWriteRuntimeUnavailable(w http.ResponseWriter, r *http.Request) {
+	routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusServiceUnavailable, errAssistantRuntimeUnavailable.Error(), "assistant runtime unavailable")
+}
+
+func assistantWriteGateUnavailable(w http.ResponseWriter, r *http.Request) {
+	routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusServiceUnavailable, errAssistantGateUnavailable.Error(), "assistant gate unavailable")
+}
+
+func assistantIsRuntimeUnavailableError(err error) bool {
+	switch {
+	case errors.Is(err, errAssistantRuntimeUnavailable):
+		return true
+	case errors.Is(err, errAssistantModelProviderUnavailable):
+		return true
+	case errors.Is(err, errAssistantModelTimeout):
+		return true
+	case errors.Is(err, errAssistantModelRateLimited):
+		return true
+	case errors.Is(err, errAssistantModelConfigInvalid):
+		return true
+	case errors.Is(err, errAssistantRuntimeConfigInvalid):
+		return true
+	case errors.Is(err, errAssistantRuntimeConfigMissing):
+		return true
+	case errors.Is(err, errAssistantModelSecretMissing):
+		return true
+	default:
+		return false
+	}
+}
+
+func assistantIsGateUnavailableError(err error) bool {
+	switch {
+	case errors.Is(err, errAssistantGateUnavailable):
+		return true
+	case errors.Is(err, errAssistantTaskWorkflowUnavailable):
+		return true
+	case errors.Is(err, errAssistantServiceMissing):
+		return true
+	default:
+		return false
+	}
+}
+
+func assistantPublicFailureCode(err error) (string, bool) {
+	switch {
+	case assistantIsRuntimeUnavailableError(err):
+		return errAssistantRuntimeUnavailable.Error(), true
+	case assistantIsGateUnavailableError(err):
+		return errAssistantGateUnavailable.Error(), true
+	default:
+		return "", false
+	}
+}
+
 var (
 	errAssistantConversationNotFound              = errors.New("assistant_conversation_not_found")
 	errAssistantConversationForbidden             = errors.New("assistant_conversation_forbidden")
@@ -766,6 +809,8 @@ var (
 	errAssistantPlanContractVersionMismatch       = errors.New("assistant_plan_contract_version_mismatch")
 	errAssistantVersionTupleStale                 = errors.New("assistant_version_tuple_stale")
 	errAssistantPlanDeterminismViolation          = errors.New("assistant_plan_determinism_violation")
+	errAssistantRuntimeUnavailable                = errors.New("assistant_runtime_unavailable")
+	errAssistantGateUnavailable                   = errors.New("assistant_gate_unavailable")
 	errAssistantModelProviderUnavailable          = errors.New("assistant_model_provider_unavailable")
 	errAssistantModelTimeout                      = errors.New("assistant_model_timeout")
 	errAssistantModelRateLimited                  = errors.New("assistant_model_rate_limited")

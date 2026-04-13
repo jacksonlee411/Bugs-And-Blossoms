@@ -1594,6 +1594,10 @@ WHERE tenant_uuid = $1::uuid
 
 func assistantIdempotencyErrorPayload(err error) (status int, code string, ok bool) {
 	switch {
+	case assistantIsRuntimeUnavailableError(err):
+		return http.StatusServiceUnavailable, errAssistantRuntimeUnavailable.Error(), true
+	case assistantIsGateUnavailableError(err):
+		return http.StatusServiceUnavailable, errAssistantGateUnavailable.Error(), true
 	case errors.Is(err, errAssistantConfirmationRequired):
 		return http.StatusConflict, errAssistantConfirmationRequired.Error(), true
 	case errors.Is(err, errAssistantConfirmationExpired):
@@ -1674,6 +1678,10 @@ func assistantRestoreTaskReceiptFromIdempotency(claim assistantIdempotencyClaim)
 
 func assistantErrorFromIdempotencyCode(code string) error {
 	switch strings.TrimSpace(code) {
+	case errAssistantRuntimeUnavailable.Error():
+		return errAssistantRuntimeUnavailable
+	case errAssistantGateUnavailable.Error():
+		return errAssistantGateUnavailable
 	case errAssistantConfirmationRequired.Error():
 		return errAssistantConfirmationRequired
 	case errAssistantConfirmationExpired.Error():
