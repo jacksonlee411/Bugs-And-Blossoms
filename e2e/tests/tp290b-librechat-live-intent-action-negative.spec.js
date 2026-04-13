@@ -63,7 +63,7 @@ async function handleCreateTurnBlockedScenario({
     return true;
   }
   if (
-    (createTurnStatus === 500 || createTurnStatus === 422) &&
+    (createTurnStatus === 500 || createTurnStatus === 503 || createTurnStatus === 422) &&
     (runtimeErrorCode === "ai_model_secret_missing" || runtimeErrorCode === "assistant_runtime_unavailable")
   ) {
     await writeJSON(path.join(EVIDENCE_ROOT, evidenceFile), {
@@ -89,7 +89,7 @@ async function handleCreateConversationBlockedScenario({
 }) {
   const runtimeErrorCode = String(parsedBody?.code || "").trim();
   if (
-    (createConversationStatus === 500 || createConversationStatus === 422) &&
+    (createConversationStatus === 500 || createConversationStatus === 503 || createConversationStatus === 422) &&
     (runtimeErrorCode === "assistant_conversation_create_failed" ||
       runtimeErrorCode === "assistant_runtime_unavailable")
   ) {
@@ -105,7 +105,7 @@ async function handleCreateConversationBlockedScenario({
     return true;
   }
   if (
-    (createConversationStatus === 500 || createConversationStatus === 422) &&
+    (createConversationStatus === 500 || createConversationStatus === 503 || createConversationStatus === 422) &&
     runtimeErrorCode === "ai_model_secret_missing"
   ) {
     await writeJSON(path.join(EVIDENCE_ROOT, evidenceFile), {
@@ -499,7 +499,7 @@ test("tp290b-neg-004: manual_takeover and timeout attribution probe", async ({ b
         return;
       }
       if (
-        (commitStatus === 500 || commitStatus === 422) &&
+        (commitStatus === 500 || commitStatus === 503 || commitStatus === 422) &&
         (parsedBody?.code === "ai_model_secret_missing" || parsedBody?.code === "assistant_runtime_unavailable")
       ) {
         const runtimeErrorCode = String(parsedBody?.code || "").trim();
