@@ -910,14 +910,15 @@ function modelSecretMissingCallsFromState(state, scopedConversationIDs = []) {
   });
 }
 
-function conversationCreateFailedCallsFromState(state, scopedConversationIDs = []) {
+function runtimeUnavailableCallsFromState(state, scopedConversationIDs = []) {
   const allowedConversationIDs = new Set(
     (Array.isArray(scopedConversationIDs) ? scopedConversationIDs : [scopedConversationIDs])
       .map((item) => String(item || "").trim())
       .filter(Boolean),
   );
   return state.internalCalls.filter((call) => {
-    if (assistantErrorCodeFromCall(call) !== "assistant_conversation_create_failed") {
+    const errorCode = assistantErrorCodeFromCall(call);
+    if (errorCode !== "assistant_conversation_create_failed" && errorCode !== "assistant_runtime_unavailable") {
       return false;
     }
     if (allowedConversationIDs.size === 0) {
@@ -1029,7 +1030,11 @@ async function runRuntimeAdmissionGate(browser) {
     if (createConversation.status() !== 200 || !report.create_conversation.conversation_id) {
       report.status = "blocked";
       await writeJSON(RUNTIME_GATE_PATH, report);
-      const ignorableCodes = new Set(["assistant_conversation_create_failed", "ai_model_secret_missing"]);
+      const ignorableCodes = new Set([
+        "assistant_conversation_create_failed",
+        "assistant_runtime_unavailable",
+        "ai_model_secret_missing",
+      ]);
       if (
         createConversation.status() !== 200 &&
         !ignorableCodes.has(report.create_conversation.error_code)
@@ -1192,7 +1197,7 @@ async function runCaseAndCollectEvidence(browser, caseId) {
       networkState,
       collectCaseConversationIDs(conversationId, snapshots),
     );
-    const conversationCreateFailedCalls = conversationCreateFailedCallsFromState(
+    const runtimeUnavailableCalls = runtimeUnavailableCallsFromState(
       networkState,
       collectCaseConversationIDs(conversationId, snapshots),
     );
@@ -1300,15 +1305,16 @@ async function runCaseAndCollectEvidence(browser, caseId) {
       });
       return;
     }
-    if (conversationCreateFailedCalls.length > 0) {
+    if (runtimeUnavailableCalls.length > 0) {
+      const observedErrorCode = assistantErrorCodeFromCall(runtimeUnavailableCalls[0]) || "assistant_runtime_unavailable";
       const payload = runtimeBlockedFailurePayload({
         caseId,
         conversationId,
         snapshots,
-        blockedCalls: conversationCreateFailedCalls,
-        errorCode: "assistant_conversation_create_failed",
+        blockedCalls: runtimeUnavailableCalls,
+        errorCode: observedErrorCode,
         failureStage: "post_turn_assertion",
-        failureMessage: "assistant_conversation_create_failed returned by runtime",
+        failureMessage: `${observedErrorCode} returned by runtime`,
       });
       await writeJSON(paths.unsupported, payload);
       try {
@@ -1338,7 +1344,7 @@ async function runCaseAndCollectEvidence(browser, caseId) {
         id: caseId,
         status: "blocked",
         input_sequence: inputs,
-        blocking_reason: "命中 assistant_conversation_create_failed（运行态不可用）",
+        blocking_reason: `命中 ${observedErrorCode}（运行态不可用）`,
         artifacts: {
           page: path.relative(repoRoot, paths.page),
           dom: path.relative(repoRoot, paths.dom),
@@ -1511,7 +1517,7 @@ async function runCaseAndCollectEvidence(browser, caseId) {
       networkState,
       collectCaseConversationIDs(conversationId, snapshots),
     );
-    const conversationCreateFailedCalls = conversationCreateFailedCallsFromState(
+    const runtimeUnavailableCalls = runtimeUnavailableCallsFromState(
       networkState,
       collectCaseConversationIDs(conversationId, snapshots),
     );
@@ -1582,18 +1588,19 @@ async function runCaseAndCollectEvidence(browser, caseId) {
       });
       await writeJSON(paths.unsupported, payload);
       blockingReason = "命中 ai_model_secret_missing（运行态缺少模型密钥）";
-    } else if (conversationCreateFailedCalls.length > 0) {
+    } else if (runtimeUnavailableCalls.length > 0) {
+      const observedErrorCode = assistantErrorCodeFromCall(runtimeUnavailableCalls[0]) || "assistant_runtime_unavailable";
       const payload = runtimeBlockedFailurePayload({
         caseId,
         conversationId,
         snapshots,
-        blockedCalls: conversationCreateFailedCalls,
-        errorCode: "assistant_conversation_create_failed",
+        blockedCalls: runtimeUnavailableCalls,
+        errorCode: observedErrorCode,
         failureStage: "runtime_or_case_flow",
         failureMessage: errorMessage,
       });
       await writeJSON(paths.unsupported, payload);
-      blockingReason = "命中 assistant_conversation_create_failed（运行态不可用）";
+      blockingReason = `命中 ${observedErrorCode}（运行态不可用）`;
     }
 
     try {
@@ -1636,7 +1643,7 @@ async function runCaseAndCollectEvidence(browser, caseId) {
     if (modelSecretMissingCalls.length > 0) {
       return;
     }
-    if (conversationCreateFailedCalls.length > 0) {
+    if (runtimeUnavailableCalls.length > 0) {
       return;
     }
     throw error;
