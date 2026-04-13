@@ -12,6 +12,8 @@
 - 新建 Go 模块后（防止 `go mod init` 默认回退）：执行 `go get go@1.26.0`（或 `go mod edit -go=1.26.0`）
 - 禁止 legacy（单链路原则）：`make check no-legacy`（或直接跑 `make preflight`）
 - Assistant 配置单主源门禁（阻断第二写入口/契约回写/SSOT 漂移）：`make check assistant-config-single-source`
+- Assistant Knowledge 单主源 / runtime / JSON cutoff 门禁：`make check assistant-knowledge-single-source && make check assistant-knowledge-runtime-load && make check assistant-knowledge-no-json-runtime`
+- Assistant Knowledge 反回流门禁（overlay/literals/archive/contract/db）：`make check assistant-no-legacy-overlay && make check assistant-no-knowledge-literals && make check assistant-knowledge-no-archive-ref && make check assistant-knowledge-contract-separation && make check assistant-no-knowledge-db`
 - 禁止新增 scope/package 漂移：`make check no-scope-package`
 - 颗粒度层次门禁（阻断 org_level/scope_type/scope_key 回流）：`make check granularity`
 - DDD 分层 P0 反漂移门禁（阻断 `internal/server` 扩散与 `infrastructure -> services` 回流）：`make check ddd-layering-p0`
@@ -57,6 +59,7 @@
 | 新增/调整文档 | `make check doc` | 门禁见“文档收敛与门禁” |
 | 引入/修改“回退通道/双链路/legacy 分支” | `make check no-legacy` | 禁止 legacy（见 `DEV-PLAN-004M1`） |
 | Assistant 模型配置主源相关改动（配置写入口/迁移 stopline/门禁接线） | `make check assistant-config-single-source` | 单主源门禁（见 `DEV-PLAN-231`） |
+| Assistant Knowledge Markdown 主源 / runtime / JSON cutoff / 反回流 | `make check assistant-knowledge-single-source && make check assistant-knowledge-runtime-load && make check assistant-knowledge-no-json-runtime && make check assistant-no-legacy-overlay && make check assistant-no-knowledge-literals && make check assistant-knowledge-no-archive-ref && make check assistant-knowledge-contract-separation && make check assistant-no-knowledge-db` | `370A` Direct Markdown Runtime 与反回流门禁 |
 | 新增 scope/package 语义引用（`scope_code/scope_package/scope_subscription/package_id`） | `make check no-scope-package` | 增量反漂移门禁（承接 `DEV-PLAN-102C6`） |
 | 颗粒度层次/旧 scope 相关新增（`org_level/scope_type/scope_key`） | `make check granularity` | 颗粒度治理门禁（承接 `DEV-PLAN-180`） |
 | DDD 分层相关新增漂移（`internal/server` 扩散模块实现、`modules/*/infrastructure -> services` 回流） | `make check ddd-layering-p0` | P0 止血门禁（承接 `DEV-PLAN-015B/015C`） |
@@ -351,8 +354,9 @@ modules/{module}/
 - DEV-PLAN-360A：LibreChat 功能禁用清单与 Runtime 主链硬切实施计划：`docs/dev-plans/360a-librechat-feature-disablement-and-runtime-cutover-plan.md`
 - DEV-PLAN-361：OPA 作为唯一 PDP 候选引擎的引入边界与迁移方案：`docs/dev-plans/361-opa-pdp-adoption-boundary-and-migration-plan.md`
 - DEV-PLAN-370：Assistant API-First 与 Markdown Knowledge Runtime 主链收敛方案：`docs/dev-plans/370-assistant-api-first-and-markdown-knowledge-runtime-plan.md`
-- DEV-PLAN-370A：Assistant Markdown Knowledge Runtime Phase 1——compiler + `knowledge_qa / business_query`：`docs/dev-plans/370a-assistant-markdown-knowledge-runtime-phase1-query-and-compiler-plan.md`
+- DEV-PLAN-370A：Assistant Markdown Knowledge Runtime Phase 1——Direct Runtime 基座与 JSON 切断：`docs/dev-plans/370a-assistant-markdown-knowledge-runtime-phase1-query-and-compiler-plan.md`
 - DEV-PLAN-370B：Assistant `business_action` Knowledge Runtime 消费收口计划：`docs/dev-plans/370b-assistant-business-action-knowledge-runtime-consumption-plan.md`
+- DEV-PLAN-371：Assistant 真正 Tool Runtime 架构与迁移方案：`docs/dev-plans/371-assistant-true-tool-runtime-architecture-and-migration-plan.md`
 - DEV-PLAN-303：全仓残留 `gap/coverage` 测试尾项清零计划：`docs/dev-plans/303-repo-final-gap-coverage-test-tail-closure-plan.md`
 - DEV-PLAN-310：全项目 view/as_of 时间语义专项检视与最小收敛方案：`docs/dev-plans/310-project-wide-view-as-of-semantics-review-and-minimal-convergence-plan.md`
 - DEV-PLAN-311：View As Of 页面改造矩阵与 OrgUnitDetails 样板实施计划：`docs/dev-plans/311-view-as-of-page-cutover-matrix-and-orgunit-details-sample-plan.md`

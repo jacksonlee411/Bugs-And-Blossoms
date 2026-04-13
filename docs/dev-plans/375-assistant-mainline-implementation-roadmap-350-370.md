@@ -1,6 +1,6 @@
 # DEV-PLAN-375：Assistant 主线实施路线图（350-370）
 
-**状态**: 进行中（2026-04-13 10:48 CST；`375M1/375M2/375M4` 已完成并封账，`350B` 已完成，`360A Phase 2` 的 compat session API cleanup PR 与 runtime fail-closed/error-code 收口已完成，`375M3 / 370A` 与后续 `375M5 / 350C` 可继续推进）
+**状态**: 进行中（2026-04-13 12:40 CST；`375M1/375M2/375M3/375M4` 已完成并封账，`350B` 已完成，`360A Phase 2` 的 compat session API cleanup PR 与 runtime fail-closed/error-code 收口已完成，后续主线进入 `375M5 / 350C`，`370B` 仍可并行推进）
 
 > 目标：为 `DEV-PLAN-350/360/360A/361/370` 提供单一编排入口，冻结当前状态、SSOT 边界、串并行顺序、批次拆分与出口条件。  
 > 本文只做路线图编排，不改写各主题文档的契约裁决权；实现细节与子系统合同仍以对应 dev-plan 为单一事实源。
@@ -17,7 +17,7 @@
    - `370B`：动作知识散点 hard cut 与 contract / knowledge 强分离
 4. [X] `375M1`：successor 执行面稳定（承接 `360 Phase 0/1` + `360A Phase 0/1`）。
 5. [X] `375M2`：`350A` 完成，收口 `add_version / insert_version`。
-6. [ ] `375M3`：`370A` 完成，收口 direct Markdown runtime foundation。
+6. [X] `375M3`：`370A` 完成，收口 direct Markdown runtime foundation。
 7. [X] `375M4`：compat session API 的 `410 Gone` 硬切、cleanup PR 与 runtime fail-closed/error-code 收口均已完成并封账。
 8. [ ] `375M5`：`350C` 完成，并完成平台退役封板。
 9. [ ] `375M6`：`370B` 完成，进入总体验收与封板准备。
@@ -95,10 +95,10 @@
 
 ### 375M3：Direct Markdown Runtime 基座
 
-1. [ ] 启动 `370A`，覆盖 Markdown 单主源、`assistant_knowledge_md`、direct runtime loader、`assistant_knowledge/*.json` 切断与反回流门禁。
-2. [ ] 明确 `370A` 不做 query-only partial cutover，也不保留 action/query ownership 分裂。
-3. [ ] 明确 `370A` 不承接 `business_action` contract，不改 `assistantActionSpec`、Tool registry、`PolicyContextContractVersion`、`PrecheckProjectionContractVersion`。
-4. [ ] 明确 `370A` 同步冻结 semantic prompt 与 active Markdown 索引的一致性。
+1. [X] 启动 `370A`，覆盖 Markdown 单主源、`assistant_knowledge_md`、direct runtime loader、`assistant_knowledge/*.json` 切断与反回流门禁。
+2. [X] 明确 `370A` 不做 query-only partial cutover，也不保留 action/query ownership 分裂。
+3. [X] 明确 `370A` 不承接 `business_action` contract，不改 `assistantActionSpec`、Tool registry、`PolicyContextContractVersion`、`PrecheckProjectionContractVersion`。
+4. [X] 明确 `370A` 同步冻结 semantic prompt 与 active Markdown 索引的一致性。
 
 ### 375M4：业务动作收口批次二 + compat API 硬切
 
@@ -162,8 +162,8 @@
    `make check doc`
 3. [ ] `350C`：沿用同一命令口径，待后续批次完成。
 4. [X] `360/360A`：compat session API `410 Gone` 断言、cleanup PR、正式入口 runtime fail-closed/error-code 收口均已完成；`/assistant-ui/*` 的 `302 -> 410 -> 删除` 断言仍待后续批次继续。
-5. [ ] `370A`：补 Markdown loader/front matter/runtime-load/no-json-runtime/反回流门禁测试，并证明 `assistant_knowledge/*.json` 已被切断。
-6. [ ] `370A`：补 semantic prompt route/action parity 回归。
+5. [X] `370A`：补 Markdown loader/front matter/runtime-load/no-json-runtime/反回流门禁测试，并证明 `assistant_knowledge/*.json` 已被切断。
+6. [X] `370A`：补 semantic prompt route/action parity 回归。
 7. [ ] `370B`：补动作知识散点清理、contract / knowledge 强分离、fail-closed 回归。
 7. [X] `350A/350B` 实际执行记录已进入对应子计划与 `docs/dev-records/`，`375` 只维护路线图级进度与引用。
 

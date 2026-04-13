@@ -7,7 +7,7 @@ export ATLAS_VERSION ?= v0.38.0
 export DEV_COMPOSE_PROJECT ?= bugs-and-blossoms-dev
 export DEV_INFRA_ENV_FILE ?= .env.example
 
-.PHONY: help preflight check pr-branch naming no-legacy assistant-config-single-source assistant-domain-allowlist no-scope-package granularity ddd-layering-p0 ddd-layering-p2 org-node-key-backflow capability-key capability-contract capability-route-map capability-catalog policy-baseline-dup request-code as-of-explicit dict-tenant-only go-version error-message fmt lint test routing e2e doc tr generate css
+.PHONY: help preflight check pr-branch naming no-legacy assistant-config-single-source assistant-domain-allowlist assistant-knowledge-single-source assistant-knowledge-runtime-load assistant-knowledge-no-json-runtime assistant-no-legacy-overlay assistant-no-knowledge-literals assistant-knowledge-no-archive-ref assistant-knowledge-contract-separation assistant-no-knowledge-db no-scope-package granularity ddd-layering-p0 ddd-layering-p2 org-node-key-backflow capability-key capability-contract capability-route-map capability-catalog policy-baseline-dup request-code as-of-explicit dict-tenant-only go-version error-message fmt lint test routing e2e doc tr generate css
 .PHONY: sqlc-generate sqlc-verify-schema authz-pack authz-test authz-lint
 .PHONY: plan migrate up
 .PHONY: iam orgunit jobcatalog staffing person
@@ -24,6 +24,14 @@ help:
 					"  make check no-legacy" \
 					"  make check assistant-config-single-source" \
 					"  make check assistant-domain-allowlist" \
+					"  make check assistant-knowledge-single-source" \
+					"  make check assistant-knowledge-runtime-load" \
+					"  make check assistant-knowledge-no-json-runtime" \
+					"  make check assistant-no-legacy-overlay" \
+					"  make check assistant-no-knowledge-literals" \
+					"  make check assistant-knowledge-no-archive-ref" \
+					"  make check assistant-knowledge-contract-separation" \
+					"  make check assistant-no-knowledge-db" \
 					"  make check no-scope-package" \
 					"  make check granularity" \
 					"  make check ddd-layering-p0" \
@@ -71,6 +79,14 @@ preflight: ## 本地一键对齐CI（严格版：含 UI build/typecheck）
 	@$(MAKE) check no-legacy
 	@$(MAKE) check assistant-config-single-source
 	@$(MAKE) check assistant-domain-allowlist
+	@$(MAKE) check assistant-knowledge-single-source
+	@$(MAKE) check assistant-knowledge-runtime-load
+	@$(MAKE) check assistant-knowledge-no-json-runtime
+	@$(MAKE) check assistant-no-legacy-overlay
+	@$(MAKE) check assistant-no-knowledge-literals
+	@$(MAKE) check assistant-knowledge-no-archive-ref
+	@$(MAKE) check assistant-knowledge-contract-separation
+	@$(MAKE) check assistant-no-knowledge-db
 	@$(MAKE) check no-scope-package
 	@$(MAKE) check granularity
 	@$(MAKE) check ddd-layering-p0
@@ -111,6 +127,30 @@ assistant-config-single-source: ## 助手配置单主源门禁（禁止第二写
 
 assistant-domain-allowlist: ## 助手外域名白名单门禁（default deny + SSRF 风险域名阻断 + SSOT 接线）
 	@./scripts/ci/check-assistant-domain-allowlist.sh
+
+assistant-knowledge-single-source: ## Assistant 知识单主源门禁（仅允许 assistant_knowledge_md 为人工写入口）
+	@./scripts/ci/check-assistant-knowledge-single-source.sh
+
+assistant-knowledge-runtime-load: ## Assistant Markdown runtime load 门禁（front matter / refs / index fail-closed）
+	@./scripts/ci/check-assistant-knowledge-runtime-load.sh
+
+assistant-knowledge-no-json-runtime: ## Assistant JSON runtime 回流门禁（禁止 assistant_knowledge/*.json 与旧 loader/embed）
+	@./scripts/ci/check-assistant-knowledge-no-json-runtime.sh
+
+assistant-no-legacy-overlay: ## Assistant mixed-source / overlay 回流门禁
+	@./scripts/ci/check-assistant-no-legacy-overlay.sh
+
+assistant-no-knowledge-literals: ## Assistant prompt/runtime 邻近知识字面量回流门禁
+	@./scripts/ci/check-assistant-no-knowledge-literals.sh
+
+assistant-knowledge-no-archive-ref: ## Assistant Markdown source_refs 禁止 archive 引用
+	@./scripts/ci/check-assistant-knowledge-no-archive-ref.sh
+
+assistant-knowledge-contract-separation: ## Assistant knowledge / contract 强分离门禁
+	@./scripts/ci/check-assistant-knowledge-contract-separation.sh
+
+assistant-no-knowledge-db: ## Assistant knowledge/runtime 禁止 DB / vector / 外部知识平台依赖
+	@./scripts/ci/check-assistant-no-knowledge-db.sh
 
 no-scope-package: ## 反漂移门禁（阻断新增 scope/package 语义）
 	@./scripts/ci/check-no-scope-package.sh
@@ -305,7 +345,7 @@ staffing:
 person:
 	@:
 
-MODULE := $(firstword $(filter-out preflight check fmt lint test routing e2e doc tr generate css sqlc-generate sqlc-verify-schema authz-pack authz-test authz-lint no-legacy assistant-config-single-source assistant-domain-allowlist no-scope-package granularity ddd-layering-p0 ddd-layering-p2 org-node-key-backflow capability-key capability-contract capability-route-map capability-catalog policy-baseline-dup request-code as-of-explicit dict-tenant-only go-version error-message plan migrate up dev dev-up dev-down dev-reset dev-ps dev-server assistant-runtime-up assistant-runtime-down assistant-runtime-status assistant-runtime-clean librechat-web-verify librechat-web-build,$(MAKECMDGOALS)))
+MODULE := $(firstword $(filter-out preflight check fmt lint test routing e2e doc tr generate css sqlc-generate sqlc-verify-schema authz-pack authz-test authz-lint no-legacy assistant-config-single-source assistant-domain-allowlist assistant-knowledge-single-source assistant-knowledge-runtime-load assistant-knowledge-no-json-runtime assistant-no-legacy-overlay assistant-no-knowledge-literals assistant-knowledge-no-archive-ref assistant-knowledge-contract-separation assistant-no-knowledge-db no-scope-package granularity ddd-layering-p0 ddd-layering-p2 org-node-key-backflow capability-key capability-contract capability-route-map capability-catalog policy-baseline-dup request-code as-of-explicit dict-tenant-only go-version error-message plan migrate up dev dev-up dev-down dev-reset dev-ps dev-server assistant-runtime-up assistant-runtime-down assistant-runtime-status assistant-runtime-clean librechat-web-verify librechat-web-build,$(MAKECMDGOALS)))
 MIGRATE_DIR := $(lastword $(filter up down,$(MAKECMDGOALS)))
 
 plan:

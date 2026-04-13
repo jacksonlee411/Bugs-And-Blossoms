@@ -120,208 +120,55 @@ func assistantKnowledgeBaseCompileInput() (
 }
 
 func TestAssistantKnowledgeRuntime_LoadersErrorPaths(t *testing.T) {
-	t.Run("load knowledge runtime errors", func(t *testing.T) {
-		t.Run("catalog read failed", func(t *testing.T) {
-			hooks := captureAssistantKnowledgeHooks()
-			defer hooks.restore()
-			assistantKnowledgeReadFileFn = func(_ fs.FS, path string) ([]byte, error) {
-				if path == "assistant_knowledge/intent_route_catalog.json" {
-					return nil, errors.New("read failed")
-				}
-				return hooks.readFileFn(assistantKnowledgeFS, path)
-			}
-			if _, err := assistantLoadKnowledgeRuntime(); !errors.Is(err, errAssistantRuntimeConfigInvalid) {
-				t.Fatalf("expected runtime config invalid, got=%v", err)
-			}
-		})
-
-		t.Run("catalog decode failed", func(t *testing.T) {
-			hooks := captureAssistantKnowledgeHooks()
-			defer hooks.restore()
-			assistantKnowledgeReadFileFn = func(_ fs.FS, path string) ([]byte, error) {
-				if path == "assistant_knowledge/intent_route_catalog.json" {
-					return []byte(`{`), nil
-				}
-				return hooks.readFileFn(assistantKnowledgeFS, path)
-			}
-			if _, err := assistantLoadKnowledgeRuntime(); !errors.Is(err, errAssistantRuntimeConfigInvalid) {
-				t.Fatalf("expected runtime config invalid, got=%v", err)
-			}
-		})
-
-		t.Run("compile failed", func(t *testing.T) {
-			hooks := captureAssistantKnowledgeHooks()
-			defer hooks.restore()
-			assistantKnowledgeCanonicalHashFn = func(any) string { return "" }
-			if _, err := assistantLoadKnowledgeRuntime(); !errors.Is(err, errAssistantRuntimeConfigInvalid) {
-				t.Fatalf("expected runtime config invalid, got=%v", err)
-			}
-		})
-
-		t.Run("interpretation load failed", func(t *testing.T) {
-			hooks := captureAssistantKnowledgeHooks()
-			defer hooks.restore()
-			assistantKnowledgeGlobFn = func(fsys fs.FS, pattern string) ([]string, error) {
-				if pattern == "assistant_knowledge/interpretation/*.json" {
-					return nil, errors.New("glob failed")
-				}
-				return hooks.globFn(fsys, pattern)
-			}
-			if _, err := assistantLoadKnowledgeRuntime(); !errors.Is(err, errAssistantRuntimeConfigInvalid) {
-				t.Fatalf("expected runtime config invalid, got=%v", err)
-			}
-		})
-
-		t.Run("action view load failed", func(t *testing.T) {
-			hooks := captureAssistantKnowledgeHooks()
-			defer hooks.restore()
-			assistantKnowledgeGlobFn = func(fsys fs.FS, pattern string) ([]string, error) {
-				if pattern == "assistant_knowledge/action_view/*.json" {
-					return nil, errors.New("glob failed")
-				}
-				return hooks.globFn(fsys, pattern)
-			}
-			if _, err := assistantLoadKnowledgeRuntime(); !errors.Is(err, errAssistantRuntimeConfigInvalid) {
-				t.Fatalf("expected runtime config invalid, got=%v", err)
-			}
-		})
-
-		t.Run("reply guidance load failed", func(t *testing.T) {
-			hooks := captureAssistantKnowledgeHooks()
-			defer hooks.restore()
-			assistantKnowledgeGlobFn = func(fsys fs.FS, pattern string) ([]string, error) {
-				if pattern == "assistant_knowledge/reply_guidance/*.json" {
-					return nil, errors.New("glob failed")
-				}
-				return hooks.globFn(fsys, pattern)
-			}
-			if _, err := assistantLoadKnowledgeRuntime(); !errors.Is(err, errAssistantRuntimeConfigInvalid) {
-				t.Fatalf("expected runtime config invalid, got=%v", err)
-			}
-		})
-	})
-
-	t.Run("interpretation loader failures", func(t *testing.T) {
-		t.Run("glob failed", func(t *testing.T) {
-			hooks := captureAssistantKnowledgeHooks()
-			defer hooks.restore()
-			assistantKnowledgeGlobFn = func(_ fs.FS, pattern string) ([]string, error) {
-				return nil, errors.New("glob failed")
-			}
-			if _, _, err := assistantLoadInterpretationPacks(); !errors.Is(err, errAssistantRuntimeConfigInvalid) {
-				t.Fatalf("expected runtime config invalid, got=%v", err)
-			}
-		})
-
-		t.Run("read failed", func(t *testing.T) {
-			hooks := captureAssistantKnowledgeHooks()
-			defer hooks.restore()
-			assistantKnowledgeGlobFn = func(_ fs.FS, pattern string) ([]string, error) {
-				return []string{"assistant_knowledge/interpretation/mock.json"}, nil
-			}
-			assistantKnowledgeReadFileFn = func(_ fs.FS, path string) ([]byte, error) {
+	t.Run("markdown runtime read failed", func(t *testing.T) {
+		hooks := captureAssistantKnowledgeHooks()
+		defer hooks.restore()
+		assistantKnowledgeReadFileFn = func(_ fs.FS, path string) ([]byte, error) {
+			if path == "assistant_knowledge_md/intent/org.orgunit_create.zh.md" {
 				return nil, errors.New("read failed")
 			}
-			if _, _, err := assistantLoadInterpretationPacks(); !errors.Is(err, errAssistantRuntimeConfigInvalid) {
-				t.Fatalf("expected runtime config invalid, got=%v", err)
-			}
-		})
-
-		t.Run("decode failed", func(t *testing.T) {
-			hooks := captureAssistantKnowledgeHooks()
-			defer hooks.restore()
-			assistantKnowledgeGlobFn = func(_ fs.FS, pattern string) ([]string, error) {
-				return []string{"assistant_knowledge/interpretation/mock.json"}, nil
-			}
-			assistantKnowledgeReadFileFn = func(_ fs.FS, path string) ([]byte, error) {
-				return []byte(`{`), nil
-			}
-			if _, _, err := assistantLoadInterpretationPacks(); !errors.Is(err, errAssistantRuntimeConfigInvalid) {
-				t.Fatalf("expected runtime config invalid, got=%v", err)
-			}
-		})
+			return hooks.readFileFn(assistantKnowledgeFS, path)
+		}
+		if _, err := assistantLoadKnowledgeRuntime(); !errors.Is(err, errAssistantRuntimeConfigInvalid) {
+			t.Fatalf("expected runtime config invalid, got=%v", err)
+		}
 	})
 
-	t.Run("action view loader failures", func(t *testing.T) {
-		t.Run("glob failed", func(t *testing.T) {
-			hooks := captureAssistantKnowledgeHooks()
-			defer hooks.restore()
-			assistantKnowledgeGlobFn = func(_ fs.FS, pattern string) ([]string, error) {
-				return nil, errors.New("glob failed")
+	t.Run("markdown runtime front matter decode failed", func(t *testing.T) {
+		hooks := captureAssistantKnowledgeHooks()
+		defer hooks.restore()
+		assistantKnowledgeReadFileFn = func(_ fs.FS, path string) ([]byte, error) {
+			if path == "assistant_knowledge_md/intent/org.orgunit_create.zh.md" {
+				return []byte("---\nid: org.orgunit_create\nlocale: zh\nkind: intent\nversion:\n  - bad\n---\nbody"), nil
 			}
-			if _, _, err := assistantLoadActionViewPacks(); !errors.Is(err, errAssistantRuntimeConfigInvalid) {
-				t.Fatalf("expected runtime config invalid, got=%v", err)
-			}
-		})
-
-		t.Run("read failed", func(t *testing.T) {
-			hooks := captureAssistantKnowledgeHooks()
-			defer hooks.restore()
-			assistantKnowledgeGlobFn = func(_ fs.FS, pattern string) ([]string, error) {
-				return []string{"assistant_knowledge/action_view/mock.json"}, nil
-			}
-			assistantKnowledgeReadFileFn = func(_ fs.FS, path string) ([]byte, error) {
-				return nil, errors.New("read failed")
-			}
-			if _, _, err := assistantLoadActionViewPacks(); !errors.Is(err, errAssistantRuntimeConfigInvalid) {
-				t.Fatalf("expected runtime config invalid, got=%v", err)
-			}
-		})
-
-		t.Run("decode failed", func(t *testing.T) {
-			hooks := captureAssistantKnowledgeHooks()
-			defer hooks.restore()
-			assistantKnowledgeGlobFn = func(_ fs.FS, pattern string) ([]string, error) {
-				return []string{"assistant_knowledge/action_view/mock.json"}, nil
-			}
-			assistantKnowledgeReadFileFn = func(_ fs.FS, path string) ([]byte, error) {
-				return []byte(`{`), nil
-			}
-			if _, _, err := assistantLoadActionViewPacks(); !errors.Is(err, errAssistantRuntimeConfigInvalid) {
-				t.Fatalf("expected runtime config invalid, got=%v", err)
-			}
-		})
+			return hooks.readFileFn(assistantKnowledgeFS, path)
+		}
+		if _, err := assistantLoadKnowledgeRuntime(); !errors.Is(err, errAssistantRuntimeConfigInvalid) {
+			t.Fatalf("expected runtime config invalid, got=%v", err)
+		}
 	})
 
-	t.Run("reply guidance loader failures", func(t *testing.T) {
-		t.Run("glob failed", func(t *testing.T) {
-			hooks := captureAssistantKnowledgeHooks()
-			defer hooks.restore()
-			assistantKnowledgeGlobFn = func(_ fs.FS, pattern string) ([]string, error) {
+	t.Run("markdown runtime glob failed", func(t *testing.T) {
+		hooks := captureAssistantKnowledgeHooks()
+		defer hooks.restore()
+		assistantKnowledgeGlobFn = func(fsys fs.FS, pattern string) ([]string, error) {
+			if pattern == "assistant_knowledge_md/intent/*.md" {
 				return nil, errors.New("glob failed")
 			}
-			if _, _, err := assistantLoadReplyGuidancePacks(); !errors.Is(err, errAssistantRuntimeConfigInvalid) {
-				t.Fatalf("expected runtime config invalid, got=%v", err)
-			}
-		})
+			return hooks.globFn(fsys, pattern)
+		}
+		if _, err := assistantLoadKnowledgeRuntime(); !errors.Is(err, errAssistantRuntimeConfigInvalid) {
+			t.Fatalf("expected runtime config invalid, got=%v", err)
+		}
+	})
 
-		t.Run("read failed", func(t *testing.T) {
-			hooks := captureAssistantKnowledgeHooks()
-			defer hooks.restore()
-			assistantKnowledgeGlobFn = func(_ fs.FS, pattern string) ([]string, error) {
-				return []string{"assistant_knowledge/reply_guidance/mock.json"}, nil
-			}
-			assistantKnowledgeReadFileFn = func(_ fs.FS, path string) ([]byte, error) {
-				return nil, errors.New("read failed")
-			}
-			if _, _, err := assistantLoadReplyGuidancePacks(); !errors.Is(err, errAssistantRuntimeConfigInvalid) {
-				t.Fatalf("expected runtime config invalid, got=%v", err)
-			}
-		})
-
-		t.Run("decode failed", func(t *testing.T) {
-			hooks := captureAssistantKnowledgeHooks()
-			defer hooks.restore()
-			assistantKnowledgeGlobFn = func(_ fs.FS, pattern string) ([]string, error) {
-				return []string{"assistant_knowledge/reply_guidance/mock.json"}, nil
-			}
-			assistantKnowledgeReadFileFn = func(_ fs.FS, path string) ([]byte, error) {
-				return []byte(`{`), nil
-			}
-			if _, _, err := assistantLoadReplyGuidancePacks(); !errors.Is(err, errAssistantRuntimeConfigInvalid) {
-				t.Fatalf("expected runtime config invalid, got=%v", err)
-			}
-		})
+	t.Run("markdown runtime compile failed", func(t *testing.T) {
+		hooks := captureAssistantKnowledgeHooks()
+		defer hooks.restore()
+		assistantKnowledgeCanonicalHashFn = func(any) string { return "" }
+		if _, err := assistantLoadKnowledgeRuntime(); !errors.Is(err, errAssistantRuntimeConfigInvalid) {
+			t.Fatalf("expected runtime config invalid, got=%v", err)
+		}
 	})
 }
 
@@ -868,30 +715,35 @@ func TestAssistantKnowledgeRuntime_HelperCoverage(t *testing.T) {
 		}
 
 		nonBusinessRuntime := &assistantKnowledgeRuntime{
-			interpretation: map[string]map[string]assistantInterpretationPack{
+			intentDocs: map[string]map[string]assistantKnowledgeMarkdownDocument{
 				"knowledge.general_qa": {
-					"zh": {PackID: "knowledge.general_qa", Locale: "zh"},
+					"zh": {ID: "knowledge.general_qa", Locale: "zh", Summary: "这是知识问答摘要"},
 				},
 			},
 		}
 		ctx, err := nonBusinessRuntime.buildPlanContextV1("tenant_1", "zh", assistantIntentSpec{
 			Action:    assistantIntentPlanOnly,
+			IntentID:  "knowledge.general_qa",
 			RouteKind: assistantRouteKindKnowledgeQA,
 		}, assistantActionSpec{}, nil)
 		if err != nil {
 			t.Fatalf("build non-business context err=%v", err)
 		}
-		if !strings.Contains(ctx.ActionViewSummary, "非动作请求") {
+		if !strings.Contains(ctx.ActionViewSummary, "知识问答") {
 			t.Fatalf("unexpected non-business summary=%q", ctx.ActionViewSummary)
 		}
 
-		emptyRuntime := &assistantKnowledgeRuntime{interpretation: map[string]map[string]assistantInterpretationPack{}}
-		if _, err := emptyRuntime.buildPlanContextV1("tenant_1", "zh", assistantIntentSpec{
+		emptyRuntime := &assistantKnowledgeRuntime{}
+		emptyCtx, err := emptyRuntime.buildPlanContextV1("tenant_1", "zh", assistantIntentSpec{
 			Action:    assistantIntentPlanOnly,
 			IntentID:  "knowledge.unknown",
 			RouteKind: assistantRouteKindKnowledgeQA,
-		}, assistantActionSpec{}, nil); err == nil {
-			t.Fatal("expected interpretation missing error")
+		}, assistantActionSpec{}, nil)
+		if err != nil {
+			t.Fatalf("unexpected non-business fallback err=%v", err)
+		}
+		if !strings.Contains(emptyCtx.ActionViewSummary, "非动作请求") {
+			t.Fatalf("unexpected fallback non-business summary=%q", emptyCtx.ActionViewSummary)
 		}
 
 		businessRuntime := &assistantKnowledgeRuntime{

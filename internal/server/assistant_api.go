@@ -1201,15 +1201,32 @@ func assistantBuildPlan(intent assistantIntentSpec) assistantPlanSummary {
 		plan.CommitAdapterKey = spec.Handler.CommitAdapterKey
 		plan.Summary = spec.PlanSummary
 	}
-	switch strings.TrimSpace(intent.RouteKind) {
-	case assistantRouteKindKnowledgeQA:
-		plan.Summary = "当前轮属于知识问答，只返回说明，不触发业务提交。"
-	case assistantRouteKindChitchat:
-		plan.Summary = "当前轮属于闲聊响应，不触发业务提交。"
-	case assistantRouteKindUncertain:
-		plan.Summary = "当前轮语义仍不确定，仅保留澄清投影，不触发业务提交。"
+	if summary := assistantKnowledgePlanSummary(intent); summary != "" {
+		plan.Summary = summary
 	}
 	return plan
+}
+
+func assistantKnowledgePlanSummary(intent assistantIntentSpec) string {
+	routeKind := strings.TrimSpace(intent.RouteKind)
+	if routeKind == "" || routeKind == assistantRouteKindBusinessAction {
+		return ""
+	}
+	intentID := strings.TrimSpace(intent.IntentID)
+	runtime, err := assistantLoadKnowledgeRuntimeFn()
+	if err == nil && runtime != nil {
+		if intentID == "" {
+			if entry, ok := runtime.findRouteByRouteKind(routeKind); ok {
+				intentID = strings.TrimSpace(entry.IntentID)
+			}
+		}
+		if doc, ok := runtime.findIntentDoc(intentID, runtime.planContextLocale()); ok {
+			if summary := strings.TrimSpace(doc.Summary); summary != "" {
+				return summary
+			}
+		}
+	}
+	return "这是非动作请求，不会触发业务提交。"
 }
 
 func assistantBuildDryRun(intent assistantIntentSpec, candidates []assistantCandidate, resolvedCandidateID string) assistantDryRunResult {

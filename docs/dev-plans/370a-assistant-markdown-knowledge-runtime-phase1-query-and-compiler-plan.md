@@ -1,6 +1,6 @@
 # DEV-PLAN-370A：Assistant Markdown Knowledge Runtime Phase 1——Direct Runtime 基座与 JSON 切断
 
-**状态**: 进行中（2026-04-13 12:15 CST）
+**状态**: 进行中（2026-04-13 12:40 CST；Direct Markdown Runtime、JSON cutoff、semantic parity 与反回流门禁已落地，剩余为 `370B` 散点知识继续硬切）
 
 > 本文从 `DEV-PLAN-370` 与 `DEV-PLAN-375` 的 `375M3` 拆分而来，作为 Direct Markdown Runtime 基座、Markdown 单主源、运行时校验/索引与 `assistant_knowledge/*.json` 切断的实施 SSOT。  
 > `DEV-PLAN-370` 继续持有 Runtime / Knowledge 总边界；本文只承接 direct runtime 基座与 JSON cutoff，不承接 `350` 的动作 contract 裁决。
@@ -16,11 +16,11 @@
 
 ### 2.1 核心目标
 
-1. [ ] 建立 `internal/server/assistant_knowledge_md/`，作为全部 Assistant Runtime Knowledge 的唯一人工主源。
-2. [ ] 建立 Direct Markdown Runtime loader：运行时直接读取 Markdown、校验 front matter 与引用，并建立内存索引。
-3. [ ] 删除 `internal/server/assistant_knowledge/*.json` 及其 embed/load 依赖。
-4. [ ] 建立反回流门禁，阻断 JSON 快照、archive 引用、知识型代码文本与 contract/knowledge 混写继续扩散。
-5. [ ] 为 `370B` 留下最小剩余工作：只处理 `business_action` 剩余知识散点与 contract / knowledge 分离。
+1. [X] 建立 `internal/server/assistant_knowledge_md/`，作为全部 Assistant Runtime Knowledge 的唯一人工主源。
+2. [X] 建立 Direct Markdown Runtime loader：运行时直接读取 Markdown、校验 front matter 与引用，并建立内存索引。
+3. [X] 删除 `internal/server/assistant_knowledge/*.json` 及其 embed/load 依赖。
+4. [X] 建立反回流门禁，阻断 JSON 快照、archive 引用、知识型代码文本与 contract/knowledge 混写继续扩散。
+5. [X] 为 `370B` 留下最小剩余工作：只处理 `business_action` 剩余知识散点与 contract / knowledge 分离。
 
 ### 2.2 非目标
 
@@ -42,18 +42,18 @@
 
 ### 4.1 正式目录
 
-1. [ ] `internal/server/assistant_knowledge_md/intent/`
-2. [ ] `internal/server/assistant_knowledge_md/actions/`
-3. [ ] `internal/server/assistant_knowledge_md/replies/`
-4. [ ] `internal/server/assistant_knowledge_md/tools/`
-5. [ ] `internal/server/assistant_knowledge_md/wiki/`
+1. [X] `internal/server/assistant_knowledge_md/intent/`
+2. [X] `internal/server/assistant_knowledge_md/actions/`
+3. [X] `internal/server/assistant_knowledge_md/replies/`
+4. [X] `internal/server/assistant_knowledge_md/tools/`
+5. [X] `internal/server/assistant_knowledge_md/wiki/`
 
 ### 4.2 ownership 规则
 
-1. [ ] `assistant_knowledge_md/` 下的 Markdown 文件是唯一允许人工编辑的知识主源。
-2. [ ] `assistant_knowledge/*.json` 必须被删除，不再保留任何 checked-in 生成物目录。
-3. [ ] `actions/` 是正式 Markdown 主源的一部分，但其中内容属于说明性知识，不拥有动作 contract 裁决权。
-4. [ ] `tools/` 中只能描述已经由 `350` 冻结的正式 Tool API，不得借机注册新 tool。
+1. [X] `assistant_knowledge_md/` 下的 Markdown 文件是唯一允许人工编辑的知识主源。
+2. [X] `assistant_knowledge/*.json` 必须被删除，不再保留任何 checked-in 生成物目录。
+3. [X] `actions/` 是正式 Markdown 主源的一部分，但其中内容属于说明性知识，不拥有动作 contract 裁决权。
+4. [X] `tools/` 中只能描述已经由 `350` 冻结的正式 Tool API，不得借机注册新 tool。
 5. [ ] `wiki/` 只承载解释性知识、术语、流程、非实时说明，不承载运行时事实。
 
 ## 5. Markdown 源结构与 schema
@@ -190,16 +190,16 @@
 
 ### 8.1 基础设施
 
-1. [ ] 建立以下目录：
+1. [X] 建立以下目录：
    - `internal/server/assistant_knowledge_md/intent/`
    - `internal/server/assistant_knowledge_md/actions/`
    - `internal/server/assistant_knowledge_md/replies/`
    - `internal/server/assistant_knowledge_md/tools/`
    - `internal/server/assistant_knowledge_md/wiki/`
-2. [ ] 新增 direct runtime loader 与测试，建议文件落点：
+2. [X] 新增 direct runtime loader 与测试，建议文件落点：
    - `internal/server/assistant_knowledge_markdown_runtime.go`
    - `internal/server/assistant_knowledge_markdown_runtime_test.go`
-3. [ ] 新增门禁脚本与 Makefile 接线：
+3. [X] 新增门禁脚本与 Makefile 接线：
    - `scripts/ci/check-assistant-knowledge-single-source.sh`
    - `scripts/ci/check-assistant-knowledge-runtime-load.sh`
    - `scripts/ci/check-assistant-knowledge-no-json-runtime.sh`
@@ -211,9 +211,9 @@
 
 ### 8.2 内容迁移
 
-1. [ ] 将现有 query、knowledge、action、reply、tool 说明性知识迁入 Markdown。
-2. [ ] 对历史散落在 `assistant_action_registry.go`、`assistant_api.go`、`assistant_reply_nlg.go` 的知识型文本建立迁移清单。
-3. [ ] 删除 `assistant_knowledge/*.json`，不保留镜像文件、导出物或 snapshot 目录。
+1. [X] 将现有 query、knowledge、action、reply、tool 说明性知识迁入 Markdown。
+2. [X] 对历史散落在 `assistant_action_registry.go`、`assistant_api.go`、`assistant_reply_nlg.go` 的知识型文本建立迁移清单，并先收口 runtime/prompt 直邻散点。
+3. [X] 删除 `assistant_knowledge/*.json`，不保留镜像文件、导出物或 snapshot 目录。
 
 ### 8.3 Runtime 影响面
 
@@ -224,7 +224,7 @@
 
 ## 9. 验收与测试
 
-1. [ ] 文档与 gate 验收：
+1. [X] 文档与 gate 验收：
    - `make check assistant-knowledge-single-source`
    - `make check assistant-knowledge-runtime-load`
    - `make check assistant-knowledge-no-json-runtime`
@@ -233,7 +233,7 @@
    - `make check assistant-knowledge-no-archive-ref`
    - `make check assistant-knowledge-contract-separation`
    - `make check assistant-no-knowledge-db`
-2. [ ] Go 测试验收：
+2. [X] Go 测试验收：
    - `go test ./internal/server/...`
 3. [ ] `370A` 至少需要覆盖以下失败面：
    - front matter 缺字段
