@@ -393,7 +393,7 @@ CREATE TABLE IF NOT EXISTS iam.cubebox_tasks (
     tenant_uuid, conversation_id, turn_id, request_id
   ),
   CONSTRAINT cubebox_tasks_task_type_check CHECK (
-    task_type IN ('assistant_async_plan', 'cubebox_async_plan')
+    task_type IN ('assistant_async_plan')
   ),
   CONSTRAINT cubebox_tasks_status_check CHECK (
     status IN ('queued', 'running', 'succeeded', 'failed', 'manual_takeover_required', 'canceled')
@@ -620,35 +620,100 @@ WITH CHECK (tenant_uuid = current_setting('app.current_tenant')::uuid);
 本计划将数据迁移拆成两类，避免把“有文件系统依赖的导入逻辑”塞进 Goose migration：
 
 1. **SQL 内可完成的 `assistant_* -> cubebox_*` 拷贝**
-   - 迁移对象：
-     - `assistant_conversations -> cubebox_conversations`
-     - `assistant_turns -> cubebox_turns`
-     - `assistant_state_transitions -> cubebox_state_transitions`
-     - `assistant_idempotency -> cubebox_idempotency`
-     - `assistant_tasks -> cubebox_tasks`
-     - `assistant_task_events -> cubebox_task_events`
-     - `assistant_task_dispatch_outbox -> cubebox_task_dispatch_outbox`
-   - 保留项：
-     - 保留原 `conversation_id / turn_id / task_id / request_id / trace_id / timestamps`
-     - 保留原 `task_type / workflow_id` 兼容值；`380A` 不提前冻结对外 literal 重命名。
-     - 不重写历史业务结果和错误码；若后续要把 `assistant_*` literal 收口为 `cubebox_*`，应由 `380C` 配合 API/DTO 收口或单独 post-cutover migration 承接。
+	   - 迁移对象：
+	     - `assistant_conversations -> cubebox_conversations`
+	     - `assistant_turns -> cubebox_turns`
+	     - `assistant_state_transitions -> cubebox_state_transitions`
+	     - `assistant_idempotency -> cubebox_idempotency`
+	     - `assistant_tasks -> cubebox_tasks`
+	     - `assistant_task_events -> cubebox_task_events`
+	     - `assistant_task_dispatch_outbox -> cubebox_task_dispatch_outbox`
+	   - 保留项：
+	     - 保留原 `conversation_id / turn_id / task_id / request_id / trace_id / timestamps`
+	     - 保留原 `task_type='assistant_async_plan'` 与既有 `workflow_id` 原值；`380A` 不提前冻结对外 literal 重命名，也不做 workflow prefix rewrite。
+	     - 不重写历史业务结果和错误码；若后续要把 `assistant_*` literal 或 workflow 前缀收口为 `cubebox_*`，应由 `380C` 配合 API/DTO 收口或单独 post-cutover migration 承接。
+	   - 基础实体链迁移语义：
+	     - `conversations / turns / tasks / idempotency` 采用主键级 `INSERT ... ON CONFLICT DO UPDATE`
+	     - source-of-migration 永远是当前 `assistant_*` 正式运行值；重跑时以源值覆盖目标值，禁止 `DO NOTHING`
+	     - “可纠偏重跑”的语义只适用于上述基础实体链
+	   - append-only 链迁移语义：
+	     - `state_transitions / task_events / task_dispatch_outbox` 不采用逐行 `UPSERT`
+	     - 原因：目标表没有足以稳定承载历史语义的自然唯一键；若直接 `UPSERT`，实现期会被迫发明隐式判重规则
+	     - 同一 tenant 的重跑策略固定为“显式清理目标 append-only 子树后全量重放”，不是追加补写
+	   - tenant 级执行顺序（冻结）：
+	     1. 开启 tenant 显式事务并注入 `app.current_tenant`
+	     2. 先回填/纠偏 `conversations / turns / tasks / idempotency`
+	     3. 删除该 tenant 在目标 `cubebox_state_transitions / cubebox_task_events / cubebox_task_dispatch_outbox` 中、属于本次 source-of-migration 的历史子树
+	     4. 按源表稳定顺序全量重放 append-only 链
+	     5. 立即执行 tenant 级校验；失败则整 tenant 回滚并保持全局停写
+
+#### 4.6.2.1 任务快照列迁移规则
+
+`cubebox_tasks` 相比当前 `assistant_tasks` 新增的快照列，必须在 `380A` 直接冻结回填口径，避免实现期自行推导历史值：
+
+| 目标列 | 历史回填规则 | 说明 |
+| --- | --- | --- |
+| `intent_schema_version` | 直接拷贝 | 来源于现有 `assistant_tasks` |
+| `compiler_contract_version` | 直接拷贝 | 来源于现有 `assistant_tasks` |
+| `capability_map_version` | 直接拷贝 | 来源于现有 `assistant_tasks` |
+| `skill_manifest_digest` | 直接拷贝 | 来源于现有 `assistant_tasks` |
+| `context_hash` | 直接拷贝 | 来源于现有 `assistant_tasks` |
+| `intent_hash` | 直接拷贝 | 来源于现有 `assistant_tasks` |
+| `plan_hash` | 直接拷贝 | 来源于现有 `assistant_tasks` |
+| `knowledge_snapshot_digest` | 写 `NULL` | 现有源表无可信历史来源 |
+| `route_catalog_version` | 写 `NULL` | 现有源表无可信历史来源 |
+| `resolver_contract_version` | 写 `NULL` | 现有源表无可信历史来源 |
+| `context_template_version` | 写 `NULL` | 现有源表无可信历史来源 |
+| `reply_guidance_version` | 写 `NULL` | 现有源表无可信历史来源 |
+| `policy_context_digest` | 写 `NULL` | 现有源表无可信历史来源 |
+| `effective_policy_version` | 写 `NULL` | 现有源表无可信历史来源 |
+| `resolved_setid` | 写 `NULL` | 现有源表无可信历史来源 |
+| `setid_source` | 写 `NULL` | 现有源表无可信历史来源 |
+| `precheck_projection_digest` | 写 `NULL` | 现有源表无可信历史来源 |
+| `mutation_policy_version` | 写 `NULL` | 现有源表无可信历史来源 |
+
+补充规则：
+
+1. 以上 `NULL` 列在 `380A` 阶段保持 nullable，禁止在 backfill 中伪造默认 literal。
+2. “历史行可为空，新写行由正式实现写齐”是 `380A` 冻结的双态契约；若未来要把这些列升级为非空，必须在正式写流量已切到 `cubebox_*` 且历史数据已完成补齐后，由后续子计划单独推进。
+3. 实现期不得把运行时对象、日志、文件索引或任意派生值当作历史事实源回填上述列。
 
 2. **依赖文件系统的本地索引导入**
-   - 来源：`.local/cubebox/files/index.json + objects/`
-   - 导入目标：
-     - `cubebox_files`
-     - `cubebox_file_links`
-   - 规则：
-     - `index.json` 中的 `conversation_id` 不再写入 `cubebox_files` 主表，而是生成一条 `cubebox_file_links`（`link_role='conversation_attachment'`）。
-     - 必须校验 `objects/<storage_key>` 实体文件存在、大小一致、`sha256` 一致。
-     - 不存在实体文件的记录视为 stopline，禁止切换到 `cubebox` 正式数据面。
+	   - 来源：`.local/cubebox/files/index.json + objects/`
+	   - 导入目标：
+	     - `cubebox_files`
+	     - `cubebox_file_links`
+	   - 输入字段契约（冻结）：
+
+| 字段 | 必填 | 导入规则 |
+| --- | --- | --- |
+| `file_id` | 是 | 必须格式合法并唯一映射到目标 `cubebox_files.file_id` |
+| `tenant_id` | 是 | 必须能唯一映射到 `iam.tenants.id`；找不到租户即 stopline |
+| `file_name` | 是 | 空值即 stopline |
+| `media_type` | 是 | 空值即 stopline |
+| `size_bytes` | 是 | 必须为正数，且与实体文件一致 |
+| `sha256` | 是 | 必须为 64 位 hex，且与实体文件一致 |
+| `storage_key` | 是 | 必须非空、tenant 内唯一，且 `objects/<storage_key>` 实体文件存在 |
+| `uploaded_by` | 是 | 空值即 stopline |
+| `uploaded_at` | 是 | 必须可解析为合法 RFC3339 时间；非法即 stopline |
+| `conversation_id` | 否 | 若存在，则必须在目标 `cubebox_conversations` 中找到同 tenant 会话；找不到即 stopline |
+
+	   - 规则：
+	     - `index.json` 中的 `conversation_id` 不再写入 `cubebox_files` 主表，而是生成一条 `cubebox_file_links`（`link_role='conversation_attachment'`）。
+	     - `cubebox_files` 只承接文件元数据；`cubebox_file_links` 承接 conversation 关联，禁止把旧索引里的 `conversation_id` 继续塞回主表。
+	     - 必须校验 `objects/<storage_key>` 实体文件存在、大小一致、`sha256` 一致。
+	     - 空 `uploaded_by`、空 `media_type`、非法 `uploaded_at`、重复 `storage_key`、缺实体文件、摘要不一致、租户映射缺失、conversation 映射缺失，全部视为 stopline。
 
 3. **执行载体**
-   - Goose migration 只承接 schema。
-   - 一次性数据迁移工具落在 `cmd/dbtool`，不落在 migration SQL 中。
-   - 推荐新增两个子命令：
-     - `cmd/dbtool cubebox-backfill-assistant`
-     - `cmd/dbtool cubebox-import-local-files`
+	   - Goose migration 只承接 schema。
+	   - 一次性数据迁移工具落在 `cmd/dbtool`，不落在 migration SQL 中。
+	   - 推荐新增以下验证入口：
+	     - `cmd/dbtool cubebox-backfill-assistant --dry-run`
+	     - `cmd/dbtool cubebox-backfill-assistant --tenant <tenant-id>`
+	     - `cmd/dbtool cubebox-verify-backfill --tenant <tenant-id>`
+	     - `cmd/dbtool cubebox-import-local-files --dry-run`
+	     - `cmd/dbtool cubebox-import-local-files --tenant <tenant-id>`
+	     - `cmd/dbtool cubebox-verify-file-import --tenant <tenant-id>`
 
 ## 5. 接口契约 (API Contracts)
 
@@ -760,9 +825,9 @@ WITH CHECK (tenant_uuid = current_setting('app.current_tenant')::uuid);
   }
   ```
 - **说明**:
-  - `380A` 只冻结数据面可接受的存储值，不提前裁决 `CubeBox` 对外 task literal。
-  - 当前兼容值与现有运行面保持一致：`assistant_async_plan`。
-  - 是否在正式 API 上收口为 `cubebox_async_plan`，由 `380C` 统一裁决并配套错误码/兼容窗口。
+  - `380A` 数据面只接受当前正式运行值 `assistant_async_plan`。
+  - `380A` 不提前裁决 `CubeBox` 对外 task literal，也不提前引入 `cubebox_async_plan`。
+  - 若未来正式 API 要收口为其他 literal，应由 `380C` 配套 DTO/错误码/迁移方案统一裁决。
 - **DB Effect**:
   - `INSERT iam.cubebox_tasks`
   - `INSERT iam.cubebox_task_events` (`queued`)
@@ -806,7 +871,8 @@ WITH CHECK (tenant_uuid = current_setting('app.current_tenant')::uuid);
    - `/internal/cubebox/*` 写接口进入环境级只读/停写。
    - 不允许开启 dual-write。
 3. 执行 `assistant_* -> cubebox_*` SQL 拷贝：
-   - Conversations → Turns → StateTransitions/Idempotency → Tasks → TaskEvents/Outbox
+   - 先执行基础实体链：Conversations → Turns → Tasks → Idempotency
+   - 再执行 append-only 链：StateTransitions → TaskEvents → Outbox
 4. 执行本地文件索引导入：
    - 校验对象文件存在
    - 导入 `cubebox_files`
@@ -815,6 +881,8 @@ WITH CHECK (tenant_uuid = current_setting('app.current_tenant')::uuid);
    - 逐表计数一致
    - 关键主键集合一致
    - `request_id / workflow_id` 唯一性与任务状态保真
+   - 历史任务新增快照列为空、旧快照列保真
+   - append-only 链重建后无重复、无残留旧错误值
    - 文件记录与物理对象一致
 6. 只有验证通过，才允许 `380B` 把正式 repository 切到 `cubebox_*`。
 7. 切换后保留 `assistant_*` 仅作历史保底观察，不再接受正式写流量。
@@ -823,26 +891,37 @@ WITH CHECK (tenant_uuid = current_setting('app.current_tenant')::uuid);
 
 1. 开启显式事务并注入 `app.current_tenant`。
 2. 以 tenant 为单位顺序迁移，避免一次性全库锁住过大范围。
-3. Conversation/Turn/Task 链采用“可纠偏的 reconcile 语义”而不是 `ON CONFLICT DO NOTHING`：
+3. 基础实体链采用“可纠偏的 reconcile 语义”而不是 `ON CONFLICT DO NOTHING`：
    - 首次导入：`INSERT`
    - 重跑导入：对命中主键的行执行 `UPDATE`，把目标行覆盖为当前 source-of-migration 的值
    - 这样当第一次导入因脚本 bug / 半途中断写入了错误字段时，修复后重跑可以真正纠偏
-4. `380A` 阶段保留 `assistant_tasks` 中的 `task_type / workflow_id` 兼容 literal，不做对外命名重写。
-5. 若后续 `380C` 决定把外部 task literal 与 workflow 前缀收口为 `cubebox_*`，必须通过独立 migration 或 post-cutover backfill 明确执行，而不是在 `380A` 的基础回填里隐式完成。
-6. 对每个 tenant 完成后立即跑校验 SQL；失败则回滚该 tenant 事务并保持全局停写。
+4. `cubebox_tasks` 的新增历史快照列按 4.6.2.1 规则回填：
+   - 现有 `assistant_tasks` 已有的 7 个快照字段直接拷贝
+   - 现有源表不存在的扩展快照列统一写 `NULL`
+   - 禁止实现期基于日志、文件索引或运行时对象自行推导历史值
+5. append-only 链采用 tenant 级显式重建：
+   - 先删除该 tenant 在目标 `cubebox_state_transitions / cubebox_task_events / cubebox_task_dispatch_outbox` 中属于本次 source-of-migration 的历史子树
+   - 再按源表稳定顺序全量重放
+   - 重跑的语义是“同 tenant 的目标 append-only 子树重建”，不是追加补写
+6. `380A` 阶段保留 `assistant_tasks` 中的 `task_type='assistant_async_plan'` 与 `workflow_id` 原值，不做对外命名重写。
+7. 若后续 `380C` 决定把外部 task literal 或 workflow 前缀收口为 `cubebox_*`，必须通过独立 migration 或 post-cutover backfill 明确执行，而不是在 `380A` 的基础回填里隐式完成。
+8. 对每个 tenant 完成后立即跑校验 SQL；失败则回滚该 tenant 事务并保持全局停写。
 
 ### 6.3 本地文件索引导入算法
 
 1. 读取 `.local/cubebox/files/index.json`。
 2. 对每条记录做以下校验：
    - `file_id` 非空且格式合法
+   - `tenant_id` 能唯一映射到 `iam.tenants.id`
+   - `file_name / media_type / uploaded_by / uploaded_at` 均满足输入字段契约
    - `storage_key` 非空
    - `objects/<storage_key>` 文件存在
    - 实际 `sha256/size_bytes` 与索引一致
+   - 若存在 `conversation_id`，则必须在目标 `cubebox_conversations` 中找到同 tenant 会话
 3. 通过校验后：
    - `INSERT iam.cubebox_files`
    - 若有 `conversation_id`，则 `INSERT iam.cubebox_file_links(link_role='conversation_attachment')`
-4. 如对象文件缺失或摘要不一致：
+4. 如任一校验失败：
    - 记录 mismatch
    - 终止导入
    - 不允许推进到正式切换
@@ -890,12 +969,12 @@ WITH CHECK (tenant_uuid = current_setting('app.current_tenant')::uuid);
 
 ### 9.1 单元测试
 
-1. [ ] 覆盖 ID 格式校验、任务类型映射、workflow 前缀重写、文件索引校验函数。
+1. [ ] 覆盖 ID 格式校验、历史任务新增 nullable 快照列默认值策略、`assistant_async_plan` 保真、文件索引校验函数。
 2. [ ] 覆盖文件 link 形状规则：
    - conversation-only
    - turn_input / turn_output
    - 非法组合拒绝
-3. [ ] 覆盖 assistant backfill 的字段转换与重入语义。
+3. [ ] 覆盖 assistant backfill 的字段转换、基础实体 reconcile 与 append-only 子树重建语义。
 
 ### 9.2 集成测试
 
@@ -905,9 +984,15 @@ WITH CHECK (tenant_uuid = current_setting('app.current_tenant')::uuid);
    - 行数一致
    - 关键主键一致
    - 任务状态/时间戳/请求标识保真
+   - 历史 `assistant_tasks` 回填后，新增快照列为空但旧快照列保真
+4. [ ] 同一 tenant 重跑 backfill 后：
+   - `cubebox_state_transitions / cubebox_task_events / cubebox_task_dispatch_outbox` 无重复
+   - append-only 链无残留旧错误值
+   - 关键字段集合与源表一致
 4. [ ] 本地文件导入后：
    - `cubebox_files` 行数 = `index.json` 有效记录数
    - `cubebox_file_links` 行数 = 有 `conversation_id` 的有效记录数
+   - 租户映射缺失、conversation 缺失、对象缺失时 fail-closed
 5. [ ] conversation 删除后：
    - turns/tasks/links 被级联删除
    - files 是否保留符合 `380D` 约束
@@ -931,6 +1016,8 @@ WITH CHECK (tenant_uuid = current_setting('app.current_tenant')::uuid);
    - 环境
    - 结果
    - mismatch/stopline 是否为空
+   - 历史新增快照列空值统计
+   - append-only 重跑前后计数/关键字段集合对比结果
 
 ## 10. 运维与监控 (Ops & Monitoring)
 
@@ -962,3 +1049,5 @@ WITH CHECK (tenant_uuid = current_setting('app.current_tenant')::uuid);
 3. 迁移后出现 task/request/workflow 唯一性冲突，或 reconcile 重跑后目标值仍无法收敛。
 4. `make sqlc-verify-schema` 失败。
 5. 任一表未启用 RLS 或存在跨租户可见性漏洞。
+6. append-only 链重跑后，条数、顺序键或关键字段集合与源表不一致。
+7. 文件索引导入出现租户映射缺失、conversation 映射缺失、空 `uploaded_by`、空 `media_type`、非法 `uploaded_at` 或重复 `storage_key`。

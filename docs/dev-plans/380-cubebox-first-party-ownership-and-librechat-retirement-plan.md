@@ -114,7 +114,7 @@
    负责 `cubebox_files / cubebox_file_links`、文件元数据 SoT、存储适配器与删除/引用一致性。
 5. [X] 已登记并创建骨架文档：`380E` `apps/web` 正式前端收口  
    文档：`docs/dev-plans/380e-cubebox-apps-web-frontend-convergence-plan.md`  
-   负责会话页、文件页、模型页、导航、i18n、页面级测试与残留前端命名清理。
+   负责会话页、文件页、模型页、导航、i18n、页面级测试与残留前端命名清理，并承接 `DEV-PLAN-360A` 已冻结的“保留聊天 UI 壳、消息树、输入框、基础展示组件” successor UX 边界；若 `CubeBox` 正式入口不再尽量接近 LibreChat 式聊天骨架，必须由 `380E` 显式改写契约与验收。
 6. [X] 已登记并创建骨架文档：`380F` LibreChat 资产退役与部署链收口  
    文档：`docs/dev-plans/380f-librechat-vendored-runtime-and-deploy-retirement-plan.md`  
    负责 `third_party/librechat-web`、`deploy/librechat/*`、`scripts/librechat/*`、旧构建链与相关文档收口。
