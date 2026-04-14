@@ -1,6 +1,6 @@
 # DEV-PLAN-380：CubeBox 一方资产化与 LibreChat 完整退役重构方案（v1 去 Prompt 版）
 
-**状态**: 进行中（2026-04-14 21:03 CST；Phase 0/1/2/3 的正式入口、最小 API 主链、文件最小闭环与旧 LibreChat UI 退役已落地；`380A~380G` 子计划已登记，但 `iam.cubebox_*` PostgreSQL 数据面、`/internal/assistant/*` 正式退役与全量门禁回归仍未完成）
+**状态**: 进行中（2026-04-15 07:15 CST；Phase 0/1/2/3 的正式入口、最小路由接线/代理接线、文件最小闭环与旧 LibreChat UI 退役已落地；`380A~380G` 子计划已登记，但 `380B` 后端正式切面、`iam.cubebox_*` PostgreSQL 数据面主链接入、`/internal/assistant/*` 正式退役与全量门禁回归仍未完成）
 
 ## 1. 背景
 
@@ -35,7 +35,7 @@
 
 1. [X] 已建立 `modules/cubebox` 模块骨架。
 2. [X] 已建立 `/internal/cubebox/*` API 命名空间。
-3. [X] 已接通会话、任务、模型状态与文件上传/列出/删除的最小闭环。
+3. [X] 已建立 `/internal/cubebox/*` 的最小 successor 路由与代理接线；正式后端实现、删除语义、`task poll_uri` 正式生成、`runtime-status`/`files` 模块化仍待 `380B/380D` 完成。
 
 ### 3.3 Phase 2：前端入口
 
@@ -55,13 +55,14 @@
 2. [X] `modules/cubebox` 一方文件能力最小闭环。
 3. [X] 旧 `LibreChat` 正式入口退役。
 4. [X] 本轮未引入新的产品级 Prompt DTO。
+5. [ ] 当前后端仍以 `assistant` 复用链路为主；`380B` stopline 尚未清零，`/internal/cubebox/*` 现阶段只能视为 successor 路由入口 + 临时代理接线，而不是正式后端主链。
 
 ## 5. 已完成事项
 
 1. [X] 已新增 `modules/cubebox` 骨架：
    `modules/cubebox/module.go`、`modules/cubebox/links.go`、`modules/cubebox/services/files.go`、`modules/cubebox/infrastructure/local_file_store.go`，并以仓库内本地目录文件存储实现 `CubeBox` 文件最小闭环。
-2. [X] 已新增 `/internal/cubebox/*` 服务端主链：
-   `conversations`、`turns`、`tasks`、`models`、`runtime-status`、`files` 已接线；其中 task 回执的 `poll_uri` 已改写为 `/internal/cubebox/tasks/*` 语义。
+2. [X] 已新增 `/internal/cubebox/*` successor 路由与兼容接线：
+   `conversations`、`turns`、`tasks`、`models`、`runtime-status`、`files` 已具备入口，但当前后端仍大量代理 `assistant` 逻辑；task 回执仍通过响应改写承接 `/internal/cubebox/tasks/*` 语义，这些都不构成 `380B` 已完成证据。
 3. [X] 已新增 `CubeBox` 前端正式页面：
    `apps/web/src/pages/cubebox/CubeBoxPage.tsx`、`CubeBoxFilesPage.tsx`、`CubeBoxModelsPage.tsx` 与 `apps/web/src/api/cubebox.ts` 已落地；路由与导航已切到 `/app/cubebox`。
 4. [X] 已退役旧 `LibreChat` UI 正式入口：
@@ -83,10 +84,14 @@
 ## 7. 剩余事项
 
 1. [ ] 以 PostgreSQL 建立 `iam.cubebox_*` 正式数据面，并完成必要的前向迁移。
-2. [ ] 将当前复用 `assistant` authoritative/persistence 的会话主链，切换为真正的 `cubebox` 一方存储与仓内模块实现。
-3. [ ] 完成 `/internal/assistant/*` 正式 API 的退役策略与主链收口，不再长期保留双正式命名空间。
-4. [ ] 实现 `DELETE /internal/cubebox/conversations/{conversation_id}` 的正式删除语义；当前仍为 `501/未实现`。
-5. [ ] 跑完 `380` 终态所需的全量仓库门禁与构建回归。
+2. [ ] 去掉 `/internal/cubebox/*` 对 `handleAssistant*API` 的代理依赖，完成 `380B` 的正式后端切面切换。
+3. [ ] 实现 `DELETE /internal/cubebox/conversations/{conversation_id}` 的正式删除语义；当前仍为 `501/未实现`。
+4. [ ] 将 `poll_uri` 收口为正式 service/DTO 生成，移除响应后改写桥接。
+5. [ ] 将 `runtime-status` 从直接读取 `assistantSvc` 内部字段收敛为 `cubebox` facade 聚合。
+6. [ ] 将 files 正式接入 `modules/cubebox`，不再由 `internal/server` 直接决定文件根目录并构造本地文件服务。
+7. [ ] 补齐 `modules/cubebox` 的 conversations/turns/tasks/models/runtime-status/files facade、domain、tests 与 readiness 证据。
+8. [ ] 完成 `/internal/assistant/*` 正式 API 的退役策略与主链收口，不再长期保留双正式命名空间。
+9. [ ] 跑完 `380` 终态所需的全量仓库门禁与构建回归。
 
 ## 8. 验收
 
@@ -96,7 +101,8 @@
 4. [ ] `make test`
 5. [ ] `pnpm --dir apps/web check`
 6. [ ] `make css`
-7. [X] `/app/cubebox` 已成为正式入口，旧 `LibreChat` 正式入口已退役为 `410 Gone`；本轮通过服务端 handler 测试、路由/能力映射测试与 `apps/web` 页面/构建验证完成最小验收。
+7. [X] `/app/cubebox` 已成为正式入口，旧 `LibreChat` 正式入口已退役为 `410 Gone`；本轮通过服务端 handler 测试、路由/能力映射测试与 `apps/web` 页面/构建验证完成最小 successor 验收。
+8. [ ] 现有验证只证明入口、路由、UI successor 与基础脚手架有效，不构成 `380B` 已完成证据；`380B` 仍需以后端去代理化、正式删除语义、`poll_uri` 收口、`runtime-status/files` 模块化与 readiness 补齐为完成条件。
 
 ## 9. 子计划分解与依赖
 
@@ -105,7 +111,7 @@
    负责 `iam.cubebox_*` 表、索引、约束、sqlc 与前向迁移策略。
 2. [X] 已登记并创建骨架文档：`380B` 后端正式实现面切换  
    文档：`docs/dev-plans/380b-cubebox-backend-formal-implementation-cutover-plan.md`  
-   负责 `modules/cubebox` 的 `domain / services / infrastructure / presentation` 正式实现与从 `assistant` 复用链路迁出。
+   负责 `modules/cubebox` 的 `domain / services / infrastructure / presentation` 正式实现与从 `assistant` 复用链路迁出；当前仅完成 groundwork，尚未达到 `380B` stopline 清零条件。
 3. [X] 已登记并创建骨架文档：`380C` API/DTO 收口与 `/internal/assistant/*` 退役  
    文档：`docs/dev-plans/380c-cubebox-api-dto-convergence-and-assistant-retirement-plan.md`  
    负责 `/internal/cubebox/*` 成为唯一正式 API、DTO 收口、错误码/状态契约与旧命名空间退役策略。
@@ -128,3 +134,4 @@
    `380C -> 380E`
    `380C + 380E -> 380F`
    `380F -> 380G`
+9. [ ] `380C` 的启动前提冻结为：`380B` stopline 1/2/3/5/6 清零，而不是只要 `/internal/cubebox/*` 路由存在即可推进旧 API 正式退役。
