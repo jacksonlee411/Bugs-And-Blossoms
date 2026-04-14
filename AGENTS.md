@@ -223,6 +223,7 @@ modules/{module}/
 - DEV-PLAN-062：全链路业务测试子计划 TP-060-02——主数据（组织架构 + SetID + JobCatalog + 职位）：`docs/dev-plans/062-test-tp060-02-master-data-org-setid-jobcatalog-position.md`
 - DEV-PLAN-063：全链路业务测试子计划 TP-060-03——人员与任职（Person + Assignments）：`docs/dev-plans/063-test-tp060-03-person-and-assignments.md`
 - DEV-PLAN-064A：全链路业务测试子计划 TP-060-05——Assistant（会话 + 意图 + 提交 + 任务编排）：`docs/dev-plans/064a-test-tp060-05-assistant-conversation-intent-and-tasks.md`
+- DEV-PLAN-380：CubeBox 一方资产化与 LibreChat 完整退役重构方案（v1 去 Prompt 版）：`docs/dev-plans/380-cubebox-first-party-ownership-and-librechat-retirement-plan.md`
 - DEV-PLAN-069：移除薪酬社保与考勤（文档/代码/测试/数据库）：`docs/dev-plans/069-remove-payroll-attendance.md`
 - DEV-PLAN-070【归档】：SetID 绑定组织架构重构方案（时间口径已由 DEV-PLAN-102B 接管）：`docs/archive/dev-plans/070-setid-orgunit-binding-redesign.md`
 - DEV-PLAN-070A：全局共享租户模式 vs 天然租户隔离模式专项调查（SetID/Scope Package）：`docs/dev-plans/070a-setid-global-share-vs-tenant-native-isolation-investigation.md`

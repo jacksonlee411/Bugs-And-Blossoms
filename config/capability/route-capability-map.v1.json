@@ -337,6 +337,132 @@
       "status": "active"
     },
     {
+      "method": "POST",
+      "path": "/internal/cubebox/conversations",
+      "route_class": "internal_api",
+      "action": "admin",
+      "capability_key": "org.assistant_conversation.manage",
+      "owner_module": "cubebox",
+      "status": "active"
+    },
+    {
+      "method": "GET",
+      "path": "/internal/cubebox/conversations",
+      "route_class": "internal_api",
+      "action": "read",
+      "capability_key": "org.assistant_conversation.manage",
+      "owner_module": "cubebox",
+      "status": "active"
+    },
+    {
+      "method": "GET",
+      "path": "/internal/cubebox/conversations/{conversation_id}",
+      "route_class": "internal_api",
+      "action": "read",
+      "capability_key": "org.assistant_conversation.manage",
+      "owner_module": "cubebox",
+      "status": "active"
+    },
+    {
+      "method": "DELETE",
+      "path": "/internal/cubebox/conversations/{conversation_id}",
+      "route_class": "internal_api",
+      "action": "admin",
+      "capability_key": "org.assistant_conversation.manage",
+      "owner_module": "cubebox",
+      "status": "active"
+    },
+    {
+      "method": "POST",
+      "path": "/internal/cubebox/conversations/{conversation_id}/turns",
+      "route_class": "internal_api",
+      "action": "admin",
+      "capability_key": "org.assistant_conversation.manage",
+      "owner_module": "cubebox",
+      "status": "active"
+    },
+    {
+      "method": "POST",
+      "path": "/internal/cubebox/conversations/{conversation_id}/turns/{turn_action}",
+      "route_class": "internal_api",
+      "action": "admin",
+      "capability_key": "org.assistant_conversation.manage",
+      "owner_module": "cubebox",
+      "status": "active"
+    },
+    {
+      "method": "POST",
+      "path": "/internal/cubebox/tasks",
+      "route_class": "internal_api",
+      "action": "admin",
+      "capability_key": "org.assistant_conversation.manage",
+      "owner_module": "cubebox",
+      "status": "active"
+    },
+    {
+      "method": "GET",
+      "path": "/internal/cubebox/tasks/{task_id}",
+      "route_class": "internal_api",
+      "action": "read",
+      "capability_key": "org.assistant_conversation.manage",
+      "owner_module": "cubebox",
+      "status": "active"
+    },
+    {
+      "method": "POST",
+      "path": "/internal/cubebox/tasks/{task_action}",
+      "route_class": "internal_api",
+      "action": "admin",
+      "capability_key": "org.assistant_conversation.manage",
+      "owner_module": "cubebox",
+      "status": "active"
+    },
+    {
+      "method": "GET",
+      "path": "/internal/cubebox/models",
+      "route_class": "internal_api",
+      "action": "read",
+      "capability_key": "org.assistant_conversation.manage",
+      "owner_module": "cubebox",
+      "status": "active"
+    },
+    {
+      "method": "GET",
+      "path": "/internal/cubebox/runtime-status",
+      "route_class": "internal_api",
+      "action": "read",
+      "capability_key": "org.assistant_conversation.manage",
+      "owner_module": "cubebox",
+      "status": "active"
+    },
+    {
+      "method": "GET",
+      "path": "/internal/cubebox/files",
+      "route_class": "internal_api",
+      "action": "read",
+      "capability_key": "org.assistant_conversation.manage",
+      "owner_module": "cubebox",
+      "status": "active"
+    },
+    {
+      "method": "POST",
+      "path": "/internal/cubebox/files",
+      "route_class": "internal_api",
+      "action": "admin",
+      "capability_key": "org.assistant_conversation.manage",
+      "owner_module": "cubebox",
+      "status": "active"
+    },
+    {
+      "method": "DELETE",
+      "path": "/internal/cubebox/files/{file_id}",
+      "route_class": "internal_api",
+      "action": "admin",
+      "capability_key": "org.assistant_conversation.manage",
+      "owner_module": "cubebox",
+      "status": "active"
+    },
+    {
       "method": "GET",
       "path": "/org/api/org-units/create-field-decisions",
       "route_class": "internal_api",

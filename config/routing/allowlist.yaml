@@ -23,6 +23,18 @@ entrypoints:
       - path: /app/assistant/models
         methods: [GET]
         route_class: ui
+      - path: /app/cubebox
+        methods: [GET]
+        route_class: ui
+      - path: /app/cubebox/conversations/{conversation_id}
+        methods: [GET]
+        route_class: ui
+      - path: /app/cubebox/files
+        methods: [GET]
+        route_class: ui
+      - path: /app/cubebox/models
+        methods: [GET]
+        route_class: ui
       - path: /app/assistant/librechat
         methods: [GET]
         route_class: ui
@@ -214,6 +226,39 @@ entrypoints:
         route_class: internal_api
       - path: /internal/assistant/session/logout
         methods: [POST]
+        route_class: internal_api
+      - path: /internal/cubebox/conversations
+        methods: [GET, POST]
+        route_class: internal_api
+      - path: /internal/cubebox/conversations/{conversation_id}
+        methods: [GET, DELETE]
+        route_class: internal_api
+      - path: /internal/cubebox/conversations/{conversation_id}/turns
+        methods: [POST]
+        route_class: internal_api
+      - path: /internal/cubebox/conversations/{conversation_id}/turns/{turn_action}
+        methods: [POST]
+        route_class: internal_api
+      - path: /internal/cubebox/tasks
+        methods: [POST]
+        route_class: internal_api
+      - path: /internal/cubebox/tasks/{task_id}
+        methods: [GET]
+        route_class: internal_api
+      - path: /internal/cubebox/tasks/{task_action}
+        methods: [POST]
+        route_class: internal_api
+      - path: /internal/cubebox/models
+        methods: [GET]
+        route_class: internal_api
+      - path: /internal/cubebox/runtime-status
+        methods: [GET]
+        route_class: internal_api
+      - path: /internal/cubebox/files
+        methods: [GET, POST]
+        route_class: internal_api
+      - path: /internal/cubebox/files/{file_id}
+        methods: [DELETE]
         route_class: internal_api
       - path: /org/api/org-units
         methods: [GET, POST]

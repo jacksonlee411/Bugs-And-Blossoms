@@ -50,22 +50,32 @@ export const navItems: NavItem[] = [
   },
   {
     key: 'assistant',
-    path: '/assistant/librechat',
+    path: '/cubebox',
     labelKey: 'nav_ai_assistant',
     icon: <SmartToyIcon fontSize='small' />,
     order: 23,
     permissionKey: 'orgunit.read',
-    keywords: ['assistant', 'ai', 'chat', 'librechat', '智能助手', '对话']
+    keywords: ['cubebox', 'assistant', 'ai', 'chat', '智能助手', '对话']
   },
   {
     key: 'assistant-models',
-    path: '/assistant/models',
+    path: '/cubebox/models',
     labelKey: 'nav_ai_assistant',
     icon: <SmartToyIcon fontSize='small' />,
     order: 231,
     parentKey: 'assistant',
     permissionKey: 'orgunit.admin',
-    keywords: ['assistant', 'model', 'provider', 'llm', '模型', '供应商']
+    keywords: ['cubebox', 'assistant', 'model', 'provider', 'llm', '模型', '供应商']
+  },
+  {
+    key: 'assistant-files',
+    path: '/cubebox/files',
+    labelKey: 'nav_ai_assistant',
+    icon: <SmartToyIcon fontSize='small' />,
+    order: 232,
+    parentKey: 'assistant',
+    permissionKey: 'orgunit.read',
+    keywords: ['cubebox', 'assistant', 'file', 'upload', '附件', '文件']
   },
   {
     key: 'configuration-policy',
