@@ -1,6 +1,6 @@
 # DEV-PLAN-380：CubeBox 一方资产化与 LibreChat 完整退役重构方案（v1 去 Prompt 版）
 
-**状态**: 进行中（2026-04-15 07:15 CST；Phase 0/1/2/3 的正式入口、最小路由接线/代理接线、文件最小闭环与旧 LibreChat UI 退役已落地；`380A~380G` 子计划已登记，但 `380B` 后端正式切面、`iam.cubebox_*` PostgreSQL 数据面主链接入、`/internal/assistant/*` 正式退役与全量门禁回归仍未完成）
+**状态**: 进行中（2026-04-15；Phase 0/1/2/3 的正式入口、最小路由接线/代理接线、文件最小闭环与旧 LibreChat UI 退役已落地；`380A` 数据面 contract 已批准可依赖，但这不等于 `380B` 已完成；`380B` 后端正式切面、`iam.cubebox_*` PostgreSQL 数据面主链接入、`/internal/assistant/*` 正式退役与全量门禁回归仍未完成）
 
 ## 1. 背景
 
@@ -108,7 +108,7 @@
 
 1. [X] 已登记并创建骨架文档：`380A` PostgreSQL 数据面与迁移契约  
    文档：`docs/dev-plans/380a-cubebox-postgresql-data-plane-and-migration-contract.md`  
-   负责 `iam.cubebox_*` 表、索引、约束、sqlc 与前向迁移策略。
+   负责 `iam.cubebox_*` 表、索引、约束、sqlc 与前向迁移策略；当前 contract 已批准，可作为 `380B/380D` 依赖，但不等于 `380B` 已完成，也不构成 `380C` 启动条件。
 2. [X] 已登记并创建骨架文档：`380B` 后端正式实现面切换  
    文档：`docs/dev-plans/380b-cubebox-backend-formal-implementation-cutover-plan.md`  
    负责 `modules/cubebox` 的 `domain / services / infrastructure / presentation` 正式实现与从 `assistant` 复用链路迁出；当前仅完成 groundwork，尚未达到 `380B` stopline 清零条件。

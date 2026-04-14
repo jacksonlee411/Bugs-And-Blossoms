@@ -1,9 +1,11 @@
 # DEV-PLAN-380A：CubeBox PostgreSQL 数据面与迁移契约
 
-**状态**: 草拟中（2026-04-14 22:35 CST）
+**状态**: 已批准（2026-04-15；`cubebox_*` PostgreSQL 数据面 contract 已获批准，可作为 `380B/380D` 依赖；迁移执行证据、Readiness 与 stopline 校验仍待后续关闭）
 
 > 本文从 `DEV-PLAN-380` 拆分而来，作为 `CubeBox` PostgreSQL 数据面、前向迁移、sqlc 接线与切换算法的实施 SSOT。  
 > `DEV-PLAN-380` 继续持有总范围、批次顺序与封板裁决权；本文只负责“正式数据面如何落地”。
+>
+> 批准说明：本次批准冻结的是 `cubebox_*` 数据面 contract、前向迁移方向与 sqlc/仓储落点；不等同于 `380A` 的实施与 readiness 已完成。`380B/380D` 可以依赖本文 contract 编码，但正式切换仍以本文第 8/9 章的里程碑、验收与 dev-record 证据为准。
 
 ## 1. 背景与上下文 (Context)
 
@@ -959,7 +961,7 @@ WITH CHECK (tenant_uuid = current_setting('app.current_tenant')::uuid);
 
 ### 8.2 里程碑
 
-1. [ ] M0：`380A` 设计冻结并获得用户对“新增表”的明确批准。
+1. [X] M0：`380A` 设计冻结并获得用户对“新增表”的明确批准（contract accepted）。
 2. [ ] M1：`iam` schema SSOT + Goose 迁移完成，`make iam plan/lint/migrate up` 通过。
 3. [ ] M2：`sqlc.yaml` 扩展完成，`modules/cubebox/infrastructure/sqlc/gen` 生成通过。
 4. [ ] M3：`cmd/dbtool` 的 assistant backfill / file import 工具完成。
@@ -1008,6 +1010,8 @@ WITH CHECK (tenant_uuid = current_setting('app.current_tenant')::uuid);
 7. [ ] 如命中 Go 代码：`go fmt ./... && go vet ./... && make check lint && make test`
 
 ### 9.4 Readiness 证据
+
+> 说明：`380A` 已批准的是 contract 依赖前提，不等于以下 readiness 项已关闭；迁移执行证据、stopline 校验与 dev-record 仍需单独完成。
 
 1. [ ] 新建并回写 `docs/dev-records/DEV-PLAN-380A-READINESS.md`
 2. [ ] 记录至少以下内容：

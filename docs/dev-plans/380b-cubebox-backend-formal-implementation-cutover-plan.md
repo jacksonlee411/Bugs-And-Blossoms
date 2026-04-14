@@ -1,6 +1,6 @@
 # DEV-PLAN-380B：CubeBox 后端正式实现面切换
 
-**状态**: 草拟中（2026-04-15 07:15 CST）
+**状态**: 草拟中（2026-04-15；`380A` contract 已批准可依赖，但当前工作区仍命中 stopline 1/2/3/5/6）
 
 > 本文从 `DEV-PLAN-380` 拆分而来，作为 `modules/cubebox` 后端正式实现面切换的实施 SSOT。  
 > `DEV-PLAN-380A` 负责 PostgreSQL 数据面 contract、前向迁移与 sqlc 基座；本文只负责 `CubeBox` 后端在 Go 仓内的正式实现、DDD 落点、切换批次与 stopline。  
@@ -54,7 +54,7 @@
    - models（只读展示）
    - files（服务装配与仓内边界；文件元数据 contract 由 `380D` 持有）
 3. [ ] 收口 `internal/server` 只保留 HTTP 接线、tenant/session/authz/routing/error mapping/streaming 适配与模块装配职责。
-4. [ ] 明确每一批次的目标目录、责任文件、允许保留的临时桥接，以及切换完成后的 stopline，防止 “proxy 一直留着以后再说”。
+4. [ ] 明确每一批次的目标职责边界、允许保留的临时桥接，以及切换完成后的 stopline，防止 “proxy 一直留着以后再说”。
 5. [ ] 为 `380C` 提供前提：当本文完成后，`/internal/cubebox/*` 背后将具备独立后端实现，`/internal/assistant/*` 才可以进入正式退役批次。
 
 ### 2.2 非目标 (Out of Scope)
@@ -67,16 +67,6 @@
 
 ### 2.3 工具链与门禁（SSOT 引用）
 
-- **触发器清单（本计划命中）**:
-  - [x] Go 代码
-  - [x] Routing（handler 挂接、路由所有权）
-  - [x] capability-route-map
-  - [x] DDD layering（`ddd-layering-p0/p2`）
-  - [x] error-message
-  - [x] sqlc（命中 repository 接线时）
-  - [ ] `.templ` / `make css`
-  - [ ] 多语言 JSON
-  - [ ] Authz 策略本体（如仅沿用既有 capability，不在本文扩 Casbin 规则）
 - **执行入口（SSOT）**:
   - 触发器矩阵与仓库红线：`AGENTS.md`
   - 文档格式：`docs/dev-plans/000-docs-format.md`
@@ -84,12 +74,16 @@
   - 模块骨架：`docs/dev-plans/016-greenfield-hr-modules-skeleton.md`
   - 路由治理：`docs/dev-plans/017-routing-strategy.md`
   - Atlas + Goose / sqlc：`docs/dev-plans/024-atlas-goose-closed-loop-guide.md`、`docs/dev-plans/025-sqlc-guidelines.md`
-- **本计划实现期本地必跑（按 SSOT）**:
-  - 涉及 Go 代码：`go fmt ./... && go vet ./... && make check lint && make test`
-  - 涉及路由/能力映射：`make check routing && make check capability-route-map`
-  - 涉及错误码/提示：`make check error-message`
-  - 命中 sqlc 生成：`make sqlc-generate`，必要时补 `make sqlc-verify-schema`
-  - 命中 DDD/组合根：`make check ddd-layering-p0 && make check ddd-layering-p2`
+  - 命令入口：`Makefile` 与 CI workflow
+- **本计划命中的门禁边界**:
+  - `ddd-layering-p0/p2`：保护 `internal/server` 不继续承载 `CubeBox` 业务主链，且 `module.go/links.go` 必须承担组合根职责。
+  - `no-legacy`：保护 `/internal/cubebox/*` 不得长期保留 `assistant` 代理壳或双正式主链。
+  - `routing` / `capability-route-map`：保护 successor 路由入口与 capability 映射不漂移。
+  - `error-message`：保护正式错误语义、错误码与用户可见提示收敛。
+  - `Atlas/Goose/sqlc`：在命中 `380A` 数据面/仓储接线时，保护 PostgreSQL contract 与生成物不漂移。
+- **记录口径**:
+  - 本文只说明“命中哪些 SSOT 入口，以及这些入口保护什么边界”。
+  - 实际执行命令、时间戳、环境与结果统一回写 readiness/dev-record，不在本文重复复制执行手册。
 
 ## 3. 架构与关键决策 (Architecture & Decisions)
 
@@ -172,45 +166,48 @@ flowchart TD
    - `runtime-status` 与 files 仍未完成模块化收口。
    - 当前工作区已命中 stopline 1/2/3/5/6，因此本文状态只能是“未完成”，不能视为 `380B` 已实现。
 
-### 4.3 目标目录与职责
+### 4.3 完成定义、不变量与失败语义
 
-目标完成后，`modules/cubebox` 至少形成如下承载面：
+1. **完成定义（必须同时满足）**:
+   - `/internal/cubebox/*` 不再直接转调 `handleAssistant*API`。
+   - `poll_uri` 由正式 `cubebox` service/DTO 直接生成，而不是依赖响应后改写。
+   - `DELETE /internal/cubebox/conversations/{conversation_id}` 具备正式删除语义，不再返回 `501`。
+   - `runtime-status` 与 `files` 通过 `modules/cubebox` facade 暴露，不再依赖 `assistantSvc` 内部字段或 `internal/server` 直接装配本地服务。
+   - `modules/cubebox` 形成 conversations/turns/tasks/models/runtime-status/files 的正式实现面，而不只是 PGStore 与文件骨架。
+2. **核心不变量**:
+   - `internal/server` 只保留 delivery/adapter，不再承载 `CubeBox` 业务主链。
+   - `modules/cubebox/module.go` / `links.go` 必须承担组合根与路由装配职责，不能继续空壳。
+   - `cubebox` 不能长期以 `assistant` handler、`assistant` 领域类型或响应字符串改写作为正式实现。
+   - 命中 `380A` 数据面时，仍必须遵守 PostgreSQL contract、tenant tx/RLS 与 fail-closed 边界。
+3. **失败语义**:
+   - 任一 stopline 未清零，则 `380B` 状态保持“未完成”。
+   - 若仍存在 bridge，必须登记为临时桥接点并说明删除批次；不得把 bridge 当完成态。
+   - `380C` 只能在 stopline 1/2/3/5/6 清零后启动，不能以 successor 路由已存在替代 cutover 完成。
 
-```text
-modules/cubebox/
-├── domain/
-│   ├── conversation.go         # 会话/turn/task 领域类型与稳定枚举
-│   ├── errors.go               # 稳定错误语义（供 server 映射）
-│   ├── ports.go                # repository/runtime/model/file 等端口
-│   └── runtime_status.go       # runtime-status 聚合视图类型
-├── services/
-│   ├── conversations.go        # create/list/get/delete facade
-│   ├── turns.go                # append / confirm / commit facade
-│   ├── tasks.go                # submit / detail / cancel / dispatch facade
-│   ├── models.go               # 模型只读 facade
-│   ├── runtime_status.go       # 运行态聚合 facade
-│   └── files.go                # 文件 facade（承接 380D adapter）
-├── infrastructure/
-│   ├── persistence/
-│   │   ├── store.go            # PG 读写仓储实现
-│   │   ├── conversations.go    # 会话读写具体实现（若 store.go 过大则拆分）
-│   │   ├── tasks.go            # 任务持久化/dispatch/outbox
-│   │   └── files.go            # 文件元数据与引用实现（承接 380D）
-│   ├── runtime/
-│   │   ├── knowledge.go        # runtime/knowledge adapter
-│   │   ├── model_gateway.go    # model gateway adapter
-│   │   └── authoritative.go    # authoritative gate adapter
-│   └── local_file_store.go     # 本地存储实现（切换期与 380D 对齐）
-├── presentation/
-│   ├── api.go                  # request/response mapper（如需要）
-│   └── errors.go               # domain/service -> HTTP 错误映射辅助
-├── module.go                   # 组合根：构造 services / adapters
-└── links.go                    # 路由挂接/对 server 暴露最小接线接口
-```
+### 4.4 目标职责边界与承载点
 
-> 说明：是否拆成多个文件以实际代码规模为准；本文冻结的是“职责必须落到哪一层”，不是强制精确文件名。
+完成态至少满足以下职责承载；文件名只作为示例，不构成强制文件树要求：
 
-### 4.4 `internal/server` 的目标残留职责
+1. `modules/cubebox/domain`
+   - 承接 `Conversation`、`Turn`、`Task`、`RuntimeStatus`、`File` 等稳定领域类型、端口与错误语义。
+   - 可由 `conversation.go`、`ports.go`、`errors.go` 等文件承载，但本文冻结的是职责，不是精确文件名。
+2. `modules/cubebox/services`
+   - 承接 conversations/turns/tasks/models/runtime-status/files facade。
+   - 不得再把 `assistantConversationService` 当作仓内主服务。
+3. `modules/cubebox/infrastructure`
+   - 承接 PostgreSQL persistence、runtime/model/file adapters。
+   - 可按规模拆分具体文件，但不得把持久化/adapter 主链继续留在 `internal/server`。
+4. `modules/cubebox/presentation`
+   - 仅在需要时承接 request/response mapper 与 delivery 辅助。
+   - 不得在该层重建业务状态机或主编排逻辑。
+5. `modules/cubebox/module.go` / `links.go`
+   - 必须成为组合根与对 `internal/server` 暴露的接线点。
+   - 负责 services、adapters 与路由挂接装配，不承载业务用例细节。
+6. `internal/server`
+   - 仅保留 adapter/delivery。
+   - 任何 conversation/turn/task/runtime/file 主编排继续留在这里，都视为 `380B` 未完成。
+
+### 4.5 `internal/server` 的目标残留职责
 
 `internal/server` 在 `380B` 完成后仅保留：
 
@@ -305,7 +302,7 @@ modules/cubebox/
 3. [ ] 新增或补齐 `modules/cubebox/domain` 与 `services` 骨架，先把后续要迁的能力落层。
 
 **当前状态**:
-- [X] `380A` 前置 accepted，`cubebox_*` 数据面 contract 视为本计划已可依赖。
+- [X] `380A` 前置 contract 已批准，`cubebox_*` 数据面 contract 可作为本计划依赖；迁移执行证据与 stopline 校验继续由 `380A` readiness 关闭。
 - [X] 当前 bridge 点已被评审明确识别。
 - [ ] `modules/cubebox/domain` 与 conversations/turns/tasks/models/runtime-status services 骨架尚未补齐。
 
@@ -498,24 +495,29 @@ modules/cubebox/
 5. [ ] `/internal/cubebox/files`
    - list/upload/delete 通过 `cubebox` facade 而非 server 直连本地存储
 
-### 9.3 路由与门禁
+### 9.3 命中门禁与验收口径
 
-1. [ ] `make check routing`
-2. [ ] `make check capability-route-map`
-3. [ ] `make check error-message`
-4. [ ] `make check ddd-layering-p0`
-5. [ ] `make check ddd-layering-p2`
-6. [ ] 如命中 sqlc：`make sqlc-generate && make sqlc-verify-schema`
-7. [ ] 涉及 Go 改动：`go fmt ./... && go vet ./... && make check lint && make test`
+> 具体命令入口以 `AGENTS.md`、`Makefile` 与 CI workflow 为 SSOT；本文只记录必须通过哪些门禁，以及它们分别保护什么边界。
+
+1. [ ] `ddd-layering-p0/p2`：证明 `internal/server` 不再承载 `CubeBox` 业务主链，且 `module.go/links.go` 已承担组合根职责。
+2. [ ] `no-legacy`：证明 `/internal/cubebox/*` 不再长期代理 `assistant` handler 或保留双正式主链。
+3. [ ] `routing` / `capability-route-map`：证明 successor 路由与 capability 映射稳定，不再依赖临时桥接。
+4. [ ] `error-message`：证明正式错误语义、错误码与用户可见提示已收敛。
+5. [ ] 命中 `380A` 数据面/仓储接线时，对应的 `Atlas/Goose/sqlc` SSOT 验收也已同步通过。
+6. [ ] 实际执行过的命令、时间戳、环境与结果已回写 readiness 记录，而不是只停留在本文叙述。
 
 ### 9.4 Readiness 证据
 
 1. [ ] 新建并回写 `docs/dev-records/DEV-PLAN-380B-READINESS.md`
 2. [ ] 至少记录以下证据：
-   - 各批次完成时间戳
-   - 关键命令与结果
-   - bridge 删除清单
-   - 仍依赖 `assistant` 的临时点位（若有）
+   - 各批次完成时间戳与实际命中的 SSOT 入口
+   - 关键命令、环境与结果
+   - tenant tx / RLS 注入与 fail-closed 证明
+   - conversations/turns/tasks/models/runtime-status/files 通过 `modules/cubebox` facade 正式接线的证据
+   - delete conversation 正式语义验证
+   - `poll_uri` 由 service/DTO 直接生成的验证
+   - files 经 `modules/cubebox` 组合根装配，而非 `internal/server` 直连本地服务的证据
+   - bridge 删除清单或剩余临时桥接点位（若有）
    - stopline 是否清零
 
 > 说明：当前工作区尚不具备上述 readiness 证据；`go test ./modules/cubebox/...` 仅能证明基础包可编译和极薄烟测通过，不足以作为 `380B` 完成证明。
