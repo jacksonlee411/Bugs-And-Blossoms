@@ -34,6 +34,7 @@ type fakeTx struct {
 	queryArgs  []any
 	rowSQL     string
 	rowArgs    []any
+	rowQueue   []pgx.Row
 	rows       pgx.Rows
 	row        pgx.Row
 	commitErr  error
@@ -93,6 +94,11 @@ func (t *fakeTx) Query(_ context.Context, sql string, args ...any) (pgx.Rows, er
 func (t *fakeTx) QueryRow(_ context.Context, sql string, args ...any) pgx.Row {
 	t.rowSQL = sql
 	t.rowArgs = append([]any(nil), args...)
+	if len(t.rowQueue) > 0 {
+		row := t.rowQueue[0]
+		t.rowQueue = t.rowQueue[1:]
+		return row
+	}
 	if t.row != nil {
 		return t.row
 	}
@@ -172,16 +178,36 @@ func assignScanValue(dest any, val any) error {
 			*d = ""
 			return nil
 		}
-		*d = val.(string)
-		return nil
+		switch v := val.(type) {
+		case string:
+			*d = v
+			return nil
+		case *string:
+			if v == nil {
+				*d = ""
+				return nil
+			}
+			*d = *v
+			return nil
+		default:
+			return fmt.Errorf("unsupported string source %T", val)
+		}
 	case **string:
 		if val == nil {
 			*d = nil
 			return nil
 		}
-		s := val.(string)
-		*d = &s
-		return nil
+		switch v := val.(type) {
+		case string:
+			s := v
+			*d = &s
+			return nil
+		case *string:
+			*d = v
+			return nil
+		default:
+			return fmt.Errorf("unsupported string pointer source %T", val)
+		}
 	case *int64:
 		if val == nil {
 			*d = 0
@@ -332,85 +358,85 @@ func TestPGStoreSuccessPaths(t *testing.T) {
 		}
 	})
 
-		t.Run("list state transitions", func(t *testing.T) {
-			tx := &fakeTx{rows: &fakeRows{records: [][]any{{}}}}
-			items, err := makeStore(tx).ListConversationStateTransitions(ctx, testTenantUUID, "conversation-1")
-			if err != nil {
-				t.Fatalf("list transitions: %v", err)
+	t.Run("list state transitions", func(t *testing.T) {
+		tx := &fakeTx{rows: &fakeRows{records: [][]any{{}}}}
+		items, err := makeStore(tx).ListConversationStateTransitions(ctx, testTenantUUID, "conversation-1")
+		if err != nil {
+			t.Fatalf("list transitions: %v", err)
 		}
-			if len(items) != 1 || !tx.committed {
-				t.Fatalf("unexpected items=%d committed=%v", len(items), tx.committed)
-			}
-		})
+		if len(items) != 1 || !tx.committed {
+			t.Fatalf("unexpected items=%d committed=%v", len(items), tx.committed)
+		}
+	})
 
-		t.Run("sync conversation snapshot", func(t *testing.T) {
-			now := time.Date(2026, 4, 15, 16, 0, 0, 0, time.UTC)
-			tx := &fakeTx{}
-			err := makeStore(tx).SyncConversationSnapshot(ctx, testTenantUUID, cubeboxdomain.Conversation{
-				ConversationID: "conv_1",
-				ActorID:        "actor-1",
-				ActorRole:      "tenant-admin",
-				State:          "confirmed",
-				CurrentPhase:   "await_commit_confirm",
-				CreatedAt:      now,
-				UpdatedAt:      now,
-				Turns: []cubeboxdomain.ConversationTurn{{
-					TurnID:              "turn_1",
-					UserInput:           "create org",
-					State:               "confirmed",
-					Phase:               "await_commit_confirm",
-					RiskTier:            "medium",
-					RequestID:           "assistant_req",
-					TraceID:             "trace",
-					PolicyVersion:       "policy.v1",
-					CompositionVersion:  "composition.v1",
-					MappingVersion:      "mapping.v1",
-					Intent:              map[string]any{"action": "create_orgunit"},
-					Plan:                map[string]any{"summary": "confirm"},
-					Candidates:          []map[string]any{{"candidate_id": "cand_1"}},
-					ResolvedCandidateID: "cand_1",
-					DryRun:              map[string]any{"plan_hash": "plan"},
-					MissingFields:       []string{},
-					CreatedAt:           now,
-					UpdatedAt:           now,
-				}},
-				Transitions: []cubeboxdomain.StateTransition{{
-					TurnID:     "turn_1",
-					TurnAction: "confirm",
-					RequestID:  "assistant_req",
-					TraceID:    "trace",
-					FromState:  "validated",
-					ToState:    "confirmed",
-					FromPhase:  "await_candidate_confirm",
-					ToPhase:    "await_commit_confirm",
-					ReasonCode: "confirmed",
-					ActorID:    "actor-1",
-					ChangedAt:  now,
-				}},
-			})
-			if err != nil {
-				t.Fatalf("sync conversation snapshot: %v", err)
-			}
-			if !tx.committed {
-				t.Fatal("expected commit")
-			}
-			if len(tx.execSQLs) != 4 {
-				t.Fatalf("unexpected exec count=%d sqls=%v", len(tx.execSQLs), tx.execSQLs)
-			}
-			if !strings.Contains(tx.execSQLs[1], "INSERT INTO iam.cubebox_conversations") {
-				t.Fatalf("unexpected conversation sql=%q", tx.execSQLs[1])
-			}
-			if !strings.Contains(tx.execSQLs[2], "INSERT INTO iam.cubebox_turns") {
-				t.Fatalf("unexpected turn sql=%q", tx.execSQLs[2])
-			}
-			if !strings.Contains(tx.execSQLs[3], "INSERT INTO iam.cubebox_state_transitions") {
-				t.Fatalf("unexpected transition sql=%q", tx.execSQLs[3])
-			}
+	t.Run("sync conversation snapshot", func(t *testing.T) {
+		now := time.Date(2026, 4, 15, 16, 0, 0, 0, time.UTC)
+		tx := &fakeTx{}
+		err := makeStore(tx).SyncConversationSnapshot(ctx, testTenantUUID, cubeboxdomain.Conversation{
+			ConversationID: "conv_1",
+			ActorID:        "actor-1",
+			ActorRole:      "tenant-admin",
+			State:          "confirmed",
+			CurrentPhase:   "await_commit_confirm",
+			CreatedAt:      now,
+			UpdatedAt:      now,
+			Turns: []cubeboxdomain.ConversationTurn{{
+				TurnID:              "turn_1",
+				UserInput:           "create org",
+				State:               "confirmed",
+				Phase:               "await_commit_confirm",
+				RiskTier:            "medium",
+				RequestID:           "assistant_req",
+				TraceID:             "trace",
+				PolicyVersion:       "policy.v1",
+				CompositionVersion:  "composition.v1",
+				MappingVersion:      "mapping.v1",
+				Intent:              map[string]any{"action": "create_orgunit"},
+				Plan:                map[string]any{"summary": "confirm"},
+				Candidates:          []map[string]any{{"candidate_id": "cand_1"}},
+				ResolvedCandidateID: "cand_1",
+				DryRun:              map[string]any{"plan_hash": "plan"},
+				MissingFields:       []string{},
+				CreatedAt:           now,
+				UpdatedAt:           now,
+			}},
+			Transitions: []cubeboxdomain.StateTransition{{
+				TurnID:     "turn_1",
+				TurnAction: "confirm",
+				RequestID:  "assistant_req",
+				TraceID:    "trace",
+				FromState:  "validated",
+				ToState:    "confirmed",
+				FromPhase:  "await_candidate_confirm",
+				ToPhase:    "await_commit_confirm",
+				ReasonCode: "confirmed",
+				ActorID:    "actor-1",
+				ChangedAt:  now,
+			}},
 		})
+		if err != nil {
+			t.Fatalf("sync conversation snapshot: %v", err)
+		}
+		if !tx.committed {
+			t.Fatal("expected commit")
+		}
+		if len(tx.execSQLs) != 4 {
+			t.Fatalf("unexpected exec count=%d sqls=%v", len(tx.execSQLs), tx.execSQLs)
+		}
+		if !strings.Contains(tx.execSQLs[1], "INSERT INTO iam.cubebox_conversations") {
+			t.Fatalf("unexpected conversation sql=%q", tx.execSQLs[1])
+		}
+		if !strings.Contains(tx.execSQLs[2], "INSERT INTO iam.cubebox_turns") {
+			t.Fatalf("unexpected turn sql=%q", tx.execSQLs[2])
+		}
+		if !strings.Contains(tx.execSQLs[3], "INSERT INTO iam.cubebox_state_transitions") {
+			t.Fatalf("unexpected transition sql=%q", tx.execSQLs[3])
+		}
+	})
 
-		t.Run("count blocking tasks", func(t *testing.T) {
-			tx := &fakeTx{row: &fakeRow{vals: []any{int64(7)}}}
-			count, err := makeStore(tx).CountBlockingTasks(ctx, testTenantUUID, "conversation-1")
+	t.Run("count blocking tasks", func(t *testing.T) {
+		tx := &fakeTx{row: &fakeRow{vals: []any{int64(7)}}}
+		count, err := makeStore(tx).CountBlockingTasks(ctx, testTenantUUID, "conversation-1")
 		if err != nil {
 			t.Fatalf("count tasks: %v", err)
 		}
@@ -900,5 +926,622 @@ func TestPGStoreRemainingBranchCoverage(t *testing.T) {
 		if _, err := newStore(errors.New("begin failed"), nil).ListConversationFileLinks(ctx, testTenantUUID, "conversation-1"); err == nil || !strings.Contains(err.Error(), "begin failed") {
 			t.Fatalf("expected begin error, got %v", err)
 		}
+	})
+
+	t.Run("task write paths and helpers", func(t *testing.T) {
+		now := time.Date(2026, 4, 15, 10, 0, 0, 0, time.UTC)
+		taskUUID, err := parseUUID(testTaskUUID)
+		if err != nil {
+			t.Fatalf("parse task uuid: %v", err)
+		}
+		tenantUUID, err := parseUUID(testTenantUUID)
+		if err != nil {
+			t.Fatalf("parse tenant uuid: %v", err)
+		}
+
+		t.Run("get task for dispatch", func(t *testing.T) {
+			tx := &fakeTx{row: &fakeRow{vals: []any{tenantUUID, taskUUID}}}
+			record, err := newStore(nil, tx).GetTaskForDispatch(ctx, testTenantUUID, testTaskUUID)
+			if err != nil {
+				t.Fatalf("get task for dispatch: %v", err)
+			}
+			if record.TaskID != testTaskUUID || !tx.committed {
+				t.Fatalf("record=%+v committed=%v", record, tx.committed)
+			}
+		})
+
+		t.Run("get task for dispatch invalid task id", func(t *testing.T) {
+			if _, err := newStore(nil, nil).GetTaskForDispatch(ctx, testTenantUUID, "bad"); err == nil {
+				t.Fatal("expected task parse error")
+			}
+		})
+
+		t.Run("get task for dispatch begin error", func(t *testing.T) {
+			if _, err := newStore(errors.New("begin failed"), nil).GetTaskForDispatch(ctx, testTenantUUID, testTaskUUID); err == nil || !strings.Contains(err.Error(), "begin failed") {
+				t.Fatalf("expected begin error, got %v", err)
+			}
+		})
+
+		t.Run("get task for dispatch row error", func(t *testing.T) {
+			tx := &fakeTx{row: &fakeRow{err: errors.New("row failed")}}
+			if _, err := newStore(nil, tx).GetTaskForDispatch(ctx, testTenantUUID, testTaskUUID); err == nil || !strings.Contains(err.Error(), "row failed") {
+				t.Fatalf("expected row error, got %v", err)
+			}
+		})
+
+		t.Run("get task for dispatch commit error", func(t *testing.T) {
+			tx := &fakeTx{row: &fakeRow{vals: []any{tenantUUID, taskUUID}}, commitErr: errors.New("commit failed")}
+			if _, err := newStore(nil, tx).GetTaskForDispatch(ctx, testTenantUUID, testTaskUUID); err == nil || !strings.Contains(err.Error(), "commit failed") {
+				t.Fatalf("expected commit error, got %v", err)
+			}
+		})
+
+		t.Run("get task actor id", func(t *testing.T) {
+			tx := &fakeTx{row: &fakeRow{vals: []any{"actor-1"}}}
+			actorID, err := newStore(nil, tx).GetTaskActorID(ctx, testTenantUUID, testTaskUUID)
+			if err != nil {
+				t.Fatalf("get task actor id: %v", err)
+			}
+			if actorID != "actor-1" || !tx.committed {
+				t.Fatalf("actorID=%q committed=%v", actorID, tx.committed)
+			}
+		})
+
+		t.Run("get task actor id invalid tenant", func(t *testing.T) {
+			if _, err := newStore(nil, nil).GetTaskActorID(ctx, "bad", testTaskUUID); err == nil {
+				t.Fatal("expected tenant parse error")
+			}
+		})
+
+		t.Run("get task actor id invalid task", func(t *testing.T) {
+			if _, err := newStore(nil, nil).GetTaskActorID(ctx, testTenantUUID, "bad"); err == nil {
+				t.Fatal("expected task parse error")
+			}
+		})
+
+		t.Run("get task actor id begin error", func(t *testing.T) {
+			if _, err := newStore(errors.New("begin failed"), nil).GetTaskActorID(ctx, testTenantUUID, testTaskUUID); err == nil || !strings.Contains(err.Error(), "begin failed") {
+				t.Fatalf("expected begin error, got %v", err)
+			}
+		})
+
+		t.Run("get task actor id row error", func(t *testing.T) {
+			tx := &fakeTx{row: &fakeRow{err: errors.New("row failed")}}
+			if _, err := newStore(nil, tx).GetTaskActorID(ctx, testTenantUUID, testTaskUUID); err == nil || !strings.Contains(err.Error(), "row failed") {
+				t.Fatalf("expected row error, got %v", err)
+			}
+		})
+
+		t.Run("get task actor id commit error", func(t *testing.T) {
+			tx := &fakeTx{row: &fakeRow{vals: []any{"actor-1"}}, commitErr: errors.New("commit failed")}
+			if _, err := newStore(nil, tx).GetTaskActorID(ctx, testTenantUUID, testTaskUUID); err == nil || !strings.Contains(err.Error(), "commit failed") {
+				t.Fatalf("expected commit error, got %v", err)
+			}
+		})
+
+		t.Run("submit task inserts new record", func(t *testing.T) {
+			var nilString *string
+			tx := &fakeTx{
+				rowQueue: []pgx.Row{
+					&fakeRow{err: pgx.ErrNoRows},
+					&fakeRow{vals: []any{
+						tenantUUID, taskUUID, "conv_1", "turn_1", "assistant_async_plan", "req_1", "hash", "wf_1",
+						"queued", "pending", int32(0), pgtype.Timestamptz{Time: now.Add(time.Minute), Valid: true},
+						int32(0), int32(3), nilString, nilString, "intent.v1", "compiler.v1", "cap.v1", "skill",
+						"ctx", "intent", "plan", nilString, nilString, nilString, nilString, nilString,
+						nilString, nilString, nilString, nilString, nilString, nilString,
+						pgtype.Timestamptz{Time: now, Valid: true}, pgtype.Timestamptz{}, pgtype.Timestamptz{},
+						pgtype.Timestamptz{Time: now, Valid: true}, pgtype.Timestamptz{Time: now, Valid: true},
+					}},
+				},
+			}
+			record, existed, err := newStore(nil, tx).SubmitTask(ctx, testTenantUUID, cubeboxdomain.TaskRecord{
+				TaskID:                  testTaskUUID,
+				ConversationID:          "conv_1",
+				TurnID:                  "turn_1",
+				TaskType:                "assistant_async_plan",
+				RequestID:               "req_1",
+				RequestHash:             "hash",
+				WorkflowID:              "wf_1",
+				Status:                  "queued",
+				DispatchStatus:          "pending",
+				MaxAttempts:             3,
+				IntentSchemaVersion:     "intent.v1",
+				CompilerContractVersion: "compiler.v1",
+				CapabilityMapVersion:    "cap.v1",
+				SkillManifestDigest:     "skill",
+				ContextHash:             "ctx",
+				IntentHash:              "intent",
+				PlanHash:                "plan",
+				SubmittedAt:             now,
+				CreatedAt:               now,
+				UpdatedAt:               now,
+				DispatchDeadlineAt:      timePtr(now.Add(time.Minute)),
+			})
+			if err != nil {
+				t.Fatalf("submit task insert: %v", err)
+			}
+			if existed || record.TaskID != testTaskUUID || len(tx.execSQLs) < 3 || !tx.committed {
+				t.Fatalf("record=%+v existed=%v execs=%v committed=%v", record, existed, tx.execSQLs, tx.committed)
+			}
+		})
+
+		t.Run("submit task returns existing record", func(t *testing.T) {
+			var nilString *string
+			tx := &fakeTx{
+				row: &fakeRow{vals: []any{
+					tenantUUID, taskUUID, "conv_1", "turn_1", "assistant_async_plan", "req_1", "hash", "wf_1",
+					"queued", "pending", int32(0), pgtype.Timestamptz{Time: now.Add(time.Minute), Valid: true},
+					int32(0), int32(3), nilString, nilString, "intent.v1", "compiler.v1", "cap.v1", "skill",
+					"ctx", "intent", "plan", nilString, nilString, nilString, nilString, nilString,
+					nilString, nilString, nilString, nilString, nilString, nilString,
+					pgtype.Timestamptz{Time: now, Valid: true}, pgtype.Timestamptz{}, pgtype.Timestamptz{},
+					pgtype.Timestamptz{Time: now, Valid: true}, pgtype.Timestamptz{Time: now, Valid: true},
+				}},
+			}
+			record, existed, err := newStore(nil, tx).SubmitTask(ctx, testTenantUUID, cubeboxdomain.TaskRecord{
+				ConversationID: "conv_1",
+				TurnID:         "turn_1",
+				RequestID:      "req_1",
+			})
+			if err != nil {
+				t.Fatalf("submit task existing: %v", err)
+			}
+			if !existed || record.TaskID != testTaskUUID || len(tx.execSQLs) != 1 || !tx.committed {
+				t.Fatalf("record=%+v existed=%v execs=%v committed=%v", record, existed, tx.execSQLs, tx.committed)
+			}
+		})
+
+		t.Run("submit task existing commit error", func(t *testing.T) {
+			var nilString *string
+			tx := &fakeTx{
+				row: &fakeRow{vals: []any{
+					tenantUUID, taskUUID, "conv_1", "turn_1", "assistant_async_plan", "req_1", "hash", "wf_1",
+					"queued", "pending", int32(0), pgtype.Timestamptz{Time: now.Add(time.Minute), Valid: true},
+					int32(0), int32(3), nilString, nilString, "intent.v1", "compiler.v1", "cap.v1", "skill",
+					"ctx", "intent", "plan", nilString, nilString, nilString, nilString, nilString,
+					nilString, nilString, nilString, nilString, nilString, nilString,
+					pgtype.Timestamptz{Time: now, Valid: true}, pgtype.Timestamptz{}, pgtype.Timestamptz{},
+					pgtype.Timestamptz{Time: now, Valid: true}, pgtype.Timestamptz{Time: now, Valid: true},
+				}},
+				commitErr: errors.New("commit failed"),
+			}
+			if _, existed, err := newStore(nil, tx).SubmitTask(ctx, testTenantUUID, cubeboxdomain.TaskRecord{
+				ConversationID: "conv_1",
+				TurnID:         "turn_1",
+				RequestID:      "req_1",
+			}); err == nil || !strings.Contains(err.Error(), "commit failed") || !existed {
+				t.Fatalf("expected commit error on existing record, existed=%v err=%v", existed, err)
+			}
+		})
+
+		t.Run("submit task insert task error", func(t *testing.T) {
+			tx := &fakeTx{
+				rowQueue:  []pgx.Row{&fakeRow{err: pgx.ErrNoRows}},
+				execErr:   errors.New("insert task failed"),
+				execErrAt: 2,
+			}
+			if _, _, err := newStore(nil, tx).SubmitTask(ctx, testTenantUUID, cubeboxdomain.TaskRecord{
+				TaskID:                  testTaskUUID,
+				ConversationID:          "conv_1",
+				TurnID:                  "turn_1",
+				TaskType:                "assistant_async_plan",
+				RequestID:               "req_1",
+				RequestHash:             "hash",
+				WorkflowID:              "wf_1",
+				Status:                  "queued",
+				DispatchStatus:          "pending",
+				MaxAttempts:             3,
+				IntentSchemaVersion:     "intent.v1",
+				CompilerContractVersion: "compiler.v1",
+				CapabilityMapVersion:    "cap.v1",
+				SkillManifestDigest:     "skill",
+				ContextHash:             "ctx",
+				IntentHash:              "intent",
+				PlanHash:                "plan",
+				SubmittedAt:             now,
+				CreatedAt:               now,
+				UpdatedAt:               now,
+			}); err == nil || !strings.Contains(err.Error(), "insert task failed") {
+				t.Fatalf("expected insert task error, got %v", err)
+			}
+		})
+
+		t.Run("submit task event error", func(t *testing.T) {
+			var nilString *string
+			tx := &fakeTx{
+				rowQueue: []pgx.Row{
+					&fakeRow{err: pgx.ErrNoRows},
+					&fakeRow{vals: []any{
+						tenantUUID, taskUUID, "conv_1", "turn_1", "assistant_async_plan", "req_1", "hash", "wf_1",
+						"queued", "pending", int32(0), pgtype.Timestamptz{Time: now.Add(time.Minute), Valid: true},
+						int32(0), int32(3), nilString, nilString, "intent.v1", "compiler.v1", "cap.v1", "skill",
+						"ctx", "intent", "plan", nilString, nilString, nilString, nilString, nilString,
+						nilString, nilString, nilString, nilString, nilString, nilString,
+						pgtype.Timestamptz{Time: now, Valid: true}, pgtype.Timestamptz{}, pgtype.Timestamptz{},
+						pgtype.Timestamptz{Time: now, Valid: true}, pgtype.Timestamptz{Time: now, Valid: true},
+					}},
+				},
+				execErr:   errors.New("insert event failed"),
+				execErrAt: 3,
+			}
+			if _, _, err := newStore(nil, tx).SubmitTask(ctx, testTenantUUID, cubeboxdomain.TaskRecord{
+				TaskID:                  testTaskUUID,
+				ConversationID:          "conv_1",
+				TurnID:                  "turn_1",
+				TaskType:                "assistant_async_plan",
+				RequestID:               "req_1",
+				RequestHash:             "hash",
+				WorkflowID:              "wf_1",
+				Status:                  "queued",
+				DispatchStatus:          "pending",
+				MaxAttempts:             3,
+				IntentSchemaVersion:     "intent.v1",
+				CompilerContractVersion: "compiler.v1",
+				CapabilityMapVersion:    "cap.v1",
+				SkillManifestDigest:     "skill",
+				ContextHash:             "ctx",
+				IntentHash:              "intent",
+				PlanHash:                "plan",
+				SubmittedAt:             now,
+				CreatedAt:               now,
+				UpdatedAt:               now,
+			}); err == nil || !strings.Contains(err.Error(), "insert event failed") {
+				t.Fatalf("expected insert event error, got %v", err)
+			}
+		})
+
+		t.Run("submit task outbox error", func(t *testing.T) {
+			var nilString *string
+			tx := &fakeTx{
+				rowQueue: []pgx.Row{
+					&fakeRow{err: pgx.ErrNoRows},
+					&fakeRow{vals: []any{
+						tenantUUID, taskUUID, "conv_1", "turn_1", "assistant_async_plan", "req_1", "hash", "wf_1",
+						"queued", "pending", int32(0), pgtype.Timestamptz{Time: now.Add(time.Minute), Valid: true},
+						int32(0), int32(3), nilString, nilString, "intent.v1", "compiler.v1", "cap.v1", "skill",
+						"ctx", "intent", "plan", nilString, nilString, nilString, nilString, nilString,
+						nilString, nilString, nilString, nilString, nilString, nilString,
+						pgtype.Timestamptz{Time: now, Valid: true}, pgtype.Timestamptz{}, pgtype.Timestamptz{},
+						pgtype.Timestamptz{Time: now, Valid: true}, pgtype.Timestamptz{Time: now, Valid: true},
+					}},
+				},
+				execErr:   errors.New("upsert outbox failed"),
+				execErrAt: 3,
+			}
+			if _, _, err := newStore(nil, tx).SubmitTask(ctx, testTenantUUID, cubeboxdomain.TaskRecord{
+				TaskID:                  testTaskUUID,
+				ConversationID:          "conv_1",
+				TurnID:                  "turn_1",
+				TaskType:                "assistant_async_plan",
+				RequestID:               "req_1",
+				RequestHash:             "hash",
+				WorkflowID:              "wf_1",
+				Status:                  "queued",
+				DispatchStatus:          "pending",
+				MaxAttempts:             3,
+				IntentSchemaVersion:     "intent.v1",
+				CompilerContractVersion: "compiler.v1",
+				CapabilityMapVersion:    "cap.v1",
+				SkillManifestDigest:     "skill",
+				ContextHash:             "ctx",
+				IntentHash:              "intent",
+				PlanHash:                "plan",
+				SubmittedAt:             now,
+				CreatedAt:               now,
+				UpdatedAt:               now,
+			}); err == nil || !strings.Contains(err.Error(), "upsert outbox failed") {
+				t.Fatalf("expected upsert outbox error, got %v", err)
+			}
+		})
+
+		t.Run("cancel task transitions running task", func(t *testing.T) {
+			var nilString *string
+			tx := &fakeTx{
+				rowQueue: []pgx.Row{
+					&fakeRow{vals: []any{
+						tenantUUID, taskUUID, "conv_1", "turn_1", "assistant_async_plan", "req_1", "hash", "wf_1",
+						"running", "pending", int32(1), pgtype.Timestamptz{Time: now.Add(time.Minute), Valid: true},
+						int32(1), int32(3), nilString, nilString, "intent.v1", "compiler.v1", "cap.v1", "skill",
+						"ctx", "intent", "plan", nilString, nilString, nilString, nilString, nilString,
+						nilString, nilString, nilString, nilString, nilString, nilString,
+						pgtype.Timestamptz{Time: now, Valid: true}, pgtype.Timestamptz{}, pgtype.Timestamptz{},
+						pgtype.Timestamptz{Time: now, Valid: true}, pgtype.Timestamptz{Time: now, Valid: true},
+					}},
+					&fakeRow{vals: []any{
+						tenantUUID, taskUUID, "conv_1", "turn_1", "assistant_async_plan", "req_1", "hash", "wf_1",
+						"canceled", "failed", int32(1), pgtype.Timestamptz{Time: now.Add(time.Minute), Valid: true},
+						int32(1), int32(3), nilString, nilString, "intent.v1", "compiler.v1", "cap.v1", "skill",
+						"ctx", "intent", "plan", nilString, nilString, nilString, nilString, nilString,
+						nilString, nilString, nilString, nilString, nilString, nilString,
+						pgtype.Timestamptz{Time: now, Valid: true},
+						pgtype.Timestamptz{Time: now, Valid: true},
+						pgtype.Timestamptz{Time: now, Valid: true},
+						pgtype.Timestamptz{Time: now, Valid: true}, pgtype.Timestamptz{Time: now, Valid: true},
+					}},
+				},
+				execTags: []pgconn.CommandTag{pgconn.NewCommandTag("SELECT 0"), pgconn.NewCommandTag("UPDATE 1"), pgconn.NewCommandTag("INSERT 1"), pgconn.NewCommandTag("INSERT 1"), pgconn.NewCommandTag("UPDATE 1")},
+			}
+			record, accepted, err := newStore(nil, tx).CancelTask(ctx, testTenantUUID, testTaskUUID, now)
+			if err != nil {
+				t.Fatalf("cancel task: %v", err)
+			}
+			if !accepted || record.Status != "canceled" || len(tx.execSQLs) < 4 || !tx.committed {
+				t.Fatalf("record=%+v accepted=%v execs=%v committed=%v", record, accepted, tx.execSQLs, tx.committed)
+			}
+		})
+
+		t.Run("cancel task returns terminal record without update", func(t *testing.T) {
+			var nilString *string
+			tx := &fakeTx{
+				row: &fakeRow{vals: []any{
+					tenantUUID, taskUUID, "conv_1", "turn_1", "assistant_async_plan", "req_1", "hash", "wf_1",
+					"succeeded", "started", int32(1), pgtype.Timestamptz{Time: now.Add(time.Minute), Valid: true},
+					int32(1), int32(3), nilString, nilString, "intent.v1", "compiler.v1", "cap.v1", "skill",
+					"ctx", "intent", "plan", nilString, nilString, nilString, nilString, nilString,
+					nilString, nilString, nilString, nilString, nilString, nilString,
+					pgtype.Timestamptz{Time: now, Valid: true}, pgtype.Timestamptz{}, pgtype.Timestamptz{},
+					pgtype.Timestamptz{Time: now, Valid: true}, pgtype.Timestamptz{Time: now, Valid: true},
+				}},
+			}
+			record, accepted, err := newStore(nil, tx).CancelTask(ctx, testTenantUUID, testTaskUUID, now)
+			if err != nil {
+				t.Fatalf("cancel terminal task: %v", err)
+			}
+			if accepted || record.Status != "succeeded" || len(tx.execSQLs) != 1 || !tx.committed {
+				t.Fatalf("record=%+v accepted=%v execs=%v committed=%v", record, accepted, tx.execSQLs, tx.committed)
+			}
+		})
+
+		t.Run("cancel task update error", func(t *testing.T) {
+			var nilString *string
+			tx := &fakeTx{
+				rowQueue: []pgx.Row{
+					&fakeRow{vals: []any{
+						tenantUUID, taskUUID, "conv_1", "turn_1", "assistant_async_plan", "req_1", "hash", "wf_1",
+						"running", "pending", int32(1), pgtype.Timestamptz{Time: now.Add(time.Minute), Valid: true},
+						int32(1), int32(3), nilString, nilString, "intent.v1", "compiler.v1", "cap.v1", "skill",
+						"ctx", "intent", "plan", nilString, nilString, nilString, nilString, nilString,
+						nilString, nilString, nilString, nilString, nilString, nilString,
+						pgtype.Timestamptz{Time: now, Valid: true}, pgtype.Timestamptz{}, pgtype.Timestamptz{},
+						pgtype.Timestamptz{Time: now, Valid: true}, pgtype.Timestamptz{Time: now, Valid: true},
+					}},
+				},
+				row: &fakeRow{err: errors.New("update failed")},
+			}
+			if _, _, err := newStore(nil, tx).CancelTask(ctx, testTenantUUID, testTaskUUID, now); err == nil || !strings.Contains(err.Error(), "update failed") {
+				t.Fatalf("expected update error, got %v", err)
+			}
+		})
+
+		t.Run("cancel task event error", func(t *testing.T) {
+			var nilString *string
+			tx := &fakeTx{
+				rowQueue: []pgx.Row{
+					&fakeRow{vals: []any{
+						tenantUUID, taskUUID, "conv_1", "turn_1", "assistant_async_plan", "req_1", "hash", "wf_1",
+						"running", "pending", int32(1), pgtype.Timestamptz{Time: now.Add(time.Minute), Valid: true},
+						int32(1), int32(3), nilString, nilString, "intent.v1", "compiler.v1", "cap.v1", "skill",
+						"ctx", "intent", "plan", nilString, nilString, nilString, nilString, nilString,
+						nilString, nilString, nilString, nilString, nilString, nilString,
+						pgtype.Timestamptz{Time: now, Valid: true}, pgtype.Timestamptz{}, pgtype.Timestamptz{},
+						pgtype.Timestamptz{Time: now, Valid: true}, pgtype.Timestamptz{Time: now, Valid: true},
+					}},
+					&fakeRow{vals: []any{
+						tenantUUID, taskUUID, "conv_1", "turn_1", "assistant_async_plan", "req_1", "hash", "wf_1",
+						"canceled", "failed", int32(1), pgtype.Timestamptz{Time: now.Add(time.Minute), Valid: true},
+						int32(1), int32(3), nilString, nilString, "intent.v1", "compiler.v1", "cap.v1", "skill",
+						"ctx", "intent", "plan", nilString, nilString, nilString, nilString, nilString,
+						nilString, nilString, nilString, nilString, nilString, nilString,
+						pgtype.Timestamptz{Time: now, Valid: true},
+						pgtype.Timestamptz{Time: now, Valid: true},
+						pgtype.Timestamptz{Time: now, Valid: true},
+						pgtype.Timestamptz{Time: now, Valid: true}, pgtype.Timestamptz{Time: now, Valid: true},
+					}},
+				},
+				execErr:   errors.New("insert event failed"),
+				execErrAt: 3,
+			}
+			if _, _, err := newStore(nil, tx).CancelTask(ctx, testTenantUUID, testTaskUUID, now); err == nil || !strings.Contains(err.Error(), "insert event failed") {
+				t.Fatalf("expected insert event error, got %v", err)
+			}
+		})
+
+		t.Run("cancel task outbox error", func(t *testing.T) {
+			var nilString *string
+			tx := &fakeTx{
+				rowQueue: []pgx.Row{
+					&fakeRow{vals: []any{
+						tenantUUID, taskUUID, "conv_1", "turn_1", "assistant_async_plan", "req_1", "hash", "wf_1",
+						"running", "pending", int32(1), pgtype.Timestamptz{Time: now.Add(time.Minute), Valid: true},
+						int32(1), int32(3), nilString, nilString, "intent.v1", "compiler.v1", "cap.v1", "skill",
+						"ctx", "intent", "plan", nilString, nilString, nilString, nilString, nilString,
+						nilString, nilString, nilString, nilString, nilString, nilString,
+						pgtype.Timestamptz{Time: now, Valid: true}, pgtype.Timestamptz{}, pgtype.Timestamptz{},
+						pgtype.Timestamptz{Time: now, Valid: true}, pgtype.Timestamptz{Time: now, Valid: true},
+					}},
+					&fakeRow{vals: []any{
+						tenantUUID, taskUUID, "conv_1", "turn_1", "assistant_async_plan", "req_1", "hash", "wf_1",
+						"canceled", "failed", int32(1), pgtype.Timestamptz{Time: now.Add(time.Minute), Valid: true},
+						int32(1), int32(3), nilString, nilString, "intent.v1", "compiler.v1", "cap.v1", "skill",
+						"ctx", "intent", "plan", nilString, nilString, nilString, nilString, nilString,
+						nilString, nilString, nilString, nilString, nilString, nilString,
+						pgtype.Timestamptz{Time: now, Valid: true},
+						pgtype.Timestamptz{Time: now, Valid: true},
+						pgtype.Timestamptz{Time: now, Valid: true},
+						pgtype.Timestamptz{Time: now, Valid: true}, pgtype.Timestamptz{Time: now, Valid: true},
+					}},
+				},
+				execErr:   errors.New("mark outbox failed"),
+				execErrAt: 4,
+			}
+			if _, _, err := newStore(nil, tx).CancelTask(ctx, testTenantUUID, testTaskUUID, now); err == nil || !strings.Contains(err.Error(), "mark outbox failed") {
+				t.Fatalf("expected mark outbox error, got %v", err)
+			}
+		})
+
+		t.Run("update task state, event, outbox, helpers", func(t *testing.T) {
+			var nilString *string
+			txState := &fakeTx{row: &fakeRow{vals: []any{
+				tenantUUID, taskUUID, "conv_1", "turn_1", "assistant_async_plan", "req_1", "hash", "wf_1",
+				"running", "started", int32(2), pgtype.Timestamptz{Time: now.Add(time.Minute), Valid: true},
+				int32(2), int32(3), stringPtr("boom"), nilString, "intent.v1", "compiler.v1", "cap.v1", "skill",
+				"ctx", "intent", "plan", nilString, nilString, nilString, nilString, nilString,
+				nilString, nilString, nilString, nilString, nilString, nilString,
+				pgtype.Timestamptz{Time: now, Valid: true}, pgtype.Timestamptz{}, pgtype.Timestamptz{},
+				pgtype.Timestamptz{Time: now, Valid: true}, pgtype.Timestamptz{Time: now, Valid: true},
+			}}}
+			record, err := newStore(nil, txState).UpdateTaskState(ctx, testTenantUUID, cubeboxdomain.TaskStateUpdate{
+				TaskID:          testTaskUUID,
+				Status:          "running",
+				DispatchStatus:  "started",
+				DispatchAttempt: 2,
+				Attempt:         2,
+				LastErrorCode:   "boom",
+				UpdatedAt:       now,
+			})
+			if err != nil || record.LastErrorCode != "boom" || !txState.committed {
+				t.Fatalf("record=%+v err=%v committed=%v", record, err, txState.committed)
+			}
+
+			txEvent := &fakeTx{}
+			if err := newStore(nil, txEvent).InsertTaskEvent(ctx, testTenantUUID, cubeboxdomain.TaskEventRecord{
+				TaskID:     testTaskUUID,
+				FromStatus: "queued",
+				ToStatus:   "running",
+				EventType:  "running",
+				ErrorCode:  "boom",
+				OccurredAt: now,
+			}); err != nil || len(txEvent.execSQLs) != 2 || !txEvent.committed {
+				t.Fatalf("insert task event err=%v execs=%v committed=%v", err, txEvent.execSQLs, txEvent.committed)
+			}
+
+			txOutbox := &fakeTx{execTags: []pgconn.CommandTag{pgconn.NewCommandTag("SELECT 0"), pgconn.NewCommandTag("UPDATE 1")}}
+			if err := newStore(nil, txOutbox).UpdateTaskDispatchOutbox(ctx, testTenantUUID, cubeboxdomain.TaskDispatchOutboxUpdate{
+				TaskID:      testTaskUUID,
+				Status:      "started",
+				Attempt:     2,
+				NextRetryAt: now.Add(time.Minute),
+				UpdatedAt:   now,
+			}); err != nil || len(txOutbox.execSQLs) != 2 || !txOutbox.committed {
+				t.Fatalf("update outbox err=%v execs=%v committed=%v", err, txOutbox.execSQLs, txOutbox.committed)
+			}
+
+			if got := timestamptzPtr(nil); got.Valid {
+				t.Fatalf("expected invalid nil timestamptz, got %+v", got)
+			}
+			if got := timestamptzValue(now); !got.Valid || !got.Time.Equal(now) {
+				t.Fatalf("unexpected timestamptz value %+v", got)
+			}
+			if mustParseUUID(testTaskUUID).Bytes != taskUUID.Bytes {
+				t.Fatal("mustParseUUID mismatch")
+			}
+			if ptr := stringPtr("abc"); ptr == nil || *ptr != "abc" {
+				t.Fatalf("unexpected string ptr %v", ptr)
+			}
+			if ptr := timePtr(now); ptr == nil || !ptr.Equal(now) {
+				t.Fatalf("unexpected time ptr %v", ptr)
+			}
+			if !isUniqueViolation(&pgconn.PgError{Code: "23505"}) || isUniqueViolation(errors.New("nope")) {
+				t.Fatal("unexpected unique violation detection")
+			}
+		})
+
+		t.Run("update task state error paths", func(t *testing.T) {
+			if _, err := newStore(nil, nil).UpdateTaskState(ctx, "bad", cubeboxdomain.TaskStateUpdate{}); err == nil {
+				t.Fatal("expected tenant parse error")
+			}
+			if _, err := newStore(nil, nil).UpdateTaskState(ctx, testTenantUUID, cubeboxdomain.TaskStateUpdate{TaskID: "bad"}); err == nil {
+				t.Fatal("expected task parse error")
+			}
+			if _, err := newStore(errors.New("begin failed"), nil).UpdateTaskState(ctx, testTenantUUID, cubeboxdomain.TaskStateUpdate{TaskID: testTaskUUID}); err == nil || !strings.Contains(err.Error(), "begin failed") {
+				t.Fatalf("expected begin error, got %v", err)
+			}
+			tx := &fakeTx{row: &fakeRow{err: errors.New("update failed")}}
+			if _, err := newStore(nil, tx).UpdateTaskState(ctx, testTenantUUID, cubeboxdomain.TaskStateUpdate{TaskID: testTaskUUID, UpdatedAt: now}); err == nil || !strings.Contains(err.Error(), "update failed") {
+				t.Fatalf("expected update error, got %v", err)
+			}
+			tx = &fakeTx{row: &fakeRow{vals: []any{tenantUUID, taskUUID}}, commitErr: errors.New("commit failed")}
+			if _, err := newStore(nil, tx).UpdateTaskState(ctx, testTenantUUID, cubeboxdomain.TaskStateUpdate{TaskID: testTaskUUID, UpdatedAt: now}); err == nil || !strings.Contains(err.Error(), "commit failed") {
+				t.Fatalf("expected commit error, got %v", err)
+			}
+		})
+
+		t.Run("insert task event error paths", func(t *testing.T) {
+			if err := newStore(nil, nil).InsertTaskEvent(ctx, "bad", cubeboxdomain.TaskEventRecord{}); err == nil {
+				t.Fatal("expected tenant parse error")
+			}
+			if err := newStore(nil, nil).InsertTaskEvent(ctx, testTenantUUID, cubeboxdomain.TaskEventRecord{TaskID: "bad"}); err == nil {
+				t.Fatal("expected task parse error")
+			}
+			if err := newStore(errors.New("begin failed"), nil).InsertTaskEvent(ctx, testTenantUUID, cubeboxdomain.TaskEventRecord{TaskID: testTaskUUID}); err == nil || !strings.Contains(err.Error(), "begin failed") {
+				t.Fatalf("expected begin error, got %v", err)
+			}
+			tx := &fakeTx{execErr: errors.New("exec failed"), execErrAt: 2}
+			if err := newStore(nil, tx).InsertTaskEvent(ctx, testTenantUUID, cubeboxdomain.TaskEventRecord{TaskID: testTaskUUID, ToStatus: "running", EventType: "running", OccurredAt: now}); err == nil || !strings.Contains(err.Error(), "exec failed") {
+				t.Fatalf("expected exec error, got %v", err)
+			}
+			tx = &fakeTx{commitErr: errors.New("commit failed")}
+			if err := newStore(nil, tx).InsertTaskEvent(ctx, testTenantUUID, cubeboxdomain.TaskEventRecord{TaskID: testTaskUUID, ToStatus: "running", EventType: "running", OccurredAt: now}); err == nil || !strings.Contains(err.Error(), "commit failed") {
+				t.Fatalf("expected commit error, got %v", err)
+			}
+		})
+
+		t.Run("update task dispatch outbox error paths", func(t *testing.T) {
+			update := cubeboxdomain.TaskDispatchOutboxUpdate{TaskID: testTaskUUID, Status: "started", NextRetryAt: now, UpdatedAt: now}
+			if err := newStore(nil, nil).UpdateTaskDispatchOutbox(ctx, "bad", update); err == nil {
+				t.Fatal("expected tenant parse error")
+			}
+			update.TaskID = "bad"
+			if err := newStore(nil, nil).UpdateTaskDispatchOutbox(ctx, testTenantUUID, update); err == nil {
+				t.Fatal("expected task parse error")
+			}
+			update.TaskID = testTaskUUID
+			if err := newStore(errors.New("begin failed"), nil).UpdateTaskDispatchOutbox(ctx, testTenantUUID, update); err == nil || !strings.Contains(err.Error(), "begin failed") {
+				t.Fatalf("expected begin error, got %v", err)
+			}
+			tx := &fakeTx{execErr: errors.New("exec failed"), execErrAt: 2}
+			if err := newStore(nil, tx).UpdateTaskDispatchOutbox(ctx, testTenantUUID, update); err == nil || !strings.Contains(err.Error(), "exec failed") {
+				t.Fatalf("expected exec error, got %v", err)
+			}
+			tx = &fakeTx{commitErr: errors.New("commit failed")}
+			if err := newStore(nil, tx).UpdateTaskDispatchOutbox(ctx, testTenantUUID, update); err == nil || !strings.Contains(err.Error(), "commit failed") {
+				t.Fatalf("expected commit error, got %v", err)
+			}
+		})
+
+		t.Run("snapshot and json helpers", func(t *testing.T) {
+			tx := &fakeTx{execErr: &pgconn.PgError{Code: "23505"}, execErrAt: 1}
+			if err := syncTransitionSnapshot(ctx, tx, tenantUUID, "conv_1", cubeboxdomain.StateTransition{RequestID: "req", TraceID: "trace"}); err != nil {
+				t.Fatalf("expected duplicate transition to be ignored, got %v", err)
+			}
+			tx = &fakeTx{execErr: errors.New("insert failed"), execErrAt: 1}
+			if err := syncTransitionSnapshot(ctx, tx, tenantUUID, "conv_1", cubeboxdomain.StateTransition{RequestID: "req", TraceID: "trace"}); err == nil || !strings.Contains(err.Error(), "insert failed") {
+				t.Fatalf("expected insert failed, got %v", err)
+			}
+
+			if raw, err := marshalJSON(nil, true); err != nil || string(raw) != "{}" {
+				t.Fatalf("marshalJSON object default raw=%s err=%v", raw, err)
+			}
+			if raw, err := marshalJSON(nil, false); err != nil || string(raw) != "[]" {
+				t.Fatalf("marshalJSON array default raw=%s err=%v", raw, err)
+			}
+			if raw, err := marshalJSON([]string{"a"}, false); err != nil || string(raw) != `["a"]` {
+				t.Fatalf("marshalJSON raw=%s err=%v", raw, err)
+			}
+			if _, err := marshalJSON(func() {}, true); err == nil {
+				t.Fatal("expected marshalJSON error")
+			}
+
+			if raw, err := marshalNullableJSON(nil); err != nil || raw != nil {
+				t.Fatalf("marshalNullableJSON nil raw=%v err=%v", raw, err)
+			}
+			if raw, err := marshalNullableJSON(map[string]any{"a": 1}); err != nil || string(raw) != `{"a":1}` {
+				t.Fatalf("marshalNullableJSON raw=%s err=%v", raw, err)
+			}
+			if _, err := marshalNullableJSON(func() {}); err == nil {
+				t.Fatal("expected marshalNullableJSON error")
+			}
+		})
 	})
 }

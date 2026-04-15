@@ -49,6 +49,36 @@ describe('resolveApiErrorMessage', () => {
     expect(retiredCompatMessage).not.toBe('assistant_vendored_api_retired')
   })
 
+  it('returns explicit mapped messages for cubebox errors', () => {
+    const serviceMissing = resolveApiErrorMessage('cubebox_service_missing', 'cubebox_service_missing')
+    const cursorInvalid = resolveApiErrorMessage('cubebox_conversation_cursor_invalid', 'cubebox_conversation_cursor_invalid')
+    const listFailed = resolveApiErrorMessage('cubebox_conversation_list_failed', 'cubebox_conversation_list_failed')
+    const loadFailed = resolveApiErrorMessage('cubebox_conversation_load_failed', 'cubebox_conversation_load_failed')
+    const createFailed = resolveApiErrorMessage('cubebox_conversation_create_failed', 'cubebox_conversation_create_failed')
+    const deleteBlocked = resolveApiErrorMessage('cubebox_conversation_delete_blocked_by_running_task', 'cubebox_conversation_delete_blocked_by_running_task')
+    const turnCreateFailed = resolveApiErrorMessage('cubebox_turn_create_failed', 'cubebox_turn_create_failed')
+    const turnActionFailed = resolveApiErrorMessage('cubebox_turn_action_failed', 'cubebox_turn_action_failed')
+    const taskNotFound = resolveApiErrorMessage('cubebox_task_not_found', 'cubebox_task_not_found')
+    const taskLoadFailed = resolveApiErrorMessage('cubebox_task_load_failed', 'cubebox_task_load_failed')
+    const taskCancelFailed = resolveApiErrorMessage('cubebox_task_cancel_failed', 'cubebox_task_cancel_failed')
+    const taskDispatchFailed = resolveApiErrorMessage('cubebox_task_dispatch_failed', 'cubebox_task_dispatch_failed')
+    const modelsUnavailable = resolveApiErrorMessage('cubebox_models_unavailable', 'cubebox_models_unavailable')
+
+    expect(serviceMissing).not.toBe('cubebox_service_missing')
+    expect(cursorInvalid).not.toBe('cubebox_conversation_cursor_invalid')
+    expect(listFailed).not.toBe('cubebox_conversation_list_failed')
+    expect(loadFailed).not.toBe('cubebox_conversation_load_failed')
+    expect(createFailed).not.toBe('cubebox_conversation_create_failed')
+    expect(deleteBlocked).not.toBe('cubebox_conversation_delete_blocked_by_running_task')
+    expect(turnCreateFailed).not.toBe('cubebox_turn_create_failed')
+    expect(turnActionFailed).not.toBe('cubebox_turn_action_failed')
+    expect(taskNotFound).not.toBe('cubebox_task_not_found')
+    expect(taskLoadFailed).not.toBe('cubebox_task_load_failed')
+    expect(taskCancelFailed).not.toBe('cubebox_task_cancel_failed')
+    expect(taskDispatchFailed).not.toBe('cubebox_task_dispatch_failed')
+    expect(modelsUnavailable).not.toBe('cubebox_models_unavailable')
+  })
+
   it('keeps backend message when it is explicit', () => {
     const fallback = 'default rule evaluation failed. please check the rule.'
     expect(resolveApiErrorMessage('DEFAULT_RULE_EVAL_FAILED', fallback)).toBeTruthy()

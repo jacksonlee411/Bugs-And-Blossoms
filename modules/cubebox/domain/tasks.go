@@ -66,6 +66,54 @@ type TaskCancelResponse struct {
 	CancelAccepted bool `json:"cancel_accepted"`
 }
 
+type TaskRecord struct {
+	TaskID                   string
+	ConversationID           string
+	TurnID                   string
+	TaskType                 string
+	RequestID                string
+	RequestHash              string
+	WorkflowID               string
+	Status                   string
+	DispatchStatus           string
+	DispatchAttempt          int
+	DispatchDeadlineAt       *time.Time
+	Attempt                  int
+	MaxAttempts              int
+	LastErrorCode            string
+	TraceID                  string
+	IntentSchemaVersion      string
+	CompilerContractVersion  string
+	CapabilityMapVersion     string
+	SkillManifestDigest      string
+	ContextHash              string
+	IntentHash               string
+	PlanHash                 string
+	KnowledgeSnapshotDigest  string
+	RouteCatalogVersion      string
+	ResolverContractVersion  string
+	ContextTemplateVersion   string
+	ReplyGuidanceVersion     string
+	PolicyContextDigest      string
+	EffectivePolicyVersion   string
+	ResolvedSetID            string
+	SetIDSource              string
+	PrecheckProjectionDigest string
+	MutationPolicyVersion    string
+	SubmittedAt              time.Time
+	CancelRequestedAt        *time.Time
+	CompletedAt              *time.Time
+	CreatedAt                time.Time
+	UpdatedAt                time.Time
+}
+
+type TaskDispatchOutboxRecord struct {
+	TaskID      string
+	Status      string
+	Attempt     int
+	NextRetryAt time.Time
+}
+
 type TaskStateUpdate struct {
 	TaskID            string
 	Status            string

@@ -27,7 +27,7 @@ func NewPGStore(pool pgBeginner) *PGStore {
 	return &PGStore{pool: pool}
 }
 
-func (s *PGStore) ListConversations(ctx context.Context, tenantID string, actorID string, limit int32, cursorUpdatedAt time.Time, cursorConversationID string) ([]cubeboxsqlc.IamCubeboxConversation, error) {
+func (s *PGStore) ListConversations(ctx context.Context, tenantID string, actorID string, limit int32, cursorUpdatedAt time.Time, cursorConversationID string) ([]cubeboxdomain.ConversationRecord, error) {
 	if limit <= 0 {
 		limit = 20
 	}
@@ -54,17 +54,17 @@ func (s *PGStore) ListConversations(ctx context.Context, tenantID string, actorI
 	if err := tx.Commit(ctx); err != nil {
 		return nil, err
 	}
-	return items, nil
+	return mapConversationRecords(items), nil
 }
 
-func (s *PGStore) GetConversation(ctx context.Context, tenantID string, conversationID string) (cubeboxsqlc.IamCubeboxConversation, error) {
+func (s *PGStore) GetConversation(ctx context.Context, tenantID string, conversationID string) (cubeboxdomain.ConversationRecord, error) {
 	tenantUUID, err := parseUUID(tenantID)
 	if err != nil {
-		return cubeboxsqlc.IamCubeboxConversation{}, err
+		return cubeboxdomain.ConversationRecord{}, err
 	}
 	tx, queries, err := s.beginTenantTx(ctx, tenantID)
 	if err != nil {
-		return cubeboxsqlc.IamCubeboxConversation{}, err
+		return cubeboxdomain.ConversationRecord{}, err
 	}
 	defer func() { _ = tx.Rollback(context.Background()) }()
 
@@ -73,15 +73,15 @@ func (s *PGStore) GetConversation(ctx context.Context, tenantID string, conversa
 		ConversationID: conversationID,
 	})
 	if err != nil {
-		return cubeboxsqlc.IamCubeboxConversation{}, err
+		return cubeboxdomain.ConversationRecord{}, err
 	}
 	if err := tx.Commit(ctx); err != nil {
-		return cubeboxsqlc.IamCubeboxConversation{}, err
+		return cubeboxdomain.ConversationRecord{}, err
 	}
-	return item, nil
+	return mapConversationRecord(item), nil
 }
 
-func (s *PGStore) ListConversationTurns(ctx context.Context, tenantID string, conversationID string) ([]cubeboxsqlc.IamCubeboxTurn, error) {
+func (s *PGStore) ListConversationTurns(ctx context.Context, tenantID string, conversationID string) ([]cubeboxdomain.ConversationTurnRecord, error) {
 	tenantUUID, err := parseUUID(tenantID)
 	if err != nil {
 		return nil, err
@@ -102,10 +102,10 @@ func (s *PGStore) ListConversationTurns(ctx context.Context, tenantID string, co
 	if err := tx.Commit(ctx); err != nil {
 		return nil, err
 	}
-	return items, nil
+	return mapTurnRecords(items), nil
 }
 
-func (s *PGStore) ListConversationStateTransitions(ctx context.Context, tenantID string, conversationID string) ([]cubeboxsqlc.IamCubeboxStateTransition, error) {
+func (s *PGStore) ListConversationStateTransitions(ctx context.Context, tenantID string, conversationID string) ([]cubeboxdomain.StateTransitionRecord, error) {
 	tenantUUID, err := parseUUID(tenantID)
 	if err != nil {
 		return nil, err
@@ -126,7 +126,7 @@ func (s *PGStore) ListConversationStateTransitions(ctx context.Context, tenantID
 	if err := tx.Commit(ctx); err != nil {
 		return nil, err
 	}
-	return items, nil
+	return mapTransitionRecords(items), nil
 }
 
 func (s *PGStore) SyncConversationSnapshot(ctx context.Context, tenantID string, conversation cubeboxdomain.Conversation) error {
@@ -233,18 +233,18 @@ func (s *PGStore) DeleteConversation(ctx context.Context, tenantID string, conve
 	return rows, nil
 }
 
-func (s *PGStore) GetTask(ctx context.Context, tenantID string, taskID string) (cubeboxsqlc.IamCubeboxTask, error) {
+func (s *PGStore) GetTask(ctx context.Context, tenantID string, taskID string) (cubeboxdomain.TaskRecord, error) {
 	tenantUUID, err := parseUUID(tenantID)
 	if err != nil {
-		return cubeboxsqlc.IamCubeboxTask{}, err
+		return cubeboxdomain.TaskRecord{}, err
 	}
 	taskUUID, err := parseUUID(taskID)
 	if err != nil {
-		return cubeboxsqlc.IamCubeboxTask{}, err
+		return cubeboxdomain.TaskRecord{}, err
 	}
 	tx, queries, err := s.beginTenantTx(ctx, tenantID)
 	if err != nil {
-		return cubeboxsqlc.IamCubeboxTask{}, err
+		return cubeboxdomain.TaskRecord{}, err
 	}
 	defer func() { _ = tx.Rollback(context.Background()) }()
 
@@ -253,26 +253,26 @@ func (s *PGStore) GetTask(ctx context.Context, tenantID string, taskID string) (
 		TaskID:     taskUUID,
 	})
 	if err != nil {
-		return cubeboxsqlc.IamCubeboxTask{}, err
+		return cubeboxdomain.TaskRecord{}, err
 	}
 	if err := tx.Commit(ctx); err != nil {
-		return cubeboxsqlc.IamCubeboxTask{}, err
+		return cubeboxdomain.TaskRecord{}, err
 	}
-	return item, nil
+	return mapTaskRecord(item), nil
 }
 
-func (s *PGStore) GetTaskForDispatch(ctx context.Context, tenantID string, taskID string) (cubeboxsqlc.IamCubeboxTask, error) {
+func (s *PGStore) GetTaskForDispatch(ctx context.Context, tenantID string, taskID string) (cubeboxdomain.TaskRecord, error) {
 	tenantUUID, err := parseUUID(tenantID)
 	if err != nil {
-		return cubeboxsqlc.IamCubeboxTask{}, err
+		return cubeboxdomain.TaskRecord{}, err
 	}
 	taskUUID, err := parseUUID(taskID)
 	if err != nil {
-		return cubeboxsqlc.IamCubeboxTask{}, err
+		return cubeboxdomain.TaskRecord{}, err
 	}
 	tx, queries, err := s.beginTenantTx(ctx, tenantID)
 	if err != nil {
-		return cubeboxsqlc.IamCubeboxTask{}, err
+		return cubeboxdomain.TaskRecord{}, err
 	}
 	defer func() { _ = tx.Rollback(context.Background()) }()
 
@@ -281,12 +281,12 @@ func (s *PGStore) GetTaskForDispatch(ctx context.Context, tenantID string, taskI
 		TaskID:     taskUUID,
 	})
 	if err != nil {
-		return cubeboxsqlc.IamCubeboxTask{}, err
+		return cubeboxdomain.TaskRecord{}, err
 	}
 	if err := tx.Commit(ctx); err != nil {
-		return cubeboxsqlc.IamCubeboxTask{}, err
+		return cubeboxdomain.TaskRecord{}, err
 	}
-	return item, nil
+	return mapTaskRecord(item), nil
 }
 
 func (s *PGStore) GetTaskActorID(ctx context.Context, tenantID string, taskID string) (string, error) {
@@ -317,14 +317,14 @@ func (s *PGStore) GetTaskActorID(ctx context.Context, tenantID string, taskID st
 	return actorID, nil
 }
 
-func (s *PGStore) SubmitTask(ctx context.Context, tenantID string, record cubeboxsqlc.IamCubeboxTask) (cubeboxsqlc.IamCubeboxTask, bool, error) {
+func (s *PGStore) SubmitTask(ctx context.Context, tenantID string, record cubeboxdomain.TaskRecord) (cubeboxdomain.TaskRecord, bool, error) {
 	tenantUUID, err := parseUUID(tenantID)
 	if err != nil {
-		return cubeboxsqlc.IamCubeboxTask{}, false, err
+		return cubeboxdomain.TaskRecord{}, false, err
 	}
 	tx, queries, err := s.beginTenantTx(ctx, tenantID)
 	if err != nil {
-		return cubeboxsqlc.IamCubeboxTask{}, false, err
+		return cubeboxdomain.TaskRecord{}, false, err
 	}
 	defer func() { _ = tx.Rollback(context.Background()) }()
 
@@ -336,17 +336,17 @@ func (s *PGStore) SubmitTask(ctx context.Context, tenantID string, record cubebo
 	})
 	if err == nil {
 		if err := tx.Commit(ctx); err != nil {
-			return cubeboxsqlc.IamCubeboxTask{}, true, err
+			return cubeboxdomain.TaskRecord{}, true, err
 		}
-		return existing, true, nil
+		return mapTaskRecord(existing), true, nil
 	}
 	if !errors.Is(err, pgx.ErrNoRows) {
-		return cubeboxsqlc.IamCubeboxTask{}, false, err
+		return cubeboxdomain.TaskRecord{}, false, err
 	}
 
 	inserted, err := queries.InsertTask(ctx, cubeboxsqlc.InsertTaskParams{
 		TenantUuid:               tenantUUID,
-		TaskID:                   record.TaskID,
+		TaskID:                   mustParseUUID(record.TaskID),
 		ConversationID:           record.ConversationID,
 		TurnID:                   record.TurnID,
 		TaskType:                 record.TaskType,
@@ -355,12 +355,12 @@ func (s *PGStore) SubmitTask(ctx context.Context, tenantID string, record cubebo
 		WorkflowID:               record.WorkflowID,
 		Status:                   record.Status,
 		DispatchStatus:           record.DispatchStatus,
-		DispatchAttempt:          record.DispatchAttempt,
-		DispatchDeadlineAt:       record.DispatchDeadlineAt,
-		Attempt:                  record.Attempt,
-		MaxAttempts:              record.MaxAttempts,
-		LastErrorCode:            record.LastErrorCode,
-		TraceID:                  record.TraceID,
+		DispatchAttempt:          int32(record.DispatchAttempt),
+		DispatchDeadlineAt:       timestamptzPtr(record.DispatchDeadlineAt),
+		Attempt:                  int32(record.Attempt),
+		MaxAttempts:              int32(record.MaxAttempts),
+		LastErrorCode:            stringPtr(record.LastErrorCode),
+		TraceID:                  stringPtr(record.TraceID),
 		IntentSchemaVersion:      record.IntentSchemaVersion,
 		CompilerContractVersion:  record.CompilerContractVersion,
 		CapabilityMapVersion:     record.CapabilityMapVersion,
@@ -368,25 +368,25 @@ func (s *PGStore) SubmitTask(ctx context.Context, tenantID string, record cubebo
 		ContextHash:              record.ContextHash,
 		IntentHash:               record.IntentHash,
 		PlanHash:                 record.PlanHash,
-		KnowledgeSnapshotDigest:  record.KnowledgeSnapshotDigest,
-		RouteCatalogVersion:      record.RouteCatalogVersion,
-		ResolverContractVersion:  record.ResolverContractVersion,
-		ContextTemplateVersion:   record.ContextTemplateVersion,
-		ReplyGuidanceVersion:     record.ReplyGuidanceVersion,
-		PolicyContextDigest:      record.PolicyContextDigest,
-		EffectivePolicyVersion:   record.EffectivePolicyVersion,
-		ResolvedSetid:            record.ResolvedSetid,
-		SetidSource:              record.SetidSource,
-		PrecheckProjectionDigest: record.PrecheckProjectionDigest,
-		MutationPolicyVersion:    record.MutationPolicyVersion,
-		SubmittedAt:              record.SubmittedAt,
-		CancelRequestedAt:        record.CancelRequestedAt,
-		CompletedAt:              record.CompletedAt,
-		CreatedAt:                record.CreatedAt,
-		UpdatedAt:                record.UpdatedAt,
+		KnowledgeSnapshotDigest:  stringPtr(record.KnowledgeSnapshotDigest),
+		RouteCatalogVersion:      stringPtr(record.RouteCatalogVersion),
+		ResolverContractVersion:  stringPtr(record.ResolverContractVersion),
+		ContextTemplateVersion:   stringPtr(record.ContextTemplateVersion),
+		ReplyGuidanceVersion:     stringPtr(record.ReplyGuidanceVersion),
+		PolicyContextDigest:      stringPtr(record.PolicyContextDigest),
+		EffectivePolicyVersion:   stringPtr(record.EffectivePolicyVersion),
+		ResolvedSetid:            stringPtr(record.ResolvedSetID),
+		SetidSource:              stringPtr(record.SetIDSource),
+		PrecheckProjectionDigest: stringPtr(record.PrecheckProjectionDigest),
+		MutationPolicyVersion:    stringPtr(record.MutationPolicyVersion),
+		SubmittedAt:              timestamptzValue(record.SubmittedAt),
+		CancelRequestedAt:        timestamptzPtr(record.CancelRequestedAt),
+		CompletedAt:              timestamptzPtr(record.CompletedAt),
+		CreatedAt:                timestamptzValue(record.CreatedAt),
+		UpdatedAt:                timestamptzValue(record.UpdatedAt),
 	})
 	if err != nil {
-		return cubeboxsqlc.IamCubeboxTask{}, false, err
+		return cubeboxdomain.TaskRecord{}, false, err
 	}
 	if err := queries.InsertTaskEvent(ctx, cubeboxsqlc.InsertTaskEventParams{
 		TenantUuid: tenantUUID,
@@ -398,7 +398,7 @@ func (s *PGStore) SubmitTask(ctx context.Context, tenantID string, record cubebo
 		Payload:    nil,
 		OccurredAt: inserted.SubmittedAt,
 	}); err != nil {
-		return cubeboxsqlc.IamCubeboxTask{}, false, err
+		return cubeboxdomain.TaskRecord{}, false, err
 	}
 	if err := queries.UpsertTaskDispatchOutbox(ctx, cubeboxsqlc.UpsertTaskDispatchOutboxParams{
 		TenantUuid:  tenantUUID,
@@ -410,26 +410,26 @@ func (s *PGStore) SubmitTask(ctx context.Context, tenantID string, record cubebo
 		CreatedAt:   inserted.SubmittedAt,
 		UpdatedAt:   inserted.SubmittedAt,
 	}); err != nil {
-		return cubeboxsqlc.IamCubeboxTask{}, false, err
+		return cubeboxdomain.TaskRecord{}, false, err
 	}
 	if err := tx.Commit(ctx); err != nil {
-		return cubeboxsqlc.IamCubeboxTask{}, false, err
+		return cubeboxdomain.TaskRecord{}, false, err
 	}
-	return inserted, false, nil
+	return mapTaskRecord(inserted), false, nil
 }
 
-func (s *PGStore) CancelTask(ctx context.Context, tenantID string, taskID string, now time.Time) (cubeboxsqlc.IamCubeboxTask, bool, error) {
+func (s *PGStore) CancelTask(ctx context.Context, tenantID string, taskID string, now time.Time) (cubeboxdomain.TaskRecord, bool, error) {
 	tenantUUID, err := parseUUID(tenantID)
 	if err != nil {
-		return cubeboxsqlc.IamCubeboxTask{}, false, err
+		return cubeboxdomain.TaskRecord{}, false, err
 	}
 	taskUUID, err := parseUUID(taskID)
 	if err != nil {
-		return cubeboxsqlc.IamCubeboxTask{}, false, err
+		return cubeboxdomain.TaskRecord{}, false, err
 	}
 	tx, queries, err := s.beginTenantTx(ctx, tenantID)
 	if err != nil {
-		return cubeboxsqlc.IamCubeboxTask{}, false, err
+		return cubeboxdomain.TaskRecord{}, false, err
 	}
 	defer func() { _ = tx.Rollback(context.Background()) }()
 
@@ -438,13 +438,13 @@ func (s *PGStore) CancelTask(ctx context.Context, tenantID string, taskID string
 		TaskID:     taskUUID,
 	})
 	if err != nil {
-		return cubeboxsqlc.IamCubeboxTask{}, false, err
+		return cubeboxdomain.TaskRecord{}, false, err
 	}
 	if record.Status == "succeeded" || record.Status == "failed" || record.Status == "canceled" {
 		if err := tx.Commit(ctx); err != nil {
-			return cubeboxsqlc.IamCubeboxTask{}, false, err
+			return cubeboxdomain.TaskRecord{}, false, err
 		}
-		return record, false, nil
+		return mapTaskRecord(record), false, nil
 	}
 
 	cancelRequestedAt := pgtype.Timestamptz{Time: now.UTC(), Valid: true}
@@ -466,7 +466,7 @@ func (s *PGStore) CancelTask(ctx context.Context, tenantID string, taskID string
 		UpdatedAt:          pgtype.Timestamptz{Time: now.UTC(), Valid: true},
 	})
 	if err != nil {
-		return cubeboxsqlc.IamCubeboxTask{}, false, err
+		return cubeboxdomain.TaskRecord{}, false, err
 	}
 
 	if err := queries.InsertTaskEvent(ctx, cubeboxsqlc.InsertTaskEventParams{
@@ -479,7 +479,7 @@ func (s *PGStore) CancelTask(ctx context.Context, tenantID string, taskID string
 		Payload:    nil,
 		OccurredAt: pgtype.Timestamptz{Time: now.UTC(), Valid: true},
 	}); err != nil {
-		return cubeboxsqlc.IamCubeboxTask{}, false, err
+		return cubeboxdomain.TaskRecord{}, false, err
 	}
 	if err := queries.InsertTaskEvent(ctx, cubeboxsqlc.InsertTaskEventParams{
 		TenantUuid: tenantUUID,
@@ -491,19 +491,19 @@ func (s *PGStore) CancelTask(ctx context.Context, tenantID string, taskID string
 		Payload:    nil,
 		OccurredAt: pgtype.Timestamptz{Time: now.UTC(), Valid: true},
 	}); err != nil {
-		return cubeboxsqlc.IamCubeboxTask{}, false, err
+		return cubeboxdomain.TaskRecord{}, false, err
 	}
 	if _, err := queries.MarkTaskOutboxCanceled(ctx, cubeboxsqlc.MarkTaskOutboxCanceledParams{
 		TenantUuid: tenantUUID,
 		TaskID:     taskUUID,
 		UpdatedAt:  pgtype.Timestamptz{Time: now.UTC(), Valid: true},
 	}); err != nil {
-		return cubeboxsqlc.IamCubeboxTask{}, false, err
+		return cubeboxdomain.TaskRecord{}, false, err
 	}
 	if err := tx.Commit(ctx); err != nil {
-		return cubeboxsqlc.IamCubeboxTask{}, false, err
+		return cubeboxdomain.TaskRecord{}, false, err
 	}
-	return updated, true, nil
+	return mapTaskRecord(updated), true, nil
 }
 
 func (s *PGStore) ListTaskEvents(ctx context.Context, tenantID string, taskID string) ([]cubeboxsqlc.IamCubeboxTaskEvent, error) {
@@ -534,7 +534,7 @@ func (s *PGStore) ListTaskEvents(ctx context.Context, tenantID string, taskID st
 	return items, nil
 }
 
-func (s *PGStore) ListDispatchOutbox(ctx context.Context, tenantID string, status string, limit int32) ([]cubeboxsqlc.IamCubeboxTaskDispatchOutbox, error) {
+func (s *PGStore) ListDispatchOutbox(ctx context.Context, tenantID string, status string, limit int32) ([]cubeboxdomain.TaskDispatchOutboxRecord, error) {
 	if limit <= 0 {
 		limit = 20
 	}
@@ -559,21 +559,21 @@ func (s *PGStore) ListDispatchOutbox(ctx context.Context, tenantID string, statu
 	if err := tx.Commit(ctx); err != nil {
 		return nil, err
 	}
-	return items, nil
+	return mapDispatchOutboxRecords(items), nil
 }
 
-func (s *PGStore) UpdateTaskState(ctx context.Context, tenantID string, update cubeboxdomain.TaskStateUpdate) (cubeboxsqlc.IamCubeboxTask, error) {
+func (s *PGStore) UpdateTaskState(ctx context.Context, tenantID string, update cubeboxdomain.TaskStateUpdate) (cubeboxdomain.TaskRecord, error) {
 	tenantUUID, err := parseUUID(tenantID)
 	if err != nil {
-		return cubeboxsqlc.IamCubeboxTask{}, err
+		return cubeboxdomain.TaskRecord{}, err
 	}
 	taskUUID, err := parseUUID(update.TaskID)
 	if err != nil {
-		return cubeboxsqlc.IamCubeboxTask{}, err
+		return cubeboxdomain.TaskRecord{}, err
 	}
 	tx, queries, err := s.beginTenantTx(ctx, tenantID)
 	if err != nil {
-		return cubeboxsqlc.IamCubeboxTask{}, err
+		return cubeboxdomain.TaskRecord{}, err
 	}
 	defer func() { _ = tx.Rollback(context.Background()) }()
 
@@ -590,12 +590,12 @@ func (s *PGStore) UpdateTaskState(ctx context.Context, tenantID string, update c
 		UpdatedAt:         pgtype.Timestamptz{Time: update.UpdatedAt.UTC(), Valid: true},
 	})
 	if err != nil {
-		return cubeboxsqlc.IamCubeboxTask{}, err
+		return cubeboxdomain.TaskRecord{}, err
 	}
 	if err := tx.Commit(ctx); err != nil {
-		return cubeboxsqlc.IamCubeboxTask{}, err
+		return cubeboxdomain.TaskRecord{}, err
 	}
-	return record, nil
+	return mapTaskRecord(record), nil
 }
 
 func (s *PGStore) InsertTaskEvent(ctx context.Context, tenantID string, event cubeboxdomain.TaskEventRecord) error {
@@ -725,6 +725,10 @@ func timestamptzPtr(ts *time.Time) pgtype.Timestamptz {
 	return pgtype.Timestamptz{Time: ts.UTC(), Valid: true}
 }
 
+func timestamptzValue(ts time.Time) pgtype.Timestamptz {
+	return pgtype.Timestamptz{Time: ts.UTC(), Valid: !ts.IsZero()}
+}
+
 func (s *PGStore) ListConversationFileLinks(ctx context.Context, tenantID string, conversationID string) ([]cubeboxsqlc.IamCubeboxFileLink, error) {
 	tenantUUID, err := parseUUID(tenantID)
 	if err != nil {
@@ -767,6 +771,176 @@ func parseUUID(raw string) (pgtype.UUID, error) {
 		return pgtype.UUID{}, err
 	}
 	return pgtype.UUID{Bytes: parsed, Valid: true}, nil
+}
+
+func mustParseUUID(raw string) pgtype.UUID {
+	parsed, _ := parseUUID(raw)
+	return parsed
+}
+
+func stringValue(value *string) string {
+	if value == nil {
+		return ""
+	}
+	return strings.TrimSpace(*value)
+}
+
+func timePtr(ts time.Time) *time.Time {
+	value := ts.UTC()
+	return &value
+}
+
+func mapConversationRecord(item cubeboxsqlc.IamCubeboxConversation) cubeboxdomain.ConversationRecord {
+	return cubeboxdomain.ConversationRecord{
+		ConversationID: strings.TrimSpace(item.ConversationID),
+		ActorID:        strings.TrimSpace(item.ActorID),
+		ActorRole:      strings.TrimSpace(item.ActorRole),
+		State:          strings.TrimSpace(item.State),
+		CurrentPhase:   strings.TrimSpace(item.CurrentPhase),
+		CreatedAt:      item.CreatedAt.Time.UTC(),
+		UpdatedAt:      item.UpdatedAt.Time.UTC(),
+	}
+}
+
+func mapConversationRecords(items []cubeboxsqlc.IamCubeboxConversation) []cubeboxdomain.ConversationRecord {
+	out := make([]cubeboxdomain.ConversationRecord, 0, len(items))
+	for _, item := range items {
+		out = append(out, mapConversationRecord(item))
+	}
+	return out
+}
+
+func mapTurnRecord(item cubeboxsqlc.IamCubeboxTurn) cubeboxdomain.ConversationTurnRecord {
+	return cubeboxdomain.ConversationTurnRecord{
+		TurnID:              strings.TrimSpace(item.TurnID),
+		UserInput:           strings.TrimSpace(item.UserInput),
+		State:               strings.TrimSpace(item.State),
+		Phase:               strings.TrimSpace(item.Phase),
+		RiskTier:            strings.TrimSpace(item.RiskTier),
+		RequestID:           strings.TrimSpace(item.RequestID),
+		TraceID:             strings.TrimSpace(item.TraceID),
+		PolicyVersion:       strings.TrimSpace(item.PolicyVersion),
+		CompositionVersion:  strings.TrimSpace(item.CompositionVersion),
+		MappingVersion:      strings.TrimSpace(item.MappingVersion),
+		IntentJSON:          append([]byte(nil), item.IntentJson...),
+		RouteDecisionJSON:   append([]byte(nil), item.RouteDecisionJson...),
+		ClarificationJSON:   append([]byte(nil), item.ClarificationJson...),
+		CandidatesJSON:      append([]byte(nil), item.CandidatesJson...),
+		PlanJSON:            append([]byte(nil), item.PlanJson...),
+		DryRunJSON:          append([]byte(nil), item.DryRunJson...),
+		ResolvedCandidateID: stringValue(item.ResolvedCandidateID),
+		SelectedCandidateID: stringValue(item.SelectedCandidateID),
+		AmbiguityCount:      int(item.AmbiguityCount),
+		Confidence:          item.Confidence,
+		ResolutionSource:    stringValue(item.ResolutionSource),
+		PendingDraftSummary: stringValue(item.PendingDraftSummary),
+		MissingFieldsJSON:   append([]byte(nil), item.MissingFields...),
+		CommitResultJSON:    append([]byte(nil), item.CommitResultJson...),
+		CommitReplyJSON:     append([]byte(nil), item.CommitReply...),
+		ErrorCode:           stringValue(item.ErrorCode),
+		CreatedAt:           item.CreatedAt.Time.UTC(),
+		UpdatedAt:           item.UpdatedAt.Time.UTC(),
+	}
+}
+
+func mapTurnRecords(items []cubeboxsqlc.IamCubeboxTurn) []cubeboxdomain.ConversationTurnRecord {
+	out := make([]cubeboxdomain.ConversationTurnRecord, 0, len(items))
+	for _, item := range items {
+		out = append(out, mapTurnRecord(item))
+	}
+	return out
+}
+
+func mapTransitionRecord(item cubeboxsqlc.IamCubeboxStateTransition) cubeboxdomain.StateTransitionRecord {
+	return cubeboxdomain.StateTransitionRecord{
+		ID:         item.ID,
+		TurnID:     stringValue(item.TurnID),
+		TurnAction: stringValue(item.TurnAction),
+		RequestID:  strings.TrimSpace(item.RequestID),
+		TraceID:    strings.TrimSpace(item.TraceID),
+		FromState:  strings.TrimSpace(item.FromState),
+		ToState:    strings.TrimSpace(item.ToState),
+		FromPhase:  strings.TrimSpace(item.FromPhase),
+		ToPhase:    strings.TrimSpace(item.ToPhase),
+		ReasonCode: stringValue(item.ReasonCode),
+		ActorID:    strings.TrimSpace(item.ActorID),
+		ChangedAt:  item.ChangedAt.Time.UTC(),
+	}
+}
+
+func mapTransitionRecords(items []cubeboxsqlc.IamCubeboxStateTransition) []cubeboxdomain.StateTransitionRecord {
+	out := make([]cubeboxdomain.StateTransitionRecord, 0, len(items))
+	for _, item := range items {
+		out = append(out, mapTransitionRecord(item))
+	}
+	return out
+}
+
+func mapTaskRecord(item cubeboxsqlc.IamCubeboxTask) cubeboxdomain.TaskRecord {
+	record := cubeboxdomain.TaskRecord{
+		TaskID:                   item.TaskID.String(),
+		ConversationID:           strings.TrimSpace(item.ConversationID),
+		TurnID:                   strings.TrimSpace(item.TurnID),
+		TaskType:                 strings.TrimSpace(item.TaskType),
+		RequestID:                strings.TrimSpace(item.RequestID),
+		RequestHash:              strings.TrimSpace(item.RequestHash),
+		WorkflowID:               strings.TrimSpace(item.WorkflowID),
+		Status:                   strings.TrimSpace(item.Status),
+		DispatchStatus:           strings.TrimSpace(item.DispatchStatus),
+		DispatchAttempt:          int(item.DispatchAttempt),
+		Attempt:                  int(item.Attempt),
+		MaxAttempts:              int(item.MaxAttempts),
+		LastErrorCode:            stringValue(item.LastErrorCode),
+		TraceID:                  stringValue(item.TraceID),
+		IntentSchemaVersion:      strings.TrimSpace(item.IntentSchemaVersion),
+		CompilerContractVersion:  strings.TrimSpace(item.CompilerContractVersion),
+		CapabilityMapVersion:     strings.TrimSpace(item.CapabilityMapVersion),
+		SkillManifestDigest:      strings.TrimSpace(item.SkillManifestDigest),
+		ContextHash:              strings.TrimSpace(item.ContextHash),
+		IntentHash:               strings.TrimSpace(item.IntentHash),
+		PlanHash:                 strings.TrimSpace(item.PlanHash),
+		KnowledgeSnapshotDigest:  stringValue(item.KnowledgeSnapshotDigest),
+		RouteCatalogVersion:      stringValue(item.RouteCatalogVersion),
+		ResolverContractVersion:  stringValue(item.ResolverContractVersion),
+		ContextTemplateVersion:   stringValue(item.ContextTemplateVersion),
+		ReplyGuidanceVersion:     stringValue(item.ReplyGuidanceVersion),
+		PolicyContextDigest:      stringValue(item.PolicyContextDigest),
+		EffectivePolicyVersion:   stringValue(item.EffectivePolicyVersion),
+		ResolvedSetID:            stringValue(item.ResolvedSetid),
+		SetIDSource:              stringValue(item.SetidSource),
+		PrecheckProjectionDigest: stringValue(item.PrecheckProjectionDigest),
+		MutationPolicyVersion:    stringValue(item.MutationPolicyVersion),
+		SubmittedAt:              item.SubmittedAt.Time.UTC(),
+		CreatedAt:                item.CreatedAt.Time.UTC(),
+		UpdatedAt:                item.UpdatedAt.Time.UTC(),
+	}
+	if item.DispatchDeadlineAt.Valid {
+		record.DispatchDeadlineAt = timePtr(item.DispatchDeadlineAt.Time.UTC())
+	}
+	if item.CancelRequestedAt.Valid {
+		record.CancelRequestedAt = timePtr(item.CancelRequestedAt.Time.UTC())
+	}
+	if item.CompletedAt.Valid {
+		record.CompletedAt = timePtr(item.CompletedAt.Time.UTC())
+	}
+	return record
+}
+
+func mapDispatchOutboxRecords(items []cubeboxsqlc.IamCubeboxTaskDispatchOutbox) []cubeboxdomain.TaskDispatchOutboxRecord {
+	out := make([]cubeboxdomain.TaskDispatchOutboxRecord, 0, len(items))
+	for _, item := range items {
+		nextRetryAt := time.Time{}
+		if item.NextRetryAt.Valid {
+			nextRetryAt = item.NextRetryAt.Time.UTC()
+		}
+		out = append(out, cubeboxdomain.TaskDispatchOutboxRecord{
+			TaskID:      item.TaskID.String(),
+			Status:      strings.TrimSpace(item.Status),
+			Attempt:     int(item.Attempt),
+			NextRetryAt: nextRetryAt,
+		})
+	}
+	return out
 }
 
 func stringPtr(value string) *string {

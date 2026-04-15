@@ -40,5 +40,8 @@ func NewDefaultLocalFileService() *services.FileService {
 }
 
 func NewFacade(store *persistence.PGStore, runtime services.RuntimeProbe, fileSvc *services.FileService, legacy services.LegacyFacade) *services.Facade {
+	if store == nil {
+		return services.NewFacade(nil, runtime, fileSvc, legacy)
+	}
 	return services.NewFacade(store, runtime, fileSvc, legacy)
 }

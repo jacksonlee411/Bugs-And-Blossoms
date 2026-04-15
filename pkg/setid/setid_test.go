@@ -92,6 +92,22 @@ func TestResolve_BlackBox(t *testing.T) {
 		}
 	})
 
+	t.Run("success with normalized org node key input", func(t *testing.T) {
+		t.Parallel()
+
+		q := &fakeQueryRower{row: fakeRow{val: "SHARE"}}
+		got, err := setid.Resolve(context.Background(), q, "t1", "A2345678", "2026-01-01")
+		if err != nil {
+			t.Fatalf("err=%v", err)
+		}
+		if got != "SHARE" {
+			t.Fatalf("got=%q", got)
+		}
+		if len(q.args) != 3 || q.args[1] != "A2345678" {
+			t.Fatalf("unexpected query args=%v", q.args)
+		}
+	})
+
 	t.Run("scan error", func(t *testing.T) {
 		t.Parallel()
 
@@ -100,6 +116,45 @@ func TestResolve_BlackBox(t *testing.T) {
 		_, err := setid.Resolve(context.Background(), q, "t1", "10000001", "2026-01-01")
 		if !errors.Is(err, want) {
 			t.Fatalf("err=%v", err)
+		}
+	})
+
+	t.Run("blank org node key", func(t *testing.T) {
+		t.Parallel()
+
+		q := &fakeQueryRower{}
+		_, err := setid.Resolve(context.Background(), q, "t1", "   ", "2026-01-01")
+		if err == nil || err.Error() != "org_node_key is required" {
+			t.Fatalf("err=%v", err)
+		}
+		if q.sql != "" || len(q.args) != 0 {
+			t.Fatalf("query should not run: sql=%q args=%v", q.sql, q.args)
+		}
+	})
+
+	t.Run("invalid org node key format", func(t *testing.T) {
+		t.Parallel()
+
+		q := &fakeQueryRower{}
+		_, err := setid.Resolve(context.Background(), q, "t1", "12AB5678", "2026-01-01")
+		if err == nil || err.Error() != "org_node_key invalid" {
+			t.Fatalf("err=%v", err)
+		}
+		if q.sql != "" || len(q.args) != 0 {
+			t.Fatalf("query should not run: sql=%q args=%v", q.sql, q.args)
+		}
+	})
+
+	t.Run("leading zero numeric org node key invalid", func(t *testing.T) {
+		t.Parallel()
+
+		q := &fakeQueryRower{}
+		_, err := setid.Resolve(context.Background(), q, "t1", "01234567", "2026-01-01")
+		if err == nil || err.Error() != "org_node_key invalid" {
+			t.Fatalf("err=%v", err)
+		}
+		if q.sql != "" || len(q.args) != 0 {
+			t.Fatalf("query should not run: sql=%q args=%v", q.sql, q.args)
 		}
 	})
 }

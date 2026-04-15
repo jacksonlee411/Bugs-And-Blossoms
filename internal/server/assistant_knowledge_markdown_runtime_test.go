@@ -391,9 +391,9 @@ func TestAssistantKnowledgeMarkdownCompilationValidation(t *testing.T) {
 		}
 	})
 
-	t.Run("wiki locale duplicates are rejected by wiki index", func(t *testing.T) {
-		mutated := makeMutated()
-		var dup assistantKnowledgeMarkdownDocument
+		t.Run("wiki locale duplicates are rejected by wiki index", func(t *testing.T) {
+			mutated := makeMutated()
+			var dup assistantKnowledgeMarkdownDocument
 		found := false
 		for _, doc := range mutated {
 			if doc.Kind == "wiki" && doc.ID == "wiki.assistant_runtime" {
@@ -408,14 +408,31 @@ func TestAssistantKnowledgeMarkdownCompilationValidation(t *testing.T) {
 			t.Fatal("expected base wiki doc to exist")
 		}
 		mutated = append(mutated, dup)
-		if _, err := assistantCompileMarkdownKnowledgeDocuments(mutated); err == nil || !strings.Contains(err.Error(), "duplicated markdown doc assistant.runtime locale zh") {
-			t.Fatalf("expected duplicated wiki locale error, got=%v", err)
-		}
-	})
+			if _, err := assistantCompileMarkdownKnowledgeDocuments(mutated); err == nil || !strings.Contains(err.Error(), "duplicated markdown doc assistant.runtime locale zh") {
+				t.Fatalf("expected duplicated wiki locale error, got=%v", err)
+			}
+		})
 
-	t.Run("all intent docs cannot become inactive", func(t *testing.T) {
-		mutated := makeMutated()
-		for idx := range mutated {
+		t.Run("action secondary indexes reject duplicate locales", func(t *testing.T) {
+			actionByActionDup := makeMutated()
+			for _, doc := range docs {
+				if doc.Kind == "action" && doc.ActionKey == assistantIntentDisableOrgUnit {
+					dup := doc
+					dup.ID = "action.orgunit_disable.alt"
+					dup.Path = "assistant_knowledge_md/actions/action.orgunit_disable.alt.zh.md"
+					actionByActionDup = append(actionByActionDup, dup)
+					break
+				}
+			}
+			if _, err := assistantCompileMarkdownKnowledgeDocuments(actionByActionDup); err == nil || !strings.Contains(err.Error(), "duplicated markdown doc "+assistantIntentDisableOrgUnit+" locale zh") {
+				t.Fatalf("expected duplicated action-key locale error, got=%v", err)
+			}
+
+		})
+
+		t.Run("all intent docs cannot become inactive", func(t *testing.T) {
+			mutated := makeMutated()
+			for idx := range mutated {
 			if mutated[idx].Kind == "intent" {
 				mutated[idx].Status = "draft"
 			}
@@ -571,6 +588,24 @@ body`)
 		}
 		if err := assistantValidateMarkdownKnowledgeDocument(valid); err != nil {
 			t.Fatalf("valid doc err=%v", err)
+		}
+		draftIntent := valid
+		draftIntent.Path = "assistant_knowledge_md/intents/knowledge.general_qa.zh.md"
+		draftIntent.ID = "intent.knowledge.general_qa"
+		draftIntent.Kind = "intent"
+		draftIntent.Status = "draft"
+		draftIntent.AppliesTo = []string{"knowledge_qa"}
+		if err := assistantValidateMarkdownKnowledgeDocument(draftIntent); err != nil {
+			t.Fatalf("draft intent doc err=%v", err)
+		}
+		deprecatedWiki := valid
+		deprecatedWiki.Path = "assistant_knowledge_md/wiki/assistant.task.submit.zh.md"
+		deprecatedWiki.ID = "wiki.assistant.task.submit"
+		deprecatedWiki.Kind = "wiki"
+		deprecatedWiki.Status = "deprecated"
+		deprecatedWiki.AppliesTo = []string{"assistant.task.submit"}
+		if err := assistantValidateMarkdownKnowledgeDocument(deprecatedWiki); err != nil {
+			t.Fatalf("deprecated wiki doc err=%v", err)
 		}
 		invalidLocale := valid
 		invalidLocale.Locale = "fr"

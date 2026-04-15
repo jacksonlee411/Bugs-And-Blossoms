@@ -11,9 +11,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgtype"
 	cubeboxdomain "github.com/jacksonlee411/Bugs-And-Blossoms/modules/cubebox/domain"
-	cubeboxsqlc "github.com/jacksonlee411/Bugs-And-Blossoms/modules/cubebox/infrastructure/sqlc/gen"
 )
 
 const (
@@ -48,20 +46,20 @@ var (
 )
 
 type ConversationReader interface {
-	ListConversations(ctx context.Context, tenantID string, actorID string, limit int32, cursorUpdatedAt time.Time, cursorConversationID string) ([]cubeboxsqlc.IamCubeboxConversation, error)
-	GetConversation(ctx context.Context, tenantID string, conversationID string) (cubeboxsqlc.IamCubeboxConversation, error)
-	ListConversationTurns(ctx context.Context, tenantID string, conversationID string) ([]cubeboxsqlc.IamCubeboxTurn, error)
-	ListConversationStateTransitions(ctx context.Context, tenantID string, conversationID string) ([]cubeboxsqlc.IamCubeboxStateTransition, error)
+	ListConversations(ctx context.Context, tenantID string, actorID string, limit int32, cursorUpdatedAt time.Time, cursorConversationID string) ([]cubeboxdomain.ConversationRecord, error)
+	GetConversation(ctx context.Context, tenantID string, conversationID string) (cubeboxdomain.ConversationRecord, error)
+	ListConversationTurns(ctx context.Context, tenantID string, conversationID string) ([]cubeboxdomain.ConversationTurnRecord, error)
+	ListConversationStateTransitions(ctx context.Context, tenantID string, conversationID string) ([]cubeboxdomain.StateTransitionRecord, error)
 	SyncConversationSnapshot(ctx context.Context, tenantID string, conversation cubeboxdomain.Conversation) error
 	CountBlockingTasks(ctx context.Context, tenantID string, conversationID string) (int64, error)
 	DeleteConversation(ctx context.Context, tenantID string, conversationID string) (int64, error)
-	GetTask(ctx context.Context, tenantID string, taskID string) (cubeboxsqlc.IamCubeboxTask, error)
-	GetTaskForDispatch(ctx context.Context, tenantID string, taskID string) (cubeboxsqlc.IamCubeboxTask, error)
+	GetTask(ctx context.Context, tenantID string, taskID string) (cubeboxdomain.TaskRecord, error)
+	GetTaskForDispatch(ctx context.Context, tenantID string, taskID string) (cubeboxdomain.TaskRecord, error)
 	GetTaskActorID(ctx context.Context, tenantID string, taskID string) (string, error)
-	SubmitTask(ctx context.Context, tenantID string, record cubeboxsqlc.IamCubeboxTask) (cubeboxsqlc.IamCubeboxTask, bool, error)
-	CancelTask(ctx context.Context, tenantID string, taskID string, now time.Time) (cubeboxsqlc.IamCubeboxTask, bool, error)
-	ListDispatchOutbox(ctx context.Context, tenantID string, status string, limit int32) ([]cubeboxsqlc.IamCubeboxTaskDispatchOutbox, error)
-	UpdateTaskState(ctx context.Context, tenantID string, update cubeboxdomain.TaskStateUpdate) (cubeboxsqlc.IamCubeboxTask, error)
+	SubmitTask(ctx context.Context, tenantID string, record cubeboxdomain.TaskRecord) (cubeboxdomain.TaskRecord, bool, error)
+	CancelTask(ctx context.Context, tenantID string, taskID string, now time.Time) (cubeboxdomain.TaskRecord, bool, error)
+	ListDispatchOutbox(ctx context.Context, tenantID string, status string, limit int32) ([]cubeboxdomain.TaskDispatchOutboxRecord, error)
+	UpdateTaskState(ctx context.Context, tenantID string, update cubeboxdomain.TaskStateUpdate) (cubeboxdomain.TaskRecord, error)
 	InsertTaskEvent(ctx context.Context, tenantID string, event cubeboxdomain.TaskEventRecord) error
 	UpdateTaskDispatchOutbox(ctx context.Context, tenantID string, update cubeboxdomain.TaskDispatchOutboxUpdate) error
 }
@@ -118,12 +116,6 @@ func NewFacade(reader ConversationReader, runtime RuntimeProbe, files *FileServi
 }
 
 func (f *Facade) ListConversations(ctx context.Context, tenantID string, actorID string, pageSize int, cursor string) ([]cubeboxdomain.ConversationListItem, string, error) {
-	if f.reader == nil {
-		if f.legacy == nil {
-			return nil, "", nil
-		}
-		return f.legacy.ListConversations(ctx, tenantID, actorID, pageSize, cursor)
-	}
 	if pageSize <= 0 {
 		pageSize = defaultConversationLimit
 	}
@@ -140,6 +132,12 @@ func (f *Facade) ListConversations(ctx context.Context, tenantID string, actorID
 		cursorUpdatedAt = decoded.UpdatedAt
 		cursorConversationID = decoded.ConversationID
 	}
+	if f.reader == nil {
+		if f.legacy == nil {
+			return nil, "", nil
+		}
+		return f.legacy.ListConversations(ctx, tenantID, actorID, pageSize, cursor)
+	}
 	rows, err := f.reader.ListConversations(ctx, strings.TrimSpace(tenantID), strings.TrimSpace(actorID), int32(pageSize+1), cursorUpdatedAt, cursorConversationID)
 	if err != nil {
 		return nil, "", err
@@ -152,11 +150,11 @@ func (f *Facade) ListConversations(ctx context.Context, tenantID string, actorID
 		if idx >= pageSize {
 			break
 		}
-		item := cubeboxdomain.ConversationListItem{
-			ConversationID: strings.TrimSpace(row.ConversationID),
-			State:          strings.TrimSpace(row.State),
-			UpdatedAt:      row.UpdatedAt.Time.UTC(),
-		}
+			item := cubeboxdomain.ConversationListItem{
+				ConversationID: strings.TrimSpace(row.ConversationID),
+				State:          strings.TrimSpace(row.State),
+				UpdatedAt:      row.UpdatedAt.UTC(),
+			}
 		if detail, err := f.loadConversation(ctx, tenantID, actorID, row.ConversationID, false); err == nil && detail != nil && len(detail.Turns) > 0 {
 			last := detail.Turns[len(detail.Turns)-1]
 			item.LastTurn = &cubeboxdomain.ConversationLastTurn{
@@ -172,7 +170,7 @@ func (f *Facade) ListConversations(ctx context.Context, tenantID string, actorID
 	if len(rows) > pageSize {
 		last := rows[pageSize-1]
 		nextCursor = encodeConversationCursor(conversationCursor{
-			UpdatedAt:      last.UpdatedAt.Time.UTC(),
+			UpdatedAt:      last.UpdatedAt.UTC(),
 			ConversationID: strings.TrimSpace(last.ConversationID),
 		}, tenantID, actorID)
 	}
@@ -400,8 +398,8 @@ func (f *Facade) dispatchPendingTasks(ctx context.Context, tenantID string, limi
 	return nil
 }
 
-func (f *Facade) dispatchTask(ctx context.Context, tenantID string, outbox cubeboxsqlc.IamCubeboxTaskDispatchOutbox, now time.Time) error {
-	taskID := outbox.TaskID.String()
+func (f *Facade) dispatchTask(ctx context.Context, tenantID string, outbox cubeboxdomain.TaskDispatchOutboxRecord, now time.Time) error {
+	taskID := strings.TrimSpace(outbox.TaskID)
 	task, err := f.reader.GetTaskForDispatch(ctx, tenantID, taskID)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -409,7 +407,7 @@ func (f *Facade) dispatchTask(ctx context.Context, tenantID string, outbox cubeb
 				TaskID:      taskID,
 				Status:      taskDispatchFailed,
 				Attempt:     int(outbox.Attempt),
-				NextRetryAt: timestampValue(outbox.NextRetryAt, now),
+				NextRetryAt: outbox.NextRetryAt,
 				UpdatedAt:   now,
 			})
 		}
@@ -420,13 +418,13 @@ func (f *Facade) dispatchTask(ctx context.Context, tenantID string, outbox cubeb
 			TaskID:      taskID,
 			Status:      taskDispatchFailed,
 			Attempt:     int(outbox.Attempt),
-			NextRetryAt: timestampValue(outbox.NextRetryAt, now),
+			NextRetryAt: outbox.NextRetryAt,
 			UpdatedAt:   now,
 		})
 	}
 
 	attempt := int(outbox.Attempt) + 1
-	if task.DispatchDeadlineAt.Valid && now.After(task.DispatchDeadlineAt.Time.UTC()) {
+	if task.DispatchDeadlineAt != nil && now.After(task.DispatchDeadlineAt.UTC()) {
 		if err := f.markTaskDispatchDeadlineExceeded(ctx, tenantID, task, attempt, now); err != nil {
 			return err
 		}
@@ -434,7 +432,7 @@ func (f *Facade) dispatchTask(ctx context.Context, tenantID string, outbox cubeb
 			TaskID:      taskID,
 			Status:      taskDispatchFailed,
 			Attempt:     attempt,
-			NextRetryAt: timestampValue(outbox.NextRetryAt, now),
+			NextRetryAt: outbox.NextRetryAt,
 			UpdatedAt:   now,
 		})
 	}
@@ -449,7 +447,7 @@ func (f *Facade) dispatchTask(ctx context.Context, tenantID string, outbox cubeb
 	if err != nil {
 		lastError := taskErrorCode(err)
 		nextRetryAt := now.Add(taskDispatchBackoff(attempt))
-		if attempt >= int(task.MaxAttempts) || (task.DispatchDeadlineAt.Valid && nextRetryAt.After(task.DispatchDeadlineAt.Time.UTC())) {
+		if attempt >= int(task.MaxAttempts) || (task.DispatchDeadlineAt != nil && nextRetryAt.After(task.DispatchDeadlineAt.UTC())) {
 			if markErr := f.markTaskDispatchFailure(ctx, tenantID, task, lastError, attempt, now); markErr != nil {
 				return markErr
 			}
@@ -485,7 +483,7 @@ func (f *Facade) dispatchTask(ctx context.Context, tenantID string, outbox cubeb
 			TaskID:      taskID,
 			Status:      taskDispatchStarted,
 			Attempt:     attempt,
-			NextRetryAt: timestampValue(outbox.NextRetryAt, now),
+			NextRetryAt: outbox.NextRetryAt,
 			UpdatedAt:   now,
 		})
 	}
@@ -507,7 +505,7 @@ func (f *Facade) dispatchTask(ctx context.Context, tenantID string, outbox cubeb
 	if err != nil {
 		lastError := taskErrorCode(err)
 		nextRetryAt := now.Add(taskDispatchBackoff(attempt))
-		if attempt >= int(task.MaxAttempts) || (task.DispatchDeadlineAt.Valid && nextRetryAt.After(task.DispatchDeadlineAt.Time.UTC())) {
+		if attempt >= int(task.MaxAttempts) || (task.DispatchDeadlineAt != nil && nextRetryAt.After(task.DispatchDeadlineAt.UTC())) {
 			if markErr := f.markTaskDispatchFailure(ctx, tenantID, task, lastError, attempt, now); markErr != nil {
 				return markErr
 			}
@@ -574,12 +572,12 @@ func (f *Facade) dispatchTask(ctx context.Context, tenantID string, outbox cubeb
 		TaskID:      taskID,
 		Status:      taskDispatchStarted,
 		Attempt:     attempt,
-		NextRetryAt: timestampValue(outbox.NextRetryAt, now),
+		NextRetryAt: outbox.NextRetryAt,
 		UpdatedAt:   now,
 	})
 }
 
-func (f *Facade) syncWorkflowConversationResult(ctx context.Context, tenantID string, task cubeboxsqlc.IamCubeboxTask, fromStatus string, outbox cubeboxsqlc.IamCubeboxTaskDispatchOutbox, attempt int, now time.Time, result TaskWorkflowExecutionResult) (bool, error) {
+func (f *Facade) syncWorkflowConversationResult(ctx context.Context, tenantID string, task cubeboxdomain.TaskRecord, fromStatus string, outbox cubeboxdomain.TaskDispatchOutboxRecord, attempt int, now time.Time, result TaskWorkflowExecutionResult) (bool, error) {
 	if result.Conversation == nil {
 		return false, nil
 	}
@@ -596,26 +594,26 @@ func (f *Facade) syncWorkflowConversationResult(ctx context.Context, tenantID st
 	return true, nil
 }
 
-func (f *Facade) finalizeTaskManualTakeover(ctx context.Context, tenantID string, task cubeboxsqlc.IamCubeboxTask, fromStatus string, outbox cubeboxsqlc.IamCubeboxTaskDispatchOutbox, attempt int, now time.Time, errorCode string) error {
+func (f *Facade) finalizeTaskManualTakeover(ctx context.Context, tenantID string, task cubeboxdomain.TaskRecord, fromStatus string, outbox cubeboxdomain.TaskDispatchOutboxRecord, attempt int, now time.Time, errorCode string) error {
 	if err := f.markTaskManualTakeover(ctx, tenantID, task, fromStatus, errorCode, now); err != nil {
 		return err
 	}
 	return f.reader.UpdateTaskDispatchOutbox(ctx, tenantID, cubeboxdomain.TaskDispatchOutboxUpdate{
-		TaskID:      task.TaskID.String(),
+		TaskID:      task.TaskID,
 		Status:      taskDispatchStarted,
 		Attempt:     attempt,
-		NextRetryAt: timestampValue(outbox.NextRetryAt, now),
+		NextRetryAt: outbox.NextRetryAt,
 		UpdatedAt:   now,
 	})
 }
 
-func (f *Facade) markTaskRunningIfNeeded(ctx context.Context, tenantID string, task cubeboxsqlc.IamCubeboxTask, attempt int, now time.Time) (cubeboxsqlc.IamCubeboxTask, string, error) {
+func (f *Facade) markTaskRunningIfNeeded(ctx context.Context, tenantID string, task cubeboxdomain.TaskRecord, attempt int, now time.Time) (cubeboxdomain.TaskRecord, string, error) {
 	fromStatus := strings.TrimSpace(task.Status)
 	if fromStatus != taskStatusQueued {
 		return task, fromStatus, nil
 	}
 	updated, err := f.reader.UpdateTaskState(ctx, tenantID, cubeboxdomain.TaskStateUpdate{
-		TaskID:          task.TaskID.String(),
+		TaskID:          task.TaskID,
 		Status:          taskStatusRunning,
 		DispatchStatus:  taskDispatchStarted,
 		DispatchAttempt: attempt,
@@ -624,21 +622,21 @@ func (f *Facade) markTaskRunningIfNeeded(ctx context.Context, tenantID string, t
 		UpdatedAt:       now,
 	})
 	if err != nil {
-		return cubeboxsqlc.IamCubeboxTask{}, "", err
+		return cubeboxdomain.TaskRecord{}, "", err
 	}
 	if err := f.reader.InsertTaskEvent(ctx, tenantID, cubeboxdomain.TaskEventRecord{
-		TaskID:     task.TaskID.String(),
+		TaskID:     task.TaskID,
 		FromStatus: fromStatus,
 		ToStatus:   taskStatusRunning,
 		EventType:  taskStatusRunning,
 		OccurredAt: now,
 	}); err != nil {
-		return cubeboxsqlc.IamCubeboxTask{}, "", err
+		return cubeboxdomain.TaskRecord{}, "", err
 	}
 	return updated, taskStatusRunning, nil
 }
 
-func (f *Facade) validateDispatchSnapshot(ctx context.Context, tenantID string, task cubeboxsqlc.IamCubeboxTask, fromStatus string, now time.Time) (bool, error) {
+func (f *Facade) validateDispatchSnapshot(ctx context.Context, tenantID string, task cubeboxdomain.TaskRecord, fromStatus string, now time.Time) (bool, error) {
 	turns, err := f.reader.ListConversationTurns(ctx, tenantID, task.ConversationID)
 	if err != nil {
 		return false, err
@@ -670,13 +668,13 @@ func (f *Facade) validateDispatchSnapshot(ctx context.Context, tenantID string, 
 	return false, nil
 }
 
-func (f *Facade) markTaskManualTakeover(ctx context.Context, tenantID string, task cubeboxsqlc.IamCubeboxTask, fromStatus string, errorCode string, now time.Time) error {
-	taskID := task.TaskID.String()
+func (f *Facade) markTaskManualTakeover(ctx context.Context, tenantID string, task cubeboxdomain.TaskRecord, fromStatus string, errorCode string, now time.Time) error {
+	taskID := task.TaskID
 	if _, err := f.reader.UpdateTaskState(ctx, tenantID, cubeboxdomain.TaskStateUpdate{
 		TaskID:          taskID,
 		Status:          taskStatusManualTakeover,
 		DispatchStatus:  strings.TrimSpace(task.DispatchStatus),
-		DispatchAttempt: int(task.DispatchAttempt),
+		DispatchAttempt: task.DispatchAttempt,
 		Attempt:         int(task.Attempt),
 		LastErrorCode:   strings.TrimSpace(errorCode),
 		CompletedAt:     timePtr(now),
@@ -704,8 +702,8 @@ func (f *Facade) markTaskManualTakeover(ctx context.Context, tenantID string, ta
 	})
 }
 
-func (f *Facade) markTaskDispatchFailure(ctx context.Context, tenantID string, task cubeboxsqlc.IamCubeboxTask, errorCode string, attempt int, now time.Time) error {
-	taskID := task.TaskID.String()
+func (f *Facade) markTaskDispatchFailure(ctx context.Context, tenantID string, task cubeboxdomain.TaskRecord, errorCode string, attempt int, now time.Time) error {
+	taskID := task.TaskID
 	if _, err := f.reader.UpdateTaskState(ctx, tenantID, cubeboxdomain.TaskStateUpdate{
 		TaskID:          taskID,
 		Status:          taskStatusManualTakeover,
@@ -738,9 +736,9 @@ func (f *Facade) markTaskDispatchFailure(ctx context.Context, tenantID string, t
 	})
 }
 
-func (f *Facade) markTaskDispatchDeadlineExceeded(ctx context.Context, tenantID string, task cubeboxsqlc.IamCubeboxTask, attempt int, now time.Time) error {
-	taskID := task.TaskID.String()
-	lastError := taskTerminalErrorCode(stringValue(task.LastErrorCode))
+func (f *Facade) markTaskDispatchDeadlineExceeded(ctx context.Context, tenantID string, task cubeboxdomain.TaskRecord, attempt int, now time.Time) error {
+	taskID := task.TaskID
+	lastError := taskTerminalErrorCode(task.LastErrorCode)
 	if _, err := f.reader.UpdateTaskState(ctx, tenantID, cubeboxdomain.TaskStateUpdate{
 		TaskID:          taskID,
 		Status:          taskStatusManualTakeover,
@@ -781,7 +779,7 @@ func (f *Facade) RenderReply(ctx context.Context, tenantID string, principal Pri
 }
 
 func (f *Facade) Models(ctx context.Context) ([]cubeboxdomain.ModelEntry, error) {
-	if f.runtime == nil {
+	if f == nil || f.runtime == nil {
 		return nil, nil
 	}
 	return f.runtime.Models(ctx)
@@ -970,15 +968,15 @@ func aggregateRuntimeStatus(components ...cubeboxdomain.RuntimeComponentStatus) 
 	return status
 }
 
-func mapConversation(row cubeboxsqlc.IamCubeboxConversation, turns []cubeboxsqlc.IamCubeboxTurn, transitions []cubeboxsqlc.IamCubeboxStateTransition) *cubeboxdomain.Conversation {
+func mapConversation(row cubeboxdomain.ConversationRecord, turns []cubeboxdomain.ConversationTurnRecord, transitions []cubeboxdomain.StateTransitionRecord) *cubeboxdomain.Conversation {
 	out := &cubeboxdomain.Conversation{
 		ConversationID: strings.TrimSpace(row.ConversationID),
 		State:          strings.TrimSpace(row.State),
 		CurrentPhase:   strings.TrimSpace(row.CurrentPhase),
 		ActorID:        strings.TrimSpace(row.ActorID),
 		ActorRole:      strings.TrimSpace(row.ActorRole),
-		CreatedAt:      row.CreatedAt.Time.UTC(),
-		UpdatedAt:      row.UpdatedAt.Time.UTC(),
+		CreatedAt:      row.CreatedAt.UTC(),
+		UpdatedAt:      row.UpdatedAt.UTC(),
 	}
 	out.Turns = make([]cubeboxdomain.ConversationTurn, 0, len(turns))
 	for _, turn := range turns {
@@ -993,62 +991,62 @@ func mapConversation(row cubeboxsqlc.IamCubeboxConversation, turns []cubeboxsqlc
 			PolicyVersion:       strings.TrimSpace(turn.PolicyVersion),
 			CompositionVersion:  strings.TrimSpace(turn.CompositionVersion),
 			MappingVersion:      strings.TrimSpace(turn.MappingVersion),
-			Intent:              jsonObject(turn.IntentJson),
-			RouteDecision:       jsonObject(turn.RouteDecisionJson),
-			Clarification:       jsonObject(turn.ClarificationJson),
-			Candidates:          jsonObjectSlice(turn.CandidatesJson),
-			Plan:                jsonObject(turn.PlanJson),
-			DryRun:              jsonObject(turn.DryRunJson),
-			ResolvedCandidateID: stringValue(turn.ResolvedCandidateID),
-			SelectedCandidateID: stringValue(turn.SelectedCandidateID),
-			AmbiguityCount:      int(turn.AmbiguityCount),
+			Intent:              jsonObject(turn.IntentJSON),
+			RouteDecision:       jsonObject(turn.RouteDecisionJSON),
+			Clarification:       jsonObject(turn.ClarificationJSON),
+			Candidates:          jsonObjectSlice(turn.CandidatesJSON),
+			Plan:                jsonObject(turn.PlanJSON),
+			DryRun:              jsonObject(turn.DryRunJSON),
+			ResolvedCandidateID: strings.TrimSpace(turn.ResolvedCandidateID),
+			SelectedCandidateID: strings.TrimSpace(turn.SelectedCandidateID),
+			AmbiguityCount:      turn.AmbiguityCount,
 			Confidence:          turn.Confidence,
-			ResolutionSource:    stringValue(turn.ResolutionSource),
-			PendingDraftSummary: stringValue(turn.PendingDraftSummary),
-			MissingFields:       bytesToStringSlice(turn.MissingFields),
-			CommitResult:        jsonObject(turn.CommitResultJson),
-			CommitReply:         jsonObject(turn.CommitReply),
-			ErrorCode:           stringValue(turn.ErrorCode),
-			CreatedAt:           turn.CreatedAt.Time.UTC(),
-			UpdatedAt:           turn.UpdatedAt.Time.UTC(),
+			ResolutionSource:    strings.TrimSpace(turn.ResolutionSource),
+			PendingDraftSummary: strings.TrimSpace(turn.PendingDraftSummary),
+			MissingFields:       bytesToStringSlice(turn.MissingFieldsJSON),
+			CommitResult:        jsonObject(turn.CommitResultJSON),
+			CommitReply:         jsonObject(turn.CommitReplyJSON),
+			ErrorCode:           strings.TrimSpace(turn.ErrorCode),
+			CreatedAt:           turn.CreatedAt.UTC(),
+			UpdatedAt:           turn.UpdatedAt.UTC(),
 		})
 	}
 	out.Transitions = make([]cubeboxdomain.StateTransition, 0, len(transitions))
 	for _, transition := range transitions {
 		out.Transitions = append(out.Transitions, cubeboxdomain.StateTransition{
 			ID:         transition.ID,
-			TurnID:     stringValue(transition.TurnID),
-			TurnAction: stringValue(transition.TurnAction),
+			TurnID:     strings.TrimSpace(transition.TurnID),
+			TurnAction: strings.TrimSpace(transition.TurnAction),
 			RequestID:  strings.TrimSpace(transition.RequestID),
 			TraceID:    strings.TrimSpace(transition.TraceID),
 			FromState:  strings.TrimSpace(transition.FromState),
 			ToState:    strings.TrimSpace(transition.ToState),
 			FromPhase:  strings.TrimSpace(transition.FromPhase),
 			ToPhase:    strings.TrimSpace(transition.ToPhase),
-			ReasonCode: stringValue(transition.ReasonCode),
+			ReasonCode: strings.TrimSpace(transition.ReasonCode),
 			ActorID:    strings.TrimSpace(transition.ActorID),
-			ChangedAt:  transition.ChangedAt.Time.UTC(),
+			ChangedAt:  transition.ChangedAt.UTC(),
 		})
 	}
 	return out
 }
 
-func mapTask(record cubeboxsqlc.IamCubeboxTask) *cubeboxdomain.TaskDetail {
+func mapTask(record cubeboxdomain.TaskRecord) *cubeboxdomain.TaskDetail {
 	detail := &cubeboxdomain.TaskDetail{
-		TaskID:         record.TaskID.String(),
+		TaskID:         record.TaskID,
 		TaskType:       strings.TrimSpace(record.TaskType),
 		Status:         strings.TrimSpace(record.Status),
 		DispatchStatus: strings.TrimSpace(record.DispatchStatus),
-		Attempt:        int(record.Attempt),
-		MaxAttempts:    int(record.MaxAttempts),
-		LastErrorCode:  stringValue(record.LastErrorCode),
+		Attempt:        record.Attempt,
+		MaxAttempts:    record.MaxAttempts,
+		LastErrorCode:  strings.TrimSpace(record.LastErrorCode),
 		WorkflowID:     strings.TrimSpace(record.WorkflowID),
 		RequestID:      strings.TrimSpace(record.RequestID),
-		TraceID:        stringValue(record.TraceID),
+		TraceID:        strings.TrimSpace(record.TraceID),
 		ConversationID: strings.TrimSpace(record.ConversationID),
 		TurnID:         strings.TrimSpace(record.TurnID),
-		SubmittedAt:    record.SubmittedAt.Time.UTC(),
-		UpdatedAt:      record.UpdatedAt.Time.UTC(),
+		SubmittedAt:    record.SubmittedAt.UTC(),
+		UpdatedAt:      record.UpdatedAt.UTC(),
 		ContractSnapshot: cubeboxdomain.TaskContractSnapshot{
 			IntentSchemaVersion:      strings.TrimSpace(record.IntentSchemaVersion),
 			CompilerContractVersion:  strings.TrimSpace(record.CompilerContractVersion),
@@ -1057,42 +1055,42 @@ func mapTask(record cubeboxsqlc.IamCubeboxTask) *cubeboxdomain.TaskDetail {
 			ContextHash:              strings.TrimSpace(record.ContextHash),
 			IntentHash:               strings.TrimSpace(record.IntentHash),
 			PlanHash:                 strings.TrimSpace(record.PlanHash),
-			KnowledgeSnapshotDigest:  stringValue(record.KnowledgeSnapshotDigest),
-			RouteCatalogVersion:      stringValue(record.RouteCatalogVersion),
-			ResolverContractVersion:  stringValue(record.ResolverContractVersion),
-			ContextTemplateVersion:   stringValue(record.ContextTemplateVersion),
-			ReplyGuidanceVersion:     stringValue(record.ReplyGuidanceVersion),
-			PolicyContextDigest:      stringValue(record.PolicyContextDigest),
-			EffectivePolicyVersion:   stringValue(record.EffectivePolicyVersion),
-			ResolvedSetID:            stringValue(record.ResolvedSetid),
-			SetIDSource:              stringValue(record.SetidSource),
-			PrecheckProjectionDigest: stringValue(record.PrecheckProjectionDigest),
-			MutationPolicyVersion:    stringValue(record.MutationPolicyVersion),
+			KnowledgeSnapshotDigest:  strings.TrimSpace(record.KnowledgeSnapshotDigest),
+			RouteCatalogVersion:      strings.TrimSpace(record.RouteCatalogVersion),
+			ResolverContractVersion:  strings.TrimSpace(record.ResolverContractVersion),
+			ContextTemplateVersion:   strings.TrimSpace(record.ContextTemplateVersion),
+			ReplyGuidanceVersion:     strings.TrimSpace(record.ReplyGuidanceVersion),
+			PolicyContextDigest:      strings.TrimSpace(record.PolicyContextDigest),
+			EffectivePolicyVersion:   strings.TrimSpace(record.EffectivePolicyVersion),
+			ResolvedSetID:            strings.TrimSpace(record.ResolvedSetID),
+			SetIDSource:              strings.TrimSpace(record.SetIDSource),
+			PrecheckProjectionDigest: strings.TrimSpace(record.PrecheckProjectionDigest),
+			MutationPolicyVersion:    strings.TrimSpace(record.MutationPolicyVersion),
 		},
 	}
-	if record.CancelRequestedAt.Valid {
-		cancelRequestedAt := record.CancelRequestedAt.Time.UTC()
+	if record.CancelRequestedAt != nil {
+		cancelRequestedAt := record.CancelRequestedAt.UTC()
 		detail.CancelRequestedAt = &cancelRequestedAt
 	}
-	if record.CompletedAt.Valid {
-		completedAt := record.CompletedAt.Time.UTC()
+	if record.CompletedAt != nil {
+		completedAt := record.CompletedAt.UTC()
 		detail.CompletedAt = &completedAt
 	}
 	return detail
 }
 
-func mapTaskReceipt(record cubeboxsqlc.IamCubeboxTask) *cubeboxdomain.TaskReceipt {
+func mapTaskReceipt(record cubeboxdomain.TaskRecord) *cubeboxdomain.TaskReceipt {
 	return &cubeboxdomain.TaskReceipt{
-		TaskID:      record.TaskID.String(),
+		TaskID:      record.TaskID,
 		TaskType:    strings.TrimSpace(record.TaskType),
 		Status:      strings.TrimSpace(record.Status),
 		WorkflowID:  strings.TrimSpace(record.WorkflowID),
-		SubmittedAt: record.SubmittedAt.Time.UTC(),
-		PollURI:     "/internal/cubebox/tasks/" + record.TaskID.String(),
+		SubmittedAt: record.SubmittedAt.UTC(),
+		PollURI:     "/internal/cubebox/tasks/" + record.TaskID,
 	}
 }
 
-func mapTaskCancelResponse(record cubeboxsqlc.IamCubeboxTask, accepted bool) *cubeboxdomain.TaskCancelResponse {
+func mapTaskCancelResponse(record cubeboxdomain.TaskRecord, accepted bool) *cubeboxdomain.TaskCancelResponse {
 	detail := mapTask(record)
 	if detail == nil {
 		return nil
@@ -1103,13 +1101,11 @@ func mapTaskCancelResponse(record cubeboxsqlc.IamCubeboxTask, accepted bool) *cu
 	}
 }
 
-func taskRecordFromSubmitRequest(tenantID string, req cubeboxdomain.TaskSubmitRequest, now time.Time) cubeboxsqlc.IamCubeboxTask {
+func taskRecordFromSubmitRequest(tenantID string, req cubeboxdomain.TaskSubmitRequest, now time.Time) cubeboxdomain.TaskRecord {
 	requestHash, _ := taskRequestHash(req)
-	taskID := uuid.New()
-	tenantUUID, _ := parseTaskUUID(tenantID)
-	return cubeboxsqlc.IamCubeboxTask{
-		TenantUuid:               tenantUUID,
-		TaskID:                   pgtype.UUID{Bytes: taskID, Valid: true},
+	taskID := uuid.NewString()
+	return cubeboxdomain.TaskRecord{
+		TaskID:                   taskID,
 		ConversationID:           req.ConversationID,
 		TurnID:                   req.TurnID,
 		TaskType:                 taskTypeAsyncPlan,
@@ -1119,11 +1115,11 @@ func taskRecordFromSubmitRequest(tenantID string, req cubeboxdomain.TaskSubmitRe
 		Status:                   taskStatusQueued,
 		DispatchStatus:           taskDispatchPending,
 		DispatchAttempt:          0,
-		DispatchDeadlineAt:       pgtype.Timestamptz{Time: now.Add(taskDispatchDeadlineDelta).UTC(), Valid: true},
+		DispatchDeadlineAt:       timePtr(now.Add(taskDispatchDeadlineDelta)),
 		Attempt:                  0,
 		MaxAttempts:              taskDefaultMaxAttempts,
-		LastErrorCode:            nil,
-		TraceID:                  nilIfBlank(req.TraceID),
+		LastErrorCode:            "",
+		TraceID:                  strings.TrimSpace(req.TraceID),
 		IntentSchemaVersion:      req.ContractSnapshot.IntentSchemaVersion,
 		CompilerContractVersion:  req.ContractSnapshot.CompilerContractVersion,
 		CapabilityMapVersion:     req.ContractSnapshot.CapabilityMapVersion,
@@ -1131,22 +1127,20 @@ func taskRecordFromSubmitRequest(tenantID string, req cubeboxdomain.TaskSubmitRe
 		ContextHash:              req.ContractSnapshot.ContextHash,
 		IntentHash:               req.ContractSnapshot.IntentHash,
 		PlanHash:                 req.ContractSnapshot.PlanHash,
-		KnowledgeSnapshotDigest:  nilIfBlank(req.ContractSnapshot.KnowledgeSnapshotDigest),
-		RouteCatalogVersion:      nilIfBlank(req.ContractSnapshot.RouteCatalogVersion),
-		ResolverContractVersion:  nilIfBlank(req.ContractSnapshot.ResolverContractVersion),
-		ContextTemplateVersion:   nilIfBlank(req.ContractSnapshot.ContextTemplateVersion),
-		ReplyGuidanceVersion:     nilIfBlank(req.ContractSnapshot.ReplyGuidanceVersion),
-		PolicyContextDigest:      nilIfBlank(req.ContractSnapshot.PolicyContextDigest),
-		EffectivePolicyVersion:   nilIfBlank(req.ContractSnapshot.EffectivePolicyVersion),
-		ResolvedSetid:            nilIfBlank(req.ContractSnapshot.ResolvedSetID),
-		SetidSource:              nilIfBlank(req.ContractSnapshot.SetIDSource),
-		PrecheckProjectionDigest: nilIfBlank(req.ContractSnapshot.PrecheckProjectionDigest),
-		MutationPolicyVersion:    nilIfBlank(req.ContractSnapshot.MutationPolicyVersion),
-		SubmittedAt:              pgtype.Timestamptz{Time: now.UTC(), Valid: true},
-		CancelRequestedAt:        pgtype.Timestamptz{},
-		CompletedAt:              pgtype.Timestamptz{},
-		CreatedAt:                pgtype.Timestamptz{Time: now.UTC(), Valid: true},
-		UpdatedAt:                pgtype.Timestamptz{Time: now.UTC(), Valid: true},
+		KnowledgeSnapshotDigest:  req.ContractSnapshot.KnowledgeSnapshotDigest,
+		RouteCatalogVersion:      req.ContractSnapshot.RouteCatalogVersion,
+		ResolverContractVersion:  req.ContractSnapshot.ResolverContractVersion,
+		ContextTemplateVersion:   req.ContractSnapshot.ContextTemplateVersion,
+		ReplyGuidanceVersion:     req.ContractSnapshot.ReplyGuidanceVersion,
+		PolicyContextDigest:      req.ContractSnapshot.PolicyContextDigest,
+		EffectivePolicyVersion:   req.ContractSnapshot.EffectivePolicyVersion,
+		ResolvedSetID:            req.ContractSnapshot.ResolvedSetID,
+		SetIDSource:              req.ContractSnapshot.SetIDSource,
+		PrecheckProjectionDigest: req.ContractSnapshot.PrecheckProjectionDigest,
+		MutationPolicyVersion:    req.ContractSnapshot.MutationPolicyVersion,
+		SubmittedAt:              now.UTC(),
+		CreatedAt:                now.UTC(),
+		UpdatedAt:                now.UTC(),
 	}
 }
 
@@ -1435,28 +1429,28 @@ func taskTerminalErrorCode(code string) string {
 	return ErrTaskStateInvalid.Error()
 }
 
-func taskSnapshotFromTurn(turn cubeboxsqlc.IamCubeboxTurn) (cubeboxdomain.TaskContractSnapshot, error) {
+func taskSnapshotFromTurn(turn cubeboxdomain.ConversationTurnRecord) (cubeboxdomain.TaskContractSnapshot, error) {
 	intent := turnIntentPayload{}
-	if len(turn.IntentJson) > 0 {
-		if err := json.Unmarshal(turn.IntentJson, &intent); err != nil {
+	if len(turn.IntentJSON) > 0 {
+		if err := json.Unmarshal(turn.IntentJSON, &intent); err != nil {
 			return cubeboxdomain.TaskContractSnapshot{}, err
 		}
 	}
 	plan := turnPlanPayload{}
-	if len(turn.PlanJson) > 0 {
-		if err := json.Unmarshal(turn.PlanJson, &plan); err != nil {
+	if len(turn.PlanJSON) > 0 {
+		if err := json.Unmarshal(turn.PlanJSON, &plan); err != nil {
 			return cubeboxdomain.TaskContractSnapshot{}, err
 		}
 	}
 	dryRun := turnDryRunPayload{}
-	if len(turn.DryRunJson) > 0 {
-		if err := json.Unmarshal(turn.DryRunJson, &dryRun); err != nil {
+	if len(turn.DryRunJSON) > 0 {
+		if err := json.Unmarshal(turn.DryRunJSON, &dryRun); err != nil {
 			return cubeboxdomain.TaskContractSnapshot{}, err
 		}
 	}
 	decision := routeDecisionPayload{}
-	if len(turn.RouteDecisionJson) > 0 {
-		if err := json.Unmarshal(turn.RouteDecisionJson, &decision); err != nil {
+	if len(turn.RouteDecisionJSON) > 0 {
+		if err := json.Unmarshal(turn.RouteDecisionJSON, &decision); err != nil {
 			return cubeboxdomain.TaskContractSnapshot{}, err
 		}
 	}
@@ -1491,7 +1485,7 @@ func taskSnapshotFromTurn(turn cubeboxsqlc.IamCubeboxTurn) (cubeboxdomain.TaskCo
 	return snapshot, nil
 }
 
-func validateTaskSnapshotAgainstTurn(snapshot cubeboxdomain.TaskContractSnapshot, turn cubeboxsqlc.IamCubeboxTurn) error {
+func validateTaskSnapshotAgainstTurn(snapshot cubeboxdomain.TaskContractSnapshot, turn cubeboxdomain.ConversationTurnRecord) error {
 	current, err := taskSnapshotFromTurn(turn)
 	if err != nil {
 		return err
@@ -1558,7 +1552,7 @@ func taskSnapshotCompatible(current cubeboxdomain.TaskContractSnapshot, stored c
 	return true
 }
 
-func taskSnapshotFromRecord(record cubeboxsqlc.IamCubeboxTask) cubeboxdomain.TaskContractSnapshot {
+func taskSnapshotFromRecord(record cubeboxdomain.TaskRecord) cubeboxdomain.TaskContractSnapshot {
 	return normalizeTaskSnapshot(cubeboxdomain.TaskContractSnapshot{
 		IntentSchemaVersion:      strings.TrimSpace(record.IntentSchemaVersion),
 		CompilerContractVersion:  strings.TrimSpace(record.CompilerContractVersion),
@@ -1567,21 +1561,21 @@ func taskSnapshotFromRecord(record cubeboxsqlc.IamCubeboxTask) cubeboxdomain.Tas
 		ContextHash:              strings.TrimSpace(record.ContextHash),
 		IntentHash:               strings.TrimSpace(record.IntentHash),
 		PlanHash:                 strings.TrimSpace(record.PlanHash),
-		KnowledgeSnapshotDigest:  stringValue(record.KnowledgeSnapshotDigest),
-		RouteCatalogVersion:      stringValue(record.RouteCatalogVersion),
-		ResolverContractVersion:  stringValue(record.ResolverContractVersion),
-		ContextTemplateVersion:   stringValue(record.ContextTemplateVersion),
-		ReplyGuidanceVersion:     stringValue(record.ReplyGuidanceVersion),
-		PolicyContextDigest:      stringValue(record.PolicyContextDigest),
-		EffectivePolicyVersion:   stringValue(record.EffectivePolicyVersion),
-		ResolvedSetID:            stringValue(record.ResolvedSetid),
-		SetIDSource:              stringValue(record.SetidSource),
-		PrecheckProjectionDigest: stringValue(record.PrecheckProjectionDigest),
-		MutationPolicyVersion:    stringValue(record.MutationPolicyVersion),
+		KnowledgeSnapshotDigest:  strings.TrimSpace(record.KnowledgeSnapshotDigest),
+		RouteCatalogVersion:      strings.TrimSpace(record.RouteCatalogVersion),
+		ResolverContractVersion:  strings.TrimSpace(record.ResolverContractVersion),
+		ContextTemplateVersion:   strings.TrimSpace(record.ContextTemplateVersion),
+		ReplyGuidanceVersion:     strings.TrimSpace(record.ReplyGuidanceVersion),
+		PolicyContextDigest:      strings.TrimSpace(record.PolicyContextDigest),
+		EffectivePolicyVersion:   strings.TrimSpace(record.EffectivePolicyVersion),
+		ResolvedSetID:            strings.TrimSpace(record.ResolvedSetID),
+		SetIDSource:              strings.TrimSpace(record.SetIDSource),
+		PrecheckProjectionDigest: strings.TrimSpace(record.PrecheckProjectionDigest),
+		MutationPolicyVersion:    strings.TrimSpace(record.MutationPolicyVersion),
 	})
 }
 
-func buildCommitTaskSubmitRequest(conversationID string, turn cubeboxsqlc.IamCubeboxTurn) (cubeboxdomain.TaskSubmitRequest, error) {
+func buildCommitTaskSubmitRequest(conversationID string, turn cubeboxdomain.ConversationTurnRecord) (cubeboxdomain.TaskSubmitRequest, error) {
 	snapshot, err := taskSnapshotFromTurn(turn)
 	if err != nil {
 		return cubeboxdomain.TaskSubmitRequest{}, err
@@ -1603,8 +1597,8 @@ func buildCommitTaskSubmitRequest(conversationID string, turn cubeboxsqlc.IamCub
 	}, nil
 }
 
-func turnRouteAuditVersionsConsistent(turn cubeboxsqlc.IamCubeboxTurn, plan turnPlanPayload, decision routeDecisionPayload) bool {
-	if len(turn.RouteDecisionJson) == 0 {
+func turnRouteAuditVersionsConsistent(turn cubeboxdomain.ConversationTurnRecord, plan turnPlanPayload, decision routeDecisionPayload) bool {
+	if len(turn.RouteDecisionJSON) == 0 {
 		return true
 	}
 	if strings.TrimSpace(plan.KnowledgeSnapshotDigest) == "" ||
@@ -1619,7 +1613,7 @@ func turnRouteAuditVersionsConsistent(turn cubeboxsqlc.IamCubeboxTurn, plan turn
 		strings.TrimSpace(plan.ResolverContractVersion) == strings.TrimSpace(decision.ResolverContractVersion)
 }
 
-func turnConfirmationExpired(turn cubeboxsqlc.IamCubeboxTurn, now time.Time) bool {
+func turnConfirmationExpired(turn cubeboxdomain.ConversationTurnRecord, now time.Time) bool {
 	if strings.TrimSpace(turn.State) != "validated" {
 		return false
 	}
@@ -1633,10 +1627,10 @@ func turnConfirmationExpired(turn cubeboxsqlc.IamCubeboxTurn, now time.Time) boo
 	return !deadline.After(now.UTC())
 }
 
-func turnConfirmDeadline(turn cubeboxsqlc.IamCubeboxTurn) (time.Time, bool) {
+func turnConfirmDeadline(turn cubeboxdomain.ConversationTurnRecord) (time.Time, bool) {
 	plan := turnPlanPayload{}
-	if len(turn.PlanJson) > 0 {
-		if err := json.Unmarshal(turn.PlanJson, &plan); err != nil {
+	if len(turn.PlanJSON) > 0 {
+		if err := json.Unmarshal(turn.PlanJSON, &plan); err != nil {
 			return time.Time{}, false
 		}
 	}
@@ -1646,9 +1640,9 @@ func turnConfirmDeadline(turn cubeboxsqlc.IamCubeboxTurn) (time.Time, bool) {
 			return parsed.UTC(), true
 		}
 	}
-	base := turn.CreatedAt.Time.UTC()
+	base := turn.CreatedAt.UTC()
 	if base.IsZero() {
-		base = turn.UpdatedAt.Time.UTC()
+		base = turn.UpdatedAt.UTC()
 	}
 	if base.IsZero() {
 		return time.Time{}, false
@@ -1703,13 +1697,13 @@ func taskWorkflowID(tenantID string, conversationID string, turnID string, reque
 	}, ":")
 }
 
-func findTurn(turns []cubeboxsqlc.IamCubeboxTurn, turnID string) (cubeboxsqlc.IamCubeboxTurn, bool) {
+func findTurn(turns []cubeboxdomain.ConversationTurnRecord, turnID string) (cubeboxdomain.ConversationTurnRecord, bool) {
 	for _, turn := range turns {
 		if strings.TrimSpace(turn.TurnID) == strings.TrimSpace(turnID) {
 			return turn, true
 		}
 	}
-	return cubeboxsqlc.IamCubeboxTurn{}, false
+	return cubeboxdomain.ConversationTurnRecord{}, false
 }
 
 func nilIfBlank(value string) *string {
@@ -1723,19 +1717,4 @@ func nilIfBlank(value string) *string {
 func timePtr(ts time.Time) *time.Time {
 	value := ts.UTC()
 	return &value
-}
-
-func timestampValue(ts pgtype.Timestamptz, fallback time.Time) time.Time {
-	if ts.Valid {
-		return ts.Time.UTC()
-	}
-	return fallback.UTC()
-}
-
-func parseTaskUUID(raw string) (pgtype.UUID, error) {
-	parsed, err := uuid.Parse(strings.TrimSpace(raw))
-	if err != nil {
-		return pgtype.UUID{}, err
-	}
-	return pgtype.UUID{Bytes: parsed, Valid: true}, nil
 }

@@ -15,6 +15,62 @@ type Conversation struct {
 	Transitions    []StateTransition  `json:"state_transitions,omitempty"`
 }
 
+type ConversationRecord struct {
+	ConversationID string
+	ActorID        string
+	ActorRole      string
+	State          string
+	CurrentPhase   string
+	CreatedAt      time.Time
+	UpdatedAt      time.Time
+}
+
+type ConversationTurnRecord struct {
+	TurnID              string
+	UserInput           string
+	State               string
+	Phase               string
+	RiskTier            string
+	RequestID           string
+	TraceID             string
+	PolicyVersion       string
+	CompositionVersion  string
+	MappingVersion      string
+	IntentJSON          []byte
+	RouteDecisionJSON   []byte
+	ClarificationJSON   []byte
+	CandidatesJSON      []byte
+	PlanJSON            []byte
+	DryRunJSON          []byte
+	ResolvedCandidateID string
+	SelectedCandidateID string
+	AmbiguityCount      int
+	Confidence          float64
+	ResolutionSource    string
+	PendingDraftSummary string
+	MissingFieldsJSON   []byte
+	CommitResultJSON    []byte
+	CommitReplyJSON     []byte
+	ErrorCode           string
+	CreatedAt           time.Time
+	UpdatedAt           time.Time
+}
+
+type StateTransitionRecord struct {
+	ID         int64
+	TurnID     string
+	TurnAction string
+	RequestID  string
+	TraceID    string
+	FromState  string
+	ToState    string
+	FromPhase  string
+	ToPhase    string
+	ReasonCode string
+	ActorID    string
+	ChangedAt  time.Time
+}
+
 type ConversationListItem struct {
 	ConversationID string                `json:"conversation_id"`
 	State          string                `json:"state"`
