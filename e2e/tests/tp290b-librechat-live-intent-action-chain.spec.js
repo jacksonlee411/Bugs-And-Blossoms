@@ -25,6 +25,8 @@ const INDEX_PATH = path.join(EVIDENCE_ROOT, "tp290b-live-evidence-index.json");
 const BASELINE_PATH = path.join(EVIDENCE_ROOT, "tp290b-data-baseline.json");
 const RUNTIME_GATE_PATH = path.join(EVIDENCE_ROOT, "runtime-admission-gate.json");
 const RUNTIME_GATE_HAR_PATH = path.join(EVIDENCE_ROOT, "runtime-admission-gate.har");
+const FORMAL_ENTRY_PATH = "/app/cubebox";
+const INTERNAL_API_PREFIX = "/internal/cubebox";
 const BASELINE_EFFECTIVE_DATE = "2026-01-01";
 const BASELINE_CASE4_AS_OF = "2026-03-26";
 const BASELINE_ROOT_CODE = "ROOT";
@@ -67,6 +69,24 @@ const staleOn = [
 
 const caseSummaries = [];
 const baselineHints = {};
+
+function isIgnorableCloseError(error) {
+  const message = String(error || "").toLowerCase();
+  return message.includes("enoent") || message.includes("step id not found");
+}
+
+async function closeContextSafely(context) {
+  if (!context) {
+    return;
+  }
+  try {
+    await context.close();
+  } catch (error) {
+    if (!isIgnorableCloseError(error)) {
+      throw error;
+    }
+  }
+}
 
 function upsertCaseSummary(summary) {
   const index = caseSummaries.findIndex((item) => item.id === summary.id);
@@ -112,7 +132,7 @@ function orgUnitsByNameContains(orgUnits, name) {
 }
 
 async function createAssistantProbe(appContext, userInput) {
-  const createConversation = await appContext.request.post("/internal/assistant/conversations", { data: {} });
+  const createConversation = await appContext.request.post(`${INTERNAL_API_PREFIX}/conversations`, { data: {} });
   const { text: conversationText, json: conversationJSON } = await parseResponseBody(createConversation);
   const conversationID = String(conversationJSON?.conversation_id || "").trim();
   if (createConversation.status() !== 200 || !conversationID) {
@@ -126,7 +146,7 @@ async function createAssistantProbe(appContext, userInput) {
     };
   }
   const createTurn = await appContext.request.post(
-    `/internal/assistant/conversations/${encodeURIComponent(conversationID)}/turns`,
+    `${INTERNAL_API_PREFIX}/conversations/${encodeURIComponent(conversationID)}/turns`,
     {
       data: { user_input: userInput },
     },
@@ -507,7 +527,7 @@ function installNetworkRecorder(page) {
       return;
     }
     const pathname = new URL(request.url()).pathname;
-    if (pathname.startsWith("/internal/assistant/")) {
+    if (pathname.startsWith(INTERNAL_API_PREFIX + "/")) {
       state.internalPostPaths.push(pathname);
       return;
     }
@@ -519,7 +539,7 @@ function installNetworkRecorder(page) {
   page.on("response", async (response) => {
     const request = response.request();
     const pathname = new URL(response.url()).pathname;
-    if (!pathname.startsWith("/internal/assistant/")) {
+    if (!pathname.startsWith(INTERNAL_API_PREFIX + "/")) {
       return;
     }
     const item = {
@@ -545,34 +565,21 @@ function installNetworkRecorder(page) {
   return state;
 }
 
+function formalInputField(surface) {
+  return surface.getByTestId("cubebox-input").locator("textarea, input").first();
+}
+
 async function openFormalEntry(page) {
-  await page.goto("/app/assistant/librechat");
-
-  const iframeLocator = page.locator("main iframe").first();
-  if ((await iframeLocator.count()) > 0) {
-    await expect(iframeLocator).toBeVisible({ timeout: 60_000 });
-    const iframeHandle = await iframeLocator.elementHandle();
-    const iframe = await iframeHandle.contentFrame();
-    await iframe.waitForLoadState("domcontentloaded");
-    await iframe.evaluate(() => {
-      window.history.replaceState({}, "", "/app/assistant/librechat/c/new");
-    });
-    const surface = page.frameLocator("main iframe").first();
-    await expect(surface.getByRole("textbox").last()).toBeVisible({ timeout: 60_000 });
-    return { surface, usedIframe: true };
-  }
-
-  await page.evaluate(() => {
-    window.history.replaceState({}, "", "/app/assistant/librechat/c/new");
-  });
-  await expect(page.getByRole("textbox").last()).toBeVisible({ timeout: 60_000 });
+  await page.goto(FORMAL_ENTRY_PATH);
+  await expect(page).toHaveURL(/\/app\/cubebox(?:\/conversations\/[^/]+)?$/);
+  await expect(formalInputField(page)).toBeVisible({ timeout: 60_000 });
   return { surface: page, usedIframe: false };
 }
 
 async function sendFromFormalEntry(surface, text) {
-  const input = surface.getByRole("textbox").last();
+  const input = formalInputField(surface);
   await input.fill(text);
-  await surface.getByRole("button", { name: /发送消息|Send message/i }).click();
+  await surface.getByTestId("cubebox-send").click();
 }
 
 async function waitForVisibleNamedButton(surface, namePattern, timeoutMs = 30_000) {
@@ -596,7 +603,8 @@ async function waitForVisibleNamedButton(surface, namePattern, timeoutMs = 30_00
 }
 
 async function clickFormalConfirm(surface) {
-  const button = await waitForVisibleNamedButton(surface, /确认|Confirm/i);
+  const button = surface.getByTestId("cubebox-confirm");
+  await expect(button).toBeVisible({ timeout: 30_000 });
   await button.click();
 }
 
@@ -611,7 +619,8 @@ async function maybeClickFormalConfirm(surface, timeoutMs = 5_000) {
 }
 
 async function clickFormalSubmit(surface) {
-  const button = await waitForVisibleNamedButton(surface, /提交|Submit/i);
+  const button = surface.getByTestId("cubebox-commit");
+  await expect(button).toBeVisible({ timeout: 30_000 });
   await button.click();
 }
 
@@ -681,23 +690,23 @@ async function latestFormalBubbleMaybe(surface, timeoutMs = 15_000) {
   }
 }
 async function latestFormalBubble(surface, timeoutMs = 60_000) {
-  const locator = surface.locator("[data-assistant-binding-key]");
+  const locator = surface.getByTestId("cubebox-turn-card");
   await expect(locator.first()).toBeVisible({ timeout: timeoutMs });
   const count = await locator.count();
   const node = locator.nth(Math.max(0, count - 1));
   return {
     count,
-    bindingKey: (await node.getAttribute("data-assistant-binding-key")) || "",
-    conversationId: (await node.getAttribute("data-assistant-conversation-id")) || "",
-    turnId: (await node.getAttribute("data-assistant-turn-id")) || "",
-    requestId: (await node.getAttribute("data-assistant-request-id")) || "",
+    bindingKey: (await node.getAttribute("data-turn-id")) || "",
+    conversationId: (await node.getAttribute("data-conversation-id")) || "",
+    turnId: (await node.getAttribute("data-turn-id")) || "",
+    requestId: (await node.getAttribute("data-request-id")) || "",
     text: normalizeText(await node.innerText()),
   };
 }
 
 async function fetchConversation(appContext, conversationId) {
   const response = await appContext.request.get(
-    `/internal/assistant/conversations/${encodeURIComponent(conversationId)}`,
+    `${INTERNAL_API_PREFIX}/conversations/${encodeURIComponent(conversationId)}`,
   );
   expect(response.status(), await response.text()).toBe(200);
   return response.json();
@@ -718,17 +727,17 @@ async function waitForCommittedConversation(appContext, conversationId, timeoutM
 }
 
 async function collectDOMEvidence(page, surface) {
-  const bubbleLocator = surface.locator("[data-assistant-binding-key]");
+  const bubbleLocator = surface.getByTestId("cubebox-turn-card");
   const bubbleCount = await bubbleLocator.count();
   const bubbles = [];
   for (let i = 0; i < bubbleCount; i += 1) {
     const item = bubbleLocator.nth(i);
     bubbles.push({
-      binding_key: await item.getAttribute("data-assistant-binding-key"),
-      conversation_id: await item.getAttribute("data-assistant-conversation-id"),
-      turn_id: await item.getAttribute("data-assistant-turn-id"),
-      request_id: await item.getAttribute("data-assistant-request-id"),
-      message_id: await item.getAttribute("data-assistant-message-id"),
+      binding_key: await item.getAttribute("data-turn-id"),
+      conversation_id: await item.getAttribute("data-conversation-id"),
+      turn_id: await item.getAttribute("data-turn-id"),
+      request_id: await item.getAttribute("data-request-id"),
+      message_id: "",
       text: normalizeText(await item.innerText()),
     });
   }
@@ -800,7 +809,7 @@ function conversationIDFromAssistantPath(pathname) {
   if (!raw) {
     return "";
   }
-  const matched = raw.match(/^\/internal\/assistant\/conversations\/([^/]+)/);
+  const matched = raw.match(/^\/internal\/cubebox\/conversations\/([^/]+)/);
   if (!matched || !matched[1]) {
     return "";
   }
@@ -856,7 +865,7 @@ function assistantTaskStatusCalls(state) {
   return state.internalCalls.filter(
     (call) =>
       call.method === "GET" &&
-      call.path.startsWith("/internal/assistant/tasks/") &&
+      call.path.startsWith(`${INTERNAL_API_PREFIX}/tasks/`) &&
       call.json &&
       typeof call.json.status === "string",
   );
@@ -918,7 +927,11 @@ function runtimeUnavailableCallsFromState(state, scopedConversationIDs = []) {
   );
   return state.internalCalls.filter((call) => {
     const errorCode = assistantErrorCodeFromCall(call);
-    if (errorCode !== "assistant_conversation_create_failed" && errorCode !== "assistant_runtime_unavailable") {
+    if (
+      errorCode !== "cubebox_conversation_create_failed" &&
+      errorCode !== "cubebox_turn_create_failed" &&
+      errorCode !== "assistant_runtime_unavailable"
+    ) {
       return false;
     }
     if (allowedConversationIDs.size === 0) {
@@ -1020,7 +1033,7 @@ async function runRuntimeAdmissionGate(browser) {
     captured_at: new Date().toISOString(),
   };
   try {
-    const createConversation = await appContext.request.post("/internal/assistant/conversations", { data: {} });
+    const createConversation = await appContext.request.post(`${INTERNAL_API_PREFIX}/conversations`, { data: {} });
     report.create_conversation.status = createConversation.status();
     const conversationText = await createConversation.text();
     const conversationJSON = parseJSONSafe(conversationText);
@@ -1031,7 +1044,8 @@ async function runRuntimeAdmissionGate(browser) {
       report.status = "blocked";
       await writeJSON(RUNTIME_GATE_PATH, report);
       const ignorableCodes = new Set([
-        "assistant_conversation_create_failed",
+        "cubebox_conversation_create_failed",
+        "cubebox_turn_create_failed",
         "assistant_runtime_unavailable",
         "ai_model_secret_missing",
       ]);
@@ -1046,7 +1060,7 @@ async function runRuntimeAdmissionGate(browser) {
 
     const conversationID = report.create_conversation.conversation_id;
     const createTurn = await appContext.request.post(
-      `/internal/assistant/conversations/${encodeURIComponent(conversationID)}/turns`,
+      `${INTERNAL_API_PREFIX}/conversations/${encodeURIComponent(conversationID)}/turns`,
       {
         data: { user_input: CASE_INPUTS[2][0] },
       },
@@ -1086,7 +1100,7 @@ async function runRuntimeAdmissionGate(browser) {
     expect(report.observed.intent_action).toBe("create_orgunit");
     expect(report.observed.fallback_detected).toBe(false);
   } finally {
-    await appContext.close();
+    await closeContextSafely(appContext);
   }
 }
 
@@ -1651,7 +1665,7 @@ async function runCaseAndCollectEvidence(browser, caseId) {
     if (traceMode === "full") {
       await appContext.tracing.stop({ path: paths.trace });
     }
-    await appContext.close();
+    await closeContextSafely(appContext);
   }
 }
 
@@ -1719,7 +1733,7 @@ test.afterAll(async () => {
     plan: "DEV-PLAN-290B",
     status: allPassed ? "passed" : hasBlocked ? "blocked" : "in_progress",
     updated_at: new Date().toISOString(),
-    formal_entry: "/app/assistant/librechat",
+    formal_entry: FORMAL_ENTRY_PATH,
     runtime_admission_gate: {
       status: runtimeGate?.status || "not_run",
       artifact: path.relative(repoRoot, RUNTIME_GATE_PATH),

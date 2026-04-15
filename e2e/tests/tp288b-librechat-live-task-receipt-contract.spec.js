@@ -24,6 +24,8 @@ const BASELINE_ROOT_CODE = "ROOT";
 const BASELINE_ROOT_NAME = "集团";
 const BASELINE_PARENT_CODE = "TP288BAIGOV";
 const BASELINE_PARENT_NAME = "AI治理办公室";
+const FORMAL_ENTRY_PATH = "/app/cubebox";
+const INTERNAL_API_PREFIX = "/internal/cubebox";
 const staleOn = [
   "240C runtime gate semantics changed",
   "240D durable execution/compensation semantics changed",
@@ -105,7 +107,7 @@ function installNetworkRecorder(page) {
       return;
     }
     const pathname = new URL(request.url()).pathname;
-    if (pathname.startsWith("/internal/assistant/")) {
+    if (pathname.startsWith(INTERNAL_API_PREFIX + "/")) {
       state.internalPostPaths.push(pathname);
       return;
     }
@@ -116,7 +118,7 @@ function installNetworkRecorder(page) {
 
   page.on("response", async (response) => {
     const pathname = new URL(response.url()).pathname;
-    if (!pathname.startsWith("/internal/assistant/")) {
+    if (!pathname.startsWith(INTERNAL_API_PREFIX + "/")) {
       return;
     }
     const request = response.request();
@@ -145,34 +147,39 @@ function installNetworkRecorder(page) {
   return state;
 }
 
+function formalInputField(surface) {
+  return surface.getByTestId("cubebox-input").locator("textarea, input").first();
+}
+
 async function openFormalEntry(page) {
-  await page.goto("/app/assistant/librechat");
-
-  const iframeLocator = page.locator("main iframe").first();
-  if ((await iframeLocator.count()) > 0) {
-    await expect(iframeLocator).toBeVisible({ timeout: 60_000 });
-    const iframeHandle = await iframeLocator.elementHandle();
-    const iframe = await iframeHandle.contentFrame();
-    await iframe.waitForLoadState("domcontentloaded");
-    await iframe.evaluate(() => {
-      window.history.replaceState({}, "", "/app/assistant/librechat/c/new");
-    });
-    const surface = page.frameLocator("main iframe").first();
-    await expect(surface.getByRole("textbox").last()).toBeVisible({ timeout: 60_000 });
-    return { surface, usedIframe: true };
-  }
-
-  await page.evaluate(() => {
-    window.history.replaceState({}, "", "/app/assistant/librechat/c/new");
-  });
-  await expect(page.getByRole("textbox").last()).toBeVisible({ timeout: 60_000 });
+  await page.goto(FORMAL_ENTRY_PATH);
+  await expect(page).toHaveURL(/\/app\/cubebox(?:\/conversations\/[^/]+)?$/);
+  await expect(formalInputField(page)).toBeVisible({ timeout: 60_000 });
   return { surface: page, usedIframe: false };
 }
 
 async function sendFromFormalEntry(surface, text) {
-  const input = surface.getByRole("textbox").last();
+  const input = formalInputField(surface);
   await input.fill(text);
-  await surface.getByRole("button", { name: /发送消息|Send message/i }).click();
+  await surface.getByTestId("cubebox-send").click();
+}
+
+function isIgnorableCloseError(error) {
+  const message = String(error || "").toLowerCase();
+  return message.includes("enoent") || message.includes("step id not found");
+}
+
+async function closeContextSafely(context) {
+  if (!context) {
+    return;
+  }
+  try {
+    await context.close();
+  } catch (error) {
+    if (!isIgnorableCloseError(error)) {
+      throw error;
+    }
+  }
 }
 
 async function waitForVisibleNamedButton(surface, namePattern, timeoutMs = 30_000) {
@@ -196,12 +203,14 @@ async function waitForVisibleNamedButton(surface, namePattern, timeoutMs = 30_00
 }
 
 async function clickFormalConfirm(surface) {
-  const button = await waitForVisibleNamedButton(surface, /确认|Confirm/i);
+  const button = surface.getByTestId("cubebox-confirm");
+  await expect(button).toBeVisible({ timeout: 30_000 });
   await button.click();
 }
 
 async function clickFormalSubmit(surface) {
-  const button = await waitForVisibleNamedButton(surface, /提交|Submit/i);
+  const button = surface.getByTestId("cubebox-commit");
+  await expect(button).toBeVisible({ timeout: 30_000 });
   await button.click();
 }
 
@@ -214,16 +223,16 @@ async function latestFormalBubbleMaybe(surface, timeoutMs = 15_000) {
 }
 
 async function latestFormalBubble(surface, timeoutMs = 60_000) {
-  const locator = surface.locator("[data-assistant-binding-key]");
+  const locator = surface.getByTestId("cubebox-turn-card");
   await expect(locator.first()).toBeVisible({ timeout: timeoutMs });
   const count = await locator.count();
   const node = locator.nth(Math.max(0, count - 1));
   return {
     count,
-    bindingKey: (await node.getAttribute("data-assistant-binding-key")) || "",
-    conversationId: (await node.getAttribute("data-assistant-conversation-id")) || "",
-    turnId: (await node.getAttribute("data-assistant-turn-id")) || "",
-    requestId: (await node.getAttribute("data-assistant-request-id")) || "",
+    bindingKey: (await node.getAttribute("data-turn-id")) || "",
+    conversationId: (await node.getAttribute("data-conversation-id")) || "",
+    turnId: (await node.getAttribute("data-turn-id")) || "",
+    requestId: (await node.getAttribute("data-request-id")) || "",
     text: normalizeText(await node.innerText()),
   };
 }
@@ -250,7 +259,7 @@ async function waitForConversationSnapshotFromState(state, timeoutMs = 30_000) {
 
 async function fetchConversation(appContext, conversationId) {
   const response = await appContext.request.get(
-    `/internal/assistant/conversations/${encodeURIComponent(conversationId)}`,
+    `${INTERNAL_API_PREFIX}/conversations/${encodeURIComponent(conversationId)}`,
   );
   expect(response.status(), await response.text()).toBe(200);
   return response.json();
@@ -314,7 +323,7 @@ function invalidTaskPollPaths(state) {
     .filter(
       (call) =>
         call.method === "GET" &&
-        (call.path === "/internal/assistant/tasks/" || call.path === "/internal/assistant/tasks/undefined"),
+        (call.path === `${INTERNAL_API_PREFIX}/tasks/` || call.path === `${INTERNAL_API_PREFIX}/tasks/undefined`),
     )
     .map((call) => call.path);
 }
@@ -323,10 +332,10 @@ async function waitForCommitReceipt(state, timeoutMs = 45_000) {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
     const failedCall = state.internalCalls.find(
-      (call) => assistantErrorCodeFromCall(call) === "assistant_task_dispatch_failed",
+      (call) => assistantErrorCodeFromCall(call) === "cubebox_task_dispatch_failed",
     );
     if (failedCall) {
-      throw new Error(`assistant_task_dispatch_failed during commit (${failedCall.path})`);
+      throw new Error(`cubebox_task_dispatch_failed during commit (${failedCall.path})`);
     }
     const invalidPaths = invalidTaskPollPaths(state);
     if (invalidPaths.length > 0) {
@@ -360,7 +369,7 @@ async function waitForTaskTerminal(state, taskId, afterSeq, timeoutMs = 45_000) 
       (call) =>
         call.seq > afterSeq &&
         call.method === "GET" &&
-        call.path === `/internal/assistant/tasks/${taskId}` &&
+        call.path === `${INTERNAL_API_PREFIX}/tasks/${taskId}` &&
         call.json &&
         typeof call.json.status === "string",
     );
@@ -380,7 +389,7 @@ async function waitForConversationRefresh(state, conversationId, afterSeq, timeo
       (item) =>
         item.seq > afterSeq &&
         item.method === "GET" &&
-        item.path === `/internal/assistant/conversations/${conversationId}` &&
+        item.path === `${INTERNAL_API_PREFIX}/conversations/${conversationId}` &&
         Array.isArray(item?.json?.turns) &&
         String(latestAssistantTurn(item.json)?.state || "").trim() === "committed",
     );
@@ -406,17 +415,17 @@ async function waitForCommittedConversation(appContext, conversationId, timeoutM
 }
 
 async function collectDOMEvidence(page, surface) {
-  const bubbleLocator = surface.locator("[data-assistant-binding-key]");
+  const bubbleLocator = surface.getByTestId("cubebox-turn-card");
   const bubbleCount = await bubbleLocator.count();
   const bubbles = [];
   for (let i = 0; i < bubbleCount; i += 1) {
     const item = bubbleLocator.nth(i);
     bubbles.push({
-      binding_key: await item.getAttribute("data-assistant-binding-key"),
-      conversation_id: await item.getAttribute("data-assistant-conversation-id"),
-      turn_id: await item.getAttribute("data-assistant-turn-id"),
-      request_id: await item.getAttribute("data-assistant-request-id"),
-      message_id: await item.getAttribute("data-assistant-message-id"),
+      binding_key: await item.getAttribute("data-turn-id"),
+      conversation_id: await item.getAttribute("data-conversation-id"),
+      turn_id: await item.getAttribute("data-turn-id"),
+      request_id: await item.getAttribute("data-request-id"),
+      message_id: "",
       text: normalizeText(await item.innerText()),
     });
   }
@@ -454,7 +463,7 @@ async function writeIndex(result, executedAt, artifacts, assertions, blockingRea
     plan: "DEV-PLAN-288B",
     status: result === "passed" ? "passed" : "blocked",
     updated_at: new Date().toISOString(),
-    formal_entry: "/app/assistant/librechat",
+    formal_entry: FORMAL_ENTRY_PATH,
     stale_on: staleOn,
     entries: [
       {
@@ -533,7 +542,8 @@ test("tp288b-live-001: real formal entry follows receipt poll refresh contract",
       networkState,
       [
         "ai_model_secret_missing",
-        "assistant_conversation_create_failed",
+        "cubebox_conversation_create_failed",
+        "cubebox_turn_create_failed",
         "assistant_runtime_unavailable",
       ],
       10_000,
@@ -547,20 +557,22 @@ test("tp288b-live-001: real formal entry follows receipt poll refresh contract",
         plan: "DEV-PLAN-288B",
         case_id: CASE_ID,
         captured_at: new Date().toISOString(),
-        formal_entry: "/app/assistant/librechat",
+        formal_entry: FORMAL_ENTRY_PATH,
         ...domEvidence,
       });
       assertions = {
         ...assertions,
         plan: "DEV-PLAN-288B",
         case_id: CASE_ID,
-        formal_entry: "/app/assistant/librechat",
+        formal_entry: FORMAL_ENTRY_PATH,
         command: process.env.TP288B_EVIDENCE_COMMAND || DEFAULT_COMMAND,
         captured_at: new Date().toISOString(),
         probe_skipped: true,
         skip_reason:
-          observedErrorCode === "assistant_conversation_create_failed"
-            ? "assistant_conversation_create_failed_on_create_conversation"
+          observedErrorCode === "cubebox_conversation_create_failed"
+            ? "cubebox_conversation_create_failed_on_create_conversation"
+            : observedErrorCode === "cubebox_turn_create_failed"
+              ? "cubebox_turn_create_failed_on_create_turn"
             : observedErrorCode === "assistant_runtime_unavailable"
               ? "assistant_runtime_unavailable_on_create_turn"
             : "ai_model_secret_missing_on_create_turn",
@@ -595,13 +607,13 @@ test("tp288b-live-001: real formal entry follows receipt poll refresh contract",
 
     await clickFormalConfirm(surface);
     await clickFormalSubmit(surface);
-    await expect(page.getByText("assistant_task_dispatch_failed", { exact: false })).toHaveCount(0);
+    await expect(page.getByText("cubebox_task_dispatch_failed", { exact: false })).toHaveCount(0);
 
     const commitCall = await waitForCommitReceipt(networkState);
     const receipt = commitCall.json;
     expect(commitCall.status).toBe(202);
     expect(receipt.task_id).toBeTruthy();
-    expect(receipt.poll_uri).toBe(`/internal/assistant/tasks/${receipt.task_id}`);
+    expect(receipt.poll_uri).toBe(`${INTERNAL_API_PREFIX}/tasks/${receipt.task_id}`);
     expect(receipt.task_type).toBeTruthy();
     expect(receipt.workflow_id).toBeTruthy();
     expect(receipt.submitted_at).toBeTruthy();
@@ -629,7 +641,7 @@ test("tp288b-live-001: real formal entry follows receipt poll refresh contract",
 
     expect(networkState.nativePostPaths).toEqual([]);
     expect(invalidTaskPaths).toEqual([]);
-    expect(assistantErrorCodes).not.toContain("assistant_task_dispatch_failed");
+    expect(assistantErrorCodes).not.toContain("cubebox_task_dispatch_failed");
     expect(String(taskProbe.terminalCall?.json?.status || "").trim()).toBe("succeeded");
     expect(String(finalTurn?.state || "").trim()).toBe("committed");
     expect(String(finalTurn?.intent?.action || "").trim()).toBe("create_orgunit");
@@ -648,7 +660,7 @@ test("tp288b-live-001: real formal entry follows receipt poll refresh contract",
       plan: "DEV-PLAN-288B",
       case_id: CASE_ID,
       captured_at: new Date().toISOString(),
-      formal_entry: "/app/assistant/librechat",
+      formal_entry: FORMAL_ENTRY_PATH,
       ...domEvidence,
     });
 
@@ -657,7 +669,7 @@ test("tp288b-live-001: real formal entry follows receipt poll refresh contract",
       case_id: CASE_ID,
       tenant_id: tenantID,
       scenario: SCENARIO,
-      formal_entry: "/app/assistant/librechat",
+      formal_entry: FORMAL_ENTRY_PATH,
       command: process.env.TP288B_EVIDENCE_COMMAND || DEFAULT_COMMAND,
       captured_at: new Date().toISOString(),
       conversation_id: conversationID,
@@ -682,7 +694,7 @@ test("tp288b-live-001: real formal entry follows receipt poll refresh contract",
         no_connection_error: domEvidence.connection_error_count === 0,
         single_assistant_bubble: domEvidence.bubble_count === 1,
         no_invalid_task_poll_path: invalidTaskPaths.length === 0,
-        no_assistant_task_dispatch_failed: !assistantErrorCodes.includes("assistant_task_dispatch_failed"),
+        no_cubebox_task_dispatch_failed: !assistantErrorCodes.includes("cubebox_task_dispatch_failed"),
         frontend_polled_receipt_task: taskProbe.calls.length > 0,
         frontend_refreshed_conversation: Boolean(refreshCall),
         no_business_mock: true,
@@ -698,7 +710,7 @@ test("tp288b-live-001: real formal entry follows receipt poll refresh contract",
       ...assertions,
       plan: "DEV-PLAN-288B",
       case_id: CASE_ID,
-      formal_entry: "/app/assistant/librechat",
+      formal_entry: FORMAL_ENTRY_PATH,
       command: process.env.TP288B_EVIDENCE_COMMAND || DEFAULT_COMMAND,
       captured_at: new Date().toISOString(),
       failure_message: blockingReason,
@@ -718,7 +730,7 @@ test("tp288b-live-001: real formal entry follows receipt poll refresh contract",
           plan: "DEV-PLAN-288B",
           case_id: CASE_ID,
           captured_at: new Date().toISOString(),
-          formal_entry: "/app/assistant/librechat",
+          formal_entry: FORMAL_ENTRY_PATH,
           ...domEvidence,
         });
       }
@@ -735,9 +747,7 @@ test("tp288b-live-001: real formal entry follows receipt poll refresh contract",
     if (appContext && traceMode === "full") {
       await appContext.tracing.stop({ path: paths.trace });
     }
-    if (appContext) {
-      await appContext.close();
-    }
+    await closeContextSafely(appContext);
     await writeIndex(result, executedAt, artifacts, assertions, blockingReason);
   }
 });

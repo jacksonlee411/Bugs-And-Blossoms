@@ -354,7 +354,14 @@ export function CubeBoxPage() {
 
               <Stack spacing={1.5}>
                 {conversations.map((turn) => (
-                  <Card key={turn.turn_id} variant='outlined'>
+                  <Card
+                    data-conversation-id={selectedConversation?.conversation_id ?? ''}
+                    data-request-id={turn.request_id}
+                    data-testid='cubebox-turn-card'
+                    data-turn-id={turn.turn_id}
+                    key={turn.turn_id}
+                    variant='outlined'
+                  >
                     <CardContent>
                       <Stack spacing={1}>
                         <Stack alignItems='center' direction='row' spacing={1}>
@@ -418,6 +425,7 @@ export function CubeBoxPage() {
                 <TextField
                   data-testid='cubebox-input'
                   fullWidth
+                  inputProps={{ 'data-testid': 'cubebox-input-field' }}
                   minRows={3}
                   multiline
                   onChange={(event) => setDraft(event.target.value)}
@@ -435,6 +443,7 @@ export function CubeBoxPage() {
                     发送
                   </Button>
                   <Button
+                    data-testid='cubebox-generate-reply'
                     disabled={busy || !currentTurn}
                     onClick={() => void handleGenerateReply()}
                     startIcon={<AutoAwesomeIcon />}
@@ -443,6 +452,7 @@ export function CubeBoxPage() {
                     生成回复
                   </Button>
                   <Button
+                    data-testid='cubebox-confirm'
                     disabled={busy || !currentTurn}
                     onClick={() => void handleConfirm()}
                     startIcon={<TaskAltIcon />}
@@ -451,6 +461,7 @@ export function CubeBoxPage() {
                     确认
                   </Button>
                   <Button
+                    data-testid='cubebox-commit'
                     disabled={busy || !currentTurn}
                     onClick={() => void handleCommit()}
                     variant='outlined'
