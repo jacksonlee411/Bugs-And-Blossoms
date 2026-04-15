@@ -26,7 +26,7 @@
 2. [ ] 完成导航、i18n key、测试文案与残留 `LibreChat`/`assistant` 前端命名清理。
 3. [ ] 补齐页面级测试与必要的前端回归。
 4. [ ] 在 `CubeBox` 品牌下保留“尽量接近 LibreChat”的正式聊天交互骨架，避免正式入口退化成与聊天产品形态无关的通用工作台页面。
-5. [ ] 为 `apps/web` 定义 assistant formal entry 的 successor/gone 方案，并与 `380C` 的退役矩阵对齐：
+5. [ ] 基于 `380C` 已冻结的 assistant formal entry successor/gone 方案完成前端切换：
    - 哪些请求迁到 `/internal/cubebox/*`
    - 哪些请求在前端删除
    - 哪些请求在后端 `410 Gone` 后应有明确前端降级行为
@@ -52,21 +52,21 @@
 6. [ ] 若 `files`、`models` 页面采用独立页，它们仍应作为聊天页的配套能力页，而不是让 `/app/cubebox` 主入口退化成与会话交互无关的概览页。
 7. [ ] `apps/web` 不允许长期依赖 `/internal/assistant/ui-bootstrap` 或 `/internal/assistant/session/*` 作为正式启动链；若确需保留过渡窗口，必须在本计划中登记删除批次与前端降级行为。
 
-## 3.2 formal entry successor / gone 契约
+## 3.2 formal entry 前端消费矩阵（引用 `380C` SSOT）
 
 1. [ ] `GET /internal/assistant/ui-bootstrap`
-   - successor 冻结为 `GET /internal/cubebox/ui-bootstrap`
+   - successor path 以 `380C` 冻结的 `GET /internal/cubebox/ui-bootstrap` 为准
    - 责任：承接 `apps/web` 启动所需的最小 UI bootstrap 信息
    - 前端完成态：不再调用 assistant path
 2. [ ] `GET /internal/assistant/session`
-   - successor 冻结为 `GET /internal/cubebox/session`
+   - successor path 以 `380C` 冻结的 `GET /internal/cubebox/session` 为准
    - 责任：承接 `apps/web` 启动时的会话态读取
    - 前端完成态：不再调用 assistant path
 3. [ ] `POST /internal/assistant/session/refresh`
-   - successor 冻结为 `POST /internal/cubebox/session/refresh`
+   - successor path 以 `380C` 冻结的 `POST /internal/cubebox/session/refresh` 为准
    - 前端完成态：刷新逻辑只走 cubebox path
 4. [ ] `POST /internal/assistant/session/logout`
-   - successor 冻结为 `POST /internal/cubebox/session/logout`
+   - successor path 以 `380C` 冻结的 `POST /internal/cubebox/session/logout` 为准
    - 前端完成态：退出逻辑只走 cubebox path
 5. [ ] `GET /internal/assistant/model-providers`
    - 不进入 `CubeBox` 正式前端
@@ -77,6 +77,9 @@
 7. [ ] 失败语义
    - 当前端已切到 successor 后，若 assistant formal entry 返回 `410 Gone`，应视为预期完成态，不得触发“回退改回 assistant path”
    - 若 cubebox successor 暂不可用，前端只能按 `380C` 兼容窗口保持临时调用，不允许自行扩展第三条启动链
+8. [ ] 权责边界
+   - path/method/错误码/final successor 定义由 `380C` 持有；本文只负责前端消费、降级行为与测试
+   - 若 `380C` 调整 formal entry path，本文件只更新消费落点与验证步骤，不单独再冻结第二份 API 契约
 
 ## 3.1 体验继承责任
 
@@ -128,8 +131,8 @@
 ## 4.2 分批切换策略
 
 1. [ ] Phase E0：文档冻结
-   - 与 `380C` 对齐 formal entry successor/gone 决策
-   - 冻结 `/internal/cubebox/ui-bootstrap`、`/internal/cubebox/session`、`/internal/cubebox/session/refresh`、`/internal/cubebox/session/logout`
+   - 读取并落实 `380C` formal entry successor/gone 决策
+   - 不在本文重复冻结 `/internal/cubebox/ui-bootstrap`、`/internal/cubebox/session`、`/internal/cubebox/session/refresh`、`/internal/cubebox/session/logout`
 2. [ ] Phase E1：API client 切换
    - `apps/web` 默认读取 cubebox formal entry
    - assistant formal entry 仅保留临时兼容引用，且必须有删除批次

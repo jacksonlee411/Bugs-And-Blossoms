@@ -1,6 +1,6 @@
 # DEV-PLAN-380C：CubeBox API/DTO 收口与 `/internal/assistant/*` 退役
 
-**状态**: 草拟中（2026-04-15；当前仅有 successor 路由与最小 `cubebox` 入口，尚未满足 `380B` 完成前提，也未进入旧 API 正式退役批次）
+**状态**: 草拟中（2026-04-15；`380B` 已完成并满足本文启动前提，但 `380D/files`、formal entry successor、旧 API 退役矩阵与门禁证据仍未收口，尚未进入旧 API 正式退役批次）
 
 > 本文从 `DEV-PLAN-380` 拆分而来，作为 `CubeBox` API/DTO 收口、命名空间冻结、错误语义统一与旧 `/internal/assistant/*` 正式退役的实施 SSOT。  
 > `DEV-PLAN-380A` 持有 PostgreSQL 数据面 contract；`DEV-PLAN-380B` 持有后端正式实现面切换；`DEV-PLAN-380D/380E/380F/380G` 分别继续持有文件面、前端面、旧资产退役与最终回归封板。本文只裁决“外部 API 面与 DTO 面什么叫完成、如何切换、何时允许删除旧命名空间”。
@@ -14,7 +14,7 @@
   - `docs/dev-plans/380d-cubebox-file-plane-formalization-plan.md`
   - `docs/dev-plans/380e-cubebox-apps-web-frontend-convergence-plan.md`
 - **当前痛点**:
-  - `/internal/cubebox/*` 与 `/internal/assistant/*` 仍并存，且 `cubebox` 面后端仍有明显桥接/代理痕迹，旧命名空间尚不具备正式退役条件。
+  - `/internal/cubebox/*` 与 `/internal/assistant/*` 仍并存；虽然 `380B` 已把后端主链切到 formal implementation，但旧命名空间尚未进入清晰、可测试、可审计的退役状态机。
   - 现有 API/DTO 仍混杂 `assistant` 历史命名、`poll_uri` 改写、旧错误码和旧 runtime-status 语义，外部契约没有真正冻结为 `CubeBox` 一方口径。
   - 若在 `380B` 未完成前提前删除 `/internal/assistant/*`，只是把“后端仍未独立”的问题转移成线上 API 风险，不符合 Greenfield “先切主链、再删桥接”的原则。
   - 若继续长期保留双命名空间，则会形成新的 legacy 双链路，直接违背 `004M1` 的单链路原则。
@@ -25,7 +25,7 @@
   - `files`、`models`、`runtime-status` 的对外字段口径仍可能受 `assistant` 历史结构牵引，尚未完全转为 `CubeBox` 契约语言。
 - **路线图分析（380 主线依赖）**:
   - `380A` 先冻结底层数据面与表/仓储 contract，保证 API 收口不会建立在漂移数据面上。
-  - `380B` 必须先完成正式后端实现面切换，本文才能宣布 `/internal/cubebox/*` 是唯一正式 API，而不是“新路径 + 旧 handler”。
+  - `380B` 已完成并提供后端正式实现面前提，因此本文不再等待“后端是否独立”这个问题，而是直接收口外部 API/DTO/退役契约。
   - `380D` 必须先冻结文件面正式 contract，本文才能把 `/internal/cubebox/files` 的 DTO/删除语义宣布为稳定完成态。
   - `380C` 完成后，`380E` 才能完全基于稳定 API/DTO 做前端收口；`380F` 才能退役 vendored/runtime/deploy 旧资产；`380G` 才能做最终封板。
 - **业务价值**:
@@ -109,8 +109,8 @@ flowchart TD
 
 - **决策 5：退役状态必须是显式状态机，而不是“看起来差不多就删”**
   - **冻结的阶段**:
-    - `Stage C0`: successor 路由存在，但 `380B` 未完成，旧 API 不得删。
-    - `Stage C1`: `380B` 已完成，开始 DTO/错误码/API matrix 收口，旧 API 进入明确兼容窗口。
+    - `Stage C0`: `380B` 已完成，本文进入契约冻结与矩阵盘点；旧 API 不得删，也不得再新增正式能力。
+    - `Stage C1`: DTO/错误码/API matrix/formal entry successor 收口完成，旧 API 进入明确兼容窗口。
     - `Stage C2`: `apps/web` 与测试全面切到 `/internal/cubebox/*`，旧 API 对外返回稳定退役语义。
     - `Stage C3`: 旧 API 删除完成，仅保留 `CubeBox` 正式命名空间。
 
@@ -137,8 +137,8 @@ flowchart TD
    - successor 命名空间已经建立。
    - 与数据面、后端面、文件面、前端面的相邻计划已经拆分，可以承载更细的 API 收口工作。
 2. **尚未完成的正式 API 收口**:
-   - `380B` 尚未完成，因此还不能宣布 `/internal/cubebox/*` 为唯一正式 API。
-   - DTO、错误码、退役阶段、兼容窗口与门禁矩阵都还未冻结为实施级别文档。
+   - `380B` 已完成，`/internal/cubebox/*` 的后端独立性前提已经满足；当前未完成点转为“外部契约未冻结、旧 API 未退役完成”。
+   - DTO、错误码、formal entry successor、退役阶段、兼容窗口与门禁矩阵都还未冻结为实施级别文档。
    - `/internal/assistant/*` 仍不得删除，也不能无限期保留为“另一套正式入口”。
 
 ### 4.3 完成定义、不变量与失败语义
@@ -204,6 +204,12 @@ flowchart TD
    - `GET /internal/cubebox/models`
    - `GET /internal/cubebox/runtime-status`
 
+6. [ ] formal entry
+   - `GET /internal/cubebox/ui-bootstrap`
+   - `GET /internal/cubebox/session`
+   - `POST /internal/cubebox/session/refresh`
+   - `POST /internal/cubebox/session/logout`
+
 ### 5.2A 过渡实现与完成态映射
 
 1. [ ] turn action 路由
@@ -220,6 +226,24 @@ flowchart TD
 4. [ ] 兼容原则
    - 任何过渡 action path 只允许在 `C0/C1` 存在，并必须在 readiness 中登记“现状 path / 目标 path / 删除批次”。
    - 不允许为了解耦前后端节奏而长期保留双 action path。
+
+### 5.2B formal entry 完成态矩阵
+
+1. [ ] `GET /internal/cubebox/ui-bootstrap`
+   - 承接 `apps/web` 启动所需的最小 bootstrap 信息
+   - 完成态下替代 `GET /internal/assistant/ui-bootstrap`
+2. [ ] `GET /internal/cubebox/session`
+   - 承接 `apps/web` 启动与恢复所需的会话态读取
+   - 完成态下替代 `GET /internal/assistant/session`
+3. [ ] `POST /internal/cubebox/session/refresh`
+   - 承接前端刷新会话逻辑
+   - 完成态下替代 `POST /internal/assistant/session/refresh`
+4. [ ] `POST /internal/cubebox/session/logout`
+   - 承接前端退出登录逻辑
+   - 完成态下替代 `POST /internal/assistant/session/logout`
+5. [ ] 边界
+   - 上述 successor path 由本文作为 API SSOT 冻结；`380E` 只消费，不再二次定义或改名
+   - `model-providers*` 不进入 `CubeBox` 正式 API，不提供 successor path
 
 ### 5.3 DTO 命名冻结规则
 
@@ -241,10 +265,11 @@ flowchart TD
    - 禁止透出：内部 route-decision 调试结构、authoritative gate 原始内部对象、未裁剪的 runtime 私有字段
 3. [ ] `Task`
    - 最小字段：`task_id`、`conversation_id`、`turn_id`、`status`、`submitted_at`、`started_at`、`finished_at`、`poll_uri`
-   - `task_type` 在 `380C` 完成态冻结为：
-     - 对外继续暴露当前正式 literal `assistant_async_plan`
-     - 理由：与 `380A` 已批准数据面 contract 对齐，避免在 `380C` 再引入第二轮 task literal 迁移
-   - 若未来要收口为 `cubebox_*` literal，必须新开后续子计划并提供迁移/兼容窗口，不得在本文实施期隐式切换
+   - `task_type` 在 `380C` 完成态冻结为兼容例外：
+     - 对外继续暴露当前正式运行 literal `assistant_async_plan`
+     - 该 literal 仅是与 `380A`/现网数据面保持一致的过渡兼容值，不构成 `CubeBox` 命名规则示范
+     - 理由：避免在 `380C` 同批次引入第二轮 task literal 迁移，导致 API 收口与数据迁移耦合
+   - 若未来要收口为 `cubebox_*` literal，必须新开后续子计划并提供迁移/兼容窗口、删除批次与回归断言；不得在本文实施期隐式切换
 4. [ ] `RuntimeStatus`
    - 最小字段：`backend`、`knowledge`、`model_gateway`、`file_plane`
    - 每个子项只允许暴露：`status`、`checked_at`、`message`
@@ -292,6 +317,21 @@ flowchart TD
    - `403` / `401` 仍由统一 authz/authn 语义承接，不在本文另起第二套错误码
    - 同一失败语义不允许在新旧命名空间上分别漂移出两套不同 literal
 
+### 5.4B 退役期错误响应 envelope 冻结
+
+1. [ ] Internal API 的 JSON 错误响应继续统一使用 `internal/routing/responder.go` 的 `routing.ErrorEnvelope`，不新增第二套 envelope：
+   - `code`
+   - `message`
+   - `trace_id`
+   - `meta.path`
+   - `meta.method`
+2. [ ] 兼容窗口中的旧 `/internal/assistant/*` 若返回 JSON 错误，必须沿用同一 `ErrorEnvelope` 结构，只允许更换稳定错误码与 message，不允许私自扩展第二套 retirement body。
+3. [ ] `assistant_api_deprecated` 与 `assistant_api_gone` 至少必须满足：
+   - `code` 为稳定错误码
+   - `message` 为明确迁移提示，不得回退到泛化 `*_failed`
+   - `meta.path` / `meta.method` 可支撑日志、测试与排障定位
+4. [ ] HTML/UI route 的呈现仍遵循统一 responder 规则；本文只冻结 Internal API JSON envelope，不复制第二套 UI HTML 契约。
+
 ### 5.5 `poll_uri`、runtime-status 与路径生成规则
 
 1. [ ] `poll_uri` 必须直接生成 `/internal/cubebox/tasks/{task_id}`，禁止依赖响应后字符串改写。
@@ -315,14 +355,17 @@ flowchart TD
    - 不进入 `CubeBox` 正式 API
    - 进入 `C2` 后直接 `410 Gone`
 4. [ ] `GET /internal/assistant/ui-bootstrap`
+   - successor 为 `GET /internal/cubebox/ui-bootstrap`
    - 作为 assistant formal entry 残留接口单独登记
    - 必须在 `380E` 前端切走后进入 `410 Gone`
 5. [ ] `GET /internal/assistant/session`
-   - 必须在 `380E` 切走后进入 `410 Gone` 或被新的非 assistant 命名空间 formal entry 替代
-   - 若需要 successor path，必须在 `380E` 中显式定义并在本文补链接
+   - successor 为 `GET /internal/cubebox/session`
+   - 必须在 `380E` 切走后进入 `410 Gone`
 6. [ ] `POST /internal/assistant/session/refresh`
+   - successor 为 `POST /internal/cubebox/session/refresh`
    - 与 session 同批退役，不允许无限期因为前端 convenience 留存
 7. [ ] `POST /internal/assistant/session/logout`
+   - successor 为 `POST /internal/cubebox/session/logout`
    - 与 session 同批退役，不允许无限期因为前端 convenience 留存
 8. [ ] 完成条件
    - 上述所有 `/internal/assistant/*` 路由都必须在 readiness 中标明其所属类别：
@@ -346,7 +389,7 @@ flowchart TD
 
 **当前状态**:
 - [ ] 本文尚未形成与 `380A/380B` 对齐的细颗粒 contract。
-- [ ] `380B/380D` 尚未同时满足相关前提，因此 C1/C2/C3 不能被提前视为可执行。
+- [ ] `380B` 已完成并满足启动前提；`380D/files`、formal entry successor 与退役矩阵仍未收口，因此 C1/C2/C3 不能被提前视为已完成。
 
 ### 6.2 Phase C1：`/internal/cubebox/*` DTO 与错误语义收口
 
@@ -421,10 +464,10 @@ flowchart TD
 
 ### 7.2 与 `380B` 的边界
 
-`380B` 完成前：
+`380B` 已完成后：
 
-1. `380C` 只能做契约冻结、盘点和测试矩阵设计。
-2. 不得提前宣布 `/internal/cubebox/*` 已是唯一正式实现。
+1. `380C` 不再持有“后端是否独立”的裁决，而只负责消费 `380B` readiness 证据。
+2. `380C` 可以进入契约冻结、兼容窗口与退役批次设计，但不得改写 `380B` 已冻结的后端实现边界。
 
 `380C` 持有：
 
@@ -485,7 +528,8 @@ flowchart TD
 1. [ ] `/internal/cubebox/*` 全量资源面均有成功/失败/鉴权/租户隔离断言。
 2. [ ] 旧 `/internal/assistant/*` 的兼容窗口与退役返回有稳定断言。
 3. [ ] DTO 字段、错误码、`poll_uri`、links/path 字段有明确 snapshot 或结构断言。
-4. [ ] 路由完成态与 capability-route-map 的 path literal 一致，不再存在 `{task_action}` 这类与真实 path 不一致的注册项。
+4. [ ] 兼容窗口与 `410 Gone` 场景的 JSON 错误响应必须断言 `routing.ErrorEnvelope` 最小字段：`code/message/trace_id/meta.path/meta.method`。
+5. [ ] 路由完成态与 capability-route-map 的 path literal 一致，不再存在 `{task_action}` 这类与真实 path 不一致的注册项。
 
 ### 9.2 集成与 E2E 测试
 
@@ -543,4 +587,4 @@ flowchart TD
 8. [ ] `apps/web`、E2E、文档、脚本仍以 `/internal/assistant/*` 作为正式主入口。
 9. [ ] 路由完成态 path 与 capability-route-map/path literal 不一致，仍依赖 `{turn_action}` / `{task_action}` 之类泛化占位继续漂移。
 
-> 当前工作区评审结论：上述 stopline 1/2/3/4/6/8/9 至少仍未关闭，因此本文状态只能保持“草拟中/未完成”，不能把 successor 路由存在视作 API 面已经正式收口。
+> 当前工作区评审结论：`380B` 已完成，stopline 1 不再是当前阻塞项；但 stopline 2/3/4/6/8/9 至少仍未关闭，因此本文状态仍只能保持“草拟中/未完成”，不能把 successor 路由存在视作 API 面已经正式收口。
