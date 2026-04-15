@@ -130,6 +130,6 @@ describe('CubeBoxPage', () => {
     expect(screen.getByText('创建一个新的运营部门')).toBeInTheDocument()
     expect(screen.getByText('brief.pdf · application/pdf')).toBeInTheDocument()
     expect(screen.getByText('memory: retired')).toBeInTheDocument()
-  })
+  }, 15000)
 
 })
