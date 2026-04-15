@@ -5,17 +5,24 @@ import (
 	"io"
 	"strings"
 
-	"github.com/jacksonlee411/Bugs-And-Blossoms/modules/cubebox/infrastructure"
+	cubeboxdomain "github.com/jacksonlee411/Bugs-And-Blossoms/modules/cubebox/domain"
 )
 
-type FileRecord = infrastructure.FileRecord
+type FileRecord = cubeboxdomain.FileRecord
 
-type FileService struct {
-	store *infrastructure.LocalFileStore
+type FileStore interface {
+	List(ctx context.Context, tenantID string, conversationID string) ([]FileRecord, error)
+	Save(ctx context.Context, tenantID string, actorID string, conversationID string, filename string, mediaType string, body io.Reader) (FileRecord, error)
+	Delete(ctx context.Context, tenantID string, fileID string) (bool, error)
+	Healthy(ctx context.Context) error
 }
 
-func NewFileService(rootDir string) *FileService {
-	return &FileService{store: infrastructure.NewLocalFileStore(rootDir)}
+type FileService struct {
+	store FileStore
+}
+
+func NewFileService(store FileStore) *FileService {
+	return &FileService{store: store}
 }
 
 func (s *FileService) ListFiles(ctx context.Context, tenantID string, conversationID string) ([]FileRecord, error) {

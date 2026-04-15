@@ -21,7 +21,7 @@ import (
 
 func main() {
 	if len(os.Args) < 2 {
-		fatalf("usage: dbtool <rls-smoke|orgunit-smoke|orgunit-code-validate|orgunit-snapshot-export|orgunit-snapshot-check|orgunit-snapshot-bootstrap-target|orgunit-snapshot-import|orgunit-snapshot-verify|orgunit-stopline-capture|orgunit-setid-strategy-registry-export|orgunit-setid-strategy-registry-check|orgunit-setid-strategy-registry-import|orgunit-setid-strategy-registry-verify|orgunit-setid-strategy-registry-validate|jobcatalog-smoke|person-smoke|staffing-smoke> [args]")
+		fatalf("usage: dbtool <rls-smoke|orgunit-smoke|orgunit-code-validate|orgunit-snapshot-export|orgunit-snapshot-check|orgunit-snapshot-bootstrap-target|orgunit-snapshot-import|orgunit-snapshot-verify|orgunit-stopline-capture|orgunit-setid-strategy-registry-export|orgunit-setid-strategy-registry-check|orgunit-setid-strategy-registry-import|orgunit-setid-strategy-registry-verify|orgunit-setid-strategy-registry-validate|cubebox-backfill-assistant|cubebox-verify-backfill|cubebox-import-local-files|cubebox-verify-file-import|jobcatalog-smoke|person-smoke|staffing-smoke> [args]")
 	}
 
 	switch os.Args[1] {
@@ -53,6 +53,14 @@ func main() {
 		orgunitSetIDStrategyRegistryVerify(os.Args[2:])
 	case "orgunit-setid-strategy-registry-validate":
 		orgunitSetIDStrategyRegistryValidate(os.Args[2:])
+	case "cubebox-backfill-assistant":
+		cubeboxBackfillAssistant(os.Args[2:])
+	case "cubebox-verify-backfill":
+		cubeboxVerifyBackfill(os.Args[2:])
+	case "cubebox-import-local-files":
+		cubeboxImportLocalFiles(os.Args[2:])
+	case "cubebox-verify-file-import":
+		cubeboxVerifyFileImport(os.Args[2:])
 	case "jobcatalog-smoke":
 		jobcatalogSmoke(os.Args[2:])
 	case "person-smoke":

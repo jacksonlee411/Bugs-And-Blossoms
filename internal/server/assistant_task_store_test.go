@@ -184,6 +184,172 @@ func assistantTaskSampleTurn(now time.Time) *assistantTurn {
 	})
 }
 
+func TestAssistantCreateOrgUnitProjectionHelpers(t *testing.T) {
+	t.Run("clone field decisions and validation errors", func(t *testing.T) {
+		original := []orgunitservices.CreateOrgUnitFieldDecisionV1{{
+			FieldKey:          "name",
+			FieldPayloadKey:   "name",
+			AllowedValueCodes: []string{"A", "B"},
+		}}
+		cloned := cloneCreateOrgUnitFieldDecisions(original)
+		if len(cloned) != 1 || len(cloned[0].AllowedValueCodes) != 2 {
+			t.Fatalf("unexpected cloned field decisions=%+v", cloned)
+		}
+		cloned[0].AllowedValueCodes[0] = "CHANGED"
+		if original[0].AllowedValueCodes[0] != "A" {
+			t.Fatalf("expected source field decisions to remain unchanged, got=%+v", original)
+		}
+		if got := cloneCreateOrgUnitFieldDecisions(nil); got != nil {
+			t.Fatalf("expected nil clone for empty input, got=%+v", got)
+		}
+
+		snapshot := assistantTestCreateOrgUnitProjectionSnapshot()
+		snapshot.Projection.RejectionReasons = []string{"existing_error", "existing_error"}
+		snapshot.Projection.MissingFields = []string{"effective_date", "name", "other_field", " "}
+		snapshot.Projection.Readiness = " candidate_confirmation_required "
+		validationErrors := assistantCreateOrgUnitProjectionValidationErrors(snapshot)
+		want := []string{
+			"existing_error",
+			"missing_effective_date",
+			"missing_entity_name",
+			"FIELD_REQUIRED_VALUE_MISSING",
+			"candidate_confirmation_required",
+		}
+		if len(validationErrors) != len(want) {
+			t.Fatalf("unexpected validation errors len=%d got=%v want=%v", len(validationErrors), validationErrors, want)
+		}
+		for idx, item := range want {
+			if validationErrors[idx] != item {
+				t.Fatalf("validationErrors[%d]=%q want=%q all=%v", idx, validationErrors[idx], item, validationErrors)
+			}
+		}
+		if got := assistantCreateOrgUnitProjectionValidationErrors(nil); got != nil {
+			t.Fatalf("expected nil validation errors for nil snapshot, got=%+v", got)
+		}
+	})
+
+	t.Run("contract missing branches", func(t *testing.T) {
+		if assistantCreateOrgUnitProjectionContractMissing(nil) {
+			t.Fatal("nil turn should not report contract missing")
+		}
+		if assistantCreateOrgUnitProjectionContractMissing(&assistantTurn{
+			Intent: assistantIntentSpec{Action: assistantIntentRenameOrgUnit, IntentSchemaVersion: assistantIntentSchemaVersionV1},
+		}) {
+			t.Fatal("non create-orgunit action should not report contract missing")
+		}
+		if assistantCreateOrgUnitProjectionContractMissing(&assistantTurn{
+			Intent: assistantIntentSpec{Action: assistantIntentCreateOrgUnit},
+		}) {
+			t.Fatal("turn without schema version should not report contract missing")
+		}
+
+		baseTurn := &assistantTurn{
+			Intent: assistantIntentSpec{
+				Action:              assistantIntentCreateOrgUnit,
+				IntentSchemaVersion: assistantIntentSchemaVersionV1,
+			},
+			DryRun: assistantDryRunResult{
+				CreateOrgUnitProjection: assistantTestCreateOrgUnitProjectionSnapshot(),
+			},
+		}
+		if assistantCreateOrgUnitProjectionContractMissing(baseTurn) {
+			t.Fatalf("expected complete projection contract, got turn=%+v", baseTurn)
+		}
+
+		cases := []struct {
+			name   string
+			mutate func(*assistantTurn)
+		}{
+			{
+				name: "missing projection snapshot",
+				mutate: func(turn *assistantTurn) {
+					turn.DryRun.CreateOrgUnitProjection = nil
+				},
+			},
+			{
+				name: "policy context contract mismatch",
+				mutate: func(turn *assistantTurn) {
+					turn.DryRun.CreateOrgUnitProjection.PolicyContextContractVersion = "v0"
+				},
+			},
+			{
+				name: "precheck contract mismatch",
+				mutate: func(turn *assistantTurn) {
+					turn.DryRun.CreateOrgUnitProjection.PrecheckProjectionContractVersion = "v0"
+				},
+			},
+			{
+				name: "missing policy digest",
+				mutate: func(turn *assistantTurn) {
+					turn.DryRun.CreateOrgUnitProjection.PolicyContext.PolicyContextDigest = ""
+				},
+			},
+			{
+				name: "missing effective policy version",
+				mutate: func(turn *assistantTurn) {
+					turn.DryRun.CreateOrgUnitProjection.Projection.EffectivePolicyVersion = ""
+				},
+			},
+			{
+				name: "missing projection digest",
+				mutate: func(turn *assistantTurn) {
+					turn.DryRun.CreateOrgUnitProjection.Projection.ProjectionDigest = ""
+				},
+			},
+			{
+				name: "missing mutation policy version",
+				mutate: func(turn *assistantTurn) {
+					turn.DryRun.CreateOrgUnitProjection.Projection.MutationPolicyVersion = ""
+				},
+			},
+		}
+		for _, tc := range cases {
+			t.Run(tc.name, func(t *testing.T) {
+				turn := &assistantTurn{
+					Intent: baseTurn.Intent,
+					DryRun: assistantDryRunResult{
+						CreateOrgUnitProjection: assistantCloneCreateOrgUnitProjectionSnapshot(baseTurn.DryRun.CreateOrgUnitProjection),
+					},
+				}
+				tc.mutate(turn)
+				if !assistantCreateOrgUnitProjectionContractMissing(turn) {
+					t.Fatalf("expected contract missing for case %q", tc.name)
+				}
+			})
+		}
+	})
+
+	t.Run("task contract incomplete detection", func(t *testing.T) {
+		if assistantTaskCreatePolicyContractIncomplete(assistantTaskContractSnapshot{}) {
+			t.Fatal("empty snapshot should not be treated as incomplete")
+		}
+
+		complete := assistantTaskContractSnapshot{
+			PolicyContextDigest:     "ctx_digest",
+			EffectivePolicyVersion:  "epv1",
+			PrecheckProjectionDigest:"projection_digest",
+			MutationPolicyVersion:   "mutation_v1",
+			ResolvedSetID:           "S2601",
+			SetIDSource:             "custom",
+		}
+		if assistantTaskCreatePolicyContractIncomplete(complete) {
+			t.Fatalf("expected complete create-policy snapshot, got=%+v", complete)
+		}
+
+		cases := []assistantTaskContractSnapshot{
+			{EffectivePolicyVersion: "epv1"},
+			{PolicyContextDigest: "ctx_digest", PrecheckProjectionDigest: "projection_digest", MutationPolicyVersion: "mutation_v1"},
+			{PolicyContextDigest: "ctx_digest", EffectivePolicyVersion: "epv1", MutationPolicyVersion: "mutation_v1"},
+			{PolicyContextDigest: "ctx_digest", EffectivePolicyVersion: "epv1", PrecheckProjectionDigest: "projection_digest"},
+		}
+		for idx, snapshot := range cases {
+			if !assistantTaskCreatePolicyContractIncomplete(snapshot) {
+				t.Fatalf("case %d expected incomplete snapshot, got=%+v", idx, snapshot)
+			}
+		}
+	})
+}
+
 func assistantTaskSampleAppendTurn(now time.Time, action string) *assistantTurn {
 	action = strings.TrimSpace(action)
 	intent := assistantIntentSpec{

@@ -16,22 +16,12 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	cubeboxdomain "github.com/jacksonlee411/Bugs-And-Blossoms/modules/cubebox/domain"
 )
 
 const maxFileSizeBytes int64 = 20 << 20
 
-type FileRecord struct {
-	FileID         string `json:"file_id"`
-	TenantID       string `json:"tenant_id"`
-	ConversationID string `json:"conversation_id,omitempty"`
-	FileName       string `json:"file_name"`
-	MediaType      string `json:"media_type"`
-	SizeBytes      int64  `json:"size_bytes"`
-	SHA256         string `json:"sha256"`
-	StorageKey     string `json:"storage_key"`
-	UploadedBy     string `json:"uploaded_by"`
-	UploadedAt     string `json:"uploaded_at"`
-}
+type FileRecord = cubeboxdomain.FileRecord
 
 type fileIndex struct {
 	Items []FileRecord `json:"items"`

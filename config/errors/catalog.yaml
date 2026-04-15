@@ -525,6 +525,48 @@ errors:
     user_message_key: errors.assistant_vendored_api_retired
     backend_policy: mapped
     frontend_policy: mapped
+  - code: cubebox_conversation_delete_not_implemented
+    module: cubebox
+    http_status: 501
+    severity: error
+    user_message_key: errors.cubebox_conversation_delete_not_implemented
+    backend_policy: mapped
+    frontend_policy: mapped
+  - code: cubebox_file_delete_failed
+    module: cubebox
+    http_status: 500
+    severity: error
+    user_message_key: errors.cubebox_file_delete_failed
+    backend_policy: mapped
+    frontend_policy: mapped
+  - code: cubebox_file_not_found
+    module: cubebox
+    http_status: 404
+    severity: error
+    user_message_key: errors.cubebox_file_not_found
+    backend_policy: mapped
+    frontend_policy: mapped
+  - code: cubebox_files_list_failed
+    module: cubebox
+    http_status: 500
+    severity: error
+    user_message_key: errors.cubebox_files_list_failed
+    backend_policy: mapped
+    frontend_policy: mapped
+  - code: cubebox_files_unavailable
+    module: cubebox
+    http_status: 503
+    severity: error
+    user_message_key: errors.cubebox_files_unavailable
+    backend_policy: mapped
+    frontend_policy: mapped
+  - code: librechat_retired
+    module: cubebox
+    http_status: 410
+    severity: error
+    user_message_key: errors.librechat_retired
+    backend_policy: mapped
+    frontend_policy: mapped
   - code: assistant_ui_method_not_allowed
     module: assistant
     http_status: 405

@@ -1449,23 +1449,23 @@ func TestNewHandlerWithOptions_AssistantRoutes_AreWired(t *testing.T) {
 	if rec := call(http.MethodPost, "/internal/assistant/session/refresh", ""); rec.Code == http.StatusNotFound {
 		t.Fatalf("assistant session refresh route not wired")
 	}
-	if rec := call(http.MethodGet, "/assets/librechat-web/api/config", ""); rec.Code != http.StatusNotFound {
-		t.Fatalf("removed librechat config compat route status=%d body=%s", rec.Code, rec.Body.String())
+	if rec := call(http.MethodGet, "/assets/librechat-web/api/config", ""); rec.Code != http.StatusGone {
+		t.Fatalf("retired librechat config compat route status=%d body=%s", rec.Code, rec.Body.String())
 	}
-	if rec := call(http.MethodGet, "/assets/librechat-web/api/endpoints", ""); rec.Code != http.StatusNotFound {
-		t.Fatalf("removed librechat endpoints compat route status=%d body=%s", rec.Code, rec.Body.String())
+	if rec := call(http.MethodGet, "/assets/librechat-web/api/endpoints", ""); rec.Code != http.StatusGone {
+		t.Fatalf("retired librechat endpoints compat route status=%d body=%s", rec.Code, rec.Body.String())
 	}
-	if rec := call(http.MethodGet, "/assets/librechat-web/api/models", ""); rec.Code != http.StatusNotFound {
-		t.Fatalf("removed librechat models compat route status=%d body=%s", rec.Code, rec.Body.String())
+	if rec := call(http.MethodGet, "/assets/librechat-web/api/models", ""); rec.Code != http.StatusGone {
+		t.Fatalf("retired librechat models compat route status=%d body=%s", rec.Code, rec.Body.String())
 	}
-	if rec := call(http.MethodGet, "/app/assistant/librechat/api/config", ""); rec.Code != http.StatusNotFound {
-		t.Fatalf("removed librechat formal alias config compat route status=%d body=%s", rec.Code, rec.Body.String())
+	if rec := call(http.MethodGet, "/app/assistant/librechat/api/config", ""); rec.Code != http.StatusGone {
+		t.Fatalf("retired librechat formal alias config compat route status=%d body=%s", rec.Code, rec.Body.String())
 	}
-	if rec := call(http.MethodGet, "/app/assistant/librechat/api/endpoints", ""); rec.Code != http.StatusNotFound {
-		t.Fatalf("removed librechat formal alias endpoints compat route status=%d body=%s", rec.Code, rec.Body.String())
+	if rec := call(http.MethodGet, "/app/assistant/librechat/api/endpoints", ""); rec.Code != http.StatusGone {
+		t.Fatalf("retired librechat formal alias endpoints compat route status=%d body=%s", rec.Code, rec.Body.String())
 	}
-	if rec := call(http.MethodGet, "/app/assistant/librechat/api/models", ""); rec.Code != http.StatusNotFound {
-		t.Fatalf("removed librechat formal alias models compat route status=%d body=%s", rec.Code, rec.Body.String())
+	if rec := call(http.MethodGet, "/app/assistant/librechat/api/models", ""); rec.Code != http.StatusGone {
+		t.Fatalf("retired librechat formal alias models compat route status=%d body=%s", rec.Code, rec.Body.String())
 	}
 	removedCompatRoutes := []struct {
 		method string
@@ -1480,8 +1480,8 @@ func TestNewHandlerWithOptions_AssistantRoutes_AreWired(t *testing.T) {
 		{method: http.MethodGet, path: "/app/assistant/librechat/api/user"},
 	}
 	for _, tc := range removedCompatRoutes {
-		if rec := call(tc.method, tc.path, ""); rec.Code != http.StatusNotFound {
-			t.Fatalf("removed compat route %s %s status=%d body=%s", tc.method, tc.path, rec.Code, rec.Body.String())
+		if rec := call(tc.method, tc.path, ""); rec.Code != http.StatusGone {
+			t.Fatalf("retired compat route %s %s status=%d body=%s", tc.method, tc.path, rec.Code, rec.Body.String())
 		}
 	}
 	if rec := call(http.MethodGet, "/app/assistant/librechat", ""); rec.Code != http.StatusGone {

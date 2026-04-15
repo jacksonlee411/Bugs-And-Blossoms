@@ -246,18 +246,56 @@ func TestAssistant268SyntheticSemanticHelperCoverage(t *testing.T) {
 			t.Fatalf("unexpected unknown route intent=%q route=%q", intentID, routeKind)
 		}
 		prompt := assistantOpenAISystemPrompt()
-		for _, want := range []string{
-			"create_orgunit=org.orgunit_create",
-			"disable_orgunit=org.orgunit_disable",
-			"知识问答 输出 action=plan_only、route_kind=knowledge_qa、intent_id=knowledge.general_qa",
-			"问候 输出 action=plan_only、route_kind=chitchat、intent_id=chat.greeting",
-			"待澄清 输出 action=plan_only、route_kind=uncertain、intent_id=route.uncertain",
-		} {
-			if !strings.Contains(prompt, want) {
-				t.Fatalf("system prompt missing %q in %q", want, prompt)
+			for _, want := range []string{
+				"create_orgunit=org.orgunit_create",
+				"disable_orgunit=org.orgunit_disable",
+				"知识问答 输出 action=plan_only、route_kind=knowledge_qa、intent_id=knowledge.general_qa",
+				"问候 输出 action=plan_only、route_kind=chitchat、intent_id=chat.greeting",
+				"待澄清 输出 action=plan_only、route_kind=uncertain、intent_id=route.uncertain",
+			} {
+				if !strings.Contains(prompt, want) {
+					t.Fatalf("system prompt missing %q in %q", want, prompt)
+				}
 			}
-		}
-	})
+
+			assistantLoadKnowledgeRuntimeFn = func() (*assistantKnowledgeRuntime, error) {
+				return &assistantKnowledgeRuntime{
+					routeByAction: map[string]assistantIntentRouteEntry{
+						assistantIntentCreateOrgUnit: {IntentID: ""},
+					},
+					routeCatalog: assistantIntentRouteCatalog{
+						Entries: []assistantIntentRouteEntry{
+							{IntentID: "knowledge.general_qa", RouteKind: ""},
+							{IntentID: "", RouteKind: assistantRouteKindChitchat},
+						},
+					},
+					intentDocs: map[string]map[string]assistantKnowledgeMarkdownDocument{
+						"knowledge.general_qa": {
+							"zh": {ID: "knowledge.general_qa", Locale: "zh", Title: "知识问答"},
+						},
+					},
+				}, nil
+			}
+			if got := assistantSemanticIntentIDForAction(""); got != "" {
+				t.Fatalf("blank action should return empty intent id, got=%q", got)
+			}
+			if got := assistantSemanticIntentIDForAction(assistantIntentCreateOrgUnit); got != "action."+assistantIntentCreateOrgUnit {
+				t.Fatalf("blank mapped intent id should fall back, got=%q", got)
+			}
+			if intentID, routeKind := assistantSemanticIntentRouteForNonBusiness(assistantRouteKindKnowledgeQA); intentID != "" || routeKind != assistantRouteKindKnowledgeQA {
+				t.Fatalf("blank runtime route kind should fall through, got intent=%q route=%q", intentID, routeKind)
+			}
+			if intentID, routeKind := assistantSemanticIntentRouteForNonBusiness(assistantRouteKindChitchat); intentID != "" || routeKind != assistantRouteKindChitchat {
+				t.Fatalf("blank runtime intent id should fall through, got intent=%q route=%q", intentID, routeKind)
+			}
+			prompt = assistantOpenAISystemPrompt()
+			if !strings.Contains(prompt, "create_orgunit=action.create_orgunit") {
+				t.Fatalf("blank business intent id should fall back to action.* mapping, got=%q", prompt)
+			}
+			if strings.Contains(prompt, "问候 输出 action=plan_only") {
+				t.Fatalf("blank non-business intent id should be skipped from prompt, got=%q", prompt)
+			}
+		})
 
 	business := assistantSyntheticSemanticPayload("在鲜花组织之下新建一个部门，成立日期是2026-01-01")
 	if business.RouteKind != assistantRouteKindBusinessAction || business.IntentID != "org.orgunit_create" {

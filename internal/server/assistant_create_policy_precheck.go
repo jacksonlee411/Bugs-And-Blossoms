@@ -46,8 +46,6 @@ func (s *assistantConversationService) enrichCreateOrgUnitDryRunWithPolicy(
 	dryRun.ValidationErrors = assistantCreateOrgUnitProjectionValidationErrors(snapshot)
 	if explain := strings.TrimSpace(snapshot.Projection.PolicyExplain); explain != "" {
 		dryRun.Explain = explain
-	} else if len(dryRun.ValidationErrors) == 0 {
-		dryRun.Explain = "计划已生成，等待确认后可提交"
 	}
 	return dryRun
 }

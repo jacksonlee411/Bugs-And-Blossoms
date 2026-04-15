@@ -1190,6 +1190,502 @@ WITH CHECK (tenant_uuid = current_setting('app.current_tenant')::uuid);
 
 -- end: modules/iam/infrastructure/persistence/schema/00010_iam_assistant_tasks.sql
 
+-- begin: modules/iam/infrastructure/persistence/schema/00011_iam_cubebox_conversations.sql
+CREATE TABLE IF NOT EXISTS iam.cubebox_conversations (
+  tenant_uuid uuid NOT NULL REFERENCES iam.tenants(id) ON DELETE CASCADE,
+  conversation_id text NOT NULL,
+  actor_id text NOT NULL,
+  actor_role text NOT NULL,
+  state text NOT NULL,
+  current_phase text NOT NULL DEFAULT 'idle',
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (tenant_uuid, conversation_id),
+  CONSTRAINT cubebox_conversations_id_format_check CHECK (
+    conversation_id ~ '^conv_[0-9a-f]{32}$'
+  ),
+  CONSTRAINT cubebox_conversations_state_check CHECK (
+    state IN ('validated', 'confirmed', 'committed', 'canceled', 'expired')
+  ),
+  CONSTRAINT cubebox_conversations_phase_check CHECK (
+    current_phase IN (
+      'idle',
+      'await_clarification',
+      'await_missing_fields',
+      'await_candidate_pick',
+      'await_candidate_confirm',
+      'await_commit_confirm',
+      'committing',
+      'committed',
+      'failed',
+      'canceled',
+      'expired'
+    )
+  )
+);
+
+CREATE INDEX IF NOT EXISTS cubebox_conversations_actor_idx
+  ON iam.cubebox_conversations (tenant_uuid, actor_id, updated_at DESC, conversation_id DESC);
+
+ALTER TABLE iam.cubebox_conversations ENABLE ROW LEVEL SECURITY;
+ALTER TABLE iam.cubebox_conversations FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation ON iam.cubebox_conversations;
+CREATE POLICY tenant_isolation ON iam.cubebox_conversations
+USING (tenant_uuid = current_setting('app.current_tenant')::uuid)
+WITH CHECK (tenant_uuid = current_setting('app.current_tenant')::uuid);
+
+CREATE TABLE IF NOT EXISTS iam.cubebox_turns (
+  tenant_uuid uuid NOT NULL,
+  conversation_id text NOT NULL,
+  turn_id text NOT NULL,
+  user_input text NOT NULL,
+  state text NOT NULL,
+  phase text NOT NULL,
+  risk_tier text NOT NULL,
+  request_id text NOT NULL,
+  trace_id text NOT NULL,
+  policy_version text NOT NULL,
+  composition_version text NOT NULL,
+  mapping_version text NOT NULL,
+  intent_json jsonb NOT NULL,
+  plan_json jsonb NOT NULL,
+  candidates_json jsonb NOT NULL,
+  candidate_options jsonb NOT NULL DEFAULT '[]'::jsonb,
+  resolved_candidate_id text NULL,
+  selected_candidate_id text NULL,
+  ambiguity_count integer NOT NULL,
+  confidence double precision NOT NULL,
+  resolution_source text NULL,
+  route_decision_json jsonb NULL,
+  clarification_json jsonb NOT NULL DEFAULT '{}'::jsonb,
+  dry_run_json jsonb NOT NULL,
+  pending_draft_summary text NULL,
+  missing_fields jsonb NOT NULL DEFAULT '[]'::jsonb,
+  commit_result_json jsonb NULL,
+  commit_reply jsonb NULL,
+  error_code text NULL,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (tenant_uuid, conversation_id, turn_id),
+  CONSTRAINT cubebox_turns_conversation_fk FOREIGN KEY (tenant_uuid, conversation_id)
+    REFERENCES iam.cubebox_conversations(tenant_uuid, conversation_id) ON DELETE CASCADE,
+  CONSTRAINT cubebox_turns_turn_id_format_check CHECK (
+    turn_id ~ '^turn_[0-9a-f]{32}$'
+  ),
+  CONSTRAINT cubebox_turns_state_check CHECK (
+    state IN ('validated', 'confirmed', 'committed', 'canceled', 'expired')
+  ),
+  CONSTRAINT cubebox_turns_phase_check CHECK (
+    phase IN (
+      'idle',
+      'await_clarification',
+      'await_missing_fields',
+      'await_candidate_pick',
+      'await_candidate_confirm',
+      'await_commit_confirm',
+      'committing',
+      'committed',
+      'failed',
+      'canceled',
+      'expired'
+    )
+  ),
+  CONSTRAINT cubebox_turns_ambiguity_non_negative CHECK (ambiguity_count >= 0),
+  CONSTRAINT cubebox_turns_confidence_range_check CHECK (confidence >= 0 AND confidence <= 1),
+  CONSTRAINT cubebox_turns_intent_object_check CHECK (jsonb_typeof(intent_json) = 'object'),
+  CONSTRAINT cubebox_turns_plan_object_check CHECK (jsonb_typeof(plan_json) = 'object'),
+  CONSTRAINT cubebox_turns_candidates_array_check CHECK (jsonb_typeof(candidates_json) = 'array'),
+  CONSTRAINT cubebox_turns_candidate_options_array_check CHECK (jsonb_typeof(candidate_options) = 'array'),
+  CONSTRAINT cubebox_turns_dry_run_object_check CHECK (jsonb_typeof(dry_run_json) = 'object'),
+  CONSTRAINT cubebox_turns_route_decision_object_or_null_check CHECK (
+    route_decision_json IS NULL OR jsonb_typeof(route_decision_json) = 'object'
+  ),
+  CONSTRAINT cubebox_turns_clarification_object_check CHECK (
+    jsonb_typeof(clarification_json) = 'object'
+  ),
+  CONSTRAINT cubebox_turns_missing_fields_array_check CHECK (
+    jsonb_typeof(missing_fields) = 'array'
+  ),
+  CONSTRAINT cubebox_turns_commit_result_object_or_null_check CHECK (
+    commit_result_json IS NULL OR jsonb_typeof(commit_result_json) = 'object'
+  ),
+  CONSTRAINT cubebox_turns_commit_reply_object_or_null_check CHECK (
+    commit_reply IS NULL OR jsonb_typeof(commit_reply) = 'object'
+  )
+);
+
+CREATE INDEX IF NOT EXISTS cubebox_turns_lookup_idx
+  ON iam.cubebox_turns (tenant_uuid, conversation_id, created_at, turn_id);
+
+ALTER TABLE iam.cubebox_turns ENABLE ROW LEVEL SECURITY;
+ALTER TABLE iam.cubebox_turns FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation ON iam.cubebox_turns;
+CREATE POLICY tenant_isolation ON iam.cubebox_turns
+USING (tenant_uuid = current_setting('app.current_tenant')::uuid)
+WITH CHECK (tenant_uuid = current_setting('app.current_tenant')::uuid);
+
+CREATE TABLE IF NOT EXISTS iam.cubebox_state_transitions (
+  id bigserial PRIMARY KEY,
+  tenant_uuid uuid NOT NULL,
+  conversation_id text NOT NULL,
+  turn_id text NULL,
+  turn_action text NULL,
+  request_id text NOT NULL,
+  trace_id text NOT NULL,
+  from_state text NOT NULL,
+  to_state text NOT NULL,
+  from_phase text NOT NULL,
+  to_phase text NOT NULL,
+  reason_code text NULL,
+  actor_id text NOT NULL,
+  changed_at timestamptz NOT NULL DEFAULT now(),
+  CONSTRAINT cubebox_state_transitions_conversation_fk FOREIGN KEY (tenant_uuid, conversation_id)
+    REFERENCES iam.cubebox_conversations(tenant_uuid, conversation_id) ON DELETE CASCADE,
+  CONSTRAINT cubebox_state_transitions_from_state_check CHECK (
+    from_state IN ('init', 'validated', 'confirmed', 'committed', 'canceled', 'expired')
+  ),
+  CONSTRAINT cubebox_state_transitions_to_state_check CHECK (
+    to_state IN ('validated', 'confirmed', 'committed', 'canceled', 'expired')
+  ),
+  CONSTRAINT cubebox_state_transitions_from_phase_check CHECK (
+    from_phase IN (
+      'init',
+      'idle',
+      'await_clarification',
+      'await_missing_fields',
+      'await_candidate_pick',
+      'await_candidate_confirm',
+      'await_commit_confirm',
+      'committing',
+      'committed',
+      'failed',
+      'canceled',
+      'expired'
+    )
+  ),
+  CONSTRAINT cubebox_state_transitions_to_phase_check CHECK (
+    to_phase IN (
+      'idle',
+      'await_clarification',
+      'await_missing_fields',
+      'await_candidate_pick',
+      'await_candidate_confirm',
+      'await_commit_confirm',
+      'committing',
+      'committed',
+      'failed',
+      'canceled',
+      'expired'
+    )
+  ),
+  CONSTRAINT cubebox_state_transitions_turn_action_check CHECK (
+    turn_action IS NULL OR turn_action IN ('confirm', 'commit')
+  )
+);
+
+CREATE INDEX IF NOT EXISTS cubebox_state_transitions_lookup_idx
+  ON iam.cubebox_state_transitions (tenant_uuid, conversation_id, changed_at, id);
+
+ALTER TABLE iam.cubebox_state_transitions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE iam.cubebox_state_transitions FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation ON iam.cubebox_state_transitions;
+CREATE POLICY tenant_isolation ON iam.cubebox_state_transitions
+USING (tenant_uuid = current_setting('app.current_tenant')::uuid)
+WITH CHECK (tenant_uuid = current_setting('app.current_tenant')::uuid);
+
+CREATE TABLE IF NOT EXISTS iam.cubebox_idempotency (
+  tenant_uuid uuid NOT NULL,
+  conversation_id text NOT NULL,
+  turn_id text NOT NULL,
+  turn_action text NOT NULL,
+  request_id text NOT NULL,
+  request_hash text NOT NULL,
+  status text NOT NULL DEFAULT 'pending',
+  http_status integer NULL,
+  error_code text NULL,
+  response_body jsonb NULL,
+  response_hash text NULL,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  finalized_at timestamptz NULL,
+  expires_at timestamptz NOT NULL,
+  PRIMARY KEY (tenant_uuid, conversation_id, turn_id, turn_action, request_id),
+  CONSTRAINT cubebox_idempotency_turn_fk FOREIGN KEY (tenant_uuid, conversation_id, turn_id)
+    REFERENCES iam.cubebox_turns(tenant_uuid, conversation_id, turn_id) ON DELETE CASCADE,
+  CONSTRAINT cubebox_idempotency_turn_action_check CHECK (
+    turn_action IN ('confirm', 'commit')
+  ),
+  CONSTRAINT cubebox_idempotency_status_check CHECK (
+    status IN ('pending', 'done')
+  ),
+  CONSTRAINT cubebox_idempotency_response_size_check CHECK (
+    response_body IS NULL OR octet_length(response_body::text) <= 65536
+  )
+);
+
+CREATE INDEX IF NOT EXISTS cubebox_idempotency_expire_idx
+  ON iam.cubebox_idempotency (tenant_uuid, expires_at);
+
+ALTER TABLE iam.cubebox_idempotency ENABLE ROW LEVEL SECURITY;
+ALTER TABLE iam.cubebox_idempotency FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation ON iam.cubebox_idempotency;
+CREATE POLICY tenant_isolation ON iam.cubebox_idempotency
+USING (tenant_uuid = current_setting('app.current_tenant')::uuid)
+WITH CHECK (tenant_uuid = current_setting('app.current_tenant')::uuid);
+
+-- end: modules/iam/infrastructure/persistence/schema/00011_iam_cubebox_conversations.sql
+
+-- begin: modules/iam/infrastructure/persistence/schema/00012_iam_cubebox_tasks.sql
+CREATE TABLE IF NOT EXISTS iam.cubebox_tasks (
+  tenant_uuid uuid NOT NULL,
+  task_id uuid NOT NULL,
+  conversation_id text NOT NULL,
+  turn_id text NOT NULL,
+  task_type text NOT NULL,
+  request_id text NOT NULL,
+  request_hash text NOT NULL,
+  workflow_id text NOT NULL,
+  status text NOT NULL,
+  dispatch_status text NOT NULL DEFAULT 'pending',
+  dispatch_attempt integer NOT NULL DEFAULT 0,
+  dispatch_deadline_at timestamptz NOT NULL,
+  attempt integer NOT NULL DEFAULT 0,
+  max_attempts integer NOT NULL,
+  last_error_code text NULL,
+  trace_id text NULL,
+  intent_schema_version text NOT NULL,
+  compiler_contract_version text NOT NULL,
+  capability_map_version text NOT NULL,
+  skill_manifest_digest text NOT NULL,
+  context_hash text NOT NULL,
+  intent_hash text NOT NULL,
+  plan_hash text NOT NULL,
+  knowledge_snapshot_digest text NULL,
+  route_catalog_version text NULL,
+  resolver_contract_version text NULL,
+  context_template_version text NULL,
+  reply_guidance_version text NULL,
+  policy_context_digest text NULL,
+  effective_policy_version text NULL,
+  resolved_setid text NULL,
+  setid_source text NULL,
+  precheck_projection_digest text NULL,
+  mutation_policy_version text NULL,
+  submitted_at timestamptz NOT NULL,
+  cancel_requested_at timestamptz NULL,
+  completed_at timestamptz NULL,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (tenant_uuid, task_id),
+  CONSTRAINT cubebox_tasks_turn_fk FOREIGN KEY (tenant_uuid, conversation_id, turn_id)
+    REFERENCES iam.cubebox_turns(tenant_uuid, conversation_id, turn_id) ON DELETE CASCADE,
+  CONSTRAINT cubebox_tasks_workflow_unique UNIQUE (tenant_uuid, workflow_id),
+  CONSTRAINT cubebox_tasks_submit_idempotency_unique UNIQUE (
+    tenant_uuid, conversation_id, turn_id, request_id
+  ),
+  CONSTRAINT cubebox_tasks_task_type_check CHECK (
+    task_type IN ('assistant_async_plan')
+  ),
+  CONSTRAINT cubebox_tasks_status_check CHECK (
+    status IN ('queued', 'running', 'succeeded', 'failed', 'manual_takeover_required', 'canceled')
+  ),
+  CONSTRAINT cubebox_tasks_dispatch_status_check CHECK (
+    dispatch_status IN ('pending', 'started', 'failed', 'canceled')
+  ),
+  CONSTRAINT cubebox_tasks_attempt_non_negative CHECK (attempt >= 0),
+  CONSTRAINT cubebox_tasks_dispatch_attempt_non_negative CHECK (dispatch_attempt >= 0),
+  CONSTRAINT cubebox_tasks_max_attempts_positive CHECK (max_attempts > 0)
+);
+
+CREATE INDEX IF NOT EXISTS cubebox_tasks_status_idx
+  ON iam.cubebox_tasks (tenant_uuid, status, updated_at);
+
+CREATE INDEX IF NOT EXISTS cubebox_tasks_dispatch_idx
+  ON iam.cubebox_tasks (tenant_uuid, dispatch_status, dispatch_deadline_at);
+
+ALTER TABLE iam.cubebox_tasks ENABLE ROW LEVEL SECURITY;
+ALTER TABLE iam.cubebox_tasks FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation ON iam.cubebox_tasks;
+CREATE POLICY tenant_isolation ON iam.cubebox_tasks
+USING (tenant_uuid = current_setting('app.current_tenant')::uuid)
+WITH CHECK (tenant_uuid = current_setting('app.current_tenant')::uuid);
+
+CREATE TABLE IF NOT EXISTS iam.cubebox_task_events (
+  id bigserial PRIMARY KEY,
+  tenant_uuid uuid NOT NULL,
+  task_id uuid NOT NULL,
+  from_status text NULL,
+  to_status text NOT NULL,
+  event_type text NOT NULL,
+  error_code text NULL,
+  payload jsonb NULL,
+  occurred_at timestamptz NOT NULL DEFAULT now(),
+  CONSTRAINT cubebox_task_events_task_fk FOREIGN KEY (tenant_uuid, task_id)
+    REFERENCES iam.cubebox_tasks(tenant_uuid, task_id) ON DELETE CASCADE,
+  CONSTRAINT cubebox_task_events_to_status_check CHECK (
+    to_status IN ('queued', 'running', 'succeeded', 'failed', 'manual_takeover_required', 'canceled')
+  ),
+  CONSTRAINT cubebox_task_events_from_status_check CHECK (
+    from_status IS NULL OR from_status IN (
+      'queued', 'running', 'succeeded', 'failed', 'manual_takeover_required', 'canceled'
+    )
+  ),
+  CONSTRAINT cubebox_task_events_type_check CHECK (
+    event_type IN (
+      'queued',
+      'running',
+      'succeeded',
+      'failed',
+      'manual_takeover_required',
+      'cancel_requested',
+      'canceled',
+      'dead_lettered'
+    )
+  ),
+  CONSTRAINT cubebox_task_events_payload_object_or_null_check CHECK (
+    payload IS NULL OR jsonb_typeof(payload) = 'object'
+  )
+);
+
+CREATE INDEX IF NOT EXISTS cubebox_task_events_lookup_idx
+  ON iam.cubebox_task_events (tenant_uuid, task_id, occurred_at);
+
+ALTER TABLE iam.cubebox_task_events ENABLE ROW LEVEL SECURITY;
+ALTER TABLE iam.cubebox_task_events FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation ON iam.cubebox_task_events;
+CREATE POLICY tenant_isolation ON iam.cubebox_task_events
+USING (tenant_uuid = current_setting('app.current_tenant')::uuid)
+WITH CHECK (tenant_uuid = current_setting('app.current_tenant')::uuid);
+
+CREATE TABLE IF NOT EXISTS iam.cubebox_task_dispatch_outbox (
+  id bigserial PRIMARY KEY,
+  tenant_uuid uuid NOT NULL,
+  task_id uuid NOT NULL,
+  workflow_id text NOT NULL,
+  status text NOT NULL DEFAULT 'pending',
+  attempt integer NOT NULL DEFAULT 0,
+  next_retry_at timestamptz NOT NULL,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now(),
+  CONSTRAINT cubebox_task_dispatch_outbox_task_fk FOREIGN KEY (tenant_uuid, task_id)
+    REFERENCES iam.cubebox_tasks(tenant_uuid, task_id) ON DELETE CASCADE,
+  CONSTRAINT cubebox_task_dispatch_outbox_task_unique UNIQUE (tenant_uuid, task_id),
+  CONSTRAINT cubebox_task_dispatch_outbox_status_check CHECK (
+    status IN ('pending', 'started', 'failed', 'canceled')
+  ),
+  CONSTRAINT cubebox_task_dispatch_outbox_attempt_non_negative CHECK (attempt >= 0)
+);
+
+CREATE INDEX IF NOT EXISTS cubebox_task_dispatch_outbox_schedule_idx
+  ON iam.cubebox_task_dispatch_outbox (status, next_retry_at);
+
+ALTER TABLE iam.cubebox_task_dispatch_outbox ENABLE ROW LEVEL SECURITY;
+ALTER TABLE iam.cubebox_task_dispatch_outbox FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation ON iam.cubebox_task_dispatch_outbox;
+CREATE POLICY tenant_isolation ON iam.cubebox_task_dispatch_outbox
+USING (tenant_uuid = current_setting('app.current_tenant')::uuid)
+WITH CHECK (tenant_uuid = current_setting('app.current_tenant')::uuid);
+
+-- end: modules/iam/infrastructure/persistence/schema/00012_iam_cubebox_tasks.sql
+
+-- begin: modules/iam/infrastructure/persistence/schema/00013_iam_cubebox_files.sql
+CREATE TABLE IF NOT EXISTS iam.cubebox_files (
+  tenant_uuid uuid NOT NULL REFERENCES iam.tenants(id) ON DELETE CASCADE,
+  file_id text NOT NULL,
+  storage_provider text NOT NULL,
+  storage_key text NOT NULL,
+  file_name text NOT NULL,
+  media_type text NOT NULL,
+  size_bytes bigint NOT NULL,
+  sha256 text NOT NULL,
+  scan_status text NOT NULL DEFAULT 'ready',
+  scan_error_code text NULL,
+  uploaded_by text NOT NULL,
+  uploaded_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (tenant_uuid, file_id),
+  CONSTRAINT cubebox_files_id_format_check CHECK (
+    file_id ~ '^file_[0-9a-f-]{36}$'
+  ),
+  CONSTRAINT cubebox_files_storage_provider_check CHECK (
+    storage_provider IN ('localfs', 's3_compat')
+  ),
+  CONSTRAINT cubebox_files_size_positive_check CHECK (
+    size_bytes > 0 AND size_bytes <= 20971520
+  ),
+  CONSTRAINT cubebox_files_sha256_hex_check CHECK (
+    sha256 ~ '^[0-9a-f]{64}$'
+  ),
+  CONSTRAINT cubebox_files_scan_status_check CHECK (
+    scan_status IN ('pending', 'ready', 'failed')
+  ),
+  CONSTRAINT cubebox_files_storage_key_unique UNIQUE (tenant_uuid, storage_key)
+);
+
+CREATE INDEX IF NOT EXISTS cubebox_files_uploaded_idx
+  ON iam.cubebox_files (tenant_uuid, uploaded_at DESC, file_id DESC);
+
+ALTER TABLE iam.cubebox_files ENABLE ROW LEVEL SECURITY;
+ALTER TABLE iam.cubebox_files FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation ON iam.cubebox_files;
+CREATE POLICY tenant_isolation ON iam.cubebox_files
+USING (tenant_uuid = current_setting('app.current_tenant')::uuid)
+WITH CHECK (tenant_uuid = current_setting('app.current_tenant')::uuid);
+
+CREATE TABLE IF NOT EXISTS iam.cubebox_file_links (
+  id bigserial PRIMARY KEY,
+  tenant_uuid uuid NOT NULL,
+  file_id text NOT NULL,
+  conversation_id text NOT NULL,
+  turn_id text NULL,
+  link_role text NOT NULL,
+  created_by text NOT NULL,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  CONSTRAINT cubebox_file_links_file_fk FOREIGN KEY (tenant_uuid, file_id)
+    REFERENCES iam.cubebox_files(tenant_uuid, file_id) ON DELETE CASCADE,
+  CONSTRAINT cubebox_file_links_conversation_fk FOREIGN KEY (tenant_uuid, conversation_id)
+    REFERENCES iam.cubebox_conversations(tenant_uuid, conversation_id) ON DELETE CASCADE,
+  CONSTRAINT cubebox_file_links_turn_fk FOREIGN KEY (tenant_uuid, conversation_id, turn_id)
+    REFERENCES iam.cubebox_turns(tenant_uuid, conversation_id, turn_id) ON DELETE CASCADE,
+  CONSTRAINT cubebox_file_links_role_check CHECK (
+    link_role IN ('conversation_attachment', 'turn_input', 'turn_output')
+  ),
+  CONSTRAINT cubebox_file_links_shape_check CHECK (
+    (
+      turn_id IS NULL
+      AND link_role = 'conversation_attachment'
+    ) OR (
+      turn_id IS NOT NULL
+      AND link_role IN ('turn_input', 'turn_output')
+    )
+  )
+);
+
+CREATE INDEX IF NOT EXISTS cubebox_file_links_conversation_idx
+  ON iam.cubebox_file_links (tenant_uuid, conversation_id, created_at, id);
+
+CREATE INDEX IF NOT EXISTS cubebox_file_links_turn_idx
+  ON iam.cubebox_file_links (tenant_uuid, conversation_id, turn_id, created_at, id);
+
+CREATE INDEX IF NOT EXISTS cubebox_file_links_file_idx
+  ON iam.cubebox_file_links (tenant_uuid, file_id, created_at, id);
+
+CREATE UNIQUE INDEX IF NOT EXISTS cubebox_file_links_conversation_unique
+  ON iam.cubebox_file_links (tenant_uuid, file_id, conversation_id, link_role)
+  WHERE turn_id IS NULL;
+
+CREATE UNIQUE INDEX IF NOT EXISTS cubebox_file_links_turn_unique
+  ON iam.cubebox_file_links (tenant_uuid, file_id, conversation_id, turn_id, link_role)
+  WHERE turn_id IS NOT NULL;
+
+ALTER TABLE iam.cubebox_file_links ENABLE ROW LEVEL SECURITY;
+ALTER TABLE iam.cubebox_file_links FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation ON iam.cubebox_file_links;
+CREATE POLICY tenant_isolation ON iam.cubebox_file_links
+USING (tenant_uuid = current_setting('app.current_tenant')::uuid)
+WITH CHECK (tenant_uuid = current_setting('app.current_tenant')::uuid);
+
+-- end: modules/iam/infrastructure/persistence/schema/00013_iam_cubebox_files.sql
+
 -- begin: modules/orgunit/infrastructure/persistence/schema/00001_orgunit_schema.sql
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
 

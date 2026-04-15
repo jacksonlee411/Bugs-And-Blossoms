@@ -380,6 +380,44 @@ func TestAssistantConversationTurns_RuntimeConfigErrorMappings(t *testing.T) {
 	})
 }
 
+func TestAssistantConversationAndReply_GateUnavailableMappings(t *testing.T) {
+	t.Run("create turn gate unavailable", func(t *testing.T) {
+		svc := newAssistantConversationService(newOrgUnitMemoryStore(), assistantWriteServiceStub{store: newOrgUnitMemoryStore()})
+		svc.pool = assistFakeTxBeginner{err: errAssistantGateUnavailable}
+
+		rec := httptest.NewRecorder()
+		req := assistantReqWithContext(http.MethodPost, "/internal/assistant/conversations/conv_1/turns", `{"user_input":"测试 gate"}`, true, true)
+		handleAssistantConversationTurnsAPI(rec, req, svc)
+		if rec.Code != http.StatusServiceUnavailable || assistantDecodeErrCode(t, rec) != errAssistantGateUnavailable.Error() {
+			t.Fatalf("status=%d code=%s body=%s", rec.Code, assistantDecodeErrCode(t, rec), rec.Body.String())
+		}
+	})
+
+	t.Run("confirm turn gate unavailable", func(t *testing.T) {
+		svc := newAssistantConversationService(newOrgUnitMemoryStore(), assistantWriteServiceStub{store: newOrgUnitMemoryStore()})
+		svc.pool = assistFakeTxBeginner{err: errAssistantGateUnavailable}
+
+		rec := httptest.NewRecorder()
+		req := assistantReqWithContext(http.MethodPost, "/internal/assistant/conversations/conv_1/turns/turn_1:confirm", `{}`, true, true)
+		handleAssistantTurnActionAPI(rec, req, svc)
+		if rec.Code != http.StatusServiceUnavailable || assistantDecodeErrCode(t, rec) != errAssistantGateUnavailable.Error() {
+			t.Fatalf("status=%d code=%s body=%s", rec.Code, assistantDecodeErrCode(t, rec), rec.Body.String())
+		}
+	})
+
+	t.Run("reply gate unavailable", func(t *testing.T) {
+		svc := newAssistantConversationService(newOrgUnitMemoryStore(), assistantWriteServiceStub{store: newOrgUnitMemoryStore()})
+		svc.pool = assistFakeTxBeginner{err: errAssistantGateUnavailable}
+
+		rec := httptest.NewRecorder()
+		req := assistantReqWithContext(http.MethodPost, "/internal/assistant/conversations/conv_1/turns/turn_1:reply", `{}`, true, true)
+		handleAssistantTurnActionAPI(rec, req, svc)
+		if rec.Code != http.StatusServiceUnavailable || assistantDecodeErrCode(t, rec) != errAssistantGateUnavailable.Error() {
+			t.Fatalf("status=%d code=%s body=%s", rec.Code, assistantDecodeErrCode(t, rec), rec.Body.String())
+		}
+	})
+}
+
 func TestAssistantServiceHelpers_PoolWrappersAndPathEdges(t *testing.T) {
 	svc := newAssistantConversationService(newOrgUnitMemoryStore(), assistantWriteServiceStub{store: newOrgUnitMemoryStore()})
 	svc.pool = assistFakeTxBeginner{err: errors.New("begin failed")}

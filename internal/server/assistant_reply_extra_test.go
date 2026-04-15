@@ -7,6 +7,8 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+
+	orgunitservices "github.com/jacksonlee411/Bugs-And-Blossoms/modules/orgunit/services"
 )
 
 func TestAssistantModelGatewayRenderReplyBranches(t *testing.T) {
@@ -266,6 +268,16 @@ func TestAssistantReplyFallbackTextCoverage(t *testing.T) {
 		t.Fatalf("missing fields=%q", got)
 	}
 	turn.DryRun.ValidationErrors = nil
+	turn.Intent.Action = assistantIntentCreateOrgUnit
+	turn.DryRun.CreateOrgUnitProjection = &assistantCreateOrgUnitProjectionSnapshot{
+		Projection: orgunitservices.CreateOrgUnitPrecheckProjectionV1{
+			MissingFields: []string{"effective_date"},
+		},
+	}
+	if got := assistantReplyFallbackText(assistantRenderReplyRequest{}, "missing_fields", turn, "zh"); got != "effective_date" {
+		t.Fatalf("projection missing fields=%q", got)
+	}
+	turn.DryRun.CreateOrgUnitProjection = nil
 	turn.DryRun.Explain = "assistant_reply_render_failed"
 	if got := assistantReplyFallbackText(assistantRenderReplyRequest{}, "draft", turn, "zh"); got != "本次请求未能完成，请根据提示调整后重试。" {
 		t.Fatalf("explain sanitize=%q", got)
