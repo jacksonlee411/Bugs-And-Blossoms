@@ -14,6 +14,7 @@ import (
 	"strings"
 	"testing"
 
+	cubeboxmodule "github.com/jacksonlee411/Bugs-And-Blossoms/modules/cubebox"
 	cubeboxservices "github.com/jacksonlee411/Bugs-And-Blossoms/modules/cubebox/services"
 )
 
@@ -359,7 +360,7 @@ func TestExtractCubeBoxFileIDFromPath(t *testing.T) {
 func TestDefaultCubeBoxFileRoot(t *testing.T) {
 	t.Run("prefers environment override", func(t *testing.T) {
 		t.Setenv("CUBEBOX_FILE_ROOT", " /tmp/cubebox-root ")
-		if got := defaultCubeBoxFileRoot(); got != "/tmp/cubebox-root" {
+		if got := cubeboxmodule.DefaultLocalFileRoot(); got != "/tmp/cubebox-root" {
 			t.Fatalf("unexpected root: %q", got)
 		}
 	})
@@ -371,7 +372,7 @@ func TestDefaultCubeBoxFileRoot(t *testing.T) {
 			t.Fatal(err)
 		}
 		want := filepath.Join(wd, ".local", "cubebox", "files")
-		if got := defaultCubeBoxFileRoot(); got != want {
+		if got := cubeboxmodule.DefaultLocalFileRoot(); got != want {
 			t.Fatalf("unexpected root: got %q want %q", got, want)
 		}
 	})

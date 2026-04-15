@@ -3,8 +3,13 @@ SELECT *
 FROM iam.cubebox_conversations
 WHERE tenant_uuid = $1
   AND actor_id = $2
+  AND (
+    $3::timestamptz = '0001-01-01 00:00:00+00'
+    OR updated_at < $3
+    OR (updated_at = $3 AND conversation_id < $4)
+  )
 ORDER BY updated_at DESC, conversation_id DESC
-LIMIT $3;
+LIMIT $5;
 
 -- name: GetConversationByID :one
 SELECT *

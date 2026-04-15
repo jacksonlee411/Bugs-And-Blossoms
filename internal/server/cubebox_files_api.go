@@ -1,15 +1,13 @@
 package server
 
 import (
+	"context"
 	"io"
 	"net/http"
-	"os"
-	"path/filepath"
 	"strings"
 
 	"github.com/jacksonlee411/Bugs-And-Blossoms/internal/routing"
-	cubeboxmodule "github.com/jacksonlee411/Bugs-And-Blossoms/modules/cubebox"
-	cubeboxservices "github.com/jacksonlee411/Bugs-And-Blossoms/modules/cubebox/services"
+	cubeboxdomain "github.com/jacksonlee411/Bugs-And-Blossoms/modules/cubebox/domain"
 )
 
 const cubeboxFileUploadLimitBytes int64 = 20 << 20
@@ -30,22 +28,13 @@ type cubeboxFileListResponse struct {
 	Items []cubeboxFileResponse `json:"items"`
 }
 
-func newCubeBoxFileService() *cubeboxservices.FileService {
-	return cubeboxmodule.NewLocalFileService(defaultCubeBoxFileRoot())
+type cubeBoxFileFacade interface {
+	ListFiles(ctx context.Context, tenantID string, conversationID string) ([]cubeboxdomain.FileRecord, error)
+	SaveFile(ctx context.Context, tenantID string, actorID string, conversationID string, filename string, mediaType string, body io.Reader) (cubeboxdomain.FileRecord, error)
+	DeleteFile(ctx context.Context, tenantID string, fileID string) (bool, error)
 }
 
-func defaultCubeBoxFileRoot() string {
-	if raw := strings.TrimSpace(os.Getenv("CUBEBOX_FILE_ROOT")); raw != "" {
-		return raw
-	}
-	wd, err := os.Getwd()
-	if err != nil {
-		return filepath.Clean(".local/cubebox/files")
-	}
-	return filepath.Join(wd, ".local", "cubebox", "files")
-}
-
-func handleCubeBoxFilesAPI(w http.ResponseWriter, r *http.Request, svc *cubeboxservices.FileService) {
+func handleCubeBoxFilesAPI(w http.ResponseWriter, r *http.Request, svc cubeBoxFileFacade) {
 	switch r.Method {
 	case http.MethodGet:
 		handleCubeBoxFilesListAPI(w, r, svc)
@@ -56,7 +45,7 @@ func handleCubeBoxFilesAPI(w http.ResponseWriter, r *http.Request, svc *cubeboxs
 	}
 }
 
-func handleCubeBoxFilesListAPI(w http.ResponseWriter, r *http.Request, svc *cubeboxservices.FileService) {
+func handleCubeBoxFilesListAPI(w http.ResponseWriter, r *http.Request, svc cubeBoxFileFacade) {
 	if svc == nil {
 		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusServiceUnavailable, "cubebox_files_unavailable", "cubebox files unavailable")
 		return
@@ -78,7 +67,7 @@ func handleCubeBoxFilesListAPI(w http.ResponseWriter, r *http.Request, svc *cube
 	writeJSON(w, http.StatusOK, resp)
 }
 
-func handleCubeBoxFilesUploadAPI(w http.ResponseWriter, r *http.Request, svc *cubeboxservices.FileService) {
+func handleCubeBoxFilesUploadAPI(w http.ResponseWriter, r *http.Request, svc cubeBoxFileFacade) {
 	if svc == nil {
 		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusServiceUnavailable, "cubebox_files_unavailable", "cubebox files unavailable")
 		return
@@ -129,7 +118,7 @@ func handleCubeBoxFilesUploadAPI(w http.ResponseWriter, r *http.Request, svc *cu
 	writeJSON(w, http.StatusCreated, cubeboxFileRecordResponse(record))
 }
 
-func handleCubeBoxFileDeleteAPI(w http.ResponseWriter, r *http.Request, svc *cubeboxservices.FileService) {
+func handleCubeBoxFileDeleteAPI(w http.ResponseWriter, r *http.Request, svc cubeBoxFileFacade) {
 	if r.Method != http.MethodDelete {
 		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusMethodNotAllowed, "method_not_allowed", "method not allowed")
 		return
@@ -160,7 +149,7 @@ func handleCubeBoxFileDeleteAPI(w http.ResponseWriter, r *http.Request, svc *cub
 	w.WriteHeader(http.StatusNoContent)
 }
 
-func cubeboxFileRecordResponse(item cubeboxservices.FileRecord) cubeboxFileResponse {
+func cubeboxFileRecordResponse(item cubeboxdomain.FileRecord) cubeboxFileResponse {
 	return cubeboxFileResponse{
 		FileID:         item.FileID,
 		ConversationID: item.ConversationID,

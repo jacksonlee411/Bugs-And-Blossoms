@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/jacksonlee411/Bugs-And-Blossoms/internal/routing"
+	cubeboxservices "github.com/jacksonlee411/Bugs-And-Blossoms/modules/cubebox/services"
 )
 
 func handleAssistantTasksAPI(w http.ResponseWriter, r *http.Request, svc *assistantConversationService) {
@@ -121,28 +122,48 @@ func assistantWriteTaskError(w http.ResponseWriter, r *http.Request, err error) 
 	switch {
 	case errors.Is(err, errAssistantConversationNotFound):
 		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusNotFound, "conversation_not_found", "conversation not found")
+	case errors.Is(err, cubeboxservices.ErrConversationNotFound):
+		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusNotFound, "conversation_not_found", "conversation not found")
 	case errors.Is(err, errAssistantTurnNotFound):
+		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusNotFound, "conversation_turn_not_found", "conversation turn not found")
+	case errors.Is(err, cubeboxservices.ErrTurnNotFound):
 		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusNotFound, "conversation_turn_not_found", "conversation turn not found")
 	case errors.Is(err, errAssistantTaskNotFound):
 		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusNotFound, "assistant_task_not_found", "assistant task not found")
+	case errors.Is(err, cubeboxservices.ErrTaskNotFound):
+		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusNotFound, "assistant_task_not_found", "assistant task not found")
 	case errors.Is(err, errAssistantConversationForbidden):
 		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusForbidden, "forbidden", "forbidden")
+	case errors.Is(err, cubeboxservices.ErrConversationForbidden):
+		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusForbidden, "forbidden", "forbidden")
 	case errors.Is(err, errAssistantTenantMismatch):
+		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusForbidden, "tenant_mismatch", "tenant mismatch")
+	case errors.Is(err, cubeboxservices.ErrTenantMismatch):
 		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusForbidden, "tenant_mismatch", "tenant mismatch")
 	case assistantIsGateUnavailableError(err):
 		assistantWriteGateUnavailable(w, r)
 	case errors.Is(err, errAssistantIdempotencyKeyConflict):
+		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusConflict, "idempotency_key_conflict", "idempotency key conflict")
+	case errors.Is(err, cubeboxservices.ErrIdempotencyConflict):
 		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusConflict, "idempotency_key_conflict", "idempotency key conflict")
 	case errors.Is(err, errAssistantRequestInProgress):
 		w.Header().Set("Retry-After", assistantDefaultRetryAfterSecs)
 		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusConflict, "request_in_progress", "request in progress")
 	case errors.Is(err, errAssistantTaskCancelNotAllowed):
 		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusConflict, "assistant_task_cancel_not_allowed", "assistant task cancel not allowed")
+	case errors.Is(err, cubeboxservices.ErrTaskCancelNotAllowed):
+		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusConflict, "assistant_task_cancel_not_allowed", "assistant task cancel not allowed")
 	case errors.Is(err, errAssistantTaskStateInvalid):
+		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusConflict, "assistant_task_state_invalid", "assistant task state invalid")
+	case errors.Is(err, cubeboxservices.ErrTaskStateInvalid):
 		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusConflict, "assistant_task_state_invalid", "assistant task state invalid")
 	case errors.Is(err, errAssistantPlanContractVersionMismatch):
 		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusConflict, "ai_plan_contract_version_mismatch", "ai plan contract version mismatch")
+	case errors.Is(err, cubeboxservices.ErrPlanContractMismatch):
+		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusConflict, "ai_plan_contract_version_mismatch", "ai plan contract version mismatch")
 	case errors.Is(err, errAssistantPlanDeterminismViolation):
+		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusConflict, "ai_plan_determinism_violation", "ai plan determinism violation")
+	case errors.Is(err, cubeboxservices.ErrPlanDeterminismViolation):
 		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusConflict, "ai_plan_determinism_violation", "ai plan determinism violation")
 	case assistantTaskRequestValidationError(err):
 		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusUnprocessableEntity, "invalid_request", err.Error())

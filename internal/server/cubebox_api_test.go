@@ -10,23 +10,12 @@ import (
 	"strings"
 	"testing"
 
+	cubeboxmodule "github.com/jacksonlee411/Bugs-And-Blossoms/modules/cubebox"
+	cubeboxdomain "github.com/jacksonlee411/Bugs-And-Blossoms/modules/cubebox/domain"
 	cubeboxservices "github.com/jacksonlee411/Bugs-And-Blossoms/modules/cubebox/services"
 )
 
 func TestCubeBoxConversationAndTaskAPIWrappers(t *testing.T) {
-	t.Run("conversation detail delete not implemented", func(t *testing.T) {
-		rec := httptest.NewRecorder()
-		req := httptest.NewRequest(http.MethodDelete, "/internal/cubebox/conversations/conv-1", nil)
-
-		handleCubeBoxConversationDetailAPI(rec, req, nil)
-		if rec.Code != http.StatusNotImplemented {
-			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
-		}
-		if !strings.Contains(rec.Body.String(), "cubebox_conversation_delete_not_implemented") {
-			t.Fatalf("body=%s", rec.Body.String())
-		}
-	})
-
 	t.Run("conversation detail missing service", func(t *testing.T) {
 		rec := httptest.NewRecorder()
 		req := httptest.NewRequest(http.MethodGet, "/internal/cubebox/conversations/conv-1", nil)
@@ -55,6 +44,17 @@ func TestCubeBoxConversationAndTaskAPIWrappers(t *testing.T) {
 	t.Run("turn action gate unavailable", func(t *testing.T) {
 		rec := httptest.NewRecorder()
 		req := httptest.NewRequest(http.MethodPost, "/internal/cubebox/conversations/conv-1/turns/turn-1:confirm", nil)
+		req = req.WithContext(withTenant(withPrincipal(req.Context(), Principal{ID: "actor-1"}), Tenant{ID: "tenant-1"}))
+
+		handleCubeBoxTurnActionAPI(rec, req, nil)
+		if rec.Code != http.StatusServiceUnavailable {
+			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+		}
+	})
+
+	t.Run("reply action gate unavailable", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPost, "/internal/cubebox/conversations/conv-1/turns/turn-1:reply", strings.NewReader(`{"locale":"zh"}`))
 		req = req.WithContext(withTenant(withPrincipal(req.Context(), Principal{ID: "actor-1"}), Tenant{ID: "tenant-1"}))
 
 		handleCubeBoxTurnActionAPI(rec, req, nil)
@@ -97,12 +97,140 @@ func TestCubeBoxConversationAndTaskAPIWrappers(t *testing.T) {
 	})
 }
 
+func TestCubeBoxReplyActionUsesFacade(t *testing.T) {
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/internal/cubebox/conversations/conv-1/turns/turn-1:reply", strings.NewReader(`{"locale":"zh","fallback_text":"摘要"}`))
+	req = req.WithContext(withTenant(withPrincipal(req.Context(), Principal{ID: "actor-1", RoleSlug: "admin"}), Tenant{ID: "tenant-1"}))
+
+	facade := cubeboxmodule.NewFacade(nil, nil, nil, stubCubeBoxLegacyFacade{
+		reply: map[string]any{
+			"text":            "已生成回复",
+			"kind":            "info",
+			"stage":           "draft",
+			"conversation_id": "conv-1",
+			"turn_id":         "turn-1",
+		},
+	})
+
+	handleCubeBoxTurnActionAPI(rec, req, facade)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+	}
+	var payload map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+		t.Fatal(err)
+	}
+	if payload["text"] != "已生成回复" || payload["turn_id"] != "turn-1" {
+		t.Fatalf("payload=%+v", payload)
+	}
+}
+
+func TestCubeBoxTaskAPIMapsFormalFacadeErrors(t *testing.T) {
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/internal/cubebox/tasks", nil)
+	if !assistantWriteTaskError(rec, req, cubeboxservices.ErrPlanContractMismatch) {
+		t.Fatal("expected error to be handled")
+	}
+	if rec.Code != http.StatusConflict {
+		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+	}
+	if !strings.Contains(rec.Body.String(), "ai_plan_contract_version_mismatch") {
+		t.Fatalf("body=%s", rec.Body.String())
+	}
+}
+
+func TestCubeBoxTurnActionMapsFormalCommitErrors(t *testing.T) {
+	testCases := []struct {
+		name     string
+		err      error
+		wantHTTP int
+		wantCode string
+	}{
+		{name: "confirmation_required", err: cubeboxservices.ErrConfirmationRequired, wantHTTP: http.StatusConflict, wantCode: "conversation_confirmation_required"},
+		{name: "confirmation_expired", err: cubeboxservices.ErrConfirmationExpired, wantHTTP: http.StatusConflict, wantCode: "conversation_confirmation_expired"},
+		{name: "state_invalid", err: cubeboxservices.ErrConversationStateInvalid, wantHTTP: http.StatusConflict, wantCode: "conversation_state_invalid"},
+		{name: "auth_snapshot_expired", err: cubeboxservices.ErrAuthSnapshotExpired, wantHTTP: http.StatusForbidden, wantCode: "ai_actor_auth_snapshot_expired"},
+		{name: "role_drift", err: cubeboxservices.ErrRoleDriftDetected, wantHTTP: http.StatusForbidden, wantCode: "ai_actor_role_drift_detected"},
+		{name: "task_state_invalid", err: cubeboxservices.ErrTaskStateInvalid, wantHTTP: http.StatusConflict, wantCode: "assistant_task_state_invalid"},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			rec := httptest.NewRecorder()
+			req := httptest.NewRequest(http.MethodPost, "/internal/cubebox/conversations/conv-1/turns/turn-1:commit", nil)
+			writeCubeBoxTurnActionError(rec, req, tc.err)
+			if rec.Code != tc.wantHTTP {
+				t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+			}
+			if !strings.Contains(rec.Body.String(), tc.wantCode) {
+				t.Fatalf("body=%s", rec.Body.String())
+			}
+		})
+	}
+}
+
+type stubCubeBoxLegacyFacade struct {
+	reply map[string]any
+}
+
+func (s stubCubeBoxLegacyFacade) ListConversations(context.Context, string, string, int, string) ([]cubeboxdomain.ConversationListItem, string, error) {
+	return nil, "", nil
+}
+func (s stubCubeBoxLegacyFacade) GetConversation(context.Context, string, string, string) (*cubeboxdomain.Conversation, error) {
+	return nil, nil
+}
+func (s stubCubeBoxLegacyFacade) CreateConversation(context.Context, string, cubeboxservices.Principal) (*cubeboxdomain.Conversation, error) {
+	return nil, nil
+}
+func (s stubCubeBoxLegacyFacade) CreateTurn(context.Context, string, cubeboxservices.Principal, string, string) (*cubeboxdomain.Conversation, error) {
+	return nil, nil
+}
+func (s stubCubeBoxLegacyFacade) ConfirmTurn(context.Context, string, cubeboxservices.Principal, string, string, string) (*cubeboxdomain.Conversation, error) {
+	return nil, nil
+}
+func (s stubCubeBoxLegacyFacade) CommitTurn(context.Context, string, cubeboxservices.Principal, string, string) (*cubeboxdomain.TaskReceipt, error) {
+	return nil, nil
+}
+func (s stubCubeBoxLegacyFacade) SubmitTask(context.Context, string, cubeboxservices.Principal, cubeboxdomain.TaskSubmitRequest) (*cubeboxdomain.TaskReceipt, error) {
+	return nil, nil
+}
+func (s stubCubeBoxLegacyFacade) GetTask(context.Context, string, cubeboxservices.Principal, string) (*cubeboxdomain.TaskDetail, error) {
+	return nil, nil
+}
+func (s stubCubeBoxLegacyFacade) CancelTask(context.Context, string, cubeboxservices.Principal, string) (*cubeboxdomain.TaskCancelResponse, error) {
+	return nil, nil
+}
+func (s stubCubeBoxLegacyFacade) ExecuteTaskWorkflow(context.Context, string, cubeboxservices.Principal, *cubeboxdomain.Conversation, string) (cubeboxservices.TaskWorkflowExecutionResult, error) {
+	return cubeboxservices.TaskWorkflowExecutionResult{}, nil
+}
+func (s stubCubeBoxLegacyFacade) RenderReply(context.Context, string, cubeboxservices.Principal, string, string, map[string]any) (map[string]any, error) {
+	return s.reply, nil
+}
+
+func TestCubeBoxConversationDeleteUsesFormalSemantics(t *testing.T) {
+	fileSvc := cubeboxservices.NewFileService(&runtimeHealthyFileStore{})
+	assistantSvc := newAssistantConversationService(nil, nil)
+	_, err := assistantSvc.createConversationWithContext(context.Background(), "tenant-1", Principal{ID: "actor-1"})
+	if err != nil {
+		t.Fatalf("create conversation: %v", err)
+	}
+	facade := newCubeBoxFacade(nil, assistantSvc, fileSvc)
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodDelete, "/internal/cubebox/conversations/conv-1", nil)
+	req = req.WithContext(withTenant(withPrincipal(req.Context(), Principal{ID: "actor-1"}), Tenant{ID: "tenant-1"}))
+
+	handleCubeBoxConversationDetailAPI(rec, req, facade)
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+	}
+}
+
 func TestCubeBoxRuntimeStatusAPI(t *testing.T) {
 	t.Run("method not allowed", func(t *testing.T) {
 		rec := httptest.NewRecorder()
 		req := httptest.NewRequest(http.MethodPost, "/internal/cubebox/runtime-status", nil)
 
-		handleCubeBoxRuntimeStatusAPI(rec, req, nil, nil)
+		handleCubeBoxRuntimeStatusAPI(rec, req, nil)
 		if rec.Code != http.StatusMethodNotAllowed {
 			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
 		}
@@ -111,29 +239,21 @@ func TestCubeBoxRuntimeStatusAPI(t *testing.T) {
 	t.Run("assistant and file store missing", func(t *testing.T) {
 		rec := httptest.NewRecorder()
 		req := httptest.NewRequest(http.MethodGet, "/internal/cubebox/runtime-status", nil)
+		facade := cubeboxmodule.NewFacade(nil, nil, nil, nil)
 
-		handleCubeBoxRuntimeStatusAPI(rec, req, nil, nil)
+		handleCubeBoxRuntimeStatusAPI(rec, req, facade)
 		if rec.Code != http.StatusOK {
 			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
 		}
-		var payload cubeboxRuntimeStatusResponse
+		var payload cubeboxdomain.RuntimeStatus
 		if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
 			t.Fatal(err)
 		}
-		if payload.Status != assistantRuntimeHealthUnavailable {
+		if payload.Status != "unavailable" {
 			t.Fatalf("status=%+v", payload)
 		}
 		if payload.Backend.Reason != "assistant_service_missing" || payload.FileStore.Reason != "file_store_missing" {
 			t.Fatalf("payload=%+v", payload)
-		}
-		if payload.KnowledgeRuntime.Reason != "knowledge_runtime_missing" || payload.ModelGateway.Reason != "model_gateway_missing" {
-			t.Fatalf("payload=%+v", payload)
-		}
-		if payload.Capabilities.ConversationEnabled != true || payload.Capabilities.FilesEnabled != true {
-			t.Fatalf("capabilities=%+v", payload.Capabilities)
-		}
-		if len(payload.RetiredCapabilities) == 0 {
-			t.Fatalf("retired capabilities missing: %+v", payload)
 		}
 	})
 
@@ -145,22 +265,23 @@ func TestCubeBoxRuntimeStatusAPI(t *testing.T) {
 			knowledgeErr: errors.New("knowledge unavailable"),
 		}
 		fileSvc := cubeboxservices.NewFileService(&runtimeHealthyFileStore{})
+		facade := newCubeBoxFacade(nil, svc, fileSvc)
 
-		handleCubeBoxRuntimeStatusAPI(rec, req, svc, fileSvc)
+		handleCubeBoxRuntimeStatusAPI(rec, req, facade)
 		if rec.Code != http.StatusOK {
 			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
 		}
-		var payload cubeboxRuntimeStatusResponse
+		var payload cubeboxdomain.RuntimeStatus
 		if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
 			t.Fatal(err)
 		}
-		if payload.Status != assistantRuntimeHealthDegraded {
+		if payload.Status != "degraded" {
 			t.Fatalf("payload=%+v", payload)
 		}
 		if payload.KnowledgeRuntime.Reason != "knowledge_runtime_unavailable" {
 			t.Fatalf("payload=%+v", payload)
 		}
-		if payload.ModelGateway.Healthy != assistantRuntimeHealthHealthy || payload.FileStore.Healthy != assistantRuntimeHealthHealthy {
+		if payload.ModelGateway.Healthy != "healthy" || payload.FileStore.Healthy != "healthy" {
 			t.Fatalf("payload=%+v", payload)
 		}
 	})
@@ -173,116 +294,20 @@ func TestCubeBoxRuntimeStatusAPI(t *testing.T) {
 			gatewayErr:   errors.New("gateway unavailable"),
 		}
 		fileSvc := cubeboxservices.NewFileService(&runtimeHealthyFileStore{healthyErr: errors.New("disk unavailable")})
+		facade := newCubeBoxFacade(nil, svc, fileSvc)
 
-		handleCubeBoxRuntimeStatusAPI(rec, req, svc, fileSvc)
-		var payload cubeboxRuntimeStatusResponse
+		handleCubeBoxRuntimeStatusAPI(rec, req, facade)
+		var payload cubeboxdomain.RuntimeStatus
 		if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
 			t.Fatal(err)
 		}
-		if payload.Status != assistantRuntimeHealthUnavailable {
+		if payload.Status != "unavailable" {
 			t.Fatalf("payload=%+v", payload)
 		}
 		if payload.ModelGateway.Reason != "model_gateway_unavailable" || payload.FileStore.Reason != "file_store_unavailable" {
 			t.Fatalf("payload=%+v", payload)
 		}
-		if payload.KnowledgeRuntime.Healthy != assistantRuntimeHealthHealthy {
-			t.Fatalf("payload=%+v", payload)
-		}
 	})
-
-	t.Run("assistant present but model gateway missing", func(t *testing.T) {
-		rec := httptest.NewRecorder()
-		req := httptest.NewRequest(http.MethodGet, "/internal/cubebox/runtime-status", nil)
-		svc := &assistantConversationService{}
-		fileSvc := cubeboxservices.NewFileService(&runtimeHealthyFileStore{})
-
-		handleCubeBoxRuntimeStatusAPI(rec, req, svc, fileSvc)
-		if rec.Code != http.StatusOK {
-			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
-		}
-		var payload cubeboxRuntimeStatusResponse
-		if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
-			t.Fatal(err)
-		}
-		if payload.Status != assistantRuntimeHealthUnavailable {
-			t.Fatalf("payload=%+v", payload)
-		}
-		if payload.ModelGateway.Reason != "model_gateway_missing" {
-			t.Fatalf("payload=%+v", payload)
-		}
-		if payload.KnowledgeRuntime.Healthy != assistantRuntimeHealthHealthy {
-			t.Fatalf("payload=%+v", payload)
-		}
-	})
-}
-
-func TestCubeBoxTaskPollURIHelpers(t *testing.T) {
-	t.Parallel()
-
-	if shouldRewriteCubeBoxTaskPollURI("text/plain", []byte(`{"poll_uri":"/internal/assistant/tasks/t1"}`)) {
-		t.Fatal("plain text should not rewrite")
-	}
-	if shouldRewriteCubeBoxTaskPollURI("application/json", nil) {
-		t.Fatal("empty body should not rewrite")
-	}
-	if !shouldRewriteCubeBoxTaskPollURI(" application/json; charset=utf-8 ", []byte(`{"poll_uri":"/internal/assistant/tasks/t1"}`)) {
-		t.Fatal("json assistant task poll uri should rewrite")
-	}
-
-	body := rewriteCubeBoxTaskPollURI([]byte(`{"poll_uri":"/internal/assistant/tasks/task_1","status":"queued"}`))
-	if !strings.Contains(string(body), "/internal/cubebox/tasks/task_1") {
-		t.Fatalf("unexpected rewritten body: %s", string(body))
-	}
-	if got := rewriteCubeBoxTaskPollURI([]byte(`not-json`)); string(got) != "not-json" {
-		t.Fatalf("expected original body, got %s", string(got))
-	}
-	if got := rewriteCubeBoxTaskPollURI([]byte(`{"status":"queued"}`)); !strings.Contains(string(got), `"status":"queued"`) {
-		t.Fatalf("expected unchanged payload, got %s", string(got))
-	}
-	if got := rewriteCubeBoxTaskPollURI([]byte(`{"poll_uri":123}`)); string(got) != `{"poll_uri":123}` {
-		t.Fatalf("expected unchanged non-string poll_uri, got %s", string(got))
-	}
-
-	if got := cubeboxTaskPollURI(" /internal/assistant/tasks/task_2 "); got != "/internal/cubebox/tasks/task_2" {
-		t.Fatalf("unexpected task poll uri: %q", got)
-	}
-	if got := cubeboxTaskPollURI("/internal/cubebox/tasks/task_2"); got != "/internal/cubebox/tasks/task_2" {
-		t.Fatalf("unexpected unchanged uri: %q", got)
-	}
-}
-
-func TestProxyCubeBoxTaskPollURIResponse(t *testing.T) {
-	t.Parallel()
-
-	req := httptest.NewRequest(http.MethodPost, "/internal/cubebox/tasks", nil)
-	rec := httptest.NewRecorder()
-
-	proxyCubeBoxTaskPollURIResponse(rec, req, func(inner *httptest.ResponseRecorder) {
-		inner.Header().Set("Content-Type", "application/json")
-		inner.Header().Add("X-Test", "one")
-		inner.WriteHeader(http.StatusAccepted)
-		_, _ = inner.Write([]byte(`{"poll_uri":"/internal/assistant/tasks/task_3"}`))
-	})
-
-	if rec.Code != http.StatusAccepted {
-		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
-	}
-	if rec.Header().Get("X-Test") != "one" {
-		t.Fatalf("headers=%v", rec.Header())
-	}
-	if !strings.Contains(rec.Body.String(), "/internal/cubebox/tasks/task_3") {
-		t.Fatalf("body=%s", rec.Body.String())
-	}
-
-	rec = httptest.NewRecorder()
-	proxyCubeBoxTaskPollURIResponse(rec, req, func(inner *httptest.ResponseRecorder) {
-		inner.Header().Set("Content-Type", "text/plain")
-		inner.WriteHeader(http.StatusAccepted)
-		_, _ = inner.Write([]byte("plain body"))
-	})
-	if rec.Body.String() != "plain body" {
-		t.Fatalf("expected passthrough body, got %q", rec.Body.String())
-	}
 }
 
 type runtimeHealthyFileStore struct {

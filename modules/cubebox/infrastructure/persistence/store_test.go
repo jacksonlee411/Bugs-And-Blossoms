@@ -6,10 +6,12 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgtype"
+	cubeboxdomain "github.com/jacksonlee411/Bugs-And-Blossoms/modules/cubebox/domain"
 )
 
 const (
@@ -296,14 +298,14 @@ func TestPGStoreSuccessPaths(t *testing.T) {
 
 	t.Run("list conversations uses default limit", func(t *testing.T) {
 		tx := &fakeTx{rows: &fakeRows{records: [][]any{{}}}}
-		items, err := makeStore(tx).ListConversations(ctx, testTenantUUID, "actor-1", 0)
+		items, err := makeStore(tx).ListConversations(ctx, testTenantUUID, "actor-1", 0, time.Time{}, "")
 		if err != nil {
 			t.Fatalf("list conversations: %v", err)
 		}
 		if len(items) != 1 || !tx.committed {
 			t.Fatalf("unexpected items=%d committed=%v", len(items), tx.committed)
 		}
-		if got, ok := tx.queryArgs[2].(int32); !ok || got != 20 {
+		if got, ok := tx.queryArgs[4].(int32); !ok || got != 20 {
 			t.Fatalf("expected default limit 20, got %#v", tx.queryArgs)
 		}
 	})
@@ -330,20 +332,85 @@ func TestPGStoreSuccessPaths(t *testing.T) {
 		}
 	})
 
-	t.Run("list state transitions", func(t *testing.T) {
-		tx := &fakeTx{rows: &fakeRows{records: [][]any{{}}}}
-		items, err := makeStore(tx).ListConversationStateTransitions(ctx, testTenantUUID, "conversation-1")
-		if err != nil {
-			t.Fatalf("list transitions: %v", err)
+		t.Run("list state transitions", func(t *testing.T) {
+			tx := &fakeTx{rows: &fakeRows{records: [][]any{{}}}}
+			items, err := makeStore(tx).ListConversationStateTransitions(ctx, testTenantUUID, "conversation-1")
+			if err != nil {
+				t.Fatalf("list transitions: %v", err)
 		}
-		if len(items) != 1 || !tx.committed {
-			t.Fatalf("unexpected items=%d committed=%v", len(items), tx.committed)
-		}
-	})
+			if len(items) != 1 || !tx.committed {
+				t.Fatalf("unexpected items=%d committed=%v", len(items), tx.committed)
+			}
+		})
 
-	t.Run("count blocking tasks", func(t *testing.T) {
-		tx := &fakeTx{row: &fakeRow{vals: []any{int64(7)}}}
-		count, err := makeStore(tx).CountBlockingTasks(ctx, testTenantUUID, "conversation-1")
+		t.Run("sync conversation snapshot", func(t *testing.T) {
+			now := time.Date(2026, 4, 15, 16, 0, 0, 0, time.UTC)
+			tx := &fakeTx{}
+			err := makeStore(tx).SyncConversationSnapshot(ctx, testTenantUUID, cubeboxdomain.Conversation{
+				ConversationID: "conv_1",
+				ActorID:        "actor-1",
+				ActorRole:      "tenant-admin",
+				State:          "confirmed",
+				CurrentPhase:   "await_commit_confirm",
+				CreatedAt:      now,
+				UpdatedAt:      now,
+				Turns: []cubeboxdomain.ConversationTurn{{
+					TurnID:              "turn_1",
+					UserInput:           "create org",
+					State:               "confirmed",
+					Phase:               "await_commit_confirm",
+					RiskTier:            "medium",
+					RequestID:           "assistant_req",
+					TraceID:             "trace",
+					PolicyVersion:       "policy.v1",
+					CompositionVersion:  "composition.v1",
+					MappingVersion:      "mapping.v1",
+					Intent:              map[string]any{"action": "create_orgunit"},
+					Plan:                map[string]any{"summary": "confirm"},
+					Candidates:          []map[string]any{{"candidate_id": "cand_1"}},
+					ResolvedCandidateID: "cand_1",
+					DryRun:              map[string]any{"plan_hash": "plan"},
+					MissingFields:       []string{},
+					CreatedAt:           now,
+					UpdatedAt:           now,
+				}},
+				Transitions: []cubeboxdomain.StateTransition{{
+					TurnID:     "turn_1",
+					TurnAction: "confirm",
+					RequestID:  "assistant_req",
+					TraceID:    "trace",
+					FromState:  "validated",
+					ToState:    "confirmed",
+					FromPhase:  "await_candidate_confirm",
+					ToPhase:    "await_commit_confirm",
+					ReasonCode: "confirmed",
+					ActorID:    "actor-1",
+					ChangedAt:  now,
+				}},
+			})
+			if err != nil {
+				t.Fatalf("sync conversation snapshot: %v", err)
+			}
+			if !tx.committed {
+				t.Fatal("expected commit")
+			}
+			if len(tx.execSQLs) != 4 {
+				t.Fatalf("unexpected exec count=%d sqls=%v", len(tx.execSQLs), tx.execSQLs)
+			}
+			if !strings.Contains(tx.execSQLs[1], "INSERT INTO iam.cubebox_conversations") {
+				t.Fatalf("unexpected conversation sql=%q", tx.execSQLs[1])
+			}
+			if !strings.Contains(tx.execSQLs[2], "INSERT INTO iam.cubebox_turns") {
+				t.Fatalf("unexpected turn sql=%q", tx.execSQLs[2])
+			}
+			if !strings.Contains(tx.execSQLs[3], "INSERT INTO iam.cubebox_state_transitions") {
+				t.Fatalf("unexpected transition sql=%q", tx.execSQLs[3])
+			}
+		})
+
+		t.Run("count blocking tasks", func(t *testing.T) {
+			tx := &fakeTx{row: &fakeRow{vals: []any{int64(7)}}}
+			count, err := makeStore(tx).CountBlockingTasks(ctx, testTenantUUID, "conversation-1")
 		if err != nil {
 			t.Fatalf("count tasks: %v", err)
 		}
@@ -463,7 +530,7 @@ func TestPGStoreFailurePaths(t *testing.T) {
 			t.Fatal("begin should not be called")
 			return nil, nil
 		}))
-		if _, err := store.ListConversations(ctx, "bad", "actor-1", 1); err == nil {
+		if _, err := store.ListConversations(ctx, "bad", "actor-1", 1, time.Time{}, ""); err == nil {
 			t.Fatal("expected tenant parse error")
 		}
 	})
@@ -635,13 +702,13 @@ func TestPGStoreAdditionalFailurePaths(t *testing.T) {
 		}
 	})
 
-		t.Run("list file links commit error", func(t *testing.T) {
-			tx := &fakeTx{rows: &fakeRows{records: [][]any{{}}}, commitErr: errors.New("commit failed")}
-			if _, err := makeStore(tx).ListConversationFileLinks(ctx, testTenantUUID, "conversation-1"); err == nil || !strings.Contains(err.Error(), "commit failed") {
-				t.Fatalf("expected commit error, got %v", err)
-			}
-		})
-	}
+	t.Run("list file links commit error", func(t *testing.T) {
+		tx := &fakeTx{rows: &fakeRows{records: [][]any{{}}}, commitErr: errors.New("commit failed")}
+		if _, err := makeStore(tx).ListConversationFileLinks(ctx, testTenantUUID, "conversation-1"); err == nil || !strings.Contains(err.Error(), "commit failed") {
+			t.Fatalf("expected commit error, got %v", err)
+		}
+	})
+}
 
 func TestPGStoreRemainingBranchCoverage(t *testing.T) {
 	t.Parallel()
@@ -658,21 +725,21 @@ func TestPGStoreRemainingBranchCoverage(t *testing.T) {
 	}
 
 	t.Run("list conversations begin error", func(t *testing.T) {
-		if _, err := newStore(errors.New("begin failed"), nil).ListConversations(ctx, testTenantUUID, "actor-1", 1); err == nil || !strings.Contains(err.Error(), "begin failed") {
+		if _, err := newStore(errors.New("begin failed"), nil).ListConversations(ctx, testTenantUUID, "actor-1", 1, time.Time{}, ""); err == nil || !strings.Contains(err.Error(), "begin failed") {
 			t.Fatalf("expected begin error, got %v", err)
 		}
 	})
 
 	t.Run("list conversations query error", func(t *testing.T) {
 		tx := &fakeTx{queryErr: errors.New("query failed")}
-		if _, err := newStore(nil, tx).ListConversations(ctx, testTenantUUID, "actor-1", 1); err == nil || !strings.Contains(err.Error(), "query failed") {
+		if _, err := newStore(nil, tx).ListConversations(ctx, testTenantUUID, "actor-1", 1, time.Time{}, ""); err == nil || !strings.Contains(err.Error(), "query failed") {
 			t.Fatalf("expected query error, got %v", err)
 		}
 	})
 
 	t.Run("list conversations commit error", func(t *testing.T) {
 		tx := &fakeTx{rows: &fakeRows{records: [][]any{{}}}, commitErr: errors.New("commit failed")}
-		if _, err := newStore(nil, tx).ListConversations(ctx, testTenantUUID, "actor-1", 1); err == nil || !strings.Contains(err.Error(), "commit failed") {
+		if _, err := newStore(nil, tx).ListConversations(ctx, testTenantUUID, "actor-1", 1, time.Time{}, ""); err == nil || !strings.Contains(err.Error(), "commit failed") {
 			t.Fatalf("expected commit error, got %v", err)
 		}
 	})

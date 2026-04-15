@@ -14,6 +14,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/jacksonlee411/Bugs-And-Blossoms/internal/routing"
+	cubeboxmodule "github.com/jacksonlee411/Bugs-And-Blossoms/modules/cubebox"
 	iammodule "github.com/jacksonlee411/Bugs-And-Blossoms/modules/iam"
 	jobcatalogmodule "github.com/jacksonlee411/Bugs-And-Blossoms/modules/jobcatalog"
 	orgunitmodule "github.com/jacksonlee411/Bugs-And-Blossoms/modules/orgunit"
@@ -153,7 +154,7 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, error) {
 		return nil, err
 	}
 	assistantSvc := newAssistantConversationServiceWithPool(orgStore, orgUnitWriteService, pgPool)
-	cubeboxFileSvc := newCubeBoxFileService()
+	cubeboxFacade := newCubeBoxFacade(pgPool, assistantSvc, cubeboxmodule.NewDefaultLocalFileService())
 	if assistantSvc != nil && assistantSvc.gatewayErr != nil {
 		return nil, assistantSvc.gatewayErr
 	}
@@ -500,46 +501,46 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, error) {
 		handleAssistantRuntimeStatusAPI(w, r)
 	}))
 	router.Handle(routing.RouteClassInternalAPI, http.MethodPost, "/internal/cubebox/conversations", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		handleCubeBoxConversationsAPI(w, r, assistantSvc)
+		handleCubeBoxConversationsAPI(w, r, cubeboxFacade)
 	}))
 	router.Handle(routing.RouteClassInternalAPI, http.MethodGet, "/internal/cubebox/conversations", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		handleCubeBoxConversationsAPI(w, r, assistantSvc)
+		handleCubeBoxConversationsAPI(w, r, cubeboxFacade)
 	}))
 	router.Handle(routing.RouteClassInternalAPI, http.MethodGet, "/internal/cubebox/conversations/{conversation_id}", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		handleCubeBoxConversationDetailAPI(w, r, assistantSvc)
+		handleCubeBoxConversationDetailAPI(w, r, cubeboxFacade)
 	}))
 	router.Handle(routing.RouteClassInternalAPI, http.MethodDelete, "/internal/cubebox/conversations/{conversation_id}", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		handleCubeBoxConversationDetailAPI(w, r, assistantSvc)
+		handleCubeBoxConversationDetailAPI(w, r, cubeboxFacade)
 	}))
 	router.Handle(routing.RouteClassInternalAPI, http.MethodPost, "/internal/cubebox/conversations/{conversation_id}/turns", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		handleCubeBoxConversationTurnsAPI(w, r, assistantSvc)
+		handleCubeBoxConversationTurnsAPI(w, r, cubeboxFacade)
 	}))
 	router.Handle(routing.RouteClassInternalAPI, http.MethodPost, "/internal/cubebox/conversations/{conversation_id}/turns/{turn_action}", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		handleCubeBoxTurnActionAPI(w, r, assistantSvc)
+		handleCubeBoxTurnActionAPI(w, r, cubeboxFacade)
 	}))
 	router.Handle(routing.RouteClassInternalAPI, http.MethodPost, "/internal/cubebox/tasks", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		handleCubeBoxTasksAPI(w, r, assistantSvc)
+		handleCubeBoxTasksAPI(w, r, cubeboxFacade)
 	}))
 	router.Handle(routing.RouteClassInternalAPI, http.MethodGet, "/internal/cubebox/tasks/{task_id}", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		handleCubeBoxTaskDetailAPI(w, r, assistantSvc)
+		handleCubeBoxTaskDetailAPI(w, r, cubeboxFacade)
 	}))
 	router.Handle(routing.RouteClassInternalAPI, http.MethodPost, "/internal/cubebox/tasks/{task_id}", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		handleCubeBoxTaskActionAPI(w, r, assistantSvc)
+		handleCubeBoxTaskActionAPI(w, r, cubeboxFacade)
 	}))
 	router.Handle(routing.RouteClassInternalAPI, http.MethodGet, "/internal/cubebox/models", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		handleCubeBoxModelsAPI(w, r, assistantSvc)
+		handleCubeBoxModelsAPI(w, r, cubeboxFacade)
 	}))
 	router.Handle(routing.RouteClassInternalAPI, http.MethodGet, "/internal/cubebox/runtime-status", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		handleCubeBoxRuntimeStatusAPI(w, r, assistantSvc, cubeboxFileSvc)
+		handleCubeBoxRuntimeStatusAPI(w, r, cubeboxFacade)
 	}))
 	router.Handle(routing.RouteClassInternalAPI, http.MethodGet, "/internal/cubebox/files", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		handleCubeBoxFilesAPI(w, r, cubeboxFileSvc)
+		handleCubeBoxFilesAPI(w, r, cubeboxFacade)
 	}))
 	router.Handle(routing.RouteClassInternalAPI, http.MethodPost, "/internal/cubebox/files", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		handleCubeBoxFilesAPI(w, r, cubeboxFileSvc)
+		handleCubeBoxFilesAPI(w, r, cubeboxFacade)
 	}))
 	router.Handle(routing.RouteClassInternalAPI, http.MethodDelete, "/internal/cubebox/files/{file_id}", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		handleCubeBoxFileDeleteAPI(w, r, cubeboxFileSvc)
+		handleCubeBoxFileDeleteAPI(w, r, cubeboxFacade)
 	}))
 	assistantFormalEntryAPI := newAssistantFormalEntryAPIHandler(assistantSvc, sessions)
 	router.Handle(routing.RouteClassInternalAPI, http.MethodGet, "/internal/assistant/ui-bootstrap", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

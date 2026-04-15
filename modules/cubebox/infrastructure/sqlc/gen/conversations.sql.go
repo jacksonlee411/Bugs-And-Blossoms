@@ -196,18 +196,31 @@ SELECT tenant_uuid, conversation_id, actor_id, actor_role, state, current_phase,
 FROM iam.cubebox_conversations
 WHERE tenant_uuid = $1
   AND actor_id = $2
+  AND (
+    $3::timestamptz = '0001-01-01 00:00:00+00'
+    OR updated_at < $3
+    OR (updated_at = $3 AND conversation_id < $4)
+  )
 ORDER BY updated_at DESC, conversation_id DESC
-LIMIT $3
+LIMIT $5
 `
 
 type ListConversationsByActorParams struct {
-	TenantUuid pgtype.UUID `json:"tenant_uuid"`
-	ActorID    string      `json:"actor_id"`
-	Limit      int32       `json:"limit"`
+	TenantUuid     pgtype.UUID        `json:"tenant_uuid"`
+	ActorID        string             `json:"actor_id"`
+	Column3        pgtype.Timestamptz `json:"column_3"`
+	ConversationID string             `json:"conversation_id"`
+	Limit          int32              `json:"limit"`
 }
 
 func (q *Queries) ListConversationsByActor(ctx context.Context, arg ListConversationsByActorParams) ([]IamCubeboxConversation, error) {
-	rows, err := q.db.Query(ctx, listConversationsByActor, arg.TenantUuid, arg.ActorID, arg.Limit)
+	rows, err := q.db.Query(ctx, listConversationsByActor,
+		arg.TenantUuid,
+		arg.ActorID,
+		arg.Column3,
+		arg.ConversationID,
+		arg.Limit,
+	)
 	if err != nil {
 		return nil, err
 	}
