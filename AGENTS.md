@@ -223,6 +223,14 @@ modules/{module}/
 - DEV-PLAN-062：全链路业务测试子计划 TP-060-02——主数据（组织架构 + SetID + JobCatalog + 职位）：`docs/dev-plans/062-test-tp060-02-master-data-org-setid-jobcatalog-position.md`
 - DEV-PLAN-063：全链路业务测试子计划 TP-060-03——人员与任职（Person + Assignments）：`docs/dev-plans/063-test-tp060-03-person-and-assignments.md`
 - DEV-PLAN-064A：全链路业务测试子计划 TP-060-05——Assistant（会话 + 意图 + 提交 + 任务编排）：`docs/dev-plans/064a-test-tp060-05-assistant-conversation-intent-and-tasks.md`
+- DEV-PLAN-380：CubeBox 一方资产化与 LibreChat 完整退役重构方案（v1 去 Prompt 版）：`docs/dev-plans/380-cubebox-first-party-ownership-and-librechat-retirement-plan.md`
+- DEV-PLAN-380A：CubeBox PostgreSQL 数据面与迁移契约：`docs/dev-plans/380a-cubebox-postgresql-data-plane-and-migration-contract.md`
+- DEV-PLAN-380B：CubeBox 后端正式实现面切换：`docs/dev-plans/380b-cubebox-backend-formal-implementation-cutover-plan.md`
+- DEV-PLAN-380C：CubeBox API/DTO 收口与 `/internal/assistant/*` 退役：`docs/dev-plans/380c-cubebox-api-dto-convergence-and-assistant-retirement-plan.md`
+- DEV-PLAN-380D：CubeBox 文件面正式化：`docs/dev-plans/380d-cubebox-file-plane-formalization-plan.md`
+- DEV-PLAN-380E：CubeBox `apps/web` 正式前端收口：`docs/dev-plans/380e-cubebox-apps-web-frontend-convergence-plan.md`
+- DEV-PLAN-380F：LibreChat vendored/runtime/deploy 资产退役与收口：`docs/dev-plans/380f-librechat-vendored-runtime-and-deploy-retirement-plan.md`
+- DEV-PLAN-380G：CubeBox 全量回归、门禁与封板验收：`docs/dev-plans/380g-cubebox-regression-gates-and-final-closure-plan.md`
 - DEV-PLAN-069：移除薪酬社保与考勤（文档/代码/测试/数据库）：`docs/dev-plans/069-remove-payroll-attendance.md`
 - DEV-PLAN-070【归档】：SetID 绑定组织架构重构方案（时间口径已由 DEV-PLAN-102B 接管）：`docs/archive/dev-plans/070-setid-orgunit-binding-redesign.md`
 - DEV-PLAN-070A：全局共享租户模式 vs 天然租户隔离模式专项调查（SetID/Scope Package）：`docs/dev-plans/070a-setid-global-share-vs-tenant-native-isolation-investigation.md`

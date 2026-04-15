@@ -272,9 +272,6 @@ func assistantSemanticIntentRouteForNonBusiness(routeKind string) (string, strin
 		if entry, ok := runtime.findRouteByRouteKind(routeKind); ok {
 			intentID := strings.TrimSpace(entry.IntentID)
 			resolvedRouteKind := strings.TrimSpace(entry.RouteKind)
-			if resolvedRouteKind == "" {
-				resolvedRouteKind = routeKind
-			}
 			if intentID != "" && resolvedRouteKind != "" {
 				return intentID, resolvedRouteKind
 			}
@@ -299,9 +296,6 @@ func assistantOpenAISystemPrompt() string {
 	businessMappings := make([]string, 0, len(runtime.routeByAction))
 	for _, actionID := range assistantOrderedBusinessActionIDs() {
 		intentID := assistantSemanticIntentIDForAction(actionID)
-		if intentID == "" {
-			continue
-		}
 		businessMappings = append(businessMappings, actionID+"="+intentID)
 	}
 	sort.Strings(businessMappings)

@@ -222,6 +222,44 @@ func knownErrorMessage(code string) string {
 		return "正式入口缺少可用 endpoint 配置，请检查 Assistant 运行时模型配置。"
 	case "assistant_startup_models_unavailable":
 		return "正式入口缺少可用模型清单，请检查 Assistant 运行时配置。"
+	case "cubebox_service_missing":
+		return "CubeBox 服务暂不可用，请稍后重试。"
+	case "cubebox_conversation_cursor_invalid":
+		return "CubeBox 会话分页游标无效或已过期，请刷新列表后重试。"
+	case "cubebox_conversation_list_failed":
+		return "加载 CubeBox 会话列表失败，请稍后重试。"
+	case "cubebox_conversation_load_failed":
+		return "加载 CubeBox 会话失败，请稍后重试。"
+	case "cubebox_conversation_create_failed":
+		return "创建 CubeBox 会话失败，请稍后重试。"
+	case "cubebox_conversation_delete_blocked_by_running_task":
+		return "该会话仍有运行中的任务，暂不能删除。"
+	case "cubebox_conversation_delete_not_implemented":
+		return "CubeBox 会话删除能力尚未正式实现。"
+	case "cubebox_turn_create_failed":
+		return "创建 CubeBox 对话轮次失败，请稍后重试。"
+	case "cubebox_turn_action_failed":
+		return "执行 CubeBox 轮次操作失败，请刷新后重试。"
+	case "cubebox_task_not_found":
+		return "未找到 CubeBox 任务，可能已完成清理或无权访问。"
+	case "cubebox_task_load_failed":
+		return "加载 CubeBox 任务失败，请稍后重试。"
+	case "cubebox_task_cancel_failed":
+		return "取消 CubeBox 任务失败，请稍后重试。"
+	case "cubebox_task_dispatch_failed":
+		return "CubeBox 任务调度失败，请稍后重试或联系管理员。"
+	case "cubebox_models_unavailable":
+		return "CubeBox 模型清单暂不可用，请稍后重试。"
+	case "cubebox_files_unavailable":
+		return "CubeBox 文件存储暂不可用，请稍后重试。"
+	case "cubebox_files_list_failed":
+		return "加载 CubeBox 文件列表失败，请稍后重试。"
+	case "cubebox_file_delete_failed":
+		return "CubeBox 文件删除失败，请稍后重试。"
+	case "cubebox_file_not_found":
+		return "未找到 CubeBox 文件。"
+	case "librechat_retired":
+		return "LibreChat 入口已退役，请改用 CubeBox 正式入口。"
 	default:
 		return ""
 	}

@@ -1,4 +1,4 @@
-h1:uSXHk8Eu/HPT++Qcxv++Y40Xjdx7Nq43dFhIxIhp4H0=
+h1:+3BKijBhnB8qT0hSTeR4drMi/xE0tdqAV0eLQeaRI/s=
 20260106003000_iam_baseline.sql h1:4cRdz130X33pSQ0tm+LXZ1ptR+zChkscFHWrmYy/UgM=
 20260107120000_iam_tenancy_and_superadmin.sql h1:a0K5XB/KuT+D5L/J87q7Rg7vNFy1Q6p4rHc2Wje3O/k=
 20260107130000_iam_principals_and_sessions.sql h1:WRxrjXjg5rHb2ds5PtPVDhVsI4IiF9SMHqY5pKn0T+U=
@@ -14,3 +14,6 @@ h1:uSXHk8Eu/HPT++Qcxv++Y40Xjdx7Nq43dFhIxIhp4H0=
 20260311005500_iam_assistant_phase_snapshot_hardening.sql h1:zkayWceHWzhwQtgS5Tg1RKzouGYX2XdS/uBrYRkUg4g=
 20260311120000_iam_assistant_route_decision.sql h1:MBOazC95Sj3/9viR0Mg9BI/QIaXAx7AaWRVwjIQWcsw=
 20260311183000_iam_assistant_clarification_policy.sql h1:bS51G8vyJB8StlwvRREglqjyICcru02sBv9BHtU3aAw=
+20260414100000_iam_cubebox_conversations.sql h1:hkZqKTqVm4fY4J4FJm5QWgj0gTAd7coq648pfary0Cs=
+20260414101000_iam_cubebox_tasks.sql h1:9WmhrzxiM12yYG80aySDIsE2fo1odS6/8+8c0ESVWTM=
+20260414102000_iam_cubebox_files.sql h1:f5fSHQjc0lomE25iec5jcDULVEIEvnYUbd0arKkyeRo=

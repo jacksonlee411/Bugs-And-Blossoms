@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 import { expectExplicitError } from "./helpers/error-message-assert";
-import { expectNoLegacyOrgFields, legacyOrgFieldPattern } from "./helpers/org-contract-assert";
+import { expectNoLegacyOrgFields } from "./helpers/org-contract-assert";
 
 async function ensureKratosIdentity(ctx, kratosAdminURL, { traits, identifier, password }) {
   const resp = await ctx.request.post(`${kratosAdminURL}/admin/identities`, {
@@ -46,60 +46,6 @@ async function getPositionOptions(ctx, { asOf, orgCode }) {
   );
   expect(resp.status(), await resp.text()).toBe(200);
   return resp.json();
-}
-
-async function fulfillJSON(route, status, payload) {
-  await route.fulfill({
-    status,
-    contentType: "application/json",
-    body: JSON.stringify(payload)
-  });
-}
-
-async function installAssistantLogPageMock(page, { orgCode, positionName, runID }) {
-  await page.route("**/internal/assistant/runtime-status", async (route) => {
-    if (route.request().method() !== "GET") {
-      await route.continue();
-      return;
-    }
-    await fulfillJSON(route, 200, {
-      status: "healthy",
-      checked_at: "2026-01-01T00:00:00Z",
-      upstream: { url: "simulate://tp060-02" },
-      services: [
-        { name: "api", required: true, healthy: "healthy" },
-        { name: "model-gateway", required: true, healthy: "healthy" }
-      ],
-      capabilities: {
-        actions_enabled: true,
-        agents_write_enabled: false,
-        mcp_enabled: false
-      }
-    });
-  });
-
-  await page.route("**/internal/assistant/conversations*", async (route) => {
-    if (route.request().method() !== "GET") {
-      await route.continue();
-      return;
-    }
-    await fulfillJSON(route, 200, {
-      items: [
-        {
-          conversation_id: `conv_tp060_02_${runID}`,
-          state: "committed",
-          updated_at: "2026-01-01T00:00:01Z",
-          last_turn: {
-            turn_id: `turn_tp060_02_${runID}`,
-            user_input: `请为 org_code=${orgCode} 的组织准备职位 ${positionName}`,
-            state: "committed",
-            risk_tier: "high"
-          }
-        }
-      ],
-      next_cursor: ""
-    });
-  });
 }
 
 test("tp060-02: master data (orgunit -> setid -> jobcatalog -> positions)", async ({ browser }) => {
@@ -589,13 +535,12 @@ test("tp060-02: master data (orgunit -> setid -> jobcatalog -> positions)", asyn
   await expect(page.getByRole("heading", { level: 2, name: "Job Catalog" })).toBeVisible();
   await page.goto(`/app/staffing/positions?as_of=${asOf}&org_code=${org.rnd}`);
   await expect(page.getByRole("heading", { level: 2, name: "Staffing / Positions" })).toBeVisible();
-  await installAssistantLogPageMock(page, { orgCode: org.rnd, positionName: "P-ENG-01", runID });
   await page.goto(`/app/assistant?as_of=${asOf}`);
-  await expect(page.getByRole("heading", { name: "AI 助手日志" })).toBeVisible();
-  await expect(page.getByRole("link", { name: "打开 LibreChat" })).toHaveAttribute("href", "/app/assistant/librechat");
-  await expect(page.getByTestId("assistant-conversation-log-item")).toContainText(`org_code=${org.rnd}`);
-  await expect(page.getByTestId("assistant-conversation-log-item")).toContainText("P-ENG-01");
-  await expect(page.getByTestId("assistant-conversation-log-item")).not.toContainText(legacyOrgFieldPattern);
+  await expect(page).toHaveURL(/\/app\/cubebox$/);
+  await expect(page.getByRole("heading", { name: "CubeBox" })).toBeVisible();
+  await expect(page.getByTestId("cubebox-input")).toBeVisible();
+  await expect(page.getByRole("link", { name: "文件" })).toHaveAttribute("href", "/app/cubebox/files");
+  await expect(page.getByRole("link", { name: "模型" })).toHaveAttribute("href", "/app/cubebox/models");
 
   await appContext.close();
 });

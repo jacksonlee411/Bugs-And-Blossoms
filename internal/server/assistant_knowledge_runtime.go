@@ -1316,10 +1316,7 @@ func (runtime *assistantKnowledgeRuntime) buildPlanContextV1(tenantID string, lo
 	if strings.TrimSpace(intent.RouteKind) != assistantRouteKindBusinessAction {
 		return context, nil
 	}
-	pack, ok := runtime.findActionView(strings.TrimSpace(intent.Action), locale)
-	if !ok {
-		return assistantPlanContextV1{}, fmt.Errorf("%w: action view pack missing for %s", errAssistantRuntimeConfigInvalid, strings.TrimSpace(intent.Action))
-	}
+	pack, _ := runtime.findActionView(strings.TrimSpace(intent.Action), locale)
 	context.ActionViewSummary = strings.TrimSpace(pack.Summary)
 	context.FieldDisplayMap = append([]assistantActionViewField(nil), pack.FieldDisplayMap...)
 	context.MissingFieldGuidance = append([]assistantActionViewGuidance(nil), pack.MissingFieldGuidance...)

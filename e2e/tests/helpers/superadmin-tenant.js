@@ -15,6 +15,11 @@ function e2eAuthConfig() {
   }
 }
 
+function isIgnorableCloseError(error) {
+  const message = String(error || "").toLowerCase()
+  return message.includes("enoent") || message.includes("step id not found")
+}
+
 async function closeContext(context, closeWith) {
   if (!context) {
     return
@@ -23,7 +28,13 @@ async function closeContext(context, closeWith) {
     await closeWith(context)
     return
   }
-  await context.close()
+  try {
+    await context.close()
+  } catch (error) {
+    if (!isIgnorableCloseError(error)) {
+      throw error
+    }
+  }
 }
 
 export async function loginSuperadmin(page, { email, password, headingText } = {}) {

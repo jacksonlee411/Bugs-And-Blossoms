@@ -8,6 +8,7 @@ import { setupTenantAdminSession } from "./helpers/superadmin-tenant.js";
 
 const repoRoot = path.resolve(__dirname, "..", "..");
 const EVIDENCE_ROOT = path.join(repoRoot, "docs", "dev-records", "assets", "dev-plan-290b");
+const INTERNAL_API_PREFIX = "/internal/cubebox";
 
 function isIgnorableCloseError(error) {
   const message = String(error || "").toLowerCase();
@@ -90,7 +91,8 @@ async function handleCreateConversationBlockedScenario({
   const runtimeErrorCode = String(parsedBody?.code || "").trim();
   if (
     (createConversationStatus === 500 || createConversationStatus === 503 || createConversationStatus === 422) &&
-    (runtimeErrorCode === "assistant_conversation_create_failed" ||
+    (runtimeErrorCode === "cubebox_conversation_create_failed" ||
+      runtimeErrorCode === "cubebox_turn_create_failed" ||
       runtimeErrorCode === "assistant_runtime_unavailable")
   ) {
     await writeJSON(path.join(EVIDENCE_ROOT, evidenceFile), {
@@ -129,7 +131,7 @@ test("tp290b-neg-001: commit without confirm returns conversation_confirmation_r
   await ensureDir(EVIDENCE_ROOT);
   const { appContext, tenantID } = await createNegativeSession(browser, "001");
   try {
-    const createConv = await appContext.request.post("/internal/assistant/conversations", {
+    const createConv = await appContext.request.post(`${INTERNAL_API_PREFIX}/conversations`, {
       data: {},
     });
     const createConvStatus = createConv.status();
@@ -153,7 +155,7 @@ test("tp290b-neg-001: commit without confirm returns conversation_confirmation_r
     const conversationID = conversation.conversation_id;
 
     const createTurn = await appContext.request.post(
-      `/internal/assistant/conversations/${encodeURIComponent(conversationID)}/turns`,
+      `${INTERNAL_API_PREFIX}/conversations/${encodeURIComponent(conversationID)}/turns`,
       {
         data: { user_input: "在 AI治理办公室 下新建 人力资源部NEG，生效日期 2026-01-01" },
       },
@@ -180,7 +182,7 @@ test("tp290b-neg-001: commit without confirm returns conversation_confirmation_r
     expect(latestTurn?.turn_id).toBeTruthy();
 
     const commitResp = await appContext.request.post(
-      `/internal/assistant/conversations/${encodeURIComponent(conversationID)}/turns/${encodeURIComponent(latestTurn.turn_id)}:commit`,
+      `${INTERNAL_API_PREFIX}/conversations/${encodeURIComponent(conversationID)}/turns/${encodeURIComponent(latestTurn.turn_id)}:commit`,
       { data: {} },
     );
     expect(commitResp.status(), await commitResp.text()).toBe(409);
@@ -208,7 +210,7 @@ test("tp290b-neg-002: confirm with bad candidate id returns deterministic error"
   await ensureDir(EVIDENCE_ROOT);
   const { appContext, tenantID } = await createNegativeSession(browser, "002");
   try {
-    const createConv = await appContext.request.post("/internal/assistant/conversations", {
+    const createConv = await appContext.request.post(`${INTERNAL_API_PREFIX}/conversations`, {
       data: {},
     });
     const createConvStatus = createConv.status();
@@ -232,7 +234,7 @@ test("tp290b-neg-002: confirm with bad candidate id returns deterministic error"
     const conversationID = conversation.conversation_id;
 
     const createTurn = await appContext.request.post(
-      `/internal/assistant/conversations/${encodeURIComponent(conversationID)}/turns`,
+      `${INTERNAL_API_PREFIX}/conversations/${encodeURIComponent(conversationID)}/turns`,
       {
         data: { user_input: "在 共享服务中心 下新建 NEG候选测试，生效日期 2026-03-26" },
       },
@@ -259,7 +261,7 @@ test("tp290b-neg-002: confirm with bad candidate id returns deterministic error"
     expect(latestTurn?.turn_id).toBeTruthy();
 
     const confirmResp = await appContext.request.post(
-      `/internal/assistant/conversations/${encodeURIComponent(conversationID)}/turns/${encodeURIComponent(latestTurn.turn_id)}:confirm`,
+      `${INTERNAL_API_PREFIX}/conversations/${encodeURIComponent(conversationID)}/turns/${encodeURIComponent(latestTurn.turn_id)}:confirm`,
       {
         data: { candidate_id: "cand-does-not-exist" },
       },
@@ -316,7 +318,7 @@ test("tp290b-neg-003: plan_only confirm then commit returns assistant_intent_uns
   await ensureDir(EVIDENCE_ROOT);
   const { appContext, tenantID } = await createNegativeSession(browser, "003");
   try {
-    const createConv = await appContext.request.post("/internal/assistant/conversations", {
+    const createConv = await appContext.request.post(`${INTERNAL_API_PREFIX}/conversations`, {
       data: {},
     });
     const createConvStatus = createConv.status();
@@ -340,7 +342,7 @@ test("tp290b-neg-003: plan_only confirm then commit returns assistant_intent_uns
     const conversationID = conversation.conversation_id;
 
     const createTurn = await appContext.request.post(
-      `/internal/assistant/conversations/${encodeURIComponent(conversationID)}/turns`,
+      `${INTERNAL_API_PREFIX}/conversations/${encodeURIComponent(conversationID)}/turns`,
       {
         data: { user_input: "你好" },
       },
@@ -367,7 +369,7 @@ test("tp290b-neg-003: plan_only confirm then commit returns assistant_intent_uns
     expect(turn?.turn_id).toBeTruthy();
 
     const confirmResp = await appContext.request.post(
-      `/internal/assistant/conversations/${encodeURIComponent(conversationID)}/turns/${encodeURIComponent(turn.turn_id)}:confirm`,
+      `${INTERNAL_API_PREFIX}/conversations/${encodeURIComponent(conversationID)}/turns/${encodeURIComponent(turn.turn_id)}:confirm`,
       { data: {} },
     );
     const confirmBodyText = await confirmResp.text();
@@ -397,7 +399,7 @@ test("tp290b-neg-004: manual_takeover and timeout attribution probe", async ({ b
   await ensureDir(EVIDENCE_ROOT);
   const { appContext, tenantID } = await createNegativeSession(browser, "004");
   try {
-    const createConv = await appContext.request.post("/internal/assistant/conversations", {
+    const createConv = await appContext.request.post(`${INTERNAL_API_PREFIX}/conversations`, {
       data: {},
     });
     const createConvStatus = createConv.status();
@@ -421,7 +423,7 @@ test("tp290b-neg-004: manual_takeover and timeout attribution probe", async ({ b
     const conversationID = conversation.conversation_id;
 
     const createTurn = await appContext.request.post(
-      `/internal/assistant/conversations/${encodeURIComponent(conversationID)}/turns`,
+      `${INTERNAL_API_PREFIX}/conversations/${encodeURIComponent(conversationID)}/turns`,
       {
         data: { user_input: "在 AI治理办公室 下新建 人力资源部NEG-PROBE，生效日期 2026-01-01" },
       },
@@ -448,7 +450,7 @@ test("tp290b-neg-004: manual_takeover and timeout attribution probe", async ({ b
     expect(firstTurn?.turn_id).toBeTruthy();
 
     const confirmResp = await appContext.request.post(
-      `/internal/assistant/conversations/${encodeURIComponent(conversationID)}/turns/${encodeURIComponent(firstTurn.turn_id)}:confirm`,
+      `${INTERNAL_API_PREFIX}/conversations/${encodeURIComponent(conversationID)}/turns/${encodeURIComponent(firstTurn.turn_id)}:confirm`,
       { data: {} },
     );
     const confirmStatus = confirmResp.status();
@@ -477,7 +479,7 @@ test("tp290b-neg-004: manual_takeover and timeout attribution probe", async ({ b
       expect(confirmStatus, rawBody).toBe(200);
     }
     const commitResp = await appContext.request.post(
-      `/internal/assistant/conversations/${encodeURIComponent(conversationID)}/turns/${encodeURIComponent(firstTurn.turn_id)}:commit`,
+      `${INTERNAL_API_PREFIX}/conversations/${encodeURIComponent(conversationID)}/turns/${encodeURIComponent(firstTurn.turn_id)}:commit`,
       { data: {} },
     );
     const commitStatus = commitResp.status();

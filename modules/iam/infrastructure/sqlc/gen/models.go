@@ -142,6 +142,178 @@ type IamAssistantTurn struct {
 	UpdatedAt           pgtype.Timestamptz `json:"updated_at"`
 }
 
+type IamCubeboxConversation struct {
+	TenantUuid     pgtype.UUID        `json:"tenant_uuid"`
+	ConversationID string             `json:"conversation_id"`
+	ActorID        string             `json:"actor_id"`
+	ActorRole      string             `json:"actor_role"`
+	State          string             `json:"state"`
+	CurrentPhase   string             `json:"current_phase"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
+}
+
+type IamCubeboxFile struct {
+	TenantUuid      pgtype.UUID        `json:"tenant_uuid"`
+	FileID          string             `json:"file_id"`
+	StorageProvider string             `json:"storage_provider"`
+	StorageKey      string             `json:"storage_key"`
+	FileName        string             `json:"file_name"`
+	MediaType       string             `json:"media_type"`
+	SizeBytes       int64              `json:"size_bytes"`
+	Sha256          string             `json:"sha256"`
+	ScanStatus      string             `json:"scan_status"`
+	ScanErrorCode   *string            `json:"scan_error_code"`
+	UploadedBy      string             `json:"uploaded_by"`
+	UploadedAt      pgtype.Timestamptz `json:"uploaded_at"`
+	UpdatedAt       pgtype.Timestamptz `json:"updated_at"`
+}
+
+type IamCubeboxFileLink struct {
+	ID             int64              `json:"id"`
+	TenantUuid     pgtype.UUID        `json:"tenant_uuid"`
+	FileID         string             `json:"file_id"`
+	ConversationID string             `json:"conversation_id"`
+	TurnID         *string            `json:"turn_id"`
+	LinkRole       string             `json:"link_role"`
+	CreatedBy      string             `json:"created_by"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+}
+
+type IamCubeboxIdempotency struct {
+	TenantUuid     pgtype.UUID        `json:"tenant_uuid"`
+	ConversationID string             `json:"conversation_id"`
+	TurnID         string             `json:"turn_id"`
+	TurnAction     string             `json:"turn_action"`
+	RequestID      string             `json:"request_id"`
+	RequestHash    string             `json:"request_hash"`
+	Status         string             `json:"status"`
+	HttpStatus     *int32             `json:"http_status"`
+	ErrorCode      *string            `json:"error_code"`
+	ResponseBody   []byte             `json:"response_body"`
+	ResponseHash   *string            `json:"response_hash"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+	FinalizedAt    pgtype.Timestamptz `json:"finalized_at"`
+	ExpiresAt      pgtype.Timestamptz `json:"expires_at"`
+}
+
+type IamCubeboxStateTransition struct {
+	ID             int64              `json:"id"`
+	TenantUuid     pgtype.UUID        `json:"tenant_uuid"`
+	ConversationID string             `json:"conversation_id"`
+	TurnID         *string            `json:"turn_id"`
+	TurnAction     *string            `json:"turn_action"`
+	RequestID      string             `json:"request_id"`
+	TraceID        string             `json:"trace_id"`
+	FromState      string             `json:"from_state"`
+	ToState        string             `json:"to_state"`
+	FromPhase      string             `json:"from_phase"`
+	ToPhase        string             `json:"to_phase"`
+	ReasonCode     *string            `json:"reason_code"`
+	ActorID        string             `json:"actor_id"`
+	ChangedAt      pgtype.Timestamptz `json:"changed_at"`
+}
+
+type IamCubeboxTask struct {
+	TenantUuid               pgtype.UUID        `json:"tenant_uuid"`
+	TaskID                   pgtype.UUID        `json:"task_id"`
+	ConversationID           string             `json:"conversation_id"`
+	TurnID                   string             `json:"turn_id"`
+	TaskType                 string             `json:"task_type"`
+	RequestID                string             `json:"request_id"`
+	RequestHash              string             `json:"request_hash"`
+	WorkflowID               string             `json:"workflow_id"`
+	Status                   string             `json:"status"`
+	DispatchStatus           string             `json:"dispatch_status"`
+	DispatchAttempt          int32              `json:"dispatch_attempt"`
+	DispatchDeadlineAt       pgtype.Timestamptz `json:"dispatch_deadline_at"`
+	Attempt                  int32              `json:"attempt"`
+	MaxAttempts              int32              `json:"max_attempts"`
+	LastErrorCode            *string            `json:"last_error_code"`
+	TraceID                  *string            `json:"trace_id"`
+	IntentSchemaVersion      string             `json:"intent_schema_version"`
+	CompilerContractVersion  string             `json:"compiler_contract_version"`
+	CapabilityMapVersion     string             `json:"capability_map_version"`
+	SkillManifestDigest      string             `json:"skill_manifest_digest"`
+	ContextHash              string             `json:"context_hash"`
+	IntentHash               string             `json:"intent_hash"`
+	PlanHash                 string             `json:"plan_hash"`
+	KnowledgeSnapshotDigest  *string            `json:"knowledge_snapshot_digest"`
+	RouteCatalogVersion      *string            `json:"route_catalog_version"`
+	ResolverContractVersion  *string            `json:"resolver_contract_version"`
+	ContextTemplateVersion   *string            `json:"context_template_version"`
+	ReplyGuidanceVersion     *string            `json:"reply_guidance_version"`
+	PolicyContextDigest      *string            `json:"policy_context_digest"`
+	EffectivePolicyVersion   *string            `json:"effective_policy_version"`
+	ResolvedSetid            *string            `json:"resolved_setid"`
+	SetidSource              *string            `json:"setid_source"`
+	PrecheckProjectionDigest *string            `json:"precheck_projection_digest"`
+	MutationPolicyVersion    *string            `json:"mutation_policy_version"`
+	SubmittedAt              pgtype.Timestamptz `json:"submitted_at"`
+	CancelRequestedAt        pgtype.Timestamptz `json:"cancel_requested_at"`
+	CompletedAt              pgtype.Timestamptz `json:"completed_at"`
+	CreatedAt                pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt                pgtype.Timestamptz `json:"updated_at"`
+}
+
+type IamCubeboxTaskDispatchOutbox struct {
+	ID          int64              `json:"id"`
+	TenantUuid  pgtype.UUID        `json:"tenant_uuid"`
+	TaskID      pgtype.UUID        `json:"task_id"`
+	WorkflowID  string             `json:"workflow_id"`
+	Status      string             `json:"status"`
+	Attempt     int32              `json:"attempt"`
+	NextRetryAt pgtype.Timestamptz `json:"next_retry_at"`
+	CreatedAt   pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
+}
+
+type IamCubeboxTaskEvent struct {
+	ID         int64              `json:"id"`
+	TenantUuid pgtype.UUID        `json:"tenant_uuid"`
+	TaskID     pgtype.UUID        `json:"task_id"`
+	FromStatus *string            `json:"from_status"`
+	ToStatus   string             `json:"to_status"`
+	EventType  string             `json:"event_type"`
+	ErrorCode  *string            `json:"error_code"`
+	Payload    []byte             `json:"payload"`
+	OccurredAt pgtype.Timestamptz `json:"occurred_at"`
+}
+
+type IamCubeboxTurn struct {
+	TenantUuid          pgtype.UUID        `json:"tenant_uuid"`
+	ConversationID      string             `json:"conversation_id"`
+	TurnID              string             `json:"turn_id"`
+	UserInput           string             `json:"user_input"`
+	State               string             `json:"state"`
+	Phase               string             `json:"phase"`
+	RiskTier            string             `json:"risk_tier"`
+	RequestID           string             `json:"request_id"`
+	TraceID             string             `json:"trace_id"`
+	PolicyVersion       string             `json:"policy_version"`
+	CompositionVersion  string             `json:"composition_version"`
+	MappingVersion      string             `json:"mapping_version"`
+	IntentJson          []byte             `json:"intent_json"`
+	PlanJson            []byte             `json:"plan_json"`
+	CandidatesJson      []byte             `json:"candidates_json"`
+	CandidateOptions    []byte             `json:"candidate_options"`
+	ResolvedCandidateID *string            `json:"resolved_candidate_id"`
+	SelectedCandidateID *string            `json:"selected_candidate_id"`
+	AmbiguityCount      int32              `json:"ambiguity_count"`
+	Confidence          float64            `json:"confidence"`
+	ResolutionSource    *string            `json:"resolution_source"`
+	RouteDecisionJson   []byte             `json:"route_decision_json"`
+	ClarificationJson   []byte             `json:"clarification_json"`
+	DryRunJson          []byte             `json:"dry_run_json"`
+	PendingDraftSummary *string            `json:"pending_draft_summary"`
+	MissingFields       []byte             `json:"missing_fields"`
+	CommitResultJson    []byte             `json:"commit_result_json"`
+	CommitReply         []byte             `json:"commit_reply"`
+	ErrorCode           *string            `json:"error_code"`
+	CreatedAt           pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt           pgtype.Timestamptz `json:"updated_at"`
+}
+
 type IamDict struct {
 	TenantUuid pgtype.UUID        `json:"tenant_uuid"`
 	DictCode   string             `json:"dict_code"`

@@ -1,5 +1,7 @@
 import { expect } from "@playwright/test"
 
+const INTERNAL_API_PREFIX = "/internal/cubebox"
+
 export async function pollAssistantTask(
   appContext,
   taskID,
@@ -14,7 +16,7 @@ export async function pollAssistantTask(
   const statuses = []
 
   while (Date.now() - startAt < timeoutMs) {
-    const resp = await appContext.request.get(`/internal/assistant/tasks/${encodeURIComponent(taskID)}`)
+    const resp = await appContext.request.get(`${INTERNAL_API_PREFIX}/tasks/${encodeURIComponent(taskID)}`)
     expect(resp.status(), await resp.text()).toBe(200)
     const detail = await resp.json()
     statuses.push({

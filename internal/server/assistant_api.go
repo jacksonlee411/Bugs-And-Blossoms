@@ -1613,7 +1613,7 @@ func extractConversationIDFromPath(path string) (string, bool) {
 	if len(parts) != 4 {
 		return "", false
 	}
-	if parts[0] != "internal" || parts[1] != "assistant" || parts[2] != "conversations" {
+	if parts[0] != "internal" || !assistantNamespaceSegment(parts[1]) || parts[2] != "conversations" {
 		return "", false
 	}
 	conversationID := strings.TrimSpace(parts[3])
@@ -1628,7 +1628,7 @@ func extractConversationTurnsPathConversationID(path string) (string, bool) {
 	if len(parts) != 5 {
 		return "", false
 	}
-	if parts[0] != "internal" || parts[1] != "assistant" || parts[2] != "conversations" || parts[4] != "turns" {
+	if parts[0] != "internal" || !assistantNamespaceSegment(parts[1]) || parts[2] != "conversations" || parts[4] != "turns" {
 		return "", false
 	}
 	conversationID := strings.TrimSpace(parts[3])
@@ -1643,7 +1643,7 @@ func extractAssistantTurnActionPath(path string) (conversationID string, turnID 
 	if len(parts) != 6 {
 		return "", "", "", false
 	}
-	if parts[0] != "internal" || parts[1] != "assistant" || parts[2] != "conversations" || parts[4] != "turns" {
+	if parts[0] != "internal" || !assistantNamespaceSegment(parts[1]) || parts[2] != "conversations" || parts[4] != "turns" {
 		return "", "", "", false
 	}
 	conversationID = strings.TrimSpace(parts[3])
@@ -1665,7 +1665,7 @@ func extractAssistantTaskIDFromPath(path string) (taskID string, ok bool) {
 	if len(parts) != 4 {
 		return "", false
 	}
-	if parts[0] != "internal" || parts[1] != "assistant" || parts[2] != "tasks" {
+	if parts[0] != "internal" || !assistantNamespaceSegment(parts[1]) || parts[2] != "tasks" {
 		return "", false
 	}
 	taskID = strings.TrimSpace(parts[3])
@@ -1680,7 +1680,7 @@ func extractAssistantTaskActionPath(path string) (taskID string, action string, 
 	if len(parts) != 4 {
 		return "", "", false
 	}
-	if parts[0] != "internal" || parts[1] != "assistant" || parts[2] != "tasks" {
+	if parts[0] != "internal" || !assistantNamespaceSegment(parts[1]) || parts[2] != "tasks" {
 		return "", "", false
 	}
 	taskAction := strings.TrimSpace(parts[3])
@@ -1777,4 +1777,13 @@ func assistantSplitPathSegments(path string) []string {
 		return nil
 	}
 	return strings.Split(path, "/")
+}
+
+func assistantNamespaceSegment(value string) bool {
+	switch strings.TrimSpace(value) {
+	case "assistant", "cubebox":
+		return true
+	default:
+		return false
+	}
 }

@@ -1638,8 +1638,6 @@ func assistantIdempotencyErrorPayload(err error) (status int, code string, ok bo
 		return http.StatusConflict, errAssistantRouteClarificationRequired.Error(), true
 	case errors.Is(err, errAssistantUnsupportedIntent):
 		return http.StatusUnprocessableEntity, errAssistantUnsupportedIntent.Error(), true
-	case errors.Is(err, errAssistantServiceMissing):
-		return http.StatusInternalServerError, errAssistantServiceMissing.Error(), true
 	}
 	if status, code, _, known := assistantResolveCommitError(err); known {
 		return status, code, true

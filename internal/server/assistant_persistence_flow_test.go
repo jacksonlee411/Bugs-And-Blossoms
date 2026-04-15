@@ -239,13 +239,20 @@ func TestAssistantPersistence_UtilityFunctions(t *testing.T) {
 		code string
 		err  error
 	}{
+		{errAssistantRuntimeUnavailable.Error(), errAssistantRuntimeUnavailable},
 		{errAssistantConfirmationRequired.Error(), errAssistantConfirmationRequired},
 		{errAssistantConfirmationExpired.Error(), errAssistantConfirmationExpired},
 		{errAssistantConversationStateInvalid.Error(), errAssistantConversationStateInvalid},
 		{errAssistantPlanContractVersionMismatch.Error(), errAssistantPlanContractVersionMismatch},
+		{errAssistantVersionTupleStale.Error(), errAssistantVersionTupleStale},
 		{errAssistantCandidateNotFound.Error(), errAssistantCandidateNotFound},
 		{errAssistantAuthSnapshotExpired.Error(), errAssistantAuthSnapshotExpired},
 		{errAssistantRoleDriftDetected.Error(), errAssistantRoleDriftDetected},
+		{errAssistantActionSpecMissing.Error(), errAssistantActionSpecMissing},
+		{errAssistantActionCapabilityUnregistered.Error(), errAssistantActionCapabilityUnregistered},
+		{errAssistantActionAuthzDenied.Error(), errAssistantActionAuthzDenied},
+		{errAssistantActionRiskGateDenied.Error(), errAssistantActionRiskGateDenied},
+		{errAssistantActionRequiredCheckFailed.Error(), errAssistantActionRequiredCheckFailed},
 		{errAssistantRouteRuntimeInvalid.Error(), errAssistantRouteRuntimeInvalid},
 		{errAssistantRouteCatalogMissing.Error(), errAssistantRouteCatalogMissing},
 		{errAssistantRouteActionConflict.Error(), errAssistantRouteActionConflict},
@@ -266,13 +273,20 @@ func TestAssistantPersistence_UtilityFunctions(t *testing.T) {
 		t.Fatalf("unexpected payload status=%d code=%s ok=%v", status, code, ok)
 	}
 	idemCases := []error{
+		errAssistantRuntimeUnavailable,
 		errAssistantConfirmationRequired,
 		errAssistantConfirmationExpired,
 		errAssistantConversationStateInvalid,
 		errAssistantPlanContractVersionMismatch,
+		errAssistantVersionTupleStale,
 		errAssistantCandidateNotFound,
 		errAssistantAuthSnapshotExpired,
 		errAssistantRoleDriftDetected,
+		errAssistantActionSpecMissing,
+		errAssistantActionCapabilityUnregistered,
+		errAssistantActionAuthzDenied,
+		errAssistantActionRiskGateDenied,
+		errAssistantActionRequiredCheckFailed,
 		errAssistantRouteRuntimeInvalid,
 		errAssistantRouteCatalogMissing,
 		errAssistantRouteActionConflict,
