@@ -219,10 +219,10 @@ func TestCubeBoxLinkHelpersAndMappings(t *testing.T) {
 		}
 	})
 
-		t.Run("json helpers and poll uri", func(t *testing.T) {
-			var out assistantIntentSpec
-			if err := remarshalJSON(map[string]any{"action": assistantIntentPlanOnly}, &out); err != nil || out.Action != assistantIntentPlanOnly {
-				t.Fatalf("out=%+v err=%v", out, err)
+	t.Run("json helpers and poll uri", func(t *testing.T) {
+		var out assistantIntentSpec
+		if err := remarshalJSON(map[string]any{"action": assistantIntentPlanOnly}, &out); err != nil || out.Action != assistantIntentPlanOnly {
+			t.Fatalf("out=%+v err=%v", out, err)
 		}
 		if err := remarshalJSON(map[string]any{"bad": func() {}}, &out); err == nil {
 			t.Fatal("expected marshal error")
@@ -233,28 +233,28 @@ func TestCubeBoxLinkHelpersAndMappings(t *testing.T) {
 		if got := assistantJSONMap(map[string]any{"k": "v"}); got["k"] != "v" {
 			t.Fatalf("json map=%+v", got)
 		}
-			if got := assistantJSONMap([]string{"bad"}); got != nil {
-				t.Fatalf("expected nil map, got %+v", got)
-			}
-			if got := assistantJSONMap(map[string]any{}); got != nil {
-				t.Fatalf("expected nil map for empty object, got %+v", got)
-			}
-			if got := assistantJSONMap("null"); got != nil {
-				t.Fatalf("expected nil map for scalar, got %+v", got)
-			}
-			if got := assistantJSONMapSlice([]map[string]any{{"k": "v"}}); len(got) != 1 || got[0]["k"] != "v" {
-				t.Fatalf("json map slice=%+v", got)
-			}
-			if got := assistantJSONMapSlice(map[string]any{"bad": "shape"}); got != nil {
-				t.Fatalf("expected nil map slice, got %+v", got)
-			}
-			if got := assistantJSONMapSlice([]map[string]any{}); got != nil {
-				t.Fatalf("expected nil map slice for empty array, got %+v", got)
-			}
-			if got := cubeboxTaskPollURI(" task-1 "); got != "/internal/cubebox/tasks/task-1" {
-				t.Fatalf("poll uri=%q", got)
-			}
-		})
+		if got := assistantJSONMap([]string{"bad"}); got != nil {
+			t.Fatalf("expected nil map, got %+v", got)
+		}
+		if got := assistantJSONMap(map[string]any{}); got != nil {
+			t.Fatalf("expected nil map for empty object, got %+v", got)
+		}
+		if got := assistantJSONMap("null"); got != nil {
+			t.Fatalf("expected nil map for scalar, got %+v", got)
+		}
+		if got := assistantJSONMapSlice([]map[string]any{{"k": "v"}}); len(got) != 1 || got[0]["k"] != "v" {
+			t.Fatalf("json map slice=%+v", got)
+		}
+		if got := assistantJSONMapSlice(map[string]any{"bad": "shape"}); got != nil {
+			t.Fatalf("expected nil map slice, got %+v", got)
+		}
+		if got := assistantJSONMapSlice([]map[string]any{}); got != nil {
+			t.Fatalf("expected nil map slice for empty array, got %+v", got)
+		}
+		if got := cubeboxTaskPollURI(" task-1 "); got != "/internal/cubebox/tasks/task-1" {
+			t.Fatalf("poll uri=%q", got)
+		}
+	})
 
 	t.Run("task response mappings", func(t *testing.T) {
 		if got := mapAssistantTaskReceipt(nil); got != nil {
@@ -482,9 +482,9 @@ func TestCubeBoxLegacyFacadeBehavior(t *testing.T) {
 		}
 	})
 
-		t.Run("conversation and task errors map to formal errors", func(t *testing.T) {
-			legacy := cubeboxLegacyFacade{assistant: newAssistantConversationService(nil, nil)}
-			conv := legacy.assistant.createConversation("tenant-1", Principal{ID: principal.ID, RoleSlug: principal.RoleSlug})
+	t.Run("conversation and task errors map to formal errors", func(t *testing.T) {
+		legacy := cubeboxLegacyFacade{assistant: newAssistantConversationService(nil, nil)}
+		conv := legacy.assistant.createConversation("tenant-1", Principal{ID: principal.ID, RoleSlug: principal.RoleSlug})
 
 		if _, err := legacy.GetConversation(context.Background(), "tenant-x", principal.ID, conv.ConversationID); !errors.Is(err, cubeboxservices.ErrTenantMismatch) {
 			t.Fatalf("tenant mismatch err=%v", err)
@@ -495,59 +495,59 @@ func TestCubeBoxLegacyFacadeBehavior(t *testing.T) {
 		if _, err := legacy.GetConversation(context.Background(), "tenant-1", principal.ID, "missing"); !errors.Is(err, cubeboxservices.ErrConversationNotFound) {
 			t.Fatalf("not found err=%v", err)
 		}
-			if _, err := legacy.GetTask(context.Background(), "tenant-1", principal, "task-missing"); !errors.Is(err, errAssistantTaskWorkflowUnavailable) {
-				t.Fatalf("expected workflow unavailable, got %v", err)
-			}
-		})
+		if _, err := legacy.GetTask(context.Background(), "tenant-1", principal, "task-missing"); !errors.Is(err, errAssistantTaskWorkflowUnavailable) {
+			t.Fatalf("expected workflow unavailable, got %v", err)
+		}
+	})
 
-		t.Run("legacy facade preserves service-side raw errors", func(t *testing.T) {
-			svc := newAssistantConversationService(nil, nil)
-			legacy := cubeboxLegacyFacade{assistant: svc}
+	t.Run("legacy facade preserves service-side raw errors", func(t *testing.T) {
+		svc := newAssistantConversationService(nil, nil)
+		legacy := cubeboxLegacyFacade{assistant: svc}
 
-			if _, _, err := legacy.ListConversations(context.Background(), "tenant-1", principal.ID, 10, "%%%"); err == nil || !strings.Contains(err.Error(), errAssistantConversationCursorInvalid.Error()) {
-				t.Fatalf("expected cursor error, got %v", err)
-			}
-			if _, err := legacy.GetTask(context.Background(), "tenant-1", principal, "task-1"); !errors.Is(err, errAssistantTaskWorkflowUnavailable) {
-				t.Fatalf("expected workflow unavailable, got %v", err)
-			}
-			if _, err := legacy.SubmitTask(context.Background(), "tenant-1", principal, cubeboxdomain.TaskSubmitRequest{}); !errors.Is(err, errAssistantTaskWorkflowUnavailable) {
-				t.Fatalf("expected submit workflow unavailable, got %v", err)
-			}
-			if _, err := legacy.CommitTurn(context.Background(), "tenant-1", principal, "conv-1", "turn-1"); !errors.Is(err, errAssistantTaskWorkflowUnavailable) {
-				t.Fatalf("expected commit workflow unavailable, got %v", err)
-			}
-			if _, err := legacy.CancelTask(context.Background(), "tenant-1", principal, "task-1"); !errors.Is(err, errAssistantTaskWorkflowUnavailable) {
-				t.Fatalf("expected cancel workflow unavailable, got %v", err)
-			}
-		})
+		if _, _, err := legacy.ListConversations(context.Background(), "tenant-1", principal.ID, 10, "%%%"); err == nil || !strings.Contains(err.Error(), errAssistantConversationCursorInvalid.Error()) {
+			t.Fatalf("expected cursor error, got %v", err)
+		}
+		if _, err := legacy.GetTask(context.Background(), "tenant-1", principal, "task-1"); !errors.Is(err, errAssistantTaskWorkflowUnavailable) {
+			t.Fatalf("expected workflow unavailable, got %v", err)
+		}
+		if _, err := legacy.SubmitTask(context.Background(), "tenant-1", principal, cubeboxdomain.TaskSubmitRequest{}); !errors.Is(err, errAssistantTaskWorkflowUnavailable) {
+			t.Fatalf("expected submit workflow unavailable, got %v", err)
+		}
+		if _, err := legacy.CommitTurn(context.Background(), "tenant-1", principal, "conv-1", "turn-1"); !errors.Is(err, errAssistantTaskWorkflowUnavailable) {
+			t.Fatalf("expected commit workflow unavailable, got %v", err)
+		}
+		if _, err := legacy.CancelTask(context.Background(), "tenant-1", principal, "task-1"); !errors.Is(err, errAssistantTaskWorkflowUnavailable) {
+			t.Fatalf("expected cancel workflow unavailable, got %v", err)
+		}
+	})
 
-		t.Run("bridge surfaces additional raw and success paths", func(t *testing.T) {
-			svc := newAssistantConversationService(nil, nil)
-			legacy := cubeboxLegacyFacade{assistant: svc}
-			svc.byID["conv-corrupted"] = nil
-			if _, err := legacy.GetConversation(context.Background(), "tenant-1", principal.ID, "conv-corrupted"); !errors.Is(err, errAssistantConversationCorrupted) {
-				t.Fatalf("expected corrupted error, got %v", err)
-			}
+	t.Run("bridge surfaces additional raw and success paths", func(t *testing.T) {
+		svc := newAssistantConversationService(nil, nil)
+		legacy := cubeboxLegacyFacade{assistant: svc}
+		svc.byID["conv-corrupted"] = nil
+		if _, err := legacy.GetConversation(context.Background(), "tenant-1", principal.ID, "conv-corrupted"); !errors.Is(err, errAssistantConversationCorrupted) {
+			t.Fatalf("expected corrupted error, got %v", err)
+		}
 
-			svc.pool = assistFakeTxBeginner{err: errors.New("begin failed")}
-			if _, err := legacy.CreateConversation(context.Background(), "tenant-1", principal); err == nil || !strings.Contains(err.Error(), "begin failed") {
-				t.Fatalf("expected create begin error, got %v", err)
-			}
-			if _, err := legacy.CreateTurn(context.Background(), "tenant-1", principal, "conv-1", "hello"); err == nil || !strings.Contains(err.Error(), "begin failed") {
-				t.Fatalf("expected create turn begin error, got %v", err)
-			}
+		svc.pool = assistFakeTxBeginner{err: errors.New("begin failed")}
+		if _, err := legacy.CreateConversation(context.Background(), "tenant-1", principal); err == nil || !strings.Contains(err.Error(), "begin failed") {
+			t.Fatalf("expected create begin error, got %v", err)
+		}
+		if _, err := legacy.CreateTurn(context.Background(), "tenant-1", principal, "conv-1", "hello"); err == nil || !strings.Contains(err.Error(), "begin failed") {
+			t.Fatalf("expected create turn begin error, got %v", err)
+		}
 
-			svc = newAssistantConversationService(nil, nil)
-			internalPrincipal := Principal{ID: "actor-1", RoleSlug: "tenant-admin"}
-			legacy = cubeboxLegacyFacade{assistant: svc}
-			svc.pool = assistFakeTxBeginner{err: errors.New("workflow begin failed")}
-			if _, err := legacy.ExecuteTaskWorkflow(nil, "tenant-1", cubeboxmodule.Principal{ID: internalPrincipal.ID, RoleSlug: internalPrincipal.RoleSlug}, &cubeboxdomain.Conversation{ConversationID: "conv-1"}, "turn-1"); err == nil || !strings.Contains(err.Error(), "workflow begin failed") {
-				t.Fatalf("expected workflow begin error, got %v", err)
-			}
-		})
+		svc = newAssistantConversationService(nil, nil)
+		internalPrincipal := Principal{ID: "actor-1", RoleSlug: "tenant-admin"}
+		legacy = cubeboxLegacyFacade{assistant: svc}
+		svc.pool = assistFakeTxBeginner{err: errors.New("workflow begin failed")}
+		if _, err := legacy.ExecuteTaskWorkflow(nil, "tenant-1", cubeboxmodule.Principal{ID: internalPrincipal.ID, RoleSlug: internalPrincipal.RoleSlug}, &cubeboxdomain.Conversation{ConversationID: "conv-1"}, "turn-1"); err == nil || !strings.Contains(err.Error(), "workflow begin failed") {
+			t.Fatalf("expected workflow begin error, got %v", err)
+		}
+	})
 
-		t.Run("submit get cancel commit and workflow bridge pg task path", func(t *testing.T) {
-			svc, principalInternal, confirmedTurn, txNow := newAssistantCommitCoverageEnv(t, assistantStateConfirmed)
+	t.Run("submit get cancel commit and workflow bridge pg task path", func(t *testing.T) {
+		svc, principalInternal, confirmedTurn, txNow := newAssistantCommitCoverageEnv(t, assistantStateConfirmed)
 		confirmedTurn.TurnID = "turn-commit"
 		confirmedTurn.RequestID = "req-commit"
 		confirmedTurn.TraceID = "trace-commit"
@@ -722,8 +722,8 @@ func TestCubeBoxLegacyFacadeBehavior(t *testing.T) {
 		}
 	})
 
-		t.Run("runtime probe models and statuses", func(t *testing.T) {
-			probe := cubeboxRuntimeProbe{}
+	t.Run("runtime probe models and statuses", func(t *testing.T) {
+		probe := cubeboxRuntimeProbe{}
 		if got := probe.BackendStatus(context.Background()); got.Reason != "assistant_service_missing" {
 			t.Fatalf("backend=%+v", got)
 		}
@@ -753,21 +753,21 @@ func TestCubeBoxLegacyFacadeBehavior(t *testing.T) {
 			t.Fatalf("models=%+v err=%v", models, err)
 		}
 
-			probe = cubeboxRuntimeProbe{assistant: &assistantConversationService{
-				modelGateway: &assistantModelGateway{},
-				gatewayErr:   errors.New("gateway down"),
-			}}
-			if got := probe.ModelGatewayStatus(context.Background()); got.Reason != "model_gateway_unavailable" {
-				t.Fatalf("model gateway=%+v", got)
-			}
-			healthyProbe := cubeboxRuntimeProbe{assistant: &assistantConversationService{knowledgeErr: errors.New("knowledge down")}}
-			if got := healthyProbe.KnowledgeRuntimeStatus(context.Background()); got.Reason != "knowledge_runtime_unavailable" {
-				t.Fatalf("knowledge degraded=%+v", got)
-			}
-			if got := healthyProbe.BackendStatus(context.Background()); got.Healthy != "healthy" {
-				t.Fatalf("backend=%+v", got)
-			}
-		})
+		probe = cubeboxRuntimeProbe{assistant: &assistantConversationService{
+			modelGateway: &assistantModelGateway{},
+			gatewayErr:   errors.New("gateway down"),
+		}}
+		if got := probe.ModelGatewayStatus(context.Background()); got.Reason != "model_gateway_unavailable" {
+			t.Fatalf("model gateway=%+v", got)
+		}
+		healthyProbe := cubeboxRuntimeProbe{assistant: &assistantConversationService{knowledgeErr: errors.New("knowledge down")}}
+		if got := healthyProbe.KnowledgeRuntimeStatus(context.Background()); got.Reason != "knowledge_runtime_unavailable" {
+			t.Fatalf("knowledge degraded=%+v", got)
+		}
+		if got := healthyProbe.BackendStatus(context.Background()); got.Healthy != "healthy" {
+			t.Fatalf("backend=%+v", got)
+		}
+	})
 }
 
 func makeAssistantTaskBridgeTx(t *testing.T, principal Principal, turn *assistantTurn, task assistantTaskRecord, now time.Time) *assistFakeTx {

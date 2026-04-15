@@ -127,12 +127,12 @@ type TaskStateUpdate struct {
 }
 
 type TaskEventRecord struct {
-	TaskID      string
-	FromStatus  string
-	ToStatus    string
-	EventType   string
-	ErrorCode   string
-	OccurredAt  time.Time
+	TaskID     string
+	FromStatus string
+	ToStatus   string
+	EventType  string
+	ErrorCode  string
+	OccurredAt time.Time
 }
 
 type TaskDispatchOutboxUpdate struct {

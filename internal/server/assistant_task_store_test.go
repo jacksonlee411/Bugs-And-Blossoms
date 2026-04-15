@@ -325,12 +325,12 @@ func TestAssistantCreateOrgUnitProjectionHelpers(t *testing.T) {
 		}
 
 		complete := assistantTaskContractSnapshot{
-			PolicyContextDigest:     "ctx_digest",
-			EffectivePolicyVersion:  "epv1",
-			PrecheckProjectionDigest:"projection_digest",
-			MutationPolicyVersion:   "mutation_v1",
-			ResolvedSetID:           "S2601",
-			SetIDSource:             "custom",
+			PolicyContextDigest:      "ctx_digest",
+			EffectivePolicyVersion:   "epv1",
+			PrecheckProjectionDigest: "projection_digest",
+			MutationPolicyVersion:    "mutation_v1",
+			ResolvedSetID:            "S2601",
+			SetIDSource:              "custom",
 		}
 		if assistantTaskCreatePolicyContractIncomplete(complete) {
 			t.Fatalf("expected complete create-policy snapshot, got=%+v", complete)

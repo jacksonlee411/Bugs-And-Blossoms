@@ -235,27 +235,27 @@ func TestAssistantPersistence_UtilityFunctions(t *testing.T) {
 	if err := assistantErrorFromIdempotencyCode("something_else"); err == nil || err.Error() != "something_else" {
 		t.Fatalf("unexpected err=%v", err)
 	}
-		idemCodes := []struct {
-			code string
-			err  error
-		}{
-			{errAssistantRuntimeUnavailable.Error(), errAssistantRuntimeUnavailable},
-			{errAssistantConfirmationRequired.Error(), errAssistantConfirmationRequired},
-			{errAssistantConfirmationExpired.Error(), errAssistantConfirmationExpired},
-			{errAssistantConversationStateInvalid.Error(), errAssistantConversationStateInvalid},
-			{errAssistantPlanContractVersionMismatch.Error(), errAssistantPlanContractVersionMismatch},
-			{errAssistantVersionTupleStale.Error(), errAssistantVersionTupleStale},
-			{errAssistantCandidateNotFound.Error(), errAssistantCandidateNotFound},
-			{errAssistantAuthSnapshotExpired.Error(), errAssistantAuthSnapshotExpired},
-			{errAssistantRoleDriftDetected.Error(), errAssistantRoleDriftDetected},
-			{errAssistantActionSpecMissing.Error(), errAssistantActionSpecMissing},
-			{errAssistantActionCapabilityUnregistered.Error(), errAssistantActionCapabilityUnregistered},
-			{errAssistantActionAuthzDenied.Error(), errAssistantActionAuthzDenied},
-			{errAssistantActionRiskGateDenied.Error(), errAssistantActionRiskGateDenied},
-			{errAssistantActionRequiredCheckFailed.Error(), errAssistantActionRequiredCheckFailed},
-			{errAssistantRouteRuntimeInvalid.Error(), errAssistantRouteRuntimeInvalid},
-			{errAssistantRouteCatalogMissing.Error(), errAssistantRouteCatalogMissing},
-			{errAssistantRouteActionConflict.Error(), errAssistantRouteActionConflict},
+	idemCodes := []struct {
+		code string
+		err  error
+	}{
+		{errAssistantRuntimeUnavailable.Error(), errAssistantRuntimeUnavailable},
+		{errAssistantConfirmationRequired.Error(), errAssistantConfirmationRequired},
+		{errAssistantConfirmationExpired.Error(), errAssistantConfirmationExpired},
+		{errAssistantConversationStateInvalid.Error(), errAssistantConversationStateInvalid},
+		{errAssistantPlanContractVersionMismatch.Error(), errAssistantPlanContractVersionMismatch},
+		{errAssistantVersionTupleStale.Error(), errAssistantVersionTupleStale},
+		{errAssistantCandidateNotFound.Error(), errAssistantCandidateNotFound},
+		{errAssistantAuthSnapshotExpired.Error(), errAssistantAuthSnapshotExpired},
+		{errAssistantRoleDriftDetected.Error(), errAssistantRoleDriftDetected},
+		{errAssistantActionSpecMissing.Error(), errAssistantActionSpecMissing},
+		{errAssistantActionCapabilityUnregistered.Error(), errAssistantActionCapabilityUnregistered},
+		{errAssistantActionAuthzDenied.Error(), errAssistantActionAuthzDenied},
+		{errAssistantActionRiskGateDenied.Error(), errAssistantActionRiskGateDenied},
+		{errAssistantActionRequiredCheckFailed.Error(), errAssistantActionRequiredCheckFailed},
+		{errAssistantRouteRuntimeInvalid.Error(), errAssistantRouteRuntimeInvalid},
+		{errAssistantRouteCatalogMissing.Error(), errAssistantRouteCatalogMissing},
+		{errAssistantRouteActionConflict.Error(), errAssistantRouteActionConflict},
 		{errAssistantRouteDecisionMissing.Error(), errAssistantRouteDecisionMissing},
 		{errAssistantRouteNonBusinessBlocked.Error(), errAssistantRouteNonBusinessBlocked},
 		{errAssistantRouteClarificationRequired.Error(), errAssistantRouteClarificationRequired},
@@ -272,24 +272,24 @@ func TestAssistantPersistence_UtilityFunctions(t *testing.T) {
 	if status, code, ok := assistantIdempotencyErrorPayload(errAssistantPlanContractVersionMismatch); !ok || status != 409 || code == "" {
 		t.Fatalf("unexpected payload status=%d code=%s ok=%v", status, code, ok)
 	}
-		idemCases := []error{
-			errAssistantRuntimeUnavailable,
-			errAssistantConfirmationRequired,
-			errAssistantConfirmationExpired,
-			errAssistantConversationStateInvalid,
-			errAssistantPlanContractVersionMismatch,
-			errAssistantVersionTupleStale,
-			errAssistantCandidateNotFound,
-			errAssistantAuthSnapshotExpired,
-			errAssistantRoleDriftDetected,
-			errAssistantActionSpecMissing,
-			errAssistantActionCapabilityUnregistered,
-			errAssistantActionAuthzDenied,
-			errAssistantActionRiskGateDenied,
-			errAssistantActionRequiredCheckFailed,
-			errAssistantRouteRuntimeInvalid,
-			errAssistantRouteCatalogMissing,
-			errAssistantRouteActionConflict,
+	idemCases := []error{
+		errAssistantRuntimeUnavailable,
+		errAssistantConfirmationRequired,
+		errAssistantConfirmationExpired,
+		errAssistantConversationStateInvalid,
+		errAssistantPlanContractVersionMismatch,
+		errAssistantVersionTupleStale,
+		errAssistantCandidateNotFound,
+		errAssistantAuthSnapshotExpired,
+		errAssistantRoleDriftDetected,
+		errAssistantActionSpecMissing,
+		errAssistantActionCapabilityUnregistered,
+		errAssistantActionAuthzDenied,
+		errAssistantActionRiskGateDenied,
+		errAssistantActionRequiredCheckFailed,
+		errAssistantRouteRuntimeInvalid,
+		errAssistantRouteCatalogMissing,
+		errAssistantRouteActionConflict,
 		errAssistantRouteDecisionMissing,
 		errAssistantRouteNonBusinessBlocked,
 		errAssistantRouteClarificationRequired,

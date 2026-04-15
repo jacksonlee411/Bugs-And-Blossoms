@@ -150,11 +150,11 @@ func (f *Facade) ListConversations(ctx context.Context, tenantID string, actorID
 		if idx >= pageSize {
 			break
 		}
-			item := cubeboxdomain.ConversationListItem{
-				ConversationID: strings.TrimSpace(row.ConversationID),
-				State:          strings.TrimSpace(row.State),
-				UpdatedAt:      row.UpdatedAt.UTC(),
-			}
+		item := cubeboxdomain.ConversationListItem{
+			ConversationID: strings.TrimSpace(row.ConversationID),
+			State:          strings.TrimSpace(row.State),
+			UpdatedAt:      row.UpdatedAt.UTC(),
+		}
 		if detail, err := f.loadConversation(ctx, tenantID, actorID, row.ConversationID, false); err == nil && detail != nil && len(detail.Turns) > 0 {
 			last := detail.Turns[len(detail.Turns)-1]
 			item.LastTurn = &cubeboxdomain.ConversationLastTurn{

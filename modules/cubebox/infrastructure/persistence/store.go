@@ -8,8 +8,8 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgtype"
 	cubeboxdomain "github.com/jacksonlee411/Bugs-And-Blossoms/modules/cubebox/domain"
 	cubeboxsqlc "github.com/jacksonlee411/Bugs-And-Blossoms/modules/cubebox/infrastructure/sqlc/gen"
@@ -454,16 +454,16 @@ func (s *PGStore) CancelTask(ctx context.Context, tenantID string, taskID string
 		dispatchStatus = "failed"
 	}
 	updated, err := queries.UpdateTaskState(ctx, cubeboxsqlc.UpdateTaskStateParams{
-		TenantUuid:         tenantUUID,
-		TaskID:             taskUUID,
-		Status:             "canceled",
-		DispatchStatus:     dispatchStatus,
-		DispatchAttempt:    record.DispatchAttempt,
-		Attempt:            record.Attempt,
-		LastErrorCode:      nil,
-		CancelRequestedAt:  cancelRequestedAt,
-		CompletedAt:        completedAt,
-		UpdatedAt:          pgtype.Timestamptz{Time: now.UTC(), Valid: true},
+		TenantUuid:        tenantUUID,
+		TaskID:            taskUUID,
+		Status:            "canceled",
+		DispatchStatus:    dispatchStatus,
+		DispatchAttempt:   record.DispatchAttempt,
+		Attempt:           record.Attempt,
+		LastErrorCode:     nil,
+		CancelRequestedAt: cancelRequestedAt,
+		CompletedAt:       completedAt,
+		UpdatedAt:         pgtype.Timestamptz{Time: now.UTC(), Valid: true},
 	})
 	if err != nil {
 		return cubeboxdomain.TaskRecord{}, false, err
