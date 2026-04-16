@@ -1,18 +1,18 @@
 {
   "plan": "DEV-PLAN-288B",
   "case_id": "tp288b-case-1",
-  "captured_at": "2026-04-16T03:36:53.035Z",
+  "captured_at": "2026-04-16T04:02:29.118Z",
   "formal_entry": "/app/cubebox",
-  "url": "http://localhost:18080/app/cubebox/conversations/conv_b326fa9f030b4fe589fb251d5b86fffc",
+  "url": "http://localhost:18080/app/cubebox/conversations/conv_21f01094f6754c9facde163f7bd17f68",
   "bubble_count": 1,
   "bubbles": [
     {
-      "binding_key": "turn_29302388bea24025a2621137e0c439ea",
-      "conversation_id": "conv_b326fa9f030b4fe589fb251d5b86fffc",
-      "turn_id": "turn_29302388bea24025a2621137e0c439ea",
-      "request_id": "assistant_447b4bdf54d1487c80f343b2b92cff7f",
+      "binding_key": "turn_5650a1e97007487eb14b56c63615c52b",
+      "conversation_id": "conv_21f01094f6754c9facde163f7bd17f68",
+      "turn_id": "turn_5650a1e97007487eb14b56c63615c52b",
+      "request_id": "assistant_7fe77892ea0f4145980ed341f86ebc51",
       "message_id": "",
-      "text": "committed high turn_29302388bea24025a2621137e0c439ea 在 AI治理办公室 下新建 人力资源部2，生效日期 2026-01-01 在指定父组织下创建部门，提交前需要确认候选主键。"
+      "text": "committed high turn_5650a1e97007487eb14b56c63615c52b 在 AI治理办公室 下新建 人力资源部2，生效日期 2026-01-01 在指定父组织下创建部门，提交前需要确认候选主键。"
     }
   ],
   "external_reply_container_count": 0,
