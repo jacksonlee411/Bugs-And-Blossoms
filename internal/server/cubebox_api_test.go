@@ -209,13 +209,20 @@ func TestCubeBoxTurnActionMapsFormalCommitErrors(t *testing.T) {
 		{name: "state_invalid", err: cubeboxservices.ErrConversationStateInvalid, wantHTTP: http.StatusConflict, wantCode: "conversation_state_invalid"},
 		{name: "candidate_not_found", err: errAssistantCandidateNotFound, wantHTTP: http.StatusUnprocessableEntity, wantCode: "assistant_candidate_not_found"},
 		{name: "route_non_business_blocked", err: errAssistantRouteNonBusinessBlocked, wantHTTP: http.StatusConflict, wantCode: "ai_route_non_business_blocked"},
+		{name: "route_decision_missing", err: errAssistantRouteDecisionMissing, wantHTTP: http.StatusConflict, wantCode: errAssistantRouteDecisionMissing.Error()},
+		{name: "route_runtime_invalid", err: errAssistantRouteRuntimeInvalid, wantHTTP: http.StatusUnprocessableEntity, wantCode: errAssistantRouteRuntimeInvalid.Error()},
+		{name: "route_action_conflict", err: errAssistantRouteActionConflict, wantHTTP: http.StatusUnprocessableEntity, wantCode: errAssistantRouteActionConflict.Error()},
 		{name: "unsupported_intent", err: errAssistantUnsupportedIntent, wantHTTP: http.StatusUnprocessableEntity, wantCode: "assistant_intent_unsupported"},
+		{name: "action_authz_denied", err: errAssistantActionAuthzDenied, wantHTTP: http.StatusForbidden, wantCode: errAssistantActionAuthzDenied.Error()},
+		{name: "action_risk_gate_denied", err: errAssistantActionRiskGateDenied, wantHTTP: http.StatusConflict, wantCode: errAssistantActionRiskGateDenied.Error()},
+		{name: "plan_contract_version_mismatch", err: errAssistantPlanContractVersionMismatch, wantHTTP: http.StatusConflict, wantCode: "ai_plan_contract_version_mismatch"},
 		{name: "version_tuple_stale", err: errAssistantVersionTupleStale, wantHTTP: http.StatusConflict, wantCode: "ai_version_tuple_stale"},
 		{name: "auth_snapshot_expired", err: cubeboxservices.ErrAuthSnapshotExpired, wantHTTP: http.StatusForbidden, wantCode: "ai_actor_auth_snapshot_expired"},
 		{name: "assistant_auth_snapshot_expired", err: errAssistantAuthSnapshotExpired, wantHTTP: http.StatusForbidden, wantCode: "ai_actor_auth_snapshot_expired"},
 		{name: "role_drift", err: cubeboxservices.ErrRoleDriftDetected, wantHTTP: http.StatusForbidden, wantCode: "ai_actor_role_drift_detected"},
 		{name: "assistant_role_drift", err: errAssistantRoleDriftDetected, wantHTTP: http.StatusForbidden, wantCode: "ai_actor_role_drift_detected"},
 		{name: "task_state_invalid", err: cubeboxservices.ErrTaskStateInvalid, wantHTTP: http.StatusConflict, wantCode: "assistant_task_state_invalid"},
+		{name: "required_check_failed", err: errAssistantActionRequiredCheckFailed, wantHTTP: http.StatusConflict, wantCode: errAssistantActionRequiredCheckFailed.Error()},
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
