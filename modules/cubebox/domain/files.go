@@ -1,6 +1,9 @@
 package domain
 
-import "errors"
+import (
+	"errors"
+	"time"
+)
 
 var (
 	ErrFileUnavailable          = errors.New("cubebox_files_unavailable")
@@ -14,6 +17,13 @@ type FileLink struct {
 	LinkRole       string `json:"link_role"`
 	ConversationID string `json:"conversation_id"`
 	TurnID         string `json:"turn_id,omitempty"`
+}
+
+type FileLinkRef struct {
+	FileID         string
+	LinkRole       string
+	ConversationID string
+	TurnID         string
 }
 
 type FileRecord struct {
@@ -52,4 +62,18 @@ type FileCleanupJob struct {
 	StorageKey      string `json:"storage_key"`
 	CleanupReason   string `json:"cleanup_reason"`
 	LastError       string `json:"last_error,omitempty"`
+}
+
+type FileMetadata struct {
+	FileID          string
+	Filename        string
+	ContentType     string
+	SizeBytes       int64
+	SHA256          string
+	StorageProvider string
+	StorageKey      string
+	ScanStatus      string
+	UploadedBy      string
+	CreatedAt       time.Time
+	UpdatedAt       time.Time
 }

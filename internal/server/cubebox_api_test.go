@@ -13,7 +13,6 @@ import (
 
 	cubeboxmodule "github.com/jacksonlee411/Bugs-And-Blossoms/modules/cubebox"
 	cubeboxdomain "github.com/jacksonlee411/Bugs-And-Blossoms/modules/cubebox/domain"
-	cubeboxsqlc "github.com/jacksonlee411/Bugs-And-Blossoms/modules/cubebox/infrastructure/sqlc/gen"
 	cubeboxservices "github.com/jacksonlee411/Bugs-And-Blossoms/modules/cubebox/services"
 )
 
@@ -1440,23 +1439,23 @@ func (s *runtimeHealthyFileStore) Healthy(context.Context) error {
 	return s.healthyErr
 }
 
-func (s runtimeHealthyFileRepo) ListFiles(context.Context, string, string, int32) ([]cubeboxsqlc.IamCubeboxFile, error) {
+func (s runtimeHealthyFileRepo) ListFiles(context.Context, string, string, int32) ([]cubeboxservices.FileMetadata, error) {
 	return nil, nil
 }
-func (s runtimeHealthyFileRepo) ListFileLinks(context.Context, string, string) ([]cubeboxsqlc.IamCubeboxFileLink, error) {
+func (s runtimeHealthyFileRepo) ListFileLinks(context.Context, string, string) ([]cubeboxservices.FileLinkRef, error) {
 	return nil, nil
 }
-func (s runtimeHealthyFileRepo) ListTenantFileLinks(context.Context, string) ([]cubeboxsqlc.IamCubeboxFileLink, error) {
+func (s runtimeHealthyFileRepo) ListTenantFileLinks(context.Context, string) ([]cubeboxservices.FileLinkRef, error) {
 	return nil, nil
 }
-func (s runtimeHealthyFileRepo) GetFile(context.Context, string, string) (cubeboxsqlc.IamCubeboxFile, error) {
-	return cubeboxsqlc.IamCubeboxFile{}, nil
+func (s runtimeHealthyFileRepo) GetFile(context.Context, string, string) (cubeboxservices.FileMetadata, error) {
+	return cubeboxservices.FileMetadata{}, nil
 }
 func (s runtimeHealthyFileRepo) ConversationExists(context.Context, string, string) (bool, error) {
 	return false, nil
 }
-func (s runtimeHealthyFileRepo) CreateFile(context.Context, string, cubeboxservices.FileObject, string, string, string, time.Time) (cubeboxsqlc.IamCubeboxFile, []cubeboxsqlc.IamCubeboxFileLink, error) {
-	return cubeboxsqlc.IamCubeboxFile{}, nil, nil
+func (s runtimeHealthyFileRepo) CreateFile(context.Context, string, cubeboxservices.FileObject, string, string, string, time.Time) (cubeboxservices.FileMetadata, []cubeboxservices.FileLinkRef, error) {
+	return cubeboxservices.FileMetadata{}, nil, nil
 }
 func (s runtimeHealthyFileRepo) CountFileLinks(context.Context, string, string) (int64, error) {
 	return 0, nil
@@ -1464,8 +1463,8 @@ func (s runtimeHealthyFileRepo) CountFileLinks(context.Context, string, string) 
 func (s runtimeHealthyFileRepo) DeleteFile(context.Context, string, string) (int64, error) {
 	return 0, nil
 }
-func (s runtimeHealthyFileRepo) InsertFileCleanupJob(context.Context, string, cubeboxservices.FileCleanupJob, time.Time) (cubeboxsqlc.IamCubeboxFileCleanupJob, error) {
-	return cubeboxsqlc.IamCubeboxFileCleanupJob{}, nil
+func (s runtimeHealthyFileRepo) InsertFileCleanupJob(context.Context, string, cubeboxservices.FileCleanupJob, time.Time) error {
+	return nil
 }
 func (s runtimeHealthyFileRepo) Healthy(context.Context, string) error { return s.healthyErr }
 

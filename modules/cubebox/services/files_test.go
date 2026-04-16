@@ -7,9 +7,6 @@ import (
 	"strings"
 	"testing"
 	"time"
-
-	"github.com/jackc/pgx/v5/pgtype"
-	cubeboxsqlc "github.com/jacksonlee411/Bugs-And-Blossoms/modules/cubebox/infrastructure/sqlc/gen"
 )
 
 type stubFileStore struct {
@@ -179,45 +176,45 @@ type stubFileRepo struct {
 	cleanupJobs   []FileCleanupJob
 }
 
-func (s *stubFileRepo) ListFiles(context.Context, string, string, int32) ([]cubeboxsqlc.IamCubeboxFile, error) {
+func (s *stubFileRepo) ListFiles(context.Context, string, string, int32) ([]FileMetadata, error) {
 	return nil, nil
 }
 
-func (s *stubFileRepo) ListFileLinks(context.Context, string, string) ([]cubeboxsqlc.IamCubeboxFileLink, error) {
+func (s *stubFileRepo) ListFileLinks(context.Context, string, string) ([]FileLinkRef, error) {
 	return nil, nil
 }
 
-func (s *stubFileRepo) ListTenantFileLinks(context.Context, string) ([]cubeboxsqlc.IamCubeboxFileLink, error) {
+func (s *stubFileRepo) ListTenantFileLinks(context.Context, string) ([]FileLinkRef, error) {
 	return nil, nil
 }
 
-func (s *stubFileRepo) GetFile(context.Context, string, string) (cubeboxsqlc.IamCubeboxFile, error) {
-	return cubeboxsqlc.IamCubeboxFile{}, nil
+func (s *stubFileRepo) GetFile(context.Context, string, string) (FileMetadata, error) {
+	return FileMetadata{}, nil
 }
 
 func (s *stubFileRepo) ConversationExists(context.Context, string, string) (bool, error) {
 	return s.conversationExists, nil
 }
 
-func (s *stubFileRepo) CreateFile(_ context.Context, _ string, record FileObject, fileID string, actorID string, conversationID string, now time.Time) (cubeboxsqlc.IamCubeboxFile, []cubeboxsqlc.IamCubeboxFileLink, error) {
+func (s *stubFileRepo) CreateFile(_ context.Context, _ string, record FileObject, fileID string, actorID string, conversationID string, now time.Time) (FileMetadata, []FileLinkRef, error) {
 	s.createdFileID = fileID
 	s.createdObject = record
 	if s.createFileErr != nil {
-		return cubeboxsqlc.IamCubeboxFile{}, nil, s.createFileErr
+		return FileMetadata{}, nil, s.createFileErr
 	}
-	return cubeboxsqlc.IamCubeboxFile{
+	return FileMetadata{
 			FileID:          fileID,
-			FileName:        record.Filename,
-			MediaType:       record.ContentType,
+			Filename:        record.Filename,
+			ContentType:     record.ContentType,
 			SizeBytes:       record.SizeBytes,
-			Sha256:          record.SHA256,
+			SHA256:          record.SHA256,
 			StorageProvider: record.StorageProvider,
 			StorageKey:      record.StorageKey,
 			ScanStatus:      "ready",
 			UploadedBy:      actorID,
-			UploadedAt:      pgtype.Timestamptz{Time: now, Valid: true},
-			UpdatedAt:       pgtype.Timestamptz{Time: now, Valid: true},
-		}, []cubeboxsqlc.IamCubeboxFileLink{{
+			CreatedAt:       now,
+			UpdatedAt:       now,
+		}, []FileLinkRef{{
 			FileID:         fileID,
 			ConversationID: conversationID,
 			LinkRole:       "conversation_attachment",
@@ -232,9 +229,9 @@ func (s *stubFileRepo) DeleteFile(context.Context, string, string) (int64, error
 	return 0, nil
 }
 
-func (s *stubFileRepo) InsertFileCleanupJob(_ context.Context, _ string, job FileCleanupJob, _ time.Time) (cubeboxsqlc.IamCubeboxFileCleanupJob, error) {
+func (s *stubFileRepo) InsertFileCleanupJob(_ context.Context, _ string, job FileCleanupJob, _ time.Time) error {
 	s.cleanupJobs = append(s.cleanupJobs, job)
-	return cubeboxsqlc.IamCubeboxFileCleanupJob{}, s.cleanupErr
+	return s.cleanupErr
 }
 
 func (s *stubFileRepo) Healthy(_ context.Context, tenantID string) error {

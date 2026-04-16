@@ -9,13 +9,14 @@ import (
 
 	"github.com/google/uuid"
 	cubeboxdomain "github.com/jacksonlee411/Bugs-And-Blossoms/modules/cubebox/domain"
-	cubeboxsqlc "github.com/jacksonlee411/Bugs-And-Blossoms/modules/cubebox/infrastructure/sqlc/gen"
 )
 
 type FileRecord = cubeboxdomain.FileRecord
 type FileLink = cubeboxdomain.FileLink
+type FileLinkRef = cubeboxdomain.FileLinkRef
 type FileObject = cubeboxdomain.FileObject
 type FileCleanupJob = cubeboxdomain.FileCleanupJob
+type FileMetadata = cubeboxdomain.FileMetadata
 
 var (
 	ErrFileUnavailable          = cubeboxdomain.ErrFileUnavailable
@@ -26,15 +27,15 @@ var (
 )
 
 type FileRepository interface {
-	ListFiles(ctx context.Context, tenantID string, conversationID string, limit int32) ([]cubeboxsqlc.IamCubeboxFile, error)
-	ListFileLinks(ctx context.Context, tenantID string, fileID string) ([]cubeboxsqlc.IamCubeboxFileLink, error)
-	ListTenantFileLinks(ctx context.Context, tenantID string) ([]cubeboxsqlc.IamCubeboxFileLink, error)
-	GetFile(ctx context.Context, tenantID string, fileID string) (cubeboxsqlc.IamCubeboxFile, error)
+	ListFiles(ctx context.Context, tenantID string, conversationID string, limit int32) ([]FileMetadata, error)
+	ListFileLinks(ctx context.Context, tenantID string, fileID string) ([]FileLinkRef, error)
+	ListTenantFileLinks(ctx context.Context, tenantID string) ([]FileLinkRef, error)
+	GetFile(ctx context.Context, tenantID string, fileID string) (FileMetadata, error)
 	ConversationExists(ctx context.Context, tenantID string, conversationID string) (bool, error)
-	CreateFile(ctx context.Context, tenantID string, record FileObject, fileID string, actorID string, conversationID string, now time.Time) (cubeboxsqlc.IamCubeboxFile, []cubeboxsqlc.IamCubeboxFileLink, error)
+	CreateFile(ctx context.Context, tenantID string, record FileObject, fileID string, actorID string, conversationID string, now time.Time) (FileMetadata, []FileLinkRef, error)
 	CountFileLinks(ctx context.Context, tenantID string, fileID string) (int64, error)
 	DeleteFile(ctx context.Context, tenantID string, fileID string) (int64, error)
-	InsertFileCleanupJob(ctx context.Context, tenantID string, job FileCleanupJob, now time.Time) (cubeboxsqlc.IamCubeboxFileCleanupJob, error)
+	InsertFileCleanupJob(ctx context.Context, tenantID string, job FileCleanupJob, now time.Time) error
 	Healthy(ctx context.Context, tenantID string) error
 }
 
@@ -94,28 +95,32 @@ func (s *FileService) ListFiles(ctx context.Context, tenantID string, conversati
 	}
 
 	linksByFile := map[string][]FileLink{}
-	var rawLinks []cubeboxsqlc.IamCubeboxFileLink
+	var refs []FileLinkRef
 	if conversationID == "" {
-		rawLinks, err = s.repo.ListTenantFileLinks(ctx, tenantID)
+		refs, err = s.repo.ListTenantFileLinks(ctx, tenantID)
+		if err != nil {
+			return nil, err
+		}
 	} else {
 		for _, item := range items {
-			fileLinks, fileErr := s.repo.ListFileLinks(ctx, tenantID, item.FileID)
+			itemRefs, fileErr := s.repo.ListFileLinks(ctx, tenantID, item.FileID)
 			if fileErr != nil {
 				return nil, fileErr
 			}
-			rawLinks = append(rawLinks, fileLinks...)
+			refs = append(refs, itemRefs...)
 		}
 	}
-	if err != nil {
-		return nil, err
-	}
-	for _, link := range rawLinks {
-		linksByFile[link.FileID] = append(linksByFile[link.FileID], mapFileLink(link))
+	for _, ref := range refs {
+		fileID := strings.TrimSpace(ref.FileID)
+		if fileID == "" {
+			continue
+		}
+		linksByFile[fileID] = append(linksByFile[fileID], mapFileLink(ref))
 	}
 
 	out := make([]FileRecord, 0, len(items))
 	for _, item := range items {
-		out = append(out, mapFileRecord(item, linksByFile[item.FileID]))
+		out = append(out, mapFileRecord(item, linksByFile[strings.TrimSpace(item.FileID)]))
 	}
 	return out, nil
 }
@@ -156,13 +161,10 @@ func (s *FileService) SaveFile(
 	fileID := "file_" + uuid.NewString()
 	object, err := s.objectStore.SaveObject(ctx, tenantID, fileID, filename, mediaType, body)
 	if err != nil {
-		if errors.Is(err, ErrFileUploadInvalid) {
-			return FileRecord{}, err
-		}
 		return FileRecord{}, err
 	}
 	now := s.now()
-	inserted, rawLinks, err := s.repo.CreateFile(ctx, tenantID, object, fileID, actorID, conversationID, now)
+	inserted, refs, err := s.repo.CreateFile(ctx, tenantID, object, fileID, actorID, conversationID, now)
 	if err != nil {
 		if deleteErr := s.objectStore.DeleteObject(ctx, object.StorageKey); deleteErr != nil {
 			s.compensateCleanup(ctx, tenantID, FileCleanupJob{
@@ -175,13 +177,7 @@ func (s *FileService) SaveFile(
 		}
 		return FileRecord{}, err
 	}
-
-	links := make([]FileLink, 0, len(rawLinks))
-	for _, link := range rawLinks {
-		links = append(links, mapFileLink(link))
-	}
-
-	return mapFileRecord(inserted, links), nil
+	return mapFileRecord(inserted, mapFileLinks(refs)), nil
 }
 
 func (s *FileService) DeleteFile(ctx context.Context, tenantID string, fileID string) (bool, error) {
@@ -258,22 +254,22 @@ func (s *FileService) compensateCleanup(ctx context.Context, tenantID string, jo
 	if s == nil || s.repo == nil {
 		return
 	}
-	_, _ = s.repo.InsertFileCleanupJob(ctx, tenantID, job, s.now())
+	_ = s.repo.InsertFileCleanupJob(ctx, tenantID, job, s.now())
 }
 
-func mapFileRecord(item cubeboxsqlc.IamCubeboxFile, links []FileLink) FileRecord {
+func mapFileRecord(item FileMetadata, links []FileLink) FileRecord {
 	record := FileRecord{
 		FileID:          strings.TrimSpace(item.FileID),
-		Filename:        strings.TrimSpace(item.FileName),
-		ContentType:     strings.TrimSpace(item.MediaType),
+		Filename:        strings.TrimSpace(item.Filename),
+		ContentType:     strings.TrimSpace(item.ContentType),
 		SizeBytes:       item.SizeBytes,
-		SHA256:          strings.TrimSpace(item.Sha256),
+		SHA256:          strings.TrimSpace(item.SHA256),
 		StorageProvider: strings.TrimSpace(item.StorageProvider),
 		StorageKey:      strings.TrimSpace(item.StorageKey),
 		ScanStatus:      strings.TrimSpace(item.ScanStatus),
 		UploadedBy:      strings.TrimSpace(item.UploadedBy),
-		CreatedAt:       item.UploadedAt.Time.UTC().Format(time.RFC3339Nano),
-		UpdatedAt:       item.UpdatedAt.Time.UTC().Format(time.RFC3339Nano),
+		CreatedAt:       formatFileTime(item.CreatedAt),
+		UpdatedAt:       formatFileTime(item.UpdatedAt),
 		Links:           links,
 	}
 	record.FileName = record.Filename
@@ -285,17 +281,28 @@ func mapFileRecord(item cubeboxsqlc.IamCubeboxFile, links []FileLink) FileRecord
 	return record
 }
 
-func mapFileLink(link cubeboxsqlc.IamCubeboxFileLink) FileLink {
+func mapFileLinks(items []FileLinkRef) []FileLink {
+	if len(items) == 0 {
+		return nil
+	}
+	out := make([]FileLink, 0, len(items))
+	for _, item := range items {
+		out = append(out, mapFileLink(item))
+	}
+	return out
+}
+
+func mapFileLink(item FileLinkRef) FileLink {
 	return FileLink{
-		LinkRole:       strings.TrimSpace(link.LinkRole),
-		ConversationID: strings.TrimSpace(link.ConversationID),
-		TurnID:         strings.TrimSpace(fileStringValue(link.TurnID)),
+		LinkRole:       strings.TrimSpace(item.LinkRole),
+		ConversationID: strings.TrimSpace(item.ConversationID),
+		TurnID:         strings.TrimSpace(item.TurnID),
 	}
 }
 
-func fileStringValue(value *string) string {
-	if value == nil {
+func formatFileTime(ts time.Time) string {
+	if ts.IsZero() {
 		return ""
 	}
-	return strings.TrimSpace(*value)
+	return ts.UTC().Format(time.RFC3339Nano)
 }
