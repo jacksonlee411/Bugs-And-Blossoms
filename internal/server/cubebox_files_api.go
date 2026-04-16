@@ -14,20 +14,20 @@ import (
 const cubeboxFileUploadLimitBytes int64 = 20 << 20
 
 type cubeboxFileResponse struct {
-	FileID         string `json:"file_id"`
-	Filename       string `json:"filename"`
-	ContentType    string `json:"content_type"`
-	ScanStatus     string `json:"scan_status"`
-	CreatedAt      string `json:"created_at"`
+	FileID         string                    `json:"file_id"`
+	Filename       string                    `json:"filename"`
+	ContentType    string                    `json:"content_type"`
+	ScanStatus     string                    `json:"scan_status"`
+	CreatedAt      string                    `json:"created_at"`
 	Links          []cubeboxFileLinkResponse `json:"links,omitempty"`
-	ConversationID string `json:"conversation_id,omitempty"`
-	FileName       string `json:"file_name"`
-	MediaType      string `json:"media_type"`
-	SizeBytes      int64  `json:"size_bytes"`
-	SHA256         string `json:"sha256"`
-	StorageKey     string `json:"storage_key"`
-	UploadedBy     string `json:"uploaded_by"`
-	UploadedAt     string `json:"uploaded_at"`
+	ConversationID string                    `json:"conversation_id,omitempty"`
+	FileName       string                    `json:"file_name"`
+	MediaType      string                    `json:"media_type"`
+	SizeBytes      int64                     `json:"size_bytes"`
+	SHA256         string                    `json:"sha256"`
+	StorageKey     string                    `json:"storage_key"`
+	UploadedBy     string                    `json:"uploaded_by"`
+	UploadedAt     string                    `json:"uploaded_at"`
 }
 
 type cubeboxFileLinkResponse struct {

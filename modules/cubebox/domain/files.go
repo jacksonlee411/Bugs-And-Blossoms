@@ -3,11 +3,11 @@ package domain
 import "errors"
 
 var (
-	ErrFileUnavailable            = errors.New("cubebox_files_unavailable")
-	ErrFileNotFound               = errors.New("cubebox_file_not_found")
-	ErrFileDeleteBlocked          = errors.New("cubebox_file_delete_blocked")
-	ErrFileUploadInvalid          = errors.New("cubebox_file_upload_invalid")
-	ErrFileConversationNotFound   = errors.New("cubebox_file_conversation_not_found")
+	ErrFileUnavailable          = errors.New("cubebox_files_unavailable")
+	ErrFileNotFound             = errors.New("cubebox_file_not_found")
+	ErrFileDeleteBlocked        = errors.New("cubebox_file_delete_blocked")
+	ErrFileUploadInvalid        = errors.New("cubebox_file_upload_invalid")
+	ErrFileConversationNotFound = errors.New("cubebox_file_conversation_not_found")
 )
 
 type FileLink struct {
