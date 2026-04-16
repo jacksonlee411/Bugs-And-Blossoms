@@ -1,18 +1,18 @@
 {
   "plan": "DEV-PLAN-288B",
   "case_id": "tp288b-case-1",
-  "captured_at": "2026-04-13T10:12:43.408Z",
-  "formal_entry": "/app/assistant/librechat",
-  "url": "http://localhost:8080/app/assistant/librechat/c/new",
+  "captured_at": "2026-04-16T03:36:53.035Z",
+  "formal_entry": "/app/cubebox",
+  "url": "http://localhost:18080/app/cubebox/conversations/conv_b326fa9f030b4fe589fb251d5b86fffc",
   "bubble_count": 1,
   "bubbles": [
     {
-      "binding_key": "conv_7d57f5307f7a44c696eca5f09c6de411::turn_ead4dfded104471886649b770d868e02::assistant_fda33e31592a45ddb96eca55c8a9458f",
-      "conversation_id": "conv_7d57f5307f7a44c696eca5f09c6de411",
-      "turn_id": "turn_ead4dfded104471886649b770d868e02",
-      "request_id": "assistant_fda33e31592a45ddb96eca55c8a9458f",
-      "message_id": "559f0832-f199-4451-8595-5160d3929da3_",
-      "text": "上级组织：TP288BAIGOV；新建组织：人力资源部收据验证部；生效日期：2026-01-01 task_id: 93b91652-8492-4274-b0cb-35e815a346a2 · succeeded Selected: AI治理办公室 org_code: O000001 parent_org_code: TP288BAIGOV effective_date: 2026-01-01 event_type: CREATE"
+      "binding_key": "turn_29302388bea24025a2621137e0c439ea",
+      "conversation_id": "conv_b326fa9f030b4fe589fb251d5b86fffc",
+      "turn_id": "turn_29302388bea24025a2621137e0c439ea",
+      "request_id": "assistant_447b4bdf54d1487c80f343b2b92cff7f",
+      "message_id": "",
+      "text": "committed high turn_29302388bea24025a2621137e0c439ea 在 AI治理办公室 下新建 人力资源部2，生效日期 2026-01-01 在指定父组织下创建部门，提交前需要确认候选主键。"
     }
   ],
   "external_reply_container_count": 0,

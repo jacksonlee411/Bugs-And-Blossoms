@@ -1,19 +1,19 @@
 {
   "plan": "DEV-PLAN-290B",
-  "tenant_id": "d3de4a7c-22fd-4de9-94a9-9264a54faf7c",
-  "conversation_id": "conv_824cc096b94b403fbc48ce536639eaea",
-  "turn_id": "turn_a5e9e245e03f4404aac7496eedc1774f",
+  "tenant_id": "9df4accb-c150-4bdb-98c0-51f9abb1551d",
+  "conversation_id": "conv_33ceadb4cb0c49bbadc97d569bb0136e",
+  "turn_id": "turn_19164bb7d8f34bb1a39bab86e3d94267",
   "probe_skipped": true,
-  "skip_reason": "conversation_confirmation_required_on_confirm",
+  "skip_reason": "ai_plan_contract_version_mismatch_on_confirm",
   "confirm_status": 409,
   "error": {
-    "code": "conversation_confirmation_required",
-    "message": "conversation confirmation required",
+    "code": "ai_plan_contract_version_mismatch",
+    "message": "ai plan contract version mismatch",
     "trace_id": "",
     "meta": {
-      "path": "/internal/assistant/conversations/conv_824cc096b94b403fbc48ce536639eaea/turns/turn_a5e9e245e03f4404aac7496eedc1774f:confirm",
+      "path": "/internal/cubebox/conversations/conv_33ceadb4cb0c49bbadc97d569bb0136e/turns/turn_19164bb7d8f34bb1a39bab86e3d94267:confirm",
       "method": "POST"
     }
   },
-  "captured_at": "2026-04-11T14:50:28.921Z"
+  "captured_at": "2026-04-16T03:20:08.280Z"
 }

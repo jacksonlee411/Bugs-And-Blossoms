@@ -24,6 +24,7 @@ const BASELINE_ROOT_CODE = "ROOT";
 const BASELINE_ROOT_NAME = "集团";
 const BASELINE_PARENT_CODE = "TP288BAIGOV";
 const BASELINE_PARENT_NAME = "AI治理办公室";
+const BASELINE_ENTITY_NAME = "人力资源部2";
 const FORMAL_ENTRY_PATH = "/app/cubebox";
 const INTERNAL_API_PREFIX = "/internal/cubebox";
 const staleOn = [
@@ -39,6 +40,119 @@ const staleOn = [
 
 function normalizeText(value) {
   return String(value || "").trim().replace(/\s+/g, " ");
+}
+
+async function createAssistantProbe(appContext, userInput) {
+  const createConversation = await appContext.request.post(`${INTERNAL_API_PREFIX}/conversations`, { data: {} });
+  const { text: conversationText, json: conversationJSON } = await parseResponseBody(createConversation);
+  const conversationID = String(conversationJSON?.conversation_id || "").trim();
+  if (createConversation.status() !== 200 || !conversationID) {
+    return {
+      conversation_id: conversationID,
+      create_turn_status: createConversation.status(),
+      error_code: String(conversationJSON?.code || ""),
+      latest_turn: null,
+      raw_text: conversationText,
+    };
+  }
+
+  const createTurn = await appContext.request.post(
+    `${INTERNAL_API_PREFIX}/conversations/${encodeURIComponent(conversationID)}/turns`,
+    { data: { user_input: userInput } },
+  );
+  const { text: turnText, json: turnJSON } = await parseResponseBody(createTurn);
+  return {
+    conversation_id: conversationID,
+    create_turn_status: createTurn.status(),
+    error_code: String(turnJSON?.code || ""),
+    latest_turn: latestAssistantTurn(turnJSON || {}),
+    raw_text: turnText,
+  };
+}
+
+async function createAssistantProbeFollowUp(appContext, conversationID, userInput) {
+  const createTurn = await appContext.request.post(
+    `${INTERNAL_API_PREFIX}/conversations/${encodeURIComponent(conversationID)}/turns`,
+    { data: { user_input: userInput } },
+  );
+  const { text: turnText, json: turnJSON } = await parseResponseBody(createTurn);
+  return {
+    conversation_id: conversationID,
+    create_turn_status: createTurn.status(),
+    error_code: String(turnJSON?.code || ""),
+    latest_turn: latestAssistantTurn(turnJSON || {}),
+    raw_text: turnText,
+  };
+}
+
+function baselineProbeSummary(probe) {
+  const turn = probe?.latest_turn || null;
+  return {
+    conversation_id: String(probe?.conversation_id || "").trim(),
+    create_turn_status: Number(probe?.create_turn_status || 0),
+    error_code: String(probe?.error_code || "").trim(),
+    phase: String(turn?.phase || "").trim(),
+    intent_action: String(turn?.intent?.action || "").trim(),
+    parent_ref_text: String(turn?.intent?.parent_ref_text || "").trim(),
+    candidate_count: Array.isArray(turn?.candidates) ? turn.candidates.length : 0,
+    validation_errors: Array.isArray(turn?.dry_run?.validation_errors)
+      ? turn.dry_run.validation_errors.map((item) => String(item || "").trim()).filter(Boolean)
+      : [],
+    resolved_candidate_id: String(turn?.resolved_candidate_id || turn?.resolvedCandidateID || "").trim(),
+  };
+}
+
+function dryRunValidationErrors(turn) {
+  if (!Array.isArray(turn?.dry_run?.validation_errors)) {
+    return [];
+  }
+  return turn.dry_run.validation_errors.map((item) => String(item || "").trim()).filter(Boolean);
+}
+
+function missingFields(turn) {
+  if (!Array.isArray(turn?.missing_fields)) {
+    return [];
+  }
+  return turn.missing_fields.map((item) => String(item || "").trim()).filter(Boolean);
+}
+
+function shouldSupplementParentCandidate(turn) {
+  const phase = String(turn?.phase || "").trim();
+  if (phase !== "await_missing_fields") {
+    return false;
+  }
+  const validationErrors = dryRunValidationErrors(turn);
+  const fields = missingFields(turn);
+  return validationErrors.includes("parent_candidate_not_found") || fields.includes("parent_ref_text");
+}
+
+function buildParentCandidateSupplement(entityName = BASELINE_ENTITY_NAME) {
+  return `请使用上级组织编码 ${BASELINE_PARENT_CODE}（${BASELINE_PARENT_NAME}），新建 ${entityName}，生效日期 ${BASELINE_EFFECTIVE_DATE}`;
+}
+
+async function createAssistantProbeWithRetry(appContext, userInput, predicate, timeoutMs = 20_000) {
+  const deadline = Date.now() + timeoutMs;
+  let lastProbe = null;
+  while (Date.now() < deadline) {
+    lastProbe = await createAssistantProbe(appContext, userInput);
+    if (predicate(lastProbe)) {
+      return lastProbe;
+    }
+    if (lastProbe?.conversation_id && shouldSupplementParentCandidate(lastProbe.latest_turn)) {
+      const supplements = [buildParentCandidateSupplement()];
+      for (const supplement of supplements) {
+        lastProbe = await createAssistantProbeFollowUp(appContext, lastProbe.conversation_id, supplement);
+        if (predicate(lastProbe)) {
+          return lastProbe;
+        }
+        if (!shouldSupplementParentCandidate(lastProbe.latest_turn)) {
+          break;
+        }
+      }
+    }
+    await new Promise((resolve) => setTimeout(resolve, 500));
+  }
+  return lastProbe;
 }
 
 function evidencePaths() {
@@ -92,6 +206,36 @@ async function ensureTenantBaseline(appContext) {
       parentOrgCode: String(rootOrg?.org_code || "").trim(),
     },
   );
+
+  const probe = await createAssistantProbeWithRetry(
+    appContext,
+    `在 ${BASELINE_PARENT_NAME} 下新建 ${BASELINE_ENTITY_NAME}，生效日期 ${BASELINE_EFFECTIVE_DATE}`,
+    (candidate) => {
+      const summary = baselineProbeSummary(candidate);
+      return (
+        summary.create_turn_status === 200 &&
+        summary.intent_action === "create_orgunit" &&
+        summary.phase === "await_commit_confirm" &&
+        !summary.validation_errors.includes("parent_candidate_not_found") &&
+        summary.resolved_candidate_id === BASELINE_PARENT_CODE
+      );
+    },
+  );
+  const probeSummary = baselineProbeSummary(probe);
+  expect(
+    {
+      create_turn_status: probeSummary.create_turn_status,
+      phase: probeSummary.phase,
+      validation_errors: probeSummary.validation_errors,
+      resolved_candidate_id: probeSummary.resolved_candidate_id,
+    },
+    probe?.raw_text || "tp288b baseline probe failed",
+  ).toEqual({
+    create_turn_status: 200,
+    phase: "await_commit_confirm",
+    validation_errors: [],
+    resolved_candidate_id: BASELINE_PARENT_CODE,
+  });
 }
 
 function installNetworkRecorder(page) {
@@ -148,7 +292,22 @@ function installNetworkRecorder(page) {
 }
 
 function formalInputField(surface) {
-  return surface.getByTestId("cubebox-input").locator("textarea, input").first();
+  return surface.getByTestId("cubebox-input-field");
+}
+
+function waitForFormalTurnResponse(surface, timeoutMs = 60_000) {
+  if (typeof surface.waitForResponse !== "function") {
+    return Promise.resolve(null);
+  }
+  return surface.waitForResponse((response) => {
+    const request = response.request();
+    const pathname = new URL(response.url()).pathname;
+    return (
+      request.method() === "POST" &&
+      pathname.startsWith(`${INTERNAL_API_PREFIX}/conversations/`) &&
+      pathname.endsWith("/turns")
+    );
+  }, { timeout: timeoutMs });
 }
 
 async function openFormalEntry(page) {
@@ -160,8 +319,20 @@ async function openFormalEntry(page) {
 
 async function sendFromFormalEntry(surface, text) {
   const input = formalInputField(surface);
+  await expect(input).toBeEditable({ timeout: 30_000 });
   await input.fill(text);
-  await surface.getByTestId("cubebox-send").click();
+  await expect(input).toHaveValue(text);
+  const button = surface.getByTestId("cubebox-send");
+  await expect(button).toBeEnabled({ timeout: 60_000 });
+  const turnResponse = waitForFormalTurnResponse(surface);
+  await button.click();
+  const response = await turnResponse;
+  if (!response) {
+    return null;
+  }
+  expect(response.status(), await response.text()).toBe(200);
+  await expect(input).toHaveValue("", { timeout: 60_000 });
+  return response.json();
 }
 
 function isIgnorableCloseError(error) {
@@ -203,9 +374,15 @@ async function waitForVisibleNamedButton(surface, namePattern, timeoutMs = 30_00
 }
 
 async function clickFormalConfirm(surface) {
-  const button = surface.getByTestId("cubebox-confirm");
-  await expect(button).toBeVisible({ timeout: 30_000 });
-  await button.click();
+  try {
+    const button = surface.getByTestId("cubebox-confirm");
+    await expect(button).toBeVisible({ timeout: 10_000 });
+    await button.click();
+    return;
+  } catch {
+    const button = await waitForVisibleNamedButton(surface, /确认|Confirm/i, 30_000);
+    await button.click();
+  }
 }
 
 async function clickFormalSubmit(surface) {
@@ -511,7 +688,7 @@ test("tp288b-live-001: real formal entry follows receipt poll refresh contract",
     page = session.page;
     const tenantID = session.tenantID;
     const networkState = installNetworkRecorder(page);
-    const orgName = "人力资源部收据验证部";
+    const orgName = BASELINE_ENTITY_NAME;
     const inputText = `在 ${BASELINE_PARENT_NAME} 下新建 ${orgName}，生效日期 ${BASELINE_EFFECTIVE_DATE}`;
 
     try {
@@ -537,7 +714,7 @@ test("tp288b-live-001: real formal entry follows receipt poll refresh contract",
     usedIframe = entry.usedIframe;
     expect(usedIframe, "formal entry must be direct page").toBe(false);
 
-    await sendFromFormalEntry(surface, inputText);
+    const turnResponseConversation = await sendFromFormalEntry(surface, inputText);
     const runtimeBlockedCall = await waitForAnyAssistantErrorCall(
       networkState,
       [
@@ -591,17 +768,37 @@ test("tp288b-live-001: real formal entry follows receipt poll refresh contract",
     const draftBubble = await latestFormalBubbleMaybe(surface);
     const draftSnapshot = await waitForConversationSnapshotFromState(networkState);
     const conversationID =
+      String(turnResponseConversation?.conversation_id || "").trim() ||
       draftBubble?.conversationId || String(draftSnapshot?.conversation_id || "").trim();
     expect(conversationID).toBeTruthy();
 
-    const draftConversation =
-      draftSnapshot &&
-      String(draftSnapshot?.conversation_id || "").trim() === conversationID &&
-      Array.isArray(draftSnapshot?.turns) &&
-      draftSnapshot.turns.length > 0
-        ? draftSnapshot
-        : await fetchConversation(appContext, conversationID);
-    const draftTurn = latestAssistantTurn(draftConversation);
+    let draftConversation =
+      turnResponseConversation &&
+      String(turnResponseConversation?.conversation_id || "").trim() === conversationID &&
+      Array.isArray(turnResponseConversation?.turns) &&
+      turnResponseConversation.turns.length > 0
+        ? turnResponseConversation
+        : draftSnapshot &&
+            String(draftSnapshot?.conversation_id || "").trim() === conversationID &&
+            Array.isArray(draftSnapshot?.turns) &&
+            draftSnapshot.turns.length > 0
+          ? draftSnapshot
+          : await fetchConversation(appContext, conversationID);
+    let draftTurn = latestAssistantTurn(draftConversation);
+    if (shouldSupplementParentCandidate(draftTurn)) {
+      const supplementResponseConversation = await sendFromFormalEntry(
+        surface,
+        buildParentCandidateSupplement(orgName),
+      );
+      draftConversation =
+        supplementResponseConversation &&
+        String(supplementResponseConversation?.conversation_id || "").trim() === conversationID &&
+        Array.isArray(supplementResponseConversation?.turns) &&
+        supplementResponseConversation.turns.length > 0
+          ? supplementResponseConversation
+          : await fetchConversation(appContext, conversationID);
+      draftTurn = latestAssistantTurn(draftConversation);
+    }
     expect(String(draftTurn?.intent?.action || "").trim()).toBe("create_orgunit");
     expect(String(draftTurn?.phase || "").trim()).toBe("await_commit_confirm");
 

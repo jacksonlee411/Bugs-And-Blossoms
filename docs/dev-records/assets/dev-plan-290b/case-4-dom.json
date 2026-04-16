@@ -1,14 +1,14 @@
 {
-  "url": "http://localhost:8080/app/assistant/librechat/c/new",
+  "url": "http://localhost:18080/app/cubebox/conversations/conv_a4d6a0e2015f4c05b12c0accdc133fff",
   "bubble_count": 1,
   "bubbles": [
     {
-      "binding_key": "conv_f739d58009f645d69e2bf380e26f1d64::turn_97e5f65a28714a3ab702b0714650cd94::assistant_e8db15f0368d4ea9970ec4c64e175cc2",
-      "conversation_id": "conv_f739d58009f645d69e2bf380e26f1d64",
-      "turn_id": "turn_97e5f65a28714a3ab702b0714650cd94",
-      "request_id": "assistant_e8db15f0368d4ea9970ec4c64e175cc2",
-      "message_id": "01d2723e-c3aa-49eb-be5f-ad2ccd974453_",
-      "text": "上级组织：TP290BSSC2；新建组织：候选验证部239A；生效日期：2026-03-26 task_id: df1bb27f-04dd-49e4-95a7-98b5372f4d3c · succeeded Selected: 共享服务中心 org_code: O000001 parent_org_code: TP290BSSC2 effective_date: 2026-03-26 event_type: CREATE"
+      "binding_key": "turn_d5879111070741a28a93fe3f9fbfc7d4",
+      "conversation_id": "conv_a4d6a0e2015f4c05b12c0accdc133fff",
+      "turn_id": "turn_d5879111070741a28a93fe3f9fbfc7d4",
+      "request_id": "assistant_85c9593014ca470592a05aa35472d228",
+      "message_id": "",
+      "text": "committed high turn_d5879111070741a28a93fe3f9fbfc7d4 请在父组织共享服务中心下新建候选验证部239A，生效日期2026-03-26 在指定父组织下创建部门，提交前需要确认候选主键。"
     }
   ],
   "external_reply_container_count": 0,

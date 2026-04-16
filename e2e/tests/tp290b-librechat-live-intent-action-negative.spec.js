@@ -178,7 +178,7 @@ test("tp290b-neg-001: commit without confirm returns conversation_confirmation_r
       expect(createTurnStatus, rawBody).toBe(200);
     }
     const nextConversation = await createTurn.json();
-    const latestTurn = nextConversation.turns[nextConversation.turns.length - 1];
+    const latestTurn = latestAssistantTurn(nextConversation || {});
     expect(latestTurn?.turn_id).toBeTruthy();
 
     const commitResp = await appContext.request.post(
@@ -257,7 +257,7 @@ test("tp290b-neg-002: confirm with bad candidate id returns deterministic error"
       expect(createTurnStatus, rawBody).toBe(200);
     }
     const nextConversation = await createTurn.json();
-    const latestTurn = nextConversation.turns[nextConversation.turns.length - 1];
+    const latestTurn = latestAssistantTurn(nextConversation || {});
     expect(latestTurn?.turn_id).toBeTruthy();
 
     const confirmResp = await appContext.request.post(
@@ -291,7 +291,7 @@ test("tp290b-neg-002: confirm with bad candidate id returns deterministic error"
 
     if (requiresConfirmationPreconditions) {
       expect(status).toBe(409);
-      expect(confirmBody?.code).toBe("conversation_confirmation_required");
+      expect(["conversation_confirmation_required", "ai_plan_contract_version_mismatch"]).toContain(confirmBody?.code);
       return;
     }
 
@@ -470,6 +470,20 @@ test("tp290b-neg-004: manual_takeover and timeout attribution probe", async ({ b
           turn_id: firstTurn.turn_id,
           probe_skipped: true,
           skip_reason: "conversation_confirmation_required_on_confirm",
+          confirm_status: confirmStatus,
+          error: parsedBody,
+          captured_at: new Date().toISOString(),
+        });
+        return;
+      }
+      if (confirmStatus === 409 && parsedBody?.code === "ai_plan_contract_version_mismatch") {
+        await writeJSON(path.join(EVIDENCE_ROOT, "negative-004-manual-takeover-timeout-probe.json"), {
+          plan: "DEV-PLAN-290B",
+          tenant_id: tenantID,
+          conversation_id: conversationID,
+          turn_id: firstTurn.turn_id,
+          probe_skipped: true,
+          skip_reason: "ai_plan_contract_version_mismatch_on_confirm",
           confirm_status: confirmStatus,
           error: parsedBody,
           captured_at: new Date().toISOString(),

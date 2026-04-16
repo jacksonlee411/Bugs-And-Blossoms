@@ -369,14 +369,14 @@ func TestFacadeListConversationsSupportsCursorClampAndFallback(t *testing.T) {
 	}
 
 	legacy := stubLegacyFacade{
-		listItems: []cubeboxdomain.ConversationListItem{{ConversationID: "legacy_conv"}},
-		listNext:  "legacy_next",
+		listItems: []cubeboxdomain.ConversationListItem{{ConversationID: "fallback_conv"}},
+		listNext:  "fallback_next",
 	}
 	items, next, err = NewFacade(nil, nil, nil, legacy).ListConversations(context.Background(), "tenant-1", "actor-1", 10, "")
 	if err != nil {
 		t.Fatalf("legacy list conversations: %v", err)
 	}
-	if len(items) != 1 || items[0].ConversationID != "legacy_conv" || next != "legacy_next" {
+	if len(items) != 1 || items[0].ConversationID != "fallback_conv" || next != "fallback_next" {
 		t.Fatalf("legacy items=%+v next=%q", items, next)
 	}
 	if _, _, err := NewFacade(nil, nil, nil, legacy).ListConversations(context.Background(), "tenant-1", "actor-1", 10, "bad-cursor"); !errors.Is(err, ErrConversationCursorInvalid) {
@@ -471,7 +471,7 @@ func TestFacadeLoadConversationFormalBranches(t *testing.T) {
 
 	t.Run("reader miss without legacy returns not found", func(t *testing.T) {
 		conv, err := NewFacade(&stubConversationReader{getErr: errors.New("missing")}, nil, nil, stubLegacyFacade{
-			getConv: &cubeboxdomain.Conversation{ConversationID: "legacy_conv"},
+			getConv: &cubeboxdomain.Conversation{ConversationID: "fallback_conv"},
 		}).loadConversation(context.Background(), "tenant-1", "actor-1", "conv_1", false)
 		if !errors.Is(err, ErrConversationNotFound) || conv != nil {
 			t.Fatalf("conversation=%+v err=%v", conv, err)
@@ -480,9 +480,9 @@ func TestFacadeLoadConversationFormalBranches(t *testing.T) {
 
 	t.Run("reader miss with allowed legacy falls back", func(t *testing.T) {
 		conv, err := NewFacade(&stubConversationReader{getErr: errors.New("missing")}, nil, nil, stubLegacyFacade{
-			getConv: &cubeboxdomain.Conversation{ConversationID: "legacy_conv"},
+			getConv: &cubeboxdomain.Conversation{ConversationID: "fallback_conv"},
 		}).loadConversation(context.Background(), "tenant-1", "actor-1", "conv_1", true)
-		if err != nil || conv == nil || conv.ConversationID != "legacy_conv" {
+		if err != nil || conv == nil || conv.ConversationID != "fallback_conv" {
 			t.Fatalf("conversation=%+v err=%v", conv, err)
 		}
 	})
@@ -2774,6 +2774,15 @@ func TestFacadeTurnDeadlineHelpersAndCancelResponse(t *testing.T) {
 		PlanJSON: mustJSONBytes(t, map[string]any{"confirm_ttl_seconds": 60}),
 	}, time.Time{}) {
 		t.Fatal("zero now should not treat zero-base turn as expired")
+	}
+	if turnConfirmationExpired(cubeboxdomain.ConversationTurnRecord{
+		State:    "validated",
+		PlanJSON: []byte("{bad json"),
+	}, now) {
+		t.Fatal("invalid plan json should not expire")
+	}
+	if turnConfirmationExpired(cubeboxdomain.ConversationTurnRecord{State: "validated"}, now) {
+		t.Fatal("validated turn without deadline should not expire")
 	}
 	explicit, ok := turnConfirmDeadline(cubeboxdomain.ConversationTurnRecord{
 		State:    "validated",

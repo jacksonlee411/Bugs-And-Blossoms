@@ -3,7 +3,7 @@ import { setupTenantAdminSession } from "./helpers/superadmin-tenant.js";
 
 const formalEntryPath = "/app/cubebox";
 const retiredEntryPath = "/app/assistant/librechat";
-const successorBootstrapPaths = ["/internal/assistant/ui-bootstrap", "/internal/assistant/session"];
+const retiredAssistantFormalAPIPaths = ["/internal/assistant/ui-bootstrap", "/internal/assistant/session"];
 const removedBootstrapCompatPaths = [
   "/assets/librechat-web/api/config",
   "/assets/librechat-web/api/endpoints",
@@ -37,22 +37,10 @@ test("tp283-e2e-001: CubeBox is the only accepted chat entry", async ({ browser 
   await expect(page.getByRole("link", { name: "模型" })).toHaveAttribute("href", "/app/cubebox/models");
 
   const [bootstrapResp, sessionResp] = await Promise.all(
-    successorBootstrapPaths.map((path) => appContext.request.get(path, { maxRedirects: 0 })),
+    retiredAssistantFormalAPIPaths.map((path) => appContext.request.get(path, { maxRedirects: 0 })),
   );
-  expect(bootstrapResp.status()).toBe(200);
-  expect(sessionResp.status()).toBe(200);
-
-  const bootstrapPayload = await bootstrapResp.json();
-  const sessionPayload = await sessionResp.json();
-  expect(bootstrapPayload.contract_version).toBe("v1");
-  expect(bootstrapPayload.runtime.runtime_cutover_mode).toBe("ui-shell-only");
-  expect(bootstrapPayload.ui.agents_ui_enabled).toBe(false);
-  expect(bootstrapPayload.ui.memory_enabled).toBe(false);
-  expect(bootstrapPayload.ui.web_search_enabled).toBe(false);
-  expect(bootstrapPayload.ui.file_search_enabled).toBe(false);
-  expect(bootstrapPayload.ui.code_interpreter_enabled).toBe(false);
-  expect(sessionPayload.contract_version).toBe("v1");
-  expect(sessionPayload.authenticated).toBe(true);
+  expect(bootstrapResp.status()).toBe(410);
+  expect(sessionResp.status()).toBe(410);
 
   const retiredEntryResp = await appContext.request.get(retiredEntryPath, { maxRedirects: 0 });
   expect(retiredEntryResp.status()).toBe(410);

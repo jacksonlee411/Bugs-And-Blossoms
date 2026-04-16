@@ -1,14 +1,14 @@
 {
-  "url": "http://localhost:8080/app/assistant/librechat/c/new",
+  "url": "http://localhost:18080/app/cubebox/conversations/conv_adf67509567c49f6b28446e649f73889",
   "bubble_count": 1,
   "bubbles": [
     {
-      "binding_key": "conv_81801261683e463aada2c1ee3a8fc293::turn_a2846536056c439d8f8b718bf9839093::assistant_ed52416126304e38ae2ebcc589678961",
-      "conversation_id": "conv_81801261683e463aada2c1ee3a8fc293",
-      "turn_id": "turn_a2846536056c439d8f8b718bf9839093",
-      "request_id": "assistant_ed52416126304e38ae2ebcc589678961",
-      "message_id": "c6c9f511-50ae-4912-9509-6017c58e23f4_",
-      "text": "上级组织：TP290BAIGOV；新建组织：人力资源部2；生效日期：2026-01-01 task_id: 4b31279e-c52e-4f34-bd9f-1b91a3438794 · succeeded Selected: AI治理办公室 org_code: O000001 parent_org_code: TP290BAIGOV effective_date: 2026-01-01 event_type: CREATE"
+      "binding_key": "turn_df72aaf7c8344e888a84b6b818f4711e",
+      "conversation_id": "conv_adf67509567c49f6b28446e649f73889",
+      "turn_id": "turn_df72aaf7c8344e888a84b6b818f4711e",
+      "request_id": "assistant_a15a87292c614f9f8f28b0e52adfe808",
+      "message_id": "",
+      "text": "committed high turn_df72aaf7c8344e888a84b6b818f4711e 在 AI治理办公室 下新建 人力资源部2，生效日期 2026-01-01 在指定父组织下创建部门，提交前需要确认候选主键。"
     }
   ],
   "external_reply_container_count": 0,

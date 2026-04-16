@@ -1,14 +1,14 @@
 {
-  "url": "http://localhost:8080/app/assistant/librechat/c/new",
+  "url": "http://localhost:18080/app/cubebox/conversations/conv_3187aea2ad894425ab133796c1a6397c",
   "bubble_count": 1,
   "bubbles": [
     {
-      "binding_key": "conv_2d078d36d77b4645b08890b665605a05::turn_6aaca2dee4154054a100532817a3eb37::assistant_a50359b9ef084dc08959f46b03275340",
-      "conversation_id": "conv_2d078d36d77b4645b08890b665605a05",
-      "turn_id": "turn_6aaca2dee4154054a100532817a3eb37",
-      "request_id": "assistant_a50359b9ef084dc08959f46b03275340",
-      "message_id": "c6747225-7a5d-4c6b-8256-b632c148c5e6_",
-      "text": "你现在想处理哪件事？可以先简单说一下你的目标，比如“想创建一个新部门”或“想调整某个部门的上级”。"
+      "binding_key": "turn_a5c3b41d591945b1b70c6d1db5fa10cc",
+      "conversation_id": "conv_3187aea2ad894425ab133796c1a6397c",
+      "turn_id": "turn_a5c3b41d591945b1b70c6d1db5fa10cc",
+      "request_id": "assistant_51d63476bf3d4600b5b43d87f97e6a78",
+      "message_id": "",
+      "text": "validated low turn_a5c3b41d591945b1b70c6d1db5fa10cc 你好 当前轮属于闲聊响应，不触发业务提交。"
     }
   ],
   "external_reply_container_count": 0,

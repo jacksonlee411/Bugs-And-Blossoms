@@ -207,8 +207,14 @@ func TestCubeBoxTurnActionMapsFormalCommitErrors(t *testing.T) {
 		{name: "confirmation_required", err: cubeboxservices.ErrConfirmationRequired, wantHTTP: http.StatusConflict, wantCode: "conversation_confirmation_required"},
 		{name: "confirmation_expired", err: cubeboxservices.ErrConfirmationExpired, wantHTTP: http.StatusConflict, wantCode: "conversation_confirmation_expired"},
 		{name: "state_invalid", err: cubeboxservices.ErrConversationStateInvalid, wantHTTP: http.StatusConflict, wantCode: "conversation_state_invalid"},
+		{name: "candidate_not_found", err: errAssistantCandidateNotFound, wantHTTP: http.StatusUnprocessableEntity, wantCode: "assistant_candidate_not_found"},
+		{name: "route_non_business_blocked", err: errAssistantRouteNonBusinessBlocked, wantHTTP: http.StatusConflict, wantCode: "ai_route_non_business_blocked"},
+		{name: "unsupported_intent", err: errAssistantUnsupportedIntent, wantHTTP: http.StatusUnprocessableEntity, wantCode: "assistant_intent_unsupported"},
+		{name: "version_tuple_stale", err: errAssistantVersionTupleStale, wantHTTP: http.StatusConflict, wantCode: "ai_version_tuple_stale"},
 		{name: "auth_snapshot_expired", err: cubeboxservices.ErrAuthSnapshotExpired, wantHTTP: http.StatusForbidden, wantCode: "ai_actor_auth_snapshot_expired"},
+		{name: "assistant_auth_snapshot_expired", err: errAssistantAuthSnapshotExpired, wantHTTP: http.StatusForbidden, wantCode: "ai_actor_auth_snapshot_expired"},
 		{name: "role_drift", err: cubeboxservices.ErrRoleDriftDetected, wantHTTP: http.StatusForbidden, wantCode: "ai_actor_role_drift_detected"},
+		{name: "assistant_role_drift", err: errAssistantRoleDriftDetected, wantHTTP: http.StatusForbidden, wantCode: "ai_actor_role_drift_detected"},
 		{name: "task_state_invalid", err: cubeboxservices.ErrTaskStateInvalid, wantHTTP: http.StatusConflict, wantCode: "assistant_task_state_invalid"},
 	}
 	for _, tc := range testCases {

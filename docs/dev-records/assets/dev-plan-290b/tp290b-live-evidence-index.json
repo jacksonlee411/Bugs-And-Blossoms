@@ -1,8 +1,8 @@
 {
   "plan": "DEV-PLAN-290B",
   "status": "passed",
-  "updated_at": "2026-04-13T10:16:00.881Z",
-  "formal_entry": "/app/assistant/librechat",
+  "updated_at": "2026-04-16T03:24:07.409Z",
+  "formal_entry": "/app/cubebox",
   "runtime_admission_gate": {
     "status": "passed",
     "artifact": "docs/dev-records/assets/dev-plan-290b/runtime-admission-gate.json",

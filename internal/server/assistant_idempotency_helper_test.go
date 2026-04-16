@@ -105,14 +105,14 @@ func TestAssistantIdempotencyTaskReceiptRestoreCoverage(t *testing.T) {
 		t.Fatal("invalid json should fail")
 	}
 
-		expected := assistantTaskAsyncReceipt{
-			TaskID:      "task_1",
-			TaskType:    assistantTaskTypeAsyncPlan,
-			Status:      assistantTaskStatusQueued,
-			WorkflowID:  "wf_1",
-			SubmittedAt: time.Date(2026, 3, 9, 4, 0, 0, 0, time.UTC),
-			PollURI:     "/internal/cubebox/tasks/task_1",
-		}
+	expected := assistantTaskAsyncReceipt{
+		TaskID:      "task_1",
+		TaskType:    assistantTaskTypeAsyncPlan,
+		Status:      assistantTaskStatusQueued,
+		WorkflowID:  "wf_1",
+		SubmittedAt: time.Date(2026, 3, 9, 4, 0, 0, 0, time.UTC),
+		PollURI:     "/internal/cubebox/tasks/task_1",
+	}
 	body, err := json.Marshal(expected)
 	if err != nil {
 		t.Fatalf("marshal receipt err=%v", err)
