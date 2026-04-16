@@ -280,7 +280,8 @@ flowchart LR
 
 - **Valid Time**：文件面不引入业务 `effective_date`。
 - **Audit / Tx Time**：
-  - `uploaded_at / created_at / updated_at` 使用 `timestamptz`
+  - `cubebox_files.uploaded_at`、`cubebox_files.updated_at`、`cubebox_file_links.created_at` 使用 `timestamptz`
+  - 对外 files DTO 若暴露 `created_at`，其来源冻结为 `cubebox_files.uploaded_at` 的映射名；`380D`/`380C` 不新增第二个文件创建时间列
   - 对象存储的写入时间只做审计，不参与业务有效期判断
 - **ID / Code 命名**：
   - `file_id` 采用 `file_<uuid>` 形式
@@ -344,9 +345,8 @@ flowchart LR
   - 只有“metadata 删除成功但对象删除失败”或“对象写入成功但 metadata 失败”这类不一致状态，才进入 orphan cleanup/reconciliation 队列
 - **恢复事实源**：
   - orphan cleanup 必须有可重试、可查询、tenant-scoped 的持久化事实源
-  - 允许实现形态：
-    - 新增持久化 cleanup 表
-    - 或复用 tenant-scoped durable outbox/queue 表
+  - 正式 owner / schema contract 由 `380A` 持有；`380D` 只消费该持久化载体，不在本文开放“实现时再决定建表还是复用其他队列”
+  - 本文冻结的完成态要求：必须存在一个**文件面专用或显式承接文件 cleanup 的 durable persistence contract**，且 readiness 要登记其 schema/查询/重试证据
   - 不允许实现形态：
     - 只有结构化日志
     - 只有进程内内存队列
@@ -411,34 +411,35 @@ flowchart LR
 
 `GET /internal/cubebox/files?conversation_id=conv_123`
 
-- **Response（外部字段名以 `380C` 为 SSOT；下述仅重复 files 资源面最小完成态）**：
+- **Response（外部字段名与错误码以 `380C` 为唯一 SSOT；下述只描述 file-plane 必须满足的底层语义，不单独形成第二份 DTO 主源）**：
 
 ```json
-{
-  "items": [
-    {
-      "file_id": "file_123",
-      "filename": "design.txt",
-      "content_type": "text/plain",
-      "size_bytes": 128,
-      "scan_status": "ready",
-      "created_at": "2026-04-16T06:00:00Z",
-      "links": [
-        {
-          "link_role": "conversation_attachment",
-          "conversation_id": "conv_123",
-          "turn_id": null
-        }
-      ]
-    }
-  ]
-}
+  {
+    "items": [
+      {
+        "file_id": "file_123",
+        "filename": "design.txt",
+        "content_type": "text/plain",
+        "size_bytes": 128,
+        "scan_status": "ready",
+        "created_at": "2026-04-16T06:00:00Z",
+        "links": [
+          {
+            "link_role": "conversation_attachment",
+            "conversation_id": "conv_123",
+            "turn_id": null
+          }
+        ]
+      }
+    ]
+  }
 ```
 
-- **兼容窗口**：
-  - 当前允许继续输出 `conversation_id` 单值字段
-  - 当前 server 仍可能输出 `file_name / media_type / uploaded_at`
-  - 这些旧字段在 `380D` 中被明确认定为过渡态，不得再被新增调用方固化；删除批次与对外收口以 `380C` 为准
+- **file-plane 对外映射要求**：
+  - `380C` 冻结的最小 files DTO 字段必须都能从 `cubebox_files + cubebox_file_links` 单链路稳定推导
+  - 其中 `created_at` 的底层来源冻结为 `cubebox_files.uploaded_at`
+  - 当前允许继续输出 `conversation_id` 单值字段作为兼容窗口，但不得新增调用方继续固化
+  - 当前 server 仍可能输出 `file_name / media_type / uploaded_at`；这些旧字段在 `380D` 中被明确认定为过渡态，不得再被新增调用方固化；删除批次与对外收口以 `380C` 为准
 
 #### 5.3.2 `POST /internal/cubebox/files`
 
@@ -447,16 +448,16 @@ flowchart LR
 - **完成态语义**：
   - `conversation_id` 只表示“立即创建一条 `conversation_attachment` link”
   - 不表示文件天然属于单一 conversation
-- **错误返回（最小契约）**：
-  - `cubebox_file_upload_invalid`
-  - `cubebox_files_unavailable`
-  - `cubebox_file_upload_failed`
-  - `cubebox_conversation_not_found` 或等价正式错误码（若 `conversation_id` 无法映射）
+- **file-plane 失败映射要求**：
+  - 外部 API 错误码主源仍是 `380C`
+  - 本文只冻结底层失败分类必须可被稳定映射：输入非法、存储未装配、对象写入/metadata 写入失败、`conversation_id` 无法映射
+  - 若 `conversation_id` 无法映射，对外必须落到 `380C` 已登记的正式 not-found 语义，不能在实现期自造新 literal
 
 #### 5.3.3 `DELETE /internal/cubebox/files/{file_id}`
 
 - **用途**：删除一个无引用文件
 - **完成态语义**：
+  - 若文件不存在，对外返回 `380C` 冻结的 `404 file not found` 语义
   - 若文件仍存在任一 `cubebox_file_links`，返回阻断错误
   - 若文件无任何 link，则删除 metadata 并回收对象
   - 删除成功返回 `204 No Content`
@@ -466,18 +467,20 @@ flowchart LR
 
 ### 5.4 失败语义 / stopline
 
-| 失败场景 | 正式错误码 | 是否允许 fallback | explain 最低输出 | 是否 stopline |
+| 失败场景 | 对外错误语义归属 | 是否允许 fallback | explain 最低输出 | 是否 stopline |
 | --- | --- | --- | --- | --- |
-| 文件存储未装配 | `cubebox_files_unavailable` | 否 | `path` `method` | 否 |
-| multipart/filename/size 非法 | `cubebox_file_upload_invalid` | 否 | `field` | 否 |
-| `conversation_id` 映射缺失 | `cubebox_conversation_not_found` 或正式等价码 | 否 | `conversation_id` | 否 |
-| 文件仍被引用不可删 | `cubebox_file_delete_blocked` | 否 | `file_id` `link_count` | 否 |
-| metadata/object 导入不一致 | `cubebox_file_import_mismatch` | 否 | mismatch 摘要 | 是 |
-| `index.json` 仍被正式路径读取 | `cubebox_file_legacy_source_detected` | 否 | source | 是 |
-| cleanup 队列无持久化事实源 | `cubebox_file_cleanup_unrecoverable` | 否 | `file_id` `cleanup_reason` | 是 |
+| 文件存储未装配 | 对外 literal 由 `380C` 持有；必须可稳定区分“files unavailable” | 否 | `path` `method` | 否 |
+| multipart/filename/size 非法 | 对外 literal 由 `380C` 持有；必须可稳定区分“upload invalid” | 否 | `field` | 否 |
+| `conversation_id` 映射缺失 | 对外 literal 由 `380C` 持有；必须映射到正式 not-found 语义 | 否 | `conversation_id` | 否 |
+| `file_id` 不存在 | 对外 literal 由 `380C` 持有；必须映射到正式 not-found 语义 | 否 | `file_id` | 否 |
+| 文件仍被引用不可删 | 对外 literal 由 `380C` 持有；必须可稳定区分“delete blocked” | 否 | `file_id` `link_count` | 否 |
+| metadata/object 导入不一致 | 内部 stopline；若对外暴露错误码仍由 `380C/error-message` 持有 | 否 | mismatch 摘要 | 是 |
+| `index.json` 仍被正式路径读取 | 内部 stopline；若对外暴露错误码仍由 `380C/error-message` 持有 | 否 | source | 是 |
+| cleanup 队列无持久化事实源 | 内部 stopline；若对外暴露错误码仍由 `380C/error-message` 持有 | 否 | `file_id` `cleanup_reason` | 是 |
 
-- **错误码约束**：
-  - 文件删除阻断必须有独立稳定错误码，不能继续只有 `cubebox_file_delete_failed`
+- **错误语义约束**：
+  - 文件删除阻断必须能稳定映射到 `380C` 已冻结的独立错误码，不能继续只有泛化 `delete failed`
+  - 文件不存在必须能稳定映射到 `380C` 已冻结的 `file not found`
   - 所有 Internal API 错误仍统一使用 `routing.ErrorEnvelope`
 
 ## 6. 核心流程与算法（Business Flow & Algorithms）
@@ -518,16 +521,18 @@ flowchart LR
 1. 解析 tenant 与 `file_id`
 2. 开启显式事务并注入 tenant
 3. 查询 `cubebox_files` 是否存在
-4. 查询 `cubebox_file_links` 数量
-5. 若 `link_count > 0`：
-   - 返回 `cubebox_file_delete_blocked`
+4. 若文件不存在：
+   - 返回 `380C` 冻结的 `404 file not found` 语义
+5. 查询 `cubebox_file_links` 数量
+6. 若 `link_count > 0`：
+   - 返回 `380C` 冻结的 `delete blocked` 语义
    - 不删除对象，不删除 metadata
-6. 若 `link_count == 0`：
+7. 若 `link_count == 0`：
    - 记录对象定位信息
    - 删除 `cubebox_files`
    - 提交事务
-7. 事务成功后回收对象文件
-8. 若对象回收失败：
+8. 事务成功后回收对象文件
+9. 若对象回收失败：
    - 写入持久化 orphan cleanup 记录
    - 不恢复 metadata，不回滚已提交事务
 

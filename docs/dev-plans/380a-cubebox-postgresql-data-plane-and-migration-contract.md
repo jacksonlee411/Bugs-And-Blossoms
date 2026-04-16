@@ -567,6 +567,55 @@ CREATE UNIQUE INDEX IF NOT EXISTS cubebox_file_links_turn_unique
   WHERE turn_id IS NOT NULL;
 ```
 
+### 4.2A Schema 定义：file cleanup durable persistence（供 `380D` 消费）
+
+> 目的：承接“对象写入成功但 metadata 失败”与“metadata 删除成功但对象回收失败”的文件面恢复主链。  
+> 归属说明：是否需要该持久化载体由 `380D` 提出，但正式 schema / migration / sqlc / owner contract 由 `380A` 持有，避免实现期临时决定。
+
+- 建议新增 schema SSOT 文件：
+  - `modules/iam/infrastructure/persistence/schema/00014_iam_cubebox_file_cleanup_jobs.sql`
+
+```sql
+CREATE TABLE IF NOT EXISTS iam.cubebox_file_cleanup_jobs (
+  id bigserial PRIMARY KEY,
+  tenant_uuid uuid NOT NULL REFERENCES iam.tenants(id) ON DELETE CASCADE,
+  file_id text NOT NULL,
+  storage_provider text NOT NULL,
+  storage_key text NOT NULL,
+  cleanup_reason text NOT NULL,
+  status text NOT NULL DEFAULT 'pending',
+  attempt_count integer NOT NULL DEFAULT 0,
+  next_retry_at timestamptz NOT NULL DEFAULT now(),
+  last_error text NULL,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now(),
+  CONSTRAINT cubebox_file_cleanup_jobs_file_id_format_check CHECK (
+    file_id ~ '^file_[0-9a-f-]{36}$'
+  ),
+  CONSTRAINT cubebox_file_cleanup_jobs_storage_provider_check CHECK (
+    storage_provider IN ('localfs', 's3_compat')
+  ),
+  CONSTRAINT cubebox_file_cleanup_jobs_reason_check CHECK (
+    cleanup_reason IN ('metadata_write_failed', 'object_delete_failed')
+  ),
+  CONSTRAINT cubebox_file_cleanup_jobs_status_check CHECK (
+    status IN ('pending', 'running', 'succeeded', 'failed', 'manual_takeover_required')
+  ),
+  CONSTRAINT cubebox_file_cleanup_jobs_attempt_non_negative CHECK (attempt_count >= 0)
+);
+
+CREATE INDEX IF NOT EXISTS cubebox_file_cleanup_jobs_schedule_idx
+  ON iam.cubebox_file_cleanup_jobs (status, next_retry_at);
+
+CREATE INDEX IF NOT EXISTS cubebox_file_cleanup_jobs_file_idx
+  ON iam.cubebox_file_cleanup_jobs (tenant_uuid, file_id, created_at DESC, id DESC);
+```
+
+- `380D`/实现期必须遵守：
+  - 文件面 cleanup/reconciliation 的 durable persistence 以该表为正式 contract，而不是临时复用 `cubebox_task_dispatch_outbox`
+  - `380D` 可以定义何时写入、如何重试、何时进入 `manual_takeover_required`
+  - 若后续确需改成更通用的 durable queue，必须先更新 `380A` 与 `380D`，不能在实现期绕过 schema contract
+
 ### 4.4 RLS、事务与统一约束
 
 以下规则适用于本节全部九张表：
