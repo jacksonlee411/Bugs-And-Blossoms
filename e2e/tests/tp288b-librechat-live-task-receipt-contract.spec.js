@@ -185,6 +185,15 @@ async function createTP288BSession(browser, suffix, harPath) {
 }
 
 async function ensureTenantBaseline(appContext) {
+  const report = {
+    effective_date: BASELINE_EFFECTIVE_DATE,
+    validated_at: new Date().toISOString(),
+    status: "blocked",
+    root_org_code: "",
+    required_orgs: [],
+    probe: {},
+    issues: [],
+  };
   let rootOrg = await detectRootOrg(appContext, BASELINE_EFFECTIVE_DATE, BASELINE_ROOT_CODE);
   if (!rootOrg) {
     await createOrgUnit(appContext, {
@@ -198,6 +207,7 @@ async function ensureTenantBaseline(appContext) {
     expect(createdRoot?.org_unit, "root org should be readable after creation").toBeTruthy();
     rootOrg = createdRoot.org_unit;
   }
+  report.root_org_code = String(rootOrg?.org_code || "").trim();
   await ensureOrgUnitByCode(
     appContext,
     { code: BASELINE_PARENT_CODE, name: BASELINE_PARENT_NAME },
@@ -222,20 +232,58 @@ async function ensureTenantBaseline(appContext) {
     },
   );
   const probeSummary = baselineProbeSummary(probe);
-  expect(
+  const ready =
+    probeSummary.create_turn_status === 200 &&
+    probeSummary.intent_action === "create_orgunit" &&
+    probeSummary.phase === "await_commit_confirm" &&
+    probeSummary.validation_errors.length === 0 &&
+    probeSummary.resolved_candidate_id === BASELINE_PARENT_CODE;
+  report.required_orgs = [
     {
-      create_turn_status: probeSummary.create_turn_status,
-      phase: probeSummary.phase,
-      validation_errors: probeSummary.validation_errors,
-      resolved_candidate_id: probeSummary.resolved_candidate_id,
+      name: BASELINE_PARENT_NAME,
+      expected: "exact_parent_resolution",
+      matched_org_code: BASELINE_PARENT_CODE,
+      ready,
     },
-    probe?.raw_text || "tp288b baseline probe failed",
-  ).toEqual({
-    create_turn_status: 200,
-    phase: "await_commit_confirm",
-    validation_errors: [],
-    resolved_candidate_id: BASELINE_PARENT_CODE,
-  });
+  ];
+  report.probe = {
+    ...probeSummary,
+    raw_text: String(probe?.raw_text || "").trim(),
+  };
+  if (probeSummary.error_code) {
+    report.issues.push(`baseline probe returned ${probeSummary.error_code}`);
+  }
+  if (probeSummary.create_turn_status !== 200) {
+    report.issues.push(`baseline probe status ${probeSummary.create_turn_status}`);
+  }
+  if (probeSummary.phase !== "await_commit_confirm") {
+    report.issues.push(`baseline probe phase ${probeSummary.phase || "unknown"}`);
+  }
+  if (probeSummary.validation_errors.length > 0) {
+    report.issues.push(`baseline validation errors: ${probeSummary.validation_errors.join(",")}`);
+  }
+  if (probeSummary.resolved_candidate_id !== BASELINE_PARENT_CODE) {
+    report.issues.push(`baseline resolved candidate ${probeSummary.resolved_candidate_id || "missing"}`);
+  }
+  report.status = ready ? "passed" : "blocked";
+  return report;
+}
+
+function baselineProbeSkipReason(probe) {
+  const errorCode = String(probe?.error_code || "").trim();
+  if (errorCode === "cubebox_conversation_create_failed") {
+    return "cubebox_conversation_create_failed_on_baseline_probe";
+  }
+  if (errorCode === "cubebox_turn_create_failed") {
+    return "cubebox_turn_create_failed_on_baseline_probe";
+  }
+  if (errorCode === "assistant_runtime_unavailable") {
+    return "assistant_runtime_unavailable_on_baseline_probe";
+  }
+  if (errorCode === "ai_model_secret_missing") {
+    return "ai_model_secret_missing_on_baseline_probe";
+  }
+  return "baseline_probe_not_ready";
 }
 
 function installNetworkRecorder(page) {
@@ -675,6 +723,7 @@ test("tp288b-live-001: real formal entry follows receipt poll refresh contract",
   let result = "blocked";
   let blockingReason = "";
   let traceMode = "none";
+  let baseline = null;
   let assertions = {
     case_id: CASE_ID,
     passed: false,
@@ -707,7 +756,31 @@ test("tp288b-live-001: real formal entry follows receipt poll refresh contract",
       );
     }
 
-    await ensureTenantBaseline(appContext);
+    baseline = await ensureTenantBaseline(appContext);
+    if (baseline.status !== "passed") {
+      blockingReason = `数据基线未就绪：${baseline.issues[0] || "租户基线校验失败"}`;
+      try {
+        await page.screenshot({ path: paths.page, fullPage: true });
+      } catch {
+        // ignore
+      }
+      assertions = {
+        ...assertions,
+        plan: "DEV-PLAN-288B",
+        case_id: CASE_ID,
+        formal_entry: FORMAL_ENTRY_PATH,
+        command: process.env.TP288B_EVIDENCE_COMMAND || DEFAULT_COMMAND,
+        captured_at: new Date().toISOString(),
+        probe_skipped: true,
+        skip_reason: baselineProbeSkipReason(baseline.probe),
+        failure_message: blockingReason,
+        baseline,
+        passed: false,
+      };
+      await writeJSON(paths.assertions, assertions);
+      result = "blocked";
+      return;
+    }
 
     const entry = await openFormalEntry(page);
     surface = entry.surface;
@@ -754,6 +827,7 @@ test("tp288b-live-001: real formal entry follows receipt poll refresh contract",
               ? "assistant_runtime_unavailable_on_create_turn"
             : "ai_model_secret_missing_on_create_turn",
         failure_message: blockingReason,
+        baseline,
         observed_call: {
           path: String(runtimeBlockedCall.path || ""),
           status: Number(runtimeBlockedCall.status || 0),
@@ -884,6 +958,7 @@ test("tp288b-live-001: real formal entry follows receipt poll refresh contract",
       final_task_status: String(taskProbe.terminalCall?.json?.status || ""),
       final_turn_state: String(finalTurn?.state || ""),
       model_proof: modelProof,
+      baseline,
       stopline: {
         single_channel: networkState.nativePostPaths.length === 0,
         single_formal_entry: usedIframe === false,
