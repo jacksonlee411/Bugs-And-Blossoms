@@ -1,22 +1,22 @@
 {
-  "url": "http://localhost:8080/app/assistant/librechat/c/new",
+  "url": "http://localhost:18080/app/cubebox/conversations/conv_437301efe4ef4bbf87226971ebb78cb8",
   "bubble_count": 2,
   "bubbles": [
     {
-      "binding_key": "conv_9b517adb5c534a24a9fb13cfe27a8553::turn_c4e31828b9834d6598140339006356b3::assistant_6a4f0ecbc87148f3bd67eb58e12f44a5",
-      "conversation_id": "conv_9b517adb5c534a24a9fb13cfe27a8553",
-      "turn_id": "turn_c4e31828b9834d6598140339006356b3",
-      "request_id": "assistant_6a4f0ecbc87148f3bd67eb58e12f44a5",
-      "message_id": "81effb75-7d79-4afc-a485-8d21fb881bd9_",
-      "text": "我可以帮你在“AI治理办公室”下新建“人力资源部239A”。为了继续，请确认生效日期（effective_date），例如设为今天，或提供一个具体日期（YYYY-MM-DD）。 Missing fields effective_date"
+      "binding_key": "turn_061d68f22ce54eaea630b5b89e6fd00e",
+      "conversation_id": "conv_437301efe4ef4bbf87226971ebb78cb8",
+      "turn_id": "turn_061d68f22ce54eaea630b5b89e6fd00e",
+      "request_id": "assistant_04ca2dac8fcb42189da74054f65f94b6",
+      "message_id": "",
+      "text": "validated high turn_061d68f22ce54eaea630b5b89e6fd00e 在 AI治理办公室 下新建 人力资源部239A补全 在指定父组织下创建部门，提交前需要确认候选主键。"
     },
     {
-      "binding_key": "conv_9b517adb5c534a24a9fb13cfe27a8553::turn_be453247ec4f4b64b0cc1c844b58002d::assistant_07dbada396cb4a8685665daa79e66a20",
-      "conversation_id": "conv_9b517adb5c534a24a9fb13cfe27a8553",
-      "turn_id": "turn_be453247ec4f4b64b0cc1c844b58002d",
-      "request_id": "assistant_07dbada396cb4a8685665daa79e66a20",
-      "message_id": "87bf3e51-7354-49ac-b3f1-eec9b0ef2189_",
-      "text": "上级组织：TP290BAIGOV；新建组织：人力资源部239A；生效日期：2026-03-25 task_id: dc569943-7174-453a-8ff1-a2514d0f944c · succeeded Selected: AI治理办公室 org_code: O000001 parent_org_code: TP290BAIGOV effective_date: 2026-03-25 event_type: CREATE"
+      "binding_key": "turn_a971eaa58232499199fe8228fe9128c9",
+      "conversation_id": "conv_437301efe4ef4bbf87226971ebb78cb8",
+      "turn_id": "turn_a971eaa58232499199fe8228fe9128c9",
+      "request_id": "assistant_b363bf91ac554fcd8aa3b78b6de45da2",
+      "message_id": "",
+      "text": "committed high turn_a971eaa58232499199fe8228fe9128c9 生效日期 2026-03-25 在指定父组织下创建部门，提交前需要确认候选主键。"
     }
   ],
   "external_reply_container_count": 0,

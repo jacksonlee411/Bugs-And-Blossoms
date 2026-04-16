@@ -1409,9 +1409,13 @@ func TestNewHandlerWithOptions_AssistantRoutes_AreWired(t *testing.T) {
 	}
 	if rec := call(http.MethodGet, "/internal/assistant/model-providers", ""); rec.Code == http.StatusNotFound {
 		t.Fatalf("assistant model providers route not wired")
+	} else if rec.Code != http.StatusGone || assistantDecodeErrCode(t, rec) != assistantAPIGoneCode {
+		t.Fatalf("assistant model providers status=%d body=%s", rec.Code, rec.Body.String())
 	}
 	if rec := call(http.MethodPost, "/internal/assistant/model-providers:validate", `{"providers":[]}`); rec.Code == http.StatusNotFound {
 		t.Fatalf("assistant model providers validate route not wired")
+	} else if rec.Code != http.StatusGone || assistantDecodeErrCode(t, rec) != assistantAPIGoneCode {
+		t.Fatalf("assistant model providers validate status=%d body=%s", rec.Code, rec.Body.String())
 	}
 	if rec := call(http.MethodPost, "/internal/assistant/model-providers:apply", `{"providers":[]}`); rec.Code != http.StatusNotFound {
 		t.Fatalf("assistant model providers apply status=%d body=%s", rec.Code, rec.Body.String())
@@ -1442,12 +1446,23 @@ func TestNewHandlerWithOptions_AssistantRoutes_AreWired(t *testing.T) {
 	}
 	if rec := call(http.MethodGet, "/internal/assistant/ui-bootstrap", ""); rec.Code == http.StatusNotFound {
 		t.Fatalf("assistant ui bootstrap route not wired")
+	} else if rec.Code != http.StatusGone || assistantDecodeErrCode(t, rec) != assistantAPIGoneCode {
+		t.Fatalf("assistant ui bootstrap status=%d body=%s", rec.Code, rec.Body.String())
 	}
 	if rec := call(http.MethodGet, "/internal/assistant/session", ""); rec.Code == http.StatusNotFound {
 		t.Fatalf("assistant session route not wired")
+	} else if rec.Code != http.StatusGone || assistantDecodeErrCode(t, rec) != assistantAPIGoneCode {
+		t.Fatalf("assistant session status=%d body=%s", rec.Code, rec.Body.String())
 	}
 	if rec := call(http.MethodPost, "/internal/assistant/session/refresh", ""); rec.Code == http.StatusNotFound {
 		t.Fatalf("assistant session refresh route not wired")
+	} else if rec.Code != http.StatusGone || assistantDecodeErrCode(t, rec) != assistantAPIGoneCode {
+		t.Fatalf("assistant session refresh status=%d body=%s", rec.Code, rec.Body.String())
+	}
+	if rec := call(http.MethodPost, "/internal/assistant/session/logout", ""); rec.Code == http.StatusNotFound {
+		t.Fatalf("assistant session logout route not wired")
+	} else if rec.Code != http.StatusGone || assistantDecodeErrCode(t, rec) != assistantAPIGoneCode {
+		t.Fatalf("assistant session logout status=%d body=%s", rec.Code, rec.Body.String())
 	}
 	if rec := call(http.MethodGet, "/assets/librechat-web/api/config", ""); rec.Code != http.StatusGone {
 		t.Fatalf("retired librechat config compat route status=%d body=%s", rec.Code, rec.Body.String())

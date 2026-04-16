@@ -794,6 +794,15 @@ func TestPathMatchRouteTemplate(t *testing.T) {
 	if pathMatchRouteTemplate("/org/api/example/123/disable", "/org/api/example/{id}/enable") {
 		t.Fatal("expected segment mismatch")
 	}
+	if pathMatchRouteTemplate("/internal/cubebox/tasks/task-1:cancel", "/internal/cubebox/tasks/{task_id}") {
+		t.Fatal("expected generic task detail template to reject action suffix path")
+	}
+	if !pathMatchRouteTemplate("/internal/cubebox/tasks/task-1:cancel", "/internal/cubebox/tasks/{task_id}:cancel") {
+		t.Fatal("expected suffix template match")
+	}
+	if pathMatchRouteTemplate("/internal/cubebox/tasks/:cancel", "/internal/cubebox/tasks/{task_id}:cancel") {
+		t.Fatal("expected missing task id to fail")
+	}
 }
 
 func TestSplitRouteSegments(t *testing.T) {

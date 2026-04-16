@@ -13,9 +13,11 @@ const (
 	assistantSessionInvalidCode            = "assistant_session_invalid"
 	assistantPrincipalInvalidCode          = "assistant_principal_invalid"
 	assistantUIBootstrapUnavailableCode    = "assistant_ui_bootstrap_unavailable"
+	assistantAPIGoneCode                   = "assistant_api_gone"
 	assistantSessionInvalidMessage         = "登录会话已失效，请重新登录。"
 	assistantPrincipalInvalidMessage       = "登录主体已失效，请重新登录。"
 	assistantUIBootstrapUnavailableMessage = "正式入口启动信息暂不可用，请稍后重试。"
+	assistantAPIGoneMessage                = "旧 Assistant API 已退役，请改用 CubeBox 正式接口。"
 )
 
 type assistantFormalViewer struct {
@@ -169,6 +171,22 @@ func (h *assistantFormalEntryAPIHandler) handleSessionLogout(w http.ResponseWrit
 	w.WriteHeader(http.StatusNoContent)
 }
 
+func (h *assistantFormalEntryAPIHandler) handleCubeBoxUIBootstrap(w http.ResponseWriter, r *http.Request) {
+	h.handleUIBootstrap(w, r)
+}
+
+func (h *assistantFormalEntryAPIHandler) handleCubeBoxSession(w http.ResponseWriter, r *http.Request) {
+	h.handleSession(w, r)
+}
+
+func (h *assistantFormalEntryAPIHandler) handleCubeBoxSessionRefresh(w http.ResponseWriter, r *http.Request) {
+	h.handleSessionRefresh(w, r)
+}
+
+func (h *assistantFormalEntryAPIHandler) handleCubeBoxSessionLogout(w http.ResponseWriter, r *http.Request) {
+	h.handleSessionLogout(w, r)
+}
+
 func assistantFormalSessionPayload(r *http.Request) (assistantFormalSessionResponse, bool) {
 	viewer, ok := assistantFormalViewerFromRequest(r)
 	if !ok {
@@ -273,12 +291,25 @@ func assistantWriteUIBootstrapUnavailable(w http.ResponseWriter, r *http.Request
 	routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusServiceUnavailable, assistantUIBootstrapUnavailableCode, message)
 }
 
+func handleAssistantRetiredAPI(w http.ResponseWriter, r *http.Request, successor string) {
+	message := assistantRetiredAPIMessage(successor)
+	routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusGone, assistantAPIGoneCode, message)
+}
+
+func assistantRetiredAPIMessage(successor string) string {
+	successor = strings.TrimSpace(successor)
+	if successor == "" {
+		return assistantAPIGoneMessage
+	}
+	return assistantAPIGoneMessage + " 请改用 " + successor + "。"
+}
+
 func isAssistantFormalSuccessorAPIPath(path string) bool {
 	switch strings.TrimSpace(path) {
-	case "/internal/assistant/ui-bootstrap",
-		"/internal/assistant/session",
-		"/internal/assistant/session/refresh",
-		"/internal/assistant/session/logout":
+	case "/internal/cubebox/ui-bootstrap",
+		"/internal/cubebox/session",
+		"/internal/cubebox/session/refresh",
+		"/internal/cubebox/session/logout":
 		return true
 	default:
 		return false

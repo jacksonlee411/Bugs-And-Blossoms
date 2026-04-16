@@ -104,9 +104,25 @@ jobs:
         if: steps.changes.outputs.relevant == 'true'
         run: make check assistant-no-knowledge-db
 
+      - name: No scope package gate
+        if: steps.changes.outputs.relevant == 'true'
+        run: make check no-scope-package
+
       - name: Org node key backflow gate
         if: steps.changes.outputs.relevant == 'true'
         run: make check org-node-key-backflow
+
+      - name: Capability key gate
+        if: steps.changes.outputs.relevant == 'true'
+        run: make check capability-key
+
+      - name: Capability contract gate
+        if: steps.changes.outputs.relevant == 'true'
+        run: make check capability-contract
+
+      - name: Capability route map gate
+        if: steps.changes.outputs.relevant == 'true'
+        run: make check capability-route-map
 
       - name: Docs gate
         if: steps.changes.outputs.relevant == 'true'

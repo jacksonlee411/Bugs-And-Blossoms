@@ -476,7 +476,13 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, error) {
 	router.Handle(routing.RouteClassInternalAPI, http.MethodPost, "/internal/assistant/conversations/{conversation_id}/turns", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		handleAssistantConversationTurnsAPI(w, r, assistantSvc)
 	}))
-	router.Handle(routing.RouteClassInternalAPI, http.MethodPost, "/internal/assistant/conversations/{conversation_id}/turns/{turn_action}", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	router.Handle(routing.RouteClassInternalAPI, http.MethodPost, "/internal/assistant/conversations/{conversation_id}/turns/{turn_id}:confirm", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handleAssistantTurnActionAPI(w, r, assistantSvc)
+	}))
+	router.Handle(routing.RouteClassInternalAPI, http.MethodPost, "/internal/assistant/conversations/{conversation_id}/turns/{turn_id}:commit", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handleAssistantTurnActionAPI(w, r, assistantSvc)
+	}))
+	router.Handle(routing.RouteClassInternalAPI, http.MethodPost, "/internal/assistant/conversations/{conversation_id}/turns/{turn_id}:reply", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		handleAssistantTurnActionAPI(w, r, assistantSvc)
 	}))
 	router.Handle(routing.RouteClassInternalAPI, http.MethodPost, "/internal/assistant/tasks", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -485,14 +491,8 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, error) {
 	router.Handle(routing.RouteClassInternalAPI, http.MethodGet, "/internal/assistant/tasks/{task_id}", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		handleAssistantTaskDetailAPI(w, r, assistantSvc)
 	}))
-	router.Handle(routing.RouteClassInternalAPI, http.MethodPost, "/internal/assistant/tasks/{task_id}", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	router.Handle(routing.RouteClassInternalAPI, http.MethodPost, "/internal/assistant/tasks/{task_id}:cancel", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		handleAssistantTaskActionAPI(w, r, assistantSvc)
-	}))
-	router.Handle(routing.RouteClassInternalAPI, http.MethodGet, "/internal/assistant/model-providers", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		handleAssistantModelProvidersAPI(w, r, assistantSvc)
-	}))
-	router.Handle(routing.RouteClassInternalAPI, http.MethodPost, "/internal/assistant/model-providers:validate", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		handleAssistantModelProvidersValidateAPI(w, r, assistantSvc)
 	}))
 	router.Handle(routing.RouteClassInternalAPI, http.MethodGet, "/internal/assistant/models", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		handleAssistantModelsAPI(w, r, assistantSvc)
@@ -515,7 +515,13 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, error) {
 	router.Handle(routing.RouteClassInternalAPI, http.MethodPost, "/internal/cubebox/conversations/{conversation_id}/turns", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		handleCubeBoxConversationTurnsAPI(w, r, cubeboxFacade)
 	}))
-	router.Handle(routing.RouteClassInternalAPI, http.MethodPost, "/internal/cubebox/conversations/{conversation_id}/turns/{turn_action}", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	router.Handle(routing.RouteClassInternalAPI, http.MethodPost, "/internal/cubebox/conversations/{conversation_id}/turns/{turn_id}:confirm", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handleCubeBoxTurnActionAPI(w, r, cubeboxFacade)
+	}))
+	router.Handle(routing.RouteClassInternalAPI, http.MethodPost, "/internal/cubebox/conversations/{conversation_id}/turns/{turn_id}:commit", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handleCubeBoxTurnActionAPI(w, r, cubeboxFacade)
+	}))
+	router.Handle(routing.RouteClassInternalAPI, http.MethodPost, "/internal/cubebox/conversations/{conversation_id}/turns/{turn_id}:reply", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		handleCubeBoxTurnActionAPI(w, r, cubeboxFacade)
 	}))
 	router.Handle(routing.RouteClassInternalAPI, http.MethodPost, "/internal/cubebox/tasks", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -524,7 +530,7 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, error) {
 	router.Handle(routing.RouteClassInternalAPI, http.MethodGet, "/internal/cubebox/tasks/{task_id}", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		handleCubeBoxTaskDetailAPI(w, r, cubeboxFacade)
 	}))
-	router.Handle(routing.RouteClassInternalAPI, http.MethodPost, "/internal/cubebox/tasks/{task_id}", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	router.Handle(routing.RouteClassInternalAPI, http.MethodPost, "/internal/cubebox/tasks/{task_id}:cancel", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		handleCubeBoxTaskActionAPI(w, r, cubeboxFacade)
 	}))
 	router.Handle(routing.RouteClassInternalAPI, http.MethodGet, "/internal/cubebox/models", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -543,17 +549,35 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, error) {
 		handleCubeBoxFileDeleteAPI(w, r, cubeboxFacade)
 	}))
 	assistantFormalEntryAPI := newAssistantFormalEntryAPIHandler(assistantSvc, sessions)
+	router.Handle(routing.RouteClassInternalAPI, http.MethodGet, "/internal/cubebox/ui-bootstrap", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assistantFormalEntryAPI.handleCubeBoxUIBootstrap(w, r)
+	}))
+	router.Handle(routing.RouteClassInternalAPI, http.MethodGet, "/internal/cubebox/session", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assistantFormalEntryAPI.handleCubeBoxSession(w, r)
+	}))
+	router.Handle(routing.RouteClassInternalAPI, http.MethodPost, "/internal/cubebox/session/refresh", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assistantFormalEntryAPI.handleCubeBoxSessionRefresh(w, r)
+	}))
+	router.Handle(routing.RouteClassInternalAPI, http.MethodPost, "/internal/cubebox/session/logout", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assistantFormalEntryAPI.handleCubeBoxSessionLogout(w, r)
+	}))
 	router.Handle(routing.RouteClassInternalAPI, http.MethodGet, "/internal/assistant/ui-bootstrap", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assistantFormalEntryAPI.handleUIBootstrap(w, r)
+		handleAssistantRetiredAPI(w, r, "/internal/cubebox/ui-bootstrap")
 	}))
 	router.Handle(routing.RouteClassInternalAPI, http.MethodGet, "/internal/assistant/session", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assistantFormalEntryAPI.handleSession(w, r)
+		handleAssistantRetiredAPI(w, r, "/internal/cubebox/session")
 	}))
 	router.Handle(routing.RouteClassInternalAPI, http.MethodPost, "/internal/assistant/session/refresh", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assistantFormalEntryAPI.handleSessionRefresh(w, r)
+		handleAssistantRetiredAPI(w, r, "/internal/cubebox/session/refresh")
 	}))
 	router.Handle(routing.RouteClassInternalAPI, http.MethodPost, "/internal/assistant/session/logout", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assistantFormalEntryAPI.handleSessionLogout(w, r)
+		handleAssistantRetiredAPI(w, r, "/internal/cubebox/session/logout")
+	}))
+	router.Handle(routing.RouteClassInternalAPI, http.MethodGet, "/internal/assistant/model-providers", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handleAssistantRetiredAPI(w, r, "")
+	}))
+	router.Handle(routing.RouteClassInternalAPI, http.MethodPost, "/internal/assistant/model-providers:validate", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handleAssistantRetiredAPI(w, r, "")
 	}))
 
 	assetsSub, _ := fs.Sub(embeddedAssets, "assets")

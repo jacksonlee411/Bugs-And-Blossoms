@@ -48,7 +48,7 @@ export function CubeBoxModelsPage() {
     <Stack spacing={2}>
       <Typography variant='h5'>CubeBox 模型</Typography>
       <Typography color='text.secondary' variant='body2'>
-        模型页只做只读展示，不再承接 LibreChat model provider 配置写入口。
+        模型页只做只读展示，不再承接旧 Assistant 模型治理写入口。
       </Typography>
       {errorMessage ? <Alert severity='warning'>{errorMessage}</Alert> : null}
 

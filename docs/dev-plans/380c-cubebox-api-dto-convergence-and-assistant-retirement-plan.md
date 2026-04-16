@@ -55,6 +55,8 @@
 - **执行入口（SSOT）**:
   - 触发器矩阵与仓库红线：`AGENTS.md`
   - 文档格式：`docs/dev-plans/000-docs-format.md`
+  - Go 测试分层与最佳实践：`docs/dev-plans/301-go-test-layering-and-best-practices-remediation-plan.md`
+  - 统一策略模型与唯一 PDP：`docs/dev-plans/330-strategy-module-architecture-and-design-convergence-plan.md`
   - 路由治理：`docs/dev-plans/017-routing-strategy.md`
   - Authz 工具链：`docs/dev-plans/022-authz-casbin-toolchain.md`
   - capability-route-map：`docs/dev-plans/156-capability-key-m3-m9-route-capability-mapping-and-gates.md`
@@ -164,10 +166,29 @@ flowchart TD
    - 对外 HTTP path、method、response shape、error code、compat window、retirement status 的冻结。
    - 新旧命名空间并行期的允许范围、禁止事项与结束条件。
    - 路由/能力/authz/error-message/API matrix/E2E 的对齐口径。
+   - `380C` 范围内测试分层的边界约束：哪些断言留在 `pkg/**` / `modules/cubebox/services` / `internal/server`，以及哪些断言必须由 E2E 兜底验收。
 2. **本文不持有**:
    - 底层数据回填、DB schema、sqlc、repository 设计细节（`380A/380B/380D`）。
    - 前端页面 IA 与视觉实现（`380E`）。
    - vendored/runtime/deploy 资产最终删除动作（`380F`）。
+
+### 4.5 测试分层边界（对齐 DEV-PLAN-301）
+
+1. [ ] `pkg/**`
+   - 承载纯函数与稳定 helper 的直接测试：path/link builder、`poll_uri` 生成、DTO canonicalize、错误码 helper、status/enum 归一化、无 DB/HTTP 依赖的 validator。
+   - 默认使用黑盒 `package xxx_test`、表驱动 `t.Run(...)`；若输入空间开放且回归价值高，补最小 fuzz；若性能数据可指导决策，补 benchmark。
+2. [ ] `modules/cubebox/services`
+   - 承载业务规则与策略测试：compat window 判定、successor/gone 选择、旧 API 是否允许只读兼容、formal entry 残留接口分类、错误语义分流。
+   - 若某断言主要是在验证退役状态机或策略选择，而不是 HTTP 协议绑定，则必须优先落在 service 层，而不是继续堆在 `internal/server`。
+3. [ ] `internal/server`
+   - 只承载适配层与组合层断言：路由注册、method/path 绑定、request/response encoding、`routing.ErrorEnvelope` 映射、authn/authz、租户/RLS 边界、handler 到 `modules/cubebox/services` 的调用编排。
+   - `server` 测试不得继续作为 DTO 纯规则、兼容策略纯判定或 path canonicalize 的一线验证层。
+4. [ ] E2E
+   - 仅验证端到端用户可见结果与跨层集成闭环：`apps/web` 是否完全切到 `/internal/cubebox/*`、旧 API 退役后是否表现为明确 `410 Gone`、前端与正式 API/DTO 是否一致。
+   - E2E 是最终验收补充，不得替代 `pkg/**` / `services` / `internal/server` 的直接测试。
+5. [ ] 例外约束
+   - 若某测试暂时无法从 `internal/server` 下沉到 `modules/cubebox/services`，必须在 readiness/dev-record 中记录暂留原因、退出条件与后续承接层。
+   - 若必须保留白盒测试，必须写明不能改为黑盒的原因；不得仅因“写起来更快”继续使用白盒。
 
 ## 5. API/DTO 契约矩阵 (API & DTO Contracts)
 
@@ -265,6 +286,8 @@ flowchart TD
    - 禁止透出：内部 route-decision 调试结构、authoritative gate 原始内部对象、未裁剪的 runtime 私有字段
 3. [ ] `Task`
    - 最小字段：`task_id`、`conversation_id`、`turn_id`、`status`、`submitted_at`、`started_at`、`finished_at`、`poll_uri`
+   - 若任务契约快照对外可见或可回放，必须显式冻结与 `330` 对齐的策略字段边界：`policy_context_digest`、`effective_policy_version`、`resolved_setid`、`setid_source`、`mutation_policy_version`
+   - 上述字段若继续保留在正式 contract 中，必须证明其来源仍是统一 `PolicyContext -> 唯一 PDP -> explain/version` 主链，而不是 CubeBox 自造第二套策略快照
    - `task_type` 在 `380C` 完成态冻结为兼容例外：
      - 对外继续暴露当前正式运行 literal `assistant_async_plan`
      - 该 literal 仅是与 `380A`/现网数据面保持一致的过渡兼容值，不构成 `CubeBox` 命名规则示范
@@ -273,6 +296,7 @@ flowchart TD
 4. [ ] `RuntimeStatus`
    - 最小字段：`backend`、`knowledge`、`model_gateway`、`file_plane`
    - 每个子项只允许暴露：`status`、`checked_at`、`message`
+   - 若 formal entry/runtime bootstrap 继续暴露 `domain_policy_version` 等策略版本字段，必须在本文显式登记为正式 contract，并说明其与 `330` 的 `policy_version / effective_policy_version / explain` 口径关系
    - 禁止透出：`assistantSvc` 内部字段名、内部 error 对象全文、runtime adapter 私有配置
 5. [ ] `File`
    - 最小字段：`file_id`、`filename`、`content_type`、`size_bytes`、`scan_status`、`created_at`
@@ -282,6 +306,10 @@ flowchart TD
 6. [ ] `Model`
    - 最小字段：`model_id`、`display_name`、`provider`、`availability_status`
    - 禁止把 provider 验证、密钥校验、模型治理后台字段直接透出到 `GET /internal/cubebox/models`
+7. [ ] `Formal Entry / Session Bootstrap`
+   - 若 `ui-bootstrap` / `session` / `session-refresh` 响应继续承载策略相关字段，只允许暴露对用户或回放真正有意义的稳定字段，例如 `domain_policy_version`
+   - 不允许把内部 PDP trace、未裁剪 explain 对象、临时调试字段或第二套策略状态字段直接塞入 bootstrap/session DTO
+   - 任何保留的策略字段都必须能回溯到 `330` 冻结的统一主链输出，而不是 formal entry 自行拼装的派生状态
 
 ### 5.4 错误码与退役错误语义
 
@@ -310,10 +338,12 @@ flowchart TD
    - `cubebox_file_not_found` -> `404`
    - `cubebox_file_delete_blocked` -> `409`
    - `cubebox_file_upload_invalid` -> `400`
-5. [ ] retirement
-   - `assistant_api_deprecated` -> 兼容窗口中的明确迁移提示
+5. [ ] policy / version / context
+   - 若 successor API 直接承接策略主链失败语义，正式输出必须继续对齐 `330` canonical lower snake_case：如 `policy_missing`、`policy_conflict_ambiguous`、`policy_mode_invalid`、`policy_version_required`、`policy_version_conflict`
+   - 不允许在 `cubebox` API 面重新包装出第二套语义等价但 literal 不同的策略错误码
+6. [ ] retirement
    - `assistant_api_gone` -> `410`
-6. [ ] 原则
+7. [ ] 原则
    - `403` / `401` 仍由统一 authz/authn 语义承接，不在本文另起第二套错误码
    - 同一失败语义不允许在新旧命名空间上分别漂移出两套不同 literal
 
@@ -326,7 +356,7 @@ flowchart TD
    - `meta.path`
    - `meta.method`
 2. [ ] 兼容窗口中的旧 `/internal/assistant/*` 若返回 JSON 错误，必须沿用同一 `ErrorEnvelope` 结构，只允许更换稳定错误码与 message，不允许私自扩展第二套 retirement body。
-3. [ ] `assistant_api_deprecated` 与 `assistant_api_gone` 至少必须满足：
+3. [ ] `assistant_api_gone` 至少必须满足：
    - `code` 为稳定错误码
    - `message` 为明确迁移提示，不得回退到泛化 `*_failed`
    - `meta.path` / `meta.method` 可支撑日志、测试与排障定位
@@ -337,6 +367,12 @@ flowchart TD
 1. [ ] `poll_uri` 必须直接生成 `/internal/cubebox/tasks/{task_id}`，禁止依赖响应后字符串改写。
 2. [ ] runtime-status 对外只暴露 `CubeBox` 产品需要的稳定字段，不泄露 `assistantSvc` 内部实现细节。
 3. [ ] 任何链接字段、redirect 字段、action URI 字段都必须直接产出 `cubebox` 正式路径，不能由客户端或 middleware 猜测改写。
+4. [ ] 若 `cubebox` successor API 需要返回策略 explain/version/context 相关字段，必须证明这些字段来自 `330` 冻结的统一主链：
+   - 外部输入 -> `Context Resolver`
+   - 规范化 `PolicyContext`
+   - 唯一 PDP
+   - explain / `policy_version` / `effective_policy_version`
+5. [ ] 不允许在 `cubebox` response builder、middleware、前端 adapter 或 task store fallback 中重新拼接第二套策略上下文或 explain/version 语义。
 
 ### 5.6 文件与模型 DTO 的相邻边界
 
@@ -350,28 +386,27 @@ flowchart TD
    - 由 `380C` 直接持有兼容窗口、`410 Gone` 与删除批次
 2. [ ] `GET /internal/assistant/model-providers`
    - 不进入 `CubeBox` 正式 API
-   - 进入 `C2` 后直接 `410 Gone`
+   - 已直接进入稳定 `410 Gone`
 3. [ ] `POST /internal/assistant/model-providers:validate`
    - 不进入 `CubeBox` 正式 API
-   - 进入 `C2` 后直接 `410 Gone`
+   - 已直接进入稳定 `410 Gone`
 4. [ ] `GET /internal/assistant/ui-bootstrap`
    - successor 为 `GET /internal/cubebox/ui-bootstrap`
-   - 作为 assistant formal entry 残留接口单独登记
-   - 必须在 `380E` 前端切走后进入 `410 Gone`
+   - 已直接进入稳定 `410 Gone`
 5. [ ] `GET /internal/assistant/session`
    - successor 为 `GET /internal/cubebox/session`
-   - 必须在 `380E` 切走后进入 `410 Gone`
+   - 已直接进入稳定 `410 Gone`
 6. [ ] `POST /internal/assistant/session/refresh`
    - successor 为 `POST /internal/cubebox/session/refresh`
-   - 与 session 同批退役，不允许无限期因为前端 convenience 留存
+   - 已直接进入稳定 `410 Gone`
 7. [ ] `POST /internal/assistant/session/logout`
    - successor 为 `POST /internal/cubebox/session/logout`
-   - 与 session 同批退役，不允许无限期因为前端 convenience 留存
+   - 已直接进入稳定 `410 Gone`
 8. [ ] 完成条件
    - 上述所有 `/internal/assistant/*` 路由都必须在 readiness 中标明其所属类别：
      - `successor in cubebox`
      - `gone without successor`
-     - `temporary keep until 380E`
+     - `compat window only`
    - 不允许存在“既不在文档里、也没删除”的悬空 assistant 路由
 
 ## 6. 核心切换算法与实施批次 (Cutover & Retirement Plan)
@@ -405,19 +440,19 @@ flowchart TD
 **当前状态**:
 - [ ] 当前工作区仍缺完整 DTO matrix 与错误码/枚举冻结表。
 
-### 6.3 Phase C2：旧 `/internal/assistant/*` 进入显式兼容窗口
+### 6.3 Phase C2：旧 `/internal/assistant/*` 兼容窗口与直接退役分类冻结
 
 1. [ ] 明确仍需短期保留的旧接口清单，以及保留原因。
 2. [ ] 对保留接口给出固定兼容策略：
    - 只读兼容
-   - 显式退役告警
-   - 稳定迁移错误码/提示
+   - 不允许继续承接新的正式 consumer 主链
 3. [ ] 禁止任何旧接口继续承载新的正式写路径或新增能力。
-4. [ ] 路由 allowlist、capability-route-map、authz requirement 与文档说明同步标注“兼容窗口中”。
-5. [ ] `ui-bootstrap/session/session-refresh/session-logout` 等 assistant formal entry 残留接口必须一并进入兼容窗口管理，不允许游离在退役矩阵之外。
+4. [ ] 路由 allowlist、capability-route-map、authz requirement 与文档说明必须同步标注其是“compat window only”还是“stable gone”。
+5. [ ] `ui-bootstrap/session/session-refresh/session-logout` 与 `model-providers*` 不再属于兼容窗口，统一视为稳定 `410 Gone + assistant_api_gone`。
 
 **当前状态**:
-- [ ] 旧接口尚未被分类为“继续兼容”还是“直接退役”，仍处于语义模糊状态。
+- [X] 旧 assistant 主业务 API 兼容窗口仅保留 `conversations / turns / tasks / models / runtime-status`。
+- [X] `ui-bootstrap / session* / model-providers*` 已直接进入稳定 `410 Gone`。
 
 ### 6.4 Phase C3：仓内消费者全面切走 `/internal/assistant/*`
 
@@ -427,7 +462,9 @@ flowchart TD
 4. [ ] 确认不存在隐藏消费者继续依赖旧命名空间。
 
 **当前状态**:
-- [ ] `380E` 仍在草拟中，前端尚未以本文为基础全面切到正式 API 面。
+- [X] `apps/web` 正式页面与路由已收口到 `/app/cubebox`、`/app/cubebox/files`、`/app/cubebox/models`。
+- [X] `/app/assistant` 与 `/app/assistant/models` 仅保留 redirect alias，不再保留对应 assistant 页面组件。
+- [X] `apps/web` 已删除 `AssistantModelProvidersPage`、`LibreChatPage`、`AssistantPage` 及其死测试/死 helper。
 
 ### 6.5 Phase C4：旧 API 退役落地（`410 Gone` / 删除）
 
@@ -441,7 +478,9 @@ flowchart TD
    - test / e2e / preflight
 
 **当前状态**:
-- [ ] 尚不具备进入本批次的前提。
+- [X] `ui-bootstrap / session* / model-providers*` 已完成稳定 `410 Gone`。
+- [ ] `conversations / turns / tasks / models / runtime-status` 仍保留 compat window，待后续批次物理删除。
+- [X] `poll_uri`、receipt link 与 task link 现已直接生成 `/internal/cubebox/tasks/{task_id}`。
 
 ### 6.6 Phase C5：进入 `380F/380G`
 
@@ -523,6 +562,16 @@ flowchart TD
 
 ## 9. 测试与验收标准 (Acceptance Criteria)
 
+### 9.0 测试设计总则（对齐 DEV-PLAN-301）
+
+1. [ ] 本文命中的新增或重组测试，禁止继续以 `*_coverage_test.go`、`*_gap_test.go`、`*_more_test.go`、`*_extra_test.go` 这类补洞式命名扩张。
+2. [ ] 新增测试默认以职责簇命名，并优先使用表驱动 `t.Run(...)` 组织场景，而不是围绕 coverage 缺口散落堆叠。
+3. [ ] 对导出 helper、canonicalize、path builder、validator、错误码 helper，优先采用黑盒测试；仅在验证未导出不变量或内部状态推进时保留白盒，并需在记录中说明理由。
+4. [ ] 只有在无共享状态、无 `t.Setenv(...)`、无全局 registry/time source/共享 DB 与文件路径耦合时，才允许启用 `t.Parallel()`；否则应保持顺序执行并登记原因。
+5. [ ] 对 `poll_uri`、path canonicalize、status/enum normalize、error code parser 这类开放输入空间 helper，若本批次抽出为稳定纯函数，应按 `301` 评估最小 fuzz；若不补 fuzz，需记录“不适用”理由。
+6. [ ] benchmark 不是机械要求，但对高频纯 helper 若性能数据能指导后续决策，应补最小 benchmark；若不补，需记录“不适用”理由。
+7. [ ] 本文命中的策略相关 successor API/DTO，必须额外对齐 `330`：不得绕过统一 `Context Resolver`、不得绕过唯一 PDP、不得在 CubeBox 层形成第二套 explain/version/error 语义。
+
 ### 9.1 API matrix 测试
 
 1. [ ] `/internal/cubebox/*` 全量资源面均有成功/失败/鉴权/租户隔离断言。
@@ -530,6 +579,13 @@ flowchart TD
 3. [ ] DTO 字段、错误码、`poll_uri`、links/path 字段有明确 snapshot 或结构断言。
 4. [ ] 兼容窗口与 `410 Gone` 场景的 JSON 错误响应必须断言 `routing.ErrorEnvelope` 最小字段：`code/message/trace_id/meta.path/meta.method`。
 5. [ ] 路由完成态与 capability-route-map 的 path literal 一致，不再存在 `{task_action}` 这类与真实 path 不一致的注册项。
+6. [ ] 纯 DTO/helper 断言不得只存在于 handler/E2E；应在 `pkg/**` 或 `modules/cubebox/services` 留下稳定直接测试。
+7. [ ] 若 successor API 返回策略相关字段，必须断言它们与 `330` 主链一致：
+   - `policy_version / effective_policy_version`
+   - `resolved_setid / setid_source`
+   - `domain_policy_version`
+   - canonical lower snake_case 策略错误码
+8. [ ] 不允许出现“HTTP 返回成功，但字段来自第二套 strategy adapter / task snapshot fallback / 临时 mapper”的假收口；需要有专门断言证明 successor API 仍复用统一策略主链。
 
 ### 9.2 集成与 E2E 测试
 
@@ -537,6 +593,8 @@ flowchart TD
 2. [ ] `apps/web` 与 E2E 用例不再依赖旧命名空间作为主入口。
 3. [ ] 当旧 API 退役后，有专门断言验证旧调用返回预期退役状态，而不是回落为 404/500。
 4. [ ] `assistant formal entry` 残留接口的 successor / gone 行为也有专门断言，不允许只测 conversations/tasks 主链。
+5. [ ] 若 `apps/web` 消费策略版本或 explain 相关字段，必须证明前端只消费统一主链输出，不在页面/adapter 侧形成第二 PDP 或二次推断。
+6. [ ] 对存在策略上下文字段的 successor 链路，应补最小集成断言，证明同一输入下 `Context Resolver`、PDP、explain/version 与 API 输出可重复复算。
 
 ### 9.3 命中门禁与验收口径
 
@@ -557,6 +615,15 @@ flowchart TD
    - `380D` 文件面 contract/完成证据引用（若本批次命中文件 API）
    - 前端切换证据引用（`380E`）
    - 旧资产删除前提引用（`380F`）
+4. [ ] 对每个整改批次补一份测试边界分类说明：哪些测试留在 `pkg/**`、哪些落在 `modules/cubebox/services`、哪些留在 `internal/server`、哪些由 E2E 验收。
+5. [ ] 若存在白盒测试、未下沉的 `server` 规则测试、未补 fuzz/benchmark 或未并行化的纯函数测试，必须分别记录原因，而不是默认省略。
+6. [ ] 记录实际命令、结果与时间戳；不得只写“测试已通过”而无命令与证据。
+7. [ ] 对命中策略主链的 successor API，补充 `330` 级证据：
+   - `Context Resolver` 仍是唯一规范化入口的证据
+   - successor API 未绕过唯一 PDP 的证据
+   - explain / `policy_version` / `effective_policy_version` 可复算的证据
+   - canonical 策略错误码仍保持 lower snake_case 的证据
+   - 不存在旧策略 happy path 或 CubeBox 第二策略主链的证据
 
 ## 10. 运维与监控 (Ops & Monitoring)
 

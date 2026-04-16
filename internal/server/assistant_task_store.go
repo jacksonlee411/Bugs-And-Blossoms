@@ -317,7 +317,7 @@ func assistantTaskReceiptFromRecord(record assistantTaskRecord) assistantTaskAsy
 		Status:      record.Status,
 		WorkflowID:  record.WorkflowID,
 		SubmittedAt: record.SubmittedAt,
-		PollURI:     "/internal/assistant/tasks/" + record.TaskID,
+		PollURI:     "/internal/cubebox/tasks/" + record.TaskID,
 	}
 }
 

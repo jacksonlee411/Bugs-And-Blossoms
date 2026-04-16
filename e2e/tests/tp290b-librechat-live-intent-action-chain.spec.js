@@ -566,7 +566,22 @@ function installNetworkRecorder(page) {
 }
 
 function formalInputField(surface) {
-  return surface.getByTestId("cubebox-input").locator("textarea, input").first();
+  return surface.getByTestId("cubebox-input-field");
+}
+
+function waitForFormalTurnResponse(surface, timeoutMs = 60_000) {
+  if (typeof surface.waitForResponse !== "function") {
+    return Promise.resolve(null);
+  }
+  return surface.waitForResponse((response) => {
+    const request = response.request();
+    const pathname = new URL(response.url()).pathname;
+    return (
+      request.method() === "POST" &&
+      pathname.startsWith(`${INTERNAL_API_PREFIX}/conversations/`) &&
+      pathname.endsWith("/turns")
+    );
+  }, { timeout: timeoutMs });
 }
 
 async function openFormalEntry(page) {
@@ -578,8 +593,18 @@ async function openFormalEntry(page) {
 
 async function sendFromFormalEntry(surface, text) {
   const input = formalInputField(surface);
+  await expect(input).toBeEditable({ timeout: 30_000 });
   await input.fill(text);
-  await surface.getByTestId("cubebox-send").click();
+  await expect(input).toHaveValue(text);
+  const button = surface.getByTestId("cubebox-send");
+  await expect(button).toBeEnabled({ timeout: 60_000 });
+  const turnResponse = waitForFormalTurnResponse(surface);
+  await button.click();
+  const response = await turnResponse;
+  if (response) {
+    expect(response.status(), await response.text()).toBe(200);
+    await expect(input).toHaveValue("", { timeout: 60_000 });
+  }
 }
 
 async function waitForVisibleNamedButton(surface, namePattern, timeoutMs = 30_000) {
@@ -603,9 +628,15 @@ async function waitForVisibleNamedButton(surface, namePattern, timeoutMs = 30_00
 }
 
 async function clickFormalConfirm(surface) {
-  const button = surface.getByTestId("cubebox-confirm");
-  await expect(button).toBeVisible({ timeout: 30_000 });
-  await button.click();
+  try {
+    const button = surface.getByTestId("cubebox-confirm");
+    await expect(button).toBeVisible({ timeout: 10_000 });
+    await button.click();
+    return;
+  } catch {
+    const button = await waitForVisibleNamedButton(surface, /确认|Confirm/i, 30_000);
+    await button.click();
+  }
 }
 
 async function maybeClickFormalConfirm(surface, timeoutMs = 5_000) {
@@ -635,10 +666,9 @@ async function tryClickFormalSubmit(surface, timeoutMs = 5_000) {
 }
 
 async function clickFormalCandidateSelect(surface, ordinal) {
-  const buttons = surface.getByRole("button", { name: /(选择|Select).*(确认|Confirm)|Select \+ Confirm/i });
-  const target = buttons.nth(Math.max(0, ordinal - 1));
-  await expect(target).toBeVisible({ timeout: 30_000 });
-  await target.click();
+  const candidateButton = surface.getByTestId(`cubebox-candidate-select-${Math.max(1, ordinal)}`);
+  await expect(candidateButton).toBeVisible({ timeout: 30_000 });
+  await candidateButton.click();
 }
 
 async function runFormalCaseStep(surface, caseId, stepIndex, text) {

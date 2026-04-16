@@ -482,12 +482,36 @@ func writeCubeBoxTurnActionError(w http.ResponseWriter, r *http.Request, err err
 		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusConflict, "conversation_state_invalid", "conversation state invalid")
 	case errors.Is(err, errAssistantCandidateNotFound):
 		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusUnprocessableEntity, "assistant_candidate_not_found", "assistant candidate not found")
+	case errors.Is(err, errAssistantRouteNonBusinessBlocked):
+		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusConflict, errAssistantRouteNonBusinessBlocked.Error(), "assistant route non business blocked")
+	case errors.Is(err, errAssistantRouteDecisionMissing):
+		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusConflict, errAssistantRouteDecisionMissing.Error(), "assistant route decision missing")
+	case errors.Is(err, errAssistantRouteRuntimeInvalid):
+		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusUnprocessableEntity, errAssistantRouteRuntimeInvalid.Error(), "assistant route runtime invalid")
+	case errors.Is(err, errAssistantRouteActionConflict):
+		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusUnprocessableEntity, errAssistantRouteActionConflict.Error(), "assistant route action conflict")
+	case errors.Is(err, errAssistantUnsupportedIntent):
+		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusUnprocessableEntity, "assistant_intent_unsupported", "assistant intent unsupported")
+	case errors.Is(err, errAssistantActionAuthzDenied):
+		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusForbidden, errAssistantActionAuthzDenied.Error(), "assistant action authz denied")
+	case errors.Is(err, errAssistantActionRiskGateDenied):
+		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusConflict, errAssistantActionRiskGateDenied.Error(), "assistant action risk gate denied")
+	case errors.Is(err, errAssistantPlanContractVersionMismatch):
+		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusConflict, "ai_plan_contract_version_mismatch", "ai plan contract version mismatch")
+	case errors.Is(err, errAssistantVersionTupleStale):
+		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusConflict, "ai_version_tuple_stale", "ai version tuple stale")
+	case errors.Is(err, errAssistantAuthSnapshotExpired):
+		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusForbidden, "ai_actor_auth_snapshot_expired", "ai actor auth snapshot expired")
+	case errors.Is(err, errAssistantRoleDriftDetected):
+		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusForbidden, "ai_actor_role_drift_detected", "ai actor role drift detected")
 	case errors.Is(err, cubeboxservices.ErrAuthSnapshotExpired):
 		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusForbidden, "ai_actor_auth_snapshot_expired", "ai actor auth snapshot expired")
 	case errors.Is(err, cubeboxservices.ErrRoleDriftDetected):
 		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusForbidden, "ai_actor_role_drift_detected", "ai actor role drift detected")
 	case errors.Is(err, cubeboxservices.ErrTaskStateInvalid):
 		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusConflict, "assistant_task_state_invalid", "assistant task state invalid")
+	case errors.Is(err, errAssistantActionRequiredCheckFailed):
+		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusConflict, errAssistantActionRequiredCheckFailed.Error(), "assistant action required check failed")
 	case assistantIsGateUnavailableError(err):
 		assistantWriteGateUnavailable(w, r)
 	default:

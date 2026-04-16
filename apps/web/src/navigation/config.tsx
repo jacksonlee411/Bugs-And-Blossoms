@@ -49,33 +49,33 @@ export const navItems: NavItem[] = [
     keywords: ['dict', 'dictionary', 'value', '配置', '字典', '编码']
   },
   {
-    key: 'assistant',
+    key: 'cubebox',
     path: '/cubebox',
     labelKey: 'nav_ai_assistant',
     icon: <SmartToyIcon fontSize='small' />,
     order: 23,
     permissionKey: 'orgunit.read',
-    keywords: ['cubebox', 'assistant', 'ai', 'chat', '智能助手', '对话']
+    keywords: ['cubebox', 'ai', 'chat', '智能助手', '对话']
   },
   {
-    key: 'assistant-models',
+    key: 'cubebox-models',
     path: '/cubebox/models',
     labelKey: 'nav_ai_assistant',
     icon: <SmartToyIcon fontSize='small' />,
     order: 231,
-    parentKey: 'assistant',
+    parentKey: 'cubebox',
     permissionKey: 'orgunit.admin',
-    keywords: ['cubebox', 'assistant', 'model', 'provider', 'llm', '模型', '供应商']
+    keywords: ['cubebox', 'model', 'provider', 'llm', '模型', '供应商']
   },
   {
-    key: 'assistant-files',
+    key: 'cubebox-files',
     path: '/cubebox/files',
     labelKey: 'nav_ai_assistant',
     icon: <SmartToyIcon fontSize='small' />,
     order: 232,
-    parentKey: 'assistant',
+    parentKey: 'cubebox',
     permissionKey: 'orgunit.read',
-    keywords: ['cubebox', 'assistant', 'file', 'upload', '附件', '文件']
+    keywords: ['cubebox', 'file', 'upload', '附件', '文件']
   },
   {
     key: 'configuration-policy',

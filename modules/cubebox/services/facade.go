@@ -320,10 +320,7 @@ func (f *Facade) SubmitTask(ctx context.Context, tenantID string, principal Prin
 		if err == nil {
 			_ = f.dispatchPendingTasks(ctx, tenantID, 1)
 			if existed {
-				hash, hashErr := taskRequestHash(req)
-				if hashErr != nil {
-					return nil, hashErr
-				}
+				hash := taskRequestHash(req)
 				if strings.TrimSpace(record.RequestHash) != strings.TrimSpace(hash) {
 					return nil, ErrIdempotencyConflict
 				}
@@ -1091,18 +1088,14 @@ func mapTaskReceipt(record cubeboxdomain.TaskRecord) *cubeboxdomain.TaskReceipt 
 }
 
 func mapTaskCancelResponse(record cubeboxdomain.TaskRecord, accepted bool) *cubeboxdomain.TaskCancelResponse {
-	detail := mapTask(record)
-	if detail == nil {
-		return nil
-	}
 	return &cubeboxdomain.TaskCancelResponse{
-		TaskDetail:     *detail,
+		TaskDetail:     *mapTask(record),
 		CancelAccepted: accepted,
 	}
 }
 
 func taskRecordFromSubmitRequest(tenantID string, req cubeboxdomain.TaskSubmitRequest, now time.Time) cubeboxdomain.TaskRecord {
-	requestHash, _ := taskRequestHash(req)
+	requestHash := taskRequestHash(req)
 	taskID := uuid.NewString()
 	return cubeboxdomain.TaskRecord{
 		TaskID:                   taskID,
@@ -1315,7 +1308,7 @@ func normalizeTaskSnapshot(snapshot cubeboxdomain.TaskContractSnapshot) cubeboxd
 	return snapshot
 }
 
-func taskRequestHash(req cubeboxdomain.TaskSubmitRequest) (string, error) {
+func taskRequestHash(req cubeboxdomain.TaskSubmitRequest) string {
 	payload := struct {
 		ConversationID   string                             `json:"conversation_id"`
 		TurnID           string                             `json:"turn_id"`
@@ -1329,11 +1322,8 @@ func taskRequestHash(req cubeboxdomain.TaskSubmitRequest) (string, error) {
 		RequestID:        strings.TrimSpace(req.RequestID),
 		ContractSnapshot: normalizeTaskSnapshot(req.ContractSnapshot),
 	}
-	raw, err := json.Marshal(payload)
-	if err != nil {
-		return "", err
-	}
-	return hashText(strings.TrimSpace(req.TaskType) + "\n" + string(raw)), nil
+	raw, _ := json.Marshal(payload)
+	return hashText(strings.TrimSpace(req.TaskType) + "\n" + string(raw))
 }
 
 func validateTaskSubmitRequest(req cubeboxdomain.TaskSubmitRequest) error {

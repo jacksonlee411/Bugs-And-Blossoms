@@ -11,7 +11,7 @@ type Conversation struct {
 	CurrentPhase   string             `json:"current_phase,omitempty"`
 	CreatedAt      time.Time          `json:"created_at"`
 	UpdatedAt      time.Time          `json:"updated_at"`
-	Turns          []ConversationTurn `json:"turns,omitempty"`
+	Turns          []ConversationTurn `json:"turns"`
 	Transitions    []StateTransition  `json:"state_transitions,omitempty"`
 }
 

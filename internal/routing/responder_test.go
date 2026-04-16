@@ -250,6 +250,7 @@ func TestKnownErrorMessage_AllCases(t *testing.T) {
 		{code: "assistant_session_invalid", want: "助手会话已失效，请重新登录。"},
 		{code: "assistant_principal_invalid", want: "当前助手登录主体已失效，请重新登录。"},
 		{code: "assistant_ui_bootstrap_unavailable", want: "正式助手入口启动信息暂不可用，请稍后重试。"},
+		{code: "assistant_api_gone", want: "旧 Assistant API 已退役，请改用 CubeBox 正式接口。"},
 		{code: "assistant_ui_retired", want: "旧助手入口已退役，请改用正式入口。"},
 		{code: "assistant_vendored_api_retired", want: "旧助手兼容接口已退役，请重新打开正式助手入口。"},
 		{code: "assistant_ui_upstream_unavailable", want: "聊天服务暂不可用，请稍后重试。"},

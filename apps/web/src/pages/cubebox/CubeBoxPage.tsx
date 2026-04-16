@@ -55,7 +55,8 @@ function turnSecondaryText(conversation: CubeBoxConversation | null, turnID: str
   if (!conversation) {
     return ''
   }
-  const turn = conversation.turns.find((item) => item.turn_id === turnID)
+  const turns = Array.isArray(conversation.turns) ? conversation.turns : []
+  const turn = turns.find((item) => item.turn_id === turnID)
   if (!turn) {
     return ''
   }
@@ -66,6 +67,13 @@ function turnSecondaryText(conversation: CubeBoxConversation | null, turnID: str
     return turn.plan.summary
   }
   return turn.user_input
+}
+
+function normalizeConversation(conversation: CubeBoxConversation): CubeBoxConversation {
+  return {
+    ...conversation,
+    turns: Array.isArray(conversation.turns) ? conversation.turns : []
+  }
 }
 
 export function CubeBoxPage() {
@@ -83,11 +91,14 @@ export function CubeBoxPage() {
   const [taskMessage, setTaskMessage] = useState('')
 
   const currentTurn = useMemo(() => {
-    if (!selectedConversation || selectedConversation.turns.length === 0) {
+    const turns = selectedConversation && Array.isArray(selectedConversation.turns) ? selectedConversation.turns : []
+    if (turns.length === 0) {
       return null
     }
-    return selectedConversation.turns[selectedConversation.turns.length - 1]
+    return turns[turns.length - 1]
   }, [selectedConversation])
+  const currentCandidates = currentTurn?.candidates ?? []
+  const candidateSelectionRequired = currentCandidates.length > 1 && !currentTurn?.resolved_candidate_id
 
   async function refreshConversationList() {
     const response = await listCubeBoxConversations({ page_size: 20 })
@@ -109,8 +120,9 @@ export function CubeBoxPage() {
       getCubeBoxConversation(targetConversationID),
       listCubeBoxFiles({ conversation_id: targetConversationID })
     ])
-    setSelectedConversation(conversation)
-    setConversations(conversation.turns)
+    const normalizedConversation = normalizeConversation(conversation)
+    setSelectedConversation(normalizedConversation)
+    setConversations(normalizedConversation.turns)
     setFiles(fileResponse.items)
   }
 
@@ -159,7 +171,7 @@ export function CubeBoxPage() {
     setErrorMessage('')
     try {
       const targetConversationID = await ensureConversationID()
-      const conversation = await createCubeBoxTurn(targetConversationID, userInput)
+      const conversation = normalizeConversation(await createCubeBoxTurn(targetConversationID, userInput))
       setDraft('')
       setSelectedConversation(conversation)
       setConversations(conversation.turns)
@@ -200,14 +212,18 @@ export function CubeBoxPage() {
     }
   }
 
-  async function handleConfirm() {
+  async function handleConfirm(candidateID?: string) {
     if (!conversationId || !currentTurn) {
       return
     }
+    const candidateIDToConfirm =
+      candidateID ??
+      currentTurn.resolved_candidate_id ??
+      (currentTurn.candidates.length === 1 ? currentTurn.candidates[0]?.candidate_id : undefined)
     setBusy(true)
     setErrorMessage('')
     try {
-      const conversation = await confirmCubeBoxTurn(conversationId, currentTurn.turn_id, currentTurn.candidates[0]?.candidate_id)
+      const conversation = normalizeConversation(await confirmCubeBoxTurn(conversationId, currentTurn.turn_id, candidateIDToConfirm))
       setSelectedConversation(conversation)
       setConversations(conversation.turns)
       await refreshConversationList()
@@ -386,6 +402,46 @@ export function CubeBoxPage() {
                 ) : null}
               </Stack>
 
+              {candidateSelectionRequired ? (
+                <>
+                  <Divider />
+                  <Stack data-testid='cubebox-candidate-panel' spacing={1}>
+                    <Typography variant='subtitle2'>候选确认</Typography>
+                    <Typography color='text.secondary' variant='body2'>
+                      当前父组织命中多个候选，请先选择正确的上级组织，再继续提交。
+                    </Typography>
+                    <Stack spacing={1}>
+                      {currentCandidates.map((candidate, index) => (
+                        <Card key={candidate.candidate_id} variant='outlined'>
+                          <CardContent>
+                            <Stack
+                              alignItems={{ xs: 'flex-start', md: 'center' }}
+                              direction={{ xs: 'column', md: 'row' }}
+                              spacing={1}
+                            >
+                              <Stack spacing={0.5} sx={{ flex: 1 }}>
+                                <Typography variant='body2'>{candidate.name}</Typography>
+                                <Typography color='text.secondary' variant='caption'>
+                                  {candidate.path || candidate.candidate_code}
+                                </Typography>
+                              </Stack>
+                              <Button
+                                data-testid={`cubebox-candidate-select-${index + 1}`}
+                                disabled={busy}
+                                onClick={() => void handleConfirm(candidate.candidate_id)}
+                                variant='outlined'
+                              >
+                                {`选择候选 ${index + 1}`}
+                              </Button>
+                            </Stack>
+                          </CardContent>
+                        </Card>
+                      ))}
+                    </Stack>
+                  </Stack>
+                </>
+              ) : null}
+
               <Divider />
 
               <Stack spacing={1}>
@@ -453,7 +509,7 @@ export function CubeBoxPage() {
                   </Button>
                   <Button
                     data-testid='cubebox-confirm'
-                    disabled={busy || !currentTurn}
+                    disabled={busy || !currentTurn || candidateSelectionRequired}
                     onClick={() => void handleConfirm()}
                     startIcon={<TaskAltIcon />}
                     variant='outlined'
