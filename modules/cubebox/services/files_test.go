@@ -165,35 +165,59 @@ func TestFileServiceDelegatesAndTrims(t *testing.T) {
 }
 
 type stubFileRepo struct {
-	conversationExists bool
-	createFileErr      error
-	cleanupErr         error
-	healthyErr         error
+	conversationExists    bool
+	conversationExistsErr error
+	createFileErr         error
+	cleanupErr            error
+	healthyErr            error
+	listFilesResult       []FileMetadata
+	listFilesErr          error
+	listTenantLinksResult []FileLinkRef
+	listTenantLinksErr    error
+	listFileLinksByFileID map[string][]FileLinkRef
+	listFileLinksErr      error
+	getFileResult         FileMetadata
+	getFileErr            error
+	countFileLinks        int64
+	countFileLinksErr     error
+	deleteRows            int64
+	deleteFileErr         error
 
 	healthyTenant string
 	createdFileID string
 	createdObject FileObject
 	cleanupJobs   []FileCleanupJob
+	listedFileIDs []string
 }
 
 func (s *stubFileRepo) ListFiles(context.Context, string, string, int32) ([]FileMetadata, error) {
-	return nil, nil
+	return s.listFilesResult, s.listFilesErr
 }
 
-func (s *stubFileRepo) ListFileLinks(context.Context, string, string) ([]FileLinkRef, error) {
-	return nil, nil
+func (s *stubFileRepo) ListFileLinks(_ context.Context, _ string, fileID string) ([]FileLinkRef, error) {
+	s.listedFileIDs = append(s.listedFileIDs, fileID)
+	if s.listFileLinksErr != nil {
+		return nil, s.listFileLinksErr
+	}
+	if s.listFileLinksByFileID == nil {
+		return nil, nil
+	}
+	return s.listFileLinksByFileID[fileID], nil
 }
 
 func (s *stubFileRepo) ListTenantFileLinks(context.Context, string) ([]FileLinkRef, error) {
-	return nil, nil
+	return s.listTenantLinksResult, s.listTenantLinksErr
 }
 
 func (s *stubFileRepo) GetFile(context.Context, string, string) (FileMetadata, error) {
-	return FileMetadata{}, nil
+	if s.getFileErr != nil {
+		return FileMetadata{}, s.getFileErr
+	}
+	return s.getFileResult, nil
 }
 
 func (s *stubFileRepo) ConversationExists(context.Context, string, string) (bool, error) {
-	return s.conversationExists, nil
+	return s.conversationExists, s.conversationExistsErr
 }
 
 func (s *stubFileRepo) CreateFile(_ context.Context, _ string, record FileObject, fileID string, actorID string, conversationID string, now time.Time) (FileMetadata, []FileLinkRef, error) {
@@ -222,11 +246,11 @@ func (s *stubFileRepo) CreateFile(_ context.Context, _ string, record FileObject
 }
 
 func (s *stubFileRepo) CountFileLinks(context.Context, string, string) (int64, error) {
-	return 0, nil
+	return s.countFileLinks, s.countFileLinksErr
 }
 
 func (s *stubFileRepo) DeleteFile(context.Context, string, string) (int64, error) {
-	return 0, nil
+	return s.deleteRows, s.deleteFileErr
 }
 
 func (s *stubFileRepo) InsertFileCleanupJob(_ context.Context, _ string, job FileCleanupJob, _ time.Time) error {
@@ -389,4 +413,172 @@ func TestFileServiceHealthyChecksRepoAndObjectStore(t *testing.T) {
 	if err := svc.Healthy(context.Background()); err == nil || err.Error() != "disk down" {
 		t.Fatalf("expected disk down, got %v", err)
 	}
+}
+
+func TestFileServiceListFilesFormalPath(t *testing.T) {
+	t.Parallel()
+
+	now := time.Date(2026, 4, 16, 9, 0, 0, 0, time.UTC)
+
+	t.Run("tenant scope groups tenant links by file id", func(t *testing.T) {
+		repo := &stubFileRepo{
+			listFilesResult: []FileMetadata{
+				{FileID: " file-1 ", Filename: "a.txt", ContentType: "text/plain", CreatedAt: now, UpdatedAt: now},
+				{FileID: "file-2", Filename: "b.txt", ContentType: "text/plain", CreatedAt: now, UpdatedAt: now},
+			},
+			listTenantLinksResult: []FileLinkRef{
+				{FileID: " file-1 ", LinkRole: " conversation_attachment ", ConversationID: " conv-1 ", TurnID: " turn-1 "},
+				{FileID: "   ", LinkRole: "ignored", ConversationID: "ignored"},
+			},
+		}
+
+		items, err := NewFileService(repo).ListFiles(context.Background(), " tenant-a ", " ")
+		if err != nil {
+			t.Fatalf("list files: %v", err)
+		}
+		if len(items) != 2 {
+			t.Fatalf("expected 2 items, got %+v", items)
+		}
+		if items[0].ConversationID != "conv-1" || len(items[0].Links) != 1 {
+			t.Fatalf("expected first item to carry grouped link, got %+v", items[0])
+		}
+		if items[0].Links[0].TurnID != "turn-1" || items[0].Links[0].LinkRole != "conversation_attachment" {
+			t.Fatalf("unexpected trimmed link: %+v", items[0].Links[0])
+		}
+		if items[1].ConversationID != "" || len(items[1].Links) != 0 {
+			t.Fatalf("expected second item to remain unlinked, got %+v", items[1])
+		}
+	})
+
+	t.Run("conversation scope loads links per file", func(t *testing.T) {
+		repo := &stubFileRepo{
+			listFilesResult: []FileMetadata{
+				{FileID: "file-1", Filename: "a.txt", ContentType: "text/plain", CreatedAt: now, UpdatedAt: now},
+				{FileID: "file-2", Filename: "b.txt", ContentType: "text/plain", CreatedAt: now, UpdatedAt: now},
+			},
+			listFileLinksByFileID: map[string][]FileLinkRef{
+				"file-1": {{FileID: "file-1", ConversationID: "conv-9", LinkRole: "conversation_attachment"}},
+				"file-2": {{FileID: "file-2", ConversationID: "conv-9", LinkRole: "conversation_attachment", TurnID: "turn-2"}},
+			},
+		}
+
+		items, err := NewFileService(repo).ListFiles(context.Background(), "tenant-a", " conv-9 ")
+		if err != nil {
+			t.Fatalf("list conversation files: %v", err)
+		}
+		if len(items) != 2 {
+			t.Fatalf("expected 2 items, got %+v", items)
+		}
+		if len(repo.listedFileIDs) != 2 || repo.listedFileIDs[0] != "file-1" || repo.listedFileIDs[1] != "file-2" {
+			t.Fatalf("expected per-file link lookups, got %+v", repo.listedFileIDs)
+		}
+		if items[1].Links[0].TurnID != "turn-2" {
+			t.Fatalf("expected per-file turn id, got %+v", items[1].Links)
+		}
+	})
+
+	t.Run("link lookup error stops aggregation", func(t *testing.T) {
+		repo := &stubFileRepo{
+			listFilesResult:  []FileMetadata{{FileID: "file-1", CreatedAt: now, UpdatedAt: now}},
+			listFileLinksErr: errors.New("list links failed"),
+		}
+
+		if _, err := NewFileService(repo).ListFiles(context.Background(), "tenant-a", "conversation-a"); err == nil || err.Error() != "list links failed" {
+			t.Fatalf("expected list links failure, got %v", err)
+		}
+	})
+}
+
+func TestFileServiceSaveFileValidationAndDeleteFormalPath(t *testing.T) {
+	t.Parallel()
+
+	t.Run("save file validates inputs and conversation checks", func(t *testing.T) {
+		repo := &stubFileRepo{}
+		objectStore := &stubFileObjectStore{}
+		svc := NewFileService(repo, objectStore)
+
+		if _, err := svc.SaveFile(context.Background(), "", "actor-1", "", "notes.txt", "text/plain", strings.NewReader("payload")); !errors.Is(err, ErrFileUploadInvalid) {
+			t.Fatalf("expected invalid upload, got %v", err)
+		}
+
+		repo.conversationExistsErr = errors.New("repo unavailable")
+		if _, err := svc.SaveFile(context.Background(), "tenant-a", "actor-1", "conversation-a", "notes.txt", "text/plain", strings.NewReader("payload")); err == nil || err.Error() != "repo unavailable" {
+			t.Fatalf("expected conversation lookup failure, got %v", err)
+		}
+
+		repo.conversationExistsErr = nil
+		if _, err := svc.SaveFile(context.Background(), "tenant-a", "actor-1", "conversation-a", "notes.txt", "text/plain", strings.NewReader("payload")); !errors.Is(err, ErrFileConversationNotFound) {
+			t.Fatalf("expected conversation not found, got %v", err)
+		}
+
+		repo.conversationExists = true
+		objectStore.saveErr = errors.New("disk full")
+		if _, err := svc.SaveFile(context.Background(), "tenant-a", "actor-1", "conversation-a", "notes.txt", "text/plain", strings.NewReader("payload")); err == nil || err.Error() != "disk full" {
+			t.Fatalf("expected object store error, got %v", err)
+		}
+	})
+
+	t.Run("delete file formal path handles blocked and cleanup branches", func(t *testing.T) {
+		repo := &stubFileRepo{
+			getFileResult: FileMetadata{
+				FileID:          "file-1",
+				StorageProvider: "localfs",
+				StorageKey:      "tenant-a/file-1/notes.txt",
+			},
+			deleteRows: 1,
+		}
+		objectStore := &stubFileObjectStore{}
+		svc := NewFileService(repo, objectStore)
+
+		repo.getFileErr = errors.New("missing")
+		if deleted, err := svc.DeleteFile(context.Background(), "tenant-a", "file-1"); deleted || !errors.Is(err, ErrFileNotFound) {
+			t.Fatalf("expected missing file, deleted=%v err=%v", deleted, err)
+		}
+
+		repo.getFileErr = nil
+		repo.countFileLinksErr = errors.New("count failed")
+		if deleted, err := svc.DeleteFile(context.Background(), "tenant-a", "file-1"); deleted || err == nil || err.Error() != "count failed" {
+			t.Fatalf("expected count failure, deleted=%v err=%v", deleted, err)
+		}
+
+		repo.countFileLinksErr = nil
+		repo.countFileLinks = 2
+		if deleted, err := svc.DeleteFile(context.Background(), "tenant-a", "file-1"); deleted || !errors.Is(err, ErrFileDeleteBlocked) {
+			t.Fatalf("expected delete blocked, deleted=%v err=%v", deleted, err)
+		}
+
+		repo.countFileLinks = 0
+		repo.deleteRows = 0
+		if deleted, err := svc.DeleteFile(context.Background(), "tenant-a", "file-1"); deleted || !errors.Is(err, ErrFileNotFound) {
+			t.Fatalf("expected deleted row miss, deleted=%v err=%v", deleted, err)
+		}
+
+		repo.deleteRows = 1
+		objectStore.deleteErr = errors.New("unlink failed")
+		deleted, err := svc.DeleteFile(context.Background(), "tenant-a", "file-1")
+		if err != nil || !deleted {
+			t.Fatalf("expected delete success with cleanup compensation, deleted=%v err=%v", deleted, err)
+		}
+		if len(repo.cleanupJobs) != 1 || repo.cleanupJobs[0].CleanupReason != "object_delete_failed" {
+			t.Fatalf("expected cleanup job after object delete failure, got %+v", repo.cleanupJobs)
+		}
+	})
+}
+
+func TestFileServiceHelpers(t *testing.T) {
+	t.Parallel()
+
+	if got := mapFileLinks(nil); got != nil {
+		t.Fatalf("expected nil mapped links, got %+v", got)
+	}
+	if got := formatFileTime(time.Time{}); got != "" {
+		t.Fatalf("expected empty zero timestamp, got %q", got)
+	}
+
+	svc := &FileService{}
+	if svc.now().IsZero() {
+		t.Fatal("expected fallback now timestamp")
+	}
+
+	svc.compensateCleanup(context.Background(), "tenant-a", FileCleanupJob{FileID: "file-1"})
 }
