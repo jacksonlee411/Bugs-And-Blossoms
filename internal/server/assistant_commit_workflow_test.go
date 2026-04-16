@@ -235,7 +235,7 @@ func TestAssistant240DSubmitCommitTaskPGCoverage(t *testing.T) {
 			t.Fatalf("unexpected in progress err=%v", err)
 		}
 
-		receipt := assistantTaskAsyncReceipt{TaskID: "task_done", TaskType: assistantTaskTypeAsyncPlan, Status: assistantTaskStatusQueued, WorkflowID: "wf_done", SubmittedAt: now, PollURI: "/internal/assistant/tasks/task_done"}
+			receipt := assistantTaskAsyncReceipt{TaskID: "task_done", TaskType: assistantTaskTypeAsyncPlan, Status: assistantTaskStatusQueued, WorkflowID: "wf_done", SubmittedAt: now, PollURI: "/internal/cubebox/tasks/task_done"}
 		receiptBody, err := json.Marshal(receipt)
 		if err != nil {
 			t.Fatal(err)

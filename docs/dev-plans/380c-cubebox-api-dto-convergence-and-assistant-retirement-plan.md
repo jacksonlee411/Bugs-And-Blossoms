@@ -342,7 +342,6 @@ flowchart TD
    - 若 successor API 直接承接策略主链失败语义，正式输出必须继续对齐 `330` canonical lower snake_case：如 `policy_missing`、`policy_conflict_ambiguous`、`policy_mode_invalid`、`policy_version_required`、`policy_version_conflict`
    - 不允许在 `cubebox` API 面重新包装出第二套语义等价但 literal 不同的策略错误码
 6. [ ] retirement
-   - `assistant_api_deprecated` -> 兼容窗口中的明确迁移提示
    - `assistant_api_gone` -> `410`
 7. [ ] 原则
    - `403` / `401` 仍由统一 authz/authn 语义承接，不在本文另起第二套错误码
@@ -357,7 +356,7 @@ flowchart TD
    - `meta.path`
    - `meta.method`
 2. [ ] 兼容窗口中的旧 `/internal/assistant/*` 若返回 JSON 错误，必须沿用同一 `ErrorEnvelope` 结构，只允许更换稳定错误码与 message，不允许私自扩展第二套 retirement body。
-3. [ ] `assistant_api_deprecated` 与 `assistant_api_gone` 至少必须满足：
+3. [ ] `assistant_api_gone` 至少必须满足：
    - `code` 为稳定错误码
    - `message` 为明确迁移提示，不得回退到泛化 `*_failed`
    - `meta.path` / `meta.method` 可支撑日志、测试与排障定位
@@ -387,28 +386,27 @@ flowchart TD
    - 由 `380C` 直接持有兼容窗口、`410 Gone` 与删除批次
 2. [ ] `GET /internal/assistant/model-providers`
    - 不进入 `CubeBox` 正式 API
-   - 进入 `C2` 后直接 `410 Gone`
+   - 已直接进入稳定 `410 Gone`
 3. [ ] `POST /internal/assistant/model-providers:validate`
    - 不进入 `CubeBox` 正式 API
-   - 进入 `C2` 后直接 `410 Gone`
+   - 已直接进入稳定 `410 Gone`
 4. [ ] `GET /internal/assistant/ui-bootstrap`
    - successor 为 `GET /internal/cubebox/ui-bootstrap`
-   - 作为 assistant formal entry 残留接口单独登记
-   - 必须在 `380E` 前端切走后进入 `410 Gone`
+   - 已直接进入稳定 `410 Gone`
 5. [ ] `GET /internal/assistant/session`
    - successor 为 `GET /internal/cubebox/session`
-   - 必须在 `380E` 切走后进入 `410 Gone`
+   - 已直接进入稳定 `410 Gone`
 6. [ ] `POST /internal/assistant/session/refresh`
    - successor 为 `POST /internal/cubebox/session/refresh`
-   - 与 session 同批退役，不允许无限期因为前端 convenience 留存
+   - 已直接进入稳定 `410 Gone`
 7. [ ] `POST /internal/assistant/session/logout`
    - successor 为 `POST /internal/cubebox/session/logout`
-   - 与 session 同批退役，不允许无限期因为前端 convenience 留存
+   - 已直接进入稳定 `410 Gone`
 8. [ ] 完成条件
    - 上述所有 `/internal/assistant/*` 路由都必须在 readiness 中标明其所属类别：
      - `successor in cubebox`
      - `gone without successor`
-     - `temporary keep until 380E`
+     - `compat window only`
    - 不允许存在“既不在文档里、也没删除”的悬空 assistant 路由
 
 ## 6. 核心切换算法与实施批次 (Cutover & Retirement Plan)
@@ -442,19 +440,19 @@ flowchart TD
 **当前状态**:
 - [ ] 当前工作区仍缺完整 DTO matrix 与错误码/枚举冻结表。
 
-### 6.3 Phase C2：旧 `/internal/assistant/*` 进入显式兼容窗口
+### 6.3 Phase C2：旧 `/internal/assistant/*` 兼容窗口与直接退役分类冻结
 
 1. [ ] 明确仍需短期保留的旧接口清单，以及保留原因。
 2. [ ] 对保留接口给出固定兼容策略：
    - 只读兼容
-   - 显式退役告警
-   - 稳定迁移错误码/提示
+   - 不允许继续承接新的正式 consumer 主链
 3. [ ] 禁止任何旧接口继续承载新的正式写路径或新增能力。
-4. [ ] 路由 allowlist、capability-route-map、authz requirement 与文档说明同步标注“兼容窗口中”。
-5. [ ] `ui-bootstrap/session/session-refresh/session-logout` 等 assistant formal entry 残留接口必须一并进入兼容窗口管理，不允许游离在退役矩阵之外。
+4. [ ] 路由 allowlist、capability-route-map、authz requirement 与文档说明必须同步标注其是“compat window only”还是“stable gone”。
+5. [ ] `ui-bootstrap/session/session-refresh/session-logout` 与 `model-providers*` 不再属于兼容窗口，统一视为稳定 `410 Gone + assistant_api_gone`。
 
 **当前状态**:
-- [ ] 旧接口尚未被分类为“继续兼容”还是“直接退役”，仍处于语义模糊状态。
+- [X] 旧 assistant 主业务 API 兼容窗口仅保留 `conversations / turns / tasks / models / runtime-status`。
+- [X] `ui-bootstrap / session* / model-providers*` 已直接进入稳定 `410 Gone`。
 
 ### 6.4 Phase C3：仓内消费者全面切走 `/internal/assistant/*`
 
@@ -464,7 +462,9 @@ flowchart TD
 4. [ ] 确认不存在隐藏消费者继续依赖旧命名空间。
 
 **当前状态**:
-- [ ] `380E` 仍在草拟中，前端尚未以本文为基础全面切到正式 API 面。
+- [X] `apps/web` 正式页面与路由已收口到 `/app/cubebox`、`/app/cubebox/files`、`/app/cubebox/models`。
+- [X] `/app/assistant` 与 `/app/assistant/models` 仅保留 redirect alias，不再保留对应 assistant 页面组件。
+- [X] `apps/web` 已删除 `AssistantModelProvidersPage`、`LibreChatPage`、`AssistantPage` 及其死测试/死 helper。
 
 ### 6.5 Phase C4：旧 API 退役落地（`410 Gone` / 删除）
 
@@ -478,7 +478,9 @@ flowchart TD
    - test / e2e / preflight
 
 **当前状态**:
-- [ ] 尚不具备进入本批次的前提。
+- [X] `ui-bootstrap / session* / model-providers*` 已完成稳定 `410 Gone`。
+- [ ] `conversations / turns / tasks / models / runtime-status` 仍保留 compat window，待后续批次物理删除。
+- [X] `poll_uri`、receipt link 与 task link 现已直接生成 `/internal/cubebox/tasks/{task_id}`。
 
 ### 6.6 Phase C5：进入 `380F/380G`
 

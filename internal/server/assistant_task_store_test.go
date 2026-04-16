@@ -628,9 +628,9 @@ func TestAssistantTaskStore_UtilityValidationAndWrappers(t *testing.T) {
 			CompletedAt:       &now,
 		}
 		receipt := assistantTaskReceiptFromRecord(record)
-		if receipt.TaskID != "task_1" || receipt.PollURI != "/internal/assistant/tasks/task_1" {
-			t.Fatalf("unexpected receipt=%+v", receipt)
-		}
+			if receipt.TaskID != "task_1" || receipt.PollURI != "/internal/cubebox/tasks/task_1" {
+				t.Fatalf("unexpected receipt=%+v", receipt)
+			}
 		detail := assistantTaskDetailFromRecord(record)
 		if detail.TaskID != "task_1" || detail.TraceID != "trace_1" || detail.ContractSnapshot.PlanHash == "" {
 			t.Fatalf("unexpected detail=%+v", detail)

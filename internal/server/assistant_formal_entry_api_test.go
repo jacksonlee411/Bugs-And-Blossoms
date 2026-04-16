@@ -6,8 +6,18 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
+
+func decodeRoutingErrorEnvelope(t *testing.T, rec *httptest.ResponseRecorder) map[string]any {
+	t.Helper()
+	var payload map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("unmarshal error envelope: %v body=%s", err, rec.Body.String())
+	}
+	return payload
+}
 
 func writeAssistantFormalEntryRuntimeFixtures(t *testing.T) {
 	t.Helper()
@@ -178,6 +188,78 @@ func TestAssistantFormalEntryAPI_SessionRefreshAndLogout(t *testing.T) {
 	}
 }
 
+func TestAssistantFormalEntryAPI_CubeBoxSuccessorEndpoints(t *testing.T) {
+	writeAssistantFormalEntryRuntimeFixtures(t)
+
+	handler := newAssistantFormalEntryAPIHandler(&assistantConversationService{
+		modelGateway: &assistantModelGateway{
+			config: assistantModelConfig{
+				Providers: []assistantModelProviderConfig{
+					{Name: "openai", Enabled: true, Model: "gpt-5.4", Endpoint: "simulate://ok", TimeoutMS: 1000, Retries: 1, Priority: 1, KeyRef: "OPENAI_API_KEY"},
+				},
+			},
+		},
+	}, &stubSessionStore{})
+
+	rec := httptest.NewRecorder()
+	handler.handleCubeBoxUIBootstrap(rec, assistantFormalEntryAuthedRequest(http.MethodGet, "/internal/cubebox/ui-bootstrap"))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+	}
+
+	rec = httptest.NewRecorder()
+	handler.handleCubeBoxSession(rec, assistantFormalEntryAuthedRequest(http.MethodGet, "/internal/cubebox/session"))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+	}
+
+	rec = httptest.NewRecorder()
+	handler.handleCubeBoxSessionRefresh(rec, assistantFormalEntryAuthedRequest(http.MethodPost, "/internal/cubebox/session/refresh"))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+	}
+
+	rec = httptest.NewRecorder()
+	handler.handleCubeBoxSessionLogout(rec, assistantFormalEntryAuthedRequest(http.MethodPost, "/internal/cubebox/session/logout"))
+	if rec.Code != http.StatusNoContent {
+		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestAssistantFormalEntryAPI_AssistantRetiredEndpoints(t *testing.T) {
+	cases := []struct {
+		method    string
+		path      string
+		successor string
+	}{
+		{method: http.MethodGet, path: "/internal/assistant/ui-bootstrap", successor: "/internal/cubebox/ui-bootstrap"},
+		{method: http.MethodGet, path: "/internal/assistant/session", successor: "/internal/cubebox/session"},
+		{method: http.MethodPost, path: "/internal/assistant/session/refresh", successor: "/internal/cubebox/session/refresh"},
+		{method: http.MethodPost, path: "/internal/assistant/session/logout", successor: "/internal/cubebox/session/logout"},
+		{method: http.MethodGet, path: "/internal/assistant/model-providers", successor: ""},
+		{method: http.MethodPost, path: "/internal/assistant/model-providers:validate", successor: ""},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.method+" "+tc.path, func(t *testing.T) {
+			rec := httptest.NewRecorder()
+			req := httptest.NewRequest(tc.method, tc.path, nil)
+			handleAssistantRetiredAPI(rec, req, tc.successor)
+			if rec.Code != http.StatusGone {
+				t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+			}
+			payload := decodeRoutingErrorEnvelope(t, rec)
+			if payload["code"] != assistantAPIGoneCode {
+				t.Fatalf("payload=%v", payload)
+			}
+			message, _ := payload["message"].(string)
+			if tc.successor != "" && !strings.Contains(message, tc.successor) {
+				t.Fatalf("message=%q successor=%q", message, tc.successor)
+			}
+		})
+	}
+}
+
 func TestAssistantFormalEntryAPI_LogoutRejectsMissingSID(t *testing.T) {
 	handler := newAssistantFormalEntryAPIHandler(nil, nil)
 	req := httptest.NewRequest(http.MethodPost, "/internal/assistant/session/logout", nil)
@@ -344,6 +426,13 @@ func TestAssistantFormalEntryHelpers(t *testing.T) {
 		}
 		if payload["message"] != assistantUIBootstrapUnavailableMessage {
 			t.Fatalf("payload=%v", payload)
+		}
+	})
+
+	t.Run("assistant retired message includes successor", func(t *testing.T) {
+		message := assistantRetiredAPIMessage("/internal/cubebox/session")
+		if !strings.Contains(message, "/internal/cubebox/session") {
+			t.Fatalf("message=%q", message)
 		}
 	})
 }

@@ -1,11 +1,38 @@
 import { httpClient } from './httpClient'
 import type {
-  AssistantConversation,
-  AssistantConversationListResponse,
-  AssistantReplyNLG,
-  AssistantTaskAsyncReceipt,
-  AssistantTaskDetail
-} from './assistant'
+  CubeBoxConversation,
+  CubeBoxConversationListResponse,
+  CubeBoxRenderReplyRequest,
+  CubeBoxReply,
+  CubeBoxRuntimeStatusResponse,
+  CubeBoxSessionRefreshResponse,
+  CubeBoxSessionResponse,
+  CubeBoxTask,
+  CubeBoxTaskCancelResponse,
+  CubeBoxTaskReceipt,
+  CubeBoxTaskSubmitRequest,
+  CubeBoxUIBootstrapResponse
+} from './cubeboxTypes'
+
+export type {
+  CubeBoxConversation,
+  CubeBoxConversationListItem,
+  CubeBoxConversationListResponse,
+  CubeBoxRenderReplyRequest,
+  CubeBoxReply,
+  CubeBoxRuntimeCapabilities,
+  CubeBoxRuntimeComponent,
+  CubeBoxRuntimeStatusResponse,
+  CubeBoxSessionRefreshResponse,
+  CubeBoxSessionResponse,
+  CubeBoxTask,
+  CubeBoxTaskCancelResponse,
+  CubeBoxTaskContractSnapshot,
+  CubeBoxTaskReceipt,
+  CubeBoxTaskSubmitRequest,
+  CubeBoxTurn,
+  CubeBoxUIBootstrapResponse
+} from './cubeboxTypes'
 
 const DEFAULT_CUBEBOX_TURN_TIMEOUT_MS = 60000
 
@@ -18,12 +45,6 @@ function resolveCubeBoxTurnTimeoutMs(raw: string | undefined): number {
 }
 
 const cubeboxTurnTimeoutMs = resolveCubeBoxTurnTimeoutMs(import.meta.env.VITE_ASSISTANT_TURN_TIMEOUT_MS)
-
-export type CubeBoxConversation = AssistantConversation
-export type CubeBoxConversationListResponse = AssistantConversationListResponse
-export type CubeBoxReply = AssistantReplyNLG
-export type CubeBoxTaskReceipt = AssistantTaskAsyncReceipt
-export type CubeBoxTask = AssistantTaskDetail
 
 export interface CubeBoxFile {
   file_id: string
@@ -46,27 +67,6 @@ export interface CubeBoxModelsResponse {
     provider: string
     model: string
   }>
-}
-
-export interface CubeBoxRuntimeStatusResponse {
-  status: 'healthy' | 'degraded' | 'unavailable' | string
-  checked_at: string
-  frontend: { healthy: string; reason?: string }
-  backend: { healthy: string; reason?: string }
-  knowledge_runtime: { healthy: string; reason?: string }
-  model_gateway: { healthy: string; reason?: string }
-  file_store: { healthy: string; reason?: string }
-  retired_capabilities: string[]
-  capabilities: {
-    conversation_enabled: boolean
-    files_enabled: boolean
-    agents_ui_enabled: boolean
-    agents_write_enabled: boolean
-    memory_enabled: boolean
-    web_search_enabled: boolean
-    file_search_enabled: boolean
-    mcp_enabled: boolean
-  }
 }
 
 export async function createCubeBoxConversation(): Promise<CubeBoxConversation> {
@@ -122,14 +122,7 @@ export async function commitCubeBoxTurn(conversationID: string, turnID: string):
 export async function renderCubeBoxTurnReply(
   conversationID: string,
   turnID: string,
-  payload: {
-    stage?: string
-    kind?: string
-    outcome?: 'success' | 'failure'
-    locale?: 'zh' | 'en'
-    fallback_text?: string
-    allow_missing_turn?: boolean
-  }
+  payload: CubeBoxRenderReplyRequest
 ): Promise<CubeBoxReply> {
   return httpClient.post<CubeBoxReply>(
     `/internal/cubebox/conversations/${encodeURIComponent(conversationID)}/turns/${encodeURIComponent(turnID)}:reply`,
@@ -137,8 +130,16 @@ export async function renderCubeBoxTurnReply(
   )
 }
 
+export async function submitCubeBoxTask(payload: CubeBoxTaskSubmitRequest): Promise<CubeBoxTaskReceipt> {
+  return httpClient.post<CubeBoxTaskReceipt>('/internal/cubebox/tasks', payload)
+}
+
 export async function getCubeBoxTask(taskID: string): Promise<CubeBoxTask> {
   return httpClient.get<CubeBoxTask>(`/internal/cubebox/tasks/${encodeURIComponent(taskID)}`)
+}
+
+export async function cancelCubeBoxTask(taskID: string): Promise<CubeBoxTaskCancelResponse> {
+  return httpClient.post<CubeBoxTaskCancelResponse>(`/internal/cubebox/tasks/${encodeURIComponent(taskID)}:cancel`, {})
 }
 
 export async function listCubeBoxFiles(params?: { conversation_id?: string }): Promise<CubeBoxFileListResponse> {
@@ -171,6 +172,40 @@ export async function getCubeBoxModels(): Promise<CubeBoxModelsResponse> {
   return httpClient.get<CubeBoxModelsResponse>('/internal/cubebox/models')
 }
 
+export async function getCubeBoxUIBootstrap(): Promise<CubeBoxUIBootstrapResponse> {
+  return httpClient.get<CubeBoxUIBootstrapResponse>('/internal/cubebox/ui-bootstrap')
+}
+
+export async function getCubeBoxSession(): Promise<CubeBoxSessionResponse> {
+  return httpClient.get<CubeBoxSessionResponse>('/internal/cubebox/session')
+}
+
+export async function refreshCubeBoxSession(): Promise<CubeBoxSessionRefreshResponse> {
+  return httpClient.post<CubeBoxSessionRefreshResponse>('/internal/cubebox/session/refresh', {})
+}
+
+export async function logoutCubeBoxSession(): Promise<void> {
+  return httpClient.post<void>('/internal/cubebox/session/logout', {})
+}
+
 export async function getCubeBoxRuntimeStatus(): Promise<CubeBoxRuntimeStatusResponse> {
-  return httpClient.get<CubeBoxRuntimeStatusResponse>('/internal/cubebox/runtime-status')
+  try {
+    return await httpClient.get<CubeBoxRuntimeStatusResponse>('/internal/cubebox/runtime-status')
+  } catch (error) {
+    const details = (error as { details?: unknown })?.details
+    if (details && typeof details === 'object') {
+      const candidate = details as Partial<CubeBoxRuntimeStatusResponse>
+      if (
+        typeof candidate.status === 'string' &&
+        candidate.frontend &&
+        candidate.backend &&
+        candidate.knowledge_runtime &&
+        candidate.model_gateway &&
+        candidate.file_store
+      ) {
+        return candidate as CubeBoxRuntimeStatusResponse
+      }
+    }
+    throw error
+  }
 }

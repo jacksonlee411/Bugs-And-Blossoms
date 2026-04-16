@@ -230,7 +230,25 @@
     },
     {
       "method": "POST",
-      "path": "/internal/assistant/conversations/{conversation_id}/turns/{turn_action}",
+      "path": "/internal/assistant/conversations/{conversation_id}/turns/{turn_id}:confirm",
+      "route_class": "internal_api",
+      "action": "admin",
+      "capability_key": "org.assistant_conversation.manage",
+      "owner_module": "orgunit",
+      "status": "active"
+    },
+    {
+      "method": "POST",
+      "path": "/internal/assistant/conversations/{conversation_id}/turns/{turn_id}:commit",
+      "route_class": "internal_api",
+      "action": "admin",
+      "capability_key": "org.assistant_conversation.manage",
+      "owner_module": "orgunit",
+      "status": "active"
+    },
+    {
+      "method": "POST",
+      "path": "/internal/assistant/conversations/{conversation_id}/turns/{turn_id}:reply",
       "route_class": "internal_api",
       "action": "admin",
       "capability_key": "org.assistant_conversation.manage",
@@ -257,7 +275,7 @@
     },
     {
       "method": "POST",
-      "path": "/internal/assistant/tasks/{task_action}",
+      "path": "/internal/assistant/tasks/{task_id}:cancel",
       "route_class": "internal_api",
       "action": "admin",
       "capability_key": "org.assistant_conversation.manage",
@@ -383,7 +401,25 @@
     },
     {
       "method": "POST",
-      "path": "/internal/cubebox/conversations/{conversation_id}/turns/{turn_action}",
+      "path": "/internal/cubebox/conversations/{conversation_id}/turns/{turn_id}:confirm",
+      "route_class": "internal_api",
+      "action": "admin",
+      "capability_key": "org.assistant_conversation.manage",
+      "owner_module": "cubebox",
+      "status": "active"
+    },
+    {
+      "method": "POST",
+      "path": "/internal/cubebox/conversations/{conversation_id}/turns/{turn_id}:commit",
+      "route_class": "internal_api",
+      "action": "admin",
+      "capability_key": "org.assistant_conversation.manage",
+      "owner_module": "cubebox",
+      "status": "active"
+    },
+    {
+      "method": "POST",
+      "path": "/internal/cubebox/conversations/{conversation_id}/turns/{turn_id}:reply",
       "route_class": "internal_api",
       "action": "admin",
       "capability_key": "org.assistant_conversation.manage",
@@ -410,7 +446,7 @@
     },
     {
       "method": "POST",
-      "path": "/internal/cubebox/tasks/{task_action}",
+      "path": "/internal/cubebox/tasks/{task_id}:cancel",
       "route_class": "internal_api",
       "action": "admin",
       "capability_key": "org.assistant_conversation.manage",
@@ -469,6 +505,42 @@
       "action": "read",
       "capability_key": "org.orgunit_create.field_policy",
       "owner_module": "orgunit",
+      "status": "active"
+    },
+    {
+      "method": "GET",
+      "path": "/internal/cubebox/ui-bootstrap",
+      "route_class": "internal_api",
+      "action": "read",
+      "capability_key": "org.assistant_conversation.manage",
+      "owner_module": "cubebox",
+      "status": "active"
+    },
+    {
+      "method": "GET",
+      "path": "/internal/cubebox/session",
+      "route_class": "internal_api",
+      "action": "read",
+      "capability_key": "org.assistant_conversation.manage",
+      "owner_module": "cubebox",
+      "status": "active"
+    },
+    {
+      "method": "POST",
+      "path": "/internal/cubebox/session/refresh",
+      "route_class": "internal_api",
+      "action": "read",
+      "capability_key": "org.assistant_conversation.manage",
+      "owner_module": "cubebox",
+      "status": "active"
+    },
+    {
+      "method": "POST",
+      "path": "/internal/cubebox/session/logout",
+      "route_class": "internal_api",
+      "action": "read",
+      "capability_key": "org.assistant_conversation.manage",
+      "owner_module": "cubebox",
       "status": "active"
     }
   ]

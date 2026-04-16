@@ -20,8 +20,10 @@ func TestParsePathPattern(t *testing.T) {
 	if _, ok := parsePathPattern("/a/{}/b"); ok {
 		t.Fatal("expected invalid")
 	}
-	if _, ok := parsePathPattern("/a/{id}x/b"); ok {
-		t.Fatal("expected invalid")
+	if p, ok := parsePathPattern("/a/{id}x/b"); !ok {
+		t.Fatal("expected suffix pattern ok")
+	} else if !p.Match("/a/123x/b") {
+		t.Fatal("expected suffix literal after param to match")
 	}
 	if _, ok := parsePathPattern("/a/id}/b"); ok {
 		t.Fatal("expected invalid")
@@ -48,6 +50,20 @@ func TestParsePathPattern(t *testing.T) {
 	}
 	if p.Match("/a//b") {
 		t.Fatal("expected no match for empty segment")
+	}
+
+	actionPattern, ok := parsePathPattern("/a/{id}:confirm")
+	if !ok {
+		t.Fatal("expected suffix pattern ok")
+	}
+	if !actionPattern.Match("/a/turn-1:confirm") {
+		t.Fatal("expected suffix pattern match")
+	}
+	if actionPattern.Match("/a/:confirm") {
+		t.Fatal("expected missing param value to fail")
+	}
+	if actionPattern.Match("/a/turn-1:commit") {
+		t.Fatal("expected suffix mismatch")
 	}
 }
 

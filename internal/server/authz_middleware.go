@@ -316,7 +316,19 @@ func pathMatchRouteTemplate(path string, template string) bool {
 		if g == "" {
 			return false
 		}
-		if routeTemplateIsParamSegment(w) {
+		if isRouteParamSegment(w) {
+			if strings.ContainsRune(g, ':') {
+				return false
+			}
+			continue
+		}
+		if prefix, suffix, ok := splitRouteTemplateSegment(w); ok {
+			if len(g) <= len(prefix)+len(suffix) {
+				return false
+			}
+			if !strings.HasPrefix(g, prefix) || !strings.HasSuffix(g, suffix) {
+				return false
+			}
 			continue
 		}
 		if g != w {
@@ -335,6 +347,32 @@ func splitRouteSegments(path string) []string {
 	return strings.Split(path, "/")
 }
 
+func isRouteParamSegment(s string) bool {
+	return strings.HasPrefix(s, "{") && strings.HasSuffix(s, "}") && len(s) > 2
+}
+
 func routeTemplateIsParamSegment(s string) bool {
 	return strings.HasPrefix(s, "{") && strings.HasSuffix(s, "}") && len(s) > 2
+}
+
+func splitRouteTemplateSegment(s string) (prefix string, suffix string, ok bool) {
+	open := strings.IndexByte(s, '{')
+	close := strings.IndexByte(s, '}')
+	if open < 0 || close < 0 || close <= open {
+		return "", "", false
+	}
+	if strings.Contains(s[close+1:], "{") || strings.Contains(s[:open], "}") {
+		return "", "", false
+	}
+	name := strings.TrimSpace(s[open+1 : close])
+	if name == "" {
+		return "", "", false
+	}
+	if strings.ContainsRune(name, '{') || strings.ContainsRune(name, '}') {
+		return "", "", false
+	}
+	if strings.Contains(s[close+1:], "}") {
+		return "", "", false
+	}
+	return s[:open], s[close+1:], true
 }

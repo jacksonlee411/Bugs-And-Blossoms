@@ -95,10 +95,10 @@ func mustAssistantFormalSuccessorAPIClassifier(t *testing.T) *routing.Classifier
 		Entrypoints: map[string]routing.Entrypoint{
 			"server": {
 				Routes: []routing.Route{
-					{Path: "/internal/assistant/ui-bootstrap", Methods: []string{"GET"}, RouteClass: "internal_api"},
-					{Path: "/internal/assistant/session", Methods: []string{"GET"}, RouteClass: "internal_api"},
-					{Path: "/internal/assistant/session/refresh", Methods: []string{"POST"}, RouteClass: "internal_api"},
-					{Path: "/internal/assistant/session/logout", Methods: []string{"POST"}, RouteClass: "internal_api"},
+					{Path: "/internal/cubebox/ui-bootstrap", Methods: []string{"GET"}, RouteClass: "internal_api"},
+					{Path: "/internal/cubebox/session", Methods: []string{"GET"}, RouteClass: "internal_api"},
+					{Path: "/internal/cubebox/session/refresh", Methods: []string{"POST"}, RouteClass: "internal_api"},
+					{Path: "/internal/cubebox/session/logout", Methods: []string{"POST"}, RouteClass: "internal_api"},
 				},
 			},
 		},
@@ -419,7 +419,7 @@ func TestWithTenantAndSession_AssistantFormalSuccessorSessionInvalid_ReturnsSpec
 		t.Fatal("unexpected next")
 	}))
 
-	req := httptest.NewRequest(http.MethodGet, "/internal/assistant/session", nil)
+	req := httptest.NewRequest(http.MethodGet, "/internal/cubebox/session", nil)
 	req.Host = "localhost:8080"
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
@@ -439,7 +439,7 @@ func TestWithTenantAndSession_AssistantFormalSuccessorPrincipalInvalid_ReturnsSp
 		t.Fatal("unexpected next")
 	}))
 
-	req := httptest.NewRequest(http.MethodGet, "/internal/assistant/ui-bootstrap", nil)
+	req := httptest.NewRequest(http.MethodGet, "/internal/cubebox/ui-bootstrap", nil)
 	req.Host = "localhost:8080"
 	req.AddCookie(&http.Cookie{Name: sidCookieName, Value: "sid1"})
 	rec := httptest.NewRecorder()

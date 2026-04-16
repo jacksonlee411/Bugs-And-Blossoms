@@ -204,6 +204,8 @@ func knownErrorMessage(code string) string {
 		return "当前助手登录主体已失效，请重新登录。"
 	case "assistant_ui_bootstrap_unavailable":
 		return "正式助手入口启动信息暂不可用，请稍后重试。"
+	case "assistant_api_gone":
+		return "旧 Assistant API 已退役，请改用 CubeBox 正式接口。"
 	case "assistant_ui_retired":
 		return "旧助手入口已退役，请改用正式入口。"
 	case "assistant_vendored_api_retired":

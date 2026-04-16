@@ -105,14 +105,14 @@ func TestAssistantIdempotencyTaskReceiptRestoreCoverage(t *testing.T) {
 		t.Fatal("invalid json should fail")
 	}
 
-	expected := assistantTaskAsyncReceipt{
-		TaskID:      "task_1",
-		TaskType:    assistantTaskTypeAsyncPlan,
-		Status:      assistantTaskStatusQueued,
-		WorkflowID:  "wf_1",
-		SubmittedAt: time.Date(2026, 3, 9, 4, 0, 0, 0, time.UTC),
-		PollURI:     "/internal/assistant/tasks/task_1",
-	}
+		expected := assistantTaskAsyncReceipt{
+			TaskID:      "task_1",
+			TaskType:    assistantTaskTypeAsyncPlan,
+			Status:      assistantTaskStatusQueued,
+			WorkflowID:  "wf_1",
+			SubmittedAt: time.Date(2026, 3, 9, 4, 0, 0, 0, time.UTC),
+			PollURI:     "/internal/cubebox/tasks/task_1",
+		}
 	body, err := json.Marshal(expected)
 	if err != nil {
 		t.Fatalf("marshal receipt err=%v", err)
@@ -151,7 +151,7 @@ func TestAssistantFinalizeIdempotencyJSONSuccessTxCoverage(t *testing.T) {
 		}
 		return pgconn.NewCommandTag("UPDATE 1"), nil
 	}}
-	receipt := assistantTaskAsyncReceipt{TaskID: "task_1", TaskType: assistantTaskTypeAsyncPlan, Status: assistantTaskStatusQueued, WorkflowID: "wf_1", SubmittedAt: time.Date(2026, 3, 9, 4, 0, 0, 0, time.UTC), PollURI: "/internal/assistant/tasks/task_1"}
+	receipt := assistantTaskAsyncReceipt{TaskID: "task_1", TaskType: assistantTaskTypeAsyncPlan, Status: assistantTaskStatusQueued, WorkflowID: "wf_1", SubmittedAt: time.Date(2026, 3, 9, 4, 0, 0, 0, time.UTC), PollURI: "/internal/cubebox/tasks/task_1"}
 	if err := svc.finalizeIdempotencyJSONSuccessTx(ctx, tx, key, http.StatusAccepted, receipt); err != nil {
 		t.Fatalf("finalize json success err=%v", err)
 	}

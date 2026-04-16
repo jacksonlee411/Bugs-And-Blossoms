@@ -191,7 +191,13 @@ entrypoints:
       - path: /internal/assistant/conversations/{conversation_id}/turns
         methods: [POST]
         route_class: internal_api
-      - path: /internal/assistant/conversations/{conversation_id}/turns/{turn_action}
+      - path: /internal/assistant/conversations/{conversation_id}/turns/{turn_id}:confirm
+        methods: [POST]
+        route_class: internal_api
+      - path: /internal/assistant/conversations/{conversation_id}/turns/{turn_id}:commit
+        methods: [POST]
+        route_class: internal_api
+      - path: /internal/assistant/conversations/{conversation_id}/turns/{turn_id}:reply
         methods: [POST]
         route_class: internal_api
       - path: /internal/assistant/tasks
@@ -200,7 +206,7 @@ entrypoints:
       - path: /internal/assistant/tasks/{task_id}
         methods: [GET]
         route_class: internal_api
-      - path: /internal/assistant/tasks/{task_action}
+      - path: /internal/assistant/tasks/{task_id}:cancel
         methods: [POST]
         route_class: internal_api
       - path: /internal/assistant/model-providers
@@ -236,7 +242,13 @@ entrypoints:
       - path: /internal/cubebox/conversations/{conversation_id}/turns
         methods: [POST]
         route_class: internal_api
-      - path: /internal/cubebox/conversations/{conversation_id}/turns/{turn_action}
+      - path: /internal/cubebox/conversations/{conversation_id}/turns/{turn_id}:confirm
+        methods: [POST]
+        route_class: internal_api
+      - path: /internal/cubebox/conversations/{conversation_id}/turns/{turn_id}:commit
+        methods: [POST]
+        route_class: internal_api
+      - path: /internal/cubebox/conversations/{conversation_id}/turns/{turn_id}:reply
         methods: [POST]
         route_class: internal_api
       - path: /internal/cubebox/tasks
@@ -245,7 +257,7 @@ entrypoints:
       - path: /internal/cubebox/tasks/{task_id}
         methods: [GET]
         route_class: internal_api
-      - path: /internal/cubebox/tasks/{task_action}
+      - path: /internal/cubebox/tasks/{task_id}:cancel
         methods: [POST]
         route_class: internal_api
       - path: /internal/cubebox/models
@@ -253,6 +265,18 @@ entrypoints:
         route_class: internal_api
       - path: /internal/cubebox/runtime-status
         methods: [GET]
+        route_class: internal_api
+      - path: /internal/cubebox/ui-bootstrap
+        methods: [GET]
+        route_class: internal_api
+      - path: /internal/cubebox/session
+        methods: [GET]
+        route_class: internal_api
+      - path: /internal/cubebox/session/refresh
+        methods: [POST]
+        route_class: internal_api
+      - path: /internal/cubebox/session/logout
+        methods: [POST]
         route_class: internal_api
       - path: /internal/cubebox/files
         methods: [GET, POST]
