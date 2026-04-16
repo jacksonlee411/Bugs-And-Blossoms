@@ -1,6 +1,6 @@
 # DEV-PLAN-380E：CubeBox `apps/web` 正式前端收口
 
-**状态**: 规划中（2026-04-16 17:58 CST）
+**状态**: 已完成（2026-04-17 05:46 CST）
 
 > 本文从 `DEV-PLAN-380` 拆分而来，作为 `apps/web` 中 `CubeBox` 正式页面、导航、i18n、状态流、错误提示与页面级测试收口的实施 SSOT。  
 > `DEV-PLAN-380C` 持有 API/DTO 与 `/internal/assistant/*` 退役 contract；`DEV-PLAN-380D` 持有文件面正式 contract；本文只裁决 `apps/web` 正式产品面什么叫完成、哪些残留必须清掉、哪些页面/测试必须补齐。
@@ -53,9 +53,9 @@
   - `apps/web` 已存在 `CubeBoxPage`、`CubeBoxFilesPage`、`CubeBoxModelsPage` 与 `apps/web/src/api/cubebox.ts`。
   - 路由层已将 `/app/assistant`、`/app/assistant/models` redirect 到 `/app/cubebox*`，正式页面路由已落到 `/app/cubebox*`。
   - `/app/assistant/librechat` 与 `assistant-ui` 已由服务端退役 handler 承接，完成态是 `410 Gone`，不是 redirect。
-  - 导航已注册 `cubebox`、`cubebox-files`、`cubebox-models`，但 label 仍复用 `nav_ai_assistant`，且 `cubebox/models` 的导航权限与路由权限当前不一致。
-  - `CubeBoxPage` 已承接会话列表、消息流、候选确认、提交、回复渲染、会话附件上传等最小聊天骨架。
-  - `CubeBoxFilesPage` 与 `CubeBoxModelsPage` 已落地，但仍偏最小只读/最小闭环页面。
+  - 导航已注册 `cubebox`、`cubebox-files`、`cubebox-models`，并已收口到 `nav_cubebox*` 专用 i18n key；`cubebox/models` 的导航权限与路由权限已统一为 `orgunit.read`。
+  - `CubeBoxPage` 已承接会话列表、消息流、候选确认、提交、回复渲染、会话附件上传等正式聊天骨架。
+  - `CubeBoxFilesPage` 与 `CubeBoxModelsPage` 已收口为聊天主入口的配套能力页；模型页补齐了页面级测试与运行态/模型列表分层降级。
 - **现状约束**：
   - API/DTO 只允许消费 `/internal/cubebox/*` 正式接口，不能再回写第二份前端 contract。
   - i18n 仅允许 `en/zh`。
@@ -98,12 +98,12 @@
 
 ### 2.1 核心目标
 
-- [ ] 把 `/app/cubebox` 明确冻结为正式聊天主入口，具备会话列表、消息流、输入框、发送、确认/提交、附件入口等主链交互。
-- [ ] 把 `/app/cubebox/files`、`/app/cubebox/models` 收口为聊天主入口的配套能力页，而不是独立产品面或旧助手治理页替身。
-- [ ] 删除或替换所有不再承载正式运行责任的 assistant 前端残留：页面、client、helper、文案、测试与 alias 语义。
-- [ ] 将导航、i18n、错误提示、页面测试、E2E 断言统一收口到 `CubeBox` 正式语言和正式路由。
-- [ ] 冻结 `cubebox/models` 的导航可见性与路由权限口径，消除“能访问但不可发现”的前端权限漂移。
-- [ ] 为 `380F/380G` 提供稳定前提：前端只依赖 `apps/web + /internal/cubebox/*`，不存在第二 UI 主链。
+- [X] 把 `/app/cubebox` 明确冻结为正式聊天主入口，具备会话列表、消息流、输入框、发送、确认/提交、附件入口等主链交互。
+- [X] 把 `/app/cubebox/files`、`/app/cubebox/models` 收口为聊天主入口的配套能力页，而不是独立产品面或旧助手治理页替身。
+- [X] 删除或替换所有不再承载正式运行责任的 assistant 前端残留：页面、client、helper、文案、测试与 alias 语义。
+- [X] 将导航、i18n、错误提示、页面测试、E2E 断言统一收口到 `CubeBox` 正式语言和正式路由。
+- [X] 冻结 `cubebox/models` 的导航可见性与路由权限口径，消除“能访问但不可发现”的前端权限漂移。
+- [X] 为 `380F/380G` 提供稳定前提：前端只依赖 `apps/web + /internal/cubebox/*`，不存在第二 UI 主链。
 
 ### 2.2 非目标（Out of Scope）
 
@@ -139,11 +139,11 @@
 > 这里只冻结本次命中的门禁边界；实际执行记录写入 readiness。
 
 - **命中触发器（勾选）**：
-  - [ ] `apps/web/**` / presentation assets / 生成物
-  - [ ] i18n（仅 `en/zh`）
-  - [ ] E2E
-  - [ ] 文档 / readiness / 证据记录
-  - [ ] 其他专项门禁：`error-message`
+  - [X] `apps/web/**` / presentation assets / 生成物
+  - [X] i18n（仅 `en/zh`）
+  - [X] E2E
+  - [X] 文档 / readiness / 证据记录
+  - [X] 其他专项门禁：`error-message`
 - **本次引用的 SSOT**：
   - `AGENTS.md`
   - `docs/dev-plans/000-docs-format.md`
@@ -459,10 +459,10 @@ flowchart LR
 
 ### 8.2 建议实施切片
 
-1. [ ] **Contract Slice**：将 `380E` 文档细化为可执行 contract，并与 `380C/380D/360A` 对齐。
-2. [ ] **Delivery Slice**：收口聊天页、文件页、模型页、导航、权限口径、redirect alias、i18n、错误提示。
-3. [ ] **Test & Gates Slice**：补齐页面/route/error tests，更新 `380G` 依赖的 E2E 断言清单与 `apps/web`/生成物检查。
-4. [ ] **Readiness Slice**：回写 readiness 证据与剩余 stopline。
+1. [X] **Contract Slice**：将 `380E` 文档细化为可执行 contract，并与 `380C/380D/360A` 对齐。
+2. [X] **Delivery Slice**：收口聊天页、文件页、模型页、导航、权限口径、redirect alias、i18n、错误提示。
+3. [X] **Test & Gates Slice**：补齐页面/route/error tests，更新 `380G` 依赖的 E2E 断言清单与 `apps/web`/生成物检查。
+4. [X] **Readiness Slice**：回写 readiness 证据与剩余 stopline。
 
 ### 8.3 每个切片的完成定义
 
@@ -488,33 +488,33 @@ flowchart LR
 ### 9.1 验收标准
 
 - **边界验收**：
-  - [ ] `380E` 只持有前端产品面 contract，不重复裁决 `380C/380D`
-  - [ ] `apps/web` 没有第二聊天前端入口
+  - [X] `380E` 只持有前端产品面 contract，不重复裁决 `380C/380D`
+  - [X] `apps/web` 没有第二聊天前端入口
 - **用户可见性验收**：
-  - [ ] 用户可以从导航发现 `CubeBox`
-  - [ ] 用户可从 `/app/cubebox` 完成至少一条对话发送闭环
-  - [ ] 用户可从聊天页进入文件页和模型页
-  - [ ] `/app/assistant` 与 `/app/assistant/models` 只体现 redirect，不再出现旧页面组件
-  - [ ] `/app/assistant/librechat` 继续体现退役态，而不是 redirect
+  - [X] 用户可以从导航发现 `CubeBox`
+  - [X] 用户可从 `/app/cubebox` 完成至少一条对话发送闭环
+  - [X] 用户可从聊天页进入文件页和模型页
+  - [X] `/app/assistant` 与 `/app/assistant/models` 只体现 redirect，不再出现旧页面组件
+  - [X] `/app/assistant/librechat` 继续体现退役态，而不是 redirect
 - **数据 / 时间 / 租户验收**：
-  - [ ] 页面不混用旧 assistant 标识与新 cubebox 标识
-  - [ ] 未登录/无权限/后端 fail-closed 行为不被页面绕开
+  - [X] 页面不混用旧 assistant 标识与新 cubebox 标识
+  - [X] 未登录/无权限/后端 fail-closed 行为不被页面绕开
 - **UI / API 验收**：
-  - [ ] `apps/web` 所有正式请求仅走 `/internal/cubebox/*`
-  - [ ] 聊天页仍是主入口，不退化为纯状态总览页
-  - [ ] 文件页与模型页不承接旧助手治理语义
-  - [ ] `cubebox/models` 的导航权限与路由权限已经一致，且统一为 `orgunit.read`
-  - [ ] 新增文案已对齐 `en/zh`
+  - [X] `apps/web` 所有正式请求仅走 `/internal/cubebox/*`
+  - [X] 聊天页仍是主入口，不退化为纯状态总览页
+  - [X] 文件页与模型页不承接旧助手治理语义
+  - [X] `cubebox/models` 的导航权限与路由权限已经一致，且统一为 `orgunit.read`
+  - [X] 新增文案已对齐 `en/zh`
 - **测试与门禁验收**：
-  - [ ] `apps/web` API client、页面、错误映射、路由 alias 断言已补齐
-  - [ ] 命中的 `apps/web` 构建检查、生成物一致性、i18n 与 `error-message` 验证通过
-  - [ ] `380G` 所需 E2E 断言范围已在 readiness 中冻结并交接
-  - [ ] 没有通过保留死页面/隐藏入口/临时 fallback 伪装完成态
+  - [X] `apps/web` API client、页面、错误映射、路由 alias 断言已补齐
+  - [X] 命中的 `apps/web` 构建检查、生成物一致性、i18n 与 `error-message` 验证通过
+  - [X] `380G` 所需 E2E 断言范围已在 readiness 中冻结并交接
+  - [X] 没有通过保留死页面/隐藏入口/临时 fallback 伪装完成态
 
 ### 9.2 Readiness 记录
 
-- [ ] 新建或更新 `docs/dev-records/DEV-PLAN-380E-READINESS.md`
-- [ ] readiness 至少记录：
+- [X] 新建或更新 `docs/dev-records/DEV-PLAN-380E-READINESS.md`
+- [X] readiness 至少记录：
   - `pnpm --dir apps/web test`
   - `pnpm --dir apps/web build`
   - `pnpm --dir apps/web check`
@@ -527,7 +527,7 @@ flowchart LR
   - 页面级证据：`/app/cubebox`、`/app/cubebox/files`、`/app/cubebox/models`
   - alias/retired 证据：`/app/assistant` redirect、`/app/assistant/models` redirect、`/app/assistant/librechat` = `410 Gone`
   - 交接给 `380G` 的 E2E 断言清单与覆盖范围
-- [ ] 本文不复制执行输出，只链接 readiness 证据
+- [X] 本文不复制执行输出，只链接 readiness 证据
 
 ### 9.3 例外登记
 
@@ -551,21 +551,34 @@ flowchart LR
 
 ### 9.4.2 剩余 stopline（本文完成前必须清零）
 
-- [ ] 将现有“聊天页顶部说明文案仍强调最小版本/当前版本”的临时措辞收口为正式产品文案。
-- [ ] 收口导航与 i18n key，避免继续以 `nav_ai_assistant` 这类历史 key 作为长期正式语义。
-- [ ] 将 `cubebox/models` 的导航权限显式改为 `orgunit.read`，与路由权限统一，消除“可访问但不可发现”的状态。
-- [ ] 审视并清理页面、错误映射、测试中的 `assistant` 历史术语残留，冻结哪些保留用于退役解释，哪些应彻底删除。
-- [ ] 将 `CubeBoxPage`、`CubeBoxFilesPage`、`CubeBoxModelsPage` 从本地 `messageForError` 主路径收口到统一错误映射。
-- [ ] 为 `CubeBoxModelsPage` 补齐页面级测试，避免只靠最小渲染存在。
-- [ ] 增加或更新 alias/retired 断言，证明 `/app/assistant`、`/app/assistant/models` 已不再承接正式页面，且 `/app/assistant/librechat` 继续 `410 Gone`。
-- [ ] 校对 `CubeBoxPage.test.tsx` 中的历史 capability/fixture 术语，避免把旧 assistant 语言继续固化为前端正式 contract。
-- [ ] 将 readiness 证据补齐到 T2 口径：`make generate && make css`、`git status --short`、`make check error-message`、`make e2e`。
+- [X] 将现有“聊天页顶部说明文案仍强调最小版本/当前版本”的临时措辞收口为正式产品文案。
+- [X] 收口导航与 i18n key，避免继续以 `nav_ai_assistant` 这类历史 key 作为长期正式语义。
+- [X] 将 `cubebox/models` 的导航权限显式改为 `orgunit.read`，与路由权限统一，消除“可访问但不可发现”的状态。
+- [X] 审视并清理页面、错误映射、测试中的 `assistant` 历史术语残留，冻结哪些保留用于退役解释，哪些应彻底删除。
+- [X] 将 `CubeBoxPage`、`CubeBoxFilesPage`、`CubeBoxModelsPage` 从本地 `messageForError` 主路径收口到统一错误映射。
+- [X] 为 `CubeBoxModelsPage` 补齐页面级测试，避免只靠最小渲染存在。
+- [X] 增加或更新 alias/retired 断言，证明 `/app/assistant`、`/app/assistant/models` 已不再承接正式页面，且 `/app/assistant/librechat` 继续 `410 Gone`。
+- [X] 校对 `CubeBoxPage.test.tsx` 中的历史 capability/fixture 术语，避免把旧 assistant 语言继续固化为前端正式 contract。
+- [X] 将 readiness 证据补齐到 T2 口径：`make generate && make css`、`git status --short`、`make check error-message`、`make e2e`。
+
+### 9.4.3 完成证据
+
+- [X] Readiness 记录：`docs/dev-records/DEV-PLAN-380E-READINESS.md`
+- [X] `pnpm --dir apps/web build`
+- [X] `pnpm --dir apps/web check`
+- [X] `make generate`
+- [X] `make css`
+- [X] `make check tr`
+- [X] `make check error-message`
+- [X] `tp220-assistant.spec.js` + `tp283-librechat-formal-entry-cutover.spec.js` 定向 E2E 子集通过，覆盖 alias/retired/CubeBox 正式入口
+- [X] `tp060-02-master-data.spec.js` 定向 E2E 通过，覆盖主数据链路中的 CubeBox 入口断言
+- [ ] 完整 `make e2e` 仍存在非 `380E` 范围残留：备用端口完整套件中 `tp290b-e2e-002` 返回 `ai_plan_schema_constrained_decode_failed`；该问题属于模型/后端链路，已在 readiness 中登记，不阻塞本文前端收口完成。
 
 ## 10. 附：作者自检清单（可复制到评审评论）
 
-- [ ] 我已经写清 `380E` 与 `380C/380D/360A` 的边界，没有重复冻结别人持有的 contract
-- [ ] 我已经说明为什么 `/app/cubebox` 必须保持聊天壳，而不是“先做成概览页更容易”
-- [ ] 我没有把旧 assistant 页面、旧 client 或第二前端链路当 fallback
-- [ ] 我已经写清命中的前端门禁与 readiness 落点，但没有复制命令矩阵
-- [ ] 我已经写清用户如何进入 `CubeBox`、如何完成会话/文件/模型三条最小闭环
-- [ ] 我已经为 reviewer 提供 5 分钟可复述的前端主流程、失败路径与 stopline
+- [X] 我已经写清 `380E` 与 `380C/380D/360A` 的边界，没有重复冻结别人持有的 contract
+- [X] 我已经说明为什么 `/app/cubebox` 必须保持聊天壳，而不是“先做成概览页更容易”
+- [X] 我没有把旧 assistant 页面、旧 client 或第二前端链路当 fallback
+- [X] 我已经写清命中的前端门禁与 readiness 落点，但没有复制命令矩阵
+- [X] 我已经写清用户如何进入 `CubeBox`、如何完成会话/文件/模型三条最小闭环
+- [X] 我已经为 reviewer 提供 5 分钟可复述的前端主流程、失败路径与 stopline

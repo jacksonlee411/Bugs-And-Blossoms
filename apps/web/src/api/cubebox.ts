@@ -44,7 +44,9 @@ function resolveCubeBoxTurnTimeoutMs(raw: string | undefined): number {
   return DEFAULT_CUBEBOX_TURN_TIMEOUT_MS
 }
 
-const cubeboxTurnTimeoutMs = resolveCubeBoxTurnTimeoutMs(import.meta.env.VITE_ASSISTANT_TURN_TIMEOUT_MS)
+const cubeboxTurnTimeoutMs = resolveCubeBoxTurnTimeoutMs(
+  import.meta.env.VITE_CUBEBOX_TURN_TIMEOUT_MS ?? import.meta.env.VITE_ASSISTANT_TURN_TIMEOUT_MS
+)
 
 export interface CubeBoxFile {
   file_id: string

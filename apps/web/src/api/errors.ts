@@ -1,4 +1,5 @@
 import axios, { type AxiosError } from 'axios'
+import type { Locale } from '../i18n/messages'
 import { resolveApiErrorMessage } from '../errors/presentApiError'
 
 export type ApiErrorCode =
@@ -33,7 +34,7 @@ function statusToCode(status: number): ApiErrorCode {
   return 'UNKNOWN_ERROR'
 }
 
-export function normalizeApiError(error: unknown): ApiClientError {
+export function normalizeApiError(error: unknown, locale?: Locale): ApiClientError {
   if (error instanceof ApiClientError) {
     return error
   }
@@ -51,7 +52,7 @@ export function normalizeApiError(error: unknown): ApiClientError {
     const status = axiosError.response.status
     const data = axiosError.response.data
     const fallbackMessage = data?.message || axiosError.message || 'API request failed'
-    const message = resolveApiErrorMessage(data?.code, fallbackMessage)
+    const message = resolveApiErrorMessage(data?.code, fallbackMessage, locale)
 
     return new ApiClientError(
       message,

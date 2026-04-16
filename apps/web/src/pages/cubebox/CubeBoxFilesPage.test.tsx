@@ -1,5 +1,7 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { AppProviders } from '../../app/providers/AppProviders'
+import { ApiClientError } from '../../api/errors'
 
 const cubeboxAPIMocks = vi.hoisted(() => ({
   listCubeBoxFiles: vi.fn(),
@@ -11,9 +13,18 @@ vi.mock('../../api/cubebox', () => cubeboxAPIMocks)
 
 import { CubeBoxFilesPage } from './CubeBoxFilesPage'
 
+function renderCubeBoxFilesPage() {
+  return render(
+    <AppProviders>
+      <CubeBoxFilesPage />
+    </AppProviders>
+  )
+}
+
 describe('CubeBoxFilesPage', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    window.localStorage.clear()
     cubeboxAPIMocks.listCubeBoxFiles.mockResolvedValue({
       items: [
         {
@@ -42,7 +53,7 @@ describe('CubeBoxFilesPage', () => {
   })
 
   it('renders files and deletes selected file', async () => {
-    render(<CubeBoxFilesPage />)
+    renderCubeBoxFilesPage()
 
     await waitFor(() => expect(cubeboxAPIMocks.listCubeBoxFiles).toHaveBeenCalled())
     expect(screen.getByTestId('cubebox-file-item')).toHaveTextContent('design.txt')
@@ -51,4 +62,26 @@ describe('CubeBoxFilesPage', () => {
 
     await waitFor(() => expect(cubeboxAPIMocks.deleteCubeBoxFile).toHaveBeenCalledWith('file_1'))
   }, 10000)
+
+  it('uses normalized api error message when file load fails', async () => {
+    cubeboxAPIMocks.listCubeBoxFiles.mockRejectedValue(
+      new ApiClientError('legacy message', 'SERVER_ERROR', 500, 'trace_1', {
+        code: 'cubebox_files_list_failed',
+        message: '加载 CubeBox 文件列表失败，请稍后重试。'
+      })
+    )
+
+    renderCubeBoxFilesPage()
+
+    expect(await screen.findByText('加载 CubeBox 文件列表失败，请稍后重试。')).toBeInTheDocument()
+  })
+
+  it('keeps file-load fallback localized to the current app locale', async () => {
+    window.localStorage.setItem('web-mui-locale', 'en')
+    cubeboxAPIMocks.listCubeBoxFiles.mockRejectedValue(new ApiClientError('网络错误', 'NETWORK_ERROR'))
+
+    renderCubeBoxFilesPage()
+
+    expect(await screen.findByText('Failed to load files.')).toBeInTheDocument()
+  })
 })
