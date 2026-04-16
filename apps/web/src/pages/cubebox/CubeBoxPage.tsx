@@ -44,6 +44,14 @@ function messageForError(error: unknown, fallback: string): string {
   return fallback
 }
 
+function cubeBoxFileLabel(file: CubeBoxFile): string {
+  return file.filename ?? file.file_name
+}
+
+function cubeBoxFileContentType(file: CubeBoxFile): string {
+  return file.content_type ?? file.media_type
+}
+
 function healthColor(value: string): 'default' | 'success' | 'warning' | 'error' {
   if (value === 'healthy') return 'success'
   if (value === 'degraded') return 'warning'
@@ -465,7 +473,7 @@ export function CubeBoxPage() {
                 </Stack>
                 <Stack direction='row' spacing={1} useFlexGap flexWrap='wrap'>
                   {files.map((file) => (
-                    <Chip key={file.file_id} label={`${file.file_name} · ${file.media_type}`} size='small' variant='outlined' />
+                    <Chip key={file.file_id} label={`${cubeBoxFileLabel(file)} · ${cubeBoxFileContentType(file)}`} size='small' variant='outlined' />
                   ))}
                   {files.length === 0 ? (
                     <Typography color='text.secondary' variant='body2'>

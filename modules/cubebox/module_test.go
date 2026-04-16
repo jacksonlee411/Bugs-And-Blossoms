@@ -27,6 +27,13 @@ func TestNewLocalFileService(t *testing.T) {
 	}
 }
 
+func TestNewPGFileService(t *testing.T) {
+	svc := NewPGFileService(fakeBeginner{}, t.TempDir())
+	if svc == nil {
+		t.Fatal("expected pg file service")
+	}
+}
+
 func TestDefaultLocalFileRoot(t *testing.T) {
 	t.Run("prefers environment override", func(t *testing.T) {
 		t.Setenv("CUBEBOX_FILE_ROOT", " /tmp/cubebox-root ")

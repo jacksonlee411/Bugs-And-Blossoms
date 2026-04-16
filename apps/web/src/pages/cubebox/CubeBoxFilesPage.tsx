@@ -24,6 +24,26 @@ function messageForError(error: unknown, fallback: string): string {
   return fallback
 }
 
+function fileLabel(item: CubeBoxFile): string {
+  return item.filename ?? item.file_name
+}
+
+function fileContentType(item: CubeBoxFile): string {
+  return item.content_type ?? item.media_type
+}
+
+function fileCreatedAt(item: CubeBoxFile): string {
+  return item.created_at ?? item.uploaded_at
+}
+
+function fileConversationID(item: CubeBoxFile): string | undefined {
+  if (typeof item.conversation_id === 'string' && item.conversation_id.trim().length > 0) {
+    return item.conversation_id
+  }
+  const firstLink = Array.isArray(item.links) ? item.links[0] : undefined
+  return firstLink?.conversation_id
+}
+
 export function CubeBoxFilesPage() {
   const fileInputRef = useRef<HTMLInputElement | null>(null)
   const [items, setItems] = useState<CubeBoxFile[]>([])
@@ -120,10 +140,10 @@ export function CubeBoxFilesPage() {
                 )}
               >
                 <ListItemText
-                  primary={item.file_name}
-                  secondary={`${item.media_type} · ${item.size_bytes} bytes · ${item.uploaded_at}`}
+                  primary={fileLabel(item)}
+                  secondary={`${fileContentType(item)} · ${item.size_bytes} bytes · ${fileCreatedAt(item)}`}
                 />
-                {item.conversation_id ? <Chip label={item.conversation_id} size='small' variant='outlined' /> : null}
+                {fileConversationID(item) ? <Chip label={fileConversationID(item)} size='small' variant='outlined' /> : null}
               </ListItem>
             ))}
             {items.length === 0 ? (

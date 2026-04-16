@@ -58,6 +58,9 @@ func (s *stubCubeBoxFileStore) Save(_ context.Context, tenantID string, actorID 
 func (s *stubCubeBoxFileStore) Delete(_ context.Context, tenantID string, fileID string) (bool, error) {
 	s.deleteTenant = tenantID
 	s.deleteFileID = fileID
+	if errors.Is(s.deleteErr, cubeboxservices.ErrFileNotFound) {
+		return false, s.deleteErr
+	}
 	return s.deleteResult, s.deleteErr
 }
 
@@ -75,7 +78,7 @@ func TestCubeBoxFilesAPI(t *testing.T) {
 
 	t.Run("post routes to upload", func(t *testing.T) {
 		store := &stubCubeBoxFileStore{
-			saveResult: cubeboxservices.FileRecord{FileID: "file-routed", FileName: "hello.txt"},
+			saveResult: cubeboxservices.FileRecord{FileID: "file-routed", Filename: "hello.txt", FileName: "hello.txt"},
 		}
 		svc := cubeboxservices.NewFileService(store)
 		req := newCubeBoxUploadRequest(t, "conversation-2", "hello.txt", "", []byte("hello"))
@@ -95,6 +98,10 @@ func TestCubeBoxFilesAPI(t *testing.T) {
 		store := &stubCubeBoxFileStore{
 			listResult: []cubeboxservices.FileRecord{{
 				FileID:         "file-1",
+				Filename:       "doc.txt",
+				ContentType:    "text/plain",
+				CreatedAt:      "2026-04-15T00:00:00Z",
+				ScanStatus:     "ready",
 				ConversationID: "conversation-1",
 				FileName:       "doc.txt",
 				MediaType:      "text/plain",
@@ -157,6 +164,10 @@ func TestCubeBoxFilesAPI(t *testing.T) {
 		store := &stubCubeBoxFileStore{
 			saveResult: cubeboxservices.FileRecord{
 				FileID:         "file-2",
+				Filename:       "hello.txt",
+				ContentType:    "text/plain; charset=utf-8",
+				CreatedAt:      "2026-04-15T00:00:00Z",
+				ScanStatus:     "ready",
 				ConversationID: "conversation-2",
 				FileName:       "hello.txt",
 				MediaType:      "text/plain; charset=utf-8",
@@ -255,7 +266,7 @@ func TestCubeBoxFilesAPI(t *testing.T) {
 			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
 		}
 
-		store.saveErr = errors.New("file_name required")
+		store.saveErr = cubeboxservices.ErrFileUploadInvalid
 		req = newCubeBoxUploadRequest(t, "", "hello.txt", "text/plain", []byte("hello"))
 		req = req.WithContext(withTenant(withPrincipal(req.Context(), Principal{ID: "actor-1"}), Tenant{ID: "tenant-a"}))
 		rec = httptest.NewRecorder()
@@ -316,7 +327,7 @@ func TestCubeBoxFilesAPI(t *testing.T) {
 			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
 		}
 
-		store.deleteErr = nil
+		store.deleteErr = cubeboxservices.ErrFileNotFound
 		store.deleteResult = false
 		rec = httptest.NewRecorder()
 		req = httptest.NewRequest(http.MethodDelete, "/internal/cubebox/files/file-1", nil)
@@ -326,6 +337,16 @@ func TestCubeBoxFilesAPI(t *testing.T) {
 			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
 		}
 
+		store.deleteErr = cubeboxservices.ErrFileDeleteBlocked
+		rec = httptest.NewRecorder()
+		req = httptest.NewRequest(http.MethodDelete, "/internal/cubebox/files/file-1", nil)
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "tenant-a"}))
+		handleCubeBoxFileDeleteAPI(rec, req, svc)
+		if rec.Code != http.StatusConflict {
+			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+		}
+
+		store.deleteErr = nil
 		store.deleteResult = true
 		rec = httptest.NewRecorder()
 		req = httptest.NewRequest(http.MethodDelete, "/internal/cubebox/files/file-1", nil)

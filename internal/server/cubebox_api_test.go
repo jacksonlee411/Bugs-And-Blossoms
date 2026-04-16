@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	cubeboxmodule "github.com/jacksonlee411/Bugs-And-Blossoms/modules/cubebox"
 	cubeboxdomain "github.com/jacksonlee411/Bugs-And-Blossoms/modules/cubebox/domain"
@@ -1367,11 +1368,39 @@ func TestCubeBoxRuntimeStatusAPI(t *testing.T) {
 			t.Fatalf("payload=%+v", payload)
 		}
 	})
+
+	t.Run("file metadata repo unavailable", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodGet, "/internal/cubebox/runtime-status", nil)
+		svc := &assistantConversationService{
+			modelGateway: &assistantModelGateway{},
+		}
+		fileSvc := cubeboxservices.NewFileService(runtimeHealthyFileRepo{healthyErr: errors.New("repo unavailable")}, runtimeHealthyObjectStore{})
+		facade := newCubeBoxFacade(nil, svc, fileSvc)
+
+		handleCubeBoxRuntimeStatusAPI(rec, req, facade)
+		var payload cubeboxdomain.RuntimeStatus
+		if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+			t.Fatal(err)
+		}
+		if payload.Status != "unavailable" {
+			t.Fatalf("payload=%+v", payload)
+		}
+		if payload.FileStore.Reason != "file_store_unavailable" {
+			t.Fatalf("payload=%+v", payload)
+		}
+	})
 }
 
 type runtimeHealthyFileStore struct {
 	healthyErr error
 }
+
+type runtimeHealthyFileRepo struct {
+	healthyErr error
+}
+
+type runtimeHealthyObjectStore struct{}
 
 type stubCubeBoxRuntimeProbe struct {
 	models    []cubeboxdomain.ModelEntry
@@ -1409,6 +1438,41 @@ func (s *runtimeHealthyFileStore) Delete(_ context.Context, _ string, _ string) 
 func (s *runtimeHealthyFileStore) Healthy(context.Context) error {
 	return s.healthyErr
 }
+
+func (s runtimeHealthyFileRepo) ListFiles(context.Context, string, string, int32) ([]cubeboxservices.FileMetadata, error) {
+	return nil, nil
+}
+func (s runtimeHealthyFileRepo) ListFileLinks(context.Context, string, string) ([]cubeboxservices.FileLinkRef, error) {
+	return nil, nil
+}
+func (s runtimeHealthyFileRepo) ListTenantFileLinks(context.Context, string) ([]cubeboxservices.FileLinkRef, error) {
+	return nil, nil
+}
+func (s runtimeHealthyFileRepo) GetFile(context.Context, string, string) (cubeboxservices.FileMetadata, error) {
+	return cubeboxservices.FileMetadata{}, nil
+}
+func (s runtimeHealthyFileRepo) ConversationExists(context.Context, string, string) (bool, error) {
+	return false, nil
+}
+func (s runtimeHealthyFileRepo) CreateFile(context.Context, string, cubeboxservices.FileObject, string, string, string, time.Time) (cubeboxservices.FileMetadata, []cubeboxservices.FileLinkRef, error) {
+	return cubeboxservices.FileMetadata{}, nil, nil
+}
+func (s runtimeHealthyFileRepo) CountFileLinks(context.Context, string, string) (int64, error) {
+	return 0, nil
+}
+func (s runtimeHealthyFileRepo) DeleteFile(context.Context, string, string) (int64, error) {
+	return 0, nil
+}
+func (s runtimeHealthyFileRepo) InsertFileCleanupJob(context.Context, string, cubeboxservices.FileCleanupJob, time.Time) error {
+	return nil
+}
+func (s runtimeHealthyFileRepo) Healthy(context.Context, string) error { return s.healthyErr }
+
+func (runtimeHealthyObjectStore) SaveObject(context.Context, string, string, string, string, io.Reader) (cubeboxservices.FileObject, error) {
+	return cubeboxservices.FileObject{}, nil
+}
+func (runtimeHealthyObjectStore) DeleteObject(context.Context, string) error { return nil }
+func (runtimeHealthyObjectStore) Healthy(context.Context) error              { return nil }
 
 func TestAssistantNamespaceSegment(t *testing.T) {
 	t.Parallel()

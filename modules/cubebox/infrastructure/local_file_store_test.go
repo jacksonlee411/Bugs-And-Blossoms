@@ -5,120 +5,53 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
-	"errors"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 )
 
-func TestLocalFileStoreLifecycle(t *testing.T) {
+func TestLocalFileStoreObjectLifecycle(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
 	store := NewLocalFileStore(t.TempDir())
 
-	first, err := store.Save(ctx, "tenant-a", "actor-1", "conversation-a", " notes.txt ", "", strings.NewReader("hello cubebox"))
+	object, err := store.SaveObject(ctx, "tenant-a", "file_test", " notes.txt ", "", strings.NewReader("hello cubebox"))
 	if err != nil {
-		t.Fatalf("save first: %v", err)
+		t.Fatalf("save object: %v", err)
 	}
-	second, err := store.Save(ctx, "tenant-a", "actor-1", "conversation-b", "report.pdf", "application/pdf", strings.NewReader("second file"))
-	if err != nil {
-		t.Fatalf("save second: %v", err)
+	if object.StorageProvider != localFileStorageProvider {
+		t.Fatalf("unexpected provider: %q", object.StorageProvider)
 	}
-	if !strings.HasPrefix(first.FileID, "file_") {
-		t.Fatalf("expected file id prefix, got %q", first.FileID)
+	if object.Filename != "notes.txt" {
+		t.Fatalf("unexpected filename: %q", object.Filename)
 	}
-	if first.FileName != "notes.txt" {
-		t.Fatalf("expected sanitized file name, got %q", first.FileName)
+	if object.ContentType != "application/octet-stream" {
+		t.Fatalf("unexpected content type: %q", object.ContentType)
 	}
-	if first.MediaType != "application/octet-stream" {
-		t.Fatalf("expected default media type, got %q", first.MediaType)
-	}
-	if second.MediaType != "application/pdf" {
-		t.Fatalf("expected explicit media type, got %q", second.MediaType)
-	}
-	if first.UploadedAt == "" || second.UploadedAt == "" {
-		t.Fatal("expected uploaded_at")
+	if object.StorageKey != "tenant-a/file_test/notes.txt" {
+		t.Fatalf("unexpected storage key: %q", object.StorageKey)
 	}
 
-	rawPath := filepath.Join(store.filesDir(), filepath.FromSlash(first.StorageKey))
-	raw, err := os.ReadFile(rawPath)
+	fullPath := filepath.Join(store.filesDir(), filepath.FromSlash(object.StorageKey))
+	raw, err := os.ReadFile(fullPath)
 	if err != nil {
 		t.Fatalf("read stored file: %v", err)
 	}
 	sum := sha256.Sum256([]byte("hello cubebox"))
-	if got := hex.EncodeToString(sum[:]); first.SHA256 != got {
-		t.Fatalf("sha mismatch: got %q want %q", first.SHA256, got)
+	if got := hex.EncodeToString(sum[:]); object.SHA256 != got {
+		t.Fatalf("sha mismatch: got %q want %q", object.SHA256, got)
 	}
 	if string(raw) != "hello cubebox" {
-		t.Fatalf("unexpected file content: %q", string(raw))
+		t.Fatalf("unexpected object content: %q", string(raw))
 	}
 
-	list, err := store.List(ctx, "tenant-a", "")
-	if err != nil {
-		t.Fatalf("list tenant: %v", err)
+	if err := store.DeleteObject(ctx, object.StorageKey); err != nil {
+		t.Fatalf("delete object: %v", err)
 	}
-	if len(list) != 2 {
-		t.Fatalf("expected 2 files, got %d", len(list))
-	}
-	if list[0].UploadedAt < list[1].UploadedAt {
-		t.Fatalf("expected descending uploaded_at order: %+v", list)
-	}
-
-	conversationList, err := store.List(ctx, "tenant-a", "conversation-a")
-	if err != nil {
-		t.Fatalf("list conversation: %v", err)
-	}
-	if len(conversationList) != 1 || conversationList[0].FileID != first.FileID {
-		t.Fatalf("unexpected conversation list: %+v", conversationList)
-	}
-
-	otherTenant, err := store.List(ctx, "tenant-b", "")
-	if err != nil {
-		t.Fatalf("list other tenant: %v", err)
-	}
-	if len(otherTenant) != 0 {
-		t.Fatalf("expected empty list, got %+v", otherTenant)
-	}
-
-	removed, err := store.Delete(ctx, "tenant-a", first.FileID)
-	if err != nil {
-		t.Fatalf("delete first: %v", err)
-	}
-	if !removed {
-		t.Fatal("expected first file deleted")
-	}
-	if _, err := os.Stat(rawPath); !os.IsNotExist(err) {
+	if _, err := os.Stat(fullPath); !os.IsNotExist(err) {
 		t.Fatalf("expected file removed, stat err=%v", err)
-	}
-
-	missingPath := filepath.Join(store.filesDir(), filepath.FromSlash(second.StorageKey))
-	if err := os.Remove(missingPath); err != nil {
-		t.Fatalf("remove underlying file before delete: %v", err)
-	}
-	removed, err = store.Delete(ctx, "tenant-a", second.FileID)
-	if err != nil {
-		t.Fatalf("delete second after manual remove: %v", err)
-	}
-	if !removed {
-		t.Fatal("expected second file deleted")
-	}
-
-	removed, err = store.Delete(ctx, "tenant-a", "missing")
-	if err != nil {
-		t.Fatalf("delete missing: %v", err)
-	}
-	if removed {
-		t.Fatal("expected missing delete to return false")
-	}
-
-	index, err := store.readIndex()
-	if err != nil {
-		t.Fatalf("read index after deletes: %v", err)
-	}
-	if len(index.Items) != 0 {
-		t.Fatalf("expected empty index, got %+v", index.Items)
 	}
 }
 
@@ -128,18 +61,18 @@ func TestLocalFileStoreValidationAndHelpers(t *testing.T) {
 	ctx := context.Background()
 	store := NewLocalFileStore(t.TempDir())
 
-	if _, err := store.Save(ctx, "", "actor-1", "", "a.txt", "", strings.NewReader("x")); err == nil || !strings.Contains(err.Error(), "tenant_id required") {
-		t.Fatalf("expected tenant_id required, got %v", err)
+	if _, err := store.SaveObject(ctx, "", "file_test", "a.txt", "", strings.NewReader("x")); err == nil {
+		t.Fatal("expected tenant error")
 	}
-	if _, err := store.Save(ctx, "tenant-a", "", "", "a.txt", "", strings.NewReader("x")); err == nil || !strings.Contains(err.Error(), "uploaded_by required") {
-		t.Fatalf("expected uploaded_by required, got %v", err)
+	if _, err := store.SaveObject(ctx, "tenant-a", "", "a.txt", "", strings.NewReader("x")); err == nil {
+		t.Fatal("expected file id error")
 	}
-	if _, err := store.Save(ctx, "tenant-a", "actor-1", "", "", "", strings.NewReader("x")); err == nil || !strings.Contains(err.Error(), "file_name required") {
-		t.Fatalf("expected file_name required, got %v", err)
+	if _, err := store.SaveObject(ctx, "tenant-a", "file_test", "", "", strings.NewReader("x")); err == nil {
+		t.Fatal("expected filename error")
 	}
 
 	tooLarge := bytes.NewReader(make([]byte, maxFileSizeBytes+1))
-	if _, err := store.Save(ctx, "tenant-a", "actor-1", "", "huge.bin", "", tooLarge); err == nil || !strings.Contains(err.Error(), "file exceeds") {
+	if _, err := store.SaveObject(ctx, "tenant-a", "file_test", "huge.bin", "", tooLarge); err == nil || !strings.Contains(err.Error(), "file exceeds") {
 		t.Fatalf("expected size error, got %v", err)
 	}
 
@@ -165,32 +98,6 @@ func TestLocalFileStoreValidationAndHelpers(t *testing.T) {
 	}
 }
 
-func TestLocalFileStoreReadIndexHandlesEmptyAndInvalidJSON(t *testing.T) {
-	t.Parallel()
-
-	ctx := context.Background()
-	root := t.TempDir()
-	store := NewLocalFileStore(root)
-
-	if err := os.WriteFile(store.indexPath(), nil, 0o644); err != nil {
-		t.Fatalf("write empty index: %v", err)
-	}
-	items, err := store.List(ctx, "tenant-a", "")
-	if err != nil {
-		t.Fatalf("list empty index: %v", err)
-	}
-	if len(items) != 0 {
-		t.Fatalf("expected empty list, got %+v", items)
-	}
-
-	if err := os.WriteFile(store.indexPath(), []byte("{"), 0o644); err != nil {
-		t.Fatalf("write invalid index: %v", err)
-	}
-	if _, err := store.List(ctx, "tenant-a", ""); err == nil {
-		t.Fatal("expected invalid json error")
-	}
-}
-
 func TestLocalFileStoreIOFailurePaths(t *testing.T) {
 	t.Parallel()
 
@@ -202,68 +109,15 @@ func TestLocalFileStoreIOFailurePaths(t *testing.T) {
 			t.Fatalf("write root file: %v", err)
 		}
 		store := NewLocalFileStore(rootFile)
-		if _, err := store.Save(ctx, "tenant-a", "actor-1", "", "a.txt", "", strings.NewReader("payload")); err == nil {
+		if _, err := store.SaveObject(ctx, "tenant-a", "file_test", "a.txt", "", strings.NewReader("payload")); err == nil {
 			t.Fatal("expected save root mkdir error")
 		}
 	})
 
-	t.Run("save fails when files dir parent is blocked by file", func(t *testing.T) {
-		root := t.TempDir()
-		store := NewLocalFileStore(root)
-		if err := os.WriteFile(store.indexPath(), []byte("{}"), 0o644); err != nil {
-			t.Fatalf("seed index: %v", err)
-		}
-		if err := os.RemoveAll(store.filesDir()); err != nil {
-			t.Fatalf("remove files dir: %v", err)
-		}
-		if err := os.WriteFile(store.filesDir(), []byte("blocked"), 0o644); err != nil {
-			t.Fatalf("write blocking file: %v", err)
-		}
-		if _, err := store.Save(ctx, "tenant-a", "actor-1", "", "a.txt", "", strings.NewReader("payload")); err == nil {
-			t.Fatal("expected save mkdir error")
-		}
-	})
-
-	t.Run("delete fails when index path parent is blocked by file", func(t *testing.T) {
-		root := t.TempDir()
-		store := NewLocalFileStore(root)
-		record, err := store.Save(ctx, "tenant-a", "actor-1", "", "a.txt", "", strings.NewReader("payload"))
-		if err != nil {
-			t.Fatalf("save file: %v", err)
-		}
-		if err := os.Remove(store.indexPath()); err != nil {
-			t.Fatalf("remove index: %v", err)
-		}
-		blockerDir := filepath.Dir(store.indexPath())
-		if err := os.RemoveAll(blockerDir); err != nil {
-			t.Fatalf("remove blocker dir: %v", err)
-		}
-		if err := os.WriteFile(blockerDir, []byte("blocked"), 0o644); err != nil {
-			t.Fatalf("write blocker file: %v", err)
-		}
-		removed, err := store.Delete(ctx, "tenant-a", record.FileID)
-		if err == nil {
-			t.Fatal("expected delete index write error")
-		}
-		if removed {
-			t.Fatal("expected delete failure to report not removed")
-		}
-	})
-
-	t.Run("read index propagates read file error", func(t *testing.T) {
-		root := t.TempDir()
-		store := NewLocalFileStore(root)
-		if err := os.MkdirAll(root, 0o755); err != nil {
-			t.Fatalf("mkdir root: %v", err)
-		}
-		if err := os.Remove(store.indexPath()); err != nil && !errors.Is(err, os.ErrNotExist) {
-			t.Fatalf("remove index: %v", err)
-		}
-		if err := os.Mkdir(store.indexPath(), 0o755); err != nil {
-			t.Fatalf("mkdir at index path: %v", err)
-		}
-		if _, err := store.readIndex(); err == nil {
-			t.Fatal("expected read index error")
+	t.Run("delete ignores missing object", func(t *testing.T) {
+		store := NewLocalFileStore(t.TempDir())
+		if err := store.DeleteObject(ctx, "tenant-a/file_x/missing.txt"); err != nil {
+			t.Fatalf("expected missing delete ignored, got %v", err)
 		}
 	})
 }

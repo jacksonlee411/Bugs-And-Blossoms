@@ -15,6 +15,13 @@ import (
 	cubeboxsqlc "github.com/jacksonlee411/Bugs-And-Blossoms/modules/cubebox/infrastructure/sqlc/gen"
 )
 
+const (
+	fileScanStatusReady        = "ready"
+	fileCleanupStatusPending   = "pending"
+	fileCleanupReasonMetaWrite = "metadata_write_failed"
+	fileCleanupReasonObjDelete = "object_delete_failed"
+)
+
 type pgBeginner interface {
 	Begin(ctx context.Context) (pgx.Tx, error)
 }
@@ -656,7 +663,7 @@ func (s *PGStore) UpdateTaskDispatchOutbox(ctx context.Context, tenantID string,
 	return tx.Commit(ctx)
 }
 
-func (s *PGStore) ListFiles(ctx context.Context, tenantID string, conversationID string, limit int32) ([]cubeboxsqlc.IamCubeboxFile, error) {
+func (s *PGStore) ListFiles(ctx context.Context, tenantID string, conversationID string, limit int32) ([]cubeboxdomain.FileMetadata, error) {
 	if limit <= 0 {
 		limit = 200
 	}
@@ -691,17 +698,41 @@ func (s *PGStore) ListFiles(ctx context.Context, tenantID string, conversationID
 	if err := tx.Commit(ctx); err != nil {
 		return nil, err
 	}
-	return items, nil
+	return mapFileMetadataRows(items), nil
 }
 
-func (s *PGStore) GetFile(ctx context.Context, tenantID string, fileID string) (cubeboxsqlc.IamCubeboxFile, error) {
+func (s *PGStore) ConversationExists(ctx context.Context, tenantID string, conversationID string) (bool, error) {
 	tenantUUID, err := parseUUID(tenantID)
 	if err != nil {
-		return cubeboxsqlc.IamCubeboxFile{}, err
+		return false, err
 	}
 	tx, queries, err := s.beginTenantTx(ctx, tenantID)
 	if err != nil {
-		return cubeboxsqlc.IamCubeboxFile{}, err
+		return false, err
+	}
+	defer func() { _ = tx.Rollback(context.Background()) }()
+
+	exists, err := queries.ConversationExists(ctx, cubeboxsqlc.ConversationExistsParams{
+		TenantUuid:     tenantUUID,
+		ConversationID: conversationID,
+	})
+	if err != nil {
+		return false, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return false, err
+	}
+	return exists, nil
+}
+
+func (s *PGStore) GetFile(ctx context.Context, tenantID string, fileID string) (cubeboxdomain.FileMetadata, error) {
+	tenantUUID, err := parseUUID(tenantID)
+	if err != nil {
+		return cubeboxdomain.FileMetadata{}, err
+	}
+	tx, queries, err := s.beginTenantTx(ctx, tenantID)
+	if err != nil {
+		return cubeboxdomain.FileMetadata{}, err
 	}
 	defer func() { _ = tx.Rollback(context.Background()) }()
 
@@ -710,12 +741,157 @@ func (s *PGStore) GetFile(ctx context.Context, tenantID string, fileID string) (
 		FileID:     fileID,
 	})
 	if err != nil {
-		return cubeboxsqlc.IamCubeboxFile{}, err
+		return cubeboxdomain.FileMetadata{}, err
 	}
 	if err := tx.Commit(ctx); err != nil {
-		return cubeboxsqlc.IamCubeboxFile{}, err
+		return cubeboxdomain.FileMetadata{}, err
 	}
-	return item, nil
+	return mapFileMetadataRow(item), nil
+}
+
+func (s *PGStore) InsertFile(
+	ctx context.Context,
+	tenantID string,
+	record cubeboxdomain.FileObject,
+	fileID string,
+	actorID string,
+	now time.Time,
+) (cubeboxdomain.FileMetadata, error) {
+	tenantUUID, err := parseUUID(tenantID)
+	if err != nil {
+		return cubeboxdomain.FileMetadata{}, err
+	}
+	tx, queries, err := s.beginTenantTx(ctx, tenantID)
+	if err != nil {
+		return cubeboxdomain.FileMetadata{}, err
+	}
+	defer func() { _ = tx.Rollback(context.Background()) }()
+
+	inserted, err := queries.InsertFile(ctx, cubeboxsqlc.InsertFileParams{
+		TenantUuid:      tenantUUID,
+		FileID:          strings.TrimSpace(fileID),
+		StorageProvider: strings.TrimSpace(record.StorageProvider),
+		StorageKey:      strings.TrimSpace(record.StorageKey),
+		FileName:        strings.TrimSpace(record.Filename),
+		MediaType:       strings.TrimSpace(record.ContentType),
+		SizeBytes:       record.SizeBytes,
+		Sha256:          strings.TrimSpace(record.SHA256),
+		ScanStatus:      fileScanStatusReady,
+		UploadedBy:      strings.TrimSpace(actorID),
+		UploadedAt:      timestamptzValue(now),
+		UpdatedAt:       timestamptzValue(now),
+	})
+	if err != nil {
+		return cubeboxdomain.FileMetadata{}, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return cubeboxdomain.FileMetadata{}, err
+	}
+	return mapFileMetadataRow(inserted), nil
+}
+
+func (s *PGStore) CreateFile(
+	ctx context.Context,
+	tenantID string,
+	record cubeboxdomain.FileObject,
+	fileID string,
+	actorID string,
+	conversationID string,
+	now time.Time,
+) (cubeboxdomain.FileMetadata, []cubeboxdomain.FileLinkRef, error) {
+	tenantUUID, err := parseUUID(tenantID)
+	if err != nil {
+		return cubeboxdomain.FileMetadata{}, nil, err
+	}
+	tx, queries, err := s.beginTenantTx(ctx, tenantID)
+	if err != nil {
+		return cubeboxdomain.FileMetadata{}, nil, err
+	}
+	defer func() { _ = tx.Rollback(context.Background()) }()
+
+	inserted, err := queries.InsertFile(ctx, cubeboxsqlc.InsertFileParams{
+		TenantUuid:      tenantUUID,
+		FileID:          strings.TrimSpace(fileID),
+		StorageProvider: strings.TrimSpace(record.StorageProvider),
+		StorageKey:      strings.TrimSpace(record.StorageKey),
+		FileName:        strings.TrimSpace(record.Filename),
+		MediaType:       strings.TrimSpace(record.ContentType),
+		SizeBytes:       record.SizeBytes,
+		Sha256:          strings.TrimSpace(record.SHA256),
+		ScanStatus:      fileScanStatusReady,
+		UploadedBy:      strings.TrimSpace(actorID),
+		UploadedAt:      timestamptzValue(now),
+		UpdatedAt:       timestamptzValue(now),
+	})
+	if err != nil {
+		return cubeboxdomain.FileMetadata{}, nil, err
+	}
+
+	links := []cubeboxsqlc.IamCubeboxFileLink{}
+	if strings.TrimSpace(conversationID) != "" {
+		link, linkErr := queries.InsertConversationFileLink(ctx, cubeboxsqlc.InsertConversationFileLinkParams{
+			TenantUuid:     tenantUUID,
+			FileID:         strings.TrimSpace(fileID),
+			ConversationID: strings.TrimSpace(conversationID),
+			CreatedBy:      strings.TrimSpace(actorID),
+		})
+		if linkErr != nil {
+			return cubeboxdomain.FileMetadata{}, nil, linkErr
+		}
+		links = append(links, link)
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return cubeboxdomain.FileMetadata{}, nil, err
+	}
+	return mapFileMetadataRow(inserted), mapFileLinkRefs(links), nil
+}
+
+func (s *PGStore) CountFileLinks(ctx context.Context, tenantID string, fileID string) (int64, error) {
+	tenantUUID, err := parseUUID(tenantID)
+	if err != nil {
+		return 0, err
+	}
+	tx, queries, err := s.beginTenantTx(ctx, tenantID)
+	if err != nil {
+		return 0, err
+	}
+	defer func() { _ = tx.Rollback(context.Background()) }()
+
+	count, err := queries.CountFileLinksByFileID(ctx, cubeboxsqlc.CountFileLinksByFileIDParams{
+		TenantUuid: tenantUUID,
+		FileID:     fileID,
+	})
+	if err != nil {
+		return 0, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return 0, err
+	}
+	return count, nil
+}
+
+func (s *PGStore) DeleteFile(ctx context.Context, tenantID string, fileID string) (int64, error) {
+	tenantUUID, err := parseUUID(tenantID)
+	if err != nil {
+		return 0, err
+	}
+	tx, queries, err := s.beginTenantTx(ctx, tenantID)
+	if err != nil {
+		return 0, err
+	}
+	defer func() { _ = tx.Rollback(context.Background()) }()
+
+	rows, err := queries.DeleteFileByID(ctx, cubeboxsqlc.DeleteFileByIDParams{
+		TenantUuid: tenantUUID,
+		FileID:     fileID,
+	})
+	if err != nil {
+		return 0, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return 0, err
+	}
+	return rows, nil
 }
 
 func timestamptzPtr(ts *time.Time) pgtype.Timestamptz {
@@ -729,7 +905,7 @@ func timestamptzValue(ts time.Time) pgtype.Timestamptz {
 	return pgtype.Timestamptz{Time: ts.UTC(), Valid: !ts.IsZero()}
 }
 
-func (s *PGStore) ListConversationFileLinks(ctx context.Context, tenantID string, conversationID string) ([]cubeboxsqlc.IamCubeboxFileLink, error) {
+func (s *PGStore) ListConversationFileLinks(ctx context.Context, tenantID string, conversationID string) ([]cubeboxdomain.FileLinkRef, error) {
 	tenantUUID, err := parseUUID(tenantID)
 	if err != nil {
 		return nil, err
@@ -750,7 +926,116 @@ func (s *PGStore) ListConversationFileLinks(ctx context.Context, tenantID string
 	if err := tx.Commit(ctx); err != nil {
 		return nil, err
 	}
-	return items, nil
+	return mapFileLinkRefs(items), nil
+}
+
+func (s *PGStore) ListFileLinks(ctx context.Context, tenantID string, fileID string) ([]cubeboxdomain.FileLinkRef, error) {
+	tenantUUID, err := parseUUID(tenantID)
+	if err != nil {
+		return nil, err
+	}
+	tx, queries, err := s.beginTenantTx(ctx, tenantID)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = tx.Rollback(context.Background()) }()
+
+	items, err := queries.ListFileLinksByFileID(ctx, cubeboxsqlc.ListFileLinksByFileIDParams{
+		TenantUuid: tenantUUID,
+		FileID:     fileID,
+	})
+	if err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return nil, err
+	}
+	return mapFileLinkRefs(items), nil
+}
+
+func (s *PGStore) ListTenantFileLinks(ctx context.Context, tenantID string) ([]cubeboxdomain.FileLinkRef, error) {
+	tenantUUID, err := parseUUID(tenantID)
+	if err != nil {
+		return nil, err
+	}
+	tx, queries, err := s.beginTenantTx(ctx, tenantID)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = tx.Rollback(context.Background()) }()
+
+	items, err := queries.ListFileLinksByTenant(ctx, tenantUUID)
+	if err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return nil, err
+	}
+	return mapFileLinkRefs(items), nil
+}
+
+func (s *PGStore) InsertFileCleanupJob(ctx context.Context, tenantID string, job cubeboxdomain.FileCleanupJob, now time.Time) error {
+	tenantUUID, err := parseUUID(tenantID)
+	if err != nil {
+		return err
+	}
+	tx, queries, err := s.beginTenantTx(ctx, tenantID)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback(context.Background()) }()
+
+	reason := strings.TrimSpace(job.CleanupReason)
+	switch reason {
+	case fileCleanupReasonMetaWrite, fileCleanupReasonObjDelete:
+	default:
+		reason = fileCleanupReasonMetaWrite
+	}
+
+	_, err = queries.InsertFileCleanupJob(ctx, cubeboxsqlc.InsertFileCleanupJobParams{
+		TenantUuid:      tenantUUID,
+		FileID:          strings.TrimSpace(job.FileID),
+		StorageProvider: strings.TrimSpace(job.StorageProvider),
+		StorageKey:      strings.TrimSpace(job.StorageKey),
+		CleanupReason:   reason,
+		Status:          fileCleanupStatusPending,
+		AttemptCount:    0,
+		NextRetryAt:     timestamptzValue(now),
+		LastError:       stringPtr(strings.TrimSpace(job.LastError)),
+		CreatedAt:       timestamptzValue(now),
+		UpdatedAt:       timestamptzValue(now),
+	})
+	if err != nil {
+		return err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (s *PGStore) Healthy(ctx context.Context, tenantID string) error {
+	tenantID = strings.TrimSpace(tenantID)
+	if tenantID == "" {
+		tenantID = uuid.Nil.String()
+	}
+	tenantUUID, err := parseUUID(tenantID)
+	if err != nil {
+		return err
+	}
+	tx, queries, err := s.beginTenantTx(ctx, tenantID)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback(context.Background()) }()
+
+	if _, err := queries.ListFilesByTenant(ctx, cubeboxsqlc.ListFilesByTenantParams{
+		TenantUuid: tenantUUID,
+		Limit:      1,
+	}); err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
 }
 
 func (s *PGStore) beginTenantTx(ctx context.Context, tenantID string) (pgx.Tx, *cubeboxsqlc.Queries, error) {
@@ -783,6 +1068,14 @@ func stringValue(value *string) string {
 		return ""
 	}
 	return strings.TrimSpace(*value)
+}
+
+func stringPtr(value string) *string {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return nil
+	}
+	return &value
 }
 
 func timePtr(ts time.Time) *time.Time {
@@ -943,8 +1236,52 @@ func mapDispatchOutboxRecords(items []cubeboxsqlc.IamCubeboxTaskDispatchOutbox) 
 	return out
 }
 
-func stringPtr(value string) *string {
-	trimmed := value
+func mapFileMetadataRow(item cubeboxsqlc.IamCubeboxFile) cubeboxdomain.FileMetadata {
+	return cubeboxdomain.FileMetadata{
+		FileID:          strings.TrimSpace(item.FileID),
+		Filename:        strings.TrimSpace(item.FileName),
+		ContentType:     strings.TrimSpace(item.MediaType),
+		SizeBytes:       item.SizeBytes,
+		SHA256:          strings.TrimSpace(item.Sha256),
+		StorageProvider: strings.TrimSpace(item.StorageProvider),
+		StorageKey:      strings.TrimSpace(item.StorageKey),
+		ScanStatus:      strings.TrimSpace(item.ScanStatus),
+		UploadedBy:      strings.TrimSpace(item.UploadedBy),
+		CreatedAt:       item.UploadedAt.Time.UTC(),
+		UpdatedAt:       item.UpdatedAt.Time.UTC(),
+	}
+}
+
+func mapFileMetadataRows(items []cubeboxsqlc.IamCubeboxFile) []cubeboxdomain.FileMetadata {
+	out := make([]cubeboxdomain.FileMetadata, 0, len(items))
+	for _, item := range items {
+		out = append(out, mapFileMetadataRow(item))
+	}
+	return out
+}
+
+func mapFileLinkRef(item cubeboxsqlc.IamCubeboxFileLink) cubeboxdomain.FileLinkRef {
+	return cubeboxdomain.FileLinkRef{
+		FileID:         strings.TrimSpace(item.FileID),
+		LinkRole:       strings.TrimSpace(item.LinkRole),
+		ConversationID: strings.TrimSpace(item.ConversationID),
+		TurnID:         stringValue(item.TurnID),
+	}
+}
+
+func mapFileLinkRefs(items []cubeboxsqlc.IamCubeboxFileLink) []cubeboxdomain.FileLinkRef {
+	out := make([]cubeboxdomain.FileLinkRef, 0, len(items))
+	for _, item := range items {
+		out = append(out, mapFileLinkRef(item))
+	}
+	return out
+}
+
+func nonEmptyStringPtr(value string) *string {
+	trimmed := strings.TrimSpace(value)
+	if trimmed == "" {
+		return nil
+	}
 	return &trimmed
 }
 

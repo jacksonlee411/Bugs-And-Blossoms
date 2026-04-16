@@ -261,6 +261,45 @@ func (s healthyFileStore) Save(context.Context, string, string, string, string, 
 func (s healthyFileStore) Delete(context.Context, string, string) (bool, error) { return false, nil }
 func (s healthyFileStore) Healthy(context.Context) error                        { return s.err }
 
+type runtimeHealthyFileRepo struct{ err error }
+
+func (s runtimeHealthyFileRepo) ListFiles(context.Context, string, string, int32) ([]FileMetadata, error) {
+	return nil, nil
+}
+func (s runtimeHealthyFileRepo) ListFileLinks(context.Context, string, string) ([]FileLinkRef, error) {
+	return nil, nil
+}
+func (s runtimeHealthyFileRepo) ListTenantFileLinks(context.Context, string) ([]FileLinkRef, error) {
+	return nil, nil
+}
+func (s runtimeHealthyFileRepo) GetFile(context.Context, string, string) (FileMetadata, error) {
+	return FileMetadata{}, nil
+}
+func (s runtimeHealthyFileRepo) ConversationExists(context.Context, string, string) (bool, error) {
+	return false, nil
+}
+func (s runtimeHealthyFileRepo) CreateFile(context.Context, string, FileObject, string, string, string, time.Time) (FileMetadata, []FileLinkRef, error) {
+	return FileMetadata{}, nil, nil
+}
+func (s runtimeHealthyFileRepo) CountFileLinks(context.Context, string, string) (int64, error) {
+	return 0, nil
+}
+func (s runtimeHealthyFileRepo) DeleteFile(context.Context, string, string) (int64, error) {
+	return 0, nil
+}
+func (s runtimeHealthyFileRepo) InsertFileCleanupJob(context.Context, string, FileCleanupJob, time.Time) error {
+	return nil
+}
+func (s runtimeHealthyFileRepo) Healthy(context.Context, string) error { return s.err }
+
+type runtimeHealthyObjectStore struct{ err error }
+
+func (s runtimeHealthyObjectStore) SaveObject(context.Context, string, string, string, string, io.Reader) (FileObject, error) {
+	return FileObject{}, nil
+}
+func (s runtimeHealthyObjectStore) DeleteObject(context.Context, string) error { return nil }
+func (s runtimeHealthyObjectStore) Healthy(context.Context) error              { return s.err }
+
 type stubFacadeFileStore struct {
 	listRecords []FileRecord
 	saveRecord  FileRecord
@@ -2130,7 +2169,7 @@ func TestFacadeRuntimeStatus(t *testing.T) {
 		backend:   cubeboxdomain.RuntimeComponentStatus{Healthy: healthHealthy},
 		knowledge: cubeboxdomain.RuntimeComponentStatus{Healthy: healthDegraded, Reason: "knowledge_runtime_unavailable"},
 		modelGate: cubeboxdomain.RuntimeComponentStatus{Healthy: healthHealthy},
-	}, NewFileService(healthyFileStore{}), nil)
+	}, NewFileService(runtimeHealthyFileRepo{}, runtimeHealthyObjectStore{}), nil)
 	facade.nowFn = func() time.Time { return time.Date(2026, 4, 15, 0, 0, 0, 0, time.UTC) }
 	status := facade.RuntimeStatus(context.Background())
 	if status.Status != healthDegraded {
@@ -2158,7 +2197,7 @@ func TestFacadeRuntimeStatusUnavailableBranches(t *testing.T) {
 	t.Run("file store unhealthy and empty runtime components", func(t *testing.T) {
 		facade := NewFacade(nil, stubRuntimeProbe{
 			backend: cubeboxdomain.RuntimeComponentStatus{Healthy: healthHealthy},
-		}, NewFileService(healthyFileStore{err: errors.New("down")}), nil)
+		}, NewFileService(runtimeHealthyFileRepo{err: errors.New("repo down")}, runtimeHealthyObjectStore{}), nil)
 		facade.nowFn = func() time.Time { return time.Date(2026, 4, 15, 0, 0, 0, 0, time.UTC) }
 		status := facade.RuntimeStatus(context.Background())
 		if status.Status != healthUnavailable ||

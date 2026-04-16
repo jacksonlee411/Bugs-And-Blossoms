@@ -258,8 +258,12 @@ func knownErrorMessage(code string) string {
 		return "加载 CubeBox 文件列表失败，请稍后重试。"
 	case "cubebox_file_delete_failed":
 		return "CubeBox 文件删除失败，请稍后重试。"
+	case "cubebox_file_delete_blocked":
+		return "该 CubeBox 文件仍被引用，暂不能删除。"
 	case "cubebox_file_not_found":
 		return "未找到 CubeBox 文件。"
+	case "cubebox_file_upload_invalid":
+		return "CubeBox 文件上传参数无效，请检查后重试。"
 	case "librechat_retired":
 		return "LibreChat 入口已退役，请改用 CubeBox 正式入口。"
 	default:

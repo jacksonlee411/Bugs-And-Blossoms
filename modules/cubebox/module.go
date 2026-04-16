@@ -21,7 +21,7 @@ func NewPGStore(pool PGBeginner) *persistence.PGStore {
 }
 
 func NewLocalFileService(rootDir string) *services.FileService {
-	return services.NewFileService(infrastructure.NewLocalFileStore(rootDir))
+	return services.NewFileService(nil, infrastructure.NewLocalFileStore(rootDir))
 }
 
 func DefaultLocalFileRoot() string {
@@ -37,6 +37,13 @@ func DefaultLocalFileRoot() string {
 
 func NewDefaultLocalFileService() *services.FileService {
 	return NewLocalFileService(DefaultLocalFileRoot())
+}
+
+func NewPGFileService(pool PGBeginner, rootDir string) *services.FileService {
+	if pool == nil {
+		return NewLocalFileService(rootDir)
+	}
+	return services.NewFileService(NewPGStore(pool), infrastructure.NewLocalFileStore(rootDir))
 }
 
 func NewFacade(store *persistence.PGStore, runtime services.RuntimeProbe, fileSvc *services.FileService, legacy services.LegacyFacade) *services.Facade {

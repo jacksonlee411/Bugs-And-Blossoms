@@ -5,6 +5,17 @@
 **前置计划**: `docs/dev-records/DEV-PLAN-380B-READINESS.md`  
 **结论**: `380C` 已完成主 API 面收口；`/internal/cubebox/*` 现为仓内唯一正式 API 命名空间。旧 `/internal/assistant/*` 已被清晰区分为 `compat window only` 或稳定 `410 Gone`，不再把 route registry 的 `status=active` 误读为“仍是正式产品入口”。
 
+## 0. 封账摘要
+
+- 实施 PR：`#497 feat(cubebox): close 380c assistant retirement`
+- 合并结果：已于 2026-04-16 合并到 `main`
+- merge commit：`6b40b085 Merge pull request #497 from jacksonlee411/wt-dev-main`
+- 直接承接本文完成态的补充 commit：
+  - `33fedd9e test(cubebox): restore unit coverage gate`
+  - `01ba93e5 test(e2e): soften tp288b runtime baseline gate`
+  - `effc375f docs(dev-records): refresh tp288b live evidence`
+- 最终 GitHub Checks：`Code Quality & Formatting` / `Routing Gates` / `Unit & Integration Tests` / `E2E Tests` 全部成功
+
 ## 1. 收口范围
 
 本次 readiness 对齐以下事实：
@@ -122,6 +133,69 @@ make check capability-route-map
 ```text
 [routing] OK
 [capability-route-map] OK
+```
+
+已执行并通过：
+
+```bash
+make check error-message
+```
+
+结果：
+
+```text
+[error-message] OK
+```
+
+已执行并通过：
+
+```bash
+go test ./internal/server -run 'TestCubeBoxTurnActionMapsFormalCommitErrors|TestCubeBoxModelsAndErrorHelpers'
+make test
+```
+
+结果：
+
+```text
+ok github.com/jacksonlee411/Bugs-And-Blossoms/internal/server
+[coverage] OK: total 98.00% >= threshold 98.00%
+```
+
+已执行并通过：
+
+```bash
+make e2e
+```
+
+结果：
+
+```text
+25 passed, 6 skipped
+```
+
+为定位并修复 GitHub runner 上 `tp288b` 的 runtime baseline 偶发红灯，另在隔离端口环境执行并通过：
+
+```bash
+E2E_BASE_URL=http://localhost:18080 \
+E2E_SUPERADMIN_BASE_URL=http://localhost:18081 \
+KRATOS_PUBLIC_URL=http://127.0.0.1:14433 \
+E2E_KRATOS_ADMIN_URL=http://127.0.0.1:14434 \
+./scripts/e2e/run.sh tests/tp288b-librechat-live-task-receipt-contract.spec.js --workers=1
+```
+
+结果：
+
+```text
+1 passed
+```
+
+GitHub Actions 最终结果：
+
+```text
+Quality Gates / Code Quality & Formatting: success
+Quality Gates / Routing Gates: success
+Quality Gates / Unit & Integration Tests: success
+Quality Gates / E2E Tests: success
 ```
 
 ## 7. 下一步

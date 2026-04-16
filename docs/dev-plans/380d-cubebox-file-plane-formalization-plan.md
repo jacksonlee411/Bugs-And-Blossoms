@@ -1,6 +1,6 @@
 # DEV-PLAN-380D：CubeBox 文件面正式化
 
-**状态**: 草拟中（2026-04-16 14:38 CST；已按 `DEV-PLAN-001` 颗粒度重写，冻结文件面边界、删除/引用契约、存储适配器策略与切换阶段；实现与 readiness 证据待后续批次关闭）
+**状态**: 部分完成（2026-04-16 16:03 CST；`Contract/Persistence/Storage/Service/Delivery/Readiness` 主切片已落地并有 `DEV-PLAN-380D-READINESS` 证据，正式主链已切到 `PG metadata + links + localfs object store + cleanup jobs`；剩余收尾项包括 `error-message` 门禁缺少 `cubebox_file_delete_blocked` 用户可见错误码收口、`cleanup worker/retry runner` 尚未单独实现，以及 `380C/380E` 持有的对外 DTO/前端最终删兼容窗口）
 
 > 本文从 `DEV-PLAN-380` 拆分而来，作为 `CubeBox` 文件元数据、引用关系、对象存储适配器与删除回收语义的实施 SSOT。  
 > `DEV-PLAN-380A` 持有 `cubebox_files / cubebox_file_links` 的 PostgreSQL schema contract 与历史索引导入规则；`DEV-PLAN-380B` 持有后端组合根与 facade 主链；`DEV-PLAN-380C` 持有 `/internal/cubebox/files` 的对外 DTO/API 收口；`DEV-PLAN-380E` 持有 `apps/web` 文件页与交互收口。  
@@ -97,11 +97,11 @@
 
 ### 2.1 核心目标
 
-- [ ] 冻结文件面的唯一正式事实源：`PostgreSQL metadata + links` 为 SoT，对象正文由单一对象存储适配器承载，`index.json` 仅允许存在于迁移期。
-- [ ] 冻结上传、列出、删除、引用保护、orphan 回收与对象存储切换的正式契约。
-- [ ] 明确当前过渡 DTO/领域模型的退出条件：`conversation_id` 从长期主字段收敛为兼容窗口，完成态改为 `links[]`。
-- [ ] 明确 `localfs` 作为开发默认实现、`s3_compat` 作为未来可替换实现的边界与不变量。
-- [ ] 为 `380C`、`380E` 提供稳定文件 contract，使 API/前端收口不再依赖 `index.json` 或过渡 DTO。
+- [x] 冻结文件面的唯一正式事实源：`PostgreSQL metadata + links` 为 SoT，对象正文由单一对象存储适配器承载，`index.json` 仅允许存在于迁移期。
+- [x] 冻结上传、列出、删除、引用保护、orphan 回收与对象存储切换的正式契约。
+- [x] 明确当前过渡 DTO/领域模型的退出条件：`conversation_id` 从长期主字段收敛为兼容窗口，完成态改为 `links[]`。
+- [x] 明确 `localfs` 作为开发默认实现、`s3_compat` 作为未来可替换实现的边界与不变量。
+- [x] 为 `380C`、`380E` 提供稳定文件 contract，使 API/前端收口不再依赖 `index.json` 或过渡 DTO。
 
 ### 2.2 非目标（Out of Scope）
 
@@ -214,7 +214,7 @@ flowchart LR
 
 - **形态选择**：
   - [x] `A. Go DDD`
-  - [ ] `B. DB Kernel + Go Facade`
+  - [x] `B. DB Kernel + Go Facade`
 - **选择理由**：
   - 文件面不是 `submit_*_event(...)` 型 One Door kernel 写链，更适合由 `Go facade + PG metadata + object store adapter` 管理。
   - 但仍必须遵守“metadata 权威只有一套、对象存储只有一套、删除语义只有一套”的单主链原则。
@@ -280,7 +280,8 @@ flowchart LR
 
 - **Valid Time**：文件面不引入业务 `effective_date`。
 - **Audit / Tx Time**：
-  - `uploaded_at / created_at / updated_at` 使用 `timestamptz`
+  - `cubebox_files.uploaded_at`、`cubebox_files.updated_at`、`cubebox_file_links.created_at` 使用 `timestamptz`
+  - 对外 files DTO 若暴露 `created_at`，其来源冻结为 `cubebox_files.uploaded_at` 的映射名；`380D`/`380C` 不新增第二个文件创建时间列
   - 对象存储的写入时间只做审计，不参与业务有效期判断
 - **ID / Code 命名**：
   - `file_id` 采用 `file_<uuid>` 形式
@@ -344,9 +345,8 @@ flowchart LR
   - 只有“metadata 删除成功但对象删除失败”或“对象写入成功但 metadata 失败”这类不一致状态，才进入 orphan cleanup/reconciliation 队列
 - **恢复事实源**：
   - orphan cleanup 必须有可重试、可查询、tenant-scoped 的持久化事实源
-  - 允许实现形态：
-    - 新增持久化 cleanup 表
-    - 或复用 tenant-scoped durable outbox/queue 表
+  - 正式 owner / schema contract 由 `380A` 持有；`380D` 只消费该持久化载体，不在本文开放“实现时再决定建表还是复用其他队列”
+  - 本文冻结的完成态要求：必须存在一个**文件面专用或显式承接文件 cleanup 的 durable persistence contract**，且 readiness 要登记其 schema/查询/重试证据
   - 不允许实现形态：
     - 只有结构化日志
     - 只有进程内内存队列
@@ -411,34 +411,35 @@ flowchart LR
 
 `GET /internal/cubebox/files?conversation_id=conv_123`
 
-- **Response（外部字段名以 `380C` 为 SSOT；下述仅重复 files 资源面最小完成态）**：
+- **Response（外部字段名与错误码以 `380C` 为唯一 SSOT；下述只描述 file-plane 必须满足的底层语义，不单独形成第二份 DTO 主源）**：
 
 ```json
-{
-  "items": [
-    {
-      "file_id": "file_123",
-      "filename": "design.txt",
-      "content_type": "text/plain",
-      "size_bytes": 128,
-      "scan_status": "ready",
-      "created_at": "2026-04-16T06:00:00Z",
-      "links": [
-        {
-          "link_role": "conversation_attachment",
-          "conversation_id": "conv_123",
-          "turn_id": null
-        }
-      ]
-    }
-  ]
-}
+  {
+    "items": [
+      {
+        "file_id": "file_123",
+        "filename": "design.txt",
+        "content_type": "text/plain",
+        "size_bytes": 128,
+        "scan_status": "ready",
+        "created_at": "2026-04-16T06:00:00Z",
+        "links": [
+          {
+            "link_role": "conversation_attachment",
+            "conversation_id": "conv_123",
+            "turn_id": null
+          }
+        ]
+      }
+    ]
+  }
 ```
 
-- **兼容窗口**：
-  - 当前允许继续输出 `conversation_id` 单值字段
-  - 当前 server 仍可能输出 `file_name / media_type / uploaded_at`
-  - 这些旧字段在 `380D` 中被明确认定为过渡态，不得再被新增调用方固化；删除批次与对外收口以 `380C` 为准
+- **file-plane 对外映射要求**：
+  - `380C` 冻结的最小 files DTO 字段必须都能从 `cubebox_files + cubebox_file_links` 单链路稳定推导
+  - 其中 `created_at` 的底层来源冻结为 `cubebox_files.uploaded_at`
+  - 当前允许继续输出 `conversation_id` 单值字段作为兼容窗口，但不得新增调用方继续固化
+  - 当前 server 仍可能输出 `file_name / media_type / uploaded_at`；这些旧字段在 `380D` 中被明确认定为过渡态，不得再被新增调用方固化；删除批次与对外收口以 `380C` 为准
 
 #### 5.3.2 `POST /internal/cubebox/files`
 
@@ -447,16 +448,16 @@ flowchart LR
 - **完成态语义**：
   - `conversation_id` 只表示“立即创建一条 `conversation_attachment` link”
   - 不表示文件天然属于单一 conversation
-- **错误返回（最小契约）**：
-  - `cubebox_file_upload_invalid`
-  - `cubebox_files_unavailable`
-  - `cubebox_file_upload_failed`
-  - `cubebox_conversation_not_found` 或等价正式错误码（若 `conversation_id` 无法映射）
+- **file-plane 失败映射要求**：
+  - 外部 API 错误码主源仍是 `380C`
+  - 本文只冻结底层失败分类必须可被稳定映射：输入非法、存储未装配、对象写入/metadata 写入失败、`conversation_id` 无法映射
+  - 若 `conversation_id` 无法映射，对外必须落到 `380C` 已登记的正式 not-found 语义，不能在实现期自造新 literal
 
 #### 5.3.3 `DELETE /internal/cubebox/files/{file_id}`
 
 - **用途**：删除一个无引用文件
 - **完成态语义**：
+  - 若文件不存在，对外返回 `380C` 冻结的 `404 file not found` 语义
   - 若文件仍存在任一 `cubebox_file_links`，返回阻断错误
   - 若文件无任何 link，则删除 metadata 并回收对象
   - 删除成功返回 `204 No Content`
@@ -466,18 +467,20 @@ flowchart LR
 
 ### 5.4 失败语义 / stopline
 
-| 失败场景 | 正式错误码 | 是否允许 fallback | explain 最低输出 | 是否 stopline |
+| 失败场景 | 对外错误语义归属 | 是否允许 fallback | explain 最低输出 | 是否 stopline |
 | --- | --- | --- | --- | --- |
-| 文件存储未装配 | `cubebox_files_unavailable` | 否 | `path` `method` | 否 |
-| multipart/filename/size 非法 | `cubebox_file_upload_invalid` | 否 | `field` | 否 |
-| `conversation_id` 映射缺失 | `cubebox_conversation_not_found` 或正式等价码 | 否 | `conversation_id` | 否 |
-| 文件仍被引用不可删 | `cubebox_file_delete_blocked` | 否 | `file_id` `link_count` | 否 |
-| metadata/object 导入不一致 | `cubebox_file_import_mismatch` | 否 | mismatch 摘要 | 是 |
-| `index.json` 仍被正式路径读取 | `cubebox_file_legacy_source_detected` | 否 | source | 是 |
-| cleanup 队列无持久化事实源 | `cubebox_file_cleanup_unrecoverable` | 否 | `file_id` `cleanup_reason` | 是 |
+| 文件存储未装配 | 对外 literal 由 `380C` 持有；必须可稳定区分“files unavailable” | 否 | `path` `method` | 否 |
+| multipart/filename/size 非法 | 对外 literal 由 `380C` 持有；必须可稳定区分“upload invalid” | 否 | `field` | 否 |
+| `conversation_id` 映射缺失 | 对外 literal 由 `380C` 持有；必须映射到正式 not-found 语义 | 否 | `conversation_id` | 否 |
+| `file_id` 不存在 | 对外 literal 由 `380C` 持有；必须映射到正式 not-found 语义 | 否 | `file_id` | 否 |
+| 文件仍被引用不可删 | 对外 literal 由 `380C` 持有；必须可稳定区分“delete blocked” | 否 | `file_id` `link_count` | 否 |
+| metadata/object 导入不一致 | 内部 stopline；若对外暴露错误码仍由 `380C/error-message` 持有 | 否 | mismatch 摘要 | 是 |
+| `index.json` 仍被正式路径读取 | 内部 stopline；若对外暴露错误码仍由 `380C/error-message` 持有 | 否 | source | 是 |
+| cleanup 队列无持久化事实源 | 内部 stopline；若对外暴露错误码仍由 `380C/error-message` 持有 | 否 | `file_id` `cleanup_reason` | 是 |
 
-- **错误码约束**：
-  - 文件删除阻断必须有独立稳定错误码，不能继续只有 `cubebox_file_delete_failed`
+- **错误语义约束**：
+  - 文件删除阻断必须能稳定映射到 `380C` 已冻结的独立错误码，不能继续只有泛化 `delete failed`
+  - 文件不存在必须能稳定映射到 `380C` 已冻结的 `file not found`
   - 所有 Internal API 错误仍统一使用 `routing.ErrorEnvelope`
 
 ## 6. 核心流程与算法（Business Flow & Algorithms）
@@ -518,16 +521,18 @@ flowchart LR
 1. 解析 tenant 与 `file_id`
 2. 开启显式事务并注入 tenant
 3. 查询 `cubebox_files` 是否存在
-4. 查询 `cubebox_file_links` 数量
-5. 若 `link_count > 0`：
-   - 返回 `cubebox_file_delete_blocked`
+4. 若文件不存在：
+   - 返回 `380C` 冻结的 `404 file not found` 语义
+5. 查询 `cubebox_file_links` 数量
+6. 若 `link_count > 0`：
+   - 返回 `380C` 冻结的 `delete blocked` 语义
    - 不删除对象，不删除 metadata
-6. 若 `link_count == 0`：
+7. 若 `link_count == 0`：
    - 记录对象定位信息
    - 删除 `cubebox_files`
    - 提交事务
-7. 事务成功后回收对象文件
-8. 若对象回收失败：
+8. 事务成功后回收对象文件
+9. 若对象回收失败：
    - 写入持久化 orphan cleanup 记录
    - 不恢复 metadata，不回滚已提交事务
 
@@ -611,12 +616,12 @@ flowchart LR
 
 ### 8.2 建议实施切片
 
-1. [ ] **Contract Slice**：冻结删除保护、兼容窗口、`links[]` 完成态、object store 端口
-2. [ ] **Persistence Slice**：补齐 PG file metadata/link repository 的写入、删除、存在性判定
-3. [ ] **Storage Slice**：把 `localfs` 适配器从 `index.json` 风格改成对象存储实现；`index.json` 只保留导入器
-4. [ ] **Service Slice**：收口 upload/list/delete/orphan cleanup 业务规则
-5. [ ] **Delivery Slice**：`internal/server` 只对齐本计划冻结的文件面语义，并为 `380C`/`380E` 输出稳定输入；不在本文重新裁决 files 对外字段名
-6. [ ] **Readiness Slice**：导入验证、门禁、文档与 dev-record 证据
+1. [x] **Contract Slice**：冻结删除保护、兼容窗口、`links[]` 完成态、object store 端口
+2. [x] **Persistence Slice**：补齐 PG file metadata/link repository 的写入、删除、存在性判定
+3. [x] **Storage Slice**：把 `localfs` 适配器从 `index.json` 风格改成对象存储实现；`index.json` 只保留导入器
+4. [x] **Service Slice**：收口 upload/list/delete/orphan cleanup 业务规则
+5. [x] **Delivery Slice**：`internal/server` 只对齐本计划冻结的文件面语义，并为 `380C`/`380E` 输出稳定输入；不在本文重新裁决 files 对外字段名
+6. [x] **Readiness Slice**：导入验证、门禁、文档与 dev-record 证据
 
 ### 8.3 每个切片的完成定义
 
@@ -650,36 +655,36 @@ flowchart LR
 ### 9.1 验收标准
 
 - **边界验收**：
-  - [ ] metadata / links / object store 职责清晰，无第二套正式事实源
-  - [ ] `internal/server` 只做 API delivery，不再持有文件业务判定
+  - [x] metadata / links / object store 职责清晰，无第二套正式事实源
+  - [x] `internal/server` 只做 API delivery，不再持有文件业务判定
 
 - **用户可见性验收**：
-  - [ ] `/app/cubebox` 或 `/app/cubebox/files` 至少保留一条完整上传/删除闭环
+  - [x] `/app/cubebox` 或 `/app/cubebox/files` 至少保留一条完整上传/删除闭环
   - [ ] 文件删除阻断对用户有明确提示，不是泛化失败
 
 - **数据 / 租户验收**：
-  - [ ] 所有 PG 文件访问都显式事务 + RLS
-  - [ ] `index.json` 不再被正式 list/delete 路径读取
-  - [ ] metadata 与对象存储之间不存在已知 mismatch
+  - [x] 所有 PG 文件访问都显式事务 + RLS
+  - [x] `index.json` 不再被正式 list/delete 路径读取
+  - [x] metadata 与对象存储之间不存在已知 mismatch
 
 - **UI / API 验收**：
-  - [ ] `/internal/cubebox/files` 只走正式单链路
-  - [ ] 已明确声明 files 对外 DTO 字段名与上传/删除错误码以 `380C` 为唯一 SSOT
-  - [ ] DTO 兼容窗口与完成态 `links[]` 的边界已登记
-  - [ ] 若继续保留 `conversation_id`，已写明删除批次
-  - [ ] `GET /internal/cubebox/files` 的请求表达已明确为 query string，而不是 request body
+  - [x] `/internal/cubebox/files` 只走正式单链路
+  - [x] 已明确声明 files 对外 DTO 字段名与上传/删除错误码以 `380C` 为唯一 SSOT
+  - [x] DTO 兼容窗口与完成态 `links[]` 的边界已登记
+  - [x] 若继续保留 `conversation_id`，已写明删除批次
+  - [x] `GET /internal/cubebox/files` 的请求表达已明确为 query string，而不是 request body
 
 - **测试与门禁验收**：
-  - [ ] 已按第 `2.5` 节补齐分层测试
+  - [x] 已按第 `2.5` 节补齐分层测试
   - [ ] 命中的 `sqlc / routing / error-message / no-legacy / ddd-layering / Go tests` 已通过
-  - [ ] 没有通过降低覆盖率、保留假 fallback 或长期双 DTO 来规避收口
+  - [x] 没有通过降低覆盖率、保留假 fallback 或长期双 DTO 来规避收口
   - [ ] conversation 删除后的 orphan file 语义已有稳定断言：tenant 级列表可见、conversation 级列表不可见、不会隐式删对象
-  - [ ] orphan cleanup 已有持久化事实源，而不是仅日志
+  - [x] orphan cleanup 已有持久化事实源，而不是仅日志
 
 ### 9.2 Readiness 记录
 
-- [ ] 新建或更新 `docs/dev-records/DEV-PLAN-380D-READINESS.md`
-- [ ] 在 readiness 中记录：
+- [x] 新建或更新 `docs/dev-records/DEV-PLAN-380D-READINESS.md`
+- [x] 在 readiness 中记录：
   - 时间戳
   - 命中的切片与执行入口
   - 导入验证结果
@@ -701,9 +706,9 @@ flowchart LR
 
 ## 10. 附：作者自检清单
 
-- [ ] 我已经写清文件 metadata、links、对象存储、删除保护与兼容窗口边界
-- [ ] 我已经写清 `index.json` 的退出条件，而不是默认它会一直留着
-- [ ] 我没有把 `conversation_id` 单值 DTO 当作完成态继续固化
-- [ ] 我已经写清文件删除到底是阻断、detach 还是回收对象，不留多重解释
-- [ ] 我已经说明与 `380A/380B/380C/380E` 的边界，没有重复裁决别人的范围
-- [ ] 我已经给 reviewer 提供 5 分钟可复述的上传、列出、删除与恢复路径
+- [x] 我已经写清文件 metadata、links、对象存储、删除保护与兼容窗口边界
+- [x] 我已经写清 `index.json` 的退出条件，而不是默认它会一直留着
+- [x] 我没有把 `conversation_id` 单值 DTO 当作完成态继续固化
+- [x] 我已经写清文件删除到底是阻断、detach 还是回收对象，不留多重解释
+- [x] 我已经说明与 `380A/380B/380C/380E` 的边界，没有重复裁决别人的范围
+- [x] 我已经给 reviewer 提供 5 分钟可复述的上传、列出、删除与恢复路径

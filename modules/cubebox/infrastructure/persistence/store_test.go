@@ -12,6 +12,7 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgtype"
 	cubeboxdomain "github.com/jacksonlee411/Bugs-And-Blossoms/modules/cubebox/domain"
+	cubeboxsqlc "github.com/jacksonlee411/Bugs-And-Blossoms/modules/cubebox/infrastructure/sqlc/gen"
 )
 
 const (
@@ -208,6 +209,13 @@ func assignScanValue(dest any, val any) error {
 		default:
 			return fmt.Errorf("unsupported string pointer source %T", val)
 		}
+	case *bool:
+		if val == nil {
+			*d = false
+			return nil
+		}
+		*d = val.(bool)
+		return nil
 	case *int64:
 		if val == nil {
 			*d = 0
@@ -252,6 +260,61 @@ func assignScanValue(dest any, val any) error {
 		return nil
 	default:
 		return fmt.Errorf("unsupported scan destination %T", dest)
+	}
+}
+
+func fileMetadataRowValues(tenantUUID pgtype.UUID, now time.Time) []any {
+	return []any{
+		tenantUUID,
+		"file-1",
+		"localfs",
+		"tenant-a/file-1/notes.txt",
+		"notes.txt",
+		"text/plain",
+		int64(7),
+		"sha256",
+		"ready",
+		(*string)(nil),
+		"actor-1",
+		pgtype.Timestamptz{Time: now, Valid: true},
+		pgtype.Timestamptz{Time: now, Valid: true},
+	}
+}
+
+func fileLinkRowValues(tenantUUID pgtype.UUID, now time.Time, fileID string, conversationID string, turnID *string) []any {
+	return []any{
+		int64(1),
+		tenantUUID,
+		fileID,
+		conversationID,
+		turnID,
+		"conversation_attachment",
+		"actor-1",
+		pgtype.Timestamptz{Time: now, Valid: true},
+	}
+}
+
+func taskRowValues(
+	tenantUUID pgtype.UUID,
+	taskUUID pgtype.UUID,
+	now time.Time,
+	status string,
+	dispatchStatus string,
+	dispatchAttempt int32,
+	attempt int32,
+	maxAttempts int32,
+	cancelRequestedAt pgtype.Timestamptz,
+	completedAt pgtype.Timestamptz,
+) []any {
+	var nilString *string
+	return []any{
+		tenantUUID, taskUUID, "conv_1", "turn_1", "assistant_async_plan", "req_1", "hash", "wf_1",
+		status, dispatchStatus, dispatchAttempt, pgtype.Timestamptz{Time: now.Add(time.Minute), Valid: true},
+		attempt, maxAttempts, nilString, nilString, "intent.v1", "compiler.v1", "cap.v1", "skill",
+		"ctx", "intent", "plan", nilString, nilString, nilString, nilString, nilString,
+		nilString, nilString, nilString, nilString, nilString, nilString,
+		pgtype.Timestamptz{Time: now, Valid: true}, cancelRequestedAt, completedAt,
+		pgtype.Timestamptz{Time: now, Valid: true}, pgtype.Timestamptz{Time: now, Valid: true},
 	}
 }
 
@@ -544,6 +607,153 @@ func TestPGStoreSuccessPaths(t *testing.T) {
 			t.Fatalf("unexpected items=%d committed=%v", len(items), tx.committed)
 		}
 	})
+
+	t.Run("conversation exists", func(t *testing.T) {
+		tx := &fakeTx{row: &fakeRow{vals: []any{true}}}
+		exists, err := makeStore(tx).ConversationExists(ctx, testTenantUUID, "conversation-1")
+		if err != nil {
+			t.Fatalf("conversation exists: %v", err)
+		}
+		if !exists || !tx.committed {
+			t.Fatalf("exists=%v committed=%v", exists, tx.committed)
+		}
+	})
+
+	t.Run("insert file", func(t *testing.T) {
+		now := time.Date(2026, 4, 16, 10, 0, 0, 0, time.UTC)
+		tenantUUID, err := parseUUID(testTenantUUID)
+		if err != nil {
+			t.Fatalf("parse tenant uuid: %v", err)
+		}
+		tx := &fakeTx{row: &fakeRow{vals: fileMetadataRowValues(tenantUUID, now)}}
+		record, err := makeStore(tx).InsertFile(ctx, testTenantUUID, cubeboxdomain.FileObject{
+			StorageProvider: "localfs",
+			StorageKey:      "tenant-a/file-1/notes.txt",
+			Filename:        "notes.txt",
+			ContentType:     "text/plain",
+			SizeBytes:       7,
+			SHA256:          "sha256",
+		}, "file-1", "actor-1", now)
+		if err != nil {
+			t.Fatalf("insert file: %v", err)
+		}
+		if record.FileID != "file-1" || record.Filename != "notes.txt" || !tx.committed {
+			t.Fatalf("record=%+v committed=%v", record, tx.committed)
+		}
+	})
+
+	t.Run("create file with link", func(t *testing.T) {
+		now := time.Date(2026, 4, 16, 10, 0, 0, 0, time.UTC)
+		tenantUUID, err := parseUUID(testTenantUUID)
+		if err != nil {
+			t.Fatalf("parse tenant uuid: %v", err)
+		}
+		tx := &fakeTx{
+			rowQueue: []pgx.Row{
+				&fakeRow{vals: fileMetadataRowValues(tenantUUID, now)},
+				&fakeRow{vals: fileLinkRowValues(tenantUUID, now, "file-1", "conversation-1", nil)},
+			},
+		}
+		record, links, err := makeStore(tx).CreateFile(ctx, testTenantUUID, cubeboxdomain.FileObject{
+			StorageProvider: "localfs",
+			StorageKey:      "tenant-a/file-1/notes.txt",
+			Filename:        "notes.txt",
+			ContentType:     "text/plain",
+			SizeBytes:       7,
+			SHA256:          "sha256",
+		}, "file-1", "actor-1", "conversation-1", now)
+		if err != nil {
+			t.Fatalf("create file: %v", err)
+		}
+		if record.FileID != "file-1" || len(links) != 1 || links[0].FileID != "file-1" || !tx.committed {
+			t.Fatalf("record=%+v links=%+v committed=%v", record, links, tx.committed)
+		}
+	})
+
+	t.Run("count file links", func(t *testing.T) {
+		tx := &fakeTx{row: &fakeRow{vals: []any{int64(3)}}}
+		count, err := makeStore(tx).CountFileLinks(ctx, testTenantUUID, "file-1")
+		if err != nil {
+			t.Fatalf("count file links: %v", err)
+		}
+		if count != 3 || !tx.committed {
+			t.Fatalf("count=%d committed=%v", count, tx.committed)
+		}
+	})
+
+	t.Run("delete file", func(t *testing.T) {
+		tx := &fakeTx{execTags: []pgconn.CommandTag{pgconn.NewCommandTag("SELECT 1"), pgconn.NewCommandTag("DELETE 1")}}
+		rows, err := makeStore(tx).DeleteFile(ctx, testTenantUUID, "file-1")
+		if err != nil {
+			t.Fatalf("delete file: %v", err)
+		}
+		if rows != 1 || !tx.committed {
+			t.Fatalf("rows=%d committed=%v", rows, tx.committed)
+		}
+	})
+
+	t.Run("list file links by file id", func(t *testing.T) {
+		tenantUUID, err := parseUUID(testTenantUUID)
+		if err != nil {
+			t.Fatalf("parse tenant uuid: %v", err)
+		}
+		now := time.Date(2026, 4, 16, 10, 0, 0, 0, time.UTC)
+		tx := &fakeTx{rows: &fakeRows{records: [][]any{fileLinkRowValues(tenantUUID, now, "file-1", "conversation-1", nil)}}}
+		items, err := makeStore(tx).ListFileLinks(ctx, testTenantUUID, "file-1")
+		if err != nil {
+			t.Fatalf("list file links by file: %v", err)
+		}
+		if len(items) != 1 || items[0].FileID != "file-1" || !tx.committed {
+			t.Fatalf("items=%+v committed=%v", items, tx.committed)
+		}
+	})
+
+	t.Run("list tenant file links", func(t *testing.T) {
+		tenantUUID, err := parseUUID(testTenantUUID)
+		if err != nil {
+			t.Fatalf("parse tenant uuid: %v", err)
+		}
+		now := time.Date(2026, 4, 16, 10, 0, 0, 0, time.UTC)
+		tx := &fakeTx{rows: &fakeRows{records: [][]any{fileLinkRowValues(tenantUUID, now, "file-2", "conversation-2", nil)}}}
+		items, err := makeStore(tx).ListTenantFileLinks(ctx, testTenantUUID)
+		if err != nil {
+			t.Fatalf("list tenant file links: %v", err)
+		}
+		if len(items) != 1 || items[0].ConversationID != "conversation-2" || !tx.committed {
+			t.Fatalf("items=%+v committed=%v", items, tx.committed)
+		}
+	})
+
+	t.Run("insert file cleanup job normalizes reason", func(t *testing.T) {
+		now := time.Date(2026, 4, 16, 10, 0, 0, 0, time.UTC)
+		tx := &fakeTx{row: &fakeRow{}}
+		err := makeStore(tx).InsertFileCleanupJob(ctx, testTenantUUID, cubeboxdomain.FileCleanupJob{
+			FileID:          "file-1",
+			StorageProvider: "localfs",
+			StorageKey:      "tenant-a/file-1/notes.txt",
+			CleanupReason:   "unknown_reason",
+			LastError:       "boom",
+		}, now)
+		if err != nil {
+			t.Fatalf("insert cleanup job: %v", err)
+		}
+		if !tx.committed {
+			t.Fatal("expected cleanup job commit")
+		}
+	})
+
+	t.Run("healthy defaults tenant id", func(t *testing.T) {
+		tx := &fakeTx{rows: &fakeRows{records: [][]any{{}}}}
+		if err := makeStore(tx).Healthy(ctx, " "); err != nil {
+			t.Fatalf("healthy: %v", err)
+		}
+		if !tx.committed {
+			t.Fatal("expected health commit")
+		}
+		if got, ok := tx.queryArgs[0].(pgtype.UUID); !ok || !got.Valid {
+			t.Fatalf("expected tenant uuid query arg, got %#v", tx.queryArgs)
+		}
+	})
 }
 
 func TestPGStoreFailurePaths(t *testing.T) {
@@ -619,6 +829,18 @@ func TestPGStoreAdditionalFailurePaths(t *testing.T) {
 
 	makeStore := func(tx *fakeTx) *PGStore {
 		return NewPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx, nil }))
+	}
+
+	newStore := func(beginErr error, tx *fakeTx) *PGStore {
+		return NewPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
+			if beginErr != nil {
+				return nil, beginErr
+			}
+			if tx == nil {
+				t.Fatal("begin should not be called")
+			}
+			return tx, nil
+		}))
 	}
 
 	t.Run("list state transitions invalid tenant", func(t *testing.T) {
@@ -732,6 +954,195 @@ func TestPGStoreAdditionalFailurePaths(t *testing.T) {
 		tx := &fakeTx{rows: &fakeRows{records: [][]any{{}}}, commitErr: errors.New("commit failed")}
 		if _, err := makeStore(tx).ListConversationFileLinks(ctx, testTenantUUID, "conversation-1"); err == nil || !strings.Contains(err.Error(), "commit failed") {
 			t.Fatalf("expected commit error, got %v", err)
+		}
+	})
+
+	t.Run("conversation exists failure paths", func(t *testing.T) {
+		if _, err := NewPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
+			t.Fatal("begin should not be called")
+			return nil, nil
+		})).ConversationExists(ctx, "bad", "conversation-1"); err == nil {
+			t.Fatal("expected tenant parse error")
+		}
+
+		if _, err := NewPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
+			return nil, errors.New("begin failed")
+		})).ConversationExists(ctx, testTenantUUID, "conversation-1"); err == nil || !strings.Contains(err.Error(), "begin failed") {
+			t.Fatalf("expected begin error, got %v", err)
+		}
+
+		tx := &fakeTx{row: &fakeRow{err: errors.New("row failed")}}
+		if _, err := makeStore(tx).ConversationExists(ctx, testTenantUUID, "conversation-1"); err == nil || !strings.Contains(err.Error(), "row failed") {
+			t.Fatalf("expected row error, got %v", err)
+		}
+
+		tx = &fakeTx{row: &fakeRow{vals: []any{true}}, commitErr: errors.New("commit failed")}
+		if _, err := makeStore(tx).ConversationExists(ctx, testTenantUUID, "conversation-1"); err == nil || !strings.Contains(err.Error(), "commit failed") {
+			t.Fatalf("expected commit error, got %v", err)
+		}
+	})
+
+	t.Run("file persistence failure paths", func(t *testing.T) {
+		now := time.Date(2026, 4, 16, 10, 0, 0, 0, time.UTC)
+		tenantUUID, err := parseUUID(testTenantUUID)
+		if err != nil {
+			t.Fatalf("parse tenant uuid: %v", err)
+		}
+
+		if _, err := NewPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
+			t.Fatal("begin should not be called")
+			return nil, nil
+		})).InsertFile(ctx, "bad", cubeboxdomain.FileObject{}, "file-1", "actor-1", now); err == nil {
+			t.Fatal("expected insert file tenant parse error")
+		}
+
+		if _, err := NewPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
+			return nil, errors.New("begin failed")
+		})).InsertFile(ctx, testTenantUUID, cubeboxdomain.FileObject{}, "file-1", "actor-1", now); err == nil || !strings.Contains(err.Error(), "begin failed") {
+			t.Fatalf("expected insert file begin error, got %v", err)
+		}
+
+		tx := &fakeTx{row: &fakeRow{err: errors.New("insert file failed")}}
+		if _, err := makeStore(tx).InsertFile(ctx, testTenantUUID, cubeboxdomain.FileObject{}, "file-1", "actor-1", now); err == nil || !strings.Contains(err.Error(), "insert file failed") {
+			t.Fatalf("expected insert file row error, got %v", err)
+		}
+
+		tx = &fakeTx{row: &fakeRow{vals: fileMetadataRowValues(tenantUUID, now)}, commitErr: errors.New("commit failed")}
+		if _, err := makeStore(tx).InsertFile(ctx, testTenantUUID, cubeboxdomain.FileObject{}, "file-1", "actor-1", now); err == nil || !strings.Contains(err.Error(), "commit failed") {
+			t.Fatalf("expected insert file commit error, got %v", err)
+		}
+
+		if _, _, err := NewPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
+			t.Fatal("begin should not be called")
+			return nil, nil
+		})).CreateFile(ctx, "bad", cubeboxdomain.FileObject{}, "file-1", "actor-1", "", now); err == nil {
+			t.Fatal("expected create file tenant parse error")
+		}
+
+		if _, _, err := NewPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
+			return nil, errors.New("begin failed")
+		})).CreateFile(ctx, testTenantUUID, cubeboxdomain.FileObject{}, "file-1", "actor-1", "", now); err == nil || !strings.Contains(err.Error(), "begin failed") {
+			t.Fatalf("expected create file begin error, got %v", err)
+		}
+
+		tx = &fakeTx{row: &fakeRow{err: errors.New("insert file failed")}}
+		if _, _, err := makeStore(tx).CreateFile(ctx, testTenantUUID, cubeboxdomain.FileObject{}, "file-1", "actor-1", "", now); err == nil || !strings.Contains(err.Error(), "insert file failed") {
+			t.Fatalf("expected create file row error, got %v", err)
+		}
+
+		tx = &fakeTx{
+			rowQueue: []pgx.Row{
+				&fakeRow{vals: fileMetadataRowValues(tenantUUID, now)},
+				&fakeRow{err: errors.New("link failed")},
+			},
+		}
+		if _, _, err := makeStore(tx).CreateFile(ctx, testTenantUUID, cubeboxdomain.FileObject{}, "file-1", "actor-1", "conversation-1", now); err == nil || !strings.Contains(err.Error(), "link failed") {
+			t.Fatalf("expected create file link error, got %v", err)
+		}
+
+		tx = &fakeTx{row: &fakeRow{vals: fileMetadataRowValues(tenantUUID, now)}, commitErr: errors.New("commit failed")}
+		if _, _, err := makeStore(tx).CreateFile(ctx, testTenantUUID, cubeboxdomain.FileObject{}, "file-1", "actor-1", "", now); err == nil || !strings.Contains(err.Error(), "commit failed") {
+			t.Fatalf("expected create file commit error, got %v", err)
+		}
+
+		if _, err := newStore(nil, nil).CountFileLinks(ctx, "bad", "file-1"); err == nil {
+			t.Fatal("expected count links tenant parse error")
+		}
+
+		if _, err := newStore(errors.New("begin failed"), nil).CountFileLinks(ctx, testTenantUUID, "file-1"); err == nil || !strings.Contains(err.Error(), "begin failed") {
+			t.Fatalf("expected count links begin error, got %v", err)
+		}
+
+		tx = &fakeTx{row: &fakeRow{err: errors.New("row failed")}}
+		if _, err := makeStore(tx).CountFileLinks(ctx, testTenantUUID, "file-1"); err == nil || !strings.Contains(err.Error(), "row failed") {
+			t.Fatalf("expected count links row error, got %v", err)
+		}
+
+		tx = &fakeTx{row: &fakeRow{vals: []any{int64(1)}}, commitErr: errors.New("commit failed")}
+		if _, err := makeStore(tx).CountFileLinks(ctx, testTenantUUID, "file-1"); err == nil || !strings.Contains(err.Error(), "commit failed") {
+			t.Fatalf("expected count links commit error, got %v", err)
+		}
+
+		if _, err := newStore(nil, nil).DeleteFile(ctx, "bad", "file-1"); err == nil {
+			t.Fatal("expected delete file tenant parse error")
+		}
+
+		if _, err := newStore(errors.New("begin failed"), nil).DeleteFile(ctx, testTenantUUID, "file-1"); err == nil || !strings.Contains(err.Error(), "begin failed") {
+			t.Fatalf("expected delete file begin error, got %v", err)
+		}
+
+		tx = &fakeTx{execErr: errors.New("delete failed"), execErrAt: 2}
+		if _, err := makeStore(tx).DeleteFile(ctx, testTenantUUID, "file-1"); err == nil || !strings.Contains(err.Error(), "delete failed") {
+			t.Fatalf("expected delete file exec error, got %v", err)
+		}
+
+		tx = &fakeTx{execTags: []pgconn.CommandTag{pgconn.NewCommandTag("SELECT 1"), pgconn.NewCommandTag("DELETE 1")}, commitErr: errors.New("commit failed")}
+		if _, err := makeStore(tx).DeleteFile(ctx, testTenantUUID, "file-1"); err == nil || !strings.Contains(err.Error(), "commit failed") {
+			t.Fatalf("expected delete file commit error, got %v", err)
+		}
+	})
+
+	t.Run("file link and cleanup failure paths", func(t *testing.T) {
+		now := time.Date(2026, 4, 16, 10, 0, 0, 0, time.UTC)
+
+		if _, err := newStore(nil, nil).ListFileLinks(ctx, "bad", "file-1"); err == nil {
+			t.Fatal("expected list file links tenant parse error")
+		}
+		if _, err := newStore(errors.New("begin failed"), nil).ListFileLinks(ctx, testTenantUUID, "file-1"); err == nil || !strings.Contains(err.Error(), "begin failed") {
+			t.Fatalf("expected list file links begin error, got %v", err)
+		}
+		tx := &fakeTx{queryErr: errors.New("query failed")}
+		if _, err := makeStore(tx).ListFileLinks(ctx, testTenantUUID, "file-1"); err == nil || !strings.Contains(err.Error(), "query failed") {
+			t.Fatalf("expected list file links query error, got %v", err)
+		}
+		tx = &fakeTx{rows: &fakeRows{records: [][]any{{}}}, commitErr: errors.New("commit failed")}
+		if _, err := makeStore(tx).ListFileLinks(ctx, testTenantUUID, "file-1"); err == nil || !strings.Contains(err.Error(), "commit failed") {
+			t.Fatalf("expected list file links commit error, got %v", err)
+		}
+
+		if _, err := newStore(nil, nil).ListTenantFileLinks(ctx, "bad"); err == nil {
+			t.Fatal("expected list tenant links tenant parse error")
+		}
+		if _, err := newStore(errors.New("begin failed"), nil).ListTenantFileLinks(ctx, testTenantUUID); err == nil || !strings.Contains(err.Error(), "begin failed") {
+			t.Fatalf("expected list tenant links begin error, got %v", err)
+		}
+		tx = &fakeTx{queryErr: errors.New("query failed")}
+		if _, err := makeStore(tx).ListTenantFileLinks(ctx, testTenantUUID); err == nil || !strings.Contains(err.Error(), "query failed") {
+			t.Fatalf("expected list tenant links query error, got %v", err)
+		}
+		tx = &fakeTx{rows: &fakeRows{records: [][]any{{}}}, commitErr: errors.New("commit failed")}
+		if _, err := makeStore(tx).ListTenantFileLinks(ctx, testTenantUUID); err == nil || !strings.Contains(err.Error(), "commit failed") {
+			t.Fatalf("expected list tenant links commit error, got %v", err)
+		}
+
+		if err := newStore(nil, nil).InsertFileCleanupJob(ctx, "bad", cubeboxdomain.FileCleanupJob{}, now); err == nil {
+			t.Fatal("expected cleanup job tenant parse error")
+		}
+		if err := newStore(errors.New("begin failed"), nil).InsertFileCleanupJob(ctx, testTenantUUID, cubeboxdomain.FileCleanupJob{}, now); err == nil || !strings.Contains(err.Error(), "begin failed") {
+			t.Fatalf("expected cleanup job begin error, got %v", err)
+		}
+		tx = &fakeTx{row: &fakeRow{err: errors.New("insert failed")}}
+		if err := makeStore(tx).InsertFileCleanupJob(ctx, testTenantUUID, cubeboxdomain.FileCleanupJob{}, now); err == nil || !strings.Contains(err.Error(), "insert failed") {
+			t.Fatalf("expected cleanup job row error, got %v", err)
+		}
+		tx = &fakeTx{row: &fakeRow{}, commitErr: errors.New("commit failed")}
+		if err := makeStore(tx).InsertFileCleanupJob(ctx, testTenantUUID, cubeboxdomain.FileCleanupJob{}, now); err == nil || !strings.Contains(err.Error(), "commit failed") {
+			t.Fatalf("expected cleanup job commit error, got %v", err)
+		}
+
+		if err := newStore(nil, nil).Healthy(ctx, "bad"); err == nil {
+			t.Fatal("expected healthy tenant parse error")
+		}
+		if err := newStore(errors.New("begin failed"), nil).Healthy(ctx, testTenantUUID); err == nil || !strings.Contains(err.Error(), "begin failed") {
+			t.Fatalf("expected healthy begin error, got %v", err)
+		}
+		tx = &fakeTx{queryErr: errors.New("query failed")}
+		if err := makeStore(tx).Healthy(ctx, testTenantUUID); err == nil || !strings.Contains(err.Error(), "query failed") {
+			t.Fatalf("expected healthy query error, got %v", err)
+		}
+		tx = &fakeTx{rows: &fakeRows{records: [][]any{{}}}, commitErr: errors.New("commit failed")}
+		if err := makeStore(tx).Healthy(ctx, testTenantUUID); err == nil || !strings.Contains(err.Error(), "commit failed") {
+			t.Fatalf("expected healthy commit error, got %v", err)
 		}
 	})
 }
@@ -1510,6 +1921,182 @@ func TestPGStoreRemainingBranchCoverage(t *testing.T) {
 			}
 		})
 
+		t.Run("task write path input and transaction errors", func(t *testing.T) {
+			t.Run("sync conversation snapshot invalid tenant", func(t *testing.T) {
+				if err := newStore(nil, nil).SyncConversationSnapshot(ctx, "bad", cubeboxdomain.Conversation{}); err == nil {
+					t.Fatal("expected tenant parse error")
+				}
+			})
+
+			t.Run("sync conversation snapshot begin error", func(t *testing.T) {
+				if err := newStore(errors.New("begin failed"), nil).SyncConversationSnapshot(ctx, testTenantUUID, cubeboxdomain.Conversation{}); err == nil || !strings.Contains(err.Error(), "begin failed") {
+					t.Fatalf("expected begin error, got %v", err)
+				}
+			})
+
+			t.Run("sync conversation snapshot turn error", func(t *testing.T) {
+				tx := &fakeTx{}
+				err := newStore(nil, tx).SyncConversationSnapshot(ctx, testTenantUUID, cubeboxdomain.Conversation{
+					ConversationID: "conv_1",
+					Turns: []cubeboxdomain.ConversationTurn{{
+						TurnID: "turn_1",
+						Intent: map[string]any{"bad": func() {}},
+					}},
+				})
+				if err == nil {
+					t.Fatal("expected turn marshal error")
+				}
+				if tx.committed {
+					t.Fatal("did not expect commit on turn error")
+				}
+			})
+
+			t.Run("sync conversation snapshot commit error", func(t *testing.T) {
+				tx := &fakeTx{commitErr: errors.New("commit failed")}
+				err := newStore(nil, tx).SyncConversationSnapshot(ctx, testTenantUUID, cubeboxdomain.Conversation{
+					ConversationID: "conv_1",
+				})
+				if err == nil || !strings.Contains(err.Error(), "commit failed") {
+					t.Fatalf("expected commit error, got %v", err)
+				}
+			})
+
+			t.Run("get task invalid tenant", func(t *testing.T) {
+				if _, err := newStore(nil, nil).GetTask(ctx, "bad", testTaskUUID); err == nil {
+					t.Fatal("expected tenant parse error")
+				}
+			})
+
+			t.Run("get task invalid task", func(t *testing.T) {
+				if _, err := newStore(nil, nil).GetTask(ctx, testTenantUUID, "bad"); err == nil {
+					t.Fatal("expected task parse error")
+				}
+			})
+
+			t.Run("get task for dispatch invalid tenant", func(t *testing.T) {
+				if _, err := newStore(nil, nil).GetTaskForDispatch(ctx, "bad", testTaskUUID); err == nil {
+					t.Fatal("expected tenant parse error")
+				}
+			})
+
+			t.Run("list dispatch outbox begin error", func(t *testing.T) {
+				if _, err := newStore(errors.New("begin failed"), nil).ListDispatchOutbox(ctx, testTenantUUID, "pending", 1); err == nil || !strings.Contains(err.Error(), "begin failed") {
+					t.Fatalf("expected begin error, got %v", err)
+				}
+			})
+
+			t.Run("get file begin error", func(t *testing.T) {
+				if _, err := newStore(errors.New("begin failed"), nil).GetFile(ctx, testTenantUUID, "file-1"); err == nil || !strings.Contains(err.Error(), "begin failed") {
+					t.Fatalf("expected begin error, got %v", err)
+				}
+			})
+
+			t.Run("submit task invalid tenant", func(t *testing.T) {
+				if _, _, err := newStore(nil, nil).SubmitTask(ctx, "bad", cubeboxdomain.TaskRecord{}); err == nil {
+					t.Fatal("expected tenant parse error")
+				}
+			})
+
+			t.Run("submit task begin error", func(t *testing.T) {
+				if _, _, err := newStore(errors.New("begin failed"), nil).SubmitTask(ctx, testTenantUUID, cubeboxdomain.TaskRecord{}); err == nil || !strings.Contains(err.Error(), "begin failed") {
+					t.Fatalf("expected begin error, got %v", err)
+				}
+			})
+
+			t.Run("submit task existing row error", func(t *testing.T) {
+				tx := &fakeTx{row: &fakeRow{err: errors.New("lookup failed")}}
+				if _, _, err := newStore(nil, tx).SubmitTask(ctx, testTenantUUID, cubeboxdomain.TaskRecord{
+					ConversationID: "conv_1",
+					TurnID:         "turn_1",
+					RequestID:      "req_1",
+				}); err == nil || !strings.Contains(err.Error(), "lookup failed") {
+					t.Fatalf("expected lookup error, got %v", err)
+				}
+			})
+
+			t.Run("submit task insert commit error", func(t *testing.T) {
+				tx := &fakeTx{
+					rowQueue: []pgx.Row{
+						&fakeRow{err: pgx.ErrNoRows},
+						&fakeRow{vals: taskRowValues(tenantUUID, taskUUID, now, "queued", "pending", 0, 0, 3, pgtype.Timestamptz{}, pgtype.Timestamptz{})},
+					},
+					commitErr: errors.New("commit failed"),
+				}
+				if _, existed, err := newStore(nil, tx).SubmitTask(ctx, testTenantUUID, cubeboxdomain.TaskRecord{
+					TaskID:                  testTaskUUID,
+					ConversationID:          "conv_1",
+					TurnID:                  "turn_1",
+					TaskType:                "assistant_async_plan",
+					RequestID:               "req_1",
+					RequestHash:             "hash",
+					WorkflowID:              "wf_1",
+					Status:                  "queued",
+					DispatchStatus:          "pending",
+					MaxAttempts:             3,
+					IntentSchemaVersion:     "intent.v1",
+					CompilerContractVersion: "compiler.v1",
+					CapabilityMapVersion:    "cap.v1",
+					SkillManifestDigest:     "skill",
+					ContextHash:             "ctx",
+					IntentHash:              "intent",
+					PlanHash:                "plan",
+					SubmittedAt:             now,
+					CreatedAt:               now,
+					UpdatedAt:               now,
+				}); err == nil || !strings.Contains(err.Error(), "commit failed") || existed {
+					t.Fatalf("expected commit error on inserted task, existed=%v err=%v", existed, err)
+				}
+			})
+
+			t.Run("cancel task invalid tenant", func(t *testing.T) {
+				if _, _, err := newStore(nil, nil).CancelTask(ctx, "bad", testTaskUUID, now); err == nil {
+					t.Fatal("expected tenant parse error")
+				}
+			})
+
+			t.Run("cancel task invalid task", func(t *testing.T) {
+				if _, _, err := newStore(nil, nil).CancelTask(ctx, testTenantUUID, "bad", now); err == nil {
+					t.Fatal("expected task parse error")
+				}
+			})
+
+			t.Run("cancel task begin error", func(t *testing.T) {
+				if _, _, err := newStore(errors.New("begin failed"), nil).CancelTask(ctx, testTenantUUID, testTaskUUID, now); err == nil || !strings.Contains(err.Error(), "begin failed") {
+					t.Fatalf("expected begin error, got %v", err)
+				}
+			})
+
+			t.Run("cancel task get record error", func(t *testing.T) {
+				tx := &fakeTx{row: &fakeRow{err: errors.New("row failed")}}
+				if _, _, err := newStore(nil, tx).CancelTask(ctx, testTenantUUID, testTaskUUID, now); err == nil || !strings.Contains(err.Error(), "row failed") {
+					t.Fatalf("expected row error, got %v", err)
+				}
+			})
+
+			t.Run("cancel task terminal commit error", func(t *testing.T) {
+				tx := &fakeTx{
+					row:       &fakeRow{vals: taskRowValues(tenantUUID, taskUUID, now, "succeeded", "started", 1, 1, 3, pgtype.Timestamptz{}, pgtype.Timestamptz{})},
+					commitErr: errors.New("commit failed"),
+				}
+				if _, accepted, err := newStore(nil, tx).CancelTask(ctx, testTenantUUID, testTaskUUID, now); err == nil || !strings.Contains(err.Error(), "commit failed") || accepted {
+					t.Fatalf("expected terminal commit error, accepted=%v err=%v", accepted, err)
+				}
+			})
+
+			t.Run("cancel task commit error after update", func(t *testing.T) {
+				tx := &fakeTx{
+					rowQueue: []pgx.Row{
+						&fakeRow{vals: taskRowValues(tenantUUID, taskUUID, now, "running", "pending", 1, 1, 3, pgtype.Timestamptz{}, pgtype.Timestamptz{})},
+						&fakeRow{vals: taskRowValues(tenantUUID, taskUUID, now, "canceled", "failed", 1, 1, 3, pgtype.Timestamptz{Time: now, Valid: true}, pgtype.Timestamptz{Time: now, Valid: true})},
+					},
+					commitErr: errors.New("commit failed"),
+				}
+				if _, accepted, err := newStore(nil, tx).CancelTask(ctx, testTenantUUID, testTaskUUID, now); err == nil || !strings.Contains(err.Error(), "commit failed") || accepted {
+					t.Fatalf("expected commit error after cancel, accepted=%v err=%v", accepted, err)
+				}
+			})
+		})
+
 		t.Run("snapshot and json helpers", func(t *testing.T) {
 			tx := &fakeTx{execErr: &pgconn.PgError{Code: "23505"}, execErrAt: 1}
 			if err := syncTransitionSnapshot(ctx, tx, tenantUUID, "conv_1", cubeboxdomain.StateTransition{RequestID: "req", TraceID: "trace"}); err != nil {
@@ -1543,5 +2130,78 @@ func TestPGStoreRemainingBranchCoverage(t *testing.T) {
 				t.Fatal("expected marshalNullableJSON error")
 			}
 		})
+	})
+}
+
+func TestPGStoreHelperCoverage(t *testing.T) {
+	t.Parallel()
+
+	t.Run("non empty string ptr trims blank input", func(t *testing.T) {
+		if ptr := nonEmptyStringPtr("   "); ptr != nil {
+			t.Fatalf("expected nil for blank input, got %q", *ptr)
+		}
+
+		ptr := nonEmptyStringPtr("  kept  ")
+		if ptr == nil || *ptr != "kept" {
+			t.Fatalf("expected trimmed value, got %v", ptr)
+		}
+	})
+
+	t.Run("dispatch outbox mapping keeps zero and valid retry time", func(t *testing.T) {
+		now := time.Date(2026, 4, 16, 12, 30, 0, 0, time.FixedZone("UTC+8", 8*60*60))
+		items := []cubeboxsqlc.IamCubeboxTaskDispatchOutbox{
+			{
+				TaskID:  mustParseUUID(testTaskUUID),
+				Status:  " pending ",
+				Attempt: 2,
+			},
+			{
+				TaskID:      mustParseUUID("33333333-3333-3333-3333-333333333333"),
+				Status:      "started",
+				Attempt:     3,
+				NextRetryAt: pgtype.Timestamptz{Time: now, Valid: true},
+			},
+		}
+
+		records := mapDispatchOutboxRecords(items)
+		if len(records) != 2 {
+			t.Fatalf("expected 2 records, got %d", len(records))
+		}
+		if !records[0].NextRetryAt.IsZero() {
+			t.Fatalf("expected zero retry time, got %v", records[0].NextRetryAt)
+		}
+		if records[0].Status != "pending" {
+			t.Fatalf("expected trimmed status, got %q", records[0].Status)
+		}
+		if !records[1].NextRetryAt.Equal(now.UTC()) {
+			t.Fatalf("expected UTC retry time %v, got %v", now.UTC(), records[1].NextRetryAt)
+		}
+	})
+
+	t.Run("marshal json defaults when encoded null", func(t *testing.T) {
+		var value *string
+		raw, err := marshalJSON(value, true)
+		if err != nil || string(raw) != "{}" {
+			t.Fatalf("expected object default, raw=%s err=%v", raw, err)
+		}
+
+		raw, err = marshalJSON(value, false)
+		if err != nil || string(raw) != "[]" {
+			t.Fatalf("expected array default, raw=%s err=%v", raw, err)
+		}
+	})
+
+	t.Run("sync turn snapshot returns marshal error before exec", func(t *testing.T) {
+		tx := &fakeTx{}
+		err := syncTurnSnapshot(context.Background(), tx, mustParseUUID(testTenantUUID), "conv_1", cubeboxdomain.ConversationTurn{
+			TurnID: "turn_1",
+			Intent: map[string]any{"bad": func() {}},
+		})
+		if err == nil {
+			t.Fatal("expected marshal error")
+		}
+		if tx.execN != 0 {
+			t.Fatalf("expected no exec call on marshal failure, got %d", tx.execN)
+		}
 	})
 }

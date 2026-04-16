@@ -644,6 +644,20 @@ errors:
     user_message_key: errors.cubebox_file_not_found
     backend_policy: mapped
     frontend_policy: mapped
+  - code: cubebox_file_delete_blocked
+    module: cubebox
+    http_status: 409
+    severity: error
+    user_message_key: errors.cubebox_file_delete_blocked
+    backend_policy: mapped
+    frontend_policy: mapped
+  - code: cubebox_file_upload_invalid
+    module: cubebox
+    http_status: 400
+    severity: error
+    user_message_key: errors.cubebox_file_upload_invalid
+    backend_policy: mapped
+    frontend_policy: mapped
   - code: cubebox_files_list_failed
     module: cubebox
     http_status: 500
