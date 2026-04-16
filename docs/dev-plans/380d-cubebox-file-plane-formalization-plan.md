@@ -52,7 +52,7 @@
   - `380B` 已建立 `modules/cubebox/services/files.go`、`modules/cubebox/infrastructure/local_file_store.go` 与 facade 接线。
   - 当前运行态仍存在 `LocalFileStore(root/.local/cubebox/files)`，以 `index.json + objects/` 保存对象与最小元数据。
   - `modules/cubebox/infrastructure/persistence/store.go` 目前只具备 `ListFiles / GetFile / ListConversationFileLinks` 等只读 PG 能力，尚未形成正式的文件写入、引用写入、删除判定与对象回收主链。
-  - `internal/server/cubebox_files_api.go` 当前对外仍返回带单值 `conversation_id` 的过渡 DTO。
+  - `internal/server/cubebox_files_api.go` 当前对外仍返回带单值 `conversation_id`、`file_name / media_type / uploaded_at` 的过渡 DTO，尚未对齐 `380C` 已冻结的正式 files DTO 字段名。
 - **现状约束**：
   - 文件大小上限已收敛为 `20 MiB`。
   - `storage_provider` 允许 `localfs / s3_compat`，但当前仓内正式运行实现只有 `localfs`。
@@ -61,6 +61,7 @@
 - **最容易出错的位置**：
   - “元数据已落 PG，但对象仍只存在 index.json/localfs” 的双事实源漂移。
   - 删除时只删对象或只删 metadata 造成悬空。
+  - conversation 删除后 `cubebox_file_links` 被级联删掉，但 `cubebox_files` 与对象本体如何处理若不冻结，会直接影响用户是否还能在租户级文件页看到这些文件。
   - `apps/web` 继续长期消费单值 `conversation_id`，阻碍 `links[]` 完成态收口。
   - conversation 删除与 file 删除交叉时的 link 回收与 orphan object 回收时序。
 - **本次不沿用的“容易做法”**：
@@ -80,7 +81,7 @@
 - **当前痛点**：
   - 文件面已经有 `cubebox_files / cubebox_file_links` schema contract，但运行实现还没完全切到这套 contract。
   - 当前 `LocalFileStore` 仍把 `conversation_id` 嵌在单条记录里，并以 `index.json` 维护列表，这和 `380A` 已冻结的 “metadata / links 分离” 模型不一致。
-  - 前端和 server response 仍消费/输出单值 `conversation_id`，与 `380C` 已写明的 `links[]` 完成态存在差距。
+  - 前端和 server response 仍消费/输出单值 `conversation_id`，且 files 对外字段仍是 `file_name / media_type / uploaded_at` 这一旧形态，与 `380C` 已冻结的 `filename / content_type / created_at / links[]` 存在差距。
   - 删除语义仍不够明确：是“有引用即阻断”，还是“先 detach link 再删对象”，以及谁负责 orphan 回收，尚未冻结。
 - **业务价值**：
   - 用户能稳定上传、查看、删除附件，而不会碰到“列表有文件但对象不存在”或“对象删了但历史引用还在”的伪成功。
@@ -321,6 +322,46 @@ flowchart LR
   - 不通过双写 `index.json + PG` 长期兜底
   - 不通过“metadata 从 PG 读、对象从 index 推断”维持半收口状态
 
+### 4.5 orphan file 与回收队列契约（本计划新增冻结）
+
+- **定义**：
+  - `orphan file` 指 metadata 仍存在于 `cubebox_files`，但当前没有任何 `cubebox_file_links` 的文件。
+  - `orphan object` 指对象正文仍存在于对象存储，但 `cubebox_files` 中已无对应 metadata 的物理对象。
+- **conversation 删除后的正式语义（承接 `380A 5.4`）**：
+  - conversation 删除会级联删除 `cubebox_file_links`，但不会直接删除 `cubebox_files`。
+  - 级联后若文件变为 “无任何 link”，该文件进入 `orphan file` 状态。
+  - `orphan file` 的正式用户可见语义冻结为：
+    - 仍可出现在 tenant 级 `GET /internal/cubebox/files` 列表中
+    - 不再出现在 `GET /internal/cubebox/files?conversation_id=...`
+    - 允许被显式 `DELETE /internal/cubebox/files/{file_id}` 删除
+  - 本期**不**把“删除 conversation”解释成“隐式删除 file”。
+- **理由**：
+  - 避免用户误把“删除会话”理解为“连带删除仍可能有价值的附件”
+  - 避免在 conversation 删除路径里引入隐式对象回收副作用
+  - 与 `DELETE /internal/cubebox/files/{file_id}` 的显式删除语义保持一致
+- **回收策略**：
+  - `orphan file` 不是错误状态，不进入自动回收队列
+  - 只有“metadata 删除成功但对象删除失败”或“对象写入成功但 metadata 失败”这类不一致状态，才进入 orphan cleanup/reconciliation 队列
+- **恢复事实源**：
+  - orphan cleanup 必须有可重试、可查询、tenant-scoped 的持久化事实源
+  - 允许实现形态：
+    - 新增持久化 cleanup 表
+    - 或复用 tenant-scoped durable outbox/queue 表
+  - 不允许实现形态：
+    - 只有结构化日志
+    - 只有进程内内存队列
+    - 只有“将来人工扫目录”的口头约定
+- **最小持久化字段要求**：
+  - `tenant_id`
+  - `file_id`
+  - `storage_key`
+  - `cleanup_reason`
+  - `attempt_count`
+  - `next_retry_at`
+  - `last_error`
+  - `created_at`
+  - `updated_at`
+
 ## 5. 路由、UI 与 API 契约（Route / UI / API Contracts）
 
 ### 5.1 交付面与路由对齐表
@@ -344,14 +385,17 @@ flowchart LR
   - `CubeBoxFilesPage.tsx`
 - **数据来源**：
   - `apps/web/src/api/cubebox.ts`
+  - query 参数正式口径为 `?conversation_id=...`
   - 当前 `CubeBoxFile` 仍消费 `conversation_id`
 - **状态要求**：
   - `loading / empty / error / success / delete-blocked / unavailable`
   - 删除阻断必须显式提示“文件仍被引用”，不能泛化成 `delete failed`
+  - conversation 删除后若某文件变为 tenant 级 orphan file，文件页/会话页必须按 “tenant 级文件仍可见，但不再属于该会话” 的语义展示，不得把它误显示为“丢失”或“隐式已删”
 - **i18n**：
   - 如新增文件阻断、迁移提示、兼容窗口文案，必须对齐 `en/zh`
 - **视觉与交互约束**：
   - 前端如何展示 `links[]`、是否在文件页显示“所属 conversation / turn”，由 `380E` 冻结
+  - `380D` 只向 `380E` 输出一个稳定输入契约：tenant 级 orphan file 可见，会话级过滤不可见
 - **禁止**：
   - 前端自行把 `conversation_id` 反推为正式 link 模型
   - 页面静默吞掉 `file_delete_blocked` 之类正式错误码
@@ -363,26 +407,22 @@ flowchart LR
 - **用途**：按 tenant 列出文件；若带 `conversation_id`，则按 link 过滤
 - **owner module**：`cubebox`
 - **route_class**：`internal_api`
-- **Request**：
+- **Query**：
 
-```json
-{
-  "conversation_id": "conv_123"
-}
-```
+`GET /internal/cubebox/files?conversation_id=conv_123`
 
-- **Response (完成态上界，由 `380C` 收口)**：
+- **Response（外部字段名以 `380C` 为 SSOT；下述仅重复 files 资源面最小完成态）**：
 
 ```json
 {
   "items": [
     {
       "file_id": "file_123",
-      "file_name": "design.txt",
-      "media_type": "text/plain",
+      "filename": "design.txt",
+      "content_type": "text/plain",
       "size_bytes": 128,
       "scan_status": "ready",
-      "uploaded_at": "2026-04-16T06:00:00Z",
+      "created_at": "2026-04-16T06:00:00Z",
       "links": [
         {
           "link_role": "conversation_attachment",
@@ -397,7 +437,8 @@ flowchart LR
 
 - **兼容窗口**：
   - 当前允许继续输出 `conversation_id` 单值字段
-  - 但必须在 readiness 中登记删除批次，且不得新增依赖它的新页面逻辑
+  - 当前 server 仍可能输出 `file_name / media_type / uploaded_at`
+  - 这些旧字段在 `380D` 中被明确认定为过渡态，不得再被新增调用方固化；删除批次与对外收口以 `380C` 为准
 
 #### 5.3.2 `POST /internal/cubebox/files`
 
@@ -407,7 +448,7 @@ flowchart LR
   - `conversation_id` 只表示“立即创建一条 `conversation_attachment` link”
   - 不表示文件天然属于单一 conversation
 - **错误返回（最小契约）**：
-  - `invalid_request`
+  - `cubebox_file_upload_invalid`
   - `cubebox_files_unavailable`
   - `cubebox_file_upload_failed`
   - `cubebox_conversation_not_found` 或等价正式错误码（若 `conversation_id` 无法映射）
@@ -428,11 +469,12 @@ flowchart LR
 | 失败场景 | 正式错误码 | 是否允许 fallback | explain 最低输出 | 是否 stopline |
 | --- | --- | --- | --- | --- |
 | 文件存储未装配 | `cubebox_files_unavailable` | 否 | `path` `method` | 否 |
-| multipart/filename/size 非法 | `invalid_request` | 否 | `field` | 否 |
+| multipart/filename/size 非法 | `cubebox_file_upload_invalid` | 否 | `field` | 否 |
 | `conversation_id` 映射缺失 | `cubebox_conversation_not_found` 或正式等价码 | 否 | `conversation_id` | 否 |
 | 文件仍被引用不可删 | `cubebox_file_delete_blocked` | 否 | `file_id` `link_count` | 否 |
 | metadata/object 导入不一致 | `cubebox_file_import_mismatch` | 否 | mismatch 摘要 | 是 |
 | `index.json` 仍被正式路径读取 | `cubebox_file_legacy_source_detected` | 否 | source | 是 |
+| cleanup 队列无持久化事实源 | `cubebox_file_cleanup_unrecoverable` | 否 | `file_id` `cleanup_reason` | 是 |
 
 - **错误码约束**：
   - 文件删除阻断必须有独立稳定错误码，不能继续只有 `cubebox_file_delete_failed`
@@ -455,7 +497,7 @@ flowchart LR
 **失败补偿**：
 
 1. 对象写失败：直接返回，不写 metadata
-2. metadata/link 写失败：补偿删除刚写入对象；若删除补偿失败，记录 orphan cleanup 任务/日志
+2. metadata/link 写失败：补偿删除刚写入对象；若删除补偿失败，写入持久化 orphan cleanup 记录
 3. tenant/RLS 失败：直接失败，不允许回退写 `index.json`
 
 ### 6.2 读路径主算法：列表
@@ -486,8 +528,23 @@ flowchart LR
    - 提交事务
 7. 事务成功后回收对象文件
 8. 若对象回收失败：
-   - 记录 orphan cleanup 信号
+   - 写入持久化 orphan cleanup 记录
    - 不恢复 metadata，不回滚已提交事务
+
+### 6.3A conversation 删除后的 file 语义
+
+1. `DELETE /internal/cubebox/conversations/{conversation_id}` 由 `380A/380B/380C` 持有主删除算法。
+2. 本计划冻结其文件面副作用：
+   - `cubebox_file_links` 级联删除
+   - `cubebox_files` 保留
+   - 对象正文保留
+3. 若某文件在该 conversation 删除后已无任何剩余 link：
+   - 该文件进入 tenant 级 orphan file 状态
+   - tenant 级文件列表仍可见
+   - conversation 级文件列表不可见
+   - 仅在用户显式删除文件时才触发 metadata/object 真正删除
+4. 本计划禁止在 conversation 删除路径里隐式触发文件物理回收。
+5. 若未来产品决定“删会话即删孤立文件”，必须新开后续计划，并同步改写 `380A/380C/380E` 的用户可见 contract。
 
 ### 6.4 幂等、回放与恢复
 
@@ -496,7 +553,7 @@ flowchart LR
 - **回放 / replay**：
   - `index.json -> PostgreSQL` 导入与 orphan cleanup 允许重跑
 - **恢复策略**：
-  - metadata 缺失但对象存在：通过 orphan scanner / import verifier 收敛
+  - metadata 缺失但对象存在：通过持久化 orphan cleanup / import verifier 收敛
   - metadata 存在但对象缺失：视为 stopline，禁止宣布文件面正式完成
 
 ## 7. 安全、租户、授权与运行保护（Security / Tenancy / Authz / Recovery）
@@ -526,7 +583,8 @@ flowchart LR
   - 修复 metadata/object mismatch
   - 重跑导入/cleanup
   - 恢复
-- 不在早期阶段引入复杂对象存储监控平台；只保留最小健康探针与结构化日志
+- 不在早期阶段引入复杂对象存储监控平台；只保留最小健康探针、结构化日志和**持久化 cleanup 队列**
+- cleanup 队列属于运行恢复主链的一部分，不是“可选增强”
 
 ## 8. 依赖、切片与里程碑（Dependencies & Milestones）
 
@@ -534,8 +592,22 @@ flowchart LR
 
 - `380A`：schema、迁移、sqlc、index 导入规则
 - `380B`：facade、模块组合根、server 接线
-- `380C`：API/DTO 收口
-- `380E`：前端 `links[]` / 错误提示收口
+- `380C`：消费本文冻结的文件面事实源与删除语义，并负责**对外** files DTO/错误码收口
+
+### 8.1A 无环依赖矩阵（冻结）
+
+1. `380A -> 380D`
+   - `380A` 先提供 schema / import contract / FK 语义
+2. `380B -> 380D`
+   - `380B` 先提供 facade / module 组合根 / server 接线
+3. `380D -> 380C(files)`
+   - `380D` 先冻结文件面事实源、删除语义、orphan 语义、cleanup 契约
+4. `380C(files) -> 380E(files consumption)`
+   - `380C` 再冻结对外 files DTO 字段名与错误码
+5. `380D` 与 `380E`
+   - **无直接前置依赖**
+   - `380D` 只向 `380E` 输出“tenant 级 orphan file 可见、conversation 级过滤不可见”的用户语义输入
+   - `380E` 的前端字段与错误提示消费仍通过 `380C` 统一收口
 
 ### 8.2 建议实施切片
 
@@ -543,13 +615,13 @@ flowchart LR
 2. [ ] **Persistence Slice**：补齐 PG file metadata/link repository 的写入、删除、存在性判定
 3. [ ] **Storage Slice**：把 `localfs` 适配器从 `index.json` 风格改成对象存储实现；`index.json` 只保留导入器
 4. [ ] **Service Slice**：收口 upload/list/delete/orphan cleanup 业务规则
-5. [ ] **Delivery Slice**：`internal/server` 错误码与 DTO 适配；`apps/web` 消费兼容窗口/完成态
+5. [ ] **Delivery Slice**：`internal/server` 只对齐本计划冻结的文件面语义，并为 `380C`/`380E` 输出稳定输入；不在本文重新裁决 files 对外字段名
 6. [ ] **Readiness Slice**：导入验证、门禁、文档与 dev-record 证据
 
 ### 8.3 每个切片的完成定义
 
 - **Contract Slice**
-  - **输入**：`380A/380C` 相邻 contract 已可引用
+  - **输入**：`380A` 相邻 contract 已可引用
   - **输出**：本文档冻结
   - **阻断条件**：若文件 delete / detach / links 模型仍存在多种解释，必须暂停继续对齐
 - **Persistence Slice**
@@ -566,8 +638,8 @@ flowchart LR
   - **阻断条件**：删除语义仍不清晰
 - **Delivery Slice**
   - **输入**：service 完成态稳定
-  - **输出**：server/API/前端适配完成
-  - **阻断条件**：DTO 兼容窗口与删除批次未登记
+  - **输出**：`internal/server` 与后续 `380C/380E` 消费者都有稳定输入语义
+  - **阻断条件**：若本计划仍试图与 `380C` 竞争 files DTO/错误码 SSOT，必须暂停并回到相邻计划对齐
 - **Readiness Slice**
   - **输入**：上述切片全部完成
   - **输出**：`DEV-PLAN-380D-READINESS.md`
@@ -592,13 +664,17 @@ flowchart LR
 
 - **UI / API 验收**：
   - [ ] `/internal/cubebox/files` 只走正式单链路
+  - [ ] 已明确声明 files 对外 DTO 字段名与上传/删除错误码以 `380C` 为唯一 SSOT
   - [ ] DTO 兼容窗口与完成态 `links[]` 的边界已登记
   - [ ] 若继续保留 `conversation_id`，已写明删除批次
+  - [ ] `GET /internal/cubebox/files` 的请求表达已明确为 query string，而不是 request body
 
 - **测试与门禁验收**：
   - [ ] 已按第 `2.5` 节补齐分层测试
   - [ ] 命中的 `sqlc / routing / error-message / no-legacy / ddd-layering / Go tests` 已通过
   - [ ] 没有通过降低覆盖率、保留假 fallback 或长期双 DTO 来规避收口
+  - [ ] conversation 删除后的 orphan file 语义已有稳定断言：tenant 级列表可见、conversation 级列表不可见、不会隐式删对象
+  - [ ] orphan cleanup 已有持久化事实源，而不是仅日志
 
 ### 9.2 Readiness 记录
 
@@ -609,6 +685,8 @@ flowchart LR
   - 导入验证结果
   - object store / metadata mismatch 结果
   - DTO 兼容窗口仍保留的字段与删除批次
+  - orphan cleanup 持久化事实源的落点、样例记录与重试结果
+  - conversation 删除后 orphan file 列表行为的验证结果
   - 关键截图 / API 响应 / 日志摘要
 
 ### 9.3 例外登记
@@ -619,6 +697,7 @@ flowchart LR
 - **暂留页面级测试理由**：`links[]` UI 展示由 `380E` 接棒，`380D` 只保留最小消费验证
 - **暂不能下沉的理由**：若某些 path 提取或 multipart 错误映射仍在 server 层，只保留 delivery 适配断言
 - **若删除死分支/旧链路**：必须说明 `index.json` 已不再是正式 SoT，删除不改变对外 API 契约，只改变内部事实源
+- **SSOT 边界理由**：files 对外 DTO 字段名与错误码仍由 `380C` 唯一持有；`380D` 只冻结底层事实源、删除/恢复与 orphan 语义
 
 ## 10. 附：作者自检清单
 
