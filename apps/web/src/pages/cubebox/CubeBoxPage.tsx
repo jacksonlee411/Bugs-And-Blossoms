@@ -152,7 +152,7 @@ export function CubeBoxPage() {
     return () => {
       active = false
     }
-  }, [conversationId])
+  }, [conversationId, locale, t])
 
   async function ensureConversationID(): Promise<string> {
     if (conversationId && conversationId.trim().length > 0) {
