@@ -14,15 +14,9 @@ import {
   Typography
 } from '@mui/material'
 import { useEffect, useRef, useState } from 'react'
+import { useAppPreferences } from '../../app/providers/AppPreferencesContext'
 import { deleteCubeBoxFile, listCubeBoxFiles, uploadCubeBoxFile, type CubeBoxFile } from '../../api/cubebox'
-
-function messageForError(error: unknown, fallback: string): string {
-  const message = (error as { message?: string })?.message
-  if (typeof message === 'string' && message.trim().length > 0) {
-    return message
-  }
-  return fallback
-}
+import { cubeBoxErrorMessage } from './errorMessage'
 
 function fileLabel(item: CubeBoxFile): string {
   return item.filename ?? item.file_name
@@ -45,6 +39,7 @@ function fileConversationID(item: CubeBoxFile): string | undefined {
 }
 
 export function CubeBoxFilesPage() {
+  const { locale, t } = useAppPreferences()
   const fileInputRef = useRef<HTMLInputElement | null>(null)
   const [items, setItems] = useState<CubeBoxFile[]>([])
   const [busy, setBusy] = useState(false)
@@ -56,8 +51,8 @@ export function CubeBoxFilesPage() {
   }
 
   useEffect(() => {
-    void load().catch((error) => setErrorMessage(messageForError(error, '加载文件失败')))
-  }, [])
+    void load().catch((error) => setErrorMessage(cubeBoxErrorMessage(error, t('cubebox_error_files_load'), locale)))
+  }, [locale, t])
 
   async function handleUpload(fileList: FileList | null) {
     const file = fileList?.item(0)
@@ -70,7 +65,7 @@ export function CubeBoxFilesPage() {
       await uploadCubeBoxFile(file)
       await load()
     } catch (error) {
-      setErrorMessage(messageForError(error, '上传文件失败'))
+      setErrorMessage(cubeBoxErrorMessage(error, t('cubebox_error_files_upload'), locale))
     } finally {
       setBusy(false)
       if (fileInputRef.current) {
@@ -86,7 +81,7 @@ export function CubeBoxFilesPage() {
       await deleteCubeBoxFile(fileID)
       await load()
     } catch (error) {
-      setErrorMessage(messageForError(error, '删除文件失败'))
+      setErrorMessage(cubeBoxErrorMessage(error, t('cubebox_error_files_delete'), locale))
     } finally {
       setBusy(false)
     }
@@ -95,7 +90,7 @@ export function CubeBoxFilesPage() {
   return (
     <Stack spacing={2}>
       <Stack alignItems='center' direction='row' spacing={1}>
-        <Typography variant='h5'>CubeBox 文件</Typography>
+        <Typography variant='h5'>{t('cubebox_files_title')}</Typography>
         <Box sx={{ flex: 1 }} />
         <input
           hidden
@@ -109,12 +104,12 @@ export function CubeBoxFilesPage() {
           startIcon={<UploadFileIcon />}
           variant='contained'
         >
-          上传文件
+          {t('cubebox_files_upload')}
         </Button>
       </Stack>
 
       <Typography color='text.secondary' variant='body2'>
-        本页负责最近上传文件、会话附件关联结果与未引用文件的删除收口，不承接 File Search 或 RAG 控制台。
+        {t('cubebox_files_subtitle')}
       </Typography>
 
       {errorMessage ? <Alert severity='warning'>{errorMessage}</Alert> : null}
@@ -135,7 +130,7 @@ export function CubeBoxFilesPage() {
                     size='small'
                     startIcon={<DeleteOutlineIcon />}
                   >
-                    删除
+                    {t('cubebox_files_delete')}
                   </Button>
                 )}
               >
@@ -148,7 +143,7 @@ export function CubeBoxFilesPage() {
             ))}
             {items.length === 0 ? (
               <Typography color='text.secondary' variant='body2'>
-                暂无已上传文件
+                {t('cubebox_files_empty')}
               </Typography>
             ) : null}
           </List>

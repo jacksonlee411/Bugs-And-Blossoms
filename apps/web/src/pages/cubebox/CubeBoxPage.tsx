@@ -18,6 +18,7 @@ import {
   Typography
 } from '@mui/material'
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { useAppPreferences } from '../../app/providers/AppPreferencesContext'
 import { useNavigate, useParams } from 'react-router-dom'
 import {
   commitCubeBoxTurn,
@@ -35,14 +36,7 @@ import {
   type CubeBoxFile,
   type CubeBoxRuntimeStatusResponse
 } from '../../api/cubebox'
-
-function messageForError(error: unknown, fallback: string): string {
-  const message = (error as { message?: string })?.message
-  if (typeof message === 'string' && message.trim().length > 0) {
-    return message
-  }
-  return fallback
-}
+import { cubeBoxErrorMessage } from './errorMessage'
 
 function cubeBoxFileLabel(file: CubeBoxFile): string {
   return file.filename ?? file.file_name
@@ -85,6 +79,7 @@ function normalizeConversation(conversation: CubeBoxConversation): CubeBoxConver
 }
 
 export function CubeBoxPage() {
+  const { locale, t } = useAppPreferences()
   const navigate = useNavigate()
   const { conversationId } = useParams<{ conversationId?: string }>()
   const fileInputRef = useRef<HTMLInputElement | null>(null)
@@ -151,13 +146,13 @@ export function CubeBoxPage() {
         if (!active) {
           return
         }
-        setErrorMessage(messageForError(error, 'CubeBox 页面加载失败'))
+        setErrorMessage(cubeBoxErrorMessage(error, t('cubebox_error_page_load'), locale))
       }
     })()
     return () => {
       active = false
     }
-  }, [conversationId])
+  }, [conversationId, locale, t])
 
   async function ensureConversationID(): Promise<string> {
     if (conversationId && conversationId.trim().length > 0) {
@@ -186,7 +181,7 @@ export function CubeBoxPage() {
       await refreshConversationList()
       await refreshConversation(targetConversationID)
     } catch (error) {
-      setErrorMessage(messageForError(error, '发送消息失败'))
+      setErrorMessage(cubeBoxErrorMessage(error, t('cubebox_error_send'), locale))
     } finally {
       setBusy(false)
     }
@@ -200,7 +195,7 @@ export function CubeBoxPage() {
     setErrorMessage('')
     try {
       const reply = await renderCubeBoxTurnReply(conversationId, currentTurn.turn_id, {
-        locale: 'zh',
+        locale,
         fallback_text: currentTurn.plan?.summary ?? currentTurn.user_input,
         allow_missing_turn: false
       })
@@ -214,7 +209,7 @@ export function CubeBoxPage() {
         }
       })
     } catch (error) {
-      setErrorMessage(messageForError(error, '生成回复失败'))
+      setErrorMessage(cubeBoxErrorMessage(error, t('cubebox_error_generate_reply'), locale))
     } finally {
       setBusy(false)
     }
@@ -236,7 +231,7 @@ export function CubeBoxPage() {
       setConversations(conversation.turns)
       await refreshConversationList()
     } catch (error) {
-      setErrorMessage(messageForError(error, '确认计划失败'))
+      setErrorMessage(cubeBoxErrorMessage(error, t('cubebox_error_confirm'), locale))
     } finally {
       setBusy(false)
     }
@@ -251,12 +246,12 @@ export function CubeBoxPage() {
     setTaskMessage('')
     try {
       const receipt = await commitCubeBoxTurn(conversationId, currentTurn.turn_id)
-      setTaskMessage(`任务已提交：${receipt.task_id}`)
+      setTaskMessage(t('cubebox_task_submitted', { taskId: receipt.task_id }))
       const detail = await getCubeBoxTask(receipt.task_id)
-      setTaskMessage(`任务状态：${detail.status}`)
+      setTaskMessage(t('cubebox_task_status', { status: detail.status }))
       await refreshConversation(conversationId)
     } catch (error) {
-      setErrorMessage(messageForError(error, '提交任务失败'))
+      setErrorMessage(cubeBoxErrorMessage(error, t('cubebox_error_commit'), locale))
     } finally {
       setBusy(false)
     }
@@ -267,7 +262,7 @@ export function CubeBoxPage() {
     try {
       await refreshConversation(targetConversationID)
     } catch (error) {
-      setErrorMessage(messageForError(error, '加载会话失败'))
+      setErrorMessage(cubeBoxErrorMessage(error, t('cubebox_error_conversation_load'), locale))
     }
   }
 
@@ -289,7 +284,7 @@ export function CubeBoxPage() {
         setFiles(next.items)
       }
     } catch (error) {
-      setErrorMessage(messageForError(error, '上传附件失败'))
+      setErrorMessage(cubeBoxErrorMessage(error, t('cubebox_error_attachment_upload'), locale))
     } finally {
       setBusy(false)
       if (fileInputRef.current) {
@@ -301,7 +296,7 @@ export function CubeBoxPage() {
   return (
     <Stack spacing={2}>
       <Stack alignItems='center' direction='row' spacing={1}>
-        <Typography variant='h5'>CubeBox</Typography>
+        <Typography variant='h5'>{t('cubebox_title')}</Typography>
         <Chip
           color={healthColor(runtimeStatus?.status ?? '')}
           data-testid='cubebox-runtime-status'
@@ -309,16 +304,16 @@ export function CubeBoxPage() {
           size='small'
         />
         <Box sx={{ flex: 1 }} />
-        <Button component='a' href='/app/cubebox/files' variant='text'>
-          文件
+        <Button onClick={() => navigate('/cubebox/files')} variant='text'>
+          {t('cubebox_link_files')}
         </Button>
-        <Button component='a' href='/app/cubebox/models' variant='text'>
-          模型
+        <Button onClick={() => navigate('/cubebox/models')} variant='text'>
+          {t('cubebox_link_models')}
         </Button>
       </Stack>
 
       <Typography color='text.secondary' variant='body2'>
-        正式入口已切换到 `/app/cubebox`。当前版本只承接会话主链、任务状态、模型只读展示与文件附件。
+        {t('cubebox_entry_subtitle')}
       </Typography>
 
       {errorMessage ? <Alert severity='warning'>{errorMessage}</Alert> : null}
@@ -328,7 +323,7 @@ export function CubeBoxPage() {
         <Card sx={{ minWidth: 280, width: { lg: 320 } }}>
           <CardContent>
             <Stack spacing={1}>
-              <Typography variant='subtitle1'>会话列表</Typography>
+              <Typography variant='subtitle1'>{t('cubebox_conversation_list')}</Typography>
               <List disablePadding>
                 {conversationItems.map((item) => (
                   <ListItemButton
@@ -342,7 +337,7 @@ export function CubeBoxPage() {
                 ))}
                 {conversationItems.length === 0 ? (
                   <Typography color='text.secondary' variant='body2'>
-                    暂无会话
+                    {t('cubebox_conversation_empty')}
                   </Typography>
                 ) : null}
               </List>
@@ -405,7 +400,7 @@ export function CubeBoxPage() {
                 ))}
                 {conversations.length === 0 ? (
                   <Typography color='text.secondary' variant='body2'>
-                    输入第一条消息即可创建会话。
+                    {t('cubebox_conversation_first_prompt')}
                   </Typography>
                 ) : null}
               </Stack>
@@ -414,9 +409,9 @@ export function CubeBoxPage() {
                 <>
                   <Divider />
                   <Stack data-testid='cubebox-candidate-panel' spacing={1}>
-                    <Typography variant='subtitle2'>候选确认</Typography>
+                    <Typography variant='subtitle2'>{t('cubebox_candidate_title')}</Typography>
                     <Typography color='text.secondary' variant='body2'>
-                      当前父组织命中多个候选，请先选择正确的上级组织，再继续提交。
+                      {t('cubebox_candidate_hint')}
                     </Typography>
                     <Stack spacing={1}>
                       {currentCandidates.map((candidate, index) => (
@@ -439,7 +434,7 @@ export function CubeBoxPage() {
                                 onClick={() => void handleConfirm(candidate.candidate_id)}
                                 variant='outlined'
                               >
-                                {`选择候选 ${index + 1}`}
+                                {t('cubebox_candidate_select', { index: index + 1 })}
                               </Button>
                             </Stack>
                           </CardContent>
@@ -454,7 +449,7 @@ export function CubeBoxPage() {
 
               <Stack spacing={1}>
                 <Stack alignItems='center' direction='row' spacing={1}>
-                  <Typography variant='subtitle2'>附件托盘</Typography>
+                  <Typography variant='subtitle2'>{t('cubebox_attachments_title')}</Typography>
                   <Box sx={{ flex: 1 }} />
                   <input
                     hidden
@@ -468,7 +463,7 @@ export function CubeBoxPage() {
                     startIcon={<AttachFileIcon />}
                     variant='outlined'
                   >
-                    上传附件
+                    {t('cubebox_attachments_upload')}
                   </Button>
                 </Stack>
                 <Stack direction='row' spacing={1} useFlexGap flexWrap='wrap'>
@@ -477,7 +472,7 @@ export function CubeBoxPage() {
                   ))}
                   {files.length === 0 ? (
                     <Typography color='text.secondary' variant='body2'>
-                      当前会话暂无附件
+                      {t('cubebox_attachments_empty')}
                     </Typography>
                   ) : null}
                 </Stack>
@@ -493,7 +488,7 @@ export function CubeBoxPage() {
                   minRows={3}
                   multiline
                   onChange={(event) => setDraft(event.target.value)}
-                  placeholder='输入需求，例如：在鲜花组织之下，新建一个名为运营部的部门，成立日期是 2026-01-01。'
+                  placeholder={t('cubebox_input_placeholder')}
                   value={draft}
                 />
                 <Stack direction={{ xs: 'row', md: 'column' }} spacing={1}>
@@ -504,7 +499,7 @@ export function CubeBoxPage() {
                     startIcon={<SendIcon />}
                     variant='contained'
                   >
-                    发送
+                    {t('cubebox_action_send')}
                   </Button>
                   <Button
                     data-testid='cubebox-generate-reply'
@@ -513,7 +508,7 @@ export function CubeBoxPage() {
                     startIcon={<AutoAwesomeIcon />}
                     variant='outlined'
                   >
-                    生成回复
+                    {t('cubebox_action_generate_reply')}
                   </Button>
                   <Button
                     data-testid='cubebox-confirm'
@@ -522,7 +517,7 @@ export function CubeBoxPage() {
                     startIcon={<TaskAltIcon />}
                     variant='outlined'
                   >
-                    确认
+                    {t('cubebox_action_confirm')}
                   </Button>
                   <Button
                     data-testid='cubebox-commit'
@@ -530,7 +525,7 @@ export function CubeBoxPage() {
                     onClick={() => void handleCommit()}
                     variant='outlined'
                   >
-                    提交
+                    {t('cubebox_action_commit')}
                   </Button>
                 </Stack>
               </Stack>

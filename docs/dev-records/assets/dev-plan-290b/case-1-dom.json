@@ -1,14 +1,14 @@
 {
-  "url": "http://localhost:18080/app/cubebox/conversations/conv_3187aea2ad894425ab133796c1a6397c",
+  "url": "http://localhost:18080/app/cubebox/conversations/conv_040dbc664f5c40f9917d86cbb6c72c55",
   "bubble_count": 1,
   "bubbles": [
     {
-      "binding_key": "turn_a5c3b41d591945b1b70c6d1db5fa10cc",
-      "conversation_id": "conv_3187aea2ad894425ab133796c1a6397c",
-      "turn_id": "turn_a5c3b41d591945b1b70c6d1db5fa10cc",
-      "request_id": "assistant_51d63476bf3d4600b5b43d87f97e6a78",
+      "binding_key": "turn_54c1e36fbe0b43e79210da04efc17736",
+      "conversation_id": "conv_040dbc664f5c40f9917d86cbb6c72c55",
+      "turn_id": "turn_54c1e36fbe0b43e79210da04efc17736",
+      "request_id": "assistant_84d6c70fffe94110a6abc744b87f0cd9",
       "message_id": "",
-      "text": "validated low turn_a5c3b41d591945b1b70c6d1db5fa10cc 你好 当前轮属于闲聊响应，不触发业务提交。"
+      "text": "validated low turn_54c1e36fbe0b43e79210da04efc17736 你好 当前轮属于闲聊响应，不触发业务提交。"
     }
   ],
   "external_reply_container_count": 0,

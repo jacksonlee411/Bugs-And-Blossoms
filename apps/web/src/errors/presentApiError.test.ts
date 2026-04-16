@@ -91,4 +91,13 @@ describe('resolveApiErrorMessage', () => {
     expect(message.length).toBeGreaterThan(0)
     expect(message).not.toBe('dict_release_failed')
   })
+
+  it('uses explicit locale override instead of navigator language', () => {
+    expect(resolveApiErrorMessage('cubebox_models_unavailable', 'cubebox_models_unavailable', 'en')).toBe(
+      'CubeBox models are unavailable. Please retry later.'
+    )
+    expect(resolveApiErrorMessage('cubebox_models_unavailable', 'cubebox_models_unavailable', 'zh')).toBe(
+      'CubeBox 模型清单暂不可用，请稍后重试。'
+    )
+  })
 })

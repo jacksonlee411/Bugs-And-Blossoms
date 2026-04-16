@@ -1,16 +1,7 @@
 {
-  "url": "http://localhost:18080/app/cubebox/conversations/conv_adf67509567c49f6b28446e649f73889",
-  "bubble_count": 1,
-  "bubbles": [
-    {
-      "binding_key": "turn_df72aaf7c8344e888a84b6b818f4711e",
-      "conversation_id": "conv_adf67509567c49f6b28446e649f73889",
-      "turn_id": "turn_df72aaf7c8344e888a84b6b818f4711e",
-      "request_id": "assistant_a15a87292c614f9f8f28b0e52adfe808",
-      "message_id": "",
-      "text": "committed high turn_df72aaf7c8344e888a84b6b818f4711e 在 AI治理办公室 下新建 人力资源部2，生效日期 2026-01-01 在指定父组织下创建部门，提交前需要确认候选主键。"
-    }
-  ],
+  "url": "http://localhost:18080/app/cubebox/conversations/conv_b98e49dafa50401caf2518f150d02775",
+  "bubble_count": 0,
+  "bubbles": [],
   "external_reply_container_count": 0,
   "connection_error_count": 0
 }

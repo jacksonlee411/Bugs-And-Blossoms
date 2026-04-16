@@ -51,7 +51,7 @@ export const navItems: NavItem[] = [
   {
     key: 'cubebox',
     path: '/cubebox',
-    labelKey: 'nav_ai_assistant',
+    labelKey: 'nav_cubebox',
     icon: <SmartToyIcon fontSize='small' />,
     order: 23,
     permissionKey: 'orgunit.read',
@@ -60,17 +60,17 @@ export const navItems: NavItem[] = [
   {
     key: 'cubebox-models',
     path: '/cubebox/models',
-    labelKey: 'nav_ai_assistant',
+    labelKey: 'nav_cubebox_models',
     icon: <SmartToyIcon fontSize='small' />,
     order: 231,
     parentKey: 'cubebox',
-    permissionKey: 'orgunit.admin',
+    permissionKey: 'orgunit.read',
     keywords: ['cubebox', 'model', 'provider', 'llm', '模型', '供应商']
   },
   {
     key: 'cubebox-files',
     path: '/cubebox/files',
-    labelKey: 'nav_ai_assistant',
+    labelKey: 'nav_cubebox_files',
     icon: <SmartToyIcon fontSize='small' />,
     order: 232,
     parentKey: 'cubebox',

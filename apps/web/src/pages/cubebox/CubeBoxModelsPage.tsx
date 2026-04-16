@@ -1,6 +1,8 @@
 import { Alert, Card, CardContent, Chip, Stack, Typography } from '@mui/material'
 import { useEffect, useState } from 'react'
+import { useAppPreferences } from '../../app/providers/AppPreferencesContext'
 import { getCubeBoxModels, getCubeBoxRuntimeStatus, type CubeBoxRuntimeStatusResponse } from '../../api/cubebox'
+import { cubeBoxErrorMessage } from './errorMessage'
 
 function healthColor(value: string): 'default' | 'success' | 'warning' | 'error' {
   if (value === 'healthy') return 'success'
@@ -9,48 +11,50 @@ function healthColor(value: string): 'default' | 'success' | 'warning' | 'error'
   return 'default'
 }
 
-function messageForError(error: unknown, fallback: string): string {
-  const message = (error as { message?: string })?.message
-  if (typeof message === 'string' && message.trim().length > 0) {
-    return message
-  }
-  return fallback
-}
-
 export function CubeBoxModelsPage() {
+  const { locale, t } = useAppPreferences()
   const [models, setModels] = useState<Array<{ provider: string; model: string }>>([])
   const [runtimeStatus, setRuntimeStatus] = useState<CubeBoxRuntimeStatusResponse | null>(null)
-  const [errorMessage, setErrorMessage] = useState('')
+  const [modelsErrorMessage, setModelsErrorMessage] = useState('')
+  const [runtimeErrorMessage, setRuntimeErrorMessage] = useState('')
 
   useEffect(() => {
     let active = true
     void (async () => {
-      try {
-        const [modelsResponse, runtimeResponse] = await Promise.all([getCubeBoxModels(), getCubeBoxRuntimeStatus()])
-        if (!active) {
-          return
-        }
-        setModels(modelsResponse.models)
-        setRuntimeStatus(runtimeResponse)
-      } catch (error) {
-        if (!active) {
-          return
-        }
-        setErrorMessage(messageForError(error, '加载 CubeBox 模型失败'))
+      const [modelsResult, runtimeResult] = await Promise.allSettled([getCubeBoxModels(), getCubeBoxRuntimeStatus()])
+      if (!active) {
+        return
+      }
+
+      if (modelsResult.status === 'fulfilled') {
+        setModels(modelsResult.value.models)
+        setModelsErrorMessage('')
+      } else {
+        setModels([])
+        setModelsErrorMessage(cubeBoxErrorMessage(modelsResult.reason, t('cubebox_error_models_load'), locale))
+      }
+
+      if (runtimeResult.status === 'fulfilled') {
+        setRuntimeStatus(runtimeResult.value)
+        setRuntimeErrorMessage('')
+      } else {
+        setRuntimeStatus(null)
+        setRuntimeErrorMessage(cubeBoxErrorMessage(runtimeResult.reason, t('cubebox_error_runtime_load'), locale))
       }
     })()
     return () => {
       active = false
     }
-  }, [])
+  }, [locale, t])
 
   return (
     <Stack spacing={2}>
-      <Typography variant='h5'>CubeBox 模型</Typography>
+      <Typography variant='h5'>{t('cubebox_models_title')}</Typography>
       <Typography color='text.secondary' variant='body2'>
-        模型页只做只读展示，不再承接旧 Assistant 模型治理写入口。
+        {t('cubebox_models_subtitle')}
       </Typography>
-      {errorMessage ? <Alert severity='warning'>{errorMessage}</Alert> : null}
+      {runtimeErrorMessage ? <Alert severity='warning'>{runtimeErrorMessage}</Alert> : null}
+      {modelsErrorMessage ? <Alert severity='warning'>{modelsErrorMessage}</Alert> : null}
 
       <Card>
         <CardContent>
@@ -76,7 +80,7 @@ export function CubeBoxModelsPage() {
             ))}
             {models.length === 0 ? (
               <Typography color='text.secondary' variant='body2'>
-                当前没有可用模型
+                {t('cubebox_models_empty')}
               </Typography>
             ) : null}
           </Stack>

@@ -1,5 +1,7 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { AppProviders } from '../../app/providers/AppProviders'
+import { ApiClientError } from '../../api/errors'
 
 const cubeboxAPIMocks = vi.hoisted(() => ({
   getCubeBoxRuntimeStatus: vi.fn(),
@@ -32,9 +34,18 @@ vi.mock('react-router-dom', async () => {
 
 import { CubeBoxPage } from './CubeBoxPage'
 
+function renderCubeBoxPage() {
+  return render(
+    <AppProviders>
+      <CubeBoxPage />
+    </AppProviders>
+  )
+}
+
 describe('CubeBoxPage', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    window.localStorage.clear()
     routeState.params = { conversationId: 'conv_1' }
     cubeboxAPIMocks.getCubeBoxRuntimeStatus.mockResolvedValue({
       status: 'healthy',
@@ -129,7 +140,7 @@ describe('CubeBoxPage', () => {
   })
 
   it('renders CubeBox runtime, conversations and files', async () => {
-    render(<CubeBoxPage />)
+    renderCubeBoxPage()
 
     await waitFor(() => expect(cubeboxAPIMocks.getCubeBoxRuntimeStatus).toHaveBeenCalled())
     await waitFor(() => expect(cubeboxAPIMocks.getCubeBoxConversation).toHaveBeenCalledWith('conv_1'))
@@ -141,6 +152,30 @@ describe('CubeBoxPage', () => {
     expect(screen.getByText('brief.pdf · application/pdf')).toBeInTheDocument()
     expect(screen.getByText('memory: retired')).toBeInTheDocument()
   }, 15000)
+
+  it('uses normalized api error message for page load failures', async () => {
+    cubeboxAPIMocks.getCubeBoxRuntimeStatus.mockRejectedValue(
+      new ApiClientError('legacy message', 'SERVER_ERROR', 503, 'trace_1', {
+        code: 'cubebox_service_missing',
+        message: 'CubeBox 服务暂不可用，请稍后重试。'
+      })
+    )
+
+    renderCubeBoxPage()
+
+    expect(await screen.findByText('CubeBox 服务暂不可用，请稍后重试。')).toBeInTheDocument()
+  })
+
+  it('keeps page-load error localized to the current app locale', async () => {
+    window.localStorage.setItem('web-mui-locale', 'en')
+    cubeboxAPIMocks.getCubeBoxRuntimeStatus.mockRejectedValue(
+      new ApiClientError('网络错误', 'NETWORK_ERROR')
+    )
+
+    renderCubeBoxPage()
+
+    expect(await screen.findByText('CubeBox page failed to load.')).toBeInTheDocument()
+  })
 
   it('renders candidate selection actions when multiple candidates require confirmation', async () => {
     cubeboxAPIMocks.getCubeBoxConversation.mockResolvedValueOnce({
@@ -245,7 +280,7 @@ describe('CubeBoxPage', () => {
       ]
     })
 
-    render(<CubeBoxPage />)
+    renderCubeBoxPage()
 
     await waitFor(() => expect(screen.getByTestId('cubebox-candidate-panel')).toBeInTheDocument())
     expect(screen.getByTestId('cubebox-confirm')).toBeDisabled()

@@ -1,3 +1,5 @@
+import type { Locale } from '../i18n/messages'
+
 type LocalizedErrorMessage = {
   en: string
   zh: string
@@ -192,12 +194,16 @@ const localizedMessages: Record<string, LocalizedErrorMessage> = {
   write_disabled: { en: 'Write disabled.', zh: '请求失败（write disabled）。' },
 }
 
-function shouldUseZh(): boolean {
+function resolveLocale(locale?: Locale): Locale {
+  if (locale === 'en' || locale === 'zh') {
+    return locale
+  }
+
   if (typeof navigator === 'undefined') {
-    return true
+    return 'zh'
   }
   const candidates = [navigator.language, ...navigator.languages].filter((item) => typeof item === 'string')
-  return candidates.some((item) => item.toLowerCase().startsWith('zh'))
+  return candidates.some((item) => item.toLowerCase().startsWith('zh')) ? 'zh' : 'en'
 }
 
 function isGenericMessage(code: string, fallback: string): boolean {
@@ -237,11 +243,12 @@ function sentenceFromCode(code: string): string {
   return `${sentence.charAt(0).toUpperCase()}${sentence.slice(1)}.`
 }
 
-export function resolveApiErrorMessage(code: string | undefined, fallback: string): string {
+export function resolveApiErrorMessage(code: string | undefined, fallback: string, locale?: Locale): string {
   const normalizedCode = (code ?? '').trim()
+  const resolvedLocale = resolveLocale(locale)
   const explicit = normalizedCode.length > 0 ? localizedMessages[normalizedCode] : undefined
   if (explicit) {
-    return shouldUseZh() ? explicit.zh : explicit.en
+    return resolvedLocale === 'zh' ? explicit.zh : explicit.en
   }
 
   if (!isGenericMessage(normalizedCode, fallback)) {
@@ -250,7 +257,7 @@ export function resolveApiErrorMessage(code: string | undefined, fallback: strin
 
   const synthesized = sentenceFromCode(normalizedCode)
   if (synthesized.length > 0) {
-    return shouldUseZh() ? `请求失败（${normalizedCode}）` : synthesized
+    return resolvedLocale === 'zh' ? `请求失败（${normalizedCode}）` : synthesized
   }
-  return shouldUseZh() ? '请求失败，请稍后重试。' : 'Request failed. Please retry later.'
+  return resolvedLocale === 'zh' ? '请求失败，请稍后重试。' : 'Request failed. Please retry later.'
 }

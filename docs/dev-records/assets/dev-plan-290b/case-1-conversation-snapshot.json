@@ -1,44 +1,44 @@
 {
   "case_id": 1,
-  "tenant_id": "9216ef9f-f3cb-421e-bcf7-1004e7f7f7ad",
-  "conversation_id": "conv_3187aea2ad894425ab133796c1a6397c",
+  "tenant_id": "aa0fa157-3734-4d5f-a2b9-c30179921518",
+  "conversation_id": "conv_040dbc664f5c40f9917d86cbb6c72c55",
   "snapshots": [
     {
       "step": 1,
       "input": "你好",
       "bubble": {
         "count": 1,
-        "bindingKey": "turn_a5c3b41d591945b1b70c6d1db5fa10cc",
-        "conversationId": "conv_3187aea2ad894425ab133796c1a6397c",
-        "turnId": "turn_a5c3b41d591945b1b70c6d1db5fa10cc",
-        "requestId": "assistant_51d63476bf3d4600b5b43d87f97e6a78",
-        "text": "validated low turn_a5c3b41d591945b1b70c6d1db5fa10cc 你好 当前轮属于闲聊响应，不触发业务提交。"
+        "bindingKey": "turn_54c1e36fbe0b43e79210da04efc17736",
+        "conversationId": "conv_040dbc664f5c40f9917d86cbb6c72c55",
+        "turnId": "turn_54c1e36fbe0b43e79210da04efc17736",
+        "requestId": "assistant_84d6c70fffe94110a6abc744b87f0cd9",
+        "text": "validated low turn_54c1e36fbe0b43e79210da04efc17736 你好 当前轮属于闲聊响应，不触发业务提交。"
       },
       "conversation": {
-        "conversation_id": "conv_3187aea2ad894425ab133796c1a6397c",
+        "conversation_id": "conv_040dbc664f5c40f9917d86cbb6c72c55",
         "tenant_id": "",
-        "actor_id": "a06b09ca-d1f1-4e06-9b59-5fe435008ecb",
+        "actor_id": "98079bec-782b-45f1-b5b7-d2e2c7aa2f3e",
         "actor_role": "tenant-admin",
         "state": "validated",
         "current_phase": "idle",
-        "created_at": "2026-04-16T03:18:43.864565Z",
-        "updated_at": "2026-04-16T03:19:04.553864Z",
+        "created_at": "2026-04-16T21:40:37.304391Z",
+        "updated_at": "2026-04-16T21:40:53.787233Z",
         "turns": [
           {
-            "turn_id": "turn_a5c3b41d591945b1b70c6d1db5fa10cc",
+            "turn_id": "turn_54c1e36fbe0b43e79210da04efc17736",
             "user_input": "你好",
             "state": "validated",
             "phase": "idle",
             "risk_tier": "low",
-            "request_id": "assistant_51d63476bf3d4600b5b43d87f97e6a78",
-            "trace_id": "42c167253822420e99b41082cc36cc4c",
+            "request_id": "assistant_84d6c70fffe94110a6abc744b87f0cd9",
+            "trace_id": "e703b5cf054d4fa895a97abaec45d896",
             "policy_version": "2026-02-23",
             "composition_version": "2026-02-23",
             "mapping_version": "2026-02-23",
             "intent": {
               "action": "",
-              "context_hash": "31ccf9e92ac99274087f9f485e78dd45f7bfc450bf925841918ef57363f7818f",
-              "intent_hash": "e9573b9ba1f2a557788440edab77648629a6c312c6a416d9131a6a7154b45509",
+              "context_hash": "6711771295263d41cd9ad157ce0c8c1374a07b12dabef30f6a1f5a651ff8adf6",
+              "intent_hash": "1e41ff3f89fc6ae89666c0784630b3f3e77b780a2c6188765138eb90cba8ae46",
               "intent_id": "chat.greeting",
               "intent_schema_version": "assistant.intent.v1",
               "route_catalog_version": "2026-04-13.v1",
@@ -66,7 +66,7 @@
               },
               "confirm_ttl_seconds": 900,
               "context_template_version": "plan_context_v1",
-              "expires_at": "2026-04-16T03:34:04Z",
+              "expires_at": "2026-04-16T21:55:53Z",
               "knowledge_snapshot_digest": "8ffc9befa42a8d7744cc5467908cb0663d4059e5c5bd06b2e71ade1a1266942e",
               "model_name": "gpt-5.2",
               "model_provider": "openai",
@@ -87,7 +87,7 @@
             "dry_run": {
               "diff": null,
               "explain": "当前轮属于闲聊响应，不触发业务提交。",
-              "plan_hash": "442be1498a6f087835c4c9cf3e51fbfdf76ae16b050362ba00c12f82d807eda8",
+              "plan_hash": "11e63aec76e2ab11be9e2395205a087bfca0ccbe6efb4438ee5ad36408eb07f8",
               "retrieval": {
                 "kind": "candidate_lookup",
                 "state": "not_requested"
@@ -98,70 +98,70 @@
               "would_commit": false
             },
             "ambiguity_count": 0,
-            "confidence": 0.65,
+            "confidence": 0.3,
             "commit_reply": {
-              "message": "你想进行哪类组织变更？请告诉我：操作类型 + 组织名称/组织编码 + 生效日期（YYYY-MM-DD）。",
+              "message": "你这次想做哪一种组织变更？如果方便，请直接告诉我：组织编码/部门名称、期望生效日期（YYYY-MM-DD）、以及上级组织（如涉及）。",
               "outcome": "pending"
             },
-            "created_at": "2026-04-16T03:19:04.553864Z",
-            "updated_at": "2026-04-16T03:19:04.553864Z"
+            "created_at": "2026-04-16T21:40:53.787233Z",
+            "updated_at": "2026-04-16T21:40:53.787233Z"
           }
         ],
         "state_transitions": [
           {
-            "id": 332,
-            "request_id": "assistant_6dc0d6e1804d49fdb9dae4b7eaa9dbf5",
-            "trace_id": "61a43fe7b7a343e58bc84dd4d251826a",
+            "id": 481,
+            "request_id": "assistant_28945197408a407cb46925e6334391bf",
+            "trace_id": "93b58bc6212849d68839fffae571fa06",
             "from_state": "init",
             "to_state": "validated",
             "from_phase": "init",
             "to_phase": "idle",
             "reason_code": "conversation_created",
-            "actor_id": "a06b09ca-d1f1-4e06-9b59-5fe435008ecb",
-            "changed_at": "2026-04-16T03:18:43.864565Z"
+            "actor_id": "98079bec-782b-45f1-b5b7-d2e2c7aa2f3e",
+            "changed_at": "2026-04-16T21:40:37.304391Z"
           },
           {
-            "id": 345,
-            "request_id": "assistant_6dc0d6e1804d49fdb9dae4b7eaa9dbf5",
-            "trace_id": "61a43fe7b7a343e58bc84dd4d251826a",
+            "id": 484,
+            "request_id": "assistant_28945197408a407cb46925e6334391bf",
+            "trace_id": "93b58bc6212849d68839fffae571fa06",
             "from_state": "init",
             "to_state": "validated",
             "from_phase": "init",
             "to_phase": "idle",
             "reason_code": "conversation_created",
-            "actor_id": "a06b09ca-d1f1-4e06-9b59-5fe435008ecb",
-            "changed_at": "2026-04-16T03:18:43.864565Z"
+            "actor_id": "98079bec-782b-45f1-b5b7-d2e2c7aa2f3e",
+            "changed_at": "2026-04-16T21:40:37.304391Z"
           },
           {
-            "id": 346,
-            "turn_id": "turn_a5c3b41d591945b1b70c6d1db5fa10cc",
-            "request_id": "assistant_51d63476bf3d4600b5b43d87f97e6a78",
-            "trace_id": "42c167253822420e99b41082cc36cc4c",
+            "id": 485,
+            "turn_id": "turn_54c1e36fbe0b43e79210da04efc17736",
+            "request_id": "assistant_84d6c70fffe94110a6abc744b87f0cd9",
+            "trace_id": "e703b5cf054d4fa895a97abaec45d896",
             "from_state": "init",
             "to_state": "validated",
             "from_phase": "idle",
             "to_phase": "idle",
             "reason_code": "turn_created",
-            "actor_id": "a06b09ca-d1f1-4e06-9b59-5fe435008ecb",
-            "changed_at": "2026-04-16T03:19:04.553864Z"
+            "actor_id": "98079bec-782b-45f1-b5b7-d2e2c7aa2f3e",
+            "changed_at": "2026-04-16T21:40:53.787233Z"
           }
         ]
       },
       "latest_turn": {
-        "turn_id": "turn_a5c3b41d591945b1b70c6d1db5fa10cc",
+        "turn_id": "turn_54c1e36fbe0b43e79210da04efc17736",
         "user_input": "你好",
         "state": "validated",
         "phase": "idle",
         "risk_tier": "low",
-        "request_id": "assistant_51d63476bf3d4600b5b43d87f97e6a78",
-        "trace_id": "42c167253822420e99b41082cc36cc4c",
+        "request_id": "assistant_84d6c70fffe94110a6abc744b87f0cd9",
+        "trace_id": "e703b5cf054d4fa895a97abaec45d896",
         "policy_version": "2026-02-23",
         "composition_version": "2026-02-23",
         "mapping_version": "2026-02-23",
         "intent": {
           "action": "",
-          "context_hash": "31ccf9e92ac99274087f9f485e78dd45f7bfc450bf925841918ef57363f7818f",
-          "intent_hash": "e9573b9ba1f2a557788440edab77648629a6c312c6a416d9131a6a7154b45509",
+          "context_hash": "6711771295263d41cd9ad157ce0c8c1374a07b12dabef30f6a1f5a651ff8adf6",
+          "intent_hash": "1e41ff3f89fc6ae89666c0784630b3f3e77b780a2c6188765138eb90cba8ae46",
           "intent_id": "chat.greeting",
           "intent_schema_version": "assistant.intent.v1",
           "route_catalog_version": "2026-04-13.v1",
@@ -189,7 +189,7 @@
           },
           "confirm_ttl_seconds": 900,
           "context_template_version": "plan_context_v1",
-          "expires_at": "2026-04-16T03:34:04Z",
+          "expires_at": "2026-04-16T21:55:53Z",
           "knowledge_snapshot_digest": "8ffc9befa42a8d7744cc5467908cb0663d4059e5c5bd06b2e71ade1a1266942e",
           "model_name": "gpt-5.2",
           "model_provider": "openai",
@@ -210,7 +210,7 @@
         "dry_run": {
           "diff": null,
           "explain": "当前轮属于闲聊响应，不触发业务提交。",
-          "plan_hash": "442be1498a6f087835c4c9cf3e51fbfdf76ae16b050362ba00c12f82d807eda8",
+          "plan_hash": "11e63aec76e2ab11be9e2395205a087bfca0ccbe6efb4438ee5ad36408eb07f8",
           "retrieval": {
             "kind": "candidate_lookup",
             "state": "not_requested"
@@ -221,41 +221,41 @@
           "would_commit": false
         },
         "ambiguity_count": 0,
-        "confidence": 0.65,
+        "confidence": 0.3,
         "commit_reply": {
-          "message": "你想进行哪类组织变更？请告诉我：操作类型 + 组织名称/组织编码 + 生效日期（YYYY-MM-DD）。",
+          "message": "你这次想做哪一种组织变更？如果方便，请直接告诉我：组织编码/部门名称、期望生效日期（YYYY-MM-DD）、以及上级组织（如涉及）。",
           "outcome": "pending"
         },
-        "created_at": "2026-04-16T03:19:04.553864Z",
-        "updated_at": "2026-04-16T03:19:04.553864Z"
+        "created_at": "2026-04-16T21:40:53.787233Z",
+        "updated_at": "2026-04-16T21:40:53.787233Z"
       }
     }
   ],
   "final_conversation": {
-    "conversation_id": "conv_3187aea2ad894425ab133796c1a6397c",
+    "conversation_id": "conv_040dbc664f5c40f9917d86cbb6c72c55",
     "tenant_id": "",
-    "actor_id": "a06b09ca-d1f1-4e06-9b59-5fe435008ecb",
+    "actor_id": "98079bec-782b-45f1-b5b7-d2e2c7aa2f3e",
     "actor_role": "tenant-admin",
     "state": "validated",
     "current_phase": "idle",
-    "created_at": "2026-04-16T03:18:43.864565Z",
-    "updated_at": "2026-04-16T03:19:04.553864Z",
+    "created_at": "2026-04-16T21:40:37.304391Z",
+    "updated_at": "2026-04-16T21:40:53.787233Z",
     "turns": [
       {
-        "turn_id": "turn_a5c3b41d591945b1b70c6d1db5fa10cc",
+        "turn_id": "turn_54c1e36fbe0b43e79210da04efc17736",
         "user_input": "你好",
         "state": "validated",
         "phase": "idle",
         "risk_tier": "low",
-        "request_id": "assistant_51d63476bf3d4600b5b43d87f97e6a78",
-        "trace_id": "42c167253822420e99b41082cc36cc4c",
+        "request_id": "assistant_84d6c70fffe94110a6abc744b87f0cd9",
+        "trace_id": "e703b5cf054d4fa895a97abaec45d896",
         "policy_version": "2026-02-23",
         "composition_version": "2026-02-23",
         "mapping_version": "2026-02-23",
         "intent": {
           "action": "",
-          "context_hash": "31ccf9e92ac99274087f9f485e78dd45f7bfc450bf925841918ef57363f7818f",
-          "intent_hash": "e9573b9ba1f2a557788440edab77648629a6c312c6a416d9131a6a7154b45509",
+          "context_hash": "6711771295263d41cd9ad157ce0c8c1374a07b12dabef30f6a1f5a651ff8adf6",
+          "intent_hash": "1e41ff3f89fc6ae89666c0784630b3f3e77b780a2c6188765138eb90cba8ae46",
           "intent_id": "chat.greeting",
           "intent_schema_version": "assistant.intent.v1",
           "route_catalog_version": "2026-04-13.v1",
@@ -283,7 +283,7 @@
           },
           "confirm_ttl_seconds": 900,
           "context_template_version": "plan_context_v1",
-          "expires_at": "2026-04-16T03:34:04Z",
+          "expires_at": "2026-04-16T21:55:53Z",
           "knowledge_snapshot_digest": "8ffc9befa42a8d7744cc5467908cb0663d4059e5c5bd06b2e71ade1a1266942e",
           "model_name": "gpt-5.2",
           "model_provider": "openai",
@@ -304,7 +304,7 @@
         "dry_run": {
           "diff": null,
           "explain": "当前轮属于闲聊响应，不触发业务提交。",
-          "plan_hash": "442be1498a6f087835c4c9cf3e51fbfdf76ae16b050362ba00c12f82d807eda8",
+          "plan_hash": "11e63aec76e2ab11be9e2395205a087bfca0ccbe6efb4438ee5ad36408eb07f8",
           "retrieval": {
             "kind": "candidate_lookup",
             "state": "not_requested"
@@ -315,52 +315,52 @@
           "would_commit": false
         },
         "ambiguity_count": 0,
-        "confidence": 0.65,
+        "confidence": 0.3,
         "commit_reply": {
-          "message": "你想进行哪类组织变更？请告诉我：操作类型 + 组织名称/组织编码 + 生效日期（YYYY-MM-DD）。",
+          "message": "你这次想做哪一种组织变更？如果方便，请直接告诉我：组织编码/部门名称、期望生效日期（YYYY-MM-DD）、以及上级组织（如涉及）。",
           "outcome": "pending"
         },
-        "created_at": "2026-04-16T03:19:04.553864Z",
-        "updated_at": "2026-04-16T03:19:04.553864Z"
+        "created_at": "2026-04-16T21:40:53.787233Z",
+        "updated_at": "2026-04-16T21:40:53.787233Z"
       }
     ],
     "state_transitions": [
       {
-        "id": 332,
-        "request_id": "assistant_6dc0d6e1804d49fdb9dae4b7eaa9dbf5",
-        "trace_id": "61a43fe7b7a343e58bc84dd4d251826a",
+        "id": 481,
+        "request_id": "assistant_28945197408a407cb46925e6334391bf",
+        "trace_id": "93b58bc6212849d68839fffae571fa06",
         "from_state": "init",
         "to_state": "validated",
         "from_phase": "init",
         "to_phase": "idle",
         "reason_code": "conversation_created",
-        "actor_id": "a06b09ca-d1f1-4e06-9b59-5fe435008ecb",
-        "changed_at": "2026-04-16T03:18:43.864565Z"
+        "actor_id": "98079bec-782b-45f1-b5b7-d2e2c7aa2f3e",
+        "changed_at": "2026-04-16T21:40:37.304391Z"
       },
       {
-        "id": 345,
-        "request_id": "assistant_6dc0d6e1804d49fdb9dae4b7eaa9dbf5",
-        "trace_id": "61a43fe7b7a343e58bc84dd4d251826a",
+        "id": 484,
+        "request_id": "assistant_28945197408a407cb46925e6334391bf",
+        "trace_id": "93b58bc6212849d68839fffae571fa06",
         "from_state": "init",
         "to_state": "validated",
         "from_phase": "init",
         "to_phase": "idle",
         "reason_code": "conversation_created",
-        "actor_id": "a06b09ca-d1f1-4e06-9b59-5fe435008ecb",
-        "changed_at": "2026-04-16T03:18:43.864565Z"
+        "actor_id": "98079bec-782b-45f1-b5b7-d2e2c7aa2f3e",
+        "changed_at": "2026-04-16T21:40:37.304391Z"
       },
       {
-        "id": 346,
-        "turn_id": "turn_a5c3b41d591945b1b70c6d1db5fa10cc",
-        "request_id": "assistant_51d63476bf3d4600b5b43d87f97e6a78",
-        "trace_id": "42c167253822420e99b41082cc36cc4c",
+        "id": 485,
+        "turn_id": "turn_54c1e36fbe0b43e79210da04efc17736",
+        "request_id": "assistant_84d6c70fffe94110a6abc744b87f0cd9",
+        "trace_id": "e703b5cf054d4fa895a97abaec45d896",
         "from_state": "init",
         "to_state": "validated",
         "from_phase": "idle",
         "to_phase": "idle",
         "reason_code": "turn_created",
-        "actor_id": "a06b09ca-d1f1-4e06-9b59-5fe435008ecb",
-        "changed_at": "2026-04-16T03:19:04.553864Z"
+        "actor_id": "98079bec-782b-45f1-b5b7-d2e2c7aa2f3e",
+        "changed_at": "2026-04-16T21:40:53.787233Z"
       }
     ]
   }

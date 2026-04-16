@@ -3,13 +3,13 @@
   "scope": "T0_DATA_BASELINE",
   "status": "passed",
   "t0_baseline_ready": true,
-  "validated_at": "2026-04-16T03:24:07.410Z",
+  "validated_at": "2026-04-16T21:42:05.889Z",
   "runtime_gate_status": "passed",
   "t0_baseline": {
-    "tenant_id": "bdbb3aff-19aa-4a58-98c5-332d0c8cd126",
+    "tenant_id": "4e5b82ea-97e6-4175-b5e8-0413a8c610c6",
     "tenant_ids": {
-      "case2": "7a6791e8-8a5a-43ea-b9c8-489c3592a897",
-      "case4": "bdbb3aff-19aa-4a58-98c5-332d0c8cd126"
+      "case2": "4e5b82ea-97e6-4175-b5e8-0413a8c610c6",
+      "case4": ""
     },
     "effective_date": "2026-01-01",
     "as_of": "2026-03-26",
@@ -74,7 +74,7 @@
     ],
     "candidate_snapshot": {
       "source_case": "case4_probe",
-      "conversation_id": "conv_bc28f5e5abbe4c289d7906a124e7291c",
+      "conversation_id": "conv_ec0badfaf7b04719bdda9bb8cf024115",
       "candidate_count": 2,
       "candidates": [
         {
@@ -97,7 +97,7 @@
     },
     "probes": {
       "case2": {
-        "conversation_id": "conv_4c80dd64574f40db9a60ac68e17420ac",
+        "conversation_id": "conv_78991e8cf41d4b35b366ac41cfb46202",
         "create_turn_status": 200,
         "error_code": "",
         "phase": "await_commit_confirm",
@@ -106,11 +106,11 @@
         "candidate_count": 1,
         "validation_errors": [],
         "resolved_candidate_id": "TP290BAIGOV",
-        "request_id": "assistant_aa764f00b0ab41dd8382dc4323e96bb1",
-        "trace_id": "65567ad055474dc8a673fa9ea03301cf"
+        "request_id": "assistant_083c2b62bcfb4c8eae79d41d2aa6bc2d",
+        "trace_id": "2a9cea43f39b4da79cf2d9a3f8b7d8b8"
       },
       "case4": {
-        "conversation_id": "conv_bc28f5e5abbe4c289d7906a124e7291c",
+        "conversation_id": "conv_ec0badfaf7b04719bdda9bb8cf024115",
         "create_turn_status": 200,
         "error_code": "",
         "phase": "await_candidate_pick",
@@ -121,8 +121,8 @@
           "candidate_confirmation_required"
         ],
         "resolved_candidate_id": "",
-        "request_id": "assistant_cb6b6546a34347a1ac55e57cd75b3eec",
-        "trace_id": "3da38aefa98144ec82f1cc24bffa5fbc"
+        "request_id": "assistant_63d1bc1ab2b644d18c7d54cb38a779cd",
+        "trace_id": "6587f25c37dd47b993e7de327f25cc36"
       }
     },
     "issues": []

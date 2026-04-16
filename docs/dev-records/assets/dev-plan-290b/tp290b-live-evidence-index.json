@@ -1,7 +1,7 @@
 {
   "plan": "DEV-PLAN-290B",
-  "status": "passed",
-  "updated_at": "2026-04-16T03:24:07.409Z",
+  "status": "blocked",
+  "updated_at": "2026-04-16T21:42:05.888Z",
   "formal_entry": "/app/cubebox",
   "runtime_admission_gate": {
     "status": "passed",
@@ -17,7 +17,9 @@
     "fail-closed behavior changed",
     "assistant formal submit pipeline changed"
   ],
-  "blockers": [],
+  "blockers": [
+    "Case 2: 主验收执行失败：{\"code\":\"ai_plan_schema_constrained_decode_failed\",\"message\":\"ai plan schema constrained decode failed\",\"trace_id\":\"2feee948696f4d3c9fa03897d5e00f20\",\"meta\":{\"path\":\"/internal/cubebox/conversations/conv_b98e49dafa50401caf2518f150d02775/turns\",\"method\":\"POST\"}}\n\n\n\u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBe\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // Object.is equality\u001b[22m\n\nExpected: \u001b[32m200\u001b[39m\nReceived: \u001b[31m422\u001b[39m"
+  ],
   "fixed_assets": {
     "root": "docs/dev-records/assets/dev-plan-290b",
     "pattern": [
@@ -55,62 +57,40 @@
     },
     {
       "id": 2,
-      "status": "passed",
+      "status": "blocked",
       "input_sequence": [
         "在 AI治理办公室 下新建 人力资源部2，生效日期 2026-01-01",
         "确认"
       ],
-      "task_terminal_status": "succeeded",
+      "blocking_reason": "主验收执行失败：{\"code\":\"ai_plan_schema_constrained_decode_failed\",\"message\":\"ai plan schema constrained decode failed\",\"trace_id\":\"2feee948696f4d3c9fa03897d5e00f20\",\"meta\":{\"path\":\"/internal/cubebox/conversations/conv_b98e49dafa50401caf2518f150d02775/turns\",\"method\":\"POST\"}}\n\n\n\u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBe\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // Object.is equality\u001b[22m\n\nExpected: \u001b[32m200\u001b[39m\nReceived: \u001b[31m422\u001b[39m",
       "artifacts": {
         "page": "docs/dev-records/assets/dev-plan-290b/case-2-page.png",
         "dom": "docs/dev-records/assets/dev-plan-290b/case-2-dom.json",
         "network": "docs/dev-records/assets/dev-plan-290b/case-2-network.har",
         "trace": "docs/dev-records/assets/dev-plan-290b/case-2-trace.zip",
-        "phase_assertions": "docs/dev-records/assets/dev-plan-290b/case-2-phase-assertions.json",
-        "intent_action_assertions": "docs/dev-records/assets/dev-plan-290b/case-2-intent-action-assertions.json",
-        "conversation_snapshot": "docs/dev-records/assets/dev-plan-290b/case-2-conversation-snapshot.json",
-        "model_proof": "docs/dev-records/assets/dev-plan-290b/case-2-model-proof.json"
+        "unsupported": "docs/dev-records/assets/dev-plan-290b/case-2-unsupported-failure.json",
+        "conversation_snapshot": "docs/dev-records/assets/dev-plan-290b/case-2-conversation-snapshot.json"
       }
     },
     {
       "id": 3,
-      "status": "passed",
+      "status": "not_run",
       "input_sequence": [
         "在 AI治理办公室 下新建 人力资源部239A补全",
         "生效日期 2026-03-25",
         "确认"
       ],
-      "task_terminal_status": "succeeded",
-      "artifacts": {
-        "page": "docs/dev-records/assets/dev-plan-290b/case-3-page.png",
-        "dom": "docs/dev-records/assets/dev-plan-290b/case-3-dom.json",
-        "network": "docs/dev-records/assets/dev-plan-290b/case-3-network.har",
-        "trace": "docs/dev-records/assets/dev-plan-290b/case-3-trace.zip",
-        "phase_assertions": "docs/dev-records/assets/dev-plan-290b/case-3-phase-assertions.json",
-        "intent_action_assertions": "docs/dev-records/assets/dev-plan-290b/case-3-intent-action-assertions.json",
-        "conversation_snapshot": "docs/dev-records/assets/dev-plan-290b/case-3-conversation-snapshot.json",
-        "model_proof": "docs/dev-records/assets/dev-plan-290b/case-3-model-proof.json"
-      }
+      "blocking_reason": "前置用例失败后未执行"
     },
     {
       "id": 4,
-      "status": "passed",
+      "status": "not_run",
       "input_sequence": [
         "请在父组织共享服务中心下新建候选验证部239A，生效日期2026-03-26",
         "选第2个",
         "是的"
       ],
-      "task_terminal_status": "succeeded",
-      "artifacts": {
-        "page": "docs/dev-records/assets/dev-plan-290b/case-4-page.png",
-        "dom": "docs/dev-records/assets/dev-plan-290b/case-4-dom.json",
-        "network": "docs/dev-records/assets/dev-plan-290b/case-4-network.har",
-        "trace": "docs/dev-records/assets/dev-plan-290b/case-4-trace.zip",
-        "phase_assertions": "docs/dev-records/assets/dev-plan-290b/case-4-phase-assertions.json",
-        "intent_action_assertions": "docs/dev-records/assets/dev-plan-290b/case-4-intent-action-assertions.json",
-        "conversation_snapshot": "docs/dev-records/assets/dev-plan-290b/case-4-conversation-snapshot.json",
-        "model_proof": "docs/dev-records/assets/dev-plan-290b/case-4-model-proof.json"
-      }
+      "blocking_reason": "前置用例失败后未执行"
     }
   ]
 }
