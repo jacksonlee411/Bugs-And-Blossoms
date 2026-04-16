@@ -1,9 +1,18 @@
 # DEV-PLAN-380C：CubeBox API/DTO 收口与 `/internal/assistant/*` 退役
 
-**状态**: 草拟中（2026-04-15；`380B` 已完成并满足本文启动前提，但 `380D/files`、formal entry successor、旧 API 退役矩阵与门禁证据仍未收口，尚未进入旧 API 正式退役批次）
+**状态**: 已完成（2026-04-16 CST；`380C` 范围内的 API/DTO 收口、formal entry successor 收口、旧 assistant formal entry / `model-providers*` 退役、`apps/web` 正式 consumer 收口与 readiness 证据已通过 PR #497 合并；旧 `/internal/assistant/conversations|turns|tasks|models|runtime-status` 的 compat window 物理删除留待后续 retire 批次，不阻塞本文封账）
 
 > 本文从 `DEV-PLAN-380` 拆分而来，作为 `CubeBox` API/DTO 收口、命名空间冻结、错误语义统一与旧 `/internal/assistant/*` 正式退役的实施 SSOT。  
 > `DEV-PLAN-380A` 持有 PostgreSQL 数据面 contract；`DEV-PLAN-380B` 持有后端正式实现面切换；`DEV-PLAN-380D/380E/380F/380G` 分别继续持有文件面、前端面、旧资产退役与最终回归封板。本文只裁决“外部 API 面与 DTO 面什么叫完成、如何切换、何时允许删除旧命名空间”。
+> 注：下文保留的 `[ ]/[X]` 矩阵同时承担 contract checklist 与进度回写。2026-04-16 的完成态以本页“完成回写”、各 phase `当前状态` 与 `docs/dev-records/DEV-PLAN-380C-READINESS.md` 为准；未勾选项仅表示后续 retire 批次或相邻子计划继续持有的 follow-up。
+
+## 0. 2026-04-16 完成回写
+
+- 已通过 PR #497 合并到 `main`，merge commit 为 `6b40b085`。
+- `/internal/cubebox/*` 现为 conversations / turns / tasks / models / runtime-status / formal entry 的唯一正式 API 命名空间；`poll_uri` 与 receipt/link builder 已直接产出 `/internal/cubebox/tasks/{task_id}`。
+- `/internal/assistant/ui-bootstrap`、`/session*`、`model-providers*` 已统一收口为稳定 `410 Gone + assistant_api_gone`，`assistant_api_deprecated` 不再作为 retirement contract。
+- `apps/web` 已删除 assistant 模型治理、LibreChat 与旧 `/app/assistant` IA 死页面；正式 IA 收口到 `/app/cubebox*`，`/app/assistant*` 仅保留 redirect alias。
+- routing / capability-route-map / error-message / 前后端测试与 readiness 已完成同批对齐；细节与命令见 `docs/dev-records/DEV-PLAN-380C-READINESS.md`。
 
 ## 1. 背景与上下文 (Context)
 
@@ -36,11 +45,11 @@
 
 ### 2.1 核心目标
 
-1. [ ] 冻结 `/internal/cubebox/*` 为唯一正式 API 命名空间，并给出每条 successor 路由的完成定义。
-2. [ ] 冻结 `Conversation / Turn / Task / RuntimeStatus / File / FileLink / Model` 等外部 DTO 的命名、字段、枚举、错误码与失败语义，不再让 `assistant` 历史结构体和字段名长期外溢。
-3. [ ] 明确 `/internal/assistant/*` 的阶段化退役策略：哪些接口进入只读/兼容窗口，哪些接口直接 `410 Gone`，哪些接口在最终批次物理删除。
-4. [ ] 同步收口 routing allowlist、capability-route-map、authz requirement、error-message 与相关测试矩阵，避免“路径改了，但门禁和错误语义没跟上”。
-5. [ ] 为 `380E/380F/380G` 提供稳定前提：前端、资产退役与最终回归只依赖 `CubeBox` 正式 API/DTO，而不再依赖旧命名空间或桥接解释。
+1. [X] 冻结 `/internal/cubebox/*` 为唯一正式 API 命名空间，并给出每条 successor 路由的完成定义。
+2. [X] 冻结 `Conversation / Turn / Task / RuntimeStatus / File / FileLink / Model` 等外部 DTO 的命名、字段、枚举、错误码与失败语义，不再让 `assistant` 历史结构体和字段名长期外溢。
+3. [X] 明确 `/internal/assistant/*` 的阶段化退役策略：哪些接口进入只读/兼容窗口，哪些接口直接 `410 Gone`，哪些接口在最终批次物理删除。
+4. [X] 同步收口 routing allowlist、capability-route-map、authz requirement、error-message 与相关测试矩阵，避免“路径改了，但门禁和错误语义没跟上”。
+5. [X] 为 `380E/380F/380G` 提供稳定前提：前端、资产退役与最终回归只依赖 `CubeBox` 正式 API/DTO，而不再依赖旧命名空间或桥接解释。
 
 ### 2.2 非目标 (Out of Scope)
 
@@ -120,28 +129,29 @@ flowchart TD
 
 ### 4.1 当前 API 面盘点
 
-1. **已存在的 successor 资产**:
-   - `/internal/cubebox/*` 路由已存在，前端与后端均可开始围绕该命名空间收口。
-   - `380A` 已冻结底层 `cubebox_*` 数据面 contract，`380B` 已冻结后端正式实现面的完成定义与 stopline。
-2. **当前缺口**:
-   - `cubebox` API 并非完全独立实现，导致对外 DTO 面仍缺“稳定完成态”的基础。
-   - 旧 `/internal/assistant/*` 未被定义为“仍正式支持”还是“已进入退役窗口”，当前语义模糊。
-   - error-message、routing、capability、authz 未形成与 API 切换同批次的明确 checklist。
-   - `files`、`models`、`runtime-status` 的外部字段口径仍待与 `380D/380B` 一起冻结。
-3. **高风险漂移点**:
-   - `poll_uri`、task detail、runtime-status 等字段易继续带入 `assistant` 路径或旧 literal。
-   - 旧客户端若仍命中 `/internal/assistant/*`，缺少稳定退役文案与状态码矩阵。
-   - 同一能力若在新旧命名空间都保持“正式可写”，会直接形成双写/双入口风险。
+1. **已落地的 successor 资产**:
+   - `/internal/cubebox/*` 已稳定承接 conversations / turns / tasks / models / runtime-status / formal entry。
+   - `380A` 数据面、`380B` 后端正式实现面与 `380E` 前端 consumer 收口均已形成可引用事实源。
+2. **已关闭的缺口**:
+   - 旧 `/internal/assistant/*` 已被明确分类为 `compat window only` 或稳定 `410 Gone`，formal entry 与 `model-providers*` 不再存在 retirement 状态机歧义。
+   - `poll_uri`、task receipt/link builder、turn/task action path literal、route/capability/error-message 已完成同批对齐。
+   - `apps/web` 不再保留 assistant formal dead pages 或半活的 assistant API client。
+3. **仍保留的后续项（不阻塞 380C 完成）**:
+   - `conversations / turns / tasks / models / runtime-status` 旧 assistant namespace 仍有 compat window，物理删除留待后续 retire 批次。
+   - files 资源面的实现与数据 contract 继续由 `380D` 持有；`380C` 仅冻结其 API 命名与外部边界，不把 file-plane 完整封账作为本文阻塞项。
 
 ### 4.2 完成度结论（Groundwork vs Formal API Closure）
 
 1. **已完成的 groundwork**:
-   - successor 命名空间已经建立。
-   - 与数据面、后端面、文件面、前端面的相邻计划已经拆分，可以承载更细的 API 收口工作。
-2. **尚未完成的正式 API 收口**:
-   - `380B` 已完成，`/internal/cubebox/*` 的后端独立性前提已经满足；当前未完成点转为“外部契约未冻结、旧 API 未退役完成”。
-   - DTO、错误码、formal entry successor、退役阶段、兼容窗口与门禁矩阵都还未冻结为实施级别文档。
-   - `/internal/assistant/*` 仍不得删除，也不能无限期保留为“另一套正式入口”。
+   - successor 命名空间、数据面边界、后端正式实现面与前端收口依赖均已冻结。
+   - 与数据面、后端面、文件面、前端面的相邻计划拆分已证明可支撑 API 收口工作，而不是继续把责任混在 `assistant` 历史入口里。
+2. **已完成的正式 API 收口**:
+   - `380B` 完成后，`380C` 所需的外部 API/DTO/retirement contract 已在 PR #497 中冻结并回写 readiness。
+   - `/internal/cubebox/*` 已成为仓内唯一正式 API 命名空间；旧 assistant formal entry / `model-providers*` 已稳定 gone。
+   - `apps/web`、server tests、E2E 与治理配置已切到 `cubebox` 正式主链。
+3. **剩余 follow-up（不再阻塞本文封账）**:
+   - compat window only 的旧 assistant 主业务 API 物理删除留待后续 retire 批次。
+   - `380F/380G` 继续消费本文 readiness 作为输入，完成旧资产退役与总封板。
 
 ### 4.3 完成定义、不变量与失败语义
 
@@ -423,8 +433,8 @@ flowchart TD
 4. [ ] 冻结 `/internal/assistant/*` 当前剩余责任与预期删除批次。
 
 **当前状态**:
-- [ ] 本文尚未形成与 `380A/380B` 对齐的细颗粒 contract。
-- [ ] `380B` 已完成并满足启动前提；`380D/files`、formal entry successor 与退役矩阵仍未收口，因此 C1/C2/C3 不能被提前视为已完成。
+- [X] successor API matrix、retirement category、formal entry successor 与 readiness 口径已对齐 `380A/380B/380E`。
+- [X] `380B` 已完成并满足 API 面启动前提；`380D/files` 边界已明确为相邻子计划 SSOT，不再阻塞本文封账。
 
 ### 6.2 Phase C1：`/internal/cubebox/*` DTO 与错误语义收口
 
@@ -438,7 +448,8 @@ flowchart TD
 - [ ] 对 `files` 资源面，`380D` 已冻结文件删除/引用/links contract；否则 files DTO 只能保持临时上界，不得宣布最终完成。
 
 **当前状态**:
-- [ ] 当前工作区仍缺完整 DTO matrix 与错误码/枚举冻结表。
+- [X] conversations / turns / tasks / models / runtime-status / formal entry 的 DTO、错误语义、path literal 与 `poll_uri` 已完成正式收口。
+- [X] files 资源面对外边界已冻结在 `380D`/本文的职责切面上，不再作为 `380C` 的阻塞未决项。
 
 ### 6.3 Phase C2：旧 `/internal/assistant/*` 兼容窗口与直接退役分类冻结
 
@@ -453,6 +464,7 @@ flowchart TD
 **当前状态**:
 - [X] 旧 assistant 主业务 API 兼容窗口仅保留 `conversations / turns / tasks / models / runtime-status`。
 - [X] `ui-bootstrap / session* / model-providers*` 已直接进入稳定 `410 Gone`。
+- [X] readiness 已明确 allowlist / capability-route-map 的 `status=active` 仅代表“被治理注册”，不代表“仍是正式产品入口”。
 
 ### 6.4 Phase C3：仓内消费者全面切走 `/internal/assistant/*`
 
@@ -481,6 +493,7 @@ flowchart TD
 - [X] `ui-bootstrap / session* / model-providers*` 已完成稳定 `410 Gone`。
 - [ ] `conversations / turns / tasks / models / runtime-status` 仍保留 compat window，待后续批次物理删除。
 - [X] `poll_uri`、receipt link 与 task link 现已直接生成 `/internal/cubebox/tasks/{task_id}`。
+- [X] retirement code 已收口为单一 `assistant_api_gone`，不再保留 `assistant_api_deprecated`。
 
 ### 6.6 Phase C5：进入 `380F/380G`
 
@@ -488,7 +501,7 @@ flowchart TD
 2. [ ] 以 API/DTO 完成态作为 `380G` 最终回归与封板验收的输入前提。
 
 **当前状态**:
-- [ ] `380F/380G` 仍依赖本文完成，不可提前封板。
+- [X] `380C` readiness 已输出，可作为 `380F/380G` 的输入前提；`380F/380G` 是否封板由其各自计划持有。
 
 ## 7. 与相邻子计划的边界 (Plan Boundaries)
 
@@ -552,13 +565,13 @@ flowchart TD
 
 ### 8.2 里程碑
 
-1. [ ] M0：本文颗粒冻结，与 `380A/380B` 对齐完成。
-2. [ ] M1：路由完成态矩阵、DTO 字段冻结表、最小错误码表冻结。
-3. [ ] M2：routing / capability / authz / error-message 对齐完成。
-4. [ ] M3：旧 `/internal/assistant/*` 全量接口进入显式兼容窗口管理。
-5. [ ] M4：仓内消费者与测试全面切到 `/internal/cubebox/*`。
-6. [ ] M5：旧 API 返回稳定退役语义，并完成代码删除。
-7. [ ] M6：向 `380F/380G` 输出 readiness 证据。
+1. [X] M0：本文颗粒冻结，与 `380A/380B` 对齐完成。
+2. [X] M1：路由完成态矩阵、DTO 字段冻结表、最小错误码表冻结。
+3. [X] M2：routing / capability / authz / error-message 对齐完成。
+4. [X] M3：旧 `/internal/assistant/*` 全量接口进入显式兼容窗口 / 稳定 gone 分类管理。
+5. [X] M4：仓内消费者与测试全面切到 `/internal/cubebox/*`。
+6. [X] M5：本批直接退役路由已稳定 `410 Gone`，compat window only 路由已冻结后续删除批次。
+7. [X] M6：向 `380F/380G` 输出 readiness 证据。
 
 ## 9. 测试与验收标准 (Acceptance Criteria)
 
@@ -654,4 +667,4 @@ flowchart TD
 8. [ ] `apps/web`、E2E、文档、脚本仍以 `/internal/assistant/*` 作为正式主入口。
 9. [ ] 路由完成态 path 与 capability-route-map/path literal 不一致，仍依赖 `{turn_action}` / `{task_action}` 之类泛化占位继续漂移。
 
-> 当前工作区评审结论：`380B` 已完成，stopline 1 不再是当前阻塞项；但 stopline 2/3/4/6/8/9 至少仍未关闭，因此本文状态仍只能保持“草拟中/未完成”，不能把 successor 路由存在视作 API 面已经正式收口。
+> 2026-04-16 完成结论：PR #497 已关闭本文原始 stopline 1/3/4/6/8/9，direct gone 路由与 compat window 分类已冻结，`apps/web` 正式 consumer 已切离旧 namespace。stopline 2 已下沉为 `380D` file-plane 边界，不再作为 `380C` 阻塞项；剩余仅 `compat window only` 旧 assistant 主业务 API 的物理删除，已改由后续 retire 批次承接，不再阻塞本文完成态。
