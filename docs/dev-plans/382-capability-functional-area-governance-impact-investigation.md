@@ -1,6 +1,6 @@
 # DEV-PLAN-382：Capability Functional Area 治理影响面专项调查
 
-**状态**: 规划中（2026-04-17 05:19 CST）
+**状态**: 规划中（2026-04-17 07:26 CST）
 
 ## 0. 适用范围与评审分级
 
@@ -116,6 +116,52 @@
 - 缺失 functional area 直接 fail-closed，避免能力无主运行。
 
 这些选择符合 Simple > Easy：实现者少一些自由度，但 reviewer 和门禁能得到一致答案。
+
+### 3.4 Functional Area 应如何显式划分
+
+Functional Area 不应自动划分，也不应从 route path、前端导航、`owner_module`、旧 capability 或文件目录隐式推导。它必须是一项显式设计决策。
+
+最小判断句：
+
+> 如果租户关闭这个 functional area，那么它下面所有 capability 一起不可用，这件事在业务上是否成立？
+
+如果答案不是明确成立，则不能放在同一个 functional area。
+
+划分时必须同时满足：
+
+- **业务能力域一致**：同一 functional area 下的 capability 必须属于同一组业务能力域，例如组织基础主数据、任职岗位、职位目录、人员主档、IAM 平台治理。
+- **租户开关爆炸半径一致**：关闭该 functional area 时，被关闭的 capability 应是业务上可解释的一组能力，不能顺带关闭不相干能力。
+- **生命周期一致**：同一 functional area 下的 capability 应能接受同一套 `active/reserved/deprecated` 节奏。
+- **责任 owner 清楚**：`owner_module` 只能辅助定位责任模块，不能自动决定 functional area。
+- **用户可见能力同类**：治理页面中展示为同一组能力时，租户管理员应能理解为什么它们受同一个总开关控制。
+- **失败语义一致**：当返回 `FUNCTIONAL_AREA_DISABLED` 时，用户应能理解“为什么这一组能力一起不可用”。
+
+### 3.5 禁止“字段合法但语义不自然”的隐式归属
+
+当前门禁主要能阻断“缺失 / 不存在 / 非 active”的 functional area，但不能自动识别“字段合法、语义不自然”的归属。例如 `org_foundation` 是合法 active area，因此历史 `org.assistant_conversation.manage` 继续挂在其下时，门禁不会自动判断 `CubeBox` 会话、文件、模型治理是否真的属于组织基础主数据能力域。
+
+因此后续新增或迁移 capability 必须显式冻结：
+
+- `capability_key`
+- `functional_area_key`
+- `owner_module`
+- `capability_type`
+- `target_object/surface/intent`
+- route/action 映射
+- lifecycle / activation / tenant switch 行为
+- 关闭该 functional area 时的用户影响说明
+- 用户可见错误码与 explain 字段
+
+以下不一致不能静默通过，必须升级评审并提供计划编号、例外理由和收口时间：
+
+- `OwnerModule=cubebox`，但 `capability_key=org.*`
+- `capability_key=org.*`，但 route 是 `/internal/cubebox/*`
+- `functional_area_key=org_foundation`，但用户能力是 CubeBox 会话、文件、模型治理
+- catalog 的 `target_object/surface/intent` 与 functional area 的业务能力域不一致
+- 新能力找不到合适 functional area，却临时挂到一个过大的 active area
+
+**调查结论**：
+Functional Area 的正确用法是显式业务治理分组，不是默认桶。`org_foundation` 不能成为“暂时不知道放哪就先挂这里”的兜底；找不到合适 area 时应触发 stopline：新增 functional area、调整 capability 设计，或明确写成迁移期例外并给出收口计划。
 
 ## 4. 影响面总览
 
@@ -269,7 +315,12 @@ Functional Area 的唯一归属与 route-map active 校验，让历史 capabilit
 - `target_object/surface/intent`
 - route/action 映射
 - lifecycle / activation / tenant switch 行为
+- 关闭该 functional area 时的业务合理性说明
 - 用户可见错误码与 explain 字段
+
+同时必须回答一条爆炸半径问题：
+
+- 关闭该 functional area 时，这个 capability 被关闭是否业务合理？若不合理，必须另选或新增 functional area。
 
 ### 8.2 CubeBox 后续收口建议
 
@@ -281,6 +332,7 @@ Functional Area 的唯一归属与 route-map active 校验，让历史 capabilit
 - Capability catalog 的 `target_object/surface/intent`。
 - 前端导航权限、路由权限、错误提示和 E2E。
 - 旧 `org.assistant_conversation.manage` 的退役或保留边界。
+- 若短期继续继承 `org_foundation`，必须标记为迁移期例外，并冻结退出条件。
 
 ### 8.3 文档表述建议
 
@@ -299,6 +351,10 @@ Functional Area 的唯一归属与 route-map active 校验，让历史 capabilit
 - [ ] 把 `owner_module` 当成 DDD 边界完成态证明。
 - [ ] 把历史 capability 继承写成正式业务域归属。
 - [ ] 新增 functional area 但未补 contract、runtime lifecycle、CI 门禁和用户可见入口。
+- [ ] 从 route path、前端导航、`owner_module`、旧 capability 或文件目录隐式推导 `functional_area_key`。
+- [ ] 关闭某个 functional area 会误伤不相干 capability，但计划没有爆炸半径说明。
+- [ ] capability prefix、route owner、functional area、catalog intent 明显不一致，却没有计划编号、例外理由和收口时间。
+- [ ] 使用 `org_foundation` 或其他 active area 作为新能力“临时兜底桶”。
 
 ## 10. 验收标准
 
@@ -306,6 +362,7 @@ Functional Area 的唯一归属与 route-map active 校验，让历史 capabilit
 - [X] 能列出 `150/157` 对 contract、route-map、runtime、catalog、frontend、error、CI 的影响。
 - [X] 能区分正向收益与副作用风险。
 - [X] 能给 `380*` 后续 capability 收口提供明确输入。
+- [X] 能说明 Functional Area 的显式划分规则，并阻断类似 CubeBox 的隐式过大归属继续静默发生。
 - [ ] 若进入实施：补齐对应 code / route-map / frontend / tests / readiness 证据。
 
 ## 11. 关联文档
