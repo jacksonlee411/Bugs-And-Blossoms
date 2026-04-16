@@ -1,6 +1,6 @@
 # DEV-PLAN-380D：CubeBox 文件面正式化
 
-**状态**: 草拟中（2026-04-16 14:38 CST；已按 `DEV-PLAN-001` 颗粒度重写，冻结文件面边界、删除/引用契约、存储适配器策略与切换阶段；实现与 readiness 证据待后续批次关闭）
+**状态**: 部分完成（2026-04-16 16:03 CST；`Contract/Persistence/Storage/Service/Delivery/Readiness` 主切片已落地并有 `DEV-PLAN-380D-READINESS` 证据，正式主链已切到 `PG metadata + links + localfs object store + cleanup jobs`；剩余收尾项包括 `error-message` 门禁缺少 `cubebox_file_delete_blocked` 用户可见错误码收口、`cleanup worker/retry runner` 尚未单独实现，以及 `380C/380E` 持有的对外 DTO/前端最终删兼容窗口）
 
 > 本文从 `DEV-PLAN-380` 拆分而来，作为 `CubeBox` 文件元数据、引用关系、对象存储适配器与删除回收语义的实施 SSOT。  
 > `DEV-PLAN-380A` 持有 `cubebox_files / cubebox_file_links` 的 PostgreSQL schema contract 与历史索引导入规则；`DEV-PLAN-380B` 持有后端组合根与 facade 主链；`DEV-PLAN-380C` 持有 `/internal/cubebox/files` 的对外 DTO/API 收口；`DEV-PLAN-380E` 持有 `apps/web` 文件页与交互收口。  
@@ -97,11 +97,11 @@
 
 ### 2.1 核心目标
 
-- [ ] 冻结文件面的唯一正式事实源：`PostgreSQL metadata + links` 为 SoT，对象正文由单一对象存储适配器承载，`index.json` 仅允许存在于迁移期。
-- [ ] 冻结上传、列出、删除、引用保护、orphan 回收与对象存储切换的正式契约。
-- [ ] 明确当前过渡 DTO/领域模型的退出条件：`conversation_id` 从长期主字段收敛为兼容窗口，完成态改为 `links[]`。
-- [ ] 明确 `localfs` 作为开发默认实现、`s3_compat` 作为未来可替换实现的边界与不变量。
-- [ ] 为 `380C`、`380E` 提供稳定文件 contract，使 API/前端收口不再依赖 `index.json` 或过渡 DTO。
+- [x] 冻结文件面的唯一正式事实源：`PostgreSQL metadata + links` 为 SoT，对象正文由单一对象存储适配器承载，`index.json` 仅允许存在于迁移期。
+- [x] 冻结上传、列出、删除、引用保护、orphan 回收与对象存储切换的正式契约。
+- [x] 明确当前过渡 DTO/领域模型的退出条件：`conversation_id` 从长期主字段收敛为兼容窗口，完成态改为 `links[]`。
+- [x] 明确 `localfs` 作为开发默认实现、`s3_compat` 作为未来可替换实现的边界与不变量。
+- [x] 为 `380C`、`380E` 提供稳定文件 contract，使 API/前端收口不再依赖 `index.json` 或过渡 DTO。
 
 ### 2.2 非目标（Out of Scope）
 
@@ -214,7 +214,7 @@ flowchart LR
 
 - **形态选择**：
   - [x] `A. Go DDD`
-  - [ ] `B. DB Kernel + Go Facade`
+  - [x] `B. DB Kernel + Go Facade`
 - **选择理由**：
   - 文件面不是 `submit_*_event(...)` 型 One Door kernel 写链，更适合由 `Go facade + PG metadata + object store adapter` 管理。
   - 但仍必须遵守“metadata 权威只有一套、对象存储只有一套、删除语义只有一套”的单主链原则。
@@ -616,12 +616,12 @@ flowchart LR
 
 ### 8.2 建议实施切片
 
-1. [ ] **Contract Slice**：冻结删除保护、兼容窗口、`links[]` 完成态、object store 端口
-2. [ ] **Persistence Slice**：补齐 PG file metadata/link repository 的写入、删除、存在性判定
-3. [ ] **Storage Slice**：把 `localfs` 适配器从 `index.json` 风格改成对象存储实现；`index.json` 只保留导入器
-4. [ ] **Service Slice**：收口 upload/list/delete/orphan cleanup 业务规则
-5. [ ] **Delivery Slice**：`internal/server` 只对齐本计划冻结的文件面语义，并为 `380C`/`380E` 输出稳定输入；不在本文重新裁决 files 对外字段名
-6. [ ] **Readiness Slice**：导入验证、门禁、文档与 dev-record 证据
+1. [x] **Contract Slice**：冻结删除保护、兼容窗口、`links[]` 完成态、object store 端口
+2. [x] **Persistence Slice**：补齐 PG file metadata/link repository 的写入、删除、存在性判定
+3. [x] **Storage Slice**：把 `localfs` 适配器从 `index.json` 风格改成对象存储实现；`index.json` 只保留导入器
+4. [x] **Service Slice**：收口 upload/list/delete/orphan cleanup 业务规则
+5. [x] **Delivery Slice**：`internal/server` 只对齐本计划冻结的文件面语义，并为 `380C`/`380E` 输出稳定输入；不在本文重新裁决 files 对外字段名
+6. [x] **Readiness Slice**：导入验证、门禁、文档与 dev-record 证据
 
 ### 8.3 每个切片的完成定义
 
@@ -655,36 +655,36 @@ flowchart LR
 ### 9.1 验收标准
 
 - **边界验收**：
-  - [ ] metadata / links / object store 职责清晰，无第二套正式事实源
-  - [ ] `internal/server` 只做 API delivery，不再持有文件业务判定
+  - [x] metadata / links / object store 职责清晰，无第二套正式事实源
+  - [x] `internal/server` 只做 API delivery，不再持有文件业务判定
 
 - **用户可见性验收**：
-  - [ ] `/app/cubebox` 或 `/app/cubebox/files` 至少保留一条完整上传/删除闭环
+  - [x] `/app/cubebox` 或 `/app/cubebox/files` 至少保留一条完整上传/删除闭环
   - [ ] 文件删除阻断对用户有明确提示，不是泛化失败
 
 - **数据 / 租户验收**：
-  - [ ] 所有 PG 文件访问都显式事务 + RLS
-  - [ ] `index.json` 不再被正式 list/delete 路径读取
-  - [ ] metadata 与对象存储之间不存在已知 mismatch
+  - [x] 所有 PG 文件访问都显式事务 + RLS
+  - [x] `index.json` 不再被正式 list/delete 路径读取
+  - [x] metadata 与对象存储之间不存在已知 mismatch
 
 - **UI / API 验收**：
-  - [ ] `/internal/cubebox/files` 只走正式单链路
-  - [ ] 已明确声明 files 对外 DTO 字段名与上传/删除错误码以 `380C` 为唯一 SSOT
-  - [ ] DTO 兼容窗口与完成态 `links[]` 的边界已登记
-  - [ ] 若继续保留 `conversation_id`，已写明删除批次
-  - [ ] `GET /internal/cubebox/files` 的请求表达已明确为 query string，而不是 request body
+  - [x] `/internal/cubebox/files` 只走正式单链路
+  - [x] 已明确声明 files 对外 DTO 字段名与上传/删除错误码以 `380C` 为唯一 SSOT
+  - [x] DTO 兼容窗口与完成态 `links[]` 的边界已登记
+  - [x] 若继续保留 `conversation_id`，已写明删除批次
+  - [x] `GET /internal/cubebox/files` 的请求表达已明确为 query string，而不是 request body
 
 - **测试与门禁验收**：
-  - [ ] 已按第 `2.5` 节补齐分层测试
+  - [x] 已按第 `2.5` 节补齐分层测试
   - [ ] 命中的 `sqlc / routing / error-message / no-legacy / ddd-layering / Go tests` 已通过
-  - [ ] 没有通过降低覆盖率、保留假 fallback 或长期双 DTO 来规避收口
+  - [x] 没有通过降低覆盖率、保留假 fallback 或长期双 DTO 来规避收口
   - [ ] conversation 删除后的 orphan file 语义已有稳定断言：tenant 级列表可见、conversation 级列表不可见、不会隐式删对象
-  - [ ] orphan cleanup 已有持久化事实源，而不是仅日志
+  - [x] orphan cleanup 已有持久化事实源，而不是仅日志
 
 ### 9.2 Readiness 记录
 
-- [ ] 新建或更新 `docs/dev-records/DEV-PLAN-380D-READINESS.md`
-- [ ] 在 readiness 中记录：
+- [x] 新建或更新 `docs/dev-records/DEV-PLAN-380D-READINESS.md`
+- [x] 在 readiness 中记录：
   - 时间戳
   - 命中的切片与执行入口
   - 导入验证结果
@@ -706,9 +706,9 @@ flowchart LR
 
 ## 10. 附：作者自检清单
 
-- [ ] 我已经写清文件 metadata、links、对象存储、删除保护与兼容窗口边界
-- [ ] 我已经写清 `index.json` 的退出条件，而不是默认它会一直留着
-- [ ] 我没有把 `conversation_id` 单值 DTO 当作完成态继续固化
-- [ ] 我已经写清文件删除到底是阻断、detach 还是回收对象，不留多重解释
-- [ ] 我已经说明与 `380A/380B/380C/380E` 的边界，没有重复裁决别人的范围
-- [ ] 我已经给 reviewer 提供 5 分钟可复述的上传、列出、删除与恢复路径
+- [x] 我已经写清文件 metadata、links、对象存储、删除保护与兼容窗口边界
+- [x] 我已经写清 `index.json` 的退出条件，而不是默认它会一直留着
+- [x] 我没有把 `conversation_id` 单值 DTO 当作完成态继续固化
+- [x] 我已经写清文件删除到底是阻断、detach 还是回收对象，不留多重解释
+- [x] 我已经说明与 `380A/380B/380C/380E` 的边界，没有重复裁决别人的范围
+- [x] 我已经给 reviewer 提供 5 分钟可复述的上传、列出、删除与恢复路径

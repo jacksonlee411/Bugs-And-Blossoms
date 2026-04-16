@@ -169,6 +169,21 @@ type IamCubeboxFile struct {
 	UpdatedAt       pgtype.Timestamptz `json:"updated_at"`
 }
 
+type IamCubeboxFileCleanupJob struct {
+	ID              int64              `json:"id"`
+	TenantUuid      pgtype.UUID        `json:"tenant_uuid"`
+	FileID          string             `json:"file_id"`
+	StorageProvider string             `json:"storage_provider"`
+	StorageKey      string             `json:"storage_key"`
+	CleanupReason   string             `json:"cleanup_reason"`
+	Status          string             `json:"status"`
+	AttemptCount    int32              `json:"attempt_count"`
+	NextRetryAt     pgtype.Timestamptz `json:"next_retry_at"`
+	LastError       *string            `json:"last_error"`
+	CreatedAt       pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt       pgtype.Timestamptz `json:"updated_at"`
+}
+
 type IamCubeboxFileLink struct {
 	ID             int64              `json:"id"`
 	TenantUuid     pgtype.UUID        `json:"tenant_uuid"`

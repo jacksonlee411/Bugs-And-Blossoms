@@ -105,6 +105,16 @@ describe('CubeBoxPage', () => {
       items: [
         {
           file_id: 'file_1',
+          filename: 'brief.pdf',
+          content_type: 'application/pdf',
+          scan_status: 'ready',
+          created_at: '2026-04-13T01:12:00Z',
+          links: [
+            {
+              link_role: 'conversation_attachment',
+              conversation_id: 'conv_1'
+            }
+          ],
           file_name: 'brief.pdf',
           media_type: 'application/pdf',
           size_bytes: 12,

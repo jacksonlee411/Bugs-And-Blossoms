@@ -48,6 +48,15 @@ const cubeboxTurnTimeoutMs = resolveCubeBoxTurnTimeoutMs(import.meta.env.VITE_AS
 
 export interface CubeBoxFile {
   file_id: string
+  filename?: string
+  content_type?: string
+  scan_status?: string
+  created_at?: string
+  links?: Array<{
+    link_role: string
+    conversation_id: string
+    turn_id?: string
+  }>
   conversation_id?: string
   file_name: string
   media_type: string

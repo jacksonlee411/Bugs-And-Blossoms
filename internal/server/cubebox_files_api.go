@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"errors"
 	"io"
 	"net/http"
 	"strings"
@@ -14,6 +15,11 @@ const cubeboxFileUploadLimitBytes int64 = 20 << 20
 
 type cubeboxFileResponse struct {
 	FileID         string `json:"file_id"`
+	Filename       string `json:"filename"`
+	ContentType    string `json:"content_type"`
+	ScanStatus     string `json:"scan_status"`
+	CreatedAt      string `json:"created_at"`
+	Links          []cubeboxFileLinkResponse `json:"links,omitempty"`
 	ConversationID string `json:"conversation_id,omitempty"`
 	FileName       string `json:"file_name"`
 	MediaType      string `json:"media_type"`
@@ -22,6 +28,12 @@ type cubeboxFileResponse struct {
 	StorageKey     string `json:"storage_key"`
 	UploadedBy     string `json:"uploaded_by"`
 	UploadedAt     string `json:"uploaded_at"`
+}
+
+type cubeboxFileLinkResponse struct {
+	LinkRole       string `json:"link_role"`
+	ConversationID string `json:"conversation_id"`
+	TurnID         string `json:"turn_id,omitempty"`
 }
 
 type cubeboxFileListResponse struct {
@@ -107,10 +119,19 @@ func handleCubeBoxFilesUploadAPI(w http.ResponseWriter, r *http.Request, svc cub
 		status := http.StatusInternalServerError
 		code := "cubebox_file_upload_failed"
 		message := "cubebox file upload failed"
-		if strings.Contains(err.Error(), "required") || strings.Contains(err.Error(), "exceeds") {
+		switch {
+		case errors.Is(err, cubeboxdomain.ErrFileUploadInvalid):
 			status = http.StatusBadRequest
-			code = "invalid_request"
-			message = err.Error()
+			code = "cubebox_file_upload_invalid"
+			message = "cubebox file upload invalid"
+		case errors.Is(err, cubeboxdomain.ErrFileConversationNotFound):
+			status = http.StatusNotFound
+			code = "conversation_not_found"
+			message = "conversation is not found"
+		case errors.Is(err, cubeboxdomain.ErrFileUnavailable):
+			status = http.StatusServiceUnavailable
+			code = "cubebox_files_unavailable"
+			message = "cubebox files unavailable"
 		}
 		routing.WriteError(w, r, routing.RouteClassInternalAPI, status, code, message)
 		return
@@ -139,7 +160,14 @@ func handleCubeBoxFileDeleteAPI(w http.ResponseWriter, r *http.Request, svc cube
 	}
 	deleted, err := svc.DeleteFile(r.Context(), tenant.ID, fileID)
 	if err != nil {
-		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusInternalServerError, "cubebox_file_delete_failed", "cubebox file delete failed")
+		switch {
+		case errors.Is(err, cubeboxdomain.ErrFileDeleteBlocked):
+			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusConflict, "cubebox_file_delete_blocked", "cubebox file delete blocked")
+		case errors.Is(err, cubeboxdomain.ErrFileNotFound):
+			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusNotFound, "cubebox_file_not_found", "cubebox file not found")
+		default:
+			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusInternalServerError, "cubebox_file_delete_failed", "cubebox file delete failed")
+		}
 		return
 	}
 	if !deleted {
@@ -150,17 +178,40 @@ func handleCubeBoxFileDeleteAPI(w http.ResponseWriter, r *http.Request, svc cube
 }
 
 func cubeboxFileRecordResponse(item cubeboxdomain.FileRecord) cubeboxFileResponse {
+	links := make([]cubeboxFileLinkResponse, 0, len(item.Links))
+	for _, link := range item.Links {
+		links = append(links, cubeboxFileLinkResponse{
+			LinkRole:       link.LinkRole,
+			ConversationID: link.ConversationID,
+			TurnID:         link.TurnID,
+		})
+	}
 	return cubeboxFileResponse{
 		FileID:         item.FileID,
+		Filename:       item.Filename,
+		ContentType:    item.ContentType,
+		ScanStatus:     item.ScanStatus,
+		CreatedAt:      item.CreatedAt,
+		Links:          links,
 		ConversationID: item.ConversationID,
-		FileName:       item.FileName,
-		MediaType:      item.MediaType,
+		FileName:       firstNonEmptyString(item.FileName, item.Filename),
+		MediaType:      firstNonEmptyString(item.MediaType, item.ContentType),
 		SizeBytes:      item.SizeBytes,
 		SHA256:         item.SHA256,
 		StorageKey:     item.StorageKey,
 		UploadedBy:     item.UploadedBy,
-		UploadedAt:     item.UploadedAt,
+		UploadedAt:     firstNonEmptyString(item.UploadedAt, item.CreatedAt),
 	}
+}
+
+func firstNonEmptyString(values ...string) string {
+	for _, value := range values {
+		value = strings.TrimSpace(value)
+		if value != "" {
+			return value
+		}
+	}
+	return ""
 }
 
 func detectUploadMediaType(contentType string, file io.ReadSeeker) string {

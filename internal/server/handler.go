@@ -154,7 +154,7 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, error) {
 		return nil, err
 	}
 	assistantSvc := newAssistantConversationServiceWithPool(orgStore, orgUnitWriteService, pgPool)
-	cubeboxFacade := newCubeBoxFacade(pgPool, assistantSvc, cubeboxmodule.NewDefaultLocalFileService())
+	cubeboxFacade := newCubeBoxFacade(pgPool, assistantSvc, cubeboxmodule.NewPGFileService(pgPool, cubeboxmodule.DefaultLocalFileRoot()))
 	if assistantSvc != nil && assistantSvc.gatewayErr != nil {
 		return nil, assistantSvc.gatewayErr
 	}

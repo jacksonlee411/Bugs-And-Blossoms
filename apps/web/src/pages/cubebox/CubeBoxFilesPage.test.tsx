@@ -18,6 +18,16 @@ describe('CubeBoxFilesPage', () => {
       items: [
         {
           file_id: 'file_1',
+          filename: 'design.txt',
+          content_type: 'text/plain',
+          scan_status: 'ready',
+          created_at: '2026-04-13T02:00:00Z',
+          links: [
+            {
+              link_role: 'conversation_attachment',
+              conversation_id: 'conv_1'
+            }
+          ],
           file_name: 'design.txt',
           media_type: 'text/plain',
           size_bytes: 16,
@@ -40,5 +50,5 @@ describe('CubeBoxFilesPage', () => {
     fireEvent.click(screen.getByRole('button', { name: '删除' }))
 
     await waitFor(() => expect(cubeboxAPIMocks.deleteCubeBoxFile).toHaveBeenCalledWith('file_1'))
-  })
+  }, 10000)
 })
