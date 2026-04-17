@@ -19,6 +19,26 @@ async function expectRetiredJSONCode(response, code) {
   expect(payload.code).toBe(code);
 }
 
+async function getRetiredJSON(appContext, path, code) {
+  const response = await appContext.request.get(path, {
+    maxRedirects: 0,
+    headers: {
+      Accept: "application/json"
+    }
+  });
+  await expectRetiredJSONCode(response, code);
+}
+
+async function postRetiredJSON(appContext, path, data, code) {
+  const response = await appContext.request.post(path, {
+    data,
+    headers: {
+      Accept: "application/json"
+    }
+  });
+  await expectRetiredJSONCode(response, code);
+}
+
 async function createTP283Session(browser, suffix) {
   const runID = `${Date.now()}-${suffix}`;
   return setupTenantAdminSession(browser, {
@@ -49,20 +69,19 @@ test("tp283-e2e-001: CubeBox is the only accepted chat entry", async ({ browser 
   expect(sessionResp.status()).toBe(410);
 
   const retiredEntryResp = await appContext.request.get(retiredEntryPath, { maxRedirects: 0 });
-  await expectRetiredJSONCode(retiredEntryResp, "librechat_retired");
+  expect(retiredEntryResp.status()).toBe(410);
+  expect(retiredEntryResp.headers()["content-type"] || "").toContain("text/html");
+  expect(await retiredEntryResp.text()).toMatch(/LibreChat 入口已退役|CubeBox 正式入口/);
+  await getRetiredJSON(appContext, retiredEntryPath, "librechat_retired");
 
-  const aliasResp = await appContext.request.get("/assistant-ui", { maxRedirects: 0 });
-  await expectRetiredJSONCode(aliasResp, "assistant_ui_retired");
+  await getRetiredJSON(appContext, "/assistant-ui", "assistant_ui_retired");
 
-  const aliasPathResp = await appContext.request.get("/assistant-ui/some/path", { maxRedirects: 0 });
-  await expectRetiredJSONCode(aliasPathResp, "assistant_ui_retired");
+  await getRetiredJSON(appContext, "/assistant-ui/some/path", "assistant_ui_retired");
 
-  const aliasWriteResp = await appContext.request.post("/assistant-ui", { data: {} });
-  await expectRetiredJSONCode(aliasWriteResp, "assistant_ui_retired");
+  await postRetiredJSON(appContext, "/assistant-ui", {}, "assistant_ui_retired");
 
   for (const compatPath of removedBootstrapCompatPaths) {
-    const resp = await appContext.request.get(compatPath, { maxRedirects: 0 });
-    await expectRetiredJSONCode(resp, "librechat_retired");
+    await getRetiredJSON(appContext, compatPath, "librechat_retired");
   }
 
   await appContext.close();
@@ -72,8 +91,7 @@ test("tp283-e2e-002: retired static prefix stays gone and still respects session
   test.setTimeout(240_000);
   const { appBaseURL, tenantHost, appContext } = await createTP283Session(browser, "002");
 
-  const authedStaticResp = await appContext.request.get("/assets/librechat-web/registerSW.js");
-  await expectRetiredJSONCode(authedStaticResp, "librechat_retired");
+  await getRetiredJSON(appContext, "/assets/librechat-web/registerSW.js", "librechat_retired");
 
   const anonContext = await browser.newContext({
     baseURL: appBaseURL,
