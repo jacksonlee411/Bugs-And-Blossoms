@@ -1,6 +1,6 @@
 # DEV-PLAN-380F：LibreChat vendored/runtime/deploy 资产退役与收口
 
-**状态**: 规划中（2026-04-17 07:23 CST；基于 `380A/380B/380C/380E` 已完成、`380D` 主链已切且仅剩少量 file-plane 收尾的最新状态，按 `DEV-PLAN-001` T2 模板重写细化）
+**状态**: 已实施（2026-04-17 CST；实施结果与验证记录见 `docs/dev-records/DEV-PLAN-380F-READINESS.md`）
 
 > 本文从 `DEV-PLAN-380` 拆分而来，作为 `LibreChat` vendored Web UI、runtime、部署链、Makefile/debug 入口与相关历史资产退役的实施 SSOT。  
 > `380A` 持有 PostgreSQL 数据面 contract，`380B` 持有后端正式实现面切换，`380C` 持有 API/DTO 收口与旧 `/internal/assistant/*` 退役，`380D` 持有文件面正式化，`380E` 持有 `apps/web` 正式前端收口，`380G` 持有最终回归与封板。  
@@ -58,14 +58,17 @@
    - 退役解释层必须稳定返回 `410 Gone`，不能因资产清理误删而退化成 404/500/无语义
 3. **可解释**：作者必须能在 5 分钟内讲清当前残留资产分类、为什么删/保留/归档、删后谁继续承接 `410 Gone` 退役 contract，以及 `380F` 如何把结果交给 `380G` 封板。
 
-### 0.2 现状研究摘要
+### 0.2 实施后现状摘要
 
 - **现状实现**：
   - `380C` 已完成 `/internal/cubebox/*` 正式 API/DTO 收口，旧 `/internal/assistant/ui-bootstrap`、`/session*`、`model-providers*` 已统一冻结为稳定 `410 Gone`。
   - `380E` 已完成 `apps/web` 收口：正式页面入口为 `/app/cubebox*`；`/app/assistant/librechat` 只剩退役语义，不再是页面主链。
   - 服务端当前通过 `internal/server/cubebox_retired.go` 与 `internal/server/assistant_ui_proxy.go` 为 `/app/assistant/librechat`、`/assets/librechat-web/**`、`/assistant-ui/*` 返回稳定 `410 Gone`。
-  - 但 `Makefile` 仍暴露 `assistant-runtime-*`、`librechat-web-*` 帮助入口；`deploy/librechat/**`、`scripts/librechat/**`、`scripts/librechat-web/**`、`third_party/librechat-web/**`、`internal/server/assets/librechat-web/**` 仍保留为活体资产；开发 skill 仍把 LibreChat runtime 作为可选联调基线。
-  - `internal/server/assistant_runtime_status.go` 仍读取 `deploy/librechat/versions.lock.yaml` 与 `deploy/librechat/runtime-status.json` 生成 `/internal/assistant/runtime-status` 的诊断输出。
+  - `Makefile` 中 `assistant-runtime-*`、`librechat-web-*` 入口已下架；开发 skill 已停止把 LibreChat runtime 作为联调基线。
+  - `internal/server/assistant_runtime_status.go` 已切断默认 `deploy/librechat/**` 读取；旧 `/internal/assistant/runtime-status` 只保留退役解释语义。
+  - capability / route-map / allowlist 已同步移除 `/internal/assistant/runtime-status` 的正式活体地位。
+  - `/app/assistant/librechat/api/*` 与 `/assets/librechat-web/api/*` 已统一收敛到 `librechat_retired`，不再保留 `assistant_vendored_api_retired` 作为活体 contract。
+  - `tp220/tp283` 已作为负向退役断言保留；`tp288/tp290` 已明确归入历史 skip，不纳入 `380G` 活体封板主链。
 - **现状约束**：
   - `360/360A` 已冻结“旧入口退役优先于长期兼容”的原则，且明确 `/assistant-ui/*` Phase 4 后必须退役，不得回流。
   - `380G` 仍需要旧路径负向断言，因此 `380F` 不能把退役 handler 与错误码清理得比 contract 更快。
@@ -75,6 +78,9 @@
   - 把“仍需保留的退役解释层”与“必须下架的正式运行入口”混为一谈，导致误删。
   - 只删入口文案，不删 Makefile/skill/debug 说明，继续形成事实上的第二运行基线。
   - 只删目录，不更新 `runtime-status`、allowlist、错误码与负向断言，导致退役 contract 断裂。
+  - 只在文档里写“历史诊断”而不裁决 `/internal/assistant/runtime-status` 的 capability/route-map/allowlist 去向，导致旧 assistant internal API 继续被视为正式活体入口。
+  - 把 vendored compat API 的 retired code 写成一套、实现继续返回另一套，导致 `380G` 按错 contract 封板。
+  - 忽略仍访问 `/app/assistant/librechat` 正向 UI 的活体 E2E，导致 `380F` 实施后回归集自爆。
   - 用“先留着以后再说”的方式让 `deploy/librechat`、`third_party/librechat-web` 长期滞留主干。
 - **本次不沿用的“容易做法”**：
   - 不通过“保留但不再提”来处理历史资产。
@@ -105,11 +111,12 @@
 
 ### 2.1 核心目标
 
-- [ ] 把 LibreChat 从仓库的正式运行基线、正式构建链、正式调试入口中移除。
-- [ ] 冻结残留资产的唯一分类：删除、退役解释层保留、归档保留。
-- [ ] 收口 `Makefile`、README、skill、runbook 与相关说明，统一改口为 `CubeBox` 唯一正式主链。
-- [ ] 保证旧入口仍稳定表现为 `410 Gone`，不出现 contract 断裂。
-- [ ] 向 `380G` 输出资产去向清单、负向断言清单与 readiness 证据。
+- [x] 把 LibreChat 从仓库的正式运行基线、正式构建链、正式调试入口中移除。
+- [x] 冻结残留资产的唯一分类：删除、退役解释层保留、归档保留。
+- [x] 冻结 `/internal/assistant/runtime-status` 的唯一完成态，并同步裁决 capability / allowlist / docs / tests 的跟随动作。
+- [x] 收口 `Makefile`、README、skill、runbook 与相关说明，统一改口为 `CubeBox` 唯一正式主链。
+- [x] 保证旧入口仍稳定表现为 `410 Gone`，不出现 contract 断裂。
+- [x] 向 `380G` 输出资产去向清单、负向断言清单与 readiness 证据。
 
 ### 2.2 非目标（Out of Scope）
 
@@ -135,21 +142,27 @@
 ## 2.4 工具链与门禁（SSOT 引用）
 
 - **命中触发器（勾选）**：
-  - [ ] Go 代码
-  - [ ] `apps/web/**` / presentation assets / 生成物
+  - [x] Go 代码
+  - [x] `apps/web/**` / presentation assets / 生成物
   - [ ] i18n（仅 `en/zh`）
   - [ ] DB Schema / Migration / Backfill / Correction
   - [ ] sqlc
   - [x] Routing / allowlist / responder / capability-route-map
   - [ ] AuthN / Tenancy / RLS
-  - [ ] Authz（Casbin）
+  - [x] Authz（Casbin）
   - [x] E2E
   - [x] 文档 / readiness / 证据记录
   - [x] 其他专项门禁：`no-legacy`、`error-message`
+- **门禁执行原则**：
+  - 只要 `380F` 触碰 `internal/server/**`、`config/routing/**`、`config/capability/**`、`Makefile`、`apps/web/src/errors/**` 或 E2E 断言，就必须把对应门禁写入 readiness，不能因为本文是“资产退役”就省略 Go / 前端 / Authz / capability 验证。
+  - 若本批次未修改某类文件，可在 readiness 中标注“未命中”；但计划阶段不得把已知高概率命中的门禁静态写成未触发。
 - **本次引用的 SSOT**：
   - `AGENTS.md`
   - `docs/dev-plans/012-ci-quality-gates.md`
   - `docs/dev-plans/017-routing-strategy.md`
+  - `docs/dev-plans/022-authz-casbin-toolchain.md`
+  - `docs/dev-plans/140-error-message-clarity-and-gates.md`
+  - `docs/dev-plans/156-capability-key-m3-m9-route-capability-mapping-and-gates.md`
   - `docs/dev-plans/360a-librechat-feature-disablement-and-runtime-cutover-plan.md`
   - `docs/dev-plans/380c-cubebox-api-dto-convergence-and-assistant-retirement-plan.md`
   - `docs/dev-plans/380e-cubebox-apps-web-frontend-convergence-plan.md`
@@ -162,7 +175,7 @@
 | --- | --- | --- | --- |
 | `internal/server` | 退役 handler、旧入口 `410 Gone` 行为、retired error envelope | `internal/server/handler_test.go`、`internal/server/librechat_web_ui_test.go`、`internal/server/assistant_ui_proxy_test.go` | 只验证退役 contract，不把它当活体 UI |
 | `apps/web/src/errors/**` | retired error code 到用户提示的映射仍可解释 | `apps/web/src/errors/presentApiError.test.ts` | 保证前端消费退役语义不退化 |
-| `E2E` | `/app/assistant/librechat`、`/assistant-ui/*`、`/assets/librechat-web/**` 负向断言；`/app/cubebox` 正向断言 | `e2e/tests/tp283-librechat-formal-entry-cutover.spec.js` 与 `380G` 汇总用例 | 作为最终封板负向证据 |
+| `E2E` | `/app/assistant/librechat`、`/assistant-ui/*`、`/assets/librechat-web/**` 负向断言；`/app/cubebox` 正向断言；旧 LibreChat 正向证据用例去向 | `e2e/tests/tp220-assistant.spec.js`、`e2e/tests/tp283-librechat-formal-entry-cutover.spec.js`、`e2e/tests/tp288-librechat-real-entry-evidence.spec.js`、`e2e/tests/tp290-librechat-real-case-matrix.spec.js` | `380F` 必须明确保留/迁移/归档，而不是默认全跑 |
 | 文档/技能 | Makefile 帮助、README、skill、runbook 是否仍引导旧链路 | readiness + `make check doc` | 文档行为即交付对象 |
 
 - **黑盒 / 白盒策略**：
@@ -235,10 +248,21 @@ flowchart LR
   - **备选 B**：先改口为 historical only，再无限期保留目录。缺点：主干残留会长期漂移。
   - **选定理由**：先切断“主干可见入口”，再做物理删改，能让风险最小、审计最清楚。
 
-- **决策 3：`/internal/assistant/runtime-status` 与 `deploy/librechat/runtime-status.json` 视为待收口对象，而不是长期保留能力面**
+- **决策 3：`/internal/assistant/runtime-status` 的完成态冻结为退役，不再保留 active capability**
   - **备选 A**：继续把 runtime-status 作为现行开发入口。缺点：继续放大历史 runtime 基线的重要性。
-  - **备选 B**：立即删除 runtime-status 相关一切路径。缺点：若相邻计划仍需负向或历史诊断信息，风险过大。
-  - **选定理由**：先在 `380F` 中明确其不再是正式运行面，再由实施批次决定是下架、改名为 historical diagnostics，还是在 `380G` 前一并清除。
+  - **备选 B**：仅在文档里改名为 historical diagnostics，但继续保留 active route capability。缺点：门禁与权限语义仍承认旧 assistant internal API 是活体入口。
+  - **备选 C（选定）**：`380F` 中下架旧 `/internal/assistant/runtime-status` 的正式能力面：不再由 Makefile/skill/README 引导；route-capability-map 与 registry 不再把它标成 active；服务端完成态为稳定退役语义或物理删除，二者只能选一并写入 readiness；`/internal/cubebox/runtime-status` 保持唯一正式运行态 API。
+  - **选定理由**：这是唯一同时满足 `380C` 单 API 命名空间、`380E` 单前端链路和 `No Legacy` 的方案。若 `380G` 仍需要历史负向断言，应断言旧 assistant runtime-status 不再是 active capability，而不是继续读取 `deploy/librechat/runtime-status.json`。
+
+- **决策 4：vendored compat API retired code 与实际 handler 收敛为 `librechat_retired`**
+  - **备选 A**：为 `/app/assistant/librechat/api/*`、`/assets/librechat-web/api/*` 新增专门 handler 返回 `assistant_vendored_api_retired`。缺点：会扩张一条只服务历史 compat API 的新退役分支，增加路由与测试面。
+  - **备选 B（选定）**：把 vendored UI 页面、静态资源与其 API 子路径统一视为 LibreChat 入口退役面，全部返回 `410 Gone + librechat_retired`；`assistant_vendored_api_retired` 仅允许作为历史错误码留存到零引用清理批次，不再作为 `380F` canonical contract。
+  - **选定理由**：当前服务端已通过 `newLibreChatRetiredHandler()` 统一承接这些路径；继续在文档中写另一套 code 会让 `380G` 按错误 contract 封板。
+
+- **决策 5：活体 E2E 必须显式分流，不允许旧 LibreChat 正向用例进入 `380G` 全量封板**
+  - **备选 A**：保留 `tp288/tp290` 等旧正向 UI 用例，依赖测试过滤规避。缺点：全量 E2E 口径不清，后续极易误跑。
+  - **备选 B（选定）**：`tp220/tp283` 保留或改写为负向退役断言；仍打开 `/app/assistant/librechat` 并期待 textbox/iframe 的旧正向 UI 用例必须改写到 `/app/cubebox`、迁入 archive/dev-record 证据，或标记为历史 skip/fixme 且不得纳入 `380G` 封板必跑集。
+  - **选定理由**：`380F` 的目标是消灭第二 UI/runtime 基线；让旧正向 E2E 继续活在默认回归里，会比保留旧脚本更容易造成语义回流。
 
 ### 3.5 Simple > Easy 自评
 
@@ -269,8 +293,39 @@ flowchart LR
 - 所有 readiness 证据仍需记录实际时间戳。
 - 退役错误码与路径 literal 必须保持稳定：
   - `assistant_ui_retired`
-  - `assistant_vendored_api_retired`
   - `librechat_retired`
+- `assistant_vendored_api_retired` 不再作为 `380F` 的 canonical runtime contract；若代码或 catalog 中仍暂留该错误码，必须在 readiness 中标注为“历史错误码 / 零引用清理候选”，不得用于新增退役路径。
+
+### 4.3 资产分类矩阵（380F Contract）
+
+| 资产 / 路径 | 当前问题 | 380F 完成分类 | 必须执行动作 | 保留原因 / 退出条件 | 验证项 |
+| --- | --- | --- | --- | --- | --- |
+| `Makefile` 中 `assistant-runtime-*`、`librechat-web-*` help 与 target | 仍把 LibreChat runtime/build 暴露为当前入口 | 删除 / 下架 | 从 `make help` 常用入口删除；target 若暂留必须改名或标注 historical-only，且不得被 skill/README 引用 | 若 target 仅用于历史复盘，可迁 archive/runbook；封板前不得作为默认调试入口 | `make help` 不出现推荐旧 runtime/build；`rg "make assistant-runtime-up|make librechat-web-build"` 只命中 archive/readiness 或 historical-only 说明 |
+| `deploy/librechat/**` | 旧 compose/runtime baseline 与 status snapshot | 删除或归档保留 | 默认从主干运行基线移除；若短期保留，必须移入 historical-only 语义并从 runtime-status 读取链路断开 | 退出条件：`/internal/cubebox/runtime-status` 已承接正式运行态，旧目录不再被任何 Makefile/skill/server runtime 读取 | `rg "deploy/librechat"` 不再命中活体运行入口；必要时 readiness 记录删除/归档清单 |
+| `deploy/librechat/runtime-status.json`、`deploy/librechat/versions.lock.yaml` | 被 `/internal/assistant/runtime-status` 读取，维持旧 runtime 诊断面 | 删除或归档保留 | 切断服务端默认读取；若保留，仅作为历史证据，不作为 runtime 输入 | 退出条件：旧 assistant runtime-status 退役或物理删除，正式 runtime-status 只走 `/internal/cubebox/runtime-status` | Go 测试覆盖旧接口退役/删除结果；`rg "defaultAssistantRuntime.*deploy/librechat"` 不再作为正式读取路径 |
+| `scripts/librechat/**` | 启停/状态/清理旧 runtime | 删除或归档保留 | 从主干可执行工作流下架；不得被 Makefile、skill、README 引用为当前步骤 | 若保留，仅用于 archive 复盘且不纳入 `make help` | `rg "scripts/librechat"` 不再命中活体入口 |
+| `scripts/librechat-web/**` | vendored Web UI 构建链 | 删除或归档保留 | 下架 build/verify target；不再生成 `internal/server/assets/librechat-web/**` | 若保留，仅作为历史来源说明；不得作为当前构建链 | `make librechat-web-build` 不再是推荐 target；生成物状态在 readiness 记录 |
+| `third_party/librechat-web/**` | vendored upstream 源码与 patch | 删除或归档保留 | 默认从主干正式资产移除；若保留，必须 historical-only 且不被构建链消费 | 退出条件：`apps/web` 已是唯一正式前端，旧源码不再参与构建/测试 | `rg "third_party/librechat-web"` 不再命中活体构建入口 |
+| `internal/server/assets/librechat-web/**` | vendored 构建产物仍在仓库内 | 删除 | 删除或停止服务端静态文件对其依赖；旧 `/assets/librechat-web/**` 由 retired handler 返回 `410 Gone` | 仅退役 handler 保留，不保留静态产物 | 访问 `/assets/librechat-web/**` 仍为 `410 + librechat_retired`，不是文件内容 |
+| `internal/server/cubebox_retired.go` | 承接 `/app/assistant/librechat*` 与 `/assets/librechat-web/**` 退役语义 | 退役解释层保留 | 保持最小 handler；补足 code 断言；不得恢复旧 UI | `380G` 之前保留以稳定负向断言；最终零行为差异清理另行裁决 | server/E2E 断言 status=410 且 code=`librechat_retired` |
+| `internal/server/assistant_ui_proxy.go` | `/assistant-ui*` 退役语义 | 退役解释层保留 | 保持最小 handler 与审计日志；不得恢复 proxy upstream | `380G` 之前保留以稳定负向断言 | server/E2E 断言 status=410 且 code=`assistant_ui_retired` |
+| `internal/server/assistant_runtime_status.go` | 旧 assistant runtime-status 仍可读取 LibreChat runtime 文件 | 删除或退役解释层保留 | 选定完成态必须是：旧 `/internal/assistant/runtime-status` 不再 active；实现可删除或返回稳定 retired/gone，但不得继续读取 `deploy/librechat/**` 作为正式诊断 | 若短期保留 handler，只能解释“旧 runtime-status 已退役，请使用 `/internal/cubebox/runtime-status`” | route-capability-map/registry/allowlist 与 Go 测试同步；旧接口不再 active capability |
+| `config/routing/allowlist.yaml` | 仍列出旧路径，部分路径需要负向治理 | 退役解释层保留 / 删除跟随 | `/app/assistant/librechat*`、`/assistant-ui*`、`/assets/librechat-web/**` 可保留以保障 `410`；`/internal/assistant/runtime-status` 跟随决策删除或改退役 | 退出条件由 `380G` 是否还需要旧路径负向断言决定 | `make check routing` |
+| `config/capability/route-capability-map.v1.json` 与 `internal/server/capability_route_registry.go` | `/internal/assistant/runtime-status` 仍 active | 删除或 retired 化 | 不得继续将旧 assistant runtime-status 标为 active capability；若 handler 保留为 retired，不应映射正式业务 capability | 旧 UI/static retired path 不需要 capability；正式能力只在 `/internal/cubebox/*` | `make check capability-route-map`，必要时 `make authz-*` |
+| `config/errors/catalog.yaml`、`apps/web/src/errors/presentApiError.ts` | retired code 仍需解释；`assistant_vendored_api_retired` 可能变成历史 code | 退役解释层保留 / 零引用候选 | `librechat_retired`、`assistant_ui_retired` 保持明确文案；`assistant_vendored_api_retired` 若无产出路径，标注为后续零引用清理候选或同步删除 | 不允许前端提示“启动 LibreChat runtime” | `make check error-message`，`pnpm --dir apps/web check` |
+| `tools/codex/skills/bugs-and-blossoms-dev-login/SKILL.md` | 仍推荐可选 LibreChat runtime 与旧正式入口 | 删除 / 改口 | 改为只启动 `CubeBox` 正式链路；旧路径只用于验证退役负向行为 | 不得再描述 `/app/assistant/librechat` 为正式聊天入口 | `rg "assistant-runtime-up|/app/assistant/librechat"` 只允许退役说明 |
+| `README` / 活体 runbook / 活体 dev-plan 引用 | 可能继续暗示 LibreChat 是 current baseline | 删除 / 改口 | 活体文档统一改到 `CubeBox`；历史说明迁 archive 或标 historical-only | archive/dev-record 历史证据不清理 | `make check doc` |
+
+### 4.4 E2E 与测试资产分类矩阵
+
+| 测试资产 | 当前语义 | 380F 完成分类 | 必须执行动作 | `380G` 口径 |
+| --- | --- | --- | --- | --- |
+| `e2e/tests/tp220-assistant.spec.js` | 已包含 `/app/cubebox` 正向与 `/app/assistant/librechat` 退役负向断言 | 保留 / 负向断言 | 保持或微调为 `CubeBox` 正向 + 旧入口 `410` | 可纳入封板必跑集 |
+| `e2e/tests/tp283-librechat-formal-entry-cutover.spec.js` | 旧 formal entry cutover 负向断言 | 保留 / 负向断言 | 补 code 断言为 `librechat_retired` / `assistant_ui_retired`；不再期待 vendored UI | 可纳入封板必跑集 |
+| `e2e/tests/tp284-librechat-send-render-takeover.prep.spec.js` | 历史 fixme skeleton | 归档或 historical skip | 若仍保留，必须改口为历史计划，不得作为待启用正式用例 | 不纳入封板必跑集 |
+| `e2e/tests/tp288-librechat-real-entry-evidence.spec.js` | 打开 `/app/assistant/librechat` 并期待 textbox/iframe 的旧正向证据 | 改写或归档 | 优先迁移核心业务断言到 `/app/cubebox`；无法迁移的历史证据转 archive/dev-record 或标 skip/fixme 并说明 retired | 不得以当前形态纳入封板必跑集 |
+| `e2e/tests/tp288b-librechat-live-task-receipt-contract.spec.js` | 文件名仍含 librechat，但已使用 `/app/cubebox` 与 `/internal/cubebox` | 改名或改口 | 可保留业务断言，但应在 `380F/380G` 中登记重命名或说明历史文件名不代表旧入口 | 可纳入封板必跑集，但 readiness 必须解释命名残留 |
+| `e2e/tests/tp290-librechat-real-case-matrix.spec.js` | 打开 `/app/assistant/librechat` 并期待 textbox/iframe 的旧正向矩阵 | 改写或归档 | 迁移仍有价值的真实案例到 `/app/cubebox`；旧入口访问部分改为负向 `410` 或归档 | 不得以当前形态纳入封板必跑集 |
 
 ## 5. 路由、UI 与 API 契约（Route / UI / API Contracts）
 
@@ -284,12 +339,13 @@ flowchart LR
 | static retired path | `/assets/librechat-web/**` | `static` | retired handler | N/A | N/A | 稳定 `410 Gone` |
 | UI retired path | `/assistant-ui` | `ui` | retired handler | N/A | N/A | 稳定 `410 Gone` |
 | UI retired path | `/assistant-ui/{path}` | `ui` | retired handler | N/A | N/A | 稳定 `410 Gone` |
-| internal API | `/internal/assistant/runtime-status` | `internal_api` | assistant retired diagnostics | N/A | N/A | 待 `380F` 判断是否下架、改口或延后清理 |
+| internal API | `/internal/assistant/runtime-status` | `internal_api` | retired / deleted | 不再使用正式业务 capability | 不得为 active | `380F` 完成态必须是不再 active；删除或 `410 Gone` 二选一 |
 
 - **要求**：
   - `CubeBox` 相关正式路径不得回流为 `assistant/librechat`。
   - 退役路径必须继续被 allowlist 与 responder 稳定治理。
-  - 若移除 `/internal/assistant/runtime-status` 之类历史诊断接口，必须同步更新调用方、文档和断言。
+  - `/internal/assistant/runtime-status` 不得继续读取 LibreChat runtime 文件作为正式诊断；若保留路由，必须返回稳定退役语义并从 active capability 中移除；若物理删除，必须同步更新 allowlist、route-capability-map、registry、调用方、文档和断言。
+  - `/app/assistant/librechat/api/*` 与 `/assets/librechat-web/api/*` 统一归属 `librechat_retired`，不再单独冻结 `assistant_vendored_api_retired` 作为 canonical 响应。
 
 ### 5.2 `apps/web` 交互契约
 
@@ -300,7 +356,8 @@ flowchart LR
   - 旧路径仅由服务端 retired handler 返回错误 envelope
 - **状态要求**：
   - 访问 `/app/assistant/librechat` 时看到明确退役语义，而不是重定向、白屏或旧页面
-  - 前端对 `librechat_retired`、`assistant_ui_retired`、`assistant_vendored_api_retired` 保持明确映射
+  - 前端对 `librechat_retired`、`assistant_ui_retired` 保持明确映射
+  - 若 `assistant_vendored_api_retired` 暂留于 catalog / 前端映射，只能作为历史零引用候选，不得新增调用方
 - **i18n**：
   - 仅允许 `en/zh`
   - 退役错误码文案必须继续可解释
@@ -314,13 +371,15 @@ flowchart LR
 
 #### 5.3.1 `GET /internal/assistant/runtime-status`
 
-- **用途**：历史 runtime baseline 诊断输出；不属于 `CubeBox` 正式产品 API。
-- **owner module**：历史 assistant/runtime diagnostics
+- **用途**：旧 runtime baseline 诊断输出的退役对象；不属于 `CubeBox` 正式产品 API。
+- **owner module**：retired assistant/runtime diagnostics
 - **route_class**：`internal_api`
 - **完成态约束**：
-  - 不得再被 Makefile、skill、README 作为正式联调前提推荐
-  - 若保留，必须在文档中明确为 historical diagnostics，而非正式运行面
-  - 若删除或改口，必须有等价的 `380F` readiness 记录与 `380G` 负向断言调整
+  - 不得再被 Makefile、skill、README 作为正式联调前提推荐。
+  - 不得继续作为 active route capability / authz object/action 的正式能力入口。
+  - 不得继续读取 `deploy/librechat/runtime-status.json`、`deploy/librechat/versions.lock.yaml` 作为正式运行态输入。
+  - 若保留路由，必须返回稳定退役语义，并在 response 中指向 `/internal/cubebox/runtime-status` 作为 successor。
+  - 若删除路由，必须同步更新 allowlist、route-capability-map、registry、tests 与 `380G` 负向断言，且不得退化为不受治理的 500。
 
 ### 5.4 失败语义 / stopline
 
@@ -328,7 +387,8 @@ flowchart LR
 | --- | --- | --- | --- | --- |
 | 访问 `/app/assistant/librechat*` | `librechat_retired` | 否 | `code/message/meta.path/meta.method` | 是 |
 | 访问 `/assistant-ui*` | `assistant_ui_retired` | 否 | `code/message/meta.path/meta.method` | 是 |
-| 访问已退役 vendored compat API | `assistant_vendored_api_retired` | 否 | `code/message/meta.path/meta.method` | 是 |
+| 访问 `/app/assistant/librechat/api/*` 或 `/assets/librechat-web/api/*` | `librechat_retired` | 否 | `code/message/meta.path/meta.method` | 是 |
+| `/internal/assistant/runtime-status` 仍被 active capability 注册 | N/A | 否 | readiness 记录中必须列出残留配置 | 是 |
 | 文档/Makefile/skill 仍引导 `make assistant-runtime-up` 或 `make librechat-web-build` | N/A | 否 | readiness 记录中必须列出残留入口 | 是 |
 
 - **错误码约束**：
@@ -396,76 +456,83 @@ flowchart LR
 
 ### 8.2 建议实施切片
 
-1. [ ] **Contract Slice**：冻结资产分类清单、退役解释层清单与 stopline。
-2. [ ] **Build / Runtime Slice**：下架 `Makefile` 中的 LibreChat runtime/build 入口，收口 `deploy/librechat/**` 与 `scripts/librechat/**` 的主干地位。
-3. [ ] **Docs / Skill Slice**：更新 README、skills、相关 dev-plan 引用，统一到 `CubeBox` 正式主链。
-4. [ ] **Test & Gates Slice**：复核退役断言、`error-message`、`make check doc` 与必要 E2E 负向断言。
-5. [ ] **Readiness Slice**：形成 `DEV-PLAN-380F-READINESS.md`，并向 `380G` 交接。
+1. [x] **Contract Slice**：冻结资产分类清单、退役解释层清单与 stopline。
+2. [x] **Build / Runtime Slice**：下架 `Makefile` 中的 LibreChat runtime/build 入口，收口 `deploy/librechat/**` 与 `scripts/librechat/**` 的主干地位。
+3. [x] **Docs / Skill Slice**：更新 README、skills、相关 dev-plan 引用，统一到 `CubeBox` 正式主链。
+4. [x] **Test & Gates Slice**：复核退役断言、`error-message`、`make check doc` 与必要 E2E 负向断言。
+5. [x] **Readiness Slice**：形成 `DEV-PLAN-380F-READINESS.md`，并向 `380G` 交接。
 
 ### 8.3 每个切片的完成定义
 
 - **Contract Slice**
   - **输入**：`380C/380E` readiness 已可引用
-  - **输出**：删除/保留/归档三类资产表已冻结
-  - **阻断条件**：若资产去向仍含糊，禁止开始物理清理
+  - **输出**：删除/保留/归档三类资产表已冻结；`/internal/assistant/runtime-status`、vendored compat API error code、活体 E2E 去向已裁决
+  - **阻断条件**：若资产去向仍含糊，或 `runtime-status` / 旧 E2E 去向仍未写清，禁止开始物理清理
 
 - **Build / Runtime Slice**
   - **输入**：资产分类已明确
-  - **输出**：`Makefile`/脚本/部署说明不再把 LibreChat 当作正式 baseline
-  - **阻断条件**：若会误删退役 contract 或 break 现有负向断言，必须暂停
+  - **输出**：`Makefile`/脚本/部署说明不再把 LibreChat 当作正式 baseline；`/internal/assistant/runtime-status` 不再是 active capability / 正式诊断入口
+  - **阻断条件**：若会误删退役 contract、break 现有负向断言，或让旧 runtime-status 变成不受治理的残留接口，必须暂停
 
 - **Docs / Skill Slice**
   - **输入**：Build/Runtime 入口已收口
-  - **输出**：所有活体说明统一改口
+  - **输出**：所有活体说明统一改口；skill/README/runbook 不再把 `/app/assistant/librechat` 或 `assistant-runtime-*` 描述为正向联调入口
   - **阻断条件**：若仍有一个活体文档或 skill 推荐旧链路，视为未完成
 
 - **Test & Gates Slice**
   - **输入**：代码/文档收口完成
-  - **输出**：退役断言稳定，专项门禁通过
-  - **阻断条件**：若旧路径只剩模糊 404/500，则不得进入 readiness
+  - **输出**：退役断言稳定，专项门禁通过，旧正向 LibreChat E2E 已迁移/归档/排除出封板必跑集
+  - **阻断条件**：若旧路径只剩模糊 404/500，或旧正向 LibreChat E2E 仍在默认封板集内，则不得进入 readiness
 
 - **Readiness Slice**
   - **输入**：上述切片完成
   - **输出**：`380F` readiness 与 `380G` 交接清单
-  - **阻断条件**：若没有资产去向清单与负向断言清单，禁止宣告完成
+  - **阻断条件**：若没有资产去向清单、负向断言清单、旧 E2E 去向清单与 `runtime-status` 裁决记录，禁止宣告完成
 
 ## 9. 测试、验收与 Readiness（Acceptance & Evidence）
 
 ### 9.1 验收标准
 
 - **边界验收**：
-  - [ ] `380F` 只处理旧资产退役，不越权修改 `380C/380D/380E` 主链 contract
-  - [ ] 退役解释层与正式入口删除面已清晰分离
+  - [x] `380F` 只处理旧资产退役，不越权修改 `380C/380D/380E` 主链 contract
+  - [x] 退役解释层与正式入口删除面已清晰分离
 
 - **用户可见性验收**：
-  - [ ] 开发者查看仓库入口说明时，只会被引导到 `CubeBox`
-  - [ ] 用户访问旧入口时，仍能得到明确退役提示
+  - [x] 开发者查看仓库入口说明时，只会被引导到 `CubeBox`
+  - [x] 用户访问旧入口时，仍能得到明确退役提示
 
 - **数据 / 时间 / 租户验收**：
-  - [ ] 旧入口退役仍经过 tenant/session 边界，不出现旁路
-  - [ ] retired handler 审计信息仍可记录最小租户/请求上下文
+  - [x] 旧入口退役仍经过 tenant/session 边界，不出现旁路
+  - [x] retired handler 审计信息仍可记录最小租户/请求上下文
 
 - **UI / API 验收**：
-  - [ ] `/app/cubebox` 仍是唯一正式 UI 入口
-  - [ ] `/app/assistant/librechat`、`/assistant-ui/*`、`/assets/librechat-web/**` 稳定 `410 Gone`
-  - [ ] `/internal/assistant/runtime-status` 若保留，已被明确定义为历史诊断而非正式运行面
+  - [x] `/app/cubebox` 仍是唯一正式 UI 入口
+  - [x] `/app/assistant/librechat`、`/assistant-ui/*`、`/assets/librechat-web/**` 稳定 `410 Gone`
+  - [x] `/app/assistant/librechat/api/*`、`/assets/librechat-web/api/*` 稳定 `410 Gone + librechat_retired`
+  - [x] `/internal/assistant/runtime-status` 已被删除或冻结为稳定退役语义，且不再是 active capability / 正式运行面
+  - [x] `/internal/cubebox/runtime-status` 仍是唯一正式 runtime status API
 
 - **测试与门禁验收**：
-  - [ ] `make check doc` 通过
-  - [ ] `error-message` 口径未被破坏
-  - [ ] 负向 E2E 断言仍可复用给 `380G`
-  - [ ] 没有通过保留第二运行基线来“降低清理风险”
+  - [x] `make check doc` 通过
+  - [x] Go / routing / capability-route-map / authz / 前端相关门禁按实际改动命中并在 readiness 中记录
+  - [x] `error-message` 口径未被破坏
+  - [x] 负向 E2E 断言仍可复用给 `380G`
+  - [x] 旧 LibreChat 正向 E2E 已迁移、归档或排除出 `380G` 必跑集
+  - [x] 没有通过保留第二运行基线来“降低清理风险”
 
 ### 9.2 Readiness 记录
 
-- [ ] 新建 `docs/dev-records/DEV-PLAN-380F-READINESS.md`
-- [ ] 在 readiness 中记录：
+- [x] 新建 `docs/dev-records/DEV-PLAN-380F-READINESS.md`
+- [x] 在 readiness 中记录：
   - 时间戳
   - 删除/保留/归档清单
+  - `/internal/assistant/runtime-status` 的最终裁决（删除 / retired handler）
+  - route-capability-map / allowlist / registry / error-message 跟随动作
+  - 活体 E2E 去向清单（保留负向 / 迁移到 `/app/cubebox` / 归档 / skip/fixme）
   - 实际执行入口
   - 结果
   - 负向断言与关键日志/截图/命令摘要
-- [ ] 本文档不复制执行输出；只链接 readiness 证据
+- [x] 本文档不复制执行输出；只链接 readiness 证据
 
 ### 9.3 例外登记
 

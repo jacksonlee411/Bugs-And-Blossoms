@@ -1,13 +1,13 @@
 ---
 name: bugs-and-blossoms-dev-login
-description: Start the Bugs-And-Blossoms local login stack and bring up the tenant login page at http://localhost:8080/app/login (Postgres+Redis via make dev-up, IAM migrations, KratosStub, and the Go server). Optionally boot LibreChat runtime (`make assistant-runtime-up`) for `/app/assistant/librechat` formal-entry verification and `/assistant-ui/*` boundary checks. Use when you need a repeatable workflow to get a working login on port 8080, seed test identities, verify session creation (cookie sid), and check assistant-ui tenant/session boundaries locally. 适用于“启动8080登录页/本地联调登录/起dev-up+kratosstub+dev-server（可选 assistant runtime）”的场景。
+description: Start the Bugs-And-Blossoms local login stack and bring up the tenant login page at http://localhost:8080/app/login (Postgres+Redis via make dev-up, IAM migrations, KratosStub, and the Go server). Use when you need a repeatable workflow to get a working login on port 8080, seed test identities, verify session creation (cookie sid), and validate the CubeBox formal entry plus retired assistant/librechat boundaries locally. 适用于“启动8080登录页/本地联调登录/起dev-up+kratosstub+dev-server，并验证 CubeBox 正式入口与旧助手退役边界”的场景。
 ---
 
-# Bugs-And-Blossoms：本地 8080 登录页启动（dev-up + kratosstub + server，可选 assistant runtime）
+# Bugs-And-Blossoms：本地 8080 登录页启动（dev-up + kratosstub + server）
 
 目标 A：在本机把 `http://localhost:8080/app/login` 跑通（含 `POST /iam/api/sessions` 成功设置 `sid` cookie，并进入 `/app`）。
 
-目标 B（可选）：在已登录前提下，跑通 `/app/assistant/librechat` 正式入口与 `/assistant-ui/*` 受保护代理链路，并验证 LibreChat runtime 可用性。
+目标 B（可选）：在已登录前提下，验证 `/app/cubebox` 正式入口可见，同时确认 `/app/assistant/librechat` 与 `/assistant-ui/*` 只表现为稳定退役语义。
 
 本技能默认只做“启动/迁移/seed/验证”，不会执行 `make dev-reset`，不会轻易清库删数据。
 
@@ -121,24 +121,16 @@ cd "$(git rev-parse --show-toplevel)"
 DEV_SERVER_ENV_FILE=.env make dev-server
 ```
 
-（可选）6) 启动 LibreChat Runtime（用于 `/app/assistant/librechat` 正式入口）
-
-先确认当前 shell 已导出 `OPENAI_API_KEY`（`make assistant-runtime-up` 会做非空校验；为空会直接失败并提示缺少该环境变量）：
+（可选）6) 验证 CubeBox 正式入口与旧入口退役边界
 
 ```bash
-export OPENAI_API_KEY='<your-openai-api-key>'
-```
-
-```bash
-cd "$(git rev-parse --show-toplevel)"
-make assistant-runtime-up
-make assistant-runtime-status
+curl -i -H 'Host: localhost:8080' http://127.0.0.1:8080/internal/cubebox/runtime-status
+curl -i -H 'Host: localhost:8080' http://127.0.0.1:8080/internal/assistant/runtime-status
 ```
 
 预期：
-- `make assistant-runtime-status` 输出 `status=healthy` 时，可通过 `/app/assistant/librechat` 进入正式对话闭环（`/app/assistant` 页面仅用于运行态与日志查看）。
-- 若输出 `status=unavailable`，先执行文末“关闭”小节中的 runtime 恢复流程再重试。
-- 注意：正式入口 `/app/assistant/librechat` 复用 `/app/login` 的 `sid` 会话，不需要单独 LibreChat 登录；仅当你直连 runtime upstream（如 `http://127.0.0.1:3080`）时，才会使用 LibreChat 本地账号体系。
+- `/internal/cubebox/runtime-status` 为唯一正式运行态接口。
+- `/internal/assistant/runtime-status` 返回 `410 Gone`，并提示改用 `/internal/cubebox/runtime-status`。
 
 ## 一键启动 + seed + 验证登录（推荐）
 
@@ -189,11 +181,10 @@ curl -i -X POST -H 'Host: localhost:8080' -H 'Content-Type: application/json' \
 3) 预期：前端调用 `POST /iam/api/sessions` 成功（204），并设置 `sid` cookie，然后进入 `/app`。
 4) 登录后可直接访问：`http://<对应租户域名>:8080/app/org/units`（未登录时访问 `/app/*` 会 302 到 `/app/login`，属正常行为）。
 5) （可选）访问：
-   - `http://<对应租户域名>:8080/app/assistant`（运行态与会话记录页）
-   - `http://<对应租户域名>:8080/app/assistant/librechat`（正式聊天入口）
-   - 若 runtime healthy：可进入正式聊天页面并发起对话。
-   - 若 runtime 未启动：通过会话校验后可能返回 `502`（表示边界已生效，但上游不可用）。
-   - 验收口径优先看“路由与会话行为”（如是否命中 `/app/assistant/librechat`、是否复用 `sid`、是否出现错误码）；页面标题/文案可随产品调整，不应作为唯一通过条件。
+   - `http://<对应租户域名>:8080/app/cubebox`（正式聊天入口）
+   - `http://<对应租户域名>:8080/app/assistant`（redirect alias，应落到 `/app/cubebox`）
+   - `http://<对应租户域名>:8080/app/assistant/librechat`（已退役，预期 `410 Gone`）
+   - 验收口径优先看“正式入口可见 + 旧入口稳定退役”（如是否进入 `/app/cubebox`、旧路径是否返回明确错误码）；页面标题/文案可随产品调整，不应作为唯一通过条件。
 
 （注意）不要用 `http://127.0.0.1:8080/app/login`：租户解析基于 Host，`127.0.0.1` 默认无租户映射，会 404（tenant not found）。
 
@@ -258,21 +249,21 @@ curl -i -b /tmp/sid-saas.txt -H 'Host: tenant2.localhost:8080' \
 
 5) （可选）assistant-ui 边界快速验证（与 DEV-PLAN-235 对齐）
 
-- 未登录访问 assistant-ui（预期 `302` 到 `/app/login`）：
+- 访问 assistant-ui 退役路径（未登录时可能先被会话边界拦截；已登录后应为 `410 Gone`）：
 
 ```bash
 curl -i -H 'Host: localhost:8080' \
   http://127.0.0.1:8080/assistant-ui
 ```
 
-- 登录后同租户访问 assistant-ui（预期 `200` 或 `502`；`502` 表示上游 runtime 未就绪）：
+- 登录后同租户访问 assistant-ui（预期 `410 Gone`）：
 
 ```bash
 curl -i -b /tmp/sid-local.txt -H 'Host: localhost:8080' \
   http://127.0.0.1:8080/assistant-ui
 ```
 
-- 跨租户复用 sid 访问 assistant-ui（预期 `302` 到 `/app/login`）：
+- 跨租户复用 sid 访问 assistant-ui（预期继续 fail-closed；常见为 `302 /app/login`）：
 
 ```bash
 curl -i -b /tmp/sid-saas.txt -H 'Host: tenant2.localhost:8080' \
@@ -308,17 +299,15 @@ curl -i -b /tmp/sid-saas.txt -H 'Host: tenant2.localhost:8080' \
 - 登录页直接显示 `tenant resolve error`（HTTP 500）：通常是 DB 未启动或服务端无法连接 DB（常见于未执行 `DEV_INFRA_ENV_FILE=.env make dev-up`）。先启动 infra，再重试 `http://localhost:8080/app/login`。
 - 404 tenant not found：确认访问 Host 是否存在于 `iam.tenant_domains`；并确认 `make iam migrate up` 已执行，必要时按“快速验证清单”第 1 步补齐域名映射。
 - 登录一直 invalid credentials：确认 KratosStub 在跑；并确认已按 `tenant_id:email` seed 过同一密码。
-- 访问 `/app/assistant/librechat` 却出现 LibreChat 登录页：优先确认是否误连到了 runtime upstream（如 `:3080`）。正式入口应走 `:8080` 同域并复用 `sid`，通常不应再次要求登录。
-- 若你确实在调试“直连 runtime upstream”（非正式入口）且遇到 LibreChat 邮箱/注册问题：`admin@localhost` 会因邮箱格式被拒；可改用 `admin@localhost.local`，并按需在 `deploy/librechat/.env` 设置 `ALLOW_REGISTRATION=true` 后重启 runtime。
+- 访问 `/app/assistant/librechat` 仍看到旧聊天 UI：说明本地分支或服务端退役 contract 漂移，优先检查 `internal/server/cubebox_retired.go`、`internal/server/handler.go` 与 `tp283` 断言是否一致。
 - seed 脚本提示 409 但你仍然 invalid credentials：说明 **KratosStub 当前进程**里该 identifier 已存在，seed 不会更新密码；处理方式是重启 KratosStub（它是内存存储）后重新 seed，或换一个新邮箱 seed。
 - 登录显示 identity error：确认 KratosStub 在跑（4433/4434）；未设置时默认 `KRATOS_PUBLIC_URL=http://127.0.0.1:4433`；并确认已执行 seed。
 - `POST /iam/api/sessions` 返回 `invalid_json`：确认 `Content-Type: application/json`，并传入合法 JSON（例如 `{"email":"admin@localhost","password":"admin123"}`）。
 - 登录显示 principal error：通常表示数据库里 `iam.principals(tenant_id,email)` 已绑定了**不同的** `kratos_identity_id`（历史数据与当前 KratosStub 的 identity id 算法不一致会触发该保护）。处理方式：
   - A) 清库重建（最省心，会丢 dev 数据）：执行一次 `make dev-reset`，然后从本技能第 1 步重新跑起。
   - B) 不清库：换一个新邮箱重新 seed；或手工把该 principal 的 `kratos_identity_id` 清空后再登录（这会改动数据库数据，需你自行确认风险）。
-- 未登录访问 `/assistant-ui` 时应为 `302 /app/login`；若不是，优先检查 `withTenantAndSession` 边界链路是否被本地改动破坏。
-- 登录后访问 `/assistant-ui` 返回 `502`：通常是 LibreChat 上游未启动或不可达，执行 `make assistant-runtime-up && make assistant-runtime-status`。
-- `make assistant-runtime-status` 显示 `unavailable`：按顺序执行 `make assistant-runtime-down && make assistant-runtime-clean && make assistant-runtime-up && make assistant-runtime-status`。
+- 未登录访问 `/assistant-ui` 时若直接进入旧页面，说明退役短路失效；优先检查服务端路由顺序与 retired handler。
+- 登录后访问 `/assistant-ui` 若不是 `410 Gone`，说明退役 contract 漂移；请对照 `tp220` / `tp283` 定向回归。
 - 8080 端口占用：用 `HTTP_ADDR=:8080` 或换端口后相应调整访问地址；但本技能的目标是跑通 8080。
 
 ## 关闭（默认保留数据）
@@ -326,7 +315,6 @@ curl -i -b /tmp/sid-saas.txt -H 'Host: tenant2.localhost:8080' \
 说明：
 - 如果你在前台运行了 `make dev-server` / `make dev-kratos-stub`：用 Ctrl+C 结束即可。
 - 如果你使用了 `&` 放到后台：`make dev-down` 只会停 Docker（Postgres/Redis），不会自动停止本机上的 Go 进程；请先手工停止它们。
-- 若你还启动了 LibreChat runtime：执行 `make assistant-runtime-down` 停止运行基线容器。
 
 （Linux）查看监听端口与 PID（然后 `kill <pid>`）：
 
@@ -341,19 +329,6 @@ make dev-down
 
 `make dev-down` 会停止容器但保留 Postgres volume（数据不丢）。
 
-（可选）如果需要连同 LibreChat runtime 一并停止：
-
-```bash
-cd "$(git rev-parse --show-toplevel)"
-make assistant-runtime-down
-```
-
-（可选）仅当你明确要清理 LibreChat 本地运行数据时：
-
-```bash
-cd "$(git rev-parse --show-toplevel)"
-make assistant-runtime-clean
-```
 
 ## 危险操作（会清空数据，需明确确认）
 

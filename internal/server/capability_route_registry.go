@@ -351,15 +351,6 @@ var capabilityRouteBindings = []capabilityRouteBinding{
 	},
 	{
 		Method:        "GET",
-		Path:          "/internal/assistant/runtime-status",
-		RouteClass:    "internal_api",
-		Action:        authz.ActionRead,
-		CapabilityKey: "org.assistant_conversation.manage",
-		OwnerModule:   "orgunit",
-		Status:        routeCapabilityStatusActive,
-	},
-	{
-		Method:        "GET",
 		Path:          "/internal/assistant/ui-bootstrap",
 		RouteClass:    "internal_api",
 		Action:        authz.ActionRead,

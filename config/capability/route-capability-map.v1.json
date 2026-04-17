@@ -311,15 +311,6 @@
     },
     {
       "method": "GET",
-      "path": "/internal/assistant/runtime-status",
-      "route_class": "internal_api",
-      "action": "read",
-      "capability_key": "org.assistant_conversation.manage",
-      "owner_module": "orgunit",
-      "status": "active"
-    },
-    {
-      "method": "GET",
       "path": "/internal/assistant/ui-bootstrap",
       "route_class": "internal_api",
       "action": "read",

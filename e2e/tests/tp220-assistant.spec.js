@@ -85,6 +85,8 @@ test("tp220-e2e-007: retired librechat entry cannot bypass business write routes
   try {
     const retiredResponse = await page.goto("/app/assistant/librechat");
     expect(retiredResponse?.status()).toBe(410);
+    const retiredPayload = await retiredResponse?.json();
+    expect(retiredPayload?.code).toBe("librechat_retired");
     await expect(page.getByText(/LibreChat 入口已退役|CubeBox 正式入口/)).toBeVisible();
 
     const bypassResp = await appContext.request.post("/assistant-ui/org/api/org-units", {
@@ -96,6 +98,8 @@ test("tp220-e2e-007: retired librechat entry cannot bypass business write routes
       }
     });
     expect(bypassResp.status()).toBe(410);
+    const bypassPayload = await bypassResp.json();
+    expect(bypassPayload.code).toBe("assistant_ui_retired");
   } finally {
     await appContext.close();
   }

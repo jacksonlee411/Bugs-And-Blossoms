@@ -218,9 +218,6 @@ entrypoints:
       - path: /internal/assistant/models
         methods: [GET]
         route_class: internal_api
-      - path: /internal/assistant/runtime-status
-        methods: [GET]
-        route_class: internal_api
       - path: /internal/assistant/ui-bootstrap
         methods: [GET]
         route_class: internal_api

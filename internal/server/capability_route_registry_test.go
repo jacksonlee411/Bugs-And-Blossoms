@@ -74,8 +74,8 @@ func TestCapabilityRouteBindingForRoute(t *testing.T) {
 	if binding, ok := capabilityRouteBindingForRoute("GET", "/internal/assistant/models"); !ok || binding.Action != authz.ActionRead {
 		t.Fatalf("expected assistant models mapping found, got=%+v ok=%v", binding, ok)
 	}
-	if binding, ok := capabilityRouteBindingForRoute("GET", "/internal/assistant/runtime-status"); !ok || binding.Action != authz.ActionRead {
-		t.Fatalf("expected assistant runtime status mapping found, got=%+v ok=%v", binding, ok)
+	if _, ok := capabilityRouteBindingForRoute("GET", "/internal/assistant/runtime-status"); ok {
+		t.Fatal("expected assistant runtime status active mapping removed")
 	}
 	if binding, ok := capabilityRouteBindingForRoute("GET", "/internal/cubebox/conversations"); !ok || binding.Action != authz.ActionRead {
 		t.Fatalf("expected cubebox conversation list mapping found, got=%+v ok=%v", binding, ok)

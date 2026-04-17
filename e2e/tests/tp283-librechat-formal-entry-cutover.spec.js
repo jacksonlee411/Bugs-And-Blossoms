@@ -13,6 +13,12 @@ const removedBootstrapCompatPaths = [
   "/app/assistant/librechat/api/models",
 ];
 
+async function expectRetiredJSONCode(response, code) {
+  expect(response.status()).toBe(410);
+  const payload = await response.json();
+  expect(payload.code).toBe(code);
+}
+
 async function createTP283Session(browser, suffix) {
   const runID = `${Date.now()}-${suffix}`;
   return setupTenantAdminSession(browser, {
@@ -43,20 +49,20 @@ test("tp283-e2e-001: CubeBox is the only accepted chat entry", async ({ browser 
   expect(sessionResp.status()).toBe(410);
 
   const retiredEntryResp = await appContext.request.get(retiredEntryPath, { maxRedirects: 0 });
-  expect(retiredEntryResp.status()).toBe(410);
+  await expectRetiredJSONCode(retiredEntryResp, "librechat_retired");
 
   const aliasResp = await appContext.request.get("/assistant-ui", { maxRedirects: 0 });
-  expect(aliasResp.status()).toBe(410);
+  await expectRetiredJSONCode(aliasResp, "assistant_ui_retired");
 
   const aliasPathResp = await appContext.request.get("/assistant-ui/some/path", { maxRedirects: 0 });
-  expect(aliasPathResp.status()).toBe(410);
+  await expectRetiredJSONCode(aliasPathResp, "assistant_ui_retired");
 
   const aliasWriteResp = await appContext.request.post("/assistant-ui", { data: {} });
-  expect(aliasWriteResp.status()).toBe(410);
+  await expectRetiredJSONCode(aliasWriteResp, "assistant_ui_retired");
 
   for (const compatPath of removedBootstrapCompatPaths) {
     const resp = await appContext.request.get(compatPath, { maxRedirects: 0 });
-    expect(resp.status(), `${compatPath} should be retired during 380B`).toBe(410);
+    await expectRetiredJSONCode(resp, "librechat_retired");
   }
 
   await appContext.close();
@@ -67,7 +73,7 @@ test("tp283-e2e-002: retired static prefix stays gone and still respects session
   const { appBaseURL, tenantHost, appContext } = await createTP283Session(browser, "002");
 
   const authedStaticResp = await appContext.request.get("/assets/librechat-web/registerSW.js");
-  expect(authedStaticResp.status()).toBe(410);
+  await expectRetiredJSONCode(authedStaticResp, "librechat_retired");
 
   const anonContext = await browser.newContext({
     baseURL: appBaseURL,

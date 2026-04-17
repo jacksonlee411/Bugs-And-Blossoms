@@ -525,13 +525,6 @@ errors:
     user_message_key: errors.assistant_ui_retired
     backend_policy: mapped
     frontend_policy: mapped
-  - code: assistant_vendored_api_retired
-    module: assistant
-    http_status: 410
-    severity: error
-    user_message_key: errors.assistant_vendored_api_retired
-    backend_policy: mapped
-    frontend_policy: mapped
   - code: cubebox_service_missing
     module: cubebox
     http_status: 500
