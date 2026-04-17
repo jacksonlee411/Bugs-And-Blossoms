@@ -233,6 +233,7 @@ modules/{module}/
 - DEV-PLAN-380G：CubeBox 全量回归、门禁与封板验收：`docs/dev-plans/380g-cubebox-regression-gates-and-final-closure-plan.md`
 - DEV-PLAN-381：CubeBox capability 与 functional area 历史来源专项调查：`docs/dev-plans/381-cubebox-capability-and-functional-area-lineage-investigation.md`
 - DEV-PLAN-382：Capability Functional Area 治理影响面专项调查：`docs/dev-plans/382-capability-functional-area-governance-impact-investigation.md`
+- DEV-PLAN-383：Functional Area 与 DDD 模块并行第二维度风险专项调查与收敛建议：`docs/dev-plans/383-functional-area-vs-ddd-module-second-axis-investigation-and-remediation-plan.md`
 - DEV-PLAN-069：移除薪酬社保与考勤（文档/代码/测试/数据库）：`docs/dev-plans/069-remove-payroll-attendance.md`
 - DEV-PLAN-070【归档】：SetID 绑定组织架构重构方案（时间口径已由 DEV-PLAN-102B 接管）：`docs/archive/dev-plans/070-setid-orgunit-binding-redesign.md`
 - DEV-PLAN-070A：全局共享租户模式 vs 天然租户隔离模式专项调查（SetID/Scope Package）：`docs/dev-plans/070a-setid-global-share-vs-tenant-native-isolation-investigation.md`
