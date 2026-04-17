@@ -2,14 +2,19 @@ package server
 
 import (
 	"context"
+	"regexp"
 	"strings"
 )
 
 var (
-	assistantAnnotateIntentPlanFn = assistantAnnotateIntentPlan
-	assistantCanonicalHashFn      = assistantCanonicalHash
-	assistantPlanHashFn           = assistantPlanHash
-	assistantBuildDryRunFn        = assistantBuildDryRun
+	assistantAnnotateIntentPlanFn              = assistantAnnotateIntentPlan
+	assistantCanonicalHashFn                   = assistantCanonicalHash
+	assistantPlanHashFn                        = assistantPlanHash
+	assistantBuildDryRunFn                     = assistantBuildDryRun
+	assistantCreateOrgUnitParentOrgCodeRE      = regexp.MustCompile(`(?:^|[，,。；\s])(?:请)?(?:使用)?(?:上级组织|父组织)?(?:编码|org_code|OrgCode)\s*([A-Za-z0-9_-]+)`)
+	assistantCreateOrgUnitCarryForwardParentRE = regexp.MustCompile(`(?:^|[，,。；\s])(?:请)?在(?:父组织)?\s*([^\s，。,；]+?)\s*(?:之下|下)`)
+	assistantCreateOrgUnitParentOrgPrefixRE    = regexp.MustCompile(`(?:^|[，,。；\s])(?:上级组织|父组织)\s*([^\s，。,；]+?)(?:$|[，,。；\s])`)
+	assistantCreateOrgUnitCarryForwardNameRE   = regexp.MustCompile(`(?:新建|创建)\s*(?:一个|一個)?(?:名为)?\s*([^\s，。,；]+?)(?:的)?(?:部门|组织)?(?:$|[，,。；\s])`)
 )
 
 func (s *assistantConversationService) resolveIntent(ctx context.Context, tenantID string, conversationID string, userInput string) (assistantResolveIntentResult, error) {
@@ -173,6 +178,209 @@ func assistantCarryForwardPendingIntentFacts(intent assistantIntentSpec, pending
 		carried.NewParentRefText = firstNonEmpty(carried.NewParentRefText, pendingTurn.Intent.NewParentRefText)
 	}
 	return carried
+}
+
+func assistantSupplementCreateOrgUnitIntentForDraft(intent assistantIntentSpec, pendingTurn *assistantTurn, userInput string) assistantIntentSpec {
+	intent = assistantNormalizeIntentSpec(intent)
+	if !assistantCreateOrgUnitLocalSupplementEligible(intent, pendingTurn, userInput) {
+		return intent
+	}
+	if strings.TrimSpace(intent.ParentRefText) != "" && strings.TrimSpace(intent.EntityName) != "" {
+		return assistantUpgradeIntentToCreateOrgUnit(intent)
+	}
+
+	out := intent
+	if strings.TrimSpace(out.ParentRefText) == "" {
+		out.ParentRefText = strings.TrimSpace(firstNonEmpty(
+			assistantExtractCreateOrgUnitParentRefText(userInput),
+			assistantExtractCreateOrgUnitParentRefTextFromPending(pendingTurn),
+		))
+	}
+	if strings.TrimSpace(out.EntityName) == "" {
+		out.EntityName = strings.TrimSpace(firstNonEmpty(
+			assistantExtractCreateOrgUnitEntityName(userInput),
+			assistantExtractCreateOrgUnitEntityNameFromPending(pendingTurn),
+		))
+	}
+	if strings.TrimSpace(out.EffectiveDate) == "" {
+		explicitDates := assistantExtractExplicitTemporalHints(userInput)
+		out.EffectiveDate = strings.TrimSpace(firstNonEmpty(
+			explicitDates.EffectiveDate,
+			assistantExtractCreateOrgUnitEffectiveDateFromPending(pendingTurn),
+		))
+	}
+	return assistantUpgradeIntentToCreateOrgUnit(out)
+}
+
+func assistantCreateOrgUnitLocalSupplementEligible(intent assistantIntentSpec, pendingTurn *assistantTurn, userInput string) bool {
+	intent = assistantNormalizeIntentSpec(intent)
+	action := strings.TrimSpace(intent.Action)
+	if action == assistantIntentCreateOrgUnit {
+		return true
+	}
+	if action != "" && action != assistantIntentPlanOnly {
+		return false
+	}
+	routeKind := strings.TrimSpace(intent.RouteKind)
+	if routeKind != "" && routeKind != assistantRouteKindUncertain {
+		return false
+	}
+	if pendingTurn != nil && strings.TrimSpace(pendingTurn.Intent.Action) == assistantIntentCreateOrgUnit {
+		return assistantCreateOrgUnitSupplementEvidenceFromUserInput(userInput)
+	}
+	return assistantLooksLikeCreateOrgUnitUserInput(userInput)
+}
+
+func assistantLooksLikeCreateOrgUnitUserInput(input string) bool {
+	text := strings.TrimSpace(input)
+	if text == "" {
+		return false
+	}
+	if !strings.Contains(text, "新建") && !strings.Contains(text, "创建") {
+		return false
+	}
+	return assistantExtractCreateOrgUnitParentRefText(text) != "" || assistantExtractCreateOrgUnitEntityName(text) != ""
+}
+
+func assistantCreateOrgUnitSupplementEvidenceFromUserInput(input string) bool {
+	text := strings.TrimSpace(input)
+	if text == "" {
+		return false
+	}
+	if assistantExtractCreateOrgUnitParentRefText(text) != "" || assistantExtractCreateOrgUnitEntityName(text) != "" {
+		return true
+	}
+	hints := assistantExtractExplicitTemporalHints(text)
+	return strings.TrimSpace(hints.EffectiveDate) != ""
+}
+
+func assistantUpgradeIntentToCreateOrgUnit(intent assistantIntentSpec) assistantIntentSpec {
+	upgraded := assistantNormalizeIntentSpec(intent)
+	upgraded.Action = assistantIntentCreateOrgUnit
+	upgraded.RouteKind = assistantRouteKindBusinessAction
+	if upgraded.IntentID == "" || upgraded.IntentID == assistantRouteFallbackUncertainID {
+		upgraded.IntentID = assistantSemanticIntentIDForAction(assistantIntentCreateOrgUnit)
+	}
+	if upgraded.RouteCatalogVersion == "" {
+		if runtime, err := assistantLoadKnowledgeRuntimeFn(); err == nil && runtime != nil {
+			if entry, ok := runtime.routeByAction[assistantIntentCreateOrgUnit]; ok {
+				upgraded.RouteCatalogVersion = strings.TrimSpace(runtime.RouteCatalogVersion)
+				if upgraded.IntentID == "" {
+					upgraded.IntentID = strings.TrimSpace(entry.IntentID)
+				}
+			} else {
+				upgraded.RouteCatalogVersion = strings.TrimSpace(runtime.RouteCatalogVersion)
+			}
+		}
+	}
+	return assistantNormalizeIntentSpec(upgraded)
+}
+
+func assistantExtractCreateOrgUnitParentRefText(input string) string {
+	text := strings.TrimSpace(input)
+	if text == "" {
+		return ""
+	}
+	match := assistantCreateOrgUnitParentOrgCodeRE.FindStringSubmatch(text)
+	if len(match) == 2 {
+		return assistantNormalizeCreateOrgUnitCarryForwardText(match[1])
+	}
+	match = assistantCreateOrgUnitCarryForwardParentRE.FindStringSubmatch(text)
+	if len(match) == 2 {
+		return assistantNormalizeCreateOrgUnitCarryForwardText(match[1])
+	}
+	match = assistantCreateOrgUnitParentOrgPrefixRE.FindStringSubmatch(text)
+	if len(match) != 2 {
+		return ""
+	}
+	return assistantNormalizeCreateOrgUnitCarryForwardText(match[1])
+}
+
+func assistantExtractCreateOrgUnitEntityName(input string) string {
+	text := strings.TrimSpace(input)
+	if text == "" {
+		return ""
+	}
+	match := assistantCreateOrgUnitCarryForwardNameRE.FindStringSubmatch(text)
+	if len(match) != 2 {
+		return ""
+	}
+	name := assistantNormalizeCreateOrgUnitCarryForwardText(match[1])
+	if assistantCreateOrgUnitGenericEntityName(name) {
+		return ""
+	}
+	return name
+}
+
+func assistantExtractCreateOrgUnitParentRefTextFromPending(pendingTurn *assistantTurn) string {
+	if pendingTurn == nil {
+		return ""
+	}
+	if text := assistantExtractCreateOrgUnitParentRefText(pendingTurn.UserInput); text != "" {
+		return text
+	}
+	reply := assistantPendingTurnReplyText(pendingTurn)
+	if !strings.Contains(reply, "上级组织") {
+		return ""
+	}
+	return ""
+}
+
+func assistantExtractCreateOrgUnitEntityNameFromPending(pendingTurn *assistantTurn) string {
+	if pendingTurn == nil {
+		return ""
+	}
+	if text := assistantExtractCreateOrgUnitEntityName(pendingTurn.UserInput); text != "" {
+		return text
+	}
+	reply := assistantPendingTurnReplyText(pendingTurn)
+	start := strings.Index(reply, "新建“")
+	if start < 0 {
+		return ""
+	}
+	rest := reply[start+len("新建“"):]
+	end := strings.Index(rest, "”")
+	if end < 0 {
+		return ""
+	}
+	return assistantNormalizeCreateOrgUnitCarryForwardText(rest[:end])
+}
+
+func assistantExtractCreateOrgUnitEffectiveDateFromPending(pendingTurn *assistantTurn) string {
+	if pendingTurn == nil {
+		return ""
+	}
+	return strings.TrimSpace(pendingTurn.Intent.EffectiveDate)
+}
+
+func assistantPendingTurnReplyText(pendingTurn *assistantTurn) string {
+	if pendingTurn == nil {
+		return ""
+	}
+	if pendingTurn.CommitReply != nil && strings.TrimSpace(pendingTurn.CommitReply.Message) != "" {
+		return strings.TrimSpace(pendingTurn.CommitReply.Message)
+	}
+	if pendingTurn.ReplyNLG != nil && strings.TrimSpace(pendingTurn.ReplyNLG.Text) != "" {
+		return strings.TrimSpace(pendingTurn.ReplyNLG.Text)
+	}
+	return ""
+}
+
+func assistantNormalizeCreateOrgUnitCarryForwardText(value string) string {
+	text := strings.TrimSpace(value)
+	text = strings.Trim(text, `"'“”‘’（）()[]【】`)
+	text = strings.Trim(text, "，,。；;：:")
+	text = strings.TrimSpace(text)
+	return text
+}
+
+func assistantCreateOrgUnitGenericEntityName(value string) bool {
+	switch strings.TrimSpace(value) {
+	case "", "部门", "组织", "一个部门", "一个组织", "一個部門", "一個組織":
+		return true
+	default:
+		return false
+	}
 }
 
 func assistantCompileIntentToPlans(intent assistantIntentSpec, resolvedCandidateID string) (assistantSkillExecutionPlan, assistantConfigDeltaPlan) {

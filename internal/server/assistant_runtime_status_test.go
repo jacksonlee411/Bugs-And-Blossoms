@@ -399,4 +399,21 @@ func TestAssistantRuntimeReadAndResolvePath(t *testing.T) {
 	if missing != "missing.lock" {
 		t.Fatalf("missing=%s", missing)
 	}
+
+	t.Setenv("LIBRECHAT_UPSTREAM", "http://example.internal:9999")
+	if got := assistantRuntimeDefaultUpstreamURL(); got != "http://example.internal:9999" {
+		t.Fatalf("upstream=%s", got)
+	}
+	t.Setenv("LIBRECHAT_UPSTREAM", "")
+	t.Setenv("LIBRECHAT_PORT", "3900")
+	if got := assistantRuntimeDefaultUpstreamURL(); got != "http://127.0.0.1:3900" {
+		t.Fatalf("port override upstream=%s", got)
+	}
+	t.Setenv("LIBRECHAT_PORT", "")
+	if got := assistantRuntimeDefaultUpstreamURL(); got != "http://127.0.0.1:3080" {
+		t.Fatalf("default upstream=%s", got)
+	}
+	if got := assistantRuntimeConfiguredPath("   "); got != "" {
+		t.Fatalf("blank configured path=%q", got)
+	}
 }

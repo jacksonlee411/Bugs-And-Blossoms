@@ -404,6 +404,42 @@ func TestAssistantOpenAIProviderAdapter_InvokeAndParseContentArray(t *testing.T)
 	}
 }
 
+func TestAssistantOpenAIProviderAdapter_InvokeAndParseContentPayloadObject(t *testing.T) {
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			t.Fatalf("method=%s", r.Method)
+		}
+		if r.URL.Path != "/v1/chat/completions" {
+			t.Fatalf("path=%s", r.URL.Path)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"choices":[{"message":{"content":[{"type":"output_text","content":"{\"result\":{\"intent\":{\"action\":\"create_orgunit\",\"route_kind\":\"business_action\",\"intent_id\":\"org.orgunit_create\",\"parent_ref_text\":\"AI治理办公室\",\"entity_name\":\"人力资源部239A补全\",\"effective_date\":\"2026-03-25\"}}}"}]}}]}`))
+	}))
+	defer server.Close()
+	t.Setenv("OPENAI_API_KEY", "test-key")
+	adapter := assistantOpenAIProviderAdapter{
+		httpClient: server.Client(),
+		fallback:   assistantDeterministicProviderAdapter{},
+	}
+	payload, err := adapter.Invoke(context.Background(), "在 AI治理办公室 下新建 人力资源部239A补全，生效日期 2026-03-25", assistantModelProviderConfig{
+		Name:      "openai",
+		Model:     "gpt-5-codex",
+		Endpoint:  server.URL + "/v1",
+		TimeoutMS: 1000,
+		KeyRef:    "OPENAI_API_KEY",
+	})
+	if err != nil {
+		t.Fatalf("invoke err=%v", err)
+	}
+	semantic, err := assistantStrictDecodeSemanticIntent(payload)
+	if err != nil {
+		t.Fatalf("strict decode err=%v payload=%s", err, string(payload))
+	}
+	if semantic.Action != assistantIntentCreateOrgUnit || semantic.RouteKind != assistantRouteKindBusinessAction || semantic.IntentID != "org.orgunit_create" || semantic.ParentRefText != "AI治理办公室" || semantic.EntityName != "人力资源部239A补全" || semantic.EffectiveDate != "2026-03-25" {
+		t.Fatalf("unexpected semantic=%+v payload=%s", semantic, string(payload))
+	}
+}
+
 func TestAssistantModelGateway_DefaultConfigFollowsRuntime(t *testing.T) {
 	t.Setenv("ASSISTANT_RUNTIME_ENV", "production")
 	prod := defaultAssistantModelConfig()
@@ -743,6 +779,12 @@ func TestAssistantModelGateway_HelperFunctions_ExtraBranches(t *testing.T) {
 	if got := assistantExtractOpenAIMessageContent([]any{"invalid", map[string]any{"type": "text"}}); got != "" {
 		t.Fatalf("unexpected content=%q", got)
 	}
+	if got := assistantExtractOpenAIMessageContent([]any{
+		map[string]any{"content": []any{" 片段A ", "片段B "}},
+		map[string]any{"route_kind": "business_action", "action": "create_orgunit"},
+	}); !strings.Contains(got, "片段A") || !strings.Contains(got, `"route_kind":"business_action"`) {
+		t.Fatalf("unexpected nested-array content=%q", got)
+	}
 	if !assistantOpenAIResponseFormatUnsupported([]byte(`{"error":{"message":"invalid response_format"}}`)) {
 		t.Fatal("expected response_format unsupported detection")
 	}
@@ -1075,6 +1117,14 @@ func TestAssistantModelGateway_HelperCoverage(t *testing.T) {
 	if got := assistantNormalizeOpenAIIntentPayload(`{"foo":"bar"}`); string(got) != `{"foo":"bar"}` {
 		t.Fatalf("expected passthrough object payload, got=%q", string(got))
 	}
+	enveloped := assistantNormalizeOpenAIIntentPayload(`{"response":{"payload":{"intent":{"action":"create_orgunit","route_kind":"business_action","intent_id":"org.orgunit_create","parentOrgName":"共享服务中心","newDepartmentName":"候选验证部239A","effectiveDate":"2026-03-26"}}}}`)
+	envelopedPayload, err := assistantStrictDecodeSemanticIntent(enveloped)
+	if err != nil {
+		t.Fatalf("unexpected enveloped payload=%s err=%v", string(enveloped), err)
+	}
+	if envelopedPayload.Action != assistantIntentCreateOrgUnit || envelopedPayload.RouteKind != assistantRouteKindBusinessAction || envelopedPayload.IntentID != "org.orgunit_create" || envelopedPayload.ParentRefText != "共享服务中心" || envelopedPayload.EntityName != "候选验证部239A" || envelopedPayload.EffectiveDate != "2026-03-26" {
+		t.Fatalf("unexpected enveloped decoded payload=%+v raw=%s", envelopedPayload, string(enveloped))
+	}
 	normalizedSemantic := assistantNormalizeOpenAIIntentPayload(`{"action":"plan_only","route_kind":"knowledge_qa","intent_id":"knowledge.general_qa","route_catalog_version":"semantic.v1"}`)
 	semanticPayload, err := assistantStrictDecodeSemanticIntent(normalizedSemantic)
 	if err != nil || semanticPayload.RouteKind != assistantRouteKindKnowledgeQA || semanticPayload.IntentID != "knowledge.general_qa" || semanticPayload.RouteCatalogVersion != "semantic.v1" {
@@ -1215,6 +1265,22 @@ func TestAssistantModelGateway_HelperCoverage_Additional(t *testing.T) {
 	if len(objects) != 2 {
 		t.Fatalf("objects=%v", objects)
 	}
+	envelopedObjects := assistantIntentCandidateObjects(map[string]any{"result": map[string]any{"intent": map[string]any{"entity_name": "共享服务中心"}}})
+	if got := assistantFirstStringFromObjects(envelopedObjects, "entity_name"); got != "共享服务中心" {
+		t.Fatalf("got=%q objects=%+v", got, envelopedObjects)
+	}
+	deepObjects := assistantIntentCandidateObjects(map[string]any{
+		"results": []any{
+			map[string]any{
+				"payload": map[string]any{
+					"intent": map[string]any{"entity_name": "候选验证部239A"},
+				},
+			},
+		},
+	})
+	if got := assistantFirstStringFromObjects(deepObjects, "entity_name"); got != "候选验证部239A" {
+		t.Fatalf("got=%q objects=%+v", got, deepObjects)
+	}
 	if _, ok := assistantFirstMapFromSlice(map[string]any{"items": []any{}}, "items"); ok {
 		t.Fatal("expected empty slice miss")
 	}
@@ -1241,6 +1307,38 @@ func TestAssistantModelGateway_HelperCoverage_Additional(t *testing.T) {
 	}
 	if got := assistantNormalizeOpenAIIntentAction("Create Org"); got != assistantIntentCreateOrgUnit {
 		t.Fatalf("got=%q", got)
+	}
+	if !assistantOpenAIContentObjectLooksLikePayload(map[string]any{"route_kind": "business_action"}) {
+		t.Fatal("expected payload-like object")
+	}
+	if assistantOpenAIContentObjectLooksLikePayload(map[string]any{"foo": "bar"}) {
+		t.Fatal("unexpected payload-like detection")
+	}
+	if userInput, pendingAction := assistantSemanticPromptFallbackContext("  原始文本  "); userInput != "原始文本" || pendingAction != "" {
+		t.Fatalf("unexpected raw prompt fallback context=%q/%q", userInput, pendingAction)
+	}
+	if userInput, pendingAction := assistantSemanticPromptFallbackContext(`{"current_user_input":"","pending_turn":{"action":"create_orgunit"}}`); userInput == "" || pendingAction != assistantIntentCreateOrgUnit {
+		t.Fatalf("unexpected empty-user-input fallback context=%q/%q", userInput, pendingAction)
+	}
+	if assistantPromptEligibleForCreateOrgUnitSemanticFallback(`{"current_user_input":"确认","pending_turn":{"action":"create_orgunit"}}`) {
+		t.Fatal("plain confirm should not trigger create prompt fallback")
+	}
+	if assistantPromptEligibleForCreateOrgUnitSemanticFallback(`{"current_user_input":"系统有哪些功能"}`) {
+		t.Fatal("knowledge qa should not trigger create prompt fallback")
+	}
+	if assistantPromptEligibleForCreateOrgUnitSemanticFallback("") {
+		t.Fatal("empty prompt should not trigger create prompt fallback")
+	}
+	if resolved, ok := assistantResolveIntentFallbackFromPrompt(assistantAdapterFunc(func(context.Context, string, assistantModelProviderConfig) ([]byte, error) {
+		return nil, nil
+	}), assistantModelProviderConfig{Name: "openai", Model: "m", Endpoint: "https://api.openai.com/v1"}, assistantBuildSemanticPrompt("在 AI治理办公室 下新建 人力资源部2，生效日期 2026-01-01", nil)); ok || resolved.Intent.Action != "" {
+		t.Fatalf("non-openai adapter should not allow fallback, resolved=%+v ok=%v", resolved, ok)
+	}
+	if resolved, ok := assistantResolveIntentFallbackFromPrompt(&assistantOpenAIProviderAdapter{}, assistantModelProviderConfig{Name: "openai", Model: "m", Endpoint: "https://api.openai.com/v1"}, assistantBuildSemanticPrompt("确认", nil)); ok || resolved.Intent.Action != "" {
+		t.Fatalf("prompt without create evidence should not allow fallback, resolved=%+v ok=%v", resolved, ok)
+	}
+	if resolved, ok := assistantResolveIntentFallbackFromPrompt(&assistantOpenAIProviderAdapter{}, assistantModelProviderConfig{Name: "openai", Model: "m", Endpoint: "https://api.openai.com/v1"}, assistantBuildSemanticPrompt("系统有哪些功能", nil)); ok || resolved.Intent.Action != "" {
+		t.Fatalf("non-create prompt should not allow fallback, resolved=%+v ok=%v", resolved, ok)
 	}
 }
 
@@ -1285,5 +1383,143 @@ func TestAssistantModelGateway_ResolveIntentRetriesStrictDecodeFailure(t *testin
 	}
 	if attempts != 2 || resolved.Intent.Action != assistantIntentPlanOnly {
 		t.Fatalf("resolved=%+v attempts=%d", resolved, attempts)
+	}
+}
+
+func TestAssistantModelGateway_ResolveIntentOpenAIPromptFallbackOnStrictDecodeFailure(t *testing.T) {
+	t.Setenv("OPENAI_API_KEY", "dummy")
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"choices":[{"message":{"content":"not-json"}}]}`))
+	}))
+	defer server.Close()
+
+	gw := &assistantModelGateway{
+		config: assistantModelConfig{
+			ProviderRouting: assistantProviderRouting{Strategy: "priority_failover", FallbackEnabled: true},
+			Providers: []assistantModelProviderConfig{{
+				Name:      "openai",
+				Enabled:   true,
+				Model:     "gpt-5-codex",
+				Endpoint:  server.URL + "/v1",
+				TimeoutMS: 1000,
+				Retries:   0,
+				Priority:  1,
+				KeyRef:    "OPENAI_API_KEY",
+			}},
+		},
+		adapters: map[string]assistantProviderAdapter{
+			"openai": assistantOpenAIProviderAdapter{
+				httpClient: server.Client(),
+				fallback:   assistantDeterministicProviderAdapter{},
+			},
+		},
+	}
+
+	resolved, err := gw.ResolveIntent(context.Background(), assistantResolveIntentRequest{
+		Prompt: assistantBuildSemanticPrompt("在 AI治理办公室 下新建 人力资源部2，生效日期 2026-01-01", nil),
+	})
+	if err != nil {
+		t.Fatalf("resolve intent err=%v", err)
+	}
+	if resolved.Intent.Action != assistantIntentCreateOrgUnit || resolved.Intent.RouteKind != assistantRouteKindBusinessAction || resolved.Intent.IntentID != "org.orgunit_create" {
+		t.Fatalf("unexpected fallback intent=%+v", resolved.Intent)
+	}
+	if resolved.ProviderName != "openai" || resolved.ModelName != "gpt-5-codex" {
+		t.Fatalf("unexpected provider metadata=%+v", resolved)
+	}
+}
+
+func TestAssistantModelGateway_ResolveIntentOpenAIPromptFallbackOnMissingRouteContract(t *testing.T) {
+	t.Setenv("OPENAI_API_KEY", "dummy")
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"choices":[{"message":{"content":"{\"action\":\"create_orgunit\",\"parent_ref_text\":\"AI治理办公室\",\"effective_date\":\"2026-01-01\"}"}}]}`))
+	}))
+	defer server.Close()
+
+	gw := &assistantModelGateway{
+		config: assistantModelConfig{
+			ProviderRouting: assistantProviderRouting{Strategy: "priority_failover", FallbackEnabled: true},
+			Providers: []assistantModelProviderConfig{{
+				Name:      "openai",
+				Enabled:   true,
+				Model:     "gpt-5-codex",
+				Endpoint:  server.URL + "/v1",
+				TimeoutMS: 1000,
+				Retries:   0,
+				Priority:  1,
+				KeyRef:    "OPENAI_API_KEY",
+			}},
+		},
+		adapters: map[string]assistantProviderAdapter{
+			"openai": assistantOpenAIProviderAdapter{
+				httpClient: server.Client(),
+				fallback:   assistantDeterministicProviderAdapter{},
+			},
+		},
+	}
+
+	resolved, err := gw.ResolveIntent(context.Background(), assistantResolveIntentRequest{
+		Prompt: assistantBuildSemanticPrompt("在 AI治理办公室 下新建 人力资源部2，生效日期 2026-01-01", nil),
+	})
+	if err != nil {
+		t.Fatalf("resolve intent err=%v", err)
+	}
+	if resolved.Intent.Action != assistantIntentCreateOrgUnit || resolved.Intent.RouteKind != assistantRouteKindBusinessAction || resolved.Intent.IntentID != "org.orgunit_create" {
+		t.Fatalf("unexpected fallback intent=%+v", resolved.Intent)
+	}
+}
+
+func TestAssistantModelGateway_ResolveIntentOpenAIPromptFallbackOnInvokeDecodeError(t *testing.T) {
+	t.Setenv("OPENAI_API_KEY", "dummy")
+	call := 0
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		call++
+		if call == 1 {
+			w.WriteHeader(http.StatusBadRequest)
+			_, _ = w.Write([]byte(`{"error":{"message":"invalid response_format"}}`))
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{`))
+	}))
+	defer server.Close()
+
+	gw := &assistantModelGateway{
+		config: assistantModelConfig{
+			ProviderRouting: assistantProviderRouting{Strategy: "priority_failover", FallbackEnabled: true},
+			Providers: []assistantModelProviderConfig{{
+				Name:      "openai",
+				Enabled:   true,
+				Model:     "gpt-5-codex",
+				Endpoint:  server.URL + "/v1",
+				TimeoutMS: 1000,
+				Retries:   0,
+				Priority:  1,
+				KeyRef:    "OPENAI_API_KEY",
+			}},
+		},
+		adapters: map[string]assistantProviderAdapter{
+			"openai": assistantOpenAIProviderAdapter{
+				httpClient: server.Client(),
+				fallback: assistantAdapterFunc(func(context.Context, string, assistantModelProviderConfig) ([]byte, error) {
+					return nil, errAssistantPlanSchemaConstrainedDecodeFailed
+				}),
+			},
+		},
+	}
+
+	resolved, err := gw.ResolveIntent(context.Background(), assistantResolveIntentRequest{
+		Prompt: assistantBuildSemanticPrompt("在 AI治理办公室 下新建 人力资源部2，生效日期 2026-01-01", nil),
+	})
+	if err != nil {
+		t.Fatalf("resolve intent err=%v", err)
+	}
+	if call != 2 {
+		t.Fatalf("expected openai adapter second pass before fallback, calls=%d", call)
+	}
+	if resolved.Intent.Action != assistantIntentCreateOrgUnit || resolved.Intent.IntentID != "org.orgunit_create" {
+		t.Fatalf("unexpected fallback intent=%+v", resolved.Intent)
 	}
 }

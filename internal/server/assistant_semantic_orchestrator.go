@@ -189,6 +189,7 @@ func (s *assistantConversationService) orchestrateSemanticTurn(
 	})
 	temporalHints := assistantExtractExplicitTemporalHints(strings.TrimSpace(userInput))
 	state := assistantSanitizeSemanticState(assistantSemanticStateFromResolved(resolved), temporalHints, pendingTurn)
+	state = assistantSupplementSemanticStateForCreateOrgUnit(state, pendingTurn, userInput)
 	resolved.SemanticState = state
 	resolved.Proposal = assistantRuntimeProposalFromIntent(state.intentSpec())
 	assistantSyncResolvedSemanticResult(&resolved)
@@ -203,12 +204,17 @@ func (s *assistantConversationService) orchestrateSemanticTurn(
 	}
 
 	request, explicitRequest, hasRequest := assistantSemanticCandidateLookupFromState(state)
-	if explicitRequest && hasRequest && strings.TrimSpace(request.RefText) != "" {
+	if explicitRequest &&
+		hasRequest &&
+		strings.TrimSpace(request.RefText) != "" &&
+		strings.TrimSpace(retrieval.State) != assistantSemanticRetrievalStateDeferredByBoundary &&
+		strings.TrimSpace(retrieval.State) != assistantSemanticRetrievalStateNotRequested {
 		followupResolved, followupErr := s.resolveSemanticPrompt(ctx, tenantID, conversationID, assistantBuildSemanticResolutionPrompt(contextEnvelope, state))
 		if followupErr != nil {
 			return assistantSemanticTurnResolution{}, followupErr
 		}
 		followupState := assistantSanitizeSemanticState(assistantSemanticStateFromResolved(followupResolved), temporalHints, pendingTurn)
+		followupState = assistantSupplementSemanticStateForCreateOrgUnit(followupState, pendingTurn, userInput)
 		followupState.RetrievalNeeded = state.RetrievalNeeded
 		followupState.RetrievalResults = append([]assistantSemanticRetrievalResult(nil), state.RetrievalResults...)
 		if strings.TrimSpace(followupState.SelectedCandidateID) == "" {
@@ -240,4 +246,14 @@ func (s *assistantConversationService) orchestrateSemanticTurn(
 		ResolutionSource:    resolutionSource,
 		Retrieval:           retrieval,
 	}, nil
+}
+
+func assistantSupplementSemanticStateForCreateOrgUnit(state assistantConversationSemanticState, pendingTurn *assistantTurn, userInput string) assistantConversationSemanticState {
+	intent := assistantSupplementCreateOrgUnitIntentForDraft(state.intentSpec(), pendingTurn, userInput)
+	state.Slots = intent
+	state.Action = strings.TrimSpace(intent.Action)
+	state.IntentID = strings.TrimSpace(intent.IntentID)
+	state.RouteKind = strings.TrimSpace(intent.RouteKind)
+	state.RouteCatalogVersion = strings.TrimSpace(intent.RouteCatalogVersion)
+	return state
 }
