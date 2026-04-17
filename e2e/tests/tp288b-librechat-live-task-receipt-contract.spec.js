@@ -12,6 +12,7 @@ import {
 } from "./helpers/org-baseline.js";
 import { setupTenantAdminSession } from "./helpers/superadmin-tenant.js";
 
+// Historical filename kept for doc backlinks; this spec validates the CubeBox formal entry.
 const repoRoot = path.resolve(__dirname, "..", "..");
 const EVIDENCE_ROOT = path.join(repoRoot, "docs", "dev-records", "assets", "dev-plan-288b");
 const INDEX_PATH = path.join(EVIDENCE_ROOT, "tp288b-live-evidence-index.json");

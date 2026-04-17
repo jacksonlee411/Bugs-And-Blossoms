@@ -3,6 +3,8 @@ package server
 import (
 	"context"
 	"errors"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 )
@@ -90,6 +92,33 @@ func TestAssistantIntentPipeline_Branches(t *testing.T) {
 	}
 	if resolvedIntent.Intent.ParentRefText != "" || resolvedIntent.Intent.EntityName != "" {
 		t.Fatalf("expected no local slot supplementation, got=%+v", resolvedIntent.Intent)
+	}
+
+	pendingCreate := &assistantTurn{
+		Intent: assistantIntentSpec{Action: assistantIntentCreateOrgUnit},
+		Clarification: &assistantClarificationDecision{
+			Status: assistantClarificationStatusOpen,
+		},
+	}
+	if !assistantCreateOrgUnitLocalSupplementEligible(assistantIntentSpec{Action: assistantIntentPlanOnly, RouteKind: assistantRouteKindUncertain}, pendingCreate, "生效日期 2026-03-25") {
+		t.Fatal("pending create follow-up should be eligible for local supplement")
+	}
+	if assistantCreateOrgUnitLocalSupplementEligible(assistantIntentSpec{Action: assistantIntentPlanOnly, RouteKind: assistantRouteKindKnowledgeQA}, nil, "请在 AI治理办公室 下新建 人力资源部239A补全") {
+		t.Fatal("knowledge route should not be locally upgraded")
+	}
+	if assistantCreateOrgUnitLocalSupplementEligible(assistantIntentSpec{Action: assistantIntentRenameOrgUnit, RouteKind: assistantRouteKindBusinessAction}, nil, "请在 AI治理办公室 下新建 人力资源部239A补全") {
+		t.Fatal("other business action should not be locally upgraded")
+	}
+
+	upgraded := assistantUpgradeIntentToCreateOrgUnit(assistantIntentSpec{
+		Action:        assistantIntentPlanOnly,
+		RouteKind:     assistantRouteKindUncertain,
+		IntentID:      assistantRouteFallbackUncertainID,
+		ParentRefText: "AI治理办公室",
+		EntityName:    "人力资源部239A补全",
+	})
+	if upgraded.Action != assistantIntentCreateOrgUnit || upgraded.RouteKind != assistantRouteKindBusinessAction || upgraded.IntentID == assistantRouteFallbackUncertainID {
+		t.Fatalf("expected upgraded create intent, got=%+v", upgraded)
 	}
 
 	intent := assistantIntentSpec{Action: assistantIntentCreateOrgUnit, ParentRefText: "鲜花组织", EntityName: "运营部", EffectiveDate: "2026-01-01"}
@@ -344,6 +373,313 @@ func TestAssistantIntentPipeline_MergesPendingTurnContextForEffectiveDateSupplem
 	}
 }
 
+func TestAssistantIntentPipeline_CreateTurnSupplementsDraftIntentFromPendingTurnText(t *testing.T) {
+	assistantResetCreatePolicyRegistryStoreForTest()
+	t.Setenv("OPENAI_API_KEY", "dummy")
+	store := newOrgUnitMemoryStore()
+	if _, err := store.CreateNodeCurrent(context.Background(), "tenant-1", "2026-01-01", "AIGOV", "AI治理办公室", "", true); err != nil {
+		t.Fatal(err)
+	}
+	svc := newAssistantConversationService(store, assistantWriteServiceStub{store: store})
+	attempt := 0
+	svc.modelGateway = &assistantModelGateway{
+		config: assistantModelConfig{
+			ProviderRouting: assistantProviderRouting{Strategy: "priority_failover", FallbackEnabled: true},
+			Providers: []assistantModelProviderConfig{{
+				Name:      "openai",
+				Enabled:   true,
+				Model:     "gpt-5-codex",
+				Endpoint:  "https://api.openai.com/v1",
+				TimeoutMS: 1000,
+				Retries:   0,
+				Priority:  1,
+				KeyRef:    "OPENAI_API_KEY",
+			}},
+		},
+		adapters: map[string]assistantProviderAdapter{
+			"openai": assistantAdapterFunc(func(context.Context, string, assistantModelProviderConfig) ([]byte, error) {
+				attempt++
+				if attempt == 1 {
+					return []byte(`{"action":"create_orgunit","route_kind":"business_action","intent_id":"org.orgunit_create"}`), nil
+				}
+				return []byte(`{"action":"create_orgunit","route_kind":"business_action","intent_id":"org.orgunit_create","effective_date":"2026-03-25","user_visible_reply":"我已补齐草案，请确认。","readiness":"ready_for_confirm"}`), nil
+			}),
+		},
+	}
+	principal := Principal{ID: "actor-3", RoleSlug: "tenant-admin"}
+	conversation := svc.createConversation("tenant-1", principal)
+	created, err := svc.createTurn(context.Background(), "tenant-1", principal, conversation.ConversationID, "在 AI治理办公室 下新建 人力资源部239A补全")
+	if err != nil {
+		t.Fatalf("create first turn err=%v", err)
+	}
+	first := created.Turns[len(created.Turns)-1]
+	if first.Intent.ParentRefText != "AI治理办公室" || first.Intent.EntityName != "人力资源部239A补全" {
+		t.Fatalf("first turn should supplement draft intent=%+v", first.Intent)
+	}
+	if first.Phase != assistantPhaseAwaitMissingFields {
+		t.Fatalf("expected await_missing_fields, got=%q", first.Phase)
+	}
+
+	next, err := svc.createTurn(context.Background(), "tenant-1", principal, conversation.ConversationID, "生效日期 2026-03-25")
+	if err != nil {
+		t.Fatalf("create follow-up turn err=%v", err)
+	}
+	merged := next.Turns[len(next.Turns)-1]
+	if merged.Intent.ParentRefText != "AI治理办公室" || merged.Intent.EntityName != "人力资源部239A补全" || merged.Intent.EffectiveDate != "2026-03-25" {
+		t.Fatalf("unexpected carried follow-up intent=%+v", merged.Intent)
+	}
+	if merged.Phase != assistantPhaseAwaitCommitConfirm {
+		t.Fatalf("expected await_commit_confirm, got=%q", merged.Phase)
+	}
+	if merged.ResolvedCandidateID != "AIGOV" {
+		t.Fatalf("expected candidate resolved from supplemented draft, got=%q", merged.ResolvedCandidateID)
+	}
+}
+
+func TestAssistantIntentPipeline_CreateTurnSingleTurnSupplementedBeforeCandidateLookup(t *testing.T) {
+	assistantResetCreatePolicyRegistryStoreForTest()
+	t.Setenv("OPENAI_API_KEY", "dummy")
+	store := newOrgUnitMemoryStore()
+	if _, err := store.CreateNodeCurrent(context.Background(), "tenant-1", "2026-01-01", "AIGOV", "AI治理办公室", "", true); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.CreateNodeCurrent(context.Background(), "tenant-1", "2026-01-01", "SSC", "共享服务中心", "", true); err != nil {
+		t.Fatal(err)
+	}
+	svc := newAssistantConversationService(store, assistantWriteServiceStub{store: store})
+	svc.modelGateway = &assistantModelGateway{
+		config: assistantModelConfig{
+			ProviderRouting: assistantProviderRouting{Strategy: "priority_failover", FallbackEnabled: true},
+			Providers: []assistantModelProviderConfig{{
+				Name:      "openai",
+				Enabled:   true,
+				Model:     "gpt-5-codex",
+				Endpoint:  "https://api.openai.com/v1",
+				TimeoutMS: 1000,
+				Retries:   0,
+				Priority:  1,
+				KeyRef:    "OPENAI_API_KEY",
+			}},
+		},
+		adapters: map[string]assistantProviderAdapter{
+			"openai": assistantAdapterFunc(func(context.Context, string, assistantModelProviderConfig) ([]byte, error) {
+				return []byte(`{"action":"create_orgunit","route_kind":"business_action","intent_id":"org.orgunit_create","readiness":"ready_for_confirm"}`), nil
+			}),
+		},
+	}
+	principal := Principal{ID: "actor-4", RoleSlug: "tenant-admin"}
+
+	t.Run("ai governance variant", func(t *testing.T) {
+		conversation := svc.createConversation("tenant-1", principal)
+		created, err := svc.createTurn(context.Background(), "tenant-1", principal, conversation.ConversationID, "上级组织 AI治理办公室，下新建 人力资源部239A补全，生效日期 2026-03-25")
+		if err != nil {
+			t.Fatalf("create turn err=%v", err)
+		}
+		turn := latestTurn(created)
+		if turn == nil {
+			t.Fatal("expected latest turn")
+		}
+		if turn.Intent.ParentRefText != "AI治理办公室" || turn.Intent.EntityName != "人力资源部239A补全" || turn.Intent.EffectiveDate != "2026-03-25" {
+			t.Fatalf("unexpected supplemented intent=%+v", turn.Intent)
+		}
+		if turn.ResolvedCandidateID != "AIGOV" {
+			t.Fatalf("expected candidate resolved before dry-run, got=%q", turn.ResolvedCandidateID)
+		}
+		if assistantTurnHasValidationCode(turn, "parent_candidate_not_found") {
+			t.Fatalf("unexpected parent_candidate_not_found=%v", turn.DryRun.ValidationErrors)
+		}
+		if strings.TrimSpace(turn.ResolutionSource) == "deferred_candidate_lookup" {
+			t.Fatalf("unexpected deferred candidate lookup resolution=%+v", turn)
+		}
+		if turn.Phase != assistantPhaseAwaitCommitConfirm {
+			t.Fatalf("expected await_commit_confirm, got=%q", turn.Phase)
+		}
+	})
+
+	t.Run("shared service variant", func(t *testing.T) {
+		conversation := svc.createConversation("tenant-1", principal)
+		created, err := svc.createTurn(context.Background(), "tenant-1", principal, conversation.ConversationID, "请在父组织共享服务中心下新建候选验证部239A，生效日期 2026-03-25")
+		if err != nil {
+			t.Fatalf("create turn err=%v", err)
+		}
+		turn := latestTurn(created)
+		if turn == nil {
+			t.Fatal("expected latest turn")
+		}
+		if turn.Intent.ParentRefText != "共享服务中心" || turn.Intent.EntityName != "候选验证部239A" || turn.Intent.EffectiveDate != "2026-03-25" {
+			t.Fatalf("unexpected supplemented intent=%+v", turn.Intent)
+		}
+		if turn.ResolvedCandidateID != "SSC" {
+			t.Fatalf("expected candidate resolved before dry-run, got=%q", turn.ResolvedCandidateID)
+		}
+		if assistantTurnHasValidationCode(turn, "parent_candidate_not_found") {
+			t.Fatalf("unexpected parent_candidate_not_found=%v", turn.DryRun.ValidationErrors)
+		}
+		if strings.TrimSpace(turn.ResolutionSource) == "deferred_candidate_lookup" {
+			t.Fatalf("unexpected deferred candidate lookup resolution=%+v", turn)
+		}
+		if turn.Phase != assistantPhaseAwaitCommitConfirm {
+			t.Fatalf("expected await_commit_confirm, got=%q", turn.Phase)
+		}
+	})
+
+	t.Run("parent code supplement variant", func(t *testing.T) {
+		conversation := svc.createConversation("tenant-1", principal)
+		created, err := svc.createTurn(context.Background(), "tenant-1", principal, conversation.ConversationID, "请使用上级组织编码 AIGOV（AI治理办公室），新建 人力资源部2，生效日期 2026-01-01")
+		if err != nil {
+			t.Fatalf("create turn err=%v", err)
+		}
+		turn := latestTurn(created)
+		if turn == nil {
+			t.Fatal("expected latest turn")
+		}
+		if turn.Intent.ParentRefText != "AIGOV" || turn.Intent.EntityName != "人力资源部2" || turn.Intent.EffectiveDate != "2026-01-01" {
+			t.Fatalf("unexpected supplemented intent=%+v", turn.Intent)
+		}
+		if turn.ResolvedCandidateID != "AIGOV" {
+			t.Fatalf("expected candidate resolved from org code, got=%q", turn.ResolvedCandidateID)
+		}
+		if assistantTurnHasValidationCode(turn, "parent_candidate_not_found") {
+			t.Fatalf("unexpected parent_candidate_not_found=%v", turn.DryRun.ValidationErrors)
+		}
+		if turn.Phase != assistantPhaseAwaitCommitConfirm {
+			t.Fatalf("expected await_commit_confirm, got=%q", turn.Phase)
+		}
+	})
+
+	t.Run("uncertain route upgraded by local supplement", func(t *testing.T) {
+		uncertainSvc := newAssistantConversationService(store, assistantWriteServiceStub{store: store})
+		uncertainSvc.modelGateway = &assistantModelGateway{
+			config: assistantModelConfig{
+				ProviderRouting: assistantProviderRouting{Strategy: "priority_failover", FallbackEnabled: true},
+				Providers: []assistantModelProviderConfig{{
+					Name:      "openai",
+					Enabled:   true,
+					Model:     "gpt-5-codex",
+					Endpoint:  "https://api.openai.com/v1",
+					TimeoutMS: 1000,
+					Retries:   0,
+					Priority:  1,
+					KeyRef:    "OPENAI_API_KEY",
+				}},
+			},
+			adapters: map[string]assistantProviderAdapter{
+				"openai": assistantAdapterFunc(func(context.Context, string, assistantModelProviderConfig) ([]byte, error) {
+					return []byte(`{"action":"plan_only","route_kind":"uncertain","intent_id":"route.uncertain","readiness":"need_more_info"}`), nil
+				}),
+			},
+		}
+		conversation := uncertainSvc.createConversation("tenant-1", principal)
+		created, err := uncertainSvc.createTurn(context.Background(), "tenant-1", principal, conversation.ConversationID, "在 AI治理办公室 下新建 人力资源部239A补全")
+		if err != nil {
+			t.Fatalf("create turn err=%v", err)
+		}
+		turn := latestTurn(created)
+		if turn == nil {
+			t.Fatal("expected latest turn")
+		}
+		if turn.Intent.Action != assistantIntentCreateOrgUnit || turn.RouteDecision.RouteKind != assistantRouteKindBusinessAction {
+			t.Fatalf("expected local upgrade to business create route, got intent=%+v route=%+v", turn.Intent, turn.RouteDecision)
+		}
+		if turn.Intent.ParentRefText != "AI治理办公室" || turn.Intent.EntityName != "人力资源部239A补全" {
+			t.Fatalf("unexpected supplemented intent=%+v", turn.Intent)
+		}
+		if turn.Phase != assistantPhaseAwaitMissingFields {
+			t.Fatalf("expected await_missing_fields after local upgrade, got=%q", turn.Phase)
+		}
+		if strings.TrimSpace(turn.ResolutionSource) == "deferred_candidate_lookup" && turn.ResolvedCandidateID != "" {
+			t.Fatalf("missing-date turn should not resolve candidate early, got=%+v", turn)
+		}
+		if assistantTurnHasValidationCode(turn, "non_business_route") {
+			t.Fatalf("unexpected non_business_route=%v", turn.DryRun.ValidationErrors)
+		}
+
+		next, err := uncertainSvc.createTurn(context.Background(), "tenant-1", principal, conversation.ConversationID, "生效日期 2026-03-25")
+		if err != nil {
+			t.Fatalf("create follow-up turn err=%v", err)
+		}
+		merged := latestTurn(next)
+		if merged == nil {
+			t.Fatal("expected latest follow-up turn")
+		}
+		if merged.Intent.Action != assistantIntentCreateOrgUnit || merged.RouteDecision.RouteKind != assistantRouteKindBusinessAction {
+			t.Fatalf("expected follow-up to stay on create route, got intent=%+v route=%+v", merged.Intent, merged.RouteDecision)
+		}
+		if merged.Intent.ParentRefText != "AI治理办公室" || merged.Intent.EntityName != "人力资源部239A补全" || merged.Intent.EffectiveDate != "2026-03-25" {
+			t.Fatalf("unexpected carried follow-up intent=%+v", merged.Intent)
+		}
+		if merged.Phase != assistantPhaseAwaitCommitConfirm {
+			t.Fatalf("expected await_commit_confirm after date supplement, got=%q", merged.Phase)
+		}
+		if merged.ResolvedCandidateID != "AIGOV" {
+			t.Fatalf("expected candidate resolved after follow-up date supplement, got=%q", merged.ResolvedCandidateID)
+		}
+		if assistantTurnHasValidationCode(merged, "non_business_route") {
+			t.Fatalf("unexpected non_business_route on follow-up=%v", merged.DryRun.ValidationErrors)
+		}
+	})
+}
+
+func TestAssistantIntentPipeline_CreateTurnOpenAIPromptFallbackStillSupplementsBeforeCandidateLookup(t *testing.T) {
+	assistantResetCreatePolicyRegistryStoreForTest()
+	t.Setenv("OPENAI_API_KEY", "dummy")
+	store := newOrgUnitMemoryStore()
+	if _, err := store.CreateNodeCurrent(context.Background(), "tenant-1", "2026-01-01", "AIGOV", "AI治理办公室", "", true); err != nil {
+		t.Fatal(err)
+	}
+
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"choices":[{"message":{"content":"not-json"}}]}`))
+	}))
+	defer server.Close()
+
+	svc := newAssistantConversationService(store, assistantWriteServiceStub{store: store})
+	svc.modelGateway = &assistantModelGateway{
+		config: assistantModelConfig{
+			ProviderRouting: assistantProviderRouting{Strategy: "priority_failover", FallbackEnabled: true},
+			Providers: []assistantModelProviderConfig{{
+				Name:      "openai",
+				Enabled:   true,
+				Model:     "gpt-5-codex",
+				Endpoint:  server.URL + "/v1",
+				TimeoutMS: 1000,
+				Retries:   0,
+				Priority:  1,
+				KeyRef:    "OPENAI_API_KEY",
+			}},
+		},
+		adapters: map[string]assistantProviderAdapter{
+			"openai": assistantOpenAIProviderAdapter{
+				httpClient: server.Client(),
+				fallback:   assistantDeterministicProviderAdapter{},
+			},
+		},
+	}
+	principal := Principal{ID: "actor-openai-fallback", RoleSlug: "tenant-admin"}
+	conversation := svc.createConversation("tenant-1", principal)
+	created, err := svc.createTurn(context.Background(), "tenant-1", principal, conversation.ConversationID, "上级组织 AI治理办公室，下新建 人力资源部2，生效日期 2026-01-01")
+	if err != nil {
+		t.Fatalf("create turn err=%v", err)
+	}
+	turn := latestTurn(created)
+	if turn == nil {
+		t.Fatal("expected latest turn")
+	}
+	if turn.Intent.ParentRefText != "AI治理办公室" || turn.Intent.EntityName != "人力资源部2" || turn.Intent.EffectiveDate != "2026-01-01" {
+		t.Fatalf("unexpected supplemented intent=%+v", turn.Intent)
+	}
+	if turn.ResolvedCandidateID != "AIGOV" {
+		t.Fatalf("expected candidate resolved before dry-run, got=%q", turn.ResolvedCandidateID)
+	}
+	if assistantTurnHasValidationCode(turn, "parent_candidate_not_found") {
+		t.Fatalf("unexpected parent_candidate_not_found=%v", turn.DryRun.ValidationErrors)
+	}
+	if turn.Phase != assistantPhaseAwaitCommitConfirm {
+		t.Fatalf("expected await_commit_confirm, got=%q", turn.Phase)
+	}
+}
+
 func TestAssistantIntentPipeline_CarryForwardPendingIntentFactsBranches(t *testing.T) {
 	basePending := &assistantTurn{
 		Intent: assistantIntentSpec{
@@ -476,6 +812,212 @@ func TestAssistantIntentPipeline_CarryForwardPendingIntentFactsBranches(t *testi
 	})
 	if enable.OrgCode != "ORG-9" || enable.EffectiveDate != "2026-12-01" {
 		t.Fatalf("enable carry mismatch=%+v", enable)
+	}
+}
+
+func TestAssistantIntentPipeline_SupplementCreateOrgUnitIntentForDraft(t *testing.T) {
+	baseIntent := assistantIntentSpec{Action: assistantIntentCreateOrgUnit, EffectiveDate: "2026-03-25"}
+	pending := &assistantTurn{
+		UserInput: "在 AI治理办公室 下新建 人力资源部239A补全",
+		Intent: assistantIntentSpec{
+			Action:        assistantIntentCreateOrgUnit,
+			EffectiveDate: "2026-03-25",
+		},
+		Clarification: &assistantClarificationDecision{
+			Status:            assistantClarificationStatusOpen,
+			ClarificationKind: assistantClarificationKindMissingSlots,
+		},
+		CommitReply: &assistantCommitReply{
+			Outcome: "pending",
+			Message: "新建“人力资源部239A补全”的生效日期是哪一天？（YYYY-MM-DD）",
+		},
+	}
+
+	supplemented := assistantSupplementCreateOrgUnitIntentForDraft(baseIntent, pending, "生效日期 2026-03-25")
+	if supplemented.ParentRefText != "AI治理办公室" || supplemented.EntityName != "人力资源部239A补全" || supplemented.EffectiveDate != "2026-03-25" {
+		t.Fatalf("unexpected supplemented intent=%+v", supplemented)
+	}
+
+	preserve := assistantSupplementCreateOrgUnitIntentForDraft(
+		assistantIntentSpec{Action: assistantIntentCreateOrgUnit, ParentRefText: "已有上级", EntityName: "已有名称", EffectiveDate: "2026-03-25"},
+		pending,
+		"生效日期 2026-03-25",
+	)
+	if preserve.ParentRefText != "已有上级" || preserve.EntityName != "已有名称" {
+		t.Fatalf("existing slots should be preserved=%+v", preserve)
+	}
+
+	uncertainFollowup := assistantSupplementCreateOrgUnitIntentForDraft(
+		assistantIntentSpec{Action: assistantIntentPlanOnly, RouteKind: assistantRouteKindUncertain, IntentID: assistantRouteFallbackUncertainID},
+		pending,
+		"生效日期 2026-03-25",
+	)
+	if uncertainFollowup.Action != assistantIntentCreateOrgUnit || uncertainFollowup.RouteKind != assistantRouteKindBusinessAction || uncertainFollowup.IntentID == assistantRouteFallbackUncertainID {
+		t.Fatalf("expected uncertain follow-up upgraded to create_orgunit, got=%+v", uncertainFollowup)
+	}
+	if uncertainFollowup.ParentRefText != "AI治理办公室" || uncertainFollowup.EntityName != "人力资源部239A补全" || uncertainFollowup.EffectiveDate != "2026-03-25" {
+		t.Fatalf("unexpected uncertain follow-up supplement=%+v", uncertainFollowup)
+	}
+}
+
+func TestAssistantIntentPipeline_CreateOrgUnitPendingCarryForwardHelpers(t *testing.T) {
+	if got := assistantExtractCreateOrgUnitParentRefTextFromPending(nil); got != "" {
+		t.Fatalf("nil pending parent ref should be empty, got=%q", got)
+	}
+	if got := assistantExtractCreateOrgUnitEntityNameFromPending(nil); got != "" {
+		t.Fatalf("nil pending entity name should be empty, got=%q", got)
+	}
+	if got := assistantExtractCreateOrgUnitEffectiveDateFromPending(nil); got != "" {
+		t.Fatalf("nil pending effective date should be empty, got=%q", got)
+	}
+	if got := assistantPendingTurnReplyText(nil); got != "" {
+		t.Fatalf("nil pending reply should be empty, got=%q", got)
+	}
+
+	withUserInput := &assistantTurn{
+		UserInput: "在 AI治理办公室 下新建 人力资源部239A补全",
+	}
+	if got := assistantExtractCreateOrgUnitParentRefTextFromPending(withUserInput); got != "AI治理办公室" {
+		t.Fatalf("expected parent ref from pending user input, got=%q", got)
+	}
+	if got := assistantExtractCreateOrgUnitEntityNameFromPending(withUserInput); got != "人力资源部239A补全" {
+		t.Fatalf("expected entity name from pending user input, got=%q", got)
+	}
+	if got := assistantExtractCreateOrgUnitEffectiveDateFromPending(withUserInput); got != "" {
+		t.Fatalf("pending user input without intent date should stay empty, got=%q", got)
+	}
+
+	withCodeSupplement := &assistantTurn{
+		UserInput: "请使用上级组织编码 AIGOV（AI治理办公室），新建 人力资源部2，生效日期 2026-01-01",
+	}
+	if got := assistantExtractCreateOrgUnitParentRefTextFromPending(withCodeSupplement); got != "AIGOV" {
+		t.Fatalf("expected parent ref code from pending user input, got=%q", got)
+	}
+	if got := assistantExtractCreateOrgUnitEntityNameFromPending(withCodeSupplement); got != "人力资源部2" {
+		t.Fatalf("expected entity name from code supplement input, got=%q", got)
+	}
+
+	withReplyNLG := &assistantTurn{
+		UserInput: "生效日期 2026-03-25",
+		ReplyNLG: &assistantRenderReplyResponse{
+			Text: "请先确认上级组织，并确认是否新建“招聘部”。",
+		},
+	}
+	if got := assistantPendingTurnReplyText(withReplyNLG); got != "请先确认上级组织，并确认是否新建“招聘部”。" {
+		t.Fatalf("expected reply text from reply nlg, got=%q", got)
+	}
+	if got := assistantExtractCreateOrgUnitParentRefTextFromPending(withReplyNLG); got != "" {
+		t.Fatalf("reply-only pending parent ref should stay empty, got=%q", got)
+	}
+	if got := assistantExtractCreateOrgUnitEntityNameFromPending(withReplyNLG); got != "招聘部" {
+		t.Fatalf("expected entity name from reply nlg, got=%q", got)
+	}
+
+	withCommitReply := &assistantTurn{
+		Intent: assistantIntentSpec{
+			EffectiveDate: "2026-03-25",
+		},
+		CommitReply: &assistantCommitReply{
+			Message: "新建“财务共享中心”的生效日期是哪一天？（YYYY-MM-DD）",
+		},
+	}
+	if got := assistantPendingTurnReplyText(withCommitReply); got != "新建“财务共享中心”的生效日期是哪一天？（YYYY-MM-DD）" {
+		t.Fatalf("expected reply text from commit reply, got=%q", got)
+	}
+	if got := assistantExtractCreateOrgUnitEntityNameFromPending(withCommitReply); got != "财务共享中心" {
+		t.Fatalf("expected entity name from commit reply, got=%q", got)
+	}
+	if got := assistantExtractCreateOrgUnitEffectiveDateFromPending(withCommitReply); got != "2026-03-25" {
+		t.Fatalf("expected effective date from pending intent, got=%q", got)
+	}
+
+	withBrokenReply := &assistantTurn{
+		CommitReply: &assistantCommitReply{
+			Message: "新建“未闭合名称的生效日期是哪一天？",
+		},
+	}
+	if got := assistantExtractCreateOrgUnitEntityNameFromPending(withBrokenReply); got != "" {
+		t.Fatalf("broken quoted reply should not extract entity name, got=%q", got)
+	}
+
+	emptyReply := &assistantTurn{
+		CommitReply: &assistantCommitReply{Message: "   "},
+	}
+	if got := assistantPendingTurnReplyText(emptyReply); got != "" {
+		t.Fatalf("blank commit reply should normalize to empty, got=%q", got)
+	}
+
+	if assistantLooksLikeCreateOrgUnitUserInput("") {
+		t.Fatal("empty input should not look like create orgunit")
+	}
+	if assistantLooksLikeCreateOrgUnitUserInput("继续") {
+		t.Fatal("neutral follow-up should not look like create orgunit")
+	}
+	if !assistantLooksLikeCreateOrgUnitUserInput("请在父组织共享服务中心下新建候选验证部239A") {
+		t.Fatal("explicit create sentence should look like create orgunit")
+	}
+
+	if assistantCreateOrgUnitSupplementEvidenceFromUserInput("") {
+		t.Fatal("empty input should not carry supplement evidence")
+	}
+	if assistantCreateOrgUnitSupplementEvidenceFromUserInput("继续") {
+		t.Fatal("neutral follow-up should not carry supplement evidence")
+	}
+	if !assistantCreateOrgUnitSupplementEvidenceFromUserInput("生效日期 2026-03-25") {
+		t.Fatal("explicit date should count as supplement evidence")
+	}
+	if !assistantCreateOrgUnitSupplementEvidenceFromUserInput("请使用上级组织编码 AIGOV（AI治理办公室），新建 人力资源部2") {
+		t.Fatal("parent/name supplement should count as supplement evidence")
+	}
+
+	nonFallbackUpgrade := assistantUpgradeIntentToCreateOrgUnit(assistantIntentSpec{
+		Action:              assistantIntentPlanOnly,
+		RouteKind:           assistantRouteKindUncertain,
+		IntentID:            "custom.intent",
+		RouteCatalogVersion: "custom.v1",
+	})
+	if nonFallbackUpgrade.IntentID != "custom.intent" || nonFallbackUpgrade.RouteCatalogVersion != "custom.v1" {
+		t.Fatalf("existing route metadata should be preserved=%+v", nonFallbackUpgrade)
+	}
+
+	hooks := captureAssistantKnowledgeHooks()
+	defer hooks.restore()
+	assistantLoadKnowledgeRuntimeFn = func() (*assistantKnowledgeRuntime, error) {
+		return nil, errors.New("runtime unavailable")
+	}
+	runtimeMissingUpgrade := assistantUpgradeIntentToCreateOrgUnit(assistantIntentSpec{
+		Action:    assistantIntentPlanOnly,
+		RouteKind: assistantRouteKindUncertain,
+		IntentID:  assistantRouteFallbackUncertainID,
+	})
+	if runtimeMissingUpgrade.IntentID != "action."+assistantIntentCreateOrgUnit || runtimeMissingUpgrade.RouteCatalogVersion != "" {
+		t.Fatalf("runtime-missing upgrade should fall back to action intent id, got=%+v", runtimeMissingUpgrade)
+	}
+	assistantLoadKnowledgeRuntimeFn = func() (*assistantKnowledgeRuntime, error) {
+		return &assistantKnowledgeRuntime{
+			RouteCatalogVersion: "semantic.v2",
+			routeByAction:       map[string]assistantIntentRouteEntry{},
+		}, nil
+	}
+	runtimeNoEntryUpgrade := assistantUpgradeIntentToCreateOrgUnit(assistantIntentSpec{
+		Action:    assistantIntentPlanOnly,
+		RouteKind: assistantRouteKindUncertain,
+		IntentID:  "custom.intent",
+	})
+	if runtimeNoEntryUpgrade.IntentID != "custom.intent" || runtimeNoEntryUpgrade.RouteCatalogVersion != "semantic.v2" {
+		t.Fatalf("runtime-without-entry upgrade should keep intent id and fill route catalog version, got=%+v", runtimeNoEntryUpgrade)
+	}
+
+	if got := assistantExtractCreateOrgUnitParentRefText("上级组织 AI治理办公室"); got != "AI治理办公室" {
+		t.Fatalf("expected parent prefix extraction, got=%q", got)
+	}
+	if got := assistantExtractCreateOrgUnitParentRefTextFromPending(&assistantTurn{
+		ReplyNLG: &assistantRenderReplyResponse{Text: "请确认上级组织后继续。"},
+	}); got != "" {
+		t.Fatalf("reply-only parent helper should stay empty, got=%q", got)
+	}
+	if got := assistantExtractCreateOrgUnitParentRefText("无关文本"); got != "" {
+		t.Fatalf("unexpected parent extraction from unrelated text, got=%q", got)
 	}
 }
 

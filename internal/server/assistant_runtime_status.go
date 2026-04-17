@@ -15,11 +15,6 @@ import (
 )
 
 const (
-	defaultAssistantRuntimeVersionsLockPath = "deploy/librechat/versions.lock.yaml"
-	defaultAssistantRuntimeStatusPath       = "deploy/librechat/runtime-status.json"
-)
-
-const (
 	assistantRuntimeHealthHealthy         = "healthy"
 	assistantRuntimeHealthDegraded        = "degraded"
 	assistantRuntimeHealthUnavailable     = "unavailable"
@@ -72,21 +67,6 @@ type assistantRuntimeVersionsLock struct {
 		Digest          string `yaml:"digest"`
 		RetiredByDesign bool   `yaml:"retired_by_design"`
 	} `yaml:"services"`
-}
-
-func handleAssistantRuntimeStatusAPI(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		routingWriteMethodNotAllowed(w, r)
-		return
-	}
-	status := assistantRuntimeStatus()
-	httpStatus := http.StatusOK
-	if status.Status == assistantRuntimeHealthUnavailable {
-		httpStatus = http.StatusServiceUnavailable
-		status.Code = status.ErrorCode
-		status.Message = status.ErrorMessage
-	}
-	writeJSON(w, httpStatus, status)
 }
 
 func routingWriteMethodNotAllowed(w http.ResponseWriter, r *http.Request) {
@@ -384,7 +364,10 @@ func assistantRuntimeLockReadErrorCode(err error) string {
 
 func readAssistantRuntimeVersionsLock() (assistantRuntimeVersionsLock, error) {
 	var lock assistantRuntimeVersionsLock
-	path := assistantRuntimeResolvePath(strings.TrimSpace(os.Getenv("ASSISTANT_RUNTIME_VERSIONS_LOCK")), defaultAssistantRuntimeVersionsLockPath)
+	path := assistantRuntimeConfiguredPath(os.Getenv("ASSISTANT_RUNTIME_VERSIONS_LOCK"))
+	if path == "" {
+		return lock, os.ErrNotExist
+	}
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return lock, err
@@ -397,7 +380,10 @@ func readAssistantRuntimeVersionsLock() (assistantRuntimeVersionsLock, error) {
 
 func readAssistantRuntimeSnapshot() (assistantRuntimeStatusResponse, error) {
 	var snapshot assistantRuntimeStatusResponse
-	path := assistantRuntimeResolvePath(strings.TrimSpace(os.Getenv("ASSISTANT_RUNTIME_STATUS_FILE")), defaultAssistantRuntimeStatusPath)
+	path := assistantRuntimeConfiguredPath(os.Getenv("ASSISTANT_RUNTIME_STATUS_FILE"))
+	if path == "" {
+		return snapshot, os.ErrNotExist
+	}
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return snapshot, err
@@ -408,11 +394,23 @@ func readAssistantRuntimeSnapshot() (assistantRuntimeStatusResponse, error) {
 	return snapshot, nil
 }
 
+func assistantRuntimeConfiguredPath(path string) string {
+	candidate := strings.TrimSpace(path)
+	if candidate == "" {
+		return ""
+	}
+	return assistantRuntimeResolvePath(candidate, "")
+}
+
 func assistantRuntimeResolvePath(path, fallback string) string {
 	candidate := strings.TrimSpace(path)
 	if candidate == "" {
-		candidate = fallback
+		candidate = strings.TrimSpace(fallback)
 	}
+	if candidate == "" {
+		return ""
+	}
+	candidate = strings.TrimSpace(candidate)
 	if filepath.IsAbs(candidate) {
 		return candidate
 	}

@@ -1425,6 +1425,8 @@ func TestNewHandlerWithOptions_AssistantRoutes_AreWired(t *testing.T) {
 	}
 	if rec := call(http.MethodGet, "/internal/assistant/runtime-status", ""); rec.Code == http.StatusNotFound {
 		t.Fatalf("assistant runtime status route not wired")
+	} else if rec.Code != http.StatusGone || assistantDecodeErrCode(t, rec) != assistantAPIGoneCode {
+		t.Fatalf("assistant runtime status status=%d body=%s", rec.Code, rec.Body.String())
 	}
 	if rec := call(http.MethodGet, "/internal/cubebox/conversations", ""); rec.Code == http.StatusNotFound {
 		t.Fatalf("cubebox conversation list route not wired")

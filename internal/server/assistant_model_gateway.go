@@ -198,6 +198,81 @@ func assistantSyntheticSemanticPayloadForPrompt(prompt string) assistantSemantic
 	return assistantSyntheticSemanticPayload(assistantSemanticCurrentUserInput(prompt))
 }
 
+func assistantSemanticPromptFallbackContext(prompt string) (userInput string, pendingAction string) {
+	var envelope assistantSemanticPromptEnvelope
+	if err := json.Unmarshal([]byte(strings.TrimSpace(prompt)), &envelope); err != nil {
+		return strings.TrimSpace(prompt), ""
+	}
+	userInput = strings.TrimSpace(envelope.CurrentUserInput)
+	if userInput == "" {
+		userInput = strings.TrimSpace(prompt)
+	}
+	if envelope.PendingTurn != nil {
+		pendingAction = strings.TrimSpace(envelope.PendingTurn.Action)
+	}
+	return userInput, pendingAction
+}
+
+func assistantPromptEligibleForCreateOrgUnitSemanticFallback(prompt string) bool {
+	userInput, pendingAction := assistantSemanticPromptFallbackContext(prompt)
+	if userInput == "" {
+		return false
+	}
+	if pendingAction == assistantIntentCreateOrgUnit {
+		return assistantCreateOrgUnitSupplementEvidenceFromUserInput(userInput)
+	}
+	return assistantLooksLikeCreateOrgUnitUserInput(userInput)
+}
+
+func assistantProviderSupportsPromptSemanticFallback(adapter assistantProviderAdapter) bool {
+	switch adapter.(type) {
+	case assistantOpenAIProviderAdapter, *assistantOpenAIProviderAdapter:
+		return true
+	default:
+		return false
+	}
+}
+
+func assistantResolveIntentResultFromSemanticPayload(provider assistantModelProviderConfig, payload assistantSemanticIntentPayload) assistantResolveIntentResult {
+	resolved := assistantResolveIntentResult{
+		Proposal:            payload.proposal(),
+		SemanticState:       payload.proposal().semanticState(),
+		ProviderName:        strings.ToLower(strings.TrimSpace(provider.Name)),
+		ModelName:           strings.TrimSpace(provider.Model),
+		ModelRevision:       assistantModelRevision(provider),
+		GoalSummary:         strings.TrimSpace(payload.GoalSummary),
+		UserVisibleReply:    strings.TrimSpace(payload.UserVisibleReply),
+		NextQuestion:        strings.TrimSpace(payload.NextQuestion),
+		Readiness:           strings.TrimSpace(payload.Readiness),
+		SelectedCandidateID: strings.TrimSpace(payload.SelectedCandidateID),
+	}
+	assistantSyncResolvedSemanticResult(&resolved)
+	return resolved
+}
+
+func assistantResolveIntentFallbackFromPrompt(adapter assistantProviderAdapter, provider assistantModelProviderConfig, prompt string) (assistantResolveIntentResult, bool) {
+	if !assistantProviderSupportsPromptSemanticFallback(adapter) {
+		return assistantResolveIntentResult{}, false
+	}
+	if !assistantPromptEligibleForCreateOrgUnitSemanticFallback(prompt) {
+		return assistantResolveIntentResult{}, false
+	}
+	resolved := assistantResolveIntentResultFromSemanticPayload(provider, assistantSyntheticSemanticPayloadForPrompt(prompt))
+	if assistantModelSemanticStateInvalid(resolved) {
+		return assistantResolveIntentResult{}, false
+	}
+	return resolved, true
+}
+
+func assistantDecodedPayloadEligibleForPromptSemanticFallback(payload assistantSemanticIntentPayload) bool {
+	switch strings.TrimSpace(payload.Action) {
+	case "", assistantIntentCreateOrgUnit, assistantIntentPlanOnly:
+		return true
+	default:
+		return false
+	}
+}
+
 func assistantSyntheticSemanticPayload(userInput string) assistantSemanticIntentPayload {
 	text := strings.TrimSpace(userInput)
 	payload := assistantSemanticIntentPayload{
@@ -1137,20 +1212,42 @@ func assistantFirstCompositeNameFromObjects(objects []map[string]any, objectPath
 }
 
 func assistantIntentCandidateObjects(object map[string]any) []map[string]any {
+	if object == nil {
+		return nil
+	}
 	objects := []map[string]any{object}
-	for _, key := range []string{"slots", "slot_values", "slotValues", "arguments", "data", "params", "target"} {
-		if nested, ok := assistantLookupLooseMap(object, key); ok {
-			objects = append([]map[string]any{nested}, objects...)
+	queue := []map[string]any{object}
+	for len(queue) > 0 {
+		current := queue[0]
+		queue = queue[1:]
+		for _, key := range []string{
+			"intent",
+			"proposal",
+			"semantic_intent",
+			"semanticIntent",
+			"result",
+			"payload",
+			"output",
+			"response",
+			"answer",
+			"slots",
+			"slot_values",
+			"slotValues",
+			"arguments",
+			"data",
+			"params",
+			"target",
+		} {
+			if nested, ok := assistantLookupLooseMap(current, key); ok {
+				objects = append([]map[string]any{nested}, objects...)
+				queue = append(queue, nested)
+			}
 		}
-	}
-	for _, key := range []string{"changes", "operations", "items"} {
-		if nested, ok := assistantFirstMapFromSlice(object, key); ok {
-			objects = append([]map[string]any{nested}, objects...)
-		}
-	}
-	for _, key := range []string{"actions"} {
-		if nested, ok := assistantFirstMapFromSlice(object, key); ok {
-			objects = append([]map[string]any{nested}, objects...)
+		for _, key := range []string{"changes", "operations", "items", "actions", "results", "outputs"} {
+			if nested, ok := assistantFirstMapFromSlice(current, key); ok {
+				objects = append([]map[string]any{nested}, objects...)
+				queue = append(queue, nested)
+			}
 		}
 	}
 	return objects
@@ -1217,7 +1314,7 @@ func assistantFirstBoolFromObjects(objects []map[string]any, paths ...string) (b
 }
 
 func assistantNormalizeOpenAIRetrievalRequests(object map[string]any) []assistantSemanticRetrievalRequest {
-	requests := assistantLooseObjectSlice(object,
+	requests := assistantLooseObjectSliceFromObjects(assistantIntentCandidateObjects(object),
 		"retrieval_requests",
 		"retrievalRequests",
 		"lookups",
@@ -1252,7 +1349,7 @@ func assistantNormalizeOpenAIRetrievalRequests(object map[string]any) []assistan
 }
 
 func assistantNormalizeOpenAIRetrievalResults(object map[string]any) []assistantSemanticRetrievalResult {
-	results := assistantLooseObjectSlice(object,
+	results := assistantLooseObjectSliceFromObjects(assistantIntentCandidateObjects(object),
 		"retrieval_results",
 		"retrievalResults",
 		"lookup_results",
@@ -1271,7 +1368,7 @@ func assistantNormalizeOpenAIRetrievalResults(object map[string]any) []assistant
 			CandidateCount:      assistantFirstInt(item, "candidate_count", "candidateCount", "count"),
 			SelectedCandidateID: strings.TrimSpace(assistantFirstString(item, "selected_candidate_id", "selectedCandidateId", "candidate_id", "candidateId")),
 		}
-		if ids := assistantLooseStringSlice(item, "candidate_ids", "candidateIds"); len(ids) > 0 {
+		if ids := assistantLooseStringSliceFromObjects([]map[string]any{item}, "candidate_ids", "candidateIds"); len(ids) > 0 {
 			result.CandidateIDs = ids
 		}
 		if result.Kind == "" {
@@ -1283,53 +1380,122 @@ func assistantNormalizeOpenAIRetrievalResults(object map[string]any) []assistant
 }
 
 func assistantLooseObjectSlice(object map[string]any, keys ...string) []map[string]any {
-	for _, key := range keys {
-		value, ok := assistantLookupMapValueLoose(object, key)
-		if !ok {
+	return assistantLooseObjectSliceFromObjects([]map[string]any{object}, keys...)
+}
+
+func assistantLooseObjectSliceFromObjects(objects []map[string]any, keys ...string) []map[string]any {
+	for _, object := range objects {
+		if object == nil {
 			continue
 		}
-		items, ok := value.([]any)
-		if !ok {
-			continue
-		}
-		out := make([]map[string]any, 0, len(items))
-		for _, item := range items {
-			asMap, ok := item.(map[string]any)
+		for _, key := range keys {
+			value, ok := assistantLookupMapValueLoose(object, key)
 			if !ok {
 				continue
 			}
-			out = append(out, asMap)
-		}
-		if len(out) > 0 {
-			return out
+			items, ok := value.([]any)
+			if !ok {
+				continue
+			}
+			out := make([]map[string]any, 0, len(items))
+			for _, item := range items {
+				asMap, ok := item.(map[string]any)
+				if !ok {
+					continue
+				}
+				out = append(out, asMap)
+			}
+			if len(out) > 0 {
+				return out
+			}
 		}
 	}
 	return nil
 }
 
 func assistantLooseStringSlice(object map[string]any, keys ...string) []string {
-	for _, key := range keys {
-		value, ok := assistantLookupMapValueLoose(object, key)
-		if !ok {
+	return assistantLooseStringSliceFromObjects([]map[string]any{object}, keys...)
+}
+
+func assistantLooseStringSliceFromObjects(objects []map[string]any, keys ...string) []string {
+	for _, object := range objects {
+		if object == nil {
 			continue
 		}
-		items, ok := value.([]any)
-		if !ok {
-			continue
-		}
-		out := make([]string, 0, len(items))
-		for _, item := range items {
-			text, ok := assistantToNonEmptyString(item)
+		for _, key := range keys {
+			value, ok := assistantLookupMapValueLoose(object, key)
 			if !ok {
 				continue
 			}
-			out = append(out, text)
-		}
-		if len(out) > 0 {
-			return assistantNormalizeRouteStringSlice(out)
+			items, ok := value.([]any)
+			if !ok {
+				continue
+			}
+			out := make([]string, 0, len(items))
+			for _, item := range items {
+				text, ok := assistantToNonEmptyString(item)
+				if !ok {
+					continue
+				}
+				out = append(out, text)
+			}
+			if len(out) > 0 {
+				return assistantNormalizeRouteStringSlice(out)
+			}
 		}
 	}
 	return nil
+}
+
+func assistantOpenAIContentObjectLooksLikePayload(object map[string]any) bool {
+	if object == nil {
+		return false
+	}
+	for _, key := range []string{
+		"action",
+		"proposed_action",
+		"proposedAction",
+		"intent_action",
+		"intentAction",
+		"intent_id",
+		"intentId",
+		"route_kind",
+		"routeKind",
+		"parent_ref_text",
+		"parentRefText",
+		"entity_name",
+		"entityName",
+		"effective_date",
+		"effectiveDate",
+		"org_code",
+		"orgCode",
+		"target_effective_date",
+		"targetEffectiveDate",
+		"new_name",
+		"newName",
+		"new_parent_ref_text",
+		"newParentRefText",
+		"goal_summary",
+		"goalSummary",
+		"user_visible_reply",
+		"userVisibleReply",
+		"next_question",
+		"nextQuestion",
+		"readiness",
+		"status",
+		"state",
+		"retrieval_requests",
+		"retrievalRequests",
+		"retrieval_results",
+		"retrievalResults",
+		"lookups",
+		"lookup_results",
+	} {
+		if _, ok := assistantLookupMapValueLoose(object, key); ok {
+			return true
+		}
+	}
+	return false
 }
 
 func assistantFirstInt(object map[string]any, keys ...string) int {
@@ -1695,6 +1861,14 @@ func (g *assistantModelGateway) ResolveIntent(ctx context.Context, req assistant
 		for attempt := 0; attempt < attempts; attempt++ {
 			raw, err := adapter.Invoke(ctx, req.Prompt, provider)
 			if err != nil {
+				if errors.Is(err, errAssistantPlanSchemaConstrainedDecodeFailed) {
+					if attempt < attempts-1 {
+						continue
+					}
+					if fallbackResolved, ok := assistantResolveIntentFallbackFromPrompt(adapter, provider, req.Prompt); ok {
+						return fallbackResolved, nil
+					}
+				}
 				invokeErr = err
 				if errorsIsAny(err, errAssistantModelTimeout, errAssistantModelRateLimited, errAssistantModelProviderUnavailable) && attempt < attempts-1 {
 					continue
@@ -1707,21 +1881,17 @@ func (g *assistantModelGateway) ResolveIntent(ctx context.Context, req assistant
 				if attempt < attempts-1 {
 					continue
 				}
+				if fallbackResolved, ok := assistantResolveIntentFallbackFromPrompt(adapter, provider, req.Prompt); ok {
+					return fallbackResolved, nil
+				}
 				break
 			}
-			resolved := assistantResolveIntentResult{
-				Proposal:            payload.proposal(),
-				SemanticState:       payload.proposal().semanticState(),
-				ProviderName:        strings.ToLower(strings.TrimSpace(provider.Name)),
-				ModelName:           strings.TrimSpace(provider.Model),
-				ModelRevision:       assistantModelRevision(provider),
-				GoalSummary:         strings.TrimSpace(payload.GoalSummary),
-				UserVisibleReply:    strings.TrimSpace(payload.UserVisibleReply),
-				NextQuestion:        strings.TrimSpace(payload.NextQuestion),
-				Readiness:           strings.TrimSpace(payload.Readiness),
-				SelectedCandidateID: strings.TrimSpace(payload.SelectedCandidateID),
+			resolved := assistantResolveIntentResultFromSemanticPayload(provider, payload)
+			if assistantModelSemanticStateInvalid(resolved) && assistantDecodedPayloadEligibleForPromptSemanticFallback(payload) {
+				if fallbackResolved, ok := assistantResolveIntentFallbackFromPrompt(adapter, provider, req.Prompt); ok {
+					return fallbackResolved, nil
+				}
 			}
-			assistantSyncResolvedSemanticResult(&resolved)
 			return resolved, nil
 		}
 		switch {
@@ -1922,9 +2092,40 @@ func assistantExtractOpenAIMessageContent(raw any) string {
 			if !ok {
 				continue
 			}
-			switch text := object["text"].(type) {
-			case string:
+			switch text := assistantFirstString(object,
+				"text",
+				"output_text",
+				"content",
+				"message",
+				"answer",
+				"json",
+				"arguments",
+				"value",
+			); {
+			case strings.TrimSpace(text) != "":
 				parts = append(parts, text)
+				continue
+			}
+			for _, key := range []string{"text", "output_text", "content"} {
+				value, ok := object[key]
+				if !ok {
+					continue
+				}
+				nested, ok := value.([]any)
+				if !ok {
+					continue
+				}
+				for _, item := range nested {
+					if text, ok := item.(string); ok && strings.TrimSpace(text) != "" {
+						parts = append(parts, strings.TrimSpace(text))
+					}
+				}
+			}
+			if assistantOpenAIContentObjectLooksLikePayload(object) {
+				payload, err := json.Marshal(object)
+				if err == nil && strings.TrimSpace(string(payload)) != "" {
+					parts = append(parts, string(payload))
+				}
 			}
 		}
 		return strings.Join(parts, "")

@@ -208,8 +208,6 @@ func knownErrorMessage(code string) string {
 		return "旧 Assistant API 已退役，请改用 CubeBox 正式接口。"
 	case "assistant_ui_retired":
 		return "旧助手入口已退役，请改用正式入口。"
-	case "assistant_vendored_api_retired":
-		return "旧助手兼容接口已退役，请重新打开正式助手入口。"
 	case "assistant_ui_upstream_unavailable":
 		return "聊天服务暂不可用，请稍后重试。"
 	case "assistant_vendored_sid_missing":

@@ -498,7 +498,7 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, error) {
 		handleAssistantModelsAPI(w, r, assistantSvc)
 	}))
 	router.Handle(routing.RouteClassInternalAPI, http.MethodGet, "/internal/assistant/runtime-status", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		handleAssistantRuntimeStatusAPI(w, r)
+		handleAssistantRetiredAPI(w, r, "/internal/cubebox/runtime-status")
 	}))
 	router.Handle(routing.RouteClassInternalAPI, http.MethodPost, "/internal/cubebox/conversations", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		handleCubeBoxConversationsAPI(w, r, cubeboxFacade)

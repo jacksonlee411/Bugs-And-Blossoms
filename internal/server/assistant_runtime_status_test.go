@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -198,29 +199,24 @@ func TestAssistantRuntimeStatus_DomainPolicyMissingFailsClosed(t *testing.T) {
 }
 
 func TestHandleAssistantRuntimeStatusAPI(t *testing.T) {
-	t.Setenv("LIBRECHAT_UPSTREAM", "http://127.0.0.1:3080")
-	t.Setenv("ASSISTANT_RUNTIME_VERSIONS_LOCK", filepath.Join(t.TempDir(), "missing.lock.yaml"))
-	t.Setenv("ASSISTANT_RUNTIME_STATUS_FILE", filepath.Join(t.TempDir(), "missing.status.json"))
-
 	req := httptest.NewRequest(http.MethodGet, "http://localhost/internal/assistant/runtime-status", nil)
 	rec := httptest.NewRecorder()
-	handleAssistantRuntimeStatusAPI(rec, req)
-	if rec.Code != http.StatusServiceUnavailable {
+	handleAssistantRetiredAPI(rec, req, "/internal/cubebox/runtime-status")
+	if rec.Code != http.StatusGone {
 		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
 	}
-	var payload assistantRuntimeStatusResponse
+	var payload struct {
+		Code    string `json:"code"`
+		Message string `json:"message"`
+	}
 	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
 		t.Fatalf("decode response: %v", err)
 	}
-	if payload.Code == "" || payload.ErrorCode == "" {
-		t.Fatalf("missing code payload=%+v", payload)
+	if payload.Code != assistantAPIGoneCode {
+		t.Fatalf("code=%q body=%s", payload.Code, rec.Body.String())
 	}
-
-	badMethodReq := httptest.NewRequest(http.MethodPost, "http://localhost/internal/assistant/runtime-status", nil)
-	badMethodRec := httptest.NewRecorder()
-	handleAssistantRuntimeStatusAPI(badMethodRec, badMethodReq)
-	if badMethodRec.Code != http.StatusMethodNotAllowed {
-		t.Fatalf("status=%d body=%s", badMethodRec.Code, badMethodRec.Body.String())
+	if !strings.Contains(payload.Message, "/internal/cubebox/runtime-status") {
+		t.Fatalf("message=%q", payload.Message)
 	}
 }
 
@@ -402,5 +398,22 @@ func TestAssistantRuntimeReadAndResolvePath(t *testing.T) {
 	missing := assistantRuntimeResolvePath("missing.lock", "fallback.lock")
 	if missing != "missing.lock" {
 		t.Fatalf("missing=%s", missing)
+	}
+
+	t.Setenv("LIBRECHAT_UPSTREAM", "http://example.internal:9999")
+	if got := assistantRuntimeDefaultUpstreamURL(); got != "http://example.internal:9999" {
+		t.Fatalf("upstream=%s", got)
+	}
+	t.Setenv("LIBRECHAT_UPSTREAM", "")
+	t.Setenv("LIBRECHAT_PORT", "3900")
+	if got := assistantRuntimeDefaultUpstreamURL(); got != "http://127.0.0.1:3900" {
+		t.Fatalf("port override upstream=%s", got)
+	}
+	t.Setenv("LIBRECHAT_PORT", "")
+	if got := assistantRuntimeDefaultUpstreamURL(); got != "http://127.0.0.1:3080" {
+		t.Fatalf("default upstream=%s", got)
+	}
+	if got := assistantRuntimeConfiguredPath("   "); got != "" {
+		t.Fatalf("blank configured path=%q", got)
 	}
 }

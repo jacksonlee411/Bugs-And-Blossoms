@@ -40,7 +40,6 @@ describe('resolveApiErrorMessage', () => {
     const retiredEntryMessage = resolveApiErrorMessage('assistant_ui_retired', 'assistant_ui_retired')
     const runtimeMessage = resolveApiErrorMessage('assistant_runtime_unavailable', 'assistant_runtime_unavailable')
     const gateMessage = resolveApiErrorMessage('assistant_gate_unavailable', 'assistant_gate_unavailable')
-    const retiredCompatMessage = resolveApiErrorMessage('assistant_vendored_api_retired', 'assistant_vendored_api_retired')
     expect(sessionMessage).not.toBe('assistant_session_invalid')
     expect(principalMessage).not.toBe('assistant_principal_invalid')
     expect(bootstrapMessage).not.toBe('assistant_ui_bootstrap_unavailable')
@@ -48,7 +47,6 @@ describe('resolveApiErrorMessage', () => {
     expect(retiredEntryMessage).not.toBe('assistant_ui_retired')
     expect(runtimeMessage).not.toBe('assistant_runtime_unavailable')
     expect(gateMessage).not.toBe('assistant_gate_unavailable')
-    expect(retiredCompatMessage).not.toBe('assistant_vendored_api_retired')
   })
 
   it('returns explicit mapped messages for cubebox errors', () => {

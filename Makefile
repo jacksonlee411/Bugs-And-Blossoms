@@ -12,8 +12,6 @@ export DEV_INFRA_ENV_FILE ?= .env.example
 .PHONY: plan migrate up
 .PHONY: iam orgunit jobcatalog staffing person
 .PHONY: dev dev-up dev-down dev-reset dev-ps dev-server dev-kratos-stub
-.PHONY: assistant-runtime-up assistant-runtime-down assistant-runtime-status assistant-runtime-clean
-.PHONY: librechat-web-verify librechat-web-build
 .PHONY: coverage
 
 help:
@@ -52,16 +50,7 @@ help:
 		"  make test" \
 		"  make check routing" \
 		"  make e2e" \
-	"" \
-	"LibreChat 运行基线：" \
-		"  make assistant-runtime-up" \
-		"  make assistant-runtime-status" \
-		"  make assistant-runtime-down" \
-		"  make assistant-runtime-clean" \
-		"  make librechat-web-verify" \
-		"  make librechat-web-build" \
-	"" \
-	"开发环境：" \
+		"开发环境：" \
 		"  make dev-up" \
 		"  make dev-server" \
 		"  make dev-superadmin" \
@@ -280,33 +269,6 @@ dev-superadmin:
 	export SUPERADMIN_BASIC_AUTH_PASS="$${SUPERADMIN_BASIC_AUTH_PASS:-admin}"; \
 	go run ./cmd/superadmin
 
-assistant-runtime-up: ## LibreChat 官方运行基线上线（compose up + healthcheck）
-	@./scripts/librechat/up.sh
-
-assistant-runtime-up-mongo-debug: ## LibreChat external Mongo 调试模式（使用 deploy/librechat/.env.mongo-debug）
-	@LIBRECHAT_ENV_FILE="$(CURDIR)/deploy/librechat/.env.mongo-debug" ./scripts/librechat/up.sh
-
-assistant-runtime-down: ## LibreChat 官方运行基线下线（compose down）
-	@./scripts/librechat/down.sh
-
-assistant-runtime-down-mongo-debug: ## LibreChat external Mongo 调试模式下线
-	@LIBRECHAT_ENV_FILE="$(CURDIR)/deploy/librechat/.env.mongo-debug" ./scripts/librechat/down.sh
-
-assistant-runtime-status: ## LibreChat 运行健康检查（产出 runtime-status.json）
-	@./scripts/librechat/status.sh
-
-assistant-runtime-status-mongo-debug: ## LibreChat external Mongo 调试模式健康检查
-	@LIBRECHAT_ENV_FILE="$(CURDIR)/deploy/librechat/.env.mongo-debug" ./scripts/librechat/status.sh
-
-assistant-runtime-clean: ## LibreChat 本地数据清理（仅 .local/librechat/*）
-	@./scripts/librechat/clean.sh
-
-librechat-web-verify: ## 校验 vendored LibreChat Web UI 骨架、来源元数据与产物出口约定
-	@./scripts/librechat-web/verify.sh
-
-librechat-web-build: ## 构建 vendored LibreChat Web UI 到 internal/server/assets/librechat-web
-	@./scripts/librechat-web/build.sh
-
 routing: ## 路由门禁（allowlist/entrypoint key 等）
 	@./scripts/routing/check-allowlist.sh
 
@@ -354,7 +316,7 @@ staffing:
 person:
 	@:
 
-MODULE := $(firstword $(filter-out preflight check fmt lint test routing e2e doc tr generate css sqlc-generate sqlc-verify-schema authz-pack authz-test authz-lint no-legacy assistant-config-single-source assistant-domain-allowlist assistant-knowledge-single-source assistant-knowledge-runtime-load assistant-knowledge-no-json-runtime assistant-no-legacy-overlay assistant-no-knowledge-literals assistant-knowledge-no-archive-ref assistant-knowledge-contract-separation assistant-no-knowledge-db no-scope-package granularity ddd-layering-p0 ddd-layering-p2 org-node-key-backflow capability-key capability-contract capability-route-map capability-catalog policy-baseline-dup request-code as-of-explicit dict-tenant-only go-version error-message plan migrate up dev dev-up dev-down dev-reset dev-ps dev-server assistant-runtime-up assistant-runtime-down assistant-runtime-status assistant-runtime-clean librechat-web-verify librechat-web-build,$(MAKECMDGOALS)))
+MODULE := $(firstword $(filter-out preflight check fmt lint test routing e2e doc tr generate css sqlc-generate sqlc-verify-schema authz-pack authz-test authz-lint no-legacy assistant-config-single-source assistant-domain-allowlist assistant-knowledge-single-source assistant-knowledge-runtime-load assistant-knowledge-no-json-runtime assistant-no-legacy-overlay assistant-no-knowledge-literals assistant-knowledge-no-archive-ref assistant-knowledge-contract-separation assistant-no-knowledge-db no-scope-package granularity ddd-layering-p0 ddd-layering-p2 org-node-key-backflow capability-key capability-contract capability-route-map capability-catalog policy-baseline-dup request-code as-of-explicit dict-tenant-only go-version error-message plan migrate up dev dev-up dev-down dev-reset dev-ps dev-server,$(MAKECMDGOALS)))
 MIGRATE_DIR := $(lastword $(filter up down,$(MAKECMDGOALS)))
 
 plan:

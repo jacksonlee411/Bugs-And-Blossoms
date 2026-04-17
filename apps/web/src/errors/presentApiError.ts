@@ -84,7 +84,6 @@ const localizedMessages: Record<string, LocalizedErrorMessage> = {
   assistant_ui_method_not_allowed: { en: 'HTTP method is not allowed for assistant chat proxy.', zh: '当前请求方法不被允许，请刷新页面后重试。' },
   assistant_ui_path_invalid: { en: 'Assistant chat proxy path is invalid. Please re-open from assistant page.', zh: '助手聊天路径无效，请从助手页面重新进入。' },
   assistant_ui_upstream_unavailable: { en: 'Assistant chat upstream is unavailable. Please retry later.', zh: '聊天服务暂不可用，请稍后重试。' },
-  assistant_vendored_api_retired: { en: 'Legacy assistant compat API is retired. Please reopen the formal assistant entry.', zh: '旧助手兼容接口已退役，请重新打开正式助手入口。' },
   cubebox_service_missing: { en: 'CubeBox service is unavailable. Please retry later.', zh: 'CubeBox 服务暂不可用，请稍后重试。' },
   cubebox_conversation_cursor_invalid: { en: 'CubeBox conversation cursor is invalid or expired. Please reload the list.', zh: 'CubeBox 会话分页游标无效或已过期，请刷新列表后重试。' },
   cubebox_conversation_list_failed: { en: 'Failed to load CubeBox conversations. Please retry later.', zh: '加载 CubeBox 会话列表失败，请稍后重试。' },

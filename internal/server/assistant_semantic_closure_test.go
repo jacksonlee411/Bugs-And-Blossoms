@@ -413,6 +413,50 @@ func TestAssistant268SemanticOrchestratorClosureCoverage(t *testing.T) {
 		t.Fatalf("unexpected carried selection resolution=%+v", carried)
 	}
 
+	uncertainUpgradeSvc := newAssistantConversationService(store, assistantWriteServiceStub{store: store})
+	uncertainUpgradeCalls := 0
+	uncertainUpgradeSvc.modelGateway = assistantTestSemanticGateway(assistantAdapterFunc(func(_ context.Context, _ string, _ assistantModelProviderConfig) ([]byte, error) {
+		uncertainUpgradeCalls++
+		if uncertainUpgradeCalls == 1 {
+			return []byte(`{"action":"plan_only","route_kind":"uncertain","intent_id":"route.uncertain","readiness":"need_more_info"}`), nil
+		}
+		return []byte(`{"action":"plan_only","route_kind":"uncertain","intent_id":"route.uncertain","readiness":"need_more_info"}`), nil
+	}))
+	uncertainFirst, err := uncertainUpgradeSvc.orchestrateSemanticTurn(context.Background(), tenantID, Principal{ID: "actor_uncertain_upgrade", RoleSlug: "tenant-admin"}, "conv_uncertain_upgrade", "在鲜花组织下创建运营部", nil)
+	if err != nil {
+		t.Fatalf("uncertain first orchestrate err=%v", err)
+	}
+	if uncertainFirst.Resolved.Intent.Action != assistantIntentCreateOrgUnit || uncertainFirst.Resolved.Intent.RouteKind != assistantRouteKindBusinessAction {
+		t.Fatalf("expected local upgrade on first uncertain turn, got=%+v", uncertainFirst.Resolved.Intent)
+	}
+	if uncertainFirst.Retrieval.State != assistantSemanticRetrievalStateDeferredByBoundary {
+		t.Fatalf("expected deferred lookup before effective date, got=%+v", uncertainFirst.Retrieval)
+	}
+	if uncertainFirst.ResolvedCandidateID != "" {
+		t.Fatalf("expected no candidate before effective date, got=%q", uncertainFirst.ResolvedCandidateID)
+	}
+	pendingTurn := &assistantTurn{
+		UserInput: "在鲜花组织下创建运营部",
+		Intent:    uncertainFirst.Resolved.Intent,
+		Clarification: &assistantClarificationDecision{
+			Status:            assistantClarificationStatusOpen,
+			ClarificationKind: assistantClarificationKindMissingSlots,
+		},
+	}
+	uncertainFollowup, err := uncertainUpgradeSvc.orchestrateSemanticTurn(context.Background(), tenantID, Principal{ID: "actor_uncertain_upgrade", RoleSlug: "tenant-admin"}, "conv_uncertain_upgrade", "生效日期 2026-01-01", pendingTurn)
+	if err != nil {
+		t.Fatalf("uncertain follow-up orchestrate err=%v", err)
+	}
+	if uncertainFollowup.Resolved.Intent.Action != assistantIntentCreateOrgUnit || uncertainFollowup.Resolved.Intent.EffectiveDate != "2026-01-01" {
+		t.Fatalf("expected create follow-up with effective date, got=%+v", uncertainFollowup.Resolved.Intent)
+	}
+	if uncertainFollowup.Retrieval.State != assistantSemanticRetrievalStateSingleMatch || uncertainFollowup.ResolvedCandidateID != "FLOWER-A" || uncertainFollowup.ResolutionSource != assistantResolutionAuto {
+		t.Fatalf("expected candidate resolved after date supplement, got=%+v", uncertainFollowup)
+	}
+	if uncertainUpgradeCalls != 2 {
+		t.Fatalf("expected deferred_by_boundary turn to skip extra follow-up resolve, calls=%d", uncertainUpgradeCalls)
+	}
+
 	notRequested, candidates, err := svc.executeSemanticCandidateLookup(context.Background(), tenantID, assistantConversationSemanticState{})
 	if err != nil || notRequested.State != assistantSemanticRetrievalStateNotRequested || candidates != nil {
 		t.Fatalf("unexpected not-requested lookup result=%+v candidates=%+v err=%v", notRequested, candidates, err)
