@@ -222,6 +222,7 @@ modules/{module}/
 - DEV-PLAN-061：全链路业务测试子计划 TP-060-01——租户/登录/权限/隔离基线：`docs/dev-plans/061-test-tp060-01-tenant-login-authz-rls-baseline.md`
 - DEV-PLAN-062：全链路业务测试子计划 TP-060-02——主数据（组织架构 + SetID + JobCatalog + 职位）：`docs/dev-plans/062-test-tp060-02-master-data-org-setid-jobcatalog-position.md`
 - DEV-PLAN-063：全链路业务测试子计划 TP-060-03——人员与任职（Person + Assignments）：`docs/dev-plans/063-test-tp060-03-person-and-assignments.md`
+<<<<<<< HEAD
 - DEV-PLAN-064A：全链路业务测试子计划 TP-060-05——Assistant（会话 + 意图 + 提交 + 任务编排）：`docs/dev-plans/064a-test-tp060-05-assistant-conversation-intent-and-tasks.md`
 - DEV-PLAN-380：CubeBox 一方资产化与 LibreChat 完整退役重构方案（v1 去 Prompt 版）：`docs/dev-plans/380-cubebox-first-party-ownership-and-librechat-retirement-plan.md`
 - DEV-PLAN-380A：CubeBox PostgreSQL 数据面与迁移契约：`docs/dev-plans/380a-cubebox-postgresql-data-plane-and-migration-contract.md`
@@ -235,6 +236,23 @@ modules/{module}/
 - DEV-PLAN-382：Capability Functional Area 治理影响面专项调查：`docs/dev-plans/382-capability-functional-area-governance-impact-investigation.md`
 - DEV-PLAN-383：Functional Area 与 DDD 模块并行第二维度风险专项调查与收敛建议：`docs/dev-plans/383-functional-area-vs-ddd-module-second-axis-investigation-and-remediation-plan.md`
 - DEV-PLAN-384：220-292 归档后测试资产重评估与防回流专项方案：`docs/dev-plans/384-220-292-archived-test-reassessment-and-anti-backflow-plan.md`
+- DEV-PLAN-390：移除 DEV-PLAN-150 治理抽象、SetID 与 scope/package/subscription 残留语义的简化方案：`docs/dev-plans/390-remove-dev-plan-150-and-setid-simplification-plan.md`
+- DEV-PLAN-391：DEV-PLAN-390 执行排序、命中清单与分批落地方案：`docs/dev-plans/391-dev-plan-390-execution-sequencing-and-hit-list.md`
+- DEV-PLAN-391A：阶段 A / PR-A：`authz requirement` 单主源与 390 反回流门禁冻结：`docs/dev-plans/391a-phase-a-authz-requirement-single-source-and-anti-backflow-gates-freeze.md`
+- DEV-PLAN-391B：阶段 B / PR-B：治理 runtime 主切断与 legacy surface 成组下线：`docs/dev-plans/391b-phase-b-main-cutover-governance-runtime-and-legacy-surface-removal-plan.md`
+- DEV-PLAN-391B1【归档】：阶段 B 尾扫：OrgUnit 字段决策与 SetID Binding 最终 runtime 切断：`docs/archive/dev-plans/391b1-phase-b-orgunit-field-decision-and-setid-binding-final-runtime-cutover.md`
+- DEV-PLAN-391C：阶段 C / PR-C：schema/sqlc/错误码/测试/文档封板收口：`docs/dev-plans/391c-phase-c-sealing-sweep-for-schema-sqlc-errors-tests-and-docs.md`
+- DEV-PLAN-392：旧对话栈全量移除与重做准备计划：`docs/dev-plans/392-remove-assistant-cubebox-and-librechat-rebuild-plan.md`
+- DEV-PLAN-410：基于实体授权的配置差异化设计原则：`docs/dev-plans/410-entity-authorization-based-configuration-differentiation-principle.md`
+- DEV-PLAN-411：基于实体授权差异化配置的 UI 配置模式：`docs/dev-plans/411-ui-configuration-pattern-for-entity-based-differentiated-config.md`
+- DEV-PLAN-420：规则函数框架与客户自定义函数方案：`docs/dev-plans/420-rule-function-framework-and-custom-functions-plan.md`
+- DEV-PLAN-430：IDE 式对话助手重做架构方案：`docs/dev-plans/430-cubebox-ide-conversation-assistant-rebuild-architecture-plan.md`
+- DEV-PLAN-431：Codex UI 协议、状态机与右悬挂壳层复用/重构方案：`docs/dev-plans/431-codex-ui-protocol-and-shell-reuse-plan.md`
+- DEV-PLAN-432：Codex 会话持久化、索引与恢复语义复用/重构方案：`docs/dev-plans/432-codex-session-persistence-reuse-plan.md`
+- DEV-PLAN-433：Bifrost 主参考的 AI 网关复用/重构方案：`docs/dev-plans/433-bifrost-centric-ai-gateway-reuse-and-reconstruction-plan.md`
+- DEV-PLAN-434：Codex 上下文管理与压缩机制复用/重构方案：`docs/dev-plans/434-codex-context-management-and-compaction-reuse-plan.md`
+- DEV-PLAN-435：Bifrost 主参考的模型配置 UI 与管理权限复用/重构方案：`docs/dev-plans/435-bifrost-centric-model-config-ui-and-admin-governance-plan.md`
+- DEV-PLAN-400：CodeFlow 辅助源码分析与爆炸半径评估落地方案：`docs/dev-plans/400-codeflow-assisted-source-analysis-and-impact-radius-plan.md`
 - DEV-PLAN-069：移除薪酬社保与考勤（文档/代码/测试/数据库）：`docs/dev-plans/069-remove-payroll-attendance.md`
 - DEV-PLAN-070【归档】：SetID 绑定组织架构重构方案（时间口径已由 DEV-PLAN-102B 接管）：`docs/archive/dev-plans/070-setid-orgunit-binding-redesign.md`
 - DEV-PLAN-070A：全局共享租户模式 vs 天然租户隔离模式专项调查（SetID/Scope Package）：`docs/dev-plans/070a-setid-global-share-vs-tenant-native-isolation-investigation.md`
