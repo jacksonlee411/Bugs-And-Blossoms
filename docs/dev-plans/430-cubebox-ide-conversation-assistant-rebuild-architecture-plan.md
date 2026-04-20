@@ -8,7 +8,7 @@
 - **范围一句话**：在旧对话栈完成历史归档之后，重新设计一个名为 `CubeBox`、中文名为“丘宝”的一方对话助手模块；首期交付对齐 VS Code Codex 插件观感的右侧悬挂抽屉、可配置外部大模型的 AI 网关，以及具备上下文压缩与会话隔离能力的连续对话内核。
 - **关联模块/目录**：`AGENTS.md`、`apps/web`、`internal/server`、`modules/cubebox`（候选新模块路径）、`config`、`migrations`、`scripts/ci`
 - **关联计划/标准**：`DEV-PLAN-004M1`、`DEV-PLAN-012`、`DEV-PLAN-015`、`DEV-PLAN-016`、`DEV-PLAN-017`、`DEV-PLAN-019`、`DEV-PLAN-021`、`DEV-PLAN-022`、`DEV-PLAN-300`、`DEV-PLAN-431`、`DEV-PLAN-432`、`DEV-PLAN-433`、`DEV-PLAN-434`、`DEV-PLAN-435`
-- **用户入口/触点**：Web 应用右侧悬挂对话入口、模型配置页、会话列表、会话详情、流式回复、错误提示、审计记录；VS Code 插件形态作为后续可选客户端适配器，不在首期实现范围内。
+- **用户入口/触点**：Web 应用右侧悬挂对话入口、模型配置页、会话列表、会话详情、流式回复、错误提示、审计记录；不提供 VS Code 插件形态或其他 IDE 客户端。
 
 ### 0.1 Simple > Easy 三问
 
@@ -31,7 +31,7 @@
 2. 提供 AI 网关能力，允许租户或管理员配置外部大模型供应商、模型、API Key、限额、超时和故障切换策略。
 3. 特别强化对话连贯性，借鉴 Codex 与 Continue 等工具的上下文收集、会话压缩、滑动窗口、结构化状态和会话恢复做法。
 
-本仓是 HRMS implementation repo，不是 VS Code extension 仓库。因此首期默认交付形态是 Web 应用内的一方模块和右侧悬挂抽屉；若后续要做真正的 VS Code 插件，应作为客户端适配器另立子计划，并通过同一后端网关和会话 API 接入。
+本仓是 HRMS implementation repo，不是 VS Code extension 仓库。因此交付形态冻结为 Web 应用内的一方模块和右侧悬挂抽屉；本计划不提供真正的 VS Code 插件或其他 IDE 客户端，也不为其保留实现范围。
 
 ## 2. 研究依据与采用口径
 
@@ -39,7 +39,7 @@
 
 - VS Code 官方文档显示，Views 可包含 Tree View、Welcome View 或 Webview View，也可被用户移动到 Secondary Sidebar；Webview 适合承载超出原生 API 能力的自定义 UI。
 - VS Code 侧边栏文档也提示，Secondary Sidebar 是辅助位置，扩展默认不能直接把 View 贡献到该位置，用户可拖动 Views 调整布局。
-- 因此本仓首期不承诺“安装即进入 VS Code Secondary Sidebar”的 IDE 插件能力；Web 产品内只复刻其右侧悬挂抽屉交互。如果后续做 VS Code 插件，必须先验证目标 VS Code API 版本是否支持默认右侧布局，否则采用官方支持的 View Container + 用户可移动布局方案。
+- 因此本仓不承诺“安装即进入 VS Code Secondary Sidebar”的 IDE 插件能力；Web 产品内只复刻其右侧悬挂抽屉交互。VS Code 相关资料在本计划中仅作为交互参考，不构成当前交付范围。
 - OpenAI Codex 开源仓库中的 Rust TUI 不适合直接复用为本仓 Web/MUI 组件，但其 app-server protocol、thread/turn 状态机、事件流、history reducer、compact/token UI 通知和交互模式是 Slice 1 的优先复用/重构基线；详细方案见 `DEV-PLAN-431`。
 
 ### 2.2 AI 网关参考
@@ -54,7 +54,7 @@
 - OpenAI 关于 Codex agent loop 的公开文章说明，Codex 会构造完整输入、接收 SSE 流，并在上下文接近阈值时 compact 对话，把历史输入替换成更小但能代表此前工作的项目列表。
 - OpenAI Codex CLI 已开源，仓库 `openai/codex` 中的 `codex-rs/core/src/compact.rs`、`compact_remote.rs`、`context_manager/history.rs` 与 `templates/compact/**` 是 CubeBox 上下文管理与压缩的优先复用/重构基线；详细复用计划见 `DEV-PLAN-434`。
 - OpenAI Agents SDK session 文档提供了 client-side session、history compaction、`sessionInputCallback` 这类可裁剪历史、去重工具结果、突出关键上下文的机制。
-- Continue 的 context providers 公开文档展示了 `@File`、`@Code`、`@Git Diff`、`@Current File`、`@Terminal`、`@Codebase`、`@Problems`、MCP 等显式上下文注入模式。
+- Continue 的 context providers 公开文档说明了“显式上下文注入”这类交互思路，可作为 CubeBox 页面内业务上下文选择的交互参考；其 coding-assistant 专属 provider 范围不纳入本计划。
 - 本计划采用“优先重构 Codex 开源上下文管理/压缩机制 + 本仓 append-only 审计适配”的策略，不把无限堆叠消息历史作为连贯性的实现方式。
 
 ## 3. 目标
@@ -66,7 +66,7 @@
 5. 网关对前端暴露单一内部 API，不让前端直接持有外部供应商 API Key。
 6. 会话持久化支持新建、恢复、重命名、归档和删除会话。
 7. 上下文管理支持 token budget、保留输出区、滑动窗口、摘要压缩、工具输出压缩、结构化状态对象和最近回合原文保留。
-8. 支持显式上下文来源：当前页面、当前业务对象、用户选中内容、最近操作、错误详情、可选 Git diff / terminal / MCP 客户端上下文。
+8. 支持显式上下文来源：当前页面、当前业务对象、用户选中内容、最近操作、错误详情。
 9. 以租户、用户和会话为隔离边界，遵守 RLS、Casbin、审计和错误码契约。
 10. 建立测试、E2E、门禁和 readiness 记录，证明新模块可发现、可操作、可审计。
 
@@ -109,7 +109,7 @@
 ### 6.1 网关职责
 
 - 对内暴露统一聊天接口，首期兼容 OpenAI chat/completions 或 Responses 风格的最小子集。
-- 对外适配多个供应商：OpenAI-compatible、Anthropic-compatible、Google-compatible、DeepSeek、豆包、通义千问等供应商作为配置项逐步开放。
+- 对外适配范围冻结为一个 OpenAI-compatible provider 最小闭环；其他供应商不在当前交付范围内。
 - 管理 API Key、base URL、模型名、默认参数、超时、重试、故障切换、启停状态和健康检查。
 - 统一处理 SSE 流式转发、错误映射、审计、token 用量记录和配额判断。
 
@@ -149,7 +149,7 @@
 - 原始消息流：用户消息、助手消息、系统提示、工具调用摘要、错误事件。
 - 压缩摘要：按时间段或主题生成的层次化摘要。
 - 结构化状态对象：当前页面、业务对象、用户意图、已确认事实、可用工具、模型配置、最近错误。
-- 上下文来源索引：当前页面、业务对象、用户选择、附件、显式 `@` 上下文、MCP 工具输出摘要。
+- 上下文来源索引：当前页面、业务对象、用户选择、附件、显式 `@` 上下文。
 
 ### 7.2 Prompt 组装顺序
 
@@ -175,9 +175,8 @@
 ### 7.4 上下文来源
 
 - 隐式上下文：当前页面 route、当前业务对象 ID、当前表单草稿、最近错误、当前用户语言。
-- 显式上下文：用户选择的对象、上传的文本片段、粘贴的错误日志、`@CurrentPage`、`@Record`、`@Diff`、`@Terminal` 等。
-- MCP：首期只定义接口和安全边界，不默认启用外部 MCP server；启用前必须做工具白名单、权限、超时和输出压缩。
-- 代码库上下文：如果未来接入代码库检索，只能作为只读 context provider，不允许模型直接执行 shell 或写文件。
+- 显式上下文：用户选择的对象、上传的文本片段、粘贴的错误日志、`@CurrentPage`、`@Record` 等。
+- 不提供 Git diff、terminal、代码库检索、MCP server 或其他 coding-assistant 风格上下文注入能力。
 
 ### 7.5 会话隔离
 
@@ -226,7 +225,7 @@
 ### Slice 2：AI 网关最小闭环
 
 - [ ] 按 `DEV-PLAN-433` 先完成 Bifrost 资产评估与复用/重构清单冻结，不从零自研平行网关。
-- [ ] 以 Bifrost 为主参考，结合 Codex provider adapter / bridge / stream parser，建立 provider adapter 接口与一个 OpenAI-compatible provider。
+- [ ] 以 Bifrost 为主参考，结合 Codex provider adapter / bridge / stream parser，建立 provider adapter 接口与一个 OpenAI-compatible provider；其他供应商不进入首期闭环。
 - [ ] 以 Bifrost 为主参考实现服务端模型配置读取、密钥解密、请求映射、SSE 转发、错误映射与 fallback 骨架。
 - [ ] 以 Bifrost 的 health/readiness 思路实现模型健康检查与配置验证。
 - [ ] 补 handler、service、adapter 单元测试、流式响应测试和 failover 测试。
@@ -246,7 +245,7 @@
 - [ ] 重构 Codex token estimator、auto compact threshold、manual compact、replacement history、summary prefix 与 canonical context reinjection 思路。
 - [ ] 将 Codex 活跃 history replacement 改造为 CubeBox prompt view replacement，数据库原始消息保持 append-only。
 - [ ] 实现 prompt builder 的固定顺序和结构化状态对象。
-- [ ] 实现摘要压缩任务，首期可使用同一 provider 的小模型或配置的 summary model。
+- [ ] 实现摘要压缩任务，首期固定使用当前主模型或当前 route 对应模型执行 compaction，不引入独立 summary model。
 - [ ] 实现工具输出压缩和最近回合原文保留。
 - [ ] 补纯函数测试、压缩边界测试、摘要不丢关键事实测试，以及 Codex 移植点的 prompt shape 快照测试。
 - [ ] `/compact`、auto compact、manual compact 的语义、触发器、执行链与验收由 `DEV-PLAN-434` 持有；`DEV-PLAN-431` 只承接 composer 命令入口与状态提示。
@@ -259,16 +258,7 @@
 - [ ] 支持模型别名、fallback、超时、限额和默认模型配置，并与 `DEV-PLAN-433` 的 provider route / health / capability 语义对齐。
 - [ ] 补 Authz、路由、错误提示、i18n 和 E2E。
 
-### Slice 6：可选上下文 provider（暂缓）
-
-> 状态：`暂缓（post-MVP）`。原因：首期先收敛 `431/432/433/434/435` 的 UI 壳、会话持久化、AI 网关、压缩内核与模型配置管理，避免在未冻结主链前扩张 context provider / MCP 范围。
-
-- [ ] 暂缓实现当前页面、当前业务对象、当前错误、用户选择文本之外的扩展 context provider。
-- [ ] 暂缓设计完整 `@` 显式上下文选择器，仅保留接口预留和对象边界说明。
-- [ ] MCP 仅做白名单与接口预留；默认不启用外部 MCP server，且不进入首期交付范围。
-- [ ] 暂缓上下文权限裁剪和输出压缩的扩展 provider 测试，首期只覆盖主链上下文注入能力。
-
-### Slice 7：封板验证
+### Slice 6：封板验证
 
 - [ ] 执行 Go、前端、routing、authz、i18n、doc、markdown、E2E 与 preflight。
 - [ ] readiness 记录用户可见闭环、流式回复、会话恢复、上下文压缩、密钥不出前端和旧对话栈无回流证据。
@@ -304,13 +294,13 @@
 - 不得让压缩摘要成为唯一事实源；原始消息和压缩事件必须可审计。
 - 不得以“上下文越多越好”为原则无限追加历史；必须通过预算、压缩和显式上下文选择保持高信噪比。
 
-## 14. 待裁决问题
+## 14. 冻结决策
 
-1. 首期是否允许使用真实外部模型做 E2E，还是只在 required gate 使用本地 deterministic provider？
-2. API Key 加密应复用仓库现有密钥机制，还是新增模块级 envelope encryption？
-3. 模型配置是租户管理员可配，还是先由平台管理员全局配置后按租户授权？
-4. 摘要压缩首期使用同一主模型、独立 summary model，还是先只做规则裁剪？
-5. 是否需要真正的 VS Code extension 客户端；如果需要，应另立 `DEV-PLAN-431` 作为 IDE adapter 子计划。
+1. **E2E 口径冻结**：required gate 只允许使用本地 deterministic provider、mock SSE 或仓内可控 fake provider；不把真实外部模型调用纳入阻断式 CI。真实模型调用只允许作为手工 smoke、非阻断 nightly 或 readiness 补充证据存在，不得成为 merge 前置条件。
+2. **API Key 加密方案冻结**：复用仓库现有服务端密钥体系作为主密钥/KEK，CubeBox 模块内采用 envelope encryption 数据模型落地 `model_credential`。模块侧只保存密文、密钥版本、掩码展示字段、验证结果与轮换审计元数据；密钥明文只允许出现在录入与即时验证路径，不得写入前端状态、日志、审计 payload 或普通查询返回。
+3. **模型配置权限边界冻结**：首期由平台管理员负责 provider、credential、route、fallback、default model 等全局配置；租户管理员只负责在已授权范围内启用模型、配置租户默认模型与额度/配额等租户级选择，不直接管理供应商密钥。后续若要开放租户自持 provider/key，必须另立计划并重新评审 Authz、RLS、审计与密钥治理边界。
+4. **summary model 策略冻结**：本计划不做独立 summary model，不采用“仅规则裁剪”替代语义压缩；compaction 固定使用当前主模型或当前 route 对应模型执行，相关配置、健康检查、fallback 与管理面不增加第二条 summary model 配置链。
+5. **VS Code 客户端边界冻结**：本计划不实现真正的 VS Code extension 客户端，也不立 IDE adapter 子计划；当前交付范围只包含 Web Shell 内的一方 CubeBox 主链，VS Code 仅作为交互参考来源，不进入实施、测试、门禁或完成定义。
 
 ## 15. 参考链接
 
