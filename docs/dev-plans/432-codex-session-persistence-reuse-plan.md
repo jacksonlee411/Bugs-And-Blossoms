@@ -21,17 +21,19 @@
   - `codex-rs/app-server-protocol/src/protocol/thread_history.rs`
   - `codex-rs/thread-store/src/local/archive_thread.rs`
   - `codex-rs/thread-store/src/local/unarchive_thread.rs`
-- **关联计划/标准**：`DEV-PLAN-004M1`、`DEV-PLAN-012`、`DEV-PLAN-015`、`DEV-PLAN-019`、`DEV-PLAN-021`、`DEV-PLAN-022`、`DEV-PLAN-024`、`DEV-PLAN-025`、`DEV-PLAN-300`、`DEV-PLAN-392`、`DEV-PLAN-430`、`DEV-PLAN-431`、`DEV-PLAN-434`
+- **关联计划/标准**：`DEV-PLAN-004M1`、`DEV-PLAN-012`、`DEV-PLAN-015`、`DEV-PLAN-019`、`DEV-PLAN-021`、`DEV-PLAN-022`、`DEV-PLAN-024`、`DEV-PLAN-025`、`DEV-PLAN-300`、`DEV-PLAN-430`、`DEV-PLAN-431`、`DEV-PLAN-434`
 
 ### 0.1 Simple > Easy 三问
 
-1. **边界**：本计划只处理 CubeBox 的会话持久化、索引、恢复与归档语义；UI 壳由 431 承接，上下文压缩内核由 434 承接，AI 网关和模型调用由 430 主计划承接。
+1. **边界**：本计划只处理 CubeBox 的会话持久化、索引、恢复与归档语义；`431` 只承接会话列表/恢复入口的 UI 壳与抽屉恢复交互，不持有 `list/read/resume/archive/rename` 的生命周期 contract；上下文压缩内核由 `434` 承接，AI 网关和模型调用由 `430` 主计划承接。
 2. **不变量**：除本地文件存储与单机路径模型不适合内容外，Codex 中可复用的 append-only 历史、session index、thread lifecycle、rollout/reconstruction 语义应优先复用或重构；禁止在未评估 Codex 对应机制前自研一套平行会话持久化语义。
-3. **可解释**：reviewer 必须能在 5 分钟内说明哪些 Codex 持久化语义被采纳、哪些因多租户/RLS/审计要求必须重构、哪些明确不引入，以及如何验证恢复/归档/重命名/压缩后恢复的行为正确。
+3. **可解释**：reviewer 必须能在 5 分钟内说明哪些 Codex 持久化语义被采纳、哪些因多租户/RLS/审计要求必须重构、哪些明确不引入，以及如何验证恢复/归档/重命名/压缩后恢复的行为正确；同时能区分“UI 入口在 431”与“生命周期 contract 在 432”的 owner 边界。
 
 ## 1. 背景
 
 `DEV-PLAN-430` 当前将 Slice 3 定义为 conversation、message、summary、usage event 的 schema 和 sqlc，以及新建、列出、恢复、归档、删除会话。用户要求沿用 431/434 的原则：如果 Codex 开源仓库已有成熟持久化语义，应优先复用或重构，而不是另起一套完全自研模型。
+
+同时，`431` 已被收口为 UI 壳与前端状态机计划，因此 `conversation list/read/resume/archive/rename` 的生命周期 contract、持久化语义与 API 行为必须由本计划持有，`431` 只消费其结果。
 
 Codex 开源仓库中与会话持久化强相关的成熟机制包括：
 
@@ -142,7 +144,7 @@ CubeBox 恢复行为要对齐 Codex 的 resume/read 思路：
 - [ ] 定义 conversation、message log、summary log、compaction event、usage event 职责。
 - [ ] 定义 list/read/resume/archive/unarchive/rename 生命周期。
 - [ ] 明确 append-only 规则和状态覆盖规则。
-- [ ] 与 431 的 UI event / timeline reconstruction 契约对齐。
+- [ ] 与 431 的 UI event / timeline reconstruction 契约对齐，并明确哪些字段只作为 UI 消费面暴露。
 
 ### Slice 2：Schema 与 sqlc 设计
 
@@ -179,6 +181,7 @@ CubeBox 恢复行为要对齐 Codex 的 resume/read 思路：
 - [ ] 压缩后恢复测试：summary 不替代原始消息。
 - [ ] 跨租户隔离测试。
 - [ ] UI reconstruction 快照测试，与 431 reducer 对齐。
+- [ ] 新增供 `431` 壳层消费的 fixture/contract 样式，确保 UI 入口与生命周期 owner 分离。
 
 ### Slice 7：430 回填与封板
 

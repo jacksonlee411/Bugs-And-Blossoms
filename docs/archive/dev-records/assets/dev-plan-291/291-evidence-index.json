@@ -1,0 +1,143 @@
+{
+  "plan": "DEV-PLAN-291",
+  "status": "completed",
+  "updated_at": "2026-03-09 11:00 CST",
+  "formal_entry": "/app/assistant/librechat",
+  "summary": "已在 `240D-03/04` cutover 后按 `291-v2` 重跑固定命令链与新鲜度复核；R1~R10 继续全部通过，`291` 可作为 `285` 的升级兼容前置件。",
+  "entries": [
+    {
+      "id": "R1",
+      "command": "make librechat-web-verify",
+      "executed_at": "2026-03-09T03:00:25Z",
+      "exit_code": 0,
+      "artifacts": [
+        "docs/archive/dev-records/assets/dev-plan-291/291-source-verify.log"
+      ],
+      "result": "passed",
+      "owner": "Codex",
+      "notes": "基于本轮 cutover 后源码重新复核通过。"
+    },
+    {
+      "id": "R2",
+      "command": "make librechat-web-build",
+      "executed_at": "2026-03-09T03:00:25Z",
+      "exit_code": 0,
+      "artifacts": [
+        "docs/archive/dev-records/assets/dev-plan-291/291-web-build.log"
+      ],
+      "result": "passed",
+      "owner": "Codex",
+      "notes": "cutover 后已重新构建 vendored LibreChat Web；关键产物输出至 internal/server/assets/librechat-web。"
+    },
+    {
+      "id": "R3",
+      "command": "make assistant-runtime-up && make assistant-runtime-status",
+      "executed_at": "2026-03-09T03:00:25Z",
+      "exit_code": 0,
+      "artifacts": [
+        "docs/archive/dev-records/assets/dev-plan-291/291-runtime-up.log",
+        "docs/archive/dev-records/assets/dev-plan-291/291-runtime-status.log",
+        "docs/archive/dev-records/assets/dev-plan-291/291-runtime-status.json"
+      ],
+      "result": "passed",
+      "owner": "Codex",
+      "notes": "runtime 已在 cutover 后重新拉起并保持 healthy。"
+    },
+    {
+      "id": "R4",
+      "command": "docker compose config --format json + versions.lock.yaml compare",
+      "executed_at": "2026-03-09T03:00:25Z",
+      "exit_code": 0,
+      "artifacts": [
+        "docs/archive/dev-records/assets/dev-plan-291/291-runtime-version-check.md"
+      ],
+      "result": "passed",
+      "owner": "Codex",
+      "notes": "`240D-03/04` 未触达 runtime 镜像版本；延续现有锁文件一致性结论。"
+    },
+    {
+      "id": "R5",
+      "command": "go test ./internal/server -run 'TestLibreChatWebUI'",
+      "executed_at": "2026-03-09T03:00:25Z",
+      "exit_code": 0,
+      "artifacts": [
+        "docs/archive/dev-records/assets/dev-plan-291/291-formal-entry-go-test.log"
+      ],
+      "result": "passed",
+      "owner": "Codex",
+      "notes": ""
+    },
+    {
+      "id": "R6",
+      "command": "go test ./internal/server -run 'TestLibreChatVendoredCompatAPI'",
+      "executed_at": "2026-03-09T03:00:25Z",
+      "exit_code": 0,
+      "artifacts": [
+        "docs/archive/dev-records/assets/dev-plan-291/291-compat-alias-go-test.log"
+      ],
+      "result": "passed",
+      "owner": "Codex",
+      "notes": ""
+    },
+    {
+      "id": "R7",
+      "command": "make check routing",
+      "executed_at": "2026-03-09T03:00:25Z",
+      "exit_code": 0,
+      "artifacts": [
+        "docs/archive/dev-records/assets/dev-plan-291/291-routing-check.log"
+      ],
+      "result": "passed",
+      "owner": "Codex",
+      "notes": ""
+    },
+    {
+      "id": "R8",
+      "command": "make check no-legacy",
+      "executed_at": "2026-03-09T03:00:25Z",
+      "exit_code": 0,
+      "artifacts": [
+        "docs/archive/dev-records/assets/dev-plan-291/291-no-legacy.log"
+      ],
+      "result": "passed",
+      "owner": "Codex",
+      "notes": ""
+    },
+    {
+      "id": "R9",
+      "command": "reference freshness review for tp288/tp290",
+      "executed_at": "2026-03-09T03:00:25Z",
+      "exit_code": 0,
+      "artifacts": [
+        "docs/archive/dev-records/assets/dev-plan-291/291-ref-288-290-freshness.md"
+      ],
+      "referenced_artifacts": [
+        {
+          "path": "docs/dev-records/assets/dev-plan-266/tp288-real-entry-evidence-index.json",
+          "mtime": "2026-03-09T10:55:01+08:00",
+          "status": "completed"
+        },
+        {
+          "path": "docs/dev-records/assets/dev-plan-290/tp290-real-case-evidence-index.json",
+          "mtime": "2026-03-09T10:55:01+08:00",
+          "status": "completed"
+        }
+      ],
+      "result": "passed",
+      "owner": "Codex",
+      "notes": "tp288/tp290 已在 `240D-03/04` cutover 后立刻重跑并保持 completed；可继续共同证明 `DEV-PLAN-280` 核心硬门槛成立。"
+    },
+    {
+      "id": "R10",
+      "command": "make assistant-runtime-down",
+      "executed_at": "2026-03-09T03:02:00Z",
+      "exit_code": 0,
+      "artifacts": [
+        "docs/archive/dev-records/assets/dev-plan-291/291-runtime-down.log"
+      ],
+      "result": "passed",
+      "owner": "Codex",
+      "notes": "cutover 后复跑完成，runtime 已正常下线。"
+    }
+  ]
+}

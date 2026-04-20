@@ -76,11 +76,6 @@ var capabilityCatalogMetadataByKey = map[string]capabilityCatalogMetadata{
 		Surface:      "details_dialog",
 		Intent:       "correct",
 	},
-	"org.assistant_conversation.manage": {
-		TargetObject: "assistant_conversation",
-		Surface:      "assistant_workspace",
-		Intent:       "manage",
-	},
 }
 
 var capabilityCatalogEntries = buildCapabilityCatalogEntries(capabilityDefinitions, capabilityRouteBindings, capabilityCatalogMetadataByKey)

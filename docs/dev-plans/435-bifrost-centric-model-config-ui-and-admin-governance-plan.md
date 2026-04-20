@@ -15,7 +15,7 @@
   - Bifrost：Web UI、provider config、route/fallback、health/readiness、capability、observability
   - One API：channels、tokens、model mapping、group/额度、启停与验证交互
   - Codex：仅 provider capability / model metadata 展示语义，不承担管理面主线
-- **关联计划/标准**：`DEV-PLAN-004M1`、`DEV-PLAN-012`、`DEV-PLAN-015`、`DEV-PLAN-017`、`DEV-PLAN-019`、`DEV-PLAN-021`、`DEV-PLAN-022`、`DEV-PLAN-024`、`DEV-PLAN-025`、`DEV-PLAN-300`、`DEV-PLAN-392`、`DEV-PLAN-430`、`DEV-PLAN-433`
+- **关联计划/标准**：`DEV-PLAN-004M1`、`DEV-PLAN-012`、`DEV-PLAN-015`、`DEV-PLAN-017`、`DEV-PLAN-019`、`DEV-PLAN-021`、`DEV-PLAN-022`、`DEV-PLAN-024`、`DEV-PLAN-025`、`DEV-PLAN-300`、`DEV-PLAN-430`、`DEV-PLAN-433`
 
 ### 0.1 Simple > Easy 三问
 

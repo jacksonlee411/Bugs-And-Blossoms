@@ -91,9 +91,10 @@ if ! command -v pnpm >/dev/null 2>&1; then
 fi
 require_cmd pnpm
 
-infra_env_file="${DEV_INFRA_ENV_FILE:-.env.example}"
+infra_env_file_override="${DEV_INFRA_ENV_FILE:-}"
+infra_env_file="${infra_env_file_override:-.env.example}"
 load_env_file "$infra_env_file"
-if [[ "$infra_env_file" != ".env" && -f .env ]]; then
+if [[ -z "$infra_env_file_override" && "$infra_env_file" != ".env" && -f .env ]]; then
   load_env_file .env
 fi
 export DEV_INFRA_ENV_FILE="$infra_env_file"
@@ -368,9 +369,21 @@ for i in $(seq 1 60); do
   sleep 0.5
 done
 
-kratos_seed_script="./tools/codex/skills/bugs-and-blossoms-dev-login/scripts/seed_kratosstub_identity.sh"
+codex_home="${CODEX_HOME:-$HOME/.codex}"
+kratos_seed_script="${E2E_KRATOS_SEED_SCRIPT:-}"
+if [[ -z "$kratos_seed_script" ]]; then
+  for candidate in \
+    "./tools/codex/skills/bugs-and-blossoms-dev-login/scripts/seed_kratosstub_identity.sh" \
+    "${codex_home}/skills/bugs-and-blossoms-dev-login/scripts/seed_kratosstub_identity.sh"
+  do
+    if [[ -x "$candidate" ]]; then
+      kratos_seed_script="$candidate"
+      break
+    fi
+  done
+fi
 if [[ ! -x "$kratos_seed_script" ]]; then
-  echo "[e2e] missing kratos seed script: $kratos_seed_script" >&2
+  echo "[e2e] missing kratos seed script; set E2E_KRATOS_SEED_SCRIPT or install bugs-and-blossoms-dev-login skill" >&2
   exit 1
 fi
 

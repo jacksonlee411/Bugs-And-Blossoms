@@ -526,17 +526,6 @@ func TestUI_MUIOnly(t *testing.T) {
 		t.Fatalf("unexpected redirect location=%q", loc)
 	}
 
-	reqAssistantUINoSession := httptest.NewRequest(http.MethodGet, "/assistant-ui", nil)
-	reqAssistantUINoSession.Host = "localhost:8080"
-	recAssistantUINoSession := httptest.NewRecorder()
-	h.ServeHTTP(recAssistantUINoSession, reqAssistantUINoSession)
-	if recAssistantUINoSession.Code != http.StatusGone {
-		t.Fatalf("assistant-ui (no session) status=%d", recAssistantUINoSession.Code)
-	}
-	if loc := recAssistantUINoSession.Result().Header.Get("Location"); loc != "" {
-		t.Fatalf("unexpected assistant-ui redirect location=%q", loc)
-	}
-
 	reqAppLogin := httptest.NewRequest(http.MethodGet, "/app/login", nil)
 	reqAppLogin.Host = "localhost:8080"
 	recAppLogin := httptest.NewRecorder()
@@ -1355,160 +1344,6 @@ func loginTenantAdminCookie(t *testing.T, h http.Handler) *http.Cookie {
 	return cookies[0]
 }
 
-func TestNewHandlerWithOptions_AssistantRoutes_AreWired(t *testing.T) {
-	wd := mustGetwd(t)
-	allowlistPath := mustAllowlistPathFromWd(t, wd)
-	t.Setenv("ALLOWLIST_PATH", allowlistPath)
-	t.Setenv("AUTHZ_MODE", "disabled")
-	t.Setenv("AUTHZ_UNSAFE_ALLOW_DISABLED", "1")
-
-	h, err := NewHandlerWithOptions(HandlerOptions{
-		TenancyResolver: localTenancyResolver(),
-		IdentityProvider: staticIdentityProvider{ident: authenticatedIdentity{
-			KratosIdentityID: "00000000-0000-0000-0000-0000000000aa",
-			Email:            "tenant-admin@example.invalid",
-			RoleSlug:         "tenant-admin",
-		}},
-		OrgUnitStore: newOrgUnitMemoryStore(),
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	sidCookie := loginTenantAdminCookie(t, h)
-	call := func(method, path, body string) *httptest.ResponseRecorder {
-		req := httptest.NewRequest(method, "http://localhost"+path, stringsReader(body))
-		req.Host = "localhost"
-		req.Header.Set("Content-Type", "application/json")
-		req.AddCookie(sidCookie)
-		rec := httptest.NewRecorder()
-		h.ServeHTTP(rec, req)
-		return rec
-	}
-
-	if rec := call(http.MethodPost, "/internal/assistant/tasks", `{"conversation_id":"conv_1","turn_id":"turn_1","task_type":"assistant_async_plan","request_id":"req_1","contract_snapshot":{"intent_schema_version":"v1","compiler_contract_version":"v1","capability_map_version":"v1","skill_manifest_digest":"d","context_hash":"c","intent_hash":"i","plan_hash":"p"}}`); rec.Code == http.StatusNotFound {
-		t.Fatalf("assistant tasks route not wired")
-	}
-	if rec := call(http.MethodGet, "/internal/assistant/tasks/task_1", ""); rec.Code == http.StatusNotFound {
-		t.Fatalf("assistant task detail route not wired")
-	} else if rec.Code != http.StatusServiceUnavailable || assistantDecodeErrCode(t, rec) != "assistant_gate_unavailable" {
-		t.Fatalf("assistant task detail status=%d body=%s", rec.Code, rec.Body.String())
-	}
-	if rec := call(http.MethodGet, "/internal/assistant/conversations", ""); rec.Code == http.StatusNotFound {
-		t.Fatalf("assistant conversation list route not wired")
-	}
-	if rec := call(http.MethodPost, "/internal/assistant/conversations/conv_1/turns/turn_1:commit", `{}`); rec.Code == http.StatusNotFound {
-		t.Fatalf("assistant turn action route not wired")
-	} else if rec.Code != http.StatusServiceUnavailable || assistantDecodeErrCode(t, rec) != "assistant_gate_unavailable" {
-		t.Fatalf("assistant turn action status=%d body=%s", rec.Code, rec.Body.String())
-	}
-	if rec := call(http.MethodPost, "/internal/assistant/tasks/task_1:cancel", ""); rec.Code == http.StatusNotFound {
-		t.Fatalf("assistant task action route not wired")
-	} else if rec.Code != http.StatusServiceUnavailable || assistantDecodeErrCode(t, rec) != "assistant_gate_unavailable" {
-		t.Fatalf("assistant task action status=%d body=%s", rec.Code, rec.Body.String())
-	}
-	if rec := call(http.MethodGet, "/internal/assistant/model-providers", ""); rec.Code == http.StatusNotFound {
-		t.Fatalf("assistant model providers route not wired")
-	} else if rec.Code != http.StatusGone || assistantDecodeErrCode(t, rec) != assistantAPIGoneCode {
-		t.Fatalf("assistant model providers status=%d body=%s", rec.Code, rec.Body.String())
-	}
-	if rec := call(http.MethodPost, "/internal/assistant/model-providers:validate", `{"providers":[]}`); rec.Code == http.StatusNotFound {
-		t.Fatalf("assistant model providers validate route not wired")
-	} else if rec.Code != http.StatusGone || assistantDecodeErrCode(t, rec) != assistantAPIGoneCode {
-		t.Fatalf("assistant model providers validate status=%d body=%s", rec.Code, rec.Body.String())
-	}
-	if rec := call(http.MethodPost, "/internal/assistant/model-providers:apply", `{"providers":[]}`); rec.Code != http.StatusNotFound {
-		t.Fatalf("assistant model providers apply status=%d body=%s", rec.Code, rec.Body.String())
-	}
-	if rec := call(http.MethodGet, "/internal/assistant/models", ""); rec.Code == http.StatusNotFound {
-		t.Fatalf("assistant models route not wired")
-	}
-	if rec := call(http.MethodGet, "/internal/assistant/runtime-status", ""); rec.Code == http.StatusNotFound {
-		t.Fatalf("assistant runtime status route not wired")
-	} else if rec.Code != http.StatusGone || assistantDecodeErrCode(t, rec) != assistantAPIGoneCode {
-		t.Fatalf("assistant runtime status status=%d body=%s", rec.Code, rec.Body.String())
-	}
-	if rec := call(http.MethodGet, "/internal/cubebox/conversations", ""); rec.Code == http.StatusNotFound {
-		t.Fatalf("cubebox conversation list route not wired")
-	}
-	if rec := call(http.MethodPost, "/internal/cubebox/conversations/conv_1/turns/turn_1:commit", `{}`); rec.Code == http.StatusNotFound {
-		t.Fatalf("cubebox turn action route not wired")
-	}
-	if rec := call(http.MethodGet, "/internal/cubebox/tasks/task_1", ""); rec.Code == http.StatusNotFound {
-		t.Fatalf("cubebox task detail route not wired")
-	}
-	if rec := call(http.MethodGet, "/internal/cubebox/models", ""); rec.Code == http.StatusNotFound {
-		t.Fatalf("cubebox models route not wired")
-	}
-	if rec := call(http.MethodGet, "/internal/cubebox/runtime-status", ""); rec.Code == http.StatusNotFound {
-		t.Fatalf("cubebox runtime status route not wired")
-	}
-	if rec := call(http.MethodGet, "/internal/cubebox/files", ""); rec.Code == http.StatusNotFound {
-		t.Fatalf("cubebox files route not wired")
-	}
-	if rec := call(http.MethodGet, "/internal/assistant/ui-bootstrap", ""); rec.Code == http.StatusNotFound {
-		t.Fatalf("assistant ui bootstrap route not wired")
-	} else if rec.Code != http.StatusGone || assistantDecodeErrCode(t, rec) != assistantAPIGoneCode {
-		t.Fatalf("assistant ui bootstrap status=%d body=%s", rec.Code, rec.Body.String())
-	}
-	if rec := call(http.MethodGet, "/internal/assistant/session", ""); rec.Code == http.StatusNotFound {
-		t.Fatalf("assistant session route not wired")
-	} else if rec.Code != http.StatusGone || assistantDecodeErrCode(t, rec) != assistantAPIGoneCode {
-		t.Fatalf("assistant session status=%d body=%s", rec.Code, rec.Body.String())
-	}
-	if rec := call(http.MethodPost, "/internal/assistant/session/refresh", ""); rec.Code == http.StatusNotFound {
-		t.Fatalf("assistant session refresh route not wired")
-	} else if rec.Code != http.StatusGone || assistantDecodeErrCode(t, rec) != assistantAPIGoneCode {
-		t.Fatalf("assistant session refresh status=%d body=%s", rec.Code, rec.Body.String())
-	}
-	if rec := call(http.MethodPost, "/internal/assistant/session/logout", ""); rec.Code == http.StatusNotFound {
-		t.Fatalf("assistant session logout route not wired")
-	} else if rec.Code != http.StatusGone || assistantDecodeErrCode(t, rec) != assistantAPIGoneCode {
-		t.Fatalf("assistant session logout status=%d body=%s", rec.Code, rec.Body.String())
-	}
-	if rec := call(http.MethodGet, "/assets/librechat-web/api/config", ""); rec.Code != http.StatusGone {
-		t.Fatalf("retired librechat config compat route status=%d body=%s", rec.Code, rec.Body.String())
-	}
-	if rec := call(http.MethodGet, "/assets/librechat-web/api/endpoints", ""); rec.Code != http.StatusGone {
-		t.Fatalf("retired librechat endpoints compat route status=%d body=%s", rec.Code, rec.Body.String())
-	}
-	if rec := call(http.MethodGet, "/assets/librechat-web/api/models", ""); rec.Code != http.StatusGone {
-		t.Fatalf("retired librechat models compat route status=%d body=%s", rec.Code, rec.Body.String())
-	}
-	if rec := call(http.MethodGet, "/app/assistant/librechat/api/config", ""); rec.Code != http.StatusGone {
-		t.Fatalf("retired librechat formal alias config compat route status=%d body=%s", rec.Code, rec.Body.String())
-	}
-	if rec := call(http.MethodGet, "/app/assistant/librechat/api/endpoints", ""); rec.Code != http.StatusGone {
-		t.Fatalf("retired librechat formal alias endpoints compat route status=%d body=%s", rec.Code, rec.Body.String())
-	}
-	if rec := call(http.MethodGet, "/app/assistant/librechat/api/models", ""); rec.Code != http.StatusGone {
-		t.Fatalf("retired librechat formal alias models compat route status=%d body=%s", rec.Code, rec.Body.String())
-	}
-	removedCompatRoutes := []struct {
-		method string
-		path   string
-	}{
-		{method: http.MethodPost, path: "/assets/librechat-web/api/auth/refresh"},
-		{method: http.MethodPost, path: "/assets/librechat-web/api/auth/logout"},
-		{method: http.MethodGet, path: "/assets/librechat-web/api/user"},
-		{method: http.MethodGet, path: "/assets/librechat-web/api/roles/user"},
-		{method: http.MethodGet, path: "/assets/librechat-web/api/roles/admin"},
-		{method: http.MethodPost, path: "/app/assistant/librechat/api/auth/refresh"},
-		{method: http.MethodGet, path: "/app/assistant/librechat/api/user"},
-	}
-	for _, tc := range removedCompatRoutes {
-		if rec := call(tc.method, tc.path, ""); rec.Code != http.StatusGone {
-			t.Fatalf("retired compat route %s %s status=%d body=%s", tc.method, tc.path, rec.Code, rec.Body.String())
-		}
-	}
-	if rec := call(http.MethodGet, "/app/assistant/librechat", ""); rec.Code != http.StatusGone {
-		t.Fatalf("retired librechat formal entry status=%d body=%s", rec.Code, rec.Body.String())
-	}
-	if rec := call(http.MethodGet, "/assets/librechat-web/registerSW.js", ""); rec.Code != http.StatusGone {
-		t.Fatalf("retired librechat asset status=%d body=%s", rec.Code, rec.Body.String())
-	}
-}
-
 func TestNewHandlerWithOptions_DictRoutes_AreWired(t *testing.T) {
 	wd := mustGetwd(t)
 	allowlistPath := mustAllowlistPathFromWd(t, wd)
@@ -1699,7 +1534,7 @@ func TestNewHandlerWithOptions_OrgUnitWriteRoutes_AreWired(t *testing.T) {
 	})
 }
 
-func TestNewHandlerWithOptions_AssistantWriteServiceFallbackForStores(t *testing.T) {
+func TestNewHandlerWithOptions_HealthRemainsAvailableForStores(t *testing.T) {
 	wd := mustGetwd(t)
 	t.Setenv("ALLOWLIST_PATH", mustAllowlistPathFromWd(t, wd))
 	t.Setenv("AUTHZ_MODE", "disabled")
@@ -1732,14 +1567,4 @@ func TestNewHandlerWithOptions_AssistantWriteServiceFallbackForStores(t *testing
 		t.Fatalf("new handler with write store failed: %v", err)
 	}
 
-	sid := loginAsTenantAdminForAssistantTests(t, h)
-	conv := createAssistantConversationForTest(t, h, sid)
-	getReq := httptest.NewRequest(http.MethodGet, "http://localhost/internal/assistant/conversations/"+conv.ConversationID, nil)
-	getReq.Host = "localhost"
-	getReq.AddCookie(sid)
-	getRec := httptest.NewRecorder()
-	h.ServeHTTP(getRec, getReq)
-	if getRec.Code != http.StatusOK {
-		t.Fatalf("get conversation status=%d body=%s", getRec.Code, getRec.Body.String())
-	}
 }

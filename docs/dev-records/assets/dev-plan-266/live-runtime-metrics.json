@@ -1,9 +1,0 @@
-{
-  "native_send_attempted": 1,
-  "native_send_blocked": 1,
-  "native_send_emitted": 0,
-  "prompt_emitted": 1,
-  "bridge_reply_embedded": 1,
-  "last_prompt": "在鲜花组织之下，新建一个名为运营部的部门。",
-  "last_message_id": ""
-}

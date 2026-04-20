@@ -14,7 +14,6 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/jacksonlee411/Bugs-And-Blossoms/internal/routing"
-	cubeboxmodule "github.com/jacksonlee411/Bugs-And-Blossoms/modules/cubebox"
 	iammodule "github.com/jacksonlee411/Bugs-And-Blossoms/modules/iam"
 	jobcatalogmodule "github.com/jacksonlee411/Bugs-And-Blossoms/modules/jobcatalog"
 	orgunitmodule "github.com/jacksonlee411/Bugs-And-Blossoms/modules/orgunit"
@@ -152,11 +151,6 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, error) {
 	}
 	if err := dictpkg.RegisterResolver(dictStore); err != nil {
 		return nil, err
-	}
-	assistantSvc := newAssistantConversationServiceWithPool(orgStore, orgUnitWriteService, pgPool)
-	cubeboxFacade := newCubeBoxFacade(pgPool, assistantSvc, cubeboxmodule.NewPGFileService(pgPool, cubeboxmodule.DefaultLocalFileRoot()))
-	if assistantSvc != nil && assistantSvc.gatewayErr != nil {
-		return nil, assistantSvc.gatewayErr
 	}
 
 	router := routing.NewRouter(classifier)
@@ -464,144 +458,21 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, error) {
 	router.Handle(routing.RouteClassInternalAPI, http.MethodPost, "/jobcatalog/api/catalog/actions", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		handleJobCatalogWriteAPI(w, r, setidStore, jobcatalogStore)
 	}))
-	router.Handle(routing.RouteClassInternalAPI, http.MethodPost, "/internal/assistant/conversations", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		handleAssistantConversationsAPI(w, r, assistantSvc)
-	}))
-	router.Handle(routing.RouteClassInternalAPI, http.MethodGet, "/internal/assistant/conversations", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		handleAssistantConversationsAPI(w, r, assistantSvc)
-	}))
-	router.Handle(routing.RouteClassInternalAPI, http.MethodGet, "/internal/assistant/conversations/{conversation_id}", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		handleAssistantConversationDetailAPI(w, r, assistantSvc)
-	}))
-	router.Handle(routing.RouteClassInternalAPI, http.MethodPost, "/internal/assistant/conversations/{conversation_id}/turns", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		handleAssistantConversationTurnsAPI(w, r, assistantSvc)
-	}))
-	router.Handle(routing.RouteClassInternalAPI, http.MethodPost, "/internal/assistant/conversations/{conversation_id}/turns/{turn_id}:confirm", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		handleAssistantTurnActionAPI(w, r, assistantSvc)
-	}))
-	router.Handle(routing.RouteClassInternalAPI, http.MethodPost, "/internal/assistant/conversations/{conversation_id}/turns/{turn_id}:commit", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		handleAssistantTurnActionAPI(w, r, assistantSvc)
-	}))
-	router.Handle(routing.RouteClassInternalAPI, http.MethodPost, "/internal/assistant/conversations/{conversation_id}/turns/{turn_id}:reply", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		handleAssistantTurnActionAPI(w, r, assistantSvc)
-	}))
-	router.Handle(routing.RouteClassInternalAPI, http.MethodPost, "/internal/assistant/tasks", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		handleAssistantTasksAPI(w, r, assistantSvc)
-	}))
-	router.Handle(routing.RouteClassInternalAPI, http.MethodGet, "/internal/assistant/tasks/{task_id}", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		handleAssistantTaskDetailAPI(w, r, assistantSvc)
-	}))
-	router.Handle(routing.RouteClassInternalAPI, http.MethodPost, "/internal/assistant/tasks/{task_id}:cancel", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		handleAssistantTaskActionAPI(w, r, assistantSvc)
-	}))
-	router.Handle(routing.RouteClassInternalAPI, http.MethodGet, "/internal/assistant/models", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		handleAssistantModelsAPI(w, r, assistantSvc)
-	}))
-	router.Handle(routing.RouteClassInternalAPI, http.MethodGet, "/internal/assistant/runtime-status", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		handleAssistantRetiredAPI(w, r, "/internal/cubebox/runtime-status")
-	}))
-	router.Handle(routing.RouteClassInternalAPI, http.MethodPost, "/internal/cubebox/conversations", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		handleCubeBoxConversationsAPI(w, r, cubeboxFacade)
-	}))
-	router.Handle(routing.RouteClassInternalAPI, http.MethodGet, "/internal/cubebox/conversations", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		handleCubeBoxConversationsAPI(w, r, cubeboxFacade)
-	}))
-	router.Handle(routing.RouteClassInternalAPI, http.MethodGet, "/internal/cubebox/conversations/{conversation_id}", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		handleCubeBoxConversationDetailAPI(w, r, cubeboxFacade)
-	}))
-	router.Handle(routing.RouteClassInternalAPI, http.MethodDelete, "/internal/cubebox/conversations/{conversation_id}", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		handleCubeBoxConversationDetailAPI(w, r, cubeboxFacade)
-	}))
-	router.Handle(routing.RouteClassInternalAPI, http.MethodPost, "/internal/cubebox/conversations/{conversation_id}/turns", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		handleCubeBoxConversationTurnsAPI(w, r, cubeboxFacade)
-	}))
-	router.Handle(routing.RouteClassInternalAPI, http.MethodPost, "/internal/cubebox/conversations/{conversation_id}/turns/{turn_id}:confirm", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		handleCubeBoxTurnActionAPI(w, r, cubeboxFacade)
-	}))
-	router.Handle(routing.RouteClassInternalAPI, http.MethodPost, "/internal/cubebox/conversations/{conversation_id}/turns/{turn_id}:commit", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		handleCubeBoxTurnActionAPI(w, r, cubeboxFacade)
-	}))
-	router.Handle(routing.RouteClassInternalAPI, http.MethodPost, "/internal/cubebox/conversations/{conversation_id}/turns/{turn_id}:reply", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		handleCubeBoxTurnActionAPI(w, r, cubeboxFacade)
-	}))
-	router.Handle(routing.RouteClassInternalAPI, http.MethodPost, "/internal/cubebox/tasks", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		handleCubeBoxTasksAPI(w, r, cubeboxFacade)
-	}))
-	router.Handle(routing.RouteClassInternalAPI, http.MethodGet, "/internal/cubebox/tasks/{task_id}", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		handleCubeBoxTaskDetailAPI(w, r, cubeboxFacade)
-	}))
-	router.Handle(routing.RouteClassInternalAPI, http.MethodPost, "/internal/cubebox/tasks/{task_id}:cancel", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		handleCubeBoxTaskActionAPI(w, r, cubeboxFacade)
-	}))
-	router.Handle(routing.RouteClassInternalAPI, http.MethodGet, "/internal/cubebox/models", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		handleCubeBoxModelsAPI(w, r, cubeboxFacade)
-	}))
-	router.Handle(routing.RouteClassInternalAPI, http.MethodGet, "/internal/cubebox/runtime-status", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		handleCubeBoxRuntimeStatusAPI(w, r, cubeboxFacade)
-	}))
-	router.Handle(routing.RouteClassInternalAPI, http.MethodGet, "/internal/cubebox/files", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		handleCubeBoxFilesAPI(w, r, cubeboxFacade)
-	}))
-	router.Handle(routing.RouteClassInternalAPI, http.MethodPost, "/internal/cubebox/files", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		handleCubeBoxFilesAPI(w, r, cubeboxFacade)
-	}))
-	router.Handle(routing.RouteClassInternalAPI, http.MethodDelete, "/internal/cubebox/files/{file_id}", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		handleCubeBoxFileDeleteAPI(w, r, cubeboxFacade)
-	}))
-	assistantFormalEntryAPI := newAssistantFormalEntryAPIHandler(assistantSvc, sessions)
-	router.Handle(routing.RouteClassInternalAPI, http.MethodGet, "/internal/cubebox/ui-bootstrap", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assistantFormalEntryAPI.handleCubeBoxUIBootstrap(w, r)
-	}))
-	router.Handle(routing.RouteClassInternalAPI, http.MethodGet, "/internal/cubebox/session", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assistantFormalEntryAPI.handleCubeBoxSession(w, r)
-	}))
-	router.Handle(routing.RouteClassInternalAPI, http.MethodPost, "/internal/cubebox/session/refresh", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assistantFormalEntryAPI.handleCubeBoxSessionRefresh(w, r)
-	}))
-	router.Handle(routing.RouteClassInternalAPI, http.MethodPost, "/internal/cubebox/session/logout", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assistantFormalEntryAPI.handleCubeBoxSessionLogout(w, r)
-	}))
-	router.Handle(routing.RouteClassInternalAPI, http.MethodGet, "/internal/assistant/ui-bootstrap", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		handleAssistantRetiredAPI(w, r, "/internal/cubebox/ui-bootstrap")
-	}))
-	router.Handle(routing.RouteClassInternalAPI, http.MethodGet, "/internal/assistant/session", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		handleAssistantRetiredAPI(w, r, "/internal/cubebox/session")
-	}))
-	router.Handle(routing.RouteClassInternalAPI, http.MethodPost, "/internal/assistant/session/refresh", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		handleAssistantRetiredAPI(w, r, "/internal/cubebox/session/refresh")
-	}))
-	router.Handle(routing.RouteClassInternalAPI, http.MethodPost, "/internal/assistant/session/logout", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		handleAssistantRetiredAPI(w, r, "/internal/cubebox/session/logout")
-	}))
-	router.Handle(routing.RouteClassInternalAPI, http.MethodGet, "/internal/assistant/model-providers", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		handleAssistantRetiredAPI(w, r, "")
-	}))
-	router.Handle(routing.RouteClassInternalAPI, http.MethodPost, "/internal/assistant/model-providers:validate", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		handleAssistantRetiredAPI(w, r, "")
-	}))
 
 	assetsSub, _ := fs.Sub(embeddedAssets, "assets")
 
 	entrypoint := http.NewServeMux()
-	libreChatRetired := newLibreChatRetiredHandler()
-	entrypoint.Handle(libreChatFormalEntryPrefix, libreChatRetired)
-	entrypoint.Handle(libreChatFormalEntryPrefix+"/", libreChatRetired)
-	entrypoint.Handle(libreChatStaticPrefix+"/", libreChatRetired)
 	entrypoint.Handle("/app", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		serveWebMUIIndex(w, r, embeddedAssets)
 	}))
 	entrypoint.Handle("/app/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		serveWebMUIIndex(w, r, embeddedAssets)
 	}))
-	assistantUIRetired := newAssistantUIRetiredHandler()
-	entrypoint.Handle("/assistant-ui", assistantUIRetired)
-	entrypoint.Handle("/assistant-ui/", assistantUIRetired)
 	entrypoint.Handle("/", router)
 
 	guarded := withTenantAndSession(classifier, tenancyResolver, principals, sessions, withAuthz(classifier, authorizer, entrypoint))
 
 	mux := http.NewServeMux()
-	mux.Handle(libreChatStaticPrefix+"/", guarded)
 	mux.Handle("/assets/", http.StripPrefix("/assets/", http.FileServer(http.FS(assetsSub))))
 	mux.Handle("/", guarded)
 
@@ -665,14 +536,8 @@ func withTenantAndSession(classifier *routing.Classifier, tenants TenancyResolve
 		}
 		r = r.WithContext(withTenant(r.Context(), t))
 
-		if isRetiredLegacyUIPath(path) {
-			next.ServeHTTP(w, r)
-			return
-		}
-
 		// DEV-PLAN-103/103A/235/283/380: protected tenant UI lives under /app/**.
-		// For other UI paths (e.g. retired aliases like /assistant-ui, or old URLs like /login, /org/*),
-		// do not redirect-to-login alias; let the router return 404/410 directly.
+		// For other UI paths, do not redirect-to-login alias; let the router return 404 directly.
 		if rc == routing.RouteClassUI && path != "/" && !isProtectedTenantUIPath(path) {
 			next.ServeHTTP(w, r)
 			return
@@ -684,10 +549,6 @@ func withTenantAndSession(classifier *routing.Classifier, tenants TenancyResolve
 
 		sid, ok := readSID(r)
 		if !ok {
-			if isAssistantFormalSuccessorAPIPath(path) {
-				assistantWriteSessionInvalid(w, r)
-				return
-			}
 			if rc == routing.RouteClassInternalAPI || rc == routing.RouteClassPublicAPI || rc == routing.RouteClassWebhook {
 				routing.WriteError(w, r, rc, http.StatusUnauthorized, "unauthorized", "unauthorized")
 				return
@@ -703,10 +564,6 @@ func withTenantAndSession(classifier *routing.Classifier, tenants TenancyResolve
 		}
 		if !ok {
 			clearSIDCookie(w)
-			if isAssistantFormalSuccessorAPIPath(path) {
-				assistantWriteSessionInvalid(w, r)
-				return
-			}
 			if rc == routing.RouteClassInternalAPI || rc == routing.RouteClassPublicAPI || rc == routing.RouteClassWebhook {
 				routing.WriteError(w, r, rc, http.StatusUnauthorized, "unauthorized", "unauthorized")
 				return
@@ -716,10 +573,6 @@ func withTenantAndSession(classifier *routing.Classifier, tenants TenancyResolve
 		}
 		if sess.TenantID != t.ID {
 			clearSIDCookie(w)
-			if isAssistantFormalSuccessorAPIPath(path) {
-				assistantWritePrincipalInvalid(w, r)
-				return
-			}
 			if rc == routing.RouteClassInternalAPI || rc == routing.RouteClassPublicAPI || rc == routing.RouteClassWebhook {
 				routing.WriteError(w, r, rc, http.StatusUnauthorized, "unauthorized", "unauthorized")
 				return
@@ -735,10 +588,6 @@ func withTenantAndSession(classifier *routing.Classifier, tenants TenancyResolve
 		}
 		if !ok || p.Status != "active" {
 			clearSIDCookie(w)
-			if isAssistantFormalSuccessorAPIPath(path) {
-				assistantWritePrincipalInvalid(w, r)
-				return
-			}
 			if rc == routing.RouteClassInternalAPI || rc == routing.RouteClassPublicAPI || rc == routing.RouteClassWebhook {
 				routing.WriteError(w, r, rc, http.StatusUnauthorized, "unauthorized", "unauthorized")
 				return
@@ -761,8 +610,4 @@ func pathHasPrefixSegment(path, prefix string) bool {
 
 func isProtectedTenantUIPath(path string) bool {
 	return pathHasPrefixSegment(path, "/app")
-}
-
-func isRetiredLegacyUIPath(path string) bool {
-	return pathHasPrefixSegment(path, "/assistant-ui") || pathHasPrefixSegment(path, libreChatFormalEntryPrefix)
 }

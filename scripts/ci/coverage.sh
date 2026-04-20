@@ -13,6 +13,11 @@ if [[ -z "${threshold:-}" ]]; then
   exit 1
 fi
 
+enforce_threshold="$(grep -E '^enforce_threshold:' "$policy" | head -n1 | awk '{print $2}')"
+if [[ -z "${enforce_threshold:-}" ]]; then
+  enforce_threshold="true"
+fi
+
 mapfile -t excludes < <(awk '/^exclude_package_prefixes:/{flag=1;next} flag && $1=="-"{print $2}' "$policy")
 
 all_pkgs="$(go list -buildvcs=false ./...)"
@@ -42,8 +47,14 @@ if [[ -z "${total:-}" ]]; then
 fi
 
 python3 - <<PY
+enforce_threshold="${enforce_threshold}".strip().lower()
 threshold=float("${threshold}")
 total=float("${total}")
+if enforce_threshold not in {"true", "false"}:
+    raise SystemExit(f"[coverage] invalid enforce_threshold: {enforce_threshold}")
+if enforce_threshold == "false":
+    print(f"[coverage] threshold gate paused: total {total:.2f}% (configured threshold {threshold:.2f}%)")
+    raise SystemExit(0)
 if total + 1e-9 < threshold:
     raise SystemExit(f"[coverage] FAIL: total {total:.2f}% < threshold {threshold:.2f}%")
 print(f"[coverage] OK: total {total:.2f}% >= threshold {threshold:.2f}%")

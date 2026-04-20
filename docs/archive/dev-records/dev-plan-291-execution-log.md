@@ -6,7 +6,7 @@
 
 ## 1. 本轮执行摘要
 1. [X] 已按 `291-v2` 固定顺序执行 `source -> build -> runtime -> version-lock -> formal-entry -> compat-alias -> routing -> no-legacy -> 引用新鲜度 -> runtime-down`。
-2. [X] 已创建证据目录：`docs/dev-records/assets/dev-plan-291/`。
+2. [X] 已创建证据目录：`docs/archive/dev-records/assets/dev-plan-291/`。
 3. [X] 已生成矩阵、执行报告、风险清单、证据索引与 `285` 交接包。
 4. [X] `R9` 已刷新并通过：`tp288` 已按 `290A/290` 回灌要求重跑刷新，`tp290` 已完成 Case 1~4 全通过，`291` 不再阻断 `285`。
 
@@ -17,9 +17,9 @@
 4. [X] `280` 核心硬门槛已可由当前 `288/290` 证据共同证明成立。
 
 ## 3. 证据索引
-- `docs/dev-records/assets/dev-plan-291/291-upgrade-compat-matrix.md`
-- `docs/dev-records/assets/dev-plan-291/291-execution-report.md`
-- `docs/dev-records/assets/dev-plan-291/291-risk-list.md`
-- `docs/dev-records/assets/dev-plan-291/291-evidence-index.json`
-- `docs/dev-records/assets/dev-plan-291/291-handoff-to-285.md`
-- `docs/dev-records/assets/dev-plan-291/291-ref-288-290-freshness.md`
+- `docs/archive/dev-records/assets/dev-plan-291/291-upgrade-compat-matrix.md`
+- `docs/archive/dev-records/assets/dev-plan-291/291-execution-report.md`
+- `docs/archive/dev-records/assets/dev-plan-291/291-risk-list.md`
+- `docs/archive/dev-records/assets/dev-plan-291/291-evidence-index.json`
+- `docs/archive/dev-records/assets/dev-plan-291/291-handoff-to-285.md`
+- `docs/archive/dev-records/assets/dev-plan-291/291-ref-288-290-freshness.md`

@@ -5,7 +5,6 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
-	"strings"
 	"testing"
 	"time"
 
@@ -77,28 +76,6 @@ func mustInternalAPIClassifier(t *testing.T) *routing.Classifier {
 			"server": {
 				Routes: []routing.Route{
 					{Path: "/org/api/org-units", Methods: []string{"GET"}, RouteClass: "internal_api"},
-				},
-			},
-		},
-	}, "server")
-	if err != nil {
-		t.Fatal(err)
-	}
-	return c
-}
-
-func mustAssistantFormalSuccessorAPIClassifier(t *testing.T) *routing.Classifier {
-	t.Helper()
-
-	c, err := routing.NewClassifier(routing.Allowlist{
-		Version: 1,
-		Entrypoints: map[string]routing.Entrypoint{
-			"server": {
-				Routes: []routing.Route{
-					{Path: "/internal/cubebox/ui-bootstrap", Methods: []string{"GET"}, RouteClass: "internal_api"},
-					{Path: "/internal/cubebox/session", Methods: []string{"GET"}, RouteClass: "internal_api"},
-					{Path: "/internal/cubebox/session/refresh", Methods: []string{"POST"}, RouteClass: "internal_api"},
-					{Path: "/internal/cubebox/session/logout", Methods: []string{"POST"}, RouteClass: "internal_api"},
 				},
 			},
 		},
@@ -214,29 +191,6 @@ func TestWithTenantAndSession_MissingSIDRedirects(t *testing.T) {
 	}
 }
 
-func TestWithTenantAndSession_MissingSIDPassesThroughRetiredAssistantUI(t *testing.T) {
-	tnt := Tenant{ID: "t1", Domain: "localhost", Name: "Local"}
-	nextCalled := false
-	h := withTenantAndSession(nil, stubTenancyResolver{tenant: tnt, ok: true}, newMemoryPrincipalStore(), newMemorySessionStore(), http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		nextCalled = true
-		w.WriteHeader(http.StatusGone)
-	}))
-
-	req := httptest.NewRequest(http.MethodGet, "/assistant-ui", nil)
-	req.Host = "localhost:8080"
-	rec := httptest.NewRecorder()
-	h.ServeHTTP(rec, req)
-	if rec.Code != http.StatusGone {
-		t.Fatalf("status=%d", rec.Code)
-	}
-	if loc := rec.Result().Header.Get("Location"); loc != "" {
-		t.Fatalf("location=%q", loc)
-	}
-	if !nextCalled {
-		t.Fatal("expected retired assistant ui path to pass through")
-	}
-}
-
 func TestWithTenantAndSession_OldUIPathPassthrough_NoLoginAlias(t *testing.T) {
 	tnt := Tenant{ID: "t1", Domain: "localhost", Name: "Local"}
 	nextCalled := false
@@ -335,34 +289,6 @@ func TestWithTenantAndSession_SessionTenantMismatchClearsCookie(t *testing.T) {
 	}
 }
 
-func TestWithTenantAndSession_SessionTenantMismatchAssistantUIFallsThrough(t *testing.T) {
-	tnt := Tenant{ID: "t1", Domain: "localhost", Name: "Local"}
-	sessions := &stubSessionStore{
-		ok:   true,
-		sess: Session{TenantID: "t2", PrincipalID: "p1", ExpiresAt: time.Now().Add(time.Hour)},
-	}
-	nextCalled := false
-	h := withTenantAndSession(nil, stubTenancyResolver{tenant: tnt, ok: true}, newMemoryPrincipalStore(), sessions, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		nextCalled = true
-		w.WriteHeader(http.StatusGone)
-	}))
-
-	req := httptest.NewRequest(http.MethodGet, "/assistant-ui", nil)
-	req.Host = "localhost:8080"
-	req.AddCookie(&http.Cookie{Name: sidCookieName, Value: "sid1"})
-	rec := httptest.NewRecorder()
-	h.ServeHTTP(rec, req)
-	if rec.Code != http.StatusGone {
-		t.Fatalf("status=%d", rec.Code)
-	}
-	if loc := rec.Result().Header.Get("Location"); loc != "" {
-		t.Fatalf("location=%q", loc)
-	}
-	if !nextCalled {
-		t.Fatal("expected retired assistant ui path to pass through")
-	}
-}
-
 func TestWithTenantAndSession_SessionTenantMismatchInternalAPI_Returns401(t *testing.T) {
 	tnt := Tenant{ID: "t1", Domain: "localhost", Name: "Local"}
 	classifier := mustInternalAPIClassifier(t)
@@ -409,46 +335,6 @@ func TestWithTenantAndSession_SessionMissingInternalAPI_Returns401(t *testing.T)
 	h.ServeHTTP(rec, req)
 	if rec.Code != http.StatusUnauthorized {
 		t.Fatalf("status=%d body=%q", rec.Code, rec.Body.String())
-	}
-}
-
-func TestWithTenantAndSession_AssistantFormalSuccessorSessionInvalid_ReturnsSpecific401(t *testing.T) {
-	tnt := Tenant{ID: "t1", Domain: "localhost", Name: "Local"}
-	classifier := mustAssistantFormalSuccessorAPIClassifier(t)
-	h := withTenantAndSession(classifier, stubTenancyResolver{tenant: tnt, ok: true}, newMemoryPrincipalStore(), newMemorySessionStore(), http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
-		t.Fatal("unexpected next")
-	}))
-
-	req := httptest.NewRequest(http.MethodGet, "/internal/cubebox/session", nil)
-	req.Host = "localhost:8080"
-	rec := httptest.NewRecorder()
-	h.ServeHTTP(rec, req)
-	if rec.Code != http.StatusUnauthorized {
-		t.Fatalf("status=%d body=%q", rec.Code, rec.Body.String())
-	}
-	if !strings.Contains(rec.Body.String(), assistantSessionInvalidCode) {
-		t.Fatalf("body=%q", rec.Body.String())
-	}
-}
-
-func TestWithTenantAndSession_AssistantFormalSuccessorPrincipalInvalid_ReturnsSpecific401(t *testing.T) {
-	tnt := Tenant{ID: "t1", Domain: "localhost", Name: "Local"}
-	classifier := mustAssistantFormalSuccessorAPIClassifier(t)
-	sessions := &stubSessionStore{ok: true, sess: Session{TenantID: "other-tenant", PrincipalID: "p1", ExpiresAt: time.Now().Add(time.Hour)}}
-	h := withTenantAndSession(classifier, stubTenancyResolver{tenant: tnt, ok: true}, newMemoryPrincipalStore(), sessions, http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
-		t.Fatal("unexpected next")
-	}))
-
-	req := httptest.NewRequest(http.MethodGet, "/internal/cubebox/ui-bootstrap", nil)
-	req.Host = "localhost:8080"
-	req.AddCookie(&http.Cookie{Name: sidCookieName, Value: "sid1"})
-	rec := httptest.NewRecorder()
-	h.ServeHTTP(rec, req)
-	if rec.Code != http.StatusUnauthorized {
-		t.Fatalf("status=%d body=%q", rec.Code, rec.Body.String())
-	}
-	if !strings.Contains(rec.Body.String(), assistantPrincipalInvalidCode) {
-		t.Fatalf("body=%q", rec.Body.String())
 	}
 }
 

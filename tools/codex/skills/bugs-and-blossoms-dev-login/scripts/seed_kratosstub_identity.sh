@@ -64,6 +64,11 @@ JSON
 )"
 
 tmp="$(mktemp)"
+cleanup() {
+  rm -f "$tmp"
+}
+trap cleanup EXIT
+
 code="$(curl -sS -o "$tmp" -w "%{http_code}" \
   -H "Content-Type: application/json" \
   -X POST "${kratos_admin_base_url}/admin/identities" \

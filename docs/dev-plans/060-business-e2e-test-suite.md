@@ -1,13 +1,13 @@
 # DEV-PLAN-060：全链路业务测试案例套件（009/026-031/220-225 覆盖）
 
-**状态**: 草拟中（2026-01-10 11:40 UTC）
+**状态**: 草拟中（2026-01-10 11:40 UTC；2026-04-20 起其中 SetID 主链口径降级为历史测试合同，现行删除 owner 以 `DEV-PLAN-440` 为准）
 
 > 假设：系统已按对应契约文档实现全部功能。本文只定义“全链路业务测试套件”的框架、数据集与记录要求，不替代各模块 dev-plan 的实现合同。
 
 ## 1. 背景
 
 本仓库按 Greenfield 的“切片式交付 + 门禁阻断漂移”推进（见 `docs/dev-plans/009-implementation-roadmap.md`、`docs/archive/dev-plans/026-org-transactional-event-sourcing-synchronous-projection.md`、`docs/dev-plans/029-job-catalog-transactional-event-sourcing-synchronous-projection.md`）。因此需要一套“全链路业务测试案例套件”，用于在 **不回退/不走双链路** 的前提下验证：
-- 系统功能是否覆盖完整业务域（组织/职位分类/SetID/职位/任职/人员）；
+- 系统功能是否覆盖完整业务域（组织/职位分类/职位/任职/人员）；其中本文原有 SetID 主链条目自 2026-04-20 起仅作为历史样本保留，不再作为现行实现目标；
 - Assistant 功能是否覆盖会话/意图/提交/任务编排的主链路（对齐 220-225）；
 - 每条能力是否 **用户可见、可操作**（避免僵尸功能）；
 - 行为是否与契约文档一致（Contract First：偏差必须先记录并回到契约处理）。
@@ -32,7 +32,7 @@
 测试侧关键信号：
 - **平台先行**：Tenancy/AuthN → RLS 圈地 → Casbin 授权边界，且 fail-closed（`docs/dev-plans/019-tenant-and-authn.md`、`docs/dev-plans/021-pg-rls-for-org-position-job-catalog.md`、`docs/dev-plans/022-authz-casbin-toolchain.md`）。
 - **用户可见性原则**：每个切片交付必须有页面入口与可操作链路（`AGENTS.md` §3.8）。
-- **主数据纵切片顺序**：`SetID => JobCatalog => Position => Assignments`（`docs/archive/dev-plans/070-setid-orgunit-binding-redesign.md`～`docs/dev-plans/031-greenfield-assignment-job-data.md`）。
+- **主数据纵切片顺序（历史口径）**：本文原先采用 `SetID => JobCatalog => Position => Assignments`。自 `DEV-PLAN-440` 生效起，该顺序不再作为现行实现顺序；涉及 SetID 的主数据链路改由 `DEV-PLAN-440` 统筹删除或重写。
 
 因此：本套件以“租户与权限基线 → 主数据 → 人员任职”为主链路顺序。
 
@@ -127,7 +127,7 @@
 | L1 | Ops | 运营/支持 |
 | L1 | Plant | 制造/仓储（用于岗位差异样例） |
 
-### 5.3 SetID 绑定与业务单元节点
+### 5.3 SetID 绑定与业务单元节点（历史合同，待 `DEV-PLAN-440` 重写或归档）
 
 | 对象 | 值 | 备注 |
 | --- | --- | --- |
@@ -150,8 +150,8 @@
 | Job Profile | `JP-SWE` | Software Engineer | families=`JF-BE,JF-FE`；primary=`JF-BE` |
 
 备注：
-- Job Catalog 的权威作用域为 `setid`；本套件使用显式 `setid=S2601` + `as_of=2026-01-01`（对齐 `docs/archive/dev-plans/070-setid-orgunit-binding-redesign.md`、`docs/dev-plans/029-job-catalog-transactional-event-sourcing-synchronous-projection.md`）。
-- 必测：覆盖 `job_family_groups/job_families/job_levels/job_profiles` 的“写入→as_of 读取→UI 可见”闭环，并包含至少 1 个跨日期场景（例如 family reparenting 的 `as_of` 前后对比）。
+- 本节保留的 `setid=S2601` 等内容仅用于解释历史测试资产来源；自 `DEV-PLAN-440` 起，不再作为当前态 Job Catalog 的实现依据。
+- 在 `DEV-PLAN-440` 完成前，本文不得被引用为“必须继续保留 SetID 主链”的证据。
 
 ### 5.5 职位（Positions，`as_of=2026-01-01`）
 
@@ -204,17 +204,13 @@
 | 租户/登录 | superadmin 创建租户与域名；tenant app 登录 | TP-060-01 |
 | 权限/隔离 | Authz 403；RLS fail-closed；跨租户不可见 | TP-060-01 |
 | 组织架构 | OrgUnit 树/新增/查询；外部协议仅使用 `org_code` | TP-060-02 |
-| SetID | SetID/组织绑定/业务单元标记；业务入口通过 `org_code -> org_node_key` 解析 setid | TP-060-02 |
+| SetID | 历史主数据测试样本；自 `DEV-PLAN-440` 起不再作为当前实现必须维持的能力 | TP-060-02（待重写/归档） |
 | 职位分类 | Job family group 创建与查询（可选扩展：families/levels/profiles） | TP-060-02 |
 | 职位 | Position 创建与列表 | TP-060-02 |
 | 人员 | Person 创建/查询；pernr 解析一致性 | TP-060-03 |
 | 任职记录 | Assignment（Valid Time `as_of`）/仅展示 effective_date；upsert 可重复执行（同日幂等）；position 裁决 fail-closed | TP-060-03 |
-| Assistant 会话 | `/app/assistant` 可发现；会话创建/列表/详情/turns 可用 | TP-060-05 |
-| Assistant 提交链路 | `validated -> confirmed -> committed` 状态机；非法转换 fail-closed | TP-060-05 |
-| Assistant 模型/意图治理 | provider validate/apply；intent candidate 确认；版本漂移回退 | TP-060-05 |
-| Assistant 任务编排 | Tasks API 与 Temporal 触发链路（含幂等与可追踪） | TP-060-05 |
 
-> 编号说明：`TP-060-04` 已被现有 OrgUnit 详情双栏回归用例占用（`e2e/tests/tp060-04-orgunit-details-two-pane.spec.js`），Assistant 子套件采用 `TP-060-05` 以避免冲突。
+> 编号说明：`TP-060-04` 已被现有 OrgUnit 详情双栏回归用例占用（`e2e/tests/tp060-04-orgunit-details-two-pane.spec.js`）。
 
 ## 7. 子测试计划（框架）
 
@@ -252,6 +248,8 @@
 
 **子计划文档**：`docs/dev-plans/062-test-tp060-02-master-data-org-setid-jobcatalog-position.md`
 
+> 状态说明：该子计划当前仍含 SetID 主链合同；自 `DEV-PLAN-440` 生效起，其 SetID 相关部分仅作为历史测试样本保留，后续需重写或归档。
+
 **契约引用**
 - `docs/archive/dev-plans/026-org-transactional-event-sourcing-synchronous-projection.md`
 - `docs/archive/dev-plans/070-setid-orgunit-binding-redesign.md`
@@ -272,7 +270,6 @@
 - JobCatalog：至少 1 个实体“写入→列表可见”闭环；`setid` 切换与 `as_of` 变更口径一致。
 - JobCatalog（增强）：groups/families/levels/profiles 均覆盖“写入→as_of 读取→UI 可见”；profile 需覆盖 families+primary 不变量的负例（稳定报错即可）。
 - Position：新增职位后列表可见；职位相关外部请求/响应只出现 `org_code`，不出现 `org_unit_id` / `org_node_key`。
-- 060 主链收口：同一租户内完成 `Org -> SetID -> Staffing(Position)` 后，`/app/assistant` 必须可见，且助手侧展示/传递组织引用仅使用 `org_code`。
 
 **问题记录**
 | 时间（UTC） | 环境（Host/as_of/模式） | 复现步骤摘要 | 期望（契约引用） | 实际结果 | 严重级别（P0/P1/P2） | 类型（BUG/CONTRACT_DRIFT/CONTRACT_MISSING/ENV_DRIFT） | 处理建议（改实现/先改契约） | 负责人 | 链接（Issue/PR/日志） |
@@ -297,38 +294,6 @@
 - Valid Time：同一 person 至少覆盖 1 条“未来生效/多切片”的 as_of 读口径（as_of 前后读到不同的 effective_date 版本；Valid Time=day）。
 - 可重复执行：同一 `effective_date` 相同输入重复提交应幂等成功；同日不同输入必须 fail-closed（例如 409 `STAFFING_IDEMPOTENCY_REUSED`，或等效稳定错误码）。
 - 交叉裁决：同一时点一个 position 不得被多个 active assignment 占用；违反必须 fail-closed（稳定错误码优先）。
-
-**问题记录**
-| 时间（UTC） | 环境（Host/as_of/模式） | 复现步骤摘要 | 期望（契约引用） | 实际结果 | 严重级别（P0/P1/P2） | 类型（BUG/CONTRACT_DRIFT/CONTRACT_MISSING/ENV_DRIFT） | 处理建议（改实现/先改契约） | 负责人 | 链接（Issue/PR/日志） |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-
-### TP-060-05：Assistant（会话 + 意图 + 提交 + 任务编排）
-
-**子计划文档**：`docs/dev-plans/064a-test-tp060-05-assistant-conversation-intent-and-tasks.md`
-
-**执行记录**：`docs/archive/dev-records/dev-plan-064a-execution-log.md`
-
-**契约引用**
-- `docs/archive/dev-plans/220-chat-assistant-upgrade-implementation-plan.md`
-- `docs/archive/dev-plans/220a-chat-assistant-gap-assessment-and-closure-plan.md`
-- `docs/archive/dev-plans/221-assistant-p1-blocker-closure-plan.md`
-- `docs/archive/dev-plans/222-assistant-frontend-e2e-evidence-closure-plan.md`
-- `docs/archive/dev-plans/223-assistant-conversation-persistence-and-audit-closure-plan.md`
-- `docs/archive/dev-plans/224-assistant-multi-model-and-llm-intent-governance-plan.md`
-- `docs/archive/dev-plans/225-assistant-tasks-temporal-p2-implementation-plan.md`
-
-**数据准备**
-- 复用 TP-060-01 的租户与登录基线（`T060` + tenant-admin）。
-- 准备 assistant 最小用例：1 条新建会话、1 次确认、1 次提交、至少 1 条失败分支（非法状态迁移或版本漂移）。
-- 若启用 tasks/temporal 验证，准备可追踪的 `request_id/trace_id` 与任务查询入口。
-
-**核心验收点（高层）**
-- `/app/assistant` 可发现、可交互，且 FE 状态与后端状态机一致（含终态可见）。
-- 会话与 turn 主链路可复现：create/list/detail/turns/confirm/commit。
-- Assistant 涉及组织引用的用户可见文本、会话日志与提交上下文只允许出现 `org_code`；不得出现 `org_id` / `org_unit_id` / `org_node_key`。
-- 意图治理稳定：候选确认后不得被静默改写；版本漂移必须回退到安全态并返回稳定错误码。
-- 多模型入口可控：provider validate/apply 路径有正负例；失败时错误码与提示可审计。
-- tasks/temporal（若功能已就绪）可追踪、可幂等；若未就绪必须记录为 `CONTRACT_MISSING` 或 `ENV_DRIFT`，不得口径降级绕过。
 
 **问题记录**
 | 时间（UTC） | 环境（Host/as_of/模式） | 复现步骤摘要 | 期望（契约引用） | 实际结果 | 严重级别（P0/P1/P2） | 类型（BUG/CONTRACT_DRIFT/CONTRACT_MISSING/ENV_DRIFT） | 处理建议（改实现/先改契约） | 负责人 | 链接（Issue/PR/日志） |

@@ -20,17 +20,19 @@
   - `codex-rs/tui/src/history_cell.rs`
   - `codex-rs/tui/src/slash_command.rs`
   - `codex-rs/tui/src/status*.rs`
-- **关联计划/标准**：`DEV-PLAN-004M1`、`DEV-PLAN-012`、`DEV-PLAN-015`、`DEV-PLAN-017`、`DEV-PLAN-019`、`DEV-PLAN-021`、`DEV-PLAN-022`、`DEV-PLAN-300`、`DEV-PLAN-392`、`DEV-PLAN-430`、`DEV-PLAN-434`
+- **关联计划/标准**：`DEV-PLAN-004M1`、`DEV-PLAN-012`、`DEV-PLAN-015`、`DEV-PLAN-017`、`DEV-PLAN-019`、`DEV-PLAN-021`、`DEV-PLAN-022`、`DEV-PLAN-300`、`DEV-PLAN-430`、`DEV-PLAN-434`
 
 ### 0.1 Simple > Easy 三问
 
-1. **边界**：本计划只处理 CubeBox 的 UI 协议、前端状态机、事件流和右悬挂壳层；AI 网关由 430 Slice 2 承接，上下文压缩内核由 434 承接。
-2. **不变量**：除 Rust terminal/TUI 视觉渲染、shell/file/patch/exec/plugin 写操作等不适合内容外，Codex 中可复用的 UI 协议、线程/回合模型、事件粒度、历史重建 reducer 和交互状态应优先复用或重构；不得在未评估 Codex 对应机制前重新设计一套平行概念。
+1. **边界**：本计划只处理 CubeBox 的 UI 协议、前端状态机、事件流和右悬挂壳层；AI 网关由 430 Slice 2 承接，上下文压缩内核由 434 承接；`340-383` 与 `380A-380G` 系列只保留为历史背景，不再构成当前 UI 主线的实现依据。
+2. **不变量**：除 Rust terminal/TUI 视觉渲染、shell/file/patch/exec/plugin 写操作等不适合内容外，Codex 中可复用的 UI 协议、线程/回合模型、事件粒度、历史重建 reducer 和交互状态应优先复用或重构；不得在未评估 Codex 对应机制前重新设计一套平行概念；不得因为引入右侧抽屉而形成第二前端主链。
 3. **可解释**：reviewer 必须能在 5 分钟内说明 UI 视觉层为何本仓自研、UI 协议/状态机为何参考 Codex、哪些事件被采纳、哪些高风险能力被裁掉，以及用户如何从右侧悬挂入口完成最小对话闭环。
 
 ## 1. 背景
 
 `DEV-PLAN-430` 已定义 CubeBox 的首期用户可见入口：Web Shell 右侧悬挂抽屉、点击图标拉出、会话列表、输入框、模型选择、上下文 chips、流式回复和会话恢复。用户进一步确认：虽然 Codex 开源仓库中的 Rust TUI 不适合直接复用为 Web/MUI 组件，但 Codex 的 UI 协议、线程/回合状态机、事件流和历史重建 reducer 应按“应复用则复用”的原则引进。
+
+同时，`DEV-PLAN-430` 已明确新一轮 CubeBox 重做不再受 `340-383` 与 `380A-380G` 系列计划约束；这些文档只保留为历史证据，不能继续决定当前 UI 契约、页面形态、阶段划分或完成定义。
 
 Codex 开源仓库中与 UI 层高度相关的成熟资产包括：
 
@@ -40,6 +42,8 @@ Codex 开源仓库中与 UI 层高度相关的成熟资产包括：
 - TUI 交互模式：输入区、历史 cell、markdown stream、slash command、status indicator、compact warning、interrupt/stop 等。
 
 这些内容可以显著降低 CubeBox UI 协议和状态机重复造车风险。
+
+但本计划必须同时满足本仓现行前端单链路约束：右侧悬挂抽屉是 `CubeBox` 正式聊天 UI 的一种承载壳层，不是第二套正式页面、第二套路由或第二套 store。
 
 ## 2. 目标
 
@@ -51,6 +55,7 @@ Codex 开源仓库中与 UI 层高度相关的成熟资产包括：
 6. 借鉴 Codex TUI 交互模式，实现 Web/MUI 右侧悬挂抽屉：输入区、消息历史、流式 markdown、状态条、compact/token 提示、stop/interrupt。
 7. 裁掉 Codex 中不适合 CubeBox 首期的 shell/file/patch/exec/plugin/MCP 写操作协议和 terminal 渲染实现。
 8. 产出 430 Slice 1 的最小用户可见闭环：打开抽屉 -> 新建/恢复会话 -> 发送消息 -> 流式回复 -> 停止/完成 -> 关闭重开后状态恢复。
+9. 将抽屉形态与 `/app/cubebox*` 路由形态收口为同一条正式 UI 主链，避免形成页面版/抽屉版双实现。
 
 ## 3. 非目标
 
@@ -61,6 +66,7 @@ Codex 开源仓库中与 UI 层高度相关的成熟资产包括：
 5. 不启用 Codex 的 shell command、file write、apply patch、exec approval、plugin install、marketplace 等能力。
 6. 不把 Codex 的认证、账号、ChatGPT plan、rate limit UI 作为本仓事实源。
 7. 不替代本仓 MUI 设计系统、丘比蓝主题、i18n、路由、Authz 和错误码契约。
+8. 不把历史 `340-383` 与 `380A-380G` 系列的页面骨架、测试语义或 API 形态视为当前实现必须兼容的前提。
 
 ## 4. Codex UI 资产采纳矩阵
 
@@ -94,6 +100,17 @@ Codex 开源仓库中与 UI 层高度相关的成熟资产包括：
 - `status bar`：模型、token usage、compact 状态、连接状态、错误提示。
 - `settings entry`：跳转模型配置页或打开配置面板。
 
+### 5.1A 单前端链路约束
+
+- 右侧抽屉不是第二产品入口，而是 `CubeBox` 正式聊天 UI 的桌面承载壳层。
+- `/app/cubebox`、`/app/cubebox/conversations/:conversationId` 与右侧抽屉必须共享同一套：
+  - `API client`
+  - `conversation store`
+  - `event reducer`
+  - `timeline/composer/status bar` 组件语义
+- 移动端或窄屏可退化为全屏页面或 bottom sheet，但仍属于同一套 UI 主链，不得形成抽屉版/页面版两套独立状态模型。
+- 不允许新增第二套路由、第二套前端 store、第二套错误映射或第二套 SSE 消费逻辑来专门服务抽屉壳层。
+
 ### 5.2 后端到前端事件契约
 
 首期建议冻结以下 CubeBox UI event，名称可参考 Codex，但字段需 HRMS 化：
@@ -117,6 +134,8 @@ Codex 开源仓库中与 UI 层高度相关的成熟资产包括：
 
 这些事件既可由 SSE 传输，也可由 WebSocket 传输；首期优先 SSE，除非 430 网关切片另行裁决。
 
+事件 canonical 语义必须由 `CubeBox` 正式模块持有；`internal/server` 只承接 HTTP/SSE delivery 与 adapter，不得把 thread/turn/event 语义再次散落在 delivery 层。
+
 ### 5.3 Timeline reducer
 
 CubeBox 前端必须有一个纯函数 reducer：
@@ -125,6 +144,7 @@ CubeBox 前端必须有一个纯函数 reducer：
 - 输出：conversation timeline、active turn、streaming message、status bar state、error state。
 - 不直接访问 DOM，不直接发网络请求。
 - 可用 Codex `ThreadHistoryBuilder` 的测试模式做 prompt/timeline shape 快照。
+- reducer 的 golden/snapshot 应优先复用或对齐上游 `ThreadHistoryBuilder` 行为，而不是只保留“受其启发”的口头说明。
 
 ### 5.4 右侧悬挂抽屉
 
@@ -133,6 +153,7 @@ CubeBox 前端必须有一个纯函数 reducer：
 - 移动端：全屏对话页或 bottom sheet。
 - 抽屉关闭不终止后端 turn；重新打开后通过 conversation read/resume 恢复 timeline。
 - 用户切换租户或权限变化时，抽屉必须重新校验 active conversation 可见性。
+- 页面路由形态与抽屉形态必须复用同一套 timeline 组件和同一份 active conversation 状态，不得分别维护。
 
 ## 6. 实施切片
 
@@ -142,6 +163,11 @@ CubeBox 前端必须有一个纯函数 reducer：
 - [ ] 确认 Apache-2.0 许可证、NOTICE 和复制要求。
 - [ ] 盘点 app-server-protocol v2 与 TUI 相关依赖闭包。
 - [ ] 输出“直接采纳协议 / 重构状态机 / 借鉴交互 / 不引入”清单。
+- [ ] 冻结“具体复用制品”清单，至少明确：
+  - `JSON schema` 是否直接消费
+  - `TypeScript schema/types` 是否直接消费或生成
+  - `ThreadHistoryBuilder` 的哪些行为以 golden/snapshot 方式继承
+  - 哪些只保留为交互参考，不进入本仓制品链
 
 ### Slice 1：UI 事件契约冻结
 
@@ -163,6 +189,7 @@ CubeBox 前端必须有一个纯函数 reducer：
 - [ ] 实现右侧抽屉布局、响应式策略和主题变量。
 - [ ] 实现 conversation header、timeline、composer、status bar、empty state。
 - [ ] 实现抽屉开关状态持久化，但不保存敏感内容。
+- [ ] 确认抽屉形态与 `/app/cubebox*` 路由形态共用同一套 store/reducer/component，不新增第二主链。
 
 ### Slice 4：流式消息与状态显示
 
@@ -171,16 +198,19 @@ CubeBox 前端必须有一个纯函数 reducer：
 - [ ] 实现 stop/interrupt。
 - [ ] 实现 token usage、compact started/context compacted、error 状态提示。
 
-### Slice 5：会话列表与恢复
+### Slice 5：会话入口与抽屉恢复交互
 
-- [ ] 实现 conversation list/read/resume/archive/rename UI。
+- [ ] 实现 conversation list/read/resume/archive/rename 的 UI 入口与展示；生命周期语义、持久化 contract 与 API owner 以 `DEV-PLAN-432` 为准。
 - [ ] 关闭抽屉后恢复 active conversation。
 - [ ] 权限或租户变化时重新加载并 fail-closed。
-- [ ] 增加 E2E 覆盖打开、关闭、恢复、归档。
+- [ ] 增加 E2E 覆盖打开、关闭与抽屉恢复；会话恢复/归档正确性由 `DEV-PLAN-432` 的 API/E2E 承接。
 
-### Slice 6：slash command 与快捷操作
+### Slice 6：composer 命令入口与快捷操作
 
-- [ ] 实现最小 slash command：`/new`、`/compact`、`/clear-draft`。
+- [ ] 实现最小 slash command 输入解析与 UI 入口：`/new`、`/compact`、`/clear-draft`。
+- [ ] `/new` 只在 UI 层触发新会话入口；会话新建与 lifecycle contract 以 `DEV-PLAN-432` 为准。
+- [ ] `/compact` 只在 UI 层触发 manual compact 入口；compaction 语义与执行链以 `DEV-PLAN-434` 为准。
+- [ ] `/clear-draft` 由前端草稿状态直接处理。
 - [ ] 命令解析参考 Codex TUI 思路，但命令集合由 CubeBox 白名单控制。
 - [ ] 不引入 shell、file、patch、exec 类命令。
 
@@ -206,6 +236,7 @@ CubeBox 前端必须有一个纯函数 reducer：
 - 不得引入 terminal rendering、alternate screen、terminal key handling。
 - 不得引入 shell/file/patch/exec/plugin/marketplace 作为默认 UI 能力。
 - 不得在未评估 Codex app-server-protocol 前自定义平行 thread/turn/event 模型。
+- 不得为了右侧抽屉再新增第二套路由、第二套 store 或第二套聊天页面实现。
 - 不得把 Codex 账号、登录、ChatGPT plan、rate limit UI 作为本仓事实源。
 - 不得在前端保存 API Key 或敏感 prompt 上下文。
 - 不得绕过本仓 MUI、i18n、routing、Authz、错误码和 E2E 门禁。

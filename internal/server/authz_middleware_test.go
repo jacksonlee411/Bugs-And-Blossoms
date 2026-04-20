@@ -402,48 +402,6 @@ func TestAuthzRequirementForRoute(t *testing.T) {
 	if object, action, ok := authzRequirementForRoute(http.MethodPost, "/internal/functional-areas/switch"); !ok || object != authz.ObjectOrgSetIDCapability || action != authz.ActionAdmin {
 		t.Fatalf("expected internal functional area switch mapped to org.setid_capability_config admin, got ok=%v object=%q action=%q", ok, object, action)
 	}
-	if object, action, ok := authzRequirementForRoute(http.MethodPost, "/internal/assistant/conversations"); !ok || object != authz.ObjectOrgSetIDCapability || action != authz.ActionAdmin {
-		t.Fatalf("expected assistant conversation create mapped to org.setid_capability_config admin, got ok=%v object=%q action=%q", ok, object, action)
-	}
-	if object, action, ok := authzRequirementForRoute(http.MethodGet, "/internal/assistant/conversations"); !ok || object != authz.ObjectOrgSetIDCapability || action != authz.ActionRead {
-		t.Fatalf("expected assistant conversation list mapped to org.setid_capability_config read, got ok=%v object=%q action=%q", ok, object, action)
-	}
-	if object, action, ok := authzRequirementForRoute(http.MethodGet, "/internal/assistant/conversations/conv_001"); !ok || object != authz.ObjectOrgSetIDCapability || action != authz.ActionRead {
-		t.Fatalf("expected assistant conversation get mapped to org.setid_capability_config read, got ok=%v object=%q action=%q", ok, object, action)
-	}
-	if object, action, ok := authzRequirementForRoute(http.MethodPost, "/internal/assistant/conversations/conv_001/turns"); !ok || object != authz.ObjectOrgSetIDCapability || action != authz.ActionAdmin {
-		t.Fatalf("expected assistant turn create mapped to org.setid_capability_config admin, got ok=%v object=%q action=%q", ok, object, action)
-	}
-	if object, action, ok := authzRequirementForRoute(http.MethodPost, "/internal/assistant/conversations/conv_001/turns/turn_001:confirm"); !ok || object != authz.ObjectOrgSetIDCapability || action != authz.ActionAdmin {
-		t.Fatalf("expected assistant turn confirm mapped to org.setid_capability_config admin, got ok=%v object=%q action=%q", ok, object, action)
-	}
-	if object, action, ok := authzRequirementForRoute(http.MethodGet, "/internal/assistant/model-providers"); !ok || object != authz.ObjectOrgSetIDCapability || action != authz.ActionRead {
-		t.Fatalf("expected assistant model providers read mapped to org.setid_capability_config read, got ok=%v object=%q action=%q", ok, object, action)
-	}
-	if object, action, ok := authzRequirementForRoute(http.MethodPost, "/internal/assistant/model-providers:validate"); !ok || object != authz.ObjectOrgSetIDCapability || action != authz.ActionAdmin {
-		t.Fatalf("expected assistant model providers validate mapped to org.setid_capability_config admin, got ok=%v object=%q action=%q", ok, object, action)
-	}
-	if _, _, ok := authzRequirementForRoute(http.MethodPost, "/internal/assistant/model-providers:apply"); ok {
-		t.Fatal("expected retired assistant model providers apply route unmapped")
-	}
-	if object, action, ok := authzRequirementForRoute(http.MethodGet, "/internal/assistant/models"); !ok || object != authz.ObjectOrgSetIDCapability || action != authz.ActionRead {
-		t.Fatalf("expected assistant models read mapped to org.setid_capability_config read, got ok=%v object=%q action=%q", ok, object, action)
-	}
-	if _, _, ok := authzRequirementForRoute(http.MethodGet, "/internal/assistant/runtime-status"); ok {
-		t.Fatal("expected retired assistant runtime status route to be unmapped from authz capability requirements")
-	}
-	if object, action, ok := authzRequirementForRoute(http.MethodGet, "/internal/assistant/ui-bootstrap"); !ok || object != authz.ObjectOrgSetIDCapability || action != authz.ActionRead {
-		t.Fatalf("expected assistant ui bootstrap read mapped to org.setid_capability_config read, got ok=%v object=%q action=%q", ok, object, action)
-	}
-	if object, action, ok := authzRequirementForRoute(http.MethodGet, "/internal/assistant/session"); !ok || object != authz.ObjectOrgSetIDCapability || action != authz.ActionRead {
-		t.Fatalf("expected assistant session read mapped to org.setid_capability_config read, got ok=%v object=%q action=%q", ok, object, action)
-	}
-	if object, action, ok := authzRequirementForRoute(http.MethodPost, "/internal/assistant/session/refresh"); !ok || object != authz.ObjectOrgSetIDCapability || action != authz.ActionRead {
-		t.Fatalf("expected assistant session refresh mapped to org.setid_capability_config read, got ok=%v object=%q action=%q", ok, object, action)
-	}
-	if object, action, ok := authzRequirementForRoute(http.MethodPost, "/internal/assistant/session/logout"); !ok || object != authz.ObjectOrgSetIDCapability || action != authz.ActionRead {
-		t.Fatalf("expected assistant session logout mapped to org.setid_capability_config read, got ok=%v object=%q action=%q", ok, object, action)
-	}
 	if _, _, ok := authzRequirementForRoute(http.MethodGet, "/org/api/org-units"); !ok {
 		t.Fatal("expected ok=true")
 	}
@@ -793,15 +751,6 @@ func TestPathMatchRouteTemplate(t *testing.T) {
 	}
 	if pathMatchRouteTemplate("/org/api/example/123/disable", "/org/api/example/{id}/enable") {
 		t.Fatal("expected segment mismatch")
-	}
-	if pathMatchRouteTemplate("/internal/cubebox/tasks/task-1:cancel", "/internal/cubebox/tasks/{task_id}") {
-		t.Fatal("expected generic task detail template to reject action suffix path")
-	}
-	if !pathMatchRouteTemplate("/internal/cubebox/tasks/task-1:cancel", "/internal/cubebox/tasks/{task_id}:cancel") {
-		t.Fatal("expected suffix template match")
-	}
-	if pathMatchRouteTemplate("/internal/cubebox/tasks/:cancel", "/internal/cubebox/tasks/{task_id}:cancel") {
-		t.Fatal("expected missing task id to fail")
 	}
 }
 

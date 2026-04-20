@@ -535,12 +535,5 @@ test("tp060-02: master data (orgunit -> setid -> jobcatalog -> positions)", asyn
   await expect(page.getByRole("heading", { level: 2, name: "Job Catalog" })).toBeVisible();
   await page.goto(`/app/staffing/positions?as_of=${asOf}&org_code=${org.rnd}`);
   await expect(page.getByRole("heading", { level: 2, name: "Staffing / Positions" })).toBeVisible();
-  await page.goto(`/app/assistant?as_of=${asOf}`);
-  await expect(page).toHaveURL(/\/app\/cubebox$/);
-  await expect(page.getByRole("heading", { name: "CubeBox" })).toBeVisible();
-  await expect(page.getByTestId("cubebox-input")).toBeVisible();
-  await expect(page.getByRole("link", { name: "文件" })).toHaveAttribute("href", "/app/cubebox/files");
-  await expect(page.getByRole("link", { name: "模型" })).toHaveAttribute("href", "/app/cubebox/models");
-
   await appContext.close();
 });

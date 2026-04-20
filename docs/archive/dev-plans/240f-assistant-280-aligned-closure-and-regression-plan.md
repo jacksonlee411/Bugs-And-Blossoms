@@ -70,9 +70,9 @@
    - [ ] `docs/dev-records/assets/dev-plan-266/tp288-handoff-to-285.md`
    - [ ] `docs/dev-records/assets/dev-plan-290/tp290-real-case-evidence-index.json`
    - [ ] `docs/dev-records/assets/dev-plan-290/tp290-case-matrix-v1.md`
-   - [ ] `docs/dev-records/assets/dev-plan-291/291-evidence-index.json`
-   - [ ] `docs/dev-records/assets/dev-plan-291/291-handoff-to-285.md`
-   - [ ] `docs/dev-records/assets/dev-plan-291/291-ref-288-290-freshness.md`
+   - [ ] `docs/archive/dev-records/assets/dev-plan-291/291-evidence-index.json`
+   - [ ] `docs/archive/dev-records/assets/dev-plan-291/291-handoff-to-285.md`
+   - [ ] `docs/archive/dev-records/assets/dev-plan-291/291-ref-288-290-freshness.md`
 
 ### 4.2 输出（本计划固定命名）
 1. [ ] 证据根目录固定为：`docs/dev-records/assets/dev-plan-240f/`。
@@ -209,7 +209,7 @@
 3. [ ] `240F` 建议固定校验顺序：
    - [ ] `test -f docs/dev-records/assets/dev-plan-266/tp288-real-entry-evidence-index.json`
    - [ ] `test -f docs/dev-records/assets/dev-plan-290/tp290-real-case-evidence-index.json`
-   - [ ] `test -f docs/dev-records/assets/dev-plan-291/291-evidence-index.json`
+   - [ ] `test -f docs/archive/dev-records/assets/dev-plan-291/291-evidence-index.json`
    - [ ] `make check doc`
    - [ ] 若命中新鲜度失效：回退执行 `288/290/291` 原计划命令与顺序
 4. [ ] 发起 `285` 前，推荐再次执行 `make preflight`，但它不是替代 `240F` 联合结论的证据来源。

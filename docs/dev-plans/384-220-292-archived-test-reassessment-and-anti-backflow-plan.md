@@ -17,7 +17,7 @@
   - `pkg/**/*_test.go`
   - `docs/dev-plans/060-business-e2e-test-suite.md`
   - `docs/dev-plans/064a-test-tp060-05-assistant-conversation-intent-and-tasks.md`
-  - `docs/dev-plans/380g-cubebox-regression-gates-and-final-closure-plan.md`
+  - `docs/archive/dev-plans/380g-cubebox-regression-gates-and-final-closure-plan.md`
   - `docs/dev-records/**`
 - **关联计划/标准**：
   - `AGENTS.md`
@@ -26,11 +26,11 @@
   - `docs/dev-plans/064a-test-tp060-05-assistant-conversation-intent-and-tasks.md`
   - `docs/dev-plans/300-test-system-investigation-report.md`
   - `docs/dev-plans/301-go-test-layering-and-best-practices-remediation-plan.md`
-  - `docs/dev-plans/380-cubebox-first-party-ownership-and-librechat-retirement-plan.md`
-  - `docs/dev-plans/380c-cubebox-api-dto-convergence-and-assistant-retirement-plan.md`
-  - `docs/dev-plans/380e-cubebox-apps-web-frontend-convergence-plan.md`
-  - `docs/dev-plans/380f-librechat-vendored-runtime-and-deploy-retirement-plan.md`
-  - `docs/dev-plans/380g-cubebox-regression-gates-and-final-closure-plan.md`
+  - `docs/archive/dev-plans/380-cubebox-first-party-ownership-and-librechat-retirement-plan.md`
+  - `docs/archive/dev-plans/380c-cubebox-api-dto-convergence-and-assistant-retirement-plan.md`
+  - `docs/archive/dev-plans/380e-cubebox-apps-web-frontend-convergence-plan.md`
+  - `docs/archive/dev-plans/380f-librechat-vendored-runtime-and-deploy-retirement-plan.md`
+  - `docs/archive/dev-plans/380g-cubebox-regression-gates-and-final-closure-plan.md`
   - `docs/archive/dev-plans/220-chat-assistant-upgrade-implementation-plan.md`
   - `docs/archive/dev-plans/220a-chat-assistant-gap-assessment-and-closure-plan.md`
   - `docs/archive/dev-plans/221-assistant-p1-blocker-closure-plan.md`
@@ -89,7 +89,7 @@
 
 ## 1. 背景与上下文（Context）
 
-- `DEV-PLAN-380/380C/380E/380F/380G` 已将正式产品面、正式 API 面和退役语义收敛到 `CubeBox` 主链与 `LibreChat` 退役断言。
+- `DEV-PLAN-380/380C/380E/380F/380G` 已作为历史切换批次，将当时的正式产品面、正式 API 面和退役语义收敛到 `CubeBox` 主链与 `LibreChat` 退役断言；现均只作为归档证据引用。
 - 但测试资产并没有同步完成“owner 重写”：
   - 一部分仍以 `tp220/tp283/tp288b/tp290b` 编号继续承担活体验收；
   - 一部分虽然 `skip`，却仍在 `playwright test --list` 与发现路径中出现；
@@ -276,7 +276,7 @@
 
 - [ ] 活体发现路径 `e2e/tests` 中不得再存在 `tp220-292` 文件。
 - [ ] 活体发现路径中不得再存在 `.prep.spec.js`、历史占位壳、长期 `test.skip(true, "...historical...")`。
-- [ ] 活体 happy-path 测试不得再以 `/internal/assistant/*` 或 `LibreChat` 旧入口作为成功契约。
+- [ ] 活体 happy-path 测试不得再以内网旧聊天入口或历史对话前端作为成功契约。
 - [ ] 活体文档不得再把 archive plan 写成当前测试 authority。
 - [ ] 历史 evidence 只允许存在于 archive / `docs/dev-records`，不得继续伪装成活体测试。
 
@@ -307,11 +307,11 @@
 4. `docs/dev-plans/064a-test-tp060-05-assistant-conversation-intent-and-tasks.md`
 5. `docs/dev-plans/300-test-system-investigation-report.md`
 6. `docs/dev-plans/301-go-test-layering-and-best-practices-remediation-plan.md`
-7. `docs/dev-plans/380-cubebox-first-party-ownership-and-librechat-retirement-plan.md`
-8. `docs/dev-plans/380c-cubebox-api-dto-convergence-and-assistant-retirement-plan.md`
-9. `docs/dev-plans/380e-cubebox-apps-web-frontend-convergence-plan.md`
-10. `docs/dev-plans/380f-librechat-vendored-runtime-and-deploy-retirement-plan.md`
-11. `docs/dev-plans/380g-cubebox-regression-gates-and-final-closure-plan.md`
+7. `docs/archive/dev-plans/380-cubebox-first-party-ownership-and-librechat-retirement-plan.md`
+8. `docs/archive/dev-plans/380c-cubebox-api-dto-convergence-and-assistant-retirement-plan.md`
+9. `docs/archive/dev-plans/380e-cubebox-apps-web-frontend-convergence-plan.md`
+10. `docs/archive/dev-plans/380f-librechat-vendored-runtime-and-deploy-retirement-plan.md`
+11. `docs/archive/dev-plans/380g-cubebox-regression-gates-and-final-closure-plan.md`
 12. `docs/archive/dev-plans/220-chat-assistant-upgrade-implementation-plan.md`
 13. `docs/archive/dev-plans/220a-chat-assistant-gap-assessment-and-closure-plan.md`
 14. `docs/archive/dev-plans/221-assistant-p1-blocker-closure-plan.md`

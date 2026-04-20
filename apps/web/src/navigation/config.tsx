@@ -6,7 +6,6 @@ import HubIcon from '@mui/icons-material/Hub'
 import HomeWorkIcon from '@mui/icons-material/HomeWork'
 import MenuBookIcon from '@mui/icons-material/MenuBook'
 import PendingActionsIcon from '@mui/icons-material/PendingActions'
-import SmartToyIcon from '@mui/icons-material/SmartToy'
 import TuneIcon from '@mui/icons-material/Tune'
 import WorkOutlineIcon from '@mui/icons-material/WorkOutline'
 import type { NavItem, SearchEntry } from '../types/navigation'
@@ -47,35 +46,6 @@ export const navItems: NavItem[] = [
     order: 22,
     permissionKey: 'dict.admin',
     keywords: ['dict', 'dictionary', 'value', '配置', '字典', '编码']
-  },
-  {
-    key: 'cubebox',
-    path: '/cubebox',
-    labelKey: 'nav_cubebox',
-    icon: <SmartToyIcon fontSize='small' />,
-    order: 23,
-    permissionKey: 'orgunit.read',
-    keywords: ['cubebox', 'ai', 'chat', '智能助手', '对话']
-  },
-  {
-    key: 'cubebox-models',
-    path: '/cubebox/models',
-    labelKey: 'nav_cubebox_models',
-    icon: <SmartToyIcon fontSize='small' />,
-    order: 231,
-    parentKey: 'cubebox',
-    permissionKey: 'orgunit.read',
-    keywords: ['cubebox', 'model', 'provider', 'llm', '模型', '供应商']
-  },
-  {
-    key: 'cubebox-files',
-    path: '/cubebox/files',
-    labelKey: 'nav_cubebox_files',
-    icon: <SmartToyIcon fontSize='small' />,
-    order: 232,
-    parentKey: 'cubebox',
-    permissionKey: 'orgunit.read',
-    keywords: ['cubebox', 'file', 'upload', '附件', '文件']
   },
   {
     key: 'configuration-policy',
