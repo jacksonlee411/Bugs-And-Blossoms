@@ -5,8 +5,8 @@
 ## 0. 适用范围与评审分级
 
 - **评审分级**：`T2`
-- **范围一句话**：以“直接切除、不可回退到 legacy、不可保留空壳兼容层”为原则，从当前 implementation repo 中整体删除 `jobcatalog`、`staffing`、`person` 三个业务模块及其用户入口、运行时装配、数据库 schema/migration、权限对象、测试资产与现行契约文档引用；同时删除 `DEV-PLAN-150/156` 引入的 `capability_key / capability-route-map` 治理链及其门禁、配置、注册表与文档主线；`orgunit` 明确保留，作为删除后仍然存在的业务模块边界。
-- **关联模块/目录**：`modules/jobcatalog`、`modules/staffing`、`modules/person`、`modules/orgunit`、`internal/server`、`apps/web`、`config/routing`、`config/access`、`config/capability`、`internal/sqlc`、`migrations/jobcatalog`、`migrations/staffing`、`migrations/person`、`scripts/ci`、`Makefile`、`.github/workflows/quality-gates.yml`、`docs/dev-plans`、`docs/dev-records`、`AGENTS.md`
+- **范围一句话**：以“直接切除、不可回退到 legacy、不可保留空壳兼容层”为原则，从当前 implementation repo 中整体删除 `jobcatalog`、`staffing`、`person` 三个业务模块及其用户入口、运行时装配、数据库 schema/migration、权限对象、测试资产与现行契约文档引用；同时删除 `DEV-PLAN-150/156` 引入并扩散出的 `capability_key / capability-route-map / capability catalog / policy activation / functional_area` 治理链及其门禁、配置、注册表与文档主线；`orgunit` 明确保留，作为删除后仍然存在的业务模块边界。
+- **关联模块/目录**：`modules/jobcatalog`、`modules/staffing`、`modules/person`、`modules/orgunit`、`internal/server`、`apps/web`、`internal/server/assets`、`config/routing`、`config/access`、`config/capability`、`internal/sqlc`、`migrations/jobcatalog`、`migrations/staffing`、`migrations/person`、`scripts/ci`、`Makefile`、`.github/workflows/quality-gates.yml`、`e2e/test-results`、`playwright-report`、`docs/dev-plans`、`docs/dev-records`、`AGENTS.md`
 - **关联计划/标准**：`AGENTS.md`、`docs/dev-plans/000-docs-format.md`、`docs/dev-plans/003-simple-not-easy-review-guide.md`、`docs/dev-plans/012-ci-quality-gates.md`、`docs/dev-plans/015-ddd-layering-framework.md`、`docs/dev-plans/016-greenfield-hr-modules-skeleton.md`、`docs/dev-plans/017-routing-strategy.md`、`docs/dev-plans/021-pg-rls-for-org-position-job-catalog.md`、`docs/dev-plans/022-authz-casbin-toolchain.md`、`docs/dev-plans/024-atlas-goose-closed-loop-guide.md`、`docs/dev-plans/025-sqlc-guidelines.md`、`docs/dev-plans/301-go-test-layering-and-best-practices-remediation-plan.md`
 - **用户入口/触点**：`/app/jobcatalog`、`/app/staffing/**`、`/app/person/**`、对应 `/org/api/**` 与 `/org/**` 页面路由、导航入口、权限点、E2E 场景、README/dev-plan 中的现行引用；`orgunit` 页面与 API 不在删除范围内
 
@@ -31,7 +31,8 @@
   - `internal/server` 组合根、导航、allowlist、capability-route-map、Casbin object/action、capability registry。
   - `internal/sqlc/schema.sql` 与模块 schema/migrations 的联动删除。
   - `orgunit` 与被删除三模块之间的隐式耦合。
-  - `DEV-PLAN-150/156` 引入的 capability 治理链与 `orgunit` 保留边界之间的缠绕。
+  - `DEV-PLAN-150/156` 引入并经 `151-160/161/163/165/181/183/184` 扩散的 capability 治理链与 `orgunit` 保留边界之间的缠绕。
+  - `functional_area` 已成为 capability governance 的一部分；本计划纳入删除，不作为独立平台能力保留。
   - `iam`、E2E、文档对三模块的隐式引用。
   - “只删目录不删契约”的文档回流。
 - **本次不沿用的“容易做法”**：
@@ -45,7 +46,7 @@
 - 当前仓库的工程现实是，这三个待删除模块不是孤立目录，而是贯穿：
   - 用户入口与导航
   - server 组合根与路由
-  - capability / Authz / routing 治理
+  - capability / functional_area / policy activation / Authz / routing 治理
   - schema / migration / sqlc
   - E2E / 单测 / 文档契约
 - 因此本计划必须先冻结“什么叫切除完成”，否则实施极易退化为删目录但保留运行时依赖，最后形成更难收口的僵尸壳层。
@@ -60,7 +61,8 @@
 - [ ] 删除三模块对应的 schema、migrations、sqlc 输入与生成物、RLS/privilege/函数等数据库对象定义。
 - [ ] 删除三模块对应的 Authz object、capability mapping、routing 分类、E2E/单测/文档主线引用。
 - [ ] 删除三模块对应的全部测试资产与开发辅助资产，包括 `unit/integration/e2e`、`testdata`、`fixtures`、`mocks`、`snapshots`、`golden files`、seed/demo data、脚本化 smoke/rehearsal、截图/录屏证据与一次性排障脚本。
-- [ ] 删除 `DEV-PLAN-150/156` 引入的 `capability_key / capability-route-map` 内容，包括注册表、配置文件、Go 注册实现、CI 门禁、Makefile 入口、workflow 接线、相关测试与现行文档入口。
+- [ ] 删除 `DEV-PLAN-150/156` 引入并扩散出的 `capability_key / capability-route-map / capability catalog / policy activation / functional_area` 内容，包括注册表、配置文件、Go 注册实现、CI 门禁、Makefile 入口、workflow 接线、相关测试与现行文档入口。
+- [ ] 将 `orgunit` 从 capability 治理链解耦：`orgunit` 保留字段可编辑性/默认值/写入校验时，必须转为 `orgunit` 模块内静态策略或模块内服务，不再暴露或依赖 `capability_key`。
 - [ ] 保证删除后仓库剩余能力以 `iam/orgunit` 为主仍可编译、门禁可运行、文档主线不再把三模块写成现行实现前提。
 
 ### 2.2 非目标
@@ -71,6 +73,7 @@
 - [ ] 本计划不新增任何新表、新缓存、新中间适配层来承接旧语义。
 - [ ] 本计划不保留任何“为了将来可能恢复”而留存的测试、fixture、seed、mock、示例数据或脚本模板。
 - [ ] 本计划不保留 `capability_key` / `capability-route-map` 的空壳 contract、门禁脚本或文档占位来“以后再决定是否恢复”。
+- [ ] 本计划不把 `functional_area` 作为 capability 删除后的替代治理层保留；若未来需要模块开关，应另起计划并重新定义，不复用本次删除对象。
 
 ### 2.3 用户可见性交付
 
@@ -119,7 +122,8 @@
 5. 对应 Authz object、capability-route-map、routing allowlist。
 6. 把三模块当当前实现基础的现行 dev-plan / readiness / 测试合同表述。
 7. `orgunit` 继续作为现行模块存在，且不得因本计划被误删或降级为壳层。
-8. `DEV-PLAN-150/156` 引入的 capability 注册、映射、门禁与文档主线。
+8. `DEV-PLAN-150/156` 引入并扩散出的 capability 注册、映射、catalog、policy activation、functional_area、门禁与文档主线。
+9. `orgunit` 对 `capability_key`、`resolveCapabilityContext`、`evaluateFunctionalAreaGate`、`resolveOrgUnitEffectivePolicyVersion` 的现行运行时依赖。
 
 ### 3.2 模块归属与职责边界
 
@@ -153,6 +157,16 @@
   - **备选 B**：保留 `route-capability-map` 但置空。
   - **选定理由**：用户要求删除 `150/156` 引入的全部内容；若保留框架壳层，后续仍会形成回流与误用入口。
 
+- **决策 6**：`functional_area` 纳入本计划删除范围，不作为 capability 删除后的独立治理机制保留。
+  - **备选 A**：只删除 capability route map，保留 functional area state/switch。
+  - **备选 B**：将 functional area 改名为模块开关后继续保留。
+  - **选定理由**：当前 functional area 与 capability catalog / policy activation 共同构成 `150` 主链治理面；保留会形成空转治理层和回流入口。
+
+- **决策 7**：保留 `orgunit` 但删除其 capability 依赖；字段策略回收进 `orgunit` 模块内语义，不新增跨模块替代层。
+  - **备选 A**：保留 `orgunit` 的 capability_key 字段与 policy version 校验。
+  - **备选 B**：删除 `orgunit` 字段策略 UI 与 API。
+  - **选定理由**：`orgunit` 是保留模块，但 `capability_key` 是本计划删除对象；保留运行时依赖会使 `150/156` 无法彻底退役。若实施期无法完成解耦，必须先停在 stopline，不得保留 capability 空壳。
+
 ## 4. 删除范围冻结
 
 ### 4.1 必删运行时对象
@@ -166,7 +180,12 @@
 7. [ ] `apps/web/src/pages`、`apps/web/src/components`、`apps/web/src/api` 中所有三模块页面与请求层
 8. [ ] `config/routing/**`、`config/access/**`、`config/capability/**` 中三模块专属项
 9. [ ] `orgunit` 中仅为三模块服务的 adapter、DTO、options API、桥接 helper
-10. [ ] `internal/server/capability_route_registry.go`、相关 capability catalog/activation API 中仅为 `150/156` 体系存在的注册与路由逻辑
+10. [ ] `internal/server/capability_route_registry.go`、`capability_catalog_api.go`、`policy_activation_api.go`、`policy_activation_runtime.go`、`capability_context_authz.go`、`functional_area_*` 中仅为 `150/156` 体系存在的注册、catalog、激活与开关逻辑
+11. [ ] `internal/server/authz_middleware.go` 中三模块 API 与 capability route requirement
+12. [ ] `internal/server/handler.go` 中三模块默认装配、API 注册、`/internal/capabilities/**`、`/internal/policies/**`、`/internal/functional-areas/**` 路由
+13. [ ] `apps/web/src/router/**`、`apps/web/src/navigation/**`、`apps/web/src/errors/**` 中三模块路由、导航、permissionKey、错误映射
+14. [ ] `pkg/authz/registry.go` 中 `jobcatalog.catalog`、`person.persons`、`staffing.positions`、`staffing.assignments` 对象常量
+15. [ ] `orgunit` 中 `capability_key`、`policy_version`、`effective_policy_version`、`functional_area` 相关返回字段与校验逻辑
 
 ### 4.2 必删数据库对象
 
@@ -181,6 +200,7 @@
 9. [ ] 三模块 sqlc 生成物与依赖测试资产
 10. [ ] `orgunit` 中仅为三模块存在的 SQL/export/bridge 片段
 11. [ ] `config/capability/route-capability-map.v1.json`、`config/capability/contract-freeze.v1.json` 等 `150/156` 引入的 capability contract 文件
+12. [ ] `functional_area` / `policy activation` 如有独立持久化或 schema 片段，也应一并删除，不保留空表、空 schema 或空 seed
 
 ### 4.3 必删测试与文档对象
 
@@ -189,10 +209,11 @@
 3. [ ] `apps/web`、`internal/server`、`e2e`、`modules/**` 下所有三模块相关 `.test.*`、`.spec.*`、benchmark、fuzz、golden、snapshot、录像、trace、截图证据
 4. [ ] `testdata/**`、`fixtures/**`、`mocks/**`、`__snapshots__/**`、`__fixtures__/**` 中三模块相关资产
 5. [ ] `AGENTS.md` 中把三模块写成现行主线或默认模块边界的表述
-6. [ ] `009` 路线图、`016` 模块骨架、`060/062/063`、`027`、以及所有把三模块当现行能力的活体 dev-plan 条目
+6. [ ] `009` 路线图、`016` 模块骨架、`060/062/063`、`027`、以及所有把三模块当现行能力的活体 dev-plan 条目；按“改写现行文档或迁入 `docs/archive/**`”处理，不直接硬删除计划文档
 7. [ ] `docs/dev-records/**` 中仍把三模块视为当前验收对象的活体记录
 8. [ ] `orgunit` 下仅用于验证三模块联动的测试与证据资产
-9. [ ] `DEV-PLAN-150`、`DEV-PLAN-156` 及其直接引入的 capability-route-map / capability-key 活体文档、readiness、证据入口
+9. [ ] `DEV-PLAN-150`、`DEV-PLAN-156` 及其直接引入的 capability-route-map / capability-key 活体文档、readiness、证据入口；计划文档本体优先迁入 `docs/archive/**`，不直接删除
+10. [ ] `DEV-PLAN-151`~`160`、`161/161A`、`163`、`165`、`181`、`183`、`184` 等 capability 主链扩散文档入口；统一迁至 `docs/archive/**` 或改写为历史说明，不可再作为现行主线保留
 
 ### 4.4 必删开发辅助与生成资产
 
@@ -202,6 +223,25 @@
 4. [ ] 与三模块绑定的 CI 命中项、fixture pipeline、测试报告、覆盖率补洞文件
 5. [ ] 所有仅为三模块存在而保留的 README、runbook、截图、录屏与执行记录
 6. [ ] `scripts/ci/check-capability-route-map.sh`、`scripts/ci/check-capability-key.sh`、`scripts/ci/check-capability-contract.sh`、`scripts/ci/check-capability-catalog.sh` 及其 Makefile / workflow 接线
+7. [ ] `internal/server/assets/**`、`apps/web/dist/**`、嵌入式 bundle 中仍暴露三模块或 capability/functional_area 治理入口的构建产物
+8. [ ] `e2e/test-results/**`、`playwright-report/**`、trace/video/screenshot 等测试结果目录
+9. [ ] `Makefile` 的 `.PHONY`、`help`、`preflight`、动态 `MODULE` 过滤中的 capability 与三模块目标
+10. [ ] `.github/workflows/**` 中 capability 门禁与三模块 matrix / step
+
+### 4.5 必删授权与路由对象
+
+1. [ ] `pkg/authz/registry.go` 中 `ObjectJobCatalogCatalog`、`ObjectPersonPersons`、`ObjectStaffingPositions`、`ObjectStaffingAssignments`
+2. [ ] `config/access/policy.csv`、`config/access/policies/**` 中三模块 object/action
+3. [ ] `config/routing/allowlist.yaml` 中 `/app/jobcatalog`、`/app/staffing/**`、`/app/person/**`、`/jobcatalog/api/**`、`/person/api/**`、`/org/api/positions**`、`/org/api/assignments**`
+4. [ ] `apps/web/src/router/**`、`apps/web/src/navigation/**` 中 `jobcatalog.read`、`person.read`、`staffing.positions.read`、`staffing.assignments.read`
+5. [ ] `internal/server/authz_middleware.go`、capability route binding 中对应路由到 object/action 的映射
+
+### 4.6 orgunit 保留边界与 capability 删除替代策略
+
+1. [ ] `orgunit` 页面与 API 保留，但不得再对外暴露 `capability_key`、`baseline_capability_key`、`policy_version`、`effective_policy_version` 等 capability 治理字段
+2. [ ] `orgunit` 创建/写入字段策略如需保留，必须内收为 `orgunit` 模块内静态规则或模块内 service；不得继续调用 `resolveCapabilityContext`、`evaluateFunctionalAreaGate`、`resolveOrgUnitEffectivePolicyVersion`
+3. [ ] `/internal/capabilities/**`、`/internal/policies/**`、`/internal/functional-areas/**` 删除后，`orgunit` 不得通过隐藏依赖或兼容 DTO 继续消费这些能力
+4. [ ] 若某个 `orgunit` 交互当前必须依赖 capability 才能成立，实施必须先做解耦 PR；在解耦完成前，不得把 capability runtime 留作空壳
 
 ## 5. 分阶段实施顺序
 
@@ -210,7 +250,7 @@
 > 目标不是“平滑迁移”，而是以最短路径把 `jobcatalog/staffing/person` 及其残留资产从仓库中剔除，同时避免误伤 `orgunit`。因此执行优先级应按“先删最容易形成拖尾的资产，再删入口，再删实现，再删底座，最后封板”推进。
 
 1. [ ] **第一刀先删全部测试与辅助资产**
-   - 先删 `e2e/tests/**`、页面测试、server 测试、模块测试、`testdata/fixtures/mocks/snapshots/golden`、trace、录像、截图、seed/demo data、一次性排障脚本。
+   - 先删 `e2e/tests/**`、页面测试、server 测试、模块测试、`testdata/fixtures/mocks/snapshots/golden`、`e2e/test-results/**`、`playwright-report/**`、trace、录像、截图、seed/demo data、一次性排障脚本。
    - 原则：只要资产唯一服务于三模块，先删，不等待代码目录删除；若同时服务 `orgunit`，转入人工判定。
 2. [ ] **第二刀删全部用户入口与外层协议**
    - 删除导航、页面、前端 client、allowlist、handler 注册、capability-route-map、Authz object、页面资源与构建残留。
@@ -219,14 +259,14 @@
    - 删除 `modules/jobcatalog`、`modules/staffing`、`modules/person`，以及 `internal/server`、`pkg/**`、`cmd/**` 中的上游依赖。
    - 原则：不保留空壳目录、空 `module.go`、空 DTO、空 store；`orgunit` 仅删除桥接代码，不删模块主体。
 4. [ ] **第四刀连带删掉 150/156 的 capability 治理链**
-   - 删除 `config/capability/**`、`internal/server/capability_route_registry.go`、相关 capability catalog/activation 路由、`scripts/ci/check-capability-*`、Makefile 入口与 workflow 接线。
-   - 原则：不保留 `capability_key`/`capability-route-map` 空壳机制。
+   - 删除 `config/capability/**`、`internal/server/capability_route_registry.go`、相关 capability catalog/activation/functional-area 路由、`scripts/ci/check-capability-*`、Makefile 入口与 workflow 接线。
+   - 原则：不保留 `capability_key`/`capability-route-map`/`functional_area` 空壳机制；`orgunit` 必须先完成 capability 解耦再执行此刀。
 5. [ ] **第五刀删全部数据库与生成链路**
-   - 删除 schema、migration、sqlc export、生成物、seed SQL、dbtool/rehearsal/backfill 辅助命令。
+   - 删除 schema、migration、sqlc export、生成物、seed SQL、dbtool/rehearsal/backfill 辅助命令，并重生成 `internal/server/assets/**` 等嵌入式前端产物。
    - 原则：不保留可被误执行的数据库入口；`orgunit` 只删除和三模块相关的桥接对象。
 6. [ ] **第六刀封板文档与门禁**
-   - 删除或改写 `AGENTS.md`、`009`、`016`、`060/062/063`、`027`、`150/156`、readiness/dev-record 中的现行口径，并跑剩余门禁。
-   - 原则：代码删完后，文档不能继续把三模块或 `150/156` 主链当现行能力，同时要明确 `orgunit` 仍保留。
+   - 改写 `AGENTS.md` 现行入口，并将 `009`、`016`、`060/062/063`、`027`、`150-160/161/163/165/181/183/184` 等相关开发计划文档按需要迁入 `docs/archive/**` 或改写为历史说明；`readiness/dev-record` 中不再属于现行主线的记录同步归档或收口，然后跑剩余门禁。
+   - 原则：代码删完后，文档不能继续把三模块或 `150` 主链当现行能力；相关开发计划文档优先归档而不是直接删除，同时要明确 `orgunit` 仍保留。
 
 **执行偏好（冻结）**
 
@@ -239,9 +279,10 @@
 
 - [ ] 建立完整命中清单：代码、schema、路由、权限、测试、文档分别列出。
 - [ ] 在命中清单中单独列出“可直接全删的资产桶”：测试、fixture、seed、mock、snapshot、trace、demo data、脚本、生成物。
-- [ ] 在命中清单中单独列出 `150/156` 引入的 capability 治理资产桶：config、registry、scripts、Makefile、workflow、tests、docs。
+- [ ] 在命中清单中单独列出 `150/156` 引入并扩散的 capability 治理资产桶：config、registry、catalog、policy activation、functional_area、scripts、Makefile、workflow、tests、docs。
 - [ ] 确认删除后剩余系统边界，特别是 `iam/orgunit` 如何作为仓库现行模块保留。
-- [ ] 先收口活体文档，把三模块从“当前默认主线”降级为“待删除对象”。
+- [ ] 单独冻结 `orgunit` 的 capability 解耦方案：保留哪些字段策略能力、删除哪些 capability 返回字段、哪些 API 直接退役。
+- [ ] 先收口活体文档，把三模块从“当前默认主线”降级为“待删除对象”；需要退役的开发计划文档统一纳入归档方案，不直接删除。
 
 **Phase 0 完成条件**
 
@@ -252,8 +293,9 @@
 
 - [ ] 删除导航、页面路由、前端页面、前端 client、i18n 文案。
 - [ ] 删除 allowlist、server handler 注册、页面渲染入口、API route。
-- [ ] 删除 capability-route-map / Authz object / 路由分类中的三模块项，以及 `150/156` 引入的 route-capability 注册表。
+- [ ] 删除 capability-route-map / Authz object / 路由分类中的三模块项，以及 `150/156` 引入的 route-capability 注册表、catalog 入口、policy activation 入口、functional_area 入口。
 - [ ] 同批删除页面级测试、Vitest/Playwright 资产、前端 mock、页面截图与构建残留 chunk，避免 UI 已删但资产仍在。
+- [ ] 删除三模块对应 permissionKey、Casbin object、allowlist 路由和 `authz_middleware` 路由映射。
 
 **Phase 1 停止线**
 
@@ -263,14 +305,15 @@
 
 - [ ] 删除三模块默认装配、server wiring、共享 helper 的上游依赖。
 - [ ] 删除 `iam`、`orgunit`、平台工具链中对三模块的 import、调用、DTO 依赖。
-- [ ] 删除 `150/156` 引入的 capability registry / activation / catalog 运行时代码与测试。
+- [ ] 删除 `150/156` 引入的 capability registry / activation / catalog / functional_area 运行时代码与测试。
 - [ ] 显式删除 `Position / Assignments` 的 API、页面、schema、E2E、fixtures、options API 与任职时间线相关资产。
 - [ ] 删除三模块对应的单测、集测、benchmark、fuzz、golden、test helper 与一次性排障脚本。
+- [ ] 重写 `orgunit` 的字段策略返回与写入校验，不再依赖 capability context / policy version。
 - [ ] 让剩余仓库在无三模块条件下可编译，且 `orgunit` 仍可编译。
 
 **Phase 2 停止线**
 
-- 若平台基座或 `orgunit` 仍把三模块视为不可替代上游，必须先冻结新的仓库边界，不得保留空壳 module 过编译。
+- 若平台基座或 `orgunit` 仍把三模块或 capability runtime 视为不可替代上游，必须先冻结新的仓库边界，不得保留空壳 module / 空壳 capability 过编译。
 
 ### 5.4 Phase 3：schema / migration / sqlc 切断
 
@@ -278,6 +321,7 @@
 - [ ] 同步收口 RLS/privilege/函数/测试数据脚本、seed SQL、sample payload、dbtool/rehearsal 辅助命令。
 - [ ] 保证剩余数据库闭环命令不再触达三模块，且 `orgunit` 闭环仍成立。
 - [ ] 删除 `150/156` 引入的 capability contract 文件、门禁脚本、Makefile 入口与 CI workflow 接线。
+- [ ] 重生成前端 bundle 与 `internal/server/assets/**` 嵌入资产，确保旧路由不再通过静态资源暴露。
 
 **Phase 3 停止线**
 
@@ -286,17 +330,28 @@
 ### 5.5 Phase 4：测试、Readiness、文档封板
 
 - [ ] 删除命中三模块的单测、E2E、readiness、执行记录、截图、trace、录像、报告；默认不重写，除非其同时覆盖 `iam/orgunit` 仍存能力。
-- [ ] 收口 `AGENTS.md` 文档地图、路线图、模块骨架、`150/156` 文档入口与测试合同。
+- [ ] 收口 `AGENTS.md` 文档地图、路线图、模块骨架、`150` 主链文档入口与测试合同；相关开发计划文档完成归档迁移或历史化改写。
 - [ ] 以门禁结果确认仓库已不存在三模块活体痕迹，且 `orgunit` 仍保持活体能力。
 
 ## 6. 验收口径
 
 ### 6.1 搜索验收
 
-- `rg -n "jobcatalog|staffing|person" modules internal apps/web config migrations docs` 不再命中任何“当前态实现/入口/契约”语义。
-- `rg -n "jobcatalog|staffing|person" testdata fixtures mocks e2e scripts cmd tools docs` 不再命中任何“相关测试/辅助资产仍存活”的语义。
-- `rg -n "capability_key|capability-route-map|route-capability-map|capability_route_registry|check-capability-route-map|check-capability-key|check-capability-contract|check-capability-catalog" AGENTS.md docs config internal scripts Makefile .github` 不再命中 `150/156` 现行治理链语义。
-- `orgunit` 相关搜索命中必须只反映保留能力，而不是三模块残余桥接。
+- 生产代码与配置使用精确 token 验收，不再使用宽泛 `person` 单词全仓阻断：
+  - `rg -n "modules/jobcatalog|/jobcatalog/api|jobcatalog\\.catalog|jobcatalog\\.read|JobCatalogPage|nav_jobcatalog" modules internal apps/web pkg config migrations internal/server/assets`
+  - `rg -n "modules/staffing|/org/api/positions|/org/api/positions:options|/org/api/assignments|/org/api/assignment-events|staffing\\.positions|staffing\\.assignments|PositionsPage|AssignmentsPage|nav_staffing_" modules internal apps/web pkg config migrations internal/server/assets`
+  - `rg -n "modules/person|/person/api|person\\.persons|person\\.read|PersonsPage|nav_person|person_uuid|pernr" modules internal apps/web pkg config migrations internal/server/assets`
+  - 以上命令均不再命中任何“当前态实现/入口/契约”语义。
+- capability 主链与治理面使用精确 token 验收：
+  - `rg -n "capability_key|capability-route-map|route-capability-map|capability_route_registry|check-capability-route-map|check-capability-key|check-capability-contract|check-capability-catalog|/internal/capabilities|/internal/policies|/internal/functional-areas|policy activation|functional_area" AGENTS.md docs config internal scripts Makefile .github apps/web`
+  - 不再命中 `150` 主链现行治理语义；若命中 `docs/archive/**`，必须明确为历史来源。
+- 授权与路由面使用精确 token 验收：
+  - `rg -n "jobcatalog\\.catalog|person\\.persons|staffing\\.positions|staffing\\.assignments|jobcatalog\\.read|person\\.read|staffing\\.positions\\.read|staffing\\.assignments\\.read" pkg config internal apps/web`
+  - `rg -n "/app/jobcatalog|/app/staffing/positions|/app/staffing/assignments|/app/person/persons|/jobcatalog/api|/person/api|/org/api/positions|/org/api/assignments" config internal apps/web internal/server/assets`
+- 测试与辅助资产使用精确路径验收：
+  - `find e2e playwright-report testdata fixtures mocks . -path '*test-results*' -o -iname '*jobcatalog*' -o -iname '*staffing*' -o -iname '*assignments*' -o -iname '*positions*' -o -iname '*persons*'`
+  - 不再返回三模块测试、trace、视频、截图和报告资产。
+- `orgunit` 相关搜索命中必须只反映保留能力，而不是 capability 桥接或三模块残余桥接；特别是 `capability_key`、`resolveCapabilityContext`、`evaluateFunctionalAreaGate`、`resolveOrgUnitEffectivePolicyVersion` 不得再出现在 `orgunit` 当前运行链路中。
 - 若因 archive/历史研究必须保留，必须明确迁入 `docs/archive/**` 并标明历史属性。
 
 ### 6.2 运行与门禁验收
@@ -305,8 +360,9 @@
 - [ ] `go fmt ./... && go vet ./...`
 - [ ] `make check lint`
 - [ ] `make test`
-- [ ] 命中的 `routing/authz/sqlc` 门禁通过；`capability-key` / `capability-route-map` 不再作为现行门禁存在
+- [ ] 命中的 `routing/authz/sqlc` 门禁通过；`capability-key` / `capability-contract` / `capability-route-map` / `capability-catalog` 不再作为现行门禁存在
 - [ ] 若仓库仍保留 E2E，则 `make e2e` 仅覆盖剩余现行能力；三模块相关 spec/trace/录像必须为 0
+- [ ] `make preflight` 不再调用 capability 门禁，也不再暴露 `jobcatalog/staffing/person` 模块目标
 
 ### 6.3 用户可见验收
 
@@ -314,6 +370,7 @@
 - 不存在三模块 API 可调用入口。
 - 不存在 `/app/staffing/positions`、`/app/staffing/assignments`、`/org/api/positions`、`/org/api/positions:options`、`/org/api/assignments` 等 Position / Assignments 入口。
 - 不存在三模块的 capability/authz object 可授权对象。
+- 不存在 `/internal/capabilities/**`、`/internal/policies/**`、`/internal/functional-areas/**` 治理入口。
 - `orgunit` 导航、页面与 API 继续可用。
 
 ## 7. 风险与停止线

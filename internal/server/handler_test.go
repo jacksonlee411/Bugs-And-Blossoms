@@ -325,19 +325,8 @@ func TestNewHandler_RouteEntrypointsAndLogout(t *testing.T) {
 		path   string
 		body   string
 	}{
-		{method: http.MethodGet, path: "/org/api/positions", body: ""},
-		{method: http.MethodPost, path: "/org/api/positions", body: "{}"},
-		{method: http.MethodGet, path: "/org/api/positions:options", body: ""},
-		{method: http.MethodGet, path: "/org/api/assignments", body: ""},
-		{method: http.MethodPost, path: "/org/api/assignments", body: "{}"},
 		{method: http.MethodGet, path: "/org/api/setids", body: ""},
 		{method: http.MethodGet, path: "/org/api/setid-bindings", body: ""},
-		{method: http.MethodGet, path: "/person/api/persons", body: ""},
-		{method: http.MethodPost, path: "/person/api/persons", body: "{}"},
-		{method: http.MethodGet, path: "/person/api/persons:options", body: ""},
-		{method: http.MethodGet, path: "/person/api/persons:by-pernr", body: ""},
-		{method: http.MethodGet, path: "/jobcatalog/api/catalog", body: ""},
-		{method: http.MethodPost, path: "/jobcatalog/api/catalog/actions", body: "{}"},
 	} {
 		req := httptest.NewRequest(tc.method, tc.path, strings.NewReader(tc.body))
 		req.Host = "localhost:8080"
@@ -683,8 +672,7 @@ func TestNewHandler_InternalAPIRoutes(t *testing.T) {
 		t.Fatalf("org units field-definitions status=%d body=%s", recOrgFieldDefs.Code, recOrgFieldDefs.Body.String())
 	}
 
-	// Memory store does not implement field configs/options and mutation-capabilities interfaces;
-	// append-capabilities is supported and should return OK.
+	// Memory store does not implement field configs/options interfaces.
 	recOrgFieldConfigs := getJSON("/org/api/org-units/field-configs?as_of=2026-01-01", nil)
 	if recOrgFieldConfigs.Code != http.StatusInternalServerError {
 		t.Fatalf("org units field-configs status=%d body=%s", recOrgFieldConfigs.Code, recOrgFieldConfigs.Body.String())
@@ -703,15 +691,6 @@ func TestNewHandler_InternalAPIRoutes(t *testing.T) {
 	recOrgFieldOptions := getJSON("/org/api/org-units/fields:options?as_of=2026-01-01&field_key=org_type", nil)
 	if recOrgFieldOptions.Code != http.StatusInternalServerError {
 		t.Fatalf("org units fields options status=%d body=%s", recOrgFieldOptions.Code, recOrgFieldOptions.Body.String())
-	}
-
-	recOrgMutationCaps := getJSON("/org/api/org-units/mutation-capabilities?org_code="+node.OrgCode+"&effective_date=2026-01-01", nil)
-	if recOrgMutationCaps.Code != http.StatusInternalServerError {
-		t.Fatalf("org units mutation capabilities status=%d body=%s", recOrgMutationCaps.Code, recOrgMutationCaps.Body.String())
-	}
-	recOrgAppendCaps := getJSON("/org/api/org-units/append-capabilities?org_code="+node.OrgCode+"&effective_date=2026-01-01", nil)
-	if recOrgAppendCaps.Code != http.StatusOK {
-		t.Fatalf("org units append capabilities status=%d body=%s", recOrgAppendCaps.Code, recOrgAppendCaps.Body.String())
 	}
 
 	recOrgVersions := getJSON("/org/api/org-units/versions?org_code="+node.OrgCode, nil)
@@ -846,103 +825,6 @@ func TestNewHandlerWithOptions_PoolDSNError(t *testing.T) {
 	}
 }
 
-func TestNewHandlerWithOptions_DefaultStaffingStores(t *testing.T) {
-	wd, err := os.Getwd()
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	allowlistPath := filepath.Clean(filepath.Join(wd, "..", "..", "config", "routing", "allowlist.yaml"))
-	if err := os.Setenv("ALLOWLIST_PATH", allowlistPath); err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = os.Unsetenv("ALLOWLIST_PATH") })
-
-	h, err := NewHandlerWithOptions(HandlerOptions{
-		TenancyResolver: localTenancyResolver(),
-		OrgUnitStore:    newOrgUnitMemoryStore(),
-		PositionStore: positionStoreStub{
-			listFn: func(context.Context, string, string) ([]Position, error) { return nil, nil },
-		},
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if h == nil {
-		t.Fatal("nil handler")
-	}
-
-	h2, err := NewHandlerWithOptions(HandlerOptions{
-		TenancyResolver: localTenancyResolver(),
-		OrgUnitStore:    newOrgUnitMemoryStore(),
-		AssignmentStore: assignmentStoreStub{
-			listFn: func(context.Context, string, string, string) ([]Assignment, error) { return nil, nil },
-		},
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if h2 == nil {
-		t.Fatal("nil handler")
-	}
-
-	h3, err := NewHandlerWithOptions(HandlerOptions{
-		TenancyResolver: localTenancyResolver(),
-		OrgUnitStore:    newOrgUnitPGStore(&fakeBeginner{}),
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if h3 == nil {
-		t.Fatal("nil handler")
-	}
-
-	h4, err := NewHandlerWithOptions(HandlerOptions{
-		TenancyResolver: localTenancyResolver(),
-		OrgUnitStore:    newOrgUnitPGStore(&fakeBeginner{}),
-		PositionStore: positionStoreStub{
-			listFn: func(context.Context, string, string) ([]Position, error) { return nil, nil },
-		},
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if h4 == nil {
-		t.Fatal("nil handler")
-	}
-}
-
-func TestNewHandlerWithOptions_UsesProvidedStores(t *testing.T) {
-	wd, err := os.Getwd()
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	allowlistPath := filepath.Clean(filepath.Join(wd, "..", "..", "config", "routing", "allowlist.yaml"))
-	if err := os.Setenv("ALLOWLIST_PATH", allowlistPath); err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = os.Unsetenv("ALLOWLIST_PATH") })
-
-	staffingStore := newStaffingMemoryStore()
-
-	h, err := NewHandlerWithOptions(HandlerOptions{
-		TenancyResolver: localTenancyResolver(),
-		OrgUnitStore:    newOrgUnitMemoryStore(),
-		SetIDStore:      newSetIDMemoryStore(),
-		JobCatalogStore: newJobCatalogMemoryStore(),
-		PersonStore:     newPersonMemoryStore(),
-		PositionStore:   staffingStore,
-		AssignmentStore: staffingStore,
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if h == nil {
-		t.Fatal("nil handler")
-	}
-}
-
 func TestNewHandlerWithOptions_WithProvidedStores(t *testing.T) {
 	wd, err := os.Getwd()
 	if err != nil {
@@ -959,7 +841,6 @@ func TestNewHandlerWithOptions_WithProvidedStores(t *testing.T) {
 		TenancyResolver: localTenancyResolver(),
 		OrgUnitStore:    newOrgUnitMemoryStore(),
 		SetIDStore:      newSetIDMemoryStore(),
-		JobCatalogStore: newJobCatalogMemoryStore(),
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -1483,9 +1364,6 @@ func TestNewHandlerWithOptions_OrgUnitFieldConfigGovernanceRoutes_AreWired(t *te
 	check(http.MethodPost, "/org/api/org-units/field-policies", `{"field_key":"","enabled_on":"","request_id":""}`, http.StatusNotFound)
 	check(http.MethodPost, "/org/api/org-units/field-policies:disable", `{"field_key":"","disabled_on":"","request_id":""}`, http.StatusNotFound)
 	check(http.MethodGet, "/org/api/org-units/field-policies:resolve-preview?as_of=2026-01-01", "", http.StatusNotFound)
-	check(http.MethodGet, "/org/api/org-units/create-field-decisions?effective_date=2026-01-01", "", http.StatusUnprocessableEntity)
-	check(http.MethodGet, "/internal/capabilities/catalog", "", http.StatusOK)
-	check(http.MethodGet, "/internal/capabilities/catalog:by-intent", "", http.StatusOK)
 }
 
 func TestNewHandlerWithOptions_OrgUnitWriteRoutes_AreWired(t *testing.T) {
@@ -1510,17 +1388,6 @@ func TestNewHandlerWithOptions_OrgUnitWriteRoutes_AreWired(t *testing.T) {
 	}
 
 	sidCookie := loginTenantAdminCookie(t, h)
-	t.Run("write-capabilities", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "http://localhost/org/api/org-units/write-capabilities?intent=create_org&org_code=A001&effective_date=2026-01-01", nil)
-		req.Host = "localhost"
-		req.AddCookie(sidCookie)
-		rec := httptest.NewRecorder()
-		h.ServeHTTP(rec, req)
-		if rec.Code == http.StatusNotFound {
-			t.Fatalf("expected route to be wired, got 404")
-		}
-	})
-
 	t.Run("write", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodPost, "http://localhost/org/api/org-units/write", stringsReader(`{"intent":"create_org","org_code":"ROOT","effective_date":"2026-01-01","request_id":"r1","patch":{"name":"Root A"}}`))
 		req.Host = "localhost"

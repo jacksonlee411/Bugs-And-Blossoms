@@ -22,12 +22,7 @@ const (
 	ObjectIAMDictRelease      = "iam.dict_release"
 	ObjectOrgUnitOrgUnits     = "orgunit.orgunits"
 	ObjectOrgUnitSetID        = "orgunit.setid"
-	ObjectOrgSetIDCapability  = "org.setid_capability_config"
 	ObjectOrgShareRead        = "org.share_read"
-	ObjectJobCatalogCatalog   = "jobcatalog.catalog"
-	ObjectPersonPersons       = "person.persons"
-	ObjectStaffingPositions   = "staffing.positions"
-	ObjectStaffingAssignments = "staffing.assignments"
 
 	ObjectSuperadminTenants = "superadmin.tenants"
 	ObjectSuperadminSession = "superadmin.session"

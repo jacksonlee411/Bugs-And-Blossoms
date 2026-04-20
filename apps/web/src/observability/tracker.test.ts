@@ -8,13 +8,13 @@ describe('trackUiEvent', () => {
       eventName: 'nav_click',
       tenant: 'tenant-a',
       module: 'shell',
-      page: '/people',
-      action: 'menu_navigate:people',
+      page: '/org/units',
+      action: 'menu_navigate:org-units',
       result: 'success'
     })
 
     expect(event.timestamp).toBeTypeOf('string')
     expect(window.__WEB_MUI_UI_EVENTS__).toHaveLength(1)
-    expect(window.__WEB_MUI_UI_EVENTS__?.[0]?.action).toBe('menu_navigate:people')
+    expect(window.__WEB_MUI_UI_EVENTS__?.[0]?.action).toBe('menu_navigate:org-units')
   })
 })

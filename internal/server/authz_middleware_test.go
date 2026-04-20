@@ -264,54 +264,6 @@ func TestAuthzRequirementForRoute(t *testing.T) {
 	if _, _, ok := authzRequirementForRoute(http.MethodPost, "/logout"); !ok {
 		t.Fatal("expected ok=true")
 	}
-	if _, _, ok := authzRequirementForRoute(http.MethodGet, "/jobcatalog/api/catalog"); !ok {
-		t.Fatal("expected ok=true")
-	}
-	if _, _, ok := authzRequirementForRoute(http.MethodPost, "/jobcatalog/api/catalog"); ok {
-		t.Fatal("expected ok=false")
-	}
-	if _, _, ok := authzRequirementForRoute(http.MethodPost, "/jobcatalog/api/catalog/actions"); !ok {
-		t.Fatal("expected ok=true")
-	}
-	if _, _, ok := authzRequirementForRoute(http.MethodGet, "/jobcatalog/api/catalog/actions"); ok {
-		t.Fatal("expected ok=false")
-	}
-	if _, _, ok := authzRequirementForRoute(http.MethodGet, "/org/api/positions"); !ok {
-		t.Fatal("expected ok=true")
-	}
-	if _, _, ok := authzRequirementForRoute(http.MethodPost, "/org/api/positions"); !ok {
-		t.Fatal("expected ok=true")
-	}
-	if _, _, ok := authzRequirementForRoute(http.MethodDelete, "/org/api/positions"); ok {
-		t.Fatal("expected ok=false")
-	}
-	if _, _, ok := authzRequirementForRoute(http.MethodGet, "/org/api/positions:options"); !ok {
-		t.Fatal("expected ok=true")
-	}
-	if _, _, ok := authzRequirementForRoute(http.MethodPost, "/org/api/positions:options"); ok {
-		t.Fatal("expected ok=false")
-	}
-	if _, _, ok := authzRequirementForRoute(http.MethodGet, "/org/api/assignments"); !ok {
-		t.Fatal("expected ok=true")
-	}
-	if _, _, ok := authzRequirementForRoute(http.MethodPost, "/org/api/assignments"); !ok {
-		t.Fatal("expected ok=true")
-	}
-	if _, _, ok := authzRequirementForRoute(http.MethodPut, "/org/api/assignments"); ok {
-		t.Fatal("expected ok=false")
-	}
-	if _, _, ok := authzRequirementForRoute(http.MethodGet, "/org/api/assignment-events:correct"); ok {
-		t.Fatal("expected ok=false")
-	}
-	if _, _, ok := authzRequirementForRoute(http.MethodPost, "/org/api/assignment-events:correct"); !ok {
-		t.Fatal("expected ok=true")
-	}
-	if _, _, ok := authzRequirementForRoute(http.MethodPost, "/org/api/assignment-events:rescind"); !ok {
-		t.Fatal("expected ok=true")
-	}
-	if _, _, ok := authzRequirementForRoute(http.MethodGet, "/org/api/assignment-events:rescind"); ok {
-		t.Fatal("expected ok=false")
-	}
 	if _, _, ok := authzRequirementForRoute(http.MethodGet, "/org/api/setids"); !ok {
 		t.Fatal("expected ok=true")
 	}
@@ -356,51 +308,6 @@ func TestAuthzRequirementForRoute(t *testing.T) {
 	}
 	if _, _, ok := authzRequirementForRoute(http.MethodGet, "/org/api/global-scope-packages"); ok {
 		t.Fatal("expected ok=false")
-	}
-	if object, action, ok := authzRequirementForRoute(http.MethodGet, "/org/api/setid-strategy-registry"); !ok || object != authz.ObjectOrgSetIDCapability || action != authz.ActionRead {
-		t.Fatalf("expected setid strategy read mapped to org.setid_capability_config, got ok=%v object=%q action=%q", ok, object, action)
-	}
-	if object, action, ok := authzRequirementForRoute(http.MethodPost, "/org/api/setid-strategy-registry"); !ok || object != authz.ObjectOrgSetIDCapability || action != authz.ActionAdmin {
-		t.Fatalf("expected setid strategy admin mapped to org.setid_capability_config, got ok=%v object=%q action=%q", ok, object, action)
-	}
-	if _, _, ok := authzRequirementForRoute(http.MethodDelete, "/org/api/setid-strategy-registry"); ok {
-		t.Fatal("expected ok=false")
-	}
-	if object, action, ok := authzRequirementForRoute(http.MethodPost, "/org/api/setid-strategy-registry:disable"); !ok || object != authz.ObjectOrgSetIDCapability || action != authz.ActionAdmin {
-		t.Fatalf("expected setid strategy disable mapped to org.setid_capability_config admin, got ok=%v object=%q action=%q", ok, object, action)
-	}
-	if _, _, ok := authzRequirementForRoute(http.MethodDelete, "/org/api/setid-strategy-registry:disable"); ok {
-		t.Fatal("expected ok=false")
-	}
-	if object, action, ok := authzRequirementForRoute(http.MethodGet, "/org/api/setid-explain"); !ok || object != authz.ObjectOrgSetIDCapability || action != authz.ActionRead {
-		t.Fatalf("expected setid explain mapped to org.setid_capability_config, got ok=%v object=%q action=%q", ok, object, action)
-	}
-	if _, _, ok := authzRequirementForRoute(http.MethodPost, "/org/api/setid-explain"); ok {
-		t.Fatal("expected ok=false")
-	}
-	if object, action, ok := authzRequirementForRoute(http.MethodPost, "/internal/rules/evaluate"); !ok || object != authz.ObjectOrgSetIDCapability || action != authz.ActionAdmin {
-		t.Fatalf("expected internal rules evaluate mapped to org.setid_capability_config admin, got ok=%v object=%q action=%q", ok, object, action)
-	}
-	if _, _, ok := authzRequirementForRoute(http.MethodGet, "/internal/rules/evaluate"); ok {
-		t.Fatal("expected ok=false")
-	}
-	if object, action, ok := authzRequirementForRoute(http.MethodGet, "/internal/policies/state"); !ok || object != authz.ObjectOrgSetIDCapability || action != authz.ActionRead {
-		t.Fatalf("expected internal policy state mapped to org.setid_capability_config read, got ok=%v object=%q action=%q", ok, object, action)
-	}
-	if object, action, ok := authzRequirementForRoute(http.MethodPost, "/internal/policies/draft"); !ok || object != authz.ObjectOrgSetIDCapability || action != authz.ActionAdmin {
-		t.Fatalf("expected internal policy draft mapped to org.setid_capability_config admin, got ok=%v object=%q action=%q", ok, object, action)
-	}
-	if object, action, ok := authzRequirementForRoute(http.MethodPost, "/internal/policies/activate"); !ok || object != authz.ObjectOrgSetIDCapability || action != authz.ActionAdmin {
-		t.Fatalf("expected internal policy activate mapped to org.setid_capability_config admin, got ok=%v object=%q action=%q", ok, object, action)
-	}
-	if object, action, ok := authzRequirementForRoute(http.MethodPost, "/internal/policies/rollback"); !ok || object != authz.ObjectOrgSetIDCapability || action != authz.ActionAdmin {
-		t.Fatalf("expected internal policy rollback mapped to org.setid_capability_config admin, got ok=%v object=%q action=%q", ok, object, action)
-	}
-	if object, action, ok := authzRequirementForRoute(http.MethodGet, "/internal/functional-areas/state"); !ok || object != authz.ObjectOrgSetIDCapability || action != authz.ActionRead {
-		t.Fatalf("expected internal functional area state mapped to org.setid_capability_config read, got ok=%v object=%q action=%q", ok, object, action)
-	}
-	if object, action, ok := authzRequirementForRoute(http.MethodPost, "/internal/functional-areas/switch"); !ok || object != authz.ObjectOrgSetIDCapability || action != authz.ActionAdmin {
-		t.Fatalf("expected internal functional area switch mapped to org.setid_capability_config admin, got ok=%v object=%q action=%q", ok, object, action)
 	}
 	if _, _, ok := authzRequirementForRoute(http.MethodGet, "/org/api/org-units"); !ok {
 		t.Fatal("expected ok=true")
@@ -451,24 +358,6 @@ func TestAuthzRequirementForRoute(t *testing.T) {
 		t.Fatal("expected ok=true")
 	}
 	if _, _, ok := authzRequirementForRoute(http.MethodPost, "/org/api/org-units/fields:options"); ok {
-		t.Fatal("expected ok=false")
-	}
-	if _, _, ok := authzRequirementForRoute(http.MethodGet, "/org/api/org-units/mutation-capabilities"); !ok {
-		t.Fatal("expected ok=true")
-	}
-	if _, _, ok := authzRequirementForRoute(http.MethodPost, "/org/api/org-units/mutation-capabilities"); ok {
-		t.Fatal("expected ok=false")
-	}
-	if _, _, ok := authzRequirementForRoute(http.MethodGet, "/org/api/org-units/append-capabilities"); !ok {
-		t.Fatal("expected ok=true")
-	}
-	if _, _, ok := authzRequirementForRoute(http.MethodPost, "/org/api/org-units/append-capabilities"); ok {
-		t.Fatal("expected ok=false")
-	}
-	if _, _, ok := authzRequirementForRoute(http.MethodGet, "/org/api/org-units/write-capabilities"); !ok {
-		t.Fatal("expected ok=true")
-	}
-	if _, _, ok := authzRequirementForRoute(http.MethodPost, "/org/api/org-units/write-capabilities"); ok {
 		t.Fatal("expected ok=false")
 	}
 	if _, _, ok := authzRequirementForRoute(http.MethodGet, "/org/api/org-units/details"); !ok {
@@ -535,24 +424,6 @@ func TestAuthzRequirementForRoute(t *testing.T) {
 		t.Fatal("expected ok=false")
 	}
 	if _, _, ok := authzRequirementForRoute(http.MethodGet, ""); ok {
-		t.Fatal("expected ok=false")
-	}
-	if _, _, ok := authzRequirementForRoute(http.MethodGet, "/person/api/persons"); !ok {
-		t.Fatal("expected ok=true")
-	}
-	if _, _, ok := authzRequirementForRoute(http.MethodPost, "/person/api/persons"); !ok {
-		t.Fatal("expected ok=true")
-	}
-	if _, _, ok := authzRequirementForRoute(http.MethodDelete, "/person/api/persons"); ok {
-		t.Fatal("expected ok=false")
-	}
-	if _, _, ok := authzRequirementForRoute(http.MethodGet, "/person/api/persons:options"); !ok {
-		t.Fatal("expected ok=true")
-	}
-	if _, _, ok := authzRequirementForRoute(http.MethodPost, "/person/api/persons:options"); ok {
-		t.Fatal("expected ok=false")
-	}
-	if _, _, ok := authzRequirementForRoute(http.MethodPost, "/person/api/persons:by-pernr"); ok {
 		t.Fatal("expected ok=false")
 	}
 }
@@ -666,7 +537,7 @@ func TestLoadAuthorizer_DefaultPaths_Success(t *testing.T) {
 	if err != nil {
 		t.Fatalf("err=%v", err)
 	}
-	if !allowed || !enforced {
+	if allowed || !enforced {
 		t.Fatalf("allowed=%v enforced=%v", allowed, enforced)
 	}
 }

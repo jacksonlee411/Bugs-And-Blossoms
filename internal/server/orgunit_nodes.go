@@ -2824,7 +2824,7 @@ func (s *orgUnitMemoryStore) MinEffectiveDate(_ context.Context, tenantID string
 
 func (s *orgUnitMemoryStore) ListEnabledTenantFieldConfigsAsOf(_ context.Context, _ string, _ string) ([]orgUnitTenantFieldConfig, error) {
 	return []orgUnitTenantFieldConfig{{
-		FieldKey:         orgUnitCreateFieldOrgType,
+		FieldKey:         "d_org_type",
 		ValueType:        "text",
 		DataSourceType:   "DICT",
 		DataSourceConfig: json.RawMessage(`{"dict_code":"org_type"}`),

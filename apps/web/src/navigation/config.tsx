@@ -1,12 +1,8 @@
 import ApartmentIcon from '@mui/icons-material/Apartment'
-import AssignmentIndIcon from '@mui/icons-material/AssignmentInd'
-import CategoryIcon from '@mui/icons-material/Category'
-import GroupsIcon from '@mui/icons-material/Groups'
 import HomeWorkIcon from '@mui/icons-material/HomeWork'
 import MenuBookIcon from '@mui/icons-material/MenuBook'
 import PendingActionsIcon from '@mui/icons-material/PendingActions'
 import TuneIcon from '@mui/icons-material/Tune'
-import WorkOutlineIcon from '@mui/icons-material/WorkOutline'
 import type { NavItem, SearchEntry } from '../types/navigation'
 
 export const navItems: NavItem[] = [
@@ -47,47 +43,11 @@ export const navItems: NavItem[] = [
     keywords: ['dict', 'dictionary', 'value', '配置', '字典', '编码']
   },
   {
-    key: 'jobcatalog',
-    path: '/jobcatalog',
-    labelKey: 'nav_jobcatalog',
-    icon: <CategoryIcon fontSize='small' />,
-    order: 30,
-    permissionKey: 'jobcatalog.read',
-    keywords: ['jobcatalog', 'job', 'catalog', '职位族', '职位', '分类']
-  },
-  {
-    key: 'staffing-positions',
-    path: '/staffing/positions',
-    labelKey: 'nav_staffing_positions',
-    icon: <WorkOutlineIcon fontSize='small' />,
-    order: 40,
-    permissionKey: 'staffing.positions.read',
-    keywords: ['staffing', 'position', '职位', '岗位']
-  },
-  {
-    key: 'staffing-assignments',
-    path: '/staffing/assignments',
-    labelKey: 'nav_staffing_assignments',
-    icon: <AssignmentIndIcon fontSize='small' />,
-    order: 50,
-    permissionKey: 'staffing.assignments.read',
-    keywords: ['staffing', 'assignment', '任职', '用工']
-  },
-  {
-    key: 'people-directory',
-    path: '/person/persons',
-    labelKey: 'nav_people',
-    icon: <GroupsIcon fontSize='small' />,
-    order: 60,
-    permissionKey: 'person.read',
-    keywords: ['people', 'person', 'employee', '人员', '员工']
-  },
-  {
     key: 'approval-inbox',
     path: '/approvals',
     labelKey: 'nav_approvals',
     icon: <PendingActionsIcon fontSize='small' />,
-    order: 70,
+    order: 30,
     permissionKey: 'approval.read',
     keywords: ['approval', 'workflow', 'task', '审批', '待办']
   }

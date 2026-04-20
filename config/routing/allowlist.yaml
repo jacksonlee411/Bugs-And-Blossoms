@@ -26,18 +26,6 @@ entrypoints:
       - path: /app/org/units/field-configs
         methods: [GET]
         route_class: ui
-      - path: /app/person/persons
-        methods: [GET]
-        route_class: ui
-      - path: /app/jobcatalog
-        methods: [GET]
-        route_class: ui
-      - path: /app/staffing/positions
-        methods: [GET]
-        route_class: ui
-      - path: /app/staffing/assignments
-        methods: [GET]
-        route_class: ui
       - path: /app/approvals
         methods: [GET]
         route_class: ui
@@ -83,21 +71,6 @@ entrypoints:
       - path: /logout
         methods: [POST]
         route_class: authn
-      - path: /org/api/positions
-        methods: [GET, POST]
-        route_class: internal_api
-      - path: /org/api/positions:options
-        methods: [GET]
-        route_class: internal_api
-      - path: /org/api/assignments
-        methods: [GET, POST]
-        route_class: internal_api
-      - path: /org/api/assignment-events:correct
-        methods: [POST]
-        route_class: internal_api
-      - path: /org/api/assignment-events:rescind
-        methods: [POST]
-        route_class: internal_api
       - path: /org/api/setids
         methods: [GET, POST]
         route_class: internal_api
@@ -106,42 +79,6 @@ entrypoints:
         route_class: internal_api
       - path: /org/api/global-setids
         methods: [GET, POST]
-        route_class: internal_api
-      - path: /org/api/setid-strategy-registry
-        methods: [GET, POST]
-        route_class: internal_api
-      - path: /org/api/setid-strategy-registry:disable
-        methods: [POST]
-        route_class: internal_api
-      - path: /org/api/setid-explain
-        methods: [GET]
-        route_class: internal_api
-      - path: /internal/rules/evaluate
-        methods: [POST]
-        route_class: internal_api
-      - path: /internal/capabilities/catalog
-        methods: [GET]
-        route_class: internal_api
-      - path: /internal/capabilities/catalog:by-intent
-        methods: [GET]
-        route_class: internal_api
-      - path: /internal/policies/state
-        methods: [GET]
-        route_class: internal_api
-      - path: /internal/policies/draft
-        methods: [POST]
-        route_class: internal_api
-      - path: /internal/policies/activate
-        methods: [POST]
-        route_class: internal_api
-      - path: /internal/policies/rollback
-        methods: [POST]
-        route_class: internal_api
-      - path: /internal/functional-areas/state
-        methods: [GET]
-        route_class: internal_api
-      - path: /internal/functional-areas/switch
-        methods: [POST]
         route_class: internal_api
       - path: /org/api/org-units
         methods: [GET, POST]
@@ -159,18 +96,6 @@ entrypoints:
         methods: [POST]
         route_class: internal_api
       - path: /org/api/org-units/fields:options
-        methods: [GET]
-        route_class: internal_api
-      - path: /org/api/org-units/mutation-capabilities
-        methods: [GET]
-        route_class: internal_api
-      - path: /org/api/org-units/append-capabilities
-        methods: [GET]
-        route_class: internal_api
-      - path: /org/api/org-units/write-capabilities
-        methods: [GET]
-        route_class: internal_api
-      - path: /org/api/org-units/create-field-decisions
         methods: [GET]
         route_class: internal_api
       - path: /org/api/org-units/details
@@ -213,21 +138,6 @@ entrypoints:
         methods: [POST]
         route_class: internal_api
       - path: /org/api/org-units/set-business-unit
-        methods: [POST]
-        route_class: internal_api
-      - path: /person/api/persons
-        methods: [GET, POST]
-        route_class: internal_api
-      - path: /person/api/persons:options
-        methods: [GET]
-        route_class: internal_api
-      - path: /person/api/persons:by-pernr
-        methods: [GET]
-        route_class: internal_api
-      - path: /jobcatalog/api/catalog
-        methods: [GET]
-        route_class: internal_api
-      - path: /jobcatalog/api/catalog/actions
         methods: [POST]
         route_class: internal_api
   superadmin:

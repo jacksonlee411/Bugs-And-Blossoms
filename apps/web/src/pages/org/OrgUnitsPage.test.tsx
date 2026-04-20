@@ -10,8 +10,6 @@ const orgUnitApiMocks = vi.hoisted(() => ({
   listOrgUnitFieldConfigs: vi.fn(),
   searchOrgUnit: vi.fn(),
   writeOrgUnit: vi.fn(),
-  getOrgUnitWriteCapabilities: vi.fn(),
-  getOrgUnitCreateFieldDecisions: vi.fn(),
   getOrgUnitFieldOptions: vi.fn()
 }))
 

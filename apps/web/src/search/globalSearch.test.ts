@@ -12,11 +12,11 @@ describe('global search providers', () => {
         keywords: ['org', '组织']
       },
       {
-        key: 'nav-people',
-        labelKey: 'nav_people',
-        path: '/people',
+        key: 'nav-approvals',
+        labelKey: 'nav_approvals',
+        path: '/approvals',
         source: 'navigation',
-        keywords: ['people', '员工']
+        keywords: ['approval', '审批']
       }
     ])
 

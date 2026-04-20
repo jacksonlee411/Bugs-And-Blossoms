@@ -122,10 +122,6 @@ func withAuthz(classifier *routing.Classifier, a authorizer, next http.Handler) 
 }
 
 func authzRequirementForRoute(method string, path string) (object string, action string, ok bool) {
-	if object, action, ok := capabilityAuthzRequirementForRoute(method, path); ok {
-		return object, action, true
-	}
-
 	switch path {
 	case "/iam/api/sessions":
 		if method == http.MethodPost {
@@ -171,47 +167,6 @@ func authzRequirementForRoute(method string, path string) (object string, action
 	case "/logout":
 		if method == http.MethodPost {
 			return authz.ObjectIAMSession, authz.ActionAdmin, true
-		}
-		return "", "", false
-	case "/jobcatalog/api/catalog":
-		if method == http.MethodGet {
-			return authz.ObjectJobCatalogCatalog, authz.ActionRead, true
-		}
-		return "", "", false
-	case "/jobcatalog/api/catalog/actions":
-		if method == http.MethodPost {
-			return authz.ObjectJobCatalogCatalog, authz.ActionAdmin, true
-		}
-		return "", "", false
-	case "/org/api/positions":
-		if method == http.MethodGet {
-			return authz.ObjectStaffingPositions, authz.ActionRead, true
-		}
-		if method == http.MethodPost {
-			return authz.ObjectStaffingPositions, authz.ActionAdmin, true
-		}
-		return "", "", false
-	case "/org/api/positions:options":
-		if method == http.MethodGet {
-			return authz.ObjectStaffingPositions, authz.ActionRead, true
-		}
-		return "", "", false
-	case "/org/api/assignments":
-		if method == http.MethodGet {
-			return authz.ObjectStaffingAssignments, authz.ActionRead, true
-		}
-		if method == http.MethodPost {
-			return authz.ObjectStaffingAssignments, authz.ActionAdmin, true
-		}
-		return "", "", false
-	case "/org/api/assignment-events:correct":
-		if method == http.MethodPost {
-			return authz.ObjectStaffingAssignments, authz.ActionAdmin, true
-		}
-		return "", "", false
-	case "/org/api/assignment-events:rescind":
-		if method == http.MethodPost {
-			return authz.ObjectStaffingAssignments, authz.ActionAdmin, true
 		}
 		return "", "", false
 	case "/org/api/setids":
@@ -266,7 +221,7 @@ func authzRequirementForRoute(method string, path string) (object string, action
 			return authz.ObjectOrgUnitOrgUnits, authz.ActionAdmin, true
 		}
 		return "", "", false
-	case "/org/api/org-units/fields:options", "/org/api/org-units/mutation-capabilities", "/org/api/org-units/append-capabilities", "/org/api/org-units/write-capabilities":
+	case "/org/api/org-units/fields:options":
 		if method == http.MethodGet {
 			return authz.ObjectOrgUnitOrgUnits, authz.ActionRead, true
 		}
@@ -284,19 +239,6 @@ func authzRequirementForRoute(method string, path string) (object string, action
 	case "/org/api/org-units/set-business-unit":
 		if method == http.MethodPost {
 			return authz.ObjectOrgUnitOrgUnits, authz.ActionAdmin, true
-		}
-		return "", "", false
-	case "/person/api/persons":
-		if method == http.MethodGet {
-			return authz.ObjectPersonPersons, authz.ActionRead, true
-		}
-		if method == http.MethodPost {
-			return authz.ObjectPersonPersons, authz.ActionAdmin, true
-		}
-		return "", "", false
-	case "/person/api/persons:options", "/person/api/persons:by-pernr":
-		if method == http.MethodGet {
-			return authz.ObjectPersonPersons, authz.ActionRead, true
 		}
 		return "", "", false
 	default:

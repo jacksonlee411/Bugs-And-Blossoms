@@ -5,14 +5,10 @@ import { ApprovalsInboxPage } from '../pages/approvals/ApprovalsInboxPage'
 import { FoundationDemoPage } from '../pages/FoundationDemoPage'
 import { DictConfigsPage } from '../pages/dicts/DictConfigsPage'
 import { DictValueDetailsPage } from '../pages/dicts/DictValueDetailsPage'
-import { JobCatalogPage } from '../pages/jobcatalog/JobCatalogPage'
 import { LoginPage } from '../pages/LoginPage'
 import { OrgUnitFieldConfigsPage } from '../pages/org/OrgUnitFieldConfigsPage'
 import { OrgUnitDetailsPage } from '../pages/org/OrgUnitDetailsPage'
 import { OrgUnitsPage } from '../pages/org/OrgUnitsPage'
-import { PersonsPage } from '../pages/person/PersonsPage'
-import { AssignmentsPage } from '../pages/staffing/AssignmentsPage'
-import { PositionsPage } from '../pages/staffing/PositionsPage'
 import { RequirePermission } from './RequirePermission'
 import { RouteErrorPage } from './RouteErrorPage'
 
@@ -75,42 +71,6 @@ export const router = createBrowserRouter([
         element: (
           <RequirePermission permissionKey='orgunit.read'>
             <OrgUnitsPage />
-          </RequirePermission>
-        )
-      },
-      {
-        path: 'people',
-        element: <Navigate replace to='/person/persons' />
-      },
-      {
-        path: 'person/persons',
-        element: (
-          <RequirePermission permissionKey='person.read'>
-            <PersonsPage />
-          </RequirePermission>
-        )
-      },
-      {
-        path: 'jobcatalog',
-        element: (
-          <RequirePermission permissionKey='jobcatalog.read'>
-            <JobCatalogPage />
-          </RequirePermission>
-        )
-      },
-      {
-        path: 'staffing/positions',
-        element: (
-          <RequirePermission permissionKey='staffing.positions.read'>
-            <PositionsPage />
-          </RequirePermission>
-        )
-      },
-      {
-        path: 'staffing/assignments',
-        element: (
-          <RequirePermission permissionKey='staffing.assignments.read'>
-            <AssignmentsPage />
           </RequirePermission>
         )
       },

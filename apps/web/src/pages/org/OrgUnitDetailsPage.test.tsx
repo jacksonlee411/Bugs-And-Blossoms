@@ -7,7 +7,6 @@ import { OrgUnitDetailsPage } from './OrgUnitDetailsPage'
 const orgUnitApiMocks = vi.hoisted(() => ({
   getOrgUnitFieldOptions: vi.fn(),
   getOrgUnitDetails: vi.fn(),
-  getOrgUnitWriteCapabilities: vi.fn(),
   listOrgUnitAudit: vi.fn(),
   listOrgUnitVersions: vi.fn(),
   rescindOrgUnit: vi.fn(),
@@ -151,17 +150,6 @@ describe('OrgUnitDetailsPage', () => {
       has_more: false,
       events: []
     })
-      orgUnitApiMocks.getOrgUnitWriteCapabilities.mockResolvedValue({
-        intent: 'correct',
-        capability_key: 'orgunit.correct',
-        policy_version: 'pv-1',
-        effective_policy_version: 'epv-1',
-        tree_initialized: true,
-        enabled: true,
-        deny_reasons: [],
-      allowed_fields: ['name'],
-      field_payload_keys: { name: 'name' }
-    })
     orgUnitApiMocks.writeOrgUnit.mockResolvedValue({
       org_code: 'ROOT',
       effective_date: '2026-03-01',
@@ -222,9 +210,7 @@ describe('OrgUnitDetailsPage', () => {
             intent: 'correct',
             org_code: 'ROOT',
             effective_date: '2026-03-01',
-            target_effective_date: '2026-03-01',
-            policy_version: 'pv-1',
-            effective_policy_version: 'epv-1'
+            target_effective_date: '2026-03-01'
           })
         )
       )

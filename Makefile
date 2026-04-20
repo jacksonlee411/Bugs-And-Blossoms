@@ -7,10 +7,10 @@ export ATLAS_VERSION ?= v0.38.0
 export DEV_COMPOSE_PROJECT ?= bugs-and-blossoms-dev
 export DEV_INFRA_ENV_FILE ?= .env.example
 
-.PHONY: help preflight check pr-branch naming no-legacy chat-surface-clean no-scope-package granularity ddd-layering-p0 ddd-layering-p2 org-node-key-backflow capability-key capability-contract capability-route-map capability-catalog policy-baseline-dup request-code as-of-explicit dict-tenant-only go-version error-message fmt lint test routing e2e doc tr generate css
+.PHONY: help preflight check pr-branch naming no-legacy chat-surface-clean no-scope-package granularity ddd-layering-p0 ddd-layering-p2 org-node-key-backflow request-code as-of-explicit dict-tenant-only go-version error-message fmt lint test routing e2e doc tr generate css
 .PHONY: sqlc-generate sqlc-verify-schema authz-pack authz-test authz-lint
 .PHONY: plan migrate up
-.PHONY: iam orgunit jobcatalog staffing person
+.PHONY: iam orgunit
 .PHONY: dev dev-up dev-down dev-reset dev-ps dev-server dev-kratos-stub
 .PHONY: coverage
 
@@ -26,12 +26,7 @@ help:
 					"  make check ddd-layering-p0" \
 					"  make check ddd-layering-p2" \
 					"  make check org-node-key-backflow" \
-				"  make check capability-key" \
-				"  make check capability-contract" \
-				"  make check capability-route-map" \
-				"  make check capability-catalog" \
-				"  make check policy-baseline-dup" \
-			"  make check request-code" \
+				"  make check request-code" \
 				"  make check as-of-explicit" \
 				"  make check dict-tenant-only" \
 			"  make check go-version" \
@@ -63,11 +58,6 @@ preflight: ## 本地一键对齐CI（严格版：含 UI build/typecheck）
 	@$(MAKE) check ddd-layering-p0
 	@$(MAKE) check ddd-layering-p2
 	@$(MAKE) check org-node-key-backflow
-	@$(MAKE) check capability-key
-	@$(MAKE) check capability-contract
-	@$(MAKE) check capability-route-map
-	@$(MAKE) check capability-catalog
-	@$(MAKE) check policy-baseline-dup
 	@$(MAKE) check request-code
 	@$(MAKE) check as-of-explicit
 	@$(MAKE) check dict-tenant-only
@@ -110,21 +100,6 @@ ddd-layering-p2: ## DDD 分层 P2 组合根门禁（模块扩张时要求 module
 
 org-node-key-backflow: ## Org node key 切窗反回流门禁（阻断 org_id/org_node_key DTO 暴露、旧 resolver 与 legacy parent payload）
 	@./scripts/ci/check-org-node-key-backflow.sh
-
-capability-key: ## capability_key 命名与拼接门禁（防退化为 scope）
-	@./scripts/ci/check-capability-key.sh
-
-capability-contract: ## capability_key 契约冻结门禁（151 基线）
-	@./scripts/ci/check-capability-contract.sh
-
-capability-route-map: ## 路由动作到 capability_key 映射门禁（156 基线）
-	@./scripts/ci/check-capability-route-map.sh
-
-capability-catalog: ## capability catalog 一致性门禁（对象/意图目录）
-	@./scripts/ci/check-capability-catalog.sh
-
-policy-baseline-dup: ## baseline + intent override 冗余覆盖门禁
-	@./scripts/ci/check-policy-baseline-dup.sh
 
 request-code: ## 业务幂等字段命名收敛（统一 request_id；阻断 request_code 与 tracing 场景 request_id/X-Request-ID）
 	@./scripts/ci/check-request-code.sh --full
@@ -264,14 +239,7 @@ iam:
 	@:
 orgunit:
 	@:
-jobcatalog:
-	@:
-staffing:
-	@:
-person:
-	@:
-
-MODULE := $(firstword $(filter-out preflight check fmt lint test routing e2e doc tr generate css sqlc-generate sqlc-verify-schema authz-pack authz-test authz-lint no-legacy chat-surface-clean no-scope-package granularity ddd-layering-p0 ddd-layering-p2 org-node-key-backflow capability-key capability-contract capability-route-map capability-catalog policy-baseline-dup request-code as-of-explicit dict-tenant-only go-version error-message plan migrate up dev dev-up dev-down dev-reset dev-ps dev-server,$(MAKECMDGOALS)))
+MODULE := $(firstword $(filter-out preflight check fmt lint test routing e2e doc tr generate css sqlc-generate sqlc-verify-schema authz-pack authz-test authz-lint no-legacy chat-surface-clean no-scope-package granularity ddd-layering-p0 ddd-layering-p2 org-node-key-backflow request-code as-of-explicit dict-tenant-only go-version error-message plan migrate up dev dev-up dev-down dev-reset dev-ps dev-server,$(MAKECMDGOALS)))
 MIGRATE_DIR := $(lastword $(filter up down,$(MAKECMDGOALS)))
 
 plan:

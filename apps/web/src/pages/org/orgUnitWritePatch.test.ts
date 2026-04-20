@@ -4,18 +4,7 @@ import { buildOrgUnitWritePatch } from './orgUnitWritePatch'
 describe('buildOrgUnitWritePatch', () => {
   it('按 allowed_fields 构建 patch：core 直写，ext 聚合到 ext 对象', () => {
     const patch = buildOrgUnitWritePatch({
-      capability: {
-        allowed_fields: ['name', 'parent_org_code', 'status', 'is_business_unit', 'manager_pernr', 'org_type', 'description'],
-        field_payload_keys: {
-          name: 'name',
-          parent_org_code: 'parent_id',
-          status: 'status',
-          is_business_unit: 'is_business_unit',
-          manager_pernr: 'manager_pernr',
-          org_type: 'ext.org_type',
-          description: 'ext.description'
-        }
-      },
+      allowedFields: ['name', 'parent_org_code', 'status', 'is_business_unit', 'manager_pernr', 'org_type', 'description'],
       original: {
         name: 'Old',
         parent_org_code: 'P001',
@@ -45,15 +34,11 @@ describe('buildOrgUnitWritePatch', () => {
     })
   })
 
-  it('allowed_fields 与 field_payload_keys 不一致时 fail-closed', () => {
+  it('未允许的字段不会进入 patch', () => {
     const patch = buildOrgUnitWritePatch({
-      capability: {
-        allowed_fields: ['name'],
-        field_payload_keys: { name: 'name', status: 'status' }
-      },
-      next: { name: 'X' }
+      allowedFields: ['name'],
+      next: { name: 'X', status: 'disabled', ext: { description: 'hidden' } }
     })
-    expect(patch).toBeNull()
+    expect(patch).toEqual({ name: 'X' })
   })
 })
-

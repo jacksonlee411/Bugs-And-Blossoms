@@ -163,11 +163,6 @@ func TestHandleOrgUnitFieldOptionsAPI_ResolveOrgIDInvalidBranch(t *testing.T) {
 func TestHandleOrgUnitFieldConfigsAPI(t *testing.T) {
 	base := newOrgUnitMemoryStore()
 	dictStore := newDictMemoryStore()
-	previousStore := defaultSetIDStrategyRegistryStore
-	defaultSetIDStrategyRegistryStore = setIDStrategyRegistryStoreStub{}
-	t.Cleanup(func() {
-		defaultSetIDStrategyRegistryStore = previousStore
-	})
 
 	t.Run("tenant missing", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/org/api/org-units/field-configs?as_of=2026-01-01", nil)
@@ -1152,20 +1147,6 @@ func TestHandleOrgUnitFieldOptionsAPI(t *testing.T) {
 				}, nil
 			},
 		}
-		previousStore := defaultSetIDStrategyRegistryStore
-		defaultSetIDStrategyRegistryStore = setIDStrategyRegistryStoreStub{
-			resolveFieldDecisionFn: func(_ context.Context, _ string, _ string, fieldKey string, _ string, _ string, _ string) (setIDFieldDecision, error) {
-				return setIDFieldDecision{
-					FieldKey:       fieldKey,
-					Maintainable:   true,
-					DefaultRuleRef: "   ",
-				}, nil
-			},
-		}
-		t.Cleanup(func() {
-			defaultSetIDStrategyRegistryStore = previousStore
-		})
-
 		req := httptest.NewRequest(http.MethodGet, "/org/api/org-units/field-configs?as_of=2026-01-01&status=all", nil)
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
@@ -1618,10 +1599,12 @@ func (s setIDGovernanceStoreStub) ResolveSetID(ctx context.Context, tenantID str
 
 type orgUnitStoreWithEnabledFieldConfigAndSetID struct {
 	*orgUnitMemoryStore
-	cfg            orgUnitTenantFieldConfig
-	ok             bool
-	err            error
-	resolveSetIDFn func(ctx context.Context, tenantID string, orgUnitID string, asOfDate string) (string, error)
+	setIDGovernanceStoreStub
+	cfg                     orgUnitTenantFieldConfig
+	ok                      bool
+	err                     error
+	resolveSetIDFn          func(ctx context.Context, tenantID string, orgUnitID string, asOfDate string) (string, error)
+	resolveOrgNodeKeyByCode func(ctx context.Context, tenantID string, orgCode string) (string, error)
 }
 
 func (s orgUnitStoreWithEnabledFieldConfigAndSetID) GetEnabledTenantFieldConfigAsOf(_ context.Context, _ string, _ string, _ string) (orgUnitTenantFieldConfig, bool, error) {
@@ -1633,6 +1616,13 @@ func (s orgUnitStoreWithEnabledFieldConfigAndSetID) ResolveSetID(ctx context.Con
 		return s.resolveSetIDFn(ctx, tenantID, orgUnitID, asOfDate)
 	}
 	return s.orgUnitMemoryStore.ResolveSetID(ctx, tenantID, orgUnitID, asOfDate)
+}
+
+func (s orgUnitStoreWithEnabledFieldConfigAndSetID) ResolveOrgNodeKeyByCode(ctx context.Context, tenantID string, orgCode string) (string, error) {
+	if s.resolveOrgNodeKeyByCode != nil {
+		return s.resolveOrgNodeKeyByCode(ctx, tenantID, orgCode)
+	}
+	return s.orgUnitMemoryStore.ResolveOrgNodeKeyByCode(ctx, tenantID, orgCode)
 }
 
 type orgUnitMemoryStoreResolveOrgIDErr struct {
@@ -2119,6 +2109,9 @@ func TestHandleOrgUnitFieldOptionsAPI_MoreBranches(t *testing.T) {
 				orgUnitMemoryStore: mem,
 				ok:                 true,
 				cfg:                orgUnitTenantFieldConfig{FieldKey: "d_org_type", DataSourceType: "DICT", DataSourceConfig: json.RawMessage(`{"dict_code":"org_type"}`)},
+				resolveOrgNodeKeyByCode: func(context.Context, string, string) (string, error) {
+					return mustOrgNodeKeyForTest(t, 10000001), nil
+				},
 				resolveSetIDFn: func(context.Context, string, string, string) (string, error) {
 					return "", errors.New("SETID_NOT_FOUND")
 				},
@@ -2136,6 +2129,9 @@ func TestHandleOrgUnitFieldOptionsAPI_MoreBranches(t *testing.T) {
 				orgUnitMemoryStore: mem,
 				ok:                 true,
 				cfg:                orgUnitTenantFieldConfig{FieldKey: "d_org_type", DataSourceType: "DICT", DataSourceConfig: json.RawMessage(`{"dict_code":"org_type"}`)},
+				resolveOrgNodeKeyByCode: func(context.Context, string, string) (string, error) {
+					return mustOrgNodeKeyForTest(t, 10000001), nil
+				},
 				resolveSetIDFn:     func(context.Context, string, string, string) (string, error) { return " ", nil },
 			}
 			req := httptest.NewRequest(http.MethodGet, "/org/api/org-units/fields:options?as_of=2026-01-01&field_key=d_org_type&org_code=A001", nil)
@@ -2175,6 +2171,9 @@ func TestHandleOrgUnitFieldOptionsAPI_MoreBranches(t *testing.T) {
 					orgUnitMemoryStore: mem,
 					ok:                 true,
 					cfg:                orgUnitTenantFieldConfig{FieldKey: "d_org_type", DataSourceType: "DICT", DataSourceConfig: json.RawMessage(`{"dict_code":"org_type"}`)},
+					resolveOrgNodeKeyByCode: func(context.Context, string, string) (string, error) {
+						return mustOrgNodeKeyForTest(t, 10000001), nil
+					},
 					resolveSetIDFn:     func(context.Context, string, string, string) (string, error) { return tc.setID, nil },
 				}
 				req := httptest.NewRequest(http.MethodGet, "/org/api/org-units/fields:options?as_of=2026-01-01&field_key=d_org_type&org_code=A001", nil)

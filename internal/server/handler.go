@@ -15,12 +15,9 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/jacksonlee411/Bugs-And-Blossoms/internal/routing"
 	iammodule "github.com/jacksonlee411/Bugs-And-Blossoms/modules/iam"
-	jobcatalogmodule "github.com/jacksonlee411/Bugs-And-Blossoms/modules/jobcatalog"
 	orgunitmodule "github.com/jacksonlee411/Bugs-And-Blossoms/modules/orgunit"
 	orgunitports "github.com/jacksonlee411/Bugs-And-Blossoms/modules/orgunit/domain/ports"
 	orgunitservices "github.com/jacksonlee411/Bugs-And-Blossoms/modules/orgunit/services"
-	personmodule "github.com/jacksonlee411/Bugs-And-Blossoms/modules/person"
-	staffingmodule "github.com/jacksonlee411/Bugs-And-Blossoms/modules/staffing"
 	"github.com/jacksonlee411/Bugs-And-Blossoms/pkg/authz"
 	dictpkg "github.com/jacksonlee411/Bugs-And-Blossoms/pkg/dict"
 )
@@ -38,10 +35,6 @@ type HandlerOptions struct {
 	OrgUnitStore        OrgUnitStore
 	OrgUnitWriteService orgunitservices.OrgUnitWriteService
 	SetIDStore          SetIDGovernanceStore
-	JobCatalogStore     JobCatalogStore
-	PersonStore         PersonStore
-	PositionStore       PositionStore
-	AssignmentStore     AssignmentStore
 	DictStore           DictStore
 }
 
@@ -68,10 +61,6 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, error) {
 	orgStore := opts.OrgUnitStore
 	orgUnitWriteService := opts.OrgUnitWriteService
 	setidStore := opts.SetIDStore
-	jobcatalogStore := opts.JobCatalogStore
-	personStore := opts.PersonStore
-	positionStore := opts.PositionStore
-	assignmentStore := opts.AssignmentStore
 	dictStore := opts.DictStore
 	tenancyResolver := opts.TenancyResolver
 	identityProvider := opts.IdentityProvider
@@ -100,45 +89,6 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, error) {
 			setidStore = orgunitmodule.NewSetIDPGStore(pgStore.pool)
 		} else {
 			setidStore = orgunitmodule.NewSetIDMemoryStore()
-		}
-	}
-	if pgStore, ok := orgStore.(*orgUnitPGStore); ok {
-		useSetIDStrategyRegistryStore(newSetIDStrategyRegistryPGStore(pgStore.pool))
-	} else {
-		useSetIDStrategyRegistryStore(nil)
-	}
-
-	if jobcatalogStore == nil {
-		if pgStore, ok := orgStore.(*orgUnitPGStore); ok {
-			jobcatalogStore = jobcatalogmodule.NewPGStore(pgStore.pool)
-		} else {
-			jobcatalogStore = jobcatalogmodule.NewMemoryStore()
-		}
-	}
-
-	if personStore == nil {
-		if pgStore, ok := orgStore.(*orgUnitPGStore); ok {
-			personStore = personmodule.NewPGStore(pgStore.pool)
-		} else {
-			personStore = personmodule.NewMemoryStore()
-		}
-	}
-
-	if positionStore == nil || assignmentStore == nil {
-		if pgStore, ok := orgStore.(*orgUnitPGStore); ok {
-			if positionStore == nil {
-				positionStore = staffingmodule.NewPositionPGStore(pgStore.pool)
-			}
-			if assignmentStore == nil {
-				assignmentStore = staffingmodule.NewAssignmentPGStore(pgStore.pool)
-			}
-		} else {
-			if positionStore == nil {
-				positionStore = staffingmodule.NewPositionMemoryStore()
-			}
-			if assignmentStore == nil {
-				assignmentStore = staffingmodule.NewAssignmentMemoryStore()
-			}
 		}
 	}
 
@@ -284,27 +234,6 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, error) {
 		clearSIDCookie(w)
 		http.Redirect(w, r, "/app/login", http.StatusFound)
 	}))
-	router.Handle(routing.RouteClassInternalAPI, http.MethodGet, "/org/api/positions", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		handlePositionsAPI(w, r, orgStore, positionStore)
-	}))
-	router.Handle(routing.RouteClassInternalAPI, http.MethodPost, "/org/api/positions", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		handlePositionsAPI(w, r, orgStore, positionStore)
-	}))
-	router.Handle(routing.RouteClassInternalAPI, http.MethodGet, "/org/api/positions:options", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		handlePositionsOptionsAPI(w, r, orgStore, jobcatalogStore)
-	}))
-	router.Handle(routing.RouteClassInternalAPI, http.MethodGet, "/org/api/assignments", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		handleAssignmentsAPI(w, r, assignmentStore)
-	}))
-	router.Handle(routing.RouteClassInternalAPI, http.MethodPost, "/org/api/assignments", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		handleAssignmentsAPI(w, r, assignmentStore)
-	}))
-	router.Handle(routing.RouteClassInternalAPI, http.MethodPost, "/org/api/assignment-events:correct", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		handleAssignmentEventsCorrectAPI(w, r, assignmentStore)
-	}))
-	router.Handle(routing.RouteClassInternalAPI, http.MethodPost, "/org/api/assignment-events:rescind", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		handleAssignmentEventsRescindAPI(w, r, assignmentStore)
-	}))
 	router.Handle(routing.RouteClassInternalAPI, http.MethodGet, "/org/api/setids", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		handleSetIDsAPI(w, r, setidStore)
 	}))
@@ -322,45 +251,6 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, error) {
 	}))
 	router.Handle(routing.RouteClassInternalAPI, http.MethodGet, "/org/api/global-setids", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		handleGlobalSetIDsAPI(w, r, setidStore)
-	}))
-	router.Handle(routing.RouteClassInternalAPI, http.MethodGet, "/org/api/setid-strategy-registry", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		handleSetIDStrategyRegistryAPI(w, r, orgStore, setidStore)
-	}))
-	router.Handle(routing.RouteClassInternalAPI, http.MethodPost, "/org/api/setid-strategy-registry", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		handleSetIDStrategyRegistryAPI(w, r, orgStore, setidStore)
-	}))
-	router.Handle(routing.RouteClassInternalAPI, http.MethodPost, "/org/api/setid-strategy-registry:disable", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		handleSetIDStrategyRegistryDisableAPI(w, r, orgStore, setidStore)
-	}))
-	router.Handle(routing.RouteClassInternalAPI, http.MethodGet, "/org/api/setid-explain", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		handleSetIDExplainAPI(w, r, setidStore, orgStore)
-	}))
-	router.Handle(routing.RouteClassInternalAPI, http.MethodPost, "/internal/rules/evaluate", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		handleInternalRulesEvaluateAPI(w, r, setidStore, orgStore)
-	}))
-	router.Handle(routing.RouteClassInternalAPI, http.MethodGet, "/internal/capabilities/catalog", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		handleCapabilityCatalogAPI(w, r)
-	}))
-	router.Handle(routing.RouteClassInternalAPI, http.MethodGet, "/internal/capabilities/catalog:by-intent", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		handleCapabilityCatalogByIntentAPI(w, r)
-	}))
-	router.Handle(routing.RouteClassInternalAPI, http.MethodGet, "/internal/policies/state", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		handleInternalPolicyStateAPI(w, r)
-	}))
-	router.Handle(routing.RouteClassInternalAPI, http.MethodPost, "/internal/policies/draft", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		handleInternalPolicyDraftAPI(w, r)
-	}))
-	router.Handle(routing.RouteClassInternalAPI, http.MethodPost, "/internal/policies/activate", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		handleInternalPolicyActivateAPI(w, r)
-	}))
-	router.Handle(routing.RouteClassInternalAPI, http.MethodPost, "/internal/policies/rollback", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		handleInternalPolicyRollbackAPI(w, r)
-	}))
-	router.Handle(routing.RouteClassInternalAPI, http.MethodGet, "/internal/functional-areas/state", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		handleInternalFunctionalAreaStateAPI(w, r)
-	}))
-	router.Handle(routing.RouteClassInternalAPI, http.MethodPost, "/internal/functional-areas/switch", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		handleInternalFunctionalAreaSwitchAPI(w, r)
 	}))
 	router.Handle(routing.RouteClassInternalAPI, http.MethodGet, "/org/api/org-units", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		handleOrgUnitsAPI(w, r, orgStore, orgUnitWriteService)
@@ -385,18 +275,6 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, error) {
 	}))
 	router.Handle(routing.RouteClassInternalAPI, http.MethodGet, "/org/api/org-units/fields:options", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		handleOrgUnitFieldOptionsAPI(w, r, orgStore)
-	}))
-	router.Handle(routing.RouteClassInternalAPI, http.MethodGet, "/org/api/org-units/mutation-capabilities", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		handleOrgUnitMutationCapabilitiesAPI(w, r, orgStore)
-	}))
-	router.Handle(routing.RouteClassInternalAPI, http.MethodGet, "/org/api/org-units/append-capabilities", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		handleOrgUnitAppendCapabilitiesAPI(w, r, orgStore)
-	}))
-	router.Handle(routing.RouteClassInternalAPI, http.MethodGet, "/org/api/org-units/write-capabilities", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		handleOrgUnitWriteCapabilitiesAPI(w, r, orgStore)
-	}))
-	router.Handle(routing.RouteClassInternalAPI, http.MethodGet, "/org/api/org-units/create-field-decisions", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		handleOrgUnitCreateFieldDecisionsAPI(w, r, orgStore)
 	}))
 	router.Handle(routing.RouteClassInternalAPI, http.MethodGet, "/org/api/org-units/details", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		handleOrgUnitsDetailsAPI(w, r, orgStore)
@@ -440,25 +318,6 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, error) {
 	router.Handle(routing.RouteClassInternalAPI, http.MethodPost, "/org/api/org-units/set-business-unit", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		handleOrgUnitsBusinessUnitAPI(w, r, orgUnitWriteService)
 	}))
-	router.Handle(routing.RouteClassInternalAPI, http.MethodGet, "/person/api/persons", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		handlePersonsAPI(w, r, personStore)
-	}))
-	router.Handle(routing.RouteClassInternalAPI, http.MethodPost, "/person/api/persons", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		handlePersonsAPI(w, r, personStore)
-	}))
-	router.Handle(routing.RouteClassInternalAPI, http.MethodGet, "/person/api/persons:options", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		handlePersonOptionsAPI(w, r, personStore)
-	}))
-	router.Handle(routing.RouteClassInternalAPI, http.MethodGet, "/person/api/persons:by-pernr", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		handlePersonByPernrAPI(w, r, personStore)
-	}))
-	router.Handle(routing.RouteClassInternalAPI, http.MethodGet, "/jobcatalog/api/catalog", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		handleJobCatalogAPI(w, r, setidStore, jobcatalogStore)
-	}))
-	router.Handle(routing.RouteClassInternalAPI, http.MethodPost, "/jobcatalog/api/catalog/actions", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		handleJobCatalogWriteAPI(w, r, setidStore, jobcatalogStore)
-	}))
-
 	assetsSub, _ := fs.Sub(embeddedAssets, "assets")
 
 	entrypoint := http.NewServeMux()
