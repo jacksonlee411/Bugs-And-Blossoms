@@ -162,7 +162,7 @@
   - `docs/dev-plans/017-routing-strategy.md`
   - `docs/dev-plans/022-authz-casbin-toolchain.md`
   - `docs/dev-plans/140-error-message-clarity-and-gates.md`
-  - `docs/dev-plans/156-capability-key-m3-m9-route-capability-mapping-and-gates.md`
+  - `docs/archive/dev-plans/156-capability-key-m3-m9-route-capability-mapping-and-gates.md`
   - `docs/dev-plans/360a-librechat-feature-disablement-and-runtime-cutover-plan.md`
   - `docs/dev-plans/380c-cubebox-api-dto-convergence-and-assistant-retirement-plan.md`
   - `docs/dev-plans/380e-cubebox-apps-web-frontend-convergence-plan.md`

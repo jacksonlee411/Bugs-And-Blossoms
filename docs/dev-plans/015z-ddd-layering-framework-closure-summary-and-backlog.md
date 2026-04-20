@@ -35,7 +35,7 @@
 - 缺口评估：`docs/dev-plans/015a-ddd-layering-framework-implementation-gap-assessment.md`
 - 收口路线图：`docs/dev-plans/015b-ddd-layering-framework-remediation-roadmap.md`
 - P0 门禁：`docs/dev-plans/015c-ddd-layering-framework-p0-anti-drift-gate-plan.md`
-- 后续实施切片：`docs/dev-plans/015d-*.md` 至 `docs/dev-plans/015y-*.md`
+- 后续实施切片（已归档）：`docs/archive/dev-plans/015d-*.md` 至 `docs/archive/dev-plans/015y-*.md`
 - 仓库规则入口：`AGENTS.md`
 
 ## 当前总体判断

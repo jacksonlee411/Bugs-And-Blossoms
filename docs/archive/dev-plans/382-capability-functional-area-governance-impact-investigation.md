@@ -10,9 +10,9 @@
 - **关联计划/标准**：
   - `AGENTS.md`
   - `docs/dev-plans/003-simple-not-easy-review-guide.md`
-  - `docs/dev-plans/150-capability-key-workday-alignment-gap-closure-plan.md`
+  - `docs/archive/dev-plans/150-capability-key-workday-alignment-gap-closure-plan.md`
   - `docs/dev-plans/156-route-capability-map-convergence.md`
-  - `docs/dev-plans/157-capability-key-m7-functional-area-governance.md`
+  - `docs/archive/dev-plans/157-capability-key-m7-functional-area-governance.md`
   - `docs/dev-plans/158-capability-m8-ui-delivery-plan.md`
   - `docs/dev-plans/381-cubebox-capability-and-functional-area-lineage-investigation.md`
 - **用户入口/触点**：Capability Governance、Functional Area、Activation、Explain、`/internal/functional-areas/*`、`/internal/capabilities/catalog*`
@@ -367,9 +367,9 @@ Functional Area 的唯一归属与 route-map active 校验，让历史 capabilit
 
 ## 11. 关联文档
 
-- `docs/dev-plans/150-capability-key-workday-alignment-gap-closure-plan.md`
+- `docs/archive/dev-plans/150-capability-key-workday-alignment-gap-closure-plan.md`
 - `docs/dev-plans/156-route-capability-map-convergence.md`
-- `docs/dev-plans/157-capability-key-m7-functional-area-governance.md`
+- `docs/archive/dev-plans/157-capability-key-m7-functional-area-governance.md`
 - `docs/dev-plans/158-capability-m8-ui-delivery-plan.md`
 - `docs/dev-plans/381-cubebox-capability-and-functional-area-lineage-investigation.md`
 - `config/capability/contract-freeze.v1.json`

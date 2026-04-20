@@ -52,8 +52,8 @@
 - 若目标是“00000002 与 00000004（含下级）稳定差异化控制”，必须补充运行时能力（至少包含：继承解析 + 非 create intent 接入）。
 
 ## 7. 关联文档
-- `docs/dev-plans/150-capability-key-workday-alignment-gap-closure-plan.md`
-- `docs/dev-plans/156-capability-key-m3-m9-route-capability-mapping-and-gates.md`
-- `docs/dev-plans/160-capability-key-m8-m10-ui-delivery-and-evidence-closure.md`
+- `docs/archive/dev-plans/150-capability-key-workday-alignment-gap-closure-plan.md`
+- `docs/archive/dev-plans/156-capability-key-m3-m9-route-capability-mapping-and-gates.md`
+- `docs/archive/dev-plans/160-capability-key-m8-m10-ui-delivery-and-evidence-closure.md`
 - `docs/dev-plans/161-org-create-dynamic-field-policy-on-capability-registry.md`
-- `docs/dev-plans/161a-setid-capability-registry-editable-and-maintainable.md`
+- `docs/archive/dev-plans/161a-setid-capability-registry-editable-and-maintainable.md`

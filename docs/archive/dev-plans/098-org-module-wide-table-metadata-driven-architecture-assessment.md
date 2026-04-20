@@ -299,7 +299,7 @@ CREATE TABLE tenant_ranks (
 - 业务上需要“历史报表可复现”时，DICT 的 label 变更不应隐式改变历史展示。这里至少要做一个明确选择：  
   - 要么把 DICT 也做成 effective-dated（Valid Time 参与查询）；  
   - 要么在写入时对关键 DICT 字段做 label 快照（读时优先展示快照）。  
-- 对于 ENTITY（例如 JobCatalog 一类有效期主数据），推荐“存 ID + as-of join 拿 label”，天然符合历史一致性（动机可对齐 `docs/dev-plans/029-job-catalog-transactional-event-sourcing-synchronous-projection.md` 中的相关讨论）。
+- 对于 ENTITY（例如 JobCatalog 一类有效期主数据），推荐“存 ID + as-of join 拿 label”，天然符合历史一致性（动机可对齐 `docs/archive/dev-plans/029-job-catalog-transactional-event-sourcing-synchronous-projection.md` 中的相关讨论）。
 
 ### 10.5 与仓库不变量/SSOT 的对齐点（实施前必须逐条确认）
 

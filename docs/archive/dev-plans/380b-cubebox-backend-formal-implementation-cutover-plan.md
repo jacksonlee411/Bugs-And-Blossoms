@@ -70,7 +70,7 @@
   - 触发器矩阵与仓库红线：`AGENTS.md`
   - 文档格式：`docs/dev-plans/000-docs-format.md`
   - DDD 分层：`docs/dev-plans/015-ddd-layering-framework.md`
-  - 模块骨架：`docs/dev-plans/016-greenfield-hr-modules-skeleton.md`
+  - 模块骨架：`docs/archive/dev-plans/016-greenfield-hr-modules-skeleton.md`
   - 路由治理：`docs/dev-plans/017-routing-strategy.md`
   - Atlas + Goose / sqlc：`docs/dev-plans/024-atlas-goose-closed-loop-guide.md`、`docs/dev-plans/025-sqlc-guidelines.md`
   - 命令入口：`Makefile` 与 CI workflow

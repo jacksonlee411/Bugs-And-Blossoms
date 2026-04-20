@@ -156,7 +156,7 @@
 - `docs/archive/dev-plans/071b-field-config-and-dict-config-setid-boundary-implementation.md`
 - `docs/archive/dev-plans/102-as-of-time-context-convergence-and-critique.md`
 - `docs/archive/dev-plans/026a-orgunit-id-uuid-code-naming.md`（历史合同中存在“缺省当日 UTC”表述，需要最小修订）
-- `docs/dev-plans/063-test-tp060-03-person-and-assignments.md`（测试合同中存在“`effective_date` 缺省默认为 `as_of`”）
+- `docs/archive/dev-plans/063-test-tp060-03-person-and-assignments.md`（测试合同中存在“`effective_date` 缺省默认为 `as_of`”）
 
 ### 8.2 对相关计划的影响评估（调查结论落表）
 1. **高影响（必须同版本收口）**

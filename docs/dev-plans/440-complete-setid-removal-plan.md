@@ -47,7 +47,7 @@
   - 运行时组合根
   - 跨模块业务解析
   - schema 与 kernel
-  - authz / capability-route-map
+  - authz / 路由注册
   - E2E / 文档 / i18n
 - 因此本计划不是单一模块 refactor，而是一次**跨层收口**。如果不先冻结范围与分阶段停止线，实施很容易退化为“外层删了、里层壳还在”。
 
@@ -57,7 +57,7 @@
 
 - [ ] 删除所有当前态 SetID runtime：Store、resolver、API、bootstrap、explain、assistant/staffing 快照字段、跨模块解析与 registry。
 - [ ] 删除所有当前态 SetID schema：表、函数、RLS/privileges、`scope_package/scope_subscription`、`global_setid_*`、`setid_strategy_registry`。
-- [ ] 删除所有 SetID UI 与路由入口，并同步清理导航、i18n、错误码、authz object、capability-route-map。
+- [ ] 删除所有 SetID UI 与路由入口，并同步清理导航、i18n、错误码、authz object、历史 capability 路由映射残留。
 - [ ] 删除现行测试合同中把 SetID 当主线能力的口径，并将相关测试改为“历史冻结/待重写/待删除”状态，不制造伪通过。
 - [ ] 形成单一删除 PoR：后续任何“SetID 根删除”工作都以 `440` 排序，不再散落到其他计划文档并列 owner。
 
@@ -86,12 +86,12 @@
   - [X] i18n（仅 `en/zh`）
   - [X] DB Schema / Migration / Backfill / Correction
   - [X] sqlc
-  - [X] Routing / allowlist / responder / capability-route-map
+  - [X] Routing / allowlist / responder
   - [X] AuthN / Tenancy / RLS
   - [X] Authz（Casbin）
   - [X] E2E
   - [X] 文档 / readiness / 证据记录
-  - [X] 其他专项门禁：`no-legacy`、`no-scope-package`、`granularity`、`capability-key`、`capability-route-map`
+  - [X] 其他专项门禁：`no-legacy`、`no-scope-package`、`granularity`
 
 ## 2.5 测试设计与分层
 
@@ -210,7 +210,7 @@
 ### 5.2 Phase 1：用户入口与外层协议切断
 
 - [ ] 删除前端页面、导航、文案、前端请求层。
-- [ ] 删除 allowlist 路由、capability-route-map、authz 对象、Casbin policy 中的 SetID 条目。
+- [ ] 删除 allowlist 路由、历史 capability 路由映射残留、authz 对象、Casbin policy 中的 SetID 条目。
 - [ ] 删除 server 路由注册与对外 handler。
 
 **Phase 1 停止线**
@@ -310,5 +310,5 @@
 - 相关联动计划：
   - `docs/dev-plans/441-legacy-strategy-module-residue-cleanup-plan.md`
   - `docs/dev-plans/060-business-e2e-test-suite.md`
-  - `docs/dev-plans/062-test-tp060-02-master-data-org-setid-jobcatalog-position.md`
+  - `docs/archive/dev-plans/062-test-tp060-02-master-data-org-setid-jobcatalog-position.md`
   - `AGENTS.md`

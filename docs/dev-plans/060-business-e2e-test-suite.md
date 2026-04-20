@@ -6,7 +6,7 @@
 
 ## 1. 背景
 
-本仓库按 Greenfield 的“切片式交付 + 门禁阻断漂移”推进（见 `docs/dev-plans/009-implementation-roadmap.md`、`docs/archive/dev-plans/026-org-transactional-event-sourcing-synchronous-projection.md`、`docs/dev-plans/029-job-catalog-transactional-event-sourcing-synchronous-projection.md`）。因此需要一套“全链路业务测试案例套件”，用于在 **不回退/不走双链路** 的前提下验证：
+本仓库按 Greenfield 的“切片式交付 + 门禁阻断漂移”推进（见 `docs/dev-plans/009-implementation-roadmap.md`、`docs/archive/dev-plans/026-org-transactional-event-sourcing-synchronous-projection.md`、`docs/archive/dev-plans/029-job-catalog-transactional-event-sourcing-synchronous-projection.md`）。因此需要一套“全链路业务测试案例套件”，用于在 **不回退/不走双链路** 的前提下验证：
 - 系统功能是否覆盖完整业务域（组织/职位分类/职位/任职/人员）；其中本文原有 SetID 主链条目自 2026-04-20 起仅作为历史样本保留，不再作为现行实现目标；
 - Assistant 功能是否覆盖会话/意图/提交/任务编排的主链路（对齐 220-225）；
 - 每条能力是否 **用户可见、可操作**（避免僵尸功能）；
@@ -173,7 +173,7 @@
 
 ### 5.6 员工数据（10 人，均需存在 Person + Assignment）
 
-> 备注：本表以“测试意图”为主；具体字段落点以 `docs/dev-plans/027-person-minimal-identity-for-staffing.md`、`docs/dev-plans/031-greenfield-assignment-job-data.md`、`docs/dev-plans/042/044` 为准。
+> 备注：本表以“测试意图”为主；具体字段落点以 `docs/archive/dev-plans/027-person-minimal-identity-for-staffing.md`、`docs/archive/dev-plans/031-greenfield-assignment-job-data.md`、`docs/dev-plans/042/044` 为准。
 
 | 编号 | pernr | 姓名 | FTE | 岗位 | 入职生效日 | 关键差异（用于覆盖） |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -246,15 +246,15 @@
 
 ### TP-060-02：主数据（组织架构 + SetID + 职位分类 + 职位）
 
-**子计划文档**：`docs/dev-plans/062-test-tp060-02-master-data-org-setid-jobcatalog-position.md`
+**子计划文档**：`docs/archive/dev-plans/062-test-tp060-02-master-data-org-setid-jobcatalog-position.md`
 
 > 状态说明：该子计划当前仍含 SetID 主链合同；自 `DEV-PLAN-440` 生效起，其 SetID 相关部分仅作为历史测试样本保留，后续需重写或归档。
 
 **契约引用**
 - `docs/archive/dev-plans/026-org-transactional-event-sourcing-synchronous-projection.md`
 - `docs/archive/dev-plans/070-setid-orgunit-binding-redesign.md`
-- `docs/dev-plans/029-job-catalog-transactional-event-sourcing-synchronous-projection.md`
-- `docs/dev-plans/030-position-transactional-event-sourcing-synchronous-projection.md`
+- `docs/archive/dev-plans/029-job-catalog-transactional-event-sourcing-synchronous-projection.md`
+- `docs/archive/dev-plans/030-position-transactional-event-sourcing-synchronous-projection.md`
 - `docs/dev-plans/032-effective-date-day-granularity.md`
 - `docs/dev-plans/320-org-node-key-cutover-plan-no-global-expansion.md`
 
@@ -277,11 +277,11 @@
 
 ### TP-060-03：人员与任职（Person + Assignments）
 
-**子计划文档**：`docs/dev-plans/063-test-tp060-03-person-and-assignments.md`
+**子计划文档**：`docs/archive/dev-plans/063-test-tp060-03-person-and-assignments.md`
 
 **契约引用**
-- `docs/dev-plans/027-person-minimal-identity-for-staffing.md`
-- `docs/dev-plans/031-greenfield-assignment-job-data.md`
+- `docs/archive/dev-plans/027-person-minimal-identity-for-staffing.md`
+- `docs/archive/dev-plans/031-greenfield-assignment-job-data.md`
 - `docs/dev-plans/032-effective-date-day-granularity.md`
 
 **数据准备**
@@ -315,5 +315,5 @@
 ## 10. 参考（SSOT 链接）
 
 - 路线图：`docs/dev-plans/009-implementation-roadmap.md`
-- 主数据：`docs/archive/dev-plans/026-org-transactional-event-sourcing-synchronous-projection.md`、`docs/archive/dev-plans/070-setid-orgunit-binding-redesign.md`、`docs/dev-plans/029-job-catalog-transactional-event-sourcing-synchronous-projection.md`、`docs/dev-plans/030-position-transactional-event-sourcing-synchronous-projection.md`、`docs/dev-plans/031-greenfield-assignment-job-data.md`
+- 主数据：`docs/archive/dev-plans/026-org-transactional-event-sourcing-synchronous-projection.md`、`docs/archive/dev-plans/070-setid-orgunit-binding-redesign.md`、`docs/archive/dev-plans/029-job-catalog-transactional-event-sourcing-synchronous-projection.md`、`docs/archive/dev-plans/030-position-transactional-event-sourcing-synchronous-projection.md`、`docs/archive/dev-plans/031-greenfield-assignment-job-data.md`
 - 平台：`docs/dev-plans/019-tenant-and-authn.md`、`docs/dev-plans/021-pg-rls-for-org-position-job-catalog.md`、`docs/dev-plans/022-authz-casbin-toolchain.md`、`docs/dev-plans/017-routing-strategy.md`、`docs/archive/dev-plans/018-astro-aha-ui-shell-for-hrms.md`、`docs/dev-plans/020-i18n-en-zh-only.md`

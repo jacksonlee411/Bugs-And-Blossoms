@@ -33,7 +33,7 @@
 - Goose runner：`scripts/db/run_goose.sh`（自动安装到 `bin/goose`）
 - DB 闭环脚本：`scripts/db/plan.sh`、`scripts/db/lint.sh`、`scripts/db/migrate.sh`
 - 现有样板（代码即样板）：`migrations/iam` + `modules/iam/infrastructure/persistence/schema`；`migrations/orgunit` + `modules/orgunit/infrastructure/persistence/schema`
-- 模块边界：`docs/dev-plans/016-greenfield-hr-modules-skeleton.md`
+- 模块边界：`docs/archive/dev-plans/016-greenfield-hr-modules-skeleton.md`
 
 ## 3. 统一闭环（架构与关键决策）
 

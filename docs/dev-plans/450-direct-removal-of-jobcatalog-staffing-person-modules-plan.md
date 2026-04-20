@@ -7,7 +7,7 @@
 - **评审分级**：`T2`
 - **范围一句话**：以“直接切除、不可回退到 legacy、不可保留空壳兼容层”为原则，从当前 implementation repo 中整体删除 `jobcatalog`、`staffing`、`person` 三个业务模块及其用户入口、运行时装配、数据库 schema/migration、权限对象、测试资产与现行契约文档引用；同时删除 `DEV-PLAN-150/156` 引入并扩散出的 `capability_key / capability-route-map / capability catalog / policy activation / functional_area` 治理链及其门禁、配置、注册表与文档主线；`orgunit` 明确保留，作为删除后仍然存在的业务模块边界。
 - **关联模块/目录**：`modules/jobcatalog`、`modules/staffing`、`modules/person`、`modules/orgunit`、`internal/server`、`apps/web`、`internal/server/assets`、`config/routing`、`config/access`、`config/capability`、`internal/sqlc`、`migrations/jobcatalog`、`migrations/staffing`、`migrations/person`、`scripts/ci`、`Makefile`、`.github/workflows/quality-gates.yml`、`e2e/test-results`、`playwright-report`、`docs/dev-plans`、`docs/dev-records`、`AGENTS.md`
-- **关联计划/标准**：`AGENTS.md`、`docs/dev-plans/000-docs-format.md`、`docs/dev-plans/003-simple-not-easy-review-guide.md`、`docs/dev-plans/012-ci-quality-gates.md`、`docs/dev-plans/015-ddd-layering-framework.md`、`docs/dev-plans/016-greenfield-hr-modules-skeleton.md`、`docs/dev-plans/017-routing-strategy.md`、`docs/dev-plans/021-pg-rls-for-org-position-job-catalog.md`、`docs/dev-plans/022-authz-casbin-toolchain.md`、`docs/dev-plans/024-atlas-goose-closed-loop-guide.md`、`docs/dev-plans/025-sqlc-guidelines.md`、`docs/dev-plans/301-go-test-layering-and-best-practices-remediation-plan.md`
+- **关联计划/标准**：`AGENTS.md`、`docs/dev-plans/000-docs-format.md`、`docs/dev-plans/003-simple-not-easy-review-guide.md`、`docs/dev-plans/012-ci-quality-gates.md`、`docs/dev-plans/015-ddd-layering-framework.md`、`docs/archive/dev-plans/016-greenfield-hr-modules-skeleton.md`、`docs/dev-plans/017-routing-strategy.md`、`docs/dev-plans/021-pg-rls-for-org-position-job-catalog.md`、`docs/dev-plans/022-authz-casbin-toolchain.md`、`docs/dev-plans/024-atlas-goose-closed-loop-guide.md`、`docs/dev-plans/025-sqlc-guidelines.md`、`docs/dev-plans/301-go-test-layering-and-best-practices-remediation-plan.md`
 - **用户入口/触点**：`/app/jobcatalog`、`/app/staffing/**`、`/app/person/**`、对应 `/org/api/**` 与 `/org/**` 页面路由、导航入口、权限点、E2E 场景、README/dev-plan 中的现行引用；`orgunit` 页面与 API 不在删除范围内
 
 ### 0.1 Simple > Easy 三问
@@ -92,7 +92,7 @@
   - [X] i18n（仅 `en/zh`）
   - [X] DB Schema / Migration / Backfill / Correction
   - [X] sqlc
-  - [X] Routing / allowlist / responder / capability-route-map
+  - [X] Routing / allowlist / responder
   - [X] AuthN / Tenancy / RLS
   - [X] Authz（Casbin）
   - [X] E2E
@@ -119,7 +119,7 @@
 2. `staffing` 下的 `Position / Assignments` 任一子链路，包括 API、页面、schema、seed、fixture、E2E 与文档合同。
 3. 对应 UI 页面、导航入口、前端 API client、i18n 文案。
 4. 对应 schema、migration、sqlc schema/export、RLS/函数/权限对象。
-5. 对应 Authz object、capability-route-map、routing allowlist。
+5. 对应 Authz object、历史 capability 路由映射、routing allowlist。
 6. 把三模块当当前实现基础的现行 dev-plan / readiness / 测试合同表述。
 7. `orgunit` 继续作为现行模块存在，且不得因本计划被误删或降级为壳层。
 8. `DEV-PLAN-150/156` 引入并扩散出的 capability 注册、映射、catalog、policy activation、functional_area、门禁与文档主线。
@@ -212,7 +212,7 @@
 6. [ ] `009` 路线图、`016` 模块骨架、`060/062/063`、`027`、以及所有把三模块当现行能力的活体 dev-plan 条目；按“改写现行文档或迁入 `docs/archive/**`”处理，不直接硬删除计划文档
 7. [ ] `docs/dev-records/**` 中仍把三模块视为当前验收对象的活体记录
 8. [ ] `orgunit` 下仅用于验证三模块联动的测试与证据资产
-9. [ ] `DEV-PLAN-150`、`DEV-PLAN-156` 及其直接引入的 capability-route-map / capability-key 活体文档、readiness、证据入口；计划文档本体优先迁入 `docs/archive/**`，不直接删除
+9. [X] `DEV-PLAN-150`、`DEV-PLAN-156` 及其直接引入的 capability-route-map / capability-key 活体文档、readiness、证据入口已转入 `docs/archive/**` 或改为历史来源
 10. [ ] `DEV-PLAN-151`~`160`、`161/161A`、`163`、`165`、`181`、`183`、`184` 等 capability 主链扩散文档入口；统一迁至 `docs/archive/**` 或改写为历史说明，不可再作为现行主线保留
 
 ### 4.4 必删开发辅助与生成资产
@@ -253,7 +253,7 @@
    - 先删 `e2e/tests/**`、页面测试、server 测试、模块测试、`testdata/fixtures/mocks/snapshots/golden`、`e2e/test-results/**`、`playwright-report/**`、trace、录像、截图、seed/demo data、一次性排障脚本。
    - 原则：只要资产唯一服务于三模块，先删，不等待代码目录删除；若同时服务 `orgunit`，转入人工判定。
 2. [ ] **第二刀删全部用户入口与外层协议**
-   - 删除导航、页面、前端 client、allowlist、handler 注册、capability-route-map、Authz object、页面资源与构建残留。
+   - 删除导航、页面、前端 client、allowlist、handler 注册、历史 capability 路由映射残留、Authz object、页面资源与构建残留。
    - 原则：先让用户与调用方彻底碰不到三模块，同时保留 `orgunit` 页面与 API。
 3. [ ] **第三刀删全部模块代码与组合根**
    - 删除 `modules/jobcatalog`、`modules/staffing`、`modules/person`，以及 `internal/server`、`pkg/**`、`cmd/**` 中的上游依赖。
@@ -360,7 +360,7 @@
 - [ ] `go fmt ./... && go vet ./...`
 - [ ] `make check lint`
 - [ ] `make test`
-- [ ] 命中的 `routing/authz/sqlc` 门禁通过；`capability-key` / `capability-contract` / `capability-route-map` / `capability-catalog` 不再作为现行门禁存在
+- [ ] 命中的 `routing/authz/sqlc` 门禁通过；历史 capability 主链门禁不再作为现行门禁存在
 - [ ] 若仓库仍保留 E2E，则 `make e2e` 仅覆盖剩余现行能力；三模块相关 spec/trace/录像必须为 0
 - [ ] `make preflight` 不再调用 capability 门禁，也不再暴露 `jobcatalog/staffing/person` 模块目标
 

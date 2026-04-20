@@ -467,7 +467,7 @@ m = r.sub == p.sub && r.dom == p.dom && r.obj == p.obj && r.act == p.act
 `), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(policy, []byte("p, role:tenant-admin, t1, jobcatalog.catalog, read\n"), 0o644); err != nil {
+	if err := os.WriteFile(policy, []byte("p, role:tenant-admin, t1, orgunit.read, read\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -479,7 +479,7 @@ m = r.sub == p.sub && r.dom == p.dom && r.obj == p.obj && r.act == p.act
 	if err != nil {
 		t.Fatalf("err=%v", err)
 	}
-	allowed, enforced, err := a.Authorize("role:tenant-admin", "t1", "jobcatalog.catalog", "read")
+	allowed, enforced, err := a.Authorize("role:tenant-admin", "t1", "orgunit.read", "read")
 	if err != nil {
 		t.Fatalf("err=%v", err)
 	}
@@ -533,7 +533,7 @@ func TestLoadAuthorizer_DefaultPaths_Success(t *testing.T) {
 	if err != nil {
 		t.Fatalf("err=%v", err)
 	}
-	allowed, enforced, err := a.Authorize("role:tenant-admin", "00000000-0000-0000-0000-000000000001", "jobcatalog.catalog", "read")
+	allowed, enforced, err := a.Authorize("role:tenant-admin", "00000000-0000-0000-0000-000000000001", "orgunit.read", "read")
 	if err != nil {
 		t.Fatalf("err=%v", err)
 	}

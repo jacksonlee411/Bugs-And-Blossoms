@@ -193,11 +193,11 @@
 ## 10. 依赖与引用
 - `docs/archive/dev-plans/102-as-of-time-context-convergence-and-critique.md`
 - `docs/dev-plans/102b-070-071-time-context-explicitness-and-replay-determinism.md`
-- `docs/dev-plans/102c-setid-group-sharing-and-bu-personalization-gap-assessment.md`
-- `docs/dev-plans/102c1-setid-contextual-security-model.md`
-- `docs/dev-plans/102c2-bu-personalization-strategy-registry.md`
-- `docs/dev-plans/102c3-setid-configuration-hit-explainability.md`
-- `docs/dev-plans/150-capability-key-workday-alignment-gap-closure-plan.md`
+- `docs/archive/dev-plans/102c-setid-group-sharing-and-bu-personalization-gap-assessment.md`
+- `docs/archive/dev-plans/102c1-setid-contextual-security-model.md`
+- `docs/archive/dev-plans/102c2-bu-personalization-strategy-registry.md`
+- `docs/archive/dev-plans/102c3-setid-configuration-hit-explainability.md`
+- `docs/archive/dev-plans/150-capability-key-workday-alignment-gap-closure-plan.md`
 - `docs/dev-plans/070b-no-global-tenant-and-dict-release-to-tenant-plan.md`
 - `docs/dev-plans/005-project-standards-and-spec-adoption.md`
 - `AGENTS.md`

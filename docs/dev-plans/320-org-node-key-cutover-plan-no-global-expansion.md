@@ -242,7 +242,7 @@
    - 证据：`docs/dev-records/assets/dev-plan-288b/tp288b-live-evidence-index.json`、`docs/dev-records/assets/dev-plan-290b/tp290b-live-evidence-index.json`
    - 现状：`tp288b` receipt/poll/refresh contract 与 `tp290b` intent-action chain 已全部转为 `passed`，且 `Assistant` 外部回包继续只暴露 `org_code`
 8. `DEV-PLAN-060` 主链路用户可见契约已收口
-   - 证据：`docs/dev-plans/060-business-e2e-test-suite.md`、`docs/dev-plans/062-test-tp060-02-master-data-org-setid-jobcatalog-position.md`、`docs/dev-plans/063-test-tp060-03-person-and-assignments.md`、`docs/dev-plans/064a-test-tp060-05-assistant-conversation-intent-and-tasks.md`
+   - 证据：`docs/dev-plans/060-business-e2e-test-suite.md`、`docs/archive/dev-plans/062-test-tp060-02-master-data-org-setid-jobcatalog-position.md`、`docs/archive/dev-plans/063-test-tp060-03-person-and-assignments.md`、`docs/dev-plans/064a-test-tp060-05-assistant-conversation-intent-and-tasks.md`
    - 现状：`SetID / Staffing / Assistant` 对外链路已显式要求仅使用 `org_code`，不再出现 `org_unit_id / org_node_key`
 9. 最终四大 Gate 已复跑完成
    - 证据：`docs/dev-records/dev-plan-320-rehearsal-log.md`
@@ -615,7 +615,7 @@ orgunit.org_node_key_registry
 
 - `docs/dev-plans/102d-context-rule-evaluation-engine-on-top-of-102-foundation.md`
 - `docs/dev-plans/161-org-create-dynamic-field-policy-on-capability-registry.md`
-- `docs/dev-plans/165-field-configs-and-strategy-capability-key-alignment-and-page-positioning.md`
+- `docs/archive/dev-plans/165-field-configs-and-strategy-capability-key-alignment-and-page-positioning.md`
 - `docs/dev-plans/180-granularity-hierarchy-governance-and-unification.md`
 
 在这些文档完成逐篇更新前，凡涉及 `setid_strategy_registry` schema 目标态的争议，以本节为 override SSOT。

@@ -217,7 +217,7 @@ CREATE TABLE orgunit.setid_binding_versions (
 - **准备期**：
   - 依赖清单（冻结范围，2026-01-25 03:21 UTC）：
     - 文档（历史/弃用）：`docs/archive/dev-plans/028-setid-management.md`（保留历史口径，含 `business_unit_id` / `record_group`）。
-    - 文档（历史说明）：`docs/dev-plans/030-position-transactional-event-sourcing-synchronous-projection.md`（更新说明仍提及旧口径）。
+    - 文档（历史说明）：`docs/archive/dev-plans/030-position-transactional-event-sourcing-synchronous-projection.md`（更新说明仍提及旧口径）。
     - 文档（本方案）：`docs/archive/dev-plans/070-setid-orgunit-binding-redesign.md`（目标/风险/验收处保留“清理项”描述）。
     - 代码/DB/迁移/API/路由/测试：当前无 `business_unit_id` / `record_group` 残留引用（全仓检索确认）。
   - 数据校验：存量 `setid` 格式（全大写 + 5 位）、根组织 `is_business_unit=true`、既有绑定有效期与缺失绑定清单。
@@ -366,14 +366,14 @@ CREATE TABLE orgunit.setid_binding_versions (
 - `docs/dev-plans/021-pg-rls-for-org-position-job-catalog.md`（RLS fail-closed）
 - `docs/dev-plans/019-tenant-and-authn.md`（租户上下文注入）
 - `docs/dev-plans/022-authz-casbin-toolchain.md`（权限点冻结）
-- `docs/dev-plans/029-job-catalog-transactional-event-sourcing-synchronous-projection.md` / `docs/dev-plans/030-position-transactional-event-sourcing-synchronous-projection.md`
+- `docs/archive/dev-plans/029-job-catalog-transactional-event-sourcing-synchronous-projection.md` / `docs/archive/dev-plans/030-position-transactional-event-sourcing-synchronous-projection.md`
 - `docs/dev-plans/012-ci-quality-gates.md`（门禁执行）
 
 ### 8.2 里程碑
 1. [X] 更新 `DEV-PLAN-028` 为“被 DEV-PLAN-070 取代”的说明，并同步 `Doc Map`（2026-01-24 04:25 UTC）。
 2. [X] 梳理 `business_unit_id` / `record_group` 依赖清单并冻结范围（2026-01-25 03:21 UTC）。
 3. [X] 更新相关 dev-plans 与测试用例（TP-060/子计划等），统一“全域迁移”口径，改为“配置主数据显式 setid、业务数据通过 org_unit 解析 setid”，并移除 BU/record_group 约束。（2026-01-25 11:01 UTC）
-  - dev-plans：`docs/archive/dev-plans/028-setid-management.md`（标注历史/弃用口径，指向 070）；`docs/dev-plans/029-job-catalog-transactional-event-sourcing-synchronous-projection.md`（配置主数据显式 setid）；`docs/dev-plans/030-position-transactional-event-sourcing-synchronous-projection.md`（Position 由 org_unit 解析 setid + job_profile 必选）；`docs/dev-plans/060-business-e2e-test-suite.md`（数据集/步骤改为“配置显式 setid + 业务解析 setid”）；`docs/dev-plans/062-test-tp060-02-master-data-org-setid-jobcatalog-position.md`（步骤/断言/契约引用改为 org_unit 解析 setid + as_of）。
+  - dev-plans：`docs/archive/dev-plans/028-setid-management.md`（标注历史/弃用口径，指向 070）；`docs/archive/dev-plans/029-job-catalog-transactional-event-sourcing-synchronous-projection.md`（配置主数据显式 setid）；`docs/archive/dev-plans/030-position-transactional-event-sourcing-synchronous-projection.md`（Position 由 org_unit 解析 setid + job_profile 必选）；`docs/dev-plans/060-business-e2e-test-suite.md`（数据集/步骤改为“配置显式 setid + 业务解析 setid”）；`docs/archive/dev-plans/062-test-tp060-02-master-data-org-setid-jobcatalog-position.md`（步骤/断言/契约引用改为 org_unit 解析 setid + as_of）。
   - 测试用例：`e2e/tests/tp060-02-master-data.spec.js`（Position 由 org_unit 派生 setid、Job Profile 必选）；`e2e/tests/tp060-03-person-and-assignments.spec.js`（Position 创建不要求 setid，Job Profile 必选）；`e2e/tests/m3-smoke.spec.js`（Position 创建不要求 setid）；`internal/server/jobcatalog_test.go`（显式 setid 入口仍保留）；`internal/server/staffing_test.go`（Position 必选 job_profile + org_unit 解析 setid）；`internal/server/handler_test.go`（Position 入口去 setid）；`internal/server/setid_test.go`（SetID 管理改组织绑定）。
 4. [X] 制定迁移窗口与切换策略（停写切换、无双写）（2026-01-25 00:45 UTC）。
 5. [X] 明确 `orgunit.global_tenant_id()` 与共享层 RLS/读写入口合同（含共享读取专用入口）（2026-01-25 01:08 UTC）。

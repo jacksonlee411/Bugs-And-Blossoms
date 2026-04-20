@@ -175,9 +175,9 @@
   缓解：写入请求强制携带 `policy_version`，后端做版本一致性校验，不一致返回冲突并要求刷新决策。
 
 ## 10. 依赖与关联文档
-- `docs/dev-plans/150-capability-key-workday-alignment-gap-closure-plan.md`
-- `docs/dev-plans/151-capability-key-m1-contract-freeze-and-gates-baseline.md`
-- `docs/dev-plans/154-capability-key-m5-explain-and-audit-convergence.md`
-- `docs/dev-plans/158-capability-key-m6-policy-activation-and-version-consistency.md`
-- `docs/dev-plans/160-capability-key-m8-m10-ui-delivery-and-evidence-closure.md`
+- `docs/archive/dev-plans/150-capability-key-workday-alignment-gap-closure-plan.md`
+- `docs/archive/dev-plans/151-capability-key-m1-contract-freeze-and-gates-baseline.md`
+- `docs/archive/dev-plans/154-capability-key-m5-explain-and-audit-convergence.md`
+- `docs/archive/dev-plans/158-capability-key-m6-policy-activation-and-version-consistency.md`
+- `docs/archive/dev-plans/160-capability-key-m8-m10-ui-delivery-and-evidence-closure.md`
 - `docs/dev-plans/003-simple-not-easy-review-guide.md`

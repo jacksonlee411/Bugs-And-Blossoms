@@ -276,7 +276,7 @@
 - `POST /org/api/assignments`：移除 JSON 字段 `base_salary`
 - `Correct/Rescind` 的 replacement_payload：移除 `base_salary`/`currency` 的处理与允许键
 
-同时更新对应契约文档（至少 `docs/dev-plans/031-greenfield-assignment-job-data.md`）以移除 payroll 字段定义。
+同时更新对应契约文档（至少 `docs/archive/dev-plans/031-greenfield-assignment-job-data.md`）以移除 payroll 字段定义。
 
 ## 6. 核心逻辑与实现步骤 (Execution Plan)
 
@@ -292,8 +292,8 @@
    - [ ] `docs/dev-plans/009-implementation-roadmap.md`：移除相关里程碑/引用
    - [ ] `docs/dev-plans/060-business-e2e-test-suite.md`：移除相关用例引用
    - [ ] `docs/archive/dev-records/DEV-PLAN-010-READINESS.md`：移除 payroll/attendance readiness 段落（避免误导）
-   - [ ] `docs/dev-plans/031-greenfield-assignment-job-data.md`：移除 `base_salary/currency` 的契约定义与任何 payroll 语义描述
-   - [ ] `docs/dev-plans/063-test-tp060-03-person-and-assignments.md`：移除 `base_salary/currency` 与 payroll 依赖引用（保持 tp060-03 作为 Person+Assignments 的核心闭环）
+   - [ ] `docs/archive/dev-plans/031-greenfield-assignment-job-data.md`：移除 `base_salary/currency` 的契约定义与任何 payroll 语义描述
+   - [ ] `docs/archive/dev-plans/063-test-tp060-03-person-and-assignments.md`：移除 `base_salary/currency` 与 payroll 依赖引用（保持 tp060-03 作为 Person+Assignments 的核心闭环）
    - [ ] `docs/archive/dev-records/dev-plan-031-execution-log.md`：改写移除 payroll/attendance 字样（保留 Assignments M4 证据）
    - [ ] `docs/archive/dev-records/dev-plan-063-execution-log.md`：改写移除 payroll/attendance 字样（保留 Person+Assignments 证据）
 5. [ ] 对 `docs/dev-records/` 做“无痕清理”扫尾：

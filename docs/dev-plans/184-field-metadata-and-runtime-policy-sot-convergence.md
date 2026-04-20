@@ -1,6 +1,6 @@
 # DEV-PLAN-184：字段配置与策略规则双层 SoT 收敛方案（Static Metadata vs Dynamic Policy）
 
-**状态**: 执行中（2026-02-27 23:40 UTC，动态策略写口已只读化，字段配置页动态镜像改由 Strategy Registry 决议口径驱动）
+**状态**: 执行中（2026-02-27 23:40 UTC，动态策略写口已只读化，字段配置页动态镜像改由历史 Strategy Registry 决议口径驱动）
 
 ## 1. 背景
 
@@ -154,7 +154,7 @@
 按 `AGENTS.md` 与 `docs/dev-plans/012-ci-quality-gates.md` 执行，不在本文复制脚本细节。预计触发：
 
 - Go/API 变更：`go fmt ./... && go vet ./... && make check lint && make test`
-- Routing/Capability：`make check routing && make check capability-route-map && make check capability-key`
+- Routing：`make check routing`
 - Legacy 防回流：`make check no-legacy`
 - i18n：`make check tr`
 - 文档：`make check doc`
@@ -174,13 +174,13 @@
 
 1. **历史配置迁移不全**：先做只读镜像与差异巡检，再执行分批迁移。
 2. **用户认知成本上升**：页面增加来源标签与跳转联动，不做硬切断。
-3. **路由 capability 语义漂移**：把 `scope_key -> capability_key` 映射校验纳入强制门禁。
+3. **路由语义漂移**：`scope_key -> capability_key` 映射校验属于历史阶段口径。
 
 ## 13. 关联文档
 
-- `docs/dev-plans/165-field-configs-and-strategy-capability-key-alignment-and-page-positioning.md`
+- `docs/archive/dev-plans/165-field-configs-and-strategy-capability-key-alignment-and-page-positioning.md`
 - `docs/dev-plans/161-org-create-dynamic-field-policy-on-capability-registry.md`
 - `docs/dev-plans/120-org-field-default-values-cel-rule-engine-roadmap.md`
-- `docs/dev-plans/156-capability-key-m3-m9-route-capability-mapping-and-gates.md`
+- `docs/archive/dev-plans/156-capability-key-m3-m9-route-capability-mapping-and-gates.md`
 - `docs/dev-plans/180-granularity-hierarchy-governance-and-unification.md`
-- `docs/dev-plans/185-field-config-dict-values-setid-column-and-master-data-fetch-control.md`
+- `docs/archive/dev-plans/185-field-config-dict-values-setid-column-and-master-data-fetch-control.md`

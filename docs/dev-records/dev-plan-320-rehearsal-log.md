@@ -356,7 +356,7 @@ docker exec bugs-and-blossoms-dev-postgres-1 \
 3. [X] 用户可见主链复跑通过
    - 结果：`m3-smoke`、`tp060-02`、`tp060-03`、`tp070b` 全部通过
 4. [X] 文档契约已同步收口
-   - 证据：`docs/dev-plans/060-business-e2e-test-suite.md`、`docs/dev-plans/062-test-tp060-02-master-data-org-setid-jobcatalog-position.md`、`docs/dev-plans/063-test-tp060-03-person-and-assignments.md`、`docs/dev-plans/064a-test-tp060-05-assistant-conversation-intent-and-tasks.md`
+   - 证据：`docs/dev-plans/060-business-e2e-test-suite.md`、`docs/archive/dev-plans/062-test-tp060-02-master-data-org-setid-jobcatalog-position.md`、`docs/archive/dev-plans/063-test-tp060-03-person-and-assignments.md`、`docs/dev-plans/064a-test-tp060-05-assistant-conversation-intent-and-tasks.md`
    - 结果：`SetID / Staffing / Assistant` 对外链路明确只允许 `org_code`，不再接受或回写 `org_unit_id / org_node_key`
 
 ### 11.4 本轮结论

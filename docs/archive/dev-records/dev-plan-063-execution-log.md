@@ -2,7 +2,7 @@
 
 **状态**：已完成（2026-01-11）
 
-> 对应计划：`docs/dev-plans/063-test-tp060-03-person-and-assignments.md`  
+> 对应计划：`docs/archive/dev-plans/063-test-tp060-03-person-and-assignments.md`  
 > 上游套件：`docs/dev-plans/060-business-e2e-test-suite.md`
 
 ## 交付物

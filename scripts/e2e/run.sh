@@ -194,12 +194,9 @@ if [[ "$sa_role_line" != "f|f|t" ]]; then
   exit 2
 fi
 
-echo "[e2e] migrate: iam/orgunit/jobcatalog/person/staffing"
+echo "[e2e] migrate: iam/orgunit"
 DATABASE_URL="$admin_db_url" make iam migrate up
 DATABASE_URL="$admin_db_url" make orgunit migrate up
-DATABASE_URL="$admin_db_url" make jobcatalog migrate up
-DATABASE_URL="$admin_db_url" make person migrate up
-DATABASE_URL="$admin_db_url" make staffing migrate up
 
 mkdir -p "$(dirname "$server_log")"
 mkdir -p "$(dirname "$superadmin_log")"

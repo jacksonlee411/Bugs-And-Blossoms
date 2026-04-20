@@ -70,5 +70,5 @@
 4. [X] 已落实 Simple > Easy：不新增多事实源、不引入 legacy 双链路。
 
 ## 11. 关联文档
-- `docs/dev-plans/165-field-configs-and-strategy-capability-key-alignment-and-page-positioning.md`
+- `docs/archive/dev-plans/165-field-configs-and-strategy-capability-key-alignment-and-page-positioning.md`
 - `docs/dev-plans/184-field-metadata-and-runtime-policy-sot-convergence.md`

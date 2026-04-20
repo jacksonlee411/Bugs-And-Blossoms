@@ -348,7 +348,7 @@
 
 | 约束 | 门禁/测试 | 证据归档 |
 | --- | --- | --- |
-| Surface/Intent 映射唯一且完整 | `make check capability-route-map` + 映射注册表一致性测试（M3） | `docs/archive/dev-records/dev-plan-200-m3-mapping-registry-evidence.md` |
+| Surface/Intent 映射唯一且完整 | 历史阶段 `make check capability-route-map` + 映射注册表一致性测试（M3） | `docs/archive/dev-records/dev-plan-200-m3-mapping-registry-evidence.md` |
 | 策略冲突决议 deterministic | 单元测试（冲突矩阵）+ 集成回放测试 | `docs/archive/dev-records/dev-plan-200-m0-policy-resolution-evidence.md` |
 | SetID 前置决议（先解析再取数） | 集成测试：候选接口未先 `ResolveSetID` 直接失败；回显 `resolved_setid/setid_source` | `docs/archive/dev-records/dev-plan-200-m2-setid-pre-resolve-evidence.md` |
 | `allowed_value_codes` 集合语义收敛 | 单元测试：`priority_mode + local_override_mode` 组合矩阵；`required/default` 一致性阻断 | `docs/archive/dev-records/dev-plan-200-m0-allowed-value-semantics-evidence.md` |
@@ -482,7 +482,7 @@
 
 - `docs/dev-plans/201-blueprint-phase0-boundary-and-scope-consistency-freeze.md`
 - `docs/dev-plans/202-blueprint-policy-resolution-and-allowed-values-determinism.md`
-- `docs/dev-plans/203-blueprint-runtime-read-path-mapping-and-setid-preresolve.md`
+- `docs/archive/dev-plans/203-blueprint-runtime-read-path-mapping-and-setid-preresolve.md`
 - `docs/dev-plans/204-blueprint-composition-dto-and-explain-versioning.md`
 - `docs/dev-plans/205-blueprint-page-responsibility-convergence-static-dynamic-sot.md`
 - `docs/dev-plans/206-blueprint-crud-template-and-double-version-submit-cutover.md`
@@ -492,19 +492,19 @@
 - `docs/dev-plans/210-blueprint-conversation-transaction-and-actor-delegated-authz.md`
 - `docs/dev-plans/211-blueprint-temporal-m10d0-minimal-orchestration-foundation.md`
 - `docs/dev-plans/212-blueprint-eval-gates-and-triggered-temporal-productionization.md`
-- `docs/dev-plans/165-field-configs-and-strategy-capability-key-alignment-and-page-positioning.md`
+- `docs/archive/dev-plans/165-field-configs-and-strategy-capability-key-alignment-and-page-positioning.md`
 - `docs/dev-plans/184-field-metadata-and-runtime-policy-sot-convergence.md`
-- `docs/dev-plans/183-capability-key-object-intent-discoverability-and-modeling.md`
-- `docs/dev-plans/156-capability-key-m3-m9-route-capability-mapping-and-gates.md`
+- `docs/archive/dev-plans/183-capability-key-object-intent-discoverability-and-modeling.md`
+- `docs/archive/dev-plans/156-capability-key-m3-m9-route-capability-mapping-and-gates.md`
 - `docs/dev-plans/021-pg-rls-for-org-position-job-catalog.md`
 - `docs/dev-plans/019-tenant-and-authn.md`
 - `docs/dev-plans/004m1-no-legacy-principle-cleanup-and-gates.md`
 - `docs/dev-plans/109a-request-code-total-convergence-and-anti-drift.md`
 - `docs/dev-plans/140-error-message-clarity-and-gates.md`
-- `docs/dev-plans/155-capability-key-m3-evaluation-context-cel-kernel.md`
+- `docs/archive/dev-plans/155-capability-key-m3-evaluation-context-cel-kernel.md`
 - `docs/dev-plans/161-org-create-dynamic-field-policy-on-capability-registry.md`
 - `docs/dev-plans/182-bu-policy-baseline-and-intent-override-unification.md`
-- `docs/dev-plans/185-field-config-dict-values-setid-column-and-master-data-fetch-control.md`
+- `docs/archive/dev-plans/185-field-config-dict-values-setid-column-and-master-data-fetch-control.md`
 - `docs/dev-plans/070b-no-global-tenant-and-dict-release-to-tenant-plan.md`
 - `docs/dev-plans/105-dict-config-platform-module.md`
 - `docs/dev-plans/105b-dict-code-management-and-governance.md`

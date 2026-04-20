@@ -152,8 +152,8 @@
 ## 10. 关联文档
 - `docs/dev-plans/102d-context-rule-evaluation-engine-on-top-of-102-foundation.md`
 - `docs/dev-plans/102b-070-071-time-context-explicitness-and-replay-determinism.md`
-- `docs/dev-plans/102c1-setid-contextual-security-model.md`
-- `docs/dev-plans/102c2-bu-personalization-strategy-registry.md`
-- `docs/dev-plans/102c3-setid-configuration-hit-explainability.md`
+- `docs/archive/dev-plans/102c1-setid-contextual-security-model.md`
+- `docs/archive/dev-plans/102c2-bu-personalization-strategy-registry.md`
+- `docs/archive/dev-plans/102c3-setid-configuration-hit-explainability.md`
 - `docs/dev-plans/012-ci-quality-gates.md`
 - `docs/dev-plans/060-business-e2e-test-suite.md`

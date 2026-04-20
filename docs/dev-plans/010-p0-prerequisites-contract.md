@@ -219,7 +219,7 @@ job(required_check):
 2. [ ] PR-1：对齐 `docs/dev-plans/011-tech-stack-and-toolchain-versions.md`（版本 pin、依赖锁定、基础 Makefile 入口）。
 3. [ ] PR-2：对齐 `docs/dev-plans/012-ci-quality-gates.md`（CI required checks 骨架；job 名称冻结；job 不跳过）。
 4. [ ] PR-3：对齐 `docs/dev-plans/017-routing-strategy.md`（allowlist SSOT + 最小 routing gates + 本地入口）。
-5. [ ] PR-4：对齐 `docs/dev-plans/015-ddd-layering-framework.md`/`docs/dev-plans/016-greenfield-hr-modules-skeleton.md`（`modules/*` 骨架 + 依赖门禁配置）。
+5. [ ] PR-4：对齐 `docs/dev-plans/015-ddd-layering-framework.md`/`docs/archive/dev-plans/016-greenfield-hr-modules-skeleton.md`（`modules/*` 骨架 + 依赖门禁配置）。
 6. [ ] PR-5：对齐 `DEV-PLAN-103（MUI-only 前端收敛）`/`docs/dev-plans/020-i18n-en-zh-only.md`（MUI 壳 + i18n + 占位页；为 P0 的 `orgunit` 预留入口）。
 7. [ ] PR-6：对齐 `docs/dev-plans/019-tenant-and-authn.md`（tenant 解析 + 登录最小闭环，进入壳即可）。
 8. [ ] PR-7：对齐 `docs/dev-plans/024-atlas-goose-closed-loop-guide.md`/`docs/dev-plans/021-pg-rls-for-org-position-job-catalog.md`（`iam` Atlas+Goose 闭环 + RLS fail-closed 最小测试）。
@@ -277,7 +277,7 @@ job(required_check):
 - `docs/dev-plans/009-implementation-roadmap.md`
 - `docs/dev-plans/011-tech-stack-and-toolchain-versions.md`
 - `docs/dev-plans/015-ddd-layering-framework.md`
-- `docs/dev-plans/016-greenfield-hr-modules-skeleton.md`
+- `docs/archive/dev-plans/016-greenfield-hr-modules-skeleton.md`
 - `docs/dev-plans/017-routing-strategy.md`
 - `DEV-PLAN-103（MUI-only 前端收敛）`
 - `docs/archive/dev-plans/018-astro-aha-ui-shell-for-hrms.md`

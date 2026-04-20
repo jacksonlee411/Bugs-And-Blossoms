@@ -73,7 +73,7 @@ m = r.sub == p.sub && r.dom == p.dom && r.obj == p.obj && r.act == p.act
 `), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(policy, []byte("p, role:tenant-admin, t1, jobcatalog.catalog, read\n"), 0o644); err != nil {
+	if err := os.WriteFile(policy, []byte("p, role:tenant-admin, t1, orgunit.read, read\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -82,7 +82,7 @@ m = r.sub == p.sub && r.dom == p.dom && r.obj == p.obj && r.act == p.act
 		t.Fatalf("err=%v", err)
 	}
 
-	allowed, enforced, err := a.Authorize("role:tenant-admin", "t1", "jobcatalog.catalog", "read")
+	allowed, enforced, err := a.Authorize("role:tenant-admin", "t1", "orgunit.read", "read")
 	if err != nil {
 		t.Fatalf("err=%v", err)
 	}
@@ -90,7 +90,7 @@ m = r.sub == p.sub && r.dom == p.dom && r.obj == p.obj && r.act == p.act
 		t.Fatalf("allowed=%v enforced=%v", allowed, enforced)
 	}
 
-	allowed, enforced, err = a.Authorize("role:tenant-admin", "t1", "jobcatalog.catalog", "admin")
+	allowed, enforced, err = a.Authorize("role:tenant-admin", "t1", "orgunit.read", "admin")
 	if err != nil {
 		t.Fatalf("err=%v", err)
 	}
@@ -102,7 +102,7 @@ m = r.sub == p.sub && r.dom == p.dom && r.obj == p.obj && r.act == p.act
 	if err != nil {
 		t.Fatalf("err=%v", err)
 	}
-	allowed, enforced, err = aShadow.Authorize("role:tenant-admin", "t1", "jobcatalog.catalog", "admin")
+	allowed, enforced, err = aShadow.Authorize("role:tenant-admin", "t1", "orgunit.read", "admin")
 	if err != nil {
 		t.Fatalf("err=%v", err)
 	}
@@ -114,7 +114,7 @@ m = r.sub == p.sub && r.dom == p.dom && r.obj == p.obj && r.act == p.act
 	if err != nil {
 		t.Fatalf("err=%v", err)
 	}
-	allowed, enforced, err = aDisabled.Authorize("role:tenant-admin", "t1", "jobcatalog.catalog", "admin")
+	allowed, enforced, err = aDisabled.Authorize("role:tenant-admin", "t1", "orgunit.read", "admin")
 	if err != nil {
 		t.Fatalf("err=%v", err)
 	}
@@ -216,7 +216,7 @@ m = r.sub ==
 `), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(policy, []byte("p, role:tenant-admin, t1, jobcatalog.catalog, read\n"), 0o644); err != nil {
+	if err := os.WriteFile(policy, []byte("p, role:tenant-admin, t1, orgunit.read, read\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -224,7 +224,7 @@ m = r.sub ==
 	if err != nil {
 		t.Fatalf("err=%v", err)
 	}
-	allowed, enforced, err := aShadow.Authorize("role:tenant-admin", "t1", "jobcatalog.catalog", "read")
+	allowed, enforced, err := aShadow.Authorize("role:tenant-admin", "t1", "orgunit.read", "read")
 	if err == nil {
 		t.Fatal("expected error")
 	}
@@ -236,7 +236,7 @@ m = r.sub ==
 	if err != nil {
 		t.Fatalf("err=%v", err)
 	}
-	allowed, enforced, err = aEnforce.Authorize("role:tenant-admin", "t1", "jobcatalog.catalog", "read")
+	allowed, enforced, err = aEnforce.Authorize("role:tenant-admin", "t1", "orgunit.read", "read")
 	if err == nil {
 		t.Fatal("expected error")
 	}

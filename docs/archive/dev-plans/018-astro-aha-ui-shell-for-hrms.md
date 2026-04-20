@@ -64,8 +64,8 @@ flowchart LR
 
 ### 2.3 工具链与门禁（SSOT 引用）
 - DDD 分层框架：`docs/dev-plans/015-ddd-layering-framework.md`
-- HR 模块骨架（4 模块）：`docs/dev-plans/016-greenfield-hr-modules-skeleton.md`
-- 任职记录 UI 合同（仅显示 effective_date、保持 `[start,end)`）：`docs/dev-plans/031-greenfield-assignment-job-data.md`
+- HR 模块骨架（4 模块）：`docs/archive/dev-plans/016-greenfield-hr-modules-skeleton.md`
+- 任职记录 UI 合同（仅显示 effective_date、保持 `[start,end)`）：`docs/archive/dev-plans/031-greenfield-assignment-job-data.md`
 - 路由治理与门禁：`docs/dev-plans/017-routing-strategy.md`（入口：`make check routing`）
 - 分层/依赖门禁：`.gocleanarch.yml`（入口：`make check lint`）
 - 样式与生成入口：`Makefile`（Tailwind/生成物以 SSOT 为准）

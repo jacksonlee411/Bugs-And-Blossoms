@@ -152,7 +152,7 @@
 3. [x] **后端权威**：解析与冲突裁决由后端完成，前端仅展示。
 4. [x] **冲突可判定**：有唯一性/优先级/时间重叠约束。
 5. [x] **主体完备性**：能映射到 `subject + domain + capability` 的完整评估输入。
-6. [x] **门禁可执行**：CI 可自动阻断（capability-key/route-map/no-legacy/专项检查）。
+6. [x] **门禁可执行**：CI 可自动阻断（历史 capability 主链门禁 + `no-legacy` + 专项检查）。
 7. [x] **可退役**：提供生命周期定义（引入/过渡/冻结/退役）及时间窗。
 
 ## 6. 目标导向实施里程碑（含硬日期）
@@ -209,8 +209,8 @@
 ## 10. 关联文档
 - `docs/dev-plans/120-org-field-default-values-cel-rule-engine-roadmap.md`
 - `docs/dev-plans/022-authz-casbin-toolchain.md`
-- `docs/dev-plans/150-capability-key-workday-alignment-gap-closure-plan.md`
-- `docs/dev-plans/156-capability-key-m3-m9-route-capability-mapping-and-gates.md`
+- `docs/archive/dev-plans/150-capability-key-workday-alignment-gap-closure-plan.md`
+- `docs/archive/dev-plans/156-capability-key-m3-m9-route-capability-mapping-and-gates.md`
 - `docs/dev-plans/161-org-create-dynamic-field-policy-on-capability-registry.md`
 - `docs/dev-plans/164-org-type-policy-control-gap-analysis.md`
-- `docs/dev-plans/165-field-configs-and-strategy-capability-key-alignment-and-page-positioning.md`
+- `docs/archive/dev-plans/165-field-configs-and-strategy-capability-key-alignment-and-page-positioning.md`

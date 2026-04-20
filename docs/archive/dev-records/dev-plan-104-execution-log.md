@@ -5,8 +5,8 @@
 ## 变更摘要
 
 - 文档与契约：
-  - 新增 `docs/dev-plans/104-jobcatalog-ui-optimization.md`
-  - 新增 `docs/dev-plans/104a-jobcatalog-ui-optimization-alignment-with-dev-plan-002.md`
+  - 新增 `docs/archive/dev-plans/104-jobcatalog-ui-optimization.md`
+  - 新增 `docs/archive/dev-plans/104a-jobcatalog-ui-optimization-alignment-with-dev-plan-002.md`
   - `AGENTS.md` 文档地图新增 104 / 104A 入口
 - JobCatalog 页面重构（单页 + Tabs，不新增二级菜单）：
   - `apps/web/src/pages/jobcatalog/JobCatalogPage.tsx`

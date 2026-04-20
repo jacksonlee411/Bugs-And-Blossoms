@@ -16,8 +16,6 @@
 - 颗粒度层次门禁（阻断 org_level/scope_type/scope_key 回流）：`make check granularity`
 - DDD 分层 P0 反漂移门禁（阻断 `internal/server` 扩散与 `infrastructure -> services` 回流）：`make check ddd-layering-p0`
 - DDD 分层 P2 组合根门禁（模块扩张时要求 `module.go/links.go` 承接职责）：`make check ddd-layering-p2`
-- capability_key 防退化（禁上下文编码/禁拼接）：`make check capability-key`
-- 路由 capability 映射防漂移（缺映射/重复/未注册阻断）：`make check capability-route-map`
 - 业务幂等字段命名收敛：`make check request-code`
 - `.templ`/MUI Web UI/presentation assets 相关：`make generate && make css`，然后 `git status --short` 必须为空
 - 多语言 JSON：`make check tr`
@@ -61,8 +59,6 @@
 | 颗粒度层次/旧 scope 相关新增（`org_level/scope_type/scope_key`） | `make check granularity` | 颗粒度治理门禁（承接 `DEV-PLAN-180`） |
 | DDD 分层相关新增漂移（`internal/server` 扩散模块实现、`modules/*/infrastructure -> services` 回流） | `make check ddd-layering-p0` | P0 止血门禁（承接 `DEV-PLAN-015B/015C`） |
 | 模块分层扩张且组合根需同步承接（`module.go/links.go` 不得继续空壳） | `make check ddd-layering-p2` | P2 组合根门禁（承接 `DEV-PLAN-015B/015Z4`） |
-| capability_key 命名与生成方式 | `make check capability-key` | 禁止上下文编码与运行时拼接（承接 `DEV-PLAN-102C6/102D`） |
-| 路由/动作到 capability_key 映射 | `make check capability-route-map` | 阻断缺映射、重复映射、未注册 key（承接 `DEV-PLAN-156`） |
 | 幂等与追踪命名（request_id / trace_id） | `make check request-code` | 规则见 `DEV-PLAN-109A` |
 | 错误提示契约（错误码→明确提示） | `make check error-message` | 规则见 `DEV-PLAN-140` |
 
@@ -109,7 +105,7 @@
 - 路由治理：命名空间/route_class/全局 responder 契约统一，并由门禁阻断漂移（`DEV-PLAN-017/012`）。
 - 授权边界：RLS 圈地 ≠ Casbin 授权；subject/domain/object/action 命名冻结（`DEV-PLAN-021/022/019`）。
 - i18n：仅 `en/zh`，语言写入口唯一；不做业务数据多语言（`DEV-PLAN-020`）。
-- 模块边界：业务域 4 模块（orgunit/jobcatalog/staffing/person）+ 平台模块 iam；跨模块优先通过 `pkg/**` 与 HTTP/JSON API 组合，避免 Go 代码跨模块 import（`DEV-PLAN-015/016/019`）。
+- 模块边界：现行业务域保留 `orgunit`，平台模块保留 `iam`；跨模块优先通过 `pkg/**` 与 HTTP/JSON API 组合，避免 Go 代码跨模块 import（`DEV-PLAN-015/016/019`）。
 - SetID：现行删除与收口以 `DEV-PLAN-440` 为唯一 PoR；历史 SetID 方案仅允许作为 archive/历史来源或待归档调查材料保留，不得再作为当前实现前提、当前用户入口或回退依据。
 - No Legacy：禁止引入“legacy 分支/回退通道/双链路”（包括 `read=legacy`、兼容别名窗口、旧实现兜底等）；回滚只能走“环境级保护 + 只读/停写/修复后重试”，并必须有门禁阻断（`DEV-PLAN-004M1`）。
 
@@ -155,7 +151,7 @@ modules/{module}/
 └── presentation/
 ```
 
-更完整的分层/边界说明以 `docs/dev-plans/015-ddd-layering-framework.md` 与 `docs/dev-plans/016-greenfield-hr-modules-skeleton.md` 为准（由本文件引用，不在多处复制）。
+更完整的分层/边界说明以 `docs/dev-plans/015-ddd-layering-framework.md` 与 `docs/archive/dev-plans/016-greenfield-hr-modules-skeleton.md` 为准（由本文件引用，不在多处复制）。
 
 ## 5. 实施工作流（入口与 SSOT）
 
@@ -217,8 +213,8 @@ modules/{module}/
 - Valid Time（日粒度 Effective Date）：`docs/dev-plans/032-effective-date-day-granularity.md`
 - DEV-PLAN-060：全链路业务测试案例套件（009/026-031/220-225 覆盖）：`docs/dev-plans/060-business-e2e-test-suite.md`
 - DEV-PLAN-061：全链路业务测试子计划 TP-060-01——租户/登录/权限/隔离基线：`docs/dev-plans/061-test-tp060-01-tenant-login-authz-rls-baseline.md`
-- DEV-PLAN-062：全链路业务测试子计划 TP-060-02（历史合同，含 SetID 主链样本；现行删除 owner 见 `DEV-PLAN-440`）：`docs/dev-plans/062-test-tp060-02-master-data-org-setid-jobcatalog-position.md`
-- DEV-PLAN-063：全链路业务测试子计划 TP-060-03——人员与任职（Person + Assignments）：`docs/dev-plans/063-test-tp060-03-person-and-assignments.md`
+- DEV-PLAN-062【归档 / 历史合同】：全链路业务测试子计划 TP-060-02（含 SetID 主链样本；现行删除 owner 见 `DEV-PLAN-440`）：`docs/archive/dev-plans/062-test-tp060-02-master-data-org-setid-jobcatalog-position.md`
+- DEV-PLAN-063【归档 / 历史合同】：全链路业务测试子计划 TP-060-03——人员与任职（Person + Assignments）：`docs/archive/dev-plans/063-test-tp060-03-person-and-assignments.md`
 - DEV-PLAN-381【归档】：CubeBox capability 与 functional area 历史来源专项调查：`docs/archive/dev-plans/381-cubebox-capability-and-functional-area-lineage-investigation.md`
 - DEV-PLAN-382【归档】：Capability Functional Area 治理影响面专项调查：`docs/archive/dev-plans/382-capability-functional-area-governance-impact-investigation.md`
 - DEV-PLAN-383【归档】：Functional Area 与 DDD 模块并行第二维度风险专项调查与收敛建议：`docs/archive/dev-plans/383-functional-area-vs-ddd-module-second-axis-investigation-and-remediation-plan.md`
@@ -244,11 +240,11 @@ modules/{module}/
 - DEV-PLAN-441：旧策略模块残余清理方案：`docs/dev-plans/441-legacy-strategy-module-residue-cleanup-plan.md`
 - DEV-PLAN-450：直接切除 jobcatalog / staffing / person 三模块方案（保留 orgunit）：`docs/dev-plans/450-direct-removal-of-jobcatalog-staffing-person-modules-plan.md`
 - DEV-PLAN-440 Readiness：当前命中、停止线与分阶段 owner：`docs/dev-records/DEV-PLAN-440-READINESS.md`
-- SetID 相关历史研究/中间方案说明：`070A`、`102C*`、`015Z*`、`161A`、`163A`、`185`、`191`、`203` 等文档仅可作为历史来源、调查记录或待归档材料引用；凡涉及 SetID 根删除、入口是否保留、现行主流程是否仍依赖 SetID，一律以 `DEV-PLAN-440` 为准。
+- SetID 相关历史研究/中间方案说明：`070A`、`102C*`、`015Z*`、`161A`、`163A`、`185`、`191`、`203` 等文档仅可作为 archive 历史来源或调查记录引用；凡涉及 SetID 根删除、入口是否保留、现行主流程是否仍依赖 SetID，一律以 `DEV-PLAN-440` 为准。
 - DEV-PLAN-400：CodeFlow 辅助源码分析与爆炸半径评估落地方案：`docs/dev-plans/400-codeflow-assisted-source-analysis-and-impact-radius-plan.md`
 - DEV-PLAN-069：移除薪酬社保与考勤（文档/代码/测试/数据库）：`docs/dev-plans/069-remove-payroll-attendance.md`
 - DEV-PLAN-070【归档】：SetID 绑定组织架构重构方案（时间口径已由 DEV-PLAN-102B 接管）：`docs/archive/dev-plans/070-setid-orgunit-binding-redesign.md`
-- DEV-PLAN-070A：全局共享租户模式 vs 天然租户隔离模式专项调查（SetID/Scope Package，历史研究来源，不作为现行实现依据）：`docs/dev-plans/070a-setid-global-share-vs-tenant-native-isolation-investigation.md`
+- DEV-PLAN-070A【归档 / 历史来源】：全局共享租户模式 vs 天然租户隔离模式专项调查（SetID/Scope Package，不作为现行实现依据）：`docs/archive/dev-plans/070a-setid-global-share-vs-tenant-native-isolation-investigation.md`
 - DEV-PLAN-070B：取消共享租户（global_tenant）并收敛为租户本地发布方案（以字典配置模块为样板）：`docs/dev-plans/070b-no-global-tenant-and-dict-release-to-tenant-plan.md`
 - DEV-PLAN-070B1：字典基线发布 UI 可视化操作方案（承接 DEV-PLAN-070B）：`docs/dev-plans/070b1-dict-release-ui-operations-plan.md`
 - DEV-PLAN-070B-T：070B 系列目标达成测试方案（字典租户本地发布）：`docs/dev-plans/070b-t-dict-tenant-release-test-plan.md`
@@ -320,38 +316,28 @@ modules/{module}/
 - DEV-PLAN-126：Go 1.26 升级与现代化改造计划（No-Compat）：`docs/dev-plans/126-go-1-26-upgrade-and-modernization-plan.md`
 - DEV-PLAN-130：Org 组织树初始化问题收敛与自举修复方案：`docs/dev-plans/130-orgunit-tree-initialization-recovery-and-bootstrap.md`
 - DEV-PLAN-140：全仓错误提示明确化与质量门禁：`docs/dev-plans/140-error-message-clarity-and-gates.md`
-- DEV-PLAN-150：Capability Key 对标 Workday 核心差距收敛方案（P0/P1）：`docs/dev-plans/150-capability-key-workday-alignment-gap-closure-plan.md`
-- DEV-PLAN-151：Capability Key Phase 1 契约冻结与门禁基线（承接 150 M1）：`docs/dev-plans/151-capability-key-m1-contract-freeze-and-gates-baseline.md`
-- DEV-PLAN-152：Capability Key Phase 2 运行时语义切口（承接 150 M4）：`docs/dev-plans/152-capability-key-m4-runtime-semantic-cutover.md`
-- DEV-PLAN-153：Capability Key Phase 3 上下文化授权与动态关系（承接 150 M2/M5）：`docs/dev-plans/153-capability-key-m2-m5-contextual-authz-and-dynamic-relations.md`
-- DEV-PLAN-154：Capability Key Phase 4 Explain 与审计收敛（承接 150 M5）：`docs/dev-plans/154-capability-key-m5-explain-and-audit-convergence.md`
-- DEV-PLAN-155：Capability Key Phase 5 EvaluationContext + CEL 内核基座（承接 150 M3）：`docs/dev-plans/155-capability-key-m3-evaluation-context-cel-kernel.md`
-- DEV-PLAN-156：Capability Key Phase 6 路由映射与复合门禁（承接 150 M3/M9）：`docs/dev-plans/156-capability-key-m3-m9-route-capability-mapping-and-gates.md`
-- DEV-PLAN-157：Capability Key Phase 7 Functional Area 治理落地（承接 150 M7）：`docs/dev-plans/157-capability-key-m7-functional-area-governance.md`
-- DEV-PLAN-158：Capability Key Phase 8 策略激活与版本一致性（承接 150 M6）：`docs/dev-plans/158-capability-key-m6-policy-activation-and-version-consistency.md`
-- DEV-PLAN-159：Capability Key Phase 9 字段级分段安全（承接 150 M7）：`docs/dev-plans/159-capability-key-m7-segment-security-field-level-visibility.md`
-- DEV-PLAN-160：Capability Key Phase 10 UI 可视化交付与证据收口（承接 150 M8/M10）：`docs/dev-plans/160-capability-key-m8-m10-ui-delivery-and-evidence-closure.md`
-- DEV-PLAN-161：Org 新建表单动态策略落地（org_code + d_org_type，承接 150）：`docs/dev-plans/161-org-create-dynamic-field-policy-on-capability-registry.md`
-- DEV-PLAN-161A：SetID Capability Registry 可编辑与可维护化（承接 160/161）：`docs/dev-plans/161a-setid-capability-registry-editable-and-maintainable.md`
+- DEV-PLAN-150 ~ DEV-PLAN-160【归档】：Capability Key / Functional Area / Policy Activation 主链文档已由 `DEV-PLAN-450` 宣告退役；现仅作为仓内历史来源保留，不再作为现行实现依据：`docs/archive/dev-plans/150-capability-key-workday-alignment-gap-closure-plan.md` ~ `docs/archive/dev-plans/160-capability-key-m8-m10-ui-delivery-and-evidence-closure.md`
+- DEV-PLAN-161【历史来源】：Org 新建表单动态策略落地（Capability 主链历史方案；现行删除 owner 见 `DEV-PLAN-450`）：`docs/dev-plans/161-org-create-dynamic-field-policy-on-capability-registry.md`
+- DEV-PLAN-161A【归档 / 历史来源】：SetID Capability Registry 可编辑与可维护化（Capability 主链历史方案；现行删除 owner 见 `DEV-PLAN-450`）：`docs/archive/dev-plans/161a-setid-capability-registry-editable-and-maintainable.md`
 - DEV-PLAN-162：OrgUnit 新增版本后组织类型回退为“单位”问题调查：`docs/dev-plans/162-orgunit-add-version-dict-ext-not-applied-investigation.md`
-- DEV-PLAN-163：Capability Key 表单字段下拉化收敛方案（Strategy Registry）：`docs/dev-plans/163-capability-key-form-dropdown-convergence.md`
-- DEV-PLAN-163A：SetID Governance 其余三页签字段下拉化收敛方案：`docs/dev-plans/163a-setid-governance-other-tabs-dropdown-convergence.md`
+- DEV-PLAN-163【归档 / 历史来源】：Capability Key 表单字段下拉化收敛方案（Strategy Registry 历史方案；现行删除 owner 见 `DEV-PLAN-450`）：`docs/archive/dev-plans/163-capability-key-form-dropdown-convergence.md`
+- DEV-PLAN-163A【归档 / 历史来源】：SetID Governance 其余三页签字段下拉化收敛方案：`docs/archive/dev-plans/163a-setid-governance-other-tabs-dropdown-convergence.md`
 - DEV-PLAN-164：组织类型策略控制范围与继承缺口分析（OrgType）：`docs/dev-plans/164-org-type-policy-control-gap-analysis.md`
-- DEV-PLAN-165：字段配置页与 Strategy capability_key 的对应关系调查与页面定位重评：`docs/dev-plans/165-field-configs-and-strategy-capability-key-alignment-and-page-positioning.md`
-- DEV-PLAN-170：Org 详情页 UI 外观对齐 Capability Key（仅页面壳层改造；弹窗不改）：`docs/dev-plans/170-org-form-ui-shell-alignment-with-capability-key.md`
-- DEV-PLAN-170A：Org 变更日志页 UI 外观对齐 Capability Key（仅页面壳层改造；其“顶部上下文定位实现”后续由 170B 纠偏）：`docs/dev-plans/170a-org-audit-log-ui-shell-alignment-with-capability-key.md`
+- DEV-PLAN-165【归档 / 历史来源】：字段配置页与 Strategy capability_key 的对应关系调查与页面定位重评（Capability 主链历史方案；现行删除 owner 见 `DEV-PLAN-450`）：`docs/archive/dev-plans/165-field-configs-and-strategy-capability-key-alignment-and-page-positioning.md`
+- DEV-PLAN-170【归档 / 历史来源】：Org 详情页 UI 外观对齐 Capability Key（Capability 主链历史方案；现行删除 owner 见 `DEV-PLAN-450`）：`docs/archive/dev-plans/170-org-form-ui-shell-alignment-with-capability-key.md`
+- DEV-PLAN-170A【归档 / 历史来源】：Org 变更日志页 UI 外观对齐 Capability Key（Capability 主链历史方案；现行删除 owner 见 `DEV-PLAN-450`）：`docs/archive/dev-plans/170a-org-audit-log-ui-shell-alignment-with-capability-key.md`
 - DEV-PLAN-170B：Org 详情页移除顶部上下文区与 URL 恢复定位替代方案（170A 纠偏计划）：`docs/dev-plans/170b-org-details-remove-top-context-and-url-restore-positioning.md`
 - DEV-PLAN-180：项目颗粒度层次统一与治理（Field/Form/Module/SetID/Tenant/Server）：`docs/dev-plans/180-granularity-hierarchy-governance-and-unification.md`
-- DEV-PLAN-181：OrgUnit Details 三类表单到 Capability Key 映射落地：`docs/dev-plans/181-orgunit-details-form-capability-mapping-implementation.md`
+- DEV-PLAN-181【归档 / 历史来源】：OrgUnit Details 三类表单到 Capability Key 映射落地（Capability 主链历史方案；现行删除 owner 见 `DEV-PLAN-450`）：`docs/archive/dev-plans/181-orgunit-details-form-capability-mapping-implementation.md`
 - DEV-PLAN-182：BU 策略“全 CRUD 默认生效”与场景覆盖收敛方案：`docs/dev-plans/182-bu-policy-baseline-and-intent-override-unification.md`
-- DEV-PLAN-183：Capability Key 配置可发现性与对象/意图显式建模方案：`docs/dev-plans/183-capability-key-object-intent-discoverability-and-modeling.md`
+- DEV-PLAN-183【归档 / 历史来源】：Capability Key 配置可发现性与对象/意图显式建模方案（Capability 主链历史方案；现行删除 owner 见 `DEV-PLAN-450`）：`docs/archive/dev-plans/183-capability-key-object-intent-discoverability-and-modeling.md`
 - DEV-PLAN-184：字段配置与策略规则双层 SoT 收敛方案（Static Metadata vs Dynamic Policy）：`docs/dev-plans/184-field-metadata-and-runtime-policy-sot-convergence.md`
-- DEV-PLAN-185：字段配置页字典值列表 SetID 列展示与主数据取数控制策略收敛：`docs/dev-plans/185-field-config-dict-values-setid-column-and-master-data-fetch-control.md`
-- DEV-PLAN-191：`/app/org/setid` 导航与页面设计优化方案（历史页面方案；现行入口删除 owner 见 `DEV-PLAN-440`）：`docs/dev-plans/191-setid-governance-navigation-and-layout-optimization.md`
+- DEV-PLAN-185【归档 / 历史来源】：字段配置页字典值列表 SetID 列展示与主数据取数控制策略收敛：`docs/archive/dev-plans/185-field-config-dict-values-setid-column-and-master-data-fetch-control.md`
+- DEV-PLAN-191【归档 / 历史来源】：`/app/org/setid` 导航与页面设计优化方案（历史页面方案；现行入口删除 owner 见 `DEV-PLAN-440`）：`docs/archive/dev-plans/191-setid-governance-navigation-and-layout-optimization.md`
 - DEV-PLAN-200：组合优先的积木式页面与功能架构蓝图（Field Config × Dict × CRUD Pattern × Strategy）：`docs/dev-plans/200-composable-building-block-architecture-blueprint.md`
 - DEV-PLAN-201：200蓝图 Phase 0 边界冻结与跨层作用域一致性基线：`docs/dev-plans/201-blueprint-phase0-boundary-and-scope-consistency-freeze.md`
 - DEV-PLAN-202：200蓝图 Phase 0 策略决议确定性与 allowed_value_codes 语义收敛：`docs/dev-plans/202-blueprint-policy-resolution-and-allowed-values-determinism.md`
-- DEV-PLAN-203：200蓝图 Phase 1 运行时读路径（映射注册表 + SetID 硬前置）：`docs/dev-plans/203-blueprint-runtime-read-path-mapping-and-setid-preresolve.md`
+- DEV-PLAN-203【归档 / 历史来源】：200蓝图 Phase 1 运行时读路径（映射注册表 + SetID 硬前置）：`docs/archive/dev-plans/203-blueprint-runtime-read-path-mapping-and-setid-preresolve.md`
 - DEV-PLAN-204：200蓝图 Phase 1 组合 DTO、Explain 与版本快照协议：`docs/dev-plans/204-blueprint-composition-dto-and-explain-versioning.md`
 - DEV-PLAN-205：200蓝图 Phase 1 页面职责收敛（Static Metadata × Dynamic Policy）：`docs/dev-plans/205-blueprint-page-responsibility-convergence-static-dynamic-sot.md`
 - DEV-PLAN-206：200蓝图 Phase 2 CRUD 模板统一与双版本提交收口：`docs/dev-plans/206-blueprint-crud-template-and-double-version-submit-cutover.md`
@@ -371,7 +357,7 @@ modules/{module}/
 - DEV-PLAN-311：View As Of 页面改造矩阵与 OrgUnitDetails 样板实施计划：`docs/dev-plans/311-view-as-of-page-cutover-matrix-and-orgunit-details-sample-plan.md`
 - DEV-PLAN-312：View As Of 收口实施计划——详情页单历史锚点与 A 类页面读写解耦：`docs/dev-plans/312-view-as-of-implementation-plan-details-single-history-anchor-and-a-pages-read-write-decoupling.md`
 - DEV-PLAN-313：View As Of 后端并行收口计划——显式日期契约、无 fallback、统一错误语义：`docs/dev-plans/313-view-as-of-backend-parallel-convergence-plan-explicit-date-contract-and-no-fallback.md`
-- DEV-PLAN-314：View As Of P1 页面批量收口计划——Assignments / Positions / JobCatalog / DictConfigs：`docs/dev-plans/314-view-as-of-p1-pages-batch-cutover-plan-assignments-positions-jobcatalog-dicts.md`
+- DEV-PLAN-314【归档 / 历史来源】：View As Of P1 页面批量收口计划——Assignments / Positions / JobCatalog / DictConfigs：`docs/archive/dev-plans/314-view-as-of-p1-pages-batch-cutover-plan-assignments-positions-jobcatalog-dicts.md`
 - DEV-PLAN-315：View As Of 最小 helper 与反回流门禁计划：`docs/dev-plans/315-view-as-of-minimal-helper-and-anti-regression-gates-plan.md`
 - DEV-PLAN-316：View As Of 工具态页面收口计划——Explain / Release / Governance 子区统一任务态时间语义：`docs/dev-plans/316-view-as-of-tooling-pages-convergence-plan.md`
 - DEV-PLAN-317：View As Of 页面时间语义回归与验收计划：`docs/dev-plans/317-view-as-of-regression-and-acceptance-plan.md`
@@ -379,20 +365,20 @@ modules/{module}/
 - DEV-PLAN-102【归档】：全项目 as_of 时间上下文收敛与批判（承接 DEV-PLAN-076，现行口径以 `DEV-PLAN-102B`/`STD-002` 为准）：`docs/archive/dev-plans/102-as-of-time-context-convergence-and-critique.md`
 - DEV-PLAN-102A【归档】：Org Code 默认规则“保存后无变化”生效日错位调查与收敛方案（表达式口径一致性已并入 `DEV-PLAN-120`）：`docs/archive/dev-plans/102a-org-code-default-policy-effective-date-visibility-fix.md`
 - DEV-PLAN-102B：070/071 时间口径强制显式化与历史回放稳定性收敛：`docs/dev-plans/102b-070-071-time-context-explicitness-and-replay-determinism.md`
-- DEV-PLAN-102C：SetID 对标 Workday 的集团共享与业务单元个性化差距评估（承接 102/102B）：`docs/dev-plans/102c-setid-group-sharing-and-bu-personalization-gap-assessment.md`
-- DEV-PLAN-102C1：SetID 上下文化安全模型（承接 102C，避免与 070B 重复）：`docs/dev-plans/102c1-setid-contextual-security-model.md`
-- DEV-PLAN-102C2：BU 个性化策略注册表（承接 102C，避免与 070B/102C1 重复）：`docs/dev-plans/102c2-bu-personalization-strategy-registry.md`
-- DEV-PLAN-102C3：SetID 配置命中可解释性（Explainability）方案（承接 102C，避免与 070B/102C1/102C2 重复）：`docs/dev-plans/102c3-setid-configuration-hit-explainability.md`
-- DEV-PLAN-102C4：BU 流程个性化样板（承接 102C，避免与 070B/102C1/102C2/102C3 重复）：`docs/dev-plans/102c4-bu-process-personalization-pilot.md`
-- DEV-PLAN-102C5：102C1-102C3 UI 专项方案（SetID 上下文化安全 + 策略注册表 + 命中解释）：`docs/dev-plans/102c5-ui-design-for-setid-context-security-registry-explainability.md`
-- DEV-PLAN-102C6：彻底删除 scope_code + package，收敛到 capability_key + setid（历史阶段方案；凡涉 SetID 根删除排序以 `DEV-PLAN-440` 为准）：`docs/dev-plans/102c6-remove-scope-code-and-converge-to-capability-key-plan.md`
-- DEV-PLAN-102C-T：102C1-102C3 测试方案（同租户跨 BU 字段差异）：`docs/dev-plans/102c-t-test-plan-for-c1-c3-bu-field-variance.md`
+- DEV-PLAN-102C【归档 / 历史来源】：SetID 对标 Workday 的集团共享与业务单元个性化差距评估（承接 102/102B）：`docs/archive/dev-plans/102c-setid-group-sharing-and-bu-personalization-gap-assessment.md`
+- DEV-PLAN-102C1【归档 / 历史来源】：SetID 上下文化安全模型（承接 102C，避免与 070B 重复）：`docs/archive/dev-plans/102c1-setid-contextual-security-model.md`
+- DEV-PLAN-102C2【归档 / 历史来源】：BU 个性化策略注册表（承接 102C，避免与 070B/102C1 重复）：`docs/archive/dev-plans/102c2-bu-personalization-strategy-registry.md`
+- DEV-PLAN-102C3【归档 / 历史来源】：SetID 配置命中可解释性（Explainability）方案（承接 102C，避免与 070B/102C1/102C2 重复）：`docs/archive/dev-plans/102c3-setid-configuration-hit-explainability.md`
+- DEV-PLAN-102C4【归档 / 历史来源】：BU 流程个性化样板（承接 102C，避免与 070B/102C1/102C2/102C3 重复）：`docs/archive/dev-plans/102c4-bu-process-personalization-pilot.md`
+- DEV-PLAN-102C5【归档 / 历史来源】：102C1-102C3 UI 专项方案（SetID 上下文化安全 + 策略注册表 + 命中解释）：`docs/archive/dev-plans/102c5-ui-design-for-setid-context-security-registry-explainability.md`
+- DEV-PLAN-102C6【归档 / 历史来源】：彻底删除 scope_code + package，收敛到 capability_key + setid（历史阶段方案；Capability 主链已退役，凡涉现行删除排序以 `DEV-PLAN-440/450` 为准）：`docs/archive/dev-plans/102c6-remove-scope-code-and-converge-to-capability-key-plan.md`
+- DEV-PLAN-102C-T【归档 / 历史来源】：102C1-102C3 测试方案（同租户跨 BU 字段差异）：`docs/archive/dev-plans/102c-t-test-plan-for-c1-c3-bu-field-variance.md`
 - DEV-PLAN-102D：基于 102 基线的 Context + Rule + Eval 动态隔离与配置安全实施方案：`docs/dev-plans/102d-context-rule-evaluation-engine-on-top-of-102-foundation.md`
 - DEV-PLAN-102D-T：102D 动态规则引擎测试方案（用户可见性 + 内部评估链路）：`docs/dev-plans/102d-t-context-rule-eval-user-visible-test-plan.md`
 - DEV-PLAN-103【归档】：移除旧前端链路，前端收敛为 MUI X（React SPA；规范已并入 `DEV-PLAN-005/STD-005/STD-006`）：`docs/archive/dev-plans/103-remove-astro-legacy-ui-and-converge-to-mui-x-only.md`
 - DEV-PLAN-103A【归档】：DEV-PLAN-103 收尾（P3 业务页闭环 + P6 工程改名：去技术后缀）：`docs/archive/dev-plans/103a-dev-plan-103-closure-p3-p6-apps-web-rename.md`
-- DEV-PLAN-104：Job Catalog（职位分类）页面 UI 优化方案（信息架构收敛：上下文工具条 + Tabs + DataGrid + Dialog）：`docs/dev-plans/104-jobcatalog-ui-optimization.md`
-- DEV-PLAN-104A：Job Catalog UI 优化补充修订（对齐 DEV-PLAN-002）：`docs/dev-plans/104a-jobcatalog-ui-optimization-alignment-with-dev-plan-002.md`
+- DEV-PLAN-104【归档 / 历史来源】：Job Catalog（职位分类）页面 UI 优化方案（信息架构收敛：上下文工具条 + Tabs + DataGrid + Dialog）：`docs/archive/dev-plans/104-jobcatalog-ui-optimization.md`
+- DEV-PLAN-104A【归档 / 历史来源】：Job Catalog UI 优化补充修订（对齐 DEV-PLAN-002）：`docs/archive/dev-plans/104a-jobcatalog-ui-optimization-alignment-with-dev-plan-002.md`
 - DEV-PLAN-026A【归档】：OrgUnit 8位编号与 UUID/Code 命名规范：`docs/archive/dev-plans/026a-orgunit-id-uuid-code-naming.md`
 - DEV-PLAN-026B【归档】：OrgUnit 外部ID兼容（org_code 映射）方案：`docs/archive/dev-plans/026b-orgunit-external-id-code-mapping.md`
 - DEV-PLAN-026C【归档】：OrgUnit 外部ID兼容（org_code 映射）评审与修订方案：`docs/archive/dev-plans/026c-orgunit-external-id-code-mapping-review-and-revision.md`
@@ -400,46 +386,46 @@ modules/{module}/
 - P0 前置条件实施方案（契约优先）：`docs/dev-plans/010-p0-prerequisites-contract.md`
 - AI 驱动开发评审清单（Simple > Easy）：`docs/dev-plans/003-simple-not-easy-review-guide.md`
 - Org（事务性事件溯源 + 同步投射，已归档）：`docs/archive/dev-plans/026-org-transactional-event-sourcing-synchronous-projection.md`
-- Position（事务性事件溯源 + 同步投射）：`docs/dev-plans/030-position-transactional-event-sourcing-synchronous-projection.md`
-- Job Catalog（事务性事件溯源 + 同步投射）：`docs/dev-plans/029-job-catalog-transactional-event-sourcing-synchronous-projection.md`
+- Position（事务性事件溯源 + 同步投射，已归档）：`docs/archive/dev-plans/030-position-transactional-event-sourcing-synchronous-projection.md`
+- Job Catalog（事务性事件溯源 + 同步投射，已归档）：`docs/archive/dev-plans/029-job-catalog-transactional-event-sourcing-synchronous-projection.md`
 - PostgreSQL RLS 强租户隔离（Org/Position/Job Catalog）：`docs/dev-plans/021-pg-rls-for-org-position-job-catalog.md`
 - DDD 分层框架（对齐 CleanArchGuard + DB Kernel）：`docs/dev-plans/015-ddd-layering-framework.md`
 - DEV-PLAN-015A：DDD 分层框架履职缺口评估（承接 DEV-PLAN-015）：`docs/dev-plans/015a-ddd-layering-framework-implementation-gap-assessment.md`
 - DEV-PLAN-015B：DDD 分层框架收口整改路线图（P0/P1/P2，承接 DEV-PLAN-015A）：`docs/dev-plans/015b-ddd-layering-framework-remediation-roadmap.md`
 - DEV-PLAN-015C：DDD 分层框架 P0 反漂移门禁实施计划（承接 DEV-PLAN-015B）：`docs/dev-plans/015c-ddd-layering-framework-p0-anti-drift-gate-plan.md`
-- DEV-PLAN-015D：Staffing Assignment 分层回流修复（承接 DEV-PLAN-015B P1）：`docs/dev-plans/015d-staffing-assignment-layering-reversal-fix-plan.md`
-- DEV-PLAN-015E：Person 默认装配向模块侧收口（承接 DEV-PLAN-015B P1）：`docs/dev-plans/015e-person-default-wiring-module-side-plan.md`
-- DEV-PLAN-015F：Person 模块 Composition Root 最小化落地（承接 DEV-PLAN-015B P1）：`docs/dev-plans/015f-person-module-composition-root-minimalization-plan.md`
-- DEV-PLAN-015G：JobCatalog 内存 Store 向模块侧收口（承接 DEV-PLAN-015B P1）：`docs/dev-plans/015g-jobcatalog-memory-store-module-side-plan.md`
-- DEV-PLAN-015H：JobCatalog PG Store 向模块侧收口（承接 DEV-PLAN-015B P1）：`docs/dev-plans/015h-jobcatalog-pg-store-module-side-plan.md`
-- DEV-PLAN-015I：Staffing Assignment 组合根最小化收口（承接 DEV-PLAN-015B P1）：`docs/dev-plans/015i-staffing-assignment-composition-root-plan.md`
-- DEV-PLAN-015J：JobCatalog Server 侧冗余构造包装消除（承接 DEV-PLAN-015B P1）：`docs/dev-plans/015j-jobcatalog-server-constructor-elimination-plan.md`
-- DEV-PLAN-015K：Person Server 侧冗余构造包装消除（承接 DEV-PLAN-015B P1）：`docs/dev-plans/015k-person-server-constructor-elimination-plan.md`
-- DEV-PLAN-015L：JobCatalog Test-Only Wrapper 从生产代码移除（承接 DEV-PLAN-015B P1）：`docs/dev-plans/015l-jobcatalog-test-only-wrapper-elimination-plan.md`
-- DEV-PLAN-015M：JobCatalog Normalize Wrapper 从生产代码移除（承接 DEV-PLAN-015B P1）：`docs/dev-plans/015m-jobcatalog-normalize-wrapper-elimination-plan.md`
-- DEV-PLAN-015N：Person Normalize Wrapper 从生产代码移除（承接 DEV-PLAN-015B P1）：`docs/dev-plans/015n-person-normalize-wrapper-elimination-plan.md`
-- DEV-PLAN-015O：Staffing Assignment 默认 PG 装配向模块侧收口（承接 DEV-PLAN-015B P1）：`docs/dev-plans/015o-staffing-assignment-pg-default-wiring-plan.md`
-- DEV-PLAN-015P：Staffing Assignment 默认 Memory 装配向模块侧收口（承接 DEV-PLAN-015B P1）：`docs/dev-plans/015p-staffing-assignment-memory-default-wiring-plan.md`
-- DEV-PLAN-015Q：Staffing Assignment 内存实现向模块侧收口（承接 DEV-PLAN-015B P1）：`docs/dev-plans/015q-staffing-assignment-memory-implementation-module-side-plan.md`
-- DEV-PLAN-015R：Staffing Position 领域类型与 Port 契约前移到模块侧（承接 DEV-PLAN-015B P1）：`docs/dev-plans/015r-staffing-position-domain-contract-plan.md`
-- DEV-PLAN-015S：Staffing Position 默认 Memory 装配向模块侧收口（承接 DEV-PLAN-015B P1）：`docs/dev-plans/015s-staffing-position-memory-default-wiring-plan.md`
-- DEV-PLAN-015T：Staffing Position 内存实现向模块侧收口（承接 DEV-PLAN-015B P1）：`docs/dev-plans/015t-staffing-position-memory-implementation-module-side-plan.md`
-- DEV-PLAN-015U：Staffing Memory 兼容壳移出生产代码（承接 DEV-PLAN-015B P1）：`docs/dev-plans/015u-staffing-memory-compatibility-shell-test-only-plan.md`
-- DEV-PLAN-015V：Staffing PG Assignment 薄委派移出生产代码（承接 DEV-PLAN-015B P1）：`docs/dev-plans/015v-staffing-pg-assignment-wrapper-test-only-plan.md`
-- DEV-PLAN-015W：Staffing Position PG 实现与默认装配向模块侧收口（承接 DEV-PLAN-015B P1）：`docs/dev-plans/015w-staffing-position-pg-module-side-wiring-plan.md`
+- DEV-PLAN-015D【归档 / 历史来源】：Staffing Assignment 分层回流修复（承接 DEV-PLAN-015B P1）：`docs/archive/dev-plans/015d-staffing-assignment-layering-reversal-fix-plan.md`
+- DEV-PLAN-015E【归档 / 历史来源】：Person 默认装配向模块侧收口（承接 DEV-PLAN-015B P1）：`docs/archive/dev-plans/015e-person-default-wiring-module-side-plan.md`
+- DEV-PLAN-015F【归档 / 历史来源】：Person 模块 Composition Root 最小化落地（承接 DEV-PLAN-015B P1）：`docs/archive/dev-plans/015f-person-module-composition-root-minimalization-plan.md`
+- DEV-PLAN-015G【归档 / 历史来源】：JobCatalog 内存 Store 向模块侧收口（承接 DEV-PLAN-015B P1）：`docs/archive/dev-plans/015g-jobcatalog-memory-store-module-side-plan.md`
+- DEV-PLAN-015H【归档 / 历史来源】：JobCatalog PG Store 向模块侧收口（承接 DEV-PLAN-015B P1）：`docs/archive/dev-plans/015h-jobcatalog-pg-store-module-side-plan.md`
+- DEV-PLAN-015I【归档 / 历史来源】：Staffing Assignment 组合根最小化收口（承接 DEV-PLAN-015B P1）：`docs/archive/dev-plans/015i-staffing-assignment-composition-root-plan.md`
+- DEV-PLAN-015J【归档 / 历史来源】：JobCatalog Server 侧冗余构造包装消除（承接 DEV-PLAN-015B P1）：`docs/archive/dev-plans/015j-jobcatalog-server-constructor-elimination-plan.md`
+- DEV-PLAN-015K【归档 / 历史来源】：Person Server 侧冗余构造包装消除（承接 DEV-PLAN-015B P1）：`docs/archive/dev-plans/015k-person-server-constructor-elimination-plan.md`
+- DEV-PLAN-015L【归档 / 历史来源】：JobCatalog Test-Only Wrapper 从生产代码移除（承接 DEV-PLAN-015B P1）：`docs/archive/dev-plans/015l-jobcatalog-test-only-wrapper-elimination-plan.md`
+- DEV-PLAN-015M【归档 / 历史来源】：JobCatalog Normalize Wrapper 从生产代码移除（承接 DEV-PLAN-015B P1）：`docs/archive/dev-plans/015m-jobcatalog-normalize-wrapper-elimination-plan.md`
+- DEV-PLAN-015N【归档 / 历史来源】：Person Normalize Wrapper 从生产代码移除（承接 DEV-PLAN-015B P1）：`docs/archive/dev-plans/015n-person-normalize-wrapper-elimination-plan.md`
+- DEV-PLAN-015O【归档 / 历史来源】：Staffing Assignment 默认 PG 装配向模块侧收口（承接 DEV-PLAN-015B P1）：`docs/archive/dev-plans/015o-staffing-assignment-pg-default-wiring-plan.md`
+- DEV-PLAN-015P【归档 / 历史来源】：Staffing Assignment 默认 Memory 装配向模块侧收口（承接 DEV-PLAN-015B P1）：`docs/archive/dev-plans/015p-staffing-assignment-memory-default-wiring-plan.md`
+- DEV-PLAN-015Q【归档 / 历史来源】：Staffing Assignment 内存实现向模块侧收口（承接 DEV-PLAN-015B P1）：`docs/archive/dev-plans/015q-staffing-assignment-memory-implementation-module-side-plan.md`
+- DEV-PLAN-015R【归档 / 历史来源】：Staffing Position 领域类型与 Port 契约前移到模块侧（承接 DEV-PLAN-015B P1）：`docs/archive/dev-plans/015r-staffing-position-domain-contract-plan.md`
+- DEV-PLAN-015S【归档 / 历史来源】：Staffing Position 默认 Memory 装配向模块侧收口（承接 DEV-PLAN-015B P1）：`docs/archive/dev-plans/015s-staffing-position-memory-default-wiring-plan.md`
+- DEV-PLAN-015T【归档 / 历史来源】：Staffing Position 内存实现向模块侧收口（承接 DEV-PLAN-015B P1）：`docs/archive/dev-plans/015t-staffing-position-memory-implementation-module-side-plan.md`
+- DEV-PLAN-015U【归档 / 历史来源】：Staffing Memory 兼容壳移出生产代码（承接 DEV-PLAN-015B P1）：`docs/archive/dev-plans/015u-staffing-memory-compatibility-shell-test-only-plan.md`
+- DEV-PLAN-015V【归档 / 历史来源】：Staffing PG Assignment 薄委派移出生产代码（承接 DEV-PLAN-015B P1）：`docs/archive/dev-plans/015v-staffing-pg-assignment-wrapper-test-only-plan.md`
+- DEV-PLAN-015W【归档 / 历史来源】：Staffing Position PG 实现与默认装配向模块侧收口（承接 DEV-PLAN-015B P1）：`docs/archive/dev-plans/015w-staffing-position-pg-module-side-wiring-plan.md`
 - DEV-PLAN-015X：OrgUnit Write Service 默认装配向模块侧收口（承接 DEV-PLAN-015B P1）：`docs/dev-plans/015x-orgunit-write-service-module-wiring-plan.md`
-- DEV-PLAN-015Y：JobCatalog 视图服务适配入口向模块侧收口（承接 DEV-PLAN-015B P1）：`docs/dev-plans/015y-jobcatalog-view-service-adapter-module-side-plan.md`
+- DEV-PLAN-015Y【归档 / 历史来源】：JobCatalog 视图服务适配入口向模块侧收口（承接 DEV-PLAN-015B P1）：`docs/archive/dev-plans/015y-jobcatalog-view-service-adapter-module-side-plan.md`
 - DEV-PLAN-015Z：DDD 分层框架收尾盘点与封板清单（承接 DEV-PLAN-015B）：`docs/dev-plans/015z-ddd-layering-framework-closure-summary-and-backlog.md`
-- DEV-PLAN-015Z1：OrgUnit SetID Memory Store 向模块侧收口（承接 DEV-PLAN-015Z）：`docs/dev-plans/015z1-orgunit-setid-memory-module-side-plan.md`
-- DEV-PLAN-015Z2：OrgUnit SetID PG 默认装配入口向模块侧收口（承接 DEV-PLAN-015Z1）：`docs/dev-plans/015z2-orgunit-setid-pg-module-entry-plan.md`
-- DEV-PLAN-015Z3：OrgUnit SetID PG 实现向模块侧收缩为 Server 薄壳（承接 DEV-PLAN-015Z2）：`docs/dev-plans/015z3-orgunit-setid-pg-server-thin-shell-plan.md`
+- DEV-PLAN-015Z1【归档 / 历史来源】：OrgUnit SetID Memory Store 向模块侧收口（承接 DEV-PLAN-015Z）：`docs/archive/dev-plans/015z1-orgunit-setid-memory-module-side-plan.md`
+- DEV-PLAN-015Z2【归档 / 历史来源】：OrgUnit SetID PG 默认装配入口向模块侧收口（承接 DEV-PLAN-015Z1）：`docs/archive/dev-plans/015z2-orgunit-setid-pg-module-entry-plan.md`
+- DEV-PLAN-015Z3【归档 / 历史来源】：OrgUnit SetID PG 实现向模块侧收缩为 Server 薄壳（承接 DEV-PLAN-015Z2）：`docs/archive/dev-plans/015z3-orgunit-setid-pg-server-thin-shell-plan.md`
 - DEV-PLAN-015Z4：DDD 分层 P2 组合根门禁封板（承接 DEV-PLAN-015Z）：`docs/dev-plans/015z4-ddd-layering-p2-gate-closure-plan.md`
 - DEV-PLAN-015Z5：IAM Dict Store 向模块侧收缩为 Server 薄壳（承接 DEV-PLAN-015Z）：`docs/dev-plans/015z5-iam-dict-server-thin-shell-plan.md`
-- DEV-PLAN-015Z6：OrgUnit SetID Store 向模块侧收缩为 Server 薄壳（承接 DEV-PLAN-015Z）：`docs/dev-plans/015z6-orgunit-setid-server-thin-shell-plan.md`
+- DEV-PLAN-015Z6【归档 / 历史来源】：OrgUnit SetID Store 向模块侧收缩为 Server 薄壳（承接 DEV-PLAN-015Z）：`docs/archive/dev-plans/015z6-orgunit-setid-server-thin-shell-plan.md`
 - DEV-PLAN-015AA：IAM Dict Store 向模块侧收口（承接 DEV-PLAN-015Z）：`docs/dev-plans/015aa-iam-dict-store-module-side-plan.md`
-- Greenfield HR 模块骨架与契约（OrgUnit/JobCatalog/Staffing/Person）：`docs/dev-plans/016-greenfield-hr-modules-skeleton.md`
-- 任职记录（Job Data / Assignments）（事件 SoT + 同步投射）：`docs/dev-plans/031-greenfield-assignment-job-data.md`
-- Person 最小身份锚点（Pernr 1-8 位数字字符串）：`docs/dev-plans/027-person-minimal-identity-for-staffing.md`
+- Greenfield HR 模块骨架与契约（已归档，OrgUnit/JobCatalog/Staffing/Person 历史骨架）：`docs/archive/dev-plans/016-greenfield-hr-modules-skeleton.md`
+- 任职记录（Job Data / Assignments，已归档）：`docs/archive/dev-plans/031-greenfield-assignment-job-data.md`
+- Person 最小身份锚点（Pernr 1-8 位数字字符串，已归档）：`docs/archive/dev-plans/027-person-minimal-identity-for-staffing.md`
 - 引入 Astro（AHA Stack）到 HRMS UI（历史，已被 DEV-PLAN-103 替代，已归档）：`docs/archive/dev-plans/018-astro-aha-ui-shell-for-hrms.md`
 - 技术栈与工具链版本冻结：`docs/dev-plans/011-tech-stack-and-toolchain-versions.md`
 - 租户管理与登录认证：`docs/dev-plans/019-tenant-and-authn.md`

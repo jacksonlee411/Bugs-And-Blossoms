@@ -49,7 +49,6 @@
 - `config/access/policy.csv`
   - `orgunit.setid`
   - `org.setid_capability_config`
-- `config/capability/route-capability-map.v1.json`
   - `setid-strategy-registry`
   - `setid-explain`
 
@@ -62,7 +61,7 @@
   - 将仍保留的 SetID 计划条目标注为历史来源/历史合同/待归档材料，而非现行主线
 - `docs/dev-plans/060-business-e2e-test-suite.md`
   - SetID 主链已降级为历史合同样本
-- `docs/dev-plans/062-test-tp060-02-master-data-org-setid-jobcatalog-position.md`
+- `docs/archive/dev-plans/062-test-tp060-02-master-data-org-setid-jobcatalog-position.md`
   - SetID 段已降级为历史测试样本
 
 ## 已完成的 Phase 1 收口
@@ -158,8 +157,6 @@
   - `make check doc`
 - 路由：
   - `make check routing`
-- capability 映射：
-  - `make check capability-route-map`
 - Authz：
   - `make authz-pack && make authz-test && make authz-lint`
 - 前端定向：
