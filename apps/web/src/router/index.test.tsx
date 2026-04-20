@@ -6,15 +6,6 @@ vi.mock('../layout/AppShell', () => ({
 vi.mock('../pages/approvals/ApprovalsInboxPage', () => ({
   ApprovalsInboxPage: () => null
 }))
-vi.mock('../pages/cubebox/CubeBoxFilesPage', () => ({
-  CubeBoxFilesPage: () => null
-}))
-vi.mock('../pages/cubebox/CubeBoxModelsPage', () => ({
-  CubeBoxModelsPage: () => null
-}))
-vi.mock('../pages/cubebox/CubeBoxPage', () => ({
-  CubeBoxPage: () => null
-}))
 vi.mock('../pages/FoundationDemoPage', () => ({
   FoundationDemoPage: () => null
 }))
@@ -73,23 +64,18 @@ function routeElement(route: unknown): { props?: { to?: string; replace?: boolea
   return element as { props?: { to?: string; replace?: boolean; permissionKey?: string } }
 }
 
-describe('cubebox router aliases', () => {
-  it('keeps assistant aliases as redirect-only entries', () => {
+describe('app router', () => {
+  it('registers current primary business routes', () => {
     const rootRoute = router.routes.find((route) => route.path === '/')
     expect(rootRoute).toBeTruthy()
 
     const children = rootRoute?.children ?? []
-    const assistant = children.find((route) => route.path === 'assistant')
-    const assistantModels = children.find((route) => route.path === 'assistant/models')
-    const cubeboxModels = children.find((route) => route.path === 'cubebox/models')
+    const routePaths = new Set(children.map((route) => route.path))
 
-    expect(routeElement(assistant)).toBeTruthy()
-    expect(routeElement(assistantModels)).toBeTruthy()
-    expect(routeElement(assistant)?.props?.to).toBe('/cubebox')
-    expect(routeElement(assistantModels)?.props?.to).toBe('/cubebox/models')
-    expect(routeElement(assistant)?.props?.replace).toBe(true)
-    expect(routeElement(assistantModels)?.props?.replace).toBe(true)
-    expect(routeElement(cubeboxModels)?.props?.permissionKey).toBe('orgunit.read')
-    expect(children.find((route) => route.path === 'assistant/librechat')).toBeUndefined()
+    expect(routePaths.has('org/units')).toBe(true)
+    expect(routePaths.has('jobcatalog')).toBe(true)
+    expect(routePaths.has('staffing/positions')).toBe(true)
+    expect(routePaths.has('person/persons')).toBe(true)
+    expect(routePaths.has('staffing/assignments')).toBe(true)
   })
 })

@@ -69,7 +69,7 @@
    `staffing` 中凡“仅为 payroll/attendance 服务”的字段/约束/表/函数一律移除；不为“未来可能用得上”保留结构。  
    例外：若发现对象已被 `staffing` 核心能力实际使用，必须在 §8 “盘点清单”中写明保留理由与依赖点。
 3. [X] **UI 与路由入口：不保留占位**  
-   直接移除入口；旧路径 404；不做 alias/redirect/compat window。
+   直接移除入口；旧路径返回未命中；不保留任何兼容过渡层。
 4. [X] **文档痕迹：全仓清理（包含 dev-records）**  
    `docs/dev-records/` 同样属于清理范围：不保留 payroll/attendance 的历史痕迹；对非 payroll/attendance 专用的记录，必须“改写”去除相关字样与上下文引用（保留其它模块证据价值）。
 

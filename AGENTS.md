@@ -11,9 +11,7 @@
 - Go 代码：`go fmt ./... && go vet ./... && make check lint && make test`
 - 新建 Go 模块后（防止 `go mod init` 默认回退）：执行 `go get go@1.26.0`（或 `go mod edit -go=1.26.0`）
 - 禁止 legacy（单链路原则）：`make check no-legacy`（或直接跑 `make preflight`）
-- Assistant 配置单主源门禁（阻断第二写入口/契约回写/SSOT 漂移）：`make check assistant-config-single-source`
-- Assistant Knowledge 单主源 / runtime / JSON cutoff 门禁：`make check assistant-knowledge-single-source && make check assistant-knowledge-runtime-load && make check assistant-knowledge-no-json-runtime`
-- Assistant Knowledge 反回流门禁（overlay/literals/archive/contract/db）：`make check assistant-no-legacy-overlay && make check assistant-no-knowledge-literals && make check assistant-knowledge-no-archive-ref && make check assistant-knowledge-contract-separation && make check assistant-no-knowledge-db`
+- 历史对话面清场门禁（阻断旧 `assistant` / `LibreChat` / `CubeBox` 运行面与兼容语义回流）：`make check chat-surface-clean`
 - 禁止新增 scope/package 漂移：`make check no-scope-package`
 - 颗粒度层次门禁（阻断 org_level/scope_type/scope_key 回流）：`make check granularity`
 - DDD 分层 P0 反漂移门禁（阻断 `internal/server` 扩散与 `infrastructure -> services` 回流）：`make check ddd-layering-p0`
@@ -58,8 +56,7 @@
 | E2E（Playwright） | `make e2e` | 门禁结构见 `DEV-PLAN-012`；数据库依赖口径冻结为 Docker / compose，E2E 不得把宿主机 `psql` 等工具作为唯一前置条件 |
 | 新增/调整文档 | `make check doc` | 门禁见“文档收敛与门禁” |
 | 引入/修改“回退通道/双链路/legacy 分支” | `make check no-legacy` | 禁止 legacy（见 `DEV-PLAN-004M1`） |
-| Assistant 模型配置主源相关改动（配置写入口/迁移 stopline/门禁接线） | `make check assistant-config-single-source` | 单主源门禁（见 `DEV-PLAN-231`） |
-| Assistant Knowledge Markdown 主源 / runtime / JSON cutoff / 反回流 | `make check assistant-knowledge-single-source && make check assistant-knowledge-runtime-load && make check assistant-knowledge-no-json-runtime && make check assistant-no-legacy-overlay && make check assistant-no-knowledge-literals && make check assistant-knowledge-no-archive-ref && make check assistant-knowledge-contract-separation && make check assistant-no-knowledge-db` | `370A` Direct Markdown Runtime 与反回流门禁 |
+| 历史对话面 / 旧路由 / 旧兼容语义相关改动 | `make check chat-surface-clean` | 硬删除后唯一反回流门禁（见 `DEV-PLAN-436`） |
 | 新增 scope/package 语义引用（`scope_code/scope_package/scope_subscription/package_id`） | `make check no-scope-package` | 增量反漂移门禁（承接 `DEV-PLAN-102C6`） |
 | 颗粒度层次/旧 scope 相关新增（`org_level/scope_type/scope_key`） | `make check granularity` | 颗粒度治理门禁（承接 `DEV-PLAN-180`） |
 | DDD 分层相关新增漂移（`internal/server` 扩散模块实现、`modules/*/infrastructure -> services` 回流） | `make check ddd-layering-p0` | P0 止血门禁（承接 `DEV-PLAN-015B/015C`） |
@@ -222,7 +219,6 @@ modules/{module}/
 - DEV-PLAN-061：全链路业务测试子计划 TP-060-01——租户/登录/权限/隔离基线：`docs/dev-plans/061-test-tp060-01-tenant-login-authz-rls-baseline.md`
 - DEV-PLAN-062：全链路业务测试子计划 TP-060-02——主数据（组织架构 + SetID + JobCatalog + 职位）：`docs/dev-plans/062-test-tp060-02-master-data-org-setid-jobcatalog-position.md`
 - DEV-PLAN-063：全链路业务测试子计划 TP-060-03——人员与任职（Person + Assignments）：`docs/dev-plans/063-test-tp060-03-person-and-assignments.md`
-- DEV-PLAN-064A：全链路业务测试子计划 TP-060-05——Assistant（会话 + 意图 + 提交 + 任务编排）：`docs/dev-plans/064a-test-tp060-05-assistant-conversation-intent-and-tasks.md`
 - DEV-PLAN-381【归档】：CubeBox capability 与 functional area 历史来源专项调查：`docs/archive/dev-plans/381-cubebox-capability-and-functional-area-lineage-investigation.md`
 - DEV-PLAN-382【归档】：Capability Functional Area 治理影响面专项调查：`docs/archive/dev-plans/382-capability-functional-area-governance-impact-investigation.md`
 - DEV-PLAN-383【归档】：Functional Area 与 DDD 模块并行第二维度风险专项调查与收敛建议：`docs/archive/dev-plans/383-functional-area-vs-ddd-module-second-axis-investigation-and-remediation-plan.md`

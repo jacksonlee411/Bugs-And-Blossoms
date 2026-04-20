@@ -17,55 +17,38 @@ entrypoints:
       - path: /app/dicts/{dict_code}/values/{code}
         methods: [GET]
         route_class: ui
-      - path: /app/assistant
         methods: [GET]
         route_class: ui
-      - path: /app/assistant/models
         methods: [GET]
         route_class: ui
-      - path: /app/cubebox
         methods: [GET]
         route_class: ui
-      - path: /app/cubebox/conversations/{conversation_id}
         methods: [GET]
         route_class: ui
-      - path: /app/cubebox/files
         methods: [GET]
         route_class: ui
-      - path: /app/cubebox/models
         methods: [GET]
         route_class: ui
-      - path: /app/assistant/librechat
         methods: [GET]
         route_class: ui
-      - path: /app/assistant/librechat/{path}
         methods: [GET]
         route_class: ui
-      - path: /assets/librechat-web/{path}
         methods: [GET]
         route_class: static
-      - path: /assets/librechat-web/assets/{path}
         methods: [GET]
         route_class: static
-      - path: /assets/librechat-web/manifest.webmanifest
         methods: [GET]
         route_class: static
-      - path: /assets/librechat-web/registerSW.js
         methods: [GET]
         route_class: static
-      - path: /assets/librechat-web/sw.js
         methods: [GET]
         route_class: static
-      - path: /assets/librechat-web/workbox-4c320e2c.js
         methods: [GET]
         route_class: static
-      - path: /assets/librechat-web/robots.txt
         methods: [GET]
         route_class: static
-      - path: /assistant-ui
         methods: [GET]
         route_class: ui
-      - path: /assistant-ui/{path}
         methods: [GET]
         route_class: ui
       - path: /app/login
@@ -182,103 +165,70 @@ entrypoints:
       - path: /internal/functional-areas/switch
         methods: [POST]
         route_class: internal_api
-      - path: /internal/assistant/conversations
         methods: [GET, POST]
         route_class: internal_api
-      - path: /internal/assistant/conversations/{conversation_id}
         methods: [GET]
         route_class: internal_api
-      - path: /internal/assistant/conversations/{conversation_id}/turns
         methods: [POST]
         route_class: internal_api
-      - path: /internal/assistant/conversations/{conversation_id}/turns/{turn_id}:confirm
         methods: [POST]
         route_class: internal_api
-      - path: /internal/assistant/conversations/{conversation_id}/turns/{turn_id}:commit
         methods: [POST]
         route_class: internal_api
-      - path: /internal/assistant/conversations/{conversation_id}/turns/{turn_id}:reply
         methods: [POST]
         route_class: internal_api
-      - path: /internal/assistant/tasks
         methods: [POST]
         route_class: internal_api
-      - path: /internal/assistant/tasks/{task_id}
         methods: [GET]
         route_class: internal_api
-      - path: /internal/assistant/tasks/{task_id}:cancel
         methods: [POST]
         route_class: internal_api
-      - path: /internal/assistant/model-providers
         methods: [GET]
         route_class: internal_api
-      - path: /internal/assistant/model-providers:validate
         methods: [POST]
         route_class: internal_api
-      - path: /internal/assistant/models
         methods: [GET]
         route_class: internal_api
-      - path: /internal/assistant/ui-bootstrap
         methods: [GET]
         route_class: internal_api
-      - path: /internal/assistant/session
         methods: [GET]
         route_class: internal_api
-      - path: /internal/assistant/session/refresh
         methods: [POST]
         route_class: internal_api
-      - path: /internal/assistant/session/logout
         methods: [POST]
         route_class: internal_api
-      - path: /internal/cubebox/conversations
         methods: [GET, POST]
         route_class: internal_api
-      - path: /internal/cubebox/conversations/{conversation_id}
         methods: [GET, DELETE]
         route_class: internal_api
-      - path: /internal/cubebox/conversations/{conversation_id}/turns
         methods: [POST]
         route_class: internal_api
-      - path: /internal/cubebox/conversations/{conversation_id}/turns/{turn_id}:confirm
         methods: [POST]
         route_class: internal_api
-      - path: /internal/cubebox/conversations/{conversation_id}/turns/{turn_id}:commit
         methods: [POST]
         route_class: internal_api
-      - path: /internal/cubebox/conversations/{conversation_id}/turns/{turn_id}:reply
         methods: [POST]
         route_class: internal_api
-      - path: /internal/cubebox/tasks
         methods: [POST]
         route_class: internal_api
-      - path: /internal/cubebox/tasks/{task_id}
         methods: [GET]
         route_class: internal_api
-      - path: /internal/cubebox/tasks/{task_id}:cancel
         methods: [POST]
         route_class: internal_api
-      - path: /internal/cubebox/models
         methods: [GET]
         route_class: internal_api
-      - path: /internal/cubebox/runtime-status
         methods: [GET]
         route_class: internal_api
-      - path: /internal/cubebox/ui-bootstrap
         methods: [GET]
         route_class: internal_api
-      - path: /internal/cubebox/session
         methods: [GET]
         route_class: internal_api
-      - path: /internal/cubebox/session/refresh
         methods: [POST]
         route_class: internal_api
-      - path: /internal/cubebox/session/logout
         methods: [POST]
         route_class: internal_api
-      - path: /internal/cubebox/files
         methods: [GET, POST]
         route_class: internal_api
-      - path: /internal/cubebox/files/{file_id}
         methods: [DELETE]
         route_class: internal_api
       - path: /org/api/org-units

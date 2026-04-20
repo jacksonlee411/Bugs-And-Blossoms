@@ -4,16 +4,27 @@ set -euo pipefail
 prefix="[chat-surface-clean]"
 
 patterns=(
-  '(^|/)(assistant|cubebox|librechat)(/|_|-)'
   '/app/assistant'
   '/app/cubebox'
   '/internal/assistant'
   '/internal/cubebox'
   '/assistant-ui'
   '/assets/librechat-web'
-  'ASSISTANT_MODEL_CONFIG_JSON'
-  'assistant\.workspace'
-  'cubebox\.workspace'
+  '/librechat'
+  'compat window'
+  'redirect alias'
+  '410 Gone'
+  'retired semantics'
+  'assistant-config-single-source'
+  'assistant-domain-allowlist'
+  'assistant-knowledge-single-source'
+  'assistant-knowledge-runtime-load'
+  'assistant-knowledge-no-json-runtime'
+  'assistant-no-legacy-overlay'
+  'assistant-no-knowledge-literals'
+  'assistant-knowledge-no-archive-ref'
+  'assistant-knowledge-contract-separation'
+  'assistant-no-knowledge-db'
 )
 
 globs=(
@@ -34,13 +45,13 @@ globs=(
 ignore_globs=(
   '--glob' '!docs/archive/**'
   '--glob' '!docs/dev-records/**'
-  '--glob' '!docs/dev-plans/392-remove-assistant-cubebox-and-librechat-rebuild-plan.md'
   '--glob' '!docs/dev-plans/430-cubebox-ide-conversation-assistant-rebuild-architecture-plan.md'
   '--glob' '!docs/dev-plans/431-codex-ui-protocol-and-shell-reuse-plan.md'
   '--glob' '!docs/dev-plans/432-codex-session-persistence-reuse-plan.md'
   '--glob' '!docs/dev-plans/433-bifrost-centric-ai-gateway-reuse-and-reconstruction-plan.md'
   '--glob' '!docs/dev-plans/434-codex-context-management-and-compaction-reuse-plan.md'
   '--glob' '!docs/dev-plans/435-bifrost-centric-model-config-ui-and-admin-governance-plan.md'
+  '--glob' '!docs/dev-plans/436-cubebox-historical-surface-hard-delete-plan.md'
   '--glob' '!scripts/ci/check-chat-surface-clean.sh'
 )
 

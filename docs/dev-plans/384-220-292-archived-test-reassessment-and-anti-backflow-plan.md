@@ -276,7 +276,7 @@
 
 - [ ] 活体发现路径 `e2e/tests` 中不得再存在 `tp220-292` 文件。
 - [ ] 活体发现路径中不得再存在 `.prep.spec.js`、历史占位壳、长期 `test.skip(true, "...historical...")`。
-- [ ] 活体 happy-path 测试不得再以 `/internal/assistant/*` 或 `LibreChat` 旧入口作为成功契约。
+- [ ] 活体 happy-path 测试不得再以内网旧聊天入口或历史对话前端作为成功契约。
 - [ ] 活体文档不得再把 archive plan 写成当前测试 authority。
 - [ ] 历史 evidence 只允许存在于 archive / `docs/dev-records`，不得继续伪装成活体测试。
 

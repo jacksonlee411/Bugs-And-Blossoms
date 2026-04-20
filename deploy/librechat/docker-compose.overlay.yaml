@@ -1,6 +1,0 @@
-services:
-  api:
-    environment:
-      LIBRECHAT_RUNTIME_OWNER: bugs-and-blossoms
-    volumes:
-      - ${LIBRECHAT_DATA_ROOT:?LIBRECHAT_DATA_ROOT is required}/api:/app/data

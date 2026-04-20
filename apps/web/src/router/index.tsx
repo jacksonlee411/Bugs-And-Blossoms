@@ -2,9 +2,6 @@ import { Navigate, createBrowserRouter } from 'react-router-dom'
 import { AppShell } from '../layout/AppShell'
 import { navItems } from '../navigation/config'
 import { ApprovalsInboxPage } from '../pages/approvals/ApprovalsInboxPage'
-import { CubeBoxFilesPage } from '../pages/cubebox/CubeBoxFilesPage'
-import { CubeBoxModelsPage } from '../pages/cubebox/CubeBoxModelsPage'
-import { CubeBoxPage } from '../pages/cubebox/CubeBoxPage'
 import { FoundationDemoPage } from '../pages/FoundationDemoPage'
 import { DictConfigsPage } from '../pages/dicts/DictConfigsPage'
 import { DictValueDetailsPage } from '../pages/dicts/DictValueDetailsPage'
@@ -41,46 +38,6 @@ export const router = createBrowserRouter([
       {
         path: 'home',
         element: <Navigate replace to='/' />
-      },
-      {
-        path: 'assistant',
-        element: <Navigate replace to='/cubebox' />
-      },
-      {
-        path: 'assistant/models',
-        element: <Navigate replace to='/cubebox/models' />
-      },
-      {
-        path: 'cubebox',
-        element: (
-          <RequirePermission permissionKey='orgunit.read'>
-            <CubeBoxPage />
-          </RequirePermission>
-        )
-      },
-      {
-        path: 'cubebox/conversations/:conversationId',
-        element: (
-          <RequirePermission permissionKey='orgunit.read'>
-            <CubeBoxPage />
-          </RequirePermission>
-        )
-      },
-      {
-        path: 'cubebox/files',
-        element: (
-          <RequirePermission permissionKey='orgunit.read'>
-            <CubeBoxFilesPage />
-          </RequirePermission>
-        )
-      },
-      {
-        path: 'cubebox/models',
-        element: (
-          <RequirePermission permissionKey='orgunit.read'>
-            <CubeBoxModelsPage />
-          </RequirePermission>
-        )
       },
       {
         path: 'org/units/field-configs',
