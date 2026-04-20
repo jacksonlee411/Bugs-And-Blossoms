@@ -222,19 +222,10 @@ modules/{module}/
 - DEV-PLAN-061：全链路业务测试子计划 TP-060-01——租户/登录/权限/隔离基线：`docs/dev-plans/061-test-tp060-01-tenant-login-authz-rls-baseline.md`
 - DEV-PLAN-062：全链路业务测试子计划 TP-060-02——主数据（组织架构 + SetID + JobCatalog + 职位）：`docs/dev-plans/062-test-tp060-02-master-data-org-setid-jobcatalog-position.md`
 - DEV-PLAN-063：全链路业务测试子计划 TP-060-03——人员与任职（Person + Assignments）：`docs/dev-plans/063-test-tp060-03-person-and-assignments.md`
-<<<<<<< HEAD
 - DEV-PLAN-064A：全链路业务测试子计划 TP-060-05——Assistant（会话 + 意图 + 提交 + 任务编排）：`docs/dev-plans/064a-test-tp060-05-assistant-conversation-intent-and-tasks.md`
-- DEV-PLAN-380：CubeBox 一方资产化与 LibreChat 完整退役重构方案（v1 去 Prompt 版）：`docs/dev-plans/380-cubebox-first-party-ownership-and-librechat-retirement-plan.md`
-- DEV-PLAN-380A：CubeBox PostgreSQL 数据面与迁移契约：`docs/dev-plans/380a-cubebox-postgresql-data-plane-and-migration-contract.md`
-- DEV-PLAN-380B：CubeBox 后端正式实现面切换：`docs/dev-plans/380b-cubebox-backend-formal-implementation-cutover-plan.md`
-- DEV-PLAN-380C：CubeBox API/DTO 收口与 `/internal/assistant/*` 退役：`docs/dev-plans/380c-cubebox-api-dto-convergence-and-assistant-retirement-plan.md`
-- DEV-PLAN-380D：CubeBox 文件面正式化：`docs/dev-plans/380d-cubebox-file-plane-formalization-plan.md`
-- DEV-PLAN-380E：CubeBox `apps/web` 正式前端收口：`docs/dev-plans/380e-cubebox-apps-web-frontend-convergence-plan.md`
-- DEV-PLAN-380F：LibreChat vendored/runtime/deploy 资产退役与收口：`docs/dev-plans/380f-librechat-vendored-runtime-and-deploy-retirement-plan.md`
-- DEV-PLAN-380G：CubeBox 全量回归、门禁与封板验收：`docs/dev-plans/380g-cubebox-regression-gates-and-final-closure-plan.md`
-- DEV-PLAN-381：CubeBox capability 与 functional area 历史来源专项调查：`docs/dev-plans/381-cubebox-capability-and-functional-area-lineage-investigation.md`
-- DEV-PLAN-382：Capability Functional Area 治理影响面专项调查：`docs/dev-plans/382-capability-functional-area-governance-impact-investigation.md`
-- DEV-PLAN-383：Functional Area 与 DDD 模块并行第二维度风险专项调查与收敛建议：`docs/dev-plans/383-functional-area-vs-ddd-module-second-axis-investigation-and-remediation-plan.md`
+- DEV-PLAN-381【归档】：CubeBox capability 与 functional area 历史来源专项调查：`docs/archive/dev-plans/381-cubebox-capability-and-functional-area-lineage-investigation.md`
+- DEV-PLAN-382【归档】：Capability Functional Area 治理影响面专项调查：`docs/archive/dev-plans/382-capability-functional-area-governance-impact-investigation.md`
+- DEV-PLAN-383【归档】：Functional Area 与 DDD 模块并行第二维度风险专项调查与收敛建议：`docs/archive/dev-plans/383-functional-area-vs-ddd-module-second-axis-investigation-and-remediation-plan.md`
 - DEV-PLAN-384：220-292 归档后测试资产重评估与防回流专项方案：`docs/dev-plans/384-220-292-archived-test-reassessment-and-anti-backflow-plan.md`
 - DEV-PLAN-390：移除 DEV-PLAN-150 治理抽象、SetID 与 scope/package/subscription 残留语义的简化方案：`docs/dev-plans/390-remove-dev-plan-150-and-setid-simplification-plan.md`
 - DEV-PLAN-391：DEV-PLAN-390 执行排序、命中清单与分批落地方案：`docs/dev-plans/391-dev-plan-390-execution-sequencing-and-hit-list.md`
@@ -242,7 +233,6 @@ modules/{module}/
 - DEV-PLAN-391B：阶段 B / PR-B：治理 runtime 主切断与 legacy surface 成组下线：`docs/dev-plans/391b-phase-b-main-cutover-governance-runtime-and-legacy-surface-removal-plan.md`
 - DEV-PLAN-391B1【归档】：阶段 B 尾扫：OrgUnit 字段决策与 SetID Binding 最终 runtime 切断：`docs/archive/dev-plans/391b1-phase-b-orgunit-field-decision-and-setid-binding-final-runtime-cutover.md`
 - DEV-PLAN-391C：阶段 C / PR-C：schema/sqlc/错误码/测试/文档封板收口：`docs/dev-plans/391c-phase-c-sealing-sweep-for-schema-sqlc-errors-tests-and-docs.md`
-- DEV-PLAN-392：旧对话栈全量移除与重做准备计划：`docs/dev-plans/392-remove-assistant-cubebox-and-librechat-rebuild-plan.md`
 - DEV-PLAN-410：基于实体授权的配置差异化设计原则：`docs/dev-plans/410-entity-authorization-based-configuration-differentiation-principle.md`
 - DEV-PLAN-411：基于实体授权差异化配置的 UI 配置模式：`docs/dev-plans/411-ui-configuration-pattern-for-entity-based-differentiated-config.md`
 - DEV-PLAN-420：规则函数框架与客户自定义函数方案：`docs/dev-plans/420-rule-function-framework-and-custom-functions-plan.md`
@@ -369,25 +359,11 @@ modules/{module}/
 - DEV-PLAN-210：200蓝图 Phase 4 会话事务提交与委托授权同构收口：`docs/dev-plans/210-blueprint-conversation-transaction-and-actor-delegated-authz.md`
 - DEV-PLAN-211：200蓝图 Phase 5 自建 Temporal M10D0 最小化落地：`docs/dev-plans/211-blueprint-temporal-m10d0-minimal-orchestration-foundation.md`
 - DEV-PLAN-212：200蓝图 Phase 6 评测门禁与触发式 Temporal 平台化验收：`docs/dev-plans/212-blueprint-eval-gates-and-triggered-temporal-productionization.md`
-- Assistant / LibreChat `220-293` 系列：已纳入 `DEV-PLAN-360/360A` 的退出归档治理，并已统一迁入 `docs/archive/dev-plans/`；相关历史执行记录已按落地情况迁入 `docs/archive/dev-records/`。这些文档不再作为现行文档地图入口；当前 Assistant 主线请改看 `DEV-PLAN-341`、`DEV-PLAN-350`、`DEV-PLAN-360`、`DEV-PLAN-360A`、`DEV-PLAN-361`。
+- Assistant / LibreChat / 旧 CubeBox `220-383` 系列与 `380A-380G` 子计划：已完成历史归档治理并迁入 `docs/archive/dev-plans/`；相关执行记录已按落地情况迁入 `docs/archive/dev-records/`。这些文档仅保留为历史证据，不再作为现行实现前提、编排入口或完成定义；当前对话助手重做主线请改看 `DEV-PLAN-430`、`DEV-PLAN-431`、`DEV-PLAN-431A`、`DEV-PLAN-432`、`DEV-PLAN-433`、`DEV-PLAN-434`、`DEV-PLAN-435`。
 - DEV-PLAN-300：全仓测试体系问题调查记录：`docs/dev-plans/300-test-system-investigation-report.md`
 - DEV-PLAN-301：Go 测试分层整治与官方最佳实践落地方案：`docs/dev-plans/301-go-test-layering-and-best-practices-remediation-plan.md`
 - DEV-PLAN-302：`internal/server` 残留 `gap/coverage` 测试文件收口计划：`docs/dev-plans/302-internal-server-residual-gap-coverage-closure-plan.md`
 - DEV-PLAN-330：策略模块架构混乱调查与收口方案：`docs/dev-plans/330-strategy-module-architecture-and-design-convergence-plan.md`
-- DEV-PLAN-341：Assistant 主线演进与 340/350 问题关联调查报告：`docs/dev-plans/341-assistant-mainline-evolution-and-340-350-correlation-investigation.md`
-- DEV-PLAN-340：Assistant 组织架构重复维护调查与收敛方案：`docs/dev-plans/340-assistant-orgunit-duplicate-maintenance-investigation-and-convergence-plan.md`
-- DEV-PLAN-375：Assistant 主线实施路线图（350-370，编排入口）：`docs/dev-plans/375-assistant-mainline-implementation-roadmap-350-370.md`
-- DEV-PLAN-350：Assistant Tooling 对齐统一策略模型实施方案：`docs/dev-plans/350-assistant-tooling-alignment-with-unified-policy-model-plan.md`
-- DEV-PLAN-350A：Assistant OrgUnit 八动作统一收口 Phase 5 P1——`add_version / insert_version`：`docs/dev-plans/350a-assistant-orgunit-phase5-p1-add-insert-version-convergence-plan.md`
-- DEV-PLAN-350B：Assistant OrgUnit 八动作统一收口 Phase 5 P2——`correct / rename / move`：`docs/dev-plans/350b-assistant-orgunit-phase5-p2-correct-rename-move-convergence-plan.md`
-- DEV-PLAN-350C：Assistant OrgUnit 八动作统一收口 Phase 5 P3——`disable / enable`：`docs/dev-plans/350c-assistant-orgunit-phase5-p3-disable-enable-convergence-plan.md`
-- DEV-PLAN-360：LibreChat 硬切剥离与 LangGraph/LangChain 分层接管方案：`docs/dev-plans/360-librechat-depower-and-langgraph-langchain-layered-takeover-plan.md`
-- DEV-PLAN-360A：LibreChat 功能禁用清单与 Runtime 主链硬切实施计划：`docs/dev-plans/360a-librechat-feature-disablement-and-runtime-cutover-plan.md`
-- DEV-PLAN-361：OPA 作为唯一 PDP 候选引擎的引入边界与迁移方案：`docs/dev-plans/361-opa-pdp-adoption-boundary-and-migration-plan.md`
-- DEV-PLAN-370：Assistant API-First 与 Markdown Knowledge Runtime 主链收敛方案：`docs/dev-plans/370-assistant-api-first-and-markdown-knowledge-runtime-plan.md`
-- DEV-PLAN-370A：Assistant Markdown Knowledge Runtime Phase 1——Direct Runtime 基座与 JSON 切断：`docs/dev-plans/370a-assistant-markdown-knowledge-runtime-phase1-query-and-compiler-plan.md`
-- DEV-PLAN-370B：Assistant `business_action` Knowledge Runtime 消费收口计划：`docs/dev-plans/370b-assistant-business-action-knowledge-runtime-consumption-plan.md`
-- DEV-PLAN-371：Assistant 真正 Tool Runtime 架构与迁移方案：`docs/dev-plans/371-assistant-true-tool-runtime-architecture-and-migration-plan.md`
 - DEV-PLAN-303：全仓残留 `gap/coverage` 测试尾项清零计划：`docs/dev-plans/303-repo-final-gap-coverage-test-tail-closure-plan.md`
 - DEV-PLAN-310：全项目 view/as_of 时间语义专项检视与最小收敛方案：`docs/dev-plans/310-project-wide-view-as-of-semantics-review-and-minimal-convergence-plan.md`
 - DEV-PLAN-311：View As Of 页面改造矩阵与 OrgUnitDetails 样板实施计划：`docs/dev-plans/311-view-as-of-page-cutover-matrix-and-orgunit-details-sample-plan.md`

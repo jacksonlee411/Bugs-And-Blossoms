@@ -5,21 +5,22 @@
 ## 0. 适用范围与评审分级
 
 - **评审分级**：`T3`
-- **范围一句话**：在 `DEV-PLAN-392` 全量移除旧对话栈之后，重新设计一个名为 `CubeBox`、中文名为“丘宝”的一方对话助手模块；首期交付对齐 VS Code Codex 插件观感的右侧悬挂抽屉、可配置外部大模型的 AI 网关，以及具备上下文压缩与会话隔离能力的连续对话内核。
-- **关联模块/目录**：`AGENTS.md`、`docs/dev-plans/392-remove-assistant-cubebox-and-librechat-rebuild-plan.md`、`apps/web`、`internal/server`、`modules/cubebox`（候选新模块路径）、`config`、`migrations`、`scripts/ci`
-- **关联计划/标准**：`DEV-PLAN-004M1`、`DEV-PLAN-012`、`DEV-PLAN-015`、`DEV-PLAN-016`、`DEV-PLAN-017`、`DEV-PLAN-019`、`DEV-PLAN-021`、`DEV-PLAN-022`、`DEV-PLAN-300`、`DEV-PLAN-392`、`DEV-PLAN-431`、`DEV-PLAN-432`、`DEV-PLAN-433`、`DEV-PLAN-434`、`DEV-PLAN-435`
+- **范围一句话**：在旧对话栈完成历史归档之后，重新设计一个名为 `CubeBox`、中文名为“丘宝”的一方对话助手模块；首期交付对齐 VS Code Codex 插件观感的右侧悬挂抽屉、可配置外部大模型的 AI 网关，以及具备上下文压缩与会话隔离能力的连续对话内核。
+- **关联模块/目录**：`AGENTS.md`、`apps/web`、`internal/server`、`modules/cubebox`（候选新模块路径）、`config`、`migrations`、`scripts/ci`
+- **关联计划/标准**：`DEV-PLAN-004M1`、`DEV-PLAN-012`、`DEV-PLAN-015`、`DEV-PLAN-016`、`DEV-PLAN-017`、`DEV-PLAN-019`、`DEV-PLAN-021`、`DEV-PLAN-022`、`DEV-PLAN-300`、`DEV-PLAN-431`、`DEV-PLAN-432`、`DEV-PLAN-433`、`DEV-PLAN-434`、`DEV-PLAN-435`
 - **用户入口/触点**：Web 应用右侧悬挂对话入口、模型配置页、会话列表、会话详情、流式回复、错误提示、审计记录；VS Code 插件形态作为后续可选客户端适配器，不在首期实现范围内。
 
 ### 0.1 Simple > Easy 三问
 
-1. **边界**：本计划定义 392 之后的新模块架构，不复用旧 `assistant`、旧 `CubeBox` 或 LibreChat 的任何代码、路由、表、错误码、测试或第三方资产。
+1. **边界**：本计划定义归档旧对话栈之后的新模块架构，不复用旧 `assistant`、旧 `CubeBox` 或 LibreChat 的任何代码、路由、表、错误码、测试或第三方资产；`340-383` 与 `380A-380G` 系列仅保留为历史证据，不再构成当前实现前提、执行分批或完成定义。
 2. **不变量**：新实现必须是一方模块、单一路径、无 legacy fallback；API Key 不进入前端明文状态；模型调用必须走服务端网关；对话上下文必须有明确 token budget、压缩策略、会话隔离与持久化边界。
 3. **可解释**：reviewer 必须能在 5 分钟内说明右悬挂 UI、AI 网关、会话上下文管理、租户隔离、鉴权、审计和门禁如何协同，且能说明它为什么不是旧对话栈回流。
 
-### 0.2 392 后置关系
+### 0.2 历史切断关系
 
-- `DEV-PLAN-392` 的结论仍然有效：旧对话栈已删除，旧计划只保留为历史证据。
-- 本计划是新的 PoR 候选，不继承 `220-293`、`340-384`、`380-380H`、`391D` 的实现假设。
+- 旧对话栈相关计划已转入历史归档区；它们只保留为历史证据，不再作为现行主线 SSOT。
+- 本计划是新的 PoR 候选，不继承 `220-293`、`340-384`、`380-380H`、`391D` 的实现假设、阶段划分、子计划依赖或完成定义。
+- 若新方案需要借鉴历史实现，只允许把它视为“可选历史案例”；不得把旧 DTO、旧路由、旧 capability、旧表结构或旧 UI 视为默认沿用前提。
 - 实施前必须把 `make check chat-surface-clean` 从“全局关键词阻断旧残留”升级为“允许本计划批准的新模块路径，继续阻断旧路径、旧 API、旧 DB 对象、旧第三方资产”的精确门禁。
 
 ## 1. 背景与问题陈述
@@ -169,7 +170,7 @@
 - 当预计输入超过阈值时，先压缩最旧且相关性低的消息块，再丢弃可重建的工具原始输出。
 - 压缩摘要必须保留业务对象、日期、用户已确认选择、错误码、待办项和显式约束。
 - 最近用户请求、最近助手回复、最近工具调用结果不得被压缩到不可追溯状态。
-- 支持手动 `/compact` 或 UI 操作触发压缩，并在会话中记录压缩事件。
+- 支持手动 `/compact` 或 UI 操作触发压缩，并在会话中记录压缩事件；UI 命令入口由 `DEV-PLAN-431` 承接，compaction 语义与执行链由 `DEV-PLAN-434` 承接。
 
 ### 7.4 上下文来源
 
@@ -219,7 +220,8 @@
 - [ ] 重构 Codex thread history builder 思路，建立 CubeBox 前端 timeline reducer。
 - [ ] 建立首期 UI 事件契约：conversation、turn、message delta、context item、compact、token usage、error、interrupt、complete。
 - [ ] 增加前端状态持久化，但不保存密钥或敏感上下文。
-- [ ] 补组件测试和基础 E2E：打开、关闭、恢复 UI 状态。
+- [ ] 由 `DEV-PLAN-431` 持有抽屉打开/关闭、active conversation UI 恢复、slash command 入口与第二主链防漂移；会话 lifecycle contract 不在本切片重复裁决。
+- [ ] 补组件测试和基础 E2E：打开、关闭、恢复 UI 状态；会话恢复/归档正确性由 `DEV-PLAN-432` 承接。
 
 ### Slice 2：AI 网关最小闭环
 
@@ -236,6 +238,7 @@
 - [ ] 实现新建、列出、恢复、归档、删除会话；生命周期语义优先对齐 Codex thread list/read/resume/archive。
 - [ ] 实现消息落库、流式回复完成后的最终状态固化；原始消息必须 append-only，不因压缩被覆盖。
 - [ ] 补租户隔离、权限、RLS、并发和错误路径测试。
+- [ ] `conversation list/read/resume/archive/rename` 的生命周期 contract、持久化语义与 API 行为由 `DEV-PLAN-432` 持有；`DEV-PLAN-431` 只消费其 UI 入口与展示结果。
 
 ### Slice 4：上下文管理与压缩
 
@@ -246,6 +249,7 @@
 - [ ] 实现摘要压缩任务，首期可使用同一 provider 的小模型或配置的 summary model。
 - [ ] 实现工具输出压缩和最近回合原文保留。
 - [ ] 补纯函数测试、压缩边界测试、摘要不丢关键事实测试，以及 Codex 移植点的 prompt shape 快照测试。
+- [ ] `/compact`、auto compact、manual compact 的语义、触发器、执行链与验收由 `DEV-PLAN-434` 持有；`DEV-PLAN-431` 只承接 composer 命令入口与状态提示。
 
 ### Slice 5：模型配置 UI 与管理权限
 
