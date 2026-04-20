@@ -61,16 +61,16 @@
 ### 4.1 回归矩阵（291-v2）
 | ID | 维度 | 检查项 | 命令入口（固定） | 通过标准 | 证据落盘 |
 | --- | --- | --- | --- | --- | --- |
-| R1 | Source 元数据 | `UPSTREAM.yaml` 的 `repo/ref/commit/imported_at/rollback_ref` 完整且一致 | `make librechat-web-verify` | 返回码为 0，且无 source 缺失/冲突提示 | `docs/dev-records/assets/dev-plan-291/291-source-verify.log` |
-| R2 | Patch Stack 回放 | patch 顺序可重放且构建成功，且产物可追踪 | `make librechat-web-build` | 返回码为 0，产物稳定输出至 `internal/server/assets/librechat-web`，并补录产物清单/关键文件摘要 | `docs/dev-records/assets/dev-plan-291/291-web-build.log` |
-| R3 | Runtime 启动健康 | 运行态服务可启动且健康 | `make assistant-runtime-up && make assistant-runtime-status` | status 为 healthy，关键组件无 crash/restart loop | `docs/dev-records/assets/dev-plan-291/291-runtime-status.json` |
-| R4 | Runtime 锁文件一致性 | `versions.lock.yaml` 与 compose 解析结果一致 | `docker compose -p ${LIBRECHAT_COMPOSE_PROJECT:-bugs-and-blossoms-librechat} --env-file deploy/librechat/.env -f deploy/librechat/docker-compose.upstream.yaml -f deploy/librechat/docker-compose.overlay.yaml config --format json` | `versions.lock.yaml` 中的服务/tag/digest 完整，且 compose 配置中的镜像引用与锁文件口径一致；不再以 `runtime-status.json` 伪装版本校验 | `docs/dev-records/assets/dev-plan-291/291-runtime-version-check.md` |
-| R5 | 正式入口与静态前缀 | `/app/assistant/librechat` 与 `/assets/librechat-web/**` 的正式入口/静态前缀边界稳定 | `go test ./internal/server -run 'TestLibreChatWebUI'` | 测试通过，正式入口、受保护静态资源、SPA fallback 与登录保护链一致 | `docs/dev-records/assets/dev-plan-291/291-formal-entry-go-test.log` |
-| R6 | Compat alias 一致性 | `292` 允许的 `/app/assistant/librechat/api/**` 仍与 `/assets/librechat-web/api/**` 同 handler/DTO/会话链 | `go test ./internal/server -run 'TestLibreChatVendoredCompatAPI'` | 测试通过；compat alias 仅限兼容，不构成第二事实源、第二写入口或第二正式 API 面 | `docs/dev-records/assets/dev-plan-291/291-compat-alias-go-test.log` |
-| R7 | 路由与入口边界 | 正式入口/静态前缀/compat API 分类与保护链一致 | `make check routing` | 门禁通过，无分类漂移 | `docs/dev-records/assets/dev-plan-291/291-routing-check.log` |
-| R8 | Legacy 回流阻断 | 无旧桥正式职责、无双链路回流 | `make check no-legacy` | 门禁通过，无回流命中 | `docs/dev-records/assets/dev-plan-291/291-no-legacy.log` |
-| R9 | `280` 硬门槛引用新鲜度 | 最新 `288/290` 证据仍可证明官方消息树唯一落点、单轮唯一 assistant 回复、DTO-only | `test -f docs/dev-records/assets/dev-plan-266/tp288-real-entry-evidence-index.json && test -f docs/dev-records/assets/dev-plan-290/tp290-real-case-evidence-index.json` | 两份索引均存在，且在 `291-execution-report.md` 中明确记录“引用文件 + 生成时间 + 最近影响性合入 + 是否仍有效”；若结论过期则 `291` 失败 | `docs/dev-records/assets/dev-plan-291/291-ref-288-290-freshness.md` |
-| R10 | 运行态清理闭环 | 回归后可正常下线，避免脏运行态影响后续 | `make assistant-runtime-down` | 返回码为 0，清理结果可复核 | `docs/dev-records/assets/dev-plan-291/291-runtime-down.log` |
+| R1 | Source 元数据 | `UPSTREAM.yaml` 的 `repo/ref/commit/imported_at/rollback_ref` 完整且一致 | `make librechat-web-verify` | 返回码为 0，且无 source 缺失/冲突提示 | `docs/archive/dev-records/assets/dev-plan-291/291-source-verify.log` |
+| R2 | Patch Stack 回放 | patch 顺序可重放且构建成功，且产物可追踪 | `make librechat-web-build` | 返回码为 0，产物稳定输出至 `internal/server/assets/librechat-web`，并补录产物清单/关键文件摘要 | `docs/archive/dev-records/assets/dev-plan-291/291-web-build.log` |
+| R3 | Runtime 启动健康 | 运行态服务可启动且健康 | `make assistant-runtime-up && make assistant-runtime-status` | status 为 healthy，关键组件无 crash/restart loop | `docs/archive/dev-records/assets/dev-plan-291/291-runtime-status.json` |
+| R4 | Runtime 锁文件一致性 | `versions.lock.yaml` 与 compose 解析结果一致 | `docker compose -p ${LIBRECHAT_COMPOSE_PROJECT:-bugs-and-blossoms-librechat} --env-file deploy/librechat/.env -f deploy/librechat/docker-compose.upstream.yaml -f deploy/librechat/docker-compose.overlay.yaml config --format json` | `versions.lock.yaml` 中的服务/tag/digest 完整，且 compose 配置中的镜像引用与锁文件口径一致；不再以 `runtime-status.json` 伪装版本校验 | `docs/archive/dev-records/assets/dev-plan-291/291-runtime-version-check.md` |
+| R5 | 正式入口与静态前缀 | `/app/assistant/librechat` 与 `/assets/librechat-web/**` 的正式入口/静态前缀边界稳定 | `go test ./internal/server -run 'TestLibreChatWebUI'` | 测试通过，正式入口、受保护静态资源、SPA fallback 与登录保护链一致 | `docs/archive/dev-records/assets/dev-plan-291/291-formal-entry-go-test.log` |
+| R6 | Compat alias 一致性 | `292` 允许的 `/app/assistant/librechat/api/**` 仍与 `/assets/librechat-web/api/**` 同 handler/DTO/会话链 | `go test ./internal/server -run 'TestLibreChatVendoredCompatAPI'` | 测试通过；compat alias 仅限兼容，不构成第二事实源、第二写入口或第二正式 API 面 | `docs/archive/dev-records/assets/dev-plan-291/291-compat-alias-go-test.log` |
+| R7 | 路由与入口边界 | 正式入口/静态前缀/compat API 分类与保护链一致 | `make check routing` | 门禁通过，无分类漂移 | `docs/archive/dev-records/assets/dev-plan-291/291-routing-check.log` |
+| R8 | Legacy 回流阻断 | 无旧桥正式职责、无双链路回流 | `make check no-legacy` | 门禁通过，无回流命中 | `docs/archive/dev-records/assets/dev-plan-291/291-no-legacy.log` |
+| R9 | `280` 硬门槛引用新鲜度 | 最新 `288/290` 证据仍可证明官方消息树唯一落点、单轮唯一 assistant 回复、DTO-only | `test -f docs/dev-records/assets/dev-plan-266/tp288-real-entry-evidence-index.json && test -f docs/dev-records/assets/dev-plan-290/tp290-real-case-evidence-index.json` | 两份索引均存在，且在 `291-execution-report.md` 中明确记录“引用文件 + 生成时间 + 最近影响性合入 + 是否仍有效”；若结论过期则 `291` 失败 | `docs/archive/dev-records/assets/dev-plan-291/291-ref-288-290-freshness.md` |
+| R10 | 运行态清理闭环 | 回归后可正常下线，避免脏运行态影响后续 | `make assistant-runtime-down` | 返回码为 0，清理结果可复核 | `docs/archive/dev-records/assets/dev-plan-291/291-runtime-down.log` |
 
 ### 4.2 Stopline 检查（强制）
 1. [X] **旧桥职责回流**：不得恢复 `bridge.js`、`data-assistant-dialog-stream`、`assistantDialogFlow`、`assistantAutoRun` 的正式职责语义。
@@ -80,8 +80,8 @@
 5. [X] **命令门禁（固定）**：`go test ./internal/server -run 'TestLibreChatWebUI|TestLibreChatVendoredCompatAPI'`、`make check routing`、`make check no-legacy`；任一失败即 `291` 失败，不得进入 `285`。
 
 ### 4.3 证据与索引结构（291-v2）
-1. [X] 证据根目录固定为：`docs/dev-records/assets/dev-plan-291/`。
-2. [X] 索引文件固定为：`docs/dev-records/assets/dev-plan-291/291-evidence-index.json`。
+1. [X] 证据根目录固定为：`docs/archive/dev-records/assets/dev-plan-291/`。
+2. [X] 索引文件固定为：`docs/archive/dev-records/assets/dev-plan-291/291-evidence-index.json`。
 3. [X] 索引条目字段固定为：`id`、`command`、`executed_at`、`exit_code`、`artifacts[]`、`result`、`owner`、`notes`。
 4. [X] 任一矩阵项若缺少索引条目或 `artifacts[]` 为空，视为未完成。
 5. [X] `R9` 必须额外记录 `referenced_artifacts[]`，至少包含 `tp288-real-entry-evidence-index.json` 与 `tp290-real-case-evidence-index.json` 的路径、生成时间与有效性结论。
@@ -107,12 +107,12 @@
 
 ## 7. 交付物
 1. [X] 本计划文档：`docs/archive/dev-plans/291-librechat-237-upgrade-compatibility-readiness-plan.md`。
-2. [X] 升级兼容回归矩阵：`docs/dev-records/assets/dev-plan-291/291-upgrade-compat-matrix.md`。
-3. [X] 执行报告：`docs/dev-records/assets/dev-plan-291/291-execution-report.md`。
-4. [X] 风险清单：`docs/dev-records/assets/dev-plan-291/291-risk-list.md`。
-5. [X] 证据索引：`docs/dev-records/assets/dev-plan-291/291-evidence-index.json`。
-6. [X] 面向 `285` 的交接清单：`docs/dev-records/assets/dev-plan-291/291-handoff-to-285.md`。
-7. [X] `280` 核心硬门槛引用结论：`docs/dev-records/assets/dev-plan-291/291-ref-288-290-freshness.md`。
+2. [X] 升级兼容回归矩阵：`docs/archive/dev-records/assets/dev-plan-291/291-upgrade-compat-matrix.md`。
+3. [X] 执行报告：`docs/archive/dev-records/assets/dev-plan-291/291-execution-report.md`。
+4. [X] 风险清单：`docs/archive/dev-records/assets/dev-plan-291/291-risk-list.md`。
+5. [X] 证据索引：`docs/archive/dev-records/assets/dev-plan-291/291-evidence-index.json`。
+6. [X] 面向 `285` 的交接清单：`docs/archive/dev-records/assets/dev-plan-291/291-handoff-to-285.md`。
+7. [X] `280` 核心硬门槛引用结论：`docs/archive/dev-records/assets/dev-plan-291/291-ref-288-290-freshness.md`。
 
 ## 8. 关联文档
 - `docs/archive/dev-plans/237-librechat-upgrade-and-regression-closure-plan.md`

@@ -28,7 +28,7 @@
 - 未发现正式入口/静态前缀分类漂移：`make check routing` 通过。
 - 未发现 `/app/assistant/librechat/api/**` compat alias 偏离 `292` 边界：相关 Go 测试通过。
 - `tp288` 与 `tp290` 最新索引时间均晚于 `240D-03/04` cutover。
-- `280` 硬门槛引用已刷新：`docs/dev-records/assets/dev-plan-291/291-ref-288-290-freshness.md` 已记录 `tp288/tp290` 的最新通过结论。
+- `280` 硬门槛引用已刷新：`docs/archive/dev-records/assets/dev-plan-291/291-ref-288-290-freshness.md` 已记录 `tp288/tp290` 的最新通过结论。
 
 ## 结论
 - `291` 的本轮重跑工作已完成。

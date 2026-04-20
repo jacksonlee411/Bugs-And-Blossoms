@@ -51,19 +51,6 @@ vi.mock('./RouteErrorPage', () => ({
 
 import { router } from './index'
 
-function routeElement(route: unknown): { props?: { to?: string; replace?: boolean; permissionKey?: string } } | null {
-  if (!route || typeof route !== 'object' || !('element' in route)) {
-    return null
-  }
-
-  const element = (route as { element?: unknown }).element
-  if (!element || typeof element !== 'object') {
-    return null
-  }
-
-  return element as { props?: { to?: string; replace?: boolean; permissionKey?: string } }
-}
-
 describe('app router', () => {
   it('registers current primary business routes', () => {
     const rootRoute = router.routes.find((route) => route.path === '/')

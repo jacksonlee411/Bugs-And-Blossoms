@@ -525,7 +525,7 @@ Vendored LibreChat UI
 5. [X] retired compat path 的短路已前移到 `withTenantAndSession`，确保缺 SID、tenant mismatch、principal invalid 不再暴露 vendored `401` 语义。
 6. [X] 本批次明确不提前处理 `/assistant-ui/*`；该别名仍按 `Phase 4` 保持 `302 -> /app/assistant/librechat`。
 7. [X] runtime fail-closed 错误码与任务终止语义（如 `assistant_runtime_unavailable / assistant_gate_unavailable`）已在 `Phase 2` 收口批次完成。
-8. [X] 当前 compat session API cutover 的实现与文档证据已回写并提交到 `bb5a8568`，执行记录见 `docs/dev-records/dev-plan-360a-execution-log.md`。
+8. [X] 当前 compat session API cutover 的实现与文档证据已回写并提交到 `bb5a8568`，执行记录见 `docs/archive/dev-records/dev-plan-360a-execution-log.md`。
 
 ### Phase 3：依赖去平台化
 
@@ -629,4 +629,4 @@ Vendored LibreChat UI
 2. `docs/dev-plans/360-librechat-depower-and-langgraph-langchain-layered-takeover-plan.md`
 3. `docs/dev-plans/361-opa-pdp-adoption-boundary-and-migration-plan.md`
 4. `AGENTS.md`
-5. `docs/dev-records/dev-plan-360a-execution-log.md`
+5. `docs/archive/dev-records/dev-plan-360a-execution-log.md`

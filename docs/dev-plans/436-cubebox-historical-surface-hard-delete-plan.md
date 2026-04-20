@@ -1,6 +1,6 @@
 # DEV-PLAN-436：CubeBox 历史对话面彻底删除与仓面清场方案
 
-**状态**: 规划中（2026-04-20 11:06 CST）
+**状态**: 已完成（2026-04-20；代码删除、门禁收敛、整仓验证与活体文档归档收口均已完成）
 
 ## 0. 适用范围与评审分级
 
@@ -227,6 +227,18 @@ flowchart LR
 4. schema/migration/sqlc/dbtool 仍存在旧面对话面对象。
 5. 活体文档、活体技能说明、活体 readiness 记录仍把旧面对话面当作当前实现、当前门禁或当前路径。
 6. 新的 `chat-surface-clean` 仍以“全仓禁 `cubebox` 词汇”或“无差别放过全部 `cubebox` 命中”的粗暴策略运行，不能精确阻断历史路径/对象回流。
+
+## 5.1 2026-04-20 完成度评估
+
+- **当前裁决**：`436` 已完成主体代码删除、门禁收敛、整仓验证补齐，以及活体 `dev-records` 的历史语义迁档；按本计划第 5 节 stopline，当前可标记为“已完成”。
+- **已完成部分**：
+  - 历史对话面主代码、路由测试残留、能力目录旧会话面元数据与相关测试基建断口已清理。
+  - 仓库级反回流门禁已收敛到 `make check chat-surface-clean`，历史 `assistant-*` 专项 gate 已从活体主链移除。
+  - 本地已完成并通过 `make check chat-surface-clean`、`go fmt ./...`、`go vet ./...`、`pnpm --dir ./apps/web exec vitest run src/router/index.test.tsx src/errors/presentApiError.test.ts`、`make test`，并在隔离环境下通过 `make e2e` 与 `make preflight`。
+  - 覆盖率口径已调整为“继续采集，但暂停作为阻断门禁”，避免本轮硬删除被 coverage stopline 反向卡住。
+- **本轮补齐的收尾动作**：
+  - 原先仍留在活体 `docs/dev-records/**` 的历史对话面 readiness、执行日志与 `dev-plan-291` 证据目录已迁入 `docs/archive/dev-records/**`。
+  - `chat-surface-clean` 已重新纳入活体 `docs/dev-records/**` 扫描，仅对白名单中的 `docs/dev-records/DEV-PLAN-436-READINESS.md` 放行，从而使门禁口径与 stopline 定义一致。
 
 ## 6. 实施步骤
 

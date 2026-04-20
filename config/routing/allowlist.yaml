@@ -17,43 +17,51 @@ entrypoints:
       - path: /app/dicts/{dict_code}/values/{code}
         methods: [GET]
         route_class: ui
+      - path: /app/org/units
         methods: [GET]
         route_class: ui
+      - path: /app/org/units/{org_code}
         methods: [GET]
         route_class: ui
+      - path: /app/org/units/field-configs
         methods: [GET]
         route_class: ui
+      - path: /app/person/persons
         methods: [GET]
         route_class: ui
+      - path: /app/jobcatalog
         methods: [GET]
         route_class: ui
+      - path: /app/staffing/positions
         methods: [GET]
         route_class: ui
+      - path: /app/staffing/assignments
         methods: [GET]
         route_class: ui
+      - path: /app/approvals
         methods: [GET]
         route_class: ui
-        methods: [GET]
-        route_class: static
-        methods: [GET]
-        route_class: static
-        methods: [GET]
-        route_class: static
-        methods: [GET]
-        route_class: static
-        methods: [GET]
-        route_class: static
-        methods: [GET]
-        route_class: static
-        methods: [GET]
-        route_class: static
+      - path: /app/org/setid
         methods: [GET]
         route_class: ui
+      - path: /app/org/setid/base
+        methods: [GET]
+        route_class: ui
+      - path: /app/org/setid/registry
+        methods: [GET]
+        route_class: ui
+      - path: /app/org/setid/explain
+        methods: [GET]
+        route_class: ui
+      - path: /app/org/setid/ops
         methods: [GET]
         route_class: ui
       - path: /app/login
         methods: [GET]
         route_class: ui
+      - path: /assets/{path}
+        methods: [GET]
+        route_class: static
       - path: /health
         methods: [GET]
         route_class: ops
@@ -90,21 +98,6 @@ entrypoints:
       - path: /logout
         methods: [POST]
         route_class: authn
-      - path: /person/api/persons
-        methods: [GET, POST]
-        route_class: internal_api
-      - path: /person/api/persons:options
-        methods: [GET]
-        route_class: internal_api
-      - path: /person/api/persons:by-pernr
-        methods: [GET]
-        route_class: internal_api
-      - path: /jobcatalog/api/catalog
-        methods: [GET]
-        route_class: internal_api
-      - path: /jobcatalog/api/catalog/actions
-        methods: [POST]
-        route_class: internal_api
       - path: /org/api/positions
         methods: [GET, POST]
         route_class: internal_api
@@ -165,72 +158,6 @@ entrypoints:
       - path: /internal/functional-areas/switch
         methods: [POST]
         route_class: internal_api
-        methods: [GET, POST]
-        route_class: internal_api
-        methods: [GET]
-        route_class: internal_api
-        methods: [POST]
-        route_class: internal_api
-        methods: [POST]
-        route_class: internal_api
-        methods: [POST]
-        route_class: internal_api
-        methods: [POST]
-        route_class: internal_api
-        methods: [POST]
-        route_class: internal_api
-        methods: [GET]
-        route_class: internal_api
-        methods: [POST]
-        route_class: internal_api
-        methods: [GET]
-        route_class: internal_api
-        methods: [POST]
-        route_class: internal_api
-        methods: [GET]
-        route_class: internal_api
-        methods: [GET]
-        route_class: internal_api
-        methods: [GET]
-        route_class: internal_api
-        methods: [POST]
-        route_class: internal_api
-        methods: [POST]
-        route_class: internal_api
-        methods: [GET, POST]
-        route_class: internal_api
-        methods: [GET, DELETE]
-        route_class: internal_api
-        methods: [POST]
-        route_class: internal_api
-        methods: [POST]
-        route_class: internal_api
-        methods: [POST]
-        route_class: internal_api
-        methods: [POST]
-        route_class: internal_api
-        methods: [POST]
-        route_class: internal_api
-        methods: [GET]
-        route_class: internal_api
-        methods: [POST]
-        route_class: internal_api
-        methods: [GET]
-        route_class: internal_api
-        methods: [GET]
-        route_class: internal_api
-        methods: [GET]
-        route_class: internal_api
-        methods: [GET]
-        route_class: internal_api
-        methods: [POST]
-        route_class: internal_api
-        methods: [POST]
-        route_class: internal_api
-        methods: [GET, POST]
-        route_class: internal_api
-        methods: [DELETE]
-        route_class: internal_api
       - path: /org/api/org-units
         methods: [GET, POST]
         route_class: internal_api
@@ -253,6 +180,9 @@ entrypoints:
         methods: [GET]
         route_class: internal_api
       - path: /org/api/org-units/append-capabilities
+        methods: [GET]
+        route_class: internal_api
+      - path: /org/api/org-units/write-capabilities
         methods: [GET]
         route_class: internal_api
       - path: /org/api/org-units/create-field-decisions
@@ -282,6 +212,9 @@ entrypoints:
       - path: /org/api/org-units/enable
         methods: [POST]
         route_class: internal_api
+      - path: /org/api/org-units/write
+        methods: [POST]
+        route_class: internal_api
       - path: /org/api/org-units/corrections
         methods: [POST]
         route_class: internal_api
@@ -297,10 +230,31 @@ entrypoints:
       - path: /org/api/org-units/set-business-unit
         methods: [POST]
         route_class: internal_api
+      - path: /person/api/persons
+        methods: [GET, POST]
+        route_class: internal_api
+      - path: /person/api/persons:options
+        methods: [GET]
+        route_class: internal_api
+      - path: /person/api/persons:by-pernr
+        methods: [GET]
+        route_class: internal_api
+      - path: /jobcatalog/api/catalog
+        methods: [GET]
+        route_class: internal_api
+      - path: /jobcatalog/api/catalog/actions
+        methods: [POST]
+        route_class: internal_api
   superadmin:
     routes:
       - path: /
         methods: [GET]
+        route_class: ui
+      - path: /superadmin/login
+        methods: [GET, POST]
+        route_class: ui
+      - path: /superadmin/logout
+        methods: [POST]
         route_class: ui
       - path: /health
         methods: [GET]

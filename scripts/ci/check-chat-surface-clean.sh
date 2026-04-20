@@ -27,6 +27,28 @@ patterns=(
   'assistant-no-knowledge-db'
 )
 
+doc_record_patterns=(
+  '/app/assistant'
+  '/internal/assistant'
+  '/assistant-ui'
+  '/assets/librechat-web'
+  '/librechat'
+  'compat window'
+  'redirect alias'
+  '410 Gone'
+  'retired semantics'
+  'assistant-config-single-source'
+  'assistant-domain-allowlist'
+  'assistant-knowledge-single-source'
+  'assistant-knowledge-runtime-load'
+  'assistant-knowledge-no-json-runtime'
+  'assistant-no-legacy-overlay'
+  'assistant-no-knowledge-literals'
+  'assistant-knowledge-no-archive-ref'
+  'assistant-knowledge-contract-separation'
+  'assistant-no-knowledge-db'
+)
+
 globs=(
   'config'
   'internal'
@@ -44,7 +66,7 @@ globs=(
 
 ignore_globs=(
   '--glob' '!docs/archive/**'
-  '--glob' '!docs/dev-records/**'
+  '--glob' '!docs/dev-records/DEV-PLAN-436-READINESS.md'
   '--glob' '!docs/dev-plans/430-cubebox-ide-conversation-assistant-rebuild-architecture-plan.md'
   '--glob' '!docs/dev-plans/431-codex-ui-protocol-and-shell-reuse-plan.md'
   '--glob' '!docs/dev-plans/432-codex-session-persistence-reuse-plan.md'
@@ -65,6 +87,20 @@ done
 
 if rg -n -i "${args[@]}" "${globs[@]}"; then
   echo "${prefix} FAIL: detected legacy chat surface residue" >&2
+  exit 1
+fi
+
+doc_record_args=()
+for pattern in "${doc_record_patterns[@]}"; do
+  doc_record_args+=(-e "$pattern")
+done
+doc_record_args+=(
+  '--glob' '!docs/archive/**'
+  '--glob' '!docs/dev-records/DEV-PLAN-436-READINESS.md'
+)
+
+if rg -n -i "${doc_record_args[@]}" docs/dev-records; then
+  echo "${prefix} FAIL: detected legacy chat surface residue in active dev-records" >&2
   exit 1
 fi
 

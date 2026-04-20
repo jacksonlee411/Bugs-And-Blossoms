@@ -86,7 +86,7 @@
 2. [X] 冻结并落地 `/internal/assistant/ui-bootstrap`、`/internal/assistant/session*`、`AssistantRuntimeStatusResponse` 的 successor 合同与运行态语义。
 3. [X] 正式入口只保留聊天 UI 壳，不再暴露 Agents / MCP / Memory / Search / Code Interpreter。
 4. [X] 将此里程碑定义为后续 `370A` 与所有正式 cutover 的前置门槛。
-5. [X] 执行证据已沉淀到 `docs/dev-records/dev-plan-375-m1-successor-entry-stabilization-log.md`。
+5. [X] 执行证据已沉淀到 `docs/archive/dev-records/dev-plan-375-m1-successor-entry-stabilization-log.md`。
 
 ### 375M2：业务动作收口批次一
 
@@ -109,7 +109,7 @@
 3. [X] 继续完成 `360 Phase 2 / 360A Phase 2` 的 runtime 主链 fail-closed/error-code 收口与 compat cleanup PR。
 4. [X] 本里程碑完成后，正式运行链只保留 `/internal/assistant/*` 所需的最小 successor 面。
 5. [X] `350B` 实施证据已沉淀到 `docs/dev-records/dev-plan-350b-execution-log.md`。
-6. [X] `360A` 本轮 compat session API cutover 证据已沉淀到 `docs/dev-records/dev-plan-360a-execution-log.md`，并已随实现提交 `bb5a8568` 固化。
+6. [X] `360A` 本轮 compat session API cutover 证据已沉淀到 `docs/archive/dev-records/dev-plan-360a-execution-log.md`，并已随实现提交 `bb5a8568` 固化。
 
 ### 375M5：业务动作收口批次三 + 平台退役封板
 
@@ -176,7 +176,7 @@
 4. [X] `360/360A`：compat session API `410 Gone` 断言、cleanup PR、正式入口 runtime fail-closed/error-code 收口、依赖去平台化、`retired_by_design` 语义与 `/assistant-ui/* -> 410 Gone` 均已完成；`tp288b / tp290b` live successor 复验也已通过。
 5. [X] `370A`：补 Markdown loader/front matter/runtime-load/no-json-runtime/反回流门禁测试，并证明 `assistant_knowledge/*.json` 已被切断。
 6. [X] `370A`：补 semantic prompt route/action parity 回归。
-7. [X] `370B`：已补动作知识散点清理、contract / knowledge 强分离、fail-closed 回归；执行记录见 `docs/dev-records/dev-plan-370b-execution-log.md`。
+7. [X] `370B`：已补动作知识散点清理、contract / knowledge 强分离、fail-closed 回归；执行记录见 `docs/archive/dev-records/dev-plan-370b-execution-log.md`。
 7. [X] `350A/350B` 实际执行记录已进入对应子计划与 `docs/dev-records/`，`375` 只维护路线图级进度与引用。
 8. [X] `375M5/M6` 合并收尾验证已完成：
    - `tp288` 已明确退役归档；
@@ -208,9 +208,9 @@ flowchart TD
 9. `docs/dev-plans/370-assistant-api-first-and-markdown-knowledge-runtime-plan.md`
 10. `docs/dev-plans/370a-assistant-markdown-knowledge-runtime-phase1-query-and-compiler-plan.md`
 11. `docs/dev-plans/370b-assistant-business-action-knowledge-runtime-consumption-plan.md`
-12. `docs/dev-records/dev-plan-375-m1-successor-entry-stabilization-log.md`
+12. `docs/archive/dev-records/dev-plan-375-m1-successor-entry-stabilization-log.md`
 13. `docs/dev-records/dev-plan-350a-execution-log.md`
 14. `docs/dev-records/dev-plan-350b-execution-log.md`
 15. `docs/dev-records/dev-plan-350c-execution-log.md`
-16. `docs/dev-records/dev-plan-360a-execution-log.md`
-17. `docs/dev-records/dev-plan-370b-execution-log.md`
+16. `docs/archive/dev-records/dev-plan-360a-execution-log.md`
+17. `docs/archive/dev-records/dev-plan-370b-execution-log.md`

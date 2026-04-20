@@ -163,6 +163,11 @@ func TestHandleOrgUnitFieldOptionsAPI_ResolveOrgIDInvalidBranch(t *testing.T) {
 func TestHandleOrgUnitFieldConfigsAPI(t *testing.T) {
 	base := newOrgUnitMemoryStore()
 	dictStore := newDictMemoryStore()
+	previousStore := defaultSetIDStrategyRegistryStore
+	defaultSetIDStrategyRegistryStore = setIDStrategyRegistryStoreStub{}
+	t.Cleanup(func() {
+		defaultSetIDStrategyRegistryStore = previousStore
+	})
 
 	t.Run("tenant missing", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/org/api/org-units/field-configs?as_of=2026-01-01", nil)

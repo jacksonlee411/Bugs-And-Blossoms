@@ -1,6 +1,6 @@
 # DEV-PLAN-380F：LibreChat vendored/runtime/deploy 资产退役与收口
 
-**状态**: 已实施（2026-04-17 CST；实施结果与验证记录见 `docs/dev-records/DEV-PLAN-380F-READINESS.md`）
+**状态**: 已实施（2026-04-17 CST；实施结果与验证记录见 `docs/archive/dev-records/DEV-PLAN-380F-READINESS.md`）
 
 > 本文从 `DEV-PLAN-380` 拆分而来，作为 `LibreChat` vendored Web UI、runtime、部署链、Makefile/debug 入口与相关历史资产退役的实施 SSOT。  
 > `380A` 持有 PostgreSQL 数据面 contract，`380B` 持有后端正式实现面切换，`380C` 持有 API/DTO 收口与旧 `/internal/assistant/*` 退役，`380D` 持有文件面正式化，`380E` 持有 `apps/web` 正式前端收口，`380G` 持有最终回归与封板。  
@@ -522,7 +522,7 @@ flowchart LR
 
 ### 9.2 Readiness 记录
 
-- [x] 新建 `docs/dev-records/DEV-PLAN-380F-READINESS.md`
+- [x] 新建 `docs/archive/dev-records/DEV-PLAN-380F-READINESS.md`
 - [x] 在 readiness 中记录：
   - 时间戳
   - 删除/保留/归档清单

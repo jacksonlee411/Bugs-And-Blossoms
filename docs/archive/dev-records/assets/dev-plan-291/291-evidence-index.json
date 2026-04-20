@@ -11,7 +11,7 @@
       "executed_at": "2026-03-09T03:00:25Z",
       "exit_code": 0,
       "artifacts": [
-        "docs/dev-records/assets/dev-plan-291/291-source-verify.log"
+        "docs/archive/dev-records/assets/dev-plan-291/291-source-verify.log"
       ],
       "result": "passed",
       "owner": "Codex",
@@ -23,7 +23,7 @@
       "executed_at": "2026-03-09T03:00:25Z",
       "exit_code": 0,
       "artifacts": [
-        "docs/dev-records/assets/dev-plan-291/291-web-build.log"
+        "docs/archive/dev-records/assets/dev-plan-291/291-web-build.log"
       ],
       "result": "passed",
       "owner": "Codex",
@@ -35,9 +35,9 @@
       "executed_at": "2026-03-09T03:00:25Z",
       "exit_code": 0,
       "artifacts": [
-        "docs/dev-records/assets/dev-plan-291/291-runtime-up.log",
-        "docs/dev-records/assets/dev-plan-291/291-runtime-status.log",
-        "docs/dev-records/assets/dev-plan-291/291-runtime-status.json"
+        "docs/archive/dev-records/assets/dev-plan-291/291-runtime-up.log",
+        "docs/archive/dev-records/assets/dev-plan-291/291-runtime-status.log",
+        "docs/archive/dev-records/assets/dev-plan-291/291-runtime-status.json"
       ],
       "result": "passed",
       "owner": "Codex",
@@ -49,7 +49,7 @@
       "executed_at": "2026-03-09T03:00:25Z",
       "exit_code": 0,
       "artifacts": [
-        "docs/dev-records/assets/dev-plan-291/291-runtime-version-check.md"
+        "docs/archive/dev-records/assets/dev-plan-291/291-runtime-version-check.md"
       ],
       "result": "passed",
       "owner": "Codex",
@@ -61,7 +61,7 @@
       "executed_at": "2026-03-09T03:00:25Z",
       "exit_code": 0,
       "artifacts": [
-        "docs/dev-records/assets/dev-plan-291/291-formal-entry-go-test.log"
+        "docs/archive/dev-records/assets/dev-plan-291/291-formal-entry-go-test.log"
       ],
       "result": "passed",
       "owner": "Codex",
@@ -73,7 +73,7 @@
       "executed_at": "2026-03-09T03:00:25Z",
       "exit_code": 0,
       "artifacts": [
-        "docs/dev-records/assets/dev-plan-291/291-compat-alias-go-test.log"
+        "docs/archive/dev-records/assets/dev-plan-291/291-compat-alias-go-test.log"
       ],
       "result": "passed",
       "owner": "Codex",
@@ -85,7 +85,7 @@
       "executed_at": "2026-03-09T03:00:25Z",
       "exit_code": 0,
       "artifacts": [
-        "docs/dev-records/assets/dev-plan-291/291-routing-check.log"
+        "docs/archive/dev-records/assets/dev-plan-291/291-routing-check.log"
       ],
       "result": "passed",
       "owner": "Codex",
@@ -97,7 +97,7 @@
       "executed_at": "2026-03-09T03:00:25Z",
       "exit_code": 0,
       "artifacts": [
-        "docs/dev-records/assets/dev-plan-291/291-no-legacy.log"
+        "docs/archive/dev-records/assets/dev-plan-291/291-no-legacy.log"
       ],
       "result": "passed",
       "owner": "Codex",
@@ -109,7 +109,7 @@
       "executed_at": "2026-03-09T03:00:25Z",
       "exit_code": 0,
       "artifacts": [
-        "docs/dev-records/assets/dev-plan-291/291-ref-288-290-freshness.md"
+        "docs/archive/dev-records/assets/dev-plan-291/291-ref-288-290-freshness.md"
       ],
       "referenced_artifacts": [
         {
@@ -133,7 +133,7 @@
       "executed_at": "2026-03-09T03:02:00Z",
       "exit_code": 0,
       "artifacts": [
-        "docs/dev-records/assets/dev-plan-291/291-runtime-down.log"
+        "docs/archive/dev-records/assets/dev-plan-291/291-runtime-down.log"
       ],
       "result": "passed",
       "owner": "Codex",

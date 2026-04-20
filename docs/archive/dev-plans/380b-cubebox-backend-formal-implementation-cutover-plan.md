@@ -31,7 +31,7 @@
   - direct task lifecycle 的 dispatch / retry / deadline / dead-letter / terminal state transition 已迁入 `modules/cubebox/services/facade`，workflow execute/apply result 也已补齐 formal terminal snapshot 回写。
   - create/append/confirm/commit 仍保留切换期 bounded bridge，但 formal snapshot write surface 与 formal task submit / dispatch state machine 已建立。
   - `commit turn -> formal task submit` 已通过 `cubebox_turns` formal snapshot 驱动；formal conversation 缺失时保留 bounded fallback。
-  - focused tests 与 readiness 证据已补齐，见 `docs/dev-records/DEV-PLAN-380B-READINESS.md`。
+  - focused tests 与 readiness 证据已补齐，见 `docs/archive/dev-records/DEV-PLAN-380B-READINESS.md`。
 - **路线图分析（380 主线依赖）**:
   - `380A` 先冻结 `iam.cubebox_*` 表、sqlc 与迁移算法，提供后端正式落点的最小数据面。
   - `380B` 需要在此基础上把 Go 侧实现从 `assistant` 复用链路迁出，否则 `380C` 无法真正退役 `/internal/assistant/*`。
@@ -553,7 +553,7 @@ flowchart TD
 
 ### 9.4 Readiness 证据
 
-1. [X] 新建并回写 `docs/dev-records/DEV-PLAN-380B-READINESS.md`
+1. [X] 新建并回写 `docs/archive/dev-records/DEV-PLAN-380B-READINESS.md`
 2. [X] 至少记录以下证据：
    - 各批次完成时间戳与实际命中的 SSOT 入口
    - 关键命令、环境与结果
@@ -565,7 +565,7 @@ flowchart TD
    - bridge 删除清单或剩余临时桥接点位（若有）
    - stopline 是否清零
 
-> 说明：当前工作区的 focused 验证、门禁与 bridge 清单已回写 `docs/dev-records/DEV-PLAN-380B-READINESS.md`，可作为 `380B` 收尾证据。
+> 说明：当前工作区的 focused 验证、门禁与 bridge 清单已回写 `docs/archive/dev-records/DEV-PLAN-380B-READINESS.md`，可作为 `380B` 收尾证据。
 
 ## 10. 运维与监控 (Ops & Monitoring)
 

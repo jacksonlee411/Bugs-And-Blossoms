@@ -513,7 +513,7 @@ flowchart LR
 
 ### 9.2 Readiness 记录
 
-- [X] 新建或更新 `docs/dev-records/DEV-PLAN-380E-READINESS.md`
+- [X] 新建或更新 `docs/archive/dev-records/DEV-PLAN-380E-READINESS.md`
 - [X] readiness 至少记录：
   - `pnpm --dir apps/web test`
   - `pnpm --dir apps/web build`
@@ -563,7 +563,7 @@ flowchart LR
 
 ### 9.4.3 完成证据
 
-- [X] Readiness 记录：`docs/dev-records/DEV-PLAN-380E-READINESS.md`
+- [X] Readiness 记录：`docs/archive/dev-records/DEV-PLAN-380E-READINESS.md`
 - [X] `pnpm --dir apps/web build`
 - [X] `pnpm --dir apps/web check`
 - [X] `make generate`

@@ -4,12 +4,12 @@
 - 当前结论：`可作为 285 的通过前置件直接引用。`
 
 ## 已通过项
-- Source 元数据完整：见 `docs/dev-records/assets/dev-plan-291/291-source-verify.log`
-- Patch Stack 可重放：见 `docs/dev-records/assets/dev-plan-291/291-web-build.log`
-- Runtime 健康：见 `docs/dev-records/assets/dev-plan-291/291-runtime-status.json`
-- Formal entry 受保护且可提供静态资源：见 `docs/dev-records/assets/dev-plan-291/291-formal-entry-go-test.log`
-- Compat alias 与正式静态 API 基准同链：见 `docs/dev-records/assets/dev-plan-291/291-compat-alias-go-test.log`
-- Routing / no-legacy 门禁通过：见 `docs/dev-records/assets/dev-plan-291/291-routing-check.log`、`docs/dev-records/assets/dev-plan-291/291-no-legacy.log`
+- Source 元数据完整：见 `docs/archive/dev-records/assets/dev-plan-291/291-source-verify.log`
+- Patch Stack 可重放：见 `docs/archive/dev-records/assets/dev-plan-291/291-web-build.log`
+- Runtime 健康：见 `docs/archive/dev-records/assets/dev-plan-291/291-runtime-status.json`
+- Formal entry 受保护且可提供静态资源：见 `docs/archive/dev-records/assets/dev-plan-291/291-formal-entry-go-test.log`
+- Compat alias 与正式静态 API 基准同链：见 `docs/archive/dev-records/assets/dev-plan-291/291-compat-alias-go-test.log`
+- Routing / no-legacy 门禁通过：见 `docs/archive/dev-records/assets/dev-plan-291/291-routing-check.log`、`docs/archive/dev-records/assets/dev-plan-291/291-no-legacy.log`
 - `tp288` 已刷新为完成态引用输入：见 `docs/dev-records/assets/dev-plan-266/tp288-real-entry-evidence-index.json`
 
 ## 未通过项
