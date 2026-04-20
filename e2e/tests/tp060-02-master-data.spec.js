@@ -20,10 +20,10 @@ async function ensureKratosIdentity(ctx, kratosAdminURL, { traits, identifier, p
   }
 }
 
-async function createJobCatalogAction(ctx, { setID, effectiveDate, action, body }) {
+async function createJobCatalogAction(ctx, { packageCode, effectiveDate, action, body }) {
   const resp = await ctx.request.post("/jobcatalog/api/catalog/actions", {
     data: {
-      setid: setID,
+      package_code: packageCode,
       effective_date: effectiveDate,
       action,
       ...body
@@ -32,9 +32,9 @@ async function createJobCatalogAction(ctx, { setID, effectiveDate, action, body 
   return resp;
 }
 
-async function getJobCatalog(ctx, { asOf, setID }) {
+async function getJobCatalog(ctx, { asOf, packageCode }) {
   const resp = await ctx.request.get(
-    `/jobcatalog/api/catalog?as_of=${encodeURIComponent(asOf)}&setid=${encodeURIComponent(setID)}`
+    `/jobcatalog/api/catalog?as_of=${encodeURIComponent(asOf)}&package_code=${encodeURIComponent(packageCode)}`
   );
   expect(resp.status(), await resp.text()).toBe(200);
   return resp.json();
@@ -262,6 +262,37 @@ test("tp060-02: master data (orgunit -> setid -> jobcatalog -> positions)", asyn
 
   const s2601SetID = "S2601";
   const s2602SetID = "S2602";
+  const s2601PackageCode = `PKG2601_${suffix}`.toUpperCase();
+  const s2602PackageCode = `PKG2602_${suffix}`.toUpperCase();
+
+  const createScopePackage = async ({ packageCode, ownerSetID, businessUnitOrgCode, name }) => {
+    const resp = await appContext.request.post("/org/api/scope-packages", {
+      data: {
+        scope_code: "jobcatalog",
+        package_code: packageCode,
+        owner_setid: ownerSetID,
+        business_unit_org_code: businessUnitOrgCode,
+        name,
+        effective_date: asOf,
+        request_id: `tp060-02-pkg-${packageCode}-${runID}`
+      }
+    });
+    expect(resp.status(), await resp.text()).toBe(201);
+    return resp.json();
+  };
+
+  await createScopePackage({
+    packageCode: s2601PackageCode,
+    ownerSetID: s2601SetID,
+    businessUnitOrgCode: org.rnd,
+    name: `R&D Package ${runID}`
+  });
+  await createScopePackage({
+    packageCode: s2602PackageCode,
+    ownerSetID: s2602SetID,
+    businessUnitOrgCode: org.sales,
+    name: `Sales Package ${runID}`
+  });
 
   // JobCatalog (S2601): create groups/families/levels/profiles, then assert valid-time reparent.
   {
@@ -273,7 +304,7 @@ test("tp060-02: master data (orgunit -> setid -> jobcatalog -> positions)", asyn
 
     const mustAction = async (action, body, effectiveDate = base, expectedStatus = 201) => {
       const resp = await createJobCatalogAction(appContext, {
-        setID: s2601SetID,
+        packageCode: s2601PackageCode,
         effectiveDate,
         action,
         body
@@ -289,16 +320,16 @@ test("tp060-02: master data (orgunit -> setid -> jobcatalog -> positions)", asyn
 
     await mustAction("update_job_family_group", { code: "JF-BE", group_code: "JFG-SALES" }, reparentEffectiveDate, 200);
 
-    const beforeCatalog = await getJobCatalog(appContext, { asOf: beforeReparent, setID: s2601SetID });
+    const beforeCatalog = await getJobCatalog(appContext, { asOf: beforeReparent, packageCode: s2601PackageCode });
     const jfBeBefore = (beforeCatalog.job_families || []).find((f) => f.job_family_code === "JF-BE");
     expect(jfBeBefore && jfBeBefore.job_family_group_code).toBe("JFG-ENG");
 
-    const afterCatalog = await getJobCatalog(appContext, { asOf: afterReparent, setID: s2601SetID });
+    const afterCatalog = await getJobCatalog(appContext, { asOf: afterReparent, packageCode: s2601PackageCode });
     const jfBeAfter = (afterCatalog.job_families || []).find((f) => f.job_family_code === "JF-BE");
     expect(jfBeAfter && jfBeAfter.job_family_group_code).toBe("JFG-SALES");
 
     await mustAction("create_job_level", { code: "JL-1", name: "Level 1" }, m5EffectiveDate);
-    const catalogBeforeExists = await getJobCatalog(appContext, { asOf: beforeLevelEffective, setID: s2601SetID });
+    const catalogBeforeExists = await getJobCatalog(appContext, { asOf: beforeLevelEffective, packageCode: s2601PackageCode });
     expect((catalogBeforeExists.job_levels || []).some((l) => l.job_level_code === "JL-1")).toBeFalsy();
 
     await mustAction("create_job_profile", {
@@ -307,12 +338,12 @@ test("tp060-02: master data (orgunit -> setid -> jobcatalog -> positions)", asyn
       family_codes_csv: "JF-BE,JF-FE",
       primary_family_code: "JF-BE"
     });
-    const catalogWithProfile = await getJobCatalog(appContext, { asOf: base, setID: s2601SetID });
+    const catalogWithProfile = await getJobCatalog(appContext, { asOf: base, packageCode: s2601PackageCode });
     const jpSwe = (catalogWithProfile.job_profiles || []).find((p) => p.job_profile_code === "JP-SWE");
     expect(jpSwe && jpSwe.primary_family_code).toBe("JF-BE");
 
     const badProfileResp = await createJobCatalogAction(appContext, {
-      setID: s2601SetID,
+      packageCode: s2601PackageCode,
       effectiveDate: base,
       action: "create_job_profile",
       body: {
@@ -332,7 +363,7 @@ test("tp060-02: master data (orgunit -> setid -> jobcatalog -> positions)", asyn
   {
     const mustCreate = async (action, body) => {
       const resp = await createJobCatalogAction(appContext, {
-        setID: "DEFLT",
+        packageCode: "DEFLT",
         effectiveDate: asOf,
         action,
         body
@@ -349,17 +380,17 @@ test("tp060-02: master data (orgunit -> setid -> jobcatalog -> positions)", asyn
     });
   }
 
-  // JobCatalog invalid SetID selection must fail-closed (response is an error JSON).
+  // JobCatalog invalid package selection must fail-closed (response is an error JSON).
   {
-    const resp = await appContext.request.get(`/jobcatalog/api/catalog?as_of=${encodeURIComponent(asOf)}&setid=S9999`);
-    await expectExplicitError(resp, { status: 422, code: "JOBCATALOG_SETID_INVALID" });
+    const resp = await appContext.request.get(`/jobcatalog/api/catalog?as_of=${encodeURIComponent(asOf)}&package_code=UNKNOWN`);
+    await expectExplicitError(resp, { status: 422, code: "PACKAGE_NOT_FOUND" });
   }
 
   // JobCatalog (S2602): create a profile for cross-setid reference tests.
   {
     const mustCreate = async (action, body) => {
       const resp = await createJobCatalogAction(appContext, {
-        setID: s2602SetID,
+        packageCode: s2602PackageCode,
         effectiveDate: asOf,
         action,
         body
@@ -526,9 +557,7 @@ test("tp060-02: master data (orgunit -> setid -> jobcatalog -> positions)", asyn
   // UI sanity checks (MUI-only pages)
   await page.goto(`/app/org/units?as_of=${asOf}`);
   await expect(page.locator("h1")).toContainText("Bugs & Blossoms");
-  await page.goto(`/app/org/setid/base`);
-  await expect(page.getByRole("heading", { level: 2, name: /^(Configuration & Policy|配置与策略)$/ })).toBeVisible();
-  await page.goto(`/app/jobcatalog?as_of=${asOf}&setid=${s2601SetID}`);
+  await page.goto(`/app/jobcatalog?as_of=${asOf}&package_code=${s2601PackageCode}`);
   await expect(page.getByRole("heading", { level: 2, name: "Job Catalog" })).toBeVisible();
   await page.goto(`/app/staffing/positions?as_of=${asOf}&org_code=${org.rnd}`);
   await expect(page.getByRole("heading", { level: 2, name: "Staffing / Positions" })).toBeVisible();

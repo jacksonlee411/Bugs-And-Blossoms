@@ -75,7 +75,7 @@ test("smoke: superadmin -> create tenant -> /app (MUI SPA) -> org/person/staffin
   const createJobCatalogItem = async (action, body) => {
     const resp = await appContext.request.post("/jobcatalog/api/catalog/actions", {
       data: {
-        setid: "DEFLT",
+        package_code: "DEFLT",
         effective_date: asOf,
         action,
         ...body
@@ -150,9 +150,9 @@ test("smoke: superadmin -> create tenant -> /app (MUI SPA) -> org/person/staffin
   expect(listAssignmentsJSON.assignments.length).toBeGreaterThan(0);
 
   // UI sanity checks (MUI-only pages)
-  await page.goto(`/app/org/setid/base`);
-  await expect(page.getByRole("heading", { level: 2, name: /^(Configuration & Policy|配置与策略)$/ })).toBeVisible();
-  await page.goto(`/app/jobcatalog?as_of=${asOf}&setid=DEFLT`);
+  await page.goto(`/app/org/units?as_of=${asOf}`);
+  await expect(page.locator("h1")).toContainText("Bugs & Blossoms");
+  await page.goto(`/app/jobcatalog?as_of=${asOf}&package_code=DEFLT`);
   await expect(page.getByRole("heading", { level: 2, name: "Job Catalog" })).toBeVisible();
   await page.goto(`/app/staffing/positions?as_of=${asOf}&org_code=${orgCode}`);
   await expect(page.getByRole("heading", { level: 2, name: "Staffing / Positions" })).toBeVisible();
