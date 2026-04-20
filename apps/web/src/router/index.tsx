@@ -8,7 +8,6 @@ import { DictValueDetailsPage } from '../pages/dicts/DictValueDetailsPage'
 import { JobCatalogPage } from '../pages/jobcatalog/JobCatalogPage'
 import { LoginPage } from '../pages/LoginPage'
 import { OrgUnitFieldConfigsPage } from '../pages/org/OrgUnitFieldConfigsPage'
-import { SetIDGovernancePage } from '../pages/org/SetIDGovernancePage'
 import { OrgUnitDetailsPage } from '../pages/org/OrgUnitDetailsPage'
 import { OrgUnitsPage } from '../pages/org/OrgUnitsPage'
 import { PersonsPage } from '../pages/person/PersonsPage'
@@ -88,46 +87,6 @@ export const router = createBrowserRouter([
         element: (
           <RequirePermission permissionKey='person.read'>
             <PersonsPage />
-          </RequirePermission>
-        )
-      },
-      {
-        path: 'org/setid',
-        element: (
-          <RequirePermission permissionKey='orgunit.read'>
-            <Navigate replace to='base' />
-          </RequirePermission>
-        )
-      },
-      {
-        path: 'org/setid/base',
-        element: (
-          <RequirePermission permissionKey='orgunit.read'>
-            <SetIDGovernancePage section='base' />
-          </RequirePermission>
-        )
-      },
-      {
-        path: 'org/setid/registry',
-        element: (
-          <RequirePermission permissionKey='orgunit.read'>
-            <SetIDGovernancePage section='registry' />
-          </RequirePermission>
-        )
-      },
-      {
-        path: 'org/setid/explain',
-        element: (
-          <RequirePermission permissionKey='orgunit.read'>
-            <SetIDGovernancePage section='explain' />
-          </RequirePermission>
-        )
-      },
-      {
-        path: 'org/setid/ops',
-        element: (
-          <RequirePermission permissionKey='orgunit.read'>
-            <SetIDGovernancePage section='ops' />
           </RequirePermission>
         )
       },

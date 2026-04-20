@@ -35,8 +35,6 @@ type staffingPositionAPIResponse struct {
 	PositionUUID          string `json:"position_uuid"`
 	OrgCode               string `json:"org_code"`
 	ReportsToPositionUUID string `json:"reports_to_position_uuid"`
-	JobCatalogSetID       string `json:"jobcatalog_setid"`
-	JobCatalogSetIDAsOf   string `json:"jobcatalog_setid_as_of"`
 	JobProfileUUID        string `json:"job_profile_uuid"`
 	JobProfileCode        string `json:"job_profile_code"`
 	Name                  string `json:"name"`
@@ -52,10 +50,9 @@ type staffingJobProfileOptionAPIItem struct {
 }
 
 type staffingPositionsOptionsAPIResponse struct {
-	AsOf            string                            `json:"as_of"`
-	OrgCode         string                            `json:"org_code"`
-	JobCatalogSetID string                            `json:"jobcatalog_setid"`
-	JobProfiles     []staffingJobProfileOptionAPIItem `json:"job_profiles"`
+	AsOf        string                            `json:"as_of"`
+	OrgCode     string                            `json:"org_code"`
+	JobProfiles []staffingJobProfileOptionAPIItem `json:"job_profiles"`
 }
 
 func handlePositionsOptionsAPI(w http.ResponseWriter, r *http.Request, orgStore OrgUnitStore, jobStore JobCatalogStore) {
@@ -125,10 +122,9 @@ func handlePositionsOptionsAPI(w http.ResponseWriter, r *http.Request, orgStore 
 	}
 
 	resp := staffingPositionsOptionsAPIResponse{
-		AsOf:            asOf,
-		OrgCode:         orgCode,
-		JobCatalogSetID: setID,
-		JobProfiles:     make([]staffingJobProfileOptionAPIItem, 0, len(jobProfiles)),
+		AsOf:        asOf,
+		OrgCode:     orgCode,
+		JobProfiles: make([]staffingJobProfileOptionAPIItem, 0, len(jobProfiles)),
 	}
 	for _, p := range jobProfiles {
 		resp.JobProfiles = append(resp.JobProfiles, staffingJobProfileOptionAPIItem{
@@ -212,18 +208,16 @@ func handlePositionsAPI(w http.ResponseWriter, r *http.Request, orgResolver OrgU
 				orgCodes[orgIDStr] = code
 			}
 		}
-		responsePositions := make([]staffingPositionAPIResponse, 0, len(positions))
-		for _, p := range positions {
-			responsePositions = append(responsePositions, staffingPositionAPIResponse{
-				PositionUUID:          p.PositionUUID,
-				OrgCode:               orgCodes[p.OrgNodeKey],
-				ReportsToPositionUUID: p.ReportsToPositionUUID,
-				JobCatalogSetID:       p.JobCatalogSetID,
-				JobCatalogSetIDAsOf:   p.JobCatalogSetIDAsOf,
-				JobProfileUUID:        p.JobProfileUUID,
-				JobProfileCode:        p.JobProfileCode,
-				Name:                  p.Name,
-				LifecycleStatus:       p.LifecycleStatus,
+			responsePositions := make([]staffingPositionAPIResponse, 0, len(positions))
+			for _, p := range positions {
+				responsePositions = append(responsePositions, staffingPositionAPIResponse{
+					PositionUUID:          p.PositionUUID,
+					OrgCode:               orgCodes[p.OrgNodeKey],
+					ReportsToPositionUUID: p.ReportsToPositionUUID,
+					JobProfileUUID:        p.JobProfileUUID,
+					JobProfileCode:        p.JobProfileCode,
+					Name:                  p.Name,
+					LifecycleStatus:       p.LifecycleStatus,
 				CapacityFTE:           p.CapacityFTE,
 				EffectiveDate:         p.EffectiveAt,
 			})
@@ -336,16 +330,14 @@ func handlePositionsAPI(w http.ResponseWriter, r *http.Request, orgResolver OrgU
 			respOrgCode = code
 		}
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
-		_ = json.NewEncoder(w).Encode(staffingPositionAPIResponse{
-			PositionUUID:          p.PositionUUID,
-			OrgCode:               respOrgCode,
-			ReportsToPositionUUID: p.ReportsToPositionUUID,
-			JobCatalogSetID:       p.JobCatalogSetID,
-			JobCatalogSetIDAsOf:   p.JobCatalogSetIDAsOf,
-			JobProfileUUID:        p.JobProfileUUID,
-			JobProfileCode:        p.JobProfileCode,
-			Name:                  p.Name,
-			LifecycleStatus:       p.LifecycleStatus,
+			_ = json.NewEncoder(w).Encode(staffingPositionAPIResponse{
+				PositionUUID:          p.PositionUUID,
+				OrgCode:               respOrgCode,
+				ReportsToPositionUUID: p.ReportsToPositionUUID,
+				JobProfileUUID:        p.JobProfileUUID,
+				JobProfileCode:        p.JobProfileCode,
+				Name:                  p.Name,
+				LifecycleStatus:       p.LifecycleStatus,
 			CapacityFTE:           p.CapacityFTE,
 			EffectiveDate:         p.EffectiveAt,
 		})

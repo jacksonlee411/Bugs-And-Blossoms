@@ -11,16 +11,11 @@ const jobCatalogApiMocks = vi.hoisted(() => ({
   getJobCatalog: vi.fn()
 }))
 
-const setidApiMocks = vi.hoisted(() => ({
-  listSetIDs: vi.fn()
-}))
-
 const appPreferencesMocks = vi.hoisted(() => ({
   useAppPreferences: vi.fn()
 }))
 
 vi.mock('../../api/jobCatalog', () => jobCatalogApiMocks)
-vi.mock('../../api/setids', () => setidApiMocks)
 vi.mock('../../app/providers/AppPreferencesContext', () => appPreferencesMocks)
 vi.mock('../../components/PageHeader', () => ({
   PageHeader: ({ title }: { title: string }) => <h1>{title}</h1>
@@ -33,9 +28,6 @@ vi.mock('../../components/DataGridPage', () => ({
 }))
 vi.mock('../../components/StatusChip', () => ({
   StatusChip: ({ label }: { label: string }) => <span>{label}</span>
-}))
-vi.mock('../../components/SetIDExplainPanel', () => ({
-  SetIDExplainPanel: () => <div data-testid='setid-explain-panel'>explain</div>
 }))
 vi.mock('@mui/x-date-pickers/DatePicker', () => ({
   DatePicker: ({
@@ -123,7 +115,6 @@ describe('JobCatalogPage', () => {
             jobcatalog_filter_apply_context: 'Apply Context',
             jobcatalog_filter_reset_context: 'Reset',
             jobcatalog_context_no_package: 'No package',
-            jobcatalog_context_owner_setid: 'Owner SetID',
             jobcatalog_context_read_only: 'Read Only',
             jobcatalog_context_read_only_true: 'Yes',
             jobcatalog_context_read_only_false: 'No',
@@ -156,11 +147,8 @@ describe('JobCatalogPage', () => {
         )[key] ?? key
     })
 
-    setidApiMocks.listSetIDs.mockResolvedValue({
-      setids: [{ setid: 'SET-1' }]
-    })
     jobCatalogApiMocks.getJobCatalog.mockResolvedValue({
-      view: { owner_setid: 'SET-1', read_only: false },
+      view: { package_code: 'PKG1', read_only: false },
       job_family_groups: [
         {
           job_family_group_uuid: 'group-1',
@@ -178,10 +166,10 @@ describe('JobCatalogPage', () => {
   })
 
   it('defaults to current mode and only enters history when requested', async () => {
-    renderPage('/jobcatalog?setid=SET-1')
+    renderPage('/jobcatalog?package_code=PKG1')
 
     await waitFor(() =>
-      expect(jobCatalogApiMocks.getJobCatalog).toHaveBeenCalledWith({ asOf: currentUTCDate(), setid: 'SET-1' })
+      expect(jobCatalogApiMocks.getJobCatalog).toHaveBeenCalledWith({ asOf: currentUTCDate(), packageCode: 'PKG1' })
     )
 
     expect(screen.queryByLabelText('As Of Date')).not.toBeInTheDocument()
@@ -195,9 +183,11 @@ describe('JobCatalogPage', () => {
   }, 20000)
 
   it('does not seed create dialog effective date from history as_of', async () => {
-    renderPage('/jobcatalog?setid=SET-1&as_of=2026-03-01')
+    renderPage('/jobcatalog?package_code=PKG1&as_of=2026-03-01')
 
-    await waitFor(() => expect(jobCatalogApiMocks.getJobCatalog).toHaveBeenCalledWith({ asOf: '2026-03-01', setid: 'SET-1' }))
+    await waitFor(() =>
+      expect(jobCatalogApiMocks.getJobCatalog).toHaveBeenCalledWith({ asOf: '2026-03-01', packageCode: 'PKG1' })
+    )
     await waitFor(() => expect(screen.getByRole('button', { name: 'Create Group' })).toBeInTheDocument())
 
     fireEvent.click(screen.getByRole('button', { name: 'Create Group' }))

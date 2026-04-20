@@ -4,8 +4,6 @@ export interface StaffingPositionAPIItem {
   position_uuid: string
   org_code: string
   reports_to_position_uuid: string
-  jobcatalog_setid: string
-  jobcatalog_setid_as_of: string
   job_profile_uuid: string
   job_profile_code: string
   name: string
@@ -40,7 +38,6 @@ export async function upsertPosition(request: {
 export interface StaffingPositionOptionsResponse {
   as_of: string
   org_code: string
-  jobcatalog_setid: string
   job_profiles: Array<{ job_profile_uuid: string; job_profile_code: string; name: string }>
 }
 
@@ -51,4 +48,3 @@ export async function getPositionOptions(options: {
   const query = new URLSearchParams({ as_of: options.asOf, org_code: options.orgCode })
   return httpClient.get<StaffingPositionOptionsResponse>(`/org/api/positions:options?${query.toString()}`)
 }
-

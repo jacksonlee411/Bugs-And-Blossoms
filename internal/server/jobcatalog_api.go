@@ -12,8 +12,7 @@ import (
 type jobCatalogViewAPI struct {
 	HasSelection bool   `json:"has_selection"`
 	ReadOnly     bool   `json:"read_only"`
-	SetID        string `json:"setid,omitempty"`
-	OwnerSetID   string `json:"owner_setid,omitempty"`
+	PackageCode  string `json:"package_code,omitempty"`
 }
 
 type jobFamilyGroupAPIItem struct {
@@ -68,11 +67,11 @@ func handleJobCatalogAPI(w http.ResponseWriter, r *http.Request, setidStore jobC
 		return
 	}
 
-	setID := jobcatalogservices.NormalizeSetID(r.URL.Query().Get("setid"))
+	packageCode := jobcatalogservices.NormalizePackageCode(r.URL.Query().Get("package_code"))
 
 	view := jobCatalogViewAPI{HasSelection: false}
-	if setID != "" {
-		v, errMsg := resolveJobCatalogView(r.Context(), store, setidStore, tenant.ID, asOf, "", setID)
+	if packageCode != "" {
+		v, errMsg := resolveJobCatalogView(r.Context(), store, setidStore, tenant.ID, asOf, packageCode, "")
 		if errMsg != "" {
 			status := jobCatalogStatusForError(errMsg)
 			code := strings.TrimSpace(errMsg)
@@ -83,12 +82,11 @@ func handleJobCatalogAPI(w http.ResponseWriter, r *http.Request, setidStore jobC
 			return
 		}
 
-		view.HasSelection = v.HasSelection
-		view.ReadOnly = v.ReadOnly
-		view.SetID = v.SetID
-		view.OwnerSetID = v.OwnerSetID
+			view.HasSelection = v.HasSelection
+			view.ReadOnly = v.ReadOnly
+			view.PackageCode = v.PackageCode
 
-		listSetID := v.listSetID()
+			listSetID := v.listSetID()
 
 		groups, err := store.ListJobFamilyGroups(r.Context(), tenant.ID, listSetID, asOf)
 		if err != nil {
@@ -203,7 +201,7 @@ func handleJobCatalogAPI(w http.ResponseWriter, r *http.Request, setidStore jobC
 }
 
 type jobCatalogWriteRequest struct {
-	SetID          string `json:"setid"`
+	PackageCode    string `json:"package_code"`
 	EffectiveDate  string `json:"effective_date"`
 	RequestAction  string `json:"action"`
 	Code           string `json:"code"`
@@ -231,7 +229,7 @@ func handleJobCatalogWriteAPI(w http.ResponseWriter, r *http.Request, setidStore
 		return
 	}
 
-	req.SetID = jobcatalogservices.NormalizeSetID(req.SetID)
+	req.PackageCode = jobcatalogservices.NormalizePackageCode(req.PackageCode)
 	effectiveDate, err := parseRequiredDay(req.EffectiveDate, "effective_date")
 	if err != nil {
 		writeInternalDayFieldError(w, r, err)
@@ -243,12 +241,12 @@ func handleJobCatalogWriteAPI(w http.ResponseWriter, r *http.Request, setidStore
 	if action == "" {
 		action = "create_job_family_group"
 	}
-	if req.SetID == "" {
-		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "invalid_request", "setid required")
+	if req.PackageCode == "" {
+		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "invalid_request", "package_code required")
 		return
 	}
 
-	view, errMsg := resolveJobCatalogView(r.Context(), store, setidStore, tenant.ID, req.EffectiveDate, "", req.SetID)
+	view, errMsg := resolveJobCatalogView(r.Context(), store, setidStore, tenant.ID, req.EffectiveDate, req.PackageCode, "")
 	if errMsg != "" {
 		status := jobCatalogStatusForError(errMsg)
 		code := strings.TrimSpace(errMsg)
@@ -280,8 +278,7 @@ func handleJobCatalogWriteAPI(w http.ResponseWriter, r *http.Request, setidStore
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		w.WriteHeader(http.StatusCreated)
 		_ = json.NewEncoder(w).Encode(map[string]any{
-			"setid":                 req.SetID,
-			"owner_setid":           ownerSetID,
+			"package_code":          req.PackageCode,
 			"effective_date":        req.EffectiveDate,
 			"job_family_group_code": strings.ToUpper(req.Code),
 		})
@@ -303,8 +300,7 @@ func handleJobCatalogWriteAPI(w http.ResponseWriter, r *http.Request, setidStore
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		w.WriteHeader(http.StatusCreated)
 		_ = json.NewEncoder(w).Encode(map[string]any{
-			"setid":           req.SetID,
-			"owner_setid":     ownerSetID,
+			"package_code":    req.PackageCode,
 			"effective_date":  req.EffectiveDate,
 			"job_family_code": strings.ToUpper(req.Code),
 		})
@@ -324,8 +320,7 @@ func handleJobCatalogWriteAPI(w http.ResponseWriter, r *http.Request, setidStore
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		w.WriteHeader(http.StatusOK)
 		_ = json.NewEncoder(w).Encode(map[string]any{
-			"setid":                 req.SetID,
-			"owner_setid":           ownerSetID,
+			"package_code":          req.PackageCode,
 			"effective_date":        req.EffectiveDate,
 			"job_family_code":       strings.ToUpper(familyCode),
 			"job_family_group_code": strings.ToUpper(groupCode),
@@ -347,8 +342,7 @@ func handleJobCatalogWriteAPI(w http.ResponseWriter, r *http.Request, setidStore
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		w.WriteHeader(http.StatusCreated)
 		_ = json.NewEncoder(w).Encode(map[string]any{
-			"setid":          req.SetID,
-			"owner_setid":    ownerSetID,
+			"package_code":   req.PackageCode,
 			"effective_date": req.EffectiveDate,
 			"job_level_code": strings.ToUpper(req.Code),
 		})
@@ -372,8 +366,7 @@ func handleJobCatalogWriteAPI(w http.ResponseWriter, r *http.Request, setidStore
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		w.WriteHeader(http.StatusCreated)
 		_ = json.NewEncoder(w).Encode(map[string]any{
-			"setid":            req.SetID,
-			"owner_setid":      ownerSetID,
+			"package_code":     req.PackageCode,
 			"effective_date":   req.EffectiveDate,
 			"job_profile_code": strings.ToUpper(req.Code),
 		})

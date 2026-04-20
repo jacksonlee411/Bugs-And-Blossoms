@@ -28,9 +28,6 @@ vi.mock('../../api/positions', () => positionApiMocks)
 vi.mock('../../components/PageHeader', () => ({
   PageHeader: ({ title }: { title: string }) => <h1>{title}</h1>
 }))
-vi.mock('../../components/SetIDExplainPanel', () => ({
-  SetIDExplainPanel: () => <div data-testid='setid-explain-panel'>explain</div>
-}))
 vi.mock('../../utils/readViewState', async () => {
   const actual = await vi.importActual<typeof import('../../utils/readViewState')>('../../utils/readViewState')
   return {
@@ -113,8 +110,7 @@ describe('Staffing view-as-of pages', () => {
           name: 'Analyst',
           job_profile_code: 'JP-1',
           org_code: 'ROOT',
-          effective_date: '2026-04-08',
-          jobcatalog_setid: 'SET-1'
+          effective_date: '2026-04-08'
         }
       ]
     })
@@ -129,7 +125,6 @@ describe('Staffing view-as-of pages', () => {
       ]
     })
     positionApiMocks.getPositionOptions.mockResolvedValue({
-      jobcatalog_setid: 'SET-1',
       job_profiles: [{ job_profile_uuid: 'profile-1', job_profile_code: 'JP-1', name: 'Analyst Profile' }]
     })
   })

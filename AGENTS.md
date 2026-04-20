@@ -110,7 +110,7 @@
 - 授权边界：RLS 圈地 ≠ Casbin 授权；subject/domain/object/action 命名冻结（`DEV-PLAN-021/022/019`）。
 - i18n：仅 `en/zh`，语言写入口唯一；不做业务数据多语言（`DEV-PLAN-020`）。
 - 模块边界：业务域 4 模块（orgunit/jobcatalog/staffing/person）+ 平台模块 iam；跨模块优先通过 `pkg/**` 与 HTTP/JSON API 组合，避免 Go 代码跨模块 import（`DEV-PLAN-015/016/019`）。
-- SetID：现行删除与收口以 `DEV-PLAN-440` 为唯一 PoR；历史 SetID 方案仅允许作为 archive/历史来源保留，不得再作为当前实现前提或回退依据。
+- SetID：现行删除与收口以 `DEV-PLAN-440` 为唯一 PoR；历史 SetID 方案仅允许作为 archive/历史来源或待归档调查材料保留，不得再作为当前实现前提、当前用户入口或回退依据。
 - No Legacy：禁止引入“legacy 分支/回退通道/双链路”（包括 `read=legacy`、兼容别名窗口、旧实现兜底等）；回滚只能走“环境级保护 + 只读/停写/修复后重试”，并必须有门禁阻断（`DEV-PLAN-004M1`）。
 
 ### 3.8 用户可见性原则（避免“僵尸功能”）
@@ -185,7 +185,7 @@ modules/{module}/
 - i18n（仅 en/zh）：`docs/dev-plans/020-i18n-en-zh-only.md`
 - Docs 治理：`docs/dev-plans/013-docs-creation-and-governance-guide.md`
 - CI 质量门禁：`docs/dev-plans/012-ci-quality-gates.md`
-- 时间口径（现行）：`docs/dev-plans/102b-070-071-time-context-explicitness-and-replay-determinism.md`；其中 070/071/028 的 SetID 历史语义不得再作为当前实现前提，现行删除 owner 见 `docs/dev-plans/440-complete-setid-removal-plan.md`
+- 时间口径（现行）：`docs/dev-plans/102b-070-071-time-context-explicitness-and-replay-determinism.md`；其中 070/071/028 的 SetID 历史语义仅可作为历史来源引用，不得再作为当前实现前提；现行删除 owner 见 `docs/dev-plans/440-complete-setid-removal-plan.md`
 
 ## 6. 文档收敛与门禁（New Doc Gate）
 
@@ -242,11 +242,12 @@ modules/{module}/
 - DEV-PLAN-436：CubeBox 历史对话面彻底删除与仓面清场方案：`docs/dev-plans/436-cubebox-historical-surface-hard-delete-plan.md`
 - DEV-PLAN-440：彻底删除 SetID 的全仓收口方案（SetID 根删除唯一 PoR）：`docs/dev-plans/440-complete-setid-removal-plan.md`
 - DEV-PLAN-441：旧策略模块残余清理方案：`docs/dev-plans/441-legacy-strategy-module-residue-cleanup-plan.md`
+- DEV-PLAN-440 Readiness：当前命中、停止线与分阶段 owner：`docs/dev-records/DEV-PLAN-440-READINESS.md`
 - SetID 相关历史研究/中间方案说明：`070A`、`102C*`、`015Z*`、`161A`、`163A`、`185`、`191`、`203` 等文档仅可作为历史来源、调查记录或待归档材料引用；凡涉及 SetID 根删除、入口是否保留、现行主流程是否仍依赖 SetID，一律以 `DEV-PLAN-440` 为准。
 - DEV-PLAN-400：CodeFlow 辅助源码分析与爆炸半径评估落地方案：`docs/dev-plans/400-codeflow-assisted-source-analysis-and-impact-radius-plan.md`
 - DEV-PLAN-069：移除薪酬社保与考勤（文档/代码/测试/数据库）：`docs/dev-plans/069-remove-payroll-attendance.md`
 - DEV-PLAN-070【归档】：SetID 绑定组织架构重构方案（时间口径已由 DEV-PLAN-102B 接管）：`docs/archive/dev-plans/070-setid-orgunit-binding-redesign.md`
-- DEV-PLAN-070A：全局共享租户模式 vs 天然租户隔离模式专项调查（SetID/Scope Package）：`docs/dev-plans/070a-setid-global-share-vs-tenant-native-isolation-investigation.md`
+- DEV-PLAN-070A：全局共享租户模式 vs 天然租户隔离模式专项调查（SetID/Scope Package，历史研究来源，不作为现行实现依据）：`docs/dev-plans/070a-setid-global-share-vs-tenant-native-isolation-investigation.md`
 - DEV-PLAN-070B：取消共享租户（global_tenant）并收敛为租户本地发布方案（以字典配置模块为样板）：`docs/dev-plans/070b-no-global-tenant-and-dict-release-to-tenant-plan.md`
 - DEV-PLAN-070B1：字典基线发布 UI 可视化操作方案（承接 DEV-PLAN-070B）：`docs/dev-plans/070b1-dict-release-ui-operations-plan.md`
 - DEV-PLAN-070B-T：070B 系列目标达成测试方案（字典租户本地发布）：`docs/dev-plans/070b-t-dict-tenant-release-test-plan.md`
@@ -345,7 +346,7 @@ modules/{module}/
 - DEV-PLAN-183：Capability Key 配置可发现性与对象/意图显式建模方案：`docs/dev-plans/183-capability-key-object-intent-discoverability-and-modeling.md`
 - DEV-PLAN-184：字段配置与策略规则双层 SoT 收敛方案（Static Metadata vs Dynamic Policy）：`docs/dev-plans/184-field-metadata-and-runtime-policy-sot-convergence.md`
 - DEV-PLAN-185：字段配置页字典值列表 SetID 列展示与主数据取数控制策略收敛：`docs/dev-plans/185-field-config-dict-values-setid-column-and-master-data-fetch-control.md`
-- DEV-PLAN-191：`/app/org/setid` 导航与页面设计优化方案（一级/二级菜单 + 独立滚动 + DEV-PLAN-002 对齐）：`docs/dev-plans/191-setid-governance-navigation-and-layout-optimization.md`
+- DEV-PLAN-191：`/app/org/setid` 导航与页面设计优化方案（历史页面方案；现行入口删除 owner 见 `DEV-PLAN-440`）：`docs/dev-plans/191-setid-governance-navigation-and-layout-optimization.md`
 - DEV-PLAN-200：组合优先的积木式页面与功能架构蓝图（Field Config × Dict × CRUD Pattern × Strategy）：`docs/dev-plans/200-composable-building-block-architecture-blueprint.md`
 - DEV-PLAN-201：200蓝图 Phase 0 边界冻结与跨层作用域一致性基线：`docs/dev-plans/201-blueprint-phase0-boundary-and-scope-consistency-freeze.md`
 - DEV-PLAN-202：200蓝图 Phase 0 策略决议确定性与 allowed_value_codes 语义收敛：`docs/dev-plans/202-blueprint-policy-resolution-and-allowed-values-determinism.md`
@@ -383,7 +384,7 @@ modules/{module}/
 - DEV-PLAN-102C3：SetID 配置命中可解释性（Explainability）方案（承接 102C，避免与 070B/102C1/102C2 重复）：`docs/dev-plans/102c3-setid-configuration-hit-explainability.md`
 - DEV-PLAN-102C4：BU 流程个性化样板（承接 102C，避免与 070B/102C1/102C2/102C3 重复）：`docs/dev-plans/102c4-bu-process-personalization-pilot.md`
 - DEV-PLAN-102C5：102C1-102C3 UI 专项方案（SetID 上下文化安全 + 策略注册表 + 命中解释）：`docs/dev-plans/102c5-ui-design-for-setid-context-security-registry-explainability.md`
-- DEV-PLAN-102C6：彻底删除 scope_code + package，收敛到 capability_key + setid（Simple First）：`docs/dev-plans/102c6-remove-scope-code-and-converge-to-capability-key-plan.md`
+- DEV-PLAN-102C6：彻底删除 scope_code + package，收敛到 capability_key + setid（历史阶段方案；凡涉 SetID 根删除排序以 `DEV-PLAN-440` 为准）：`docs/dev-plans/102c6-remove-scope-code-and-converge-to-capability-key-plan.md`
 - DEV-PLAN-102C-T：102C1-102C3 测试方案（同租户跨 BU 字段差异）：`docs/dev-plans/102c-t-test-plan-for-c1-c3-bu-field-variance.md`
 - DEV-PLAN-102D：基于 102 基线的 Context + Rule + Eval 动态隔离与配置安全实施方案：`docs/dev-plans/102d-context-rule-evaluation-engine-on-top-of-102-foundation.md`
 - DEV-PLAN-102D-T：102D 动态规则引擎测试方案（用户可见性 + 内部评估链路）：`docs/dev-plans/102d-t-context-rule-eval-user-visible-test-plan.md`

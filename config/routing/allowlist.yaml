@@ -41,21 +41,6 @@ entrypoints:
       - path: /app/approvals
         methods: [GET]
         route_class: ui
-      - path: /app/org/setid
-        methods: [GET]
-        route_class: ui
-      - path: /app/org/setid/base
-        methods: [GET]
-        route_class: ui
-      - path: /app/org/setid/registry
-        methods: [GET]
-        route_class: ui
-      - path: /app/org/setid/explain
-        methods: [GET]
-        route_class: ui
-      - path: /app/org/setid/ops
-        methods: [GET]
-        route_class: ui
       - path: /app/login
         methods: [GET]
         route_class: ui

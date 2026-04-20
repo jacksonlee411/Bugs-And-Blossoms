@@ -379,19 +379,16 @@ test("tp060-02: master data (orgunit -> setid -> jobcatalog -> positions)", asyn
   // Resolve Job Profile UUIDs via options API.
   const rndOptions = await getPositionOptions(appContext, { asOf, orgCode: org.rnd });
   expectNoLegacyOrgFields(rndOptions, "R&D position options");
-  expect(rndOptions.jobcatalog_setid).toBe("S2601");
   const jpSweOpt = (rndOptions.job_profiles || []).find((p) => p.job_profile_code === "JP-SWE");
   expect(jpSweOpt && jpSweOpt.job_profile_uuid).toBeTruthy();
 
   const salesOptions = await getPositionOptions(appContext, { asOf, orgCode: org.sales });
   expectNoLegacyOrgFields(salesOptions, "Sales position options");
-  expect(salesOptions.jobcatalog_setid).toBe("S2602");
   const jpOpsOpt = (salesOptions.job_profiles || []).find((p) => p.job_profile_code === "JP-OPS");
   expect(jpOpsOpt && jpOpsOpt.job_profile_uuid).toBeTruthy();
 
   const hqOptions = await getPositionOptions(appContext, { asOf, orgCode: org.hq });
   expectNoLegacyOrgFields(hqOptions, "HQ position options");
-  expect(hqOptions.jobcatalog_setid).toBe("DEFLT");
   const jpDefOpt = (hqOptions.job_profiles || []).find((p) => p.job_profile_code === defltJobProfileCode);
   expect(jpDefOpt && jpDefOpt.job_profile_uuid).toBeTruthy();
 

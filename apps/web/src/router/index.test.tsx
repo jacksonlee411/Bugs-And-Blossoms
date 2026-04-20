@@ -24,9 +24,6 @@ vi.mock('../pages/LoginPage', () => ({
 vi.mock('../pages/org/OrgUnitFieldConfigsPage', () => ({
   OrgUnitFieldConfigsPage: () => null
 }))
-vi.mock('../pages/org/SetIDGovernancePage', () => ({
-  SetIDGovernancePage: () => null
-}))
 vi.mock('../pages/org/OrgUnitDetailsPage', () => ({
   OrgUnitDetailsPage: () => null
 }))

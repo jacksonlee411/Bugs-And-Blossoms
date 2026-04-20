@@ -122,7 +122,7 @@ func LoadOwnedJobCatalogPackages(ctx context.Context, principal Principal, setid
 }
 
 func ResolveJobCatalogView(ctx context.Context, principal Principal, store JobCatalogStore, setidStore SetIDStore, tenantID string, asOf string, packageCode string, setID string) (JobCatalogView, string) {
-	view := JobCatalogView{PackageCode: packageCode}
+	view := JobCatalogView{PackageCode: NormalizePackageCode(packageCode)}
 	if packageCode == "" && setID == "" {
 		return view, ""
 	}

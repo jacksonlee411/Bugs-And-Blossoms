@@ -6,7 +6,6 @@ import { listAssignments, upsertAssignment } from '../../api/assignments'
 import { getPersonByPernr } from '../../api/persons'
 import { listPositions } from '../../api/positions'
 import { PageHeader } from '../../components/PageHeader'
-import { SetIDExplainPanel } from '../../components/SetIDExplainPanel'
 import { isDay, resolveReadViewState, todayISODate } from '../../utils/readViewState'
 
 function parseOptionalValue(raw: string | null): string {
@@ -191,12 +190,6 @@ export function AssignmentsPage() {
             </>
           ) : null}
         </Paper>
-
-        <SetIDExplainPanel
-          initialAsOf={asOf}
-          title='SetID Explain（Assignments）'
-          subtitle='用于排查任职写入时的上下文拒绝与字段策略命中。'
-        />
 
         <Paper sx={{ p: 2 }}>
           <Typography component='h3' variant='subtitle1' sx={{ mb: 1 }}>

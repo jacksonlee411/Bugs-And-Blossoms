@@ -2,7 +2,7 @@
 
 **状态**: 进行中（2026-01-11 20:55 UTC）— M3/M4a/M5/M6a/M7 已落地；M4b/M6b 作为可选里程碑见 §10
 
-> **更新说明（DEV-PLAN-070）**：本计划中涉及 `business_unit_id` / `record_group` 的 SetID 口径已被 `docs/archive/dev-plans/070-setid-orgunit-binding-redesign.md` 取代；以下内容已按“配置主数据显式 `setid`、业务数据可由 `org_unit_id` 解析并落库”更新，Position 不再要求手工选择 SetID。历史实现细节仅供追溯，不再作为契约。
+> **更新说明（2026-04-20 / DEV-PLAN-440）**：本计划中涉及 `jobcatalog_setid`、Position UI 外显 SetID、Assignments Explain 依赖 SetID 的内容，均已进入 `DEV-PLAN-440` 删除范围。以下 SetID 相关内容仅反映历史实现事实与待改造阻塞，不再构成当前用户界面必须继续暴露的契约。
 
 > 本计划的定位：作为 Greenfield HR 的 Position/Assignment 子域，提供 **Position/Assignment 的权威契约**（DB Kernel + Go Facade + One Door），并与 `DEV-PLAN-026`（OrgUnit）对齐“事件 SoT + 同步投射 + 可重放”的范式。
 
@@ -99,7 +99,7 @@
 - [X] Schema（staffing）：`modules/staffing/infrastructure/persistence/schema/00002_staffing_tables.sql`（新增 `jobcatalog_setid/jobcatalog_setid_as_of/job_profile_id`；移除 `business_unit_id`）
 - [X] Kernel（staffing）：`modules/staffing/infrastructure/persistence/schema/00003_staffing_engine.sql`（通过 `orgunit.resolve_setid` 解析 `jobcatalog_setid`，并做 `JOBCATALOG_REFERENCE_NOT_FOUND` 引用校验；`job_profile_id` 必填）
 - [X] 说明：跨模块 FK 默认禁止（`DEV-PLAN-024`），因此本阶段不落物理 FK，采用 Kernel 校验（soft FK）
-- [X] UI/Internal API：`internal/server/staffing_handlers.go`、`internal/server/staffing.go`（OrgUnit + Job Profile 选择与展示；Job Profile 选项按 org_unit 解析得到的 setid 过滤；list/join 显示 job_profile_code）
+- [X] UI/Internal API：`internal/server/staffing_handlers.go`、`internal/server/staffing.go`（OrgUnit + Job Profile 选择与展示；Job Profile 选项按 org_unit 解析得到的历史 SetID 运行时过滤；SetID 相关用户外显展示由 `DEV-PLAN-440` 继续删除）
 - [X] Tests：`internal/server/staffing_test.go`、`internal/server/handler_test.go`（覆盖 org_unit 解析 setid、Job Profile 必选与引用校验、redirect 行为）
 
 ## 3. 架构与关键决策 (Architecture & Decisions)

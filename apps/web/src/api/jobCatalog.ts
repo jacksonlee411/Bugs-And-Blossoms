@@ -3,8 +3,7 @@ import { httpClient } from './httpClient'
 export interface JobCatalogView {
   has_selection: boolean
   read_only: boolean
-  setid?: string
-  owner_setid?: string
+  package_code?: string
 }
 
 export interface JobFamilyGroupItem {
@@ -54,18 +53,18 @@ export interface JobCatalogResponse {
 
 export async function getJobCatalog(options: {
   asOf: string
-  setid?: string
+  packageCode?: string
 }): Promise<JobCatalogResponse> {
   const query = new URLSearchParams({ as_of: options.asOf })
-  if (options.setid) {
-    query.set('setid', options.setid)
+  if (options.packageCode) {
+    query.set('package_code', options.packageCode)
   }
   return httpClient.get<JobCatalogResponse>(`/jobcatalog/api/catalog?${query.toString()}`)
 }
 
 export async function applyJobCatalogAction(request: {
   action: string
-  setid: string
+  package_code: string
   effective_date: string
   code?: string
   name?: string

@@ -2,7 +2,6 @@ import ApartmentIcon from '@mui/icons-material/Apartment'
 import AssignmentIndIcon from '@mui/icons-material/AssignmentInd'
 import CategoryIcon from '@mui/icons-material/Category'
 import GroupsIcon from '@mui/icons-material/Groups'
-import HubIcon from '@mui/icons-material/Hub'
 import HomeWorkIcon from '@mui/icons-material/HomeWork'
 import MenuBookIcon from '@mui/icons-material/MenuBook'
 import PendingActionsIcon from '@mui/icons-material/PendingActions'
@@ -46,55 +45,6 @@ export const navItems: NavItem[] = [
     order: 22,
     permissionKey: 'dict.admin',
     keywords: ['dict', 'dictionary', 'value', '配置', '字典', '编码']
-  },
-  {
-    key: 'configuration-policy',
-    path: '/org/setid',
-    labelKey: 'nav_configuration_policy',
-    icon: <HubIcon fontSize='small' />,
-    order: 25,
-    permissionKey: 'orgunit.read',
-    keywords: ['setid', 'configuration', 'policy', '集合', '策略', '治理']
-  },
-  {
-    key: 'configuration-policy-base',
-    path: '/org/setid/base',
-    labelKey: 'nav_configuration_policy_base',
-    icon: <HubIcon fontSize='small' />,
-    order: 251,
-    parentKey: 'configuration-policy',
-    permissionKey: 'orgunit.read',
-    keywords: ['setid', 'binding', '集合', '绑定']
-  },
-  {
-    key: 'configuration-policy-registry',
-    path: '/org/setid/registry',
-    labelKey: 'nav_configuration_policy_registry',
-    icon: <HubIcon fontSize='small' />,
-    order: 252,
-    parentKey: 'configuration-policy',
-    permissionKey: 'orgunit.read',
-    keywords: ['policy', 'registry', 'capability', '策略', '规则']
-  },
-  {
-    key: 'configuration-policy-explain',
-    path: '/org/setid/explain',
-    labelKey: 'nav_configuration_policy_explain',
-    icon: <HubIcon fontSize='small' />,
-    order: 253,
-    parentKey: 'configuration-policy',
-    permissionKey: 'orgunit.read',
-    keywords: ['explain', 'trace', '命中', '解释']
-  },
-  {
-    key: 'configuration-policy-ops',
-    path: '/org/setid/ops',
-    labelKey: 'nav_configuration_policy_ops',
-    icon: <HubIcon fontSize='small' />,
-    order: 254,
-    parentKey: 'configuration-policy',
-    permissionKey: 'orgunit.read',
-    keywords: ['activation', 'functional', '运维', '激活']
   },
   {
     key: 'jobcatalog',

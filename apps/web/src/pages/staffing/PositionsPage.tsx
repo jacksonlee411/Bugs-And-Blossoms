@@ -177,7 +177,6 @@ export function PositionsPage() {
           </Typography>
           <Typography variant='body2'>{readMode === 'history' ? `As-of: ${asOf}` : 'Viewing current data by default'}</Typography>
           <Typography variant='body2'>Org Code: {orgCode || '(none)'}</Typography>
-          <Typography variant='body2'>SetID: {options?.jobcatalog_setid ?? '-'}</Typography>
         </Paper>
 
         <Paper sx={{ p: 2 }}>
@@ -232,7 +231,6 @@ export function PositionsPage() {
                 <th>position_uuid</th>
                 <th>org_code</th>
                 <th>job_profile_code</th>
-                <th>setid</th>
                 <th>effective_date</th>
               </tr>
             </thead>
@@ -245,7 +243,6 @@ export function PositionsPage() {
                   </td>
                   <td>{p.org_code}</td>
                   <td>{p.job_profile_code}</td>
-                  <td>{p.jobcatalog_setid}</td>
                   <td>{p.effective_date}</td>
                 </tr>
               ))}
