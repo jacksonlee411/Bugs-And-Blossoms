@@ -237,13 +237,13 @@ func TestHandlePositionsOptionsAPI_Branches(t *testing.T) {
 		if err := json.Unmarshal(rec.Body.Bytes(), &out); err != nil {
 			t.Fatal(err)
 		}
-			if out.OrgCode != "A001" {
-				t.Fatalf("org_code=%q", out.OrgCode)
-			}
-			if out.AsOf != "2026-01-01" {
-				t.Fatalf("as_of=%q", out.AsOf)
-			}
-			if len(out.JobProfiles) != 1 {
+		if out.OrgCode != "A001" {
+			t.Fatalf("org_code=%q", out.OrgCode)
+		}
+		if out.AsOf != "2026-01-01" {
+			t.Fatalf("as_of=%q", out.AsOf)
+		}
+		if len(out.JobProfiles) != 1 {
 			t.Fatalf("job_profiles=%+v", out.JobProfiles)
 		}
 	})

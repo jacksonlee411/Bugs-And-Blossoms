@@ -242,7 +242,7 @@ modules/{module}/
 - DEV-PLAN-436：CubeBox 历史对话面彻底删除与仓面清场方案：`docs/dev-plans/436-cubebox-historical-surface-hard-delete-plan.md`
 - DEV-PLAN-440：彻底删除 SetID 的全仓收口方案（SetID 根删除唯一 PoR）：`docs/dev-plans/440-complete-setid-removal-plan.md`
 - DEV-PLAN-441：旧策略模块残余清理方案：`docs/dev-plans/441-legacy-strategy-module-residue-cleanup-plan.md`
-- DEV-PLAN-450：直接切除 orgunit / jobcatalog / staffing 三模块方案：`docs/dev-plans/450-direct-removal-of-orgunit-jobcatalog-staffing-modules-plan.md`
+- DEV-PLAN-450：直接切除 jobcatalog / staffing / person 三模块方案（保留 orgunit）：`docs/dev-plans/450-direct-removal-of-jobcatalog-staffing-person-modules-plan.md`
 - DEV-PLAN-440 Readiness：当前命中、停止线与分阶段 owner：`docs/dev-records/DEV-PLAN-440-READINESS.md`
 - SetID 相关历史研究/中间方案说明：`070A`、`102C*`、`015Z*`、`161A`、`163A`、`185`、`191`、`203` 等文档仅可作为历史来源、调查记录或待归档材料引用；凡涉及 SetID 根删除、入口是否保留、现行主流程是否仍依赖 SetID，一律以 `DEV-PLAN-440` 为准。
 - DEV-PLAN-400：CodeFlow 辅助源码分析与爆炸半径评估落地方案：`docs/dev-plans/400-codeflow-assisted-source-analysis-and-impact-radius-plan.md`

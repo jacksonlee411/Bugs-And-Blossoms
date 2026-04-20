@@ -82,11 +82,11 @@ func handleJobCatalogAPI(w http.ResponseWriter, r *http.Request, setidStore jobC
 			return
 		}
 
-			view.HasSelection = v.HasSelection
-			view.ReadOnly = v.ReadOnly
-			view.PackageCode = v.PackageCode
+		view.HasSelection = v.HasSelection
+		view.ReadOnly = v.ReadOnly
+		view.PackageCode = v.PackageCode
 
-			listSetID := v.listSetID()
+		listSetID := v.listSetID()
 
 		groups, err := store.ListJobFamilyGroups(r.Context(), tenant.ID, listSetID, asOf)
 		if err != nil {
