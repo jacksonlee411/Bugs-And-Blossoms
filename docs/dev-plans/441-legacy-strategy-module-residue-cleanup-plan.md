@@ -1,18 +1,18 @@
 # DEV-PLAN-441：旧策略模块残余清理方案
 
-**状态**: 规划中（2026-04-20 11:11 CST）
+**状态**: 规划中（2026-04-20 15:20 CST，作为 DEV-PLAN-440 的配套残余清理计划）
 
 ## 0. 适用范围与评审分级
 
 - **评审分级**：`T2`
-- **范围一句话**：在独立 `strategy` 模块已删除的前提下，清理当前仓库中仍残留的“旧策略模块”语义、命名、运行时壳层、测试资产与文档入口，完成术语与结构封板。
+- **范围一句话**：在独立 `strategy` 模块已删除的前提下，清理当前仓库中仍残留的“旧策略模块”语义、命名、运行时壳层、测试资产与文档入口；凡命中 SetID 根删除范围的对象，排序与 owner 统一服从 `DEV-PLAN-440`。
 - **关联模块/目录**：`pkg/fieldpolicy`、`modules/orgunit`、`internal/server`、`cmd/dbtool`、`docs/dev-plans`、`AGENTS.md`
 - **关联计划/标准**：`AGENTS.md`、`docs/dev-plans/000-docs-format.md`、`docs/dev-plans/003-simple-not-easy-review-guide.md`、`docs/dev-plans/012-ci-quality-gates.md`、`docs/dev-plans/015-ddd-layering-framework.md`、`docs/dev-plans/330-strategy-module-architecture-and-design-convergence-plan.md`
 - **用户入口/触点**：策略 registry / explain / 字段决策运行时、`fieldpolicy` PDP、dbtool snapshot/validate 工具、主文档中的策略模块入口
 
 ### 0.1 Simple > Easy 三问
 
-1. **边界**：本计划只清理“旧策略模块残余”，不承担 SetID 全量删除；涉及 SetID 根移除的对象由 `DEV-PLAN-440` 统一 owner。
+1. **边界**：本计划只清理“旧策略模块残余”，不承担 SetID 全量删除；涉及 SetID 根移除的对象由 `DEV-PLAN-440` 统一 owner 与排期。
 2. **不变量**：仓库内不能再出现“已无独立模块，但代码/文档仍把它当模块”的语义漂移；不能保留第二套 PDP 或跨层重复决策实现。
 3. **可解释**：清理后，维护者应能清楚回答“当前动态字段策略唯一 SoT、唯一 PDP、唯一 owner module 是谁”，且不再需要提“旧策略模块”。
 
@@ -46,12 +46,12 @@
 
 - [ ] 清理“旧策略模块”术语、文档入口与代码命名残余。
 - [ ] 合并或删除跨层重复的字段策略决策实现，只保留唯一 PDP 主链。
-- [ ] 删除与独立策略模块时代绑定的 dbtool、snapshot、validate、compat 壳层。
+- [ ] 删除与独立策略模块时代绑定、且不再被 `440` 明确保留的 dbtool、snapshot、validate、compat 壳层。
 - [ ] 将现行动态策略能力明确归位到当前 owner module / package，不再以“旧策略模块”表述。
 
 ### 2.2 非目标
 
-- [ ] 本计划不单独承接 SetID 根删除；若对象同时属于 SetID 大链路，则由 `DEV-PLAN-440` 统筹。
+- [ ] 本计划不单独承接 SetID 根删除；若对象同时属于 SetID 大链路，则由 `DEV-PLAN-440` 统筹并决定删改先后。
 - [ ] 本计划不重新设计新的规则引擎能力边界。
 - [ ] 本计划不额外增加新的策略治理抽象来替代旧残余。
 
@@ -126,25 +126,26 @@
 
 ## 5. 实施步骤
 
-1. [ ] 列出所有“旧策略模块”命中点，并按四类归档。
+1. [ ] 在 `440` readiness 清单基础上，标注哪些命中点属于“SetID 删除完成后仍需继续清理的旧策略残余”。
 2. [ ] 明确唯一 PDP 与唯一 owner module，删除重复裁决实现。
-3. [ ] 清理 dbtool / bootstrap / validate / snapshot 旧工具。
-4. [ ] 清理 API、测试与 capability-route-map 中的旧命名。
+3. [ ] 清理 dbtool / bootstrap / validate / snapshot 旧工具，但不得抢跑 `440` 已冻结的 SetID 根删除顺序。
+4. [ ] 清理 API、测试与 capability-route-map 中仍残留的旧命名。
 5. [ ] 更新 `AGENTS.md` 与文档地图，将 `DEV-PLAN-330` 调整为历史架构调查入口，而非现行模块入口。
-6. [ ] 形成 readiness 证据并补充封板说明。
+6. [ ] 形成 readiness 证据并补充“哪些对象已随 440 删除、哪些是 441 独立收尾”的封板说明。
 
 ## 6. 验收标准
 
 1. [ ] 仓库中不再存在把“策略模块”当作现行独立模块的代码和文档描述。
 2. [ ] 字段动态策略裁决只保留唯一主链。
-3. [ ] `cmd/dbtool` 不再保留旧策略模块时代的 registry snapshot / validate 壳层。
+3. [ ] `cmd/dbtool` 不再保留旧策略模块时代的 registry snapshot / validate 壳层；若该对象已被 `440` 一并删除，`441` 仅记录封板结果，不重复 owner。
 4. [ ] `AGENTS.md` 文档地图不再制造“旧策略模块仍为现行模块”的认知。
 
 ## 7. 与 DEV-PLAN-440 的关系
 
 - `441` 是“旧策略模块残余清理”。
-- `440` 是“彻底删除 SetID”。
-- 若某对象同时满足“旧策略模块残余”与“SetID 根语义”，以 `440` 为主计划，`441` 只负责描述其文档/命名/结构清理视角，不重复定义删除顺序。
+- `440` 是“彻底删除 SetID”的唯一 PoR。
+- 若某对象同时满足“旧策略模块残余”与“SetID 根语义”，以 `440` 为主计划，`441` 只负责描述其命名/结构/封板视角，不重复定义删除顺序、停止线或验收 owner。
+- `441` 的实现顺序必须服从 `440` 的 Phase 0-4：未完成 `440` 的契约收口与根切断前，`441` 不得把 SetID 相关对象单独宣称为“已收口”。
 
 ## 8. 交付物
 

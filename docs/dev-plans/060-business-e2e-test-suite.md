@@ -1,13 +1,13 @@
 # DEV-PLAN-060：全链路业务测试案例套件（009/026-031/220-225 覆盖）
 
-**状态**: 草拟中（2026-01-10 11:40 UTC）
+**状态**: 草拟中（2026-01-10 11:40 UTC；2026-04-20 起其中 SetID 主链口径降级为历史测试合同，现行删除 owner 以 `DEV-PLAN-440` 为准）
 
 > 假设：系统已按对应契约文档实现全部功能。本文只定义“全链路业务测试套件”的框架、数据集与记录要求，不替代各模块 dev-plan 的实现合同。
 
 ## 1. 背景
 
 本仓库按 Greenfield 的“切片式交付 + 门禁阻断漂移”推进（见 `docs/dev-plans/009-implementation-roadmap.md`、`docs/archive/dev-plans/026-org-transactional-event-sourcing-synchronous-projection.md`、`docs/dev-plans/029-job-catalog-transactional-event-sourcing-synchronous-projection.md`）。因此需要一套“全链路业务测试案例套件”，用于在 **不回退/不走双链路** 的前提下验证：
-- 系统功能是否覆盖完整业务域（组织/职位分类/SetID/职位/任职/人员）；
+- 系统功能是否覆盖完整业务域（组织/职位分类/职位/任职/人员）；其中本文原有 SetID 主链条目自 2026-04-20 起仅作为历史样本保留，不再作为现行实现目标；
 - Assistant 功能是否覆盖会话/意图/提交/任务编排的主链路（对齐 220-225）；
 - 每条能力是否 **用户可见、可操作**（避免僵尸功能）；
 - 行为是否与契约文档一致（Contract First：偏差必须先记录并回到契约处理）。
@@ -32,7 +32,7 @@
 测试侧关键信号：
 - **平台先行**：Tenancy/AuthN → RLS 圈地 → Casbin 授权边界，且 fail-closed（`docs/dev-plans/019-tenant-and-authn.md`、`docs/dev-plans/021-pg-rls-for-org-position-job-catalog.md`、`docs/dev-plans/022-authz-casbin-toolchain.md`）。
 - **用户可见性原则**：每个切片交付必须有页面入口与可操作链路（`AGENTS.md` §3.8）。
-- **主数据纵切片顺序**：`SetID => JobCatalog => Position => Assignments`（`docs/archive/dev-plans/070-setid-orgunit-binding-redesign.md`～`docs/dev-plans/031-greenfield-assignment-job-data.md`）。
+- **主数据纵切片顺序（历史口径）**：本文原先采用 `SetID => JobCatalog => Position => Assignments`。自 `DEV-PLAN-440` 生效起，该顺序不再作为现行实现顺序；涉及 SetID 的主数据链路改由 `DEV-PLAN-440` 统筹删除或重写。
 
 因此：本套件以“租户与权限基线 → 主数据 → 人员任职”为主链路顺序。
 
@@ -127,7 +127,7 @@
 | L1 | Ops | 运营/支持 |
 | L1 | Plant | 制造/仓储（用于岗位差异样例） |
 
-### 5.3 SetID 绑定与业务单元节点
+### 5.3 SetID 绑定与业务单元节点（历史合同，待 `DEV-PLAN-440` 重写或归档）
 
 | 对象 | 值 | 备注 |
 | --- | --- | --- |
@@ -150,8 +150,8 @@
 | Job Profile | `JP-SWE` | Software Engineer | families=`JF-BE,JF-FE`；primary=`JF-BE` |
 
 备注：
-- Job Catalog 的权威作用域为 `setid`；本套件使用显式 `setid=S2601` + `as_of=2026-01-01`（对齐 `docs/archive/dev-plans/070-setid-orgunit-binding-redesign.md`、`docs/dev-plans/029-job-catalog-transactional-event-sourcing-synchronous-projection.md`）。
-- 必测：覆盖 `job_family_groups/job_families/job_levels/job_profiles` 的“写入→as_of 读取→UI 可见”闭环，并包含至少 1 个跨日期场景（例如 family reparenting 的 `as_of` 前后对比）。
+- 本节保留的 `setid=S2601` 等内容仅用于解释历史测试资产来源；自 `DEV-PLAN-440` 起，不再作为当前态 Job Catalog 的实现依据。
+- 在 `DEV-PLAN-440` 完成前，本文不得被引用为“必须继续保留 SetID 主链”的证据。
 
 ### 5.5 职位（Positions，`as_of=2026-01-01`）
 
@@ -204,7 +204,7 @@
 | 租户/登录 | superadmin 创建租户与域名；tenant app 登录 | TP-060-01 |
 | 权限/隔离 | Authz 403；RLS fail-closed；跨租户不可见 | TP-060-01 |
 | 组织架构 | OrgUnit 树/新增/查询；外部协议仅使用 `org_code` | TP-060-02 |
-| SetID | SetID/组织绑定/业务单元标记；业务入口通过 `org_code -> org_node_key` 解析 setid | TP-060-02 |
+| SetID | 历史主数据测试样本；自 `DEV-PLAN-440` 起不再作为当前实现必须维持的能力 | TP-060-02（待重写/归档） |
 | 职位分类 | Job family group 创建与查询（可选扩展：families/levels/profiles） | TP-060-02 |
 | 职位 | Position 创建与列表 | TP-060-02 |
 | 人员 | Person 创建/查询；pernr 解析一致性 | TP-060-03 |
@@ -247,6 +247,8 @@
 ### TP-060-02：主数据（组织架构 + SetID + 职位分类 + 职位）
 
 **子计划文档**：`docs/dev-plans/062-test-tp060-02-master-data-org-setid-jobcatalog-position.md`
+
+> 状态说明：该子计划当前仍含 SetID 主链合同；自 `DEV-PLAN-440` 生效起，其 SetID 相关部分仅作为历史测试样本保留，后续需重写或归档。
 
 **契约引用**
 - `docs/archive/dev-plans/026-org-transactional-event-sourcing-synchronous-projection.md`

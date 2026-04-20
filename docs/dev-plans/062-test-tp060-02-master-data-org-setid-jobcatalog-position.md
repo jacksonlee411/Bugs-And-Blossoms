@@ -1,33 +1,35 @@
 # DEV-PLAN-062：全链路业务测试子计划 TP-060-02——主数据（组织架构 + SetID + JobCatalog + 职位）
 
-**状态**: 草拟中（2026-01-24 05:00 UTC）
+**状态**: 草拟中（2026-01-24 05:00 UTC；2026-04-20 起其中 SetID 主链合同降级为历史测试样本，现行删除 owner 以 `DEV-PLAN-440` 为准）
 
 > 上游测试套件（总纲）：`docs/dev-plans/060-business-e2e-test-suite.md`  
 > 依赖：建议先完成 `docs/dev-plans/061-test-tp060-01-tenant-login-authz-rls-baseline.md`（可登录 + 隔离基线）。
 
+> Override：本文原始合同建立在 SetID 仍为现行主流程的前提上。自 `DEV-PLAN-440` 生效起，本文中所有“必须保留 SetID UI/API/解析链”的表述仅作为历史测试样本保留，不再构成当前实现的必达项。
+
 ## 1. 背景与上下文（Context）
 
 - **需求来源**：TP-060 总纲中的“主数据最小可复现闭环”（`docs/dev-plans/060-business-e2e-test-suite.md`），以及 Phase 4 纵切片的交付口径（`DEV-PLAN-009`）。
-- **覆盖范围**：OrgUnit → SetID → JobCatalog → Position（契约分别对齐 `docs/dev-plans/026/070/029/030`）。
+- **覆盖范围（历史合同）**：OrgUnit → SetID → JobCatalog → Position（契约分别对齐 `docs/dev-plans/026/070/029/030`）。其中 SetID 段自 `DEV-PLAN-440` 起已不再是当前态应维持的主线。
 - **业务价值**：为后续 TP-060-03（Person/Assignments）及考勤/薪酬子计划提供稳定的主数据底座，避免“不可见/不可操作”的僵尸交付（见 `AGENTS.md` 的用户可见性原则）。
 - **关键不变量（必须 fail-closed）**：
   - `as_of` 为日粒度（date），所有读取必须显式传入 `as_of=YYYY-MM-DD`（对齐 `docs/dev-plans/032-effective-date-day-granularity.md`）。
-- SetID 绑定必须显式存在：根组织绑定 `DEFLT`，业务单元节点允许绑定其他 SetID；绑定管理与审计解析仍沿 `is_business_unit=true` 的祖先链路，缺绑定或非法状态必须 fail-closed（对齐 `docs/archive/dev-plans/070-setid-orgunit-binding-redesign.md`）。
-- 配置主数据入口必须显式携带 `setid`；Position 创建必须选择 Job Profile，且可选列表由 `org_code` 解析得到的 setid 提供（不要求手工选择 setid，缺绑定/非法必须 fail-closed）。
+- 历史口径中，SetID 绑定必须显式存在：根组织绑定 `DEFLT`，业务单元节点允许绑定其他 SetID；绑定管理与审计解析仍沿 `is_business_unit=true` 的祖先链路，缺绑定或非法状态必须 fail-closed（对齐 `docs/archive/dev-plans/070-setid-orgunit-binding-redesign.md`）。
+- 历史口径中，配置主数据入口必须显式携带 `setid`；Position 创建必须选择 Job Profile，且可选列表由 `org_code` 解析得到的 setid 提供。自 `DEV-PLAN-440` 起，这些条目不再构成现行实现约束。
 
 ## 2. 目标与非目标
 
 ### 2.1 目标（Done 定义）
 
 - [X] **OrgUnit**：可在 `/org/units` 完成 Root + 5 个一级部门创建，刷新后列表可见；并记录每个 `org_code`。
-- [X] **SetID**：可在 `/org/setid` 完成 SetID 创建与组织绑定；业务单元节点允许绑定 SetID；不存在/disabled 的 `org_code` 必须 fail-closed。
-- [X] **JobCatalog**：在 `/org/job-catalog` 能看到 `SetID: S2601`，并覆盖 groups/families/levels/profiles 的“写入→as_of 读取→UI 可见”闭环，且包含至少 1 个跨日期场景（Job Family reparenting 的前后对比）。
+- [ ] **SetID（历史样本，待重写/归档）**：原合同要求可在 `/org/setid` 完成 SetID 创建与组织绑定；自 `DEV-PLAN-440` 起，该项不再作为当前态验收目标。
+- [ ] **JobCatalog（待按无 SetID 主线重写）**：本文原合同要求在 `/org/job-catalog` 显示 `SetID: S2601`；自 `DEV-PLAN-440` 起，该显示与依赖关系不再是当前态目标。
 - [X] **Position（基础）**：在 `/org/positions` 能创建 10 条职位，刷新后列表可见且包含 `position_id`；创建时 OrgUnit 下拉可用（不出现 `(no org units)`）。
-- [X] **Position（M5：与 JobCatalog/SetID 组合）**：至少 1 条职位能绑定 `org_code=<R&D>` + `job_profile=JP-SWE`（由 org_code 解析 setid），且列表中可见：
+- [ ] **Position（M5：历史 SetID 组合样本）**：本文原合同要求至少 1 条职位能绑定 `org_code=<R&D>` + `job_profile=JP-SWE`（由 org_code 解析 setid）；自 `DEV-PLAN-440` 起，该约束待按无 SetID 契约重写：
   - `org_code=<R&D>`
   - `jobcatalog_setid=S2601`（解析结果）
   - `job_profile` 显示 `JP-SWE (...)`（或等效可解释文本）
-- [X] **Position（M5：fail-closed 负例，Internal API）**：至少覆盖 3 个负例断言（1 个参数校验 + 2 个稳定错误码）：
+- [ ] **Position（M5：历史 SetID 负例样本）**：本文原合同中的下列负例依赖 SetID 主链，自 `DEV-PLAN-440` 起仅作历史记录保留，待重写：
   - `400`：缺失 `org_code`（`code=invalid_request`）
   - `SETID_BINDING_MISSING/SETID_DISABLED/ORG_NOT_FOUND_AS_OF`：org_unit 解析 setid 失败（422）
   - `JOBCATALOG_REFERENCE_NOT_FOUND`：`job_profile_id` 不属于解析得到的 setid（422）
@@ -58,7 +60,7 @@
 ## 3. 契约引用（SSOT）
 
 - OrgUnit：`docs/archive/dev-plans/026-org-transactional-event-sourcing-synchronous-projection.md`
-- SetID：`docs/archive/dev-plans/070-setid-orgunit-binding-redesign.md`
+- SetID（历史来源，非现行实现依据）：`docs/archive/dev-plans/070-setid-orgunit-binding-redesign.md`
 - JobCatalog：`docs/dev-plans/029-job-catalog-transactional-event-sourcing-synchronous-projection.md`
 - Position：`docs/dev-plans/030-position-transactional-event-sourcing-synchronous-projection.md`
 - Valid Time（日粒度）：`docs/dev-plans/032-effective-date-day-granularity.md`
@@ -100,7 +102,7 @@
 
 ### 4.6 数据保留（强制）
 
-- 本子计划创建/补齐的数据（OrgUnit、SetID/绑定/业务单元标记、JobCatalog、Positions）构成 060-DS1 的主数据底座，必须保留以供 TP-060-03/04/05/07/08 复用（SSOT：`docs/dev-plans/060-business-e2e-test-suite.md` §5.0）。
+- 本子计划创建/补齐的数据（含 OrgUnit、历史 SetID/绑定样本、JobCatalog、Positions）构成旧版 060-DS1 主数据底座。自 `DEV-PLAN-440` 起，这些 SetID 数据只作为历史测试样本保留，不再构成当前态必须续用的产品合同。
 - 禁止在本子计划执行完后清理数据；若必须重置环境，需按 §4.5 的口径登记并重建 060-DS1。
 
 ## 5. 数据准备要求（060-DS1 子集 + 本计划增量）
@@ -146,10 +148,10 @@
   - `name`（必填；空值应提示 `name is required`）
 - Authz 口径：`GET /org/units`、`GET /org/api/org-units*=read`，`POST /org/api/org-units*=admin`（对齐 `docs/dev-plans/022-authz-casbin-toolchain.md`）。
 
-### 6.2 SetID：`/org/setid`（UI）
+### 6.2 SetID：`/org/setid`（UI，历史合同，待 `DEV-PLAN-440` 删除或归档）
 
-- `GET /org/setid?as_of=YYYY-MM-DD`：展示 SetIDs + 组织树 + 绑定编辑。
-- `POST /org/setid?as_of=YYYY-MM-DD`：两类动作（成功后 `303` 跳回 `/org/setid?as_of=...`）：
+- `GET /org/setid?as_of=YYYY-MM-DD`：历史合同中要求展示 SetIDs + 组织树 + 绑定编辑。
+- `POST /org/setid?as_of=YYYY-MM-DD`：历史合同中定义两类动作（成功后 `303` 跳回 `/org/setid?as_of=...`）：
   - `action=create_setid`：`setid` + `name` 必填
   - `action=bind_setid`：`org_code` + `setid` + `effective_date` 必填
 - Authz 口径：`GET=read`，`POST=admin`。
@@ -215,7 +217,7 @@
 5. [ ] 负例：提交空 `name`
    - 断言：页面提示 `name is required`；不得创建新节点
 
-### 7.2 SetID：创建与组织绑定
+### 7.2 SetID：创建与组织绑定（历史步骤，待重写/归档）
 
 1. [ ] 打开：`/org/setid?as_of=2026-01-01`
 2. [ ] 断言：已存在可用于共享的 `SHARE` SetID（若不存在，记录为 `CONTRACT_DRIFT/ENV_DRIFT` 并停止后续 SetID 步骤）
@@ -228,7 +230,7 @@
 6. [ ] 负例：尝试绑定到非业务单元节点（例如 `HQ`）
    - 断言：应失败并提示 `ORG_NOT_BUSINESS_UNIT_AS_OF`（若无法稳定提取错误码，记录实际提示）
 
-### 7.3 JobCatalog：显式 SetID、写入闭环与 fail-closed 负例
+### 7.3 JobCatalog：显式 SetID、写入闭环与 fail-closed 负例（历史步骤，待按无 SetID 主线重写）
 
 1. [ ] 打开：`/org/job-catalog?as_of=2026-01-01&setid=S2601`
 2. [ ] 断言：页面显示 `SetID: S2601`（且无错误提示）
@@ -277,7 +279,7 @@
 4. [ ] 负例：提交非法 `effective_date`（例如 `bad`）
    - 断言：页面提示 `effective_date 无效: ...`；不得创建新职位
 
-### 7.5 Position（M5）：与 JobCatalog/SetID 组合（OrgUnit + SetID + Job Profile）
+### 7.5 Position（M5）：与 JobCatalog/SetID 组合（历史步骤，待按无 SetID 主线重写）
 
 > 目标：覆盖 `DEV-PLAN-030` 的 M5 关键链路：org_unit 解析 setid → job_profile identity 校验 → UI 可见。
 

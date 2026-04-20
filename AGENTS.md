@@ -110,7 +110,7 @@
 - 授权边界：RLS 圈地 ≠ Casbin 授权；subject/domain/object/action 命名冻结（`DEV-PLAN-021/022/019`）。
 - i18n：仅 `en/zh`，语言写入口唯一；不做业务数据多语言（`DEV-PLAN-020`）。
 - 模块边界：业务域 4 模块（orgunit/jobcatalog/staffing/person）+ 平台模块 iam；跨模块优先通过 `pkg/**` 与 HTTP/JSON API 组合，避免 Go 代码跨模块 import（`DEV-PLAN-015/016/019`）。
-- SetID：record group 为稳定枚举；映射无缺省洞；不得模块自造回退规则（`DEV-PLAN-028`）。
+- SetID：现行删除与收口以 `DEV-PLAN-440` 为唯一 PoR；历史 SetID 方案仅允许作为 archive/历史来源保留，不得再作为当前实现前提或回退依据。
 - No Legacy：禁止引入“legacy 分支/回退通道/双链路”（包括 `read=legacy`、兼容别名窗口、旧实现兜底等）；回滚只能走“环境级保护 + 只读/停写/修复后重试”，并必须有门禁阻断（`DEV-PLAN-004M1`）。
 
 ### 3.8 用户可见性原则（避免“僵尸功能”）
@@ -185,7 +185,7 @@ modules/{module}/
 - i18n（仅 en/zh）：`docs/dev-plans/020-i18n-en-zh-only.md`
 - Docs 治理：`docs/dev-plans/013-docs-creation-and-governance-guide.md`
 - CI 质量门禁：`docs/dev-plans/012-ci-quality-gates.md`
-- SetID/时间口径（现行）：`docs/dev-plans/102b-070-071-time-context-explicitness-and-replay-determinism.md`（070/071 系列与 028 已归档）
+- 时间口径（现行）：`docs/dev-plans/102b-070-071-time-context-explicitness-and-replay-determinism.md`；其中 070/071/028 的 SetID 历史语义不得再作为当前实现前提，现行删除 owner 见 `docs/dev-plans/440-complete-setid-removal-plan.md`
 
 ## 6. 文档收敛与门禁（New Doc Gate）
 
@@ -217,13 +217,13 @@ modules/{module}/
 - Valid Time（日粒度 Effective Date）：`docs/dev-plans/032-effective-date-day-granularity.md`
 - DEV-PLAN-060：全链路业务测试案例套件（009/026-031/220-225 覆盖）：`docs/dev-plans/060-business-e2e-test-suite.md`
 - DEV-PLAN-061：全链路业务测试子计划 TP-060-01——租户/登录/权限/隔离基线：`docs/dev-plans/061-test-tp060-01-tenant-login-authz-rls-baseline.md`
-- DEV-PLAN-062：全链路业务测试子计划 TP-060-02——主数据（组织架构 + SetID + JobCatalog + 职位）：`docs/dev-plans/062-test-tp060-02-master-data-org-setid-jobcatalog-position.md`
+- DEV-PLAN-062：全链路业务测试子计划 TP-060-02（历史合同，含 SetID 主链样本；现行删除 owner 见 `DEV-PLAN-440`）：`docs/dev-plans/062-test-tp060-02-master-data-org-setid-jobcatalog-position.md`
 - DEV-PLAN-063：全链路业务测试子计划 TP-060-03——人员与任职（Person + Assignments）：`docs/dev-plans/063-test-tp060-03-person-and-assignments.md`
 - DEV-PLAN-381【归档】：CubeBox capability 与 functional area 历史来源专项调查：`docs/archive/dev-plans/381-cubebox-capability-and-functional-area-lineage-investigation.md`
 - DEV-PLAN-382【归档】：Capability Functional Area 治理影响面专项调查：`docs/archive/dev-plans/382-capability-functional-area-governance-impact-investigation.md`
 - DEV-PLAN-383【归档】：Functional Area 与 DDD 模块并行第二维度风险专项调查与收敛建议：`docs/archive/dev-plans/383-functional-area-vs-ddd-module-second-axis-investigation-and-remediation-plan.md`
 - DEV-PLAN-384：220-292 归档后测试资产重评估与防回流专项方案：`docs/dev-plans/384-220-292-archived-test-reassessment-and-anti-backflow-plan.md`
-- DEV-PLAN-390：移除 DEV-PLAN-150 治理抽象、SetID 与 scope/package/subscription 残留语义的简化方案：`docs/dev-plans/390-remove-dev-plan-150-and-setid-simplification-plan.md`
+- DEV-PLAN-390：历史文档入口已失效；涉及 SetID 与 scope/package/subscription 根删除的现行 owner 统一以 `DEV-PLAN-440` 为准。
 - DEV-PLAN-391：DEV-PLAN-390 执行排序、命中清单与分批落地方案：`docs/dev-plans/391-dev-plan-390-execution-sequencing-and-hit-list.md`
 - DEV-PLAN-391A：阶段 A / PR-A：`authz requirement` 单主源与 390 反回流门禁冻结：`docs/dev-plans/391a-phase-a-authz-requirement-single-source-and-anti-backflow-gates-freeze.md`
 - DEV-PLAN-391B：阶段 B / PR-B：治理 runtime 主切断与 legacy surface 成组下线：`docs/dev-plans/391b-phase-b-main-cutover-governance-runtime-and-legacy-surface-removal-plan.md`
@@ -240,8 +240,9 @@ modules/{module}/
 - DEV-PLAN-434：Codex 上下文管理与压缩机制复用/重构方案：`docs/dev-plans/434-codex-context-management-and-compaction-reuse-plan.md`
 - DEV-PLAN-435：Bifrost 主参考的模型配置 UI 与管理权限复用/重构方案：`docs/dev-plans/435-bifrost-centric-model-config-ui-and-admin-governance-plan.md`
 - DEV-PLAN-436：CubeBox 历史对话面彻底删除与仓面清场方案：`docs/dev-plans/436-cubebox-historical-surface-hard-delete-plan.md`
-- DEV-PLAN-440：彻底删除 SetID 的全仓收口方案：`docs/dev-plans/440-complete-setid-removal-plan.md`
+- DEV-PLAN-440：彻底删除 SetID 的全仓收口方案（SetID 根删除唯一 PoR）：`docs/dev-plans/440-complete-setid-removal-plan.md`
 - DEV-PLAN-441：旧策略模块残余清理方案：`docs/dev-plans/441-legacy-strategy-module-residue-cleanup-plan.md`
+- SetID 相关历史研究/中间方案说明：`070A`、`102C*`、`015Z*`、`161A`、`163A`、`185`、`191`、`203` 等文档仅可作为历史来源、调查记录或待归档材料引用；凡涉及 SetID 根删除、入口是否保留、现行主流程是否仍依赖 SetID，一律以 `DEV-PLAN-440` 为准。
 - DEV-PLAN-400：CodeFlow 辅助源码分析与爆炸半径评估落地方案：`docs/dev-plans/400-codeflow-assisted-source-analysis-and-impact-radius-plan.md`
 - DEV-PLAN-069：移除薪酬社保与考勤（文档/代码/测试/数据库）：`docs/dev-plans/069-remove-payroll-attendance.md`
 - DEV-PLAN-070【归档】：SetID 绑定组织架构重构方案（时间口径已由 DEV-PLAN-102B 接管）：`docs/archive/dev-plans/070-setid-orgunit-binding-redesign.md`
@@ -362,7 +363,7 @@ modules/{module}/
 - DEV-PLAN-300：全仓测试体系问题调查记录：`docs/dev-plans/300-test-system-investigation-report.md`
 - DEV-PLAN-301：Go 测试分层整治与官方最佳实践落地方案：`docs/dev-plans/301-go-test-layering-and-best-practices-remediation-plan.md`
 - DEV-PLAN-302：`internal/server` 残留 `gap/coverage` 测试文件收口计划：`docs/dev-plans/302-internal-server-residual-gap-coverage-closure-plan.md`
-- DEV-PLAN-330：策略模块架构混乱调查与收口方案：`docs/dev-plans/330-strategy-module-architecture-and-design-convergence-plan.md`
+- DEV-PLAN-330：策略模块架构混乱调查与收口方案（历史架构调查入口；现行残余清理以 `DEV-PLAN-441` 为准）：`docs/dev-plans/330-strategy-module-architecture-and-design-convergence-plan.md`
 - DEV-PLAN-303：全仓残留 `gap/coverage` 测试尾项清零计划：`docs/dev-plans/303-repo-final-gap-coverage-test-tail-closure-plan.md`
 - DEV-PLAN-310：全项目 view/as_of 时间语义专项检视与最小收敛方案：`docs/dev-plans/310-project-wide-view-as-of-semantics-review-and-minimal-convergence-plan.md`
 - DEV-PLAN-311：View As Of 页面改造矩阵与 OrgUnitDetails 样板实施计划：`docs/dev-plans/311-view-as-of-page-cutover-matrix-and-orgunit-details-sample-plan.md`
