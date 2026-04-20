@@ -243,6 +243,9 @@ modules/{module}/
 - DEV-PLAN-433：Bifrost 主参考的 AI 网关复用/重构方案：`docs/dev-plans/433-bifrost-centric-ai-gateway-reuse-and-reconstruction-plan.md`
 - DEV-PLAN-434：Codex 上下文管理与压缩机制复用/重构方案：`docs/dev-plans/434-codex-context-management-and-compaction-reuse-plan.md`
 - DEV-PLAN-435：Bifrost 主参考的模型配置 UI 与管理权限复用/重构方案：`docs/dev-plans/435-bifrost-centric-model-config-ui-and-admin-governance-plan.md`
+- DEV-PLAN-436：CubeBox 历史对话面彻底删除与仓面清场方案：`docs/dev-plans/436-cubebox-historical-surface-hard-delete-plan.md`
+- DEV-PLAN-440：彻底删除 SetID 的全仓收口方案：`docs/dev-plans/440-complete-setid-removal-plan.md`
+- DEV-PLAN-441：旧策略模块残余清理方案：`docs/dev-plans/441-legacy-strategy-module-residue-cleanup-plan.md`
 - DEV-PLAN-400：CodeFlow 辅助源码分析与爆炸半径评估落地方案：`docs/dev-plans/400-codeflow-assisted-source-analysis-and-impact-radius-plan.md`
 - DEV-PLAN-069：移除薪酬社保与考勤（文档/代码/测试/数据库）：`docs/dev-plans/069-remove-payroll-attendance.md`
 - DEV-PLAN-070【归档】：SetID 绑定组织架构重构方案（时间口径已由 DEV-PLAN-102B 接管）：`docs/archive/dev-plans/070-setid-orgunit-binding-redesign.md`
