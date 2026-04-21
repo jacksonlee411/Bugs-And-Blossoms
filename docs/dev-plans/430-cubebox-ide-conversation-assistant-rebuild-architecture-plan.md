@@ -8,7 +8,7 @@
 - **范围一句话**：在旧对话栈完成历史归档之后，重新设计一个名为 `CubeBox`、中文名为“丘宝”的一方对话助手模块；首期交付对齐 VS Code Codex 插件观感的右侧悬挂抽屉、可配置外部大模型的 AI 网关，以及具备上下文压缩与会话隔离能力的连续对话内核。
 - **关联模块/目录**：`AGENTS.md`、`apps/web`、`internal/server`、`modules/cubebox`（候选新模块路径）、`config`、`migrations`、`scripts/ci`
 - **关联计划/标准**：`DEV-PLAN-004M1`、`DEV-PLAN-012`、`DEV-PLAN-015`、`DEV-PLAN-016`、`DEV-PLAN-017`、`DEV-PLAN-019`、`DEV-PLAN-021`、`DEV-PLAN-022`、`DEV-PLAN-300`、`DEV-PLAN-431`、`DEV-PLAN-432`、`DEV-PLAN-433`、`DEV-PLAN-434`、`DEV-PLAN-435`
-- **用户入口/触点**：Web 应用右侧悬挂对话入口、模型配置页、会话列表、会话详情、流式回复、错误提示、审计记录；不提供 VS Code 插件形态或其他 IDE 客户端。
+- **用户入口/触点**：Web 应用右侧悬挂对话入口、`/app/cubebox` 页面、`/internal/cubebox` 服务端 API、模型配置页、会话列表、会话详情、流式回复、错误提示、审计记录；不提供 VS Code 插件形态或其他 IDE 客户端。
 
 ### 0.1 Simple > Easy 三问
 
@@ -22,13 +22,14 @@
 - 本计划是新的 PoR 候选，不继承 `220-293`、`340-384`、`380-380H`、`391D` 的实现假设、阶段划分、子计划依赖或完成定义。
 - 若新方案需要借鉴历史实现，只允许把它视为“可选历史案例”；不得把旧 DTO、旧路由、旧 capability、旧表结构或旧 UI 视为默认沿用前提。
 - 实施前必须把 `make check chat-surface-clean` 从“全局关键词阻断旧残留”升级为“允许本计划批准的新模块路径，继续阻断旧路径、旧 API、旧 DB 对象、旧第三方资产”的精确门禁。
+- 新 CubeBox 正式路径冻结为 `/app/cubebox` 与 `/internal/cubebox`；它们代表 `430-435` 新主线，不再被 `chat-surface-clean` 视为旧 `cubebox` runtime 回流。旧 `assistant`、LibreChat、`/app/assistant`、`/internal/assistant`、`/assistant-ui` 与历史 compat/retired 语义仍必须 fail-closed。
 
 ## 1. 背景与问题陈述
 
 当前仓库已经完成旧对话栈拆除，具备重新设计智能对话助手的干净基线。新的 CubeBox 需要满足三个产品目标：
 
 1. 在用户界面上形成类似 VS Code Codex 插件的右侧悬挂抽屉体验，点击图标即可拉出或收起，不打断主业务页面。
-2. 提供 AI 网关能力，允许租户或管理员配置外部大模型供应商、模型、API Key、限额、超时和故障切换策略。
+2. 提供 AI 网关能力，首期只交付一个 OpenAI-compatible provider、active model 选择、API Key、base URL、显式连通性验证与基础健康状态；限额、route alias、default model 与故障切换策略列为非首期，暂缓到后续计划。
 3. 特别强化对话连贯性，借鉴 Codex 与 Continue 等工具的上下文收集、会话压缩、滑动窗口、结构化状态和会话恢复做法。
 
 本仓是 HRMS implementation repo，不是 VS Code extension 仓库。因此交付形态冻结为 Web 应用内的一方模块和右侧悬挂抽屉；本计划不提供真正的 VS Code 插件或其他 IDE 客户端，也不为其保留实现范围。
@@ -115,7 +116,7 @@
 4. 不引入 Redis、Ristretto、BigCache 等外部缓存作为默认方案；如需外部缓存，必须按 AGENTS.md 外部依赖准入完成用户审批、文档更新和一致性评审。
 5. 不把 AI 网关做成通用治理平台、PDP 或 capability governance 回流点。
 6. 不在首期实现真正的 VS Code extension；首期仅实现 Web Shell 内的 IDE 式右侧悬挂体验。
-7. 不允许模型自动提交业务写入；首期对业务动作只允许建议、解释和生成草稿，提交仍走现有业务模块 One Door。
+7. 不在本计划内冻结“模型提交业务写入”的最终动作链；模型可以进入业务写入讨论范围，但任何落地都必须另立工具/动作链契约，且不得绕过现有业务模块 One Door、事务、RLS、Authz 与审计链路。
 
 ## 5. 产品与交互方案
 
@@ -148,7 +149,8 @@
 - 对内暴露统一聊天接口，首期兼容 OpenAI chat/completions 或 Responses 风格的最小子集。
 - 对外适配范围冻结为一个 OpenAI-compatible provider 最小闭环；其他供应商不在当前交付范围内。
 - 管理 API Key、base URL、active model、启停状态和显式连通性验证/基础健康状态。
-- 统一处理 SSE 流式转发、错误映射、审计、token 用量记录和配额判断。
+- 统一处理 SSE 流式转发、错误映射、审计与 token 用量记录。
+- quota、route alias、default model、fallback/failover 不进入首期运行时闭环；`DEV-PLAN-433/435` 只能做上游评估与后续预留，不得把这些能力列为首期验收项。
 
 ### 6.2 运行时技术口径
 
@@ -156,7 +158,7 @@
 - provider adapter 必须是可插拔接口，避免在业务 handler 中散落供应商分支。
 - API Key 必须服务端加密保存，前端只看到 provider alias、模型展示名和健康状态。
 - 请求路径必须显式租户注入、显式事务边界和 fail-closed 错误处理。
-- 网关主请求链只做必要鉴权、请求映射和 SSE 转发；用量统计、审计写入和健康指标可在响应完成后异步落库，但必须保证失败可观测。
+- 网关主请求链只做必要鉴权、请求映射和 SSE 转发；但调用外部 provider 前必须同事务写入 `request-start`、`usage-intent` 与 `audit-start` 记录，流式完成后更新 final 状态。异步路径只允许补充非关键指标，或通过 outbox 重试关键 final 更新；该模式优先复用/重构 Bifrost/Codex 的 telemetry、stream lifecycle 与测试样式，不为 CubeBox 扩大一套平行自研审计框架。
 
 ### 6.3 配置模型
 
@@ -165,15 +167,22 @@
 - `model_provider`：供应商编码、展示名、base URL、协议类型、启停状态、健康状态。
 - `model_credential`：加密 API Key、密钥版本、创建人、更新时间、最后验证结果。
 - `model_selection`：当前启用的 active model、展示名与必要默认参数。
-- `model_usage_event`：请求时间、会话、模型、输入输出 token、错误码、延迟、trace_id。
+- `model_usage_event`：请求时间、会话、模型、输入输出 token、错误码、延迟、trace_id、start/final 状态与 outbox 重试状态。
 
 ### 6.4 外部网关借鉴边界
 
 - 借鉴 Bifrost：Go runtime、低开销请求转发、显式验证与 SSE 直通。
 - 借鉴 One API：OpenAI-compatible 统一入口与最小 provider/config 信息架构。
 - 借鉴 LiteLLM / Portkey：错误归一化与观测字段组织方式。
-- Slice 2 执行口径以 `DEV-PLAN-433` 为准：Bifrost 为主参考，要求尽量复用或重构其代码或功能；Codex 只复用局部 provider adapter / bridge / stream parser；本仓继续保留密钥治理、RLS/Authz、错误码、审计和持久化的自研主导权。
+- Slice 2 执行口径以 `DEV-PLAN-433` 为准：Bifrost 为主参考，要求尽量复用或重构其代码或功能；Codex 只复用局部 provider adapter / bridge / stream parser；本仓继续保留密钥治理、RLS/Authz、错误码、审计和持久化的主导权，但主导权不等于扩大自研，必须优先复用上游 telemetry/lifecycle/test 形状。
 - 不直接复制外部项目数据库模型作为本仓事实源，不绕过本仓 RLS/Authz/路由/错误码门禁。
+
+### 6.5 首期明确暂缓项
+
+- `fallback/failover`：首期只做单 provider fail-closed 与健康验证，不做多 provider 故障切换。
+- `quota`：首期只记录 token usage 与审计字段，不做租户/用户额度治理。
+- `route alias/default model`：首期只有 active model 选择，不提供 alias、route graph 或 default model 管理面。
+- 上述能力仍可在 `433/435` 做上游映射和后续预留，但不得作为首期 required gate 或验收条件。
 
 ## 7. 会话连贯性与上下文管理
 
@@ -191,7 +200,7 @@
 
 每轮请求按固定顺序组装：
 
-1. 系统基线指令：安全、租户隔离、禁止自动写入、输出格式和错误处理规则。
+1. 系统基线指令：安全、租户隔离、业务写入必须走已冻结动作链与 One Door、输出格式和错误处理规则。
 2. 模块上下文：当前页面、业务对象、用户权限摘要、可用工具摘要。
 3. 历史压缩摘要：只包含仍然相关的关键决策、文件/对象、业务事实和未完成事项。
 4. 结构化状态对象：确定性 JSON，不由模型自由改写。
@@ -213,6 +222,7 @@
 - 隐式上下文：当前页面 route、当前业务对象 ID、当前表单草稿、最近错误、当前用户语言。
 - 显式上下文：用户选择的对象、上传的文本片段、粘贴的错误日志、`@CurrentPage`、`@Record` 等。
 - 不提供 Git diff、terminal、代码库检索、MCP server 或其他 coding-assistant 风格上下文注入能力。
+- 外部 provider 首期允许接收当前用户有权访问的真实 HR 业务对象摘要与表单草稿；本计划不扩散建立独立的数据出境/脱敏专项契约，仍以现有租户隔离、Authz/RLS、审计、错误码和 440 收口期间的“不扩大新治理面”原则约束输入范围。
 
 ### 7.5 会话隔离
 
@@ -229,7 +239,8 @@
 - 对话请求必须记录 trace_id、conversation_id、active model、latency、token usage、错误码和调用结果摘要。
 - 所有用户可见错误必须走项目错误码与 i18n 文案，不直接透出供应商原始错误。
 - Prompt 和工具上下文不得包含不属于当前租户和当前用户权限范围的数据。
-- 模型输出不得绕过业务模块提交入口；任何业务写入都必须回到现有 One Door、事务、RLS 和审计链路。
+- 模型输出不得绕过业务模块提交入口；任何业务写入都必须回到现有 One Door、事务、RLS、Authz 和审计链路。
+- 若后续允许模型触发业务写入，必须先冻结工具/动作链契约：tool/action registry、subject/domain/object/action 权限检查、用户确认或代理授权、幂等键、request-start/usage-intent/audit-start、业务 One Door 调用、final/outbox 记录、错误恢复和 E2E 证据；不得通过 prompt 约定或前端隐式按钮形成第二写入口。
 
 ## 9. 数据库与迁移策略
 
@@ -244,9 +255,11 @@
 ### Slice 0：契约与门禁准备
 
 - [ ] 将本计划评审到 `准备就绪`。
-- [ ] 更新 `chat-surface-clean` 为精确反回流门禁：允许本计划批准的新 `CubeBox` 路径和对象，继续阻断旧 `assistant`、LibreChat、旧路由、旧表名和旧错误码。
+- [ ] 更新 `chat-surface-clean` 为精确反回流门禁：允许新主线 `/app/cubebox`、`/internal/cubebox`、`modules/cubebox` 和后续明确批准的新 CubeBox 对象，继续阻断旧 `assistant`、LibreChat、`/app/assistant`、`/internal/assistant`、`/assistant-ui`、旧表名和旧错误码。
 - [ ] 新增 readiness 记录入口，登记每个切片的命令、证据和残留命中解释。
 - [ ] 冻结 `431`、`433`、`434`、`435` 的上游 `commit SHA`、文件级映射表、采用状态与 stopline；未完成前不得进入对应切片实现。
+- [ ] 冻结首期暂缓项：fallback/failover、quota、route alias、default model 只允许进入上游评估与后续预留，不得进入首期验收。
+- [ ] 冻结业务动作链讨论结论；未冻结前只允许实现对话、上下文、流式回复和可审计草稿，不得实现模型驱动业务写入。
 
 ### Slice 1：UI 壳与用户可见入口
 
@@ -265,6 +278,7 @@
 - [ ] 以 Bifrost 为主参考，结合 Codex provider adapter / bridge / stream parser，建立 provider adapter 接口与一个 OpenAI-compatible provider；其他供应商不进入首期闭环。
 - [ ] 以 Bifrost 为主参考实现服务端模型配置读取、密钥解密、请求映射、SSE 转发与错误映射；fallback 不在当前交付范围。
 - [ ] 以 Bifrost 的 health/readiness 思路实现显式连通性验证与基础健康检查。
+- [ ] 以 Bifrost/Codex 的 telemetry、stream lifecycle 和测试样式为主参考，实现调用前同事务写入 `request-start` / `usage-intent` / `audit-start`，流式完成后更新 final 状态；异步只补非关键指标或通过 outbox 重试 final 更新。
 - [ ] 补 handler、service、adapter 单元测试、流式响应测试和错误路径测试。
 
 ### Slice 3：会话持久化
@@ -282,7 +296,7 @@
 - [ ] 重构 Codex token estimator、auto compact threshold、manual compact、replacement history、summary prefix 与 canonical context reinjection 思路。
 - [ ] 将 Codex 活跃 history replacement 改造为 CubeBox prompt view replacement，数据库原始消息保持 append-only。
 - [ ] 实现 prompt builder 的固定顺序和结构化状态对象。
-- [ ] 实现摘要压缩任务，首期固定使用当前主模型或当前 route 对应模型执行 compaction，不引入独立 summary model。
+- [ ] 实现摘要压缩任务，首期固定使用当前 active model 执行 compaction，不引入独立 summary model。
 - [ ] 实现工具输出压缩和最近回合原文保留。
 - [ ] 补纯函数测试、压缩边界测试、摘要不丢关键事实测试，以及 Codex 移植点的 prompt shape 快照测试。
 - [ ] `/compact`、auto compact、manual compact 的语义、触发器、执行链与验收由 `DEV-PLAN-434` 持有；`DEV-PLAN-431` 只承接 composer 命令入口与状态提示。
@@ -293,6 +307,7 @@
 - [ ] 以 Bifrost 为主参考新增模型供应商配置页或设置面板，`One API` 仅补充渠道/模型映射的信息架构。
 - [ ] 支持新增、验证、启用、停用、轮换 API Key；密钥生命周期、掩码展示、审计和权限矩阵由本仓主导。
 - [ ] 支持 active model 选择与基础 provider 配置展示，并与 `DEV-PLAN-433` 的 provider / health / validation 语义对齐；quota、route alias、default model、fallback 不在当前交付范围。
+- [ ] 冻结显式 Authz 矩阵：平台 admin、平台 operator、租户 admin、普通用户分别映射到 subject/domain/object/action；外部项目只可复用页面 IA、provider/config 命名和验证交互，不复用其用户/角色模型。
 - [ ] 补 Authz、路由、错误提示、i18n 和 E2E。
 
 ### Slice 6：封板验证
@@ -302,7 +317,7 @@
 
 ## 11. 测试与覆盖率
 
-- Go 单元测试覆盖 provider adapter、prompt builder、token budget、summary compaction、error mapping、quota、credential masking。
+- Go 单元测试覆盖 provider adapter、prompt builder、token budget、summary compaction、error mapping、credential masking、request-start/final/outbox 状态推进。
 - 服务层测试覆盖租户隔离、权限失败、模型不可用、SSE 中断与错误映射。
 - 前端测试覆盖抽屉开关、输入、停止生成、会话恢复、配置表单、错误提示。
 - E2E 覆盖最小用户闭环：配置模型 -> 打开抽屉 -> 新建会话 -> 流式回复 -> 关闭重开 -> 恢复会话。
@@ -330,7 +345,7 @@
 - 不得把供应商 API Key 暴露给前端。
 - 不得在没有用户手工确认的情况下新增数据库表。
 - 不得用 Redis 等外部缓存替代 Go 原生 + pgx + PostgreSQL 默认方案。
-- 不得让模型输出直接执行业务写入。
+- 不得在工具/动作链契约未冻结前让模型输出触发业务写入；契约冻结后也不得绕过 One Door、事务、RLS、Authz、幂等与审计。
 - 不得让压缩摘要成为唯一事实源；原始消息和压缩事件必须可审计。
 - 不得以“上下文越多越好”为原则无限追加历史；必须通过预算、压缩和显式上下文选择保持高信噪比。
 - 不得把“功能跑通”当作切片验收的唯一标准；若未证明实现仍沿着已冻结的复用路线，则视为未通过。
@@ -339,8 +354,8 @@
 
 1. **E2E 口径冻结**：required gate 只允许使用本地 deterministic provider、mock SSE 或仓内可控 fake provider；不把真实外部模型调用纳入阻断式 CI。真实模型调用只允许作为手工 smoke、非阻断 nightly 或 readiness 补充证据存在，不得成为 merge 前置条件。
 2. **API Key 加密方案冻结**：复用仓库现有服务端密钥体系作为主密钥/KEK，CubeBox 模块内采用 envelope encryption 数据模型落地 `model_credential`。模块侧只保存密文、密钥版本、掩码展示字段、验证结果与轮换审计元数据；密钥明文只允许出现在录入与即时验证路径，不得写入前端状态、日志、审计 payload 或普通查询返回。
-3. **模型配置权限边界冻结**：首期由平台管理员负责 provider、credential、active model 与基础健康验证等全局配置；租户管理员只负责在已授权范围内选择当前可用模型，不直接管理供应商密钥，也不持有 quota、route alias、default model 或 fallback 等治理能力。后续若要开放租户自持 provider/key 或更复杂模型治理，必须另立计划并重新评审 Authz、RLS、审计与密钥治理边界。
-4. **summary model 策略冻结**：本计划不做独立 summary model，不采用“仅规则裁剪”替代语义压缩；compaction 固定使用当前主模型执行，相关配置、健康检查、fallback 与管理面不增加第二条 summary model 配置链。
+3. **模型配置权限边界冻结**：首期由平台管理员负责 provider、credential、active model 与基础健康验证等全局配置；租户管理员只负责在已授权范围内选择当前可用模型，不直接管理供应商密钥，也不持有 quota、route alias、default model 或 fallback 等治理能力。权限矩阵必须显式落为 subject/domain/object/action：平台 admin、平台 operator、租户 admin、普通用户分别冻结可见、验证、启停、active model 选择和密钥轮换能力。后续若要开放租户自持 provider/key 或更复杂模型治理，必须另立计划并重新评审 Authz、RLS、审计与密钥治理边界。
+4. **summary model 策略冻结**：本计划不做独立 summary model，不采用“仅规则裁剪”替代语义压缩；compaction 固定使用当前 active model 执行，相关配置、健康检查与管理面不增加第二条 summary model 配置链。
 5. **VS Code 客户端边界冻结**：本计划不实现真正的 VS Code extension 客户端，也不立 IDE adapter 子计划；当前交付范围只包含 Web Shell 内的一方 CubeBox 主链，VS Code 仅作为交互参考来源，不进入实施、测试、门禁或完成定义。
 
 ## 15. 参考链接
