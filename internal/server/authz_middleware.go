@@ -164,6 +164,16 @@ func authzRequirementForRoute(method string, path string) (object string, action
 			return authz.ObjectIAMDictRelease, authz.ActionAdmin, true
 		}
 		return "", "", false
+	case "/internal/cubebox/conversations":
+		if method == http.MethodPost {
+			return authz.ObjectCubeBoxConversations, authz.ActionAdmin, true
+		}
+		return "", "", false
+	case "/internal/cubebox/turns:stream":
+		if method == http.MethodPost {
+			return authz.ObjectCubeBoxConversations, authz.ActionAdmin, true
+		}
+		return "", "", false
 	case "/logout":
 		if method == http.MethodPost {
 			return authz.ObjectIAMSession, authz.ActionAdmin, true
@@ -218,6 +228,12 @@ func authzRequirementForRoute(method string, path string) (object string, action
 		}
 		return "", "", false
 	default:
+		if pathMatchRouteTemplate(path, "/internal/cubebox/conversations/{conversation_id}") && method == http.MethodGet {
+			return authz.ObjectCubeBoxConversations, authz.ActionRead, true
+		}
+		if pathMatchRouteTemplate(path, "/internal/cubebox/turns/{turn_id}:interrupt") && method == http.MethodPost {
+			return authz.ObjectCubeBoxConversations, authz.ActionAdmin, true
+		}
 		return "", "", false
 	}
 }

@@ -8,7 +8,7 @@
 - **范围一句话**：在旧对话栈完成历史归档之后，重新设计一个名为 `CubeBox`、中文名为“丘宝”的一方对话助手模块；首期交付对齐 VS Code Codex 插件观感的右侧悬挂抽屉、可配置外部大模型的 AI 网关，以及具备上下文压缩与会话隔离能力的连续对话内核。
 - **关联模块/目录**：`AGENTS.md`、`apps/web`、`internal/server`、`modules/cubebox`（候选新模块路径）、`config`、`migrations`、`scripts/ci`
 - **关联计划/标准**：`DEV-PLAN-004M1`、`DEV-PLAN-012`、`DEV-PLAN-015`、`DEV-PLAN-016`、`DEV-PLAN-017`、`DEV-PLAN-019`、`DEV-PLAN-021`、`DEV-PLAN-022`、`DEV-PLAN-300`、`DEV-PLAN-431`、`DEV-PLAN-432`、`DEV-PLAN-433`、`DEV-PLAN-434`、`DEV-PLAN-435`、`DEV-PLAN-437`、`DEV-PLAN-437A`
-- **用户入口/触点**：Web 应用右侧悬挂对话入口、`/app/cubebox` 页面、`/internal/cubebox` 服务端 API、模型配置页、会话列表、会话详情、流式回复、错误提示、审计记录；不提供 VS Code 插件形态或其他 IDE 客户端。
+- **用户入口/触点**：Web 应用右侧悬挂对话入口、`/internal/cubebox` 服务端 API、模型配置页、会话列表、会话详情、流式回复、错误提示、审计记录；不提供 VS Code 插件形态或其他 IDE 客户端。
 
 ### 0.1 Simple > Easy 三问
 
@@ -22,7 +22,7 @@
 - 本计划是新的 PoR 候选，不继承 `220-293`、`340-384`、`380-380H`、`391D` 的实现假设、阶段划分、子计划依赖或完成定义。
 - 若新方案需要借鉴历史实现，只允许把它视为“可选历史案例”；不得把旧 DTO、旧路由、旧 capability、旧表结构或旧 UI 视为默认沿用前提。
 - 实施前必须把 `make check chat-surface-clean` 从“全局关键词阻断旧残留”升级为“允许本计划批准的新模块路径，继续阻断旧路径、旧 API、旧 DB 对象、旧第三方资产”的精确门禁。
-- 新 CubeBox 正式路径冻结为 `/app/cubebox` 与 `/internal/cubebox`；它们代表 `430-435` 新主线，不再被 `chat-surface-clean` 视为旧 `cubebox` runtime 回流。旧 `assistant`、LibreChat、`/app/assistant`、`/internal/assistant`、`/assistant-ui` 与历史 compat/retired 语义仍必须 fail-closed。
+- 新 CubeBox 正式运行面冻结为 Web Shell 右侧抽屉与 `/internal/cubebox`；它们代表 `430-435` 新主线，不再被 `chat-surface-clean` 视为旧 `cubebox` runtime 回流。旧 `assistant`、LibreChat、`/app/assistant`、`/internal/assistant`、`/assistant-ui` 与历史 compat/retired 语义仍必须 fail-closed。
 
 ## 1. 背景与问题陈述
 
@@ -266,7 +266,7 @@
 ### Slice 0：契约与门禁准备
 
 - [ ] 将本计划评审到 `准备就绪`。
-- [ ] 更新 `chat-surface-clean` 为精确反回流门禁：允许新主线 `/app/cubebox`、`/internal/cubebox`、`modules/cubebox` 和后续明确批准的新 CubeBox 对象，继续阻断旧 `assistant`、LibreChat、`/app/assistant`、`/internal/assistant`、`/assistant-ui`、旧表名和旧错误码。
+- [ ] 更新 `chat-surface-clean` 为精确反回流门禁：允许新主线 `/internal/cubebox`、`modules/cubebox` 和后续明确批准的新 CubeBox 对象，继续阻断旧 `assistant`、LibreChat、`/app/assistant`、`/internal/assistant`、`/assistant-ui`、旧表名和旧错误码。
 - [ ] 新增 readiness 记录入口，登记每个切片的命令、证据和残留命中解释。
 - [ ] 冻结 `431`、`433`、`434`、`435` 的上游 `commit SHA`、文件级映射表、采用状态与 stopline；`PR-437A` 只要求补齐首轮会消费的最小冻结集，详见 `DEV-PLAN-437` 与 `DEV-PLAN-437A`。
 - [ ] 冻结首期暂缓项：fallback/failover、quota、route alias、default model 只允许进入上游评估与后续预留，不得进入首期验收。

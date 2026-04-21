@@ -14,6 +14,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/jacksonlee411/Bugs-And-Blossoms/internal/routing"
+	"github.com/jacksonlee411/Bugs-And-Blossoms/modules/cubebox"
 	iammodule "github.com/jacksonlee411/Bugs-And-Blossoms/modules/iam"
 	orgunitmodule "github.com/jacksonlee411/Bugs-And-Blossoms/modules/orgunit"
 	orgunitports "github.com/jacksonlee411/Bugs-And-Blossoms/modules/orgunit/domain/ports"
@@ -92,6 +93,8 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, error) {
 	if err := dictpkg.RegisterResolver(dictStore); err != nil {
 		return nil, err
 	}
+
+	cubeboxRuntime := cubebox.NewRuntime()
 
 	router := routing.NewRouter(classifier)
 
@@ -289,6 +292,18 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, error) {
 	}))
 	router.Handle(routing.RouteClassInternalAPI, http.MethodPost, "/org/api/org-units/set-business-unit", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		handleOrgUnitsBusinessUnitAPI(w, r, orgUnitWriteService)
+	}))
+	router.Handle(routing.RouteClassInternalAPI, http.MethodPost, "/internal/cubebox/conversations", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handleCubeBoxCreateConversationAPI(w, r, cubeboxRuntime)
+	}))
+	router.Handle(routing.RouteClassInternalAPI, http.MethodGet, "/internal/cubebox/conversations/{conversation_id}", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handleCubeBoxLoadConversationAPI(w, r, cubeboxRuntime)
+	}))
+	router.Handle(routing.RouteClassInternalAPI, http.MethodPost, "/internal/cubebox/turns:stream", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handleCubeBoxStreamTurnAPI(w, r, cubeboxRuntime)
+	}))
+	router.Handle(routing.RouteClassInternalAPI, http.MethodPost, "/internal/cubebox/turns/{turn_id}:interrupt", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handleCubeBoxInterruptTurnAPI(w, r, cubeboxRuntime)
 	}))
 	assetsSub, _ := fs.Sub(embeddedAssets, "assets")
 

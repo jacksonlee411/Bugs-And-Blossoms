@@ -8,7 +8,7 @@
 - **范围一句话**：作为 `DEV-PLAN-437 / PR-437A` 的 companion doc，冻结 `431/432/434` 在首轮开工时必须共享的最小 conversation/turn/item/event 契约、SSE envelope、reducer 输入形状、reconstruction 输出形状与 deterministic provider fixture 口径。
 - **关联模块/目录**：`docs/dev-plans/431-codex-ui-protocol-and-shell-reuse-plan.md`、`docs/dev-plans/432-codex-session-persistence-reuse-plan.md`、`docs/dev-plans/434-codex-context-management-and-compaction-reuse-plan.md`、`docs/dev-plans/437-cubebox-implementation-roadmap-for-fast-start.md`、`apps/web`、`internal/server`、`modules/cubebox`
 - **关联计划/标准**：`DEV-PLAN-430`、`DEV-PLAN-431`、`DEV-PLAN-432`、`DEV-PLAN-434`、`DEV-PLAN-437`
-- **用户入口/触点**：右侧抽屉、`/app/cubebox`、SSE 流式回复、会话恢复、`/compact`
+- **用户入口/触点**：右侧抽屉、SSE 流式回复、会话恢复、`/compact`
 
 ### 0.1 Simple > Easy 三问
 

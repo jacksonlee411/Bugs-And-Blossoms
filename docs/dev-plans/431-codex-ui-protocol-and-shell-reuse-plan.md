@@ -55,7 +55,7 @@ Codex 开源仓库中与 UI 层高度相关的成熟资产包括：
 6. 借鉴 Codex TUI 交互模式，实现 Web/MUI 右侧悬挂抽屉：输入区、消息历史、流式 markdown、状态条、compact/token 提示、stop/interrupt。
 7. 裁掉 Codex 中不适合 CubeBox 首期的 shell/file/patch/exec/plugin/MCP 写操作协议和 terminal 渲染实现。
 8. 产出 430 Slice 1 的最小用户可见闭环：打开抽屉 -> 新建/恢复会话 -> 发送消息 -> 流式回复 -> 停止/完成 -> 关闭重开后状态恢复。
-9. 将抽屉形态与 `/app/cubebox*` 路由形态收口为同一条正式 UI 主链，避免形成页面版/抽屉版双实现。
+9. 将正式 UI 主链收口为右侧抽屉承载，避免再次形成页面版/抽屉版双实现。
 
 ## 3. 非目标
 
@@ -136,8 +136,8 @@ Codex 开源仓库中与 UI 层高度相关的成熟资产包括：
 
 ### 5.1A 单前端链路约束
 
-- 右侧抽屉不是第二产品入口，而是 `CubeBox` 正式聊天 UI 的桌面承载壳层。
-- `/app/cubebox`、`/app/cubebox/conversations/:conversationId` 与右侧抽屉必须共享同一套：
+- 右侧抽屉不是第二产品入口，而是 `CubeBox` 唯一正式聊天 UI 承载壳层。
+- 右侧抽屉必须承载同一套：
   - `API client`
   - `conversation store`
   - `event reducer`
@@ -227,7 +227,7 @@ CubeBox 前端必须有一个纯函数 reducer：
 - [ ] 实现右侧抽屉布局、响应式策略和主题变量。
 - [ ] 实现 conversation header、timeline、composer、status bar、empty state。
 - [ ] 实现抽屉开关状态持久化，但不保存敏感内容。
-- [ ] 确认抽屉形态与 `/app/cubebox*` 路由形态共用同一套 store/reducer/component，不新增第二主链。
+- [ ] 确认右侧抽屉为唯一正式承载面，不新增第二套路由、第二套页面或第二主链。
 
 ### Slice 4：流式消息与状态显示
 
@@ -278,7 +278,7 @@ CubeBox 前端必须有一个纯函数 reducer：
 - 不得在未评估 Codex app-server-protocol 前自定义平行 thread/turn/event 模型。
 - 不得在 `4A` 映射表缺失 `commit SHA`、文件级对象或采用状态时开始实现 reducer、schema 或 drawer 主链。
 - 不得只写“借鉴 Codex 交互”而不落到具体文件、协议或测试样例。
-- 不得为了右侧抽屉再新增第二套路由、第二套 store 或第二套聊天页面实现。
+- 不得为了 CubeBox 再新增第二套路由、第二套 store 或第二套聊天页面实现。
 - 不得把 Codex 账号、登录、ChatGPT plan、rate limit UI 作为本仓事实源。
 - 不得在前端保存 API Key 或敏感 prompt 上下文。
 - 不得绕过本仓 MUI、i18n、routing、Authz、错误码和 E2E 门禁。

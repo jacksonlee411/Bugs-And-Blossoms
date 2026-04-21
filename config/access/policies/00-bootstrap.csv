@@ -5,6 +5,8 @@ p, role:tenant-admin, *, iam.session, admin
 p, role:tenant-admin, *, iam.dicts, read
 p, role:tenant-admin, *, iam.dicts, admin
 p, role:tenant-admin, *, iam.dict_release, admin
+p, role:tenant-admin, *, cubebox.conversations, read
+p, role:tenant-admin, *, cubebox.conversations, admin
 p, role:tenant-admin, *, orgunit.orgunits, read
 p, role:tenant-admin, *, orgunit.orgunits, admin
 p, role:tenant-admin, *, org.share_read, read

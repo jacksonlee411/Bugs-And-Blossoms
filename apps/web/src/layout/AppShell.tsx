@@ -1,4 +1,5 @@
 import { type PropsWithChildren, useCallback, useEffect, useMemo, useState } from 'react'
+import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome'
 import DarkModeIcon from '@mui/icons-material/DarkMode'
 import ExpandLessIcon from '@mui/icons-material/ExpandLess'
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore'
@@ -25,6 +26,7 @@ import {
   ListItemButton,
   ListItemText,
   MenuItem,
+  Paper,
   Select,
   TextField,
   Toolbar,
@@ -36,6 +38,8 @@ import { buildNavigationSearchEntries, commonSearchEntries } from '../navigation
 import { trackUiEvent } from '../observability/tracker'
 import { createLocalSearchProvider, mergeSearchProviders } from '../search/globalSearch'
 import type { NavItem } from '../types/navigation'
+import { CubeBoxProvider } from '../pages/cubebox/CubeBoxProvider'
+import { CubeBoxPanel } from '../pages/cubebox/CubeBoxPanel'
 
 const drawerWidth = 240
 
@@ -49,6 +53,7 @@ export function AppShell({ navItems }: PropsWithChildren<AppShellProps>) {
   const { hasPermission, locale, navDebugMode, setLocale, t, tenantId, themeMode, toggleThemeMode } =
     useAppPreferences()
   const [searchOpen, setSearchOpen] = useState(false)
+  const [cubeBoxOpen, setCubeBoxOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const [searchResults, setSearchResults] = useState(() => buildNavigationSearchEntries(navItems))
 
@@ -156,221 +161,261 @@ export function AppShell({ navItems }: PropsWithChildren<AppShellProps>) {
   }
 
   return (
-    <Box sx={{ display: 'flex', minHeight: '100vh' }}>
-      <AppBar
-        enableColorOnDark
-        color='primary'
-        position='fixed'
-        sx={{
-          zIndex: (theme) => theme.zIndex.drawer + 1,
-          color: 'common.white',
-          '& .MuiSvgIcon-root': { color: 'common.white' }
-        }}
-      >
-        <Toolbar sx={{ gap: 1 }}>
-          <Typography component='h1' variant='h6'>
-            {t('app_title')}
-          </Typography>
-          <Box sx={{ flex: 1 }} />
-          <Tooltip title='Ctrl/Cmd + K'>
-            <IconButton
-              color='inherit'
-              onClick={() => {
-                setSearchOpen(true)
-                void runSearch(searchQuery, false)
-              }}
-            >
-              <SearchIcon />
-            </IconButton>
-          </Tooltip>
-          <Tooltip title={t(themeMode === 'light' ? 'theme_dark' : 'theme_light')}>
-            <IconButton color='inherit' onClick={toggleThemeMode}>
-              {themeMode === 'light' ? <DarkModeIcon /> : <LightModeIcon />}
-            </IconButton>
-          </Tooltip>
-          <FormControl size='small' sx={{ minWidth: 120 }}>
-            <Select
-              sx={{
-                color: 'common.white',
-                '& .MuiSelect-icon': { color: 'common.white' },
-                '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.5)' },
-                '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: 'common.white' },
-                '&.Mui-focused .MuiOutlinedInput-notchedOutline': { borderColor: 'common.white' }
-              }}
-              onChange={(event) => setLocale(event.target.value as 'en' | 'zh')}
-              startAdornment={
-                <InputAdornment position='start'>
-                  <LanguageIcon fontSize='small' sx={{ color: 'common.white' }} />
-                </InputAdornment>
-              }
-              value={locale}
-            >
-              <MenuItem value='zh'>{t('language_zh')}</MenuItem>
-              <MenuItem value='en'>{t('language_en')}</MenuItem>
-            </Select>
-          </FormControl>
-          <Tooltip title={t('action_logout')}>
-            <IconButton color='inherit' onClick={() => void handleLogout()}>
-              <LogoutIcon />
-            </IconButton>
-          </Tooltip>
-        </Toolbar>
-      </AppBar>
-      <Drawer
-        sx={{
-          width: drawerWidth,
-          flexShrink: 0,
-          '& .MuiDrawer-paper': { boxSizing: 'border-box', width: drawerWidth }
-        }}
-        variant='permanent'
-      >
-        <Toolbar />
-        <List>
-          {topLevelNavItems.map((item) => {
-            const children = childNavItemsByParent[item.key] ?? []
-            const parentSelected = item.path === '/' ? location.pathname === '/' : location.pathname.startsWith(item.path)
-
-            if (children.length === 0) {
-              return (
-                <ListItemButton
-                  key={item.key}
-                  component={RouterLink}
-                  onClick={() =>
-                    trackUiEvent({
-                      eventName: 'nav_click',
-                      tenant: tenantId,
-                      module: 'shell',
-                      page: location.pathname,
-                      action: `menu_navigate:${item.key}`,
-                      result: 'success',
-                      metadata: { target: item.path }
-                    })
-                  }
-                  selected={parentSelected}
-                  to={item.path}
-                >
-                  <ListItemIcon sx={{ minWidth: 34 }}>{item.icon}</ListItemIcon>
-                  <ListItemText primary={t(item.labelKey)} />
-                </ListItemButton>
-              )
-            }
-
-            const expanded = expandedGroups[item.key] ?? parentSelected
-            return (
-              <Box key={item.key}>
-                <ListItemButton
-                  component={RouterLink}
+    <CubeBoxProvider>
+      <Box sx={{ display: 'flex', minHeight: '100vh' }}>
+        <AppBar
+          enableColorOnDark
+          color='primary'
+          position='fixed'
+          sx={{
+            zIndex: (theme) => theme.zIndex.drawer + 1,
+            color: 'common.white',
+            '& .MuiSvgIcon-root': { color: 'common.white' }
+          }}
+        >
+          <Toolbar sx={{ gap: 1 }}>
+            <Typography component='h1' variant='h6'>
+              {t('app_title')}
+            </Typography>
+            <Box sx={{ flex: 1 }} />
+            <Tooltip title='Ctrl/Cmd + K'>
+              <IconButton
+                color='inherit'
+                onClick={() => {
+                  setSearchOpen(true)
+                  void runSearch(searchQuery, false)
+                }}
+              >
+                <SearchIcon />
+              </IconButton>
+            </Tooltip>
+            {hasPermission('orgunit.read') ? (
+              <Tooltip title={t('cubebox_open_drawer')}>
+                <IconButton
+                  color='inherit'
                   onClick={() => {
-                    setExpandedGroups((previous) => ({
-                      ...previous,
-                      [item.key]: !(previous[item.key] ?? parentSelected)
-                    }))
+                    setCubeBoxOpen(true)
                     trackUiEvent({
                       eventName: 'nav_click',
                       tenant: tenantId,
                       module: 'shell',
                       page: location.pathname,
-                      action: `menu_navigate:${item.key}`,
-                      result: 'success',
-                      metadata: { target: item.path }
+                      action: 'cubebox_drawer_open',
+                      result: 'success'
                     })
                   }}
-                  selected={parentSelected}
-                  to={item.path}
                 >
-                  <ListItemIcon sx={{ minWidth: 34 }}>{item.icon}</ListItemIcon>
-                  <ListItemText primary={t(item.labelKey)} />
-                  {expanded ? <ExpandLessIcon fontSize='small' /> : <ExpandMoreIcon fontSize='small' />}
-                </ListItemButton>
-                <Collapse in={expanded} timeout='auto' unmountOnExit>
-                  <List component='div' disablePadding>
-                    {children.map((child) => (
-                      <ListItemButton
-                        key={child.key}
-                        component={RouterLink}
-                        onClick={() =>
-                          trackUiEvent({
-                            eventName: 'nav_click',
-                            tenant: tenantId,
-                            module: 'shell',
-                            page: location.pathname,
-                            action: `menu_navigate:${child.key}`,
-                            result: 'success',
-                            metadata: { target: child.path }
-                          })
-                        }
-                        selected={location.pathname.startsWith(child.path)}
-                        sx={{ pl: 6 }}
-                        to={child.path}
-                      >
-                        <ListItemText primary={t(child.labelKey)} />
-                      </ListItemButton>
-                    ))}
-                  </List>
-                </Collapse>
-              </Box>
-            )
-          })}
-          {navDebugMode
-            ? hiddenNavItems.map((item) => (
-                <ListItemButton disabled key={item.key}>
-                  <ListItemIcon sx={{ minWidth: 34 }}>
-                    <LockIcon fontSize='small' />
-                  </ListItemIcon>
-                  <ListItemText primary={t(item.labelKey)} secondary={t('nav_debug_mode')} />
-                </ListItemButton>
-              ))
-            : null}
-        </List>
-      </Drawer>
-      <Box component='main' sx={{ flexGrow: 1, minWidth: 0, p: 3 }}>
-        <Toolbar />
-        <Outlet />
-      </Box>
-      <Dialog fullWidth maxWidth='sm' onClose={() => setSearchOpen(false)} open={searchOpen}>
-        <DialogTitle>{t('global_search')}</DialogTitle>
-        <DialogContent>
-          <Box component='form' onSubmit={(event) => event.preventDefault()} sx={{ mb: 2 }}>
-            <TextField
-              fullWidth
-              onKeyDown={(event) => {
-                const nativeEvent = event.nativeEvent
-                if (nativeEvent.isComposing || nativeEvent.keyCode === 229) {
-                  return
-                }
-                if (event.key === 'Enter') {
-                  event.preventDefault()
-                  void runSearch(searchQuery, true)
-                }
-              }}
-              onChange={(event) => {
-                const nextQuery = event.target.value
-                setSearchQuery(nextQuery)
-                void runSearch(nextQuery, false)
-              }}
-              placeholder={t('global_search_placeholder')}
-              value={searchQuery}
-            />
-          </Box>
-          <List>
-            {searchResults.length === 0 ? (
-              <Typography color='text.secondary' sx={{ px: 2, py: 1.5 }} variant='body2'>
-                {t('global_search_empty')}
-              </Typography>
+                  <AutoAwesomeIcon />
+                </IconButton>
+              </Tooltip>
             ) : null}
-            {searchResults.map((entry) => (
-              <ListItemButton key={entry.key} onClick={() => handleSearchSelect(entry.path)}>
-                <ListItemText primary={t(entry.labelKey)} />
-                <Chip
-                  label={entry.source === 'navigation' ? t('search_source_navigation') : t('search_source_common')}
-                  size='small'
-                  variant='outlined'
-                />
-              </ListItemButton>
-            ))}
+            <Tooltip title={t(themeMode === 'light' ? 'theme_dark' : 'theme_light')}>
+              <IconButton color='inherit' onClick={toggleThemeMode}>
+                {themeMode === 'light' ? <DarkModeIcon /> : <LightModeIcon />}
+              </IconButton>
+            </Tooltip>
+            <FormControl size='small' sx={{ minWidth: 120 }}>
+              <Select
+                sx={{
+                  color: 'common.white',
+                  '& .MuiSelect-icon': { color: 'common.white' },
+                  '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.5)' },
+                  '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: 'common.white' },
+                  '&.Mui-focused .MuiOutlinedInput-notchedOutline': { borderColor: 'common.white' }
+                }}
+                onChange={(event) => setLocale(event.target.value as 'en' | 'zh')}
+                startAdornment={
+                  <InputAdornment position='start'>
+                    <LanguageIcon fontSize='small' sx={{ color: 'common.white' }} />
+                  </InputAdornment>
+                }
+                value={locale}
+              >
+                <MenuItem value='zh'>{t('language_zh')}</MenuItem>
+                <MenuItem value='en'>{t('language_en')}</MenuItem>
+              </Select>
+            </FormControl>
+            <Tooltip title={t('action_logout')}>
+              <IconButton color='inherit' onClick={() => void handleLogout()}>
+                <LogoutIcon />
+              </IconButton>
+            </Tooltip>
+          </Toolbar>
+        </AppBar>
+        <Drawer
+          sx={{
+            width: drawerWidth,
+            flexShrink: 0,
+            '& .MuiDrawer-paper': { boxSizing: 'border-box', width: drawerWidth }
+          }}
+          variant='permanent'
+        >
+          <Toolbar />
+          <List>
+            {topLevelNavItems.map((item) => {
+              const children = childNavItemsByParent[item.key] ?? []
+              const parentSelected = item.path === '/' ? location.pathname === '/' : location.pathname.startsWith(item.path)
+
+              if (children.length === 0) {
+                return (
+                  <ListItemButton
+                    key={item.key}
+                    component={RouterLink}
+                    onClick={() =>
+                      trackUiEvent({
+                        eventName: 'nav_click',
+                        tenant: tenantId,
+                        module: 'shell',
+                        page: location.pathname,
+                        action: `menu_navigate:${item.key}`,
+                        result: 'success',
+                        metadata: { target: item.path }
+                      })
+                    }
+                    selected={parentSelected}
+                    to={item.path}
+                  >
+                    <ListItemIcon sx={{ minWidth: 34 }}>{item.icon}</ListItemIcon>
+                    <ListItemText primary={t(item.labelKey)} />
+                  </ListItemButton>
+                )
+              }
+
+              const expanded = expandedGroups[item.key] ?? parentSelected
+              return (
+                <Box key={item.key}>
+                  <ListItemButton
+                    component={RouterLink}
+                    onClick={() => {
+                      setExpandedGroups((previous) => ({
+                        ...previous,
+                        [item.key]: !(previous[item.key] ?? parentSelected)
+                      }))
+                      trackUiEvent({
+                        eventName: 'nav_click',
+                        tenant: tenantId,
+                        module: 'shell',
+                        page: location.pathname,
+                        action: `menu_navigate:${item.key}`,
+                        result: 'success',
+                        metadata: { target: item.path }
+                      })
+                    }}
+                    selected={parentSelected}
+                    to={item.path}
+                  >
+                    <ListItemIcon sx={{ minWidth: 34 }}>{item.icon}</ListItemIcon>
+                    <ListItemText primary={t(item.labelKey)} />
+                    {expanded ? <ExpandLessIcon fontSize='small' /> : <ExpandMoreIcon fontSize='small' />}
+                  </ListItemButton>
+                  <Collapse in={expanded} timeout='auto' unmountOnExit>
+                    <List component='div' disablePadding>
+                      {children.map((child) => (
+                        <ListItemButton
+                          key={child.key}
+                          component={RouterLink}
+                          onClick={() =>
+                            trackUiEvent({
+                              eventName: 'nav_click',
+                              tenant: tenantId,
+                              module: 'shell',
+                              page: location.pathname,
+                              action: `menu_navigate:${child.key}`,
+                              result: 'success',
+                              metadata: { target: child.path }
+                            })
+                          }
+                          selected={location.pathname.startsWith(child.path)}
+                          sx={{ pl: 6 }}
+                          to={child.path}
+                        >
+                          <ListItemText primary={t(child.labelKey)} />
+                        </ListItemButton>
+                      ))}
+                    </List>
+                  </Collapse>
+                </Box>
+              )
+            })}
+            {navDebugMode
+              ? hiddenNavItems.map((item) => (
+                  <ListItemButton disabled key={item.key}>
+                    <ListItemIcon sx={{ minWidth: 34 }}>
+                      <LockIcon fontSize='small' />
+                    </ListItemIcon>
+                    <ListItemText primary={t(item.labelKey)} secondary={t('nav_debug_mode')} />
+                  </ListItemButton>
+                ))
+              : null}
           </List>
-        </DialogContent>
-      </Dialog>
-    </Box>
+        </Drawer>
+        <Box component='main' sx={{ flexGrow: 1, minWidth: 0, p: 3 }}>
+          <Toolbar />
+          <Outlet />
+        </Box>
+        <Drawer
+          anchor='right'
+          onClose={() => setCubeBoxOpen(false)}
+          open={cubeBoxOpen}
+          PaperProps={{
+            sx: {
+              p: 2,
+              width: {
+                xs: '100%',
+                md: 520
+              }
+            }
+          }}
+        >
+          <Paper elevation={0} sx={{ height: '100%' }}>
+            <CubeBoxPanel />
+          </Paper>
+        </Drawer>
+        <Dialog fullWidth maxWidth='sm' onClose={() => setSearchOpen(false)} open={searchOpen}>
+          <DialogTitle>{t('global_search')}</DialogTitle>
+          <DialogContent>
+            <Box component='form' onSubmit={(event) => event.preventDefault()} sx={{ mb: 2 }}>
+              <TextField
+                fullWidth
+                onKeyDown={(event) => {
+                  const nativeEvent = event.nativeEvent
+                  if (nativeEvent.isComposing || nativeEvent.keyCode === 229) {
+                    return
+                  }
+                  if (event.key === 'Enter') {
+                    event.preventDefault()
+                    void runSearch(searchQuery, true)
+                  }
+                }}
+                onChange={(event) => {
+                  const nextQuery = event.target.value
+                  setSearchQuery(nextQuery)
+                  void runSearch(nextQuery, false)
+                }}
+                placeholder={t('global_search_placeholder')}
+                value={searchQuery}
+              />
+            </Box>
+            <List>
+              {searchResults.length === 0 ? (
+                <Typography color='text.secondary' sx={{ px: 2, py: 1.5 }} variant='body2'>
+                  {t('global_search_empty')}
+                </Typography>
+              ) : null}
+              {searchResults.map((entry) => (
+                <ListItemButton key={entry.key} onClick={() => handleSearchSelect(entry.path)}>
+                  <ListItemText primary={t(entry.labelKey)} />
+                  <Chip
+                    label={entry.source === 'navigation' ? t('search_source_navigation') : t('search_source_common')}
+                    size='small'
+                    variant='outlined'
+                  />
+                </ListItemButton>
+              ))}
+            </List>
+          </DialogContent>
+        </Dialog>
+      </Box>
+    </CubeBoxProvider>
   )
 }

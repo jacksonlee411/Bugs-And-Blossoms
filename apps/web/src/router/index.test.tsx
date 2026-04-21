@@ -49,5 +49,6 @@ describe('app router', () => {
     expect(routePaths.has('org/units/field-configs')).toBe(true)
     expect(routePaths.has('dicts')).toBe(true)
     expect(routePaths.has('approvals')).toBe(true)
+    expect(routePaths.has('cubebox')).toBe(false)
   })
 })

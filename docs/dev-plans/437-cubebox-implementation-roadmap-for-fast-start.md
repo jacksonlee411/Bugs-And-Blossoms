@@ -1,20 +1,20 @@
 # DEV-PLAN-437：CubeBox 实施路线图（快速开工版）
 
-**状态**: 规划中（2026-04-21 11:10 CST）
+**状态**: 执行中（2026-04-21 20:50 CST，`PR-437A` 已完成，`Phase B` 当前范围已完成）
 
 ## 0. 适用范围与评审分级
 
 - **评审分级**：`T3`
-- **范围一句话**：作为 `DEV-PLAN-430` 及其子计划 `431-435` 的实施路线图，冻结“如何快速开工”的执行顺序、并行策略、最小前置冻结项、第一条可运行竖切和阶段验收口径；不替代各子计划自身的契约 owner。
+- **范围一句话**：作为 `DEV-PLAN-430` 及其子计划 `431-435` 的实施路线图，冻结“如何快速开工”的执行顺序、并行策略、最小前置冻结项、首轮可用能力和阶段验收口径；不替代各子计划自身的契约 owner。
 - **关联模块/目录**：`docs/dev-plans/430-cubebox-ide-conversation-assistant-rebuild-architecture-plan.md`、`docs/dev-plans/431-codex-ui-protocol-and-shell-reuse-plan.md`、`docs/dev-plans/431a-cubebox-page-design-contract.md`、`docs/dev-plans/432-codex-session-persistence-reuse-plan.md`、`docs/dev-plans/433-bifrost-centric-ai-gateway-reuse-and-reconstruction-plan.md`、`docs/dev-plans/434-codex-context-management-and-compaction-reuse-plan.md`、`docs/dev-plans/435-bifrost-centric-model-config-ui-and-admin-governance-plan.md`、`docs/dev-plans/436-cubebox-historical-surface-hard-delete-plan.md`、`apps/web`、`internal/server`、`modules/cubebox`
 - **关联计划/标准**：`DEV-PLAN-004M1`、`DEV-PLAN-012`、`DEV-PLAN-015`、`DEV-PLAN-017`、`DEV-PLAN-019`、`DEV-PLAN-022`、`DEV-PLAN-300`、`DEV-PLAN-430`、`DEV-PLAN-431`、`DEV-PLAN-432`、`DEV-PLAN-433`、`DEV-PLAN-434`、`DEV-PLAN-435`、`DEV-PLAN-436`、`DEV-PLAN-437A`
-- **用户入口/触点**：Web Shell 右侧 CubeBox 入口、`/app/cubebox` 页面、`/internal/cubebox` API、模型配置页、会话列表/恢复、流式对话、压缩提示
+- **用户入口/触点**：Web Shell 右侧 CubeBox 入口、`/internal/cubebox` API、模型配置页、会话列表/恢复、流式对话、压缩提示
 
 ### 0.1 Simple > Easy 三问
 
 1. **边界**：`437` 只定义实施顺序、切片编排、并行原则与开工门槛；`430` 继续是总架构 PoR，`431-435` 继续分别持有 UI、持久化、网关、压缩、管理面的正式契约。
 2. **不变量**：不得因为追求“快速开工”而绕过 `430` 已冻结的无 legacy、单前端主链、服务端网关、append-only 审计、当前用户权限执行与上游复用审计要求。
-3. **可解释**：reviewer 必须能在 5 分钟内讲清为什么先做哪一条竖切、哪些项必须先冻结、哪些项可以并行，以及为什么这条路线比“所有子计划先写完再开工”更简单。
+3. **可解释**：reviewer 必须能在 5 分钟内讲清为什么先做哪一轮能力、哪些项必须先冻结、哪些项可以并行，以及为什么这条路线比“所有子计划先写完再开工”更简单。
 
 ### 0.2 现状研究摘要
 
@@ -23,8 +23,8 @@
 - **最容易出错的位置**：
   - 把“上游映射表冻结”扩张为“所有子计划全部冻结完才允许任何代码落地”
   - `431/432/434` 各自先行实现，形成不同的 conversation/turn/event/compaction 语义
-  - 抽屉壳层和 `/app/cubebox` 页面各自长出第二套 store/reducer/SSE 消费链
-  - 先做全量管理面或全量持久化，迟迟没有第一条可运行对话链路
+  - 再次长出抽屉之外的第二套路由页面或第二套 store/reducer/SSE 消费链
+  - 先做全量管理面或全量持久化，迟迟没有首轮可用对话链路
 - **本次不沿用的“容易做法”**：
   - 先把 `431-435` 全文档冻结到巨细无遗再开工
   - 先做“模型管理后台”或“复杂持久化”再回头拼对话主链
@@ -38,8 +38,8 @@
 - 当前最需要的不是再补一份“更大的总方案”，而是明确：
   - 哪些前置项必须先冻结
   - 哪些切片可以并行
-  - 第一条竖切是什么
-  - 何时从 mock/deterministic provider 进入持久化和 compaction 闭环
+  - 首轮能力边界是什么
+  - 何时从本地可控运行时进入持久化和 compaction 闭环
 
 ## 2. 目标与非目标
 
@@ -47,7 +47,7 @@
 
 - [ ] 冻结 `430/431-435` 的实施顺序，使 CubeBox 可以在最小前置条件下快速开工。
 - [ ] 定义“最小前置冻结集”，避免把全部子计划同时阻塞在文档完善阶段。
-- [ ] 定义第一条用户可见竖切：右侧入口 -> 发送消息 -> 流式回复 -> 停止/完成。
+- [ ] 定义首轮用户可见能力：右侧入口 -> 发送消息 -> 流式回复 -> 停止/完成。
 - [ ] 定义第二阶段、第三阶段的扩展顺序，使持久化、恢复、压缩、管理面按依赖自然落位。
 - [ ] 冻结并行规则和 stopline，阻断双主链、伪复用和管理面抢跑。
 
@@ -60,9 +60,9 @@
 
 ### 2.3 用户可见性交付
 
-- **用户可见入口**：Web Shell 右侧悬挂入口与 `/app/cubebox`。
+- **用户可见入口**：Web Shell 右侧悬挂入口。
 - **最小可操作闭环**：用户可以打开 CubeBox、输入问题、收到流式回复、停止生成、关闭后重新打开仍看到当前 UI 状态。
-- **快速开工的定义**：不是“文档写完”，而是首条竖切在不违背 `430` stopline 的前提下进入可运行状态。
+- **快速开工的定义**：不是“文档写完”，而是首轮能力在不违背 `430` stopline 的前提下进入可运行状态。
 
 ## 2.4 工具链与门禁（SSOT 引用）
 
@@ -109,7 +109,7 @@
    - `turn.agent_message.delta` / `turn.completed` / `turn.error` / `turn.interrupted`
    - compact/token usage 事件名
    - 该 companion doc 现冻结为 `DEV-PLAN-437A`
-5. 已明确首条竖切使用 deterministic provider / mock SSE / fake provider，不把真实外部模型连通性作为 merge 前置条件。
+5. 已明确首轮能力使用本地可控运行时 / mock SSE / fake provider，不把真实外部模型连通性作为 merge 前置条件。
 
 ### 3.2 串行与并行规则
 
@@ -121,9 +121,9 @@
 
 可以并行的事项：
 
-1. `431` 的抽屉壳层与 `433` 的 deterministic provider / SSE mock 可以并行。
+1. `431` 的抽屉壳层与 `433` 的本地可控运行时 / SSE mock 可以并行。
 2. `432` 的持久化对象职责冻结与 `434` 的 compaction 纯函数接口冻结可以并行，但二者都要消费同一份 canonical contract。
-3. `431A` 的页面视觉合同可以与 `431` 组件 IA 同步推进，但不得反向阻塞 reducer/SSE 竖切。
+3. `431A` 的页面视觉合同可以与 `431` 组件 IA 同步推进，但不得反向阻塞 reducer/SSE 首轮实现。
 
 ### 3.3 第一性排序原则
 
@@ -131,7 +131,7 @@
 
 1. 能让用户“看到并操作”的主链优先于后台治理面。
 2. 能冻结共享语义的 contract 优先于各层各写一套局部 DTO。
-3. 能形成可回归测试的 deterministic 竖切优先于真实 provider 连接。
+3. 能形成可回归测试的本地可控实现优先于真实 provider 连接。
 4. 能减少未来返工的 owner 边界优先于“先写起来再说”的局部便利。
 
 ## 4. 分阶段实施路线
@@ -140,37 +140,43 @@
 
 目标：把“可以安全开工”的门槛降到最小，但不破坏 `430` 不变量。
 
-1. [ ] 完成 `chat-surface-clean` 精确 allowlist 更新，允许 `/app/cubebox`、`/internal/cubebox`、`modules/cubebox`，继续阻断旧 `assistant` / LibreChat / 旧表名 / 旧错误码。
+1. [ ] 完成 `chat-surface-clean` 精确 allowlist 更新，允许 `/internal/cubebox`、`modules/cubebox`，继续阻断旧 `assistant` / LibreChat / 旧表名 / 旧错误码。
 2. [ ] 在 `430` 与 `431/433/434` 中补齐首轮会用到的上游 `commit SHA` 与最小文件级映射，不等待未来全部映射对象冻结完毕。
 3. [ ] 产出一份共享 canonical contract 附录或 companion doc，作为 `431/432/434` 共同输入；当前 companion doc 冻结为 `DEV-PLAN-437A`：
    - conversation/turn/item 生命周期
    - SSE event naming
    - reducer 输入 shape
    - reconstruction 输出 shape
-4. [ ] 冻结 deterministic provider 口径：mock SSE / fake provider / fixed transcript fixture。
+4. [ ] 冻结本地可控运行时口径：mock SSE / fake provider / fixed transcript fixture。
 
 阶段完成定义：
 
 - 可以开始写 `modules/cubebox`、`apps/web`、`internal/server` 的首轮代码。
 - reviewer 不再要求“先把 431-435 所有映射表全部补完”。
 
-### Phase B：第一条可运行竖切
+### Phase B：首轮可用对话能力
 
 目标：尽快形成“可打开、可发问、可流式回复、可停止”的用户闭环。
 
 owner：
 
 - `431`：抽屉壳层、统一 store/reducer、timeline/composer/status bar、SSE 消费
-- `433`：deterministic provider、request mapping 最小链路、SSE passthrough、错误映射
+- `433`：本地可控运行时、request mapping 最小链路、SSE passthrough、错误映射
 
 范围：
 
 1. [ ] Web Shell 右侧图标 + 抽屉挂载完成。
-2. [ ] `/app/cubebox` 与抽屉共用同一套 store/reducer/component 语义。
+2. [ ] 右侧抽屉承载唯一正式 UI 主链，复用同一套 store/reducer/component 语义。
 3. [ ] `turn.agent_message.delta`、`turn.completed`、`turn.error`、`turn.interrupted` 已打通。
-4. [ ] 可用 deterministic provider 返回稳定流式输出。
+4. [ ] 可用本地可控运行时返回稳定流式输出。
 5. [ ] stop/interrupt 可见且可回归测试。
 6. [ ] 不要求真实持久化，不要求真实 provider health，不要求 active model 管理面闭环。
+
+Phase B 临时权限口径：
+
+- 在 `435` 的正式权限矩阵冻结前，右侧抽屉入口的前端可见性权限暂时统一复用现有 `orgunit.read`。
+- 这只是首轮能力的入口可发现性占位，不改变后端 runtime object 命名；服务端鉴权对象仍保持 `cubebox.conversations`。
+- 待 `435` 落地正式权限矩阵后，再把前端入口权限从临时可见性权限收口为最终命名；不得把本阶段占位口径误当作长期 owner。
 
 阶段完成定义：
 
@@ -253,7 +259,7 @@ owner：
 | --- | --- | --- | --- |
 | 总体架构/stopline | `430` | `431-435` 承接切片 | 不得在 `437` 重写总体架构 |
 | UI 协议/状态机/抽屉壳层 | `431` | `432/434` 对齐 reducer 输入输出 | 先冻结 `DEV-PLAN-437A` 再开工 |
-| 页面视觉合同 | `431A` | `431` 页面实现消费 | 不得反向阻塞首轮竖切 |
+| 页面视觉合同 | `431A` | `431` 页面实现消费 | 不得反向阻塞首轮能力 |
 | 会话 lifecycle/persistence | `432` | `431` 消费其 list/read/resume/archive/rename 结果 | UI 不得偷持 lifecycle owner |
 | AI gateway/provider/health runtime | `433` | `431/435` 消费其运行时对象 | 管理面不得抢先定义命名 |
 | compaction 语义与执行链 | `434` | `431` 只承接 `/compact` 入口与状态提示 | UI 不得自造第二套 compact 语义 |
@@ -268,11 +274,15 @@ owner：
 - 补共享 canonical contract
 - 不进入真实业务实现
 
-### PR-437B：第一条对话竖切
+当前状态：已完成。
+
+### PR-437B：首轮对话能力
 
 - `431` 抽屉壳层 + 统一 reducer/store
-- `433` deterministic provider + SSE passthrough
+- `433` 本地可控运行时 + SSE passthrough
 - 打通发送、流式回复、停止生成
+
+当前状态：已完成；当前仓库已命中右侧抽屉、`/internal/cubebox`、`modules/cubebox` 三个活体路径，并通过前端、Go、routing、authz 与 `chat-surface-clean` 收口验证。
 
 ### PR-437C：会话持久化与恢复
 
@@ -293,7 +303,7 @@ owner：
 
 ### 7.1 分阶段验收口径
 
-- **Phase B**：组件测试 + 前端交互测试 + deterministic SSE/E2E
+- **Phase B**：组件测试 + 前端交互测试 + 本地可控 SSE/E2E
 - **Phase C**：API/service 测试 + reconstruction fixture + 恢复 E2E
 - **Phase D**：compaction 纯函数测试 + prompt shape snapshot + 权限/租户 reinjection 测试
 - **Phase E**：Authz test + 配置验证 fixture + 管理面 E2E
@@ -320,7 +330,7 @@ owner：
 
 - 不得把“快速开工”解释为绕过 `430` 的 no-legacy、单前端主链、服务端网关、append-only 审计与当前用户权限边界。
 - 不得在 `436` 清场门禁未更新前新增 `modules/cubebox` 活体代码。
-- 不得要求 `431-435` 所有上游映射表全量冻结完才允许写第一条竖切代码。
+- 不得要求 `431-435` 所有上游映射表全量冻结完才允许写首轮代码。
 - 不得跳过共享 canonical contract，直接让 `431/432/434` 各自实现接近但不同的 conversation/turn/event 语义。
 - 不得让 `435` 管理面先于 `433` 运行时对象命名抢跑。
 - 不得为抽屉形态和页面形态分别实现第二套 store/reducer/SSE 消费链。

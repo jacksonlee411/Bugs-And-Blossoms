@@ -4,7 +4,6 @@ set -euo pipefail
 prefix="[chat-surface-clean]"
 
 approved_new_surface_paths=(
-  '/app/cubebox'
   '/internal/cubebox'
   'modules/cubebox'
 )

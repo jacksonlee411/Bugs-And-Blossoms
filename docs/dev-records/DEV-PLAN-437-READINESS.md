@@ -4,20 +4,23 @@
 
 - 作为 `DEV-PLAN-437` 的执行证据入口，记录 CubeBox 快速开工路线图的阶段状态、命中的 owner 计划、执行命令与可审计证据。
 - 将“快速开工”收敛为一组可验证阶段，而不是口头上的优先级建议。
-- 首轮先固化 `Phase A / PR-437A` 的 readiness 清单，为后续 `PR-437B` 到 `PR-437E` 预留统一记录结构。
+- 首轮先固化 `Phase A / PR-437A` 的 readiness 清单，为后续阶段预留统一记录结构。
 
 ## 当前状态
 
 - 日期：2026-04-21
 - owner：`DEV-PLAN-437`
-- 当前结论：`PR-437A` 已完成其文档层收敛范围：`430` 已回链、`431/433/434` 已补齐首轮最小上游冻结、共享 companion doc `DEV-PLAN-437A` 已创建，且 `chat-surface-clean` 已显式列出批准的新主线路径 `/app/cubebox`、`/internal/cubebox`、`modules/cubebox`。但由于当前仓库尚未命中这些新路径，`Phase A` 仍保持“进行中”，等待 `PR-437B` 首次实际命中活体路径后再做最终闭环确认。
+- 当前结论：`PR-437A` 已完成其文档层收敛范围，且当前实现已命中右侧抽屉、`/internal/cubebox`、`modules/cubebox` 三个冻结路径并通过对应门禁，因此 `Phase A` 已完成，`Phase B` 已完成当前范围内的收口验证。
+- `2026-04-21` 更新：当前实现已完成本地对话运行时、SSE handler、右侧抽屉共享 reducer、右侧入口打通，并完成前端依赖补齐、Vitest 回归、类型检查、构建验证与 Go/routing/authz/chat-surface-clean 收口。
+- `2026-04-21` 更新：为符合 `DEV-PLAN-003` 的“分阶段冻结边界而非临时绕行”要求，当前前端入口权限暂时统一复用现有 `orgunit.read`；正式权限矩阵仍由 `Phase E / 435` owner 收口。
+- `2026-04-21` 更新：根据当前产品决策，CubeBox 已从“页面 + 抽屉双承载”收口为“仅右侧抽屉承载”；`/app/cubebox` 路由、左侧导航入口与完整页面跳转按钮均已移除。
 
 ## 阶段总览
 
 | 阶段 | 对应 PR | 主要 owner 计划 | 目标 | 当前状态 |
 | --- | --- | --- | --- | --- |
-| `Phase A` | `PR-437A` | `436`、`430`、`431`、`433`、`434` | 开工门禁、最小上游冻结、共享 canonical contract、deterministic provider 口径 | `进行中` |
-| `Phase B` | `PR-437B` | `431`、`433` | 第一条可运行对话竖切 | `未开始` |
+| `Phase A` | `PR-437A` | `436`、`430`、`431`、`433`、`434` | 开工门禁、最小上游冻结、共享 canonical contract、本地运行时口径 | `已完成` |
+| `Phase B` | `PR-437B` | `431`、`433` | 首轮可用对话链路 | `已完成` |
 | `Phase C` | `PR-437C` | `432`、`431` | 会话持久化与恢复 | `未开始` |
 | `Phase D` | `PR-437D` | `434`、`431` | 压缩最小闭环 | `未开始` |
 | `Phase E` | `PR-437E` | `435`、`433` | 管理面与权限闭环 | `未开始` |
@@ -28,11 +31,11 @@
 
 - 把 CubeBox 从“文档已拆分但仍不好开工”推进到“具备首轮实现前置条件”。
 - 只冻结最小必要项，不要求 `431-435` 全量映射一次性补齐。
-- 为 `PR-437B` 的第一条可运行竖切提供单一共享输入。
+- 为首轮对话能力提供单一共享输入。
 
 ### 勾选项
 
-1. [x] `chat-surface-clean` 已补充显式批准的新主线路径清单：`/app/cubebox`、`/internal/cubebox`、`modules/cubebox`；当前文档层 allowlist 与路线图口径一致。
+1. [x] `chat-surface-clean` 已补充显式批准的新主线路径清单：`/internal/cubebox`、`modules/cubebox`；当前文档层 allowlist 与路线图口径一致。
 2. [x] `430` 已回填“按阶段快速开工”的引用，且不与 `437` 路线图冲突。
 3. [x] `431`、`433`、`434` 已补齐首轮会使用到的上游 `commit SHA` 与最小文件级映射对象。
 4. [x] 已形成共享 canonical contract，明确：
@@ -41,7 +44,7 @@
    - `turn.agent_message.delta` / `turn.completed` / `turn.error` / `turn.interrupted`
    - compact / token usage 事件名
    - reducer 输入与 reconstruction 输出 shape
-5. [x] deterministic provider / mock SSE / fake provider 口径已冻结，不把真实外部模型调用作为 merge 前置条件。
+5. [x] 本地可控运行时 / mock SSE / fake provider 口径已冻结，不把真实外部模型调用作为 merge 前置条件。
 
 ### 当前证据
 
@@ -68,13 +71,13 @@
 
 | 证据主题 | 目标文件 / 产物 | 期望证据形态 | 当前状态 |
 | --- | --- | --- | --- |
-| 反回流门禁更新 | `scripts/ci/check-chat-surface-clean.sh`、相关文档 | diff + 命令结果 | `已补并验证通过；待 PR-437B 首次命中新路径时再次确认` |
+| 反回流门禁更新 | `scripts/ci/check-chat-surface-clean.sh`、相关文档 | diff + 命令结果 | `已补并验证通过；待当前实现首次命中新路径时再次确认` |
 | `430` 回链 | `docs/dev-plans/430-cubebox-ide-conversation-assistant-rebuild-architecture-plan.md` | 文档 diff | `已补` |
 | `431` 最小映射冻结 | `docs/dev-plans/431-codex-ui-protocol-and-shell-reuse-plan.md` | `commit SHA` + 文件级映射 | `已补` |
 | `433` 最小映射冻结 | `docs/dev-plans/433-bifrost-centric-ai-gateway-reuse-and-reconstruction-plan.md` | `commit SHA` + 文件级映射 | `已补` |
 | `434` 最小映射冻结 | `docs/dev-plans/434-codex-context-management-and-compaction-reuse-plan.md` | `commit SHA` + 文件级映射 | `已补` |
 | 共享 canonical contract | `docs/dev-plans/437a-cubebox-phase-a-canonical-conversation-contract.md` | 文档 diff + owner 对齐说明 | `已补` |
-| deterministic provider 口径 | `433` / companion doc / fixture 方案文档 | 文档 diff + fixture 路径 | `口径已冻结；代码/fixture 仍待 PR-437B 实现` |
+| 本地运行时口径 | `433` / companion doc / fixture 方案文档 | 文档 diff + fixture 路径 | `口径已冻结；代码/fixture 已有首轮实现` |
 
 ### 命令记录
 
@@ -90,22 +93,61 @@
 
 1. 上述 5 个勾选项全部完成。
 2. `chat-surface-clean` 可通过且显式批准的新主线路径与 `437` 路线图一致。
-3. reviewer 能指出首轮竖切具体依赖哪份 shared contract，而不是继续依赖口头约定。
-4. `PR-437B` 已具备可直接开工条件，不再被“先补完整映射表”阻塞。
+3. reviewer 能指出首轮实现具体依赖哪份 shared contract，而不是继续依赖口头约定。
+4. `Phase B` 已具备可直接开工条件，不再被“先补完整映射表”阻塞。
 
 ## 后续阶段预留
 
-### Phase B / PR-437B 预留证据
+### Phase B 已落地证据
 
-- 第一条可运行竖切：
-  - 抽屉入口
-  - 统一 store / reducer
-  - deterministic SSE 回复
-  - stop / interrupt
-- 待补命令：
+- 首轮可用对话链路：
+  - [x] Web Shell 右侧抽屉入口已命中活体路径
+  - [x] 右侧抽屉已接入 `CubeBoxProvider`、统一 reducer/store 与 timeline/composer 语义
+  - [x] `/internal/cubebox` 已提供 create/load/stream/interrupt 最小链路
+  - [x] `turn.agent_message.delta` / `turn.completed` / `turn.error` / `turn.interrupted` 已打通
+  - [x] `stop / interrupt` 已可用并具备最小回归覆盖
+- 主要落地文件：
+  - `apps/web/src/pages/cubebox/**`
+  - `apps/web/src/layout/AppShell.tsx`
+  - `apps/web/src/router/index.tsx`
+  - `apps/web/src/navigation/config.tsx`
+  - `internal/server/cubebox_api.go`
+  - `modules/cubebox/runtime.go`
+  - `config/routing/allowlist.yaml`
+  - `config/access/policy.csv`
+  - `pkg/authz/registry.go`
+- 实际执行命令：
+  - `pnpm install`（`apps/web`；用于补齐本地缺失的前端依赖，修复 `vitest: not found`）
+  - `pnpm --dir apps/web test`
+  - `pnpm --dir apps/web typecheck`
+  - `pnpm --dir apps/web build`
   - `pnpm --dir apps/web check`
-  - 命中 Go 时 `go fmt ./... && go vet ./... && make check lint && make test`
-  - 命中门禁时 `make check chat-surface-clean`
+  - `bash scripts/ci/check-chat-surface-clean.sh`
+  - `make check doc`
+  - `make check routing`
+  - `make authz-pack && make authz-test && make authz-lint`
+  - `go fmt ./internal/server ./modules/cubebox ./pkg/authz`
+  - `go vet ./internal/server ./modules/cubebox ./pkg/authz`
+  - `go test ./internal/server ./modules/cubebox ./pkg/authz`
+- 结果摘要：
+  - 前端本地依赖已按 `apps/web` 工具链口径补齐，`vitest` 可直接运行
+  - `apps/web` 的 `test` / `typecheck` / `build` / `check` 已通过
+  - `chat-surface-clean`、`doc`、`routing`、`authz` 已通过
+  - Go 侧命中目录的 `fmt` / `vet` / `test` 已通过
+- 真实页面验证（`2026-04-21`，本地浏览器 + 运行中 `:8080` dev server）：
+  - 登录链路已验证：访问 `/app/login`，使用 `admin@localhost / admin123` 登录后成功跳转到 `/app`
+  - 入口可发现性已验证：工作台顶栏出现“打开 CubeBox 抽屉”
+  - 抽屉链路已验证：打开右侧抽屉后，标题、会话区、timeline、输入框、发送/停止控件均可见
+  - 正常消息链路已验证：输入 `hello cubebox` 后，UI 出现 `conv_000001`、用户消息、assistant 流式完成消息，状态收敛为“已完成”
+  - 错误消息链路已验证：输入 `please error now` 后，UI 出现 error alert 与 timeline 错误项“当前回复暂时失败，请稍后重试。”，状态收敛为“失败”
+  - 中断链路已验证：输入 `stop verification run` 后，真实页面已命中停止按钮，触发 `POST /internal/cubebox/turns/turn_000030:interrupt`，UI 状态收敛为“已中断”
+  - 实际命中请求：
+    - `POST /internal/cubebox/conversations` => `201`
+    - `POST /internal/cubebox/turns:stream` => `200`
+    - `POST /internal/cubebox/turns/turn_000030:interrupt` => `200`
+  - 当前残余控制台噪音：
+    - `GET /favicon.ico` => `404`
+    - 早先未登录/未授权阶段的历史记录里仍能看到一次 `422 /iam/api/sessions` 与一次 `403 /internal/cubebox/conversations`；两者不再阻断当前已登录后的主链验证结果
 
 ### Phase C / PR-437C 预留证据
 
@@ -137,9 +179,9 @@
 
 ## 当前裁决
 
-- `DEV-PLAN-437` 已具备 readiness 文档入口。
-- `PR-437A` 已完成文档层冻结与门禁语义收敛，但 `Phase A` 仍待 `PR-437B` 首次命中新主线路径时完成最后的“活体路径命中确认”。
-- 下一步可进入 `PR-437B`：抽屉壳层、统一 reducer/store、deterministic provider 与 SSE 最小竖切；届时应顺带再次执行 `make check chat-surface-clean`，验证新路径在真实代码落地后仍与 allowlist 口径一致。
+- `DEV-PLAN-437` 已具备从文档冻结到当前可用对话能力的完整 readiness 证据链。
+- `PR-437A` 已完成文档层冻结与门禁语义收敛，`Phase B` 已完成首轮对话能力并通过相应验证。
+- 下一步进入 `PR-437C`：以 `432` 为 owner 推进会话持久化、恢复与 conversation lifecycle，避免把当前前端内存态误延长为长期实现。
 
 ## 关联文档
 
