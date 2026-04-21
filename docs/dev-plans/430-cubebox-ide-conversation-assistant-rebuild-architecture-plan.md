@@ -116,7 +116,7 @@
 4. 不引入 Redis、Ristretto、BigCache 等外部缓存作为默认方案；如需外部缓存，必须按 AGENTS.md 外部依赖准入完成用户审批、文档更新和一致性评审。
 5. 不把 AI 网关做成通用治理平台、PDP 或 capability governance 回流点。
 6. 不在首期实现真正的 VS Code extension；首期仅实现 Web Shell 内的 IDE 式右侧悬挂体验。
-7. 不在本计划内冻结“模型提交业务写入”的最终动作链；模型可以进入业务写入讨论范围，但任何落地都必须另立工具/动作链契约，且不得绕过现有业务模块 One Door、事务、RLS、Authz 与审计链路。
+7. CubeBox 可以辅助发起业务写入，但它只是由当前用户调用的普通工具，不是独立授权主体；查询和写入都必须以当前用户身份、当前租户和当前会话上下文执行，写入前征得用户确认即可，不引入过度复杂的代理授权或独立主体设计。
 
 ## 5. 产品与交互方案
 
@@ -200,7 +200,7 @@
 
 每轮请求按固定顺序组装：
 
-1. 系统基线指令：安全、租户隔离、业务写入必须走已冻结动作链与 One Door、输出格式和错误处理规则。
+1. 系统基线指令：安全、租户隔离、CubeBox 仅代表当前用户调用工具、业务写入必须走 One Door、输出格式和错误处理规则。
 2. 模块上下文：当前页面、业务对象、用户权限摘要、可用工具摘要。
 3. 历史压缩摘要：只包含仍然相关的关键决策、文件/对象、业务事实和未完成事项。
 4. 结构化状态对象：确定性 JSON，不由模型自由改写。
@@ -239,8 +239,10 @@
 - 对话请求必须记录 trace_id、conversation_id、active model、latency、token usage、错误码和调用结果摘要。
 - 所有用户可见错误必须走项目错误码与 i18n 文案，不直接透出供应商原始错误。
 - Prompt 和工具上下文不得包含不属于当前租户和当前用户权限范围的数据。
-- 模型输出不得绕过业务模块提交入口；任何业务写入都必须回到现有 One Door、事务、RLS、Authz 和审计链路。
-- 若后续允许模型触发业务写入，必须先冻结工具/动作链契约：tool/action registry、subject/domain/object/action 权限检查、用户确认或代理授权、幂等键、request-start/usage-intent/audit-start、业务 One Door 调用、final/outbox 记录、错误恢复和 E2E 证据；不得通过 prompt 约定或前端隐式按钮形成第二写入口。
+- CubeBox 是当前用户调用的普通工具，不是 Casbin/Authz 中被独立授权的 subject；业务查询和写入 API 必须完全按当前用户已有权限、当前租户、当前 session 执行，不允许使用 CubeBox service account、代理主体或权限提升。
+- 模型输出不得绕过业务模块提交入口；任何业务写入都必须由 CubeBox 带着当前用户身份回到现有业务模块 One Door、事务、RLS、Authz 和审计链路。
+- 写入操作只要求用户在 UI 中显式确认待提交动作、关键字段和影响对象；确认后使用当前用户身份提交。首期不引入 delegated actor、长期代理授权、独立策略主体或多阶段审批动作链。
+- 审计中 `actor/principal` 必须仍是当前用户；CubeBox 只能作为 `channel/source/tool`、`conversation_id` 与 `trace_id` 记录，不能成为业务授权主体。
 
 ## 9. 数据库与迁移策略
 
@@ -259,7 +261,7 @@
 - [ ] 新增 readiness 记录入口，登记每个切片的命令、证据和残留命中解释。
 - [ ] 冻结 `431`、`433`、`434`、`435` 的上游 `commit SHA`、文件级映射表、采用状态与 stopline；未完成前不得进入对应切片实现。
 - [ ] 冻结首期暂缓项：fallback/failover、quota、route alias、default model 只允许进入上游评估与后续预留，不得进入首期验收。
-- [ ] 冻结业务动作链讨论结论；未冻结前只允许实现对话、上下文、流式回复和可审计草稿，不得实现模型驱动业务写入。
+- [ ] 冻结 CubeBox 工具调用权限原则：CubeBox 不是独立授权主体，查询/写入按当前用户权限执行；写入只需用户显式确认，并走现有业务模块 One Door、事务、RLS、Authz 和审计。
 
 ### Slice 1：UI 壳与用户可见入口
 
@@ -345,7 +347,7 @@
 - 不得把供应商 API Key 暴露给前端。
 - 不得在没有用户手工确认的情况下新增数据库表。
 - 不得用 Redis 等外部缓存替代 Go 原生 + pgx + PostgreSQL 默认方案。
-- 不得在工具/动作链契约未冻结前让模型输出触发业务写入；契约冻结后也不得绕过 One Door、事务、RLS、Authz、幂等与审计。
+- 不得把 CubeBox 设计成独立授权主体、service account 或权限提升通道；任何查询/写入都必须按当前用户权限执行，写入必须先获得用户显式确认并走 One Door、事务、RLS、Authz、幂等与审计。
 - 不得让压缩摘要成为唯一事实源；原始消息和压缩事件必须可审计。
 - 不得以“上下文越多越好”为原则无限追加历史；必须通过预算、压缩和显式上下文选择保持高信噪比。
 - 不得把“功能跑通”当作切片验收的唯一标准；若未证明实现仍沿着已冻结的复用路线，则视为未通过。
@@ -356,7 +358,8 @@
 2. **API Key 加密方案冻结**：复用仓库现有服务端密钥体系作为主密钥/KEK，CubeBox 模块内采用 envelope encryption 数据模型落地 `model_credential`。模块侧只保存密文、密钥版本、掩码展示字段、验证结果与轮换审计元数据；密钥明文只允许出现在录入与即时验证路径，不得写入前端状态、日志、审计 payload 或普通查询返回。
 3. **模型配置权限边界冻结**：首期由平台管理员负责 provider、credential、active model 与基础健康验证等全局配置；租户管理员只负责在已授权范围内选择当前可用模型，不直接管理供应商密钥，也不持有 quota、route alias、default model 或 fallback 等治理能力。权限矩阵必须显式落为 subject/domain/object/action：平台 admin、平台 operator、租户 admin、普通用户分别冻结可见、验证、启停、active model 选择和密钥轮换能力。后续若要开放租户自持 provider/key 或更复杂模型治理，必须另立计划并重新评审 Authz、RLS、审计与密钥治理边界。
 4. **summary model 策略冻结**：本计划不做独立 summary model，不采用“仅规则裁剪”替代语义压缩；compaction 固定使用当前 active model 执行，相关配置、健康检查与管理面不增加第二条 summary model 配置链。
-5. **VS Code 客户端边界冻结**：本计划不实现真正的 VS Code extension 客户端，也不立 IDE adapter 子计划；当前交付范围只包含 Web Shell 内的一方 CubeBox 主链，VS Code 仅作为交互参考来源，不进入实施、测试、门禁或完成定义。
+5. **CubeBox 工具授权边界冻结**：CubeBox 只是当前用户主动调用的普通工具，不是独立授权主体；业务查询和业务写入完全继承当前用户权限。写入前只需要用户确认动作和关键字段，确认后以当前用户身份调用现有 API / One Door；首期不设计代理授权、独立主体、多阶段审批或额外 PDP。
+6. **VS Code 客户端边界冻结**：本计划不实现真正的 VS Code extension 客户端，也不立 IDE adapter 子计划；当前交付范围只包含 Web Shell 内的一方 CubeBox 主链，VS Code 仅作为交互参考来源，不进入实施、测试、门禁或完成定义。
 
 ## 15. 参考链接
 
