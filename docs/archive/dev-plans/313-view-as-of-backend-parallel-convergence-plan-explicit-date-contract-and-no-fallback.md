@@ -1,6 +1,6 @@
 # DEV-PLAN-313：View As Of 后端并行收口计划——显式日期契约、无 fallback、统一错误语义
 
-**状态**: 已实施（2026-04-09，代码完成并通过本地验证）
+**状态**: 已归档（历史来源；原状态：已实施，2026-04-09，代码完成并通过本地验证）
 
 ## 实施更新（2026-04-09）
 
@@ -274,11 +274,11 @@
 ## 关联文档
 
 - `docs/dev-plans/310-project-wide-view-as-of-semantics-review-and-minimal-convergence-plan.md`
-- `docs/dev-plans/311-view-as-of-page-cutover-matrix-and-orgunit-details-sample-plan.md`
+- `docs/archive/dev-plans/311-view-as-of-page-cutover-matrix-and-orgunit-details-sample-plan.md`
 - `docs/dev-plans/312-view-as-of-implementation-plan-details-single-history-anchor-and-a-pages-read-write-decoupling.md`
 - `docs/dev-plans/005-project-standards-and-spec-adoption.md`
 - `docs/dev-plans/032-effective-date-day-granularity.md`
 - `docs/dev-plans/102b-070-071-time-context-explicitness-and-replay-determinism.md`
 - `docs/dev-plans/300-test-system-investigation-report.md`
-- `docs/dev-plans/301-go-test-layering-and-best-practices-remediation-plan.md`
+- `docs/archive/dev-plans/301-go-test-layering-and-best-practices-remediation-plan.md`
 - `AGENTS.md`

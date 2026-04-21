@@ -156,7 +156,7 @@ UI 目标流程：
 - 三者并行推进时，以 183 目录模型提供配置入口，以 182/185 语义模型提供运行时判定约束。
 
 ## 13. 关联文档
-- `docs/dev-plans/182-bu-policy-baseline-and-intent-override-unification.md`
+- `docs/archive/dev-plans/182-bu-policy-baseline-and-intent-override-unification.md`
 - `docs/archive/dev-plans/181-orgunit-details-form-capability-mapping-implementation.md`
 - `docs/dev-plans/180-granularity-hierarchy-governance-and-unification.md`
 - `docs/archive/dev-plans/156-capability-key-m3-m9-route-capability-mapping-and-gates.md`

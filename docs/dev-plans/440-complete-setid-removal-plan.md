@@ -7,7 +7,7 @@
 - **评审分级**：`T2`
 - **范围一句话**：将 SetID 从当前 implementation repo 的现行运行时、数据库 schema、路由/API、前端入口、鉴权对象、测试资产与现行契约文档中彻底删除，并以不引入 legacy fallback 的单主链方式完成切断。
 - **关联模块/目录**：`modules/orgunit`、`modules/jobcatalog`、`modules/staffing`、`internal/server`、`pkg/setid`、`pkg/fieldpolicy`、`internal/sqlc/schema.sql`、`migrations/orgunit`、`migrations/jobcatalog`、`migrations/staffing`、`apps/web`、`cmd/dbtool`、`config/access`、`config/capability`、`config/routing`、`docs/dev-plans`、`AGENTS.md`
-- **关联计划/标准**：`AGENTS.md`、`docs/dev-plans/000-docs-format.md`、`docs/dev-plans/003-simple-not-easy-review-guide.md`、`docs/dev-plans/012-ci-quality-gates.md`、`docs/dev-plans/017-routing-strategy.md`、`docs/archive/dev-plans/021-pg-rls-for-org-position-job-catalog.md`、`docs/dev-plans/022-authz-casbin-toolchain.md`、`docs/dev-plans/301-go-test-layering-and-best-practices-remediation-plan.md`、`docs/dev-plans/441-legacy-strategy-module-residue-cleanup-plan.md`
+- **关联计划/标准**：`AGENTS.md`、`docs/dev-plans/000-docs-format.md`、`docs/dev-plans/003-simple-not-easy-review-guide.md`、`docs/dev-plans/012-ci-quality-gates.md`、`docs/dev-plans/017-routing-strategy.md`、`docs/archive/dev-plans/021-pg-rls-for-org-position-job-catalog.md`、`docs/dev-plans/022-authz-casbin-toolchain.md`、`docs/archive/dev-plans/301-go-test-layering-and-best-practices-remediation-plan.md`、`docs/dev-plans/441-legacy-strategy-module-residue-cleanup-plan.md`
 - **用户入口/触点**：`/app/org/setid/**`、`/org/api/setid-*`、`/org/api/global-setids`、JobCatalog/Staffing 中所有显式或隐式 SetID 上下文、解释面板、registry、dbtool rehearsal/validate 辅助
 
 ### 0.1 Simple > Easy 三问

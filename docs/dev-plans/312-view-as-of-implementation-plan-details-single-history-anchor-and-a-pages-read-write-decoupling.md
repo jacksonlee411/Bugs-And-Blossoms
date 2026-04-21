@@ -38,7 +38,7 @@
 
 ## 约束来源（SSOT）
 
-- `DEV-PLAN-311`：`docs/dev-plans/311-view-as-of-page-cutover-matrix-and-orgunit-details-sample-plan.md`
+- `DEV-PLAN-311`：`docs/archive/dev-plans/311-view-as-of-page-cutover-matrix-and-orgunit-details-sample-plan.md`（历史来源）
 - `DEV-PLAN-310`：`docs/dev-plans/310-project-wide-view-as-of-semantics-review-and-minimal-convergence-plan.md`
 - `STD-002`：`docs/dev-plans/005-project-standards-and-spec-adoption.md`
 - `DEV-PLAN-102B`：`docs/dev-plans/102b-070-071-time-context-explicitness-and-replay-determinism.md`
@@ -327,7 +327,7 @@
 
 ## 关联文档
 
-- `docs/dev-plans/311-view-as-of-page-cutover-matrix-and-orgunit-details-sample-plan.md`
+- `docs/archive/dev-plans/311-view-as-of-page-cutover-matrix-and-orgunit-details-sample-plan.md`
 - `docs/dev-plans/310-project-wide-view-as-of-semantics-review-and-minimal-convergence-plan.md`
 - `docs/dev-plans/005-project-standards-and-spec-adoption.md`
 - `docs/dev-plans/102b-070-071-time-context-explicitness-and-replay-determinism.md`

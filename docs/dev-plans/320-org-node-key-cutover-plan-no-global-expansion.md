@@ -2,6 +2,8 @@
 
 **状态**: 实施中（截至 2026-04-11：`P0/P1/P2/P4/P5` 已完成；`P3` 的仓库侧正式切主准备与 `P6` 的最终 Gate/readiness review 已完成，当前结论为“可进入正式维护窗口”；正式停写/发布/reopen 尚待按 choreography 执行）
 
+> 状态说明：本文保留为 `org_node_key` 切换的现行/维护窗口记录。文中涉及 `staffing/jobcatalog/person/setid_strategy_registry` 的 consumer/runtime 样本，多数属于历史实施证据；`jobcatalog/staffing/person` 当前 owner 已由 `DEV-PLAN-450` 删除，SetID 剩余治理面 owner 见 `DEV-PLAN-440`。
+
 ## 1. 背景
 
 当前仓库中，Org 域是少数把内部结构标识深度嵌入树结构内核的模块：
@@ -26,7 +28,7 @@
 
 - [ ] 为 Org 域定义 `org_node_key` 标准：固定 8 位、非纯数字、无业务语义、唯一、自增分配。
 - [ ] Org 域一步切换为 `org_node_key` / `parent_org_node_key`，不保留运行期双轨。
-- [ ] 将 Org 内核，以及 SetID / Staffing / Assistant / `internal/server` 中**引用 Org 的链路**同步对齐到 `org_node_key`。
+- [ ] 将 Org 内核，以及历史实施范围内 SetID / Staffing / Assistant / `internal/server` 中**引用 Org 的链路**同步对齐到 `org_node_key`；其中 `Staffing` 样本当前仅保留为历史切换证据，不再构成现行活体执行面。
 - [ ] 保持对外契约继续只暴露业务编码 `org_code`，不得回流暴露内部结构标识。
 
 ### 2.2 非目标
@@ -87,7 +89,7 @@
   - `docs/dev-plans/015a-ddd-layering-framework-implementation-gap-assessment.md`
   - `docs/dev-plans/004m1-no-legacy-principle-cleanup-and-gates.md`
   - `docs/dev-plans/300-test-system-investigation-report.md`
-  - `docs/dev-plans/301-go-test-layering-and-best-practices-remediation-plan.md`
+  - `docs/archive/dev-plans/301-go-test-layering-and-best-practices-remediation-plan.md`
 
 ## 2.6 实施阶段冻结（7 阶段）
 
@@ -205,15 +207,15 @@
    - `cmd/dbtool` 与 `scripts/db/orgunit-node-key-rehearsal.sh` 已形成 committed `export -> check -> bootstrap -> import -> verify` 闭环。
 4. `P3 Org 内核切换`：已完成（仓库侧正式切主准备）
    - target runtime overlay `00023-00032` 已补齐并通过 fresh DB 顺序安装验证。
-   - Org / SetID / Staffing / `internal/server` 的核心运行时调用已切到 `org_node_key` / `char(8)` 主链；source-real 继续仅通过 compat migration 承接维护窗口前的过渡运行。
+   - 历史实施期的 Org / SetID / Staffing / `internal/server` 核心运行时调用已切到 `org_node_key` / `char(8)` 主链；source-real 继续仅通过 compat migration 承接维护窗口前的过渡运行。
 5. `P4 消费方收口`：已完成
-   - SetID strategy registry 的 schema cutover / rehearsal 链路已完成。
-   - Assistant 候选/响应、OrgUnit details 扩展字段快照 compat bridge、Staffing Position 的运行时/schema/DTO 已完成 `org_node_key` 收口，并继续只对外暴露 `org_code`。
-   - committed `Staffing` consumer/runtime 的真实 `target-real` explain 已采集并留档到 `docs/dev-records/dev-plan-320-stopline-log.md`。
+   - SetID strategy registry 的 schema cutover / rehearsal 链路已完成；该 consumer 主链后续已由 `DEV-PLAN-450` 删除，当前仅保留历史切换证据。
+   - Assistant 候选/响应、OrgUnit details 扩展字段快照 compat bridge、Staffing Position 的运行时/schema/DTO 已完成 `org_node_key` 收口，并继续只对外暴露 `org_code`；其中 `Staffing Position` 当前仅保留为历史样本。
+   - committed `Staffing` consumer/runtime 的真实 `target-real` explain 已采集并留档到 `docs/dev-records/dev-plan-320-stopline-log.md`，当前仅作为历史切换证据保留。
    - `SetID` consumer/runtime 的真实 `target-real` explain 已补齐；source compat runtime 已通过 `20260411120000_orgunit_setid_org_node_key_runtime_compat.sql` 与 `char(8)` 签名对齐。
 6. `P5 验收与门禁收口`：已完成
    - 已有 `make check org-node-key-backflow`、本地 stopline explain 与 rehearsal 证据。
-   - `DEV-PLAN-060` / `062` / `063` / `064A` 已补齐“外部链路仅暴露 `org_code`”契约；`m3`、`tp060-02`、`tp060-03`、`tp070b`、`tp288b`、`tp290b` 已在 2026-04-11 复跑通过。
+   - `DEV-PLAN-060` / `062` / `063` / `064A` 已补齐“外部链路仅暴露 `org_code`”契约；其中 `tp060-02`、`tp060-03` 当前已归档为历史测试合同。
    - 最终 Gate 已在 2026-04-11 实跑通过：`go test ./...`、`make check org-node-key-backflow`、`make check error-message`、`make check doc`、`make sqlc-verify-schema`、`make e2e`。
 7. `P6 预演与正式切换`：部分完成
    - 已完成至少 2 次本地 source/target rehearsal，以及最终 Gate/readiness review。
@@ -1015,7 +1017,7 @@ Org 域新边界规则：
 
 - 覆盖率口径与测试分层基线以：
   - `docs/dev-plans/300-test-system-investigation-report.md`
-  - `docs/dev-plans/301-go-test-layering-and-best-practices-remediation-plan.md`
+  - `docs/archive/dev-plans/301-go-test-layering-and-best-practices-remediation-plan.md`
   为准。
 - 涉及覆盖率统计范围、测试触发条件、paths-filter 触发范围的任何调整，必须遵循 `docs/archive/dev-plans/226-test-guide-tg004-gate-caliber-change-approval.md`；不得通过改门禁口径替代补测试或删死分支。
 
@@ -1025,23 +1027,23 @@ Org 域新边界规则：
 2. [ ] Org sequence 分配唯一性测试
 3. [ ] Org registry 一致性与当前态导入核对测试
 4. [ ] Org tree create/move/rename/disable/enable/correct/rescind 集成测试
-5. [ ] SetID 基于 `org_node_key` 的解析集成测试
-6. [ ] SetID strategy registry schema cutover 测试：
+5. [ ] SetID 基于 `org_node_key` 的解析集成测试【历史样本 / 现行 owner 见 `DEV-PLAN-440`】
+6. [ ] SetID strategy registry schema cutover 测试【历史样本；registry 主链已由 `DEV-PLAN-450` 删除】：
    - 表升级迁移测试
    - 非法 `business_unit_id` 存量 stopline 测试
    - `business_unit_node_key` upsert / disable / list / resolve 查询测试
-7. [X] Staffing 引用 `org_node_key` 的联动测试
+7. [X] Staffing 引用 `org_node_key` 的联动测试【历史样本】
 8. [X] Assistant / internal API 不暴露 `org_id` / `org_node_key` 的响应契约测试
 9. [ ] 当前态导出 / 导入 / 结构核对测试
 10. [ ] 路由、lint、DDD layering、No Legacy 与相关反回流门禁测试
-11. [X] `DEV-PLAN-060` 对应全链路业务测试套件同步更新，至少覆盖 Org / SetID / Staffing / Assistant 一条用户可见、仅暴露 `org_code` 的端到端主链路
+11. [X] `DEV-PLAN-060` 对应全链路业务测试套件同步更新；其中 Org / SetID / Staffing / Assistant 主链样本当前主要保留为历史测试合同与切换证据
 
 ### 11.3 与 DEV-PLAN-012 四大 Gate 的对齐
 
 - Gate-1 `Code Quality & Formatting`：承载文档更新、No Legacy、DDD layering、错误提示、反回流脚本与生成物一致性检查。
-- Gate-2 `Unit & Integration Tests`：承载 `org_node_key` 编解码、当前态导入核对、Org/SetID/Staffing/Assistant 集成测试与 100% coverage 单主源执行。
+- Gate-2 `Unit & Integration Tests`：承载 `org_node_key` 编解码、当前态导入核对、Org/Assistant 集成测试，以及历史实施期 SetID/Staffing 样本的留档验证。
 - Gate-3 `Routing Gates`：承载路由 allowlist / 分类 / responder 契约收敛，确保对外不再接受或回写 `org_id` / `org_node_key`。
-- Gate-4 `E2E Tests`：承载 `DEV-PLAN-060` 同步后的用户可见主链路验证，确认外部入口只使用 `org_code`，且切换后主路径可操作。
+- Gate-4 `E2E Tests`：承载 `DEV-PLAN-060` 同步后的用户可见主链路验证，确认外部入口只使用 `org_code`，且切换后主路径可操作；SetID/Staffing 样本当前仅保留 archive 历史合同意义。
 
 ## 12. 验收标准
 
@@ -1050,7 +1052,7 @@ Org 域新边界规则：
 3. [ ] `internal/server` 与对外响应不再暴露 `org_id`
 4. [ ] `org_node_key` 也未暴露到任何外部协议、前端状态或 Assistant 回包中
 5. [ ] 旧 Org 历史数据已按计划丢弃，切换后仅保留当前态重建出的新账本
-6. [X] Org 主链路、SetID、Staffing、Assistant 回归通过
+6. [X] Org 主链路、SetID、Staffing、Assistant 历史样本回归已留档通过
 7. [ ] `orgunit.setid_strategy_registry` 已完成 schema SoT 收口：目标库中只存在 `business_unit_node_key`，不存在 `business_unit_id` 旧列
 8. [ ] 无 legacy 双轨、无 fallback、无兼容别名窗口
 9. [ ] 边界保持收敛：320 只影响 Org 及其他模块中的 Org 引用面，未把 `*_node_key` 扩大到 Person / Position / Assignment / JobCatalog 等非 Org 对象

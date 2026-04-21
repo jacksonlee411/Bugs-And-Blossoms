@@ -138,6 +138,6 @@
 - `docs/dev-plans/105b-dict-code-management-and-governance.md`
 - `docs/dev-plans/106a-org-ext-fields-dict-as-field-key-and-custom-label.md`
 - `docs/archive/dev-plans/165-field-configs-and-strategy-capability-key-alignment-and-page-positioning.md`
-- `docs/dev-plans/182-bu-policy-baseline-and-intent-override-unification.md`
+- `docs/archive/dev-plans/182-bu-policy-baseline-and-intent-override-unification.md`
 - `docs/dev-plans/184-field-metadata-and-runtime-policy-sot-convergence.md`
 - `docs/archive/dev-plans/191-setid-governance-navigation-and-layout-optimization.md`

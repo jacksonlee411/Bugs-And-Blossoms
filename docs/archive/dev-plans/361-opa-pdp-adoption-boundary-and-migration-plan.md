@@ -223,7 +223,7 @@
 
 ## 12. 关联事实源
 
-1. [X] `docs/dev-plans/330-strategy-module-architecture-and-design-convergence-plan.md`
+1. [X] `docs/archive/dev-plans/330-strategy-module-architecture-and-design-convergence-plan.md`
 2. [X] `docs/dev-plans/340-assistant-orgunit-duplicate-maintenance-investigation-and-convergence-plan.md`
 3. [X] `docs/dev-plans/341-assistant-mainline-evolution-and-340-350-correlation-investigation.md`
 4. [X] `docs/dev-plans/350-assistant-tooling-alignment-with-unified-policy-model-plan.md`

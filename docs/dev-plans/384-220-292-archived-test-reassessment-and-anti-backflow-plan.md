@@ -25,7 +25,7 @@
   - `docs/dev-plans/060-business-e2e-test-suite.md`
   - `docs/dev-plans/064a-test-tp060-05-assistant-conversation-intent-and-tasks.md`
   - `docs/dev-plans/300-test-system-investigation-report.md`
-  - `docs/dev-plans/301-go-test-layering-and-best-practices-remediation-plan.md`
+  - `docs/archive/dev-plans/301-go-test-layering-and-best-practices-remediation-plan.md`
   - `docs/archive/dev-plans/380-cubebox-first-party-ownership-and-librechat-retirement-plan.md`
   - `docs/archive/dev-plans/380c-cubebox-api-dto-convergence-and-assistant-retirement-plan.md`
   - `docs/archive/dev-plans/380e-cubebox-apps-web-frontend-convergence-plan.md`
@@ -306,7 +306,7 @@
 3. `docs/dev-plans/060-business-e2e-test-suite.md`
 4. `docs/dev-plans/064a-test-tp060-05-assistant-conversation-intent-and-tasks.md`
 5. `docs/dev-plans/300-test-system-investigation-report.md`
-6. `docs/dev-plans/301-go-test-layering-and-best-practices-remediation-plan.md`
+6. `docs/archive/dev-plans/301-go-test-layering-and-best-practices-remediation-plan.md`
 7. `docs/archive/dev-plans/380-cubebox-first-party-ownership-and-librechat-retirement-plan.md`
 8. `docs/archive/dev-plans/380c-cubebox-api-dto-convergence-and-assistant-retirement-plan.md`
 9. `docs/archive/dev-plans/380e-cubebox-apps-web-frontend-convergence-plan.md`

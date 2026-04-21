@@ -184,4 +184,4 @@
 - 路由治理：`docs/dev-plans/017-routing-strategy.md`
 - i18n（en/zh）：`docs/dev-plans/020-i18n-en-zh-only.md`
 - 文档治理：`docs/dev-plans/013-docs-creation-and-governance-guide.md`
-- 总体实施路线：`docs/dev-plans/009-implementation-roadmap.md`
+- 总体实施路线（历史来源）：`docs/archive/dev-plans/009-implementation-roadmap.md`

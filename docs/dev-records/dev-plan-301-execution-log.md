@@ -6,7 +6,7 @@
 
 1. [X] 本执行日志记录的首轮实施批次仍保持完成态。
 2. [X] 但恢复后的当前代码树里，`internal/server` 仍残留 `28` 个 `gap/coverage` 测试文件，其中 `18` 个在本日志或 `301` 主计划中曾被表述为“已收口”。
-3. [X] 这批残留项不再回灌到 `301`，统一转由 `DEV-PLAN-302` 继续承接：`docs/dev-plans/302-internal-server-residual-gap-coverage-closure-plan.md`
+3. [X] 这批残留项不再回灌到 `301`，统一转由 `DEV-PLAN-302` 继续承接：`docs/archive/dev-plans/302-internal-server-residual-gap-coverage-closure-plan.md`
 
 ## 1. 执行范围（与 301 对齐）
 

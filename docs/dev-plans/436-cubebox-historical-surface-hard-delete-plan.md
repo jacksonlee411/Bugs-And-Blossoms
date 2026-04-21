@@ -7,7 +7,7 @@
 - **评审分级**：`T3`
 - **范围一句话**：以 `DEV-PLAN-430` 为唯一新主线，在新 CubeBox（丘宝）实现开始前，物理删除仓内所有历史 `assistant` / LibreChat / 旧对话运行面及其 compat window / retired semantics / 对应测试 / 生成物 / 静态资产 / DB 对象 / CI 门禁 / 文档活体引用；`cubebox` 一词仅允许作为 `430-436` 新主线规划命名存在，不再允许承载旧运行时实现或退役兼容语义。
 - **关联模块/目录**：`AGENTS.md`、`docs/dev-plans`、`docs/dev-records`、`internal/server`、`modules/cubebox`、`apps/web`、`config/**`、`migrations/**`、`scripts/**`、`third_party/**`、`deploy/**`、`e2e/**`
-- **关联计划/标准**：`AGENTS.md`、`docs/dev-plans/000-docs-format.md`、`docs/dev-plans/012-ci-quality-gates.md`、`docs/dev-plans/301-go-test-layering-and-best-practices-remediation-plan.md`、`docs/dev-plans/430-cubebox-ide-conversation-assistant-rebuild-architecture-plan.md`、`docs/dev-plans/431-codex-ui-protocol-and-shell-reuse-plan.md`、`docs/dev-plans/432-codex-session-persistence-reuse-plan.md`、`docs/dev-plans/433-bifrost-centric-ai-gateway-reuse-and-reconstruction-plan.md`、`docs/dev-plans/434-codex-context-management-and-compaction-reuse-plan.md`、`docs/dev-plans/435-bifrost-centric-model-config-ui-and-admin-governance-plan.md`
+- **关联计划/标准**：`AGENTS.md`、`docs/dev-plans/000-docs-format.md`、`docs/dev-plans/012-ci-quality-gates.md`、`docs/archive/dev-plans/301-go-test-layering-and-best-practices-remediation-plan.md`、`docs/dev-plans/430-cubebox-ide-conversation-assistant-rebuild-architecture-plan.md`、`docs/dev-plans/431-codex-ui-protocol-and-shell-reuse-plan.md`、`docs/dev-plans/432-codex-session-persistence-reuse-plan.md`、`docs/dev-plans/433-bifrost-centric-ai-gateway-reuse-and-reconstruction-plan.md`、`docs/dev-plans/434-codex-context-management-and-compaction-reuse-plan.md`、`docs/dev-plans/435-bifrost-centric-model-config-ui-and-admin-governance-plan.md`
 - **用户入口/触点**：无直接用户功能交付；本计划交付的是“清空旧面对话面残留，给 `430-435` 新实现提供零历史耦合基线”。
 
 ### 0.1 Simple > Easy 三问
@@ -86,7 +86,7 @@
   - `AGENTS.md`
   - `docs/dev-plans/000-docs-format.md`
   - `docs/dev-plans/012-ci-quality-gates.md`
-  - `docs/dev-plans/301-go-test-layering-and-best-practices-remediation-plan.md`
+  - `docs/archive/dev-plans/301-go-test-layering-and-best-practices-remediation-plan.md`
   - `docs/dev-plans/430-cubebox-ide-conversation-assistant-rebuild-architecture-plan.md`
   - `Makefile`
   - `.github/workflows/quality-gates.yml`

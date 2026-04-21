@@ -4,7 +4,7 @@
 
 本文件是仓库内“如何开发/如何验证/如何组织文档与规则”的**主干入口**。优先阅读本文件，并通过链接跳转到其他专题文档；避免在多个文档里复制同一套规则，减少漂移。
 
-本仓库为 Greenfield 的 **implementation repo**（仓库名：`Bugs-And-Blossoms`）。执行顺序与并行策略以 `docs/dev-plans/009-implementation-roadmap.md` 为准；`docs/dev-plans/` 为契约文档 SSOT（同时通过 `docs/dev-plans` 入口可达），P0-Ready 的证据记录在 `docs/dev-records/`。
+本仓库为 Greenfield 的 **implementation repo**（仓库名：`Bugs-And-Blossoms`）。Greenfield 早期执行顺序与并行策略历史来源见 `docs/archive/dev-plans/009-implementation-roadmap.md`；当前现行 owner 以 `docs/dev-plans/440-complete-setid-removal-plan.md`、`docs/dev-plans/450-direct-removal-of-jobcatalog-staffing-person-modules-plan.md` 及其他活体 dev-plan 为准。`docs/dev-plans/` 为契约文档 SSOT（同时通过 `docs/dev-plans` 入口可达），P0-Ready 的证据记录在 `docs/dev-records/`。
 
 ## 0. TL;DR（最常见变更要跑什么）
 
@@ -36,7 +36,7 @@
 
 - 规则入口：`AGENTS.md`
 - 计划/规范文档：`docs/dev-plans/`
-- 实施路线图：`docs/dev-plans/009-implementation-roadmap.md`
+- 实施路线图【归档 / 历史来源】：`docs/archive/dev-plans/009-implementation-roadmap.md`
 - Readiness 证据记录：`docs/dev-records/`
 
 ## 2. 变更触发器矩阵（与 CI 对齐）
@@ -124,10 +124,10 @@
 
 ### 3.10 测试设计原则（DEV-PLAN-300/301）
 
-- 测试设计与新增测试文件前，必须先对齐 `docs/dev-plans/300-test-system-investigation-report.md` 与 `docs/dev-plans/301-go-test-layering-and-best-practices-remediation-plan.md`；它们是本仓测试问题基线与分层整改口径的事实源。
+- 测试设计与新增测试文件前，必须先对齐 `docs/dev-plans/300-test-system-investigation-report.md` 与 `docs/archive/dev-plans/301-go-test-layering-and-best-practices-remediation-plan.md`；其中 `300` 是测试问题基线，`301` 作为首轮分层整改历史方案来源。
 - 严禁继续以 `*_coverage_test.go`、`*_gap_test.go`、`*_more_test.go`、`*_extra_test.go` 一类“补洞式”命名追加同质测试；新增测试应围绕稳定职责、明确场景与子测试组织，而不是围绕 coverage 缺口堆文件。
 - 优先补“最小而稳定”的直接测试：纯函数、解析/归一化链路、错误映射、默认值策略、边界日期/空值/非法输入；先把职责拆小、把逻辑做纯，再补测试，不要把复杂装配硬塞进测试里。
-- Go 测试分层遵循 `DEV-PLAN-301`：`pkg/**` 优先承载纯函数与工具层边界测试，`modules/*/services` 优先承载业务规则与默认值策略测试，`internal/server` 只保留路由、协议解析、错误映射、租户/鉴权/RLS 适配与跨模块编排测试。
+- Go 测试分层遵循 `DEV-PLAN-301` 的历史收敛口径：`pkg/**` 优先承载纯函数与工具层边界测试，`modules/*/services` 优先承载业务规则与默认值策略测试，`internal/server` 只保留路由、协议解析、错误映射、租户/鉴权/RLS 适配与跨模块编排测试。
 - 对导出边界、纯函数、解析器、validator，优先考虑黑盒测试（`package xxx_test`）；只有在验证未导出不变量或明确内部状态推进时，才保留白盒测试，并需能说明理由。
 - 并行、`t.Setenv`、fuzz、benchmark 的使用必须遵循 `DEV-PLAN-300/301` 引用的 Go 官方实践：仅在隔离成立时启用并行；修改环境变量或全局状态的测试不得与 parallel 混用；对开放输入空间的解析/归一化路径优先评估 fuzz；仅对热点纯函数补 benchmark。
 - 前端测试同样遵循“职责下沉、最小边界、避免补洞式堆叠”的原则：优先测试可提纯的小函数、小状态机、小转换器；仅在纯函数无法覆盖关键用户行为时，再增加页面级交互测试。
@@ -169,7 +169,7 @@ modules/{module}/
 - 主线原则：以 `origin/main` 为唯一主线；所有 worktree 分支都应以 `origin/main` 为基线并定期同步，避免把 `origin/wt-dev-*` 当作集成主线。
 - 合并建议：固定 worktree 分支（`wt-dev-*`）向 `origin/main` 合并时优先使用 **merge commit**（GitHub: Create a merge commit），以便后续能通过快进/常规 merge 顺滑同步；`squash`/`rebase` 仅适用于“短生命周期分支”（本仓库日常已禁止创建临时分支），避免出现“内容已进 main 但 hash 不同”的残留分叉。
 - P0 前置条件实施方案（契约优先）：`docs/dev-plans/010-p0-prerequisites-contract.md`
-- 路线图（执行顺序/并行）：`docs/dev-plans/009-implementation-roadmap.md`
+- 路线图（执行顺序/并行，归档历史来源）：`docs/archive/dev-plans/009-implementation-roadmap.md`
 - 版本与工具链基线：`docs/dev-plans/011-tech-stack-and-toolchain-versions.md`
 - Atlas + Goose（模块级闭环）：`docs/dev-plans/024-atlas-goose-closed-loop-guide.md`
 - sqlc（规范与门禁）：`docs/dev-plans/025-sqlc-guidelines.md`
@@ -329,7 +329,7 @@ modules/{module}/
 - DEV-PLAN-170B：Org 详情页移除顶部上下文区与 URL 恢复定位替代方案（170A 纠偏计划）：`docs/dev-plans/170b-org-details-remove-top-context-and-url-restore-positioning.md`
 - DEV-PLAN-180：项目颗粒度层次统一与治理（Field/Form/Module/SetID/Tenant/Server）：`docs/dev-plans/180-granularity-hierarchy-governance-and-unification.md`
 - DEV-PLAN-181【归档 / 历史来源】：OrgUnit Details 三类表单到 Capability Key 映射落地（Capability 主链历史方案；现行删除 owner 见 `DEV-PLAN-450`）：`docs/archive/dev-plans/181-orgunit-details-form-capability-mapping-implementation.md`
-- DEV-PLAN-182：BU 策略“全 CRUD 默认生效”与场景覆盖收敛方案：`docs/dev-plans/182-bu-policy-baseline-and-intent-override-unification.md`
+- DEV-PLAN-182【归档 / 历史来源】：BU 策略“全 CRUD 默认生效”与场景覆盖收敛方案（Capability/SetID 主链历史方案；现行删除 owner 见 `DEV-PLAN-450`）：`docs/archive/dev-plans/182-bu-policy-baseline-and-intent-override-unification.md`
 - DEV-PLAN-183【归档 / 历史来源】：Capability Key 配置可发现性与对象/意图显式建模方案（Capability 主链历史方案；现行删除 owner 见 `DEV-PLAN-450`）：`docs/archive/dev-plans/183-capability-key-object-intent-discoverability-and-modeling.md`
 - DEV-PLAN-184：字段配置与策略规则双层 SoT 收敛方案（Static Metadata vs Dynamic Policy）：`docs/dev-plans/184-field-metadata-and-runtime-policy-sot-convergence.md`
 - DEV-PLAN-185【归档 / 历史来源】：字段配置页字典值列表 SetID 列展示与主数据取数控制策略收敛：`docs/archive/dev-plans/185-field-config-dict-values-setid-column-and-master-data-fetch-control.md`
@@ -349,17 +349,17 @@ modules/{module}/
 - DEV-PLAN-212【归档 / 历史来源】：200蓝图 Phase 6 评测门禁与触发式 Temporal 平台化验收：`docs/archive/dev-plans/212-blueprint-eval-gates-and-triggered-temporal-productionization.md`
 - Assistant / LibreChat / 旧 CubeBox `220-383` 系列与 `380A-380G` 子计划：已完成历史归档治理并迁入 `docs/archive/dev-plans/`；相关执行记录已按落地情况迁入 `docs/archive/dev-records/`。这些文档仅保留为历史证据，不再作为现行实现前提、编排入口或完成定义；当前对话助手重做主线请改看 `DEV-PLAN-430`、`DEV-PLAN-431`、`DEV-PLAN-431A`、`DEV-PLAN-432`、`DEV-PLAN-433`、`DEV-PLAN-434`、`DEV-PLAN-435`。
 - DEV-PLAN-300：全仓测试体系问题调查记录：`docs/dev-plans/300-test-system-investigation-report.md`
-- DEV-PLAN-301：Go 测试分层整治与官方最佳实践落地方案：`docs/dev-plans/301-go-test-layering-and-best-practices-remediation-plan.md`
-- DEV-PLAN-302：`internal/server` 残留 `gap/coverage` 测试文件收口计划：`docs/dev-plans/302-internal-server-residual-gap-coverage-closure-plan.md`
-- DEV-PLAN-330：策略模块架构混乱调查与收口方案（历史架构调查入口；现行残余清理以 `DEV-PLAN-441` 为准）：`docs/dev-plans/330-strategy-module-architecture-and-design-convergence-plan.md`
+- DEV-PLAN-301【归档 / 历史来源】：Go 测试分层整治与官方最佳实践落地方案（首轮分层整改历史方案）：`docs/archive/dev-plans/301-go-test-layering-and-best-practices-remediation-plan.md`
+- DEV-PLAN-302【归档 / 历史来源】：`internal/server` 残留 `gap/coverage` 测试文件收口计划（首轮尾项清零历史方案）：`docs/archive/dev-plans/302-internal-server-residual-gap-coverage-closure-plan.md`
+- DEV-PLAN-330【归档 / 历史来源】：策略模块架构混乱调查与收口方案（旧策略模块历史架构调查入口；现行残余清理以 `DEV-PLAN-441`、SetID 根删除以 `DEV-PLAN-440`、三模块/Capability 主链删除以 `DEV-PLAN-450` 为准）：`docs/archive/dev-plans/330-strategy-module-architecture-and-design-convergence-plan.md`
 - DEV-PLAN-303：全仓残留 `gap/coverage` 测试尾项清零计划：`docs/dev-plans/303-repo-final-gap-coverage-test-tail-closure-plan.md`
 - DEV-PLAN-310：全项目 view/as_of 时间语义专项检视与最小收敛方案：`docs/dev-plans/310-project-wide-view-as-of-semantics-review-and-minimal-convergence-plan.md`
-- DEV-PLAN-311：View As Of 页面改造矩阵与 OrgUnitDetails 样板实施计划：`docs/dev-plans/311-view-as-of-page-cutover-matrix-and-orgunit-details-sample-plan.md`
+- DEV-PLAN-311【归档 / 历史来源】：View As Of 页面改造矩阵与 OrgUnitDetails 样板实施计划（含已删除页面的历史矩阵；现行页面边界以当前活体模块为准）：`docs/archive/dev-plans/311-view-as-of-page-cutover-matrix-and-orgunit-details-sample-plan.md`
 - DEV-PLAN-312：View As Of 收口实施计划——详情页单历史锚点与 A 类页面读写解耦：`docs/dev-plans/312-view-as-of-implementation-plan-details-single-history-anchor-and-a-pages-read-write-decoupling.md`
-- DEV-PLAN-313：View As Of 后端并行收口计划——显式日期契约、无 fallback、统一错误语义：`docs/dev-plans/313-view-as-of-backend-parallel-convergence-plan-explicit-date-contract-and-no-fallback.md`
+- DEV-PLAN-313【归档 / 历史来源】：View As Of 后端并行收口计划——显式日期契约、无 fallback、统一错误语义（含已删除接口的历史收口记录）：`docs/archive/dev-plans/313-view-as-of-backend-parallel-convergence-plan-explicit-date-contract-and-no-fallback.md`
 - DEV-PLAN-314【归档 / 历史来源】：View As Of P1 页面批量收口计划——Assignments / Positions / JobCatalog / DictConfigs：`docs/archive/dev-plans/314-view-as-of-p1-pages-batch-cutover-plan-assignments-positions-jobcatalog-dicts.md`
 - DEV-PLAN-315：View As Of 最小 helper 与反回流门禁计划：`docs/dev-plans/315-view-as-of-minimal-helper-and-anti-regression-gates-plan.md`
-- DEV-PLAN-316：View As Of 工具态页面收口计划——Explain / Release / Governance 子区统一任务态时间语义：`docs/dev-plans/316-view-as-of-tooling-pages-convergence-plan.md`
+- DEV-PLAN-316【归档 / 历史来源】：View As Of 工具态页面收口计划——Explain / Release / Governance 子区统一任务态时间语义（含已删除页面/工具区的历史收口记录）：`docs/archive/dev-plans/316-view-as-of-tooling-pages-convergence-plan.md`
 - DEV-PLAN-317：View As Of 页面时间语义回归与验收计划：`docs/dev-plans/317-view-as-of-regression-and-acceptance-plan.md`
 - DEV-PLAN-320：Org 域 8 位非纯数字 `org_node_key` 一步切换方案（不扩大到全对象）：`docs/dev-plans/320-org-node-key-cutover-plan-no-global-expansion.md`
 - DEV-PLAN-102【归档】：全项目 as_of 时间上下文收敛与批判（承接 DEV-PLAN-076，现行口径以 `DEV-PLAN-102B`/`STD-002` 为准）：`docs/archive/dev-plans/102-as-of-time-context-convergence-and-critique.md`
@@ -446,4 +446,4 @@ modules/{module}/
 - DEV-PLAN-009M4【归档】：Phase 2 下一大型里程碑执行计划（SuperAdmin 控制面 + Tenant Console MVP）：`docs/archive/dev-plans/009m4-phase2-superadmin-tenant-console-execution-plan.md`
 - DEV-PLAN-009M5【归档】：Phase 2 下一大型里程碑执行计划（AuthN 真实化：Kratos + 本地会话 sid/sa_sid）：`docs/archive/dev-plans/009m5-phase2-authn-kratos-sessions-execution-plan.md`
 - DEV-PLAN-009M6【归档】：Phase 1 追加里程碑执行计划（历史：补齐 DEV-PLAN-018 Phase 0，已由 DEV-PLAN-103 收口）：`docs/archive/dev-plans/009m6-phase1-astro-build-phase0-execution-plan.md`
-- Greenfield 全新实施路线图（009-031）：`docs/dev-plans/009-implementation-roadmap.md`
+- Greenfield 全新实施路线图（009-031，归档历史来源）：`docs/archive/dev-plans/009-implementation-roadmap.md`

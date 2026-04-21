@@ -1,6 +1,6 @@
 # DEV-PLAN-316：View As Of 工具态页面收口计划——Explain / Release / Governance 子区统一任务态时间语义
 
-**状态**: 已完成（2026-04-09 CST）
+**状态**: 已归档（历史来源；原状态：已完成，2026-04-09 CST）
 
 ## 背景
 
@@ -270,9 +270,9 @@
 
 ## 关联文档
 
-- `docs/dev-plans/311-view-as-of-page-cutover-matrix-and-orgunit-details-sample-plan.md`
+- `docs/archive/dev-plans/311-view-as-of-page-cutover-matrix-and-orgunit-details-sample-plan.md`
 - `docs/archive/dev-plans/314-view-as-of-p1-pages-batch-cutover-plan-assignments-positions-jobcatalog-dicts.md`
 - `docs/dev-plans/315-view-as-of-minimal-helper-and-anti-regression-gates-plan.md`
 - `docs/dev-plans/300-test-system-investigation-report.md`
-- `docs/dev-plans/301-go-test-layering-and-best-practices-remediation-plan.md`
+- `docs/archive/dev-plans/301-go-test-layering-and-best-practices-remediation-plan.md`
 - `AGENTS.md`

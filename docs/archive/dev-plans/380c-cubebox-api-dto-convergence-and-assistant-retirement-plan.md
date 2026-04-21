@@ -64,8 +64,8 @@
 - **执行入口（SSOT）**:
   - 触发器矩阵与仓库红线：`AGENTS.md`
   - 文档格式：`docs/dev-plans/000-docs-format.md`
-  - Go 测试分层与最佳实践：`docs/dev-plans/301-go-test-layering-and-best-practices-remediation-plan.md`
-  - 统一策略模型与唯一 PDP：`docs/dev-plans/330-strategy-module-architecture-and-design-convergence-plan.md`
+  - Go 测试分层与最佳实践：`docs/archive/dev-plans/301-go-test-layering-and-best-practices-remediation-plan.md`
+  - 统一策略模型与唯一 PDP：`docs/archive/dev-plans/330-strategy-module-architecture-and-design-convergence-plan.md`
   - 路由治理：`docs/dev-plans/017-routing-strategy.md`
   - Authz 工具链：`docs/dev-plans/022-authz-casbin-toolchain.md`
   - capability-route-map：`docs/archive/dev-plans/156-capability-key-m3-m9-route-capability-mapping-and-gates.md`

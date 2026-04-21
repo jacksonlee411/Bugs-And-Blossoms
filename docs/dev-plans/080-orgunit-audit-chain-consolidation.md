@@ -332,6 +332,6 @@ CREATE INDEX IF NOT EXISTS org_events_tenant_tx_time_idx
 
 ## 关联与引用
 - 模板：`docs/dev-plans/001-technical-design-template.md`
-- 路线图：`docs/dev-plans/009-implementation-roadmap.md`
+- 路线图（历史来源）：`docs/archive/dev-plans/009-implementation-roadmap.md`
 - 前置背景：`docs/dev-plans/078-orgunit-write-model-alternatives-comparison-and-decision.md`
 - 质量门禁与触发器：`AGENTS.md`

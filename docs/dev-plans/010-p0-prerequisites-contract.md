@@ -7,7 +7,7 @@
 
 ## 1. 背景与上下文 (Context)
 
-- **需求来源**：`docs/dev-plans/009-implementation-roadmap.md`（Phase 0/1 的前置条件收口）。
+- **需求来源**：`docs/archive/dev-plans/009-implementation-roadmap.md`（Phase 0/1 的前置条件收口；历史路线图来源）。
 - **当前痛点**：Greenfield 从 0 开始最容易出现“先写代码再补规约/门禁”的漂移：版本不可复现、迁移/生成物口径各写一套、路由/授权边界随人演化，最终产出大量不可见的“僵尸功能”。
 - **业务价值**：把 P0 之前必须具备的契约（SSOT/门禁/壳/最小登录/迁移闭环）提前固化，使后续 `DEV-PLAN-011`～`DEV-PLAN-031` 的实施只是在“既定轨道”上累积业务能力，而非重复发明基础设施。
 
@@ -54,7 +54,7 @@
 
 - **SSOT 链接（本仓库路径）**：
   - 规则入口：`AGENTS.md`
-  - 路线图：`docs/dev-plans/009-implementation-roadmap.md`
+  - 路线图：`docs/archive/dev-plans/009-implementation-roadmap.md`
   - 版本基线：`docs/dev-plans/011-tech-stack-and-toolchain-versions.md`
   - 路由契约：`docs/dev-plans/017-routing-strategy.md`
   - CI 门禁：`docs/dev-plans/012-ci-quality-gates.md`
@@ -271,7 +271,7 @@ job(required_check):
 ## 13. 参考（本仓库路径）
 
 - `docs/dev-plans/001-technical-design-template.md`
-- `docs/dev-plans/009-implementation-roadmap.md`
+- `docs/archive/dev-plans/009-implementation-roadmap.md`
 - `docs/dev-plans/011-tech-stack-and-toolchain-versions.md`
 - `docs/dev-plans/015-ddd-layering-framework.md`
 - `docs/archive/dev-plans/016-greenfield-hr-modules-skeleton.md`
@@ -298,7 +298,7 @@ job(required_check):
 
 ### 认知（本质/偶然复杂度）
 - 通过：复杂度直接服务于不变量（no skipped、fail-closed、routing/authn/rls 边界、用户可见性），未引入历史兼容负担。
-- 警告：E2E/生成物门禁在早期容易被“先 no-op”滥用；需在 Readiness 里记录何时从 no-op 升级为真实执行的里程碑（与 `DEV-PLAN-009` 路线图同步）。
+- 警告：E2E/生成物门禁在早期容易被“先 no-op”滥用；需在 Readiness 里记录何时从 no-op 升级为真实执行的里程碑（与 `DEV-PLAN-009` 历史路线图口径同步）。
 
 ### 维护（可理解/可解释）
 - 通过：具备可解释叙事（Mermaid + CI 伪代码 + 关键路径），reviewer 可在 5 分钟内复述“为什么这样做”。

@@ -119,7 +119,7 @@ rg -n "staffing.assignment_create.field_policy|ObjectOrgSetIDCapability|capabili
 ## 6. 交付物
 
 1. [X] 主计划补充 PR 映射与 PR-1 已交付清单：
-   [330-strategy-module-architecture-and-design-convergence-plan.md](/home/lee/Projects/Bugs-And-Blossoms/docs/dev-plans/330-strategy-module-architecture-and-design-convergence-plan.md)
+   [330-strategy-module-architecture-and-design-convergence-plan.md](/home/lee/Projects/Bugs-And-Blossoms/docs/archive/dev-plans/330-strategy-module-architecture-and-design-convergence-plan.md)
 2. [X] 本审计记录：
    [dev-plan-330-pr1-audit-and-contract-freeze-log.md](/home/lee/Projects/Bugs-And-Blossoms/docs/dev-records/dev-plan-330-pr1-audit-and-contract-freeze-log.md)
 3. [X] 仓库级文档地图新增索引：

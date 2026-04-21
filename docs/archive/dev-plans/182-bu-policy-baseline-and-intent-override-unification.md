@@ -1,6 +1,6 @@
 # DEV-PLAN-182：BU 策略“全 CRUD 默认生效”与场景覆盖收敛方案
 
-**状态**: 执行中（2026-02-26 14:06 UTC，后端与门禁已验收，UI 验收待补）
+**状态**: 已归档（历史来源；原状态：执行中，2026-02-26 14:06 UTC，后端与门禁已验收，UI 验收待补；现行 owner 见 `DEV-PLAN-450`）
 
 ## 1. 背景
 当前 OrgUnit 策略按意图拆分为多条 capability（`create/add/insert/correct`）。  

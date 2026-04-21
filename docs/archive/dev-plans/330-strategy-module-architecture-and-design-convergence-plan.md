@@ -1,6 +1,6 @@
 # DEV-PLAN-330：策略模块架构混乱调查与收口方案
 
-**状态**: 已完成（2026-04-11，`PR-1 ~ PR-6` 已完成并封板）
+**状态**: 已归档（历史来源；原状态：已完成，2026-04-11，`PR-1 ~ PR-6` 已完成并封板；现行残余清理以 `DEV-PLAN-441`、SetID 根删除以 `DEV-PLAN-440`、三模块/Capability 主链删除以 `DEV-PLAN-450` 为准）
 
 ## 1. 背景
 
@@ -847,7 +847,7 @@
 
 1. `docs/archive/dev-plans/102c2-bu-personalization-strategy-registry.md`
 2. `docs/archive/dev-plans/165-field-configs-and-strategy-capability-key-alignment-and-page-positioning.md`
-3. `docs/dev-plans/182-bu-policy-baseline-and-intent-override-unification.md`
+3. `docs/archive/dev-plans/182-bu-policy-baseline-and-intent-override-unification.md`
 4. `docs/dev-plans/184-field-metadata-and-runtime-policy-sot-convergence.md`
 5. `docs/archive/dev-plans/202-blueprint-policy-resolution-and-allowed-values-determinism.md`
 6. `docs/dev-plans/100e1-orgunit-mutation-policy-and-ext-corrections-prereq.md`

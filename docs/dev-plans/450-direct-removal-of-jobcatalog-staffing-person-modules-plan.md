@@ -1,14 +1,24 @@
 # DEV-PLAN-450：直接切除 jobcatalog / staffing / person 三模块方案（保留 orgunit）
 
-**状态**: 规划中（2026-04-20 16:18 CST）
+**状态**: 已关闭（2026-04-21 CST）
+
+> 关闭说明（2026-04-21）：`DEV-PLAN-450` 的 owner 范围已完成收口。当前仓库中，`jobcatalog` / `staffing` / `person` 三模块、其运行时装配、对应 schema/migration/sqlc 输入、主要 capability / functional_area 治理主链及现行文档主线入口均已退出当前执行面；现行剩余治理面分别由活体 `orgunit` 文档与 `DEV-PLAN-440`、`DEV-PLAN-441` 承接。本文自关闭日起转为“删除方案与历史收口记录”，下文未勾选的实施/验收清单仅保留为历史冻结底稿，不再表示当前待办。
 
 ## 0. 适用范围与评审分级
 
 - **评审分级**：`T2`
 - **范围一句话**：以“直接切除、不可回退到 legacy、不可保留空壳兼容层”为原则，从当前 implementation repo 中整体删除 `jobcatalog`、`staffing`、`person` 三个业务模块及其用户入口、运行时装配、数据库 schema/migration、权限对象、测试资产与现行契约文档引用；同时删除 `DEV-PLAN-150/156` 引入并扩散出的 `capability_key / capability-route-map / capability catalog / policy activation / functional_area` 治理链及其门禁、配置、注册表与文档主线；`orgunit` 明确保留，作为删除后仍然存在的业务模块边界。
 - **关联模块/目录**：`modules/jobcatalog`、`modules/staffing`、`modules/person`、`modules/orgunit`、`internal/server`、`apps/web`、`internal/server/assets`、`config/routing`、`config/access`、`config/capability`、`internal/sqlc`、`migrations/jobcatalog`、`migrations/staffing`、`migrations/person`、`scripts/ci`、`Makefile`、`.github/workflows/quality-gates.yml`、`e2e/test-results`、`playwright-report`、`docs/dev-plans`、`docs/dev-records`、`AGENTS.md`
-- **关联计划/标准**：`AGENTS.md`、`docs/dev-plans/000-docs-format.md`、`docs/dev-plans/003-simple-not-easy-review-guide.md`、`docs/dev-plans/012-ci-quality-gates.md`、`docs/dev-plans/015-ddd-layering-framework.md`、`docs/archive/dev-plans/016-greenfield-hr-modules-skeleton.md`、`docs/dev-plans/017-routing-strategy.md`、`docs/archive/dev-plans/021-pg-rls-for-org-position-job-catalog.md`、`docs/dev-plans/022-authz-casbin-toolchain.md`、`docs/dev-plans/024-atlas-goose-closed-loop-guide.md`、`docs/dev-plans/025-sqlc-guidelines.md`、`docs/dev-plans/301-go-test-layering-and-best-practices-remediation-plan.md`
+- **关联计划/标准**：`AGENTS.md`、`docs/dev-plans/000-docs-format.md`、`docs/dev-plans/003-simple-not-easy-review-guide.md`、`docs/dev-plans/012-ci-quality-gates.md`、`docs/dev-plans/015-ddd-layering-framework.md`、`docs/archive/dev-plans/016-greenfield-hr-modules-skeleton.md`、`docs/dev-plans/017-routing-strategy.md`、`docs/archive/dev-plans/021-pg-rls-for-org-position-job-catalog.md`、`docs/dev-plans/022-authz-casbin-toolchain.md`、`docs/dev-plans/024-atlas-goose-closed-loop-guide.md`、`docs/dev-plans/025-sqlc-guidelines.md`、`docs/archive/dev-plans/301-go-test-layering-and-best-practices-remediation-plan.md`
 - **用户入口/触点**：`/app/jobcatalog`、`/app/staffing/**`、`/app/person/**`、对应 `/org/api/**` 与 `/org/**` 页面路由、导航入口、权限点、E2E 场景、README/dev-plan 中的现行引用；`orgunit` 页面与 API 不在删除范围内
+
+### 0.0 关闭结论
+
+1. [X] `jobcatalog` / `staffing` / `person` 三模块已从当前仓库删除，不再构成现行模块边界。
+2. [X] `capability_key / capability-route-map / capability catalog / policy activation / functional_area` 主链已退出当前执行面；相关文档入口已转为 archive 或历史来源。
+3. [X] `AGENTS.md`、路线图/测试分层/DDD 收口等现行文档已改写为“历史来源”或归档入口，不再把三模块写成当前待办。
+4. [X] 当前与 `450` 直接相关的剩余文档面，已收敛为 archive、历史样板或由 `440/441` 承接的 owner 说明。
+5. [X] 本计划不再新增独立 `DEV-PLAN-450-READINESS`；关闭证据以现有文档归档、活体文档改写与 `docs/dev-records/DEV-PLAN-440-READINESS.md` 中对 `450` 完成状态的引用共同承接。
 
 ### 0.1 Simple > Easy 三问
 
@@ -245,6 +255,8 @@
 
 ## 5. 分阶段实施顺序
 
+> 历史说明：本节以下内容保留为实施前冻结顺序与 stopline 底稿，供后续审计“当时如何定义删除完成”使用；`DEV-PLAN-450` 关闭后，不再作为当前执行清单继续推进。
+
 ### 5.0 极速切除建议顺序
 
 > 目标不是“平滑迁移”，而是以最短路径把 `jobcatalog/staffing/person` 及其残留资产从仓库中剔除，同时避免误伤 `orgunit`。因此执行优先级应按“先删最容易形成拖尾的资产，再删入口，再删实现，再删底座，最后封板”推进。
@@ -335,6 +347,8 @@
 
 ## 6. 验收口径
 
+> 历史说明：本节保留为关闭前的原始验收口径。当前关闭判断以实际仓面、归档迁移结果、现行 owner 改写结果与门禁结果为准，而非继续逐项补勾本节条目。
+
 ### 6.1 搜索验收
 
 - 生产代码与配置使用精确 token 验收，不再使用宽泛 `person` 单词全仓阻断：
@@ -393,6 +407,6 @@
 
 ## 9. 交付物
 
-1. [ ] `docs/dev-plans/450-direct-removal-of-jobcatalog-staffing-person-modules-plan.md`
-2. [ ] `AGENTS.md` 文档地图入口更新
-3. [ ] 后续若进入实施，新增对应 `docs/dev-records/DEV-PLAN-450-READINESS.md`
+1. [X] `docs/dev-plans/450-direct-removal-of-jobcatalog-staffing-person-modules-plan.md` 已转为关闭态历史收口文档。
+2. [X] `AGENTS.md` 文档地图与现行 owner 说明已同步更新。
+3. [X] 本计划关闭证据由 archive 迁移、活体文档改写与 `docs/dev-records/DEV-PLAN-440-READINESS.md` 中对 `450` 完成状态的引用共同承接，不再单独新增 `DEV-PLAN-450-READINESS.md`。
