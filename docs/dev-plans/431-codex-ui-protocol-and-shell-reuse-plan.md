@@ -88,6 +88,24 @@ Codex 开源仓库中与 UI 层高度相关的成熟资产包括：
 | Plugin/marketplace | protocol v2 plugin/marketplace schemas | 不引入 |
 | TUI key handling | `tui/**` | 不引入 |
 
+## 4A. 上游映射表模板
+
+本计划的实现、PR 与 readiness 必须直接引用下表；未填完前不得开始 Slice 1-6 的实现。
+
+| 上游项目 | 上游 commit SHA | 上游制品类型 | 上游路径或对象名 | CubeBox 对应对象/切片 | 采用状态 | 不可直接复用原因 | 原因类型 | 必备验证 | PR 证据位置 | readiness 证据位置 |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `openai/codex` | `待补` | `协议` | `codex-rs/app-server-protocol/schema/json/v2/*.json` | `CubeBox UI event schema / Slice 1` | `待补` | `待补` | `待补` | `schema fixture + snapshot` | `待补` | `待补` |
+| `openai/codex` | `待补` | `文件` | `codex-rs/app-server-protocol/src/protocol/thread_history.rs` | `timeline reducer / Slice 2` | `待补` | `待补` | `待补` | `golden reducer fixture` | `待补` | `待补` |
+| `openai/codex` | `待补` | `文件` | `codex-rs/tui/src/markdown_stream.rs` | `streaming markdown 行为 / Slice 4` | `待补` | `待补` | `待补` | `streaming snapshot` | `待补` | `待补` |
+| `openai/codex` | `待补` | `文件` | `codex-rs/tui/src/slash_command.rs` | `composer 命令入口 / Slice 6` | `待补` | `待补` | `待补` | `command parser fixture` | `待补` | `待补` |
+| `openai/codex` | `待补` | `页面信息架构` | `codex-rs/tui/src/chatwidget/**`、`codex-rs/tui/src/bottom_pane/**` | `drawer/timeline/composer/status bar 信息架构 / Slice 3` | `待补` | `待补` | `待补` | `IA snapshot + E2E` | `待补` | `待补` |
+
+填写规则：
+
+- `采用状态` 只允许填写 `直接复用`、`重构复用`、`只借鉴语义`、`明确不引入`。
+- 若某行是 `只借鉴语义` 或 `明确不引入`，`不可直接复用原因` 必须写到仓库约束级别，例如 `前端单主链`、`MUI 渲染栈`、`非 terminal 环境`、`禁止 shell/file/patch`。
+- `必备验证` 至少要锁住协议形状、事件序列或 UI 行为之一；不能只写“页面能打开”。
+
 ## 5. CubeBox UI 架构
 
 ### 5.1 前端分层
@@ -163,6 +181,7 @@ CubeBox 前端必须有一个纯函数 reducer：
 - [ ] 确认 Apache-2.0 许可证、NOTICE 和复制要求。
 - [ ] 盘点 app-server-protocol v2 与 TUI 相关依赖闭包。
 - [ ] 输出“直接采纳协议 / 重构状态机 / 借鉴交互 / 不引入”清单。
+- [ ] 按本计划 `4A` 模板补齐文件级上游映射表，并为每个对象冻结采用状态与不可复用原因。
 - [ ] 冻结“具体复用制品”清单，至少明确：
   - `JSON schema` 是否直接消费
   - `TypeScript schema/types` 是否直接消费或生成
@@ -224,8 +243,10 @@ CubeBox 前端必须有一个纯函数 reducer：
 
 - [ ] UI event reducer 纯函数测试覆盖主要事件。
 - [ ] timeline snapshot 覆盖 user/agent/context/compact/error/interrupt/complete。
+- [ ] Codex `thread_history` 对照 fixture 已冻结，CubeBox reducer 输出与映射表中的上游行为一致。
 - [ ] 抽屉开关测试覆盖桌面、中等宽度、移动端。
 - [ ] SSE 流式渲染测试覆盖 delta 合并、完成态、错误态和中断态。
+- [ ] 协议 schema、delta 事件、slash command 和 IA snapshot 都有可回归的 golden/snapshot 证据。
 - [ ] 会话恢复测试覆盖关闭抽屉、刷新页面、重新读取 conversation。
 - [ ] 权限/租户变化测试覆盖 fail-closed。
 - [ ] `make check chat-surface-clean` 仍能阻断旧对话栈回流。
@@ -236,6 +257,8 @@ CubeBox 前端必须有一个纯函数 reducer：
 - 不得引入 terminal rendering、alternate screen、terminal key handling。
 - 不得引入 shell/file/patch/exec/plugin/marketplace 作为默认 UI 能力。
 - 不得在未评估 Codex app-server-protocol 前自定义平行 thread/turn/event 模型。
+- 不得在 `4A` 映射表缺失 `commit SHA`、文件级对象或采用状态时开始实现 reducer、schema 或 drawer 主链。
+- 不得只写“借鉴 Codex 交互”而不落到具体文件、协议或测试样例。
 - 不得为了右侧抽屉再新增第二套路由、第二套 store 或第二套聊天页面实现。
 - 不得把 Codex 账号、登录、ChatGPT plan、rate limit UI 作为本仓事实源。
 - 不得在前端保存 API Key 或敏感 prompt 上下文。

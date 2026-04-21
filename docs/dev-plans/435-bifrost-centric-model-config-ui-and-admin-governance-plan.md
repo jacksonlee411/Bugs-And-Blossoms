@@ -126,6 +126,24 @@
 | 审计与错误码 | 本仓自研 | 不外包给外部项目 |
 | i18n / E2E | 本仓自研 | 必须纳入仓库门禁 |
 
+## 5A. 上游映射表模板
+
+本计划必须把 Bifrost/One API/Codex 在管理面上的复用对象冻结成可审计制品；未填完前不得进入 Slice 5.1 之后的实现。
+
+| 上游项目 | 上游 commit SHA | 上游制品类型 | 上游路径或对象名 | CubeBox 对应对象/切片 | 采用状态 | 不可直接复用原因 | 原因类型 | 必备验证 | PR 证据位置 | readiness 证据位置 |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `maximhq/bifrost` | `待补` | `页面信息架构` | `provider config / route / fallback / health 相关页面或目录` | `provider/route/health 管理面 / Slice 5.2-5.5` | `待补` | `待补` | `待补` | `IA snapshot + E2E` | `待补` | `待补` |
+| `maximhq/bifrost` | `待补` | `文件` | `health/readiness/validation 代表文件` | `健康验证动作与状态展示 / Slice 5.5` | `待补` | `待补` | `待补` | `validation fixture` | `待补` | `待补` |
+| `songquanpeng/one-api` | `待补` | `页面信息架构` | `channels/tokens/model mapping 代表页面` | `表格组织与信息架构 / Slice 5.3` | `待补` | `待补` | `待补` | `IA snapshot` | `待补` | `待补` |
+| `openai/codex` | `待补` | `协议` | `provider capability / model metadata 代表对象` | `capability 命名与元信息展示 / Slice 5.2-5.3` | `待补` | `待补` | `待补` | `metadata snapshot` | `待补` | `待补` |
+| `本仓自研` | `N/A` | `协议` | `Authz/RLS/密钥治理/错误码/i18n 契约` | `权限矩阵、密钥生命周期、审计 / Slice 5.1-5.4` | `直接复用` | `本仓事实源` | `仓库约束` | `Authz test + E2E` | `待补` | `待补` |
+
+填写规则：
+
+- `采用状态` 只允许填写 `直接复用`、`重构复用`、`只借鉴语义`、`明确不引入`。
+- 若 `One API` 或 `Codex` 只承担局部参考，必须明确到页面 IA、命名对象或 metadata 级别，不能写“后台风格类似”。
+- `必备验证` 必须锁住命名、页面 IA、权限行为或验证动作；不能只靠人工截图说明“看起来差不多”。
+
 ## 6. CubeBox 管理面目标架构
 
 ### 6.1 用户可见页面
@@ -158,6 +176,7 @@
 - [ ] 确认 Apache-2.0 许可证、NOTICE 和复制要求。
 - [ ] 盘点与 Web UI、provider config、health/readiness、route/fallback 相关的依赖闭包。
 - [ ] 输出“可直接复用 / 可重构 / 仅借鉴语义 / 不引入”清单。
+- [ ] 按本计划 `5A` 模板补齐页面 IA/文件级上游映射表，并为每个对象冻结采用状态与不可复用原因。
 
 ### Slice 5.1：配置对象与权限矩阵冻结
 
@@ -197,7 +216,7 @@
 ### Slice 5.6：430 回填与封板
 
 - [ ] 更新 `DEV-PLAN-430` Slice 5 回链本计划。
-- [ ] readiness 记录 Bifrost/One API/Codex 参考 commit、采纳矩阵、页面截图、测试结果。
+- [ ] readiness 记录 Bifrost/One API/Codex 参考 commit、采纳矩阵、裁剪矩阵、IA snapshot、Authz/E2E 测试结果。
 - [ ] 执行文档、前端、Go、routing、authz、preflight 和反回流门禁验证。
 
 ## 8. 验收标准
@@ -209,12 +228,15 @@
 - [ ] 支持模型别名、fallback、超时、限额和默认模型配置。
 - [ ] Authz、路由、错误提示、i18n 和 E2E 已纳入实施闭环。
 - [ ] 密钥明文不回显，轮换可审计。
+- [ ] PR 与 readiness 中都能把页面 IA、provider/config 对象与权限设计映射回 `5A` 的具体上游制品。
 - [ ] `make check chat-surface-clean` 仍通过。
 
 ## 9. Stopline
 
 - 不得为 Slice 5 再切换到第二套主参考。
 - 不得直接复用外部项目的用户/角色/数据库模型。
+- 不得在 `5A` 映射表缺失 `commit SHA`、页面 IA/文件级对象或采用状态时开始管理面页面、自定义对象命名或权限矩阵实现。
+- 不得把“看起来像 Bifrost/One API”当作复用证明；若没有对象级映射与不可复用原因，即视为自研偏航。
 - 不得在前端保存密钥明文。
 - 不得绕过本仓 Authz、RLS、routing、错误码和 i18n 契约。
 - 不得把配置管理页做成只读后端能力而无用户可见入口。

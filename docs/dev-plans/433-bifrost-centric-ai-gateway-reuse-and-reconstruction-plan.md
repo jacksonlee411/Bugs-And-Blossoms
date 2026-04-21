@@ -127,6 +127,25 @@ Codex 在网关层只承担局部能力来源，不承担整体网关骨架：
 | 虚拟 key / 多租户密钥治理 | 本仓自研 | 不直接复用外部项目实现 |
 | DB 持久化 / RLS / 审计 | 本仓自研 | 外部项目只作字段参考，不作事实源 |
 
+## 5A. 上游映射表模板
+
+本计划必须把 Bifrost/Codex 的复用对象冻结成文件级或协议级映射；未填完前不得进入 Slice 2.1 之后的实现。
+
+| 上游项目 | 上游 commit SHA | 上游制品类型 | 上游路径或对象名 | CubeBox 对应对象/切片 | 采用状态 | 不可直接复用原因 | 原因类型 | 必备验证 | PR 证据位置 | readiness 证据位置 |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `maximhq/bifrost` | `待补` | `目录` | `router/streaming/fallback/health 相关目录` | `gateway 主请求链 / Slice 2.2-2.5` | `待补` | `待补` | `待补` | `流式集成测试 + failover fixture` | `待补` | `待补` |
+| `maximhq/bifrost` | `待补` | `文件` | `provider selection / fallback / health readiness 代表文件` | `provider route 与健康检查 / Slice 2.4-2.5` | `待补` | `待补` | `待补` | `route fixture + health test` | `待补` | `待补` |
+| `openai/codex` | `待补` | `目录` | `codex-rs/model-provider/**` | `provider adapter 接口 / Slice 2.1` | `待补` | `待补` | `待补` | `adapter contract test` | `待补` | `待补` |
+| `openai/codex` | `待补` | `目录` | `codex-rs/responses-api-proxy/**`、`codex-rs/codex-api/**` | `request mapping / Slice 2.2` | `待补` | `待补` | `待补` | `request mapping golden fixture` | `待补` | `待补` |
+| `openai/codex` | `待补` | `目录` | `codex-rs/utils/stream-parser/**` | `SSE parser / Slice 2.2` | `待补` | `待补` | `待补` | `SSE fixture + snapshot` | `待补` | `待补` |
+| `songquanpeng/one-api`、`BerriAI/litellm`、`Portkey-AI/gateway` | `待补` | `协议` | `错误归一化/模型别名/渠道语义代表对象` | `错误码口径与配置命名 / Slice 2.3` | `待补` | `待补` | `待补` | `error mapping fixture` | `待补` | `待补` |
+
+填写规则：
+
+- `采用状态` 只允许填写 `直接复用`、`重构复用`、`只借鉴语义`、`明确不引入`。
+- 对 `只借鉴语义` 或 `明确不引入` 的对象，必须说明为什么不能更小地复用现成上游实现，例如 `多租户 RLS/Authz`、`密钥治理`、`DDD 分层`、`错误码/i18n 契约`。
+- `必备验证` 至少覆盖一个上游形状：请求体、SSE 事件流、fallback 路径、健康检查输出、错误映射结果。
+
 ## 6. CubeBox 网关目标架构
 
 ### 6.1 分层
@@ -170,6 +189,7 @@ Codex 在网关层只承担局部能力来源，不承担整体网关骨架：
 - [ ] 确认 Apache-2.0 许可证、NOTICE 和复制要求。
 - [ ] 盘点 router、provider、streaming、health 相关依赖闭包。
 - [ ] 输出“可直接复用 / 可重构 / 仅借鉴语义 / 不引入”清单。
+- [ ] 按本计划 `5A` 模板补齐文件级/协议级上游映射表，并为每个对象冻结采用状态与不可复用原因。
 
 ### Slice 2.1：provider adapter 最小闭环
 
@@ -209,7 +229,7 @@ Codex 在网关层只承担局部能力来源，不承担整体网关骨架：
 ### Slice 2.6：430 回填与封板
 
 - [ ] 更新 `DEV-PLAN-430` Slice 2 回链本计划。
-- [ ] readiness 记录 Bifrost/Codex 参考 commit、采纳矩阵、测试结果。
+- [ ] readiness 记录 Bifrost/Codex 参考 commit、采纳矩阵、裁剪矩阵、请求映射 golden、SSE fixture、fallback 测试结果。
 - [ ] 执行文档、Go、routing、authz、preflight 和反回流门禁验证。
 
 ## 8. 验收标准
@@ -222,12 +242,15 @@ Codex 在网关层只承担局部能力来源，不承担整体网关骨架：
 - [ ] 健康检查与配置验证已闭环。
 - [ ] fallback 行为可测、可观测。
 - [ ] 流式响应测试覆盖成功、失败、中断、fallback。
+- [ ] PR 与 readiness 中都能把 handler/service/adapter 改动映射回 `5A` 的具体上游制品。
 - [ ] `make check chat-surface-clean` 仍通过。
 
 ## 9. Stopline
 
 - 不得在未评估 Bifrost 对应能力前直接自研第三套网关骨架。
 - 不得把 Bifrost 仅当“设计灵感”，实现上却完全重写同类模块。
+- 不得在 `5A` 映射表缺失 `commit SHA`、文件级对象或采用状态时开始 provider adapter、request mapping、fallback 或 SSE 实现。
+- 不得只说“结合本仓情况适配 Bifrost/Codex”而没有请求映射、SSE 路径或测试样例的对应关系。
 - 不得把 Codex 当作完整多租户网关主基座。
 - 不得直接采纳外部项目的数据库模型作为本仓事实源。
 - 不得引入 Python 网关进程作为首期默认运行时。
