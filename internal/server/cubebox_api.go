@@ -1,18 +1,26 @@
 package server
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"io"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/jacksonlee411/Bugs-And-Blossoms/internal/routing"
 	"github.com/jacksonlee411/Bugs-And-Blossoms/modules/cubebox"
 )
 
 type cubeboxCreateConversationRequest struct{}
+
+type cubeboxConversationPatchRequest struct {
+	Title    *string `json:"title"`
+	Archived *bool   `json:"archived"`
+}
 
 type cubeboxStreamTurnRequest struct {
 	ConversationID string `json:"conversation_id"`
@@ -29,9 +37,29 @@ type cubeboxInterruptResponse struct {
 	Interrupted bool   `json:"interrupted"`
 }
 
-func handleCubeBoxCreateConversationAPI(w http.ResponseWriter, r *http.Request, runtime *cubebox.Runtime) {
-	if r.Method != http.MethodPost {
+type cubeboxConversationStore interface {
+	CreateConversation(ctx context.Context, tenantID string, principalID string) (cubebox.ConversationReplayResponse, error)
+	GetConversation(ctx context.Context, tenantID string, principalID string, conversationID string) (cubebox.ConversationReplayResponse, error)
+	ListConversations(ctx context.Context, tenantID string, principalID string, limit int32) (cubebox.ConversationListResponse, error)
+	RenameConversation(ctx context.Context, tenantID string, principalID string, conversationID string, title string) (cubebox.ConversationReplayResponse, error)
+	ArchiveConversation(ctx context.Context, tenantID string, principalID string, conversationID string, archived bool) (cubebox.ConversationReplayResponse, error)
+	AppendEvent(ctx context.Context, tenantID string, principalID string, conversationID string, event cubebox.CanonicalEvent) error
+}
+
+func handleCubeBoxConversationsAPI(w http.ResponseWriter, r *http.Request, store cubeboxConversationStore) {
+	switch r.Method {
+	case http.MethodPost:
+		handleCubeBoxCreateConversationAPI(w, r, store)
+	case http.MethodGet:
+		handleCubeBoxListConversationsAPI(w, r, store)
+	default:
 		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusMethodNotAllowed, "method_not_allowed", "method not allowed")
+	}
+}
+
+func handleCubeBoxCreateConversationAPI(w http.ResponseWriter, r *http.Request, store cubeboxConversationStore) {
+	tenant, principal, ok := cubeboxRequestActor(w, r)
+	if !ok {
 		return
 	}
 
@@ -41,27 +69,113 @@ func handleCubeBoxCreateConversationAPI(w http.ResponseWriter, r *http.Request, 
 		return
 	}
 
-	writeJSON(w, http.StatusCreated, runtime.NewConversation())
-}
-
-func handleCubeBoxLoadConversationAPI(w http.ResponseWriter, r *http.Request, runtime *cubebox.Runtime) {
-	if r.Method != http.MethodGet {
-		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusMethodNotAllowed, "method_not_allowed", "method not allowed")
+	payload, err := store.CreateConversation(r.Context(), tenant.ID, principal.ID)
+	if err != nil {
+		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusInternalServerError, "cubebox_conversation_create_failed", "create conversation failed")
 		return
 	}
+	writeJSON(w, http.StatusCreated, payload)
+}
 
+func handleCubeBoxListConversationsAPI(w http.ResponseWriter, r *http.Request, store cubeboxConversationStore) {
+	tenant, principal, ok := cubeboxRequestActor(w, r)
+	if !ok {
+		return
+	}
+	limit := int32(20)
+	if raw := strings.TrimSpace(r.URL.Query().Get("limit")); raw != "" {
+		if parsed, err := strconv.Atoi(raw); err == nil && parsed > 0 && parsed <= 100 {
+			limit = int32(parsed)
+		}
+	}
+	payload, err := store.ListConversations(r.Context(), tenant.ID, principal.ID, limit)
+	if err != nil {
+		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusInternalServerError, "cubebox_conversation_list_failed", "list conversations failed")
+		return
+	}
+	writeJSON(w, http.StatusOK, payload)
+}
+
+func handleCubeBoxConversationAPI(w http.ResponseWriter, r *http.Request, store cubeboxConversationStore) {
+	switch r.Method {
+	case http.MethodGet:
+		handleCubeBoxLoadConversationAPI(w, r, store)
+	case http.MethodPatch:
+		handleCubeBoxPatchConversationAPI(w, r, store)
+	default:
+		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusMethodNotAllowed, "method_not_allowed", "method not allowed")
+	}
+}
+
+func handleCubeBoxLoadConversationAPI(w http.ResponseWriter, r *http.Request, store cubeboxConversationStore) {
 	conversationID := conversationIDFromPath(r.URL.Path)
 	if conversationID == "" {
 		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusUnprocessableEntity, "conversation_id_required", "conversation id required")
 		return
 	}
 
-	writeJSON(w, http.StatusOK, runtime.LoadConversation(conversationID))
+	tenant, principal, ok := cubeboxRequestActor(w, r)
+	if !ok {
+		return
+	}
+	payload, err := store.GetConversation(r.Context(), tenant.ID, principal.ID, conversationID)
+	if err != nil {
+		if errors.Is(err, cubebox.ErrConversationNotFound) {
+			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusNotFound, "cubebox_conversation_not_found", "conversation not found")
+			return
+		}
+		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusInternalServerError, "cubebox_conversation_read_failed", "read conversation failed")
+		return
+	}
+	writeJSON(w, http.StatusOK, payload)
 }
 
-func handleCubeBoxStreamTurnAPI(w http.ResponseWriter, r *http.Request, runtime *cubebox.Runtime) {
+func handleCubeBoxPatchConversationAPI(w http.ResponseWriter, r *http.Request, store cubeboxConversationStore) {
+	conversationID := conversationIDFromPath(r.URL.Path)
+	if conversationID == "" {
+		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusUnprocessableEntity, "conversation_id_required", "conversation id required")
+		return
+	}
+	tenant, principal, ok := cubeboxRequestActor(w, r)
+	if !ok {
+		return
+	}
+	var req cubeboxConversationPatchRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusUnprocessableEntity, "invalid_json", "invalid json")
+		return
+	}
+
+	var (
+		payload cubebox.ConversationReplayResponse
+		err     error
+	)
+	if req.Title != nil {
+		payload, err = store.RenameConversation(r.Context(), tenant.ID, principal.ID, conversationID, *req.Title)
+	} else if req.Archived != nil {
+		payload, err = store.ArchiveConversation(r.Context(), tenant.ID, principal.ID, conversationID, *req.Archived)
+	} else {
+		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusUnprocessableEntity, "invalid_form", "title or archived required")
+		return
+	}
+	if err != nil {
+		if errors.Is(err, cubebox.ErrConversationNotFound) {
+			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusNotFound, "cubebox_conversation_not_found", "conversation not found")
+			return
+		}
+		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusInternalServerError, "cubebox_conversation_update_failed", "update conversation failed")
+		return
+	}
+	writeJSON(w, http.StatusOK, payload)
+}
+
+func handleCubeBoxStreamTurnAPI(w http.ResponseWriter, r *http.Request, runtime *cubebox.Runtime, store cubeboxConversationStore) {
 	if r.Method != http.MethodPost {
 		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusMethodNotAllowed, "method_not_allowed", "method not allowed")
+		return
+	}
+	tenant, principal, ok := cubeboxRequestActor(w, r)
+	if !ok {
 		return
 	}
 
@@ -80,7 +194,11 @@ func handleCubeBoxStreamTurnAPI(w http.ResponseWriter, r *http.Request, runtime 
 		req.NextSequence = 1
 	}
 
-	turn := runtime.StartTurn(req.ConversationID, req.Prompt)
+	turn := runtime.StartTurn(cubebox.TurnOwner{
+		TenantID:       tenant.ID,
+		PrincipalID:    principal.ID,
+		ConversationID: req.ConversationID,
+	}, req.Prompt)
 	defer runtime.FinishTurn(turn.TurnID)
 
 	w.Header().Set("Content-Type", "text/event-stream")
@@ -96,7 +214,7 @@ func handleCubeBoxStreamTurnAPI(w http.ResponseWriter, r *http.Request, runtime 
 	sequence := req.NextSequence
 	writeEvent := func(eventType string, turnID *string, payload map[string]any) bool {
 		event := cubebox.CanonicalEvent{
-			EventID:        runtime.NextEventID(),
+			EventID:        "evt_" + strings.ReplaceAll(uuid.NewString(), "-", ""),
 			ConversationID: req.ConversationID,
 			TurnID:         turnID,
 			Sequence:       sequence,
@@ -105,6 +223,9 @@ func handleCubeBoxStreamTurnAPI(w http.ResponseWriter, r *http.Request, runtime 
 			Payload:        payload,
 		}
 		sequence += 1
+		if err := store.AppendEvent(r.Context(), tenant.ID, principal.ID, req.ConversationID, event); err != nil {
+			return false
+		}
 		b, err := json.Marshal(event)
 		if err != nil {
 			return false
@@ -121,12 +242,40 @@ func handleCubeBoxStreamTurnAPI(w http.ResponseWriter, r *http.Request, runtime 
 		flusher.Flush()
 		return true
 	}
+	writeStreamFailure := func(message string) {
+		fallback := cubebox.CanonicalEvent{
+			EventID:        "evt_" + strings.ReplaceAll(uuid.NewString(), "-", ""),
+			ConversationID: req.ConversationID,
+			TurnID:         &turn.TurnID,
+			Sequence:       sequence,
+			Type:           "turn.error",
+			TS:             time.Now().UTC().Format(time.RFC3339),
+			Payload: map[string]any{
+				"code":      "event_log_write_failed",
+				"message":   message,
+				"retryable": false,
+			},
+		}
+		if b, err := json.Marshal(fallback); err == nil {
+			_, _ = w.Write([]byte("data: "))
+			_, _ = w.Write(b)
+			_, _ = w.Write([]byte("\n\n"))
+			flusher.Flush()
+		}
+	}
+	writeEventOrFail := func(eventType string, turnID *string, payload map[string]any, failureMessage string) bool {
+		if writeEvent(eventType, turnID, payload) {
+			return true
+		}
+		writeStreamFailure(failureMessage)
+		return false
+	}
 
 	turnID := turn.TurnID
-	if !writeEvent("turn.started", &turnID, map[string]any{"user_message_id": turn.UserMessageID}) {
+	if !writeEventOrFail("turn.started", &turnID, map[string]any{"user_message_id": turn.UserMessageID}, "会话事件落库失败，当前响应已终止。") {
 		return
 	}
-	if !writeEvent("turn.user_message.accepted", &turnID, map[string]any{"message_id": turn.UserMessageID, "text": turn.Prompt}) {
+	if !writeEventOrFail("turn.user_message.accepted", &turnID, map[string]any{"message_id": turn.UserMessageID, "text": turn.Prompt}, "会话事件落库失败，当前响应已终止。") {
 		return
 	}
 
@@ -151,10 +300,10 @@ func handleCubeBoxStreamTurnAPI(w http.ResponseWriter, r *http.Request, runtime 
 		case <-time.After(25 * time.Millisecond):
 		}
 
-		if !writeEvent("turn.agent_message.delta", &turnID, map[string]any{
+		if !writeEventOrFail("turn.agent_message.delta", &turnID, map[string]any{
 			"message_id": turn.AssistantMessageID,
 			"delta":      chunk,
-		}) {
+		}, "会话事件落库失败，当前响应已终止。") {
 			return
 		}
 	}
@@ -180,10 +329,27 @@ func handleCubeBoxInterruptTurnAPI(w http.ResponseWriter, r *http.Request, runti
 		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusUnprocessableEntity, "turn_id_required", "turn id required")
 		return
 	}
+	tenant, principal, ok := cubeboxRequestActor(w, r)
+	if !ok {
+		return
+	}
+	req.Reason = strings.TrimSpace(req.Reason)
+	if req.Reason == "" {
+		req.Reason = "user_requested"
+	}
+	conversationID := strings.TrimSpace(r.URL.Query().Get("conversation_id"))
+	if conversationID == "" {
+		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusUnprocessableEntity, "conversation_id_required", "conversation id required")
+		return
+	}
 
 	writeJSON(w, http.StatusOK, cubeboxInterruptResponse{
-		TurnID:      turnID,
-		Interrupted: runtime.InterruptTurn(turnID),
+		TurnID: turnID,
+		Interrupted: runtime.InterruptTurnForOwner(turnID, cubebox.TurnOwner{
+			TenantID:       tenant.ID,
+			PrincipalID:    principal.ID,
+			ConversationID: conversationID,
+		}),
 	})
 }
 
@@ -210,4 +376,18 @@ func interruptTurnIDFromPath(path string) string {
 	trimmed := strings.TrimPrefix(path, prefix)
 	trimmed = strings.TrimSuffix(trimmed, suffix)
 	return strings.TrimSpace(trimmed)
+}
+
+func cubeboxRequestActor(w http.ResponseWriter, r *http.Request) (Tenant, Principal, bool) {
+	tenant, ok := currentTenant(r.Context())
+	if !ok {
+		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusInternalServerError, "tenant_missing", "tenant missing")
+		return Tenant{}, Principal{}, false
+	}
+	principal, ok := currentPrincipal(r.Context())
+	if !ok {
+		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusUnauthorized, "principal_missing", "principal missing")
+		return Tenant{}, Principal{}, false
+	}
+	return tenant, principal, true
 }

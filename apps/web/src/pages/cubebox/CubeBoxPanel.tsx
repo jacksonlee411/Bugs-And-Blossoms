@@ -1,34 +1,90 @@
+import AddCommentOutlinedIcon from '@mui/icons-material/AddCommentOutlined'
+import ArchiveOutlinedIcon from '@mui/icons-material/ArchiveOutlined'
 import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome'
-import StopCircleOutlinedIcon from '@mui/icons-material/StopCircleOutlined'
+import DriveFileRenameOutlineIcon from '@mui/icons-material/DriveFileRenameOutline'
+import HistoryOutlinedIcon from '@mui/icons-material/HistoryOutlined'
+import SettingsOutlinedIcon from '@mui/icons-material/SettingsOutlined'
 import SendIcon from '@mui/icons-material/Send'
+import StopCircleOutlinedIcon from '@mui/icons-material/StopCircleOutlined'
 import {
   Alert,
   Button,
   CircularProgress,
   Divider,
+  Dialog,
+  DialogContent,
+  DialogTitle,
+  IconButton,
   List,
+  ListItemButton,
   ListItem,
+  ListItemText,
   Paper,
   Stack,
   TextField,
+  Tooltip,
   Typography
 } from '@mui/material'
+import { useState } from 'react'
 import { useAppPreferences } from '../../app/providers/AppPreferencesContext'
 import { useCubeBox } from './CubeBoxProvider'
 
 export function CubeBoxPanel() {
-  const { state, interrupt, sendMessage, setComposerText } = useCubeBox()
+  const {
+    archiveConversation,
+    conversations,
+    conversationsLoading,
+    renameConversation,
+    selectConversation,
+    startNewConversation,
+    state,
+    interrupt,
+    sendMessage,
+    setComposerText
+  } = useCubeBox()
   const { t } = useAppPreferences()
+  const [historyOpen, setHistoryOpen] = useState(false)
+  const [settingsOpen, setSettingsOpen] = useState(false)
+  const currentTitle = state.conversation?.title?.trim() || t('page_cubebox_title')
 
   return (
     <Stack spacing={2} sx={{ height: '100%' }}>
-      <Stack spacing={0.5}>
-        <Typography component='h2' variant='h6'>
-          {t('page_cubebox_title')}
-        </Typography>
-        <Typography color='text.secondary' variant='body2'>
-          {t('page_cubebox_subtitle')}
-        </Typography>
+      <Stack alignItems='center' direction='row' justifyContent='space-between' spacing={2}>
+        <Stack spacing={0.5} sx={{ minWidth: 0 }}>
+          <Typography component='h2' noWrap variant='h6'>
+            {currentTitle}
+          </Typography>
+          <Typography color='text.secondary' noWrap variant='body2'>
+            {state.conversation?.id ? `${t('cubebox_conversation_id')}: ${state.conversation.id}` : t('page_cubebox_subtitle')}
+          </Typography>
+        </Stack>
+        <Stack direction='row' spacing={0.5}>
+          <Tooltip title={t('cubebox_history')}>
+            <span>
+              <IconButton aria-label={t('cubebox_history')} onClick={() => setHistoryOpen(true)}>
+                <HistoryOutlinedIcon />
+              </IconButton>
+            </span>
+          </Tooltip>
+          <Tooltip title={t('cubebox_settings')}>
+            <span>
+              <IconButton aria-label={t('cubebox_settings')} onClick={() => setSettingsOpen(true)}>
+                <SettingsOutlinedIcon />
+              </IconButton>
+            </span>
+          </Tooltip>
+          <Tooltip title={t('cubebox_new_chat')}>
+            <span>
+              <IconButton
+                aria-label={t('cubebox_new_chat')}
+                disabled={state.loading || state.turnStatus === 'streaming'}
+                onClick={() => void startNewConversation()}
+              >
+                <AddCommentOutlinedIcon />
+              </IconButton>
+            </span>
+          </Tooltip>
+        </Stack>
       </Stack>
 
       <Paper sx={{ flex: 1, overflow: 'auto', p: 2 }} variant='outlined'>
@@ -117,8 +173,93 @@ export function CubeBoxPanel() {
           </Stack>
         </Stack>
       </Paper>
+
+      <Dialog fullWidth maxWidth='sm' onClose={() => setHistoryOpen(false)} open={historyOpen}>
+        <DialogTitle>{t('cubebox_history_title')}</DialogTitle>
+        <DialogContent dividers>
+          <List sx={{ p: 0 }}>
+            {conversations.map((conversation) => (
+              <ListItem
+                key={conversation.id}
+                disablePadding
+                secondaryAction={
+                  <Stack direction='row' spacing={0.5}>
+                    <Tooltip title={t('cubebox_rename')}>
+                      <span>
+                        <IconButton
+                          edge='end'
+                          size='small'
+                          onClick={() => {
+                            const title = window.prompt(t('cubebox_prompt_label'), conversation.title)
+                            if (typeof title === 'string' && title.trim().length > 0) {
+                              void renameConversation(conversation.id, title.trim())
+                            }
+                          }}
+                        >
+                          <DriveFileRenameOutlineIcon fontSize='small' />
+                        </IconButton>
+                      </span>
+                    </Tooltip>
+                    <Tooltip title={conversation.archived ? t('cubebox_unarchive') : t('cubebox_archive')}>
+                      <span>
+                        <IconButton edge='end' size='small' onClick={() => void archiveConversation(conversation.id, !conversation.archived)}>
+                          <ArchiveOutlinedIcon fontSize='small' />
+                        </IconButton>
+                      </span>
+                    </Tooltip>
+                  </Stack>
+                }
+              >
+                <ListItemButton
+                  selected={state.conversation?.id === conversation.id}
+                  onClick={() => {
+                    void selectConversation(conversation.id)
+                    setHistoryOpen(false)
+                  }}
+                >
+                  <ListItemText
+                    primary={conversation.title}
+                    primaryTypographyProps={{ noWrap: true, variant: 'body2' }}
+                    secondary={`${conversation.id} · ${formatConversationStatus(conversation.archived, t)}`}
+                    secondaryTypographyProps={{ noWrap: true, variant: 'caption' }}
+                  />
+                </ListItemButton>
+              </ListItem>
+            ))}
+            {conversations.length === 0 && !conversationsLoading ? (
+              <Typography color='text.secondary' sx={{ py: 1 }} variant='body2'>
+                {t('cubebox_empty_history')}
+              </Typography>
+            ) : null}
+            {conversationsLoading ? (
+              <Stack alignItems='center' direction='row' spacing={1} sx={{ py: 1 }}>
+                <CircularProgress size={16} />
+                <Typography color='text.secondary' variant='body2'>
+                  {t('text_loading')}
+                </Typography>
+              </Stack>
+            ) : null}
+          </List>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog fullWidth maxWidth='xs' onClose={() => setSettingsOpen(false)} open={settingsOpen}>
+        <DialogTitle>{t('cubebox_settings_title')}</DialogTitle>
+        <DialogContent dividers>
+          <Typography color='text.secondary' variant='body2'>
+            {t('cubebox_settings_placeholder')}
+          </Typography>
+        </DialogContent>
+      </Dialog>
     </Stack>
   )
+}
+
+function formatConversationStatus(
+  archived: boolean,
+  t: (key: 'cubebox_conversation_status_active' | 'cubebox_conversation_status_archived') => string
+) {
+  return archived ? t('cubebox_conversation_status_archived') : t('cubebox_conversation_status_active')
 }
 
 function statusLabel(

@@ -21,7 +21,7 @@
 | --- | --- | --- | --- | --- |
 | `Phase A` | `PR-437A` | `436`、`430`、`431`、`433`、`434` | 开工门禁、最小上游冻结、共享 canonical contract、本地运行时口径 | `已完成` |
 | `Phase B` | `PR-437B` | `431`、`433` | 首轮可用对话链路 | `已完成` |
-| `Phase C` | `PR-437C` | `432`、`431` | 会话持久化与恢复 | `未开始` |
+| `Phase C` | `PR-437C` | `432`、`431` | 会话持久化与恢复 | `进行中` |
 | `Phase D` | `PR-437D` | `434`、`431` | 压缩最小闭环 | `未开始` |
 | `Phase E` | `PR-437E` | `435`、`433` | 管理面与权限闭环 | `未开始` |
 
@@ -149,12 +149,64 @@
     - `GET /favicon.ico` => `404`
     - 早先未登录/未授权阶段的历史记录里仍能看到一次 `422 /iam/api/sessions` 与一次 `403 /internal/cubebox/conversations`；两者不再阻断当前已登录后的主链验证结果
 
-### Phase C / PR-437C 预留证据
+### Phase C / PR-437C 当前证据（`2026-04-21`）
 
 - 会话持久化与恢复：
-  - append-only message log
-  - conversation list/read/resume/archive/rename
-  - reconstruction fixture
+  - [x] 最小正式数据面已落地：`iam.cubebox_conversations` + `iam.cubebox_conversation_events`
+  - [x] `modules/cubebox` 已新增正式 store，并由 `internal/server` 消费；会话主事实源不再是纯前端内存
+  - [x] append-only message/event log 已接入流式主链：`turn.started` / `turn.user_message.accepted` / `turn.agent_message.delta` / `turn.error` / `turn.interrupted` / `turn.completed` 会在 stream 期间顺序写入
+  - [x] conversation lifecycle 最小 API 已落地：
+    - `GET /internal/cubebox/conversations`
+    - `POST /internal/cubebox/conversations`
+    - `GET /internal/cubebox/conversations/{conversation_id}`
+    - `PATCH /internal/cubebox/conversations/{conversation_id}`（title / archived）
+  - [x] 抽屉 reopen 恢复已接入：provider 初始化时先读 list，再自动恢复最近 active conversation
+  - [x] 抽屉内最小会话列表 UI 已落地：列表、选中切换、重命名入口、归档/取消归档入口
+  - [ ] reconstruction fixture / golden 测试仍需继续加强
+
+- 主要落地文件：
+  - `modules/iam/infrastructure/persistence/schema/00009_iam_cubebox_conversations.sql`
+  - `migrations/iam/20260421120000_iam_cubebox_conversations.sql`
+  - `modules/cubebox/infrastructure/sqlc/queries/conversations.sql`
+  - `modules/cubebox/store.go`
+  - `internal/server/cubebox_api.go`
+  - `internal/server/cubebox_api_test.go`
+  - `internal/server/handler.go`
+  - `internal/server/authz_middleware.go`
+  - `config/routing/allowlist.yaml`
+  - `apps/web/src/pages/cubebox/api.ts`
+  - `apps/web/src/pages/cubebox/CubeBoxProvider.tsx`
+  - `apps/web/src/pages/cubebox/CubeBoxPanel.tsx`
+  - `apps/web/src/pages/cubebox/types.ts`
+  - `sqlc.yaml`
+
+- 当前验证结果：
+  - [x] `make sqlc-generate`
+  - [x] `go test ./internal/server ./modules/cubebox/...`
+  - [x] `pnpm --dir apps/web test`
+  - [x] `pnpm --dir apps/web typecheck`
+  - [x] `pnpm --dir apps/web build`
+  - [x] `make check routing`
+  - [x] `make authz-pack && make authz-test && make authz-lint`
+  - [x] `make check doc`
+  - 说明：`vite build` 通过，当前仍存在既有的 chunk size warning，但不阻断本轮 `437C` 收口
+
+### Phase C / PR-437C 当前盘点（`2026-04-21`）
+
+- [x] 已完成现状盘点：当前活体实现仅包含前端共享 reducer / provider、`/internal/cubebox` 的 create/load/stream/interrupt handler，以及 `modules/cubebox/runtime.go` 的内存 runtime。
+- [x] 已确认当前分支不存在可直接复用的 `cubebox` 正式持久化对象：
+  - 无活体 `modules/cubebox/infrastructure/sqlc/**`
+  - 无活体 `modules/cubebox/infrastructure/persistence/**`
+  - 无活体 `cubebox` schema / migration 文件
+- [x] 已确认 `PR-437C` 的真实第一阻塞点是数据库对象，而不是前端壳层：
+  - 若要把 conversation / message / event 落到正式存储，必须新增 `cubebox` 相关表与 sqlc/store
+  - 该动作按仓库规则需用户手工确认后才能继续执行
+- [ ] 待确认后按最小批次推进：
+  - conversation / message / event 存储模型
+  - `GET /internal/cubebox/conversations/{id}` 与 list/read API
+  - 抽屉 reopen 恢复
+  - reconstruction fixture / golden 测试
+  - 会话列表 UI
 
 ### Phase D / PR-437D 预留证据
 

@@ -135,10 +135,10 @@ entrypoints:
         methods: [POST]
         route_class: internal_api
       - path: /internal/cubebox/conversations
-        methods: [POST]
+        methods: [GET, POST]
         route_class: internal_api
       - path: /internal/cubebox/conversations/{conversation_id}
-        methods: [GET]
+        methods: [GET, PATCH]
         route_class: internal_api
       - path: /internal/cubebox/turns:stream
         methods: [POST]

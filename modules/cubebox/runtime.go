@@ -36,6 +36,18 @@ type ConversationReplayResponse struct {
 	NextSequence int              `json:"next_sequence"`
 }
 
+type ConversationListItem struct {
+	ID        string `json:"id"`
+	Title     string `json:"title"`
+	Status    string `json:"status"`
+	Archived  bool   `json:"archived"`
+	UpdatedAt string `json:"updated_at"`
+}
+
+type ConversationListResponse struct {
+	Items []ConversationListItem `json:"items"`
+}
+
 type DeterministicTurn struct {
 	ConversationID     string
 	TurnID             string
@@ -51,11 +63,19 @@ type Runtime struct {
 	counter    atomic.Uint64
 	mu         sync.Mutex
 	interrupts map[string]chan struct{}
+	turnOwners map[string]TurnOwner
+}
+
+type TurnOwner struct {
+	TenantID       string
+	PrincipalID    string
+	ConversationID string
 }
 
 func NewRuntime() *Runtime {
 	return &Runtime{
 		interrupts: make(map[string]chan struct{}),
+		turnOwners: make(map[string]TurnOwner),
 	}
 }
 
@@ -119,16 +139,21 @@ func (r *Runtime) LoadConversation(conversationID string) ConversationReplayResp
 	}
 }
 
-func (r *Runtime) StartTurn(conversationID string, prompt string) DeterministicTurn {
+func (r *Runtime) StartTurn(owner TurnOwner, prompt string) DeterministicTurn {
 	turnID := r.nextID("turn")
 	ch := make(chan struct{})
 
 	r.mu.Lock()
 	r.interrupts[turnID] = ch
+	r.turnOwners[turnID] = TurnOwner{
+		TenantID:       strings.TrimSpace(owner.TenantID),
+		PrincipalID:    strings.TrimSpace(owner.PrincipalID),
+		ConversationID: strings.TrimSpace(owner.ConversationID),
+	}
 	r.mu.Unlock()
 
 	return DeterministicTurn{
-		ConversationID:     strings.TrimSpace(conversationID),
+		ConversationID:     strings.TrimSpace(owner.ConversationID),
 		TurnID:             turnID,
 		UserMessageID:      r.nextID("msg_user"),
 		AssistantMessageID: r.nextID("msg_agent"),
@@ -140,10 +165,26 @@ func (r *Runtime) StartTurn(conversationID string, prompt string) DeterministicT
 }
 
 func (r *Runtime) InterruptTurn(turnID string) bool {
+	return r.InterruptTurnForOwner(turnID, TurnOwner{})
+}
+
+func (r *Runtime) InterruptTurnForOwner(turnID string, owner TurnOwner) bool {
+	turnID = strings.TrimSpace(turnID)
 	r.mu.Lock()
-	ch, ok := r.interrupts[strings.TrimSpace(turnID)]
+	ch, ok := r.interrupts[turnID]
+	turnOwner, hasOwner := r.turnOwners[turnID]
+	if ok && owner != (TurnOwner{}) {
+		if !hasOwner ||
+			turnOwner.TenantID != strings.TrimSpace(owner.TenantID) ||
+			turnOwner.PrincipalID != strings.TrimSpace(owner.PrincipalID) ||
+			turnOwner.ConversationID != strings.TrimSpace(owner.ConversationID) {
+			r.mu.Unlock()
+			return false
+		}
+	}
 	if ok {
-		delete(r.interrupts, strings.TrimSpace(turnID))
+		delete(r.interrupts, turnID)
+		delete(r.turnOwners, turnID)
 	}
 	r.mu.Unlock()
 	if !ok {
@@ -156,6 +197,7 @@ func (r *Runtime) InterruptTurn(turnID string) bool {
 func (r *Runtime) FinishTurn(turnID string) {
 	r.mu.Lock()
 	delete(r.interrupts, strings.TrimSpace(turnID))
+	delete(r.turnOwners, strings.TrimSpace(turnID))
 	r.mu.Unlock()
 }
 

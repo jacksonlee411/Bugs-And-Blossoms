@@ -231,6 +231,7 @@ modules/{module}/
 - DEV-PLAN-430：IDE 式对话助手重做架构方案：`docs/dev-plans/430-cubebox-ide-conversation-assistant-rebuild-architecture-plan.md`
 - DEV-PLAN-431：Codex UI 协议、状态机与右悬挂壳层复用/重构方案：`docs/dev-plans/431-codex-ui-protocol-and-shell-reuse-plan.md`
 - DEV-PLAN-431A：CubeBox 页面设计契约（承接 DEV-PLAN-431）：`docs/dev-plans/431a-cubebox-page-design-contract.md`
+- DEV-PLAN-431B：CubeBox 壳层避让与非阻断右侧悬挂方案：`docs/dev-plans/431b-cubebox-shell-overlay-and-nonblocking-drawer-plan.md`
 - DEV-PLAN-432：Codex 会话持久化、索引与恢复语义复用/重构方案：`docs/dev-plans/432-codex-session-persistence-reuse-plan.md`
 - DEV-PLAN-433：Bifrost 主参考的 AI 网关复用/重构方案：`docs/dev-plans/433-bifrost-centric-ai-gateway-reuse-and-reconstruction-plan.md`
 - DEV-PLAN-434：Codex 上下文管理与压缩机制复用/重构方案：`docs/dev-plans/434-codex-context-management-and-compaction-reuse-plan.md`

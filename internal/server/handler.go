@@ -95,6 +95,7 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, error) {
 	}
 
 	cubeboxRuntime := cubebox.NewRuntime()
+	cubeboxStore := cubebox.NewStore(pgPool)
 
 	router := routing.NewRouter(classifier)
 
@@ -294,13 +295,19 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, error) {
 		handleOrgUnitsBusinessUnitAPI(w, r, orgUnitWriteService)
 	}))
 	router.Handle(routing.RouteClassInternalAPI, http.MethodPost, "/internal/cubebox/conversations", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		handleCubeBoxCreateConversationAPI(w, r, cubeboxRuntime)
+		handleCubeBoxConversationsAPI(w, r, cubeboxStore)
+	}))
+	router.Handle(routing.RouteClassInternalAPI, http.MethodGet, "/internal/cubebox/conversations", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handleCubeBoxConversationsAPI(w, r, cubeboxStore)
 	}))
 	router.Handle(routing.RouteClassInternalAPI, http.MethodGet, "/internal/cubebox/conversations/{conversation_id}", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		handleCubeBoxLoadConversationAPI(w, r, cubeboxRuntime)
+		handleCubeBoxConversationAPI(w, r, cubeboxStore)
+	}))
+	router.Handle(routing.RouteClassInternalAPI, http.MethodPatch, "/internal/cubebox/conversations/{conversation_id}", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handleCubeBoxConversationAPI(w, r, cubeboxStore)
 	}))
 	router.Handle(routing.RouteClassInternalAPI, http.MethodPost, "/internal/cubebox/turns:stream", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		handleCubeBoxStreamTurnAPI(w, r, cubeboxRuntime)
+		handleCubeBoxStreamTurnAPI(w, r, cubeboxRuntime, cubeboxStore)
 	}))
 	router.Handle(routing.RouteClassInternalAPI, http.MethodPost, "/internal/cubebox/turns/{turn_id}:interrupt", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		handleCubeBoxInterruptTurnAPI(w, r, cubeboxRuntime)

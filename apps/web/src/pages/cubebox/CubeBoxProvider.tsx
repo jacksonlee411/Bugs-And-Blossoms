@@ -1,11 +1,19 @@
-import { createContext, type PropsWithChildren, useCallback, useContext, useEffect, useMemo, useReducer, useRef } from 'react'
-import { createConversation, interruptTurn, streamTurn } from './api'
+import { createContext, type PropsWithChildren, useCallback, useContext, useEffect, useMemo, useReducer, useRef, useState } from 'react'
+import { createConversation, interruptTurn, listConversations, loadConversation, streamTurn, updateConversation } from './api'
 import { cubeboxReducer, initialCubeBoxState } from './reducer'
-import type { ConversationReplayResponse, CubeBoxState } from './types'
+import type { ConversationReplayResponse, CubeBoxConversationSummary, CubeBoxState } from './types'
 
 interface CubeBoxContextValue {
   state: CubeBoxState
+  conversations: CubeBoxConversationSummary[]
+  conversationsLoading: boolean
   setComposerText: (value: string) => void
+  startNewConversation: () => Promise<void>
+  refreshConversations: () => Promise<void>
+  restoreLatestConversation: () => Promise<void>
+  selectConversation: (conversationID: string) => Promise<void>
+  renameConversation: (conversationID: string, title: string) => Promise<void>
+  archiveConversation: (conversationID: string, archived: boolean) => Promise<void>
   ensureConversation: () => Promise<ConversationReplayResponse | null>
   sendMessage: () => Promise<void>
   interrupt: () => Promise<void>
@@ -15,6 +23,8 @@ const CubeBoxContext = createContext<CubeBoxContextValue | null>(null)
 
 export function CubeBoxProvider({ children }: PropsWithChildren) {
   const [state, dispatch] = useReducer(cubeboxReducer, initialCubeBoxState)
+  const [conversations, setConversations] = useState<CubeBoxConversationSummary[]>([])
+  const [conversationsLoading, setConversationsLoading] = useState(false)
   const abortRef = useRef<AbortController | null>(null)
   const ensurePromiseRef = useRef<Promise<ConversationReplayResponse | null> | null>(null)
   const conversationRef = useRef(state.conversation)
@@ -32,6 +42,43 @@ export function CubeBoxProvider({ children }: PropsWithChildren) {
     activeTurnIDRef.current = state.activeTurnID
   }, [state])
 
+  const refreshConversations = useCallback(async () => {
+    setConversationsLoading(true)
+    try {
+      const payload = await listConversations()
+      setConversations(payload.items)
+    } catch {
+      setConversations([])
+    } finally {
+      setConversationsLoading(false)
+    }
+  }, [])
+
+  const selectConversation = useCallback(async (conversationID: string) => {
+    dispatch({ type: 'loading_started' })
+    try {
+      const payload = await loadConversation(conversationID)
+      dispatch({ type: 'conversation_loaded', payload })
+    } catch (error) {
+      dispatch({ type: 'error_message_set', message: error instanceof Error ? error.message : 'unknown error' })
+    } finally {
+      dispatch({ type: 'loading_finished' })
+    }
+  }, [])
+
+  const restoreLatestConversation = useCallback(async () => {
+    const payload = await listConversations()
+    setConversations(payload.items)
+    const latest = payload.items[0]
+    if (!latest) {
+      return
+    }
+    if (conversationRef.current?.id === latest.id) {
+      return
+    }
+    await selectConversation(latest.id)
+  }, [selectConversation])
+
   const ensureConversation = useCallback(async () => {
     if (conversationRef.current) {
       return {
@@ -48,6 +95,7 @@ export function CubeBoxProvider({ children }: PropsWithChildren) {
       try {
         const payload = await createConversation()
         dispatch({ type: 'conversation_loaded', payload })
+        await refreshConversations()
         return payload
       } catch (error) {
         dispatch({ type: 'error_message_set', message: error instanceof Error ? error.message : 'unknown error' })
@@ -95,6 +143,7 @@ export function CubeBoxProvider({ children }: PropsWithChildren) {
           dispatch({ type: 'event_received', payload: event })
         }
       })
+      await refreshConversations()
     } catch (error) {
       if (controller.signal.aborted) {
         return
@@ -106,25 +155,99 @@ export function CubeBoxProvider({ children }: PropsWithChildren) {
     } finally {
       abortRef.current = null
     }
-  }, [ensureConversation])
+  }, [ensureConversation, refreshConversations])
 
   const interrupt = useCallback(async () => {
     const turnID = activeTurnIDRef.current
-    if (!turnID) {
+    const conversationID = conversationRef.current?.id ?? ''
+    if (!turnID || conversationID.length === 0) {
       return
     }
-    await interruptTurn(turnID)
+    try {
+      await interruptTurn(turnID, conversationID)
+    } catch (error) {
+      dispatch({ type: 'error_message_set', message: error instanceof Error ? error.message : 'unknown error' })
+    }
   }, [])
+
+  const startNewConversation = useCallback(async () => {
+    if (turnStatusRef.current === 'streaming') {
+      return
+    }
+    dispatch({ type: 'loading_started' })
+    dispatch({ type: 'error_message_set', message: null })
+    try {
+      const payload = await createConversation()
+      dispatch({ type: 'conversation_loaded', payload })
+      await refreshConversations()
+    } catch (error) {
+      dispatch({ type: 'error_message_set', message: error instanceof Error ? error.message : 'unknown error' })
+    } finally {
+      dispatch({ type: 'loading_finished' })
+    }
+  }, [refreshConversations])
+
+  const renameConversation = useCallback(
+    async (conversationID: string, title: string) => {
+      try {
+        const payload = await updateConversation({ conversationID, title })
+        dispatch({ type: 'conversation_loaded', payload })
+        await refreshConversations()
+      } catch (error) {
+        dispatch({ type: 'error_message_set', message: error instanceof Error ? error.message : 'unknown error' })
+      }
+    },
+    [refreshConversations]
+  )
+
+  const archiveConversation = useCallback(
+    async (conversationID: string, archived: boolean) => {
+      try {
+        const payload = await updateConversation({ conversationID, archived })
+        dispatch({ type: 'conversation_loaded', payload })
+        await refreshConversations()
+      } catch (error) {
+        dispatch({ type: 'error_message_set', message: error instanceof Error ? error.message : 'unknown error' })
+      }
+    },
+    [refreshConversations]
+  )
+
+  useEffect(() => {
+    void refreshConversations()
+    void restoreLatestConversation()
+  }, [refreshConversations, restoreLatestConversation])
 
   const value = useMemo<CubeBoxContextValue>(
     () => ({
       state,
+      conversations,
+      conversationsLoading,
       setComposerText: (value) => dispatch({ type: 'composer_changed', value }),
+      startNewConversation,
+      refreshConversations,
+      restoreLatestConversation,
+      selectConversation,
+      renameConversation,
+      archiveConversation,
       ensureConversation,
       sendMessage,
       interrupt
     }),
-    [ensureConversation, interrupt, sendMessage, state]
+    [
+      archiveConversation,
+      conversations,
+      conversationsLoading,
+      ensureConversation,
+      interrupt,
+      refreshConversations,
+      renameConversation,
+      restoreLatestConversation,
+      selectConversation,
+      sendMessage,
+      startNewConversation,
+      state
+    ]
   )
 
   return <CubeBoxContext.Provider value={value}>{children}</CubeBoxContext.Provider>

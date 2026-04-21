@@ -5,6 +5,18 @@ export interface CubeBoxConversation {
   archived: boolean
 }
 
+export interface CubeBoxConversationSummary {
+  id: string
+  title: string
+  status: 'active' | 'archived'
+  archived: boolean
+  updated_at: string
+}
+
+export interface CubeBoxConversationListResponse {
+  items: CubeBoxConversationSummary[]
+}
+
 export interface CanonicalEvent {
   event_id: string
   conversation_id: string
@@ -12,6 +24,9 @@ export interface CanonicalEvent {
   sequence: number
   type:
     | 'conversation.loaded'
+    | 'conversation.renamed'
+    | 'conversation.archived'
+    | 'conversation.unarchived'
     | 'turn.started'
     | 'turn.user_message.accepted'
     | 'turn.agent_message.delta'
