@@ -6,6 +6,7 @@ BEGIN
 END $$;
 
 GRANT USAGE ON SCHEMA orgunit TO orgunit_kernel;
+GRANT USAGE ON SCHEMA iam TO orgunit_kernel;
 
 ALTER TABLE IF EXISTS orgunit.org_node_key_registry OWNER TO orgunit_kernel;
 ALTER TABLE IF EXISTS orgunit.org_trees OWNER TO orgunit_kernel;
@@ -23,6 +24,7 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE
 TO orgunit_kernel;
 
 GRANT USAGE, SELECT ON SEQUENCE orgunit.org_node_key_seq TO orgunit_kernel;
+GRANT SELECT ON TABLE iam.principals TO orgunit_kernel;
 
 ALTER FUNCTION orgunit.is_valid_org_node_key(text)
   OWNER TO orgunit_kernel;
