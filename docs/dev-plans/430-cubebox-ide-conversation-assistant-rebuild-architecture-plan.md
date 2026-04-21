@@ -62,9 +62,9 @@
 1. 新增 CubeBox（丘宝）作为一方对话助手模块，英文模块名为 `cubebox`。
 2. 提供 Web 应用内右侧悬挂抽屉入口：默认停靠右侧，点击图标拉出，再次点击收起。
 3. 支持流式对话回复，用户能看到渐进式输出、代码块、错误提示和中止按钮。
-4. 提供 AI 网关配置能力：供应商、base URL、模型、API Key、超时、限额、启停、健康检查、故障切换。
+4. 提供 AI 网关配置能力：provider、base URL、active model、API Key、显式连通性验证与基础健康状态。
 5. 网关对前端暴露单一内部 API，不让前端直接持有外部供应商 API Key。
-6. 会话持久化支持新建、恢复、重命名、归档和删除会话。
+6. 会话持久化支持新建、读取、恢复和归档会话。
 7. 上下文管理支持 token budget、保留输出区、滑动窗口、摘要压缩、工具输出压缩、结构化状态对象和最近回合原文保留。
 8. 支持显式上下文来源：当前页面、当前业务对象、用户选中内容、最近操作、错误详情。
 9. 以租户、用户和会话为隔离边界，遵守 RLS、Casbin、审计和错误码契约。
@@ -110,7 +110,7 @@
 
 - 对内暴露统一聊天接口，首期兼容 OpenAI chat/completions 或 Responses 风格的最小子集。
 - 对外适配范围冻结为一个 OpenAI-compatible provider 最小闭环；其他供应商不在当前交付范围内。
-- 管理 API Key、base URL、模型名、默认参数、超时、重试、故障切换、启停状态和健康检查。
+- 管理 API Key、base URL、active model、启停状态和显式连通性验证/基础健康状态。
 - 统一处理 SSE 流式转发、错误映射、审计、token 用量记录和配额判断。
 
 ### 6.2 运行时技术口径
@@ -119,23 +119,22 @@
 - provider adapter 必须是可插拔接口，避免在业务 handler 中散落供应商分支。
 - API Key 必须服务端加密保存，前端只看到 provider alias、模型展示名和健康状态。
 - 请求路径必须显式租户注入、显式事务边界和 fail-closed 错误处理。
-- 网关主请求链只做必要鉴权、限额判断、请求映射和 SSE 转发；用量统计、审计写入和健康指标可在响应完成后异步落库，但必须保证失败可观测。
+- 网关主请求链只做必要鉴权、请求映射和 SSE 转发；用量统计、审计写入和健康指标可在响应完成后异步落库，但必须保证失败可观测。
 
 ### 6.3 配置模型
 
-首期需要冻结以下配置对象，但新增表和迁移必须在实施前再次获得用户手工确认：
+首期需要冻结以下最小配置对象，但新增表和迁移必须在实施前再次获得用户手工确认：
 
 - `model_provider`：供应商编码、展示名、base URL、协议类型、启停状态、健康状态。
 - `model_credential`：加密 API Key、密钥版本、创建人、更新时间、最后验证结果。
-- `model_route`：模型别名、上游模型名、默认 provider、fallback provider、超时、最大输入 token、最大输出 token。
-- `model_quota`：租户级、用户级或模型级 RPM/TPM/每日预算。
+- `model_selection`：当前启用的 active model、展示名与必要默认参数。
 - `model_usage_event`：请求时间、会话、模型、输入输出 token、错误码、延迟、trace_id。
 
 ### 6.4 外部网关借鉴边界
 
-- 借鉴 Bifrost：Go runtime、低开销路由、故障切换、自适应 provider 选择、SSE 直通。
-- 借鉴 One API：OpenAI-compatible 统一入口、多供应商适配、模型别名与渠道配置。
-- 借鉴 LiteLLM / Portkey：provider 覆盖、观测、限额、虚拟 key 和错误归一化。
+- 借鉴 Bifrost：Go runtime、低开销请求转发、显式验证与 SSE 直通。
+- 借鉴 One API：OpenAI-compatible 统一入口与最小 provider/config 信息架构。
+- 借鉴 LiteLLM / Portkey：错误归一化与观测字段组织方式。
 - Slice 2 执行口径以 `DEV-PLAN-433` 为准：Bifrost 为主参考，要求尽量复用或重构其代码或功能；Codex 只复用局部 provider adapter / bridge / stream parser；本仓继续保留密钥治理、RLS/Authz、错误码、审计和持久化的自研主导权。
 - 不直接复制外部项目数据库模型作为本仓事实源，不绕过本仓 RLS/Authz/路由/错误码门禁。
 
@@ -190,7 +189,7 @@
 - 前端不得直接请求外部模型供应商。
 - API Key 只允许服务端保存和解密，密钥展示永远只显示掩码。
 - 模型配置管理需要独立权限对象；普通用户只能选择已授权模型，不可读取密钥。
-- 对话请求必须记录 trace_id、conversation_id、model alias、latency、token usage、错误码和调用结果摘要。
+- 对话请求必须记录 trace_id、conversation_id、active model、latency、token usage、错误码和调用结果摘要。
 - 所有用户可见错误必须走项目错误码与 i18n 文案，不直接透出供应商原始错误。
 - Prompt 和工具上下文不得包含不属于当前租户和当前用户权限范围的数据。
 - 模型输出不得绕过业务模块提交入口；任何业务写入都必须回到现有 One Door、事务、RLS 和审计链路。
@@ -226,15 +225,15 @@
 
 - [ ] 按 `DEV-PLAN-433` 先完成 Bifrost 资产评估与复用/重构清单冻结，不从零自研平行网关。
 - [ ] 以 Bifrost 为主参考，结合 Codex provider adapter / bridge / stream parser，建立 provider adapter 接口与一个 OpenAI-compatible provider；其他供应商不进入首期闭环。
-- [ ] 以 Bifrost 为主参考实现服务端模型配置读取、密钥解密、请求映射、SSE 转发、错误映射与 fallback 骨架。
-- [ ] 以 Bifrost 的 health/readiness 思路实现模型健康检查与配置验证。
-- [ ] 补 handler、service、adapter 单元测试、流式响应测试和 failover 测试。
+- [ ] 以 Bifrost 为主参考实现服务端模型配置读取、密钥解密、请求映射、SSE 转发与错误映射；fallback 不在当前交付范围。
+- [ ] 以 Bifrost 的 health/readiness 思路实现显式连通性验证与基础健康检查。
+- [ ] 补 handler、service、adapter 单元测试、流式响应测试和错误路径测试。
 
 ### Slice 3：会话持久化
 
 - [ ] 按 `DEV-PLAN-432` 先完成 Codex append-only history、session index、archive/resume、rollout/reconstruction 语义复用/重构评估。
 - [ ] 新增 conversation、message、summary、usage event 的 schema 和 sqlc。
-- [ ] 实现新建、列出、恢复、归档、删除会话；生命周期语义优先对齐 Codex thread list/read/resume/archive。
+- [ ] 实现新建、读取、列出、恢复、归档会话；生命周期语义优先对齐 Codex thread list/read/resume/archive。
 - [ ] 实现消息落库、流式回复完成后的最终状态固化；原始消息必须 append-only，不因压缩被覆盖。
 - [ ] 补租户隔离、权限、RLS、并发和错误路径测试。
 - [ ] `conversation list/read/resume/archive/rename` 的生命周期 contract、持久化语义与 API 行为由 `DEV-PLAN-432` 持有；`DEV-PLAN-431` 只消费其 UI 入口与展示结果。
@@ -255,7 +254,7 @@
 - [ ] 按 `DEV-PLAN-435` 先完成 Bifrost 管理面资产评估与复用/重构清单冻结，不为 Slice 5 再切换第二套主参考。
 - [ ] 以 Bifrost 为主参考新增模型供应商配置页或设置面板，`One API` 仅补充渠道/模型映射的信息架构。
 - [ ] 支持新增、验证、启用、停用、轮换 API Key；密钥生命周期、掩码展示、审计和权限矩阵由本仓主导。
-- [ ] 支持模型别名、fallback、超时、限额和默认模型配置，并与 `DEV-PLAN-433` 的 provider route / health / capability 语义对齐。
+- [ ] 支持 active model 选择与基础 provider 配置展示，并与 `DEV-PLAN-433` 的 provider / health / validation 语义对齐；quota、route alias、default model、fallback 不在当前交付范围。
 - [ ] 补 Authz、路由、错误提示、i18n 和 E2E。
 
 ### Slice 6：封板验证
@@ -266,7 +265,7 @@
 ## 11. 测试与覆盖率
 
 - Go 单元测试覆盖 provider adapter、prompt builder、token budget、summary compaction、error mapping、quota、credential masking。
-- 服务层测试覆盖租户隔离、权限失败、模型不可用、SSE 中断、重试与 fallback。
+- 服务层测试覆盖租户隔离、权限失败、模型不可用、SSE 中断与错误映射。
 - 前端测试覆盖抽屉开关、输入、停止生成、会话恢复、配置表单、错误提示。
 - E2E 覆盖最小用户闭环：配置模型 -> 打开抽屉 -> 新建会话 -> 流式回复 -> 关闭重开 -> 恢复会话。
 - 覆盖率缺口按 `DEV-PLAN-300` 分类处理：可构造真实分支补测试，可证明死分支删除，不通过新增补洞式文件绕过。
@@ -298,8 +297,8 @@
 
 1. **E2E 口径冻结**：required gate 只允许使用本地 deterministic provider、mock SSE 或仓内可控 fake provider；不把真实外部模型调用纳入阻断式 CI。真实模型调用只允许作为手工 smoke、非阻断 nightly 或 readiness 补充证据存在，不得成为 merge 前置条件。
 2. **API Key 加密方案冻结**：复用仓库现有服务端密钥体系作为主密钥/KEK，CubeBox 模块内采用 envelope encryption 数据模型落地 `model_credential`。模块侧只保存密文、密钥版本、掩码展示字段、验证结果与轮换审计元数据；密钥明文只允许出现在录入与即时验证路径，不得写入前端状态、日志、审计 payload 或普通查询返回。
-3. **模型配置权限边界冻结**：首期由平台管理员负责 provider、credential、route、fallback、default model 等全局配置；租户管理员只负责在已授权范围内启用模型、配置租户默认模型与额度/配额等租户级选择，不直接管理供应商密钥。后续若要开放租户自持 provider/key，必须另立计划并重新评审 Authz、RLS、审计与密钥治理边界。
-4. **summary model 策略冻结**：本计划不做独立 summary model，不采用“仅规则裁剪”替代语义压缩；compaction 固定使用当前主模型或当前 route 对应模型执行，相关配置、健康检查、fallback 与管理面不增加第二条 summary model 配置链。
+3. **模型配置权限边界冻结**：首期由平台管理员负责 provider、credential、active model 与基础健康验证等全局配置；租户管理员只负责在已授权范围内选择当前可用模型，不直接管理供应商密钥，也不持有 quota、route alias、default model 或 fallback 等治理能力。后续若要开放租户自持 provider/key 或更复杂模型治理，必须另立计划并重新评审 Authz、RLS、审计与密钥治理边界。
+4. **summary model 策略冻结**：本计划不做独立 summary model，不采用“仅规则裁剪”替代语义压缩；compaction 固定使用当前主模型执行，相关配置、健康检查、fallback 与管理面不增加第二条 summary model 配置链。
 5. **VS Code 客户端边界冻结**：本计划不实现真正的 VS Code extension 客户端，也不立 IDE adapter 子计划；当前交付范围只包含 Web Shell 内的一方 CubeBox 主链，VS Code 仅作为交互参考来源，不进入实施、测试、门禁或完成定义。
 
 ## 15. 参考链接
