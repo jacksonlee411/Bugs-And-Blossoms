@@ -14,7 +14,6 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jacksonlee411/Bugs-And-Blossoms/pkg/authz"
 	orgunitpkg "github.com/jacksonlee411/Bugs-And-Blossoms/pkg/orgunit"
-	"github.com/jacksonlee411/Bugs-And-Blossoms/pkg/setid"
 	"github.com/jacksonlee411/Bugs-And-Blossoms/pkg/uuidv7"
 )
 
@@ -1906,32 +1905,6 @@ func (s *orgUnitPGStore) MinEffectiveDate(ctx context.Context, tenantID string) 
 	return value.Format(asOfLayout), true, nil
 }
 
-func (s *orgUnitPGStore) ResolveSetID(ctx context.Context, tenantID string, orgNodeKey string, asOfDate string) (string, error) {
-	tx, err := s.pool.Begin(ctx)
-	if err != nil {
-		return "", err
-	}
-	defer func() { _ = tx.Rollback(context.Background()) }()
-
-	if _, err := tx.Exec(ctx, `SELECT set_config('app.current_tenant', $1, true);`, tenantID); err != nil {
-		return "", err
-	}
-
-	normalizedOrgNodeKey, err := normalizeOrgNodeKeyInput(orgNodeKey)
-	if err != nil {
-		return "", err
-	}
-
-	out, err := setid.Resolve(ctx, tx, tenantID, normalizedOrgNodeKey, asOfDate)
-	if err != nil {
-		return "", err
-	}
-
-	if err := tx.Commit(ctx); err != nil {
-		return "", err
-	}
-	return out, nil
-}
 func (s *orgUnitPGStore) CreateNodeCurrent(ctx context.Context, tenantID string, effectiveDate string, orgCode string, name string, parentID string, isBusinessUnit bool) (OrgUnitNode, error) {
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
@@ -2341,13 +2314,6 @@ func (s *orgUnitMemoryStore) ListNodesCurrent(_ context.Context, tenantID string
 
 func (s *orgUnitMemoryStore) ListNodesCurrentWithVisibility(_ context.Context, tenantID string, _ string, _ bool) ([]OrgUnitNode, error) {
 	return s.listNodes(tenantID)
-}
-
-func (s *orgUnitMemoryStore) ResolveSetID(_ context.Context, _ string, orgNodeKey string, _ string) (string, error) {
-	if _, err := normalizeOrgNodeKeyInput(orgNodeKey); err != nil {
-		return "", err
-	}
-	return "S2601", nil
 }
 
 func (s *orgUnitMemoryStore) CreateNodeCurrent(_ context.Context, tenantID string, _ string, orgCode string, name string, _ string, isBusinessUnit bool) (OrgUnitNode, error) {

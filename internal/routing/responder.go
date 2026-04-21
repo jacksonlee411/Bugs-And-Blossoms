@@ -128,8 +128,6 @@ func knownErrorMessage(code string) string {
 		return "租户上下文缺失，请刷新后重试。"
 	case "tenant_resolve_error":
 		return "租户解析失败，请稍后重试。"
-	case "CAPABILITY_CONTEXT_MISMATCH":
-		return "上下文与服务端判定不一致，请检查业务单元与生效日期后重试。"
 	case "ORG_ROOT_ALREADY_EXISTS":
 		return "根组织已存在，请改为选择上级组织后新建。"
 	case "ORG_TREE_NOT_INITIALIZED":
@@ -148,12 +146,8 @@ func knownErrorMessage(code string) string {
 		return "必填字段缺少有效值，请补全后重试。"
 	case "policy_missing":
 		return "未找到匹配的字段策略，请刷新后重试。"
-	case "policy_redundant_override":
-		return "该策略与基线配置一致，无需重复覆盖。"
 	case "policy_conflict_ambiguous":
 		return "字段策略存在冲突，请联系管理员。"
-	case "policy_disable_not_allowed":
-		return "停用该策略会导致当前上下文无可用策略，请先补齐兜底策略后再重试。"
 	case "policy_version_required":
 		return "缺少策略版本，请刷新页面后重试。"
 	case "policy_version_conflict":

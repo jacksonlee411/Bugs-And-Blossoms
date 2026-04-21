@@ -1,19 +1,5 @@
 version: 1
 errors:
-  - code: ACTOR_SCOPE_FORBIDDEN
-    module: setid
-    http_status: 403
-    severity: error
-    user_message_key: errors.actor_scope_forbidden
-    backend_policy: passthrough
-    frontend_policy: mapped
-  - code: CAPABILITY_CONTEXT_MISMATCH
-    module: setid
-    http_status: 403
-    severity: error
-    user_message_key: errors.capability_context_mismatch
-    backend_policy: mapped
-    frontend_policy: mapped
   - code: DEFAULT_RULE_REQUIRED
     module: orgunit
     http_status: 422
@@ -35,13 +21,6 @@ errors:
     user_message_key: errors.policy_conflict_ambiguous
     backend_policy: mapped
     frontend_policy: mapped
-  - code: policy_disable_not_allowed
-    module: setid
-    http_status: 422
-    severity: error
-    user_message_key: errors.policy_disable_not_allowed
-    backend_policy: mapped
-    frontend_policy: mapped
   - code: FIELD_POLICY_EXPR_INVALID
     module: orgunit
     http_status: 422
@@ -49,32 +28,11 @@ errors:
     user_message_key: errors.field_policy_expr_invalid
     backend_policy: passthrough
     frontend_policy: mapped
-  - code: policy_mode_invalid
-    module: setid
-    http_status: 422
-    severity: error
-    user_message_key: errors.policy_mode_invalid
-    backend_policy: passthrough
-    frontend_policy: mapped
-  - code: policy_mode_combination_invalid
-    module: setid
-    http_status: 422
-    severity: error
-    user_message_key: errors.policy_mode_combination_invalid
-    backend_policy: passthrough
-    frontend_policy: mapped
   - code: policy_missing
     module: orgunit
     http_status: 422
     severity: error
     user_message_key: errors.policy_missing
-    backend_policy: mapped
-    frontend_policy: mapped
-  - code: policy_redundant_override
-    module: setid
-    http_status: 422
-    severity: error
-    user_message_key: errors.policy_redundant_override
     backend_policy: mapped
     frontend_policy: mapped
   - code: policy_version_required
@@ -195,41 +153,6 @@ errors:
     severity: error
     user_message_key: errors.org_tree_not_initialized
     backend_policy: mapped
-    frontend_policy: mapped
-  - code: OWNER_CONTEXT_FORBIDDEN
-    module: setid
-    http_status: 403
-    severity: error
-    user_message_key: errors.owner_context_forbidden
-    backend_policy: passthrough
-    frontend_policy: mapped
-  - code: OWNER_CONTEXT_REQUIRED
-    module: setid
-    http_status: 400
-    severity: error
-    user_message_key: errors.owner_context_required
-    backend_policy: passthrough
-    frontend_policy: mapped
-  - code: PACKAGE_CODE_INVALID
-    module: setid
-    http_status: 400
-    severity: error
-    user_message_key: errors.package_code_invalid
-    backend_policy: passthrough
-    frontend_policy: mapped
-  - code: PACKAGE_CODE_RESERVED
-    module: setid
-    http_status: 422
-    severity: error
-    user_message_key: errors.package_code_reserved
-    backend_policy: passthrough
-    frontend_policy: mapped
-  - code: PACKAGE_OWNER_INVALID
-    module: setid
-    http_status: 400
-    severity: error
-    user_message_key: errors.package_owner_invalid
-    backend_policy: passthrough
     frontend_policy: mapped
   - code: audit_error
     module: iam
@@ -539,20 +462,6 @@ errors:
     user_message_key: errors.invalid_as_of
     backend_policy: passthrough
     frontend_policy: mapped
-  - code: invalid_business_unit_id
-    module: setid
-    http_status: 400
-    severity: error
-    user_message_key: errors.invalid_business_unit_id
-    backend_policy: passthrough
-    frontend_policy: mapped
-  - code: invalid_disable_date
-    module: setid
-    http_status: 400
-    severity: error
-    user_message_key: errors.invalid_disable_date
-    backend_policy: passthrough
-    frontend_policy: mapped
   - code: invalid_credentials
     module: iam
     http_status: 401
@@ -565,13 +474,6 @@ errors:
     http_status: 400
     severity: error
     user_message_key: errors.invalid_effective_date
-    backend_policy: passthrough
-    frontend_policy: mapped
-  - code: invalid_explain_level
-    module: setid
-    http_status: 400
-    severity: error
-    user_message_key: errors.invalid_explain_level
     backend_policy: passthrough
     frontend_policy: mapped
   - code: invalid_form
@@ -607,34 +509,6 @@ errors:
     http_status: 400
     severity: error
     user_message_key: errors.invalid_json
-    backend_policy: passthrough
-    frontend_policy: mapped
-  - code: invalid_org_unit_id
-    module: setid
-    http_status: 400
-    severity: error
-    user_message_key: errors.invalid_org_unit_id
-    backend_policy: passthrough
-    frontend_policy: mapped
-  - code: business_unit_org_code_invalid
-    module: setid
-    http_status: 400
-    severity: error
-    user_message_key: errors.business_unit_org_code_invalid
-    backend_policy: passthrough
-    frontend_policy: mapped
-  - code: business_unit_org_code_not_found
-    module: setid
-    http_status: 404
-    severity: error
-    user_message_key: errors.business_unit_org_code_not_found
-    backend_policy: passthrough
-    frontend_policy: mapped
-  - code: resolved_setid_mismatch
-    module: setid
-    http_status: 409
-    severity: error
-    user_message_key: errors.resolved_setid_mismatch
     backend_policy: passthrough
     frontend_policy: mapped
   - code: invalid_request
@@ -686,13 +560,6 @@ errors:
     user_message_key: errors.orgunit_resolve_org_code_failed
     backend_policy: passthrough
     frontend_policy: mapped
-  - code: orgunit_resolver_missing
-    module: setid
-    http_status: 500
-    severity: error
-    user_message_key: errors.orgunit_resolver_missing
-    backend_policy: passthrough
-    frontend_policy: mapped
   - code: orgunit_service_missing
     module: orgunit
     http_status: 500
@@ -733,20 +600,6 @@ errors:
     http_status: 500
     severity: error
     user_message_key: errors.session_lookup_error
-    backend_policy: passthrough
-    frontend_policy: mapped
-  - code: setid_missing
-    module: setid
-    http_status: 400
-    severity: error
-    user_message_key: errors.setid_missing
-    backend_policy: passthrough
-    frontend_policy: mapped
-  - code: setid_resolver_missing
-    module: setid
-    http_status: 500
-    severity: error
-    user_message_key: errors.setid_resolver_missing
     backend_policy: passthrough
     frontend_policy: mapped
   - code: tenant_missing

@@ -215,10 +215,6 @@ type orgUnitRequestIDEventReader interface {
 	FindEventByRequestID(ctx context.Context, tenantID string, requestID string) (types.OrgUnitEvent, bool, error)
 }
 
-type orgUnitSetIDResolver interface {
-	ResolveSetID(ctx context.Context, tenantID string, orgNodeKey string, asOf string) (string, error)
-}
-
 type orgUnitTreeInitializationReader interface {
 	IsOrgTreeInitialized(ctx context.Context, tenantID string) (bool, error)
 }
@@ -253,14 +249,6 @@ type createOrgUnitPrecheckWriteStoreReader struct {
 
 func (r createOrgUnitPrecheckWriteStoreReader) ResolveOrgNodeKey(ctx context.Context, tenantID string, orgCode string) (string, error) {
 	return r.store.ResolveOrgNodeKey(ctx, tenantID, orgCode)
-}
-
-func (r createOrgUnitPrecheckWriteStoreReader) ResolveSetID(ctx context.Context, tenantID string, orgNodeKey string, asOf string) (string, error) {
-	resolver, ok := r.store.(orgUnitSetIDResolver)
-	if !ok {
-		return "", errors.New(createOrgUnitContextCodeSetIDBindingMissing)
-	}
-	return resolver.ResolveSetID(ctx, tenantID, orgNodeKey, asOf)
 }
 
 func (r createOrgUnitPrecheckWriteStoreReader) IsOrgTreeInitialized(ctx context.Context, tenantID string) (bool, error) {
@@ -1731,20 +1719,6 @@ func readCreateExtFieldString(ext map[string]any, fieldKey string) (string, bool
 	return strings.TrimSpace(value), true, nil
 }
 
-func mapSetIDFieldDecisionError(err error) error {
-	code := strings.TrimSpace(err.Error())
-	switch code {
-	case errFieldPolicyMissing:
-		return errors.New(errFieldPolicyMissing)
-	case errFieldPolicyConflict:
-		return errors.New(errFieldPolicyConflict)
-	case "FIELD_DEFAULT_RULE_MISSING":
-		return errors.New(errDefaultRuleRequired)
-	default:
-		return err
-	}
-}
-
 func mapCreateOrgUnitPolicyContextError(err *CreateOrgUnitPolicyContextErrorV1) error {
 	if err == nil {
 		return nil
@@ -1758,8 +1732,6 @@ func mapCreateOrgUnitPolicyContextError(err *CreateOrgUnitPolicyContextErrorV1) 
 			return err.Cause
 		}
 		return errors.New(errOrgCodeInvalid)
-	case createOrgUnitContextCodeSetIDBindingMissing, createOrgUnitContextCodeSetIDSourceInvalid:
-		return errors.New(errFieldPolicyMissing)
 	default:
 		if err.Cause != nil {
 			return err.Cause

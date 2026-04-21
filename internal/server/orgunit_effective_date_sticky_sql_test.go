@@ -9,7 +9,7 @@ import (
 
 func TestOrgunitEngine_StickyEffectiveDateIsAppliedInViewAndReplay(t *testing.T) {
 	root := repoRootFromCurrentFile(t)
-	p := filepath.Join(root, "modules/orgunit/infrastructure/persistence/schema/00003_orgunit_engine.sql")
+	p := filepath.Join(root, "modules/orgunit/infrastructure/persistence/schema/00026_orgunit_org_node_key_engine.sql")
 	b, err := os.ReadFile(p)
 	if err != nil {
 		t.Fatalf("read %s: %v", p, err)

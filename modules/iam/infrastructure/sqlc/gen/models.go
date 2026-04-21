@@ -135,72 +135,11 @@ type IamTenantDomain struct {
 	UpdatedAt  pgtype.Timestamptz `json:"updated_at"`
 }
 
-type OrgunitGlobalSetid struct {
-	TenantUuid  pgtype.UUID        `json:"tenant_uuid"`
-	Setid       string             `json:"setid"`
-	Name        string             `json:"name"`
-	Status      string             `json:"status"`
-	LastEventID int64              `json:"last_event_id"`
-	CreatedAt   pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
-}
-
-type OrgunitGlobalSetidEvent struct {
-	ID              int64              `json:"id"`
-	EventUuid       pgtype.UUID        `json:"event_uuid"`
-	TenantUuid      pgtype.UUID        `json:"tenant_uuid"`
-	EventType       string             `json:"event_type"`
-	Setid           string             `json:"setid"`
-	Payload         []byte             `json:"payload"`
-	RequestID       string             `json:"request_id"`
-	InitiatorUuid   pgtype.UUID        `json:"initiator_uuid"`
-	TransactionTime pgtype.Timestamptz `json:"transaction_time"`
-	CreatedAt       pgtype.Timestamptz `json:"created_at"`
-}
-
-type OrgunitGlobalSetidScopePackage struct {
-	TenantUuid  pgtype.UUID        `json:"tenant_uuid"`
-	ScopeCode   string             `json:"scope_code"`
-	PackageID   pgtype.UUID        `json:"package_id"`
-	PackageCode string             `json:"package_code"`
-	Name        string             `json:"name"`
-	Status      string             `json:"status"`
-	CreatedAt   pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
-}
-
-type OrgunitGlobalSetidScopePackageEvent struct {
-	ID              int64              `json:"id"`
-	EventUuid       pgtype.UUID        `json:"event_uuid"`
-	TenantUuid      pgtype.UUID        `json:"tenant_uuid"`
-	ScopeCode       string             `json:"scope_code"`
-	PackageID       pgtype.UUID        `json:"package_id"`
-	EventType       string             `json:"event_type"`
-	EffectiveDate   pgtype.Date        `json:"effective_date"`
-	Payload         []byte             `json:"payload"`
-	RequestID       string             `json:"request_id"`
-	InitiatorUuid   pgtype.UUID        `json:"initiator_uuid"`
-	TransactionTime pgtype.Timestamptz `json:"transaction_time"`
-	CreatedAt       pgtype.Timestamptz `json:"created_at"`
-}
-
-type OrgunitGlobalSetidScopePackageVersion struct {
-	ID          int64                     `json:"id"`
-	TenantUuid  pgtype.UUID               `json:"tenant_uuid"`
-	ScopeCode   string                    `json:"scope_code"`
-	PackageID   pgtype.UUID               `json:"package_id"`
-	PackageCode string                    `json:"package_code"`
-	Name        string                    `json:"name"`
-	Status      string                    `json:"status"`
-	Validity    pgtype.Range[pgtype.Date] `json:"validity"`
-	LastEventID int64                     `json:"last_event_id"`
-}
-
 type OrgunitOrgEvent struct {
 	ID                  int64              `json:"id"`
 	EventUuid           pgtype.UUID        `json:"event_uuid"`
 	TenantUuid          pgtype.UUID        `json:"tenant_uuid"`
-	OrgID               int32              `json:"org_id"`
+	OrgNodeKey          string             `json:"org_node_key"`
 	EventType           string             `json:"event_type"`
 	EffectiveDate       pgtype.Date        `json:"effective_date"`
 	Payload             []byte             `json:"payload"`
@@ -221,7 +160,7 @@ type OrgunitOrgEventsEffective struct {
 	ID              int64              `json:"id"`
 	EventUuid       pgtype.UUID        `json:"event_uuid"`
 	TenantUuid      pgtype.UUID        `json:"tenant_uuid"`
-	OrgID           int32              `json:"org_id"`
+	OrgNodeKey      string             `json:"org_node_key"`
 	EventType       interface{}        `json:"event_type"`
 	EffectiveDate   pgtype.Date        `json:"effective_date"`
 	Payload         interface{}        `json:"payload"`
@@ -231,22 +170,23 @@ type OrgunitOrgEventsEffective struct {
 	CreatedAt       pgtype.Timestamptz `json:"created_at"`
 }
 
-type OrgunitOrgIDAllocator struct {
+type OrgunitOrgNodeKeyRegistry struct {
+	OrgNodeKey string             `json:"org_node_key"`
+	Seq        int64              `json:"seq"`
 	TenantUuid pgtype.UUID        `json:"tenant_uuid"`
-	NextOrgID  int32              `json:"next_org_id"`
-	UpdatedAt  pgtype.Timestamptz `json:"updated_at"`
+	CreatedAt  pgtype.Timestamptz `json:"created_at"`
 }
 
 type OrgunitOrgTree struct {
-	TenantUuid pgtype.UUID        `json:"tenant_uuid"`
-	RootOrgID  int32              `json:"root_org_id"`
-	CreatedAt  pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt  pgtype.Timestamptz `json:"updated_at"`
+	TenantUuid     pgtype.UUID        `json:"tenant_uuid"`
+	RootOrgNodeKey string             `json:"root_org_node_key"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
 }
 
 type OrgunitOrgUnitCode struct {
 	TenantUuid pgtype.UUID        `json:"tenant_uuid"`
-	OrgID      int32              `json:"org_id"`
+	OrgNodeKey string             `json:"org_node_key"`
 	OrgCode    string             `json:"org_code"`
 	CreatedAt  pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt  pgtype.Timestamptz `json:"updated_at"`
@@ -255,11 +195,11 @@ type OrgunitOrgUnitCode struct {
 type OrgunitOrgUnitVersion struct {
 	ID                int64                     `json:"id"`
 	TenantUuid        pgtype.UUID               `json:"tenant_uuid"`
-	OrgID             int32                     `json:"org_id"`
-	ParentID          *int32                    `json:"parent_id"`
+	OrgNodeKey        string                    `json:"org_node_key"`
+	ParentOrgNodeKey  *string                   `json:"parent_org_node_key"`
 	NodePath          string                    `json:"node_path"`
 	Validity          pgtype.Range[pgtype.Date] `json:"validity"`
-	PathIds           []int32                   `json:"path_ids"`
+	PathNodeKeys      []string                  `json:"path_node_keys"`
 	Name              string                    `json:"name"`
 	FullNamePath      string                    `json:"full_name_path"`
 	Status            string                    `json:"status"`
@@ -402,124 +342,6 @@ type OrgunitOrgUnitVersion struct {
 	ExtStr69          *string                   `json:"ext_str_69"`
 	ExtStr70          *string                   `json:"ext_str_70"`
 	ExtLabelsSnapshot []byte                    `json:"ext_labels_snapshot"`
-}
-
-type OrgunitSetid struct {
-	TenantUuid  pgtype.UUID        `json:"tenant_uuid"`
-	Setid       string             `json:"setid"`
-	Name        string             `json:"name"`
-	Status      string             `json:"status"`
-	LastEventID int64              `json:"last_event_id"`
-	CreatedAt   pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
-}
-
-type OrgunitSetidBindingEvent struct {
-	ID              int64              `json:"id"`
-	EventUuid       pgtype.UUID        `json:"event_uuid"`
-	TenantUuid      pgtype.UUID        `json:"tenant_uuid"`
-	OrgID           int32              `json:"org_id"`
-	EventType       string             `json:"event_type"`
-	EffectiveDate   pgtype.Date        `json:"effective_date"`
-	Payload         []byte             `json:"payload"`
-	RequestID       string             `json:"request_id"`
-	InitiatorUuid   pgtype.UUID        `json:"initiator_uuid"`
-	TransactionTime pgtype.Timestamptz `json:"transaction_time"`
-	CreatedAt       pgtype.Timestamptz `json:"created_at"`
-}
-
-type OrgunitSetidBindingVersion struct {
-	ID          int64                     `json:"id"`
-	TenantUuid  pgtype.UUID               `json:"tenant_uuid"`
-	OrgID       int32                     `json:"org_id"`
-	Setid       string                    `json:"setid"`
-	Validity    pgtype.Range[pgtype.Date] `json:"validity"`
-	LastEventID int64                     `json:"last_event_id"`
-	CreatedAt   pgtype.Timestamptz        `json:"created_at"`
-	UpdatedAt   pgtype.Timestamptz        `json:"updated_at"`
-}
-
-type OrgunitSetidEvent struct {
-	ID              int64              `json:"id"`
-	EventUuid       pgtype.UUID        `json:"event_uuid"`
-	TenantUuid      pgtype.UUID        `json:"tenant_uuid"`
-	EventType       string             `json:"event_type"`
-	Setid           string             `json:"setid"`
-	Payload         []byte             `json:"payload"`
-	RequestID       string             `json:"request_id"`
-	InitiatorUuid   pgtype.UUID        `json:"initiator_uuid"`
-	TransactionTime pgtype.Timestamptz `json:"transaction_time"`
-	CreatedAt       pgtype.Timestamptz `json:"created_at"`
-}
-
-type OrgunitSetidScopePackage struct {
-	TenantUuid  pgtype.UUID        `json:"tenant_uuid"`
-	ScopeCode   string             `json:"scope_code"`
-	PackageID   pgtype.UUID        `json:"package_id"`
-	PackageCode string             `json:"package_code"`
-	Name        string             `json:"name"`
-	Status      string             `json:"status"`
-	CreatedAt   pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
-	OwnerSetid  string             `json:"owner_setid"`
-}
-
-type OrgunitSetidScopePackageEvent struct {
-	ID              int64              `json:"id"`
-	EventUuid       pgtype.UUID        `json:"event_uuid"`
-	TenantUuid      pgtype.UUID        `json:"tenant_uuid"`
-	ScopeCode       string             `json:"scope_code"`
-	PackageID       pgtype.UUID        `json:"package_id"`
-	EventType       string             `json:"event_type"`
-	EffectiveDate   pgtype.Date        `json:"effective_date"`
-	Payload         []byte             `json:"payload"`
-	RequestID       string             `json:"request_id"`
-	InitiatorUuid   pgtype.UUID        `json:"initiator_uuid"`
-	TransactionTime pgtype.Timestamptz `json:"transaction_time"`
-	CreatedAt       pgtype.Timestamptz `json:"created_at"`
-}
-
-type OrgunitSetidScopePackageVersion struct {
-	ID          int64                     `json:"id"`
-	TenantUuid  pgtype.UUID               `json:"tenant_uuid"`
-	ScopeCode   string                    `json:"scope_code"`
-	PackageID   pgtype.UUID               `json:"package_id"`
-	PackageCode string                    `json:"package_code"`
-	Name        string                    `json:"name"`
-	Status      string                    `json:"status"`
-	Validity    pgtype.Range[pgtype.Date] `json:"validity"`
-	LastEventID int64                     `json:"last_event_id"`
-	OwnerSetid  string                    `json:"owner_setid"`
-}
-
-type OrgunitSetidScopeSubscription struct {
-	ID                     int64                     `json:"id"`
-	TenantUuid             pgtype.UUID               `json:"tenant_uuid"`
-	Setid                  string                    `json:"setid"`
-	ScopeCode              string                    `json:"scope_code"`
-	PackageID              pgtype.UUID               `json:"package_id"`
-	PackageOwnerTenantUuid pgtype.UUID               `json:"package_owner_tenant_uuid"`
-	Validity               pgtype.Range[pgtype.Date] `json:"validity"`
-	LastEventID            int64                     `json:"last_event_id"`
-	CreatedAt              pgtype.Timestamptz        `json:"created_at"`
-	UpdatedAt              pgtype.Timestamptz        `json:"updated_at"`
-}
-
-type OrgunitSetidScopeSubscriptionEvent struct {
-	ID                     int64              `json:"id"`
-	EventUuid              pgtype.UUID        `json:"event_uuid"`
-	TenantUuid             pgtype.UUID        `json:"tenant_uuid"`
-	Setid                  string             `json:"setid"`
-	ScopeCode              string             `json:"scope_code"`
-	PackageID              pgtype.UUID        `json:"package_id"`
-	PackageOwnerTenantUuid pgtype.UUID        `json:"package_owner_tenant_uuid"`
-	EventType              string             `json:"event_type"`
-	EffectiveDate          pgtype.Date        `json:"effective_date"`
-	Payload                []byte             `json:"payload"`
-	RequestID              string             `json:"request_id"`
-	InitiatorUuid          pgtype.UUID        `json:"initiator_uuid"`
-	TransactionTime        pgtype.Timestamptz `json:"transaction_time"`
-	CreatedAt              pgtype.Timestamptz `json:"created_at"`
 }
 
 type OrgunitTenantFieldConfig struct {

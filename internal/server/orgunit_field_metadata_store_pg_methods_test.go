@@ -389,23 +389,10 @@ func TestOrgUnitPGStore_EvaluateRescindOrgDenyReasons(t *testing.T) {
 		}
 	})
 
-	t.Run("dependencies query error", func(t *testing.T) {
-		tx := &stubTx{
-			row:  ptrScanRow{err: pgx.ErrNoRows},
-			row2: ptrScanRow{err: pgx.ErrNoRows},
-			row3: ptrScanRow{err: errors.New("boom")},
-		}
-		store := &orgUnitPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx, nil })}
-		if _, err := store.EvaluateRescindOrgDenyReasons(ctx, "t1", mustTestOrgNodeKey(t, nowOrgID)); err == nil {
-			t.Fatal("expected error")
-		}
-	})
-
 	t.Run("commit error", func(t *testing.T) {
 		tx := &stubTx{
 			row:       ptrScanRow{err: pgx.ErrNoRows},
 			row2:      ptrScanRow{err: pgx.ErrNoRows},
-			row3:      ptrScanRow{vals: []any{false}},
 			commitErr: errors.New("commit"),
 		}
 		store := &orgUnitPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx, nil })}
@@ -418,7 +405,6 @@ func TestOrgUnitPGStore_EvaluateRescindOrgDenyReasons(t *testing.T) {
 		tx := &stubTx{
 			row:  ptrScanRow{err: pgx.ErrNoRows},
 			row2: ptrScanRow{err: pgx.ErrNoRows},
-			row3: ptrScanRow{vals: []any{false}},
 		}
 		store := &orgUnitPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx, nil })}
 		deny, err := store.EvaluateRescindOrgDenyReasons(ctx, "t1", mustTestOrgNodeKey(t, nowOrgID))
@@ -434,7 +420,6 @@ func TestOrgUnitPGStore_EvaluateRescindOrgDenyReasons(t *testing.T) {
 		tx := &stubTx{
 			row:  ptrScanRow{err: pgx.ErrNoRows},
 			row2: ptrScanRow{vals: []any{""}},
-			row3: ptrScanRow{vals: []any{false}},
 		}
 		store := &orgUnitPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx, nil })}
 		deny, err := store.EvaluateRescindOrgDenyReasons(ctx, "t1", mustTestOrgNodeKey(t, nowOrgID))
@@ -446,22 +431,21 @@ func TestOrgUnitPGStore_EvaluateRescindOrgDenyReasons(t *testing.T) {
 		}
 	})
 
-	t.Run("root/children/dependencies denies", func(t *testing.T) {
+	t.Run("root and children denies", func(t *testing.T) {
 		tx := &stubTx{
 			row:  ptrScanRow{vals: []any{mustTestOrgNodeKey(t, nowOrgID)}},
 			row2: ptrScanRow{vals: []any{"1.2"}},
 			row3: ptrScanRow{vals: []any{true}},
-			row4: ptrScanRow{vals: []any{true}},
 		}
 		store := &orgUnitPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx, nil })}
 		deny, err := store.EvaluateRescindOrgDenyReasons(ctx, "t1", mustTestOrgNodeKey(t, nowOrgID))
 		if err != nil {
 			t.Fatalf("err=%v", err)
 		}
-		if len(deny) != 3 {
+		if len(deny) != 2 {
 			t.Fatalf("deny=%v", deny)
 		}
-		if deny[0] != orgUnitErrRootDeleteForbidden || deny[1] != orgUnitErrHasChildrenCannotDelete || deny[2] != orgUnitErrHasDependenciesCannotDelete {
+		if deny[0] != orgUnitErrRootDeleteForbidden || deny[1] != orgUnitErrHasChildrenCannotDelete {
 			t.Fatalf("deny=%v", deny)
 		}
 	})

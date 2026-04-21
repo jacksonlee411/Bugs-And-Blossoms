@@ -16,7 +16,6 @@ import (
 	celtypes "github.com/google/cel-go/common/types"
 	"github.com/google/cel-go/common/types/ref"
 	"github.com/jacksonlee411/Bugs-And-Blossoms/internal/routing"
-	orgunitpkg "github.com/jacksonlee411/Bugs-And-Blossoms/pkg/orgunit"
 )
 
 type orgUnitFieldDefinitionsAPIResponse struct {
@@ -141,8 +140,6 @@ type orgUnitFieldEnableCandidateField struct {
 	FieldKey       string `json:"field_key"`
 	DictCode       string `json:"dict_code"`
 	Name           string `json:"name"`
-	SetID          string `json:"setid,omitempty"`
-	SetIDSource    string `json:"setid_source,omitempty"`
 	ValueType      string `json:"value_type"`
 	DataSourceType string `json:"data_source_type"`
 }
@@ -153,39 +150,7 @@ type orgUnitPlainCustomHint struct {
 	DefaultValueType string   `json:"default_value_type"`
 }
 
-func writeOrgUnitSetIDContextError(w http.ResponseWriter, r *http.Request, field string, err error) {
-	if resolveErr, ok := asSetIDContextResolveError(err); ok {
-		switch resolveErr.Code {
-		case setIDContextCodeBusinessUnitInvalid:
-			switch {
-			case errors.Is(resolveErr.Cause, orgunitpkg.ErrOrgCodeInvalid):
-				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, field+"_invalid", field+" invalid")
-			case errors.Is(resolveErr.Cause, orgunitpkg.ErrOrgCodeNotFound):
-				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusNotFound, field+"_not_found", field+" not found")
-			default:
-				writeInternalAPIError(w, r, resolveErr.Cause, "orgunit_resolve_org_code_failed")
-			}
-		case setIDContextCodeOrgResolverMissing:
-			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusInternalServerError, "orgunit_store_missing", "orgunit store missing")
-		case setIDContextCodeSetIDResolverMissing:
-			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusInternalServerError, "setid_resolver_missing", "setid resolver missing")
-		case setIDContextCodeSetIDBindingMissing:
-			if resolveErr.Cause != nil {
-				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusUnprocessableEntity, stablePgMessage(resolveErr.Cause), "resolve setid failed")
-				return
-			}
-			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusUnprocessableEntity, "setid_missing", "setid missing")
-		case setIDContextCodeSetIDSourceInvalid:
-			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusUnprocessableEntity, resolveErr.Code, "setid source invalid")
-		default:
-			writeInternalAPIError(w, r, err, "orgunit_resolve_setid_context_failed")
-		}
-		return
-	}
-	writeInternalAPIError(w, r, err, "orgunit_resolve_setid_context_failed")
-}
-
-func handleOrgUnitFieldConfigsEnableCandidatesAPI(w http.ResponseWriter, r *http.Request, dictStore orgUnitDictRegistryStore, orgResolver OrgUnitCodeResolver, setIDStore SetIDGovernanceStore) {
+func handleOrgUnitFieldConfigsEnableCandidatesAPI(w http.ResponseWriter, r *http.Request, dictStore orgUnitDictRegistryStore) {
 	if r.Method != http.MethodGet {
 		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusMethodNotAllowed, "method_not_allowed", "method not allowed")
 		return
@@ -210,19 +175,6 @@ func handleOrgUnitFieldConfigsEnableCandidatesAPI(w http.ResponseWriter, r *http
 	if dictStore == nil {
 		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusInternalServerError, "dict_store_missing", "dict store missing")
 		return
-	}
-	resolvedSetID := orgUnitFieldOptionSetIDDeflt
-	resolvedSetIDSource := orgUnitFieldOptionSetIDSourceDeflt
-	rawOrgCode := strings.TrimSpace(r.URL.Query().Get("org_code"))
-	if rawOrgCode != "" {
-		contextResolver := newSetIDContextResolver(orgResolver, setIDStore)
-		resolvedCtx, resolveErr := contextResolver.ResolveOrgContext(r.Context(), tenant.ID, rawOrgCode, enabledOn, "org_code")
-		if resolveErr != nil {
-			writeOrgUnitSetIDContextError(w, r, "org_code", resolveErr)
-			return
-		}
-		resolvedSetID = resolvedCtx.ResolvedSetID
-		resolvedSetIDSource = resolvedCtx.SetIDSource
 	}
 
 	dicts, err := listOrgUnitDicts(r.Context(), dictStore, tenant.ID, enabledOn)
@@ -254,8 +206,6 @@ func handleOrgUnitFieldConfigsEnableCandidatesAPI(w http.ResponseWriter, r *http
 			FieldKey:       fieldKey,
 			DictCode:       code,
 			Name:           name,
-			SetID:          resolvedSetID,
-			SetIDSource:    resolvedSetIDSource,
 			ValueType:      "text",
 			DataSourceType: "DICT",
 		})
@@ -764,20 +714,6 @@ func handleOrgUnitFieldOptionsAPI(w http.ResponseWriter, r *http.Request, store 
 	}
 
 	keyword := strings.TrimSpace(r.URL.Query().Get("q"))
-	resolvedSetID := orgUnitFieldOptionSetIDDeflt
-	resolvedSetIDSource := orgUnitFieldOptionSetIDSourceDeflt
-	rawOrgCode := strings.TrimSpace(r.URL.Query().Get("org_code"))
-	if rawOrgCode != "" {
-		setIDStore, _ := store.(SetIDGovernanceStore)
-		contextResolver := newSetIDContextResolver(store, setIDStore)
-		resolvedCtx, resolveErr := contextResolver.ResolveOrgContext(r.Context(), tenant.ID, rawOrgCode, asOf, "org_code")
-		if resolveErr != nil {
-			writeOrgUnitSetIDContextError(w, r, "org_code", resolveErr)
-			return
-		}
-		resolvedSetID = resolvedCtx.ResolvedSetID
-		resolvedSetIDSource = resolvedCtx.SetIDSource
-	}
 
 	cfg, ok, err := reader.GetEnabledTenantFieldConfigAsOf(r.Context(), tenant.ID, fieldKey, asOf)
 	if err != nil {
@@ -820,16 +756,10 @@ func handleOrgUnitFieldOptionsAPI(w http.ResponseWriter, r *http.Request, store 
 			writeInternalAPIError(w, r, err, "orgunit_field_options_failed")
 			return
 		}
-		optionsWithSetID := make([]orgUnitFieldOption, 0, len(options))
-		for _, option := range options {
-			option.SetID = resolvedSetID
-			option.SetIDSource = resolvedSetIDSource
-			optionsWithSetID = append(optionsWithSetID, option)
-		}
 
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		w.WriteHeader(http.StatusOK)
-		_ = json.NewEncoder(w).Encode(orgUnitFieldOptionsAPIResponse{FieldKey: fieldKey, AsOf: asOf, Options: optionsWithSetID})
+		_ = json.NewEncoder(w).Encode(orgUnitFieldOptionsAPIResponse{FieldKey: fieldKey, AsOf: asOf, Options: options})
 		return
 	case "ENTITY":
 		fallthrough

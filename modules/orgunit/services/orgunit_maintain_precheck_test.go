@@ -12,7 +12,6 @@ import (
 
 type orgUnitMaintainPrecheckReaderStub struct {
 	resolveOrgNodeKeyFn             func(context.Context, string, string) (string, error)
-	resolveSetIDFn                  func(context.Context, string, string, string) (string, error)
 	isOrgTreeInitializedFn          func(context.Context, string) (bool, error)
 	listEnabledTenantFieldConfigsFn func(context.Context, string, string) ([]orgunittypes.TenantFieldConfig, error)
 	resolveTargetExistsAsOfFn       func(context.Context, string, string, string) (bool, error)
@@ -22,13 +21,6 @@ type orgUnitMaintainPrecheckReaderStub struct {
 func (s orgUnitMaintainPrecheckReaderStub) ResolveOrgNodeKey(ctx context.Context, tenantID string, orgCode string) (string, error) {
 	if s.resolveOrgNodeKeyFn != nil {
 		return s.resolveOrgNodeKeyFn(ctx, tenantID, orgCode)
-	}
-	return "", nil
-}
-
-func (s orgUnitMaintainPrecheckReaderStub) ResolveSetID(ctx context.Context, tenantID string, orgNodeKey string, asOf string) (string, error) {
-	if s.resolveSetIDFn != nil {
-		return s.resolveSetIDFn(ctx, tenantID, orgNodeKey, asOf)
 	}
 	return "", nil
 }
@@ -66,9 +58,6 @@ func testMaintainReaderReady() orgUnitMaintainPrecheckReaderStub {
 		resolveOrgNodeKeyFn: func(context.Context, string, string) (string, error) {
 			return "10000003", nil
 		},
-		resolveSetIDFn: func(context.Context, string, string, string) (string, error) {
-			return "S2601", nil
-		},
 		isOrgTreeInitializedFn: func(context.Context, string) (bool, error) {
 			return true, nil
 		},
@@ -94,13 +83,12 @@ func testMaintainReaderReady() orgUnitMaintainPrecheckReaderStub {
 
 func TestBuildOrgUnitMaintainPrecheckProjectionV1_CorrectReady(t *testing.T) {
 	result, err := BuildOrgUnitMaintainPrecheckProjectionV1(context.Background(), testMaintainReaderReady(), OrgUnitMaintainPrecheckInputV1{
-		Intent:                 OrgUnitMaintainIntentCorrect,
-		TenantID:               "tenant_1",
-		TargetEffectiveDate:    "2026-01-01",
-		OrgCode:                "FLOWER-C",
-		EffectivePolicyVersion: "epv1:test",
-		CanAdmin:               true,
-		NewName:                "运营中心",
+		Intent:              OrgUnitMaintainIntentCorrect,
+		TenantID:            "tenant_1",
+		TargetEffectiveDate: "2026-01-01",
+		OrgCode:             "FLOWER-C",
+		CanAdmin:            true,
+		NewName:             "运营中心",
 	})
 	if err != nil {
 		t.Fatalf("build err=%v", err)
@@ -108,8 +96,8 @@ func TestBuildOrgUnitMaintainPrecheckProjectionV1_CorrectReady(t *testing.T) {
 	if result.Projection.Readiness != orgUnitMaintainReadinessReady {
 		t.Fatalf("readiness=%q", result.Projection.Readiness)
 	}
-	if result.PolicyContext.ResolvedSetID != "S2601" || result.Projection.ResolvedSetID != "S2601" {
-		t.Fatalf("setid context=%+v projection=%+v", result.PolicyContext, result.Projection)
+	if result.PolicyContext.OrgNodeKey != "10000003" {
+		t.Fatalf("policy context=%+v", result.PolicyContext)
 	}
 	if len(result.Projection.MissingFields) != 0 || len(result.Projection.RejectionReasons) != 0 {
 		t.Fatalf("projection=%+v", result.Projection)
@@ -136,7 +124,6 @@ func TestBuildOrgUnitMaintainPrecheckProjectionV1_MoveCandidateConfirmationAndRe
 		TenantID:                      "tenant_1",
 		EffectiveDate:                 "2026-04-01",
 		OrgCode:                       "FLOWER-C",
-		EffectivePolicyVersion:        "epv1:test",
 		CanAdmin:                      true,
 		CandidateConfirmationRequired: true,
 		NewParentRequested:            true,
@@ -162,15 +149,14 @@ func TestBuildOrgUnitMaintainPrecheckProjectionV1_MoveCandidateConfirmationAndRe
 			RawEventType: orgunittypes.OrgUnitEventCreate,
 		}, nil
 	}
-	rejectedResult, err := BuildOrgUnitMaintainPrecheckProjectionV1(context.Background(), rejectedReader, OrgUnitMaintainPrecheckInputV1{
-		Intent:                 OrgUnitMaintainIntentCorrect,
-		TenantID:               "tenant_1",
-		TargetEffectiveDate:    "2026-01-01",
-		OrgCode:                "FLOWER-C",
-		EffectivePolicyVersion: "epv1:test",
-		CanAdmin:               true,
-		NewName:                "运营中心",
-	})
+		rejectedResult, err := BuildOrgUnitMaintainPrecheckProjectionV1(context.Background(), rejectedReader, OrgUnitMaintainPrecheckInputV1{
+			Intent:              OrgUnitMaintainIntentCorrect,
+			TenantID:            "tenant_1",
+			TargetEffectiveDate: "2026-01-01",
+			OrgCode:             "FLOWER-C",
+			CanAdmin:            true,
+			NewName:             "运营中心",
+		})
 	if err != nil {
 		t.Fatalf("rejected build err=%v", err)
 	}
@@ -186,14 +172,13 @@ func TestBuildOrgUnitMaintainPrecheckProjectionV1_MoveCandidateConfirmationAndRe
 }
 
 func TestBuildOrgUnitMaintainPrecheckProjectionV1_DisableEnableReady(t *testing.T) {
-	disableResult, err := BuildOrgUnitMaintainPrecheckProjectionV1(context.Background(), testMaintainReaderReady(), OrgUnitMaintainPrecheckInputV1{
-		Intent:                 OrgUnitMaintainIntentDisable,
-		TenantID:               "tenant_1",
-		EffectiveDate:          "2026-05-01",
-		OrgCode:                "FLOWER-C",
-		EffectivePolicyVersion: "epv1:test",
-		CanAdmin:               true,
-	})
+		disableResult, err := BuildOrgUnitMaintainPrecheckProjectionV1(context.Background(), testMaintainReaderReady(), OrgUnitMaintainPrecheckInputV1{
+			Intent:        OrgUnitMaintainIntentDisable,
+			TenantID:      "tenant_1",
+			EffectiveDate: "2026-05-01",
+			OrgCode:       "FLOWER-C",
+			CanAdmin:      true,
+		})
 	if err != nil {
 		t.Fatalf("disable build err=%v", err)
 	}
@@ -207,14 +192,13 @@ func TestBuildOrgUnitMaintainPrecheckProjectionV1_DisableEnableReady(t *testing.
 		t.Fatalf("disable projection=%+v", disableResult.Projection)
 	}
 
-	enableResult, err := BuildOrgUnitMaintainPrecheckProjectionV1(context.Background(), testMaintainReaderReady(), OrgUnitMaintainPrecheckInputV1{
-		Intent:                 OrgUnitMaintainIntentEnable,
-		TenantID:               "tenant_1",
-		EffectiveDate:          "2026-06-01",
-		OrgCode:                "FLOWER-C",
-		EffectivePolicyVersion: "epv1:test",
-		CanAdmin:               true,
-	})
+		enableResult, err := BuildOrgUnitMaintainPrecheckProjectionV1(context.Background(), testMaintainReaderReady(), OrgUnitMaintainPrecheckInputV1{
+			Intent:        OrgUnitMaintainIntentEnable,
+			TenantID:      "tenant_1",
+			EffectiveDate: "2026-06-01",
+			OrgCode:       "FLOWER-C",
+			CanAdmin:      true,
+		})
 	if err != nil {
 		t.Fatalf("enable build err=%v", err)
 	}
@@ -241,19 +225,15 @@ func TestOrgUnitMaintainPrecheckHelpers(t *testing.T) {
 			t.Fatalf("nil clone=%v", got)
 		}
 
-		original := OrgUnitMaintainPrecheckProjectionV1{
-			Readiness:                         " ready ",
-			MissingFields:                     []string{"a"},
-			FieldDecisions:                    []OrgUnitMaintainFieldDecisionV1{{FieldKey: "name", AllowedValueCodes: []string{"X"}}},
-			CandidateConfirmationRequirements: []string{"b"},
-			PendingDraftSummary:               " summary ",
-			EffectivePolicyVersion:            " epv1 ",
-			MutationPolicyVersion:             " mpv1 ",
-			ResolvedSetID:                     " S1 ",
-			SetIDSource:                       " custom ",
-			PolicyExplain:                     " explain ",
-			RejectionReasons:                  []string{"FORBIDDEN"},
-			ProjectionDigest:                  " digest ",
+			original := OrgUnitMaintainPrecheckProjectionV1{
+				Readiness:                         " ready ",
+				MissingFields:                     []string{"a"},
+				FieldDecisions:                    []OrgUnitMaintainFieldDecisionV1{{FieldKey: "name", AllowedValueCodes: []string{"X"}}},
+				CandidateConfirmationRequirements: []string{"b"},
+				PendingDraftSummary:               " summary ",
+				PolicyExplain:                     " explain ",
+				RejectionReasons:                  []string{"FORBIDDEN"},
+				ProjectionDigest:                  " digest ",
 		}
 		cloned := CloneOrgUnitMaintainProjectionV1(original)
 		original.MissingFields[0] = "changed"
@@ -491,23 +471,9 @@ func TestOrgUnitMaintainPrecheckHelpers(t *testing.T) {
 			t.Fatalf("org err=%v", ctxErr)
 		}
 
-		setIDErrReader := orgUnitMaintainPrecheckReaderStub{
-			resolveOrgNodeKeyFn: func(context.Context, string, string) (string, error) {
-				return "10000003", nil
-			},
-			resolveSetIDFn: func(context.Context, string, string, string) (string, error) {
-				return "", errors.New("setid missing")
-			},
-		}
-		if _, ctxErr = resolveOrgUnitMaintainPolicyContextV1(context.Background(), setIDErrReader, OrgUnitMaintainPrecheckInputV1{
-			TenantID: "tenant_1",
-			OrgCode:  "FLOWER-C",
-		}, "2026-01-01"); ctxErr == nil || ctxErr.Code != orgUnitMaintainContextCodeSetIDBindingMissing {
-			t.Fatalf("setid err=%v", ctxErr)
-		}
-		emptyNodeReader := orgUnitMaintainPrecheckReaderStub{
-			resolveOrgNodeKeyFn: func(context.Context, string, string) (string, error) {
-				return " ", nil
+			emptyNodeReader := orgUnitMaintainPrecheckReaderStub{
+				resolveOrgNodeKeyFn: func(context.Context, string, string) (string, error) {
+					return " ", nil
 			},
 		}
 		if ctxValue, ctxErr = resolveOrgUnitMaintainPolicyContextV1(context.Background(), emptyNodeReader, OrgUnitMaintainPrecheckInputV1{
@@ -516,23 +482,9 @@ func TestOrgUnitMaintainPrecheckHelpers(t *testing.T) {
 		}, "2026-01-01"); ctxErr != nil || ctxValue.OrgNodeKey != "" || ctxValue.PolicyContextDigest == "" {
 			t.Fatalf("empty node ctx=%+v err=%v", ctxValue, ctxErr)
 		}
-		setIDNoneReader := orgUnitMaintainPrecheckReaderStub{
-			resolveOrgNodeKeyFn: func(context.Context, string, string) (string, error) {
-				return "10000003", nil
-			},
-			resolveSetIDFn: func(context.Context, string, string, string) (string, error) {
-				return " ", nil
-			},
-		}
-		if ctxValue, ctxErr = resolveOrgUnitMaintainPolicyContextV1(context.Background(), setIDNoneReader, OrgUnitMaintainPrecheckInputV1{
-			TenantID: "tenant_1",
-			OrgCode:  "FLOWER-C",
-		}, "2026-01-01"); ctxErr != nil || ctxValue.ResolvedSetID != "" || ctxValue.SetIDSource != "none" || ctxValue.PolicyContextDigest == "" {
-			t.Fatalf("setid none ctx=%+v err=%v", ctxValue, ctxErr)
-		}
-		if ctxValue, ctxErr = resolveOrgUnitMaintainPolicyContextV1(context.Background(), orgUnitMaintainPrecheckReaderStub{}, OrgUnitMaintainPrecheckInputV1{
-			TenantID: "tenant_1",
-		}, "2026-01-01"); ctxErr != nil || ctxValue.OrgCode != "" || ctxValue.PolicyContextDigest == "" {
+			if ctxValue, ctxErr = resolveOrgUnitMaintainPolicyContextV1(context.Background(), orgUnitMaintainPrecheckReaderStub{}, OrgUnitMaintainPrecheckInputV1{
+				TenantID: "tenant_1",
+			}, "2026-01-01"); ctxErr != nil || ctxValue.OrgCode != "" || ctxValue.PolicyContextDigest == "" {
 			t.Fatalf("empty org code ctx=%+v err=%v", ctxValue, ctxErr)
 		}
 
@@ -694,16 +646,13 @@ func TestOrgUnitMaintainPrecheckHelpers(t *testing.T) {
 			t.Fatalf("target exists err=%v", err)
 		}
 
-		_, err = BuildOrgUnitMaintainPrecheckProjectionV1(context.Background(), orgUnitMaintainPrecheckReaderStub{
-			resolveOrgNodeKeyFn: func(context.Context, string, string) (string, error) {
-				return "10000003", nil
-			},
-			resolveSetIDFn: func(context.Context, string, string, string) (string, error) {
-				return "S2601", nil
-			},
-			isOrgTreeInitializedFn: func(context.Context, string) (bool, error) {
-				return true, nil
-			},
+			_, err = BuildOrgUnitMaintainPrecheckProjectionV1(context.Background(), orgUnitMaintainPrecheckReaderStub{
+				resolveOrgNodeKeyFn: func(context.Context, string, string) (string, error) {
+					return "10000003", nil
+				},
+				isOrgTreeInitializedFn: func(context.Context, string) (bool, error) {
+					return true, nil
+				},
 			resolveMutationTargetEventFn: func(context.Context, string, string, string) (OrgUnitMaintainTargetEventV1, error) {
 				return OrgUnitMaintainTargetEventV1{}, errors.New("target event failed")
 			},

@@ -361,7 +361,7 @@ function useDebouncedValue<T>(value: T, delayMs: number): T {
   return debounced
 }
 
-type FieldOption = { value: string; label: string; setid?: string; setid_source?: 'custom' | 'deflt' | 'share_preview' }
+type FieldOption = { value: string; label: string }
 
 function uniqueOptionsByValue(options: FieldOption[]): FieldOption[] {
   const seen = new Set<string>()
@@ -378,17 +378,12 @@ function uniqueOptionsByValue(options: FieldOption[]): FieldOption[] {
 }
 
 function formatFieldOptionLabel(option: FieldOption): string {
-  const setID = option.setid?.trim() ?? ''
-  if (setID.length === 0) {
-    return option.label
-  }
-  return `${option.label} [${setID}]`
+  return option.label
 }
 
 function OrgUnitExtFieldSelect(props: {
   fieldKey: string
   asOf: string
-  orgCode?: string
   label: string
   disabled: boolean
   value: string | null
@@ -404,8 +399,8 @@ function OrgUnitExtFieldSelect(props: {
 
   const optionsQuery = useQuery({
     enabled: !props.disabled,
-    queryKey: ['org-units', 'field-options', props.fieldKey, props.asOf, props.orgCode ?? '', debouncedKeyword],
-    queryFn: () => getOrgUnitFieldOptions({ fieldKey: props.fieldKey, asOf: props.asOf, orgCode: props.orgCode, keyword: debouncedKeyword, limit: 20 }),
+    queryKey: ['org-units', 'field-options', props.fieldKey, props.asOf, debouncedKeyword],
+    queryFn: () => getOrgUnitFieldOptions({ fieldKey: props.fieldKey, asOf: props.asOf, keyword: debouncedKeyword, limit: 20 }),
     staleTime: 30_000
   })
 
@@ -1901,7 +1896,6 @@ export function OrgUnitDetailsPage() {
                         asOf={actionWriteEffectiveDate}
                         disabled={!editable}
                         fieldKey={fieldKey}
-                        orgCode={orgCodeValue}
                         label={label}
                         value={currentValue}
                         valueLabel={actionForm.extDisplayValues[fieldKey] ?? null}

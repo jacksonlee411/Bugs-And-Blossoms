@@ -20,7 +20,7 @@ func repoRootFromCurrentFile(t *testing.T) string {
 
 func TestOrgunitSchema_SubmitOrgEvent_UsesInsertCompleteSnapshots(t *testing.T) {
 	root := repoRootFromCurrentFile(t)
-	p := filepath.Join(root, "modules/orgunit/infrastructure/persistence/schema/00015_orgunit_org_id_allocator.sql")
+	p := filepath.Join(root, "modules/orgunit/infrastructure/persistence/schema/00028_orgunit_org_node_key_submit_allocator.sql")
 	b, err := os.ReadFile(p)
 	if err != nil {
 		t.Fatalf("read %s: %v", p, err)
@@ -56,7 +56,7 @@ func TestOrgunitSchema_SubmitOrgEvent_UsesInsertCompleteSnapshots(t *testing.T) 
 
 func TestOrgunitEngine_NoPostInsertSnapshotUpdate(t *testing.T) {
 	root := repoRootFromCurrentFile(t)
-	p := filepath.Join(root, "modules/orgunit/infrastructure/persistence/schema/00003_orgunit_engine.sql")
+	p := filepath.Join(root, "modules/orgunit/infrastructure/persistence/schema/00026_orgunit_org_node_key_engine.sql")
 	b, err := os.ReadFile(p)
 	if err != nil {
 		t.Fatalf("read %s: %v", p, err)
@@ -80,7 +80,7 @@ func TestOrgunitEngine_NoPostInsertSnapshotUpdate(t *testing.T) {
 
 func TestOrgunitSchema_PresencePredicateStrictRescindOutcome(t *testing.T) {
 	root := repoRootFromCurrentFile(t)
-	p := filepath.Join(root, "modules/orgunit/infrastructure/persistence/schema/00002_orgunit_org_schema.sql")
+	p := filepath.Join(root, "modules/orgunit/infrastructure/persistence/schema/00023_orgunit_org_node_key_schema.sql")
 	b, err := os.ReadFile(p)
 	if err != nil {
 		t.Fatalf("read %s: %v", p, err)
@@ -111,7 +111,7 @@ func TestOrgunitSchema_PresencePredicateStrictRescindOutcome(t *testing.T) {
 
 func TestOrgunitSchema_RescindSnapshotContentConstraints(t *testing.T) {
 	root := repoRootFromCurrentFile(t)
-	p := filepath.Join(root, "modules/orgunit/infrastructure/persistence/schema/00002_orgunit_org_schema.sql")
+	p := filepath.Join(root, "modules/orgunit/infrastructure/persistence/schema/00023_orgunit_org_node_key_schema.sql")
 	b, err := os.ReadFile(p)
 	if err != nil {
 		t.Fatalf("read %s: %v", p, err)
@@ -132,7 +132,7 @@ func TestOrgunitSchema_RescindSnapshotContentConstraints(t *testing.T) {
 
 func TestOrgunitMigration080D_BackfillsRescindSnapshotContent(t *testing.T) {
 	root := repoRootFromCurrentFile(t)
-	p := filepath.Join(root, "migrations/orgunit/20260212113000_orgunit_rescind_snapshot_completeness.sql")
+	p := filepath.Join(root, "migrations/orgunit/20260421052927_orgunit_reset_without_setid.sql")
 	b, err := os.ReadFile(p)
 	if err != nil {
 		t.Fatalf("read %s: %v", p, err)
@@ -140,13 +140,11 @@ func TestOrgunitMigration080D_BackfillsRescindSnapshotContent(t *testing.T) {
 	s := string(b)
 
 	for _, token := range []string{
-		"UPDATE orgunit.org_events e",
-		"jsonb_build_object(",
-		"'target_effective_date'",
-		"WITH target AS (",
+		"CREATE OR REPLACE FUNCTION orgunit.is_orgunit_snapshot_complete(p_snapshot jsonb)",
+		"CREATE OR REPLACE FUNCTION orgunit.is_org_event_snapshot_content_valid(",
 		"CONSTRAINT org_events_rescind_payload_required CHECK",
 		"CONSTRAINT org_events_snapshot_content_check CHECK",
-		"VALIDATE CONSTRAINT org_events_snapshot_content_check",
+		"'target_effective_date'",
 	} {
 		if !strings.Contains(s, token) {
 			t.Fatalf("missing %q in %s", token, p)
@@ -156,7 +154,7 @@ func TestOrgunitMigration080D_BackfillsRescindSnapshotContent(t *testing.T) {
 
 func TestOrgunitMigration080C_IntroducesPendingReplayEngine(t *testing.T) {
 	root := repoRootFromCurrentFile(t)
-	p := filepath.Join(root, "migrations/orgunit/20260210203000_orgunit_snapshot_insert_complete.sql")
+	p := filepath.Join(root, "migrations/orgunit/20260421052927_orgunit_reset_without_setid.sql")
 	b, err := os.ReadFile(p)
 	if err != nil {
 		t.Fatalf("read %s: %v", p, err)
@@ -166,9 +164,9 @@ func TestOrgunitMigration080C_IntroducesPendingReplayEngine(t *testing.T) {
 	for _, token := range []string{
 		"CREATE OR REPLACE FUNCTION orgunit.org_events_effective_for_replay(",
 		"CREATE OR REPLACE FUNCTION orgunit.rebuild_org_unit_versions_for_org_with_pending_event(",
-		"UPDATE orgunit.org_events",
-		"SET rescind_outcome = CASE WHEN after_snapshot IS NULL THEN 'ABSENT' ELSE 'PRESENT' END",
 		"SELECT nextval(pg_get_serial_sequence('orgunit.org_events', 'id')) INTO v_event_db_id;",
+		"INSERT INTO orgunit.org_events (",
+		"rescind_outcome",
 	} {
 		if !strings.Contains(s, token) {
 			t.Fatalf("missing %q in %s", token, p)
@@ -178,7 +176,7 @@ func TestOrgunitMigration080C_IntroducesPendingReplayEngine(t *testing.T) {
 
 func TestOrgunitMigration080A_ReappliesKernelFunctionPrivileges(t *testing.T) {
 	root := repoRootFromCurrentFile(t)
-	p := filepath.Join(root, "migrations/orgunit/20260210093000_orgunit_audit_snapshot_canonical.sql")
+	p := filepath.Join(root, "modules/orgunit/infrastructure/persistence/schema/00029_orgunit_org_node_key_engine_privileges.sql")
 	b, err := os.ReadFile(p)
 	if err != nil {
 		t.Fatalf("read %s: %v", p, err)
@@ -186,11 +184,10 @@ func TestOrgunitMigration080A_ReappliesKernelFunctionPrivileges(t *testing.T) {
 	s := string(b)
 
 	signatures := []string{
-		"orgunit.submit_org_event(uuid, uuid, int, text, date, jsonb, text, uuid)",
-		"orgunit.submit_org_event_rescind(uuid, int, date, text, text, uuid)",
-		"orgunit.submit_org_rescind(uuid, int, text, text, uuid)",
-		"orgunit.submit_org_event_correction(uuid, int, date, jsonb, text, uuid)",
-		"orgunit.submit_org_status_correction(uuid, int, date, text, text, uuid)",
+		"orgunit.submit_org_event_correction(uuid, char(8), date, jsonb, text, uuid)",
+		"orgunit.submit_org_status_correction(uuid, char(8), date, text, text, uuid)",
+		"orgunit.submit_org_event_rescind(uuid, char(8), date, text, text, uuid)",
+		"orgunit.submit_org_rescind(uuid, char(8), text, text, uuid)",
 	}
 	for _, signature := range signatures {
 		if !strings.Contains(s, "ALTER FUNCTION "+signature+"\n  OWNER TO orgunit_kernel;") {

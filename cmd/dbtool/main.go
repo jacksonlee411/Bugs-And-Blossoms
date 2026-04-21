@@ -241,7 +241,7 @@ func orgunitSmoke(args []string) {
 	SELECT orgunit.submit_org_event(
 	  $1::uuid,
 	  $2::uuid,
-	  $3::int,
+	  $3::char(8),
 	  'CREATE',
 	  $4::date,
 	  jsonb_build_object('name', 'A1'),
@@ -252,7 +252,7 @@ func orgunitSmoke(args []string) {
 		fatal(err)
 	}
 	if err := tx.QueryRow(ctx, `
-		SELECT org_id::text
+		SELECT org_node_key::text
 		FROM orgunit.org_events
 		WHERE tenant_uuid = $1::uuid AND event_uuid = $2::uuid
 	`, tenantA, eventIDA).Scan(&orgIDA); err != nil {
@@ -275,7 +275,7 @@ func orgunitSmoke(args []string) {
 	SELECT orgunit.submit_org_event(
 	  $1::uuid,
 	  $2::uuid,
-	  $3::int,
+	  $3::char(8),
 	  'CREATE',
 	  '2026-01-01'::date,
 	  jsonb_build_object('name', 'B1'),
@@ -370,7 +370,7 @@ func orgunitSmoke(args []string) {
 	SELECT orgunit.submit_org_event(
 	  $1::uuid,
 	  $2::uuid,
-	  $3::int,
+	  $3::char(8),
 	  'CREATE',
 	  $4::date,
 	  jsonb_build_object('name', 'Root'),
@@ -381,7 +381,7 @@ func orgunitSmoke(args []string) {
 		fatal(err)
 	}
 	if err := tx3.QueryRow(ctx, `
-		SELECT org_id::text
+		SELECT org_node_key::text
 		FROM orgunit.org_events
 		WHERE tenant_uuid = $1::uuid AND event_uuid = $2::uuid
 	`, tenantC, eventCreateRoot).Scan(&orgRootID); err != nil {
@@ -393,7 +393,7 @@ func orgunitSmoke(args []string) {
 	SELECT orgunit.submit_org_event(
 	  $1::uuid,
 	  $2::uuid,
-	  $3::int,
+	  $3::char(8),
 	  'CREATE',
 	  $4::date,
 	  jsonb_build_object('name', 'Root'),
@@ -412,10 +412,10 @@ func orgunitSmoke(args []string) {
 	SELECT orgunit.submit_org_event(
 	  $1::uuid,
 	  $2::uuid,
-	  $3::int,
+	  $3::char(8),
 	  'CREATE',
 	  $4::date,
-	  jsonb_build_object('parent_id', $5::int, 'name', 'Child'),
+	  jsonb_build_object('parent_org_node_key', $5::char(8), 'name', 'Child'),
 	  $6::text,
   $7::uuid
 )
@@ -423,7 +423,7 @@ func orgunitSmoke(args []string) {
 		fatal(err)
 	}
 	if err := tx3.QueryRow(ctx, `
-		SELECT org_id::text
+		SELECT org_node_key::text
 		FROM orgunit.org_events
 		WHERE tenant_uuid = $1::uuid AND event_uuid = $2::uuid
 	`, tenantC, eventCreateChild).Scan(&orgChildID); err != nil {
@@ -435,10 +435,10 @@ func orgunitSmoke(args []string) {
 	SELECT orgunit.submit_org_event(
 	  $1::uuid,
 	  $2::uuid,
-	  $3::int,
+	  $3::char(8),
 	  'CREATE',
 	  $4::date,
-	  jsonb_build_object('parent_id', $5::int, 'name', 'Parent2'),
+	  jsonb_build_object('parent_org_node_key', $5::char(8), 'name', 'Parent2'),
 	  $6::text,
   $7::uuid
 )
@@ -446,7 +446,7 @@ func orgunitSmoke(args []string) {
 		fatal(err)
 	}
 	if err := tx3.QueryRow(ctx, `
-		SELECT org_id::text
+		SELECT org_node_key::text
 		FROM orgunit.org_events
 		WHERE tenant_uuid = $1::uuid AND event_uuid = $2::uuid
 	`, tenantC, eventCreateParent2).Scan(&orgParent2ID); err != nil {
@@ -458,7 +458,7 @@ func orgunitSmoke(args []string) {
 	SELECT orgunit.submit_org_event(
 	  $1::uuid,
 	  $2::uuid,
-	  $3::int,
+	  $3::char(8),
 	  'RENAME',
 	  $4::date,
 	  jsonb_build_object('new_name', 'Child2'),
@@ -474,10 +474,10 @@ func orgunitSmoke(args []string) {
 	SELECT orgunit.submit_org_event(
 	  $1::uuid,
 	  $2::uuid,
-	  $3::int,
+	  $3::char(8),
 	  'MOVE',
 	  $4::date,
-	  jsonb_build_object('new_parent_id', $5::int),
+	  jsonb_build_object('new_parent_org_node_key', $5::char(8)),
 	  $6::text,
   $7::uuid
 )
@@ -490,7 +490,7 @@ func orgunitSmoke(args []string) {
 	SELECT orgunit.submit_org_event(
 	  $1::uuid,
 	  $2::uuid,
-	  $3::int,
+	  $3::char(8),
 	  'DISABLE',
 	  $4::date,
 	  '{}'::jsonb,
@@ -505,7 +505,7 @@ func orgunitSmoke(args []string) {
 	if err := tx3.QueryRow(ctx, `
 SELECT count(*)
 FROM orgunit.org_unit_versions
-WHERE tenant_uuid = $1::uuid AND org_id = $2::int
+WHERE tenant_uuid = $1::uuid AND org_node_key = $2::char(8)
 `, tenantC, orgChildID).Scan(&childSlices); err != nil {
 		fatal(err)
 	}
@@ -514,13 +514,13 @@ WHERE tenant_uuid = $1::uuid AND org_id = $2::int
 	}
 
 	var rootLabel, childLabel, parent2Label string
-	if err := tx3.QueryRow(ctx, `SELECT orgunit.org_ltree_label($1::int);`, orgRootID).Scan(&rootLabel); err != nil {
+	if err := tx3.QueryRow(ctx, `SELECT orgunit.org_ltree_label($1::text);`, orgRootID).Scan(&rootLabel); err != nil {
 		fatal(err)
 	}
-	if err := tx3.QueryRow(ctx, `SELECT orgunit.org_ltree_label($1::int);`, orgChildID).Scan(&childLabel); err != nil {
+	if err := tx3.QueryRow(ctx, `SELECT orgunit.org_ltree_label($1::text);`, orgChildID).Scan(&childLabel); err != nil {
 		fatal(err)
 	}
-	if err := tx3.QueryRow(ctx, `SELECT orgunit.org_ltree_label($1::int);`, orgParent2ID).Scan(&parent2Label); err != nil {
+	if err := tx3.QueryRow(ctx, `SELECT orgunit.org_ltree_label($1::text);`, orgParent2ID).Scan(&parent2Label); err != nil {
 		fatal(err)
 	}
 	expectedPathBeforeMove := rootLabel + "." + childLabel
@@ -528,10 +528,10 @@ WHERE tenant_uuid = $1::uuid AND org_id = $2::int
 
 	var name0301, status0301, parent0301, path0301 string
 	if err := tx3.QueryRow(ctx, `
-SELECT name, status, parent_id::text, node_path::text
+SELECT name, status, parent_org_node_key::text, node_path::text
 FROM orgunit.org_unit_versions
 WHERE tenant_uuid = $1::uuid
-  AND org_id = $2::int
+  AND org_node_key = $2::char(8)
   AND validity @> $3::date
 `, tenantC, orgChildID, "2026-01-03").Scan(&name0301, &status0301, &parent0301, &path0301); err != nil {
 		fatal(err)
@@ -542,10 +542,10 @@ WHERE tenant_uuid = $1::uuid
 
 	var name0501, status0501, parent0501, path0501 string
 	if err := tx3.QueryRow(ctx, `
-SELECT name, status, parent_id::text, node_path::text
+SELECT name, status, parent_org_node_key::text, node_path::text
 FROM orgunit.org_unit_versions
 WHERE tenant_uuid = $1::uuid
-  AND org_id = $2::int
+  AND org_node_key = $2::char(8)
   AND validity @> $3::date
 `, tenantC, orgChildID, "2026-01-05").Scan(&name0501, &status0501, &parent0501, &path0501); err != nil {
 		fatal(err)
@@ -559,7 +559,7 @@ WHERE tenant_uuid = $1::uuid
 SELECT status
 FROM orgunit.org_unit_versions
 WHERE tenant_uuid = $1::uuid
-  AND org_id = $2::int
+  AND org_node_key = $2::char(8)
   AND validity @> $3::date
 `, tenantC, orgChildID, "2026-01-07").Scan(&status0701); err != nil {
 		fatal(err)
@@ -577,7 +577,7 @@ WHERE tenant_uuid = $1::uuid
 	SELECT orgunit.submit_org_event(
 	  $1::uuid,
 	  $2::uuid,
-	  $3::int,
+	  $3::char(8),
 	  'CREATE',
 	  $4::date,
 	  jsonb_build_object('name', 'X'),

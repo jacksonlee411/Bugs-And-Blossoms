@@ -118,7 +118,6 @@ describe('DictConfigsPage', () => {
           dict_code: 'cost_center',
           code: 'A1',
           label: '默认值',
-          setid: 'DEFLT',
           status: 'active',
           enabled_on: '2026-04-01',
           disabled_on: null,

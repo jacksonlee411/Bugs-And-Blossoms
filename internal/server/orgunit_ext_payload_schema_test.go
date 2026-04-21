@@ -9,7 +9,7 @@ import (
 
 func TestOrgunitExtPayloadEngine_HasKernelHelpersAndStableErrors(t *testing.T) {
 	root := repoRootFromCurrentFile(t)
-	p := filepath.Join(root, "modules/orgunit/infrastructure/persistence/schema/00003_orgunit_engine.sql")
+	p := filepath.Join(root, "modules/orgunit/infrastructure/persistence/schema/00026_orgunit_org_node_key_engine.sql")
 	b, err := os.ReadFile(p)
 	if err != nil {
 		t.Fatalf("read %s: %v", p, err)
@@ -39,7 +39,7 @@ func TestOrgunitExtPayloadEngine_HasKernelHelpersAndStableErrors(t *testing.T) {
 
 func TestOrgunitExtPayloadEngine_SplitAndMoveCopyExtSlots(t *testing.T) {
 	root := repoRootFromCurrentFile(t)
-	p := filepath.Join(root, "modules/orgunit/infrastructure/persistence/schema/00003_orgunit_engine.sql")
+	p := filepath.Join(root, "modules/orgunit/infrastructure/persistence/schema/00026_orgunit_org_node_key_engine.sql")
 	b, err := os.ReadFile(p)
 	if err != nil {
 		t.Fatalf("read %s: %v", p, err)
@@ -47,7 +47,7 @@ func TestOrgunitExtPayloadEngine_SplitAndMoveCopyExtSlots(t *testing.T) {
 	s := string(b)
 
 	for _, token := range []string{
-		"PERFORM orgunit.split_org_unit_version_at(p_tenant_uuid, p_org_id, p_effective_date, p_event_db_id);",
+		"PERFORM orgunit.split_org_unit_version_at(p_tenant_uuid, p_org_node_key, p_effective_date, p_event_db_id);",
 		"last_event_id = $6::bigint",
 		"last_event_id = $7::bigint",
 		"last_event_id = $5::bigint",
@@ -87,7 +87,7 @@ func TestOrgunitExtPayloadEngine_SplitAndMoveCopyExtSlots(t *testing.T) {
 func TestOrgunitExtPayloadEngine_SubmitAndReplayCallApplyExtPayload(t *testing.T) {
 	root := repoRootFromCurrentFile(t)
 
-	enginePath := filepath.Join(root, "modules/orgunit/infrastructure/persistence/schema/00003_orgunit_engine.sql")
+	enginePath := filepath.Join(root, "modules/orgunit/infrastructure/persistence/schema/00026_orgunit_org_node_key_engine.sql")
 	engineBytes, err := os.ReadFile(enginePath)
 	if err != nil {
 		t.Fatalf("read %s: %v", enginePath, err)
@@ -99,7 +99,7 @@ func TestOrgunitExtPayloadEngine_SubmitAndReplayCallApplyExtPayload(t *testing.T
 		t.Fatalf("missing event_db_id argument in replay call in %s", enginePath)
 	}
 
-	submitPath := filepath.Join(root, "modules/orgunit/infrastructure/persistence/schema/00015_orgunit_org_id_allocator.sql")
+	submitPath := filepath.Join(root, "modules/orgunit/infrastructure/persistence/schema/00028_orgunit_org_node_key_submit_allocator.sql")
 	submitBytes, err := os.ReadFile(submitPath)
 	if err != nil {
 		t.Fatalf("read %s: %v", submitPath, err)

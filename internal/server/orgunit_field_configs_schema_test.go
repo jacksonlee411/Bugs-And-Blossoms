@@ -9,7 +9,7 @@ import (
 
 func TestOrgunitFieldConfigSchema_UsesFrozenDataSourceConfigShape(t *testing.T) {
 	root := repoRootFromCurrentFile(t)
-	p := filepath.Join(root, "modules/orgunit/infrastructure/persistence/schema/00016_orgunit_field_configs_schema.sql")
+	p := filepath.Join(root, "modules/orgunit/infrastructure/persistence/schema/00030_orgunit_field_configs_schema.sql")
 	b, err := os.ReadFile(p)
 	if err != nil {
 		t.Fatalf("read %s: %v", p, err)
@@ -37,7 +37,7 @@ func TestOrgunitFieldConfigSchema_UsesFrozenDataSourceConfigShape(t *testing.T) 
 
 func TestOrgunitFieldConfigSchema_HasRLSGuardAndImmutability(t *testing.T) {
 	root := repoRootFromCurrentFile(t)
-	p := filepath.Join(root, "modules/orgunit/infrastructure/persistence/schema/00016_orgunit_field_configs_schema.sql")
+	p := filepath.Join(root, "modules/orgunit/infrastructure/persistence/schema/00030_orgunit_field_configs_schema.sql")
 	b, err := os.ReadFile(p)
 	if err != nil {
 		t.Fatalf("read %s: %v", p, err)
@@ -63,8 +63,8 @@ func TestOrgunitFieldConfigSchema_HasRLSGuardAndImmutability(t *testing.T) {
 
 func TestOrgunitFieldConfigSchema_HasKernelOneDoorEntryPoints(t *testing.T) {
 	root := repoRootFromCurrentFile(t)
-	schemaPath := filepath.Join(root, "modules/orgunit/infrastructure/persistence/schema/00016_orgunit_field_configs_schema.sql")
-	privilegePath := filepath.Join(root, "modules/orgunit/infrastructure/persistence/schema/00017_orgunit_field_configs_kernel_privileges.sql")
+	schemaPath := filepath.Join(root, "modules/orgunit/infrastructure/persistence/schema/00030_orgunit_field_configs_schema.sql")
+	privilegePath := filepath.Join(root, "modules/orgunit/infrastructure/persistence/schema/00031_orgunit_field_configs_kernel_privileges.sql")
 
 	schemaBytes, err := os.ReadFile(schemaPath)
 	if err != nil {

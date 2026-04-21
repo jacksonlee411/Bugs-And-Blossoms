@@ -2901,18 +2901,6 @@ BEGIN
       DETAIL = format('org_node_key=%s', p_org_node_key);
   END IF;
 
-  IF EXISTS (
-    SELECT 1
-    FROM orgunit.setid_binding_versions b
-    WHERE b.tenant_uuid = p_tenant_uuid
-      AND b.org_node_key = p_org_node_key
-    LIMIT 1
-  ) THEN
-    RAISE EXCEPTION USING
-      MESSAGE = 'ORG_HAS_DEPENDENCIES_CANNOT_DELETE',
-      DETAIL = format('org_node_key=%s', p_org_node_key);
-  END IF;
-
   SELECT COUNT(*) INTO v_event_count
   FROM orgunit.org_events e
   WHERE e.tenant_uuid = p_tenant_uuid

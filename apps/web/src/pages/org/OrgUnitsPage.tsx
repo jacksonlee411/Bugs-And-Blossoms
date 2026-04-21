@@ -157,7 +157,7 @@ function getErrorMessage(error: unknown): string {
   return String(error)
 }
 
-type FieldOption = { value: string; label: string; setid?: string; setid_source?: 'custom' | 'deflt' | 'share_preview' }
+type FieldOption = { value: string; label: string }
 
 type OrgUnitExtQueryField = Pick<import('../../api/orgUnits').OrgUnitTenantFieldConfig, 'field_key' | 'value_type' | 'data_source_type'> & {
   label: string
@@ -191,11 +191,7 @@ function uniqueOptionsByValue(options: FieldOption[]): FieldOption[] {
 }
 
 function formatFieldOptionLabel(option: FieldOption): string {
-  const setID = option.setid?.trim() ?? ''
-  if (setID.length === 0) {
-    return option.label
-  }
-  return `${option.label} [${setID}]`
+  return option.label
 }
 
 function ExtFilterValueInput(props: {

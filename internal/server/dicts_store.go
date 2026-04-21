@@ -20,8 +20,6 @@ const (
 	dictValueEventDisabled       = iampersistence.DictValueEventDisabled
 	dictRegistryEventCreated     = iampersistence.DictRegistryEventCreated
 	dictRegistryEventDisabled    = iampersistence.DictRegistryEventDisabled
-	dictOptionSetIDDeflt         = iampersistence.DictOptionSetIDDeflt
-	dictOptionSetIDSourceDeflt   = iampersistence.DictOptionSetIDSourceDeflt
 )
 
 var (

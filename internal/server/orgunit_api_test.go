@@ -94,7 +94,7 @@ func TestHandleOrgUnitsBusinessUnitAPI_StoreError(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/org/api/org-units/set-business-unit", body)
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "T"}))
 	rec := httptest.NewRecorder()
-	handleOrgUnitsBusinessUnitAPI(rec, req, errOrgUnitStore{err: errBoom{}})
+	handleOrgUnitsBusinessUnitAPI(rec, req, struct{}{})
 	if rec.Code != http.StatusInternalServerError {
 		t.Fatalf("status=%d", rec.Code)
 	}

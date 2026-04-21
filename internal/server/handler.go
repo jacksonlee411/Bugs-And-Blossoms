@@ -34,7 +34,6 @@ type HandlerOptions struct {
 	IdentityProvider    identityProvider
 	OrgUnitStore        OrgUnitStore
 	OrgUnitWriteService orgunitservices.OrgUnitWriteService
-	SetIDStore          SetIDGovernanceStore
 	DictStore           DictStore
 }
 
@@ -60,7 +59,6 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, error) {
 
 	orgStore := opts.OrgUnitStore
 	orgUnitWriteService := opts.OrgUnitWriteService
-	setidStore := opts.SetIDStore
 	dictStore := opts.DictStore
 	tenancyResolver := opts.TenancyResolver
 	identityProvider := opts.IdentityProvider
@@ -81,14 +79,6 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, error) {
 			orgUnitWriteService = orgunitmodule.NewWriteService(writeStore)
 		} else if pgStore, ok := orgStore.(*orgUnitPGStore); ok {
 			orgUnitWriteService = orgunitmodule.NewWriteServiceWithPGStore(pgStore.pool)
-		}
-	}
-
-	if setidStore == nil {
-		if pgStore, ok := orgStore.(*orgUnitPGStore); ok {
-			setidStore = orgunitmodule.NewSetIDPGStore(pgStore.pool)
-		} else {
-			setidStore = orgunitmodule.NewSetIDMemoryStore()
 		}
 	}
 
@@ -234,24 +224,6 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, error) {
 		clearSIDCookie(w)
 		http.Redirect(w, r, "/app/login", http.StatusFound)
 	}))
-	router.Handle(routing.RouteClassInternalAPI, http.MethodGet, "/org/api/setids", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		handleSetIDsAPI(w, r, setidStore)
-	}))
-	router.Handle(routing.RouteClassInternalAPI, http.MethodPost, "/org/api/setids", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		handleSetIDsAPI(w, r, setidStore)
-	}))
-	router.Handle(routing.RouteClassInternalAPI, http.MethodGet, "/org/api/setid-bindings", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		handleSetIDBindingsAPI(w, r, setidStore, orgStore)
-	}))
-	router.Handle(routing.RouteClassInternalAPI, http.MethodPost, "/org/api/setid-bindings", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		handleSetIDBindingsAPI(w, r, setidStore, orgStore)
-	}))
-	router.Handle(routing.RouteClassInternalAPI, http.MethodPost, "/org/api/global-setids", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		handleGlobalSetIDsAPI(w, r, setidStore)
-	}))
-	router.Handle(routing.RouteClassInternalAPI, http.MethodGet, "/org/api/global-setids", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		handleGlobalSetIDsAPI(w, r, setidStore)
-	}))
 	router.Handle(routing.RouteClassInternalAPI, http.MethodGet, "/org/api/org-units", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		handleOrgUnitsAPI(w, r, orgStore, orgUnitWriteService)
 	}))
@@ -268,7 +240,7 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, error) {
 		handleOrgUnitFieldConfigsAPI(w, r, orgStore, dictStore)
 	}))
 	router.Handle(routing.RouteClassInternalAPI, http.MethodGet, "/org/api/org-units/field-configs:enable-candidates", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		handleOrgUnitFieldConfigsEnableCandidatesAPI(w, r, dictStore, orgStore, setidStore)
+		handleOrgUnitFieldConfigsEnableCandidatesAPI(w, r, dictStore)
 	}))
 	router.Handle(routing.RouteClassInternalAPI, http.MethodPost, "/org/api/org-units/field-configs:disable", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		handleOrgUnitFieldConfigsDisableAPI(w, r, orgStore)

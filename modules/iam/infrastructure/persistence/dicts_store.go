@@ -28,8 +28,6 @@ const (
 	DictRegistryEventCreated  = "DICT_CREATED"
 	DictRegistryEventDisabled = "DICT_DISABLED"
 
-	DictOptionSetIDDeflt       = "DEFLT"
-	DictOptionSetIDSourceDeflt = "deflt"
 )
 
 var (
@@ -76,15 +74,13 @@ type DictItem struct {
 }
 
 type DictValueItem struct {
-	DictCode    string    `json:"dict_code"`
-	Code        string    `json:"code"`
-	Label       string    `json:"label"`
-	SetID       string    `json:"setid,omitempty"`
-	SetIDSource string    `json:"setid_source,omitempty"`
-	Status      string    `json:"status"`
-	EnabledOn   string    `json:"enabled_on"`
-	DisabledOn  *string   `json:"disabled_on"`
-	UpdatedAt   time.Time `json:"updated_at"`
+	DictCode   string    `json:"dict_code"`
+	Code       string    `json:"code"`
+	Label      string    `json:"label"`
+	Status     string    `json:"status"`
+	EnabledOn  string    `json:"enabled_on"`
+	DisabledOn *string   `json:"disabled_on"`
+	UpdatedAt  time.Time `json:"updated_at"`
 }
 
 type DictValueAuditItem struct {
@@ -422,8 +418,6 @@ LIMIT $6::int
 			return nil, err
 		}
 		item.DisabledOn = CloneOptionalString(disabled)
-		item.SetID = DictOptionSetIDDeflt
-		item.SetIDSource = DictOptionSetIDSourceDeflt
 		out = append(out, item)
 	}
 	if err := rows.Err(); err != nil {
@@ -490,14 +484,12 @@ func (s *PGStore) ListOptions(ctx context.Context, tenantID string, asOf string,
 	out := make([]dictpkg.Option, 0, len(values))
 	for _, item := range values {
 		out = append(out, dictpkg.Option{
-			Code:        item.Code,
-			Label:       item.Label,
-			SetID:       DictOptionSetIDDeflt,
-			SetIDSource: DictOptionSetIDSourceDeflt,
-			Status:      item.Status,
-			EnabledOn:   item.EnabledOn,
-			DisabledOn:  CloneOptionalString(item.DisabledOn),
-			UpdatedAt:   item.UpdatedAt,
+			Code:       item.Code,
+			Label:      item.Label,
+			Status:     item.Status,
+			EnabledOn:  item.EnabledOn,
+			DisabledOn: CloneOptionalString(item.DisabledOn),
+			UpdatedAt:  item.UpdatedAt,
 		})
 	}
 	return out, nil
@@ -618,15 +610,13 @@ WHERE tenant_uuid = $1::uuid
 		return DictValueItem{}, err
 	}
 	return DictValueItem{
-		DictCode:    payload.DictCode,
-		Code:        payload.Code,
-		Label:       payload.Label,
-		SetID:       DictOptionSetIDDeflt,
-		SetIDSource: DictOptionSetIDSourceDeflt,
-		Status:      payload.Status,
-		EnabledOn:   payload.EnabledOn,
-		DisabledOn:  CloneOptionalString(payload.DisabledOn),
-		UpdatedAt:   txTime,
+		DictCode:   payload.DictCode,
+		Code:       payload.Code,
+		Label:      payload.Label,
+		Status:     payload.Status,
+		EnabledOn:  payload.EnabledOn,
+		DisabledOn: CloneOptionalString(payload.DisabledOn),
+		UpdatedAt:  txTime,
 	}, nil
 }
 
@@ -688,8 +678,8 @@ func NewMemoryStore() *MemoryStore {
 	now := time.Unix(0, 0).UTC()
 	defaultDict := DictItem{DictCode: DictCodeOrgType, Name: "Org Type", Status: "active", EnabledOn: "1970-01-01"}
 	defaultValues := []DictValueItem{
-		{DictCode: DictCodeOrgType, Code: "10", Label: "部门", SetID: DictOptionSetIDDeflt, SetIDSource: DictOptionSetIDSourceDeflt, Status: "active", EnabledOn: "1970-01-01", UpdatedAt: now},
-		{DictCode: DictCodeOrgType, Code: "20", Label: "单位", SetID: DictOptionSetIDDeflt, SetIDSource: DictOptionSetIDSourceDeflt, Status: "active", EnabledOn: "1970-01-01", UpdatedAt: now},
+		{DictCode: DictCodeOrgType, Code: "10", Label: "部门", Status: "active", EnabledOn: "1970-01-01", UpdatedAt: now},
+		{DictCode: DictCodeOrgType, Code: "20", Label: "单位", Status: "active", EnabledOn: "1970-01-01", UpdatedAt: now},
 	}
 	return &MemoryStore{
 		Dicts: map[string]map[string]DictItem{
@@ -801,17 +791,11 @@ func (s *MemoryStore) ListDictValues(_ context.Context, tenantID string, dictCod
 		}
 		if keyword != "" && !strings.Contains(strings.ToLower(item.Code), keyword) && !strings.Contains(strings.ToLower(item.Label), keyword) {
 			continue
+			}
+			cloned := item
+			cloned.Status = currentStatus
+			out = append(out, cloned)
 		}
-		cloned := item
-		cloned.Status = currentStatus
-		if strings.TrimSpace(cloned.SetID) == "" {
-			cloned.SetID = DictOptionSetIDDeflt
-		}
-		if strings.TrimSpace(cloned.SetIDSource) == "" {
-			cloned.SetIDSource = DictOptionSetIDSourceDeflt
-		}
-		out = append(out, cloned)
-	}
 
 	sort.SliceStable(out, func(i, j int) bool {
 		if out[i].Code == out[j].Code {
@@ -852,14 +836,12 @@ func (s *MemoryStore) ListOptions(ctx context.Context, tenantID string, asOf str
 	out := make([]dictpkg.Option, 0, len(values))
 	for _, item := range values {
 		out = append(out, dictpkg.Option{
-			Code:        item.Code,
-			Label:       item.Label,
-			SetID:       DictOptionSetIDDeflt,
-			SetIDSource: DictOptionSetIDSourceDeflt,
-			Status:      item.Status,
-			EnabledOn:   item.EnabledOn,
-			DisabledOn:  item.DisabledOn,
-			UpdatedAt:   item.UpdatedAt,
+			Code:       item.Code,
+			Label:      item.Label,
+			Status:     item.Status,
+			EnabledOn:  item.EnabledOn,
+			DisabledOn: item.DisabledOn,
+			UpdatedAt:  item.UpdatedAt,
 		})
 	}
 	return out, nil

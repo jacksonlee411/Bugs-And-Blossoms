@@ -1587,6 +1587,22 @@ func writeOrgUnitServiceError(w http.ResponseWriter, r *http.Request, err error,
 	routing.WriteError(w, r, routing.RouteClassInternalAPI, status, code, message)
 }
 
+func writeInternalAPIError(w http.ResponseWriter, r *http.Request, err error, defaultCode string) {
+	code := strings.TrimSpace(defaultCode)
+	if code == "" {
+		code = "internal_error"
+	}
+	message := code
+	if err != nil {
+		if stable := strings.TrimSpace(stablePgMessage(err)); stable != "" {
+			message = stable
+		} else if raw := strings.TrimSpace(err.Error()); raw != "" {
+			message = raw
+		}
+	}
+	routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusInternalServerError, code, message)
+}
+
 func orgUnitAPIStatusForCode(code string) (int, bool) {
 	switch code {
 	case orgUnitErrCodeInvalid,

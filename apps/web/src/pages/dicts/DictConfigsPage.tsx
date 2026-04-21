@@ -866,7 +866,6 @@ export function DictConfigsPage() {
                   <tr style={{ position: 'sticky', top: 0, background: '#fff' }}>
                     <th align='left'>code</th>
                     <th align='left'>label</th>
-                    <th align='left'>setid</th>
                     <th align='left'>status</th>
                     <th align='left'>enabled_on</th>
                     <th align='left'>disabled_on</th>
@@ -887,7 +886,6 @@ export function DictConfigsPage() {
                     >
                       <td>{value.code}</td>
                       <td>{value.label}</td>
-                      <td>{value.setid ?? 'DEFLT'}</td>
                       <td>{value.status}</td>
                       <td>{value.enabled_on}</td>
                       <td>{value.disabled_on ?? '-'}</td>
@@ -896,7 +894,7 @@ export function DictConfigsPage() {
                   ))}
                   {values.length === 0 ? (
                     <tr>
-                      <td colSpan={7} style={{ padding: 16, textAlign: 'center' }}>
+                      <td colSpan={6} style={{ padding: 16, textAlign: 'center' }}>
                         暂无字典值
                       </td>
                     </tr>
