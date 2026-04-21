@@ -1032,9 +1032,9 @@ func TestHandleOrgUnitFieldOptionsAPI(t *testing.T) {
 		if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
 			t.Fatalf("unmarshal: %v", err)
 		}
-			if len(payload.Options) != 1 || payload.Options[0].Value != "20" {
-				t.Fatalf("payload=%+v", payload)
-			}
+		if len(payload.Options) != 1 || payload.Options[0].Value != "20" {
+			t.Fatalf("payload=%+v", payload)
+		}
 
 		req2 := httptest.NewRequest(http.MethodGet, "/org/api/org-units/fields:options?as_of=2026-01-01&field_key=org_type&limit=100", nil)
 		req2 = req2.WithContext(withTenant(req2.Context(), Tenant{ID: "t1"}))
@@ -1150,7 +1150,7 @@ func TestHandleOrgUnitFieldConfigsEnableCandidatesAPI(t *testing.T) {
 		req := httptest.NewRequest(http.MethodPost, "/org/api/org-units/field-configs:enable-candidates", nil)
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
-			handleOrgUnitFieldConfigsEnableCandidatesAPI(rec, req, dictStore)
+		handleOrgUnitFieldConfigsEnableCandidatesAPI(rec, req, dictStore)
 		if rec.Code != http.StatusMethodNotAllowed {
 			t.Fatalf("status=%d", rec.Code)
 		}
@@ -1159,7 +1159,7 @@ func TestHandleOrgUnitFieldConfigsEnableCandidatesAPI(t *testing.T) {
 	t.Run("tenant missing", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/org/api/org-units/field-configs:enable-candidates?enabled_on=2026-01-01", nil)
 		rec := httptest.NewRecorder()
-			handleOrgUnitFieldConfigsEnableCandidatesAPI(rec, req, dictStore)
+		handleOrgUnitFieldConfigsEnableCandidatesAPI(rec, req, dictStore)
 		if rec.Code != http.StatusInternalServerError {
 			t.Fatalf("status=%d", rec.Code)
 		}
@@ -1169,7 +1169,7 @@ func TestHandleOrgUnitFieldConfigsEnableCandidatesAPI(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/org/api/org-units/field-configs:enable-candidates", nil)
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
-			handleOrgUnitFieldConfigsEnableCandidatesAPI(rec, req, dictStore)
+		handleOrgUnitFieldConfigsEnableCandidatesAPI(rec, req, dictStore)
 		if rec.Code != http.StatusBadRequest {
 			t.Fatalf("status=%d", rec.Code)
 		}
@@ -1179,7 +1179,7 @@ func TestHandleOrgUnitFieldConfigsEnableCandidatesAPI(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/org/api/org-units/field-configs:enable-candidates?enabled_on=2026-01-01", nil)
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
-			handleOrgUnitFieldConfigsEnableCandidatesAPI(rec, req, dictStore)
+		handleOrgUnitFieldConfigsEnableCandidatesAPI(rec, req, dictStore)
 		if rec.Code != http.StatusOK {
 			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
 		}
@@ -1189,9 +1189,9 @@ func TestHandleOrgUnitFieldConfigsEnableCandidatesAPI(t *testing.T) {
 		}
 		found := false
 		for _, f := range body.DictFields {
-				if f.FieldKey == "d_org_type" && f.DictCode == "org_type" && f.DataSourceType == "DICT" && f.ValueType == "text" {
-					found = true
-				}
+			if f.FieldKey == "d_org_type" && f.DictCode == "org_type" && f.DataSourceType == "DICT" && f.ValueType == "text" {
+				found = true
+			}
 		}
 		if !found {
 			t.Fatalf("expected d_org_type in dict_fields: %+v", body.DictFields)
@@ -1576,7 +1576,7 @@ func TestHandleOrgUnitFieldConfigsEnableCandidatesAPI_BranchCoverage(t *testing.
 		req := httptest.NewRequest(http.MethodGet, "/org/api/org-units/field-configs:enable-candidates?enabled_on=bad", nil)
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
-			handleOrgUnitFieldConfigsEnableCandidatesAPI(rec, req, newDictMemoryStore())
+		handleOrgUnitFieldConfigsEnableCandidatesAPI(rec, req, newDictMemoryStore())
 		if rec.Code != http.StatusBadRequest {
 			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
 		}
@@ -1586,7 +1586,7 @@ func TestHandleOrgUnitFieldConfigsEnableCandidatesAPI_BranchCoverage(t *testing.
 		req := httptest.NewRequest(http.MethodGet, "/org/api/org-units/field-configs:enable-candidates?enabled_on=2026-01-01", nil)
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
-			handleOrgUnitFieldConfigsEnableCandidatesAPI(rec, req, nil)
+		handleOrgUnitFieldConfigsEnableCandidatesAPI(rec, req, nil)
 		if rec.Code != http.StatusInternalServerError {
 			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
 		}
@@ -1596,9 +1596,9 @@ func TestHandleOrgUnitFieldConfigsEnableCandidatesAPI_BranchCoverage(t *testing.
 		req := httptest.NewRequest(http.MethodGet, "/org/api/org-units/field-configs:enable-candidates?enabled_on=2026-01-01", nil)
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
-			handleOrgUnitFieldConfigsEnableCandidatesAPI(rec, req, dictRegistryStoreStub{
-				listFn: func(context.Context, string, string) ([]DictItem, error) { return nil, errors.New("boom") },
-			})
+		handleOrgUnitFieldConfigsEnableCandidatesAPI(rec, req, dictRegistryStoreStub{
+			listFn: func(context.Context, string, string) ([]DictItem, error) { return nil, errors.New("boom") },
+		})
 		if rec.Code != http.StatusInternalServerError {
 			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
 		}
@@ -1608,10 +1608,10 @@ func TestHandleOrgUnitFieldConfigsEnableCandidatesAPI_BranchCoverage(t *testing.
 		req := httptest.NewRequest(http.MethodGet, "/org/api/org-units/field-configs:enable-candidates?enabled_on=2026-01-01", nil)
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
-			handleOrgUnitFieldConfigsEnableCandidatesAPI(rec, req, dictRegistryStoreStub{
-				listFn: func(_ context.Context, _ string, _ string) ([]DictItem, error) {
-					return []DictItem{
-						{DictCode: " ", Name: "blank"},                            // skipped
+		handleOrgUnitFieldConfigsEnableCandidatesAPI(rec, req, dictRegistryStoreStub{
+			listFn: func(_ context.Context, _ string, _ string) ([]DictItem, error) {
+				return []DictItem{
+					{DictCode: " ", Name: "blank"},                            // skipped
 					{DictCode: strings.Repeat("a", 62), Name: "too long"},     // skipped
 					{DictCode: "bad-code", Name: "invalid dict_code format"},  // skipped by IsCustomDictFieldKey
 					{DictCode: "cost_center", Name: " "},                      // name fallback to dict_code
@@ -1619,8 +1619,8 @@ func TestHandleOrgUnitFieldConfigsEnableCandidatesAPI_BranchCoverage(t *testing.
 					{DictCode: "org_type", Name: "duplicate, should be kept"}, // duplicates are allowed at this layer
 					{DictCode: "location_code", Name: "Location Code"},        // ok
 				}, nil
-				},
-			})
+			},
+		})
 		if rec.Code != http.StatusOK {
 			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
 		}

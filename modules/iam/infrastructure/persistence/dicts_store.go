@@ -27,7 +27,6 @@ const (
 
 	DictRegistryEventCreated  = "DICT_CREATED"
 	DictRegistryEventDisabled = "DICT_DISABLED"
-
 )
 
 var (
@@ -791,11 +790,11 @@ func (s *MemoryStore) ListDictValues(_ context.Context, tenantID string, dictCod
 		}
 		if keyword != "" && !strings.Contains(strings.ToLower(item.Code), keyword) && !strings.Contains(strings.ToLower(item.Label), keyword) {
 			continue
-			}
-			cloned := item
-			cloned.Status = currentStatus
-			out = append(out, cloned)
 		}
+		cloned := item
+		cloned.Status = currentStatus
+		out = append(out, cloned)
+	}
 
 	sort.SliceStable(out, func(i, j int) bool {
 		if out[i].Code == out[j].Code {

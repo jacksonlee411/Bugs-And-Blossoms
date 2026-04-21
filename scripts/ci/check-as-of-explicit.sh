@@ -4,16 +4,16 @@ set -euo pipefail
 repo_root="$(git rev-parse --show-toplevel)"
 cd "$repo_root"
 
-echo "[as-of-explicit] scan: disallow implicit today/default date fallback in 070/071 runtime scope"
+echo "[as-of-explicit] scan: disallow implicit today/default date fallback in current orgunit runtime scope"
 
 go_targets=(
-  "internal/server/setid_api.go"
-  "internal/server/setid_scope_api.go"
+  "internal/server/orgunit_api.go"
+  "internal/server/orgunit_field_metadata_api.go"
 )
 
 sql_targets=(
-  "modules/orgunit/infrastructure/persistence/schema/00006_orgunit_setid_engine.sql"
-  "internal/sqlc/schema.sql"
+  "modules/orgunit/infrastructure/persistence/schema/00026_orgunit_org_node_key_engine.sql"
+  "modules/orgunit/infrastructure/persistence/schema/00027_orgunit_org_node_key_read.sql"
 )
 
 for file in "${go_targets[@]}" "${sql_targets[@]}"; do
