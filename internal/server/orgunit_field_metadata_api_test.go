@@ -1133,9 +1133,6 @@ func TestHandleOrgUnitFieldOptionsAPI(t *testing.T) {
 				continue
 			}
 			found = true
-			if item.DefaultMode != "NONE" || item.DefaultRuleExpr != nil {
-				t.Fatalf("unexpected resolved policy=%+v", item)
-			}
 		}
 		if !found {
 			t.Fatalf("unexpected items=%+v", body.FieldConfigs)

@@ -73,15 +73,12 @@ type orgUnitFieldConfigsAPIResponse struct {
 }
 
 type orgUnitFieldPolicyAPIItem struct {
-	FieldKey        string    `json:"field_key"`
-	ScopeType       string    `json:"scope_type"`
-	ScopeKey        string    `json:"scope_key"`
-	Maintainable    bool      `json:"maintainable"`
-	DefaultMode     string    `json:"default_mode"`
-	DefaultRuleExpr *string   `json:"default_rule_expr"`
-	EnabledOn       string    `json:"enabled_on"`
-	DisabledOn      *string   `json:"disabled_on"`
-	UpdatedAt       time.Time `json:"updated_at"`
+	FieldKey   string    `json:"field_key"`
+	ScopeType  string    `json:"scope_type"`
+	ScopeKey   string    `json:"scope_key"`
+	EnabledOn  string    `json:"enabled_on"`
+	DisabledOn *string   `json:"disabled_on"`
+	UpdatedAt  time.Time `json:"updated_at"`
 }
 
 type orgUnitFieldConfigAPIItem struct {
@@ -98,11 +95,6 @@ type orgUnitFieldConfigAPIItem struct {
 	UpdatedAt        time.Time       `json:"updated_at"`
 	AllowFilter      bool            `json:"allow_filter"`
 	AllowSort        bool            `json:"allow_sort"`
-	Maintainable     bool            `json:"maintainable"`
-	DefaultMode      string          `json:"default_mode"`
-	DefaultRuleExpr  *string         `json:"default_rule_expr"`
-	PolicyScopeType  string          `json:"policy_scope_type,omitempty"`
-	PolicyScopeKey   string          `json:"policy_scope_key,omitempty"`
 }
 
 type orgUnitFieldConfigsEnableRequest struct {
@@ -278,13 +270,6 @@ func handleOrgUnitFieldConfigsAPI(w http.ResponseWriter, r *http.Request, store 
 			if status == "disabled" {
 				continue
 			}
-			policy := orgUnitFieldPolicyAPIItem{
-				FieldKey:     core.FieldKey,
-				ScopeType:    "SYSTEM_DEFAULT",
-				ScopeKey:     "system",
-				Maintainable: true,
-				DefaultMode:  "NONE",
-			}
 			key := strings.TrimSpace(core.LabelI18nKey)
 			items = append(items, orgUnitFieldConfigAPIItem{
 				FieldKey:         row.FieldKey,
@@ -300,11 +285,6 @@ func handleOrgUnitFieldConfigsAPI(w http.ResponseWriter, r *http.Request, store 
 				UpdatedAt:        time.Time{},
 				AllowFilter:      false,
 				AllowSort:        false,
-				Maintainable:     policy.Maintainable,
-				DefaultMode:      policy.DefaultMode,
-				DefaultRuleExpr:  policy.DefaultRuleExpr,
-				PolicyScopeType:  policy.ScopeType,
-				PolicyScopeKey:   policy.ScopeKey,
 			})
 		}
 
@@ -319,13 +299,6 @@ func handleOrgUnitFieldConfigsAPI(w http.ResponseWriter, r *http.Request, store 
 
 			labelI18nKey, label, allowFilter, allowSort := orgUnitFieldConfigPresentation(row)
 
-			policy := orgUnitFieldPolicyAPIItem{
-				FieldKey:     row.FieldKey,
-				ScopeType:    "SYSTEM_DEFAULT",
-				ScopeKey:     "system",
-				Maintainable: true,
-				DefaultMode:  "NONE",
-			}
 			items = append(items, orgUnitFieldConfigAPIItem{
 				FieldKey:         row.FieldKey,
 				FieldClass:       "EXT",
@@ -340,11 +313,6 @@ func handleOrgUnitFieldConfigsAPI(w http.ResponseWriter, r *http.Request, store 
 				UpdatedAt:        row.UpdatedAt,
 				AllowFilter:      allowFilter,
 				AllowSort:        allowSort,
-				Maintainable:     policy.Maintainable,
-				DefaultMode:      policy.DefaultMode,
-				DefaultRuleExpr:  policy.DefaultRuleExpr,
-				PolicyScopeType:  policy.ScopeType,
-				PolicyScopeKey:   policy.ScopeKey,
 			})
 		}
 

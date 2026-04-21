@@ -104,7 +104,6 @@ type WriteOrgUnitRequest struct {
 	OrgCode             string
 	EffectiveDate       string
 	TargetEffectiveDate string
-	PolicyVersion       string
 	RequestID           string
 	Patch               OrgUnitWritePatch
 	InitiatorUUID       string

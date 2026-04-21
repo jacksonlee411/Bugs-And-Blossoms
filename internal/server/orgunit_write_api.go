@@ -25,7 +25,6 @@ type orgUnitWriteAPIRequest struct {
 	OrgCode             string                      `json:"org_code"`
 	EffectiveDate       string                      `json:"effective_date"`
 	TargetEffectiveDate string                      `json:"target_effective_date"`
-	PolicyVersion       string                      `json:"policy_version"`
 	RequestID           string                      `json:"request_id"`
 	Patch               orgUnitWritePatchAPIRequest `json:"patch"`
 }
@@ -68,14 +67,12 @@ func handleOrgUnitsWriteAPI(w http.ResponseWriter, r *http.Request, writeSvc org
 
 	intent := strings.TrimSpace(req.Intent)
 	effectiveDate := strings.TrimSpace(req.EffectiveDate)
-	policyVersion := strings.TrimSpace(req.PolicyVersion)
 
 	result, err := writeSvc.Write(r.Context(), tenant.ID, orgunitservices.WriteOrgUnitRequest{
 		Intent:              intent,
 		OrgCode:             strings.TrimSpace(req.OrgCode),
 		EffectiveDate:       effectiveDate,
 		TargetEffectiveDate: strings.TrimSpace(req.TargetEffectiveDate),
-		PolicyVersion:       policyVersion,
 		RequestID:           strings.TrimSpace(req.RequestID),
 		Patch: orgunitservices.OrgUnitWritePatch{
 			Name:           req.Patch.Name,
