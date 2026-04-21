@@ -2132,7 +2132,7 @@ func TestHandleOrgUnitFieldOptionsAPI_MoreBranches(t *testing.T) {
 				resolveOrgNodeKeyByCode: func(context.Context, string, string) (string, error) {
 					return mustOrgNodeKeyForTest(t, 10000001), nil
 				},
-				resolveSetIDFn:     func(context.Context, string, string, string) (string, error) { return " ", nil },
+				resolveSetIDFn: func(context.Context, string, string, string) (string, error) { return " ", nil },
 			}
 			req := httptest.NewRequest(http.MethodGet, "/org/api/org-units/fields:options?as_of=2026-01-01&field_key=d_org_type&org_code=A001", nil)
 			req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
@@ -2174,7 +2174,7 @@ func TestHandleOrgUnitFieldOptionsAPI_MoreBranches(t *testing.T) {
 					resolveOrgNodeKeyByCode: func(context.Context, string, string) (string, error) {
 						return mustOrgNodeKeyForTest(t, 10000001), nil
 					},
-					resolveSetIDFn:     func(context.Context, string, string, string) (string, error) { return tc.setID, nil },
+					resolveSetIDFn: func(context.Context, string, string, string) (string, error) { return tc.setID, nil },
 				}
 				req := httptest.NewRequest(http.MethodGet, "/org/api/org-units/fields:options?as_of=2026-01-01&field_key=d_org_type&org_code=A001", nil)
 				req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))

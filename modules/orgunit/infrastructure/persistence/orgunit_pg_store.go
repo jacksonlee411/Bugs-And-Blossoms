@@ -47,23 +47,18 @@ func (s *OrgUnitPGStore) SubmitEvent(ctx context.Context, tenantID string, event
 
 	var eventID int64
 	if err := tx.QueryRow(ctx, `
-SELECT orgunit.submit_org_event(
-  $1::uuid,
-  $2::uuid,
-  $3::char(8),
+	SELECT orgunit.submit_org_event(
+	  $1::uuid,
+	  $2::uuid,
+	  $3::char(8),
   $4::text,
   $5::date,
   $6::jsonb,
   $7::text,
   $8::uuid
-)
-	`, eventUUID, tenantID, orgNodeKeyValue, eventType, effectiveDate, payload, requestID, initiatorUUID).Scan(&eventID); err != nil {
+	)
+		`, eventUUID, tenantID, orgNodeKeyValue, eventType, effectiveDate, payload, requestID, initiatorUUID).Scan(&eventID); err != nil {
 		return 0, err
-	}
-	if eventType == string(types.OrgUnitEventCreate) || eventType == string(types.OrgUnitEventSetBusinessUnit) {
-		if err := setidresolver.EnsureBootstrap(ctx, tx, tenantID, initiatorUUID); err != nil {
-			return 0, err
-		}
 	}
 
 	if err := tx.Commit(ctx); err != nil {

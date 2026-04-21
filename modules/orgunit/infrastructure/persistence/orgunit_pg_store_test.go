@@ -3,7 +3,6 @@ package persistence
 import (
 	"context"
 	"errors"
-	"strings"
 	"testing"
 	"time"
 
@@ -199,11 +198,8 @@ func TestOrgUnitPGStore_SubmitEvent(t *testing.T) {
 	if _, err := store.SubmitEvent(ctx, "t1", "e2", nil, "CREATE", "2026-01-01", nil, "r2", "t1"); err != nil {
 		t.Fatalf("unexpected create error: %v", err)
 	}
-	if createTx.execCalls != 2 {
-		t.Fatalf("create should set tenant then ensure bootstrap, exec_calls=%d sql=%v", createTx.execCalls, createTx.execSQLs)
-	}
-	if !strings.Contains(createTx.execSQLs[1], "orgunit.ensure_setid_bootstrap") {
-		t.Fatalf("create should call ensure_setid_bootstrap, sql=%v", createTx.execSQLs)
+	if createTx.execCalls != 1 {
+		t.Fatalf("create should only set tenant once, exec_calls=%d sql=%v", createTx.execCalls, createTx.execSQLs)
 	}
 
 	store = NewOrgUnitPGStore(beginFunc(func(context.Context) (pgx.Tx, error) {
@@ -213,8 +209,8 @@ func TestOrgUnitPGStore_SubmitEvent(t *testing.T) {
 			execErrAt: 2,
 		}, nil
 	}))
-	if _, err := store.SubmitEvent(ctx, "t1", "e3", nil, "SET_BUSINESS_UNIT", "2026-01-01", nil, "r3", "t1"); err == nil {
-		t.Fatal("expected bootstrap error")
+	if _, err := store.SubmitEvent(ctx, "t1", "e3", nil, "SET_BUSINESS_UNIT", "2026-01-01", nil, "r3", "t1"); err != nil {
+		t.Fatalf("unexpected set business unit error: %v", err)
 	}
 }
 

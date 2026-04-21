@@ -473,7 +473,7 @@ func TestOrgUnitMaintainPrecheckHelpers(t *testing.T) {
 
 	t.Run("policy context and target exists branches", func(t *testing.T) {
 		ctxValue, ctxErr := resolveOrgUnitMaintainPolicyContextV1(context.Background(), nil, OrgUnitMaintainPrecheckInputV1{
-			TenantID:      "tenant_1",
+			TenantID: "tenant_1",
 		}, "2026-01-01")
 		if ctxErr != nil || ctxValue.PolicyContextDigest == "" {
 			t.Fatalf("nil reader ctx=%+v err=%v", ctxValue, ctxErr)

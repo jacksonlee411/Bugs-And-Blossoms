@@ -281,8 +281,8 @@ const (
 	orgUnitDefaultOrgCodeWidth  = 6
 	orgUnitPolicyDisabledStatus = "disabled"
 	orgUnitPolicyEnabledStatus  = "active"
-	orgUnitCreateFieldOrgCode             = "org_code"
-	orgUnitCreateFieldOrgType             = "org_type"
+	orgUnitCreateFieldOrgCode   = "org_code"
+	orgUnitCreateFieldOrgType   = "org_type"
 )
 
 type globalDictResolver struct{}

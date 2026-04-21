@@ -32,11 +32,11 @@ func resolveCreateOrgUnitStaticFieldDecision(enabledExtFieldKeys []string, field
 			return orgUnitFieldDecision{}, false, ""
 		}
 		return orgUnitFieldDecision{
-			FieldKey:      orgUnitCreateFieldOrgType,
-			Visible:       true,
-			Maintainable:  true,
-			Required:      false,
-			DefaultValue:  "",
+			FieldKey:       orgUnitCreateFieldOrgType,
+			Visible:        true,
+			Maintainable:   true,
+			Required:       false,
+			DefaultValue:   "",
 			DefaultRuleRef: "",
 		}, true, ""
 	default:

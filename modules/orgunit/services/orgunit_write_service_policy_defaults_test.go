@@ -167,7 +167,7 @@ func TestApplyCreatePolicyDefaults_StaticRules(t *testing.T) {
 
 	t.Run("org type allowlist empty accepts arbitrary value", func(t *testing.T) {
 		svc := newWriteService(orgUnitWriteStoreStub{
-			resolveOrgNodeKeyFn: func(context.Context, string, string) (string, error) { return mustEncodeTestOrgNodeKey(10000001), nil },
+			resolveOrgNodeKeyFn:    func(context.Context, string, string) (string, error) { return mustEncodeTestOrgNodeKey(10000001), nil },
 			isOrgTreeInitializedFn: func(context.Context, string) (bool, error) { return true, nil },
 		})
 		req := &WriteOrgUnitRequest{
@@ -218,7 +218,7 @@ func TestWrite_CreateOrg_AutoCodeBranches(t *testing.T) {
 	t.Run("auto submit success", func(t *testing.T) {
 		store := orgUnitWriteAutoCodeStoreStub{
 			orgUnitWriteStoreStub: orgUnitWriteStoreStub{
-				resolveOrgIDFn: func(context.Context, string, string) (int, error) { return 10000001, nil },
+				resolveOrgIDFn:         func(context.Context, string, string) (int, error) { return 10000001, nil },
 				isOrgTreeInitializedFn: func(context.Context, string) (bool, error) { return false, nil },
 				listEnabledFieldCfgsFn: func(context.Context, string, string) ([]types.TenantFieldConfig, error) {
 					return []types.TenantFieldConfig{}, nil
