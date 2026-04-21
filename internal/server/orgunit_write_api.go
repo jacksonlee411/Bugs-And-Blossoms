@@ -21,14 +21,13 @@ type orgUnitWritePatchAPIRequest struct {
 }
 
 type orgUnitWriteAPIRequest struct {
-	Intent                 string                      `json:"intent"`
-	OrgCode                string                      `json:"org_code"`
-	EffectiveDate          string                      `json:"effective_date"`
-	TargetEffectiveDate    string                      `json:"target_effective_date"`
-	PolicyVersion          string                      `json:"policy_version"`
-	EffectivePolicyVersion string                      `json:"effective_policy_version"`
-	RequestID              string                      `json:"request_id"`
-	Patch                  orgUnitWritePatchAPIRequest `json:"patch"`
+	Intent              string                      `json:"intent"`
+	OrgCode             string                      `json:"org_code"`
+	EffectiveDate       string                      `json:"effective_date"`
+	TargetEffectiveDate string                      `json:"target_effective_date"`
+	PolicyVersion       string                      `json:"policy_version"`
+	RequestID           string                      `json:"request_id"`
+	Patch               orgUnitWritePatchAPIRequest `json:"patch"`
 }
 
 type orgUnitWriteAPIResponse struct {

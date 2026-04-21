@@ -13,7 +13,6 @@ import (
 	"time"
 
 	dictpkg "github.com/jacksonlee411/Bugs-And-Blossoms/pkg/dict"
-	orgunitpkg "github.com/jacksonlee411/Bugs-And-Blossoms/pkg/orgunit"
 )
 
 type orgUnitStoreWithFieldConfigs struct {
@@ -142,22 +141,6 @@ func TestHandleOrgUnitFieldDefinitionsAPI(t *testing.T) {
 			t.Fatalf("org_type not found")
 		}
 	})
-}
-
-func TestHandleOrgUnitFieldOptionsAPI_ResolveOrgIDInvalidBranch(t *testing.T) {
-	base := newOrgUnitMemoryStore()
-	store := orgUnitStoreWithEnabledFieldConfig{
-		OrgUnitStore: orgUnitMemoryStoreResolveOrgIDErr{orgUnitMemoryStore: base, err: orgunitpkg.ErrOrgCodeInvalid},
-		cfg:          orgUnitTenantFieldConfig{FieldKey: "org_code", ValueType: "text", DataSourceType: "PLAIN"},
-		ok:           true,
-	}
-	req := httptest.NewRequest(http.MethodGet, "/org/api/org-units/field-options?as_of=2026-01-01&field_key=org_code&org_code=FLOWER-A", nil)
-	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
-	rec := httptest.NewRecorder()
-	handleOrgUnitFieldOptionsAPI(rec, req, store)
-	if rec.Code != http.StatusBadRequest {
-		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
-	}
 }
 
 func TestHandleOrgUnitFieldConfigsAPI(t *testing.T) {
@@ -906,17 +889,6 @@ func TestHandleOrgUnitFieldOptionsAPI(t *testing.T) {
 		}
 	})
 
-	t.Run("org_code invalid", func(t *testing.T) {
-		store := orgUnitStoreWithEnabledFieldConfig{OrgUnitStore: base}
-		req := httptest.NewRequest(http.MethodGet, "/org/api/org-units/fields:options?as_of=2026-01-01&field_key=org_type&org_code=A%0A1", nil)
-		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
-		rec := httptest.NewRecorder()
-		handleOrgUnitFieldOptionsAPI(rec, req, store)
-		if rec.Code != http.StatusBadRequest {
-			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
-		}
-	})
-
 	t.Run("store error", func(t *testing.T) {
 		store := orgUnitStoreWithEnabledFieldConfig{OrgUnitStore: base, err: errors.New("boom")}
 		req := httptest.NewRequest(http.MethodGet, "/org/api/org-units/fields:options?as_of=2026-01-01&field_key=org_type", nil)
@@ -1063,9 +1035,6 @@ func TestHandleOrgUnitFieldOptionsAPI(t *testing.T) {
 		if len(payload.Options) != 1 || payload.Options[0].Value != "20" {
 			t.Fatalf("payload=%+v", payload)
 		}
-		if payload.Options[0].SetID != orgUnitFieldOptionSetIDDeflt || payload.Options[0].SetIDSource != orgUnitFieldOptionSetIDSourceDeflt {
-			t.Fatalf("option setid mismatch: %+v", payload.Options[0])
-		}
 
 		req2 := httptest.NewRequest(http.MethodGet, "/org/api/org-units/fields:options?as_of=2026-01-01&field_key=org_type&limit=100", nil)
 		req2 = req2.WithContext(withTenant(req2.Context(), Tenant{ID: "t1"}))
@@ -1181,7 +1150,7 @@ func TestHandleOrgUnitFieldConfigsEnableCandidatesAPI(t *testing.T) {
 		req := httptest.NewRequest(http.MethodPost, "/org/api/org-units/field-configs:enable-candidates", nil)
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
-		handleOrgUnitFieldConfigsEnableCandidatesAPI(rec, req, dictStore, nil, nil)
+		handleOrgUnitFieldConfigsEnableCandidatesAPI(rec, req, dictStore)
 		if rec.Code != http.StatusMethodNotAllowed {
 			t.Fatalf("status=%d", rec.Code)
 		}
@@ -1190,7 +1159,7 @@ func TestHandleOrgUnitFieldConfigsEnableCandidatesAPI(t *testing.T) {
 	t.Run("tenant missing", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/org/api/org-units/field-configs:enable-candidates?enabled_on=2026-01-01", nil)
 		rec := httptest.NewRecorder()
-		handleOrgUnitFieldConfigsEnableCandidatesAPI(rec, req, dictStore, nil, nil)
+		handleOrgUnitFieldConfigsEnableCandidatesAPI(rec, req, dictStore)
 		if rec.Code != http.StatusInternalServerError {
 			t.Fatalf("status=%d", rec.Code)
 		}
@@ -1200,7 +1169,7 @@ func TestHandleOrgUnitFieldConfigsEnableCandidatesAPI(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/org/api/org-units/field-configs:enable-candidates", nil)
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
-		handleOrgUnitFieldConfigsEnableCandidatesAPI(rec, req, dictStore, nil, nil)
+		handleOrgUnitFieldConfigsEnableCandidatesAPI(rec, req, dictStore)
 		if rec.Code != http.StatusBadRequest {
 			t.Fatalf("status=%d", rec.Code)
 		}
@@ -1210,7 +1179,7 @@ func TestHandleOrgUnitFieldConfigsEnableCandidatesAPI(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/org/api/org-units/field-configs:enable-candidates?enabled_on=2026-01-01", nil)
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
-		handleOrgUnitFieldConfigsEnableCandidatesAPI(rec, req, dictStore, nil, nil)
+		handleOrgUnitFieldConfigsEnableCandidatesAPI(rec, req, dictStore)
 		if rec.Code != http.StatusOK {
 			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
 		}
@@ -1221,9 +1190,6 @@ func TestHandleOrgUnitFieldConfigsEnableCandidatesAPI(t *testing.T) {
 		found := false
 		for _, f := range body.DictFields {
 			if f.FieldKey == "d_org_type" && f.DictCode == "org_type" && f.DataSourceType == "DICT" && f.ValueType == "text" {
-				if f.SetID != orgUnitFieldOptionSetIDDeflt || f.SetIDSource != orgUnitFieldOptionSetIDSourceDeflt {
-					t.Fatalf("setid mismatch: %+v", f)
-				}
 				found = true
 			}
 		}
@@ -1582,49 +1548,6 @@ func (s orgUnitCodeResolverStub) ResolveOrgCodesByNodeKeys(ctx context.Context, 
 	return nil, errors.New("org_code_resolver_missing")
 }
 
-type setIDGovernanceStoreStub struct {
-	SetIDGovernanceStore
-	resolveSetIDFn func(ctx context.Context, tenantID string, orgUnitID string, asOfDate string) (string, error)
-}
-
-func (s setIDGovernanceStoreStub) ResolveSetID(ctx context.Context, tenantID string, orgUnitID string, asOfDate string) (string, error) {
-	if s.resolveSetIDFn != nil {
-		return s.resolveSetIDFn(ctx, tenantID, orgUnitID, asOfDate)
-	}
-	if s.SetIDGovernanceStore != nil {
-		return s.SetIDGovernanceStore.ResolveSetID(ctx, tenantID, orgUnitID, asOfDate)
-	}
-	return "", errors.New("SETID_NOT_FOUND")
-}
-
-type orgUnitStoreWithEnabledFieldConfigAndSetID struct {
-	*orgUnitMemoryStore
-	setIDGovernanceStoreStub
-	cfg                     orgUnitTenantFieldConfig
-	ok                      bool
-	err                     error
-	resolveSetIDFn          func(ctx context.Context, tenantID string, orgUnitID string, asOfDate string) (string, error)
-	resolveOrgNodeKeyByCode func(ctx context.Context, tenantID string, orgCode string) (string, error)
-}
-
-func (s orgUnitStoreWithEnabledFieldConfigAndSetID) GetEnabledTenantFieldConfigAsOf(_ context.Context, _ string, _ string, _ string) (orgUnitTenantFieldConfig, bool, error) {
-	return s.cfg, s.ok, s.err
-}
-
-func (s orgUnitStoreWithEnabledFieldConfigAndSetID) ResolveSetID(ctx context.Context, tenantID string, orgUnitID string, asOfDate string) (string, error) {
-	if s.resolveSetIDFn != nil {
-		return s.resolveSetIDFn(ctx, tenantID, orgUnitID, asOfDate)
-	}
-	return s.orgUnitMemoryStore.ResolveSetID(ctx, tenantID, orgUnitID, asOfDate)
-}
-
-func (s orgUnitStoreWithEnabledFieldConfigAndSetID) ResolveOrgNodeKeyByCode(ctx context.Context, tenantID string, orgCode string) (string, error) {
-	if s.resolveOrgNodeKeyByCode != nil {
-		return s.resolveOrgNodeKeyByCode(ctx, tenantID, orgCode)
-	}
-	return s.orgUnitMemoryStore.ResolveOrgNodeKeyByCode(ctx, tenantID, orgCode)
-}
-
 type orgUnitMemoryStoreResolveOrgIDErr struct {
 	*orgUnitMemoryStore
 	err error
@@ -1653,7 +1576,7 @@ func TestHandleOrgUnitFieldConfigsEnableCandidatesAPI_BranchCoverage(t *testing.
 		req := httptest.NewRequest(http.MethodGet, "/org/api/org-units/field-configs:enable-candidates?enabled_on=bad", nil)
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
-		handleOrgUnitFieldConfigsEnableCandidatesAPI(rec, req, newDictMemoryStore(), nil, nil)
+		handleOrgUnitFieldConfigsEnableCandidatesAPI(rec, req, newDictMemoryStore())
 		if rec.Code != http.StatusBadRequest {
 			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
 		}
@@ -1663,7 +1586,7 @@ func TestHandleOrgUnitFieldConfigsEnableCandidatesAPI_BranchCoverage(t *testing.
 		req := httptest.NewRequest(http.MethodGet, "/org/api/org-units/field-configs:enable-candidates?enabled_on=2026-01-01", nil)
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
-		handleOrgUnitFieldConfigsEnableCandidatesAPI(rec, req, nil, nil, nil)
+		handleOrgUnitFieldConfigsEnableCandidatesAPI(rec, req, nil)
 		if rec.Code != http.StatusInternalServerError {
 			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
 		}
@@ -1675,7 +1598,7 @@ func TestHandleOrgUnitFieldConfigsEnableCandidatesAPI_BranchCoverage(t *testing.
 		rec := httptest.NewRecorder()
 		handleOrgUnitFieldConfigsEnableCandidatesAPI(rec, req, dictRegistryStoreStub{
 			listFn: func(context.Context, string, string) ([]DictItem, error) { return nil, errors.New("boom") },
-		}, nil, nil)
+		})
 		if rec.Code != http.StatusInternalServerError {
 			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
 		}
@@ -1697,7 +1620,7 @@ func TestHandleOrgUnitFieldConfigsEnableCandidatesAPI_BranchCoverage(t *testing.
 					{DictCode: "location_code", Name: "Location Code"},        // ok
 				}, nil
 			},
-		}, nil, nil)
+		})
 		if rec.Code != http.StatusOK {
 			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
 		}
@@ -1731,132 +1654,6 @@ func TestHandleOrgUnitFieldConfigsEnableCandidatesAPI_BranchCoverage(t *testing.
 		}
 	})
 
-	t.Run("org_code invalid", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/org/api/org-units/field-configs:enable-candidates?enabled_on=2026-01-01&org_code=A%0A1", nil)
-		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
-		rec := httptest.NewRecorder()
-		handleOrgUnitFieldConfigsEnableCandidatesAPI(rec, req, newDictMemoryStore(), nil, nil)
-		if rec.Code != http.StatusBadRequest {
-			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
-		}
-	})
-
-	t.Run("org_code provided but resolver missing", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/org/api/org-units/field-configs:enable-candidates?enabled_on=2026-01-01&org_code=A001", nil)
-		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
-		rec := httptest.NewRecorder()
-		handleOrgUnitFieldConfigsEnableCandidatesAPI(rec, req, newDictMemoryStore(), nil, nil)
-		if rec.Code != http.StatusInternalServerError {
-			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
-		}
-	})
-
-	t.Run("setid resolver missing", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/org/api/org-units/field-configs:enable-candidates?enabled_on=2026-01-01&org_code=A001", nil)
-		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
-		rec := httptest.NewRecorder()
-		handleOrgUnitFieldConfigsEnableCandidatesAPI(rec, req, newDictMemoryStore(), orgUnitCodeResolverStub{
-			resolveOrgIDFn: func(context.Context, string, string) (int, error) { return 10000001, nil },
-		}, nil)
-		if rec.Code != http.StatusInternalServerError {
-			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
-		}
-	})
-
-	t.Run("org_code resolve failure mapping", func(t *testing.T) {
-		cases := []struct {
-			name   string
-			err    error
-			status int
-		}{
-			{name: "invalid", err: orgunitpkg.ErrOrgCodeInvalid, status: http.StatusBadRequest},
-			{name: "not-found", err: orgunitpkg.ErrOrgCodeNotFound, status: http.StatusNotFound},
-			{name: "internal", err: errors.New("boom"), status: http.StatusInternalServerError},
-		}
-		for _, tc := range cases {
-			t.Run(tc.name, func(t *testing.T) {
-				req := httptest.NewRequest(http.MethodGet, "/org/api/org-units/field-configs:enable-candidates?enabled_on=2026-01-01&org_code=A001", nil)
-				req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
-				rec := httptest.NewRecorder()
-				handleOrgUnitFieldConfigsEnableCandidatesAPI(rec, req, newDictMemoryStore(), orgUnitCodeResolverStub{
-					resolveOrgIDFn: func(context.Context, string, string) (int, error) { return 0, tc.err },
-				}, setIDGovernanceStoreStub{})
-				if rec.Code != tc.status {
-					t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
-				}
-			})
-		}
-	})
-
-	t.Run("setid resolve fail and empty setid", func(t *testing.T) {
-		t.Run("resolve error", func(t *testing.T) {
-			req := httptest.NewRequest(http.MethodGet, "/org/api/org-units/field-configs:enable-candidates?enabled_on=2026-01-01&org_code=A001", nil)
-			req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
-			rec := httptest.NewRecorder()
-			handleOrgUnitFieldConfigsEnableCandidatesAPI(rec, req, newDictMemoryStore(), orgUnitCodeResolverStub{
-				resolveOrgIDFn: func(context.Context, string, string) (int, error) { return 10000001, nil },
-			}, setIDGovernanceStoreStub{
-				resolveSetIDFn: func(context.Context, string, string, string) (string, error) {
-					return "", errors.New("SETID_NOT_FOUND")
-				},
-			})
-			if rec.Code != http.StatusUnprocessableEntity {
-				t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
-			}
-		})
-		t.Run("empty setid", func(t *testing.T) {
-			req := httptest.NewRequest(http.MethodGet, "/org/api/org-units/field-configs:enable-candidates?enabled_on=2026-01-01&org_code=A001", nil)
-			req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
-			rec := httptest.NewRecorder()
-			handleOrgUnitFieldConfigsEnableCandidatesAPI(rec, req, newDictMemoryStore(), orgUnitCodeResolverStub{
-				resolveOrgIDFn: func(context.Context, string, string) (int, error) { return 10000001, nil },
-			}, setIDGovernanceStoreStub{
-				resolveSetIDFn: func(context.Context, string, string, string) (string, error) { return " ", nil },
-			})
-			if rec.Code != http.StatusUnprocessableEntity {
-				t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
-			}
-		})
-	})
-
-	t.Run("org_code setid source mapping", func(t *testing.T) {
-		dictStore := dictRegistryStoreStub{
-			listFn: func(context.Context, string, string) ([]DictItem, error) {
-				return []DictItem{{DictCode: "org_type", Name: "Org Type"}}, nil
-			},
-		}
-		cases := []struct {
-			name      string
-			setID     string
-			expectSrc string
-		}{
-			{name: "deflt", setID: "DEFLT", expectSrc: "deflt"},
-			{name: "share", setID: "SHARE", expectSrc: "share_preview"},
-			{name: "custom", setID: "S9000", expectSrc: "custom"},
-		}
-		for _, tc := range cases {
-			t.Run(tc.name, func(t *testing.T) {
-				req := httptest.NewRequest(http.MethodGet, "/org/api/org-units/field-configs:enable-candidates?enabled_on=2026-01-01&org_code=A001", nil)
-				req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
-				rec := httptest.NewRecorder()
-				handleOrgUnitFieldConfigsEnableCandidatesAPI(rec, req, dictStore, orgUnitCodeResolverStub{
-					resolveOrgIDFn: func(context.Context, string, string) (int, error) { return 10000001, nil },
-				}, setIDGovernanceStoreStub{
-					resolveSetIDFn: func(context.Context, string, string, string) (string, error) { return tc.setID, nil },
-				})
-				if rec.Code != http.StatusOK {
-					t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
-				}
-				var body orgUnitFieldConfigsEnableCandidatesAPIResponse
-				if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
-					t.Fatalf("unmarshal: %v", err)
-				}
-				if len(body.DictFields) != 1 || body.DictFields[0].SetID != tc.setID || body.DictFields[0].SetIDSource != tc.expectSrc {
-					t.Fatalf("dict_fields=%+v", body.DictFields)
-				}
-			})
-		}
-	})
 }
 
 func TestHandleOrgUnitFieldConfigsAPI_WasRetryAndMethodNotAllowed(t *testing.T) {
@@ -2051,148 +1848,6 @@ func TestHandleOrgUnitFieldOptionsAPI_MoreBranches(t *testing.T) {
 		}
 	})
 
-	t.Run("org_code not found", func(t *testing.T) {
-		store := orgUnitStoreWithEnabledFieldConfig{
-			OrgUnitStore: base,
-			ok:           true,
-			cfg:          orgUnitTenantFieldConfig{FieldKey: "d_org_type", DataSourceType: "DICT", DataSourceConfig: json.RawMessage(`{"dict_code":"org_type"}`)},
-		}
-		req := httptest.NewRequest(http.MethodGet, "/org/api/org-units/fields:options?as_of=2026-01-01&field_key=d_org_type&org_code=A001", nil)
-		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
-		rec := httptest.NewRecorder()
-		handleOrgUnitFieldOptionsAPI(rec, req, store)
-		if rec.Code != http.StatusNotFound {
-			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
-		}
-	})
-
-	t.Run("org_code resolver internal error", func(t *testing.T) {
-		store := orgUnitStoreWithEnabledFieldConfig{
-			OrgUnitStore: orgUnitMemoryStoreResolveOrgIDErr{orgUnitMemoryStore: base, err: errors.New("boom")},
-			ok:           true,
-			cfg:          orgUnitTenantFieldConfig{FieldKey: "d_org_type", DataSourceType: "DICT", DataSourceConfig: json.RawMessage(`{"dict_code":"org_type"}`)},
-		}
-		req := httptest.NewRequest(http.MethodGet, "/org/api/org-units/fields:options?as_of=2026-01-01&field_key=d_org_type&org_code=A001", nil)
-		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
-		rec := httptest.NewRecorder()
-		handleOrgUnitFieldOptionsAPI(rec, req, store)
-		if rec.Code != http.StatusInternalServerError {
-			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
-		}
-	})
-
-	t.Run("setid resolver missing", func(t *testing.T) {
-		if _, err := base.CreateNodeCurrent(context.Background(), "t1", "2026-01-01", "A001", "Org A", "", false); err != nil {
-			t.Fatalf("create node: %v", err)
-		}
-		store := orgUnitStoreWithEnabledFieldConfig{
-			OrgUnitStore: base,
-			ok:           true,
-			cfg:          orgUnitTenantFieldConfig{FieldKey: "d_org_type", DataSourceType: "DICT", DataSourceConfig: json.RawMessage(`{"dict_code":"org_type"}`)},
-		}
-		req := httptest.NewRequest(http.MethodGet, "/org/api/org-units/fields:options?as_of=2026-01-01&field_key=d_org_type&org_code=A001", nil)
-		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
-		rec := httptest.NewRecorder()
-		handleOrgUnitFieldOptionsAPI(rec, req, store)
-		if rec.Code != http.StatusInternalServerError {
-			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
-		}
-	})
-
-	t.Run("setid resolve error and empty setid", func(t *testing.T) {
-		mem := newOrgUnitMemoryStore()
-		if _, err := mem.CreateNodeCurrent(context.Background(), "t1", "2026-01-01", "A001", "Org A", "", false); err != nil {
-			t.Fatalf("create node: %v", err)
-		}
-		t.Run("resolve error", func(t *testing.T) {
-			store := orgUnitStoreWithEnabledFieldConfigAndSetID{
-				orgUnitMemoryStore: mem,
-				ok:                 true,
-				cfg:                orgUnitTenantFieldConfig{FieldKey: "d_org_type", DataSourceType: "DICT", DataSourceConfig: json.RawMessage(`{"dict_code":"org_type"}`)},
-				resolveOrgNodeKeyByCode: func(context.Context, string, string) (string, error) {
-					return mustOrgNodeKeyForTest(t, 10000001), nil
-				},
-				resolveSetIDFn: func(context.Context, string, string, string) (string, error) {
-					return "", errors.New("SETID_NOT_FOUND")
-				},
-			}
-			req := httptest.NewRequest(http.MethodGet, "/org/api/org-units/fields:options?as_of=2026-01-01&field_key=d_org_type&org_code=A001", nil)
-			req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
-			rec := httptest.NewRecorder()
-			handleOrgUnitFieldOptionsAPI(rec, req, store)
-			if rec.Code != http.StatusUnprocessableEntity {
-				t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
-			}
-		})
-		t.Run("empty setid", func(t *testing.T) {
-			store := orgUnitStoreWithEnabledFieldConfigAndSetID{
-				orgUnitMemoryStore: mem,
-				ok:                 true,
-				cfg:                orgUnitTenantFieldConfig{FieldKey: "d_org_type", DataSourceType: "DICT", DataSourceConfig: json.RawMessage(`{"dict_code":"org_type"}`)},
-				resolveOrgNodeKeyByCode: func(context.Context, string, string) (string, error) {
-					return mustOrgNodeKeyForTest(t, 10000001), nil
-				},
-				resolveSetIDFn: func(context.Context, string, string, string) (string, error) { return " ", nil },
-			}
-			req := httptest.NewRequest(http.MethodGet, "/org/api/org-units/fields:options?as_of=2026-01-01&field_key=d_org_type&org_code=A001", nil)
-			req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
-			rec := httptest.NewRecorder()
-			handleOrgUnitFieldOptionsAPI(rec, req, store)
-			if rec.Code != http.StatusUnprocessableEntity {
-				t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
-			}
-		})
-	})
-
-	t.Run("org_code setid source mapping", func(t *testing.T) {
-		if err := dictpkg.RegisterResolver(orgunitDictResolverStub{
-			listFn: func(context.Context, string, string, string, string, int) ([]dictpkg.Option, error) {
-				return []dictpkg.Option{{Code: "20", Label: "单位"}}, nil
-			},
-		}); err != nil {
-			t.Fatalf("register resolver err=%v", err)
-		}
-		mem := newOrgUnitMemoryStore()
-		if _, err := mem.CreateNodeCurrent(context.Background(), "t1", "2026-01-01", "A001", "Org A", "", false); err != nil {
-			t.Fatalf("create node: %v", err)
-		}
-		cases := []struct {
-			name      string
-			setID     string
-			expectSrc string
-		}{
-			{name: "deflt", setID: "DEFLT", expectSrc: "deflt"},
-			{name: "share", setID: "SHARE", expectSrc: "share_preview"},
-			{name: "custom", setID: "S9000", expectSrc: "custom"},
-		}
-		for _, tc := range cases {
-			t.Run(tc.name, func(t *testing.T) {
-				store := orgUnitStoreWithEnabledFieldConfigAndSetID{
-					orgUnitMemoryStore: mem,
-					ok:                 true,
-					cfg:                orgUnitTenantFieldConfig{FieldKey: "d_org_type", DataSourceType: "DICT", DataSourceConfig: json.RawMessage(`{"dict_code":"org_type"}`)},
-					resolveOrgNodeKeyByCode: func(context.Context, string, string) (string, error) {
-						return mustOrgNodeKeyForTest(t, 10000001), nil
-					},
-					resolveSetIDFn: func(context.Context, string, string, string) (string, error) { return tc.setID, nil },
-				}
-				req := httptest.NewRequest(http.MethodGet, "/org/api/org-units/fields:options?as_of=2026-01-01&field_key=d_org_type&org_code=A001", nil)
-				req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
-				rec := httptest.NewRecorder()
-				handleOrgUnitFieldOptionsAPI(rec, req, store)
-				if rec.Code != http.StatusOK {
-					t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
-				}
-				var body orgUnitFieldOptionsAPIResponse
-				if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
-					t.Fatalf("unmarshal: %v", err)
-				}
-				if len(body.Options) != 1 || body.Options[0].SetID != tc.setID || body.Options[0].SetIDSource != tc.expectSrc {
-					t.Fatalf("options=%+v", body.Options)
-				}
-			})
-		}
-	})
 }
 
 func TestNormalizeOrgUnitEnableDataSourceConfig_EntityMarshalErrorIsSkipped(t *testing.T) {

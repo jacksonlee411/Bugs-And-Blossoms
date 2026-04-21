@@ -73,7 +73,6 @@ type orgUnitWriteStoreStub struct {
 	resolveOrgIDFn           func(ctx context.Context, tenantID string, orgCode string) (int, error)
 	resolveOrgNodeKeyFn      func(ctx context.Context, tenantID string, orgCode string) (string, error)
 	resolveOrgCodeFn         func(ctx context.Context, tenantID string, orgID int) (string, error)
-	resolveSetIDFn           func(ctx context.Context, tenantID string, orgNodeKey string, asOf string) (string, error)
 	isOrgTreeInitializedFn   func(ctx context.Context, tenantID string) (bool, error)
 }
 
@@ -187,16 +186,6 @@ func (s orgUnitWriteStoreStub) ResolveOrgCodeByNodeKey(ctx context.Context, tena
 		return "", err
 	}
 	return s.resolveOrgCodeFn(ctx, tenantID, orgID)
-}
-
-func (s orgUnitWriteStoreStub) ResolveSetID(ctx context.Context, tenantID string, orgNodeKey string, asOf string) (string, error) {
-	if s.resolveSetIDFn != nil {
-		return s.resolveSetIDFn(ctx, tenantID, orgNodeKey, asOf)
-	}
-	if _, err := parseTestOrgNodeKey(orgNodeKey); err != nil {
-		return "", err
-	}
-	return "DEFLT", nil
 }
 
 func (s orgUnitWriteStoreStub) IsOrgTreeInitialized(ctx context.Context, tenantID string) (bool, error) {

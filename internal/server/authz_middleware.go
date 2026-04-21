@@ -169,30 +169,6 @@ func authzRequirementForRoute(method string, path string) (object string, action
 			return authz.ObjectIAMSession, authz.ActionAdmin, true
 		}
 		return "", "", false
-	case "/org/api/setids":
-		if method == http.MethodGet {
-			return authz.ObjectOrgUnitSetID, authz.ActionRead, true
-		}
-		if method == http.MethodPost {
-			return authz.ObjectOrgUnitSetID, authz.ActionAdmin, true
-		}
-		return "", "", false
-	case "/org/api/setid-bindings":
-		if method == http.MethodGet {
-			return authz.ObjectOrgUnitSetID, authz.ActionRead, true
-		}
-		if method == http.MethodPost {
-			return authz.ObjectOrgUnitSetID, authz.ActionAdmin, true
-		}
-		return "", "", false
-	case "/org/api/global-setids":
-		if method == http.MethodGet {
-			return authz.ObjectOrgShareRead, authz.ActionRead, true
-		}
-		if method == http.MethodPost {
-			return authz.ObjectOrgUnitSetID, authz.ActionAdmin, true
-		}
-		return "", "", false
 	case "/org/api/org-units":
 		if method == http.MethodGet {
 			return authz.ObjectOrgUnitOrgUnits, authz.ActionRead, true

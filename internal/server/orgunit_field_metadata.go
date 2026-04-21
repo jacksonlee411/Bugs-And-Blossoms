@@ -15,11 +15,6 @@ import (
 type orgUnitFieldDefinition = fieldmeta.FieldDefinition
 type orgUnitFieldOption = fieldmeta.FieldOption
 
-const (
-	orgUnitFieldOptionSetIDDeflt       = "DEFLT"
-	orgUnitFieldOptionSetIDSourceDeflt = "deflt"
-)
-
 func listOrgUnitFieldDefinitions() []orgUnitFieldDefinition {
 	return fieldmeta.ListFieldDefinitions()
 }
@@ -82,19 +77,9 @@ func listOrgUnitDictOptions(ctx context.Context, tenantID string, asOf string, d
 	}
 	out := make([]orgUnitFieldOption, 0, len(options))
 	for _, option := range options {
-		setID := strings.ToUpper(strings.TrimSpace(option.SetID))
-		if setID == "" {
-			setID = orgUnitFieldOptionSetIDDeflt
-		}
-		setIDSource := strings.ToLower(strings.TrimSpace(option.SetIDSource))
-		if setIDSource == "" {
-			setIDSource = orgUnitFieldOptionSetIDSourceDeflt
-		}
 		out = append(out, orgUnitFieldOption{
-			Value:       option.Code,
-			Label:       option.Label,
-			SetID:       setID,
-			SetIDSource: setIDSource,
+			Value: option.Code,
+			Label: option.Label,
 		})
 	}
 	return out, nil

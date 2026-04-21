@@ -647,22 +647,6 @@ SELECT EXISTS (
 		}
 	}
 
-	var hasDependencies bool
-	if err := tx.QueryRow(ctx, fmt.Sprintf(`
-SELECT EXISTS (
-  SELECT 1
-  FROM orgunit.setid_binding_versions b
-  WHERE b.tenant_uuid = $1::uuid
-    AND %s = $2::text
-  LIMIT 1
-)
-	`, orgNodeKeyCompatExpr("b")), tenantID, normalizedOrgNodeKey).Scan(&hasDependencies); err != nil {
-		return nil, err
-	}
-	if hasDependencies {
-		deny = append(deny, orgUnitErrHasDependenciesCannotDelete)
-	}
-
 	if err := tx.Commit(ctx); err != nil {
 		return nil, err
 	}

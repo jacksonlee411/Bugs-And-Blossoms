@@ -71,15 +71,6 @@ entrypoints:
       - path: /logout
         methods: [POST]
         route_class: authn
-      - path: /org/api/setids
-        methods: [GET, POST]
-        route_class: internal_api
-      - path: /org/api/setid-bindings
-        methods: [GET, POST]
-        route_class: internal_api
-      - path: /org/api/global-setids
-        methods: [GET, POST]
-        route_class: internal_api
       - path: /org/api/org-units
         methods: [GET, POST]
         route_class: internal_api

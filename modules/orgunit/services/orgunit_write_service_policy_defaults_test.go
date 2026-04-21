@@ -288,11 +288,6 @@ func TestCreateFieldDecisionHelperFunctions(t *testing.T) {
 		}
 	})
 
-	t.Run("mapSetIDFieldDecisionError branches", func(t *testing.T) {
-		if got := mapSetIDFieldDecisionError(errors.New(errFieldPolicyConflict)); got.Error() != errFieldPolicyConflict {
-			t.Fatalf("got=%v", got)
-		}
-	})
 }
 
 func TestResolveCreateBusinessUnitID(t *testing.T) {

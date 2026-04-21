@@ -604,22 +604,6 @@ func TestOrgUnitMemoryStore_ResolveOrgCodes(t *testing.T) {
 	}
 }
 
-func TestOrgUnitMemoryStore_ResolveSetID(t *testing.T) {
-	store := newOrgUnitMemoryStore()
-	orgNodeKey := mustOrgNodeKeyForTest(t, 10000001)
-
-	if _, err := store.ResolveSetID(context.Background(), "t1", "", "2026-01-01"); err == nil {
-		t.Fatal("expected error")
-	}
-	got, err := store.ResolveSetID(context.Background(), "t1", orgNodeKey, "2026-01-01")
-	if err != nil {
-		t.Fatalf("err=%v", err)
-	}
-	if got != "S2601" {
-		t.Fatalf("expected S2601, got %q", got)
-	}
-}
-
 func TestOrgUnitMemoryStore_MoveDisableSetBusinessUnitErrors(t *testing.T) {
 	s := newOrgUnitMemoryStore()
 	created, err := s.CreateNodeCurrent(context.Background(), "t1", "2026-01-06", "A003", "A", "", false)

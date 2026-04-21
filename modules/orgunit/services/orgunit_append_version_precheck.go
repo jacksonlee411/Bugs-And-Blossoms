@@ -12,7 +12,6 @@ import (
 )
 
 const (
-	OrgUnitAppendVersionMutationPolicyVersionV1        = "orgunit.append_version.mutation_policy.v1"
 	OrgUnitAppendVersionPolicyContextContractVersionV1 = "orgunit.append_version.policy_context.v1"
 	OrgUnitAppendVersionPrecheckProjectionContractV1   = "orgunit.append_version.precheck_projection.v1"
 
@@ -21,9 +20,7 @@ const (
 	orgUnitAppendVersionReadinessCandidateConfirmation = "candidate_confirmation_required"
 	orgUnitAppendVersionReadinessRejected              = "rejected"
 
-	orgUnitAppendVersionContextCodeOrgInvalid          = "org_context_invalid"
-	orgUnitAppendVersionContextCodeSetIDBindingMissing = "setid_binding_missing"
-	orgUnitAppendVersionContextCodeSetIDSourceInvalid  = "setid_source_invalid"
+	orgUnitAppendVersionContextCodeOrgInvalid = "org_context_invalid"
 
 	orgUnitAppendVersionCandidateRequirementNewParent = "new_parent_org_code"
 )
@@ -41,8 +38,6 @@ type OrgUnitAppendVersionPolicyContextV1 struct {
 	EffectiveDate       string `json:"effective_date"`
 	OrgCode             string `json:"org_code"`
 	OrgNodeKey          string `json:"org_node_key"`
-	ResolvedSetID       string `json:"resolved_setid"`
-	SetIDSource         string `json:"setid_source"`
 	PolicyContextDigest string `json:"policy_context_digest"`
 }
 
@@ -63,10 +58,6 @@ type OrgUnitAppendVersionPrecheckProjectionV1 struct {
 	FieldDecisions                    []OrgUnitAppendVersionFieldDecisionV1 `json:"field_decisions"`
 	CandidateConfirmationRequirements []string                              `json:"candidate_confirmation_requirements"`
 	PendingDraftSummary               string                                `json:"pending_draft_summary"`
-	EffectivePolicyVersion            string                                `json:"effective_policy_version"`
-	MutationPolicyVersion             string                                `json:"mutation_policy_version"`
-	ResolvedSetID                     string                                `json:"resolved_setid"`
-	SetIDSource                       string                                `json:"setid_source"`
 	PolicyExplain                     string                                `json:"policy_explain"`
 	RejectionReasons                  []string                              `json:"rejection_reasons"`
 	ProjectionDigest                  string                                `json:"projection_digest"`
@@ -77,7 +68,6 @@ type OrgUnitAppendVersionPrecheckInputV1 struct {
 	TenantID                          string
 	EffectiveDate                     string
 	OrgCode                           string
-	EffectivePolicyVersion            string
 	CanAdmin                          bool
 	CandidateConfirmationRequired     bool
 	CandidateConfirmationRequirements []string
@@ -118,7 +108,6 @@ type OrgUnitAppendVersionFactsV1 struct {
 
 type OrgUnitAppendVersionPrecheckReader interface {
 	ResolveOrgNodeKey(ctx context.Context, tenantID string, orgCode string) (string, error)
-	ResolveSetID(ctx context.Context, tenantID string, orgNodeKey string, asOf string) (string, error)
 	IsOrgTreeInitialized(ctx context.Context, tenantID string) (bool, error)
 	ListEnabledTenantFieldConfigsAsOf(ctx context.Context, tenantID string, asOf string) ([]types.TenantFieldConfig, error)
 	ResolveAppendFacts(ctx context.Context, tenantID string, orgNodeKey string, effectiveDate string) (OrgUnitAppendVersionFactsV1, error)
@@ -160,8 +149,6 @@ func evaluateOrgUnitAppendVersionPrecheckV1(
 			OrgCode:       normalizedInput.OrgCode,
 		},
 		Projection: OrgUnitAppendVersionPrecheckProjectionV1{
-			MutationPolicyVersion:             OrgUnitAppendVersionMutationPolicyVersionV1,
-			EffectivePolicyVersion:            normalizedInput.EffectivePolicyVersion,
 			CandidateConfirmationRequirements: normalizeOrgUnitAppendVersionCandidateRequirements(normalizedInput.CandidateConfirmationRequired, normalizedInput.CandidateConfirmationRequirements),
 			MissingFields:                     []string{},
 			FieldDecisions:                    []OrgUnitAppendVersionFieldDecisionV1{},
@@ -239,8 +226,6 @@ func evaluateOrgUnitAppendVersionPrecheckV1(
 	eval.Result.Projection.FieldDecisions = buildOrgUnitAppendVersionFieldDecisions(eval, enabledExtFieldKeys)
 	eval.Result.Projection.Readiness = resolveOrgUnitAppendVersionReadiness(eval.Result.Projection)
 	eval.Result.Projection.PendingDraftSummary = buildOrgUnitAppendVersionPendingDraftSummary(normalizedInput)
-	eval.Result.Projection.ResolvedSetID = eval.Result.PolicyContext.ResolvedSetID
-	eval.Result.Projection.SetIDSource = eval.Result.PolicyContext.SetIDSource
 	eval.Result.Projection.PolicyExplain = buildOrgUnitAppendVersionPolicyExplain(eval.Result.Projection)
 	eval.Result.PolicyContext.PolicyContextDigest = buildOrgUnitAppendVersionPolicyContextDigest(eval.Result.PolicyContext)
 	eval.Result.Projection.ProjectionDigest = buildOrgUnitAppendVersionProjectionDigest(eval.Result.Projection)
@@ -252,7 +237,6 @@ func normalizeOrgUnitAppendVersionPrecheckInput(input OrgUnitAppendVersionPreche
 	input.TenantID = strings.TrimSpace(input.TenantID)
 	input.EffectiveDate = strings.TrimSpace(input.EffectiveDate)
 	input.OrgCode = strings.TrimSpace(input.OrgCode)
-	input.EffectivePolicyVersion = strings.TrimSpace(input.EffectivePolicyVersion)
 	input.NewName = strings.TrimSpace(input.NewName)
 	input.NewParentOrgCode = strings.TrimSpace(input.NewParentOrgCode)
 	if input.NewParentOrgCode != "" {
@@ -319,31 +303,6 @@ func resolveOrgUnitAppendVersionPolicyContextV1(
 		return ctxV1, contextErr
 	}
 	ctxV1.OrgNodeKey = strings.TrimSpace(orgNodeKey)
-	resolvedSetID, err := reader.ResolveSetID(ctx, input.TenantID, ctxV1.OrgNodeKey, input.EffectiveDate)
-	if err != nil {
-		contextErr := &OrgUnitAppendVersionPolicyContextErrorV1{
-			Code:  orgUnitAppendVersionContextCodeSetIDBindingMissing,
-			Cause: err,
-		}
-		ctxV1.PolicyContextDigest = buildOrgUnitAppendVersionPolicyContextDigest(ctxV1)
-		return ctxV1, contextErr
-	}
-	ctxV1.ResolvedSetID = strings.ToUpper(strings.TrimSpace(resolvedSetID))
-	if ctxV1.ResolvedSetID == "" {
-		contextErr := &OrgUnitAppendVersionPolicyContextErrorV1{Code: orgUnitAppendVersionContextCodeSetIDBindingMissing}
-		ctxV1.PolicyContextDigest = buildOrgUnitAppendVersionPolicyContextDigest(ctxV1)
-		return ctxV1, contextErr
-	}
-	setIDSource, sourceErr := classifyCreateOrgUnitSetIDSource(ctxV1.ResolvedSetID)
-	if sourceErr != nil {
-		contextErr := &OrgUnitAppendVersionPolicyContextErrorV1{
-			Code:  orgUnitAppendVersionContextCodeSetIDSourceInvalid,
-			Cause: sourceErr,
-		}
-		ctxV1.PolicyContextDigest = buildOrgUnitAppendVersionPolicyContextDigest(ctxV1)
-		return ctxV1, contextErr
-	}
-	ctxV1.SetIDSource = setIDSource
 	ctxV1.PolicyContextDigest = buildOrgUnitAppendVersionPolicyContextDigest(ctxV1)
 	return ctxV1, nil
 }
@@ -505,7 +464,7 @@ func normalizeOrgUnitAppendVersionRejectionReasons(reasons []string) []string {
 	}
 	for _, reason := range reasons {
 		switch strings.TrimSpace(reason) {
-		case orgUnitAppendVersionContextCodeOrgInvalid, orgUnitAppendVersionContextCodeSetIDBindingMissing, orgUnitAppendVersionContextCodeSetIDSourceInvalid:
+		case orgUnitAppendVersionContextCodeOrgInvalid:
 			appendReason(&contextReasons, reason)
 		case "FORBIDDEN", "ORG_TREE_NOT_INITIALIZED", "ORG_NOT_FOUND_AS_OF":
 			appendReason(&mutationReasons, reason)
@@ -648,16 +607,12 @@ func buildOrgUnitAppendVersionPolicyContextDigest(ctx OrgUnitAppendVersionPolicy
 		EffectiveDate string `json:"effective_date"`
 		OrgCode       string `json:"org_code"`
 		OrgNodeKey    string `json:"org_node_key"`
-		ResolvedSetID string `json:"resolved_setid"`
-		SetIDSource   string `json:"setid_source"`
 	}{
 		TenantID:      strings.TrimSpace(ctx.TenantID),
 		Intent:        strings.TrimSpace(ctx.Intent),
 		EffectiveDate: strings.TrimSpace(ctx.EffectiveDate),
 		OrgCode:       strings.TrimSpace(ctx.OrgCode),
 		OrgNodeKey:    strings.TrimSpace(ctx.OrgNodeKey),
-		ResolvedSetID: strings.TrimSpace(ctx.ResolvedSetID),
-		SetIDSource:   strings.TrimSpace(ctx.SetIDSource),
 	}
 	return orgUnitAppendVersionDigest(payload)
 }
@@ -669,10 +624,6 @@ func buildOrgUnitAppendVersionProjectionDigest(projection OrgUnitAppendVersionPr
 		FieldDecisions                    []OrgUnitAppendVersionFieldDecisionV1 `json:"field_decisions"`
 		CandidateConfirmationRequirements []string                              `json:"candidate_confirmation_requirements"`
 		PendingDraftSummary               string                                `json:"pending_draft_summary"`
-		EffectivePolicyVersion            string                                `json:"effective_policy_version"`
-		MutationPolicyVersion             string                                `json:"mutation_policy_version"`
-		ResolvedSetID                     string                                `json:"resolved_setid"`
-		SetIDSource                       string                                `json:"setid_source"`
 		PolicyExplain                     string                                `json:"policy_explain"`
 		RejectionReasons                  []string                              `json:"rejection_reasons"`
 	}{
@@ -681,10 +632,6 @@ func buildOrgUnitAppendVersionProjectionDigest(projection OrgUnitAppendVersionPr
 		FieldDecisions:                    append([]OrgUnitAppendVersionFieldDecisionV1(nil), projection.FieldDecisions...),
 		CandidateConfirmationRequirements: append([]string(nil), projection.CandidateConfirmationRequirements...),
 		PendingDraftSummary:               strings.TrimSpace(projection.PendingDraftSummary),
-		EffectivePolicyVersion:            strings.TrimSpace(projection.EffectivePolicyVersion),
-		MutationPolicyVersion:             strings.TrimSpace(projection.MutationPolicyVersion),
-		ResolvedSetID:                     strings.TrimSpace(projection.ResolvedSetID),
-		SetIDSource:                       strings.TrimSpace(projection.SetIDSource),
 		PolicyExplain:                     strings.TrimSpace(projection.PolicyExplain),
 		RejectionReasons:                  append([]string(nil), projection.RejectionReasons...),
 	}
@@ -717,10 +664,6 @@ func CloneOrgUnitAppendVersionProjectionV1(projection OrgUnitAppendVersionPreche
 		FieldDecisions:                    CloneOrgUnitAppendVersionFieldDecisions(projection.FieldDecisions),
 		CandidateConfirmationRequirements: append([]string(nil), projection.CandidateConfirmationRequirements...),
 		PendingDraftSummary:               strings.TrimSpace(projection.PendingDraftSummary),
-		EffectivePolicyVersion:            strings.TrimSpace(projection.EffectivePolicyVersion),
-		MutationPolicyVersion:             strings.TrimSpace(projection.MutationPolicyVersion),
-		ResolvedSetID:                     strings.TrimSpace(projection.ResolvedSetID),
-		SetIDSource:                       strings.TrimSpace(projection.SetIDSource),
 		PolicyExplain:                     strings.TrimSpace(projection.PolicyExplain),
 		RejectionReasons:                  append([]string(nil), projection.RejectionReasons...),
 		ProjectionDigest:                  strings.TrimSpace(projection.ProjectionDigest),

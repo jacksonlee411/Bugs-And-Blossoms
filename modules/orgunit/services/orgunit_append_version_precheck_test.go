@@ -11,7 +11,6 @@ import (
 
 type orgUnitAppendVersionPrecheckReaderStub struct {
 	resolveOrgNodeKeyFn func(context.Context, string, string) (string, error)
-	resolveSetIDFn      func(context.Context, string, string, string) (string, error)
 	treeInitFn          func(context.Context, string) (bool, error)
 	listConfigsFn       func(context.Context, string, string) ([]types.TenantFieldConfig, error)
 	resolveFactsFn      func(context.Context, string, string, string) (OrgUnitAppendVersionFactsV1, error)
@@ -20,13 +19,6 @@ type orgUnitAppendVersionPrecheckReaderStub struct {
 func (s orgUnitAppendVersionPrecheckReaderStub) ResolveOrgNodeKey(ctx context.Context, tenantID string, orgCode string) (string, error) {
 	if s.resolveOrgNodeKeyFn != nil {
 		return s.resolveOrgNodeKeyFn(ctx, tenantID, orgCode)
-	}
-	return "", nil
-}
-
-func (s orgUnitAppendVersionPrecheckReaderStub) ResolveSetID(ctx context.Context, tenantID string, orgNodeKey string, asOf string) (string, error) {
-	if s.resolveSetIDFn != nil {
-		return s.resolveSetIDFn(ctx, tenantID, orgNodeKey, asOf)
 	}
 	return "", nil
 }
@@ -83,13 +75,12 @@ func TestOrgUnitAppendVersionPrecheckHelpers(t *testing.T) {
 
 	t.Run("normalize input and small helpers", func(t *testing.T) {
 		input := normalizeOrgUnitAppendVersionPrecheckInput(OrgUnitAppendVersionPrecheckInputV1{
-			Intent:                 " add_version ",
-			TenantID:               " tenant-1 ",
-			EffectiveDate:          " 2026-01-01 ",
-			OrgCode:                " flower-c ",
-			EffectivePolicyVersion: " epv1 ",
-			NewName:                " 运营一部 ",
-			NewParentOrgCode:       " flower-a ",
+			Intent:           " add_version ",
+			TenantID:         " tenant-1 ",
+			EffectiveDate:    " 2026-01-01 ",
+			OrgCode:          " flower-c ",
+			NewName:          " 运营一部 ",
+			NewParentOrgCode: " flower-a ",
 		})
 		if input.Intent != "add_version" || input.TenantID != "tenant-1" {
 			t.Fatalf("normalized input=%+v", input)
@@ -182,14 +173,12 @@ func TestOrgUnitAppendVersionPrecheckHelpers(t *testing.T) {
 		ordered := normalizeOrgUnitAppendVersionRejectionReasons([]string{
 			"PATCH_FIELD_NOT_ALLOWED",
 			"FORBIDDEN",
-			orgUnitAppendVersionContextCodeSetIDBindingMissing,
 			"PATCH_FIELD_NOT_ALLOWED",
 			"ORG_TREE_NOT_INITIALIZED",
 			"policy_missing",
 			"",
 		})
 		wantOrdered := []string{
-			orgUnitAppendVersionContextCodeSetIDBindingMissing,
 			"FORBIDDEN",
 			"ORG_TREE_NOT_INITIALIZED",
 			"PATCH_FIELD_NOT_ALLOWED",
@@ -285,10 +274,6 @@ func TestOrgUnitAppendVersionPrecheckHelpers(t *testing.T) {
 			FieldDecisions:                    appendFieldDecisions,
 			CandidateConfirmationRequirements: []string{"new_parent_org_code"},
 			PendingDraftSummary:               " 目标组织：FLOWER-C ",
-			EffectivePolicyVersion:            " epv1 ",
-			MutationPolicyVersion:             " mpv1 ",
-			ResolvedSetID:                     " S2601 ",
-			SetIDSource:                       " custom ",
 			PolicyExplain:                     " 已就绪 ",
 			RejectionReasons:                  []string{"FORBIDDEN"},
 			ProjectionDigest:                  " digest ",
@@ -304,10 +289,6 @@ func TestOrgUnitAppendVersionPrecheckHelpers(t *testing.T) {
 			clonedProjection.CandidateConfirmationRequirements[0] != "new_parent_org_code" ||
 			clonedProjection.RejectionReasons[0] != "FORBIDDEN" ||
 			clonedProjection.PendingDraftSummary != "目标组织：FLOWER-C" ||
-			clonedProjection.EffectivePolicyVersion != "epv1" ||
-			clonedProjection.MutationPolicyVersion != "mpv1" ||
-			clonedProjection.ResolvedSetID != "S2601" ||
-			clonedProjection.SetIDSource != "custom" ||
 			clonedProjection.PolicyExplain != "已就绪" ||
 			clonedProjection.ProjectionDigest != "digest" {
 			t.Fatalf("cloned projection=%+v", clonedProjection)
@@ -355,30 +336,9 @@ func TestResolveOrgUnitAppendVersionPolicyContextBranches(t *testing.T) {
 		}
 	})
 
-	t.Run("resolve setid error", func(t *testing.T) {
-		_, contextErr := resolveOrgUnitAppendVersionPolicyContextV1(ctx, orgUnitAppendVersionPrecheckReaderStub{
-			resolveOrgNodeKeyFn: func(context.Context, string, string) (string, error) { return "10000001", nil },
-			resolveSetIDFn:      func(context.Context, string, string, string) (string, error) { return "", errors.New("missing") },
-		}, OrgUnitAppendVersionPrecheckInputV1{TenantID: "tenant-1", OrgCode: "FLOWER-C", EffectiveDate: "2026-01-01"})
-		if contextErr == nil || contextErr.Code != orgUnitAppendVersionContextCodeSetIDBindingMissing {
-			t.Fatalf("err=%+v", contextErr)
-		}
-	})
-
-	t.Run("empty setid maps to binding missing", func(t *testing.T) {
-		_, contextErr := resolveOrgUnitAppendVersionPolicyContextV1(ctx, orgUnitAppendVersionPrecheckReaderStub{
-			resolveOrgNodeKeyFn: func(context.Context, string, string) (string, error) { return "10000001", nil },
-			resolveSetIDFn:      func(context.Context, string, string, string) (string, error) { return " ", nil },
-		}, OrgUnitAppendVersionPrecheckInputV1{TenantID: "tenant-1", OrgCode: "FLOWER-C", EffectiveDate: "2026-01-01"})
-		if contextErr == nil || contextErr.Code != orgUnitAppendVersionContextCodeSetIDBindingMissing {
-			t.Fatalf("err=%+v", contextErr)
-		}
-	})
-
 	t.Run("success", func(t *testing.T) {
 		policyCtx, contextErr := resolveOrgUnitAppendVersionPolicyContextV1(ctx, orgUnitAppendVersionPrecheckReaderStub{
 			resolveOrgNodeKeyFn: func(context.Context, string, string) (string, error) { return "10000001", nil },
-			resolveSetIDFn:      func(context.Context, string, string, string) (string, error) { return "deflt", nil },
 		}, OrgUnitAppendVersionPrecheckInputV1{
 			TenantID:      "tenant-1",
 			Intent:        "add_version",
@@ -388,7 +348,7 @@ func TestResolveOrgUnitAppendVersionPolicyContextBranches(t *testing.T) {
 		if contextErr != nil {
 			t.Fatalf("unexpected err=%v", contextErr)
 		}
-		if policyCtx.OrgCode != "FLOWER-C" || policyCtx.ResolvedSetID != "DEFLT" || policyCtx.SetIDSource != "deflt" || policyCtx.PolicyContextDigest == "" {
+		if policyCtx.OrgCode != "FLOWER-C" || policyCtx.OrgNodeKey != "10000001" || policyCtx.PolicyContextDigest == "" {
 			t.Fatalf("ctx=%+v", policyCtx)
 		}
 	})
@@ -397,18 +357,16 @@ func TestResolveOrgUnitAppendVersionPolicyContextBranches(t *testing.T) {
 func TestBuildOrgUnitAppendVersionPrecheckProjectionBranches(t *testing.T) {
 	ctx := context.Background()
 	baseInput := OrgUnitAppendVersionPrecheckInputV1{
-		Intent:                 string(OrgUnitWriteIntentAddVersion),
-		TenantID:               "tenant-1",
-		EffectiveDate:          "2026-01-01",
-		OrgCode:                "FLOWER-C",
-		EffectivePolicyVersion: "epv1",
-		CanAdmin:               true,
-		NewName:                "运营一部",
+		Intent:        string(OrgUnitWriteIntentAddVersion),
+		TenantID:      "tenant-1",
+		EffectiveDate: "2026-01-01",
+		OrgCode:       "FLOWER-C",
+		CanAdmin:      true,
+		NewName:       "运营一部",
 	}
 
 	readyReader := orgUnitAppendVersionPrecheckReaderStub{
 		resolveOrgNodeKeyFn: func(context.Context, string, string) (string, error) { return "10000003", nil },
-		resolveSetIDFn:      func(context.Context, string, string, string) (string, error) { return "S2601", nil },
 		treeInitFn:          func(context.Context, string) (bool, error) { return true, nil },
 		listConfigsFn:       func(context.Context, string, string) ([]types.TenantFieldConfig, error) { return nil, nil },
 		resolveFactsFn: func(context.Context, string, string, string) (OrgUnitAppendVersionFactsV1, error) {

@@ -15,7 +15,6 @@ import (
 )
 
 const (
-	CreateOrgUnitMutationPolicyVersionV1        = "orgunit.create.mutation_policy.v1"
 	CreateOrgUnitPolicyContextContractVersionV1 = "orgunit.create.policy_context.v1"
 	CreateOrgUnitPrecheckProjectionContractV1   = "orgunit.create.precheck_projection.v1"
 	createOrgUnitReadinessReady                 = "ready"
@@ -23,8 +22,6 @@ const (
 	createOrgUnitReadinessCandidateConfirmation = "candidate_confirmation_required"
 	createOrgUnitReadinessRejected              = "rejected"
 	createOrgUnitContextCodeBusinessUnitInvalid = "business_unit_context_invalid"
-	createOrgUnitContextCodeSetIDBindingMissing = "setid_binding_missing"
-	createOrgUnitContextCodeSetIDSourceInvalid  = "setid_source_invalid"
 	createOrgUnitCandidateRequirementParentOrg  = "parent_org_code"
 )
 
@@ -43,8 +40,6 @@ type CreateOrgUnitPolicyContextV1 struct {
 	EffectiveDate       string `json:"effective_date"`
 	BusinessUnitOrgCode string `json:"business_unit_org_code"`
 	BusinessUnitNodeKey string `json:"business_unit_node_key"`
-	ResolvedSetID       string `json:"resolved_setid"`
-	SetIDSource         string `json:"setid_source"`
 	PolicyContextDigest string `json:"policy_context_digest"`
 }
 
@@ -65,10 +60,6 @@ type CreateOrgUnitPrecheckProjectionV1 struct {
 	FieldDecisions                    []CreateOrgUnitFieldDecisionV1 `json:"field_decisions"`
 	CandidateConfirmationRequirements []string                       `json:"candidate_confirmation_requirements"`
 	PendingDraftSummary               string                         `json:"pending_draft_summary"`
-	EffectivePolicyVersion            string                         `json:"effective_policy_version"`
-	MutationPolicyVersion             string                         `json:"mutation_policy_version"`
-	ResolvedSetID                     string                         `json:"resolved_setid"`
-	SetIDSource                       string                         `json:"setid_source"`
 	PolicyExplain                     string                         `json:"policy_explain"`
 	RejectionReasons                  []string                       `json:"rejection_reasons"`
 	ProjectionDigest                  string                         `json:"projection_digest"`
@@ -78,7 +69,6 @@ type CreateOrgUnitPrecheckInputV1 struct {
 	TenantID                          string
 	EffectiveDate                     string
 	BusinessUnitOrgCode               string
-	EffectivePolicyVersion            string
 	CanAdmin                          bool
 	CandidateConfirmationRequired     bool
 	CandidateConfirmationRequirements []string
@@ -117,7 +107,6 @@ func (e *CreateOrgUnitPolicyContextErrorV1) Unwrap() error {
 
 type CreateOrgUnitPrecheckReader interface {
 	ResolveOrgNodeKey(ctx context.Context, tenantID string, orgCode string) (string, error)
-	ResolveSetID(ctx context.Context, tenantID string, orgNodeKey string, asOf string) (string, error)
 	IsOrgTreeInitialized(ctx context.Context, tenantID string) (bool, error)
 	ListEnabledTenantFieldConfigsAsOf(ctx context.Context, tenantID string, asOf string) ([]types.TenantFieldConfig, error)
 }
@@ -159,8 +148,6 @@ func evaluateCreateOrgUnitPrecheckV1(
 			BusinessUnitOrgCode: normalizedInput.BusinessUnitOrgCode,
 		},
 		Projection: CreateOrgUnitPrecheckProjectionV1{
-			MutationPolicyVersion:             CreateOrgUnitMutationPolicyVersionV1,
-			EffectivePolicyVersion:            normalizedInput.EffectivePolicyVersion,
 			CandidateConfirmationRequirements: normalizeCreateOrgUnitCandidateRequirements(normalizedInput.CandidateConfirmationRequired, normalizedInput.CandidateConfirmationRequirements),
 			MissingFields:                     []string{},
 			FieldDecisions:                    []CreateOrgUnitFieldDecisionV1{},
@@ -279,8 +266,6 @@ func evaluateCreateOrgUnitPrecheckV1(
 	eval.Result.Projection.FieldDecisions = buildCreateOrgUnitFieldDecisions(eval, enabledExtFieldKeys)
 	eval.Result.Projection.Readiness = resolveCreateOrgUnitReadiness(eval.Result.Projection)
 	eval.Result.Projection.PendingDraftSummary = buildCreateOrgUnitPendingDraftSummary(normalizedInput)
-	eval.Result.Projection.ResolvedSetID = eval.Result.PolicyContext.ResolvedSetID
-	eval.Result.Projection.SetIDSource = eval.Result.PolicyContext.SetIDSource
 	eval.Result.Projection.PolicyExplain = buildCreateOrgUnitPolicyExplain(eval.Result.Projection)
 	eval.Result.PolicyContext.PolicyContextDigest = buildCreateOrgUnitPolicyContextDigest(eval.Result.PolicyContext)
 	eval.Result.Projection.ProjectionDigest = buildCreateOrgUnitProjectionDigest(eval.Result.Projection)
@@ -291,7 +276,6 @@ func normalizeCreateOrgUnitPrecheckInput(input CreateOrgUnitPrecheckInputV1) Cre
 	input.TenantID = strings.TrimSpace(input.TenantID)
 	input.EffectiveDate = strings.TrimSpace(input.EffectiveDate)
 	input.BusinessUnitOrgCode = strings.TrimSpace(input.BusinessUnitOrgCode)
-	input.EffectivePolicyVersion = strings.TrimSpace(input.EffectivePolicyVersion)
 	input.Name = strings.TrimSpace(input.Name)
 	input.OrgCode = strings.TrimSpace(input.OrgCode)
 	input.ManagerPernr = strings.TrimSpace(input.ManagerPernr)
@@ -358,31 +342,6 @@ func resolveCreateOrgUnitPolicyContextV1(
 		return ctxV1, contextErr
 	}
 	ctxV1.BusinessUnitNodeKey = strings.TrimSpace(orgNodeKey)
-	resolvedSetID, err := reader.ResolveSetID(ctx, input.TenantID, ctxV1.BusinessUnitNodeKey, input.EffectiveDate)
-	if err != nil {
-		contextErr := &CreateOrgUnitPolicyContextErrorV1{
-			Code:  createOrgUnitContextCodeSetIDBindingMissing,
-			Cause: err,
-		}
-		ctxV1.PolicyContextDigest = buildCreateOrgUnitPolicyContextDigest(ctxV1)
-		return ctxV1, contextErr
-	}
-	ctxV1.ResolvedSetID = strings.ToUpper(strings.TrimSpace(resolvedSetID))
-	if ctxV1.ResolvedSetID == "" {
-		contextErr := &CreateOrgUnitPolicyContextErrorV1{Code: createOrgUnitContextCodeSetIDBindingMissing}
-		ctxV1.PolicyContextDigest = buildCreateOrgUnitPolicyContextDigest(ctxV1)
-		return ctxV1, contextErr
-	}
-	setIDSource, sourceErr := classifyCreateOrgUnitSetIDSource(ctxV1.ResolvedSetID)
-	if sourceErr != nil {
-		contextErr := &CreateOrgUnitPolicyContextErrorV1{
-			Code:  createOrgUnitContextCodeSetIDSourceInvalid,
-			Cause: sourceErr,
-		}
-		ctxV1.PolicyContextDigest = buildCreateOrgUnitPolicyContextDigest(ctxV1)
-		return ctxV1, contextErr
-	}
-	ctxV1.SetIDSource = setIDSource
 	ctxV1.PolicyContextDigest = buildCreateOrgUnitPolicyContextDigest(ctxV1)
 	return ctxV1, nil
 }
@@ -624,7 +583,7 @@ func normalizeCreateOrgUnitRejectionReasons(reasons []string) []string {
 	for _, reason := range reasons {
 		code := strings.TrimSpace(reason)
 		switch code {
-		case createOrgUnitContextCodeBusinessUnitInvalid, createOrgUnitContextCodeSetIDBindingMissing, createOrgUnitContextCodeSetIDSourceInvalid:
+		case createOrgUnitContextCodeBusinessUnitInvalid:
 			appendReason(&contextReasons, code)
 		case "FORBIDDEN", "ORG_ALREADY_EXISTS", "ORG_ROOT_ALREADY_EXISTS", "ORG_TREE_NOT_INITIALIZED":
 			appendReason(&mutationReasons, code)
@@ -690,15 +649,11 @@ func buildCreateOrgUnitPolicyContextDigest(ctx CreateOrgUnitPolicyContextV1) str
 		EffectiveDate       string `json:"effective_date"`
 		BusinessUnitOrgCode string `json:"business_unit_org_code"`
 		BusinessUnitNodeKey string `json:"business_unit_node_key"`
-		ResolvedSetID       string `json:"resolved_setid"`
-		SetIDSource         string `json:"setid_source"`
 	}{
 		TenantID:            strings.TrimSpace(ctx.TenantID),
 		EffectiveDate:       strings.TrimSpace(ctx.EffectiveDate),
 		BusinessUnitOrgCode: strings.TrimSpace(ctx.BusinessUnitOrgCode),
 		BusinessUnitNodeKey: strings.TrimSpace(ctx.BusinessUnitNodeKey),
-		ResolvedSetID:       strings.TrimSpace(ctx.ResolvedSetID),
-		SetIDSource:         strings.TrimSpace(ctx.SetIDSource),
 	}
 	return createOrgUnitDigest(payload)
 }
@@ -710,10 +665,6 @@ func buildCreateOrgUnitProjectionDigest(projection CreateOrgUnitPrecheckProjecti
 		FieldDecisions                    []CreateOrgUnitFieldDecisionV1 `json:"field_decisions"`
 		CandidateConfirmationRequirements []string                       `json:"candidate_confirmation_requirements"`
 		PendingDraftSummary               string                         `json:"pending_draft_summary"`
-		EffectivePolicyVersion            string                         `json:"effective_policy_version"`
-		MutationPolicyVersion             string                         `json:"mutation_policy_version"`
-		ResolvedSetID                     string                         `json:"resolved_setid"`
-		SetIDSource                       string                         `json:"setid_source"`
 		PolicyExplain                     string                         `json:"policy_explain"`
 		RejectionReasons                  []string                       `json:"rejection_reasons"`
 	}{
@@ -722,10 +673,6 @@ func buildCreateOrgUnitProjectionDigest(projection CreateOrgUnitPrecheckProjecti
 		FieldDecisions:                    append([]CreateOrgUnitFieldDecisionV1(nil), projection.FieldDecisions...),
 		CandidateConfirmationRequirements: append([]string(nil), projection.CandidateConfirmationRequirements...),
 		PendingDraftSummary:               strings.TrimSpace(projection.PendingDraftSummary),
-		EffectivePolicyVersion:            strings.TrimSpace(projection.EffectivePolicyVersion),
-		MutationPolicyVersion:             strings.TrimSpace(projection.MutationPolicyVersion),
-		ResolvedSetID:                     strings.TrimSpace(projection.ResolvedSetID),
-		SetIDSource:                       strings.TrimSpace(projection.SetIDSource),
 		PolicyExplain:                     strings.TrimSpace(projection.PolicyExplain),
 		RejectionReasons:                  append([]string(nil), projection.RejectionReasons...),
 	}
@@ -759,18 +706,4 @@ func normalizeCreateOrgUnitAllowedValueCodes(values []string) []string {
 		return []string{}
 	}
 	return out
-}
-
-func classifyCreateOrgUnitSetIDSource(resolvedSetID string) (string, error) {
-	resolvedSetID = strings.ToUpper(strings.TrimSpace(resolvedSetID))
-	switch resolvedSetID {
-	case "":
-		return "", errors.New("resolved_setid empty")
-	case "DEFLT":
-		return "deflt", nil
-	case "SHARE":
-		return "share_preview", nil
-	default:
-		return "custom", nil
-	}
 }

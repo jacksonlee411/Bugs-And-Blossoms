@@ -36,6 +36,19 @@ CREATE TABLE IF NOT EXISTS iam.sessions (
 CREATE INDEX IF NOT EXISTS sessions_tenant_idx ON iam.sessions (tenant_uuid);
 CREATE INDEX IF NOT EXISTS sessions_principal_idx ON iam.sessions (principal_id);
 
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'app_runtime') THEN
+    EXECUTE 'GRANT USAGE ON SCHEMA iam TO app_runtime';
+    EXECUTE 'GRANT SELECT ON iam.principals TO app_runtime';
+  END IF;
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'app_nobypassrls') THEN
+    EXECUTE 'GRANT USAGE ON SCHEMA iam TO app_nobypassrls';
+    EXECUTE 'GRANT SELECT ON iam.principals TO app_nobypassrls';
+  END IF;
+END
+$$;
+
 CREATE TABLE IF NOT EXISTS iam.superadmin_principals (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   email text NOT NULL UNIQUE,

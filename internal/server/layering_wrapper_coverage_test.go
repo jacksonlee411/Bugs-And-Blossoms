@@ -51,36 +51,3 @@ func TestDictCompatibilityWrappers(t *testing.T) {
 		t.Fatalf("cloned=%+v", cloned)
 	}
 }
-
-func TestSetIDCompatibilityWrappers(t *testing.T) {
-	ctx := context.Background()
-
-	store := newSetIDPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
-		return &stubTx{}, nil
-	}))
-	if store == nil {
-		t.Fatal("expected store")
-	}
-
-	globalRows := &tableRows{rows: [][]any{{"SHARE", "Shared", "active"}}}
-	tx := &stubTx{
-		row:  &stubRow{vals: []any{"gt1"}},
-		rows: globalRows,
-	}
-	pgStore := &setidPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx, nil })}
-	setids, err := pgStore.ListGlobalSetIDs(ctx)
-	if err != nil || len(setids) != 1 || !setids[0].IsShared {
-		t.Fatalf("setids=%+v err=%v", setids, err)
-	}
-
-	globalRows2 := &tableRows{rows: [][]any{{"SHARE", "Shared", "active"}}}
-	tx2 := &stubTx{
-		row:  &stubRow{vals: []any{"gt1"}},
-		rows: globalRows2,
-	}
-	pgStore2 := &setidPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx2, nil })}
-	setids2, err := pgStore2.listGlobalSetIDs(ctx)
-	if err != nil || len(setids2) != 1 {
-		t.Fatalf("setids=%+v err=%v", setids2, err)
-	}
-}

@@ -101,7 +101,7 @@ func TestWithAuthz_ForbiddenWhenEnforced(t *testing.T) {
 	})
 	h := withAuthz(mustTestClassifier(t), stubAuthorizer{allowed: false, enforced: true}, next)
 
-	req := httptest.NewRequest(http.MethodGet, "/org/api/setids", nil)
+	req := httptest.NewRequest(http.MethodGet, "/org/api/org-units", nil)
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Domain: "localhost", Name: "T"}))
 	req = req.WithContext(withPrincipal(req.Context(), Principal{ID: "p1", TenantID: "t1", RoleSlug: "tenant-admin", Status: "active"}))
 	rec := httptest.NewRecorder()
@@ -127,25 +127,6 @@ func TestWithAuthz_OrgUnitRescindForbiddenWhenEnforced(t *testing.T) {
 		t.Fatalf("status=%d body=%q", rec.Code, rec.Body.String())
 	}
 	if !strings.Contains(rec.Body.String(), "forbidden") {
-		t.Fatalf("unexpected body: %q", rec.Body.String())
-	}
-}
-
-func TestWithAuthz_ShareReadForbidden(t *testing.T) {
-	next := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusOK)
-	})
-	h := withAuthz(mustTestClassifier(t), stubAuthorizer{allowed: false, enforced: true}, next)
-
-	req := httptest.NewRequest(http.MethodGet, "/org/api/global-setids", nil)
-	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Domain: "localhost", Name: "T"}))
-	req = req.WithContext(withPrincipal(req.Context(), Principal{ID: "p1", TenantID: "t1", RoleSlug: "tenant-admin", Status: "active"}))
-	rec := httptest.NewRecorder()
-	h.ServeHTTP(rec, req)
-	if rec.Code != http.StatusForbidden {
-		t.Fatalf("status=%d", rec.Code)
-	}
-	if !strings.Contains(rec.Body.String(), "share_read_forbidden") {
 		t.Fatalf("unexpected body: %q", rec.Body.String())
 	}
 }
@@ -264,24 +245,6 @@ func TestAuthzRequirementForRoute(t *testing.T) {
 	if _, _, ok := authzRequirementForRoute(http.MethodPost, "/logout"); !ok {
 		t.Fatal("expected ok=true")
 	}
-	if _, _, ok := authzRequirementForRoute(http.MethodGet, "/org/api/setids"); !ok {
-		t.Fatal("expected ok=true")
-	}
-	if _, _, ok := authzRequirementForRoute(http.MethodPost, "/org/api/setids"); !ok {
-		t.Fatal("expected ok=true")
-	}
-	if _, _, ok := authzRequirementForRoute(http.MethodDelete, "/org/api/setids"); ok {
-		t.Fatal("expected ok=false")
-	}
-	if _, _, ok := authzRequirementForRoute(http.MethodGet, "/org/api/setid-bindings"); !ok {
-		t.Fatal("expected ok=true")
-	}
-	if _, _, ok := authzRequirementForRoute(http.MethodPost, "/org/api/setid-bindings"); !ok {
-		t.Fatal("expected ok=true")
-	}
-	if _, _, ok := authzRequirementForRoute(http.MethodDelete, "/org/api/setid-bindings"); ok {
-		t.Fatal("expected ok=false")
-	}
 	if _, _, ok := authzRequirementForRoute(http.MethodGet, "/org/api/scope-packages"); ok {
 		t.Fatal("expected ok=false")
 	}
@@ -295,15 +258,6 @@ func TestAuthzRequirementForRoute(t *testing.T) {
 		t.Fatal("expected ok=false")
 	}
 	if _, _, ok := authzRequirementForRoute(http.MethodGet, "/org/api/scope-subscriptions"); ok {
-		t.Fatal("expected ok=false")
-	}
-	if _, _, ok := authzRequirementForRoute(http.MethodPost, "/org/api/global-setids"); !ok {
-		t.Fatal("expected ok=true")
-	}
-	if _, _, ok := authzRequirementForRoute(http.MethodGet, "/org/api/global-setids"); !ok {
-		t.Fatal("expected ok=true")
-	}
-	if _, _, ok := authzRequirementForRoute(http.MethodPut, "/org/api/global-setids"); ok {
 		t.Fatal("expected ok=false")
 	}
 	if _, _, ok := authzRequirementForRoute(http.MethodGet, "/org/api/global-scope-packages"); ok {
@@ -605,9 +559,6 @@ m = r.sub == p.sub && r.dom == p.dom && r.obj == p.obj && r.act == p.act
 }
 
 func TestAuthzRequirementForRoute_UnsupportedMethods(t *testing.T) {
-	if _, _, ok := authzRequirementForRoute(http.MethodPut, "/org/api/setids"); ok {
-		t.Fatal("expected ok=false")
-	}
 }
 
 func TestPathMatchRouteTemplate(t *testing.T) {

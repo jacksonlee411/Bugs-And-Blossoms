@@ -14,12 +14,6 @@ describe('resolveApiErrorMessage', () => {
     expect(message).not.toBe('tenant_resolve_error')
   })
 
-  it('returns explicit mapped message for disable-not-allowed', () => {
-    const message = resolveApiErrorMessage('policy_disable_not_allowed', 'policy_disable_not_allowed')
-    expect(message.length).toBeGreaterThan(0)
-    expect(message).not.toBe('policy_disable_not_allowed')
-  })
-
   it('returns explicit mapped message for assistant state invalid', () => {
     const message = resolveApiErrorMessage('conversation_state_invalid', 'conversation_state_invalid')
     expect(message.length).toBeGreaterThan(0)

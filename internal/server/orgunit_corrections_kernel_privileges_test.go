@@ -19,7 +19,7 @@ func repoRootFromCurrentFile080B(t *testing.T) string {
 
 func TestOrgunitMigration080B_CorrectionsKernelPrivileges(t *testing.T) {
 	root := repoRootFromCurrentFile080B(t)
-	p := filepath.Join(root, "migrations/orgunit/20260210101000_orgunit_corrections_kernel_privileges.sql")
+	p := filepath.Join(root, "modules/orgunit/infrastructure/persistence/schema/00029_orgunit_org_node_key_engine_privileges.sql")
 	b, err := os.ReadFile(p)
 	if err != nil {
 		t.Fatalf("read %s: %v", p, err)
@@ -27,10 +27,10 @@ func TestOrgunitMigration080B_CorrectionsKernelPrivileges(t *testing.T) {
 	s := string(b)
 
 	signatures := []string{
-		"orgunit.submit_org_event_correction(uuid, int, date, jsonb, text, uuid)",
-		"orgunit.submit_org_status_correction(uuid, int, date, text, text, uuid)",
-		"orgunit.submit_org_event_rescind(uuid, int, date, text, text, uuid)",
-		"orgunit.submit_org_rescind(uuid, int, text, text, uuid)",
+		"orgunit.submit_org_event_correction(uuid, char(8), date, jsonb, text, uuid)",
+		"orgunit.submit_org_status_correction(uuid, char(8), date, text, text, uuid)",
+		"orgunit.submit_org_event_rescind(uuid, char(8), date, text, text, uuid)",
+		"orgunit.submit_org_rescind(uuid, char(8), text, text, uuid)",
 	}
 	for _, signature := range signatures {
 		if !strings.Contains(s, "ALTER FUNCTION "+signature+"\n  OWNER TO orgunit_kernel;") {

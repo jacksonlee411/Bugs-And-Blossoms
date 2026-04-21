@@ -1080,7 +1080,7 @@ export function OrgUnitFieldConfigsPage() {
                 >
                   {dictFieldCandidatesFiltered.map((item) => (
                     <MenuItem key={item.field_key} value={item.field_key}>
-                      {item.name} ({item.dict_code}) · setid:{item.setid ?? 'DEFLT'}
+                      {item.name} ({item.dict_code})
                     </MenuItem>
                   ))}
                 </Select>

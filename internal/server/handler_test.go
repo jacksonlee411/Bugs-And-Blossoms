@@ -316,27 +316,6 @@ func TestNewHandler_RouteEntrypointsAndLogout(t *testing.T) {
 		t.Fatalf("app status=%d body=%q", appRec.Code, appRec.Body.String())
 	}
 
-	for _, tc := range []struct {
-		method string
-		path   string
-		body   string
-	}{
-		{method: http.MethodGet, path: "/org/api/setids", body: ""},
-		{method: http.MethodGet, path: "/org/api/setid-bindings", body: ""},
-	} {
-		req := httptest.NewRequest(tc.method, tc.path, strings.NewReader(tc.body))
-		req.Host = "localhost:8080"
-		req.AddCookie(sidCookie)
-		if tc.method == http.MethodPost {
-			req.Header.Set("Content-Type", "application/json")
-		}
-		rec := httptest.NewRecorder()
-		h.ServeHTTP(rec, req)
-		if rec.Code == http.StatusNotFound || rec.Code == http.StatusMethodNotAllowed {
-			t.Fatalf("%s %s status=%d body=%q", tc.method, tc.path, rec.Code, rec.Body.String())
-		}
-	}
-
 	logoutReq := httptest.NewRequest(http.MethodPost, "/logout", nil)
 	logoutReq.Host = "localhost:8080"
 	logoutReq.AddCookie(sidCookie)
@@ -549,7 +528,6 @@ func TestNewHandler_InternalAPIRoutes(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	setidStore := newSetIDMemoryStore().(*setidMemoryStore)
 	writeSvc := orgUnitWriteServiceStub{
 		createFn: func(_ context.Context, _ string, req orgunitservices.CreateOrgUnitRequest) (orgunittypes.OrgUnitResult, error) {
 			return orgunittypes.OrgUnitResult{
@@ -567,7 +545,6 @@ func TestNewHandler_InternalAPIRoutes(t *testing.T) {
 		}},
 		OrgUnitStore:        orgStore,
 		OrgUnitWriteService: writeSvc,
-		SetIDStore:          setidStore,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -616,11 +593,6 @@ func TestNewHandler_InternalAPIRoutes(t *testing.T) {
 		return rec
 	}
 
-	recSet := postJSON("/org/api/setids", `{"setid":"A0001","name":"Default","effective_date":"2026-01-01","request_id":"r1"}`, nil)
-	if recSet.Code != http.StatusCreated {
-		t.Fatalf("setid status=%d", recSet.Code)
-	}
-
 	recDicts := getJSON("/iam/api/dicts?as_of=2026-01-01", nil)
 	if recDicts.Code != http.StatusOK {
 		t.Fatalf("dicts status=%d body=%s", recDicts.Code, recDicts.Body.String())
@@ -632,20 +604,6 @@ func TestNewHandler_InternalAPIRoutes(t *testing.T) {
 	recDictAudit := getJSON("/iam/api/dicts/values/audit?dict_code=org_type&code=10&limit=10", nil)
 	if recDictAudit.Code != http.StatusOK {
 		t.Fatalf("dict audit status=%d body=%s", recDictAudit.Code, recDictAudit.Body.String())
-	}
-
-	recBind := postJSON("/org/api/setid-bindings", `{"org_code":"`+node.OrgCode+`","setid":"A0001","effective_date":"2026-01-01","request_id":"r2"}`, nil)
-	if recBind.Code != http.StatusCreated {
-		t.Fatalf("binding status=%d", recBind.Code)
-	}
-
-	recGlobal := postJSON("/org/api/global-setids", `{"name":"Shared","request_id":"r3"}`, map[string]string{"X-Actor-Scope": "saas"})
-	if recGlobal.Code != http.StatusCreated {
-		t.Fatalf("global setid status=%d", recGlobal.Code)
-	}
-	recGlobalList := getJSON("/org/api/global-setids", nil)
-	if recGlobalList.Code != http.StatusOK {
-		t.Fatalf("global setid list status=%d", recGlobalList.Code)
 	}
 
 	recBU := postJSON("/org/api/org-units/set-business-unit", `{"org_code":"`+node.OrgCode+`","effective_date":"2026-01-01","is_business_unit":true,"request_id":"r4"}`, nil)
@@ -836,7 +794,6 @@ func TestNewHandlerWithOptions_WithProvidedStores(t *testing.T) {
 	h, err := NewHandlerWithOptions(HandlerOptions{
 		TenancyResolver: localTenancyResolver(),
 		OrgUnitStore:    newOrgUnitMemoryStore(),
-		SetIDStore:      newSetIDMemoryStore(),
 	})
 	if err != nil {
 		t.Fatal(err)
