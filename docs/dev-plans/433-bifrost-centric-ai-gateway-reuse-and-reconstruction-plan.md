@@ -20,7 +20,7 @@
   - Codex：`codex-rs/codex-api/**`
   - Codex：`codex-rs/responses-api-proxy/**`
   - Codex：`codex-rs/utils/stream-parser/**`
-- **关联计划/标准**：`DEV-PLAN-004M1`、`DEV-PLAN-012`、`DEV-PLAN-015`、`DEV-PLAN-017`、`DEV-PLAN-019`、`DEV-PLAN-021`、`DEV-PLAN-022`、`DEV-PLAN-024`、`DEV-PLAN-025`、`DEV-PLAN-300`、`DEV-PLAN-430`
+- **关联计划/标准**：`DEV-PLAN-004M1`、`DEV-PLAN-012`、`DEV-PLAN-015`、`DEV-PLAN-017`、`DEV-PLAN-019`、`DEV-PLAN-021`、`DEV-PLAN-022`、`DEV-PLAN-024`、`DEV-PLAN-025`、`DEV-PLAN-300`、`DEV-PLAN-430`、`DEV-PLAN-437`
 
 ### 0.1 Simple > Easy 三问
 
@@ -146,6 +146,23 @@ Codex 在网关层只承担局部能力来源，不承担整体网关骨架：
 - 对 `只借鉴语义` 或 `明确不引入` 的对象，必须说明为什么不能更小地复用现成上游实现，例如 `多租户 RLS/Authz`、`密钥治理`、`DDD 分层`、`错误码/i18n 契约`。
 - `必备验证` 至少覆盖一个上游形状：请求体、SSE 事件流、provider fail-closed、健康检查输出、错误映射结果；fallback 只作为非首期预留证据。
 
+## 5B. PR-437A 首轮最小冻结
+
+首轮固定参考 commit SHA：
+
+- `maximhq/bifrost`: `de67db28676a8a80ba1e738ebf8f9318d82d16f7`
+- `openai/codex`: `ef071cf816950dc416b2a975e7ed023eea639026`
+
+`PR-437A` 只冻结支撑 `PR-437B` 首条竖切所需的最小对象：
+
+| 上游项目 | 上游 commit SHA | 上游制品类型 | 上游路径或对象名 | CubeBox 对应对象/切片 | 采用状态 | 不可直接复用原因 | 原因类型 | 必备验证 |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `maximhq/bifrost` | `de67db28676a8a80ba1e738ebf8f9318d82d16f7` | `目录` | `router/streaming/health/telemetry 相关目录` | `gateway 主请求链最小骨架 / Phase B` | `重构复用` | 需服从本仓 route allowlist、RLS/Authz、错误码与审计链 | `仓库约束` | `流式集成测试 + lifecycle fixture` |
+| `openai/codex` | `ef071cf816950dc416b2a975e7ed023eea639026` | `目录` | `codex-rs/responses-api-proxy/**`、`codex-rs/codex-api/**` | `request mapping / deterministic provider bridge` | `重构复用` | 本仓不直接引入 app-server/runtime，需要收敛到一方 Go gateway | `DDD 边界` | `request mapping golden fixture` |
+| `openai/codex` | `ef071cf816950dc416b2a975e7ed023eea639026` | `目录` | `codex-rs/utils/stream-parser/**` | `SSE parser / delta streaming 行为` | `重构复用` | 需与本仓 SSE envelope 和错误映射统一 | `协议不匹配` | `SSE fixture + snapshot` |
+
+`PR-437A` 同时冻结 deterministic provider 口径：required gate 使用 mock SSE / fake provider / fixed transcript fixture，不把真实外部 provider 连通性作为 merge 前置条件。
+
 ## 6. CubeBox 网关目标架构
 
 ### 6.1 分层
@@ -190,6 +207,7 @@ Codex 在网关层只承担局部能力来源，不承担整体网关骨架：
 - [ ] 盘点 router、provider、streaming、health 相关依赖闭包。
 - [ ] 输出“可直接复用 / 可重构 / 仅借鉴语义 / 不引入”清单。
 - [ ] 按本计划 `5A` 模板补齐文件级/协议级上游映射表，并为每个对象冻结采用状态与不可复用原因。
+- [ ] `PR-437A` 先以 `5B` 的最小冻结集满足 deterministic provider、request mapping 与 SSE passthrough 的开工条件。
 
 ### Slice 2.1：provider adapter 最小闭环
 

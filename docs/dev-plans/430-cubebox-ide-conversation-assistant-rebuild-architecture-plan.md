@@ -7,7 +7,7 @@
 - **评审分级**：`T3`
 - **范围一句话**：在旧对话栈完成历史归档之后，重新设计一个名为 `CubeBox`、中文名为“丘宝”的一方对话助手模块；首期交付对齐 VS Code Codex 插件观感的右侧悬挂抽屉、可配置外部大模型的 AI 网关，以及具备上下文压缩与会话隔离能力的连续对话内核。
 - **关联模块/目录**：`AGENTS.md`、`apps/web`、`internal/server`、`modules/cubebox`（候选新模块路径）、`config`、`migrations`、`scripts/ci`
-- **关联计划/标准**：`DEV-PLAN-004M1`、`DEV-PLAN-012`、`DEV-PLAN-015`、`DEV-PLAN-016`、`DEV-PLAN-017`、`DEV-PLAN-019`、`DEV-PLAN-021`、`DEV-PLAN-022`、`DEV-PLAN-300`、`DEV-PLAN-431`、`DEV-PLAN-432`、`DEV-PLAN-433`、`DEV-PLAN-434`、`DEV-PLAN-435`
+- **关联计划/标准**：`DEV-PLAN-004M1`、`DEV-PLAN-012`、`DEV-PLAN-015`、`DEV-PLAN-016`、`DEV-PLAN-017`、`DEV-PLAN-019`、`DEV-PLAN-021`、`DEV-PLAN-022`、`DEV-PLAN-300`、`DEV-PLAN-431`、`DEV-PLAN-432`、`DEV-PLAN-433`、`DEV-PLAN-434`、`DEV-PLAN-435`、`DEV-PLAN-437`、`DEV-PLAN-437A`
 - **用户入口/触点**：Web 应用右侧悬挂对话入口、`/app/cubebox` 页面、`/internal/cubebox` 服务端 API、模型配置页、会话列表、会话详情、流式回复、错误提示、审计记录；不提供 VS Code 插件形态或其他 IDE 客户端。
 
 ### 0.1 Simple > Easy 三问
@@ -74,9 +74,9 @@
 
 | 子计划/切片 | 上游项目 | 上游 commit SHA | 上游制品类型 | 上游路径或对象名 | 本仓对应切片/模块 | 采用状态 | 不可直接复用原因 | 原因类型 | 必备验证 | PR 证据位置 | readiness 证据位置 |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| `431 / Slice 1` | `openai/codex` | `待补` | `协议/文件/测试样例` | `待补` | `CubeBox UI 协议与壳层` | `待补` | `待补` | `待补` | `golden/snapshot/E2E` | `待补` | `待补` |
-| `433 / Slice 2` | `maximhq/bifrost`、`openai/codex` | `待补` | `目录/文件/协议/测试样例` | `待补` | `CubeBox AI 网关` | `待补` | `待补` | `待补` | `fixture/SSE 对照/集成测试` | `待补` | `待补` |
-| `434 / Slice 4` | `openai/codex` | `待补` | `文件/模板/测试样例` | `待补` | `CubeBox 上下文压缩` | `待补` | `待补` | `待补` | `golden/snapshot/纯函数测试` | `待补` | `待补` |
+| `431 / Slice 1` | `openai/codex` | `ef071cf816950dc416b2a975e7ed023eea639026` | `协议/文件/测试样例` | `详见 DEV-PLAN-431 / 4B` | `CubeBox UI 协议与壳层` | `PR-437A 最小冻结已补齐` | `详见 DEV-PLAN-431 / 4B` | `详见 DEV-PLAN-431 / 4B` | `golden/snapshot/E2E` | `待补` | `待补` |
+| `433 / Slice 2` | `maximhq/bifrost`、`openai/codex` | `Bifrost: de67db28676a8a80ba1e738ebf8f9318d82d16f7; Codex: ef071cf816950dc416b2a975e7ed023eea639026` | `目录/文件/协议/测试样例` | `详见 DEV-PLAN-433 / 5B` | `CubeBox AI 网关` | `PR-437A 最小冻结已补齐` | `详见 DEV-PLAN-433 / 5B` | `详见 DEV-PLAN-433 / 5B` | `fixture/SSE 对照/集成测试` | `待补` | `待补` |
+| `434 / Slice 4` | `openai/codex` | `ef071cf816950dc416b2a975e7ed023eea639026` | `文件/模板/测试样例` | `详见 DEV-PLAN-434 / 4B` | `CubeBox 上下文压缩` | `PR-437A 最小冻结已补齐` | `详见 DEV-PLAN-434 / 4B` | `详见 DEV-PLAN-434 / 4B` | `golden/snapshot/纯函数测试` | `待补` | `待补` |
 | `435 / Slice 5` | `maximhq/bifrost`、`songquanpeng/one-api`、`openai/codex` | `待补` | `页面信息架构/目录/文件` | `待补` | `CubeBox 模型配置 UI` | `待补` | `待补` | `待补` | `IA snapshot/E2E/Authz` | `待补` | `待补` |
 
 字段说明冻结如下：
@@ -94,6 +94,15 @@
   3. 自研部分是否比上游更小，而不是更大。
 - readiness 必须保留以下证据：上游 `commit SHA`、采用矩阵、裁剪矩阵、差异说明、golden/fixture/snapshot/集成测试结果。
 - 验收以“是否沿着已冻结的复用路线实现”为主，不以“功能跑通”替代复用审计。
+
+### 2A.4 PR-437A 首轮最小冻结
+
+- `PR-437A` 不要求 `431-435` 一次性补齐所有未来切片的映射表，只要求补齐首轮开工需要的最小冻结集。
+- 首轮共享 companion doc 冻结为 `DEV-PLAN-437A`，用于统一 `431` reducer、`432` reconstruction 与 `434` compact event 的最小 canonical contract。
+- 首轮最小冻结 owner 如下：
+  - `431`：见 `DEV-PLAN-431 / 4B`
+  - `433`：见 `DEV-PLAN-433 / 5B`
+  - `434`：见 `DEV-PLAN-434 / 4B`
 
 ## 3. 目标
 
@@ -259,7 +268,7 @@
 - [ ] 将本计划评审到 `准备就绪`。
 - [ ] 更新 `chat-surface-clean` 为精确反回流门禁：允许新主线 `/app/cubebox`、`/internal/cubebox`、`modules/cubebox` 和后续明确批准的新 CubeBox 对象，继续阻断旧 `assistant`、LibreChat、`/app/assistant`、`/internal/assistant`、`/assistant-ui`、旧表名和旧错误码。
 - [ ] 新增 readiness 记录入口，登记每个切片的命令、证据和残留命中解释。
-- [ ] 冻结 `431`、`433`、`434`、`435` 的上游 `commit SHA`、文件级映射表、采用状态与 stopline；未完成前不得进入对应切片实现。
+- [ ] 冻结 `431`、`433`、`434`、`435` 的上游 `commit SHA`、文件级映射表、采用状态与 stopline；`PR-437A` 只要求补齐首轮会消费的最小冻结集，详见 `DEV-PLAN-437` 与 `DEV-PLAN-437A`。
 - [ ] 冻结首期暂缓项：fallback/failover、quota、route alias、default model 只允许进入上游评估与后续预留，不得进入首期验收。
 - [ ] 冻结 CubeBox 工具调用权限原则：CubeBox 不是独立授权主体，查询/写入按当前用户权限执行；写入只需用户显式确认，并走现有业务模块 One Door、事务、RLS、Authz 和审计。
 

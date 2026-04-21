@@ -21,7 +21,7 @@
   - `codex-rs/app-server-protocol/src/protocol/thread_history.rs`
   - `codex-rs/thread-store/src/local/archive_thread.rs`
   - `codex-rs/thread-store/src/local/unarchive_thread.rs`
-- **关联计划/标准**：`DEV-PLAN-004M1`、`DEV-PLAN-012`、`DEV-PLAN-015`、`DEV-PLAN-019`、`DEV-PLAN-021`、`DEV-PLAN-022`、`DEV-PLAN-024`、`DEV-PLAN-025`、`DEV-PLAN-300`、`DEV-PLAN-430`、`DEV-PLAN-431`、`DEV-PLAN-434`
+- **关联计划/标准**：`DEV-PLAN-004M1`、`DEV-PLAN-012`、`DEV-PLAN-015`、`DEV-PLAN-019`、`DEV-PLAN-021`、`DEV-PLAN-022`、`DEV-PLAN-024`、`DEV-PLAN-025`、`DEV-PLAN-300`、`DEV-PLAN-430`、`DEV-PLAN-431`、`DEV-PLAN-434`、`DEV-PLAN-437`、`DEV-PLAN-437A`
 
 ### 0.1 Simple > Easy 三问
 
@@ -116,6 +116,11 @@ CubeBox 恢复行为要对齐 Codex 的 resume/read 思路：
 3. 通过与 431 对齐的 timeline reconstruction/reducer 还原前端视图。
 4. 重新生成当前 canonical context，不信任旧权限上下文。
 5. 如 active turn 未完成，恢复为“可继续观察或重新发起”的明确状态，不静默伪装为完成。
+
+补充冻结：
+
+- `432` 对 `431` 的正式恢复输出，在 `Phase A` 起统一对齐 `DEV-PLAN-437A` 中定义的 `CanonicalEvent` envelope 与 `TimelineEventStream` 形状。
+- `432` 不再为恢复路径额外交付只给页面态消费的第二套 timeline DTO。
 
 ## 6. 数据对象建议
 

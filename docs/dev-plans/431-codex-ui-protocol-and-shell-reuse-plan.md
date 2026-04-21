@@ -20,7 +20,7 @@
   - `codex-rs/tui/src/history_cell.rs`
   - `codex-rs/tui/src/slash_command.rs`
   - `codex-rs/tui/src/status*.rs`
-- **关联计划/标准**：`DEV-PLAN-004M1`、`DEV-PLAN-012`、`DEV-PLAN-015`、`DEV-PLAN-017`、`DEV-PLAN-019`、`DEV-PLAN-021`、`DEV-PLAN-022`、`DEV-PLAN-300`、`DEV-PLAN-430`、`DEV-PLAN-434`
+- **关联计划/标准**：`DEV-PLAN-004M1`、`DEV-PLAN-012`、`DEV-PLAN-015`、`DEV-PLAN-017`、`DEV-PLAN-019`、`DEV-PLAN-021`、`DEV-PLAN-022`、`DEV-PLAN-300`、`DEV-PLAN-430`、`DEV-PLAN-434`、`DEV-PLAN-437`、`DEV-PLAN-437A`
 
 ### 0.1 Simple > Easy 三问
 
@@ -106,6 +106,22 @@ Codex 开源仓库中与 UI 层高度相关的成熟资产包括：
 - 若某行是 `只借鉴语义` 或 `明确不引入`，`不可直接复用原因` 必须写到仓库约束级别，例如 `前端单主链`、`MUI 渲染栈`、`非 terminal 环境`、`禁止 shell/file/patch`。
 - `必备验证` 至少要锁住协议形状、事件序列或 UI 行为之一；不能只写“页面能打开”。
 
+## 4B. PR-437A 首轮最小冻结
+
+首轮固定 `openai/codex` 参考 commit SHA：
+
+- `ef071cf816950dc416b2a975e7ed023eea639026`
+
+`PR-437A` 只冻结首轮会消费的最小对象，不要求一次性补齐 `4A` 全表：
+
+| 上游项目 | 上游 commit SHA | 上游制品类型 | 上游路径或对象名 | CubeBox 对应对象/切片 | 采用状态 | 不可直接复用原因 | 原因类型 | 必备验证 |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `openai/codex` | `ef071cf816950dc416b2a975e7ed023eea639026` | `协议` | `codex-rs/app-server-protocol/schema/json/v2/*.json` | `Phase A/B event naming + SSE envelope` | `重构复用` | 需按本仓 conversation/turn/event 命名与错误码契约收口 | `协议不匹配` | `schema fixture + snapshot` |
+| `openai/codex` | `ef071cf816950dc416b2a975e7ed023eea639026` | `文件` | `codex-rs/app-server-protocol/src/protocol/thread_history.rs` | `timeline reducer / reconstruction 对齐` | `重构复用` | `432` 恢复输出与 `431` reducer 需共享同形 contract，不能直接照搬 Rust 类型 | `DDD 边界` | `golden reducer fixture` |
+| `openai/codex` | `ef071cf816950dc416b2a975e7ed023eea639026` | `文件` | `codex-rs/tui/src/markdown_stream.rs` | `流式 delta 合并行为` | `只借鉴语义` | 本仓使用 React/MUI，不引入 terminal renderer | `依赖不兼容` | `streaming snapshot` |
+
+`431` 在 `PR-437A` 与 `PR-437B` 必须同时消费 `DEV-PLAN-437A` 的共享 canonical contract；不得让 reducer、SSE 客户端和恢复页各自维护不同命名。
+
 ## 5. CubeBox UI 架构
 
 ### 5.1 前端分层
@@ -152,6 +168,8 @@ Codex 开源仓库中与 UI 层高度相关的成熟资产包括：
 
 这些事件既可由 SSE 传输，也可由 WebSocket 传输；首期优先 SSE，除非 430 网关切片另行裁决。
 
+`Phase A` 最小事件名、SSE envelope、reducer 输入与 reconstruction 输出的共享 companion doc 冻结为 `DEV-PLAN-437A`；本节后续扩展不得与其冲突。
+
 事件 canonical 语义必须由 `CubeBox` 正式模块持有；`internal/server` 只承接 HTTP/SSE delivery 与 adapter，不得把 thread/turn/event 语义再次散落在 delivery 层。
 
 ### 5.3 Timeline reducer
@@ -182,6 +200,7 @@ CubeBox 前端必须有一个纯函数 reducer：
 - [ ] 盘点 app-server-protocol v2 与 TUI 相关依赖闭包。
 - [ ] 输出“直接采纳协议 / 重构状态机 / 借鉴交互 / 不引入”清单。
 - [ ] 按本计划 `4A` 模板补齐文件级上游映射表，并为每个对象冻结采用状态与不可复用原因。
+- [ ] `PR-437A` 先以 `4B` 的最小冻结集满足首轮开工条件，再逐步补齐 `4A` 全表。
 - [ ] 冻结“具体复用制品”清单，至少明确：
   - `JSON schema` 是否直接消费
   - `TypeScript schema/types` 是否直接消费或生成
