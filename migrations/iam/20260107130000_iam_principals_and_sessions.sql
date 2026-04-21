@@ -42,6 +42,10 @@ BEGIN
     EXECUTE 'GRANT USAGE ON SCHEMA iam TO app_runtime';
     EXECUTE 'GRANT SELECT ON iam.principals TO app_runtime';
   END IF;
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'app_nobypassrls') THEN
+    EXECUTE 'GRANT USAGE ON SCHEMA iam TO app_nobypassrls';
+    EXECUTE 'GRANT SELECT ON iam.principals TO app_nobypassrls';
+  END IF;
 END
 $$;
 
