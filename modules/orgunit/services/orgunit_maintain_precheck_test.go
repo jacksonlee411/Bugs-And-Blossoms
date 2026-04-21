@@ -14,7 +14,6 @@ type orgUnitMaintainPrecheckReaderStub struct {
 	resolveOrgNodeKeyFn             func(context.Context, string, string) (string, error)
 	resolveSetIDFn                  func(context.Context, string, string, string) (string, error)
 	isOrgTreeInitializedFn          func(context.Context, string) (bool, error)
-	resolveFieldDecisionFn          func(context.Context, string, string, string, string, string) (orgunittypes.SetIDStrategyFieldDecision, bool, error)
 	listEnabledTenantFieldConfigsFn func(context.Context, string, string) ([]orgunittypes.TenantFieldConfig, error)
 	resolveTargetExistsAsOfFn       func(context.Context, string, string, string) (bool, error)
 	resolveMutationTargetEventFn    func(context.Context, string, string, string) (OrgUnitMaintainTargetEventV1, error)
@@ -39,20 +38,6 @@ func (s orgUnitMaintainPrecheckReaderStub) IsOrgTreeInitialized(ctx context.Cont
 		return s.isOrgTreeInitializedFn(ctx, tenantID)
 	}
 	return false, nil
-}
-
-func (s orgUnitMaintainPrecheckReaderStub) ResolveSetIDStrategyFieldDecision(
-	ctx context.Context,
-	tenantID string,
-	capabilityKey string,
-	fieldKey string,
-	businessUnitNodeKey string,
-	asOf string,
-) (orgunittypes.SetIDStrategyFieldDecision, bool, error) {
-	if s.resolveFieldDecisionFn != nil {
-		return s.resolveFieldDecisionFn(ctx, tenantID, capabilityKey, fieldKey, businessUnitNodeKey, asOf)
-	}
-	return orgunittypes.SetIDStrategyFieldDecision{}, false, nil
 }
 
 func (s orgUnitMaintainPrecheckReaderStub) ListEnabledTenantFieldConfigsAsOf(ctx context.Context, tenantID string, asOf string) ([]orgunittypes.TenantFieldConfig, error) {
@@ -87,18 +72,6 @@ func testMaintainReaderReady() orgUnitMaintainPrecheckReaderStub {
 		isOrgTreeInitializedFn: func(context.Context, string) (bool, error) {
 			return true, nil
 		},
-		resolveFieldDecisionFn: func(_ context.Context, _ string, _ string, fieldKey string, _ string, _ string) (orgunittypes.SetIDStrategyFieldDecision, bool, error) {
-			switch fieldKey {
-			case "name", "parent_org_code":
-				return orgunittypes.SetIDStrategyFieldDecision{
-					FieldKey:     fieldKey,
-					Visible:      true,
-					Maintainable: true,
-				}, true, nil
-			default:
-				return orgunittypes.SetIDStrategyFieldDecision{}, false, nil
-			}
-		},
 		listEnabledTenantFieldConfigsFn: func(context.Context, string, string) ([]orgunittypes.TenantFieldConfig, error) {
 			return []orgunittypes.TenantFieldConfig{
 				{FieldKey: " ext_str_01 "},
@@ -123,7 +96,6 @@ func TestBuildOrgUnitMaintainPrecheckProjectionV1_CorrectReady(t *testing.T) {
 	result, err := BuildOrgUnitMaintainPrecheckProjectionV1(context.Background(), testMaintainReaderReady(), OrgUnitMaintainPrecheckInputV1{
 		Intent:                 OrgUnitMaintainIntentCorrect,
 		TenantID:               "tenant_1",
-		CapabilityKey:          "org.orgunit_correct.field_policy",
 		TargetEffectiveDate:    "2026-01-01",
 		OrgCode:                "FLOWER-C",
 		EffectivePolicyVersion: "epv1:test",
@@ -162,7 +134,6 @@ func TestBuildOrgUnitMaintainPrecheckProjectionV1_MoveCandidateConfirmationAndRe
 	moveResult, err := BuildOrgUnitMaintainPrecheckProjectionV1(context.Background(), testMaintainReaderReady(), OrgUnitMaintainPrecheckInputV1{
 		Intent:                        OrgUnitMaintainIntentMove,
 		TenantID:                      "tenant_1",
-		CapabilityKey:                 "org.orgunit_write.field_policy",
 		EffectiveDate:                 "2026-04-01",
 		OrgCode:                       "FLOWER-C",
 		EffectivePolicyVersion:        "epv1:test",
@@ -194,7 +165,6 @@ func TestBuildOrgUnitMaintainPrecheckProjectionV1_MoveCandidateConfirmationAndRe
 	rejectedResult, err := BuildOrgUnitMaintainPrecheckProjectionV1(context.Background(), rejectedReader, OrgUnitMaintainPrecheckInputV1{
 		Intent:                 OrgUnitMaintainIntentCorrect,
 		TenantID:               "tenant_1",
-		CapabilityKey:          "org.orgunit_correct.field_policy",
 		TargetEffectiveDate:    "2026-01-01",
 		OrgCode:                "FLOWER-C",
 		EffectivePolicyVersion: "epv1:test",
@@ -219,7 +189,6 @@ func TestBuildOrgUnitMaintainPrecheckProjectionV1_DisableEnableReady(t *testing.
 	disableResult, err := BuildOrgUnitMaintainPrecheckProjectionV1(context.Background(), testMaintainReaderReady(), OrgUnitMaintainPrecheckInputV1{
 		Intent:                 OrgUnitMaintainIntentDisable,
 		TenantID:               "tenant_1",
-		CapabilityKey:          "org.orgunit_write.field_policy",
 		EffectiveDate:          "2026-05-01",
 		OrgCode:                "FLOWER-C",
 		EffectivePolicyVersion: "epv1:test",
@@ -241,7 +210,6 @@ func TestBuildOrgUnitMaintainPrecheckProjectionV1_DisableEnableReady(t *testing.
 	enableResult, err := BuildOrgUnitMaintainPrecheckProjectionV1(context.Background(), testMaintainReaderReady(), OrgUnitMaintainPrecheckInputV1{
 		Intent:                 OrgUnitMaintainIntentEnable,
 		TenantID:               "tenant_1",
-		CapabilityKey:          "org.orgunit_write.field_policy",
 		EffectiveDate:          "2026-06-01",
 		OrgCode:                "FLOWER-C",
 		EffectivePolicyVersion: "epv1:test",
@@ -354,11 +322,11 @@ func TestOrgUnitMaintainPrecheckHelpers(t *testing.T) {
 	})
 
 	t.Run("field, context and missing-field helpers", func(t *testing.T) {
-		missingDecision := buildOrgUnitMaintainPDPFieldDecision("name", orgunittypes.SetIDStrategyFieldDecision{}, false, "name")
+		missingDecision := buildOrgUnitMaintainPDPFieldDecision("name", orgUnitFieldDecision{}, false, "name")
 		if !missingDecision.Visible || !missingDecision.Maintainable || missingDecision.Required {
 			t.Fatalf("missing decision=%+v", missingDecision)
 		}
-		foundDecision := buildOrgUnitMaintainPDPFieldDecision("name", orgunittypes.SetIDStrategyFieldDecision{
+		foundDecision := buildOrgUnitMaintainPDPFieldDecision("name", orgUnitFieldDecision{
 			Visible:           true,
 			Required:          true,
 			Maintainable:      true,
@@ -430,7 +398,7 @@ func TestOrgUnitMaintainPrecheckHelpers(t *testing.T) {
 			NewParentRequested:  true,
 		}, orgUnitMaintainPrecheckEvaluation{
 			NameFound:    true,
-			NameDecision: orgunittypes.SetIDStrategyFieldDecision{Required: true},
+			NameDecision: orgUnitFieldDecision{Required: true},
 		})
 		if !slices.Equal(requiredFieldMissing, []string{"new_name"}) {
 			t.Fatalf("required field missing=%v", requiredFieldMissing)
@@ -440,7 +408,7 @@ func TestOrgUnitMaintainPrecheckHelpers(t *testing.T) {
 			OrgCode: "FLOWER-C",
 		}, orgUnitMaintainPrecheckEvaluation{
 			ParentFound:    true,
-			ParentDecision: orgunittypes.SetIDStrategyFieldDecision{Required: true},
+			ParentDecision: orgUnitFieldDecision{Required: true},
 		})
 		if !slices.Equal(dedupMissing, []string{"effective_date", "new_parent_ref_text"}) {
 			t.Fatalf("dedup missing=%v", dedupMissing)
@@ -466,12 +434,12 @@ func TestOrgUnitMaintainPrecheckHelpers(t *testing.T) {
 				"parent_org_code": "parent_org_node_key",
 			}},
 			NameFound: true,
-			NameDecision: orgunittypes.SetIDStrategyFieldDecision{
+			NameDecision: orgUnitFieldDecision{
 				Maintainable:      false,
 				AllowedValueCodes: []string{"GOOD-NAME"},
 			},
 			ParentFound: true,
-			ParentDecision: orgunittypes.SetIDStrategyFieldDecision{
+			ParentDecision: orgUnitFieldDecision{
 				Maintainable:      false,
 				AllowedValueCodes: []string{"GOOD-PARENT"},
 			},
@@ -505,8 +473,7 @@ func TestOrgUnitMaintainPrecheckHelpers(t *testing.T) {
 
 	t.Run("policy context and target exists branches", func(t *testing.T) {
 		ctxValue, ctxErr := resolveOrgUnitMaintainPolicyContextV1(context.Background(), nil, OrgUnitMaintainPrecheckInputV1{
-			TenantID:      "tenant_1",
-			CapabilityKey: "cap",
+			TenantID: "tenant_1",
 		}, "2026-01-01")
 		if ctxErr != nil || ctxValue.PolicyContextDigest == "" {
 			t.Fatalf("nil reader ctx=%+v err=%v", ctxValue, ctxErr)
@@ -727,42 +694,6 @@ func TestOrgUnitMaintainPrecheckHelpers(t *testing.T) {
 			t.Fatalf("target exists err=%v", err)
 		}
 
-		fieldErrResult, err := BuildOrgUnitMaintainPrecheckProjectionV1(context.Background(), orgUnitMaintainPrecheckReaderStub{
-			resolveOrgNodeKeyFn: func(context.Context, string, string) (string, error) {
-				return "10000003", nil
-			},
-			resolveSetIDFn: func(context.Context, string, string, string) (string, error) {
-				return "S2601", nil
-			},
-			isOrgTreeInitializedFn: func(context.Context, string) (bool, error) {
-				return true, nil
-			},
-			resolveFieldDecisionFn: func(context.Context, string, string, string, string, string) (orgunittypes.SetIDStrategyFieldDecision, bool, error) {
-				return orgunittypes.SetIDStrategyFieldDecision{}, false, errors.New(errPatchFieldNotAllowed)
-			},
-			resolveMutationTargetEventFn: func(context.Context, string, string, string) (OrgUnitMaintainTargetEventV1, error) {
-				return OrgUnitMaintainTargetEventV1{
-					HasEffective:       true,
-					EffectiveEventType: orgunittypes.OrgUnitEventCreate,
-				}, nil
-			},
-		}, OrgUnitMaintainPrecheckInputV1{
-			Intent:              OrgUnitMaintainIntentCorrect,
-			TenantID:            "tenant_1",
-			CapabilityKey:       "org.orgunit_correct.field_policy",
-			OrgCode:             "FLOWER-C",
-			TargetEffectiveDate: "2026-01-01",
-			NewName:             "运营中心",
-			NewParentRequested:  true,
-			CanAdmin:            true,
-		})
-		if err != nil {
-			t.Fatalf("field err build=%v", err)
-		}
-		if count := slices.Index(fieldErrResult.Projection.RejectionReasons, errPatchFieldNotAllowed); count < 0 {
-			t.Fatalf("field err projection=%+v", fieldErrResult.Projection)
-		}
-
 		_, err = BuildOrgUnitMaintainPrecheckProjectionV1(context.Background(), orgUnitMaintainPrecheckReaderStub{
 			resolveOrgNodeKeyFn: func(context.Context, string, string) (string, error) {
 				return "10000003", nil
@@ -779,7 +710,6 @@ func TestOrgUnitMaintainPrecheckHelpers(t *testing.T) {
 		}, OrgUnitMaintainPrecheckInputV1{
 			Intent:              OrgUnitMaintainIntentCorrect,
 			TenantID:            "tenant_1",
-			CapabilityKey:       "org.orgunit_correct.field_policy",
 			OrgCode:             "FLOWER-C",
 			TargetEffectiveDate: "2026-01-01",
 			CanAdmin:            true,
@@ -793,15 +723,9 @@ func TestOrgUnitMaintainPrecheckHelpers(t *testing.T) {
 		if decision, found, reason := resolveOrgUnitMaintainFieldDecision(context.Background(), nil, OrgUnitMaintainPrecheckInputV1{}, "10000003", "name", "2026-01-01"); found || reason != "" || decision.FieldKey != "" || len(decision.AllowedValueCodes) != 0 {
 			t.Fatalf("nil reader decision=%+v found=%v reason=%q", decision, found, reason)
 		}
-		errReader := orgUnitMaintainPrecheckReaderStub{
-			resolveFieldDecisionFn: func(context.Context, string, string, string, string, string) (orgunittypes.SetIDStrategyFieldDecision, bool, error) {
-				return orgunittypes.SetIDStrategyFieldDecision{}, false, errors.New(errPatchFieldNotAllowed)
-			},
-		}
-		if _, found, reason := resolveOrgUnitMaintainFieldDecision(context.Background(), errReader, OrgUnitMaintainPrecheckInputV1{
-			TenantID:      "tenant_1",
-			CapabilityKey: "cap",
-		}, "10000003", "name", "2026-01-01"); found || reason != errPatchFieldNotAllowed {
+		if _, found, reason := resolveOrgUnitMaintainFieldDecision(context.Background(), orgUnitMaintainPrecheckReaderStub{}, OrgUnitMaintainPrecheckInputV1{
+			TenantID: "tenant_1",
+		}, "10000003", "name", "2026-01-01"); found || reason != "" {
 			t.Fatalf("reason=%q found=%v", reason, found)
 		}
 

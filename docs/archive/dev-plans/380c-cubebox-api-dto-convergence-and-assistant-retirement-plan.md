@@ -68,7 +68,7 @@
   - 统一策略模型与唯一 PDP：`docs/dev-plans/330-strategy-module-architecture-and-design-convergence-plan.md`
   - 路由治理：`docs/dev-plans/017-routing-strategy.md`
   - Authz 工具链：`docs/dev-plans/022-authz-casbin-toolchain.md`
-  - capability-route-map：`docs/dev-plans/156-capability-key-m3-m9-route-capability-mapping-and-gates.md`
+  - capability-route-map：`docs/archive/dev-plans/156-capability-key-m3-m9-route-capability-mapping-and-gates.md`
   - 错误语义门禁：`docs/dev-plans/140-error-message-clarity-and-gates.md`
   - E2E/回归基线：`docs/dev-plans/060-business-e2e-test-suite.md`、`docs/dev-plans/064a-test-tp060-05-assistant-conversation-intent-and-tasks.md`
 - **本计划命中的门禁边界**:

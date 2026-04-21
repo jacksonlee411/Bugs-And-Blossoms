@@ -10,7 +10,6 @@ import (
 
 var (
 	ErrOrgEventNotFound = errors.New("org_event_not_found")
-	ErrPersonNotFound   = errors.New("person_not_found")
 )
 
 type OrgUnitWriteStore interface {
@@ -24,5 +23,4 @@ type OrgUnitWriteStore interface {
 	ListEnabledTenantFieldConfigsAsOf(ctx context.Context, tenantID string, asOf string) ([]types.TenantFieldConfig, error)
 	ResolveOrgNodeKey(ctx context.Context, tenantID string, orgCode string) (string, error)
 	ResolveOrgCodeByNodeKey(ctx context.Context, tenantID string, orgNodeKey string) (string, error)
-	FindPersonByPernr(ctx context.Context, tenantID string, pernr string) (types.Person, error)
 }

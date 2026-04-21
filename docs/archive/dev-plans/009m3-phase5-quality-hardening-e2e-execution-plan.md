@@ -28,7 +28,7 @@
   - Atlas+Goose：`docs/dev-plans/024-atlas-goose-closed-loop-guide.md`
   - sqlc：`docs/dev-plans/025-sqlc-guidelines.md`
   - Authz：`docs/dev-plans/022-authz-casbin-toolchain.md`
-  - E2E 业务断言口径（`effective_date`）：`docs/dev-plans/031-greenfield-assignment-job-data.md`、`docs/dev-plans/032-effective-date-day-granularity.md`
+  - E2E 业务断言口径（`effective_date`）：`docs/archive/dev-plans/031-greenfield-assignment-job-data.md`、`docs/dev-plans/032-effective-date-day-granularity.md`
   - Phase 4 复用输入（smoke 场景来源）：`docs/archive/dev-plans/009m2-phase4-person-identity-staffing-vertical-slice-execution-plan.md`
 
 ## 2. 非目标（本执行计划不做）

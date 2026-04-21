@@ -1,12 +1,8 @@
 CREATE OR REPLACE FUNCTION orgunit.scope_code_registry()
 RETURNS TABLE(scope_code text, owner_module text, share_mode text, is_stable boolean) AS $$
   VALUES
-    ('jobcatalog', 'jobcatalog', 'tenant-only', true),
     ('orgunit_geo_admin', 'orgunit', 'shared-only', true),
-    ('orgunit_location', 'orgunit', 'shared-only', true),
-    ('person_school', 'person', 'shared-only', true),
-    ('person_education_type', 'person', 'shared-only', true),
-    ('person_credential_type', 'person', 'shared-only', true)
+    ('orgunit_location', 'orgunit', 'shared-only', true)
 $$ LANGUAGE SQL IMMUTABLE;
 
 CREATE OR REPLACE FUNCTION orgunit.scope_code_is_valid(p_scope_code text)

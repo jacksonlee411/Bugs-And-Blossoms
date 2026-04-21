@@ -237,8 +237,6 @@ export interface OrgUnitWriteAPIRequest {
   org_code: string
   effective_date: string
   target_effective_date?: string
-  policy_version?: string
-  effective_policy_version?: string
   request_id: string
   patch: {
     name?: string
@@ -260,77 +258,6 @@ export interface OrgUnitWriteAPIResponse {
 
 export async function writeOrgUnit(request: OrgUnitWriteAPIRequest): Promise<OrgUnitWriteAPIResponse> {
   return httpClient.post<OrgUnitWriteAPIResponse>('/org/api/org-units/write', request)
-}
-
-export interface OrgUnitCreateFieldDecision {
-  capability_key: string
-  field_key: string
-  required: boolean
-  visible: boolean
-  maintainable: boolean
-  default_rule_ref?: string
-  resolved_default_value?: string
-  allowed_value_codes?: string[]
-}
-
-export interface OrgUnitCreateFieldDecisionsResponse {
-  capability_key: string
-  baseline_capability_key?: string
-  business_unit_org_code: string
-  as_of: string
-  policy_version: string
-  effective_policy_version: string
-  policy_version_alg?: string
-  intent_policy_version?: string
-  baseline_policy_version?: string
-  field_decisions: OrgUnitCreateFieldDecision[]
-}
-
-export async function getOrgUnitCreateFieldDecisions(options: {
-  effectiveDate: string
-  parentOrgCode?: string
-}): Promise<OrgUnitCreateFieldDecisionsResponse> {
-  const query = new URLSearchParams({
-    effective_date: options.effectiveDate
-  })
-  const parentOrgCode = options.parentOrgCode?.trim() ?? ''
-  if (parentOrgCode.length > 0) {
-    query.set('parent_org_code', parentOrgCode)
-  }
-  return httpClient.get<OrgUnitCreateFieldDecisionsResponse>(`/org/api/org-units/create-field-decisions?${query.toString()}`)
-}
-
-export interface OrgUnitWriteCapabilitiesResponse {
-  intent: OrgUnitWriteIntent
-  capability_key: string
-  baseline_capability_key?: string
-  policy_version: string
-  effective_policy_version: string
-  policy_version_alg?: string
-  intent_policy_version?: string
-  baseline_policy_version?: string
-  tree_initialized: boolean
-  enabled: boolean
-  deny_reasons: string[]
-  allowed_fields: string[]
-  field_payload_keys: Record<string, string>
-}
-
-export async function getOrgUnitWriteCapabilities(options: {
-  intent: OrgUnitWriteIntent
-  orgCode: string
-  effectiveDate: string
-  targetEffectiveDate?: string
-}): Promise<OrgUnitWriteCapabilitiesResponse> {
-  const query = new URLSearchParams({
-    intent: options.intent,
-    org_code: options.orgCode,
-    effective_date: options.effectiveDate
-  })
-  if (options.targetEffectiveDate) {
-    query.set('target_effective_date', options.targetEffectiveDate)
-  }
-  return httpClient.get<OrgUnitWriteCapabilitiesResponse>(`/org/api/org-units/write-capabilities?${query.toString()}`)
 }
 
 export async function createOrgUnit(request: {
@@ -438,77 +365,6 @@ export async function rescindOrgUnit(request: {
     '/org/api/org-units/rescinds/org',
     request
   )
-}
-
-export interface OrgUnitCorrectEventCapability {
-  enabled: boolean
-  allowed_fields: string[]
-  field_payload_keys: Record<string, string>
-  deny_reasons: string[]
-}
-
-export interface OrgUnitCorrectStatusCapability {
-  enabled: boolean
-  allowed_target_statuses: string[]
-  deny_reasons: string[]
-}
-
-export interface OrgUnitBasicCapability {
-  enabled: boolean
-  deny_reasons: string[]
-}
-
-export interface OrgUnitMutationCapabilitiesEnvelope {
-  correct_event: OrgUnitCorrectEventCapability
-  correct_status: OrgUnitCorrectStatusCapability
-  rescind_event: OrgUnitBasicCapability
-  rescind_org: OrgUnitBasicCapability
-}
-
-export interface OrgUnitMutationCapabilitiesResponse {
-  org_code: string
-  effective_date: string
-  effective_target_event_type: string
-  raw_target_event_type: string
-  capabilities: OrgUnitMutationCapabilitiesEnvelope
-}
-
-export interface OrgUnitAppendCapability {
-  enabled: boolean
-  allowed_fields: string[]
-  field_payload_keys: Record<string, string>
-  deny_reasons: string[]
-}
-
-export interface OrgUnitAppendCapabilitiesResponse {
-  org_code: string
-  effective_date: string
-  capabilities: {
-    create: OrgUnitAppendCapability
-    event_update: Record<string, OrgUnitAppendCapability>
-  }
-}
-
-export async function getOrgUnitMutationCapabilities(options: {
-  orgCode: string
-  effectiveDate: string
-}): Promise<OrgUnitMutationCapabilitiesResponse> {
-  const query = new URLSearchParams({
-    org_code: options.orgCode,
-    effective_date: options.effectiveDate
-  })
-  return httpClient.get<OrgUnitMutationCapabilitiesResponse>(`/org/api/org-units/mutation-capabilities?${query.toString()}`)
-}
-
-export async function getOrgUnitAppendCapabilities(options: {
-  orgCode: string
-  effectiveDate: string
-}): Promise<OrgUnitAppendCapabilitiesResponse> {
-  const query = new URLSearchParams({
-    org_code: options.orgCode,
-    effective_date: options.effectiveDate
-  })
-  return httpClient.get<OrgUnitAppendCapabilitiesResponse>(`/org/api/org-units/append-capabilities?${query.toString()}`)
 }
 
 export interface OrgUnitFieldOption {

@@ -11,8 +11,8 @@
   - `AGENTS.md`
   - `docs/dev-plans/003-simple-not-easy-review-guide.md`
   - `docs/dev-plans/015-ddd-layering-framework.md`
-  - `docs/dev-plans/150-capability-key-workday-alignment-gap-closure-plan.md`
-  - `docs/dev-plans/157-capability-key-m7-functional-area-governance.md`
+  - `docs/archive/dev-plans/150-capability-key-workday-alignment-gap-closure-plan.md`
+  - `docs/archive/dev-plans/157-capability-key-m7-functional-area-governance.md`
   - `docs/dev-plans/380-cubebox-first-party-ownership-and-librechat-retirement-plan.md`
   - `docs/archive/dev-plans/220-chat-assistant-upgrade-implementation-plan.md`
 - **用户入口/触点**：`/app/cubebox*`、`/internal/cubebox/*`、capability registry / route-capability-map / functional area 治理
@@ -117,13 +117,13 @@
 
 ### 4.1 `org_foundation` 的来源不是 CubeBox，而是 capability functional area 治理体系
 
-最早的计划级冻结来源是 [150-capability-key-workday-alignment-gap-closure-plan.md](/home/lee/Projects/Bugs-And-Blossoms/docs/dev-plans/150-capability-key-workday-alignment-gap-closure-plan.md#L104)：
+最早的计划级冻结来源是 [150-capability-key-workday-alignment-gap-closure-plan.md](/home/lee/Projects/Bugs-And-Blossoms/docs/archive/dev-plans/150-capability-key-workday-alignment-gap-closure-plan.md#L104)：
 
 - `5.6.1 Functional Area 词汇表（M1 冻结）`
 - 首批冻结清单中明确包含 `org_foundation`
-- 并要求“每个 capability_key 必须且仅能归属 1 个 functional_area_key” [150-capability-key-workday-alignment-gap-closure-plan.md](/home/lee/Projects/Bugs-And-Blossoms/docs/dev-plans/150-capability-key-workday-alignment-gap-closure-plan.md#L123)
+- 并要求“每个 capability_key 必须且仅能归属 1 个 functional_area_key” [150-capability-key-workday-alignment-gap-closure-plan.md](/home/lee/Projects/Bugs-And-Blossoms/docs/archive/dev-plans/150-capability-key-workday-alignment-gap-closure-plan.md#L123)
 
-随后 [157-capability-key-m7-functional-area-governance.md](/home/lee/Projects/Bugs-And-Blossoms/docs/dev-plans/157-capability-key-m7-functional-area-governance.md#L12) 将这套功能域治理正式落地，并冻结：
+随后 [157-capability-key-m7-functional-area-governance.md](/home/lee/Projects/Bugs-And-Blossoms/docs/archive/dev-plans/157-capability-key-m7-functional-area-governance.md#L12) 将这套功能域治理正式落地，并冻结：
 
 - `functional_area_key/display_name/owner_module/lifecycle_status`
 - capability 与功能域建立唯一归属关系
@@ -222,8 +222,8 @@
 
 ## 9. 关联文档
 
-- `docs/dev-plans/150-capability-key-workday-alignment-gap-closure-plan.md`
-- `docs/dev-plans/157-capability-key-m7-functional-area-governance.md`
+- `docs/archive/dev-plans/150-capability-key-workday-alignment-gap-closure-plan.md`
+- `docs/archive/dev-plans/157-capability-key-m7-functional-area-governance.md`
 - `docs/archive/dev-plans/220-chat-assistant-upgrade-implementation-plan.md`
 - `docs/dev-plans/380-cubebox-first-party-ownership-and-librechat-retirement-plan.md`
 - `docs/dev-plans/380b-cubebox-backend-formal-implementation-cutover-plan.md`

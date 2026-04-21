@@ -5,9 +5,7 @@ prefix="[chat-surface-clean]"
 
 patterns=(
   '/app/assistant'
-  '/app/cubebox'
   '/internal/assistant'
-  '/internal/cubebox'
   '/assistant-ui'
   '/assets/librechat-web'
   '/librechat'

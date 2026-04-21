@@ -271,7 +271,7 @@
 ## 关联文档
 
 - `docs/dev-plans/311-view-as-of-page-cutover-matrix-and-orgunit-details-sample-plan.md`
-- `docs/dev-plans/314-view-as-of-p1-pages-batch-cutover-plan-assignments-positions-jobcatalog-dicts.md`
+- `docs/archive/dev-plans/314-view-as-of-p1-pages-batch-cutover-plan-assignments-positions-jobcatalog-dicts.md`
 - `docs/dev-plans/315-view-as-of-minimal-helper-and-anti-regression-gates-plan.md`
 - `docs/dev-plans/300-test-system-investigation-report.md`
 - `docs/dev-plans/301-go-test-layering-and-best-practices-remediation-plan.md`

@@ -12,18 +12,11 @@ import (
 )
 
 const defaultOrgunitSnapshotSchemaDir = "modules/orgunit/infrastructure/persistence/org-node-key-bootstrap"
-const defaultSetIDStrategyRegistrySchemaDir = "modules/orgunit/infrastructure/persistence/schema"
 
 var orgunitSnapshotBootstrapFiles = []string{
 	"00023_orgunit_org_node_key_schema.sql",
 	"00024_orgunit_org_node_key_allocator.sql",
 	"00025_orgunit_org_node_key_kernel_privileges.sql",
-}
-
-var setIDStrategyRegistryBootstrapFiles = []string{
-	"00020_orgunit_setid_strategy_registry_schema.sql",
-	"00021_orgunit_setid_strategy_registry_fields.sql",
-	"00022_orgunit_setid_strategy_registry_modes.sql",
 }
 
 const orgunitSnapshotBootstrapPrelude = `
@@ -82,10 +75,8 @@ func orgunitSnapshotBootstrapTarget(args []string) {
 
 	var url string
 	var schemaDir string
-	var includeSetIDStrategyRegistry bool
 	fs.StringVar(&url, "url", "", "postgres connection string for the dedicated target database")
 	fs.StringVar(&schemaDir, "schema-dir", defaultOrgunitSnapshotSchemaDir, "directory containing 00023-00025 target schema files")
-	fs.BoolVar(&includeSetIDStrategyRegistry, "include-setid-strategy-registry", false, "also apply setid strategy registry target schema files for rehearsal")
 	if err := fs.Parse(args); err != nil {
 		fatal(err)
 	}
@@ -118,7 +109,7 @@ func orgunitSnapshotBootstrapTarget(args []string) {
 		fatal(err)
 	}
 
-	paths := orgunitSnapshotBootstrapPaths(schemaDir, includeSetIDStrategyRegistry)
+	paths := orgunitSnapshotBootstrapPaths(schemaDir)
 	for _, path := range paths {
 		data, readErr := os.ReadFile(path)
 		if readErr != nil {
@@ -133,19 +124,13 @@ func orgunitSnapshotBootstrapTarget(args []string) {
 		fatal(err)
 	}
 
-	fmt.Printf("[orgunit-snapshot-bootstrap-target] OK applied_files=%d schema_dir=%s include_setid_strategy_registry=%t\n", len(paths), schemaDir, includeSetIDStrategyRegistry)
+	fmt.Printf("[orgunit-snapshot-bootstrap-target] OK applied_files=%d schema_dir=%s\n", len(paths), schemaDir)
 }
 
-func orgunitSnapshotBootstrapPaths(schemaDir string, includeSetIDStrategyRegistry bool) []string {
-	paths := make([]string, 0, len(orgunitSnapshotBootstrapFiles)+len(setIDStrategyRegistryBootstrapFiles))
+func orgunitSnapshotBootstrapPaths(schemaDir string) []string {
+	paths := make([]string, 0, len(orgunitSnapshotBootstrapFiles))
 	for _, name := range orgunitSnapshotBootstrapFiles {
 		paths = append(paths, filepath.Join(schemaDir, name))
-	}
-	if !includeSetIDStrategyRegistry {
-		return paths
-	}
-	for _, name := range setIDStrategyRegistryBootstrapFiles {
-		paths = append(paths, filepath.Join(defaultSetIDStrategyRegistrySchemaDir, name))
 	}
 	return paths
 }

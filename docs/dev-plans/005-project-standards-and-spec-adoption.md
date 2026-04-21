@@ -277,7 +277,7 @@
 
 - `docs/dev-plans/032-effective-date-day-granularity.md`
 - `docs/dev-plans/102b-070-071-time-context-explicitness-and-replay-determinism.md`
-- `docs/dev-plans/021-pg-rls-for-org-position-job-catalog.md`
+- `docs/archive/dev-plans/021-pg-rls-for-org-position-job-catalog.md`
 
 **与现有计划关系**
 

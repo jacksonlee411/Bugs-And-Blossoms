@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState } from 'react'
-import { Link as RouterLink, useNavigate, useSearchParams } from 'react-router-dom'
+import { Link as RouterLink, useSearchParams } from 'react-router-dom'
 import {
   Alert,
   Breadcrumbs,
@@ -335,7 +335,6 @@ function formatDefaultPolicySummary(row: FieldConfigRow): string {
 const customPlainValueTypeFallback: OrgUnitExtValueType[] = ['text', 'int', 'uuid', 'bool', 'date', 'numeric']
 
 export function OrgUnitFieldConfigsPage() {
-  const navigate = useNavigate()
   const queryClient = useQueryClient()
   const { t, tenantId } = useAppPreferences()
   const [searchParams, setSearchParams] = useSearchParams()
@@ -564,20 +563,6 @@ export function OrgUnitFieldConfigsPage() {
     [todayUtc]
   )
 
-  const openStrategyRegistry = useCallback(
-    (row: FieldConfigRow) => {
-      const next = new URLSearchParams()
-      if (readMode === 'history') {
-        next.set('as_of', asOf)
-      }
-      next.set('registry_view', 'editor')
-      next.set('capability_key', 'org.orgunit_write.field_policy')
-      next.set('field_key', row.fieldKey)
-      navigate({ pathname: '/org/setid/registry', search: `?${next.toString()}` })
-    },
-    [asOf, navigate, readMode]
-  )
-
   const columns = useMemo<GridColDef<FieldConfigRow>[]>(() => {
     return [
       {
@@ -714,9 +699,6 @@ export function OrgUnitFieldConfigsPage() {
               <Button onClick={() => setViewRow(row)} size='small' variant='text'>
                 {t('common_detail')}
               </Button>
-              <Button onClick={() => openStrategyRegistry(row)} size='small' variant='text'>
-                {t('nav_setid')}
-              </Button>
               <Button
                 disabled={!canDisable}
                 onClick={() => openDisableDialog('disable', row)}
@@ -738,7 +720,7 @@ export function OrgUnitFieldConfigsPage() {
         }
       }
     ]
-  }, [openDisableDialog, openStrategyRegistry, t, todayUtc])
+  }, [openDisableDialog, t, todayUtc])
 
   function openEnableDialog() {
     setEnableError('')

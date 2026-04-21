@@ -350,8 +350,8 @@ const (
 	orgUnitErrFieldPolicyExprInvalid             = "FIELD_POLICY_EXPR_INVALID"
 	orgUnitErrFieldOptionNotAllowed              = "FIELD_OPTION_NOT_ALLOWED"
 	orgUnitErrFieldRequiredValueMissing          = "FIELD_REQUIRED_VALUE_MISSING"
-	orgUnitErrFieldPolicyMissing                 = fieldPolicyMissingCode
-	orgUnitErrFieldPolicyConflict                = fieldPolicyConflictCode
+	orgUnitErrFieldPolicyMissing                 = "policy_missing"
+	orgUnitErrFieldPolicyConflict                = "policy_conflict_ambiguous"
 	orgUnitErrFieldPolicyVersionRequired         = "policy_version_required"
 	orgUnitErrFieldPolicyVersionConflict         = "policy_version_conflict"
 	orgUnitErrOrgCodeExhausted                   = "ORG_CODE_EXHAUSTED"

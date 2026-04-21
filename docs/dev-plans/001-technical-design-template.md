@@ -91,12 +91,12 @@
   - [ ] i18n（仅 `en/zh`）
   - [ ] DB Schema / Migration / Backfill / Correction
   - [ ] sqlc
-  - [ ] Routing / allowlist / responder / capability-route-map
+  - [ ] Routing / allowlist / responder / 相关路由注册/映射
   - [ ] AuthN / Tenancy / RLS
   - [ ] Authz（Casbin）
   - [ ] E2E
   - [ ] 文档 / readiness / 证据记录
-  - [ ] 其他专项门禁：[填写，如 `error-message` / `request-code` / `capability-key` / assistant 相关]
+  - [ ] 其他专项门禁：[填写，如 `error-message` / `request-code` / `granularity` / assistant 相关]
 
 - **本次引用的 SSOT（按需保留）**：
   - `AGENTS.md`
@@ -106,11 +106,11 @@
   - `docs/dev-plans/011-tech-stack-and-toolchain-versions.md`
   - `docs/dev-plans/012-ci-quality-gates.md`
   - `docs/dev-plans/015-ddd-layering-framework.md`
-  - `docs/dev-plans/016-greenfield-hr-modules-skeleton.md`
+  - `docs/archive/dev-plans/016-greenfield-hr-modules-skeleton.md`
   - `docs/dev-plans/017-routing-strategy.md`
   - `docs/dev-plans/019-tenant-and-authn.md`
   - `docs/dev-plans/020-i18n-en-zh-only.md`
-  - `docs/dev-plans/021-pg-rls-for-org-position-job-catalog.md`
+  - `docs/archive/dev-plans/021-pg-rls-for-org-position-job-catalog.md`
   - `docs/dev-plans/022-authz-casbin-toolchain.md`
   - `docs/dev-plans/032-effective-date-day-granularity.md`
   - `docs/dev-plans/301-go-test-layering-and-best-practices-remediation-plan.md`
@@ -268,15 +268,15 @@ flowchart LR
 
 ### 5.1 交付面与路由对齐表（必填）
 
-| 交付面 | Canonical Path / Route | `route_class` | owner module | Authz object/action | capability / route-map | 备注 |
+| 交付面 | Canonical Path / Route | `route_class` | owner module | Authz object/action | 路由映射来源 | 备注 |
 | --- | --- | --- | --- | --- | --- | --- |
-| UI 页面 | `[如 /org/units]` | `[ui/authn/... ]` | `[module]` | `[module.resource / read|admin|debug]` | `[capability_key 或 N/A]` | [入口/导航/页面归属] |
-| internal API | `[如 /org/api/org-units]` | `internal_api` | `[module]` | `[module.resource / action]` | `[映射来源]` | [JSON-only] |
-| public API / webhook / job / CLI | `[按需填写]` | `[class]` | `[module]` | `[object/action]` | `[映射]` | [边界说明] |
+| UI 页面 | `[如 /org/units]` | `[ui/authn/... ]` | `[module]` | `[module.resource / read|admin|debug]` | `[router / handler / config 或 N/A]` | [入口/导航/页面归属] |
+| internal API | `[如 /org/api/org-units]` | `internal_api` | `[module]` | `[module.resource / action]` | `[handler / registry / config]` | [JSON-only] |
+| public API / webhook / job / CLI | `[按需填写]` | `[class]` | `[module]` | `[object/action]` | `[映射来源]` | [边界说明] |
 
 - **要求**：
-  - route capability、authz object、owner module、页面归属必须一致
-  - 新增/调整路由时必须明确 allowlist / responder / route-map 的承接位置
+  - 路由归属、authz object、owner module、页面归属必须一致
+  - 新增/调整路由时必须明确 allowlist / responder / 路由注册的承接位置
   - 不新增第二前端链路、第二 API 命名空间或 legacy 别名窗口
 
 ### 5.2 `apps/web` 交互契约（命中 UI 时必填）

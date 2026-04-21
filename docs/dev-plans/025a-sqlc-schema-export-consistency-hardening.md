@@ -43,7 +43,7 @@
 
 ### 3.3 决策 C（选定）：自动模块发现替代硬编码模块清单
 
-- `export-schema.sh` 不再写死 `iam/orgunit/jobcatalog/staffing/person`。
+- `export-schema.sh` 不再写死任何模块清单；当前仓库即使只剩 `iam/orgunit`，也应继续通过自动发现导出 schema。
 - 由脚本自动扫描 `modules/*/infrastructure/persistence/schema` 并按稳定顺序导出。
 
 ### 3.4 决策 D（选定）：比对规则规范化

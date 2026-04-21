@@ -3,7 +3,6 @@ package persistence
 import (
 	"context"
 	"errors"
-	"strings"
 	"testing"
 	"time"
 
@@ -199,11 +198,8 @@ func TestOrgUnitPGStore_SubmitEvent(t *testing.T) {
 	if _, err := store.SubmitEvent(ctx, "t1", "e2", nil, "CREATE", "2026-01-01", nil, "r2", "t1"); err != nil {
 		t.Fatalf("unexpected create error: %v", err)
 	}
-	if createTx.execCalls != 2 {
-		t.Fatalf("create should set tenant then ensure bootstrap, exec_calls=%d sql=%v", createTx.execCalls, createTx.execSQLs)
-	}
-	if !strings.Contains(createTx.execSQLs[1], "orgunit.ensure_setid_bootstrap") {
-		t.Fatalf("create should call ensure_setid_bootstrap, sql=%v", createTx.execSQLs)
+	if createTx.execCalls != 1 {
+		t.Fatalf("create should only set tenant once, exec_calls=%d sql=%v", createTx.execCalls, createTx.execSQLs)
 	}
 
 	store = NewOrgUnitPGStore(beginFunc(func(context.Context) (pgx.Tx, error) {
@@ -213,8 +209,8 @@ func TestOrgUnitPGStore_SubmitEvent(t *testing.T) {
 			execErrAt: 2,
 		}, nil
 	}))
-	if _, err := store.SubmitEvent(ctx, "t1", "e3", nil, "SET_BUSINESS_UNIT", "2026-01-01", nil, "r3", "t1"); err == nil {
-		t.Fatal("expected bootstrap error")
+	if _, err := store.SubmitEvent(ctx, "t1", "e3", nil, "SET_BUSINESS_UNIT", "2026-01-01", nil, "r3", "t1"); err != nil {
+		t.Fatalf("unexpected set business unit error: %v", err)
 	}
 }
 
@@ -540,52 +536,6 @@ func TestOrgUnitPGStore_ResolveOrgCodeByNodeKey(t *testing.T) {
 		return &txStub{row: stubRow{vals: []any{"ROOT"}}}, nil
 	}))
 	if _, err := store.ResolveOrgCodeByNodeKey(ctx, "t1", "A2345678"); err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-}
-
-func TestOrgUnitPGStore_FindPersonByPernr(t *testing.T) {
-	ctx := context.Background()
-
-	store := NewOrgUnitPGStore(beginFunc(func(context.Context) (pgx.Tx, error) {
-		return nil, errors.New("begin")
-	}))
-	if _, err := store.FindPersonByPernr(ctx, "t1", "1001"); err == nil {
-		t.Fatal("expected begin error")
-	}
-
-	store = NewOrgUnitPGStore(beginFunc(func(context.Context) (pgx.Tx, error) {
-		return &txStub{execErr: errors.New("exec")}, nil
-	}))
-	if _, err := store.FindPersonByPernr(ctx, "t1", "1001"); err == nil {
-		t.Fatal("expected exec error")
-	}
-
-	store = NewOrgUnitPGStore(beginFunc(func(context.Context) (pgx.Tx, error) {
-		return &txStub{row: stubRow{err: pgx.ErrNoRows}}, nil
-	}))
-	if _, err := store.FindPersonByPernr(ctx, "t1", "1001"); !errors.Is(err, ports.ErrPersonNotFound) {
-		t.Fatalf("expected person not found, got %v", err)
-	}
-
-	store = NewOrgUnitPGStore(beginFunc(func(context.Context) (pgx.Tx, error) {
-		return &txStub{row: stubRow{err: errors.New("row")}}, nil
-	}))
-	if _, err := store.FindPersonByPernr(ctx, "t1", "1001"); err == nil {
-		t.Fatal("expected row error")
-	}
-
-	store = NewOrgUnitPGStore(beginFunc(func(context.Context) (pgx.Tx, error) {
-		return &txStub{row: stubRow{vals: []any{"p1", "1001", "Name", "active"}}, commitErr: errors.New("commit")}, nil
-	}))
-	if _, err := store.FindPersonByPernr(ctx, "t1", "1001"); err == nil {
-		t.Fatal("expected commit error")
-	}
-
-	store = NewOrgUnitPGStore(beginFunc(func(context.Context) (pgx.Tx, error) {
-		return &txStub{row: stubRow{vals: []any{"p1", "1001", "Name", "active"}}}, nil
-	}))
-	if _, err := store.FindPersonByPernr(ctx, "t1", "1001"); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }

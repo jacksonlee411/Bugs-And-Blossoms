@@ -9,9 +9,6 @@ echo "[as-of-explicit] scan: disallow implicit today/default date fallback in 07
 go_targets=(
   "internal/server/setid_api.go"
   "internal/server/setid_scope_api.go"
-  "internal/server/jobcatalog_api.go"
-  "internal/server/staffing_handlers.go"
-  "modules/staffing/presentation/controllers/assignments_api.go"
 )
 
 sql_targets=(

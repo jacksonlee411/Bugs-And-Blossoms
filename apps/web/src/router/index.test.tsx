@@ -15,32 +15,17 @@ vi.mock('../pages/dicts/DictConfigsPage', () => ({
 vi.mock('../pages/dicts/DictValueDetailsPage', () => ({
   DictValueDetailsPage: () => null
 }))
-vi.mock('../pages/jobcatalog/JobCatalogPage', () => ({
-  JobCatalogPage: () => null
-}))
 vi.mock('../pages/LoginPage', () => ({
   LoginPage: () => null
 }))
 vi.mock('../pages/org/OrgUnitFieldConfigsPage', () => ({
   OrgUnitFieldConfigsPage: () => null
 }))
-vi.mock('../pages/org/SetIDGovernancePage', () => ({
-  SetIDGovernancePage: () => null
-}))
 vi.mock('../pages/org/OrgUnitDetailsPage', () => ({
   OrgUnitDetailsPage: () => null
 }))
 vi.mock('../pages/org/OrgUnitsPage', () => ({
   OrgUnitsPage: () => null
-}))
-vi.mock('../pages/person/PersonsPage', () => ({
-  PersonsPage: () => null
-}))
-vi.mock('../pages/staffing/AssignmentsPage', () => ({
-  AssignmentsPage: () => null
-}))
-vi.mock('../pages/staffing/PositionsPage', () => ({
-  PositionsPage: () => null
 }))
 vi.mock('./RequirePermission', () => ({
   RequirePermission: ({ children }: { children: unknown }) => children
@@ -60,9 +45,9 @@ describe('app router', () => {
     const routePaths = new Set(children.map((route) => route.path))
 
     expect(routePaths.has('org/units')).toBe(true)
-    expect(routePaths.has('jobcatalog')).toBe(true)
-    expect(routePaths.has('staffing/positions')).toBe(true)
-    expect(routePaths.has('person/persons')).toBe(true)
-    expect(routePaths.has('staffing/assignments')).toBe(true)
+    expect(routePaths.has('org/units/:orgCode')).toBe(true)
+    expect(routePaths.has('org/units/field-configs')).toBe(true)
+    expect(routePaths.has('dicts')).toBe(true)
+    expect(routePaths.has('approvals')).toBe(true)
   })
 })

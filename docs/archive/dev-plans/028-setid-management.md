@@ -18,7 +18,7 @@
 ### 0.1 新增功能（NEW）
 
 - [ ] **UI：显式 Business Unit（已废弃）**：任何 setid-controlled 的 UI 入口（例如 `/org/job-catalog`）若缺少 `business_unit_id`，必须 `302` 重定向补齐默认 `BU000`（最终请求必须显式携带 `business_unit_id`；禁止 silent default）。**现改为配置主数据显式 `setid`；业务数据由 `org_unit_id` 解析 `setid`**（见 `docs/archive/dev-plans/070-setid-orgunit-binding-redesign.md`）。
-- [X] **Staffing：Position 必填 BU（已废弃）**：`position` 的创建事件必须携带 `business_unit_id`，并由 DB Kernel/UI/API 共同强制（保证“人员→任职→岗位→BU”的可推导链路；也避免后续接入 setid 解析时出现不可判定上下文）。**现改为 Position 创建不要求手工 `setid`；`job_profile_id` 必填，`setid` 由 `org_unit_id` 解析并落库**（见 `docs/dev-plans/030-position-transactional-event-sourcing-synchronous-projection.md`）。
+- [X] **Staffing：Position 必填 BU（已废弃）**：`position` 的创建事件必须携带 `business_unit_id`，并由 DB Kernel/UI/API 共同强制（保证“人员→任职→岗位→BU”的可推导链路；也避免后续接入 setid 解析时出现不可判定上下文）。**现改为 Position 创建不要求手工 `setid`；`job_profile_id` 必填，`setid` 由 `org_unit_id` 解析并落库**（见 `docs/archive/dev-plans/030-position-transactional-event-sourcing-synchronous-projection.md`）。
 - [ ] **（可选，非 P0）Tree Controls**：当出现“某 BU 需要访问不属于其 record group 解析 setid 的树/层级配置”的需求时，引入 Tree Controls 映射（契约见 5.3.1）。
 
 ### 0.2 实现缺口（GAP：原计划已包含但尚未补齐）
@@ -118,7 +118,7 @@
 - 触发器矩阵与本地必跑：`AGENTS.md`
 - 命令入口：`Makefile`
 - CI 门禁：`.github/workflows/quality-gates.yml`
-- 模块边界（将影响哪些模块）：`docs/dev-plans/016-greenfield-hr-modules-skeleton.md`
+- 模块边界（将影响哪些模块）：`docs/archive/dev-plans/016-greenfield-hr-modules-skeleton.md`
 - Tenancy/AuthN 与主体模型：`docs/dev-plans/019-tenant-and-authn.md`
 - SuperAdmin 控制面认证与会话：`docs/dev-plans/023-superadmin-authn.md`
 - RLS 强租户隔离：`docs/dev-plans/021-pg-rls-for-org-position-job-catalog.md`

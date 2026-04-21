@@ -153,25 +153,6 @@ type orgUnitPlainCustomHint struct {
 	DefaultValueType string   `json:"default_value_type"`
 }
 
-func resolveOrgUnitFieldConfigDecision(ctx context.Context, tenantID string, fieldKey string, asOf string) (setIDFieldDecision, bool, error) {
-	decision, err := defaultSetIDStrategyRegistryStore.resolveFieldDecision(
-		ctx,
-		tenantID,
-		orgUnitWriteFieldPolicyCapabilityKey,
-		fieldKey,
-		"",
-		"",
-		asOf,
-	)
-	if err != nil {
-		if strings.EqualFold(stablePgMessage(err), fieldPolicyMissingCode) {
-			return setIDFieldDecision{}, false, nil
-		}
-		return setIDFieldDecision{}, false, err
-	}
-	return decision, true, nil
-}
-
 func writeOrgUnitSetIDContextError(w http.ResponseWriter, r *http.Request, field string, err error) {
 	if resolveErr, ok := asSetIDContextResolveError(err); ok {
 		switch resolveErr.Code {
@@ -354,19 +335,6 @@ func handleOrgUnitFieldConfigsAPI(w http.ResponseWriter, r *http.Request, store 
 				Maintainable: true,
 				DefaultMode:  "NONE",
 			}
-			decision, found, resolveErr := resolveOrgUnitFieldConfigDecision(r.Context(), tenant.ID, core.FieldKey, asOf)
-			if resolveErr != nil {
-				writeInternalAPIError(w, r, resolveErr, "orgunit_field_configs_list_failed")
-				return
-			}
-			if found {
-				policy.Maintainable = decision.Maintainable
-				defaultRuleRef := strings.TrimSpace(decision.DefaultRuleRef)
-				if defaultRuleRef != "" {
-					policy.DefaultMode = "CEL"
-					policy.DefaultRuleExpr = &defaultRuleRef
-				}
-			}
 			key := strings.TrimSpace(core.LabelI18nKey)
 			items = append(items, orgUnitFieldConfigAPIItem{
 				FieldKey:         row.FieldKey,
@@ -407,22 +375,6 @@ func handleOrgUnitFieldConfigsAPI(w http.ResponseWriter, r *http.Request, store 
 				ScopeKey:     "system",
 				Maintainable: true,
 				DefaultMode:  "NONE",
-			}
-			decision, found, resolveErr := resolveOrgUnitFieldConfigDecision(r.Context(), tenant.ID, row.FieldKey, asOf)
-			if resolveErr != nil {
-				writeInternalAPIError(w, r, resolveErr, "orgunit_field_configs_list_failed")
-				return
-			}
-			if found {
-				policy.Maintainable = decision.Maintainable
-				defaultRuleRef := strings.TrimSpace(decision.DefaultRuleRef)
-				if defaultRuleRef == "" {
-					policy.DefaultMode = "NONE"
-					policy.DefaultRuleExpr = nil
-				} else {
-					policy.DefaultMode = "CEL"
-					policy.DefaultRuleExpr = &defaultRuleRef
-				}
 			}
 			items = append(items, orgUnitFieldConfigAPIItem{
 				FieldKey:         row.FieldKey,
@@ -816,11 +768,8 @@ func handleOrgUnitFieldOptionsAPI(w http.ResponseWriter, r *http.Request, store 
 	resolvedSetIDSource := orgUnitFieldOptionSetIDSourceDeflt
 	rawOrgCode := strings.TrimSpace(r.URL.Query().Get("org_code"))
 	if rawOrgCode != "" {
-		var setIDResolver setIDContextSetIDResolver
-		if typedResolver, ok := any(store).(orgUnitSetIDResolver); ok {
-			setIDResolver = typedResolver
-		}
-		contextResolver := newSetIDContextResolver(store, setIDResolver)
+		setIDStore, _ := store.(SetIDGovernanceStore)
+		contextResolver := newSetIDContextResolver(store, setIDStore)
 		resolvedCtx, resolveErr := contextResolver.ResolveOrgContext(r.Context(), tenant.ID, rawOrgCode, asOf, "org_code")
 		if resolveErr != nil {
 			writeOrgUnitSetIDContextError(w, r, "org_code", resolveErr)

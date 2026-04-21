@@ -1,6 +1,6 @@
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
+import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { GridColDef } from '@mui/x-data-grid'
 import { OrgUnitFieldConfigsPage } from './OrgUnitFieldConfigsPage'
@@ -73,11 +73,6 @@ vi.mock('./readViewState', async () => {
   }
 })
 
-function LocationProbe() {
-  const location = useLocation()
-  return <div data-testid='location-state'>{`${location.pathname}${location.search}`}</div>
-}
-
 function renderPage(initialEntry = '/org/units/field-configs') {
   const queryClient = new QueryClient({
     defaultOptions: {
@@ -95,11 +90,9 @@ function renderPage(initialEntry = '/org/units/field-configs') {
             element={
               <>
                 <OrgUnitFieldConfigsPage />
-                <LocationProbe />
               </>
             }
           />
-          <Route path='/org/setid/registry' element={<LocationProbe />} />
         </Routes>
       </MemoryRouter>
     </QueryClientProvider>
@@ -142,7 +135,6 @@ describe('OrgUnitFieldConfigsPage', () => {
           common_yes: 'Yes',
           common_no: 'No',
           common_detail: 'Detail',
-          nav_setid: 'SetID',
           org_field_configs_column_label: 'Label',
           org_field_configs_column_key: 'Key',
           org_field_configs_column_field_class: 'Field Class',
@@ -210,42 +202,4 @@ describe('OrgUnitFieldConfigsPage', () => {
     expect(screen.getByRole('button', { name: 'View History' })).toBeInTheDocument()
   }, 20000)
 
-  it('omits as_of when opening setid registry from current mode', async () => {
-    renderPage()
-
-    await waitFor(() => expect(screen.getByRole('button', { name: 'SetID' })).toBeInTheDocument())
-
-    fireEvent.click(screen.getByRole('button', { name: 'SetID' }))
-    await waitFor(() =>
-      expect(screen.getByTestId('location-state').textContent).toBe(
-        '/org/setid/registry?registry_view=editor&capability_key=org.orgunit_write.field_policy&field_key=x_cost_center'
-      )
-    )
-  }, 20000)
-
-  it('passes as_of to setid registry in history mode', async () => {
-    cleanup()
-
-    renderPage('/org/units/field-configs')
-    await waitFor(() => expect(screen.getByRole('button', { name: 'View History' })).toBeInTheDocument())
-
-    fireEvent.click(screen.getByRole('button', { name: 'View History' }))
-    const asOfInput = await screen.findByLabelText('As Of Date')
-    fireEvent.change(asOfInput, { target: { value: '2026-03-01' } })
-    fireEvent.click(screen.getByRole('button', { name: 'Apply Filters' }))
-
-    await waitFor(() =>
-      expect(screen.getByTestId('location-state').textContent).toContain('/org/units/field-configs?as_of=2026-03-01')
-    )
-    await waitFor(() =>
-      expect(orgUnitApiMocks.listOrgUnitFieldConfigs).toHaveBeenLastCalledWith({ asOf: '2026-03-01', status: 'all' })
-    )
-
-    fireEvent.click(screen.getByRole('button', { name: 'SetID' }))
-    await waitFor(() =>
-      expect(screen.getByTestId('location-state').textContent).toBe(
-        '/org/setid/registry?as_of=2026-03-01&registry_view=editor&capability_key=org.orgunit_write.field_policy&field_key=x_cost_center'
-      )
-    )
-  }, 20000)
 })

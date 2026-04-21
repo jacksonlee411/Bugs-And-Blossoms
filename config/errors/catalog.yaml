@@ -98,20 +98,6 @@ errors:
     user_message_key: errors.field_required_value_missing
     backend_policy: mapped
     frontend_policy: mapped
-  - code: FUNCTIONAL_AREA_MISSING
-    module: setid
-    http_status: 404
-    severity: error
-    user_message_key: errors.functional_area_missing
-    backend_policy: passthrough
-    frontend_policy: mapped
-  - code: FUNCTIONAL_AREA_NOT_ACTIVE
-    module: setid
-    http_status: 409
-    severity: error
-    user_message_key: errors.functional_area_not_active
-    backend_policy: passthrough
-    frontend_policy: mapped
   - code: ORG_ALREADY_EXISTS
     module: orgunit
     http_status: 409
@@ -224,13 +210,6 @@ errors:
     user_message_key: errors.owner_context_required
     backend_policy: passthrough
     frontend_policy: mapped
-  - code: OWNER_SETID_FORBIDDEN
-    module: jobcatalog
-    http_status: 403
-    severity: error
-    user_message_key: errors.owner_setid_forbidden
-    backend_policy: passthrough
-    frontend_policy: mapped
   - code: PACKAGE_CODE_INVALID
     module: setid
     http_status: 400
@@ -250,34 +229,6 @@ errors:
     http_status: 400
     severity: error
     user_message_key: errors.package_owner_invalid
-    backend_policy: passthrough
-    frontend_policy: mapped
-  - code: PERSON_CREATE_FAILED
-    module: person
-    http_status: 422
-    severity: error
-    user_message_key: errors.person_create_failed
-    backend_policy: passthrough
-    frontend_policy: mapped
-  - code: PERSON_INTERNAL
-    module: person
-    http_status: 500
-    severity: error
-    user_message_key: errors.person_internal
-    backend_policy: passthrough
-    frontend_policy: mapped
-  - code: PERSON_NOT_FOUND
-    module: person
-    http_status: 404
-    severity: error
-    user_message_key: errors.person_not_found
-    backend_policy: passthrough
-    frontend_policy: mapped
-  - code: PERSON_PERNR_INVALID
-    module: person
-    http_status: 400
-    severity: error
-    user_message_key: errors.person_pernr_invalid
     backend_policy: passthrough
     frontend_policy: mapped
   - code: audit_error
@@ -610,7 +561,7 @@ errors:
     backend_policy: passthrough
     frontend_policy: mapped
   - code: invalid_effective_date
-    module: jobcatalog
+    module: platform
     http_status: 400
     severity: error
     user_message_key: errors.invalid_effective_date
@@ -693,53 +644,11 @@ errors:
     user_message_key: errors.invalid_request
     backend_policy: mapped
     frontend_policy: mapped
-  - code: invalid_status
-    module: staffing
-    http_status: 400
-    severity: error
-    user_message_key: errors.invalid_status
-    backend_policy: passthrough
-    frontend_policy: mapped
-  - code: invalid_target_effective_date
-    module: staffing
-    http_status: 400
-    severity: error
-    user_message_key: errors.invalid_target_effective_date
-    backend_policy: passthrough
-    frontend_policy: mapped
-  - code: jobcatalog_store_missing
-    module: staffing
-    http_status: 500
-    severity: error
-    user_message_key: errors.jobcatalog_store_missing
-    backend_policy: passthrough
-    frontend_policy: mapped
   - code: method_not_allowed
     module: platform
     http_status: 405
     severity: error
     user_message_key: errors.method_not_allowed
-    backend_policy: passthrough
-    frontend_policy: mapped
-  - code: missing_assignment_uuid
-    module: staffing
-    http_status: 422
-    severity: error
-    user_message_key: errors.missing_assignment_uuid
-    backend_policy: passthrough
-    frontend_policy: mapped
-  - code: missing_person_uuid
-    module: staffing
-    http_status: 422
-    severity: error
-    user_message_key: errors.missing_person_uuid
-    backend_policy: passthrough
-    frontend_policy: mapped
-  - code: missing_target_effective_date
-    module: staffing
-    http_status: 422
-    severity: error
-    user_message_key: errors.missing_target_effective_date
     backend_policy: passthrough
     frontend_policy: mapped
   - code: not_found
@@ -770,29 +679,15 @@ errors:
     user_message_key: errors.org_unit_not_found
     backend_policy: passthrough
     frontend_policy: mapped
-  - code: orgunit_id_invalid
-    module: staffing
-    http_status: 400
-    severity: error
-    user_message_key: errors.orgunit_id_invalid
-    backend_policy: passthrough
-    frontend_policy: mapped
-  - code: orgunit_ref_invalid
-    module: staffing
-    http_status: 500
-    severity: error
-    user_message_key: errors.orgunit_ref_invalid
-    backend_policy: passthrough
-    frontend_policy: mapped
   - code: orgunit_resolve_org_code_failed
-    module: staffing
+    module: orgunit
     http_status: 422
     severity: error
     user_message_key: errors.orgunit_resolve_org_code_failed
     backend_policy: passthrough
     frontend_policy: mapped
   - code: orgunit_resolver_missing
-    module: staffing
+    module: setid
     http_status: 500
     severity: error
     user_message_key: errors.orgunit_resolver_missing
@@ -841,45 +736,17 @@ errors:
     backend_policy: passthrough
     frontend_policy: mapped
   - code: setid_missing
-    module: staffing
+    module: setid
     http_status: 400
     severity: error
     user_message_key: errors.setid_missing
     backend_policy: passthrough
     frontend_policy: mapped
   - code: setid_resolver_missing
-    module: staffing
+    module: setid
     http_status: 500
     severity: error
     user_message_key: errors.setid_resolver_missing
-    backend_policy: passthrough
-    frontend_policy: mapped
-  - code: setid_strategy_registry_list_failed
-    module: setid
-    http_status: 422
-    severity: error
-    user_message_key: errors.setid_strategy_registry_list_failed
-    backend_policy: passthrough
-    frontend_policy: mapped
-  - code: setid_strategy_registry_disable_failed
-    module: setid
-    http_status: 500
-    severity: error
-    user_message_key: errors.setid_strategy_registry_disable_failed
-    backend_policy: passthrough
-    frontend_policy: mapped
-  - code: setid_strategy_registry_not_found
-    module: setid
-    http_status: 404
-    severity: error
-    user_message_key: errors.setid_strategy_registry_not_found
-    backend_policy: passthrough
-    frontend_policy: mapped
-  - code: setid_strategy_registry_upsert_failed
-    module: setid
-    http_status: 422
-    severity: error
-    user_message_key: errors.setid_strategy_registry_upsert_failed
     backend_policy: passthrough
     frontend_policy: mapped
   - code: tenant_missing

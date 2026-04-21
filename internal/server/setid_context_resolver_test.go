@@ -1,7 +1,6 @@
 package server
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"net/http"
@@ -362,52 +361,5 @@ func TestWriteOrgUnitSetIDContextError_Fallback(t *testing.T) {
 	}
 	if !strings.Contains(rec.Body.String(), `"code":"boom"`) {
 		t.Fatalf("unexpected body: %s", rec.Body.String())
-	}
-}
-
-func TestHandleSetIDExplainAPI_DependencyErrors(t *testing.T) {
-	makeReq := func() *http.Request {
-		req := httptest.NewRequest(
-			http.MethodGet,
-			"/org/api/setid-explain?capability_key=staffing.assignment_create.field_policy&field_key=field_x&business_unit_org_code=BU-001&as_of=2026-01-01",
-			nil,
-		)
-		return req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
-	}
-
-	t.Run("org resolver missing", func(t *testing.T) {
-		rec := httptest.NewRecorder()
-		handleSetIDExplainAPI(rec, makeReq(), scopeAPIStore{}, nil)
-		if rec.Code != http.StatusInternalServerError || !strings.Contains(rec.Body.String(), "orgunit_resolver_missing") {
-			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
-		}
-	})
-
-	t.Run("setid resolver missing", func(t *testing.T) {
-		rec := httptest.NewRecorder()
-		handleSetIDExplainAPI(
-			rec,
-			makeReq(),
-			nil,
-			setIDExplainOrgResolverStub{byCode: map[string]string{"BU-001": mustOrgNodeKeyForTest(t, 10000001)}},
-		)
-		if rec.Code != http.StatusInternalServerError || !strings.Contains(rec.Body.String(), "setid_resolver_missing") {
-			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
-		}
-	})
-}
-
-func TestHandleInternalRulesEvaluateAPI_OrgResolverMissing(t *testing.T) {
-	req := httptest.NewRequest(
-		http.MethodPost,
-		"/internal/rules/evaluate",
-		bytes.NewBufferString(`{"capability_key":"staffing.assignment_create.field_policy","field_key":"field_x","business_unit_org_code":"BU-001","as_of":"2026-01-01"}`),
-	)
-	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
-	req = req.WithContext(withPrincipal(req.Context(), Principal{RoleSlug: "tenant-admin"}))
-	rec := httptest.NewRecorder()
-	handleInternalRulesEvaluateAPI(rec, req, scopeAPIStore{}, nil)
-	if rec.Code != http.StatusInternalServerError || !strings.Contains(rec.Body.String(), "orgunit_resolver_missing") {
-		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
 	}
 }

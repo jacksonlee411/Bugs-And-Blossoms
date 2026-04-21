@@ -43,7 +43,6 @@ import { format as formatDate } from 'date-fns'
 import {
   getOrgUnitFieldOptions,
   getOrgUnitDetails,
-  getOrgUnitWriteCapabilities,
   listOrgUnitAudit,
   listOrgUnitVersions,
   rescindOrgUnit,
@@ -610,31 +609,6 @@ export function OrgUnitDetailsPage() {
     return input.length > 0 ? input : effectiveDate
   }, [actionForm.correctedEffectiveDate, actionForm.effectiveDate, activeWriteIntent, effectiveDate])
 
-  const writeCapabilitiesQuery = useQuery({
-    enabled:
-      orgCodeValue.length > 0 &&
-      canWrite &&
-      activeWriteIntent !== null &&
-      isISODate(actionWriteEffectiveDate) &&
-      (activeWriteIntent !== 'correct' || isISODate(actionForm.effectiveDate)),
-    queryKey: [
-      'org-units',
-      'write-capabilities',
-      activeWriteIntent,
-      orgCodeValue,
-      actionWriteEffectiveDate,
-      activeWriteIntent === 'correct' ? actionForm.effectiveDate : ''
-    ],
-    queryFn: () =>
-      getOrgUnitWriteCapabilities({
-        intent: activeWriteIntent ?? 'correct',
-        orgCode: orgCodeValue,
-        effectiveDate: actionWriteEffectiveDate,
-        targetEffectiveDate: activeWriteIntent === 'correct' ? actionForm.effectiveDate : undefined
-      }),
-    staleTime: 30_000
-  })
-
   const auditQuery = useQuery({
     enabled: orgCodeValue.length > 0,
     queryKey: ['org-units', 'audit', orgCodeValue, auditLimit],
@@ -700,34 +674,21 @@ export function OrgUnitDetailsPage() {
   }, [selectedAuditEvent])
 
   const actionExtFields = useMemo(() => detailQuery.data?.ext_fields ?? [], [detailQuery.data?.ext_fields])
-  const writeCapability = writeCapabilitiesQuery.data
-  const writeAllowedFieldSet = useMemo(() => new Set(writeCapability?.allowed_fields ?? []), [writeCapability?.allowed_fields])
-  const writeDenyReasons = useMemo(() => writeCapability?.deny_reasons ?? [], [writeCapability?.deny_reasons])
   const isWriteAction = activeWriteIntent !== null
-  const isWriteActionDisabled = useMemo(() => {
-    if (!isWriteAction) {
-      return false
-    }
-    if (writeCapabilitiesQuery.isLoading || writeCapabilitiesQuery.isError) {
-      return true
-    }
-    if (!writeCapability?.enabled) {
-      return true
-    }
-    return false
-  }, [isWriteAction, writeCapabilitiesQuery.isError, writeCapabilitiesQuery.isLoading, writeCapability?.enabled])
+  const writeAllowedFieldSet = useMemo(
+    () => new Set(['name', 'parent_org_code', 'status', 'is_business_unit', 'manager_pernr', ...actionExtFields.map((field) => field.field_key)]),
+    [actionExtFields]
+  )
+  const isWriteActionDisabled = false
 
   const isWriteFieldEditable = useCallback(
     (fieldKey: string): boolean => {
       if (!isWriteAction) {
         return true
       }
-      if (isWriteActionDisabled) {
-        return false
-      }
       return writeAllowedFieldSet.has(fieldKey)
     },
-    [isWriteAction, isWriteActionDisabled, writeAllowedFieldSet]
+    [isWriteAction, writeAllowedFieldSet]
   )
 
   const actionPlainExtErrors = useMemo(() => {
@@ -770,9 +731,6 @@ export function OrgUnitDetailsPage() {
 
   const writePatchPreview = useMemo(() => {
     if (!isWriteAction) {
-      return null
-    }
-    if (writeCapabilitiesQuery.isError || !writeCapability) {
       return null
     }
 
@@ -819,7 +777,7 @@ export function OrgUnitDetailsPage() {
     }
 
     return buildOrgUnitWritePatch({
-      capability: writeCapability,
+      allowedFields: writeAllowedFieldSet,
       original,
       next
     })
@@ -840,8 +798,6 @@ export function OrgUnitDetailsPage() {
     actionExtFields,
     isWriteAction,
     writeAllowedFieldSet,
-    writeCapability,
-    writeCapabilitiesQuery.isError
   ])
 
   const isWritePatchEmpty = useMemo(() => {
@@ -1101,14 +1057,6 @@ export function OrgUnitDetailsPage() {
       if (!activeWriteIntent || activeWriteIntent !== type) {
         throw new Error('write intent mismatch')
       }
-      if (!writeCapability?.enabled || writeCapabilitiesQuery.isError) {
-        throw new Error('write capabilities unavailable')
-      }
-      const policyVersion = writeCapability.policy_version.trim()
-      const effectivePolicyVersion = writeCapability.effective_policy_version.trim()
-      if (policyVersion.length === 0 || effectivePolicyVersion.length === 0) {
-        throw new Error('write policy version missing')
-      }
       if (hasActionPlainExtErrors) {
         const firstErrorKey = Object.values(actionPlainExtErrors)[0]
         throw new Error(firstErrorKey ? t(firstErrorKey as MessageKey) : 'plain ext fields invalid')
@@ -1129,8 +1077,6 @@ export function OrgUnitDetailsPage() {
         org_code: targetCode,
         effective_date: effectiveDateValue,
         target_effective_date: activeWriteIntent === 'correct' ? actionForm.effectiveDate.trim() : undefined,
-        policy_version: policyVersion,
-        effective_policy_version: effectivePolicyVersion,
         request_id: requestID,
         patch: patch as Parameters<typeof writeOrgUnit>[0]['patch']
       })
@@ -1674,14 +1620,7 @@ export function OrgUnitDetailsPage() {
 
               {isWriteAction ? (
                 <>
-                  {writeCapabilitiesQuery.isLoading ? <Alert severity='info'>{t('text_loading')}</Alert> : null}
-                  {writeCapabilitiesQuery.isError ? (
-                    <Alert severity='error'>{getErrorMessage(writeCapabilitiesQuery.error)}</Alert>
-                  ) : null}
-                  {!writeCapability?.enabled && writeDenyReasons.length > 0 ? (
-                    <Alert severity='warning'>{writeDenyReasons.join(', ')}</Alert>
-                  ) : null}
-                  {writeCapability?.enabled && isWritePatchEmpty ? <Alert severity='info'>{t('org_write_no_changes')}</Alert> : null}
+                  {isWritePatchEmpty ? <Alert severity='info'>{t('org_write_no_changes')}</Alert> : null}
                 </>
               ) : null}
 

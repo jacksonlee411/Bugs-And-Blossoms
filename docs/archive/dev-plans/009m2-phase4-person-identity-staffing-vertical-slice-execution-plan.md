@@ -25,10 +25,10 @@
 
 - 依赖（SSOT 引用）：
   - 路线图与出口口径：`docs/dev-plans/009-implementation-roadmap.md`
-  - Person Identity：`docs/dev-plans/027-person-minimal-identity-for-staffing.md`
-  - Position：`docs/dev-plans/030-position-transactional-event-sourcing-synchronous-projection.md`
-  - Assignments：`docs/dev-plans/031-greenfield-assignment-job-data.md`
-  - OrgUnit / JobCatalog（业务组合前置）：`docs/archive/dev-plans/026-org-transactional-event-sourcing-synchronous-projection.md`、`docs/dev-plans/029-job-catalog-transactional-event-sourcing-synchronous-projection.md`
+  - Person Identity：`docs/archive/dev-plans/027-person-minimal-identity-for-staffing.md`
+  - Position：`docs/archive/dev-plans/030-position-transactional-event-sourcing-synchronous-projection.md`
+  - Assignments：`docs/archive/dev-plans/031-greenfield-assignment-job-data.md`
+  - OrgUnit / JobCatalog（业务组合前置）：`docs/archive/dev-plans/026-org-transactional-event-sourcing-synchronous-projection.md`、`docs/archive/dev-plans/029-job-catalog-transactional-event-sourcing-synchronous-projection.md`
   - Tenancy/AuthN：`docs/dev-plans/019-tenant-and-authn.md`
   - RLS（No Tx, No RLS）：`docs/dev-plans/021-pg-rls-for-org-position-job-catalog.md`
   - Authz（统一 403 + policy SSOT）：`docs/dev-plans/022-authz-casbin-toolchain.md`

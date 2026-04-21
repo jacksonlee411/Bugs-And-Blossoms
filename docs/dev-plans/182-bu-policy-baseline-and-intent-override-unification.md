@@ -135,7 +135,7 @@
 - [ ] 解析器验证“先分桶后比 `priority`”语义：intent 记录存在时不得被 baseline 仅凭更高 `priority` 覆盖。
 - [ ] 兼容窗口内旧“意图单版本”仅在无 baseline 生效时可通过；`2026-05-01`（UTC）后仅接受 `epv1:*` 组合版本。
 - [ ] `make check policy-baseline-dup` 能阻断“intent 与 baseline 无差异”的重复配置。
-- [ ] `make check capability-route-map`、相关 server tests、关键 e2e 通过。
+- [ ] 历史阶段 capability-route-map 门禁已通过；现行要求为相关 server tests、关键 e2e 通过。
 
 ## 10. 风险与缓解
 - **风险 1：组合版本口径引入理解成本**  
@@ -148,7 +148,7 @@
   缓解：保持错误码不变，前端先兼容新字段，后端再切换严格校验。
 
 ## 10A. 2026-02-26 验收记录（后端 + 门禁）
-- [x] `make check policy-baseline-dup` 通过；`make check capability-route-map` 通过。
+- [x] `make check policy-baseline-dup` 通过；历史阶段 `make check capability-route-map` 通过。
 - [x] `write-capabilities` 返回 `baseline_capability_key=org.orgunit_write.field_policy`，`policy_version_alg=epv1`，`policy_version` 为 `epv1:*`。
 - [x] `setid-strategy-registry` 冗余 override 写入被 `422 FIELD_POLICY_REDUNDANT_OVERRIDE` 阻断；非冗余 override 可成功写入。
 - [x] E2E 回归通过：`make e2e`（8/8 passed，执行时间约 13.5s）。
@@ -157,12 +157,12 @@
 
 ## 11. 关联文档
 - `docs/dev-plans/180-granularity-hierarchy-governance-and-unification.md`
-- `docs/dev-plans/181-orgunit-details-form-capability-mapping-implementation.md`
-- `docs/dev-plans/165-field-configs-and-strategy-capability-key-alignment-and-page-positioning.md`
-- `docs/dev-plans/156-capability-key-m3-m9-route-capability-mapping-and-gates.md`
+- `docs/archive/dev-plans/181-orgunit-details-form-capability-mapping-implementation.md`
+- `docs/archive/dev-plans/165-field-configs-and-strategy-capability-key-alignment-and-page-positioning.md`
+- `docs/archive/dev-plans/156-capability-key-m3-m9-route-capability-mapping-and-gates.md`
 
 ## 12. 设计反思拆分说明
 “为什么配置 capability_key 时选不到对象/意图”已拆分为独立详细方案：
-- `docs/dev-plans/183-capability-key-object-intent-discoverability-and-modeling.md`
+- `docs/archive/dev-plans/183-capability-key-object-intent-discoverability-and-modeling.md`
 
 本计划（182）继续聚焦“基线 + 场景覆盖”的策略生效语义，不展开配置可发现性的细化设计。

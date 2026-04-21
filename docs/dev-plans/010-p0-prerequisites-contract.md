@@ -25,9 +25,9 @@
 - [ ] **仓库初始化（bootstrap）可复现**：implementation repo 的基础结构、入口、文档与规则落点清晰，reviewer 能在 5 分钟内找到“规则/门禁/路线图/关键 SSOT”。
 - [ ] **SSOT 不漂移**：命令入口统一 `Makefile`；CI 门禁统一 `.github/workflows/*`；规则入口统一 `AGENTS.md`（对齐 `docs/dev-plans/012-ci-quality-gates.md`）。
 - [ ] **门禁先行**：CI 至少具备四大 required checks 的“外壳”，且不会出现 `skipped` 结论。
-- [ ] **用户可见骨架先行**：UI 壳（含 4 模块入口 + 占位页）尽早落地，后续能力只能挂到这些入口上（对齐用户可见性原则）。
+- [ ] **用户可见骨架先行**：UI 壳尽早落地，并为当前活体模块提供明确入口；历史上的“四模块入口”要求已被 `DEV-PLAN-450` 收口为 `iam/orgunit` 当前态，不再作为现行实施前提（对齐用户可见性原则）。
 - [ ] **平台最小闭环**：至少具备“租户解析（fail-closed）→ 登录 → session → 进入壳”的最小链路（`docs/dev-plans/019-tenant-and-authn.md`）。
-- [ ] **DB/迁移闭环可复制**：至少平台模块（`iam`）具备 Atlas+Goose 模块级闭环与 smoke（`docs/dev-plans/024-atlas-goose-closed-loop-guide.md`），并有 RLS fail-closed 证据（`docs/dev-plans/021-pg-rls-for-org-position-job-catalog.md`）。
+- [ ] **DB/迁移闭环可复制**：至少平台模块（`iam`）具备 Atlas+Goose 模块级闭环与 smoke（`docs/dev-plans/024-atlas-goose-closed-loop-guide.md`），并有 RLS fail-closed 证据（历史合同见 `docs/archive/dev-plans/021-pg-rls-for-org-position-job-catalog.md`）。
 - [ ] **证据可审计**：P0-Ready 的每项关键结论（命令/时间戳/环境）有 readiness 记录入口（实现仓库落地）。
 
 ### 2.2 非目标（Out of Scope）
@@ -61,7 +61,7 @@
   - UI 壳（MUI-only）：`DEV-PLAN-103（MUI-only 前端收敛）`
   - UI 壳（历史记录）：`docs/archive/dev-plans/018-astro-aha-ui-shell-for-hrms.md`
   - Tenancy/AuthN：`docs/dev-plans/019-tenant-and-authn.md`
-  - RLS：`docs/dev-plans/021-pg-rls-for-org-position-job-catalog.md`
+  - RLS：`docs/archive/dev-plans/021-pg-rls-for-org-position-job-catalog.md`
   - Atlas+Goose：`docs/dev-plans/024-atlas-goose-closed-loop-guide.md`
   - sqlc：`docs/dev-plans/025-sqlc-guidelines.md`
   - Authz：`docs/dev-plans/022-authz-casbin-toolchain.md`
@@ -122,10 +122,7 @@ flowchart TD
 │   └── dev-records/          # readiness 证据记录
 ├── modules/
 │   ├── iam/                  # 平台模块（Tenancy/AuthN/session）
-│   ├── orgunit/
-│   ├── jobcatalog/
-│   ├── staffing/
-│   └── person/
+│   └── orgunit/              # 当前保留业务模块；其余三模块已由 DEV-PLAN-450 删除
 ├── apps/web/             # MUI React SPA（DEV-PLAN-103）
 └── scripts/                  # db/routing/authz/sqlc 等脚本入口（由 Makefile 调用）
 ```
@@ -168,7 +165,7 @@ flowchart TD
 
 ### 4.4 UI 最小接口（用户可见性）
 
-- UI 壳必须可运行并包含 4 模块入口（对齐 `DEV-PLAN-103` 的 MUI-only IA）。
+- UI 壳必须可运行并包含当前活体能力入口；历史上的“四模块入口”要求仅用于解释 P0 骨架来源，不再作为现行验收口径。
 - 未交付模块必须以占位页承载，并明确“未来将交付的能力范围/验收方式”，作为后续唯一挂载点。
 
 ## 5. 接口契约 (API Contracts)
@@ -219,10 +216,10 @@ job(required_check):
 2. [ ] PR-1：对齐 `docs/dev-plans/011-tech-stack-and-toolchain-versions.md`（版本 pin、依赖锁定、基础 Makefile 入口）。
 3. [ ] PR-2：对齐 `docs/dev-plans/012-ci-quality-gates.md`（CI required checks 骨架；job 名称冻结；job 不跳过）。
 4. [ ] PR-3：对齐 `docs/dev-plans/017-routing-strategy.md`（allowlist SSOT + 最小 routing gates + 本地入口）。
-5. [ ] PR-4：对齐 `docs/dev-plans/015-ddd-layering-framework.md`/`docs/dev-plans/016-greenfield-hr-modules-skeleton.md`（`modules/*` 骨架 + 依赖门禁配置）。
+5. [ ] PR-4：对齐 `docs/dev-plans/015-ddd-layering-framework.md`/`docs/archive/dev-plans/016-greenfield-hr-modules-skeleton.md`（`modules/*` 骨架 + 依赖门禁配置）。
 6. [ ] PR-5：对齐 `DEV-PLAN-103（MUI-only 前端收敛）`/`docs/dev-plans/020-i18n-en-zh-only.md`（MUI 壳 + i18n + 占位页；为 P0 的 `orgunit` 预留入口）。
 7. [ ] PR-6：对齐 `docs/dev-plans/019-tenant-and-authn.md`（tenant 解析 + 登录最小闭环，进入壳即可）。
-8. [ ] PR-7：对齐 `docs/dev-plans/024-atlas-goose-closed-loop-guide.md`/`docs/dev-plans/021-pg-rls-for-org-position-job-catalog.md`（`iam` Atlas+Goose 闭环 + RLS fail-closed 最小测试）。
+8. [ ] PR-7：对齐 `docs/dev-plans/024-atlas-goose-closed-loop-guide.md`/`docs/archive/dev-plans/021-pg-rls-for-org-position-job-catalog.md`（`iam` Atlas+Goose 闭环 + RLS fail-closed 最小测试）。
 9. [ ] PR-8：对齐 `docs/dev-plans/025-sqlc-guidelines.md`/`docs/dev-plans/022-authz-casbin-toolchain.md`（sqlc 与 Authz 工具链收口；可与 P0 并行，但必须在首批 schema/策略合入前完成）。
 
 ## 9. 测试与验收标准 (Acceptance Criteria)
@@ -231,7 +228,7 @@ job(required_check):
 
 - [ ] implementation repo 内 SSOT 落点清晰：规则入口、门禁入口、计划文档入口均可发现且不重复（完成 ADR-010-01）。
 - [ ] CI required checks 名称稳定且不出现 `skipped`（未命中触发器时以 no-op 返回成功结论；对齐 012）。
-- [ ] UI 壳可打开且 4 模块入口可见；未交付模块以占位页承载（对齐用户可见性原则）。
+- [ ] UI 壳可打开且当前活体入口可见；未交付能力必须通过明确入口规划或占位承载（对齐用户可见性原则）。
 - [ ] 最小登录链路可演示：确定租户 → 登录 → 进入壳（对齐 019 的 fail-closed 约束）。
 - [ ] routing gates 能阻断 allowlist 缺失/entrypoint 缺失/返回契约漂移（对齐 017）。
 - [ ] 至少平台模块具备迁移闭环与 RLS fail-closed 证据（对齐 024/021）。
@@ -243,7 +240,7 @@ job(required_check):
 ### 9.3 5 分钟验收叙事（用于评审/演示）
 
 - [ ] 运行一次 `make preflight`，四大 required checks 在本地均有可复现入口（对齐 012）。
-- [ ] 打开 UI 壳：能看到 4 模块入口与占位页（对齐用户可见性原则）。
+- [ ] 打开 UI 壳：能看到当前活体入口与必要占位页（对齐用户可见性原则）。
 - [ ] 走一遍最小链路：确定租户 → `/app/login`（或 `POST /iam/api/sessions`）→ 登录成功 → 进入壳（对齐 019，tenant 解析 fail-closed）。
 
 ## 10. 运维与监控 (Ops & Monitoring)
@@ -277,12 +274,12 @@ job(required_check):
 - `docs/dev-plans/009-implementation-roadmap.md`
 - `docs/dev-plans/011-tech-stack-and-toolchain-versions.md`
 - `docs/dev-plans/015-ddd-layering-framework.md`
-- `docs/dev-plans/016-greenfield-hr-modules-skeleton.md`
+- `docs/archive/dev-plans/016-greenfield-hr-modules-skeleton.md`
 - `docs/dev-plans/017-routing-strategy.md`
 - `DEV-PLAN-103（MUI-only 前端收敛）`
 - `docs/archive/dev-plans/018-astro-aha-ui-shell-for-hrms.md`
 - `docs/dev-plans/019-tenant-and-authn.md`
-- `docs/dev-plans/021-pg-rls-for-org-position-job-catalog.md`
+- `docs/archive/dev-plans/021-pg-rls-for-org-position-job-catalog.md`
 - `docs/dev-plans/024-atlas-goose-closed-loop-guide.md`
 - `docs/dev-plans/025-sqlc-guidelines.md`
 - `docs/dev-plans/022-authz-casbin-toolchain.md`

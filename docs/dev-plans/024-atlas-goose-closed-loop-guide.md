@@ -33,7 +33,7 @@
 - Goose runner：`scripts/db/run_goose.sh`（自动安装到 `bin/goose`）
 - DB 闭环脚本：`scripts/db/plan.sh`、`scripts/db/lint.sh`、`scripts/db/migrate.sh`
 - 现有样板（代码即样板）：`migrations/iam` + `modules/iam/infrastructure/persistence/schema`；`migrations/orgunit` + `modules/orgunit/infrastructure/persistence/schema`
-- 模块边界：`docs/dev-plans/016-greenfield-hr-modules-skeleton.md`
+- 模块边界：`docs/archive/dev-plans/016-greenfield-hr-modules-skeleton.md`
 
 ## 3. 统一闭环（架构与关键决策）
 
@@ -68,7 +68,7 @@ flowchart TD
 - 更易审计：每套目录可独立回滚与核对（对齐 dev-record 的记录口径）。
 
 ### 3.3 命名约定（冻结）
-> `<module>` 采用 `DEV-PLAN-016` 的模块名（`orgunit/jobcatalog/staffing/person`）。平台能力（例如 `iam`）的边界与数据所有权见 `DEV-PLAN-019`；如需为平台模块启用 Atlas+Goose，同样按本节规则扩展。
+> 当前活体模块以 `iam`、`orgunit` 为准；`jobcatalog/staffing/person` 已由 `DEV-PLAN-450` 从现行仓库删除。本文涉及后三者的表述仅作为历史接入样例保留，不再构成当前实施前提。平台能力（例如 `iam`）的边界与数据所有权见 `DEV-PLAN-019`；如需为平台模块启用 Atlas+Goose，同样按本节规则扩展。
 
 | 项 | 约定 |
 | --- | --- |
@@ -111,7 +111,7 @@ flowchart TD
 约束：
 - 同一模块内 `version_id` 必须严格递增（按时间戳天然满足）。
 - 禁止在不同模块共享同一个 goose 版本表；否则仅按 `version_id` 记账会导致串号（已在 3.2 冻结）。
-- 现仓库既有目录（例如 `migrations/person` 的 `00001_...`）不强制回迁；本规则仅约束新建模块，避免在旧资产上制造额外 churn。
+- 现仓库既有目录若属于已删除模块的历史资产（例如 `migrations/person`），不再作为现行约束对象；本规则仅约束当前活体模块与后续新建模块，避免在历史资产上制造额外 churn。
 
 ### 3.7 与现有样板的对照（避免“再发明一套”）
 - `iam`：`modules/iam/infrastructure/persistence/schema` + `migrations/iam`；本地 `make iam plan && make iam lint && make iam migrate up`；CI 见 `.github/workflows/quality-gates.yml` 的 “DB Gates”。
@@ -141,10 +141,10 @@ migrations/orgunit/
 > 目标：把某个模块接入到“可 plan/lint/apply + CI 门禁”的状态；模板以仓库现有 `iam`/`orgunit` 为参照。
 
 ### 5.1 建议接入顺序（路线图）
-为减少跨模块依赖与“先有鸡还是先有蛋”，建议接入顺序为：
+为减少跨模块依赖与“先有鸡还是先有蛋”，当前仓库建议接入顺序为：
 1. `iam`：先落 `tenants/tenant_domains/sessions` 等平台表（见 `DEV-PLAN-019`），并把其 Atlas+Goose 闭环跑通。
-2. `orgunit` / `jobcatalog` / `staffing`：按业务优先级逐个接入；每个模块独立 migrations/env/版本表。
-3. `person`（identity）：按 `DEV-PLAN-027` 的契约落地；是否复用现有 `migrations/person` 取决于“是否新建 person 模块与新表”，需在实现计划中明确。
+2. `orgunit`：作为当前唯一保留的业务模块，独立维护 migrations/env/版本表。
+3. 未来若新增其他模块：必须先补对应 dev-plan，并按本计划的模块级闭环接入；不得以 `jobcatalog/staffing/person` 的历史目录作为现行样板复活。
 
 ### 5.2 接入落地步骤
 1. [ ] 准备 Schema SSOT：在 `modules/<module>/infrastructure/persistence/schema/` 创建/维护 schema SQL（SSOT）。

@@ -146,7 +146,7 @@
 
 ## 9. 关联文档
 - `docs/archive/dev-plans/220-chat-assistant-upgrade-implementation-plan.md`
-- `docs/dev-plans/210-blueprint-conversation-transaction-and-actor-delegated-authz.md`
-- `docs/dev-plans/211-blueprint-temporal-m10d0-minimal-orchestration-foundation.md`
-- `docs/dev-plans/212-blueprint-eval-gates-and-triggered-temporal-productionization.md`
+- `docs/archive/dev-plans/210-blueprint-conversation-transaction-and-actor-delegated-authz.md`
+- `docs/archive/dev-plans/211-blueprint-temporal-m10d0-minimal-orchestration-foundation.md`
+- `docs/archive/dev-plans/212-blueprint-eval-gates-and-triggered-temporal-productionization.md`
 - `AGENTS.md`

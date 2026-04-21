@@ -8,8 +8,8 @@
 - **需求来源**:
   - `docs/archive/dev-plans/220-chat-assistant-upgrade-implementation-plan.md`
   - `docs/archive/dev-plans/220a-chat-assistant-gap-assessment-and-closure-plan.md`
-  - `docs/dev-plans/211-blueprint-temporal-m10d0-minimal-orchestration-foundation.md`
-  - `docs/dev-plans/212-blueprint-eval-gates-and-triggered-temporal-productionization.md`
+  - `docs/archive/dev-plans/211-blueprint-temporal-m10d0-minimal-orchestration-foundation.md`
+  - `docs/archive/dev-plans/212-blueprint-eval-gates-and-triggered-temporal-productionization.md`
   - `docs/archive/dev-plans/224-assistant-multi-model-and-llm-intent-governance-plan.md`
 - **前置事实（本修订冻结）**:
   1. `DEV-PLAN-224` 已按目标实施，已具备 `intent_schema_version/compiler_contract_version/capability_map_version/skill_manifest_digest/context_hash/intent_hash/plan_hash` 产出能力。
@@ -520,7 +520,7 @@ on workflow canceled callback:
 - `docs/archive/dev-plans/220-chat-assistant-upgrade-implementation-plan.md`
 - `docs/archive/dev-plans/220a-chat-assistant-gap-assessment-and-closure-plan.md`
 - `docs/archive/dev-plans/223-assistant-conversation-persistence-and-audit-closure-plan.md`
-- `docs/dev-plans/211-blueprint-temporal-m10d0-minimal-orchestration-foundation.md`
-- `docs/dev-plans/212-blueprint-eval-gates-and-triggered-temporal-productionization.md`
+- `docs/archive/dev-plans/211-blueprint-temporal-m10d0-minimal-orchestration-foundation.md`
+- `docs/archive/dev-plans/212-blueprint-eval-gates-and-triggered-temporal-productionization.md`
 - `docs/archive/dev-plans/224-assistant-multi-model-and-llm-intent-governance-plan.md`
 - `AGENTS.md`

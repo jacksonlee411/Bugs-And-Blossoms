@@ -143,4 +143,4 @@ OrgUnit：`ROOT260205A`，已有记录：
 - `AGENTS.md`
 - `docs/dev-plans/073-orgunit-crud-implementation-status.md`
 - `docs/dev-plans/032-effective-date-day-granularity.md`
-- `docs/dev-plans/031-greenfield-assignment-job-data.md`
+- `docs/archive/dev-plans/031-greenfield-assignment-job-data.md`

@@ -180,21 +180,24 @@ test("tp060-01: tenant/login/authz/rls baseline", async ({ browser }) => {
   });
   expect(tenantBLoginResp.status()).toBe(204);
 
-  const personLookupB = await tenantBAdminContext.request.get("/person/api/persons:by-pernr?pernr=201");
-  if (personLookupB.status() === 404) {
-    const createPersonResp = await tenantBAdminContext.request.post("/person/api/persons", {
-      data: { pernr: "201", display_name: `TP060-01 CrossTenant ${runID}` }
-    });
-    expect(createPersonResp.status(), await createPersonResp.text()).toBe(201);
-    const personLookupBAfter = await tenantBAdminContext.request.get("/person/api/persons:by-pernr?pernr=201");
-    expect(personLookupBAfter.status()).toBe(200);
-  } else {
-    expect(personLookupB.status()).toBe(200);
-  }
+  const tenantBOrgCode = `TP06001B${runID.slice(-5)}`.toUpperCase();
+  const createTenantBOrgResp = await tenantBAdminContext.request.post(`/org/api/org-units`, {
+    headers: { Accept: "application/json" },
+    data: {
+      org_code: tenantBOrgCode,
+      name: `TP060-01 Tenant B Org ${runID}`,
+      effective_date: asOf,
+      is_business_unit: true
+    }
+  });
+  expect(createTenantBOrgResp.status(), await createTenantBOrgResp.text()).toBe(201);
   await tenantBAdminContext.close();
 
-  const crossTenantDataResp = await tenantAContext.request.get("/person/api/persons:by-pernr?pernr=201");
-  await expectExplicitError(crossTenantDataResp, { status: 404, code: "PERSON_NOT_FOUND" });
+  const crossTenantDataResp = await tenantAContext.request.get(
+    `/org/api/org-units/details?org_code=${encodeURIComponent(tenantBOrgCode)}&as_of=${asOf}`,
+    { headers: { Accept: "application/json" } }
+  );
+  await expectExplicitError(crossTenantDataResp, { status: 404, code: "org_code_not_found" });
 
   const tenantAViewerContext = await browser.newContext({
     baseURL: appBaseURL,

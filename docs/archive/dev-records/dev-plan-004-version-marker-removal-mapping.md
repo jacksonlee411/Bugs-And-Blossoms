@@ -46,9 +46,9 @@ rg --files --hidden --glob '!.git/**' | rg -S "(?i)(${PATTERN_LOWER}|${PATTERN_U
 | docs-file | `docs/dev-plans/025-sqlc-guidelines-for-<ver>.md` | `docs/dev-plans/025-sqlc-guidelines.md` | low | 同上 |
 | docs-file | `docs/dev-plans/026-org-<ver>-transactional-event-sourcing-synchronous-projection.md` | `docs/archive/dev-plans/026-org-transactional-event-sourcing-synchronous-projection.md` | low | 同上 |
 | docs-file | `docs/dev-plans/028-<ver>-setid-management.md` | `docs/archive/dev-plans/028-setid-management.md` | low | 同上 |
-| docs-file | `docs/dev-plans/029-job-catalog-<ver>-transactional-event-sourcing-synchronous-projection.md` | `docs/dev-plans/029-job-catalog-transactional-event-sourcing-synchronous-projection.md` | low | 同上 |
-| docs-file | `docs/dev-plans/030-position-<ver>-transactional-event-sourcing-synchronous-projection.md` | `docs/dev-plans/030-position-transactional-event-sourcing-synchronous-projection.md` | low | 同上 |
-| docs-file | `docs/dev-plans/031-greenfield-assignment-job-data-<ver>.md` | `docs/dev-plans/031-greenfield-assignment-job-data.md` | low | 同上 |
+| docs-file | `docs/dev-plans/029-job-catalog-<ver>-transactional-event-sourcing-synchronous-projection.md` | `docs/archive/dev-plans/029-job-catalog-transactional-event-sourcing-synchronous-projection.md` | low | 同上 |
+| docs-file | `docs/dev-plans/030-position-<ver>-transactional-event-sourcing-synchronous-projection.md` | `docs/archive/dev-plans/030-position-transactional-event-sourcing-synchronous-projection.md` | low | 同上 |
+| docs-file | `docs/dev-plans/031-greenfield-assignment-job-data-<ver>.md` | `docs/archive/dev-plans/031-greenfield-assignment-job-data.md` | low | 同上 |
 
 ### 2.2 `migrations/orgunit/**`（迁移文件名）
 

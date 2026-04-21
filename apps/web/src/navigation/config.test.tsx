@@ -1,15 +1,18 @@
 import { describe, expect, it } from 'vitest'
 import { navItems } from './config'
 
-describe('cubebox navigation config', () => {
-  it('uses cubebox-specific labels and aligns models permission with route access', () => {
-    const cubebox = navItems.find((item) => item.key === 'cubebox')
-    const cubeboxModels = navItems.find((item) => item.key === 'cubebox-models')
-    const cubeboxFiles = navItems.find((item) => item.key === 'cubebox-files')
-
-    expect(cubebox?.labelKey).toBe('nav_cubebox')
-    expect(cubeboxModels?.labelKey).toBe('nav_cubebox_models')
-    expect(cubeboxFiles?.labelKey).toBe('nav_cubebox_files')
-    expect(cubeboxModels?.permissionKey).toBe('orgunit.read')
+describe('navigation config', () => {
+  it('exposes only current retained primary routes', () => {
+    expect(navItems.map((item) => item.key)).toEqual([
+      'foundation-demo',
+      'org-units',
+      'org-field-configs',
+      'dict-configs',
+      'approval-inbox'
+    ])
+    expect(navItems.find((item) => item.key === 'org-units')?.permissionKey).toBe('orgunit.read')
+    expect(navItems.find((item) => item.key === 'org-field-configs')?.permissionKey).toBe('orgunit.admin')
+    expect(navItems.find((item) => item.key === 'dict-configs')?.permissionKey).toBe('dict.admin')
+    expect(navItems.find((item) => item.key === 'approval-inbox')?.permissionKey).toBe('approval.read')
   })
 })

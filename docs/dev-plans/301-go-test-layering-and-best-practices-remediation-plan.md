@@ -385,9 +385,9 @@ parallel / Setenv 仓库内约束冻结（2026-04-08 CST）：
 目标模块优先级：
 
 1. [X] `modules/orgunit/services` —— 已完成首个“从 server 下沉到 services”的规则样板（2026-04-08 CST）
-2. [ ] `modules/staffing/services`
-3. [ ] `modules/jobcatalog`
-4. [ ] `modules/person`
+2. [X] `modules/staffing/services` —— 历史样板已完成，但模块已由 `DEV-PLAN-450` 删除
+3. [X] `modules/jobcatalog` —— 历史样板已完成，但模块已由 `DEV-PLAN-450` 删除
+4. [X] `modules/person` —— 历史样板已完成，但模块已由 `DEV-PLAN-450` 删除
 
 交付要求：
 
@@ -496,6 +496,8 @@ parallel / Setenv 仓库内约束冻结（2026-04-08 CST）：
    - `go test ./internal/server -run 'TestNewHandlerWithOptions_RouteFamilies_AreWired$' -count=1`
 
 增量执行记录（2026-04-08 09:05 CST）：
+
+> 当前态说明（2026-04-21 CST）：本节提到的 `setid_strategy_registry_api*`、`staffing`、`jobcatalog`、`person` 相关测试样板均已转为历史记录；对应模块或 API 已由 `DEV-PLAN-450` 删除，不再构成当前测试分层整改待办。
 
 1. [X] 已将 `internal/server/setid_strategy_registry_api_coverage_test.go` 归并到 `internal/server/setid_strategy_registry_api_test.go`。
 2. [X] 归并后的职责边界：
@@ -696,7 +698,7 @@ parallel / Setenv 仓库内约束冻结（2026-04-08 CST）：
    - `go test ./internal/server -run 'TestAssistantTaskStore_' -count=1`
    - `make check doc`
 
-增量执行记录（2026-04-08 11:41 CST）：
+增量执行记录（2026-04-08 11:41 CST，历史样板）：
 
 1. [X] 已完成 `internal/server` 高频规则测试的下沉候选盘点，并明确目标承接层。
 2. [X] 首批高优先候选清单：
@@ -711,12 +713,12 @@ parallel / Setenv 仓库内约束冻结（2026-04-08 CST）：
 3. [X] 本批次明确暂留 `internal/server` 的测试族：
    - `assistant_clarification_policy_test.go`、`assistant_create_policy_precheck_test.go` 仍与 assistant 运行态组合逻辑强绑定，当前无独立模块服务层承接；
    - `functional_area_governance_test.go` 仍绑定 capability 注册表与全局 functional area gate，暂不作为 `services` 首批样板。
-4. [X] 已确定下批实施顺序为：
+4. [X] 已确定当时的下批实施顺序为：
    - `modules/staffing/services` → `modules/jobcatalog/services` → `modules/person/services`
 5. [X] 验证命令：
    - `make check doc`
 
-增量执行记录（2026-04-08 11:56 CST）：
+增量执行记录（2026-04-08 11:56 CST，历史样板）：
 
 1. [X] 已完成 `modules/staffing/services` 首个服务层样板迁移，并将 `AssignmentsFacade` 从透传 facade 收敛为最小规则承接点。
 2. [X] 本批次下沉内容：
@@ -730,14 +732,14 @@ parallel / Setenv 仓库内约束冻结（2026-04-08 CST）：
 4. [X] 对外契约不变性说明：
    - 未新增新的 `staffing_*_test.go` server 入口，也未修改 public API、数据库或路由契约；
    - 仅调整测试分层与规则归属，外部 `go test` 调用方式保持不变。
-5. [ ] 本批次完成后，下一自然顺序推进到 `modules/jobcatalog/services` 的 helper/规则样板迁移。
+5. [X] 当时的下一自然顺序是推进到 `modules/jobcatalog/services` 的 helper/规则样板迁移；该顺序现已失去当前执行意义。
 6. [X] 验证命令：
    - `go test ./modules/staffing/services -count=1`
    - `go test ./modules/staffing/infrastructure/persistence -count=1`
    - `go test ./internal/server -run 'TestStaffing(PGStore_UpsertPrimaryAssignmentForPerson|PGStore_CorrectRescindAssignmentEvent|MemoryStore|Handlers_JSONRoundTrip)' -count=1`
    - `make check doc`
 
-增量执行记录（2026-04-08 12:06 CST）：
+增量执行记录（2026-04-08 12:06 CST，历史样板）：
 
 1. [X] 已完成 `modules/jobcatalog/services` 首个服务层样板迁移，并将 package/view 相关 helper 从 `internal/server` 收敛到服务层。
 2. [X] 本批次下沉内容：
@@ -750,13 +752,13 @@ parallel / Setenv 仓库内约束冻结（2026-04-08 CST）：
 4. [X] 对外契约不变性说明：
    - 未修改 public API、数据库 schema、路由或 jobcatalog handler 的入参/出参契约；
    - 仅调整规则承接层与测试分层，外部 `go test ./internal/server` 调用口径不变。
-5. [ ] 本批次完成后，下一自然顺序推进到 `modules/person/services` 的 `normalizePernr` 与 create/find 输入校验样板迁移。
+5. [X] 当时的下一自然顺序是推进到 `modules/person/services` 的 `normalizePernr` 与 create/find 输入校验样板迁移；该顺序现已失去当前执行意义。
 6. [X] 验证命令：
    - `go test ./modules/jobcatalog/services -count=1`
    - `go test ./internal/server -run 'Test(JobCatalogStatusForError|JobCatalogPGStore_SetIDValidation|ResolveJobCatalogPackageByCode_PG|JobCatalogPGStore_ResolvePackages|HandleJobCatalogAPI_Get|HandleJobCatalogWriteAPI_Post)' -count=1`
    - `make check doc`
 
-增量执行记录（2026-04-08 12:12 CST）：
+增量执行记录（2026-04-08 12:12 CST，历史样板）：
 
 1. [X] 已完成 `modules/person/services` 首个服务层样板迁移，并将 `normalizePernr` 与 create/find 输入规范化从 `internal/server` 收敛到服务层。
 2. [X] 本批次下沉内容：
@@ -831,11 +833,9 @@ parallel / Setenv 仓库内约束冻结（2026-04-08 CST）：
 1. [X] 已完成 `pkg/setid` 的黑盒化与子测试收敛（2026-04-08 CST）。
 2. [X] 已评估 `pkg/authz` 的 fuzz 适用性，并登记“不补 fuzz”的理由（2026-04-08 CST）。
 3. [X] 已盘点并完成 `modules/orgunit/services` 中首批 `*_coverage_test.go` 的按职责重组样板（2026-04-08 CST）。
-4. [X] 已列出 `internal/server` 中可下沉到服务层的高频规则测试清单，并锁定首批顺序 `staffing -> jobcatalog -> person`（2026-04-08 CST）。
+4. [X] 已列出 `internal/server` 中可下沉到服务层的高频规则测试清单；其中 `staffing -> jobcatalog -> person` 的历史样板当时已完成，后续又由 `DEV-PLAN-450` 删除（2026-04-08 / 2026-04-21 CST）。
 5. [X] `assistant_task_store_test.go` 已采用单文件细化策略，并完成 utility / PG store / dispatch-execute / residual error matrix 的文件内职责重排（2026-04-08 CST）。
-6. [X] 已完成 `modules/staffing/services` 首个样板迁移：assignment 纯规则 helper 与首批输入校验/默认值语义测试已从 `internal/server` 下沉（2026-04-08 CST）。
-7. [X] 已完成 `modules/jobcatalog/services` 首个样板迁移：package/view helper 与 owned-package 权限规则测试已从 `internal/server` 下沉（2026-04-08 CST）。
-8. [X] 已完成 `modules/person/services` 首个样板迁移：`normalizePernr` 与 create/find 输入校验测试已从 `internal/server` 下沉（2026-04-08 CST）。
+6. [X] 已完成 `modules/staffing/services` / `modules/jobcatalog/services` / `modules/person/services` 的历史样板迁移，但这些模块已不再属于当前仓库活体执行面。
 9. [X] 已完成 `Phase 4` 首批 E2E helper 收敛：`Kratos identity` 与 `superadmin tenant session` 已抽为共享基建，并接入代表性 spec（2026-04-08 CST）。
 10. [X] 已完成 `Phase 4` 第二批 E2E helper 收敛：`iam-session`、`evidence`、`assistant-task` 已抽为共享基建，并接入 `tp288* / tp290* / tp290b*` 代表性 live spec（2026-04-08 CST）。
 11. [X] 已完成 `Phase 4` 第三批 E2E helper 收敛：`org-baseline` 已抽为共享基建，并接入 `tp288b` / `tp290b` 的 baseline org 初始化路径（2026-04-08 CST）。

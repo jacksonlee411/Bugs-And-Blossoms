@@ -68,11 +68,11 @@
   - [ ] i18n（仅 `en/zh`）
   - [X] DB Schema / Migration / Backfill / Correction
   - [X] sqlc
-  - [X] Routing / allowlist / responder / capability-route-map
+  - [X] Routing / allowlist / responder
   - [ ] AuthN / Tenancy / RLS
   - [X] Authz（Casbin）
   - [X] 文档 / readiness / 证据记录
-  - [X] 其他专项门禁：`ddd-layering-p0`、`ddd-layering-p2`、`capability-route-map`
+  - [X] 其他专项门禁：`ddd-layering-p0`、`ddd-layering-p2`
 
 ## 3. 架构与关键决策
 
@@ -110,7 +110,7 @@
 
 1. [ ] `pkg/fieldpolicy` 与 `orgunit` 持久化层的重复裁决逻辑
 2. [ ] server 层仅为旧策略模块过渡期保留的 compat helper
-3. [ ] capability-route-map 中与旧 registry 概念强绑定的条目
+3. [ ] 历史路由映射中与旧 registry 概念强绑定的条目
 
 ### 4.3 工具残余
 
@@ -129,7 +129,7 @@
 1. [ ] 在 `440` readiness 清单基础上，标注哪些命中点属于“SetID 删除完成后仍需继续清理的旧策略残余”。
 2. [ ] 明确唯一 PDP 与唯一 owner module，删除重复裁决实现。
 3. [ ] 清理 dbtool / bootstrap / validate / snapshot 旧工具，但不得抢跑 `440` 已冻结的 SetID 根删除顺序。
-4. [ ] 清理 API、测试与 capability-route-map 中仍残留的旧命名。
+4. [ ] 清理 API、测试与历史路由映射中仍残留的旧命名。
 5. [ ] 更新 `AGENTS.md` 与文档地图，将 `DEV-PLAN-330` 调整为历史架构调查入口，而非现行模块入口。
 6. [ ] 形成 readiness 证据并补充“哪些对象已随 440 删除、哪些是 441 独立收尾”的封板说明。
 

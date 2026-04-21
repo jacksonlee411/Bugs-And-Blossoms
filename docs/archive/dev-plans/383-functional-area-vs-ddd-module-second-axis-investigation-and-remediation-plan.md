@@ -11,9 +11,9 @@
   - `AGENTS.md`
   - `docs/dev-plans/003-simple-not-easy-review-guide.md`
   - `docs/dev-plans/015-ddd-layering-framework.md`
-  - `docs/dev-plans/016-greenfield-hr-modules-skeleton.md`
-  - `docs/dev-plans/150-capability-key-workday-alignment-gap-closure-plan.md`
-  - `docs/dev-plans/157-capability-key-m7-functional-area-governance.md`
+  - `docs/archive/dev-plans/016-greenfield-hr-modules-skeleton.md`
+  - `docs/archive/dev-plans/150-capability-key-workday-alignment-gap-closure-plan.md`
+  - `docs/archive/dev-plans/157-capability-key-m7-functional-area-governance.md`
   - `docs/dev-plans/381-cubebox-capability-and-functional-area-lineage-investigation.md`
   - `docs/dev-plans/382-capability-functional-area-governance-impact-investigation.md`
 - **用户入口/触点**：Capability Governance、Functional Area、Capability Catalog、route-capability-map、运行时 functional area gate、后续模块收口计划
@@ -359,8 +359,8 @@ DDD module / bounded context 在本仓不是参考意见，而是已经冻结的
 ## 10. 关联文档
 
 - `docs/dev-plans/015-ddd-layering-framework.md`
-- `docs/dev-plans/016-greenfield-hr-modules-skeleton.md`
-- `docs/dev-plans/150-capability-key-workday-alignment-gap-closure-plan.md`
-- `docs/dev-plans/157-capability-key-m7-functional-area-governance.md`
+- `docs/archive/dev-plans/016-greenfield-hr-modules-skeleton.md`
+- `docs/archive/dev-plans/150-capability-key-workday-alignment-gap-closure-plan.md`
+- `docs/archive/dev-plans/157-capability-key-m7-functional-area-governance.md`
 - `docs/dev-plans/381-cubebox-capability-and-functional-area-lineage-investigation.md`
 - `docs/dev-plans/382-capability-functional-area-governance-impact-investigation.md`

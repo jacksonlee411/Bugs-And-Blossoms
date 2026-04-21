@@ -13,7 +13,6 @@ type orgUnitAppendVersionPrecheckReaderStub struct {
 	resolveOrgNodeKeyFn func(context.Context, string, string) (string, error)
 	resolveSetIDFn      func(context.Context, string, string, string) (string, error)
 	treeInitFn          func(context.Context, string) (bool, error)
-	resolveDecisionFn   func(context.Context, string, string, string, string, string) (types.SetIDStrategyFieldDecision, bool, error)
 	listConfigsFn       func(context.Context, string, string) ([]types.TenantFieldConfig, error)
 	resolveFactsFn      func(context.Context, string, string, string) (OrgUnitAppendVersionFactsV1, error)
 }
@@ -37,20 +36,6 @@ func (s orgUnitAppendVersionPrecheckReaderStub) IsOrgTreeInitialized(ctx context
 		return s.treeInitFn(ctx, tenantID)
 	}
 	return false, nil
-}
-
-func (s orgUnitAppendVersionPrecheckReaderStub) ResolveSetIDStrategyFieldDecision(
-	ctx context.Context,
-	tenantID string,
-	capabilityKey string,
-	fieldKey string,
-	businessUnitNodeKey string,
-	asOf string,
-) (types.SetIDStrategyFieldDecision, bool, error) {
-	if s.resolveDecisionFn != nil {
-		return s.resolveDecisionFn(ctx, tenantID, capabilityKey, fieldKey, businessUnitNodeKey, asOf)
-	}
-	return types.SetIDStrategyFieldDecision{}, false, nil
 }
 
 func (s orgUnitAppendVersionPrecheckReaderStub) ListEnabledTenantFieldConfigsAsOf(
@@ -100,14 +85,13 @@ func TestOrgUnitAppendVersionPrecheckHelpers(t *testing.T) {
 		input := normalizeOrgUnitAppendVersionPrecheckInput(OrgUnitAppendVersionPrecheckInputV1{
 			Intent:                 " add_version ",
 			TenantID:               " tenant-1 ",
-			CapabilityKey:          " Org.Field ",
 			EffectiveDate:          " 2026-01-01 ",
 			OrgCode:                " flower-c ",
 			EffectivePolicyVersion: " epv1 ",
 			NewName:                " 运营一部 ",
 			NewParentOrgCode:       " flower-a ",
 		})
-		if input.Intent != "add_version" || input.TenantID != "tenant-1" || input.CapabilityKey != "org.field" {
+		if input.Intent != "add_version" || input.TenantID != "tenant-1" {
 			t.Fatalf("normalized input=%+v", input)
 		}
 		if !input.NewParentRequested || input.NewParentOrgCode != "flower-a" {
@@ -144,9 +128,9 @@ func TestOrgUnitAppendVersionPrecheckHelpers(t *testing.T) {
 			OrgUnitAppendVersionPrecheckInputV1{},
 			orgUnitAppendVersionPrecheckEvaluation{
 				NameFound:      true,
-				NameDecision:   types.SetIDStrategyFieldDecision{Required: true},
+				NameDecision:   orgUnitFieldDecision{Required: true},
 				ParentFound:    true,
-				ParentDecision: types.SetIDStrategyFieldDecision{Required: true},
+				ParentDecision: orgUnitFieldDecision{Required: true},
 			},
 		)
 		wantMissing := []string{"org_code", "effective_date", "change_fields", "new_name", "new_parent_ref_text"}
@@ -174,12 +158,12 @@ func TestOrgUnitAppendVersionPrecheckHelpers(t *testing.T) {
 					"parent_org_code": "parent_org_node_key",
 				}},
 				NameFound: true,
-				NameDecision: types.SetIDStrategyFieldDecision{
+				NameDecision: orgUnitFieldDecision{
 					Maintainable:      false,
 					AllowedValueCodes: []string{"GOOD-NAME"},
 				},
 				ParentFound: true,
-				ParentDecision: types.SetIDStrategyFieldDecision{
+				ParentDecision: orgUnitFieldDecision{
 					Maintainable:      false,
 					AllowedValueCodes: []string{"GOOD-PARENT"},
 				},
@@ -228,13 +212,13 @@ func TestOrgUnitAppendVersionPrecheckHelpers(t *testing.T) {
 			t.Fatalf("ready readiness=%q", got)
 		}
 
-		notFoundDecision := buildOrgUnitAppendVersionPDPFieldDecision("name", types.SetIDStrategyFieldDecision{}, false, "name")
+		notFoundDecision := buildOrgUnitAppendVersionPDPFieldDecision("name", orgUnitFieldDecision{}, false, "name")
 		if !notFoundDecision.Visible || !notFoundDecision.Maintainable || notFoundDecision.Required {
 			t.Fatalf("not found decision=%+v", notFoundDecision)
 		}
 		foundDecision := buildOrgUnitAppendVersionPDPFieldDecision(
 			"parent_org_code",
-			types.SetIDStrategyFieldDecision{
+			orgUnitFieldDecision{
 				Visible:           true,
 				Required:          true,
 				Maintainable:      true,
@@ -328,7 +312,7 @@ func TestOrgUnitAppendVersionPrecheckHelpers(t *testing.T) {
 			clonedProjection.ProjectionDigest != "digest" {
 			t.Fatalf("cloned projection=%+v", clonedProjection)
 		}
-		if _, _, errMsg := resolveOrgUnitAppendVersionFieldDecision(context.Background(), nil, OrgUnitAppendVersionPrecheckInputV1{}, "", "name"); errMsg != errFieldPolicyMissing {
+		if _, found, errMsg := resolveOrgUnitAppendVersionFieldDecision(context.Background(), nil, OrgUnitAppendVersionPrecheckInputV1{}, "", "name"); found || errMsg != "" {
 			t.Fatalf("nil reader err=%q", errMsg)
 		}
 	})
@@ -340,7 +324,6 @@ func TestResolveOrgUnitAppendVersionPolicyContextBranches(t *testing.T) {
 	t.Run("empty org code only builds digest", func(t *testing.T) {
 		policyCtx, contextErr := resolveOrgUnitAppendVersionPolicyContextV1(ctx, nil, OrgUnitAppendVersionPrecheckInputV1{
 			TenantID:      "tenant-1",
-			CapabilityKey: "org.field",
 			Intent:        "add_version",
 			EffectiveDate: "2026-01-01",
 		})
@@ -398,7 +381,6 @@ func TestResolveOrgUnitAppendVersionPolicyContextBranches(t *testing.T) {
 			resolveSetIDFn:      func(context.Context, string, string, string) (string, error) { return "deflt", nil },
 		}, OrgUnitAppendVersionPrecheckInputV1{
 			TenantID:      "tenant-1",
-			CapabilityKey: "org.field",
 			Intent:        "add_version",
 			EffectiveDate: "2026-01-01",
 			OrgCode:       "flower-c",
@@ -417,7 +399,6 @@ func TestBuildOrgUnitAppendVersionPrecheckProjectionBranches(t *testing.T) {
 	baseInput := OrgUnitAppendVersionPrecheckInputV1{
 		Intent:                 string(OrgUnitWriteIntentAddVersion),
 		TenantID:               "tenant-1",
-		CapabilityKey:          "org.orgunit_add_version.field_policy",
 		EffectiveDate:          "2026-01-01",
 		OrgCode:                "FLOWER-C",
 		EffectivePolicyVersion: "epv1",
@@ -432,9 +413,6 @@ func TestBuildOrgUnitAppendVersionPrecheckProjectionBranches(t *testing.T) {
 		listConfigsFn:       func(context.Context, string, string) ([]types.TenantFieldConfig, error) { return nil, nil },
 		resolveFactsFn: func(context.Context, string, string, string) (OrgUnitAppendVersionFactsV1, error) {
 			return OrgUnitAppendVersionFactsV1{TargetExistsAsOf: true}, nil
-		},
-		resolveDecisionFn: func(context.Context, string, string, string, string, string) (types.SetIDStrategyFieldDecision, bool, error) {
-			return types.SetIDStrategyFieldDecision{Visible: true, Maintainable: true}, true, nil
 		},
 	}
 
@@ -501,17 +479,11 @@ func TestBuildOrgUnitAppendVersionPrecheckProjectionBranches(t *testing.T) {
 		}
 	})
 
-	t.Run("field decision mapping and deny reasons propagate", func(t *testing.T) {
+	t.Run("deny reasons propagate", func(t *testing.T) {
 		reader := readyReader
 		reader.treeInitFn = func(context.Context, string) (bool, error) { return false, nil }
 		reader.resolveFactsFn = func(context.Context, string, string, string) (OrgUnitAppendVersionFactsV1, error) {
 			return OrgUnitAppendVersionFactsV1{TargetExistsAsOf: false}, nil
-		}
-		reader.resolveDecisionFn = func(_ context.Context, _ string, _ string, fieldKey string, _ string, _ string) (types.SetIDStrategyFieldDecision, bool, error) {
-			if fieldKey == "name" {
-				return types.SetIDStrategyFieldDecision{}, false, errors.New(errFieldPolicyConflict)
-			}
-			return types.SetIDStrategyFieldDecision{}, false, errors.New(errFieldPolicyMissing)
 		}
 		input := baseInput
 		input.CanAdmin = false
@@ -524,9 +496,7 @@ func TestBuildOrgUnitAppendVersionPrecheckProjectionBranches(t *testing.T) {
 		}
 		if !slices.Contains(result.Projection.RejectionReasons, "FORBIDDEN") ||
 			!slices.Contains(result.Projection.RejectionReasons, "ORG_TREE_NOT_INITIALIZED") ||
-			!slices.Contains(result.Projection.RejectionReasons, "ORG_NOT_FOUND_AS_OF") ||
-			!slices.Contains(result.Projection.RejectionReasons, errFieldPolicyConflict) ||
-			!slices.Contains(result.Projection.RejectionReasons, errFieldPolicyMissing) {
+			!slices.Contains(result.Projection.RejectionReasons, "ORG_NOT_FOUND_AS_OF") {
 			t.Fatalf("rejections=%v", result.Projection.RejectionReasons)
 		}
 	})

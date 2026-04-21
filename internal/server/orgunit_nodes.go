@@ -1150,8 +1150,8 @@ func (s *orgUnitPGStore) GetNodeDetailsByNodeKey(ctx context.Context, tenantID s
 		  COALESCE(pc.org_code, '') AS parent_org_code,
 		  COALESCE(pv.name, '') AS parent_name,
 		  v.is_business_unit,
-		  COALESCE(p.pernr, '') AS manager_pernr,
-		  COALESCE(p.display_name, '') AS manager_name,
+		  '' AS manager_pernr,
+		  '' AS manager_name,
 		  `+pathOrgNodeKeysCompatExpr("v")+` AS path_org_node_keys,
 		  COALESCE(v.full_name_path, '') AS full_name_path,
 		  c.created_at,
@@ -1171,9 +1171,6 @@ func (s *orgUnitPGStore) GetNodeDetailsByNodeKey(ctx context.Context, tenantID s
 		 AND `+orgNodeKeyCompatExpr("pv")+` = `+parentOrgNodeKeyCompatExpr("v")+`
 		 AND pv.status = 'active'
 		 AND pv.validity @> $3::date
-		LEFT JOIN person.persons p
-		  ON p.tenant_uuid = $1::uuid
-		 AND p.person_uuid = v.manager_uuid
 		WHERE v.tenant_uuid = $1::uuid
 		  AND `+orgNodeKeyCompatExpr("v")+` = $2::text
 		  AND v.status = 'active'
@@ -1255,8 +1252,8 @@ func (s *orgUnitPGStore) GetNodeDetailsWithVisibilityByNodeKey(ctx context.Conte
 		  COALESCE(pc.org_code, '') AS parent_org_code,
 		  COALESCE(pv.name, '') AS parent_name,
 		  v.is_business_unit,
-		  COALESCE(p.pernr, '') AS manager_pernr,
-		  COALESCE(p.display_name, '') AS manager_name,
+		  '' AS manager_pernr,
+		  '' AS manager_name,
 		  `+pathOrgNodeKeysCompatExpr("v")+` AS path_org_node_keys,
 		  COALESCE(v.full_name_path, '') AS full_name_path,
 		  c.created_at,
@@ -1275,9 +1272,6 @@ func (s *orgUnitPGStore) GetNodeDetailsWithVisibilityByNodeKey(ctx context.Conte
 		  ON pv.tenant_uuid = $1::uuid
 		 AND `+orgNodeKeyCompatExpr("pv")+` = `+parentOrgNodeKeyCompatExpr("v")+`
 		 AND pv.validity @> $3::date
-		LEFT JOIN person.persons p
-		  ON p.tenant_uuid = $1::uuid
-		 AND p.person_uuid = v.manager_uuid
 		WHERE v.tenant_uuid = $1::uuid
 		  AND `+orgNodeKeyCompatExpr("v")+` = $2::text
 		  AND v.validity @> $3::date
@@ -2824,7 +2818,7 @@ func (s *orgUnitMemoryStore) MinEffectiveDate(_ context.Context, tenantID string
 
 func (s *orgUnitMemoryStore) ListEnabledTenantFieldConfigsAsOf(_ context.Context, _ string, _ string) ([]orgUnitTenantFieldConfig, error) {
 	return []orgUnitTenantFieldConfig{{
-		FieldKey:         orgUnitCreateFieldOrgType,
+		FieldKey:         "d_org_type",
 		ValueType:        "text",
 		DataSourceType:   "DICT",
 		DataSourceConfig: json.RawMessage(`{"dict_code":"org_type"}`),

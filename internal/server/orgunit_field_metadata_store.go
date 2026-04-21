@@ -43,6 +43,13 @@ type orgUnitMutationTargetEvent struct {
 	HasRaw             bool
 }
 
+type orgUnitAppendFacts struct {
+	TreeInitialized  bool
+	TargetExistsAsOf bool
+	TargetStatusAsOf string
+	IsRoot           bool
+}
+
 var orgUnitExtPhysicalColRe = regexp.MustCompile(`^ext_(str|int|uuid|bool|date|num)_[0-9]{2}$`)
 
 var errOrgUnitExtQueryFieldNotAllowed = errors.New("org_ext_query_field_not_allowed")

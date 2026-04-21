@@ -10,7 +10,7 @@
 - 目标（对齐 `DEV-PLAN-009` Phase 4 出口条件 #3）：在 JobCatalog 至少一个实体上形成“**解析 → 写入 → 列表读取**”的 **UI 可见且可操作** 闭环。
 - 依赖（SSOT 引用）：
   - SetID：`docs/archive/dev-plans/028-setid-management.md`
-  - JobCatalog：`docs/dev-plans/029-job-catalog-transactional-event-sourcing-synchronous-projection.md`
+  - JobCatalog：`docs/archive/dev-plans/029-job-catalog-transactional-event-sourcing-synchronous-projection.md`
   - 门禁与触发器：`AGENTS.md`、`Makefile`、`.github/workflows/quality-gates.yml`
   - Tenancy/AuthN：`docs/dev-plans/019-tenant-and-authn.md`
   - RLS：`docs/dev-plans/021-pg-rls-for-org-position-job-catalog.md`

@@ -7,7 +7,7 @@ out="$root/internal/sqlc/schema.sql"
 tmp="$(mktemp)"
 
 list_modules() {
-  local preferred=(iam orgunit jobcatalog staffing person)
+  local preferred=(iam orgunit)
   declare -A seen=()
   local module
 

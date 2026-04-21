@@ -5,8 +5,6 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
-	"regexp"
-	"slices"
 	"strings"
 	"testing"
 
@@ -389,28 +387,8 @@ func TestTenantsCreate_InsertDomainError(t *testing.T) {
 func TestTenantsCreate_AuditError(t *testing.T) {
 	tx := &stubTx{
 		queryRowFn: func(string, ...any) pgx.Row { return stubRow{vals: []any{"t1"}} },
-		execErrAt:  3,
-		execErr:    errors.New("audit err"),
-	}
-	h := newTestHandler(t, stubPool{
-		beginFn: func(context.Context) (pgx.Tx, error) { return tx, nil },
-		queryFn: func(context.Context, string, ...any) (pgx.Rows, error) { return &stubRows{}, nil },
-	})
-
-	req := h.newRequest(http.MethodPost, "/superadmin/tenants", strings.NewReader("name=x&hostname=x.local"))
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	rec := httptest.NewRecorder()
-	h.h.ServeHTTP(rec, req)
-	if rec.Code != http.StatusInternalServerError {
-		t.Fatalf("status=%d", rec.Code)
-	}
-}
-
-func TestTenantsCreate_SetTenantContextError(t *testing.T) {
-	tx := &stubTx{
-		queryRowFn: func(string, ...any) pgx.Row { return stubRow{vals: []any{"t1"}} },
 		execErrAt:  2,
-		execErr:    errors.New("exec err"),
+		execErr:    errors.New("audit err"),
 	}
 	h := newTestHandler(t, stubPool{
 		beginFn: func(context.Context) (pgx.Tx, error) { return tx, nil },
@@ -463,23 +441,10 @@ func TestTenantsCreate_Success(t *testing.T) {
 		t.Fatalf("status=%d", rec.Code)
 	}
 	if len(tx.execSQLs) < 2 {
-		t.Fatalf("expected bootstrap exec to run, got %d execs", len(tx.execSQLs))
+		t.Fatalf("expected domain insert and audit insert, got %d execs", len(tx.execSQLs))
 	}
-	bootstrapSQL := tx.execSQLs[1]
-	if !strings.Contains(bootstrapSQL, "business_unit_node_key") {
-		t.Fatalf("bootstrap SQL must write business_unit_node_key, got %q", bootstrapSQL)
-	}
-	if !strings.Contains(bootstrapSQL, "resolved_setid") {
-		t.Fatalf("bootstrap SQL must write resolved_setid, got %q", bootstrapSQL)
-	}
-	canonicalConflictKey := regexp.MustCompile(`(?s)ON CONFLICT \(\s*tenant_uuid,\s*capability_key,\s*field_key,\s*org_applicability,\s*resolved_setid,\s*business_unit_node_key,\s*effective_date\s*\)`)
-	if !canonicalConflictKey.MatchString(bootstrapSQL) {
-		t.Fatalf("bootstrap SQL must use canonical conflict key with resolved_setid, got %q", bootstrapSQL)
-	}
-	if slices.ContainsFunc([]string{"business_unit_id", "seeded.business_unit_id"}, func(needle string) bool {
-		return strings.Contains(bootstrapSQL, needle)
-	}) {
-		t.Fatalf("bootstrap SQL must not reference legacy business_unit_id, got %q", bootstrapSQL)
+	if got := tx.execSQLs[1]; !strings.Contains(got, "INSERT INTO iam.superadmin_audit_logs") {
+		t.Fatalf("second exec should write audit log, got %q", got)
 	}
 }
 

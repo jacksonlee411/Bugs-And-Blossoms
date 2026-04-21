@@ -7,7 +7,7 @@
 - **评审分级**：`T2`
 - **范围一句话**：将 SetID 从当前 implementation repo 的现行运行时、数据库 schema、路由/API、前端入口、鉴权对象、测试资产与现行契约文档中彻底删除，并以不引入 legacy fallback 的单主链方式完成切断。
 - **关联模块/目录**：`modules/orgunit`、`modules/jobcatalog`、`modules/staffing`、`internal/server`、`pkg/setid`、`pkg/fieldpolicy`、`internal/sqlc/schema.sql`、`migrations/orgunit`、`migrations/jobcatalog`、`migrations/staffing`、`apps/web`、`cmd/dbtool`、`config/access`、`config/capability`、`config/routing`、`docs/dev-plans`、`AGENTS.md`
-- **关联计划/标准**：`AGENTS.md`、`docs/dev-plans/000-docs-format.md`、`docs/dev-plans/003-simple-not-easy-review-guide.md`、`docs/dev-plans/012-ci-quality-gates.md`、`docs/dev-plans/017-routing-strategy.md`、`docs/dev-plans/021-pg-rls-for-org-position-job-catalog.md`、`docs/dev-plans/022-authz-casbin-toolchain.md`、`docs/dev-plans/301-go-test-layering-and-best-practices-remediation-plan.md`、`docs/dev-plans/441-legacy-strategy-module-residue-cleanup-plan.md`
+- **关联计划/标准**：`AGENTS.md`、`docs/dev-plans/000-docs-format.md`、`docs/dev-plans/003-simple-not-easy-review-guide.md`、`docs/dev-plans/012-ci-quality-gates.md`、`docs/dev-plans/017-routing-strategy.md`、`docs/archive/dev-plans/021-pg-rls-for-org-position-job-catalog.md`、`docs/dev-plans/022-authz-casbin-toolchain.md`、`docs/dev-plans/301-go-test-layering-and-best-practices-remediation-plan.md`、`docs/dev-plans/441-legacy-strategy-module-residue-cleanup-plan.md`
 - **用户入口/触点**：`/app/org/setid/**`、`/org/api/setid-*`、`/org/api/global-setids`、JobCatalog/Staffing 中所有显式或隐式 SetID 上下文、解释面板、registry、dbtool rehearsal/validate 辅助
 
 ### 0.1 Simple > Easy 三问
@@ -22,8 +22,8 @@
   - `internal/server` 仍在默认装配 `SetIDStore`，并注册 `/org/api/setids`、`/org/api/setid-bindings`、`/org/api/global-setids`、`/org/api/setid-strategy-registry`、`/org/api/setid-explain`。
   - `modules/orgunit` 仍公开 `SetIDPGStore` / `SetIDMemoryStore`，`pkg/setid` 仍直接调用 `ensure_setid_bootstrap(...)` 与 `resolve_setid(...)`。
   - `apps/web` 仍保留 `/app/org/setid` 全套页面、导航、i18n、Explain/Registry 组件。
-  - `jobcatalog` / `staffing` / `fieldpolicy` 仍在真实消费 `setid` / `resolved_setid` / `owner_setid` / `setid_strategy_registry`。
-  - `internal/sqlc/schema.sql`、模块 schema 与 migrations 仍保留 SetID 表、函数、权限、bootstrap、scope/package/subscription、strategy registry。
+  - `internal/sqlc/schema.sql`、`modules/orgunit` schema 与 `migrations/orgunit` 仍保留 SetID 表、函数、权限、bootstrap、scope/package/subscription 等治理底座。
+  - `jobcatalog` / `staffing` / `person` / `pkg/fieldpolicy` / `setid_strategy_registry` 的当前态执行面已由 `DEV-PLAN-450` 收口删除，不再是本计划剩余阻塞项。
 - **现状约束**：
   - 当前仓库禁止 legacy 双链路，删除 SetID 不能以“旧接口先留着但置空”方式拖尾。
   - 新增数据库表需用户确认；本计划允许删表/删函数/删权限，不允许在实施中偷偷引入新的“过渡治理表”。
@@ -47,7 +47,7 @@
   - 运行时组合根
   - 跨模块业务解析
   - schema 与 kernel
-  - authz / capability-route-map
+  - authz / 路由注册
   - E2E / 文档 / i18n
 - 因此本计划不是单一模块 refactor，而是一次**跨层收口**。如果不先冻结范围与分阶段停止线，实施很容易退化为“外层删了、里层壳还在”。
 
@@ -56,8 +56,8 @@
 ### 2.1 核心目标
 
 - [ ] 删除所有当前态 SetID runtime：Store、resolver、API、bootstrap、explain、assistant/staffing 快照字段、跨模块解析与 registry。
-- [ ] 删除所有当前态 SetID schema：表、函数、RLS/privileges、`scope_package/scope_subscription`、`global_setid_*`、`setid_strategy_registry`。
-- [ ] 删除所有 SetID UI 与路由入口，并同步清理导航、i18n、错误码、authz object、capability-route-map。
+- [ ] 删除所有当前态 SetID schema：表、函数、RLS/privileges、`scope_package/scope_subscription`、`global_setid_*` 等剩余治理对象；`setid_strategy_registry` 已由 `DEV-PLAN-450` 删除。
+- [ ] 删除所有 SetID UI 与路由入口，并同步清理导航、i18n、错误码、authz object、历史 capability 路由映射残留。
 - [ ] 删除现行测试合同中把 SetID 当主线能力的口径，并将相关测试改为“历史冻结/待重写/待删除”状态，不制造伪通过。
 - [ ] 形成单一删除 PoR：后续任何“SetID 根删除”工作都以 `440` 排序，不再散落到其他计划文档并列 owner。
 
@@ -71,7 +71,7 @@
 ### 2.3 用户可见性交付
 
 - **删除后用户入口**：不存在 `/app/org/setid` 及其子页面，不存在 SetID Explain/Registry/Ops 页，不存在 SetID 导航项。
-- **删除后主流程**：用户仍可完成 orgunit、jobcatalog、staffing 的现行主流程，但不再看到 `setid` 输入、`resolved_setid` 解释、`owner_setid`、`global share setid` 等 UI 语义。
+- **删除后主流程**：用户仍可完成 `orgunit` 的现行主流程，但不再看到 `setid` 输入、`resolved_setid` 解释、`owner_setid`、`global share setid` 等 UI 语义。`jobcatalog/staffing/person` 已由 `DEV-PLAN-450` 从当前仓库删除，不属于本计划现行验收范围。
 - **当前验收方式**：
   - 路由 allowlist 中不存在 `/app/org/setid/**` 与 `/org/api/setid-*` / `/org/api/global-setids`
   - `internal/server` 不再注册相关 handler
@@ -86,22 +86,22 @@
   - [X] i18n（仅 `en/zh`）
   - [X] DB Schema / Migration / Backfill / Correction
   - [X] sqlc
-  - [X] Routing / allowlist / responder / capability-route-map
+  - [X] Routing / allowlist / responder
   - [X] AuthN / Tenancy / RLS
   - [X] Authz（Casbin）
   - [X] E2E
   - [X] 文档 / readiness / 证据记录
-  - [X] 其他专项门禁：`no-legacy`、`no-scope-package`、`granularity`、`capability-key`、`capability-route-map`
+  - [X] 其他专项门禁：`no-legacy`、`no-scope-package`、`granularity`
 
 ## 2.5 测试设计与分层
 
 | 层级 | 本计划承接内容 | 代表对象/文件 | 说明 |
 | --- | --- | --- | --- |
-| `pkg/**` | 删除 `pkg/setid` 与 SetID 相关纯函数/rego/PDP | `pkg/setid`、`pkg/fieldpolicy` | 能删则删；保留者必须改名并改职责 |
-| `modules/*/services` | `jobcatalog` / `orgunit` / `staffing` 去 SetID 后的业务规则收口 | 对应 services tests | 不允许 server 层替模块兜底 |
+| `pkg/**` | 删除 `pkg/setid` 与 SetID 相关纯函数/rego/PDP | `pkg/setid`、残余 helper | `pkg/fieldpolicy` 已由 `DEV-PLAN-450` 删除 |
+| `modules/*/services` | `orgunit` 去 SetID 后的业务规则收口 | 对应 services tests | 不允许 server 层替模块兜底 |
 | `internal/server` | 路由下线、错误映射、authz/capability 收口 | `internal/server/*setid*` | 删除或改为“路由不存在/能力不存在”断言 |
 | `apps/web` | 页面/导航/文案/请求层删除 | `pages/org/SetID*`、`api/setids.ts` | 页面级可见性必须真实消失 |
-| `E2E` | 删除旧 SetID 测试，或改为不存在断言 | `e2e/tests/*setid*`、`m3-smoke`、`tp060-02` | 不保留伪主链 |
+| `E2E` | 删除旧 SetID 测试，或改为不存在断言 | `e2e/tests/*setid*`、`tp060-02` | `m3-smoke` 已由 `DEV-PLAN-450` 删除 |
 
 ## 3. 架构与关键决策
 
@@ -119,13 +119,10 @@
 - `orgunit`
   - owner SetID 根删除。
   - 负责 schema、kernel、store、bootstrap、server wiring、authz 对象与 UI 删除。
-- `jobcatalog`
-  - 删除 `SetIDStore`、`ResolveJobCatalogPackageBySetID(...)` 及所有 `setid` 视图契约。
-  - 若尚无无 SetID 契约可承接，必须在 `440` 停止线记录为阻塞，不得私留 compat。
-- `staffing`
-  - 删除对 `resolved_setid`、`jobcatalog_setid`、`setid-explain` 的依赖和展示。
+- `jobcatalog` / `staffing` / `person`
+  - 已由 `DEV-PLAN-450` 直接切除，不再作为 `440` 的现行 owner 模块。
 - `pkg/fieldpolicy`
-  - 删除以 SetID 为输入轴的 PDP / Rego / bucket 语义；与旧策略残余相关的命名清理由 `441` 协助，但排序服从 `440`。
+  - 已由 `DEV-PLAN-450` 删除；本计划不再把它当作当前剩余阻塞项。
 - `internal/server`
   - 只承接路由/API 切断和组合根去壳，不承担替代业务逻辑。
 
@@ -151,9 +148,9 @@
 1. [ ] `modules/orgunit/module.go` 中 `SetIDPGStore` / `SetIDMemoryStore` 与相关包装。
 2. [ ] `internal/server` 中所有 `setid-*` handler、resolver、context resolver、explain、registry API、route capability entry。
 3. [ ] `pkg/setid/**` 全量。
-4. [ ] `jobcatalog` 中 `SetIDStore`、`ResolveJobCatalogPackageBySetID(...)`、`OwnerSetID*` 与 by-setid 视图规则。
-5. [ ] `staffing` / `assistant` / `fieldpolicy` 中 `resolved_setid`、`jobcatalog_setid`、`setid_source` 相关输入/输出。
-6. [ ] `cmd/dbtool` 中所有 setid / registry snapshot / validate / rehearsal / bootstrap 专项工具。
+4. [X] `jobcatalog/staffing/fieldpolicy/setid_strategy_registry` 相关 runtime 已由 `DEV-PLAN-450` 删除，不再属于当前待办。
+5. [ ] `assistant` 中仍残留的 `setid` 输入/输出与解释面。
+6. [ ] `cmd/dbtool` 中所有仍存活的 setid / bootstrap 专项工具。
 
 ### 4.2 必删数据库对象
 
@@ -193,7 +190,7 @@
 1. [ ] `AGENTS.md` 中把 SetID 写成现行 Greenfield 不变量的描述。
 2. [ ] `AGENTS.md` 文档地图中把 SetID 主链文档当活体主线的表述。
 3. [ ] `DEV-PLAN-060/062` 中将 SetID 作为现行主数据主流程的描述。
-4. [ ] 任何现行 dev-plan 中把 `/app/org/setid`、`setid_strategy_registry`、`resolved_setid` 当当前用户能力或当前实施主线的表述。
+4. [ ] 任何现行 dev-plan 中把 `/app/org/setid`、`resolved_setid` 当当前用户能力或当前实施主线的表述；`setid_strategy_registry` 已由 `DEV-PLAN-450` 删除。
 
 ## 5. 分阶段实施顺序
 
@@ -210,7 +207,7 @@
 ### 5.2 Phase 1：用户入口与外层协议切断
 
 - [ ] 删除前端页面、导航、文案、前端请求层。
-- [ ] 删除 allowlist 路由、capability-route-map、authz 对象、Casbin policy 中的 SetID 条目。
+- [ ] 删除 allowlist 路由、历史 capability 路由映射残留、authz 对象、Casbin policy 中的 SetID 条目。
 - [ ] 删除 server 路由注册与对外 handler。
 
 **Phase 1 停止线**
@@ -220,10 +217,10 @@
 
 - [ ] 删除 `SetIDStore` 默认装配。
 - [ ] 删除 `pkg/setid` 与 `modules/orgunit` 的 SetID Store 暴露。
-- [ ] 删除 `jobcatalog` / `staffing` / `fieldpolicy` 中所有 SetID 上下文输入。
+- [X] `jobcatalog` / `staffing` / `fieldpolicy` 中所有 SetID 上下文输入已由 `DEV-PLAN-450` 退出当前执行面。
 
 **Phase 2 停止线**
-- 若 `jobcatalog` 或 `staffing` 仍只有 SetID 这唯一业务归属语义，必须先回到设计层冻结新的正式契约，不能保留 compat Store/DTO。
+- 当前停止线聚焦 `orgunit` 与 `pkg/setid` 自身；不得以保留 compat Store/DTO 的方式拖延 SetID 根删除。
 
 ### 5.4 Phase 3：schema / sqlc / migration 切断
 
@@ -284,11 +281,9 @@
 
 ### 7.2 高风险与停止线
 
-- **高风险 A**：`jobcatalog` / `staffing` 仍只有 SetID 作为业务归属轴。
+- **高风险 A**：`orgunit` 与 `pkg/setid` 仍保留完整 SetID 底座，删路由但不删底座会造成假收口。
   - **停止线**：不得以保留 compat Store/字段的方式继续推进。
-- **高风险 B**：`pkg/fieldpolicy` / registry 同时是 SetID 依赖与旧策略残余。
-  - **停止线**：不得把“命名清理”伪装成“已完成 SetID 删除”。
-- **高风险 C**：文档地图仍把 SetID 当活体主线。
+- **高风险 B**：文档地图仍把 SetID 当活体主线。
   - **停止线**：在 `AGENTS.md` 和 `060/062` 未收口前，不进入大规模 runtime/schema 删除。
 - **高风险 D**：schema 删除与 sqlc/Atlas 不同步。
   - **停止线**：任何一批 schema 删除必须包含 `internal/sqlc/schema.sql`、模块 schema、migrations、生成物的闭环收口。
@@ -310,5 +305,5 @@
 - 相关联动计划：
   - `docs/dev-plans/441-legacy-strategy-module-residue-cleanup-plan.md`
   - `docs/dev-plans/060-business-e2e-test-suite.md`
-  - `docs/dev-plans/062-test-tp060-02-master-data-org-setid-jobcatalog-position.md`
+  - `docs/archive/dev-plans/062-test-tp060-02-master-data-org-setid-jobcatalog-position.md`
   - `AGENTS.md`
