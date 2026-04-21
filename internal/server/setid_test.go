@@ -137,7 +137,7 @@ func (s scopeTestStore) ListScopeCodes(context.Context, string) ([]ScopeCode, er
 	if s.scopes != nil {
 		return s.scopes, nil
 	}
-	return []ScopeCode{{ScopeCode: "jobcatalog", OwnerModule: "jobcatalog", ShareMode: "tenant-only", IsStable: true}}, nil
+	return []ScopeCode{{ScopeCode: "orgunit_location", OwnerModule: "orgunit", ShareMode: "shared-only", IsStable: true}}, nil
 }
 
 func (s scopeTestStore) ListScopePackages(_ context.Context, _ string, scopeCode string) ([]ScopePackage, error) {
@@ -156,7 +156,7 @@ func (s scopeTestStore) CreateScopePackage(context.Context, string, string, stri
 	}
 	return ScopePackage{
 		PackageID:   "p1",
-		ScopeCode:   "jobcatalog",
+		ScopeCode:   "orgunit_location",
 		PackageCode: "PKG1",
 		OwnerSetID:  "A0001",
 		Name:        "Pkg",
@@ -182,15 +182,15 @@ func TestSetIDMemoryStore_ListOwnedScopePackages(t *testing.T) {
 		"B0001": {SetID: "B0001", Name: "B", Status: "disabled"},
 	}
 	store.scopePackages[tenantID] = map[string]map[string]ScopePackage{
-		"jobcatalog": {
-			"pkg0": {PackageID: "pkg0", ScopeCode: "jobcatalog", PackageCode: "PKG0", OwnerSetID: "A0001", Name: "Pkg0", Status: "active"},
-			"pkg1": {PackageID: "pkg1", ScopeCode: "jobcatalog", PackageCode: "PKG1", OwnerSetID: "A0001", Name: "Pkg1", Status: "active"},
-			"pkg2": {PackageID: "pkg2", ScopeCode: "jobcatalog", PackageCode: "PKG2", OwnerSetID: "B0001", Name: "Pkg2", Status: "active"},
-			"pkg3": {PackageID: "pkg3", ScopeCode: "jobcatalog", PackageCode: "PKG3", OwnerSetID: "A0001", Name: "Pkg3", Status: "disabled"},
+		"orgunit_location": {
+			"pkg0": {PackageID: "pkg0", ScopeCode: "orgunit_location", PackageCode: "PKG0", OwnerSetID: "A0001", Name: "Pkg0", Status: "active"},
+			"pkg1": {PackageID: "pkg1", ScopeCode: "orgunit_location", PackageCode: "PKG1", OwnerSetID: "A0001", Name: "Pkg1", Status: "active"},
+			"pkg2": {PackageID: "pkg2", ScopeCode: "orgunit_location", PackageCode: "PKG2", OwnerSetID: "B0001", Name: "Pkg2", Status: "active"},
+			"pkg3": {PackageID: "pkg3", ScopeCode: "orgunit_location", PackageCode: "PKG3", OwnerSetID: "A0001", Name: "Pkg3", Status: "disabled"},
 		},
 	}
 
-	rows, err := store.ListOwnedScopePackages(context.Background(), tenantID, "jobcatalog", "2026-01-01")
+	rows, err := store.ListOwnedScopePackages(context.Background(), tenantID, "orgunit_location", "2026-01-01")
 	if err != nil {
 		t.Fatalf("err=%v", err)
 	}
@@ -495,33 +495,12 @@ func TestSetIDMemoryStore_ListSortsWithMultipleItems(t *testing.T) {
 
 func TestSetIDMemoryStore_ScopePackageLifecycle(t *testing.T) {
 	store := newSetIDMemoryStore().(*setidMemoryStore)
-	pkg, err := store.CreateScopePackage(context.Background(), "t1", "jobcatalog", "PKG1", "A0001", "Pkg", "2026-01-01", "r1", "i1")
-	if err != nil {
+	if _, err := store.CreateScopePackage(context.Background(), "t1", "orgunit_location", "PKG1", "A0001", "Pkg", "2026-01-01", "r1", "i1"); err == nil {
+		t.Fatal("expected scope mismatch")
+	}
+	if _, err := store.ListScopePackages(context.Background(), "t1", "orgunit_location"); err != nil {
 		t.Fatalf("err=%v", err)
 	}
-	if pkg.EffectiveDate != "2026-01-01" {
-		t.Fatalf("effective_date=%q", pkg.EffectiveDate)
-	}
-	if pkg.UpdatedAt == "" {
-		t.Fatal("expected updated_at")
-	}
-
-	pkgs, err := store.ListScopePackages(context.Background(), "t1", "jobcatalog")
-	if err != nil || len(pkgs) != 1 {
-		t.Fatalf("len=%d err=%v", len(pkgs), err)
-	}
-
-	disabled, err := store.DisableScopePackage(context.Background(), "t1", pkg.PackageID, "2026-01-02", "r2", "i1")
-	if err != nil {
-		t.Fatalf("err=%v", err)
-	}
-	if disabled.Status != "disabled" {
-		t.Fatalf("status=%q", disabled.Status)
-	}
-	if disabled.UpdatedAt == "" {
-		t.Fatal("expected updated_at")
-	}
-
 	if _, err := store.DisableScopePackage(context.Background(), "t1", "missing", "2026-01-03", "r3", "i1"); err == nil {
 		t.Fatal("expected error")
 	}

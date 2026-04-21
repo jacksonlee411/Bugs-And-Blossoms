@@ -20,8 +20,8 @@
 ### 2.1 范围
 - 102D 核心执行链路：Context 构建、候选规则粗筛、CEL 执行、冲突决议、explain 输出。
 - 用户可见样板链路（至少 1 条）：
-  - `staffing/assignments` 页面规则过滤，或
-  - `jobcatalog` 页面命中决策。
+  - `orgunit/units` 页面规则过滤，或
+  - `orgunit/field-configs` 页面命中决策。
 - 与 102C 子计划的联动验证：
   - 102C1：拒绝码/上下文授权；
   - 102C2：capability/策略键一致性；
@@ -54,8 +54,8 @@
   - `w-cn-dev`（CN/Dev）
   - `w-us-sales`（US/Sales）
 - 样板 capability：
-  - `staffing.assignment_create`
-  - `jobcatalog.profile_defaults`
+  - `orgunit.node_create`
+  - `orgunit.ext_fields_edit`
 - 样板规则：
   - `R1`：CN 命中，priority=20
   - `R2`：CN+Dev 命中，priority=10
@@ -77,9 +77,9 @@
 - `TC-RULE-003`：无可决规则时返回拒绝，并包含可解释 reason code。
 
 ### 5.4 用户可见性 E2E（至少一条）
-- `TC-UI-001`（推荐：staffing/assignments）：
+- `TC-UI-001`（推荐：orgunit/units）：
   - 前置：用户从导航进入页面（可发现入口）。
-  - 操作：选择目标员工，触发规则过滤。
+  - 操作：打开“新增组织”或字段配置相关界面，触发规则过滤。
   - 期望：只展示符合规则的选项；用户可完成提交（可操作）。
 - `TC-UI-002`（拒绝路径）：
   - 操作：构造不满足规则的目标对象。

@@ -70,23 +70,10 @@
 3. [X] 本轮后续切片已被该门禁真实约束，说明门禁已进入日常生效状态。
 4. [X] `015Z4` 已补上 `ddd-layering-p2`，使“模块扩张时组合根不得继续空壳”进入实际门禁。
 
-### 2. Staffing 主要收口已完成
+### 2. 历史三模块收口已完成
 
-1. [X] `015D` 已修复 `infrastructure -> services` 反向依赖问题。
-2. [X] `015I/O/P/Q/R/S/T/W` 已将 `staffing` 的 assignment / position 契约、memory/PG 默认装配与主要实现收回模块侧。
-3. [X] `015U/V` 已把 `staffing` 的测试兼容壳逐步移出生产代码。
-4. [X] 当前 `handler` 对 `staffing` 的默认装配已主要通过 `modules/staffing/module.go` 承接。
-
-### 3. Person 主要收口已完成
-
-1. [X] `015E/F/K/N` 已将 `person` 的默认装配、模块入口与 server 侧兼容包装收回模块侧或测试侧。
-2. [X] 当前 `person` 在 `internal/server` 中已不再是主要历史风险点。
-
-### 4. JobCatalog 主要收口已完成
-
-1. [X] `015G/H/J/L/M/Y` 已将 `jobcatalog` 的 memory/PG store、默认装配、server 构造包装与部分服务适配入口迁回模块侧。
-2. [X] 当前 `jobcatalog` 在 `internal/server` 中已不再保留主要 PG 生产实现。
-3. [X] `internal/server/jobcatalog.go` 仍存在的逻辑已大幅收缩为 server 薄适配，而非模块内部实现主入口。
+1. [X] `015D`、`015E/F/K/N`、`015G/H/J/L/M/Y`、`015I/O/P/Q/R/S/T/W` 等历史子计划，曾分别完成 `staffing`、`person`、`jobcatalog` 的模块侧收口。
+2. [X] 这些结论当前仅保留为历史整改记录；对应模块已由 `DEV-PLAN-450` 删除，不再属于现行结构整改范围。
 
 ### 5. OrgUnit 组合根已开始承接职责
 
@@ -94,11 +81,11 @@
 2. [X] `OrgUnitWriteService` 的默认装配已从 `internal/server/handler.go` 收到模块入口。
 3. [X] `015Z1/015Z2/015Z3/015Z6` 已使 `setid` 的默认装配、PG 实现与兼容包装进一步回收到 `modules/orgunit/module.go`。
 
-### 6. Dict 与 SetID 高耦合尾巴已显著压薄
+### 4. Dict 与 SetID 高耦合尾巴已显著压薄
 
 1. [X] `015Z5` 已将 `dict` 的 PG/Memory helper 包装前移到 `modules/iam/module.go`，`internal/server/dicts_store.go` 收缩为兼容薄壳。
-2. [X] `015Z6` 已将 `setid` 的 PG/Memory helper 包装前移到 `modules/orgunit/module.go`，`internal/server/setid.go` 收缩为兼容薄壳。
-3. [X] `handler` 对 `setid/dict` 的默认装配已主要经模块入口返回实例，而不是继续在 `internal/server` 内堆主实现。
+2. [X] 历史上 `015Z6` 曾将 `setid` 的 PG/Memory helper 包装前移到 `modules/orgunit/module.go`，但 SetID 主链现已由 `DEV-PLAN-440` 删除。
+3. [X] 当前仍保留现实意义的结论主要集中在 `dict/iam` 方向；`setid` 部分仅作为历史整改记录保留。
 
 ## 当前剩余尾巴
 
@@ -106,20 +93,18 @@
 
 #### A1. `internal/server` 仍保留少量兼容薄壳
 
-当前 [`internal/server/setid.go`](/home/lee/Projects/Bugs-And-Blossoms/internal/server/setid.go) 与 [`internal/server/dicts_store.go`](/home/lee/Projects/Bugs-And-Blossoms/internal/server/dicts_store.go) 仍保留：
+历史上 [`internal/server/setid.go`](/home/lee/Projects/Bugs-And-Blossoms/internal/server/setid.go) 与当前 [`internal/server/dicts_store.go`](/home/lee/Projects/Bugs-And-Blossoms/internal/server/dicts_store.go) 都曾保留兼容薄壳；其中 `setid.go` 所属主链现已删除，当前更应关注 `dicts_store.go`：
 
 1. [ ] 兼容类型名：
-   - [ ] `setidPGStore` / `setidMemoryStore`
    - [ ] `dictPGStore` / `dictMemoryStore`
 2. [ ] 兼容构造入口：
-   - [ ] `newSetIDPGStore(...)` / `newSetIDMemoryStore(...)`
    - [ ] `newDictPGStore(...)` / `newDictMemoryStore(...)`
 3. [ ] 少量为照顾历史测试而保留的 helper / 状态镜像字段。
 
 这意味着：
 
-1. [X] 这些块已不再是主要生产实现入口，而是兼容薄壳。
-2. [ ] 若要继续推进到更“纯”的终局，还可以再评估是否把这些兼容壳后移到测试侧。
+1. [X] 这些块已不再是主要生产实现入口，而是兼容薄壳或历史残余记录。
+2. [ ] 若要继续推进到更“纯”的终局，还可以再评估是否把仍存活的兼容壳后移到测试侧。
 3. [ ] 但这一步已不再是高收益主风险项。
 
 ### B. 中优先级剩余项
@@ -128,7 +113,7 @@
 
 当前：
 
-1. [X] `staffing/module.go`、`jobcatalog/module.go`、`person/module.go`、`orgunit/module.go` 已不同程度承接职责。
+1. [X] 历史上 `staffing/module.go`、`jobcatalog/module.go`、`person/module.go`、`orgunit/module.go` 已不同程度承接职责；当前活体仅剩 `orgunit`，其余三模块已由 `DEV-PLAN-450` 删除。
 2. [ ] 各模块 `links.go` 仍大多为空壳。
 3. [ ] `iam/module.go` / `iam/links.go` 仍为空壳。
 

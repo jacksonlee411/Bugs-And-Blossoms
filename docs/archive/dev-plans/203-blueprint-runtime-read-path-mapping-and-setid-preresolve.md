@@ -70,5 +70,5 @@
 4. [X] 已落实 Simple > Easy：不新增多事实源、不引入 legacy 双链路。
 
 ## 11. 关联文档
-- `docs/dev-plans/200-composable-building-block-architecture-blueprint.md`
+- `docs/archive/dev-plans/200-composable-building-block-architecture-blueprint.md`
 - `docs/archive/dev-plans/185-field-config-dict-values-setid-column-and-master-data-fetch-control.md`

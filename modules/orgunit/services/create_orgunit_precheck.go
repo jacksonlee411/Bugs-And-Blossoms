@@ -40,7 +40,6 @@ var createOrgUnitFieldDecisionOrder = []string{
 
 type CreateOrgUnitPolicyContextV1 struct {
 	TenantID            string `json:"tenant_id"`
-	CapabilityKey       string `json:"capability_key"`
 	EffectiveDate       string `json:"effective_date"`
 	BusinessUnitOrgCode string `json:"business_unit_org_code"`
 	BusinessUnitNodeKey string `json:"business_unit_node_key"`
@@ -77,7 +76,6 @@ type CreateOrgUnitPrecheckProjectionV1 struct {
 
 type CreateOrgUnitPrecheckInputV1 struct {
 	TenantID                          string
-	CapabilityKey                     string
 	EffectiveDate                     string
 	BusinessUnitOrgCode               string
 	EffectivePolicyVersion            string
@@ -121,14 +119,6 @@ type CreateOrgUnitPrecheckReader interface {
 	ResolveOrgNodeKey(ctx context.Context, tenantID string, orgCode string) (string, error)
 	ResolveSetID(ctx context.Context, tenantID string, orgNodeKey string, asOf string) (string, error)
 	IsOrgTreeInitialized(ctx context.Context, tenantID string) (bool, error)
-	ResolveSetIDStrategyFieldDecision(
-		ctx context.Context,
-		tenantID string,
-		capabilityKey string,
-		fieldKey string,
-		businessUnitNodeKey string,
-		asOf string,
-	) (types.SetIDStrategyFieldDecision, bool, error)
 	ListEnabledTenantFieldConfigsAsOf(ctx context.Context, tenantID string, asOf string) ([]types.TenantFieldConfig, error)
 }
 
@@ -136,8 +126,8 @@ type createOrgUnitPrecheckEvaluation struct {
 	Result          CreateOrgUnitPrecheckResultV1
 	MutationPolicy  OrgUnitMutationPolicyDecision
 	EnabledFieldCfg []types.TenantFieldConfig
-	OrgCodeDecision types.SetIDStrategyFieldDecision
-	OrgTypeDecision types.SetIDStrategyFieldDecision
+	OrgCodeDecision orgUnitFieldDecision
+	OrgTypeDecision orgUnitFieldDecision
 	OrgCodeFound    bool
 	OrgTypeFound    bool
 	OrgCodeValue    createFieldDecisionValue
@@ -165,7 +155,6 @@ func evaluateCreateOrgUnitPrecheckV1(
 	result := CreateOrgUnitPrecheckResultV1{
 		PolicyContext: CreateOrgUnitPolicyContextV1{
 			TenantID:            normalizedInput.TenantID,
-			CapabilityKey:       normalizedInput.CapabilityKey,
 			EffectiveDate:       normalizedInput.EffectiveDate,
 			BusinessUnitOrgCode: normalizedInput.BusinessUnitOrgCode,
 		},
@@ -277,7 +266,7 @@ func evaluateCreateOrgUnitPrecheckV1(
 				}
 			}
 		} else {
-			eval.Result.Projection.RejectionReasons = append(eval.Result.Projection.RejectionReasons, errFieldPolicyMissing)
+			// org_type is optional and may be fully absent when the ext field is not enabled.
 		}
 	}
 
@@ -300,10 +289,6 @@ func evaluateCreateOrgUnitPrecheckV1(
 
 func normalizeCreateOrgUnitPrecheckInput(input CreateOrgUnitPrecheckInputV1) CreateOrgUnitPrecheckInputV1 {
 	input.TenantID = strings.TrimSpace(input.TenantID)
-	input.CapabilityKey = strings.ToLower(strings.TrimSpace(input.CapabilityKey))
-	if input.CapabilityKey == "" {
-		input.CapabilityKey = orgUnitCreateFieldPolicyCapabilityKey
-	}
 	input.EffectiveDate = strings.TrimSpace(input.EffectiveDate)
 	input.BusinessUnitOrgCode = strings.TrimSpace(input.BusinessUnitOrgCode)
 	input.EffectivePolicyVersion = strings.TrimSpace(input.EffectivePolicyVersion)
@@ -341,7 +326,6 @@ func resolveCreateOrgUnitPolicyContextV1(
 ) (CreateOrgUnitPolicyContextV1, *CreateOrgUnitPolicyContextErrorV1) {
 	ctxV1 := CreateOrgUnitPolicyContextV1{
 		TenantID:            input.TenantID,
-		CapabilityKey:       input.CapabilityKey,
 		EffectiveDate:       input.EffectiveDate,
 		BusinessUnitOrgCode: input.BusinessUnitOrgCode,
 	}
@@ -435,22 +419,12 @@ func resolveCreateOrgUnitFieldDecision(
 	input CreateOrgUnitPrecheckInputV1,
 	businessUnitNodeKey string,
 	fieldKey string,
-) (types.SetIDStrategyFieldDecision, bool, string) {
-	if reader == nil {
-		return types.SetIDStrategyFieldDecision{}, false, errFieldPolicyMissing
-	}
-	decision, found, err := reader.ResolveSetIDStrategyFieldDecision(
-		ctx,
-		input.TenantID,
-		input.CapabilityKey,
-		fieldKey,
-		businessUnitNodeKey,
-		input.EffectiveDate,
-	)
-	if err != nil {
-		return types.SetIDStrategyFieldDecision{}, false, strings.TrimSpace(mapSetIDFieldDecisionError(err).Error())
-	}
-	return decision, found, ""
+) (orgUnitFieldDecision, bool, string) {
+	_ = ctx
+	_ = reader
+	_ = input.TenantID
+	_ = businessUnitNodeKey
+	return resolveCreateOrgUnitStaticFieldDecision(fieldConfigKeys(input.EnabledFieldConfigs), fieldKey)
 }
 
 func filterEnabledOrgUnitExtFieldConfigs(cfgs []types.TenantFieldConfig) ([]types.TenantFieldConfig, []string, error) {
@@ -536,7 +510,7 @@ func buildCreateOrgUnitCoreFieldDecision(fieldKey string, payloadKey string) Cre
 	}
 }
 
-func buildCreateOrgUnitPDPFieldDecision(fieldKey string, decision types.SetIDStrategyFieldDecision, found bool, payloadKey string) CreateOrgUnitFieldDecisionV1 {
+func buildCreateOrgUnitPDPFieldDecision(fieldKey string, decision orgUnitFieldDecision, found bool, payloadKey string) CreateOrgUnitFieldDecisionV1 {
 	if !found {
 		return CreateOrgUnitFieldDecisionV1{
 			FieldKey:             fieldKey,
@@ -713,7 +687,6 @@ func buildCreateOrgUnitPolicyExplain(projection CreateOrgUnitPrecheckProjectionV
 func buildCreateOrgUnitPolicyContextDigest(ctx CreateOrgUnitPolicyContextV1) string {
 	payload := struct {
 		TenantID            string `json:"tenant_id"`
-		CapabilityKey       string `json:"capability_key"`
 		EffectiveDate       string `json:"effective_date"`
 		BusinessUnitOrgCode string `json:"business_unit_org_code"`
 		BusinessUnitNodeKey string `json:"business_unit_node_key"`
@@ -721,7 +694,6 @@ func buildCreateOrgUnitPolicyContextDigest(ctx CreateOrgUnitPolicyContextV1) str
 		SetIDSource         string `json:"setid_source"`
 	}{
 		TenantID:            strings.TrimSpace(ctx.TenantID),
-		CapabilityKey:       strings.TrimSpace(ctx.CapabilityKey),
 		EffectiveDate:       strings.TrimSpace(ctx.EffectiveDate),
 		BusinessUnitOrgCode: strings.TrimSpace(ctx.BusinessUnitOrgCode),
 		BusinessUnitNodeKey: strings.TrimSpace(ctx.BusinessUnitNodeKey),

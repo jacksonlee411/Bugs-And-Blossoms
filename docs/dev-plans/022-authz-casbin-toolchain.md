@@ -48,7 +48,7 @@
 - Pack 产物：`config/access/policy.csv`、`config/access/policy.csv.rev`
 - 打包/校验脚本：`scripts/authz/pack.sh`、`scripts/authz/test.sh`、`scripts/authz/lint.sh`
 - Tenancy/AuthN 与主体模型（principal）：`docs/dev-plans/019-tenant-and-authn.md`
-- RLS 强租户隔离：`docs/dev-plans/021-pg-rls-for-org-position-job-catalog.md`
+- RLS 强租户隔离【归档 / 历史合同】：`docs/archive/dev-plans/021-pg-rls-for-org-position-job-catalog.md`
 - 路由治理与 responder 契约：`docs/dev-plans/017-routing-strategy.md`
 - 技术栈与工具链版本（Casbin 版本基线等）：`docs/dev-plans/011-tech-stack-and-toolchain-versions.md`
 - Simple > Easy 评审口径：`docs/dev-plans/003-simple-not-easy-review-guide.md`
@@ -84,14 +84,11 @@
 ### 4.4 Object 命名（选定：module.resource）
 
 - **选定**：object 采用 `module.resource`（全小写）。
-- **粒度（选定，MVP）**：以“业务资源级”作为 object 粒度（例如 `orgunit.orgunits`、`jobcatalog.catalog`），避免按 endpoint/page 细碎拆分导致策略爆炸与漂移。
+- **粒度（选定，MVP）**：以“业务资源级”作为 object 粒度（例如 `orgunit.orgunits`），避免按 endpoint/page 细碎拆分导致策略爆炸与漂移。
 - **禁止**：把 HTTP method/path 片段、页面组件名、query params 等写入 object（它们属于路由与展示层细节，不是稳定授权边界）。
 - **模块建议前缀**（与 `DEV-PLAN-016/019` 对齐）：
   - `iam.*`（tenancy/authn/session/principal 等平台域）
   - `orgunit.*`
-  - `jobcatalog.*`
-  - `staffing.*`
-  - `person.*`
   - `superadmin.*`（仅控制面；与 tenant app 隔离）
 
 ### 4.5 Action 命名（选定：最小动词集合）
@@ -150,10 +147,6 @@
 | object（module.resource） | `tenant_viewer` | `tenant_admin` | `superadmin` | `anonymous` |
 | --- | --- | --- | --- | --- |
 | `orgunit.orgunits` | `read` | `read, admin` | — | — |
-| `jobcatalog.catalog` | `read` | `read, admin` | — | — |
-| `staffing.positions` | `read` | `read, admin` | — | — |
-| `staffing.assignments` | `read` | `read, admin` | — | — |
-| `person.persons` | `read` | `read, admin` | — | — |
 | `superadmin.tenants` | — | — | `read, admin` | — |
 | `superadmin.authz`（可选） | — | — | `debug` | — |
 | `iam.ping`（示例） | — | — | `read` | `read` |
@@ -217,15 +210,9 @@
   - lint/test（确保不出现 `g,` 行与非 MVP action）
 
 **M2 最小映射（冻结，用于 Review 快速核对）**
-- `person.persons`
-  - UI：`/person/persons`（`GET=read`，`POST=admin`）
-  - internal_api：`/person/api/persons:options`、`/person/api/persons:by-pernr`（`GET=read`）
-- `staffing.positions`
-  - UI：`/org/positions`（`GET=read`，`POST=admin`）
-  - internal_api：`/org/api/positions`（`GET=read`，`POST=admin`）
-- `staffing.assignments`
-  - UI：`/org/assignments`（`GET=read`，`POST=admin`）
-  - internal_api：`/org/api/assignments`（`GET=read`，`POST=admin`）
+- `orgunit.orgunits`
+  - UI：`/app/org/units`、`/app/org/units/:orgCode`（`GET=read`）
+  - internal_api：`/org/api/units`、`/org/api/org-codes:resolve`（`GET=read`，写接口为 `admin`）
 
 **口径（冻结）**
 - “表单页/写提交”统一归为 `admin`：避免出现“页面可打开但提交 403/反之”的漂移；只读列表/详情为 `read`。
@@ -255,7 +242,7 @@
    - [ ] `scripts/authz/test.sh`（或 CI 步骤）在 `make authz-pack` 后执行 `git diff --exit-code -- config/access/policy.csv config/access/policy.csv.rev`，确保生成物与源码一致且已提交。
 5. [ ] 接入最小授权点：
    - [ ] `modules/iam`：tenant console（创建/禁用租户、绑定域名、bootstrap）—— 仅 superadmin 可用。
-   - [ ] HR 4 模块 UI/API（`orgunit/jobcatalog/staffing/person`）的 read/admin 最小集（M2 objects 见 §5.2）。
+   - [ ] 现行 tenant app UI/API（至少 `orgunit`）的 read/admin 最小集（M2 objects 见 §5.2）；`jobcatalog/staffing/person` 已由 `DEV-PLAN-450` 删除，不再属于当前授权面。
 6. [ ] 统一 403/forbidden 输出契约：控制器侧不自造 JSON/HTML；统一走全局 responder/通用组件（对齐 `DEV-PLAN-017`）；响应体不回显 `subject/domain/object/action`。
 7. [ ] 落地匿名白名单（MVP）：保证 `role:anonymous` 仅访问 policy 明确列出的入口（至少 `iam.ping/read`）；任何新增匿名入口必须先定义稳定 object 并显式加 policy。
 8. [ ] 文档与门禁对齐：确保 `AGENTS.md` 与 `docs/dev-plans/012-ci-quality-gates.md` 所述 Authz gates 与实际 `Makefile/scripts/authz/*` 一致，避免“文档说一套、CI 跑一套”。

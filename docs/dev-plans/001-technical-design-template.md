@@ -110,7 +110,7 @@
   - `docs/dev-plans/017-routing-strategy.md`
   - `docs/dev-plans/019-tenant-and-authn.md`
   - `docs/dev-plans/020-i18n-en-zh-only.md`
-  - `docs/dev-plans/021-pg-rls-for-org-position-job-catalog.md`
+  - `docs/archive/dev-plans/021-pg-rls-for-org-position-job-catalog.md`
   - `docs/dev-plans/022-authz-casbin-toolchain.md`
   - `docs/dev-plans/032-effective-date-day-granularity.md`
   - `docs/dev-plans/301-go-test-layering-and-best-practices-remediation-plan.md`

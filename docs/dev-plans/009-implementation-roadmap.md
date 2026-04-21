@@ -23,9 +23,9 @@
 ### 2.1 核心目标（Done 的定义）
 - [X] **工程可复现**：版本基线、门禁入口、生成物一致性可被 CI 阻断（011/024/025/012）。证据：`docs/archive/dev-records/DEV-PLAN-010-READINESS.md` §2/§6/§7
 - [X] **平台先行**：Tenancy/AuthN → RLS 圈地 → Casbin 管事，且 superadmin 与 tenant app 边界清晰可审计（019/021/022/023）。证据：`docs/archive/dev-records/DEV-PLAN-010-READINESS.md` §14/§15/§16
-- [X] **业务闭环**：OrgUnit / JobCatalog / Staffing / Person 四模块具备最小可用闭环（026/029/030/031/027/016）。证据：`docs/archive/dev-records/DEV-PLAN-010-READINESS.md` §10/§11/§12/§14
+- [X] **业务闭环（历史完成态）**：执行阶段曾完成 OrgUnit / JobCatalog / Staffing / Person 四模块最小可用闭环（026/029/030/031/027/016）。当前仓库现行模块边界已由 `DEV-PLAN-450` 收口为保留 `orgunit`、删除 `jobcatalog/staffing/person`。证据：`docs/archive/dev-records/DEV-PLAN-010-READINESS.md` §10/§11/§12/§14、`docs/dev-plans/450-direct-removal-of-jobcatalog-staffing-person-modules-plan.md`
 - [X] **UI 可用**：MUI X（React SPA）+ en/zh i18n + as-of 交互一致，且任职记录仅展示 `effective_date` 合同不漂移（018→103/020/017/031）。证据：#5 https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/5 、#80 https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/80 、`docs/archive/dev-records/DEV-PLAN-010-READINESS.md` §3/§11/§14/§17（说明：UI 现行口径已由 `DEV-PLAN-103` 收口为 MUI-only）
-- [X] **主数据治理可扩展**：SetID 机制从最小集合起步，并在 JobCatalog 上形成首个样板（028/029）。证据：`docs/archive/dev-records/DEV-PLAN-010-READINESS.md` §10
+- [X] **主数据治理可扩展（历史样板）**：执行阶段曾以 SetID + JobCatalog 形成首个主数据样板（028/029）；当前态 SetID 根删除 owner 见 `DEV-PLAN-440`，三模块删除 owner 见 `DEV-PLAN-450`。该结论仅用于解释历史演进，不构成当前仓库待交付范围。证据：`docs/archive/dev-records/DEV-PLAN-010-READINESS.md` §10
 
 ### 2.2 非目标（本文不解决）
 - 不解决任何存量系统迁移/兼容/灰度（026/030/029/031 明确不承接）。
@@ -50,7 +50,7 @@
 
 - **架构与边界（实现载体）**
   - `DEV-PLAN-015`：DDD 分层框架（阻塞 016 与后续代码结构）。
-  - `DEV-PLAN-016`：4 模块骨架与跨模块契约（阻塞 026/030/029/031/027/018/028）。
+  - `DEV-PLAN-016`：历史 4 模块骨架与跨模块契约（已归档；当前模块边界收口见 `DEV-PLAN-450`）。
   - `DEV-PLAN-017`：全局路由策略与 routing gates（阻塞 019/018/022/012 的路由/门禁一致性）。
 
 - **平台与安全（业务的运行时前提）**
@@ -64,15 +64,12 @@
   - `DEV-PLAN-024`：Atlas+Goose 模块级闭环（依赖 011；建议在任何 schema 开始落盘前完成）。
   - `DEV-PLAN-025`：sqlc 规范（显式依赖 011/015/016/021；建议在第一批 sqlc 生成物进入主干前完成）。
 
-- **主数据治理（影响 JobCatalog/Staffing 的建模）**
+- **主数据治理（历史执行依赖；当前态删除 owner 见 `DEV-PLAN-440/450`）**
   - `DEV-PLAN-028`：SetID（依赖 016/019/021；应在 029/030 进入“落盘与 API 合同冻结”前完成，以避免返工）。
 
-- **业务模块（交付主体）**
-  - `DEV-PLAN-026`：OrgUnit（依赖 016/024/021；为 Staffing/SetID/UI 提供组织基础）。
-  - `DEV-PLAN-029`：Job Catalog（依赖 016/024/021/028；为 Staffing/Assignments 提供主数据）。
-  - `DEV-PLAN-030`：Position（Staffing，依赖 026/029/016/024/021；Position↔Assignment 强不变量收敛在同模块）。
-  - `DEV-PLAN-027`：Person 最小身份锚点（依赖 016；为 031 的 `person_uuid` 写侧合同做前置）。
-  - `DEV-PLAN-031`：Assignments（依赖 030/027，并与 026/029 组合；UI 合同“仅展示 effective_date”对齐 018/020）。
+- **业务模块（历史交付主体；当前态仅保留 `orgunit`）**
+  - `DEV-PLAN-026`：OrgUnit（依赖 016/024/021；当前仍是现行业务模块的历史来源之一）。
+  - `DEV-PLAN-029` / `030` / `027` / `031`：分别对应 Job Catalog / Position / Person / Assignments 的历史交付链路；现已由 `DEV-PLAN-450` 从当前仓库删除。
   - `DEV-PLAN-018`：UI Shell 历史阶段计划（已由 `DEV-PLAN-103` 收口为 MUI X / React SPA 单链路；模块页面与权限集成随 022 与各业务垂直切片推进）。
 
 ## 5. 实施路线图（串行 + 并行泳道）
@@ -124,16 +121,17 @@
 - 并行说明：
   - 本阶段可在 Phase 1 完成后立刻启动，并与 Phase 2/3 并行推进；但任何落盘 schema/生成物/路由/授权变更必须遵守 021/024/025/022/017/012 的门禁与 stopline（禁止为“先跑起来”埋技术债）。
 - 建议并行拓扑（以减少阻塞）：
+  - 以下仅记录历史执行顺序；当前态仓库模块边界已由 `DEV-PLAN-450` 收口，不应据此推导当前待办。
   - `026(orgunit) || 027(person identity) || 028(setid)`
   - `028 => 029(jobcatalog)`
   - `026 + 029 => 030(position)`
   - `030 + 027 => 031(assignments)`
 - 出口条件（最小端到端闭环，且必须用户可见）：
   1. [X] OrgUnit：至少一条“写入→读树/详情”的 UI 操作链路可演示（026 + 018）。证据：#21 https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/21 、#22 https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/22 、#26 https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/26 、#28 https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/28 、#29 https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/29 、#30 https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/30
-  2. [X] Person Identity：`pernr -> person_uuid` 精确解析可被页面/表单实际复用（027 + 018），避免 staffing 自己解析形成隐形耦合。证据：#43 https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/43
-  3. [X] SetID + JobCatalog：SetID 映射可配置，并在 JobCatalog 至少一个实体形成“解析→写入→列表读取”的 UI 样板（028 + 029 + 018）。证据：#42 https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/42
-  4. [X] Staffing：Position 与 Assignments 的写入口与读模型闭环可用，且至少一条“创建/更新→列表可见”的 UI 链路存在（030/031 + 018）。证据：#43 https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/43
-  5. [X] Assignments UI：严格执行“仅展示 `effective_date`”（031/018）。证据：#43 https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/43
+  2. [X] Person Identity：`pernr -> person_uuid` 精确解析曾可被页面/表单实际复用（027 + 018），避免 staffing 自己解析形成隐形耦合；该链路现已退出当前仓库。证据：#43 https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/43
+  3. [X] SetID + JobCatalog：SetID 映射曾可配置，并在 JobCatalog 至少一个实体形成“解析→写入→列表读取”的 UI 样板（028 + 029 + 018）；该链路现行删除 owner 见 `DEV-PLAN-440/450`。证据：#42 https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/42
+  4. [X] Staffing：Position 与 Assignments 的写入口与读模型闭环曾可用，且至少一条“创建/更新→列表可见”的 UI 链路存在（030/031 + 018）；该链路现已退出当前仓库。证据：#43 https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/43
+  5. [X] Assignments UI：曾严格执行“仅展示 `effective_date`”（031/018）；该结论仅保留为历史交付记录。证据：#43 https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/43
 
 ### Phase 5：质量收口（把“能跑”变成“可长期演进”）
 - 串行关键路径：`012(四大 required checks 全量启用) => 交付`
@@ -159,7 +157,7 @@ flowchart TD
   P87 --> P90[024 Atlas+Goose]
   P87 --> P91[025 sqlc 规范]
 
-  P82[015 DDD 分层] --> P83[016 4 模块骨架]
+  P82[015 DDD 分层] --> P83[016 历史 4 模块骨架]
   P94[017 路由策略] --> P96
 
   P83 --> P88[019 Tenancy/AuthN]
@@ -207,14 +205,14 @@ flowchart TD
 - `docs/archive/dev-plans/018-astro-aha-ui-shell-for-hrms.md`
 - `docs/dev-plans/019-tenant-and-authn.md`
 - `docs/dev-plans/020-i18n-en-zh-only.md`
-- `docs/dev-plans/021-pg-rls-for-org-position-job-catalog.md`
+- `docs/archive/dev-plans/021-pg-rls-for-org-position-job-catalog.md`
 - `docs/dev-plans/022-authz-casbin-toolchain.md`
 - `docs/dev-plans/023-superadmin-authn.md`
 - `docs/dev-plans/024-atlas-goose-closed-loop-guide.md`
 - `docs/dev-plans/025-sqlc-guidelines.md`
 - `docs/archive/dev-plans/026-org-transactional-event-sourcing-synchronous-projection.md`（已被 DEV-PLAN-078 替代，历史参考）
 - `docs/dev-plans/078-orgunit-write-model-alternatives-comparison-and-decision.md`
-- `docs/archive/dev-plans/027-person-minimal-identity-for-staffing.md`
+- `docs/archive/dev-plans/027-person-minimal-identity-for-staffing.md`（历史来源；现行三模块删除 owner 见 `DEV-PLAN-450`）
 - `docs/archive/dev-plans/028-setid-management.md`
 - `docs/archive/dev-plans/029-job-catalog-transactional-event-sourcing-synchronous-projection.md`
 - `docs/archive/dev-plans/030-position-transactional-event-sourcing-synchronous-projection.md`

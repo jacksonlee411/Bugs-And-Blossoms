@@ -73,7 +73,6 @@ type orgUnitWriteStoreStub struct {
 	resolveOrgIDFn           func(ctx context.Context, tenantID string, orgCode string) (int, error)
 	resolveOrgNodeKeyFn      func(ctx context.Context, tenantID string, orgCode string) (string, error)
 	resolveOrgCodeFn         func(ctx context.Context, tenantID string, orgID int) (string, error)
-	findPersonByPernrFn      func(ctx context.Context, tenantID string, pernr string) (types.Person, error)
 	resolveSetIDFn           func(ctx context.Context, tenantID string, orgNodeKey string, asOf string) (string, error)
 	isOrgTreeInitializedFn   func(ctx context.Context, tenantID string) (bool, error)
 }
@@ -237,13 +236,6 @@ func mustEncodeTestOrgNodeKey(orgID int) string {
 	return key
 }
 
-func (s orgUnitWriteStoreStub) FindPersonByPernr(ctx context.Context, tenantID string, pernr string) (types.Person, error) {
-	if s.findPersonByPernrFn == nil {
-		return types.Person{}, errors.New("FindPersonByPernr not mocked")
-	}
-	return s.findPersonByPernrFn(ctx, tenantID, pernr)
-}
-
 func withNewUUID(t *testing.T, fn func() (string, error)) {
 	t.Helper()
 	orig := newUUID
@@ -258,7 +250,7 @@ func withMarshalJSON(t *testing.T, fn func(any) ([]byte, error)) {
 	t.Cleanup(func() { marshalJSON = orig })
 }
 
-func withDefaultCreateFieldDecisions(store orgUnitWriteStoreStub) orgUnitWriteSetIDResolverStoreStub {
+func withDefaultCreateFieldDecisions(store orgUnitWriteStoreStub) orgUnitWriteStoreStub {
 	if store.resolveOrgNodeKeyFn == nil {
 		store.resolveOrgNodeKeyFn = func(context.Context, string, string) (string, error) {
 			return "", orgunitpkg.ErrOrgCodeNotFound
@@ -269,32 +261,7 @@ func withDefaultCreateFieldDecisions(store orgUnitWriteStoreStub) orgUnitWriteSe
 			return false, nil
 		}
 	}
-	return orgUnitWriteSetIDResolverStoreStub{
-		orgUnitWriteStoreStub: store,
-		resolveDecisionFn: func(_ context.Context, _ string, capabilityKey string, fieldKey string, _ string, _ string) (types.SetIDStrategyFieldDecision, bool, error) {
-			if strings.TrimSpace(capabilityKey) != orgUnitCreateFieldPolicyCapabilityKey {
-				return types.SetIDStrategyFieldDecision{}, false, nil
-			}
-			switch strings.TrimSpace(fieldKey) {
-			case orgUnitCreateFieldOrgCode:
-				return types.SetIDStrategyFieldDecision{
-					CapabilityKey: orgUnitCreateFieldPolicyCapabilityKey,
-					FieldKey:      orgUnitCreateFieldOrgCode,
-					Visible:       true,
-					Maintainable:  true,
-				}, true, nil
-			case orgUnitCreateFieldOrgType:
-				return types.SetIDStrategyFieldDecision{
-					CapabilityKey: orgUnitCreateFieldPolicyCapabilityKey,
-					FieldKey:      orgUnitCreateFieldOrgType,
-					Visible:       true,
-					Maintainable:  true,
-				}, true, nil
-			default:
-				return types.SetIDStrategyFieldDecision{}, false, nil
-			}
-		},
-	}
+	return store
 }
 
 func newWriteService(store ports.OrgUnitWriteStore) *orgUnitWriteService {
@@ -390,8 +357,8 @@ func TestCorrectManagerPernrNotFound(t *testing.T) {
 		findEventByEffectiveFn: func(_ context.Context, _ string, _ int, _ string) (types.OrgUnitEvent, error) {
 			return types.OrgUnitEvent{EventType: types.OrgUnitEventCreate}, nil
 		},
-		findPersonByPernrFn: func(_ context.Context, _ string, _ string) (types.Person, error) {
-			return types.Person{}, ports.ErrPersonNotFound
+		submitCorrectionFn: func(_ context.Context, _ string, _ int, _ string, _ json.RawMessage, _ string, _ string) (string, error) {
+			return "evt-1", nil
 		},
 	}
 
@@ -404,18 +371,15 @@ func TestCorrectManagerPernrNotFound(t *testing.T) {
 			ManagerPernr: new("1001"),
 		},
 	})
-	if err == nil || err.Error() != errManagerPernrNotFound {
-		t.Fatalf("expected manager pernr not found, got %v", err)
+	if err != nil {
+		t.Fatalf("expected manager pernr to normalize without person lookup, got %v", err)
 	}
 }
 
-func TestCreateManagerPernrInactive(t *testing.T) {
+func TestCreateManagerPernrNormalized(t *testing.T) {
 	store := orgUnitWriteStoreStub{
 		resolveOrgIDFn: func(_ context.Context, _ string, _ string) (int, error) {
 			return 0, orgunitpkg.ErrOrgCodeNotFound
-		},
-		findPersonByPernrFn: func(_ context.Context, _ string, _ string) (types.Person, error) {
-			return types.Person{UUID: "p1", Pernr: "1001", Status: "inactive"}, nil
 		},
 		submitEventFn: func(_ context.Context, _ string, _ string, _ *int, _ string, _ string, _ json.RawMessage, _ string, _ string) (int64, error) {
 			return 1, nil
@@ -430,10 +394,10 @@ func TestCreateManagerPernrInactive(t *testing.T) {
 		EffectiveDate: "2026-01-01",
 		OrgCode:       "ROOT",
 		Name:          "Root",
-		ManagerPernr:  "1001",
+		ManagerPernr:  "01001",
 	})
-	if err == nil || err.Error() != errManagerPernrInactive {
-		t.Fatalf("expected manager pernr inactive, got %v", err)
+	if err != nil {
+		t.Fatalf("expected normalized manager pernr, got %v", err)
 	}
 }
 
@@ -1782,33 +1746,18 @@ func TestParentPatchKey(t *testing.T) {
 
 func TestResolveManagerInvalidPernr(t *testing.T) {
 	svc := newWriteService(orgUnitWriteStoreStub{})
-	if _, _, _, err := svc.resolveManager(context.Background(), "t1", "ABC"); err == nil || !httperr.IsBadRequest(err) || err.Error() != errManagerPernrInvalid {
+	if _, _, _, err := svc.resolveManager("ABC"); err == nil || !httperr.IsBadRequest(err) || err.Error() != errManagerPernrInvalid {
 		t.Fatalf("expected pernr invalid, got %v", err)
 	}
 }
 
-func TestResolveManagerStoreError(t *testing.T) {
-	svc := newWriteService(orgUnitWriteStoreStub{
-		findPersonByPernrFn: func(_ context.Context, _ string, _ string) (types.Person, error) {
-			return types.Person{}, errors.New("find")
-		},
-	})
-	if _, _, _, err := svc.resolveManager(context.Background(), "t1", "1001"); err == nil || err.Error() != "find" {
-		t.Fatalf("expected find error, got %v", err)
-	}
-}
-
 func TestResolveManagerSuccess(t *testing.T) {
-	svc := newWriteService(orgUnitWriteStoreStub{
-		findPersonByPernrFn: func(_ context.Context, _ string, _ string) (types.Person, error) {
-			return types.Person{UUID: "p1", Pernr: "1001", DisplayName: "Manager", Status: "active"}, nil
-		},
-	})
-	pernr, uuid, name, err := svc.resolveManager(context.Background(), "t1", "01001")
+	svc := newWriteService(orgUnitWriteStoreStub{})
+	pernr, uuid, name, err := svc.resolveManager("01001")
 	if err != nil {
 		t.Fatalf("expected ok, got %v", err)
 	}
-	if pernr != "1001" || uuid != "p1" || name != "Manager" {
+	if pernr != "1001" || uuid != "" || name != "" {
 		t.Fatalf("unexpected manager data: %v %v %v", pernr, uuid, name)
 	}
 }
@@ -1999,9 +1948,6 @@ func TestCreateSuccess(t *testing.T) {
 			}
 			return 20000002, nil
 		},
-		findPersonByPernrFn: func(_ context.Context, _ string, _ string) (types.Person, error) {
-			return types.Person{UUID: "p1", Pernr: "1001", DisplayName: "Manager", Status: "active"}, nil
-		},
 		submitEventFn: func(_ context.Context, _ string, _ string, _ *int, _ string, _ string, _ json.RawMessage, _ string, _ string) (int64, error) {
 			return 1, nil
 		},
@@ -2024,7 +1970,7 @@ func TestCreateSuccess(t *testing.T) {
 	if res.OrgCode != "ROOT" || res.EffectiveDate != "2026-01-01" {
 		t.Fatalf("unexpected result: %#v", res)
 	}
-	if res.Fields["parent_org_code"] != "PARENT" || res.Fields["manager_pernr"] != "1001" || res.Fields["manager_name"] != "Manager" {
+	if res.Fields["parent_org_code"] != "PARENT" || res.Fields["manager_pernr"] != "1001" {
 		t.Fatalf("unexpected fields: %#v", res.Fields)
 	}
 }
@@ -3184,35 +3130,27 @@ func TestBuildCorrectionPatch(t *testing.T) {
 	})
 
 	t.Run("manager_resolve_error", func(t *testing.T) {
-		svc := newWriteService(orgUnitWriteStoreStub{
-			findPersonByPernrFn: func(_ context.Context, _ string, _ string) (types.Person, error) {
-				return types.Person{}, errors.New("find")
-			},
-		})
+		svc := newWriteService(orgUnitWriteStoreStub{})
 		_, _, _, err := svc.buildCorrectionPatch(ctx, "t1", types.OrgUnitEvent{EventType: types.OrgUnitEventCreate}, OrgUnitCorrectionPatch{
-			ManagerPernr: new("1001"),
+			ManagerPernr: new("bad"),
 		}, emptyCfgs)
-		if err == nil || err.Error() != "find" {
-			t.Fatalf("expected find error, got %v", err)
+		if err == nil || !httperr.IsBadRequest(err) || err.Error() != errManagerPernrInvalid {
+			t.Fatalf("expected invalid pernr, got %v", err)
 		}
 	})
 
 	t.Run("manager_success", func(t *testing.T) {
-		svc := newWriteService(orgUnitWriteStoreStub{
-			findPersonByPernrFn: func(_ context.Context, _ string, _ string) (types.Person, error) {
-				return types.Person{UUID: "p1", Pernr: "1001", DisplayName: "Manager", Status: "active"}, nil
-			},
-		})
+		svc := newWriteService(orgUnitWriteStoreStub{})
 		patchMap, fields, _, err := svc.buildCorrectionPatch(ctx, "t1", types.OrgUnitEvent{EventType: types.OrgUnitEventCreate}, OrgUnitCorrectionPatch{
 			ManagerPernr: new("1001"),
 		}, emptyCfgs)
 		if err != nil {
 			t.Fatalf("expected ok, got %v", err)
 		}
-		if patchMap["manager_uuid"] != "p1" || patchMap["manager_pernr"] != "1001" {
+		if patchMap["manager_pernr"] != "1001" {
 			t.Fatalf("unexpected patch map: %#v", patchMap)
 		}
-		if fields["manager_pernr"] != "1001" || fields["manager_name"] != "Manager" {
+		if fields["manager_pernr"] != "1001" {
 			t.Fatalf("unexpected fields: %#v", fields)
 		}
 	})

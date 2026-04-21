@@ -849,7 +849,7 @@
 2. `docs/archive/dev-plans/165-field-configs-and-strategy-capability-key-alignment-and-page-positioning.md`
 3. `docs/dev-plans/182-bu-policy-baseline-and-intent-override-unification.md`
 4. `docs/dev-plans/184-field-metadata-and-runtime-policy-sot-convergence.md`
-5. `docs/dev-plans/202-blueprint-policy-resolution-and-allowed-values-determinism.md`
+5. `docs/archive/dev-plans/202-blueprint-policy-resolution-and-allowed-values-determinism.md`
 6. `docs/dev-plans/100e1-orgunit-mutation-policy-and-ext-corrections-prereq.md`
 7. `docs/archive/dev-plans/156-capability-key-m3-m9-route-capability-mapping-and-gates.md`
 8. `docs/dev-plans/320-org-node-key-cutover-plan-no-global-expansion.md`

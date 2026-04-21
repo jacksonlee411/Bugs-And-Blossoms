@@ -34,7 +34,7 @@ func scopeSubscriptionRow(setid string, scopeCode string, packageID string, owne
 func TestSetIDPGStore_ListScopeCodes(t *testing.T) {
 	tx := &stubTx{
 		rows: &tableRows{rows: [][]any{
-			{"jobcatalog", "jobcatalog", "tenant-only", true},
+			{"orgunit_location", "orgunit", "shared-only", true},
 		}},
 	}
 	store := &setidPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx, nil })}
@@ -65,20 +65,19 @@ func TestSetIDPGStore_ListScopeCodes(t *testing.T) {
 func TestSetIDPGStore_CreateScopePackage(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
 		tx := &stubTx{
-			row:  &stubRow{vals: []any{"p1"}},
-			row2: scopePackageRow("p1", "jobcatalog", "PKG1", "A0001", "Pkg", "active"),
+			execErr:   errors.New("scope mismatch"),
+			execErrAt: 3,
 		}
 		store := &setidPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx, nil })}
-		pkg, err := store.CreateScopePackage(context.Background(), "t1", "jobcatalog", "PKG1", "A0001", "Pkg", "2026-01-01", "r1", "p1")
-		if err != nil || pkg.PackageID != "p1" {
-			t.Fatalf("pkg=%+v err=%v", pkg, err)
+		if _, err := store.CreateScopePackage(context.Background(), "t1", "orgunit_location", "PKG1", "A0001", "Pkg", "2026-01-01", "r1", "p1"); err == nil {
+			t.Fatal("expected error")
 		}
 	})
 
 	t.Run("bootstrap error", func(t *testing.T) {
 		tx := &stubTx{execErr: errors.New("exec fail"), execErrAt: 2}
 		store := &setidPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx, nil })}
-		if _, err := store.CreateScopePackage(context.Background(), "t1", "jobcatalog", "PKG1", "A0001", "Pkg", "2026-01-01", "r1", "p1"); err == nil {
+		if _, err := store.CreateScopePackage(context.Background(), "t1", "orgunit_location", "PKG1", "A0001", "Pkg", "2026-01-01", "r1", "p1"); err == nil {
 			t.Fatal("expected error")
 		}
 	})
@@ -86,7 +85,7 @@ func TestSetIDPGStore_CreateScopePackage(t *testing.T) {
 	t.Run("package id error", func(t *testing.T) {
 		tx := &stubTx{rowErr: errors.New("row fail")}
 		store := &setidPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx, nil })}
-		if _, err := store.CreateScopePackage(context.Background(), "t1", "jobcatalog", "PKG1", "A0001", "Pkg", "2026-01-01", "r1", "p1"); err == nil {
+		if _, err := store.CreateScopePackage(context.Background(), "t1", "orgunit_location", "PKG1", "A0001", "Pkg", "2026-01-01", "r1", "p1"); err == nil {
 			t.Fatal("expected error")
 		}
 	})
@@ -95,7 +94,7 @@ func TestSetIDPGStore_CreateScopePackage(t *testing.T) {
 		tx := &stubTx{row: &stubRow{vals: []any{"p1"}}}
 		store := &setidPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx, nil })}
 		withRandReader(t, randErrReader{}, func() {
-			if _, err := store.CreateScopePackage(context.Background(), "t1", "jobcatalog", "PKG1", "A0001", "Pkg", "2026-01-01", "r1", "p1"); err == nil {
+			if _, err := store.CreateScopePackage(context.Background(), "t1", "orgunit_location", "PKG1", "A0001", "Pkg", "2026-01-01", "r1", "p1"); err == nil {
 				t.Fatal("expected error")
 			}
 		})
@@ -108,7 +107,7 @@ func TestSetIDPGStore_CreateScopePackage(t *testing.T) {
 			execErrAt: 3,
 		}
 		store := &setidPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx, nil })}
-		if _, err := store.CreateScopePackage(context.Background(), "t1", "jobcatalog", "PKG1", "A0001", "Pkg", "2026-01-01", "r1", "p1"); err == nil {
+		if _, err := store.CreateScopePackage(context.Background(), "t1", "orgunit_location", "PKG1", "A0001", "Pkg", "2026-01-01", "r1", "p1"); err == nil {
 			t.Fatal("expected error")
 		}
 	})
@@ -120,7 +119,7 @@ func TestSetIDPGStore_CreateScopePackage(t *testing.T) {
 			execErrAt: 4,
 		}
 		store := &setidPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx, nil })}
-		if _, err := store.CreateScopePackage(context.Background(), "t1", "jobcatalog", "PKG1", "A0001", "Pkg", "2026-01-01", "r1", "p1"); err == nil {
+		if _, err := store.CreateScopePackage(context.Background(), "t1", "orgunit_location", "PKG1", "A0001", "Pkg", "2026-01-01", "r1", "p1"); err == nil {
 			t.Fatal("expected error")
 		}
 	})
@@ -129,7 +128,7 @@ func TestSetIDPGStore_CreateScopePackage(t *testing.T) {
 		tx := &stubTx{row: &stubRow{vals: []any{"p1"}}}
 		store := &setidPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx, nil })}
 		withRandReader(t, &seqRandErrReader{}, func() {
-			if _, err := store.CreateScopePackage(context.Background(), "t1", "jobcatalog", "PKG1", "A0001", "Pkg", "2026-01-01", "r1", "p1"); err == nil {
+			if _, err := store.CreateScopePackage(context.Background(), "t1", "orgunit_location", "PKG1", "A0001", "Pkg", "2026-01-01", "r1", "p1"); err == nil {
 				t.Fatal("expected error")
 			}
 		})
@@ -141,7 +140,7 @@ func TestSetIDPGStore_CreateScopePackage(t *testing.T) {
 			row2Err: errors.New("fetch fail"),
 		}
 		store := &setidPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx, nil })}
-		if _, err := store.CreateScopePackage(context.Background(), "t1", "jobcatalog", "PKG1", "A0001", "Pkg", "2026-01-01", "r1", "p1"); err == nil {
+		if _, err := store.CreateScopePackage(context.Background(), "t1", "orgunit_location", "PKG1", "A0001", "Pkg", "2026-01-01", "r1", "p1"); err == nil {
 			t.Fatal("expected error")
 		}
 	})
@@ -151,10 +150,10 @@ func TestSetIDPGStore_CreateScopePackage(t *testing.T) {
 			row:  &stubRow{vals: []any{"p1"}},
 			row2: &stubRow{err: pgx.ErrNoRows},
 			row3: &stubRow{vals: []any{"p2"}},
-			row4: scopePackageRow("p2", "jobcatalog", "PKG2", "A0001", "Pkg2", "active"),
+			row4: scopePackageRow("p2", "orgunit_location", "PKG2", "A0001", "Pkg2", "active"),
 		}
 		store := &setidPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx, nil })}
-		pkg, err := store.CreateScopePackage(context.Background(), "t1", "jobcatalog", "PKG1", "A0001", "Pkg", "2026-01-01", "r1", "p1")
+		pkg, err := store.CreateScopePackage(context.Background(), "t1", "orgunit_location", "PKG1", "A0001", "Pkg", "2026-01-01", "r1", "p1")
 		if err != nil || pkg.PackageID != "p2" {
 			t.Fatalf("pkg=%+v err=%v", pkg, err)
 		}
@@ -167,7 +166,7 @@ func TestSetIDPGStore_CreateScopePackage(t *testing.T) {
 			row3Err: errors.New("row fail"),
 		}
 		store := &setidPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx, nil })}
-		if _, err := store.CreateScopePackage(context.Background(), "t1", "jobcatalog", "PKG1", "A0001", "Pkg", "2026-01-01", "r1", "p1"); err == nil {
+		if _, err := store.CreateScopePackage(context.Background(), "t1", "orgunit_location", "PKG1", "A0001", "Pkg", "2026-01-01", "r1", "p1"); err == nil {
 			t.Fatal("expected error")
 		}
 	})
@@ -180,7 +179,7 @@ func TestSetIDPGStore_CreateScopePackage(t *testing.T) {
 			row4Err: errors.New("fetch fail"),
 		}
 		store := &setidPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx, nil })}
-		if _, err := store.CreateScopePackage(context.Background(), "t1", "jobcatalog", "PKG1", "A0001", "Pkg", "2026-01-01", "r1", "p1"); err == nil {
+		if _, err := store.CreateScopePackage(context.Background(), "t1", "orgunit_location", "PKG1", "A0001", "Pkg", "2026-01-01", "r1", "p1"); err == nil {
 			t.Fatal("expected error")
 		}
 	})
@@ -188,10 +187,10 @@ func TestSetIDPGStore_CreateScopePackage(t *testing.T) {
 	t.Run("success empty request code", func(t *testing.T) {
 		tx := &stubTx{
 			row:  &stubRow{vals: []any{"p1"}},
-			row2: scopePackageRow("p1", "jobcatalog", "PKG1", "A0001", "Pkg", "active"),
+			row2: scopePackageRow("p1", "orgunit_location", "PKG1", "A0001", "Pkg", "active"),
 		}
 		store := &setidPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx, nil })}
-		pkg, err := store.CreateScopePackage(context.Background(), "t1", "jobcatalog", "PKG1", "A0001", "Pkg", "2026-01-01", "", "p1")
+		pkg, err := store.CreateScopePackage(context.Background(), "t1", "orgunit_location", "PKG1", "A0001", "Pkg", "2026-01-01", "", "p1")
 		if err != nil || pkg.PackageID != "p1" {
 			t.Fatalf("pkg=%+v err=%v", pkg, err)
 		}
@@ -201,7 +200,7 @@ func TestSetIDPGStore_CreateScopePackage(t *testing.T) {
 func TestSetIDPGStore_DisableScopePackage(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
 		tx := &stubTx{
-			row: scopePackageRow("p1", "jobcatalog", "PKG1", "A0001", "Pkg", "disabled"),
+			row: scopePackageRow("p1", "orgunit_location", "PKG1", "A0001", "Pkg", "disabled"),
 		}
 		store := &setidPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx, nil })}
 		pkg, err := store.DisableScopePackage(context.Background(), "t1", "p1", "2026-01-01", "r1", "p1")
@@ -245,30 +244,30 @@ func TestSetIDPGStore_DisableScopePackage(t *testing.T) {
 func TestSetIDPGStore_ListScopePackages(t *testing.T) {
 	tx := &stubTx{
 		rows: &tableRows{rows: [][]any{
-			{"p1", "jobcatalog", "PKG1", "A0001", "Pkg", "active", "2026-01-01", "2026-01-02T00:00:00Z"},
+			{"p1", "orgunit_location", "PKG1", "A0001", "Pkg", "active", "2026-01-01", "2026-01-02T00:00:00Z"},
 		}},
 	}
 	store := &setidPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx, nil })}
-	pkgs, err := store.ListScopePackages(context.Background(), "t1", "jobcatalog")
+	pkgs, err := store.ListScopePackages(context.Background(), "t1", "orgunit_location")
 	if err != nil || len(pkgs) != 1 {
 		t.Fatalf("len=%d err=%v", len(pkgs), err)
 	}
 
 	txQueryErr := &stubTx{queryErr: errors.New("query fail")}
 	storeQueryErr := &setidPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return txQueryErr, nil })}
-	if _, err := storeQueryErr.ListScopePackages(context.Background(), "t1", "jobcatalog"); err == nil {
+	if _, err := storeQueryErr.ListScopePackages(context.Background(), "t1", "orgunit_location"); err == nil {
 		t.Fatal("expected error")
 	}
 
 	txScanErr := &stubTx{rows: &scanErrRows{}}
 	storeScanErr := &setidPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return txScanErr, nil })}
-	if _, err := storeScanErr.ListScopePackages(context.Background(), "t1", "jobcatalog"); err == nil {
+	if _, err := storeScanErr.ListScopePackages(context.Background(), "t1", "orgunit_location"); err == nil {
 		t.Fatal("expected error")
 	}
 
 	txRowsErr := &stubTx{rows: &tableRows{rows: [][]any{}, err: errors.New("rows err")}}
 	storeRowsErr := &setidPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return txRowsErr, nil })}
-	if _, err := storeRowsErr.ListScopePackages(context.Background(), "t1", "jobcatalog"); err == nil {
+	if _, err := storeRowsErr.ListScopePackages(context.Background(), "t1", "orgunit_location"); err == nil {
 		t.Fatal("expected error")
 	}
 }
@@ -276,30 +275,30 @@ func TestSetIDPGStore_ListScopePackages(t *testing.T) {
 func TestSetIDPGStore_ListOwnedScopePackages(t *testing.T) {
 	tx := &stubTx{
 		rows: &tableRows{rows: [][]any{
-			{"p1", "jobcatalog", "PKG1", "A0001", "Pkg", "active", "2026-01-01"},
+			{"p1", "orgunit_location", "PKG1", "A0001", "Pkg", "active", "2026-01-01"},
 		}},
 	}
 	store := &setidPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx, nil })}
-	pkgs, err := store.ListOwnedScopePackages(context.Background(), "t1", "jobcatalog", "2026-01-01")
+	pkgs, err := store.ListOwnedScopePackages(context.Background(), "t1", "orgunit_location", "2026-01-01")
 	if err != nil || len(pkgs) != 1 {
 		t.Fatalf("len=%d err=%v", len(pkgs), err)
 	}
 
 	txQueryErr := &stubTx{queryErr: errors.New("query fail")}
 	storeQueryErr := &setidPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return txQueryErr, nil })}
-	if _, err := storeQueryErr.ListOwnedScopePackages(context.Background(), "t1", "jobcatalog", "2026-01-01"); err == nil {
+	if _, err := storeQueryErr.ListOwnedScopePackages(context.Background(), "t1", "orgunit_location", "2026-01-01"); err == nil {
 		t.Fatal("expected error")
 	}
 
 	txScanErr := &stubTx{rows: &scanErrRows{}}
 	storeScanErr := &setidPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return txScanErr, nil })}
-	if _, err := storeScanErr.ListOwnedScopePackages(context.Background(), "t1", "jobcatalog", "2026-01-01"); err == nil {
+	if _, err := storeScanErr.ListOwnedScopePackages(context.Background(), "t1", "orgunit_location", "2026-01-01"); err == nil {
 		t.Fatal("expected error")
 	}
 
 	txRowsErr := &stubTx{rows: &tableRows{rows: [][]any{}, err: errors.New("rows err")}}
 	storeRowsErr := &setidPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return txRowsErr, nil })}
-	if _, err := storeRowsErr.ListOwnedScopePackages(context.Background(), "t1", "jobcatalog", "2026-01-01"); err == nil {
+	if _, err := storeRowsErr.ListOwnedScopePackages(context.Background(), "t1", "orgunit_location", "2026-01-01"); err == nil {
 		t.Fatal("expected error")
 	}
 }
@@ -307,10 +306,10 @@ func TestSetIDPGStore_ListOwnedScopePackages(t *testing.T) {
 func TestSetIDPGStore_CreateScopeSubscription(t *testing.T) {
 	t.Run("tenant success", func(t *testing.T) {
 		tx := &stubTx{
-			row: scopeSubscriptionRow("S2601", "jobcatalog", "p1", "t1", "2026-01-01", ""),
+			row: scopeSubscriptionRow("S2601", "orgunit_location", "p1", "t1", "2026-01-01", ""),
 		}
 		store := &setidPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx, nil })}
-		sub, err := store.CreateScopeSubscription(context.Background(), "t1", "S2601", "jobcatalog", "p1", "tenant", "2026-01-01", "r1", "p1")
+		sub, err := store.CreateScopeSubscription(context.Background(), "t1", "S2601", "orgunit_location", "p1", "tenant", "2026-01-01", "r1", "p1")
 		if err != nil || sub.PackageOwner != "tenant" {
 			t.Fatalf("sub=%+v err=%v", sub, err)
 		}
@@ -319,10 +318,10 @@ func TestSetIDPGStore_CreateScopeSubscription(t *testing.T) {
 	t.Run("global success", func(t *testing.T) {
 		tx := &stubTx{
 			row:  &stubRow{vals: []any{"gt1"}},
-			row2: scopeSubscriptionRow("S2601", "jobcatalog", "p1", "gt1", "2026-01-01", ""),
+			row2: scopeSubscriptionRow("S2601", "orgunit_location", "p1", "gt1", "2026-01-01", ""),
 		}
 		store := &setidPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx, nil })}
-		sub, err := store.CreateScopeSubscription(context.Background(), "t1", "S2601", "jobcatalog", "p1", "global", "2026-01-01", "r1", "p1")
+		sub, err := store.CreateScopeSubscription(context.Background(), "t1", "S2601", "orgunit_location", "p1", "global", "2026-01-01", "r1", "p1")
 		if err != nil || sub.PackageOwner != "global" {
 			t.Fatalf("sub=%+v err=%v", sub, err)
 		}
@@ -332,7 +331,7 @@ func TestSetIDPGStore_CreateScopeSubscription(t *testing.T) {
 		tx := &stubTx{}
 		store := &setidPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx, nil })}
 		withRandReader(t, randErrReader{}, func() {
-			if _, err := store.CreateScopeSubscription(context.Background(), "t1", "S2601", "jobcatalog", "p1", "tenant", "2026-01-01", "r1", "p1"); err == nil {
+			if _, err := store.CreateScopeSubscription(context.Background(), "t1", "S2601", "orgunit_location", "p1", "tenant", "2026-01-01", "r1", "p1"); err == nil {
 				t.Fatal("expected error")
 			}
 		})
@@ -343,7 +342,7 @@ func TestSetIDPGStore_CreateScopeSubscription(t *testing.T) {
 			rowErr: errors.New("row fail"),
 		}
 		store := &setidPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx, nil })}
-		if _, err := store.CreateScopeSubscription(context.Background(), "t1", "S2601", "jobcatalog", "p1", "global", "2026-01-01", "r1", "p1"); err == nil {
+		if _, err := store.CreateScopeSubscription(context.Background(), "t1", "S2601", "orgunit_location", "p1", "global", "2026-01-01", "r1", "p1"); err == nil {
 			t.Fatal("expected error")
 		}
 	})
@@ -354,7 +353,7 @@ func TestSetIDPGStore_CreateScopeSubscription(t *testing.T) {
 			execErrAt: 2,
 		}
 		store := &setidPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx, nil })}
-		if _, err := store.CreateScopeSubscription(context.Background(), "t1", "S2601", "jobcatalog", "p1", "tenant", "2026-01-01", "r1", "p1"); err == nil {
+		if _, err := store.CreateScopeSubscription(context.Background(), "t1", "S2601", "orgunit_location", "p1", "tenant", "2026-01-01", "r1", "p1"); err == nil {
 			t.Fatal("expected error")
 		}
 	})
@@ -364,7 +363,7 @@ func TestSetIDPGStore_CreateScopeSubscription(t *testing.T) {
 			rowErr: errors.New("row fail"),
 		}
 		store := &setidPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx, nil })}
-		if _, err := store.CreateScopeSubscription(context.Background(), "t1", "S2601", "jobcatalog", "p1", "tenant", "2026-01-01", "r1", "p1"); err == nil {
+		if _, err := store.CreateScopeSubscription(context.Background(), "t1", "S2601", "orgunit_location", "p1", "tenant", "2026-01-01", "r1", "p1"); err == nil {
 			t.Fatal("expected error")
 		}
 	})
@@ -374,7 +373,7 @@ func TestSetIDPGStore_GetScopeSubscription(t *testing.T) {
 	t.Run("missing", func(t *testing.T) {
 		tx := &stubTx{rowErr: pgx.ErrNoRows}
 		store := &setidPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx, nil })}
-		if _, err := store.GetScopeSubscription(context.Background(), "t1", "S2601", "jobcatalog", "2026-01-01"); err == nil || !strings.Contains(err.Error(), "SCOPE_SUBSCRIPTION_MISSING") {
+		if _, err := store.GetScopeSubscription(context.Background(), "t1", "S2601", "orgunit_location", "2026-01-01"); err == nil || !strings.Contains(err.Error(), "SCOPE_SUBSCRIPTION_MISSING") {
 			t.Fatalf("expected missing err, got %v", err)
 		}
 	})
@@ -382,17 +381,17 @@ func TestSetIDPGStore_GetScopeSubscription(t *testing.T) {
 	t.Run("fetch error", func(t *testing.T) {
 		tx := &stubTx{rowErr: errors.New("boom")}
 		store := &setidPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx, nil })}
-		if _, err := store.GetScopeSubscription(context.Background(), "t1", "S2601", "jobcatalog", "2026-01-01"); err == nil {
+		if _, err := store.GetScopeSubscription(context.Background(), "t1", "S2601", "orgunit_location", "2026-01-01"); err == nil {
 			t.Fatal("expected error")
 		}
 	})
 
 	t.Run("success", func(t *testing.T) {
 		tx := &stubTx{
-			row: scopeSubscriptionRow("S2601", "jobcatalog", "p1", "t1", "2026-01-01", ""),
+			row: scopeSubscriptionRow("S2601", "orgunit_location", "p1", "t1", "2026-01-01", ""),
 		}
 		store := &setidPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx, nil })}
-		sub, err := store.GetScopeSubscription(context.Background(), "t1", "S2601", "jobcatalog", "2026-01-01")
+		sub, err := store.GetScopeSubscription(context.Background(), "t1", "S2601", "orgunit_location", "2026-01-01")
 		if err != nil || sub.PackageOwner != "tenant" {
 			t.Fatalf("sub=%+v err=%v", sub, err)
 		}
@@ -404,7 +403,7 @@ func TestSetIDPGStore_CreateGlobalScopePackage(t *testing.T) {
 		store := &setidPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) {
 			return nil, errors.New("begin fail")
 		})}
-		if _, err := store.CreateGlobalScopePackage(context.Background(), "jobcatalog", "PKG1", "Pkg", "2026-01-01", "r1", "p1", "saas"); err == nil {
+		if _, err := store.CreateGlobalScopePackage(context.Background(), "orgunit_location", "PKG1", "Pkg", "2026-01-01", "r1", "p1", "saas"); err == nil {
 			t.Fatal("expected error")
 		}
 	})
@@ -412,7 +411,7 @@ func TestSetIDPGStore_CreateGlobalScopePackage(t *testing.T) {
 	t.Run("tenant id error", func(t *testing.T) {
 		tx := &stubTx{rowErr: errors.New("row fail")}
 		store := &setidPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx, nil })}
-		if _, err := store.CreateGlobalScopePackage(context.Background(), "jobcatalog", "PKG1", "Pkg", "2026-01-01", "r1", "p1", "saas"); err == nil {
+		if _, err := store.CreateGlobalScopePackage(context.Background(), "orgunit_location", "PKG1", "Pkg", "2026-01-01", "r1", "p1", "saas"); err == nil {
 			t.Fatal("expected error")
 		}
 	})
@@ -424,7 +423,7 @@ func TestSetIDPGStore_CreateGlobalScopePackage(t *testing.T) {
 			execErrAt: 1,
 		}
 		store := &setidPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx, nil })}
-		if _, err := store.CreateGlobalScopePackage(context.Background(), "jobcatalog", "PKG1", "Pkg", "2026-01-01", "r1", "p1", "saas"); err == nil {
+		if _, err := store.CreateGlobalScopePackage(context.Background(), "orgunit_location", "PKG1", "Pkg", "2026-01-01", "r1", "p1", "saas"); err == nil {
 			t.Fatal("expected error")
 		}
 	})
@@ -436,7 +435,7 @@ func TestSetIDPGStore_CreateGlobalScopePackage(t *testing.T) {
 			execErrAt: 2,
 		}
 		store := &setidPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx, nil })}
-		if _, err := store.CreateGlobalScopePackage(context.Background(), "jobcatalog", "PKG1", "Pkg", "2026-01-01", "r1", "p1", "saas"); err == nil {
+		if _, err := store.CreateGlobalScopePackage(context.Background(), "orgunit_location", "PKG1", "Pkg", "2026-01-01", "r1", "p1", "saas"); err == nil {
 			t.Fatal("expected error")
 		}
 	})
@@ -448,7 +447,7 @@ func TestSetIDPGStore_CreateGlobalScopePackage(t *testing.T) {
 			execErrAt: 3,
 		}
 		store := &setidPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx, nil })}
-		if _, err := store.CreateGlobalScopePackage(context.Background(), "jobcatalog", "PKG1", "Pkg", "2026-01-01", "r1", "p1", "saas"); err == nil {
+		if _, err := store.CreateGlobalScopePackage(context.Background(), "orgunit_location", "PKG1", "Pkg", "2026-01-01", "r1", "p1", "saas"); err == nil {
 			t.Fatal("expected error")
 		}
 	})
@@ -459,7 +458,7 @@ func TestSetIDPGStore_CreateGlobalScopePackage(t *testing.T) {
 			row2Err: errors.New("row fail"),
 		}
 		store := &setidPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx, nil })}
-		if _, err := store.CreateGlobalScopePackage(context.Background(), "jobcatalog", "PKG1", "Pkg", "2026-01-01", "r1", "p1", "saas"); err == nil {
+		if _, err := store.CreateGlobalScopePackage(context.Background(), "orgunit_location", "PKG1", "Pkg", "2026-01-01", "r1", "p1", "saas"); err == nil {
 			t.Fatal("expected error")
 		}
 	})
@@ -471,7 +470,7 @@ func TestSetIDPGStore_CreateGlobalScopePackage(t *testing.T) {
 		}
 		store := &setidPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx, nil })}
 		withRandReader(t, randErrReader{}, func() {
-			if _, err := store.CreateGlobalScopePackage(context.Background(), "jobcatalog", "PKG1", "Pkg", "2026-01-01", "r1", "p1", "saas"); err == nil {
+			if _, err := store.CreateGlobalScopePackage(context.Background(), "orgunit_location", "PKG1", "Pkg", "2026-01-01", "r1", "p1", "saas"); err == nil {
 				t.Fatal("expected error")
 			}
 		})
@@ -485,7 +484,7 @@ func TestSetIDPGStore_CreateGlobalScopePackage(t *testing.T) {
 			execErrAt: 4,
 		}
 		store := &setidPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx, nil })}
-		if _, err := store.CreateGlobalScopePackage(context.Background(), "jobcatalog", "PKG1", "Pkg", "2026-01-01", "r1", "p1", "saas"); err == nil {
+		if _, err := store.CreateGlobalScopePackage(context.Background(), "orgunit_location", "PKG1", "Pkg", "2026-01-01", "r1", "p1", "saas"); err == nil {
 			t.Fatal("expected error")
 		}
 	})
@@ -497,7 +496,7 @@ func TestSetIDPGStore_CreateGlobalScopePackage(t *testing.T) {
 			row3Err: errors.New("fetch fail"),
 		}
 		store := &setidPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx, nil })}
-		if _, err := store.CreateGlobalScopePackage(context.Background(), "jobcatalog", "PKG1", "Pkg", "2026-01-01", "r1", "p1", "saas"); err == nil {
+		if _, err := store.CreateGlobalScopePackage(context.Background(), "orgunit_location", "PKG1", "Pkg", "2026-01-01", "r1", "p1", "saas"); err == nil {
 			t.Fatal("expected error")
 		}
 	})
@@ -510,11 +509,11 @@ func TestSetIDPGStore_CreateGlobalScopePackage(t *testing.T) {
 				&stubRow{vals: []any{"p1"}},
 				&stubRow{err: pgx.ErrNoRows},
 				&stubRow{vals: []any{"p2"}},
-				scopePackageRow("p2", "jobcatalog", "PKG2", "A0001", "Pkg2", "active"),
+				scopePackageRow("p2", "orgunit_location", "PKG2", "A0001", "Pkg2", "active"),
 			},
 		}
 		store := &setidPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx, nil })}
-		pkg, err := store.CreateGlobalScopePackage(context.Background(), "jobcatalog", "PKG1", "Pkg", "2026-01-01", "r1", "p1", "saas")
+		pkg, err := store.CreateGlobalScopePackage(context.Background(), "orgunit_location", "PKG1", "Pkg", "2026-01-01", "r1", "p1", "saas")
 		if err != nil || pkg.PackageID != "p2" {
 			t.Fatalf("pkg=%+v err=%v", pkg, err)
 		}
@@ -531,7 +530,7 @@ func TestSetIDPGStore_CreateGlobalScopePackage(t *testing.T) {
 			},
 		}
 		store := &setidPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx, nil })}
-		if _, err := store.CreateGlobalScopePackage(context.Background(), "jobcatalog", "PKG1", "Pkg", "2026-01-01", "r1", "p1", "saas"); err == nil {
+		if _, err := store.CreateGlobalScopePackage(context.Background(), "orgunit_location", "PKG1", "Pkg", "2026-01-01", "r1", "p1", "saas"); err == nil {
 			t.Fatal("expected error")
 		}
 	})
@@ -548,7 +547,7 @@ func TestSetIDPGStore_CreateGlobalScopePackage(t *testing.T) {
 			},
 		}
 		store := &setidPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx, nil })}
-		if _, err := store.CreateGlobalScopePackage(context.Background(), "jobcatalog", "PKG1", "Pkg", "2026-01-01", "r1", "p1", "saas"); err == nil {
+		if _, err := store.CreateGlobalScopePackage(context.Background(), "orgunit_location", "PKG1", "Pkg", "2026-01-01", "r1", "p1", "saas"); err == nil {
 			t.Fatal("expected error")
 		}
 	})
@@ -557,11 +556,11 @@ func TestSetIDPGStore_CreateGlobalScopePackage(t *testing.T) {
 		tx := &stubTx{
 			row:       &stubRow{vals: []any{"gt1"}},
 			row2:      &stubRow{vals: []any{"p1"}},
-			row3:      scopePackageRow("p1", "jobcatalog", "PKG1", "A0001", "Pkg", "active"),
+			row3:      scopePackageRow("p1", "orgunit_location", "PKG1", "A0001", "Pkg", "active"),
 			commitErr: errors.New("commit fail"),
 		}
 		store := &setidPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx, nil })}
-		if _, err := store.CreateGlobalScopePackage(context.Background(), "jobcatalog", "PKG1", "Pkg", "2026-01-01", "r1", "p1", "saas"); err == nil {
+		if _, err := store.CreateGlobalScopePackage(context.Background(), "orgunit_location", "PKG1", "Pkg", "2026-01-01", "r1", "p1", "saas"); err == nil {
 			t.Fatal("expected error")
 		}
 	})
@@ -570,10 +569,10 @@ func TestSetIDPGStore_CreateGlobalScopePackage(t *testing.T) {
 		tx := &stubTx{
 			row:  &stubRow{vals: []any{"gt1"}},
 			row2: &stubRow{vals: []any{"p1"}},
-			row3: scopePackageRow("p1", "jobcatalog", "PKG1", "A0001", "Pkg", "active"),
+			row3: scopePackageRow("p1", "orgunit_location", "PKG1", "A0001", "Pkg", "active"),
 		}
 		store := &setidPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx, nil })}
-		pkg, err := store.CreateGlobalScopePackage(context.Background(), "jobcatalog", "PKG1", "Pkg", "2026-01-01", "r1", "p1", "saas")
+		pkg, err := store.CreateGlobalScopePackage(context.Background(), "orgunit_location", "PKG1", "Pkg", "2026-01-01", "r1", "p1", "saas")
 		if err != nil || pkg.PackageID != "p1" {
 			t.Fatalf("pkg=%+v err=%v", pkg, err)
 		}
@@ -585,7 +584,7 @@ func TestSetIDPGStore_ListGlobalScopePackages(t *testing.T) {
 		store := &setidPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) {
 			return nil, errors.New("begin fail")
 		})}
-		if _, err := store.ListGlobalScopePackages(context.Background(), "jobcatalog"); err == nil {
+		if _, err := store.ListGlobalScopePackages(context.Background(), "orgunit_location"); err == nil {
 			t.Fatal("expected error")
 		}
 	})
@@ -593,7 +592,7 @@ func TestSetIDPGStore_ListGlobalScopePackages(t *testing.T) {
 	t.Run("tenant id error", func(t *testing.T) {
 		tx := &stubTx{rowErr: errors.New("row fail")}
 		store := &setidPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx, nil })}
-		if _, err := store.ListGlobalScopePackages(context.Background(), "jobcatalog"); err == nil {
+		if _, err := store.ListGlobalScopePackages(context.Background(), "orgunit_location"); err == nil {
 			t.Fatal("expected error")
 		}
 	})
@@ -605,7 +604,7 @@ func TestSetIDPGStore_ListGlobalScopePackages(t *testing.T) {
 			execErrAt: 1,
 		}
 		store := &setidPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx, nil })}
-		if _, err := store.ListGlobalScopePackages(context.Background(), "jobcatalog"); err == nil {
+		if _, err := store.ListGlobalScopePackages(context.Background(), "orgunit_location"); err == nil {
 			t.Fatal("expected error")
 		}
 	})
@@ -617,7 +616,7 @@ func TestSetIDPGStore_ListGlobalScopePackages(t *testing.T) {
 			execErrAt: 2,
 		}
 		store := &setidPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx, nil })}
-		if _, err := store.ListGlobalScopePackages(context.Background(), "jobcatalog"); err == nil {
+		if _, err := store.ListGlobalScopePackages(context.Background(), "orgunit_location"); err == nil {
 			t.Fatal("expected error")
 		}
 	})
@@ -628,7 +627,7 @@ func TestSetIDPGStore_ListGlobalScopePackages(t *testing.T) {
 			queryErr: errors.New("query fail"),
 		}
 		store := &setidPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx, nil })}
-		if _, err := store.ListGlobalScopePackages(context.Background(), "jobcatalog"); err == nil {
+		if _, err := store.ListGlobalScopePackages(context.Background(), "orgunit_location"); err == nil {
 			t.Fatal("expected error")
 		}
 	})
@@ -639,7 +638,7 @@ func TestSetIDPGStore_ListGlobalScopePackages(t *testing.T) {
 			rows: &scanErrRows{},
 		}
 		store := &setidPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx, nil })}
-		if _, err := store.ListGlobalScopePackages(context.Background(), "jobcatalog"); err == nil {
+		if _, err := store.ListGlobalScopePackages(context.Background(), "orgunit_location"); err == nil {
 			t.Fatal("expected error")
 		}
 	})
@@ -650,7 +649,7 @@ func TestSetIDPGStore_ListGlobalScopePackages(t *testing.T) {
 			rows: &tableRows{rows: [][]any{}, err: errors.New("rows err")},
 		}
 		store := &setidPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx, nil })}
-		if _, err := store.ListGlobalScopePackages(context.Background(), "jobcatalog"); err == nil {
+		if _, err := store.ListGlobalScopePackages(context.Background(), "orgunit_location"); err == nil {
 			t.Fatal("expected error")
 		}
 	})
@@ -662,7 +661,7 @@ func TestSetIDPGStore_ListGlobalScopePackages(t *testing.T) {
 			commitErr: errors.New("commit fail"),
 		}
 		store := &setidPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx, nil })}
-		if _, err := store.ListGlobalScopePackages(context.Background(), "jobcatalog"); err == nil {
+		if _, err := store.ListGlobalScopePackages(context.Background(), "orgunit_location"); err == nil {
 			t.Fatal("expected error")
 		}
 	})
@@ -671,11 +670,11 @@ func TestSetIDPGStore_ListGlobalScopePackages(t *testing.T) {
 		tx := &stubTx{
 			row: &stubRow{vals: []any{"gt1"}},
 			rows: &tableRows{rows: [][]any{
-				{"p1", "jobcatalog", "PKG1", "", "Pkg", "active"},
+				{"p1", "orgunit_location", "PKG1", "", "Pkg", "active"},
 			}},
 		}
 		store := &setidPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx, nil })}
-		pkgs, err := store.ListGlobalScopePackages(context.Background(), "jobcatalog")
+		pkgs, err := store.ListGlobalScopePackages(context.Background(), "orgunit_location")
 		if err != nil || len(pkgs) != 1 {
 			t.Fatalf("len=%d err=%v", len(pkgs), err)
 		}
@@ -690,43 +689,44 @@ func TestSetIDMemoryStore_ScopePackages(t *testing.T) {
 		t.Fatalf("len=%d err=%v", len(codes), err)
 	}
 
-	p1, err := store.CreateScopePackage(context.Background(), "t1", "jobcatalog", "PKG2", "A0001", "Pkg2", "2026-01-01", "r1", "p1")
-	if err != nil {
-		t.Fatalf("err=%v", err)
+	if _, err := store.CreateScopePackage(context.Background(), "t1", "orgunit_location", "PKG2", "A0001", "Pkg2", "2026-01-01", "r1", "p1"); err == nil {
+		t.Fatal("expected scope mismatch")
 	}
-	_, _ = store.CreateScopePackage(context.Background(), "t1", "jobcatalog", "PKG1", "A0001", "Pkg1", "2026-01-01", "r2", "p1")
-	pkgs, err := store.ListScopePackages(context.Background(), "t1", "jobcatalog")
-	if err != nil || len(pkgs) != 2 || pkgs[0].PackageCode != "PKG1" {
+	pkgs, err := store.ListScopePackages(context.Background(), "t1", "orgunit_location")
+	if err != nil || len(pkgs) != 0 {
 		t.Fatalf("pkgs=%+v err=%v", pkgs, err)
-	}
-
-	if _, err := store.DisableScopePackage(context.Background(), "t1", p1.PackageID, "2026-01-01", "r3", "p1"); err != nil {
-		t.Fatalf("err=%v", err)
 	}
 	if _, err := store.DisableScopePackage(context.Background(), "t1", "missing", "2026-01-01", "r3", "p1"); err == nil {
 		t.Fatal("expected error")
 	}
 
-	if _, err := store.CreateScopeSubscription(context.Background(), "t1", "S2601", "jobcatalog", "p1", "tenant", "2026-01-01", "r1", "p1"); err != nil {
+	if _, err := store.CreateScopeSubscription(context.Background(), "t1", "S2601", "orgunit_location", "p1", "tenant", "2026-01-01", "r1", "p1"); err == nil {
+		t.Fatal("expected scope mismatch")
+	}
+	if _, err := store.GetScopeSubscription(context.Background(), "t1", "S2601", "orgunit_location", "2026-01-01"); err == nil {
+		t.Fatal("expected missing error")
+	}
+	globalPkg, err := store.CreateGlobalScopePackage(context.Background(), "orgunit_location", "PKG2", "Pkg2", "2026-01-01", "r1", "p1", "saas")
+	if err != nil {
 		t.Fatalf("err=%v", err)
 	}
-	if _, err := store.GetScopeSubscription(context.Background(), "t1", "S2601", "jobcatalog", "2026-01-01"); err != nil {
+	if _, err := store.CreateScopeSubscription(context.Background(), "t1", "S2601", "orgunit_location", globalPkg.PackageID, "global", "2026-01-01", "r2", "p1"); err != nil {
 		t.Fatalf("err=%v", err)
 	}
-	if _, err := store.GetScopeSubscription(context.Background(), "t1", "MISSING", "jobcatalog", "2026-01-01"); err == nil {
+	if _, err := store.GetScopeSubscription(context.Background(), "t1", "S2601", "orgunit_location", "2026-01-01"); err != nil {
+		t.Fatalf("err=%v", err)
+	}
+	if _, err := store.GetScopeSubscription(context.Background(), "t1", "MISSING", "orgunit_location", "2026-01-01"); err == nil {
 		t.Fatal("expected error")
 	}
 
-	if _, err := store.CreateGlobalScopePackage(context.Background(), "jobcatalog", "PKG1", "Pkg", "2026-01-01", "r1", "p1", "nope"); err == nil {
+	if _, err := store.CreateGlobalScopePackage(context.Background(), "orgunit_location", "PKG1", "Pkg", "2026-01-01", "r1", "p1", "nope"); err == nil {
 		t.Fatal("expected error")
 	}
-	if _, err := store.CreateGlobalScopePackage(context.Background(), "jobcatalog", "PKG2", "Pkg2", "2026-01-01", "r1", "p1", "saas"); err != nil {
+	if _, err := store.CreateGlobalScopePackage(context.Background(), "orgunit_location", "PKG1", "Pkg1", "2026-01-01", "r2", "p1", "saas"); err != nil {
 		t.Fatalf("err=%v", err)
 	}
-	if _, err := store.CreateGlobalScopePackage(context.Background(), "jobcatalog", "PKG1", "Pkg1", "2026-01-01", "r2", "p1", "saas"); err != nil {
-		t.Fatalf("err=%v", err)
-	}
-	if pkgs, err := store.ListGlobalScopePackages(context.Background(), "jobcatalog"); err != nil || len(pkgs) != 2 || pkgs[0].PackageCode != "PKG1" {
+	if pkgs, err := store.ListGlobalScopePackages(context.Background(), "orgunit_location"); err != nil || len(pkgs) != 2 || pkgs[0].PackageCode != "PKG1" {
 		t.Fatalf("pkgs=%+v err=%v", pkgs, err)
 	}
 }

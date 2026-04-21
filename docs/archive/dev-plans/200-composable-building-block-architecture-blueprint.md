@@ -480,18 +480,18 @@
 
 ## 13. 关联文档
 
-- `docs/dev-plans/201-blueprint-phase0-boundary-and-scope-consistency-freeze.md`
-- `docs/dev-plans/202-blueprint-policy-resolution-and-allowed-values-determinism.md`
+- `docs/archive/dev-plans/201-blueprint-phase0-boundary-and-scope-consistency-freeze.md`
+- `docs/archive/dev-plans/202-blueprint-policy-resolution-and-allowed-values-determinism.md`
 - `docs/archive/dev-plans/203-blueprint-runtime-read-path-mapping-and-setid-preresolve.md`
-- `docs/dev-plans/204-blueprint-composition-dto-and-explain-versioning.md`
-- `docs/dev-plans/205-blueprint-page-responsibility-convergence-static-dynamic-sot.md`
-- `docs/dev-plans/206-blueprint-crud-template-and-double-version-submit-cutover.md`
-- `docs/dev-plans/207-blueprint-performance-gates-and-n-plus-one-prevention.md`
-- `docs/dev-plans/208-blueprint-req2config-readonly-and-strict-decode.md`
-- `docs/dev-plans/209-blueprint-skill-manifest-tool-whitelist-and-risk-tier.md`
-- `docs/dev-plans/210-blueprint-conversation-transaction-and-actor-delegated-authz.md`
-- `docs/dev-plans/211-blueprint-temporal-m10d0-minimal-orchestration-foundation.md`
-- `docs/dev-plans/212-blueprint-eval-gates-and-triggered-temporal-productionization.md`
+- `docs/archive/dev-plans/204-blueprint-composition-dto-and-explain-versioning.md`
+- `docs/archive/dev-plans/205-blueprint-page-responsibility-convergence-static-dynamic-sot.md`
+- `docs/archive/dev-plans/206-blueprint-crud-template-and-double-version-submit-cutover.md`
+- `docs/archive/dev-plans/207-blueprint-performance-gates-and-n-plus-one-prevention.md`
+- `docs/archive/dev-plans/208-blueprint-req2config-readonly-and-strict-decode.md`
+- `docs/archive/dev-plans/209-blueprint-skill-manifest-tool-whitelist-and-risk-tier.md`
+- `docs/archive/dev-plans/210-blueprint-conversation-transaction-and-actor-delegated-authz.md`
+- `docs/archive/dev-plans/211-blueprint-temporal-m10d0-minimal-orchestration-foundation.md`
+- `docs/archive/dev-plans/212-blueprint-eval-gates-and-triggered-temporal-productionization.md`
 - `docs/archive/dev-plans/165-field-configs-and-strategy-capability-key-alignment-and-page-positioning.md`
 - `docs/dev-plans/184-field-metadata-and-runtime-policy-sot-convergence.md`
 - `docs/archive/dev-plans/183-capability-key-object-intent-discoverability-and-modeling.md`

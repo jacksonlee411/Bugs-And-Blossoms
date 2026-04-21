@@ -544,52 +544,6 @@ func TestOrgUnitPGStore_ResolveOrgCodeByNodeKey(t *testing.T) {
 	}
 }
 
-func TestOrgUnitPGStore_FindPersonByPernr(t *testing.T) {
-	ctx := context.Background()
-
-	store := NewOrgUnitPGStore(beginFunc(func(context.Context) (pgx.Tx, error) {
-		return nil, errors.New("begin")
-	}))
-	if _, err := store.FindPersonByPernr(ctx, "t1", "1001"); err == nil {
-		t.Fatal("expected begin error")
-	}
-
-	store = NewOrgUnitPGStore(beginFunc(func(context.Context) (pgx.Tx, error) {
-		return &txStub{execErr: errors.New("exec")}, nil
-	}))
-	if _, err := store.FindPersonByPernr(ctx, "t1", "1001"); err == nil {
-		t.Fatal("expected exec error")
-	}
-
-	store = NewOrgUnitPGStore(beginFunc(func(context.Context) (pgx.Tx, error) {
-		return &txStub{row: stubRow{err: pgx.ErrNoRows}}, nil
-	}))
-	if _, err := store.FindPersonByPernr(ctx, "t1", "1001"); !errors.Is(err, ports.ErrPersonNotFound) {
-		t.Fatalf("expected person not found, got %v", err)
-	}
-
-	store = NewOrgUnitPGStore(beginFunc(func(context.Context) (pgx.Tx, error) {
-		return &txStub{row: stubRow{err: errors.New("row")}}, nil
-	}))
-	if _, err := store.FindPersonByPernr(ctx, "t1", "1001"); err == nil {
-		t.Fatal("expected row error")
-	}
-
-	store = NewOrgUnitPGStore(beginFunc(func(context.Context) (pgx.Tx, error) {
-		return &txStub{row: stubRow{vals: []any{"p1", "1001", "Name", "active"}}, commitErr: errors.New("commit")}, nil
-	}))
-	if _, err := store.FindPersonByPernr(ctx, "t1", "1001"); err == nil {
-		t.Fatal("expected commit error")
-	}
-
-	store = NewOrgUnitPGStore(beginFunc(func(context.Context) (pgx.Tx, error) {
-		return &txStub{row: stubRow{vals: []any{"p1", "1001", "Name", "active"}}}, nil
-	}))
-	if _, err := store.FindPersonByPernr(ctx, "t1", "1001"); err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-}
-
 func TestOrgUnitPGStore_ListEnabledTenantFieldConfigsAsOf(t *testing.T) {
 	ctx := context.Background()
 

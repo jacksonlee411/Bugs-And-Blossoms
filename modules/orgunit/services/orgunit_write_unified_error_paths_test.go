@@ -7,7 +7,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/jacksonlee411/Bugs-And-Blossoms/modules/orgunit/domain/ports"
 	"github.com/jacksonlee411/Bugs-And-Blossoms/modules/orgunit/domain/types"
 	"github.com/jacksonlee411/Bugs-And-Blossoms/pkg/httperr"
 	orgunitpkg "github.com/jacksonlee411/Bugs-And-Blossoms/pkg/orgunit"
@@ -20,9 +19,6 @@ func TestWriteUnified_CoversMoreWriteBranches(t *testing.T) {
 		},
 		resolveOrgIDFn: func(context.Context, string, string) (int, error) {
 			return 10000001, nil
-		},
-		findPersonByPernrFn: func(context.Context, string, string) (types.Person, error) {
-			return types.Person{}, ports.ErrPersonNotFound
 		},
 		submitEventFn: func(context.Context, string, string, *int, string, string, json.RawMessage, string, string) (int64, error) {
 			return 1, nil
@@ -414,9 +410,6 @@ func TestWriteUnified_CoversMoreWriteBranches(t *testing.T) {
 
 	t.Run("manager pernr invalid", func(t *testing.T) {
 		store := baseStore
-		store.findPersonByPernrFn = func(context.Context, string, string) (types.Person, error) {
-			return types.Person{}, errors.New("unexpected")
-		}
 		svc := NewOrgUnitWriteService(store)
 		name := "X"
 		pernr := "abc"
@@ -435,81 +428,9 @@ func TestWriteUnified_CoversMoreWriteBranches(t *testing.T) {
 		}
 	})
 
-	t.Run("manager pernr not found mapped", func(t *testing.T) {
-		store := baseStore
-		store.findPersonByPernrFn = func(context.Context, string, string) (types.Person, error) {
-			return types.Person{}, ports.ErrPersonNotFound
-		}
-		svc := NewOrgUnitWriteService(store)
-		name := "X"
-		pernr := "123"
-		_, err := svc.Write(context.Background(), "t1", WriteOrgUnitRequest{
-			Intent:        "add_version",
-			OrgCode:       "A001",
-			EffectiveDate: "2026-01-01",
-			RequestID:     "r1",
-			Patch: OrgUnitWritePatch{
-				Name:         &name,
-				ManagerPernr: &pernr,
-			},
-		})
-		if err == nil || err.Error() != errManagerPernrNotFound {
-			t.Fatalf("err=%v", err)
-		}
-	})
-
-	t.Run("manager pernr inactive mapped", func(t *testing.T) {
-		store := baseStore
-		store.findPersonByPernrFn = func(context.Context, string, string) (types.Person, error) {
-			return types.Person{Status: "disabled"}, nil
-		}
-		svc := NewOrgUnitWriteService(store)
-		name := "X"
-		pernr := "123"
-		_, err := svc.Write(context.Background(), "t1", WriteOrgUnitRequest{
-			Intent:        "add_version",
-			OrgCode:       "A001",
-			EffectiveDate: "2026-01-01",
-			RequestID:     "r1",
-			Patch: OrgUnitWritePatch{
-				Name:         &name,
-				ManagerPernr: &pernr,
-			},
-		})
-		if err == nil || err.Error() != errManagerPernrInactive {
-			t.Fatalf("err=%v", err)
-		}
-	})
-
-	t.Run("manager pernr store error bubbles", func(t *testing.T) {
-		store := baseStore
-		store.findPersonByPernrFn = func(context.Context, string, string) (types.Person, error) {
-			return types.Person{}, errors.New("boom")
-		}
-		svc := NewOrgUnitWriteService(store)
-		name := "X"
-		pernr := "123"
-		_, err := svc.Write(context.Background(), "t1", WriteOrgUnitRequest{
-			Intent:        "add_version",
-			OrgCode:       "A001",
-			EffectiveDate: "2026-01-01",
-			RequestID:     "r1",
-			Patch: OrgUnitWritePatch{
-				Name:         &name,
-				ManagerPernr: &pernr,
-			},
-		})
-		if err == nil || !strings.Contains(err.Error(), "boom") {
-			t.Fatalf("err=%v", err)
-		}
-	})
-
 	t.Run("manager pernr success sets manager fields", func(t *testing.T) {
 		var captured map[string]any
 		store := baseStore
-		store.findPersonByPernrFn = func(context.Context, string, string) (types.Person, error) {
-			return types.Person{UUID: "u1", DisplayName: "Alice", Status: "active"}, nil
-		}
 		store.submitEventFn = func(_ context.Context, _ string, _ string, _ *int, _ string, _ string, payload json.RawMessage, _ string, _ string) (int64, error) {
 			if err := json.Unmarshal(payload, &captured); err != nil {
 				return 0, err
@@ -532,7 +453,7 @@ func TestWriteUnified_CoversMoreWriteBranches(t *testing.T) {
 		if err != nil {
 			t.Fatalf("err=%v", err)
 		}
-		if captured["manager_uuid"] != "u1" || captured["manager_pernr"] != "123" {
+		if captured["manager_pernr"] != "123" {
 			t.Fatalf("payload=%v", captured)
 		}
 	})

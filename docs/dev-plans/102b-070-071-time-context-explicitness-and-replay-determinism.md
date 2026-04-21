@@ -49,7 +49,7 @@
   - [ ] 多语言 JSON（`make check tr`）
   - [x] Authz（`make authz-pack && make authz-test && make authz-lint`）
   - [x] 路由治理（`make check routing`）
-  - [x] DB 迁移 / Schema（`make orgunit plan/lint/migrate up`，按需补 jobcatalog/staffing）
+- [x] DB 迁移 / Schema（`make orgunit plan/lint/migrate up`；历史上的 `jobcatalog/staffing` 命中已由 `DEV-PLAN-450` 删除，不再属于当前门禁面）
   - [x] sqlc（如有 schema/query 变更则 `make sqlc-generate`）
   - [x] 文档（`make check doc`）
 - **SSOT 链接**：`AGENTS.md`、`Makefile`、`.github/workflows/quality-gates.yml`、`docs/dev-plans/012-ci-quality-gates.md`
@@ -106,10 +106,10 @@
 - [x] `GET /org/api/setid-bindings?as_of=YYYY-MM-DD`
 - [x] `GET /org/api/owned-scope-packages?scope_code=...&as_of=YYYY-MM-DD`
 - [x] `GET /org/api/scope-subscriptions?setid=...&scope_code=...&as_of=YYYY-MM-DD`
-- [x] `GET /jobcatalog/api/catalog?as_of=YYYY-MM-DD&...`
 - [x] `GET /org/api/positions?as_of=YYYY-MM-DD`
 - [x] `GET /org/api/positions:options?as_of=YYYY-MM-DD&org_code=...`
 - [x] `GET /org/api/assignments?as_of=YYYY-MM-DD&person_uuid=...`
+- [x] 以上 `jobcatalog/positions/assignments` 读接口均为历史合同样本；当前活体仓库仅保留 `orgunit` 相关显式时间语义要求。
 
 缺失参数统一返回：
 - `400 invalid_as_of` + message `as_of required`（冻结口径，不再引入 `missing_as_of`）。
@@ -119,10 +119,10 @@
 - [x] `POST /org/api/scope-packages`（`effective_date` 必填）
 - [x] `POST /org/api/scope-packages/{package_id}/disable`（`effective_date` 必填，不允许服务端生成 today）
 - [x] `POST /org/api/global-scope-packages`（`effective_date` 必填）
-- [x] `POST /jobcatalog/api/catalog/actions`（`effective_date` 必填）
 - [x] `POST /org/api/positions`（`effective_date` 必填；不再从 `as_of` 回填）
 - [x] `POST /org/api/assignments`（`effective_date` 必填；不再从 `as_of` 回填）
 - [x] `POST /org/api/scope-subscriptions` / `POST /org/api/setid-bindings` 继续保持 `effective_date` 必填（已有约束不得回退）。
+- [x] 以上 `jobcatalog/positions/assignments` 写接口均为历史合同样本；当前活体仓库仅保留 `orgunit` 相关显式时间语义要求。
 
 缺失参数统一返回：
 - `400 invalid_effective_date` + message `effective_date required`（冻结口径，不再引入 `missing_effective_date`）。

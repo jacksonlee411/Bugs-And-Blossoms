@@ -95,7 +95,7 @@
 - 标识类：`org_code`、`external_id`、`legacy_id`（若保留需符合 No Legacy 原则，仅作映射不做回退）
 - 名称类：`name`、`short_name`、`description`
 - 归属/分类：`org_type`（如公司/部门/BU/成本中心/地点）、`org_level`、`status`
-- 归属关系：`parent_org_id`、`manager_pernr`（页面录入工号，姓名自动带出）
+- 归属关系：`parent_org_id`、`manager_pernr`（页面录入工号；当前不依赖 `Person` 自动带出姓名）
 - 组织维度：`company`/`legal_entity`、`business_unit`、`department`、`cost_center`
 - 地理/地点：`location_code`/`location_name`、`timezone`
 - 生效口径：`effective_date`（day 颗粒度）与 `status` 的有效区间（validity）
@@ -146,7 +146,7 @@
 - 同日停用：默认拒绝（同日唯一约束冲突），返回 `EVENT_DATE_CONFLICT`（409）。
 - “原地修改”需保留修改前快照，不需要记录原因。
 - 在现有 `/org/units`（列表）与 `/org/units/:org_code`（详情）页面中改造，不新增独立入口。
-- Manager 维护口径：仅录入工号（PERNR），姓名自动带出；UI 不使用 UUID。
+- Manager 维护口径：仅录入工号（PERNR）；当前不依赖 `Person` 自动带出姓名；UI 不使用 UUID。
 - 原地修改范围：以“不可更正清单”为准（含 `status`）；本期 UI 暴露负责人/上级/名称。
 - 改生效日：不新增显式字段；允许在更正 `patch` 中修改 `effective_date`，**可向前或向后调整**，但新日期必须落在该事件原区间内（介于前后生效日之间；缺失一侧边界时视为单侧无界），超出则拒绝；同时新日期不得早于上级组织最早生效日期且该日期上级组织必须有效；修改生效日期必须触发重放。
 - 状态变更：必须通过显式事件（`ENABLE` / `DISABLE`），不允许通过更正修改 `status`。
@@ -252,7 +252,7 @@
 
 ### 评审结论与处置（编号）
 1. 事件不可变性：已明确采用“更正叠加视图”，避免改写原始事件。
-2. `manager_pernr` 校验/契约：采纳，需补充按 `effective_date` 校验与失败路径。
+2. `manager_pernr` 校验/契约：采纳；当前按格式规则校验，不再依赖 `Person` 模块做 `effective_date` 存在性校验。
 3. 字段范围：允许更正除 `org_code` 外的业务属性；本期 UI 暴露负责人/上级/名称。
 4. 重放策略：采纳。优先复用现有 `orgunit.replay_org_unit_versions(...)`；如需优化范围，新增“按 org_id/子树重放”也必须复用同一核心逻辑，不另起一套。
 5. UI 验收口径：采纳，已补充 HR 视角交互口径与确认规则。
@@ -271,13 +271,13 @@
 
 ### 1. 背景与上下文
 - **需求来源**：本方案与评审结论（见本文件“评审结论与处置”）。
-- **当前痛点**：无法原地更正历史记录；UI 入口分散；负责人字段不满足“工号录入+姓名自动带出”的规范。
+- **当前痛点**：无法原地更正历史记录；UI 入口分散；负责人字段仍需进一步明确最终展示口径，但当前仓库已不再依赖 `Person` 自动带名。
 - **业务价值**：提升组织维护效率与历史修正准确性，减少二次补丁与手工回滚。
 
 ### 2. 目标与非目标
 **核心目标**：
 - [ ] 提供“原地更正历史记录”的能力（含上级、名称、负责人）。
-- [ ] 负责人录入使用 `manager_pernr`，姓名自动带出，UI 禁用 UUID。
+- [ ] 负责人录入使用 `manager_pernr`，UI 禁用 UUID。
 - [ ] UI 改造为“树 + 详情 + as_of 控件 + 版本切换”的 PeopleSoft 风格。
 - [ ] 写入路径统一到模块 services 层，UI/API 共用。
 - [ ] 明确触发器与门禁对齐（见 2.1）。
@@ -367,12 +367,12 @@ org_event_corrections_history(
 
 **负责人字段**：
 - 现状为 `manager_uuid`（历史字段）；目标新增/迁移为 `manager_pernr`（text / digits 1-8）。
-- 校验：`manager_pernr` 符合 `^[0-9]{1,8}$`，并按 `effective_date` 校验 person 存在且可用。
+- 校验：`manager_pernr` 符合 `^[0-9]{1,8}$`；`DEV-PLAN-450` 删除 `Person` 后，当前不再按 `effective_date` 校验人员存在性。
 
 **迁移策略（manager_pernr）**：
-- 双写期：写入时同时填充 `manager_uuid` 与 `manager_pernr`（若可得）。
-- 回填：历史版本基于 person/person_identity 回填 `manager_pernr`。
-- 读取优先级：优先 `manager_pernr`，迁移期允许 fallback 到 `manager_uuid`，并明确淘汰截止日期。
+- 历史上曾评估 `manager_uuid -> manager_pernr` 的迁移方案。
+- 当前仓库在 `DEV-PLAN-450` 后已删除 `Person` 模块，因此不再以 `person/person_identity` 回填作为现行前提。
+- 现行实现应以 `manager_pernr` 作为唯一用户可见输入口径；`manager_uuid` 仅视为历史内部字段，不再扩展其现行语义。
 
 #### 4.1 不可更正清单（硬约束）
 - 身份锚点：`org_code` / `org_id` / `tenant_uuid`
@@ -388,7 +388,7 @@ org_event_corrections_history(
 | `name` | text | 是 | 非空字符串 |
 | `parent_org_code` | text | 是 | `effective_date` 时点必须存在且 active；为空表示无上级 |
 | `is_business_unit` | boolean | 是 | 与现有 SET_BUSINESS_UNIT 语义一致 |
-| `manager_pernr` | text | 是 | `^[0-9]{1,8}$`，按 `effective_date` 校验 person 存在且 active |
+| `manager_pernr` | text | 是 | `^[0-9]{1,8}$`；当前不再依赖 `Person` 模块做 `effective_date` 存在性校验 |
 
 **未来扩展字段（需先落表与更新契约）**：
 `short_name` / `description` / `org_type` / `org_level` / `external_id` / `legacy_id` / `company` / `business_unit` / `department` / `cost_center` / `location_code` / `location_name` / `timezone`
@@ -581,7 +581,7 @@ type OrgUnitReadService interface {
   - `effective_date`（日期选择；允许调整，但必须落在原区间内。提交时保留原 `effective_date` 作为定位值；若用户修改，则在 `patch.effective_date` 传入新值）
   - `parent_org_code`（可选）
   - `name`（可选）
-  - `manager_pernr`（可选；输入后自动带出 `manager_name` 只读）
+  - `manager_pernr`（可选；当前仅录入工号，不再承诺自动带出 `manager_name`）
 - 版本切换（`effective_date`）与更正表单联动：切换后表单默认填充该生效日的当前值。
 
 #### 5.5 校验规则（统一服务层）
@@ -593,7 +593,7 @@ type OrgUnitReadService interface {
 - `name`：若提供，必须非空。
 - `manager_pernr`：
   - 符合 `^[0-9]{1,8}$`，且遵循 `person` 的 canonical 规则（`"0"` 允许；否则禁止前导 0）。
-  - 在 `effective_date` 时点必须存在于 `person.persons` 且 `status=active`。
+  - `DEV-PLAN-450` 删除 `Person` 后，当前不再以 `person.persons` 作为运行时校验前提。
 - 其他业务属性：按字段元数据（类型/必填/枚举/长度）统一校验与错误码映射。
 - 同日唯一：若更正导致 `effective_date` 变更，需确保 `(tenant_uuid, org_id, effective_date)` 无冲突事件。
 - 同日停用（DISABLE）：`effective_date` 与既有事件同日则拒绝，返回 `EVENT_DATE_CONFLICT`（409）。
@@ -720,7 +720,7 @@ type OrgUnitReadService interface {
    - 若存在且 `request_hash` 一致：直接返回当前结果（视为重复请求）。
    - 若存在但 `request_hash` 不一致：返回 `REQUEST_DUPLICATE`（409）。
 3) 解析 `org_code` → `org_id`；定位目标事件（`org_id + effective_date` 原值）。
-4) 校验 `patch` 中各字段（含 `manager_pernr` 的 `effective_date` 校验）。若包含 `patch.effective_date` 且与原值不同：
+4) 校验 `patch` 中各字段（含 `manager_pernr` 的格式校验）。若包含 `patch.effective_date` 且与原值不同：
    - 计算前后相邻生效日（prev/next，来自原始 `org_events` 基准序列，不受更正影响）并验证新日期落在原区间内（介于前后生效日之间；缺失一侧边界时视为单侧无界）。
    - 基于更正叠加视图检查同日冲突（排除当前 event_uuid）。
 5) 写入更正历史表；UPSERT 当前更正表（若改生效日，`corrected_effective_date` 存为新值；`target_effective_date` 存原值）。
@@ -914,7 +914,7 @@ END LOOP;
 **待办事项（补充）**：
 - [x] 补齐 Internal API：`POST /org/api/org-units/corrections`（handler + allowlist/Authz + tests）
 - [ ] UI `/org/units/:org_code` 更正表单与错误回显（走 OrgUnitWriteService）
-- [ ] `manager_pernr` 的 `effective_date` 校验（依赖 Person 有效期模型）
+- [ ] 若未来重新引入负责人主数据来源，再单独评估 `manager_pernr` 的存在性/生效日校验；当前不再依赖 `Person`。
 - [ ] 在“新增表审批流程/记录”补记批准人、时间（UTC）与范围
 - [ ] 同步里程碑与 PR 状态（更正接口/UI 完成后再勾选）
 
@@ -922,7 +922,7 @@ END LOOP;
 M1. [x] 设计确认（更正叠加视图取舍、字段元数据/不可更正清单、UI 交互口径与 `as_of/effective_date` 规则、API/路由/权限口径）
 M2. [x] 新增表手工确认（阻断点）
 M3. [x] Schema 迁移（含更正表与幂等约束）
-M4. [x] 服务层实现 + 单测（幂等/更正/重放/租户 fail-closed；manager_pernr `effective_date` 校验待 Person 有效期补齐）
+M4. [x] 服务层实现 + 单测（幂等/更正/重放/租户 fail-closed；`manager_pernr` 当前按格式规则校验）
 M5. [x] 接口实现（children/details/search + corrections）+ 路由 allowlist/Authz 策略
 M6. [x] MUI TreePanel 接入 + UI 对接（树/详情/搜索定位、事件桥接）
 M7. [x] Readiness 记录（门禁执行证据与关键结果）
@@ -939,7 +939,7 @@ M9. [x] 独立详情页 / 组织单元详情视图（UI）
 - [x] 完成：`manager_pernr` 规范校验（digits 1-8）+ 双写 `manager_uuid`/`manager_pernr`。
 - [x] 单测：服务层/持久层覆盖率补齐，满足 100% 覆盖率门禁。
 - [x] 验证：`go fmt ./... && go vet ./... && make check lint && make test`
-- [ ] 备注：`manager_pernr` 的 `effective_date` 校验依赖 Person 有效期模型，当前仅校验存在/active，待 Person 有效期补齐后完善。
+- [x] 备注：`DEV-PLAN-450` 删除 `Person` 后，`manager_pernr` 当前仅保留格式校验；若未来需要外部主数据校验，应另起计划重新定义来源与契约。
 
 **PR 3｜读服务 + 新路由：children/details/search**
 - [x] 完成：实现 `OrgUnitReadService` 与 3 个只读路由，并补齐 Authz 与 allowlist。

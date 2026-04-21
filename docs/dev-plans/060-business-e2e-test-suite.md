@@ -30,7 +30,7 @@
 ### 3.1 `DEV-PLAN-009`（Greenfield 全新实施路线图）
 
 测试侧关键信号：
-- **平台先行**：Tenancy/AuthN → RLS 圈地 → Casbin 授权边界，且 fail-closed（`docs/dev-plans/019-tenant-and-authn.md`、`docs/dev-plans/021-pg-rls-for-org-position-job-catalog.md`、`docs/dev-plans/022-authz-casbin-toolchain.md`）。
+- **平台先行**：Tenancy/AuthN → RLS 圈地 → Casbin 授权边界，且 fail-closed（`docs/dev-plans/019-tenant-and-authn.md`、`docs/archive/dev-plans/021-pg-rls-for-org-position-job-catalog.md`、`docs/dev-plans/022-authz-casbin-toolchain.md`）。
 - **用户可见性原则**：每个切片交付必须有页面入口与可操作链路（`AGENTS.md` §3.8）。
 - **主数据纵切片顺序（历史口径）**：本文原先采用 `SetID => JobCatalog => Position => Assignments`。自 `DEV-PLAN-440` 生效起，该顺序不再作为现行实现顺序；涉及 SetID 的主数据链路改由 `DEV-PLAN-440` 统筹删除或重写。
 
@@ -98,13 +98,13 @@
 
 ## 5. 基线数据集（060-DS1/DS2）
 
-> 说明：060-DS1 是“业务全链路可复现”的主数据集（含 10 员工差异）；060-DS2 为跨租户隔离验证的最小补充数据集。各子计划在其“数据准备”小节中声明所需子集与增量数据。
+> 说明：当前活体数据集只保留现行执行面所需的最小样本。历史上的 `JobCatalog/Position/Person/Assignment` 样本已退出当前态，只在归档子计划中保留。
 
 ### 5.0 数据保留与复用（强制）
 
 > 目的：TP-060-* 是“纵切片串联”的测试套件；前一子计划产出的数据会成为后一子计划的输入，因此**必须保留**，不能“跑完就清理”。
 
-- **必须保留**：执行 TP-060-* 过程中创建/变更的测试数据必须保留（含租户、账号/角色、OrgUnit、SetID/绑定/业务单元标记、JobCatalog、Position、Person、Assignment 等）。
+- **必须保留**：执行当前活体 TP-060-* 过程中创建/变更的测试数据必须保留（含租户、账号/角色、OrgUnit 与现行 app 所需最小样本）。已被 `DEV-PLAN-450` 删除的 `JobCatalog/Position/Person/Assignment` 数据仅允许作为 archive 证据保留，不再作为当前态建数要求。
 - **禁止自动清理**：测试脚本与手工步骤不得包含“跑完回滚/删除租户/清库”的自动清理逻辑。
 - **需要重置时的口径**：若因环境漂移/破坏性变更必须重置（例如执行 `make dev-reset`），必须在对应子计划“问题记录”中登记为 `ENV_DRIFT`，并按本文的 060-DS1/DS2 重新建数再继续后续子计划。
 - **重复执行口径**：优先“存在则复用、缺失则补齐”；若必须新增，使用可追溯命名（例如附加 `run_id`/日期后缀），并在证据中记录映射，避免后续子计划无法对齐。
@@ -127,66 +127,13 @@
 | L1 | Ops | 运营/支持 |
 | L1 | Plant | 制造/仓储（用于岗位差异样例） |
 
-### 5.3 SetID 绑定与业务单元节点（历史合同，待 `DEV-PLAN-440` 重写或归档）
+### 5.3 历史主数据样本（已归档，不再作为当前态建数要求）
 
-| 对象 | 值 | 备注 |
-| --- | --- | --- |
-| SetID | `S2601` | 示例 SetID |
-| SetID | `S2602` | 跨 SetID 负例 |
-| 根组织绑定 | `DEFLT` | 根节点绑定租户默认 SetID |
-| 业务单元节点 | `R&D` | `is_business_unit=true` 且绑定 `S2601`（记录 `org_code` 供职位归属） |
-| 业务单元节点 | `Sales` | `is_business_unit=true` 且绑定 `S2602`（记录 `org_code` 供职位归属） |
-| SHARE | `SHARE` | 仅白名单入口可读 |
+> 状态说明：历史上的 SetID / JobCatalog / Position / Person / Assignment 样本已分别由 `DEV-PLAN-440` 或 `DEV-PLAN-450` 退出当前执行面。本文不再展开这些样本明细，避免把 archive 内容误读为当前建数要求。
 
-### 5.4 职位分类（JobCatalog，按 `setid=S2601` + `as_of=2026-01-01`）
-
-| 对象 | code | name | 备注 |
-| --- | --- | --- | --- |
-| Job Family Group | `JFG-ENG` | Engineering | 示例 |
-| Job Family Group | `JFG-SALES` | Sales | 示例 |
-| Job Family | `JF-BE` | Backend | 初始归属 `JFG-ENG`；用于 reparenting |
-| Job Family | `JF-FE` | Frontend | 归属 `JFG-ENG` |
-| Job Level | `JL-1` | Level 1 | 最小闭环（写入→列表） |
-| Job Profile | `JP-SWE` | Software Engineer | families=`JF-BE,JF-FE`；primary=`JF-BE` |
-
-备注：
-- 本节保留的 `setid=S2601` 等内容仅用于解释历史测试资产来源；自 `DEV-PLAN-440` 起，不再作为当前态 Job Catalog 的实现依据。
-- 在 `DEV-PLAN-440` 完成前，本文不得被引用为“必须继续保留 SetID 主链”的证据。
-
-### 5.5 职位（Positions，`as_of=2026-01-01`）
-
-| Position | OrgUnit | 备注 |
-| --- | --- | --- |
-| P-ENG-01 | R&D | 研发岗位 |
-| P-ENG-02 | R&D | 研发岗位（用于 FTE 差异） |
-| P-SALES-01 | Sales | 销售岗位 |
-| P-HR-01 | HQ | HR 岗位 |
-| P-FIN-01 | HQ | 财务岗位 |
-| P-OPS-01 | Ops | 运营岗位 |
-| P-PLANT-01 | Plant | 制造岗位样例 |
-| P-PLANT-02 | Plant | 制造岗位样例 |
-| P-SUPPORT-01 | Ops | 支持岗位 |
-| P-MGR-01 | HQ | 管理岗（用于任职变更样例） |
-
-备注：
-- Position 创建必须选择 Job Profile；可选列表由 `org_code` 解析得到的 setid 决定，不需要手工选择 setid。
-
-### 5.6 员工数据（10 人，均需存在 Person + Assignment）
-
-> 备注：本表以“测试意图”为主；具体字段落点以 `docs/archive/dev-plans/027-person-minimal-identity-for-staffing.md`、`docs/archive/dev-plans/031-greenfield-assignment-job-data.md`、`docs/dev-plans/042/044` 为准。
-
-| 编号 | pernr | 姓名 | FTE | 岗位 | 入职生效日 | 关键差异（用于覆盖） |
-| --- | --- | --- | --- | --- | --- | --- |
-| E01 | `101` | Alice Zhang | 1.0 | P-ENG-01 | 2026-01-01 | 标准链路：Person + Assignment |
-| E02 | `102` | Bob Li | 1.0 | P-SALES-01 | 2026-01-01 | 职位占用冲突样例 |
-| E03 | `00000103` | Carol Wu | 1.0 | P-ENG-02 | 2026-01-01 | pernr 前导 0 解析一致性 |
-| E04 | `104` | David Chen | 0.5 | P-ENG-02 | 2026-01-01 | FTE 0.5 的容量口径 |
-| E05 | `105` | Erin Sun | 1.0 | P-MGR-01 | 2026-01-01 | 任职变更目标岗位 |
-| E06 | `106` | Frank Zhou | 1.0 | P-FIN-01 | 2026-01-15 | 延后生效（as_of=2026-01-15） |
-| E07 | `107` | Grace Xu | 1.0 | P-MGR-01 | 2026-01-01 | 管理岗位用于 reports_to 链路 |
-| E08 | `108` | Henry Gao | 1.0 | P-PLANT-01 | 2026-01-01 | 制造岗位样例 |
-| E09 | `109` | Ivy He | 1.0 | P-PLANT-02 | 2026-01-01 | 制造岗位样例 |
-| E10 | `110` | Jack Lin | 1.0 | P-SUPPORT-01 | 2026-01-01 | 岗位容量上限校验 |
+- 如需追溯历史样本，请查：
+  - `TP-060-02`：`docs/archive/dev-plans/062-test-tp060-02-master-data-org-setid-jobcatalog-position.md`
+  - `TP-060-03`：`docs/archive/dev-plans/063-test-tp060-03-person-and-assignments.md`
 
 ### 5.7 第二租户数据（060-DS2，用于跨租户隔离验证）
 
@@ -194,8 +141,8 @@
 - Hostname（示例）：`t-060b.localhost`
   - 手工测试建议：在本机 `hosts` 中绑定 `127.0.0.1 t-060b.localhost`；或在反代层注入 `X-Forwarded-Host: t-060b.localhost`。
 - 最小数据（用于“跨租户不可见”断言）：
-  - 创建 1 个 Person：`pernr=201`、`display_name=Tenant060B Person 201`；记录其 `person_uuid` 为 `T060B_PERSON_UUID`。
-  - （可选）创建 1 个 Position + 1 条 Assignment（用于跨租户 positions/assignments 的不可见验证）。
+  - 创建 1 个 OrgUnit：`org_code=T060B-ROOT`、`name=Tenant060B Root Unit`；记录其 `org_code` 为 `T060B_ORG_CODE`。
+  - 不再要求创建 `Person/Position/Assignment` 样本；相关旧断言已由 `DEV-PLAN-450` 下线。
 
 ## 6. 覆盖矩阵（功能 × 子测试计划）
 
@@ -203,12 +150,9 @@
 | --- | --- | --- |
 | 租户/登录 | superadmin 创建租户与域名；tenant app 登录 | TP-060-01 |
 | 权限/隔离 | Authz 403；RLS fail-closed；跨租户不可见 | TP-060-01 |
-| 组织架构 | OrgUnit 树/新增/查询；外部协议仅使用 `org_code` | TP-060-02 |
-| SetID | 历史主数据测试样本；自 `DEV-PLAN-440` 起不再作为当前实现必须维持的能力 | TP-060-02（待重写/归档） |
-| 职位分类 | Job family group 创建与查询（可选扩展：families/levels/profiles） | TP-060-02 |
-| 职位 | Position 创建与列表 | TP-060-02 |
-| 人员 | Person 创建/查询；pernr 解析一致性 | TP-060-03 |
-| 任职记录 | Assignment（Valid Time `as_of`）/仅展示 effective_date；upsert 可重复执行（同日幂等）；position 裁决 fail-closed | TP-060-03 |
+| 组织架构 | OrgUnit 树/新增/查询；外部协议仅使用 `org_code` | 现行由 TP-060-01 与后续 orgunit 专项回归承接 |
+| SetID | 历史主数据测试样本；当前剩余治理 owner 见 `DEV-PLAN-440` | TP-060-02（已归档，不再执行） |
+| 职位分类 / 职位 / 人员 / 任职记录 | 历史三模块测试样本；当前删除 owner 见 `DEV-PLAN-450` | TP-060-02 / TP-060-03（已归档，不再执行） |
 
 > 编号说明：`TP-060-04` 已被现有 OrgUnit 详情双栏回归用例占用（`e2e/tests/tp060-04-orgunit-details-two-pane.spec.js`）。
 
@@ -222,7 +166,7 @@
 
 **契约引用**
 - `docs/dev-plans/019-tenant-and-authn.md`
-- `docs/dev-plans/021-pg-rls-for-org-position-job-catalog.md`
+- `docs/archive/dev-plans/021-pg-rls-for-org-position-job-catalog.md`
 - `docs/dev-plans/022-authz-casbin-toolchain.md`
 - `docs/dev-plans/023-superadmin-authn.md`
 - `docs/dev-plans/017-routing-strategy.md`
@@ -231,24 +175,24 @@
 
 **数据准备**
 - 按 §4.4 创建 `T060 / t-060.localhost` 与 `T060B / t-060b.localhost`，并创建第 4.2 的账号（含 tenant users 的 Kratos identity 与首次登录）。
-- 按 060-DS2 在 `T060B` 创建 Person `pernr=201` 并记录 `T060B_PERSON_UUID`（用于跨租户不可见断言）。
+- 按 060-DS2 在 `T060B` 创建 OrgUnit `org_code=T060B-ROOT` 并记录 `T060B_ORG_CODE`（用于跨租户不可见断言）。
 
 **核心验收点（高层）**
 - tenant app 在正确 Host 下可登录并进入 `/app?as_of=...`；错误 Host/缺失 Host 必须 fail-closed。
 - **跨租户隔离（Host/Session）**：在 `t-060.localhost` 登录后，直接切换到 `t-060b.localhost` 访问 `/app?as_of=...` 必须 fail-closed（不得“带着同一 session 自动切租户”）；反向同理。
-- **跨租户隔离（数据）**：在 `T060` 下用 `T060B_PERSON_UUID` 访问任一“按 person_uuid 定位”的页面（示例：Person 详情页）不得读到数据（404/空/稳定错误码均可，但不得泄漏 B 租户数据）。
+- **跨租户隔离（数据）**：在 `T060` 下以 `T060B_ORG_CODE` 请求第二租户 OrgUnit 数据不得读到内容（404/空/稳定错误码均可，但不得泄漏 B 租户数据）。
 - **Authz 可拒绝**：`role_slug=tenant-viewer` 对 GET 可访问，对任一 POST/ADMIN 动作必须 403（至少覆盖 1 个页面）；若无法创建/分配 `tenant-viewer`，按 §9 记录为 `CONTRACT_MISSING` 并标注阻塞点。
-- UI Shell：导航可发现（Org/Person/Staffing 入口）与 en/zh 文案不缺漏（抽样 2 页）。
+- UI Shell：导航可发现（至少 `Org` 与首页入口）与 en/zh 文案不缺漏（抽样 2 页）。
 
 **问题记录**
 | 时间（UTC） | 环境（Host/as_of/模式） | 复现步骤摘要 | 期望（契约引用） | 实际结果 | 严重级别（P0/P1/P2） | 类型（BUG/CONTRACT_DRIFT/CONTRACT_MISSING/ENV_DRIFT） | 处理建议（改实现/先改契约） | 负责人 | 链接（Issue/PR/日志） |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 
-### TP-060-02：主数据（组织架构 + SetID + 职位分类 + 职位）
+### TP-060-02【已归档 / 不再执行】：主数据（组织架构 + SetID + 职位分类 + 职位）
 
 **子计划文档**：`docs/archive/dev-plans/062-test-tp060-02-master-data-org-setid-jobcatalog-position.md`
 
-> 状态说明：该子计划当前仍含 SetID 主链合同；自 `DEV-PLAN-440` 生效起，其 SetID 相关部分仅作为历史测试样本保留，后续需重写或归档。
+> 状态说明：该子计划自 `DEV-PLAN-440/450` 生效起已退出当前态 E2E 执行面，仅作为历史测试样本保留；其中 SetID 剩余治理 owner 见 `DEV-PLAN-440`，`jobcatalog/position` 删除 owner 见 `DEV-PLAN-450`。
 
 **契约引用**
 - `docs/archive/dev-plans/026-org-transactional-event-sourcing-synchronous-projection.md`
@@ -260,22 +204,17 @@
 
 **数据准备**
 - 按 060-DS1 建立 OrgUnit 树（`/org/units?as_of=2026-01-01`）。
-- 建立 SetID + 业务单元标记 + 组织绑定（`/org/setid` + `/org/units`）。
-- 建立 JobCatalog（`/org/job-catalog?as_of=2026-01-01&setid=S2601`）。
-- 建立 10 个职位（`/org/positions?as_of=2026-01-01&org_code=<R&D>`；Job Profile 必选，列表由 `org_code` 解析 setid 提供）。
+- 其余 SetID / JobCatalog / Position 样本细节以归档子计划为准，当前不在本总纲重复展开。
 
 **核心验收点（高层）**
 - OrgUnit：新增节点后树与详情可见；`as_of` 改变时口径符合日粒度有效期。
-- SetID：绑定保存后，JobCatalog 页面展示 `setid`；缺失/非法 `setid` 必须 fail-closed（不允许默认洞）。
-- JobCatalog：至少 1 个实体“写入→列表可见”闭环；`setid` 切换与 `as_of` 变更口径一致。
-- JobCatalog（增强）：groups/families/levels/profiles 均覆盖“写入→as_of 读取→UI 可见”；profile 需覆盖 families+primary 不变量的负例（稳定报错即可）。
-- Position：新增职位后列表可见；职位相关外部请求/响应只出现 `org_code`，不出现 `org_unit_id` / `org_node_key`。
+- 历史 SetID / JobCatalog / Position 验收细项仅保留在 archive，用于回溯当时测试口径，不再作为当前 E2E 总纲要求。
 
 **问题记录**
 | 时间（UTC） | 环境（Host/as_of/模式） | 复现步骤摘要 | 期望（契约引用） | 实际结果 | 严重级别（P0/P1/P2） | 类型（BUG/CONTRACT_DRIFT/CONTRACT_MISSING/ENV_DRIFT） | 处理建议（改实现/先改契约） | 负责人 | 链接（Issue/PR/日志） |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 
-### TP-060-03：人员与任职（Person + Assignments）
+### TP-060-03【已归档 / 不再执行】：人员与任职（Person + Assignments）
 
 **子计划文档**：`docs/archive/dev-plans/063-test-tp060-03-person-and-assignments.md`
 
@@ -284,16 +223,13 @@
 - `docs/archive/dev-plans/031-greenfield-assignment-job-data.md`
 - `docs/dev-plans/032-effective-date-day-granularity.md`
 
+> 状态说明：该子计划对应的 `person/assignments` 能力已由 `DEV-PLAN-450` 从当前仓库删除，以下内容仅保留为历史测试样本，不再作为现行 E2E 合同。
+
 **数据准备**
-- 创建 10 个 Person（`/person/persons?as_of=2026-01-01`），包含 `E03 pernr=00000103`。
-- 为 10 人创建/更新 Assignment（`/org/assignments?as_of=2026-01-01&pernr=...`），绑定到 10 个职位，并设置 `allocated_fte`。
+- 历史 `Person/Assignment` 样本细节以归档子计划为准，当前不在本总纲重复展开。
 
 **核心验收点（高层）**
-- pernr 校验：仅允许 1-8 位数字字符串；前导 0 的解析一致性可验证（同一人可用不同输入形式定位，但不得产生重复人）。
-- Assignment：timeline 可见；UI 仅展示 `effective_date`（不展示 `end_date`）。
-- Valid Time：同一 person 至少覆盖 1 条“未来生效/多切片”的 as_of 读口径（as_of 前后读到不同的 effective_date 版本；Valid Time=day）。
-- 可重复执行：同一 `effective_date` 相同输入重复提交应幂等成功；同日不同输入必须 fail-closed（例如 409 `STAFFING_IDEMPOTENCY_REUSED`，或等效稳定错误码）。
-- 交叉裁决：同一时点一个 position 不得被多个 active assignment 占用；违反必须 fail-closed（稳定错误码优先）。
+- 历史 `Person/Assignment` 验收细项仅保留在 archive，用于回溯当时测试口径，不再作为当前 E2E 总纲要求。
 
 **问题记录**
 | 时间（UTC） | 环境（Host/as_of/模式） | 复现步骤摘要 | 期望（契约引用） | 实际结果 | 严重级别（P0/P1/P2） | 类型（BUG/CONTRACT_DRIFT/CONTRACT_MISSING/ENV_DRIFT） | 处理建议（改实现/先改契约） | 负责人 | 链接（Issue/PR/日志） |
@@ -316,4 +252,4 @@
 
 - 路线图：`docs/dev-plans/009-implementation-roadmap.md`
 - 主数据：`docs/archive/dev-plans/026-org-transactional-event-sourcing-synchronous-projection.md`、`docs/archive/dev-plans/070-setid-orgunit-binding-redesign.md`、`docs/archive/dev-plans/029-job-catalog-transactional-event-sourcing-synchronous-projection.md`、`docs/archive/dev-plans/030-position-transactional-event-sourcing-synchronous-projection.md`、`docs/archive/dev-plans/031-greenfield-assignment-job-data.md`
-- 平台：`docs/dev-plans/019-tenant-and-authn.md`、`docs/dev-plans/021-pg-rls-for-org-position-job-catalog.md`、`docs/dev-plans/022-authz-casbin-toolchain.md`、`docs/dev-plans/017-routing-strategy.md`、`docs/archive/dev-plans/018-astro-aha-ui-shell-for-hrms.md`、`docs/dev-plans/020-i18n-en-zh-only.md`
+- 平台：`docs/dev-plans/019-tenant-and-authn.md`、`docs/archive/dev-plans/021-pg-rls-for-org-position-job-catalog.md`、`docs/dev-plans/022-authz-casbin-toolchain.md`、`docs/dev-plans/017-routing-strategy.md`、`docs/archive/dev-plans/018-astro-aha-ui-shell-for-hrms.md`、`docs/dev-plans/020-i18n-en-zh-only.md`

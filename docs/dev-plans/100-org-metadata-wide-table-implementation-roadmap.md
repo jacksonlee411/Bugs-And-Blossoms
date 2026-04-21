@@ -242,6 +242,6 @@
 - `docs/archive/dev-plans/083-org-whitelist-extensibility-capability-matrix-plan.md`
 - `docs/dev-plans/080c-orgunit-audit-snapshot-presence-table-constraint-plan.md`
 - `docs/dev-plans/032-effective-date-day-granularity.md`
-- `docs/dev-plans/021-pg-rls-for-org-position-job-catalog.md`
+- `docs/archive/dev-plans/021-pg-rls-for-org-position-job-catalog.md`
 - `docs/dev-plans/012-ci-quality-gates.md`
 - `AGENTS.md`

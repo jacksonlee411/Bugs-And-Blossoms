@@ -29,7 +29,7 @@
 ## 3. 范围与非目标
 
 ### 3.1 范围（In Scope）
-- 业务域模块：`orgunit` / `jobcatalog` / `staffing` / `person`（对齐 `DEV-PLAN-016`）。
+- 当前业务域活体模块：`orgunit`。`jobcatalog` / `staffing` / `person` 仅作为历史模块来源存在于 archive 或历史生成物上下文中，现行删除 owner 见 `DEV-PLAN-450`。
 - 平台模块：如 `iam`（若存在；对齐 `DEV-PLAN-019/023` 的思路），同样遵循本文规范。
 - sqlc 配置（`sqlc.yaml`）、schema 输入、查询文件组织、生成目录、门禁触发器与验收标准。
 
@@ -80,7 +80,7 @@ internal/
 **结论（选定）**：采用 **全量可解析 schema** 作为 sqlc 输入，并纳入门禁；不采用“每模块自维护最小 schema 子集”的方式。
 
 原因：
-- 026/030/029 的方案存在跨模块引用与组合（例如 staffing ↔ jobcatalog 的 identity，orgunit 的 as-of 校验），若 schema 输入按模块裁剪，容易引入“缺表/缺类型/缺函数”的隐式依赖清单，最终靠试错补齐。
+- 历史上 026/030/029 的方案存在跨模块引用与组合（例如 `staffing ↔ jobcatalog` 的 identity、`orgunit` 的 as-of 校验），若 schema 输入按模块裁剪，容易引入“缺表/缺类型/缺函数”的隐式依赖清单，最终靠试错补齐。当前仓库经 `DEV-PLAN-450` 删除后三模块后，本文保留这一段仅作历史设计理由说明，不构成现行依赖要求。
 - 全量 schema 输入可把“依赖边界”从“sqlc 能否解析”解耦出来：边界由模块分层/ports/one-door 决定，而不是由 schema 文件裁剪决定。
 
 回滚/演化：
@@ -184,7 +184,7 @@ sqlc 侧只负责调用该函数/视图（提高一致性、降低漂移）。
 - `modules/**/infrastructure/persistence/schema/**`（或 schema SSOT 等效路径）
 - `internal/sqlc/**`
 
-> 说明（M2 典型场景）：即使某模块（例如 `person/staffing`）暂时没有新增 sqlc queries，只要 schema SSOT 有变更，`internal/sqlc/schema.sql` 仍会变化；该导出文件属于生成物，必须提交并通过 “Generated Artifacts Clean” 门禁。
+> 说明：即使某个模块当前没有新增 sqlc queries，只要 schema SSOT 有变更，`internal/sqlc/schema.sql` 仍会变化；该导出文件属于生成物，必须提交并通过 “Generated Artifacts Clean” 门禁。历史上 `person/staffing` 也曾命中这一规则，但它们已不属于当前活体模块。
 
 ### 11.2 开发者本地流程（必须）
 1. 修改 schema SSOT（Atlas/Goose 入口按 Makefile）。

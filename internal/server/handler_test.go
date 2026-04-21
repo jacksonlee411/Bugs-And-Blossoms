@@ -70,10 +70,6 @@ func (s orgUnitMemoryStoreWithWriteStore) ListEnabledTenantFieldConfigsAsOf(cont
 	return nil, nil
 }
 
-func (s orgUnitMemoryStoreWithWriteStore) FindPersonByPernr(context.Context, string, string) (orgunittypes.Person, error) {
-	return orgunittypes.Person{}, errors.New("person not found")
-}
-
 func localTenancyResolver() TenancyResolver {
 	return newStaticTenancyResolver(map[string]Tenant{
 		"localhost": {ID: "00000000-0000-0000-0000-000000000001", Domain: "localhost", Name: "Local Tenant"},

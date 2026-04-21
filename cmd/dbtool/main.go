@@ -21,7 +21,7 @@ import (
 
 func main() {
 	if len(os.Args) < 2 {
-		fatalf("usage: dbtool <rls-smoke|orgunit-smoke|orgunit-code-validate|orgunit-snapshot-export|orgunit-snapshot-check|orgunit-snapshot-bootstrap-target|orgunit-snapshot-import|orgunit-snapshot-verify|orgunit-stopline-capture|orgunit-setid-strategy-registry-export|orgunit-setid-strategy-registry-check|orgunit-setid-strategy-registry-import|orgunit-setid-strategy-registry-verify|orgunit-setid-strategy-registry-validate> [args]")
+		fatalf("usage: dbtool <rls-smoke|orgunit-smoke|orgunit-code-validate|orgunit-snapshot-export|orgunit-snapshot-check|orgunit-snapshot-bootstrap-target|orgunit-snapshot-import|orgunit-snapshot-verify> [args]")
 	}
 
 	switch os.Args[1] {
@@ -41,18 +41,6 @@ func main() {
 		orgunitSnapshotImport(os.Args[2:])
 	case "orgunit-snapshot-verify":
 		orgunitSnapshotVerify(os.Args[2:])
-	case "orgunit-stopline-capture":
-		orgunitStoplineCapture(os.Args[2:])
-	case "orgunit-setid-strategy-registry-export":
-		orgunitSetIDStrategyRegistryExport(os.Args[2:])
-	case "orgunit-setid-strategy-registry-check":
-		orgunitSetIDStrategyRegistryCheck(os.Args[2:])
-	case "orgunit-setid-strategy-registry-import":
-		orgunitSetIDStrategyRegistryImport(os.Args[2:])
-	case "orgunit-setid-strategy-registry-verify":
-		orgunitSetIDStrategyRegistryVerify(os.Args[2:])
-	case "orgunit-setid-strategy-registry-validate":
-		orgunitSetIDStrategyRegistryValidate(os.Args[2:])
 	default:
 		fatalf("unknown subcommand: %s", os.Args[1])
 	}
@@ -1061,33 +1049,18 @@ $$;`, role, role)
 	_, _ = conn.Exec(ctx, `GRANT USAGE ON SCHEMA public TO `+role+`;`)
 	_, _ = conn.Exec(ctx, `GRANT USAGE ON SCHEMA iam TO `+role+`;`)
 	_, _ = conn.Exec(ctx, `GRANT USAGE ON SCHEMA orgunit TO `+role+`;`)
-	_, _ = conn.Exec(ctx, `GRANT USAGE ON SCHEMA jobcatalog TO `+role+`;`)
-	_, _ = conn.Exec(ctx, `GRANT USAGE ON SCHEMA person TO `+role+`;`)
-	_, _ = conn.Exec(ctx, `GRANT USAGE ON SCHEMA staffing TO `+role+`;`)
 	_, _ = conn.Exec(ctx, `GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO `+role+`;`)
 	_, _ = conn.Exec(ctx, `GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA iam TO `+role+`;`)
 	_, _ = conn.Exec(ctx, `GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA orgunit TO `+role+`;`)
-	_, _ = conn.Exec(ctx, `GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA jobcatalog TO `+role+`;`)
-	_, _ = conn.Exec(ctx, `GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA person TO `+role+`;`)
-	_, _ = conn.Exec(ctx, `GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA staffing TO `+role+`;`)
 	_, _ = conn.Exec(ctx, `GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO `+role+`;`)
 	_, _ = conn.Exec(ctx, `GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA iam TO `+role+`;`)
 	_, _ = conn.Exec(ctx, `GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA orgunit TO `+role+`;`)
-	_, _ = conn.Exec(ctx, `GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA jobcatalog TO `+role+`;`)
-	_, _ = conn.Exec(ctx, `GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA person TO `+role+`;`)
-	_, _ = conn.Exec(ctx, `GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA staffing TO `+role+`;`)
 	_, _ = conn.Exec(ctx, `GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA public TO `+role+`;`)
 	_, _ = conn.Exec(ctx, `GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA iam TO `+role+`;`)
 	_, _ = conn.Exec(ctx, `GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA orgunit TO `+role+`;`)
-	_, _ = conn.Exec(ctx, `GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA jobcatalog TO `+role+`;`)
-	_, _ = conn.Exec(ctx, `GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA person TO `+role+`;`)
-	_, _ = conn.Exec(ctx, `GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA staffing TO `+role+`;`)
 	_, _ = conn.Exec(ctx, `ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT USAGE, SELECT ON SEQUENCES TO `+role+`;`)
 	_, _ = conn.Exec(ctx, `ALTER DEFAULT PRIVILEGES IN SCHEMA iam GRANT USAGE, SELECT ON SEQUENCES TO `+role+`;`)
 	_, _ = conn.Exec(ctx, `ALTER DEFAULT PRIVILEGES IN SCHEMA orgunit GRANT USAGE, SELECT ON SEQUENCES TO `+role+`;`)
-	_, _ = conn.Exec(ctx, `ALTER DEFAULT PRIVILEGES IN SCHEMA jobcatalog GRANT USAGE, SELECT ON SEQUENCES TO `+role+`;`)
-	_, _ = conn.Exec(ctx, `ALTER DEFAULT PRIVILEGES IN SCHEMA person GRANT USAGE, SELECT ON SEQUENCES TO `+role+`;`)
-	_, _ = conn.Exec(ctx, `ALTER DEFAULT PRIVILEGES IN SCHEMA staffing GRANT USAGE, SELECT ON SEQUENCES TO `+role+`;`)
 	return nil
 }
 

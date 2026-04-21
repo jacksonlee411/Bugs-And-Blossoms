@@ -27,13 +27,6 @@ type OrgUnitEvent struct {
 	TransactionTime time.Time
 }
 
-type Person struct {
-	UUID        string
-	Pernr       string
-	DisplayName string
-	Status      string
-}
-
 type OrgUnitResult struct {
 	OrgCode       string
 	EffectiveDate string

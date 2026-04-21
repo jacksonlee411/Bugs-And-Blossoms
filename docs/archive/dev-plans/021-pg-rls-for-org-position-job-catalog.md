@@ -2,6 +2,8 @@
 
 **状态**: 已完成（2026-01-08 02:45 UTC；PR #66 https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/66）
 
+> 历史归档说明：本文记录 `orgunit/jobcatalog/staffing/person` 并存时期的 RLS 合同与落地过程。自 `DEV-PLAN-450` 删除 `jobcatalog/staffing/person` 三模块后，本文不再代表当前活体模块边界；现行仓库仅将其作为历史来源引用。
+
 > 本计划聚焦：在 `DEV-PLAN-026/030/029` 的 Kernel 表上 **默认启用 PostgreSQL RLS**，把“租户隔离”从应用层 `WHERE tenant_id=...` 的约定，升级为 DB 层可验证的强制约束；并与 `DEV-PLAN-019/019A` 的 RLS 注入与 DB 角色契约对齐，确保 Greenfield 默认强隔离，不依赖实现期临时补丁。
 
 ## 1. 背景与上下文 (Context)

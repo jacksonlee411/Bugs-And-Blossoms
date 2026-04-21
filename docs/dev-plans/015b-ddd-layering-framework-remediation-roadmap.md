@@ -71,7 +71,8 @@ P0 完成标准：
 目标：把主要的结构性偏差从 `internal/server` 与历史回流点中迁回模块分层。
 
 1. [ ] Composition Root 收口：
-   - [ ] 为 `orgunit`、`staffing`、`jobcatalog`、`person`、`iam` 逐步让 `module.go` / `links.go` 真正承接默认装配。
+   - [ ] 为当前活体模块 `orgunit`、`iam` 逐步让 `module.go` / `links.go` 真正承接默认装配。
+   - [ ] `staffing`、`jobcatalog`、`person` 的相关收口项已随 `DEV-PLAN-450` 退出当前执行面，不再作为现行待办。
    - [ ] 让 `internal/server/handler.go` 从“自己组装模块实现”逐步收敛为“调用模块暴露的装配入口”。
 2. [ ] 模块内部实现回迁：
    - [ ] 将 `internal/server` 中属于模块内部的 PG store / Kernel access 逐步迁回模块的 `infrastructure`。

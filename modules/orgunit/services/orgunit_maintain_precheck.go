@@ -36,7 +36,6 @@ const (
 
 type OrgUnitMaintainPolicyContextV1 struct {
 	TenantID            string `json:"tenant_id"`
-	CapabilityKey       string `json:"capability_key"`
 	Intent              string `json:"intent"`
 	EffectiveDate       string `json:"effective_date,omitempty"`
 	TargetEffectiveDate string `json:"target_effective_date,omitempty"`
@@ -76,7 +75,6 @@ type OrgUnitMaintainPrecheckProjectionV1 struct {
 type OrgUnitMaintainPrecheckInputV1 struct {
 	Intent                            string
 	TenantID                          string
-	CapabilityKey                     string
 	EffectiveDate                     string
 	TargetEffectiveDate               string
 	OrgCode                           string
@@ -125,14 +123,6 @@ type OrgUnitMaintainPrecheckReader interface {
 	ResolveOrgNodeKey(ctx context.Context, tenantID string, orgCode string) (string, error)
 	ResolveSetID(ctx context.Context, tenantID string, orgNodeKey string, asOf string) (string, error)
 	IsOrgTreeInitialized(ctx context.Context, tenantID string) (bool, error)
-	ResolveSetIDStrategyFieldDecision(
-		ctx context.Context,
-		tenantID string,
-		capabilityKey string,
-		fieldKey string,
-		businessUnitNodeKey string,
-		asOf string,
-	) (types.SetIDStrategyFieldDecision, bool, error)
 	ListEnabledTenantFieldConfigsAsOf(ctx context.Context, tenantID string, asOf string) ([]types.TenantFieldConfig, error)
 	ResolveTargetExistsAsOf(ctx context.Context, tenantID string, orgNodeKey string, asOf string) (bool, error)
 	ResolveMutationTargetEvent(ctx context.Context, tenantID string, orgNodeKey string, effectiveDate string) (OrgUnitMaintainTargetEventV1, error)
@@ -143,9 +133,9 @@ type orgUnitMaintainPrecheckEvaluation struct {
 	TargetEvent      OrgUnitMaintainTargetEventV1
 	MutationDecision OrgUnitMutationPolicyDecision
 	EnabledFieldCfg  []types.TenantFieldConfig
-	NameDecision     types.SetIDStrategyFieldDecision
+	NameDecision     orgUnitFieldDecision
 	NameFound        bool
-	ParentDecision   types.SetIDStrategyFieldDecision
+	ParentDecision   orgUnitFieldDecision
 	ParentFound      bool
 }
 
@@ -170,7 +160,6 @@ func evaluateOrgUnitMaintainPrecheckV1(
 	result := OrgUnitMaintainPrecheckResultV1{
 		PolicyContext: OrgUnitMaintainPolicyContextV1{
 			TenantID:            normalizedInput.TenantID,
-			CapabilityKey:       normalizedInput.CapabilityKey,
 			Intent:              normalizedInput.Intent,
 			EffectiveDate:       normalizedInput.EffectiveDate,
 			TargetEffectiveDate: normalizedInput.TargetEffectiveDate,
@@ -259,7 +248,6 @@ func normalizeOrgUnitMaintainPrecheckInput(input OrgUnitMaintainPrecheckInputV1)
 	normalized := input
 	normalized.Intent = strings.ToLower(strings.TrimSpace(input.Intent))
 	normalized.TenantID = strings.TrimSpace(input.TenantID)
-	normalized.CapabilityKey = strings.TrimSpace(input.CapabilityKey)
 	normalized.EffectiveDate = strings.TrimSpace(input.EffectiveDate)
 	normalized.TargetEffectiveDate = strings.TrimSpace(input.TargetEffectiveDate)
 	normalized.OrgCode = strings.TrimSpace(input.OrgCode)
@@ -313,7 +301,6 @@ func resolveOrgUnitMaintainPolicyContextV1(
 ) (OrgUnitMaintainPolicyContextV1, *OrgUnitMaintainPolicyContextErrorV1) {
 	ctxV1 := OrgUnitMaintainPolicyContextV1{
 		TenantID:            strings.TrimSpace(input.TenantID),
-		CapabilityKey:       strings.TrimSpace(input.CapabilityKey),
 		Intent:              strings.TrimSpace(input.Intent),
 		EffectiveDate:       strings.TrimSpace(input.EffectiveDate),
 		TargetEffectiveDate: strings.TrimSpace(input.TargetEffectiveDate),
@@ -390,22 +377,13 @@ func resolveOrgUnitMaintainFieldDecision(
 	orgNodeKey string,
 	fieldKey string,
 	asOf string,
-) (types.SetIDStrategyFieldDecision, bool, string) {
-	if reader == nil {
-		return types.SetIDStrategyFieldDecision{}, false, ""
-	}
-	decision, found, err := reader.ResolveSetIDStrategyFieldDecision(
-		ctx,
-		input.TenantID,
-		input.CapabilityKey,
-		fieldKey,
-		orgNodeKey,
-		asOf,
-	)
-	if err != nil {
-		return types.SetIDStrategyFieldDecision{}, false, strings.TrimSpace(mapSetIDFieldDecisionError(err).Error())
-	}
-	return decision, found, ""
+) (orgUnitFieldDecision, bool, string) {
+	_ = ctx
+	_ = reader
+	_ = input
+	_ = orgNodeKey
+	_ = asOf
+	return resolveOrgUnitWriteFieldDecision(fieldKey)
 }
 
 func normalizeOrgUnitMaintainCandidateRequirements(required bool, requirements []string) []string {
@@ -744,7 +722,7 @@ func orgUnitMaintainFieldDecisionOrder(intent string) []string {
 
 func buildOrgUnitMaintainPDPFieldDecision(
 	fieldKey string,
-	decision types.SetIDStrategyFieldDecision,
+	decision orgUnitFieldDecision,
 	found bool,
 	payloadKey string,
 ) OrgUnitMaintainFieldDecisionV1 {
@@ -823,7 +801,6 @@ func buildOrgUnitMaintainPolicyExplain(projection OrgUnitMaintainPrecheckProject
 func buildOrgUnitMaintainPolicyContextDigest(ctx OrgUnitMaintainPolicyContextV1) string {
 	payload := struct {
 		TenantID            string `json:"tenant_id"`
-		CapabilityKey       string `json:"capability_key"`
 		Intent              string `json:"intent"`
 		EffectiveDate       string `json:"effective_date,omitempty"`
 		TargetEffectiveDate string `json:"target_effective_date,omitempty"`
@@ -833,7 +810,6 @@ func buildOrgUnitMaintainPolicyContextDigest(ctx OrgUnitMaintainPolicyContextV1)
 		SetIDSource         string `json:"setid_source"`
 	}{
 		TenantID:            strings.TrimSpace(ctx.TenantID),
-		CapabilityKey:       strings.TrimSpace(ctx.CapabilityKey),
 		Intent:              strings.TrimSpace(ctx.Intent),
 		EffectiveDate:       strings.TrimSpace(ctx.EffectiveDate),
 		TargetEffectiveDate: strings.TrimSpace(ctx.TargetEffectiveDate),

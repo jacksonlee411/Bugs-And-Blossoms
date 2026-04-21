@@ -136,16 +136,28 @@ func (s *SetIDMemoryStore) CreateGlobalSetID(_ context.Context, name string, _ s
 
 func (s *SetIDMemoryStore) ListScopeCodes(_ context.Context, _ string) ([]ports.ScopeCode, error) {
 	return []ports.ScopeCode{
-		{ScopeCode: "jobcatalog", OwnerModule: "jobcatalog", ShareMode: "tenant-only", IsStable: true},
 		{ScopeCode: "orgunit_geo_admin", OwnerModule: "orgunit", ShareMode: "shared-only", IsStable: true},
 		{ScopeCode: "orgunit_location", OwnerModule: "orgunit", ShareMode: "shared-only", IsStable: true},
-		{ScopeCode: "person_school", OwnerModule: "person", ShareMode: "shared-only", IsStable: true},
-		{ScopeCode: "person_education_type", OwnerModule: "person", ShareMode: "shared-only", IsStable: true},
-		{ScopeCode: "person_credential_type", OwnerModule: "person", ShareMode: "shared-only", IsStable: true},
 	}, nil
 }
 
+func setidScopeShareMode(scopeCode string) (string, error) {
+	switch strings.TrimSpace(scopeCode) {
+	case "orgunit_geo_admin", "orgunit_location":
+		return "shared-only", nil
+	default:
+		return "", errors.New("SCOPE_CODE_INVALID")
+	}
+}
+
 func (s *SetIDMemoryStore) CreateScopePackage(_ context.Context, tenantID string, scopeCode string, packageCode string, ownerSetID string, name string, effectiveDate string, _ string, _ string) (ports.ScopePackage, error) {
+	shareMode, err := setidScopeShareMode(scopeCode)
+	if err != nil {
+		return ports.ScopePackage{}, err
+	}
+	if shareMode == "shared-only" {
+		return ports.ScopePackage{}, errors.New("PACKAGE_SCOPE_MISMATCH")
+	}
 	if s.ScopePackages[tenantID] == nil {
 		s.ScopePackages[tenantID] = make(map[string]map[string]ports.ScopePackage)
 	}
@@ -211,6 +223,22 @@ func (s *SetIDMemoryStore) ListOwnedScopePackages(_ context.Context, tenantID st
 }
 
 func (s *SetIDMemoryStore) CreateScopeSubscription(_ context.Context, tenantID string, setID string, scopeCode string, packageID string, packageOwner string, effectiveDate string, _ string, _ string) (ports.ScopeSubscription, error) {
+	shareMode, err := setidScopeShareMode(scopeCode)
+	if err != nil {
+		return ports.ScopeSubscription{}, err
+	}
+	switch strings.ToLower(strings.TrimSpace(packageOwner)) {
+	case "tenant":
+		if shareMode == "shared-only" {
+			return ports.ScopeSubscription{}, errors.New("PACKAGE_SCOPE_MISMATCH")
+		}
+	case "global":
+		if shareMode == "tenant-only" {
+			return ports.ScopeSubscription{}, errors.New("PACKAGE_SCOPE_MISMATCH")
+		}
+	default:
+		return ports.ScopeSubscription{}, errors.New("PACKAGE_OWNER_INVALID")
+	}
 	if s.ScopeSubscriptions[tenantID] == nil {
 		s.ScopeSubscriptions[tenantID] = make(map[string]map[string]ports.ScopeSubscription)
 	}
@@ -237,6 +265,13 @@ func (s *SetIDMemoryStore) GetScopeSubscription(_ context.Context, tenantID stri
 }
 
 func (s *SetIDMemoryStore) CreateGlobalScopePackage(_ context.Context, scopeCode string, packageCode string, name string, _ string, _ string, _ string, actorScope string) (ports.ScopePackage, error) {
+	shareMode, err := setidScopeShareMode(scopeCode)
+	if err != nil {
+		return ports.ScopePackage{}, err
+	}
+	if shareMode == "tenant-only" {
+		return ports.ScopePackage{}, errors.New("PACKAGE_SCOPE_MISMATCH")
+	}
 	if strings.TrimSpace(actorScope) != "saas" {
 		return ports.ScopePackage{}, errors.New("ACTOR_SCOPE_FORBIDDEN")
 	}

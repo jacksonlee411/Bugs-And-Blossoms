@@ -215,17 +215,6 @@ type orgUnitRequestIDEventReader interface {
 	FindEventByRequestID(ctx context.Context, tenantID string, requestID string) (types.OrgUnitEvent, bool, error)
 }
 
-type orgUnitSetIDStrategyFieldDecisionResolver interface {
-	ResolveSetIDStrategyFieldDecision(
-		ctx context.Context,
-		tenantID string,
-		capabilityKey string,
-		fieldKey string,
-		businessUnitID string,
-		asOf string,
-	) (types.SetIDStrategyFieldDecision, bool, error)
-}
-
 type orgUnitSetIDResolver interface {
 	ResolveSetID(ctx context.Context, tenantID string, orgNodeKey string, asOf string) (string, error)
 }
@@ -282,21 +271,6 @@ func (r createOrgUnitPrecheckWriteStoreReader) IsOrgTreeInitialized(ctx context.
 	return reader.IsOrgTreeInitialized(ctx, tenantID)
 }
 
-func (r createOrgUnitPrecheckWriteStoreReader) ResolveSetIDStrategyFieldDecision(
-	ctx context.Context,
-	tenantID string,
-	capabilityKey string,
-	fieldKey string,
-	businessUnitNodeKey string,
-	asOf string,
-) (types.SetIDStrategyFieldDecision, bool, error) {
-	resolver, ok := r.store.(orgUnitSetIDStrategyFieldDecisionResolver)
-	if !ok {
-		return types.SetIDStrategyFieldDecision{}, false, errors.New(errFieldPolicyMissing)
-	}
-	return resolver.ResolveSetIDStrategyFieldDecision(ctx, tenantID, capabilityKey, fieldKey, businessUnitNodeKey, asOf)
-}
-
 func (r createOrgUnitPrecheckWriteStoreReader) ListEnabledTenantFieldConfigsAsOf(ctx context.Context, tenantID string, asOf string) ([]types.TenantFieldConfig, error) {
 	return r.store.ListEnabledTenantFieldConfigsAsOf(ctx, tenantID, asOf)
 }
@@ -307,10 +281,8 @@ const (
 	orgUnitDefaultOrgCodeWidth  = 6
 	orgUnitPolicyDisabledStatus = "disabled"
 	orgUnitPolicyEnabledStatus  = "active"
-
-	orgUnitCreateFieldPolicyCapabilityKey = "org.orgunit_create.field_policy"
 	orgUnitCreateFieldOrgCode             = "org_code"
-	orgUnitCreateFieldOrgType             = "d_org_type"
+	orgUnitCreateFieldOrgType             = "org_type"
 )
 
 type globalDictResolver struct{}
@@ -428,7 +400,6 @@ func (s *orgUnitWriteService) Write(ctx context.Context, tenantID string, req Wr
 		fields["is_business_unit"] = *req.Patch.IsBusinessUnit
 	}
 
-	// manager_pernr -> manager_uuid
 	if req.Patch.ManagerPernr != nil {
 		pernrInput := strings.TrimSpace(*req.Patch.ManagerPernr)
 		if pernrInput == "" {
@@ -438,14 +409,18 @@ func (s *orgUnitWriteService) Write(ctx context.Context, tenantID string, req Wr
 			fields["manager_pernr"] = ""
 			fields["manager_name"] = ""
 		} else {
-			pernr, managerUUID, managerName, err := s.resolveManager(ctx, tenantID, pernrInput)
+			pernr, managerUUID, managerName, err := s.resolveManager(pernrInput)
 			if err != nil {
 				return OrgUnitWriteResult{}, err
 			}
-			payload["manager_uuid"] = managerUUID
+			if managerUUID != "" {
+				payload["manager_uuid"] = managerUUID
+			}
 			payload["manager_pernr"] = pernr
 			fields["manager_pernr"] = pernr
-			fields["manager_name"] = managerName
+			if managerName != "" {
+				fields["manager_name"] = managerName
+			}
 		}
 	}
 
@@ -645,7 +620,7 @@ func (s *orgUnitWriteService) Create(ctx context.Context, tenantID string, req C
 	var managerPernr string
 	var managerName string
 	if strings.TrimSpace(req.ManagerPernr) != "" {
-		managerPernr, managerUUID, managerName, err = s.resolveManager(ctx, tenantID, req.ManagerPernr)
+		managerPernr, managerUUID, managerName, err = s.resolveManager(req.ManagerPernr)
 		if err != nil {
 			return types.OrgUnitResult{}, err
 		}
@@ -723,7 +698,9 @@ func (s *orgUnitWriteService) Create(ctx context.Context, tenantID string, req C
 	}
 	if managerPernr != "" {
 		fields["manager_pernr"] = managerPernr
-		fields["manager_name"] = managerName
+		if managerName != "" {
+			fields["manager_name"] = managerName
+		}
 	}
 
 	return types.OrgUnitResult{
@@ -1373,14 +1350,18 @@ func (s *orgUnitWriteService) buildCorrectionPatch(ctx context.Context, tenantID
 		if event.EventType != types.OrgUnitEventCreate {
 			return nil, nil, "", httperr.NewBadRequest(errPatchFieldNotAllowed)
 		}
-		pernr, managerUUID, managerName, err := s.resolveManager(ctx, tenantID, *patch.ManagerPernr)
+		pernr, managerUUID, managerName, err := s.resolveManager(*patch.ManagerPernr)
 		if err != nil {
 			return nil, nil, "", err
 		}
-		patchMap["manager_uuid"] = managerUUID
+		if managerUUID != "" {
+			patchMap["manager_uuid"] = managerUUID
+		}
 		patchMap["manager_pernr"] = pernr
 		fields["manager_pernr"] = pernr
-		fields["manager_name"] = managerName
+		if managerName != "" {
+			fields["manager_name"] = managerName
+		}
 	}
 
 	if len(patch.Ext) > 0 {
@@ -1625,7 +1606,6 @@ func (s *orgUnitWriteService) applyCreatePolicyDefaults(
 	precheckReader := createOrgUnitPrecheckWriteStoreReader{store: s.store}
 	input := CreateOrgUnitPrecheckInputV1{
 		TenantID:            tenantID,
-		CapabilityKey:       orgUnitCreateFieldPolicyCapabilityKey,
 		EffectiveDate:       effectiveDate,
 		BusinessUnitOrgCode: stringValue(req.Patch.ParentOrgCode),
 		CanAdmin:            true,
@@ -1662,7 +1642,7 @@ type createFieldDecisionValue struct {
 	autoCodeSpec *orgUnitAutoCodeSpec
 }
 
-func resolveCreateFieldDecisionValue(fieldKey string, provided string, providedByClient bool, decision types.SetIDStrategyFieldDecision) (createFieldDecisionValue, error) {
+func resolveCreateFieldDecisionValue(fieldKey string, provided string, providedByClient bool, decision orgUnitFieldDecision) (createFieldDecisionValue, error) {
 	providedValue := strings.TrimSpace(provided)
 	if !decision.Maintainable && providedValue != "" {
 		return createFieldDecisionValue{}, errors.New(errFieldNotMaintainable)
@@ -1977,25 +1957,12 @@ func parentPatchKey(eventType types.OrgUnitEventType) (string, bool) {
 
 var pernrDigitsMax8Re = regexp.MustCompile(`^[0-9]{1,8}$`)
 
-func (s *orgUnitWriteService) resolveManager(ctx context.Context, tenantID string, pernrInput string) (string, string, string, error) {
+func (s *orgUnitWriteService) resolveManager(pernrInput string) (string, string, string, error) {
 	pernr, err := normalizePernr(pernrInput)
 	if err != nil {
 		return "", "", "", err
 	}
-
-	person, err := s.store.FindPersonByPernr(ctx, tenantID, pernr)
-	if err != nil {
-		if errors.Is(err, ports.ErrPersonNotFound) {
-			return "", "", "", errors.New(errManagerPernrNotFound)
-		}
-		return "", "", "", err
-	}
-
-	if strings.ToLower(person.Status) != "active" {
-		return "", "", "", errors.New(errManagerPernrInactive)
-	}
-
-	return pernr, person.UUID, person.DisplayName, nil
+	return pernr, "", "", nil
 }
 
 func normalizePernr(raw string) (string, error) {

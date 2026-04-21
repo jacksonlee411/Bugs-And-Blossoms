@@ -174,7 +174,7 @@ modules/{module}/
 - Atlas + Goose（模块级闭环）：`docs/dev-plans/024-atlas-goose-closed-loop-guide.md`
 - sqlc（规范与门禁）：`docs/dev-plans/025-sqlc-guidelines.md`
 - Tenancy/AuthN（Kratos + session）：`docs/dev-plans/019-tenant-and-authn.md`
-- RLS 强租户隔离：`docs/dev-plans/021-pg-rls-for-org-position-job-catalog.md`
+- RLS 强租户隔离【归档 / 历史合同】：`docs/archive/dev-plans/021-pg-rls-for-org-position-job-catalog.md`
 - Authz（Casbin）：`docs/dev-plans/022-authz-casbin-toolchain.md`
 - Routing 策略与门禁：`docs/dev-plans/017-routing-strategy.md`
 - UI Shell（历史，已被 DEV-PLAN-103 替代，已归档）：`docs/archive/dev-plans/018-astro-aha-ui-shell-for-hrms.md`
@@ -242,7 +242,7 @@ modules/{module}/
 - DEV-PLAN-440 Readiness：当前命中、停止线与分阶段 owner：`docs/dev-records/DEV-PLAN-440-READINESS.md`
 - SetID 相关历史研究/中间方案说明：`070A`、`102C*`、`015Z*`、`161A`、`163A`、`185`、`191`、`203` 等文档仅可作为 archive 历史来源或调查记录引用；凡涉及 SetID 根删除、入口是否保留、现行主流程是否仍依赖 SetID，一律以 `DEV-PLAN-440` 为准。
 - DEV-PLAN-400：CodeFlow 辅助源码分析与爆炸半径评估落地方案：`docs/dev-plans/400-codeflow-assisted-source-analysis-and-impact-radius-plan.md`
-- DEV-PLAN-069：移除薪酬社保与考勤（文档/代码/测试/数据库）：`docs/dev-plans/069-remove-payroll-attendance.md`
+- DEV-PLAN-069【归档 / 历史删除方案】：移除薪酬社保与考勤（文档/代码/测试/数据库）：`docs/archive/dev-plans/069-remove-payroll-attendance.md`
 - DEV-PLAN-070【归档】：SetID 绑定组织架构重构方案（时间口径已由 DEV-PLAN-102B 接管）：`docs/archive/dev-plans/070-setid-orgunit-binding-redesign.md`
 - DEV-PLAN-070A【归档 / 历史来源】：全局共享租户模式 vs 天然租户隔离模式专项调查（SetID/Scope Package，不作为现行实现依据）：`docs/archive/dev-plans/070a-setid-global-share-vs-tenant-native-isolation-investigation.md`
 - DEV-PLAN-070B：取消共享租户（global_tenant）并收敛为租户本地发布方案（以字典配置模块为样板）：`docs/dev-plans/070b-no-global-tenant-and-dict-release-to-tenant-plan.md`
@@ -334,19 +334,19 @@ modules/{module}/
 - DEV-PLAN-184：字段配置与策略规则双层 SoT 收敛方案（Static Metadata vs Dynamic Policy）：`docs/dev-plans/184-field-metadata-and-runtime-policy-sot-convergence.md`
 - DEV-PLAN-185【归档 / 历史来源】：字段配置页字典值列表 SetID 列展示与主数据取数控制策略收敛：`docs/archive/dev-plans/185-field-config-dict-values-setid-column-and-master-data-fetch-control.md`
 - DEV-PLAN-191【归档 / 历史来源】：`/app/org/setid` 导航与页面设计优化方案（历史页面方案；现行入口删除 owner 见 `DEV-PLAN-440`）：`docs/archive/dev-plans/191-setid-governance-navigation-and-layout-optimization.md`
-- DEV-PLAN-200：组合优先的积木式页面与功能架构蓝图（Field Config × Dict × CRUD Pattern × Strategy）：`docs/dev-plans/200-composable-building-block-architecture-blueprint.md`
-- DEV-PLAN-201：200蓝图 Phase 0 边界冻结与跨层作用域一致性基线：`docs/dev-plans/201-blueprint-phase0-boundary-and-scope-consistency-freeze.md`
-- DEV-PLAN-202：200蓝图 Phase 0 策略决议确定性与 allowed_value_codes 语义收敛：`docs/dev-plans/202-blueprint-policy-resolution-and-allowed-values-determinism.md`
+- DEV-PLAN-200【归档 / 历史来源】：组合优先的积木式页面与功能架构蓝图（Field Config × Dict × CRUD Pattern × Strategy）：`docs/archive/dev-plans/200-composable-building-block-architecture-blueprint.md`
+- DEV-PLAN-201【归档 / 历史来源】：200蓝图 Phase 0 边界冻结与跨层作用域一致性基线：`docs/archive/dev-plans/201-blueprint-phase0-boundary-and-scope-consistency-freeze.md`
+- DEV-PLAN-202【归档 / 历史来源】：200蓝图 Phase 0 策略决议确定性与 allowed_value_codes 语义收敛：`docs/archive/dev-plans/202-blueprint-policy-resolution-and-allowed-values-determinism.md`
 - DEV-PLAN-203【归档 / 历史来源】：200蓝图 Phase 1 运行时读路径（映射注册表 + SetID 硬前置）：`docs/archive/dev-plans/203-blueprint-runtime-read-path-mapping-and-setid-preresolve.md`
-- DEV-PLAN-204：200蓝图 Phase 1 组合 DTO、Explain 与版本快照协议：`docs/dev-plans/204-blueprint-composition-dto-and-explain-versioning.md`
-- DEV-PLAN-205：200蓝图 Phase 1 页面职责收敛（Static Metadata × Dynamic Policy）：`docs/dev-plans/205-blueprint-page-responsibility-convergence-static-dynamic-sot.md`
-- DEV-PLAN-206：200蓝图 Phase 2 CRUD 模板统一与双版本提交收口：`docs/dev-plans/206-blueprint-crud-template-and-double-version-submit-cutover.md`
-- DEV-PLAN-207：200蓝图 Phase 2 性能停止线与反 N+1 门禁收口：`docs/dev-plans/207-blueprint-performance-gates-and-n-plus-one-prevention.md`
-- DEV-PLAN-208：200蓝图 Phase 3 Req2Config 只读编排与严格结构化输出：`docs/dev-plans/208-blueprint-req2config-readonly-and-strict-decode.md`
-- DEV-PLAN-209：200蓝图 Phase 3 Skill 契约化与工具白名单治理：`docs/dev-plans/209-blueprint-skill-manifest-tool-whitelist-and-risk-tier.md`
-- DEV-PLAN-210：200蓝图 Phase 4 会话事务提交与委托授权同构收口：`docs/dev-plans/210-blueprint-conversation-transaction-and-actor-delegated-authz.md`
-- DEV-PLAN-211：200蓝图 Phase 5 自建 Temporal M10D0 最小化落地：`docs/dev-plans/211-blueprint-temporal-m10d0-minimal-orchestration-foundation.md`
-- DEV-PLAN-212：200蓝图 Phase 6 评测门禁与触发式 Temporal 平台化验收：`docs/dev-plans/212-blueprint-eval-gates-and-triggered-temporal-productionization.md`
+- DEV-PLAN-204【归档 / 历史来源】：200蓝图 Phase 1 组合 DTO、Explain 与版本快照协议：`docs/archive/dev-plans/204-blueprint-composition-dto-and-explain-versioning.md`
+- DEV-PLAN-205【归档 / 历史来源】：200蓝图 Phase 1 页面职责收敛（Static Metadata × Dynamic Policy）：`docs/archive/dev-plans/205-blueprint-page-responsibility-convergence-static-dynamic-sot.md`
+- DEV-PLAN-206【归档 / 历史来源】：200蓝图 Phase 2 CRUD 模板统一与双版本提交收口：`docs/archive/dev-plans/206-blueprint-crud-template-and-double-version-submit-cutover.md`
+- DEV-PLAN-207【归档 / 历史来源】：200蓝图 Phase 2 性能停止线与反 N+1 门禁收口：`docs/archive/dev-plans/207-blueprint-performance-gates-and-n-plus-one-prevention.md`
+- DEV-PLAN-208【归档 / 历史来源】：200蓝图 Phase 3 Req2Config 只读编排与严格结构化输出：`docs/archive/dev-plans/208-blueprint-req2config-readonly-and-strict-decode.md`
+- DEV-PLAN-209【归档 / 历史来源】：200蓝图 Phase 3 Skill 契约化与工具白名单治理：`docs/archive/dev-plans/209-blueprint-skill-manifest-tool-whitelist-and-risk-tier.md`
+- DEV-PLAN-210【归档 / 历史来源】：200蓝图 Phase 4 会话事务提交与委托授权同构收口：`docs/archive/dev-plans/210-blueprint-conversation-transaction-and-actor-delegated-authz.md`
+- DEV-PLAN-211【归档 / 历史来源】：200蓝图 Phase 5 自建 Temporal M10D0 最小化落地：`docs/archive/dev-plans/211-blueprint-temporal-m10d0-minimal-orchestration-foundation.md`
+- DEV-PLAN-212【归档 / 历史来源】：200蓝图 Phase 6 评测门禁与触发式 Temporal 平台化验收：`docs/archive/dev-plans/212-blueprint-eval-gates-and-triggered-temporal-productionization.md`
 - Assistant / LibreChat / 旧 CubeBox `220-383` 系列与 `380A-380G` 子计划：已完成历史归档治理并迁入 `docs/archive/dev-plans/`；相关执行记录已按落地情况迁入 `docs/archive/dev-records/`。这些文档仅保留为历史证据，不再作为现行实现前提、编排入口或完成定义；当前对话助手重做主线请改看 `DEV-PLAN-430`、`DEV-PLAN-431`、`DEV-PLAN-431A`、`DEV-PLAN-432`、`DEV-PLAN-433`、`DEV-PLAN-434`、`DEV-PLAN-435`。
 - DEV-PLAN-300：全仓测试体系问题调查记录：`docs/dev-plans/300-test-system-investigation-report.md`
 - DEV-PLAN-301：Go 测试分层整治与官方最佳实践落地方案：`docs/dev-plans/301-go-test-layering-and-best-practices-remediation-plan.md`
@@ -388,7 +388,7 @@ modules/{module}/
 - Org（事务性事件溯源 + 同步投射，已归档）：`docs/archive/dev-plans/026-org-transactional-event-sourcing-synchronous-projection.md`
 - Position（事务性事件溯源 + 同步投射，已归档）：`docs/archive/dev-plans/030-position-transactional-event-sourcing-synchronous-projection.md`
 - Job Catalog（事务性事件溯源 + 同步投射，已归档）：`docs/archive/dev-plans/029-job-catalog-transactional-event-sourcing-synchronous-projection.md`
-- PostgreSQL RLS 强租户隔离（Org/Position/Job Catalog）：`docs/dev-plans/021-pg-rls-for-org-position-job-catalog.md`
+- PostgreSQL RLS 强租户隔离【归档 / 历史合同】：`docs/archive/dev-plans/021-pg-rls-for-org-position-job-catalog.md`
 - DDD 分层框架（对齐 CleanArchGuard + DB Kernel）：`docs/dev-plans/015-ddd-layering-framework.md`
 - DEV-PLAN-015A：DDD 分层框架履职缺口评估（承接 DEV-PLAN-015）：`docs/dev-plans/015a-ddd-layering-framework-implementation-gap-assessment.md`
 - DEV-PLAN-015B：DDD 分层框架收口整改路线图（P0/P1/P2，承接 DEV-PLAN-015A）：`docs/dev-plans/015b-ddd-layering-framework-remediation-roadmap.md`

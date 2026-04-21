@@ -128,9 +128,6 @@ func TestWriteUnified_CoversParentAndManagerBranches(t *testing.T) {
 				return 0, orgunitpkg.ErrOrgCodeNotFound
 			}
 		},
-		findPersonByPernrFn: func(context.Context, string, string) (types.Person, error) {
-			return types.Person{}, errors.New("unexpected FindPersonByPernr")
-		},
 		submitEventFn: func(_ context.Context, _ string, _ string, _ *int, _ string, _ string, payload json.RawMessage, _ string, _ string) (int64, error) {
 			if err := json.Unmarshal(payload, &captured); err != nil {
 				return 0, err

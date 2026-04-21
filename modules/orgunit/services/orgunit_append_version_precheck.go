@@ -37,7 +37,6 @@ var orgUnitAppendVersionFieldDecisionOrder = []string{
 
 type OrgUnitAppendVersionPolicyContextV1 struct {
 	TenantID            string `json:"tenant_id"`
-	CapabilityKey       string `json:"capability_key"`
 	Intent              string `json:"intent"`
 	EffectiveDate       string `json:"effective_date"`
 	OrgCode             string `json:"org_code"`
@@ -76,7 +75,6 @@ type OrgUnitAppendVersionPrecheckProjectionV1 struct {
 type OrgUnitAppendVersionPrecheckInputV1 struct {
 	Intent                            string
 	TenantID                          string
-	CapabilityKey                     string
 	EffectiveDate                     string
 	OrgCode                           string
 	EffectivePolicyVersion            string
@@ -122,14 +120,6 @@ type OrgUnitAppendVersionPrecheckReader interface {
 	ResolveOrgNodeKey(ctx context.Context, tenantID string, orgCode string) (string, error)
 	ResolveSetID(ctx context.Context, tenantID string, orgNodeKey string, asOf string) (string, error)
 	IsOrgTreeInitialized(ctx context.Context, tenantID string) (bool, error)
-	ResolveSetIDStrategyFieldDecision(
-		ctx context.Context,
-		tenantID string,
-		capabilityKey string,
-		fieldKey string,
-		businessUnitNodeKey string,
-		asOf string,
-	) (types.SetIDStrategyFieldDecision, bool, error)
 	ListEnabledTenantFieldConfigsAsOf(ctx context.Context, tenantID string, asOf string) ([]types.TenantFieldConfig, error)
 	ResolveAppendFacts(ctx context.Context, tenantID string, orgNodeKey string, effectiveDate string) (OrgUnitAppendVersionFactsV1, error)
 }
@@ -138,9 +128,9 @@ type orgUnitAppendVersionPrecheckEvaluation struct {
 	Result           OrgUnitAppendVersionPrecheckResultV1
 	MutationDecision OrgUnitWriteCapabilitiesDecision
 	EnabledFieldCfg  []types.TenantFieldConfig
-	NameDecision     types.SetIDStrategyFieldDecision
+	NameDecision     orgUnitFieldDecision
 	NameFound        bool
-	ParentDecision   types.SetIDStrategyFieldDecision
+	ParentDecision   orgUnitFieldDecision
 	ParentFound      bool
 }
 
@@ -165,7 +155,6 @@ func evaluateOrgUnitAppendVersionPrecheckV1(
 	result := OrgUnitAppendVersionPrecheckResultV1{
 		PolicyContext: OrgUnitAppendVersionPolicyContextV1{
 			TenantID:      normalizedInput.TenantID,
-			CapabilityKey: normalizedInput.CapabilityKey,
 			Intent:        normalizedInput.Intent,
 			EffectiveDate: normalizedInput.EffectiveDate,
 			OrgCode:       normalizedInput.OrgCode,
@@ -261,7 +250,6 @@ func evaluateOrgUnitAppendVersionPrecheckV1(
 func normalizeOrgUnitAppendVersionPrecheckInput(input OrgUnitAppendVersionPrecheckInputV1) OrgUnitAppendVersionPrecheckInputV1 {
 	input.Intent = strings.TrimSpace(input.Intent)
 	input.TenantID = strings.TrimSpace(input.TenantID)
-	input.CapabilityKey = strings.ToLower(strings.TrimSpace(input.CapabilityKey))
 	input.EffectiveDate = strings.TrimSpace(input.EffectiveDate)
 	input.OrgCode = strings.TrimSpace(input.OrgCode)
 	input.EffectivePolicyVersion = strings.TrimSpace(input.EffectivePolicyVersion)
@@ -298,7 +286,6 @@ func resolveOrgUnitAppendVersionPolicyContextV1(
 ) (OrgUnitAppendVersionPolicyContextV1, *OrgUnitAppendVersionPolicyContextErrorV1) {
 	ctxV1 := OrgUnitAppendVersionPolicyContextV1{
 		TenantID:      input.TenantID,
-		CapabilityKey: input.CapabilityKey,
 		Intent:        input.Intent,
 		EffectiveDate: input.EffectiveDate,
 		OrgCode:       input.OrgCode,
@@ -390,22 +377,12 @@ func resolveOrgUnitAppendVersionFieldDecision(
 	input OrgUnitAppendVersionPrecheckInputV1,
 	orgNodeKey string,
 	fieldKey string,
-) (types.SetIDStrategyFieldDecision, bool, string) {
-	if reader == nil {
-		return types.SetIDStrategyFieldDecision{}, false, errFieldPolicyMissing
-	}
-	decision, found, err := reader.ResolveSetIDStrategyFieldDecision(
-		ctx,
-		input.TenantID,
-		input.CapabilityKey,
-		fieldKey,
-		orgNodeKey,
-		input.EffectiveDate,
-	)
-	if err != nil {
-		return types.SetIDStrategyFieldDecision{}, false, strings.TrimSpace(mapSetIDFieldDecisionError(err).Error())
-	}
-	return decision, found, ""
+) (orgUnitFieldDecision, bool, string) {
+	_ = ctx
+	_ = reader
+	_ = input
+	_ = orgNodeKey
+	return resolveOrgUnitWriteFieldDecision(fieldKey)
 }
 
 func normalizeOrgUnitAppendVersionCandidateRequirements(required bool, requirements []string) []string {
@@ -603,7 +580,7 @@ func buildOrgUnitAppendVersionFieldDecisions(
 
 func buildOrgUnitAppendVersionPDPFieldDecision(
 	fieldKey string,
-	decision types.SetIDStrategyFieldDecision,
+	decision orgUnitFieldDecision,
 	found bool,
 	payloadKey string,
 ) OrgUnitAppendVersionFieldDecisionV1 {
@@ -667,7 +644,6 @@ func buildOrgUnitAppendVersionPolicyExplain(projection OrgUnitAppendVersionPrech
 func buildOrgUnitAppendVersionPolicyContextDigest(ctx OrgUnitAppendVersionPolicyContextV1) string {
 	payload := struct {
 		TenantID      string `json:"tenant_id"`
-		CapabilityKey string `json:"capability_key"`
 		Intent        string `json:"intent"`
 		EffectiveDate string `json:"effective_date"`
 		OrgCode       string `json:"org_code"`
@@ -676,7 +652,6 @@ func buildOrgUnitAppendVersionPolicyContextDigest(ctx OrgUnitAppendVersionPolicy
 		SetIDSource   string `json:"setid_source"`
 	}{
 		TenantID:      strings.TrimSpace(ctx.TenantID),
-		CapabilityKey: strings.TrimSpace(ctx.CapabilityKey),
 		Intent:        strings.TrimSpace(ctx.Intent),
 		EffectiveDate: strings.TrimSpace(ctx.EffectiveDate),
 		OrgCode:       strings.TrimSpace(ctx.OrgCode),

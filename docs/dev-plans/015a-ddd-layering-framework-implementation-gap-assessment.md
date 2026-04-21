@@ -58,7 +58,7 @@
 
 ### 已履职项
 
-1. [X] 四层目录骨架已在主要业务模块落位：`modules/{iam,jobcatalog,orgunit,person,staffing}/{domain,infrastructure,presentation,services}`。
+1. [X] 四层目录骨架曾在主要业务模块落位；当前活体模块以 `iam/orgunit` 为准，`jobcatalog/person/staffing` 已由 `DEV-PLAN-450` 删除。
 2. [X] `.gocleanarch.yml` 与 `scripts/ci/cleanarch.sh` 已接入，`make check lint` 中存在分层门禁入口。
 3. [X] `DEV-PLAN-015` 已把两类落地形态（Go DDD / DB Kernel + Go Facade）与 One Door 口径写清，后续评审已有统一引用点。
 4. [X] 各模块 `module.go` / `links.go` 已预留为 Composition Root 挂载位置，且目前没有演化成新的业务逻辑堆积点。
@@ -84,8 +84,8 @@
 
 但当前：
 
-1. [ ] `modules/staffing/module.go`、`modules/orgunit/module.go`、`modules/person/module.go` 及对应 `links.go` 仍基本为空。
-2. [ ] 默认装配仍集中在 `internal/server/handler.go`：包括创建 PG pool、决定默认 store、拼装 write service 等。
+1. [ ] 当前活体侧的 `modules/orgunit/module.go`、`modules/iam/module.go` 及对应 `links.go` 仍未完全做到“名实相符”。
+2. [ ] 默认装配仍有一部分集中在 `internal/server/handler.go`：包括创建 PG pool、决定默认 store、拼装 write service 等。
 
 判断：
 
@@ -96,9 +96,9 @@
 
 当前代码树中，`internal/server` 不仅承担 HTTP/路由适配，还继续承担部分模块内部装配与 persistence 组织工作。例如：
 
-1. [ ] `internal/server/staffing.go` 自行定义 `staffingPGStore` 并直接调用 `staffing.submit_position_event(...)`。
-2. [ ] `internal/server/setid.go` 自行定义 `setidPGStore` 并直接调用 `orgunit.submit_setid_event(...)`、`submit_setid_binding_event(...)` 等。
-3. [ ] `internal/server/jobcatalog.go` 自行定义 `jobcatalogPGStore` 并直接调用 `jobcatalog.submit_job_*_event(...)`。
+1. [ ] 历史上 `internal/server/staffing.go` / `internal/server/jobcatalog.go` 曾直接持有模块内 PG store 与 Kernel 调用实现；这些例子已随 `DEV-PLAN-450` 退出当前执行面。
+2. [ ] `internal/server/setid.go` 曾直接定义 `setidPGStore` 并调用 `orgunit.submit_setid_event(...)`、`submit_setid_binding_event(...)` 等；但当前 SetID 主链也已由 `DEV-PLAN-440` 收口删除。
+3. [ ] 当前更值得关注的是：现存 `internal/server` 是否仍保留不应继续存在的模块内装配残余，而不是继续围绕已删除模块评估。
 
 判断：
 
@@ -107,7 +107,7 @@
 
 ### 3. 存在 `infrastructure -> services` 的反向依赖
 
-当前 `modules/staffing/infrastructure/persistence/assignment_pg_store.go` 直接 import `modules/staffing/services`，并调用 `PrepareUpsertPrimaryAssignment(...)`、`PrepareCorrectAssignmentEvent(...)` 等准备逻辑。
+历史上 `modules/staffing/infrastructure/persistence/assignment_pg_store.go` 曾直接 import `modules/staffing/services`，并调用 `PrepareUpsertPrimaryAssignment(...)`、`PrepareCorrectAssignmentEvent(...)` 等准备逻辑；该例已随 `DEV-PLAN-450` 退出当前执行面。
 
 判断：
 

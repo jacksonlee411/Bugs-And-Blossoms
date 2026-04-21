@@ -413,8 +413,8 @@ return plan + hashes
 - `docs/archive/dev-plans/222-assistant-frontend-e2e-evidence-closure-plan.md`
 - `docs/archive/dev-plans/223-assistant-conversation-persistence-and-audit-closure-plan.md`
 - `docs/archive/dev-plans/225-assistant-tasks-temporal-p2-implementation-plan.md`
-- `docs/dev-plans/209-blueprint-skill-manifest-tool-whitelist-and-risk-tier.md`
-- `docs/dev-plans/200-composable-building-block-architecture-blueprint.md`
+- `docs/archive/dev-plans/209-blueprint-skill-manifest-tool-whitelist-and-risk-tier.md`
+- `docs/archive/dev-plans/200-composable-building-block-architecture-blueprint.md`
 - `AGENTS.md`
 
 ## 14. 实施回执（2026-03-02）

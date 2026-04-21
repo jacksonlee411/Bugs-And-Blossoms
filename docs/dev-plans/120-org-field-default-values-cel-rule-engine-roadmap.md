@@ -32,7 +32,7 @@
 
 ### 2.2 非目标（Stopline）
 
-1. 不在首期实现跨模块（jobcatalog/person/staffing）统一规则引擎接入。
+1. 不在首期实现跨模块统一规则引擎接入；历史上的 `jobcatalog/person/staffing` 设想已因 `DEV-PLAN-450` 删除而失效。
 2. 不在首期实现 Tri-State/PENDING 异步补数流程。
 3. 不引入 legacy 双链路或灰度开关分叉（遵循 `DEV-PLAN-004M1`）。
 4. 不在 M1 扩展默认值写入触发到 `add_version` / `insert_version` / `correct`（该扩展另立里程碑）。
