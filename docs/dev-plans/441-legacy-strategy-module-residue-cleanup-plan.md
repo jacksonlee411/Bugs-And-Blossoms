@@ -7,7 +7,7 @@
 - **评审分级**：`T2`
 - **范围一句话**：在独立 `strategy` 模块已删除的前提下，清理当前仓库中仍残留的“旧策略模块”语义、命名、运行时壳层、测试资产与文档入口；凡命中 SetID 根删除范围的对象，排序与 owner 统一服从 `DEV-PLAN-440`。
 - **关联模块/目录**：`pkg/fieldpolicy`、`modules/orgunit`、`internal/server`、`cmd/dbtool`、`docs/dev-plans`、`AGENTS.md`
-- **关联计划/标准**：`AGENTS.md`、`docs/dev-plans/000-docs-format.md`、`docs/dev-plans/003-simple-not-easy-review-guide.md`、`docs/dev-plans/012-ci-quality-gates.md`、`docs/dev-plans/015-ddd-layering-framework.md`、`docs/dev-plans/330-strategy-module-architecture-and-design-convergence-plan.md`
+- **关联计划/标准**：`AGENTS.md`、`docs/dev-plans/000-docs-format.md`、`docs/dev-plans/003-simple-not-easy-review-guide.md`、`docs/dev-plans/012-ci-quality-gates.md`、`docs/dev-plans/015-ddd-layering-framework.md`、`docs/archive/dev-plans/330-strategy-module-architecture-and-design-convergence-plan.md`
 - **用户入口/触点**：策略 registry / explain / 字段决策运行时、`fieldpolicy` PDP、dbtool snapshot/validate 工具、主文档中的策略模块入口
 
 ### 0.1 Simple > Easy 三问

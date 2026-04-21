@@ -171,7 +171,7 @@
 - `Makefile`
 - `docs/dev-plans/012-ci-quality-gates.md`
 - `docs/dev-plans/300-test-system-investigation-report.md`
-- `docs/dev-plans/301-go-test-layering-and-best-practices-remediation-plan.md`
+- `docs/archive/dev-plans/301-go-test-layering-and-best-practices-remediation-plan.md`
 
 本计划当前为文档评估类变更：
 

@@ -503,7 +503,7 @@
 - `docs/dev-plans/140-error-message-clarity-and-gates.md`
 - `docs/archive/dev-plans/155-capability-key-m3-evaluation-context-cel-kernel.md`
 - `docs/dev-plans/161-org-create-dynamic-field-policy-on-capability-registry.md`
-- `docs/dev-plans/182-bu-policy-baseline-and-intent-override-unification.md`
+- `docs/archive/dev-plans/182-bu-policy-baseline-and-intent-override-unification.md`
 - `docs/archive/dev-plans/185-field-config-dict-values-setid-column-and-master-data-fetch-control.md`
 - `docs/dev-plans/070b-no-global-tenant-and-dict-release-to-tenant-plan.md`
 - `docs/dev-plans/105-dict-config-platform-module.md`

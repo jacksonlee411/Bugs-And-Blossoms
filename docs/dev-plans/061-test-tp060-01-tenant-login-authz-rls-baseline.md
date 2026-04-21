@@ -52,7 +52,7 @@
 
 ## 3. 契约引用（SSOT）
 
-- 路线图与不变量：`docs/dev-plans/009-implementation-roadmap.md`、`AGENTS.md`
+- 路线图与不变量：`docs/archive/dev-plans/009-implementation-roadmap.md`、`AGENTS.md`
 - Tenancy/AuthN：`docs/dev-plans/019-tenant-and-authn.md`
 - RLS（No Tx, No RLS；历史合同来源）：`docs/archive/dev-plans/021-pg-rls-for-org-position-job-catalog.md`
 - Authz（Casbin）：`docs/dev-plans/022-authz-casbin-toolchain.md`

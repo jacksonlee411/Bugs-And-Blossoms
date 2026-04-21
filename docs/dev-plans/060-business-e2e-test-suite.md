@@ -6,7 +6,7 @@
 
 ## 1. 背景
 
-本仓库按 Greenfield 的“切片式交付 + 门禁阻断漂移”推进（见 `docs/dev-plans/009-implementation-roadmap.md`、`docs/archive/dev-plans/026-org-transactional-event-sourcing-synchronous-projection.md`、`docs/archive/dev-plans/029-job-catalog-transactional-event-sourcing-synchronous-projection.md`）。因此需要一套“全链路业务测试案例套件”，用于在 **不回退/不走双链路** 的前提下验证：
+本仓库按 Greenfield 的“切片式交付 + 门禁阻断漂移”推进（历史路线图见 `docs/archive/dev-plans/009-implementation-roadmap.md`、`docs/archive/dev-plans/026-org-transactional-event-sourcing-synchronous-projection.md`、`docs/archive/dev-plans/029-job-catalog-transactional-event-sourcing-synchronous-projection.md`）。因此需要一套“全链路业务测试案例套件”，用于在 **不回退/不走双链路** 的前提下验证：
 - 系统功能是否覆盖完整业务域（组织/职位分类/职位/任职/人员）；其中本文原有 SetID 主链条目自 2026-04-20 起仅作为历史样本保留，不再作为现行实现目标；
 - Assistant 功能是否覆盖会话/意图/提交/任务编排的主链路（对齐 220-225）；
 - 每条能力是否 **用户可见、可操作**（避免僵尸功能）；
@@ -34,7 +34,7 @@
 - **用户可见性原则**：每个切片交付必须有页面入口与可操作链路（`AGENTS.md` §3.8）。
 - **主数据纵切片顺序（历史口径）**：本文原先采用 `SetID => JobCatalog => Position => Assignments`。自 `DEV-PLAN-440` 生效起，该顺序不再作为现行实现顺序；涉及 SetID 的主数据链路改由 `DEV-PLAN-440` 统筹删除或重写。
 
-因此：本套件以“租户与权限基线 → 主数据 → 人员任职”为主链路顺序。
+因此：当前活体执行面以“租户与权限基线 → OrgUnit/现行主流程”为主链路顺序；历史主数据与人员任职链路仅保留 archive 合同与证据，不再作为现行执行顺序。
 
 ## 4. 测试环境与登录信息（dev 默认）
 
@@ -250,6 +250,6 @@
 
 ## 10. 参考（SSOT 链接）
 
-- 路线图：`docs/dev-plans/009-implementation-roadmap.md`
+- 路线图（历史来源）：`docs/archive/dev-plans/009-implementation-roadmap.md`
 - 主数据：`docs/archive/dev-plans/026-org-transactional-event-sourcing-synchronous-projection.md`、`docs/archive/dev-plans/070-setid-orgunit-binding-redesign.md`、`docs/archive/dev-plans/029-job-catalog-transactional-event-sourcing-synchronous-projection.md`、`docs/archive/dev-plans/030-position-transactional-event-sourcing-synchronous-projection.md`、`docs/archive/dev-plans/031-greenfield-assignment-job-data.md`
 - 平台：`docs/dev-plans/019-tenant-and-authn.md`、`docs/archive/dev-plans/021-pg-rls-for-org-position-job-catalog.md`、`docs/dev-plans/022-authz-casbin-toolchain.md`、`docs/dev-plans/017-routing-strategy.md`、`docs/archive/dev-plans/018-astro-aha-ui-shell-for-hrms.md`、`docs/dev-plans/020-i18n-en-zh-only.md`

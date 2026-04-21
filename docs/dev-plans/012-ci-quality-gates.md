@@ -48,7 +48,7 @@
 - sqlc 门禁：`docs/dev-plans/025-sqlc-guidelines.md`
 - Authz 门禁：`docs/dev-plans/022-authz-casbin-toolchain.md`
 - 路由门禁：`docs/dev-plans/017-routing-strategy.md`
-- 覆盖率与测试分层：`docs/dev-plans/300-test-system-investigation-report.md`、`docs/dev-plans/301-go-test-layering-and-best-practices-remediation-plan.md`
+- 覆盖率与测试分层：`docs/dev-plans/300-test-system-investigation-report.md`、`docs/archive/dev-plans/301-go-test-layering-and-best-practices-remediation-plan.md`
 
 ## 3. 当前实现快照（2026-04-09）
 
@@ -272,7 +272,7 @@ Gate-4 继续以 `make e2e -> scripts/e2e/run.sh` 为唯一入口，负责：
 - `docs/dev-plans/025-sqlc-guidelines.md`
 - `docs/dev-plans/025a-sqlc-schema-export-consistency-hardening.md`
 - `docs/dev-plans/300-test-system-investigation-report.md`
-- `docs/dev-plans/301-go-test-layering-and-best-practices-remediation-plan.md`
+- `docs/archive/dev-plans/301-go-test-layering-and-best-practices-remediation-plan.md`
 - `Makefile`
 - `config/coverage/policy.yaml`
 - `scripts/ci/test.sh`

@@ -385,7 +385,7 @@ Assistant turn/task 快照新增冻结字段：
 
 ## 12. 关联事实源
 
-1. `docs/dev-plans/330-strategy-module-architecture-and-design-convergence-plan.md`
+1. `docs/archive/dev-plans/330-strategy-module-architecture-and-design-convergence-plan.md`
 2. `docs/dev-plans/340-assistant-orgunit-duplicate-maintenance-investigation-and-convergence-plan.md`
 3. `docs/dev-plans/341-assistant-mainline-evolution-and-340-350-correlation-investigation.md`
 4. `docs/dev-plans/375-assistant-mainline-implementation-roadmap-350-370.md`
