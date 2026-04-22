@@ -215,7 +215,7 @@
 
 ### P0：高风险高体量文件
 
-1. [ ] `modules/orgunit/services/orgunit_write_service_test.go`
+1. [X] `modules/orgunit/services/orgunit_write_service_test.go`
 2. [ ] `internal/server/orgunit_api_test.go`
 3. [ ] `internal/server/orgunit_field_metadata_api_test.go`
 4. [ ] `internal/server/dicts_api_test.go`
@@ -234,8 +234,8 @@
 
 ### P2：低信号文件并回/删除
 
-1. [ ] `internal/server/layering_wrapper_coverage_test.go`
-2. [ ] `internal/server/orgunit_field_metadata_api_coverage_extra_test.go`
+1. [X] `internal/server/layering_wrapper_coverage_test.go`
+2. [X] `internal/server/orgunit_field_metadata_api_coverage_extra_test.go`
 3. [ ] `internal/routing/responder_extra_test.go`
 
 目标：删除或并回主职责文件，不再让低信号文件独立占据测试入口。
@@ -399,32 +399,86 @@
 
 ### Phase 2：P0 文件拆分试点
 
-1. [ ] 先选择 `orgunit_write_service_test.go` 作为最大体量试点。
-2. [ ] 再选择 `orgunit_api_test.go` 作为 `internal/server` 最大体量试点。
-3. [ ] 每个试点必须提交：
+1. [X] 先选择 `orgunit_write_service_test.go` 作为最大体量试点。
+2. [X] 再选择 `orgunit_api_test.go` 作为 `internal/server` 最大体量试点。
+3. [X] 每个试点必须提交：
    - 拆分前后的文件映射
    - 迁移的职责边界
    - 是否减少 branch/coverage 风格函数
    - 是否降低 stub/fake 重复
-4. [ ] P0/P1 任何命中 Go 测试文件的批次，最小验证集固定为：
+4. [X] P0/P1 任何命中 Go 测试文件的批次，最小验证集固定为：
    - `go fmt ./...`
    - `go vet ./...`
    - `make check lint`
    - `make test`
 
+#### `orgunit_write_service_test.go` 试点记录（2026-04-22）
+
+1. [X] 拆分前文件：
+   - `modules/orgunit/services/orgunit_write_service_test.go`（单文件承载共享 fixture、Create、Rename、Move、Enable、Disable、SetBusinessUnit、Correct、buildCorrectionPatch）
+2. [X] 拆分后文件映射：
+   - `modules/orgunit/services/orgunit_write_service_test.go`：只保留共享 fixture / stub / helper / `TestMain`
+   - `modules/orgunit/services/orgunit_write_service_create_test.go`：承接 `Create` 入口测试
+   - `modules/orgunit/services/orgunit_write_service_actions_test.go`：承接 `Rename / Move / Enable / Disable / SetBusinessUnit`
+   - `modules/orgunit/services/orgunit_write_service_correct_test.go`：承接 `Correct` 主路径与 `buildCorrectionPatch`
+   - `modules/orgunit/services/orgunit_write_service_ext_test.go`：继续承接扩展字段与扩展分支
+   - `modules/orgunit/services/orgunit_write_service_status_rescind_test.go`：继续承接 `CorrectStatus / Rescind / helper`
+3. [X] 职责边界说明：
+   - 共享 stub/fake 不再散落复制，统一留在 `orgunit_write_service_test.go`
+   - 入口测试按写动作职责拆分，避免继续把不同 mutation action 堆在单个总入口文件
+   - `Correct` 主路径与扩展字段/状态撤销路径分离，减少跨语义跳转
+4. [X] branch/coverage 风格检查：
+   - 本批次未新增 `*_coverage_test.go` / `*_more_test.go` / `*_gap_test.go` / `*_extra_test.go`
+   - 本批次仅做职责搬移，不通过新增补洞式测试函数维持覆盖率
+5. [X] stub/fake 重复评估：
+   - 共享 `orgUnitWriteStoreStub`、UUID / JSON hook、node key helper 继续单点复用
+   - 新拆文件未复制新的 store fake 结构
+
+#### `orgunit_api_test.go` 试点记录（2026-04-22）
+
+1. [X] 拆分前文件：
+   - `internal/server/orgunit_api_test.go`（单文件承载共享 fixture、读接口、`set-business-unit`、写动作、更正/撤销与错误映射）
+2. [X] 拆分后文件映射：
+   - `internal/server/orgunit_api_test.go`：只保留共享 fixture / stub / helper 壳文件
+   - `internal/server/orgunit_business_unit_api_test.go`：承接 `set-business-unit` API
+   - `internal/server/orgunit_read_api_test.go`：承接列表、详情、版本、审计、搜索等读接口
+   - `internal/server/orgunit_write_actions_api_test.go`：承接创建、rename、move、enable、disable、correct、rescind 与错误映射
+3. [X] 职责边界说明：
+   - `internal/server/orgunit_write_api_test.go` 继续聚焦 `/org/api/org-units/write`，不与本批次拆分职责重叠
+   - `orgunit_api_test.go` 不再继续堆放入口测试，仅作为共享 fake/store/helper 单点复用容器
+   - 读接口、业务单元切换、写动作与错误映射按协议职责拆分，降低跨场景跳转成本
+4. [X] branch/coverage 风格检查：
+   - 本批次未新增 `*_coverage_test.go` / `*_more_test.go` / `*_gap_test.go` / `*_extra_test.go`
+   - 本批次仅做职责搬移与文件收口，不通过补洞式测试维持覆盖率
+5. [X] stub/fake 重复评估：
+   - 共享 `resolveOrgCodeStore`、`orgUnitListPageReaderStore`、`orgUnitDetailsExtStoreStub`、`orgUnitWriteServiceStub` 继续集中在 `orgunit_api_test.go`
+   - 新拆文件未复制新的 API fake / helper 结构
+
 ### Phase 3：低信号文件清理
 
-1. [ ] 评估 `C` 类文件是否可以直接并回主职责文件。
-2. [ ] 若无法直接删除，必须记录保留理由与退出条件。
-3. [ ] 不得新增新的 `C` 类独立测试文件替代旧文件。
+1. [X] 评估 `C` 类文件是否可以直接并回主职责文件。
+2. [X] 若无法直接删除，必须记录保留理由与退出条件。
+3. [X] 不得新增新的 `C` 类独立测试文件替代旧文件。
 4. [ ] 若本 phase 仅改文档与门禁说明，最小验证集固定为 `make check doc`。
+
+#### Phase 3 执行记录（2026-04-22）
+
+1. [X] `internal/server/layering_wrapper_coverage_test.go`
+   - 已并回 `internal/server/dicts_store_test.go`
+   - 承接方式：将 `TestDictCompatibilityWrappers` 作为 `TestDictPGStore_ListDictValues_AndOptions_Coverage` 的同职责子场景收口
+   - 退出理由：该文件只承载字典 store 兼容包装路径，不需要继续独立占据测试入口
+2. [X] `internal/server/orgunit_field_metadata_api_coverage_extra_test.go`
+   - 已并回 `internal/server/orgunit_field_metadata_api_test.go`
+   - 承接方式：将 `dict list error => 500` 场景并入 `TestHandleOrgUnitFieldOptionsAPI`
+   - 退出理由：该文件只补一个 API 错误分支，直接并回主职责文件后信号更高
+3. [X] 本批次未新增新的 `*_coverage_test.go` / `*_extra_test.go` / `*_gap_test.go` / `*_more_test.go`
 
 ## 验收标准
 
 1. [X] `DEV-PLAN-304` 已进入 `AGENTS.md` 文档地图。
 2. [X] `AGENTS.md` 的活体测试设计入口已完成 owner 收口，不再把 `301` 单独表述为现行执行 owner。
-3. [ ] 至少完成 `2` 个 P0 巨型文件的职责拆分试点。
-4. [ ] `C` 类低信号文件数量相对本计划基线下降。
+3. [X] 至少完成 `2` 个 P0 巨型文件的职责拆分试点。
+4. [X] `C` 类低信号文件数量相对本计划基线下降。
 5. [ ] 至少一个专项门禁或人工 stopline 已落地并有执行记录，能够阻断新的 `extra/more/gap/coverage` 风格文件或函数名。
 6. [ ] 本计划实施批次未通过降低 coverage 阈值、扩大排除项来达成“治理完成”。
 
