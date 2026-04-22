@@ -453,6 +453,171 @@ func TestStoreGetConversationReturnsPhaseCLifecycleRoundtripGolden(t *testing.T)
 	}
 }
 
+func TestStoreGetActiveModelRuntimeConfig(t *testing.T) {
+	tenantID := uuid.NewString()
+	principalID := uuid.NewString()
+	now := timestamptz(time.Date(2026, 4, 22, 10, 0, 0, 0, time.UTC))
+	tx := &txStub{
+		rowQueue: []pgx.Row{
+			rowStub{vals: []any{
+				uuidToPGType(tenantID),
+				"active",
+				"provider_1",
+				"gpt-4.1",
+				[]byte(`{"streaming":true}`),
+				uuidToPGType(principalID),
+				now,
+				now,
+			}},
+			rowStub{vals: []any{
+				uuidToPGType(tenantID),
+				"provider_1",
+				"openai-compatible",
+				"Primary",
+				"https://example.invalid/v1",
+				true,
+				uuidToPGType(principalID),
+				uuidToPGType(principalID),
+				now,
+				now,
+				nullTimestamptz(),
+			}},
+		},
+		rowsQueue: []pgx.Rows{
+			&rowsStub{
+				rows: [][]any{
+					{
+						uuidToPGType(tenantID),
+						"cred_1",
+						"provider_1",
+						"env://OPENAI_API_KEY",
+						"sk-****",
+						int32(2),
+						true,
+						uuidToPGType(principalID),
+						now,
+						nullTimestamptz(),
+					},
+				},
+			},
+		},
+	}
+	store := NewStore(beginFunc(func(context.Context) (pgx.Tx, error) { return tx, nil }))
+
+	config, err := store.GetActiveModelRuntimeConfig(context.Background(), tenantID)
+	if err != nil {
+		t.Fatalf("get active model runtime config: %v", err)
+	}
+	if config.Selection.ProviderID != "provider_1" || config.Selection.ModelSlug != "gpt-4.1" {
+		t.Fatalf("unexpected selection=%+v", config.Selection)
+	}
+	if config.Provider.BaseURL != "https://example.invalid/v1" || !config.Provider.Enabled {
+		t.Fatalf("unexpected provider=%+v", config.Provider)
+	}
+	if config.Credential.SecretRef != "env://OPENAI_API_KEY" || !config.Credential.Active {
+		t.Fatalf("unexpected credential=%+v", config.Credential)
+	}
+}
+
+func TestStoreGetActiveModelRuntimeConfigFailsClosedWhenCredentialMissing(t *testing.T) {
+	tenantID := uuid.NewString()
+	principalID := uuid.NewString()
+	now := timestamptz(time.Date(2026, 4, 22, 10, 0, 0, 0, time.UTC))
+	tx := &txStub{
+		rowQueue: []pgx.Row{
+			rowStub{vals: []any{
+				uuidToPGType(tenantID),
+				"active",
+				"provider_1",
+				"gpt-4.1",
+				[]byte(`{"streaming":true}`),
+				uuidToPGType(principalID),
+				now,
+				now,
+			}},
+			rowStub{vals: []any{
+				uuidToPGType(tenantID),
+				"provider_1",
+				"openai-compatible",
+				"Primary",
+				"https://example.invalid/v1",
+				true,
+				uuidToPGType(principalID),
+				uuidToPGType(principalID),
+				now,
+				now,
+				nullTimestamptz(),
+			}},
+		},
+		rowsQueue: []pgx.Rows{
+			&rowsStub{},
+		},
+	}
+	store := NewStore(beginFunc(func(context.Context) (pgx.Tx, error) { return tx, nil }))
+
+	_, err := store.GetActiveModelRuntimeConfig(context.Background(), tenantID)
+	if !errors.Is(err, ErrModelCredentialNotFound) {
+		t.Fatalf("expected ErrModelCredentialNotFound, got %v", err)
+	}
+}
+
+func TestStoreGetActiveModelRuntimeConfigFailsClosedWhenCredentialInactive(t *testing.T) {
+	tenantID := uuid.NewString()
+	principalID := uuid.NewString()
+	now := timestamptz(time.Date(2026, 4, 22, 10, 0, 0, 0, time.UTC))
+	tx := &txStub{
+		rowQueue: []pgx.Row{
+			rowStub{vals: []any{
+				uuidToPGType(tenantID),
+				"active",
+				"provider_1",
+				"gpt-4.1",
+				[]byte(`{"streaming":true}`),
+				uuidToPGType(principalID),
+				now,
+				now,
+			}},
+			rowStub{vals: []any{
+				uuidToPGType(tenantID),
+				"provider_1",
+				"openai-compatible",
+				"Primary",
+				"https://example.invalid/v1",
+				true,
+				uuidToPGType(principalID),
+				uuidToPGType(principalID),
+				now,
+				now,
+				nullTimestamptz(),
+			}},
+		},
+		rowsQueue: []pgx.Rows{
+			&rowsStub{
+				rows: [][]any{
+					{
+						uuidToPGType(tenantID),
+						"cred_1",
+						"provider_1",
+						"env://OPENAI_API_KEY",
+						"sk-****",
+						int32(2),
+						false,
+						uuidToPGType(principalID),
+						now,
+						timestamptz(time.Date(2026, 4, 22, 10, 1, 0, 0, time.UTC)),
+					},
+				},
+			},
+		},
+	}
+	store := NewStore(beginFunc(func(context.Context) (pgx.Tx, error) { return tx, nil }))
+
+	_, err := store.GetActiveModelRuntimeConfig(context.Background(), tenantID)
+	if !errors.Is(err, ErrModelCredentialNotFound) {
+		t.Fatalf("expected ErrModelCredentialNotFound, got %v", err)
+	}
+}
+
 func ptr(value string) *string {
 	return &value
 }

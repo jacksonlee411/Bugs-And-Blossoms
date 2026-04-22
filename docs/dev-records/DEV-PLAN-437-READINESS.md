@@ -42,7 +42,7 @@
    - conversation / turn / item 命名
    - SSE event envelope
    - `turn.agent_message.delta` / `turn.completed` / `turn.error` / `turn.interrupted`
-   - compact / token usage 事件名
+   - compact 事件名，以及后续可选的 token usage 扩展位
    - reducer 输入与 reconstruction 输出 shape
 5. [x] 本地可控运行时 / mock SSE / fake provider 口径已冻结，不把真实外部模型调用作为 merge 前置条件。
 
@@ -284,7 +284,19 @@
 - `PR-437D` 已具备正式封板条件：最小 compaction 闭环、恢复链路、prompt shape fixture / snapshot、no-op 收口与并发序号安全均已落地并回填证据。
 - `PR-437E` 的文档前置条件现已补齐，且首轮代码已进入运行态：新版 settings 弹窗、settings 读面与最小 provider / credential / selection / verify 链路已可验证。
 - `PR-437E` 当前应记为“最小运行态闭环已通过，权限矩阵与完整管理面未封板”：新版 settings 入口和最小表单已存在，但完整管理面 IA 与四类角色权限矩阵仍未落地。
-- 下一步应继续围绕 `435` 的正式管理面 IA 与 `subject/domain/object/action` 权限矩阵收口，而不是再把 `PR-437E` 口径表述为“尚未进入代码阶段”。
+- `PR-437E` 口径保持不变：最小运行态闭环已通过，但权限矩阵与完整管理面未封板；下一条产品主链已改由 `433 Slice 2.1-2.3` 承接，用于把 CubeBox 从 deterministic runtime 推进到真实 provider 对话主链。
+- `2026-04-22` 已继续完成 `433 Slice 2.4` 首轮封板：`POST /internal/cubebox/settings/verify` 已切成真实 provider 验证，并把验证结果真实写回 `health`；`status / latency_ms / error_summary / validated_at` 不再是启发式占位。
+- `2026-04-22` 已补充 `433 Slice 2.5` 的首轮冻结：`usage_event` 数据面暂缓，不作为当前 merge gate；首轮只要求最小 lifecycle telemetry 与 canonical event final 语义稳定。
+- 项目当前尚未建设 `outbox` 能力，`outbox` 已从 `DEV-PLAN-433` 暂停实施；当前计划不承接事务内登记 + 异步重试的最终一致保障，仅要求 `turn.started / turn.error / turn.completed` 的 final 语义在单请求路径内稳定收口。
+- `2026-04-22` 已完成 `DEV-PLAN-433A` 代码实施：terminal error 改为 `AppendEvents` append-first，失败 turn 写入 `turn.error` + `turn.completed(status=failed)`；`settings/verify` 复用真实 provider adapter / stream parser / 错误归一化并写回 health；新增 `/internal/cubebox/capabilities`，settings 入口按真实 session capability fail-closed；compact context 使用 `provider_id / provider_type / model_slug / runtime` 分离字段，不再写 `deterministic-runtime`。
+- `DEV-PLAN-433A` 自动化证据：`go test ./modules/cubebox ./internal/server` 通过；`cd apps/web && pnpm typecheck && pnpm test -- CubeBoxPanel reducer api` 通过；`git diff --check` 通过。前端测试仍有既有 React `act(...)` warning，但断言全部通过。
+- `DEV-PLAN-433A` 真实浏览器复验已补（2026-04-22 20:17 CST）：Playwright 从 `http://localhost:8080/app/login` 登录 `admin@localhost`，进入 `/app` 后打开主壳层右侧 CubeBox 抽屉；旧整页入口计数为 `0`，抽屉 `role=complementary` 可见。
+- `DEV-PLAN-433A` 网络证据：`/internal/cubebox/capabilities`、`/internal/cubebox/settings`、`/internal/cubebox/settings/providers`、`/internal/cubebox/settings/credentials`、`/internal/cubebox/settings/selection`、`/internal/cubebox/settings/verify`、`/internal/cubebox/conversations`、`/internal/cubebox/turns:stream` 均通过真实浏览器 session 发起；未出现 `/internal/cubebox/**` 401。
+- `DEV-PLAN-433A` settings/verify 证据：`settings/verify` 返回 `200` 并写回 health；health 回显从 `validated_at=2026-04-22T12:01:03Z / latency_ms=30012 / error_summary=provider_stream_timeout` 更新为 `validated_at=2026-04-22T12:17:30Z / latency_ms=30002 / error_summary=provider_stream_timeout`。
+- `DEV-PLAN-433A` 真实 provider turn 证据：`turns:stream` 返回 `200 text/event-stream`，SSE 为 `turn.started -> turn.user_message.accepted -> turn.error -> turn.completed(status=failed)`；生命周期字段包含 `runtime=openai-chat-completions`、`trace_id`、`provider_id=openai-compatible`、`provider_type=openai-compatible`、`model_slug=gpt-4.1`，未回退 `deterministic-fixture`。
+- `DEV-PLAN-433A` DB replay 证据：新会话 `conv_4a32db7ea99e4fb5b171bdd0e137ad4d` 已落库 `conversation.loaded`、`turn.started`、`turn.user_message.accepted`、`turn.error(code=ai_model_provider_unavailable, latency_ms=30013)`、`turn.completed(status=failed, latency_ms=30013)`，失败恢复不再留下 dangling streaming turn。
+- `DEV-PLAN-433A` 收尾状态：按用户要求保留真实 credential 引用并把 active selection 恢复为 `model_slug=gpt-5.2`；provider 仍为 `openai-compatible / https://api.openai.com/v1 / enabled=true`，active credential version 为 `4`，证据未记录真实 key。
+- `DEV-PLAN-433A` 剩余阻塞：真实 provider 外网/上游当前 30 秒超时，未拿到成功 `turn.agent_message.delta`，因此“成功 turn”和“streaming 中点击停止”的真实页面证据仍待 provider 连通后补验；测试专用 credential 破坏性 fail-closed 页面用例仍待独立测试 provider/credential。
 
 ## 关联文档
 

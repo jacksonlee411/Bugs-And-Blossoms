@@ -8,11 +8,10 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
-	"time"
 
-	"github.com/google/uuid"
 	"github.com/jacksonlee411/Bugs-And-Blossoms/internal/routing"
 	"github.com/jacksonlee411/Bugs-And-Blossoms/modules/cubebox"
+	"github.com/jacksonlee411/Bugs-And-Blossoms/pkg/authz"
 )
 
 type cubeboxCreateConversationRequest struct{}
@@ -49,12 +48,14 @@ type cubeboxConversationStore interface {
 	ArchiveConversation(ctx context.Context, tenantID string, principalID string, conversationID string, archived bool) (cubebox.ConversationReplayResponse, error)
 	CompactConversation(ctx context.Context, tenantID string, principalID string, conversationID string, canonicalContext cubebox.CanonicalContext, reason string) (cubebox.CompactConversationResponse, error)
 	AppendEvent(ctx context.Context, tenantID string, principalID string, conversationID string, event cubebox.CanonicalEvent) error
+	AppendEvents(ctx context.Context, tenantID string, principalID string, conversationID string, events []cubebox.CanonicalEvent) error
 	GetModelSettings(ctx context.Context, tenantID string) (cubebox.ModelSettingsSnapshot, error)
 	UpsertModelProvider(ctx context.Context, tenantID string, principalID string, input cubebox.UpsertModelProviderInput) (cubebox.ModelProvider, error)
 	RotateModelCredential(ctx context.Context, tenantID string, principalID string, input cubebox.RotateModelCredentialInput) (cubebox.ModelCredential, error)
 	DeactivateCredential(ctx context.Context, tenantID string, credentialID string) (cubebox.ModelCredential, error)
 	SelectActiveModel(ctx context.Context, tenantID string, principalID string, input cubebox.SelectActiveModelInput) (cubebox.ActiveModelSelection, error)
 	VerifyActiveModel(ctx context.Context, tenantID string, principalID string) (cubebox.ModelHealth, error)
+	GetActiveModelRuntimeConfig(ctx context.Context, tenantID string) (cubebox.ActiveModelRuntimeConfig, error)
 }
 
 type cubeboxProviderUpsertRequest struct {
@@ -77,6 +78,29 @@ type cubeboxSelectionRequest struct {
 	CapabilitySummary map[string]any `json:"capability_summary"`
 }
 
+type cubeboxCapabilitiesResponse struct {
+	Conversation cubeboxConversationCapabilities `json:"conversation"`
+	Settings     cubeboxSettingsCapabilities     `json:"settings"`
+}
+
+type cubeboxConversationCapabilities struct {
+	Read bool `json:"read"`
+	Use  bool `json:"use"`
+}
+
+type cubeboxSettingsCapabilities struct {
+	Read       bool `json:"read"`
+	Verify     bool `json:"verify"`
+	Select     bool `json:"select"`
+	Update     bool `json:"update"`
+	Rotate     bool `json:"rotate"`
+	Deactivate bool `json:"deactivate"`
+}
+
+type cubeboxCapabilityAuthorizer interface {
+	Authorize(subject string, domain string, object string, action string) (allowed bool, enforced bool, err error)
+}
+
 func handleCubeBoxConversationsAPI(w http.ResponseWriter, r *http.Request, store cubeboxConversationStore) {
 	switch r.Method {
 	case http.MethodPost:
@@ -86,6 +110,85 @@ func handleCubeBoxConversationsAPI(w http.ResponseWriter, r *http.Request, store
 	default:
 		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusMethodNotAllowed, "method_not_allowed", "method not allowed")
 	}
+}
+
+func handleCubeBoxCapabilitiesAPI(w http.ResponseWriter, r *http.Request, authorizer cubeboxCapabilityAuthorizer) {
+	if r.Method != http.MethodGet {
+		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusMethodNotAllowed, "method_not_allowed", "method not allowed")
+		return
+	}
+	tenant, principal, ok := cubeboxRequestActor(w, r)
+	if !ok {
+		return
+	}
+	if authorizer == nil {
+		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusInternalServerError, "authz_error", "authz error")
+		return
+	}
+	subject := authz.SubjectFromRoleSlug(principal.RoleSlug)
+	domain := authz.DomainFromTenantID(tenant.ID)
+	can := func(object string, action string) (bool, bool) {
+		allowed, enforced, err := authorizer.Authorize(subject, domain, object, action)
+		if err != nil {
+			return false, false
+		}
+		return !enforced || allowed, true
+	}
+	conversationRead, ok := can(authz.ObjectCubeBoxConversations, authz.ActionRead)
+	if !ok {
+		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusInternalServerError, "authz_error", "authz error")
+		return
+	}
+	conversationUse, ok := can(authz.ObjectCubeBoxConversations, authz.ActionUse)
+	if !ok {
+		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusInternalServerError, "authz_error", "authz error")
+		return
+	}
+	settingsRead, ok := can(authz.ObjectCubeBoxModelCredential, authz.ActionRead)
+	if !ok {
+		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusInternalServerError, "authz_error", "authz error")
+		return
+	}
+	settingsVerify, ok := can(authz.ObjectCubeBoxModelSelection, authz.ActionVerify)
+	if !ok {
+		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusInternalServerError, "authz_error", "authz error")
+		return
+	}
+	settingsSelect, ok := can(authz.ObjectCubeBoxModelSelection, authz.ActionSelect)
+	if !ok {
+		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusInternalServerError, "authz_error", "authz error")
+		return
+	}
+	settingsUpdate, ok := can(authz.ObjectCubeBoxModelProvider, authz.ActionUpdate)
+	if !ok {
+		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusInternalServerError, "authz_error", "authz error")
+		return
+	}
+	settingsRotate, ok := can(authz.ObjectCubeBoxModelCredential, authz.ActionRotate)
+	if !ok {
+		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusInternalServerError, "authz_error", "authz error")
+		return
+	}
+	settingsDeactivate, ok := can(authz.ObjectCubeBoxModelCredential, authz.ActionDeactivate)
+	if !ok {
+		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusInternalServerError, "authz_error", "authz error")
+		return
+	}
+
+	writeJSON(w, http.StatusOK, cubeboxCapabilitiesResponse{
+		Conversation: cubeboxConversationCapabilities{
+			Read: conversationRead,
+			Use:  conversationUse,
+		},
+		Settings: cubeboxSettingsCapabilities{
+			Read:       settingsRead,
+			Verify:     settingsVerify,
+			Select:     settingsSelect,
+			Update:     settingsUpdate,
+			Rotate:     settingsRotate,
+			Deactivate: settingsDeactivate,
+		},
+	})
 }
 
 func handleCubeBoxCreateConversationAPI(w http.ResponseWriter, r *http.Request, store cubeboxConversationStore) {
@@ -158,15 +261,26 @@ func handleCubeBoxCompactConversationAPI(w http.ResponseWriter, r *http.Request,
 		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusUnprocessableEntity, "invalid_json", "invalid json")
 		return
 	}
-	payload, err := store.CompactConversation(r.Context(), tenant.ID, principal.ID, conversationID, cubebox.CanonicalContext{
+	canonicalContext := cubebox.CanonicalContext{
 		TenantID:       tenant.ID,
 		PrincipalID:    principal.ID,
 		Language:       "zh",
 		Page:           "/app/cubebox",
 		Permissions:    []string{"cubebox.conversations:use"},
 		BusinessObject: "conversation",
-		Model:          "deterministic-runtime",
-	}, strings.TrimSpace(req.Reason))
+	}
+	if runtimeConfig, err := store.GetActiveModelRuntimeConfig(r.Context(), tenant.ID); err == nil {
+		canonicalContext.ProviderID = runtimeConfig.Provider.ID
+		canonicalContext.ProviderType = runtimeConfig.Provider.ProviderType
+		canonicalContext.ModelSlug = runtimeConfig.Selection.ModelSlug
+		canonicalContext.Runtime = "openai-chat-completions"
+	} else {
+		canonicalContext.ProviderID = "unavailable"
+		canonicalContext.ProviderType = "unavailable"
+		canonicalContext.ModelSlug = "unavailable"
+		canonicalContext.Runtime = "unavailable"
+	}
+	payload, err := store.CompactConversation(r.Context(), tenant.ID, principal.ID, conversationID, canonicalContext, strings.TrimSpace(req.Reason))
 	if err != nil {
 		if errors.Is(err, cubebox.ErrConversationNotFound) {
 			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusNotFound, "cubebox_conversation_not_found", "conversation not found")
@@ -240,7 +354,7 @@ func handleCubeBoxPatchConversationAPI(w http.ResponseWriter, r *http.Request, s
 	writeJSON(w, http.StatusOK, payload)
 }
 
-func handleCubeBoxStreamTurnAPI(w http.ResponseWriter, r *http.Request, runtime *cubebox.Runtime, store cubeboxConversationStore) {
+func handleCubeBoxStreamTurnAPI(w http.ResponseWriter, r *http.Request, runtime *cubebox.Runtime, store cubeboxConversationStore, gateway *cubebox.GatewayService) {
 	if r.Method != http.MethodPost {
 		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusMethodNotAllowed, "method_not_allowed", "method not allowed")
 		return
@@ -265,30 +379,6 @@ func handleCubeBoxStreamTurnAPI(w http.ResponseWriter, r *http.Request, runtime 
 		req.NextSequence = 1
 	}
 
-	if req.NextSequence > 1 {
-		compactPayload, err := store.CompactConversation(r.Context(), tenant.ID, principal.ID, req.ConversationID, cubebox.CanonicalContext{
-			TenantID:       tenant.ID,
-			PrincipalID:    principal.ID,
-			Language:       "zh",
-			Page:           "/app/cubebox",
-			Permissions:    []string{"cubebox.conversations:use"},
-			BusinessObject: "conversation",
-			Model:          "deterministic-runtime",
-		}, "pre_turn_auto")
-		if err != nil && !errors.Is(err, cubebox.ErrConversationNotFound) {
-			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusInternalServerError, "cubebox_conversation_update_failed", "compact conversation failed")
-			return
-		}
-		req.NextSequence = max(req.NextSequence, compactPayload.NextSequence)
-	}
-
-	turn := runtime.StartTurn(cubebox.TurnOwner{
-		TenantID:       tenant.ID,
-		PrincipalID:    principal.ID,
-		ConversationID: req.ConversationID,
-	}, req.Prompt)
-	defer runtime.FinishTurn(turn.TurnID)
-
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Header().Set("Connection", "keep-alive")
@@ -299,105 +389,48 @@ func handleCubeBoxStreamTurnAPI(w http.ResponseWriter, r *http.Request, runtime 
 		return
 	}
 
-	sequence := req.NextSequence
-	writeEvent := func(eventType string, turnID *string, payload map[string]any) bool {
-		event := cubebox.CanonicalEvent{
-			EventID:        "evt_" + strings.ReplaceAll(uuid.NewString(), "-", ""),
-			ConversationID: req.ConversationID,
-			TurnID:         turnID,
-			Sequence:       sequence,
-			Type:           eventType,
-			TS:             time.Now().UTC().Format(time.RFC3339),
-			Payload:        payload,
-		}
-		sequence += 1
-		if err := store.AppendEvent(r.Context(), tenant.ID, principal.ID, req.ConversationID, event); err != nil {
-			return false
-		}
-		b, err := json.Marshal(event)
-		if err != nil {
-			return false
-		}
-		if _, err := w.Write([]byte("data: ")); err != nil {
-			return false
-		}
-		if _, err := w.Write(b); err != nil {
-			return false
-		}
-		if _, err := w.Write([]byte("\n\n")); err != nil {
-			return false
-		}
-		flusher.Flush()
-		return true
+	if gateway == nil {
+		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusInternalServerError, "cubebox_turn_stream_failed", "stream unavailable")
+		return
 	}
-	writeStreamFailure := func(message string) {
-		fallback := cubebox.CanonicalEvent{
-			EventID:        "evt_" + strings.ReplaceAll(uuid.NewString(), "-", ""),
-			ConversationID: req.ConversationID,
-			TurnID:         &turn.TurnID,
-			Sequence:       sequence,
-			Type:           "turn.error",
-			TS:             time.Now().UTC().Format(time.RFC3339),
-			Payload: map[string]any{
-				"code":      "event_log_write_failed",
-				"message":   message,
-				"retryable": false,
-			},
-		}
-		if b, err := json.Marshal(fallback); err == nil {
-			_, _ = w.Write([]byte("data: "))
-			_, _ = w.Write(b)
-			_, _ = w.Write([]byte("\n\n"))
-			flusher.Flush()
-		}
-	}
-	writeEventOrFail := func(eventType string, turnID *string, payload map[string]any, failureMessage string) bool {
-		if writeEvent(eventType, turnID, payload) {
-			return true
-		}
-		writeStreamFailure(failureMessage)
+
+	gateway.StreamTurn(r.Context(), cubebox.GatewayStreamRequest{
+		TenantID:       tenant.ID,
+		PrincipalID:    principal.ID,
+		ConversationID: req.ConversationID,
+		Prompt:         req.Prompt,
+		NextSequence:   req.NextSequence,
+	}, store, cubeboxSSEEventSink{
+		w:       w,
+		flusher: flusher,
+	})
+}
+
+type cubeboxSSEEventSink struct {
+	w       http.ResponseWriter
+	flusher http.Flusher
+}
+
+func (s cubeboxSSEEventSink) Write(event cubebox.CanonicalEvent) bool {
+	b, err := json.Marshal(event)
+	if err != nil {
 		return false
 	}
-
-	turnID := turn.TurnID
-	if !writeEventOrFail("turn.started", &turnID, map[string]any{"user_message_id": turn.UserMessageID}, "会话事件落库失败，当前响应已终止。") {
-		return
+	if _, err := s.w.Write([]byte("data: ")); err != nil {
+		return false
 	}
-	if !writeEventOrFail("turn.user_message.accepted", &turnID, map[string]any{"message_id": turn.UserMessageID, "text": turn.Prompt}, "会话事件落库失败，当前响应已终止。") {
-		return
+	if _, err := s.w.Write(b); err != nil {
+		return false
 	}
-
-	if turn.ShouldError {
-		_ = writeEvent("turn.error", &turnID, map[string]any{
-			"code":      "deterministic_provider_error",
-			"message":   "当前回复暂时失败，请稍后重试。",
-			"retryable": false,
-		})
-		_ = writeEvent("turn.completed", &turnID, map[string]any{"status": "failed"})
-		return
+	if _, err := s.w.Write([]byte("\n\n")); err != nil {
+		return false
 	}
+	s.flusher.Flush()
+	return true
+}
 
-	for _, chunk := range turn.Chunks {
-		select {
-		case <-r.Context().Done():
-			return
-		case <-turn.InterruptSignal():
-			_ = writeEvent("turn.interrupted", &turnID, map[string]any{"reason": "user_requested"})
-			_ = writeEvent("turn.completed", &turnID, map[string]any{"status": "interrupted"})
-			return
-		case <-time.After(25 * time.Millisecond):
-		}
-
-		if !writeEventOrFail("turn.agent_message.delta", &turnID, map[string]any{
-			"message_id": turn.AssistantMessageID,
-			"delta":      chunk,
-		}, "会话事件落库失败，当前响应已终止。") {
-			return
-		}
-	}
-
-	_ = writeEvent("turn.agent_message.completed", &turnID, map[string]any{"message_id": turn.AssistantMessageID})
-	_ = writeEvent("turn.completed", &turnID, map[string]any{"status": "completed"})
+func (s cubeboxSSEEventSink) WriteFallback(event cubebox.CanonicalEvent) {
+	_ = s.Write(event)
 }
 
 func handleCubeBoxInterruptTurnAPI(w http.ResponseWriter, r *http.Request, runtime *cubebox.Runtime) {
@@ -602,7 +635,7 @@ func handleCubeBoxSettingsVerifyAPI(w http.ResponseWriter, r *http.Request, stor
 			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusNotFound, "ai_model_provider_unavailable", "provider unavailable")
 			return
 		}
-		if strings.Contains(strings.ToLower(err.Error()), "secret missing") {
+		if errors.Is(err, cubebox.ErrModelCredentialNotFound) || errors.Is(err, cubebox.ErrSecretMissing) || errors.Is(err, cubebox.ErrSecretRefInvalid) {
 			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusUnprocessableEntity, "ai_model_secret_missing", "secret missing")
 			return
 		}

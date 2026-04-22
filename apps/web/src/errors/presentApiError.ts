@@ -69,6 +69,7 @@ const localizedMessages: Record<string, LocalizedErrorMessage> = {
   cubebox_conversation_not_found: { en: 'Conversation is not found.', zh: '会话不存在，请重新选择或新建。' },
   cubebox_conversation_read_failed: { en: 'Failed to load conversation. Please retry.', zh: '读取会话失败，请稍后重试。' },
   cubebox_conversation_update_failed: { en: 'Failed to update conversation. Please retry.', zh: '更新会话失败，请稍后重试。' },
+  cubebox_turn_stream_failed: { en: 'CubeBox response failed. Please retry later.', zh: 'CubeBox 回复失败，请稍后重试。' },
   idempotency_key_conflict: { en: 'Request payload conflicts with existing idempotency key.', zh: '请求载荷与已有幂等键冲突，请使用新的 request_id 重试。' },
   request_in_progress: { en: 'Request is still in progress. Please retry shortly.', zh: '请求仍在处理中，请稍后重试。' },
   tenant_mismatch: { en: 'Conversation belongs to another tenant.', zh: '该会话不属于当前租户。' },

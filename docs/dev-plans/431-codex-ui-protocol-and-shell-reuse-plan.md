@@ -38,7 +38,7 @@ Codex 开源仓库中与 UI 层高度相关的成熟资产包括：
 
 - app-server protocol：`ThreadStart`、`ThreadRead`、`ThreadList`、`ThreadResume`、`ThreadArchive`、`ThreadCompactStart`、`TurnInterrupt`、`AgentMessageDelta`、`TurnCompleted`、`ContextCompactedNotification`、`ThreadTokenUsageUpdatedNotification` 等 schema。
 - thread history builder：把底层 rollout/event 重建为 UI 可消费的 `Turn` 列表。
-- streaming event model：区分 user message、agent message delta、reasoning、tool item started/completed、error、turn complete、compact、token usage。
+- streaming event model：区分 user message、agent message delta、reasoning、tool item started/completed、error、turn complete、compact，以及后续可选的 token usage 扩展事件。
 - TUI 交互模式：输入区、历史 cell、markdown stream、slash command、status indicator、compact warning、interrupt/stop 等。
 
 这些内容可以显著降低 CubeBox UI 协议和状态机重复造车风险。
@@ -51,8 +51,8 @@ Codex 开源仓库中与 UI 层高度相关的成熟资产包括：
 2. 冻结 CubeBox UI 事件协议，以 Codex app-server protocol v2 为优先参考。
 3. 重构 Codex thread/turn/item/event 概念为 CubeBox 前后端共享契约。
 4. 重构 Codex `ThreadHistoryBuilder` 思路，形成 CubeBox 前端可消费的 conversation timeline reducer。
-5. 重构 Codex streaming UI 状态：turn started、message delta、item started/completed、turn complete、error、compact、token usage、interrupt。
-6. 借鉴 Codex TUI 交互模式，实现 Web/MUI 右侧悬挂抽屉：输入区、消息历史、流式 markdown、状态条、compact/token 提示、stop/interrupt。
+5. 重构 Codex streaming UI 状态：turn started、message delta、item started/completed、turn complete、error、compact、interrupt，以及后续可选的 token usage 扩展位。
+6. 借鉴 Codex TUI 交互模式，实现 Web/MUI 右侧悬挂抽屉：输入区、消息历史、流式 markdown、状态条、compact 提示、stop/interrupt；token usage 提示后移。
 7. 裁掉 Codex 中不适合 CubeBox 首期的 shell/file/patch/exec/plugin/MCP 写操作协议和 terminal 渲染实现。
 8. 产出 430 Slice 1 的最小用户可见闭环：打开抽屉 -> 新建/恢复会话 -> 发送消息 -> 流式回复 -> 停止/完成 -> 关闭重开后状态恢复。
 9. 将正式 UI 主链收口为右侧抽屉承载，避免再次形成页面版/抽屉版双实现。
@@ -77,7 +77,7 @@ Codex 开源仓库中与 UI 层高度相关的成熟资产包括：
 | Message delta | `AgentMessageDeltaNotification` | 采纳，作为 SSE/WebSocket delta 事件参考 |
 | Item started/completed | `ItemStartedNotification` / `ItemCompletedNotification` | 采纳，用于工具/上下文 provider/compact 状态展示 |
 | Context compacted | `ContextCompactedNotification` | 采纳，并与 434 compaction 事件对齐 |
-| Token usage update | `ThreadTokenUsageUpdatedNotification` | 采纳，用于抽屉状态条和阈值提示 |
+| Token usage update | `ThreadTokenUsageUpdatedNotification` | 只保留为后续扩展位；首期不作为 required event |
 | Thread history reducer | `thread_history.rs` | 重构，形成 CubeBox timeline reducer |
 | Markdown streaming | `markdown_stream.rs` | 借鉴行为，不直接移植 terminal renderer |
 | History cell | `history_cell.rs` | 借鉴消息分组/状态展示，不直接移植 UI 代码 |
@@ -131,7 +131,7 @@ Codex 开源仓库中与 UI 层高度相关的成熟资产包括：
 - `event reducer`：参考 Codex `ThreadHistoryBuilder`，把后端事件流规整为 UI timeline。
 - `composer`：输入框、上下文 chips、模型选择、发送/停止、slash command。
 - `timeline`：用户消息、助手消息、流式 markdown、工具/context item、compact item、错误 item。
-- `status bar`：模型、token usage、compact 状态、连接状态、错误提示。
+- `status bar`：模型、compact 状态、连接状态、错误提示；token usage 后移为可选扩展位。
 - `settings entry`：跳转模型配置页或打开配置面板。
 
 ### 5.1A 单前端链路约束
@@ -161,7 +161,6 @@ Codex 开源仓库中与 UI 层高度相关的成熟资产包括：
 - `turn.context_item.completed`
 - `turn.compaction.started`
 - `turn.context_compacted`
-- `turn.token_usage.updated`
 - `turn.error`
 - `turn.interrupted`
 - `turn.completed`
@@ -209,7 +208,7 @@ CubeBox 前端必须有一个纯函数 reducer：
 
 ### Slice 1：UI 事件契约冻结
 
-- [ ] 定义 CubeBox conversation、turn、item、delta、compact、token、error event。
+- [ ] 定义 CubeBox conversation、turn、item、delta、compact、error event；token usage 仅保留后续扩展位。
 - [ ] 将 Codex thread/turn 术语映射到 CubeBox conversation/turn。
 - [ ] 明确裁掉 shell/file/patch/exec/plugin 事件。
 - [ ] 定义 SSE event 格式与错误映射。
@@ -234,7 +233,7 @@ CubeBox 前端必须有一个纯函数 reducer：
 - [ ] 接入后端 SSE mock 或 deterministic provider。
 - [ ] 实现 markdown 流式渲染，借鉴 Codex markdown streaming 行为。
 - [ ] 实现 stop/interrupt。
-- [ ] 实现 token usage、compact started/context compacted、error 状态提示。
+- [ ] 实现 compact started/context compacted、error 状态提示；token usage 提示后移。
 
 ### Slice 5：会话入口与抽屉恢复交互
 

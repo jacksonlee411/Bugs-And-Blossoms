@@ -234,6 +234,7 @@ modules/{module}/
 - DEV-PLAN-431B：CubeBox 壳层避让与非阻断右侧悬挂方案：`docs/dev-plans/431b-cubebox-shell-overlay-and-nonblocking-drawer-plan.md`
 - DEV-PLAN-432：Codex 会话持久化、索引与恢复语义复用/重构方案：`docs/dev-plans/432-codex-session-persistence-reuse-plan.md`
 - DEV-PLAN-433：Bifrost 主参考的 AI 网关复用/重构方案：`docs/dev-plans/433-bifrost-centric-ai-gateway-reuse-and-reconstruction-plan.md`
+- DEV-PLAN-433A：CubeBox 真实 Provider 浏览器验证发现与修复方案：`docs/dev-plans/433a-cubebox-real-provider-browser-validation-findings-and-remediation-plan.md`
 - DEV-PLAN-434：Codex 上下文管理与压缩机制复用/重构方案：`docs/dev-plans/434-codex-context-management-and-compaction-reuse-plan.md`
 - DEV-PLAN-435：Bifrost 主参考的模型配置 UI 与管理权限复用/重构方案：`docs/dev-plans/435-bifrost-centric-model-config-ui-and-admin-governance-plan.md`
 - DEV-PLAN-436：CubeBox 历史对话面彻底删除与仓面清场方案：`docs/dev-plans/436-cubebox-historical-surface-hard-delete-plan.md`

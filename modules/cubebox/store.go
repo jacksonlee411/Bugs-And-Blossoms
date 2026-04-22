@@ -32,6 +32,8 @@ type ConversationSummary struct {
 }
 
 var ErrModelProviderNotFound = errors.New("CUBEBOX_MODEL_PROVIDER_NOT_FOUND")
+var ErrActiveModelSelectionNotFound = errors.New("CUBEBOX_ACTIVE_MODEL_SELECTION_NOT_FOUND")
+var ErrModelCredentialNotFound = errors.New("CUBEBOX_MODEL_CREDENTIAL_NOT_FOUND")
 var ErrModelCapabilitySummaryInvalid = errors.New("CUBEBOX_MODEL_CAPABILITY_SUMMARY_INVALID")
 
 type UpsertModelProviderInput struct {
@@ -52,6 +54,12 @@ type SelectActiveModelInput struct {
 	ProviderID        string
 	ModelSlug         string
 	CapabilitySummary map[string]any
+}
+
+type ActiveModelRuntimeConfig struct {
+	Selection  ActiveModelSelection
+	Provider   ModelProvider
+	Credential ModelCredential
 }
 
 func NewStore(pool TxBeginner) *Store {
@@ -222,6 +230,13 @@ func (s *Store) ArchiveConversation(ctx context.Context, tenantID string, princi
 }
 
 func (s *Store) AppendEvent(ctx context.Context, tenantID string, principalID string, conversationID string, event CanonicalEvent) error {
+	return s.AppendEvents(ctx, tenantID, principalID, conversationID, []CanonicalEvent{event})
+}
+
+func (s *Store) AppendEvents(ctx context.Context, tenantID string, principalID string, conversationID string, events []CanonicalEvent) error {
+	if len(events) == 0 {
+		return nil
+	}
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
 		return err
@@ -242,11 +257,13 @@ func (s *Store) AppendEvent(ctx context.Context, tenantID string, principalID st
 		return err
 	}
 	now := time.Now().UTC()
-	if err := appendEvent(ctx, q, tenantID, event, now); err != nil {
-		return err
+	for _, event := range events {
+		if err := appendEvent(ctx, q, tenantID, event, now); err != nil {
+			return err
+		}
 	}
 	if _, err := tx.Exec(ctx, `
-UPDATE iam.cubebox_conversations
+	UPDATE iam.cubebox_conversations
 SET updated_at = $4
 WHERE tenant_uuid = $1::uuid AND conversation_id = $2 AND principal_id = $3::uuid
 `, tenantID, strings.TrimSpace(conversationID), principalID, now); err != nil {
@@ -421,6 +438,90 @@ func (s *Store) GetModelSettings(ctx context.Context, tenantID string) (ModelSet
 		return ModelSettingsSnapshot{}, err
 	}
 	return snapshot, nil
+}
+
+func (s *Store) GetActiveModelRuntimeConfig(ctx context.Context, tenantID string) (ActiveModelRuntimeConfig, error) {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return ActiveModelRuntimeConfig{}, err
+	}
+	defer func() { _ = tx.Rollback(context.Background()) }()
+	if _, err := tx.Exec(ctx, `SELECT set_config('app.current_tenant', $1, true);`, tenantID); err != nil {
+		return ActiveModelRuntimeConfig{}, err
+	}
+
+	q := cubeboxsqlc.New(tx)
+	selectionRow, err := q.GetActiveModelSelection(ctx, uuidToPGType(tenantID))
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return ActiveModelRuntimeConfig{}, ErrActiveModelSelectionNotFound
+		}
+		return ActiveModelRuntimeConfig{}, err
+	}
+
+	providerRow, err := q.GetModelProvider(ctx, cubeboxsqlc.GetModelProviderParams{
+		Column1:    uuidToPGType(tenantID),
+		ProviderID: selectionRow.ProviderID,
+	})
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return ActiveModelRuntimeConfig{}, ErrModelProviderNotFound
+		}
+		return ActiveModelRuntimeConfig{}, err
+	}
+
+	credentialRows, err := q.ListModelCredentialsByProvider(ctx, cubeboxsqlc.ListModelCredentialsByProviderParams{
+		Column1:    uuidToPGType(tenantID),
+		ProviderID: selectionRow.ProviderID,
+	})
+	if err != nil {
+		return ActiveModelRuntimeConfig{}, err
+	}
+	if len(credentialRows) == 0 || !credentialRows[0].Active {
+		return ActiveModelRuntimeConfig{}, ErrModelCredentialNotFound
+	}
+
+	capability := map[string]any{}
+	if len(selectionRow.CapabilitySummary) > 0 {
+		_ = json.Unmarshal(selectionRow.CapabilitySummary, &capability)
+	}
+
+	config := ActiveModelRuntimeConfig{
+		Selection: ActiveModelSelection{
+			ProviderID:        selectionRow.ProviderID,
+			ModelSlug:         selectionRow.ModelSlug,
+			CapabilitySummary: capability,
+			UpdatedAt:         pgTime(selectionRow.UpdatedAt).Format(time.RFC3339),
+		},
+		Provider: ModelProvider{
+			ID:           providerRow.ProviderID,
+			ProviderType: providerRow.ProviderType,
+			DisplayName:  providerRow.DisplayName,
+			BaseURL:      providerRow.BaseUrl,
+			Enabled:      providerRow.Enabled,
+			UpdatedAt:    pgTime(providerRow.UpdatedAt).Format(time.RFC3339),
+		},
+		Credential: ModelCredential{
+			ID:           credentialRows[0].CredentialID,
+			ProviderID:   credentialRows[0].ProviderID,
+			SecretRef:    credentialRows[0].SecretRef,
+			MaskedSecret: credentialRows[0].MaskedSecret,
+			Version:      int(credentialRows[0].Version),
+			Active:       credentialRows[0].Active,
+			CreatedAt:    pgTime(credentialRows[0].CreatedAt).Format(time.RFC3339),
+		},
+	}
+	if providerRow.DisabledAt.Valid {
+		config.Provider.DisabledAt = pgTime(providerRow.DisabledAt).Format(time.RFC3339)
+	}
+	if credentialRows[0].DisabledAt.Valid {
+		config.Credential.DisabledAt = pgTime(credentialRows[0].DisabledAt).Format(time.RFC3339)
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return ActiveModelRuntimeConfig{}, err
+	}
+	return config, nil
 }
 
 func (s *Store) UpsertModelProvider(ctx context.Context, tenantID string, principalID string, input UpsertModelProviderInput) (ModelProvider, error) {
@@ -625,6 +726,11 @@ func (s *Store) SelectActiveModel(ctx context.Context, tenantID string, principa
 }
 
 func (s *Store) VerifyActiveModel(ctx context.Context, tenantID string, principalID string) (ModelHealth, error) {
+	service := NewModelVerificationService(s, s, NewOpenAICompatibleAdapter(nil), EnvSecretResolver{})
+	return service.VerifyActiveModel(ctx, tenantID, principalID)
+}
+
+func (s *Store) RecordModelHealthCheck(ctx context.Context, tenantID string, principalID string, input ModelHealthWriteInput) (ModelHealth, error) {
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
 		return ModelHealth{}, err
@@ -634,57 +740,33 @@ func (s *Store) VerifyActiveModel(ctx context.Context, tenantID string, principa
 		return ModelHealth{}, err
 	}
 	q := cubeboxsqlc.New(tx)
-	selection, err := q.GetActiveModelSelection(ctx, uuidToPGType(tenantID))
-	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return ModelHealth{}, ErrModelProviderNotFound
-		}
-		return ModelHealth{}, err
-	}
-	provider, err := q.GetModelProvider(ctx, cubeboxsqlc.GetModelProviderParams{
-		Column1:    uuidToPGType(tenantID),
-		ProviderID: selection.ProviderID,
-	})
-	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return ModelHealth{}, ErrModelProviderNotFound
-		}
-		return ModelHealth{}, err
-	}
-	credentials, err := q.ListModelCredentialsByProvider(ctx, cubeboxsqlc.ListModelCredentialsByProviderParams{
-		Column1:    uuidToPGType(tenantID),
-		ProviderID: selection.ProviderID,
-	})
-	if err != nil {
-		return ModelHealth{}, err
-	}
-
 	now := time.Now().UTC()
-	status := "healthy"
-	latency := int32(120)
+	var latencyValue int32
+	var hasLatency bool
+	if input.LatencyMS != nil {
+		latencyValue = int32(*input.LatencyMS)
+		hasLatency = true
+	}
 	var summary *string
-	switch {
-	case !provider.Enabled:
-		status = "failed"
-		summary = stringPtr("provider disabled")
-	case len(credentials) == 0 || !credentials[0].Active || strings.TrimSpace(credentials[0].SecretRef) == "":
-		status = "failed"
-		summary = stringPtr("secret missing")
-	case strings.TrimSpace(provider.BaseUrl) == "":
-		status = "failed"
-		summary = stringPtr("provider config invalid")
+	if trimmed := strings.TrimSpace(input.ErrorSummary); trimmed != "" {
+		summary = &trimmed
 	}
 
 	row, err := q.InsertModelHealthCheck(ctx, cubeboxsqlc.InsertModelHealthCheckParams{
 		Column1:       uuidToPGType(tenantID),
 		HealthCheckID: "health_" + strings.ReplaceAll(uuid.NewString(), "-", ""),
-		ProviderID:    selection.ProviderID,
-		ModelSlug:     selection.ModelSlug,
-		Status:        status,
-		LatencyMs:     int32PtrOrNil(status, latency),
-		ErrorSummary:  summary,
-		Column8:       uuidToPGType(principalID),
-		ValidatedAt:   timestamptz(now),
+		ProviderID:    strings.TrimSpace(input.ProviderID),
+		ModelSlug:     strings.TrimSpace(input.ModelSlug),
+		Status:        strings.TrimSpace(input.Status),
+		LatencyMs: func() *int32 {
+			if !hasLatency {
+				return nil
+			}
+			return int32PtrOrNil(input.Status, latencyValue)
+		}(),
+		ErrorSummary: summary,
+		Column8:      uuidToPGType(principalID),
+		ValidatedAt:  timestamptz(now),
 	})
 	if err != nil {
 		return ModelHealth{}, err

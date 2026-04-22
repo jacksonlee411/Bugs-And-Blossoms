@@ -158,7 +158,7 @@
 - 对内暴露统一聊天接口，首期兼容 OpenAI chat/completions 或 Responses 风格的最小子集。
 - 对外适配范围冻结为一个 OpenAI-compatible provider 最小闭环；其他供应商不在当前交付范围内。
 - 管理 API Key、base URL、active model、启停状态和显式连通性验证/基础健康状态。
-- 统一处理 SSE 流式转发、错误映射、审计与 token 用量记录。
+- 统一处理 SSE 流式转发、错误映射、审计与最小 lifecycle telemetry。
 - quota、route alias、default model、fallback/failover 不进入首期运行时闭环；`DEV-PLAN-433/435` 只能做上游评估与后续预留，不得把这些能力列为首期验收项。
 
 ### 6.2 运行时技术口径
@@ -167,7 +167,7 @@
 - provider adapter 必须是可插拔接口，避免在业务 handler 中散落供应商分支。
 - API Key 必须服务端加密保存，前端只看到 provider alias、模型展示名和健康状态。
 - 请求路径必须显式租户注入、显式事务边界和 fail-closed 错误处理。
-- 网关主请求链只做必要鉴权、请求映射和 SSE 转发；但调用外部 provider 前必须同事务写入 `request-start`、`usage-intent` 与 `audit-start` 记录，流式完成后更新 final 状态。异步路径只允许补充非关键指标，或通过 outbox 重试关键 final 更新；该模式优先复用/重构 Bifrost/Codex 的 telemetry、stream lifecycle 与测试样式，不为 CubeBox 扩大一套平行自研审计框架。
+- 网关主请求链只做必要鉴权、请求映射和 SSE 转发；`request-start` / `usage-intent` / `audit-start` 持久化仍是长期目标，但首轮只要求 canonical event 内的最小 lifecycle telemetry 与 final 语义稳定。`usage_event` 数据面已暂缓，项目当前也未建设 `outbox` 能力，因此 `outbox` 不属于本轮实施范围；该模式仍优先复用/重构 Bifrost/Codex 的 telemetry、stream lifecycle 与测试样式，不为 CubeBox 扩大一套平行自研审计框架。
 
 ### 6.3 配置模型
 
@@ -176,7 +176,7 @@
 - `model_provider`：供应商编码、展示名、base URL、协议类型、启停状态、健康状态。
 - `model_credential`：加密 API Key、密钥版本、创建人、更新时间、最后验证结果。
 - `model_selection`：当前启用的 active model、展示名与必要默认参数。
-- `model_usage_event`：请求时间、会话、模型、输入输出 token、错误码、延迟、trace_id、start/final 状态与 outbox 重试状态。
+- `model_usage_event`：后续阶段预留对象；如恢复实施，记录请求时间、会话、模型、输入输出 token、错误码、延迟、trace_id 与 start/final 状态。本轮不落地 `usage_event` 数据面，也不承接 `outbox` 重试状态。
 
 ### 6.4 外部网关借鉴边界
 
@@ -189,7 +189,7 @@
 ### 6.5 首期明确暂缓项
 
 - `fallback/failover`：首期只做单 provider fail-closed 与健康验证，不做多 provider 故障切换。
-- `quota`：首期只记录 token usage 与审计字段，不做租户/用户额度治理。
+- `quota`：首期只保留 provider/model/latency/error 等最小 lifecycle 字段，不做租户/用户额度治理；正式 token usage 数据面后移。
 - `route alias/default model`：首期只有 active model 选择，不提供 alias、route graph 或 default model 管理面。
 - 上述能力仍可在 `433/435` 做上游映射和后续预留，但不得作为首期 required gate 或验收条件。
 
@@ -245,7 +245,7 @@
 - 前端不得直接请求外部模型供应商。
 - API Key 只允许服务端保存和解密，密钥展示永远只显示掩码。
 - 模型配置管理需要独立权限对象；普通用户只能选择已授权模型，不可读取密钥。
-- 对话请求必须记录 trace_id、conversation_id、active model、latency、token usage、错误码和调用结果摘要。
+- 对话请求必须记录 trace_id、conversation_id、active model、latency、错误码和调用结果摘要；正式 token usage 持久化后移。
 - 所有用户可见错误必须走项目错误码与 i18n 文案，不直接透出供应商原始错误。
 - Prompt 和工具上下文不得包含不属于当前租户和当前用户权限范围的数据。
 - CubeBox 是当前用户调用的普通工具，不是 Casbin/Authz 中被独立授权的 subject；业务查询和写入 API 必须完全按当前用户已有权限、当前租户、当前 session 执行，不允许使用 CubeBox service account、代理主体或权限提升。
@@ -256,7 +256,7 @@
 ## 9. 数据库与迁移策略
 
 - 新增表前必须先完成对象清单评审，并获得用户手工确认。
-- 首期推荐把会话、消息、摘要、模型配置、密钥元数据、用量事件放在新模块 schema 下，避免污染 iam 或业务模块。
+- 首期推荐把会话、消息、摘要、模型配置与密钥元数据放在新模块 schema 下，避免污染 iam 或业务模块；`usage_event` 数据面后移。
 - 密钥密文与密钥元数据必须分离；密钥明文不得进入日志、审计 payload 或前端返回。
 - Goose migration、Atlas schema、sqlc query 必须按本仓现行模块闭环执行。
 - sqlc 生成后必须确认没有旧对话栈对象名回流。
@@ -278,7 +278,7 @@
 - [ ] 在 Web Shell 新增右侧悬挂抽屉与入口图标。
 - [ ] 用 React/MUI 实现抽屉开关、响应式布局、主题变量、空状态、会话列表占位和输入框；不得直接移植 Codex Rust TUI 渲染层。
 - [ ] 重构 Codex thread history builder 思路，建立 CubeBox 前端 timeline reducer。
-- [ ] 建立首期 UI 事件契约：conversation、turn、message delta、context item、compact、token usage、error、interrupt、complete。
+- [ ] 建立首期 UI 事件契约：conversation、turn、message delta、context item、compact、error、interrupt、complete；`token usage` 事件后移，不作为首期前置。
 - [ ] 增加前端状态持久化，但不保存密钥或敏感上下文。
 - [ ] 由 `DEV-PLAN-431` 持有抽屉打开/关闭、active conversation UI 恢复、slash command 入口与第二主链防漂移；会话 lifecycle contract 不在本切片重复裁决。
 - [ ] 补组件测试和基础 E2E：打开、关闭、恢复 UI 状态；会话恢复/归档正确性由 `DEV-PLAN-432` 承接。
@@ -289,13 +289,13 @@
 - [ ] 以 Bifrost 为主参考，结合 Codex provider adapter / bridge / stream parser，建立 provider adapter 接口与一个 OpenAI-compatible provider；其他供应商不进入首期闭环。
 - [ ] 以 Bifrost 为主参考实现服务端模型配置读取、密钥解密、请求映射、SSE 转发与错误映射；fallback 不在当前交付范围。
 - [ ] 以 Bifrost 的 health/readiness 思路实现显式连通性验证与基础健康检查。
-- [ ] 以 Bifrost/Codex 的 telemetry、stream lifecycle 和测试样式为主参考，实现调用前同事务写入 `request-start` / `usage-intent` / `audit-start`，流式完成后更新 final 状态；异步只补非关键指标或通过 outbox 重试 final 更新。
+- [ ] 以 Bifrost/Codex 的 telemetry、stream lifecycle 和测试样式为主参考，先完成 canonical event 内的最小 lifecycle telemetry 与 final 语义收口；`request-start` / `usage-intent` / `audit-start` 持久化为长期目标，`outbox` 不在本轮实施范围。
 - [ ] 补 handler、service、adapter 单元测试、流式响应测试和错误路径测试。
 
 ### Slice 3：会话持久化
 
 - [ ] 按 `DEV-PLAN-432` 先完成 Codex append-only history、session index、archive/resume、rollout/reconstruction 语义复用/重构评估。
-- [ ] 新增 conversation、message、summary、usage event 的 schema 和 sqlc。
+- [ ] 新增 conversation、message、summary 的 schema 和 sqlc；`usage_event` 数据面暂停实施，不作为本轮 Slice 3 前置。
 - [ ] 实现新建、读取、列出、恢复、归档会话；生命周期语义优先对齐 Codex thread list/read/resume/archive。
 - [ ] 实现消息落库、流式回复完成后的最终状态固化；原始消息必须 append-only，不因压缩被覆盖。
 - [ ] 补租户隔离、权限、RLS、并发和错误路径测试。
@@ -336,7 +336,7 @@
 
 ## 11. 测试与覆盖率
 
-- Go 单元测试覆盖 provider adapter、prompt builder、token budget、summary compaction、error mapping、credential masking、request-start/final/outbox 状态推进。
+- Go 单元测试覆盖 provider adapter、prompt builder、token budget、summary compaction、error mapping、credential masking，以及最小 lifecycle telemetry/final 语义推进。
 - 服务层测试覆盖租户隔离、权限失败、模型不可用、SSE 中断与错误映射。
 - 前端测试覆盖抽屉开关、输入、停止生成、会话恢复、配置表单、错误提示。
 - E2E 覆盖最小用户闭环：配置模型 -> 打开抽屉 -> 新建会话 -> 流式回复 -> 关闭重开 -> 恢复会话。

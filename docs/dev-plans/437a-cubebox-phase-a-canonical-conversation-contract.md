@@ -76,17 +76,16 @@
 | 事件名 | 用途 | 最小 payload |
 | --- | --- | --- |
 | `conversation.loaded` | 读取或恢复 conversation 后装载初始状态 | `title`、`status`、`archived` |
-| `turn.started` | 一轮开始 | `user_message_id` |
+| `turn.started` | 一轮开始 | `user_message_id`、`trace_id`、`provider_id`、`provider_type`、`model_slug`、`runtime` |
 | `turn.user_message.accepted` | 用户消息已进入本轮 | `message_id`、`text` |
 | `turn.agent_message.delta` | 助手流式增量 | `message_id`、`delta` |
 | `turn.agent_message.completed` | 助手消息完成 | `message_id` |
 | `turn.context_item.started` | 上下文条目开始 | `item_id`、`kind` |
 | `turn.context_item.completed` | 上下文条目完成 | `item_id`、`kind`、`summary` |
 | `turn.context_compacted` | 历史已被压缩 | `summary_id`、`source_range` |
-| `turn.token_usage.updated` | token 使用量刷新 | `input_tokens`、`output_tokens`、`budget_state` |
-| `turn.error` | 本轮失败 | `code`、`message`、`retryable` |
-| `turn.interrupted` | 本轮被用户或系统中断 | `reason` |
-| `turn.completed` | 本轮结束 | `status` |
+| `turn.error` | 本轮失败 | `code`、`message`、`retryable`、`trace_id`、`provider_id`、`provider_type`、`model_slug`、`runtime`、`latency_ms` |
+| `turn.interrupted` | 本轮被用户或系统中断 | `reason`、`trace_id`、`provider_id`、`provider_type`、`model_slug`、`runtime`、`latency_ms` |
+| `turn.completed` | 本轮结束 | `status`、`trace_id`、`provider_id`、`provider_type`、`model_slug`、`runtime`、`latency_ms` |
 
 ### 5.2 明确暂缓事件
 
@@ -95,8 +94,25 @@
 - `conversation.archived`
 - `conversation.renamed`
 - `turn.compaction.started`
+- `turn.token_usage.updated`
 - provider failover / route alias / quota 相关事件
 - shell/file/patch/exec/plugin/marketplace 相关事件
+
+### 5.3 首轮 lifecycle 字段规则
+
+`PR-437B` 之后，`433 Slice 2.5A` 的最小 lifecycle telemetry 继续复用本节事件名，并冻结以下字段规则：
+
+1. `trace_id`：
+   - 同一 turn 内稳定不变。
+   - 首轮只要求字符串可关联，不要求前端理解其生成算法。
+2. `provider_id` / `provider_type` / `model_slug`：
+   - 首轮必须由运行时真实配置派生。
+   - deterministic fixture 路径也必须给出稳定值，避免测试链路长出第二套 shape。
+3. `runtime`：
+   - 首轮只允许 `openai-chat-completions` 或 `deterministic-fixture`。
+4. `latency_ms`：
+   - 仅要求出现在 terminal lifecycle 事件，即 `turn.error`、`turn.interrupted`、`turn.completed`。
+   - 以服务端开始处理该 turn 到 terminal event 写出前的壁钟时间计算。
 
 ## 6. Reducer 输入与 Reconstruction 输出
 

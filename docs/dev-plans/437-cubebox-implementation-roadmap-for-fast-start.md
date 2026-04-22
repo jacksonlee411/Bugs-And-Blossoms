@@ -107,7 +107,7 @@
    - conversation/turn/item 的命名
    - SSE event envelope
    - `turn.agent_message.delta` / `turn.completed` / `turn.error` / `turn.interrupted`
-   - compact/token usage 事件名
+   - compact 事件名，以及后续可选的 token usage 扩展位
    - 该 companion doc 现冻结为 `DEV-PLAN-437A`
 5. 已明确首轮能力使用本地可控运行时 / mock SSE / fake provider，不把真实外部模型连通性作为 merge 前置条件。
 
@@ -194,7 +194,7 @@ owner：
 
 范围：
 
-1. [ ] conversation/message/summary/usage event 职责冻结并落到 schema/sqlc 方案。
+1. [ ] conversation/message/summary 职责冻结并落到 schema/sqlc 方案；`usage_event` 数据面后移。
 2. [X] append-only 原始消息写入与 final 状态固化打通。
 3. [X] conversation list/read/resume/archive/rename 的 API contract 可被 UI 消费。
 4. [X] 抽屉关闭后重新打开可以恢复 active conversation。
@@ -208,7 +208,7 @@ owner：
   - 正式数据面、最小 lifecycle API、抽屉恢复、会话列表 UI 与前端 reconstruction fixture / golden 已落地。
   - `432` owner 下的后端 `PATCH` rename/archive/unarchive handler 级验证、前端 reconstruction fixture / restore 对照、以及“压缩后恢复”回归已补齐。
   - store/API/UI 三层已围绕同一 lifecycle roundtrip fixture / golden 补齐对照，store 级跨租户 fail-closed 验证与 readiness 证据已回填，因此 `Phase C` 当前已具备正式封板条件。
-  - 更大范围的持久化扩展项，例如完整 summary/usage event 数据面与更细颗粒审计对象，仍由 `432` 后续切片继续推进，但不再阻断本轮 `Phase C` 封板。
+  - 更大范围的持久化扩展项，例如完整 summary 数据面、后续 `usage_event` 数据面与更细颗粒审计对象，仍由 `432` 后续切片继续推进，但不再阻断本轮 `Phase C` 封板。
 
 ### Phase D：上下文压缩最小闭环
 

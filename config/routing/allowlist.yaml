@@ -149,6 +149,9 @@ entrypoints:
       - path: /internal/cubebox/turns/{turn_id}:interrupt
         methods: [POST]
         route_class: internal_api
+      - path: /internal/cubebox/capabilities
+        methods: [GET]
+        route_class: internal_api
       - path: /internal/cubebox/settings
         methods: [GET]
         route_class: internal_api

@@ -241,6 +241,9 @@ func TestAuthzRequirementForRoute(t *testing.T) {
 	if object, action, ok := authzRequirementForRoute(http.MethodPost, "/internal/cubebox/turns/turn_1:interrupt"); !ok || object != authz.ObjectCubeBoxConversations || action != authz.ActionUse {
 		t.Fatalf("unexpected cubebox interrupt authz: object=%q action=%q ok=%v", object, action, ok)
 	}
+	if object, action, ok := authzRequirementForRoute(http.MethodGet, "/internal/cubebox/capabilities"); ok || object != "" || action != "" {
+		t.Fatalf("unexpected cubebox capabilities authz: object=%q action=%q ok=%v", object, action, ok)
+	}
 	if object, action, ok := authzRequirementForRoute(http.MethodGet, "/internal/cubebox/settings"); !ok || object != authz.ObjectCubeBoxModelCredential || action != authz.ActionRead {
 		t.Fatalf("unexpected cubebox settings authz: object=%q action=%q ok=%v", object, action, ok)
 	}

@@ -321,4 +321,59 @@ describe('cubebox reducer', () => {
     expect(state.activeTurnID).toBeNull()
     expect(state.errorMessage).toBe('network down')
   })
+
+  it('fails closed when restored history contains a dangling streaming turn', () => {
+    const state = replayConversation({
+      conversation: {
+        id: 'conv_dangling',
+        title: '未完成会话',
+        status: 'active',
+        archived: false
+      },
+      next_sequence: 5,
+      events: [
+        {
+          event_id: 'evt_1',
+          conversation_id: 'conv_dangling',
+          turn_id: null,
+          sequence: 1,
+          type: 'conversation.loaded',
+          ts: '2026-04-22T00:00:00Z',
+          payload: { title: '未完成会话', status: 'active', archived: false }
+        },
+        {
+          event_id: 'evt_2',
+          conversation_id: 'conv_dangling',
+          turn_id: 'turn_1',
+          sequence: 2,
+          type: 'turn.started',
+          ts: '2026-04-22T00:00:01Z',
+          payload: { trace_id: 'trace_1', runtime: 'openai-chat-completions' }
+        },
+        {
+          event_id: 'evt_3',
+          conversation_id: 'conv_dangling',
+          turn_id: 'turn_1',
+          sequence: 3,
+          type: 'turn.user_message.accepted',
+          ts: '2026-04-22T00:00:02Z',
+          payload: { message_id: 'msg_user_1', text: 'hello' }
+        },
+        {
+          event_id: 'evt_4',
+          conversation_id: 'conv_dangling',
+          turn_id: 'turn_1',
+          sequence: 4,
+          type: 'turn.agent_message.delta',
+          ts: '2026-04-22T00:00:03Z',
+          payload: { message_id: 'msg_agent_1', delta: 'partial' }
+        }
+      ]
+    })
+
+    expect(state.turnStatus).toBe('error')
+    expect(state.activeTurnID).toBeNull()
+    expect(state.errorMessage).toBe('上次回复未正常结束，请重新发送。')
+    expect(state.items[1]).toMatchObject({ id: 'msg_agent_1', status: 'error' })
+  })
 })

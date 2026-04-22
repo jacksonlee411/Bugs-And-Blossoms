@@ -119,7 +119,7 @@
 | 启用 / 停用 | Bifrost + One API | 主语义用 Bifrost，补充页面组织 |
 | API Key 轮换 | 本仓主导 + Bifrost/One API 交互参考 | 不复用外部密钥存储，但复用录入/验证/掩码/轮换 IA |
 | 权限矩阵 | 本仓主导 + 开源角色语义参考 | 不直接复用外部角色系统，必须落到 subject/domain/object/action |
-| 审计与错误码 | 本仓主导 + Bifrost telemetry 参考 | 不外包给外部项目，但复用 telemetry/health 状态形状 |
+| 审计与错误码 | 本仓主导 + Bifrost telemetry 参考 | 不外包给外部项目，但复用最小 telemetry/health 状态形状；不依赖 `usage_event/outbox` 数据面 |
 | i18n / E2E | 本仓主导 | 必须纳入仓库门禁 |
 
 ## 5A. 上游映射表（2026-04-22 首轮冻结）

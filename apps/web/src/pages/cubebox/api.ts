@@ -5,6 +5,7 @@ import type {
   CompactConversationResponse,
   ConversationReplayResponse,
   CubeBoxConversationListResponse,
+  CubeBoxCapabilities,
   CubeBoxModelCredential,
   CubeBoxModelHealth,
   CubeBoxModelProvider,
@@ -190,6 +191,17 @@ export async function loadModelSettings(): Promise<CubeBoxModelSettingsSnapshot>
     await readError(response, 'ai_model_config_invalid', `load model settings failed: ${response.status}`)
   }
   return (await response.json()) as CubeBoxModelSettingsSnapshot
+}
+
+export async function loadCubeBoxCapabilities(): Promise<CubeBoxCapabilities> {
+  const response = await fetch('/internal/cubebox/capabilities', {
+    credentials: 'include',
+    method: 'GET'
+  })
+  if (!response.ok) {
+    await readError(response, 'forbidden', `load cubebox capabilities failed: ${response.status}`)
+  }
+  return (await response.json()) as CubeBoxCapabilities
 }
 
 export async function upsertModelProvider(input: {

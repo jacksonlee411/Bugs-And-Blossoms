@@ -106,7 +106,7 @@ export interface CubeBoxModelHealth {
   id: string
   provider_id: string
   model_slug: string
-  status: 'healthy' | 'degraded' | 'failed'
+  status: 'healthy' | 'degraded' | 'failed' | 'unknown'
   latency_ms?: number
   error_summary?: string
   validated_at: string
@@ -117,4 +117,19 @@ export interface CubeBoxModelSettingsSnapshot {
   credentials: CubeBoxModelCredential[]
   selection?: CubeBoxActiveModelSelection | null
   health?: CubeBoxModelHealth | null
+}
+
+export interface CubeBoxCapabilities {
+  conversation: {
+    read: boolean
+    use: boolean
+  }
+  settings: {
+    read: boolean
+    verify: boolean
+    select: boolean
+    update: boolean
+    rotate: boolean
+    deactivate: boolean
+  }
 }

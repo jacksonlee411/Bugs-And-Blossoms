@@ -34,6 +34,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useAppPreferences } from '../../app/providers/AppPreferencesContext'
 import {
   deactivateModelCredential,
+  loadCubeBoxCapabilities,
   loadModelSettings,
   rotateModelCredential,
   selectActiveModel,
@@ -41,6 +42,7 @@ import {
   verifyActiveModel
 } from './api'
 import type { CubeBoxModelSettingsSnapshot } from './types'
+import type { CubeBoxCapabilities } from './types'
 import { useCubeBox } from './CubeBoxProvider'
 
 export function CubeBoxPanel() {
@@ -64,6 +66,7 @@ export function CubeBoxPanel() {
   const [settingsSaving, setSettingsSaving] = useState(false)
   const [settingsError, setSettingsError] = useState<string | null>(null)
   const [settingsSnapshot, setSettingsSnapshot] = useState<CubeBoxModelSettingsSnapshot | null>(null)
+  const [capabilities, setCapabilities] = useState<CubeBoxCapabilities | null>(null)
   const [providerID, setProviderID] = useState('openai-compatible')
   const [providerType, setProviderType] = useState('openai-compatible')
   const [providerName, setProviderName] = useState('Primary Provider')
@@ -73,14 +76,16 @@ export function CubeBoxPanel() {
   const [credentialMaskedSecret, setCredentialMaskedSecret] = useState('sk-****')
   const [modelSlug, setModelSlug] = useState('gpt-4.1')
   const [capabilitySummaryText, setCapabilitySummaryText] = useState('{"streaming":true,"tool_calls":false}')
-  const canReadConversations = hasPermission('cubebox.conversations.read') || hasPermission('cubebox.conversations.use')
-  const canUseConversations = hasPermission('cubebox.conversations.use')
-  const canOpenSettings = hasPermission('cubebox.model_credential.read')
-  const canEditProvider = hasPermission('cubebox.model_provider.update')
-  const canRotateCredential = hasPermission('cubebox.model_credential.rotate')
-  const canDeactivateCredential = hasPermission('cubebox.model_credential.deactivate')
-  const canSelectActiveModel = hasPermission('cubebox.model_selection.select')
-  const canVerifyActiveModel = hasPermission('cubebox.model_selection.verify')
+  const localCanReadConversations = hasPermission('cubebox.conversations.read') || hasPermission('cubebox.conversations.use')
+  const localCanUseConversations = hasPermission('cubebox.conversations.use')
+  const canReadConversations = capabilities ? capabilities.conversation.read || capabilities.conversation.use : localCanReadConversations
+  const canUseConversations = capabilities ? capabilities.conversation.use : localCanUseConversations
+  const canOpenSettings = capabilities ? capabilities.settings.read : false
+  const canEditProvider = capabilities ? capabilities.settings.update : false
+  const canRotateCredential = capabilities ? capabilities.settings.rotate : false
+  const canDeactivateCredential = capabilities ? capabilities.settings.deactivate : false
+  const canSelectActiveModel = capabilities ? capabilities.settings.select : false
+  const canVerifyActiveModel = capabilities ? capabilities.settings.verify : false
   const currentTitle = state.conversation?.title?.trim() || t('page_cubebox_title')
   const latestHealthLabel = settingsSnapshot?.health ? formatHealth(settingsSnapshot.health.status, t) : t('cubebox_settings_health_unknown')
   const activeSelectionLabel = settingsSnapshot?.selection
@@ -118,11 +123,35 @@ export function CubeBoxPanel() {
   }
 
   useEffect(() => {
+    let cancelled = false
+    async function loadCapabilities() {
+      try {
+        const payload = await loadCubeBoxCapabilities()
+        if (!cancelled) {
+          setCapabilities(payload)
+        }
+      } catch {
+        if (!cancelled) {
+          setCapabilities(null)
+        }
+      }
+    }
+    void loadCapabilities()
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  useEffect(() => {
     if (!settingsOpen) {
       return
     }
+    if (!canOpenSettings) {
+      setSettingsOpen(false)
+      return
+    }
     void refreshSettings()
-  }, [settingsOpen])
+  }, [settingsOpen, canOpenSettings])
 
   const providerCredentials = useMemo(
     () => settingsSnapshot?.credentials.filter((item) => item.provider_id === providerID) ?? [],
@@ -534,14 +563,16 @@ function statusLabel(
 }
 
 function formatHealth(
-  status: 'healthy' | 'degraded' | 'failed',
-  t: (key: 'cubebox_settings_health_healthy' | 'cubebox_settings_health_degraded' | 'cubebox_settings_health_failed') => string
+  status: 'healthy' | 'degraded' | 'failed' | 'unknown',
+  t: (key: 'cubebox_settings_health_healthy' | 'cubebox_settings_health_degraded' | 'cubebox_settings_health_failed' | 'cubebox_settings_health_unknown') => string
 ) {
   switch (status) {
     case 'healthy':
       return t('cubebox_settings_health_healthy')
     case 'degraded':
       return t('cubebox_settings_health_degraded')
+    case 'unknown':
+      return t('cubebox_settings_health_unknown')
     default:
       return t('cubebox_settings_health_failed')
   }

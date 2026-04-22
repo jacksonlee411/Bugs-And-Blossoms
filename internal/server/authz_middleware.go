@@ -177,6 +177,11 @@ func authzRequirementForRoute(method string, path string) (object string, action
 			return authz.ObjectCubeBoxConversations, authz.ActionUse, true
 		}
 		return "", "", false
+	case "/internal/cubebox/capabilities":
+		if method == http.MethodGet {
+			return "", "", false
+		}
+		return "", "", false
 	case "/internal/cubebox/settings":
 		if method == http.MethodGet {
 			return authz.ObjectCubeBoxModelCredential, authz.ActionRead, true

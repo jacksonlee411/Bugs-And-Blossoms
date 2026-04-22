@@ -28,6 +28,10 @@ type CanonicalContext struct {
 	Permissions    []string
 	BusinessObject string
 	Model          string
+	ProviderID     string
+	ProviderType   string
+	ModelSlug      string
+	Runtime        string
 }
 
 type CompactionResult struct {
@@ -112,15 +116,26 @@ func BuildCompactionEvent(conversationID string, turnID *string, sequence int, n
 
 func buildCanonicalContextBlock(context CanonicalContext) string {
 	permissions := strings.Join(filterNonEmpty(context.Permissions), ", ")
+	runtime := strings.TrimSpace(context.Runtime)
+	providerID := strings.TrimSpace(context.ProviderID)
+	modelSlug := strings.TrimSpace(context.ModelSlug)
+	modelDisplay := strings.TrimSpace(context.Model)
+	if modelDisplay == "" && runtime != "" && providerID != "" && modelSlug != "" {
+		modelDisplay = runtime + ":" + providerID + "/" + modelSlug
+	}
 	return strings.TrimSpace(fmt.Sprintf(
-		"tenant=%s\nprincipal=%s\nlanguage=%s\npage=%s\npermissions=%s\nbusiness_object=%s\nmodel=%s",
+		"tenant=%s\nprincipal=%s\nlanguage=%s\npage=%s\npermissions=%s\nbusiness_object=%s\nprovider_id=%s\nprovider_type=%s\nmodel_slug=%s\nruntime=%s\nmodel=%s",
 		strings.TrimSpace(context.TenantID),
 		strings.TrimSpace(context.PrincipalID),
 		normalizeDefault(context.Language, "zh"),
 		normalizeDefault(context.Page, "cubebox"),
-			normalizeDefault(permissions, "cubebox.conversations:use"),
+		normalizeDefault(permissions, "cubebox.conversations:use"),
 		normalizeDefault(context.BusinessObject, "conversation"),
-		normalizeDefault(context.Model, "deterministic-runtime"),
+		normalizeDefault(providerID, "unavailable"),
+		normalizeDefault(context.ProviderType, "unavailable"),
+		normalizeDefault(modelSlug, "unavailable"),
+		normalizeDefault(runtime, "unavailable"),
+		normalizeDefault(modelDisplay, "unavailable"),
 	))
 }
 

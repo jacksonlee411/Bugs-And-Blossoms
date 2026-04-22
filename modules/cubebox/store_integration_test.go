@@ -3,6 +3,9 @@ package cubebox
 import (
 	"context"
 	"fmt"
+	"io"
+	"net/http"
+	"net/http/httptest"
 	"net/url"
 	"os"
 	"strings"
@@ -36,12 +39,29 @@ func TestStoreModelSettingsLifecyclePG(t *testing.T) {
 	defer cleanupCubeboxTestActor(context.Background(), pool, tenantID, principalID)
 
 	store := NewStore(pool)
+	t.Setenv("OPENAI_API_KEY", "sk-integration-test")
+	providerServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if got := r.Header.Get("Authorization"); got != "Bearer sk-integration-test" {
+			t.Fatalf("authorization=%q", got)
+		}
+		payload, err := io.ReadAll(r.Body)
+		if err != nil {
+			t.Fatalf("read body: %v", err)
+		}
+		if !strings.Contains(string(payload), `"model":"gpt-4.1"`) {
+			t.Fatalf("unexpected payload=%s", string(payload))
+		}
+		w.Header().Set("Content-Type", "text/event-stream")
+		_, _ = w.Write([]byte("data: {\"choices\":[{\"delta\":{\"content\":\"ok\"},\"finish_reason\":null}]}\n\n"))
+		_, _ = w.Write([]byte("data: [DONE]\n\n"))
+	}))
+	defer providerServer.Close()
 
 	provider, err := store.UpsertModelProvider(ctx, tenantID, principalID, UpsertModelProviderInput{
 		ProviderID:   providerID,
 		ProviderType: "openai-compatible",
 		DisplayName:  "Integration Provider",
-		BaseURL:      "https://example.invalid/v1",
+		BaseURL:      providerServer.URL,
 		Enabled:      true,
 	})
 	if err != nil {
@@ -85,7 +105,7 @@ func TestStoreModelSettingsLifecyclePG(t *testing.T) {
 	if health.ProviderID != providerID || health.ModelSlug != modelSlug || health.Status != "healthy" {
 		t.Fatalf("unexpected health: %+v", health)
 	}
-	if health.LatencyMS == nil || *health.LatencyMS <= 0 {
+	if health.LatencyMS == nil || *health.LatencyMS < 0 {
 		t.Fatalf("unexpected latency: %+v", health)
 	}
 

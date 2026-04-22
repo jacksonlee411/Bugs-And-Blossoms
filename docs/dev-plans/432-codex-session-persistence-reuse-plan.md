@@ -1,6 +1,6 @@
 # DEV-PLAN-432：Codex 会话持久化、索引与恢复语义复用/重构方案
 
-**状态**: 部分完成（2026-04-22 CST；`PR-437C` 已完成最小封板范围：正式数据面、最小 lifecycle API、抽屉恢复、store/API/UI 共用 reconstruction roundtrip golden、压缩后恢复与跨租户 fail-closed 验证均已补齐；更大范围的 summary/usage event 数据面与后续持久化扩展仍待推进）
+**状态**: 部分完成（2026-04-22 CST；`PR-437C` 已完成最小封板范围：正式数据面、最小 lifecycle API、抽屉恢复、store/API/UI 共用 reconstruction roundtrip golden、压缩后恢复与跨租户 fail-closed 验证均已补齐；更大范围的 summary 持久化扩展与后续 `usage_event` 数据面仍待推进）
 
 ## 0. 适用范围与评审分级
 
@@ -31,7 +31,7 @@
 
 ## 1. 背景
 
-`DEV-PLAN-430` 当前将 Slice 3 定义为 conversation、message、summary、usage event 的 schema 和 sqlc，以及新建、列出、恢复、归档、删除会话。用户要求沿用 431/434 的原则：如果 Codex 开源仓库已有成熟持久化语义，应优先复用或重构，而不是另起一套完全自研模型。
+`DEV-PLAN-430` 当前将 Slice 3 定义为 conversation、message、summary 的 schema 和 sqlc，以及新建、列出、恢复、归档、删除会话；更大范围的 `usage_event` 数据面已后移，不再作为本轮前置。用户要求沿用 431/434 的原则：如果 Codex 开源仓库已有成熟持久化语义，应优先复用或重构，而不是另起一套完全自研模型。
 
 同时，`431` 已被收口为 UI 壳与前端状态机计划，因此 `conversation list/read/resume/archive/rename` 的生命周期 contract、持久化语义与 API 行为必须由本计划持有，`431` 只消费其结果。
 
@@ -58,7 +58,7 @@ Codex 开源仓库中与会话持久化强相关的成熟机制包括：
    - 事件流记录与 timeline reconstruction。
    - 压缩后恢复与历史重建。
 4. 将 Codex 的本地文件模型映射为本仓 PostgreSQL 模块 schema + sqlc + RLS。
-5. 确保原始消息、压缩摘要、compaction event、usage event、UI event reducer 间的关系可审计、可回放、可恢复。
+5. 确保原始消息、压缩摘要、compaction event 与 UI event reducer 间的关系可审计、可回放、可恢复；`usage_event` 后移后不再作为本轮恢复前置。
 6. 输出 430 Slice 3 的最小可用持久化基线，使其不从零设计同类语义。
 
 ## 3. 非目标
@@ -95,7 +95,6 @@ Codex 开源仓库中与会话持久化强相关的成熟机制包括：
 - `message_log`：append-only 原始消息流，按 conversation 有序写入。
 - `summary_log`：压缩摘要记录，引用 source message range。
 - `compaction_event`：压缩触发、执行、完成、失败事件。
-- `usage_event`：模型调用输入输出 token、延迟、错误码。
 - `conversation_index_view`：供 list/read/resume 使用的查询视图或物化结果。
 
 ### 5.2 原则
@@ -112,7 +111,7 @@ Codex 开源仓库中与会话持久化强相关的成熟机制包括：
 CubeBox 恢复行为要对齐 Codex 的 resume/read 思路：
 
 1. 根据 conversation id 读取主记录和最新状态。
-2. 读取 message_log、summary_log、compaction_event、必要 usage event。
+2. 读取 message_log、summary_log、compaction_event。
 3. 通过与 431 对齐的 timeline reconstruction/reducer 还原前端视图。
 4. 重新生成当前 canonical context，不信任旧权限上下文。
 5. 如 active turn 未完成，恢复为“可继续观察或重新发起”的明确状态，不静默伪装为完成。
@@ -131,8 +130,6 @@ CubeBox 恢复行为要对齐 Codex 的 resume/read 思路：
 - `cubebox_message_log`
 - `cubebox_summary_log`
 - `cubebox_compaction_events`
-- `cubebox_usage_events`
-
 如果为了简化首期实现，需要合并表，也必须保持 append-only message log 和 summary/event 分层不丢失。
 
 ## 7. 实施切片
@@ -146,7 +143,7 @@ CubeBox 恢复行为要对齐 Codex 的 resume/read 思路：
 
 ### Slice 1：持久化模型冻结
 
-- [ ] 定义 conversation、message log、summary log、compaction event、usage event 职责。
+- [ ] 定义 conversation、message log、summary log、compaction event 职责；`usage_event` 职责后移到后续计划。
 - [ ] 定义 list/read/resume/archive/unarchive/rename 生命周期。
 - [ ] 明确 append-only 规则和状态覆盖规则。
 - [ ] 与 431 的 UI event / timeline reconstruction 契约对齐，并明确哪些字段只作为 UI 消费面暴露。
@@ -163,7 +160,7 @@ CubeBox 恢复行为要对齐 Codex 的 resume/read 思路：
 - [ ] 实现新建 conversation。
 - [ ] 实现 append-only message log 写入。
 - [ ] 实现 rename/archive/unarchive 事件或状态更新。
-- [ ] 实现 summary/compaction/usage event 写入。
+- [ ] 实现 summary/compaction 写入；`usage_event` 写入不属于本轮范围。
 
 ### Slice 4：读取与恢复路径
 
@@ -201,7 +198,7 @@ CubeBox 恢复行为要对齐 Codex 的 resume/read 思路：
 - [x] list/read/resume/archive/unarchive/rename 生命周期冻结：已完成当前最小封板范围。正式 API 与 UI 消费链路已落地，后端 handler/store 验证与跨层 roundtrip golden 证据已补齐。
 - [x] timeline 可由持久化记录重建。
 - [x] 原始消息不因压缩被覆盖。
-- [ ] summary、compaction、usage event 可按 conversation 追溯。
+- [ ] summary、compaction event 可按 conversation 追溯；`usage_event` 数据面后移。
 - [ ] RLS/租户隔离覆盖所有持久化对象。
   当前 `cubebox_conversations` / `cubebox_conversation_events` 主链已补 fail-closed 测试；未来新增 summary/usage 等持久化对象时仍需按同口径继续补齐。
 - [x] UI 恢复行为与 431 reducer 对齐。

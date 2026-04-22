@@ -12,6 +12,7 @@ const appPreferencesMocks = vi.hoisted(() => ({
 
 const apiMocks = vi.hoisted(() => ({
   deactivateModelCredential: vi.fn(),
+  loadCubeBoxCapabilities: vi.fn(),
   loadModelSettings: vi.fn(),
   rotateModelCredential: vi.fn(),
   selectActiveModel: vi.fn(),
@@ -168,6 +169,20 @@ describe('CubeBoxPanel', () => {
         validated_at: '2026-04-22T00:00:00Z'
       }
     })
+    apiMocks.loadCubeBoxCapabilities.mockResolvedValue({
+      conversation: {
+        read: true,
+        use: true
+      },
+      settings: {
+        read: true,
+        verify: true,
+        select: true,
+        update: true,
+        rotate: true,
+        deactivate: true
+      }
+    })
     apiMocks.deactivateModelCredential.mockResolvedValue(undefined)
     apiMocks.rotateModelCredential.mockResolvedValue(undefined)
     apiMocks.selectActiveModel.mockResolvedValue(undefined)
@@ -175,12 +190,12 @@ describe('CubeBoxPanel', () => {
     apiMocks.verifyActiveModel.mockResolvedValue(undefined)
   })
 
-  it('renders 431A header actions and conversation title', () => {
+  it('renders 431A header actions and conversation title', async () => {
     render(<CubeBoxPanel />)
 
     expect(screen.getByRole('heading', { name: '需求澄清' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '历史记录' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: '设置' })).toBeInTheDocument()
+    expect(await screen.findByRole('button', { name: '设置' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '新建对话' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '压缩上下文' })).toBeInTheDocument()
   })
@@ -211,62 +226,32 @@ describe('CubeBoxPanel', () => {
     expect(cubeBoxMocks.useCubeBox.mock.results[0]?.value.compactCurrentConversation).toHaveBeenCalledTimes(1)
   })
 
-  it('hides settings entry when model settings permission is missing', () => {
-    appPreferencesMocks.useAppPreferences.mockReturnValue({
-      tenantId: 'tenant-a',
-      locale: 'zh',
-      setLocale: vi.fn(),
-      themeMode: 'light',
-      toggleThemeMode: vi.fn(),
-      navDebugMode: false,
-      hasPermission: vi.fn().mockImplementation((permissionKey?: string) =>
-        permissionKey === 'cubebox.conversations.read' || permissionKey === 'cubebox.conversations.use'
-      ),
-      t: (key: string) =>
-        (
-          {
-            page_cubebox_title: 'CubeBox',
-            page_cubebox_subtitle: '在右侧抽屉中发起并继续对话。',
-            cubebox_conversation_id: '会话',
-            cubebox_user_message: '你',
-            cubebox_agent_message: 'CubeBox',
-            cubebox_error_item: '错误',
-            cubebox_empty_timeline: '先发送一句话开始对话。',
-            cubebox_prompt_label: '输入消息',
-            cubebox_stop: '停止',
-            cubebox_send: '发送',
-            cubebox_history: '历史记录',
-            cubebox_settings: '设置',
-            cubebox_new_chat: '新建对话',
-            cubebox_history_title: '历史会话',
-            cubebox_settings_title: 'CubeBox 设置',
-            cubebox_empty_history: '还没有已保存的会话。',
-            cubebox_rename: '重命名',
-            cubebox_archive: '归档',
-            cubebox_unarchive: '恢复',
-            cubebox_compact: '压缩上下文',
-            cubebox_compact_item: '压缩摘要',
-            cubebox_conversation_status_active: '进行中',
-            cubebox_conversation_status_archived: '已归档',
-            cubebox_status_idle: '空闲',
-            cubebox_status_streaming: '流式处理中',
-            cubebox_status_completed: '已完成',
-            cubebox_status_error: '失败',
-            cubebox_status_interrupted: '已中断',
-            text_loading: '加载中'
-          } as Record<string, string>
-        )[key] ?? key
+  it('hides settings entry when model settings permission is missing', async () => {
+    apiMocks.loadCubeBoxCapabilities.mockResolvedValueOnce({
+      conversation: {
+        read: true,
+        use: true
+      },
+      settings: {
+        read: false,
+        verify: false,
+        select: false,
+        update: false,
+        rotate: false,
+        deactivate: false
+      }
     })
 
     render(<CubeBoxPanel />)
 
+    await waitFor(() => expect(apiMocks.loadCubeBoxCapabilities).toHaveBeenCalledTimes(1))
     expect(screen.queryByRole('button', { name: '设置' })).not.toBeInTheDocument()
   })
 
   it('shows local validation error when capability summary is not a json object', async () => {
     render(<CubeBoxPanel />)
 
-    fireEvent.click(screen.getByRole('button', { name: '设置' }))
+    fireEvent.click(await screen.findByRole('button', { name: '设置' }))
     await screen.findByDisplayValue('{"streaming":true}')
     fireEvent.change(screen.getByLabelText('能力摘要'), { target: { value: '[]' } })
     fireEvent.click(screen.getByRole('button', { name: '保存当前模型' }))
@@ -280,7 +265,7 @@ describe('CubeBoxPanel', () => {
 
     render(<CubeBoxPanel />)
 
-    fireEvent.click(screen.getByRole('button', { name: '设置' }))
+    fireEvent.click(await screen.findByRole('button', { name: '设置' }))
     await screen.findByText('sk-**** · v1')
     fireEvent.click(screen.getByRole('button', { name: '停用' }))
 

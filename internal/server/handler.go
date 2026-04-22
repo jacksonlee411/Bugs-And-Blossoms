@@ -96,6 +96,7 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, error) {
 
 	cubeboxRuntime := cubebox.NewRuntime()
 	cubeboxStore := cubebox.NewStore(pgPool)
+	cubeboxGateway := cubebox.NewGatewayService(cubeboxRuntime, cubeboxStore, cubebox.NewOpenAICompatibleAdapter(nil), cubebox.EnvSecretResolver{})
 
 	router := routing.NewRouter(classifier)
 
@@ -300,6 +301,9 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, error) {
 	router.Handle(routing.RouteClassInternalAPI, http.MethodGet, "/internal/cubebox/conversations", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		handleCubeBoxConversationsAPI(w, r, cubeboxStore)
 	}))
+	router.Handle(routing.RouteClassInternalAPI, http.MethodGet, "/internal/cubebox/capabilities", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handleCubeBoxCapabilitiesAPI(w, r, authorizer)
+	}))
 	router.Handle(routing.RouteClassInternalAPI, http.MethodGet, "/internal/cubebox/conversations/{conversation_id}", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		handleCubeBoxConversationAPI(w, r, cubeboxStore)
 	}))
@@ -310,7 +314,7 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, error) {
 		handleCubeBoxCompactConversationAPI(w, r, cubeboxStore)
 	}))
 	router.Handle(routing.RouteClassInternalAPI, http.MethodPost, "/internal/cubebox/turns:stream", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		handleCubeBoxStreamTurnAPI(w, r, cubeboxRuntime, cubeboxStore)
+		handleCubeBoxStreamTurnAPI(w, r, cubeboxRuntime, cubeboxStore, cubeboxGateway)
 	}))
 	router.Handle(routing.RouteClassInternalAPI, http.MethodPost, "/internal/cubebox/turns/{turn_id}:interrupt", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		handleCubeBoxInterruptTurnAPI(w, r, cubeboxRuntime)

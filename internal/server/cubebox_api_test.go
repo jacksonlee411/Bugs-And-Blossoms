@@ -12,6 +12,22 @@ import (
 	"github.com/jacksonlee411/Bugs-And-Blossoms/modules/cubebox"
 )
 
+func newTestGateway(runtime *cubebox.Runtime) *cubebox.GatewayService {
+	return cubebox.NewGatewayService(runtime, nil, nil, nil)
+}
+
+type cubeboxAuthorizerStub struct {
+	allowed map[string]bool
+	err     error
+}
+
+func (s cubeboxAuthorizerStub) Authorize(_ string, _ string, object string, action string) (bool, bool, error) {
+	if s.err != nil {
+		return false, true, s.err
+	}
+	return s.allowed[object+":"+action], true, nil
+}
+
 type cubeboxStoreStub struct {
 	createFn               func(context.Context, string, string) (cubebox.ConversationReplayResponse, error)
 	getFn                  func(context.Context, string, string, string) (cubebox.ConversationReplayResponse, error)
@@ -26,6 +42,7 @@ type cubeboxStoreStub struct {
 	deactivateCredentialFn func(context.Context, string, string) (cubebox.ModelCredential, error)
 	selectionFn            func(context.Context, string, string, cubebox.SelectActiveModelInput) (cubebox.ActiveModelSelection, error)
 	verifyFn               func(context.Context, string, string) (cubebox.ModelHealth, error)
+	runtimeConfigFn        func(context.Context, string) (cubebox.ActiveModelRuntimeConfig, error)
 }
 
 func (s cubeboxStoreStub) CreateConversation(ctx context.Context, tenantID string, principalID string) (cubebox.ConversationReplayResponse, error) {
@@ -67,6 +84,15 @@ func (s cubeboxStoreStub) AppendEvent(ctx context.Context, tenantID string, prin
 		return nil
 	}
 	return s.appendFn(ctx, tenantID, principalID, conversationID, event)
+}
+
+func (s cubeboxStoreStub) AppendEvents(ctx context.Context, tenantID string, principalID string, conversationID string, events []cubebox.CanonicalEvent) error {
+	for _, event := range events {
+		if err := s.AppendEvent(ctx, tenantID, principalID, conversationID, event); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (s cubeboxStoreStub) GetModelSettings(ctx context.Context, tenantID string) (cubebox.ModelSettingsSnapshot, error) {
@@ -111,6 +137,13 @@ func (s cubeboxStoreStub) VerifyActiveModel(ctx context.Context, tenantID string
 	return s.verifyFn(ctx, tenantID, principalID)
 }
 
+func (s cubeboxStoreStub) GetActiveModelRuntimeConfig(ctx context.Context, tenantID string) (cubebox.ActiveModelRuntimeConfig, error) {
+	if s.runtimeConfigFn == nil {
+		return cubebox.ActiveModelRuntimeConfig{}, errors.New("unexpected")
+	}
+	return s.runtimeConfigFn(ctx, tenantID)
+}
+
 func TestCubeBoxCreateConversationAPI(t *testing.T) {
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodPost, "/internal/cubebox/conversations", strings.NewReader(`{}`))
@@ -147,6 +180,35 @@ func TestCubeBoxCreateConversationAPI(t *testing.T) {
 	}
 	if !strings.Contains(rec.Body.String(), `"conversation"`) {
 		t.Fatalf("unexpected body=%s", rec.Body.String())
+	}
+}
+
+func TestCubeBoxCapabilitiesAPI(t *testing.T) {
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/internal/cubebox/capabilities", nil)
+	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
+	req = req.WithContext(withPrincipal(req.Context(), Principal{ID: "p1", RoleSlug: "tenant-viewer"}))
+
+	handleCubeBoxCapabilitiesAPI(rec, req, cubeboxAuthorizerStub{
+		allowed: map[string]bool{
+			"cubebox.conversations:read": true,
+			"cubebox.conversations:use":  true,
+		},
+	})
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+	}
+	body := rec.Body.String()
+	for _, needle := range []string{
+		`"conversation":{"read":true,"use":true}`,
+		`"settings":{"read":false`,
+		`"verify":false`,
+		`"rotate":false`,
+	} {
+		if !strings.Contains(body, needle) {
+			t.Fatalf("expected body to contain %s, got %s", needle, body)
+		}
 	}
 }
 
@@ -226,7 +288,8 @@ func TestCubeBoxStreamTurnAPI(t *testing.T) {
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 	req = req.WithContext(withPrincipal(req.Context(), Principal{ID: "p1"}))
 
-	handleCubeBoxStreamTurnAPI(rec, req, cubebox.NewRuntime(), cubeboxStoreStub{
+	runtime := cubebox.NewRuntime()
+	handleCubeBoxStreamTurnAPI(rec, req, runtime, cubeboxStoreStub{
 		createFn: func(context.Context, string, string) (cubebox.ConversationReplayResponse, error) {
 			return cubebox.ConversationReplayResponse{}, errors.New("unexpected")
 		},
@@ -251,7 +314,7 @@ func TestCubeBoxStreamTurnAPI(t *testing.T) {
 			}
 			return nil
 		},
-	})
+	}, newTestGateway(runtime))
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
@@ -262,6 +325,15 @@ func TestCubeBoxStreamTurnAPI(t *testing.T) {
 	}
 	if !strings.Contains(body, `"type":"turn.completed"`) {
 		t.Fatalf("missing completed event: %s", body)
+	}
+	if !strings.Contains(body, `"trace_id":"`) {
+		t.Fatalf("missing trace_id payload: %s", body)
+	}
+	if !strings.Contains(body, `"runtime":"deterministic-fixture"`) {
+		t.Fatalf("missing runtime payload: %s", body)
+	}
+	if !strings.Contains(body, `"latency_ms":`) {
+		t.Fatalf("missing latency payload: %s", body)
 	}
 }
 
@@ -332,7 +404,8 @@ func TestCubeBoxStreamTurnAPIWritesFallbackErrorWhenAppendFails(t *testing.T) {
 	req = req.WithContext(withPrincipal(req.Context(), Principal{ID: "p1"}))
 	appendCount := 0
 
-	handleCubeBoxStreamTurnAPI(rec, req, cubebox.NewRuntime(), cubeboxStoreStub{
+	runtime := cubebox.NewRuntime()
+	handleCubeBoxStreamTurnAPI(rec, req, runtime, cubeboxStoreStub{
 		createFn: func(context.Context, string, string) (cubebox.ConversationReplayResponse, error) {
 			return cubebox.ConversationReplayResponse{}, errors.New("unexpected")
 		},
@@ -361,7 +434,7 @@ func TestCubeBoxStreamTurnAPIWritesFallbackErrorWhenAppendFails(t *testing.T) {
 			}
 			return nil
 		},
-	})
+	}, newTestGateway(runtime))
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
@@ -372,6 +445,9 @@ func TestCubeBoxStreamTurnAPIWritesFallbackErrorWhenAppendFails(t *testing.T) {
 	}
 	if !strings.Contains(body, `"code":"event_log_write_failed"`) {
 		t.Fatalf("missing fallback error code: %s", body)
+	}
+	if !strings.Contains(body, `"trace_id":"`) {
+		t.Fatalf("missing trace_id in fallback error: %s", body)
 	}
 }
 
@@ -445,7 +521,8 @@ func TestCubeBoxStreamTurnAPIUsesUUIDEventIDs(t *testing.T) {
 	req = req.WithContext(withPrincipal(req.Context(), Principal{ID: "p1"}))
 
 	var eventIDs []string
-	handleCubeBoxStreamTurnAPI(rec, req, cubebox.NewRuntime(), cubeboxStoreStub{
+	runtime := cubebox.NewRuntime()
+	handleCubeBoxStreamTurnAPI(rec, req, runtime, cubeboxStoreStub{
 		createFn: func(context.Context, string, string) (cubebox.ConversationReplayResponse, error) {
 			return cubebox.ConversationReplayResponse{}, errors.New("unexpected")
 		},
@@ -471,7 +548,7 @@ func TestCubeBoxStreamTurnAPIUsesUUIDEventIDs(t *testing.T) {
 			eventIDs = append(eventIDs, event.EventID)
 			return nil
 		},
-	})
+	}, newTestGateway(runtime))
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
@@ -626,6 +703,9 @@ func TestCubeBoxCompactConversationAPI(t *testing.T) {
 			if canonicalContext.TenantID != "t1" || canonicalContext.PrincipalID != "p1" {
 				t.Fatalf("unexpected canonical context=%+v", canonicalContext)
 			}
+			if canonicalContext.Runtime != "unavailable" || canonicalContext.ModelSlug != "unavailable" {
+				t.Fatalf("expected unavailable runtime metadata when config is unavailable, got %+v", canonicalContext)
+			}
 			event := cubebox.CanonicalEvent{
 				EventID:        "evt_compact",
 				ConversationID: "conv_1",
@@ -757,7 +837,8 @@ func TestCubeBoxStreamTurnAPIPreTurnAutoCompactUsesActorAndUpdatedSequence(t *te
 
 	var compactCalled bool
 	var appended []cubebox.CanonicalEvent
-	handleCubeBoxStreamTurnAPI(rec, req, cubebox.NewRuntime(), cubeboxStoreStub{
+	runtime := cubebox.NewRuntime()
+	handleCubeBoxStreamTurnAPI(rec, req, runtime, cubeboxStoreStub{
 		createFn: func(context.Context, string, string) (cubebox.ConversationReplayResponse, error) {
 			return cubebox.ConversationReplayResponse{}, errors.New("unexpected")
 		},
@@ -798,7 +879,7 @@ func TestCubeBoxStreamTurnAPIPreTurnAutoCompactUsesActorAndUpdatedSequence(t *te
 			appended = append(appended, event)
 			return nil
 		},
-	})
+	}, newTestGateway(runtime))
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())

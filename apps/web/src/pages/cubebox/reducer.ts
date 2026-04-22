@@ -66,7 +66,7 @@ export function cubeboxReducer(state: CubeBoxState, action: CubeBoxAction): Cube
 }
 
 export function replayConversation(payload: ConversationReplayResponse): CubeBoxState {
-  return payload.events.reduce<CubeBoxState>(
+  const replayed = payload.events.reduce<CubeBoxState>(
     (state, event) => applyEvent(state, event),
     {
       ...initialCubeBoxState,
@@ -74,6 +74,7 @@ export function replayConversation(payload: ConversationReplayResponse): CubeBox
       nextSequence: payload.next_sequence
     }
   )
+  return normalizeDanglingRestoredTurn(replayed)
 }
 
 function applyEvent(state: CubeBoxState, event: CanonicalEvent): CubeBoxState {
@@ -211,6 +212,23 @@ function finalizeItem(items: TimelineItem[], messageID: string): TimelineItem[] 
 
 function markStreamingInterrupted(items: TimelineItem[]): TimelineItem[] {
   return items.map((item) => (item.status === 'streaming' ? { ...item, status: 'interrupted' } : item))
+}
+
+function markStreamingError(items: TimelineItem[]): TimelineItem[] {
+  return items.map((item) => (item.status === 'streaming' ? { ...item, status: 'error' } : item))
+}
+
+function normalizeDanglingRestoredTurn(state: CubeBoxState): CubeBoxState {
+  if (state.turnStatus !== 'streaming') {
+    return state
+  }
+  return {
+    ...state,
+    activeTurnID: null,
+    errorMessage: '上次回复未正常结束，请重新发送。',
+    items: markStreamingError(state.items),
+    turnStatus: 'error'
+  }
 }
 
 function normalizeTurnStatus(input: unknown): CubeBoxState['turnStatus'] {
