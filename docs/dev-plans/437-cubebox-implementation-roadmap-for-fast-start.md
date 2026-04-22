@@ -1,6 +1,6 @@
 # DEV-PLAN-437：CubeBox 实施路线图（快速开工版）
 
-**状态**: 执行中（2026-04-22 CST，`PR-437A` / `Phase B` 已完成；`Phase C` 已具备正式封板条件；`Phase D` 最小闭环已落地）
+**状态**: 执行中（2026-04-22 CST，`PR-437A` / `Phase B` 已完成；`Phase C` 与 `Phase D` 已具备正式封板条件）
 
 ## 0. 适用范围与评审分级
 
@@ -239,7 +239,8 @@ owner：
 - 当前备注（`2026-04-22`）：
   - manual compact API、pre-turn auto compact、canonical context reinjection、`turn.context_compacted` timeline 消费、`/compact` UI 入口与 compaction 纯函数测试已落地。
   - 本轮实现级收口已补齐：no-op compaction 不再伪造 compact event / 空摘要项，compaction 序号推进也已收敛为单事务安全，不再因并发 compact 抢占 `sequence` 而阻断正常流式请求。
-  - 当前实现仍属最小闭环：未引入 mid-turn compact、remote compaction、provider downshift，也未承诺真实 tokenizer 精度或独立 summary model。
+  - 首期 `prompt shape snapshot` 以纯函数 fixture / snapshot 承担 golden 等价物，已满足当前封板口径，不再要求本轮额外拆出独立 golden 文件。
+  - 当前实现仍属最小闭环：未引入 mid-turn compact、remote compaction、provider downshift，也未承诺真实 tokenizer 精度或独立 summary model；这些后移项不阻断 `Phase D` 正式封板。
 
 ### Phase E：模型配置管理面与权限闭环
 
@@ -302,6 +303,8 @@ owner：
 
 - `434` manual compact + pre-turn auto compact + reinjection
 - `431` `/compact` UI 入口
+
+当前状态：已具备正式封板条件。
 
 ### PR-437E：管理面与权限闭环
 

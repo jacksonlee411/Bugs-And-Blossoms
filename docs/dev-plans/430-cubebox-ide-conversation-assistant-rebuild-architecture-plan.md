@@ -76,7 +76,7 @@
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | `431 / Slice 1` | `openai/codex` | `ef071cf816950dc416b2a975e7ed023eea639026` | `协议/文件/测试样例` | `详见 DEV-PLAN-431 / 4B` | `CubeBox UI 协议与壳层` | `PR-437A 最小冻结已补齐` | `详见 DEV-PLAN-431 / 4B` | `详见 DEV-PLAN-431 / 4B` | `golden/snapshot/E2E` | `待补` | `待补` |
 | `433 / Slice 2` | `maximhq/bifrost`、`openai/codex` | `Bifrost: de67db28676a8a80ba1e738ebf8f9318d82d16f7; Codex: ef071cf816950dc416b2a975e7ed023eea639026` | `目录/文件/协议/测试样例` | `详见 DEV-PLAN-433 / 5B` | `CubeBox AI 网关` | `PR-437A 最小冻结已补齐` | `详见 DEV-PLAN-433 / 5B` | `详见 DEV-PLAN-433 / 5B` | `fixture/SSE 对照/集成测试` | `待补` | `待补` |
-| `434 / Slice 4` | `openai/codex` | `ef071cf816950dc416b2a975e7ed023eea639026` | `文件/模板/测试样例` | `详见 DEV-PLAN-434 / 4B` | `CubeBox 上下文压缩` | `PR-437A 最小冻结已补齐` | `详见 DEV-PLAN-434 / 4B` | `详见 DEV-PLAN-434 / 4B` | `golden/snapshot/纯函数测试` | `待补` | `待补` |
+| `434 / Slice 4` | `openai/codex` | `ef071cf816950dc416b2a975e7ed023eea639026` | `文件/模板/测试样例` | `详见 DEV-PLAN-434 / 4B` | `CubeBox 上下文压缩` | `PR-437D 已具备正式封板条件` | `详见 DEV-PLAN-434 / 4B` | `详见 DEV-PLAN-434 / 4B` | `golden/snapshot/纯函数测试` | `docs/dev-plans/437-cubebox-implementation-roadmap-for-fast-start.md#phase-d上下文压缩最小闭环` | `docs/dev-records/DEV-PLAN-437-READINESS.md#phase-d--pr-437d-当前证据2026-04-22` |
 | `435 / Slice 5` | `maximhq/bifrost`、`songquanpeng/one-api`、`openai/codex` | `待补` | `页面信息架构/目录/文件` | `待补` | `CubeBox 模型配置 UI` | `待补` | `待补` | `待补` | `IA snapshot/E2E/Authz` | `待补` | `待补` |
 
 字段说明冻结如下：
@@ -303,14 +303,18 @@
 
 ### Slice 4：上下文管理与压缩
 
-- [ ] 按 `DEV-PLAN-434` 先完成 Codex 上下文管理与 compaction 复用/重构评估，不从零自研同类机制。
-- [ ] 重构 Codex token estimator、auto compact threshold、manual compact、replacement history、summary prefix 与 canonical context reinjection 思路。
-- [ ] 将 Codex 活跃 history replacement 改造为 CubeBox prompt view replacement，数据库原始消息保持 append-only。
-- [ ] 实现 prompt builder 的固定顺序和结构化状态对象。
-- [ ] 实现摘要压缩任务，首期固定使用当前 active model 执行 compaction，不引入独立 summary model。
-- [ ] 实现工具输出压缩和最近回合原文保留。
-- [ ] 补纯函数测试、压缩边界测试、摘要不丢关键事实测试，以及 Codex 移植点的 prompt shape 快照测试。
-- [ ] `/compact`、auto compact、manual compact 的语义、触发器、执行链与验收由 `DEV-PLAN-434` 持有；`DEV-PLAN-431` 只承接 composer 命令入口与状态提示。
+- [x] 按 `DEV-PLAN-434` 完成 Codex 上下文管理与 compaction 复用/重构评估，不从零自研同类机制。
+- [x] 已按首期范围重构 Codex token estimator、auto compact threshold、manual compact、replacement history、summary prefix 与 canonical context reinjection 思路。
+- [x] 已将 Codex 活跃 history replacement 改造为 CubeBox prompt view replacement，数据库原始消息继续保持 append-only。
+- [x] 已实现 prompt builder 的固定顺序和结构化状态对象。
+- [x] 已实现摘要压缩任务，首期固定使用当前 active model 执行 compaction，不引入独立 summary model。
+- [x] 已按首期范围实现最近回合原文保留；工具输出压缩的更大范围治理继续后移。
+- [x] 已补纯函数测试、压缩边界测试、摘要不丢关键事实测试，以及以 fixture / snapshot 承担 golden 等价物的 prompt shape 快照测试。
+- [x] `/compact`、auto compact、manual compact` 的语义、触发器、执行链与验收已由 `DEV-PLAN-434` 持有；`DEV-PLAN-431` 只承接 composer 命令入口与状态提示。
+- 当前备注（`2026-04-22`）：
+  - `PR-437D` 已具备正式封板条件，最小闭环包括 manual compact、pre-turn auto compact、canonical context reinjection、prompt view replacement、`/compact` UI 入口与压缩后恢复链路。
+  - 本轮实现级收口已补齐：no-op compaction 不再伪造 compact event / 空摘要项，compaction 序号推进已收敛为单事务安全，不再因并发 compact 抢占 `sequence` 而阻断正常请求。
+  - mid-turn compact、remote compaction、model downshift compact、真实 tokenizer 校准与更大范围工具输出压缩仍按 `434` 计划后移，不阻断当前 `Phase D` 封板。
 
 ### Slice 5：模型配置 UI 与管理权限
 
@@ -325,6 +329,10 @@
 
 - [ ] 执行 Go、前端、routing、authz、i18n、doc、markdown、E2E 与 preflight。
 - [ ] readiness 记录用户可见闭环、流式回复、会话恢复、上下文压缩、密钥不出前端和旧对话栈无回流证据。
+- 当前备注（`2026-04-22`）：
+  - `Phase C` 与 `Phase D` 均已在 `DEV-PLAN-437-READINESS` 中回填为“已具备正式封板条件”。
+  - `Phase D` 当前已回填的验证命令包括 `go test ./modules/cubebox ./internal/server`、`pnpm -C apps/web exec vitest run src/pages/cubebox/api.test.ts src/pages/cubebox/reducer.test.ts src/pages/cubebox/CubeBoxProvider.test.tsx src/pages/cubebox/CubeBoxPanel.test.tsx src/pages/cubebox/CubeBoxPanel.restore.test.tsx`、`make check routing`、`make authz-test`、`make check doc`、`make check chat-surface-clean`。
+  - `make preflight` 保留为发 PR 前统一对齐动作，不作为本轮仅文档封板收口的新增阻断前置。
 
 ## 11. 测试与覆盖率
 

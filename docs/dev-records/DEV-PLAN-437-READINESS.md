@@ -22,7 +22,7 @@
 | `Phase A` | `PR-437A` | `436`、`430`、`431`、`433`、`434` | 开工门禁、最小上游冻结、共享 canonical contract、本地运行时口径 | `已完成` |
 | `Phase B` | `PR-437B` | `431`、`433` | 首轮可用对话链路 | `已完成` |
 | `Phase C` | `PR-437C` | `432`、`431` | 会话持久化与恢复 | `已具备正式封板条件` |
-| `Phase D` | `PR-437D` | `434`、`431` | 压缩最小闭环 | `进行中（最小闭环已落地）` |
+| `Phase D` | `PR-437D` | `434`、`431` | 压缩最小闭环 | `已具备正式封板条件` |
 | `Phase E` | `PR-437E` | `435`、`433` | 管理面与权限闭环 | `未开始` |
 
 ## Phase A / PR-437A
@@ -240,10 +240,14 @@
   - [x] `make check routing`
   - [x] `make authz-test`
   - [x] `make check doc`
+  - [x] `make check chat-surface-clean`
 
-- 当前仍未封板：
-  - mid-turn compact / remote compaction / model downshift 仍按计划后移到 P1
-  - prompt shape snapshot 目前以纯函数 + fixture 形式落地，尚未引入独立 golden 文件体系
+- 封板裁决：
+  - [x] `PR-437D` 当前已满足最小正式封板口径：
+    - manual compact、pre-turn auto compact、canonical context reinjection、`/compact` UI 入口、压缩后恢复与 prompt shape fixture / snapshot 已闭环。
+    - no-op compaction 不再伪造 compact event / 空摘要项，并发 compact 的 `sequence` 竞争也已收敛为单事务安全。
+    - 首期 `prompt shape snapshot` 以纯函数 fixture / snapshot 承担 golden 等价物，不再把“尚未拆出独立 golden 文件”视为阻断项。
+  - [x] 以下能力明确后移且不阻断本轮封板：mid-turn compact、remote compaction、model downshift、真实 tokenizer 校准、更完整的 store 级跨租户隔离扩展测试。
 
 ### Phase E / PR-437E 预留证据
 
@@ -263,7 +267,8 @@
 - `DEV-PLAN-437` 已具备从文档冻结到当前可用对话能力的完整 readiness 证据链。
 - `PR-437A` 已完成文档层冻结与门禁语义收敛，`Phase B` 已完成首轮对话能力并通过相应验证。
 - `PR-437C` 已具备正式封板条件：正式数据面、最小 lifecycle API、抽屉恢复、压缩后恢复、跨租户 fail-closed，以及 store/API/UI 共用 lifecycle roundtrip golden 均已落地并有回归证据。
-- 下一步应继续在 `PR-437D` / `434` 与后续 `432` 扩展切片中推进更大范围的数据面与治理项，而不是继续把 `Phase C` 维持在“未封板”状态。
+- `PR-437D` 已具备正式封板条件：最小 compaction 闭环、恢复链路、prompt shape fixture / snapshot、no-op 收口与并发序号安全均已落地并回填证据。
+- 下一步可切入 `PR-437E` / `435` / `433` 的管理面与权限闭环，不需要再把 `Phase D` 维持在“进行中”状态。
 
 ## 关联文档
 
