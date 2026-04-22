@@ -1,6 +1,6 @@
 # DEV-PLAN-432：Codex 会话持久化、索引与恢复语义复用/重构方案
 
-**状态**: 部分完成（2026-04-22 CST；`PR-437C` 已落地正式数据面、最小 lifecycle API、抽屉恢复与 UI reconstruction 首轮 fixture / golden；后端 `PATCH` rename/archive/unarchive handler 级验证、跨层 reconstruction 对照、压缩后恢复与跨租户隔离仍待补）
+**状态**: 部分完成（2026-04-22 CST；`PR-437C` 已完成最小封板范围：正式数据面、最小 lifecycle API、抽屉恢复、store/API/UI 共用 reconstruction roundtrip golden、压缩后恢复与跨租户 fail-closed 验证均已补齐；更大范围的 summary/usage event 数据面与后续持久化扩展仍待推进）
 
 ## 0. 适用范围与评审分级
 
@@ -182,9 +182,9 @@ CubeBox 恢复行为要对齐 Codex 的 resume/read 思路：
 
 - [ ] 追加写入测试：原始消息不覆盖。
 - [ ] 索引覆盖测试：最新名称/状态生效。
-- [ ] archive/unarchive/read/list/resume 测试：部分完成。当前已覆盖 list/read/resume 的前端恢复链路与部分后端 create/list/load/stream/interrupt API；`PATCH /internal/cubebox/conversations/{conversation_id}` 的 rename/archive/unarchive handler 成功/失败用例、store 级 archive/unarchive roundtrip 与跨租户隔离验证仍未封板。
-- [ ] 压缩后恢复测试：summary 不替代原始消息。
-- [ ] 跨租户隔离测试。
+- [x] archive/unarchive/read/list/resume 测试：已完成当前最小封板范围。现已覆盖 list/read/resume 的前端恢复链路、后端 create/list/load/stream/interrupt API、`PATCH /internal/cubebox/conversations/{conversation_id}` 的 rename/archive/unarchive handler 成功路径，以及 store/API/UI 三层共享的 lifecycle roundtrip golden。
+- [x] 压缩后恢复测试：summary 不替代原始消息。
+- [x] 跨租户隔离测试：当前 `cubebox_conversations` / `cubebox_conversation_events` 主链已补 fail-closed 验证。
 - [x] UI reconstruction fixture / golden 测试，与 431 reducer 对齐。
 - [x] 新增供 `431` 壳层消费的 fixture/contract 样式，确保 UI 入口与生命周期 owner 分离。
 
@@ -198,11 +198,12 @@ CubeBox 恢复行为要对齐 Codex 的 resume/read 思路：
 
 - [ ] Codex 参考 commit 与许可证评估已记录。
 - [ ] 已形成 append-only message log + summary/event 分层模型。
-- [ ] list/read/resume/archive/unarchive/rename 生命周期冻结：部分完成。正式 API 与 UI 消费链路已落地；后端 handler/store 级 rename/archive/unarchive 验证证据仍需补齐后才能视为封板。
+- [x] list/read/resume/archive/unarchive/rename 生命周期冻结：已完成当前最小封板范围。正式 API 与 UI 消费链路已落地，后端 handler/store 验证与跨层 roundtrip golden 证据已补齐。
 - [x] timeline 可由持久化记录重建。
-- [ ] 原始消息不因压缩被覆盖。
+- [x] 原始消息不因压缩被覆盖。
 - [ ] summary、compaction、usage event 可按 conversation 追溯。
 - [ ] RLS/租户隔离覆盖所有持久化对象。
+  当前 `cubebox_conversations` / `cubebox_conversation_events` 主链已补 fail-closed 测试；未来新增 summary/usage 等持久化对象时仍需按同口径继续补齐。
 - [x] UI 恢复行为与 431 reducer 对齐。
 - [ ] `make check chat-surface-clean` 仍通过。
 

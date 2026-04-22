@@ -1,5 +1,5 @@
 import { createContext, type PropsWithChildren, useCallback, useContext, useEffect, useMemo, useReducer, useRef, useState } from 'react'
-import { createConversation, interruptTurn, listConversations, loadConversation, streamTurn, updateConversation } from './api'
+import { compactConversation, createConversation, interruptTurn, listConversations, loadConversation, streamTurn, updateConversation } from './api'
 import { cubeboxReducer, initialCubeBoxState } from './reducer'
 import type { ConversationReplayResponse, CubeBoxConversationSummary, CubeBoxState } from './types'
 
@@ -14,6 +14,7 @@ interface CubeBoxContextValue {
   selectConversation: (conversationID: string) => Promise<void>
   renameConversation: (conversationID: string, title: string) => Promise<void>
   archiveConversation: (conversationID: string, archived: boolean) => Promise<void>
+  compactCurrentConversation: () => Promise<void>
   ensureConversation: () => Promise<ConversationReplayResponse | null>
   sendMessage: () => Promise<void>
   interrupt: () => Promise<void>
@@ -229,6 +230,25 @@ export function CubeBoxProvider({ children }: PropsWithChildren) {
     [refreshConversations]
   )
 
+  const compactCurrentConversation = useCallback(async () => {
+    const conversationID = conversationRef.current?.id ?? ''
+    if (conversationID.length === 0) {
+      return
+    }
+    dispatch({ type: 'compact_started' })
+    try {
+      const payload = await compactConversation(conversationID, 'manual')
+      if (payload.event) {
+        dispatch({ type: 'event_received', payload: payload.event })
+      }
+      await refreshConversations()
+    } catch (error) {
+      dispatch({ type: 'error_message_set', message: error instanceof Error ? error.message : 'unknown error' })
+    } finally {
+      dispatch({ type: 'compact_finished' })
+    }
+  }, [refreshConversations])
+
   useEffect(() => {
     void refreshConversations().catch(() => {})
     void restoreLatestConversation()
@@ -246,6 +266,7 @@ export function CubeBoxProvider({ children }: PropsWithChildren) {
       selectConversation,
       renameConversation,
       archiveConversation,
+      compactCurrentConversation,
       ensureConversation,
       sendMessage,
       interrupt
@@ -262,6 +283,7 @@ export function CubeBoxProvider({ children }: PropsWithChildren) {
       selectConversation,
       sendMessage,
       startNewConversation,
+      compactCurrentConversation,
       state
     ]
   )

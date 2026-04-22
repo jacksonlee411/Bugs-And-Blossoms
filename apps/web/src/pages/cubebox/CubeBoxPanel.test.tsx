@@ -48,6 +48,8 @@ describe('CubeBoxPanel', () => {
             cubebox_rename: '重命名',
             cubebox_archive: '归档',
             cubebox_unarchive: '恢复',
+            cubebox_compact: '压缩上下文',
+            cubebox_compact_item: '压缩摘要',
             cubebox_conversation_status_active: '进行中',
             cubebox_conversation_status_archived: '已归档',
             cubebox_status_idle: '空闲',
@@ -62,6 +64,7 @@ describe('CubeBoxPanel', () => {
 
     cubeBoxMocks.useCubeBox.mockReturnValue({
       archiveConversation: vi.fn(),
+      compactCurrentConversation: vi.fn(),
       conversations: [
         {
           id: 'conv_1',
@@ -103,6 +106,7 @@ describe('CubeBoxPanel', () => {
     expect(screen.getByRole('button', { name: '历史记录' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '设置' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '新建对话' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '压缩上下文' })).toBeInTheDocument()
   })
 
   it('opens history dialog from header history button', () => {
@@ -121,5 +125,13 @@ describe('CubeBoxPanel', () => {
     fireEvent.click(screen.getByRole('button', { name: '新建对话' }))
 
     expect(cubeBoxMocks.useCubeBox.mock.results[0]?.value.startNewConversation).toHaveBeenCalledTimes(1)
+  })
+
+  it('triggers manual compact from header action', () => {
+    render(<CubeBoxPanel />)
+
+    fireEvent.click(screen.getByRole('button', { name: '压缩上下文' }))
+
+    expect(cubeBoxMocks.useCubeBox.mock.results[0]?.value.compactCurrentConversation).toHaveBeenCalledTimes(1)
   })
 })

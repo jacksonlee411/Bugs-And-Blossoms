@@ -1,6 +1,6 @@
 # DEV-PLAN-437：CubeBox 实施路线图（快速开工版）
 
-**状态**: 执行中（2026-04-22 CST，`PR-437A` / `Phase B` 已完成；`Phase C` 已进入部分完成收口，尚未封板）
+**状态**: 执行中（2026-04-22 CST，`PR-437A` / `Phase B` 已完成；`Phase C` 已具备正式封板条件；`Phase D` 最小闭环已落地）
 
 ## 0. 适用范围与评审分级
 
@@ -140,14 +140,14 @@
 
 目标：把“可以安全开工”的门槛降到最小，但不破坏 `430` 不变量。
 
-1. [ ] 完成 `chat-surface-clean` 精确 allowlist 更新，允许 `/internal/cubebox`、`modules/cubebox`，继续阻断旧 `assistant` / LibreChat / 旧表名 / 旧错误码。
-2. [ ] 在 `430` 与 `431/433/434` 中补齐首轮会用到的上游 `commit SHA` 与最小文件级映射，不等待未来全部映射对象冻结完毕。
-3. [ ] 产出一份共享 canonical contract 附录或 companion doc，作为 `431/432/434` 共同输入；当前 companion doc 冻结为 `DEV-PLAN-437A`：
+1. [X] 完成 `chat-surface-clean` 精确 allowlist 更新，允许 `/internal/cubebox`、`modules/cubebox`，继续阻断旧 `assistant` / LibreChat / 旧表名 / 旧错误码。
+2. [X] 在 `430` 与 `431/433/434` 中补齐首轮会用到的上游 `commit SHA` 与最小文件级映射，不等待未来全部映射对象冻结完毕。
+3. [X] 产出一份共享 canonical contract 附录或 companion doc，作为 `431/432/434` 共同输入；当前 companion doc 冻结为 `DEV-PLAN-437A`：
    - conversation/turn/item 生命周期
    - SSE event naming
    - reducer 输入 shape
    - reconstruction 输出 shape
-4. [ ] 冻结本地可控运行时口径：mock SSE / fake provider / fixed transcript fixture。
+4. [X] 冻结本地可控运行时口径：mock SSE / fake provider / fixed transcript fixture。
 
 阶段完成定义：
 
@@ -165,12 +165,12 @@ owner：
 
 范围：
 
-1. [ ] Web Shell 右侧图标 + 抽屉挂载完成。
-2. [ ] 右侧抽屉承载唯一正式 UI 主链，复用同一套 store/reducer/component 语义。
-3. [ ] `turn.agent_message.delta`、`turn.completed`、`turn.error`、`turn.interrupted` 已打通。
-4. [ ] 可用本地可控运行时返回稳定流式输出。
-5. [ ] stop/interrupt 可见且可回归测试。
-6. [ ] 不要求真实持久化，不要求真实 provider health，不要求 active model 管理面闭环。
+1. [X] Web Shell 右侧图标 + 抽屉挂载完成。
+2. [X] 右侧抽屉承载唯一正式 UI 主链，复用同一套 store/reducer/component 语义。
+3. [X] `turn.agent_message.delta`、`turn.completed`、`turn.error`、`turn.interrupted` 已打通。
+4. [X] 可用本地可控运行时返回稳定流式输出。
+5. [X] stop/interrupt 可见且可回归测试。
+6. [X] 不要求真实持久化，不要求真实 provider health，不要求 active model 管理面闭环。
 
 Phase B 临时权限口径：
 
@@ -195,10 +195,10 @@ owner：
 范围：
 
 1. [ ] conversation/message/summary/usage event 职责冻结并落到 schema/sqlc 方案。
-2. [ ] append-only 原始消息写入与 final 状态固化打通。
-3. [ ] conversation list/read/resume/archive/rename 的 API contract 可被 UI 消费。
-4. [ ] 抽屉关闭后重新打开可以恢复 active conversation。
-5. [ ] reconstruction 输出与 `431` reducer 对齐。
+2. [X] append-only 原始消息写入与 final 状态固化打通。
+3. [X] conversation list/read/resume/archive/rename 的 API contract 可被 UI 消费。
+4. [X] 抽屉关闭后重新打开可以恢复 active conversation。
+5. [X] reconstruction 输出与 `431` reducer 对齐。
 
 阶段完成定义：
 
@@ -206,7 +206,9 @@ owner：
 - 会话读取不再依赖纯前端内存态。
 - 当前备注（`2026-04-22`）：
   - 正式数据面、最小 lifecycle API、抽屉恢复、会话列表 UI 与前端 reconstruction fixture / golden 已落地。
-  - 但 `432` owner 下的后端 `PATCH` rename/archive/unarchive handler 级验证、跨层 reconstruction 对照、跨租户隔离与压缩后恢复验证仍未封板，因此 `Phase C` 当前只能视为“部分完成”，不应直接进入 `Phase D` 开发。
+  - `432` owner 下的后端 `PATCH` rename/archive/unarchive handler 级验证、前端 reconstruction fixture / restore 对照、以及“压缩后恢复”回归已补齐。
+  - store/API/UI 三层已围绕同一 lifecycle roundtrip fixture / golden 补齐对照，store 级跨租户 fail-closed 验证与 readiness 证据已回填，因此 `Phase C` 当前已具备正式封板条件。
+  - 更大范围的持久化扩展项，例如完整 summary/usage event 数据面与更细颗粒审计对象，仍由 `432` 后续切片继续推进，但不再阻断本轮 `Phase C` 封板。
 
 ### Phase D：上下文压缩最小闭环
 
@@ -219,10 +221,10 @@ owner：
 
 首期必须项：
 
-1. [ ] manual compact
-2. [ ] pre-turn auto compact
-3. [ ] canonical context reinjection
-4. [ ] prompt shape snapshot / summary prefix fixture / compaction 纯函数测试
+1. [X] manual compact
+2. [X] pre-turn auto compact
+3. [X] canonical context reinjection
+4. [X] prompt shape snapshot / summary prefix fixture / compaction 纯函数测试
 
 明确后移到 P1 的项：
 
@@ -234,6 +236,10 @@ owner：
 
 - 对话不会无限追加历史。
 - 压缩后仍保持 append-only 原始消息审计链不变。
+- 当前备注（`2026-04-22`）：
+  - manual compact API、pre-turn auto compact、canonical context reinjection、`turn.context_compacted` timeline 消费、`/compact` UI 入口与 compaction 纯函数测试已落地。
+  - 本轮实现级收口已补齐：no-op compaction 不再伪造 compact event / 空摘要项，compaction 序号推进也已收敛为单事务安全，不再因并发 compact 抢占 `sequence` 而阻断正常流式请求。
+  - 当前实现仍属最小闭环：未引入 mid-turn compact、remote compaction、provider downshift，也未承诺真实 tokenizer 精度或独立 summary model。
 
 ### Phase E：模型配置管理面与权限闭环
 

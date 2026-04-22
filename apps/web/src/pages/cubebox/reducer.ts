@@ -8,12 +8,15 @@ export const initialCubeBoxState: CubeBoxState = {
   nextSequence: 1,
   composerText: '',
   loading: false,
-  errorMessage: null
+  errorMessage: null,
+  compacting: false
 }
 
 type CubeBoxAction =
   | { type: 'loading_started' }
   | { type: 'loading_finished' }
+  | { type: 'compact_started' }
+  | { type: 'compact_finished' }
   | { type: 'composer_changed'; value: string }
   | { type: 'conversation_loaded'; payload: ConversationReplayResponse }
   | { type: 'event_received'; payload: CanonicalEvent }
@@ -27,6 +30,10 @@ export function cubeboxReducer(state: CubeBoxState, action: CubeBoxAction): Cube
       return { ...state, loading: true, errorMessage: null }
     case 'loading_finished':
       return { ...state, loading: false }
+    case 'compact_started':
+      return { ...state, compacting: true, errorMessage: null }
+    case 'compact_finished':
+      return { ...state, compacting: false }
     case 'composer_changed':
       return { ...state, composerText: action.value }
     case 'conversation_loaded':
@@ -41,13 +48,14 @@ export function cubeboxReducer(state: CubeBoxState, action: CubeBoxAction): Cube
     case 'event_received':
       return applyEvent(state, action.payload)
     case 'error_message_set':
-      return { ...state, errorMessage: action.message, loading: false }
+      return { ...state, errorMessage: action.message, loading: false, compacting: false }
     case 'stream_failed_locally':
       return {
         ...state,
         activeTurnID: null,
         errorMessage: action.message,
         loading: false,
+        compacting: false,
         turnStatus: 'error'
       }
     case 'reset':
@@ -117,6 +125,17 @@ function applyEvent(state: CubeBoxState, event: CanonicalEvent): CubeBoxState {
       return {
         ...state,
         items: finalizeItem(state.items, String(event.payload.message_id ?? '')),
+        nextSequence
+      }
+    case 'turn.context_compacted':
+      return {
+        ...state,
+        items: appendOrReplaceItem(state.items, {
+          id: String(event.payload.summary_id ?? `compact-${event.sequence}`),
+          kind: 'compact_item',
+          text: String(event.payload.summary_text ?? '历史已压缩'),
+          status: 'completed'
+        }),
         nextSequence
       }
     case 'turn.error':

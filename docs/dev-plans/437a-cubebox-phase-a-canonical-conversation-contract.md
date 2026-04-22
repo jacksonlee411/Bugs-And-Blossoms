@@ -159,6 +159,9 @@ type ConversationReplayResponse = {
 
 - `431` timeline 组件按 `item.kind` 决定展示语义。
 - `434` 只新增 `compact_item` 的生成与消费规则，不新增第二套 timeline item 分类。
+- 当前状态（`2026-04-22`）：
+  - `compact_item` 已由 `turn.context_compacted` 统一生成并被 reducer / restore flow 消费。
+  - 当前仍未引入第二套“只供恢复页使用”的 compact DTO，继续维持 `ConversationReplayResponse.events -> reducer -> timeline` 单链路。
 
 ## 8. Deterministic Provider / Mock SSE 口径
 

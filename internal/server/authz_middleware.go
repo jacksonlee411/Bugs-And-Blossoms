@@ -237,6 +237,9 @@ func authzRequirementForRoute(method string, path string) (object string, action
 		if pathMatchRouteTemplate(path, "/internal/cubebox/conversations/{conversation_id}") && method == http.MethodPatch {
 			return authz.ObjectCubeBoxConversations, authz.ActionAdmin, true
 		}
+		if pathMatchRouteTemplate(path, "/internal/cubebox/conversations/{conversation_id}:compact") && method == http.MethodPost {
+			return authz.ObjectCubeBoxConversations, authz.ActionAdmin, true
+		}
 		if pathMatchRouteTemplate(path, "/internal/cubebox/turns/{turn_id}:interrupt") && method == http.MethodPost {
 			return authz.ObjectCubeBoxConversations, authz.ActionAdmin, true
 		}

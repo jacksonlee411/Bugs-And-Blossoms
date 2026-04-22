@@ -21,8 +21,8 @@
 | --- | --- | --- | --- | --- |
 | `Phase A` | `PR-437A` | `436`、`430`、`431`、`433`、`434` | 开工门禁、最小上游冻结、共享 canonical contract、本地运行时口径 | `已完成` |
 | `Phase B` | `PR-437B` | `431`、`433` | 首轮可用对话链路 | `已完成` |
-| `Phase C` | `PR-437C` | `432`、`431` | 会话持久化与恢复 | `进行中` |
-| `Phase D` | `PR-437D` | `434`、`431` | 压缩最小闭环 | `未开始` |
+| `Phase C` | `PR-437C` | `432`、`431` | 会话持久化与恢复 | `已具备正式封板条件` |
+| `Phase D` | `PR-437D` | `434`、`431` | 压缩最小闭环 | `进行中（最小闭环已落地）` |
 | `Phase E` | `PR-437E` | `435`、`433` | 管理面与权限闭环 | `未开始` |
 
 ## Phase A / PR-437A
@@ -204,22 +204,46 @@
   - fixture / golden：`apps/web/src/pages/cubebox/reconstruction.fixtures.ts`
   - reducer 回放验证：`apps/web/src/pages/cubebox/reducer.test.ts`
   - 页面级恢复验证：`apps/web/src/pages/cubebox/CubeBoxPanel.restore.test.tsx`
+- [x] store / API / UI 三层共享 lifecycle roundtrip golden 已补：
+  - 共用 fixture / golden：`apps/web/src/pages/cubebox/lifecycle.fixture.ts`
+  - store 级 roundtrip 对照：`modules/cubebox/store_test.go`
+  - API 级 roundtrip 对照：`internal/server/cubebox_api_test.go`
+  - UI reducer 对照：`apps/web/src/pages/cubebox/reducer.test.ts`
 - [x] 已消除一处恢复语义偏差：
   - provider 恢复链路不再盲选列表第一项，而是显式跳过 archived conversation，恢复最近 active conversation
   - reducer 已开始回放 `conversation.renamed / conversation.archived / conversation.unarchived`，避免读取事件日志恢复后标题/归档态停留旧值
-- [ ] `PR-437C` 当前为“部分完成”，尚未满足完全封板：
-  - `PATCH /internal/cubebox/conversations/{conversation_id}` 的 rename / archive / unarchive handler 级成功/失败测试证据未在活体测试中补齐
-  - store / API / UI 三层对照的 reconstruction golden 仍不足，当前主要是前端 reducer fixture 与页面级恢复验证
-  - 跨租户隔离、压缩后恢复、summary 不替代原始消息等 `432` 验收项仍未验证
-  - 因上述缺口，`432` 中 `archive/unarchive/read/list/resume 测试` 与 `list/read/resume/archive/unarchive/rename 生命周期冻结` 只能记为部分完成，不应视为完全封板
+- [x] `PATCH /internal/cubebox/conversations/{conversation_id}` 的 rename / archive / unarchive handler 级成功路径验证已补：`internal/server/cubebox_api_test.go`
+- [x] 压缩后恢复验证已补：`turn.context_compacted` 现已纳入 restore fixture 与页面级恢复验证
+- [x] store/持久层跨租户隔离的 fail-closed 验证已补：错租户/错 principal 命中 `ErrConversationNotFound`，且 `app.current_tenant` 注入已在 store 测试中显式断言
+- [x] `summary 不替代原始消息` 的跨层证据已补：
+  - compaction 纯函数验证 `prompt view` 只新增摘要，不覆盖原始 timeline：`modules/cubebox/compaction_test.go`
+  - reducer / reconstruction 验证 compact event 回放后，原始 user/agent message 仍可恢复：`apps/web/src/pages/cubebox/reducer.test.ts`
+- [x] `PR-437C` 当前已满足最小正式封板口径：
+  - store / API / UI 已围绕同一 lifecycle roundtrip fixture / golden 完成对照，恢复语义不再仅停留在前端单层验证
+  - `432` 中 `archive/unarchive/read/list/resume 测试` 与 `list/read/resume/archive/unarchive/rename 生命周期冻结` 已可按当前最小范围记为完成
 
-### Phase D / PR-437D 预留证据
+### Phase D / PR-437D 当前证据（`2026-04-22`）
 
 - 压缩最小闭环：
-  - manual compact
-  - pre-turn auto compact
-  - canonical context reinjection
-  - prompt shape snapshot
+  - [x] manual compact：`POST /internal/cubebox/conversations/{conversation_id}:compact`
+  - [x] pre-turn auto compact：stream 前自动 compact 并续接 `next_sequence`
+  - [x] canonical context reinjection：`modules/cubebox/compaction.go`
+  - [x] summary prefix / compaction 纯函数测试：`modules/cubebox/compaction_test.go`
+  - [x] `/compact` UI 入口与 `compact_item` timeline 消费：`apps/web/src/pages/cubebox/CubeBoxPanel.tsx`、`apps/web/src/pages/cubebox/reducer.ts`
+  - [x] 压缩后恢复验证：`apps/web/src/pages/cubebox/CubeBoxPanel.restore.test.tsx`
+  - [x] no-op compaction 不落 `turn.context_compacted` 事件，前端不再伪造空摘要项：`modules/cubebox/store.go`、`internal/server/cubebox_api_test.go`、`apps/web/src/pages/cubebox/CubeBoxProvider.test.tsx`
+  - [x] compaction 序号推进已收敛为单事务安全，避免 pre-turn auto compact / manual compact 并发时撞 `sequence` 唯一索引：`modules/cubebox/store.go`、`modules/cubebox/store_test.go`
+
+- 当前验证结果：
+  - [x] `go test ./modules/cubebox ./internal/server`
+  - [x] `pnpm -C apps/web exec vitest run src/pages/cubebox/api.test.ts src/pages/cubebox/reducer.test.ts src/pages/cubebox/CubeBoxProvider.test.tsx src/pages/cubebox/CubeBoxPanel.test.tsx src/pages/cubebox/CubeBoxPanel.restore.test.tsx`
+  - [x] `make check routing`
+  - [x] `make authz-test`
+  - [x] `make check doc`
+
+- 当前仍未封板：
+  - mid-turn compact / remote compaction / model downshift 仍按计划后移到 P1
+  - prompt shape snapshot 目前以纯函数 + fixture 形式落地，尚未引入独立 golden 文件体系
 
 ### Phase E / PR-437E 预留证据
 
@@ -238,7 +262,8 @@
 
 - `DEV-PLAN-437` 已具备从文档冻结到当前可用对话能力的完整 readiness 证据链。
 - `PR-437A` 已完成文档层冻结与门禁语义收敛，`Phase B` 已完成首轮对话能力并通过相应验证。
-- 下一步进入 `PR-437C`：以 `432` 为 owner 推进会话持久化、恢复与 conversation lifecycle，避免把当前前端内存态误延长为长期实现。
+- `PR-437C` 已具备正式封板条件：正式数据面、最小 lifecycle API、抽屉恢复、压缩后恢复、跨租户 fail-closed，以及 store/API/UI 共用 lifecycle roundtrip golden 均已落地并有回归证据。
+- 下一步应继续在 `PR-437D` / `434` 与后续 `432` 扩展切片中推进更大范围的数据面与治理项，而不是继续把 `Phase C` 维持在“未封板”状态。
 
 ## 关联文档
 

@@ -140,6 +140,9 @@ entrypoints:
       - path: /internal/cubebox/conversations/{conversation_id}
         methods: [GET, PATCH]
         route_class: internal_api
+      - path: /internal/cubebox/conversations/{conversation_id}:compact
+        methods: [POST]
+        route_class: internal_api
       - path: /internal/cubebox/turns:stream
         methods: [POST]
         route_class: internal_api

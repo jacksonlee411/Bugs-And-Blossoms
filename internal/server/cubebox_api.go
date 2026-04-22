@@ -22,6 +22,10 @@ type cubeboxConversationPatchRequest struct {
 	Archived *bool   `json:"archived"`
 }
 
+type cubeboxCompactConversationRequest struct {
+	Reason string `json:"reason"`
+}
+
 type cubeboxStreamTurnRequest struct {
 	ConversationID string `json:"conversation_id"`
 	Prompt         string `json:"prompt"`
@@ -43,6 +47,7 @@ type cubeboxConversationStore interface {
 	ListConversations(ctx context.Context, tenantID string, principalID string, limit int32) (cubebox.ConversationListResponse, error)
 	RenameConversation(ctx context.Context, tenantID string, principalID string, conversationID string, title string) (cubebox.ConversationReplayResponse, error)
 	ArchiveConversation(ctx context.Context, tenantID string, principalID string, conversationID string, archived bool) (cubebox.ConversationReplayResponse, error)
+	CompactConversation(ctx context.Context, tenantID string, principalID string, conversationID string, canonicalContext cubebox.CanonicalContext, reason string) (cubebox.CompactConversationResponse, error)
 	AppendEvent(ctx context.Context, tenantID string, principalID string, conversationID string, event cubebox.CanonicalEvent) error
 }
 
@@ -105,6 +110,46 @@ func handleCubeBoxConversationAPI(w http.ResponseWriter, r *http.Request, store 
 	default:
 		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusMethodNotAllowed, "method_not_allowed", "method not allowed")
 	}
+}
+
+func handleCubeBoxCompactConversationAPI(w http.ResponseWriter, r *http.Request, store cubeboxConversationStore) {
+	if r.Method != http.MethodPost {
+		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusMethodNotAllowed, "method_not_allowed", "method not allowed")
+		return
+	}
+	conversationID := conversationIDFromCompactPath(r.URL.Path)
+	if conversationID == "" {
+		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusUnprocessableEntity, "conversation_id_required", "conversation id required")
+		return
+	}
+	tenant, principal, ok := cubeboxRequestActor(w, r)
+	if !ok {
+		return
+	}
+
+	var req cubeboxCompactConversationRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil && !errors.Is(err, io.EOF) {
+		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusUnprocessableEntity, "invalid_json", "invalid json")
+		return
+	}
+	payload, err := store.CompactConversation(r.Context(), tenant.ID, principal.ID, conversationID, cubebox.CanonicalContext{
+		TenantID:       tenant.ID,
+		PrincipalID:    principal.ID,
+		Language:       "zh",
+		Page:           "/app/cubebox",
+		Permissions:    []string{"cubebox.conversations:admin"},
+		BusinessObject: "conversation",
+		Model:          "deterministic-runtime",
+	}, strings.TrimSpace(req.Reason))
+	if err != nil {
+		if errors.Is(err, cubebox.ErrConversationNotFound) {
+			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusNotFound, "cubebox_conversation_not_found", "conversation not found")
+			return
+		}
+		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusInternalServerError, "cubebox_conversation_update_failed", "compact conversation failed")
+		return
+	}
+	writeJSON(w, http.StatusOK, payload)
 }
 
 func handleCubeBoxLoadConversationAPI(w http.ResponseWriter, r *http.Request, store cubeboxConversationStore) {
@@ -192,6 +237,23 @@ func handleCubeBoxStreamTurnAPI(w http.ResponseWriter, r *http.Request, runtime 
 	}
 	if req.NextSequence <= 0 {
 		req.NextSequence = 1
+	}
+
+	if req.NextSequence > 1 {
+		compactPayload, err := store.CompactConversation(r.Context(), tenant.ID, principal.ID, req.ConversationID, cubebox.CanonicalContext{
+			TenantID:       tenant.ID,
+			PrincipalID:    principal.ID,
+			Language:       "zh",
+			Page:           "/app/cubebox",
+			Permissions:    []string{"cubebox.conversations:admin"},
+			BusinessObject: "conversation",
+			Model:          "deterministic-runtime",
+		}, "pre_turn_auto")
+		if err != nil && !errors.Is(err, cubebox.ErrConversationNotFound) {
+			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusInternalServerError, "cubebox_conversation_update_failed", "compact conversation failed")
+			return
+		}
+		req.NextSequence = max(req.NextSequence, compactPayload.NextSequence)
 	}
 
 	turn := runtime.StartTurn(cubebox.TurnOwner{
@@ -367,6 +429,17 @@ func conversationIDFromPath(path string) string {
 	return strings.TrimSpace(strings.TrimPrefix(path, prefix))
 }
 
+func conversationIDFromCompactPath(path string) string {
+	const prefix = "/internal/cubebox/conversations/"
+	const suffix = ":compact"
+	if !strings.HasPrefix(path, prefix) || !strings.HasSuffix(path, suffix) {
+		return ""
+	}
+	trimmed := strings.TrimPrefix(path, prefix)
+	trimmed = strings.TrimSuffix(trimmed, suffix)
+	return strings.TrimSpace(trimmed)
+}
+
 func interruptTurnIDFromPath(path string) string {
 	const prefix = "/internal/cubebox/turns/"
 	const suffix = ":interrupt"
@@ -390,4 +463,11 @@ func cubeboxRequestActor(w http.ResponseWriter, r *http.Request) (Tenant, Princi
 		return Tenant{}, Principal{}, false
 	}
 	return tenant, principal, true
+}
+
+func max(a int, b int) int {
+	if a > b {
+		return a
+	}
+	return b
 }

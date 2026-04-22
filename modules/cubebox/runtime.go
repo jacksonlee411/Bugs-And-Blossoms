@@ -36,6 +36,13 @@ type ConversationReplayResponse struct {
 	NextSequence int              `json:"next_sequence"`
 }
 
+type CompactConversationResponse struct {
+	Conversation Conversation    `json:"conversation"`
+	Event        *CanonicalEvent `json:"event,omitempty"`
+	PromptView   []PromptItem    `json:"prompt_view"`
+	NextSequence int             `json:"next_sequence"`
+}
+
 type ConversationListItem struct {
 	ID        string `json:"id"`
 	Title     string `json:"title"`

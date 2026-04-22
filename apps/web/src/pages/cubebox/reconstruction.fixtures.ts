@@ -1,4 +1,5 @@
 import type { ConversationReplayResponse, CubeBoxState } from './types'
+import { phaseCRoundtripGolden, phaseCRoundtripReplayFixture } from './lifecycle.fixture'
 
 interface ReconstructionFixture {
   name: string
@@ -7,6 +8,93 @@ interface ReconstructionFixture {
 }
 
 export const reconstructionFixtures: ReconstructionFixture[] = [
+  {
+    name: 'phase_c_lifecycle_roundtrip_golden',
+    replay: phaseCRoundtripReplayFixture,
+    golden: phaseCRoundtripGolden
+  },
+  {
+    name: 'manual_compaction_replays_into_compact_item',
+    replay: {
+      conversation: {
+        id: 'conv_compacted',
+        title: '已压缩会话',
+        status: 'active',
+        archived: false
+      },
+      next_sequence: 5,
+      events: [
+        {
+          event_id: 'evt_1',
+          conversation_id: 'conv_compacted',
+          turn_id: null,
+          sequence: 1,
+          type: 'conversation.loaded',
+          ts: '2026-04-22T00:00:00Z',
+          payload: { title: '已压缩会话', status: 'active', archived: false }
+        },
+        {
+          event_id: 'evt_2',
+          conversation_id: 'conv_compacted',
+          turn_id: 'turn_1',
+          sequence: 2,
+          type: 'turn.user_message.accepted',
+          ts: '2026-04-22T00:00:01Z',
+          payload: { message_id: 'msg_user_1', text: '请总结最近几轮' }
+        },
+        {
+          event_id: 'evt_3',
+          conversation_id: 'conv_compacted',
+          turn_id: null,
+          sequence: 3,
+          type: 'turn.context_compacted',
+          ts: '2026-04-22T00:00:02Z',
+          payload: { summary_id: 'summary_1', summary_text: '已压缩前 3 条历史。', source_range: [1, 3] }
+        },
+        {
+          event_id: 'evt_4',
+          conversation_id: 'conv_compacted',
+          turn_id: 'turn_2',
+          sequence: 4,
+          type: 'turn.user_message.accepted',
+          ts: '2026-04-22T00:00:03Z',
+          payload: { message_id: 'msg_user_2', text: '继续最新问题' }
+        }
+      ]
+    },
+    golden: {
+      conversation: {
+        id: 'conv_compacted',
+        title: '已压缩会话',
+        status: 'active',
+        archived: false
+      },
+      items: [
+        {
+          id: 'msg_user_1',
+          kind: 'user_message',
+          text: '请总结最近几轮',
+          status: 'completed'
+        },
+        {
+          id: 'summary_1',
+          kind: 'compact_item',
+          text: '已压缩前 3 条历史。',
+          status: 'completed'
+        },
+        {
+          id: 'msg_user_2',
+          kind: 'user_message',
+          text: '继续最新问题',
+          status: 'completed'
+        }
+      ],
+      turnStatus: 'idle',
+      activeTurnID: null,
+      nextSequence: 5,
+      errorMessage: null
+    }
+  },
   {
     name: 'completed_turn_with_rename_and_archive_roundtrip',
     replay: {

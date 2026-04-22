@@ -1,6 +1,7 @@
 import AddCommentOutlinedIcon from '@mui/icons-material/AddCommentOutlined'
 import ArchiveOutlinedIcon from '@mui/icons-material/ArchiveOutlined'
 import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome'
+import CompressOutlinedIcon from '@mui/icons-material/CompressOutlined'
 import DriveFileRenameOutlineIcon from '@mui/icons-material/DriveFileRenameOutline'
 import HistoryOutlinedIcon from '@mui/icons-material/HistoryOutlined'
 import SettingsOutlinedIcon from '@mui/icons-material/SettingsOutlined'
@@ -32,6 +33,7 @@ import { useCubeBox } from './CubeBoxProvider'
 export function CubeBoxPanel() {
   const {
     archiveConversation,
+    compactCurrentConversation,
     conversations,
     conversationsLoading,
     renameConversation,
@@ -84,6 +86,17 @@ export function CubeBoxPanel() {
               </IconButton>
             </span>
           </Tooltip>
+          <Tooltip title={t('cubebox_compact')}>
+            <span>
+              <IconButton
+                aria-label={t('cubebox_compact')}
+                disabled={!state.conversation?.id || state.loading || state.compacting || state.turnStatus === 'streaming'}
+                onClick={() => void compactCurrentConversation()}
+              >
+                <CompressOutlinedIcon />
+              </IconButton>
+            </span>
+          </Tooltip>
         </Stack>
       </Stack>
 
@@ -112,6 +125,8 @@ export function CubeBoxPanel() {
                 <Typography variant='caption'>
                   {item.kind === 'user_message'
                     ? t('cubebox_user_message')
+                    : item.kind === 'compact_item'
+                      ? t('cubebox_compact_item')
                     : item.kind === 'error_item'
                       ? t('cubebox_error_item')
                       : t('cubebox_agent_message')}
@@ -152,6 +167,7 @@ export function CubeBoxPanel() {
             </Typography>
             <Stack direction='row' spacing={1}>
               {state.loading ? <CircularProgress size={18} /> : null}
+              {state.compacting ? <CircularProgress size={18} /> : null}
               <Button
                 color='warning'
                 disabled={state.turnStatus !== 'streaming'}
@@ -163,7 +179,13 @@ export function CubeBoxPanel() {
               </Button>
               <Button
                 disabled={state.loading || state.composerText.trim().length === 0 || state.turnStatus === 'streaming'}
-                onClick={() => void sendMessage()}
+                onClick={() => {
+                  if (state.composerText.trim() === '/compact') {
+                    void compactCurrentConversation()
+                    return
+                  }
+                  void sendMessage()
+                }}
                 startIcon={<SendIcon />}
                 variant='contained'
               >

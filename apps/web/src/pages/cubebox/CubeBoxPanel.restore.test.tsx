@@ -5,6 +5,7 @@ import { CubeBoxProvider } from './CubeBoxProvider'
 import { CubeBoxPanel } from './CubeBoxPanel'
 
 const apiMocks = vi.hoisted(() => ({
+  compactConversation: vi.fn(),
   createConversation: vi.fn(),
   interruptTurn: vi.fn(),
   listConversations: vi.fn(),
@@ -47,6 +48,8 @@ describe('CubeBoxPanel restore flow', () => {
             cubebox_rename: '重命名',
             cubebox_archive: '归档',
             cubebox_unarchive: '恢复',
+            cubebox_compact: '压缩上下文',
+            cubebox_compact_item: '压缩摘要',
             cubebox_conversation_status_active: '进行中',
             cubebox_conversation_status_archived: '已归档',
             cubebox_status_idle: '空闲',
@@ -104,9 +107,18 @@ describe('CubeBoxPanel restore flow', () => {
           type: 'turn.user_message.accepted',
           ts: '2026-04-22T08:00:01Z',
           payload: { message_id: 'msg_user_1', text: '恢复我上次的上下文' }
+        },
+        {
+          event_id: 'evt_3',
+          conversation_id: 'conv_active',
+          turn_id: null,
+          sequence: 3,
+          type: 'turn.context_compacted',
+          ts: '2026-04-22T08:00:02Z',
+          payload: { summary_id: 'summary_1', summary_text: '已压缩更早的历史。', source_range: [1, 2] }
         }
       ],
-      next_sequence: 3
+      next_sequence: 4
     })
 
     render(
@@ -119,6 +131,8 @@ describe('CubeBoxPanel restore flow', () => {
     await waitFor(() => expect(apiMocks.loadConversation).toHaveBeenCalledWith('conv_active'))
     await waitFor(() => expect(screen.getByRole('heading', { name: '当前活跃会话' })).toBeInTheDocument())
     expect(screen.getByText('恢复我上次的上下文')).toBeInTheDocument()
+    expect(screen.getByText('已压缩更早的历史。')).toBeInTheDocument()
+    expect(screen.getByText('压缩摘要')).toBeInTheDocument()
     expect(screen.getAllByText('会话: conv_active').length).toBeGreaterThan(0)
   })
 })
