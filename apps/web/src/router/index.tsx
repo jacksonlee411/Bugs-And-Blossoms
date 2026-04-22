@@ -11,6 +11,7 @@ import { OrgUnitDetailsPage } from '../pages/org/OrgUnitDetailsPage'
 import { OrgUnitsPage } from '../pages/org/OrgUnitsPage'
 import { RequirePermission } from './RequirePermission'
 import { RouteErrorPage } from './RouteErrorPage'
+import { APP_ROUTER_BASENAME } from './paths'
 
 export const router = createBrowserRouter([
   {
@@ -89,5 +90,5 @@ export const router = createBrowserRouter([
     ]
   }
 ], {
-  basename: '/app'
+  basename: APP_ROUTER_BASENAME
 })

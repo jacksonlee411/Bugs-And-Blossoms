@@ -1,5 +1,6 @@
 import { useRouteError } from 'react-router-dom'
 import { Alert, Box, Button, Stack, Typography } from '@mui/material'
+import { APP_ROUTER_BASENAME } from './paths'
 
 function toErrorMessage(err: unknown): string {
   if (err instanceof Error) return err.message
@@ -23,7 +24,7 @@ export function RouteErrorPage() {
         </Typography>
         <Alert severity='error'>{message}</Alert>
         <Box>
-          <Button variant='contained' onClick={() => window.location.assign('/app/')}>
+          <Button variant='contained' onClick={() => window.location.assign(`${APP_ROUTER_BASENAME}/`)}>
             返回首页
           </Button>
         </Box>
@@ -31,4 +32,3 @@ export function RouteErrorPage() {
     </Box>
   )
 }
-

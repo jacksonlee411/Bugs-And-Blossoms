@@ -33,6 +33,8 @@ import {
   Tooltip,
   Typography
 } from '@mui/material'
+import useMediaQuery from '@mui/material/useMediaQuery'
+import { useTheme } from '@mui/material/styles'
 import { useAppPreferences } from '../app/providers/AppPreferencesContext'
 import { buildNavigationSearchEntries, commonSearchEntries } from '../navigation/config'
 import { trackUiEvent } from '../observability/tracker'
@@ -42,6 +44,17 @@ import { CubeBoxProvider } from '../pages/cubebox/CubeBoxProvider'
 import { CubeBoxPanel } from '../pages/cubebox/CubeBoxPanel'
 
 const drawerWidth = 240
+const cubeBoxPanelWidth = 416
+const shellHeaderOffset = {
+  xs: '56px',
+  sm: '64px'
+} as const
+const cubeBoxPanelHeight = {
+  xs: `calc(100% - ${shellHeaderOffset.xs})`,
+  sm: `calc(100% - ${shellHeaderOffset.sm})`
+} as const
+
+type CubeBoxShellMode = 'wide' | 'medium' | 'compact'
 
 interface AppShellProps {
   navItems: NavItem[]
@@ -50,12 +63,18 @@ interface AppShellProps {
 export function AppShell({ navItems }: PropsWithChildren<AppShellProps>) {
   const navigate = useNavigate()
   const location = useLocation()
+  const theme = useTheme()
   const { hasPermission, locale, navDebugMode, setLocale, t, tenantId, themeMode, toggleThemeMode } =
     useAppPreferences()
   const [searchOpen, setSearchOpen] = useState(false)
   const [cubeBoxOpen, setCubeBoxOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const [searchResults, setSearchResults] = useState(() => buildNavigationSearchEntries(navItems))
+  const cubeBoxWide = useMediaQuery(theme.breakpoints.up('lg'))
+  const cubeBoxDesktop = useMediaQuery(theme.breakpoints.up('md'))
+  const cubeBoxShellMode: CubeBoxShellMode = cubeBoxWide ? 'wide' : cubeBoxDesktop ? 'medium' : 'compact'
+  const cubeBoxDrawerVariant = cubeBoxDesktop ? 'persistent' : 'temporary'
+  const cubeBoxToggleLabel = t(cubeBoxOpen ? 'cubebox_close_drawer' : 'cubebox_open_drawer')
 
   const sortedNavItems = useMemo(() => [...navItems].sort((left, right) => left.order - right.order), [navItems])
   const visibleNavItems = useMemo(
@@ -139,6 +158,22 @@ export function AppShell({ navItems }: PropsWithChildren<AppShellProps>) {
     return () => window.removeEventListener('keydown', onShortcut)
   }, [])
 
+  useEffect(() => {
+    if (!cubeBoxOpen || searchOpen) {
+      return
+    }
+
+    function onEscape(event: KeyboardEvent) {
+      if (event.defaultPrevented || event.key !== 'Escape') {
+        return
+      }
+      setCubeBoxOpen(false)
+    }
+
+    window.addEventListener('keydown', onEscape)
+    return () => window.removeEventListener('keydown', onEscape)
+  }, [cubeBoxOpen, searchOpen])
+
   const handleSearchSelect = useCallback(
     (path: string) => {
       navigate(path)
@@ -160,9 +195,32 @@ export function AppShell({ navItems }: PropsWithChildren<AppShellProps>) {
     navigate('/login', { replace: true })
   }
 
+  const toggleCubeBox = useCallback(() => {
+    const nextOpen = !cubeBoxOpen
+    setCubeBoxOpen(nextOpen)
+    trackUiEvent({
+      eventName: 'nav_click',
+      tenant: tenantId,
+      module: 'shell',
+      page: location.pathname,
+      action: nextOpen ? 'cubebox_drawer_open' : 'cubebox_drawer_close',
+      result: 'success',
+      metadata: {
+        shell_mode: cubeBoxShellMode
+      }
+    })
+  }, [cubeBoxOpen, cubeBoxShellMode, location.pathname, tenantId])
+
   return (
     <CubeBoxProvider>
-      <Box sx={{ display: 'flex', minHeight: '100vh' }}>
+      <Box
+        data-cubebox-shell-mode={cubeBoxShellMode}
+        sx={{
+          '--app-shell-header-offset': shellHeaderOffset,
+          display: 'flex',
+          minHeight: '100vh'
+        }}
+      >
         <AppBar
           enableColorOnDark
           color='primary'
@@ -190,20 +248,12 @@ export function AppShell({ navItems }: PropsWithChildren<AppShellProps>) {
               </IconButton>
             </Tooltip>
             {hasPermission('orgunit.read') ? (
-              <Tooltip title={t('cubebox_open_drawer')}>
+              <Tooltip title={cubeBoxToggleLabel}>
                 <IconButton
+                  aria-label={cubeBoxToggleLabel}
+                  aria-pressed={cubeBoxOpen}
                   color='inherit'
-                  onClick={() => {
-                    setCubeBoxOpen(true)
-                    trackUiEvent({
-                      eventName: 'nav_click',
-                      tenant: tenantId,
-                      module: 'shell',
-                      page: location.pathname,
-                      action: 'cubebox_drawer_open',
-                      result: 'success'
-                    })
-                  }}
+                  onClick={toggleCubeBox}
                 >
                   <AutoAwesomeIcon />
                 </IconButton>
@@ -349,7 +399,22 @@ export function AppShell({ navItems }: PropsWithChildren<AppShellProps>) {
               : null}
           </List>
         </Drawer>
-        <Box component='main' sx={{ flexGrow: 1, minWidth: 0, p: 3 }}>
+        <Box
+          component='main'
+          data-cubebox-main-reserves-panel={cubeBoxOpen && cubeBoxWide ? 'true' : 'false'}
+          sx={{
+            flexGrow: 1,
+            minWidth: 0,
+            p: 3,
+            pr: {
+              xs: 3,
+              lg: cubeBoxOpen ? `calc(${theme.spacing(3)} + ${cubeBoxPanelWidth}px)` : 3
+            },
+            transition: theme.transitions.create('padding-right', {
+              duration: theme.transitions.duration.shorter
+            })
+          }}
+        >
           <Toolbar />
           <Outlet />
         </Box>
@@ -357,14 +422,28 @@ export function AppShell({ navItems }: PropsWithChildren<AppShellProps>) {
           anchor='right'
           onClose={() => setCubeBoxOpen(false)}
           open={cubeBoxOpen}
+          variant={cubeBoxDrawerVariant}
+          ModalProps={{ keepMounted: true }}
           PaperProps={{
             sx: {
+              borderLeft: {
+                md: '1px solid'
+              },
+              borderColor: 'divider',
+              boxSizing: 'border-box',
+              height: cubeBoxPanelHeight,
               p: 2,
+              top: shellHeaderOffset,
               width: {
                 xs: '100%',
-                md: 520
+                sm: cubeBoxPanelWidth,
+                md: cubeBoxPanelWidth
               }
-            }
+            },
+            role: 'complementary',
+            'aria-label': t('page_cubebox_title'),
+            'data-cubebox-non-modal': cubeBoxDesktop ? 'true' : 'false',
+            'data-cubebox-shell-mode': cubeBoxShellMode
           }}
         >
           <Paper elevation={0} sx={{ height: '100%' }}>

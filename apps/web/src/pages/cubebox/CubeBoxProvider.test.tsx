@@ -24,6 +24,37 @@ describe('CubeBoxProvider', () => {
     apiMocks.listConversations.mockResolvedValue({ items: [] })
   })
 
+  it('surfaces restore latest conversation failure as error message', async () => {
+    apiMocks.listConversations.mockRejectedValue(new Error('list failed'))
+
+    const { result } = renderHook(() => useCubeBox(), { wrapper })
+
+    await waitFor(() => expect(result.current.state.errorMessage).toBe('list failed'))
+    expect(result.current.conversations).toEqual([])
+  })
+
+  it('reuses the in-flight conversation list request during restore to avoid clearing successful results', async () => {
+    const conversations = [{ id: 'conv_1', title: 'Latest', archived: false, updated_at: '2026-04-22T00:00:00Z' }]
+    apiMocks.listConversations.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          setTimeout(() => resolve({ items: conversations }), 0)
+        })
+    )
+    apiMocks.loadConversation.mockResolvedValue({
+      conversation: { id: 'conv_1', title: 'Latest', archived: false, status: 'active' },
+      events: [],
+      next_sequence: 1
+    })
+
+    const { result } = renderHook(() => useCubeBox(), { wrapper })
+
+    await waitFor(() => expect(apiMocks.listConversations).toHaveBeenCalledTimes(1))
+    await waitFor(() => expect(result.current.conversations).toEqual(conversations))
+    await waitFor(() => expect(apiMocks.loadConversation).toHaveBeenCalledWith('conv_1'))
+    expect(result.current.state.errorMessage).toBeNull()
+  })
+
   it('surfaces rename failure as error message', async () => {
     apiMocks.updateConversation.mockRejectedValue(new Error('rename failed'))
 

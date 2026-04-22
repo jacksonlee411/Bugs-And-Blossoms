@@ -9,7 +9,7 @@ interface CubeBoxContextValue {
   conversationsLoading: boolean
   setComposerText: (value: string) => void
   startNewConversation: () => Promise<void>
-  refreshConversations: () => Promise<void>
+  refreshConversations: () => Promise<CubeBoxConversationSummary[]>
   restoreLatestConversation: () => Promise<void>
   selectConversation: (conversationID: string) => Promise<void>
   renameConversation: (conversationID: string, title: string) => Promise<void>
@@ -27,6 +27,7 @@ export function CubeBoxProvider({ children }: PropsWithChildren) {
   const [conversationsLoading, setConversationsLoading] = useState(false)
   const abortRef = useRef<AbortController | null>(null)
   const ensurePromiseRef = useRef<Promise<ConversationReplayResponse | null> | null>(null)
+  const conversationsPromiseRef = useRef<Promise<CubeBoxConversationSummary[]> | null>(null)
   const conversationRef = useRef(state.conversation)
   const nextSequenceRef = useRef(state.nextSequence)
   const composerTextRef = useRef(state.composerText)
@@ -43,15 +44,27 @@ export function CubeBoxProvider({ children }: PropsWithChildren) {
   }, [state])
 
   const refreshConversations = useCallback(async () => {
-    setConversationsLoading(true)
-    try {
-      const payload = await listConversations()
-      setConversations(payload.items)
-    } catch {
-      setConversations([])
-    } finally {
-      setConversationsLoading(false)
+    if (conversationsPromiseRef.current) {
+      return conversationsPromiseRef.current
     }
+
+    setConversationsLoading(true)
+
+    conversationsPromiseRef.current = (async () => {
+      try {
+        const payload = await listConversations()
+        setConversations(payload.items)
+        return payload.items
+      } catch (error) {
+        setConversations([])
+        throw error
+      } finally {
+        setConversationsLoading(false)
+        conversationsPromiseRef.current = null
+      }
+    })()
+
+    return conversationsPromiseRef.current
   }, [])
 
   const selectConversation = useCallback(async (conversationID: string) => {
@@ -67,17 +80,20 @@ export function CubeBoxProvider({ children }: PropsWithChildren) {
   }, [])
 
   const restoreLatestConversation = useCallback(async () => {
-    const payload = await listConversations()
-    setConversations(payload.items)
-    const latest = payload.items[0]
-    if (!latest) {
-      return
+    try {
+      const items = await refreshConversations()
+      const latest = items[0]
+      if (!latest) {
+        return
+      }
+      if (conversationRef.current?.id === latest.id) {
+        return
+      }
+      await selectConversation(latest.id)
+    } catch (error) {
+      dispatch({ type: 'error_message_set', message: error instanceof Error ? error.message : 'unknown error' })
     }
-    if (conversationRef.current?.id === latest.id) {
-      return
-    }
-    await selectConversation(latest.id)
-  }, [selectConversation])
+  }, [refreshConversations, selectConversation])
 
   const ensureConversation = useCallback(async () => {
     if (conversationRef.current) {
@@ -106,7 +122,7 @@ export function CubeBoxProvider({ children }: PropsWithChildren) {
       }
     })()
     return ensurePromiseRef.current
-  }, [])
+  }, [refreshConversations])
 
   const sendMessage = useCallback(async () => {
     if (turnStatusRef.current === 'streaming') {
@@ -214,7 +230,7 @@ export function CubeBoxProvider({ children }: PropsWithChildren) {
   )
 
   useEffect(() => {
-    void refreshConversations()
+    void refreshConversations().catch(() => {})
     void restoreLatestConversation()
   }, [refreshConversations, restoreLatestConversation])
 

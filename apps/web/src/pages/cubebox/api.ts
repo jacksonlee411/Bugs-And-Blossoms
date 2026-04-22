@@ -1,4 +1,24 @@
+import { ApiClientError } from '../../api/errors'
+import { resolveApiErrorMessage } from '../../errors/presentApiError'
 import type { CanonicalEvent, ConversationReplayResponse, CubeBoxConversationListResponse } from './types'
+
+async function readError(response: Response, fallbackCode: string, fallbackMessage: string): Promise<never> {
+  let code = fallbackCode
+  let message = fallbackMessage
+
+  try {
+    const payload = (await response.json()) as { code?: string; message?: string; trace_id?: string }
+    code = payload.code?.trim() || fallbackCode
+    message = resolveApiErrorMessage(payload.code, payload.message || fallbackMessage)
+    throw new ApiClientError(message, response.status === 401 ? 'UNAUTHORIZED' : 'UNKNOWN_ERROR', response.status, payload.trace_id, payload)
+  } catch (error) {
+    if (error instanceof ApiClientError) {
+      throw error
+    }
+  }
+
+  throw new ApiClientError(resolveApiErrorMessage(code, fallbackMessage), response.status === 401 ? 'UNAUTHORIZED' : 'UNKNOWN_ERROR', response.status)
+}
 
 export async function createConversation(): Promise<ConversationReplayResponse> {
   const response = await fetch('/internal/cubebox/conversations', {
@@ -10,7 +30,7 @@ export async function createConversation(): Promise<ConversationReplayResponse> 
     body: '{}'
   })
   if (!response.ok) {
-    throw new Error(`create conversation failed: ${response.status}`)
+    await readError(response, 'cubebox_conversation_create_failed', `create conversation failed: ${response.status}`)
   }
   return (await response.json()) as ConversationReplayResponse
 }
@@ -21,7 +41,7 @@ export async function loadConversation(conversationID: string): Promise<Conversa
     method: 'GET'
   })
   if (!response.ok) {
-    throw new Error(`load conversation failed: ${response.status}`)
+    await readError(response, 'cubebox_conversation_read_failed', `load conversation failed: ${response.status}`)
   }
   return (await response.json()) as ConversationReplayResponse
 }
@@ -32,7 +52,7 @@ export async function listConversations(): Promise<CubeBoxConversationListRespon
     method: 'GET'
   })
   if (!response.ok) {
-    throw new Error(`list conversations failed: ${response.status}`)
+    await readError(response, 'cubebox_conversation_list_failed', `list conversations failed: ${response.status}`)
   }
   return (await response.json()) as CubeBoxConversationListResponse
 }
@@ -54,7 +74,7 @@ export async function updateConversation(input: {
     })
   })
   if (!response.ok) {
-    throw new Error(`update conversation failed: ${response.status}`)
+    await readError(response, 'cubebox_conversation_update_failed', `update conversation failed: ${response.status}`)
   }
   return (await response.json()) as ConversationReplayResponse
 }
@@ -80,10 +100,15 @@ export async function streamTurn(input: {
     signal: input.signal
   })
   if (!response.ok || !response.body) {
-    throw new Error(`stream turn failed: ${response.status}`)
+    await readError(response, 'cubebox_turn_stream_failed', `stream turn failed: ${response.status}`)
   }
 
-  const reader = response.body.getReader()
+  const responseBody = response.body
+  if (!responseBody) {
+    throw new Error('stream turn failed: missing response body')
+  }
+
+  const reader = responseBody.getReader()
   const decoder = new TextDecoder()
   let buffer = ''
   let sawTerminalEvent = false
@@ -127,6 +152,6 @@ export async function interruptTurn(turnID: string, conversationID: string): Pro
     body: JSON.stringify({ reason: 'user_requested' })
   })
   if (!response.ok) {
-    throw new Error(`interrupt turn failed: ${response.status}`)
+    await readError(response, 'cubebox_turn_interrupt_failed', `interrupt turn failed: ${response.status}`)
   }
 }
