@@ -1,6 +1,6 @@
 # DEV-PLAN-437：CubeBox 实施路线图（快速开工版）
 
-**状态**: 执行中（2026-04-21 20:50 CST，`PR-437A` 已完成，`Phase B` 当前范围已完成）
+**状态**: 执行中（2026-04-22 CST，`PR-437A` / `Phase B` 已完成；`Phase C` 已进入部分完成收口，尚未封板）
 
 ## 0. 适用范围与评审分级
 
@@ -204,6 +204,9 @@ owner：
 
 - 用户关闭再打开后可恢复会话。
 - 会话读取不再依赖纯前端内存态。
+- 当前备注（`2026-04-22`）：
+  - 正式数据面、最小 lifecycle API、抽屉恢复、会话列表 UI 与前端 reconstruction fixture / golden 已落地。
+  - 但 `432` owner 下的后端 `PATCH` rename/archive/unarchive handler 级验证、跨层 reconstruction 对照、跨租户隔离与压缩后恢复验证仍未封板，因此 `Phase C` 当前只能视为“部分完成”，不应直接进入 `Phase D` 开发。
 
 ### Phase D：上下文压缩最小闭环
 

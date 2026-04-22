@@ -1,7 +1,19 @@
 import { describe, expect, it } from 'vitest'
 import { cubeboxReducer, initialCubeBoxState, replayConversation } from './reducer'
+import { reconstructionFixtures } from './reconstruction.fixtures'
 
 describe('cubebox reducer', () => {
+  it.each(reconstructionFixtures)('replays reconstruction fixture %s into golden state', ({ replay, golden }) => {
+    const state = replayConversation(replay)
+
+    expect(state.conversation).toEqual(golden.conversation)
+    expect(state.items).toEqual(golden.items)
+    expect(state.turnStatus).toBe(golden.turnStatus)
+    expect(state.activeTurnID).toBe(golden.activeTurnID)
+    expect(state.nextSequence).toBe(golden.nextSequence)
+    expect(state.errorMessage).toBe(golden.errorMessage)
+  })
+
   it('replays deterministic stream events into a shared timeline state', () => {
     const state = replayConversation({
       conversation: {
@@ -75,6 +87,55 @@ describe('cubebox reducer', () => {
     expect(state.items[1]).toMatchObject({ kind: 'agent_message', text: 'hi there', status: 'streaming' })
     expect(state.turnStatus).toBe('completed')
     expect(state.nextSequence).toBe(7)
+  })
+
+  it('applies archived metadata events during replay so restored title and status match the event log', () => {
+    const state = replayConversation({
+      conversation: {
+        id: 'conv_1',
+        title: '旧标题',
+        status: 'active',
+        archived: false
+      },
+      next_sequence: 4,
+      events: [
+        {
+          event_id: 'evt_1',
+          conversation_id: 'conv_1',
+          turn_id: null,
+          sequence: 1,
+          type: 'conversation.loaded',
+          ts: '2026-04-21T00:00:00Z',
+          payload: { title: '旧标题', status: 'active', archived: false }
+        },
+        {
+          event_id: 'evt_2',
+          conversation_id: 'conv_1',
+          turn_id: null,
+          sequence: 2,
+          type: 'conversation.renamed',
+          ts: '2026-04-21T00:00:01Z',
+          payload: { title: '新标题', status: 'active', archived: false }
+        },
+        {
+          event_id: 'evt_3',
+          conversation_id: 'conv_1',
+          turn_id: null,
+          sequence: 3,
+          type: 'conversation.archived',
+          ts: '2026-04-21T00:00:02Z',
+          payload: { title: '归档标题', status: 'archived', archived: true }
+        }
+      ]
+    })
+
+    expect(state.conversation).toEqual({
+      id: 'conv_1',
+      title: '归档标题',
+      status: 'archived',
+      archived: true
+    })
+    expect(state.nextSequence).toBe(4)
   })
 
   it('records turn error into the timeline', () => {

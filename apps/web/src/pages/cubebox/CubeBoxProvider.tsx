@@ -82,7 +82,7 @@ export function CubeBoxProvider({ children }: PropsWithChildren) {
   const restoreLatestConversation = useCallback(async () => {
     try {
       const items = await refreshConversations()
-      const latest = items[0]
+      const latest = items.find((item) => !item.archived)
       if (!latest) {
         return
       }

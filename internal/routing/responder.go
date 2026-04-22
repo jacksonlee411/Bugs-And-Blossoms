@@ -128,6 +128,24 @@ func knownErrorMessage(code string) string {
 		return "租户上下文缺失，请刷新后重试。"
 	case "tenant_resolve_error":
 		return "租户解析失败，请稍后重试。"
+	case "principal_missing":
+		return "登录已失效，请重新登录。"
+	case "conversation_id_required":
+		return "缺少会话 ID，请重试。"
+	case "turn_id_required":
+		return "缺少回合 ID，请重试。"
+	case "cubebox_conversation_not_found":
+		return "会话不存在，请重新选择或新建。"
+	case "cubebox_conversation_create_failed":
+		return "创建会话失败，请稍后重试。"
+	case "cubebox_conversation_list_failed":
+		return "加载会话列表失败，请稍后重试。"
+	case "cubebox_conversation_read_failed":
+		return "读取会话失败，请稍后重试。"
+	case "cubebox_conversation_update_failed":
+		return "更新会话失败，请稍后重试。"
+	case "stream_not_supported":
+		return "当前环境不支持流式响应，请稍后重试。"
 	case "ORG_ROOT_ALREADY_EXISTS":
 		return "根组织已存在，请改为选择上级组织后新建。"
 	case "ORG_TREE_NOT_INITIALIZED":

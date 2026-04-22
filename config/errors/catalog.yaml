@@ -315,6 +315,48 @@ errors:
     user_message_key: errors.conversation_state_invalid
     backend_policy: passthrough
     frontend_policy: mapped
+  - code: conversation_id_required
+    module: cubebox
+    http_status: 422
+    severity: error
+    user_message_key: errors.conversation_id_required
+    backend_policy: mapped
+    frontend_policy: mapped
+  - code: cubebox_conversation_create_failed
+    module: cubebox
+    http_status: 500
+    severity: error
+    user_message_key: errors.cubebox_conversation_create_failed
+    backend_policy: mapped
+    frontend_policy: mapped
+  - code: cubebox_conversation_list_failed
+    module: cubebox
+    http_status: 500
+    severity: error
+    user_message_key: errors.cubebox_conversation_list_failed
+    backend_policy: mapped
+    frontend_policy: mapped
+  - code: cubebox_conversation_not_found
+    module: cubebox
+    http_status: 404
+    severity: error
+    user_message_key: errors.cubebox_conversation_not_found
+    backend_policy: mapped
+    frontend_policy: mapped
+  - code: cubebox_conversation_read_failed
+    module: cubebox
+    http_status: 500
+    severity: error
+    user_message_key: errors.cubebox_conversation_read_failed
+    backend_policy: mapped
+    frontend_policy: mapped
+  - code: cubebox_conversation_update_failed
+    module: cubebox
+    http_status: 500
+    severity: error
+    user_message_key: errors.cubebox_conversation_update_failed
+    backend_policy: mapped
+    frontend_policy: mapped
   - code: idempotency_key_conflict
     module: assistant
     http_status: 409
@@ -588,6 +630,13 @@ errors:
     user_message_key: errors.principal_lookup_error
     backend_policy: passthrough
     frontend_policy: mapped
+  - code: principal_missing
+    module: iam
+    http_status: 401
+    severity: error
+    user_message_key: errors.principal_missing
+    backend_policy: mapped
+    frontend_policy: mapped
   - code: session_error
     module: iam
     http_status: 500
@@ -601,6 +650,13 @@ errors:
     severity: error
     user_message_key: errors.session_lookup_error
     backend_policy: passthrough
+    frontend_policy: mapped
+  - code: stream_not_supported
+    module: cubebox
+    http_status: 500
+    severity: error
+    user_message_key: errors.stream_not_supported
+    backend_policy: mapped
     frontend_policy: mapped
   - code: tenant_missing
     module: iam
@@ -621,6 +677,13 @@ errors:
     http_status: 500
     severity: error
     user_message_key: errors.tenant_resolve_error
+    backend_policy: mapped
+    frontend_policy: mapped
+  - code: turn_id_required
+    module: cubebox
+    http_status: 422
+    severity: error
+    user_message_key: errors.turn_id_required
     backend_policy: mapped
     frontend_policy: mapped
   - code: unauthorized

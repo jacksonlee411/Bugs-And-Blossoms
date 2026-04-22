@@ -55,6 +55,25 @@ describe('CubeBoxProvider', () => {
     expect(result.current.state.errorMessage).toBeNull()
   })
 
+  it('skips archived conversations and restores the most recent active conversation', async () => {
+    apiMocks.listConversations.mockResolvedValue({
+      items: [
+        { id: 'conv_archived', title: 'Archived', status: 'archived', archived: true, updated_at: '2026-04-22T02:00:00Z' },
+        { id: 'conv_active', title: 'Active', status: 'active', archived: false, updated_at: '2026-04-22T01:00:00Z' }
+      ]
+    })
+    apiMocks.loadConversation.mockResolvedValue({
+      conversation: { id: 'conv_active', title: 'Active', archived: false, status: 'active' },
+      events: [],
+      next_sequence: 1
+    })
+
+    renderHook(() => useCubeBox(), { wrapper })
+
+    await waitFor(() => expect(apiMocks.loadConversation).toHaveBeenCalledWith('conv_active'))
+    expect(apiMocks.loadConversation).not.toHaveBeenCalledWith('conv_archived')
+  })
+
   it('surfaces rename failure as error message', async () => {
     apiMocks.updateConversation.mockRejectedValue(new Error('rename failed'))
 

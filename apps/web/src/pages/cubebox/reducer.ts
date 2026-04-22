@@ -73,6 +73,9 @@ function applyEvent(state: CubeBoxState, event: CanonicalEvent): CubeBoxState {
 
   switch (event.type) {
     case 'conversation.loaded':
+    case 'conversation.renamed':
+    case 'conversation.archived':
+    case 'conversation.unarchived':
       return {
         ...state,
         conversation: {

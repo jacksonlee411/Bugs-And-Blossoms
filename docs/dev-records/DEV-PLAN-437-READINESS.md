@@ -162,7 +162,9 @@
     - `PATCH /internal/cubebox/conversations/{conversation_id}`（title / archived）
   - [x] 抽屉 reopen 恢复已接入：provider 初始化时先读 list，再自动恢复最近 active conversation
   - [x] 抽屉内最小会话列表 UI 已落地：列表、选中切换、重命名入口、归档/取消归档入口
-  - [ ] reconstruction fixture / golden 测试仍需继续加强
+  - [x] reconstruction fixture / golden 测试已补首轮封板：`apps/web/src/pages/cubebox/reconstruction.fixtures.ts` + `apps/web/src/pages/cubebox/reducer.test.ts`
+  - [x] 恢复页面级验证已补：`apps/web/src/pages/cubebox/CubeBoxPanel.restore.test.tsx`
+  - [x] 恢复链路已补行为纠偏：reopen 时跳过 archived conversation，恢复最近 active conversation；reconstruction 现已回放 `conversation.renamed / archived / unarchived`
 
 - 主要落地文件：
   - `modules/iam/infrastructure/persistence/schema/00009_iam_cubebox_conversations.sql`
@@ -176,7 +178,11 @@
   - `config/routing/allowlist.yaml`
   - `apps/web/src/pages/cubebox/api.ts`
   - `apps/web/src/pages/cubebox/CubeBoxProvider.tsx`
+  - `apps/web/src/pages/cubebox/CubeBoxProvider.test.tsx`
   - `apps/web/src/pages/cubebox/CubeBoxPanel.tsx`
+  - `apps/web/src/pages/cubebox/CubeBoxPanel.restore.test.tsx`
+  - `apps/web/src/pages/cubebox/reconstruction.fixtures.ts`
+  - `apps/web/src/pages/cubebox/reducer.test.ts`
   - `apps/web/src/pages/cubebox/types.ts`
   - `sqlc.yaml`
 
@@ -191,22 +197,21 @@
   - [x] `make check doc`
   - 说明：`vite build` 通过，当前仍存在既有的 chunk size warning，但不阻断本轮 `437C` 收口
 
-### Phase C / PR-437C 当前盘点（`2026-04-21`）
+### Phase C / PR-437C 当前盘点（`2026-04-22`）
 
-- [x] 已完成现状盘点：当前活体实现仅包含前端共享 reducer / provider、`/internal/cubebox` 的 create/load/stream/interrupt handler，以及 `modules/cubebox/runtime.go` 的内存 runtime。
-- [x] 已确认当前分支不存在可直接复用的 `cubebox` 正式持久化对象：
-  - 无活体 `modules/cubebox/infrastructure/sqlc/**`
-  - 无活体 `modules/cubebox/infrastructure/persistence/**`
-  - 无活体 `cubebox` schema / migration 文件
-- [x] 已确认 `PR-437C` 的真实第一阻塞点是数据库对象，而不是前端壳层：
-  - 若要把 conversation / message / event 落到正式存储，必须新增 `cubebox` 相关表与 sqlc/store
-  - 该动作按仓库规则需用户手工确认后才能继续执行
-- [ ] 待确认后按最小批次推进：
-  - conversation / message / event 存储模型
-  - `GET /internal/cubebox/conversations/{id}` 与 list/read API
-  - 抽屉 reopen 恢复
-  - reconstruction fixture / golden 测试
-  - 会话列表 UI
+- [x] 正式会话数据面、最小 lifecycle API、append-only event log、抽屉 reopen 恢复、最小会话列表 UI 均已落地。
+- [x] reconstruction 首轮封板证据已补：
+  - fixture / golden：`apps/web/src/pages/cubebox/reconstruction.fixtures.ts`
+  - reducer 回放验证：`apps/web/src/pages/cubebox/reducer.test.ts`
+  - 页面级恢复验证：`apps/web/src/pages/cubebox/CubeBoxPanel.restore.test.tsx`
+- [x] 已消除一处恢复语义偏差：
+  - provider 恢复链路不再盲选列表第一项，而是显式跳过 archived conversation，恢复最近 active conversation
+  - reducer 已开始回放 `conversation.renamed / conversation.archived / conversation.unarchived`，避免读取事件日志恢复后标题/归档态停留旧值
+- [ ] `PR-437C` 当前为“部分完成”，尚未满足完全封板：
+  - `PATCH /internal/cubebox/conversations/{conversation_id}` 的 rename / archive / unarchive handler 级成功/失败测试证据未在活体测试中补齐
+  - store / API / UI 三层对照的 reconstruction golden 仍不足，当前主要是前端 reducer fixture 与页面级恢复验证
+  - 跨租户隔离、压缩后恢复、summary 不替代原始消息等 `432` 验收项仍未验证
+  - 因上述缺口，`432` 中 `archive/unarchive/read/list/resume 测试` 与 `list/read/resume/archive/unarchive/rename 生命周期冻结` 只能记为部分完成，不应视为完全封板
 
 ### Phase D / PR-437D 预留证据
 
