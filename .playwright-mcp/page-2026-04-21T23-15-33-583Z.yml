@@ -1,0 +1,220 @@
+- generic [ref=e1]:
+  - generic [ref=e20]:
+    - banner [ref=e21]:
+      - generic [ref=e22]:
+        - heading [level=1] [ref=e158]: Bugs & Blossoms · MUI X 工作台
+        - button [ref=e159] [cursor=pointer]:
+          - img [ref=e25]
+        - button [ref=e160] [cursor=pointer]:
+          - img [ref=e28]
+        - button [ref=e161] [cursor=pointer]:
+          - img [ref=e31]
+        - generic [ref=e34]:
+          - img [ref=e36]
+          - combobox [ref=e38] [cursor=pointer]: 中文
+          - textbox: zh
+          - img
+          - group
+        - button [ref=e162] [cursor=pointer]:
+          - img [ref=e40]
+    - list [ref=e45]:
+      - link [ref=e163] [cursor=pointer]:
+        - /url: /app
+        - img [ref=e48]
+        - generic [ref=e52]: 基座示例
+      - link [ref=e164] [cursor=pointer]:
+        - /url: /app/org/units
+        - img [ref=e55]
+        - generic [ref=e58]: 组织架构
+      - link [ref=e165] [cursor=pointer]:
+        - /url: /app/org/units/field-configs
+        - img [ref=e61]
+        - generic [ref=e64]: 字段配置
+      - link [ref=e166] [cursor=pointer]:
+        - /url: /app/dicts
+        - img [ref=e67]
+        - generic [ref=e71]: 字典配置
+      - link [ref=e167] [cursor=pointer]:
+        - /url: /app/approvals
+        - img [ref=e74]
+        - generic [ref=e77]: 审批待办
+    - main [ref=e78]:
+      - generic [ref=e81]:
+        - heading [level=2] [ref=e168]: 基座示例
+        - paragraph [ref=e83]: P091 基座示例：树 + 表 + 详情侧栏 + 统一筛选栏
+      - generic [ref=e85]:
+        - generic [ref=e86]:
+          - generic: 搜索（姓名/部门/岗位）
+          - generic [ref=e87]:
+            - textbox [ref=e169]
+            - group:
+              - generic: 搜索（姓名/部门/岗位）
+        - generic [ref=e89]:
+          - generic [ref=e90]: 状态
+          - generic [ref=e91]:
+            - combobox [ref=e170] [cursor=pointer]: 全部
+            - textbox: all
+            - img
+            - group:
+              - generic: 状态
+        - button [ref=e171] [cursor=pointer]: 应用筛选
+      - generic [ref=e94]:
+        - generic [ref=e95]:
+          - heading [level=6] [ref=e172]: 部门树
+          - tree [ref=e97]:
+            - treeitem [ref=e173]:
+              - generic [ref=e99] [cursor=pointer]:
+                - img [ref=e101]
+                - generic [ref=e104]: 总部
+        - generic [ref=e107]:
+          - grid [ref=e108]:
+            - row [ref=e174]:
+              - columnheader [ref=e175] [cursor=pointer]:
+                - generic [ref=e112]: 姓名
+                - generic [ref=e113]:
+                  - img
+              - columnheader [ref=e176] [cursor=pointer]:
+                - generic [ref=e116]: 部门
+                - generic [ref=e117]:
+                  - img
+              - columnheader [ref=e177] [cursor=pointer]:
+                - generic [ref=e120]: 岗位
+                - generic [ref=e121]:
+                  - img
+              - columnheader [ref=e178] [cursor=pointer]:
+                - generic [ref=e124]: 状态
+                - generic [ref=e125]:
+                  - img
+            - rowgroup [ref=e126]:
+              - row [ref=e179]:
+                - gridcell [ref=e180]: 张三
+                - gridcell [ref=e181]: 人力资源部
+                - gridcell [ref=e182]: HRBP
+                - gridcell [ref=e183]: 在职
+              - row [ref=e184]:
+                - gridcell [ref=e185]: 李四
+                - gridcell [ref=e186]: 财务部
+                - gridcell [ref=e187]: 会计
+                - gridcell [ref=e188]: 在职
+              - row [ref=e189]:
+                - gridcell [ref=e190]: 王五
+                - gridcell [ref=e191]: 前端组
+                - gridcell [ref=e192]: 前端工程师
+                - gridcell [ref=e193]: 在职
+              - row [ref=e194]:
+                - gridcell [ref=e195]: 赵六
+                - gridcell [ref=e196]: 后端组
+                - gridcell [ref=e197]: 后端工程师
+                - gridcell [ref=e198]: 离职
+          - generic [ref=e152]:
+            - paragraph [ref=e153]: "Rows per page:"
+            - generic [ref=e154]:
+              - combobox [ref=e199] [cursor=pointer]: "10"
+              - textbox: "10"
+              - img
+            - paragraph [ref=e156]: 1–4 of 4
+            - generic [ref=e157]:
+              - button [disabled]:
+                - img
+              - button [disabled]:
+                - img
+  - dialog [active] [ref=e201]:
+    - generic [ref=e203]:
+      - generic [ref=e204]:
+        - generic [ref=e205]:
+          - heading "新对话" [level=2] [ref=e206]
+          - paragraph [ref=e207]: "会话: conv_02e2b31a29fa45559f70e44b834c4e71"
+        - generic [ref=e208]:
+          - generic "历史记录" [ref=e209]:
+            - button "历史记录" [ref=e210] [cursor=pointer]:
+              - img [ref=e211]
+          - generic "设置" [ref=e213]:
+            - button "设置" [ref=e214] [cursor=pointer]:
+              - img [ref=e215]
+          - generic "新建对话" [ref=e217]:
+            - button "新建对话" [ref=e218] [cursor=pointer]:
+              - img [ref=e219]
+      - generic [ref=e221]:
+        - generic [ref=e222]:
+          - img [ref=e223]
+          - paragraph [ref=e225]: "会话: conv_02e2b31a29fa45559f70e44b834c4e71"
+        - separator [ref=e226]
+        - list [ref=e227]:
+          - listitem [ref=e228]:
+            - generic [ref=e229]:
+              - generic [ref=e230]: 你
+              - paragraph [ref=e231]: hello cubebox verification
+              - generic [ref=e232]: completed
+          - listitem [ref=e233]:
+            - generic [ref=e234]:
+              - generic [ref=e235]: CubeBox
+              - paragraph [ref=e236]: 已收到你的消息：hello cubebox verification 我正在整理回复。
+              - generic [ref=e237]: completed
+          - listitem [ref=e238]:
+            - generic [ref=e239]:
+              - generic [ref=e240]: 你
+              - paragraph [ref=e241]: please error now
+              - generic [ref=e242]: completed
+          - listitem [ref=e243]:
+            - generic [ref=e244]:
+              - generic [ref=e245]: 错误
+              - paragraph [ref=e246]: 当前回复暂时失败，请稍后重试。
+              - generic [ref=e247]: error
+          - listitem [ref=e248]:
+            - generic [ref=e249]:
+              - generic [ref=e250]: 你
+              - paragraph [ref=e251]: stop verification run
+              - generic [ref=e252]: completed
+          - listitem [ref=e253]:
+            - generic [ref=e254]:
+              - generic [ref=e255]: CubeBox
+              - paragraph [ref=e256]: 已收到你的消息：stop verific
+              - generic [ref=e257]: interrupted
+          - listitem [ref=e258]:
+            - generic [ref=e259]:
+              - generic [ref=e260]: 你
+              - paragraph [ref=e261]: 你好
+              - generic [ref=e262]: completed
+          - listitem [ref=e263]:
+            - generic [ref=e264]:
+              - generic [ref=e265]: CubeBox
+              - paragraph [ref=e266]: 已收到你的消息：你好 我正在整理回复。
+              - generic [ref=e267]: completed
+          - listitem [ref=e268]:
+            - generic [ref=e269]:
+              - generic [ref=e270]: 你
+              - paragraph [ref=e271]: history verification 1776785195280
+              - generic [ref=e272]: completed
+          - listitem [ref=e273]:
+            - generic [ref=e274]:
+              - generic [ref=e275]: CubeBox
+              - paragraph [ref=e276]: 已收到你的消息：history verification 1776785195280 我正在整理回复。
+              - generic [ref=e277]: completed
+          - listitem [ref=e278]:
+            - generic [ref=e279]:
+              - generic [ref=e280]: 你
+              - paragraph [ref=e281]: another prompt 1776785231995
+              - generic [ref=e282]: completed
+          - listitem [ref=e283]:
+            - generic [ref=e284]:
+              - generic [ref=e285]: CubeBox
+              - paragraph [ref=e286]: 已收到你的消息：another prompt 1776785231995 我正在整理回复。
+              - generic [ref=e287]: completed
+      - generic [ref=e289]:
+        - generic [ref=e290]:
+          - generic: 输入消息
+          - generic [ref=e291]:
+            - textbox "输入消息" [ref=e292]
+            - group:
+              - generic: 输入消息
+        - generic [ref=e293]:
+          - paragraph [ref=e294]: 已完成
+          - generic [ref=e295]:
+            - button "停止" [disabled]:
+              - generic:
+                - img
+              - text: 停止
+            - button "发送" [disabled]:
+              - generic:
+                - img
+              - text: 发送

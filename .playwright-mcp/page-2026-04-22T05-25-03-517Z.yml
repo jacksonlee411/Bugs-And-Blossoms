@@ -1,0 +1,177 @@
+- generic [ref=e1]:
+  - generic [ref=e3]:
+    - banner [ref=e4]:
+      - generic [ref=e5]:
+        - heading [level=1] [ref=e199]: Bugs & Blossoms · MUI X 工作台
+        - button [ref=e200] [cursor=pointer]:
+          - img [ref=e8]
+        - button [pressed] [ref=e201] [cursor=pointer]:
+          - img [ref=e11]
+        - button [ref=e202] [cursor=pointer]:
+          - img [ref=e14]
+        - generic [ref=e17]:
+          - img [ref=e19]
+          - combobox [ref=e21] [cursor=pointer]: 中文
+          - textbox: zh
+          - img
+          - group
+        - button [ref=e203] [cursor=pointer]:
+          - img [ref=e23]
+    - list [ref=e28]:
+      - link [ref=e204] [cursor=pointer]:
+        - /url: /app
+        - img [ref=e31]
+        - generic [ref=e35]: 基座示例
+      - link [ref=e205] [cursor=pointer]:
+        - /url: /app/org/units
+        - img [ref=e38]
+        - generic [ref=e41]: 组织架构
+      - link [ref=e206] [cursor=pointer]:
+        - /url: /app/org/units/field-configs
+        - img [ref=e44]
+        - generic [ref=e47]: 字段配置
+      - link [ref=e207] [cursor=pointer]:
+        - /url: /app/dicts
+        - img [ref=e50]
+        - generic [ref=e54]: 字典配置
+      - link [ref=e208] [cursor=pointer]:
+        - /url: /app/approvals
+        - img [ref=e57]
+        - generic [ref=e60]: 审批待办
+    - main [ref=e61]:
+      - generic [ref=e64]:
+        - heading [level=2] [ref=e209]: 基座示例
+        - paragraph [ref=e66]: P091 基座示例：树 + 表 + 详情侧栏 + 统一筛选栏
+      - generic [ref=e68]:
+        - generic [ref=e69]:
+          - generic: 搜索（姓名/部门/岗位）
+          - generic [ref=e70]:
+            - textbox [ref=e210]
+            - group:
+              - generic: 搜索（姓名/部门/岗位）
+        - generic [ref=e72]:
+          - generic [ref=e73]: 状态
+          - generic [ref=e74]:
+            - combobox [ref=e211] [cursor=pointer]: 全部
+            - textbox: all
+            - img
+            - group:
+              - generic: 状态
+        - button [ref=e212] [cursor=pointer]: 应用筛选
+      - generic [ref=e77]:
+        - generic [ref=e78]:
+          - heading [level=6] [ref=e213]: 部门树
+          - tree [ref=e80]:
+            - treeitem [ref=e214]:
+              - generic [ref=e82] [cursor=pointer]:
+                - img [ref=e84]
+                - generic [ref=e87]: 总部
+        - generic [ref=e90]:
+          - grid [ref=e91]:
+            - row [ref=e215]:
+              - columnheader [ref=e216] [cursor=pointer]:
+                - generic [ref=e95]: 姓名
+                - generic [ref=e96]:
+                  - img
+              - columnheader [ref=e217] [cursor=pointer]:
+                - generic [ref=e99]: 部门
+                - generic [ref=e100]:
+                  - img
+              - columnheader [ref=e218] [cursor=pointer]:
+                - generic [ref=e103]: 岗位
+                - generic [ref=e104]:
+                  - img
+              - columnheader [ref=e219] [cursor=pointer]:
+                - generic [ref=e107]: 状态
+                - generic [ref=e108]:
+                  - img
+            - rowgroup [ref=e109]:
+              - row [ref=e220]:
+                - gridcell [ref=e221]: 张三
+                - gridcell [ref=e222]: 人力资源部
+                - gridcell [ref=e223]: HRBP
+                - gridcell [ref=e224]: 在职
+              - row [ref=e225]:
+                - gridcell [ref=e226]: 李四
+                - gridcell [ref=e227]: 财务部
+                - gridcell [ref=e228]: 会计
+                - gridcell [ref=e229]: 在职
+              - row [ref=e230]:
+                - gridcell [ref=e231]: 王五
+                - gridcell [ref=e232]: 前端组
+                - gridcell [ref=e233]: 前端工程师
+                - gridcell [ref=e234]: 在职
+              - row [ref=e235]:
+                - gridcell [ref=e236]: 赵六
+                - gridcell [ref=e237]: 后端组
+                - gridcell [ref=e238]: 后端工程师
+                - gridcell [ref=e239]: 离职
+          - generic [ref=e133]:
+            - paragraph [ref=e134]: "Rows per page:"
+            - generic [ref=e135]:
+              - combobox [ref=e240] [cursor=pointer]: "10"
+              - textbox: "10"
+              - img
+            - paragraph [ref=e137]: 1–4 of 4
+            - generic [ref=e138]:
+              - button [disabled]:
+                - img
+              - button [disabled]:
+                - img
+    - complementary [ref=e241]:
+      - generic [ref=e146]:
+        - generic [ref=e147]:
+          - generic [ref=e148]:
+            - heading [level=2] [ref=e242]: 新对话
+            - paragraph [ref=e150]: "会话: conv_3a474ef6a1bd4ae5b0ff28e0202f04d0"
+          - generic [ref=e151]:
+            - button [ref=e244] [cursor=pointer]:
+              - img [ref=e154]
+            - button [ref=e246] [cursor=pointer]:
+              - img [ref=e158]
+            - button [ref=e248] [cursor=pointer]:
+              - img [ref=e162]
+            - button [ref=e250] [cursor=pointer]:
+              - img [ref=e166]
+        - generic [ref=e168]:
+          - generic [ref=e169]:
+            - img [ref=e170]
+            - paragraph [ref=e172]: "会话: conv_3a474ef6a1bd4ae5b0ff28e0202f04d0"
+          - separator [ref=e173]
+          - list [ref=e174]:
+            - listitem [ref=e175]:
+              - generic [ref=e176]:
+                - generic [ref=e177]: 你
+                - paragraph [ref=e178]: /compact
+                - generic [ref=e179]: completed
+            - listitem [ref=e180]:
+              - generic [ref=e181]:
+                - generic [ref=e182]: CubeBox
+                - paragraph [ref=e183]: 已收到你的消息：你好 我正在整理回复。已收到你的消息：你好 有什么可以版主的吗 我需要查询最近的收入等等 可以吗 你方便吗 回答我啊 我正在整理回复。已收到你的消息：/compact 我正在整理回复。
+                - generic [ref=e184]: completed
+            - listitem [ref=e185]:
+              - generic [ref=e186]:
+                - generic [ref=e187]: 压缩摘要
+                - paragraph [ref=e188]: "user: 你好 assistant: 已收到你的消息：你好 我正在整理回复。"
+                - generic [ref=e189]: completed
+        - generic [ref=e191]:
+          - generic [ref=e192]:
+            - generic: 输入消息
+            - generic [ref=e193]:
+              - textbox [ref=e251]
+              - group:
+                - generic: 输入消息
+          - generic [ref=e195]:
+            - paragraph [ref=e196]: 已完成
+            - generic [ref=e197]:
+              - button [disabled]:
+                - generic:
+                  - img
+                - text: 停止
+              - button [disabled]:
+                - generic:
+                  - img
+                - text: 发送
+  - dialog "CubeBox 设置" [ref=e254]:
+    - heading "CubeBox 设置" [level=2] [ref=e255]
+    - paragraph [ref=e257]: 这里先保留设置壳层入口，后续再绑定模型与配置项。

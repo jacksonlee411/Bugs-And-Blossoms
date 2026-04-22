@@ -1,0 +1,180 @@
+- generic [ref=e1]:
+  - generic [ref=e3]:
+    - banner [ref=e4]:
+      - generic [ref=e5]:
+        - heading "Bugs & Blossoms · MUI X 工作台" [level=1] [ref=e258]
+        - button "Ctrl/Cmd + K" [ref=e259] [cursor=pointer]:
+          - img [ref=e8]
+        - button "关闭 CubeBox 抽屉" [pressed] [ref=e260] [cursor=pointer]:
+          - img [ref=e11]
+        - button "浅色" [ref=e261] [cursor=pointer]:
+          - img [ref=e14]
+        - generic [ref=e17]:
+          - img [ref=e19]
+          - combobox [ref=e21] [cursor=pointer]: 中文
+          - textbox: zh
+          - img
+          - group
+        - button "退出登录" [ref=e262] [cursor=pointer]:
+          - img [ref=e23]
+    - list [ref=e28]:
+      - link "基座示例" [ref=e263] [cursor=pointer]:
+        - /url: /app
+        - img [ref=e31]
+        - generic [ref=e35]: 基座示例
+      - link "组织架构" [ref=e264] [cursor=pointer]:
+        - /url: /app/org/units
+        - img [ref=e38]
+        - generic [ref=e41]: 组织架构
+      - link "字段配置" [ref=e265] [cursor=pointer]:
+        - /url: /app/org/units/field-configs
+        - img [ref=e44]
+        - generic [ref=e47]: 字段配置
+      - link "字典配置" [ref=e266] [cursor=pointer]:
+        - /url: /app/dicts
+        - img [ref=e50]
+        - generic [ref=e54]: 字典配置
+      - link "审批待办" [ref=e267] [cursor=pointer]:
+        - /url: /app/approvals
+        - img [ref=e57]
+        - generic [ref=e60]: 审批待办
+    - main [ref=e61]:
+      - generic [ref=e64]:
+        - heading "基座示例" [level=2] [ref=e268]
+        - paragraph [ref=e66]: P091 基座示例：树 + 表 + 详情侧栏 + 统一筛选栏
+      - generic [ref=e68]:
+        - generic [ref=e69]:
+          - generic: 搜索（姓名/部门/岗位）
+          - generic [ref=e70]:
+            - textbox "搜索（姓名/部门/岗位）" [ref=e269]
+            - group:
+              - generic: 搜索（姓名/部门/岗位）
+        - generic [ref=e72]:
+          - generic [ref=e73]: 状态
+          - generic [ref=e74]:
+            - combobox "状态" [ref=e270] [cursor=pointer]: 全部
+            - textbox: all
+            - img
+            - group:
+              - generic: 状态
+        - button "应用筛选" [ref=e271] [cursor=pointer]
+      - generic [ref=e77]:
+        - generic [ref=e78]:
+          - heading "部门树" [level=6] [ref=e272]
+          - tree [ref=e80]:
+            - treeitem "总部" [ref=e273]:
+              - generic [ref=e82] [cursor=pointer]:
+                - img [ref=e84]
+                - generic [ref=e87]: 总部
+        - generic [ref=e90]:
+          - grid [ref=e91]:
+            - row "姓名 部门 岗位 状态" [ref=e274]:
+              - columnheader "姓名" [ref=e275] [cursor=pointer]:
+                - generic [ref=e95]: 姓名
+                - generic [ref=e96]:
+                  - img
+              - columnheader "部门" [ref=e276] [cursor=pointer]:
+                - generic [ref=e99]: 部门
+                - generic [ref=e100]:
+                  - img
+              - columnheader "岗位" [ref=e277] [cursor=pointer]:
+                - generic [ref=e103]: 岗位
+                - generic [ref=e104]:
+                  - img
+              - columnheader "状态" [ref=e278] [cursor=pointer]:
+                - generic [ref=e107]: 状态
+                - generic [ref=e108]:
+                  - img
+            - rowgroup [ref=e109]:
+              - row "张三 人力资源部 HRBP 在职" [ref=e279]:
+                - gridcell "张三" [ref=e280]
+                - gridcell "人力资源部" [ref=e281]
+                - gridcell "HRBP" [ref=e282]
+                - gridcell "在职" [ref=e283]
+              - row "李四 财务部 会计 在职" [ref=e284]:
+                - gridcell "李四" [ref=e285]
+                - gridcell "财务部" [ref=e286]
+                - gridcell "会计" [ref=e287]
+                - gridcell "在职" [ref=e288]
+              - row "王五 前端组 前端工程师 在职" [ref=e289]:
+                - gridcell "王五" [ref=e290]
+                - gridcell "前端组" [ref=e291]
+                - gridcell "前端工程师" [ref=e292]
+                - gridcell "在职" [ref=e293]
+              - row "赵六 后端组 后端工程师 离职" [ref=e294]:
+                - gridcell "赵六" [ref=e295]
+                - gridcell "后端组" [ref=e296]
+                - gridcell "后端工程师" [ref=e297]
+                - gridcell "离职" [ref=e298]
+          - generic [ref=e133]:
+            - paragraph [ref=e134]: "Rows per page:"
+            - generic [ref=e135]:
+              - 'combobox "Rows per page: 10" [ref=e299] [cursor=pointer]': "10"
+              - textbox: "10"
+              - img
+            - paragraph [ref=e137]: 1–4 of 4
+            - generic [ref=e138]:
+              - button "Go to previous page" [disabled]:
+                - img
+              - button "Go to next page" [disabled]:
+                - img
+    - complementary "CubeBox" [ref=e300]:
+      - generic [ref=e146]:
+        - generic [ref=e147]:
+          - generic [ref=e148]:
+            - heading "新对话" [level=2] [ref=e301]
+            - paragraph [ref=e150]: "会话: conv_3a474ef6a1bd4ae5b0ff28e0202f04d0"
+          - generic [ref=e151]:
+            - generic "历史记录" [ref=e302]:
+              - button "历史记录" [ref=e303] [cursor=pointer]:
+                - img [ref=e154]
+            - generic "设置" [ref=e304]:
+              - button "设置" [active] [ref=e305] [cursor=pointer]:
+                - img [ref=e158]
+            - generic "新建对话" [ref=e306]:
+              - button "新建对话" [ref=e307] [cursor=pointer]:
+                - img [ref=e162]
+            - generic "压缩上下文" [ref=e308]:
+              - button "压缩上下文" [ref=e309] [cursor=pointer]:
+                - img [ref=e166]
+        - generic [ref=e168]:
+          - generic [ref=e169]:
+            - img [ref=e170]
+            - paragraph [ref=e172]: "会话: conv_3a474ef6a1bd4ae5b0ff28e0202f04d0"
+          - separator [ref=e173]
+          - list [ref=e174]:
+            - listitem [ref=e175]:
+              - generic [ref=e176]:
+                - generic [ref=e177]: 你
+                - paragraph [ref=e178]: /compact
+                - generic [ref=e179]: completed
+            - listitem [ref=e180]:
+              - generic [ref=e181]:
+                - generic [ref=e182]: CubeBox
+                - paragraph [ref=e183]: 已收到你的消息：你好 我正在整理回复。已收到你的消息：你好 有什么可以版主的吗 我需要查询最近的收入等等 可以吗 你方便吗 回答我啊 我正在整理回复。已收到你的消息：/compact 我正在整理回复。
+                - generic [ref=e184]: completed
+            - listitem [ref=e185]:
+              - generic [ref=e186]:
+                - generic [ref=e187]: 压缩摘要
+                - paragraph [ref=e188]: "user: 你好 assistant: 已收到你的消息：你好 我正在整理回复。"
+                - generic [ref=e189]: completed
+        - generic [ref=e191]:
+          - generic [ref=e192]:
+            - generic: 输入消息
+            - generic [ref=e193]:
+              - textbox "输入消息" [ref=e310]
+              - group:
+                - generic: 输入消息
+          - generic [ref=e195]:
+            - paragraph [ref=e196]: 已完成
+            - generic [ref=e197]:
+              - button "停止" [disabled]:
+                - generic:
+                  - img
+                - text: 停止
+              - button "发送" [disabled]:
+                - generic:
+                  - img
+                - text: 发送
+  - tooltip "设置" [ref=e311]:
+    - generic [ref=e312]: 设置

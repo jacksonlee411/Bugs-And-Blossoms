@@ -1,0 +1,38 @@
+- generic [ref=e3]:
+  - banner [ref=e4]:
+    - generic [ref=e5]:
+      - heading "Bugs & Blossoms · MUI X 工作台" [level=1] [ref=e6]
+      - button "Ctrl/Cmd + K" [ref=e7] [cursor=pointer]:
+        - img [ref=e8]
+      - button "深色" [ref=e10] [cursor=pointer]:
+        - img [ref=e11]
+      - generic [ref=e14]:
+        - img [ref=e16]
+        - combobox [ref=e18] [cursor=pointer]: 中文
+        - textbox: zh
+        - img
+        - group
+      - button "退出登录" [ref=e19] [cursor=pointer]:
+        - img [ref=e20]
+  - list [ref=e25]:
+    - link "基座示例" [ref=e26] [cursor=pointer]:
+      - /url: /app
+      - img [ref=e28]
+      - generic [ref=e32]: 基座示例
+    - link "组织架构" [ref=e33] [cursor=pointer]:
+      - /url: /app/org/units
+      - img [ref=e35]
+      - generic [ref=e38]: 组织架构
+    - link "字段配置" [ref=e39] [cursor=pointer]:
+      - /url: /app/org/units/field-configs
+      - img [ref=e41]
+      - generic [ref=e44]: 字段配置
+    - link "字典配置" [ref=e45] [cursor=pointer]:
+      - /url: /app/dicts
+      - img [ref=e47]
+      - generic [ref=e51]: 字典配置
+    - link "审批待办" [ref=e52] [cursor=pointer]:
+      - /url: /app/approvals
+      - img [ref=e54]
+      - generic [ref=e57]: 审批待办
+  - main [ref=e58]

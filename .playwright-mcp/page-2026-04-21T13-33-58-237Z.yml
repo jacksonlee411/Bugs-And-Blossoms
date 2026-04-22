@@ -1,0 +1,21 @@
+- generic [ref=e139]:
+  - generic [ref=e140]:
+    - heading "登录" [level=1] [ref=e141]
+    - paragraph [ref=e142]: 登录后继续
+  - generic [ref=e143]:
+    - generic:
+      - text: 邮箱
+      - generic: "*"
+    - generic [ref=e144]:
+      - textbox "邮箱" [ref=e145]
+      - group:
+        - generic: 邮箱 *
+  - generic [ref=e146]:
+    - generic:
+      - text: 密码
+      - generic: "*"
+    - generic [ref=e147]:
+      - textbox "密码" [ref=e148]
+      - group:
+        - generic: 密码 *
+  - button "登录" [ref=e149] [cursor=pointer]

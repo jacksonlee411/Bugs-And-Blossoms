@@ -1,0 +1,123 @@
+- generic [ref=e20]:
+  - banner [ref=e21]:
+    - generic [ref=e22]:
+      - heading "Bugs & Blossoms · MUI X 工作台" [level=1] [ref=e23]
+      - button "Ctrl/Cmd + K" [ref=e24] [cursor=pointer]:
+        - img [ref=e25]
+      - button "打开 CubeBox 抽屉" [ref=e27] [cursor=pointer]:
+        - img [ref=e28]
+      - button "浅色" [ref=e30] [cursor=pointer]:
+        - img [ref=e31]
+      - generic [ref=e34]:
+        - img [ref=e36]
+        - combobox [ref=e38] [cursor=pointer]: 中文
+        - textbox: zh
+        - img
+        - group
+      - button "退出登录" [ref=e39] [cursor=pointer]:
+        - img [ref=e40]
+  - list [ref=e45]:
+    - link "基座示例" [ref=e46] [cursor=pointer]:
+      - /url: /app
+      - img [ref=e48]
+      - generic [ref=e52]: 基座示例
+    - link "CubeBox" [ref=e53] [cursor=pointer]:
+      - /url: /app/cubebox
+      - img [ref=e55]
+      - generic [ref=e58]: CubeBox
+    - link "组织架构" [ref=e59] [cursor=pointer]:
+      - /url: /app/org/units
+      - img [ref=e61]
+      - generic [ref=e64]: 组织架构
+    - link "字段配置" [ref=e65] [cursor=pointer]:
+      - /url: /app/org/units/field-configs
+      - img [ref=e67]
+      - generic [ref=e70]: 字段配置
+    - link "字典配置" [ref=e71] [cursor=pointer]:
+      - /url: /app/dicts
+      - img [ref=e73]
+      - generic [ref=e77]: 字典配置
+    - link "审批待办" [ref=e78] [cursor=pointer]:
+      - /url: /app/approvals
+      - img [ref=e80]
+      - generic [ref=e83]: 审批待办
+  - main [ref=e84]:
+    - generic [ref=e87]:
+      - heading "基座示例" [level=2] [ref=e88]
+      - paragraph [ref=e89]: P091 基座示例：树 + 表 + 详情侧栏 + 统一筛选栏
+    - generic [ref=e91]:
+      - generic [ref=e92]:
+        - generic: 搜索（姓名/部门/岗位）
+        - generic [ref=e93]:
+          - textbox "搜索（姓名/部门/岗位）" [ref=e94]
+          - group:
+            - generic: 搜索（姓名/部门/岗位）
+      - generic [ref=e95]:
+        - generic [ref=e96]: 状态
+        - generic [ref=e97]:
+          - combobox "状态" [ref=e98] [cursor=pointer]: 全部
+          - textbox: all
+          - img
+          - group:
+            - generic: 状态
+      - button "应用筛选" [ref=e99] [cursor=pointer]
+    - generic [ref=e100]:
+      - generic [ref=e101]:
+        - heading "部门树" [level=6] [ref=e102]
+        - tree [ref=e103]:
+          - treeitem "总部" [ref=e104]:
+            - generic [ref=e105] [cursor=pointer]:
+              - img [ref=e107]
+              - generic [ref=e110]: 总部
+      - generic [ref=e113]:
+        - grid [ref=e114]:
+          - row "姓名 部门 岗位 状态" [ref=e115]:
+            - columnheader "姓名" [ref=e116] [cursor=pointer]:
+              - generic [ref=e118]: 姓名
+              - generic [ref=e119]:
+                - img
+            - columnheader "部门" [ref=e120] [cursor=pointer]:
+              - generic [ref=e122]: 部门
+              - generic [ref=e123]:
+                - img
+            - columnheader "岗位" [ref=e124] [cursor=pointer]:
+              - generic [ref=e126]: 岗位
+              - generic [ref=e127]:
+                - img
+            - columnheader "状态" [ref=e128] [cursor=pointer]:
+              - generic [ref=e130]: 状态
+              - generic [ref=e131]:
+                - img
+          - rowgroup [ref=e132]:
+            - row "张三 人力资源部 HRBP 在职" [ref=e133]:
+              - gridcell "张三" [ref=e134]
+              - gridcell "人力资源部" [ref=e135]
+              - gridcell "HRBP" [ref=e136]
+              - gridcell "在职" [ref=e137]
+            - row "李四 财务部 会计 在职" [ref=e138]:
+              - gridcell "李四" [ref=e139]
+              - gridcell "财务部" [ref=e140]
+              - gridcell "会计" [ref=e141]
+              - gridcell "在职" [ref=e142]
+            - row "王五 前端组 前端工程师 在职" [ref=e143]:
+              - gridcell "王五" [ref=e144]
+              - gridcell "前端组" [ref=e145]
+              - gridcell "前端工程师" [ref=e146]
+              - gridcell "在职" [ref=e147]
+            - row "赵六 后端组 后端工程师 离职" [ref=e148]:
+              - gridcell "赵六" [ref=e149]
+              - gridcell "后端组" [ref=e150]
+              - gridcell "后端工程师" [ref=e151]
+              - gridcell "离职" [ref=e152]
+        - generic [ref=e156]:
+          - paragraph [ref=e157]: "Rows per page:"
+          - generic [ref=e158]:
+            - 'combobox "Rows per page: 10" [ref=e159] [cursor=pointer]': "10"
+            - textbox: "10"
+            - img
+          - paragraph [ref=e160]: 1–4 of 4
+          - generic [ref=e161]:
+            - button "Go to previous page" [disabled]:
+              - img
+            - button "Go to next page" [disabled]:
+              - img
