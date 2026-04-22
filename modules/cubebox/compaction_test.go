@@ -40,7 +40,7 @@ func TestBuildPromptViewWithCompactionCompactsOldHistoryAndReinjectsCanonicalCon
 		PrincipalID:    "principal-a",
 		Language:       "zh",
 		Page:           "/app/cubebox",
-		Permissions:    []string{"cubebox.conversations:admin"},
+		Permissions:    []string{"cubebox.conversations:use"},
 		BusinessObject: "conversation",
 		Model:          "deterministic-runtime",
 	}, "请基于最新上下文继续回答")

@@ -163,6 +163,21 @@ Codex 在网关层只承担局部能力来源，不承担整体网关骨架：
 
 `PR-437A` 同时冻结 deterministic provider 口径：required gate 使用 mock SSE / fake provider / fixed transcript fixture，不把真实外部 provider 连通性作为 merge 前置条件。
 
+## 5C. Phase E 共享对象口径
+
+为避免 `433` 运行时与 `435` 管理面在 `PR-437E` 重新分叉，`Phase E` 统一消费以下共享对象名：
+
+- `provider`：运行时可被选择、验证、启停的上游供应商配置对象；不得再引入 `vendor` / `channel` 作为主名。
+- `credential`：附着在 provider 上、仅服务端可见明文的密钥或认证材料；UI 只消费掩码与版本/状态元信息。
+- `active model`：当前对话默认选择的模型对象，最小形状为 `provider + model slug + capability summary`；route alias / fallback / default model 暂不并入首期。
+- `health`：针对 provider 或 active model 组合的验证 / readiness 快照，最小形状包括 `status`、`validated_at`、`latency_ms`、`error_summary`。
+
+冻结规则：
+
+- `435` 只能消费这些对象名和最小形状，不能先做页面再反推运行时命名。
+- `433` 后续新增配置读取、验证、健康输出时，字段命名应优先贴齐 `435/5A` 中冻结的 Bifrost / Codex 参考对象。
+- 任何需要后移的 `route alias`、`fallback`、`quota`、`default model` 都必须继续留在非首期，不得借管理面需求提前回流。
+
 ## 6. CubeBox 网关目标架构
 
 ### 6.1 分层

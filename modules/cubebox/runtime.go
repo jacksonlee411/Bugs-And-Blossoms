@@ -55,6 +55,51 @@ type ConversationListResponse struct {
 	Items []ConversationListItem `json:"items"`
 }
 
+type ModelProvider struct {
+	ID           string `json:"id"`
+	ProviderType string `json:"provider_type"`
+	DisplayName  string `json:"display_name"`
+	BaseURL      string `json:"base_url"`
+	Enabled      bool   `json:"enabled"`
+	UpdatedAt    string `json:"updated_at"`
+	DisabledAt   string `json:"disabled_at,omitempty"`
+}
+
+type ModelCredential struct {
+	ID           string `json:"id"`
+	ProviderID   string `json:"provider_id"`
+	SecretRef    string `json:"secret_ref"`
+	MaskedSecret string `json:"masked_secret"`
+	Version      int    `json:"version"`
+	Active       bool   `json:"active"`
+	CreatedAt    string `json:"created_at"`
+	DisabledAt   string `json:"disabled_at,omitempty"`
+}
+
+type ActiveModelSelection struct {
+	ProviderID        string         `json:"provider_id"`
+	ModelSlug         string         `json:"model_slug"`
+	CapabilitySummary map[string]any `json:"capability_summary"`
+	UpdatedAt         string         `json:"updated_at"`
+}
+
+type ModelHealth struct {
+	ID           string `json:"id"`
+	ProviderID   string `json:"provider_id"`
+	ModelSlug    string `json:"model_slug"`
+	Status       string `json:"status"`
+	LatencyMS    *int   `json:"latency_ms,omitempty"`
+	ErrorSummary string `json:"error_summary,omitempty"`
+	ValidatedAt  string `json:"validated_at"`
+}
+
+type ModelSettingsSnapshot struct {
+	Providers   []ModelProvider       `json:"providers"`
+	Credentials []ModelCredential     `json:"credentials"`
+	Selection   *ActiveModelSelection `json:"selection,omitempty"`
+	Health      *ModelHealth          `json:"health,omitempty"`
+}
+
 type DeterministicTurn struct {
 	ConversationID     string
 	TurnID             string

@@ -75,6 +75,7 @@ export function AppShell({ navItems }: PropsWithChildren<AppShellProps>) {
   const cubeBoxShellMode: CubeBoxShellMode = cubeBoxWide ? 'wide' : cubeBoxDesktop ? 'medium' : 'compact'
   const cubeBoxDrawerVariant = cubeBoxDesktop ? 'persistent' : 'temporary'
   const cubeBoxToggleLabel = t(cubeBoxOpen ? 'cubebox_close_drawer' : 'cubebox_open_drawer')
+  const canAccessCubeBox = hasPermission('cubebox.conversations.read') || hasPermission('cubebox.conversations.use')
 
   const sortedNavItems = useMemo(() => [...navItems].sort((left, right) => left.order - right.order), [navItems])
   const visibleNavItems = useMemo(
@@ -247,7 +248,7 @@ export function AppShell({ navItems }: PropsWithChildren<AppShellProps>) {
                 <SearchIcon />
               </IconButton>
             </Tooltip>
-            {hasPermission('orgunit.read') ? (
+            {canAccessCubeBox ? (
               <Tooltip title={cubeBoxToggleLabel}>
                 <IconButton
                   aria-label={cubeBoxToggleLabel}

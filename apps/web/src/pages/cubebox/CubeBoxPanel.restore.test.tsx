@@ -25,6 +25,7 @@ describe('CubeBoxPanel restore flow', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     appPreferencesMocks.useAppPreferences.mockReturnValue({
+      hasPermission: vi.fn().mockReturnValue(true),
       t: (key: string) =>
         (
           {

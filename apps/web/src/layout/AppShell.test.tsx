@@ -139,4 +139,42 @@ describe('AppShell CubeBox shell', () => {
 
     expect(screen.getByRole('button', { name: '打开 CubeBox 抽屉' })).toHaveAttribute('aria-pressed', 'false')
   })
+
+  it('hides CubeBox entry when conversation permissions are missing', () => {
+    setViewport(1280)
+    appPreferencesMocks.useAppPreferences.mockReturnValue({
+      tenantId: 'tenant-a',
+      locale: 'zh',
+      setLocale: vi.fn(),
+      themeMode: 'light',
+      toggleThemeMode: vi.fn(),
+      navDebugMode: false,
+      hasPermission: vi.fn().mockImplementation((permissionKey?: string) => permissionKey === 'foundation.read'),
+      t: (key: string) =>
+        (
+          {
+            app_title: 'Bugs & Blossoms',
+            action_logout: '退出登录',
+            cubebox_open_drawer: '打开 CubeBox 抽屉',
+            cubebox_close_drawer: '关闭 CubeBox 抽屉',
+            page_cubebox_title: 'CubeBox',
+            global_search: '全局搜索',
+            global_search_placeholder: '搜索',
+            global_search_empty: '无结果',
+            language_zh: '中文',
+            language_en: 'English',
+            nav_foundation_demo: '基座示例',
+            nav_debug_mode: '导航调试',
+            search_source_navigation: '导航',
+            search_source_common: '常用',
+            theme_dark: '深色',
+            theme_light: '浅色'
+          } as Record<string, string>
+        )[key] ?? key
+    })
+
+    renderShell()
+
+    expect(screen.queryByRole('button', { name: '打开 CubeBox 抽屉' })).not.toBeInTheDocument()
+  })
 })

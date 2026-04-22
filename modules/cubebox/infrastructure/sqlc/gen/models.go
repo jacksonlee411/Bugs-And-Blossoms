@@ -31,6 +31,56 @@ type IamCubeboxConversationEvent struct {
 	CreatedAt      pgtype.Timestamptz `json:"created_at"`
 }
 
+type IamCubeboxModelCredential struct {
+	TenantUuid           pgtype.UUID        `json:"tenant_uuid"`
+	CredentialID         string             `json:"credential_id"`
+	ProviderID           string             `json:"provider_id"`
+	SecretRef            string             `json:"secret_ref"`
+	MaskedSecret         string             `json:"masked_secret"`
+	Version              int32              `json:"version"`
+	Active               bool               `json:"active"`
+	CreatedByPrincipalID pgtype.UUID        `json:"created_by_principal_id"`
+	CreatedAt            pgtype.Timestamptz `json:"created_at"`
+	DisabledAt           pgtype.Timestamptz `json:"disabled_at"`
+}
+
+type IamCubeboxModelHealthCheck struct {
+	TenantUuid             pgtype.UUID        `json:"tenant_uuid"`
+	HealthCheckID          string             `json:"health_check_id"`
+	ProviderID             string             `json:"provider_id"`
+	ModelSlug              string             `json:"model_slug"`
+	Status                 string             `json:"status"`
+	LatencyMs              *int32             `json:"latency_ms"`
+	ErrorSummary           *string            `json:"error_summary"`
+	ValidatedByPrincipalID pgtype.UUID        `json:"validated_by_principal_id"`
+	ValidatedAt            pgtype.Timestamptz `json:"validated_at"`
+}
+
+type IamCubeboxModelProvider struct {
+	TenantUuid           pgtype.UUID        `json:"tenant_uuid"`
+	ProviderID           string             `json:"provider_id"`
+	ProviderType         string             `json:"provider_type"`
+	DisplayName          string             `json:"display_name"`
+	BaseUrl              string             `json:"base_url"`
+	Enabled              bool               `json:"enabled"`
+	CreatedByPrincipalID pgtype.UUID        `json:"created_by_principal_id"`
+	UpdatedByPrincipalID pgtype.UUID        `json:"updated_by_principal_id"`
+	CreatedAt            pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt            pgtype.Timestamptz `json:"updated_at"`
+	DisabledAt           pgtype.Timestamptz `json:"disabled_at"`
+}
+
+type IamCubeboxModelSelection struct {
+	TenantUuid            pgtype.UUID        `json:"tenant_uuid"`
+	SelectionID           string             `json:"selection_id"`
+	ProviderID            string             `json:"provider_id"`
+	ModelSlug             string             `json:"model_slug"`
+	CapabilitySummary     []byte             `json:"capability_summary"`
+	SelectedByPrincipalID pgtype.UUID        `json:"selected_by_principal_id"`
+	CreatedAt             pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt             pgtype.Timestamptz `json:"updated_at"`
+}
+
 type IamDict struct {
 	TenantUuid pgtype.UUID        `json:"tenant_uuid"`
 	DictCode   string             `json:"dict_code"`

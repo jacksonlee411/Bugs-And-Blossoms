@@ -315,6 +315,24 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, error) {
 	router.Handle(routing.RouteClassInternalAPI, http.MethodPost, "/internal/cubebox/turns/{turn_id}:interrupt", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		handleCubeBoxInterruptTurnAPI(w, r, cubeboxRuntime)
 	}))
+	router.Handle(routing.RouteClassInternalAPI, http.MethodGet, "/internal/cubebox/settings", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handleCubeBoxSettingsAPI(w, r, cubeboxStore)
+	}))
+	router.Handle(routing.RouteClassInternalAPI, http.MethodPost, "/internal/cubebox/settings/providers", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handleCubeBoxSettingsProvidersAPI(w, r, cubeboxStore)
+	}))
+	router.Handle(routing.RouteClassInternalAPI, http.MethodPost, "/internal/cubebox/settings/credentials", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handleCubeBoxSettingsCredentialsAPI(w, r, cubeboxStore)
+	}))
+	router.Handle(routing.RouteClassInternalAPI, http.MethodPost, "/internal/cubebox/settings/credentials/{credential_id}:deactivate", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handleCubeBoxSettingsCredentialDeactivateAPI(w, r, cubeboxStore)
+	}))
+	router.Handle(routing.RouteClassInternalAPI, http.MethodPost, "/internal/cubebox/settings/selection", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handleCubeBoxSettingsSelectionAPI(w, r, cubeboxStore)
+	}))
+	router.Handle(routing.RouteClassInternalAPI, http.MethodPost, "/internal/cubebox/settings/verify", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handleCubeBoxSettingsVerifyAPI(w, r, cubeboxStore)
+	}))
 	assetsSub, _ := fs.Sub(embeddedAssets, "assets")
 
 	entrypoint := http.NewServeMux()

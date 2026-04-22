@@ -73,3 +73,48 @@ export interface CubeBoxState {
   errorMessage: string | null
   compacting: boolean
 }
+
+export interface CubeBoxModelProvider {
+  id: string
+  provider_type: string
+  display_name: string
+  base_url: string
+  enabled: boolean
+  updated_at: string
+  disabled_at?: string
+}
+
+export interface CubeBoxModelCredential {
+  id: string
+  provider_id: string
+  secret_ref: string
+  masked_secret: string
+  version: number
+  active: boolean
+  created_at: string
+  disabled_at?: string
+}
+
+export interface CubeBoxActiveModelSelection {
+  provider_id: string
+  model_slug: string
+  capability_summary: Record<string, unknown>
+  updated_at: string
+}
+
+export interface CubeBoxModelHealth {
+  id: string
+  provider_id: string
+  model_slug: string
+  status: 'healthy' | 'degraded' | 'failed'
+  latency_ms?: number
+  error_summary?: string
+  validated_at: string
+}
+
+export interface CubeBoxModelSettingsSnapshot {
+  providers: CubeBoxModelProvider[]
+  credentials: CubeBoxModelCredential[]
+  selection?: CubeBoxActiveModelSelection | null
+  health?: CubeBoxModelHealth | null
+}

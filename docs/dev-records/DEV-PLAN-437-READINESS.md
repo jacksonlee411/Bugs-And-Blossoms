@@ -12,7 +12,7 @@
 - owner：`DEV-PLAN-437`
 - 当前结论：`PR-437A` 已完成其文档层收敛范围，且当前实现已命中右侧抽屉、`/internal/cubebox`、`modules/cubebox` 三个冻结路径并通过对应门禁，因此 `Phase A` 已完成，`Phase B` 已完成当前范围内的收口验证。
 - `2026-04-21` 更新：当前实现已完成本地对话运行时、SSE handler、右侧抽屉共享 reducer、右侧入口打通，并完成前端依赖补齐、Vitest 回归、类型检查、构建验证与 Go/routing/authz/chat-surface-clean 收口。
-- `2026-04-21` 更新：为符合 `DEV-PLAN-003` 的“分阶段冻结边界而非临时绕行”要求，当前前端入口权限暂时统一复用现有 `orgunit.read`；正式权限矩阵仍由 `Phase E / 435` owner 收口。
+- `2026-04-22` 更新：前端 CubeBox 入口已从临时 `orgunit.read` 收口为 `cubebox.conversations.read/use`；抽屉内 settings 权限也已拆分为 `read/update/rotate/select/verify/deactivate`，但正式四类角色矩阵仍由 `Phase E / 435` owner 收口。
 - `2026-04-21` 更新：根据当前产品决策，CubeBox 已从“页面 + 抽屉双承载”收口为“仅右侧抽屉承载”；`/app/cubebox` 路由、左侧导航入口与完整页面跳转按钮均已移除。
 
 ## 阶段总览
@@ -23,7 +23,7 @@
 | `Phase B` | `PR-437B` | `431`、`433` | 首轮可用对话链路 | `已完成` |
 | `Phase C` | `PR-437C` | `432`、`431` | 会话持久化与恢复 | `已具备正式封板条件` |
 | `Phase D` | `PR-437D` | `434`、`431` | 压缩最小闭环 | `已具备正式封板条件` |
-| `Phase E` | `PR-437E` | `435`、`433` | 管理面与权限闭环 | `未开始` |
+| `Phase E` | `PR-437E` | `435`、`433` | 管理面与权限闭环 | `最小运行态闭环已通过，权限矩阵与完整管理面未封板` |
 
 ## Phase A / PR-437A
 
@@ -76,6 +76,7 @@
 | `431` 最小映射冻结 | `docs/dev-plans/431-codex-ui-protocol-and-shell-reuse-plan.md` | `commit SHA` + 文件级映射 | `已补` |
 | `433` 最小映射冻结 | `docs/dev-plans/433-bifrost-centric-ai-gateway-reuse-and-reconstruction-plan.md` | `commit SHA` + 文件级映射 | `已补` |
 | `434` 最小映射冻结 | `docs/dev-plans/434-codex-context-management-and-compaction-reuse-plan.md` | `commit SHA` + 文件级映射 | `已补` |
+| `435` Phase E 映射冻结 | `docs/dev-plans/435-bifrost-centric-model-config-ui-and-admin-governance-plan.md` | `commit SHA` + 对象级映射 + 采用状态 | `2026-04-22 已补首轮冻结` |
 | 共享 canonical contract | `docs/dev-plans/437a-cubebox-phase-a-canonical-conversation-contract.md` | 文档 diff + owner 对齐说明 | `已补` |
 | 本地运行时口径 | `433` / companion doc / fixture 方案文档 | 文档 diff + fixture 路径 | `口径已冻结；代码/fixture 已有首轮实现` |
 
@@ -255,12 +256,25 @@
   - provider / active model / credential / health UI
   - Authz 矩阵
   - validation / readiness / masking / rotation 证据
+- `2026-04-22` 文档前置冻结已补：
+  - `435/5A` 已固定 `Bifrost 865c097cadcfe3677dbf2cc0fb1d63a699fab552`、`One API 8df4a2670b98266bd287c698243fff327d9748cf`、`Codex 69c8913e24f2f455c8f000fa7afe039a38bdd48d`
+  - `435/5A` 已将 `provider config / provider keys / health / active model / capability metadata` 映射到具体上游对象，不再停留在“风格参考”
+  - `433/5C` 已冻结 `provider` / `credential` / `active model` / `health` 共享对象名，避免 `433` 与 `435` 双命名
+- `2026-04-22` 运行态 / 页面态验证已补：
+  - `:8080` 上已重建并切到新版前端静态产物，右上角 CubeBox 抽屉与抽屉内齿轮 settings 入口可见
+  - 抽屉内 `CubeBox 设置` 弹窗已不再是旧占位文案，而是最小真实表单：当前模型、health、provider、credential、active model、verify 均可见
+  - 运行态已验证 `provider -> credential / selection / verify` 最小链路可通，settings 读面已能回显真实配置与健康数据
+- 当前裁决：
+  - `PR-437E` 已不再是“未开始”；当前已完成抽屉内 settings 弹窗的首轮实现，且最小运行态闭环已通过
+  - 但 `PR-437E` 仍未封板：当前实现尚不足以覆盖 `435` 要求的完整管理面 IA，也尚未完成 `platform admin / platform operator / tenant admin / user` 权限矩阵落地
+  - 实施入口应继续沿 `435 Slice 5.1-5.5` 与 `433 Slice 2.3/2.4` 收口，而不是把当前临时 settings 弹窗误记为 `Phase E` 已完成
 
 ## 当前风险
 
 - `437A` 已存在，但若后续实现没有真正消费该 companion doc，`431/432/434` 仍可能在代码层重新分叉。
 - 若 `435` 抢在 `433` 运行时对象命名前先做管理面，会重新引入 Slice 2 / Slice 5 双主参考或双命名问题。
-- 若继续把“完整映射表冻结”当作普遍前置，路线图虽然存在，开工节奏仍会停在文档层。
+- `435/5A` 虽已冻结，但若实现时绕开这些对象级映射，仍会退回“名义参考 Bifrost、实际自研管理面”的偏航。
+- 当前仓内虽然已有最小 settings API 与抽屉内 settings 弹窗，但 `cubebox.model_provider` / `cubebox.model_credential` / `cubebox.model_selection` 的 Authz object/action 与四类角色边界仍未完整落地，`PR-437E` 的真正风险已从“文档未冻结”转为“代码只完成了临时形态，尚未收口为正式管理面”。
 
 ## 当前裁决
 
@@ -268,7 +282,9 @@
 - `PR-437A` 已完成文档层冻结与门禁语义收敛，`Phase B` 已完成首轮对话能力并通过相应验证。
 - `PR-437C` 已具备正式封板条件：正式数据面、最小 lifecycle API、抽屉恢复、压缩后恢复、跨租户 fail-closed，以及 store/API/UI 共用 lifecycle roundtrip golden 均已落地并有回归证据。
 - `PR-437D` 已具备正式封板条件：最小 compaction 闭环、恢复链路、prompt shape fixture / snapshot、no-op 收口与并发序号安全均已落地并回填证据。
-- 下一步可切入 `PR-437E` / `435` / `433` 的管理面与权限闭环，不需要再把 `Phase D` 维持在“进行中”状态。
+- `PR-437E` 的文档前置条件现已补齐，且首轮代码已进入运行态：新版 settings 弹窗、settings 读面与最小 provider / credential / selection / verify 链路已可验证。
+- `PR-437E` 当前应记为“最小运行态闭环已通过，权限矩阵与完整管理面未封板”：新版 settings 入口和最小表单已存在，但完整管理面 IA 与四类角色权限矩阵仍未落地。
+- 下一步应继续围绕 `435` 的正式管理面 IA 与 `subject/domain/object/action` 权限矩阵收口，而不是再把 `PR-437E` 口径表述为“尚未进入代码阶段”。
 
 ## 关联文档
 

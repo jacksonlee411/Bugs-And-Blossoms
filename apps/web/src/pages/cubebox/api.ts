@@ -1,6 +1,16 @@
 import { ApiClientError } from '../../api/errors'
 import { resolveApiErrorMessage } from '../../errors/presentApiError'
-import type { CanonicalEvent, CompactConversationResponse, ConversationReplayResponse, CubeBoxConversationListResponse } from './types'
+import type {
+  CanonicalEvent,
+  CompactConversationResponse,
+  ConversationReplayResponse,
+  CubeBoxConversationListResponse,
+  CubeBoxModelCredential,
+  CubeBoxModelHealth,
+  CubeBoxModelProvider,
+  CubeBoxModelSettingsSnapshot,
+  CubeBoxActiveModelSelection
+} from './types'
 
 async function readError(response: Response, fallbackCode: string, fallbackMessage: string): Promise<never> {
   let code = fallbackCode
@@ -169,4 +179,118 @@ export async function interruptTurn(turnID: string, conversationID: string): Pro
   if (!response.ok) {
     await readError(response, 'cubebox_turn_interrupt_failed', `interrupt turn failed: ${response.status}`)
   }
+}
+
+export async function loadModelSettings(): Promise<CubeBoxModelSettingsSnapshot> {
+  const response = await fetch('/internal/cubebox/settings', {
+    credentials: 'include',
+    method: 'GET'
+  })
+  if (!response.ok) {
+    await readError(response, 'ai_model_config_invalid', `load model settings failed: ${response.status}`)
+  }
+  return (await response.json()) as CubeBoxModelSettingsSnapshot
+}
+
+export async function upsertModelProvider(input: {
+  providerID: string
+  providerType: string
+  displayName: string
+  baseURL: string
+  enabled: boolean
+}): Promise<CubeBoxModelProvider> {
+  const response = await fetch('/internal/cubebox/settings/providers', {
+    credentials: 'include',
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      provider_id: input.providerID,
+      provider_type: input.providerType,
+      display_name: input.displayName,
+      base_url: input.baseURL,
+      enabled: input.enabled
+    })
+  })
+  if (!response.ok) {
+    await readError(response, 'ai_model_config_invalid', `save provider failed: ${response.status}`)
+  }
+  return (await response.json()) as CubeBoxModelProvider
+}
+
+export async function rotateModelCredential(input: {
+  providerID: string
+  secretRef: string
+  maskedSecret: string
+}): Promise<CubeBoxModelCredential> {
+  const response = await fetch('/internal/cubebox/settings/credentials', {
+    credentials: 'include',
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      provider_id: input.providerID,
+      secret_ref: input.secretRef,
+      masked_secret: input.maskedSecret
+    })
+  })
+  if (!response.ok) {
+    await readError(response, 'ai_model_secret_missing', `rotate credential failed: ${response.status}`)
+  }
+  return (await response.json()) as CubeBoxModelCredential
+}
+
+export async function deactivateModelCredential(credentialID: string): Promise<CubeBoxModelCredential> {
+  const response = await fetch(`/internal/cubebox/settings/credentials/${credentialID}:deactivate`, {
+    credentials: 'include',
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json'
+    },
+    body: '{}'
+  })
+  if (!response.ok) {
+    await readError(response, 'ai_model_config_invalid', `deactivate credential failed: ${response.status}`)
+  }
+  return (await response.json()) as CubeBoxModelCredential
+}
+
+export async function selectActiveModel(input: {
+  providerID: string
+  modelSlug: string
+  capabilitySummary: Record<string, unknown>
+}): Promise<CubeBoxActiveModelSelection> {
+  const response = await fetch('/internal/cubebox/settings/selection', {
+    credentials: 'include',
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      provider_id: input.providerID,
+      model_slug: input.modelSlug,
+      capability_summary: input.capabilitySummary
+    })
+  })
+  if (!response.ok) {
+    await readError(response, 'ai_model_config_invalid', `select active model failed: ${response.status}`)
+  }
+  return (await response.json()) as CubeBoxActiveModelSelection
+}
+
+export async function verifyActiveModel(): Promise<CubeBoxModelHealth> {
+  const response = await fetch('/internal/cubebox/settings/verify', {
+    credentials: 'include',
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json'
+    },
+    body: '{}'
+  })
+  if (!response.ok) {
+    await readError(response, 'ai_model_provider_unavailable', `verify active model failed: ${response.status}`)
+  }
+  return (await response.json()) as CubeBoxModelHealth
 }

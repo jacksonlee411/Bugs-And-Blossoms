@@ -172,11 +172,11 @@ owner：
 5. [X] stop/interrupt 可见且可回归测试。
 6. [X] 不要求真实持久化，不要求真实 provider health，不要求 active model 管理面闭环。
 
-Phase B 临时权限口径：
+Phase B 入口权限说明：
 
-- 在 `435` 的正式权限矩阵冻结前，右侧抽屉入口的前端可见性权限暂时统一复用现有 `orgunit.read`。
-- 这只是首轮能力的入口可发现性占位，不改变后端 runtime object 命名；服务端鉴权对象仍保持 `cubebox.conversations`。
-- 待 `435` 落地正式权限矩阵后，再把前端入口权限从临时可见性权限收口为最终命名；不得把本阶段占位口径误当作长期 owner。
+- 首轮对话能力的运行时 object 始终保持 `cubebox.conversations`，不再借用其他业务域对象命名。
+- `2026-04-22` 起，前端抽屉入口已从早期临时 `orgunit.read` 收口为 `cubebox.conversations.read/use`。
+- 完整四类角色矩阵仍由 `435` 继续收口；不得把当前已落地的最小动作键误记为最终角色设计已完成。
 
 阶段完成定义：
 
@@ -246,6 +246,13 @@ owner：
 
 目标：在运行时对象命名已经稳定后，再补 provider/config 管理面。
 
+当前状态（`2026-04-22`）：
+
+- `435/5A` 上游映射已完成首轮冻结：`Bifrost` 为唯一主参考，`One API` 仅补 IA，`Codex` 仅补 capability / metadata。
+- `433/5C` 已补 `provider` / `credential` / `active model` / `health` 共享对象口径，`PR-437E` 已完成最小运行态闭环。
+- 代码实现已进入首轮落地：右侧抽屉内 `settings` 入口、新版 settings 弹窗、provider / credential / active model / verify 最小表单与后端链路已通过页面运行态验证。
+- 当前仍未封板：完整管理面 IA、`platform admin / platform operator / tenant admin / user` 权限矩阵、Authz object/action 最终收口，以及管理面 E2E 仍属本阶段待办。
+
 owner：
 
 - `435`：provider/credential/active model/health 管理面与权限矩阵
@@ -310,6 +317,8 @@ owner：
 
 - `435` provider/config/health/credential 页面
 - `433` health/validation 运行时语义补齐
+
+当前状态：最小运行态闭环已通过，但仅完成“抽屉内 settings 弹窗 + 最小运行时配置表单”这一首轮落点；完整管理面 IA 与四类角色权限矩阵仍未完成，因此当前应记为“最小运行态闭环已通过，权限矩阵与完整管理面未封板”。
 
 ## 7. 测试与验收
 

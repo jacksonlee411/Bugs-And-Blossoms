@@ -13,13 +13,19 @@ import (
 )
 
 type cubeboxStoreStub struct {
-	createFn  func(context.Context, string, string) (cubebox.ConversationReplayResponse, error)
-	getFn     func(context.Context, string, string, string) (cubebox.ConversationReplayResponse, error)
-	listFn    func(context.Context, string, string, int32) (cubebox.ConversationListResponse, error)
-	renameFn  func(context.Context, string, string, string, string) (cubebox.ConversationReplayResponse, error)
-	archiveFn func(context.Context, string, string, string, bool) (cubebox.ConversationReplayResponse, error)
-	compactFn func(context.Context, string, string, string, cubebox.CanonicalContext, string) (cubebox.CompactConversationResponse, error)
-	appendFn  func(context.Context, string, string, string, cubebox.CanonicalEvent) error
+	createFn               func(context.Context, string, string) (cubebox.ConversationReplayResponse, error)
+	getFn                  func(context.Context, string, string, string) (cubebox.ConversationReplayResponse, error)
+	listFn                 func(context.Context, string, string, int32) (cubebox.ConversationListResponse, error)
+	renameFn               func(context.Context, string, string, string, string) (cubebox.ConversationReplayResponse, error)
+	archiveFn              func(context.Context, string, string, string, bool) (cubebox.ConversationReplayResponse, error)
+	compactFn              func(context.Context, string, string, string, cubebox.CanonicalContext, string) (cubebox.CompactConversationResponse, error)
+	appendFn               func(context.Context, string, string, string, cubebox.CanonicalEvent) error
+	settingsFn             func(context.Context, string) (cubebox.ModelSettingsSnapshot, error)
+	providerFn             func(context.Context, string, string, cubebox.UpsertModelProviderInput) (cubebox.ModelProvider, error)
+	credentialFn           func(context.Context, string, string, cubebox.RotateModelCredentialInput) (cubebox.ModelCredential, error)
+	deactivateCredentialFn func(context.Context, string, string) (cubebox.ModelCredential, error)
+	selectionFn            func(context.Context, string, string, cubebox.SelectActiveModelInput) (cubebox.ActiveModelSelection, error)
+	verifyFn               func(context.Context, string, string) (cubebox.ModelHealth, error)
 }
 
 func (s cubeboxStoreStub) CreateConversation(ctx context.Context, tenantID string, principalID string) (cubebox.ConversationReplayResponse, error) {
@@ -61,6 +67,48 @@ func (s cubeboxStoreStub) AppendEvent(ctx context.Context, tenantID string, prin
 		return nil
 	}
 	return s.appendFn(ctx, tenantID, principalID, conversationID, event)
+}
+
+func (s cubeboxStoreStub) GetModelSettings(ctx context.Context, tenantID string) (cubebox.ModelSettingsSnapshot, error) {
+	if s.settingsFn == nil {
+		return cubebox.ModelSettingsSnapshot{}, errors.New("unexpected")
+	}
+	return s.settingsFn(ctx, tenantID)
+}
+
+func (s cubeboxStoreStub) UpsertModelProvider(ctx context.Context, tenantID string, principalID string, input cubebox.UpsertModelProviderInput) (cubebox.ModelProvider, error) {
+	if s.providerFn == nil {
+		return cubebox.ModelProvider{}, errors.New("unexpected")
+	}
+	return s.providerFn(ctx, tenantID, principalID, input)
+}
+
+func (s cubeboxStoreStub) RotateModelCredential(ctx context.Context, tenantID string, principalID string, input cubebox.RotateModelCredentialInput) (cubebox.ModelCredential, error) {
+	if s.credentialFn == nil {
+		return cubebox.ModelCredential{}, errors.New("unexpected")
+	}
+	return s.credentialFn(ctx, tenantID, principalID, input)
+}
+
+func (s cubeboxStoreStub) DeactivateCredential(ctx context.Context, tenantID string, credentialID string) (cubebox.ModelCredential, error) {
+	if s.deactivateCredentialFn == nil {
+		return cubebox.ModelCredential{}, errors.New("unexpected")
+	}
+	return s.deactivateCredentialFn(ctx, tenantID, credentialID)
+}
+
+func (s cubeboxStoreStub) SelectActiveModel(ctx context.Context, tenantID string, principalID string, input cubebox.SelectActiveModelInput) (cubebox.ActiveModelSelection, error) {
+	if s.selectionFn == nil {
+		return cubebox.ActiveModelSelection{}, errors.New("unexpected")
+	}
+	return s.selectionFn(ctx, tenantID, principalID, input)
+}
+
+func (s cubeboxStoreStub) VerifyActiveModel(ctx context.Context, tenantID string, principalID string) (cubebox.ModelHealth, error) {
+	if s.verifyFn == nil {
+		return cubebox.ModelHealth{}, errors.New("unexpected")
+	}
+	return s.verifyFn(ctx, tenantID, principalID)
 }
 
 func TestCubeBoxCreateConversationAPI(t *testing.T) {
@@ -327,6 +375,69 @@ func TestCubeBoxStreamTurnAPIWritesFallbackErrorWhenAppendFails(t *testing.T) {
 	}
 }
 
+func TestCubeBoxSettingsAPI(t *testing.T) {
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/internal/cubebox/settings", nil)
+	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
+	req = req.WithContext(withPrincipal(req.Context(), Principal{ID: "p1"}))
+
+	handleCubeBoxSettingsAPI(rec, req, cubeboxStoreStub{
+		settingsFn: func(_ context.Context, tenantID string) (cubebox.ModelSettingsSnapshot, error) {
+			if tenantID != "t1" {
+				t.Fatalf("tenant=%q", tenantID)
+			}
+			return cubebox.ModelSettingsSnapshot{
+				Providers: []cubebox.ModelProvider{{ID: "openai-compatible", ProviderType: "openai-compatible", DisplayName: "Primary", BaseURL: "https://example.invalid/v1", Enabled: true}},
+			}, nil
+		},
+	})
+
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"providers"`) {
+		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestCubeBoxSettingsProvidersAPI(t *testing.T) {
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/internal/cubebox/settings/providers", strings.NewReader(`{"provider_id":"openai-compatible","provider_type":"openai-compatible","display_name":"Primary","base_url":"https://example.invalid/v1","enabled":true}`))
+	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
+	req = req.WithContext(withPrincipal(req.Context(), Principal{ID: "p1"}))
+
+	handleCubeBoxSettingsProvidersAPI(rec, req, cubeboxStoreStub{
+		providerFn: func(_ context.Context, tenantID string, principalID string, input cubebox.UpsertModelProviderInput) (cubebox.ModelProvider, error) {
+			if tenantID != "t1" || principalID != "p1" || input.ProviderID != "openai-compatible" {
+				t.Fatalf("tenant=%q principal=%q input=%+v", tenantID, principalID, input)
+			}
+			return cubebox.ModelProvider{ID: input.ProviderID, ProviderType: input.ProviderType, DisplayName: input.DisplayName, BaseURL: input.BaseURL, Enabled: input.Enabled}, nil
+		},
+	})
+
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"openai-compatible"`) {
+		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestCubeBoxSettingsVerifyAPI(t *testing.T) {
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/internal/cubebox/settings/verify", strings.NewReader(`{}`))
+	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
+	req = req.WithContext(withPrincipal(req.Context(), Principal{ID: "p1"}))
+
+	handleCubeBoxSettingsVerifyAPI(rec, req, cubeboxStoreStub{
+		verifyFn: func(_ context.Context, tenantID string, principalID string) (cubebox.ModelHealth, error) {
+			if tenantID != "t1" || principalID != "p1" {
+				t.Fatalf("tenant=%q principal=%q", tenantID, principalID)
+			}
+			latency := 120
+			return cubebox.ModelHealth{ID: "health_1", ProviderID: "openai-compatible", ModelSlug: "gpt-4.1", Status: "healthy", LatencyMS: &latency}, nil
+		},
+	})
+
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"healthy"`) {
+		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+	}
+}
+
 func TestCubeBoxStreamTurnAPIUsesUUIDEventIDs(t *testing.T) {
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodPost, "/internal/cubebox/turns:stream", strings.NewReader(`{"conversation_id":"conv_1","prompt":"hello","next_sequence":48}`))
@@ -515,22 +626,22 @@ func TestCubeBoxCompactConversationAPI(t *testing.T) {
 			if canonicalContext.TenantID != "t1" || canonicalContext.PrincipalID != "p1" {
 				t.Fatalf("unexpected canonical context=%+v", canonicalContext)
 			}
-				event := cubebox.CanonicalEvent{
-						EventID:        "evt_compact",
-						ConversationID: "conv_1",
-						Sequence:       5,
-						Type:           "turn.context_compacted",
-						Payload: map[string]any{
-							"summary_id":   "summary_1",
-							"source_range": []int{1, 4},
-						},
-					}
-				return cubebox.CompactConversationResponse{
-					Conversation: cubebox.Conversation{ID: "conv_1", Title: "新对话", Status: "active"},
-					Event:        &event,
-					PromptView:   []cubebox.PromptItem{{Role: "system", Content: "tenant=t1"}},
-					NextSequence: 6,
-				}, nil
+			event := cubebox.CanonicalEvent{
+				EventID:        "evt_compact",
+				ConversationID: "conv_1",
+				Sequence:       5,
+				Type:           "turn.context_compacted",
+				Payload: map[string]any{
+					"summary_id":   "summary_1",
+					"source_range": []int{1, 4},
+				},
+			}
+			return cubebox.CompactConversationResponse{
+				Conversation: cubebox.Conversation{ID: "conv_1", Title: "新对话", Status: "active"},
+				Event:        &event,
+				PromptView:   []cubebox.PromptItem{{Role: "system", Content: "tenant=t1"}},
+				NextSequence: 6,
+			}, nil
 		},
 	})
 
@@ -588,7 +699,9 @@ func TestCubeBoxLoadConversationAPIReturnsPhaseCLifecycleRoundtripGolden(t *test
 	req = req.WithContext(withPrincipal(req.Context(), Principal{ID: "p1"}))
 
 	handleCubeBoxLoadConversationAPI(rec, req, cubeboxStoreStub{
-		createFn: func(context.Context, string, string) (cubebox.ConversationReplayResponse, error) { return cubebox.ConversationReplayResponse{}, errors.New("unexpected") },
+		createFn: func(context.Context, string, string) (cubebox.ConversationReplayResponse, error) {
+			return cubebox.ConversationReplayResponse{}, errors.New("unexpected")
+		},
 		getFn: func(_ context.Context, tenantID string, principalID string, conversationID string) (cubebox.ConversationReplayResponse, error) {
 			if tenantID != "t1" || principalID != "p1" || conversationID != "conv_roundtrip" {
 				t.Fatalf("unexpected args tenant=%s principal=%s conversation=%s", tenantID, principalID, conversationID)
@@ -607,9 +720,15 @@ func TestCubeBoxLoadConversationAPIReturnsPhaseCLifecycleRoundtripGolden(t *test
 				NextSequence: 8,
 			}, nil
 		},
-		listFn:    func(context.Context, string, string, int32) (cubebox.ConversationListResponse, error) { return cubebox.ConversationListResponse{}, errors.New("unexpected") },
-		renameFn:  func(context.Context, string, string, string, string) (cubebox.ConversationReplayResponse, error) { return cubebox.ConversationReplayResponse{}, errors.New("unexpected") },
-		archiveFn: func(context.Context, string, string, string, bool) (cubebox.ConversationReplayResponse, error) { return cubebox.ConversationReplayResponse{}, errors.New("unexpected") },
+		listFn: func(context.Context, string, string, int32) (cubebox.ConversationListResponse, error) {
+			return cubebox.ConversationListResponse{}, errors.New("unexpected")
+		},
+		renameFn: func(context.Context, string, string, string, string) (cubebox.ConversationReplayResponse, error) {
+			return cubebox.ConversationReplayResponse{}, errors.New("unexpected")
+		},
+		archiveFn: func(context.Context, string, string, string, bool) (cubebox.ConversationReplayResponse, error) {
+			return cubebox.ConversationReplayResponse{}, errors.New("unexpected")
+		},
 	})
 
 	if rec.Code != http.StatusOK {
@@ -665,13 +784,13 @@ func TestCubeBoxStreamTurnAPIPreTurnAutoCompactUsesActorAndUpdatedSequence(t *te
 			if reason != "pre_turn_auto" {
 				t.Fatalf("unexpected compact reason=%s", reason)
 			}
-				event := cubebox.CanonicalEvent{EventID: "evt_compact", ConversationID: "conv_1", Sequence: 8, Type: "turn.context_compacted"}
-				return cubebox.CompactConversationResponse{
-					Conversation: cubebox.Conversation{ID: "conv_1", Title: "新对话", Status: "active"},
-					Event:        &event,
-					NextSequence: 12,
-				}, nil
-			},
+			event := cubebox.CanonicalEvent{EventID: "evt_compact", ConversationID: "conv_1", Sequence: 8, Type: "turn.context_compacted"}
+			return cubebox.CompactConversationResponse{
+				Conversation: cubebox.Conversation{ID: "conv_1", Title: "新对话", Status: "active"},
+				Event:        &event,
+				NextSequence: 12,
+			}, nil
+		},
 		appendFn: func(_ context.Context, tenantID string, principalID string, conversationID string, event cubebox.CanonicalEvent) error {
 			if tenantID != "tenant-a" || principalID != "principal-a" || conversationID != "conv_1" {
 				t.Fatalf("unexpected append actor tenant=%s principal=%s conversation=%s", tenantID, principalID, conversationID)

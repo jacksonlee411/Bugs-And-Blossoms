@@ -118,7 +118,7 @@ func buildCanonicalContextBlock(context CanonicalContext) string {
 		strings.TrimSpace(context.PrincipalID),
 		normalizeDefault(context.Language, "zh"),
 		normalizeDefault(context.Page, "cubebox"),
-		normalizeDefault(permissions, "cubebox.conversations:admin"),
+			normalizeDefault(permissions, "cubebox.conversations:use"),
 		normalizeDefault(context.BusinessObject, "conversation"),
 		normalizeDefault(context.Model, "deterministic-runtime"),
 	))

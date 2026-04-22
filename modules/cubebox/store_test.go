@@ -216,8 +216,8 @@ func TestStoreCompactConversationReusesTenantScopedReadAndWrite(t *testing.T) {
 				now,
 			}},
 		},
-			rowsQueue: []pgx.Rows{
-				&rowsStub{
+		rowsQueue: []pgx.Rows{
+			&rowsStub{
 				rows: [][]any{
 					{
 						uuidToPGType(tenantID),
@@ -300,10 +300,10 @@ func TestStoreCompactConversationReusesTenantScopedReadAndWrite(t *testing.T) {
 						now,
 					},
 				},
-				},
 			},
-		}
-		store := NewStore(beginFunc(func(context.Context) (pgx.Tx, error) { return tx, nil }))
+		},
+	}
+	store := NewStore(beginFunc(func(context.Context) (pgx.Tx, error) { return tx, nil }))
 
 	response, err := store.CompactConversation(context.Background(), tenantID, principalID, "conv_1", CanonicalContext{
 		TenantID:    tenantID,

@@ -149,6 +149,24 @@ entrypoints:
       - path: /internal/cubebox/turns/{turn_id}:interrupt
         methods: [POST]
         route_class: internal_api
+      - path: /internal/cubebox/settings
+        methods: [GET]
+        route_class: internal_api
+      - path: /internal/cubebox/settings/providers
+        methods: [POST]
+        route_class: internal_api
+      - path: /internal/cubebox/settings/credentials
+        methods: [POST]
+        route_class: internal_api
+      - path: /internal/cubebox/settings/credentials/{credential_id}:deactivate
+        methods: [POST]
+        route_class: internal_api
+      - path: /internal/cubebox/settings/selection
+        methods: [POST]
+        route_class: internal_api
+      - path: /internal/cubebox/settings/verify
+        methods: [POST]
+        route_class: internal_api
   superadmin:
     routes:
       - path: /
