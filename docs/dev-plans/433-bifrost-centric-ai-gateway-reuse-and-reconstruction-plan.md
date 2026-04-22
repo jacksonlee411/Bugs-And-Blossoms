@@ -1,6 +1,6 @@
 # DEV-PLAN-433：Bifrost 主参考的 AI 网关复用/重构方案
 
-**状态**: 实施中（2026-04-22 16:40 CST）
+**状态**: 已完成当前范围封板；`Slice 2.0-2.6` 与上游映射、真实 success/interrupted 证据、回链与 readiness 已补齐，测试专用 credential 破坏性页面样本后移到 `433A/F06`（2026-04-22 21:39 CST）
 
 ## 0. 适用范围与评审分级
 
@@ -127,18 +127,18 @@ Codex 在网关层只承担局部能力来源，不承担整体网关骨架：
 | 虚拟 key / 多租户密钥治理 | 本仓自研 | 不直接复用外部项目实现 |
 | DB 持久化 / RLS / 审计 | 本仓自研 | 外部项目只作字段参考，不作事实源 |
 
-## 5A. 上游映射表模板
+## 5A. 上游映射表（2026-04-22 当前范围封板）
 
-本计划必须把 Bifrost/Codex 的复用对象冻结成文件级或协议级映射；未填完前不得进入 Slice 2.1 之后的实现。
+本计划要求把 Bifrost/Codex 的复用对象冻结成文件级或协议级映射。当前已补到足以支撑 `Slice 2.0-2.6` 封板的对象级粒度；后续若扩到 fallback/failover、Responses 首链或配额治理，再以增量方式补表，不得回退为“只写主参考项目名”。
 
 | 上游项目 | 上游 commit SHA | 上游制品类型 | 上游路径或对象名 | CubeBox 对应对象/切片 | 采用状态 | 不可直接复用原因 | 原因类型 | 必备验证 | PR 证据位置 | readiness 证据位置 |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| `maximhq/bifrost` | `待补` | `目录` | `router/streaming/health/telemetry 相关目录` | `gateway 主请求链 / Slice 2.2-2.5` | `待补` | `待补` | `待补` | `流式集成测试 + lifecycle fixture` | `待补` | `待补` |
-| `maximhq/bifrost` | `待补` | `文件` | `provider selection / health readiness / telemetry 代表文件` | `active model 与健康检查 / Slice 2.4-2.5` | `待补` | `待补` | `待补` | `health fixture + start/final 状态测试` | `待补` | `待补` |
-| `openai/codex` | `待补` | `目录` | `codex-rs/model-provider/**` | `provider adapter 接口 / Slice 2.1` | `待补` | `待补` | `待补` | `adapter contract test` | `待补` | `待补` |
-| `openai/codex` | `待补` | `目录` | `codex-rs/responses-api-proxy/**`、`codex-rs/codex-api/**` | `request mapping / Slice 2.2` | `待补` | `待补` | `待补` | `request mapping golden fixture` | `待补` | `待补` |
-| `openai/codex` | `待补` | `目录` | `codex-rs/utils/stream-parser/**` | `SSE parser / Slice 2.2` | `待补` | `待补` | `待补` | `SSE fixture + snapshot` | `待补` | `待补` |
-| `songquanpeng/one-api`、`BerriAI/litellm`、`Portkey-AI/gateway` | `待补` | `协议` | `错误归一化/模型别名/渠道语义代表对象` | `错误码口径与配置命名 / Slice 2.3` | `待补` | `待补` | `待补` | `error mapping fixture` | `待补` | `待补` |
+| `maximhq/bifrost` | `de67db28676a8a80ba1e738ebf8f9318d82d16f7` | `目录` | `core/providers/**`、`framework/streaming/**`、`transports/bifrost-http/**` | `gateway 主请求链、provider dispatch、SSE passthrough / Slice 2.1-2.3` | `重构复用` | 上游是多模块 Go workspace，且自带 transport/config/runtime 组织；本仓必须收敛到 `modules/cubebox` + `internal/server`，同时服从 route allowlist、RLS/Authz、错误码与审计链 | `仓库约束` | `go test ./modules/cubebox ./internal/server`、真实浏览器 `turns:stream` success/interrupted、Vitest panel/reducer restore | `DEV-PLAN-433 / 8A` | `DEV-PLAN-437-READINESS` CubeBox Phase 段 |
+| `maximhq/bifrost` | `de67db28676a8a80ba1e738ebf8f9318d82d16f7` | `文件` | `core/utils.go`、`core/schemas/**`、`framework/modelcatalog/**`、`framework/tracing/**`、`transports/schema_test/config_schema_test.go` | `provider capability、health/readiness、最小 lifecycle telemetry / Slice 2.4-2.5` | `重构复用` | Bifrost 的 provider/schema/telemetry 形状可复用，但其配置 schema、provider catalog 和 tracing 不能直接成为本仓事实源；需落为本仓 canonical event、settings DTO 与 health DTO | `协议不匹配` | `settings/verify` 自动化 + 浏览器同源 `GET /internal/cubebox/settings` 与会话 replay 证据 | `DEV-PLAN-433 / 5D.1、8A` | `DEV-PLAN-437-READINESS` CubeBox Phase 段 |
+| `openai/codex` | `ef071cf816950dc416b2a975e7ed023eea639026` | `目录` | `codex-rs/model-provider/**` | `provider adapter 接口与 auth 抽象 / Slice 2.1` | `重构复用` | Codex 是 Rust workspace，`model-provider` 依赖 `model-provider-info/protocol` 等多个 crate；本仓不能直接 vendoring，但其 provider/auth 抽象应保持同类分层 | `DDD 边界` | `go test ./modules/cubebox ./internal/server` 中 adapter contract 相关用例 | `DEV-PLAN-433 / 8A` | `DEV-PLAN-437-READINESS` CubeBox Phase 段 |
+| `openai/codex` | `ef071cf816950dc416b2a975e7ed023eea639026` | `目录` | `codex-rs/responses-api-proxy/**`、`codex-rs/codex-api/**` | `OpenAI-compatible 请求映射、上游 stream relay / Slice 2.2-2.3` | `重构复用` | 上游以 Rust HTTP client/CLI 形态承载，且混有 app-server/runtime 语义；本仓只借其 request/response bridge 与长连接约束，不引入第二运行时 | `依赖不兼容` | `turns:stream` 浏览器网络证据 + 流式集成测试 | `DEV-PLAN-433 / 8A` | `DEV-PLAN-437-READINESS` CubeBox Phase 段 |
+| `openai/codex` | `ef071cf816950dc416b2a975e7ed023eea639026` | `目录` | `codex-rs/utils/stream-parser/**` | `SSE parser、delta/terminal 事件整形 / Slice 2.2、2.5` | `重构复用` | 需与本仓 canonical event、UI reducer 与错误码映射统一，不能直接输出 Codex 自身事件协议 | `协议不匹配` | `turn.started/error/interrupted/completed` 自动化断言 + 浏览器 interrupted replay 证据 | `DEV-PLAN-433 / 8A` | `DEV-PLAN-437-READINESS` CubeBox Phase 段 |
+| `songquanpeng/one-api`、`BerriAI/litellm`、`Portkey-AI/gateway` | `N/A` | `协议` | `错误归一化/模型别名/渠道语义代表对象` | `错误码口径与配置命名 / Slice 2.3` | `只借鉴语义` | 这些项目不作为当前 Go 主链运行时；只补错误归一化、渠道/模型术语与管理面产品语义，不直接进入代码依赖 | `范围不匹配` | `error mapping fixture` + `settings/verify`/turn 一致性证据 | `DEV-PLAN-433 / 8A` | `DEV-PLAN-437-READINESS` CubeBox Phase 段 |
 
 填写规则：
 
@@ -191,6 +191,24 @@ Codex 在网关层只承担局部能力来源，不承担整体网关骨架：
 - 不新增数据库表，不把 `cubebox_model_credentials` 改为密文存储模型。
 - 不引入 fallback / failover / route alias / quota / default model。
 - 不让 `435` 管理面反向定义 `provider / credential / active model / health` 的运行时命名。
+
+### 5D.1 当前运行时配置基线（2026-04-22）
+
+本小节冻结当前 CubeBox 在真实模型主链上的运行时配置，作为 `433/435/433A` 对齐时的当前口径；后续若管理面或运行时切换 provider/model，必须同步更新本小节与相关证据文档。
+
+- `provider_id`: `openai-compatible`
+- `provider_type`: `codex`
+- `base_url`: `https://code2026.pumpkinai.vip/v1`
+- `enabled`: `true`
+- `secret_ref`: `env://OPENAI_API_KEY`
+- `model_slug`: `gpt-5.2`
+
+约束说明：
+
+- `provider_id` 延续当前管理面对象标识，不因上游 endpoint 或 provider adapter 调整而随意改名。
+- `provider_type` 当前以运行时实际配置 `codex` 为准；历史验证中出现的 `provider_type=openai-compatible` 只代表当时快照，不再视为当前基线。
+- `base_url` 当前以 `https://code2026.pumpkinai.vip/v1` 为准；历史证据中出现的 `https://api.openai.com/v1` 只代表早期验证快照，不再作为当前默认值。
+- `secret_ref` 只允许在服务端解析，UI、SSE payload、event log 与审计证据不得泄露真实 key。
 
 ## 5C. Phase E 共享对象口径
 
@@ -246,12 +264,26 @@ Codex 在网关层只承担局部能力来源，不承担整体网关骨架：
 
 ### Slice 2.0：Bifrost 资产评估
 
-- [ ] 固定 Bifrost 参考 commit SHA。
-- [ ] 确认 Apache-2.0 许可证、NOTICE 和复制要求。
-- [ ] 盘点 router、provider、streaming、health 相关依赖闭包。
-- [ ] 输出“可直接复用 / 可重构 / 仅借鉴语义 / 不引入”清单。
-- [ ] 按本计划 `5A` 模板补齐文件级/协议级上游映射表，并为每个对象冻结采用状态与不可复用原因。
+- [x] 固定 Bifrost 参考 commit SHA。
+- [x] 确认 Apache-2.0 许可证、NOTICE 和复制要求。
+- [x] 盘点 router、provider、streaming、health 相关依赖闭包。
+- [x] 输出“可直接复用 / 可重构 / 仅借鉴语义 / 不引入”清单。
+- [x] 按本计划 `5A` 模板补齐文件级/协议级上游映射表，并为每个对象冻结采用状态与不可复用原因。
 - [ ] `PR-437A` 先以 `5B` 的最小冻结集满足 deterministic provider、request mapping 与 SSE passthrough 的开工条件。
+
+`2026-04-22` 封板结论：
+
+- 当前对象级映射仍沿 `5B` 的固定 commit：`Bifrost de67db28676a8a80ba1e738ebf8f9318d82d16f7`、`Codex ef071cf816950dc416b2a975e7ed023eea639026`。
+- 许可证结论：
+  - Bifrost 根目录 `LICENSE` 为 `Apache License Version 2.0`；未发现根级 `NOTICE`，因此当前仅保留 Apache-2.0 许可证义务，不额外引入上游 NOTICE 复制动作。
+  - Codex 根目录 `LICENSE` 为 `Apache License Version 2.0`，并存在根级 `NOTICE`；若未来直接复制其源文件到本仓，需同步评估 NOTICE 传递义务。当前为重构复用与语义借鉴，不涉及源码 vendoring。
+- 依赖闭包结论：
+  - Bifrost 为多模块 Go 仓：`cli/core/framework/transports` 各自维护 `go.mod`，无法不经拆解就作为单模块 vendoring 进入本仓。
+  - Codex 为大型 Rust workspace，本地快照可见 `78` 个 `Cargo.toml`；`model-provider`、`responses-api-proxy`、`codex-api`、`protocol`、`model-provider-info`、`utils/stream-parser` 均依赖 workspace crate，不能直接嵌入 Go 运行时。
+- 采用状态清单：
+  - `Bifrost provider/streaming/health/telemetry`：`重构复用`
+  - `Codex model-provider / bridge / stream-parser`：`重构复用`
+  - `One API / LiteLLM / Portkey`：`只借鉴语义`
 
 ### Slice 2.1：provider adapter 最小闭环
 
@@ -373,23 +405,66 @@ Codex 在网关层只承担局部能力来源，不承担整体网关骨架：
 
 ### Slice 2.6：430 回填与封板
 
-- [ ] 更新 `DEV-PLAN-430` Slice 2 回链本计划。
-- [ ] readiness 记录 Bifrost/Codex 参考 commit、采纳矩阵、裁剪矩阵、请求映射 golden、SSE fixture、health fixture、最小 lifecycle 测试结果，以及 `usage_event` 暂缓与 `outbox` 暂停实施证据。
-- [ ] 执行文档、Go、routing、authz、preflight 和反回流门禁验证。
+- [x] 更新 `DEV-PLAN-430` Slice 2 回链本计划。
+- [x] readiness 记录 Bifrost/Codex 参考 commit、采纳矩阵、裁剪矩阵、请求映射 golden、SSE fixture、health fixture、最小 lifecycle 测试结果，以及 `usage_event` 暂缓与 `outbox` 暂停实施证据。
+- [x] 执行文档、Go、routing、authz、preflight 和反回流门禁验证。
 
 ## 8. 验收标准
 
-- [ ] 已固定 Bifrost 参考 commit 与许可证评估结果。
-- [ ] `430` Slice 2 已明确以 Bifrost 为主参考，而非从零自研。
+- [x] 已固定 Bifrost 参考 commit 与许可证评估结果。
+- [x] `430` Slice 2 已明确以 Bifrost 为主参考，而非从零自研。
 - [ ] provider adapter 接口已对齐 Bifrost/Codex 成熟模式。
 - [x] OpenAI-compatible provider 最小闭环可工作。
 - [x] 服务端模型配置读取、密钥解密、请求映射、SSE 转发、错误映射已闭环。
 - [x] 健康检查与配置验证已闭环。
-- [ ] 首轮最小 lifecycle telemetry 与 final 语义已可测、可观测；`usage_event` 暂缓与 `outbox` 暂停实施证据已回填。
-- [ ] 流式响应测试覆盖成功、失败、中断和 provider fail-closed。
-- [ ] fallback/failover、quota、route alias、default model 已明确列为非首期并暂缓。
-- [ ] PR 与 readiness 中都能把 handler/service/adapter 改动映射回 `5A` 的具体上游制品。
+- [x] 首轮最小 lifecycle telemetry 与 final 语义已可测、可观测；`usage_event` 暂缓与 `outbox` 暂停实施证据已回填。
+- [x] 流式响应测试覆盖成功、失败、中断和 provider fail-closed。
+- [x] fallback/failover、quota、route alias、default model 已明确列为非首期并暂缓。
+- [x] PR 与 readiness 中都能把 handler/service/adapter 改动映射回 `5A` 的具体上游制品。
 - [ ] `make check chat-surface-clean` 仍通过。
+
+## 8A. 2026-04-22 重新验收记录
+
+本次重新验收与封板只裁决 `433` 当前实现范围，不把测试专用 credential 破坏性页面样本误记到 `433`；该样本后移到 `433A/F06`。
+
+本次实际执行命令：
+
+- `go test ./modules/cubebox ./internal/server`
+- `pnpm -C apps/web exec vitest run src/pages/cubebox/api.test.ts src/pages/cubebox/reducer.test.ts src/pages/cubebox/CubeBoxProvider.test.tsx src/pages/cubebox/CubeBoxPanel.test.tsx src/pages/cubebox/CubeBoxPanel.restore.test.tsx`
+- `make check doc`
+- `make check chat-surface-clean`
+- `make check routing`
+- `make authz-test`
+- `make preflight`
+
+结果摘要：
+
+- Go 侧 `modules/cubebox` 与 `internal/server` 测试通过，覆盖 provider adapter、health verify、lifecycle telemetry、terminal append-first、config fail-closed 与 fallback SSE。
+- 前端 CubeBox 相关 5 组 Vitest 共 `37` 条断言通过，覆盖 settings/capabilities、reducer replay、compact、恢复链路与权限显隐；仍有既有 React `act(...)` warning，但不影响断言结果。
+- 文档、`chat-surface-clean`、`routing`、`authz-test` 全部通过，说明当前实现没有突破新主线路径和路由/授权门禁。
+- `make preflight` 通过，说明当前文档状态回写后仍与仓库主门禁一致。
+- Playwright 真实浏览器证据已补齐：
+  - success：`POST /internal/cubebox/turns:stream => 200`，prompt=`请用中文写一句简短问候，只回复一句。`，页面最终为 `completed/completed`，助手回复 `你好，祝你今天一切顺利。`
+  - interrupted：`POST /internal/cubebox/turns:stream => 200` 后，`POST /internal/cubebox/turns/turn_000037:interrupt?conversation_id=conv_b223bd5689fb48b3ab2c7434ce952318 => 200`，页面状态为 `已中断`，replay 中存在 `turn.interrupted` 与 `turn.completed(status=interrupted)`。
+- 当前 settings 实时回显为 `provider.id=openai-compatible`、`provider.provider_type=openai-compatible`、`provider.display_name=codex`、`base_url=https://code2026.pumpkinai.vip/v1`、`selection.model_slug=gpt-5.2`、`health.status=healthy(latency_ms=3377)`；该回显事实与本计划 `5D.1` 的冻结基线需并行记录，不得混写。
+
+当前验收裁决：
+
+- 已验收通过：
+  - `Slice 2.0`：Bifrost/Codex 参考 commit、Apache-2.0 许可证、依赖闭包与 `5A` 对象级映射已补齐。
+  - `Slice 2.1`：provider adapter 最小闭环与 adapter 单测。
+  - `Slice 2.2`：请求映射、SSE passthrough、错误映射与最小流式测试闭环。
+  - `Slice 2.3`：服务端模型配置读取、`env://` 密钥解析、本仓错误码归一化、上游错误 fail-closed。
+  - `Slice 2.4`：`settings/verify` 真实 provider 验证与 health 写回闭环。
+  - `Slice 2.5` 当前范围：`turn.started` / `turn.error` / `turn.interrupted` / `turn.completed` lifecycle 字段、`trace_id`、`provider_id`、`provider_type`、`model_slug`、`runtime`、`latency_ms` 已进入 canonical event payload，并具备自动化验证与 success/interrupted 浏览器证据。
+  - `Slice 2.6`：`430` 回链、完整 readiness 映射矩阵、文档/门禁/preflight 总收口已回填。
+- 当前不纳入 `433` 封板：
+  - 测试专用 provider/credential 的破坏性 fail-closed 页面样本仍属 `433A/F06`，不因本计划主链封板而被误记为完成。
+
+结论：
+
+- `DEV-PLAN-433` 当前范围已可记为完成：`Slice 2.0-2.6` 的运行时主链、上游映射、success/interrupted 真实证据、`430` 回链与 readiness 已完成封板。
+- 后续若扩展到 fallback/failover、Responses 主链、配额/默认模型等非首期能力，应另开增量切片，不得回滚本次封板状态。
 
 ## 9. Stopline
 

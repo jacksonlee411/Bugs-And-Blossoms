@@ -296,7 +296,15 @@
 - `DEV-PLAN-433A` 真实 provider turn 证据：`turns:stream` 返回 `200 text/event-stream`，SSE 为 `turn.started -> turn.user_message.accepted -> turn.error -> turn.completed(status=failed)`；生命周期字段包含 `runtime=openai-chat-completions`、`trace_id`、`provider_id=openai-compatible`、`provider_type=openai-compatible`、`model_slug=gpt-4.1`，未回退 `deterministic-fixture`。
 - `DEV-PLAN-433A` DB replay 证据：新会话 `conv_4a32db7ea99e4fb5b171bdd0e137ad4d` 已落库 `conversation.loaded`、`turn.started`、`turn.user_message.accepted`、`turn.error(code=ai_model_provider_unavailable, latency_ms=30013)`、`turn.completed(status=failed, latency_ms=30013)`，失败恢复不再留下 dangling streaming turn。
 - `DEV-PLAN-433A` 收尾状态：按用户要求保留真实 credential 引用并把 active selection 恢复为 `model_slug=gpt-5.2`；provider 仍为 `openai-compatible / https://api.openai.com/v1 / enabled=true`，active credential version 为 `4`，证据未记录真实 key。
-- `DEV-PLAN-433A` 剩余阻塞：真实 provider 外网/上游当前 30 秒超时，未拿到成功 `turn.agent_message.delta`，因此“成功 turn”和“streaming 中点击停止”的真实页面证据仍待 provider 连通后补验；测试专用 credential 破坏性 fail-closed 页面用例仍待独立测试 provider/credential。
+- `2026-04-22 21:32-21:33 CST` 已补 success/interrupted 真实页面证据：
+  - success：`POST /internal/cubebox/turns:stream => 200`，prompt=`请用中文写一句简短问候，只回复一句。`，页面最终显示助手回复 `你好，祝你今天一切顺利。`，用户/助手两条消息状态均为 `completed`。
+  - interrupted：会话 `conv_b223bd5689fb48b3ab2c7434ce952318` 中，`POST /internal/cubebox/turns:stream => 200` 后触发 `POST /internal/cubebox/turns/turn_000037:interrupt?conversation_id=conv_b223bd5689fb48b3ab2c7434ce952318 => 200`；页面终态为 `已中断`，replay 中存在 `turn.interrupted(reason=user_requested)` 与 `turn.completed(status=interrupted)`，字段包含 `runtime=openai-chat-completions`、`provider_id=openai-compatible`、`provider_type=openai-compatible`、`model_slug=gpt-5.2` 与稳定 `trace_id`。
+- `2026-04-22 21:32 CST` 当前 settings 实时回显：`provider.id=openai-compatible`、`provider.provider_type=openai-compatible`、`provider.display_name=codex`、`base_url=https://code2026.pumpkinai.vip/v1`、`selection.model_slug=gpt-5.2`、`health.status=healthy`、`latency_ms=3377`、`validated_at=2026-04-22T12:32:45Z`。该“当前 UI 回显事实”与 `DEV-PLAN-433/5D.1` 的冻结基线需要并行保留。
+- `2026-04-22 21:39 CST` 重新验收与封板：再次执行 `go test ./modules/cubebox ./internal/server`、`pnpm -C apps/web exec vitest run src/pages/cubebox/api.test.ts src/pages/cubebox/reducer.test.ts src/pages/cubebox/CubeBoxProvider.test.tsx src/pages/cubebox/CubeBoxPanel.test.tsx src/pages/cubebox/CubeBoxPanel.restore.test.tsx`、`make check doc`、`make check chat-surface-clean`、`make check routing`、`make authz-test`、`make preflight`，全部通过。
+- 本次重验收结论：
+  - `DEV-PLAN-433` 当前范围应记为“已完成封板”：`Slice 2.0-2.6`、上游映射、success/interrupted 浏览器证据、`430` 回链与 readiness 已补齐。
+  - `DEV-PLAN-433A` 当前应记为“已实现范围重新验收通过”，剩余待补的是测试专用 credential 破坏性页面样本。
+- 当前运行时基线按 `DEV-PLAN-433/433A` 最新口径冻结为 `provider_id=openai-compatible`、`provider_type=codex`、`base_url=https://code2026.pumpkinai.vip/v1`、`enabled=true`、`secret_ref=env://OPENAI_API_KEY`、`model_slug=gpt-5.2`；`4.2` 中 `https://api.openai.com/v1` 与旧 `provider_type=openai-compatible` 仅代表早期复验证据快照。
 
 ## 关联文档
 

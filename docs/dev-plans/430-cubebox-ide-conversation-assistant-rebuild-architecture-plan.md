@@ -75,7 +75,7 @@
 | 子计划/切片 | 上游项目 | 上游 commit SHA | 上游制品类型 | 上游路径或对象名 | 本仓对应切片/模块 | 采用状态 | 不可直接复用原因 | 原因类型 | 必备验证 | PR 证据位置 | readiness 证据位置 |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | `431 / Slice 1` | `openai/codex` | `ef071cf816950dc416b2a975e7ed023eea639026` | `协议/文件/测试样例` | `详见 DEV-PLAN-431 / 4B` | `CubeBox UI 协议与壳层` | `PR-437A 最小冻结已补齐` | `详见 DEV-PLAN-431 / 4B` | `详见 DEV-PLAN-431 / 4B` | `golden/snapshot/E2E` | `待补` | `待补` |
-| `433 / Slice 2` | `maximhq/bifrost`、`openai/codex` | `Bifrost: de67db28676a8a80ba1e738ebf8f9318d82d16f7; Codex: ef071cf816950dc416b2a975e7ed023eea639026` | `目录/文件/协议/测试样例` | `详见 DEV-PLAN-433 / 5B` | `CubeBox AI 网关` | `PR-437A 最小冻结已补齐` | `详见 DEV-PLAN-433 / 5B` | `详见 DEV-PLAN-433 / 5B` | `fixture/SSE 对照/集成测试` | `待补` | `待补` |
+| `433 / Slice 2` | `maximhq/bifrost`、`openai/codex` | `Bifrost: de67db28676a8a80ba1e738ebf8f9318d82d16f7; Codex: ef071cf816950dc416b2a975e7ed023eea639026` | `目录/文件/协议/测试样例` | `详见 DEV-PLAN-433 / 5A、5B` | `CubeBox AI 网关` | `2026-04-22 当前范围已封板` | `详见 DEV-PLAN-433 / 5A、5B` | `详见 DEV-PLAN-433 / 5A、5B` | `fixture/SSE 对照/集成测试/真实浏览器 success-interrupted` | `docs/dev-plans/433-bifrost-centric-ai-gateway-reuse-and-reconstruction-plan.md#8a-2026-04-22-重新验收记录` | `docs/dev-records/DEV-PLAN-437-READINESS.md` |
 | `434 / Slice 4` | `openai/codex` | `ef071cf816950dc416b2a975e7ed023eea639026` | `文件/模板/测试样例` | `详见 DEV-PLAN-434 / 4B` | `CubeBox 上下文压缩` | `PR-437D 已具备正式封板条件` | `详见 DEV-PLAN-434 / 4B` | `详见 DEV-PLAN-434 / 4B` | `golden/snapshot/纯函数测试` | `docs/dev-plans/437-cubebox-implementation-roadmap-for-fast-start.md#phase-d上下文压缩最小闭环` | `docs/dev-records/DEV-PLAN-437-READINESS.md#phase-d--pr-437d-当前证据2026-04-22` |
 | `435 / Slice 5` | `maximhq/bifrost`、`songquanpeng/one-api`、`openai/codex` | `待补` | `页面信息架构/目录/文件` | `待补` | `CubeBox 模型配置 UI` | `待补` | `待补` | `待补` | `IA snapshot/E2E/Authz` | `待补` | `待补` |
 
@@ -285,12 +285,12 @@
 
 ### Slice 2：AI 网关最小闭环
 
-- [ ] 按 `DEV-PLAN-433` 先完成 Bifrost 资产评估与复用/重构清单冻结，不从零自研平行网关。
-- [ ] 以 Bifrost 为主参考，结合 Codex provider adapter / bridge / stream parser，建立 provider adapter 接口与一个 OpenAI-compatible provider；其他供应商不进入首期闭环。
-- [ ] 以 Bifrost 为主参考实现服务端模型配置读取、密钥解密、请求映射、SSE 转发与错误映射；fallback 不在当前交付范围。
-- [ ] 以 Bifrost 的 health/readiness 思路实现显式连通性验证与基础健康检查。
-- [ ] 以 Bifrost/Codex 的 telemetry、stream lifecycle 和测试样式为主参考，先完成 canonical event 内的最小 lifecycle telemetry 与 final 语义收口；`request-start` / `usage-intent` / `audit-start` 持久化为长期目标，`outbox` 不在本轮实施范围。
-- [ ] 补 handler、service、adapter 单元测试、流式响应测试和错误路径测试。
+- [x] 按 `DEV-PLAN-433` 先完成 Bifrost 资产评估与复用/重构清单冻结，不从零自研平行网关。
+- [x] 以 Bifrost 为主参考，结合 Codex provider adapter / bridge / stream parser，建立 provider adapter 接口与一个 OpenAI-compatible provider；其他供应商不进入首期闭环。
+- [x] 以 Bifrost 为主参考实现服务端模型配置读取、密钥解密、请求映射、SSE 转发与错误映射；fallback 不在当前交付范围。
+- [x] 以 Bifrost 的 health/readiness 思路实现显式连通性验证与基础健康检查。
+- [x] 以 Bifrost/Codex 的 telemetry、stream lifecycle 和测试样式为主参考，先完成 canonical event 内的最小 lifecycle telemetry 与 final 语义收口；`request-start` / `usage-intent` / `audit-start` 持久化为长期目标，`outbox` 不在本轮实施范围。
+- [x] 补 handler、service、adapter 单元测试、流式响应测试和错误路径测试。
 
 ### Slice 3：会话持久化
 
