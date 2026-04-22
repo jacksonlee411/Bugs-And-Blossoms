@@ -218,6 +218,36 @@
 - [x] store/持久层跨租户隔离的 fail-closed 验证已补：错租户/错 principal 命中 `ErrConversationNotFound`，且 `app.current_tenant` 注入已在 store 测试中显式断言
 - [x] `summary 不替代原始消息` 的跨层证据已补：
   - compaction 纯函数验证 `prompt view` 只新增摘要，不覆盖原始 timeline：`modules/cubebox/compaction_test.go`
+
+### Phase D / PR-437D 连贯对话补充证据（`2026-04-23`）
+
+- [x] 已确认并修复真实连续对话失效根因：
+  - 修复前，provider 主链仍只消费裸 `turn.Prompt`，导致会话虽可恢复、compact 虽可执行，但上一轮上下文没有真正进入模型输入。
+  - 修复后，`modules/cubebox/gateway.go` 改为优先把 `434` 输出的 `PromptView` 映射为 provider `messages`，不再退回单条用户输入。
+- [x] 当前对齐 Codex 的收敛点：
+  - 保持 history / prompt view 分离；
+  - pre-turn auto compact 后使用 replacement prompt view；
+  - 每轮继续进行 canonical context reinjection；
+  - 不替换数据库 append-only 原始事件，只替换 provider 采样视图。
+- [x] 自动化已补并通过：
+  - `go test ./modules/cubebox ./internal/server`
+  - `make check doc`
+- [x] 当前新增/更新验证点：
+  - gateway 单测断言 provider 收到结构化 `messages`，而不是仅有 `Input`
+  - compact 后连续追问单测断言 summary/history/current user 同时进入 provider request
+- [ ] 待补最终页面复验证据：
+  - 样本二：形成足够历史并 compact 后，继续追问前文指代
+
+- [x] 真实页面复验证据（`2026-04-23`，本地浏览器 + 新重启 `:8080` server）：
+  - 登录 `http://localhost:8080/app/login`，使用 `admin@localhost / admin123` 成功进入 `/app`
+  - 打开主壳层右侧 CubeBox 抽屉，新建会话 `conv_254ceb032b484630b871315d2bcdd639`
+  - 第一轮发送 `a`，第二轮发送 `我是。回答你前面的。问题`
+  - 第二轮 assistant 实际回复：
+    - “你是在回答我前面那句‘想做哪一件？’对吗？”
+  - 该结果说明上一轮上下文已真正进入模型输入；回复不再是“看不到前面的问题/不知道你指哪一句”的失忆性回答
+  - 网络证据：
+    - `POST /internal/cubebox/turns:stream` 第 1 轮 `next_sequence=2`
+    - `POST /internal/cubebox/turns:stream` 第 2 轮 `next_sequence=110`
   - reducer / reconstruction 验证 compact event 回放后，原始 user/agent message 仍可恢复：`apps/web/src/pages/cubebox/reducer.test.ts`
 - [x] `PR-437C` 当前已满足最小正式封板口径：
   - store / API / UI 已围绕同一 lifecycle roundtrip fixture / golden 完成对照，恢复语义不再仅停留在前端单层验证

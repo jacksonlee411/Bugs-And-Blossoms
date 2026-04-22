@@ -11,8 +11,9 @@ import (
 )
 
 const (
-	compactionSummaryPrefix = "[[summary]] "
-	defaultRecentItemLimit  = 4
+	compactionSummaryPrefix        = "[[summary]] "
+	defaultRecentItemLimit         = 4
+	defaultRecentUserMessageTokens = 400
 )
 
 type PromptItem struct {
@@ -75,7 +76,7 @@ func BuildPromptViewWithCompaction(events []CanonicalEvent, context CanonicalCon
 	if compacted {
 		prompt = append(prompt, PromptItem{Role: "system", Content: compactionSummaryPrefix + summaryText})
 	}
-	prompt = append(prompt, recent...)
+	prompt = append(prompt, trimRecentUserMessages(recent, defaultRecentUserMessageTokens)...)
 	if trimmed := strings.TrimSpace(currentUserInput); trimmed != "" {
 		prompt = append(prompt, PromptItem{Role: "user", Content: trimmed})
 	}
@@ -107,8 +108,6 @@ func BuildCompactionEvent(conversationID string, turnID *string, sequence int, n
 			"source_range":  []int{result.SourceRange[0], result.SourceRange[1]},
 			"summary_text":  result.SummaryText,
 			"source_digest": result.SourceDigest,
-			"token_before":  result.TokenBefore,
-			"token_after":   result.TokenAfter,
 			"reason":        result.Reason,
 		},
 	}
@@ -198,6 +197,45 @@ func keepRecentTimeline(items []PromptItem, limit int) []PromptItem {
 		return append([]PromptItem(nil), items...)
 	}
 	return append([]PromptItem(nil), items[len(items)-limit:]...)
+}
+
+func trimRecentUserMessages(items []PromptItem, tokenLimit int) []PromptItem {
+	trimmed := make([]PromptItem, 0, len(items))
+	for _, item := range items {
+		next := item
+		if next.Role == "user" {
+			next.Content = trimTextToApproxTokenLimit(next.Content, tokenLimit)
+		}
+		trimmed = append(trimmed, next)
+	}
+	return trimmed
+}
+
+func trimTextToApproxTokenLimit(text string, tokenLimit int) string {
+	content := strings.TrimSpace(text)
+	if tokenLimit <= 0 || content == "" || estimateTextTokens(content) <= tokenLimit {
+		return content
+	}
+	runes := []rune(content)
+	maxRunes := tokenLimit * 4
+	if maxRunes <= 0 {
+		return content
+	}
+	if len(runes) > maxRunes {
+		runes = runes[:maxRunes]
+	}
+	trimmed := strings.TrimSpace(string(runes))
+	for trimmed != "" && estimateTextTokens(trimmed) > tokenLimit {
+		current := []rune(trimmed)
+		if len(current) == 0 {
+			break
+		}
+		trimmed = strings.TrimSpace(string(current[:len(current)-1]))
+	}
+	if trimmed == "" {
+		return "[truncated]"
+	}
+	return trimmed + "\n[truncated]"
 }
 
 func estimatePromptTokens(items []PromptItem, extraUserInput string) int {

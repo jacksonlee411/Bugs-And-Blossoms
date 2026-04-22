@@ -66,6 +66,9 @@ func (s *ModelVerificationService) VerifyActiveModel(ctx context.Context, tenant
 		BaseURL: strings.TrimSpace(config.Provider.BaseURL),
 		APIKey:  secret,
 		Model:   strings.TrimSpace(config.Selection.ModelSlug),
+		Messages: []PromptItem{
+			{Role: "user", Content: "health check"},
+		},
 		Input:   "health check",
 	})
 	if err != nil {

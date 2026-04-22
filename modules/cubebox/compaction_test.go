@@ -1,6 +1,7 @@
 package cubebox
 
 import (
+	"strings"
 	"testing"
 	"time"
 )
@@ -156,6 +157,79 @@ func TestBuildPromptViewWithCompactionDoesNotReplaceOriginalMessages(t *testing.
 	}
 }
 
+func TestBuildPromptViewWithCompactionTruncatesLongRecentUserMessageOnlyInPromptView(t *testing.T) {
+	longUserMessage := ""
+	for i := 0; i < 1800; i++ {
+		longUserMessage += "长"
+	}
+	events := []CanonicalEvent{
+		{
+			Type:    "turn.user_message.accepted",
+			Payload: map[string]any{"message_id": "msg_old_1", "text": "第一轮原始问题"},
+		},
+		{
+			Type:    "turn.agent_message.delta",
+			Payload: map[string]any{"message_id": "msg_agent_1", "delta": "第一轮原始回答"},
+		},
+		{
+			Type:    "turn.agent_message.completed",
+			Payload: map[string]any{"message_id": "msg_agent_1"},
+		},
+		{
+			Type:    "turn.user_message.accepted",
+			Payload: map[string]any{"message_id": "msg_user_long", "text": longUserMessage},
+		},
+		{
+			Type:    "turn.agent_message.delta",
+			Payload: map[string]any{"message_id": "msg_agent_2", "delta": "收到长消息"},
+		},
+		{
+			Type:    "turn.agent_message.completed",
+			Payload: map[string]any{"message_id": "msg_agent_2"},
+		},
+		{
+			Type:    "turn.user_message.accepted",
+			Payload: map[string]any{"message_id": "msg_user_latest", "text": "最新问题"},
+		},
+	}
+
+	result := BuildPromptViewWithCompaction(events, CanonicalContext{TenantID: "tenant-a", PrincipalID: "principal-a"}, "")
+
+	if !result.Compacted {
+		t.Fatal("expected compaction to happen")
+	}
+	foundTrimmed := false
+	for _, item := range result.PromptView {
+		if item.Role == "user" && strings.Contains(item.Content, "[truncated]") {
+			foundTrimmed = true
+			if estimateTextTokens(item.Content) > defaultRecentUserMessageTokens+4 {
+				t.Fatalf("expected trimmed user message within token guardrail, got %d", estimateTextTokens(item.Content))
+			}
+		}
+	}
+	if !foundTrimmed {
+		t.Fatalf("expected long recent user message to be trimmed in prompt view: %#v", result.PromptView)
+	}
+	original := collectPromptTimeline(events)
+	if original[2].Content != longUserMessage {
+		t.Fatal("expected original timeline to remain unmodified")
+	}
+}
+
+func TestTrimTextToApproxTokenLimitTruncatesBoundaryCase(t *testing.T) {
+	boundary := strings.Repeat("长", defaultRecentUserMessageTokens*4)
+	if estimateTextTokens(boundary) <= defaultRecentUserMessageTokens {
+		t.Fatalf("expected boundary text to exceed token limit, got %d", estimateTextTokens(boundary))
+	}
+	trimmed := trimTextToApproxTokenLimit(boundary, defaultRecentUserMessageTokens)
+	if !strings.Contains(trimmed, "[truncated]") {
+		t.Fatalf("expected boundary text to be truncated, got %q", trimmed)
+	}
+	if estimateTextTokens(trimmed) > defaultRecentUserMessageTokens+4 {
+		t.Fatalf("expected trimmed boundary text within guardrail, got %d", estimateTextTokens(trimmed))
+	}
+}
+
 func TestBuildCompactionEventUsesCanonicalEnvelope(t *testing.T) {
 	turnID := "turn_1"
 	event := BuildCompactionEvent("conv_1", &turnID, 9, time.Date(2026, 4, 22, 10, 0, 0, 0, time.UTC), CompactionResult{
@@ -180,5 +254,11 @@ func TestBuildCompactionEventUsesCanonicalEnvelope(t *testing.T) {
 	}
 	if event.Payload["summary_id"] != "summary_1" {
 		t.Fatalf("unexpected payload=%#v", event.Payload)
+	}
+	if _, ok := event.Payload["token_before"]; ok {
+		t.Fatalf("token_before must remain debug-only and outside canonical event payload: %#v", event.Payload)
+	}
+	if _, ok := event.Payload["token_after"]; ok {
+		t.Fatalf("token_after must remain debug-only and outside canonical event payload: %#v", event.Payload)
 	}
 }

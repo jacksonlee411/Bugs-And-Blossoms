@@ -239,6 +239,9 @@ modules/{module}/
 - DEV-PLAN-433：Bifrost 主参考的 AI 网关复用/重构方案：`docs/dev-plans/433-bifrost-centric-ai-gateway-reuse-and-reconstruction-plan.md`
 - DEV-PLAN-433A：CubeBox 真实 Provider 浏览器验证发现与修复方案：`docs/dev-plans/433a-cubebox-real-provider-browser-validation-findings-and-remediation-plan.md`
 - DEV-PLAN-434：Codex 上下文管理与压缩机制复用/重构方案：`docs/dev-plans/434-codex-context-management-and-compaction-reuse-plan.md`
+- DEV-PLAN-438：CubeBox 连贯对话失效调查与修复方案：`docs/dev-plans/438-cubebox-conversational-continuity-investigation-and-remediation-plan.md`
+- DEV-PLAN-438A：CubeBox provider 输入角色收敛与 Codex 摘要语义对齐方案：`docs/dev-plans/438a-cubebox-provider-message-role-normalization-and-codex-summary-alignment-plan.md`
+- DEV-PLAN-438B：CubeBox 流式回复换行丢失与列表结构压平专项调查与修复方案：`docs/dev-plans/438b-cubebox-streaming-newline-loss-investigation-and-remediation-plan.md`
 - DEV-PLAN-435：Bifrost 主参考的模型配置 UI 与管理权限复用/重构方案：`docs/dev-plans/435-bifrost-centric-model-config-ui-and-admin-governance-plan.md`
 - DEV-PLAN-436：CubeBox 历史对话面彻底删除与仓面清场方案：`docs/dev-plans/436-cubebox-historical-surface-hard-delete-plan.md`
 - DEV-PLAN-437：CubeBox 实施路线图（快速开工版）：`docs/dev-plans/437-cubebox-implementation-roadmap-for-fast-start.md`

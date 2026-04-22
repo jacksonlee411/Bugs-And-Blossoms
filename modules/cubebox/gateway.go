@@ -52,6 +52,7 @@ type ProviderChatRequest struct {
 	BaseURL string
 	APIKey  string
 	Model   string
+	Messages []PromptItem
 	Input   string
 }
 
@@ -142,19 +143,10 @@ func (s *GatewayService) StreamTurn(
 	if sequence <= 0 {
 		sequence = 1
 	}
+	canonicalContext := s.buildCanonicalContext(request, lifecycle)
+	providerPromptView := BuildPromptViewWithCompaction(nil, canonicalContext, turn.Prompt).PromptView
 	if sequence > 1 {
-		compactPayload, err := store.CompactConversation(ctx, request.TenantID, request.PrincipalID, request.ConversationID, CanonicalContext{
-			TenantID:       request.TenantID,
-			PrincipalID:    request.PrincipalID,
-			Language:       "zh",
-			Page:           "/app/cubebox",
-			Permissions:    []string{"cubebox.conversations:use"},
-			BusinessObject: "conversation",
-			ProviderID:     lifecycle.providerID,
-			ProviderType:   lifecycle.providerType,
-			ModelSlug:      lifecycle.modelSlug,
-			Runtime:        lifecycle.runtime,
-		}, "pre_turn_auto")
+		compactPayload, err := store.CompactConversation(ctx, request.TenantID, request.PrincipalID, request.ConversationID, canonicalContext, "pre_turn_auto")
 		if err != nil && !errors.Is(err, ErrConversationNotFound) {
 			s.appendTerminalError(ctx, store, sink, request, turn.TurnID, &sequence, lifecycle, "cubebox_turn_stream_failed", "会话压缩失败，当前响应已终止。", false)
 			return
@@ -162,6 +154,7 @@ func (s *GatewayService) StreamTurn(
 		if compactPayload.NextSequence > sequence {
 			sequence = compactPayload.NextSequence
 		}
+		providerPromptView = promptViewForProvider(compactPayload.PromptView, canonicalContext, turn.Prompt)
 	}
 
 	writeEvent := func(eventType string, payload map[string]any) bool {
@@ -235,6 +228,7 @@ func (s *GatewayService) StreamTurn(
 		BaseURL: strings.TrimSpace(config.Provider.BaseURL),
 		APIKey:  secret,
 		Model:   strings.TrimSpace(config.Selection.ModelSlug),
+		Messages: providerPromptView,
 		Input:   turn.Prompt,
 	})
 	if err != nil {
@@ -439,6 +433,33 @@ func providerErrorFromContext(err error) error {
 	return ErrProviderUnavailable
 }
 
+func (s *GatewayService) buildCanonicalContext(request GatewayStreamRequest, lifecycle gatewayLifecycleMeta) CanonicalContext {
+	return CanonicalContext{
+		TenantID:       request.TenantID,
+		PrincipalID:    request.PrincipalID,
+		Language:       "zh",
+		Page:           "/app/cubebox",
+		Permissions:    []string{"cubebox.conversations:use"},
+		BusinessObject: "conversation",
+		ProviderID:     lifecycle.providerID,
+		ProviderType:   lifecycle.providerType,
+		ModelSlug:      lifecycle.modelSlug,
+		Runtime:        lifecycle.runtime,
+	}
+}
+
+func promptViewForProvider(base []PromptItem, canonicalContext CanonicalContext, currentUserInput string) []PromptItem {
+	if len(base) == 0 {
+		return BuildPromptViewWithCompaction(nil, canonicalContext, currentUserInput).PromptView
+	}
+	prompt := append([]PromptItem(nil), base...)
+	trimmedInput := strings.TrimSpace(currentUserInput)
+	if trimmedInput == "" {
+		return prompt
+	}
+	return append(prompt, PromptItem{Role: "user", Content: trimmedInput})
+}
+
 func (s *GatewayService) startedPayload(userMessageID string, lifecycle gatewayLifecycleMeta) map[string]any {
 	return map[string]any{
 		"user_message_id": userMessageID,
@@ -531,12 +552,20 @@ func (a *OpenAICompatibleAdapter) StreamChatCompletion(ctx context.Context, requ
 	if strings.TrimSpace(request.BaseURL) == "" || strings.TrimSpace(request.Model) == "" {
 		return nil, ErrProviderConfigInvalid
 	}
+	messages, err := normalizeProviderMessages(request.Messages)
+	if err != nil {
+		return nil, err
+	}
+	if len(messages) == 0 && strings.TrimSpace(request.Input) != "" {
+		messages = append(messages, map[string]string{
+			"role":    "user",
+			"content": strings.TrimSpace(request.Input),
+		})
+	}
 	body, err := json.Marshal(map[string]any{
-		"model": request.Model,
-		"messages": []map[string]string{
-			{"role": "user", "content": request.Input},
-		},
-		"stream": true,
+		"model":    request.Model,
+		"messages": messages,
+		"stream":   true,
 	})
 	if err != nil {
 		return nil, err
@@ -581,6 +610,32 @@ func (a *OpenAICompatibleAdapter) StreamChatCompletion(ctx context.Context, requ
 		body:    resp.Body,
 		scanner: bufio.NewScanner(resp.Body),
 	}, nil
+}
+
+func normalizeProviderMessages(items []PromptItem) ([]map[string]string, error) {
+	messages := make([]map[string]string, 0, len(items))
+	for _, item := range items {
+		role := strings.TrimSpace(item.Role)
+		content := strings.TrimSpace(item.Content)
+		if role == "" || content == "" {
+			continue
+		}
+		switch role {
+		case "system", "assistant", "user":
+		case "summary":
+			role = "user"
+			if !strings.HasPrefix(content, compactionSummaryPrefix) {
+				content = compactionSummaryPrefix + content
+			}
+		default:
+			return nil, ErrProviderConfigInvalid
+		}
+		messages = append(messages, map[string]string{
+			"role":    role,
+			"content": content,
+		})
+	}
+	return messages, nil
 }
 
 type openAICompatibleStream struct {

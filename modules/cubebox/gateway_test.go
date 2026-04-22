@@ -62,11 +62,15 @@ func (s *modelHealthWriterStub) RecordModelHealthCheck(_ context.Context, _ stri
 }
 
 type providerAdapterStub struct {
-	stream ProviderChatStream
-	err    error
+	stream       ProviderChatStream
+	err          error
+	lastRequest  ProviderChatRequest
+	requestCount int
 }
 
-func (s providerAdapterStub) StreamChatCompletion(context.Context, ProviderChatRequest) (ProviderChatStream, error) {
+func (s *providerAdapterStub) StreamChatCompletion(_ context.Context, request ProviderChatRequest) (ProviderChatStream, error) {
+	s.lastRequest = request
+	s.requestCount++
 	if s.err != nil {
 		return nil, s.err
 	}
@@ -90,10 +94,17 @@ type appendEventStoreStub struct {
 	appendErr       error
 	appendEventsErr error
 	appendEventsCtx context.Context
+	compactResponse CompactConversationResponse
+	compactErr      error
+	compactCalls    int
 }
 
 func (s *appendEventStoreStub) CompactConversation(context.Context, string, string, string, CanonicalContext, string) (CompactConversationResponse, error) {
-	return CompactConversationResponse{}, nil
+	s.compactCalls++
+	if s.compactErr != nil {
+		return CompactConversationResponse{}, s.compactErr
+	}
+	return s.compactResponse, nil
 }
 
 func (s *appendEventStoreStub) AppendEvent(_ context.Context, _ string, _ string, _ string, event CanonicalEvent) error {
@@ -177,6 +188,10 @@ func TestOpenAICompatibleAdapterStreamChatCompletion(t *testing.T) {
 		BaseURL: server.URL,
 		APIKey:  "sk-test",
 		Model:   "gpt-4.1",
+		Messages: []PromptItem{
+			{Role: "system", Content: "ctx"},
+			{Role: "user", Content: "hello"},
+		},
 		Input:   "hello",
 	})
 	if err != nil {
@@ -203,6 +218,70 @@ func TestOpenAICompatibleAdapterStreamChatCompletion(t *testing.T) {
 	}
 	if !strings.Contains(sawBody, `"model":"gpt-4.1"`) || !strings.Contains(sawBody, `"stream":true`) {
 		t.Fatalf("unexpected body=%s", sawBody)
+	}
+	if !strings.Contains(sawBody, `"messages":[{"content":"ctx","role":"system"},{"content":"hello","role":"user"}]`) {
+		t.Fatalf("expected structured messages body=%s", sawBody)
+	}
+}
+
+func TestOpenAICompatibleAdapterNormalizesSummaryRoleToUserWithPrefix(t *testing.T) {
+	var sawBody string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		payload, _ := io.ReadAll(r.Body)
+		sawBody = string(payload)
+		w.Header().Set("Content-Type", "text/event-stream")
+		_, _ = w.Write([]byte("data: [DONE]\n\n"))
+	}))
+	defer server.Close()
+
+	adapter := NewOpenAICompatibleAdapter(server.Client())
+	stream, err := adapter.StreamChatCompletion(context.Background(), ProviderChatRequest{
+		BaseURL: server.URL,
+		APIKey:  "sk-test",
+		Model:   "gpt-4.1",
+		Messages: []PromptItem{
+			{Role: "system", Content: "ctx"},
+			{Role: "summary", Content: "user: a"},
+			{Role: "assistant", Content: "继续"},
+		},
+	})
+	if err != nil {
+		t.Fatalf("stream chat completion: %v", err)
+	}
+	defer func() { _ = stream.Close() }()
+
+	done, err := stream.Recv()
+	if err != nil {
+		t.Fatalf("recv done chunk: %v", err)
+	}
+	if !done.Done {
+		t.Fatalf("expected done chunk, got %+v", done)
+	}
+	if strings.Contains(sawBody, `"role":"summary"`) {
+		t.Fatalf("summary role must not reach provider body=%s", sawBody)
+	}
+	if !strings.Contains(sawBody, `"messages":[{"content":"ctx","role":"system"},{"content":"[[summary]] user: a","role":"user"},{"content":"继续","role":"assistant"}]`) {
+		t.Fatalf("expected normalized summary body=%s", sawBody)
+	}
+}
+
+func TestOpenAICompatibleAdapterRejectsUnknownPromptRole(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Fatal("request must not be sent when role is invalid")
+	}))
+	defer server.Close()
+
+	adapter := NewOpenAICompatibleAdapter(server.Client())
+	_, err := adapter.StreamChatCompletion(context.Background(), ProviderChatRequest{
+		BaseURL: server.URL,
+		APIKey:  "sk-test",
+		Model:   "gpt-4.1",
+		Messages: []PromptItem{
+			{Role: "tool", Content: "forbidden"},
+		},
+	})
+	if !errors.Is(err, ErrProviderConfigInvalid) {
+		t.Fatalf("want %v, got %v", ErrProviderConfigInvalid, err)
 	}
 }
 
@@ -249,7 +328,7 @@ func TestModelVerificationServiceVerifyActiveModelHealthy(t *testing.T) {
 			},
 		},
 		writer,
-		providerAdapterStub{stream: &providerChunkStub{chunks: []ProviderChatChunk{{Delta: "ok"}}}},
+		&providerAdapterStub{stream: &providerChunkStub{chunks: []ProviderChatChunk{{Delta: "ok"}}}},
 		secretResolverStub{secret: "sk-test"},
 	)
 
@@ -276,7 +355,7 @@ func TestModelVerificationServiceVerifyActiveModelWritesFailedOnUnauthorized(t *
 			},
 		},
 		writer,
-		providerAdapterStub{err: ErrProviderUnauthorized},
+		&providerAdapterStub{err: ErrProviderUnauthorized},
 		secretResolverStub{secret: "sk-test"},
 	)
 
@@ -300,7 +379,7 @@ func TestModelVerificationServiceVerifyActiveModelWritesDegradedOnRateLimit(t *t
 			},
 		},
 		writer,
-		providerAdapterStub{err: ErrProviderRateLimited},
+		&providerAdapterStub{err: ErrProviderRateLimited},
 		secretResolverStub{secret: "sk-test"},
 	)
 
@@ -316,6 +395,7 @@ func TestModelVerificationServiceVerifyActiveModelWritesDegradedOnRateLimit(t *t
 func TestGatewayServiceStreamTurnWritesLifecycleTelemetry(t *testing.T) {
 	store := &appendEventStoreStub{}
 	sink := &eventSinkStub{}
+	adapter := &providerAdapterStub{stream: &providerChunkStub{chunks: []ProviderChatChunk{{Delta: "你好"}, {Done: true}}}}
 	service := NewGatewayService(
 		NewRuntime(),
 		runtimeConfigReaderStub{
@@ -325,7 +405,7 @@ func TestGatewayServiceStreamTurnWritesLifecycleTelemetry(t *testing.T) {
 				Credential: ModelCredential{SecretRef: "env://OPENAI_API_KEY", Active: true},
 			},
 		},
-		providerAdapterStub{stream: &providerChunkStub{chunks: []ProviderChatChunk{{Delta: "你好"}, {Done: true}}}},
+		adapter,
 		secretResolverStub{secret: "sk-test"},
 	)
 	now := time.Date(2026, 4, 22, 12, 0, 0, 0, time.UTC)
@@ -376,11 +456,21 @@ func TestGatewayServiceStreamTurnWritesLifecycleTelemetry(t *testing.T) {
 	if _, ok := completed.Payload["latency_ms"]; !ok {
 		t.Fatalf("missing latency_ms in completed payload: %+v", completed.Payload)
 	}
+	if got := adapter.lastRequest.Messages; len(got) != 3 {
+		t.Fatalf("expected provider prompt view with system context and user message, got %+v", got)
+	}
+	if adapter.lastRequest.Messages[0].Role != "system" || adapter.lastRequest.Messages[1].Role != "system" || adapter.lastRequest.Messages[2].Role != "user" {
+		t.Fatalf("unexpected prompt view roles=%+v", adapter.lastRequest.Messages)
+	}
+	if adapter.lastRequest.Messages[2].Content != "hello" {
+		t.Fatalf("unexpected current user input=%+v", adapter.lastRequest.Messages)
+	}
 }
 
 func TestGatewayServiceStreamTurnMapsProviderErrorWithLifecycleTelemetry(t *testing.T) {
 	store := &appendEventStoreStub{}
 	sink := &eventSinkStub{}
+	adapter := &providerAdapterStub{err: ErrProviderTimeout}
 	service := NewGatewayService(
 		NewRuntime(),
 		runtimeConfigReaderStub{
@@ -390,7 +480,7 @@ func TestGatewayServiceStreamTurnMapsProviderErrorWithLifecycleTelemetry(t *test
 				Credential: ModelCredential{SecretRef: "env://OPENAI_API_KEY", Active: true},
 			},
 		},
-		providerAdapterStub{err: ErrProviderTimeout},
+		adapter,
 		secretResolverStub{secret: "sk-test"},
 	)
 	now := time.Date(2026, 4, 22, 12, 0, 0, 0, time.UTC)
@@ -431,6 +521,9 @@ func TestGatewayServiceStreamTurnMapsProviderErrorWithLifecycleTelemetry(t *test
 	if got := collectEventTypes(store.events); !reflect.DeepEqual(got, collectEventTypes(sink.events)) {
 		t.Fatalf("terminal events were not appended before SSE, store=%v sink=%v", got, collectEventTypes(sink.events))
 	}
+	if len(adapter.lastRequest.Messages) == 0 {
+		t.Fatal("expected provider request messages to be populated")
+	}
 }
 
 func TestGatewayServiceStreamTurnAppendsTerminalErrorAfterRequestContextCancelled(t *testing.T) {
@@ -445,7 +538,7 @@ func TestGatewayServiceStreamTurnAppendsTerminalErrorAfterRequestContextCancelle
 				Credential: ModelCredential{SecretRef: "env://OPENAI_API_KEY", Active: true},
 			},
 		},
-		providerAdapterStub{err: ErrProviderTimeout},
+		&providerAdapterStub{err: ErrProviderTimeout},
 		secretResolverStub{secret: "sk-test"},
 	)
 	ctx, cancel := context.WithCancel(context.Background())
@@ -481,7 +574,7 @@ func TestGatewayServiceStreamTurnMarksConfigErrorRuntimeUnavailable(t *testing.T
 	service := NewGatewayService(
 		NewRuntime(),
 		runtimeConfigReaderStub{err: ErrActiveModelSelectionNotFound},
-		providerAdapterStub{stream: &providerChunkStub{chunks: []ProviderChatChunk{{Delta: "unreachable"}}}},
+		&providerAdapterStub{stream: &providerChunkStub{chunks: []ProviderChatChunk{{Delta: "unreachable"}}}},
 		secretResolverStub{secret: "sk-test"},
 	)
 
@@ -524,7 +617,7 @@ func TestGatewayServiceStreamTurnWritesFallbackOnlyWhenTerminalAppendFails(t *te
 				Credential: ModelCredential{SecretRef: "env://OPENAI_API_KEY", Active: true},
 			},
 		},
-		providerAdapterStub{err: ErrProviderTimeout},
+		&providerAdapterStub{err: ErrProviderTimeout},
 		secretResolverStub{secret: "sk-test"},
 	)
 
@@ -548,6 +641,73 @@ func TestGatewayServiceStreamTurnWritesFallbackOnlyWhenTerminalAppendFails(t *te
 	}
 	if got := collectEventTypes(sink.events); containsType(got, "turn.completed") {
 		t.Fatalf("fallback path must not fake terminal completed event, got %v", got)
+	}
+}
+
+func TestGatewayServiceStreamTurnUsesCompactedPromptViewForProvider(t *testing.T) {
+	store := &appendEventStoreStub{
+		compactResponse: CompactConversationResponse{
+			PromptView: []PromptItem{
+				{Role: "system", Content: "你是 CubeBox，在当前租户与权限上下文下提供帮助。"},
+				{Role: "system", Content: "tenant=tenant-1\nprincipal=principal-1"},
+				{Role: "system", Content: "[[summary]] user: a"},
+				{Role: "assistant", Content: "Hi—what would you like to do with a?"},
+			},
+			NextSequence: 8,
+		},
+	}
+	sink := &eventSinkStub{}
+	adapter := &providerAdapterStub{stream: &providerChunkStub{chunks: []ProviderChatChunk{{Delta: "继续回答"}, {Done: true}}}}
+	service := NewGatewayService(
+		NewRuntime(),
+		runtimeConfigReaderStub{
+			config: ActiveModelRuntimeConfig{
+				Selection:  ActiveModelSelection{ProviderID: "provider-1", ModelSlug: "gpt-4.1"},
+				Provider:   ModelProvider{ID: "provider-1", ProviderType: "openai-compatible", BaseURL: "https://example.invalid/v1", Enabled: true},
+				Credential: ModelCredential{SecretRef: "env://OPENAI_API_KEY", Active: true},
+			},
+		},
+		adapter,
+		secretResolverStub{secret: "sk-test"},
+	)
+
+	service.StreamTurn(context.Background(), GatewayStreamRequest{
+		TenantID:       "tenant-1",
+		PrincipalID:    "principal-1",
+		ConversationID: "conv-1",
+		Prompt:         "回答你前面的那个问题",
+		NextSequence:   3,
+	}, store, sink)
+
+	if store.compactCalls != 1 {
+		t.Fatalf("expected pre-turn compact, got %d", store.compactCalls)
+	}
+	if len(adapter.lastRequest.Messages) != 5 {
+		t.Fatalf("expected compacted prompt view plus current user input, got %+v", adapter.lastRequest.Messages)
+	}
+	if adapter.lastRequest.Messages[2].Content != "[[summary]] user: a" {
+		t.Fatalf("expected summary in provider request, got %+v", adapter.lastRequest.Messages)
+	}
+	last := adapter.lastRequest.Messages[len(adapter.lastRequest.Messages)-1]
+	if last.Role != "user" || last.Content != "回答你前面的那个问题" {
+		t.Fatalf("expected current user input appended after history, got %+v", adapter.lastRequest.Messages)
+	}
+}
+
+func TestPromptViewForProviderAppendsCurrentUserInputEvenWhenSameAsLastHistoricalUser(t *testing.T) {
+	base := []PromptItem{
+		{Role: "system", Content: "ctx"},
+		{Role: "user", Content: "same question"},
+	}
+
+	prompt := promptViewForProvider(base, CanonicalContext{TenantID: "tenant-1"}, "same question")
+
+	if len(prompt) != 3 {
+		t.Fatalf("expected current user input to be appended, got %+v", prompt)
+	}
+	last := prompt[len(prompt)-1]
+	if last.Role != "user" || last.Content != "same question" {
+		t.Fatalf("unexpected last prompt item=%+v", last)
 	}
 }
 
