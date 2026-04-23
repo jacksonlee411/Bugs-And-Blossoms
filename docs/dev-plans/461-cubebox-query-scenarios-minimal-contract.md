@@ -406,10 +406,10 @@ modules/orgunit/presentation/cubebox/
 
 ### 12.3 Step 3：实现 `api_key -> executor` 执行注册层
 
-- [ ] 在 `modules/cubebox` 增加受控执行注册表
-- [ ] 每个 `api_key` 只映射到现有模块只读能力
-- [ ] 注册层只承担白名单注册、参数收口和顺序调度
-- [ ] 不允许注册层直接查库、重写业务查询逻辑或形成第二读事实源
+- [x] 在 `modules/cubebox` 增加受控执行注册表
+- [x] 冻结 `api_key -> executor` 注册元数据与受控映射骨架
+- [x] 注册层只承担白名单注册、参数收口和顺序调度
+- [x] 不允许注册层直接查库、重写业务查询逻辑或形成第二读事实源
 
 交付结果：
 
@@ -544,6 +544,19 @@ PR-2 验收点：
 - 增加 `api_key -> executor` 注册表、执行器接口和线性多步调度骨架
 - 只冻结受控映射层，不引入第二套查询实现
 - 本 PR 可以使用 stub executor 验证主链，但不应复制任何真实业务查询逻辑
+
+PR-3 实际落点：
+
+- [x] `modules/cubebox/read_executor.go`
+- [x] `modules/cubebox/read_executor_test.go`
+
+PR-3 验收点：
+
+- [x] 已存在唯一执行事实源：`api_key -> executor`
+- [x] 注册表支持白名单注册与查找，不允许重复 `api_key`
+- [x] 线性多步调度骨架已存在，且前序结果已进入后续步骤执行上下文
+- [x] 未注册 `api_key` 会命中 `api_catalog_drift_or_executor_missing`
+- [x] `go test ./modules/cubebox/...` 通过
 
 #### PR-4：`orgunit` 首批执行器接入
 
