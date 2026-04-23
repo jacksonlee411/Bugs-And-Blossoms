@@ -249,6 +249,7 @@ modules/{module}/
 - DEV-PLAN-460：CubeBox 数字助手定位与执行契约：`docs/dev-plans/460-cubebox-digital-assistant-positioning-and-execution-contract.md`
 - DEV-PLAN-461：CubeBox 查询场景最小契约：`docs/dev-plans/461-cubebox-query-scenarios-minimal-contract.md`
 - DEV-PLAN-462：CubeBox 借鉴 Codex 成熟压缩机制的统一收敛方案：`docs/dev-plans/462-cubebox-codex-compaction-adoption-value-and-unified-convergence-plan.md`
+- DEV-PLAN-463：CubeBox 组织树发现缺口调查与修复方案：`docs/dev-plans/463-cubebox-orgunit-tree-discovery-gap-investigation-and-remediation-plan.md`
 - DEV-PLAN-440：彻底删除 SetID 的全仓收口方案（SetID 根删除唯一 PoR）：`docs/dev-plans/440-complete-setid-removal-plan.md`
 - DEV-PLAN-441：旧策略模块残余清理方案：`docs/dev-plans/441-legacy-strategy-module-residue-cleanup-plan.md`
 - DEV-PLAN-450：直接切除 jobcatalog / staffing / person 三模块方案（保留 orgunit）：`docs/dev-plans/450-direct-removal-of-jobcatalog-staffing-person-modules-plan.md`
