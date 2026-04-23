@@ -31,3 +31,9 @@ e2e/_artifacts/
 # Local dev server / stub runtime artifacts
 .dev-*.pid
 create_orgunit
+
+# Local editor / MCP debug artifacts
+.vscode/
+.playwright-mcp/
+playwright-login-snapshot.md
+cubebox-conv-interrupted.json
