@@ -77,8 +77,8 @@ func BuildPromptViewWithCompaction(events []CanonicalEvent, context CanonicalCon
 		prompt = append(prompt, PromptItem{Role: "system", Content: compactionSummaryPrefix + summaryText})
 	}
 	prompt = append(prompt, trimRecentUserMessages(recent, defaultRecentUserMessageTokens)...)
-	if trimmed := strings.TrimSpace(currentUserInput); trimmed != "" {
-		prompt = append(prompt, PromptItem{Role: "user", Content: trimmed})
+	if strings.TrimSpace(currentUserInput) != "" {
+		prompt = append(prompt, PromptItem{Role: "user", Content: currentUserInput})
 	}
 
 	return CompactionResult{
@@ -144,8 +144,8 @@ func buildSummaryText(items []PromptItem) string {
 	}
 	parts := make([]string, 0, len(items))
 	for _, item := range items {
-		content := strings.TrimSpace(item.Content)
-		if content == "" {
+		content := item.Content
+		if strings.TrimSpace(content) == "" {
 			continue
 		}
 		parts = append(parts, fmt.Sprintf("%s: %s", item.Role, content))
@@ -162,8 +162,8 @@ func collectPromptTimeline(events []CanonicalEvent) []PromptItem {
 	for _, event := range events {
 		switch event.Type {
 		case "turn.user_message.accepted":
-			text := strings.TrimSpace(stringValue(event.Payload["text"]))
-			if text == "" || strings.HasPrefix(text, compactionSummaryPrefix) {
+			text := stringValue(event.Payload["text"])
+			if strings.TrimSpace(text) == "" || strings.HasPrefix(text, compactionSummaryPrefix) {
 				continue
 			}
 			items = append(items, PromptItem{Role: "user", Content: text})
@@ -175,15 +175,15 @@ func collectPromptTimeline(events []CanonicalEvent) []PromptItem {
 			agentChunks[messageID] = agentChunks[messageID] + stringValue(event.Payload["delta"])
 		case "turn.agent_message.completed":
 			messageID := stringValue(event.Payload["message_id"])
-			text := strings.TrimSpace(agentChunks[messageID])
-			if text == "" {
+			text := agentChunks[messageID]
+			if strings.TrimSpace(text) == "" {
 				continue
 			}
 			items = append(items, PromptItem{Role: "assistant", Content: text})
 			delete(agentChunks, messageID)
 		case "turn.context_compacted":
-			text := strings.TrimSpace(stringValue(event.Payload["summary_text"]))
-			if text == "" {
+			text := stringValue(event.Payload["summary_text"])
+			if strings.TrimSpace(text) == "" {
 				continue
 			}
 			items = append(items, PromptItem{Role: "summary", Content: text})
@@ -204,11 +204,18 @@ func trimRecentUserMessages(items []PromptItem, tokenLimit int) []PromptItem {
 	for _, item := range items {
 		next := item
 		if next.Role == "user" {
-			next.Content = trimTextToApproxTokenLimit(next.Content, tokenLimit)
+			next.Content = preserveOrTrimTextToApproxTokenLimit(next.Content, tokenLimit)
 		}
 		trimmed = append(trimmed, next)
 	}
 	return trimmed
+}
+
+func preserveOrTrimTextToApproxTokenLimit(text string, tokenLimit int) string {
+	if tokenLimit <= 0 || strings.TrimSpace(text) == "" || estimateTextTokens(text) <= tokenLimit {
+		return text
+	}
+	return trimTextToApproxTokenLimit(text, tokenLimit)
 }
 
 func trimTextToApproxTokenLimit(text string, tokenLimit int) string {
@@ -295,5 +302,5 @@ func stringValue(value any) string {
 	if value == nil {
 		return ""
 	}
-	return strings.TrimSpace(fmt.Sprint(value))
+	return fmt.Sprint(value)
 }

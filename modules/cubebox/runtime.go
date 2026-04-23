@@ -209,7 +209,7 @@ func (r *Runtime) StartTurn(owner TurnOwner, prompt string) DeterministicTurn {
 		TurnID:             turnID,
 		UserMessageID:      r.nextID("msg_user"),
 		AssistantMessageID: r.nextID("msg_agent"),
-		Prompt:             strings.TrimSpace(prompt),
+		Prompt:             prompt,
 		Chunks:             deterministicChunks(prompt),
 		ShouldError:        strings.Contains(strings.ToLower(prompt), "error"),
 		interrupt:          ch,
@@ -263,7 +263,7 @@ func (t DeterministicTurn) InterruptSignal() <-chan struct{} {
 }
 
 func deterministicChunks(prompt string) []string {
-	reply := fmt.Sprintf("已收到你的消息：%s\n我正在整理回复。", strings.TrimSpace(prompt))
+	reply := fmt.Sprintf("已收到你的消息：%s\n我正在整理回复。", prompt)
 	if strings.TrimSpace(prompt) == "" {
 		reply = "已收到你的消息。\n我正在整理回复。"
 	}

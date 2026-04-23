@@ -238,6 +238,74 @@
 - [ ] 待补最终页面复验证据：
   - 样本二：形成足够历史并 compact 后，继续追问前文指代
 
+### Phase D / PR-437D 正文保真与 `TrimSpace` 收敛补充证据（`2026-04-23`）
+
+- [x] 已确认并修复 `438B` 定义的两条正文破坏主链：
+  - `modules/cubebox/gateway.go` 不再用 `strings.TrimSpace(chunk.Delta) == ""` 丢弃 `newline-only delta`。
+  - `internal/server/cubebox_api.go`、`modules/cubebox/gateway.go`、`modules/cubebox/compaction.go`、`modules/cubebox/runtime.go` 已改为“trim 仅判空，不用 trim 后结果覆盖正文”。
+- [x] replay / compaction / summary 路径已按 `438B` 收敛：
+  - `collectPromptTimeline(...)` 改为保留 user / assistant / summary 原始正文，只在判空时使用 `TrimSpace`。
+  - `buildSummaryText(...)` 不再先隐式 trim 再拼接摘要，摘要标准化仅保留在显式 token budget 截断路径。
+  - `stringValue(...)` 不再对事件 payload 中的正文统一裁边。
+- [x] 自动化证据已补：
+  - Go：
+    - `modules/cubebox/gateway_test.go`
+      - `TestGatewayServiceStreamTurnPreservesNewlineOnlyDelta`
+      - `TestPromptViewForProviderPreservesCurrentUserInputWhitespace`
+      - `TestNormalizeProviderMessagesPreservesContentWhitespace`
+    - `modules/cubebox/compaction_test.go`
+      - `TestBuildPromptViewWithCompactionPreservesCurrentUserInputWhitespace`
+      - `TestCollectPromptTimelinePreservesOriginalWhitespace`
+    - `internal/server/cubebox_api_test.go`
+      - `TestCubeBoxStreamTurnAPIPreservesPromptWhitespace`
+  - Web：
+    - `apps/web/src/pages/cubebox/reducer.test.ts`
+      - 新增换行 chunk 回放断言，验证 `1)` / `2)` 列表边界不会在 reducer 重建时压平
+    - `apps/web/src/pages/cubebox/CubeBoxPanel.test.tsx`
+      - 新增 `pre-wrap` 显示断言，验证含空行的编号列表正文按原样显示
+- [x] 当前本地验证命令：
+  - `go test ./modules/cubebox ./internal/server`
+  - `pnpm --dir apps/web test -- --run apps/web/src/pages/cubebox/reducer.test.ts apps/web/src/pages/cubebox/CubeBoxPanel.test.tsx`
+- [ ] 待补最终浏览器证据：
+  - 真实 provider / 真实页面场景下再次复现“为什么没有选项2”样本，回填 UI 肉眼验收截图或文字记录
+  - `2026-04-23 08:18 CST` 已补首次真实运行态复验，但结果为“部分通过，需要继续分层跟进”：
+    - 真实页面登录、打开右侧 CubeBox 抽屉、发送最小样本 prompt 的浏览器自动化脚本已执行：`node e2e/tmp-verify-cubebox-newline.js`
+    - 页面截图与结果 JSON 已落盘：
+      - `e2e/_artifacts/cubebox-newline-live-validation.png`
+      - `e2e/_artifacts/cubebox-newline-live-validation.json`
+    - 同一会话的真实 SSE 事件流已补抓：
+      - `e2e/_artifacts/cubebox-newline-live-validation.sse.txt`
+    - 结论分层如下：
+      - 本地页面显示层仍保持 `white-space: pre-wrap`，不是显示层把换行压平；
+      - `438B` 已删除的 `newline-only delta` 过滤在真实 SSE 主链中没有再出现；
+      - 但当前真实 provider 对最小样本 `1) AAA\n\n2) BBB\n\n3) CCC` 返回的 `turn.agent_message.delta` 序列为 `"1"`, `")"`, `" AAA"`, `"2"`, `")"`, `" BBB"`, `"3"`, `")"`, `" CCC"`，未包含 `\n` / `\n\n`；
+      - 因此真实页面最终 assistant 气泡显示为 `1) AAA2) BBB3) CCC`，当前“选项 2 独立换行”的真实运行态验收仍未通过。
+    - 本轮裁决：
+      - `438B` 的本地 TrimSpace / newline-only delta 根因已完成止血；
+      - 当前残余问题已不再能直接归因于本地过滤，而是需要继续调查真实 provider 对该类 prompt 的输出行为，或评估是否要通过 prompt/上游约束而不是本地补丁来稳定编号列表格式。
+  - `2026-04-23 08:23 CST` 已补正式会话证据，明确区分“provider 输出不保行”与“本地 newline loss”：
+    - 目标会话：`conv_99047493358e4e89aabeb7af99db563a`
+    - 目标轮次：
+      - `turn_000040`：用户消息 `列出20大世界旅游胜地`
+      - `turn_000043`：用户消息 `要逐行输出不要搞成一大段`
+    - 事实提取方式：
+      - 通过 `GET /internal/cubebox/conversations/conv_99047493358e4e89aabeb7af99db563a` 直接读取 append-only event log
+      - 使用 `jq` 提取 `turn.user_message.accepted` 与 `turn.agent_message.delta`
+    - 关键事实：
+      - `turn_000040` 在 `sequence=313..330` 的 assistant 增量依次为：
+        - `1`, `.`, ` 法`, `国`, `·`, `巴黎`, `（`, `埃`, `菲`, `尔`, `铁`, `塔`, `、`, `卢`, `浮`, `宫`, `）`, `2`
+      - `turn_000043` 在 `sequence=652..669` 的 assistant 增量依次为：
+        - `1`, `.`, ` 法`, `国`, `·`, `巴黎`, `（`, `埃`, `菲`, `尔`, `铁`, `塔`, `、`, `卢`, `浮`, `宫`, `）`, `2`
+      - 上述两轮在编号切换处都没有出现任何 `\n` / `\n\n` delta，也没有出现“换行 delta 被后续文本断开”的模式。
+    - 裁决：
+      - 该会话两次“没有换行”不属于 `438B` 所定义的“本地 newline-only delta 被吞”。
+      - 该会话命中的是“真实 provider 返回本身就未保留换行”的场景；也就是 assistant 在事实层直接生成了压平列表。
+      - 因此前端显示层与本地 reducer / gateway 不能为该会话的压平结果背锅；即使 `438B` 已修复，本会话仍可能继续表现为单段列表。
+    - 结论归档口径：
+      - `438B` 负责“本地正文保真与 TrimSpace 收敛”；
+      - `conv_99047493358e4e89aabeb7af99db563a` 这组案例应归入“provider 输出不保行 / 格式服从不稳定”证据，而不是“本地 newline loss”证据。
+      - 后续处理裁决已冻结：以真实 provider 返回为准；若 provider 未返回换行，CubeBox 不在本地追加换行、重排列表或做其他猜测性格式修复。
+
 - [x] 真实页面复验证据（`2026-04-23`，本地浏览器 + 新重启 `:8080` server）：
   - 登录 `http://localhost:8080/app/login`，使用 `admin@localhost / admin123` 成功进入 `/app`
   - 打开主壳层右侧 CubeBox 抽屉，新建会话 `conv_254ceb032b484630b871315d2bcdd639`

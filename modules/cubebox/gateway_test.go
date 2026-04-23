@@ -192,7 +192,7 @@ func TestOpenAICompatibleAdapterStreamChatCompletion(t *testing.T) {
 			{Role: "system", Content: "ctx"},
 			{Role: "user", Content: "hello"},
 		},
-		Input:   "hello",
+		Input: "hello",
 	})
 	if err != nil {
 		t.Fatalf("stream chat completion: %v", err)
@@ -467,6 +467,51 @@ func TestGatewayServiceStreamTurnWritesLifecycleTelemetry(t *testing.T) {
 	}
 }
 
+func TestGatewayServiceStreamTurnPreservesNewlineOnlyDelta(t *testing.T) {
+	store := &appendEventStoreStub{}
+	sink := &eventSinkStub{}
+	adapter := &providerAdapterStub{
+		stream: &providerChunkStub{
+			chunks: []ProviderChatChunk{
+				{Delta: "1) first"},
+				{Delta: "\n\n"},
+				{Delta: "2) second"},
+				{Done: true},
+			},
+		},
+	}
+	service := NewGatewayService(
+		NewRuntime(),
+		runtimeConfigReaderStub{
+			config: ActiveModelRuntimeConfig{
+				Selection:  ActiveModelSelection{ProviderID: "provider-1", ModelSlug: "gpt-4.1"},
+				Provider:   ModelProvider{ID: "provider-1", ProviderType: "openai-compatible", BaseURL: "https://example.invalid/v1", Enabled: true},
+				Credential: ModelCredential{SecretRef: "env://OPENAI_API_KEY", Active: true},
+			},
+		},
+		adapter,
+		secretResolverStub{secret: "sk-test"},
+	)
+
+	service.StreamTurn(context.Background(), GatewayStreamRequest{
+		TenantID:       "tenant-1",
+		PrincipalID:    "principal-1",
+		ConversationID: "conv-1",
+		Prompt:         "list",
+		NextSequence:   1,
+	}, store, sink)
+
+	deltas := make([]string, 0, len(sink.events))
+	for _, event := range sink.events {
+		if event.Type == "turn.agent_message.delta" {
+			deltas = append(deltas, event.Payload["delta"].(string))
+		}
+	}
+	if !reflect.DeepEqual(deltas, []string{"1) first", "\n\n", "2) second"}) {
+		t.Fatalf("unexpected deltas=%q", deltas)
+	}
+}
+
 func TestGatewayServiceStreamTurnMapsProviderErrorWithLifecycleTelemetry(t *testing.T) {
 	store := &appendEventStoreStub{}
 	sink := &eventSinkStub{}
@@ -708,6 +753,29 @@ func TestPromptViewForProviderAppendsCurrentUserInputEvenWhenSameAsLastHistorica
 	last := prompt[len(prompt)-1]
 	if last.Role != "user" || last.Content != "same question" {
 		t.Fatalf("unexpected last prompt item=%+v", last)
+	}
+}
+
+func TestPromptViewForProviderPreservesCurrentUserInputWhitespace(t *testing.T) {
+	base := []PromptItem{
+		{Role: "system", Content: "ctx"},
+	}
+
+	prompt := promptViewForProvider(base, CanonicalContext{TenantID: "tenant-1"}, "\n  same question  \n")
+
+	last := prompt[len(prompt)-1]
+	if last.Role != "user" || last.Content != "\n  same question  \n" {
+		t.Fatalf("unexpected last prompt item=%+v", last)
+	}
+}
+
+func TestNormalizeProviderMessagesPreservesContentWhitespace(t *testing.T) {
+	messages, err := normalizeProviderMessages([]PromptItem{{Role: "user", Content: "\n  hello  \n"}})
+	if err != nil {
+		t.Fatalf("normalize provider messages: %v", err)
+	}
+	if len(messages) != 1 || messages[0]["content"] != "\n  hello  \n" {
+		t.Fatalf("unexpected messages=%+v", messages)
 	}
 }
 

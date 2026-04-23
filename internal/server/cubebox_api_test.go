@@ -337,6 +337,37 @@ func TestCubeBoxStreamTurnAPI(t *testing.T) {
 	}
 }
 
+func TestCubeBoxStreamTurnAPIPreservesPromptWhitespace(t *testing.T) {
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/internal/cubebox/turns:stream", strings.NewReader("{\"conversation_id\":\"conv_1\",\"prompt\":\"\\n  hello  \\n\",\"next_sequence\":1}"))
+	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
+	req = req.WithContext(withPrincipal(req.Context(), Principal{ID: "p1"}))
+
+	runtime := cubebox.NewRuntime()
+	var gotPrompt string
+	handleCubeBoxStreamTurnAPI(rec, req, runtime, cubeboxStoreStub{
+		compactFn: func(context.Context, string, string, string, cubebox.CanonicalContext, string) (cubebox.CompactConversationResponse, error) {
+			return cubebox.CompactConversationResponse{}, nil
+		},
+		appendFn: func(_ context.Context, _ string, _ string, _ string, event cubebox.CanonicalEvent) error {
+			if event.Type == "turn.user_message.accepted" {
+				gotPrompt = event.Payload["text"].(string)
+			}
+			return nil
+		},
+	}, newTestGateway(runtime))
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+	}
+	if gotPrompt != "\n  hello  \n" {
+		t.Fatalf("unexpected prompt=%q", gotPrompt)
+	}
+	if !strings.Contains(rec.Body.String(), "\\n  hello  \\n") {
+		t.Fatalf("expected response body to preserve prompt whitespace, body=%s", rec.Body.String())
+	}
+}
+
 func TestCubeBoxInterruptTurnAPI(t *testing.T) {
 	runtime := cubebox.NewRuntime()
 	turn := runtime.StartTurn(cubebox.TurnOwner{

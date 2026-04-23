@@ -49,11 +49,11 @@ type ProviderAdapter interface {
 }
 
 type ProviderChatRequest struct {
-	BaseURL string
-	APIKey  string
-	Model   string
+	BaseURL  string
+	APIKey   string
+	Model    string
 	Messages []PromptItem
-	Input   string
+	Input    string
 }
 
 type ProviderChatChunk struct {
@@ -225,11 +225,11 @@ func (s *GatewayService) StreamTurn(
 	}()
 
 	stream, err := s.adapter.StreamChatCompletion(providerCtx, ProviderChatRequest{
-		BaseURL: strings.TrimSpace(config.Provider.BaseURL),
-		APIKey:  secret,
-		Model:   strings.TrimSpace(config.Selection.ModelSlug),
+		BaseURL:  strings.TrimSpace(config.Provider.BaseURL),
+		APIKey:   secret,
+		Model:    strings.TrimSpace(config.Selection.ModelSlug),
 		Messages: providerPromptView,
-		Input:   turn.Prompt,
+		Input:    turn.Prompt,
 	})
 	if err != nil {
 		s.writeProviderError(store, sink, ctx, request, turn.TurnID, &sequence, lifecycle, err)
@@ -274,9 +274,6 @@ func (s *GatewayService) StreamTurn(
 			_ = writeEvent("turn.agent_message.completed", map[string]any{"message_id": turn.AssistantMessageID})
 			_ = writeEvent("turn.completed", s.completedPayload("completed", lifecycle))
 			return
-		}
-		if strings.TrimSpace(chunk.Delta) == "" {
-			continue
 		}
 		if !writeEvent("turn.agent_message.delta", map[string]any{
 			"message_id": turn.AssistantMessageID,
@@ -453,11 +450,10 @@ func promptViewForProvider(base []PromptItem, canonicalContext CanonicalContext,
 		return BuildPromptViewWithCompaction(nil, canonicalContext, currentUserInput).PromptView
 	}
 	prompt := append([]PromptItem(nil), base...)
-	trimmedInput := strings.TrimSpace(currentUserInput)
-	if trimmedInput == "" {
+	if strings.TrimSpace(currentUserInput) == "" {
 		return prompt
 	}
-	return append(prompt, PromptItem{Role: "user", Content: trimmedInput})
+	return append(prompt, PromptItem{Role: "user", Content: currentUserInput})
 }
 
 func (s *GatewayService) startedPayload(userMessageID string, lifecycle gatewayLifecycleMeta) map[string]any {
@@ -559,7 +555,7 @@ func (a *OpenAICompatibleAdapter) StreamChatCompletion(ctx context.Context, requ
 	if len(messages) == 0 && strings.TrimSpace(request.Input) != "" {
 		messages = append(messages, map[string]string{
 			"role":    "user",
-			"content": strings.TrimSpace(request.Input),
+			"content": request.Input,
 		})
 	}
 	body, err := json.Marshal(map[string]any{
@@ -616,8 +612,8 @@ func normalizeProviderMessages(items []PromptItem) ([]map[string]string, error) 
 	messages := make([]map[string]string, 0, len(items))
 	for _, item := range items {
 		role := strings.TrimSpace(item.Role)
-		content := strings.TrimSpace(item.Content)
-		if role == "" || content == "" {
+		content := item.Content
+		if role == "" || strings.TrimSpace(content) == "" {
 			continue
 		}
 		switch role {

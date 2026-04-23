@@ -70,6 +70,42 @@ func TestBuildPromptViewWithCompactionCompactsOldHistoryAndReinjectsCanonicalCon
 	}
 }
 
+func TestBuildPromptViewWithCompactionPreservesCurrentUserInputWhitespace(t *testing.T) {
+	result := BuildPromptViewWithCompaction(nil, CanonicalContext{TenantID: "tenant-a", PrincipalID: "principal-a"}, "\n  请继续回答  \n")
+
+	last := result.PromptView[len(result.PromptView)-1]
+	if last.Role != "user" || last.Content != "\n  请继续回答  \n" {
+		t.Fatalf("unexpected final prompt item: %#v", last)
+	}
+}
+
+func TestBuildPromptViewWithCompactionPreservesRecentUserWhitespaceWithinBudget(t *testing.T) {
+	result := BuildPromptViewWithCompaction([]CanonicalEvent{
+		{
+			Type:    "turn.user_message.accepted",
+			Payload: map[string]any{"message_id": "msg_user_1", "text": "\n  第一轮原始问题  \n"},
+		},
+		{
+			Type:    "turn.agent_message.delta",
+			Payload: map[string]any{"message_id": "msg_agent_1", "delta": "收到"},
+		},
+		{
+			Type:    "turn.agent_message.completed",
+			Payload: map[string]any{"message_id": "msg_agent_1"},
+		},
+	}, CanonicalContext{TenantID: "tenant-a", PrincipalID: "principal-a"}, "")
+
+	found := false
+	for _, item := range result.PromptView {
+		if item.Role == "user" && item.Content == "\n  第一轮原始问题  \n" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("expected recent user whitespace to remain unchanged: %#v", result.PromptView)
+	}
+}
+
 func TestBuildPromptViewWithCompactionSkipsSummaryPrefixAndKeepsRecentItems(t *testing.T) {
 	result := BuildPromptViewWithCompaction([]CanonicalEvent{
 		{
@@ -157,6 +193,49 @@ func TestBuildPromptViewWithCompactionDoesNotReplaceOriginalMessages(t *testing.
 	}
 }
 
+func TestCollectPromptTimelinePreservesOriginalWhitespace(t *testing.T) {
+	events := []CanonicalEvent{
+		{
+			Type:    "turn.user_message.accepted",
+			Payload: map[string]any{"message_id": "msg_user_1", "text": "\n1) first\n\n2) second\n"},
+		},
+		{
+			Type:    "turn.agent_message.delta",
+			Payload: map[string]any{"message_id": "msg_agent_1", "delta": "A"},
+		},
+		{
+			Type:    "turn.agent_message.delta",
+			Payload: map[string]any{"message_id": "msg_agent_1", "delta": "\n\n"},
+		},
+		{
+			Type:    "turn.agent_message.delta",
+			Payload: map[string]any{"message_id": "msg_agent_1", "delta": "B"},
+		},
+		{
+			Type:    "turn.agent_message.completed",
+			Payload: map[string]any{"message_id": "msg_agent_1"},
+		},
+		{
+			Type:    "turn.context_compacted",
+			Payload: map[string]any{"summary_text": "\nsummary line\n"},
+		},
+	}
+
+	timeline := collectPromptTimeline(events)
+	if len(timeline) != 3 {
+		t.Fatalf("unexpected timeline=%#v", timeline)
+	}
+	if timeline[0].Content != "\n1) first\n\n2) second\n" {
+		t.Fatalf("unexpected user content=%q", timeline[0].Content)
+	}
+	if timeline[1].Content != "A\n\nB" {
+		t.Fatalf("unexpected assistant content=%q", timeline[1].Content)
+	}
+	if timeline[2].Content != "\nsummary line\n" {
+		t.Fatalf("unexpected summary content=%q", timeline[2].Content)
+	}
+}
+
 func TestBuildPromptViewWithCompactionTruncatesLongRecentUserMessageOnlyInPromptView(t *testing.T) {
 	longUserMessage := ""
 	for i := 0; i < 1800; i++ {
@@ -227,6 +306,14 @@ func TestTrimTextToApproxTokenLimitTruncatesBoundaryCase(t *testing.T) {
 	}
 	if estimateTextTokens(trimmed) > defaultRecentUserMessageTokens+4 {
 		t.Fatalf("expected trimmed boundary text within guardrail, got %d", estimateTextTokens(trimmed))
+	}
+}
+
+func TestPreserveOrTrimTextToApproxTokenLimitKeepsBoundaryWhitespaceWhenWithinBudget(t *testing.T) {
+	input := "\n  short recent user input  \n"
+	got := preserveOrTrimTextToApproxTokenLimit(input, defaultRecentUserMessageTokens)
+	if got != input {
+		t.Fatalf("expected within-budget text to remain unchanged, got %q", got)
 	}
 }
 

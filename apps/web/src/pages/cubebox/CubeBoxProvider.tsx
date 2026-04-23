@@ -141,8 +141,8 @@ export function CubeBoxProvider({ children }: PropsWithChildren) {
       nextSequence = payload.next_sequence
     }
 
-    const prompt = composerTextRef.current.trim()
-    if (prompt.length === 0 || conversationID.length === 0) {
+    const prompt = composerTextRef.current
+    if (prompt.trim().length === 0 || conversationID.length === 0) {
       return
     }
 

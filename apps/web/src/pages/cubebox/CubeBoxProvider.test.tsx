@@ -167,4 +167,31 @@ describe('CubeBoxProvider', () => {
     expect(result.current.state.items).toEqual([])
     expect(result.current.state.compacting).toBe(false)
   })
+
+  it('preserves composer whitespace when sending message to stream api', async () => {
+    apiMocks.createConversation.mockResolvedValue({
+      conversation: { id: 'conv_1', title: '新对话', archived: false, status: 'active' },
+      events: [],
+      next_sequence: 2
+    })
+    apiMocks.streamTurn.mockResolvedValue(undefined)
+
+    const { result } = renderHook(() => useCubeBox(), { wrapper })
+
+    await act(async () => {
+      result.current.setComposerText('\n  hello  \n')
+    })
+
+    await act(async () => {
+      await result.current.sendMessage()
+    })
+
+    expect(apiMocks.streamTurn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        conversationID: 'conv_1',
+        prompt: '\n  hello  \n',
+        nextSequence: 2
+      })
+    )
+  })
 })

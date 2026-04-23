@@ -370,8 +370,7 @@ func handleCubeBoxStreamTurnAPI(w http.ResponseWriter, r *http.Request, runtime 
 		return
 	}
 	req.ConversationID = strings.TrimSpace(req.ConversationID)
-	req.Prompt = strings.TrimSpace(req.Prompt)
-	if req.ConversationID == "" || req.Prompt == "" {
+	if req.ConversationID == "" || strings.TrimSpace(req.Prompt) == "" {
 		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusUnprocessableEntity, "invalid_form", "conversation and prompt required")
 		return
 	}

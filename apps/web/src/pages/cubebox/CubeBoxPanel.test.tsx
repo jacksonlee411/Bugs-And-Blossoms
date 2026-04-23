@@ -226,6 +226,58 @@ describe('CubeBoxPanel', () => {
     expect(cubeBoxMocks.useCubeBox.mock.results[0]?.value.compactCurrentConversation).toHaveBeenCalledTimes(1)
   })
 
+  it('renders multiline agent content with preserved numbered list boundaries', () => {
+    cubeBoxMocks.useCubeBox.mockReturnValueOnce({
+      archiveConversation: vi.fn(),
+      compactCurrentConversation: vi.fn(),
+      conversations: [
+        {
+          id: 'conv_1',
+          title: '需求澄清',
+          status: 'active',
+          archived: false,
+          updated_at: '2026-04-21T10:00:00Z'
+        }
+      ],
+      conversationsLoading: false,
+      renameConversation: vi.fn(),
+      selectConversation: vi.fn(),
+      startNewConversation: vi.fn().mockResolvedValue(undefined),
+      state: {
+        conversation: {
+          id: 'conv_1',
+          title: '需求澄清',
+          status: 'active',
+          archived: false
+        },
+        items: [
+          {
+            id: 'msg_agent_1',
+            kind: 'agent_message',
+            text: '1) 关于我能帮你做什么\n\n2) 关于我“知道什么”',
+            status: 'completed'
+          }
+        ],
+        turnStatus: 'completed',
+        activeTurnID: null,
+        nextSequence: 2,
+        composerText: '',
+        loading: false,
+        errorMessage: null,
+        compacting: false
+      },
+      interrupt: vi.fn(),
+      sendMessage: vi.fn(),
+      setComposerText: vi.fn()
+    })
+
+    render(<CubeBoxPanel />)
+
+    const message = screen.getByText((_, element) => element?.textContent === '1) 关于我能帮你做什么\n\n2) 关于我“知道什么”')
+    expect(message).toBeInTheDocument()
+    expect(message).toHaveStyle({ whiteSpace: 'pre-wrap' })
+  })
+
   it('hides settings entry when model settings permission is missing', async () => {
     apiMocks.loadCubeBoxCapabilities.mockResolvedValueOnce({
       conversation: {

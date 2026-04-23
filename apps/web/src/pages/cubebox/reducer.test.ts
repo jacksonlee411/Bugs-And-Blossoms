@@ -101,6 +101,90 @@ describe('cubebox reducer', () => {
     expect(state.nextSequence).toBe(7)
   })
 
+  it('preserves newline-only delta chunks so numbered items do not collapse during replay', () => {
+    const state = replayConversation({
+      conversation: {
+        id: 'conv_1',
+        title: '新对话',
+        status: 'active',
+        archived: false
+      },
+      next_sequence: 6,
+      events: [
+        {
+          event_id: 'evt_1',
+          conversation_id: 'conv_1',
+          turn_id: 'turn_1',
+          sequence: 1,
+          type: 'turn.started',
+          ts: '2026-04-23T00:00:00Z',
+          payload: { user_message_id: 'msg_user_1' }
+        },
+        {
+          event_id: 'evt_2',
+          conversation_id: 'conv_1',
+          turn_id: 'turn_1',
+          sequence: 2,
+          type: 'turn.user_message.accepted',
+          ts: '2026-04-23T00:00:01Z',
+          payload: { message_id: 'msg_user_1', text: '介绍一下你知道的' }
+        },
+        {
+          event_id: 'evt_3',
+          conversation_id: 'conv_1',
+          turn_id: 'turn_1',
+          sequence: 3,
+          type: 'turn.agent_message.delta',
+          ts: '2026-04-23T00:00:02Z',
+          payload: { message_id: 'msg_agent_1', delta: '1) 关于我能帮你做什么' }
+        },
+        {
+          event_id: 'evt_4',
+          conversation_id: 'conv_1',
+          turn_id: 'turn_1',
+          sequence: 4,
+          type: 'turn.agent_message.delta',
+          ts: '2026-04-23T00:00:03Z',
+          payload: { message_id: 'msg_agent_1', delta: '\n\n' }
+        },
+        {
+          event_id: 'evt_5',
+          conversation_id: 'conv_1',
+          turn_id: 'turn_1',
+          sequence: 5,
+          type: 'turn.agent_message.delta',
+          ts: '2026-04-23T00:00:04Z',
+          payload: { message_id: 'msg_agent_1', delta: '2) 关于我“知道什么”' }
+        },
+        {
+          event_id: 'evt_6',
+          conversation_id: 'conv_1',
+          turn_id: 'turn_1',
+          sequence: 6,
+          type: 'turn.agent_message.completed',
+          ts: '2026-04-23T00:00:05Z',
+          payload: { message_id: 'msg_agent_1' }
+        },
+        {
+          event_id: 'evt_7',
+          conversation_id: 'conv_1',
+          turn_id: 'turn_1',
+          sequence: 7,
+          type: 'turn.completed',
+          ts: '2026-04-23T00:00:06Z',
+          payload: { status: 'completed' }
+        }
+      ]
+    })
+
+    expect(state.items).toHaveLength(2)
+    expect(state.items[1]).toMatchObject({
+      kind: 'agent_message',
+      text: '1) 关于我能帮你做什么\n\n2) 关于我“知道什么”',
+      status: 'completed'
+    })
+  })
+
   it('applies archived metadata events during replay so restored title and status match the event log', () => {
     const state = replayConversation({
       conversation: {
