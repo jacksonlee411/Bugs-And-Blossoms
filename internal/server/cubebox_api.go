@@ -354,7 +354,7 @@ func handleCubeBoxPatchConversationAPI(w http.ResponseWriter, r *http.Request, s
 	writeJSON(w, http.StatusOK, payload)
 }
 
-func handleCubeBoxStreamTurnAPI(w http.ResponseWriter, r *http.Request, runtime *cubebox.Runtime, store cubeboxConversationStore, gateway *cubebox.GatewayService) {
+func handleCubeBoxStreamTurnAPI(w http.ResponseWriter, r *http.Request, runtime *cubebox.Runtime, store cubeboxConversationStore, gateway *cubebox.GatewayService, queryFlow *cubeboxQueryFlow) {
 	if r.Method != http.MethodPost {
 		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusMethodNotAllowed, "method_not_allowed", "method not allowed")
 		return
@@ -393,16 +393,21 @@ func handleCubeBoxStreamTurnAPI(w http.ResponseWriter, r *http.Request, runtime 
 		return
 	}
 
-	gateway.StreamTurn(r.Context(), cubebox.GatewayStreamRequest{
+	streamRequest := cubebox.GatewayStreamRequest{
 		TenantID:       tenant.ID,
 		PrincipalID:    principal.ID,
 		ConversationID: req.ConversationID,
 		Prompt:         req.Prompt,
 		NextSequence:   req.NextSequence,
-	}, store, cubeboxSSEEventSink{
+	}
+	sink := cubeboxSSEEventSink{
 		w:       w,
 		flusher: flusher,
-	})
+	}
+	if queryFlow != nil && queryFlow.TryHandle(r.Context(), streamRequest, sink) {
+		return
+	}
+	gateway.StreamTurn(r.Context(), streamRequest, store, sink)
 }
 
 type cubeboxSSEEventSink struct {

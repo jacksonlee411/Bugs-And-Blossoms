@@ -157,6 +157,7 @@ func TestCubeBoxOrgUnitDetailsExecutorResolvesOrgCodeFromPreviousStep(t *testing
 			"step-1": {
 				Payload: map[string]any{
 					"target_org_code": "1001",
+					"target_unique":   true,
 				},
 			},
 		},
@@ -167,6 +168,34 @@ func TestCubeBoxOrgUnitDetailsExecutorResolvesOrgCodeFromPreviousStep(t *testing
 	orgUnit := result.Payload["org_unit"].(orgUnitDetailsAPIItem)
 	if orgUnit.OrgCode != "1001" {
 		t.Fatalf("org_unit.org_code=%q", orgUnit.OrgCode)
+	}
+}
+
+func TestCubeBoxOrgUnitDetailsExecutorRejectsOrgCodeFromAmbiguousPreviousStep(t *testing.T) {
+	store := &orgUnitDetailsExtStoreStub{
+		resolveOrgCodeStore: &resolveOrgCodeStore{},
+	}
+	executor := cubeBoxOrgUnitDetailsExecutor{store: store}
+	params, err := executor.ValidateParams(map[string]any{
+		"org_code_from": "step-1.target_org_code",
+		"as_of":         "2026-04-23",
+	})
+	if err != nil {
+		t.Fatalf("ValidateParams err=%v", err)
+	}
+	_, err = executor.Execute(context.Background(), cubebox.ExecuteRequest{
+		TenantID: "t1",
+		PreviousResults: map[string]cubebox.ExecuteResult{
+			"step-1": {
+				Payload: map[string]any{
+					"target_org_code": "1001",
+					"target_unique":   false,
+				},
+			},
+		},
+	}, params)
+	if err == nil {
+		t.Fatal("expected ambiguous previous step to be rejected")
 	}
 }
 

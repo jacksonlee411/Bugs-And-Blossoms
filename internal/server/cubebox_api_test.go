@@ -8,12 +8,25 @@ import (
 	"regexp"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/jacksonlee411/Bugs-And-Blossoms/modules/cubebox"
 )
 
 func newTestGateway(runtime *cubebox.Runtime) *cubebox.GatewayService {
 	return cubebox.NewGatewayService(runtime, nil, nil, nil)
+}
+
+type cubeboxReadPlanProducerStub struct {
+	result cubeboxReadPlanProductionResult
+	err    error
+}
+
+func (s cubeboxReadPlanProducerStub) ProduceReadPlan(context.Context, cubeboxReadPlanProductionInput) (cubeboxReadPlanProductionResult, error) {
+	if s.err != nil {
+		return cubeboxReadPlanProductionResult{}, s.err
+	}
+	return s.result, nil
 }
 
 type cubeboxAuthorizerStub struct {
@@ -314,7 +327,7 @@ func TestCubeBoxStreamTurnAPI(t *testing.T) {
 			}
 			return nil
 		},
-	}, newTestGateway(runtime))
+	}, newTestGateway(runtime), nil)
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
@@ -355,7 +368,7 @@ func TestCubeBoxStreamTurnAPIPreservesPromptWhitespace(t *testing.T) {
 			}
 			return nil
 		},
-	}, newTestGateway(runtime))
+	}, newTestGateway(runtime), nil)
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
@@ -465,7 +478,7 @@ func TestCubeBoxStreamTurnAPIWritesFallbackErrorWhenAppendFails(t *testing.T) {
 			}
 			return nil
 		},
-	}, newTestGateway(runtime))
+	}, newTestGateway(runtime), nil)
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
@@ -579,7 +592,7 @@ func TestCubeBoxStreamTurnAPIUsesUUIDEventIDs(t *testing.T) {
 			eventIDs = append(eventIDs, event.EventID)
 			return nil
 		},
-	}, newTestGateway(runtime))
+	}, newTestGateway(runtime), nil)
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
@@ -910,7 +923,7 @@ func TestCubeBoxStreamTurnAPIPreTurnAutoCompactUsesActorAndUpdatedSequence(t *te
 			appended = append(appended, event)
 			return nil
 		},
-	}, newTestGateway(runtime))
+	}, newTestGateway(runtime), nil)
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
@@ -924,4 +937,312 @@ func TestCubeBoxStreamTurnAPIPreTurnAutoCompactUsesActorAndUpdatedSequence(t *te
 	if appended[0].Sequence != 12 {
 		t.Fatalf("expected first stream event to continue from compact next sequence, got %d", appended[0].Sequence)
 	}
+}
+
+func TestCubeBoxStreamTurnAPIUsesQueryFlowWhenHandled(t *testing.T) {
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/internal/cubebox/turns:stream", strings.NewReader(`{"conversation_id":"conv_1","prompt":"查一下 1001 在 2026-04-23 的组织详情","next_sequence":1}`))
+	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
+	req = req.WithContext(withPrincipal(req.Context(), Principal{ID: "p1"}))
+
+	registry, err := cubebox.NewExecutionRegistry(cubebox.RegisteredExecutor{
+		APIKey:         "orgunit.details",
+		RequiredParams: []string{"org_code", "as_of"},
+		OptionalParams: []string{"include_disabled"},
+		Executor: queryExecutorStub{
+			validateParamsFn: func(raw map[string]any) (map[string]any, error) {
+				return raw, nil
+			},
+			executeFn: func(_ context.Context, request cubebox.ExecuteRequest, params map[string]any) (cubebox.ExecuteResult, error) {
+				if request.TenantID != "t1" || request.PrincipalID != "p1" || request.ConversationID != "conv_1" {
+					t.Fatalf("unexpected request=%+v", request)
+				}
+				return cubebox.ExecuteResult{
+					Payload: map[string]any{
+						"org_unit": map[string]any{
+							"name":            "总部",
+							"parent_org_code": "",
+							"manager_name":    "张三",
+							"full_name_path":  "总部",
+						},
+					},
+				}, nil
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("NewExecutionRegistry err=%v", err)
+	}
+	queryFlow := &cubeboxQueryFlow{
+		runtime:  cubebox.NewRuntime(),
+		store:    cubeboxStoreStub{},
+		registry: registry,
+		producer: cubeboxReadPlanProducerStub{
+			result: cubeboxReadPlanProductionResult{
+				Handled: true,
+				Plan: cubebox.ReadPlan{
+					Intent:       "orgunit.details",
+					Confidence:   0.9,
+					ExplainFocus: []string{"组织基本信息"},
+					Steps: []cubebox.ReadPlanStep{
+						{
+							ID:          "step-1",
+							APIKey:      "orgunit.details",
+							Params:      map[string]any{"org_code": "1001", "as_of": "2026-04-23", "include_disabled": false},
+							ResultFocus: []string{"org_unit.name", "org_unit.manager_name", "org_unit.full_name_path"},
+							DependsOn:   []string{},
+						},
+					},
+				},
+				ProviderID:   "openai-compatible",
+				ProviderType: "openai-compatible",
+				ModelSlug:    "gpt-5.2",
+			},
+		},
+		knowledgePacks: []cubebox.KnowledgePack{
+			{Dir: "modules/orgunit/presentation/cubebox", Files: map[string]string{"CUBEBOX-SKILL.md": "x", "queries.md": "x", "apis.md": "x", "examples.md": "x"}},
+		},
+		now: func() time.Time { return time.Date(2026, 4, 23, 12, 0, 0, 0, time.UTC) },
+	}
+
+	handleCubeBoxStreamTurnAPI(rec, req, cubebox.NewRuntime(), cubeboxStoreStub{
+		appendFn: func(_ context.Context, tenantID string, principalID string, conversationID string, event cubebox.CanonicalEvent) error {
+			if tenantID != "t1" || principalID != "p1" || conversationID != "conv_1" {
+				t.Fatalf("tenant=%q principal=%q conversation=%q", tenantID, principalID, conversationID)
+			}
+			return nil
+		},
+	}, newTestGateway(cubebox.NewRuntime()), queryFlow)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+	}
+	body := rec.Body.String()
+	if !strings.Contains(body, `"runtime":"cubebox-query-read-plan"`) {
+		t.Fatalf("expected query runtime, got %s", body)
+	}
+	if !strings.Contains(body, `org_unit.name：总部`) {
+		t.Fatalf("expected summarized query answer, got %s", body)
+	}
+	if strings.Contains(body, `deterministic-fixture`) {
+		t.Fatalf("expected not to fallback to gateway fixture, got %s", body)
+	}
+}
+
+func TestCubeBoxStreamTurnAPIFallsBackToGatewayWhenQueryFlowSkips(t *testing.T) {
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/internal/cubebox/turns:stream", strings.NewReader(`{"conversation_id":"conv_1","prompt":"hello","next_sequence":1}`))
+	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
+	req = req.WithContext(withPrincipal(req.Context(), Principal{ID: "p1"}))
+
+	queryFlow := &cubeboxQueryFlow{
+		runtime:  cubebox.NewRuntime(),
+		store:    cubeboxStoreStub{},
+		registry: &cubebox.ExecutionRegistry{},
+		producer: cubeboxReadPlanProducerStub{result: cubeboxReadPlanProductionResult{Handled: false}},
+		knowledgePacks: []cubebox.KnowledgePack{
+			{Dir: "modules/orgunit/presentation/cubebox", Files: map[string]string{"CUBEBOX-SKILL.md": "x", "queries.md": "x", "apis.md": "x", "examples.md": "x"}},
+		},
+	}
+
+	handleCubeBoxStreamTurnAPI(rec, req, cubebox.NewRuntime(), cubeboxStoreStub{
+		compactFn: func(context.Context, string, string, string, cubebox.CanonicalContext, string) (cubebox.CompactConversationResponse, error) {
+			return cubebox.CompactConversationResponse{}, nil
+		},
+		appendFn: func(context.Context, string, string, string, cubebox.CanonicalEvent) error {
+			return nil
+		},
+	}, newTestGateway(cubebox.NewRuntime()), queryFlow)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+	}
+	body := rec.Body.String()
+	if !strings.Contains(body, `"runtime":"deterministic-fixture"`) {
+		t.Fatalf("expected gateway fallback body=%s", body)
+	}
+}
+
+func TestCubeBoxStreamTurnAPIWritesQueryErrorWhenQueryExecutionFails(t *testing.T) {
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/internal/cubebox/turns:stream", strings.NewReader(`{"conversation_id":"conv_1","prompt":"查组织","next_sequence":1}`))
+	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
+	req = req.WithContext(withPrincipal(req.Context(), Principal{ID: "p1"}))
+
+	registry, err := cubebox.NewExecutionRegistry(cubebox.RegisteredExecutor{
+		APIKey:         "orgunit.details",
+		RequiredParams: []string{"org_code", "as_of"},
+		Executor: queryExecutorStub{
+			validateParamsFn: func(raw map[string]any) (map[string]any, error) { return raw, nil },
+			executeFn: func(context.Context, cubebox.ExecuteRequest, map[string]any) (cubebox.ExecuteResult, error) {
+				return cubebox.ExecuteResult{}, newBadRequestError("org_code invalid")
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("NewExecutionRegistry err=%v", err)
+	}
+
+	queryFlow := &cubeboxQueryFlow{
+		runtime: cubebox.NewRuntime(),
+		store: cubeboxStoreStub{
+			appendFn: func(context.Context, string, string, string, cubebox.CanonicalEvent) error { return nil },
+		},
+		registry: registry,
+		producer: cubeboxReadPlanProducerStub{result: cubeboxReadPlanProductionResult{
+			Handled: true,
+			Plan: cubebox.ReadPlan{
+				Intent:     "orgunit.details",
+				Confidence: 0.9,
+				Steps: []cubebox.ReadPlanStep{
+					{
+						ID:          "step-1",
+						APIKey:      "orgunit.details",
+						Params:      map[string]any{"org_code": "bad", "as_of": "2026-04-23"},
+						ResultFocus: []string{"org_unit.name"},
+						DependsOn:   []string{},
+					},
+				},
+			},
+		}},
+		knowledgePacks: []cubebox.KnowledgePack{
+			{Dir: "modules/orgunit/presentation/cubebox", Files: map[string]string{"CUBEBOX-SKILL.md": "x", "queries.md": "x", "apis.md": "x", "examples.md": "x"}},
+		},
+		now: func() time.Time { return time.Date(2026, 4, 23, 12, 0, 0, 0, time.UTC) },
+	}
+
+	handleCubeBoxStreamTurnAPI(rec, req, cubebox.NewRuntime(), cubeboxStoreStub{
+		appendFn: func(context.Context, string, string, string, cubebox.CanonicalEvent) error { return nil },
+	}, newTestGateway(cubebox.NewRuntime()), queryFlow)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+	}
+	body := rec.Body.String()
+	if !strings.Contains(body, `"code":"invalid_request"`) {
+		t.Fatalf("expected query execution invalid_request body=%s", body)
+	}
+	if !strings.Contains(body, `"type":"turn.completed"`) {
+		t.Fatalf("expected terminal completed event body=%s", body)
+	}
+}
+
+func TestCubeBoxStreamTurnAPIWritesNotFoundWhenQueryExecutionHasNoResult(t *testing.T) {
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/internal/cubebox/turns:stream", strings.NewReader(`{"conversation_id":"conv_1","prompt":"查总部","next_sequence":1}`))
+	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
+	req = req.WithContext(withPrincipal(req.Context(), Principal{ID: "p1"}))
+
+	registry, err := cubebox.NewExecutionRegistry(cubebox.RegisteredExecutor{
+		APIKey:         "orgunit.search",
+		RequiredParams: []string{"query", "as_of"},
+		Executor: queryExecutorStub{
+			validateParamsFn: func(raw map[string]any) (map[string]any, error) { return raw, nil },
+			executeFn: func(context.Context, cubebox.ExecuteRequest, map[string]any) (cubebox.ExecuteResult, error) {
+				return cubebox.ExecuteResult{}, errOrgUnitNotFound
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("NewExecutionRegistry err=%v", err)
+	}
+
+	queryFlow := &cubeboxQueryFlow{
+		runtime: cubebox.NewRuntime(),
+		store: cubeboxStoreStub{
+			appendFn: func(context.Context, string, string, string, cubebox.CanonicalEvent) error { return nil },
+		},
+		registry: registry,
+		producer: cubeboxReadPlanProducerStub{result: cubeboxReadPlanProductionResult{
+			Handled: true,
+			Plan: cubebox.ReadPlan{
+				Intent:     "orgunit.search",
+				Confidence: 0.9,
+				Steps: []cubebox.ReadPlanStep{
+					{
+						ID:          "step-1",
+						APIKey:      "orgunit.search",
+						Params:      map[string]any{"query": "总部", "as_of": "2026-04-23"},
+						ResultFocus: []string{"target_org_code"},
+						DependsOn:   []string{},
+					},
+				},
+			},
+		}},
+		knowledgePacks: []cubebox.KnowledgePack{
+			{Dir: "modules/orgunit/presentation/cubebox", Files: map[string]string{"CUBEBOX-SKILL.md": "x", "queries.md": "x", "apis.md": "x", "examples.md": "x"}},
+		},
+		now: func() time.Time { return time.Date(2026, 4, 23, 12, 0, 0, 0, time.UTC) },
+	}
+
+	handleCubeBoxStreamTurnAPI(rec, req, cubebox.NewRuntime(), cubeboxStoreStub{
+		appendFn: func(context.Context, string, string, string, cubebox.CanonicalEvent) error { return nil },
+	}, newTestGateway(cubebox.NewRuntime()), queryFlow)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+	}
+	body := rec.Body.String()
+	if !strings.Contains(body, `"code":"orgunit_not_found"`) {
+		t.Fatalf("expected orgunit_not_found body=%s", body)
+	}
+	if !strings.Contains(body, `未找到符合条件的组织，请调整关键词或提供组织编码。`) {
+		t.Fatalf("expected explicit not found message body=%s", body)
+	}
+}
+
+func TestCubeBoxStreamTurnAPIFallsBackToGatewayWhenPlannerErrors(t *testing.T) {
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/internal/cubebox/turns:stream", strings.NewReader(`{"conversation_id":"conv_1","prompt":"普通聊天","next_sequence":1}`))
+	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
+	req = req.WithContext(withPrincipal(req.Context(), Principal{ID: "p1"}))
+
+	queryFlow := &cubeboxQueryFlow{
+		runtime: cubebox.NewRuntime(),
+		store: cubeboxStoreStub{
+			appendFn: func(context.Context, string, string, string, cubebox.CanonicalEvent) error { return nil },
+		},
+		registry: &cubebox.ExecutionRegistry{},
+		producer: cubeboxReadPlanProducerStub{err: cubebox.ErrProviderUnavailable},
+		knowledgePacks: []cubebox.KnowledgePack{
+			{Dir: "modules/orgunit/presentation/cubebox", Files: map[string]string{"CUBEBOX-SKILL.md": "x", "queries.md": "x", "apis.md": "x", "examples.md": "x"}},
+		},
+	}
+
+	handleCubeBoxStreamTurnAPI(rec, req, cubebox.NewRuntime(), cubeboxStoreStub{
+		compactFn: func(context.Context, string, string, string, cubebox.CanonicalContext, string) (cubebox.CompactConversationResponse, error) {
+			return cubebox.CompactConversationResponse{}, nil
+		},
+		appendFn: func(context.Context, string, string, string, cubebox.CanonicalEvent) error { return nil },
+	}, newTestGateway(cubebox.NewRuntime()), queryFlow)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+	}
+	body := rec.Body.String()
+	if !strings.Contains(body, `"runtime":"deterministic-fixture"`) {
+		t.Fatalf("expected gateway fallback when planner errors body=%s", body)
+	}
+	if strings.Contains(body, `"code":"ai_model_provider_unavailable"`) {
+		t.Fatalf("planner error should not hijack non-query turns body=%s", body)
+	}
+}
+
+type queryExecutorStub struct {
+	validateParamsFn func(map[string]any) (map[string]any, error)
+	executeFn        func(context.Context, cubebox.ExecuteRequest, map[string]any) (cubebox.ExecuteResult, error)
+}
+
+func (s queryExecutorStub) ValidateParams(raw map[string]any) (map[string]any, error) {
+	if s.validateParamsFn == nil {
+		return raw, nil
+	}
+	return s.validateParamsFn(raw)
+}
+
+func (s queryExecutorStub) Execute(ctx context.Context, request cubebox.ExecuteRequest, params map[string]any) (cubebox.ExecuteResult, error) {
+	if s.executeFn == nil {
+		return cubebox.ExecuteResult{}, nil
+	}
+	return s.executeFn(ctx, request, params)
 }

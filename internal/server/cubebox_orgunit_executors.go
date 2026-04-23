@@ -280,6 +280,10 @@ func (e cubeBoxOrgUnitSearchExecutor) Execute(ctx context.Context, request cubeb
 	query := strings.TrimSpace(params["query"].(string))
 	asOf := strings.TrimSpace(params["as_of"].(string))
 	includeDisabled := params["include_disabled"].(bool)
+	candidates, err := searchNodeCandidatesByVisibility(ctx, e.store, strings.TrimSpace(request.TenantID), query, asOf, 2, includeDisabled)
+	if err != nil {
+		return cubebox.ExecuteResult{}, err
+	}
 
 	result, err := searchNodeByVisibility(ctx, e.store, strings.TrimSpace(request.TenantID), query, asOf, includeDisabled)
 	if err != nil {
@@ -307,6 +311,7 @@ func (e cubeBoxOrgUnitSearchExecutor) Execute(ctx context.Context, request cubeb
 			"target_name":     result.TargetName,
 			"path_org_codes":  result.PathOrgCodes,
 			"tree_as_of":      result.TreeAsOf,
+			"target_unique":   len(candidates) == 1,
 		},
 	}, nil
 }
@@ -429,6 +434,12 @@ func resolveStepResultReference(previous map[string]cubebox.ExecuteResult, ref s
 	result, ok := previous[stepID]
 	if !ok {
 		return nil, newBadRequestError("org_code_from invalid")
+	}
+	if unique, ok := result.Payload["target_unique"]; ok {
+		isUnique, ok := unique.(bool)
+		if !ok || !isUnique {
+			return nil, newBadRequestError("org_code_from invalid")
+		}
 	}
 	value, ok := result.Payload[field]
 	if !ok || value == nil {

@@ -139,23 +139,18 @@ func (s *GatewayService) StreamTurn(
 		}
 	}
 
-	sequence := request.NextSequence
-	if sequence <= 0 {
-		sequence = 1
-	}
 	canonicalContext := s.buildCanonicalContext(request, lifecycle)
-	providerPromptView := BuildPromptViewWithCompaction(nil, canonicalContext, turn.Prompt).PromptView
-	if sequence > 1 {
-		compactPayload, err := store.CompactConversation(ctx, request.TenantID, request.PrincipalID, request.ConversationID, canonicalContext, "pre_turn_auto")
-		if err != nil && !errors.Is(err, ErrConversationNotFound) {
-			s.appendTerminalError(ctx, store, sink, request, turn.TurnID, &sequence, lifecycle, "cubebox_turn_stream_failed", "会话压缩失败，当前响应已终止。", false)
-			return
+	prepared, err := PrepareTurnStream(ctx, store, request, canonicalContext)
+	if err != nil {
+		sequence := request.NextSequence
+		if sequence <= 0 {
+			sequence = 1
 		}
-		if compactPayload.NextSequence > sequence {
-			sequence = compactPayload.NextSequence
-		}
-		providerPromptView = promptViewForProvider(compactPayload.PromptView, canonicalContext, turn.Prompt)
+		s.appendTerminalError(ctx, store, sink, request, turn.TurnID, &sequence, lifecycle, "cubebox_turn_stream_failed", "会话压缩失败，当前响应已终止。", false)
+		return
 	}
+	sequence := prepared.Sequence
+	providerPromptView := prepared.ProviderPromptView
 
 	writeEvent := func(eventType string, payload map[string]any) bool {
 		event := CanonicalEvent{

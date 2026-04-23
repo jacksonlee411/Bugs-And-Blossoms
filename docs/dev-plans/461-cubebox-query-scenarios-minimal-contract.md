@@ -431,10 +431,10 @@ modules/orgunit/presentation/cubebox/
 
 ### 12.5 Step 5：接入 `CubeBox` 查询主链
 
-- [ ] 在现有 `CubeBox` turn 主链中插入“知识包加载 -> `ReadPlan` 生成 -> 校验 -> 执行 -> 结果解释”路径
-- [ ] 保持当前对话 UI、会话持久化、权限与租户边界不变
-- [ ] 不把查询编排实现为第二套对话 runtime
-- [ ] 查询链路失败时走受控错误码与现有错误映射
+- [x] 在现有 `CubeBox` turn 主链中插入“知识包加载 -> `ReadPlan` 生成 -> 校验 -> 执行 -> 结果解释”路径
+- [x] 保持当前对话 UI、会话持久化、权限与租户边界不变
+- [x] 不把查询编排实现为第二套对话 runtime
+- [x] 查询链路失败时走受控错误码与现有错误映射
 
 交付结果：
 
@@ -587,6 +587,23 @@ PR-4 验收点：
 - 在现有 `CubeBox` turn 主链中接入知识包加载、`ReadPlan` 生成、校验、执行和结果解释
 - 保持当前会话、流式、租户和权限主链不被破坏
 - 本 PR 重点审查链路是否仍然单一、失败是否 fail-closed
+
+PR-5 实际落点：
+
+- [x] `internal/server/cubebox_query_flow.go`
+- [x] `internal/server/cubebox_api.go`
+- [x] `internal/server/handler.go`
+- [x] `internal/server/cubebox_api_test.go`
+
+PR-5 验收点：
+
+- [x] 仍复用 `/internal/cubebox/turns:stream` 与现有 SSE `CanonicalEvent`，未新增查询专用 endpoint 或第二套前端协议
+- [x] 查询分流位于 `internal/server`，`GatewayService` 仍只负责现有聊天/流式主链
+- [x] 查询命中时，运行时会先加载模块级知识包，再通过当前用户租户下的模型配置生成 `ReadPlan`
+- [x] 只有合法 `ReadPlan` 才能进入执行注册表；未命中查询场景时继续走现有 provider 聊天主链
+- [x] 查询执行与结果解释通过现有 `turn.started` / `turn.user_message.accepted` / `turn.agent_message.delta` / `turn.completed` 事件回流
+- [x] 查询链失败时走受控错误码，不退化为自由查询或隐式直查
+- [x] 首期仅接入模块级通用知识包 `modules/orgunit/presentation/cubebox/`，未冻结租户级知识包存储与发布面
 
 #### PR-6：错误语义、测试与 readiness 收口
 
