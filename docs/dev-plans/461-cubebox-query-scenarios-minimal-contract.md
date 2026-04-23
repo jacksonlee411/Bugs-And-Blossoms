@@ -1,6 +1,6 @@
 # DEV-PLAN-461：CubeBox Markdown 知识包驱动的查询方案
 
-**状态**: 规划中（2026-04-23 10:12 CST）
+**状态**: 已完成（2026-04-23 21:10 CST；PR-6 readiness 收口完成）
 
 ## 0. 适用范围与评审分级
 
@@ -44,10 +44,10 @@
 
 ### 2.1 核心目标
 
-- [ ] 冻结 `CubeBox` 查询场景的知识来源：模块知识通过 Markdown 知识包提供，而不是硬编码在运行时代码中。
-- [ ] 冻结知识包最小目录与格式，确保模型可读、代码可校验。
-- [ ] 冻结支持线性多步只读编排的 `ReadPlan` 结构化输出契约，避免模型直接产出不可执行的自由文本查询。
-- [ ] 冻结首个样板模块 `orgunit` 的知识包口径，验证“知识包驱动 + 现有读 API 执行”的最小闭环。
+- [x] 冻结 `CubeBox` 查询场景的知识来源：模块知识通过 Markdown 知识包提供，而不是硬编码在运行时代码中。
+- [x] 冻结知识包最小目录与格式，确保模型可读、代码可校验。
+- [x] 冻结支持线性多步只读编排的 `ReadPlan` 结构化输出契约，避免模型直接产出不可执行的自由文本查询。
+- [x] 冻结首个样板模块 `orgunit` 的知识包口径，验证“知识包驱动 + 现有读 API 执行”的最小闭环。
 
 ### 2.2 非目标
 
@@ -300,6 +300,41 @@ modules/orgunit/presentation/cubebox/
 5. 执行注册层只能做受控映射、参数收口和顺序调度，不得重新实现模块查询逻辑。
 6. 当 `ReadPlan` 校验失败时，必须 fail-closed，不得退化成自由查询。
 
+### 7.4 结果摘要与预算控制
+
+查询结果进入 `CubeBox` 回答面时，冻结为“统一摘要层 + 明确预算控制”，而不是在主回答链路里按 `api_key` 持续追加专用渲染分支。
+
+首期不变量如下：
+
+1. 回答面默认输出“重点摘要”，而不是把原始列表、分页结果或长对象直接原样展开到一次 `turn.agent_message.delta` 中。
+2. 结果摘要必须受统一预算约束，至少同时满足：
+   - **条目预算**：列表类结果默认只展示有限个代表项；超过预算时必须显式截断并告知“仍有更多结果”。
+   - **文本预算**：单次查询回答写入会话事件前，必须经过统一长度控制；不能因某个能力的特例渲染绕过收敛逻辑。
+3. `result_focus` 仍是默认摘要来源；若某个 `api_key` 确实需要能力专属摘要，必须在能力侧通过受控摘要器承接，而不是在 `buildCubeboxQueryAnswer` 这类总线函数中堆叠 `switch api_key`。
+4. 能力专属摘要器只允许承担“把原始结果压缩成更少、更稳定、更可解释的要点”；不得承担第二套业务 DTO、第二套展示模型或任意格式拼装。
+5. 长结果的完整明细不属于首期 `CubeBox` 查询回答主链的默认交付；若用户需要完整明细，应通过现有业务页面、分页 API 或后续单独 owner 计划定义的展开机制获取。
+6. 当结果规模较大时，必须优先保留以下信息，而不是优先保留全部条目：
+   - 查询范围 / 过滤条件 / 生效日
+   - 结果总数与是否分页
+   - 少量代表项
+   - 下一步可行动建议（如“请补充关键字”“请指定组织编码”“如需完整列表请缩小范围”）
+
+首期最小执行口径冻结如下：
+
+1. **预算作用对象**：首期预算作用于查询回答组装阶段生成的**整次 answer 字符串**，而不是单个字段值、单条 `result_focus` 命中值或单条 SSE event。
+2. **统一承载点**：预算检查与超预算降级必须由回答组装阶段的统一收敛入口承接；不得下放到各个 `api_key` 摘要器各自决定，也不得散落在调用方条件分支中。首期实现口径为统一行数预算、整次 answer 字符预算与受控省略提示。
+3. **超预算降级顺序**：超预算时必须按以下顺序收敛，而不是直接失败：
+   - 先保留查询范围 / 过滤条件 / 生效日
+   - 再保留结果总数与分页信息（若有）
+   - 再保留有限个代表项
+   - 最后追加“仍有更多结果，请缩小范围或进入业务页面查看”一类受控提示
+4. **报错规则**：正常超预算不允许作为用户可见错误直接报出；只有当能力专属摘要执行失败且无法回退到通用 `result_focus` 摘要，或统一回答组装发生受控系统错误时，才允许返回受控错误。
+5. **能力专属摘要的唯一挂载点**：若某个 `api_key` 需要能力专属摘要，必须挂在 `api_key -> executor` 注册元数据的可选摘要入口上；删除该入口后，运行时必须自动回退到通用 `result_focus` 摘要。
+6. **通用回退**：当能力专属摘要器缺失且 `result_focus` 未命中时，运行时只能回退到少量稳定元信息或受控提示；不得把整份 `result.Payload` JSON 直接写入回答。
+7. **禁止项**：禁止在通用回答总线中追加 `switch api_key` / `if api_key == ...` 作为能力专属摘要挂载方式。
+
+该约束参考 `openai/codex` 开源实现的做法：把长上下文问题上移为统一的 compaction / summary / budget 机制，而不是让每个能力在主链上各自发明结果输出格式。`461` 首期不要求复刻 Codex 的完整 compaction 子系统，但必须先冻结“统一预算 + 能力侧摘要边界”这两个核心原则，阻断查询回答主链继续积累 capability-specific 特例。
+
 ## 8. 首批样板：`orgunit`
 
 ### 8.1 首批查询意图
@@ -353,15 +388,18 @@ modules/orgunit/presentation/cubebox/
 
 ## 10. 验收标准
 
-- [ ] 模块知识、意图映射、字段语义与 API 使用规则不再硬编码在 `modules/cubebox` 或 `internal/server` 中。
-- [ ] 首期知识包目录和加载顺序明确，且 `461` 不提前冻结租户级覆盖的目录、存储面和发布面。
-- [ ] 模型只能通过知识包产出结构化 `ReadPlan`，而不是直接生成自由文本执行动作。
-- [ ] `ReadPlan` 首期支持一个问题下的线性多步只读编排，但不引入图状执行、并发分叉或通用 workflow engine。
-- [ ] `ReadPlan` 执行只能复用现有只读 API，不能直查数据库或形成第二读事实源。
-- [ ] `apis.md` 只是 prompt-facing 说明，运行时唯一执行事实源仍是代码中的 `api_key -> executor` 注册表。
-- [ ] 执行注册层删去后，现有模块只读能力本身仍成立；该层只承担受控映射、参数收口和顺序调度，而不是第二套实现。
-- [ ] `orgunit` 首批样板能跑通最小查询闭环。
-- [ ] 查询失败语义清晰，覆盖 `knowledge_pack_invalid` 与 `api_catalog_drift_or_executor_missing`，且不以模型猜测替代真实系统结果。
+- [x] 模块知识、意图映射、字段语义与 API 使用规则不再硬编码在 `modules/cubebox` 或 `internal/server` 中。
+- [x] 首期知识包目录和加载顺序明确，且 `461` 不提前冻结租户级覆盖的目录、存储面和发布面。
+- [x] 模型只能通过知识包产出结构化 `ReadPlan`，而不是直接生成自由文本执行动作。
+- [x] `ReadPlan` 首期支持一个问题下的线性多步只读编排，但不引入图状执行、并发分叉或通用 workflow engine。
+- [x] `ReadPlan` 执行只能复用现有只读 API，不能直查数据库或形成第二读事实源。
+- [x] `apis.md` 只是 prompt-facing 说明，运行时唯一执行事实源仍是代码中的 `api_key -> executor` 注册表。
+- [x] 执行注册层删去后，现有模块只读能力本身仍成立；该层只承担受控映射、参数收口和顺序调度，而不是第二套实现。
+- [x] `orgunit` 首批样板能跑通最小查询闭环。
+- [x] 查询回答默认走统一摘要层与统一预算控制；列表类能力不会通过主链特例把完整结果页原样展开进单次 SSE 回答，通用回退也不会把整份原始 payload JSON 直接写入回答。
+- [x] 若某个 `api_key` 需要能力专属摘要，摘要器边界位于能力侧而不是通用回答总线；删除该摘要器后，其能力仍可回退到通用 `result_focus` 摘要。
+- [x] 预算作用对象、统一承载点、超预算降级顺序、通用回退与报错规则已在计划中冻结，reviewer 不需要依赖实现猜测这些语义。
+- [x] 查询失败语义清晰，覆盖 `knowledge_pack_invalid` 与 `api_catalog_drift_or_executor_missing`，且不以模型猜测替代真实系统结果。
 
 ## 11. 反模式与禁止项
 
@@ -375,6 +413,9 @@ modules/orgunit/presentation/cubebox/
 - 不得把“支持多步查询”膨胀成 DAG 编排、并发 fan-out/fan-in、动态工具发现或通用任务图框架
 - 不得在 `461` 首期冻结租户级覆盖目录路径、存储面或发布面
 - 不得把知识包膨胀成重型固定模板，导致维护和演化成本过高
+- 不得在 `buildCubeboxQueryAnswer`、`summarizeQueryResult` 或同类通用回答总线中持续追加 `switch api_key` / `if api_key == ...` 式 capability-specific 渲染分支
+- 不得让任意列表类结果绕过统一条目预算与文本预算，把默认页大小或大结果集完整写入单次 `turn.agent_message.delta`
+- 不得为了“更好看”而在查询回答主链上引入第二套展示 DTO、第二套结果模板或无上限的字符串拼装逻辑
 
 ## 12. 实施步骤与进展跟踪
 
@@ -440,18 +481,26 @@ modules/orgunit/presentation/cubebox/
 
 - 用户可在现有 `CubeBox` 抽屉中触发知识包驱动查询
 - 查询执行链不破坏当前 `CubeBox` 会话主链
+- 已接入最小结果解释路径，但统一摘要预算、超预算降级与能力专属摘要挂载边界仍在 Step 6 封板
 
 ### 12.6 Step 6：补齐错误语义、测试与 Readiness 证据
 
-- [ ] 接入 `knowledge_pack_invalid` 与 `api_catalog_drift_or_executor_missing`
-- [ ] 为知识包加载、`ReadPlan` 校验、执行注册表和 `orgunit` 样板补最小稳定测试
-- [ ] 记录首期实现范围、已接入 `api_key`、未覆盖能力与已知限制
-- [ ] 在对应 `docs/dev-records/` 中沉淀 readiness 证据
+- [x] 接入 `knowledge_pack_invalid` 与 `api_catalog_drift_or_executor_missing`
+- [x] 为知识包加载、`ReadPlan` 校验、执行注册表和 `orgunit` 样板补最小稳定测试
+- [x] 冻结统一结果摘要预算：至少覆盖列表类结果的条目截断、文本长度控制和“仍有更多结果”的提示语义
+- [x] 若接入能力专属摘要器，补充其与通用 `result_focus` 摘要之间的一致性与回退测试
+- [x] 补齐大 payload、超长摘要器输出、多 step 累积超预算与正常小结果不误截断的回归测试
+- [x] 禁止通用回退路径把整份原始 payload JSON 写入单次回答
+- [x] 删除当前查询回答中的 capability-specific 硬编码实现，包括但不限于 `buildCubeboxQueryAnswer` / `summarizeQueryResult` 总线中的 `api_key` 特判，以及现有 `orgunit.list` 专用字符串模板分支
+- [x] 记录首期实现范围、已接入 `api_key`、未覆盖能力与已知限制
+- [x] 在对应 `docs/dev-records/` 中沉淀 readiness 证据
 
 交付结果：
 
 - 首期闭环具备可回归验证能力
 - 后续扩模块时有明确基线，不需要回头重判边界
+- 查询回答面不会因新增能力而继续在主链堆积无预算特例渲染
+- `461` 封板时，新旧回答收敛路径不得并存；当前硬编码特判已被统一收敛入口替换
 
 ### 12.7 进展记录规则
 
@@ -604,12 +653,13 @@ PR-5 验收点：
 - [x] 查询执行与结果解释通过现有 `turn.started` / `turn.user_message.accepted` / `turn.agent_message.delta` / `turn.completed` 事件回流
 - [x] 查询链失败时走受控错误码，不退化为自由查询或隐式直查
 - [x] 首期仅接入模块级通用知识包 `modules/orgunit/presentation/cubebox/`，未冻结租户级知识包存储与发布面
+- [x] PR-5 只要求主链接入与最小结果解释路径；统一摘要预算、超预算降级和能力专属摘要挂载点在 PR-6 封板，不在本 PR 提前固化为分散特判
 
 #### PR-6：错误语义、测试与 readiness 收口
 
 - 覆盖 Step 6
 - 接入 `knowledge_pack_invalid` 与 `api_catalog_drift_or_executor_missing`
-- 补最小稳定测试与 `docs/dev-records/` 证据
+- 补最小稳定测试、统一结果摘要预算测试、删除当前硬编码特判并补 `docs/dev-records/` 证据
 - 本 PR 重点审查可回归性、错误提示和首期范围是否闭合
 
 #### 合并原则
@@ -624,3 +674,4 @@ PR-5 验收点：
 - `docs/dev-plans/460-cubebox-digital-assistant-positioning-and-execution-contract.md`
 - `docs/dev-plans/430-cubebox-ide-conversation-assistant-rebuild-architecture-plan.md`
 - `docs/dev-plans/434-codex-context-management-and-compaction-reuse-plan.md`
+- `docs/dev-records/DEV-PLAN-462-READINESS.md`

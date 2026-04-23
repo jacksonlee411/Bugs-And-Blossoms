@@ -11,6 +11,7 @@ import (
 	"runtime"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/google/uuid"
 
@@ -95,6 +96,14 @@ func newCubeboxQueryFlow(
 		now:            func() time.Time { return time.Now().UTC() },
 	}, nil
 }
+
+const (
+	cubeboxQueryAnswerMaxLines            = 14
+	cubeboxQueryAnswerMaxChars            = 560
+	cubeboxQueryListSummaryMaxItems       = 5
+	cubeboxQuerySummaryFallbackListNotice = "仍有更多结果，请缩小范围或进入业务页面查看。"
+	cubeboxQuerySummaryFallbackOmitted    = "结果过大，已省略详细内容，请缩小范围或进入业务页面查看。"
+)
 
 func newCubeboxProviderReadPlanProducer(
 	configReader cubebox.RuntimeConfigReader,
@@ -182,7 +191,7 @@ func (f *cubeboxQueryFlow) TryHandle(
 		return true
 	}
 
-	answer := buildCubeboxQueryAnswer(produced.Plan, results)
+	answer := buildCubeboxQueryAnswer(produced.Plan, results, f.registry)
 	if !writeEvent("turn.agent_message.delta", map[string]any{"message_id": prepared.turn.AssistantMessageID, "delta": answer}) {
 		return true
 	}
@@ -564,33 +573,39 @@ func queryExecutionErrorToTerminal(err error) queryTerminalError {
 	case isBadRequestError(err), errors.Is(err, cubebox.ErrReadPlanBoundaryViolation):
 		return queryTerminalError{Code: "invalid_request", Message: "查询参数无效，请检查后重试。", Retryable: false}
 	case errors.Is(err, cubebox.ErrAPICatalogDriftOrExecutorMissing):
-		return queryTerminalError{Code: "ai_plan_boundary_violation", Message: "查询计划引用了未登记的只读能力，请调整问题后重试。", Retryable: false}
+		return queryTerminalError{Code: "api_catalog_drift_or_executor_missing", Message: "查询执行目录与系统注册表不一致，请稍后重试或联系管理员。", Retryable: false}
 	default:
 		return queryTerminalError{Code: "cubebox_turn_stream_failed", Message: "查询执行失败，请稍后重试。", Retryable: false}
 	}
 }
 
-func buildCubeboxQueryAnswer(plan cubebox.ReadPlan, results []cubebox.ExecuteResult) string {
+func buildCubeboxQueryAnswer(plan cubebox.ReadPlan, results []cubebox.ExecuteResult, registry *cubebox.ExecutionRegistry) string {
 	lines := []string{"已完成只读查询。"}
 	if len(plan.ExplainFocus) > 0 {
 		lines = append(lines, "本次关注："+strings.Join(plan.ExplainFocus, "、")+"。")
 	}
 	for _, result := range results {
 		lines = append(lines, fmt.Sprintf("%s（%s）", strings.TrimSpace(result.StepID), strings.TrimSpace(result.APIKey)))
-		summaries := summarizeQueryResult(result)
+		summaries := summarizeQueryResult(result, registry)
 		if len(summaries) == 0 {
 			lines = append(lines, "未返回可解释的重点字段。")
 			continue
 		}
 		lines = append(lines, summaries...)
 	}
+	lines = limitQueryAnswer(lines)
 	return strings.Join(lines, "\n")
 }
 
-func summarizeQueryResult(result cubebox.ExecuteResult) []string {
+func summarizeQueryResult(result cubebox.ExecuteResult, registry *cubebox.ExecutionRegistry) []string {
+	if summaries := summarizeQueryResultWithRenderer(result, registry); len(summaries) > 0 {
+		return summaries
+	}
+
+	payload := normalizeQuerySummaryPayload(result.Payload)
 	out := make([]string, 0, len(result.ResultFocus))
 	for _, focus := range result.ResultFocus {
-		values := collectQueryFocusValues(result.Payload, splitQueryFocus(focus))
+		values := collectQueryFocusValues(payload, splitQueryFocus(focus))
 		if len(values) == 0 {
 			continue
 		}
@@ -599,11 +614,182 @@ func summarizeQueryResult(result cubebox.ExecuteResult) []string {
 	if len(out) > 0 {
 		return out
 	}
-	raw, err := json.Marshal(result.Payload)
-	if err != nil {
+	if summaries := summarizeQueryResultStableMeta(payload); len(summaries) > 0 {
+		return summaries
+	}
+	return []string{"未返回可解释的重点字段。"}
+}
+
+func summarizeQueryResultWithRenderer(result cubebox.ExecuteResult, registry *cubebox.ExecutionRegistry) []string {
+	if registry == nil {
 		return nil
 	}
-	return []string{string(raw)}
+	item, ok := registry.Resolve(result.APIKey)
+	if !ok || item.SummaryRenderer == nil {
+		return nil
+	}
+	return item.SummaryRenderer(result)
+}
+
+func limitQueryAnswer(lines []string) []string {
+	lines = limitQueryAnswerLines(lines)
+	return limitQueryAnswerChars(lines)
+}
+
+func limitQueryAnswerLines(lines []string) []string {
+	if len(lines) <= cubeboxQueryAnswerMaxLines {
+		return lines
+	}
+	head := append([]string(nil), lines[:cubeboxQueryAnswerMaxLines-1]...)
+	return append(head, cubeboxQuerySummaryFallbackListNotice)
+}
+
+func limitQueryAnswerChars(lines []string) []string {
+	if utf8.RuneCountInString(strings.Join(lines, "\n")) <= cubeboxQueryAnswerMaxChars {
+		return lines
+	}
+
+	fallbacks := []string{
+		cubeboxQuerySummaryFallbackListNotice,
+		cubeboxQuerySummaryFallbackOmitted,
+	}
+	out := make([]string, 0, len(lines))
+	for _, line := range lines {
+		candidate := append(out, line)
+		if utf8.RuneCountInString(strings.Join(candidate, "\n")) <= cubeboxQueryAnswerMaxChars {
+			out = candidate
+			continue
+		}
+		break
+	}
+
+	if len(out) == 0 {
+		return []string{"已完成只读查询。", cubeboxQuerySummaryFallbackOmitted}
+	}
+
+	for _, fallback := range fallbacks {
+		candidate := append([]string(nil), out...)
+		if len(candidate) == 0 || candidate[len(candidate)-1] != fallback {
+			candidate = append(candidate, fallback)
+		}
+		if utf8.RuneCountInString(strings.Join(candidate, "\n")) <= cubeboxQueryAnswerMaxChars {
+			return candidate
+		}
+	}
+
+	if len(out) > 1 {
+		out = out[:len(out)-1]
+	}
+	return []string{out[0], cubeboxQuerySummaryFallbackOmitted}
+}
+
+func summarizeOrgUnitListQueryResult(payload map[string]any) []string {
+	payload = normalizeQuerySummaryPayload(payload)
+	items, ok := decodeOrgUnitListSummaryItems(payload["org_units"])
+	if !ok {
+		return nil
+	}
+
+	lines := make([]string, 0, len(items)+3)
+	if asOf, ok := renderQuerySummaryValue(payload["as_of"]); ok {
+		lines = append(lines, "as_of："+asOf)
+	}
+	if includeDisabled, ok := renderQuerySummaryValue(payload["include_disabled"]); ok {
+		lines = append(lines, "include_disabled："+includeDisabled)
+	}
+	if len(items) == 0 {
+		lines = append(lines, "组织列表：未返回组织。")
+		return lines
+	}
+
+	countText := fmt.Sprintf("%d 条", len(items))
+	if total, ok := renderQuerySummaryValue(payload["total"]); ok {
+		countText = fmt.Sprintf("%s / total %s", countText, total)
+	}
+	lines = append(lines, "组织列表："+countText)
+	visibleItems := items
+	if len(visibleItems) > cubeboxQueryListSummaryMaxItems {
+		visibleItems = visibleItems[:cubeboxQueryListSummaryMaxItems]
+	}
+	for _, item := range visibleItems {
+		lines = append(lines, formatOrgUnitListSummaryItem(item))
+	}
+	if len(items) > len(visibleItems) {
+		lines = append(lines, cubeboxQuerySummaryFallbackListNotice)
+	}
+	return lines
+}
+
+func summarizeQueryResultStableMeta(payload map[string]any) []string {
+	orderedKeys := []string{"as_of", "tree_as_of", "include_disabled", "page", "size", "total", "has_more"}
+	lines := make([]string, 0, len(orderedKeys))
+	for _, key := range orderedKeys {
+		value, ok := payload[key]
+		if !ok || value == nil {
+			continue
+		}
+		rendered, ok := renderQuerySummaryValue(value)
+		if !ok {
+			continue
+		}
+		lines = append(lines, fmt.Sprintf("%s：%s", key, rendered))
+	}
+	return lines
+}
+
+func decodeOrgUnitListSummaryItems(value any) ([]orgUnitListItem, bool) {
+	if value == nil {
+		return nil, false
+	}
+	raw, err := json.Marshal(value)
+	if err != nil {
+		return nil, false
+	}
+	var items []orgUnitListItem
+	if err := json.Unmarshal(raw, &items); err != nil {
+		return nil, false
+	}
+	return items, true
+}
+
+func formatOrgUnitListSummaryItem(item orgUnitListItem) string {
+	parts := []string{
+		strings.TrimSpace(item.OrgCode),
+		strings.TrimSpace(item.Name),
+		"状态：" + strings.TrimSpace(item.Status),
+		"业务单元：" + renderQueryOptionalBoolCN(item.IsBusinessUnit),
+		"有下级：" + renderQueryOptionalBoolCN(item.HasChildren),
+	}
+	out := make([]string, 0, len(parts))
+	for _, part := range parts {
+		part = strings.TrimSpace(part)
+		if part != "" {
+			out = append(out, part)
+		}
+	}
+	return "- " + strings.Join(out, " | ")
+}
+
+func renderQueryOptionalBoolCN(value *bool) string {
+	if value == nil {
+		return "未知"
+	}
+	if *value {
+		return "是"
+	}
+	return "否"
+}
+
+func normalizeQuerySummaryPayload(payload map[string]any) map[string]any {
+	raw, err := json.Marshal(payload)
+	if err != nil {
+		return payload
+	}
+	var normalized map[string]any
+	if err := json.Unmarshal(raw, &normalized); err != nil {
+		return payload
+	}
+	return normalized
 }
 
 func splitQueryFocus(focus string) []string {

@@ -1029,6 +1029,182 @@ func TestCubeBoxStreamTurnAPIUsesQueryFlowWhenHandled(t *testing.T) {
 	}
 }
 
+func TestCubeBoxStreamTurnAPIUsesQueryFlowWhenHandledForOrgUnitList(t *testing.T) {
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/internal/cubebox/turns:stream", strings.NewReader(`{"conversation_id":"conv_1","prompt":"请列出全部组织，今天为准，根据你认为合适的格式","next_sequence":1}`))
+	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
+	req = req.WithContext(withPrincipal(req.Context(), Principal{ID: "p1"}))
+
+	registry, err := cubebox.NewExecutionRegistry(cubebox.RegisteredExecutor{
+		APIKey:         "orgunit.list",
+		RequiredParams: []string{"as_of"},
+		OptionalParams: []string{"include_disabled"},
+		SummaryRenderer: func(result cubebox.ExecuteResult) []string {
+			return summarizeOrgUnitListQueryResult(result.Payload)
+		},
+		Executor: queryExecutorStub{
+			validateParamsFn: func(raw map[string]any) (map[string]any, error) {
+				return raw, nil
+			},
+			executeFn: func(_ context.Context, request cubebox.ExecuteRequest, params map[string]any) (cubebox.ExecuteResult, error) {
+				if request.TenantID != "t1" || request.PrincipalID != "p1" || request.ConversationID != "conv_1" {
+					t.Fatalf("unexpected request=%+v", request)
+				}
+				return cubebox.ExecuteResult{
+					Payload: map[string]any{
+						"as_of":            "2026-04-23",
+						"include_disabled": false,
+						"org_units": []orgUnitListItem{
+							{
+								OrgCode:        "1001",
+								Name:           "总部",
+								Status:         "active",
+								IsBusinessUnit: ptrBool(true),
+								HasChildren:    ptrBool(true),
+							},
+							{
+								OrgCode:        "1002",
+								Name:           "华东事业部",
+								Status:         "active",
+								IsBusinessUnit: ptrBool(false),
+								HasChildren:    ptrBool(false),
+							},
+						},
+					},
+				}, nil
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("NewExecutionRegistry err=%v", err)
+	}
+	queryFlow := &cubeboxQueryFlow{
+		runtime:  cubebox.NewRuntime(),
+		store:    cubeboxStoreStub{},
+		registry: registry,
+		producer: cubeboxReadPlanProducerStub{
+			result: cubeboxReadPlanProductionResult{
+				Handled: true,
+				Plan: cubebox.ReadPlan{
+					Intent:       "orgunit.list",
+					Confidence:   0.9,
+					ExplainFocus: []string{"按 2026-04-23 的组织列表（默认不含停用组织）", "输出字段：组织编码、名称、状态、是否业务单元、是否有下级"},
+					Steps: []cubebox.ReadPlanStep{
+						{
+							ID:          "step-1",
+							APIKey:      "orgunit.list",
+							Params:      map[string]any{"as_of": "2026-04-23", "include_disabled": false},
+							ResultFocus: []string{"as_of", "include_disabled"},
+							DependsOn:   []string{},
+						},
+					},
+				},
+				ProviderID:   "openai-compatible",
+				ProviderType: "openai-compatible",
+				ModelSlug:    "gpt-5.2",
+			},
+		},
+		knowledgePacks: []cubebox.KnowledgePack{
+			{Dir: "modules/orgunit/presentation/cubebox", Files: map[string]string{"CUBEBOX-SKILL.md": "x", "queries.md": "x", "apis.md": "x", "examples.md": "x"}},
+		},
+		now: func() time.Time { return time.Date(2026, 4, 23, 12, 0, 0, 0, time.UTC) },
+	}
+
+	handleCubeBoxStreamTurnAPI(rec, req, cubebox.NewRuntime(), cubeboxStoreStub{
+		appendFn: func(_ context.Context, tenantID string, principalID string, conversationID string, event cubebox.CanonicalEvent) error {
+			if tenantID != "t1" || principalID != "p1" || conversationID != "conv_1" {
+				t.Fatalf("tenant=%q principal=%q conversation=%q", tenantID, principalID, conversationID)
+			}
+			return nil
+		},
+	}, newTestGateway(cubebox.NewRuntime()), queryFlow)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+	}
+	body := rec.Body.String()
+	for _, expected := range []string{
+		`"runtime":"cubebox-query-read-plan"`,
+		`组织列表：2 条`,
+		`- 1001 | 总部 | 状态：active | 业务单元：是 | 有下级：是`,
+		`- 1002 | 华东事业部 | 状态：active | 业务单元：否 | 有下级：否`,
+	} {
+		if !strings.Contains(body, expected) {
+			t.Fatalf("expected %q in body=%s", expected, body)
+		}
+	}
+}
+
+func TestCubeBoxStreamTurnAPILimitsLargeQueryPayloadInDelta(t *testing.T) {
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/internal/cubebox/turns:stream", strings.NewReader(`{"conversation_id":"conv_1","prompt":"查大结果","next_sequence":1}`))
+	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
+	req = req.WithContext(withPrincipal(req.Context(), Principal{ID: "p1"}))
+
+	registry, err := cubebox.NewExecutionRegistry(cubebox.RegisteredExecutor{
+		APIKey:   "orgunit.details",
+		Executor: queryExecutorStub{
+			validateParamsFn: func(raw map[string]any) (map[string]any, error) { return raw, nil },
+			executeFn: func(context.Context, cubebox.ExecuteRequest, map[string]any) (cubebox.ExecuteResult, error) {
+				return cubebox.ExecuteResult{
+					Payload: map[string]any{
+						"as_of":        "2026-04-23",
+						"total":        1,
+						"large_object": strings.Repeat("raw-payload-should-not-appear", 80),
+					},
+				}, nil
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("NewExecutionRegistry err=%v", err)
+	}
+	queryFlow := &cubeboxQueryFlow{
+		runtime: cubebox.NewRuntime(),
+		store: cubeboxStoreStub{
+			appendFn: func(context.Context, string, string, string, cubebox.CanonicalEvent) error { return nil },
+		},
+		registry: registry,
+		producer: cubeboxReadPlanProducerStub{result: cubeboxReadPlanProductionResult{
+			Handled: true,
+			Plan: cubebox.ReadPlan{
+				Intent:     "orgunit.details",
+				Confidence: 0.9,
+				Steps: []cubebox.ReadPlanStep{
+					{
+						ID:          "step-1",
+						APIKey:      "orgunit.details",
+						Params:      map[string]any{"org_code": "1001", "as_of": "2026-04-23"},
+						ResultFocus: []string{"org_unit.name"},
+						DependsOn:   []string{},
+					},
+				},
+			},
+		}},
+		knowledgePacks: []cubebox.KnowledgePack{
+			{Dir: "modules/orgunit/presentation/cubebox", Files: map[string]string{"CUBEBOX-SKILL.md": "x", "queries.md": "x", "apis.md": "x", "examples.md": "x"}},
+		},
+		now: func() time.Time { return time.Date(2026, 4, 23, 12, 0, 0, 0, time.UTC) },
+	}
+
+	handleCubeBoxStreamTurnAPI(rec, req, cubebox.NewRuntime(), cubeboxStoreStub{
+		appendFn: func(context.Context, string, string, string, cubebox.CanonicalEvent) error { return nil },
+	}, newTestGateway(cubebox.NewRuntime()), queryFlow)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+	}
+	body := rec.Body.String()
+	for _, expected := range []string{`"runtime":"cubebox-query-read-plan"`, `as_of：2026-04-23`, `total：1`} {
+		if !strings.Contains(body, expected) {
+			t.Fatalf("expected %q in body=%s", expected, body)
+		}
+	}
+	if strings.Contains(body, "raw-payload-should-not-appear") || strings.Contains(body, "large_object") {
+		t.Fatalf("expected large raw payload to be omitted body=%s", body)
+	}
+}
+
 func TestCubeBoxStreamTurnAPIFallsBackToGatewayWhenQueryFlowSkips(t *testing.T) {
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodPost, "/internal/cubebox/turns:stream", strings.NewReader(`{"conversation_id":"conv_1","prompt":"hello","next_sequence":1}`))
@@ -1191,6 +1367,63 @@ func TestCubeBoxStreamTurnAPIWritesNotFoundWhenQueryExecutionHasNoResult(t *test
 	}
 }
 
+func TestCubeBoxStreamTurnAPIWritesCatalogDriftWhenExecutorMissing(t *testing.T) {
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/internal/cubebox/turns:stream", strings.NewReader(`{"conversation_id":"conv_1","prompt":"查组织","next_sequence":1}`))
+	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
+	req = req.WithContext(withPrincipal(req.Context(), Principal{ID: "p1"}))
+
+	registry, err := cubebox.NewExecutionRegistry(cubebox.RegisteredExecutor{
+		APIKey:   "orgunit.search",
+		Executor: queryExecutorStub{},
+	})
+	if err != nil {
+		t.Fatalf("NewExecutionRegistry err=%v", err)
+	}
+	queryFlow := &cubeboxQueryFlow{
+		runtime: cubebox.NewRuntime(),
+		store: cubeboxStoreStub{
+			appendFn: func(context.Context, string, string, string, cubebox.CanonicalEvent) error { return nil },
+		},
+		registry: registry,
+		producer: cubeboxReadPlanProducerStub{result: cubeboxReadPlanProductionResult{
+			Handled: true,
+			Plan: cubebox.ReadPlan{
+				Intent:     "orgunit.details",
+				Confidence: 0.9,
+				Steps: []cubebox.ReadPlanStep{
+					{
+						ID:          "step-1",
+						APIKey:      "orgunit.details",
+						Params:      map[string]any{"org_code": "1001", "as_of": "2026-04-23"},
+						ResultFocus: []string{"org_unit.name"},
+						DependsOn:   []string{},
+					},
+				},
+			},
+		}},
+		knowledgePacks: []cubebox.KnowledgePack{
+			{Dir: "modules/orgunit/presentation/cubebox", Files: map[string]string{"CUBEBOX-SKILL.md": "x", "queries.md": "x", "apis.md": "x", "examples.md": "x"}},
+		},
+		now: func() time.Time { return time.Date(2026, 4, 23, 12, 0, 0, 0, time.UTC) },
+	}
+
+	handleCubeBoxStreamTurnAPI(rec, req, cubebox.NewRuntime(), cubeboxStoreStub{
+		appendFn: func(context.Context, string, string, string, cubebox.CanonicalEvent) error { return nil },
+	}, newTestGateway(cubebox.NewRuntime()), queryFlow)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+	}
+	body := rec.Body.String()
+	if !strings.Contains(body, `"code":"api_catalog_drift_or_executor_missing"`) {
+		t.Fatalf("expected catalog drift error body=%s", body)
+	}
+	if !strings.Contains(body, `查询执行目录与系统注册表不一致，请稍后重试或联系管理员。`) {
+		t.Fatalf("expected explicit catalog drift message body=%s", body)
+	}
+}
+
 func TestCubeBoxStreamTurnAPIFallsBackToGatewayWhenPlannerErrors(t *testing.T) {
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodPost, "/internal/cubebox/turns:stream", strings.NewReader(`{"conversation_id":"conv_1","prompt":"普通聊天","next_sequence":1}`))
@@ -1231,6 +1464,10 @@ func TestCubeBoxStreamTurnAPIFallsBackToGatewayWhenPlannerErrors(t *testing.T) {
 type queryExecutorStub struct {
 	validateParamsFn func(map[string]any) (map[string]any, error)
 	executeFn        func(context.Context, cubebox.ExecuteRequest, map[string]any) (cubebox.ExecuteResult, error)
+}
+
+func ptrBool(value bool) *bool {
+	return &value
 }
 
 func (s queryExecutorStub) ValidateParams(raw map[string]any) (map[string]any, error) {
