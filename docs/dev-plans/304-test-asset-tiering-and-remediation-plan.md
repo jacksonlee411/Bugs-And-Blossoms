@@ -236,7 +236,7 @@
 
 1. [X] `internal/server/layering_wrapper_coverage_test.go`
 2. [X] `internal/server/orgunit_field_metadata_api_coverage_extra_test.go`
-3. [ ] `internal/routing/responder_extra_test.go`
+3. [X] `internal/routing/responder_extra_test.go`
 
 目标：删除或并回主职责文件，不再让低信号文件独立占据测试入口。
 
@@ -471,7 +471,11 @@
    - 已并回 `internal/server/orgunit_field_metadata_api_test.go`
    - 承接方式：将 `dict list error => 500` 场景并入 `TestHandleOrgUnitFieldOptionsAPI`
    - 退出理由：该文件只补一个 API 错误分支，直接并回主职责文件后信号更高
-3. [X] 本批次未新增新的 `*_coverage_test.go` / `*_extra_test.go` / `*_gap_test.go` / `*_more_test.go`
+3. [X] `internal/routing/responder_extra_test.go`
+   - 已并回 `internal/routing/responder_test.go`
+   - 承接方式：将 AI reply 错误码映射断言并入 `TestKnownErrorMessage_AllCases`
+   - 退出理由：该文件只补一个消息映射断言，不需要继续独立占据 routing 测试入口
+4. [X] 本批次未新增新的 `*_coverage_test.go` / `*_extra_test.go` / `*_gap_test.go` / `*_more_test.go`
 
 ## 验收标准
 

@@ -1,0 +1,268 @@
+- generic [ref=e1]:
+  - generic [ref=e20]:
+    - banner [ref=e21]:
+      - generic [ref=e22]:
+        - heading [level=1] [ref=e158]: Bugs & Blossoms · MUI X 工作台
+        - button [ref=e159] [cursor=pointer]:
+          - img [ref=e25]
+        - button [pressed] [ref=e160] [cursor=pointer]:
+          - img [ref=e28]
+        - button [ref=e161] [cursor=pointer]:
+          - img [ref=e31]
+        - generic [ref=e34]:
+          - img [ref=e36]
+          - combobox [ref=e38] [cursor=pointer]: 中文
+          - textbox: zh
+          - img
+          - group
+        - button [ref=e162] [cursor=pointer]:
+          - img [ref=e40]
+    - list [ref=e45]:
+      - link [ref=e163] [cursor=pointer]:
+        - /url: /app
+        - img [ref=e48]
+        - generic [ref=e52]: 基座示例
+      - link [ref=e164] [cursor=pointer]:
+        - /url: /app/org/units
+        - img [ref=e55]
+        - generic [ref=e58]: 组织架构
+      - link [ref=e165] [cursor=pointer]:
+        - /url: /app/org/units/field-configs
+        - img [ref=e61]
+        - generic [ref=e64]: 字段配置
+      - link [ref=e166] [cursor=pointer]:
+        - /url: /app/dicts
+        - img [ref=e67]
+        - generic [ref=e71]: 字典配置
+      - link [ref=e167] [cursor=pointer]:
+        - /url: /app/approvals
+        - img [ref=e74]
+        - generic [ref=e77]: 审批待办
+    - main [ref=e78]:
+      - generic [ref=e81]:
+        - heading [level=2] [ref=e168]: 基座示例
+        - paragraph [ref=e83]: P091 基座示例：树 + 表 + 详情侧栏 + 统一筛选栏
+      - generic [ref=e85]:
+        - generic [ref=e86]:
+          - generic: 搜索（姓名/部门/岗位）
+          - generic [ref=e87]:
+            - textbox [ref=e169]
+            - group:
+              - generic: 搜索（姓名/部门/岗位）
+        - generic [ref=e89]:
+          - generic [ref=e90]: 状态
+          - generic [ref=e91]:
+            - combobox [ref=e170] [cursor=pointer]: 全部
+            - textbox: all
+            - img
+            - group:
+              - generic: 状态
+        - button [ref=e171] [cursor=pointer]: 应用筛选
+      - generic [ref=e94]:
+        - generic [ref=e95]:
+          - heading [level=6] [ref=e172]: 部门树
+          - tree [ref=e97]:
+            - treeitem [ref=e173]:
+              - generic [ref=e99] [cursor=pointer]:
+                - img [ref=e101]
+                - generic [ref=e104]: 总部
+        - generic [ref=e107]:
+          - grid [ref=e108]:
+            - row [ref=e174]:
+              - columnheader [ref=e175] [cursor=pointer]:
+                - generic [ref=e112]: 姓名
+                - generic [ref=e113]:
+                  - img
+              - columnheader [ref=e176] [cursor=pointer]:
+                - generic [ref=e116]: 部门
+                - generic [ref=e117]:
+                  - img
+              - columnheader [ref=e177] [cursor=pointer]:
+                - generic [ref=e120]: 岗位
+                - generic [ref=e121]:
+                  - img
+              - columnheader [ref=e178] [cursor=pointer]:
+                - generic [ref=e124]: 状态
+                - generic [ref=e125]:
+                  - img
+            - rowgroup [ref=e126]:
+              - row [ref=e179]:
+                - gridcell [ref=e180]: 张三
+                - gridcell [ref=e181]: 人力资源部
+                - gridcell [ref=e182]: HRBP
+                - gridcell [ref=e183]: 在职
+              - row [ref=e184]:
+                - gridcell [ref=e185]: 李四
+                - gridcell [ref=e186]: 财务部
+                - gridcell [ref=e187]: 会计
+                - gridcell [ref=e188]: 在职
+              - row [ref=e189]:
+                - gridcell [ref=e190]: 王五
+                - gridcell [ref=e191]: 前端组
+                - gridcell [ref=e192]: 前端工程师
+                - gridcell [ref=e193]: 在职
+              - row [ref=e194]:
+                - gridcell [ref=e195]: 赵六
+                - gridcell [ref=e196]: 后端组
+                - gridcell [ref=e197]: 后端工程师
+                - gridcell [ref=e198]: 离职
+          - generic [ref=e152]:
+            - paragraph [ref=e153]: "Rows per page:"
+            - generic [ref=e154]:
+              - combobox [ref=e199] [cursor=pointer]: "10"
+              - textbox: "10"
+              - img
+            - paragraph [ref=e156]: 1–4 of 4
+            - generic [ref=e157]:
+              - button [disabled]:
+                - img
+              - button [disabled]:
+                - img
+  - complementary "CubeBox" [active] [ref=e201]:
+    - generic [ref=e203]:
+      - generic [ref=e204]:
+        - generic [ref=e205]:
+          - heading "新对话" [level=2] [ref=e206]
+          - paragraph [ref=e207]: "会话: conv_1db58863b0764207a855cb84ca33e47c"
+        - generic [ref=e208]:
+          - generic "历史记录" [ref=e209]:
+            - button "历史记录" [ref=e210] [cursor=pointer]:
+              - img [ref=e211]
+          - generic "设置" [ref=e213]:
+            - button "设置" [ref=e214] [cursor=pointer]:
+              - img [ref=e215]
+          - generic "新建对话" [ref=e217]:
+            - button "新建对话" [ref=e218] [cursor=pointer]:
+              - img [ref=e219]
+          - generic "压缩上下文" [ref=e221]:
+            - button "压缩上下文" [ref=e222] [cursor=pointer]:
+              - img [ref=e223]
+      - generic [ref=e225]:
+        - generic [ref=e226]:
+          - img [ref=e227]
+          - paragraph [ref=e229]: "会话: conv_1db58863b0764207a855cb84ca33e47c"
+        - separator [ref=e230]
+        - list [ref=e231]:
+          - listitem [ref=e232]:
+            - generic [ref=e233]:
+              - generic [ref=e234]: 你
+              - paragraph [ref=e235]: 你好
+              - generic [ref=e236]: completed
+          - listitem [ref=e237]:
+            - generic [ref=e238]:
+              - generic [ref=e239]: CubeBox
+              - paragraph [ref=e240]: 你好，我可以帮助你什么？
+              - generic [ref=e241]: completed
+          - listitem [ref=e242]:
+            - generic [ref=e243]:
+              - generic [ref=e244]: 你
+              - paragraph [ref=e245]: 你知道这个项目的什么
+              - generic [ref=e246]: completed
+          - listitem [ref=e247]:
+            - generic [ref=e248]:
+              - generic [ref=e249]: CubeBox
+              - paragraph [ref=e250]: "我现在还不知道你说的是哪个“项目”。你可以把下面任意一种信息发我，我就能告诉你我能看到/能推断到的内容： 1) **项目链接**（GitHub/Gitee/官网/文档）2) **项目名称 + 技术栈**（比如：Vue3 + Spring Boot）3) **README/简介截图** 或复制粘贴一段介绍4) **目录结构**（把根目录 `ls`/文件树贴出来）5)你最关心的点： -这是做什么的？ - 怎么部署/运行？ - 架构/模块划分？ -代码质量/风险点？ -依赖与许可证？ 把项目信息发来后，我可以帮你快速梳理：功能、核心模块、运行方式、关键依赖、可能的坑以及适合的下一步。"
+              - generic [ref=e251]: completed
+          - listitem [ref=e252]:
+            - generic [ref=e253]:
+              - generic [ref=e254]: 你
+              - paragraph [ref=e255]: 海上生明月，你怎么回答
+              - generic [ref=e256]: completed
+          - listitem [ref=e257]:
+            - generic [ref=e258]:
+              - generic [ref=e259]: CubeBox
+              - paragraph [ref=e260]: “海上生明月”常见的对句/接法是下一句： **天涯共此时。** 如果是聊天里有人发“海上生明月”，你也可以根据语境这样回： - 文雅版：**天涯共此时。**- 想念版：**天涯共此时，想你也是。**-祝福版：**愿你我同赏一轮月，平安喜乐。**- 调皮版：**海上生明月，我在想你呀。** 你想用来回谁（朋友/恋人/长辈）？我可以给你更贴合的版本。
+              - generic [ref=e261]: completed
+          - listitem [ref=e262]:
+            - generic [ref=e263]:
+              - generic [ref=e264]: 压缩摘要
+              - paragraph [ref=e265]: "user: 你好 assistant: 你好，我可以帮助你什么？"
+              - generic [ref=e266]: completed
+          - listitem [ref=e267]:
+            - generic [ref=e268]:
+              - generic [ref=e269]: 你
+              - paragraph [ref=e270]: 我说海上生明月，您说：天王盖地虎
+              - generic [ref=e271]: completed
+          - listitem [ref=e272]:
+            - generic [ref=e273]:
+              - generic [ref=e274]: CubeBox
+              - paragraph [ref=e275]: 宝塔镇河妖要不按您的节奏来一轮接龙也行：我说“天王盖地虎”，您接下一句。
+              - generic [ref=e276]: completed
+          - listitem [ref=e277]:
+            - generic [ref=e278]:
+              - generic [ref=e279]: 压缩摘要
+              - paragraph [ref=e280]: "user: 你好 assistant: 你好，我可以帮助你什么？ user: 你知道这个项目的什么 assistant: 我现在还不知道你说的是哪个“项目”。你可以把下面任意一种信息发我，我就能告诉你我能看到/能推断到的内容：1)**项目链接**（GitHub/Gitee/官网/文档）2)**项目名称+技术栈**（比如：Vue3+SpringBoot）3)**README/简介截图**或复制粘贴一段介绍4)**目录结构**（把根目录`ls`/文件树贴出来）5)你最关心的点：-这是做什么的？-怎么部署/运行？-架构/模块划分？-代码质量/风险点？-依赖与许可证？把项目信息发来后，我可以帮你快速梳理：功能、核心模块、运行方式、关键依赖、可能的坑以及适合的下一步。 user: 海上生明月，你怎么回答"
+              - generic [ref=e281]: completed
+          - listitem [ref=e282]:
+            - generic [ref=e283]:
+              - generic [ref=e284]: 你
+              - paragraph [ref=e285]: 海上生明月
+              - generic [ref=e286]: completed
+          - listitem [ref=e287]:
+            - generic [ref=e288]:
+              - generic [ref=e289]: CubeBox
+              - paragraph [ref=e290]: “海上生明月”出自唐代张九龄《望月怀远》，下一句是： **天涯共此时。** 全诗为： 海上生明月，天涯共此时。情人怨遥夜，竟夕起相思。灭烛怜光满，披衣觉露滋。不堪盈手赠，还寝梦佳期。
+              - generic [ref=e291]: completed
+          - listitem [ref=e292]:
+            - generic [ref=e293]:
+              - generic [ref=e294]: 压缩摘要
+              - paragraph [ref=e295]: "user: 你好 assistant: 你好，我可以帮助你什么？ user: 你知道这个项目的什么 assistant: 我现在还不知道你说的是哪个“项目”。你可以把下面任意一种信息发我，我就能告诉你我能看到/能推断到的内容：1)**项目链接**（GitHub/Gitee/官网/文档）2)**项目名称+技术栈**（比如：Vue3+SpringBoot）3)**README/简介截图**或复制粘贴一段介绍4)**目录结构**（把根目录`ls`/文件树贴出来）5)你最关心的点：-这是做什么的？-怎么部署/运行？-架构/模块划分？-代码质量/风险点？-依赖与许可证？把项目信息发来后，我可以帮你快速梳理：功能、核心模块、运行方式、关键依赖、可能的坑以及适合的下一步。 user: 海上生明月，你怎么回答 assistant: “海上生明月”常见的对句/接法是下一句：**天涯共此时。**如果是聊天里有人发“海上生明月”，你也可以根据语境这样回：-文雅版：**天涯共此时。**-想念版：**天涯共此时，想你也是。**-祝福版：**愿你我同赏一轮月，平安喜乐。**-调皮版：**海上生明月，我在想你呀。**你想用来回谁（朋友/恋人/长辈）？我可以给你更贴合的版本。 summary: user: 你好 assistant: 你好，我可以帮助你什么？ user: 我说海上生明月，您说：天王盖地虎"
+              - generic [ref=e296]: completed
+          - listitem [ref=e297]:
+            - generic [ref=e298]:
+              - generic [ref=e299]: 你
+              - paragraph [ref=e300]: 我说升明月，你说：
+              - generic [ref=e301]: completed
+          - listitem [ref=e302]:
+            - generic [ref=e303]:
+              - generic [ref=e304]: CubeBox
+              - paragraph [ref=e305]: 照大江。
+              - generic [ref=e306]: completed
+          - listitem [ref=e307]:
+            - generic [ref=e308]:
+              - generic [ref=e309]: 压缩摘要
+              - paragraph [ref=e310]: "user: 你好 assistant: 你好，我可以帮助你什么？ user: 你知道这个项目的什么 assistant: 我现在还不知道你说的是哪个“项目”。你可以把下面任意一种信息发我，我就能告诉你我能看到/能推断到的内容：1)**项目链接**（GitHub/Gitee/官网/文档）2)**项目名称+技术栈**（比如：Vue3+SpringBoot）3)**README/简介截图**或复制粘贴一段介绍4)**目录结构**（把根目录`ls`/文件树贴出来）5)你最关心的点：-这是做什么的？-怎么部署/运行？-架构/模块划分？-代码质量/风险点？-依赖与许可证？把项目信息发来后，我可以帮你快速梳理：功能、核心模块、运行方式、关键依赖、可能的坑以及适合的下一步。 user: 海上生明月，你怎么回答 assistant: “海上生明月”常见的对句/接法是下一句：**天涯共此时。**如果是聊天里有人发“海上生明月”，你也可以根据语境这样回：-文雅版：**天涯共此时。**-想念版：**天涯共此时，想你也是。**-祝福版：**愿你我同赏一轮月，平安喜乐。**-调皮版：**海上生明月，我在想你呀。**你想用来回谁（朋友/恋人/长辈）？我可以给你更贴合的版本。 summary: user: 你好 assistant: 你好，我可以帮助你什么？ user: 我说海上生明月，您说：天王盖地虎 assistant: 宝塔镇河妖要不按您的节奏来一轮接龙也行：我说“天王盖地虎”，您接下一句。 summary: user: 你好 assistant: 你好，我可以帮助你什么？ user: 你知道这个项目的什么 assistant: 我现在还不知道你说的是哪个“项目”。你可以把下面任意一种信息发我，我就能告诉你我能看到/能推断到的内容：1)**项目链接**（GitHub/Gitee/官网/文档）2)**项目名称+技术栈**（比如：Vue3+SpringBoot）3)**README/简介截图**或复制粘贴一段介绍4)**目录结构**（把根目录`ls`/文件树贴出来）5)你最关心的点：-这是做什么的？-怎么部署/运行？-架构/模块划分？-代码质量/风险点？-依赖与许可证？把项目信息发来后，我可以帮你快速梳理：功能、核心模块、运行方式、关键依赖、可能的坑以及适合的下一步。 user: 海上生明月，你怎么回答 user: 海上生明月"
+              - generic [ref=e311]: completed
+          - listitem [ref=e312]:
+            - generic [ref=e313]:
+              - generic [ref=e314]: 你
+              - paragraph [ref=e315]: 按我前面说的回答
+              - generic [ref=e316]: completed
+          - listitem [ref=e317]:
+            - generic [ref=e318]:
+              - generic [ref=e319]: CubeBox
+              - paragraph [ref=e320]: 我看不到你“前面说的”内容（在当前对话里没有显示），所以没法按你之前的要求来答。 请你把以下任意一项补发一下，我就能按那个标准回答： 1)你前面那段具体要求/指令原文；或2)你要我回答的具体问题 +你希望的回答格式（例如：简短/详细、要不要分点、要不要举例、用中文还是中英对照）。
+              - generic [ref=e321]: completed
+          - listitem [ref=e322]:
+            - generic [ref=e323]:
+              - generic [ref=e324]: 压缩摘要
+              - paragraph [ref=e325]: "user: 你好 assistant: 你好，我可以帮助你什么？ user: 你知道这个项目的什么 assistant: 我现在还不知道你说的是哪个“项目”。你可以把下面任意一种信息发我，我就能告诉你我能看到/能推断到的内容：1)**项目链接**（GitHub/Gitee/官网/文档）2)**项目名称+技术栈**（比如：Vue3+SpringBoot）3)**README/简介截图**或复制粘贴一段介绍4)**目录结构**（把根目录`ls`/文件树贴出来）5)你最关心的点：-这是做什么的？-怎么部署/运行？-架构/模块划分？-代码质量/风险点？-依赖与许可证？把项目信息发来后，我可以帮你快速梳理：功能、核心模块、运行方式、关键依赖、可能的坑以及适合的下一步。 user: 海上生明月，你怎么回答 assistant: “海上生明月”常见的对句/接法是下一句：**天涯共此时。**如果是聊天里有人发“海上生明月”，你也可以根据语境这样回：-文雅版：**天涯共此时。**-想念版：**天涯共此时，想你也是。**-祝福版：**愿你我同赏一轮月，平安喜乐。**-调皮版：**海上生明月，我在想你呀。**你想用来回谁（朋友/恋人/长辈）？我可以给你更贴合的版本。 summary: user: 你好 assistant: 你好，我可以帮助你什么？ user: 我说海上生明月，您说：天王盖地虎 assistant: 宝塔镇河妖要不按您的节奏来一轮接龙也行：我说“天王盖地虎”，您接下一句。 summary: user: 你好 assistant: 你好，我可以帮助你什么？ user: 你知道这个项目的什么 assistant: 我现在还不知道你说的是哪个“项目”。你可以把下面任意一种信息发我，我就能告诉你我能看到/能推断到的内容：1)**项目链接**（GitHub/Gitee/官网/文档）2)**项目名称+技术栈**（比如：Vue3+SpringBoot）3)**README/简介截图**或复制粘贴一段介绍4)**目录结构**（把根目录`ls`/文件树贴出来）5)你最关心的点：-这是做什么的？-怎么部署/运行？-架构/模块划分？-代码质量/风险点？-依赖与许可证？把项目信息发来后，我可以帮你快速梳理：功能、核心模块、运行方式、关键依赖、可能的坑以及适合的下一步。 user: 海上生明月，你怎么回答 user: 海上生明月 assistant: “海上生明月”出自唐代张九龄《望月怀远》，下一句是：**天涯共此时。**全诗为：海上生明月，天涯共此时。情人怨遥夜，竟夕起相思。灭烛怜光满，披衣觉露滋。不堪盈手赠，还寝梦佳期。 summary: user: 你好 assistant: 你好，我可以帮助你什么？ user: 你知道这个项目的什么 assistant: 我现在还不知道你说的是哪个“项目”。你可以把下面任意一种信息发我，我就能告诉你我能看到/能推断到的内容：1)**项目链接**（GitHub/Gitee/官网/文档）2)**项目名称+技术栈**（比如：Vue3+SpringBoot）3)**README/简介截图**或复制粘贴一段介绍4)**目录结构**（把根目录`ls`/文件树贴出来）5)你最关心的点：-这是做什么的？-怎么部署/运行？-架构/模块划分？-代码质量/风险点？-依赖与许可证？把项目信息发来后，我可以帮你快速梳理：功能、核心模块、运行方式、关键依赖、可能的坑以及适合的下一步。 user: 海上生明月，你怎么回答 assistant: “海上生明月”常见的对句/接法是下一句：**天涯共此时。**如果是聊天里有人发“海上生明月”，你也可以根据语境这样回：-文雅版：**天涯共此时。**-想念版：**天涯共此时，想你也是。**-祝福版：**愿你我同赏一轮月，平安喜乐。**-调皮版：**海上生明月，我在想你呀。**你想用来回谁（朋友/恋人/长辈）？我可以给你更贴合的版本。 summary: user: 你好 assistant: 你好，我可以帮助你什么？ user: 我说海上生明月，您说：天王盖地虎 user: 我说升明月，你说："
+              - generic [ref=e326]: completed
+          - listitem [ref=e327]:
+            - generic [ref=e328]:
+              - generic [ref=e329]: 你
+              - paragraph [ref=e330]: 哈喽哈喽
+              - generic [ref=e331]: completed
+          - listitem [ref=e332]:
+            - generic [ref=e333]:
+              - generic [ref=e334]: CubeBox
+              - paragraph [ref=e335]: 哈喽！今天想聊点什么？如果你告诉我你的目标（比如学习、写作、编程、翻译、做计划、情感困扰等），我可以更快帮上忙。
+              - generic [ref=e336]: completed
+      - generic [ref=e338]:
+        - generic [ref=e339]:
+          - generic: 输入消息
+          - generic [ref=e340]:
+            - textbox "输入消息" [ref=e341]
+            - group:
+              - generic: 输入消息
+        - generic [ref=e342]:
+          - paragraph [ref=e343]: 已完成
+          - generic [ref=e344]:
+            - button "停止" [disabled]:
+              - generic:
+                - img
+              - text: 停止
+            - button "发送" [disabled]:
+              - generic:
+                - img
+              - text: 发送

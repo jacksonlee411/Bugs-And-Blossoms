@@ -1,0 +1,24 @@
+- generic [ref=e5]:
+  - generic [ref=e6]:
+    - heading "登录" [level=1] [ref=e7]
+    - paragraph [ref=e8]: 登录后继续
+  - alert [ref=e20]:
+    - img [ref=e22]
+    - generic [ref=e24]: Identity error.
+  - generic [ref=e9]:
+    - generic [ref=e16]:
+      - text: 邮箱
+      - generic [ref=e17]: "*"
+    - generic [ref=e10]:
+      - textbox "邮箱" [ref=e11]: admin@localhost
+      - group:
+        - generic: 邮箱 *
+  - generic [ref=e12]:
+    - generic [ref=e18]:
+      - text: 密码
+      - generic [ref=e19]: "*"
+    - generic [ref=e13]:
+      - textbox "密码" [ref=e14]: admin123
+      - group:
+        - generic: 密码 *
+  - button "登录" [ref=e15] [cursor=pointer]: 登录
