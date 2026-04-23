@@ -35,8 +35,14 @@ vi.mock('./RouteErrorPage', () => ({
 }))
 
 import { router } from './index'
+import { APP_ROUTER_BASENAME } from './paths'
 
 describe('app router', () => {
+  it('pins business router basename to /app', () => {
+    expect(APP_ROUTER_BASENAME).toBe('/app')
+    expect(router.basename).toBe('/app')
+  })
+
   it('registers current primary business routes', () => {
     const rootRoute = router.routes.find((route) => route.path === '/')
     expect(rootRoute).toBeTruthy()
@@ -49,5 +55,6 @@ describe('app router', () => {
     expect(routePaths.has('org/units/field-configs')).toBe(true)
     expect(routePaths.has('dicts')).toBe(true)
     expect(routePaths.has('approvals')).toBe(true)
+    expect(routePaths.has('cubebox')).toBe(false)
   })
 })

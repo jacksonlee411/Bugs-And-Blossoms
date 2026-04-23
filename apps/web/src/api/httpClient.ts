@@ -1,4 +1,5 @@
 import axios, { type AxiosInstance, type AxiosRequestConfig } from 'axios'
+import { APP_ROUTER_BASENAME } from '../router/paths'
 import { normalizeApiError } from './errors'
 
 export interface HttpClientOptions {
@@ -119,8 +120,9 @@ export function createHttpClient(options: HttpClientOptions): HttpClient {
 
         const normalized = normalizeApiError(error)
         if (normalized.status === 401 && typeof window !== 'undefined') {
-          if (!window.location.pathname.startsWith('/app/login')) {
-            window.location.assign('/app/login')
+          const loginPath = `${APP_ROUTER_BASENAME}/login`
+          if (!window.location.pathname.startsWith(loginPath)) {
+            window.location.assign(loginPath)
           }
         }
         throw normalized

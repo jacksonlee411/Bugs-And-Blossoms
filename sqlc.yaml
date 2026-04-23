@@ -14,3 +14,17 @@ sql:
         emit_json_tags: true
         emit_pointers_for_null_types: true
         emit_empty_slices: true
+  - engine: "postgresql"
+    schema:
+      - "internal/sqlc/schema.sql"
+    queries:
+      - "modules/cubebox/infrastructure/sqlc/queries/*.sql"
+    gen:
+      go:
+        package: "cubeboxsqlc"
+        out: "modules/cubebox/infrastructure/sqlc/gen"
+        sql_package: "pgx/v5"
+        emit_prepared_queries: true
+        emit_json_tags: true
+        emit_pointers_for_null_types: true
+        emit_empty_slices: true

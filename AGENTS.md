@@ -38,6 +38,7 @@
 - 计划/规范文档：`docs/dev-plans/`
 - 实施路线图【归档 / 历史来源】：`docs/archive/dev-plans/009-implementation-roadmap.md`
 - Readiness 证据记录：`docs/dev-records/`
+- CubeBox 当前真实模型运行时基线（当前开发参考，配置变更需同步 `DEV-PLAN-433/433A`）：`provider_id=openai-compatible`、`provider_type=codex`、`base_url=https://code2026.pumpkinai.vip/v1`、`enabled=true`、`secret_ref=env://OPENAI_API_KEY`、`model_slug=gpt-5.2`
 
 ## 2. 变更触发器矩阵（与 CI 对齐）
 
@@ -89,6 +90,8 @@
 ### 3.4 AI 驱动开发：简单而非容易（Simple > Easy）
 
 使用 AI 辅助时，优先追求“简单（Simple）”而不是“容易（Easy）”：先写清边界、不变量、失败路径与验收标准（建议以 dev-plan/Spec 固化），再实现；拒绝补丁式堆叠分支、复制粘贴与相似文件增殖；任何新抽象必须可在 5 分钟内解释清楚、具备可替换性，并能对应到明确的业务约束（评审清单见 `docs/dev-plans/003-simple-not-easy-review-guide.md`）。
+- 防止过度设计：不要把治理留痕、未来扩展、参数化预留、异步编排、对象级证据矩阵或调试 telemetry 提前写成首期范围、硬契约、硬验收或实现前置；若某复杂度不是当前不变量所必需，应默认后移到 P1/后续计划，而不是先纳入主方案。
+- 评审和实现时，必须主动识别过度设计信号：当前闭环未跑通却先加 capability/fallback/第二配置链；把 prompt/summary/DTO 规格化过重；先抽一整套接口和类型再寻找真实边界；把上游复用膨胀成流程性 companion contract。命中此类信号时，应按 `DEV-PLAN-003` 收敛范围、压缩抽象并降低验收重量。
 
 ### 3.5 时间语义（Valid Time vs Audit/Tx Time）
 
@@ -231,11 +234,18 @@ modules/{module}/
 - DEV-PLAN-430：IDE 式对话助手重做架构方案：`docs/dev-plans/430-cubebox-ide-conversation-assistant-rebuild-architecture-plan.md`
 - DEV-PLAN-431：Codex UI 协议、状态机与右悬挂壳层复用/重构方案：`docs/dev-plans/431-codex-ui-protocol-and-shell-reuse-plan.md`
 - DEV-PLAN-431A：CubeBox 页面设计契约（承接 DEV-PLAN-431）：`docs/dev-plans/431a-cubebox-page-design-contract.md`
+- DEV-PLAN-431B：CubeBox 壳层避让与非阻断右侧悬挂方案：`docs/dev-plans/431b-cubebox-shell-overlay-and-nonblocking-drawer-plan.md`
 - DEV-PLAN-432：Codex 会话持久化、索引与恢复语义复用/重构方案：`docs/dev-plans/432-codex-session-persistence-reuse-plan.md`
 - DEV-PLAN-433：Bifrost 主参考的 AI 网关复用/重构方案：`docs/dev-plans/433-bifrost-centric-ai-gateway-reuse-and-reconstruction-plan.md`
+- DEV-PLAN-433A：CubeBox 真实 Provider 浏览器验证发现与修复方案：`docs/dev-plans/433a-cubebox-real-provider-browser-validation-findings-and-remediation-plan.md`
 - DEV-PLAN-434：Codex 上下文管理与压缩机制复用/重构方案：`docs/dev-plans/434-codex-context-management-and-compaction-reuse-plan.md`
+- DEV-PLAN-438：CubeBox 连贯对话失效调查与修复方案：`docs/dev-plans/438-cubebox-conversational-continuity-investigation-and-remediation-plan.md`
+- DEV-PLAN-438A：CubeBox provider 输入角色收敛与 Codex 摘要语义对齐方案：`docs/dev-plans/438a-cubebox-provider-message-role-normalization-and-codex-summary-alignment-plan.md`
+- DEV-PLAN-438B：CubeBox 流式回复换行丢失与列表结构压平专项调查与修复方案：`docs/dev-plans/438b-cubebox-streaming-newline-loss-investigation-and-remediation-plan.md`
 - DEV-PLAN-435：Bifrost 主参考的模型配置 UI 与管理权限复用/重构方案：`docs/dev-plans/435-bifrost-centric-model-config-ui-and-admin-governance-plan.md`
 - DEV-PLAN-436：CubeBox 历史对话面彻底删除与仓面清场方案：`docs/dev-plans/436-cubebox-historical-surface-hard-delete-plan.md`
+- DEV-PLAN-437：CubeBox 实施路线图（快速开工版）：`docs/dev-plans/437-cubebox-implementation-roadmap-for-fast-start.md`
+- DEV-PLAN-437A：CubeBox Phase A 共享 Canonical Contract：`docs/dev-plans/437a-cubebox-phase-a-canonical-conversation-contract.md`
 - DEV-PLAN-440：彻底删除 SetID 的全仓收口方案（SetID 根删除唯一 PoR）：`docs/dev-plans/440-complete-setid-removal-plan.md`
 - DEV-PLAN-441：旧策略模块残余清理方案：`docs/dev-plans/441-legacy-strategy-module-residue-cleanup-plan.md`
 - DEV-PLAN-450：直接切除 jobcatalog / staffing / person 三模块方案（保留 orgunit）：`docs/dev-plans/450-direct-removal-of-jobcatalog-staffing-person-modules-plan.md`

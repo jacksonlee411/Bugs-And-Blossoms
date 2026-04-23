@@ -1249,6 +1249,42 @@ func TestNewHandlerWithOptions_DictRoutes_AreWired(t *testing.T) {
 	}
 }
 
+func TestNewHandlerWithOptions_CubeBoxCapabilitiesRouteIsInternalJSON(t *testing.T) {
+	wd := mustGetwd(t)
+	allowlistPath := mustAllowlistPathFromWd(t, wd)
+	t.Setenv("ALLOWLIST_PATH", allowlistPath)
+
+	h, err := NewHandlerWithOptions(HandlerOptions{
+		TenancyResolver: localTenancyResolver(),
+		IdentityProvider: staticIdentityProvider{ident: authenticatedIdentity{
+			KratosIdentityID: "00000000-0000-0000-0000-0000000000aa",
+			Email:            "tenant-admin@example.invalid",
+			RoleSlug:         "tenant-admin",
+		}},
+		OrgUnitStore: newOrgUnitMemoryStore(),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	sidCookie := loginTenantAdminCookie(t, h)
+	req := httptest.NewRequest(http.MethodGet, "http://localhost/internal/cubebox/capabilities", nil)
+	req.Host = "localhost"
+	req.AddCookie(sidCookie)
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+	}
+	if ct := rec.Result().Header.Get("Content-Type"); !strings.Contains(ct, "application/json") {
+		t.Fatalf("content-type=%q body=%s", ct, rec.Body.String())
+	}
+	if !strings.Contains(rec.Body.String(), `"conversation":{"read":true,"use":true}`) {
+		t.Fatalf("unexpected body=%s", rec.Body.String())
+	}
+}
+
 func TestNewHandlerWithOptions_OrgUnitFieldConfigRoutes_AreWired(t *testing.T) {
 	wd := mustGetwd(t)
 	allowlistPath := mustAllowlistPathFromWd(t, wd)

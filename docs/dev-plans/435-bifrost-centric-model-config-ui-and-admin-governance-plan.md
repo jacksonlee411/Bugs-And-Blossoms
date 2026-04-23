@@ -119,26 +119,33 @@
 | 启用 / 停用 | Bifrost + One API | 主语义用 Bifrost，补充页面组织 |
 | API Key 轮换 | 本仓主导 + Bifrost/One API 交互参考 | 不复用外部密钥存储，但复用录入/验证/掩码/轮换 IA |
 | 权限矩阵 | 本仓主导 + 开源角色语义参考 | 不直接复用外部角色系统，必须落到 subject/domain/object/action |
-| 审计与错误码 | 本仓主导 + Bifrost telemetry 参考 | 不外包给外部项目，但复用 telemetry/health 状态形状 |
+| 审计与错误码 | 本仓主导 + Bifrost telemetry 参考 | 不外包给外部项目，但复用最小 telemetry/health 状态形状；不依赖 `usage_event/outbox` 数据面 |
 | i18n / E2E | 本仓主导 | 必须纳入仓库门禁 |
 
-## 5A. 上游映射表模板
+## 5A. 上游映射表（2026-04-22 首轮冻结）
 
 本计划必须把 Bifrost/One API/Codex 在管理面上的复用对象冻结成可审计制品；未填完前不得进入 Slice 5.1 之后的实现。
 
 | 上游项目 | 上游 commit SHA | 上游制品类型 | 上游路径或对象名 | CubeBox 对应对象/切片 | 采用状态 | 不可直接复用原因 | 原因类型 | 必备验证 | PR 证据位置 | readiness 证据位置 |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| `maximhq/bifrost` | `待补` | `页面信息架构` | `provider config / health 相关页面或目录` | `provider/active model/health 管理面 / Slice 5.2-5.5` | `待补` | `待补` | `待补` | `IA snapshot + E2E` | `待补` | `待补` |
-| `maximhq/bifrost` | `待补` | `文件` | `health/readiness/validation 代表文件` | `健康验证动作与状态展示 / Slice 5.5` | `待补` | `待补` | `待补` | `validation fixture` | `待补` | `待补` |
-| `songquanpeng/one-api` | `待补` | `页面信息架构` | `channels/tokens/model mapping 代表页面` | `表格组织与信息架构 / Slice 5.3` | `待补` | `待补` | `待补` | `IA snapshot` | `待补` | `待补` |
-| `openai/codex` | `待补` | `协议` | `provider capability / model metadata 代表对象` | `capability 命名与元信息展示 / Slice 5.2-5.3` | `待补` | `待补` | `待补` | `metadata snapshot` | `待补` | `待补` |
-| `本仓主导` | `N/A` | `协议` | `Authz/RLS/密钥治理/错误码/i18n 契约` | `权限矩阵、密钥生命周期、审计 / Slice 5.1-5.4` | `重构复用` | `外部角色/DB 不可直接采用，但 IA/命名/验证交互需优先复用` | `仓库约束` | `Authz test + E2E` | `待补` | `待补` |
+| `maximhq/bifrost` | `865c097cadcfe3677dbf2cc0fb1d63a699fab552` | `页面信息架构 + handler` | `ui/README.md`、`transports/README.md`、`transports/bifrost-http/handlers/providers.go`、`transports/bifrost-http/handlers/provider_keys.go`、`transports/bifrost-http/handlers/config.go` | `provider/credential/active model/health 管理面信息架构 / Slice 5.2-5.5` | `重构复用` | 本仓继续使用 React/MUI、DDD 分层、RLS/Authz 与错误码契约，不能直接搬运其 UI 与 handler；但 provider/key/model/health 对象命名和管理入口必须优先沿用其形状 | `仓库约束` | `IA snapshot + handler contract fixture + E2E` | `PR-437E` | `DEV-PLAN-437-READINESS Phase E` |
+| `maximhq/bifrost` | `865c097cadcfe3677dbf2cc0fb1d63a699fab552` | `文件` | `transports/bifrost-http/handlers/health.go`、`transports/config.schema.json`、`core/schemas/provider.go`、`core/schemas/models.go` | `健康验证动作、provider capability、active model 运行时事实 / Slice 5.1、5.5` | `重构复用` | 本仓不直接采用其配置存储和全量 schema，但 provider status、health/readiness、model capability 的输出形状应尽量贴齐，避免自造第四套字段名 | `协议不匹配` | `validation fixture + metadata snapshot + API test` | `PR-437E` | `DEV-PLAN-437-READINESS Phase E` |
+| `songquanpeng/one-api` | `8df4a2670b98266bd287c698243fff327d9748cf` | `页面信息架构 + controller` | `controller/channel.go`、`controller/channel-test.go`、`controller/token.go`、`controller/model.go`、`web/default/src/constants/channel.constants.js` | `active model 列表组织、启停/验证入口、密钥列表 IA / Slice 5.3-5.4` | `只借鉴语义` | `channel/token` 是 One API 自身产品术语；CubeBox 不能直接把 provider/credential 重命名为 channel/token，但表格结构、测试动作、状态枚举可借鉴 | `产品语义差异` | `IA snapshot + action mapping note` | `PR-437E` | `DEV-PLAN-437-READINESS Phase E` |
+| `openai/codex` | `69c8913e24f2f455c8f000fa7afe039a38bdd48d` | `协议 + 元信息对象` | `codex-rs/model-provider-info/src/lib.rs`、`codex-rs/protocol/src/openai_models.rs`、`codex-rs/model-provider/src/provider.rs`、`codex-rs/protocol/src/config_types.rs` | `provider capability 命名、model metadata 展示、provider auth 元信息 / Slice 5.2-5.3` | `只借鉴语义` | Codex 不提供首期所需的多租户管理面、密钥生命周期或 health UI；仅适合作为 capability / metadata 字段命名参考 | `范围不匹配` | `metadata snapshot` | `PR-437E` | `DEV-PLAN-437-READINESS Phase E` |
+| `本仓主导` | `N/A` | `协议` | `Authz/RLS/密钥治理/错误码/i18n 契约` | `权限矩阵、密钥生命周期、审计 / Slice 5.1-5.4` | `重构复用` | 外部角色/DB 不可直接采用，但 IA、provider/config 命名与验证交互已在上表冻结，不得再以“本仓主导”为由回退到纯自研页面 | `仓库约束` | `Authz test + E2E + masking/rotation test` | `PR-437E` | `DEV-PLAN-437-READINESS Phase E` |
 
 填写规则：
 
 - `采用状态` 只允许填写 `直接复用`、`重构复用`、`只借鉴语义`、`明确不引入`。
 - 若 `One API` 或 `Codex` 只承担局部参考，必须明确到页面 IA、命名对象或 metadata 级别，不能写“后台风格类似”。
 - `必备验证` 必须锁住命名、页面 IA、权限行为或验证动作；不能只靠人工截图说明“看起来差不多”。
+
+冻结结论：
+
+- `Bifrost` 是 `Phase E` 唯一主参考；provider/config/health/active model 不允许另起第二套主语义。
+- `One API` 只补表格信息架构、测试动作和启停/状态组织；不得把 CubeBox 核心对象重命名为 `channel` / `token`。
+- `Codex` 只补 capability / metadata 命名；不得把其 provider auth / local config 直接包装成 CubeBox 管理面。
+- 从本节开始，`provider`、`credential`、`active model`、`health` 是 `433/435/437E` 的共享对象名；后续实现不得再引入 `vendor`、`channel`、`endpoint config` 等平行命名。
 
 ## 6. CubeBox 管理面目标架构
 

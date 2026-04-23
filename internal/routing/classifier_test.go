@@ -132,3 +132,25 @@ func TestClassifier_ExplicitRouteOverridesWildcard(t *testing.T) {
 		t.Fatalf("got=%q", got)
 	}
 }
+
+func TestClassifier_CubeBoxInternalCapabilitiesFromAllowlist(t *testing.T) {
+	t.Parallel()
+
+	a := Allowlist{
+		Version: 1,
+		Entrypoints: map[string]Entrypoint{
+			"server": {Routes: []Route{
+				{Path: "/health", Methods: []string{"GET"}, RouteClass: "ops"},
+				{Path: "/internal/cubebox/capabilities", Methods: []string{"GET"}, RouteClass: "internal_api"},
+			}},
+		},
+	}
+	c, err := NewClassifier(a, "server")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if got := c.Classify("/internal/cubebox/capabilities"); got != RouteClassInternalAPI {
+		t.Fatalf("got=%q", got)
+	}
+}

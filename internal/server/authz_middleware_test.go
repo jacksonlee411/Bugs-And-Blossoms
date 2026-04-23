@@ -111,6 +111,23 @@ func TestWithAuthz_ForbiddenWhenEnforced(t *testing.T) {
 	}
 }
 
+func TestWithAuthz_CubeBoxForbiddenWhenEnforced(t *testing.T) {
+	next := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+	h := withAuthz(mustTestClassifier(t), stubAuthorizer{allowed: false, enforced: true}, next)
+
+	req := httptest.NewRequest(http.MethodPost, "/internal/cubebox/turns:stream", strings.NewReader(`{"conversation_id":"conv_1","prompt":"hello"}`))
+	req.Header.Set("Content-Type", "application/json")
+	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Domain: "localhost", Name: "T"}))
+	req = req.WithContext(withPrincipal(req.Context(), Principal{ID: "p1", TenantID: "t1", RoleSlug: "tenant-admin", Status: "active"}))
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("status=%d body=%q", rec.Code, rec.Body.String())
+	}
+}
+
 func TestWithAuthz_OrgUnitRescindForbiddenWhenEnforced(t *testing.T) {
 	next := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -211,6 +228,39 @@ func TestAuthzRequirementForRoute(t *testing.T) {
 	}
 	if _, _, ok := authzRequirementForRoute(http.MethodDelete, "/iam/api/dicts/values"); ok {
 		t.Fatal("expected ok=false")
+	}
+	if object, action, ok := authzRequirementForRoute(http.MethodPost, "/internal/cubebox/turns:stream"); !ok || object != authz.ObjectCubeBoxConversations || action != authz.ActionUse {
+		t.Fatalf("unexpected cubebox stream authz: object=%q action=%q ok=%v", object, action, ok)
+	}
+	if object, action, ok := authzRequirementForRoute(http.MethodGet, "/internal/cubebox/conversations/conv_1"); !ok || object != authz.ObjectCubeBoxConversations || action != authz.ActionRead {
+		t.Fatalf("unexpected cubebox read authz: object=%q action=%q ok=%v", object, action, ok)
+	}
+	if object, action, ok := authzRequirementForRoute(http.MethodPost, "/internal/cubebox/conversations/conv_1:compact"); !ok || object != authz.ObjectCubeBoxConversations || action != authz.ActionUse {
+		t.Fatalf("unexpected cubebox compact authz: object=%q action=%q ok=%v", object, action, ok)
+	}
+	if object, action, ok := authzRequirementForRoute(http.MethodPost, "/internal/cubebox/turns/turn_1:interrupt"); !ok || object != authz.ObjectCubeBoxConversations || action != authz.ActionUse {
+		t.Fatalf("unexpected cubebox interrupt authz: object=%q action=%q ok=%v", object, action, ok)
+	}
+	if object, action, ok := authzRequirementForRoute(http.MethodGet, "/internal/cubebox/capabilities"); ok || object != "" || action != "" {
+		t.Fatalf("unexpected cubebox capabilities authz: object=%q action=%q ok=%v", object, action, ok)
+	}
+	if object, action, ok := authzRequirementForRoute(http.MethodGet, "/internal/cubebox/settings"); !ok || object != authz.ObjectCubeBoxModelCredential || action != authz.ActionRead {
+		t.Fatalf("unexpected cubebox settings authz: object=%q action=%q ok=%v", object, action, ok)
+	}
+	if object, action, ok := authzRequirementForRoute(http.MethodPost, "/internal/cubebox/settings/providers"); !ok || object != authz.ObjectCubeBoxModelProvider || action != authz.ActionUpdate {
+		t.Fatalf("unexpected cubebox provider authz: object=%q action=%q ok=%v", object, action, ok)
+	}
+	if object, action, ok := authzRequirementForRoute(http.MethodPost, "/internal/cubebox/settings/credentials"); !ok || object != authz.ObjectCubeBoxModelCredential || action != authz.ActionRotate {
+		t.Fatalf("unexpected cubebox credential authz: object=%q action=%q ok=%v", object, action, ok)
+	}
+	if object, action, ok := authzRequirementForRoute(http.MethodPost, "/internal/cubebox/settings/selection"); !ok || object != authz.ObjectCubeBoxModelSelection || action != authz.ActionSelect {
+		t.Fatalf("unexpected cubebox selection authz: object=%q action=%q ok=%v", object, action, ok)
+	}
+	if object, action, ok := authzRequirementForRoute(http.MethodPost, "/internal/cubebox/settings/verify"); !ok || object != authz.ObjectCubeBoxModelSelection || action != authz.ActionVerify {
+		t.Fatalf("unexpected cubebox verify authz: object=%q action=%q ok=%v", object, action, ok)
+	}
+	if object, action, ok := authzRequirementForRoute(http.MethodPost, "/internal/cubebox/settings/credentials/cred_1:deactivate"); !ok || object != authz.ObjectCubeBoxModelCredential || action != authz.ActionDeactivate {
+		t.Fatalf("unexpected cubebox credential deactivate authz: object=%q action=%q ok=%v", object, action, ok)
 	}
 	if _, _, ok := authzRequirementForRoute(http.MethodPost, "/iam/api/dicts/values:disable"); !ok {
 		t.Fatal("expected ok=true")
