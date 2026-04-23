@@ -7,8 +7,8 @@
 - **评审分级**：`T3`
 - **范围一句话**：在旧对话栈完成历史归档之后，重新设计一个名为 `CubeBox`、中文名为“丘宝”的一方对话助手模块；首期交付对齐 VS Code Codex 插件观感的右侧悬挂抽屉、可配置外部大模型的 AI 网关，以及具备上下文压缩与会话隔离能力的连续对话内核。
 - **关联模块/目录**：`AGENTS.md`、`apps/web`、`internal/server`、`modules/cubebox`（候选新模块路径）、`config`、`migrations`、`scripts/ci`
-- **关联计划/标准**：`DEV-PLAN-004M1`、`DEV-PLAN-012`、`DEV-PLAN-015`、`DEV-PLAN-016`、`DEV-PLAN-017`、`DEV-PLAN-019`、`DEV-PLAN-021`、`DEV-PLAN-022`、`DEV-PLAN-300`、`DEV-PLAN-431`、`DEV-PLAN-432`、`DEV-PLAN-433`、`DEV-PLAN-434`、`DEV-PLAN-435`
-- **用户入口/触点**：Web 应用右侧悬挂对话入口、`/app/cubebox` 页面、`/internal/cubebox` 服务端 API、模型配置页、会话列表、会话详情、流式回复、错误提示、审计记录；不提供 VS Code 插件形态或其他 IDE 客户端。
+- **关联计划/标准**：`DEV-PLAN-004M1`、`DEV-PLAN-012`、`DEV-PLAN-015`、`DEV-PLAN-016`、`DEV-PLAN-017`、`DEV-PLAN-019`、`DEV-PLAN-021`、`DEV-PLAN-022`、`DEV-PLAN-300`、`DEV-PLAN-431`、`DEV-PLAN-432`、`DEV-PLAN-433`、`DEV-PLAN-434`、`DEV-PLAN-435`、`DEV-PLAN-437`、`DEV-PLAN-437A`
+- **用户入口/触点**：Web 应用右侧悬挂对话入口、`/internal/cubebox` 服务端 API、模型配置页、会话列表、会话详情、流式回复、错误提示、审计记录；不提供 VS Code 插件形态或其他 IDE 客户端。
 
 ### 0.1 Simple > Easy 三问
 
@@ -22,7 +22,7 @@
 - 本计划是新的 PoR 候选，不继承 `220-293`、`340-384`、`380-380H`、`391D` 的实现假设、阶段划分、子计划依赖或完成定义。
 - 若新方案需要借鉴历史实现，只允许把它视为“可选历史案例”；不得把旧 DTO、旧路由、旧 capability、旧表结构或旧 UI 视为默认沿用前提。
 - 实施前必须把 `make check chat-surface-clean` 从“全局关键词阻断旧残留”升级为“允许本计划批准的新模块路径，继续阻断旧路径、旧 API、旧 DB 对象、旧第三方资产”的精确门禁。
-- 新 CubeBox 正式路径冻结为 `/app/cubebox` 与 `/internal/cubebox`；它们代表 `430-435` 新主线，不再被 `chat-surface-clean` 视为旧 `cubebox` runtime 回流。旧 `assistant`、LibreChat、`/app/assistant`、`/internal/assistant`、`/assistant-ui` 与历史 compat/retired 语义仍必须 fail-closed。
+- 新 CubeBox 正式运行面冻结为 Web Shell 右侧抽屉与 `/internal/cubebox`；它们代表 `430-435` 新主线，不再被 `chat-surface-clean` 视为旧 `cubebox` runtime 回流。旧 `assistant`、LibreChat、`/app/assistant`、`/internal/assistant`、`/assistant-ui` 与历史 compat/retired 语义仍必须 fail-closed。
 
 ## 1. 背景与问题陈述
 
@@ -74,9 +74,9 @@
 
 | 子计划/切片 | 上游项目 | 上游 commit SHA | 上游制品类型 | 上游路径或对象名 | 本仓对应切片/模块 | 采用状态 | 不可直接复用原因 | 原因类型 | 必备验证 | PR 证据位置 | readiness 证据位置 |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| `431 / Slice 1` | `openai/codex` | `待补` | `协议/文件/测试样例` | `待补` | `CubeBox UI 协议与壳层` | `待补` | `待补` | `待补` | `golden/snapshot/E2E` | `待补` | `待补` |
-| `433 / Slice 2` | `maximhq/bifrost`、`openai/codex` | `待补` | `目录/文件/协议/测试样例` | `待补` | `CubeBox AI 网关` | `待补` | `待补` | `待补` | `fixture/SSE 对照/集成测试` | `待补` | `待补` |
-| `434 / Slice 4` | `openai/codex` | `待补` | `文件/模板/测试样例` | `待补` | `CubeBox 上下文压缩` | `待补` | `待补` | `待补` | `golden/snapshot/纯函数测试` | `待补` | `待补` |
+| `431 / Slice 1` | `openai/codex` | `ef071cf816950dc416b2a975e7ed023eea639026` | `协议/文件/测试样例` | `详见 DEV-PLAN-431 / 4B` | `CubeBox UI 协议与壳层` | `PR-437A 最小冻结已补齐` | `详见 DEV-PLAN-431 / 4B` | `详见 DEV-PLAN-431 / 4B` | `golden/snapshot/E2E` | `待补` | `待补` |
+| `433 / Slice 2` | `maximhq/bifrost`、`openai/codex` | `Bifrost: de67db28676a8a80ba1e738ebf8f9318d82d16f7; Codex: ef071cf816950dc416b2a975e7ed023eea639026` | `目录/文件/协议/测试样例` | `详见 DEV-PLAN-433 / 5A、5B` | `CubeBox AI 网关` | `2026-04-22 当前范围已封板` | `详见 DEV-PLAN-433 / 5A、5B` | `详见 DEV-PLAN-433 / 5A、5B` | `fixture/SSE 对照/集成测试/真实浏览器 success-interrupted` | `docs/dev-plans/433-bifrost-centric-ai-gateway-reuse-and-reconstruction-plan.md#8a-2026-04-22-重新验收记录` | `docs/dev-records/DEV-PLAN-437-READINESS.md` |
+| `434 / Slice 4` | `openai/codex` | `ef071cf816950dc416b2a975e7ed023eea639026` | `文件/模板/测试样例` | `详见 DEV-PLAN-434 / 4B` | `CubeBox 上下文压缩` | `PR-437D 已具备正式封板条件` | `详见 DEV-PLAN-434 / 4B` | `详见 DEV-PLAN-434 / 4B` | `golden/snapshot/纯函数测试` | `docs/dev-plans/437-cubebox-implementation-roadmap-for-fast-start.md#phase-d上下文压缩最小闭环` | `docs/dev-records/DEV-PLAN-437-READINESS.md#phase-d--pr-437d-当前证据2026-04-22` |
 | `435 / Slice 5` | `maximhq/bifrost`、`songquanpeng/one-api`、`openai/codex` | `待补` | `页面信息架构/目录/文件` | `待补` | `CubeBox 模型配置 UI` | `待补` | `待补` | `待补` | `IA snapshot/E2E/Authz` | `待补` | `待补` |
 
 字段说明冻结如下：
@@ -94,6 +94,15 @@
   3. 自研部分是否比上游更小，而不是更大。
 - readiness 必须保留以下证据：上游 `commit SHA`、采用矩阵、裁剪矩阵、差异说明、golden/fixture/snapshot/集成测试结果。
 - 验收以“是否沿着已冻结的复用路线实现”为主，不以“功能跑通”替代复用审计。
+
+### 2A.4 PR-437A 首轮最小冻结
+
+- `PR-437A` 不要求 `431-435` 一次性补齐所有未来切片的映射表，只要求补齐首轮开工需要的最小冻结集。
+- 首轮共享 companion doc 冻结为 `DEV-PLAN-437A`，用于统一 `431` reducer、`432` reconstruction 与 `434` compact event 的最小 canonical contract。
+- 首轮最小冻结 owner 如下：
+  - `431`：见 `DEV-PLAN-431 / 4B`
+  - `433`：见 `DEV-PLAN-433 / 5B`
+  - `434`：见 `DEV-PLAN-434 / 4B`
 
 ## 3. 目标
 
@@ -149,7 +158,7 @@
 - 对内暴露统一聊天接口，首期兼容 OpenAI chat/completions 或 Responses 风格的最小子集。
 - 对外适配范围冻结为一个 OpenAI-compatible provider 最小闭环；其他供应商不在当前交付范围内。
 - 管理 API Key、base URL、active model、启停状态和显式连通性验证/基础健康状态。
-- 统一处理 SSE 流式转发、错误映射、审计与 token 用量记录。
+- 统一处理 SSE 流式转发、错误映射、审计与最小 lifecycle telemetry。
 - quota、route alias、default model、fallback/failover 不进入首期运行时闭环；`DEV-PLAN-433/435` 只能做上游评估与后续预留，不得把这些能力列为首期验收项。
 
 ### 6.2 运行时技术口径
@@ -158,7 +167,7 @@
 - provider adapter 必须是可插拔接口，避免在业务 handler 中散落供应商分支。
 - API Key 必须服务端加密保存，前端只看到 provider alias、模型展示名和健康状态。
 - 请求路径必须显式租户注入、显式事务边界和 fail-closed 错误处理。
-- 网关主请求链只做必要鉴权、请求映射和 SSE 转发；但调用外部 provider 前必须同事务写入 `request-start`、`usage-intent` 与 `audit-start` 记录，流式完成后更新 final 状态。异步路径只允许补充非关键指标，或通过 outbox 重试关键 final 更新；该模式优先复用/重构 Bifrost/Codex 的 telemetry、stream lifecycle 与测试样式，不为 CubeBox 扩大一套平行自研审计框架。
+- 网关主请求链只做必要鉴权、请求映射和 SSE 转发；`request-start` / `usage-intent` / `audit-start` 持久化仍是长期目标，但首轮只要求 canonical event 内的最小 lifecycle telemetry 与 final 语义稳定。`usage_event` 数据面已暂缓，项目当前也未建设 `outbox` 能力，因此 `outbox` 不属于本轮实施范围；该模式仍优先复用/重构 Bifrost/Codex 的 telemetry、stream lifecycle 与测试样式，不为 CubeBox 扩大一套平行自研审计框架。
 
 ### 6.3 配置模型
 
@@ -167,7 +176,7 @@
 - `model_provider`：供应商编码、展示名、base URL、协议类型、启停状态、健康状态。
 - `model_credential`：加密 API Key、密钥版本、创建人、更新时间、最后验证结果。
 - `model_selection`：当前启用的 active model、展示名与必要默认参数。
-- `model_usage_event`：请求时间、会话、模型、输入输出 token、错误码、延迟、trace_id、start/final 状态与 outbox 重试状态。
+- `model_usage_event`：后续阶段预留对象；如恢复实施，记录请求时间、会话、模型、输入输出 token、错误码、延迟、trace_id 与 start/final 状态。本轮不落地 `usage_event` 数据面，也不承接 `outbox` 重试状态。
 
 ### 6.4 外部网关借鉴边界
 
@@ -180,7 +189,7 @@
 ### 6.5 首期明确暂缓项
 
 - `fallback/failover`：首期只做单 provider fail-closed 与健康验证，不做多 provider 故障切换。
-- `quota`：首期只记录 token usage 与审计字段，不做租户/用户额度治理。
+- `quota`：首期只保留 provider/model/latency/error 等最小 lifecycle 字段，不做租户/用户额度治理；正式 token usage 数据面后移。
 - `route alias/default model`：首期只有 active model 选择，不提供 alias、route graph 或 default model 管理面。
 - 上述能力仍可在 `433/435` 做上游映射和后续预留，但不得作为首期 required gate 或验收条件。
 
@@ -236,7 +245,7 @@
 - 前端不得直接请求外部模型供应商。
 - API Key 只允许服务端保存和解密，密钥展示永远只显示掩码。
 - 模型配置管理需要独立权限对象；普通用户只能选择已授权模型，不可读取密钥。
-- 对话请求必须记录 trace_id、conversation_id、active model、latency、token usage、错误码和调用结果摘要。
+- 对话请求必须记录 trace_id、conversation_id、active model、latency、错误码和调用结果摘要；正式 token usage 持久化后移。
 - 所有用户可见错误必须走项目错误码与 i18n 文案，不直接透出供应商原始错误。
 - Prompt 和工具上下文不得包含不属于当前租户和当前用户权限范围的数据。
 - CubeBox 是当前用户调用的普通工具，不是 Casbin/Authz 中被独立授权的 subject；业务查询和写入 API 必须完全按当前用户已有权限、当前租户、当前 session 执行，不允许使用 CubeBox service account、代理主体或权限提升。
@@ -247,7 +256,7 @@
 ## 9. 数据库与迁移策略
 
 - 新增表前必须先完成对象清单评审，并获得用户手工确认。
-- 首期推荐把会话、消息、摘要、模型配置、密钥元数据、用量事件放在新模块 schema 下，避免污染 iam 或业务模块。
+- 首期推荐把会话、消息、摘要、模型配置与密钥元数据放在新模块 schema 下，避免污染 iam 或业务模块；`usage_event` 数据面后移。
 - 密钥密文与密钥元数据必须分离；密钥明文不得进入日志、审计 payload 或前端返回。
 - Goose migration、Atlas schema、sqlc query 必须按本仓现行模块闭环执行。
 - sqlc 生成后必须确认没有旧对话栈对象名回流。
@@ -257,9 +266,9 @@
 ### Slice 0：契约与门禁准备
 
 - [ ] 将本计划评审到 `准备就绪`。
-- [ ] 更新 `chat-surface-clean` 为精确反回流门禁：允许新主线 `/app/cubebox`、`/internal/cubebox`、`modules/cubebox` 和后续明确批准的新 CubeBox 对象，继续阻断旧 `assistant`、LibreChat、`/app/assistant`、`/internal/assistant`、`/assistant-ui`、旧表名和旧错误码。
+- [ ] 更新 `chat-surface-clean` 为精确反回流门禁：允许新主线 `/internal/cubebox`、`modules/cubebox` 和后续明确批准的新 CubeBox 对象，继续阻断旧 `assistant`、LibreChat、`/app/assistant`、`/internal/assistant`、`/assistant-ui`、旧表名和旧错误码。
 - [ ] 新增 readiness 记录入口，登记每个切片的命令、证据和残留命中解释。
-- [ ] 冻结 `431`、`433`、`434`、`435` 的上游 `commit SHA`、文件级映射表、采用状态与 stopline；未完成前不得进入对应切片实现。
+- [ ] 冻结 `431`、`433`、`434`、`435` 的上游 `commit SHA`、文件级映射表、采用状态与 stopline；`PR-437A` 只要求补齐首轮会消费的最小冻结集，详见 `DEV-PLAN-437` 与 `DEV-PLAN-437A`。
 - [ ] 冻结首期暂缓项：fallback/failover、quota、route alias、default model 只允许进入上游评估与后续预留，不得进入首期验收。
 - [ ] 冻结 CubeBox 工具调用权限原则：CubeBox 不是独立授权主体，查询/写入按当前用户权限执行；写入只需用户显式确认，并走现有业务模块 One Door、事务、RLS、Authz 和审计。
 
@@ -269,24 +278,24 @@
 - [ ] 在 Web Shell 新增右侧悬挂抽屉与入口图标。
 - [ ] 用 React/MUI 实现抽屉开关、响应式布局、主题变量、空状态、会话列表占位和输入框；不得直接移植 Codex Rust TUI 渲染层。
 - [ ] 重构 Codex thread history builder 思路，建立 CubeBox 前端 timeline reducer。
-- [ ] 建立首期 UI 事件契约：conversation、turn、message delta、context item、compact、token usage、error、interrupt、complete。
+- [ ] 建立首期 UI 事件契约：conversation、turn、message delta、context item、compact、error、interrupt、complete；`token usage` 事件后移，不作为首期前置。
 - [ ] 增加前端状态持久化，但不保存密钥或敏感上下文。
 - [ ] 由 `DEV-PLAN-431` 持有抽屉打开/关闭、active conversation UI 恢复、slash command 入口与第二主链防漂移；会话 lifecycle contract 不在本切片重复裁决。
 - [ ] 补组件测试和基础 E2E：打开、关闭、恢复 UI 状态；会话恢复/归档正确性由 `DEV-PLAN-432` 承接。
 
 ### Slice 2：AI 网关最小闭环
 
-- [ ] 按 `DEV-PLAN-433` 先完成 Bifrost 资产评估与复用/重构清单冻结，不从零自研平行网关。
-- [ ] 以 Bifrost 为主参考，结合 Codex provider adapter / bridge / stream parser，建立 provider adapter 接口与一个 OpenAI-compatible provider；其他供应商不进入首期闭环。
-- [ ] 以 Bifrost 为主参考实现服务端模型配置读取、密钥解密、请求映射、SSE 转发与错误映射；fallback 不在当前交付范围。
-- [ ] 以 Bifrost 的 health/readiness 思路实现显式连通性验证与基础健康检查。
-- [ ] 以 Bifrost/Codex 的 telemetry、stream lifecycle 和测试样式为主参考，实现调用前同事务写入 `request-start` / `usage-intent` / `audit-start`，流式完成后更新 final 状态；异步只补非关键指标或通过 outbox 重试 final 更新。
-- [ ] 补 handler、service、adapter 单元测试、流式响应测试和错误路径测试。
+- [x] 按 `DEV-PLAN-433` 先完成 Bifrost 资产评估与复用/重构清单冻结，不从零自研平行网关。
+- [x] 以 Bifrost 为主参考，结合 Codex provider adapter / bridge / stream parser，建立 provider adapter 接口与一个 OpenAI-compatible provider；其他供应商不进入首期闭环。
+- [x] 以 Bifrost 为主参考实现服务端模型配置读取、密钥解密、请求映射、SSE 转发与错误映射；fallback 不在当前交付范围。
+- [x] 以 Bifrost 的 health/readiness 思路实现显式连通性验证与基础健康检查。
+- [x] 以 Bifrost/Codex 的 telemetry、stream lifecycle 和测试样式为主参考，先完成 canonical event 内的最小 lifecycle telemetry 与 final 语义收口；`request-start` / `usage-intent` / `audit-start` 持久化为长期目标，`outbox` 不在本轮实施范围。
+- [x] 补 handler、service、adapter 单元测试、流式响应测试和错误路径测试。
 
 ### Slice 3：会话持久化
 
 - [ ] 按 `DEV-PLAN-432` 先完成 Codex append-only history、session index、archive/resume、rollout/reconstruction 语义复用/重构评估。
-- [ ] 新增 conversation、message、summary、usage event 的 schema 和 sqlc。
+- [ ] 新增 conversation、message、summary 的 schema 和 sqlc；`usage_event` 数据面暂停实施，不作为本轮 Slice 3 前置。
 - [ ] 实现新建、读取、列出、恢复、归档会话；生命周期语义优先对齐 Codex thread list/read/resume/archive。
 - [ ] 实现消息落库、流式回复完成后的最终状态固化；原始消息必须 append-only，不因压缩被覆盖。
 - [ ] 补租户隔离、权限、RLS、并发和错误路径测试。
@@ -294,14 +303,18 @@
 
 ### Slice 4：上下文管理与压缩
 
-- [ ] 按 `DEV-PLAN-434` 先完成 Codex 上下文管理与 compaction 复用/重构评估，不从零自研同类机制。
-- [ ] 重构 Codex token estimator、auto compact threshold、manual compact、replacement history、summary prefix 与 canonical context reinjection 思路。
-- [ ] 将 Codex 活跃 history replacement 改造为 CubeBox prompt view replacement，数据库原始消息保持 append-only。
-- [ ] 实现 prompt builder 的固定顺序和结构化状态对象。
-- [ ] 实现摘要压缩任务，首期固定使用当前 active model 执行 compaction，不引入独立 summary model。
-- [ ] 实现工具输出压缩和最近回合原文保留。
-- [ ] 补纯函数测试、压缩边界测试、摘要不丢关键事实测试，以及 Codex 移植点的 prompt shape 快照测试。
-- [ ] `/compact`、auto compact、manual compact 的语义、触发器、执行链与验收由 `DEV-PLAN-434` 持有；`DEV-PLAN-431` 只承接 composer 命令入口与状态提示。
+- [x] 按 `DEV-PLAN-434` 完成 Codex 上下文管理与 compaction 复用/重构评估，不从零自研同类机制。
+- [x] 已按首期范围重构 Codex token estimator、auto compact threshold、manual compact、replacement history、summary prefix 与 canonical context reinjection 思路。
+- [x] 已将 Codex 活跃 history replacement 改造为 CubeBox prompt view replacement，数据库原始消息继续保持 append-only。
+- [x] 已实现 prompt builder 的固定顺序和结构化状态对象。
+- [x] 已实现摘要压缩任务，首期固定使用当前 active model 执行 compaction，不引入独立 summary model。
+- [x] 已按首期范围实现最近回合原文保留；工具输出压缩的更大范围治理继续后移。
+- [x] 已补纯函数测试、压缩边界测试、摘要不丢关键事实测试，以及以 fixture / snapshot 承担 golden 等价物的 prompt shape 快照测试。
+- [x] `/compact`、auto compact、manual compact` 的语义、触发器、执行链与验收已由 `DEV-PLAN-434` 持有；`DEV-PLAN-431` 只承接 composer 命令入口与状态提示。
+- 当前备注（`2026-04-22`）：
+  - `PR-437D` 已具备正式封板条件，最小闭环包括 manual compact、pre-turn auto compact、canonical context reinjection、prompt view replacement、`/compact` UI 入口与压缩后恢复链路。
+  - 本轮实现级收口已补齐：no-op compaction 不再伪造 compact event / 空摘要项，compaction 序号推进已收敛为单事务安全，不再因并发 compact 抢占 `sequence` 而阻断正常请求。
+  - mid-turn compact、remote compaction、model downshift compact、真实 tokenizer 校准与更大范围工具输出压缩仍按 `434` 计划后移，不阻断当前 `Phase D` 封板。
 
 ### Slice 5：模型配置 UI 与管理权限
 
@@ -316,10 +329,14 @@
 
 - [ ] 执行 Go、前端、routing、authz、i18n、doc、markdown、E2E 与 preflight。
 - [ ] readiness 记录用户可见闭环、流式回复、会话恢复、上下文压缩、密钥不出前端和旧对话栈无回流证据。
+- 当前备注（`2026-04-22`）：
+  - `Phase C` 与 `Phase D` 均已在 `DEV-PLAN-437-READINESS` 中回填为“已具备正式封板条件”。
+  - `Phase D` 当前已回填的验证命令包括 `go test ./modules/cubebox ./internal/server`、`pnpm -C apps/web exec vitest run src/pages/cubebox/api.test.ts src/pages/cubebox/reducer.test.ts src/pages/cubebox/CubeBoxProvider.test.tsx src/pages/cubebox/CubeBoxPanel.test.tsx src/pages/cubebox/CubeBoxPanel.restore.test.tsx`、`make check routing`、`make authz-test`、`make check doc`、`make check chat-surface-clean`。
+  - `make preflight` 保留为发 PR 前统一对齐动作，不作为本轮仅文档封板收口的新增阻断前置。
 
 ## 11. 测试与覆盖率
 
-- Go 单元测试覆盖 provider adapter、prompt builder、token budget、summary compaction、error mapping、credential masking、request-start/final/outbox 状态推进。
+- Go 单元测试覆盖 provider adapter、prompt builder、token budget、summary compaction、error mapping、credential masking，以及最小 lifecycle telemetry/final 语义推进。
 - 服务层测试覆盖租户隔离、权限失败、模型不可用、SSE 中断与错误映射。
 - 前端测试覆盖抽屉开关、输入、停止生成、会话恢复、配置表单、错误提示。
 - E2E 覆盖最小用户闭环：配置模型 -> 打开抽屉 -> 新建会话 -> 流式回复 -> 关闭重开 -> 恢复会话。

@@ -29,6 +29,9 @@ entrypoints:
       - path: /app/approvals
         methods: [GET]
         route_class: ui
+      - path: /app/cubebox
+        methods: [GET]
+        route_class: ui
       - path: /app/login
         methods: [GET]
         route_class: ui
@@ -129,6 +132,42 @@ entrypoints:
         methods: [POST]
         route_class: internal_api
       - path: /org/api/org-units/set-business-unit
+        methods: [POST]
+        route_class: internal_api
+      - path: /internal/cubebox/conversations
+        methods: [GET, POST]
+        route_class: internal_api
+      - path: /internal/cubebox/conversations/{conversation_id}
+        methods: [GET, PATCH]
+        route_class: internal_api
+      - path: /internal/cubebox/conversations/{conversation_id}:compact
+        methods: [POST]
+        route_class: internal_api
+      - path: /internal/cubebox/turns:stream
+        methods: [POST]
+        route_class: internal_api
+      - path: /internal/cubebox/turns/{turn_id}:interrupt
+        methods: [POST]
+        route_class: internal_api
+      - path: /internal/cubebox/capabilities
+        methods: [GET]
+        route_class: internal_api
+      - path: /internal/cubebox/settings
+        methods: [GET]
+        route_class: internal_api
+      - path: /internal/cubebox/settings/providers
+        methods: [POST]
+        route_class: internal_api
+      - path: /internal/cubebox/settings/credentials
+        methods: [POST]
+        route_class: internal_api
+      - path: /internal/cubebox/settings/credentials/{credential_id}:deactivate
+        methods: [POST]
+        route_class: internal_api
+      - path: /internal/cubebox/settings/selection
+        methods: [POST]
+        route_class: internal_api
+      - path: /internal/cubebox/settings/verify
         methods: [POST]
         route_class: internal_api
   superadmin:

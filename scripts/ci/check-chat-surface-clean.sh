@@ -3,6 +3,11 @@ set -euo pipefail
 
 prefix="[chat-surface-clean]"
 
+approved_new_surface_paths=(
+  '/internal/cubebox'
+  'modules/cubebox'
+)
+
 patterns=(
   '/app/assistant'
   '/internal/assistant'
@@ -72,6 +77,8 @@ ignore_globs=(
   '--glob' '!docs/dev-plans/434-codex-context-management-and-compaction-reuse-plan.md'
   '--glob' '!docs/dev-plans/435-bifrost-centric-model-config-ui-and-admin-governance-plan.md'
   '--glob' '!docs/dev-plans/436-cubebox-historical-surface-hard-delete-plan.md'
+  '--glob' '!docs/dev-plans/437-cubebox-implementation-roadmap-for-fast-start.md'
+  '--glob' '!docs/dev-plans/437a-cubebox-phase-a-canonical-conversation-contract.md'
   '--glob' '!scripts/ci/check-chat-surface-clean.sh'
 )
 
@@ -95,11 +102,17 @@ done
 doc_record_args+=(
   '--glob' '!docs/archive/**'
   '--glob' '!docs/dev-records/DEV-PLAN-436-READINESS.md'
+  '--glob' '!docs/dev-records/DEV-PLAN-437-READINESS.md'
 )
 
 if rg -n -i "${doc_record_args[@]}" docs/dev-records; then
   echo "${prefix} FAIL: detected legacy chat surface residue in active dev-records" >&2
   exit 1
 fi
+
+echo "${prefix} approved new surface paths:"
+for path in "${approved_new_surface_paths[@]}"; do
+  echo "  - ${path}"
+done
 
 echo "${prefix} OK"
