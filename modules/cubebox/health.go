@@ -69,7 +69,7 @@ func (s *ModelVerificationService) VerifyActiveModel(ctx context.Context, tenant
 		Messages: []PromptItem{
 			{Role: "user", Content: "health check"},
 		},
-		Input:   "health check",
+		Input: "health check",
 	})
 	if err != nil {
 		status, summary := verifyStatusAndSummary(err)
