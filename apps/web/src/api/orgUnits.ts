@@ -436,11 +436,6 @@ export interface OrgUnitTenantFieldConfig {
   updated_at: string
   allow_filter?: boolean
   allow_sort?: boolean
-  maintainable?: boolean
-  default_mode?: 'NONE' | 'CEL'
-  default_rule_expr?: string | null
-  policy_scope_type?: string
-  policy_scope_key?: string
 }
 
 export interface OrgUnitFieldConfigsResponse {

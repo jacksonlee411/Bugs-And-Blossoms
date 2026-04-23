@@ -259,6 +259,17 @@ func TestKnownErrorMessage_AllCases(t *testing.T) {
 			}
 		})
 	}
+
+	t.Run("ai reply codes stay mapped", func(t *testing.T) {
+		t.Parallel()
+
+		if got := knownErrorMessage("ai_reply_model_target_mismatch"); got == "" {
+			t.Fatal("missing ai_reply_model_target_mismatch message")
+		}
+		if got := knownErrorMessage("ai_reply_render_failed"); got == "" {
+			t.Fatal("missing ai_reply_render_failed message")
+		}
+	})
 }
 
 func TestHumanizeErrorCode_Branches(t *testing.T) {

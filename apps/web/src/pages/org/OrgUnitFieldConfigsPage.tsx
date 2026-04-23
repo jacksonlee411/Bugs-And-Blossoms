@@ -57,11 +57,6 @@ interface FieldConfigRow {
   enabledOn: string
   disabledOn: string | null
   updatedAt: string
-  maintainable: boolean
-  defaultMode: 'NONE' | 'CEL'
-  defaultRuleExpr: string
-  policyScopeType: string
-  policyScopeKey: string
   state: RowState
 }
 
@@ -314,24 +309,6 @@ function normalizeFieldClass(value: string | undefined): 'CORE' | 'EXT' {
   return normalized === 'CORE' ? 'CORE' : 'EXT'
 }
 
-function normalizeFieldPolicyScopeType(value: string | undefined): string {
-  const normalized = (value ?? '').trim().toUpperCase()
-  if (normalized === 'FORM' || normalized === 'GLOBAL') {
-    return normalized
-  }
-  return 'SYSTEM_DEFAULT'
-}
-
-function formatDefaultPolicySummary(row: FieldConfigRow): string {
-  if (row.defaultMode === 'CEL') {
-    if (row.defaultRuleExpr.length > 0) {
-      return `CEL: ${row.defaultRuleExpr}`
-    }
-    return 'CEL'
-  }
-  return '-'
-}
-
 const customPlainValueTypeFallback: OrgUnitExtValueType[] = ['text', 'int', 'uuid', 'bool', 'date', 'numeric']
 
 export function OrgUnitFieldConfigsPage() {
@@ -472,11 +449,6 @@ export function OrgUnitFieldConfigsPage() {
         enabledOn: cfg.enabled_on,
         disabledOn: cfg.disabled_on,
         updatedAt: cfg.updated_at,
-        maintainable: cfg.maintainable !== false,
-        defaultMode: String(cfg.default_mode ?? 'NONE').toUpperCase() === 'CEL' ? 'CEL' : 'NONE',
-        defaultRuleExpr: (cfg.default_rule_expr ?? '').trim(),
-        policyScopeType: normalizeFieldPolicyScopeType(cfg.policy_scope_type),
-        policyScopeKey: (cfg.policy_scope_key ?? '').trim(),
         state: toRowState(cfg, asOf)
       }
     })
@@ -608,35 +580,6 @@ export function OrgUnitFieldConfigsPage() {
             </Typography>
           )
         }
-      },
-      {
-        field: 'maintainable',
-        headerName: t('org_field_configs_column_maintainable'),
-        minWidth: 120,
-        flex: 0.7,
-        renderCell: (params) => (params.row.maintainable ? t('common_yes') : t('common_no'))
-      },
-      {
-        field: 'defaultMode',
-        headerName: t('org_field_configs_column_default_value'),
-        minWidth: 260,
-        flex: 1.2,
-        sortable: false,
-        renderCell: (params) => {
-          return (
-            <Typography component='span' sx={{ fontFamily: 'monospace', fontSize: 12 }}>
-              {formatDefaultPolicySummary(params.row)}
-            </Typography>
-          )
-        }
-      },
-      {
-        field: 'policyScope',
-        headerName: t('org_field_configs_column_policy_scope'),
-        minWidth: 210,
-        flex: 1,
-        sortable: false,
-        renderCell: (params) => `${params.row.policyScopeType}:${params.row.policyScopeKey || '-'}`
       },
       {
         field: 'state',
@@ -1256,13 +1199,6 @@ export function OrgUnitFieldConfigsPage() {
               </Typography>
               <Typography variant='body2'>
                 {t('org_field_configs_column_enabled_on')}: <code>{viewRow.enabledOn}</code> · {t('org_field_configs_column_disabled_on')}: <code>{viewRow.disabledOn ?? '-'}</code>
-              </Typography>
-              <Typography variant='body2'>
-                {t('org_field_configs_column_maintainable')}: <code>{viewRow.maintainable ? 'true' : 'false'}</code> · {t('org_field_configs_column_default_value')}:{' '}
-                <code>{formatDefaultPolicySummary(viewRow)}</code>
-              </Typography>
-              <Typography variant='body2'>
-                {t('org_field_configs_column_policy_scope')}: <code>{viewRow.policyScopeType}:{viewRow.policyScopeKey || '-'}</code>
               </Typography>
               <Typography variant='body2'>
                 {t('org_field_configs_column_data_source_config')}:

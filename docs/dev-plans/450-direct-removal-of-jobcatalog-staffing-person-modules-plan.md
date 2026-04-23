@@ -195,7 +195,7 @@
 12. [ ] `internal/server/handler.go` 中三模块默认装配、API 注册、`/internal/capabilities/**`、`/internal/policies/**`、`/internal/functional-areas/**` 路由
 13. [ ] `apps/web/src/router/**`、`apps/web/src/navigation/**`、`apps/web/src/errors/**` 中三模块路由、导航、permissionKey、错误映射
 14. [ ] `pkg/authz/registry.go` 中 `jobcatalog.catalog`、`person.persons`、`staffing.positions`、`staffing.assignments` 对象常量
-15. [ ] `orgunit` 中 `capability_key`、`policy_version`、`effective_policy_version`、`functional_area` 相关返回字段与校验逻辑
+15. [X] `orgunit` 中 `capability_key`、`policy_version`、`effective_policy_version`、`functional_area` 相关返回字段与校验逻辑
 
 ### 4.2 必删数据库对象
 
@@ -248,7 +248,7 @@
 
 ### 4.6 orgunit 保留边界与 capability 删除替代策略
 
-1. [ ] `orgunit` 页面与 API 保留，但不得再对外暴露 `capability_key`、`baseline_capability_key`、`policy_version`、`effective_policy_version` 等 capability 治理字段
+1. [X] `orgunit` 页面与 API 保留，但不得再对外暴露 `capability_key`、`baseline_capability_key`、`policy_version`、`effective_policy_version` 等 capability 治理字段
 2. [ ] `orgunit` 创建/写入字段策略如需保留，必须内收为 `orgunit` 模块内静态规则或模块内 service；不得继续调用 `resolveCapabilityContext`、`evaluateFunctionalAreaGate`、`resolveOrgUnitEffectivePolicyVersion`
 3. [ ] `/internal/capabilities/**`、`/internal/policies/**`、`/internal/functional-areas/**` 删除后，`orgunit` 不得通过隐藏依赖或兼容 DTO 继续消费这些能力
 4. [ ] 若某个 `orgunit` 交互当前必须依赖 capability 才能成立，实施必须先做解耦 PR；在解耦完成前，不得把 capability runtime 留作空壳

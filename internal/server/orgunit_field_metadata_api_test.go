@@ -61,6 +61,16 @@ func (dictListErrStore) ListDicts(context.Context, string, string) ([]DictItem, 
 	return nil, errors.New("boom")
 }
 
+type dictListErrResolver struct{}
+
+func (dictListErrResolver) ResolveValueLabel(context.Context, string, string, string, string) (string, bool, error) {
+	return "", false, nil
+}
+
+func (dictListErrResolver) ListOptions(context.Context, string, string, string, string, int) ([]dictpkg.Option, error) {
+	return nil, errors.New("boom")
+}
+
 func TestHandleOrgUnitFieldDefinitionsAPI(t *testing.T) {
 	t.Run("method not allowed", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodPost, "/org/api/org-units/field-definitions", nil)
@@ -1133,9 +1143,6 @@ func TestHandleOrgUnitFieldOptionsAPI(t *testing.T) {
 				continue
 			}
 			found = true
-			if item.DefaultMode != "NONE" || item.DefaultRuleExpr != nil {
-				t.Fatalf("unexpected resolved policy=%+v", item)
-			}
 		}
 		if !found {
 			t.Fatalf("unexpected items=%+v", body.FieldConfigs)
@@ -1840,6 +1847,34 @@ func TestHandleOrgUnitFieldOptionsAPI_MoreBranches(t *testing.T) {
 			cfg:          orgUnitTenantFieldConfig{FieldKey: "d_org_type", DataSourceType: "DICT", DataSourceConfig: json.RawMessage(`{"dict_code":"org_type"}`)},
 		}
 		req := httptest.NewRequest(http.MethodGet, "/org/api/org-units/fields:options?as_of=2026-01-01&field_key=d_org_type", nil)
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
+		rec := httptest.NewRecorder()
+		handleOrgUnitFieldOptionsAPI(rec, req, store)
+		if rec.Code != http.StatusInternalServerError {
+			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+		}
+	})
+
+	t.Run("dict list error => 500", func(t *testing.T) {
+		if err := dictpkg.RegisterResolver(dictListErrResolver{}); err != nil {
+			t.Fatalf("register err=%v", err)
+		}
+		t.Cleanup(func() {
+			_ = dictpkg.RegisterResolver(newDictMemoryStore())
+		})
+
+		store := orgUnitStoreWithEnabledFieldConfig{
+			OrgUnitStore: newOrgUnitMemoryStore(),
+			cfg: orgUnitTenantFieldConfig{
+				FieldKey:         "org_type",
+				ValueType:        "text",
+				DataSourceType:   "DICT",
+				DataSourceConfig: json.RawMessage(`{"dict_code":"org_type"}`),
+			},
+			ok: true,
+		}
+
+		req := httptest.NewRequest(http.MethodGet, "/org/api/org-units/fields:options?as_of=2026-01-01&field_key=org_type", nil)
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
 		handleOrgUnitFieldOptionsAPI(rec, req, store)

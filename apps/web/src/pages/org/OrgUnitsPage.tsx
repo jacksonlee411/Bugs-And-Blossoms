@@ -425,12 +425,6 @@ export function OrgUnitsPage() {
         case 'policy_conflict_ambiguous':
         case 'FIELD_POLICY_CONFLICT':
           return t('org_field_policy_error_FIELD_POLICY_CONFLICT')
-        case 'policy_version_required':
-        case 'FIELD_POLICY_VERSION_REQUIRED':
-          return t('org_field_policy_error_FIELD_POLICY_VERSION_REQUIRED')
-        case 'policy_version_conflict':
-        case 'FIELD_POLICY_VERSION_STALE':
-          return t('org_field_policy_error_FIELD_POLICY_VERSION_STALE')
         case 'ORG_CODE_EXHAUSTED':
           return t('org_field_policy_error_ORG_CODE_EXHAUSTED')
         case 'ORG_CODE_CONFLICT':

@@ -141,9 +141,6 @@ describe('OrgUnitFieldConfigsPage', () => {
           org_field_configs_column_value_type: 'Value Type',
           org_field_configs_column_data_source_type: 'Data Source Type',
           org_field_configs_column_data_source_config: 'Data Source Config',
-          org_field_configs_column_maintainable: 'Maintainable',
-          org_field_configs_column_default_value: 'Default Value',
-          org_field_configs_column_policy_scope: 'Policy Scope',
           org_field_configs_column_enabled_on: 'Enabled On',
           org_field_configs_column_disabled_on: 'Disabled On',
           org_field_configs_column_physical_col: 'Physical Col',
@@ -178,12 +175,7 @@ describe('OrgUnitFieldConfigsPage', () => {
           physical_col: 'ext_text_01',
           enabled_on: '2026-04-01',
           disabled_on: null,
-          updated_at: '2026-04-08T00:00:00Z',
-          maintainable: true,
-          default_mode: 'NONE',
-          default_rule_expr: '',
-          policy_scope_type: 'FORM',
-          policy_scope_key: 'orgunit.create_dialog'
+          updated_at: '2026-04-08T00:00:00Z'
         }
       ]
     })

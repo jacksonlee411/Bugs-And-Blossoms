@@ -125,14 +125,14 @@
 - 删除死分支时，必须满足：① 能说明不可达原因；② 删除后不改变对外契约；③ 相关测试与文档同步更新。
 - 未经用户明确批准，不得通过降低阈值、扩大 coverage 排除项、缩小统计范围来替代“删死分支/补测试”。
 
-### 3.10 测试设计原则（DEV-PLAN-300/301）
+### 3.10 测试设计原则（DEV-PLAN-300/301/304）
 
-- 测试设计与新增测试文件前，必须先对齐 `docs/dev-plans/300-test-system-investigation-report.md` 与 `docs/archive/dev-plans/301-go-test-layering-and-best-practices-remediation-plan.md`；其中 `300` 是测试问题基线，`301` 作为首轮分层整改历史方案来源。
+- 测试设计与新增测试文件前，必须先对齐 `docs/dev-plans/300-test-system-investigation-report.md`、`docs/archive/dev-plans/301-go-test-layering-and-best-practices-remediation-plan.md` 与 `docs/dev-plans/304-test-asset-tiering-and-remediation-plan.md`；其中 `300` 是测试问题基线，`301` 作为首轮分层整改历史方案来源，`304` 作为当前测试资产分级治理与收敛 owner。
 - 严禁继续以 `*_coverage_test.go`、`*_gap_test.go`、`*_more_test.go`、`*_extra_test.go` 一类“补洞式”命名追加同质测试；新增测试应围绕稳定职责、明确场景与子测试组织，而不是围绕 coverage 缺口堆文件。
 - 优先补“最小而稳定”的直接测试：纯函数、解析/归一化链路、错误映射、默认值策略、边界日期/空值/非法输入；先把职责拆小、把逻辑做纯，再补测试，不要把复杂装配硬塞进测试里。
 - Go 测试分层遵循 `DEV-PLAN-301` 的历史收敛口径：`pkg/**` 优先承载纯函数与工具层边界测试，`modules/*/services` 优先承载业务规则与默认值策略测试，`internal/server` 只保留路由、协议解析、错误映射、租户/鉴权/RLS 适配与跨模块编排测试。
 - 对导出边界、纯函数、解析器、validator，优先考虑黑盒测试（`package xxx_test`）；只有在验证未导出不变量或明确内部状态推进时，才保留白盒测试，并需能说明理由。
-- 并行、`t.Setenv`、fuzz、benchmark 的使用必须遵循 `DEV-PLAN-300/301` 引用的 Go 官方实践：仅在隔离成立时启用并行；修改环境变量或全局状态的测试不得与 parallel 混用；对开放输入空间的解析/归一化路径优先评估 fuzz；仅对热点纯函数补 benchmark。
+- 并行、`t.Setenv`、fuzz、benchmark 的使用必须遵循 `DEV-PLAN-300/301/304` 收敛后的 Go 官方实践：仅在隔离成立时启用并行；修改环境变量或全局状态的测试不得与 parallel 混用；对开放输入空间的解析/归一化路径优先评估 fuzz；仅对热点纯函数补 benchmark。
 - 前端测试同样遵循“职责下沉、最小边界、避免补洞式堆叠”的原则：优先测试可提纯的小函数、小状态机、小转换器；仅在纯函数无法覆盖关键用户行为时，再增加页面级交互测试。
 
 ### 3.11 缓存默认方案与外部依赖准入
@@ -364,6 +364,7 @@ modules/{module}/
 - DEV-PLAN-302【归档 / 历史来源】：`internal/server` 残留 `gap/coverage` 测试文件收口计划（首轮尾项清零历史方案）：`docs/archive/dev-plans/302-internal-server-residual-gap-coverage-closure-plan.md`
 - DEV-PLAN-330【归档 / 历史来源】：策略模块架构混乱调查与收口方案（旧策略模块历史架构调查入口；现行残余清理以 `DEV-PLAN-441`、SetID 根删除以 `DEV-PLAN-440`、三模块/Capability 主链删除以 `DEV-PLAN-450` 为准）：`docs/archive/dev-plans/330-strategy-module-architecture-and-design-convergence-plan.md`
 - DEV-PLAN-303：全仓残留 `gap/coverage` 测试尾项清零计划：`docs/dev-plans/303-repo-final-gap-coverage-test-tail-closure-plan.md`
+- DEV-PLAN-304：全仓测试资产分级治理与高信号回归收敛方案：`docs/dev-plans/304-test-asset-tiering-and-remediation-plan.md`
 - DEV-PLAN-310：全项目 view/as_of 时间语义专项检视与最小收敛方案：`docs/dev-plans/310-project-wide-view-as-of-semantics-review-and-minimal-convergence-plan.md`
 - DEV-PLAN-311【归档 / 历史来源】：View As Of 页面改造矩阵与 OrgUnitDetails 样板实施计划（含已删除页面的历史矩阵；现行页面边界以当前活体模块为准）：`docs/archive/dev-plans/311-view-as-of-page-cutover-matrix-and-orgunit-details-sample-plan.md`
 - DEV-PLAN-312：View As Of 收口实施计划——详情页单历史锚点与 A 类页面读写解耦：`docs/dev-plans/312-view-as-of-implementation-plan-details-single-history-anchor-and-a-pages-read-write-decoupling.md`
