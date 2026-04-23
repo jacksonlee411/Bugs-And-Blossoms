@@ -111,6 +111,29 @@
 
 代码层不持有模块知识本身。
 
+### 3.4 执行注册层的正式边界
+
+本计划中的执行注册层，只是 `api_key -> executor` 的受控映射层，不是第二套业务实现。
+
+执行注册层只允许承担：
+
+- 白名单注册：声明哪些 `api_key` 允许进入执行面
+- 参数收口：把模型输出的 `params` 校验为受控输入
+- 顺序调度：按 `steps[]` 顺序调用现有只读 API
+- 结果转交：把原始结果交给结果解释阶段
+
+执行注册层不得承担：
+
+- 重新实现模块业务查询逻辑
+- 直接查询数据库、投影表、内部 SQL 函数或 store
+- 重新发明一套 AI 专用读 DTO、权限模型或错误语义
+- 脱离现有业务模块读链路形成第二读事实源
+
+判定标准冻结为：
+
+- 若移除执行注册层后，现有模块读能力仍完整存在且对外行为不变，则执行注册层只是受控分发层。
+- 若移除执行注册层后，查询能力本身不再成立，则说明该层已经承载了第二套实现，本计划不允许这种设计。
+
 ## 4. 知识包目录与加载规则
 
 ### 4.1 模块级目录规范
@@ -274,7 +297,8 @@ modules/orgunit/presentation/cubebox/
 2. 模型不能直接指定数据库、SQL、内部表、内部函数或未登记的执行器。
 3. 模型不能在 `params` 中注入当前用户无权访问的对象。
 4. `apis.md` 只能帮助模型理解允许的查询面，不能替代代码中的执行注册表。
-5. 当 `ReadPlan` 校验失败时，必须 fail-closed，不得退化成自由查询。
+5. 执行注册层只能做受控映射、参数收口和顺序调度，不得重新实现模块查询逻辑。
+6. 当 `ReadPlan` 校验失败时，必须 fail-closed，不得退化成自由查询。
 
 ## 8. 首批样板：`orgunit`
 
@@ -335,6 +359,7 @@ modules/orgunit/presentation/cubebox/
 - [ ] `ReadPlan` 首期支持一个问题下的线性多步只读编排，但不引入图状执行、并发分叉或通用 workflow engine。
 - [ ] `ReadPlan` 执行只能复用现有只读 API，不能直查数据库或形成第二读事实源。
 - [ ] `apis.md` 只是 prompt-facing 说明，运行时唯一执行事实源仍是代码中的 `api_key -> executor` 注册表。
+- [ ] 执行注册层删去后，现有模块只读能力本身仍成立；该层只承担受控映射、参数收口和顺序调度，而不是第二套实现。
 - [ ] `orgunit` 首批样板能跑通最小查询闭环。
 - [ ] 查询失败语义清晰，覆盖 `knowledge_pack_invalid` 与 `api_catalog_drift_or_executor_missing`，且不以模型猜测替代真实系统结果。
 
@@ -345,12 +370,149 @@ modules/orgunit/presentation/cubebox/
 - 不得把知识包做成第二套 API 或权限系统
 - 不得让模型直接拼 SQL、直读内部表或调用未登记执行器
 - 不得让知识包直接决定可执行面；执行面只能由代码中的 `api_key -> executor` 注册表冻结
+- 不得让执行注册层重新承载模块查询逻辑、数据库访问、AI 专用 DTO、AI 专用权限判断或第二套错误体系
 - 不得一开始就引入通用 planner DSL、workflow engine 或大而全 tool registry
 - 不得把“支持多步查询”膨胀成 DAG 编排、并发 fan-out/fan-in、动态工具发现或通用任务图框架
 - 不得在 `461` 首期冻结租户级覆盖目录路径、存储面或发布面
 - 不得把知识包膨胀成重型固定模板，导致维护和演化成本过高
 
-## 12. 关联文档
+## 12. 实施步骤与进展跟踪
+
+以下步骤用于后续实施排期、PR 拆分和 readiness 跟踪。首期按“先骨架、后样板、再联调”的顺序推进；每一步都必须保持可验证、可回退、可审查。
+
+### 12.1 Step 1：冻结 `orgunit` 模块级知识包样板
+
+- [ ] 在 `modules/orgunit/presentation/cubebox/` 下创建 `CUBEBOX-SKILL.md`、`queries.md`、`apis.md`、`examples.md`
+- [ ] 只覆盖 `orgunit.details`、`orgunit.list`、`orgunit.search`、`orgunit.audit`
+- [ ] `apis.md` 中的 `api_key` 命名与后续代码注册表保持一一对应
+- [ ] 不引入租户级覆盖目录、租户级发布机制或额外知识运行时
+
+交付结果：
+
+- 仓库内存在首批模块级知识包实物
+- reviewer 可以直接阅读 Markdown 知识包理解首期查询面
+
+### 12.2 Step 2：实现 `ReadPlan` 最小契约与校验器
+
+- [ ] 在 `modules/cubebox` 冻结 `ReadPlan` 类型与 `steps[]` 最小 schema
+- [ ] 实现结构化解析与 fail-closed 校验
+- [ ] 对非法知识包或非法计划返回受控失败，不退化为自由查询
+- [ ] 明确支持线性多步只读编排，不支持 DAG、并发分叉或动态工具发现
+
+交付结果：
+
+- 运行时能够稳定接收和校验结构化 `ReadPlan`
+- 非法输入会命中明确失败语义，而不是进入执行面
+
+### 12.3 Step 3：实现 `api_key -> executor` 执行注册层
+
+- [ ] 在 `modules/cubebox` 增加受控执行注册表
+- [ ] 每个 `api_key` 只映射到现有模块只读能力
+- [ ] 注册层只承担白名单注册、参数收口和顺序调度
+- [ ] 不允许注册层直接查库、重写业务查询逻辑或形成第二读事实源
+
+交付结果：
+
+- 运行时存在唯一执行事实源
+- 未注册 `api_key` 会 fail-closed，并命中 `api_catalog_drift_or_executor_missing`
+
+### 12.4 Step 4：接入 `orgunit` 首批只读执行器
+
+- [ ] 为 `orgunit.details`、`orgunit.list`、`orgunit.search`、`orgunit.audit` 接入执行器
+- [ ] 执行器只复用现有 `orgunit` 读链路，不复制实现
+- [ ] 参数校验与上下文注入遵循当前用户、当前租户、当前 session 边界
+- [ ] 原始结果保持受控结构，交由结果解释阶段消费
+
+交付结果：
+
+- `orgunit` 成为 `461` 首个可跑通的模块样板
+- 删除执行注册层后，现有 `orgunit` 读能力本身不受影响
+
+### 12.5 Step 5：接入 `CubeBox` 查询主链
+
+- [ ] 在现有 `CubeBox` turn 主链中插入“知识包加载 -> `ReadPlan` 生成 -> 校验 -> 执行 -> 结果解释”路径
+- [ ] 保持当前对话 UI、会话持久化、权限与租户边界不变
+- [ ] 不把查询编排实现为第二套对话 runtime
+- [ ] 查询链路失败时走受控错误码与现有错误映射
+
+交付结果：
+
+- 用户可在现有 `CubeBox` 抽屉中触发知识包驱动查询
+- 查询执行链不破坏当前 `CubeBox` 会话主链
+
+### 12.6 Step 6：补齐错误语义、测试与 Readiness 证据
+
+- [ ] 接入 `knowledge_pack_invalid` 与 `api_catalog_drift_or_executor_missing`
+- [ ] 为知识包加载、`ReadPlan` 校验、执行注册表和 `orgunit` 样板补最小稳定测试
+- [ ] 记录首期实现范围、已接入 `api_key`、未覆盖能力与已知限制
+- [ ] 在对应 `docs/dev-records/` 中沉淀 readiness 证据
+
+交付结果：
+
+- 首期闭环具备可回归验证能力
+- 后续扩模块时有明确基线，不需要回头重判边界
+
+### 12.7 进展记录规则
+
+- 每完成一个步骤，更新本节对应 checklist 状态。
+- 每个步骤至少对应一个可审查 PR；不要把多个步骤揉成一次不可分审的大提交。
+- 若某一步实施中发现超出 `461` 当前边界的新问题，必须先更新 `docs/dev-plans/` 对应 owner 文档，再继续编码。
+- 若首期实现需要压缩范围，只允许删减样板覆盖面，不允许突破“知识包驱动 + 唯一执行注册表 + 复用现有读 API”三条主边界。
+
+### 12.8 建议 PR 切分
+
+为降低评审成本，首期建议按以下顺序拆分 PR。若实际实现中发现某两个 PR 高度耦合，可以合并，但不得跨越主边界。
+
+#### PR-1：知识包样板落地
+
+- 覆盖 Step 1
+- 新增 `modules/orgunit/presentation/cubebox/` 下的 4 个 Markdown 文件
+- 目标是把首批 `orgunit` 查询面冻结成可阅读、可评审的知识包实物
+- 本 PR 不引入任何运行时代码
+
+#### PR-2：`ReadPlan` 最小契约与校验器
+
+- 覆盖 Step 2
+- 在 `modules/cubebox` 增加 `ReadPlan` 类型、结构化解析和 fail-closed 校验
+- 接入最小失败语义，但暂不接模块执行器
+- 本 PR 不接数据库、不接 `orgunit` 读链路
+
+#### PR-3：执行注册层骨架
+
+- 覆盖 Step 3
+- 增加 `api_key -> executor` 注册表、执行器接口和线性多步调度骨架
+- 只冻结受控映射层，不引入第二套查询实现
+- 本 PR 可以使用 stub executor 验证主链，但不应复制任何真实业务查询逻辑
+
+#### PR-4：`orgunit` 首批执行器接入
+
+- 覆盖 Step 4
+- 把 `orgunit.details`、`orgunit.list`、`orgunit.search`、`orgunit.audit` 接入注册表
+- 执行器只复用现有 `orgunit` 读链路
+- 本 PR 重点审查“是否出现第二套实现”与“是否越过现有权限边界”
+
+#### PR-5：接入 `CubeBox` 查询主链
+
+- 覆盖 Step 5
+- 在现有 `CubeBox` turn 主链中接入知识包加载、`ReadPlan` 生成、校验、执行和结果解释
+- 保持当前会话、流式、租户和权限主链不被破坏
+- 本 PR 重点审查链路是否仍然单一、失败是否 fail-closed
+
+#### PR-6：错误语义、测试与 readiness 收口
+
+- 覆盖 Step 6
+- 接入 `knowledge_pack_invalid` 与 `api_catalog_drift_or_executor_missing`
+- 补最小稳定测试与 `docs/dev-records/` 证据
+- 本 PR 重点审查可回归性、错误提示和首期范围是否闭合
+
+#### 合并原则
+
+- `PR-1` 到 `PR-3` 解决“能否建立受控查询骨架”。
+- `PR-4` 到 `PR-5` 解决“首个模块样板能否接入并跑通”。
+- `PR-6` 负责把首期闭环收口到可验证状态。
+- 若时间或风险受限，允许在 `PR-4` 只先接一个 `api_key` 做最小样板，但必须在文档和 readiness 中显式记录缩范围结果。
+
+## 13. 关联文档
 
 - `docs/dev-plans/460-cubebox-digital-assistant-positioning-and-execution-contract.md`
 - `docs/dev-plans/430-cubebox-ide-conversation-assistant-rebuild-architecture-plan.md`
