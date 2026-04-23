@@ -79,7 +79,51 @@
 }
 ```
 
-## 示例 3：缺参追问
+## 示例 3：组织树默认值查询
+
+用户问法：
+
+`查询组织树`
+
+期望 `ReadPlan`：
+
+```json
+{
+  "intent": "orgunit.list",
+  "confidence": 0.88,
+  "missing_params": [],
+  "steps": [
+    {
+      "id": "step-1",
+      "api_key": "orgunit.list",
+      "params": {
+        "as_of": "2026-04-23",
+        "include_disabled": false
+      },
+      "result_focus": [
+        "as_of",
+        "org_units[].org_code",
+        "org_units[].name",
+        "org_units[].status",
+        "org_units[].has_children"
+      ],
+      "depends_on": []
+    }
+  ],
+  "explain_focus": [
+    "当前租户一级组织",
+    "状态",
+    "是否还有下级"
+  ]
+}
+```
+
+说明：
+
+- 本例默认按当前自然日查询
+- 本例未给 `parent_org_code`，表示先返回当前租户一级组织
+
+## 示例 4：缺参追问
 
 用户问法：
 
@@ -99,7 +143,7 @@
 }
 ```
 
-## 示例 4：多步只读编排
+## 示例 5：多步只读编排
 
 用户问法：
 

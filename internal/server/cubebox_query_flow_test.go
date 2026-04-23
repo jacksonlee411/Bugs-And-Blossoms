@@ -3,14 +3,88 @@ package server
 import (
 	"strings"
 	"testing"
+	"time"
 	"unicode/utf8"
 
 	"github.com/jacksonlee411/Bugs-And-Blossoms/modules/cubebox"
 )
 
+func TestNormalizeCubeboxReadPlanPromotesOrgUnitListClarificationToExecutableDefault(t *testing.T) {
+	plan := normalizeCubeboxReadPlan(cubebox.ReadPlan{
+		Intent:             "orgunit.list",
+		Confidence:         0.41,
+		MissingParams:      []string{"as_of", "parent_org_code"},
+		ClarifyingQuestion: "请告诉我要按哪一天查询组织树，以及是查一级组织还是某个 parent_org_code 下面的子组织。",
+	}, "查询组织树", time.Date(2026, 4, 23, 9, 0, 0, 0, time.UTC))
+
+	if len(plan.MissingParams) != 0 {
+		t.Fatalf("expected missing params cleared, got %+v", plan.MissingParams)
+	}
+	if len(plan.Steps) != 1 {
+		t.Fatalf("expected one step, got %+v", plan.Steps)
+	}
+	step := plan.Steps[0]
+	if step.APIKey != "orgunit.list" {
+		t.Fatalf("unexpected api key=%q", step.APIKey)
+	}
+	if got := step.Params["as_of"]; got != "2026-04-23" {
+		t.Fatalf("expected as_of defaulted, got %#v", got)
+	}
+	if got := step.Params["include_disabled"]; got != false {
+		t.Fatalf("expected include_disabled defaulted false, got %#v", got)
+	}
+	if _, ok := step.Params["parent_org_code"]; ok {
+		t.Fatalf("expected root list query without parent_org_code, got %+v", step.Params)
+	}
+	if plan.ClarifyingQuestion != "" {
+		t.Fatalf("expected clarifying question cleared, got %q", plan.ClarifyingQuestion)
+	}
+	if !strings.Contains(strings.Join(plan.ExplainFocus, " "), "一级组织") {
+		t.Fatalf("expected explain focus to mention 一级组织, got %+v", plan.ExplainFocus)
+	}
+}
+
+func TestNormalizeCubeboxReadPlanKeepsNonListClarification(t *testing.T) {
+	plan := normalizeCubeboxReadPlan(cubebox.ReadPlan{
+		Intent:             "orgunit.details",
+		Confidence:         0.41,
+		MissingParams:      []string{"org_code", "as_of"},
+		ClarifyingQuestion: "请提供组织编码和查询日期。",
+	}, "查一下这个组织详情", time.Date(2026, 4, 23, 9, 0, 0, 0, time.UTC))
+
+	if len(plan.MissingParams) != 2 {
+		t.Fatalf("expected missing params kept, got %+v", plan.MissingParams)
+	}
+	if len(plan.Steps) != 0 {
+		t.Fatalf("expected no executable steps, got %+v", plan.Steps)
+	}
+	if plan.ClarifyingQuestion != "请提供组织编码和查询日期。" {
+		t.Fatalf("unexpected clarifying question=%q", plan.ClarifyingQuestion)
+	}
+}
+
+func TestNormalizeCubeboxReadPlanKeepsChildrenQueryAsClarification(t *testing.T) {
+	plan := normalizeCubeboxReadPlan(cubebox.ReadPlan{
+		Intent:             "orgunit.list",
+		Confidence:         0.41,
+		MissingParams:      []string{"as_of", "parent_org_code"},
+		ClarifyingQuestion: "请提供 parent_org_code。",
+	}, "看华东事业部下面的子组织", time.Date(2026, 4, 23, 9, 0, 0, 0, time.UTC))
+
+	if len(plan.Steps) != 0 {
+		t.Fatalf("expected children query to remain clarifying, got %+v", plan.Steps)
+	}
+	if len(plan.MissingParams) != 2 {
+		t.Fatalf("expected missing params kept, got %+v", plan.MissingParams)
+	}
+	if !strings.Contains(plan.ClarifyingQuestion, "上级组织的组织编码") {
+		t.Fatalf("expected humanized clarification, got %q", plan.ClarifyingQuestion)
+	}
+}
+
 func TestBuildCubeboxQueryAnswerRendersOrgUnitListPayloadViaSummaryRenderer(t *testing.T) {
 	registry, err := cubebox.NewExecutionRegistry(cubebox.RegisteredExecutor{
-		APIKey: "orgunit.list",
+		APIKey:   "orgunit.list",
 		Executor: queryExecutorStub{},
 		SummaryRenderer: func(result cubebox.ExecuteResult) []string {
 			return summarizeOrgUnitListQueryResult(result.Payload)
@@ -61,7 +135,7 @@ func TestBuildCubeboxQueryAnswerRendersOrgUnitListPayloadViaSummaryRenderer(t *t
 
 func TestBuildCubeboxQueryAnswerLimitsListSummaryAndAddsMoreNotice(t *testing.T) {
 	registry, err := cubebox.NewExecutionRegistry(cubebox.RegisteredExecutor{
-		APIKey: "orgunit.list",
+		APIKey:   "orgunit.list",
 		Executor: queryExecutorStub{},
 		SummaryRenderer: func(result cubebox.ExecuteResult) []string {
 			return summarizeOrgUnitListQueryResult(result.Payload)

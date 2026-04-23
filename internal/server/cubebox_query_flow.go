@@ -158,6 +158,12 @@ func (f *cubeboxQueryFlow) TryHandle(
 		return true
 	}
 
+	if err := cubebox.ValidateReadPlan(produced.Plan); err != nil {
+		f.writeQueryTerminalError(ctx, request, prepared.turn.TurnID, &prepared.sequence, prepared.lifecycle, sink, queryPlanErrorToTerminal(err))
+		return true
+	}
+	produced.Plan = normalizeCubeboxReadPlan(produced.Plan, request.Prompt, f.now())
+
 	if len(produced.Plan.MissingParams) > 0 {
 		text := strings.TrimSpace(produced.Plan.ClarifyingQuestion)
 		if text == "" {
@@ -270,6 +276,130 @@ func (p *cubeboxProviderReadPlanProducer) ProduceReadPlan(
 		ProviderType: strings.TrimSpace(config.Provider.ProviderType),
 		ModelSlug:    modelSlug,
 	}, nil
+}
+
+func normalizeCubeboxReadPlan(plan cubebox.ReadPlan, prompt string, now time.Time) cubebox.ReadPlan {
+	if strings.TrimSpace(plan.Intent) != "orgunit.list" {
+		return plan
+	}
+	if len(plan.Steps) > 0 {
+		return normalizeCubeboxExecutableListPlan(plan, now)
+	}
+	if len(plan.MissingParams) == 0 {
+		return plan
+	}
+	return normalizeCubeboxClarifyingListPlan(plan, prompt, now)
+}
+
+func normalizeCubeboxExecutableListPlan(plan cubebox.ReadPlan, now time.Time) cubebox.ReadPlan {
+	normalized := plan
+	for i := range normalized.Steps {
+		step := &normalized.Steps[i]
+		if strings.TrimSpace(step.APIKey) != "orgunit.list" {
+			continue
+		}
+		if step.Params == nil {
+			step.Params = map[string]any{}
+		}
+		if _, ok := step.Params["as_of"]; !ok {
+			step.Params["as_of"] = now.Format("2006-01-02")
+		}
+		if _, ok := step.Params["include_disabled"]; !ok {
+			step.Params["include_disabled"] = false
+		}
+	}
+	return normalized
+}
+
+func normalizeCubeboxClarifyingListPlan(plan cubebox.ReadPlan, prompt string, now time.Time) cubebox.ReadPlan {
+	missing := normalizeReadPlanMissingParams(plan.MissingParams)
+	if isOrgUnitRootListPrompt(prompt) && onlyMissingListDefaults(missing) {
+		return cubebox.ReadPlan{
+			Intent:        plan.Intent,
+			Confidence:    plan.Confidence,
+			ExplainFocus:  []string{"当前租户一级组织", "状态", "是否还有下级"},
+			MissingParams: []string{},
+			Steps: []cubebox.ReadPlanStep{
+				{
+					ID:          "step-1",
+					APIKey:      "orgunit.list",
+					Params:      map[string]any{"as_of": now.Format("2006-01-02"), "include_disabled": false},
+					ResultFocus: []string{"as_of", "org_units[].org_code", "org_units[].name", "org_units[].status", "org_units[].has_children"},
+					DependsOn:   []string{},
+				},
+			},
+		}
+	}
+	if isOrgUnitChildrenPrompt(prompt) && containsMissingParam(missing, "parent_org_code") {
+		plan.ClarifyingQuestion = "如果你想看某个上级组织下面的子组织，请提供该上级组织的组织编码；如果只有名称，也可以直接回复组织名称，我先帮你定位。"
+	}
+	return plan
+}
+
+func normalizeReadPlanMissingParams(items []string) []string {
+	out := make([]string, 0, len(items))
+	seen := make(map[string]struct{}, len(items))
+	for _, item := range items {
+		name := strings.TrimSpace(item)
+		if name == "" {
+			continue
+		}
+		if _, ok := seen[name]; ok {
+			continue
+		}
+		seen[name] = struct{}{}
+		out = append(out, name)
+	}
+	return out
+}
+
+func onlyMissingListDefaults(items []string) bool {
+	if len(items) == 0 {
+		return false
+	}
+	for _, item := range items {
+		if item != "as_of" && item != "parent_org_code" {
+			return false
+		}
+	}
+	return true
+}
+
+func containsMissingParam(items []string, name string) bool {
+	for _, item := range items {
+		if item == strings.TrimSpace(name) {
+			return true
+		}
+	}
+	return false
+}
+
+func isOrgUnitRootListPrompt(prompt string) bool {
+	text := strings.TrimSpace(prompt)
+	if text == "" {
+		return false
+	}
+	keywords := []string{"组织树", "一级组织", "全部组织", "全租户", "列出组织", "所有组织"}
+	for _, keyword := range keywords {
+		if strings.Contains(text, keyword) {
+			return true
+		}
+	}
+	return false
+}
+
+func isOrgUnitChildrenPrompt(prompt string) bool {
+	text := strings.TrimSpace(prompt)
+	if text == "" {
+		return false
+	}
+	keywords := []string{"下面", "下级", "子组织", "下的组织", "某个组织下"}
+	for _, keyword := range keywords {
+		if strings.Contains(text, keyword) {
+			return true
+		}
+	}
+	return false
 }
 
 func (p *cubeboxProviderReadPlanProducer) buildPlannerMessages(input cubeboxReadPlanProductionInput) []cubebox.PromptItem {
