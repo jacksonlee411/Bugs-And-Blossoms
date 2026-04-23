@@ -14,12 +14,12 @@ var ErrReadPlanBoundaryViolation = errors.New("CUBEBOX_READ_PLAN_BOUNDARY_VIOLAT
 var ErrKnowledgePackInvalid = errors.New("CUBEBOX_KNOWLEDGE_PACK_INVALID")
 
 type ReadPlan struct {
-	Intent            string         `json:"intent"`
-	Confidence        float64        `json:"confidence"`
-	MissingParams     []string       `json:"missing_params"`
-	Steps             []ReadPlanStep `json:"steps"`
-	ExplainFocus      []string       `json:"explain_focus"`
-	ClarifyingQuestion string        `json:"clarifying_question,omitempty"`
+	Intent             string         `json:"intent"`
+	Confidence         float64        `json:"confidence"`
+	MissingParams      []string       `json:"missing_params"`
+	Steps              []ReadPlanStep `json:"steps"`
+	ExplainFocus       []string       `json:"explain_focus"`
+	ClarifyingQuestion string         `json:"clarifying_question,omitempty"`
 }
 
 type ReadPlanStep struct {

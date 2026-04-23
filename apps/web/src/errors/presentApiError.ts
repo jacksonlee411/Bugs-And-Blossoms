@@ -34,6 +34,8 @@ const localizedMessages: Record<string, LocalizedErrorMessage> = {
   ai_plan_contract_version_mismatch: { en: 'Plan contract version mismatch. Please regenerate and confirm again.', zh: '计划契约版本不一致，请重新生成并确认后再提交。' },
   ai_version_tuple_stale: { en: 'Confirmation baseline changed. Please confirm again before commit.', zh: '确认基线已变化，请重新确认后再提交。' },
   ai_plan_determinism_violation: { en: 'Plan determinism check failed. Please regenerate and retry.', zh: '计划确定性校验失败，请重新生成后重试。' },
+  knowledge_pack_invalid: { en: 'Query knowledge pack is invalid. Please ask an administrator to check the module knowledge configuration.', zh: '查询知识包不合法，请联系管理员检查模块知识配置。' },
+  api_catalog_drift_or_executor_missing: { en: 'Query execution catalog is inconsistent with the system registry. Please retry later or contact an administrator.', zh: '查询执行目录与系统注册表不一致，请稍后重试或联系管理员。' },
   ai_model_provider_unavailable: { en: 'No available model provider. Please check provider health and retry.', zh: '当前无可用模型服务，请检查模型健康状态后重试。' },
   ai_model_timeout: { en: 'Model request timed out. Please retry later.', zh: '模型请求超时，请稍后重试。' },
   ai_model_rate_limited: { en: 'Model provider is rate limited. Please retry later.', zh: '模型服务限流，请稍后重试。' },

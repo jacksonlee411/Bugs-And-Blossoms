@@ -37,14 +37,14 @@ func TestNewExecutionRegistryRejectsDuplicateAPIKey(t *testing.T) {
 
 func TestExecutionRegistryExecutePlan(t *testing.T) {
 	registry, err := NewExecutionRegistry(
-			RegisteredExecutor{
-				APIKey:         "orgunit.search",
-				RequiredParams: []string{"query", "as_of"},
-				Executor: readExecutorStub{
-					validateFn: func(raw map[string]any) (map[string]any, error) {
-						return raw, nil
-					},
-					executeFn: func(_ context.Context, request ExecuteRequest, params map[string]any) (ExecuteResult, error) {
+		RegisteredExecutor{
+			APIKey:         "orgunit.search",
+			RequiredParams: []string{"query", "as_of"},
+			Executor: readExecutorStub{
+				validateFn: func(raw map[string]any) (map[string]any, error) {
+					return raw, nil
+				},
+				executeFn: func(_ context.Context, request ExecuteRequest, params map[string]any) (ExecuteResult, error) {
 					if request.StepID != "step-1" {
 						t.Fatalf("step_id=%q", request.StepID)
 					}
@@ -57,28 +57,28 @@ func TestExecutionRegistryExecutePlan(t *testing.T) {
 				},
 			},
 		},
-			RegisteredExecutor{
-				APIKey:         "orgunit.details",
-				RequiredParams: []string{"org_code_from", "as_of"},
-				Executor: readExecutorStub{
-					validateFn: func(raw map[string]any) (map[string]any, error) {
-						return raw, nil
-					},
-					executeFn: func(_ context.Context, request ExecuteRequest, params map[string]any) (ExecuteResult, error) {
-						if request.StepID != "step-2" {
-							t.Fatalf("step_id=%q", request.StepID)
-						}
-						prev, ok := request.PreviousResults["step-1"]
-						if !ok {
-							t.Fatal("missing previous result for step-1")
-						}
-						return ExecuteResult{
-							Payload: map[string]any{
-								"org_code_from": params["org_code_from"],
-								"resolved_from": prev.Payload["target_org_code"],
-							},
-						}, nil
-					},
+		RegisteredExecutor{
+			APIKey:         "orgunit.details",
+			RequiredParams: []string{"org_code_from", "as_of"},
+			Executor: readExecutorStub{
+				validateFn: func(raw map[string]any) (map[string]any, error) {
+					return raw, nil
+				},
+				executeFn: func(_ context.Context, request ExecuteRequest, params map[string]any) (ExecuteResult, error) {
+					if request.StepID != "step-2" {
+						t.Fatalf("step_id=%q", request.StepID)
+					}
+					prev, ok := request.PreviousResults["step-1"]
+					if !ok {
+						t.Fatal("missing previous result for step-1")
+					}
+					return ExecuteResult{
+						Payload: map[string]any{
+							"org_code_from": params["org_code_from"],
+							"resolved_from": prev.Payload["target_org_code"],
+						},
+					}, nil
+				},
 			},
 		},
 	)
@@ -163,9 +163,9 @@ func TestExecutionRegistryExecutePlanRejectsClarifyingPlan(t *testing.T) {
 	}
 
 	_, err = registry.ExecutePlan(context.Background(), ExecuteRequest{}, ReadPlan{
-		Intent:            "orgunit.details",
-		Confidence:        0.4,
-		MissingParams:     []string{"org_code"},
+		Intent:             "orgunit.details",
+		Confidence:         0.4,
+		MissingParams:      []string{"org_code"},
 		ClarifyingQuestion: "请提供组织编码",
 	})
 	if !errors.Is(err, ErrReadPlanBoundaryViolation) {
