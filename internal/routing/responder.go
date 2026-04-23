@@ -180,6 +180,10 @@ func knownErrorMessage(code string) string {
 		return "确认基线已变化，请重新确认后再提交。"
 	case "ai_plan_determinism_violation":
 		return "计划确定性校验失败，请重新生成后重试。"
+	case "knowledge_pack_invalid":
+		return "查询知识包不合法，请联系管理员检查模块知识配置。"
+	case "api_catalog_drift_or_executor_missing":
+		return "查询执行目录与系统注册表不一致，请稍后重试或联系管理员。"
 	case "ai_model_provider_unavailable":
 		return "当前无可用模型服务，请检查模型健康状态后重试。"
 	case "ai_model_timeout":

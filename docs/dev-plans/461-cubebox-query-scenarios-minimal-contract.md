@@ -394,10 +394,10 @@ modules/orgunit/presentation/cubebox/
 
 ### 12.2 Step 2：实现 `ReadPlan` 最小契约与校验器
 
-- [ ] 在 `modules/cubebox` 冻结 `ReadPlan` 类型与 `steps[]` 最小 schema
-- [ ] 实现结构化解析与 fail-closed 校验
-- [ ] 对非法知识包或非法计划返回受控失败，不退化为自由查询
-- [ ] 明确支持线性多步只读编排，不支持 DAG、并发分叉或动态工具发现
+- [x] 在 `modules/cubebox` 冻结 `ReadPlan` 类型与 `steps[]` 最小 schema
+- [x] 实现结构化解析与 fail-closed 校验
+- [x] 对非法知识包或非法计划返回受控失败，不退化为自由查询
+- [x] 明确支持线性多步只读编排，不支持 DAG、并发分叉或动态工具发现
 
 交付结果：
 
@@ -521,6 +521,22 @@ PR-1 评审重点：
 - 在 `modules/cubebox` 增加 `ReadPlan` 类型、结构化解析和 fail-closed 校验
 - 接入最小失败语义，但暂不接模块执行器
 - 本 PR 不接数据库、不接 `orgunit` 读链路
+
+PR-2 实际落点：
+
+- [x] `modules/cubebox/read_plan.go`
+- [x] `modules/cubebox/knowledge_pack.go`
+- [x] `modules/cubebox/read_plan_test.go`
+- [x] `modules/cubebox/knowledge_pack_test.go`
+- [x] `internal/routing/responder.go` 增加最小错误提示映射
+
+PR-2 验收点：
+
+- [x] `ReadPlan` 类型与 `steps[]` 最小 schema 已在代码中冻结
+- [x] 结构化解析失败会命中受控失败，而不是进入执行面
+- [x] 非线性 `depends_on`、缺失必要字段等边界问题会 fail-closed
+- [x] 知识包缺文件、缺结构化锚点时会命中 `knowledge_pack_invalid`
+- [x] `go test ./modules/cubebox/... ./internal/routing/...` 通过
 
 #### PR-3：执行注册层骨架
 
