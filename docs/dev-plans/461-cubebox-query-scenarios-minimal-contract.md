@@ -382,10 +382,10 @@ modules/orgunit/presentation/cubebox/
 
 ### 12.1 Step 1：冻结 `orgunit` 模块级知识包样板
 
-- [ ] 在 `modules/orgunit/presentation/cubebox/` 下创建 `CUBEBOX-SKILL.md`、`queries.md`、`apis.md`、`examples.md`
-- [ ] 只覆盖 `orgunit.details`、`orgunit.list`、`orgunit.search`、`orgunit.audit`
-- [ ] `apis.md` 中的 `api_key` 命名与后续代码注册表保持一一对应
-- [ ] 不引入租户级覆盖目录、租户级发布机制或额外知识运行时
+- [x] 在 `modules/orgunit/presentation/cubebox/` 下创建 `CUBEBOX-SKILL.md`、`queries.md`、`apis.md`、`examples.md`
+- [x] 只覆盖 `orgunit.details`、`orgunit.list`、`orgunit.search`、`orgunit.audit`
+- [x] `apis.md` 中的 `api_key` 命名与后续代码注册表保持一一对应
+- [x] 不引入租户级覆盖目录、租户级发布机制或额外知识运行时
 
 交付结果：
 
@@ -469,6 +469,51 @@ modules/orgunit/presentation/cubebox/
 - 新增 `modules/orgunit/presentation/cubebox/` 下的 4 个 Markdown 文件
 - 目标是把首批 `orgunit` 查询面冻结成可阅读、可评审的知识包实物
 - 本 PR 不引入任何运行时代码
+
+建议文件清单：
+
+- [x] `modules/orgunit/presentation/cubebox/CUBEBOX-SKILL.md`
+- [x] `modules/orgunit/presentation/cubebox/queries.md`
+- [x] `modules/orgunit/presentation/cubebox/apis.md`
+- [x] `modules/orgunit/presentation/cubebox/examples.md`
+
+建议各文件最小内容：
+
+- `CUBEBOX-SKILL.md`
+  - 模块定位：`orgunit` 是什么、主要业务对象是什么
+  - 当前页面/上下文如何帮助补参
+  - 首批只允许的查询意图概览
+  - 对 `queries.md`、`apis.md`、`examples.md` 的引用关系
+- `queries.md`
+  - 只定义 `orgunit.details`、`orgunit.list`、`orgunit.search`、`orgunit.audit`
+  - 每个意图的必填参数、可选参数、缺参追问口径
+  - 常见自然语言表达与意图映射
+- `apis.md`
+  - 只列出首批 4 个 `api_key`
+  - 每个 `api_key` 的用途、参数、关注字段、权限前提
+  - 明确声明“禁止直查数据库、禁止调用未列出的接口”
+  - 明确声明“本文件不是执行事实源，执行事实源以后续代码注册表为准”
+- `examples.md`
+  - 每个意图至少 1 条高质量问法
+  - 至少包含 1 个缺参追问示例
+  - 至少包含 1 个多步只读编排示例
+  - 示例中的 `api_key` 必须只使用首批 4 个冻结值
+
+PR-1 验收点：
+
+- [x] 目录与文件路径符合 `461` 冻结的模块级知识包规范
+- [x] 4 个文件都能被 reviewer 独立阅读理解，不依赖运行时代码补完语义
+- [x] 查询意图范围没有超出 `orgunit.details/list/search/audit`
+- [x] `api_key` 命名在 4 个文件之间保持一致，没有同义漂移
+- [x] 文档未引入租户级覆盖目录、租户级发布机制或第二知识运行时
+- [x] 文档未声明数据库、SQL、store、内部函数等非法执行面
+- [x] 至少有 1 个示例体现“一个问题下的线性多步只读编排”
+- [x] `make check doc` 通过
+
+PR-1 评审重点：
+
+- reviewer 应重点看“知识是否清楚、边界是否收敛、`api_key` 是否稳定”，而不是提前评审运行时实现细节
+- 若在 PR-1 中发现必须依赖代码实现才能写清语义，优先回到文档收敛，而不是把运行时代码夹带进这个 PR
 
 #### PR-2：`ReadPlan` 最小契约与校验器
 
