@@ -418,15 +418,16 @@ modules/orgunit/presentation/cubebox/
 
 ### 12.4 Step 4：接入 `orgunit` 首批只读执行器
 
-- [ ] 为 `orgunit.details`、`orgunit.list`、`orgunit.search`、`orgunit.audit` 接入执行器
-- [ ] 执行器只复用现有 `orgunit` 读链路，不复制实现
-- [ ] 参数校验与上下文注入遵循当前用户、当前租户、当前 session 边界
-- [ ] 原始结果保持受控结构，交由结果解释阶段消费
+- [x] 为 `orgunit.details`、`orgunit.list`、`orgunit.search`、`orgunit.audit` 接入执行器
+- [x] 执行器只复用现有 `orgunit` 读链路，不复制实现
+- [x] 参数校验与上下文注入遵循当前用户、当前租户、当前 session 边界
+- [x] 原始结果保持受控结构，交由结果解释阶段消费
 
 交付结果：
 
 - `orgunit` 成为 `461` 首个可跑通的模块样板
 - 删除执行注册层后，现有 `orgunit` 读能力本身不受影响
+- 实际落点冻结为：`modules/cubebox` 只保留注册表契约；`internal/server` 侧提供 `orgunit` 的 CubeBox 执行器适配，并直接复用现有 `orgunit` 读 helper / store 能力
 
 ### 12.5 Step 5：接入 `CubeBox` 查询主链
 
@@ -564,6 +565,21 @@ PR-3 验收点：
 - 把 `orgunit.details`、`orgunit.list`、`orgunit.search`、`orgunit.audit` 接入注册表
 - 执行器只复用现有 `orgunit` 读链路
 - 本 PR 重点审查“是否出现第二套实现”与“是否越过现有权限边界”
+
+PR-4 实际落点：
+
+- [x] `internal/server/cubebox_orgunit_executors.go`
+- [x] `internal/server/cubebox_orgunit_executors_test.go`
+
+PR-4 验收点：
+
+- [x] `orgunit.details`、`orgunit.list`、`orgunit.search`、`orgunit.audit` 已作为 `RegisteredExecutor` 接入唯一执行注册表
+- [x] 执行器实现位于 `internal/server`，直接复用现有 `orgunit` 读 helper、现有 store 能力与现有返回结构；`modules/cubebox` 未长出第二套 `orgunit` 查询实现
+- [x] `orgunit.details` 支持 `org_code` 与线性多步派生参数 `org_code_from`
+- [x] `orgunit.search` 返回前会复用现有 `ResolveOrgCodesByNodeKeys` 补齐 `path_org_codes`
+- [x] `orgunit.audit` 默认 `limit` 与现有 `orgNodeAuditPageSize` 对齐
+- [x] 参数归一化仅覆盖该 4 个 `api_key` 的最小受控入参，不扩展成通用 planner/DSL/参数中台
+- [x] `go test ./internal/server/... ./modules/cubebox/...` 通过
 
 #### PR-5：接入 `CubeBox` 查询主链
 
