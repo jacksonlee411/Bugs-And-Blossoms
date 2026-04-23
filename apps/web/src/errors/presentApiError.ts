@@ -93,6 +93,8 @@ const localizedMessages: Record<string, LocalizedErrorMessage> = {
   orgunit_resolve_org_code_failed: { en: 'Orgunit resolve org code failed.', zh: '请求失败（orgunit resolve org code failed）。' },
   orgunit_service_missing: { en: 'Orgunit service is missing.', zh: '请求失败（orgunit service missing）。' },
   orgunit_store_missing: { en: 'Orgunit store is missing.', zh: '请求失败（orgunit store missing）。' },
+  policy_version_required: { en: 'Policy version is required. Please refresh and retry.', zh: '缺少策略版本，请刷新页面后重试。' },
+  policy_version_conflict: { en: 'Policy version is stale. Please refresh and retry.', zh: '策略版本已过期，请刷新页面后重试。' },
   principal_error: { en: 'Principal error.', zh: '请求失败（principal error）。' },
   principal_lookup_error: { en: 'Principal lookup error.', zh: '请求失败（principal lookup error）。' },
   principal_missing: { en: 'Your session has expired. Please sign in again.', zh: '登录已失效，请重新登录。' },
