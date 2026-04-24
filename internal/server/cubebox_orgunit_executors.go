@@ -55,9 +55,6 @@ func newCubeBoxOrgUnitRegisteredExecutors(store OrgUnitStore) ([]cubebox.Registe
 			Executor: cubeBoxOrgUnitListExecutor{
 				store: store,
 			},
-			SummaryRenderer: func(result cubebox.ExecuteResult) []string {
-				return summarizeOrgUnitListQueryResult(result.Payload)
-			},
 		},
 		cubebox.RegisteredExecutor{
 			APIKey:         "orgunit.search",

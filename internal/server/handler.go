@@ -96,9 +96,12 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, error) {
 
 	cubeboxRuntime := cubebox.NewRuntime()
 	cubeboxStore := cubebox.NewStore(pgPool)
-	cubeboxGateway := cubebox.NewGatewayService(cubeboxRuntime, cubeboxStore, cubebox.NewOpenAICompatibleAdapter(nil), cubebox.EnvSecretResolver{})
-	cubeboxQueryProducer := newCubeboxProviderReadPlanProducer(cubeboxStore, cubebox.NewOpenAICompatibleAdapter(nil), cubebox.EnvSecretResolver{})
-	cubeboxQueryFlow, err := buildDefaultCubeboxQueryFlow(cubeboxRuntime, cubeboxStore, orgStore, cubeboxQueryProducer)
+	cubeboxAdapter := cubebox.NewOpenAICompatibleAdapter(nil)
+	cubeboxSecretResolver := cubebox.EnvSecretResolver{}
+	cubeboxGateway := cubebox.NewGatewayService(cubeboxRuntime, cubeboxStore, cubeboxAdapter, cubeboxSecretResolver)
+	cubeboxQueryProducer := newCubeboxProviderReadPlanProducer(cubeboxStore, cubeboxAdapter, cubeboxSecretResolver)
+	cubeboxQueryNarrator := newCubeboxProviderQueryNarrator(cubeboxStore, cubeboxAdapter, cubeboxSecretResolver)
+	cubeboxQueryFlow, err := buildDefaultCubeboxQueryFlow(cubeboxRuntime, cubeboxStore, orgStore, cubeboxQueryProducer, cubeboxQueryNarrator)
 	if err != nil {
 		return nil, err
 	}

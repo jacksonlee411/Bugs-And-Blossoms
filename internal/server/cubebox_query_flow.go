@@ -11,7 +11,6 @@ import (
 	"runtime"
 	"strings"
 	"time"
-	"unicode/utf8"
 
 	"github.com/google/uuid"
 
@@ -20,6 +19,10 @@ import (
 
 type cubeboxReadPlanProducer interface {
 	ProduceReadPlan(ctx context.Context, input cubeboxReadPlanProductionInput) (cubeboxReadPlanProductionResult, error)
+}
+
+type cubeboxQueryNarrator interface {
+	NarrateQueryResult(ctx context.Context, input cubeboxQueryNarrationInput) (string, error)
 }
 
 type cubeboxReadPlanProductionInput struct {
@@ -43,6 +46,7 @@ type cubeboxQueryFlow struct {
 	store          cubeboxConversationStore
 	registry       *cubebox.ExecutionRegistry
 	producer       cubeboxReadPlanProducer
+	narrator       cubeboxQueryNarrator
 	knowledgePacks []cubebox.KnowledgePack
 	now            func() time.Time
 }
@@ -60,6 +64,24 @@ type cubeboxProviderReadPlanProducer struct {
 	now            func() time.Time
 }
 
+type cubeboxProviderQueryNarrator struct {
+	configReader   cubebox.RuntimeConfigReader
+	adapter        cubebox.ProviderAdapter
+	secretResolver cubebox.SecretResolver
+}
+
+type cubeboxQueryNarrationInput struct {
+	TenantID             string
+	PrincipalID          string
+	ConversationID       string
+	Prompt               string
+	Plan                 cubebox.ReadPlan
+	Results              []cubebox.ExecuteResult
+	ExpectedProviderID   string
+	ExpectedProviderType string
+	ExpectedModelSlug    string
+}
+
 type cubeboxQueryLifecycle struct {
 	traceID      string
 	providerID   string
@@ -69,14 +91,23 @@ type cubeboxQueryLifecycle struct {
 	startedAt    time.Time
 }
 
+type cubeboxQueryNarrationEnvelope struct {
+	UserPrompt string                  `json:"user_prompt"`
+	Plan       cubebox.ReadPlan        `json:"plan"`
+	Results    []cubebox.ExecuteResult `json:"results"`
+}
+
+var errCubeboxQueryNarrationTargetMismatch = errors.New("cubebox query narration target mismatch")
+
 func newCubeboxQueryFlow(
 	runtime *cubebox.Runtime,
 	store cubeboxConversationStore,
 	registry *cubebox.ExecutionRegistry,
 	producer cubeboxReadPlanProducer,
+	narrator cubeboxQueryNarrator,
 	knowledgePackDirs []string,
 ) (*cubeboxQueryFlow, error) {
-	if runtime == nil || store == nil || registry == nil || producer == nil || len(knowledgePackDirs) == 0 {
+	if runtime == nil || store == nil || registry == nil || producer == nil || narrator == nil || len(knowledgePackDirs) == 0 {
 		return nil, nil
 	}
 	packs := make([]cubebox.KnowledgePack, 0, len(knowledgePackDirs))
@@ -92,18 +123,11 @@ func newCubeboxQueryFlow(
 		store:          store,
 		registry:       registry,
 		producer:       producer,
+		narrator:       narrator,
 		knowledgePacks: packs,
 		now:            func() time.Time { return time.Now().UTC() },
 	}, nil
 }
-
-const (
-	cubeboxQueryAnswerMaxLines            = 14
-	cubeboxQueryAnswerMaxChars            = 560
-	cubeboxQueryListSummaryMaxItems       = 5
-	cubeboxQuerySummaryFallbackListNotice = "仍有更多结果，请缩小范围或进入业务页面查看。"
-	cubeboxQuerySummaryFallbackOmitted    = "结果过大，已省略详细内容，请缩小范围或进入业务页面查看。"
-)
 
 func newCubeboxProviderReadPlanProducer(
 	configReader cubebox.RuntimeConfigReader,
@@ -121,12 +145,27 @@ func newCubeboxProviderReadPlanProducer(
 	}
 }
 
+func newCubeboxProviderQueryNarrator(
+	configReader cubebox.RuntimeConfigReader,
+	adapter cubebox.ProviderAdapter,
+	secretResolver cubebox.SecretResolver,
+) *cubeboxProviderQueryNarrator {
+	if configReader == nil || adapter == nil || secretResolver == nil {
+		return nil
+	}
+	return &cubeboxProviderQueryNarrator{
+		configReader:   configReader,
+		adapter:        adapter,
+		secretResolver: secretResolver,
+	}
+}
+
 func (f *cubeboxQueryFlow) TryHandle(
 	ctx context.Context,
 	request cubebox.GatewayStreamRequest,
 	sink cubebox.GatewayEventSink,
 ) bool {
-	if f == nil || f.runtime == nil || f.store == nil || f.registry == nil || f.producer == nil || len(f.knowledgePacks) == 0 {
+	if f == nil || f.runtime == nil || f.store == nil || f.registry == nil || f.producer == nil || f.narrator == nil || len(f.knowledgePacks) == 0 {
 		return false
 	}
 
@@ -162,7 +201,6 @@ func (f *cubeboxQueryFlow) TryHandle(
 		f.writeQueryTerminalError(ctx, request, prepared.turn.TurnID, &prepared.sequence, prepared.lifecycle, sink, queryPlanErrorToTerminal(err))
 		return true
 	}
-	produced.Plan = normalizeCubeboxReadPlan(produced.Plan, request.Prompt, f.now())
 
 	if len(produced.Plan.MissingParams) > 0 {
 		text := strings.TrimSpace(produced.Plan.ClarifyingQuestion)
@@ -182,11 +220,6 @@ func (f *cubeboxQueryFlow) TryHandle(
 		return true
 	}
 
-	if err := cubebox.ValidateReadPlan(produced.Plan); err != nil {
-		f.writeQueryTerminalError(ctx, request, prepared.turn.TurnID, &prepared.sequence, prepared.lifecycle, sink, queryPlanErrorToTerminal(err))
-		return true
-	}
-
 	results, err := f.registry.ExecutePlan(ctx, cubebox.ExecuteRequest{
 		TenantID:       request.TenantID,
 		PrincipalID:    request.PrincipalID,
@@ -197,7 +230,21 @@ func (f *cubeboxQueryFlow) TryHandle(
 		return true
 	}
 
-	answer := buildCubeboxQueryAnswer(produced.Plan, results, f.registry)
+	answer, err := f.narrator.NarrateQueryResult(ctx, cubeboxQueryNarrationInput{
+		TenantID:             request.TenantID,
+		PrincipalID:          request.PrincipalID,
+		ConversationID:       request.ConversationID,
+		Prompt:               request.Prompt,
+		Plan:                 produced.Plan,
+		Results:              results,
+		ExpectedProviderID:   produced.ProviderID,
+		ExpectedProviderType: produced.ProviderType,
+		ExpectedModelSlug:    produced.ModelSlug,
+	})
+	if err != nil {
+		f.writeQueryTerminalError(ctx, request, prepared.turn.TurnID, &prepared.sequence, prepared.lifecycle, sink, queryNarrationErrorToTerminal(err))
+		return true
+	}
 	if !writeEvent("turn.agent_message.delta", map[string]any{"message_id": prepared.turn.AssistantMessageID, "delta": answer}) {
 		return true
 	}
@@ -278,130 +325,6 @@ func (p *cubeboxProviderReadPlanProducer) ProduceReadPlan(
 	}, nil
 }
 
-func normalizeCubeboxReadPlan(plan cubebox.ReadPlan, prompt string, now time.Time) cubebox.ReadPlan {
-	if strings.TrimSpace(plan.Intent) != "orgunit.list" {
-		return plan
-	}
-	if len(plan.Steps) > 0 {
-		return normalizeCubeboxExecutableListPlan(plan, now)
-	}
-	if len(plan.MissingParams) == 0 {
-		return plan
-	}
-	return normalizeCubeboxClarifyingListPlan(plan, prompt, now)
-}
-
-func normalizeCubeboxExecutableListPlan(plan cubebox.ReadPlan, now time.Time) cubebox.ReadPlan {
-	normalized := plan
-	for i := range normalized.Steps {
-		step := &normalized.Steps[i]
-		if strings.TrimSpace(step.APIKey) != "orgunit.list" {
-			continue
-		}
-		if step.Params == nil {
-			step.Params = map[string]any{}
-		}
-		if _, ok := step.Params["as_of"]; !ok {
-			step.Params["as_of"] = now.Format("2006-01-02")
-		}
-		if _, ok := step.Params["include_disabled"]; !ok {
-			step.Params["include_disabled"] = false
-		}
-	}
-	return normalized
-}
-
-func normalizeCubeboxClarifyingListPlan(plan cubebox.ReadPlan, prompt string, now time.Time) cubebox.ReadPlan {
-	missing := normalizeReadPlanMissingParams(plan.MissingParams)
-	if isOrgUnitRootListPrompt(prompt) && onlyMissingListDefaults(missing) {
-		return cubebox.ReadPlan{
-			Intent:        plan.Intent,
-			Confidence:    plan.Confidence,
-			ExplainFocus:  []string{"当前租户一级组织", "状态", "是否还有下级"},
-			MissingParams: []string{},
-			Steps: []cubebox.ReadPlanStep{
-				{
-					ID:          "step-1",
-					APIKey:      "orgunit.list",
-					Params:      map[string]any{"as_of": now.Format("2006-01-02"), "include_disabled": false},
-					ResultFocus: []string{"as_of", "org_units[].org_code", "org_units[].name", "org_units[].status", "org_units[].has_children"},
-					DependsOn:   []string{},
-				},
-			},
-		}
-	}
-	if isOrgUnitChildrenPrompt(prompt) && containsMissingParam(missing, "parent_org_code") {
-		plan.ClarifyingQuestion = "如果你想看某个上级组织下面的子组织，请提供该上级组织的组织编码；如果只有名称，也可以直接回复组织名称，我先帮你定位。"
-	}
-	return plan
-}
-
-func normalizeReadPlanMissingParams(items []string) []string {
-	out := make([]string, 0, len(items))
-	seen := make(map[string]struct{}, len(items))
-	for _, item := range items {
-		name := strings.TrimSpace(item)
-		if name == "" {
-			continue
-		}
-		if _, ok := seen[name]; ok {
-			continue
-		}
-		seen[name] = struct{}{}
-		out = append(out, name)
-	}
-	return out
-}
-
-func onlyMissingListDefaults(items []string) bool {
-	if len(items) == 0 {
-		return false
-	}
-	for _, item := range items {
-		if item != "as_of" && item != "parent_org_code" {
-			return false
-		}
-	}
-	return true
-}
-
-func containsMissingParam(items []string, name string) bool {
-	for _, item := range items {
-		if item == strings.TrimSpace(name) {
-			return true
-		}
-	}
-	return false
-}
-
-func isOrgUnitRootListPrompt(prompt string) bool {
-	text := strings.TrimSpace(prompt)
-	if text == "" {
-		return false
-	}
-	keywords := []string{"组织树", "一级组织", "全部组织", "全租户", "列出组织", "所有组织"}
-	for _, keyword := range keywords {
-		if strings.Contains(text, keyword) {
-			return true
-		}
-	}
-	return false
-}
-
-func isOrgUnitChildrenPrompt(prompt string) bool {
-	text := strings.TrimSpace(prompt)
-	if text == "" {
-		return false
-	}
-	keywords := []string{"下面", "下级", "子组织", "下的组织", "某个组织下"}
-	for _, keyword := range keywords {
-		if strings.Contains(text, keyword) {
-			return true
-		}
-	}
-	return false
-}
-
 func (p *cubeboxProviderReadPlanProducer) buildPlannerMessages(input cubeboxReadPlanProductionInput) []cubebox.PromptItem {
 	messages := []cubebox.PromptItem{
 		{
@@ -444,6 +367,98 @@ func buildKnowledgePackPromptBlock(pack cubebox.KnowledgePack) string {
 		"[examples.md]\n" + strings.TrimSpace(pack.Files["examples.md"]),
 	}
 	return strings.Join(parts, "\n\n")
+}
+
+func (n *cubeboxProviderQueryNarrator) NarrateQueryResult(
+	ctx context.Context,
+	input cubeboxQueryNarrationInput,
+) (string, error) {
+	if n == nil || n.configReader == nil || n.adapter == nil || n.secretResolver == nil {
+		return "", cubebox.ErrProviderConfigInvalid
+	}
+	config, err := n.configReader.GetActiveModelRuntimeConfig(ctx, strings.TrimSpace(input.TenantID))
+	if err != nil {
+		return "", err
+	}
+	if !config.Provider.Enabled {
+		return "", cubebox.ErrProviderDisabled
+	}
+	providerID := strings.TrimSpace(config.Provider.ID)
+	providerType := strings.TrimSpace(config.Provider.ProviderType)
+	modelSlug := strings.TrimSpace(config.Selection.ModelSlug)
+	if modelSlug == "" {
+		return "", cubebox.ErrModelSlugMissing
+	}
+	if providerID != strings.TrimSpace(input.ExpectedProviderID) ||
+		providerType != strings.TrimSpace(input.ExpectedProviderType) ||
+		modelSlug != strings.TrimSpace(input.ExpectedModelSlug) {
+		return "", errCubeboxQueryNarrationTargetMismatch
+	}
+	secret, err := n.secretResolver.ResolveSecretRef(ctx, strings.TrimSpace(input.TenantID), providerID, config.Credential.SecretRef)
+	if err != nil {
+		return "", err
+	}
+	envelope := cubeboxQueryNarrationEnvelope{
+		UserPrompt: strings.TrimSpace(input.Prompt),
+		Plan:       input.Plan,
+		Results:    input.Results,
+	}
+	body, err := json.Marshal(envelope)
+	if err != nil {
+		return "", err
+	}
+	stream, err := n.adapter.StreamChatCompletion(ctx, cubebox.ProviderChatRequest{
+		BaseURL: strings.TrimSpace(config.Provider.BaseURL),
+		APIKey:  secret,
+		Model:   modelSlug,
+		Messages: []cubebox.PromptItem{
+			{
+				Role: "system",
+				Content: strings.TrimSpace(`
+你是 CubeBox 的查询结果叙述器。
+你的职责只有一件事：基于已经执行完成的只读查询结果，向用户输出最终中文回答。
+
+硬约束：
+- 只能依据输入 JSON 中的 user_prompt、plan、results 叙述
+- 不得编造任何 results 中不存在的字段、值、条数、层级或结论
+- 不得补做新的查询、推断新的默认值、追加新的澄清问题
+- 不得输出 Markdown 代码块
+- 不得逐字回显整份原始 JSON
+- 若结果不足以支持更强结论，只能如实说明
+- 输出纯文本，直接作为用户可见最终回复
+`),
+			},
+			{
+				Role:    "user",
+				Content: string(body),
+			},
+		},
+		Input: string(body),
+	})
+	if err != nil {
+		return "", err
+	}
+	defer func() { _ = stream.Close() }()
+
+	var out strings.Builder
+	for {
+		chunk, err := stream.Recv()
+		if err != nil {
+			if errors.Is(err, io.EOF) {
+				break
+			}
+			return "", err
+		}
+		out.WriteString(chunk.Delta)
+		if chunk.Done {
+			break
+		}
+	}
+	text := strings.TrimSpace(out.String())
+	if text == "" {
+		return "", cubebox.ErrProviderStreamInvalid
+	}
+	return text, nil
 }
 
 func (f *cubeboxQueryFlow) newQueryEventWriter(
@@ -590,8 +605,9 @@ func buildDefaultCubeboxQueryFlow(
 	store cubeboxConversationStore,
 	orgStore OrgUnitStore,
 	producer cubeboxReadPlanProducer,
+	narrator cubeboxQueryNarrator,
 ) (*cubeboxQueryFlow, error) {
-	if runtime == nil || store == nil || orgStore == nil || producer == nil {
+	if runtime == nil || store == nil || orgStore == nil || producer == nil || narrator == nil {
 		return nil, nil
 	}
 	items, err := newCubeBoxOrgUnitRegisteredExecutors(orgStore)
@@ -607,6 +623,7 @@ func buildDefaultCubeboxQueryFlow(
 		store,
 		registry,
 		producer,
+		narrator,
 		[]string{mustResolveRepoPath(filepath.Join("modules", "orgunit", "presentation", "cubebox"))},
 	)
 }
@@ -709,323 +726,23 @@ func queryExecutionErrorToTerminal(err error) queryTerminalError {
 	}
 }
 
-func buildCubeboxQueryAnswer(plan cubebox.ReadPlan, results []cubebox.ExecuteResult, registry *cubebox.ExecutionRegistry) string {
-	lines := []string{"已完成只读查询。"}
-	if len(plan.ExplainFocus) > 0 {
-		lines = append(lines, "本次关注："+strings.Join(plan.ExplainFocus, "、")+"。")
-	}
-	for _, result := range results {
-		lines = append(lines, fmt.Sprintf("%s（%s）", strings.TrimSpace(result.StepID), strings.TrimSpace(result.APIKey)))
-		summaries := summarizeQueryResult(result, registry)
-		if len(summaries) == 0 {
-			lines = append(lines, "未返回可解释的重点字段。")
-			continue
-		}
-		lines = append(lines, summaries...)
-	}
-	lines = limitQueryAnswer(lines)
-	return strings.Join(lines, "\n")
-}
-
-func summarizeQueryResult(result cubebox.ExecuteResult, registry *cubebox.ExecutionRegistry) []string {
-	if summaries := summarizeQueryResultWithRenderer(result, registry); len(summaries) > 0 {
-		return summaries
-	}
-
-	payload := normalizeQuerySummaryPayload(result.Payload)
-	out := make([]string, 0, len(result.ResultFocus))
-	for _, focus := range result.ResultFocus {
-		values := collectQueryFocusValues(payload, splitQueryFocus(focus))
-		if len(values) == 0 {
-			continue
-		}
-		out = append(out, fmt.Sprintf("%s：%s", strings.TrimSpace(focus), strings.Join(limitQuerySummaryValues(values), "，")))
-	}
-	if len(out) > 0 {
-		return out
-	}
-	if summaries := summarizeQueryResultStableMeta(payload); len(summaries) > 0 {
-		return summaries
-	}
-	return []string{"未返回可解释的重点字段。"}
-}
-
-func summarizeQueryResultWithRenderer(result cubebox.ExecuteResult, registry *cubebox.ExecutionRegistry) []string {
-	if registry == nil {
-		return nil
-	}
-	item, ok := registry.Resolve(result.APIKey)
-	if !ok || item.SummaryRenderer == nil {
-		return nil
-	}
-	return item.SummaryRenderer(result)
-}
-
-func limitQueryAnswer(lines []string) []string {
-	lines = limitQueryAnswerLines(lines)
-	return limitQueryAnswerChars(lines)
-}
-
-func limitQueryAnswerLines(lines []string) []string {
-	if len(lines) <= cubeboxQueryAnswerMaxLines {
-		return lines
-	}
-	head := append([]string(nil), lines[:cubeboxQueryAnswerMaxLines-1]...)
-	return append(head, cubeboxQuerySummaryFallbackListNotice)
-}
-
-func limitQueryAnswerChars(lines []string) []string {
-	if utf8.RuneCountInString(strings.Join(lines, "\n")) <= cubeboxQueryAnswerMaxChars {
-		return lines
-	}
-
-	fallbacks := []string{
-		cubeboxQuerySummaryFallbackListNotice,
-		cubeboxQuerySummaryFallbackOmitted,
-	}
-	out := make([]string, 0, len(lines))
-	for _, line := range lines {
-		candidate := append(out, line)
-		if utf8.RuneCountInString(strings.Join(candidate, "\n")) <= cubeboxQueryAnswerMaxChars {
-			out = candidate
-			continue
-		}
-		break
-	}
-
-	if len(out) == 0 {
-		return []string{"已完成只读查询。", cubeboxQuerySummaryFallbackOmitted}
-	}
-
-	for _, fallback := range fallbacks {
-		candidate := append([]string(nil), out...)
-		if len(candidate) == 0 || candidate[len(candidate)-1] != fallback {
-			candidate = append(candidate, fallback)
-		}
-		if utf8.RuneCountInString(strings.Join(candidate, "\n")) <= cubeboxQueryAnswerMaxChars {
-			return candidate
-		}
-	}
-
-	if len(out) > 1 {
-		out = out[:len(out)-1]
-	}
-	return []string{out[0], cubeboxQuerySummaryFallbackOmitted}
-}
-
-func summarizeOrgUnitListQueryResult(payload map[string]any) []string {
-	payload = normalizeQuerySummaryPayload(payload)
-	items, ok := decodeOrgUnitListSummaryItems(payload["org_units"])
-	if !ok {
-		return nil
-	}
-
-	lines := make([]string, 0, len(items)+3)
-	if asOf, ok := renderQuerySummaryValue(payload["as_of"]); ok {
-		lines = append(lines, "as_of："+asOf)
-	}
-	if includeDisabled, ok := renderQuerySummaryValue(payload["include_disabled"]); ok {
-		lines = append(lines, "include_disabled："+includeDisabled)
-	}
-	if len(items) == 0 {
-		lines = append(lines, "组织列表：未返回组织。")
-		return lines
-	}
-
-	countText := fmt.Sprintf("%d 条", len(items))
-	if total, ok := renderQuerySummaryValue(payload["total"]); ok {
-		countText = fmt.Sprintf("%s / total %s", countText, total)
-	}
-	lines = append(lines, "组织列表："+countText)
-	visibleItems := items
-	if len(visibleItems) > cubeboxQueryListSummaryMaxItems {
-		visibleItems = visibleItems[:cubeboxQueryListSummaryMaxItems]
-	}
-	for _, item := range visibleItems {
-		lines = append(lines, formatOrgUnitListSummaryItem(item))
-	}
-	if len(items) > len(visibleItems) {
-		lines = append(lines, cubeboxQuerySummaryFallbackListNotice)
-	}
-	return lines
-}
-
-func summarizeQueryResultStableMeta(payload map[string]any) []string {
-	orderedKeys := []string{"as_of", "tree_as_of", "include_disabled", "page", "size", "total", "has_more"}
-	lines := make([]string, 0, len(orderedKeys))
-	for _, key := range orderedKeys {
-		value, ok := payload[key]
-		if !ok || value == nil {
-			continue
-		}
-		rendered, ok := renderQuerySummaryValue(value)
-		if !ok {
-			continue
-		}
-		lines = append(lines, fmt.Sprintf("%s：%s", key, rendered))
-	}
-	return lines
-}
-
-func decodeOrgUnitListSummaryItems(value any) ([]orgUnitListItem, bool) {
-	if value == nil {
-		return nil, false
-	}
-	raw, err := json.Marshal(value)
-	if err != nil {
-		return nil, false
-	}
-	var items []orgUnitListItem
-	if err := json.Unmarshal(raw, &items); err != nil {
-		return nil, false
-	}
-	return items, true
-}
-
-func formatOrgUnitListSummaryItem(item orgUnitListItem) string {
-	parts := []string{
-		strings.TrimSpace(item.OrgCode),
-		strings.TrimSpace(item.Name),
-		"状态：" + strings.TrimSpace(item.Status),
-		"业务单元：" + renderQueryOptionalBoolCN(item.IsBusinessUnit),
-		"有下级：" + renderQueryOptionalBoolCN(item.HasChildren),
-	}
-	out := make([]string, 0, len(parts))
-	for _, part := range parts {
-		part = strings.TrimSpace(part)
-		if part != "" {
-			out = append(out, part)
-		}
-	}
-	return "- " + strings.Join(out, " | ")
-}
-
-func renderQueryOptionalBoolCN(value *bool) string {
-	if value == nil {
-		return "未知"
-	}
-	if *value {
-		return "是"
-	}
-	return "否"
-}
-
-func normalizeQuerySummaryPayload(payload map[string]any) map[string]any {
-	raw, err := json.Marshal(payload)
-	if err != nil {
-		return payload
-	}
-	var normalized map[string]any
-	if err := json.Unmarshal(raw, &normalized); err != nil {
-		return payload
-	}
-	return normalized
-}
-
-func splitQueryFocus(focus string) []string {
-	parts := strings.Split(strings.TrimSpace(focus), ".")
-	out := make([]string, 0, len(parts))
-	for _, part := range parts {
-		part = strings.TrimSpace(part)
-		if part != "" {
-			out = append(out, part)
-		}
-	}
-	return out
-}
-
-func collectQueryFocusValues(value any, path []string) []string {
-	if len(path) == 0 {
-		if rendered, ok := renderQuerySummaryValue(value); ok {
-			return []string{rendered}
-		}
-		return nil
-	}
-
-	token := path[0]
-	if strings.HasSuffix(token, "[]") {
-		key := strings.TrimSuffix(token, "[]")
-		obj, ok := value.(map[string]any)
-		if !ok {
-			return nil
-		}
-		next, ok := obj[key]
-		if !ok || next == nil {
-			return nil
-		}
-		items, ok := next.([]any)
-		if !ok {
-			return nil
-		}
-		out := make([]string, 0, len(items))
-		for _, item := range items {
-			out = append(out, collectQueryFocusValues(item, path[1:])...)
-		}
-		return uniqueQuerySummaryValues(out)
-	}
-
-	obj, ok := value.(map[string]any)
-	if !ok {
-		return nil
-	}
-	next, ok := obj[token]
-	if !ok || next == nil {
-		return nil
-	}
-	return collectQueryFocusValues(next, path[1:])
-}
-
-func renderQuerySummaryValue(value any) (string, bool) {
-	switch v := value.(type) {
-	case string:
-		v = strings.TrimSpace(v)
-		return v, v != ""
-	case bool:
-		if v {
-			return "true", true
-		}
-		return "false", true
-	case int:
-		return fmt.Sprintf("%d", v), true
-	case int32:
-		return fmt.Sprintf("%d", v), true
-	case int64:
-		return fmt.Sprintf("%d", v), true
-	case float64:
-		return strings.TrimRight(strings.TrimRight(fmt.Sprintf("%.6f", v), "0"), "."), true
+func queryNarrationErrorToTerminal(err error) queryTerminalError {
+	switch {
+	case errors.Is(err, errCubeboxQueryNarrationTargetMismatch):
+		return queryTerminalError{Code: "ai_reply_model_target_mismatch", Message: "查询结果叙述未命中预期的大模型链路，请稍后重试。", Retryable: false}
+	case errors.Is(err, cubebox.ErrProviderDisabled), errors.Is(err, cubebox.ErrModelSlugMissing), errors.Is(err, cubebox.ErrProviderConfigInvalid):
+		return queryTerminalError{Code: "ai_model_config_invalid", Message: "模型配置无效，请联系管理员检查。", Retryable: false}
+	case errors.Is(err, cubebox.ErrSecretMissing), errors.Is(err, cubebox.ErrSecretRefInvalid):
+		return queryTerminalError{Code: "ai_model_secret_missing", Message: "当前模型密钥不可用，请联系管理员检查。", Retryable: false}
+	case errors.Is(err, cubebox.ErrProviderUnauthorized):
+		return queryTerminalError{Code: "ai_model_provider_unavailable", Message: "当前模型认证失败，请联系管理员检查。", Retryable: false}
+	case errors.Is(err, cubebox.ErrProviderRateLimited):
+		return queryTerminalError{Code: "ai_reply_render_failed", Message: "查询结果叙述失败，请稍后重试。", Retryable: true}
+	case errors.Is(err, cubebox.ErrProviderUnavailable), errors.Is(err, cubebox.ErrProviderTimeout), errors.Is(err, cubebox.ErrProviderStreamInvalid):
+		return queryTerminalError{Code: "ai_reply_render_failed", Message: "查询结果叙述失败，请稍后重试。", Retryable: true}
 	default:
-		raw, err := json.Marshal(v)
-		if err != nil {
-			return "", false
-		}
-		text := strings.TrimSpace(string(raw))
-		return text, text != ""
+		return queryTerminalError{Code: "ai_reply_render_failed", Message: "查询结果叙述失败，请稍后重试。", Retryable: false}
 	}
-}
-
-func uniqueQuerySummaryValues(values []string) []string {
-	out := make([]string, 0, len(values))
-	seen := make(map[string]struct{}, len(values))
-	for _, value := range values {
-		value = strings.TrimSpace(value)
-		if value == "" {
-			continue
-		}
-		if _, ok := seen[value]; ok {
-			continue
-		}
-		seen[value] = struct{}{}
-		out = append(out, value)
-	}
-	return out
-}
-
-func limitQuerySummaryValues(values []string) []string {
-	values = uniqueQuerySummaryValues(values)
-	if len(values) <= 5 {
-		return values
-	}
-	return append(values[:5], "…")
 }
 
 func turnIDPtr(v string) *string {

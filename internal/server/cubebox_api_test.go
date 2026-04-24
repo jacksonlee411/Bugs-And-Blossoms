@@ -29,6 +29,22 @@ func (s cubeboxReadPlanProducerStub) ProduceReadPlan(context.Context, cubeboxRea
 	return s.result, nil
 }
 
+type cubeboxQueryNarratorStub struct {
+	text string
+	err  error
+	fn   func(context.Context, cubeboxQueryNarrationInput) (string, error)
+}
+
+func (s cubeboxQueryNarratorStub) NarrateQueryResult(ctx context.Context, input cubeboxQueryNarrationInput) (string, error) {
+	if s.fn != nil {
+		return s.fn(ctx, input)
+	}
+	if s.err != nil {
+		return "", s.err
+	}
+	return s.text, nil
+}
+
 type cubeboxAuthorizerStub struct {
 	allowed map[string]bool
 	err     error
@@ -999,6 +1015,7 @@ func TestCubeBoxStreamTurnAPIUsesQueryFlowWhenHandled(t *testing.T) {
 				ModelSlug:    "gpt-5.2",
 			},
 		},
+		narrator: cubeboxQueryNarratorStub{text: "总部当前有效。"},
 		knowledgePacks: []cubebox.KnowledgePack{
 			{Dir: "modules/orgunit/presentation/cubebox", Files: map[string]string{"CUBEBOX-SKILL.md": "x", "queries.md": "x", "apis.md": "x", "examples.md": "x"}},
 		},
@@ -1021,8 +1038,8 @@ func TestCubeBoxStreamTurnAPIUsesQueryFlowWhenHandled(t *testing.T) {
 	if !strings.Contains(body, `"runtime":"cubebox-query-read-plan"`) {
 		t.Fatalf("expected query runtime, got %s", body)
 	}
-	if !strings.Contains(body, `org_unit.name：总部`) {
-		t.Fatalf("expected summarized query answer, got %s", body)
+	if !strings.Contains(body, `总部当前有效。`) {
+		t.Fatalf("expected narrated query answer, got %s", body)
 	}
 	if strings.Contains(body, `deterministic-fixture`) {
 		t.Fatalf("expected not to fallback to gateway fixture, got %s", body)
@@ -1039,9 +1056,6 @@ func TestCubeBoxStreamTurnAPIUsesQueryFlowWhenHandledForOrgUnitList(t *testing.T
 		APIKey:         "orgunit.list",
 		RequiredParams: []string{"as_of"},
 		OptionalParams: []string{"include_disabled"},
-		SummaryRenderer: func(result cubebox.ExecuteResult) []string {
-			return summarizeOrgUnitListQueryResult(result.Payload)
-		},
 		Executor: queryExecutorStub{
 			validateParamsFn: func(raw map[string]any) (map[string]any, error) {
 				return raw, nil
@@ -1104,6 +1118,7 @@ func TestCubeBoxStreamTurnAPIUsesQueryFlowWhenHandledForOrgUnitList(t *testing.T
 				ModelSlug:    "gpt-5.2",
 			},
 		},
+		narrator: cubeboxQueryNarratorStub{text: "已找到 2 条组织记录。"},
 		knowledgePacks: []cubebox.KnowledgePack{
 			{Dir: "modules/orgunit/presentation/cubebox", Files: map[string]string{"CUBEBOX-SKILL.md": "x", "queries.md": "x", "apis.md": "x", "examples.md": "x"}},
 		},
@@ -1125,9 +1140,7 @@ func TestCubeBoxStreamTurnAPIUsesQueryFlowWhenHandledForOrgUnitList(t *testing.T
 	body := rec.Body.String()
 	for _, expected := range []string{
 		`"runtime":"cubebox-query-read-plan"`,
-		`组织列表：2 条`,
-		`- 1001 | 总部 | 状态：active | 业务单元：是 | 有下级：是`,
-		`- 1002 | 华东事业部 | 状态：active | 业务单元：否 | 有下级：否`,
+		`已找到 2 条组织记录。`,
 	} {
 		if !strings.Contains(body, expected) {
 			t.Fatalf("expected %q in body=%s", expected, body)
@@ -1146,9 +1159,6 @@ func TestCubeBoxStreamTurnAPIPromotesOrgTreeClarificationToDefaultRootList(t *te
 		APIKey:         "orgunit.list",
 		RequiredParams: []string{"as_of"},
 		OptionalParams: []string{"include_disabled", "parent_org_code"},
-		SummaryRenderer: func(result cubebox.ExecuteResult) []string {
-			return summarizeOrgUnitListQueryResult(result.Payload)
-		},
 		Executor: queryExecutorStub{
 			validateParamsFn: func(raw map[string]any) (map[string]any, error) {
 				sawParams = raw
@@ -1197,6 +1207,10 @@ func TestCubeBoxStreamTurnAPIPromotesOrgTreeClarificationToDefaultRootList(t *te
 				ModelSlug:    "gpt-5.2",
 			},
 		},
+		narrator: cubeboxQueryNarratorStub{fn: func(context.Context, cubeboxQueryNarrationInput) (string, error) {
+			t.Fatal("narrator should not be called when clarification is required")
+			return "", nil
+		}},
 		knowledgePacks: []cubebox.KnowledgePack{
 			{Dir: "modules/orgunit/presentation/cubebox", Files: map[string]string{"CUBEBOX-SKILL.md": "x", "queries.md": "x", "apis.md": "x", "examples.md": "x"}},
 		},
@@ -1215,24 +1229,15 @@ func TestCubeBoxStreamTurnAPIPromotesOrgTreeClarificationToDefaultRootList(t *te
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
 	}
-	if sawParams == nil {
-		t.Fatal("expected orgunit.list executor to be called")
-	}
-	if got := sawParams["as_of"]; got != "2026-04-23" {
-		t.Fatalf("expected as_of defaulted, got %#v", got)
-	}
-	if got := sawParams["include_disabled"]; got != false {
-		t.Fatalf("expected include_disabled false, got %#v", got)
-	}
-	if _, ok := sawParams["parent_org_code"]; ok {
-		t.Fatalf("expected root list query, got params=%+v", sawParams)
+	if sawParams != nil {
+		t.Fatalf("expected clarification plan not to execute, got params=%+v", sawParams)
 	}
 	body := rec.Body.String()
-	if !strings.Contains(body, `组织列表：1 条`) {
-		t.Fatalf("expected executed list summary, got %s", body)
+	if !strings.Contains(body, `请告诉我要按哪一天查询组织树`) {
+		t.Fatalf("expected raw clarification text, got %s", body)
 	}
-	if strings.Contains(body, `parent_org_code`) || strings.Contains(body, `请告诉我要按哪一天查询组织树`) {
-		t.Fatalf("expected no raw clarification text, got %s", body)
+	if strings.Contains(body, `组织列表：`) {
+		t.Fatalf("expected no executed list summary, got %s", body)
 	}
 }
 
@@ -1279,6 +1284,10 @@ func TestCubeBoxStreamTurnAPIDoesNotDowngradeChildrenQueryToRootList(t *testing.
 				ModelSlug:    "gpt-5.2",
 			},
 		},
+		narrator: cubeboxQueryNarratorStub{fn: func(context.Context, cubeboxQueryNarrationInput) (string, error) {
+			t.Fatal("narrator should not be called when clarification is required")
+			return "", nil
+		}},
 		knowledgePacks: []cubebox.KnowledgePack{
 			{Dir: "modules/orgunit/presentation/cubebox", Files: map[string]string{"CUBEBOX-SKILL.md": "x", "queries.md": "x", "apis.md": "x", "examples.md": "x"}},
 		},
@@ -1301,8 +1310,8 @@ func TestCubeBoxStreamTurnAPIDoesNotDowngradeChildrenQueryToRootList(t *testing.
 		t.Fatal("expected children query clarification not to execute orgunit.list")
 	}
 	body := rec.Body.String()
-	if !strings.Contains(body, "上级组织的组织编码") {
-		t.Fatalf("expected humanized clarification, got %s", body)
+	if !strings.Contains(body, "请提供 parent_org_code。") {
+		t.Fatalf("expected raw clarification, got %s", body)
 	}
 	if strings.Contains(body, "组织列表：") {
 		t.Fatalf("expected no root list downgrade, got %s", body)
@@ -1355,6 +1364,7 @@ func TestCubeBoxStreamTurnAPILimitsLargeQueryPayloadInDelta(t *testing.T) {
 				},
 			},
 		}},
+		narrator: cubeboxQueryNarratorStub{text: "结果过大，请进入业务页面查看完整明细。"},
 		knowledgePacks: []cubebox.KnowledgePack{
 			{Dir: "modules/orgunit/presentation/cubebox", Files: map[string]string{"CUBEBOX-SKILL.md": "x", "queries.md": "x", "apis.md": "x", "examples.md": "x"}},
 		},
@@ -1369,7 +1379,7 @@ func TestCubeBoxStreamTurnAPILimitsLargeQueryPayloadInDelta(t *testing.T) {
 		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
 	}
 	body := rec.Body.String()
-	for _, expected := range []string{`"runtime":"cubebox-query-read-plan"`, `as_of：2026-04-23`, `total：1`} {
+	for _, expected := range []string{`"runtime":"cubebox-query-read-plan"`, `结果过大，请进入业务页面查看完整明细。`} {
 		if !strings.Contains(body, expected) {
 			t.Fatalf("expected %q in body=%s", expected, body)
 		}
@@ -1390,6 +1400,7 @@ func TestCubeBoxStreamTurnAPIFallsBackToGatewayWhenQueryFlowSkips(t *testing.T) 
 		store:    cubeboxStoreStub{},
 		registry: &cubebox.ExecutionRegistry{},
 		producer: cubeboxReadPlanProducerStub{result: cubeboxReadPlanProductionResult{Handled: false}},
+		narrator: cubeboxQueryNarratorStub{text: "unused"},
 		knowledgePacks: []cubebox.KnowledgePack{
 			{Dir: "modules/orgunit/presentation/cubebox", Files: map[string]string{"CUBEBOX-SKILL.md": "x", "queries.md": "x", "apis.md": "x", "examples.md": "x"}},
 		},
@@ -1455,6 +1466,7 @@ func TestCubeBoxStreamTurnAPIWritesQueryErrorWhenQueryExecutionFails(t *testing.
 				},
 			},
 		}},
+		narrator: cubeboxQueryNarratorStub{text: "unused"},
 		knowledgePacks: []cubebox.KnowledgePack{
 			{Dir: "modules/orgunit/presentation/cubebox", Files: map[string]string{"CUBEBOX-SKILL.md": "x", "queries.md": "x", "apis.md": "x", "examples.md": "x"}},
 		},
@@ -1519,6 +1531,7 @@ func TestCubeBoxStreamTurnAPIWritesNotFoundWhenQueryExecutionHasNoResult(t *test
 				},
 			},
 		}},
+		narrator: cubeboxQueryNarratorStub{text: "unused"},
 		knowledgePacks: []cubebox.KnowledgePack{
 			{Dir: "modules/orgunit/presentation/cubebox", Files: map[string]string{"CUBEBOX-SKILL.md": "x", "queries.md": "x", "apis.md": "x", "examples.md": "x"}},
 		},
@@ -1576,6 +1589,7 @@ func TestCubeBoxStreamTurnAPIWritesCatalogDriftWhenExecutorMissing(t *testing.T)
 				},
 			},
 		}},
+		narrator: cubeboxQueryNarratorStub{text: "unused"},
 		knowledgePacks: []cubebox.KnowledgePack{
 			{Dir: "modules/orgunit/presentation/cubebox", Files: map[string]string{"CUBEBOX-SKILL.md": "x", "queries.md": "x", "apis.md": "x", "examples.md": "x"}},
 		},
@@ -1611,6 +1625,7 @@ func TestCubeBoxStreamTurnAPIFallsBackToGatewayWhenPlannerErrors(t *testing.T) {
 		},
 		registry: &cubebox.ExecutionRegistry{},
 		producer: cubeboxReadPlanProducerStub{err: cubebox.ErrProviderUnavailable},
+		narrator: cubeboxQueryNarratorStub{text: "unused"},
 		knowledgePacks: []cubebox.KnowledgePack{
 			{Dir: "modules/orgunit/presentation/cubebox", Files: map[string]string{"CUBEBOX-SKILL.md": "x", "queries.md": "x", "apis.md": "x", "examples.md": "x"}},
 		},

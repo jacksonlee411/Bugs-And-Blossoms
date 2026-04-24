@@ -26,7 +26,7 @@ type ReadPlanStep struct {
 	ID          string         `json:"id"`
 	APIKey      string         `json:"api_key"`
 	Params      map[string]any `json:"params"`
-	ResultFocus []string       `json:"result_focus"`
+	ResultFocus []string       `json:"result_focus,omitempty"`
 	DependsOn   []string       `json:"depends_on"`
 }
 
@@ -128,9 +128,6 @@ func validateReadPlanStep(step ReadPlanStep, index int, steps []ReadPlanStep, se
 	}
 	if step.Params == nil {
 		return wrapReadPlanBoundaryError(fmt.Sprintf("steps[%d].params required", index))
-	}
-	if step.ResultFocus == nil {
-		return wrapReadPlanBoundaryError(fmt.Sprintf("steps[%d].result_focus required", index))
 	}
 	if step.DependsOn == nil {
 		return wrapReadPlanBoundaryError(fmt.Sprintf("steps[%d].depends_on required", index))

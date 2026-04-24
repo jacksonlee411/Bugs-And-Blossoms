@@ -30,14 +30,11 @@ type ExecuteResult struct {
 	ResultFocus []string
 }
 
-type SummaryRenderer func(ExecuteResult) []string
-
 type RegisteredExecutor struct {
-	APIKey          string
-	RequiredParams  []string
-	OptionalParams  []string
-	Executor        ReadExecutor
-	SummaryRenderer SummaryRenderer
+	APIKey         string
+	RequiredParams []string
+	OptionalParams []string
+	Executor       ReadExecutor
 }
 
 type ExecutionRegistry struct {
