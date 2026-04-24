@@ -251,6 +251,7 @@ modules/{module}/
 - DEV-PLAN-462：CubeBox 借鉴 Codex 成熟压缩机制的统一收敛方案：`docs/dev-plans/462-cubebox-codex-compaction-adoption-value-and-unified-convergence-plan.md`
 - DEV-PLAN-463：CubeBox 组织树查询暴露的知识包驱动偏航调查与收敛方案：`docs/dev-plans/463-cubebox-orgunit-tree-discovery-gap-investigation-and-remediation-plan.md`
 - DEV-PLAN-464：CubeBox 查询链架构收敛与知识包运行时重构方案：`docs/dev-plans/464-cubebox-query-architecture-convergence-plan.md`
+- DEV-PLAN-465：CubeBox OrgUnit Executor 契约边界与字段归属收敛方案：`docs/dev-plans/465-cubebox-orgunit-executor-contract-boundary-and-field-owner-convergence-plan.md`
 - DEV-PLAN-440：彻底删除 SetID 的全仓收口方案（SetID 根删除唯一 PoR）：`docs/dev-plans/440-complete-setid-removal-plan.md`
 - DEV-PLAN-441：旧策略模块残余清理方案：`docs/dev-plans/441-legacy-strategy-module-residue-cleanup-plan.md`
 - DEV-PLAN-450：直接切除 jobcatalog / staffing / person 三模块方案（保留 orgunit）：`docs/dev-plans/450-direct-removal-of-jobcatalog-staffing-person-modules-plan.md`
