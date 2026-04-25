@@ -459,13 +459,15 @@ narrator 可以看到：
    - 对误杀风险高的 regex 改成更明确的结构化泄露检测
    - 对普通风格不再 terminal error
    - 增加自然中文列表/短段落/小标题可通过的回归测试
-2. [ ] `P1` 纳入：
-   - 给 narrator 传入轻量对话上下文，但事实结论仍只能来自 `results`
-   - 把 narrator 输入从 raw `plan/results` 收敛为安全 presentation DTO
-   - 前端向 `/internal/cubebox/turns:stream` 传受控页面/对象事实
-   - 共享 query flow 去除模块专属澄清文案，把候选列表交给模型追问
-   - 知识包 API/参数集合与执行注册表一致性校验
-   - provider/runtime/model 元数据从 provider prompt view 中剥离，仅保留在事件 metadata、管理 UI 或日志中
+2. [x] `P1` 纳入并进一步收口：
+   - narrator 已接收轻量对话上下文，但事实结论仍只能来自 `results`
+   - narrator 输入已从 raw `plan/results` 收敛为安全 presentation DTO，并进一步移除 `plan`
+   - 前端已向 `/internal/cubebox/turns:stream` 传受控页面/对象事实
+   - 已修复 `page_context` 对 `/org/units/field-configs` 的详情页误判，不再把固定子路由伪装成 `orgunit` 实体对象
+   - 已修复组织详情页 `effective_date` 页面历史锚点漏传；当前前端优先读取 `effective_date`，兼容写回现有 `view.as_of` DTO
+   - 共享 query flow 已去除模块专属澄清文案，把候选列表交给模型追问；clarifier 进一步只消费 `user_prompt + page_context + dialogue_context + candidates`
+   - 已增加知识包 API/参数集合与执行注册表双向一致性校验
+   - provider/runtime/model 元数据已从 provider prompt view 中剥离，仅保留在事件 metadata、管理 UI 或日志中
 3. [ ] `P2/后续 owner` 纳入：
    - 模型参与会话语义摘要或摘要改写
    - 更完整的长结果语义收敛
@@ -483,6 +485,16 @@ narrator 可以看到：
   - `go test ./modules/cubebox ./internal/server`
   - `make check doc`
 - [x] 真实页面复验已补齐，Slice D 证据已登记到 readiness（含截图、网络请求与 canonical event 片段）。
+- [x] `P1` 表达层与 prompt-view 收口已完成：
+  - narrator 仅消费 `user_prompt + page_context + dialogue_context + results`
+  - clarifier 仅消费 `user_prompt + page_context + dialogue_context + candidates`
+  - prompt-facing 实体上下文已收敛为最小实体视图，不再暴露 `intent`、`source_api_key`、`target_org_code`、`parent_org_code`
+  - 共享层不再替模型承担模块专属澄清文案或 narrator 结果概括
+- [x] `P1` 回归修复已完成：
+  - `page_context` 不再把 `/org/units/field-configs` 误识别为组织详情页
+  - 组织详情页前端页面事实已优先读取 `effective_date`，但当前 DTO 仍保持 `view.as_of` 以避免把契约改名混入本次修复
+  - 知识包 `apis.md` 与 `ExecutionRegistry` 已改为双向一致性校验
+- [ ] DTO 契约改名后续 owner 已独立拆出：`DEV-PLAN-470`
 
 ## 7. 验收场景
 
@@ -560,14 +572,14 @@ narrator 可以看到：
 
 ## 10. 交付物
 
-1. [ ] 扩展后的 `QueryContext` 与事件提取测试。
+1. [x] 扩展后的 `QueryContext` 与事件提取测试。
 2. [x] planner 输入包含有限 `query_dialogue_context`。
 3. [x] 通用前序结果引用解析与测试。
-4. [ ] narrator 输入包含轻量对话上下文。
+4. [x] narrator 输入包含轻量对话上下文。
 5. [x] `queryNarrationForbiddenPatterns` 收缩到内部实现泄露防线。
 6. [x] metadata event 支撑候选、澄清和解析来源。
 7. [x] 同会话连续追问服务端测试。
-8. [ ] 真实页面复验证据记录。
+8. [x] 真实页面复验证据记录。
 9. [x] 模型限制面扩大调查清单与回交优先级已冻结。
 10. [x] `AGENTS.md` Doc Map 已登记本计划。
 
@@ -581,3 +593,6 @@ narrator 可以看到：
 6. [X] 完成 `468 P0` 代码落地：`QueryContext` 扩展、`query_dialogue_context` 注入、普通列表结果转 `recent_candidates`、通用前序结果引用解析、知识包规则更新与相关自动化测试通过。（2026-04-25 16:50 CST）
 7. [X] 完成代码评审收口：修复 synthetic resolved-context event、`missing_params` `[]string` 解码丢失、dialogue delta 聚合与澄清重复污染问题。（2026-04-25 17:10 CST）
 8. [X] 执行 `go test ./modules/cubebox ./internal/server` 与 `make check doc` 并通过。（2026-04-25 17:20 CST）
+9. [X] 完成 `468 Slice E / P1` 收口：narrator/clarifier 输入已收敛为安全 DTO 与轻量上下文；narrator 不再接收 `plan`，clarifier 不再接收 `query_intent`，候选追问完全回交模型。（2026-04-25）
+10. [X] 回写 `DEV-PLAN-468` 与 readiness 状态，并执行文档门禁校验。（2026-04-25）
+11. [X] 修复 `page_context` 路由误判、历史日期漏传与知识包-执行注册表单向校验残口；并把 `page_context.view.as_of -> effective_date` DTO 改名单独拆到 `DEV-PLAN-470`。（2026-04-25 21:48 CST）

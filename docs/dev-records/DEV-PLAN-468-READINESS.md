@@ -25,6 +25,16 @@
   - `@step-1.target_org_code`
   - `@step-1.payload.target_org_code`
 - 已更新 `orgunit` 知识包，使模型可基于 `query_dialogue_context`、`recent_candidates` 与多步引用完成“先 search，再 details/list”的线性编排。
+- 已完成 `Slice E / P1` 的 prompt-view 收口：
+  - narrator 输入已收敛为安全 presentation DTO，并只保留 `user_prompt`、`page_context`、`dialogue_context`、`results`
+  - clarifier 输入已只保留 `user_prompt`、`page_context`、`dialogue_context`、`candidates`
+  - prompt-facing 实体上下文已压缩为最小实体视图，仅保留 `domain`、`entity_key`、`as_of`
+  - 前端已向 `/internal/cubebox/turns:stream` 传入受控 `page_context`
+  - 已修复 `page_context` 对 `/org/units/field-configs` 的详情页误判；固定子路由不再伪装为 `orgunit` 对象事实
+  - 已修复组织详情页 `effective_date` 页面历史锚点漏传；当前前端优先读取 `effective_date`，兼容写回 `view.as_of`
+  - 知识包 API/参数集合已与执行注册表做双向一致性校验
+  - provider/runtime/model 元数据已从 provider prompt view 剥离，仅保留在 metadata、管理 UI 或日志
+  - `page_context.view.as_of -> effective_date` DTO 改名已独立拆到 `DEV-PLAN-470`，不混入本次回归修复
 
 ### 代码评审收口
 
@@ -35,6 +45,11 @@
   - `turn.agent_message.delta` 按 `message_id` 聚合
   - 在 `turn.agent_message.completed` 时落完整 assistant reply
   - `turn.query_clarification.requested` 不再重复塞入 `RecentDialogueTurns`
+- 已把 narrator/clarifier 的 owner 边界继续回交模型：
+  - 共享 query flow 不再拼模块专属候选澄清文案，改为把候选列表交给 clarifier 生成自然追问
+  - 共享层不再为 narrator 生成结果总结；模块侧只产安全 DTO，最终自然语言组织完全回交 narrator
+  - narrator 不再接收 `plan`
+  - clarifier 不再接收 `query_intent`
 
 ### 自动化验证
 
@@ -47,6 +62,10 @@
   - delta 聚合与澄清不重复
   - query flow 不再写 synthetic resolved-context event
   - 通用前序结果引用解析
+  - narrator/clarifier 输入 DTO 收口与轻量上下文注入
+  - prompt-facing 实体上下文不再泄露 `intent`、`source_api_key`、`target_org_code`、`parent_org_code`
+  - narrator 不再接收 `plan`
+  - clarifier 不再接收 `query_intent`
 
 - 命令：`make check doc`
 - 结果：通过（`[doc] OK`）
@@ -55,6 +74,8 @@
 
 - `468 P0` 的代码闭环与自动化测试已完成。
 - `468 Slice D` 的真实页面复验与会话样本证据已补齐。
+- `468 Slice E / P1` 的表达层、DTO 与 prompt-view 收口已完成；当前剩余主线为 `P2/后续 owner`。
+- `468 Slice E / P1` 评审发现的前端页面事实误判、历史日期漏传与知识包-注册表单向校验残口已完成修复。
 
 ## 真实页面复验
 

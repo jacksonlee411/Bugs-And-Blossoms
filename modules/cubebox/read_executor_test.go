@@ -35,6 +35,24 @@ func TestNewExecutionRegistryRejectsDuplicateAPIKey(t *testing.T) {
 	}
 }
 
+func TestExecutionRegistryRegisteredExecutorsReturnsSortedSnapshot(t *testing.T) {
+	registry, err := NewExecutionRegistry(
+		RegisteredExecutor{APIKey: "orgunit.list_children", Executor: readExecutorStub{}},
+		RegisteredExecutor{APIKey: "orgunit.details", Executor: readExecutorStub{}},
+	)
+	if err != nil {
+		t.Fatalf("NewExecutionRegistry err=%v", err)
+	}
+
+	items := registry.RegisteredExecutors()
+	if len(items) != 2 {
+		t.Fatalf("registered executors=%d", len(items))
+	}
+	if items[0].APIKey != "orgunit.details" || items[1].APIKey != "orgunit.list_children" {
+		t.Fatalf("unexpected api key order: %#v", items)
+	}
+}
+
 func TestExecutionRegistryExecutePlan(t *testing.T) {
 	registry, err := NewExecutionRegistry(
 		RegisteredExecutor{

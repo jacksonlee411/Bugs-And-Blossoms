@@ -72,6 +72,7 @@ type GatewayStreamRequest struct {
 	ConversationID string
 	Prompt         string
 	NextSequence   int
+	PageContext    *PageContext
 }
 
 type GatewayEventSink interface {
@@ -426,17 +427,25 @@ func providerErrorFromContext(err error) error {
 }
 
 func (s *GatewayService) buildCanonicalContext(request GatewayStreamRequest, lifecycle gatewayLifecycleMeta) CanonicalContext {
+	pageContext := NormalizePageContext(request.PageContext)
+	page := "/app/cubebox"
+	businessObject := "conversation"
+	if pageContext != nil {
+		if pageContext.Page != "" {
+			page = pageContext.Page
+		}
+		if pageContext.BusinessObject != "" {
+			businessObject = pageContext.BusinessObject
+		}
+	}
 	return CanonicalContext{
 		TenantID:       request.TenantID,
 		PrincipalID:    request.PrincipalID,
 		Language:       "zh",
-		Page:           "/app/cubebox",
+		Page:           page,
 		Permissions:    []string{"cubebox.conversations:use"},
-		BusinessObject: "conversation",
-		ProviderID:     lifecycle.providerID,
-		ProviderType:   lifecycle.providerType,
-		ModelSlug:      lifecycle.modelSlug,
-		Runtime:        lifecycle.runtime,
+		BusinessObject: businessObject,
+		PageContext:    pageContext,
 	}
 }
 

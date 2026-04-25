@@ -1,5 +1,6 @@
 import '@testing-library/jest-dom/vitest'
 import { render, screen, waitFor } from '@testing-library/react'
+import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { CubeBoxProvider } from './CubeBoxProvider'
 import { CubeBoxPanel } from './CubeBoxPanel'
@@ -122,9 +123,11 @@ describe('CubeBoxPanel restore flow', () => {
     })
 
     render(
-      <CubeBoxProvider>
-        <CubeBoxPanel />
-      </CubeBoxProvider>
+      <MemoryRouter>
+        <CubeBoxProvider>
+          <CubeBoxPanel />
+        </CubeBoxProvider>
+      </MemoryRouter>
     )
 
     await waitFor(() => expect(apiMocks.listConversations).toHaveBeenCalledTimes(1))

@@ -25,13 +25,17 @@ type KnowledgePack struct {
 
 type knowledgePackQueriesDoc struct {
 	Intents []struct {
-		Key string `yaml:"key"`
+		Key            string   `yaml:"key"`
+		RequiredParams []string `yaml:"required_params"`
+		OptionalParams []string `yaml:"optional_params"`
 	} `yaml:"intents"`
 }
 
 type knowledgePackAPIsDoc struct {
 	APIs []struct {
-		APIKey string `yaml:"api_key"`
+		APIKey         string   `yaml:"api_key"`
+		RequiredParams []string `yaml:"required_params"`
+		OptionalParams []string `yaml:"optional_params"`
 	} `yaml:"apis"`
 }
 
@@ -82,6 +86,31 @@ func ValidateKnowledgePack(pack KnowledgePack) error {
 	if len(queriesDoc.Intents) == 0 {
 		return wrapKnowledgePackError("queries.md missing intents block")
 	}
+	queriesByKey := make(map[string]struct {
+		RequiredParams []string
+		OptionalParams []string
+	}, len(queriesDoc.Intents))
+	for _, item := range queriesDoc.Intents {
+		key := strings.TrimSpace(item.Key)
+		if key == "" {
+			return wrapKnowledgePackError("queries.md intent key required")
+		}
+		if _, exists := queriesByKey[key]; exists {
+			return wrapKnowledgePackError(fmt.Sprintf("queries.md duplicate intent key: %s", key))
+		}
+		required := normalizeParamNames(item.RequiredParams)
+		optional := normalizeParamNames(item.OptionalParams)
+		if item.RequiredParams == nil || item.OptionalParams == nil {
+			return wrapKnowledgePackError(fmt.Sprintf("queries.md params missing for intent: %s", key))
+		}
+		queriesByKey[key] = struct {
+			RequiredParams []string
+			OptionalParams []string
+		}{
+			RequiredParams: required,
+			OptionalParams: optional,
+		}
+	}
 
 	apisBlock, err := extractFencedBlock(pack.Files["apis.md"], "yaml")
 	if err != nil {
@@ -93,6 +122,22 @@ func ValidateKnowledgePack(pack KnowledgePack) error {
 	}
 	if len(apisDoc.APIs) == 0 {
 		return wrapKnowledgePackError("apis.md missing api_key declaration")
+	}
+	for _, item := range apisDoc.APIs {
+		apiKey := strings.TrimSpace(item.APIKey)
+		if apiKey == "" {
+			return wrapKnowledgePackError("apis.md api_key required")
+		}
+		if item.RequiredParams == nil || item.OptionalParams == nil {
+			return wrapKnowledgePackError(fmt.Sprintf("apis.md params missing for api_key: %s", apiKey))
+		}
+		if queryDoc, ok := queriesByKey[apiKey]; ok {
+			required := normalizeParamNames(item.RequiredParams)
+			optional := normalizeParamNames(item.OptionalParams)
+			if !sameNormalizedParamSet(required, queryDoc.RequiredParams) || !sameNormalizedParamSet(optional, queryDoc.OptionalParams) {
+				return wrapKnowledgePackError(fmt.Sprintf("queries/apis params drift for key: %s", apiKey))
+			}
+		}
 	}
 
 	exampleBlocks, err := extractAllFencedBlocks(pack.Files["examples.md"], "json")
@@ -118,6 +163,69 @@ func ValidateKnowledgePack(pack KnowledgePack) error {
 	}
 
 	return nil
+}
+
+func ValidateKnowledgePackAgainstRegistry(pack KnowledgePack, registry *ExecutionRegistry) error {
+	if registry == nil {
+		return wrapKnowledgePackError("execution registry missing")
+	}
+	if err := ValidateKnowledgePack(pack); err != nil {
+		return err
+	}
+	apisBlock, err := extractFencedBlock(pack.Files["apis.md"], "yaml")
+	if err != nil {
+		return wrapKnowledgePackError(fmt.Sprintf("apis.md invalid: %v", err))
+	}
+	var apisDoc knowledgePackAPIsDoc
+	if err := yaml.Unmarshal([]byte(apisBlock), &apisDoc); err != nil {
+		return wrapKnowledgePackError(fmt.Sprintf("apis.md yaml invalid: %v", err))
+	}
+	declaredAPIKeys := make(map[string]struct{}, len(apisDoc.APIs))
+	for _, item := range apisDoc.APIs {
+		apiKey := strings.TrimSpace(item.APIKey)
+		declaredAPIKeys[apiKey] = struct{}{}
+		registered, ok := registry.Resolve(apiKey)
+		if !ok {
+			return wrapKnowledgePackError(fmt.Sprintf("apis.md api_key not registered: %s", apiKey))
+		}
+		required := normalizeParamNames(item.RequiredParams)
+		optional := normalizeParamNames(item.OptionalParams)
+		if !sameNormalizedParamSet(required, registered.RequiredParams) || !sameNormalizedParamSet(optional, registered.OptionalParams) {
+			return wrapKnowledgePackError(fmt.Sprintf(
+				"apis.md params drift for %s: required=%v optional=%v registry_required=%v registry_optional=%v",
+				apiKey,
+				required,
+				optional,
+				registered.RequiredParams,
+				registered.OptionalParams,
+			))
+		}
+	}
+	for _, registered := range registry.RegisteredExecutors() {
+		if _, ok := declaredAPIKeys[registered.APIKey]; ok {
+			continue
+		}
+		return wrapKnowledgePackError(fmt.Sprintf("execution registry api_key missing from apis.md: %s", registered.APIKey))
+	}
+	return nil
+}
+
+func sameNormalizedParamSet(left []string, right []string) bool {
+	left = normalizeParamNames(left)
+	right = normalizeParamNames(right)
+	if len(left) != len(right) {
+		return false
+	}
+	index := make(map[string]struct{}, len(left))
+	for _, item := range left {
+		index[item] = struct{}{}
+	}
+	for _, item := range right {
+		if _, ok := index[item]; !ok {
+			return false
+		}
+	}
+	return true
 }
 
 func wrapKnowledgePackError(detail string) error {

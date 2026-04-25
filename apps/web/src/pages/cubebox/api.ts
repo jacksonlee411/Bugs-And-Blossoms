@@ -3,6 +3,7 @@ import { resolveApiErrorMessage } from '../../errors/presentApiError'
 import type {
   CanonicalEvent,
   ConversationReplayResponse,
+  CubeBoxPageContext,
   CubeBoxConversationListResponse,
   CubeBoxCapabilities,
   CubeBoxModelCredential,
@@ -93,6 +94,7 @@ export async function streamTurn(input: {
   conversationID: string
   prompt: string
   nextSequence: number
+  pageContext?: CubeBoxPageContext
   signal: AbortSignal
   onEvent: (event: CanonicalEvent) => void
 }): Promise<void> {
@@ -105,7 +107,8 @@ export async function streamTurn(input: {
     body: JSON.stringify({
       conversation_id: input.conversationID,
       prompt: input.prompt,
-      next_sequence: input.nextSequence
+      next_sequence: input.nextSequence,
+      ...(input.pageContext ? { page_context: input.pageContext } : {})
     }),
     signal: input.signal
   })

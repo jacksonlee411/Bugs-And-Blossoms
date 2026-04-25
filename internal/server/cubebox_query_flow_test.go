@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"io"
 	"strings"
@@ -25,8 +26,7 @@ func TestCubeboxProviderQueryNarratorRejectsTargetMismatch(t *testing.T) {
 	_, err := narrator.NarrateQueryResult(context.Background(), cubeboxQueryNarrationInput{
 		TenantID:             "tenant-a",
 		Prompt:               "查总部",
-		Plan:                 cubebox.ReadPlan{Intent: "orgunit.details", Confidence: 0.9, Steps: []cubebox.ReadPlanStep{{ID: "step-1", APIKey: "orgunit.details", Params: map[string]any{"org_code": "1001", "as_of": "2026-04-23"}, DependsOn: []string{}}}},
-		Results:              []cubebox.ExecuteResult{{APIKey: "orgunit.details", StepID: "step-1", Payload: map[string]any{"org_unit": map[string]any{"name": "总部"}}}},
+		Results:              []cubebox.QueryNarrationResult{{Domain: "orgunit", Data: map[string]any{"entity": map[string]any{"name": "总部"}}}},
 		ExpectedProviderID:   "provider-b",
 		ExpectedProviderType: "openai-compatible",
 		ExpectedModelSlug:    "gpt-5.2",
@@ -83,6 +83,65 @@ func TestBuildQueryNarrationMessagesForbidsInternalLeakage(t *testing.T) {
 	}
 }
 
+func TestBuildQueryClarificationMessagesUsesClarifierPrompt(t *testing.T) {
+	messages := buildQueryClarificationMessages(`{"user_prompt":"查华东","candidates":[{"entity_key":"1001"}]}`)
+	if len(messages) != 2 {
+		t.Fatalf("unexpected message count=%d", len(messages))
+	}
+	if !strings.Contains(messages[0].Content, "查询澄清器") || !strings.Contains(messages[0].Content, "不能静默替用户选择") {
+		t.Fatalf("unexpected clarification prompt=%q", messages[0].Content)
+	}
+}
+
+func TestBuildQueryClarificationEnvelopeOmitsQueryIntent(t *testing.T) {
+	body, err := json.Marshal(buildQueryClarificationEnvelope(cubeboxQueryClarificationInput{
+		Prompt:      "查华东",
+		PageContext: &cubebox.PageContext{Page: "/org/units", BusinessObject: "orgunit"},
+		QueryContext: cubebox.QueryContext{
+			ResolvedEntity: &cubebox.QueryEntity{
+				Domain:        "orgunit",
+				Intent:        "orgunit.search",
+				EntityKey:     "1001",
+				AsOf:          "2026-04-24",
+				SourceAPIKey:  "orgunit.search",
+				TargetOrgCode: "1001",
+			},
+			RecentCandidates: []cubebox.QueryCandidate{
+				{Domain: "orgunit", EntityKey: "1001", Name: "华东销售中心", AsOf: "2026-04-24"},
+			},
+		},
+		Candidates: []cubebox.QueryCandidate{
+			{Domain: "orgunit", EntityKey: "1001", Name: "华东销售中心", AsOf: "2026-04-24"},
+			{Domain: "orgunit", EntityKey: "1002", Name: "华东运营中心", AsOf: "2026-04-24"},
+		},
+	}))
+	if err != nil {
+		t.Fatalf("marshal clarification envelope: %v", err)
+	}
+	text := string(body)
+	for _, snippet := range []string{
+		`"user_prompt":"查华东"`,
+		`"page_context"`,
+		`"dialogue_context"`,
+		`"candidates"`,
+		`"entity_key":"1001"`,
+	} {
+		if !strings.Contains(text, snippet) {
+			t.Fatalf("expected clarification body to contain %q, got %q", snippet, text)
+		}
+	}
+	for _, forbidden := range []string{
+		`"query_intent"`,
+		`"intent":"orgunit.search"`,
+		`"source_api_key"`,
+		`"target_org_code"`,
+	} {
+		if strings.Contains(text, forbidden) {
+			t.Fatalf("expected clarification body to omit %q, got %q", forbidden, text)
+		}
+	}
+}
+
 func TestValidateQueryNarrationTextRejectsInternalLeakage(t *testing.T) {
 	for _, text := range []string{
 		"```json\n{\"results\":[{\"payload\":{\"name\":\"飞虫与鲜花\"}}]}\n```",
@@ -108,16 +167,12 @@ func TestValidateQueryNarrationTextAllowsNaturalLanguage(t *testing.T) {
 	}
 }
 
-func TestQueryExecutionClarifyingQuestionReturnsAmbiguousSearchPrompt(t *testing.T) {
-	err := &orgUnitSearchAmbiguousError{
-		Query: "华东",
-		Candidates: []OrgUnitSearchCandidate{
-			{OrgCode: "1001", Name: "华东销售中心", Status: "active"},
-			{OrgCode: "1002", Name: "华东运营中心", Status: "disabled"},
-		},
-	}
-	text := queryExecutionClarifyingQuestion(err)
-	if !strings.Contains(text, "华东") || !strings.Contains(text, "1001") || !strings.Contains(text, "1002") {
+func TestFallbackCandidateClarificationTextContainsCandidates(t *testing.T) {
+	text := fallbackCandidateClarificationText([]cubebox.QueryCandidate{
+		{Domain: "orgunit", EntityKey: "1001", Name: "华东销售中心", Status: "active"},
+		{Domain: "orgunit", EntityKey: "1002", Name: "华东运营中心", Status: "disabled"},
+	})
+	if !strings.Contains(text, "1001") || !strings.Contains(text, "1002") {
 		t.Fatalf("unexpected clarification text=%q", text)
 	}
 }
@@ -182,9 +237,13 @@ func TestBuildPlannerMessagesIncludesQueryDialogueContext(t *testing.T) {
 		},
 		QueryContext: cubebox.QueryContext{
 			RecentConfirmedEntity: &cubebox.QueryEntity{
-				Domain:    "orgunit",
-				EntityKey: "100000",
-				AsOf:      "2026-04-25",
+				Domain:        "orgunit",
+				Intent:        "orgunit.details",
+				EntityKey:     "100000",
+				AsOf:          "2026-04-25",
+				SourceAPIKey:  "orgunit.details",
+				TargetOrgCode: "100000",
+				ParentOrgCode: "ROOT",
 			},
 			RecentCandidates: []cubebox.QueryCandidate{
 				{Domain: "orgunit", EntityKey: "200000", Name: "飞虫公司", AsOf: "2026-04-25"},
@@ -201,6 +260,11 @@ func TestBuildPlannerMessagesIncludesQueryDialogueContext(t *testing.T) {
 			found = true
 			if !strings.Contains(message.Content, "recent_candidates") || !strings.Contains(message.Content, "100000") {
 				t.Fatalf("unexpected context block=%q", message.Content)
+			}
+			for _, forbidden := range []string{`"intent":"orgunit.details"`, `"source_api_key"`, `"target_org_code"`, `"parent_org_code"`} {
+				if strings.Contains(message.Content, forbidden) {
+					t.Fatalf("expected planner context to omit %q, got %q", forbidden, message.Content)
+				}
 			}
 		}
 	}
@@ -320,10 +384,27 @@ func TestCubeboxProviderQueryNarratorBuildsStrictMessagesAndRejectsInternalLeaka
 	}
 
 	_, err := narrator.NarrateQueryResult(context.Background(), cubeboxQueryNarrationInput{
-		TenantID:             "tenant-a",
-		Prompt:               "查一下 100000 在 2026-04-24 的组织详情",
-		Plan:                 cubebox.ReadPlan{Intent: "orgunit.details", Confidence: 0.9, Steps: []cubebox.ReadPlanStep{{ID: "step-1", APIKey: "orgunit.details", Params: map[string]any{"org_code": "100000", "as_of": "2026-04-24"}, DependsOn: []string{}}}},
-		Results:              []cubebox.ExecuteResult{{APIKey: "orgunit.details", StepID: "step-1", Payload: map[string]any{"org_unit": map[string]any{"org_code": "100000", "name": "飞虫与鲜花", "status": "active"}}}},
+		TenantID: "tenant-a",
+		Prompt:   "查一下 100000 在 2026-04-24 的组织详情",
+		Results: []cubebox.QueryNarrationResult{{
+			Domain: "orgunit",
+			Data:   map[string]any{"entity": map[string]any{"code": "100000", "name": "飞虫与鲜花", "status": "active"}},
+		}},
+		QueryContext: cubebox.QueryContext{
+			ResolvedEntity: &cubebox.QueryEntity{
+				Domain:        "orgunit",
+				Intent:        "orgunit.details",
+				EntityKey:     "100000",
+				AsOf:          "2026-04-24",
+				SourceAPIKey:  "orgunit.details",
+				TargetOrgCode: "100000",
+				ParentOrgCode: "ROOT",
+			},
+			RecentDialogueTurns: []cubebox.QueryDialogueTurn{
+				{UserPrompt: "查总部", AssistantReply: "总部是 100000。"},
+			},
+		},
+		PageContext:          &cubebox.PageContext{Page: "/org/units/100000", BusinessObject: "orgunit", CurrentObject: &cubebox.PageObjectContext{Domain: "orgunit", EntityKey: "100000"}},
 		ExpectedProviderID:   "provider-a",
 		ExpectedProviderType: "openai-compatible",
 		ExpectedModelSlug:    "gpt-5.2",
@@ -337,5 +418,31 @@ func TestCubeboxProviderQueryNarratorBuildsStrictMessagesAndRejectsInternalLeaka
 	systemPrompt := adapter.lastRequest.Messages[0].Content
 	if !strings.Contains(systemPrompt, "不得逐字回显整份原始 JSON") {
 		t.Fatalf("expected strict narrator prompt, got %q", systemPrompt)
+	}
+	body := adapter.lastRequest.Messages[1].Content
+	for _, snippet := range []string{
+		`"dialogue_context"`,
+		`"page_context"`,
+		`"entity_key":"100000"`,
+		`"as_of":"2026-04-24"`,
+	} {
+		if !strings.Contains(body, snippet) {
+			t.Fatalf("expected narrator body to contain %q, got %q", snippet, body)
+		}
+	}
+	for _, forbidden := range []string{
+		`"step_id":"step-1"`,
+		`"api_key":"orgunit.details"`,
+		`"payload":`,
+		`"plan":`,
+		`"executed_steps"`,
+		`"executor_key"`,
+		`"source_api_key"`,
+		`"target_org_code"`,
+		`"parent_org_code"`,
+	} {
+		if strings.Contains(body, forbidden) {
+			t.Fatalf("expected narrator body to omit raw execution envelope %q, got %q", forbidden, body)
+		}
 	}
 }

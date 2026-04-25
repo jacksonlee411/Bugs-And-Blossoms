@@ -22,9 +22,10 @@ type cubeboxConversationPatchRequest struct {
 }
 
 type cubeboxStreamTurnRequest struct {
-	ConversationID string `json:"conversation_id"`
-	Prompt         string `json:"prompt"`
-	NextSequence   int    `json:"next_sequence"`
+	ConversationID string               `json:"conversation_id"`
+	Prompt         string               `json:"prompt"`
+	NextSequence   int                  `json:"next_sequence"`
+	PageContext    *cubebox.PageContext `json:"page_context,omitempty"`
 }
 
 type cubeboxInterruptRequest struct {
@@ -349,6 +350,7 @@ func handleCubeBoxStreamTurnAPI(w http.ResponseWriter, r *http.Request, runtime 
 		ConversationID: req.ConversationID,
 		Prompt:         req.Prompt,
 		NextSequence:   req.NextSequence,
+		PageContext:    cubebox.NormalizePageContext(req.PageContext),
 	}
 	sink := cubeboxSSEEventSink{
 		w:       w,

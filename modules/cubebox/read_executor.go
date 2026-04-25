@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
+	"slices"
 	"strings"
 )
 
@@ -34,11 +35,17 @@ type ExecuteResult struct {
 	ConfirmedEntity *QueryEntity
 }
 
+type QueryNarrationResult struct {
+	Domain string         `json:"domain,omitempty"`
+	Data   map[string]any `json:"data,omitempty"`
+}
+
 type RegisteredExecutor struct {
-	APIKey         string
-	RequiredParams []string
-	OptionalParams []string
-	Executor       ReadExecutor
+	APIKey             string
+	RequiredParams     []string
+	OptionalParams     []string
+	Executor           ReadExecutor
+	NarrationProjector func(ExecuteResult) QueryNarrationResult
 }
 
 type ExecutionRegistry struct {
@@ -84,6 +91,33 @@ func (r *ExecutionRegistry) Resolve(apiKey string) (RegisteredExecutor, bool) {
 	}
 	item, ok := r.executors[strings.TrimSpace(apiKey)]
 	return item, ok
+}
+
+func (r *ExecutionRegistry) RegisteredExecutors() []RegisteredExecutor {
+	if r == nil || len(r.executors) == 0 {
+		return nil
+	}
+	items := make([]RegisteredExecutor, 0, len(r.executors))
+	for _, item := range r.executors {
+		items = append(items, item)
+	}
+	slices.SortFunc(items, func(left RegisteredExecutor, right RegisteredExecutor) int {
+		return strings.Compare(left.APIKey, right.APIKey)
+	})
+	return items
+}
+
+func (r *ExecutionRegistry) ProjectNarrationResults(results []ExecuteResult) []QueryNarrationResult {
+	out := make([]QueryNarrationResult, 0, len(results))
+	for _, result := range results {
+		item, ok := r.Resolve(result.APIKey)
+		if ok && item.NarrationProjector != nil {
+			out = append(out, normalizeQueryNarrationResult(item.NarrationProjector(result), result))
+			continue
+		}
+		out = append(out, defaultQueryNarrationResult(result))
+	}
+	return out
 }
 
 func (r *ExecutionRegistry) ExecutePlan(ctx context.Context, request ExecuteRequest, plan ReadPlan) ([]ExecuteResult, error) {
@@ -186,6 +220,33 @@ func normalizeParamNames(items []string) []string {
 		out = append(out, name)
 	}
 	return out
+}
+
+func normalizeQueryNarrationResult(view QueryNarrationResult, result ExecuteResult) QueryNarrationResult {
+	view.Domain = strings.TrimSpace(view.Domain)
+	if view.Domain == "" {
+		view.Domain = queryNarrationDomainForResult(result)
+	}
+	return view
+}
+
+func defaultQueryNarrationResult(result ExecuteResult) QueryNarrationResult {
+	view := QueryNarrationResult{
+		Domain: queryNarrationDomainForResult(result),
+	}
+	if len(result.Payload) > 0 {
+		view.Data = map[string]any{"data_present": true}
+	}
+	return view
+}
+
+func queryNarrationDomainForResult(result ExecuteResult) string {
+	if result.ConfirmedEntity != nil {
+		if normalized := NormalizeQueryEntity(*result.ConfirmedEntity); normalized != nil {
+			return normalized.Domain
+		}
+	}
+	return strings.TrimSpace(stringValue(result.Payload["domain"]))
 }
 
 func resolveReadPlanStepParams(params map[string]any, previousResults map[string]ExecuteResult) (map[string]any, error) {

@@ -26,6 +26,10 @@ type cubeboxQueryNarrator interface {
 	NarrateQueryResult(ctx context.Context, input cubeboxQueryNarrationInput) (string, error)
 }
 
+type cubeboxQueryClarifier interface {
+	ClarifyQuery(ctx context.Context, input cubeboxQueryClarificationInput) (string, error)
+}
+
 type cubeboxReadPlanProductionInput struct {
 	TenantID       string
 	PrincipalID    string
@@ -49,6 +53,7 @@ type cubeboxQueryFlow struct {
 	registry       *cubebox.ExecutionRegistry
 	producer       cubeboxReadPlanProducer
 	narrator       cubeboxQueryNarrator
+	clarifier      cubeboxQueryClarifier
 	knowledgePacks []cubebox.KnowledgePack
 	now            func() time.Time
 }
@@ -72,13 +77,25 @@ type cubeboxProviderQueryNarrator struct {
 	secretResolver cubebox.SecretResolver
 }
 
+type cubeboxQueryClarificationInput struct {
+	TenantID             string
+	Prompt               string
+	QueryContext         cubebox.QueryContext
+	PageContext          *cubebox.PageContext
+	Candidates           []cubebox.QueryCandidate
+	ExpectedProviderID   string
+	ExpectedProviderType string
+	ExpectedModelSlug    string
+}
+
 type cubeboxQueryNarrationInput struct {
 	TenantID             string
 	PrincipalID          string
 	ConversationID       string
 	Prompt               string
-	Plan                 cubebox.ReadPlan
-	Results              []cubebox.ExecuteResult
+	Results              []cubebox.QueryNarrationResult
+	QueryContext         cubebox.QueryContext
+	PageContext          *cubebox.PageContext
 	ExpectedProviderID   string
 	ExpectedProviderType string
 	ExpectedModelSlug    string
@@ -94,9 +111,37 @@ type cubeboxQueryLifecycle struct {
 }
 
 type cubeboxQueryNarrationEnvelope struct {
-	UserPrompt string                  `json:"user_prompt"`
-	Plan       cubebox.ReadPlan        `json:"plan"`
-	Results    []cubebox.ExecuteResult `json:"results"`
+	UserPrompt      string                            `json:"user_prompt"`
+	PageContext     *cubebox.PageContext              `json:"page_context,omitempty"`
+	DialogueContext cubeboxQueryDialogueContextView   `json:"dialogue_context"`
+	Results         []cubeboxQueryNarrationResultView `json:"results"`
+}
+
+type cubeboxQueryDialogueContextView struct {
+	RecentConfirmedEntity   *cubeboxQueryEntityView     `json:"recent_confirmed_entity,omitempty"`
+	RecentConfirmedEntities []cubeboxQueryEntityView    `json:"recent_confirmed_entities,omitempty"`
+	ResolvedEntity          *cubeboxQueryEntityView     `json:"resolved_entity,omitempty"`
+	RecentDialogueTurns     []cubebox.QueryDialogueTurn `json:"recent_dialogue_turns,omitempty"`
+	LastClarification       *cubebox.QueryClarification `json:"last_clarification,omitempty"`
+	RecentCandidates        []cubebox.QueryCandidate    `json:"recent_candidates,omitempty"`
+}
+
+type cubeboxQueryEntityView struct {
+	Domain    string `json:"domain,omitempty"`
+	EntityKey string `json:"entity_key,omitempty"`
+	AsOf      string `json:"as_of,omitempty"`
+}
+
+type cubeboxQueryNarrationResultView struct {
+	Domain string         `json:"domain,omitempty"`
+	Data   map[string]any `json:"data,omitempty"`
+}
+
+type cubeboxQueryClarificationEnvelope struct {
+	UserPrompt      string                          `json:"user_prompt"`
+	PageContext     *cubebox.PageContext            `json:"page_context,omitempty"`
+	DialogueContext cubeboxQueryDialogueContextView `json:"dialogue_context"`
+	Candidates      []cubebox.QueryCandidate        `json:"candidates"`
 }
 
 var errCubeboxQueryNarrationTargetMismatch = errors.New("cubebox query narration target mismatch")
@@ -123,10 +168,17 @@ func newCubeboxQueryFlow(
 	if runtime == nil || store == nil || registry == nil || producer == nil || narrator == nil || len(knowledgePackDirs) == 0 {
 		return nil, nil
 	}
+	var clarifier cubeboxQueryClarifier
+	if value, ok := narrator.(cubeboxQueryClarifier); ok {
+		clarifier = value
+	}
 	packs := make([]cubebox.KnowledgePack, 0, len(knowledgePackDirs))
 	for _, dir := range knowledgePackDirs {
 		pack, err := cubebox.LoadKnowledgePack(strings.TrimSpace(dir))
 		if err != nil {
+			return nil, err
+		}
+		if err := cubebox.ValidateKnowledgePackAgainstRegistry(pack, registry); err != nil {
 			return nil, err
 		}
 		packs = append(packs, pack)
@@ -137,6 +189,7 @@ func newCubeboxQueryFlow(
 		registry:       registry,
 		producer:       producer,
 		narrator:       narrator,
+		clarifier:      clarifier,
 		knowledgePacks: packs,
 		now:            func() time.Time { return time.Now().UTC() },
 	}, nil
@@ -171,6 +224,72 @@ func newCubeboxProviderQueryNarrator(
 		adapter:        adapter,
 		secretResolver: secretResolver,
 	}
+}
+
+func (n *cubeboxProviderQueryNarrator) ClarifyQuery(ctx context.Context, input cubeboxQueryClarificationInput) (string, error) {
+	if n == nil || n.configReader == nil || n.adapter == nil || n.secretResolver == nil {
+		return "", cubebox.ErrProviderConfigInvalid
+	}
+	config, err := n.configReader.GetActiveModelRuntimeConfig(ctx, strings.TrimSpace(input.TenantID))
+	if err != nil {
+		return "", err
+	}
+	if !config.Provider.Enabled {
+		return "", cubebox.ErrProviderDisabled
+	}
+	providerID := strings.TrimSpace(config.Provider.ID)
+	providerType := strings.TrimSpace(config.Provider.ProviderType)
+	modelSlug := strings.TrimSpace(config.Selection.ModelSlug)
+	if modelSlug == "" {
+		return "", cubebox.ErrModelSlugMissing
+	}
+	if providerID != strings.TrimSpace(input.ExpectedProviderID) ||
+		providerType != strings.TrimSpace(input.ExpectedProviderType) ||
+		modelSlug != strings.TrimSpace(input.ExpectedModelSlug) {
+		return "", errCubeboxQueryNarrationTargetMismatch
+	}
+	secret, err := n.secretResolver.ResolveSecretRef(ctx, strings.TrimSpace(input.TenantID), providerID, config.Credential.SecretRef)
+	if err != nil {
+		return "", err
+	}
+	body, err := json.Marshal(buildQueryClarificationEnvelope(input))
+	if err != nil {
+		return "", err
+	}
+	stream, err := n.adapter.StreamChatCompletion(ctx, cubebox.ProviderChatRequest{
+		BaseURL:  strings.TrimSpace(config.Provider.BaseURL),
+		APIKey:   secret,
+		Model:    modelSlug,
+		Messages: buildQueryClarificationMessages(string(body)),
+		Input:    string(body),
+	})
+	if err != nil {
+		return "", err
+	}
+	defer func() { _ = stream.Close() }()
+
+	var out strings.Builder
+	for {
+		chunk, err := stream.Recv()
+		if err != nil {
+			if errors.Is(err, io.EOF) {
+				break
+			}
+			return "", err
+		}
+		out.WriteString(chunk.Delta)
+		if chunk.Done {
+			break
+		}
+	}
+	text := strings.TrimSpace(out.String())
+	if text == "" {
+		return "", cubebox.ErrProviderStreamInvalid
+	}
+	if err := validateQueryNarrationText(text); err != nil {
+		return "", err
+	}
+	return text, nil
 }
 
 func (f *cubeboxQueryFlow) TryHandle(
@@ -249,18 +368,20 @@ func (f *cubeboxQueryFlow) TryHandle(
 		ConversationID: request.ConversationID,
 	}, produced.Plan)
 	if err != nil {
-		if text := queryExecutionClarifyingQuestion(err); text != "" {
+		if candidates := queryExecutionCandidates(err); len(candidates) > 0 {
+			text := f.buildExecutionClarificationText(ctx, request, produced, queryContext, candidates)
+			if text == "" {
+				text = "找到了多个候选项，请从中明确你要继续查询的对象。"
+			}
 			if !writeEvent("turn.agent_message.delta", map[string]any{"message_id": prepared.turn.AssistantMessageID, "delta": text}) {
 				return true
 			}
 			f.appendQueryMetadataEvent(ctx, request, prepared.turn.TurnID, &prepared.sequence, cubebox.QueryClarificationRequestedEventType, map[string]any{
 				"clarifying_question": text,
 			})
-			if candidates := queryExecutionCandidates(err); len(candidates) > 0 {
-				f.appendQueryMetadataEvent(ctx, request, prepared.turn.TurnID, &prepared.sequence, cubebox.QueryCandidatesPresentedEventType, map[string]any{
-					"candidates": queryCandidatePayloads(candidates),
-				})
-			}
+			f.appendQueryMetadataEvent(ctx, request, prepared.turn.TurnID, &prepared.sequence, cubebox.QueryCandidatesPresentedEventType, map[string]any{
+				"candidates": queryCandidatePayloads(candidates),
+			})
 			_ = writeEvent("turn.agent_message.completed", map[string]any{"message_id": prepared.turn.AssistantMessageID})
 			_ = writeEvent("turn.completed", f.queryCompletedPayload("completed", prepared.lifecycle))
 			return true
@@ -274,8 +395,9 @@ func (f *cubeboxQueryFlow) TryHandle(
 		PrincipalID:          request.PrincipalID,
 		ConversationID:       request.ConversationID,
 		Prompt:               request.Prompt,
-		Plan:                 produced.Plan,
-		Results:              results,
+		Results:              f.registry.ProjectNarrationResults(results),
+		QueryContext:         queryContext,
+		PageContext:          cubebox.NormalizePageContext(request.PageContext),
 		ExpectedProviderID:   produced.ProviderID,
 		ExpectedProviderType: produced.ProviderType,
 		ExpectedModelSlug:    produced.ModelSlug,
@@ -414,12 +536,12 @@ func (p *cubeboxProviderReadPlanProducer) buildPlannerMessages(input cubeboxRead
 func buildQueryDialogueContextPromptBlock(queryContext cubebox.QueryContext) string {
 	body, err := json.Marshal(map[string]any{
 		"query_dialogue_context": map[string]any{
-			"recent_confirmed_entity":   queryContext.RecentConfirmedEntity,
-			"recent_confirmed_entities": queryContext.RecentConfirmedEntities,
+			"recent_confirmed_entity":   buildQueryEntityView(queryContext.RecentConfirmedEntity),
+			"recent_confirmed_entities": buildQueryEntityViews(queryContext.RecentConfirmedEntities),
 			"recent_dialogue_turns":     queryContext.RecentDialogueTurns,
 			"last_clarification":        queryContext.LastClarification,
 			"recent_candidates":         queryContext.RecentCandidates,
-			"resolved_entity":           queryContext.ResolvedEntity,
+			"resolved_entity":           buildQueryEntityView(queryContext.ResolvedEntity),
 		},
 	})
 	if err != nil {
@@ -475,11 +597,7 @@ func (n *cubeboxProviderQueryNarrator) NarrateQueryResult(
 	if err != nil {
 		return "", err
 	}
-	envelope := cubeboxQueryNarrationEnvelope{
-		UserPrompt: strings.TrimSpace(input.Prompt),
-		Plan:       input.Plan,
-		Results:    input.Results,
-	}
+	envelope := buildQueryNarrationEnvelope(input)
 	body, err := json.Marshal(envelope)
 	if err != nil {
 		return "", err
@@ -533,21 +651,46 @@ func buildQueryNarrationMessages(body string) []cubebox.PromptItem {
 - 默认使用 1 到 3 句自然中文；只有结果本身是多个对象时，才允许用极短列表列出关键项。
 - 把枚举、布尔和空值翻译成自然中文，例如 active=启用、disabled=停用、true=是、false=否、null/空字符串/空列表=未记录或没有。
 - 对单个实体详情，优先用完整句子归纳；如用户需要对比或明细，也可以使用简短列表。
+- 如果输入里带有轻量对话上下文，可用它解释“刚才那个/继续查”的衔接关系，但不得把上下文当成新的业务事实源。
 - 如果某些字段为空，只在和用户问题相关时用一句话说明“未记录……”，不要机械逐项写“空”。
 
 硬约束：
-- 只能依据输入 JSON 中的 user_prompt、plan、results 叙述。
+- 只能依据输入 JSON 中的 user_prompt、page_context、dialogue_context、results 叙述。
+- 事实性结论只能来自 results，不得从 dialogue_context 或 page_context 推导新的业务事实。
 - 不得编造任何 results 中不存在的字段、值、条数、层级或结论。
 - 不得补做新的查询、推断新的默认值、追加新的澄清问题。
 - 不得输出 Markdown 代码块。
 - 不得逐字回显整份原始 JSON。
-- 不得暴露实现细节或计划执行痕迹；不要出现“step-1”“api_key”“result_focus”“org_code”“parent_org_code”“as_of”“include_disabled”“ext_fields”“payload”“results”等内部字段或结构名。
+- 不得暴露实现细节或计划执行痕迹；不要出现“step-1”“api_key”“result_focus”“org_code”“parent_org_code”“as_of”“include_disabled”“ext_fields”“payload”“results”“executor_key”等内部字段或结构名。
 - 若结果不足以支持更强结论，只能如实说明。
 - 输出纯文本，直接作为用户可见最终回复。
 
 示例：
 - 好的回答：截至 2026-04-24，组织 100000 是“飞虫与鲜花”，当前为启用状态，属于业务单元。系统里暂未记录它的上级组织和负责人，也没有扩展字段。
 - 不好的回答：{"results":[{"step_id":"step-1","payload":{"org_unit":{"org_code":"100000"}}}]}
+`),
+		},
+		{
+			Role:    "user",
+			Content: body,
+		},
+	}
+}
+
+func buildQueryClarificationMessages(body string) []cubebox.PromptItem {
+	return []cubebox.PromptItem{
+		{
+			Role: "system",
+			Content: strings.TrimSpace(`
+你是 CubeBox 的查询澄清器。
+你的职责只有一件事：当执行阶段发现多个候选对象时，基于当前问题、轻量上下文和候选列表，向用户生成一句自然中文追问。
+
+要求：
+- 只允许要求用户从候选中确认目标，不能静默替用户选择。
+- 直接给出追问，必要时附上极短候选列表。
+- 可以用“刚才那个/继续查”的语气承接上下文，但不得编造候选之外的新事实。
+- 不得输出 Markdown 代码块、JSON、内部字段名或执行痕迹。
+- 输出纯文本，直接作为用户可见消息。
 `),
 		},
 		{
@@ -945,17 +1088,25 @@ func (f *cubeboxQueryFlow) clockNow() time.Time {
 }
 
 func (f *cubeboxQueryFlow) buildQueryCanonicalContext(request cubebox.GatewayStreamRequest, lifecycle cubeboxQueryLifecycle) cubebox.CanonicalContext {
+	pageContext := cubebox.NormalizePageContext(request.PageContext)
+	page := "/app/cubebox"
+	businessObject := "conversation"
+	if pageContext != nil {
+		if pageContext.Page != "" {
+			page = pageContext.Page
+		}
+		if pageContext.BusinessObject != "" {
+			businessObject = pageContext.BusinessObject
+		}
+	}
 	return cubebox.CanonicalContext{
 		TenantID:       request.TenantID,
 		PrincipalID:    request.PrincipalID,
 		Language:       "zh",
-		Page:           "/app/cubebox",
+		Page:           page,
 		Permissions:    []string{"cubebox.conversations:use"},
-		BusinessObject: "conversation",
-		ProviderID:     lifecycle.providerID,
-		ProviderType:   lifecycle.providerType,
-		ModelSlug:      lifecycle.modelSlug,
-		Runtime:        lifecycle.runtime,
+		BusinessObject: businessObject,
+		PageContext:    pageContext,
 	}
 }
 
@@ -1012,10 +1163,6 @@ func queryExecutionErrorToTerminal(err error) queryTerminalError {
 }
 
 func queryExecutionClarifyingQuestion(err error) string {
-	var ambiguous *orgUnitSearchAmbiguousError
-	if errors.As(err, &ambiguous) {
-		return strings.TrimSpace(ambiguous.ClarifyingQuestion())
-	}
 	return ""
 }
 
@@ -1051,4 +1198,154 @@ func queryNarrationErrorToTerminal(err error) queryTerminalError {
 func turnIDPtr(v string) *string {
 	value := v
 	return &value
+}
+
+func (f *cubeboxQueryFlow) buildExecutionClarificationText(
+	ctx context.Context,
+	request cubebox.GatewayStreamRequest,
+	produced cubeboxReadPlanProductionResult,
+	queryContext cubebox.QueryContext,
+	candidates []cubebox.QueryCandidate,
+) string {
+	if len(candidates) == 0 {
+		return ""
+	}
+	if f == nil || f.clarifier == nil {
+		return fallbackCandidateClarificationText(candidates)
+	}
+	text, err := f.clarifier.ClarifyQuery(ctx, cubeboxQueryClarificationInput{
+		TenantID:             request.TenantID,
+		Prompt:               request.Prompt,
+		QueryContext:         queryContext,
+		PageContext:          cubebox.NormalizePageContext(request.PageContext),
+		Candidates:           candidates,
+		ExpectedProviderID:   produced.ProviderID,
+		ExpectedProviderType: produced.ProviderType,
+		ExpectedModelSlug:    produced.ModelSlug,
+	})
+	if err != nil {
+		return fallbackCandidateClarificationText(candidates)
+	}
+	return strings.TrimSpace(text)
+}
+
+func fallbackCandidateClarificationText(candidates []cubebox.QueryCandidate) string {
+	items := make([]string, 0, len(candidates))
+	for _, candidate := range candidates {
+		code := strings.TrimSpace(candidate.EntityKey)
+		name := strings.TrimSpace(candidate.Name)
+		status := strings.TrimSpace(candidate.Status)
+		item := code
+		if name != "" {
+			if item != "" {
+				item += "「" + name + "」"
+			} else {
+				item = "「" + name + "」"
+			}
+		}
+		if status != "" {
+			item += "（" + status + "）"
+		}
+		if item != "" {
+			items = append(items, item)
+		}
+	}
+	if len(items) == 0 {
+		return "找到了多个候选项，请明确你要继续查询的对象。"
+	}
+	return "找到了多个候选项，请确认要继续查询哪一个：" + strings.Join(items, "、") + "。"
+}
+
+func buildQueryClarificationEnvelope(input cubeboxQueryClarificationInput) cubeboxQueryClarificationEnvelope {
+	dialogueTurns := append([]cubebox.QueryDialogueTurn(nil), input.QueryContext.RecentDialogueTurns...)
+	if len(dialogueTurns) > 2 {
+		dialogueTurns = dialogueTurns[len(dialogueTurns)-2:]
+	}
+	return cubeboxQueryClarificationEnvelope{
+		UserPrompt:  strings.TrimSpace(input.Prompt),
+		PageContext: cubebox.NormalizePageContext(input.PageContext),
+		DialogueContext: cubeboxQueryDialogueContextView{
+			ResolvedEntity:      buildQueryEntityView(input.QueryContext.ResolvedEntity),
+			RecentDialogueTurns: dialogueTurns,
+			LastClarification:   input.QueryContext.LastClarification,
+			RecentCandidates:    append([]cubebox.QueryCandidate(nil), input.QueryContext.RecentCandidates...),
+		},
+		Candidates: append([]cubebox.QueryCandidate(nil), input.Candidates...),
+	}
+}
+
+func buildQueryNarrationEnvelope(input cubeboxQueryNarrationInput) cubeboxQueryNarrationEnvelope {
+	dialogueTurns := append([]cubebox.QueryDialogueTurn(nil), input.QueryContext.RecentDialogueTurns...)
+	if len(dialogueTurns) > 2 {
+		dialogueTurns = dialogueTurns[len(dialogueTurns)-2:]
+	}
+	recentCandidates := append([]cubebox.QueryCandidate(nil), input.QueryContext.RecentCandidates...)
+	if len(recentCandidates) > 5 {
+		recentCandidates = recentCandidates[:5]
+	}
+	return cubeboxQueryNarrationEnvelope{
+		UserPrompt:  strings.TrimSpace(input.Prompt),
+		PageContext: cubebox.NormalizePageContext(input.PageContext),
+		DialogueContext: cubeboxQueryDialogueContextView{
+			ResolvedEntity:      buildQueryEntityView(input.QueryContext.ResolvedEntity),
+			RecentDialogueTurns: dialogueTurns,
+			LastClarification:   input.QueryContext.LastClarification,
+			RecentCandidates:    recentCandidates,
+		},
+		Results: buildQueryNarrationResults(input.Results),
+	}
+}
+
+func buildQueryEntityView(entity *cubebox.QueryEntity) *cubeboxQueryEntityView {
+	if entity == nil {
+		return nil
+	}
+	normalized := cubebox.NormalizeQueryEntity(*entity)
+	if normalized == nil {
+		return nil
+	}
+	return &cubeboxQueryEntityView{
+		Domain:    normalized.Domain,
+		EntityKey: normalized.EntityKey,
+		AsOf:      normalized.AsOf,
+	}
+}
+
+func buildQueryEntityViews(entities []cubebox.QueryEntity) []cubeboxQueryEntityView {
+	if len(entities) == 0 {
+		return nil
+	}
+	out := make([]cubeboxQueryEntityView, 0, len(entities))
+	for _, entity := range entities {
+		if view := buildQueryEntityView(&entity); view != nil {
+			out = append(out, *view)
+		}
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
+}
+
+func buildQueryNarrationResults(results []cubebox.QueryNarrationResult) []cubeboxQueryNarrationResultView {
+	out := make([]cubeboxQueryNarrationResultView, 0, len(results))
+	for _, result := range results {
+		payload := copyQueryNarrationData(result.Data)
+		out = append(out, cubeboxQueryNarrationResultView{
+			Domain: strings.TrimSpace(result.Domain),
+			Data:   payload,
+		})
+	}
+	return out
+}
+
+func copyQueryNarrationData(source map[string]any) map[string]any {
+	if len(source) == 0 {
+		return nil
+	}
+	target := make(map[string]any, len(source))
+	for key, value := range source {
+		target[key] = value
+	}
+	return target
 }

@@ -112,7 +112,7 @@ intents:
 - “搜索”“找一下”“名称里有” 通常映射到 `orgunit.search`
 - “审计”“变更记录”“谁改过”“最近变更” 通常映射到 `orgunit.audit`
 - “该组织”“这个组织”“那个组织”“最开始那个组织”“第一个”属于查询连续性指代；应优先读取 planner 输入里的 `query_dialogue_context`
-- `query_dialogue_context.recent_confirmed_entity` / `recent_confirmed_entities` 提供最近已确认的结构化实体事实，可继承其中的 `entity_key`（组织编码）/ `target_org_code` 与 `as_of`
+- `query_dialogue_context.recent_confirmed_entity` / `recent_confirmed_entities` 提供最近已确认的结构化实体事实，可继承其中的 `entity_key`（组织编码）与 `as_of`
 - `query_dialogue_context.recent_candidates` 提供上一轮已展示给用户的候选列表；当用户说“第一个”“第二个”“那个公司”时，应优先从这里解析，而不是再次机械追问编码
 - 若用户仍在询问组织架构，但缺少可继承实体或必要参数，应返回澄清型 `ReadPlan`，不得输出 `NO_QUERY` 让普通聊天链回答“没有查询接口/权限”
 - 若当前轮显式给出新的组织编码、组织名称或日期，应覆盖最近已确认查询实体中的同名事实

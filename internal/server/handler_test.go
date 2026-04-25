@@ -66,8 +66,8 @@ func (s orgUnitMemoryStoreWithWriteStore) FindEventByEffectiveDate(context.Conte
 	return orgunittypes.OrgUnitEvent{}, orgunitports.ErrOrgEventNotFound
 }
 
-func (s orgUnitMemoryStoreWithWriteStore) ListEnabledTenantFieldConfigsAsOf(context.Context, string, string) ([]orgunittypes.TenantFieldConfig, error) {
-	return nil, nil
+func (s orgUnitMemoryStoreWithWriteStore) ListEnabledTenantFieldConfigsAsOf(ctx context.Context, tenantID string, asOf string) ([]orgUnitTenantFieldConfig, error) {
+	return s.orgUnitMemoryStore.ListEnabledTenantFieldConfigsAsOf(ctx, tenantID, asOf)
 }
 
 func localTenancyResolver() TenancyResolver {

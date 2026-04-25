@@ -34,10 +34,62 @@ describe('cubebox api', () => {
         conversationID: 'conv_1',
         prompt: 'hello',
         nextSequence: 1,
+        pageContext: {
+          page: '/org/units/100000',
+          business_object: 'orgunit',
+          current_object: { domain: 'orgunit', entity_key: '100000' },
+          view: { as_of: '2026-04-25' }
+        },
         signal: new AbortController().signal,
         onEvent: vi.fn()
       })
     ).rejects.toThrow('stream turn failed: missing terminal event')
+  })
+
+  it('posts controlled page context to turn stream endpoint', async () => {
+    const encoder = new TextEncoder()
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      body: new ReadableStream({
+        start(controller) {
+          controller.enqueue(encoder.encode('data: {"event_id":"evt_1","conversation_id":"conv_1","turn_id":"turn_1","sequence":1,"type":"turn.completed","ts":"2026-04-21T00:00:00Z","payload":{"status":"completed"}}\n\n'))
+          controller.close()
+        }
+      })
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    await streamTurn({
+      conversationID: 'conv_1',
+      prompt: '查该组织详情',
+      nextSequence: 3,
+      pageContext: {
+        page: '/org/units/100000',
+        business_object: 'orgunit',
+        current_object: { domain: 'orgunit', entity_key: '100000' },
+        view: { as_of: '2026-04-25' }
+      },
+      signal: new AbortController().signal,
+      onEvent: vi.fn()
+    })
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/internal/cubebox/turns:stream',
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({
+          conversation_id: 'conv_1',
+          prompt: '查该组织详情',
+          next_sequence: 3,
+          page_context: {
+            page: '/org/units/100000',
+            business_object: 'orgunit',
+            current_object: { domain: 'orgunit', entity_key: '100000' },
+            view: { as_of: '2026-04-25' }
+          }
+        })
+      })
+    )
   })
 
   it('includes conversation_id when interrupting a turn', async () => {

@@ -1,5 +1,6 @@
 import { act, renderHook, waitFor } from '@testing-library/react'
 import { type PropsWithChildren } from 'react'
+import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { CubeBoxProvider, useCubeBox } from './CubeBoxProvider'
 
@@ -15,7 +16,11 @@ const apiMocks = vi.hoisted(() => ({
 vi.mock('./api', () => apiMocks)
 
 function wrapper({ children }: PropsWithChildren) {
-  return <CubeBoxProvider>{children}</CubeBoxProvider>
+  return (
+    <MemoryRouter>
+      <CubeBoxProvider>{children}</CubeBoxProvider>
+    </MemoryRouter>
+  )
 }
 
 describe('CubeBoxProvider', () => {
@@ -120,7 +125,134 @@ describe('CubeBoxProvider', () => {
       expect.objectContaining({
         conversationID: 'conv_1',
         prompt: '\n  hello  \n',
-        nextSequence: 2
+        nextSequence: 2,
+        pageContext: {
+          page: '/',
+          business_object: 'conversation'
+        }
+      })
+    )
+  })
+
+  it('derives controlled orgunit page context from current route', async () => {
+    apiMocks.createConversation.mockResolvedValue({
+      conversation: { id: 'conv_1', title: '新对话', archived: false, status: 'active' },
+      events: [],
+      next_sequence: 2
+    })
+    apiMocks.streamTurn.mockResolvedValue(undefined)
+
+    const routeWrapper = ({ children }: PropsWithChildren) => (
+      <MemoryRouter initialEntries={['/org/units/100000?as_of=2026-04-25']}>
+        <CubeBoxProvider>{children}</CubeBoxProvider>
+      </MemoryRouter>
+    )
+    const { result } = renderHook(() => useCubeBox(), { wrapper: routeWrapper })
+
+    await act(async () => {
+      result.current.setComposerText('查该组织详情')
+    })
+
+    await act(async () => {
+      await result.current.sendMessage()
+    })
+
+    expect(apiMocks.streamTurn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        pageContext: {
+          page: '/org/units/100000',
+          business_object: 'orgunit',
+          current_object: {
+            domain: 'orgunit',
+            entity_key: '100000'
+          },
+          view: {
+            as_of: '2026-04-25'
+          }
+        }
+      })
+    )
+  })
+
+  it('prefers effective_date when deriving orgunit detail page context', async () => {
+    apiMocks.createConversation.mockResolvedValue({
+      conversation: { id: 'conv_1', title: '新对话', archived: false, status: 'active' },
+      events: [],
+      next_sequence: 2
+    })
+    apiMocks.streamTurn.mockResolvedValue(undefined)
+
+    const routeWrapper = ({ children }: PropsWithChildren) => (
+      <MemoryRouter initialEntries={['/org/units/100000?effective_date=2026-03-01&as_of=2026-04-25']}>
+        <CubeBoxProvider>{children}</CubeBoxProvider>
+      </MemoryRouter>
+    )
+    const { result } = renderHook(() => useCubeBox(), { wrapper: routeWrapper })
+
+    await act(async () => {
+      result.current.setComposerText('查该组织历史详情')
+    })
+
+    await act(async () => {
+      await result.current.sendMessage()
+    })
+
+    expect(apiMocks.streamTurn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        pageContext: {
+          page: '/org/units/100000',
+          business_object: 'orgunit',
+          current_object: {
+            domain: 'orgunit',
+            entity_key: '100000'
+          },
+          view: {
+            as_of: '2026-03-01'
+          }
+        }
+      })
+    )
+  })
+
+  it('does not treat orgunit field config page as orgunit detail context', async () => {
+    apiMocks.createConversation.mockResolvedValue({
+      conversation: { id: 'conv_1', title: '新对话', archived: false, status: 'active' },
+      events: [],
+      next_sequence: 2
+    })
+    apiMocks.streamTurn.mockResolvedValue(undefined)
+
+    const routeWrapper = ({ children }: PropsWithChildren) => (
+      <MemoryRouter initialEntries={['/org/units/field-configs?as_of=2026-04-25']}>
+        <CubeBoxProvider>{children}</CubeBoxProvider>
+      </MemoryRouter>
+    )
+    const { result } = renderHook(() => useCubeBox(), { wrapper: routeWrapper })
+
+    await act(async () => {
+      result.current.setComposerText('看看当前页面')
+    })
+
+    await act(async () => {
+      await result.current.sendMessage()
+    })
+
+    expect(apiMocks.streamTurn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        pageContext: {
+          page: '/org/units/field-configs',
+          business_object: 'conversation',
+          view: {
+            as_of: '2026-04-25'
+          }
+        }
+      })
+    )
+    expect(apiMocks.streamTurn).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        pageContext: expect.objectContaining({
+          current_object: expect.anything()
+        })
       })
     )
   })

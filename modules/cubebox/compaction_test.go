@@ -43,7 +43,16 @@ func TestBuildPromptViewWithCompactionUsesFullHistoryViewAndReinjectsCanonicalCo
 		Page:           "/app/cubebox",
 		Permissions:    []string{"cubebox.conversations:use"},
 		BusinessObject: "conversation",
-		Model:          "deterministic-runtime",
+		PageContext: &PageContext{
+			Page:           "/org/units/100000",
+			BusinessObject: "orgunit",
+			CurrentObject: &PageObjectContext{
+				Domain:    "orgunit",
+				EntityKey: "100000",
+				Label:     "总部",
+			},
+			View: &PageViewContext{AsOf: "2026-04-25"},
+		},
 	}, "请基于最新上下文继续回答")
 
 	if result.Compacted {
@@ -60,6 +69,12 @@ func TestBuildPromptViewWithCompactionUsesFullHistoryViewAndReinjectsCanonicalCo
 	}
 	if result.PromptView[1].Role != "system" || result.PromptView[1].Content == "" {
 		t.Fatalf("expected canonical context reinjection, got %#v", result.PromptView[1])
+	}
+	if strings.Contains(result.PromptView[1].Content, "provider_id=") || strings.Contains(result.PromptView[1].Content, "runtime=") {
+		t.Fatalf("expected canonical block without runtime metadata, got %#v", result.PromptView[1])
+	}
+	if !strings.Contains(result.PromptView[1].Content, "page_facts=") || !strings.Contains(result.PromptView[1].Content, "\"entity_key\":\"100000\"") {
+		t.Fatalf("expected page facts in canonical block, got %#v", result.PromptView[1])
 	}
 	if result.PromptView[2].Role != "user" || result.PromptView[2].Content != "请总结当前进度" {
 		t.Fatalf("expected first raw history item after canonical block, got %#v", result.PromptView[2])

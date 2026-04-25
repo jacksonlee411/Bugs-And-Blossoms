@@ -802,7 +802,7 @@ func TestCubeBoxLoadConversationAPIReturnsPhaseCLifecycleRoundtripGolden(t *test
 
 func TestCubeBoxStreamTurnAPIPreTurnAutoCompactUsesActorAndUpdatedSequence(t *testing.T) {
 	rec := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodPost, "/internal/cubebox/turns:stream", strings.NewReader(`{"conversation_id":"conv_1","prompt":"hello","next_sequence":8}`))
+	req := httptest.NewRequest(http.MethodPost, "/internal/cubebox/turns:stream", strings.NewReader(`{"conversation_id":"conv_1","prompt":"hello","next_sequence":8,"page_context":{"page":"/org/units/100000","business_object":"orgunit","current_object":{"domain":"orgunit","entity_key":"100000"},"view":{"as_of":"2026-04-25"}}}`))
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "tenant-a"}))
 	req = req.WithContext(withPrincipal(req.Context(), Principal{ID: "principal-a"}))
 
@@ -832,6 +832,12 @@ func TestCubeBoxStreamTurnAPIPreTurnAutoCompactUsesActorAndUpdatedSequence(t *te
 			}
 			if canonicalContext.TenantID != "tenant-a" || canonicalContext.PrincipalID != "principal-a" {
 				t.Fatalf("unexpected canonical context=%+v", canonicalContext)
+			}
+			if canonicalContext.Page != "/org/units/100000" || canonicalContext.BusinessObject != "orgunit" {
+				t.Fatalf("expected controlled page context, got %+v", canonicalContext)
+			}
+			if canonicalContext.PageContext == nil || canonicalContext.PageContext.CurrentObject == nil || canonicalContext.PageContext.CurrentObject.EntityKey != "100000" {
+				t.Fatalf("expected normalized page facts, got %+v", canonicalContext.PageContext)
 			}
 			if reason != "pre_turn_auto" {
 				t.Fatalf("unexpected compact reason=%s", reason)
@@ -1535,11 +1541,11 @@ func TestCubeBoxStreamTurnAPIClarifiesAmbiguousOrgunitSearch(t *testing.T) {
 		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
 	}
 	body := rec.Body.String()
-	if !strings.Contains(body, "找到了多个与“华东”匹配的组织") {
+	if !strings.Contains(body, "1001") || !strings.Contains(body, "1002") {
 		t.Fatalf("expected clarification body=%s", body)
 	}
-	if !strings.Contains(body, "1001") || !strings.Contains(body, "1002") {
-		t.Fatalf("expected candidate codes in clarification body=%s", body)
+	if strings.Contains(body, "找到了多个与“华东”匹配的组织") {
+		t.Fatalf("expected clarification not to depend on module-specific fixed wording body=%s", body)
 	}
 	if strings.Contains(body, `"code":"invalid_request"`) || strings.Contains(body, `"type":"turn.error"`) {
 		t.Fatalf("ambiguous search should clarify instead of failing body=%s", body)

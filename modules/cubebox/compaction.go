@@ -3,6 +3,7 @@ package cubebox
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -27,11 +28,7 @@ type CanonicalContext struct {
 	Page           string
 	Permissions    []string
 	BusinessObject string
-	Model          string
-	ProviderID     string
-	ProviderType   string
-	ModelSlug      string
-	Runtime        string
+	PageContext    *PageContext
 }
 
 type CompactionResult struct {
@@ -96,27 +93,34 @@ func BuildCompactionEvent(conversationID string, turnID *string, sequence int, n
 
 func buildCanonicalContextBlock(context CanonicalContext) string {
 	permissions := strings.Join(filterNonEmpty(context.Permissions), ", ")
-	runtime := strings.TrimSpace(context.Runtime)
-	providerID := strings.TrimSpace(context.ProviderID)
-	modelSlug := strings.TrimSpace(context.ModelSlug)
-	modelDisplay := strings.TrimSpace(context.Model)
-	if modelDisplay == "" && runtime != "" && providerID != "" && modelSlug != "" {
-		modelDisplay = runtime + ":" + providerID + "/" + modelSlug
+	pageFacts := ""
+	if normalized := NormalizePageContext(context.PageContext); normalized != nil {
+		payload := map[string]any{}
+		if normalized.CurrentObject != nil {
+			payload["current_object"] = normalized.CurrentObject
+		}
+		if normalized.View != nil {
+			payload["view"] = normalized.View
+		}
+		if len(payload) > 0 {
+			body, err := json.Marshal(payload)
+			if err == nil {
+				pageFacts = string(body)
+			}
+		}
 	}
-	return strings.TrimSpace(fmt.Sprintf(
-		"tenant=%s\nprincipal=%s\nlanguage=%s\npage=%s\npermissions=%s\nbusiness_object=%s\nprovider_id=%s\nprovider_type=%s\nmodel_slug=%s\nruntime=%s\nmodel=%s",
-		strings.TrimSpace(context.TenantID),
-		strings.TrimSpace(context.PrincipalID),
-		normalizeDefault(context.Language, "zh"),
-		normalizeDefault(context.Page, "cubebox"),
-		normalizeDefault(permissions, "cubebox.conversations:use"),
-		normalizeDefault(context.BusinessObject, "conversation"),
-		normalizeDefault(providerID, "unavailable"),
-		normalizeDefault(context.ProviderType, "unavailable"),
-		normalizeDefault(modelSlug, "unavailable"),
-		normalizeDefault(runtime, "unavailable"),
-		normalizeDefault(modelDisplay, "unavailable"),
-	))
+	lines := []string{
+		fmt.Sprintf("tenant=%s", strings.TrimSpace(context.TenantID)),
+		fmt.Sprintf("principal=%s", strings.TrimSpace(context.PrincipalID)),
+		fmt.Sprintf("language=%s", normalizeDefault(context.Language, "zh")),
+		fmt.Sprintf("page=%s", normalizeDefault(context.Page, "cubebox")),
+		fmt.Sprintf("permissions=%s", normalizeDefault(permissions, "cubebox.conversations:use")),
+		fmt.Sprintf("business_object=%s", normalizeDefault(context.BusinessObject, "conversation")),
+	}
+	if pageFacts != "" {
+		lines = append(lines, "page_facts="+pageFacts)
+	}
+	return strings.TrimSpace(strings.Join(lines, "\n"))
 }
 
 func buildSummaryText(items []PromptItem) string {

@@ -40,6 +40,19 @@ export interface CanonicalEvent {
   payload: Record<string, unknown>
 }
 
+export interface CubeBoxPageContext {
+  page?: string
+  business_object?: string
+  current_object?: {
+    domain?: string
+    entity_key?: string
+    label?: string
+  }
+  view?: {
+    as_of?: string
+  }
+}
+
 export interface ConversationReplayResponse {
   conversation: CubeBoxConversation
   events: CanonicalEvent[]
