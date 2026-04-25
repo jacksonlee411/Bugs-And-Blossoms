@@ -155,9 +155,10 @@ start_if_needed() {
   fi
 
   log "start ${name}: log=${log_file}"
-  "$@" >"$log_file" 2>&1 &
+  setsid nohup "$@" >"$log_file" 2>&1 </dev/null &
   local pid="$!"
   printf '%s\n' "$pid" >"$pid_file"
+  disown "$pid" >/dev/null 2>&1 || true
   sleep 0.2
   if ! kill -0 "$pid" >/dev/null 2>&1; then
     echo "[dev-runtime] ${name} failed to start; see ${log_file}" >&2
@@ -199,6 +200,7 @@ require_cmd docker
 require_cmd go
 require_cmd curl
 require_cmd python3
+require_cmd setsid
 
 if ! command -v pnpm >/dev/null 2>&1 && command -v corepack >/dev/null 2>&1; then
   corepack enable >/dev/null 2>&1 || true
