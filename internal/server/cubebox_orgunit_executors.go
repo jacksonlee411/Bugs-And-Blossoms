@@ -185,7 +185,16 @@ func (e cubeBoxOrgUnitDetailsExecutor) Execute(ctx context.Context, request cube
 	if err != nil {
 		return cubebox.ExecuteResult{}, err
 	}
-	return cubebox.ExecuteResult{Payload: payload}, nil
+	return cubebox.ExecuteResult{
+		Payload: payload,
+		ConfirmedEntity: orgUnitQueryEntity(cubebox.QueryEntity{
+			Intent:        strings.TrimSpace(request.PlanIntent),
+			EntityKey:     details.OrgCode,
+			AsOf:          asOf,
+			SourceAPIKey:  "orgunit.details",
+			ParentOrgCode: details.ParentCode,
+		}),
+	}, nil
 }
 
 func (e cubeBoxOrgUnitListExecutor) ValidateParams(raw map[string]any) (map[string]any, error) {
@@ -308,7 +317,16 @@ func (e cubeBoxOrgUnitListExecutor) Execute(ctx context.Context, request cubebox
 	if err != nil {
 		return cubebox.ExecuteResult{}, err
 	}
-	return cubebox.ExecuteResult{Payload: payload}, nil
+	return cubebox.ExecuteResult{
+		Payload: payload,
+		ConfirmedEntity: orgUnitQueryEntity(cubebox.QueryEntity{
+			Intent:        strings.TrimSpace(request.PlanIntent),
+			EntityKey:     orgUnitListAnchor(params),
+			AsOf:          asOf,
+			SourceAPIKey:  "orgunit.list",
+			ParentOrgCode: orgUnitListAnchor(params),
+		}),
+	}, nil
 }
 
 func (e cubeBoxOrgUnitSearchExecutor) ValidateParams(raw map[string]any) (map[string]any, error) {
@@ -362,7 +380,16 @@ func (e cubeBoxOrgUnitSearchExecutor) Execute(ctx context.Context, request cubeb
 	if err != nil {
 		return cubebox.ExecuteResult{}, err
 	}
-	return cubebox.ExecuteResult{Payload: payload}, nil
+	return cubebox.ExecuteResult{
+		Payload: payload,
+		ConfirmedEntity: orgUnitQueryEntity(cubebox.QueryEntity{
+			Intent:        strings.TrimSpace(request.PlanIntent),
+			EntityKey:     result.TargetOrgCode,
+			AsOf:          asOf,
+			SourceAPIKey:  "orgunit.search",
+			TargetOrgCode: result.TargetOrgCode,
+		}),
+	}, nil
 }
 
 func (e cubeBoxOrgUnitAuditExecutor) ValidateParams(raw map[string]any) (map[string]any, error) {
@@ -437,7 +464,26 @@ func (e cubeBoxOrgUnitAuditExecutor) Execute(ctx context.Context, request cubebo
 	if err != nil {
 		return cubebox.ExecuteResult{}, err
 	}
-	return cubebox.ExecuteResult{Payload: payload}, nil
+	return cubebox.ExecuteResult{
+		Payload: payload,
+		ConfirmedEntity: orgUnitQueryEntity(cubebox.QueryEntity{
+			Intent:       strings.TrimSpace(request.PlanIntent),
+			EntityKey:    orgCode,
+			SourceAPIKey: "orgunit.audit",
+		}),
+	}, nil
+}
+
+func orgUnitQueryEntity(entity cubebox.QueryEntity) *cubebox.QueryEntity {
+	entity.Domain = "orgunit"
+	return cubebox.NormalizeQueryEntity(entity)
+}
+
+func orgUnitListAnchor(params map[string]any) string {
+	if value, ok := params["parent_org_code"].(string); ok {
+		return strings.TrimSpace(value)
+	}
+	return ""
 }
 
 func normalizeOrgUnitCommonParams(raw map[string]any) (map[string]any, error) {

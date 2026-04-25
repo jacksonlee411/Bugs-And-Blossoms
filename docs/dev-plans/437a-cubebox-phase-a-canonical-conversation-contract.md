@@ -83,6 +83,7 @@
 | `turn.context_item.started` | 上下文条目开始 | `item_id`、`kind` |
 | `turn.context_item.completed` | 上下文条目完成 | `item_id`、`kind`、`summary` |
 | `turn.context_compacted` | 历史已被压缩 | `summary_id`、`source_range` |
+| `turn.query_entity.confirmed` | 查询链确认了可继承业务实体 | `entity.domain`、`entity.entity_key`、`entity.intent`、`entity.as_of`、`entity.source_api_key` |
 | `turn.error` | 本轮失败 | `code`、`message`、`retryable`、`trace_id`、`provider_id`、`provider_type`、`model_slug`、`runtime`、`latency_ms` |
 | `turn.interrupted` | 本轮被用户或系统中断 | `reason`、`trace_id`、`provider_id`、`provider_type`、`model_slug`、`runtime`、`latency_ms` |
 | `turn.completed` | 本轮结束 | `status`、`trace_id`、`provider_id`、`provider_type`、`model_slug`、`runtime`、`latency_ms` |

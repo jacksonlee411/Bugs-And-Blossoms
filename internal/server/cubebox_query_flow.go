@@ -32,6 +32,7 @@ type cubeboxReadPlanProductionInput struct {
 	ConversationID string
 	Prompt         string
 	KnowledgePacks []cubebox.KnowledgePack
+	RecentEntity   *cubebox.QueryEntity
 }
 
 type cubeboxReadPlanProductionResult struct {
@@ -186,18 +187,24 @@ func (f *cubeboxQueryFlow) TryHandle(
 		return false
 	}
 
+	queryContext, err := f.queryContext(ctx, request)
+	if err != nil {
+		return false
+	}
+	recentEntity := queryContext.RecentConfirmedEntity
 	produced, err := f.producer.ProduceReadPlan(ctx, cubeboxReadPlanProductionInput{
 		TenantID:       strings.TrimSpace(request.TenantID),
 		PrincipalID:    strings.TrimSpace(request.PrincipalID),
 		ConversationID: strings.TrimSpace(request.ConversationID),
 		Prompt:         request.Prompt,
 		KnowledgePacks: append([]cubebox.KnowledgePack(nil), f.knowledgePacks...),
+		RecentEntity:   recentEntity,
 	})
 	if err != nil {
 		return false
 	}
 	if !produced.Handled {
-		return false
+		return f.writeQueryNoQueryStopline(ctx, request, sink, produced)
 	}
 
 	prepared, err := f.prepareQueryTurn(ctx, request, produced)
@@ -269,6 +276,9 @@ func (f *cubeboxQueryFlow) TryHandle(
 	if err != nil {
 		f.writeQueryTerminalError(ctx, request, prepared.turn.TurnID, &prepared.sequence, prepared.lifecycle, sink, queryNarrationErrorToTerminal(err))
 		return true
+	}
+	if anchor := confirmedQueryEntity(results); anchor != nil {
+		f.appendQueryMetadataEvent(ctx, request, prepared.turn.TurnID, &prepared.sequence, cubebox.QueryEntityConfirmedEventType, map[string]any{"entity": anchor.Payload()})
 	}
 	if !writeEvent("turn.agent_message.delta", map[string]any{"message_id": prepared.turn.AssistantMessageID, "delta": answer}) {
 		return true
@@ -376,11 +386,33 @@ func (p *cubeboxProviderReadPlanProducer) buildPlannerMessages(input cubeboxRead
 			Content: buildKnowledgePackPromptBlock(pack),
 		})
 	}
+	if input.RecentEntity != nil {
+		messages = append(messages, cubebox.PromptItem{
+			Role:    "system",
+			Content: buildRecentQueryEntityPromptBlock(*input.RecentEntity),
+		})
+	}
 	messages = append(messages, cubebox.PromptItem{
 		Role:    "user",
 		Content: input.Prompt,
 	})
 	return messages
+}
+
+func buildRecentQueryEntityPromptBlock(entity cubebox.QueryEntity) string {
+	body, err := json.Marshal(map[string]any{
+		"recent_confirmed_query_entity": entity,
+	})
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(fmt.Sprintf(`查询会话上下文：
+%s
+
+使用规则：
+- 该块只提供上一轮已成功只读查询确认的结构化实体事实。
+- 字段语义、继承规则与澄清策略以已加载知识包为准，通用 query flow 不解释具体业务字段。
+- 当前轮用户显式输入优先；该上下文不是授权来源，也不是会话压缩摘要。`, string(body)))
 }
 
 func buildKnowledgePackPromptBlock(pack cubebox.KnowledgePack) string {
@@ -534,7 +566,7 @@ func (f *cubeboxQueryFlow) newQueryEventWriter(
 			TurnID:         turnIDPtr(turnID),
 			Sequence:       *sequence,
 			Type:           eventType,
-			TS:             f.now().Format(time.RFC3339),
+			TS:             f.clockNow().Format(time.RFC3339),
 			Payload:        payload,
 		}
 		*sequence = *sequence + 1
@@ -545,13 +577,42 @@ func (f *cubeboxQueryFlow) newQueryEventWriter(
 				TurnID:         turnIDPtr(turnID),
 				Sequence:       event.Sequence,
 				Type:           "turn.error",
-				TS:             f.now().Format(time.RFC3339),
+				TS:             f.clockNow().Format(time.RFC3339),
 				Payload:        f.queryErrorPayload("event_log_write_failed", "会话事件落库失败，当前响应已终止。", false, lifecycle),
 			})
 			return false
 		}
 		return sink.Write(event)
 	}
+}
+
+func (f *cubeboxQueryFlow) appendQueryMetadataEvent(
+	ctx context.Context,
+	request cubebox.GatewayStreamRequest,
+	turnID string,
+	sequence *int,
+	eventType string,
+	payload map[string]any,
+) {
+	if f == nil || f.store == nil || sequence == nil {
+		return
+	}
+	event := cubebox.CanonicalEvent{
+		EventID:        "evt_" + strings.ReplaceAll(uuid.NewString(), "-", ""),
+		ConversationID: request.ConversationID,
+		TurnID:         turnIDPtr(turnID),
+		Sequence:       *sequence,
+		Type:           strings.TrimSpace(eventType),
+		TS:             f.clockNow().Format(time.RFC3339),
+		Payload:        payload,
+	}
+	if event.Type == "" {
+		return
+	}
+	if err := f.store.AppendEvent(ctx, request.TenantID, request.PrincipalID, request.ConversationID, event); err != nil {
+		return
+	}
+	*sequence = *sequence + 1
 }
 
 func (f *cubeboxQueryFlow) writeQueryTerminalError(
@@ -570,7 +631,7 @@ func (f *cubeboxQueryFlow) writeQueryTerminalError(
 			TurnID:         turnIDPtr(turnID),
 			Sequence:       *sequence,
 			Type:           "turn.error",
-			TS:             f.now().Format(time.RFC3339),
+			TS:             f.clockNow().Format(time.RFC3339),
 			Payload:        f.queryErrorPayload(terminal.Code, terminal.Message, terminal.Retryable, lifecycle),
 		},
 		{
@@ -579,7 +640,7 @@ func (f *cubeboxQueryFlow) writeQueryTerminalError(
 			TurnID:         turnIDPtr(turnID),
 			Sequence:       *sequence + 1,
 			Type:           "turn.completed",
-			TS:             f.now().Format(time.RFC3339),
+			TS:             f.clockNow().Format(time.RFC3339),
 			Payload:        f.queryCompletedPayload("failed", lifecycle),
 		},
 	}
@@ -591,7 +652,7 @@ func (f *cubeboxQueryFlow) writeQueryTerminalError(
 			TurnID:         turnIDPtr(turnID),
 			Sequence:       events[0].Sequence,
 			Type:           "turn.error",
-			TS:             f.now().Format(time.RFC3339),
+			TS:             f.clockNow().Format(time.RFC3339),
 			Payload:        f.queryErrorPayload("event_log_write_failed", "会话事件落库失败，当前响应已终止。", false, lifecycle),
 		})
 		return
@@ -643,13 +704,70 @@ func (f *cubeboxQueryFlow) queryLifecyclePayload(lifecycle cubeboxQueryLifecycle
 func (f *cubeboxQueryFlow) queryLatencyMS(lifecycle cubeboxQueryLifecycle) int64 {
 	startedAt := lifecycle.startedAt
 	if startedAt.IsZero() {
-		startedAt = f.now()
+		startedAt = f.clockNow()
 	}
-	latency := f.now().Sub(startedAt).Milliseconds()
+	latency := f.clockNow().Sub(startedAt).Milliseconds()
 	if latency < 0 {
 		return 0
 	}
 	return latency
+}
+
+func (f *cubeboxQueryFlow) queryContext(ctx context.Context, request cubebox.GatewayStreamRequest) (cubebox.QueryContext, error) {
+	if f == nil || f.store == nil {
+		return cubebox.QueryContext{}, nil
+	}
+	replay, err := f.store.GetConversation(ctx, strings.TrimSpace(request.TenantID), strings.TrimSpace(request.PrincipalID), strings.TrimSpace(request.ConversationID))
+	if err != nil {
+		return cubebox.QueryContext{}, err
+	}
+	return cubebox.QueryContextFromEvents(replay.Events), nil
+}
+
+func confirmedQueryEntity(results []cubebox.ExecuteResult) *cubebox.QueryEntity {
+	for i := len(results) - 1; i >= 0; i-- {
+		if entity := normalizedQueryEntity(results[i].ConfirmedEntity); entity != nil {
+			return entity
+		}
+	}
+	return nil
+}
+
+func normalizedQueryEntity(entity *cubebox.QueryEntity) *cubebox.QueryEntity {
+	if entity == nil {
+		return nil
+	}
+	return cubebox.NormalizeQueryEntity(*entity)
+}
+
+func (f *cubeboxQueryFlow) writeQueryNoQueryStopline(
+	ctx context.Context,
+	request cubebox.GatewayStreamRequest,
+	sink cubebox.GatewayEventSink,
+	produced cubeboxReadPlanProductionResult,
+) bool {
+	prepared, err := f.prepareQueryTurn(ctx, request, produced)
+	if err != nil {
+		return false
+	}
+	defer f.runtime.FinishTurn(prepared.turn.TurnID)
+	writeEvent := f.newQueryEventWriter(ctx, request, prepared.turn.TurnID, &prepared.sequence, prepared.lifecycle, sink)
+	if !writeEvent("turn.started", f.queryStartedPayload(prepared.turn.UserMessageID, prepared.lifecycle)) {
+		return true
+	}
+	if !writeEvent("turn.user_message.accepted", map[string]any{"message_id": prepared.turn.UserMessageID, "text": prepared.turn.Prompt}) {
+		return true
+	}
+	if !writeEvent("turn.agent_message.delta", map[string]any{"message_id": prepared.turn.AssistantMessageID, "delta": queryNoQueryStoplineMessage()}) {
+		return true
+	}
+	_ = writeEvent("turn.agent_message.completed", map[string]any{"message_id": prepared.turn.AssistantMessageID})
+	_ = writeEvent("turn.completed", f.queryCompletedPayload("completed", prepared.lifecycle))
+	return true
+}
+
+func queryNoQueryStoplineMessage() string {
+	return "当前请求未形成可安全执行的只读查询计划。请换成明确的数据查询问题，或补充查询对象、条件和日期后重试。"
 }
 
 type queryTerminalError struct {
@@ -702,7 +820,7 @@ func (f *cubeboxQueryFlow) prepareQueryTurn(
 		providerType: strings.TrimSpace(produced.ProviderType),
 		modelSlug:    strings.TrimSpace(produced.ModelSlug),
 		runtime:      "cubebox-query-read-plan",
-		startedAt:    f.now(),
+		startedAt:    f.clockNow(),
 	}
 	canonicalContext := f.buildQueryCanonicalContext(request, lifecycle)
 	prepared, err := cubebox.PrepareTurnStream(ctx, f.store, request, canonicalContext)
@@ -715,6 +833,13 @@ func (f *cubeboxQueryFlow) prepareQueryTurn(
 		lifecycle: lifecycle,
 		sequence:  prepared.Sequence,
 	}, nil
+}
+
+func (f *cubeboxQueryFlow) clockNow() time.Time {
+	if f != nil && f.now != nil {
+		return f.now()
+	}
+	return time.Now().UTC()
 }
 
 func (f *cubeboxQueryFlow) buildQueryCanonicalContext(request cubebox.GatewayStreamRequest, lifecycle cubeboxQueryLifecycle) cubebox.CanonicalContext {

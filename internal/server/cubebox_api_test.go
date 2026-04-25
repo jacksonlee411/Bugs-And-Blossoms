@@ -20,9 +20,13 @@ func newTestGateway(runtime *cubebox.Runtime) *cubebox.GatewayService {
 type cubeboxReadPlanProducerStub struct {
 	result cubeboxReadPlanProductionResult
 	err    error
+	fn     func(context.Context, cubeboxReadPlanProductionInput) (cubeboxReadPlanProductionResult, error)
 }
 
-func (s cubeboxReadPlanProducerStub) ProduceReadPlan(context.Context, cubeboxReadPlanProductionInput) (cubeboxReadPlanProductionResult, error) {
+func (s cubeboxReadPlanProducerStub) ProduceReadPlan(ctx context.Context, input cubeboxReadPlanProductionInput) (cubeboxReadPlanProductionResult, error) {
+	if s.fn != nil {
+		return s.fn(ctx, input)
+	}
 	if s.err != nil {
 		return cubeboxReadPlanProductionResult{}, s.err
 	}
@@ -79,6 +83,11 @@ func (s cubeboxStoreStub) CreateConversation(ctx context.Context, tenantID strin
 }
 
 func (s cubeboxStoreStub) GetConversation(ctx context.Context, tenantID string, principalID string, conversationID string) (cubebox.ConversationReplayResponse, error) {
+	if s.getFn == nil {
+		return cubebox.ConversationReplayResponse{
+			Conversation: cubebox.Conversation{ID: strings.TrimSpace(conversationID), Title: "新对话", Status: "active"},
+		}, nil
+	}
 	return s.getFn(ctx, tenantID, principalID, conversationID)
 }
 
@@ -1390,7 +1399,7 @@ func TestCubeBoxStreamTurnAPILimitsLargeQueryPayloadInDelta(t *testing.T) {
 	}
 }
 
-func TestCubeBoxStreamTurnAPIFallsBackToGatewayWhenQueryFlowSkips(t *testing.T) {
+func TestCubeBoxStreamTurnAPIStopsNoQueryWithoutGatewayFallback(t *testing.T) {
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodPost, "/internal/cubebox/turns:stream", strings.NewReader(`{"conversation_id":"conv_1","prompt":"hello","next_sequence":1}`))
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
@@ -1420,8 +1429,11 @@ func TestCubeBoxStreamTurnAPIFallsBackToGatewayWhenQueryFlowSkips(t *testing.T) 
 		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
 	}
 	body := rec.Body.String()
-	if !strings.Contains(body, `"runtime":"deterministic-fixture"`) {
-		t.Fatalf("expected gateway fallback body=%s", body)
+	if !strings.Contains(body, "当前请求未形成可安全执行的只读查询计划") {
+		t.Fatalf("expected no-query stopline body=%s", body)
+	}
+	if strings.Contains(body, `"runtime":"deterministic-fixture"`) {
+		t.Fatalf("expected no gateway fallback body=%s", body)
 	}
 }
 
@@ -1729,6 +1741,256 @@ func TestCubeBoxStreamTurnAPIFallsBackToGatewayWhenPlannerErrors(t *testing.T) {
 	if strings.Contains(body, `"code":"ai_model_provider_unavailable"`) {
 		t.Fatalf("planner error should not hijack non-query turns body=%s", body)
 	}
+}
+
+func TestCubeBoxQueryFlowInjectsRecentConfirmedEntity(t *testing.T) {
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/internal/cubebox/turns:stream", strings.NewReader(`{"conversation_id":"conv_1","prompt":"查该组织的下级组织","next_sequence":10}`))
+	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
+	req = req.WithContext(withPrincipal(req.Context(), Principal{ID: "p1"}))
+
+	registry, err := cubebox.NewExecutionRegistry(cubebox.RegisteredExecutor{
+		APIKey:         "orgunit.list",
+		RequiredParams: []string{"as_of"},
+		OptionalParams: []string{"parent_org_code", "include_disabled"},
+		Executor: queryExecutorStub{
+			validateParamsFn: func(raw map[string]any) (map[string]any, error) { return raw, nil },
+			executeFn: func(ctx context.Context, request cubebox.ExecuteRequest, params map[string]any) (cubebox.ExecuteResult, error) {
+				if params["parent_org_code"] != "100000" || params["as_of"] != "2026-04-25" {
+					t.Fatalf("unexpected inherited params=%v", params)
+				}
+				return cubebox.ExecuteResult{
+					Payload: map[string]any{"as_of": "2026-04-25", "org_units": []any{}},
+					ConfirmedEntity: &cubebox.QueryEntity{
+						Domain:        "orgunit",
+						Intent:        "orgunit.list",
+						EntityKey:     "100000",
+						AsOf:          "2026-04-25",
+						SourceAPIKey:  "orgunit.list",
+						ParentOrgCode: "100000",
+					},
+				}, nil
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("NewExecutionRegistry err=%v", err)
+	}
+	var appended []cubebox.CanonicalEvent
+	store := cubeboxStoreStub{
+		getFn: func(context.Context, string, string, string) (cubebox.ConversationReplayResponse, error) {
+			return cubebox.ConversationReplayResponse{Conversation: cubebox.Conversation{ID: "conv_1", Title: "新对话", Status: "active"}, Events: []cubebox.CanonicalEvent{{
+				Type:    cubebox.QueryEntityConfirmedEventType,
+				Payload: map[string]any{"entity": map[string]any{"domain": "orgunit", "intent": "orgunit.details", "entity_key": "100000", "as_of": "2026-04-25"}},
+			}}, NextSequence: 10}, nil
+		},
+		compactFn: func(context.Context, string, string, string, cubebox.CanonicalContext, string) (cubebox.CompactConversationResponse, error) {
+			return cubebox.CompactConversationResponse{Conversation: cubebox.Conversation{ID: "conv_1", Title: "新对话", Status: "active"}, NextSequence: 10}, nil
+		},
+		appendFn: func(_ context.Context, _ string, _ string, _ string, event cubebox.CanonicalEvent) error {
+			appended = append(appended, event)
+			return nil
+		},
+	}
+	queryFlow := &cubeboxQueryFlow{
+		runtime:  cubebox.NewRuntime(),
+		store:    store,
+		registry: registry,
+		producer: cubeboxReadPlanProducerStub{fn: func(ctx context.Context, input cubeboxReadPlanProductionInput) (cubeboxReadPlanProductionResult, error) {
+			if input.RecentEntity == nil || input.RecentEntity.EntityKey != "100000" || input.RecentEntity.AsOf != "2026-04-25" {
+				t.Fatalf("expected recent entity injected, got %#v", input.RecentEntity)
+			}
+			return cubeboxReadPlanProductionResult{
+				Handled: true,
+				Plan: cubebox.ReadPlan{Intent: "orgunit.list", Confidence: 0.9, Steps: []cubebox.ReadPlanStep{{
+					ID: "step-1", APIKey: "orgunit.list", Params: map[string]any{"as_of": input.RecentEntity.AsOf, "parent_org_code": input.RecentEntity.EntityKey, "include_disabled": false}, DependsOn: []string{},
+				}}},
+				ProviderID: "openai-compatible", ProviderType: "openai-compatible", ModelSlug: "gpt-5.2",
+			}, nil
+		}},
+		narrator:       cubeboxQueryNarratorStub{text: "100000 没有下级组织。"},
+		knowledgePacks: []cubebox.KnowledgePack{{Dir: "modules/orgunit/presentation/cubebox", Files: map[string]string{"CUBEBOX-SKILL.md": "x", "queries.md": "x", "apis.md": "x", "examples.md": "x"}}},
+		now:            func() time.Time { return time.Date(2026, 4, 25, 12, 0, 0, 0, time.UTC) },
+	}
+
+	handleCubeBoxStreamTurnAPI(rec, req, cubebox.NewRuntime(), store, newTestGateway(cubebox.NewRuntime()), queryFlow)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+	}
+	if !strings.Contains(rec.Body.String(), "100000 没有下级组织") {
+		t.Fatalf("expected query narration body=%s", rec.Body.String())
+	}
+	if !containsCanonicalEventType(appended, cubebox.QueryEntityConfirmedEventType) {
+		t.Fatalf("expected refreshed query anchor event, got %#v", appended)
+	}
+}
+
+func TestCubeBoxQueryFlowIgnoresConfirmedEntityMetadataAppendFailure(t *testing.T) {
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/internal/cubebox/turns:stream", strings.NewReader(`{"conversation_id":"conv_1","prompt":"查组织 100000","next_sequence":10}`))
+	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
+	req = req.WithContext(withPrincipal(req.Context(), Principal{ID: "p1"}))
+
+	registry, err := cubebox.NewExecutionRegistry(cubebox.RegisteredExecutor{
+		APIKey:         "orgunit.details",
+		RequiredParams: []string{"org_code", "as_of"},
+		Executor: queryExecutorStub{
+			executeFn: func(context.Context, cubebox.ExecuteRequest, map[string]any) (cubebox.ExecuteResult, error) {
+				return cubebox.ExecuteResult{
+					Payload: map[string]any{"org_unit": map[string]any{"org_code": "100000", "name": "总部"}},
+					ConfirmedEntity: &cubebox.QueryEntity{
+						Domain:       "orgunit",
+						Intent:       "orgunit.details",
+						EntityKey:    "100000",
+						AsOf:         "2026-04-25",
+						SourceAPIKey: "orgunit.details",
+					},
+				}, nil
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("NewExecutionRegistry err=%v", err)
+	}
+	var appended []cubebox.CanonicalEvent
+	store := cubeboxStoreStub{
+		getFn: func(context.Context, string, string, string) (cubebox.ConversationReplayResponse, error) {
+			return cubebox.ConversationReplayResponse{Conversation: cubebox.Conversation{ID: "conv_1", Title: "新对话", Status: "active"}, NextSequence: 10}, nil
+		},
+		compactFn: func(context.Context, string, string, string, cubebox.CanonicalContext, string) (cubebox.CompactConversationResponse, error) {
+			return cubebox.CompactConversationResponse{Conversation: cubebox.Conversation{ID: "conv_1", Title: "新对话", Status: "active"}, NextSequence: 10}, nil
+		},
+		appendFn: func(_ context.Context, _ string, _ string, _ string, event cubebox.CanonicalEvent) error {
+			if event.Type == cubebox.QueryEntityConfirmedEventType {
+				return errors.New("metadata append failed")
+			}
+			appended = append(appended, event)
+			return nil
+		},
+	}
+	queryFlow := &cubeboxQueryFlow{
+		runtime:  cubebox.NewRuntime(),
+		store:    store,
+		registry: registry,
+		producer: cubeboxReadPlanProducerStub{result: cubeboxReadPlanProductionResult{
+			Handled: true,
+			Plan: cubebox.ReadPlan{Intent: "orgunit.details", Confidence: 0.9, Steps: []cubebox.ReadPlanStep{{
+				ID: "step-1", APIKey: "orgunit.details", Params: map[string]any{"org_code": "100000", "as_of": "2026-04-25"}, DependsOn: []string{},
+			}}},
+			ProviderID: "openai-compatible", ProviderType: "openai-compatible", ModelSlug: "gpt-5.2",
+		}},
+		narrator:       cubeboxQueryNarratorStub{text: "100000 是总部。"},
+		knowledgePacks: []cubebox.KnowledgePack{{Dir: "modules/orgunit/presentation/cubebox", Files: map[string]string{"CUBEBOX-SKILL.md": "x", "queries.md": "x", "apis.md": "x", "examples.md": "x"}}},
+		now:            func() time.Time { return time.Date(2026, 4, 25, 12, 0, 0, 0, time.UTC) },
+	}
+
+	handleCubeBoxStreamTurnAPI(rec, req, cubebox.NewRuntime(), store, newTestGateway(cubebox.NewRuntime()), queryFlow)
+
+	body := rec.Body.String()
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", rec.Code, body)
+	}
+	if !strings.Contains(body, "100000 是总部。") {
+		t.Fatalf("expected query narration body=%s", body)
+	}
+	if strings.Contains(body, `"type":"turn.error"`) || strings.Contains(body, "event_log_write_failed") {
+		t.Fatalf("metadata append failure must not emit terminal error body=%s", body)
+	}
+	if !strings.Contains(body, `"type":"turn.completed"`) {
+		t.Fatalf("expected completed event body=%s", body)
+	}
+	if containsCanonicalEventType(appended, cubebox.QueryEntityConfirmedEventType) {
+		t.Fatalf("metadata event should not be appended after failure, got %#v", appended)
+	}
+	for _, event := range appended {
+		if event.Type == "turn.agent_message.delta" && event.Sequence != 12 {
+			t.Fatalf("metadata append failure should not consume visible sequence, got event=%#v", event)
+		}
+	}
+}
+
+func TestCubeBoxQueryFlowStopsNoQueryFallbackWithGenericBoundary(t *testing.T) {
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/internal/cubebox/turns:stream", strings.NewReader(`{"conversation_id":"conv_1","prompt":"查该组织的下级组织","next_sequence":3}`))
+	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
+	req = req.WithContext(withPrincipal(req.Context(), Principal{ID: "p1"}))
+
+	store := cubeboxStoreStub{
+		getFn: func(context.Context, string, string, string) (cubebox.ConversationReplayResponse, error) {
+			return cubebox.ConversationReplayResponse{Conversation: cubebox.Conversation{ID: "conv_1", Title: "新对话", Status: "active"}, NextSequence: 3}, nil
+		},
+		compactFn: func(context.Context, string, string, string, cubebox.CanonicalContext, string) (cubebox.CompactConversationResponse, error) {
+			return cubebox.CompactConversationResponse{Conversation: cubebox.Conversation{ID: "conv_1", Title: "新对话", Status: "active"}, NextSequence: 3}, nil
+		},
+		appendFn: func(context.Context, string, string, string, cubebox.CanonicalEvent) error { return nil },
+	}
+	queryFlow := &cubeboxQueryFlow{
+		runtime:        cubebox.NewRuntime(),
+		store:          store,
+		registry:       &cubebox.ExecutionRegistry{},
+		producer:       cubeboxReadPlanProducerStub{result: cubeboxReadPlanProductionResult{Handled: false, ProviderID: "openai-compatible", ProviderType: "openai-compatible", ModelSlug: "gpt-5.2"}},
+		narrator:       cubeboxQueryNarratorStub{text: "unused"},
+		knowledgePacks: []cubebox.KnowledgePack{{Dir: "modules/orgunit/presentation/cubebox", Files: map[string]string{"CUBEBOX-SKILL.md": "x", "queries.md": "x", "apis.md": "x", "examples.md": "x"}}},
+		now:            func() time.Time { return time.Date(2026, 4, 25, 12, 0, 0, 0, time.UTC) },
+	}
+	handleCubeBoxStreamTurnAPI(rec, req, cubebox.NewRuntime(), store, newTestGateway(cubebox.NewRuntime()), queryFlow)
+
+	body := rec.Body.String()
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", rec.Code, body)
+	}
+	if !strings.Contains(body, "当前请求未形成可安全执行的只读查询计划") {
+		t.Fatalf("expected generic no-query stopline body=%s", body)
+	}
+	if strings.Contains(body, `"runtime":"deterministic-fixture"`) || strings.Contains(body, "没有查询接口") || strings.Contains(body, "没有工具权限") || strings.Contains(body, "组织详情") {
+		t.Fatalf("expected stopline without gateway fallback body=%s", body)
+	}
+}
+
+func TestCubeBoxQueryFlowStopsNoQueryWithoutDomainSemantics(t *testing.T) {
+	store := cubeboxStoreStub{
+		getFn: func(context.Context, string, string, string) (cubebox.ConversationReplayResponse, error) {
+			return cubebox.ConversationReplayResponse{Conversation: cubebox.Conversation{ID: "conv_1", Title: "新对话", Status: "active"}, NextSequence: 1}, nil
+		},
+		appendFn: func(context.Context, string, string, string, cubebox.CanonicalEvent) error { return nil },
+	}
+	queryFlow := &cubeboxQueryFlow{
+		runtime:        cubebox.NewRuntime(),
+		store:          store,
+		registry:       &cubebox.ExecutionRegistry{},
+		producer:       cubeboxReadPlanProducerStub{result: cubeboxReadPlanProductionResult{Handled: false, ProviderID: "openai-compatible", ProviderType: "openai-compatible", ModelSlug: "gpt-5.2"}},
+		narrator:       cubeboxQueryNarratorStub{text: "unused"},
+		knowledgePacks: []cubebox.KnowledgePack{{Dir: "modules/orgunit/presentation/cubebox", Files: map[string]string{"CUBEBOX-SKILL.md": "x", "queries.md": "x", "apis.md": "x", "examples.md": "x"}}},
+		now:            func() time.Time { return time.Date(2026, 4, 25, 12, 0, 0, 0, time.UTC) },
+	}
+
+	sink := &capturingGatewaySink{}
+	handled := queryFlow.TryHandle(context.Background(), cubebox.GatewayStreamRequest{
+		TenantID:       "t1",
+		PrincipalID:    "p1",
+		ConversationID: "conv_1",
+		Prompt:         "帮我写一封邮件",
+		NextSequence:   1,
+	}, sink)
+	if !handled {
+		t.Fatal("expected query no-query stopline to handle without domain policy")
+	}
+	if text := strings.Join(sink.deltas(), "\n"); !strings.Contains(text, "当前请求未形成可安全执行的只读查询计划") {
+		t.Fatalf("expected generic no-query stopline, got events=%#v", sink.events)
+	}
+	if text := strings.Join(sink.deltas(), "\n"); strings.Contains(text, "组织") {
+		t.Fatalf("generic stopline must not include orgunit semantics, got %q", text)
+	}
+}
+
+func containsCanonicalEventType(events []cubebox.CanonicalEvent, eventType string) bool {
+	for _, event := range events {
+		if event.Type == eventType {
+			return true
+		}
+	}
+	return false
 }
 
 type queryExecutorStub struct {

@@ -1,0 +1,15 @@
+[GET] http://localhost:8080/internal/cubebox/conversations?limit=20 => [200] OK
+[GET] http://localhost:8080/internal/cubebox/capabilities => [200] OK
+[GET] http://localhost:8080/internal/cubebox/conversations/conv_8abc2b7f95764981bd07b9dbb0f1e0ed => [200] OK
+[POST] http://localhost:8080/internal/cubebox/conversations => [201] Created
+  Request body: {}
+[GET] http://localhost:8080/internal/cubebox/conversations?limit=20 => [200] OK
+[POST] http://localhost:8080/internal/cubebox/turns:stream => [200] OK
+  Request body: {"conversation_id":"conv_ff07b16ef1e6403182c4f8a6b5b7e33b","prompt":"查一下 100000 在 2026-04-25 的组织详情","next_sequence":2}
+[GET] http://localhost:8080/internal/cubebox/conversations?limit=20 => [200] OK
+[POST] http://localhost:8080/internal/cubebox/turns:stream => [200] OK
+  Request body: {"conversation_id":"conv_ff07b16ef1e6403182c4f8a6b5b7e33b","prompt":"查该组织的下级组织","next_sequence":8}
+[GET] http://localhost:8080/internal/cubebox/conversations?limit=20 => [200] OK
+[POST] http://localhost:8080/internal/cubebox/turns:stream => [200] OK
+  Request body: {"conversation_id":"conv_ff07b16ef1e6403182c4f8a6b5b7e33b","prompt":"就是你哦最开始说的。那个。组织啊","next_sequence":14}
+[GET] http://localhost:8080/internal/cubebox/conversations?limit=20 => [200] OK

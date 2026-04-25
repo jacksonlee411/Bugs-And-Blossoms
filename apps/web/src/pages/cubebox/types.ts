@@ -32,6 +32,7 @@ export interface CanonicalEvent {
     | 'turn.agent_message.delta'
     | 'turn.agent_message.completed'
     | 'turn.context_compacted'
+    | 'turn.query_entity.confirmed'
     | 'turn.error'
     | 'turn.interrupted'
     | 'turn.completed'

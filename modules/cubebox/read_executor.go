@@ -24,10 +24,11 @@ type ExecuteRequest struct {
 }
 
 type ExecuteResult struct {
-	APIKey      string
-	StepID      string
-	Payload     map[string]any
-	ResultFocus []string
+	APIKey          string
+	StepID          string
+	Payload         map[string]any
+	ResultFocus     []string
+	ConfirmedEntity *QueryEntity
 }
 
 type RegisteredExecutor struct {

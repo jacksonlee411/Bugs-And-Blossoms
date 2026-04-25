@@ -209,3 +209,89 @@
 
 - `status` 只使用 canonical 值 `disabled`
 - 不要输出 `inactive`
+
+## 示例 7：继承最近已确认组织查询子组织
+
+planner 上下文：
+
+```yaml
+recent_confirmed_query_entity:
+  domain: orgunit
+  intent: orgunit.details
+  entity_key: "100000"
+  as_of: "2026-04-25"
+```
+
+用户问法：
+
+`查该组织的下级组织`
+
+期望 `ReadPlan`：
+
+```json
+{
+  "intent": "orgunit.list",
+  "confidence": 0.9,
+  "missing_params": [],
+  "steps": [
+    {
+      "id": "step-1",
+      "api_key": "orgunit.list",
+      "params": {
+        "as_of": "2026-04-25",
+        "parent_org_code": "100000",
+        "include_disabled": false
+      },
+      "result_focus": [
+        "org_units[].org_code",
+        "org_units[].name",
+        "org_units[].status",
+        "org_units[].has_children"
+      ],
+      "depends_on": []
+    }
+  ],
+  "explain_focus": [
+    "直接子组织列表",
+    "状态",
+    "是否还有下级"
+  ]
+}
+```
+
+说明：
+
+- “该组织”继承最近已确认查询实体中的 `entity_key=100000`
+- 用户未显式给新日期，因此继承 `as_of=2026-04-25`
+- 若当前轮显式给出另一个组织编码，应使用当前轮编码覆盖历史实体
+
+## 示例 8：仍在查询域但缺少可继承实体时 fail-closed
+
+planner 上下文：
+
+```yaml
+recent_confirmed_query_entity: null
+```
+
+用户问法：
+
+`查该组织的下级组织`
+
+期望返回：
+
+```json
+{
+  "intent": "orgunit.list",
+  "confidence": 0.44,
+  "missing_params": [
+    "parent_org_code"
+  ],
+  "clarifying_question": "请提供要查询下级组织的上级组织编码，或先告诉我要定位的组织名称。"
+}
+```
+
+说明：
+
+- 该问题仍属于组织架构查询域，不应输出 `NO_QUERY`
+- 不得回答“没有查询接口”“没有工具权限”
+- 不得从会话压缩摘要里猜测组织编码
