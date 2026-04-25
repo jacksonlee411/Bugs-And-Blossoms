@@ -321,8 +321,8 @@ export function CubeBoxPanel() {
                 <Typography variant='caption'>
                   {item.kind === 'user_message'
                     ? t('cubebox_user_message')
-                    : item.kind === 'compact_item'
-                      ? t('cubebox_compact_item')
+                    : item.kind === 'history_context_item'
+                      ? t('cubebox_history_context_item')
                     : item.kind === 'error_item'
                       ? t('cubebox_error_item')
                       : t('cubebox_agent_message')}

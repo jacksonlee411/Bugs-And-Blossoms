@@ -36,7 +36,7 @@ type ConversationReplayResponse struct {
 	NextSequence int              `json:"next_sequence"`
 }
 
-type CompactConversationResponse struct {
+type PromptViewPreparationResponse struct {
 	Conversation Conversation    `json:"conversation"`
 	Event        *CanonicalEvent `json:"event,omitempty"`
 	PromptView   []PromptItem    `json:"prompt_view"`

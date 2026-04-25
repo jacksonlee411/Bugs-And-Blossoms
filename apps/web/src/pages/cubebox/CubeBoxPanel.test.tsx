@@ -82,7 +82,7 @@ describe('CubeBoxPanel', () => {
             cubebox_rename: '重命名',
             cubebox_archive: '归档',
             cubebox_unarchive: '恢复',
-            cubebox_compact_item: '压缩摘要',
+            cubebox_history_context_item: '历史上下文',
             cubebox_conversation_status_active: '进行中',
             cubebox_conversation_status_archived: '已归档',
             cubebox_status_idle: '空闲',

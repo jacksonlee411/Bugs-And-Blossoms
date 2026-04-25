@@ -125,8 +125,8 @@ function applyEvent(state: CubeBoxState, event: CanonicalEvent): CubeBoxState {
         ...state,
         items: appendOrReplaceItem(state.items, {
           id: String(event.payload.summary_id ?? `compact-${event.sequence}`),
-          kind: 'compact_item',
-          text: String(event.payload.summary_text ?? '历史已压缩'),
+          kind: 'history_context_item',
+          text: String(event.payload.summary_text ?? '已记录历史上下文'),
           status: 'completed'
         }),
         nextSequence

@@ -14,7 +14,7 @@ export const reconstructionFixtures: ReconstructionFixture[] = [
     golden: phaseCRoundtripGolden
   },
   {
-    name: 'manual_compaction_replays_into_compact_item',
+    name: 'manual_compaction_replays_into_history_context_item',
     replay: {
       conversation: {
         id: 'conv_compacted',
@@ -78,7 +78,7 @@ export const reconstructionFixtures: ReconstructionFixture[] = [
         },
         {
           id: 'summary_1',
-          kind: 'compact_item',
+          kind: 'history_context_item',
           text: '已压缩前 3 条历史。',
           status: 'completed'
         },

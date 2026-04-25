@@ -1,19 +1,9 @@
 package cubebox
 
 import (
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"strings"
-	"time"
-
-	"github.com/google/uuid"
-)
-
-const (
-	compactionSummaryPrefix        = "[[summary]] "
-	defaultRecentUserMessageTokens = 400
 )
 
 type PromptItem struct {
@@ -31,24 +21,20 @@ type CanonicalContext struct {
 	PageContext    *PageContext
 }
 
-type CompactionResult struct {
-	SummaryID      string       `json:"summary_id"`
-	SourceRange    [2]int       `json:"source_range"`
-	SourceDigest   string       `json:"source_digest"`
-	SummaryText    string       `json:"summary_text"`
+type PromptViewBuildResult struct {
 	TokenBefore    int          `json:"token_before"`
 	TokenAfter     int          `json:"token_after"`
 	PromptView     []PromptItem `json:"prompt_view"`
-	Compacted      bool         `json:"compacted"`
-	Reason         string       `json:"reason"`
 	CanonicalBlock string       `json:"canonical_block"`
 }
 
-func BuildPromptViewWithCompaction(events []CanonicalEvent, context CanonicalContext, currentUserInput string) CompactionResult {
+func buildPromptViewForProvider(events []CanonicalEvent, context CanonicalContext, currentUserInput string) []PromptItem {
+	return BuildPromptView(events, context, currentUserInput).PromptView
+}
+
+func BuildPromptView(events []CanonicalEvent, context CanonicalContext, currentUserInput string) PromptViewBuildResult {
 	timeline := collectPromptTimeline(events)
 	tokenBefore := estimatePromptTokens(timeline, currentUserInput)
-	sourceRange := [2]int{0, 0}
-
 	canonicalBlock := buildCanonicalContextBlock(context)
 
 	prompt := make([]PromptItem, 0, 2+len(timeline)+1)
@@ -59,35 +45,11 @@ func BuildPromptViewWithCompaction(events []CanonicalEvent, context CanonicalCon
 		prompt = append(prompt, PromptItem{Role: "user", Content: currentUserInput})
 	}
 
-	return CompactionResult{
-		SummaryID:      "summary_" + strings.ReplaceAll(uuid.NewString(), "-", ""),
-		SourceRange:    sourceRange,
-		SourceDigest:   "",
-		SummaryText:    "",
+	return PromptViewBuildResult{
 		TokenBefore:    tokenBefore,
 		TokenAfter:     estimatePromptTokens(prompt, ""),
 		PromptView:     prompt,
-		Compacted:      false,
-		Reason:         compactionReason(false, tokenBefore),
 		CanonicalBlock: canonicalBlock,
-	}
-}
-
-func BuildCompactionEvent(conversationID string, turnID *string, sequence int, now time.Time, result CompactionResult) CanonicalEvent {
-	return CanonicalEvent{
-		EventID:        "evt_" + strings.ReplaceAll(uuid.NewString(), "-", ""),
-		ConversationID: strings.TrimSpace(conversationID),
-		TurnID:         turnID,
-		Sequence:       sequence,
-		Type:           "turn.context_compacted",
-		TS:             now.UTC().Format(time.RFC3339),
-		Payload: map[string]any{
-			"summary_id":    result.SummaryID,
-			"source_range":  []int{result.SourceRange[0], result.SourceRange[1]},
-			"summary_text":  result.SummaryText,
-			"source_digest": result.SourceDigest,
-			"reason":        result.Reason,
-		},
 	}
 }
 
@@ -123,24 +85,6 @@ func buildCanonicalContextBlock(context CanonicalContext) string {
 	return strings.TrimSpace(strings.Join(lines, "\n"))
 }
 
-func buildSummaryText(items []PromptItem) string {
-	if len(items) == 0 {
-		return "暂无可压缩历史。"
-	}
-	parts := make([]string, 0, len(items))
-	for _, item := range items {
-		content := item.Content
-		if strings.TrimSpace(content) == "" {
-			continue
-		}
-		parts = append(parts, fmt.Sprintf("%s: %s", item.Role, content))
-	}
-	if len(parts) == 0 {
-		return "暂无可压缩历史。"
-	}
-	return strings.Join(parts, "\n")
-}
-
 func collectPromptTimeline(events []CanonicalEvent) []PromptItem {
 	items := make([]PromptItem, 0, len(events))
 	agentChunks := make(map[string]string)
@@ -148,7 +92,7 @@ func collectPromptTimeline(events []CanonicalEvent) []PromptItem {
 		switch event.Type {
 		case "turn.user_message.accepted":
 			text := stringValue(event.Payload["text"])
-			if strings.TrimSpace(text) == "" || strings.HasPrefix(text, compactionSummaryPrefix) {
+			if strings.TrimSpace(text) == "" {
 				continue
 			}
 			items = append(items, PromptItem{Role: "user", Content: text})
@@ -171,40 +115,6 @@ func collectPromptTimeline(events []CanonicalEvent) []PromptItem {
 	return items
 }
 
-func preserveOrTrimTextToApproxTokenLimit(text string, tokenLimit int) string {
-	if tokenLimit <= 0 || strings.TrimSpace(text) == "" || estimateTextTokens(text) <= tokenLimit {
-		return text
-	}
-	return trimTextToApproxTokenLimit(text, tokenLimit)
-}
-
-func trimTextToApproxTokenLimit(text string, tokenLimit int) string {
-	content := strings.TrimSpace(text)
-	if tokenLimit <= 0 || content == "" || estimateTextTokens(content) <= tokenLimit {
-		return content
-	}
-	runes := []rune(content)
-	maxRunes := tokenLimit * 4
-	if maxRunes <= 0 {
-		return content
-	}
-	if len(runes) > maxRunes {
-		runes = runes[:maxRunes]
-	}
-	trimmed := strings.TrimSpace(string(runes))
-	for trimmed != "" && estimateTextTokens(trimmed) > tokenLimit {
-		current := []rune(trimmed)
-		if len(current) == 0 {
-			break
-		}
-		trimmed = strings.TrimSpace(string(current[:len(current)-1]))
-	}
-	if trimmed == "" {
-		return "[truncated]"
-	}
-	return trimmed + "\n[truncated]"
-}
-
 func estimatePromptTokens(items []PromptItem, extraUserInput string) int {
 	total := 0
 	for _, item := range items {
@@ -221,21 +131,6 @@ func estimateTextTokens(text string) int {
 	}
 	runes := len([]rune(trimmed))
 	return runes/4 + 1
-}
-
-func digestTimeline(items []PromptItem) string {
-	h := sha256.Sum256([]byte(buildSummaryText(items)))
-	return hex.EncodeToString(h[:])
-}
-
-func compactionReason(compacted bool, tokenBefore int) string {
-	if compacted {
-		return "history_limit_exceeded"
-	}
-	if tokenBefore > 0 {
-		return "within_budget"
-	}
-	return "empty_history"
 }
 
 func filterNonEmpty(values []string) []string {

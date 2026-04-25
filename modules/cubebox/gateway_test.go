@@ -94,17 +94,17 @@ type appendEventStoreStub struct {
 	appendErr       error
 	appendEventsErr error
 	appendEventsCtx context.Context
-	compactResponse CompactConversationResponse
-	compactErr      error
-	compactCalls    int
+	preparedResponse PromptViewPreparationResponse
+	prepareErr       error
+	prepareCalls     int
 }
 
-func (s *appendEventStoreStub) PrepareConversationPromptView(context.Context, string, string, string, CanonicalContext, string) (CompactConversationResponse, error) {
-	s.compactCalls++
-	if s.compactErr != nil {
-		return CompactConversationResponse{}, s.compactErr
+func (s *appendEventStoreStub) PrepareConversationPromptView(context.Context, string, string, string, CanonicalContext, string) (PromptViewPreparationResponse, error) {
+	s.prepareCalls++
+	if s.prepareErr != nil {
+		return PromptViewPreparationResponse{}, s.prepareErr
 	}
-	return s.compactResponse, nil
+	return s.preparedResponse, nil
 }
 
 func (s *appendEventStoreStub) AppendEvent(_ context.Context, _ string, _ string, _ string, event CanonicalEvent) error {
@@ -689,9 +689,9 @@ func TestGatewayServiceStreamTurnWritesFallbackOnlyWhenTerminalAppendFails(t *te
 	}
 }
 
-func TestGatewayServiceStreamTurnUsesCompactedPromptViewForProvider(t *testing.T) {
+func TestGatewayServiceStreamTurnUsesPreparedPromptViewForProvider(t *testing.T) {
 	store := &appendEventStoreStub{
-		compactResponse: CompactConversationResponse{
+		preparedResponse: PromptViewPreparationResponse{
 			PromptView: []PromptItem{
 				{Role: "system", Content: "你是 CubeBox，在当前租户与权限上下文下提供帮助。"},
 				{Role: "system", Content: "tenant=tenant-1\nprincipal=principal-1"},
@@ -724,11 +724,11 @@ func TestGatewayServiceStreamTurnUsesCompactedPromptViewForProvider(t *testing.T
 		NextSequence:   3,
 	}, store, sink)
 
-	if store.compactCalls != 1 {
-		t.Fatalf("expected pre-turn compact, got %d", store.compactCalls)
+	if store.prepareCalls != 1 {
+		t.Fatalf("expected pre-turn prompt view preparation, got %d", store.prepareCalls)
 	}
 	if len(adapter.lastRequest.Messages) != 5 {
-		t.Fatalf("expected compacted prompt view plus current user input, got %+v", adapter.lastRequest.Messages)
+		t.Fatalf("expected prepared prompt view plus current user input, got %+v", adapter.lastRequest.Messages)
 	}
 	if adapter.lastRequest.Messages[2].Role != "user" || adapter.lastRequest.Messages[2].Content != "a" {
 		t.Fatalf("expected raw historical user message in provider request, got %+v", adapter.lastRequest.Messages)

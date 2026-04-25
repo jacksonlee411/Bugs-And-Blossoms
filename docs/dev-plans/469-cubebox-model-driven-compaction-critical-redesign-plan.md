@@ -23,8 +23,8 @@
   - `BuildPromptViewWithCompaction(...)` 从 canonical events 收集 timeline，默认只保留最近 `4` 个 item。
   - 更早 timeline 交给 `buildSummaryText(...)` 拼成 `role: content` 文本。
   - recent user message 通过估算 token 做字符级截断。
-  - `CompactConversation(...)` 在事务内读取事件、调用本地 prompt builder、按需写入 `turn.context_compacted`。
-  - pre-turn auto compact 通过 `PrepareTurnStream(...)` 调用 store compact，再把 `PromptView` 送到 provider。
+  - 当前 Phase 1 运行时已收口为 `PrepareConversationPromptView(...)`：事务内读取事件并构造完整历史 `PromptView`，不再以 `CompactConversation(...)` 命名当前主链。
+  - pre-turn auto prompt view 准备通过 `PrepareTurnStream(...)` 调用 store preparation，再把 `PromptView` 送到 provider；当前阶段不伪造 `turn.context_compacted` 运行时事件。
 - **现状约束**：
   - 原始事件 append-only 的方向正确。
   - canonical context reinjection 的方向正确。
@@ -90,9 +90,9 @@ CubeBox 应学习的是这个职责分配，而不是只复制文件名或事件
 
 ## 3. 设计目标
 
-1. [ ] 先建立一个“无摘要基线阶段”：停用 `compaction summary` 生产语义，不做本地摘要，只把完整历史视图 + canonical context 继续喂给模型，用于先验证连贯性主链和 owner 边界。
+1. [x] 先建立一个“无摘要基线阶段”：停用 `compaction summary` 生产语义，不做本地摘要，只把完整历史视图 + canonical context 继续喂给模型，用于先验证连贯性主链和 owner 边界。
 2. [ ] 在无摘要基线稳定后，把 CubeBox compaction 从“本地 role/content 拼接”升级为“模型参与式语义摘要或 provider remote compact”。
-3. [ ] 保留 append-only 原始事件、canonical context reinjection、pre-turn auto prompt view 准备和 sequence 单事务安全；当前不暴露 manual compact 产品能力；`turn.context_compacted` 是否写入取决于当前阶段能力，不得伪造摘要事件。
+3. [x] 保留 append-only 原始事件、canonical context reinjection、pre-turn auto prompt view 准备和 sequence 单事务安全；当前不暴露 manual compact 产品能力；`turn.context_compacted` 不作为 Phase 1 运行时产物伪造写入。
 4. [ ] 建立 provider capability：能 remote compact 则优先 remote compact；不能 remote compact 则用当前 active model 执行 summarization prompt；没有 provider runtime 时仅允许 deterministic fixture 测试路径，不伪装为真实语义摘要。
 5. [ ] 明确 compact summary 只服务 provider prompt view，不作为查询 planner、授权、RLS、业务事实、页面状态或执行参数的事实源。
 6. [ ] 修正 `DEV-PLAN-430/434/462/468` 之间关于“当前 active model 执行 compaction”的文档漂移，避免文档宣称模型摘要而代码仍是本地拼接。
@@ -207,19 +207,19 @@ CubeBox 应学习的是这个职责分配，而不是只复制文件名或事件
 
 ### Slice A：文档与漂移收口
 
-1. [ ] 更新 `DEV-PLAN-430/434/462/468` 中与 compaction 实现不一致的表述。
-2. [ ] 新增 `DEV-PLAN-469-READINESS.md` 证据入口。
-3. [ ] 明确当前实现状态：本地拼接摘要是已知缺陷，不再称为模型语义摘要。
+1. [x] 更新 `DEV-PLAN-430/434/462/468` 中与 compaction 实现不一致的表述。
+2. [x] 新增 `DEV-PLAN-469-READINESS.md` 证据入口。
+3. [x] 明确当前实现状态：本地拼接摘要是已知缺陷，不再称为模型语义摘要。
 
 ### Slice B：Phase 1 / No-Summary Baseline
 
-1. [ ] 停用 `buildSummaryText(...)` 的生产语义，不再向 provider prompt view 注入本地拼接 `summary_text`。
-2. [ ] 保留完整历史视图重建、canonical context reinjection 和当前 user input 拼装，先验证无摘要状态下的连续性主链。
-3. [ ] 冻结首阶段运行语义：
+1. [x] 停用 `buildSummaryText(...)` 的生产语义，不再向 provider prompt view 注入本地拼接 `summary_text`。
+2. [x] 保留完整历史视图重建、canonical context reinjection 和当前 user input 拼装，先验证无摘要状态下的连续性主链。
+3. [x] 冻结首阶段运行语义：
    - 只保留 pre-turn auto prompt view 准备作为运行时入口
    - 不再暴露 manual compact UI、slash command 或 `:compact` API
    - 不得再伪造“已完成语义压缩”的事件或 UI 文案
-4. [ ] 明确首阶段验收：
+4. [x] 明确首阶段验收：
    - 普通连续追问不因停用本地伪摘要而退化
    - query 链不依赖 compact summary
    - provider 持续消费完整历史视图而不是裸 `turn.Prompt`
@@ -280,7 +280,22 @@ CubeBox 应学习的是这个职责分配，而不是只复制文件名或事件
 5. [ ] compact 后 provider request 包含完整历史视图或后续语义摘要/replacement history、当前 user input 和重新注入的 canonical context。
 6. [ ] query 链不把 compaction summary 当事实源。
 7. [ ] fake adapter 测试能稳定验证成功、失败、超时和无效响应。
-8. [ ] 文档地图、关联 dev-plan 和 readiness 入口全部对齐。
+8. [x] 文档地图、关联 dev-plan 和 readiness 入口全部对齐。
+
+## 8.1 当前进展（2026-04-25）
+
+- [x] `Phase 1 / No-Summary Baseline` 已实际落地：
+  - `CompactConversation(...)` 命名已退出主链，当前统一收口为 `PrepareConversationPromptView(...)`
+  - store 在事务内只读取 canonical events、重建完整历史视图并返回 provider prompt view
+  - gateway pre-turn 失败文案已从“会话压缩失败”改为“会话上下文准备失败”
+  - provider prompt view 不再消费本地拼接 `summary_text`
+- [x] Web UI 已完成运行时表述收口：
+  - `turn.context_compacted` 只作为历史回放兼容展示
+  - timeline item 文案已从“压缩摘要”改为“历史上下文”
+- [x] 2026-04-25 浏览器 smoke 已补：
+  - 按 `bugs-and-blossoms-dev-login` skill 重启本地运行时并重建嵌入式 web 产物
+  - 在 `http://localhost:8080/app` 以 `admin@localhost` 登录并验证 CubeBox 抽屉可打开、发送链路正常
+  - live flow 未再把当前运行时能力表述为“压缩摘要”
 
 ## 9. 本地必跑与门禁
 

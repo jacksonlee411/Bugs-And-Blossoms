@@ -452,14 +452,16 @@ narrator 可以看到：
 
 说明：2026-04-25 已完成真实页面复验；截图、网络请求与 canonical event 片段见 `docs/dev-records/DEV-PLAN-468-READINESS.md` 及 `docs/dev-records/assets/dev-plan-468/`。
 
-### Slice E：`P1/P2` 后续收口
+### Slice E：`P2` / 后续 owner
+
+说明：`P1` 已收口，当前主线转入 `P2` / 后续 owner。
 
 1. [x] 已完成的表达层收缩保留在 `468` 范围内：
    - 收缩 `queryNarrationForbiddenPatterns`
    - 对误杀风险高的 regex 改成更明确的结构化泄露检测
    - 对普通风格不再 terminal error
    - 增加自然中文列表/短段落/小标题可通过的回归测试
-2. [x] `P1` 纳入并进一步收口：
+2. [x] `P1` 已收口：
    - narrator 已接收轻量对话上下文，但事实结论仍只能来自 `results`
    - narrator 输入已从 raw `plan/results` 收敛为安全 presentation DTO，并进一步移除 `plan`
    - 前端已向 `/internal/cubebox/turns:stream` 传受控页面/对象事实
@@ -468,7 +470,7 @@ narrator 可以看到：
    - 共享 query flow 已去除模块专属澄清文案，把候选列表交给模型追问；clarifier 进一步只消费 `user_prompt + page_context + dialogue_context + candidates`
    - 已增加知识包 API/参数集合与执行注册表双向一致性校验
    - provider/runtime/model 元数据已从 provider prompt view 中剥离，仅保留在事件 metadata、管理 UI 或日志中
-3. [ ] `P2/后续 owner` 纳入：
+3. [ ] `P2/后续 owner` 主线：
    - 模型参与会话语义摘要或摘要改写
    - 更完整的长结果语义收敛
    - 第二个业务模块接入后的共享 narrator 去模块化污染复核
@@ -490,6 +492,11 @@ narrator 可以看到：
   - clarifier 仅消费 `user_prompt + page_context + dialogue_context + candidates`
   - prompt-facing 实体上下文已收敛为最小实体视图，不再暴露 `intent`、`source_api_key`、`target_org_code`、`parent_org_code`
   - 共享层不再替模型承担模块专属澄清文案或 narrator 结果概括
+- [x] 当前主线已切入 `P2/后续 owner`：后续实现 PR 先说明是“给模型事实/上下文”，还是“替模型做语义判断”。
+- [x] `DEV-PLAN-469 Phase 1 / No-Summary Baseline` 运行时语义已收口：
+  - Go 主链已从 `CompactConversation` 命名收敛为 `PrepareConversationPromptView`
+  - pre-turn 主链失败文案已改为“会话上下文准备失败”，不再误称“会话压缩失败”
+  - Web UI 对 `turn.context_compacted` 仅保留历史回放兼容展示，不再把它表述为当前运行时能力
 - [x] `P1` 回归修复已完成：
   - `page_context` 不再把 `/org/units/field-configs` 误识别为组织详情页
   - 组织详情页前端页面事实已优先读取 `effective_date`，但当前 DTO 仍保持 `view.as_of` 以避免把契约改名混入本次修复

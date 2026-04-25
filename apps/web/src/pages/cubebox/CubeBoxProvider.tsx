@@ -285,7 +285,7 @@ function buildCubeBoxPageContext(pathname: string, search: string): CubeBoxPageC
   const asOf = resolvePageContextAsOf(params)
 
   if (page === '/org/units') {
-    const selectedNode = normalizeEntityKey(params.get('node'))
+    const selectedNode = normalizeEntityKey(params.get('node') ?? '')
     return compactPageContext({
       page,
       business_object: 'orgunit',

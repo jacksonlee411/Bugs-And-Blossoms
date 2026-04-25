@@ -29,13 +29,14 @@ var ErrProviderStreamInvalid = errors.New("CUBEBOX_PROVIDER_STREAM_INVALID")
 var ErrProviderTimeout = errors.New("CUBEBOX_PROVIDER_TIMEOUT")
 
 const terminalAppendTimeout = 5 * time.Second
+const providerSummaryPrefix = "[[summary]] "
 
 type RuntimeConfigReader interface {
 	GetActiveModelRuntimeConfig(ctx context.Context, tenantID string) (ActiveModelRuntimeConfig, error)
 }
 
 type StreamAppendStore interface {
-	PrepareConversationPromptView(ctx context.Context, tenantID string, principalID string, conversationID string, canonicalContext CanonicalContext, reason string) (CompactConversationResponse, error)
+	PrepareConversationPromptView(ctx context.Context, tenantID string, principalID string, conversationID string, canonicalContext CanonicalContext, reason string) (PromptViewPreparationResponse, error)
 	AppendEvent(ctx context.Context, tenantID string, principalID string, conversationID string, event CanonicalEvent) error
 	AppendEvents(ctx context.Context, tenantID string, principalID string, conversationID string, events []CanonicalEvent) error
 }
@@ -147,7 +148,7 @@ func (s *GatewayService) StreamTurn(
 		if sequence <= 0 {
 			sequence = 1
 		}
-		s.appendTerminalError(ctx, store, sink, request, turn.TurnID, &sequence, lifecycle, "cubebox_turn_stream_failed", "会话压缩失败，当前响应已终止。", false)
+		s.appendTerminalError(ctx, store, sink, request, turn.TurnID, &sequence, lifecycle, "cubebox_turn_stream_failed", "会话上下文准备失败，当前响应已终止。", false)
 		return
 	}
 	sequence := prepared.Sequence
@@ -451,7 +452,7 @@ func (s *GatewayService) buildCanonicalContext(request GatewayStreamRequest, lif
 
 func promptViewForProvider(base []PromptItem, canonicalContext CanonicalContext, currentUserInput string) []PromptItem {
 	if len(base) == 0 {
-		return BuildPromptViewWithCompaction(nil, canonicalContext, currentUserInput).PromptView
+		return buildPromptViewForProvider(nil, canonicalContext, currentUserInput)
 	}
 	prompt := append([]PromptItem(nil), base...)
 	if strings.TrimSpace(currentUserInput) == "" {
@@ -624,8 +625,8 @@ func normalizeProviderMessages(items []PromptItem) ([]map[string]string, error) 
 		case "system", "assistant", "user":
 		case "summary":
 			role = "user"
-			if !strings.HasPrefix(content, compactionSummaryPrefix) {
-				content = compactionSummaryPrefix + content
+			if !strings.HasPrefix(content, providerSummaryPrefix) {
+				content = providerSummaryPrefix + content
 			}
 		default:
 			return nil, ErrProviderConfigInvalid

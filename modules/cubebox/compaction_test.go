@@ -3,11 +3,10 @@ package cubebox
 import (
 	"strings"
 	"testing"
-	"time"
 )
 
-func TestBuildPromptViewWithCompactionUsesFullHistoryViewAndReinjectsCanonicalContext(t *testing.T) {
-	result := BuildPromptViewWithCompaction([]CanonicalEvent{
+func TestBuildPromptViewUsesFullHistoryViewAndReinjectsCanonicalContext(t *testing.T) {
+	result := BuildPromptView([]CanonicalEvent{
 		{
 			Type:    "turn.user_message.accepted",
 			Payload: map[string]any{"text": "请总结当前进度"},
@@ -55,15 +54,6 @@ func TestBuildPromptViewWithCompactionUsesFullHistoryViewAndReinjectsCanonicalCo
 		},
 	}, "请基于最新上下文继续回答")
 
-	if result.Compacted {
-		t.Fatal("expected phase-1 no-summary baseline to avoid compact summary")
-	}
-	if result.SourceRange != [2]int{0, 0} {
-		t.Fatalf("unexpected source range: %#v", result.SourceRange)
-	}
-	if result.SummaryText != "" {
-		t.Fatalf("expected no summary text, got %q", result.SummaryText)
-	}
 	if len(result.PromptView) != 8 {
 		t.Fatalf("expected canonical context plus full history and current input, got %d", len(result.PromptView))
 	}
@@ -88,8 +78,8 @@ func TestBuildPromptViewWithCompactionUsesFullHistoryViewAndReinjectsCanonicalCo
 	}
 }
 
-func TestBuildPromptViewWithCompactionPreservesCurrentUserInputWhitespace(t *testing.T) {
-	result := BuildPromptViewWithCompaction(nil, CanonicalContext{TenantID: "tenant-a", PrincipalID: "principal-a"}, "\n  请继续回答  \n")
+func TestBuildPromptViewPreservesCurrentUserInputWhitespace(t *testing.T) {
+	result := BuildPromptView(nil, CanonicalContext{TenantID: "tenant-a", PrincipalID: "principal-a"}, "\n  请继续回答  \n")
 
 	last := result.PromptView[len(result.PromptView)-1]
 	if last.Role != "user" || last.Content != "\n  请继续回答  \n" {
@@ -97,8 +87,8 @@ func TestBuildPromptViewWithCompactionPreservesCurrentUserInputWhitespace(t *tes
 	}
 }
 
-func TestBuildPromptViewWithCompactionPreservesRecentUserWhitespaceWithinBudget(t *testing.T) {
-	result := BuildPromptViewWithCompaction([]CanonicalEvent{
+func TestBuildPromptViewPreservesRecentUserWhitespaceWithinBudget(t *testing.T) {
+	result := BuildPromptView([]CanonicalEvent{
 		{
 			Type:    "turn.user_message.accepted",
 			Payload: map[string]any{"message_id": "msg_user_1", "text": "\n  第一轮原始问题  \n"},
@@ -124,11 +114,11 @@ func TestBuildPromptViewWithCompactionPreservesRecentUserWhitespaceWithinBudget(
 	}
 }
 
-func TestBuildPromptViewWithCompactionSkipsSummaryPrefixAndIgnoresHistoricalCompactEvents(t *testing.T) {
-	result := BuildPromptViewWithCompaction([]CanonicalEvent{
+func TestBuildPromptViewSkipsSummaryPrefixAndIgnoresHistoricalCompactEvents(t *testing.T) {
+	result := BuildPromptView([]CanonicalEvent{
 		{
 			Type:    "turn.user_message.accepted",
-			Payload: map[string]any{"text": "[[summary]] stale summary"},
+			Payload: map[string]any{"text": "继续输出最终方案之前的原始输入"},
 		},
 		{
 			Type:    "turn.context_compacted",
@@ -140,23 +130,17 @@ func TestBuildPromptViewWithCompactionSkipsSummaryPrefixAndIgnoresHistoricalComp
 		},
 	}, CanonicalContext{TenantID: "tenant-a", PrincipalID: "principal-a"}, "")
 
-	if result.Compacted {
-		t.Fatal("did not expect compaction for phase-1 baseline")
-	}
-	if len(result.PromptView) != 3 {
-		t.Fatalf("expected only system baseline and one raw user message, got %#v", result.PromptView)
+	if len(result.PromptView) != 4 {
+		t.Fatalf("expected system baseline plus two raw user messages, got %#v", result.PromptView)
 	}
 	for _, item := range result.PromptView {
-		if item.Role == "user" && item.Content == "[[summary]] stale summary" {
-			t.Fatalf("summary prefix user message should be filtered: %#v", result.PromptView)
-		}
 		if strings.Contains(item.Content, "已确认租户和权限") {
 			t.Fatalf("historical compact summary must not be replayed into provider prompt view: %#v", result.PromptView)
 		}
 	}
 }
 
-func TestBuildPromptViewWithCompactionDoesNotReplaceOriginalMessages(t *testing.T) {
+func TestBuildPromptViewDoesNotReplaceOriginalMessages(t *testing.T) {
 	events := []CanonicalEvent{
 		{
 			Type:    "turn.user_message.accepted",
@@ -188,17 +172,11 @@ func TestBuildPromptViewWithCompactionDoesNotReplaceOriginalMessages(t *testing.
 		},
 	}
 
-	result := BuildPromptViewWithCompaction(events, CanonicalContext{
+	result := BuildPromptView(events, CanonicalContext{
 		TenantID:    "tenant-a",
 		PrincipalID: "principal-a",
 	}, "")
 
-	if result.Compacted {
-		t.Fatal("expected no compact summary in phase-1 baseline")
-	}
-	if result.SummaryText != "" {
-		t.Fatal("expected no summary text for prompt view")
-	}
 	original := collectPromptTimeline(events)
 	if len(original) != 5 {
 		t.Fatalf("expected original timeline to remain fully reconstructable, got %d", len(original))
@@ -260,7 +238,7 @@ func TestCollectPromptTimelinePreservesOriginalWhitespaceAndSkipsCompactionEvent
 	}
 }
 
-func TestBuildPromptViewWithCompactionPreservesLongHistoricalUserMessageInFullHistoryView(t *testing.T) {
+func TestBuildPromptViewPreservesLongHistoricalUserMessageInFullHistoryView(t *testing.T) {
 	longUserMessage := ""
 	for i := 0; i < 1800; i++ {
 		longUserMessage += "长"
@@ -296,7 +274,7 @@ func TestBuildPromptViewWithCompactionPreservesLongHistoricalUserMessageInFullHi
 		},
 	}
 
-	result := BuildPromptViewWithCompaction(events, CanonicalContext{TenantID: "tenant-a", PrincipalID: "principal-a"}, "")
+	result := BuildPromptView(events, CanonicalContext{TenantID: "tenant-a", PrincipalID: "principal-a"}, "")
 
 	foundHistoricalUser := false
 	for _, item := range result.PromptView {
@@ -313,62 +291,5 @@ func TestBuildPromptViewWithCompactionPreservesLongHistoricalUserMessageInFullHi
 	original := collectPromptTimeline(events)
 	if original[2].Content != longUserMessage {
 		t.Fatal("expected original timeline to remain unmodified")
-	}
-}
-
-func TestTrimTextToApproxTokenLimitTruncatesBoundaryCase(t *testing.T) {
-	const tokenLimit = 400
-	boundary := strings.Repeat("长", tokenLimit*4)
-	if estimateTextTokens(boundary) <= tokenLimit {
-		t.Fatalf("expected boundary text to exceed token limit, got %d", estimateTextTokens(boundary))
-	}
-	trimmed := trimTextToApproxTokenLimit(boundary, tokenLimit)
-	if !strings.Contains(trimmed, "[truncated]") {
-		t.Fatalf("expected boundary text to be truncated, got %q", trimmed)
-	}
-	if estimateTextTokens(trimmed) > tokenLimit+4 {
-		t.Fatalf("expected trimmed boundary text within guardrail, got %d", estimateTextTokens(trimmed))
-	}
-}
-
-func TestPreserveOrTrimTextToApproxTokenLimitKeepsBoundaryWhitespaceWhenWithinBudget(t *testing.T) {
-	const tokenLimit = 400
-	input := "\n  short recent user input  \n"
-	got := preserveOrTrimTextToApproxTokenLimit(input, tokenLimit)
-	if got != input {
-		t.Fatalf("expected within-budget text to remain unchanged, got %q", got)
-	}
-}
-
-func TestBuildCompactionEventUsesCanonicalEnvelope(t *testing.T) {
-	turnID := "turn_1"
-	event := BuildCompactionEvent("conv_1", &turnID, 9, time.Date(2026, 4, 22, 10, 0, 0, 0, time.UTC), CompactionResult{
-		SummaryID:    "summary_1",
-		SourceRange:  [2]int{1, 4},
-		SummaryText:  "已确认上下文。",
-		SourceDigest: "abc",
-		TokenBefore:  120,
-		TokenAfter:   64,
-		Reason:       "manual",
-	})
-
-	if event.Type != "turn.context_compacted" {
-		t.Fatalf("unexpected type=%s", event.Type)
-	}
-	if event.Sequence != 9 {
-		t.Fatalf("unexpected sequence=%d", event.Sequence)
-	}
-	sourceRange, ok := event.Payload["source_range"].([]int)
-	if !ok || len(sourceRange) != 2 || sourceRange[0] != 1 || sourceRange[1] != 4 {
-		t.Fatalf("unexpected source_range=%#v", event.Payload["source_range"])
-	}
-	if event.Payload["summary_id"] != "summary_1" {
-		t.Fatalf("unexpected payload=%#v", event.Payload)
-	}
-	if _, ok := event.Payload["token_before"]; ok {
-		t.Fatalf("token_before must remain debug-only and outside canonical event payload: %#v", event.Payload)
-	}
-	if _, ok := event.Payload["token_after"]; ok {
-		t.Fatalf("token_after must remain debug-only and outside canonical event payload: %#v", event.Payload)
 	}
 }

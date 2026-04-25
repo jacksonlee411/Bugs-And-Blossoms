@@ -21,16 +21,16 @@ func PrepareTurnStream(
 	if sequence <= 0 {
 		sequence = 1
 	}
-	providerPromptView := BuildPromptViewWithCompaction(nil, canonicalContext, request.Prompt).PromptView
+	providerPromptView := buildPromptViewForProvider(nil, canonicalContext, request.Prompt)
 	if sequence > 1 {
-		compactPayload, err := store.PrepareConversationPromptView(ctx, request.TenantID, request.PrincipalID, request.ConversationID, canonicalContext, "pre_turn_auto")
+		preparedPromptView, err := store.PrepareConversationPromptView(ctx, request.TenantID, request.PrincipalID, request.ConversationID, canonicalContext, "pre_turn_auto")
 		if err != nil && !errors.Is(err, ErrConversationNotFound) {
 			return PreTurnPreparation{}, err
 		}
-		if compactPayload.NextSequence > sequence {
-			sequence = compactPayload.NextSequence
+		if preparedPromptView.NextSequence > sequence {
+			sequence = preparedPromptView.NextSequence
 		}
-		providerPromptView = promptViewForProvider(compactPayload.PromptView, canonicalContext, request.Prompt)
+		providerPromptView = promptViewForProvider(preparedPromptView.PromptView, canonicalContext, request.Prompt)
 	}
 	return PreTurnPreparation{
 		Sequence:           sequence,

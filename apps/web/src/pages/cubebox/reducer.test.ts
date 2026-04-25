@@ -270,7 +270,7 @@ describe('cubebox reducer', () => {
 
     expect(state.items[0]).toMatchObject({
       id: 'summary_1',
-      kind: 'compact_item',
+      kind: 'history_context_item',
       text: '已压缩旧历史。',
       status: 'completed'
     })
@@ -388,7 +388,7 @@ describe('cubebox reducer', () => {
       },
       {
         id: 'summary_1',
-        kind: 'compact_item',
+        kind: 'history_context_item',
         text: '这里只是摘要，不替代原始消息。',
         status: 'completed'
       }

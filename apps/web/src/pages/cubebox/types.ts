@@ -61,7 +61,7 @@ export interface ConversationReplayResponse {
 
 export interface TimelineItem {
   id: string
-  kind: 'user_message' | 'agent_message' | 'error_item' | 'compact_item'
+  kind: 'user_message' | 'agent_message' | 'error_item' | 'history_context_item'
   text: string
   status?: 'streaming' | 'completed' | 'error' | 'interrupted'
 }
