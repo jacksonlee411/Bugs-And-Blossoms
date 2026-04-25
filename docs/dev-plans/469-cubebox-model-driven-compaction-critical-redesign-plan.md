@@ -1,6 +1,6 @@
 # DEV-PLAN-469：CubeBox 模型驱动会话压缩批判与重构方案
 
-**状态**: 规划中（2026-04-25 14:32 CST）
+**状态**: 暂停实施（2026-04-26；`Phase 1 / No-Summary Baseline` 已收口，`Phase 2/3` 不再作为当前主线）
 
 ## 0. 适用范围与评审分级
 
@@ -89,6 +89,12 @@ Codex 的关键分层是：
 CubeBox 应学习的是这个职责分配，而不是只复制文件名或事件名。
 
 ## 3. 设计目标
+
+2026-04-26 裁决补记：
+
+- `469` 当前只保留已完成的 `Phase 1 / No-Summary Baseline` 作为运行时基线与历史文档记录。
+- `Phase 2 / Model Summary Fallback` 与 `Phase 3 / Remote Compact Capability` 暂停实施，不再作为当前主线。
+- 后续若要重启，必须重新说明其必要性、预算收益、失败语义和为什么这属于“给模型事实/上下文”而不是“继续替模型做语义判断”。
 
 1. [x] 先建立一个“无摘要基线阶段”：停用 `compaction summary` 生产语义，不做本地摘要，只把完整历史视图 + canonical context 继续喂给模型，用于先验证连贯性主链和 owner 边界。
 2. [ ] 在无摘要基线稳定后，把 CubeBox compaction 从“本地 role/content 拼接”升级为“模型参与式语义摘要或 provider remote compact”。
@@ -224,6 +230,8 @@ CubeBox 应学习的是这个职责分配，而不是只复制文件名或事件
    - query 链不依赖 compact summary
    - provider 持续消费完整历史视图而不是裸 `turn.Prompt`
 
+2026-04-26 裁决补记：除已完成的 Slice A/B 外，Slice C-G 暂停实施，不再作为当前主线。
+
 ### Slice C：纯函数边界拆分
 
 1. [ ] 从 `BuildPromptViewWithCompaction(...)` 中拆出 history selector。
@@ -296,6 +304,10 @@ CubeBox 应学习的是这个职责分配，而不是只复制文件名或事件
   - 按 `bugs-and-blossoms-dev-login` skill 重启本地运行时并重建嵌入式 web 产物
   - 在 `http://localhost:8080/app` 以 `admin@localhost` 登录并验证 CubeBox 抽屉可打开、发送链路正常
   - live flow 未再把当前运行时能力表述为“压缩摘要”
+- [x] 2026-04-26 已裁决暂停后续实施：
+  - `Phase 2 / Model Summary Fallback` 暂不进入当前主线
+  - `Phase 3 / Remote Compact Capability` 暂不进入当前主线
+  - `469` 当前仅保留 `Phase 1 / No-Summary Baseline` 作为有效运行时基线与历史文档记录
 
 ## 9. 本地必跑与门禁
 

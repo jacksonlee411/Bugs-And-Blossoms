@@ -470,11 +470,12 @@ narrator 可以看到：
    - 共享 query flow 已去除模块专属澄清文案，把候选列表交给模型追问；clarifier 进一步只消费 `user_prompt + page_context + dialogue_context + candidates`
    - 已增加知识包 API/参数集合与执行注册表双向一致性校验
    - provider/runtime/model 元数据已从 provider prompt view 中剥离，仅保留在事件 metadata、管理 UI 或日志中
-3. [ ] `P2/后续 owner` 主线：
-   - 模型参与会话语义摘要或摘要改写
+3. [x] 已明确暂停的后续 owner：
+   - 会话压缩 / 模型语义摘要相关后续项继续由 `DEV-PLAN-469` 持有；自 2026-04-26 起随 `469` 一并暂停实施，不再作为 `468` 当前主线
+4. [ ] `P2/后续 owner` 当前主线：
    - 更完整的长结果语义收敛
    - 第二个业务模块接入后的共享 narrator 去模块化污染复核
-4. [ ] 每个后续实现 PR 必须先说明：它是在“给模型事实/上下文”，还是在“替模型做语义判断”。后者默认需要收敛或单独论证。
+5. [ ] 每个后续实现 PR 必须先说明：它是在“给模型事实/上下文”，还是在“替模型做语义判断”。后者默认需要收敛或单独论证。
 
 ### 6.1 2026-04-25 当前实施进度
 
@@ -497,6 +498,7 @@ narrator 可以看到：
   - Go 主链已从 `CompactConversation` 命名收敛为 `PrepareConversationPromptView`
   - pre-turn 主链失败文案已改为“会话上下文准备失败”，不再误称“会话压缩失败”
   - Web UI 对 `turn.context_compacted` 仅保留历史回放兼容展示，不再把它表述为当前运行时能力
+- [x] 2026-04-26 已裁决：`468 P2` 中与会话压缩 / 模型语义摘要相关的后续项随 `469` 暂停实施，不再作为 `468` 当前主线。
 - [x] `P1` 回归修复已完成：
   - `page_context` 不再把 `/org/units/field-configs` 误识别为组织详情页
   - 组织详情页前端页面事实已优先读取 `effective_date`，但当前 DTO 仍保持 `view.as_of` 以避免把契约改名混入本次修复

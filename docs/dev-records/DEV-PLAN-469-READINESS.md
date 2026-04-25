@@ -4,6 +4,7 @@
 
 - 本文件用于登记 `DEV-PLAN-469` 的阶段性实现状态、自动化验证、浏览器 smoke 与后续待补证据。
 - 当前只记录已经实际完成的 `Phase 1 / No-Summary Baseline` 收口，不提前宣称 `Phase 2 / 模型摘要 fallback` 已落地。
+- 2026-04-26 起，`Phase 2 / Model Summary Fallback` 与 `Phase 3 / Remote Compact Capability` 暂停实施，不再作为当前主线。
 
 ## 2026-04-25 实施记录
 
@@ -65,9 +66,9 @@
 
 - `469 Phase 1 / No-Summary Baseline` 已完成代码与页面层收口。
 - 当前 provider prompt view 已回到“完整历史视图 + canonical context + 当前 user input”基线。
-- 当前剩余主线为 `Phase 2 / Model Summary Fallback`，尚未开始实现模型参与式语义摘要。
+- `469` 当前不再推进 `Phase 2 / Model Summary Fallback` 与 `Phase 3 / Remote Compact Capability`；两者自 2026-04-26 起暂停实施，待未来单独重启。
 
-## 待补证据
+## 若未来重启需补证据
 
 - `Phase 2 / Model Summary Fallback` 的契约冻结、prompt shape fixture 与真实 provider smoke。
 - `remote compact capability` 的 adapter 能力验证与错误映射证据。
