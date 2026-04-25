@@ -8,15 +8,12 @@ export const initialCubeBoxState: CubeBoxState = {
   nextSequence: 1,
   composerText: '',
   loading: false,
-  errorMessage: null,
-  compacting: false
+  errorMessage: null
 }
 
 type CubeBoxAction =
   | { type: 'loading_started' }
   | { type: 'loading_finished' }
-  | { type: 'compact_started' }
-  | { type: 'compact_finished' }
   | { type: 'composer_changed'; value: string }
   | { type: 'conversation_loaded'; payload: ConversationReplayResponse }
   | { type: 'event_received'; payload: CanonicalEvent }
@@ -30,10 +27,6 @@ export function cubeboxReducer(state: CubeBoxState, action: CubeBoxAction): Cube
       return { ...state, loading: true, errorMessage: null }
     case 'loading_finished':
       return { ...state, loading: false }
-    case 'compact_started':
-      return { ...state, compacting: true, errorMessage: null }
-    case 'compact_finished':
-      return { ...state, compacting: false }
     case 'composer_changed':
       return { ...state, composerText: action.value }
     case 'conversation_loaded':
@@ -48,14 +41,13 @@ export function cubeboxReducer(state: CubeBoxState, action: CubeBoxAction): Cube
     case 'event_received':
       return applyEvent(state, action.payload)
     case 'error_message_set':
-      return { ...state, errorMessage: action.message, loading: false, compacting: false }
+      return { ...state, errorMessage: action.message, loading: false }
     case 'stream_failed_locally':
       return {
         ...state,
         activeTurnID: null,
         errorMessage: action.message,
         loading: false,
-        compacting: false,
         turnStatus: 'error'
       }
     case 'reset':

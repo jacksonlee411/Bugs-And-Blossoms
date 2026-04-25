@@ -35,7 +35,7 @@ type RuntimeConfigReader interface {
 }
 
 type StreamAppendStore interface {
-	CompactConversation(ctx context.Context, tenantID string, principalID string, conversationID string, canonicalContext CanonicalContext, reason string) (CompactConversationResponse, error)
+	PrepareConversationPromptView(ctx context.Context, tenantID string, principalID string, conversationID string, canonicalContext CanonicalContext, reason string) (CompactConversationResponse, error)
 	AppendEvent(ctx context.Context, tenantID string, principalID string, conversationID string, event CanonicalEvent) error
 	AppendEvents(ctx context.Context, tenantID string, principalID string, conversationID string, events []CanonicalEvent) error
 }

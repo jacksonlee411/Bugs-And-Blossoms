@@ -318,9 +318,6 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, error) {
 	router.Handle(routing.RouteClassInternalAPI, http.MethodPatch, "/internal/cubebox/conversations/{conversation_id}", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		handleCubeBoxConversationAPI(w, r, cubeboxStore)
 	}))
-	router.Handle(routing.RouteClassInternalAPI, http.MethodPost, "/internal/cubebox/conversations/{conversation_id}:compact", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		handleCubeBoxCompactConversationAPI(w, r, cubeboxStore)
-	}))
 	router.Handle(routing.RouteClassInternalAPI, http.MethodPost, "/internal/cubebox/turns:stream", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		handleCubeBoxStreamTurnAPI(w, r, cubeboxRuntime, cubeboxStore, cubeboxGateway, cubeboxQueryFlow)
 	}))

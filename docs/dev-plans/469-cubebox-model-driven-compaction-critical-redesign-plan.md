@@ -90,12 +90,13 @@ CubeBox 应学习的是这个职责分配，而不是只复制文件名或事件
 
 ## 3. 设计目标
 
-1. [ ] 把 CubeBox compaction 从“本地 role/content 拼接”升级为“模型参与式语义摘要或 provider remote compact”。
-2. [ ] 保留 append-only 原始事件、`turn.context_compacted`、canonical context reinjection、manual compact、pre-turn auto compact 和 sequence 单事务安全。
-3. [ ] 建立 provider capability：能 remote compact 则优先 remote compact；不能 remote compact 则用当前 active model 执行 summarization prompt；没有 provider runtime 时仅允许 deterministic fixture 测试路径，不伪装为真实语义摘要。
-4. [ ] 明确 compact summary 只服务 provider prompt view，不作为查询 planner、授权、RLS、业务事实、页面状态或执行参数的事实源。
-5. [ ] 修正 `DEV-PLAN-430/434/462/468` 之间关于“当前 active model 执行 compaction”的文档漂移，避免文档宣称模型摘要而代码仍是本地拼接。
-6. [ ] 设计可测试的 prompt shape、summary quality fixture、fallback 语义和失败事件，避免把真实外部模型调用变成阻断式 CI 前置。
+1. [ ] 先建立一个“无摘要基线阶段”：停用 `compaction summary` 生产语义，不做本地摘要，只把完整历史视图 + canonical context 继续喂给模型，用于先验证连贯性主链和 owner 边界。
+2. [ ] 在无摘要基线稳定后，把 CubeBox compaction 从“本地 role/content 拼接”升级为“模型参与式语义摘要或 provider remote compact”。
+3. [ ] 保留 append-only 原始事件、canonical context reinjection、manual compact、pre-turn auto compact 和 sequence 单事务安全；`turn.context_compacted` 是否写入取决于当前阶段能力，不得伪造摘要事件。
+4. [ ] 建立 provider capability：能 remote compact 则优先 remote compact；不能 remote compact 则用当前 active model 执行 summarization prompt；没有 provider runtime 时仅允许 deterministic fixture 测试路径，不伪装为真实语义摘要。
+5. [ ] 明确 compact summary 只服务 provider prompt view，不作为查询 planner、授权、RLS、业务事实、页面状态或执行参数的事实源。
+6. [ ] 修正 `DEV-PLAN-430/434/462/468` 之间关于“当前 active model 执行 compaction”的文档漂移，避免文档宣称模型摘要而代码仍是本地拼接。
+7. [ ] 设计可测试的 prompt shape、summary quality fixture、fallback 语义和失败事件，避免把真实外部模型调用变成阻断式 CI 前置。
 
 ## 4. 非目标
 
@@ -105,6 +106,7 @@ CubeBox 应学习的是这个职责分配，而不是只复制文件名或事件
 - 不让模型直接读取数据库、绕过 API、绕过权限或访问密钥。
 - 不把 compact summary 作为查询事实源；查询连续性仍应使用结构化 query dialogue context 和 canonical events。
 - 不把真实外部模型调用纳入阻断式 CI；真实模型只作为手工 smoke、nightly 或 readiness 补充证据。
+- “无摘要基线阶段”不是永久方案；它只用于验证当前连贯性问题是否主要来自本地伪摘要，而不是为了长期放弃预算治理。
 
 ## 5. 目标架构
 
@@ -129,6 +131,23 @@ CubeBox 应学习的是这个职责分配，而不是只复制文件名或事件
    - 输出 provider prompt view。
    - 永远由服务端重新注入 canonical context，不信任旧 summary 自带的上下文。
 
+### 5.1A 首阶段：无摘要基线（No-Summary Baseline）
+
+在真正引入模型摘要或 remote compact 之前，先冻结一个更简单的过渡阶段：
+
+1. 停用 `buildSummaryText(...)` 的生产语义，不再把 `role: content` 拼接结果作为 provider prompt view 的摘要输入。
+2. pre-turn auto compact 与 manual compact 仍可保留统一入口，但首阶段只负责：
+   - 读取 canonical events
+   - 重建完整历史视图
+   - 重新注入 canonical context
+   - 把完整历史视图继续送到 provider
+3. 首阶段不得伪造“已经完成语义压缩”的 `turn.context_compacted` 事件；是否完全不写事件，或只写显式 `disabled/no_summary_baseline` 语义，必须在实现前冻结且前后一致。
+4. 首阶段的目标不是优化 token 成本，而是先验证：
+   - provider 主链确实持续消费完整历史视图
+   - 连贯性缺陷是否主要来自本地伪摘要
+   - query 链与普通对话链都没有把 summary 当事实源
+5. 首阶段允许暴露“长会话预算风险”，但不允许再把本地拼接文本伪装成语义摘要来掩盖该风险。
+
 ### 5.2 Provider capability
 
 `ProviderAdapter` 或相邻能力接口应表达：
@@ -137,11 +156,12 @@ CubeBox 应学习的是这个职责分配，而不是只复制文件名或事件
 - `CompactConversationHistory(ctx, request) (response, error)`
 - `StreamChatCompletion(ctx, request) (...)`
 
-首期策略：
+分阶段策略：
 
-1. provider 支持 remote compact：优先使用 remote compact。
-2. provider 不支持 remote compact，但 chat completion 可用：使用当前 active model 执行 summarization prompt。
-3. provider 不可用：manual compact 返回明确错误；pre-turn auto compact 不应伪造模型摘要，可退回未压缩 prompt view 或终止当前 turn，具体失败语义需在实现前冻结。
+1. **Phase 1 / No-Summary Baseline**：不调用 remote compact，不调用模型摘要，只把完整历史视图送到 provider。
+2. **Phase 2 / Model Summary Fallback**：provider 不支持 remote compact，但 chat completion 可用时，使用当前 active model 执行 summarization prompt。
+3. **Phase 3 / Remote Compact Capability**：provider 支持 remote compact 时，优先使用 remote compact。
+4. provider 不可用：manual compact 返回明确错误；pre-turn auto compact 不应伪造模型摘要，可退回未压缩 prompt view 或终止当前 turn，具体失败语义需在实现前冻结。
 
 ### 5.3 Summary prompt 方向
 
@@ -191,38 +211,50 @@ CubeBox 应学习的是这个职责分配，而不是只复制文件名或事件
 2. [ ] 新增 `DEV-PLAN-469-READINESS.md` 证据入口。
 3. [ ] 明确当前实现状态：本地拼接摘要是已知缺陷，不再称为模型语义摘要。
 
-### Slice B：纯函数边界拆分
+### Slice B：Phase 1 / No-Summary Baseline
+
+1. [ ] 停用 `buildSummaryText(...)` 的生产语义，不再向 provider prompt view 注入本地拼接 `summary_text`。
+2. [ ] 保留完整历史视图重建、canonical context reinjection 和当前 user input 拼装，先验证无摘要状态下的连续性主链。
+3. [ ] 冻结 manual compact / pre-turn auto compact 在首阶段的语义：
+   - 可以继续作为统一入口存在
+   - 但不得再伪造“已完成语义压缩”的事件或 UI 文案
+4. [ ] 明确首阶段验收：
+   - 普通连续追问不因停用本地伪摘要而退化
+   - query 链不依赖 compact summary
+   - provider 持续消费完整历史视图而不是裸 `turn.Prompt`
+
+### Slice C：纯函数边界拆分
 
 1. [ ] 从 `BuildPromptViewWithCompaction(...)` 中拆出 history selector。
 2. [ ] 保留 source range、source digest、recent window、token estimate 的纯函数测试。
 3. [ ] 删除或降级 `buildSummaryText(...)` 的生产语义地位；它最多保留为 deterministic fixture 或 debug fallback，不再作为真实 compact summary。
 
-### Slice C：模型摘要 fallback
+### Slice D：模型摘要 fallback
 
 1. [ ] 定义 `ModelSummaryCompactionEngine`。
 2. [ ] 复用当前 active model provider runtime，不新增独立 summary model 配置链。
 3. [ ] 新增 summarization prompt 模板和 prompt shape fixture。
 4. [ ] 失败时返回明确错误码，manual compact 向 UI 显示可理解失败；pre-turn auto compact 失败策略在代码实现前冻结。
 
-### Slice D：remote compact capability
+### Slice E：remote compact capability
 
 1. [ ] 在 provider adapter 层表达 remote compact capability。
 2. [ ] 对支持 `/responses/compact` 或等价 compact endpoint 的 provider，优先走 remote compact。
 3. [ ] 对不支持 remote compact 的 provider，落到 Slice C 的 active model summary。
 4. [ ] 测试覆盖 capability 选择、错误映射、超时、无效 response 和 replacement history 组装。
 
-### Slice E：Prompt view 与安全边界
+### Slice F：Prompt view 与安全边界
 
 1. [ ] compact 后 prompt view 继续由服务端注入 canonical context。
 2. [ ] 从普通业务 prompt view 中移除不必要的 provider/runtime/model 运维元数据；这类信息保留在 event metadata、日志或 UI 状态。
 3. [ ] 保证 summary role 到 provider role 的映射仍符合 `DEV-PLAN-438A`。
 4. [ ] 保证 query planner 不读取 compaction summary 作为事实源。
 
-### Slice F：验证与回归
+### Slice G：验证与回归
 
 1. [ ] 单元测试覆盖 history selector、prompt view assembler、model summary engine fake adapter、remote compact fake adapter。
 2. [ ] store 测试覆盖 compact event payload、no-op、并发 sequence。
-3. [ ] gateway 测试覆盖 pre-turn auto compact 后 provider request 消费模型摘要/replacement history。
+3. [ ] gateway 测试先覆盖 Phase 1 无摘要完整历史视图，再覆盖后续模型摘要/replacement history。
 4. [ ] 前端测试覆盖 manual compact 成功、失败、恢复展示。
 5. [ ] readiness 记录真实 provider smoke，但不作为阻断式 CI。
 
@@ -230,6 +262,7 @@ CubeBox 应学习的是这个职责分配，而不是只复制文件名或事件
 
 | 风险 | 判断 | 收敛方式 |
 | --- | --- | --- |
+| 无摘要基线导致长会话超预算 | 首阶段明确存在 | 作为已知风险暴露；先验证连贯性主链，后续用模型摘要或 remote compact 解决预算问题 |
 | 模型摘要幻觉 | 真实风险 | 原始事件 append-only；summary 不作事实源；prompt 明确不得引入原文无事实；关键查询状态走结构化 canonical events |
 | 成本与延迟增加 | 可接受但需预算 | 只在 manual 或阈值触发；设置 timeout；记录 token estimate；失败可清晰降级 |
 | provider 不支持 remote compact | 常态 | active model summary fallback |
@@ -239,13 +272,14 @@ CubeBox 应学习的是这个职责分配，而不是只复制文件名或事件
 
 ## 8. 验收口径
 
-1. [ ] reviewer 能从代码中看到 compaction summary 来自 remote compact 或 active model summary，而不是 `role: content` 拼接。
-2. [ ] manual compact 与 pre-turn auto compact 都使用同一 compaction engine 分层。
-3. [ ] 原始 conversation events 不被覆盖，恢复链路仍可重放。
-4. [ ] compact 后 provider request 包含语义摘要/replacement history、recent window、当前 user input 和重新注入的 canonical context。
-5. [ ] query 链不把 compaction summary 当事实源。
-6. [ ] fake adapter 测试能稳定验证成功、失败、超时和无效响应。
-7. [ ] 文档地图、关联 dev-plan 和 readiness 入口全部对齐。
+1. [ ] Phase 1 中，provider request 不再消费本地拼接 `summary_text`，而是继续消费完整历史视图 + canonical context + 当前 user input。
+2. [ ] reviewer 能从代码中看到后续 compaction summary 来自 remote compact 或 active model summary，而不是 `role: content` 拼接。
+3. [ ] manual compact 与 pre-turn auto compact 都使用同一 compaction engine 分层；Phase 1 允许该 engine 返回“无摘要完整历史视图”。
+4. [ ] 原始 conversation events 不被覆盖，恢复链路仍可重放。
+5. [ ] compact 后 provider request 包含完整历史视图或后续语义摘要/replacement history、当前 user input 和重新注入的 canonical context。
+6. [ ] query 链不把 compaction summary 当事实源。
+7. [ ] fake adapter 测试能稳定验证成功、失败、超时和无效响应。
+8. [ ] 文档地图、关联 dev-plan 和 readiness 入口全部对齐。
 
 ## 9. 本地必跑与门禁
 
@@ -258,6 +292,7 @@ CubeBox 应学习的是这个职责分配，而不是只复制文件名或事件
 ## 10. Stopline
 
 - 不得继续把本地拼接 `buildSummaryText(...)` 描述为模型语义摘要。
+- 不得把“无摘要基线阶段”偷换成“直接关闭历史视图重建，只发当前轮 prompt”。
 - 不得为了“看起来像 Codex”只改事件名或文档名，而不让模型参与摘要。
 - 不得把 remote compact 或 model summary 的输出作为授权、查询事实、RLS、业务执行参数或页面状态的事实源。
 - 不得新增独立 summary model 配置链，除非另立计划重新评审模型治理、权限、健康检查和管理 UI。

@@ -99,7 +99,7 @@ type appendEventStoreStub struct {
 	compactCalls    int
 }
 
-func (s *appendEventStoreStub) CompactConversation(context.Context, string, string, string, CanonicalContext, string) (CompactConversationResponse, error) {
+func (s *appendEventStoreStub) PrepareConversationPromptView(context.Context, string, string, string, CanonicalContext, string) (CompactConversationResponse, error) {
 	s.compactCalls++
 	if s.compactErr != nil {
 		return CompactConversationResponse{}, s.compactErr
@@ -695,7 +695,7 @@ func TestGatewayServiceStreamTurnUsesCompactedPromptViewForProvider(t *testing.T
 			PromptView: []PromptItem{
 				{Role: "system", Content: "你是 CubeBox，在当前租户与权限上下文下提供帮助。"},
 				{Role: "system", Content: "tenant=tenant-1\nprincipal=principal-1"},
-				{Role: "system", Content: "[[summary]] user: a"},
+				{Role: "user", Content: "a"},
 				{Role: "assistant", Content: "Hi—what would you like to do with a?"},
 			},
 			NextSequence: 8,
@@ -730,8 +730,8 @@ func TestGatewayServiceStreamTurnUsesCompactedPromptViewForProvider(t *testing.T
 	if len(adapter.lastRequest.Messages) != 5 {
 		t.Fatalf("expected compacted prompt view plus current user input, got %+v", adapter.lastRequest.Messages)
 	}
-	if adapter.lastRequest.Messages[2].Content != "[[summary]] user: a" {
-		t.Fatalf("expected summary in provider request, got %+v", adapter.lastRequest.Messages)
+	if adapter.lastRequest.Messages[2].Role != "user" || adapter.lastRequest.Messages[2].Content != "a" {
+		t.Fatalf("expected raw historical user message in provider request, got %+v", adapter.lastRequest.Messages)
 	}
 	last := adapter.lastRequest.Messages[len(adapter.lastRequest.Messages)-1]
 	if last.Role != "user" || last.Content != "回答你前面的那个问题" {

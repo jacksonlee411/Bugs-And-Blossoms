@@ -4,7 +4,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { CubeBoxProvider, useCubeBox } from './CubeBoxProvider'
 
 const apiMocks = vi.hoisted(() => ({
-  compactConversation: vi.fn(),
   createConversation: vi.fn(),
   interruptTurn: vi.fn(),
   listConversations: vi.fn(),
@@ -97,75 +96,6 @@ describe('CubeBoxProvider', () => {
     })
 
     await waitFor(() => expect(result.current.state.errorMessage).toBe('archive failed'))
-  })
-
-  it('dispatches compact event when manually compacting current conversation', async () => {
-    apiMocks.listConversations.mockResolvedValue({
-      items: [{ id: 'conv_1', title: 'Latest', status: 'active', archived: false, updated_at: '2026-04-22T00:00:00Z' }]
-    })
-    apiMocks.loadConversation.mockResolvedValue({
-      conversation: { id: 'conv_1', title: 'Latest', archived: false, status: 'active' },
-      events: [],
-      next_sequence: 1
-    })
-    apiMocks.compactConversation.mockResolvedValue({
-      conversation: { id: 'conv_1', title: 'Latest', archived: false, status: 'active' },
-      event: {
-        event_id: 'evt_compact',
-        conversation_id: 'conv_1',
-        turn_id: null,
-        sequence: 2,
-        type: 'turn.context_compacted',
-        ts: '2026-04-22T00:00:00Z',
-        payload: { summary_id: 'summary_1', summary_text: '已压缩旧历史。', source_range: [1, 3] }
-      },
-      prompt_view: [{ role: 'system', content: 'tenant=t1' }],
-      next_sequence: 3
-    })
-
-    const { result } = renderHook(() => useCubeBox(), { wrapper })
-    await waitFor(() => expect(apiMocks.loadConversation).toHaveBeenCalledWith('conv_1'))
-
-    await act(async () => {
-      await result.current.compactCurrentConversation()
-    })
-
-    expect(apiMocks.compactConversation).toHaveBeenCalledWith('conv_1', 'manual')
-    await waitFor(() =>
-      expect(result.current.state.items).toContainEqual({
-        id: 'summary_1',
-        kind: 'compact_item',
-        text: '已压缩旧历史。',
-        status: 'completed'
-      })
-    )
-  })
-
-  it('does not append compact item when compact response has no event', async () => {
-    apiMocks.listConversations.mockResolvedValue({
-      items: [{ id: 'conv_1', title: 'Latest', status: 'active', archived: false, updated_at: '2026-04-22T00:00:00Z' }]
-    })
-    apiMocks.loadConversation.mockResolvedValue({
-      conversation: { id: 'conv_1', title: 'Latest', archived: false, status: 'active' },
-      events: [],
-      next_sequence: 3
-    })
-    apiMocks.compactConversation.mockResolvedValue({
-      conversation: { id: 'conv_1', title: 'Latest', archived: false, status: 'active' },
-      event: null,
-      prompt_view: [{ role: 'system', content: 'tenant=t1' }],
-      next_sequence: 3
-    })
-
-    const { result } = renderHook(() => useCubeBox(), { wrapper })
-    await waitFor(() => expect(apiMocks.loadConversation).toHaveBeenCalledWith('conv_1'))
-
-    await act(async () => {
-      await result.current.compactCurrentConversation()
-    })
-
-    expect(result.current.state.items).toEqual([])
-    expect(result.current.state.compacting).toBe(false)
   })
 
   it('preserves composer whitespace when sending message to stream api', async () => {

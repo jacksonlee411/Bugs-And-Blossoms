@@ -23,7 +23,7 @@ func PrepareTurnStream(
 	}
 	providerPromptView := BuildPromptViewWithCompaction(nil, canonicalContext, request.Prompt).PromptView
 	if sequence > 1 {
-		compactPayload, err := store.CompactConversation(ctx, request.TenantID, request.PrincipalID, request.ConversationID, canonicalContext, "pre_turn_auto")
+		compactPayload, err := store.PrepareConversationPromptView(ctx, request.TenantID, request.PrincipalID, request.ConversationID, canonicalContext, "pre_turn_auto")
 		if err != nil && !errors.Is(err, ErrConversationNotFound) {
 			return PreTurnPreparation{}, err
 		}

@@ -314,8 +314,8 @@ func TestStoreCompactConversationReusesTenantScopedReadAndWrite(t *testing.T) {
 	if err != nil {
 		t.Fatalf("expected compact success, got %v", err)
 	}
-	if response.Event == nil || response.Event.Type != "turn.context_compacted" {
-		t.Fatalf("unexpected compact event=%#v", response.Event)
+	if response.Event != nil {
+		t.Fatalf("expected no compact event in phase-1 no-summary baseline, got %#v", response.Event)
 	}
 	if len(tx.execSQLs) == 0 {
 		t.Fatalf("expected tenant-scoped tx execs, got %#v", tx.execSQLs)
@@ -323,8 +323,8 @@ func TestStoreCompactConversationReusesTenantScopedReadAndWrite(t *testing.T) {
 	if got := tx.execArgs[0][0]; got != tenantID {
 		t.Fatalf("expected tenant arg %s, got %#v", tenantID, got)
 	}
-	if response.NextSequence != 10 {
-		t.Fatalf("expected next sequence 10, got %d", response.NextSequence)
+	if response.NextSequence != 9 {
+		t.Fatalf("expected next sequence 9 without compact event write, got %d", response.NextSequence)
 	}
 }
 

@@ -40,16 +40,6 @@ export interface CanonicalEvent {
   payload: Record<string, unknown>
 }
 
-export interface CompactConversationResponse {
-  conversation: CubeBoxConversation
-  event?: CanonicalEvent | null
-  prompt_view: Array<{
-    role: string
-    content: string
-  }>
-  next_sequence: number
-}
-
 export interface ConversationReplayResponse {
   conversation: CubeBoxConversation
   events: CanonicalEvent[]
@@ -72,7 +62,6 @@ export interface CubeBoxState {
   composerText: string
   loading: boolean
   errorMessage: string | null
-  compacting: boolean
 }
 
 export interface CubeBoxModelProvider {

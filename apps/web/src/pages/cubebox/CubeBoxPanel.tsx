@@ -1,7 +1,6 @@
 import AddCommentOutlinedIcon from '@mui/icons-material/AddCommentOutlined'
 import ArchiveOutlinedIcon from '@mui/icons-material/ArchiveOutlined'
 import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome'
-import CompressOutlinedIcon from '@mui/icons-material/CompressOutlined'
 import DriveFileRenameOutlineIcon from '@mui/icons-material/DriveFileRenameOutline'
 import HistoryOutlinedIcon from '@mui/icons-material/HistoryOutlined'
 import SettingsOutlinedIcon from '@mui/icons-material/SettingsOutlined'
@@ -48,7 +47,6 @@ import { useCubeBox } from './CubeBoxProvider'
 export function CubeBoxPanel() {
   const {
     archiveConversation,
-    compactCurrentConversation,
     conversations,
     conversationsLoading,
     renameConversation,
@@ -280,17 +278,6 @@ export function CubeBoxPanel() {
               </IconButton>
             </span>
           </Tooltip>
-          <Tooltip title={t('cubebox_compact')}>
-            <span>
-              <IconButton
-                aria-label={t('cubebox_compact')}
-                disabled={!canUseConversations || !state.conversation?.id || state.loading || state.compacting || state.turnStatus === 'streaming'}
-                onClick={() => void compactCurrentConversation()}
-              >
-                <CompressOutlinedIcon />
-              </IconButton>
-            </span>
-          </Tooltip>
         </Stack>
       </Stack>
 
@@ -361,7 +348,6 @@ export function CubeBoxPanel() {
             </Typography>
             <Stack direction='row' spacing={1}>
               {state.loading ? <CircularProgress size={18} /> : null}
-              {state.compacting ? <CircularProgress size={18} /> : null}
               <Button
                 color='warning'
                 disabled={!canUseConversations || state.turnStatus !== 'streaming'}
@@ -373,13 +359,7 @@ export function CubeBoxPanel() {
               </Button>
               <Button
                 disabled={!canUseConversations || state.loading || state.composerText.trim().length === 0 || state.turnStatus === 'streaming'}
-                onClick={() => {
-                  if (state.composerText.trim() === '/compact') {
-                    void compactCurrentConversation()
-                    return
-                  }
-                  void sendMessage()
-                }}
+                onClick={() => void sendMessage()}
                 startIcon={<SendIcon />}
                 variant='contained'
               >

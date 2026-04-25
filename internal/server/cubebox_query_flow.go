@@ -45,7 +45,7 @@ type cubeboxReadPlanProductionResult struct {
 
 type cubeboxQueryFlow struct {
 	runtime        *cubebox.Runtime
-	store          cubeboxConversationStore
+	store          cubeboxTurnStore
 	registry       *cubebox.ExecutionRegistry
 	producer       cubeboxReadPlanProducer
 	narrator       cubeboxQueryNarrator
@@ -114,7 +114,7 @@ var queryNarrationForbiddenPatterns = []*regexp.Regexp{
 
 func newCubeboxQueryFlow(
 	runtime *cubebox.Runtime,
-	store cubeboxConversationStore,
+	store cubeboxTurnStore,
 	registry *cubebox.ExecutionRegistry,
 	producer cubeboxReadPlanProducer,
 	narrator cubeboxQueryNarrator,
@@ -772,7 +772,7 @@ type queryTerminalError struct {
 
 func buildDefaultCubeboxQueryFlow(
 	runtime *cubebox.Runtime,
-	store cubeboxConversationStore,
+	store cubeboxTurnStore,
 	orgStore OrgUnitStore,
 	producer cubeboxReadPlanProducer,
 	narrator cubeboxQueryNarrator,

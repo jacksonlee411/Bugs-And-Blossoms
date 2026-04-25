@@ -67,7 +67,7 @@ type cubeboxStoreStub struct {
 	listFn                 func(context.Context, string, string, int32) (cubebox.ConversationListResponse, error)
 	renameFn               func(context.Context, string, string, string, string) (cubebox.ConversationReplayResponse, error)
 	archiveFn              func(context.Context, string, string, string, bool) (cubebox.ConversationReplayResponse, error)
-	compactFn              func(context.Context, string, string, string, cubebox.CanonicalContext, string) (cubebox.CompactConversationResponse, error)
+	preparePromptViewFn    func(context.Context, string, string, string, cubebox.CanonicalContext, string) (cubebox.CompactConversationResponse, error)
 	appendFn               func(context.Context, string, string, string, cubebox.CanonicalEvent) error
 	settingsFn             func(context.Context, string) (cubebox.ModelSettingsSnapshot, error)
 	providerFn             func(context.Context, string, string, cubebox.UpsertModelProviderInput) (cubebox.ModelProvider, error)
@@ -103,7 +103,7 @@ func (s cubeboxStoreStub) ArchiveConversation(ctx context.Context, tenantID stri
 	return s.archiveFn(ctx, tenantID, principalID, conversationID, archived)
 }
 
-func (s cubeboxStoreStub) CompactConversation(
+func (s cubeboxStoreStub) PrepareConversationPromptView(
 	ctx context.Context,
 	tenantID string,
 	principalID string,
@@ -111,10 +111,10 @@ func (s cubeboxStoreStub) CompactConversation(
 	canonicalContext cubebox.CanonicalContext,
 	reason string,
 ) (cubebox.CompactConversationResponse, error) {
-	if s.compactFn == nil {
+	if s.preparePromptViewFn == nil {
 		return cubebox.CompactConversationResponse{}, errors.New("unexpected")
 	}
-	return s.compactFn(ctx, tenantID, principalID, conversationID, canonicalContext, reason)
+	return s.preparePromptViewFn(ctx, tenantID, principalID, conversationID, canonicalContext, reason)
 }
 
 func (s cubeboxStoreStub) AppendEvent(ctx context.Context, tenantID string, principalID string, conversationID string, event cubebox.CanonicalEvent) error {
@@ -343,7 +343,7 @@ func TestCubeBoxStreamTurnAPI(t *testing.T) {
 		archiveFn: func(context.Context, string, string, string, bool) (cubebox.ConversationReplayResponse, error) {
 			return cubebox.ConversationReplayResponse{}, errors.New("unexpected")
 		},
-		compactFn: func(context.Context, string, string, string, cubebox.CanonicalContext, string) (cubebox.CompactConversationResponse, error) {
+		preparePromptViewFn: func(context.Context, string, string, string, cubebox.CanonicalContext, string) (cubebox.CompactConversationResponse, error) {
 			return cubebox.CompactConversationResponse{}, nil
 		},
 		appendFn: func(_ context.Context, tenantID string, principalID string, conversationID string, event cubebox.CanonicalEvent) error {
@@ -384,7 +384,7 @@ func TestCubeBoxStreamTurnAPIPreservesPromptWhitespace(t *testing.T) {
 	runtime := cubebox.NewRuntime()
 	var gotPrompt string
 	handleCubeBoxStreamTurnAPI(rec, req, runtime, cubeboxStoreStub{
-		compactFn: func(context.Context, string, string, string, cubebox.CanonicalContext, string) (cubebox.CompactConversationResponse, error) {
+		preparePromptViewFn: func(context.Context, string, string, string, cubebox.CanonicalContext, string) (cubebox.CompactConversationResponse, error) {
 			return cubebox.CompactConversationResponse{}, nil
 		},
 		appendFn: func(_ context.Context, _ string, _ string, _ string, event cubebox.CanonicalEvent) error {
@@ -490,7 +490,7 @@ func TestCubeBoxStreamTurnAPIWritesFallbackErrorWhenAppendFails(t *testing.T) {
 		archiveFn: func(context.Context, string, string, string, bool) (cubebox.ConversationReplayResponse, error) {
 			return cubebox.ConversationReplayResponse{}, errors.New("unexpected")
 		},
-		compactFn: func(context.Context, string, string, string, cubebox.CanonicalContext, string) (cubebox.CompactConversationResponse, error) {
+		preparePromptViewFn: func(context.Context, string, string, string, cubebox.CanonicalContext, string) (cubebox.CompactConversationResponse, error) {
 			return cubebox.CompactConversationResponse{}, nil
 		},
 		appendFn: func(_ context.Context, tenantID string, principalID string, conversationID string, event cubebox.CanonicalEvent) error {
@@ -607,7 +607,7 @@ func TestCubeBoxStreamTurnAPIUsesUUIDEventIDs(t *testing.T) {
 		archiveFn: func(context.Context, string, string, string, bool) (cubebox.ConversationReplayResponse, error) {
 			return cubebox.ConversationReplayResponse{}, errors.New("unexpected")
 		},
-		compactFn: func(context.Context, string, string, string, cubebox.CanonicalContext, string) (cubebox.CompactConversationResponse, error) {
+		preparePromptViewFn: func(context.Context, string, string, string, cubebox.CanonicalContext, string) (cubebox.CompactConversationResponse, error) {
 			return cubebox.CompactConversationResponse{}, nil
 		},
 		appendFn: func(_ context.Context, tenantID string, principalID string, conversationID string, event cubebox.CanonicalEvent) error {
@@ -743,104 +743,6 @@ func TestCubeBoxPatchConversationAPIUnarchivesConversation(t *testing.T) {
 	}
 }
 
-func TestCubeBoxCompactConversationAPI(t *testing.T) {
-	rec := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodPost, "/internal/cubebox/conversations/conv_1:compact", strings.NewReader(`{"reason":"manual"}`))
-	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
-	req = req.WithContext(withPrincipal(req.Context(), Principal{ID: "p1"}))
-
-	handleCubeBoxCompactConversationAPI(rec, req, cubeboxStoreStub{
-		createFn: func(context.Context, string, string) (cubebox.ConversationReplayResponse, error) {
-			return cubebox.ConversationReplayResponse{}, errors.New("unexpected")
-		},
-		getFn: func(context.Context, string, string, string) (cubebox.ConversationReplayResponse, error) {
-			return cubebox.ConversationReplayResponse{}, errors.New("unexpected")
-		},
-		listFn: func(context.Context, string, string, int32) (cubebox.ConversationListResponse, error) {
-			return cubebox.ConversationListResponse{}, errors.New("unexpected")
-		},
-		renameFn: func(context.Context, string, string, string, string) (cubebox.ConversationReplayResponse, error) {
-			return cubebox.ConversationReplayResponse{}, errors.New("unexpected")
-		},
-		archiveFn: func(context.Context, string, string, string, bool) (cubebox.ConversationReplayResponse, error) {
-			return cubebox.ConversationReplayResponse{}, errors.New("unexpected")
-		},
-		compactFn: func(_ context.Context, tenantID string, principalID string, conversationID string, canonicalContext cubebox.CanonicalContext, reason string) (cubebox.CompactConversationResponse, error) {
-			if tenantID != "t1" || principalID != "p1" || conversationID != "conv_1" || reason != "manual" {
-				t.Fatalf("unexpected compact args tenant=%s principal=%s conversation=%s reason=%s", tenantID, principalID, conversationID, reason)
-			}
-			if canonicalContext.TenantID != "t1" || canonicalContext.PrincipalID != "p1" {
-				t.Fatalf("unexpected canonical context=%+v", canonicalContext)
-			}
-			if canonicalContext.Runtime != "unavailable" || canonicalContext.ModelSlug != "unavailable" {
-				t.Fatalf("expected unavailable runtime metadata when config is unavailable, got %+v", canonicalContext)
-			}
-			event := cubebox.CanonicalEvent{
-				EventID:        "evt_compact",
-				ConversationID: "conv_1",
-				Sequence:       5,
-				Type:           "turn.context_compacted",
-				Payload: map[string]any{
-					"summary_id":   "summary_1",
-					"source_range": []int{1, 4},
-				},
-			}
-			return cubebox.CompactConversationResponse{
-				Conversation: cubebox.Conversation{ID: "conv_1", Title: "新对话", Status: "active"},
-				Event:        &event,
-				PromptView:   []cubebox.PromptItem{{Role: "system", Content: "tenant=t1"}},
-				NextSequence: 6,
-			}, nil
-		},
-	})
-
-	if rec.Code != http.StatusOK {
-		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
-	}
-	if !strings.Contains(rec.Body.String(), `"turn.context_compacted"`) {
-		t.Fatalf("unexpected body=%s", rec.Body.String())
-	}
-}
-
-func TestCubeBoxCompactConversationAPIReturnsNoEventWhenCompactionIsSkipped(t *testing.T) {
-	rec := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodPost, "/internal/cubebox/conversations/conv_1:compact", strings.NewReader(`{"reason":"manual"}`))
-	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
-	req = req.WithContext(withPrincipal(req.Context(), Principal{ID: "p1"}))
-
-	handleCubeBoxCompactConversationAPI(rec, req, cubeboxStoreStub{
-		createFn: func(context.Context, string, string) (cubebox.ConversationReplayResponse, error) {
-			return cubebox.ConversationReplayResponse{}, errors.New("unexpected")
-		},
-		getFn: func(context.Context, string, string, string) (cubebox.ConversationReplayResponse, error) {
-			return cubebox.ConversationReplayResponse{}, errors.New("unexpected")
-		},
-		listFn: func(context.Context, string, string, int32) (cubebox.ConversationListResponse, error) {
-			return cubebox.ConversationListResponse{}, errors.New("unexpected")
-		},
-		renameFn: func(context.Context, string, string, string, string) (cubebox.ConversationReplayResponse, error) {
-			return cubebox.ConversationReplayResponse{}, errors.New("unexpected")
-		},
-		archiveFn: func(context.Context, string, string, string, bool) (cubebox.ConversationReplayResponse, error) {
-			return cubebox.ConversationReplayResponse{}, errors.New("unexpected")
-		},
-		compactFn: func(_ context.Context, tenantID string, principalID string, conversationID string, canonicalContext cubebox.CanonicalContext, reason string) (cubebox.CompactConversationResponse, error) {
-			return cubebox.CompactConversationResponse{
-				Conversation: cubebox.Conversation{ID: conversationID, Title: "新对话", Status: "active"},
-				PromptView:   []cubebox.PromptItem{{Role: "system", Content: "tenant=t1"}},
-				NextSequence: 3,
-			}, nil
-		},
-	})
-
-	if rec.Code != http.StatusOK {
-		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
-	}
-	if strings.Contains(rec.Body.String(), `"event":{`) {
-		t.Fatalf("expected compact skip response without event, got %s", rec.Body.String())
-	}
-}
-
 func TestCubeBoxLoadConversationAPIReturnsPhaseCLifecycleRoundtripGolden(t *testing.T) {
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/internal/cubebox/conversations/conv_roundtrip", nil)
@@ -923,7 +825,7 @@ func TestCubeBoxStreamTurnAPIPreTurnAutoCompactUsesActorAndUpdatedSequence(t *te
 		archiveFn: func(context.Context, string, string, string, bool) (cubebox.ConversationReplayResponse, error) {
 			return cubebox.ConversationReplayResponse{}, errors.New("unexpected")
 		},
-		compactFn: func(_ context.Context, tenantID string, principalID string, conversationID string, canonicalContext cubebox.CanonicalContext, reason string) (cubebox.CompactConversationResponse, error) {
+		preparePromptViewFn: func(_ context.Context, tenantID string, principalID string, conversationID string, canonicalContext cubebox.CanonicalContext, reason string) (cubebox.CompactConversationResponse, error) {
 			compactCalled = true
 			if tenantID != "tenant-a" || principalID != "principal-a" || conversationID != "conv_1" {
 				t.Fatalf("unexpected compact actor tenant=%s principal=%s conversation=%s", tenantID, principalID, conversationID)
@@ -1417,7 +1319,7 @@ func TestCubeBoxStreamTurnAPIStopsNoQueryWithoutGatewayFallback(t *testing.T) {
 	}
 
 	handleCubeBoxStreamTurnAPI(rec, req, cubebox.NewRuntime(), cubeboxStoreStub{
-		compactFn: func(context.Context, string, string, string, cubebox.CanonicalContext, string) (cubebox.CompactConversationResponse, error) {
+		preparePromptViewFn: func(context.Context, string, string, string, cubebox.CanonicalContext, string) (cubebox.CompactConversationResponse, error) {
 			return cubebox.CompactConversationResponse{}, nil
 		},
 		appendFn: func(context.Context, string, string, string, cubebox.CanonicalEvent) error {
@@ -1725,7 +1627,7 @@ func TestCubeBoxStreamTurnAPIFallsBackToGatewayWhenPlannerErrors(t *testing.T) {
 	}
 
 	handleCubeBoxStreamTurnAPI(rec, req, cubebox.NewRuntime(), cubeboxStoreStub{
-		compactFn: func(context.Context, string, string, string, cubebox.CanonicalContext, string) (cubebox.CompactConversationResponse, error) {
+		preparePromptViewFn: func(context.Context, string, string, string, cubebox.CanonicalContext, string) (cubebox.CompactConversationResponse, error) {
 			return cubebox.CompactConversationResponse{}, nil
 		},
 		appendFn: func(context.Context, string, string, string, cubebox.CanonicalEvent) error { return nil },
@@ -1784,7 +1686,7 @@ func TestCubeBoxQueryFlowInjectsRecentConfirmedEntity(t *testing.T) {
 				Payload: map[string]any{"entity": map[string]any{"domain": "orgunit", "intent": "orgunit.details", "entity_key": "100000", "as_of": "2026-04-25"}},
 			}}, NextSequence: 10}, nil
 		},
-		compactFn: func(context.Context, string, string, string, cubebox.CanonicalContext, string) (cubebox.CompactConversationResponse, error) {
+		preparePromptViewFn: func(context.Context, string, string, string, cubebox.CanonicalContext, string) (cubebox.CompactConversationResponse, error) {
 			return cubebox.CompactConversationResponse{Conversation: cubebox.Conversation{ID: "conv_1", Title: "新对话", Status: "active"}, NextSequence: 10}, nil
 		},
 		appendFn: func(_ context.Context, _ string, _ string, _ string, event cubebox.CanonicalEvent) error {
@@ -1858,7 +1760,7 @@ func TestCubeBoxQueryFlowIgnoresConfirmedEntityMetadataAppendFailure(t *testing.
 		getFn: func(context.Context, string, string, string) (cubebox.ConversationReplayResponse, error) {
 			return cubebox.ConversationReplayResponse{Conversation: cubebox.Conversation{ID: "conv_1", Title: "新对话", Status: "active"}, NextSequence: 10}, nil
 		},
-		compactFn: func(context.Context, string, string, string, cubebox.CanonicalContext, string) (cubebox.CompactConversationResponse, error) {
+		preparePromptViewFn: func(context.Context, string, string, string, cubebox.CanonicalContext, string) (cubebox.CompactConversationResponse, error) {
 			return cubebox.CompactConversationResponse{Conversation: cubebox.Conversation{ID: "conv_1", Title: "新对话", Status: "active"}, NextSequence: 10}, nil
 		},
 		appendFn: func(_ context.Context, _ string, _ string, _ string, event cubebox.CanonicalEvent) error {
@@ -1920,7 +1822,7 @@ func TestCubeBoxQueryFlowStopsNoQueryFallbackWithGenericBoundary(t *testing.T) {
 		getFn: func(context.Context, string, string, string) (cubebox.ConversationReplayResponse, error) {
 			return cubebox.ConversationReplayResponse{Conversation: cubebox.Conversation{ID: "conv_1", Title: "新对话", Status: "active"}, NextSequence: 3}, nil
 		},
-		compactFn: func(context.Context, string, string, string, cubebox.CanonicalContext, string) (cubebox.CompactConversationResponse, error) {
+		preparePromptViewFn: func(context.Context, string, string, string, cubebox.CanonicalContext, string) (cubebox.CompactConversationResponse, error) {
 			return cubebox.CompactConversationResponse{Conversation: cubebox.Conversation{ID: "conv_1", Title: "新对话", Status: "active"}, NextSequence: 3}, nil
 		},
 		appendFn: func(context.Context, string, string, string, cubebox.CanonicalEvent) error { return nil },

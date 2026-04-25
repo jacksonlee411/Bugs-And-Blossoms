@@ -127,7 +127,7 @@ func TestQueryFlowReturnsPlannerClarificationVerbatim(t *testing.T) {
 		runtime: cubebox.NewRuntime(),
 		store: cubeboxStoreStub{
 			appendFn: func(context.Context, string, string, string, cubebox.CanonicalEvent) error { return nil },
-			compactFn: func(context.Context, string, string, string, cubebox.CanonicalContext, string) (cubebox.CompactConversationResponse, error) {
+			preparePromptViewFn: func(context.Context, string, string, string, cubebox.CanonicalContext, string) (cubebox.CompactConversationResponse, error) {
 				return cubebox.CompactConversationResponse{NextSequence: 1}, nil
 			},
 		},

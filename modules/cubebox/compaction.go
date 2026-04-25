@@ -12,7 +12,6 @@ import (
 
 const (
 	compactionSummaryPrefix        = "[[summary]] "
-	defaultRecentItemLimit         = 4
 	defaultRecentUserMessageTokens = 400
 )
 
@@ -51,32 +50,14 @@ type CompactionResult struct {
 func BuildPromptViewWithCompaction(events []CanonicalEvent, context CanonicalContext, currentUserInput string) CompactionResult {
 	timeline := collectPromptTimeline(events)
 	tokenBefore := estimatePromptTokens(timeline, currentUserInput)
-	recent := keepRecentTimeline(timeline, defaultRecentItemLimit)
-	compacted := len(timeline) > len(recent)
-	compactedCount := len(timeline) - len(recent)
-	sourceRange := [2]int{1, compactedCount}
-	if !compacted {
-		sourceRange = [2]int{0, 0}
-	}
-	if len(timeline) == 0 {
-		sourceRange = [2]int{0, 0}
-	}
+	sourceRange := [2]int{0, 0}
 
 	canonicalBlock := buildCanonicalContextBlock(context)
-	summaryText := ""
-	sourceDigest := ""
-	if compacted {
-		summaryText = buildSummaryText(timeline[:len(timeline)-len(recent)])
-		sourceDigest = digestTimeline(timeline[:len(timeline)-len(recent)])
-	}
 
-	prompt := make([]PromptItem, 0, 2+len(recent)+1)
+	prompt := make([]PromptItem, 0, 2+len(timeline)+1)
 	prompt = append(prompt, PromptItem{Role: "system", Content: "你是 CubeBox，在当前租户与权限上下文下提供帮助。"})
 	prompt = append(prompt, PromptItem{Role: "system", Content: canonicalBlock})
-	if compacted {
-		prompt = append(prompt, PromptItem{Role: "system", Content: compactionSummaryPrefix + summaryText})
-	}
-	prompt = append(prompt, trimRecentUserMessages(recent, defaultRecentUserMessageTokens)...)
+	prompt = append(prompt, timeline...)
 	if strings.TrimSpace(currentUserInput) != "" {
 		prompt = append(prompt, PromptItem{Role: "user", Content: currentUserInput})
 	}
@@ -84,13 +65,13 @@ func BuildPromptViewWithCompaction(events []CanonicalEvent, context CanonicalCon
 	return CompactionResult{
 		SummaryID:      "summary_" + strings.ReplaceAll(uuid.NewString(), "-", ""),
 		SourceRange:    sourceRange,
-		SourceDigest:   sourceDigest,
-		SummaryText:    summaryText,
+		SourceDigest:   "",
+		SummaryText:    "",
 		TokenBefore:    tokenBefore,
 		TokenAfter:     estimatePromptTokens(prompt, ""),
 		PromptView:     prompt,
-		Compacted:      compacted,
-		Reason:         compactionReason(compacted, tokenBefore),
+		Compacted:      false,
+		Reason:         compactionReason(false, tokenBefore),
 		CanonicalBlock: canonicalBlock,
 	}
 }
@@ -181,34 +162,9 @@ func collectPromptTimeline(events []CanonicalEvent) []PromptItem {
 			}
 			items = append(items, PromptItem{Role: "assistant", Content: text})
 			delete(agentChunks, messageID)
-		case "turn.context_compacted":
-			text := stringValue(event.Payload["summary_text"])
-			if strings.TrimSpace(text) == "" {
-				continue
-			}
-			items = append(items, PromptItem{Role: "summary", Content: text})
 		}
 	}
 	return items
-}
-
-func keepRecentTimeline(items []PromptItem, limit int) []PromptItem {
-	if limit <= 0 || len(items) <= limit {
-		return append([]PromptItem(nil), items...)
-	}
-	return append([]PromptItem(nil), items[len(items)-limit:]...)
-}
-
-func trimRecentUserMessages(items []PromptItem, tokenLimit int) []PromptItem {
-	trimmed := make([]PromptItem, 0, len(items))
-	for _, item := range items {
-		next := item
-		if next.Role == "user" {
-			next.Content = preserveOrTrimTextToApproxTokenLimit(next.Content, tokenLimit)
-		}
-		trimmed = append(trimmed, next)
-	}
-	return trimmed
 }
 
 func preserveOrTrimTextToApproxTokenLimit(text string, tokenLimit int) string {
