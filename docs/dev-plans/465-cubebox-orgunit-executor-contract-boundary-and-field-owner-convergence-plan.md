@@ -152,11 +152,91 @@
 
 这意味着模型如果产出非法字符串，不会被拒绝，而会被当成合法的 `false` 继续执行。该行为弱化了 `461/464` 要求的 schema / fail-closed 校验边界。
 
-## 8. 后续收敛建议
+### 7.2 共享执行层当前只校验“参数名”，不校验“参数值类型”
 
-- 保持字段 owner 继续归属 `orgunit`，不要在 `CubeBox` 侧新增私有响应类型或私有字段白名单。
-- 将 `orgunit.details`、`orgunit.audit` 等重复 DTO 组装逻辑进一步收口为共享 builder，或直接复用 `orgunit` 既有响应组装函数，减少双份维护。
-- 将 `include_disabled` 的字符串校验收紧为严格白名单；非法字符串直接报错，不再静默落为 `false`。
+当前 `modules/cubebox/read_executor.go` 的执行注册表主要负责：
+
+- `api_key -> executor` 白名单映射
+- 必填参数存在性校验
+- 未注册参数拒绝
+- 顺序执行
+
+而 `ReadPlan` 当前也只约束结构、步骤顺序与边界，不持有 `include_disabled` 这类参数的类型 schema。
+
+这意味着本问题的正确修复方向应是：
+
+1. 在模块 executor / `orgunit` owner 侧把参数校验收紧；
+2. 不为了解一个布尔参数问题再引入通用参数 schema 平台或第二套执行期类型系统。
+
+## 8. 解决方案与后续收敛建议
+
+以下建议用于后续代码整改时的最小实现路径，目标是消除重复实现与 fail-closed 缺口，而不是继续扩张运行时抽象。
+
+### 8.1 `orgunit.details` 的最小收敛主线
+
+建议把 `orgunit.details` 当前分散在主 API 与 `CubeBox` executor 两处的“查询 + DTO 收口”逻辑，收敛回 `orgunit` owner 侧的共享 helper / builder。
+
+建议冻结如下：
+
+1. 共享 helper 应放在 `orgunit` 读契约同 owner 的位置，优先靠近 `internal/server/orgunit_api.go`，而不是继续放在 `CubeBox` 专属文件里。
+2. 该 helper 持有以下职责：
+   - 根据 `tenant + org_code + as_of + include_disabled` 解析目标组织；
+   - 调用现有 `orgunit` 读链路获取 `details`；
+   - 完成从内部领域结构到 `orgUnitDetailsAPIResponse` 的白名单收口；
+   - 组装 `ext_fields` 并保证空切片语义稳定。
+3. `handleOrgUnitsDetailsAPI(...)` 与 `cubeBoxOrgUnitDetailsExecutor.Execute(...)` 都只调用该共享 helper：
+   - HTTP handler 继续负责 HTTP 错误映射与响应写出；
+   - `CubeBox` executor 只负责参数转换、调用 helper、再把结果转成 payload。
+
+这样做的效果是：
+
+- 字段 owner 继续留在 `orgunit`；
+- `CubeBox` 不再重复维护一份 `details` DTO 组装代码；
+- 后续字段增删改只需要在一个地方维护。
+
+### 8.2 `include_disabled` 的 fail-closed 修复边界
+
+建议将 `CubeBox` 路径中的 `include_disabled` 校验收紧为严格白名单，不再复用当前“宽松 query 参数解析”的静默降级语义。
+
+建议冻结如下：
+
+1. `normalizeOptionalBool(...)` 不得再把任意未知字符串静默解释为 `false`。
+2. 首选只接受真正的 JSON `bool`。
+3. 若考虑平滑过渡，字符串兼容也只能接受严格白名单，例如 `true` / `false`；`yes` / `on` / 空字符串 / 任意其他字符串都应直接返回 `include_disabled invalid`。
+4. 该错误最终应沿现有查询错误映射返回 `invalid_request`，而不是继续执行。
+
+### 8.3 不要借机扩大到更重的平台抽象
+
+本问题不应被扩写成以下方向：
+
+- 通用 DTO 平台
+- 通用字段投影平台
+- 通用参数 schema 平台
+- 第二套 `CubeBox` 专用解释层
+
+原因是：
+
+1. 465 当前暴露的是“同一契约的重复组装”与“一个布尔参数未 fail-closed”，不是平台缺失。
+2. 共享执行层当前仍符合 `461/464` 的最小边界，只需把 `orgunit` owner 的共享 helper 抽出来、把布尔校验收紧即可。
+3. 若在这里顺手引入更重抽象，会违背 `Simple > Easy` 与 `464` 已冻结的“执行层继续变薄”方向。
+
+### 8.4 本计划不建议同步扩大到公开 `orgunit` 读 API query 语义整改
+
+`parseIncludeDisabled(...)` 当前服务于公开 `orgunit` 读 API 的 query string 解析。465 的直接 owner 是 `CubeBox` executor 与 `orgunit` 读契约之间的边界收口，而不是一次性重写公开 query 语义。
+
+因此建议：
+
+1. 本计划先收紧 `CubeBox` 内部执行链路的 `normalizeOptionalBool(...)`。
+2. 是否连带收紧公开 `GET /org/api/org-units*` 的 `include_disabled` query 参数语义，应由 `orgunit` 读 API owner 单独评估，不在 465 中混做。
+
+### 8.5 后续测试建议
+
+后续若实施代码整改，至少应补齐以下测试：
+
+1. `orgunit.details` 主 API 与 `CubeBox` executor 对同一输入返回的结构保持一致，避免字段漂移。
+2. `include_disabled` 在 `CubeBox` 路径下收到非法字符串时，会 fail-closed 并映射为 `invalid_request`。
+3. `ext_fields` 在无扩展字段时仍返回空数组，而不是 `nil` 或缺省。
+4. 若后续继续收口 `orgunit.audit` 等重复响应组装逻辑，也应沿用同样的“共享 builder + 双入口一致性”测试方法。
 
 ## 9. 验收标准
 
