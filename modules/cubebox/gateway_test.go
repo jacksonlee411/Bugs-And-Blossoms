@@ -90,10 +90,10 @@ func (s secretResolverStub) ResolveSecretRef(context.Context, string, string, st
 }
 
 type appendEventStoreStub struct {
-	events          []CanonicalEvent
-	appendErr       error
-	appendEventsErr error
-	appendEventsCtx context.Context
+	events           []CanonicalEvent
+	appendErr        error
+	appendEventsErr  error
+	appendEventsCtx  context.Context
 	preparedResponse PromptViewPreparationResponse
 	prepareErr       error
 	prepareCalls     int
