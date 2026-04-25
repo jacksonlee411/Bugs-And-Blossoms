@@ -141,10 +141,10 @@
 
 ### 5.2 会话操作
 
-- 提供“新会话”按钮，触发严格会话隔离：清空当前消息窗口、摘要、结构化状态与工具结果缓存。
+- 提供“新会话”按钮，触发严格会话隔离：清空当前消息窗口、历史上下文状态、结构化状态与工具结果缓存。
 - 提供历史会话列表，按最近更新时间、页面来源和标题展示。
 - 支持恢复旧会话，但恢复后必须以该会话自己的历史、摘要和状态对象为输入，不与当前会话混用。
-- 支持手动压缩上下文，作为自动压缩之外的显式操作。
+- 不提供用户显式压缩入口；首阶段由服务端 pre-turn prompt view 准备承接历史重建与 canonical context reinjection，后续语义摘要演进由 `DEV-PLAN-469` 持有。
 
 ### 5.3 用户可见性
 
@@ -211,7 +211,7 @@
 
 1. 系统基线指令：安全、租户隔离、CubeBox 仅代表当前用户调用工具、业务写入必须走 One Door、输出格式和错误处理规则。
 2. 模块上下文：当前页面、业务对象、用户权限摘要、可用工具摘要。
-3. 历史压缩摘要：只包含仍然相关的关键决策、文件/对象、业务事实和未完成事项。
+3. 历史上下文层：`DEV-PLAN-469 Phase 1` 当前基线为“完整历史视图 + canonical context”；后续阶段才允许升级为模型语义摘要或 remote compact replacement history。
 4. 结构化状态对象：确定性 JSON，不由模型自由改写。
 5. 工具输出压缩结果：保留必要元数据，不塞入大体积原始输出。
 6. 最近 3 到 5 轮原文：保留当前任务的细粒度语义。
@@ -224,7 +224,7 @@
 - 当预计输入超过阈值时，先压缩最旧且相关性低的消息块，再丢弃可重建的工具原始输出。
 - 压缩摘要必须保留业务对象、日期、用户已确认选择、错误码、待办项和显式约束。
 - 最近用户请求、最近助手回复、最近工具调用结果不得被压缩到不可追溯状态。
-- 支持手动 `/compact` 或 UI 操作触发压缩，并在会话中记录压缩事件；UI 命令入口由 `DEV-PLAN-431` 承接，compaction 语义与执行链由 `DEV-PLAN-434` 承接。
+- 不提供用户手动 `/compact` 或按钮入口；首阶段只保留服务端 pre-turn prompt view 准备，并在需要时通过历史 `turn.context_compacted` 回放兼容承接旧会话显示。
 
 ### 7.4 上下文来源
 
@@ -304,15 +304,15 @@
 ### Slice 4：上下文管理与压缩
 
 - [x] 按 `DEV-PLAN-434` 完成 Codex 上下文管理与 compaction 复用/重构评估，不从零自研同类机制。
-- [x] 已按首期范围重构 Codex token estimator、auto compact threshold、manual compact、replacement history、summary prefix 与 canonical context reinjection 思路。
+- [x] 已按首阶段范围重构 Codex token estimator、auto compact threshold、pre-turn prompt view 准备、replacement history、summary prefix 与 canonical context reinjection 思路。
 - [x] 已将 Codex 活跃 history replacement 改造为 CubeBox prompt view replacement，数据库原始消息继续保持 append-only。
 - [x] 已实现 prompt builder 的固定顺序和结构化状态对象。
-- [x] 已实现摘要压缩任务，首期固定使用当前 active model 执行 compaction，不引入独立 summary model。
+- [x] 已按 `DEV-PLAN-469 Phase 1` 停用本地拼接摘要的生产语义，当前以完整历史视图 + canonical context 作为 provider prompt view 基线。
 - [x] 已按首期范围实现最近回合原文保留；工具输出压缩的更大范围治理继续后移。
 - [x] 已补纯函数测试、压缩边界测试、摘要不丢关键事实测试，以及以 fixture / snapshot 承担 golden 等价物的 prompt shape 快照测试。
-- [x] `/compact`、auto compact、manual compact` 的语义、触发器、执行链与验收已由 `DEV-PLAN-434` 持有；`DEV-PLAN-431` 只承接 composer 命令入口与状态提示。
+- [x] manual compact 已取消为产品需求；当前只保留 pre-turn auto prompt view 准备与 compaction 内核后续演进 owner，`DEV-PLAN-431` 不再承接 `/compact` 命令入口。
 - 当前备注（`2026-04-22`）：
-  - `PR-437D` 已具备正式封板条件，最小闭环包括 manual compact、pre-turn auto compact、canonical context reinjection、prompt view replacement、`/compact` UI 入口与压缩后恢复链路。
+  - `PR-437D` 已具备正式封板条件，最小闭环包括 pre-turn auto prompt view 准备、canonical context reinjection、prompt view replacement，以及历史 `turn.context_compacted` 的回放兼容链路。
   - 本轮实现级收口已补齐：no-op compaction 不再伪造 compact event / 空摘要项，compaction 序号推进已收敛为单事务安全，不再因并发 compact 抢占 `sequence` 而阻断正常请求。
   - mid-turn compact、remote compaction、model downshift compact、真实 tokenizer 校准与更大范围工具输出压缩仍按 `434` 计划后移，不阻断当前 `Phase D` 封板。
 

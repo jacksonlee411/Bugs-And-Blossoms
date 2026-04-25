@@ -81,7 +81,7 @@ Codex 开源仓库中与 UI 层高度相关的成熟资产包括：
 | Thread history reducer | `thread_history.rs` | 重构，形成 CubeBox timeline reducer |
 | Markdown streaming | `markdown_stream.rs` | 借鉴行为，不直接移植 terminal renderer |
 | History cell | `history_cell.rs` | 借鉴消息分组/状态展示，不直接移植 UI 代码 |
-| Slash command | `slash_command.rs` | 借鉴 `/compact`、`/new`、`/clear` 等模式，命令集合本仓裁剪 |
+| Slash command | `slash_command.rs` | 借鉴 `/new`、`/clear` 等模式，命令集合本仓裁剪，不采纳 `/compact` |
 | Status indicator | `status*.rs` | 借鉴状态分类，使用 MUI 实现 |
 | Bottom pane/chat widget | `bottom_pane/**`、`chatwidget/**` | 借鉴交互信息架构，不直接复用渲染代码 |
 | Shell/file/patch/exec | protocol v2 exec/fs/patch schemas | 不引入首期默认能力 |
@@ -244,9 +244,9 @@ CubeBox 前端必须有一个纯函数 reducer：
 
 ### Slice 6：composer 命令入口与快捷操作
 
-- [ ] 实现最小 slash command 输入解析与 UI 入口：`/new`、`/compact`、`/clear-draft`。
+- [ ] 实现最小 slash command 输入解析与 UI 入口：`/new`、`/clear-draft`。
 - [ ] `/new` 只在 UI 层触发新会话入口；会话新建与 lifecycle contract 以 `DEV-PLAN-432` 为准。
-- [ ] `/compact` 只在 UI 层触发 manual compact 入口；compaction 语义与执行链以 `DEV-PLAN-434` 为准。
+- [x] 明确不提供 `/compact`；用户可见 manual compact 已从产品范围移除，历史 `compact_item` 只保留回放兼容。
 - [ ] `/clear-draft` 由前端草稿状态直接处理。
 - [ ] 命令解析参考 Codex TUI 思路，但命令集合由 CubeBox 白名单控制。
 - [ ] 不引入 shell、file、patch、exec 类命令。

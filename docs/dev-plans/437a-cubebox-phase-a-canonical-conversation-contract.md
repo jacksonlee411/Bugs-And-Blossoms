@@ -8,7 +8,7 @@
 - **范围一句话**：作为 `DEV-PLAN-437 / PR-437A` 的 companion doc，冻结 `431/432/434` 在首轮开工时必须共享的最小 conversation/turn/item/event 契约、SSE envelope、reducer 输入形状、reconstruction 输出形状与 deterministic provider fixture 口径。
 - **关联模块/目录**：`docs/dev-plans/431-codex-ui-protocol-and-shell-reuse-plan.md`、`docs/dev-plans/432-codex-session-persistence-reuse-plan.md`、`docs/dev-plans/434-codex-context-management-and-compaction-reuse-plan.md`、`docs/dev-plans/437-cubebox-implementation-roadmap-for-fast-start.md`、`apps/web`、`internal/server`、`modules/cubebox`
 - **关联计划/标准**：`DEV-PLAN-430`、`DEV-PLAN-431`、`DEV-PLAN-432`、`DEV-PLAN-434`、`DEV-PLAN-437`
-- **用户入口/触点**：右侧抽屉、SSE 流式回复、会话恢复、`/compact`
+- **用户入口/触点**：右侧抽屉、SSE 流式回复、会话恢复、历史 `compact_item` 回放兼容
 
 ### 0.1 Simple > Easy 三问
 
@@ -82,11 +82,16 @@
 | `turn.agent_message.completed` | 助手消息完成 | `message_id` |
 | `turn.context_item.started` | 上下文条目开始 | `item_id`、`kind` |
 | `turn.context_item.completed` | 上下文条目完成 | `item_id`、`kind`、`summary` |
-| `turn.context_compacted` | 历史已被压缩 | `summary_id`、`source_range` |
 | `turn.query_entity.confirmed` | 查询链确认了可继承业务实体 | `entity.domain`、`entity.entity_key`、`entity.intent`、`entity.as_of`、`entity.source_api_key` |
 | `turn.error` | 本轮失败 | `code`、`message`、`retryable`、`trace_id`、`provider_id`、`provider_type`、`model_slug`、`runtime`、`latency_ms` |
 | `turn.interrupted` | 本轮被用户或系统中断 | `reason`、`trace_id`、`provider_id`、`provider_type`、`model_slug`、`runtime`、`latency_ms` |
 | `turn.completed` | 本轮结束 | `status`、`trace_id`、`provider_id`、`provider_type`、`model_slug`、`runtime`、`latency_ms` |
+
+### 5.1A 历史兼容事件
+
+| 事件名 | 用途 | 最小 payload |
+| --- | --- | --- |
+| `turn.context_compacted` | 历史 compact 回放兼容；`DEV-PLAN-469 Phase 1` 下新 turn 默认不新增该事件 | `summary_id`、`source_range` |
 
 ### 5.2 明确暂缓事件
 
@@ -177,8 +182,8 @@ type ConversationReplayResponse = {
 - `431` timeline 组件按 `item.kind` 决定展示语义。
 - `434` 只新增 `compact_item` 的生成与消费规则，不新增第二套 timeline item 分类。
 - 当前状态（`2026-04-22`）：
-  - `compact_item` 已由 `turn.context_compacted` 统一生成并被 reducer / restore flow 消费。
-  - 当前仍未引入第二套“只供恢复页使用”的 compact DTO，继续维持 `ConversationReplayResponse.events -> reducer -> timeline` 单链路。
+  - `compact_item` 已由 `turn.context_compacted` 统一定义为历史回放兼容 item，并被 reducer / restore flow 消费。
+  - `DEV-PLAN-469 Phase 1` 下新 turn 默认不再新增该 event；当前仍未引入第二套“只供恢复页使用”的 compact DTO，继续维持 `ConversationReplayResponse.events -> reducer -> timeline` 单链路。
 
 ## 8. Deterministic Provider / Mock SSE 口径
 

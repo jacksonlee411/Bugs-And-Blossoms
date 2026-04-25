@@ -49,7 +49,6 @@ describe('CubeBoxPanel restore flow', () => {
             cubebox_rename: '重命名',
             cubebox_archive: '归档',
             cubebox_unarchive: '恢复',
-            cubebox_compact: '压缩上下文',
             cubebox_compact_item: '压缩摘要',
             cubebox_conversation_status_active: '进行中',
             cubebox_conversation_status_archived: '已归档',

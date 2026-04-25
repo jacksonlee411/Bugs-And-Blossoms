@@ -186,7 +186,7 @@ Codex 的启发在于：
 - recent-user-message budget
 - summary prefix
 - canonical initial context reinjection
-- pre-turn/manual compact
+- pre-turn compact / prompt view preparation
 - compact 纯函数测试与 snapshot 思路
 
 本项目当前明确不引入的，包括：
