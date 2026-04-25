@@ -5,7 +5,7 @@
 ## 0. 适用范围与评审分级
 
 - **评审分级**：`T2`
-- **范围一句话**：承接 `DEV-PLAN-467` 的调查结论，专门处理 `CubeBox` 在同一会话内基本连续追问时的记忆继承、指代解析、澄清表达与查询结果叙述问题，并收敛当前本地代码对大模型语义发挥的过度干预。
+- **范围一句话**：承接 `DEV-PLAN-467` 的调查结论，专门处理 `CubeBox` 在同一会话内基本连续追问时的记忆继承、指代解析、澄清表达与查询结果叙述问题，并扩大调查当前本地代码对大模型语义发挥的过度干预，以及哪些本可由模型承担的理解、澄清、候选选择、默认值选择、结果叙述与上下文收敛事项被提前编码到了 Go/TS 规则里。
 - **关联模块/目录**：`docs/dev-plans/438-cubebox-conversational-continuity-investigation-and-remediation-plan.md`、`docs/dev-plans/438a-cubebox-provider-message-role-normalization-and-codex-summary-alignment-plan.md`、`docs/dev-plans/460-cubebox-digital-assistant-positioning-and-execution-contract.md`、`docs/dev-plans/461-cubebox-query-scenarios-minimal-contract.md`、`docs/dev-plans/462-cubebox-codex-compaction-adoption-value-and-unified-convergence-plan.md`、`docs/dev-plans/464-cubebox-query-architecture-convergence-plan.md`、`docs/dev-plans/467-cubebox-query-conversational-continuity-and-memory-loss-investigation-plan.md`、`internal/server/cubebox_query_flow.go`、`modules/cubebox/*`、`modules/orgunit/presentation/cubebox/*`
 - **关联计划/标准**：`AGENTS.md`、`DEV-PLAN-003`、`DEV-PLAN-004M1`、`DEV-PLAN-012`、`DEV-PLAN-300`、`DEV-PLAN-301`、`DEV-PLAN-304`、`DEV-PLAN-438`、`DEV-PLAN-460`、`DEV-PLAN-461`、`DEV-PLAN-462`、`DEV-PLAN-464`、`DEV-PLAN-467`
 - **用户入口/触点**：主应用壳层右侧 `CubeBox` 抽屉、`/internal/cubebox/turns:stream`、查询 planner、只读执行器、查询 narrator、canonical events
@@ -37,6 +37,27 @@
 - “那它的负责人/上级/下级是什么”
 
 核心收敛方向是：**代码从“替模型决定怎么说、怎么澄清、怎么压制表达”退回到“提供高质量上下文 + 强制安全边界”；模型重新承担指代解析、澄清、默认值选择与自然叙述。**
+
+### 0.3 本轮扩大调查口径（2026-04-25 补充）
+
+本计划不应被理解为“继续限制大模型，防止模型发挥”。恰恰相反，`468` 的主轴应从“用本地规则压住模型”调整为：**安全护栏不变，语义工作重新交给模型**。
+
+必须保留的硬护栏包括：
+
+- 当前用户、当前租户、当前 session、Authz/RLS 与审计归属。
+- 只读执行注册表、`api_key` 白名单、现有读 API、参数类型与 schema 校验。
+- 不让模型直查数据库、直接写库、调用未登记接口、绕过业务 API 或越权执行。
+- 不把会话压缩摘要、知识包或模型输出当作授权来源。
+- 不向用户泄露原始执行 JSON、内部执行计划、密钥、provider 配置或未公开字段路径。
+
+应扩大回交给模型的语义职责包括：
+
+- 判断用户是否仍处于受支持业务查询域。
+- 基于有限会话上下文解析“该组织 / 那个 / 最开始那个 / 它”。
+- 在低风险只读场景选择默认值，并在缺参或歧义时自然澄清。
+- 面对候选列表时让用户选择，而不是由本地代码生成固定澄清话术。
+- 基于执行结果做自然叙述、减少重复、承接上一轮上下文和用户语气。
+- 对较长历史和较长结果做语义级摘要或收敛时，优先让模型承担表达与取舍，本地只提供预算、事实边界和当前权威上下文。
 
 ## 1. 背景与问题定义
 
@@ -112,6 +133,88 @@
 
 该规则能保持执行边界简单，但它也让“可部分解析、只缺一个确认”的情形无法表达候选、上下文解析依据或预期下一步。后续可继续保持 `steps` 为空，但需要给 planner/narrator 一个更清楚的“澄清态”协议，而不是把所有非执行结果都混到 `NO_QUERY` 或固定 stopline。
 
+### 2.7 扩大调查：当前仍存在的模型限制面
+
+本轮扩大调查后，当前限制大模型发挥的实现点不止连续追问，还包括以下几类。
+
+#### A. planner 被压成“JSON/NO_QUERY 二选一”
+
+`buildPlannerMessages(...)` 要求模型只有两种职责：输出严格合法 `ReadPlan JSON`，或输出 `NO_QUERY`，见 `internal/server/cubebox_query_flow.go:363`。这能保证执行入口简单，但会把模型擅长的中间判断压扁：
+
+- 用户仍在支持领域内，但缺少可继承实体；
+- 用户给出候选选择，需要结合上一轮候选；
+- 用户表达有情绪或强指代，需要先自然确认理解；
+- 用户问题可执行但需要解释默认值选择依据。
+
+扩大调查结论：`ReadPlan` schema 作为执行边界应保留，但 planner 对外不宜长期只有 `ReadPlan / NO_QUERY` 两态。最小可行方向是引入极薄的四态 outcome：`read_plan`、`need_clarification`、`unsupported_query`、`pass_through`，让模型拥有可解释的澄清、不支持判断与普通对话放行空间。
+
+其中 `unsupported_query` 只用于“用户确实在请求数据查询或系统操作，但当前查询链不支持或不能安全执行”；`pass_through` 用于普通寒暄、非查询解释、写作或开放聊天，应交还普通 provider 对话链，不应显示查询 stopline。
+
+#### B. narrator 被 prompt 与 regex 双重强控
+
+narrator system prompt 当前要求默认 `1 到 3 句`、不要固定栏目、不要小标题、不要键值对，并列出大量不应出现的 `orgunit` 字段与中文标题，见 `internal/server/cubebox_query_flow.go:503`。随后 `queryNarrationForbiddenPatterns` 又用 regex 拦截 `已完成只读查询`、`本次关注`、`详情如下`、`组织基本信息`、`上级组织`、`负责人`、`组织全路径`、`扩展字段` 以及普通 `active/disabled/true/false/null` 键值形态，见 `internal/server/cubebox_query_flow.go:105`。
+
+扩大调查结论：这已经超出“防泄露”边界，进入“本地规定模型怎么写”的表达控制。应保留内部实现泄露检测，但移除普通中文结构、业务字段中文名、小标题、短列表和自然键值表达的失败判定。回答风格应主要通过 prompt 引导，而不是通过 terminal error 惩罚。
+
+#### C. 共享 query flow 仍在生成模块专属澄清与错误文案
+
+`orgUnitSearchAmbiguousError.ClarifyingQuestion()` 在本地拼接“找到了多个与……匹配的组织，请提供组织编码……”并列出候选，见 `internal/server/cubebox_orgunit_executors.go:45`。共享 query flow 再通过 `queryExecutionClarifyingQuestion(...)` 消费该错误，见 `internal/server/cubebox_query_flow.go:912`。
+
+这类文案本质上是候选解释与下一步引导，适合由模型基于候选、用户问题和会话语气生成。代码只应提供候选结构、候选数量、可选项 ID/名称/状态，以及“不能静默选择”的安全约束。
+
+同类问题还包括 `queryExecutionErrorToTerminal(...)` 对 `errOrgUnitNotFound` 的 `orgunit_not_found` 固定文案映射，见 `internal/server/cubebox_query_flow.go:899`。短期可以保留通用错误码和安全兜底，但不应在共享层继续增长模块私有自然语言说明。
+
+#### D. 查询链没有给模型足够上下文，却要求模型正确理解
+
+前端 `streamTurn(...)` 当前只提交 `conversation_id`、`prompt`、`next_sequence`，见 `apps/web/src/pages/cubebox/api.ts:108`；后端 query canonical context 还把 `Page` 固定成 `"/app/cubebox"`，见 `internal/server/cubebox_query_flow.go:845`。因此知识包里“当前页面可补参”的规则没有真实运行时输入。
+
+这不是模型能力不足，而是模型拿不到事实。代码不应用关键词补丁替代模型理解；应把当前页面、当前业务对象、当前选中组织、当前日期视图等事实以受控结构传入 planner/narrator，让模型做语义选择。
+
+#### E. 查询上下文事件只保留单个实体，缺少候选与澄清状态
+
+`QueryContext` 当前只有 `RecentConfirmedEntity`，见 `modules/cubebox/query_entity.go:17`。这限制了模型处理以下常见追问：
+
+- “第一个”
+- “最开始那个”
+- “不是这个，另一个”
+- “不用再问了，就是刚才那个”
+- “按刚才的日期继续查”
+
+扩大调查结论：本地代码应扩大“上下文供给”，但不要扩大“本地理解”。也就是说，代码负责从 canonical events 中提取有限窗口、候选、澄清状态和已确认实体列表；模型负责解析用户当前指代并决定澄清还是执行。
+
+#### F. compaction 仍是本地拼接摘要，不是语义摘要
+
+`BuildPromptViewWithCompaction(...)` 的 `buildSummaryText(...)` 当前只是把较早 timeline 拼成 `role: content` 文本，见 `modules/cubebox/compaction.go:141`；recent user message 还会按估算 token 做字符级截断，见 `modules/cubebox/compaction.go:202`。
+
+这对首期可接受，但它不是模型语义摘要。后续若 `CubeBox` 要真正承担数字助手长线程能力，应评估让模型参与摘要生成或摘要改写，同时继续保留 append-only 原始事件、canonical context reinjection 和预算边界。该项不应塞进 `468 P0`，但应列入“当前本地代码替模型做了语义压缩”的扩大调查项。
+
+#### G. 知识包校验仍停留在外形校验，模型与执行边界缺少早发现协同
+
+`ValidateKnowledgePack(...)` 当前主要校验文件存在、fenced block 存在、`queries.md` 有 intents、`apis.md` 有 `api_key`、`examples.md` 有 `ReadPlan` 示例，见 `modules/cubebox/knowledge_pack.go:62`。它不校验知识包 API/参数集合与执行注册表一致。
+
+该问题不是“应该让模型自由执行”，而是“应该让模型获得更可靠的、不会漂移的知识”。早发现校验应保护模型输入质量，避免模型按过期知识包生成计划后才在运行时失败。
+
+#### H. 参数类型校验应更硬，不属于应回交模型的事项
+
+与上述语义职责不同，参数类型、枚举和值域必须继续由代码 fail-closed。例如 `status` 只允许 `active/disabled/all`，`page/size/limit` 必须是合法整数，日期必须是 `YYYY-MM-DD`，这些不是模型自主发挥空间。
+
+需要特别区分的是：自然语言别名折叠应由模型和知识包负责，例如“停用/无效”映射到 `disabled`；但执行层收到 canonical 参数后的类型与枚举校验必须继续硬拒绝非法值。`normalizeOptionalBool(...)` 这类布尔解析不应接受模糊字符串并静默落默认，相关风险已在 `DEV-PLAN-466` 归类。
+
+### 2.8 可回交模型事项清单
+
+基于 2.7，本计划补充以下“尽可能应由模型来做”的事项清单：
+
+| 事项 | 当前偏差 | 回交方向 | 代码仍保留 |
+| --- | --- | --- | --- |
+| 查询域判断 | `NO_QUERY` 过粗，寒暄和不安全查询都会被压成固定 stopline | 模型输出 `read_plan`、`need_clarification`、`unsupported_query` 或 `pass_through` | 不支持/不安全查询安全兜底；普通对话放行到 provider |
+| 默认值选择 | 知识包已有规则，但上下文不足时容易被本地补丁替代 | 模型按知识包与当前日期选择低风险默认值 | 日期格式与参数合法性校验 |
+| 指代解析 | 只给最近单实体，不足以理解多轮指代 | 模型消费有限 `query_dialogue_context` 解析 | 事件提取与窗口裁剪 |
+| 候选选择 | 本地拼候选澄清文案 | 模型基于候选列表自然追问或理解“第一个” | 候选结构、不可静默猜测约束 |
+| 结果叙述 | prompt 与 regex 过度规定表达形态 | 模型按结果和上下文自然回答 | 禁止 raw JSON / 内部计划泄露 |
+| 长历史摘要 | 本地拼接旧 timeline | 后续评估模型语义摘要 | 原始事件、预算、当前上下文 reinjection |
+| 页面补参 | 前端未传，后端硬编码 page | 模型基于受控页面/对象上下文选择参数 | 前端只传事实，不拼 prompt |
+| 错误解释 | 共享层增长模块私有文案 | 模型解释可恢复业务错误与下一步 | 错误码、权限/执行失败 fail-closed |
+
 ## 3. 设计目标
 
 1. [ ] 支持同一会话内 3 到 5 轮内的基本连续追问：`该组织`、`那个组织`、`刚才那个`、`最开始那个`、`它`。
@@ -120,7 +223,8 @@
 4. [ ] 支持模型生成业务澄清问题：领域内缺参由模型按知识包自然追问，不由固定 stopline 取代。
 5. [ ] 支持 narrator 消费轻量对话上下文：最终回答能体现“已按刚才的组织继续查询”，但不得编造结果中没有的事实。
 6. [ ] 收缩本地表达层约束：只禁止内部实现泄露和原始结构化数据回显，不再用大量 regex 管控普通中文表达风格。
-7. [ ] 保持安全边界不变：权限、租户、只读注册表、`ReadPlan` schema、参数校验、执行失败 fail-closed 均不放松。
+7. [ ] 冻结“安全硬护栏 vs 语义回交模型”的边界，避免继续把模型能力误压成本地规则。
+8. [ ] 保持安全边界不变：权限、租户、只读注册表、`ReadPlan` schema、参数校验、执行失败 fail-closed 均不放松。
 
 ## 4. 非目标
 
@@ -131,6 +235,8 @@
 - 不把 `orgunit` 业务语义重新硬编码到 `internal/server`。
 - 不让前端拼 prompt 或承载查询语义。
 - 不在本计划内重做整个 CubeBox UI、模型配置 UI 或 provider 网关。
+- 不在 `468 P0` 内实现模型生成的长期语义摘要、remote compaction、memory pipeline 或跨会话记忆；本计划只把当前本地摘要对模型语义能力的限制登记为后续 owner 输入。
+- 不把“回交给模型”理解成放松 schema、参数类型、枚举、权限、白名单或执行失败边界。
 
 ## 5. 关键设计决策
 
@@ -162,14 +268,16 @@
 - 用 capability-specific 规则改写用户意图
 - 用本地模板替模型写最终回答
 
-### 5.3 `NO_QUERY` 从业务澄清中退出
+### 5.3 `NO_QUERY` 从业务澄清与普通对话中退出
 
-`NO_QUERY` 只应表示“当前请求不是已支持查询域，或不能安全进入查询链”。领域内缺参、歧义、候选选择，应走模型生成的澄清态。
+`NO_QUERY` 不应继续作为单一业务结果。领域内缺参、歧义、候选选择，应走模型生成的澄清态；普通寒暄、非查询解释、写作或开放聊天，应作为 `pass_through` 回到普通 provider 对话链；只有用户确实在请求数据查询或系统操作但当前查询链不支持或不能安全执行时，才走查询 stopline。
 
 首期允许两种最小实现路径，落地时二选一：
 
 1. **轻量保持 `ReadPlan`**：领域内缺参继续用 `ReadPlan.missing_params + clarifying_question`，但补充知识包与 planner prompt，明确带有最近上下文时不得轻易 `NO_QUERY`。
-2. **引入最小 planner outcome**：新增一个很薄的 planner decision envelope，仅区分 `read_plan`、`need_clarification`、`unsupported_domain`，其中 `read_plan` 内部仍复用现有 `ReadPlan`。
+2. **引入最小 planner outcome**：新增一个很薄的 planner decision envelope，仅区分 `read_plan`、`need_clarification`、`unsupported_query`、`pass_through`，其中 `read_plan` 内部仍复用现有 `ReadPlan`。
+
+若要覆盖 `你好` 这类普通寒暄，首期应优先选择 planner outcome envelope；仅保持 `ReadPlan + NO_QUERY` 无法区分普通对话与不安全查询，除非额外再引入一层本地分类器，而这会重新把语义判断拉回代码侧。
 
 无论选择哪种路径，都不得引入 DAG、workflow engine、工具发现平台或新的执行 DSL。
 
@@ -225,11 +333,12 @@ narrator 可以看到：
 
 ### Slice C：收敛 `NO_QUERY` 与澄清协议
 
-1. [ ] 冻结 `NO_QUERY` 的语义：仅用于 unsupported domain 或无法安全进入查询链。
+1. [ ] 冻结 `NO_QUERY` 退出长期契约：planner outcome 应显式区分 `unsupported_query` 与 `pass_through`。
 2. [ ] 对领域内缺参、指代歧义、候选选择，使用模型生成的澄清问题。
-3. [ ] 如果采用 planner outcome envelope，新增 decode/validate 测试，保持 envelope 只有三态，不扩大为通用 workflow。
-4. [ ] 保留服务端 stopline，但只作为安全兜底；不得替代正常业务澄清。
+3. [ ] 如果采用 planner outcome envelope，新增 decode/validate 测试，保持 envelope 只有四态，不扩大为通用 workflow。
+4. [ ] 保留服务端 stopline，但只作为不支持/不安全查询的安全兜底；不得替代正常业务澄清或普通对话。
 5. [ ] 增加测试：带有最近实体上下文的“查该组织下级”不得走 `NO_QUERY` stopline。
+6. [ ] 增加测试：`你好`、`请介绍一下你能做什么` 等普通对话不得显示查询 stopline，应进入普通 provider 对话链。
 
 ### Slice D：给 narrator 传入轻量对话上下文
 
@@ -267,6 +376,26 @@ narrator 可以看到：
 3. [ ] 验证 unsupported domain 仍 fail-closed，不掉回“我没有查询接口/权限”的虚假描述。
 4. [ ] 证据登记到 `docs/dev-records/DEV-PLAN-468-READINESS.md`。
 
+### Slice H：扩大限制面分流与回交优先级
+
+本 slice 只冻结分流，不要求一次性实现所有扩大项。
+
+1. [ ] `P0` 纳入：
+   - `query_dialogue_context` 有限上下文输入；
+   - `NO_QUERY` 与澄清态、普通对话 `pass_through` 区分；
+   - narrator 上下文输入；
+   - 表达层 regex 收缩；
+   - 候选/澄清 metadata event 的最小闭环。
+2. [ ] `P1` 纳入：
+   - 前端向 `/internal/cubebox/turns:stream` 传受控页面/对象事实；
+   - 共享 query flow 去除模块专属澄清文案，把候选列表交给模型追问；
+   - 知识包 API/参数集合与执行注册表一致性校验。
+3. [ ] `P2/后续 owner` 纳入：
+   - 模型参与会话语义摘要或摘要改写；
+   - 更完整的长结果语义收敛；
+   - 第二个业务模块接入后的共享 narrator 去模块化污染复核。
+4. [ ] 每个后续实现 PR 必须先说明：它是在“给模型事实/上下文”，还是在“替模型做语义判断”。后者默认需要收敛或单独论证。
+
 ## 7. 验收场景
 
 ### 7.1 基本连续追问
@@ -285,7 +414,8 @@ narrator 可以看到：
 | --- | --- |
 | 支持领域缺参 | 由模型自然追问缺少的业务参数 |
 | 指代歧义 | 由模型说明有多个可能对象并请用户选择 |
-| 不支持领域 | 统一安全 stopline，不编造系统能力 |
+| 不支持或不安全查询 | 统一安全 stopline，不编造系统能力 |
+| 普通寒暄/非查询对话 | 回到普通 provider 对话链，不显示查询 stopline |
 | 模型输出越界 plan | schema / registry / executor 校验 fail-closed |
 
 ### 7.3 表达层
@@ -334,6 +464,8 @@ narrator 可以看到：
 5. [ ] 不得通过前端拼 prompt 解决连续追问。
 6. [ ] 不得把 planner outcome 扩张成 workflow/DAG/tool platform。
 7. [ ] 不得为避免测试困难而放松 schema、降低门禁或扩大 coverage 排除项。
+8. [ ] 不得以“模型自主性”为理由放松权限、租户、白名单、参数类型、枚举或只读边界。
+9. [ ] 不得继续用普通中文表达禁词、栏目词或业务字段中文名作为 terminal error 条件来限制模型回答风格。
 
 ## 10. 交付物
 
@@ -345,10 +477,12 @@ narrator 可以看到：
 6. [ ] metadata event 支撑候选、澄清和解析来源。
 7. [ ] 同会话连续追问服务端测试。
 8. [ ] 真实页面复验证据记录。
-9. [ ] `AGENTS.md` Doc Map 已登记本计划。
+9. [ ] 模型限制面扩大调查清单与回交优先级已冻结。
+10. [ ] `AGENTS.md` Doc Map 已登记本计划。
 
 ## 11. 当前阶段执行记录
 
 1. [X] 新建本专项计划文档：`docs/dev-plans/468-cubebox-session-continuity-and-model-autonomy-improvement-plan.md`（2026-04-25 13:29 CST）
 2. [X] 更新 `AGENTS.md` 文档地图。（2026-04-25 13:29 CST）
 3. [X] 执行 `make check doc` 并记录结果：`[doc] OK`。（2026-04-25 13:29 CST）
+4. [X] 扩大调查本项目当前对大模型的限制面，新增“安全硬护栏 vs 语义回交模型”口径、限制面清单、可回交模型事项清单与分流优先级。（2026-04-25）
