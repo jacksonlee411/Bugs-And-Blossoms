@@ -255,6 +255,7 @@ modules/{module}/
 - DEV-PLAN-465：CubeBox OrgUnit Executor 契约边界与字段归属收敛方案：`docs/dev-plans/465-cubebox-orgunit-executor-contract-boundary-and-field-owner-convergence-plan.md`
 - DEV-PLAN-466：CubeBox 查询链 owner 漂移与反回流扩大调查方案：`docs/dev-plans/466-cubebox-query-owner-drift-and-anti-backflow-investigation-plan.md`
 - DEV-PLAN-467：CubeBox 查询会话不连贯与失去记忆专项调查方案：`docs/dev-plans/467-cubebox-query-conversational-continuity-and-memory-loss-investigation-plan.md`
+- DEV-PLAN-468：CubeBox 同会话连续追问与模型自主性收敛方案：`docs/dev-plans/468-cubebox-session-continuity-and-model-autonomy-improvement-plan.md`
 - DEV-PLAN-440：彻底删除 SetID 的全仓收口方案（SetID 根删除唯一 PoR）：`docs/dev-plans/440-complete-setid-removal-plan.md`
 - DEV-PLAN-441：旧策略模块残余清理方案：`docs/dev-plans/441-legacy-strategy-module-residue-cleanup-plan.md`
 - DEV-PLAN-450：直接切除 jobcatalog / staffing / person 三模块方案（保留 orgunit）：`docs/dev-plans/450-direct-removal-of-jobcatalog-staffing-person-modules-plan.md`
