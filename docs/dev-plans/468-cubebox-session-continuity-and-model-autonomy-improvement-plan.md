@@ -477,6 +477,38 @@ narrator 可以看到：
    - 第二个业务模块接入后的共享 narrator 去模块化污染复核
 5. [ ] 每个后续实现 PR 必须先说明：它是在“给模型事实/上下文”，还是在“替模型做语义判断”。后者默认需要收敛或单独论证。
 
+#### Slice E1：`P2-1` / raw payload 默认进入 narrator 输入
+
+2026-04-26 策略更新：无 `NarrationProjector` 时不再用 `data_present=true` 阻断结果细节。默认策略改为：raw `ExecuteResult.Payload` 可以进入 narrator 输入，由模型基于执行结果事实生成最终自然语言回答；本地代码只负责输入装配、输出泄露拦截和 fail-closed 边界。
+
+最小 PR 边界：
+
+1. [ ] 修改 `modules/cubebox.defaultQueryNarrationResult(...)`：
+   - 当 `ExecuteResult.Payload` 非空时，将 payload 浅拷贝为 `QueryNarrationResult.Data`。
+   - 保留 `Domain` 推断逻辑。
+   - 不把 `APIKey`、`StepID`、`ResultFocus`、`ConfirmedEntity` 等执行 envelope 字段混入 `Data`。
+2. [ ] 保留 `NarrationProjector` 机制：
+   - 有 projector 时仍优先使用 projector 输出。
+   - projector 降级为可选的字段整理、重命名、降噪或模块迁移辅助，不再是模型看见结果事实的必需入口。
+3. [ ] 调整 narrator prompt：
+   - 明确 `results[].data` 可能是 raw payload 或 projector DTO。
+   - 允许模型读取 raw payload 中的业务事实。
+   - 仍禁止逐字回显整份 JSON、内部执行字段或实现痕迹。
+4. [ ] 调整/新增测试：
+   - 无 projector 时 narrator 输入包含 raw payload 中的业务字段。
+   - 无 projector 时用户可见回答仍不得原样输出 raw JSON。
+   - 有 projector 时仍使用 projector DTO，不被 raw payload 覆盖。
+   - `APIKey`、`StepID`、`ResultFocus`、`ConfirmedEntity` 不进入 narrator `Data`。
+5. [ ] 更新 `DEV-PLAN-468-READINESS.md` 记录本策略变更、代码落地范围和验证命令。
+
+明确非目标：
+
+- 不重启 `DEV-PLAN-469` 的模型摘要、remote compact 或会话 compaction。
+- 不新增第二套展示 DTO、结果摘要器或 capability-specific 本地 prose 模板。
+- 不改前端展开机制。
+- 不改 DB、只读 API 或执行注册表权限边界。
+- 不放松 narrator 输出泄露校验；用户可见回答仍不得直出 raw JSON、`api_key`、`payload`、`results`、`step-*` 或执行计划结构。
+
 ### 6.1 2026-04-25 当前实施进度
 
 - [x] `P0` 代码闭环已完成：`QueryContext` 扩展、`query_dialogue_context` 注入、普通列表结果转 `recent_candidates`、通用前序结果引用解析、知识包规则更新、候选/澄清 metadata event 写入与相关测试已落地。
