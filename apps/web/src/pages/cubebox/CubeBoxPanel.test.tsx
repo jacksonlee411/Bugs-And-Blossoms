@@ -267,6 +267,59 @@ describe('CubeBoxPanel', () => {
     expect(screen.queryByRole('button', { name: '压缩上下文' })).not.toBeInTheDocument()
   })
 
+  it('sends only on plain Enter', () => {
+    const sendMessage = vi.fn()
+    const setComposerText = vi.fn()
+
+    cubeBoxMocks.useCubeBox.mockReturnValueOnce({
+      archiveConversation: vi.fn(),
+      conversations: [
+        {
+          id: 'conv_1',
+          title: '需求澄清',
+          status: 'active',
+          archived: false,
+          updated_at: '2026-04-21T10:00:00Z'
+        }
+      ],
+      conversationsLoading: false,
+      renameConversation: vi.fn(),
+      selectConversation: vi.fn(),
+      startNewConversation: vi.fn().mockResolvedValue(undefined),
+      state: {
+        conversation: {
+          id: 'conv_1',
+          title: '需求澄清',
+          status: 'active',
+          archived: false
+        },
+        items: [],
+        turnStatus: 'idle',
+        activeTurnID: null,
+        nextSequence: 1,
+        composerText: '第一行',
+        loading: false,
+        errorMessage: null
+      },
+      interrupt: vi.fn(),
+      sendMessage,
+      setComposerText
+    })
+
+    render(<CubeBoxPanel />)
+
+    const composer = screen.getByRole('textbox', { name: '输入消息' })
+
+    fireEvent.keyDown(composer, { key: 'Enter' })
+    fireEvent.keyDown(composer, { key: 'Enter', ctrlKey: true })
+    fireEvent.keyDown(composer, { key: 'Enter', shiftKey: true })
+    fireEvent.keyDown(composer, { key: 'Enter', altKey: true })
+    fireEvent.keyDown(composer, { key: 'Enter', metaKey: true })
+
+    expect(sendMessage).toHaveBeenCalledTimes(1)
+    expect(setComposerText).not.toHaveBeenCalled()
+  })
+
   it('renders multiline agent content with preserved numbered list boundaries', () => {
     cubeBoxMocks.useCubeBox.mockReturnValueOnce({
       archiveConversation: vi.fn(),

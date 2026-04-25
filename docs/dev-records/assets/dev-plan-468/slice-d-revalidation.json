@@ -1,0 +1,492 @@
+{
+  "executedAt": "2026-04-25T09:53:41.990Z",
+  "shortcut": {
+    "conversationId": "conv_2303dc8cb9c94a528f69411192a45ad4",
+    "ctrlSent": false,
+    "afterCtrlValue": "快捷键验证第一行",
+    "enterRequestBody": "{\"conversation_id\":\"conv_2303dc8cb9c94a528f69411192a45ad4\",\"prompt\":\"快捷键验证第一行\",\"next_sequence\":2}",
+    "enterStatus": 200
+  },
+  "scenarios": [
+    {
+      "name": "slice-d-s1-roots-children",
+      "conversationId": "conv_b3f8141f05094b33966f813ad2b63709",
+      "turns": [
+        {
+          "prompt": "系统里有哪些组织",
+          "requestBody": "{\"conversation_id\":\"conv_b3f8141f05094b33966f813ad2b63709\",\"prompt\":\"系统里有哪些组织\",\"next_sequence\":2}",
+          "status": 200,
+          "timeline": [
+            {
+              "label": "你",
+              "status": "completed",
+              "text": "系统里有哪些组织"
+            },
+            {
+              "label": "CubeBox",
+              "status": "completed",
+              "text": "截至 2026-04-25，系统里有 1 个组织：组织 100000“飞虫与鲜花”，当前为启用状态，并且还有下级组织。"
+            }
+          ]
+        },
+        {
+          "prompt": "列出它的全部下级组织",
+          "requestBody": "{\"conversation_id\":\"conv_b3f8141f05094b33966f813ad2b63709\",\"prompt\":\"列出它的全部下级组织\",\"next_sequence\":8}",
+          "status": 200,
+          "timeline": [
+            {
+              "label": "你",
+              "status": "completed",
+              "text": "系统里有哪些组织"
+            },
+            {
+              "label": "CubeBox",
+              "status": "completed",
+              "text": "截至 2026-04-25，系统里有 1 个组织：组织 100000“飞虫与鲜花”，当前为启用状态，并且还有下级组织。"
+            },
+            {
+              "label": "你",
+              "status": "completed",
+              "text": "列出它的全部下级组织"
+            },
+            {
+              "label": "CubeBox",
+              "status": "completed",
+              "text": "截至 2026-04-25，组织 100000 的下级组织有 2 个：飞虫公司（200000，启用，仍有下级）和鲜花公司（300000，启用，没有下级）。"
+            }
+          ]
+        }
+      ],
+      "replayStatus": 200,
+      "replayEvents": [
+        {
+          "sequence": 4,
+          "type": "turn.query_candidates.presented",
+          "payload": {
+            "candidates": [
+              {
+                "as_of": "2026-04-25",
+                "domain": "orgunit",
+                "entity_key": "100000",
+                "name": "飞虫与鲜花",
+                "status": "active"
+              }
+            ]
+          }
+        },
+        {
+          "sequence": 6,
+          "type": "turn.agent_message.completed",
+          "payload": {
+            "message_id": "msg_agent_000006"
+          }
+        },
+        {
+          "sequence": 7,
+          "type": "turn.completed",
+          "payload": {
+            "latency_ms": 3312,
+            "model_slug": "gpt-5.2",
+            "provider_id": "openai-compatible",
+            "provider_type": "codex",
+            "runtime": "cubebox-query-read-plan",
+            "status": "completed",
+            "trace_id": "trace_15d129d78158463cbae63e860e4e7e68"
+          }
+        },
+        {
+          "sequence": 10,
+          "type": "turn.query_entity.confirmed",
+          "payload": {
+            "entity": {
+              "as_of": "2026-04-25",
+              "domain": "orgunit",
+              "entity_key": "100000",
+              "intent": "orgunit.list",
+              "parent_org_code": "100000",
+              "source_api_key": "orgunit.list"
+            }
+          }
+        },
+        {
+          "sequence": 11,
+          "type": "turn.query_candidates.presented",
+          "payload": {
+            "candidates": [
+              {
+                "as_of": "2026-04-25",
+                "domain": "orgunit",
+                "entity_key": "200000",
+                "name": "飞虫公司",
+                "status": "active"
+              },
+              {
+                "as_of": "2026-04-25",
+                "domain": "orgunit",
+                "entity_key": "300000",
+                "name": "鲜花公司",
+                "status": "active"
+              }
+            ]
+          }
+        },
+        {
+          "sequence": 13,
+          "type": "turn.agent_message.completed",
+          "payload": {
+            "message_id": "msg_agent_000009"
+          }
+        },
+        {
+          "sequence": 14,
+          "type": "turn.completed",
+          "payload": {
+            "latency_ms": 2310,
+            "model_slug": "gpt-5.2",
+            "provider_id": "openai-compatible",
+            "provider_type": "codex",
+            "runtime": "cubebox-query-read-plan",
+            "status": "completed",
+            "trace_id": "trace_2d0da37969c44c0bb584d9ca83c84637"
+          }
+        }
+      ],
+      "screenshotPath": "/home/lee/Projects/Bugs-And-Blossoms/docs/dev-records/assets/dev-plan-468/slice-d-s1-roots-children.png"
+    },
+    {
+      "name": "slice-d-s2-name-search",
+      "conversationId": "conv_8e622a151785484585d23438a741bc91",
+      "turns": [
+        {
+          "prompt": "请列出鲜花公司的全部下级组织，允许先按名称搜索定位该组织",
+          "requestBody": "{\"conversation_id\":\"conv_8e622a151785484585d23438a741bc91\",\"prompt\":\"请列出鲜花公司的全部下级组织，允许先按名称搜索定位该组织\",\"next_sequence\":2}",
+          "status": 200,
+          "timeline": [
+            {
+              "label": "你",
+              "status": "completed",
+              "text": "请列出鲜花公司的全部下级组织，允许先按名称搜索定位该组织"
+            },
+            {
+              "label": "CubeBox",
+              "status": "completed",
+              "text": "截至 2026-04-25，按名称已定位到“鲜花公司”（组织编码 300000）。在系统中它当前没有记录任何启用状态的直接下级组织。"
+            }
+          ]
+        }
+      ],
+      "replayStatus": 200,
+      "replayEvents": [
+        {
+          "sequence": 4,
+          "type": "turn.query_entity.confirmed",
+          "payload": {
+            "entity": {
+              "as_of": "2026-04-25",
+              "domain": "orgunit",
+              "entity_key": "300000",
+              "intent": "orgunit.search_then_list",
+              "parent_org_code": "300000",
+              "source_api_key": "orgunit.list"
+            }
+          }
+        },
+        {
+          "sequence": 5,
+          "type": "turn.query_candidates.presented",
+          "payload": {
+            "candidates": [
+              {
+                "as_of": "2026-04-25",
+                "domain": "orgunit",
+                "entity_key": "300000",
+                "name": "鲜花公司"
+              }
+            ]
+          }
+        },
+        {
+          "sequence": 7,
+          "type": "turn.agent_message.completed",
+          "payload": {
+            "message_id": "msg_agent_000012"
+          }
+        },
+        {
+          "sequence": 8,
+          "type": "turn.completed",
+          "payload": {
+            "latency_ms": 4105,
+            "model_slug": "gpt-5.2",
+            "provider_id": "openai-compatible",
+            "provider_type": "codex",
+            "runtime": "cubebox-query-read-plan",
+            "status": "completed",
+            "trace_id": "trace_5129043089e24e0fa6076ad09d111eea"
+          }
+        }
+      ],
+      "screenshotPath": "/home/lee/Projects/Bugs-And-Blossoms/docs/dev-records/assets/dev-plan-468/slice-d-s2-name-search.png"
+    },
+    {
+      "name": "slice-d-s3-details-children-manager",
+      "conversationId": "conv_e759a9389bcf4e529a909a1aa9d2ffa6",
+      "turns": [
+        {
+          "prompt": "查一下 100000 在 2026-04-25 的组织详情",
+          "requestBody": "{\"conversation_id\":\"conv_e759a9389bcf4e529a909a1aa9d2ffa6\",\"prompt\":\"查一下 100000 在 2026-04-25 的组织详情\",\"next_sequence\":2}",
+          "status": 200,
+          "timeline": [
+            {
+              "label": "你",
+              "status": "completed",
+              "text": "查一下 100000 在 2026-04-25 的组织详情"
+            },
+            {
+              "label": "CubeBox",
+              "status": "completed",
+              "text": "截至 2026-04-25，组织 100000 名称为“飞虫与鲜花”，当前状态为启用，且属于业务单元。它的组织全路径为“飞虫与鲜花”。系统未记录其上级组织信息和负责人信息，也没有扩展字段。"
+            }
+          ]
+        },
+        {
+          "prompt": "查该组织的下级组织",
+          "requestBody": "{\"conversation_id\":\"conv_e759a9389bcf4e529a909a1aa9d2ffa6\",\"prompt\":\"查该组织的下级组织\",\"next_sequence\":8}",
+          "status": 200,
+          "timeline": [
+            {
+              "label": "你",
+              "status": "completed",
+              "text": "查一下 100000 在 2026-04-25 的组织详情"
+            },
+            {
+              "label": "CubeBox",
+              "status": "completed",
+              "text": "截至 2026-04-25，组织 100000 名称为“飞虫与鲜花”，当前状态为启用，且属于业务单元。它的组织全路径为“飞虫与鲜花”。系统未记录其上级组织信息和负责人信息，也没有扩展字段。"
+            },
+            {
+              "label": "你",
+              "status": "completed",
+              "text": "查该组织的下级组织"
+            },
+            {
+              "label": "CubeBox",
+              "status": "completed",
+              "text": "截至 2026-04-25，该组织（100000）的下级组织共有 2 个，且都为启用状态。  \n- 200000「飞虫公司」：启用，且还有下级组织  \n- 300000「鲜花公司」：启用，没有下级组织"
+            }
+          ]
+        },
+        {
+          "prompt": "那它的负责人呢",
+          "requestBody": "{\"conversation_id\":\"conv_e759a9389bcf4e529a909a1aa9d2ffa6\",\"prompt\":\"那它的负责人呢\",\"next_sequence\":15}",
+          "status": 200,
+          "timeline": [
+            {
+              "label": "你",
+              "status": "completed",
+              "text": "查一下 100000 在 2026-04-25 的组织详情"
+            },
+            {
+              "label": "CubeBox",
+              "status": "completed",
+              "text": "截至 2026-04-25，组织 100000 名称为“飞虫与鲜花”，当前状态为启用，且属于业务单元。它的组织全路径为“飞虫与鲜花”。系统未记录其上级组织信息和负责人信息，也没有扩展字段。"
+            },
+            {
+              "label": "你",
+              "status": "completed",
+              "text": "查该组织的下级组织"
+            },
+            {
+              "label": "CubeBox",
+              "status": "completed",
+              "text": "截至 2026-04-25，该组织（100000）的下级组织共有 2 个，且都为启用状态。  \n- 200000「飞虫公司」：启用，且还有下级组织  \n- 300000「鲜花公司」：启用，没有下级组织"
+            },
+            {
+              "label": "你",
+              "status": "completed",
+              "text": "那它的负责人呢"
+            },
+            {
+              "label": "CubeBox",
+              "status": "completed",
+              "text": "截至 2026-04-25，组织“飞虫与鲜花”（100000）的负责人信息系统里未记录：负责人姓名和工号都没有填写。"
+            }
+          ]
+        }
+      ],
+      "replayStatus": 200,
+      "replayEvents": [
+        {
+          "sequence": 4,
+          "type": "turn.query_entity.confirmed",
+          "payload": {
+            "entity": {
+              "as_of": "2026-04-25",
+              "domain": "orgunit",
+              "entity_key": "100000",
+              "intent": "orgunit.details",
+              "source_api_key": "orgunit.details"
+            }
+          }
+        },
+        {
+          "sequence": 6,
+          "type": "turn.agent_message.completed",
+          "payload": {
+            "message_id": "msg_agent_000015"
+          }
+        },
+        {
+          "sequence": 7,
+          "type": "turn.completed",
+          "payload": {
+            "latency_ms": 2475,
+            "model_slug": "gpt-5.2",
+            "provider_id": "openai-compatible",
+            "provider_type": "codex",
+            "runtime": "cubebox-query-read-plan",
+            "status": "completed",
+            "trace_id": "trace_fe205f2212f043749cae1149de4e5355"
+          }
+        },
+        {
+          "sequence": 10,
+          "type": "turn.query_entity.confirmed",
+          "payload": {
+            "entity": {
+              "as_of": "2026-04-25",
+              "domain": "orgunit",
+              "entity_key": "100000",
+              "intent": "orgunit.list",
+              "parent_org_code": "100000",
+              "source_api_key": "orgunit.list"
+            }
+          }
+        },
+        {
+          "sequence": 11,
+          "type": "turn.query_candidates.presented",
+          "payload": {
+            "candidates": [
+              {
+                "as_of": "2026-04-25",
+                "domain": "orgunit",
+                "entity_key": "200000",
+                "name": "飞虫公司",
+                "status": "active"
+              },
+              {
+                "as_of": "2026-04-25",
+                "domain": "orgunit",
+                "entity_key": "300000",
+                "name": "鲜花公司",
+                "status": "active"
+              }
+            ]
+          }
+        },
+        {
+          "sequence": 13,
+          "type": "turn.agent_message.completed",
+          "payload": {
+            "message_id": "msg_agent_000018"
+          }
+        },
+        {
+          "sequence": 14,
+          "type": "turn.completed",
+          "payload": {
+            "latency_ms": 3126,
+            "model_slug": "gpt-5.2",
+            "provider_id": "openai-compatible",
+            "provider_type": "codex",
+            "runtime": "cubebox-query-read-plan",
+            "status": "completed",
+            "trace_id": "trace_74a5cadd22bb41a8b407475acdfc480f"
+          }
+        },
+        {
+          "sequence": 17,
+          "type": "turn.query_entity.confirmed",
+          "payload": {
+            "entity": {
+              "as_of": "2026-04-25",
+              "domain": "orgunit",
+              "entity_key": "100000",
+              "intent": "orgunit.details",
+              "source_api_key": "orgunit.details"
+            }
+          }
+        },
+        {
+          "sequence": 19,
+          "type": "turn.agent_message.completed",
+          "payload": {
+            "message_id": "msg_agent_000021"
+          }
+        },
+        {
+          "sequence": 20,
+          "type": "turn.completed",
+          "payload": {
+            "latency_ms": 1959,
+            "model_slug": "gpt-5.2",
+            "provider_id": "openai-compatible",
+            "provider_type": "codex",
+            "runtime": "cubebox-query-read-plan",
+            "status": "completed",
+            "trace_id": "trace_d60c539efeb74cc39ab2957bd447be2d"
+          }
+        }
+      ],
+      "screenshotPath": "/home/lee/Projects/Bugs-And-Blossoms/docs/dev-records/assets/dev-plan-468/slice-d-s3-details-children-manager.png"
+    },
+    {
+      "name": "slice-d-s4-unsupported",
+      "conversationId": "conv_e7106a0f8af34a89af68471ce40cdd05",
+      "turns": [
+        {
+          "prompt": "帮我查一下今天上海天气",
+          "requestBody": "{\"conversation_id\":\"conv_e7106a0f8af34a89af68471ce40cdd05\",\"prompt\":\"帮我查一下今天上海天气\",\"next_sequence\":2}",
+          "status": 200,
+          "timeline": [
+            {
+              "label": "你",
+              "status": "completed",
+              "text": "帮我查一下今天上海天气"
+            },
+            {
+              "label": "CubeBox",
+              "status": "completed",
+              "text": "当前请求未形成可安全执行的只读查询计划。请换成明确的数据查询问题，或补充查询对象、条件和日期后重试。"
+            }
+          ]
+        }
+      ],
+      "replayStatus": 200,
+      "replayEvents": [
+        {
+          "sequence": 5,
+          "type": "turn.agent_message.completed",
+          "payload": {
+            "message_id": "msg_agent_000024"
+          }
+        },
+        {
+          "sequence": 6,
+          "type": "turn.completed",
+          "payload": {
+            "latency_ms": 35,
+            "model_slug": "gpt-5.2",
+            "provider_id": "openai-compatible",
+            "provider_type": "codex",
+            "runtime": "cubebox-query-read-plan",
+            "status": "completed",
+            "trace_id": "trace_08876951bb384d13953374cde70096c1"
+          }
+        }
+      ],
+      "screenshotPath": "/home/lee/Projects/Bugs-And-Blossoms/docs/dev-records/assets/dev-plan-468/slice-d-s4-unsupported.png"
+    }
+  ]
+}

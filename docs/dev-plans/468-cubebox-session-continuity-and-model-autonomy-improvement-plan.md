@@ -437,18 +437,20 @@ narrator 可以看到：
 
 ### Slice D：真实会话复验与 readiness
 
-1. [ ] 在真实页面执行并记录以下链路：
+1. [x] 在真实页面执行并记录以下链路：
    - `系统里有哪些组织`
    - `列出它的全部下级组织`
    - `请列出鲜花公司的全部下级组织，允许先按名称搜索定位该组织`
-2. [ ] 在真实页面执行并记录以下链路：
+2. [x] 在真实页面执行并记录以下链路：
    - `查一下 100000 在 2026-04-25 的组织详情`
    - `查该组织的下级组织`
    - `那它的负责人呢`
-3. [ ] 验证同会话内已出现并已返回给用户的组织，不得再次机械性要求用户补 `org_code`；当目标查询需要稳定编码且用户只给名称时，允许模型先 search 唯一命中后继续执行。
-4. [ ] 验证第二轮继承 `org_code=100000` 与 `as_of=2026-04-25`，不得重复追问 `parent_org_code`。
-5. [ ] 验证 unsupported domain 仍 fail-closed，不掉回“我没有查询接口/权限”的虚假描述。
+3. [x] 验证同会话内已出现并已返回给用户的组织，不得再次机械性要求用户补 `org_code`；当目标查询需要稳定编码且用户只给名称时，允许模型先 search 唯一命中后继续执行。
+4. [x] 验证第二轮继承 `org_code=100000` 与 `as_of=2026-04-25`，不得重复追问 `parent_org_code`。
+5. [x] 验证 unsupported domain 仍 fail-closed，不掉回“我没有查询接口/权限”的虚假描述。
 6. [x] 证据登记到 `docs/dev-records/DEV-PLAN-468-READINESS.md`。
+
+说明：2026-04-25 已完成真实页面复验；截图、网络请求与 canonical event 片段见 `docs/dev-records/DEV-PLAN-468-READINESS.md` 及 `docs/dev-records/assets/dev-plan-468/`。
 
 ### Slice E：`P1/P2` 后续收口
 
@@ -480,7 +482,7 @@ narrator 可以看到：
 - [x] 自动化验证已完成：
   - `go test ./modules/cubebox ./internal/server`
   - `make check doc`
-- [ ] 真实页面复验尚未补齐，仍按 Slice D 继续登记到 readiness。
+- [x] 真实页面复验已补齐，Slice D 证据已登记到 readiness（含截图、网络请求与 canonical event 片段）。
 
 ## 7. 验收场景
 

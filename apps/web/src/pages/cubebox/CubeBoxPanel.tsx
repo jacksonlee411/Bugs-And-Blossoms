@@ -29,7 +29,7 @@ import {
   Tooltip,
   Typography
 } from '@mui/material'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, type KeyboardEvent } from 'react'
 import { useAppPreferences } from '../../app/providers/AppPreferencesContext'
 import {
   deactivateModelCredential,
@@ -89,6 +89,7 @@ export function CubeBoxPanel() {
   const activeSelectionLabel = settingsSnapshot?.selection
     ? `${settingsSnapshot.selection.provider_id} / ${settingsSnapshot.selection.model_slug}`
     : t('cubebox_settings_no_selection')
+  const canSendMessage = canUseConversations && !state.loading && state.composerText.trim().length > 0 && state.turnStatus !== 'streaming'
 
   async function refreshSettings() {
     setSettingsLoading(true)
@@ -239,6 +240,20 @@ export function CubeBoxPanel() {
     }
   }
 
+  function handleComposerKeyDown(event: KeyboardEvent<HTMLDivElement>) {
+    if (event.key !== 'Enter' || event.nativeEvent.isComposing) {
+      return
+    }
+    if (event.ctrlKey || event.shiftKey || event.altKey || event.metaKey) {
+      return
+    }
+    event.preventDefault()
+    if (!canSendMessage) {
+      return
+    }
+    void sendMessage()
+  }
+
   return (
     <Stack spacing={2} sx={{ height: '100%' }}>
       <Stack alignItems='center' direction='row' justifyContent='space-between' spacing={2}>
@@ -340,6 +355,7 @@ export function CubeBoxPanel() {
             multiline
             minRows={3}
             onChange={(event) => setComposerText(event.target.value)}
+            onKeyDown={handleComposerKeyDown}
             value={state.composerText}
           />
           <Stack direction='row' justifyContent='space-between' spacing={2}>
@@ -358,7 +374,7 @@ export function CubeBoxPanel() {
                 {t('cubebox_stop')}
               </Button>
               <Button
-                disabled={!canUseConversations || state.loading || state.composerText.trim().length === 0 || state.turnStatus === 'streaming'}
+                disabled={!canSendMessage}
                 onClick={() => void sendMessage()}
                 startIcon={<SendIcon />}
                 variant='contained'
