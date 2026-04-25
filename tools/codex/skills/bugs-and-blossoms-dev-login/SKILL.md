@@ -39,6 +39,8 @@ tenant: localhost / 00000000-0000-0000-0000-000000000001
 
 Keep real secrets in `.env.local` or exported shell environment. Do not put real keys in tracked files.
 
+Runtime logs and pid files are written under `.local/runtime/` by default. Override with `DEV_RUNTIME_DIR` only for local debugging.
+
 For CubeBox, the DB stores `secret_ref=env://OPENAI_API_KEY`. The server resolves that at runtime through its environment. Removing a duplicate key from `.env` does not break CubeBox as long as `OPENAI_API_KEY` remains in `.env.local` or is exported when `make dev-server` starts.
 
 The startup script never prints, moves, or deletes secrets. It only warns if `OPENAI_API_KEY` appears duplicated between `.env` and `.env.local`.

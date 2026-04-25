@@ -4,6 +4,8 @@ set -euo pipefail
 repo_root="$(git rev-parse --show-toplevel)"
 cd "$repo_root"
 
+runtime_dir="${DEV_RUNTIME_DIR:-.local/runtime}"
+
 stop_pid_file() {
   local name="${1:?}"
   local pid_file="${2:?}"
@@ -27,9 +29,14 @@ stop_pid_file() {
   fi
 }
 
-stop_pid_file "server" ".dev-server.pid"
-stop_pid_file "kratos stub" ".dev-kratosstub.pid"
-stop_pid_file "superadmin" ".dev-superadmin.pid"
+stop_pid_file "server" "${runtime_dir}/dev-server.pid"
+stop_pid_file "kratos stub" "${runtime_dir}/dev-kratosstub.pid"
+stop_pid_file "superadmin" "${runtime_dir}/dev-superadmin.pid"
+
+for legacy_pid_file in .dev-server.pid .dev-kratosstub.pid .dev-superadmin.pid .dev-web.pid; do
+  [[ -f "$legacy_pid_file" ]] || continue
+  stop_pid_file "legacy ${legacy_pid_file}" "$legacy_pid_file"
+done
 
 if [[ "${1:-}" == "--down" ]]; then
   DEV_INFRA_ENV_FILE="${DEV_INFRA_ENV_FILE:-.env.example}" make dev-down

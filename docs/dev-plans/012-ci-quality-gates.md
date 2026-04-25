@@ -59,6 +59,7 @@
 - [X] `scripts/ci/coverage.sh` + `config/coverage/policy.yaml` 已落地 line coverage 单主源策略。
 - [X] `scripts/e2e/run.sh` 已是实际 E2E 入口，不再是 placeholder/no-op。
 - [X] `check go-version`、`check error-message`、`check chat-surface-clean` 等专项门禁已具备脚本与 `Makefile` 接线。
+- [X] `check root-surface` 已接入根目录允许清单门禁，阻断零散文件、调试快照、运行产物和异常文件名回流。
 - [X] `DEV-PLAN-436` 的历史对话面清场门禁已具备脚本、`Makefile`、`preflight` 与 workflow 接线：`make check chat-surface-clean`
 - [X] `preflight` 已能作为“本地严格版对齐 CI”的聚合入口。
 
@@ -125,6 +126,7 @@ paths-filter 与 no-op 机制仍然是本计划的正确目标形态：
 当前状态：
 
 - [X] 四个 required checks 均已接入 `paths-filter + no-op`；
+- [X] `make check root-surface` 在 Gate-1 中无条件执行，避免新增未归口根目录文件因路径过滤而绕过 CI；
 - [X] job 级别继续保留稳定名称；
 - [ ] 后续仍需根据实际误报/漏报情况细化路径分类。
 
@@ -135,6 +137,7 @@ paths-filter 与 no-op 机制仍然是本计划的正确目标形态：
 Gate-1 继续承载静态检查与生成物一致性，不跑长期运行态。当前应纳入并恢复执行的内容包括：
 
 - Go：`make check fmt`、`make check lint`
+- 根目录 surface：`make check root-surface`
 - Docs：`make check doc`
 - Go 版本：`make check go-version`
 - 错误提示：`make check error-message`

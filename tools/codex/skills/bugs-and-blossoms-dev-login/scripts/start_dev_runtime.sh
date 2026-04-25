@@ -29,6 +29,7 @@ env:
   DEV_SERVER_ENV_FILE      default: .env.local, env.local, .env, .env.example
   DEV_SERVER_BASE_URL      default: http://localhost:8080
   DEV_SUPERADMIN_BASE_URL  default: http://localhost:8081
+  DEV_RUNTIME_DIR          default: .local/runtime
   OPENAI_API_KEY           required by CubeBox at runtime when secret_ref=env://OPENAI_API_KEY
 EOF
 }
@@ -235,6 +236,9 @@ if [[ "$build_ui" == "1" || ! -f internal/server/assets/web/index.html ]]; then
   make css
 fi
 
+runtime_dir="${DEV_RUNTIME_DIR:-.local/runtime}"
+mkdir -p "$runtime_dir"
+
 log "start infra: DEV_INFRA_ENV_FILE=${infra_env_file}"
 DEV_INFRA_ENV_FILE="$infra_env_file" make dev-up
 
@@ -285,16 +289,23 @@ kratos_admin_port="$(extract_port_from_url "$kratos_admin_url" 4434)"
 export KRATOS_STUB_PUBLIC_ADDR="${KRATOS_STUB_PUBLIC_ADDR:-127.0.0.1:${kratos_public_port}}"
 export KRATOS_STUB_ADMIN_ADDR="${KRATOS_STUB_ADMIN_ADDR:-127.0.0.1:${kratos_admin_port}}"
 
-start_if_needed "kratos stub" ".dev-kratosstub.pid" ".dev-kratosstub.log" make dev-kratos-stub
+kratos_pid_file="${runtime_dir}/dev-kratosstub.pid"
+kratos_log_file="${runtime_dir}/dev-kratosstub.log"
+server_pid_file="${runtime_dir}/dev-server.pid"
+server_log_file="${runtime_dir}/dev-server.log"
+superadmin_pid_file="${runtime_dir}/dev-superadmin.pid"
+superadmin_log_file="${runtime_dir}/dev-superadmin.log"
+
+start_if_needed "kratos stub" "$kratos_pid_file" "$kratos_log_file" make dev-kratos-stub
 wait_http_ready "kratos public" "${kratos_public_url}/health/ready" 60
 wait_http_ready "kratos admin" "${kratos_admin_url}/health/ready" 60
 
-start_if_needed "server" ".dev-server.pid" ".dev-server.log" env DEV_SERVER_ENV_FILE="$server_env_file" DEV_SERVER_HTTP_ADDR=":${server_port}" make dev-server
+start_if_needed "server" "$server_pid_file" "$server_log_file" env DEV_SERVER_ENV_FILE="$server_env_file" DEV_SERVER_HTTP_ADDR=":${server_port}" make dev-server
 wait_http_ready "server" "http://127.0.0.1:${server_port}/health" 60
 
 if [[ "$with_superadmin" == "1" ]]; then
   superadmin_db_url="postgres://superadmin_runtime:${DB_PASSWORD:-app}@${db_host}:${db_port}/${db_name}?sslmode=${db_sslmode}"
-  start_if_needed "superadmin" ".dev-superadmin.pid" ".dev-superadmin.log" env \
+  start_if_needed "superadmin" "$superadmin_pid_file" "$superadmin_log_file" env \
     DEV_SUPERADMIN_ENV_FILE="$server_env_file" \
     DEV_SUPERADMIN_HTTP_ADDR=":${superadmin_port}" \
     SUPERADMIN_DATABASE_URL="$superadmin_db_url" \
@@ -362,7 +373,7 @@ if [[ "$setup_cubebox" == "1" ]]; then
 fi
 
 log "ready: ${server_base_url}/app"
-log "logs: .dev-server.log .dev-kratosstub.log"
+log "logs: ${server_log_file} ${kratos_log_file}"
 if [[ "$with_superadmin" == "1" ]]; then
   log "superadmin: ${superadmin_base_url}"
 fi

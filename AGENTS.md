@@ -10,6 +10,7 @@
 
 - Go 代码：`go fmt ./... && go vet ./... && make check lint && make test`
 - 新建 Go 模块后（防止 `go mod init` 默认回退）：执行 `go get go@1.26.0`（或 `go mod edit -go=1.26.0`）
+- 根目录 surface 收敛（禁止零散文件、调试快照、运行产物回流）：`make check root-surface`（或直接跑 `make preflight`）
 - 禁止 legacy（单链路原则）：`make check no-legacy`（或直接跑 `make preflight`）
 - 历史对话面清场门禁（阻断旧 `assistant` / `LibreChat` / `CubeBox` 运行面与兼容语义回流）：`make check chat-surface-clean`
 - 禁止新增 scope/package 漂移：`make check no-scope-package`
@@ -54,6 +55,7 @@
 | Authz（Casbin） | `make authz-pack && make authz-test && make authz-lint` | 口径见 `DEV-PLAN-022` |
 | E2E（Playwright） | `make e2e` | 门禁结构见 `DEV-PLAN-012`；数据库依赖口径冻结为 Docker / compose，E2E 不得把宿主机 `psql` 等工具作为唯一前置条件 |
 | 新增/调整文档 | `make check doc` | 门禁见“文档收敛与门禁” |
+| 根目录新增/移动文件或调整本地运行产物落点 | `make check root-surface` | 根目录只允许固定入口、配置与顶层目录；运行产物必须进入 `.local/` 或归属目录 |
 | 引入/修改“回退通道/双链路/legacy 分支” | `make check no-legacy` | 禁止 legacy（见 `DEV-PLAN-004M1`） |
 | 历史对话面 / 旧路由 / 旧兼容语义相关改动 | `make check chat-surface-clean` | 硬删除后唯一反回流门禁（见 `DEV-PLAN-436`） |
 | 新增 scope/package 语义引用（`scope_code/scope_package/scope_subscription/package_id`） | `make check no-scope-package` | 增量反漂移门禁（承接 `DEV-PLAN-102C6`） |
@@ -79,6 +81,7 @@
 - DO NOT USE `sed` 做文件内容修改。
 - 未经用户明确批准，禁止通过 `git checkout --` / `git restore` / `git reset` / `git clean` 丢弃或回退未提交改动。
 - 未经用户明确指示，禁止擅自执行 `git commit` / `git push` / 创建 PR；即使代码已完成，也必须先得到用户确认再提交。
+- 禁止在仓库根目录新增零散运行产物、调试快照、临时脚本输出或未知文件；本地运行产物必须归入 `.local/`、`e2e/_artifacts/`、`coverage/` 或明确归属模块目录，并由 `make check root-surface` 阻断回流；`.env`、`.local/`、`bin/`、`coverage/` 等本地项允许存在但不得入仓。
 - 新增数据库表（新建迁移中的 `CREATE TABLE` 或 schema 中新增表）前，必须获得用户手工确认。
 - `GITHUB_TOKEN` 等密钥只允许放在本机 `.env.local`，不得提交到仓库（CI 使用 GitHub Secrets）。
 
@@ -191,7 +194,8 @@ modules/{module}/
 
 目标：防止文档熵增；新增文档必须可发现、可归类、可维护。
 
-- 仓库根目录禁止新增 `.md`（白名单：`AGENTS.md`）。
+- 仓库根目录禁止新增 Markdown 文档（大小写不敏感；白名单：`AGENTS.md`）。
+- 仓库根目录 surface 采用允许清单：只保留固定入口文件、工程配置与顶层目录；禁止根目录日志、pid、调试快照、临时脚本残片与异常文件名。门禁入口为 `make check root-surface`，并区分“本地可存在”与“允许入仓”的根路径。
 - 仓库级文档分类：
   - 计划/契约：`docs/dev-plans/`（遵循 `docs/dev-plans/000-docs-format.md`）
   - 证据/记录：`docs/dev-records/`（按 `DEV-PLAN-010` 的 readiness 要求固化证据）
@@ -201,6 +205,7 @@ modules/{module}/
   - 统一使用：`kebab-case.md`
 - 可发现性：新增仓库级活体文档（计划/规范/指南/runbook/索引）必须在本文件的“文档地图（Doc Map）”中新增链接；执行日志/Readiness 证据/过程性 `dev-record` 不逐条纳入 `AGENTS.md` 文档地图，应通过 `docs/dev-records/README.md`、`docs/archive/dev-records/README.md` 或对应计划文档的关联章节发现。
 - 门禁：`make check doc`（执行阶段由 CI 触发，仅在文档/资源变更时运行）。
+- 根目录 surface 门禁：`make check root-surface`（由 `make preflight` 与 CI Gate-1 执行）。
 
 ## 7. 文档地图（Doc Map）
 

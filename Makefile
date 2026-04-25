@@ -7,7 +7,7 @@ export ATLAS_VERSION ?= v0.38.0
 export DEV_COMPOSE_PROJECT ?= bugs-and-blossoms-dev
 export DEV_INFRA_ENV_FILE ?= .env.example
 
-.PHONY: help preflight check pr-branch naming no-legacy chat-surface-clean no-scope-package granularity ddd-layering-p0 ddd-layering-p2 org-node-key-backflow request-code as-of-explicit dict-tenant-only go-version error-message fmt lint test routing e2e doc tr generate css
+.PHONY: help preflight check pr-branch root-surface naming no-legacy chat-surface-clean no-scope-package granularity ddd-layering-p0 ddd-layering-p2 org-node-key-backflow request-code as-of-explicit dict-tenant-only go-version error-message fmt lint test routing e2e doc tr generate css
 .PHONY: sqlc-generate sqlc-verify-schema authz-pack authz-test authz-lint
 .PHONY: plan migrate up
 .PHONY: iam orgunit
@@ -16,9 +16,10 @@ export DEV_INFRA_ENV_FILE ?= .env.example
 
 help:
 	@printf "%s\n" \
-		"常用入口：" \
-		"  make preflight" \
-				"  make check naming" \
+			"常用入口：" \
+			"  make preflight" \
+			"  make check root-surface" \
+			"  make check naming" \
 					"  make check no-legacy" \
 					"  make check chat-surface-clean" \
 					"  make check no-scope-package" \
@@ -50,6 +51,7 @@ help:
 
 preflight: ## 本地一键对齐CI（严格版：含 UI build/typecheck）
 	@$(MAKE) check pr-branch
+	@$(MAKE) check root-surface
 	@$(MAKE) check naming
 	@$(MAKE) check no-legacy
 	@$(MAKE) check chat-surface-clean
@@ -70,12 +72,16 @@ preflight: ## 本地一键对齐CI（严格版：含 UI build/typecheck）
 	@$(MAKE) test
 	@$(MAKE) check routing
 	@$(MAKE) e2e
+	@$(MAKE) check root-surface
 
 check:
 	@:
 
 pr-branch: ## PR 固定分支门禁（只允许 wt-dev-main / wt-dev-a / wt-dev-b）
 	@./scripts/ci/check-pr-fixed-branch.sh
+
+root-surface: ## 根目录 surface 门禁（禁止零散文件、调试快照与运行产物回流）
+	@./scripts/ci/check-root-surface.sh
 
 naming: ## 命名去噪门禁（已取消：no-op）
 	@./scripts/ci/check-no-version-marker.sh

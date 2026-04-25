@@ -64,6 +64,7 @@
 - **活体 vs 归档明确**：过期或仅供历史参考的内容必须迁移到 `docs/archive/` 并标注 `[Archived]`；归档不得作为活体 SSOT 被引用。
 - **过程性计划退场明确**：已经作废、已被替代、已不具有参考意义的过程性开发计划文档，必须迁移到 `docs/archive/dev-plans/`（例如：`DEV-PLAN-018`、`DEV-PLAN-026` 系列）。
 - **新增文档可被门禁校验**：新增/移动文档必须通过 `make check doc`（命名、落点、入口链接与资源归口一致）。
+- **根目录 surface 收敛**：根目录只保留固定入口文件、工程配置与顶层目录；运行产物、调试快照、临时脚本输出必须落入 `.local/`、`e2e/_artifacts/`、`coverage/` 或明确归属模块目录，并通过 `make check root-surface` 校验；本地可存在目录不等于允许入仓。
 
 ## 5. 文档类型与落点（Routing & Ownership）
 
@@ -72,7 +73,6 @@
 | 文档类型 | 目录/路径 | 写什么 | 不写什么 | 命名约定 |
 | --- | --- | --- | --- | --- |
 | 主干规则与入口索引 | `AGENTS.md` | 规则、触发器矩阵、红线、Doc Map | 业务实现细节/长 runbook | 固定文件 |
-| 对外入口 | `README.MD` | 摘要 + 入口链接 | 过长流程与细则 | 固定文件 |
 | 贡献者上手 | `docs/CONTRIBUTING.MD` | 上手步骤 + 与 CI 对齐矩阵（入口） | 深度 runbook | 固定文件 |
 | 活体架构 | `docs/ARCHITECTURE.md` | 长期维护的架构约定 | 临时执行记录 | 固定文件 |
 | 概念/约定/参考 | `docs/guides/**` | 相对稳定的指南/约定 | 强时效 runbook | `kebab-case.md` |
@@ -134,7 +134,8 @@
 ### 8.1 新增文档（Author）
 
 - [ ] 目录选择正确（计划/记录/指南/runbook/归档/模块级）。
-- [ ] 文件命名符合约定；根目录未新增 `.md`（白名单除外）。
+- [ ] 文件命名符合约定；根目录未新增 Markdown 文档（大小写不敏感，白名单除外）。
+- [ ] 根目录未新增零散文件、调试快照或运行产物；`make check root-surface` 通过。
 - [ ] 若涉及命令/端口/版本，优先引用 `Makefile`/`devhub.yml`/`.env.example` 等 SSOT。
 - [ ] 已按文档类型更新发现入口：活体文档更新 `AGENTS.md` Doc Map；执行日志/Readiness 记录更新目录入口或对应计划链接。
 - [ ] `make check doc` 通过。
@@ -155,6 +156,7 @@
 ## 10. 常见违规与修复（最小处置）
 
 - `make check doc` 失败：优先检查是否把新增活体文档遗漏在 `AGENTS.md` Doc Map、是否遗漏了执行日志目录入口/对应计划链接、命名/落点是否不符合约定、或资源未归口到 `docs/assets/` / `modules/{module}/docs/`。
+- `make check root-surface` 失败：把根目录零散文件移入 `.local/`、`e2e/_artifacts/`、`coverage/` 或所属模块目录；若确实需要新增根入口，先更新根目录允许清单与 `AGENTS.md`。
 - 出现孤儿文档：活体文档补到 `AGENTS.md` Doc Map；执行日志/Readiness 记录补到 `docs/dev-records/README.md`、`docs/archive/dev-records/README.md` 或对应计划文档的关联章节，并视情况补充 `docs/guides/index.md` / `docs/assets/index.md` 的目录入口链接。
 - 文档复制了易漂移事实（端口/命令/版本）：改为引用 `devhub.yml`/`Makefile`/`.env.example`/CI workflow；仅在执行记录中写死命令并带时间戳。
 - 活体/归档混用：把过期内容迁移到 `docs/archive/` 并标注 `[Archived]`；同时修正入口链接，避免归档被当作 SSOT。

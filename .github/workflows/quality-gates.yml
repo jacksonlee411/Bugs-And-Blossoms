@@ -25,6 +25,7 @@ jobs:
               - '.github/workflows/**'
               - 'AGENTS.md'
               - 'Makefile'
+              - '.gitignore'
               - '.tool-versions'
               - 'go.mod'
               - 'go.sum'
@@ -37,6 +38,9 @@ jobs:
               - 'pkg/**/*.go'
               - 'apps/web/**'
               - 'internal/server/assets/web/**'
+
+      - name: Root surface gate
+        run: make check root-surface
 
       - name: Setup Go
         if: steps.changes.outputs.relevant == 'true'
@@ -87,6 +91,10 @@ jobs:
       - name: Lint gate
         if: steps.changes.outputs.relevant == 'true'
         run: make check lint
+
+      - name: Root surface final gate
+        if: steps.changes.outputs.relevant == 'true'
+        run: make check root-surface
 
       - name: Assert clean worktree
         if: steps.changes.outputs.relevant == 'true'
