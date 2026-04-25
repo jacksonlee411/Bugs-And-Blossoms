@@ -613,7 +613,7 @@ PR-4 验收点：
 
 - [x] `orgunit.details`、`orgunit.list`、`orgunit.search`、`orgunit.audit` 已作为 `RegisteredExecutor` 接入唯一执行注册表
 - [x] 执行器实现位于 `internal/server`，直接复用现有 `orgunit` 读 helper、现有 store 能力与现有返回结构；`modules/cubebox` 未长出第二套 `orgunit` 查询实现
-- [x] `orgunit.details` 支持 `org_code` 与线性多步派生参数 `org_code_from`
+- [x] `orgunit.details` 只接受显式 `org_code` 与 `as_of`；若用户输入不足以稳定定位目标组织，应先回到澄清，不再依赖 `org_code_from` 一类隐藏跨步参数
 - [x] `orgunit.search` 返回前会复用现有 `ResolveOrgCodesByNodeKeys` 补齐 `path_org_codes`
 - [x] `orgunit.audit` 默认 `limit` 与现有 `orgNodeAuditPageSize` 对齐
 - [x] 参数归一化仅覆盖该 4 个 `api_key` 的最小受控入参，不扩展成通用 planner/DSL/参数中台

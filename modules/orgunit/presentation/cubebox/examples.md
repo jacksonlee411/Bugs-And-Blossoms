@@ -149,56 +149,63 @@
 
 `先帮我找到名字里带华东的组织，再看它在 2026-04-23 的详情`
 
-期望 `ReadPlan`：
+期望返回：
 
 ```json
 {
   "intent": "orgunit.search_then_details",
-  "confidence": 0.78,
+  "confidence": 0.46,
+  "missing_params": [
+    "org_code"
+  ],
+  "clarifying_question": "请先提供要查看详情的组织编码；如果你只是想先定位名称里带“华东”的组织，我可以先按 2026-04-23 为你搜索。"
+}
+```
+
+说明：
+
+- 本示例体现当前 owner 口径：搜索和详情之间不要依赖本地隐藏字段续执行
+- 若用户尚未提供可直接查询详情的 `org_code`，应先回到澄清，而不是让执行层读取前一步结果拼参数
+- 若按名称搜索会命中多个组织，也应先回到澄清，并给出少量候选供用户确认，不要静默选第一条继续
+
+## 示例 6：列表状态过滤使用 canonical 参数
+
+用户问法：
+
+`列出 2026-04-23 当天 1001 下面已停用的直接子组织`
+
+期望 `ReadPlan`：
+
+```json
+{
+  "intent": "orgunit.list",
+  "confidence": 0.91,
   "missing_params": [],
   "steps": [
     {
       "id": "step-1",
-      "api_key": "orgunit.search",
+      "api_key": "orgunit.list",
       "params": {
-        "query": "华东",
         "as_of": "2026-04-23",
-        "include_disabled": false
+        "parent_org_code": "1001",
+        "status": "disabled",
+        "include_disabled": true
       },
       "result_focus": [
-        "target_org_code",
-        "target_name",
-        "path_org_codes"
+        "org_units[].org_code",
+        "org_units[].name",
+        "org_units[].status"
       ],
       "depends_on": []
-    },
-    {
-      "id": "step-2",
-      "api_key": "orgunit.details",
-      "params": {
-        "org_code_from": "step-1.target_org_code",
-        "as_of": "2026-04-23",
-        "include_disabled": false
-      },
-      "result_focus": [
-        "org_unit.name",
-        "org_unit.parent_org_code",
-        "org_unit.manager_name",
-        "org_unit.full_name_path"
-      ],
-      "depends_on": [
-        "step-1"
-      ]
     }
   ],
   "explain_focus": [
-    "先说明命中的组织",
-    "再说明详情"
+    "已停用的直接子组织"
   ]
 }
 ```
 
 说明：
 
-- 本示例体现首期允许的线性多步只读编排
-- 若 `step-1` 不能稳定定位唯一组织，应停止在搜索结果并回到澄清，不应盲目执行 `step-2`
+- `status` 只使用 canonical 值 `disabled`
+- 不要输出 `inactive`

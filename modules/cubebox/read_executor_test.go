@@ -59,7 +59,7 @@ func TestExecutionRegistryExecutePlan(t *testing.T) {
 		},
 		RegisteredExecutor{
 			APIKey:         "orgunit.details",
-			RequiredParams: []string{"org_code_from", "as_of"},
+			RequiredParams: []string{"org_code", "as_of"},
 			Executor: readExecutorStub{
 				validateFn: func(raw map[string]any) (map[string]any, error) {
 					return raw, nil
@@ -74,7 +74,7 @@ func TestExecutionRegistryExecutePlan(t *testing.T) {
 					}
 					return ExecuteResult{
 						Payload: map[string]any{
-							"org_code_from": params["org_code_from"],
+							"org_code":      params["org_code"],
 							"resolved_from": prev.Payload["target_org_code"],
 						},
 					}, nil
@@ -101,7 +101,7 @@ func TestExecutionRegistryExecutePlan(t *testing.T) {
 			{
 				ID:          "step-2",
 				APIKey:      "orgunit.details",
-				Params:      map[string]any{"org_code_from": "step-1.target_org_code", "as_of": "2026-04-23"},
+				Params:      map[string]any{"org_code": "1001", "as_of": "2026-04-23"},
 				ResultFocus: []string{"org_unit.name"},
 				DependsOn:   []string{"step-1"},
 			},
@@ -194,6 +194,39 @@ func TestExecutionRegistryExecutePlanRejectsMissingRequiredParam(t *testing.T) {
 				ID:          "step-1",
 				APIKey:      "orgunit.details",
 				Params:      map[string]any{"org_code": "1001"},
+				ResultFocus: []string{},
+				DependsOn:   []string{},
+			},
+		},
+		ExplainFocus: []string{},
+	})
+	if !errors.Is(err, ErrReadPlanBoundaryViolation) {
+		t.Fatalf("expected ErrReadPlanBoundaryViolation, got %v", err)
+	}
+}
+
+func TestExecutionRegistryExecutePlanRejectsUnexpectedParam(t *testing.T) {
+	registry, err := NewExecutionRegistry(
+		RegisteredExecutor{
+			APIKey:         "orgunit.details",
+			RequiredParams: []string{"org_code", "as_of"},
+			OptionalParams: []string{"include_disabled"},
+			Executor:       readExecutorStub{},
+		},
+	)
+	if err != nil {
+		t.Fatalf("NewExecutionRegistry err=%v", err)
+	}
+
+	_, err = registry.ExecutePlan(context.Background(), ExecuteRequest{}, ReadPlan{
+		Intent:        "orgunit.details",
+		Confidence:    0.9,
+		MissingParams: []string{},
+		Steps: []ReadPlanStep{
+			{
+				ID:          "step-1",
+				APIKey:      "orgunit.details",
+				Params:      map[string]any{"org_code": "1001", "as_of": "2026-04-23", "org_code_from": "step-0.target_org_code"},
 				ResultFocus: []string{},
 				DependsOn:   []string{},
 			},

@@ -137,13 +137,13 @@ func TestDecodeReadPlanRejectsSecondStepWithoutDependsOn(t *testing.T) {
 	      "result_focus": [],
 	      "depends_on": []
 	    },
-	    {
-	      "id": "step-2",
-	      "api_key": "orgunit.details",
-	      "params": {"org_code_from":"step-1.target_org_code","as_of":"2026-04-23"},
-	      "result_focus": [],
-	      "depends_on": []
-	    }
+		    {
+		      "id": "step-2",
+		      "api_key": "orgunit.details",
+		      "params": {"org_code":"1001","as_of":"2026-04-23"},
+		      "result_focus": [],
+		      "depends_on": []
+		    }
 	  ],
 	  "explain_focus": []
 	}`))
@@ -172,13 +172,13 @@ func TestDecodeReadPlanRejectsNonLinearDependsOn(t *testing.T) {
 	      "result_focus": [],
 	      "depends_on": []
 	    },
-	    {
-	      "id": "step-3",
-	      "api_key": "orgunit.details",
-	      "params": {"org_code_from":"step-1.target_org_code","as_of":"2026-04-23"},
-	      "result_focus": [],
-	      "depends_on": ["step-1"]
-	    }
+		    {
+		      "id": "step-3",
+		      "api_key": "orgunit.details",
+		      "params": {"org_code":"1001","as_of":"2026-04-23"},
+		      "result_focus": [],
+		      "depends_on": ["step-1"]
+		    }
 	  ],
 	  "explain_focus": []
 	}`))

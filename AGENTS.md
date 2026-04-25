@@ -78,6 +78,7 @@
 
 - DO NOT USE `sed` 做文件内容修改。
 - 未经用户明确批准，禁止通过 `git checkout --` / `git restore` / `git reset` / `git clean` 丢弃或回退未提交改动。
+- 未经用户明确指示，禁止擅自执行 `git commit` / `git push` / 创建 PR；即使代码已完成，也必须先得到用户确认再提交。
 - 新增数据库表（新建迁移中的 `CREATE TABLE` 或 schema 中新增表）前，必须获得用户手工确认。
 - `GITHUB_TOKEN` 等密钥只允许放在本机 `.env.local`，不得提交到仓库（CI 使用 GitHub Secrets）。
 
@@ -252,6 +253,8 @@ modules/{module}/
 - DEV-PLAN-463：CubeBox 组织树查询暴露的知识包驱动偏航调查与收敛方案：`docs/dev-plans/463-cubebox-orgunit-tree-discovery-gap-investigation-and-remediation-plan.md`
 - DEV-PLAN-464：CubeBox 查询链架构收敛与知识包运行时重构方案：`docs/dev-plans/464-cubebox-query-architecture-convergence-plan.md`
 - DEV-PLAN-465：CubeBox OrgUnit Executor 契约边界与字段归属收敛方案：`docs/dev-plans/465-cubebox-orgunit-executor-contract-boundary-and-field-owner-convergence-plan.md`
+- DEV-PLAN-466：CubeBox 查询链 owner 漂移与反回流扩大调查方案：`docs/dev-plans/466-cubebox-query-owner-drift-and-anti-backflow-investigation-plan.md`
+- DEV-PLAN-467：CubeBox 查询会话不连贯与失去记忆专项调查方案：`docs/dev-plans/467-cubebox-query-conversational-continuity-and-memory-loss-investigation-plan.md`
 - DEV-PLAN-440：彻底删除 SetID 的全仓收口方案（SetID 根删除唯一 PoR）：`docs/dev-plans/440-complete-setid-removal-plan.md`
 - DEV-PLAN-441：旧策略模块残余清理方案：`docs/dev-plans/441-legacy-strategy-module-residue-cleanup-plan.md`
 - DEV-PLAN-450：直接切除 jobcatalog / staffing / person 三模块方案（保留 orgunit）：`docs/dev-plans/450-direct-removal-of-jobcatalog-staffing-person-modules-plan.md`

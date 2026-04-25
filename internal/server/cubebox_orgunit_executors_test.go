@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -114,88 +115,19 @@ func TestCubeBoxOrgUnitDetailsExecutor(t *testing.T) {
 	if len(results) != 1 {
 		t.Fatalf("results=%d", len(results))
 	}
-	orgUnit, ok := results[0].Payload["org_unit"].(orgUnitDetailsAPIItem)
+	orgUnit, ok := results[0].Payload["org_unit"].(map[string]any)
 	if !ok {
 		t.Fatalf("org_unit=%T", results[0].Payload["org_unit"])
 	}
-	if orgUnit.Name != "华东销售中心" {
-		t.Fatalf("org_unit.name=%q", orgUnit.Name)
+	if got := orgUnit["name"]; got != "华东销售中心" {
+		t.Fatalf("org_unit.name=%v", got)
 	}
-	extFields, ok := results[0].Payload["ext_fields"].([]orgUnitExtFieldAPIItem)
+	extFields, ok := results[0].Payload["ext_fields"].([]any)
 	if !ok || len(extFields) != 1 {
 		t.Fatalf("ext_fields=%T len=%d", results[0].Payload["ext_fields"], len(extFields))
 	}
 	if store.snapshotByNodeKeyArg != "10000001" {
 		t.Fatalf("snapshotByNodeKeyArg=%q", store.snapshotByNodeKeyArg)
-	}
-}
-
-func TestCubeBoxOrgUnitDetailsExecutorResolvesOrgCodeFromPreviousStep(t *testing.T) {
-	store := &orgUnitDetailsExtStoreStub{
-		resolveOrgCodeStore: &resolveOrgCodeStore{
-			resolveID: 1001,
-			getNodeDetails: OrgUnitNodeDetails{
-				OrgNodeKey: "10000001",
-				OrgCode:    "1001",
-				Name:       "华东销售中心",
-				Status:     "active",
-			},
-		},
-	}
-
-	executor := cubeBoxOrgUnitDetailsExecutor{store: store}
-	params, err := executor.ValidateParams(map[string]any{
-		"org_code_from": "step-1.target_org_code",
-		"as_of":         "2026-04-23",
-	})
-	if err != nil {
-		t.Fatalf("ValidateParams err=%v", err)
-	}
-	result, err := executor.Execute(context.Background(), cubebox.ExecuteRequest{
-		TenantID: "t1",
-		PreviousResults: map[string]cubebox.ExecuteResult{
-			"step-1": {
-				Payload: map[string]any{
-					"target_org_code": "1001",
-					"target_unique":   true,
-				},
-			},
-		},
-	}, params)
-	if err != nil {
-		t.Fatalf("Execute err=%v", err)
-	}
-	orgUnit := result.Payload["org_unit"].(orgUnitDetailsAPIItem)
-	if orgUnit.OrgCode != "1001" {
-		t.Fatalf("org_unit.org_code=%q", orgUnit.OrgCode)
-	}
-}
-
-func TestCubeBoxOrgUnitDetailsExecutorRejectsOrgCodeFromAmbiguousPreviousStep(t *testing.T) {
-	store := &orgUnitDetailsExtStoreStub{
-		resolveOrgCodeStore: &resolveOrgCodeStore{},
-	}
-	executor := cubeBoxOrgUnitDetailsExecutor{store: store}
-	params, err := executor.ValidateParams(map[string]any{
-		"org_code_from": "step-1.target_org_code",
-		"as_of":         "2026-04-23",
-	})
-	if err != nil {
-		t.Fatalf("ValidateParams err=%v", err)
-	}
-	_, err = executor.Execute(context.Background(), cubebox.ExecuteRequest{
-		TenantID: "t1",
-		PreviousResults: map[string]cubebox.ExecuteResult{
-			"step-1": {
-				Payload: map[string]any{
-					"target_org_code": "1001",
-					"target_unique":   false,
-				},
-			},
-		},
-	}, params)
-	if err == nil {
-		t.Fatal("expected ambiguous previous step to be rejected")
 	}
 }
 
@@ -215,7 +147,7 @@ func TestCubeBoxOrgUnitListExecutor(t *testing.T) {
 		"parent_org_code":  "1001",
 		"include_disabled": true,
 		"keyword":          "销售",
-		"status":           "inactive",
+		"status":           "disabled",
 		"page":             float64(2),
 		"size":             float64(5),
 	})
@@ -235,7 +167,7 @@ func TestCubeBoxOrgUnitListExecutor(t *testing.T) {
 	if store.capturedReq.Limit != 5 || store.capturedReq.Offset != 10 {
 		t.Fatalf("limit=%d offset=%d", store.capturedReq.Limit, store.capturedReq.Offset)
 	}
-	if got := result.Payload["total"]; got != 12 {
+	if got := result.Payload["total"]; got != float64(12) {
 		t.Fatalf("total=%v", got)
 	}
 }
@@ -263,13 +195,13 @@ func TestCubeBoxOrgUnitListExecutorPaginatesWhenOnlyPageProvided(t *testing.T) {
 	if store.capturedReq.Limit != orgUnitListDefaultPageSize || store.capturedReq.Offset != 2*orgUnitListDefaultPageSize {
 		t.Fatalf("limit=%d offset=%d", store.capturedReq.Limit, store.capturedReq.Offset)
 	}
-	if got := result.Payload["page"]; got != 2 {
+	if got := result.Payload["page"]; got != float64(2) {
 		t.Fatalf("page=%v", got)
 	}
-	if got := result.Payload["size"]; got != orgUnitListDefaultPageSize {
+	if got := result.Payload["size"]; got != float64(orgUnitListDefaultPageSize) {
 		t.Fatalf("size=%v", got)
 	}
-	if got := result.Payload["total"]; got != 12 {
+	if got := result.Payload["total"]; got != float64(12) {
 		t.Fatalf("total=%v", got)
 	}
 }
@@ -296,6 +228,9 @@ func TestCubeBoxOrgUnitSearchExecutor(t *testing.T) {
 			PathOrgNodeKeys: []string{"10000000", "10000001"},
 			TreeAsOf:        "2026-04-23",
 		},
+		searchCandidates: []OrgUnitSearchCandidate{
+			{OrgNodeKey: "10000001", OrgCode: "1001", Name: "华东销售中心", Status: "active"},
+		},
 		resolveCodes: map[int]string{
 			10000000: "0001",
 			10000001: "1001",
@@ -313,12 +248,41 @@ func TestCubeBoxOrgUnitSearchExecutor(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Execute err=%v", err)
 	}
-	pathCodes, ok := result.Payload["path_org_codes"].([]string)
+	pathCodes, ok := result.Payload["path_org_codes"].([]any)
 	if !ok {
 		t.Fatalf("path_org_codes=%T", result.Payload["path_org_codes"])
 	}
 	if len(pathCodes) != 2 || pathCodes[0] != "0001" || pathCodes[1] != "1001" {
 		t.Fatalf("path_org_codes=%v", pathCodes)
+	}
+}
+
+func TestCubeBoxOrgUnitSearchExecutorReturnsClarificationWhenSearchIsAmbiguous(t *testing.T) {
+	store := &resolveOrgCodeStore{
+		searchCandidates: []OrgUnitSearchCandidate{
+			{OrgNodeKey: "10000001", OrgCode: "1001", Name: "华东销售中心", Status: "active"},
+			{OrgNodeKey: "10000002", OrgCode: "1002", Name: "华东运营中心", Status: "disabled"},
+		},
+	}
+	executor := cubeBoxOrgUnitSearchExecutor{store: store}
+	params, err := executor.ValidateParams(map[string]any{
+		"query": "华东",
+		"as_of": "2026-04-23",
+	})
+	if err != nil {
+		t.Fatalf("ValidateParams err=%v", err)
+	}
+	_, err = executor.Execute(context.Background(), cubebox.ExecuteRequest{TenantID: "t1"}, params)
+	var ambiguous *orgUnitSearchAmbiguousError
+	if !errors.As(err, &ambiguous) {
+		t.Fatalf("expected ambiguous search error, got %v", err)
+	}
+	text := ambiguous.ClarifyingQuestion()
+	if !strings.Contains(text, "1001") || !strings.Contains(text, "1002") {
+		t.Fatalf("expected candidate org codes in clarification, got %q", text)
+	}
+	if !strings.Contains(text, "已停用") {
+		t.Fatalf("expected disabled candidate hint, got %q", text)
 	}
 }
 
@@ -367,7 +331,7 @@ func TestCubeBoxOrgUnitAuditExecutor(t *testing.T) {
 	if got := result.Payload["has_more"]; got != true {
 		t.Fatalf("has_more=%v", got)
 	}
-	events, ok := result.Payload["events"].([]orgUnitAuditAPIItem)
+	events, ok := result.Payload["events"].([]any)
 	if !ok || len(events) != 2 {
 		t.Fatalf("events=%T len=%d", result.Payload["events"], len(events))
 	}
@@ -394,6 +358,9 @@ func TestCubeBoxOrgUnitExecutorsRejectInvalidParams(t *testing.T) {
 	if _, err := list.ValidateParams(map[string]any{"as_of": "2026-04-23", "size": float64(0)}); err == nil {
 		t.Fatal("expected size error")
 	}
+	if _, err := list.ValidateParams(map[string]any{"as_of": "2026-04-23", "status": "inactive"}); err == nil {
+		t.Fatal("expected canonical status error")
+	}
 
 	search := cubeBoxOrgUnitSearchExecutor{}
 	if _, err := search.ValidateParams(map[string]any{"query": "", "as_of": "2026-04-23"}); err == nil {
@@ -403,15 +370,6 @@ func TestCubeBoxOrgUnitExecutorsRejectInvalidParams(t *testing.T) {
 	audit := cubeBoxOrgUnitAuditExecutor{}
 	if _, err := audit.ValidateParams(map[string]any{"org_code": "1001", "limit": float64(1.5)}); err == nil {
 		t.Fatal("expected limit error")
-	}
-}
-
-func TestResolveStepResultReferenceRejectsInvalidReference(t *testing.T) {
-	_, err := resolveStepResultReference(map[string]cubebox.ExecuteResult{
-		"step-1": {Payload: map[string]any{"target_org_code": "1001"}},
-	}, "step-1")
-	if err == nil {
-		t.Fatal("expected invalid ref error")
 	}
 }
 

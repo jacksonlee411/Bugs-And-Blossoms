@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"strings"
 	"time"
@@ -98,6 +99,22 @@ type cubeboxQueryNarrationEnvelope struct {
 }
 
 var errCubeboxQueryNarrationTargetMismatch = errors.New("cubebox query narration target mismatch")
+var errCubeboxQueryNarrationContractViolation = errors.New("cubebox query narration contract violation")
+
+var queryNarrationForbiddenPatterns = []*regexp.Regexp{
+	regexp.MustCompile(`已完成只读查询`),
+	regexp.MustCompile(`本次关注`),
+	regexp.MustCompile(`(?i)\bstep-\d+\b`),
+	regexp.MustCompile(`(?i)\b(api_key|result_focus|payload|results)\b`),
+	regexp.MustCompile(`(?i)\b(org_code|parent_org_code|as_of|include_disabled|ext_fields)\s*[:：]`),
+	regexp.MustCompile(`详情如下[：:]`),
+	regexp.MustCompile(`(^|\n)\s*组织基本信息\s*[-：:]`),
+	regexp.MustCompile(`(^|\n)\s*上级组织\s*[-：:]`),
+	regexp.MustCompile(`(^|\n)\s*负责人\s*[-：:]`),
+	regexp.MustCompile(`(^|\n)\s*组织全路径\s*[-：:]`),
+	regexp.MustCompile(`(^|\n)\s*扩展字段\s*[-：:]`),
+	regexp.MustCompile(`(?i)[:：]\s*(active|disabled|true|false|null)\b`),
+}
 
 func newCubeboxQueryFlow(
 	runtime *cubebox.Runtime,
@@ -226,6 +243,14 @@ func (f *cubeboxQueryFlow) TryHandle(
 		ConversationID: request.ConversationID,
 	}, produced.Plan)
 	if err != nil {
+		if text := queryExecutionClarifyingQuestion(err); text != "" {
+			if !writeEvent("turn.agent_message.delta", map[string]any{"message_id": prepared.turn.AssistantMessageID, "delta": text}) {
+				return true
+			}
+			_ = writeEvent("turn.agent_message.completed", map[string]any{"message_id": prepared.turn.AssistantMessageID})
+			_ = writeEvent("turn.completed", f.queryCompletedPayload("completed", prepared.lifecycle))
+			return true
+		}
 		f.writeQueryTerminalError(ctx, request, prepared.turn.TurnID, &prepared.sequence, prepared.lifecycle, sink, queryExecutionErrorToTerminal(err))
 		return true
 	}
@@ -408,32 +433,11 @@ func (n *cubeboxProviderQueryNarrator) NarrateQueryResult(
 		return "", err
 	}
 	stream, err := n.adapter.StreamChatCompletion(ctx, cubebox.ProviderChatRequest{
-		BaseURL: strings.TrimSpace(config.Provider.BaseURL),
-		APIKey:  secret,
-		Model:   modelSlug,
-		Messages: []cubebox.PromptItem{
-			{
-				Role: "system",
-				Content: strings.TrimSpace(`
-你是 CubeBox 的查询结果叙述器。
-你的职责只有一件事：基于已经执行完成的只读查询结果，向用户输出最终中文回答。
-
-硬约束：
-- 只能依据输入 JSON 中的 user_prompt、plan、results 叙述
-- 不得编造任何 results 中不存在的字段、值、条数、层级或结论
-- 不得补做新的查询、推断新的默认值、追加新的澄清问题
-- 不得输出 Markdown 代码块
-- 不得逐字回显整份原始 JSON
-- 若结果不足以支持更强结论，只能如实说明
-- 输出纯文本，直接作为用户可见最终回复
-`),
-			},
-			{
-				Role:    "user",
-				Content: string(body),
-			},
-		},
-		Input: string(body),
+		BaseURL:  strings.TrimSpace(config.Provider.BaseURL),
+		APIKey:   secret,
+		Model:    modelSlug,
+		Messages: buildQueryNarrationMessages(string(body)),
+		Input:    string(body),
 	})
 	if err != nil {
 		return "", err
@@ -458,7 +462,61 @@ func (n *cubeboxProviderQueryNarrator) NarrateQueryResult(
 	if text == "" {
 		return "", cubebox.ErrProviderStreamInvalid
 	}
+	if err := validateQueryNarrationText(text); err != nil {
+		return "", err
+	}
 	return text, nil
+}
+
+func buildQueryNarrationMessages(body string) []cubebox.PromptItem {
+	return []cubebox.PromptItem{
+		{
+			Role: "system",
+			Content: strings.TrimSpace(`
+你是 CubeBox 的查询结果叙述器。
+你的职责只有一件事：基于已经执行完成的只读查询结果，向用户输出最终中文回答。
+
+回答方式：
+- 直接回答用户问题，先给结论，再补充最相关事实。
+- 默认使用 1 到 3 句自然中文；只有结果本身是多个对象时，才允许用极短列表列出关键项。
+- 把枚举、布尔和空值翻译成自然中文，例如 active=启用、disabled=停用、true=是、false=否、null/空字符串/空列表=未记录或没有。
+- 对单个实体详情，优先用完整句子归纳，不要按固定栏目拆成“组织基本信息 / 上级组织 / 负责人 / 组织全路径 / 扩展字段”等小标题。
+- 如果某些字段为空，只在和用户问题相关时用一句话说明“未记录……”，不要机械逐项写“空”。
+
+硬约束：
+- 只能依据输入 JSON 中的 user_prompt、plan、results 叙述。
+- 不得编造任何 results 中不存在的字段、值、条数、层级或结论。
+- 不得补做新的查询、推断新的默认值、追加新的澄清问题。
+- 不得输出 Markdown 代码块。
+- 不得逐字回显整份原始 JSON。
+- 不得暴露实现细节或计划执行痕迹；不要出现“只读查询”“本次关注”“step-1”“api_key”“result_focus”“org_code”“parent_org_code”“as_of”“include_disabled”“ext_fields”“payload”“results”等字样。
+- 不得输出固定模板、小标题或键值对罗列；不要写“详情如下：”“组织基本信息”“上级组织”“负责人”“组织全路径”“扩展字段”等段落标题。
+- 若结果不足以支持更强结论，只能如实说明。
+- 输出纯文本，直接作为用户可见最终回复。
+
+示例：
+- 好的回答：截至 2026-04-24，组织 100000 是“飞虫与鲜花”，当前为启用状态，属于业务单元。系统里暂未记录它的上级组织和负责人，也没有扩展字段。
+- 不好的回答：组织 100000 在 2026-04-24 的详情如下：组织基本信息……上级组织……扩展字段……
+`),
+		},
+		{
+			Role:    "user",
+			Content: body,
+		},
+	}
+}
+
+func validateQueryNarrationText(text string) error {
+	text = strings.TrimSpace(text)
+	if text == "" {
+		return cubebox.ErrProviderStreamInvalid
+	}
+	for _, pattern := range queryNarrationForbiddenPatterns {
+		if pattern.MatchString(text) {
+			return errCubeboxQueryNarrationContractViolation
+		}
+	}
+	return nil
 }
 
 func (f *cubeboxQueryFlow) newQueryEventWriter(
@@ -726,10 +784,20 @@ func queryExecutionErrorToTerminal(err error) queryTerminalError {
 	}
 }
 
+func queryExecutionClarifyingQuestion(err error) string {
+	var ambiguous *orgUnitSearchAmbiguousError
+	if errors.As(err, &ambiguous) {
+		return strings.TrimSpace(ambiguous.ClarifyingQuestion())
+	}
+	return ""
+}
+
 func queryNarrationErrorToTerminal(err error) queryTerminalError {
 	switch {
 	case errors.Is(err, errCubeboxQueryNarrationTargetMismatch):
 		return queryTerminalError{Code: "ai_reply_model_target_mismatch", Message: "查询结果叙述未命中预期的大模型链路，请稍后重试。", Retryable: false}
+	case errors.Is(err, errCubeboxQueryNarrationContractViolation):
+		return queryTerminalError{Code: "ai_reply_render_failed", Message: "查询结果叙述未通过输出约束校验，请稍后重试。", Retryable: true}
 	case errors.Is(err, cubebox.ErrProviderDisabled), errors.Is(err, cubebox.ErrModelSlugMissing), errors.Is(err, cubebox.ErrProviderConfigInvalid):
 		return queryTerminalError{Code: "ai_model_config_invalid", Message: "模型配置无效，请联系管理员检查。", Retryable: false}
 	case errors.Is(err, cubebox.ErrSecretMissing), errors.Is(err, cubebox.ErrSecretRefInvalid):

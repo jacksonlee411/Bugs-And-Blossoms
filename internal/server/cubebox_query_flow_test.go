@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"errors"
+	"io"
 	"strings"
 	"testing"
 	"time"
@@ -17,7 +18,7 @@ func TestCubeboxProviderQueryNarratorRejectsTargetMismatch(t *testing.T) {
 			Selection:  cubebox.ActiveModelSelection{ModelSlug: "gpt-5.2"},
 			Credential: cubebox.ModelCredential{SecretRef: "env://OPENAI_API_KEY"},
 		}},
-		adapter:        cubeboxProviderAdapterStub{},
+		adapter:        &cubeboxProviderAdapterStub{},
 		secretResolver: cubeboxSecretResolverStub{secret: "sk-test"},
 	}
 
@@ -49,6 +50,68 @@ func TestQueryNarrationErrorToTerminalMapsProviderFailure(t *testing.T) {
 	}
 	if !terminal.Retryable {
 		t.Fatal("expected retryable provider failure")
+	}
+}
+
+func TestQueryNarrationErrorToTerminalMapsContractViolation(t *testing.T) {
+	terminal := queryNarrationErrorToTerminal(errCubeboxQueryNarrationContractViolation)
+	if terminal.Code != "ai_reply_render_failed" {
+		t.Fatalf("unexpected code=%s", terminal.Code)
+	}
+	if !terminal.Retryable {
+		t.Fatal("expected retryable contract violation")
+	}
+}
+
+func TestBuildQueryNarrationMessagesForbidsTemplateOutput(t *testing.T) {
+	messages := buildQueryNarrationMessages(`{"user_prompt":"查一下 100000 在 2026-04-24 的组织详情"}`)
+	if len(messages) != 2 {
+		t.Fatalf("unexpected message count=%d", len(messages))
+	}
+	systemPrompt := messages[0].Content
+	for _, snippet := range []string{
+		"不要出现“只读查询”",
+		"不要写“详情如下：”",
+		"不要按固定栏目拆成",
+		"好的回答",
+		"不好的回答",
+	} {
+		if !strings.Contains(systemPrompt, snippet) {
+			t.Fatalf("expected narrator prompt to contain %q, got %q", snippet, systemPrompt)
+		}
+	}
+}
+
+func TestValidateQueryNarrationTextRejectsTemplateOutput(t *testing.T) {
+	for _, text := range []string{
+		"已完成只读查询。本次关注：当前租户一级组织。",
+		"组织 100000 在 2026-04-24 的详情如下：组织基本信息 - 名称：飞虫与鲜花",
+		"step-1（orgunit.details） org_code：100000",
+	} {
+		if err := validateQueryNarrationText(text); !errors.Is(err, errCubeboxQueryNarrationContractViolation) {
+			t.Fatalf("expected contract violation for %q, got %v", text, err)
+		}
+	}
+}
+
+func TestValidateQueryNarrationTextAllowsNaturalLanguage(t *testing.T) {
+	text := "截至 2026-04-24，组织 100000 是“飞虫与鲜花”，当前为启用状态，属于业务单元。系统里暂未记录它的上级组织和负责人，也没有扩展字段。"
+	if err := validateQueryNarrationText(text); err != nil {
+		t.Fatalf("expected natural language to pass, got %v", err)
+	}
+}
+
+func TestQueryExecutionClarifyingQuestionReturnsAmbiguousSearchPrompt(t *testing.T) {
+	err := &orgUnitSearchAmbiguousError{
+		Query: "华东",
+		Candidates: []OrgUnitSearchCandidate{
+			{OrgCode: "1001", Name: "华东销售中心", Status: "active"},
+			{OrgCode: "1002", Name: "华东运营中心", Status: "disabled"},
+		},
+	}
+	text := queryExecutionClarifyingQuestion(err)
+	if !strings.Contains(text, "华东") || !strings.Contains(text, "1001") || !strings.Contains(text, "1002") {
+		t.Fatalf("unexpected clarification text=%q", text)
 	}
 }
 
@@ -151,11 +214,13 @@ func (s cubeboxSecretResolverStub) ResolveSecretRef(context.Context, string, str
 }
 
 type cubeboxProviderAdapterStub struct {
-	stream cubebox.ProviderChatStream
-	err    error
+	lastRequest cubebox.ProviderChatRequest
+	stream      cubebox.ProviderChatStream
+	err         error
 }
 
-func (s cubeboxProviderAdapterStub) StreamChatCompletion(context.Context, cubebox.ProviderChatRequest) (cubebox.ProviderChatStream, error) {
+func (s *cubeboxProviderAdapterStub) StreamChatCompletion(_ context.Context, request cubebox.ProviderChatRequest) (cubebox.ProviderChatStream, error) {
+	s.lastRequest = request
 	if s.err != nil {
 		return nil, s.err
 	}
@@ -172,3 +237,59 @@ func (cubeboxProviderChatStreamStub) Recv() (cubebox.ProviderChatChunk, error) {
 }
 
 func (cubeboxProviderChatStreamStub) Close() error { return nil }
+
+type cubeboxProviderChatStreamTextStub struct {
+	chunks []cubebox.ProviderChatChunk
+	index  int
+}
+
+func (s *cubeboxProviderChatStreamTextStub) Recv() (cubebox.ProviderChatChunk, error) {
+	if s.index >= len(s.chunks) {
+		return cubebox.ProviderChatChunk{}, io.EOF
+	}
+	chunk := s.chunks[s.index]
+	s.index += 1
+	return chunk, nil
+}
+
+func (*cubeboxProviderChatStreamTextStub) Close() error { return nil }
+
+func TestCubeboxProviderQueryNarratorBuildsStrictMessagesAndRejectsTemplateOutput(t *testing.T) {
+	adapter := &cubeboxProviderAdapterStub{
+		stream: &cubeboxProviderChatStreamTextStub{
+			chunks: []cubebox.ProviderChatChunk{
+				{Delta: "组织 100000 在 2026-04-24 的详情如下：组织基本信息 - 名称：飞虫与鲜花"},
+				{Done: true},
+			},
+		},
+	}
+	narrator := &cubeboxProviderQueryNarrator{
+		configReader: cubeboxRuntimeConfigReaderStub{config: cubebox.ActiveModelRuntimeConfig{
+			Provider:   cubebox.ModelProvider{ID: "provider-a", ProviderType: "openai-compatible", BaseURL: "https://example.com", Enabled: true},
+			Selection:  cubebox.ActiveModelSelection{ModelSlug: "gpt-5.2"},
+			Credential: cubebox.ModelCredential{SecretRef: "env://OPENAI_API_KEY"},
+		}},
+		adapter:        adapter,
+		secretResolver: cubeboxSecretResolverStub{secret: "sk-test"},
+	}
+
+	_, err := narrator.NarrateQueryResult(context.Background(), cubeboxQueryNarrationInput{
+		TenantID:             "tenant-a",
+		Prompt:               "查一下 100000 在 2026-04-24 的组织详情",
+		Plan:                 cubebox.ReadPlan{Intent: "orgunit.details", Confidence: 0.9, Steps: []cubebox.ReadPlanStep{{ID: "step-1", APIKey: "orgunit.details", Params: map[string]any{"org_code": "100000", "as_of": "2026-04-24"}, DependsOn: []string{}}}},
+		Results:              []cubebox.ExecuteResult{{APIKey: "orgunit.details", StepID: "step-1", Payload: map[string]any{"org_unit": map[string]any{"org_code": "100000", "name": "飞虫与鲜花", "status": "active"}}}},
+		ExpectedProviderID:   "provider-a",
+		ExpectedProviderType: "openai-compatible",
+		ExpectedModelSlug:    "gpt-5.2",
+	})
+	if !errors.Is(err, errCubeboxQueryNarrationContractViolation) {
+		t.Fatalf("expected contract violation, got %v", err)
+	}
+	if len(adapter.lastRequest.Messages) != 2 {
+		t.Fatalf("expected 2 narrator messages, got %+v", adapter.lastRequest.Messages)
+	}
+	systemPrompt := adapter.lastRequest.Messages[0].Content
+	if !strings.Contains(systemPrompt, "不要写“详情如下：”") {
+		t.Fatalf("expected strict narrator prompt, got %q", systemPrompt)
+	}
+}

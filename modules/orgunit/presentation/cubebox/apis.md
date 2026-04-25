@@ -56,6 +56,8 @@ apis:
   - `status`
   - `page`
   - `size`
+- 参数约束：
+  - `status` 只接受 canonical 值 `active`、`disabled`、`all`
 - 关注字段：
   - `as_of`
   - `include_disabled`
@@ -79,6 +81,7 @@ apis:
   - `target_name`
   - `path_org_codes`
   - `tree_as_of`
+- owner 说明：`path_org_codes` 当前属于现有 `orgunit.search` 读契约字段；若未来删除，必须同步调整 `orgunit` 读契约与知识包，不能只在 CubeBox executor 单点删除
 - 权限前提：必须沿用当前用户、当前租户、当前 session 的现有只读权限边界
 
 ### `orgunit.audit`
@@ -100,4 +103,5 @@ apis:
   - `events[].request_id`
   - `events[].reason`
   - `events[].is_rescinded`
+- owner 说明：`has_more` 当前属于现有 `orgunit.audit` 读契约字段；若未来删除，必须同步调整 `orgunit` 读契约与知识包，不能只在 CubeBox executor 单点删除
 - 权限前提：必须沿用当前用户、当前租户、当前 session 的现有只读权限边界

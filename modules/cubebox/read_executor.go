@@ -135,6 +135,19 @@ func wrapExecutorMissingError(detail string) error {
 }
 
 func validateRegisteredParams(item RegisteredExecutor, params map[string]any) error {
+	allowed := make(map[string]struct{}, len(item.RequiredParams)+len(item.OptionalParams))
+	for _, name := range item.RequiredParams {
+		allowed[name] = struct{}{}
+	}
+	for _, name := range item.OptionalParams {
+		allowed[name] = struct{}{}
+	}
+	for name := range params {
+		if _, ok := allowed[name]; ok {
+			continue
+		}
+		return wrapReadPlanBoundaryError(fmt.Sprintf("unexpected param for %s: %s", item.APIKey, strings.TrimSpace(name)))
+	}
 	for _, name := range item.RequiredParams {
 		value, ok := params[name]
 		if !ok || value == nil {

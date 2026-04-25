@@ -717,7 +717,7 @@ func TestOrgUnitPGStore_ListOrgUnitsPage(t *testing.T) {
 	t.Run("rows scan error", func(t *testing.T) {
 		tx := &stubTx{
 			row:  metadataScanRow{vals: []any{int(1)}},
-			rows: &metadataScanRows{records: [][]any{{"A001", "Root", "active", true}}, scanErr: errors.New("scan")},
+			rows: &metadataScanRows{records: [][]any{{"A001", "Root", "active", true, true}}, scanErr: errors.New("scan")},
 		}
 		store := &orgUnitPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx, nil })}
 		if _, _, err := store.ListOrgUnitsPage(ctx, "t1", orgUnitListPageRequest{AsOf: "2026-01-01"}); err == nil {
@@ -754,7 +754,7 @@ func TestOrgUnitPGStore_ListOrgUnitsPage(t *testing.T) {
 	t.Run("commit error", func(t *testing.T) {
 		tx := &stubTx{
 			row:       metadataScanRow{vals: []any{int(1)}},
-			rows:      &metadataScanRows{records: [][]any{{"A001", "Root", "active", true}}},
+			rows:      &metadataScanRows{records: [][]any{{"A001", "Root", "active", true, true}}},
 			commitErr: errors.New("commit"),
 		}
 		store := &orgUnitPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx, nil })}
@@ -766,7 +766,7 @@ func TestOrgUnitPGStore_ListOrgUnitsPage(t *testing.T) {
 	t.Run("success root list with pagination and keyword/status filter", func(t *testing.T) {
 		tx := &stubTx{
 			row:  metadataScanRow{vals: []any{int(1)}},
-			rows: &metadataScanRows{records: [][]any{{"A001", "Root", "", true}}},
+			rows: &metadataScanRows{records: [][]any{{"A001", "Root", "", true, true}}},
 		}
 		store := &orgUnitPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx, nil })}
 		items, total, err := store.ListOrgUnitsPage(ctx, "t1", orgUnitListPageRequest{
@@ -784,6 +784,9 @@ func TestOrgUnitPGStore_ListOrgUnitsPage(t *testing.T) {
 		}
 		if total != 1 || len(items) != 1 || items[0].Status != orgUnitListStatusActive {
 			t.Fatalf("total=%d items=%v", total, items)
+		}
+		if items[0].HasChildren == nil || !*items[0].HasChildren {
+			t.Fatalf("expected root has_children, items=%v", items)
 		}
 	})
 
@@ -817,7 +820,7 @@ func TestOrgUnitPGStore_ListOrgUnitsPage(t *testing.T) {
 		tx := &stubTx{
 			row:  metadataScanRow{vals: []any{"org_type", "text", "DICT", []byte(`{}`), nil, "ext_str_01", "2026-01-01", nil, now}},
 			row2: metadataScanRow{vals: []any{int(1)}},
-			rows: &metadataScanRows{records: [][]any{{"A001", "Root", "active", true}}},
+			rows: &metadataScanRows{records: [][]any{{"A001", "Root", "active", true, true}}},
 		}
 		store := &orgUnitPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx, nil })}
 		items, total, err := store.ListOrgUnitsPage(ctx, "t1", orgUnitListPageRequest{
@@ -838,7 +841,7 @@ func TestOrgUnitPGStore_ListOrgUnitsPage(t *testing.T) {
 		tx := &stubTx{
 			row:  metadataScanRow{vals: []any{"d_org_type", "text", "DICT", []byte(`{"dict_code":"org_type"}`), nil, "ext_str_01", "2026-01-01", nil, now}},
 			row2: metadataScanRow{vals: []any{int(1)}},
-			rows: &metadataScanRows{records: [][]any{{"A001", "Root", "active", true}}},
+			rows: &metadataScanRows{records: [][]any{{"A001", "Root", "active", true, true}}},
 		}
 		store := &orgUnitPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx, nil })}
 		items, total, err := store.ListOrgUnitsPage(ctx, "t1", orgUnitListPageRequest{
@@ -858,7 +861,7 @@ func TestOrgUnitPGStore_ListOrgUnitsPage(t *testing.T) {
 		tx := &stubTx{
 			row:  metadataScanRow{vals: []any{"org_type", "text", "DICT", []byte(`{}`), nil, "ext_str_01", "2026-01-01", nil, now}},
 			row2: metadataScanRow{vals: []any{int(1)}},
-			rows: &metadataScanRows{records: [][]any{{"A001", "Root", "active", true}}},
+			rows: &metadataScanRows{records: [][]any{{"A001", "Root", "active", true, true}}},
 		}
 		store := &orgUnitPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx, nil })}
 		items, total, err := store.ListOrgUnitsPage(ctx, "t1", orgUnitListPageRequest{
@@ -881,7 +884,7 @@ func TestOrgUnitPGStore_ListOrgUnitsPage(t *testing.T) {
 		tx := &stubTx{
 			row:  metadataScanRow{vals: []any{"d_org_type", "text", "DICT", []byte(`{"dict_code":"org_type"}`), nil, "ext_str_01", "2026-01-01", nil, now}},
 			row2: metadataScanRow{vals: []any{int(1)}},
-			rows: &metadataScanRows{records: [][]any{{"A001", "Root", "active", true}}},
+			rows: &metadataScanRows{records: [][]any{{"A001", "Root", "active", true, true}}},
 		}
 		store := &orgUnitPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx, nil })}
 		items, total, err := store.ListOrgUnitsPage(ctx, "t1", orgUnitListPageRequest{

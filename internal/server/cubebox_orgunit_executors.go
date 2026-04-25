@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"math"
 	"strconv"
@@ -32,6 +33,52 @@ type cubeBoxOrgUnitAuditExecutor struct {
 	store OrgUnitStore
 }
 
+type orgUnitSearchAmbiguousError struct {
+	Query      string
+	Candidates []OrgUnitSearchCandidate
+}
+
+func (e *orgUnitSearchAmbiguousError) Error() string {
+	return "org_unit_search_ambiguous"
+}
+
+func (e *orgUnitSearchAmbiguousError) ClarifyingQuestion() string {
+	if e == nil {
+		return ""
+	}
+	query := strings.TrimSpace(e.Query)
+	items := make([]string, 0, len(e.Candidates))
+	for _, candidate := range e.Candidates {
+		orgCode := strings.TrimSpace(candidate.OrgCode)
+		name := strings.TrimSpace(candidate.Name)
+		if orgCode == "" && name == "" {
+			continue
+		}
+		item := orgCode
+		if name != "" {
+			if item != "" {
+				item += "「" + name + "」"
+			} else {
+				item = "「" + name + "」"
+			}
+		}
+		if strings.EqualFold(strings.TrimSpace(candidate.Status), orgUnitListStatusDisabled) {
+			item += "（已停用）"
+		}
+		items = append(items, item)
+	}
+	if len(items) == 0 {
+		if query == "" {
+			return "找到了多个可能匹配的组织，请提供组织编码以便继续查询。"
+		}
+		return "找到了多个与“" + query + "”匹配的组织，请提供组织编码以便继续查询。"
+	}
+	if query == "" {
+		return "找到了多个可能匹配的组织，请提供组织编码以便继续查询。可选项：" + strings.Join(items, "、") + "。"
+	}
+	return "找到了多个与“" + query + "”匹配的组织，请提供组织编码以便继续查询。可选项：" + strings.Join(items, "、") + "。"
+}
+
 func newCubeBoxOrgUnitRegisteredExecutors(store OrgUnitStore) ([]cubebox.RegisteredExecutor, error) {
 	if store == nil {
 		return nil, errors.New("orgunit store required")
@@ -40,8 +87,8 @@ func newCubeBoxOrgUnitRegisteredExecutors(store OrgUnitStore) ([]cubebox.Registe
 	if detailsStore, ok := store.(cubeBoxOrgUnitDetailsStore); ok {
 		items = append(items, cubebox.RegisteredExecutor{
 			APIKey:         "orgunit.details",
-			RequiredParams: []string{"as_of"},
-			OptionalParams: []string{"org_code", "org_code_from", "include_disabled"},
+			RequiredParams: []string{"org_code", "as_of"},
+			OptionalParams: []string{"include_disabled"},
 			Executor: cubeBoxOrgUnitDetailsExecutor{
 				store: detailsStore,
 			},
@@ -81,28 +128,16 @@ func (e cubeBoxOrgUnitDetailsExecutor) ValidateParams(raw map[string]any) (map[s
 	if err != nil {
 		return nil, err
 	}
-	if value, ok := raw["org_code"]; ok && value != nil {
-		orgCode, err := normalizeOptionalOrgCode(value, "org_code")
-		if err != nil {
-			return nil, err
-		}
-		params["org_code"] = orgCode
+	orgCode, err := normalizeOptionalOrgCode(raw["org_code"], "org_code")
+	if err != nil {
+		return nil, err
 	}
-	if value, ok := raw["org_code_from"]; ok && value != nil {
-		orgCodeFrom, err := normalizeRequiredString(value, "org_code_from")
-		if err != nil {
-			return nil, err
-		}
-		params["org_code_from"] = orgCodeFrom
-	}
+	params["org_code"] = orgCode
 	return params, nil
 }
 
 func (e cubeBoxOrgUnitDetailsExecutor) Execute(ctx context.Context, request cubebox.ExecuteRequest, params map[string]any) (cubebox.ExecuteResult, error) {
-	orgCode, err := resolveOrgCodeParam(params, request.PreviousResults)
-	if err != nil {
-		return cubebox.ExecuteResult{}, err
-	}
+	orgCode := strings.TrimSpace(params["org_code"].(string))
 	asOf := strings.TrimSpace(params["as_of"].(string))
 	includeDisabled := params["include_disabled"].(bool)
 
@@ -124,27 +159,33 @@ func (e cubeBoxOrgUnitDetailsExecutor) Execute(ctx context.Context, request cube
 	if err != nil {
 		return cubebox.ExecuteResult{}, err
 	}
-
-	return cubebox.ExecuteResult{
-		Payload: map[string]any{
-			"as_of": asOf,
-			"org_unit": orgUnitDetailsAPIItem{
-				OrgCode:        details.OrgCode,
-				Name:           details.Name,
-				Status:         strings.TrimSpace(details.Status),
-				ParentOrgCode:  details.ParentCode,
-				ParentName:     details.ParentName,
-				IsBusinessUnit: details.IsBusinessUnit,
-				ManagerPernr:   details.ManagerPernr,
-				ManagerName:    details.ManagerName,
-				FullNamePath:   details.FullNamePath,
-				CreatedAt:      details.CreatedAt,
-				UpdatedAt:      details.UpdatedAt,
-				EventUUID:      details.EventUUID,
-			},
-			"ext_fields": extFields,
+	resp := orgUnitDetailsAPIResponse{
+		AsOf:      asOf,
+		ExtFields: []orgUnitExtFieldAPIItem{},
+		OrgUnit: orgUnitDetailsAPIItem{
+			OrgCode:        details.OrgCode,
+			Name:           details.Name,
+			Status:         strings.TrimSpace(details.Status),
+			ParentOrgCode:  details.ParentCode,
+			ParentName:     details.ParentName,
+			IsBusinessUnit: details.IsBusinessUnit,
+			ManagerPernr:   details.ManagerPernr,
+			ManagerName:    details.ManagerName,
+			FullNamePath:   details.FullNamePath,
+			CreatedAt:      details.CreatedAt,
+			UpdatedAt:      details.UpdatedAt,
+			EventUUID:      details.EventUUID,
 		},
-	}, nil
+	}
+	resp.ExtFields = extFields
+	if resp.ExtFields == nil {
+		resp.ExtFields = []orgUnitExtFieldAPIItem{}
+	}
+	payload, err := marshalStructPayload(resp)
+	if err != nil {
+		return cubebox.ExecuteResult{}, err
+	}
+	return cubebox.ExecuteResult{Payload: payload}, nil
 }
 
 func (e cubeBoxOrgUnitListExecutor) ValidateParams(raw map[string]any) (map[string]any, error) {
@@ -242,10 +283,13 @@ func (e cubeBoxOrgUnitListExecutor) Execute(ctx context.Context, request cubebox
 		return cubebox.ExecuteResult{}, err
 	}
 
-	payload := map[string]any{
-		"as_of":            asOf,
-		"include_disabled": includeDisabled,
-		"org_units":        items,
+	resp := orgUnitListResponse{
+		AsOf:            asOf,
+		IncludeDisabled: includeDisabled,
+		OrgUnits:        items,
+	}
+	if resp.OrgUnits == nil {
+		resp.OrgUnits = []orgUnitListItem{}
 	}
 	if hasPage || hasSize {
 		pageValue := orgUnitListDefaultPage
@@ -256,9 +300,13 @@ func (e cubeBoxOrgUnitListExecutor) Execute(ctx context.Context, request cubebox
 		if hasSize {
 			sizeValue = size.(int)
 		}
-		payload["page"] = pageValue
-		payload["size"] = sizeValue
-		payload["total"] = total
+		resp.Page = &pageValue
+		resp.Size = &sizeValue
+		resp.Total = &total
+	}
+	payload, err := marshalStructPayload(resp)
+	if err != nil {
+		return cubebox.ExecuteResult{}, err
 	}
 	return cubebox.ExecuteResult{Payload: payload}, nil
 }
@@ -280,11 +328,16 @@ func (e cubeBoxOrgUnitSearchExecutor) Execute(ctx context.Context, request cubeb
 	query := strings.TrimSpace(params["query"].(string))
 	asOf := strings.TrimSpace(params["as_of"].(string))
 	includeDisabled := params["include_disabled"].(bool)
-	candidates, err := searchNodeCandidatesByVisibility(ctx, e.store, strings.TrimSpace(request.TenantID), query, asOf, 2, includeDisabled)
+	candidates, err := searchNodeCandidatesByVisibility(ctx, e.store, strings.TrimSpace(request.TenantID), query, asOf, 3, includeDisabled)
 	if err != nil {
 		return cubebox.ExecuteResult{}, err
 	}
-
+	if len(candidates) > 1 {
+		return cubebox.ExecuteResult{}, &orgUnitSearchAmbiguousError{
+			Query:      query,
+			Candidates: append([]OrgUnitSearchCandidate(nil), candidates...),
+		}
+	}
 	result, err := searchNodeByVisibility(ctx, e.store, strings.TrimSpace(request.TenantID), query, asOf, includeDisabled)
 	if err != nil {
 		return cubebox.ExecuteResult{}, err
@@ -305,19 +358,15 @@ func (e cubeBoxOrgUnitSearchExecutor) Execute(ctx context.Context, request cubeb
 		result.PathOrgCodes = pathCodes
 	}
 
-	return cubebox.ExecuteResult{
-		Payload: map[string]any{
-			"target_org_code": result.TargetOrgCode,
-			"target_name":     result.TargetName,
-			"path_org_codes":  result.PathOrgCodes,
-			"tree_as_of":      result.TreeAsOf,
-			"target_unique":   len(candidates) == 1,
-		},
-	}, nil
+	payload, err := marshalStructPayload(result)
+	if err != nil {
+		return cubebox.ExecuteResult{}, err
+	}
+	return cubebox.ExecuteResult{Payload: payload}, nil
 }
 
 func (e cubeBoxOrgUnitAuditExecutor) ValidateParams(raw map[string]any) (map[string]any, error) {
-	orgCode, err := resolveOrgCodeParam(raw, nil)
+	orgCode, err := normalizeOptionalOrgCode(raw["org_code"], "org_code")
 	if err != nil {
 		return nil, err
 	}
@@ -375,14 +424,20 @@ func (e cubeBoxOrgUnitAuditExecutor) Execute(ctx context.Context, request cubebo
 		})
 	}
 
-	return cubebox.ExecuteResult{
-		Payload: map[string]any{
-			"org_code": orgCode,
-			"limit":    limit,
-			"has_more": hasMore,
-			"events":   items,
-		},
-	}, nil
+	resp := orgUnitAuditAPIResponse{
+		OrgCode: orgCode,
+		Limit:   limit,
+		HasMore: hasMore,
+		Events:  items,
+	}
+	if resp.Events == nil {
+		resp.Events = []orgUnitAuditAPIItem{}
+	}
+	payload, err := marshalStructPayload(resp)
+	if err != nil {
+		return cubebox.ExecuteResult{}, err
+	}
+	return cubebox.ExecuteResult{Payload: payload}, nil
 }
 
 func normalizeOrgUnitCommonParams(raw map[string]any) (map[string]any, error) {
@@ -398,54 +453,6 @@ func normalizeOrgUnitCommonParams(raw map[string]any) (map[string]any, error) {
 		"as_of":            asOf,
 		"include_disabled": includeDisabled,
 	}, nil
-}
-
-func resolveOrgCodeParam(raw map[string]any, previous map[string]cubebox.ExecuteResult) (string, error) {
-	if value, ok := raw["org_code"]; ok && value != nil {
-		return normalizeOptionalOrgCode(value, "org_code")
-	}
-	if value, ok := raw["org_code_from"]; ok && value != nil {
-		ref, err := normalizeRequiredString(value, "org_code_from")
-		if err != nil {
-			return "", err
-		}
-		if previous == nil {
-			return "", newBadRequestError("org_code required")
-		}
-		resolved, err := resolveStepResultReference(previous, ref)
-		if err != nil {
-			return "", err
-		}
-		return normalizeOptionalOrgCode(resolved, "org_code")
-	}
-	return "", newBadRequestError("org_code required")
-}
-
-func resolveStepResultReference(previous map[string]cubebox.ExecuteResult, ref string) (any, error) {
-	parts := strings.Split(strings.TrimSpace(ref), ".")
-	if len(parts) != 2 {
-		return nil, newBadRequestError("org_code_from invalid")
-	}
-	stepID := strings.TrimSpace(parts[0])
-	field := strings.TrimSpace(parts[1])
-	if stepID == "" || field == "" {
-		return nil, newBadRequestError("org_code_from invalid")
-	}
-	result, ok := previous[stepID]
-	if !ok {
-		return nil, newBadRequestError("org_code_from invalid")
-	}
-	if unique, ok := result.Payload["target_unique"]; ok {
-		isUnique, ok := unique.(bool)
-		if !ok || !isUnique {
-			return nil, newBadRequestError("org_code_from invalid")
-		}
-	}
-	value, ok := result.Payload[field]
-	if !ok || value == nil {
-		return nil, newBadRequestError("org_code_from invalid")
-	}
-	return value, nil
 }
 
 func normalizeDayParam(value any, field string) (string, error) {
@@ -577,9 +584,24 @@ func normalizeOrgUnitListStatus(value any) (string, error) {
 		return "", nil
 	case orgUnitListStatusActive:
 		return orgUnitListStatusActive, nil
-	case orgUnitListStatusInactive, orgUnitListStatusDisabled:
+	case orgUnitListStatusDisabled:
 		return orgUnitListStatusDisabled, nil
 	default:
 		return "", newBadRequestError("status invalid")
 	}
+}
+
+func marshalStructPayload(value any) (map[string]any, error) {
+	raw, err := json.Marshal(value)
+	if err != nil {
+		return nil, err
+	}
+	var payload map[string]any
+	if err := json.Unmarshal(raw, &payload); err != nil {
+		return nil, err
+	}
+	if payload == nil {
+		return map[string]any{}, nil
+	}
+	return payload, nil
 }

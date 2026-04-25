@@ -1325,7 +1325,8 @@ func TestCubeBoxStreamTurnAPILimitsLargeQueryPayloadInDelta(t *testing.T) {
 	req = req.WithContext(withPrincipal(req.Context(), Principal{ID: "p1"}))
 
 	registry, err := cubebox.NewExecutionRegistry(cubebox.RegisteredExecutor{
-		APIKey: "orgunit.details",
+		APIKey:         "orgunit.details",
+		RequiredParams: []string{"org_code", "as_of"},
 		Executor: queryExecutorStub{
 			validateParamsFn: func(raw map[string]any) (map[string]any, error) { return raw, nil },
 			executeFn: func(context.Context, cubebox.ExecuteRequest, map[string]any) (cubebox.ExecuteResult, error) {
@@ -1551,6 +1552,86 @@ func TestCubeBoxStreamTurnAPIWritesNotFoundWhenQueryExecutionHasNoResult(t *test
 	}
 	if !strings.Contains(body, `未找到符合条件的组织，请调整关键词或提供组织编码。`) {
 		t.Fatalf("expected explicit not found message body=%s", body)
+	}
+}
+
+func TestCubeBoxStreamTurnAPIClarifiesAmbiguousOrgunitSearch(t *testing.T) {
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/internal/cubebox/turns:stream", strings.NewReader(`{"conversation_id":"conv_1","prompt":"查华东","next_sequence":1}`))
+	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
+	req = req.WithContext(withPrincipal(req.Context(), Principal{ID: "p1"}))
+
+	registry, err := cubebox.NewExecutionRegistry(cubebox.RegisteredExecutor{
+		APIKey:         "orgunit.search",
+		RequiredParams: []string{"query", "as_of"},
+		Executor: queryExecutorStub{
+			validateParamsFn: func(raw map[string]any) (map[string]any, error) { return raw, nil },
+			executeFn: func(context.Context, cubebox.ExecuteRequest, map[string]any) (cubebox.ExecuteResult, error) {
+				return cubebox.ExecuteResult{}, &orgUnitSearchAmbiguousError{
+					Query: "华东",
+					Candidates: []OrgUnitSearchCandidate{
+						{OrgCode: "1001", Name: "华东销售中心", Status: "active"},
+						{OrgCode: "1002", Name: "华东运营中心", Status: "disabled"},
+					},
+				}
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("NewExecutionRegistry err=%v", err)
+	}
+
+	queryFlow := &cubeboxQueryFlow{
+		runtime: cubebox.NewRuntime(),
+		store: cubeboxStoreStub{
+			appendFn: func(context.Context, string, string, string, cubebox.CanonicalEvent) error { return nil },
+		},
+		registry: registry,
+		producer: cubeboxReadPlanProducerStub{result: cubeboxReadPlanProductionResult{
+			Handled: true,
+			Plan: cubebox.ReadPlan{
+				Intent:     "orgunit.search",
+				Confidence: 0.9,
+				Steps: []cubebox.ReadPlanStep{
+					{
+						ID:          "step-1",
+						APIKey:      "orgunit.search",
+						Params:      map[string]any{"query": "华东", "as_of": "2026-04-23"},
+						ResultFocus: []string{"target_org_code"},
+						DependsOn:   []string{},
+					},
+				},
+			},
+		}},
+		narrator: cubeboxQueryNarratorStub{fn: func(context.Context, cubeboxQueryNarrationInput) (string, error) {
+			t.Fatal("narrator should not be called when execution requires clarification")
+			return "", nil
+		}},
+		knowledgePacks: []cubebox.KnowledgePack{
+			{Dir: "modules/orgunit/presentation/cubebox", Files: map[string]string{"CUBEBOX-SKILL.md": "x", "queries.md": "x", "apis.md": "x", "examples.md": "x"}},
+		},
+		now: func() time.Time { return time.Date(2026, 4, 23, 12, 0, 0, 0, time.UTC) },
+	}
+
+	handleCubeBoxStreamTurnAPI(rec, req, cubebox.NewRuntime(), cubeboxStoreStub{
+		appendFn: func(context.Context, string, string, string, cubebox.CanonicalEvent) error { return nil },
+	}, newTestGateway(cubebox.NewRuntime()), queryFlow)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+	}
+	body := rec.Body.String()
+	if !strings.Contains(body, "找到了多个与“华东”匹配的组织") {
+		t.Fatalf("expected clarification body=%s", body)
+	}
+	if !strings.Contains(body, "1001") || !strings.Contains(body, "1002") {
+		t.Fatalf("expected candidate codes in clarification body=%s", body)
+	}
+	if strings.Contains(body, `"code":"invalid_request"`) || strings.Contains(body, `"type":"turn.error"`) {
+		t.Fatalf("ambiguous search should clarify instead of failing body=%s", body)
+	}
+	if !strings.Contains(body, `"type":"turn.completed"`) {
+		t.Fatalf("expected terminal completed event body=%s", body)
 	}
 }
 
