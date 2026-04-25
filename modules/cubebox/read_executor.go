@@ -4,10 +4,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"regexp"
 	"strings"
 )
 
 var ErrAPICatalogDriftOrExecutorMissing = errors.New("CUBEBOX_API_CATALOG_DRIFT_OR_EXECUTOR_MISSING")
+
+var readPlanParamReferencePattern = regexp.MustCompile(`^@([A-Za-z0-9_-]+)\.([A-Za-z0-9_.-]+)$`)
 
 type ReadExecutor interface {
 	ValidateParams(raw map[string]any) (map[string]any, error)
@@ -101,10 +104,14 @@ func (r *ExecutionRegistry) ExecutePlan(ctx context.Context, request ExecuteRequ
 		if !ok {
 			return nil, wrapExecutorMissingError(fmt.Sprintf("api_key not registered: %s", strings.TrimSpace(step.APIKey)))
 		}
-		if err := validateRegisteredParams(item, step.Params); err != nil {
+		resolvedParams, err := resolveReadPlanStepParams(step.Params, previousResults)
+		if err != nil {
 			return nil, err
 		}
-		validatedParams, err := item.Executor.ValidateParams(step.Params)
+		if err := validateRegisteredParams(item, resolvedParams); err != nil {
+			return nil, err
+		}
+		validatedParams, err := item.Executor.ValidateParams(resolvedParams)
 		if err != nil {
 			return nil, err
 		}
@@ -179,6 +186,100 @@ func normalizeParamNames(items []string) []string {
 		out = append(out, name)
 	}
 	return out
+}
+
+func resolveReadPlanStepParams(params map[string]any, previousResults map[string]ExecuteResult) (map[string]any, error) {
+	if len(params) == 0 {
+		return map[string]any{}, nil
+	}
+	out := make(map[string]any, len(params))
+	for name, value := range params {
+		resolved, err := resolveReadPlanParamValue(value, previousResults)
+		if err != nil {
+			return nil, wrapReadPlanBoundaryError(fmt.Sprintf("param %s reference invalid: %v", strings.TrimSpace(name), err))
+		}
+		out[name] = resolved
+	}
+	return out, nil
+}
+
+func resolveReadPlanParamValue(value any, previousResults map[string]ExecuteResult) (any, error) {
+	text, ok := value.(string)
+	if !ok {
+		return value, nil
+	}
+	text = strings.TrimSpace(text)
+	if !strings.HasPrefix(text, "@") {
+		return value, nil
+	}
+	matches := readPlanParamReferencePattern.FindStringSubmatch(text)
+	if len(matches) != 3 {
+		return nil, errors.New("reference syntax invalid")
+	}
+	stepID := strings.TrimSpace(matches[1])
+	fieldPath := strings.TrimSpace(matches[2])
+	if stepID == "" || fieldPath == "" {
+		return nil, errors.New("reference syntax invalid")
+	}
+	result, ok := previousResults[stepID]
+	if !ok {
+		return nil, errors.New("referenced step not found")
+	}
+	resolved, err := resolveReadPlanResultField(result, fieldPath)
+	if err != nil {
+		return nil, err
+	}
+	return resolved, nil
+}
+
+func resolveReadPlanResultField(result ExecuteResult, fieldPath string) (any, error) {
+	parts := strings.Split(fieldPath, ".")
+	if len(parts) == 0 {
+		return nil, errors.New("reference field required")
+	}
+	first := strings.TrimSpace(parts[0])
+	switch first {
+	case "payload":
+		if len(parts) < 2 {
+			return nil, errors.New("payload child field required")
+		}
+		return resolveNestedMapField(result.Payload, parts[1:])
+	case "api_key":
+		return result.APIKey, nil
+	case "step_id":
+		return result.StepID, nil
+	default:
+		if len(parts) != 1 {
+			return nil, errors.New("only top-level payload alias fields allowed")
+		}
+		return resolveNestedMapField(result.Payload, parts)
+	}
+}
+
+func resolveNestedMapField(payload map[string]any, parts []string) (any, error) {
+	if len(parts) == 0 {
+		return nil, errors.New("field path required")
+	}
+	current := any(payload)
+	for _, part := range parts {
+		key := strings.TrimSpace(part)
+		if key == "" {
+			return nil, errors.New("field path invalid")
+		}
+		m, ok := current.(map[string]any)
+		if !ok {
+			return nil, errors.New("field path invalid")
+		}
+		next, exists := m[key]
+		if !exists {
+			return nil, errors.New("field not found")
+		}
+		current = next
+	}
+	if current == nil {
+		return nil, errors.New("field empty")
+	}
+	return current, nil
 }
 
 func copyPreviousResults(in map[string]ExecuteResult) map[string]ExecuteResult {

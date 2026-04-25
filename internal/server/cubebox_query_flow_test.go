@@ -170,6 +170,45 @@ func TestQueryFlowReturnsPlannerClarificationVerbatim(t *testing.T) {
 	}
 }
 
+func TestBuildPlannerMessagesIncludesQueryDialogueContext(t *testing.T) {
+	producer := &cubeboxProviderReadPlanProducer{
+		now: func() time.Time { return time.Date(2026, 4, 25, 12, 0, 0, 0, time.UTC) },
+	}
+
+	messages := producer.buildPlannerMessages(cubeboxReadPlanProductionInput{
+		Prompt: "查该组织的下级组织",
+		KnowledgePacks: []cubebox.KnowledgePack{
+			{Dir: "modules/orgunit/presentation/cubebox", Files: map[string]string{"CUBEBOX-SKILL.md": "x", "queries.md": "x", "apis.md": "x", "examples.md": "x"}},
+		},
+		QueryContext: cubebox.QueryContext{
+			RecentConfirmedEntity: &cubebox.QueryEntity{
+				Domain:    "orgunit",
+				EntityKey: "100000",
+				AsOf:      "2026-04-25",
+			},
+			RecentCandidates: []cubebox.QueryCandidate{
+				{Domain: "orgunit", EntityKey: "200000", Name: "飞虫公司", AsOf: "2026-04-25"},
+			},
+		},
+	})
+
+	if len(messages) < 3 {
+		t.Fatalf("expected planner messages, got %+v", messages)
+	}
+	found := false
+	for _, message := range messages {
+		if strings.Contains(message.Content, "query_dialogue_context") {
+			found = true
+			if !strings.Contains(message.Content, "recent_candidates") || !strings.Contains(message.Content, "100000") {
+				t.Fatalf("unexpected context block=%q", message.Content)
+			}
+		}
+	}
+	if !found {
+		t.Fatalf("expected query_dialogue_context block, got %+v", messages)
+	}
+}
+
 type capturingGatewaySink struct {
 	events []cubebox.CanonicalEvent
 }

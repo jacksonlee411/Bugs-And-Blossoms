@@ -36,6 +36,7 @@ type cubeBoxOrgUnitAuditExecutor struct {
 type orgUnitSearchAmbiguousError struct {
 	Query      string
 	Candidates []OrgUnitSearchCandidate
+	AsOf       string
 }
 
 func (e *orgUnitSearchAmbiguousError) Error() string {
@@ -77,6 +78,27 @@ func (e *orgUnitSearchAmbiguousError) ClarifyingQuestion() string {
 		return "找到了多个可能匹配的组织，请提供组织编码以便继续查询。可选项：" + strings.Join(items, "、") + "。"
 	}
 	return "找到了多个与“" + query + "”匹配的组织，请提供组织编码以便继续查询。可选项：" + strings.Join(items, "、") + "。"
+}
+
+func (e *orgUnitSearchAmbiguousError) QueryCandidates() []cubebox.QueryCandidate {
+	if e == nil {
+		return nil
+	}
+	items := make([]cubebox.QueryCandidate, 0, len(e.Candidates))
+	for _, candidate := range e.Candidates {
+		normalized := cubebox.NormalizeQueryCandidate(cubebox.QueryCandidate{
+			Domain:    "orgunit",
+			EntityKey: candidate.OrgCode,
+			Name:      candidate.Name,
+			AsOf:      e.AsOf,
+			Status:    candidate.Status,
+		})
+		if normalized == nil {
+			continue
+		}
+		items = append(items, *normalized)
+	}
+	return items
 }
 
 func newCubeBoxOrgUnitRegisteredExecutors(store OrgUnitStore) ([]cubebox.RegisteredExecutor, error) {
@@ -354,6 +376,7 @@ func (e cubeBoxOrgUnitSearchExecutor) Execute(ctx context.Context, request cubeb
 		return cubebox.ExecuteResult{}, &orgUnitSearchAmbiguousError{
 			Query:      query,
 			Candidates: append([]OrgUnitSearchCandidate(nil), candidates...),
+			AsOf:       asOf,
 		}
 	}
 	result, err := searchNodeByVisibility(ctx, e.store, strings.TrimSpace(request.TenantID), query, asOf, includeDisabled)

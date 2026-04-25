@@ -32,7 +32,7 @@ type cubeboxReadPlanProductionInput struct {
 	ConversationID string
 	Prompt         string
 	KnowledgePacks []cubebox.KnowledgePack
-	RecentEntity   *cubebox.QueryEntity
+	QueryContext   cubebox.QueryContext
 }
 
 type cubeboxReadPlanProductionResult struct {
@@ -186,14 +186,13 @@ func (f *cubeboxQueryFlow) TryHandle(
 	if err != nil {
 		return false
 	}
-	recentEntity := queryContext.RecentConfirmedEntity
 	produced, err := f.producer.ProduceReadPlan(ctx, cubeboxReadPlanProductionInput{
 		TenantID:       strings.TrimSpace(request.TenantID),
 		PrincipalID:    strings.TrimSpace(request.PrincipalID),
 		ConversationID: strings.TrimSpace(request.ConversationID),
 		Prompt:         request.Prompt,
 		KnowledgePacks: append([]cubebox.KnowledgePack(nil), f.knowledgePacks...),
-		RecentEntity:   recentEntity,
+		QueryContext:   queryContext,
 	})
 	if err != nil {
 		return false
@@ -234,6 +233,11 @@ func (f *cubeboxQueryFlow) TryHandle(
 		if !writeEvent("turn.agent_message.delta", map[string]any{"message_id": prepared.turn.AssistantMessageID, "delta": text}) {
 			return true
 		}
+		f.appendQueryMetadataEvent(ctx, request, prepared.turn.TurnID, &prepared.sequence, cubebox.QueryClarificationRequestedEventType, map[string]any{
+			"intent":              strings.TrimSpace(produced.Plan.Intent),
+			"missing_params":      append([]string(nil), produced.Plan.MissingParams...),
+			"clarifying_question": text,
+		})
 		_ = writeEvent("turn.agent_message.completed", map[string]any{"message_id": prepared.turn.AssistantMessageID})
 		_ = writeEvent("turn.completed", f.queryCompletedPayload("completed", prepared.lifecycle))
 		return true
@@ -248,6 +252,14 @@ func (f *cubeboxQueryFlow) TryHandle(
 		if text := queryExecutionClarifyingQuestion(err); text != "" {
 			if !writeEvent("turn.agent_message.delta", map[string]any{"message_id": prepared.turn.AssistantMessageID, "delta": text}) {
 				return true
+			}
+			f.appendQueryMetadataEvent(ctx, request, prepared.turn.TurnID, &prepared.sequence, cubebox.QueryClarificationRequestedEventType, map[string]any{
+				"clarifying_question": text,
+			})
+			if candidates := queryExecutionCandidates(err); len(candidates) > 0 {
+				f.appendQueryMetadataEvent(ctx, request, prepared.turn.TurnID, &prepared.sequence, cubebox.QueryCandidatesPresentedEventType, map[string]any{
+					"candidates": queryCandidatePayloads(candidates),
+				})
 			}
 			_ = writeEvent("turn.agent_message.completed", map[string]any{"message_id": prepared.turn.AssistantMessageID})
 			_ = writeEvent("turn.completed", f.queryCompletedPayload("completed", prepared.lifecycle))
@@ -274,6 +286,11 @@ func (f *cubeboxQueryFlow) TryHandle(
 	}
 	if anchor := confirmedQueryEntity(results); anchor != nil {
 		f.appendQueryMetadataEvent(ctx, request, prepared.turn.TurnID, &prepared.sequence, cubebox.QueryEntityConfirmedEventType, map[string]any{"entity": anchor.Payload()})
+	}
+	if candidates := queryPresentedCandidates(results); len(candidates) > 0 {
+		f.appendQueryMetadataEvent(ctx, request, prepared.turn.TurnID, &prepared.sequence, cubebox.QueryCandidatesPresentedEventType, map[string]any{
+			"candidates": queryCandidatePayloads(candidates),
+		})
 	}
 	if !writeEvent("turn.agent_message.delta", map[string]any{"message_id": prepared.turn.AssistantMessageID, "delta": answer}) {
 		return true
@@ -381,10 +398,10 @@ func (p *cubeboxProviderReadPlanProducer) buildPlannerMessages(input cubeboxRead
 			Content: buildKnowledgePackPromptBlock(pack),
 		})
 	}
-	if input.RecentEntity != nil {
+	if block := buildQueryDialogueContextPromptBlock(input.QueryContext); block != "" {
 		messages = append(messages, cubebox.PromptItem{
 			Role:    "system",
-			Content: buildRecentQueryEntityPromptBlock(*input.RecentEntity),
+			Content: block,
 		})
 	}
 	messages = append(messages, cubebox.PromptItem{
@@ -394,9 +411,16 @@ func (p *cubeboxProviderReadPlanProducer) buildPlannerMessages(input cubeboxRead
 	return messages
 }
 
-func buildRecentQueryEntityPromptBlock(entity cubebox.QueryEntity) string {
+func buildQueryDialogueContextPromptBlock(queryContext cubebox.QueryContext) string {
 	body, err := json.Marshal(map[string]any{
-		"recent_confirmed_query_entity": entity,
+		"query_dialogue_context": map[string]any{
+			"recent_confirmed_entity":   queryContext.RecentConfirmedEntity,
+			"recent_confirmed_entities": queryContext.RecentConfirmedEntities,
+			"recent_dialogue_turns":     queryContext.RecentDialogueTurns,
+			"last_clarification":        queryContext.LastClarification,
+			"recent_candidates":         queryContext.RecentCandidates,
+			"resolved_entity":           queryContext.ResolvedEntity,
+		},
 	})
 	if err != nil {
 		return ""
@@ -405,9 +429,10 @@ func buildRecentQueryEntityPromptBlock(entity cubebox.QueryEntity) string {
 %s
 
 使用规则：
-- 该块只提供上一轮已成功只读查询确认的结构化实体事实。
+- 当前轮用户显式输入优先。
+- 该块只提供当前会话已记录的结构化查询事实、候选与最近问答，不代表代码已经替你选定当前引用对象。
 - 字段语义、继承规则与澄清策略以已加载知识包为准，通用 query flow 不解释具体业务字段。
-- 当前轮用户显式输入优先；该上下文不是授权来源，也不是会话压缩摘要。`, string(body)))
+- 该上下文不是授权来源，也不是会话压缩摘要。`, string(body)))
 }
 
 func buildKnowledgePackPromptBlock(pack cubebox.KnowledgePack) string {
@@ -727,6 +752,89 @@ func confirmedQueryEntity(results []cubebox.ExecuteResult) *cubebox.QueryEntity 
 	return nil
 }
 
+func queryPresentedCandidates(results []cubebox.ExecuteResult) []cubebox.QueryCandidate {
+	for _, result := range results {
+		candidates := extractQueryCandidatesFromPayload(result.Payload)
+		if len(candidates) > 0 {
+			return candidates
+		}
+	}
+	return nil
+}
+
+func queryCandidatePayloads(items []cubebox.QueryCandidate) []any {
+	out := make([]any, 0, len(items))
+	for _, item := range items {
+		payload := item.Payload()
+		if len(payload) == 0 {
+			continue
+		}
+		out = append(out, payload)
+	}
+	return out
+}
+
+func extractQueryCandidatesFromPayload(payload map[string]any) []cubebox.QueryCandidate {
+	if len(payload) == 0 {
+		return nil
+	}
+	if rawItems, ok := payload["org_units"].([]any); ok {
+		candidates := make([]cubebox.QueryCandidate, 0, minIntServer(len(rawItems), 100))
+		asOf := strings.TrimSpace(stringValue(payload["as_of"]))
+		for _, rawItem := range rawItems {
+			item, ok := rawItem.(map[string]any)
+			if !ok {
+				continue
+			}
+			candidate := cubebox.NormalizeQueryCandidate(cubebox.QueryCandidate{
+				Domain:    "orgunit",
+				EntityKey: stringValue(item["org_code"]),
+				Name:      stringValue(item["name"]),
+				AsOf:      asOf,
+				Status:    stringValue(item["status"]),
+			})
+			if candidate == nil {
+				continue
+			}
+			candidates = append(candidates, *candidate)
+			if len(candidates) >= 100 {
+				break
+			}
+		}
+		return candidates
+	}
+	if targetOrgCode := strings.TrimSpace(stringValue(payload["target_org_code"])); targetOrgCode != "" {
+		candidate := cubebox.NormalizeQueryCandidate(cubebox.QueryCandidate{
+			Domain:    "orgunit",
+			EntityKey: targetOrgCode,
+			Name:      stringValue(payload["target_name"]),
+			AsOf:      strings.TrimSpace(stringValue(payload["tree_as_of"])),
+		})
+		if candidate != nil {
+			return []cubebox.QueryCandidate{*candidate}
+		}
+	}
+	return nil
+}
+
+func stringValue(value any) string {
+	switch v := value.(type) {
+	case string:
+		return v
+	case []byte:
+		return string(v)
+	default:
+		return ""
+	}
+}
+
+func minIntServer(a int, b int) int {
+	if a < b {
+		return a
+	}
+	return b
+}
+
 func normalizedQueryEntity(entity *cubebox.QueryEntity) *cubebox.QueryEntity {
 	if entity == nil {
 		return nil
@@ -909,6 +1017,14 @@ func queryExecutionClarifyingQuestion(err error) string {
 		return strings.TrimSpace(ambiguous.ClarifyingQuestion())
 	}
 	return ""
+}
+
+func queryExecutionCandidates(err error) []cubebox.QueryCandidate {
+	var ambiguous *orgUnitSearchAmbiguousError
+	if errors.As(err, &ambiguous) {
+		return ambiguous.QueryCandidates()
+	}
+	return nil
 }
 
 func queryNarrationErrorToTerminal(err error) queryTerminalError {

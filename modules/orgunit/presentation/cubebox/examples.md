@@ -149,23 +149,57 @@
 
 `先帮我找到名字里带华东的组织，再看它在 2026-04-23 的详情`
 
-期望返回：
+期望 `ReadPlan`：
 
 ```json
 {
   "intent": "orgunit.search_then_details",
-  "confidence": 0.46,
-  "missing_params": [
-    "org_code"
+  "confidence": 0.84,
+  "missing_params": [],
+  "steps": [
+    {
+      "id": "step-1",
+      "api_key": "orgunit.search",
+      "params": {
+        "query": "华东",
+        "as_of": "2026-04-23",
+        "include_disabled": false
+      },
+      "result_focus": [
+        "target_org_code",
+        "target_name"
+      ],
+      "depends_on": []
+    },
+    {
+      "id": "step-2",
+      "api_key": "orgunit.details",
+      "params": {
+        "org_code": "@step-1.target_org_code",
+        "as_of": "2026-04-23",
+        "include_disabled": false
+      },
+      "result_focus": [
+        "org_unit.name",
+        "org_unit.parent_org_code",
+        "org_unit.manager_name"
+      ],
+      "depends_on": [
+        "step-1"
+      ]
+    }
   ],
-  "clarifying_question": "请先提供要查看详情的组织编码；如果你只是想先定位名称里带“华东”的组织，我可以先按 2026-04-23 为你搜索。"
+  "explain_focus": [
+    "先定位唯一命中的组织",
+    "再回答组织详情"
+  ]
 }
 ```
 
 说明：
 
-- 本示例体现当前 owner 口径：搜索和详情之间不要依赖本地隐藏字段续执行
-- 若用户尚未提供可直接查询详情的 `org_code`，应先回到澄清，而不是让执行层读取前一步结果拼参数
+- 本示例体现 `468 P0` 口径：若第一步可以唯一命中，应优先生成线性多步 `ReadPlan`
+- 搜索和详情之间允许通过 `@step-1.target_org_code` 或 `@step-1.payload.target_org_code` 引用前序结果
 - 若按名称搜索会命中多个组织，也应先回到澄清，并给出少量候选供用户确认，不要静默选第一条继续
 
 ## 示例 6：列表状态过滤使用 canonical 参数
@@ -215,11 +249,18 @@
 planner 上下文：
 
 ```yaml
-recent_confirmed_query_entity:
-  domain: orgunit
-  intent: orgunit.details
-  entity_key: "100000"
-  as_of: "2026-04-25"
+query_dialogue_context:
+  recent_confirmed_entity:
+    domain: orgunit
+    intent: orgunit.details
+    entity_key: "100000"
+    as_of: "2026-04-25"
+  recent_confirmed_entities:
+    - domain: orgunit
+      intent: orgunit.details
+      entity_key: "100000"
+      as_of: "2026-04-25"
+  recent_candidates: []
 ```
 
 用户问法：
@@ -270,7 +311,10 @@ recent_confirmed_query_entity:
 planner 上下文：
 
 ```yaml
-recent_confirmed_query_entity: null
+query_dialogue_context:
+  recent_confirmed_entity: null
+  recent_confirmed_entities: []
+  recent_candidates: []
 ```
 
 用户问法：
@@ -295,3 +339,119 @@ recent_confirmed_query_entity: null
 - 该问题仍属于组织架构查询域，不应输出 `NO_QUERY`
 - 不得回答“没有查询接口”“没有工具权限”
 - 不得从会话压缩摘要里猜测组织编码
+
+## 示例 9：只有名称时先 search 再 list
+
+用户问法：
+
+`查询飞虫公司的下级组织，只有名称`
+
+期望 `ReadPlan`：
+
+```json
+{
+  "intent": "orgunit.search_then_list",
+  "confidence": 0.88,
+  "missing_params": [],
+  "steps": [
+    {
+      "id": "step-1",
+      "api_key": "orgunit.search",
+      "params": {
+        "query": "飞虫公司",
+        "as_of": "2026-04-25",
+        "include_disabled": false
+      },
+      "result_focus": [
+        "target_org_code",
+        "target_name"
+      ],
+      "depends_on": []
+    },
+    {
+      "id": "step-2",
+      "api_key": "orgunit.list",
+      "params": {
+        "as_of": "2026-04-25",
+        "parent_org_code": "@step-1.target_org_code",
+        "include_disabled": false
+      },
+      "result_focus": [
+        "org_units[].org_code",
+        "org_units[].name",
+        "org_units[].status",
+        "org_units[].has_children"
+      ],
+      "depends_on": [
+        "step-1"
+      ]
+    }
+  ],
+  "explain_focus": [
+    "先定位组织编码",
+    "再回答直接下级组织"
+  ]
+}
+```
+
+说明：
+
+- 用户虽然只给了名称，但目标查询需要稳定编码时，不必先追问编码
+- 若第一步搜索不是唯一命中，应回到澄清，并给出少量候选供用户确认
+
+## 示例 10：消费 recent_candidates 中的“第一个”
+
+planner 上下文：
+
+```yaml
+query_dialogue_context:
+  recent_confirmed_entity: null
+  recent_confirmed_entities: []
+  recent_candidates:
+    - domain: orgunit
+      entity_key: "200000"
+      name: "飞虫公司"
+      as_of: "2026-04-25"
+    - domain: orgunit
+      entity_key: "300000"
+      name: "鲜花公司"
+      as_of: "2026-04-25"
+```
+
+用户问法：
+
+`第一个`
+
+期望 `ReadPlan`：
+
+```json
+{
+  "intent": "orgunit.details",
+  "confidence": 0.79,
+  "missing_params": [],
+  "steps": [
+    {
+      "id": "step-1",
+      "api_key": "orgunit.details",
+      "params": {
+        "org_code": "200000",
+        "as_of": "2026-04-25",
+        "include_disabled": false
+      },
+      "result_focus": [
+        "org_unit.name",
+        "org_unit.status"
+      ],
+      "depends_on": []
+    }
+  ],
+  "explain_focus": [
+    "回答第一个候选组织的详情"
+  ]
+}
+```
+
+说明：
+
+- 当上一轮已经给用户展示了候选列表时，“第一个”“第二个”“那个公司”应优先消费 `recent_candidates`
+- 只有在候选为空或用户指代仍然歧义时，才回到澄清

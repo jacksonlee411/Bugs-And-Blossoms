@@ -6,7 +6,7 @@
 
 本文件不是运行时执行事实源。运行时唯一执行事实源以后续代码中的 `api_key -> executor` 注册表为准。
 
-planner 输入可能包含最近已确认查询实体。该上下文只用于补齐用户代词型追问中的稳定参数，不是新的 API，也不是授权来源；在 orgunit 域中 `entity_key` 表示组织编码，当前轮用户显式参数始终优先。
+planner 输入可能包含 `query_dialogue_context`。该上下文只用于补齐用户代词型追问中的稳定参数，不是新的 API，也不是授权来源；在 orgunit 域中 `entity_key` 表示组织编码，当前轮用户显式参数始终优先。
 
 禁止项：
 
@@ -85,6 +85,7 @@ apis:
   - `target_name`
   - `path_org_codes`
   - `tree_as_of`
+- 多步编排提示：若 `orgunit.search` 已唯一命中，后续 step 可合法引用 `@step-1.target_org_code` 或 `@step-1.payload.target_org_code`
 - owner 说明：`path_org_codes` 当前属于现有 `orgunit.search` 读契约字段；若未来删除，必须同步调整 `orgunit` 读契约与知识包，不能只在 CubeBox executor 单点删除
 - 权限前提：必须沿用当前用户、当前租户、当前 session 的现有只读权限边界
 

@@ -72,6 +72,9 @@ func TestExecutionRegistryExecutePlan(t *testing.T) {
 					if !ok {
 						t.Fatal("missing previous result for step-1")
 					}
+					if params["org_code"] != "1001" {
+						t.Fatalf("expected resolved org_code, got %v", params["org_code"])
+					}
 					return ExecuteResult{
 						Payload: map[string]any{
 							"org_code":      params["org_code"],
@@ -101,7 +104,7 @@ func TestExecutionRegistryExecutePlan(t *testing.T) {
 			{
 				ID:          "step-2",
 				APIKey:      "orgunit.details",
-				Params:      map[string]any{"org_code": "1001", "as_of": "2026-04-23"},
+				Params:      map[string]any{"org_code": "@step-1.target_org_code", "as_of": "2026-04-23"},
 				ResultFocus: []string{"org_unit.name"},
 				DependsOn:   []string{"step-1"},
 			},
@@ -125,6 +128,62 @@ func TestExecutionRegistryExecutePlan(t *testing.T) {
 	}
 	if results[1].Payload["resolved_from"] != "1001" {
 		t.Fatalf("resolved_from=%v", results[1].Payload["resolved_from"])
+	}
+}
+
+func TestExecutionRegistryExecutePlanResolvesPayloadPathReference(t *testing.T) {
+	registry, err := NewExecutionRegistry(
+		RegisteredExecutor{
+			APIKey:         "orgunit.search",
+			RequiredParams: []string{"query", "as_of"},
+			Executor: readExecutorStub{
+				executeFn: func(_ context.Context, _ ExecuteRequest, _ map[string]any) (ExecuteResult, error) {
+					return ExecuteResult{
+						Payload: map[string]any{
+							"payload":         map[string]any{"target_org_code": "nested-value"},
+							"target_org_code": "top-value",
+						},
+					}, nil
+				},
+			},
+		},
+		RegisteredExecutor{
+			APIKey:         "orgunit.details",
+			RequiredParams: []string{"org_code", "as_of"},
+			Executor: readExecutorStub{
+				executeFn: func(_ context.Context, _ ExecuteRequest, params map[string]any) (ExecuteResult, error) {
+					if params["org_code"] != "top-value" {
+						t.Fatalf("expected payload reference resolved, got %v", params["org_code"])
+					}
+					return ExecuteResult{Payload: map[string]any{}}, nil
+				},
+			},
+		},
+	)
+	if err != nil {
+		t.Fatalf("NewExecutionRegistry err=%v", err)
+	}
+
+	_, err = registry.ExecutePlan(context.Background(), ExecuteRequest{}, ReadPlan{
+		Intent:     "orgunit.search_then_details",
+		Confidence: 0.8,
+		Steps: []ReadPlanStep{
+			{
+				ID:        "step-1",
+				APIKey:    "orgunit.search",
+				Params:    map[string]any{"query": "华东", "as_of": "2026-04-23"},
+				DependsOn: []string{},
+			},
+			{
+				ID:        "step-2",
+				APIKey:    "orgunit.details",
+				Params:    map[string]any{"org_code": "@step-1.payload.target_org_code", "as_of": "2026-04-23"},
+				DependsOn: []string{"step-1"},
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("ExecutePlan err=%v", err)
 	}
 }
 
@@ -232,6 +291,75 @@ func TestExecutionRegistryExecutePlanRejectsUnexpectedParam(t *testing.T) {
 			},
 		},
 		ExplainFocus: []string{},
+	})
+	if !errors.Is(err, ErrReadPlanBoundaryViolation) {
+		t.Fatalf("expected ErrReadPlanBoundaryViolation, got %v", err)
+	}
+}
+
+func TestExecutionRegistryExecutePlanRejectsInvalidReferenceSyntax(t *testing.T) {
+	registry, err := NewExecutionRegistry(
+		RegisteredExecutor{
+			APIKey:         "orgunit.details",
+			RequiredParams: []string{"org_code", "as_of"},
+			Executor:       readExecutorStub{},
+		},
+	)
+	if err != nil {
+		t.Fatalf("NewExecutionRegistry err=%v", err)
+	}
+
+	_, err = registry.ExecutePlan(context.Background(), ExecuteRequest{}, ReadPlan{
+		Intent:     "orgunit.details",
+		Confidence: 0.9,
+		Steps: []ReadPlanStep{
+			{
+				ID:        "step-1",
+				APIKey:    "orgunit.details",
+				Params:    map[string]any{"org_code": "@bad", "as_of": "2026-04-23"},
+				DependsOn: []string{},
+			},
+		},
+	})
+	if !errors.Is(err, ErrReadPlanBoundaryViolation) {
+		t.Fatalf("expected ErrReadPlanBoundaryViolation, got %v", err)
+	}
+}
+
+func TestExecutionRegistryExecutePlanRejectsReferenceToMissingStep(t *testing.T) {
+	registry, err := NewExecutionRegistry(
+		RegisteredExecutor{
+			APIKey:         "orgunit.search",
+			RequiredParams: []string{"query", "as_of"},
+			Executor:       readExecutorStub{},
+		},
+		RegisteredExecutor{
+			APIKey:         "orgunit.details",
+			RequiredParams: []string{"org_code", "as_of"},
+			Executor:       readExecutorStub{},
+		},
+	)
+	if err != nil {
+		t.Fatalf("NewExecutionRegistry err=%v", err)
+	}
+
+	_, err = registry.ExecutePlan(context.Background(), ExecuteRequest{}, ReadPlan{
+		Intent:     "orgunit.search_then_details",
+		Confidence: 0.9,
+		Steps: []ReadPlanStep{
+			{
+				ID:        "step-1",
+				APIKey:    "orgunit.search",
+				Params:    map[string]any{"query": "华东", "as_of": "2026-04-23"},
+				DependsOn: []string{},
+			},
+			{
+				ID:        "step-2",
+				APIKey:    "orgunit.details",
+				Params:    map[string]any{"org_code": "@step-0.target_org_code", "as_of": "2026-04-23"},
+				DependsOn: []string{"step-1"},
+			},
+		},
 	})
 	if !errors.Is(err, ErrReadPlanBoundaryViolation) {
 		t.Fatalf("expected ErrReadPlanBoundaryViolation, got %v", err)

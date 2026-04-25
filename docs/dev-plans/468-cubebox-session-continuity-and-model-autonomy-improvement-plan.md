@@ -1,6 +1,6 @@
 # DEV-PLAN-468：CubeBox 同会话连续追问与模型自主性收敛方案
 
-**状态**: 规划中（2026-04-25 15:10 CST）
+**状态**: 实施中（2026-04-25 17:20 CST）
 
 ## 0. 适用范围与评审分级
 
@@ -390,18 +390,18 @@ narrator 可以看到：
 
 ### Slice A：统一 `QueryContext` 与 metadata event 最小闭环
 
-1. [ ] 以 `DEV-PLAN-469 Phase 1 / No-Summary Baseline` 作为 `468 P0` 前置；实现、测试与真实页面复验均不得假设 compaction summary 可用。
-2. [ ] 将 `modules/cubebox.QueryContext` 从单个 `RecentConfirmedEntity` 扩展为有限窗口结构，至少包含：
+1. [x] 以 `DEV-PLAN-469 Phase 1 / No-Summary Baseline` 作为 `468 P0` 前置；实现、测试与真实页面复验均不得假设 compaction summary 可用。
+2. [x] 将 `modules/cubebox.QueryContext` 从单个 `RecentConfirmedEntity` 扩展为有限窗口结构，至少包含：
    - `RecentConfirmedEntities []QueryEntity`
    - `RecentDialogueTurns []QueryDialogueTurn`
    - `LastClarification *QueryClarification`
    - `RecentCandidates []QueryCandidate`
-3. [ ] 保留当前 `RecentConfirmedEntity` 兼容访问器或派生字段，避免一次性大面积改调用方；但它降级为 compatibility accessor，不再作为 planner 语义 owner。
-4. [ ] 成功查询后继续写 `turn.query_entity.confirmed`；当查询返回可供下一轮指代解析的实体列表、候选列表或澄清请求时，统一写入不可见 metadata event。
-5. [ ] 事件 payload 必须小而稳定，只记录后续追问需要的锚点，不记录整份查询结果；普通列表结果也应可转为 `recent_candidates`，真实返回条数不做限制，但注入模型时最多保留前 `100` 条。
-6. [ ] `QueryContextFromEvents(...)` 只从当前会话事件流提取，默认最多保留最近 `5` 个对话片段与最近 `5` 个实体/候选组；消费 confirmed/candidates/clarification/resolved-context 事件形成下一轮 planner 输入。
-7. [ ] 若需记录“当前轮解析到了哪个实体”，应写成单独的 resolved-context metadata，而不是回写覆盖 `confirmed entity` 的事实语义。
-8. [ ] 单元测试覆盖：
+3. [x] 保留当前 `RecentConfirmedEntity` 兼容访问器或派生字段，避免一次性大面积改调用方；但它降级为 compatibility accessor，不再作为 planner 语义 owner。
+4. [x] 成功查询后继续写 `turn.query_entity.confirmed`；当查询返回可供下一轮指代解析的实体列表、候选列表或澄清请求时，统一写入不可见 metadata event。
+5. [x] 事件 payload 必须小而稳定，只记录后续追问需要的锚点，不记录整份查询结果；普通列表结果也应可转为 `recent_candidates`，真实返回条数不做限制，但注入模型时最多保留前 `100` 条。
+6. [x] `QueryContextFromEvents(...)` 只从当前会话事件流提取，默认最多保留最近 `5` 个对话片段与最近 `5` 个实体/候选组；消费 confirmed/candidates/clarification/resolved-context 事件形成下一轮 planner 输入。
+7. [x] 若需记录“当前轮解析到了哪个实体”，应写成单独的 resolved-context metadata，而不是回写覆盖 `confirmed entity` 的事实语义。
+8. [x] 单元测试覆盖：
    - 多个实体时保留最近列表
    - 无效实体跳过
    - 普通列表结果转 `recent_candidates`
@@ -413,27 +413,27 @@ narrator 可以看到：
 
 ### Slice B：扩展 planner 输入与知识包指引
 
-1. [ ] 将 `cubeboxReadPlanProductionInput` 中的 `RecentEntity` 扩展为完整 `QueryContext`。
-2. [ ] `buildPlannerMessages(...)` 注入一个稳定 JSON 块，例如 `query_dialogue_context`，包含最近实体、上一轮问答摘要、候选与澄清状态。
-3. [ ] planner system prompt 明确：
+1. [x] 将 `cubeboxReadPlanProductionInput` 中的 `RecentEntity` 扩展为完整 `QueryContext`。
+2. [x] `buildPlannerMessages(...)` 注入一个稳定 JSON 块，例如 `query_dialogue_context`，包含最近实体、上一轮问答摘要、候选与澄清状态。
+3. [x] planner system prompt 明确：
    - 当前轮显式输入优先
    - `该/那个/它/刚才/最开始` 应优先尝试从 `query_dialogue_context` 解析
    - 支持领域内缺参应输出澄清态，而不是 `NO_QUERY`
    - 上下文不是授权来源，不能绕过 API 白名单
    - `RecentConfirmedEntity` 仅可作为兼容提示，不代表代码已经替模型选定当前引用对象
-4. [ ] 补充知识包规则与样例，覆盖：
+4. [x] 补充知识包规则与样例，覆盖：
    - `查详情 -> 查该组织下级` 的连续追问
    - `只有名称时先搜索唯一命中，再继续查详情/下级组织` 的线性编排
    - 列表结果转候选后，模型可理解用户说的 `第一个`、`那个公司`
 
 ### Slice C：开放通用前序结果引用解析
 
-1. [ ] 在不改变 `ReadPlan` 总体 schema 的前提下，引入通用前序结果引用能力，例如 `@step-1.target_org_code`。
-2. [ ] 引用能力只允许读取前序 step 的受控 payload 字段；不得允许任意表达式、任意 JSONPath 或代码执行。
-3. [ ] 执行前统一解析引用；解析失败、字段不存在、类型不匹配时 fail-closed。
-4. [ ] 知识包只负责告诉模型什么时候适合“先 search、再 list/details”；代码只负责把合法引用解析成真实参数，不承接业务专用编排分支。
-5. [ ] 增加测试：带有最近实体上下文的“查该组织下级”不得走 `NO_QUERY` stopline。
-6. [ ] 增加测试：`查询飞虫公司的下级组织，只有名称` 可由模型生成“先 search、再 list”的合法线性 `ReadPlan`。
+1. [x] 在不改变 `ReadPlan` 总体 schema 的前提下，引入通用前序结果引用能力，例如 `@step-1.target_org_code`。
+2. [x] 引用能力只允许读取前序 step 的受控 payload 字段；不得允许任意表达式、任意 JSONPath 或代码执行。
+3. [x] 执行前统一解析引用；解析失败、字段不存在、类型不匹配时 fail-closed。
+4. [x] 知识包只负责告诉模型什么时候适合“先 search、再 list/details”；代码只负责把合法引用解析成真实参数，不承接业务专用编排分支。
+5. [x] 增加测试：带有最近实体上下文的“查该组织下级”不得走 `NO_QUERY` stopline。
+6. [x] 增加测试：`查询飞虫公司的下级组织，只有名称` 可由模型生成“先 search、再 list”的合法线性 `ReadPlan`。
 
 ### Slice D：真实会话复验与 readiness
 
@@ -448,7 +448,7 @@ narrator 可以看到：
 3. [ ] 验证同会话内已出现并已返回给用户的组织，不得再次机械性要求用户补 `org_code`；当目标查询需要稳定编码且用户只给名称时，允许模型先 search 唯一命中后继续执行。
 4. [ ] 验证第二轮继承 `org_code=100000` 与 `as_of=2026-04-25`，不得重复追问 `parent_org_code`。
 5. [ ] 验证 unsupported domain 仍 fail-closed，不掉回“我没有查询接口/权限”的虚假描述。
-6. [ ] 证据登记到 `docs/dev-records/DEV-PLAN-468-READINESS.md`。
+6. [x] 证据登记到 `docs/dev-records/DEV-PLAN-468-READINESS.md`。
 
 ### Slice E：`P1/P2` 后续收口
 
@@ -469,6 +469,18 @@ narrator 可以看到：
    - 更完整的长结果语义收敛
    - 第二个业务模块接入后的共享 narrator 去模块化污染复核
 4. [ ] 每个后续实现 PR 必须先说明：它是在“给模型事实/上下文”，还是在“替模型做语义判断”。后者默认需要收敛或单独论证。
+
+### 6.1 2026-04-25 当前实施进度
+
+- [x] `P0` 代码闭环已完成：`QueryContext` 扩展、`query_dialogue_context` 注入、普通列表结果转 `recent_candidates`、通用前序结果引用解析、知识包规则更新、候选/澄清 metadata event 写入与相关测试已落地。
+- [x] 代码评审收口已完成：
+  - 修复 `turn.query_context.resolved` 被旧 `RecentConfirmedEntity` 误写的风险；当前实现不再在成功查询后伪造 resolved-context event。
+  - 修复 `missing_params` 事件 payload 直接写入 `[]string` 时解码丢失的问题。
+  - 修复 `QueryContextFromEvents(...)` 对流式 delta 的碎片化读取与澄清重复记入 dialogue 的问题，改为按事件正序和 `message_id` 聚合。
+- [x] 自动化验证已完成：
+  - `go test ./modules/cubebox ./internal/server`
+  - `make check doc`
+- [ ] 真实页面复验尚未补齐，仍按 Slice D 继续登记到 readiness。
 
 ## 7. 验收场景
 
@@ -547,15 +559,15 @@ narrator 可以看到：
 ## 10. 交付物
 
 1. [ ] 扩展后的 `QueryContext` 与事件提取测试。
-2. [ ] planner 输入包含有限 `query_dialogue_context`。
-3. [ ] 通用前序结果引用解析与测试。
+2. [x] planner 输入包含有限 `query_dialogue_context`。
+3. [x] 通用前序结果引用解析与测试。
 4. [ ] narrator 输入包含轻量对话上下文。
-5. [ ] `queryNarrationForbiddenPatterns` 收缩到内部实现泄露防线。
-6. [ ] metadata event 支撑候选、澄清和解析来源。
-7. [ ] 同会话连续追问服务端测试。
+5. [x] `queryNarrationForbiddenPatterns` 收缩到内部实现泄露防线。
+6. [x] metadata event 支撑候选、澄清和解析来源。
+7. [x] 同会话连续追问服务端测试。
 8. [ ] 真实页面复验证据记录。
-9. [ ] 模型限制面扩大调查清单与回交优先级已冻结。
-10. [ ] `AGENTS.md` Doc Map 已登记本计划。
+9. [x] 模型限制面扩大调查清单与回交优先级已冻结。
+10. [x] `AGENTS.md` Doc Map 已登记本计划。
 
 ## 11. 当前阶段执行记录
 
@@ -564,3 +576,6 @@ narrator 可以看到：
 3. [X] 执行 `make check doc` 并记录结果：`[doc] OK`。（2026-04-25 13:29 CST）
 4. [X] 扩大调查本项目当前对大模型的限制面，新增“安全硬护栏 vs 语义回交模型”口径、限制面清单、可回交模型事项清单与分流优先级。（2026-04-25）
 5. [X] 根据 `DEV-PLAN-469` 第一阶段，将 `468 P0` 调整为 `No-Summary Baseline` 前提，明确先停用会话压缩摘要，再推进连续追问修复。（2026-04-25 15:10 CST）
+6. [X] 完成 `468 P0` 代码落地：`QueryContext` 扩展、`query_dialogue_context` 注入、普通列表结果转 `recent_candidates`、通用前序结果引用解析、知识包规则更新与相关自动化测试通过。（2026-04-25 16:50 CST）
+7. [X] 完成代码评审收口：修复 synthetic resolved-context event、`missing_params` `[]string` 解码丢失、dialogue delta 聚合与澄清重复污染问题。（2026-04-25 17:10 CST）
+8. [X] 执行 `go test ./modules/cubebox ./internal/server` 与 `make check doc` 并通过。（2026-04-25 17:20 CST）
