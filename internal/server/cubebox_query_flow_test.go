@@ -63,16 +63,17 @@ func TestQueryNarrationErrorToTerminalMapsContractViolation(t *testing.T) {
 	}
 }
 
-func TestBuildQueryNarrationMessagesForbidsTemplateOutput(t *testing.T) {
+func TestBuildQueryNarrationMessagesForbidsInternalLeakage(t *testing.T) {
 	messages := buildQueryNarrationMessages(`{"user_prompt":"查一下 100000 在 2026-04-24 的组织详情"}`)
 	if len(messages) != 2 {
 		t.Fatalf("unexpected message count=%d", len(messages))
 	}
 	systemPrompt := messages[0].Content
 	for _, snippet := range []string{
-		"不要出现“只读查询”",
-		"不要写“详情如下：”",
-		"不要按固定栏目拆成",
+		"不得逐字回显整份原始 JSON",
+		"不得暴露实现细节或计划执行痕迹",
+		"api_key",
+		"payload",
 		"好的回答",
 		"不好的回答",
 	} {
@@ -82,11 +83,12 @@ func TestBuildQueryNarrationMessagesForbidsTemplateOutput(t *testing.T) {
 	}
 }
 
-func TestValidateQueryNarrationTextRejectsTemplateOutput(t *testing.T) {
+func TestValidateQueryNarrationTextRejectsInternalLeakage(t *testing.T) {
 	for _, text := range []string{
-		"已完成只读查询。本次关注：当前租户一级组织。",
-		"组织 100000 在 2026-04-24 的详情如下：组织基本信息 - 名称：飞虫与鲜花",
-		"step-1（orgunit.details） org_code：100000",
+		"```json\n{\"results\":[{\"payload\":{\"name\":\"飞虫与鲜花\"}}]}\n```",
+		"{\"results\":[{\"step_id\":\"step-1\",\"payload\":{\"org_unit\":{\"org_code\":\"100000\"}}}]}",
+		"step-1 调用了 orgunit.details，result_focus 是 org_unit.name。",
+		"内部参数 org_code：100000，as_of：2026-04-24。",
 	} {
 		if err := validateQueryNarrationText(text); !errors.Is(err, errCubeboxQueryNarrationContractViolation) {
 			t.Fatalf("expected contract violation for %q, got %v", text, err)
@@ -95,9 +97,14 @@ func TestValidateQueryNarrationTextRejectsTemplateOutput(t *testing.T) {
 }
 
 func TestValidateQueryNarrationTextAllowsNaturalLanguage(t *testing.T) {
-	text := "截至 2026-04-24，组织 100000 是“飞虫与鲜花”，当前为启用状态，属于业务单元。系统里暂未记录它的上级组织和负责人，也没有扩展字段。"
-	if err := validateQueryNarrationText(text); err != nil {
-		t.Fatalf("expected natural language to pass, got %v", err)
+	for _, text := range []string{
+		"截至 2026-04-24，组织 100000 是“飞虫与鲜花”，当前为启用状态，属于业务单元。系统里暂未记录它的上级组织和负责人，也没有扩展字段。",
+		"组织 100000 在 2026-04-24 的详情如下：组织基本信息 - 名称：飞虫与鲜花；上级组织 - 未记录。",
+		"状态：启用；是否业务单元：是；负责人：未记录。",
+	} {
+		if err := validateQueryNarrationText(text); err != nil {
+			t.Fatalf("expected natural language to pass for %q, got %v", text, err)
+		}
 	}
 }
 
@@ -254,11 +261,11 @@ func (s *cubeboxProviderChatStreamTextStub) Recv() (cubebox.ProviderChatChunk, e
 
 func (*cubeboxProviderChatStreamTextStub) Close() error { return nil }
 
-func TestCubeboxProviderQueryNarratorBuildsStrictMessagesAndRejectsTemplateOutput(t *testing.T) {
+func TestCubeboxProviderQueryNarratorBuildsStrictMessagesAndRejectsInternalLeakage(t *testing.T) {
 	adapter := &cubeboxProviderAdapterStub{
 		stream: &cubeboxProviderChatStreamTextStub{
 			chunks: []cubebox.ProviderChatChunk{
-				{Delta: "组织 100000 在 2026-04-24 的详情如下：组织基本信息 - 名称：飞虫与鲜花"},
+				{Delta: "{\"results\":[{\"step_id\":\"step-1\",\"payload\":{\"org_unit\":{\"org_code\":\"100000\"}}}]}"},
 				{Done: true},
 			},
 		},
@@ -289,7 +296,7 @@ func TestCubeboxProviderQueryNarratorBuildsStrictMessagesAndRejectsTemplateOutpu
 		t.Fatalf("expected 2 narrator messages, got %+v", adapter.lastRequest.Messages)
 	}
 	systemPrompt := adapter.lastRequest.Messages[0].Content
-	if !strings.Contains(systemPrompt, "不要写“详情如下：”") {
+	if !strings.Contains(systemPrompt, "不得逐字回显整份原始 JSON") {
 		t.Fatalf("expected strict narrator prompt, got %q", systemPrompt)
 	}
 }

@@ -103,18 +103,13 @@ var errCubeboxQueryNarrationTargetMismatch = errors.New("cubebox query narration
 var errCubeboxQueryNarrationContractViolation = errors.New("cubebox query narration contract violation")
 
 var queryNarrationForbiddenPatterns = []*regexp.Regexp{
-	regexp.MustCompile(`已完成只读查询`),
-	regexp.MustCompile(`本次关注`),
+	regexp.MustCompile("```"),
+	regexp.MustCompile(`(?m)^\s*\{`),
+	regexp.MustCompile(`(?m)^\s*[\}\]]\s*$`),
 	regexp.MustCompile(`(?i)\bstep-\d+\b`),
 	regexp.MustCompile(`(?i)\b(api_key|result_focus|payload|results)\b`),
-	regexp.MustCompile(`(?i)\b(org_code|parent_org_code|as_of|include_disabled|ext_fields)\s*[:：]`),
-	regexp.MustCompile(`详情如下[：:]`),
-	regexp.MustCompile(`(^|\n)\s*组织基本信息\s*[-：:]`),
-	regexp.MustCompile(`(^|\n)\s*上级组织\s*[-：:]`),
-	regexp.MustCompile(`(^|\n)\s*负责人\s*[-：:]`),
-	regexp.MustCompile(`(^|\n)\s*组织全路径\s*[-：:]`),
-	regexp.MustCompile(`(^|\n)\s*扩展字段\s*[-：:]`),
-	regexp.MustCompile(`(?i)[:：]\s*(active|disabled|true|false|null)\b`),
+	regexp.MustCompile(`(?i)\b(plan|steps|params|depends_on|explain_focus|missing_params|clarifying_question)\s*["'：:=]`),
+	regexp.MustCompile(`(?i)\b(org_code|parent_org_code|as_of|include_disabled|ext_fields)\s*["'：:=]`),
 }
 
 func newCubeboxQueryFlow(
@@ -512,7 +507,7 @@ func buildQueryNarrationMessages(body string) []cubebox.PromptItem {
 - 直接回答用户问题，先给结论，再补充最相关事实。
 - 默认使用 1 到 3 句自然中文；只有结果本身是多个对象时，才允许用极短列表列出关键项。
 - 把枚举、布尔和空值翻译成自然中文，例如 active=启用、disabled=停用、true=是、false=否、null/空字符串/空列表=未记录或没有。
-- 对单个实体详情，优先用完整句子归纳，不要按固定栏目拆成“组织基本信息 / 上级组织 / 负责人 / 组织全路径 / 扩展字段”等小标题。
+- 对单个实体详情，优先用完整句子归纳；如用户需要对比或明细，也可以使用简短列表。
 - 如果某些字段为空，只在和用户问题相关时用一句话说明“未记录……”，不要机械逐项写“空”。
 
 硬约束：
@@ -521,14 +516,13 @@ func buildQueryNarrationMessages(body string) []cubebox.PromptItem {
 - 不得补做新的查询、推断新的默认值、追加新的澄清问题。
 - 不得输出 Markdown 代码块。
 - 不得逐字回显整份原始 JSON。
-- 不得暴露实现细节或计划执行痕迹；不要出现“只读查询”“本次关注”“step-1”“api_key”“result_focus”“org_code”“parent_org_code”“as_of”“include_disabled”“ext_fields”“payload”“results”等字样。
-- 不得输出固定模板、小标题或键值对罗列；不要写“详情如下：”“组织基本信息”“上级组织”“负责人”“组织全路径”“扩展字段”等段落标题。
+- 不得暴露实现细节或计划执行痕迹；不要出现“step-1”“api_key”“result_focus”“org_code”“parent_org_code”“as_of”“include_disabled”“ext_fields”“payload”“results”等内部字段或结构名。
 - 若结果不足以支持更强结论，只能如实说明。
 - 输出纯文本，直接作为用户可见最终回复。
 
 示例：
 - 好的回答：截至 2026-04-24，组织 100000 是“飞虫与鲜花”，当前为启用状态，属于业务单元。系统里暂未记录它的上级组织和负责人，也没有扩展字段。
-- 不好的回答：组织 100000 在 2026-04-24 的详情如下：组织基本信息……上级组织……扩展字段……
+- 不好的回答：{"results":[{"step_id":"step-1","payload":{"org_unit":{"org_code":"100000"}}}]}
 `),
 		},
 		{
