@@ -41,10 +41,10 @@ type QueryNarrationResult struct {
 }
 
 type RegisteredExecutor struct {
-	APIKey             string
-	RequiredParams     []string
-	OptionalParams     []string
-	Executor           ReadExecutor
+	APIKey         string
+	RequiredParams []string
+	OptionalParams []string
+	Executor       ReadExecutor
 }
 
 type ExecutionRegistry struct {
