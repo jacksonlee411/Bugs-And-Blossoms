@@ -42,6 +42,10 @@ type QueryClarification struct {
 	Intent             string   `json:"intent,omitempty"`
 	MissingParams      []string `json:"missing_params,omitempty"`
 	ClarifyingQuestion string   `json:"clarifying_question,omitempty"`
+	ErrorCode          string   `json:"error_code,omitempty"`
+	CandidateSource    string   `json:"candidate_source,omitempty"`
+	CandidateCount     int      `json:"candidate_count,omitempty"`
+	CannotSilentSelect bool     `json:"cannot_silent_select,omitempty"`
 }
 
 type QueryContext struct {
@@ -304,9 +308,19 @@ func DecodeQueryClarification(payload map[string]any) *QueryClarification {
 	out := &QueryClarification{
 		Intent:             strings.TrimSpace(stringValue(payload["intent"])),
 		ClarifyingQuestion: strings.TrimSpace(stringValue(payload["clarifying_question"])),
+		ErrorCode:          strings.TrimSpace(stringValue(payload["error_code"])),
+		CandidateSource:    strings.TrimSpace(stringValue(payload["candidate_source"])),
 	}
 	out.MissingParams = decodeQueryStringList(payload["missing_params"])
-	if out.Intent == "" && out.ClarifyingQuestion == "" && len(out.MissingParams) == 0 {
+	out.CandidateCount = decodeQueryInt(payload["candidate_count"])
+	out.CannotSilentSelect = decodeQueryBool(payload["cannot_silent_select"])
+	if out.Intent == "" &&
+		out.ClarifyingQuestion == "" &&
+		out.ErrorCode == "" &&
+		out.CandidateSource == "" &&
+		out.CandidateCount == 0 &&
+		!out.CannotSilentSelect &&
+		len(out.MissingParams) == 0 {
 		return nil
 	}
 	return out
@@ -337,6 +351,28 @@ func decodeQueryStringList(raw any) []string {
 	default:
 		return nil
 	}
+}
+
+func decodeQueryInt(raw any) int {
+	switch value := raw.(type) {
+	case int:
+		return value
+	case int32:
+		return int(value)
+	case int64:
+		return int(value)
+	case float32:
+		return int(value)
+	case float64:
+		return int(value)
+	default:
+		return 0
+	}
+}
+
+func decodeQueryBool(raw any) bool {
+	value, ok := raw.(bool)
+	return ok && value
 }
 
 func minInt(a int, b int) int {

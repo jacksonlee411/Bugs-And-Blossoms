@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"strings"
 	"testing"
 	"time"
 
@@ -277,12 +276,15 @@ func TestCubeBoxOrgUnitSearchExecutorReturnsClarificationWhenSearchIsAmbiguous(t
 	if !errors.As(err, &ambiguous) {
 		t.Fatalf("expected ambiguous search error, got %v", err)
 	}
-	text := ambiguous.ClarifyingQuestion()
-	if !strings.Contains(text, "1001") || !strings.Contains(text, "1002") {
-		t.Fatalf("expected candidate org codes in clarification, got %q", text)
+	candidates := ambiguous.QueryCandidates()
+	if len(candidates) != 2 {
+		t.Fatalf("expected query candidates, got %#v", candidates)
 	}
-	if !strings.Contains(text, "已停用") {
-		t.Fatalf("expected disabled candidate hint, got %q", text)
+	if candidates[0].EntityKey != "1001" || candidates[1].EntityKey != "1002" {
+		t.Fatalf("unexpected candidate entity keys=%#v", candidates)
+	}
+	if candidates[1].Status != "disabled" {
+		t.Fatalf("expected disabled candidate hint in structured candidate, got %#v", candidates[1])
 	}
 }
 

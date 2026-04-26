@@ -1930,6 +1930,28 @@ func TestCubeBoxQueryFlowWritesCandidateMetadataForAmbiguousSearch(t *testing.T)
 	if !containsCanonicalEventType(appended, cubebox.QueryCandidatesPresentedEventType) {
 		t.Fatalf("expected candidates metadata event, got %#v", appended)
 	}
+	foundClarification := false
+	for _, event := range appended {
+		if event.Type != cubebox.QueryClarificationRequestedEventType {
+			continue
+		}
+		foundClarification = true
+		if event.Payload["error_code"] != "org_unit_search_ambiguous" {
+			t.Fatalf("expected structured error_code, got %#v", event.Payload)
+		}
+		if event.Payload["candidate_source"] != "execution_error" {
+			t.Fatalf("expected candidate_source, got %#v", event.Payload)
+		}
+		if event.Payload["candidate_count"] != 2 {
+			t.Fatalf("expected candidate_count=2, got %#v", event.Payload)
+		}
+		if event.Payload["cannot_silent_select"] != true {
+			t.Fatalf("expected cannot_silent_select=true, got %#v", event.Payload)
+		}
+	}
+	if !foundClarification {
+		t.Fatalf("expected clarification metadata event, got %#v", appended)
+	}
 }
 
 func TestCubeBoxQueryFlowDoesNotWriteSyntheticResolvedContextEvent(t *testing.T) {

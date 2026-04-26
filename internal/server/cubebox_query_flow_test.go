@@ -95,8 +95,12 @@ func TestBuildQueryClarificationMessagesUsesClarifierPrompt(t *testing.T) {
 
 func TestBuildQueryClarificationEnvelopeOmitsQueryIntent(t *testing.T) {
 	body, err := json.Marshal(buildQueryClarificationEnvelope(cubeboxQueryClarificationInput{
-		Prompt:      "查华东",
-		PageContext: &cubebox.PageContext{Page: "/org/units", BusinessObject: "orgunit"},
+		Prompt:             "查华东",
+		PageContext:        &cubebox.PageContext{Page: "/org/units", BusinessObject: "orgunit"},
+		ErrorCode:          "org_unit_search_ambiguous",
+		CandidateSource:    "execution_error",
+		CandidateCount:     2,
+		CannotSilentSelect: true,
 		QueryContext: cubebox.QueryContext{
 			ResolvedEntity: &cubebox.QueryEntity{
 				Domain:        "orgunit",
@@ -125,6 +129,10 @@ func TestBuildQueryClarificationEnvelopeOmitsQueryIntent(t *testing.T) {
 		`"dialogue_context"`,
 		`"candidates"`,
 		`"entity_key":"1001"`,
+		`"error_code":"org_unit_search_ambiguous"`,
+		`"candidate_source":"execution_error"`,
+		`"candidate_count":2`,
+		`"cannot_silent_select":true`,
 	} {
 		if !strings.Contains(text, snippet) {
 			t.Fatalf("expected clarification body to contain %q, got %q", snippet, text)
@@ -175,6 +183,36 @@ func TestFallbackCandidateClarificationTextContainsCandidates(t *testing.T) {
 	})
 	if !strings.Contains(text, "1001") || !strings.Contains(text, "1002") {
 		t.Fatalf("unexpected clarification text=%q", text)
+	}
+}
+
+func TestBuildExecutionClarificationTextPassesStructuredClarificationFacts(t *testing.T) {
+	var got cubeboxQueryClarificationInput
+	flow := &cubeboxQueryFlow{
+		clarifier: cubeboxQueryClarifierStub{fn: func(_ context.Context, input cubeboxQueryClarificationInput) (string, error) {
+			got = input
+			return "请确认要继续查询的组织编码。", nil
+		}},
+	}
+	text := flow.buildExecutionClarificationText(
+		context.Background(),
+		cubebox.GatewayStreamRequest{TenantID: "t1", Prompt: "查华东"},
+		cubeboxReadPlanProductionResult{ProviderID: "provider-a", ProviderType: "openai-compatible", ModelSlug: "gpt-5.2"},
+		cubebox.QueryContext{},
+		[]cubebox.QueryCandidate{
+			{Domain: "orgunit", EntityKey: "1001", Name: "华东销售中心", AsOf: "2026-04-24"},
+			{Domain: "orgunit", EntityKey: "1002", Name: "华东运营中心", AsOf: "2026-04-24"},
+		},
+		"org_unit_search_ambiguous",
+		"execution_error",
+		2,
+		true,
+	)
+	if text != "请确认要继续查询的组织编码。" {
+		t.Fatalf("unexpected clarification text=%q", text)
+	}
+	if got.ErrorCode != "org_unit_search_ambiguous" || got.CandidateSource != "execution_error" || got.CandidateCount != 2 || !got.CannotSilentSelect {
+		t.Fatalf("unexpected structured clarification input=%#v", got)
 	}
 }
 
@@ -276,6 +314,17 @@ func TestBuildPlannerMessagesIncludesQueryDialogueContext(t *testing.T) {
 
 type capturingGatewaySink struct {
 	events []cubebox.CanonicalEvent
+}
+
+type cubeboxQueryClarifierStub struct {
+	fn func(context.Context, cubeboxQueryClarificationInput) (string, error)
+}
+
+func (s cubeboxQueryClarifierStub) ClarifyQuery(ctx context.Context, input cubeboxQueryClarificationInput) (string, error) {
+	if s.fn == nil {
+		return "", nil
+	}
+	return s.fn(ctx, input)
 }
 
 func (s *capturingGatewaySink) Write(event cubebox.CanonicalEvent) bool {
@@ -391,9 +440,9 @@ func TestCubeboxProviderQueryNarratorBuildsStrictMessagesAndRejectsInternalLeaka
 			Domain: "orgunit",
 			Data: map[string]any{
 				"org_unit": map[string]any{
-					"org_code":       "100000",
-					"name":           "飞虫与鲜花",
-					"status":         "active",
+					"org_code":        "100000",
+					"name":            "飞虫与鲜花",
+					"status":          "active",
 					"parent_org_code": "ROOT",
 				},
 				"as_of": "2026-04-24",

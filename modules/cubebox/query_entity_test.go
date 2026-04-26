@@ -122,6 +122,9 @@ func TestQueryContextFromEventsExtractsCandidatesAndClarification(t *testing.T) 
 	if context.LastClarification == nil || context.LastClarification.ClarifyingQuestion == "" {
 		t.Fatalf("expected clarification, got %#v", context.LastClarification)
 	}
+	if context.LastClarification.ErrorCode != "" || context.LastClarification.CandidateCount != 0 || context.LastClarification.CannotSilentSelect {
+		t.Fatalf("expected empty optional clarification fields when absent, got %#v", context.LastClarification)
+	}
 	if context.ResolvedEntity == nil || context.ResolvedEntity.EntityKey != "200000" {
 		t.Fatalf("expected resolved entity, got %#v", context.ResolvedEntity)
 	}
@@ -208,9 +211,13 @@ func TestQueryContextFromEventsCapsCandidatesAt100(t *testing.T) {
 
 func TestDecodeQueryClarificationAcceptsStringSlice(t *testing.T) {
 	clarification := DecodeQueryClarification(map[string]any{
-		"intent":              "orgunit.list",
-		"missing_params":      []string{"parent_org_code", " as_of "},
-		"clarifying_question": "请补充参数。",
+		"intent":               "orgunit.list",
+		"missing_params":       []string{"parent_org_code", " as_of "},
+		"clarifying_question":  "请补充参数。",
+		"error_code":           "org_unit_search_ambiguous",
+		"candidate_source":     "execution_error",
+		"candidate_count":      float64(2),
+		"cannot_silent_select": true,
 	})
 
 	if clarification == nil {
@@ -218,6 +225,9 @@ func TestDecodeQueryClarificationAcceptsStringSlice(t *testing.T) {
 	}
 	if !reflect.DeepEqual(clarification.MissingParams, []string{"parent_org_code", "as_of"}) {
 		t.Fatalf("unexpected missing params=%#v", clarification.MissingParams)
+	}
+	if clarification.ErrorCode != "org_unit_search_ambiguous" || clarification.CandidateSource != "execution_error" || clarification.CandidateCount != 2 || !clarification.CannotSilentSelect {
+		t.Fatalf("unexpected clarification=%#v", clarification)
 	}
 }
 

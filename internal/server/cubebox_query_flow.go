@@ -83,6 +83,10 @@ type cubeboxQueryClarificationInput struct {
 	QueryContext         cubebox.QueryContext
 	PageContext          *cubebox.PageContext
 	Candidates           []cubebox.QueryCandidate
+	ErrorCode            string
+	CandidateSource      string
+	CandidateCount       int
+	CannotSilentSelect   bool
 	ExpectedProviderID   string
 	ExpectedProviderType string
 	ExpectedModelSlug    string
@@ -138,10 +142,14 @@ type cubeboxQueryNarrationResultView struct {
 }
 
 type cubeboxQueryClarificationEnvelope struct {
-	UserPrompt      string                          `json:"user_prompt"`
-	PageContext     *cubebox.PageContext            `json:"page_context,omitempty"`
-	DialogueContext cubeboxQueryDialogueContextView `json:"dialogue_context"`
-	Candidates      []cubebox.QueryCandidate        `json:"candidates"`
+	UserPrompt         string                          `json:"user_prompt"`
+	PageContext        *cubebox.PageContext            `json:"page_context,omitempty"`
+	DialogueContext    cubeboxQueryDialogueContextView `json:"dialogue_context"`
+	Candidates         []cubebox.QueryCandidate        `json:"candidates"`
+	ErrorCode          string                          `json:"error_code,omitempty"`
+	CandidateSource    string                          `json:"candidate_source,omitempty"`
+	CandidateCount     int                             `json:"candidate_count,omitempty"`
+	CannotSilentSelect bool                            `json:"cannot_silent_select,omitempty"`
 }
 
 var errCubeboxQueryNarrationTargetMismatch = errors.New("cubebox query narration target mismatch")
@@ -369,16 +377,30 @@ func (f *cubeboxQueryFlow) TryHandle(
 	}, produced.Plan)
 	if err != nil {
 		if candidates := queryExecutionCandidates(err); len(candidates) > 0 {
-			text := f.buildExecutionClarificationText(ctx, request, produced, queryContext, candidates)
+			errorCode, candidateSource, candidateCount, cannotSilentSelect := queryExecutionClarificationFacts(err)
+			text := f.buildExecutionClarificationText(ctx, request, produced, queryContext, candidates, errorCode, candidateSource, candidateCount, cannotSilentSelect)
 			if text == "" {
 				text = "找到了多个候选项，请从中明确你要继续查询的对象。"
 			}
 			if !writeEvent("turn.agent_message.delta", map[string]any{"message_id": prepared.turn.AssistantMessageID, "delta": text}) {
 				return true
 			}
-			f.appendQueryMetadataEvent(ctx, request, prepared.turn.TurnID, &prepared.sequence, cubebox.QueryClarificationRequestedEventType, map[string]any{
+			payload := map[string]any{
 				"clarifying_question": text,
-			})
+			}
+			if errorCode != "" {
+				payload["error_code"] = errorCode
+			}
+			if candidateSource != "" {
+				payload["candidate_source"] = candidateSource
+			}
+			if candidateCount > 0 {
+				payload["candidate_count"] = candidateCount
+			}
+			if cannotSilentSelect {
+				payload["cannot_silent_select"] = true
+			}
+			f.appendQueryMetadataEvent(ctx, request, prepared.turn.TurnID, &prepared.sequence, cubebox.QueryClarificationRequestedEventType, payload)
 			f.appendQueryMetadataEvent(ctx, request, prepared.turn.TurnID, &prepared.sequence, cubebox.QueryCandidatesPresentedEventType, map[string]any{
 				"candidates": queryCandidatePayloads(candidates),
 			})
@@ -687,6 +709,7 @@ func buildQueryClarificationMessages(body string) []cubebox.PromptItem {
 
 要求：
 - 只允许要求用户从候选中确认目标，不能静默替用户选择。
+- 输入中的 error_code、candidate_source、candidate_count、cannot_silent_select 是结构化澄清事实；可以用于组织追问，但不要把这些字段名直接输出给用户。
 - 直接给出追问，必要时附上极短候选列表。
 - 可以用“刚才那个/继续查”的语气承接上下文，但不得编造候选之外的新事实。
 - 不得输出 Markdown 代码块、JSON、内部字段名或执行痕迹。
@@ -1174,6 +1197,14 @@ func queryExecutionCandidates(err error) []cubebox.QueryCandidate {
 	return nil
 }
 
+func queryExecutionClarificationFacts(err error) (string, string, int, bool) {
+	var ambiguous *orgUnitSearchAmbiguousError
+	if errors.As(err, &ambiguous) {
+		return "org_unit_search_ambiguous", "execution_error", len(ambiguous.QueryCandidates()), true
+	}
+	return "", "", 0, false
+}
+
 func queryNarrationErrorToTerminal(err error) queryTerminalError {
 	switch {
 	case errors.Is(err, errCubeboxQueryNarrationTargetMismatch):
@@ -1206,6 +1237,10 @@ func (f *cubeboxQueryFlow) buildExecutionClarificationText(
 	produced cubeboxReadPlanProductionResult,
 	queryContext cubebox.QueryContext,
 	candidates []cubebox.QueryCandidate,
+	errorCode string,
+	candidateSource string,
+	candidateCount int,
+	cannotSilentSelect bool,
 ) string {
 	if len(candidates) == 0 {
 		return ""
@@ -1219,6 +1254,10 @@ func (f *cubeboxQueryFlow) buildExecutionClarificationText(
 		QueryContext:         queryContext,
 		PageContext:          cubebox.NormalizePageContext(request.PageContext),
 		Candidates:           candidates,
+		ErrorCode:            strings.TrimSpace(errorCode),
+		CandidateSource:      strings.TrimSpace(candidateSource),
+		CandidateCount:       candidateCount,
+		CannotSilentSelect:   cannotSilentSelect,
 		ExpectedProviderID:   produced.ProviderID,
 		ExpectedProviderType: produced.ProviderType,
 		ExpectedModelSlug:    produced.ModelSlug,
@@ -1270,7 +1309,11 @@ func buildQueryClarificationEnvelope(input cubeboxQueryClarificationInput) cubeb
 			LastClarification:   input.QueryContext.LastClarification,
 			RecentCandidates:    append([]cubebox.QueryCandidate(nil), input.QueryContext.RecentCandidates...),
 		},
-		Candidates: append([]cubebox.QueryCandidate(nil), input.Candidates...),
+		Candidates:         append([]cubebox.QueryCandidate(nil), input.Candidates...),
+		ErrorCode:          strings.TrimSpace(input.ErrorCode),
+		CandidateSource:    strings.TrimSpace(input.CandidateSource),
+		CandidateCount:     input.CandidateCount,
+		CannotSilentSelect: input.CannotSilentSelect,
 	}
 }
 

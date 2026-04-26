@@ -43,43 +43,6 @@ func (e *orgUnitSearchAmbiguousError) Error() string {
 	return "org_unit_search_ambiguous"
 }
 
-func (e *orgUnitSearchAmbiguousError) ClarifyingQuestion() string {
-	if e == nil {
-		return ""
-	}
-	query := strings.TrimSpace(e.Query)
-	items := make([]string, 0, len(e.Candidates))
-	for _, candidate := range e.Candidates {
-		orgCode := strings.TrimSpace(candidate.OrgCode)
-		name := strings.TrimSpace(candidate.Name)
-		if orgCode == "" && name == "" {
-			continue
-		}
-		item := orgCode
-		if name != "" {
-			if item != "" {
-				item += "「" + name + "」"
-			} else {
-				item = "「" + name + "」"
-			}
-		}
-		if strings.EqualFold(strings.TrimSpace(candidate.Status), orgUnitListStatusDisabled) {
-			item += "（已停用）"
-		}
-		items = append(items, item)
-	}
-	if len(items) == 0 {
-		if query == "" {
-			return "找到了多个可能匹配的组织，请提供组织编码以便继续查询。"
-		}
-		return "找到了多个与“" + query + "”匹配的组织，请提供组织编码以便继续查询。"
-	}
-	if query == "" {
-		return "找到了多个可能匹配的组织，请提供组织编码以便继续查询。可选项：" + strings.Join(items, "、") + "。"
-	}
-	return "找到了多个与“" + query + "”匹配的组织，请提供组织编码以便继续查询。可选项：" + strings.Join(items, "、") + "。"
-}
-
 func (e *orgUnitSearchAmbiguousError) QueryCandidates() []cubebox.QueryCandidate {
 	if e == nil {
 		return nil
