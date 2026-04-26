@@ -22,10 +22,9 @@ type cubeboxConversationPatchRequest struct {
 }
 
 type cubeboxStreamTurnRequest struct {
-	ConversationID string               `json:"conversation_id"`
-	Prompt         string               `json:"prompt"`
-	NextSequence   int                  `json:"next_sequence"`
-	PageContext    *cubebox.PageContext `json:"page_context,omitempty"`
+	ConversationID string `json:"conversation_id"`
+	Prompt         string `json:"prompt"`
+	NextSequence   int    `json:"next_sequence"`
 }
 
 type cubeboxInterruptRequest struct {
@@ -316,7 +315,9 @@ func handleCubeBoxStreamTurnAPI(w http.ResponseWriter, r *http.Request, runtime 
 	}
 
 	var req cubeboxStreamTurnRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	decoder := json.NewDecoder(r.Body)
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&req); err != nil {
 		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusUnprocessableEntity, "invalid_json", "invalid json")
 		return
 	}
@@ -350,7 +351,6 @@ func handleCubeBoxStreamTurnAPI(w http.ResponseWriter, r *http.Request, runtime 
 		ConversationID: req.ConversationID,
 		Prompt:         req.Prompt,
 		NextSequence:   req.NextSequence,
-		PageContext:    cubebox.NormalizePageContext(req.PageContext),
 	}
 	sink := cubeboxSSEEventSink{
 		w:       w,

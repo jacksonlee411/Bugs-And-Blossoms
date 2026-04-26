@@ -162,36 +162,36 @@
 4. [x] 更新 `AGENTS.md` 文档地图标题。
 5. [x] 更新 readiness 记录，说明 `page_context` 已裁决为当前范围外。
 6. [x] 回写 `DEV-PLAN-461` / `DEV-PLAN-462` 中与页面上下文当前能力冲突的条款。
-7. [ ] 前端删除 `page_context` 构造与发送。
-8. [ ] 服务端删除 `PageContext` DTO 与 prompt-facing 输出。
-9. [ ] 知识包删除页面补参规则。
-10. [ ] 执行测试与门禁。
+7. [x] 前端删除 `page_context` 构造与发送。
+8. [x] 服务端删除 `PageContext` DTO 与 prompt-facing 输出。
+9. [x] 知识包删除页面补参规则。
+10. [x] 执行测试与门禁。
 
 ## 8. 验收
 
-1. [ ] `rg -n "page_context|PageContext|page_facts|pageContext|CubeBoxPageContext|buildCubeBoxPageContext|NormalizePageContext|PageViewContext|PageObjectContext" apps/web/src internal modules/cubebox modules/orgunit/presentation/cubebox` 不再命中当前运行时代码和知识包，测试 fixture 中也不得作为请求/响应字段存在。
-2. [ ] `/internal/cubebox/turns:stream` 请求体只包含 `conversation_id`、`prompt`、`next_sequence`。
-3. [ ] provider canonical context 不再输出 `page_facts`。
-4. [ ] query planner、narrator、clarifier 输入均不包含 `page_context`。
-5. [ ] `orgunit` 知识包不再要求模型从当前页面补 `org_code`。
-6. [ ] 467 真实失败场景仍由 `query_dialogue_context` / query fact window 解决：`100000 -> 查该组织的下级组织` 不能依赖当前页面事实。
-7. [ ] `rg -n "当前页面上下文|页面上下文|页面补参|当前页面.*补|current page|page context" modules/orgunit/presentation/cubebox` 不再命中当前知识包。
-8. [ ] Web 生成资产重新生成后，`rg -n "page_context|PageContext|page_facts" internal/server/assets/web/assets apps/web/dist` 不再命中可提交产物。
-9. [ ] 文档中仅允许 `DEV-PLAN-470`、`DEV-PLAN-468/468C` 和 readiness 的“剔除/历史说明”出现 `page_context`；不得作为当前能力、当前实施要求或补参规则出现。
+1. [x] `rg -n "page_context|PageContext|page_facts|pageContext|CubeBoxPageContext|buildCubeBoxPageContext|NormalizePageContext|PageViewContext|PageObjectContext" apps/web/src internal modules/cubebox modules/orgunit/presentation/cubebox` 不再命中当前运行时代码和知识包，测试 fixture 中也不得作为请求/响应字段存在。
+2. [x] `/internal/cubebox/turns:stream` 请求体只包含 `conversation_id`、`prompt`、`next_sequence`。
+3. [x] provider canonical context 不再输出 `page_facts`。
+4. [x] query planner、narrator、clarifier 输入均不包含 `page_context`。
+5. [x] `orgunit` 知识包不再要求模型从当前页面补 `org_code`。
+6. [x] 467 真实失败场景仍由 `query_dialogue_context` / query fact window 解决：`100000 -> 查该组织的下级组织` 不能依赖当前页面事实。
+7. [x] `rg -n "当前页面上下文|页面上下文|页面补参|当前页面.*补|current page|page context" modules/orgunit/presentation/cubebox` 不再命中当前知识包。
+8. [x] Web 生成资产重新生成后，`rg -n "page_context|PageContext|page_facts" internal/server/assets/web/assets apps/web/dist` 不再命中可提交产物。
+9. [x] 文档中仅允许 `DEV-PLAN-470`、`DEV-PLAN-468/468C` 和 readiness 的“剔除/历史说明”出现 `page_context`；不得作为当前能力、当前实施要求或补参规则出现。
 
 ## 9. 验证命令
 
 代码实施时按实际触发器运行：
 
-1. [ ] `go fmt ./... && go vet ./... && make check lint && make test`
-2. [ ] Web 源码变更后执行 `make generate && make css`，并确认 `git status --short` 只包含预期变更。
-3. [ ] 文档变更执行 `make check doc`。
-4. [ ] 执行 §8 中的运行时代码、知识包、生成资产和文档漂移搜索。
+1. [x] `go fmt ./... && go vet ./... && make check lint && make test`
+2. [x] Web 源码变更后执行 `make generate && make css`，并确认 `git status --short` 只包含预期变更。
+3. [x] 文档变更执行 `make check doc`。
+4. [x] 执行 §8 中的运行时代码、知识包、生成资产和文档漂移搜索。
 
 ## 10. 当前状态
 
 - [x] 470 已完全重写为 `page_context` 当前范围剔除与清理方案。
 - [x] 468 / 468C / readiness / AGENTS 文档回写。
 - [x] 461 / 462 冲突口径回写。
-- [ ] 代码与知识包清理。
+- [x] 代码与知识包清理。
 - [x] 文档门禁验证：`make check doc`。

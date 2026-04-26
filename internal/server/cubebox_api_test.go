@@ -802,7 +802,7 @@ func TestCubeBoxLoadConversationAPIReturnsPhaseCLifecycleRoundtripGolden(t *test
 
 func TestCubeBoxStreamTurnAPIPreTurnAutoCompactUsesActorAndUpdatedSequence(t *testing.T) {
 	rec := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodPost, "/internal/cubebox/turns:stream", strings.NewReader(`{"conversation_id":"conv_1","prompt":"hello","next_sequence":8,"page_context":{"page":"/org/units/100000","business_object":"orgunit","current_object":{"domain":"orgunit","entity_key":"100000"},"view":{"as_of":"2026-04-25"}}}`))
+	req := httptest.NewRequest(http.MethodPost, "/internal/cubebox/turns:stream", strings.NewReader(`{"conversation_id":"conv_1","prompt":"hello","next_sequence":8}`))
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "tenant-a"}))
 	req = req.WithContext(withPrincipal(req.Context(), Principal{ID: "principal-a"}))
 
@@ -833,11 +833,8 @@ func TestCubeBoxStreamTurnAPIPreTurnAutoCompactUsesActorAndUpdatedSequence(t *te
 			if canonicalContext.TenantID != "tenant-a" || canonicalContext.PrincipalID != "principal-a" {
 				t.Fatalf("unexpected canonical context=%+v", canonicalContext)
 			}
-			if canonicalContext.Page != "/org/units/100000" || canonicalContext.BusinessObject != "orgunit" {
-				t.Fatalf("expected controlled page context, got %+v", canonicalContext)
-			}
-			if canonicalContext.PageContext == nil || canonicalContext.PageContext.CurrentObject == nil || canonicalContext.PageContext.CurrentObject.EntityKey != "100000" {
-				t.Fatalf("expected normalized page facts, got %+v", canonicalContext.PageContext)
+			if canonicalContext.Page != "/app/cubebox" || canonicalContext.BusinessObject != "conversation" {
+				t.Fatalf("expected default canonical context, got %+v", canonicalContext)
 			}
 			if reason != "pre_turn_auto" {
 				t.Fatalf("unexpected preparation reason=%s", reason)
@@ -867,6 +864,22 @@ func TestCubeBoxStreamTurnAPIPreTurnAutoCompactUsesActorAndUpdatedSequence(t *te
 	}
 	if appended[0].Sequence != 12 {
 		t.Fatalf("expected first stream event to continue from prepared next sequence, got %d", appended[0].Sequence)
+	}
+}
+
+func TestCubeBoxStreamTurnAPIRejectsLegacyPageContextField(t *testing.T) {
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/internal/cubebox/turns:stream", strings.NewReader(`{"conversation_id":"conv_1","prompt":"hello","next_sequence":8,"page_context":{"page":"/org/units/100000"}}`))
+	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "tenant-a"}))
+	req = req.WithContext(withPrincipal(req.Context(), Principal{ID: "principal-a"}))
+
+	handleCubeBoxStreamTurnAPI(rec, req, cubebox.NewRuntime(), cubeboxStoreStub{}, newTestGateway(cubebox.NewRuntime()), nil)
+
+	if rec.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+	}
+	if !strings.Contains(rec.Body.String(), `"code":"invalid_json"`) {
+		t.Fatalf("expected invalid_json, got %s", rec.Body.String())
 	}
 }
 

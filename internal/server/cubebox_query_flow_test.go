@@ -96,7 +96,6 @@ func TestBuildQueryClarificationMessagesUsesClarifierPrompt(t *testing.T) {
 func TestBuildQueryClarificationEnvelopeOmitsQueryIntent(t *testing.T) {
 	body, err := json.Marshal(buildQueryClarificationEnvelope(cubeboxQueryClarificationInput{
 		Prompt:             "查华东",
-		PageContext:        &cubebox.PageContext{Page: "/org/units", BusinessObject: "orgunit"},
 		ErrorCode:          "org_unit_search_ambiguous",
 		CandidateSource:    "execution_error",
 		CandidateCount:     2,
@@ -125,7 +124,6 @@ func TestBuildQueryClarificationEnvelopeOmitsQueryIntent(t *testing.T) {
 	text := string(body)
 	for _, snippet := range []string{
 		`"user_prompt":"查华东"`,
-		`"page_context"`,
 		`"dialogue_context"`,
 		`"candidates"`,
 		`"entity_key":"1001"`,
@@ -462,7 +460,6 @@ func TestCubeboxProviderQueryNarratorBuildsStrictMessagesAndRejectsInternalLeaka
 				{UserPrompt: "查总部", AssistantReply: "总部是 100000。"},
 			},
 		},
-		PageContext:          &cubebox.PageContext{Page: "/org/units/100000", BusinessObject: "orgunit", CurrentObject: &cubebox.PageObjectContext{Domain: "orgunit", EntityKey: "100000"}},
 		ExpectedProviderID:   "provider-a",
 		ExpectedProviderType: "openai-compatible",
 		ExpectedModelSlug:    "gpt-5.2",
@@ -489,7 +486,6 @@ func TestCubeboxProviderQueryNarratorBuildsStrictMessagesAndRejectsInternalLeaka
 	body := adapter.lastRequest.Messages[1].Content
 	for _, snippet := range []string{
 		`"dialogue_context"`,
-		`"page_context"`,
 		`"entity_key":"100000"`,
 		`"as_of":"2026-04-24"`,
 		`"org_unit"`,

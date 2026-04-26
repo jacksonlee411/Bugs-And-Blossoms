@@ -1,8 +1,7 @@
 import { createContext, type PropsWithChildren, useCallback, useContext, useEffect, useMemo, useReducer, useRef, useState } from 'react'
-import { matchPath, useLocation } from 'react-router-dom'
 import { createConversation, interruptTurn, listConversations, loadConversation, streamTurn, updateConversation } from './api'
 import { cubeboxReducer, initialCubeBoxState } from './reducer'
-import type { ConversationReplayResponse, CubeBoxConversationSummary, CubeBoxPageContext, CubeBoxState } from './types'
+import type { ConversationReplayResponse, CubeBoxConversationSummary, CubeBoxState } from './types'
 
 interface CubeBoxContextValue {
   state: CubeBoxState
@@ -23,7 +22,6 @@ interface CubeBoxContextValue {
 const CubeBoxContext = createContext<CubeBoxContextValue | null>(null)
 
 export function CubeBoxProvider({ children }: PropsWithChildren) {
-  const location = useLocation()
   const [state, dispatch] = useReducer(cubeboxReducer, initialCubeBoxState)
   const [conversations, setConversations] = useState<CubeBoxConversationSummary[]>([])
   const [conversationsLoading, setConversationsLoading] = useState(false)
@@ -35,7 +33,6 @@ export function CubeBoxProvider({ children }: PropsWithChildren) {
   const composerTextRef = useRef(state.composerText)
   const turnStatusRef = useRef(state.turnStatus)
   const activeTurnIDRef = useRef(state.activeTurnID)
-  const pageContextRef = useRef<CubeBoxPageContext | undefined>(undefined)
 
   useEffect(() => () => abortRef.current?.abort(), [])
   useEffect(() => {
@@ -45,9 +42,6 @@ export function CubeBoxProvider({ children }: PropsWithChildren) {
     turnStatusRef.current = state.turnStatus
     activeTurnIDRef.current = state.activeTurnID
   }, [state])
-  useEffect(() => {
-    pageContextRef.current = buildCubeBoxPageContext(location.pathname, location.search)
-  }, [location.pathname, location.search])
 
   const refreshConversations = useCallback(async () => {
     if (conversationsPromiseRef.current) {
@@ -160,7 +154,6 @@ export function CubeBoxProvider({ children }: PropsWithChildren) {
         conversationID,
         prompt,
         nextSequence,
-        pageContext: pageContextRef.current,
         signal: controller.signal,
         onEvent: (event) => {
           dispatch({ type: 'event_received', payload: event })
@@ -274,116 +267,6 @@ export function CubeBoxProvider({ children }: PropsWithChildren) {
   )
 
   return <CubeBoxContext.Provider value={value}>{children}</CubeBoxContext.Provider>
-}
-
-function buildCubeBoxPageContext(pathname: string, search: string): CubeBoxPageContext | undefined {
-  const page = normalizePathname(pathname)
-  if (!page) {
-    return undefined
-  }
-  const params = new URLSearchParams(search)
-  const asOf = resolvePageContextAsOf(params)
-
-  if (page === '/org/units') {
-    const selectedNode = normalizeEntityKey(params.get('node') ?? '')
-    return compactPageContext({
-      page,
-      business_object: 'orgunit',
-      current_object: selectedNode ? { domain: 'orgunit', entity_key: selectedNode } : undefined,
-      view: asOf ? { as_of: asOf } : undefined
-    })
-  }
-
-  if (page === '/org/units/field-configs') {
-    return compactPageContext({
-      page,
-      business_object: 'conversation',
-      view: asOf ? { as_of: asOf } : undefined
-    })
-  }
-
-  const detailMatch = matchPath('/org/units/:orgCode', page)
-  if (detailMatch) {
-    const orgCode = normalizeEntityKey(detailMatch.params.orgCode ?? '')
-    return compactPageContext({
-      page,
-      business_object: 'orgunit',
-      current_object: orgCode ? { domain: 'orgunit', entity_key: orgCode } : undefined,
-      view: asOf ? { as_of: asOf } : undefined
-    })
-  }
-
-  return compactPageContext({
-    page,
-    business_object: 'conversation'
-  })
-}
-
-function compactPageContext(value: CubeBoxPageContext): CubeBoxPageContext | undefined {
-  const page = normalizePathname(value.page ?? '')
-  const businessObject = normalizeSlug(value.business_object ?? '')
-  const currentDomain = normalizeSlug(value.current_object?.domain ?? '')
-  const currentEntityKey = normalizeEntityKey(value.current_object?.entity_key ?? '')
-  const currentLabel = normalizeLabel(value.current_object?.label ?? '')
-  const asOf = normalizeAsOf(value.view?.as_of ?? '')
-
-  const currentObject =
-    currentDomain || currentEntityKey || currentLabel
-      ? {
-          ...(currentDomain ? { domain: currentDomain } : {}),
-          ...(currentEntityKey ? { entity_key: currentEntityKey } : {}),
-          ...(currentLabel ? { label: currentLabel } : {})
-        }
-      : undefined
-  const view = asOf ? { as_of: asOf } : undefined
-  if (!page && !businessObject && !currentObject && !view) {
-    return undefined
-  }
-  return {
-    ...(page ? { page } : {}),
-    ...(businessObject ? { business_object: businessObject } : {}),
-    ...(currentObject ? { current_object: currentObject } : {}),
-    ...(view ? { view } : {})
-  }
-}
-
-function normalizePathname(value: string): string {
-  const trimmed = value.trim()
-  if (!trimmed.startsWith('/')) {
-    return ''
-  }
-  return trimmed.length > 160 ? trimmed.slice(0, 160) : trimmed
-}
-
-function normalizeSlug(value: string): string {
-  const trimmed = value.trim().toLowerCase()
-  return /^[a-z0-9][a-z0-9._-]{0,63}$/.test(trimmed) ? trimmed : ''
-}
-
-function normalizeEntityKey(value: string): string {
-  const trimmed = value.trim()
-  return /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(trimmed) ? trimmed : ''
-}
-
-function normalizeLabel(value: string): string {
-  const trimmed = value.trim()
-  if (!trimmed || /[\r\n\t]/.test(trimmed)) {
-    return ''
-  }
-  return trimmed.length > 120 ? trimmed.slice(0, 120) : trimmed
-}
-
-function normalizeAsOf(value: string | null): string {
-  const trimmed = (value ?? '').trim()
-  return /^\d{4}-\d{2}-\d{2}$/.test(trimmed) ? trimmed : ''
-}
-
-function resolvePageContextAsOf(params: URLSearchParams): string {
-  const effectiveDate = normalizeAsOf(params.get('effective_date'))
-  if (effectiveDate) {
-    return effectiveDate
-  }
-  return normalizeAsOf(params.get('as_of'))
 }
 
 export function useCubeBox() {

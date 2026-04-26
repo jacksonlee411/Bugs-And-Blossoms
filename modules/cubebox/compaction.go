@@ -1,7 +1,6 @@
 package cubebox
 
 import (
-	"encoding/json"
 	"fmt"
 	"strings"
 )
@@ -18,7 +17,6 @@ type CanonicalContext struct {
 	Page           string
 	Permissions    []string
 	BusinessObject string
-	PageContext    *PageContext
 }
 
 type PromptViewBuildResult struct {
@@ -55,22 +53,6 @@ func BuildPromptView(events []CanonicalEvent, context CanonicalContext, currentU
 
 func buildCanonicalContextBlock(context CanonicalContext) string {
 	permissions := strings.Join(filterNonEmpty(context.Permissions), ", ")
-	pageFacts := ""
-	if normalized := NormalizePageContext(context.PageContext); normalized != nil {
-		payload := map[string]any{}
-		if normalized.CurrentObject != nil {
-			payload["current_object"] = normalized.CurrentObject
-		}
-		if normalized.View != nil {
-			payload["view"] = normalized.View
-		}
-		if len(payload) > 0 {
-			body, err := json.Marshal(payload)
-			if err == nil {
-				pageFacts = string(body)
-			}
-		}
-	}
 	lines := []string{
 		fmt.Sprintf("tenant=%s", strings.TrimSpace(context.TenantID)),
 		fmt.Sprintf("principal=%s", strings.TrimSpace(context.PrincipalID)),
@@ -78,9 +60,6 @@ func buildCanonicalContextBlock(context CanonicalContext) string {
 		fmt.Sprintf("page=%s", normalizeDefault(context.Page, "cubebox")),
 		fmt.Sprintf("permissions=%s", normalizeDefault(permissions, "cubebox.conversations:use")),
 		fmt.Sprintf("business_object=%s", normalizeDefault(context.BusinessObject, "conversation")),
-	}
-	if pageFacts != "" {
-		lines = append(lines, "page_facts="+pageFacts)
 	}
 	return strings.TrimSpace(strings.Join(lines, "\n"))
 }

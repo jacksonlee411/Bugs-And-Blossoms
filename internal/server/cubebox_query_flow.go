@@ -81,7 +81,6 @@ type cubeboxQueryClarificationInput struct {
 	TenantID             string
 	Prompt               string
 	QueryContext         cubebox.QueryContext
-	PageContext          *cubebox.PageContext
 	Candidates           []cubebox.QueryCandidate
 	ErrorCode            string
 	CandidateSource      string
@@ -99,7 +98,6 @@ type cubeboxQueryNarrationInput struct {
 	Prompt               string
 	Results              []cubebox.QueryNarrationResult
 	QueryContext         cubebox.QueryContext
-	PageContext          *cubebox.PageContext
 	ExpectedProviderID   string
 	ExpectedProviderType string
 	ExpectedModelSlug    string
@@ -116,7 +114,6 @@ type cubeboxQueryLifecycle struct {
 
 type cubeboxQueryNarrationEnvelope struct {
 	UserPrompt      string                            `json:"user_prompt"`
-	PageContext     *cubebox.PageContext              `json:"page_context,omitempty"`
 	DialogueContext cubeboxQueryDialogueContextView   `json:"dialogue_context"`
 	Results         []cubeboxQueryNarrationResultView `json:"results"`
 }
@@ -143,7 +140,6 @@ type cubeboxQueryNarrationResultView struct {
 
 type cubeboxQueryClarificationEnvelope struct {
 	UserPrompt         string                          `json:"user_prompt"`
-	PageContext        *cubebox.PageContext            `json:"page_context,omitempty"`
 	DialogueContext    cubeboxQueryDialogueContextView `json:"dialogue_context"`
 	Candidates         []cubebox.QueryCandidate        `json:"candidates"`
 	ErrorCode          string                          `json:"error_code,omitempty"`
@@ -419,7 +415,6 @@ func (f *cubeboxQueryFlow) TryHandle(
 		Prompt:               request.Prompt,
 		Results:              f.registry.ProjectNarrationResults(results),
 		QueryContext:         queryContext,
-		PageContext:          cubebox.NormalizePageContext(request.PageContext),
 		ExpectedProviderID:   produced.ProviderID,
 		ExpectedProviderType: produced.ProviderType,
 		ExpectedModelSlug:    produced.ModelSlug,
@@ -677,8 +672,8 @@ func buildQueryNarrationMessages(body string) []cubebox.PromptItem {
 - 如果某些字段为空，只在和用户问题相关时用一句话说明“未记录……”，不要机械逐项写“空”。
 
 硬约束：
-- 只能依据输入 JSON 中的 user_prompt、page_context、dialogue_context、results 叙述。
-- 事实性结论只能来自 results，不得从 dialogue_context 或 page_context 推导新的业务事实。
+- 只能依据输入 JSON 中的 user_prompt、dialogue_context、results 叙述。
+- 事实性结论只能来自 results，不得从 dialogue_context 推导新的业务事实。
 - 不得编造任何 results 中不存在的字段、值、条数、层级或结论。
 - 不得补做新的查询、推断新的默认值、追加新的澄清问题。
 - 不得输出 Markdown 代码块。
@@ -1111,25 +1106,13 @@ func (f *cubeboxQueryFlow) clockNow() time.Time {
 }
 
 func (f *cubeboxQueryFlow) buildQueryCanonicalContext(request cubebox.GatewayStreamRequest, lifecycle cubeboxQueryLifecycle) cubebox.CanonicalContext {
-	pageContext := cubebox.NormalizePageContext(request.PageContext)
-	page := "/app/cubebox"
-	businessObject := "conversation"
-	if pageContext != nil {
-		if pageContext.Page != "" {
-			page = pageContext.Page
-		}
-		if pageContext.BusinessObject != "" {
-			businessObject = pageContext.BusinessObject
-		}
-	}
 	return cubebox.CanonicalContext{
 		TenantID:       request.TenantID,
 		PrincipalID:    request.PrincipalID,
 		Language:       "zh",
-		Page:           page,
+		Page:           "/app/cubebox",
 		Permissions:    []string{"cubebox.conversations:use"},
-		BusinessObject: businessObject,
-		PageContext:    pageContext,
+		BusinessObject: "conversation",
 	}
 }
 
@@ -1252,7 +1235,6 @@ func (f *cubeboxQueryFlow) buildExecutionClarificationText(
 		TenantID:             request.TenantID,
 		Prompt:               request.Prompt,
 		QueryContext:         queryContext,
-		PageContext:          cubebox.NormalizePageContext(request.PageContext),
 		Candidates:           candidates,
 		ErrorCode:            strings.TrimSpace(errorCode),
 		CandidateSource:      strings.TrimSpace(candidateSource),
@@ -1301,8 +1283,7 @@ func buildQueryClarificationEnvelope(input cubeboxQueryClarificationInput) cubeb
 		dialogueTurns = dialogueTurns[len(dialogueTurns)-2:]
 	}
 	return cubeboxQueryClarificationEnvelope{
-		UserPrompt:  strings.TrimSpace(input.Prompt),
-		PageContext: cubebox.NormalizePageContext(input.PageContext),
+		UserPrompt: strings.TrimSpace(input.Prompt),
 		DialogueContext: cubeboxQueryDialogueContextView{
 			ResolvedEntity:      buildQueryEntityView(input.QueryContext.ResolvedEntity),
 			RecentDialogueTurns: dialogueTurns,
@@ -1327,8 +1308,7 @@ func buildQueryNarrationEnvelope(input cubeboxQueryNarrationInput) cubeboxQueryN
 		recentCandidates = recentCandidates[:5]
 	}
 	return cubeboxQueryNarrationEnvelope{
-		UserPrompt:  strings.TrimSpace(input.Prompt),
-		PageContext: cubebox.NormalizePageContext(input.PageContext),
+		UserPrompt: strings.TrimSpace(input.Prompt),
 		DialogueContext: cubeboxQueryDialogueContextView{
 			ResolvedEntity:      buildQueryEntityView(input.QueryContext.ResolvedEntity),
 			RecentDialogueTurns: dialogueTurns,
