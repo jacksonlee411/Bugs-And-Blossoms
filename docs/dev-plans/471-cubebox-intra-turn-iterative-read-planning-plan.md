@@ -45,10 +45,11 @@
 ### 0.3 现状研究摘要
 
 - 当前 `cubeboxQueryFlow.TryHandle(...)` 只做一次 `ProduceReadPlan(...)`、一次 `ExecutionRegistry.ExecutePlan(...)`，随后直接 `NarrateQueryResult(...)`。
-- planner 已可消费 `knowledge packs + query_dialogue_context`，并已具备 `468C` 的前序 step 结果字段引用能力。
-- executor 已支持线性 `ReadPlan`、前序结果字段引用、参数白名单与 fail-closed 执行。
+- planner 已可消费 `knowledge packs + query_dialogue_context`；其中 `query_dialogue_context` 的跨 turn 事实窗口与 planner projection 口径以 `468C` 为 SSOT。
+- executor 已支持线性 `ReadPlan`、前序 step 结果字段引用、参数白名单与 fail-closed 执行。
 - `ReadPlan` 仍是单次产物；planner 当前看不到本 turn 已执行的小步骤结果。
-- query context / recent candidates 面向跨 turn 连续性，不应承接本 turn 内临时工作态。
+- `query_dialogue_context` 面向跨 turn 历史事实，`working_results` 面向同一 turn 临时 observation；两者不能合并、不能互相回写，也不能互相派生新的 canonical facts。
+- `resolved_entity` 已由 `468C` 明确移出当前范围；471 不应把它当作 loop 快捷状态、当前 turn winner 或 `DONE` 的摘要载体。
 - `orgunit.list` 已返回 `org_units[].has_children`；当前缺口不是业务 API，而是同一 turn 内的 observation 回灌与再规划。
 
 ### 0.4 最容易出错的位置
@@ -81,7 +82,8 @@
   - 再分别查出这些组织的各自下级组织
   - 最后把这些“有下级的直接下级组织”的下级组织汇总为最终回答
 - **本质缺口**：
-  - `468C` 的线性前序引用适合“先 search 唯一命中，再 details/list”的已知链路
+  - `468C` 负责跨 turn query dialogue fact window，让 planner 能继承最近确认实体、候选组、最近问答与澄清状态
+  - 现有 `ReadPlan` / executor 的线性前序引用适合“先 search 唯一命中，再 details/list”的已知链路
   - 本案例要求“执行一步 -> 观察结果 -> 根据结果决定下一步”
   - 因此需要同一 turn 内的模型再入循环，而不是单次大 `ReadPlan`
 
@@ -203,6 +205,13 @@ flowchart TD
 5. 当前用户原始 prompt
 6. 当前 turn 内 `working_results`
 
+其中：
+
+- `query_dialogue_context` 只承接跨 turn 历史事实，字段语义、canonical 上限与 planner projection 口径统一以 `DEV-PLAN-468C` 为准。
+- `working_results` 只承接当前 turn 的临时 observation，不进入 canonical events，不进入 `query_dialogue_context`。
+- 两者必须并列输入给 planner；不得把 `working_results` 合并成 `query_dialogue_context`，也不得从 `query_dialogue_context` 派生当前 turn 的 synthetic observation。
+- `resolved_entity` 不在 471 的 planner 输入范围；loop 不得依赖它表达“本 turn 已解析目标”“当前 winner”或 `DONE` 摘要。
+
 `read_api_catalog` 是代码从注册表生成的最小执行事实：
 
 ```json
@@ -277,11 +286,24 @@ flowchart TD
 
 - 不包含密钥、provider 配置、内部 session token 或未授权数据。
 - 不原样塞入无限 raw payload；必须按预算裁剪。
-- 不作为长期 canonical event，不进入 `query_dialogue_context`。
+- 不作为长期 canonical event，不进入 `query_dialogue_context`，也不进入 `468C` 的 query dialogue fact window projection。
 - 不作为 narrator 之外的用户可见 JSON。
+- 跨 turn 锚点只来自 `468C` 的 `query_dialogue_context`；同一 turn 临时事实只来自 `working_results`。
 - `remaining_goal_hint` 如确有必要，只能是 query flow 生成的通用短提示，不得包含业务专用 prose 或隐藏分支语义。
 
-### 4.6 预算与去重
+### 4.6 候选澄清事件契约
+
+当 loop 中某次执行返回“候选不可静默选择”时，471 必须沿用并显式对齐 `468C` 的事件契约，而不是再发明一套 loop 专用关联语义。
+
+规则：
+
+1. `turn.query_candidates.presented` 的 prompt-facing 权威关联键只有 `group_id`。
+2. `turn.query_clarification.requested` 在候选澄清场景必须写 `candidate_group_id`，并通过它关联最近一次或同一轮的候选组。
+3. `candidate_source` 只描述来源，不得作为候选澄清的关联键。
+4. `turn_id`、loop round、`working_results.round_index` 或其他内部计数器只可用于审计或调试，不得作为 prompt-facing 关联主键。
+5. `query_dialogue_context` 对候选事实的组织方式统一以 `468C` 的 `recent_candidate_groups` / `recent_candidates` compatibility alias 为准；471 不得改写其语义。
+
+### 4.7 预算与去重
 
 P0 默认预算建议：
 
@@ -302,7 +324,7 @@ P0 默认预算建议：
 - 第一次重复：作为 observation 告知 planner 已执行过，不重复执行，要求其选择下一步或 `DONE`
 - 再次重复：fail-closed，输出统一 stopline
 
-### 4.7 Fanout 策略
+### 4.8 Fanout 策略
 
 P0 不引入 fanout DSL，不并发执行。
 
@@ -320,6 +342,7 @@ P0 不引入 fanout DSL，不并发执行。
   - 解析 planner outcome
   - 调用 executor
   - 累积 `working_results`
+  - 对齐 `468C` 的 planner projection 与候选澄清事件契约
   - 执行预算、去重、错误映射和 SSE 事件顺序
   - 最终只调用 narrator 一次
 - **`modules/cubebox`**
@@ -338,7 +361,7 @@ P0 不引入 fanout DSL，不并发执行。
 | planner 输出非法 JSON / 非法 outcome | fail-closed，映射为计划边界错误 |
 | `ReadPlan` schema 或参数非法 | fail-closed，沿用现有计划边界错误 |
 | 未注册 `api_key` | fail-closed，沿用执行注册表漂移错误 |
-| executor 返回候选不可静默选择 | 进入澄清终态，写候选 metadata events |
+| executor 返回候选不可静默选择 | 进入澄清终态，并按 `468C` 契约写 `group_id` / `candidate_group_id` metadata events |
 | executor 执行失败 | 沿用现有错误映射 |
 | planner 在已执行后返回 `NO_QUERY` | fail-closed，不当作完成 |
 | planner 返回 `DONE` 但无任何执行结果 | fail-closed |
@@ -363,6 +386,9 @@ P0 不引入 fanout DSL，不并发执行。
 - planner 重复请求相同 fingerprint 时不会重复执行。
 - 超过 `max_planning_rounds` 时 fail-closed。
 - 中间 `working_results` 不写入长期 canonical event。
+- loop 每轮看到的 `query_dialogue_context` 使用 `468C` planner projection，且不吸收当前 turn observation。
+- 候选澄清事件使用 `group_id` / `candidate_group_id` 串联，不得用 `candidate_source`、loop round 或 `turn_id` 当关联键。
+- `resolved_entity` 不参与 471 loop 输入、状态推进或完成判定。
 - 用户可见输出不泄露 `api_key`、`step-*`、`payload`、`results`、`params` 等内部执行痕迹。
 
 ## 8. 实施步骤
@@ -409,12 +435,12 @@ P0 不引入 fanout DSL，不并发执行。
      - `internal/server/cubebox_query_flow_test.go`
    - 具体动作：
      - 在 `TryHandle(...)` 内引入 `max_planning_rounds`、`max_executed_steps`、`max_repeated_plan_fingerprint` 限制
-     - 每轮都重建 planner 输入：`knowledge packs + read_api_catalog + query_dialogue_context + current user prompt + working_results`
+     - 每轮都重建 planner 输入：`knowledge packs + read_api_catalog + query_dialogue_context(按 468C planner projection) + current user prompt + working_results`
      - `READ_PLAN`：执行小 `ReadPlan`，追加 observation，进入下一轮
      - `CLARIFY`：直接终止为澄清，不进入 narrator
      - `DONE`：仅在至少执行过一次只读计划后允许进入 narrator
      - `NO_QUERY`：未执行前可作为普通 no-query stopline；已执行后返回 `NO_QUERY` 必须 fail-closed
-     - executor 返回候选不可静默选择时，继续沿用现有澄清终态与 candidate metadata event
+     - executor 返回候选不可静默选择时，继续沿用现有澄清终态，但 metadata event 必须按 `468C` 契约写 `group_id` / `candidate_group_id`
    - 本片完成判定：
      - 单轮问题仍只调用一次 planner/executor/narrator
      - 需要“先执行再决定”的问题可在同一 turn 内进入第二轮 planner
@@ -427,9 +453,11 @@ P0 不引入 fanout DSL，不并发执行。
      - `modules/orgunit/presentation/cubebox/examples.md`
      - 如需补说明，可同步 `modules/orgunit/presentation/cubebox/apis.md`
    - 具体动作：
-     - 在 planner system prompt 中增加 `working_results` 说明
+     - 在 planner system prompt 中增加 `working_results` 说明，并明确 `query_dialogue_context` 使用 `468C` 的跨 turn fact window
      - 明确 `DONE` 的语义是“当前 observation 已足够进入 narrator”
      - 明确 `NO_QUERY` 只表示“超出查询域”，不能表示“已经查够”
+     - 明确 `recent_confirmed_entities` / `recent_candidate_groups` 是跨 turn 历史事实主输入，`recent_confirmed_entity` / `recent_candidates` 只是 compatibility alias
+     - 明确 `resolved_entity` 不在本计划输入范围
      - 明确禁止重复请求已执行 fingerprint
      - 在 orgunit 样例中加入“先查直接下级，再基于 `has_children=true` 继续查其下级”的最小案例
    - 本片完成判定：
@@ -450,6 +478,8 @@ P0 不引入 fanout DSL，不并发执行。
      - repeat / budget fail-closed：重复请求同 fingerprint 或超预算时不重复执行
      - narrator 单次调用：中途不得输出用户可见半成品回答
      - 长期事件隔离：中间 `working_results` 不写入 canonical events
+     - 候选澄清事件契约：`turn.query_candidates.presented.group_id` 与 `turn.query_clarification.requested.candidate_group_id` 正确关联
+     - `resolved_entity` 不参与 planner 输入或 loop 完成判定
    - 本片完成判定：
      - `modules/cubebox` 纯函数测试与 `internal/server` 组合层测试都能独立说明 471 的主约束
 
@@ -476,9 +506,12 @@ P0 不引入 fanout DSL，不并发执行。
 5. [ ] planner 终止态明确：`DONE` 才能在已执行查询后进入 narrator；`NO_QUERY` 不得作为完成态。
 6. [ ] narrator 只在所有小循环结束后调用一次。
 7. [ ] 当前 turn 的 `working_results` 不写入长期 canonical event，不污染后续 turn 的 `query_dialogue_context`。
-8. [ ] 超预算、重复查询不收敛、非法 planner outcome 均 fail-closed。
-9. [ ] 用户可见回答不泄露内部执行痕迹。
-10. [ ] `third_party/openai-codex` 已完整克隆并记录 HEAD，用于后续本地对标学习。
+8. [ ] 每轮 planner 输入中的 `query_dialogue_context` 以 `468C` planner projection 为 SSOT，且与 `working_results` 保持并列、分层、不互写。
+9. [ ] 候选澄清事件按 `468C` 契约使用 `group_id` / `candidate_group_id` 关联；`candidate_source`、loop round 与 `turn_id` 不作为主关联键。
+10. [ ] `resolved_entity` 不参与 471 的 planner 输入、loop 状态推进或完成判定。
+11. [ ] 超预算、重复查询不收敛、非法 planner outcome 均 fail-closed。
+12. [ ] 用户可见回答不泄露内部执行痕迹。
+13. [ ] `third_party/openai-codex` 已完整克隆并记录 HEAD，用于后续本地对标学习。
 
 ## 10. 风险与对策
 
