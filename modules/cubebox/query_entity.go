@@ -47,14 +47,32 @@ type QueryCandidateGroup struct {
 }
 
 type QueryClarification struct {
-	Intent             string   `json:"intent,omitempty"`
-	MissingParams      []string `json:"missing_params,omitempty"`
-	ClarifyingQuestion string   `json:"clarifying_question,omitempty"`
-	ErrorCode          string   `json:"error_code,omitempty"`
-	CandidateGroupID   string   `json:"candidate_group_id,omitempty"`
-	CandidateSource    string   `json:"candidate_source,omitempty"`
-	CandidateCount     int      `json:"candidate_count,omitempty"`
-	CannotSilentSelect bool     `json:"cannot_silent_select,omitempty"`
+	SourceTurnID       string         `json:"source_turn_id,omitempty"`
+	Intent             string         `json:"intent,omitempty"`
+	MissingParams      []string       `json:"missing_params,omitempty"`
+	ClarifyingQuestion string         `json:"clarifying_question,omitempty"`
+	ErrorCode          string         `json:"error_code,omitempty"`
+	CandidateGroupID   string         `json:"candidate_group_id,omitempty"`
+	CandidateSource    string         `json:"candidate_source,omitempty"`
+	CandidateCount     int            `json:"candidate_count,omitempty"`
+	CannotSilentSelect bool           `json:"cannot_silent_select,omitempty"`
+	KnownParams        map[string]any `json:"known_params,omitempty"`
+}
+
+type QueryClarificationResume struct {
+	ReplyCandidate      bool                `json:"reply_candidate,omitempty"`
+	SourceTurnID        string              `json:"source_turn_id,omitempty"`
+	Intent              string              `json:"intent,omitempty"`
+	MissingParams       []string            `json:"missing_params,omitempty"`
+	ClarifyingQuestion  string              `json:"clarifying_question,omitempty"`
+	KnownParams         map[string]any      `json:"known_params,omitempty"`
+	CandidateGroupID    string              `json:"candidate_group_id,omitempty"`
+	CandidateSource     string              `json:"candidate_source,omitempty"`
+	CandidateCount      int                 `json:"candidate_count,omitempty"`
+	CannotSilentSelect  bool                `json:"cannot_silent_select,omitempty"`
+	Candidates          []QueryCandidate    `json:"candidates,omitempty"`
+	RecentDialogueTurns []QueryDialogueTurn `json:"recent_dialogue_turns,omitempty"`
+	RawUserReply        string              `json:"raw_user_reply,omitempty"`
 }
 
 type QueryContext struct {
@@ -62,6 +80,7 @@ type QueryContext struct {
 	RecentConfirmedEntities []QueryEntity
 	RecentDialogueTurns     []QueryDialogueTurn
 	LastClarification       *QueryClarification
+	ClarificationResume     *QueryClarificationResume
 	RecentCandidateGroups   []QueryCandidateGroup
 	RecentCandidates        []QueryCandidate
 }
@@ -74,6 +93,8 @@ func QueryContextFromEvents(events []CanonicalEvent) QueryContext {
 	assistantReplies := map[string]string{}
 	currentDialogue := QueryDialogueTurn{}
 	hasCurrentDialogue := false
+	var lastClarificationEvent *CanonicalEvent
+	clarificationStillOpen := false
 
 	appendDialogue := func(turn QueryDialogueTurn) {
 		trimmed := QueryDialogueTurn{
@@ -120,7 +141,13 @@ func QueryContextFromEvents(events []CanonicalEvent) QueryContext {
 			}
 		case QueryClarificationRequestedEventType:
 			if clarification := DecodeQueryClarification(event.Payload); clarification != nil {
+				if clarification.SourceTurnID == "" && event.TurnID != nil {
+					clarification.SourceTurnID = strings.TrimSpace(*event.TurnID)
+				}
 				context.LastClarification = clarification
+				eventCopy := event
+				lastClarificationEvent = &eventCopy
+				clarificationStillOpen = true
 			}
 		case "turn.agent_message.delta":
 			reply := strings.TrimSpace(stringValue(event.Payload["delta"]))
@@ -158,6 +185,7 @@ func QueryContextFromEvents(events []CanonicalEvent) QueryContext {
 			if prompt == "" {
 				continue
 			}
+			clarificationStillOpen = false
 			flushCurrentDialogue()
 			currentDialogue = QueryDialogueTurn{UserPrompt: prompt}
 			hasCurrentDialogue = true
@@ -171,7 +199,79 @@ func QueryContextFromEvents(events []CanonicalEvent) QueryContext {
 	if len(candidateGroups) > 0 {
 		context.RecentCandidates = append([]QueryCandidate(nil), candidateGroups[len(candidateGroups)-1].Candidates...)
 	}
+	if clarificationStillOpen && context.LastClarification != nil && lastClarificationEvent != nil {
+		context.ClarificationResume = BuildQueryClarificationResume(context, "")
+	}
 	return context
+}
+
+func BuildQueryClarificationResume(context QueryContext, rawUserReply string) *QueryClarificationResume {
+	clarification := copyQueryClarificationLocal(context.LastClarification)
+	if clarification == nil {
+		return nil
+	}
+	reply := strings.TrimSpace(rawUserReply)
+	candidateGroup := matchingClarificationCandidateGroup(context.RecentCandidateGroups, clarification.CandidateGroupID)
+	candidateSource := strings.TrimSpace(clarification.CandidateSource)
+	if candidateSource == "" {
+		candidateSource = strings.TrimSpace(candidateGroup.CandidateSource)
+	}
+	candidateCount := clarification.CandidateCount
+	if candidateCount <= 0 {
+		candidateCount = candidateGroup.CandidateCount
+	}
+	candidates := copyQueryCandidates(candidateGroup.Candidates)
+	if candidateCount <= 0 {
+		candidateCount = len(candidates)
+	}
+	resume := &QueryClarificationResume{
+		ReplyCandidate:      reply != "",
+		SourceTurnID:        strings.TrimSpace(clarification.SourceTurnID),
+		Intent:              strings.TrimSpace(clarification.Intent),
+		MissingParams:       append([]string(nil), clarification.MissingParams...),
+		ClarifyingQuestion:  strings.TrimSpace(clarification.ClarifyingQuestion),
+		KnownParams:         copyQueryKnownParams(clarification.KnownParams),
+		CandidateGroupID:    strings.TrimSpace(clarification.CandidateGroupID),
+		CandidateSource:     candidateSource,
+		CandidateCount:      candidateCount,
+		CannotSilentSelect:  clarification.CannotSilentSelect || candidateGroup.CannotSilentSelect,
+		Candidates:          candidates,
+		RecentDialogueTurns: append([]QueryDialogueTurn(nil), context.RecentDialogueTurns...),
+		RawUserReply:        reply,
+	}
+	if resume.SourceTurnID == "" &&
+		resume.Intent == "" &&
+		len(resume.MissingParams) == 0 &&
+		resume.ClarifyingQuestion == "" &&
+		len(resume.KnownParams) == 0 &&
+		resume.CandidateGroupID == "" &&
+		resume.CandidateSource == "" &&
+		resume.CandidateCount == 0 &&
+		!resume.CannotSilentSelect &&
+		len(resume.Candidates) == 0 &&
+		len(resume.RecentDialogueTurns) == 0 &&
+		resume.RawUserReply == "" {
+		return nil
+	}
+	if len(resume.KnownParams) == 0 {
+		resume.KnownParams = nil
+	}
+	return resume
+}
+
+func matchingClarificationCandidateGroup(groups []QueryCandidateGroup, groupID string) QueryCandidateGroup {
+	groupID = strings.TrimSpace(groupID)
+	if groupID == "" {
+		return QueryCandidateGroup{}
+	}
+	for i := len(groups) - 1; i >= 0; i-- {
+		if strings.TrimSpace(groups[i].GroupID) == groupID {
+			group := groups[i]
+			group.Candidates = copyQueryCandidates(groups[i].Candidates)
+			return group
+		}
+	}
+	return QueryCandidateGroup{}
 }
 
 func DecodeQueryEntity(payload map[string]any) *QueryEntity {
@@ -366,6 +466,7 @@ func DecodeQueryClarification(payload map[string]any) *QueryClarification {
 		return nil
 	}
 	out := &QueryClarification{
+		SourceTurnID:       strings.TrimSpace(stringValue(payload["source_turn_id"])),
 		Intent:             strings.TrimSpace(stringValue(payload["intent"])),
 		ClarifyingQuestion: strings.TrimSpace(stringValue(payload["clarifying_question"])),
 		ErrorCode:          strings.TrimSpace(stringValue(payload["error_code"])),
@@ -375,15 +476,21 @@ func DecodeQueryClarification(payload map[string]any) *QueryClarification {
 	out.MissingParams = decodeQueryStringList(payload["missing_params"])
 	out.CandidateCount = decodeQueryInt(payload["candidate_count"])
 	out.CannotSilentSelect = decodeQueryBool(payload["cannot_silent_select"])
+	out.KnownParams = copyQueryKnownParams(decodeQueryObject(payload["known_params"]))
 	if out.Intent == "" &&
+		out.SourceTurnID == "" &&
 		out.ClarifyingQuestion == "" &&
 		out.ErrorCode == "" &&
 		out.CandidateGroupID == "" &&
 		out.CandidateSource == "" &&
 		out.CandidateCount == 0 &&
 		!out.CannotSilentSelect &&
-		len(out.MissingParams) == 0 {
+		len(out.MissingParams) == 0 &&
+		len(out.KnownParams) == 0 {
 		return nil
+	}
+	if len(out.KnownParams) == 0 {
+		out.KnownParams = nil
 	}
 	return out
 }
@@ -435,6 +542,60 @@ func decodeQueryInt(raw any) int {
 func decodeQueryBool(raw any) bool {
 	value, ok := raw.(bool)
 	return ok && value
+}
+
+func decodeQueryObject(raw any) map[string]any {
+	value, ok := raw.(map[string]any)
+	if !ok || len(value) == 0 {
+		return nil
+	}
+	return value
+}
+
+func copyQueryKnownParams(source map[string]any) map[string]any {
+	if len(source) == 0 {
+		return nil
+	}
+	target := make(map[string]any, len(source))
+	for key, value := range source {
+		name := strings.TrimSpace(key)
+		if name == "" {
+			continue
+		}
+		target[name] = value
+	}
+	if len(target) == 0 {
+		return nil
+	}
+	return target
+}
+
+func copyQueryCandidates(source []QueryCandidate) []QueryCandidate {
+	if len(source) == 0 {
+		return nil
+	}
+	target := make([]QueryCandidate, 0, len(source))
+	for _, item := range source {
+		normalized := NormalizeQueryCandidate(item)
+		if normalized == nil {
+			continue
+		}
+		target = append(target, *normalized)
+	}
+	if len(target) == 0 {
+		return nil
+	}
+	return target
+}
+
+func copyQueryClarificationLocal(in *QueryClarification) *QueryClarification {
+	if in == nil {
+		return nil
+	}
+	out := *in
+	out.MissingParams = append([]string(nil), in.MissingParams...)
+	out.KnownParams = copyQueryKnownParams(in.KnownParams)
+	return &out
 }
 
 func minInt(a int, b int) int {

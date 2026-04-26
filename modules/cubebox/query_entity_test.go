@@ -127,11 +127,26 @@ func TestQueryContextFromEventsExtractsCandidatesAndClarification(t *testing.T) 
 	if context.LastClarification.CandidateGroupID != "candgrp_test_1" {
 		t.Fatalf("expected candidate group id, got %#v", context.LastClarification)
 	}
+	if context.LastClarification.SourceTurnID != "" {
+		t.Fatalf("expected empty source turn id when turn id absent, got %#v", context.LastClarification)
+	}
 	if context.LastClarification.ErrorCode != "" || context.LastClarification.CandidateCount != 0 || context.LastClarification.CannotSilentSelect {
 		t.Fatalf("expected empty optional clarification fields when absent, got %#v", context.LastClarification)
 	}
 	if len(context.RecentDialogueTurns) == 0 {
 		t.Fatalf("expected dialogue turns, got %#v", context.RecentDialogueTurns)
+	}
+	if context.ClarificationResume == nil {
+		t.Fatalf("expected open clarification resume, got %#v", context)
+	}
+	if context.ClarificationResume.RawUserReply != "" || context.ClarificationResume.ReplyCandidate {
+		t.Fatalf("expected resume without raw reply before next user turn, got %#v", context.ClarificationResume)
+	}
+	if context.ClarificationResume.CandidateSource != "execution_error" || context.ClarificationResume.CandidateCount != 2 || !context.ClarificationResume.CannotSilentSelect {
+		t.Fatalf("expected candidate facts in resume, got %#v", context.ClarificationResume)
+	}
+	if got := len(context.ClarificationResume.Candidates); got != 2 {
+		t.Fatalf("expected resume candidates, got %d in %#v", got, context.ClarificationResume)
 	}
 }
 
@@ -240,6 +255,7 @@ func cubeboxQueryCandidateGroupForPayloadTest() QueryCandidateGroup {
 
 func TestDecodeQueryClarificationAcceptsStringSlice(t *testing.T) {
 	clarification := DecodeQueryClarification(map[string]any{
+		"source_turn_id":       "turn_prev",
 		"intent":               "orgunit.list",
 		"missing_params":       []string{"parent_org_code", " as_of "},
 		"clarifying_question":  "请补充参数。",
@@ -248,6 +264,9 @@ func TestDecodeQueryClarificationAcceptsStringSlice(t *testing.T) {
 		"candidate_source":     "execution_error",
 		"candidate_count":      float64(2),
 		"cannot_silent_select": true,
+		"known_params": map[string]any{
+			"as_of_text": "2025年1月",
+		},
 	})
 
 	if clarification == nil {
@@ -256,8 +275,185 @@ func TestDecodeQueryClarificationAcceptsStringSlice(t *testing.T) {
 	if !reflect.DeepEqual(clarification.MissingParams, []string{"parent_org_code", "as_of"}) {
 		t.Fatalf("unexpected missing params=%#v", clarification.MissingParams)
 	}
+	if clarification.SourceTurnID != "turn_prev" {
+		t.Fatalf("unexpected source turn id=%#v", clarification)
+	}
+	if got, _ := clarification.KnownParams["as_of_text"].(string); got != "2025年1月" {
+		t.Fatalf("unexpected known params=%#v", clarification.KnownParams)
+	}
 	if clarification.ErrorCode != "org_unit_search_ambiguous" || clarification.CandidateGroupID != "candgrp_test_1" || clarification.CandidateSource != "execution_error" || clarification.CandidateCount != 2 || !clarification.CannotSilentSelect {
 		t.Fatalf("unexpected clarification=%#v", clarification)
+	}
+}
+
+func TestQueryContextFromEventsBuildsOpenClarificationResume(t *testing.T) {
+	context := QueryContextFromEvents([]CanonicalEvent{
+		{
+			Type: "turn.user_message.accepted",
+			Payload: map[string]any{
+				"text": "查出顶级点的全部各级下级组织，时间节点是2025年1月",
+			},
+		},
+		{
+			Type: "turn.agent_message.delta",
+			Payload: map[string]any{
+				"message_id": "msg_agent_1",
+				"delta":      "请提供完整查询日期，例如 2025-01-01。",
+			},
+		},
+		{
+			Type: "turn.agent_message.completed",
+			Payload: map[string]any{
+				"message_id": "msg_agent_1",
+			},
+		},
+		{
+			Type:   QueryClarificationRequestedEventType,
+			TurnID: stringPtr("turn_prev"),
+			Payload: map[string]any{
+				"intent":              "orgunit.list",
+				"missing_params":      []string{"as_of"},
+				"clarifying_question": "请提供完整查询日期，例如 2025-01-01。",
+			},
+		},
+	})
+
+	if context.LastClarification == nil {
+		t.Fatalf("expected last clarification, got %#v", context)
+	}
+	if context.ClarificationResume == nil {
+		t.Fatalf("expected clarification resume, got %#v", context)
+	}
+	if context.ClarificationResume.ReplyCandidate {
+		t.Fatalf("expected reply candidate false before raw reply injection, got %#v", context.ClarificationResume)
+	}
+	if context.ClarificationResume.SourceTurnID != "turn_prev" {
+		t.Fatalf("unexpected source turn id=%#v", context.ClarificationResume)
+	}
+	if context.ClarificationResume.RawUserReply != "" {
+		t.Fatalf("expected empty raw reply before injection, got %#v", context.ClarificationResume)
+	}
+}
+
+func TestBuildQueryClarificationResumeCopiesRawReply(t *testing.T) {
+	context := QueryContext{
+		LastClarification: &QueryClarification{
+			SourceTurnID:       "turn_prev",
+			Intent:             "orgunit.list",
+			MissingParams:      []string{"as_of"},
+			ClarifyingQuestion: "请提供完整查询日期，例如 2025-01-01。",
+			KnownParams: map[string]any{
+				"as_of_text": "2025年1月",
+			},
+		},
+		RecentDialogueTurns: []QueryDialogueTurn{
+			{UserPrompt: "查出顶级点的全部各级下级组织，时间节点是2025年1月", AssistantReply: "请提供完整查询日期，例如 2025-01-01。"},
+		},
+	}
+	resume := BuildQueryClarificationResume(context, "1日")
+	if resume == nil {
+		t.Fatal("expected clarification resume")
+	}
+	if !resume.ReplyCandidate || resume.RawUserReply != "1日" {
+		t.Fatalf("unexpected resume=%#v", resume)
+	}
+	if got, _ := resume.KnownParams["as_of_text"].(string); got != "2025年1月" {
+		t.Fatalf("unexpected known params=%#v", resume.KnownParams)
+	}
+}
+
+func TestBuildQueryClarificationResumeIncludesMatchingCandidateGroup(t *testing.T) {
+	context := QueryContext{
+		LastClarification: &QueryClarification{
+			SourceTurnID:       "turn_prev",
+			ClarifyingQuestion: "请确认要继续查询哪一个。",
+			CandidateGroupID:   "candgrp_finance",
+			CandidateCount:     3,
+			CannotSilentSelect: true,
+		},
+		RecentCandidateGroups: []QueryCandidateGroup{
+			{
+				GroupID:         "candgrp_other",
+				CandidateSource: "results",
+				CandidateCount:  1,
+				Candidates: []QueryCandidate{
+					{Domain: "orgunit", EntityKey: "100001", Name: "销售部"},
+				},
+			},
+			{
+				GroupID:         "candgrp_finance",
+				CandidateSource: "execution_error",
+				CandidateCount:  3,
+				Candidates: []QueryCandidate{
+					{Domain: "orgunit", EntityKey: "200001", Name: "财务部", AsOf: "2026-01-07"},
+					{Domain: "orgunit", EntityKey: "200002", Name: "财务一组", AsOf: "2026-01-07"},
+					{Domain: "orgunit", EntityKey: "200004", Name: "财务四组", AsOf: "2026-01-07"},
+				},
+			},
+		},
+	}
+
+	resume := BuildQueryClarificationResume(context, "以上全部")
+	if resume == nil {
+		t.Fatal("expected clarification resume")
+	}
+	if !resume.ReplyCandidate || resume.RawUserReply != "以上全部" {
+		t.Fatalf("unexpected reply facts=%#v", resume)
+	}
+	if resume.CandidateGroupID != "candgrp_finance" || resume.CandidateSource != "execution_error" || resume.CandidateCount != 3 || !resume.CannotSilentSelect {
+		t.Fatalf("unexpected candidate facts=%#v", resume)
+	}
+	if got := len(resume.Candidates); got != 3 {
+		t.Fatalf("expected 3 candidates, got %d in %#v", got, resume.Candidates)
+	}
+	if resume.Candidates[0].EntityKey != "200001" || resume.Candidates[2].Name != "财务四组" {
+		t.Fatalf("unexpected candidates=%#v", resume.Candidates)
+	}
+}
+
+func TestQueryContextFromEventsClearsOpenClarificationResumeAfterNextUserMessage(t *testing.T) {
+	context := QueryContextFromEvents([]CanonicalEvent{
+		{
+			Type: "turn.user_message.accepted",
+			Payload: map[string]any{
+				"text": "查出顶级点的全部各级下级组织，时间节点是2025年1月",
+			},
+		},
+		{
+			Type: "turn.agent_message.delta",
+			Payload: map[string]any{
+				"message_id": "msg_agent_1",
+				"delta":      "请提供完整查询日期，例如 2025-01-01。",
+			},
+		},
+		{
+			Type: "turn.agent_message.completed",
+			Payload: map[string]any{
+				"message_id": "msg_agent_1",
+			},
+		},
+		{
+			Type:   QueryClarificationRequestedEventType,
+			TurnID: stringPtr("turn_prev"),
+			Payload: map[string]any{
+				"intent":              "orgunit.list",
+				"missing_params":      []string{"as_of"},
+				"clarifying_question": "请提供完整查询日期，例如 2025-01-01。",
+			},
+		},
+		{
+			Type: "turn.user_message.accepted",
+			Payload: map[string]any{
+				"text": "1日",
+			},
+		},
+	})
+
+	if context.LastClarification == nil {
+		t.Fatalf("expected last clarification retained for audit, got %#v", context)
+	}
+	if context.ClarificationResume != nil {
+		t.Fatalf("expected open clarification resume cleared after next user message, got %#v", context.ClarificationResume)
 	}
 }
 

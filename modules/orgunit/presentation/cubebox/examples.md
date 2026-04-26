@@ -653,3 +653,200 @@ query_dialogue_context:
 - 不要输出裸文本 `DONE`；完成时必须输出 JSON envelope。
 - 不要重复执行 `executed_fingerprints` 中已经出现的查询。
 - 不要生成 `remaining_parent_org_codes`、业务 winner、聚合事实或其他 orgunit 专用状态字段。
+
+## 示例 13：日期澄清后的短答续接
+
+planner 上下文：
+
+```yaml
+query_dialogue_context:
+  recent_confirmed_entity: null
+  recent_confirmed_entities: []
+  recent_candidate_groups: []
+  recent_candidates: []
+  recent_dialogue_turns:
+    - user_prompt: 查出顶级点的全部各级下级组织，时间节点是2025年1月
+      assistant_reply: 请提供完整查询日期，例如 2025-01-01。
+  last_clarification:
+    source_turn_id: turn_prev
+    intent: orgunit.list
+    missing_params:
+      - as_of
+    clarifying_question: 请提供完整查询日期，例如 2025-01-01。
+  clarification_resume:
+    reply_candidate: true
+    source_turn_id: turn_prev
+    intent: orgunit.list
+    missing_params:
+      - as_of
+    clarifying_question: 请提供完整查询日期，例如 2025-01-01。
+    raw_user_reply: 1日
+```
+
+用户问法：
+
+`1日`
+
+期望 `ReadPlan`：
+
+```json
+{
+  "intent": "orgunit.list",
+  "confidence": 0.82,
+  "missing_params": [],
+  "steps": [
+    {
+      "id": "step-1",
+      "api_key": "orgunit.list",
+      "params": {
+        "as_of": "2025-01-01",
+        "include_disabled": false
+      },
+      "result_focus": [
+        "org_units[].org_code",
+        "org_units[].name",
+        "org_units[].has_children"
+      ],
+      "depends_on": []
+    }
+  ],
+  "explain_focus": [
+    "顶级组织下的各级下级组织"
+  ]
+}
+```
+
+说明：
+
+- `clarification_resume.reply_candidate=true` 表示当前轮很可能在回答上一轮澄清。
+- 应优先把 `1日` 解释成对上一轮日期澄清的补充，而不是重新追问“你想查什么”。
+- 最终执行参数必须是完整 `YYYY-MM-DD`；不能输出 `as_of_day` 这类临时槽位。
+
+## 示例 14：候选澄清后的“全部”
+
+planner 上下文：
+
+```yaml
+query_dialogue_context:
+  recent_confirmed_entity: null
+  recent_confirmed_entities: []
+  recent_candidate_groups:
+    - group_id: candgrp_finance
+      candidate_source: execution_error
+      candidate_count: 3
+      cannot_silent_select: true
+      candidates:
+        - domain: orgunit
+          entity_key: "200001"
+          name: 财务部
+          as_of: "2026-04-25"
+        - domain: orgunit
+          entity_key: "200002"
+          name: 财务一组
+          as_of: "2026-04-25"
+        - domain: orgunit
+          entity_key: "200004"
+          name: 财务四组
+          as_of: "2026-04-25"
+  recent_candidates:
+    - domain: orgunit
+      entity_key: "200001"
+      name: 财务部
+      as_of: "2026-04-25"
+    - domain: orgunit
+      entity_key: "200002"
+      name: 财务一组
+      as_of: "2026-04-25"
+    - domain: orgunit
+      entity_key: "200004"
+      name: 财务四组
+      as_of: "2026-04-25"
+  recent_dialogue_turns:
+    - user_prompt: 列出全部财务组织的详情
+      assistant_reply: 找到了多个候选项，请确认要继续查询哪一个。
+  last_clarification:
+    source_turn_id: turn_prev
+    clarifying_question: 找到了多个候选项，请确认要继续查询哪一个。
+    candidate_group_id: candgrp_finance
+    candidate_count: 3
+    cannot_silent_select: true
+  clarification_resume:
+    reply_candidate: true
+    source_turn_id: turn_prev
+    candidate_group_id: candgrp_finance
+    candidate_source: execution_error
+    candidate_count: 3
+    cannot_silent_select: true
+    candidates:
+      - domain: orgunit
+        entity_key: "200001"
+        name: 财务部
+        as_of: "2026-04-25"
+      - domain: orgunit
+        entity_key: "200002"
+        name: 财务一组
+        as_of: "2026-04-25"
+      - domain: orgunit
+        entity_key: "200004"
+        name: 财务四组
+        as_of: "2026-04-25"
+    raw_user_reply: 全部
+```
+
+用户问法：
+
+`全部`
+
+期望行为：
+
+- 先把 `全部` 理解为对上一轮候选澄清的集合型答复。
+- 若当前预算和执行能力允许，可继续围绕这 3 个候选组织生成合法小计划。
+- 若当前预算不足或集合语义仍不稳定，应继续澄清；不要跳回入口级重判或输出 `NO_QUERY`。
+
+## 示例 15：直接问“本月9日”时使用当前自然日年月
+
+planner 当前自然日：
+
+`2026-04-25`
+
+用户问法：
+
+`查询全部财务组织本月9日的详情`
+
+期望行为：
+
+- `本月9日` 应解析为 `2026-04-09`，不要再次要求用户提供完整日期。
+- `全部财务组织` 优先用 `orgunit.list` 的 `keyword=财务` 查询候选列表；若后续要看详情，再基于 `working_results` 中的候选组织编码继续生成线性小计划。
+
+期望首轮 `ReadPlan`：
+
+```json
+{
+  "intent": "orgunit.list",
+  "confidence": 0.86,
+  "missing_params": [],
+  "steps": [
+    {
+      "id": "step-1",
+      "api_key": "orgunit.list",
+      "params": {
+        "as_of": "2026-04-09",
+        "keyword": "财务",
+        "include_disabled": false
+      },
+      "result_focus": [
+        "org_units[].org_code",
+        "org_units[].name",
+        "org_units[].status"
+      ],
+      "depends_on": []
+    }
+  ],
+  "explain_focus": [
+    "名称包含财务的组织",
+    "2026-04-09 的组织详情"
+  ]
+}
+```
+
+若首轮结果只有少量候选，planner 后续可在同一 turn 内按 `working_results.latest_observation.items` 的出现顺序继续查详情；若候选过多或预算不足，应继续澄清缩小范围。

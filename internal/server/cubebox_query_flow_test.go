@@ -499,6 +499,346 @@ func TestBuildPlannerMessagesIncludesQueryDialogueContext(t *testing.T) {
 	}
 }
 
+func TestBuildPlannerMessagesIncludesClarificationResume(t *testing.T) {
+	producer := &cubeboxProviderReadPlanProducer{
+		now: func() time.Time { return time.Date(2026, 4, 25, 12, 0, 0, 0, time.UTC) },
+	}
+	messages := producer.buildPlannerMessages(cubeboxReadPlanProductionInput{
+		Prompt: "1日",
+		KnowledgePacks: []cubebox.KnowledgePack{
+			{Dir: "modules/orgunit/presentation/cubebox", Files: map[string]string{"CUBEBOX-SKILL.md": "x", "queries.md": "x", "apis.md": "x", "examples.md": "x"}},
+		},
+		QueryContext: cubebox.QueryContext{
+			RecentDialogueTurns: []cubebox.QueryDialogueTurn{
+				{UserPrompt: "查出顶级点的全部各级下级组织，时间节点是2025年1月", AssistantReply: "请提供完整查询日期，例如 2025-01-01。"},
+			},
+			LastClarification: &cubebox.QueryClarification{
+				SourceTurnID:       "turn_prev",
+				Intent:             "orgunit.list",
+				MissingParams:      []string{"as_of"},
+				ClarifyingQuestion: "请提供完整查询日期，例如 2025-01-01。",
+			},
+			ClarificationResume: &cubebox.QueryClarificationResume{
+				ReplyCandidate:     true,
+				SourceTurnID:       "turn_prev",
+				Intent:             "orgunit.list",
+				MissingParams:      []string{"as_of"},
+				ClarifyingQuestion: "请提供完整查询日期，例如 2025-01-01。",
+				RawUserReply:       "1日",
+			},
+		},
+	})
+
+	joined := plannerMessageText(messages)
+	for _, expected := range []string{
+		`"clarification_resume"`,
+		`"reply_candidate":true`,
+		`"raw_user_reply":"1日"`,
+		"不要因为输入很短就直接输出 NO_QUERY",
+	} {
+		if !strings.Contains(joined, expected) {
+			t.Fatalf("expected planner prompt to contain %q, got %s", expected, joined)
+		}
+	}
+}
+
+func TestBuildPlannerMessagesIncludesRelativeMonthDayGuidance(t *testing.T) {
+	producer := &cubeboxProviderReadPlanProducer{
+		now: func() time.Time { return time.Date(2026, 4, 25, 12, 0, 0, 0, time.UTC) },
+	}
+	messages := producer.buildPlannerMessages(cubeboxReadPlanProductionInput{
+		Prompt: "查询全部财务组织本月9日的详情",
+		KnowledgePacks: []cubebox.KnowledgePack{
+			{Dir: "modules/orgunit/presentation/cubebox", Files: map[string]string{"CUBEBOX-SKILL.md": "x", "queries.md": "x", "apis.md": "x", "examples.md": "x"}},
+		},
+	})
+
+	joined := plannerMessageText(messages)
+	for _, expected := range []string{
+		"本月N日/这个月N号",
+		"2026-04-09",
+	} {
+		if !strings.Contains(joined, expected) {
+			t.Fatalf("expected planner prompt to contain %q, got %s", expected, joined)
+		}
+	}
+}
+
+func TestQueryFlowInjectsClarificationResumeIntoPlannerInput(t *testing.T) {
+	registry, err := cubebox.NewExecutionRegistry(cubebox.RegisteredExecutor{
+		APIKey:         "orgunit.list",
+		RequiredParams: []string{"as_of"},
+		OptionalParams: []string{"parent_org_code", "include_disabled"},
+		Executor: queryExecutorStub{
+			executeFn: func(context.Context, cubebox.ExecuteRequest, map[string]any) (cubebox.ExecuteResult, error) {
+				return cubebox.ExecuteResult{
+					Payload: map[string]any{
+						"org_units": []map[string]any{{"org_code": "100000", "name": "总部", "has_children": true}},
+					},
+				}, nil
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("NewExecutionRegistry err=%v", err)
+	}
+
+	var plannerCalls int
+	flow := &cubeboxQueryFlow{
+		runtime: cubebox.NewRuntime(),
+		store: cubeboxStoreStub{
+			appendFn: func(context.Context, string, string, string, cubebox.CanonicalEvent) error { return nil },
+			getFn: func(context.Context, string, string, string) (cubebox.ConversationReplayResponse, error) {
+				return cubebox.ConversationReplayResponse{
+					Conversation: cubebox.Conversation{ID: "conv-1"},
+					Events: []cubebox.CanonicalEvent{
+						{
+							Type: "turn.user_message.accepted",
+							Payload: map[string]any{
+								"text": "查出顶级点的全部各级下级组织，时间节点是2025年1月",
+							},
+						},
+						{
+							Type: "turn.agent_message.delta",
+							Payload: map[string]any{
+								"message_id": "msg_agent_1",
+								"delta":      "请提供完整查询日期，例如 2025-01-01。",
+							},
+						},
+						{
+							Type: "turn.agent_message.completed",
+							Payload: map[string]any{
+								"message_id": "msg_agent_1",
+							},
+						},
+						{
+							Type:   cubebox.QueryClarificationRequestedEventType,
+							TurnID: turnIDPtrForTest("turn_prev"),
+							Payload: map[string]any{
+								"intent":              "orgunit.list",
+								"missing_params":      []string{"as_of"},
+								"clarifying_question": "请提供完整查询日期，例如 2025-01-01。",
+							},
+						},
+					},
+				}, nil
+			},
+			preparePromptViewFn: func(context.Context, string, string, string, cubebox.CanonicalContext, string) (cubebox.PromptViewPreparationResponse, error) {
+				return cubebox.PromptViewPreparationResponse{NextSequence: 1}, nil
+			},
+		},
+		registry: registry,
+		producer: cubeboxReadPlanProducerStub{fn: func(_ context.Context, input cubeboxReadPlanProductionInput) (cubeboxReadPlanProductionResult, error) {
+			plannerCalls++
+			if plannerCalls == 1 {
+				if input.QueryContext.ClarificationResume == nil {
+					t.Fatalf("expected clarification resume, got %#v", input.QueryContext)
+				}
+				if !input.QueryContext.ClarificationResume.ReplyCandidate || input.QueryContext.ClarificationResume.RawUserReply != "1日" {
+					t.Fatalf("unexpected clarification resume=%#v", input.QueryContext.ClarificationResume)
+				}
+				if input.QueryContext.ClarificationResume.SourceTurnID != "turn_prev" {
+					t.Fatalf("unexpected source turn id=%#v", input.QueryContext.ClarificationResume)
+				}
+				return queryPlannerReadPlanResult(queryPlanForOrgUnitList("2025-01-01", "")), nil
+			}
+			return queryPlannerDoneResult(), nil
+		}},
+		narrator: cubeboxQueryNarratorStub{fn: func(_ context.Context, input cubeboxQueryNarrationInput) (string, error) {
+			return "已按 2025-01-01 查询。", nil
+		}},
+		knowledgePacks: []cubebox.KnowledgePack{
+			{Dir: "modules/orgunit/presentation/cubebox", Files: map[string]string{"CUBEBOX-SKILL.md": "x", "queries.md": "x", "apis.md": "x", "examples.md": "x"}},
+		},
+		now: func() time.Time { return time.Date(2026, 4, 25, 12, 0, 0, 0, time.UTC) },
+	}
+
+	sink := &capturingGatewaySink{}
+	if handled := flow.TryHandle(context.Background(), queryGatewayRequest("1日"), sink); !handled {
+		t.Fatal("expected handled")
+	}
+	if plannerCalls != 2 {
+		t.Fatalf("expected 2 planner calls, got %d", plannerCalls)
+	}
+	if text := strings.Join(sink.deltas(), "\n"); !strings.Contains(text, "2025-01-01") {
+		t.Fatalf("expected final narration to include resolved date, got %#v", sink.events)
+	}
+}
+
+func TestQueryFlowDoesNotRebuildClosedClarificationResume(t *testing.T) {
+	var plannerCalls int
+	flow := &cubeboxQueryFlow{
+		runtime: cubebox.NewRuntime(),
+		store: cubeboxStoreStub{
+			appendFn: func(context.Context, string, string, string, cubebox.CanonicalEvent) error { return nil },
+			getFn: func(context.Context, string, string, string) (cubebox.ConversationReplayResponse, error) {
+				return cubebox.ConversationReplayResponse{
+					Conversation: cubebox.Conversation{ID: "conv-1"},
+					Events: []cubebox.CanonicalEvent{
+						{
+							Type: "turn.user_message.accepted",
+							Payload: map[string]any{
+								"text": "查出顶级点的全部各级下级组织，时间节点是2025年1月",
+							},
+						},
+						{
+							Type: "turn.agent_message.delta",
+							Payload: map[string]any{
+								"message_id": "msg_agent_1",
+								"delta":      "请提供完整查询日期，例如 2025-01-01。",
+							},
+						},
+						{
+							Type: "turn.agent_message.completed",
+							Payload: map[string]any{
+								"message_id": "msg_agent_1",
+							},
+						},
+						{
+							Type:   cubebox.QueryClarificationRequestedEventType,
+							TurnID: turnIDPtrForTest("turn_prev"),
+							Payload: map[string]any{
+								"intent":              "orgunit.list",
+								"missing_params":      []string{"as_of"},
+								"clarifying_question": "请提供完整查询日期，例如 2025-01-01。",
+							},
+						},
+						{
+							Type: "turn.user_message.accepted",
+							Payload: map[string]any{
+								"text": "1日",
+							},
+						},
+					},
+				}, nil
+			},
+			preparePromptViewFn: func(context.Context, string, string, string, cubebox.CanonicalContext, string) (cubebox.PromptViewPreparationResponse, error) {
+				return cubebox.PromptViewPreparationResponse{NextSequence: 1}, nil
+			},
+		},
+		registry: &cubebox.ExecutionRegistry{},
+		producer: cubeboxReadPlanProducerStub{fn: func(_ context.Context, input cubeboxReadPlanProductionInput) (cubeboxReadPlanProductionResult, error) {
+			plannerCalls++
+			if input.QueryContext.ClarificationResume != nil {
+				t.Fatalf("expected no clarification resume after prior clarification already consumed, got %#v", input.QueryContext.ClarificationResume)
+			}
+			return cubeboxReadPlanProductionResult{
+				Handled:         false,
+				Outcome:         cubebox.PlannerOutcome{Type: cubebox.PlannerOutcomeNoQuery},
+				ProviderID:      "openai-compatible",
+				ProviderType:    "openai-compatible",
+				ModelSlug:       "gpt-5.2",
+				ExplicitOutcome: true,
+			}, nil
+		}},
+		narrator: cubeboxQueryNarratorStub{},
+		knowledgePacks: []cubebox.KnowledgePack{
+			{Dir: "modules/orgunit/presentation/cubebox", Files: map[string]string{"CUBEBOX-SKILL.md": "x", "queries.md": "x", "apis.md": "x", "examples.md": "x"}},
+		},
+		now: func() time.Time { return time.Date(2026, 4, 25, 12, 0, 0, 0, time.UTC) },
+	}
+
+	sink := &capturingGatewaySink{}
+	if handled := flow.TryHandle(context.Background(), queryGatewayRequest("那查一下华东销售中心"), sink); !handled {
+		t.Fatal("expected handled")
+	}
+	if plannerCalls != 1 {
+		t.Fatalf("expected 1 planner call, got %d", plannerCalls)
+	}
+}
+
+func TestQueryFlowInjectsCandidateClarificationResumeIntoPlannerInput(t *testing.T) {
+	var plannerCalls int
+	flow := &cubeboxQueryFlow{
+		runtime: cubebox.NewRuntime(),
+		store: cubeboxStoreStub{
+			appendFn: func(context.Context, string, string, string, cubebox.CanonicalEvent) error { return nil },
+			getFn: func(context.Context, string, string, string) (cubebox.ConversationReplayResponse, error) {
+				return cubebox.ConversationReplayResponse{
+					Conversation: cubebox.Conversation{ID: "conv-1"},
+					Events: []cubebox.CanonicalEvent{
+						{
+							Type: "turn.user_message.accepted",
+							Payload: map[string]any{
+								"text": "列出全部财务组织的详情",
+							},
+						},
+						{
+							Type: cubebox.QueryCandidatesPresentedEventType,
+							Payload: map[string]any{
+								"group_id":             "candgrp_finance",
+								"candidate_source":     "execution_error",
+								"candidate_count":      3,
+								"cannot_silent_select": true,
+								"candidates": []any{
+									map[string]any{"domain": "orgunit", "entity_key": "200001", "name": "财务部", "as_of": "2026-04-25"},
+									map[string]any{"domain": "orgunit", "entity_key": "200002", "name": "财务一组", "as_of": "2026-04-25"},
+									map[string]any{"domain": "orgunit", "entity_key": "200004", "name": "财务四组", "as_of": "2026-04-25"},
+								},
+							},
+						},
+						{
+							Type:   cubebox.QueryClarificationRequestedEventType,
+							TurnID: turnIDPtrForTest("turn_prev"),
+							Payload: map[string]any{
+								"clarifying_question":  "找到了多个候选项，请确认要继续查询哪一个。",
+								"candidate_group_id":   "candgrp_finance",
+								"candidate_source":     "execution_error",
+								"candidate_count":      3,
+								"cannot_silent_select": true,
+							},
+						},
+					},
+				}, nil
+			},
+			preparePromptViewFn: func(context.Context, string, string, string, cubebox.CanonicalContext, string) (cubebox.PromptViewPreparationResponse, error) {
+				return cubebox.PromptViewPreparationResponse{NextSequence: 1}, nil
+			},
+		},
+		registry: &cubebox.ExecutionRegistry{},
+		producer: cubeboxReadPlanProducerStub{fn: func(_ context.Context, input cubeboxReadPlanProductionInput) (cubeboxReadPlanProductionResult, error) {
+			plannerCalls++
+			resume := input.QueryContext.ClarificationResume
+			if resume == nil {
+				t.Fatalf("expected clarification resume, got %#v", input.QueryContext)
+			}
+			if !resume.ReplyCandidate || resume.RawUserReply != "全部" {
+				t.Fatalf("unexpected clarification resume=%#v", resume)
+			}
+			if resume.CandidateGroupID != "candgrp_finance" || resume.CandidateCount != 3 || !resume.CannotSilentSelect {
+				t.Fatalf("unexpected candidate clarification resume=%#v", resume)
+			}
+			if got := len(resume.Candidates); got != 3 {
+				t.Fatalf("expected resume candidates, got %d in %#v", got, resume)
+			}
+			if resume.Candidates[0].EntityKey != "200001" || resume.Candidates[2].EntityKey != "200004" {
+				t.Fatalf("unexpected resume candidates=%#v", resume.Candidates)
+			}
+			return cubeboxReadPlanProductionResult{
+				Handled:         false,
+				Outcome:         cubebox.PlannerOutcome{Type: cubebox.PlannerOutcomeNoQuery},
+				ProviderID:      "openai-compatible",
+				ProviderType:    "openai-compatible",
+				ModelSlug:       "gpt-5.2",
+				ExplicitOutcome: true,
+			}, nil
+		}},
+		narrator: cubeboxQueryNarratorStub{},
+		knowledgePacks: []cubebox.KnowledgePack{
+			{Dir: "modules/orgunit/presentation/cubebox", Files: map[string]string{"CUBEBOX-SKILL.md": "x", "queries.md": "x", "apis.md": "x", "examples.md": "x"}},
+		},
+		now: func() time.Time { return time.Date(2026, 4, 25, 12, 0, 0, 0, time.UTC) },
+	}
+
+	sink := &capturingGatewaySink{}
+	if handled := flow.TryHandle(context.Background(), queryGatewayRequest("全部"), sink); !handled {
+		t.Fatal("expected handled")
+	}
+	if plannerCalls != 1 {
+		t.Fatalf("expected 1 planner call, got %d", plannerCalls)
+	}
+}
+
 func TestBuildPlannerMessagesIncludesReadCatalogAndWorkingResults(t *testing.T) {
 	producer := &cubeboxProviderReadPlanProducer{
 		now: func() time.Time { return time.Date(2026, 4, 25, 12, 0, 0, 0, time.UTC) },
@@ -1068,6 +1408,14 @@ func workingObservationContainsOrgCode(observation *cubebox.QueryWorkingObservat
 		}
 	}
 	return false
+}
+
+func turnIDPtrForTest(v string) *string {
+	value := strings.TrimSpace(v)
+	if value == "" {
+		return nil
+	}
+	return &value
 }
 
 type cubeboxRuntimeConfigReaderStub struct {

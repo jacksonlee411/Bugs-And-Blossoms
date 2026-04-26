@@ -143,12 +143,13 @@ type cubeboxQueryNarrationEnvelope struct {
 }
 
 type cubeboxQueryDialogueContextView struct {
-	RecentConfirmedEntity   *cubeboxQueryEntityView       `json:"recent_confirmed_entity,omitempty"`
-	RecentConfirmedEntities []cubeboxQueryEntityView      `json:"recent_confirmed_entities,omitempty"`
-	RecentCandidateGroups   []cubebox.QueryCandidateGroup `json:"recent_candidate_groups,omitempty"`
-	RecentDialogueTurns     []cubebox.QueryDialogueTurn   `json:"recent_dialogue_turns,omitempty"`
-	LastClarification       *cubebox.QueryClarification   `json:"last_clarification,omitempty"`
-	RecentCandidates        []cubebox.QueryCandidate      `json:"recent_candidates,omitempty"`
+	RecentConfirmedEntity   *cubeboxQueryEntityView           `json:"recent_confirmed_entity,omitempty"`
+	RecentConfirmedEntities []cubeboxQueryEntityView          `json:"recent_confirmed_entities,omitempty"`
+	RecentCandidateGroups   []cubebox.QueryCandidateGroup     `json:"recent_candidate_groups,omitempty"`
+	RecentDialogueTurns     []cubebox.QueryDialogueTurn       `json:"recent_dialogue_turns,omitempty"`
+	LastClarification       *cubebox.QueryClarification       `json:"last_clarification,omitempty"`
+	ClarificationResume     *cubebox.QueryClarificationResume `json:"clarification_resume,omitempty"`
+	RecentCandidates        []cubebox.QueryCandidate          `json:"recent_candidates,omitempty"`
 }
 
 type cubeboxQueryEntityView struct {
@@ -636,6 +637,8 @@ func (p *cubeboxProviderReadPlanProducer) ProduceReadPlan(
 }
 
 func (p *cubeboxProviderReadPlanProducer) buildPlannerMessages(input cubeboxReadPlanProductionInput) []cubebox.PromptItem {
+	currentDate := p.now()
+	monthDayExample := time.Date(currentDate.Year(), currentDate.Month(), 9, 0, 0, 0, 0, currentDate.Location()).Format("2006-01-02")
 	messages := []cubebox.PromptItem{
 		{
 			Role: "system",
@@ -655,11 +658,12 @@ func (p *cubeboxProviderReadPlanProducer) buildPlannerMessages(input cubeboxRead
 	- CLARIFY 表示缺少必要参数或无法稳定判断引用对象，必须给出 missing_params 与 clarifying_question
 	- DONE 表示当前 working_results 已足够进入最终回答；不要用 NO_QUERY 表示“已经查够”
 	- NO_QUERY 只表示用户请求超出当前查询域
-	- working_results 是当前 turn 内临时 tool observation；不要把它写成长时记忆，也不要生成业务专用待查队列或 winner 状态
-	- 不要重复执行 working_results.executed_fingerprints 中已经出现的查询 fingerprint；若重复提示已出现，必须选择新的 READ_PLAN、CLARIFY 或 DONE
-	- 判断是否继续查询时，只能阅读 working_results.latest_observation/items/summary 与知识包规则；通用 query flow 不会替你解释业务字段
-	- 如果用户说“今天/当前/现在”，可按当前自然日 %s 解释
-	`, p.now().Format("2006-01-02"))),
+		- working_results 是当前 turn 内临时 tool observation；不要把它写成长时记忆，也不要生成业务专用待查队列或 winner 状态
+		- 不要重复执行 working_results.executed_fingerprints 中已经出现的查询 fingerprint；若重复提示已出现，必须选择新的 READ_PLAN、CLARIFY 或 DONE
+		- 判断是否继续查询时，只能阅读 working_results.latest_observation/items/summary 与知识包规则；通用 query flow 不会替你解释业务字段
+		- 如果用户说“今天/当前/现在”，可按当前自然日 %s 解释
+		- 如果用户说“本月N日/这个月N号”，可按当前自然日所在年月解释为完整日期；例如当前自然日为 %s 时，“本月9日”是 %s
+		`, currentDate.Format("2006-01-02"), currentDate.Format("2006-01-02"), monthDayExample)),
 		},
 	}
 	for _, pack := range input.KnowledgePacks {
@@ -713,9 +717,12 @@ func buildQueryDialogueContextPromptBlock(queryContext cubebox.QueryContext) str
 
 使用规则：
 - 当前轮用户显式输入优先。
+- 如果存在 clarification_resume.reply_candidate=true，先判断当前输入是否在回答上一轮澄清；不要因为输入很短就直接输出 NO_QUERY。
 - recent_confirmed_entity 只是 recent_confirmed_entities 最后一项的兼容别名。
 - recent_candidates 只是 recent_candidate_groups 最后一组的兼容别名。
-- 序号型、否定型、跨组引用必须优先读取 recent_candidate_groups。
+- “第一个/第二个/以上/全部/这些/都要/不是这个/另一个”等候选答复必须优先读取 clarification_resume.candidates 与 recent_candidate_groups。
+- clarification_resume 只表示“当前输入可能是在续接上一轮澄清”，不是代码已经替你完成了参数解析。
+- clarification_resume.candidates 是上一轮澄清关联的候选实体列表；只能作为 planner 生成合法 ReadPlan 或继续澄清的输入事实，不是本地已选择结果。
 - 无法稳定判断引用对象时，输出澄清型 ReadPlan。
 - 该块只提供当前会话已记录的结构化查询事实、候选与最近问答，不代表代码已经替你选定当前引用对象。
 - 字段语义、继承规则与澄清策略以已加载知识包为准，通用 query flow 不解释具体业务字段。
@@ -1152,6 +1159,7 @@ func (f *cubeboxQueryFlow) produceReadPlan(
 	if f == nil || f.producer == nil {
 		return cubeboxReadPlanProductionResult{}, cubebox.ErrProviderConfigInvalid
 	}
+	queryContext = withClarificationResume(queryContext, request.Prompt)
 	snapshot := workingState.Snapshot()
 	produced, err := f.producer.ProduceReadPlan(ctx, cubeboxReadPlanProductionInput{
 		TenantID:       strings.TrimSpace(request.TenantID),
@@ -1504,6 +1512,7 @@ func (f *cubeboxQueryFlow) writePlannerClarification(
 		return true
 	}
 	f.appendQueryMetadataEvent(ctx, request, prepared.turn.TurnID, &prepared.sequence, cubebox.QueryClarificationRequestedEventType, map[string]any{
+		"source_turn_id":      prepared.turn.TurnID,
 		"intent":              strings.TrimSpace(outcome.Plan.Intent),
 		"missing_params":      missingParams,
 		"clarifying_question": text,
@@ -1542,6 +1551,7 @@ func (f *cubeboxQueryFlow) writeQueryExecutionClarification(
 		return true
 	}
 	payload := map[string]any{
+		"source_turn_id":      prepared.turn.TurnID,
 		"clarifying_question": text,
 	}
 	if candidateGroup.GroupID != "" {
@@ -1978,6 +1988,7 @@ func projectQueryDialogueContext(
 		RecentCandidateGroups:   groups,
 		RecentDialogueTurns:     dialogueTurns,
 		LastClarification:       copyQueryClarification(queryContext.LastClarification),
+		ClarificationResume:     projectQueryClarificationResume(queryContext.ClarificationResume, budget.MaxDialogueTurns, budget.MaxCandidatesPerGroup),
 	}
 	if len(confirmed) > 0 {
 		view.RecentConfirmedEntity = buildQueryEntityView(&confirmed[len(confirmed)-1])
@@ -2061,7 +2072,47 @@ func copyQueryClarification(in *cubebox.QueryClarification) *cubebox.QueryClarif
 	}
 	out := *in
 	out.MissingParams = append([]string(nil), in.MissingParams...)
+	if len(in.KnownParams) > 0 {
+		out.KnownParams = copyQueryNarrationData(in.KnownParams)
+	}
 	return &out
+}
+
+func projectQueryClarificationResume(in *cubebox.QueryClarificationResume, maxDialogueTurns int, maxCandidates int) *cubebox.QueryClarificationResume {
+	if in == nil {
+		return nil
+	}
+	out := *in
+	out.MissingParams = append([]string(nil), in.MissingParams...)
+	if len(in.KnownParams) > 0 {
+		out.KnownParams = copyQueryNarrationData(in.KnownParams)
+	}
+	if len(in.Candidates) > 0 {
+		out.Candidates = append([]cubebox.QueryCandidate(nil), in.Candidates...)
+		if maxCandidates > 0 && len(out.Candidates) > maxCandidates {
+			out.Candidates = out.Candidates[:maxCandidates]
+		}
+	}
+	if len(in.RecentDialogueTurns) > 0 {
+		out.RecentDialogueTurns = append([]cubebox.QueryDialogueTurn(nil), in.RecentDialogueTurns...)
+		if maxDialogueTurns > 0 && len(out.RecentDialogueTurns) > maxDialogueTurns {
+			out.RecentDialogueTurns = out.RecentDialogueTurns[len(out.RecentDialogueTurns)-maxDialogueTurns:]
+		}
+	}
+	if len(out.KnownParams) == 0 {
+		out.KnownParams = nil
+	}
+	return &out
+}
+
+func withClarificationResume(queryContext cubebox.QueryContext, rawUserReply string) cubebox.QueryContext {
+	out := queryContext
+	if queryContext.ClarificationResume == nil {
+		out.ClarificationResume = nil
+		return out
+	}
+	out.ClarificationResume = cubebox.BuildQueryClarificationResume(queryContext, rawUserReply)
+	return out
 }
 
 func buildQueryNarrationResults(results []cubebox.QueryNarrationResult) []cubeboxQueryNarrationResultView {
