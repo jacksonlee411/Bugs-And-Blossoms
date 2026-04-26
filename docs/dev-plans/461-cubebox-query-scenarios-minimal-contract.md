@@ -321,14 +321,18 @@ modules/orgunit/presentation/cubebox/
 
 1. 查询结果的自然语言叙述由模型负责，不再把结果解释正式冻结为代码侧摘要器体系。
 2. 代码侧只负责 schema / fail-closed 约束和输出泄露拦截，而不负责能力专属 prose 生成。
-3. 当某个 executor 注册了 `NarrationProjector` 时，narrator 输入使用 projector 产出的 prompt-facing DTO。
-4. 当某个 executor 没有注册 `NarrationProjector` 时，默认不再用 `data_present=true` 阻断细节，而是将 `ExecuteResult.Payload` 浅拷贝到 `QueryNarrationResult.Data`，由模型基于原始 payload 做自然语言叙述。
-5. `NarrationProjector` 的职责降级为可选的字段整理、重命名、降噪或模块迁移辅助；它不再是“允许模型看见结果事实”的必需入口。
-6. 长结果的完整明细是否全部进入 narrator 输入，默认由 executor 返回 payload 与当前模型上下文预算共同决定；本计划不再以“无 projector”为理由主动丢弃 raw payload。
-7. 用户可见回答仍不得逐字回显整份原始 payload、内部执行结构或 raw JSON；若模型输出违反该边界，继续通过 narrator 输出校验 fail-closed。
-8. 禁止在通用回答总线中继续追加 `switch api_key` / `if api_key == ...` 式 capability-specific 渲染分支。
+3. `NarrationProjector` 不降级为可选工具，而是在当前阶段直接删除；不得继续保留 `api_key -> projector` 的第二套 narrator DTO 分支，避免后续模块接入时回流。
+4. narrator 输入统一使用 `ExecuteResult.Payload` 的浅拷贝；由模型基于原始 payload 做自然语言叙述。
+5. 长结果的完整明细是否全部进入 narrator 输入，默认由 executor 返回 payload 与当前模型上下文预算共同决定；本计划不再以“无 projector”为理由主动丢弃 raw payload。
+6. 用户可见回答仍不得逐字回显整份原始 payload、内部执行结构或 raw JSON；若模型输出违反该边界，继续通过 narrator 输出校验 fail-closed。
+7. 禁止在通用回答总线中继续追加 `switch api_key` / `if api_key == ...` 式 capability-specific 渲染分支。
+8. 禁止新增或恢复 `NarrationProjector`、`project*Narration(...)` 或同类“AI 专用结果 DTO 投影器”；若未来确有重启必要，必须另立计划说明为什么它不是第二套展示/保护层。
+9. 业务字段名不是 narrator 输入或自然语言表达禁忌。`org_code`、`parent_org_code`、`as_of` 等字段可作为模型理解事实进入回答阶段；用户可见回答应转成自然业务表达，禁止的是 raw JSON、内部执行路径、完整 payload 和执行结构泄露。
+10. 查询结果回答不再冻结为默认 `1 到 3 句`。简单结果可以短答；多对象列表、审计、对比或用户要求明细时，允许列表、分段和小标题。
+11. 知识包不得变成回答模板库；它只说明查询面、参数、字段语义、安全默认值与澄清规则，不负责生成固定 prose，不声明或扩大权限。
+12. 本地错误/澄清阶段应优先向模型提供结构化 `candidates`、`missing_params`、错误码与错误事实，由模型生成自然追问或解释。
 
-本节不再把查询结果叙述、能力专属摘要挂载点或通用回答组合冻结为代码 owner；这些语义应在后续整改中回归模型 owner。本地代码保留执行 schema、输入装配、输出泄露拦截与 fail-closed 边界，但不再用“缺少 projector”作为阻断模型获取查询事实的理由。
+本节不再把查询结果叙述、能力专属摘要挂载点、字段白名单投影器或通用回答组合冻结为代码 owner；这些语义应在后续整改中回归模型 owner。本地代码保留执行 schema、输入装配、输出泄露拦截与 fail-closed 边界，但不再用“缺少 projector”作为阻断模型获取查询事实的理由。
 
 ## 8. 首批样板：`orgunit`
 
@@ -391,7 +395,7 @@ modules/orgunit/presentation/cubebox/
 - [x] `apis.md` 只是 prompt-facing 说明，运行时唯一执行事实源仍是代码中的 `api_key -> executor` 注册表。
 - [x] 执行注册层删去后，现有模块只读能力本身仍成立；该层只承担受控映射、参数收口和顺序调度，而不是第二套实现。
 - [x] `orgunit` 首批样板能跑通最小查询闭环。
-- [x] 查询结果不会绕过 schema / fail-closed 约束，把完整结果页或整份原始 payload JSON 直接写入单次 SSE 用户可见回答；但无 `NarrationProjector` 时允许 raw payload 进入 narrator 输入。
+- [x] 查询结果不会绕过 schema / fail-closed 约束，把完整结果页或整份原始 payload JSON 直接写入单次 SSE 用户可见回答；narrator 输入统一允许 raw payload 作为事实来源。
 - [x] 查询结果叙述不再以能力专属摘要器作为正式代码 owner。
 - [x] 查询返回边界与 fail-closed 规则已在计划中冻结，reviewer 不需要依赖实现猜测这些语义。
 - [x] 查询失败语义清晰，覆盖 `knowledge_pack_invalid` 与 `api_catalog_drift_or_executor_missing`，且不以模型猜测替代真实系统结果。
@@ -483,7 +487,7 @@ modules/orgunit/presentation/cubebox/
 - [x] 接入 `knowledge_pack_invalid` 与 `api_catalog_drift_or_executor_missing`
 - [x] 为知识包加载、`ReadPlan` 校验、执行注册表和 `orgunit` 样板补最小稳定测试
 - [x] 冻结查询结果返回的 schema / fail-closed 边界
-- [x] 补齐大 payload、超长返回与原始 payload 不得原样输出到用户可见回答的回归测试；后续需按 `DEV-PLAN-468 P2-1` 更新无 projector raw payload 进入 narrator 输入的回归测试
+- [x] 补齐大 payload、超长返回与原始 payload 不得原样输出到用户可见回答的回归测试；后续需按 `DEV-PLAN-468 P2-1` 更新 raw payload 进入 narrator 输入与 projector 删除的回归测试
 - [x] 删除当前查询回答中的 capability-specific 硬编码实现，包括但不限于 `buildCubeboxQueryAnswer` / `summarizeQueryResult` 总线中的 `api_key` 特判，以及现有 `orgunit.list` 专用字符串模板分支
 - [x] 记录首期实现范围、已接入 `api_key`、未覆盖能力与已知限制
 - [x] 在对应 `docs/dev-records/` 中沉淀 readiness 证据

@@ -77,7 +77,10 @@
 - `468 Slice E / P1` 的表达层、DTO 与 prompt-view 收口已完成。
 - `468 P2` 中与会话压缩 / 模型语义摘要相关的后续项已转由 `DEV-PLAN-469` 持有，并于 2026-04-26 起暂停实施，不再作为 `468` 当前主线。
 - `468` 当前若继续推进 `P2/后续 owner`，剩余主线仅包括：更完整的长结果语义收敛、第二个业务模块接入后的共享 narrator 去模块化污染复核。
-- 2026-04-26 策略已冻结：`P2-1` 将无 `NarrationProjector` 时的默认行为从 `data_present=true` 占位改为 raw `ExecuteResult.Payload` 进入 narrator 输入；用户可见输出仍不得原样回显 raw JSON 或内部执行结构。当前仅完成文档策略冻结，代码实现与验证待补。
+- 2026-04-26 策略已冻结：`P2-1` 不保留 `NarrationProjector` 作为可选工具，而是当前阶段直接删除；narrator 输入统一使用 raw `ExecuteResult.Payload` 作为事实来源，用户可见输出仍不得原样回显 raw JSON 或内部执行结构。当前仅完成文档策略冻结，代码实现与验证待补。
+- 2026-04-26 追加记录：`ExecutionRegistry` / executor 当前没有 per-api 授权校验，`PrincipalID` 仅透传；未来需补 `P2-2`，在每个 step 执行前基于注册表授权元数据与当前用户/租户做 fail-closed 校验。当前仅登记未来待实现事项，未改代码。
+- 2026-04-26 追加记录：`P2-3` 冻结“放开事实输入与自然表达限制”。业务字段名、长结果明细、页面事实和候选/缺参/错误事实应提供给模型；固定短答、知识包回答模板、本地 prose 模板和业务字段禁忌应继续收敛。执行注册、租户、权限、参数校验、只读边界与用户可见输出泄露拦截不放松。当前仅登记方案，未改代码。
+- 2026-04-26 二次扩大批判已写入 `DEV-PLAN-468`：除 projector 外，还需继续放开 narrator 固定短答、业务字段 forbidden pattern、候选澄清本地 prose、过窄 `page_context`、`recent_confirmed_entity` privileged winner、只保留最后一组候选、知识包回答模板化、`api_key` 命名误导与 provider/runtime/model 元数据进 prompt 的自造泄露面。当前仅登记方案，未改代码。
 - `468 Slice E / P1` 评审发现的前端页面事实误判、历史日期漏传与知识包-注册表单向校验残口已完成修复。
 - 后续实现 PR 进入 `P2/后续 owner` 时，必须先说明：是在“给模型事实/上下文”，还是在“替模型做语义判断”；后者默认需要收敛或单独论证。
 
