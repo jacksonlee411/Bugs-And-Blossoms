@@ -26,15 +26,15 @@
   - `@step-1.payload.target_org_code`
 - 已更新 `orgunit` 知识包，使模型可基于 `query_dialogue_context`、`recent_candidates` 与多步引用完成“先 search，再 details/list”的线性编排。
 - 已完成 `Slice E / P1` 的 prompt-view 收口：
-  - narrator 输入已收敛为安全 presentation DTO，并只保留 `user_prompt`、`page_context`、`dialogue_context`、`results`
-  - clarifier 输入已只保留 `user_prompt`、`page_context`、`dialogue_context`、`candidates`
+  - narrator 输入已收敛为安全 presentation DTO；后续 `page_context` 已重新裁决为当前范围外，清理由 `DEV-PLAN-470` 承接
+  - clarifier 输入已收敛为结构化候选事实与 query dialogue context；后续不再扩展 `page_context`
   - prompt-facing 实体上下文已压缩为最小实体视图，仅保留 `domain`、`entity_key`、`as_of`
-  - 前端已向 `/internal/cubebox/turns:stream` 传入受控 `page_context`
-  - 已修复 `page_context` 对 `/org/units/field-configs` 的详情页误判；固定子路由不再伪装为 `orgunit` 对象事实
-  - 已修复组织详情页 `effective_date` 页面历史锚点漏传；当前前端优先读取 `effective_date`，兼容写回 `view.as_of`
+  - 前端曾向 `/internal/cubebox/turns:stream` 传入受控 `page_context`
+  - 曾修复 `page_context` 对 `/org/units/field-configs` 的详情页误判；固定子路由不再伪装为 `orgunit` 对象事实
+  - 曾修复组织详情页 `effective_date` 页面历史锚点漏传
   - 知识包 API/参数集合已与执行注册表做双向一致性校验
   - provider/runtime/model 元数据已从 provider prompt view 剥离，仅保留在 metadata、管理 UI 或日志
-  - `page_context.view.as_of -> effective_date` DTO 改名已独立拆到 `DEV-PLAN-470`，不混入本次回归修复
+  - `page_context` 已重新裁决为当前实施范围外；剔除与清理由 `DEV-PLAN-470` 承接
 
 ### 代码评审收口
 
@@ -86,8 +86,8 @@
   - `go test ./modules/cubebox ./internal/server`
   - `git diff --check`
 - 2026-04-26 追加记录：`ExecutionRegistry` / executor 当前没有 per-api 授权校验，`PrincipalID` 仅透传；未来需补 `P2-2`，在每个 step 执行前基于注册表授权元数据与当前用户/租户做 fail-closed 校验。当前仅登记未来待实现事项，未改代码。
-- 2026-04-26 追加记录：`P2-3` 当前已分两轮完成 `P2-3a` / `P2-3b`；剩余待办集中为 `P2-3c`，即扩展 `page_context` 与 query context 候选组/事实窗口，解决“只保留最后一组候选”和 `recent_confirmed_entity` privileged winner 等残口。
-- 2026-04-26 二次扩大批判已写入 `DEV-PLAN-468`：除 projector 外，还需继续放开 narrator 固定短答、业务字段 forbidden pattern、候选澄清本地 prose、过窄 `page_context`、`recent_confirmed_entity` privileged winner、只保留最后一组候选、知识包回答模板化、`api_key` 命名误导与 provider/runtime/model 元数据进 prompt 的自造泄露面。当前仅登记方案，未改代码。
+- 2026-04-26 追加记录：`P2-3` 当前已分两轮完成 `P2-3a` / `P2-3b`；剩余待办集中为 `P2-3c`，即扩展 query dialogue fact window，解决“只保留最后一组候选”和 `recent_confirmed_entity` privileged winner 等残口。
+- 2026-04-26 二次扩大批判已写入 `DEV-PLAN-468`：除 projector 外，还需继续放开 narrator 固定短答、业务字段 forbidden pattern、候选澄清本地 prose、`recent_confirmed_entity` privileged winner、只保留最后一组候选、知识包回答模板化、`api_key` 命名误导与 provider/runtime/model 元数据进 prompt 的自造泄露面。`page_context` 已裁决为当前范围外，由 `DEV-PLAN-470` 清理。当前仅登记方案，未改代码。
 - `468 Slice E / P1` 评审发现的前端页面事实误判、历史日期漏传与知识包-注册表单向校验残口已完成修复。
 - 后续实现 PR 进入 `P2/后续 owner` 时，必须先说明：是在“给模型事实/上下文”，还是在“替模型做语义判断”；后者默认需要收敛或单独论证。
 

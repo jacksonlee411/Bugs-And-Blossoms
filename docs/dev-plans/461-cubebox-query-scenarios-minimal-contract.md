@@ -103,7 +103,7 @@
 
 代码层只持有以下通用职责：
 
-1. 根据当前页面、当前对象和当前模块发现应加载哪些知识包。
+1. 根据已登记查询域、用户意图和当前租户/权限上下文发现应加载哪些知识包；当前阶段不依赖页面上下文做知识包发现或补参。
 2. 读取并拼装知识包内容供模型使用。
 3. 校验模型产出的 `ReadPlan` 是否符合 schema 和允许范围。
 4. 通过代码中的 `api_key -> executor` 注册表，把步骤安全映射到现有读 API 执行器。
@@ -169,7 +169,7 @@ modules/orgunit/presentation/cubebox/
 知识包加载顺序冻结为：
 
 1. 模块级通用知识包
-2. 当前页面 / 当前对象 / 当前用户权限摘要 / 当前租户上下文
+2. 当前用户权限摘要 / 当前租户上下文 / 已登记查询域
 
 ## 5. 知识包文件职责
 
@@ -179,7 +179,7 @@ modules/orgunit/presentation/cubebox/
 
 - 模块定位
 - 主要业务对象
-- 当前页面上下文如何帮助补参
+- query dialogue context 如何帮助连续追问、候选选择和缺参澄清
 - 当前模块允许的查询意图概览
 - 对 `queries.md` / `apis.md` / `examples.md` 的引用
 
@@ -528,7 +528,7 @@ modules/orgunit/presentation/cubebox/
 
 - `CUBEBOX-SKILL.md`
   - 模块定位：`orgunit` 是什么、主要业务对象是什么
-  - 当前页面/上下文如何帮助补参
+  - query dialogue context 如何帮助连续追问、候选选择和缺参澄清
   - 首批只允许的查询意图概览
   - 对 `queries.md`、`apis.md`、`examples.md` 的引用关系
 - `queries.md`
