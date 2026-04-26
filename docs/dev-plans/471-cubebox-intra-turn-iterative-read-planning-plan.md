@@ -367,39 +367,105 @@ P0 不引入 fanout DSL，不并发执行。
 
 ## 8. 实施步骤
 
-1. [ ] 冻结 planner outcome：兼容现有裸 `ReadPlan` / `NO_QUERY`，新增严格 `DONE` 完成态；澄清态继续沿用 `missing_params + clarifying_question`。
-2. [ ] 从 `ExecutionRegistry` 派生 `read_api_catalog` prompt block，明确注册表是执行事实源，知识包是语义说明。
-3. [ ] 新增 `working_results` DTO 与纯函数：
-   - completed plan/step summary
-   - latest observation
-   - aggregated facts
-   - plan/step fingerprint
-   - budget counters
-4. [ ] 重构 `cubeboxQueryFlow.TryHandle(...)`：
-   - 从单次 `ProduceReadPlan -> ExecutePlan -> Narrate`
-   - 改为有限次 `ProduceReadPlan -> outcome -> ExecutePlan -> append working_results`
-   - 最后在 `DONE` 后统一 `NarrateQueryResult`
-5. [ ] 扩展 planner prompt：
-   - 说明 `working_results` 是当前 turn observation
-   - 说明何时继续输出小 `ReadPlan`
-   - 说明何时输出 `DONE`
-   - 明确 `NO_QUERY` 不代表完成
-   - 禁止重复查询已完成 fingerprint
-6. [ ] 扩展 orgunit 知识包样例：
-   - 基于 `orgunit.list` 的 `has_children`
-   - 先查直接下级，再对 `has_children=true` 的组织继续查下级
-   - 不新增 API、不引入 DSL
-7. [ ] 增加自动化测试：
-   - planner outcome 解析
-   - working_results 构造与裁剪
-   - loop 正常完成
-   - loop 澄清终止
-   - budget / repeat fail-closed
-   - narrator 单次调用
-8. [ ] 真实页面复验并登记 `docs/dev-records/DEV-PLAN-471-READINESS.md`。
-9. [ ] 登记 `third_party/openai-codex` 参考源码版本：
-   - `git -C third_party/openai-codex rev-parse HEAD`
-   - `git -C third_party/openai-codex status --short`
+按最小实现切片推进；每个切片都应保持“可独立评审、可单独回归、失败时可停在当前切片不继续放大范围”。
+
+1. [ ] `PR-471-01`：冻结 planner outcome 与 `read_api_catalog`
+   - 目标：先把“planner 到 query loop 的控制协议”收紧，再进入循环改造；避免一边改 loop 一边继续放宽 planner 输出语义。
+   - 代码落点：
+     - `internal/server/cubebox_query_flow.go`
+     - `modules/cubebox/read_plan.go`
+     - 如有必要，新增 `modules/cubebox/planner_outcome.go`
+   - 具体动作：
+     - 兼容现有裸 `ReadPlan JSON` 作为 `READ_PLAN`
+     - 保留现有 `NO_QUERY`
+     - 新增严格字面量 `DONE`
+     - 澄清态继续沿用现有 `missing_params + clarifying_question`
+     - 从 `ExecutionRegistry` 派生稳定排序的 `read_api_catalog` prompt block，并明确“注册表是执行事实源，知识包只解释语义”
+   - 本片完成判定：
+     - planner outcome 解析矩阵冻结
+     - 非法 outcome 统一映射为计划边界错误
+     - `read_api_catalog` 的输出稳定、可测试、与注册表一致
+
+2. [ ] `PR-471-02`：新增 `working_results` / fingerprint / budget 纯函数
+   - 目标：先把循环状态抽成业务无关纯函数，再让 `TryHandle(...)` 消费这些状态；避免把预算、聚合、去重逻辑写散在 server 组合层。
+   - 代码落点：
+     - 建议新增 `modules/cubebox/query_working_results.go`
+     - 建议新增 `modules/cubebox/query_loop_budget.go`
+     - 如无必要，不改 `modules/orgunit/**` 业务 executor
+   - 具体动作：
+     - 定义 `working_results` DTO：`completed_plans`、`latest_observation`、`aggregated_facts`
+     - 生成 `plan_fingerprint` / `step_fingerprint`
+     - 维护 `round_index`、`executed_steps`、`remaining_parent_org_codes` 等预算/聚合信息
+     - 对 observation 做条数与字段裁剪，禁止无限回灌 raw payload
+     - 明确 `working_results` 仅存在于当前 `TryHandle(...)` 生命周期内，不写入 canonical events
+   - 本片完成判定：
+     - 可独立测试追加 observation、重复 fingerprint 检测、预算耗尽、裁剪结果
+     - `has_children` 场景所需的最小聚合事实可由纯函数得到
+
+3. [ ] `PR-471-03`：把 `cubeboxQueryFlow.TryHandle(...)` 从单次链改成有限次 loop
+   - 目标：把现有 `ProduceReadPlan -> ExecutePlan -> Narrate` 改成有限次 `ProduceReadPlan -> outcome -> ExecutePlan -> append working_results`，但仍只保留一个 narrator 终点。
+   - 代码落点：
+     - `internal/server/cubebox_query_flow.go`
+     - `internal/server/cubebox_query_flow_test.go`
+   - 具体动作：
+     - 在 `TryHandle(...)` 内引入 `max_planning_rounds`、`max_executed_steps`、`max_repeated_plan_fingerprint` 限制
+     - 每轮都重建 planner 输入：`knowledge packs + read_api_catalog + query_dialogue_context + current user prompt + working_results`
+     - `READ_PLAN`：执行小 `ReadPlan`，追加 observation，进入下一轮
+     - `CLARIFY`：直接终止为澄清，不进入 narrator
+     - `DONE`：仅在至少执行过一次只读计划后允许进入 narrator
+     - `NO_QUERY`：未执行前可作为普通 no-query stopline；已执行后返回 `NO_QUERY` 必须 fail-closed
+     - executor 返回候选不可静默选择时，继续沿用现有澄清终态与 candidate metadata event
+   - 本片完成判定：
+     - 单轮问题仍只调用一次 planner/executor/narrator
+     - 需要“先执行再决定”的问题可在同一 turn 内进入第二轮 planner
+     - narrator 只在最终完成时调用一次
+
+4. [ ] `PR-471-04`：扩展 planner prompt 与 orgunit 知识包案例
+   - 目标：让模型知道“什么时候继续查、什么时候 `DONE`、什么时候绝不能再查重复 fingerprint”；不要把这些规则偷偷塞进 server if-else。
+   - 代码落点：
+     - `internal/server/cubebox_query_flow.go`
+     - `modules/orgunit/presentation/cubebox/examples.md`
+     - 如需补说明，可同步 `modules/orgunit/presentation/cubebox/apis.md`
+   - 具体动作：
+     - 在 planner system prompt 中增加 `working_results` 说明
+     - 明确 `DONE` 的语义是“当前 observation 已足够进入 narrator”
+     - 明确 `NO_QUERY` 只表示“超出查询域”，不能表示“已经查够”
+     - 明确禁止重复请求已执行 fingerprint
+     - 在 orgunit 样例中加入“先查直接下级，再基于 `has_children=true` 继续查其下级”的最小案例
+   - 本片完成判定：
+     - planner 提示词与知识包案例对齐
+     - 不新增 API、不引入 DSL、不写业务专用分支 prompt
+
+5. [ ] `PR-471-05`：补齐自动化测试，先锁死回归面再做真实复验
+   - 目标：优先用最小直接测试锁死循环协议与 stopline，再进入页面复验；避免把问题推到浏览器层才暴露。
+   - 代码落点：
+     - `modules/cubebox/*_test.go`
+     - `internal/server/cubebox_query_flow_test.go`
+     - 如需组合层覆盖，可补 `internal/server/cubebox_api_test.go`
+   - 重点覆盖：
+     - planner outcome 解析：裸 `ReadPlan` / `DONE` / `NO_QUERY` / 非法文本
+     - `working_results` 构造、聚合、裁剪、fingerprint
+     - loop 正常完成：至少两轮 planner 后 `DONE`
+     - loop 澄清终止：候选不可静默选择时直接终止，不进入 narrator
+     - repeat / budget fail-closed：重复请求同 fingerprint 或超预算时不重复执行
+     - narrator 单次调用：中途不得输出用户可见半成品回答
+     - 长期事件隔离：中间 `working_results` 不写入 canonical events
+   - 本片完成判定：
+     - `modules/cubebox` 纯函数测试与 `internal/server` 组合层测试都能独立说明 471 的主约束
+
+6. [ ] `PR-471-06`：真实页面复验、readiness 证据与第三方源码留痕
+   - 目标：在自动化回归通过后，用真实页面验证“同一 turn 内二次规划”确实发生，并把对标源码版本固定到证据里。
+   - 代码/文档落点：
+     - `docs/dev-records/DEV-PLAN-471-READINESS.md`
+   - 具体动作：
+     - 记录自动化测试命令、时间戳、结果
+     - 记录浏览器真实复验：输入、页面表现、网络请求、截图
+     - 记录 `third_party/openai-codex` 参考源码版本：
+       - `git -C third_party/openai-codex rev-parse HEAD`
+       - `git -C third_party/openai-codex status --short`
+   - 本片完成判定：
+     - readiness 能证明 P0 样例已在真实页面闭环通过
+     - 第三方参考源码 HEAD 已冻结，后续偏差分析有可追溯基线
 
 ## 9. 验收口径
 
