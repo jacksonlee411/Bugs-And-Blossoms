@@ -82,6 +82,7 @@ type cubeboxQueryClarificationInput struct {
 	Prompt               string
 	QueryContext         cubebox.QueryContext
 	Candidates           []cubebox.QueryCandidate
+	CandidateGroupID     string
 	ErrorCode            string
 	CandidateSource      string
 	CandidateCount       int
@@ -119,12 +120,12 @@ type cubeboxQueryNarrationEnvelope struct {
 }
 
 type cubeboxQueryDialogueContextView struct {
-	RecentConfirmedEntity   *cubeboxQueryEntityView     `json:"recent_confirmed_entity,omitempty"`
-	RecentConfirmedEntities []cubeboxQueryEntityView    `json:"recent_confirmed_entities,omitempty"`
-	ResolvedEntity          *cubeboxQueryEntityView     `json:"resolved_entity,omitempty"`
-	RecentDialogueTurns     []cubebox.QueryDialogueTurn `json:"recent_dialogue_turns,omitempty"`
-	LastClarification       *cubebox.QueryClarification `json:"last_clarification,omitempty"`
-	RecentCandidates        []cubebox.QueryCandidate    `json:"recent_candidates,omitempty"`
+	RecentConfirmedEntity   *cubeboxQueryEntityView       `json:"recent_confirmed_entity,omitempty"`
+	RecentConfirmedEntities []cubeboxQueryEntityView      `json:"recent_confirmed_entities,omitempty"`
+	RecentCandidateGroups   []cubebox.QueryCandidateGroup `json:"recent_candidate_groups,omitempty"`
+	RecentDialogueTurns     []cubebox.QueryDialogueTurn   `json:"recent_dialogue_turns,omitempty"`
+	LastClarification       *cubebox.QueryClarification   `json:"last_clarification,omitempty"`
+	RecentCandidates        []cubebox.QueryCandidate      `json:"recent_candidates,omitempty"`
 }
 
 type cubeboxQueryEntityView struct {
@@ -138,10 +139,18 @@ type cubeboxQueryNarrationResultView struct {
 	Data   map[string]any `json:"data,omitempty"`
 }
 
+type cubeboxQueryDialogueContextProjectionBudget struct {
+	MaxConfirmedEntities  int
+	MaxCandidateGroups    int
+	MaxCandidatesPerGroup int
+	MaxDialogueTurns      int
+}
+
 type cubeboxQueryClarificationEnvelope struct {
 	UserPrompt         string                          `json:"user_prompt"`
 	DialogueContext    cubeboxQueryDialogueContextView `json:"dialogue_context"`
 	Candidates         []cubebox.QueryCandidate        `json:"candidates"`
+	CandidateGroupID   string                          `json:"candidate_group_id,omitempty"`
 	ErrorCode          string                          `json:"error_code,omitempty"`
 	CandidateSource    string                          `json:"candidate_source,omitempty"`
 	CandidateCount     int                             `json:"candidate_count,omitempty"`
@@ -150,6 +159,25 @@ type cubeboxQueryClarificationEnvelope struct {
 
 var errCubeboxQueryNarrationTargetMismatch = errors.New("cubebox query narration target mismatch")
 var errCubeboxQueryNarrationContractViolation = errors.New("cubebox query narration contract violation")
+
+const (
+	queryContextMaxCanonicalCandidateGroups = 5
+
+	queryContextMaxPlannerConfirmedEntities  = 5
+	queryContextMaxPlannerCandidateGroups    = 5
+	queryContextMaxPlannerCandidatesPerGroup = 100
+	queryContextMaxPlannerDialogueTurns      = 5
+
+	queryContextMaxClarifierConfirmedEntities  = 5
+	queryContextMaxClarifierCandidateGroups    = 2
+	queryContextMaxClarifierCandidatesPerGroup = 20
+	queryContextMaxClarifierDialogueTurns      = 2
+
+	queryContextMaxNarratorConfirmedEntities  = 5
+	queryContextMaxNarratorCandidateGroups    = 1
+	queryContextMaxNarratorCandidatesPerGroup = 5
+	queryContextMaxNarratorDialogueTurns      = 2
+)
 
 var queryNarrationForbiddenPatterns = []*regexp.Regexp{
 	regexp.MustCompile("```"),
@@ -374,7 +402,14 @@ func (f *cubeboxQueryFlow) TryHandle(
 	if err != nil {
 		if candidates := queryExecutionCandidates(err); len(candidates) > 0 {
 			errorCode, candidateSource, candidateCount, cannotSilentSelect := queryExecutionClarificationFacts(err)
-			text := f.buildExecutionClarificationText(ctx, request, produced, queryContext, candidates, errorCode, candidateSource, candidateCount, cannotSilentSelect)
+			candidateGroup := cubebox.QueryCandidateGroup{
+				GroupID:            newQueryCandidateGroupID(),
+				CandidateSource:    candidateSource,
+				CandidateCount:     candidateCount,
+				CannotSilentSelect: cannotSilentSelect,
+				Candidates:         append([]cubebox.QueryCandidate(nil), candidates...),
+			}
+			text := f.buildExecutionClarificationText(ctx, request, produced, queryContext, candidateGroup, errorCode)
 			if text == "" {
 				text = "找到了多个候选项，请从中明确你要继续查询的对象。"
 			}
@@ -384,22 +419,23 @@ func (f *cubeboxQueryFlow) TryHandle(
 			payload := map[string]any{
 				"clarifying_question": text,
 			}
+			if candidateGroup.GroupID != "" {
+				payload["candidate_group_id"] = candidateGroup.GroupID
+			}
 			if errorCode != "" {
 				payload["error_code"] = errorCode
 			}
-			if candidateSource != "" {
-				payload["candidate_source"] = candidateSource
+			if candidateGroup.CandidateSource != "" {
+				payload["candidate_source"] = candidateGroup.CandidateSource
 			}
-			if candidateCount > 0 {
-				payload["candidate_count"] = candidateCount
+			if candidateGroup.CandidateCount > 0 {
+				payload["candidate_count"] = candidateGroup.CandidateCount
 			}
-			if cannotSilentSelect {
+			if candidateGroup.CannotSilentSelect {
 				payload["cannot_silent_select"] = true
 			}
 			f.appendQueryMetadataEvent(ctx, request, prepared.turn.TurnID, &prepared.sequence, cubebox.QueryClarificationRequestedEventType, payload)
-			f.appendQueryMetadataEvent(ctx, request, prepared.turn.TurnID, &prepared.sequence, cubebox.QueryCandidatesPresentedEventType, map[string]any{
-				"candidates": queryCandidatePayloads(candidates),
-			})
+			f.appendQueryMetadataEvent(ctx, request, prepared.turn.TurnID, &prepared.sequence, cubebox.QueryCandidatesPresentedEventType, candidateGroup.Payload())
 			_ = writeEvent("turn.agent_message.completed", map[string]any{"message_id": prepared.turn.AssistantMessageID})
 			_ = writeEvent("turn.completed", f.queryCompletedPayload("completed", prepared.lifecycle))
 			return true
@@ -427,9 +463,12 @@ func (f *cubeboxQueryFlow) TryHandle(
 		f.appendQueryMetadataEvent(ctx, request, prepared.turn.TurnID, &prepared.sequence, cubebox.QueryEntityConfirmedEventType, map[string]any{"entity": anchor.Payload()})
 	}
 	if candidates := queryPresentedCandidates(results); len(candidates) > 0 {
-		f.appendQueryMetadataEvent(ctx, request, prepared.turn.TurnID, &prepared.sequence, cubebox.QueryCandidatesPresentedEventType, map[string]any{
-			"candidates": queryCandidatePayloads(candidates),
-		})
+		f.appendQueryMetadataEvent(ctx, request, prepared.turn.TurnID, &prepared.sequence, cubebox.QueryCandidatesPresentedEventType, cubebox.QueryCandidateGroup{
+			GroupID:         newQueryCandidateGroupID(),
+			CandidateSource: "results",
+			CandidateCount:  len(candidates),
+			Candidates:      append([]cubebox.QueryCandidate(nil), candidates...),
+		}.Payload())
 	}
 	if !writeEvent("turn.agent_message.delta", map[string]any{"message_id": prepared.turn.AssistantMessageID, "delta": answer}) {
 		return true
@@ -551,15 +590,14 @@ func (p *cubeboxProviderReadPlanProducer) buildPlannerMessages(input cubeboxRead
 }
 
 func buildQueryDialogueContextPromptBlock(queryContext cubebox.QueryContext) string {
+	view := projectQueryDialogueContext(queryContext, cubeboxQueryDialogueContextProjectionBudget{
+		MaxConfirmedEntities:  queryContextMaxPlannerConfirmedEntities,
+		MaxCandidateGroups:    queryContextMaxPlannerCandidateGroups,
+		MaxCandidatesPerGroup: queryContextMaxPlannerCandidatesPerGroup,
+		MaxDialogueTurns:      queryContextMaxPlannerDialogueTurns,
+	})
 	body, err := json.Marshal(map[string]any{
-		"query_dialogue_context": map[string]any{
-			"recent_confirmed_entity":   buildQueryEntityView(queryContext.RecentConfirmedEntity),
-			"recent_confirmed_entities": buildQueryEntityViews(queryContext.RecentConfirmedEntities),
-			"recent_dialogue_turns":     queryContext.RecentDialogueTurns,
-			"last_clarification":        queryContext.LastClarification,
-			"recent_candidates":         queryContext.RecentCandidates,
-			"resolved_entity":           buildQueryEntityView(queryContext.ResolvedEntity),
-		},
+		"query_dialogue_context": view,
 	})
 	if err != nil {
 		return ""
@@ -569,6 +607,10 @@ func buildQueryDialogueContextPromptBlock(queryContext cubebox.QueryContext) str
 
 使用规则：
 - 当前轮用户显式输入优先。
+- recent_confirmed_entity 只是 recent_confirmed_entities 最后一项的兼容别名。
+- recent_candidates 只是 recent_candidate_groups 最后一组的兼容别名。
+- 序号型、否定型、跨组引用必须优先读取 recent_candidate_groups。
+- 无法稳定判断引用对象时，输出澄清型 ReadPlan。
 - 该块只提供当前会话已记录的结构化查询事实、候选与最近问答，不代表代码已经替你选定当前引用对象。
 - 字段语义、继承规则与澄清策略以已加载知识包为准，通用 query flow 不解释具体业务字段。
 - 该上下文不是授权来源，也不是会话压缩摘要。`, string(body)))
@@ -923,6 +965,10 @@ func queryPresentedCandidates(results []cubebox.ExecuteResult) []cubebox.QueryCa
 	return nil
 }
 
+func newQueryCandidateGroupID() string {
+	return "candgrp_" + strings.ReplaceAll(uuid.NewString(), "-", "")
+}
+
 func queryCandidatePayloads(items []cubebox.QueryCandidate) []any {
 	out := make([]any, 0, len(items))
 	for _, item := range items {
@@ -1219,33 +1265,43 @@ func (f *cubeboxQueryFlow) buildExecutionClarificationText(
 	request cubebox.GatewayStreamRequest,
 	produced cubeboxReadPlanProductionResult,
 	queryContext cubebox.QueryContext,
-	candidates []cubebox.QueryCandidate,
+	candidateGroup cubebox.QueryCandidateGroup,
 	errorCode string,
-	candidateSource string,
-	candidateCount int,
-	cannotSilentSelect bool,
 ) string {
-	if len(candidates) == 0 {
+	if len(candidateGroup.Candidates) == 0 {
 		return ""
 	}
+	queryContext = withAppendedQueryCandidateGroup(queryContext, candidateGroup)
+	projectedGroup := latestProjectedCandidateGroup(
+		projectQueryDialogueContext(queryContext, cubeboxQueryDialogueContextProjectionBudget{
+			MaxConfirmedEntities:  queryContextMaxClarifierConfirmedEntities,
+			MaxCandidateGroups:    queryContextMaxClarifierCandidateGroups,
+			MaxCandidatesPerGroup: queryContextMaxClarifierCandidatesPerGroup,
+			MaxDialogueTurns:      queryContextMaxClarifierDialogueTurns,
+		}),
+	)
+	if len(projectedGroup.Candidates) == 0 {
+		projectedGroup = candidateGroup
+	}
 	if f == nil || f.clarifier == nil {
-		return fallbackCandidateClarificationText(candidates)
+		return fallbackCandidateClarificationText(projectedGroup.Candidates)
 	}
 	text, err := f.clarifier.ClarifyQuery(ctx, cubeboxQueryClarificationInput{
 		TenantID:             request.TenantID,
 		Prompt:               request.Prompt,
 		QueryContext:         queryContext,
-		Candidates:           candidates,
+		Candidates:           append([]cubebox.QueryCandidate(nil), projectedGroup.Candidates...),
+		CandidateGroupID:     projectedGroup.GroupID,
 		ErrorCode:            strings.TrimSpace(errorCode),
-		CandidateSource:      strings.TrimSpace(candidateSource),
-		CandidateCount:       candidateCount,
-		CannotSilentSelect:   cannotSilentSelect,
+		CandidateSource:      strings.TrimSpace(projectedGroup.CandidateSource),
+		CandidateCount:       projectedGroup.CandidateCount,
+		CannotSilentSelect:   projectedGroup.CannotSilentSelect,
 		ExpectedProviderID:   produced.ProviderID,
 		ExpectedProviderType: produced.ProviderType,
 		ExpectedModelSlug:    produced.ModelSlug,
 	})
 	if err != nil {
-		return fallbackCandidateClarificationText(candidates)
+		return fallbackCandidateClarificationText(projectedGroup.Candidates)
 	}
 	return strings.TrimSpace(text)
 }
@@ -1278,43 +1334,45 @@ func fallbackCandidateClarificationText(candidates []cubebox.QueryCandidate) str
 }
 
 func buildQueryClarificationEnvelope(input cubeboxQueryClarificationInput) cubeboxQueryClarificationEnvelope {
-	dialogueTurns := append([]cubebox.QueryDialogueTurn(nil), input.QueryContext.RecentDialogueTurns...)
-	if len(dialogueTurns) > 2 {
-		dialogueTurns = dialogueTurns[len(dialogueTurns)-2:]
-	}
-	return cubeboxQueryClarificationEnvelope{
-		UserPrompt: strings.TrimSpace(input.Prompt),
-		DialogueContext: cubeboxQueryDialogueContextView{
-			ResolvedEntity:      buildQueryEntityView(input.QueryContext.ResolvedEntity),
-			RecentDialogueTurns: dialogueTurns,
-			LastClarification:   input.QueryContext.LastClarification,
-			RecentCandidates:    append([]cubebox.QueryCandidate(nil), input.QueryContext.RecentCandidates...),
-		},
-		Candidates:         append([]cubebox.QueryCandidate(nil), input.Candidates...),
-		ErrorCode:          strings.TrimSpace(input.ErrorCode),
+	queryContext := input.QueryContext
+	currentGroup := cubebox.QueryCandidateGroup{
+		GroupID:            strings.TrimSpace(input.CandidateGroupID),
 		CandidateSource:    strings.TrimSpace(input.CandidateSource),
 		CandidateCount:     input.CandidateCount,
 		CannotSilentSelect: input.CannotSilentSelect,
+		Candidates:         append([]cubebox.QueryCandidate(nil), input.Candidates...),
+	}
+	if len(currentGroup.Candidates) > 0 {
+		queryContext = withAppendedQueryCandidateGroup(queryContext, currentGroup)
+	}
+	dialogueContext := projectQueryDialogueContext(queryContext, cubeboxQueryDialogueContextProjectionBudget{
+		MaxConfirmedEntities:  queryContextMaxClarifierConfirmedEntities,
+		MaxCandidateGroups:    queryContextMaxClarifierCandidateGroups,
+		MaxCandidatesPerGroup: queryContextMaxClarifierCandidatesPerGroup,
+		MaxDialogueTurns:      queryContextMaxClarifierDialogueTurns,
+	})
+	currentProjectedGroup := latestProjectedCandidateGroup(dialogueContext)
+	return cubeboxQueryClarificationEnvelope{
+		UserPrompt:         strings.TrimSpace(input.Prompt),
+		DialogueContext:    dialogueContext,
+		Candidates:         append([]cubebox.QueryCandidate(nil), currentProjectedGroup.Candidates...),
+		CandidateGroupID:   strings.TrimSpace(currentProjectedGroup.GroupID),
+		ErrorCode:          strings.TrimSpace(input.ErrorCode),
+		CandidateSource:    strings.TrimSpace(currentProjectedGroup.CandidateSource),
+		CandidateCount:     currentProjectedGroup.CandidateCount,
+		CannotSilentSelect: currentProjectedGroup.CannotSilentSelect,
 	}
 }
 
 func buildQueryNarrationEnvelope(input cubeboxQueryNarrationInput) cubeboxQueryNarrationEnvelope {
-	dialogueTurns := append([]cubebox.QueryDialogueTurn(nil), input.QueryContext.RecentDialogueTurns...)
-	if len(dialogueTurns) > 2 {
-		dialogueTurns = dialogueTurns[len(dialogueTurns)-2:]
-	}
-	recentCandidates := append([]cubebox.QueryCandidate(nil), input.QueryContext.RecentCandidates...)
-	if len(recentCandidates) > 5 {
-		recentCandidates = recentCandidates[:5]
-	}
 	return cubeboxQueryNarrationEnvelope{
 		UserPrompt: strings.TrimSpace(input.Prompt),
-		DialogueContext: cubeboxQueryDialogueContextView{
-			ResolvedEntity:      buildQueryEntityView(input.QueryContext.ResolvedEntity),
-			RecentDialogueTurns: dialogueTurns,
-			LastClarification:   input.QueryContext.LastClarification,
-			RecentCandidates:    recentCandidates,
-		},
+		DialogueContext: projectQueryDialogueContext(input.QueryContext, cubeboxQueryDialogueContextProjectionBudget{
+			MaxConfirmedEntities:  queryContextMaxNarratorConfirmedEntities,
+			MaxCandidateGroups:    queryContextMaxNarratorCandidateGroups,
+			MaxCandidatesPerGroup: queryContextMaxNarratorCandidatesPerGroup,
+			MaxDialogueTurns:      queryContextMaxNarratorDialogueTurns,
+		}),
 		Results: buildQueryNarrationResults(input.Results),
 	}
 }
@@ -1348,6 +1406,110 @@ func buildQueryEntityViews(entities []cubebox.QueryEntity) []cubeboxQueryEntityV
 		return nil
 	}
 	return out
+}
+
+func projectQueryDialogueContext(
+	queryContext cubebox.QueryContext,
+	budget cubeboxQueryDialogueContextProjectionBudget,
+) cubeboxQueryDialogueContextView {
+	confirmed := append([]cubebox.QueryEntity(nil), queryContext.RecentConfirmedEntities...)
+	if budget.MaxConfirmedEntities > 0 && len(confirmed) > budget.MaxConfirmedEntities {
+		confirmed = confirmed[len(confirmed)-budget.MaxConfirmedEntities:]
+	}
+	dialogueTurns := append([]cubebox.QueryDialogueTurn(nil), queryContext.RecentDialogueTurns...)
+	if budget.MaxDialogueTurns > 0 && len(dialogueTurns) > budget.MaxDialogueTurns {
+		dialogueTurns = dialogueTurns[len(dialogueTurns)-budget.MaxDialogueTurns:]
+	}
+	groups := projectQueryCandidateGroups(queryContext.RecentCandidateGroups, budget.MaxCandidateGroups, budget.MaxCandidatesPerGroup)
+	view := cubeboxQueryDialogueContextView{
+		RecentConfirmedEntities: buildQueryEntityViews(confirmed),
+		RecentCandidateGroups:   groups,
+		RecentDialogueTurns:     dialogueTurns,
+		LastClarification:       copyQueryClarification(queryContext.LastClarification),
+	}
+	if len(confirmed) > 0 {
+		view.RecentConfirmedEntity = buildQueryEntityView(&confirmed[len(confirmed)-1])
+	}
+	if len(groups) > 0 {
+		view.RecentCandidates = append([]cubebox.QueryCandidate(nil), groups[len(groups)-1].Candidates...)
+	}
+	return view
+}
+
+func withAppendedQueryCandidateGroup(queryContext cubebox.QueryContext, group cubebox.QueryCandidateGroup) cubebox.QueryContext {
+	if len(group.Candidates) == 0 {
+		return queryContext
+	}
+	out := queryContext
+	out.RecentCandidateGroups = append([]cubebox.QueryCandidateGroup(nil), queryContext.RecentCandidateGroups...)
+	if group.CandidateCount <= 0 {
+		group.CandidateCount = len(group.Candidates)
+	}
+	if groupID := strings.TrimSpace(group.GroupID); groupID != "" {
+		for i := range out.RecentCandidateGroups {
+			if strings.TrimSpace(out.RecentCandidateGroups[i].GroupID) == groupID {
+				out.RecentCandidateGroups[i] = group
+				out.RecentCandidates = append([]cubebox.QueryCandidate(nil), group.Candidates...)
+				return out
+			}
+		}
+	}
+	out.RecentCandidateGroups = append(out.RecentCandidateGroups, group)
+	if len(out.RecentCandidateGroups) > queryContextMaxCanonicalCandidateGroups {
+		out.RecentCandidateGroups = out.RecentCandidateGroups[len(out.RecentCandidateGroups)-queryContextMaxCanonicalCandidateGroups:]
+	}
+	out.RecentCandidates = append([]cubebox.QueryCandidate(nil), group.Candidates...)
+	return out
+}
+
+func latestProjectedCandidateGroup(view cubeboxQueryDialogueContextView) cubebox.QueryCandidateGroup {
+	if len(view.RecentCandidateGroups) == 0 {
+		return cubebox.QueryCandidateGroup{}
+	}
+	group := view.RecentCandidateGroups[len(view.RecentCandidateGroups)-1]
+	group.Candidates = append([]cubebox.QueryCandidate(nil), group.Candidates...)
+	return group
+}
+
+func projectQueryCandidateGroups(groups []cubebox.QueryCandidateGroup, maxGroups int, maxCandidates int) []cubebox.QueryCandidateGroup {
+	if len(groups) == 0 {
+		return nil
+	}
+	selected := append([]cubebox.QueryCandidateGroup(nil), groups...)
+	if maxGroups > 0 && len(selected) > maxGroups {
+		selected = selected[len(selected)-maxGroups:]
+	}
+	out := make([]cubebox.QueryCandidateGroup, 0, len(selected))
+	for _, group := range selected {
+		candidates := append([]cubebox.QueryCandidate(nil), group.Candidates...)
+		if maxCandidates > 0 && len(candidates) > maxCandidates {
+			candidates = candidates[:maxCandidates]
+		}
+		item := cubebox.QueryCandidateGroup{
+			GroupID:            strings.TrimSpace(group.GroupID),
+			CandidateSource:    strings.TrimSpace(group.CandidateSource),
+			CandidateCount:     group.CandidateCount,
+			CannotSilentSelect: group.CannotSilentSelect,
+			Candidates:         candidates,
+		}
+		if item.CandidateCount <= 0 {
+			item.CandidateCount = len(candidates)
+		}
+		out = append(out, item)
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
+}
+
+func copyQueryClarification(in *cubebox.QueryClarification) *cubebox.QueryClarification {
+	if in == nil {
+		return nil
+	}
+	out := *in
+	out.MissingParams = append([]string(nil), in.MissingParams...)
+	return &out
 }
 
 func buildQueryNarrationResults(results []cubebox.QueryNarrationResult) []cubeboxQueryNarrationResultView {

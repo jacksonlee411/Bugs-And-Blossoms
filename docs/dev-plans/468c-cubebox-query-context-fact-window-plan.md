@@ -29,7 +29,7 @@
 
 1. `recent_candidates` 只暴露最后一组候选，无法稳定处理“第一个”“最开始那个”“不是这个，另一个”等跨候选组指代。
 2. `recent_confirmed_entity` 虽已有 `recent_confirmed_entities` 补充，但仍容易被知识包或调用方当作 privileged winner。
-3. `last_clarification`、`recent_dialogue_turns`、`resolved_entity` 与候选事实没有形成清晰的 prompt-facing 事实窗口规则。
+3. `last_clarification`、`recent_dialogue_turns` 与候选事实没有形成清晰的 prompt-facing 事实窗口规则；`resolved_entity` 当前没有稳定 writer，不进入本计划事实窗口。
 4. 467 真实失败场景需要继承上一轮已确认实体与日期，不能依赖页面事实。
 
 ## 2. 问题定义
@@ -46,7 +46,11 @@
 
 `LastClarification` 已包含 `missing_params`、`error_code`、`candidate_source`、`candidate_count` 和 `cannot_silent_select`，但模型看到的事实仍偏扁平。后续应让 planner / clarifier 能够知道候选来自哪一次澄清、是否禁止静默选择、用户后续是否在选择候选。
 
-### 2.4 页面事实退出当前范围
+### 2.4 `resolved_entity` 退出当前范围
+
+`resolved_entity` 当前没有冻结“谁写、何时写、优先级低于什么”，且现有 API 测试明确禁止由成功查询后旧实体伪造 synthetic resolved event。为避免它重新长成第二个 privileged winner，本计划不引入、不消费、不验收 `resolved_entity`；若后续确需引入，必须单独开 owner 先冻结 writer、写入时机和优先级。
+
+### 2.5 页面事实退出当前范围
 
 `page_context` 不解决 467 的主问题，且容易把页面当前对象误当成用户当前意图。当前实施不再扩展、不再接入 planner，并按 `DEV-PLAN-470` 完成清理。
 
@@ -65,7 +69,8 @@
 3. 不新增写能力，不新增模型工具调用，不允许模型直查 DB、拼 SQL 或调用未登记接口。
 4. 不把知识包扩展成回答模板库、prose 模板库或权限声明来源。
 5. 不建设通用 FactSet 平台、展示 DTO 平台、字段投影平台或跨会话记忆。
-6. 不把候选组、最近问答或澄清状态作为结果事实源；narrator 的事实性业务结论仍只能来自执行后的 `results`。
+6. 不引入、不消费、不验收 `resolved_entity`；`QueryContextResolvedEventType` 不作为本计划交付物。
+7. 不把候选组、最近问答或澄清状态作为结果事实源；narrator 的事实性业务结论仍只能来自执行后的 `results`。
 
 ## 5. 设计方案
 
@@ -77,9 +82,8 @@
 {
   "recent_candidate_groups": [
     {
-      "group_id": "turn-3:candidates-1",
-      "turn_id": "turn_3",
-      "source": "execution_error",
+      "group_id": "candgrp_<opaque>",
+      "candidate_source": "execution_error",
       "candidate_count": 2,
       "cannot_silent_select": true,
       "candidates": [
@@ -99,11 +103,27 @@
 
 规则：
 
-1. `recent_candidate_groups` 最多保留最近 5 组。
-2. 每组候选最多保留 100 个，narrator / clarifier 可再按输入预算裁剪。
-3. `recent_candidates` 保留为兼容字段，表示最近一组候选的扁平视图。
-4. 写入 `turn.query_candidates.presented` metadata event 时补来源、数量、不可静默选择和可追溯分组信息。
-5. 模型可用候选组解析“第一个”“第二个”“最开始那个”“上一轮那个”“不是这个，另一个”。
+1. `turn.query_candidates.presented` 的权威关联键只有 `group_id`。
+2. `group_id` 使用 opaque 值，例如 `candgrp_<opaque>`；planner / clarifier / narrator 不得解析其内部结构。
+3. `candidate_source` 只是描述字段，用于解释候选来源，不参与关联。
+4. `turn_id` 不再作为可选主关联键；如事件 envelope 中存在 turn 信息，也只能用于审计或排查，不能作为 prompt-facing 关联规则。
+5. `recent_candidate_groups` 最多保留最近 5 组。
+6. 每组候选最多保留 100 个，planner 默认直接消费 canonical 上限，narrator / clarifier 可再按输入预算裁剪。
+7. `recent_candidates` 保留为兼容字段，必须始终表示当前 projection 中最后一组候选的扁平 alias。
+8. 写入 `turn.query_candidates.presented` metadata event 时必须补 `group_id`、来源、数量、不可静默选择和候选项。
+9. 模型可用候选组解析“第一个”“第二个”“最开始那个”“上一轮那个”“不是这个，另一个”。
+
+冻结事件 payload：
+
+```json
+{
+  "group_id": "candgrp_<opaque>",
+  "candidate_source": "execution_error",
+  "candidate_count": 2,
+  "cannot_silent_select": true,
+  "candidates": []
+}
+```
 
 ### 5.2 `recent_confirmed_entity` 降级
 
@@ -120,38 +140,89 @@
    - `missing_params`
    - `clarifying_question`
    - `error_code`
+   - `candidate_group_id`
    - `candidate_source`
    - `candidate_count`
    - `cannot_silent_select`
-3. 若澄清与候选组来自同一执行错误，应通过 `candidate_source`、`turn_id` 或 `group_id` 建立可解释关联。
-4. `resolved_entity` 只表示本轮或最近一轮明确解析出的实体，不得由成功查询后的旧实体伪造。
+3. `turn.query_clarification.requested` 可选携带 `candidate_group_id`，用于关联同一轮或最近一次 `turn.query_candidates.presented`。
+4. `QueryClarification` 新增 `CandidateGroupID string`。
+5. 若澄清与候选组来自同一执行错误，只能通过 `candidate_group_id == recent_candidate_groups[*].group_id` 建立可解释关联。
 
-### 5.4 planner 输入规则
+冻结可选 payload 扩展：
+
+```json
+{
+  "candidate_group_id": "candgrp_<opaque>"
+}
+```
+
+### 5.4 canonical 存储视图与 projection 视图
+
+`QueryContext` 是 canonical storage view，语义完整、边界固定；planner / clarifier / narrator 看到的是 projection view，字段形状必须一致，只允许按预算裁剪。
+
+canonical 上限：
+
+1. `recent_confirmed_entities` 最多 5 项。
+2. `recent_candidate_groups` 最多 5 组。
+3. 每组 `candidates` 最多 100 项。
+4. `recent_dialogue_turns` 最多 5 轮。
+
+consumer projection 上限：
+
+1. planner：直接消费 canonical 上限。
+2. clarifier：最多 2 组候选、每组最多 20 项、最近 2 轮 dialogue。
+3. narrator：最多 1 组候选、最多 5 项、最近 2 轮 dialogue。
+
+关键约束：
+
+1. 字段语义不能因 consumer 改变。
+2. `recent_candidates` 必须始终是当前 projection 中最后一组的扁平 alias。
+3. `recent_confirmed_entity` 必须始终是当前 projection 中最后一项 confirmed entity 的 alias。
+4. projection helper 只能裁剪数量，不得重排、不生成新事实、不合并候选组。
+
+### 5.5 planner 输入规则
 
 `buildPlannerMessages(...)` 继续注入 `query_dialogue_context`，但 block 内容应调整为：
 
 1. 明确当前用户输入优先于历史事实。
-2. `recent_confirmed_entity` 是兼容快捷视图，不是唯一 winner。
-3. `recent_confirmed_entities`、`recent_candidate_groups`、`recent_dialogue_turns`、`last_clarification` 共同构成事实窗口。
-4. 模型应自行判断“该组织”“第一个”“最开始那个”“不是这个，另一个”指向哪一项；无法稳定判断时输出澄清型 `ReadPlan`。
-5. 不允许从自然语言 summary、失败查询或普通 assistant reply 猜测实体。
+2. `recent_confirmed_entities`、`recent_candidate_groups`、`recent_dialogue_turns`、`last_clarification` 共同构成事实窗口。
+3. `recent_confirmed_entity` 只是 `recent_confirmed_entities` 最后一项的 compatibility alias，不是唯一 winner。
+4. `recent_candidates` 只是 `recent_candidate_groups` 最后一组的 compatibility alias，不是候选主来源。
+5. 序号型、否定型、跨组引用必须优先读取 `recent_candidate_groups`。
+6. 模型应自行判断“该组织”“第一个”“最开始那个”“不是这个，另一个”指向哪一项；无法稳定判断时输出澄清型 `ReadPlan`。
+7. 不允许从自然语言 summary、失败查询或普通 assistant reply 猜测实体。
 
-### 5.5 clarifier / narrator 对齐
+planner JSON 前必须增加固定 contract 文本：
+
+```text
+查询会话上下文契约：
+- 当前轮用户显式输入优先于历史事实。
+- recent_confirmed_entity 只是 recent_confirmed_entities 最后一项的兼容别名。
+- recent_candidates 只是 recent_candidate_groups 最后一组的兼容别名。
+- 序号型、否定型、跨组引用必须优先读取 recent_candidate_groups。
+- 无法稳定判断引用对象时，输出澄清型 ReadPlan。
+```
+
+### 5.6 clarifier / narrator 对齐
 
 1. clarifier 输入保持 `user_prompt + dialogue_context + candidates`。
 2. narrator 输入保持 `user_prompt + dialogue_context + results`。
 3. narrator 可以用对话事实解释“刚才那个/继续查”的衔接关系。
 4. narrator 的事实性业务结论只能来自 `results`，不得从候选组或最近问答推导结果中不存在的字段、状态、层级或条数。
 
-### 5.6 知识包调整
+### 5.7 知识包调整
 
 `modules/orgunit/presentation/cubebox/*` 应同步调整：
 
 1. 只保留查询面、参数语义、字段含义、安全默认值、候选处理与澄清边界。
 2. 删除页面事实补参规则。
-3. 增加候选组解析规则：序号、名称、最早/最近、否定后选择另一个。
-4. 删除回答模板、固定 prose 和“最近确认实体单点优先”的倾向。
-5. 明确知识包不是授权来源，也不是执行注册表事实源。
+3. 主规则只写 `recent_confirmed_entities` / `recent_candidate_groups`。
+4. `recent_confirmed_entity` / `recent_candidates` 只能出现在 compatibility 说明里。
+5. 增加候选组解析规则：序号、名称、最早/最近、否定后选择另一个。
+6. 示例 10 改为消费 `recent_candidate_groups`，不得再使用裸 `recent_candidates` 作为主输入。
+7. 增加一个“最开始那个 / 不是这个，另一个”的跨组示例。
+8. 删除回答模板、固定 prose 和“最近确认实体单点优先”的倾向。
+9. 明确知识包不是授权来源，也不是执行注册表事实源。
 
 ## 6. 安全边界与 Stopline
 
@@ -167,21 +238,32 @@
 ## 7. 实施步骤
 
 1. [ ] 冻结 query dialogue fact window 契约：`recent_candidate_groups`、`recent_confirmed_entities`、`recent_dialogue_turns`、`last_clarification` 与兼容字段策略。
-2. [ ] 引入 `QueryCandidateGroup` 与 `RecentCandidateGroups`，保留 `RecentCandidates` 兼容视图。
-3. [ ] 调整 `QueryContextFromEvents(...)`，从 canonical events 提取最近若干候选组并限量。
-4. [ ] 调整 planner prompt block，明确 `recent_confirmed_entity` 降级和候选组解析规则。
-5. [ ] 调整 narration / clarification envelope，按预算传候选组和最近问答，同时保留 narrator 只从 `results` 下事实结论的约束。
-6. [ ] 更新 `orgunit` 知识包，移除 privileged winner 与回答模板倾向，补充候选组解析规则，并删除页面补参规则。
-7. [ ] 回写 `DEV-PLAN-468` 中 `P2-3c` owner 指向本计划，避免双 owner。
-8. [ ] 执行并登记验证命令与真实页面复验结果。
+2. [ ] 引入 `QueryCandidateGroup` 与 `RecentCandidateGroups`，字段包含 `GroupID`、`CandidateSource`、`CandidateCount`、`CannotSilentSelect`、`Candidates`。
+3. [ ] `QueryClarification` 新增 `CandidateGroupID string`，并从 `candidate_group_id` payload 解码。
+4. [ ] 调整 `QueryContextFromEvents(...)`，从 canonical events 提取最近若干候选组并限量，`RecentCandidates` 始终指向当前 projection 最后一组。
+5. [ ] 调整 ambiguous search metadata writer：`turn.query_candidates.presented` 写出 `group_id`；对应 `turn.query_clarification.requested` 写出 `candidate_group_id`。
+6. [ ] 新增 projection helper，统一 planner / clarifier / narrator 的预算裁剪；helper 只允许裁剪数量，不得改变字段语义。
+7. [ ] 调整 planner prompt block，增加固定 compatibility contract 文本，并输出 `recent_candidate_groups`。
+8. [ ] 调整 narration / clarification envelope，按 projection 预算传候选组和最近问答，同时保留 narrator 只从 `results` 下事实结论的约束。
+9. [ ] 从 468C 当前实现范围移除 `resolved_entity`：planner block、projection 和验收不得依赖它；不得新增 `QueryContextResolvedEventType` writer。
+10. [ ] 更新 `orgunit` 知识包，移除 privileged winner 与回答模板倾向，补充候选组解析规则，并删除页面补参规则。
+11. [ ] 回写 `DEV-PLAN-468` 中 `P2-3c` owner 指向本计划，避免双 owner。
+12. [ ] 执行并登记验证命令与真实页面复验结果。
 
 ## 8. 验收场景
 
-1. [ ] 连续候选组中，用户输入“第一个”“最开始那个”“不是这个，另一个”时，planner 能看到候选分组事实。
-2. [ ] `recent_confirmed_entity` 不再作为知识包或 prompt 的唯一继承 owner。
-3. [ ] `100000 -> 查该组织的下级组织` 继续由 `query_dialogue_context` 继承实体与日期，不依赖页面事实。
-4. [ ] narrator 可自然承接上下文，但事实性结论仍只来自 `results`。
-5. [ ] `rg -n "page_context|PageContext|页面事实|当前页面上下文补|页面上下文|页面补参|current page|page context" modules/orgunit/presentation/cubebox` 不命中当前知识包；本计划文件中仅允许保留“范围外/不得恢复”的说明。
+1. [ ] `turn.query_candidates.presented` 写出的候选事件包含 `group_id`，且 `candidate_source` 不参与关联。
+2. [ ] `turn.query_clarification.requested` 在候选澄清场景写出 `candidate_group_id`。
+3. [ ] 连续候选组中，用户输入“第一个”“最开始那个”“不是这个，另一个”时，planner 能看到候选分组事实。
+4. [ ] planner / clarifier / narrator 看到的 projection 字段语义一致，只发生预算裁剪。
+5. [ ] `recent_candidates` 始终是当前 projection 中最后一组候选的扁平 alias。
+6. [ ] `recent_confirmed_entity` 始终是当前 projection 中最后一项 confirmed entity 的 alias。
+7. [ ] `resolved_entity` 不进入 468C prompt-facing 事实窗口，不生成 `QueryContextResolvedEventType`。
+8. [ ] 知识包主规则段落不再把 `recent_candidates` 写成一等来源。
+9. [ ] `recent_confirmed_entity` 出现时必须带 compatibility 语义。
+10. [ ] `100000 -> 查该组织的下级组织` 继续由 `query_dialogue_context` 继承实体与日期，不依赖页面事实。
+11. [ ] narrator 可自然承接上下文，但事实性结论仍只来自 `results`。
+12. [ ] `rg -n "page_context|PageContext|页面事实|当前页面上下文补|页面上下文|页面补参|current page|page context" modules/orgunit/presentation/cubebox` 不命中当前知识包；本计划文件中仅允许保留“范围外/不得恢复”的说明。
 
 ## 9. 测试与覆盖率
 
@@ -193,14 +275,29 @@
 
 Go：
 
-1. [ ] `modules/cubebox/query_entity.go`：候选组提取、限量、兼容 `RecentCandidates`、`RecentConfirmedEntity` 保留。
-2. [ ] `internal/server/cubebox_query_flow.go`：planner 输入包含 query dialogue fact window，narrator / clarifier envelope 保持安全收口。
+1. [ ] `modules/cubebox/query_entity_test.go`
+   - 多候选组提取与 5 组上限。
+   - 每组 100 项上限。
+   - `candidate_group_id` 关联澄清。
+   - `RecentCandidates` alias 正确。
+   - `RecentConfirmedEntity` alias 正确。
+2. [ ] `internal/server/cubebox_query_flow_test.go`
+   - planner block 包含 `recent_candidate_groups`。
+   - contract 文本包含 compatibility 说明。
+   - clarifier projection 最多 2 组候选、每组 20 项、最近 2 轮 dialogue。
+   - narrator projection 最多 1 组候选、最多 5 项、最近 2 轮 dialogue。
+3. [ ] `internal/server/cubebox_api_test.go`
+   - `turn.query_candidates.presented` 写出 `group_id`。
+   - `turn.query_clarification.requested` 写出 `candidate_group_id`。
+   - 不生成 `QueryContextResolvedEventType`。
 
 知识包：
 
 1. [ ] `modules/orgunit/presentation/cubebox/*` 与 registry 校验仍通过。
-2. [ ] 示例覆盖候选组序号选择、缺参澄清和 `NO_QUERY` 边界。
-3. [ ] 示例不再覆盖页面事实补参。
+2. [ ] 主规则只消费 `recent_confirmed_entities` / `recent_candidate_groups`。
+3. [ ] `recent_confirmed_entity` / `recent_candidates` 只出现在 compatibility 说明里。
+4. [ ] 示例覆盖候选组序号选择、跨组引用、否定后选择另一个、缺参澄清和 `NO_QUERY` 边界。
+5. [ ] 示例不再覆盖页面事实补参。
 
 ### 9.3 建议验证命令
 

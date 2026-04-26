@@ -38,11 +38,20 @@ type QueryCandidate struct {
 	Status    string `json:"status,omitempty"`
 }
 
+type QueryCandidateGroup struct {
+	GroupID            string           `json:"group_id,omitempty"`
+	CandidateSource    string           `json:"candidate_source,omitempty"`
+	CandidateCount     int              `json:"candidate_count,omitempty"`
+	CannotSilentSelect bool             `json:"cannot_silent_select,omitempty"`
+	Candidates         []QueryCandidate `json:"candidates,omitempty"`
+}
+
 type QueryClarification struct {
 	Intent             string   `json:"intent,omitempty"`
 	MissingParams      []string `json:"missing_params,omitempty"`
 	ClarifyingQuestion string   `json:"clarifying_question,omitempty"`
 	ErrorCode          string   `json:"error_code,omitempty"`
+	CandidateGroupID   string   `json:"candidate_group_id,omitempty"`
 	CandidateSource    string   `json:"candidate_source,omitempty"`
 	CandidateCount     int      `json:"candidate_count,omitempty"`
 	CannotSilentSelect bool     `json:"cannot_silent_select,omitempty"`
@@ -53,15 +62,15 @@ type QueryContext struct {
 	RecentConfirmedEntities []QueryEntity
 	RecentDialogueTurns     []QueryDialogueTurn
 	LastClarification       *QueryClarification
+	RecentCandidateGroups   []QueryCandidateGroup
 	RecentCandidates        []QueryCandidate
-	ResolvedEntity          *QueryEntity
 }
 
 func QueryContextFromEvents(events []CanonicalEvent) QueryContext {
 	context := QueryContext{}
 	confirmed := make([]QueryEntity, 0, queryContextMaxEntities)
 	dialogue := make([]QueryDialogueTurn, 0, queryContextMaxDialogueTurns)
-	candidateGroups := make([][]QueryCandidate, 0, queryContextMaxCandidateGroups)
+	candidateGroups := make([]QueryCandidateGroup, 0, queryContextMaxCandidateGroups)
 	assistantReplies := map[string]string{}
 	currentDialogue := QueryDialogueTurn{}
 	hasCurrentDialogue := false
@@ -101,22 +110,17 @@ func QueryContextFromEvents(events []CanonicalEvent) QueryContext {
 				}
 			}
 		case QueryCandidatesPresentedEventType:
-			candidates := DecodeQueryCandidates(event.Payload)
-			if len(candidates) == 0 {
+			group := DecodeQueryCandidateGroup(event.Payload)
+			if group == nil || len(group.Candidates) == 0 {
 				continue
 			}
-			candidateGroups = append(candidateGroups, candidates)
+			candidateGroups = append(candidateGroups, *group)
 			if len(candidateGroups) > queryContextMaxCandidateGroups {
 				candidateGroups = candidateGroups[len(candidateGroups)-queryContextMaxCandidateGroups:]
 			}
 		case QueryClarificationRequestedEventType:
 			if clarification := DecodeQueryClarification(event.Payload); clarification != nil {
 				context.LastClarification = clarification
-			}
-		case QueryContextResolvedEventType:
-			if entity := DecodeQueryEntity(event.Payload); entity != nil {
-				entityCopy := *entity
-				context.ResolvedEntity = &entityCopy
 			}
 		case "turn.agent_message.delta":
 			reply := strings.TrimSpace(stringValue(event.Payload["delta"]))
@@ -163,8 +167,9 @@ func QueryContextFromEvents(events []CanonicalEvent) QueryContext {
 
 	context.RecentConfirmedEntities = confirmed
 	context.RecentDialogueTurns = dialogue
+	context.RecentCandidateGroups = candidateGroups
 	if len(candidateGroups) > 0 {
-		context.RecentCandidates = append([]QueryCandidate(nil), candidateGroups[len(candidateGroups)-1]...)
+		context.RecentCandidates = append([]QueryCandidate(nil), candidateGroups[len(candidateGroups)-1].Candidates...)
 	}
 	return context
 }
@@ -269,6 +274,43 @@ func (c QueryCandidate) Payload() map[string]any {
 	return payload
 }
 
+func (g QueryCandidateGroup) Payload() map[string]any {
+	candidates := make([]any, 0, minInt(len(g.Candidates), queryContextMaxCandidateItems))
+	for _, item := range g.Candidates {
+		payload := item.Payload()
+		if len(payload) == 0 {
+			continue
+		}
+		candidates = append(candidates, payload)
+		if len(candidates) >= queryContextMaxCandidateItems {
+			break
+		}
+	}
+	if len(candidates) == 0 {
+		return map[string]any{}
+	}
+	payload := map[string]any{
+		"candidates": candidates,
+	}
+	if groupID := strings.TrimSpace(g.GroupID); groupID != "" {
+		payload["group_id"] = groupID
+	}
+	if candidateSource := strings.TrimSpace(g.CandidateSource); candidateSource != "" {
+		payload["candidate_source"] = candidateSource
+	}
+	candidateCount := g.CandidateCount
+	if candidateCount <= 0 {
+		candidateCount = len(candidates)
+	}
+	if candidateCount > 0 {
+		payload["candidate_count"] = candidateCount
+	}
+	if g.CannotSilentSelect {
+		payload["cannot_silent_select"] = true
+	}
+	return payload
+}
+
 func DecodeQueryCandidates(payload map[string]any) []QueryCandidate {
 	if len(payload) == 0 {
 		return nil
@@ -301,6 +343,24 @@ func DecodeQueryCandidates(payload map[string]any) []QueryCandidate {
 	return items
 }
 
+func DecodeQueryCandidateGroup(payload map[string]any) *QueryCandidateGroup {
+	candidates := DecodeQueryCandidates(payload)
+	if len(candidates) == 0 {
+		return nil
+	}
+	group := &QueryCandidateGroup{
+		GroupID:            strings.TrimSpace(stringValue(payload["group_id"])),
+		CandidateSource:    strings.TrimSpace(stringValue(payload["candidate_source"])),
+		CandidateCount:     decodeQueryInt(payload["candidate_count"]),
+		CannotSilentSelect: decodeQueryBool(payload["cannot_silent_select"]),
+		Candidates:         candidates,
+	}
+	if group.CandidateCount <= 0 {
+		group.CandidateCount = len(candidates)
+	}
+	return group
+}
+
 func DecodeQueryClarification(payload map[string]any) *QueryClarification {
 	if len(payload) == 0 {
 		return nil
@@ -309,6 +369,7 @@ func DecodeQueryClarification(payload map[string]any) *QueryClarification {
 		Intent:             strings.TrimSpace(stringValue(payload["intent"])),
 		ClarifyingQuestion: strings.TrimSpace(stringValue(payload["clarifying_question"])),
 		ErrorCode:          strings.TrimSpace(stringValue(payload["error_code"])),
+		CandidateGroupID:   strings.TrimSpace(stringValue(payload["candidate_group_id"])),
 		CandidateSource:    strings.TrimSpace(stringValue(payload["candidate_source"])),
 	}
 	out.MissingParams = decodeQueryStringList(payload["missing_params"])
@@ -317,6 +378,7 @@ func DecodeQueryClarification(payload map[string]any) *QueryClarification {
 	if out.Intent == "" &&
 		out.ClarifyingQuestion == "" &&
 		out.ErrorCode == "" &&
+		out.CandidateGroupID == "" &&
 		out.CandidateSource == "" &&
 		out.CandidateCount == 0 &&
 		!out.CannotSilentSelect &&

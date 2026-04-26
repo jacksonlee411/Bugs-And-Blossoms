@@ -316,6 +316,7 @@ planner 上下文：
 query_dialogue_context:
   recent_confirmed_entity: null
   recent_confirmed_entities: []
+  recent_candidate_groups: []
   recent_candidates: []
 ```
 
@@ -401,7 +402,7 @@ query_dialogue_context:
 - 用户虽然只给了名称，但目标查询需要稳定编码时，不必先追问编码
 - 若第一步搜索不是唯一命中，应回到澄清，并给出少量候选供用户确认
 
-## 示例 10：消费 recent_candidates 中的“第一个”
+## 示例 10：消费 recent_candidate_groups 中的“第一个”
 
 planner 上下文：
 
@@ -409,6 +410,20 @@ planner 上下文：
 query_dialogue_context:
   recent_confirmed_entity: null
   recent_confirmed_entities: []
+  recent_candidate_groups:
+    - group_id: candgrp_aaa
+      candidate_source: execution_error
+      candidate_count: 2
+      cannot_silent_select: true
+      candidates:
+        - domain: orgunit
+          entity_key: "200000"
+          name: "飞虫公司"
+          as_of: "2026-04-25"
+        - domain: orgunit
+          entity_key: "300000"
+          name: "鲜花公司"
+          as_of: "2026-04-25"
   recent_candidates:
     - domain: orgunit
       entity_key: "200000"
@@ -455,5 +470,69 @@ query_dialogue_context:
 
 说明：
 
-- 当上一轮已经给用户展示了候选列表时，“第一个”“第二个”“那个公司”应优先消费 `recent_candidates`
+- 当上一轮已经给用户展示了候选列表时，“第一个”“第二个”“那个公司”应优先消费 `recent_candidate_groups`
 - 只有在候选为空或用户指代仍然歧义时，才回到澄清
+
+## 示例 11：跨组引用“最开始那个 / 不是这个，另一个”
+
+planner 上下文：
+
+```yaml
+query_dialogue_context:
+  recent_confirmed_entity: null
+  recent_confirmed_entities: []
+  recent_candidate_groups:
+    - group_id: candgrp_old
+      candidate_source: execution_error
+      candidate_count: 2
+      cannot_silent_select: true
+      candidates:
+        - domain: orgunit
+          entity_key: "100100"
+          name: "华东销售中心"
+          as_of: "2026-04-25"
+        - domain: orgunit
+          entity_key: "100200"
+          name: "华东运营中心"
+          as_of: "2026-04-25"
+    - group_id: candgrp_new
+      candidate_source: execution_error
+      candidate_count: 2
+      cannot_silent_select: true
+      candidates:
+        - domain: orgunit
+          entity_key: "200100"
+          name: "飞虫公司"
+          as_of: "2026-04-25"
+        - domain: orgunit
+          entity_key: "200200"
+          name: "鲜花公司"
+          as_of: "2026-04-25"
+  recent_candidates:
+    - domain: orgunit
+      entity_key: "200100"
+      name: "飞虫公司"
+      as_of: "2026-04-25"
+    - domain: orgunit
+      entity_key: "200200"
+      name: "鲜花公司"
+      as_of: "2026-04-25"
+```
+
+用户问法 1：
+
+`最开始那个`
+
+期望行为：
+
+- 应优先回看较早的 `recent_candidate_groups[0]`
+- 若表达足以唯一定位，则可继续查询 `org_code=100100`
+
+用户问法 2：
+
+`不是这个，另一个`
+
+期望行为：
+
+- 应在当前相关候选组内切换到另一项
+- 若“这个”指向仍不稳定，应回到澄清，而不是静默猜测跨组对象

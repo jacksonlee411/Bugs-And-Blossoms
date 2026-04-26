@@ -112,11 +112,13 @@ intents:
 - “搜索”“找一下”“名称里有” 通常映射到 `orgunit.search`
 - “审计”“变更记录”“谁改过”“最近变更” 通常映射到 `orgunit.audit`
 - “该组织”“这个组织”“那个组织”“最开始那个组织”“第一个”属于查询连续性指代；应优先读取 planner 输入里的 `query_dialogue_context`
-- `query_dialogue_context.recent_confirmed_entity` / `recent_confirmed_entities` 提供最近已确认的结构化实体事实，可继承其中的 `entity_key`（组织编码）与 `as_of`
-- `query_dialogue_context.recent_candidates` 提供上一轮已展示给用户的候选列表；当用户说“第一个”“第二个”“那个公司”时，应优先从这里解析，而不是再次机械追问编码
+- `query_dialogue_context.recent_confirmed_entities` 提供最近已确认的结构化实体事实；`recent_confirmed_entity` 只是最后一项兼容别名，可继承其中的 `entity_key`（组织编码）与 `as_of`
+- `query_dialogue_context.recent_candidate_groups` 提供最近若干组候选及其顺序、来源和候选项；当用户说“第一个”“第二个”“最开始那个”“不是这个，另一个”时，应优先从这里解析
+- `query_dialogue_context.recent_candidates` 只是最近一组候选的兼容扁平别名，不应作为候选主来源
 - 若用户仍在询问组织架构，但缺少可继承实体或必要参数，应返回澄清型 `ReadPlan`，不得输出 `NO_QUERY` 让普通聊天链回答“没有查询接口/权限”
 - 若当前轮显式给出新的组织编码、组织名称或日期，应覆盖最近已确认查询实体中的同名事实
 - 会话压缩摘要不能作为查询锚点；不要从自然语言 summary 中猜测组织编码、日期或父组织编码
+- `last_clarification` 只提供最近一次结构化澄清事实，可用于理解用户是否在确认候选，但不能替代执行结果事实
 
 ## 多步只读编排提示
 

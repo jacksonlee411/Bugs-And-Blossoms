@@ -1944,7 +1944,13 @@ func TestCubeBoxQueryFlowWritesCandidateMetadataForAmbiguousSearch(t *testing.T)
 		t.Fatalf("expected candidates metadata event, got %#v", appended)
 	}
 	foundClarification := false
+	var candidateGroupID string
 	for _, event := range appended {
+		if event.Type == cubebox.QueryCandidatesPresentedEventType {
+			if raw, ok := event.Payload["group_id"].(string); ok && strings.TrimSpace(raw) != "" {
+				candidateGroupID = raw
+			}
+		}
 		if event.Type != cubebox.QueryClarificationRequestedEventType {
 			continue
 		}
@@ -1961,9 +1967,15 @@ func TestCubeBoxQueryFlowWritesCandidateMetadataForAmbiguousSearch(t *testing.T)
 		if event.Payload["cannot_silent_select"] != true {
 			t.Fatalf("expected cannot_silent_select=true, got %#v", event.Payload)
 		}
+		if got, _ := event.Payload["candidate_group_id"].(string); strings.TrimSpace(got) == "" {
+			t.Fatalf("expected candidate_group_id, got %#v", event.Payload)
+		}
 	}
 	if !foundClarification {
 		t.Fatalf("expected clarification metadata event, got %#v", appended)
+	}
+	if strings.TrimSpace(candidateGroupID) == "" {
+		t.Fatalf("expected group_id on candidates metadata event, got %#v", appended)
 	}
 }
 

@@ -97,20 +97,24 @@ func TestBuildQueryClarificationEnvelopeOmitsQueryIntent(t *testing.T) {
 	body, err := json.Marshal(buildQueryClarificationEnvelope(cubeboxQueryClarificationInput{
 		Prompt:             "查华东",
 		ErrorCode:          "org_unit_search_ambiguous",
+		CandidateGroupID:   "candgrp_test_1",
 		CandidateSource:    "execution_error",
 		CandidateCount:     2,
 		CannotSilentSelect: true,
 		QueryContext: cubebox.QueryContext{
-			ResolvedEntity: &cubebox.QueryEntity{
-				Domain:        "orgunit",
-				Intent:        "orgunit.search",
-				EntityKey:     "1001",
-				AsOf:          "2026-04-24",
-				SourceAPIKey:  "orgunit.search",
-				TargetOrgCode: "1001",
+			RecentConfirmedEntities: []cubebox.QueryEntity{
+				{Domain: "orgunit", Intent: "orgunit.search", EntityKey: "1001", AsOf: "2026-04-24", SourceAPIKey: "orgunit.search", TargetOrgCode: "1001"},
 			},
-			RecentCandidates: []cubebox.QueryCandidate{
-				{Domain: "orgunit", EntityKey: "1001", Name: "华东销售中心", AsOf: "2026-04-24"},
+			RecentCandidateGroups: []cubebox.QueryCandidateGroup{
+				{
+					GroupID:            "candgrp_prev_1",
+					CandidateSource:    "execution_error",
+					CandidateCount:     1,
+					CannotSilentSelect: true,
+					Candidates: []cubebox.QueryCandidate{
+						{Domain: "orgunit", EntityKey: "1001", Name: "华东销售中心", AsOf: "2026-04-24"},
+					},
+				},
 			},
 		},
 		Candidates: []cubebox.QueryCandidate{
@@ -126,6 +130,9 @@ func TestBuildQueryClarificationEnvelopeOmitsQueryIntent(t *testing.T) {
 		`"user_prompt":"查华东"`,
 		`"dialogue_context"`,
 		`"candidates"`,
+		`"candidate_group_id":"candgrp_test_1"`,
+		`"recent_candidate_groups"`,
+		`"group_id":"candgrp_test_1"`,
 		`"entity_key":"1001"`,
 		`"error_code":"org_unit_search_ambiguous"`,
 		`"candidate_source":"execution_error"`,
@@ -139,12 +146,66 @@ func TestBuildQueryClarificationEnvelopeOmitsQueryIntent(t *testing.T) {
 	for _, forbidden := range []string{
 		`"query_intent"`,
 		`"intent":"orgunit.search"`,
+		`"resolved_entity"`,
 		`"source_api_key"`,
 		`"target_org_code"`,
 	} {
 		if strings.Contains(text, forbidden) {
 			t.Fatalf("expected clarification body to omit %q, got %q", forbidden, text)
 		}
+	}
+}
+
+func TestBuildQueryClarificationEnvelopeProjectsCurrentCandidateGroupIntoDialogueContext(t *testing.T) {
+	rawCandidates := make([]cubebox.QueryCandidate, 0, 25)
+	for i := 0; i < 25; i++ {
+		rawCandidates = append(rawCandidates, cubebox.QueryCandidate{
+			Domain:    "orgunit",
+			EntityKey: "10" + strings.Repeat("0", 2) + string(rune('A'+(i%26))),
+			Name:      "候选组织",
+			AsOf:      "2026-04-24",
+		})
+	}
+
+	envelope := buildQueryClarificationEnvelope(cubeboxQueryClarificationInput{
+		Prompt:             "查华东",
+		CandidateGroupID:   "candgrp_live_1",
+		CandidateSource:    "execution_error",
+		CandidateCount:     len(rawCandidates),
+		CannotSilentSelect: true,
+		QueryContext: cubebox.QueryContext{
+			RecentCandidateGroups: []cubebox.QueryCandidateGroup{
+				{
+					GroupID:         "candgrp_prev_1",
+					CandidateSource: "execution_error",
+					CandidateCount:  1,
+					Candidates: []cubebox.QueryCandidate{
+						{Domain: "orgunit", EntityKey: "1001", Name: "旧候选", AsOf: "2026-04-24"},
+					},
+				},
+			},
+		},
+		Candidates: rawCandidates,
+	})
+
+	if got, want := len(envelope.DialogueContext.RecentCandidateGroups), 2; got != want {
+		t.Fatalf("expected %d candidate groups, got %#v", want, envelope.DialogueContext.RecentCandidateGroups)
+	}
+	lastGroup := envelope.DialogueContext.RecentCandidateGroups[len(envelope.DialogueContext.RecentCandidateGroups)-1]
+	if lastGroup.GroupID != "candgrp_live_1" {
+		t.Fatalf("expected current group appended, got %#v", lastGroup)
+	}
+	if got, want := len(lastGroup.Candidates), queryContextMaxClarifierCandidatesPerGroup; got != want {
+		t.Fatalf("expected current group truncated to %d, got %d", want, got)
+	}
+	if got, want := len(envelope.Candidates), queryContextMaxClarifierCandidatesPerGroup; got != want {
+		t.Fatalf("expected top-level candidates truncated to %d, got %d", want, got)
+	}
+	if envelope.CandidateGroupID != "candgrp_live_1" || envelope.CandidateCount != len(rawCandidates) || !envelope.CannotSilentSelect {
+		t.Fatalf("unexpected envelope metadata=%#v", envelope)
+	}
+	if lastGroup.Candidates[len(lastGroup.Candidates)-1].EntityKey != envelope.Candidates[len(envelope.Candidates)-1].EntityKey {
+		t.Fatalf("expected top-level candidates to mirror projected current group, got %#v %#v", lastGroup.Candidates, envelope.Candidates)
 	}
 }
 
@@ -197,20 +258,81 @@ func TestBuildExecutionClarificationTextPassesStructuredClarificationFacts(t *te
 		cubebox.GatewayStreamRequest{TenantID: "t1", Prompt: "查华东"},
 		cubeboxReadPlanProductionResult{ProviderID: "provider-a", ProviderType: "openai-compatible", ModelSlug: "gpt-5.2"},
 		cubebox.QueryContext{},
-		[]cubebox.QueryCandidate{
-			{Domain: "orgunit", EntityKey: "1001", Name: "华东销售中心", AsOf: "2026-04-24"},
-			{Domain: "orgunit", EntityKey: "1002", Name: "华东运营中心", AsOf: "2026-04-24"},
+		cubebox.QueryCandidateGroup{
+			GroupID:            "candgrp_test_1",
+			CandidateSource:    "execution_error",
+			CandidateCount:     2,
+			CannotSilentSelect: true,
+			Candidates: []cubebox.QueryCandidate{
+				{Domain: "orgunit", EntityKey: "1001", Name: "华东销售中心", AsOf: "2026-04-24"},
+				{Domain: "orgunit", EntityKey: "1002", Name: "华东运营中心", AsOf: "2026-04-24"},
+			},
 		},
 		"org_unit_search_ambiguous",
-		"execution_error",
-		2,
-		true,
 	)
 	if text != "请确认要继续查询的组织编码。" {
 		t.Fatalf("unexpected clarification text=%q", text)
 	}
-	if got.ErrorCode != "org_unit_search_ambiguous" || got.CandidateSource != "execution_error" || got.CandidateCount != 2 || !got.CannotSilentSelect {
+	if got.CandidateGroupID != "candgrp_test_1" || got.ErrorCode != "org_unit_search_ambiguous" || got.CandidateSource != "execution_error" || got.CandidateCount != 2 || !got.CannotSilentSelect {
 		t.Fatalf("unexpected structured clarification input=%#v", got)
+	}
+}
+
+func TestBuildExecutionClarificationTextProjectsClarifierCandidatesToBudget(t *testing.T) {
+	var got cubeboxQueryClarificationInput
+	rawCandidates := make([]cubebox.QueryCandidate, 0, 25)
+	for i := 0; i < 25; i++ {
+		rawCandidates = append(rawCandidates, cubebox.QueryCandidate{
+			Domain:    "orgunit",
+			EntityKey: "200" + strings.Repeat("0", 1) + string(rune('A'+(i%26))),
+			Name:      "候选组织",
+			AsOf:      "2026-04-24",
+		})
+	}
+	flow := &cubeboxQueryFlow{
+		clarifier: cubeboxQueryClarifierStub{fn: func(_ context.Context, input cubeboxQueryClarificationInput) (string, error) {
+			got = input
+			return "请确认。", nil
+		}},
+	}
+
+	_ = flow.buildExecutionClarificationText(
+		context.Background(),
+		cubebox.GatewayStreamRequest{TenantID: "t1", Prompt: "查华东"},
+		cubeboxReadPlanProductionResult{ProviderID: "provider-a", ProviderType: "openai-compatible", ModelSlug: "gpt-5.2"},
+		cubebox.QueryContext{
+			RecentCandidateGroups: []cubebox.QueryCandidateGroup{
+				{
+					GroupID:         "candgrp_prev_1",
+					CandidateSource: "execution_error",
+					CandidateCount:  1,
+					Candidates: []cubebox.QueryCandidate{
+						{Domain: "orgunit", EntityKey: "1001", Name: "旧候选", AsOf: "2026-04-24"},
+					},
+				},
+			},
+		},
+		cubebox.QueryCandidateGroup{
+			GroupID:            "candgrp_test_1",
+			CandidateSource:    "execution_error",
+			CandidateCount:     len(rawCandidates),
+			CannotSilentSelect: true,
+			Candidates:         rawCandidates,
+		},
+		"org_unit_search_ambiguous",
+	)
+
+	if got.CandidateGroupID != "candgrp_test_1" {
+		t.Fatalf("unexpected candidate group id=%#v", got)
+	}
+	if got.CandidateCount != len(rawCandidates) || !got.CannotSilentSelect {
+		t.Fatalf("unexpected clarification metadata=%#v", got)
+	}
+	if gotLen, want := len(got.Candidates), queryContextMaxClarifierCandidatesPerGroup; gotLen != want {
+		t.Fatalf("expected projected candidates length %d, got %d", want, gotLen)
+	}
+	if last := got.Candidates[len(got.Candidates)-1]; last.EntityKey != rawCandidates[queryContextMaxClarifierCandidatesPerGroup-1].EntityKey {
+		t.Fatalf("expected candidates to preserve order under projection, got %#v", got.Candidates)
 	}
 }
 
@@ -273,17 +395,26 @@ func TestBuildPlannerMessagesIncludesQueryDialogueContext(t *testing.T) {
 			{Dir: "modules/orgunit/presentation/cubebox", Files: map[string]string{"CUBEBOX-SKILL.md": "x", "queries.md": "x", "apis.md": "x", "examples.md": "x"}},
 		},
 		QueryContext: cubebox.QueryContext{
-			RecentConfirmedEntity: &cubebox.QueryEntity{
-				Domain:        "orgunit",
-				Intent:        "orgunit.details",
-				EntityKey:     "100000",
-				AsOf:          "2026-04-25",
-				SourceAPIKey:  "orgunit.details",
-				TargetOrgCode: "100000",
-				ParentOrgCode: "ROOT",
+			RecentConfirmedEntities: []cubebox.QueryEntity{
+				{
+					Domain:        "orgunit",
+					Intent:        "orgunit.details",
+					EntityKey:     "100000",
+					AsOf:          "2026-04-25",
+					SourceAPIKey:  "orgunit.details",
+					TargetOrgCode: "100000",
+					ParentOrgCode: "ROOT",
+				},
 			},
-			RecentCandidates: []cubebox.QueryCandidate{
-				{Domain: "orgunit", EntityKey: "200000", Name: "飞虫公司", AsOf: "2026-04-25"},
+			RecentCandidateGroups: []cubebox.QueryCandidateGroup{
+				{
+					GroupID:         "candgrp_test_1",
+					CandidateSource: "execution_error",
+					CandidateCount:  1,
+					Candidates: []cubebox.QueryCandidate{
+						{Domain: "orgunit", EntityKey: "200000", Name: "飞虫公司", AsOf: "2026-04-25"},
+					},
+				},
 			},
 		},
 	})
@@ -295,12 +426,17 @@ func TestBuildPlannerMessagesIncludesQueryDialogueContext(t *testing.T) {
 	for _, message := range messages {
 		if strings.Contains(message.Content, "query_dialogue_context") {
 			found = true
-			if !strings.Contains(message.Content, "recent_candidates") || !strings.Contains(message.Content, "100000") {
+			if !strings.Contains(message.Content, "recent_candidates") || !strings.Contains(message.Content, "recent_candidate_groups") || !strings.Contains(message.Content, "100000") {
 				t.Fatalf("unexpected context block=%q", message.Content)
 			}
 			for _, forbidden := range []string{`"intent":"orgunit.details"`, `"source_api_key"`, `"target_org_code"`, `"parent_org_code"`} {
 				if strings.Contains(message.Content, forbidden) {
 					t.Fatalf("expected planner context to omit %q, got %q", forbidden, message.Content)
+				}
+			}
+			for _, required := range []string{"recent_confirmed_entity 只是 recent_confirmed_entities 最后一项的兼容别名", "recent_candidates 只是 recent_candidate_groups 最后一组的兼容别名"} {
+				if !strings.Contains(message.Content, required) {
+					t.Fatalf("expected planner context to contain %q, got %q", required, message.Content)
 				}
 			}
 		}
@@ -447,14 +583,26 @@ func TestCubeboxProviderQueryNarratorBuildsStrictMessagesAndRejectsInternalLeaka
 			},
 		}},
 		QueryContext: cubebox.QueryContext{
-			ResolvedEntity: &cubebox.QueryEntity{
-				Domain:        "orgunit",
-				Intent:        "orgunit.details",
-				EntityKey:     "100000",
-				AsOf:          "2026-04-24",
-				SourceAPIKey:  "orgunit.details",
-				TargetOrgCode: "100000",
-				ParentOrgCode: "ROOT",
+			RecentConfirmedEntities: []cubebox.QueryEntity{
+				{
+					Domain:        "orgunit",
+					Intent:        "orgunit.details",
+					EntityKey:     "100000",
+					AsOf:          "2026-04-24",
+					SourceAPIKey:  "orgunit.details",
+					TargetOrgCode: "100000",
+					ParentOrgCode: "ROOT",
+				},
+			},
+			RecentCandidateGroups: []cubebox.QueryCandidateGroup{
+				{
+					GroupID:         "candgrp_test_1",
+					CandidateSource: "results",
+					CandidateCount:  1,
+					Candidates: []cubebox.QueryCandidate{
+						{Domain: "orgunit", EntityKey: "100000", Name: "飞虫与鲜花", AsOf: "2026-04-24"},
+					},
+				},
 			},
 			RecentDialogueTurns: []cubebox.QueryDialogueTurn{
 				{UserPrompt: "查总部", AssistantReply: "总部是 100000。"},
@@ -503,6 +651,7 @@ func TestCubeboxProviderQueryNarratorBuildsStrictMessagesAndRejectsInternalLeaka
 		`"plan":`,
 		`"executed_steps"`,
 		`"executor_key"`,
+		`"resolved_entity"`,
 		`"source_api_key"`,
 		`"target_org_code"`,
 	} {

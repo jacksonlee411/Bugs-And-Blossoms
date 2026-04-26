@@ -90,6 +90,10 @@ func TestQueryContextFromEventsExtractsCandidatesAndClarification(t *testing.T) 
 		{
 			Type: QueryCandidatesPresentedEventType,
 			Payload: map[string]any{
+				"group_id":             "candgrp_test_1",
+				"candidate_source":     "execution_error",
+				"candidate_count":      2,
+				"cannot_silent_select": true,
 				"candidates": []any{
 					map[string]any{"domain": "orgunit", "entity_key": "200000", "name": "飞虫公司", "as_of": "2026-04-25"},
 					map[string]any{"domain": "orgunit", "entity_key": "300000", "name": "鲜花公司", "as_of": "2026-04-25"},
@@ -102,16 +106,7 @@ func TestQueryContextFromEventsExtractsCandidatesAndClarification(t *testing.T) 
 				"intent":              "orgunit.list",
 				"missing_params":      []any{"parent_org_code"},
 				"clarifying_question": "请先确认你要查哪个组织。",
-			},
-		},
-		{
-			Type: QueryContextResolvedEventType,
-			Payload: map[string]any{
-				"entity": map[string]any{
-					"domain":     "orgunit",
-					"entity_key": "200000",
-					"as_of":      "2026-04-25",
-				},
+				"candidate_group_id":  "candgrp_test_1",
 			},
 		},
 	})
@@ -119,14 +114,21 @@ func TestQueryContextFromEventsExtractsCandidatesAndClarification(t *testing.T) 
 	if len(context.RecentCandidates) != 2 {
 		t.Fatalf("expected recent candidates, got %#v", context.RecentCandidates)
 	}
+	if got, want := len(context.RecentCandidateGroups), 1; got != want {
+		t.Fatalf("expected %d candidate group, got %#v", want, context.RecentCandidateGroups)
+	}
+	group := context.RecentCandidateGroups[0]
+	if group.GroupID != "candgrp_test_1" || group.CandidateSource != "execution_error" || group.CandidateCount != 2 || !group.CannotSilentSelect {
+		t.Fatalf("unexpected candidate group=%#v", group)
+	}
 	if context.LastClarification == nil || context.LastClarification.ClarifyingQuestion == "" {
 		t.Fatalf("expected clarification, got %#v", context.LastClarification)
 	}
+	if context.LastClarification.CandidateGroupID != "candgrp_test_1" {
+		t.Fatalf("expected candidate group id, got %#v", context.LastClarification)
+	}
 	if context.LastClarification.ErrorCode != "" || context.LastClarification.CandidateCount != 0 || context.LastClarification.CannotSilentSelect {
 		t.Fatalf("expected empty optional clarification fields when absent, got %#v", context.LastClarification)
-	}
-	if context.ResolvedEntity == nil || context.ResolvedEntity.EntityKey != "200000" {
-		t.Fatalf("expected resolved entity, got %#v", context.ResolvedEntity)
 	}
 	if len(context.RecentDialogueTurns) == 0 {
 		t.Fatalf("expected dialogue turns, got %#v", context.RecentDialogueTurns)
@@ -209,12 +211,40 @@ func TestQueryContextFromEventsCapsCandidatesAt100(t *testing.T) {
 	}
 }
 
+func TestQueryCandidateGroupPayloadUsesFrozenSchema(t *testing.T) {
+	payload := cubeboxQueryCandidateGroupForPayloadTest().Payload()
+	if payload["group_id"] != "candgrp_test_1" || payload["candidate_source"] != "execution_error" || payload["candidate_count"] != 2 {
+		t.Fatalf("unexpected payload=%#v", payload)
+	}
+	if payload["cannot_silent_select"] != true {
+		t.Fatalf("expected cannot_silent_select, got %#v", payload)
+	}
+	rawCandidates, ok := payload["candidates"].([]any)
+	if !ok || len(rawCandidates) != 2 {
+		t.Fatalf("unexpected candidates payload=%#v", payload)
+	}
+}
+
+func cubeboxQueryCandidateGroupForPayloadTest() QueryCandidateGroup {
+	return QueryCandidateGroup{
+		GroupID:            "candgrp_test_1",
+		CandidateSource:    "execution_error",
+		CandidateCount:     2,
+		CannotSilentSelect: true,
+		Candidates: []QueryCandidate{
+			{Domain: "orgunit", EntityKey: "200000", Name: "飞虫公司", AsOf: "2026-04-25"},
+			{Domain: "orgunit", EntityKey: "300000", Name: "鲜花公司", AsOf: "2026-04-25"},
+		},
+	}
+}
+
 func TestDecodeQueryClarificationAcceptsStringSlice(t *testing.T) {
 	clarification := DecodeQueryClarification(map[string]any{
 		"intent":               "orgunit.list",
 		"missing_params":       []string{"parent_org_code", " as_of "},
 		"clarifying_question":  "请补充参数。",
 		"error_code":           "org_unit_search_ambiguous",
+		"candidate_group_id":   "candgrp_test_1",
 		"candidate_source":     "execution_error",
 		"candidate_count":      float64(2),
 		"cannot_silent_select": true,
@@ -226,7 +256,7 @@ func TestDecodeQueryClarificationAcceptsStringSlice(t *testing.T) {
 	if !reflect.DeepEqual(clarification.MissingParams, []string{"parent_org_code", "as_of"}) {
 		t.Fatalf("unexpected missing params=%#v", clarification.MissingParams)
 	}
-	if clarification.ErrorCode != "org_unit_search_ambiguous" || clarification.CandidateSource != "execution_error" || clarification.CandidateCount != 2 || !clarification.CannotSilentSelect {
+	if clarification.ErrorCode != "org_unit_search_ambiguous" || clarification.CandidateGroupID != "candgrp_test_1" || clarification.CandidateSource != "execution_error" || clarification.CandidateCount != 2 || !clarification.CannotSilentSelect {
 		t.Fatalf("unexpected clarification=%#v", clarification)
 	}
 }
