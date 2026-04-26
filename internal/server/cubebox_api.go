@@ -21,10 +21,6 @@ type cubeboxConversationPatchRequest struct {
 	Archived *bool   `json:"archived"`
 }
 
-type cubeboxCompactConversationRequest struct {
-	Reason string `json:"reason"`
-}
-
 type cubeboxStreamTurnRequest struct {
 	ConversationID string `json:"conversation_id"`
 	Prompt         string `json:"prompt"`
@@ -46,7 +42,7 @@ type cubeboxConversationStore interface {
 	ListConversations(ctx context.Context, tenantID string, principalID string, limit int32) (cubebox.ConversationListResponse, error)
 	RenameConversation(ctx context.Context, tenantID string, principalID string, conversationID string, title string) (cubebox.ConversationReplayResponse, error)
 	ArchiveConversation(ctx context.Context, tenantID string, principalID string, conversationID string, archived bool) (cubebox.ConversationReplayResponse, error)
-	CompactConversation(ctx context.Context, tenantID string, principalID string, conversationID string, canonicalContext cubebox.CanonicalContext, reason string) (cubebox.CompactConversationResponse, error)
+	PrepareConversationPromptView(ctx context.Context, tenantID string, principalID string, conversationID string, canonicalContext cubebox.CanonicalContext, reason string) (cubebox.PromptViewPreparationResponse, error)
 	AppendEvent(ctx context.Context, tenantID string, principalID string, conversationID string, event cubebox.CanonicalEvent) error
 	AppendEvents(ctx context.Context, tenantID string, principalID string, conversationID string, events []cubebox.CanonicalEvent) error
 	GetModelSettings(ctx context.Context, tenantID string) (cubebox.ModelSettingsSnapshot, error)
@@ -56,6 +52,11 @@ type cubeboxConversationStore interface {
 	SelectActiveModel(ctx context.Context, tenantID string, principalID string, input cubebox.SelectActiveModelInput) (cubebox.ActiveModelSelection, error)
 	VerifyActiveModel(ctx context.Context, tenantID string, principalID string) (cubebox.ModelHealth, error)
 	GetActiveModelRuntimeConfig(ctx context.Context, tenantID string) (cubebox.ActiveModelRuntimeConfig, error)
+}
+
+type cubeboxTurnStore interface {
+	cubeboxConversationStore
+	cubebox.StreamAppendStore
 }
 
 type cubeboxProviderUpsertRequest struct {
@@ -241,57 +242,6 @@ func handleCubeBoxConversationAPI(w http.ResponseWriter, r *http.Request, store 
 	}
 }
 
-func handleCubeBoxCompactConversationAPI(w http.ResponseWriter, r *http.Request, store cubeboxConversationStore) {
-	if r.Method != http.MethodPost {
-		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusMethodNotAllowed, "method_not_allowed", "method not allowed")
-		return
-	}
-	conversationID := conversationIDFromCompactPath(r.URL.Path)
-	if conversationID == "" {
-		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusUnprocessableEntity, "conversation_id_required", "conversation id required")
-		return
-	}
-	tenant, principal, ok := cubeboxRequestActor(w, r)
-	if !ok {
-		return
-	}
-
-	var req cubeboxCompactConversationRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil && !errors.Is(err, io.EOF) {
-		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusUnprocessableEntity, "invalid_json", "invalid json")
-		return
-	}
-	canonicalContext := cubebox.CanonicalContext{
-		TenantID:       tenant.ID,
-		PrincipalID:    principal.ID,
-		Language:       "zh",
-		Page:           "/app/cubebox",
-		Permissions:    []string{"cubebox.conversations:use"},
-		BusinessObject: "conversation",
-	}
-	if runtimeConfig, err := store.GetActiveModelRuntimeConfig(r.Context(), tenant.ID); err == nil {
-		canonicalContext.ProviderID = runtimeConfig.Provider.ID
-		canonicalContext.ProviderType = runtimeConfig.Provider.ProviderType
-		canonicalContext.ModelSlug = runtimeConfig.Selection.ModelSlug
-		canonicalContext.Runtime = "openai-chat-completions"
-	} else {
-		canonicalContext.ProviderID = "unavailable"
-		canonicalContext.ProviderType = "unavailable"
-		canonicalContext.ModelSlug = "unavailable"
-		canonicalContext.Runtime = "unavailable"
-	}
-	payload, err := store.CompactConversation(r.Context(), tenant.ID, principal.ID, conversationID, canonicalContext, strings.TrimSpace(req.Reason))
-	if err != nil {
-		if errors.Is(err, cubebox.ErrConversationNotFound) {
-			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusNotFound, "cubebox_conversation_not_found", "conversation not found")
-			return
-		}
-		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusInternalServerError, "cubebox_conversation_update_failed", "compact conversation failed")
-		return
-	}
-	writeJSON(w, http.StatusOK, payload)
-}
-
 func handleCubeBoxLoadConversationAPI(w http.ResponseWriter, r *http.Request, store cubeboxConversationStore) {
 	conversationID := conversationIDFromPath(r.URL.Path)
 	if conversationID == "" {
@@ -354,7 +304,7 @@ func handleCubeBoxPatchConversationAPI(w http.ResponseWriter, r *http.Request, s
 	writeJSON(w, http.StatusOK, payload)
 }
 
-func handleCubeBoxStreamTurnAPI(w http.ResponseWriter, r *http.Request, runtime *cubebox.Runtime, store cubeboxConversationStore, gateway *cubebox.GatewayService) {
+func handleCubeBoxStreamTurnAPI(w http.ResponseWriter, r *http.Request, runtime *cubebox.Runtime, store cubeboxTurnStore, gateway *cubebox.GatewayService, queryFlow *cubeboxQueryFlow) {
 	if r.Method != http.MethodPost {
 		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusMethodNotAllowed, "method_not_allowed", "method not allowed")
 		return
@@ -365,7 +315,9 @@ func handleCubeBoxStreamTurnAPI(w http.ResponseWriter, r *http.Request, runtime 
 	}
 
 	var req cubeboxStreamTurnRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	decoder := json.NewDecoder(r.Body)
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&req); err != nil {
 		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusUnprocessableEntity, "invalid_json", "invalid json")
 		return
 	}
@@ -393,16 +345,21 @@ func handleCubeBoxStreamTurnAPI(w http.ResponseWriter, r *http.Request, runtime 
 		return
 	}
 
-	gateway.StreamTurn(r.Context(), cubebox.GatewayStreamRequest{
+	streamRequest := cubebox.GatewayStreamRequest{
 		TenantID:       tenant.ID,
 		PrincipalID:    principal.ID,
 		ConversationID: req.ConversationID,
 		Prompt:         req.Prompt,
 		NextSequence:   req.NextSequence,
-	}, store, cubeboxSSEEventSink{
+	}
+	sink := cubeboxSSEEventSink{
 		w:       w,
 		flusher: flusher,
-	})
+	}
+	if queryFlow != nil && queryFlow.TryHandle(r.Context(), streamRequest, sink) {
+		return
+	}
+	gateway.StreamTurn(r.Context(), streamRequest, store, sink)
 }
 
 type cubeboxSSEEventSink struct {
@@ -660,17 +617,6 @@ func conversationIDFromPath(path string) string {
 		return ""
 	}
 	return strings.TrimSpace(strings.TrimPrefix(path, prefix))
-}
-
-func conversationIDFromCompactPath(path string) string {
-	const prefix = "/internal/cubebox/conversations/"
-	const suffix = ":compact"
-	if !strings.HasPrefix(path, prefix) || !strings.HasSuffix(path, suffix) {
-		return ""
-	}
-	trimmed := strings.TrimPrefix(path, prefix)
-	trimmed = strings.TrimSuffix(trimmed, suffix)
-	return strings.TrimSpace(trimmed)
 }
 
 func interruptTurnIDFromPath(path string) string {

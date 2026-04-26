@@ -32,8 +32,10 @@ type resolveOrgCodeStore struct {
 	getNodeDetails    OrgUnitNodeDetails
 	getNodeDetailsErr error
 
-	searchNodeResult OrgUnitSearchResult
-	searchNodeErr    error
+	searchNodeResult    OrgUnitSearchResult
+	searchNodeErr       error
+	searchCandidates    []OrgUnitSearchCandidate
+	searchCandidatesErr error
 
 	listNodeVersions    []OrgUnitNodeVersion
 	listNodeVersionsErr error
@@ -172,7 +174,10 @@ func (s *resolveOrgCodeStore) SearchNode(context.Context, string, string, string
 }
 
 func (s *resolveOrgCodeStore) SearchNodeCandidates(context.Context, string, string, string, int) ([]OrgUnitSearchCandidate, error) {
-	return []OrgUnitSearchCandidate{}, nil
+	if s.searchCandidatesErr != nil {
+		return nil, s.searchCandidatesErr
+	}
+	return append([]OrgUnitSearchCandidate(nil), s.searchCandidates...), nil
 }
 
 func (s *resolveOrgCodeStore) ListNodeVersions(context.Context, string, int) ([]OrgUnitNodeVersion, error) {

@@ -32,21 +32,12 @@ export interface CanonicalEvent {
     | 'turn.agent_message.delta'
     | 'turn.agent_message.completed'
     | 'turn.context_compacted'
+    | 'turn.query_entity.confirmed'
     | 'turn.error'
     | 'turn.interrupted'
     | 'turn.completed'
   ts: string
   payload: Record<string, unknown>
-}
-
-export interface CompactConversationResponse {
-  conversation: CubeBoxConversation
-  event?: CanonicalEvent | null
-  prompt_view: Array<{
-    role: string
-    content: string
-  }>
-  next_sequence: number
 }
 
 export interface ConversationReplayResponse {
@@ -57,7 +48,7 @@ export interface ConversationReplayResponse {
 
 export interface TimelineItem {
   id: string
-  kind: 'user_message' | 'agent_message' | 'error_item' | 'compact_item'
+  kind: 'user_message' | 'agent_message' | 'error_item' | 'history_context_item'
   text: string
   status?: 'streaming' | 'completed' | 'error' | 'interrupted'
 }
@@ -71,7 +62,6 @@ export interface CubeBoxState {
   composerText: string
   loading: boolean
   errorMessage: string | null
-  compacting: boolean
 }
 
 export interface CubeBoxModelProvider {

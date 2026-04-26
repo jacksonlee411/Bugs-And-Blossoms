@@ -210,6 +210,20 @@ errors:
     user_message_key: errors.ai_plan_determinism_violation
     backend_policy: mapped
     frontend_policy: mapped
+  - code: knowledge_pack_invalid
+    module: assistant
+    http_status: 422
+    severity: error
+    user_message_key: errors.knowledge_pack_invalid
+    backend_policy: mapped
+    frontend_policy: mapped
+  - code: api_catalog_drift_or_executor_missing
+    module: assistant
+    http_status: 500
+    severity: error
+    user_message_key: errors.api_catalog_drift_or_executor_missing
+    backend_policy: mapped
+    frontend_policy: mapped
   - code: ai_reply_model_target_mismatch
     module: assistant
     http_status: 422

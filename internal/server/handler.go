@@ -96,7 +96,15 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, error) {
 
 	cubeboxRuntime := cubebox.NewRuntime()
 	cubeboxStore := cubebox.NewStore(pgPool)
-	cubeboxGateway := cubebox.NewGatewayService(cubeboxRuntime, cubeboxStore, cubebox.NewOpenAICompatibleAdapter(nil), cubebox.EnvSecretResolver{})
+	cubeboxAdapter := cubebox.NewOpenAICompatibleAdapter(nil)
+	cubeboxSecretResolver := cubebox.EnvSecretResolver{}
+	cubeboxGateway := cubebox.NewGatewayService(cubeboxRuntime, cubeboxStore, cubeboxAdapter, cubeboxSecretResolver)
+	cubeboxQueryProducer := newCubeboxProviderReadPlanProducer(cubeboxStore, cubeboxAdapter, cubeboxSecretResolver)
+	cubeboxQueryNarrator := newCubeboxProviderQueryNarrator(cubeboxStore, cubeboxAdapter, cubeboxSecretResolver)
+	cubeboxQueryFlow, err := buildDefaultCubeboxQueryFlow(cubeboxRuntime, cubeboxStore, orgStore, cubeboxQueryProducer, cubeboxQueryNarrator)
+	if err != nil {
+		return nil, err
+	}
 
 	router := routing.NewRouter(classifier)
 
@@ -310,11 +318,8 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, error) {
 	router.Handle(routing.RouteClassInternalAPI, http.MethodPatch, "/internal/cubebox/conversations/{conversation_id}", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		handleCubeBoxConversationAPI(w, r, cubeboxStore)
 	}))
-	router.Handle(routing.RouteClassInternalAPI, http.MethodPost, "/internal/cubebox/conversations/{conversation_id}:compact", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		handleCubeBoxCompactConversationAPI(w, r, cubeboxStore)
-	}))
 	router.Handle(routing.RouteClassInternalAPI, http.MethodPost, "/internal/cubebox/turns:stream", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		handleCubeBoxStreamTurnAPI(w, r, cubeboxRuntime, cubeboxStore, cubeboxGateway)
+		handleCubeBoxStreamTurnAPI(w, r, cubeboxRuntime, cubeboxStore, cubeboxGateway, cubeboxQueryFlow)
 	}))
 	router.Handle(routing.RouteClassInternalAPI, http.MethodPost, "/internal/cubebox/turns/{turn_id}:interrupt", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		handleCubeBoxInterruptTurnAPI(w, r, cubeboxRuntime)

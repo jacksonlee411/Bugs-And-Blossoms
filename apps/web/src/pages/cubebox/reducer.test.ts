@@ -270,10 +270,57 @@ describe('cubebox reducer', () => {
 
     expect(state.items[0]).toMatchObject({
       id: 'summary_1',
-      kind: 'compact_item',
+      kind: 'history_context_item',
       text: '已压缩旧历史。',
       status: 'completed'
     })
+    expect(state.nextSequence).toBe(4)
+  })
+
+  it('uses query entity confirmation as hidden recovery metadata only', () => {
+    const state = cubeboxReducer(
+      {
+        ...initialCubeBoxState,
+        items: [
+          {
+            id: 'msg_user_1',
+            kind: 'user_message',
+            text: '查组织详情',
+            status: 'completed'
+          }
+        ],
+        nextSequence: 3
+      },
+      {
+        type: 'event_received',
+        payload: {
+          event_id: 'evt_query_entity',
+          conversation_id: 'conv_1',
+          turn_id: 'turn_1',
+          sequence: 3,
+          type: 'turn.query_entity.confirmed',
+          ts: '2026-04-25T00:00:00Z',
+          payload: {
+            entity: {
+              domain: 'orgunit',
+              intent: 'orgunit.details',
+              entity_key: '100000',
+              as_of: '2026-04-25',
+              source_api_key: 'orgunit.details'
+            }
+          }
+        }
+      }
+    )
+
+    expect(state.items).toEqual([
+      {
+        id: 'msg_user_1',
+        kind: 'user_message',
+        text: '查组织详情',
+        status: 'completed'
+      }
+    ])
     expect(state.nextSequence).toBe(4)
   })
 
@@ -341,7 +388,7 @@ describe('cubebox reducer', () => {
       },
       {
         id: 'summary_1',
-        kind: 'compact_item',
+        kind: 'history_context_item',
         text: '这里只是摘要，不替代原始消息。',
         status: 'completed'
       }

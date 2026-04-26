@@ -82,8 +82,7 @@ describe('CubeBoxPanel', () => {
             cubebox_rename: '重命名',
             cubebox_archive: '归档',
             cubebox_unarchive: '恢复',
-            cubebox_compact: '压缩上下文',
-            cubebox_compact_item: '压缩摘要',
+            cubebox_history_context_item: '历史上下文',
             cubebox_conversation_status_active: '进行中',
             cubebox_conversation_status_archived: '已归档',
             cubebox_status_idle: '空闲',
@@ -98,7 +97,6 @@ describe('CubeBoxPanel', () => {
 
     cubeBoxMocks.useCubeBox.mockReturnValue({
       archiveConversation: vi.fn(),
-      compactCurrentConversation: vi.fn(),
       conversations: [
         {
           id: 'conv_1',
@@ -125,8 +123,7 @@ describe('CubeBoxPanel', () => {
         nextSequence: 1,
         composerText: '',
         loading: false,
-        errorMessage: null,
-        compacting: false
+        errorMessage: null
       },
       interrupt: vi.fn(),
       sendMessage: vi.fn(),
@@ -197,7 +194,7 @@ describe('CubeBoxPanel', () => {
     expect(screen.getByRole('button', { name: '历史记录' })).toBeInTheDocument()
     expect(await screen.findByRole('button', { name: '设置' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '新建对话' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: '压缩上下文' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '压缩上下文' })).not.toBeInTheDocument()
   })
 
   it('opens history dialog from header history button', () => {
@@ -218,18 +215,114 @@ describe('CubeBoxPanel', () => {
     expect(cubeBoxMocks.useCubeBox.mock.results[0]?.value.startNewConversation).toHaveBeenCalledTimes(1)
   })
 
-  it('triggers manual compact from header action', () => {
+  it('treats /compact as a normal message and uses the standard send flow', () => {
+    const sendMessage = vi.fn()
+    const setComposerText = vi.fn()
+    const archiveConversation = vi.fn()
+    const renameConversation = vi.fn()
+    const selectConversation = vi.fn()
+    const startNewConversation = vi.fn().mockResolvedValue(undefined)
+    const interrupt = vi.fn()
+
+    cubeBoxMocks.useCubeBox.mockReturnValueOnce({
+      archiveConversation,
+      conversations: [
+        {
+          id: 'conv_1',
+          title: '需求澄清',
+          status: 'active',
+          archived: false,
+          updated_at: '2026-04-21T10:00:00Z'
+        }
+      ],
+      conversationsLoading: false,
+      renameConversation,
+      selectConversation,
+      startNewConversation,
+      state: {
+        conversation: {
+          id: 'conv_1',
+          title: '需求澄清',
+          status: 'active',
+          archived: false
+        },
+        items: [],
+        turnStatus: 'idle',
+        activeTurnID: null,
+        nextSequence: 1,
+        composerText: '/compact',
+        loading: false,
+        errorMessage: null
+      },
+      interrupt,
+      sendMessage,
+      setComposerText
+    })
+
     render(<CubeBoxPanel />)
 
-    fireEvent.click(screen.getByRole('button', { name: '压缩上下文' }))
+    fireEvent.click(screen.getByRole('button', { name: '发送' }))
 
-    expect(cubeBoxMocks.useCubeBox.mock.results[0]?.value.compactCurrentConversation).toHaveBeenCalledTimes(1)
+    expect(sendMessage).toHaveBeenCalledTimes(1)
+    expect(screen.queryByRole('button', { name: '压缩上下文' })).not.toBeInTheDocument()
+  })
+
+  it('sends only on plain Enter', () => {
+    const sendMessage = vi.fn()
+    const setComposerText = vi.fn()
+
+    cubeBoxMocks.useCubeBox.mockReturnValueOnce({
+      archiveConversation: vi.fn(),
+      conversations: [
+        {
+          id: 'conv_1',
+          title: '需求澄清',
+          status: 'active',
+          archived: false,
+          updated_at: '2026-04-21T10:00:00Z'
+        }
+      ],
+      conversationsLoading: false,
+      renameConversation: vi.fn(),
+      selectConversation: vi.fn(),
+      startNewConversation: vi.fn().mockResolvedValue(undefined),
+      state: {
+        conversation: {
+          id: 'conv_1',
+          title: '需求澄清',
+          status: 'active',
+          archived: false
+        },
+        items: [],
+        turnStatus: 'idle',
+        activeTurnID: null,
+        nextSequence: 1,
+        composerText: '第一行',
+        loading: false,
+        errorMessage: null
+      },
+      interrupt: vi.fn(),
+      sendMessage,
+      setComposerText
+    })
+
+    render(<CubeBoxPanel />)
+
+    const composer = screen.getByRole('textbox', { name: '输入消息' })
+
+    fireEvent.keyDown(composer, { key: 'Enter' })
+    fireEvent.keyDown(composer, { key: 'Enter', ctrlKey: true })
+    fireEvent.keyDown(composer, { key: 'Enter', shiftKey: true })
+    fireEvent.keyDown(composer, { key: 'Enter', altKey: true })
+    fireEvent.keyDown(composer, { key: 'Enter', metaKey: true })
+
+    expect(sendMessage).toHaveBeenCalledTimes(1)
+    expect(setComposerText).not.toHaveBeenCalled()
   })
 
   it('renders multiline agent content with preserved numbered list boundaries', () => {
     cubeBoxMocks.useCubeBox.mockReturnValueOnce({
       archiveConversation: vi.fn(),
-      compactCurrentConversation: vi.fn(),
       conversations: [
         {
           id: 'conv_1',
@@ -263,8 +356,7 @@ describe('CubeBoxPanel', () => {
         nextSequence: 2,
         composerText: '',
         loading: false,
-        errorMessage: null,
-        compacting: false
+        errorMessage: null
       },
       interrupt: vi.fn(),
       sendMessage: vi.fn(),

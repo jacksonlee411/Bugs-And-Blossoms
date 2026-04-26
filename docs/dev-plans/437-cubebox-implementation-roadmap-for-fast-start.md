@@ -212,17 +212,17 @@ owner：
 
 ### Phase D：上下文压缩最小闭环
 
-目标：只交付首期真正需要的 compaction 能力，不把 P1 复杂项挤进首轮。
+目标：只交付首阶段真正需要的上下文准备能力，不把 P1 复杂项挤进首轮，也不恢复伪需求 manual compact。
 
 owner：
 
-- `434`：manual compact、pre-turn auto compact、canonical context reinjection、prompt view replacement
-- `431`：`/compact` 入口与状态提示
+- `434`：无摘要基线、pre-turn auto prompt view 准备、canonical context reinjection、prompt view replacement
+- `431`：历史 `compact_item` 回放兼容与状态提示，不提供 `/compact` 入口
 
 首期必须项：
 
-1. [X] manual compact
-2. [X] pre-turn auto compact
+1. [X] `DEV-PLAN-469 Phase 1` 无摘要基线
+2. [X] pre-turn auto prompt view 准备
 3. [X] canonical context reinjection
 4. [X] prompt shape snapshot / summary prefix fixture / compaction 纯函数测试
 
@@ -234,10 +234,11 @@ owner：
 
 阶段完成定义：
 
-- 对话不会无限追加历史。
-- 压缩后仍保持 append-only 原始消息审计链不变。
+- 首阶段先验证 provider 持续消费完整历史视图，而不是裸 `turn.Prompt`。
+- 长会话预算风险允许显式暴露，不再用本地伪摘要掩盖。
+- append-only 原始消息审计链保持不变。
 - 当前备注（`2026-04-22`）：
-  - manual compact API、pre-turn auto compact、canonical context reinjection、`turn.context_compacted` timeline 消费、`/compact` UI 入口与 compaction 纯函数测试已落地。
+  - manual compact API 与 `/compact` UI 入口已按 `DEV-PLAN-469 Phase 1` 退出；当前已落地范围为 pre-turn auto prompt view 准备、canonical context reinjection、历史 `turn.context_compacted` timeline 回放兼容与 compaction 纯函数测试。
   - 本轮实现级收口已补齐：no-op compaction 不再伪造 compact event / 空摘要项，compaction 序号推进也已收敛为单事务安全，不再因并发 compact 抢占 `sequence` 而阻断正常流式请求。
   - 首期 `prompt shape snapshot` 以纯函数 fixture / snapshot 承担 golden 等价物，已满足当前封板口径，不再要求本轮额外拆出独立 golden 文件。
   - 当前实现仍属最小闭环：未引入 mid-turn compact、remote compaction、provider downshift，也未承诺真实 tokenizer 精度或独立 summary model；这些后移项不阻断 `Phase D` 正式封板。
@@ -279,7 +280,7 @@ owner：
 | 页面视觉合同 | `431A` | `431` 页面实现消费 | 不得反向阻塞首轮能力 |
 | 会话 lifecycle/persistence | `432` | `431` 消费其 list/read/resume/archive/rename 结果 | UI 不得偷持 lifecycle owner |
 | AI gateway/provider/health runtime | `433` | `431/435` 消费其运行时对象 | 管理面不得抢先定义命名 |
-| compaction 语义与执行链 | `434` | `431` 只承接 `/compact` 入口与状态提示 | UI 不得自造第二套 compact 语义 |
+| compaction 语义与执行链 | `434` | `431` 只承接历史 `compact_item` 回放兼容与状态提示，不再提供 `/compact` | UI 不得自造第二套 compact 语义，也不得恢复 manual compact 产品入口 |
 | 模型配置管理面/权限矩阵 | `435` | `433` 提供 provider/config/health 运行时事实 | 运行时与管理面命名必须统一 |
 
 ## 6. 快速开工的 PR 编排建议
@@ -308,8 +309,8 @@ owner：
 
 ### PR-437D：压缩最小闭环
 
-- `434` manual compact + pre-turn auto compact + reinjection
-- `431` `/compact` UI 入口
+- `434` no-summary baseline + pre-turn auto prompt view preparation + reinjection
+- `431` 历史 `compact_item` 回放兼容，不提供 `/compact` UI 入口
 
 当前状态：已具备正式封板条件。
 

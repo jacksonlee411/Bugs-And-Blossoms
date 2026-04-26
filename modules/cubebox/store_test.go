@@ -187,7 +187,7 @@ func TestStoreAppendEventFailsClosedWhenConversationLookupIsTenantScopedAway(t *
 	}
 }
 
-func TestStoreCompactConversationReusesTenantScopedReadAndWrite(t *testing.T) {
+func TestStorePrepareConversationPromptViewReusesTenantScopedReadAndWrite(t *testing.T) {
 	tenantID := uuid.NewString()
 	principalID := uuid.NewString()
 	now := timestamptz(time.Date(2026, 4, 22, 10, 0, 0, 0, time.UTC))
@@ -305,17 +305,17 @@ func TestStoreCompactConversationReusesTenantScopedReadAndWrite(t *testing.T) {
 	}
 	store := NewStore(beginFunc(func(context.Context) (pgx.Tx, error) { return tx, nil }))
 
-	response, err := store.CompactConversation(context.Background(), tenantID, principalID, "conv_1", CanonicalContext{
+	response, err := store.PrepareConversationPromptView(context.Background(), tenantID, principalID, "conv_1", CanonicalContext{
 		TenantID:    tenantID,
 		PrincipalID: principalID,
 		Language:    "zh",
 		Page:        "/app/cubebox",
 	}, "manual")
 	if err != nil {
-		t.Fatalf("expected compact success, got %v", err)
+		t.Fatalf("expected prompt view preparation success, got %v", err)
 	}
-	if response.Event == nil || response.Event.Type != "turn.context_compacted" {
-		t.Fatalf("unexpected compact event=%#v", response.Event)
+	if response.Event != nil {
+		t.Fatalf("expected no compaction event in phase-1 no-summary baseline, got %#v", response.Event)
 	}
 	if len(tx.execSQLs) == 0 {
 		t.Fatalf("expected tenant-scoped tx execs, got %#v", tx.execSQLs)
@@ -323,12 +323,12 @@ func TestStoreCompactConversationReusesTenantScopedReadAndWrite(t *testing.T) {
 	if got := tx.execArgs[0][0]; got != tenantID {
 		t.Fatalf("expected tenant arg %s, got %#v", tenantID, got)
 	}
-	if response.NextSequence != 10 {
-		t.Fatalf("expected next sequence 10, got %d", response.NextSequence)
+	if response.NextSequence != 9 {
+		t.Fatalf("expected next sequence 9 without compaction event write, got %d", response.NextSequence)
 	}
 }
 
-func TestStoreCompactConversationSkipsNoOpCompactionEvent(t *testing.T) {
+func TestStorePrepareConversationPromptViewSkipsNoOpCompactionEvent(t *testing.T) {
 	tenantID := uuid.NewString()
 	principalID := uuid.NewString()
 	now := timestamptz(time.Date(2026, 4, 22, 10, 0, 0, 0, time.UTC))
@@ -376,14 +376,14 @@ func TestStoreCompactConversationSkipsNoOpCompactionEvent(t *testing.T) {
 	}
 	store := NewStore(beginFunc(func(context.Context) (pgx.Tx, error) { return tx, nil }))
 
-	response, err := store.CompactConversation(context.Background(), tenantID, principalID, "conv_short", CanonicalContext{
+	response, err := store.PrepareConversationPromptView(context.Background(), tenantID, principalID, "conv_short", CanonicalContext{
 		TenantID:    tenantID,
 		PrincipalID: principalID,
 		Language:    "zh",
 		Page:        "/app/cubebox",
 	}, "manual")
 	if err != nil {
-		t.Fatalf("expected compact success, got %v", err)
+		t.Fatalf("expected prompt view preparation success, got %v", err)
 	}
 	if response.Event != nil {
 		t.Fatalf("expected no event for no-op compaction, got %#v", response.Event)

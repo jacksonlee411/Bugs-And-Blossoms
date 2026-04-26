@@ -8,7 +8,7 @@
 - **范围一句话**：专门记录 CubeBox 在真实页面验证中暴露出的“对话不连贯/上一轮上下文未被模型消费”问题，冻结调查结论、根因、owner 边界、修复步骤与验收口径，确保 `DEV-PLAN-430` 定义的连续对话能力真正落到 provider 主链，而不是只停留在会话存储、恢复和 compaction 辅助层。
 - **关联模块/目录**：`docs/dev-plans/430-cubebox-ide-conversation-assistant-rebuild-architecture-plan.md`、`docs/dev-plans/432-codex-session-persistence-reuse-plan.md`、`docs/dev-plans/433a-cubebox-real-provider-browser-validation-findings-and-remediation-plan.md`、`docs/dev-plans/434-codex-context-management-and-compaction-reuse-plan.md`、`docs/dev-plans/437a-cubebox-phase-a-canonical-conversation-contract.md`、`modules/cubebox`、`internal/server`、`apps/web/src/pages/cubebox`
 - **关联计划/标准**：`DEV-PLAN-003`、`DEV-PLAN-004M1`、`DEV-PLAN-012`、`DEV-PLAN-017`、`DEV-PLAN-019`、`DEV-PLAN-022`、`DEV-PLAN-300`、`DEV-PLAN-430`、`DEV-PLAN-432`、`DEV-PLAN-433A`、`DEV-PLAN-434`、`DEV-PLAN-437A`、`DEV-PLAN-438A`、`DEV-PLAN-438B`
-- **用户入口/触点**：登录页、主应用壳层右侧 CubeBox 抽屉、历史恢复、新建会话、发送消息、manual `/compact`、pre-turn auto compact、`/internal/cubebox/turns:stream`
+- **用户入口/触点**：登录页、主应用壳层右侧 CubeBox 抽屉、历史恢复、新建会话、发送消息、pre-turn auto prompt view 准备、`/internal/cubebox/turns:stream`
 - **证据记录 SSOT**：本计划的实施与页面复验证据统一回填 `docs/dev-records/DEV-PLAN-437-READINESS.md` 的 CubeBox Phase 段；本文件只冻结调查结论、修复步骤与验收口径，不承载零散运行日志。
 
 ### 0.1 Simple > Easy 三问
@@ -21,7 +21,7 @@
 
 `DEV-PLAN-430` 已把 CubeBox 的连续对话能力定义为首期核心目标之一：会话必须可恢复、上下文必须有 token budget、历史必须可压缩、每轮必须按固定顺序组装 prompt，而不是无限堆叠聊天记录。
 
-`DEV-PLAN-434` 也已按 Codex 主参考实现了首期 compaction 纯函数、prompt view builder、recent message 保留、canonical context reinjection、manual compact API 与 pre-turn auto compact。
+`DEV-PLAN-434` 也已按 Codex 主参考实现了首期 compaction 纯函数、prompt view builder、recent message 保留、canonical context reinjection 与 pre-turn auto prompt view 准备；后续又按 `DEV-PLAN-469 Phase 1` 停用了本地摘要生产语义，并取消了 manual compact 产品入口。
 
 但在 2026-04-22 的真实页面验证中，出现了以下用户可见现象：
 
@@ -32,7 +32,7 @@
 
 这说明：
 
-1. 会话主链、恢复链、抽屉 UI、streaming、history list、compact API 都已经存在。
+1. 会话主链、恢复链、抽屉 UI、streaming 与 history list 都已经存在；调查当时另有 compact API，但它并不是本问题根因。
 2. 但“前文连续性”并没有真正进入模型输入。
 3. 当前实现更接近“有会话存储的单轮问答”，而不是 `430` 定义的连续对话内核。
 
@@ -40,7 +40,7 @@
 
 ### 2.1 页面级现象
 
-- 页面登录、抽屉入口、会话新建、消息发送、历史恢复、manual compact API 均可通过真实浏览器触发。
+- 页面登录、抽屉入口、会话新建、消息发送、历史恢复均可通过真实浏览器触发；当前仓面已取消 manual compact 产品入口，不影响本调查关于 provider 主链的结论。
 - 真实页面中可看到旧会话被恢复，说明 `432` 的会话恢复链路本身存在。
 - 但连续追问时，模型无法理解“前面的那个问题”，说明恢复出来的会话历史并未成为下一轮模型输入的一部分。
 
@@ -48,8 +48,9 @@
 
 - `POST /internal/cubebox/conversations => 201`
 - `POST /internal/cubebox/turns:stream => 200`
-- `POST /internal/cubebox/conversations/{id}:compact => 200`
 - `GET /internal/cubebox/conversations/{id} => 200`
+
+调查当时曾额外存在 `POST /internal/cubebox/conversations/{id}:compact => 200`，但该路由现已按 `DEV-PLAN-469 Phase 1` 收口移除；根因结论不受影响。
 
 这说明链路问题不在“接口不存在”或“页面没触发”，而在服务端实际提交给 provider 的请求内容。
 
@@ -60,8 +61,7 @@
 `modules/cubebox/compaction.go` 中的 `BuildPromptViewWithCompaction(...)` 已经具备：
 
 - 读取历史 timeline
-- 判断是否 compact
-- 生成 `summary_text`
+- 重建完整历史视图
 - reinject canonical context
 - 保留 recent user/assistant timeline
 - 拼出 `PromptView []PromptItem`
@@ -133,7 +133,7 @@
 - 可以打开抽屉
 - 可以新建会话
 - 可以恢复历史
-- 可以调用 compact API
+- 可以重建并消费历史 prompt view
 
 但还没有把下面这个场景纳入阻断验收：
 
@@ -151,7 +151,7 @@
 
 1. 系统基线指令
 2. 模块上下文
-3. 历史压缩摘要
+3. 历史上下文层（`DEV-PLAN-469 Phase 1` 当前为完整历史视图）
 4. 结构化状态对象
 5. 工具输出压缩结果
 6. 最近 3-5 轮原文
@@ -219,12 +219,11 @@ Codex 的连贯对话不是“保存历史即可”，而是：
 
 #### Slice B：在 gateway 中真正接线
 
-1. [x] 在 `GatewayService.StreamTurn(...)` 中，把 pre-turn auto compact 的返回值接成“本轮实际采样输入”。
+1. [x] 在 `GatewayService.StreamTurn(...)` 中，把 pre-turn auto prompt view 准备的返回值接成“本轮实际采样输入”。
 2. [x] 若未发生 compact，也从当前 canonical context + 当前用户输入构造最小 `PromptView`，不再退回单独发 `turn.Prompt`。
 3. [x] `turn.user_message.accepted` 仍写 append-only event log；但 provider 采样输入改为：
    - canonical context
-   - existing compact summary
-   - recent history
+   - 完整历史视图
    - current user input
 
 #### Slice C：adapter 层映射
@@ -238,11 +237,11 @@ Codex 的连贯对话不是“保存历史即可”，而是：
    - 第一轮：`a`
    - 第二轮：`回答你前面的那个问题`
    - 期望：不得回复“看不到前面的问题”这类失忆性回答。
-2. [ ] 增加 compact 后连续追问样本：
+2. [ ] 增加长历史连续追问样本：
    - 先形成足够历史
-   - manual compact 或 pre-turn auto compact
+   - 触发 pre-turn auto prompt view 准备
    - 再继续追问
-   - 期望：压缩后仍能理解前文指代。
+   - 期望：长历史下仍能理解前文指代。
 3. [ ] 增加“相同文本重试”样本：
    - 上一轮停在用户消息后失败或被中断
    - 用户再次发送相同文本
@@ -264,7 +263,7 @@ Codex 的连贯对话不是“保存历史即可”，而是：
 - 不得用前端拼接历史字符串替代服务端 `PromptView`。
 - 不得为 provider 输入引入一套绕开 `434` 的第二上下文模型。
 - 不得通过 prompt 工程兜底文案掩盖“前文根本没进模型”的实现缺口。
-- 不得因为 compact API 已可调用，就把 434 判定为“连贯对话已实现”。
+- 不得因为历史上存在 compact API 或当前仍能回放 compact item，就把 434 判定为“连贯对话已实现”。
 
 ## 8. 验收标准
 
@@ -272,7 +271,7 @@ Codex 的连贯对话不是“保存历史即可”，而是：
 2. [x] `PromptView` 在真实 provider 路径被实际消费。
 3. [ ] 页面连续追问场景不再出现“看不到前面的问题/不知道你指哪一句”的失忆性回答。
 4. [ ] compact 前后都能维持指代连续性。
-5. [x] 会话恢复、manual compact、pre-turn auto compact 与真实 provider 路径共用同一套连续对话输入模型。
+5. [x] 会话恢复、历史 compact item 回放兼容、pre-turn auto prompt view 准备与真实 provider 路径共用同一套连续对话输入模型。
 6. [ ] 自动化至少覆盖：
    - gateway 单测
    - provider adapter 映射测试

@@ -1,5 +1,6 @@
 import '@testing-library/jest-dom/vitest'
 import { render, screen, waitFor } from '@testing-library/react'
+import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { CubeBoxProvider } from './CubeBoxProvider'
 import { CubeBoxPanel } from './CubeBoxPanel'
@@ -49,8 +50,7 @@ describe('CubeBoxPanel restore flow', () => {
             cubebox_rename: '重命名',
             cubebox_archive: '归档',
             cubebox_unarchive: '恢复',
-            cubebox_compact: '压缩上下文',
-            cubebox_compact_item: '压缩摘要',
+            cubebox_history_context_item: '历史上下文',
             cubebox_conversation_status_active: '进行中',
             cubebox_conversation_status_archived: '已归档',
             cubebox_status_idle: '空闲',
@@ -123,9 +123,11 @@ describe('CubeBoxPanel restore flow', () => {
     })
 
     render(
-      <CubeBoxProvider>
-        <CubeBoxPanel />
-      </CubeBoxProvider>
+      <MemoryRouter>
+        <CubeBoxProvider>
+          <CubeBoxPanel />
+        </CubeBoxProvider>
+      </MemoryRouter>
     )
 
     await waitFor(() => expect(apiMocks.listConversations).toHaveBeenCalledTimes(1))
@@ -133,7 +135,7 @@ describe('CubeBoxPanel restore flow', () => {
     await waitFor(() => expect(screen.getByRole('heading', { name: '当前活跃会话' })).toBeInTheDocument())
     expect(screen.getByText('恢复我上次的上下文')).toBeInTheDocument()
     expect(screen.getByText('已压缩更早的历史。')).toBeInTheDocument()
-    expect(screen.getByText('压缩摘要')).toBeInTheDocument()
+    expect(screen.getByText('历史上下文')).toBeInTheDocument()
     expect(screen.getAllByText('会话: conv_active').length).toBeGreaterThan(0)
   })
 })

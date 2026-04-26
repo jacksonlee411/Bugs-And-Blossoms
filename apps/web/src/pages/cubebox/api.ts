@@ -2,7 +2,6 @@ import { ApiClientError } from '../../api/errors'
 import { resolveApiErrorMessage } from '../../errors/presentApiError'
 import type {
   CanonicalEvent,
-  CompactConversationResponse,
   ConversationReplayResponse,
   CubeBoxConversationListResponse,
   CubeBoxCapabilities,
@@ -88,21 +87,6 @@ export async function updateConversation(input: {
     await readError(response, 'cubebox_conversation_update_failed', `update conversation failed: ${response.status}`)
   }
   return (await response.json()) as ConversationReplayResponse
-}
-
-export async function compactConversation(conversationID: string, reason = 'manual'): Promise<CompactConversationResponse> {
-  const response = await fetch(`/internal/cubebox/conversations/${conversationID}:compact`, {
-    credentials: 'include',
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify({ reason })
-  })
-  if (!response.ok) {
-    await readError(response, 'cubebox_conversation_update_failed', `compact conversation failed: ${response.status}`)
-  }
-  return (await response.json()) as CompactConversationResponse
 }
 
 export async function streamTurn(input: {

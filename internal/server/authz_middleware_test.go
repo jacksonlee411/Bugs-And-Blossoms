@@ -235,9 +235,6 @@ func TestAuthzRequirementForRoute(t *testing.T) {
 	if object, action, ok := authzRequirementForRoute(http.MethodGet, "/internal/cubebox/conversations/conv_1"); !ok || object != authz.ObjectCubeBoxConversations || action != authz.ActionRead {
 		t.Fatalf("unexpected cubebox read authz: object=%q action=%q ok=%v", object, action, ok)
 	}
-	if object, action, ok := authzRequirementForRoute(http.MethodPost, "/internal/cubebox/conversations/conv_1:compact"); !ok || object != authz.ObjectCubeBoxConversations || action != authz.ActionUse {
-		t.Fatalf("unexpected cubebox compact authz: object=%q action=%q ok=%v", object, action, ok)
-	}
 	if object, action, ok := authzRequirementForRoute(http.MethodPost, "/internal/cubebox/turns/turn_1:interrupt"); !ok || object != authz.ObjectCubeBoxConversations || action != authz.ActionUse {
 		t.Fatalf("unexpected cubebox interrupt authz: object=%q action=%q ok=%v", object, action, ok)
 	}

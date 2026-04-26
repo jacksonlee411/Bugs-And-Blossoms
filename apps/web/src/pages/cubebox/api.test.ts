@@ -1,6 +1,5 @@
 import { describe, expect, it, vi, afterEach } from 'vitest'
 import {
-  compactConversation,
   deactivateModelCredential,
   interruptTurn,
   loadCubeBoxCapabilities,
@@ -41,6 +40,40 @@ describe('cubebox api', () => {
     ).rejects.toThrow('stream turn failed: missing terminal event')
   })
 
+  it('posts only canonical turn fields to turn stream endpoint', async () => {
+    const encoder = new TextEncoder()
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      body: new ReadableStream({
+        start(controller) {
+          controller.enqueue(encoder.encode('data: {"event_id":"evt_1","conversation_id":"conv_1","turn_id":"turn_1","sequence":1,"type":"turn.completed","ts":"2026-04-21T00:00:00Z","payload":{"status":"completed"}}\n\n'))
+          controller.close()
+        }
+      })
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    await streamTurn({
+      conversationID: 'conv_1',
+      prompt: '查该组织详情',
+      nextSequence: 3,
+      signal: new AbortController().signal,
+      onEvent: vi.fn()
+    })
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/internal/cubebox/turns:stream',
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({
+          conversation_id: 'conv_1',
+          prompt: '查该组织详情',
+          next_sequence: 3
+        })
+      })
+    )
+  })
+
   it('includes conversation_id when interrupting a turn', async () => {
     const fetchMock = vi.fn().mockResolvedValue({ ok: true })
     vi.stubGlobal('fetch', fetchMock)
@@ -49,37 +82,6 @@ describe('cubebox api', () => {
 
     expect(fetchMock).toHaveBeenCalledWith(
       '/internal/cubebox/turns/turn_1:interrupt?conversation_id=conv_1',
-      expect.objectContaining({
-        method: 'POST',
-        credentials: 'include'
-      })
-    )
-  })
-
-  it('posts to the compact endpoint', async () => {
-    const fetchMock = vi.fn().mockResolvedValue({
-      ok: true,
-      json: vi.fn().mockResolvedValue({
-        conversation: { id: 'conv_1', title: 'Latest', status: 'active', archived: false },
-        event: {
-          event_id: 'evt_compact',
-          conversation_id: 'conv_1',
-          turn_id: null,
-          sequence: 5,
-          type: 'turn.context_compacted',
-          ts: '2026-04-22T00:00:00Z',
-          payload: { summary_id: 'summary_1', source_range: [1, 3] }
-        },
-        prompt_view: [],
-        next_sequence: 6
-      })
-    })
-    vi.stubGlobal('fetch', fetchMock)
-
-    await compactConversation('conv_1')
-
-    expect(fetchMock).toHaveBeenCalledWith(
-      '/internal/cubebox/conversations/conv_1:compact',
       expect.objectContaining({
         method: 'POST',
         credentials: 'include'

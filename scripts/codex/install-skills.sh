@@ -22,15 +22,15 @@ install_one() {
     echo "[codex-skill] destination is a directory; updating in-place (non-destructive): $dst" >&2
     cp -f "$src/SKILL.md" "$dst/SKILL.md"
     mkdir -p "$dst/scripts"
-    if [[ -f "$src/scripts/seed_kratosstub_identity.sh" ]]; then
-      cp -f "$src/scripts/seed_kratosstub_identity.sh" "$dst/scripts/seed_kratosstub_identity.sh"
+    if compgen -G "$src/scripts/*" >/dev/null; then
+      cp -f "$src"/scripts/* "$dst/scripts/"
     fi
   else
     ln -sfn "$src" "$dst"
   fi
 
-  if [[ -f "$src/scripts/seed_kratosstub_identity.sh" ]]; then
-    chmod +x "$src/scripts/seed_kratosstub_identity.sh" || true
+  if compgen -G "$src/scripts/*.sh" >/dev/null; then
+    chmod +x "$src"/scripts/*.sh || true
   fi
 
   echo "[codex-skill] installed: ${name} -> ${dst}"

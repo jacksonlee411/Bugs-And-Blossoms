@@ -272,14 +272,14 @@ WHERE tenant_uuid = $1::uuid AND conversation_id = $2 AND principal_id = $3::uui
 	return tx.Commit(ctx)
 }
 
-func (s *Store) CompactConversation(ctx context.Context, tenantID string, principalID string, conversationID string, canonicalContext CanonicalContext, reason string) (CompactConversationResponse, error) {
+func (s *Store) PrepareConversationPromptView(ctx context.Context, tenantID string, principalID string, conversationID string, canonicalContext CanonicalContext, reason string) (PromptViewPreparationResponse, error) {
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
-		return CompactConversationResponse{}, err
+		return PromptViewPreparationResponse{}, err
 	}
 	defer func() { _ = tx.Rollback(context.Background()) }()
 	if _, err := tx.Exec(ctx, `SELECT set_config('app.current_tenant', $1, true);`, tenantID); err != nil {
-		return CompactConversationResponse{}, err
+		return PromptViewPreparationResponse{}, err
 	}
 	q := cubeboxsqlc.New(tx)
 	current, err := q.GetConversation(ctx, cubeboxsqlc.GetConversationParams{
@@ -289,9 +289,9 @@ func (s *Store) CompactConversation(ctx context.Context, tenantID string, princi
 	})
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return CompactConversationResponse{}, ErrConversationNotFound
+			return PromptViewPreparationResponse{}, ErrConversationNotFound
 		}
-		return CompactConversationResponse{}, err
+		return PromptViewPreparationResponse{}, err
 	}
 	if _, err := tx.Exec(ctx, `
 SELECT conversation_id
@@ -299,54 +299,28 @@ FROM iam.cubebox_conversations
 WHERE tenant_uuid = $1::uuid AND conversation_id = $2 AND principal_id = $3::uuid
 FOR UPDATE
 `, tenantID, strings.TrimSpace(conversationID), principalID); err != nil {
-		return CompactConversationResponse{}, err
+		return PromptViewPreparationResponse{}, err
 	}
 	rows, err := q.ListConversationEvents(ctx, cubeboxsqlc.ListConversationEventsParams{
 		Column1:        uuidToPGType(tenantID),
 		ConversationID: strings.TrimSpace(conversationID),
 	})
 	if err != nil {
-		return CompactConversationResponse{}, err
+		return PromptViewPreparationResponse{}, err
 	}
 	next := nextSequence(rows)
-	result := BuildPromptViewWithCompaction(mapEvents(rows), canonicalContext, "")
-	if strings.TrimSpace(reason) != "" {
-		result.Reason = strings.TrimSpace(reason)
-	}
-
-	response := CompactConversationResponse{
+	response := PromptViewPreparationResponse{
 		Conversation: Conversation{
 			ID:       current.ConversationID,
 			Title:    current.Title,
 			Status:   current.Status,
 			Archived: current.Archived,
 		},
-		PromptView:   result.PromptView,
+		PromptView:   buildPromptViewForProvider(mapEvents(rows), canonicalContext, ""),
 		NextSequence: next,
 	}
-	if !result.Compacted {
-		if err := tx.Commit(ctx); err != nil {
-			return CompactConversationResponse{}, err
-		}
-		return response, nil
-	}
-
-	now := time.Now().UTC()
-	event := BuildCompactionEvent(conversationID, nil, next, now, result)
-	if err := appendEvent(ctx, q, tenantID, event, now); err != nil {
-		return CompactConversationResponse{}, err
-	}
-	if _, err := tx.Exec(ctx, `
-UPDATE iam.cubebox_conversations
-SET updated_at = $4
-WHERE tenant_uuid = $1::uuid AND conversation_id = $2 AND principal_id = $3::uuid
-`, tenantID, strings.TrimSpace(conversationID), principalID, now); err != nil {
-		return CompactConversationResponse{}, err
-	}
-	response.Event = &event
-	response.NextSequence = next + 1
 	if err := tx.Commit(ctx); err != nil {
-		return CompactConversationResponse{}, err
+		return PromptViewPreparationResponse{}, err
 	}
 	return response, nil
 }

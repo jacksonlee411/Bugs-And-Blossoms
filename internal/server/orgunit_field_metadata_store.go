@@ -868,14 +868,12 @@ WHERE ` + whereSQL
 		sortOrder = "ASC"
 	}
 
-	selectCols := `
+	selectCols := fmt.Sprintf(`
 SELECT
   c.org_code,
   v.name,
   v.status,
-  v.is_business_unit`
-	if parentOrgNodeKey != "" {
-		selectCols += fmt.Sprintf(`,
+  v.is_business_unit,
   EXISTS (
     SELECT 1
     FROM orgunit.org_unit_versions ch
@@ -885,7 +883,6 @@ SELECT
        AND ch.status = 'active'
      LIMIT 1
    ) AS has_children`, parentOrgNodeKeyCompatExpr("ch"), orgNodeKeyCompatExpr("v"))
-	}
 
 	listSQL := selectCols + `
 FROM orgunit.org_unit_versions v
@@ -912,17 +909,11 @@ ORDER BY ` + sortExpr + ` ` + sortOrder + `, c.org_code ASC`
 		item := orgUnitListItem{}
 		var status string
 		var isBusinessUnit bool
-		if parentOrgNodeKey != "" {
-			var hasChildren bool
-			if err := rows.Scan(&item.OrgCode, &item.Name, &status, &isBusinessUnit, &hasChildren); err != nil {
-				return nil, 0, err
-			}
-			item.HasChildren = &hasChildren
-		} else {
-			if err := rows.Scan(&item.OrgCode, &item.Name, &status, &isBusinessUnit); err != nil {
-				return nil, 0, err
-			}
+		var hasChildren bool
+		if err := rows.Scan(&item.OrgCode, &item.Name, &status, &isBusinessUnit, &hasChildren); err != nil {
+			return nil, 0, err
 		}
+		item.HasChildren = &hasChildren
 		if strings.TrimSpace(status) == "" {
 			status = orgUnitListStatusActive
 		}

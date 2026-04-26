@@ -10,6 +10,7 @@
 
 - Go 代码：`go fmt ./... && go vet ./... && make check lint && make test`
 - 新建 Go 模块后（防止 `go mod init` 默认回退）：执行 `go get go@1.26.0`（或 `go mod edit -go=1.26.0`）
+- 根目录 surface 收敛（禁止零散文件、调试快照、运行产物回流）：`make check root-surface`（或直接跑 `make preflight`）
 - 禁止 legacy（单链路原则）：`make check no-legacy`（或直接跑 `make preflight`）
 - 历史对话面清场门禁（阻断旧 `assistant` / `LibreChat` / `CubeBox` 运行面与兼容语义回流）：`make check chat-surface-clean`
 - 禁止新增 scope/package 漂移：`make check no-scope-package`
@@ -54,6 +55,7 @@
 | Authz（Casbin） | `make authz-pack && make authz-test && make authz-lint` | 口径见 `DEV-PLAN-022` |
 | E2E（Playwright） | `make e2e` | 门禁结构见 `DEV-PLAN-012`；数据库依赖口径冻结为 Docker / compose，E2E 不得把宿主机 `psql` 等工具作为唯一前置条件 |
 | 新增/调整文档 | `make check doc` | 门禁见“文档收敛与门禁” |
+| 根目录新增/移动文件或调整本地运行产物落点 | `make check root-surface` | 根目录只允许固定入口、配置与顶层目录；运行产物必须进入 `.local/` 或归属目录 |
 | 引入/修改“回退通道/双链路/legacy 分支” | `make check no-legacy` | 禁止 legacy（见 `DEV-PLAN-004M1`） |
 | 历史对话面 / 旧路由 / 旧兼容语义相关改动 | `make check chat-surface-clean` | 硬删除后唯一反回流门禁（见 `DEV-PLAN-436`） |
 | 新增 scope/package 语义引用（`scope_code/scope_package/scope_subscription/package_id`） | `make check no-scope-package` | 增量反漂移门禁（承接 `DEV-PLAN-102C6`） |
@@ -78,6 +80,8 @@
 
 - DO NOT USE `sed` 做文件内容修改。
 - 未经用户明确批准，禁止通过 `git checkout --` / `git restore` / `git reset` / `git clean` 丢弃或回退未提交改动。
+- 未经用户明确指示，禁止擅自执行 `git commit` / `git push` / 创建 PR；即使代码已完成，也必须先得到用户确认再提交。
+- 禁止在仓库根目录新增零散运行产物、调试快照、临时脚本输出或未知文件；本地运行产物必须归入 `.local/`、`e2e/_artifacts/`、`coverage/` 或明确归属模块目录，并由 `make check root-surface` 阻断回流；`.env`、`.local/`、`bin/`、`coverage/` 等本地项允许存在但不得入仓。
 - 新增数据库表（新建迁移中的 `CREATE TABLE` 或 schema 中新增表）前，必须获得用户手工确认。
 - `GITHUB_TOKEN` 等密钥只允许放在本机 `.env.local`，不得提交到仓库（CI 使用 GitHub Secrets）。
 
@@ -90,6 +94,12 @@
 ### 3.4 AI 驱动开发：简单而非容易（Simple > Easy）
 
 使用 AI 辅助时，优先追求“简单（Simple）”而不是“容易（Easy）”：先写清边界、不变量、失败路径与验收标准（建议以 dev-plan/Spec 固化），再实现；拒绝补丁式堆叠分支、复制粘贴与相似文件增殖；任何新抽象必须可在 5 分钟内解释清楚、具备可替换性，并能对应到明确的业务约束（评审清单见 `docs/dev-plans/003-simple-not-easy-review-guide.md`）。
+- 假设显性化：改动前必须说明关键假设；存在多种合理解释时，不得静默选择，应说明解释差异、风险和推荐路径；不确定会影响契约、数据、权限、迁移或用户入口时，先向用户澄清或先落 dev-plan。
+- 成功标准前置：非平凡任务开工前，必须把请求转为可验证目标；修 bug 先确认复现路径，加校验要有非法输入验证，重构要说明重构前后行为不变的验证入口。
+- 按请求收敛：没被要求的功能不写，没人要求的“灵活性”和“可配置”不加；发现有更简单的方案时，必须主动说明取舍，必要时推回原方案并请用户确认。
+- 抽象克制：只用一次的代码不建抽象层；只有当抽象消除真实重复、承载明确不变量或匹配既有边界时，才允许新增抽象。
+- 不为不可能场景做错误处理：若某场景已由上游不变量、类型/数据库约束、统一入口或门禁证明不可达，不得为其堆叠 fallback、防御性分支或兼容错误路径；应把不可达原因前移为约束、测试或断言。
+- 困惑时停下来就问：当需求、边界、数据语义或验收口径无法从用户请求与现有 SSOT 推导时，不得靠猜测继续实现；先提问澄清。存在多种理解时，必须列出选项让用户选择，而不是替用户做决定；尤其涉及契约、权限、租户、迁移、用户入口和删除行为时，必须先获得明确口径或形成 dev-plan。
 - 防止过度设计：不要把治理留痕、未来扩展、参数化预留、异步编排、对象级证据矩阵或调试 telemetry 提前写成首期范围、硬契约、硬验收或实现前置；若某复杂度不是当前不变量所必需，应默认后移到 P1/后续计划，而不是先纳入主方案。
 - 评审和实现时，必须主动识别过度设计信号：当前闭环未跑通却先加 capability/fallback/第二配置链；把 prompt/summary/DTO 规格化过重；先抽一整套接口和类型再寻找真实边界；把上游复用膨胀成流程性 companion contract。命中此类信号时，应按 `DEV-PLAN-003` 收敛范围、压缩抽象并降低验收重量。
 
@@ -190,7 +200,8 @@ modules/{module}/
 
 目标：防止文档熵增；新增文档必须可发现、可归类、可维护。
 
-- 仓库根目录禁止新增 `.md`（白名单：`AGENTS.md`）。
+- 仓库根目录禁止新增 Markdown 文档（大小写不敏感；白名单：`AGENTS.md`）。
+- 仓库根目录 surface 采用允许清单：只保留固定入口文件、工程配置与顶层目录；禁止根目录日志、pid、调试快照、临时脚本残片与异常文件名。门禁入口为 `make check root-surface`，并区分“本地可存在”与“允许入仓”的根路径。
 - 仓库级文档分类：
   - 计划/契约：`docs/dev-plans/`（遵循 `docs/dev-plans/000-docs-format.md`）
   - 证据/记录：`docs/dev-records/`（按 `DEV-PLAN-010` 的 readiness 要求固化证据）
@@ -200,6 +211,7 @@ modules/{module}/
   - 统一使用：`kebab-case.md`
 - 可发现性：新增仓库级活体文档（计划/规范/指南/runbook/索引）必须在本文件的“文档地图（Doc Map）”中新增链接；执行日志/Readiness 证据/过程性 `dev-record` 不逐条纳入 `AGENTS.md` 文档地图，应通过 `docs/dev-records/README.md`、`docs/archive/dev-records/README.md` 或对应计划文档的关联章节发现。
 - 门禁：`make check doc`（执行阶段由 CI 触发，仅在文档/资源变更时运行）。
+- 根目录 surface 门禁：`make check root-surface`（由 `make preflight` 与 CI Gate-1 执行）。
 
 ## 7. 文档地图（Doc Map）
 
@@ -246,6 +258,19 @@ modules/{module}/
 - DEV-PLAN-436：CubeBox 历史对话面彻底删除与仓面清场方案：`docs/dev-plans/436-cubebox-historical-surface-hard-delete-plan.md`
 - DEV-PLAN-437：CubeBox 实施路线图（快速开工版）：`docs/dev-plans/437-cubebox-implementation-roadmap-for-fast-start.md`
 - DEV-PLAN-437A：CubeBox Phase A 共享 Canonical Contract：`docs/dev-plans/437a-cubebox-phase-a-canonical-conversation-contract.md`
+- DEV-PLAN-460：CubeBox 数字助手定位与执行契约：`docs/dev-plans/460-cubebox-digital-assistant-positioning-and-execution-contract.md`
+- DEV-PLAN-461：CubeBox 查询场景最小契约：`docs/dev-plans/461-cubebox-query-scenarios-minimal-contract.md`
+- DEV-PLAN-462：CubeBox 借鉴 Codex 成熟压缩机制的统一收敛方案：`docs/dev-plans/462-cubebox-codex-compaction-adoption-value-and-unified-convergence-plan.md`
+- DEV-PLAN-463：CubeBox 组织树查询暴露的知识包驱动偏航调查与收敛方案：`docs/dev-plans/463-cubebox-orgunit-tree-discovery-gap-investigation-and-remediation-plan.md`
+- DEV-PLAN-464：CubeBox 查询链架构收敛与知识包运行时重构方案：`docs/dev-plans/464-cubebox-query-architecture-convergence-plan.md`
+- DEV-PLAN-465：CubeBox OrgUnit Executor 契约边界与字段归属收敛方案：`docs/dev-plans/465-cubebox-orgunit-executor-contract-boundary-and-field-owner-convergence-plan.md`
+- DEV-PLAN-466：CubeBox 查询链 owner 漂移与反回流扩大调查方案：`docs/dev-plans/466-cubebox-query-owner-drift-and-anti-backflow-investigation-plan.md`
+- DEV-PLAN-467：CubeBox 查询会话不连贯与失去记忆专项调查方案：`docs/dev-plans/467-cubebox-query-conversational-continuity-and-memory-loss-investigation-plan.md`
+- DEV-PLAN-468：CubeBox 同会话连续追问与模型自主性收敛方案：`docs/dev-plans/468-cubebox-session-continuity-and-model-autonomy-improvement-plan.md`
+- DEV-PLAN-468C：CubeBox 查询上下文事实窗口扩展方案：`docs/dev-plans/468c-cubebox-query-context-fact-window-plan.md`
+- DEV-PLAN-469：CubeBox 模型驱动会话压缩批判与重构方案：`docs/dev-plans/469-cubebox-model-driven-compaction-critical-redesign-plan.md`
+- DEV-PLAN-470：CubeBox `page_context` 当前范围剔除与清理方案：`docs/dev-plans/470-cubebox-page-context-scope-removal-and-cleanup-plan.md`
+- DEV-PLAN-471：CubeBox 同一 Turn 内模型驱动的迭代式只读规划方案：`docs/dev-plans/471-cubebox-intra-turn-iterative-read-planning-plan.md`
 - DEV-PLAN-440：彻底删除 SetID 的全仓收口方案（SetID 根删除唯一 PoR）：`docs/dev-plans/440-complete-setid-removal-plan.md`
 - DEV-PLAN-441：旧策略模块残余清理方案：`docs/dev-plans/441-legacy-strategy-module-residue-cleanup-plan.md`
 - DEV-PLAN-450：直接切除 jobcatalog / staffing / person 三模块方案（保留 orgunit）：`docs/dev-plans/450-direct-removal-of-jobcatalog-staffing-person-modules-plan.md`
