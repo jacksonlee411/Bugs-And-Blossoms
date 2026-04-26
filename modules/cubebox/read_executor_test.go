@@ -53,6 +53,67 @@ func TestExecutionRegistryRegisteredExecutorsReturnsSortedSnapshot(t *testing.T)
 	}
 }
 
+func TestExecutionRegistryProjectNarrationResultsUsesRawPayloadCopy(t *testing.T) {
+	registry, err := NewExecutionRegistry(
+		RegisteredExecutor{APIKey: "orgunit.details", Executor: readExecutorStub{}},
+	)
+	if err != nil {
+		t.Fatalf("NewExecutionRegistry err=%v", err)
+	}
+
+	source := map[string]any{
+		"org_unit": map[string]any{
+			"org_code": "100000",
+			"name":     "飞虫与鲜花",
+		},
+		"as_of": "2026-04-25",
+	}
+	results := registry.ProjectNarrationResults([]ExecuteResult{
+		{
+			APIKey:      "orgunit.details",
+			StepID:      "step-1",
+			Payload:     source,
+			ResultFocus: []string{"org_unit.name"},
+			ConfirmedEntity: &QueryEntity{
+				Domain:    "orgunit",
+				EntityKey: "100000",
+			},
+		},
+	})
+	if len(results) != 1 {
+		t.Fatalf("results=%d", len(results))
+	}
+	if results[0].Domain != "orgunit" {
+		t.Fatalf("domain=%q", results[0].Domain)
+	}
+	if results[0].Data == nil {
+		t.Fatal("expected narration data")
+	}
+	if _, ok := results[0].Data["org_unit"]; !ok {
+		t.Fatalf("expected raw payload field, got %+v", results[0].Data)
+	}
+	if got := results[0].Data["as_of"]; got != "2026-04-25" {
+		t.Fatalf("as_of=%v", got)
+	}
+	for _, forbidden := range []string{"api_key", "step_id", "result_focus", "confirmed_entity", "data_present"} {
+		if _, ok := results[0].Data[forbidden]; ok {
+			t.Fatalf("unexpected execution envelope field %q in narration data: %+v", forbidden, results[0].Data)
+		}
+	}
+	results[0].Data["as_of"] = "mutated"
+	if got := source["as_of"]; got != "2026-04-25" {
+		t.Fatalf("expected top-level narration data map to be copied, source as_of=%v", got)
+	}
+	source["org_unit"].(map[string]any)["name"] = "已更新"
+	if got := results[0].Data["org_unit"].(map[string]any)["name"]; got != "已更新" {
+		t.Fatalf("expected shallow copy to retain nested payload reference, got %v", got)
+	}
+	source["added_later"] = "should-not-appear"
+	if _, ok := results[0].Data["added_later"]; ok {
+		t.Fatalf("unexpected mutation leakage: %+v", results[0].Data)
+	}
+}
+
 func TestExecutionRegistryExecutePlan(t *testing.T) {
 	registry, err := NewExecutionRegistry(
 		RegisteredExecutor{

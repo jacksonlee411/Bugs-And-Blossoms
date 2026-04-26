@@ -114,7 +114,6 @@ func newCubeBoxOrgUnitRegisteredExecutors(store OrgUnitStore) ([]cubebox.Registe
 			Executor: cubeBoxOrgUnitDetailsExecutor{
 				store: detailsStore,
 			},
-			NarrationProjector: projectOrgUnitDetailsNarration,
 		})
 	}
 	items = append(items,
@@ -125,7 +124,6 @@ func newCubeBoxOrgUnitRegisteredExecutors(store OrgUnitStore) ([]cubebox.Registe
 			Executor: cubeBoxOrgUnitListExecutor{
 				store: store,
 			},
-			NarrationProjector: projectOrgUnitListNarration,
 		},
 		cubebox.RegisteredExecutor{
 			APIKey:         "orgunit.search",
@@ -134,7 +132,6 @@ func newCubeBoxOrgUnitRegisteredExecutors(store OrgUnitStore) ([]cubebox.Registe
 			Executor: cubeBoxOrgUnitSearchExecutor{
 				store: store,
 			},
-			NarrationProjector: projectOrgUnitSearchNarration,
 		},
 		cubebox.RegisteredExecutor{
 			APIKey:         "orgunit.audit",
@@ -143,7 +140,6 @@ func newCubeBoxOrgUnitRegisteredExecutors(store OrgUnitStore) ([]cubebox.Registe
 			Executor: cubeBoxOrgUnitAuditExecutor{
 				store: store,
 			},
-			NarrationProjector: projectOrgUnitAuditNarration,
 		},
 	)
 	return items, nil
@@ -511,136 +507,6 @@ func orgUnitListAnchor(params map[string]any) string {
 		return strings.TrimSpace(value)
 	}
 	return ""
-}
-
-func projectOrgUnitDetailsNarration(result cubebox.ExecuteResult) cubebox.QueryNarrationResult {
-	data := map[string]any{}
-	if asOf := strings.TrimSpace(stringValue(result.Payload["as_of"])); asOf != "" {
-		data["effective_date"] = asOf
-	}
-	if orgUnit, ok := result.Payload["org_unit"].(map[string]any); ok {
-		item := map[string]any{}
-		copyAllowedNarrationField(item, "code", orgUnit, "org_code")
-		copyAllowedNarrationField(item, "name", orgUnit, "name")
-		copyAllowedNarrationField(item, "status", orgUnit, "status")
-		copyAllowedNarrationField(item, "parent_name", orgUnit, "parent_name")
-		copyAllowedNarrationField(item, "parent_code", orgUnit, "parent_org_code")
-		copyAllowedNarrationField(item, "is_business_unit", orgUnit, "is_business_unit")
-		copyAllowedNarrationField(item, "manager_name", orgUnit, "manager_name")
-		copyAllowedNarrationField(item, "manager_employee_id", orgUnit, "manager_pernr")
-		copyAllowedNarrationField(item, "full_name_path", orgUnit, "full_name_path")
-		if len(item) > 0 {
-			data["entity"] = item
-		}
-	}
-	if extFields, ok := result.Payload["ext_fields"].([]any); ok {
-		items := make([]any, 0, len(extFields))
-		for _, raw := range extFields {
-			field, ok := raw.(map[string]any)
-			if !ok {
-				continue
-			}
-			item := map[string]any{}
-			copyAllowedNarrationField(item, "label", field, "label")
-			copyAllowedNarrationField(item, "field_key", field, "field_key")
-			copyAllowedNarrationField(item, "value", field, "value")
-			copyAllowedNarrationField(item, "display_value", field, "display_value")
-			if len(item) > 0 {
-				items = append(items, item)
-			}
-		}
-		data["attributes"] = items
-	}
-	return cubebox.QueryNarrationResult{Domain: "orgunit", Data: data}
-}
-
-func projectOrgUnitListNarration(result cubebox.ExecuteResult) cubebox.QueryNarrationResult {
-	data := map[string]any{}
-	if asOf := strings.TrimSpace(stringValue(result.Payload["as_of"])); asOf != "" {
-		data["effective_date"] = asOf
-	}
-	if includeDisabled, ok := result.Payload["include_disabled"].(bool); ok {
-		data["include_disabled"] = includeDisabled
-	}
-	if orgUnits, ok := result.Payload["org_units"].([]any); ok {
-		items := make([]any, 0, len(orgUnits))
-		for _, raw := range orgUnits {
-			itemMap, ok := raw.(map[string]any)
-			if !ok {
-				continue
-			}
-			item := map[string]any{}
-			copyAllowedNarrationField(item, "code", itemMap, "org_code")
-			copyAllowedNarrationField(item, "name", itemMap, "name")
-			copyAllowedNarrationField(item, "status", itemMap, "status")
-			copyAllowedNarrationField(item, "is_business_unit", itemMap, "is_business_unit")
-			copyAllowedNarrationField(item, "has_children", itemMap, "has_children")
-			if len(item) > 0 {
-				items = append(items, item)
-			}
-		}
-		data["items"] = items
-		data["item_count"] = len(items)
-	}
-	return cubebox.QueryNarrationResult{Domain: "orgunit", Data: data}
-}
-
-func projectOrgUnitSearchNarration(result cubebox.ExecuteResult) cubebox.QueryNarrationResult {
-	data := map[string]any{}
-	copyAllowedNarrationField(data, "query", result.Payload, "query")
-	copyAllowedNarrationField(data, "effective_date", result.Payload, "tree_as_of")
-	copyAllowedNarrationField(data, "matched_code", result.Payload, "target_org_code")
-	copyAllowedNarrationField(data, "matched_name", result.Payload, "target_name")
-	if path, ok := result.Payload["path_org_codes"].([]any); ok {
-		codes := make([]any, 0, len(path))
-		for _, raw := range path {
-			if code, ok := raw.(string); ok && strings.TrimSpace(code) != "" {
-				codes = append(codes, strings.TrimSpace(code))
-			}
-		}
-		data["path_codes"] = codes
-	}
-	return cubebox.QueryNarrationResult{Domain: "orgunit", Data: data}
-}
-
-func projectOrgUnitAuditNarration(result cubebox.ExecuteResult) cubebox.QueryNarrationResult {
-	data := map[string]any{}
-	copyAllowedNarrationField(data, "code", result.Payload, "org_code")
-	copyAllowedNarrationField(data, "limit", result.Payload, "limit")
-	copyAllowedNarrationField(data, "has_more", result.Payload, "has_more")
-	if events, ok := result.Payload["events"].([]any); ok {
-		items := make([]any, 0, len(events))
-		for _, raw := range events {
-			itemMap, ok := raw.(map[string]any)
-			if !ok {
-				continue
-			}
-			item := map[string]any{}
-			copyAllowedNarrationField(item, "event_type", itemMap, "event_type")
-			copyAllowedNarrationField(item, "effective_date", itemMap, "effective_date")
-			copyAllowedNarrationField(item, "tx_time", itemMap, "tx_time")
-			copyAllowedNarrationField(item, "initiator_name", itemMap, "initiator_name")
-			copyAllowedNarrationField(item, "reason", itemMap, "reason")
-			copyAllowedNarrationField(item, "is_rescinded", itemMap, "is_rescinded")
-			if len(item) > 0 {
-				items = append(items, item)
-			}
-		}
-		data["events"] = items
-		data["event_count"] = len(items)
-	}
-	return cubebox.QueryNarrationResult{Domain: "orgunit", Data: data}
-}
-
-func copyAllowedNarrationField(target map[string]any, targetKey string, source map[string]any, sourceKey string) {
-	if target == nil || len(source) == 0 {
-		return
-	}
-	value, ok := source[sourceKey]
-	if !ok || value == nil {
-		return
-	}
-	target[targetKey] = value
 }
 
 func normalizeOrgUnitCommonParams(raw map[string]any) (map[string]any, error) {

@@ -147,7 +147,7 @@ func TestValidateQueryNarrationTextRejectsInternalLeakage(t *testing.T) {
 		"```json\n{\"results\":[{\"payload\":{\"name\":\"飞虫与鲜花\"}}]}\n```",
 		"{\"results\":[{\"step_id\":\"step-1\",\"payload\":{\"org_unit\":{\"org_code\":\"100000\"}}}]}",
 		"step-1 调用了 orgunit.details，result_focus 是 org_unit.name。",
-		"内部参数 org_code：100000，as_of：2026-04-24。",
+		"请根据 params.org_code=100000 和 plan.steps[0] 继续执行。",
 	} {
 		if err := validateQueryNarrationText(text); !errors.Is(err, errCubeboxQueryNarrationContractViolation) {
 			t.Fatalf("expected contract violation for %q, got %v", text, err)
@@ -160,6 +160,7 @@ func TestValidateQueryNarrationTextAllowsNaturalLanguage(t *testing.T) {
 		"截至 2026-04-24，组织 100000 是“飞虫与鲜花”，当前为启用状态，属于业务单元。系统里暂未记录它的上级组织和负责人，也没有扩展字段。",
 		"组织 100000 在 2026-04-24 的详情如下：组织基本信息 - 名称：飞虫与鲜花；上级组织 - 未记录。",
 		"状态：启用；是否业务单元：是；负责人：未记录。",
+		"组织编码 100000\n生效日期 2026-04-25\n- 状态：启用\n- 上级组织：未记录",
 	} {
 		if err := validateQueryNarrationText(text); err != nil {
 			t.Fatalf("expected natural language to pass for %q, got %v", text, err)
@@ -388,7 +389,15 @@ func TestCubeboxProviderQueryNarratorBuildsStrictMessagesAndRejectsInternalLeaka
 		Prompt:   "查一下 100000 在 2026-04-24 的组织详情",
 		Results: []cubebox.QueryNarrationResult{{
 			Domain: "orgunit",
-			Data:   map[string]any{"entity": map[string]any{"code": "100000", "name": "飞虫与鲜花", "status": "active"}},
+			Data: map[string]any{
+				"org_unit": map[string]any{
+					"org_code":       "100000",
+					"name":           "飞虫与鲜花",
+					"status":         "active",
+					"parent_org_code": "ROOT",
+				},
+				"as_of": "2026-04-24",
+			},
 		}},
 		QueryContext: cubebox.QueryContext{
 			ResolvedEntity: &cubebox.QueryEntity{
@@ -419,12 +428,24 @@ func TestCubeboxProviderQueryNarratorBuildsStrictMessagesAndRejectsInternalLeaka
 	if !strings.Contains(systemPrompt, "不得逐字回显整份原始 JSON") {
 		t.Fatalf("expected strict narrator prompt, got %q", systemPrompt)
 	}
+	for _, snippet := range []string{
+		"可以是短答、分段、小标题或列表",
+		"params.org_code",
+		"plan.steps",
+	} {
+		if !strings.Contains(systemPrompt, snippet) {
+			t.Fatalf("expected narrator prompt to contain %q, got %q", snippet, systemPrompt)
+		}
+	}
 	body := adapter.lastRequest.Messages[1].Content
 	for _, snippet := range []string{
 		`"dialogue_context"`,
 		`"page_context"`,
 		`"entity_key":"100000"`,
 		`"as_of":"2026-04-24"`,
+		`"org_unit"`,
+		`"org_code":"100000"`,
+		`"parent_org_code":"ROOT"`,
 	} {
 		if !strings.Contains(body, snippet) {
 			t.Fatalf("expected narrator body to contain %q, got %q", snippet, body)
@@ -439,7 +460,6 @@ func TestCubeboxProviderQueryNarratorBuildsStrictMessagesAndRejectsInternalLeaka
 		`"executor_key"`,
 		`"source_api_key"`,
 		`"target_org_code"`,
-		`"parent_org_code"`,
 	} {
 		if strings.Contains(body, forbidden) {
 			t.Fatalf("expected narrator body to omit raw execution envelope %q, got %q", forbidden, body)

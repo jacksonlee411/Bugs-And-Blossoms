@@ -45,7 +45,6 @@ type RegisteredExecutor struct {
 	RequiredParams     []string
 	OptionalParams     []string
 	Executor           ReadExecutor
-	NarrationProjector func(ExecuteResult) QueryNarrationResult
 }
 
 type ExecutionRegistry struct {
@@ -110,11 +109,6 @@ func (r *ExecutionRegistry) RegisteredExecutors() []RegisteredExecutor {
 func (r *ExecutionRegistry) ProjectNarrationResults(results []ExecuteResult) []QueryNarrationResult {
 	out := make([]QueryNarrationResult, 0, len(results))
 	for _, result := range results {
-		item, ok := r.Resolve(result.APIKey)
-		if ok && item.NarrationProjector != nil {
-			out = append(out, normalizeQueryNarrationResult(item.NarrationProjector(result), result))
-			continue
-		}
 		out = append(out, defaultQueryNarrationResult(result))
 	}
 	return out
@@ -235,9 +229,20 @@ func defaultQueryNarrationResult(result ExecuteResult) QueryNarrationResult {
 		Domain: queryNarrationDomainForResult(result),
 	}
 	if len(result.Payload) > 0 {
-		view.Data = map[string]any{"data_present": true}
+		view.Data = copyQueryNarrationPayload(result.Payload)
 	}
 	return view
+}
+
+func copyQueryNarrationPayload(source map[string]any) map[string]any {
+	if len(source) == 0 {
+		return nil
+	}
+	target := make(map[string]any, len(source))
+	for key, value := range source {
+		target[key] = value
+	}
+	return target
 }
 
 func queryNarrationDomainForResult(result ExecuteResult) string {

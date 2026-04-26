@@ -154,7 +154,7 @@ var queryNarrationForbiddenPatterns = []*regexp.Regexp{
 	regexp.MustCompile(`(?i)\bstep-\d+\b`),
 	regexp.MustCompile(`(?i)\b(api_key|result_focus|payload|results)\b`),
 	regexp.MustCompile(`(?i)\b(plan|steps|params|depends_on|explain_focus|missing_params|clarifying_question)\s*["'：:=]`),
-	regexp.MustCompile(`(?i)\b(org_code|parent_org_code|as_of|include_disabled|ext_fields)\s*["'：:=]`),
+	regexp.MustCompile(`(?i)\b(plan|steps|params|depends_on|explain_focus|missing_params|clarifying_question)(\.[A-Za-z0-9_-]+|\[[0-9]+\])+`),
 }
 
 func newCubeboxQueryFlow(
@@ -648,9 +648,9 @@ func buildQueryNarrationMessages(body string) []cubebox.PromptItem {
 
 回答方式：
 - 直接回答用户问题，先给结论，再补充最相关事实。
-- 默认使用 1 到 3 句自然中文；只有结果本身是多个对象时，才允许用极短列表列出关键项。
+- 根据用户问题和结果内容选择合适的表达结构；可以是短答、分段、小标题或列表。
 - 把枚举、布尔和空值翻译成自然中文，例如 active=启用、disabled=停用、true=是、false=否、null/空字符串/空列表=未记录或没有。
-- 对单个实体详情，优先用完整句子归纳；如用户需要对比或明细，也可以使用简短列表。
+- 对单个实体详情，优先直接回答并补充关键事实；如用户需要对比、审计或明细，可以展开说明。
 - 如果输入里带有轻量对话上下文，可用它解释“刚才那个/继续查”的衔接关系，但不得把上下文当成新的业务事实源。
 - 如果某些字段为空，只在和用户问题相关时用一句话说明“未记录……”，不要机械逐项写“空”。
 
@@ -661,7 +661,7 @@ func buildQueryNarrationMessages(body string) []cubebox.PromptItem {
 - 不得补做新的查询、推断新的默认值、追加新的澄清问题。
 - 不得输出 Markdown 代码块。
 - 不得逐字回显整份原始 JSON。
-- 不得暴露实现细节或计划执行痕迹；不要出现“step-1”“api_key”“result_focus”“org_code”“parent_org_code”“as_of”“include_disabled”“ext_fields”“payload”“results”“executor_key”等内部字段或结构名。
+- 不得暴露实现细节或计划执行痕迹；不要出现“step-1”“api_key”“result_focus”“payload”“results”“executor_key”“params.org_code”“plan.steps”这类内部字段路径或执行结构名。
 - 若结果不足以支持更强结论，只能如实说明。
 - 输出纯文本，直接作为用户可见最终回复。
 
