@@ -1,57 +1,72 @@
-# DEV-PLAN-471：CubeBox 同一 Turn 内模型驱动的迭代式只读规划方案
+# DEV-PLAN-471：CubeBox 借鉴 Codex Agent Loop 的同一 Turn 内迭代式只读编排方案
 
-**状态**: 规划中（2026-04-26 09:32 CST）
+**状态**: 规划中（2026-04-26 10:52 CST）
 
 ## 0. 适用范围与评审分级
 
 - **评审分级**：`T2`
-- **范围一句话**：在不新增 `orgunit` 专用只读 API、不引入业务 DSL、也不在共享 query flow 中硬编码业务分支的前提下，把当前“一次 planner -> 一次 execute -> narrator”收敛为“同一用户 turn 内可进行多次 planner-executor-planner 小循环，最后再 narrator”的通用编排主链。
-- **关联模块/目录**：`internal/server/cubebox_query_flow.go`、`modules/cubebox/read_plan.go`、`modules/cubebox/read_executor.go`、`modules/cubebox/query_entity.go`、`modules/orgunit/presentation/cubebox`、`docs/dev-records/DEV-PLAN-468-READINESS.md`
+- **范围一句话**：借鉴 Codex 的“模型 -> 工具执行 -> observation 回灌 -> 模型继续规划 -> 最终回答”agent loop，把 CubeBox 当前“一次 planner -> 一次 execute -> narrator”收敛为“同一用户 turn 内有限次只读 planner/executor 小循环，最后统一 narrator”的查询编排主链。
+- **关联模块/目录**：`internal/server/cubebox_query_flow.go`、`modules/cubebox/read_plan.go`、`modules/cubebox/read_executor.go`、`modules/cubebox/query_entity.go`、`modules/orgunit/presentation/cubebox`、`third_party/openai-codex`、`docs/dev-records/DEV-PLAN-471-READINESS.md`
 - **关联计划/标准**：`AGENTS.md`、`DEV-PLAN-003`、`DEV-PLAN-012`、`DEV-PLAN-430`、`DEV-PLAN-460`、`DEV-PLAN-461`、`DEV-PLAN-463`、`DEV-PLAN-468`、`DEV-PLAN-468C`、`DEV-PLAN-470`
 - **用户入口/触点**：`/internal/cubebox/turns:stream`、CubeBox 页面同一会话内的查询型 turn
 
 ### 0.1 Simple > Easy 三问
 
-1. **边界**：模型负责“理解当前结果是否足以继续查、下一步该调用哪个已登记只读 API”；本地代码负责“在同一 turn 内按预算反复调用 planner 与 executor，并把已执行结果以结构化事实回灌给模型”；`orgunit` executor 继续只负责单次读，不承接业务编排。
-2. **不变量**：不新增第二套查询 endpoint；不新增 capability-specific 编排分支；不新增业务 DSL；不绕过执行注册表、租户、权限与参数校验；最终用户可见回答仍只在所有小循环结束后由 narrator 输出。
-3. **可解释**：reviewer 必须能在 5 分钟内说明三件事：为什么 `468C` 的单次前序引用不足以支撑“先查、再看结果、再决定继续查”的问题；为什么本计划不需要新增 `orgunit` API；为什么“多次小计划循环”比“扩张单次大 ReadPlan”更简单。
+1. **边界**：模型负责理解当前目标、观察只读结果、决定下一次已登记只读 API 调用或声明查询完成；本地代码负责循环调度、工具目录供给、只读执行、observation 构造、预算/去重/权限/参数校验和最终 narrator 调用。
+2. **不变量**：不新增第二套查询 endpoint；不新增 `orgunit` 专用读 API；不引入业务 DSL、JSONPath、脚本求值器、DAG/workflow engine 或 capability-specific 编排分支；不绕过执行注册表、租户、权限与参数校验；最终用户可见回答只由 narrator 在循环结束后输出一次。
+3. **可解释**：reviewer 必须能在 5 分钟内说明：Codex agent loop 的哪部分被借鉴；为什么 `working_results` 等价于只读工具 observation 而不是长期记忆；为什么需要明确 `DONE` 终止态；为什么多次小 `ReadPlan` 比扩张单次大计划更简单。
 
-### 0.2 现状研究摘要
+### 0.2 Codex 对标结论
 
-- **现状实现**：
-  - 当前 `cubeboxQueryFlow.TryHandle(...)` 只做一次 `ProduceReadPlan(...)`、一次 `ExecutionRegistry.ExecutePlan(...)`，随后直接 `NarrateQueryResult(...)`。
-  - planner 已可消费 `knowledge packs + query_dialogue_context`，并已具备 `468C` 的前序 step 结果字段引用能力。
-  - executor 已支持线性 `ReadPlan`、前序结果字段引用、参数白名单与 fail-closed 执行。
-- **现状约束**：
-  - `ReadPlan` 仍是单次产物；planner 当前看不到“本 turn 已执行的小步骤结果”。
-  - query context / recent candidates 对列表结果的保留是有损的，`orgunit.list` 的 `has_children` 未沉淀到可复用事实窗口。
-  - `page_context` 已裁决为当前范围外，不能作为本计划的补参或再规划输入来源。
-- **最容易出错的位置**：
-  - 把“多次小计划循环”误做成新 DSL 或 capability-specific 解释器
-  - 把当前 turn 的工作结果误写成会话长期事实，污染后续 turns
-  - narrator 提前介入，导致模型在中途输出半成品用户可见回答
-  - 未加预算导致 planner/executor 循环失控
-- **本次不沿用的“容易做法”**：
-  - 在共享 query flow 中写死“有下级的下级组织”专门分支
-  - 给 `orgunit` 新增专用孙级/递归查询 API
-  - 为多次执行引入业务 DSL、循环表达式或 JSONPath
+- **借鉴对象**：`openai/codex` 的核心 agent loop。其模式不是一次性生成完整计划，而是在同一个 turn 内反复执行：
+  1. 构造模型输入
+  2. 模型输出工具调用或最终消息
+  3. 本地执行工具调用
+  4. 将工具结果作为 observation 写回下一次模型输入
+  5. 直到模型不再请求工具并给出最终输出
+- **本计划只借鉴的部分**：
+  - loop 是一等运行时，由代码负责预算、状态推进和工具结果回灌
+  - 工具目录由本地注册表约束，模型只能选择已登记能力
+  - 工具 observation 进入下一次模型调用，驱动模型“看结果再规划”
+  - 最终用户可见输出与中间工具 observation 分离
+- **本计划不借鉴的部分**：
+  - 不建设开放式 agent/tool 平台
+  - 不允许模型访问 shell、文件系统、数据库或任意 HTTP 工具
+  - 不引入并发 subagent、DAG 调度、workflow engine、通用函数调用市场
+  - 不把模型输出当作授权来源或执行事实源
+- **本地参考源码落点**：`third_party/openai-codex`。该目录仅作为源码学习参考，不得成为运行时依赖，不纳入 Go import、不参与 CubeBox 构建链路。
+- **本地对标阅读路径**：
+  - `third_party/openai-codex/codex-rs/core/src/session/turn.rs`：`run_turn(...)` 持有同一 turn 内的模型调用循环，并依据 `needs_follow_up` 决定是否继续 sampling。
+  - `third_party/openai-codex/codex-rs/core/src/stream_events_utils.rs`：`handle_output_item_done(...)` 将模型输出解析为工具调用、执行工具，并把工具结果标记为需要后续模型调用。
+  - `third_party/openai-codex/codex-rs/core/src/tools/router.rs`：`ToolRouter` 从本地配置构造可用工具集合，并把模型输出路由到受控工具处理器。
+  - `third_party/openai-codex/codex-rs/core/src/context_manager/history.rs` 与 `context_manager/normalize.rs`：维护历史项、token 估算、工具调用输出配对与孤儿输出清理。
+  - `third_party/openai-codex/codex-rs/core/src/compact.rs` 与 `compact_remote.rs`：在上下文预算压力下执行本地/远端 compaction，并替换 active history。
 
-## 1. 背景与上下文（Context）
+### 0.3 现状研究摘要
 
-- **需求来源**：针对“把那些有下级的下级组织的下级组织列出来”这类查询，用户明确要求通过模型理解与自动编排已有能力解决，而不是新增业务 API 或 DSL。
-- **当前痛点**：
-  - `468C` 只解决“单次 ReadPlan 内，后一步引用前一步结果字段”的线性接力。
-  - 像“先查一批直接下级，再根据结果中的 `has_children` 决定下一步要不要继续查哪些组织”的问题，本质上需要“执行一步 -> 观察结果 -> 再规划一步”。
-  - 当前系统在同一 turn 内没有这种模型再入能力。
-- **业务价值**：
-  - 让 CubeBox 在不扩张业务 API 表面的前提下，利用模型编排已有只读能力完成更复杂的查询分解。
-  - 提升查询能力上限，同时保持 `orgunit` 等业务模块边界稳定。
-- **仓库级约束**：
-  - 继续复用现有只读执行注册表与知识包
-  - 不引入第二套查询事实源
-  - 不放松执行白名单、参数校验、租户与授权边界
+- 当前 `cubeboxQueryFlow.TryHandle(...)` 只做一次 `ProduceReadPlan(...)`、一次 `ExecutionRegistry.ExecutePlan(...)`，随后直接 `NarrateQueryResult(...)`。
+- planner 已可消费 `knowledge packs + query_dialogue_context`，并已具备 `468C` 的前序 step 结果字段引用能力。
+- executor 已支持线性 `ReadPlan`、前序结果字段引用、参数白名单与 fail-closed 执行。
+- `ReadPlan` 仍是单次产物；planner 当前看不到本 turn 已执行的小步骤结果。
+- query context / recent candidates 面向跨 turn 连续性，不应承接本 turn 内临时工作态。
+- `orgunit.list` 已返回 `org_units[].has_children`；当前缺口不是业务 API，而是同一 turn 内的 observation 回灌与再规划。
 
-### 1.1 原始失败案例（Case）
+### 0.4 最容易出错的位置
+
+- 把 Codex 借鉴误做成开放式工具平台
+- 用 `NO_QUERY` 同时表达“不支持查询域”和“已有结果足够”，导致状态混淆
+- 把 `working_results` 写入长期 canonical events，污染后续 turn
+- 把当前 turn 的 observation 设计成业务 DSL、JSONPath 或 capability-specific 解释器
+- 未加预算、去重和重复查询检测，导致 planner/executor 循环失控
+- narrator 中途介入并输出半成品用户可见回答
+
+## 1. 背景与问题
+
+### 1.1 需求来源
+
+针对“把那些有下级的下级组织的下级组织列出来”这类查询，用户明确要求通过模型理解与自动编排已有能力解决，而不是新增业务 API、DSL 或本地业务分支。
+
+### 1.2 原始失败案例
 
 - **原始多轮输入**：
   1. `查一下 100000 在 2026-04-25 的组织详情`
@@ -62,45 +77,46 @@
 - **用户真实意图**：
   - 第二句中的“它”指向上一轮已查到的组织 `100000`
   - 系统应先查出该组织在 `2026-04-25` 的直接下级组织
-  - 再从直接下级中识别哪些组织仍有下级（例如 `has_children=true`）
+  - 再从直接下级中识别哪些组织仍有下级，例如 `has_children=true`
   - 再分别查出这些组织的各自下级组织
   - 最后把这些“有下级的直接下级组织”的下级组织汇总为最终回答
-- **该案例暴露的问题本质**：
-  - 问题不在 `orgunit` 缺少 `details / list / search / audit` 之外的新只读接口
-  - 问题也不应通过 capability-specific 硬编码分支或 DSL 解决
-  - 真正缺口是 query flow 缺少“先执行一步、观察结果、再决定下一步”的同一 turn 内迭代式编排能力
-- **对应的更清晰单句表达**：
-  - `把那些有下级的下级组织的下级组织列出来`
+- **本质缺口**：
+  - `468C` 的线性前序引用适合“先 search 唯一命中，再 details/list”的已知链路
+  - 本案例要求“执行一步 -> 观察结果 -> 根据结果决定下一步”
+  - 因此需要同一 turn 内的模型再入循环，而不是单次大 `ReadPlan`
 
-## 2. 目标与非目标（Goals & Non-Goals）
+## 2. 目标与非目标
 
 ### 2.1 核心目标
 
-- [ ] 将当前 query flow 从“单次 planner-executor”升级为“同一用户 turn 内的有限次 planner-executor-planner 循环”。
-- [ ] 每次小循环都只允许模型输出现有合法 `ReadPlan`；不得引入新的计划语言、脚本语言或业务 DSL。
-- [ ] 将当前 turn 的已执行结果以稳定结构化块 `working_results` 回灌给 planner，使模型能基于最新结果决定是否继续查询。
-- [ ] 保持 narrator 只在所有小循环完成后执行一次，避免中间阶段产出半成品用户可见回答。
-- [ ] 通过预算、迭代上限与 fail-closed stopline 保证该循环不会失控。
+- [ ] 将当前 query flow 从“单次 planner-executor”升级为“同一用户 turn 内有限次 planner-executor-planner loop”。
+- [ ] 每次小循环只允许模型输出合法小 `ReadPlan` 或冻结的循环控制态；不得引入新业务计划语言。
+- [ ] 将当前 turn 的已执行结果整理成稳定结构化 `working_results`，作为下一次 planner 输入中的 tool observation。
+- [ ] 增加明确的 planner 终止协议：`READ_PLAN`、`CLARIFY`、`DONE`、`NO_QUERY`。
+- [ ] 保持 narrator 只在 `DONE` 或单轮执行后确认足够时调用一次，避免中间阶段产出半成品用户可见回答。
+- [ ] 通过 `max_planning_rounds`、`max_executed_steps`、`max_working_result_items`、重复查询检测与 fail-closed stopline 保证循环不会失控。
+- [ ] 对 P0 案例支持串行 fanout：当多个直接下级 `has_children=true` 时，允许 planner 在预算内分批或逐个继续查其下级。
 
-### 2.2 非目标（Out of Scope）
+### 2.2 非目标
 
 - 不新增 `orgunit` / 其他业务模块的专用只读 API、递归 API、孙级 API。
-- 不引入通用 DSL、JSONPath、表达式求值器、脚本执行器或 capability-specific mini language。
+- 不引入通用 DSL、JSONPath、表达式求值器、脚本执行器、DAG planner、workflow engine 或 capability-specific mini language。
 - 不恢复或扩张 `page_context` 作为本计划的编排输入。
 - 不在 query flow 中写业务专用 `if prompt contains ...` 分支。
 - 不在本计划内处理跨 turn 长期记忆、会话压缩摘要、remote compact 或模型摘要恢复。
+- 不引入并发工具执行；P0 只做串行循环。
 
 ### 2.3 用户可见性交付
 
 - **用户可见入口**：CubeBox 查询型对话；仍由 `/internal/cubebox/turns:stream` 承接。
 - **最小可操作闭环**：用户在单条问题中提出“需要先查一层结果、再根据结果决定是否继续查”的查询时，系统可在同一 turn 内自动完成多次只读编排，并直接给出最终答案。
 - **本期最小验收样例**：
-  - `查一下 100000 在 2026-04-25 的组织详情`
-  - `把那些有下级的下级组织的下级组织列出来`
+  - 先问：`查一下 100000 在 2026-04-25 的组织详情`
+  - 再问：`把那些有下级的下级组织的下级组织列出来`
 
-## 2.4 工具链与门禁（SSOT 引用）
+## 3. 工具链与门禁
 
-- **命中触发器（勾选）**：
+- **命中触发器**：
   - [X] Go 代码
   - [ ] `apps/web/**` / presentation assets / 生成物
   - [ ] i18n（仅 `en/zh`）
@@ -111,7 +127,7 @@
   - [ ] Authz（Casbin）
   - [ ] E2E
   - [X] 文档 / readiness / 证据记录
-  - [X] 其他专项门禁：`error-message`
+  - [X] 其他专项门禁：`error-message`、`root-surface`
 
 - **本次引用的 SSOT**：
   - `AGENTS.md`
@@ -124,162 +140,296 @@
   - `docs/dev-plans/468-cubebox-session-continuity-and-model-autonomy-improvement-plan.md`
   - `docs/dev-plans/468c-cubebox-query-context-fact-window-plan.md`
   - `docs/dev-plans/470-cubebox-page-context-scope-removal-and-cleanup-plan.md`
+  - `third_party/openai-codex`
   - `Makefile`
 
-## 2.5 测试设计与分层
+## 4. 架构方案
 
-| 层级 | 本计划承接内容 | 代表对象/文件 | 说明 |
-| --- | --- | --- | --- |
-| `modules/cubebox` | 小循环状态推进、working_results 注入、迭代预算、结果回灌 | `modules/cubebox/*_test.go` | 优先纯逻辑与编排层黑盒测试 |
-| `internal/server` | `cubebox_query_flow` 的 turn 内循环、错误映射、SSE 事件顺序 | `internal/server/cubebox_query_flow_test.go`、`internal/server/cubebox_api_test.go` | 只测 query flow 组合层 |
-| `E2E` | 浏览器真实对话复验 | `docs/dev-records/DEV-PLAN-471-READINESS.md` | 先以 readiness 证据承接，必要时后补自动化 |
+### 4.1 Codex Loop 到 CubeBox Query Loop 的映射
 
-- **黑盒 / 白盒策略**：
-  - `working_results` 构造、迭代预算、停止条件等优先黑盒测试
-  - 白盒测试仅用于断言事件顺序或内部回灌结构无法通过黑盒稳定观察时使用
+| Codex agent loop 概念 | CubeBox 471 对应物 | 说明 |
+| --- | --- | --- |
+| Model reasoning | query planner | 只负责选择已登记只读 API 或声明完成/澄清/不支持 |
+| Tool schema/catalog | `ExecutionRegistry` 生成的 `read_api_catalog` + knowledge packs | 注册表是执行事实源，知识包解释业务语义 |
+| Tool call | 小 `ReadPlan` | 每轮仍是现有合法线性 ReadPlan |
+| Tool execution | `ExecutionRegistry.ExecutePlan(...)` | 保持租户、权限、参数白名单和 executor 校验 |
+| Tool observation | `working_results` | 当前 turn 内临时结构化事实，不入长期事件 |
+| Final assistant message | narrator 输出 | 只在 loop 完成后输出一次 |
 
-## 3. 架构与关键决策（Architecture & Decisions）
-
-### 3.1 5 分钟主流程
+### 4.2 主流程
 
 ```mermaid
-flowchart LR
-  U[User Prompt] --> P[Planner]
-  P --> E[Execute Small ReadPlan]
-  E --> W[working_results]
-  W --> P
-  P -->|done| N[Narrator]
+flowchart TD
+  U[User Prompt] --> C[Build planner input]
+  C --> P[Planner]
+  P -->|READ_PLAN| E[Execute small ReadPlan]
+  E --> O[Build working_results observation]
+  O --> C
+  P -->|DONE| N[Narrator once]
+  P -->|CLARIFY| Q[Clarification terminal]
+  P -->|NO_QUERY before execution| X[No-query stopline]
+  P -->|NO_QUERY after execution| B[Boundary violation stopline]
+  C -->|budget exceeded| S[Fail-closed stopline]
   N --> R[Final Reply]
 ```
 
-- **主流程叙事**：
-  - query flow 接收用户 prompt 后，先像现在一样构造 `knowledge packs + query_dialogue_context`。
-  - planner 输出一个普通小 `ReadPlan`。
-  - executor 执行该小 `ReadPlan`，得到结构化结果。
-  - query flow 将“本 turn 已执行的小步骤结果”整理成 `working_results`，再次调用 planner。
-  - planner 可以决定：
-    - 继续输出下一个普通小 `ReadPlan`
-    - 或停止继续查询，进入 narrator
-    - 或给出澄清
-  - 所有小循环结束后，统一把累计结果交给 narrator 输出最终中文回答。
-- **失败路径叙事**：
-  - 任意小计划若不合法，立即 fail-closed。
-  - 任意 step 执行失败，沿用现有候选澄清 / invalid_request / not_found 等终端错误映射。
-  - 若超过预算、循环次数上限或 planner 一直不收敛，输出统一 stopline。
-- **恢复叙事**：
-  - 不落长期工作状态；失败后不污染后续 turn。
-  - 用户可在下一条消息中继续追问，继续依赖 canonical events 与 `query_dialogue_context`。
+### 4.3 Planner 控制态
 
-### 3.2 模块归属与职责边界
+当前 `ReadPlan` schema 不应被扩成业务 DSL，但 loop 需要一个薄控制 envelope。P0 冻结以下 planner outcome：
 
-- **owner module**：共享 query orchestration owner 为 `internal/server/cubebox_query_flow.go`；`modules/cubebox` 继续承担读计划结构、执行注册表与结果引用；`modules/orgunit/presentation/cubebox` 只承接知识包样例和提示规则。
-- **交付面**：`internal/server` + `modules/cubebox` + `docs/dev-plans` / `docs/dev-records`
-- **跨模块交互方式**：继续通过已登记 `api_key -> executor` 执行，不新增跨模块 Go import 扩散
-- **组合根落点**：query orchestration 仍在 `internal/server`；不得把循环编排逻辑散落到各业务 executor
+1. `READ_PLAN`
+   - 表示本轮需要执行一个合法小 `ReadPlan`
+   - 兼容现状：模型直接输出 `ReadPlan JSON` 时等价于 `READ_PLAN`
+2. `CLARIFY`
+   - 表示缺少必要参数或候选不可静默选择
+   - 兼容现状：带 `missing_params + clarifying_question` 且无 `steps` 的 `ReadPlan`
+3. `DONE`
+   - 表示 planner 已看到足够 `working_results`，可以进入 narrator
+   - 推荐模型输出严格字面量 `DONE`
+   - 只允许在至少执行过一次只读计划后出现
+4. `NO_QUERY`
+   - 只表示用户请求不属于当前知识包支持的查询域
+   - 仅允许在尚未执行任何查询时作为普通 no-query stopline
+   - 若已执行过查询后又返回 `NO_QUERY`，视为 planner 边界错误，fail-closed；不能把 `NO_QUERY` 当完成态
 
-### 3.3 ADR 摘要
+### 4.4 Planner 输入结构
 
-- **决策 1**：采用“同一 turn 内多次小计划循环”，而不是扩张单次大 `ReadPlan`
-  - **备选 A**：新增业务递归/孙级 API
-  - **备选 B**：给模型新增 DSL / fanout 计划语言
-  - **选定理由**：复用已有业务能力，保持业务模块边界不变；模型继续负责编排，代码只做调度，不额外发明语义层
+每次 planner 调用都包含：
 
-- **决策 2**：`working_results` 作为当前 turn 内的临时工作事实，而不是并入长期 `query_dialogue_context`
-  - **备选 A**：把本 turn 中间结果直接写成长期 canonical event 再回放给 planner
-  - **备选 B**：让 narrator 中途输出阶段性结果再由模型继续读
-  - **选定理由**：当前 turn 的工作状态不应污染长期会话事实；中途输出用户可见半成品会破坏 query flow 单终态叙述
+1. 静态 planner system prompt
+2. knowledge packs
+3. 由 `ExecutionRegistry` 派生的 `read_api_catalog`
+4. `query_dialogue_context`
+5. 当前用户原始 prompt
+6. 当前 turn 内 `working_results`
 
-- **决策 3**：继续复用 `468C` 的前序字段引用能力，但不要求模型在一张大计划里预写完整链路
-  - **备选 A**：要求模型一次生成完整多步大计划
-  - **选定理由**：像“先看结果再决定下一步”这类问题天然适合分阶段规划；把未知后续强塞进单次计划只会诱导 planner 幻觉或非法参数
+`read_api_catalog` 是代码从注册表生成的最小执行事实：
 
-### 3.4 Simple > Easy 自评
+```json
+{
+  "read_api_catalog": [
+    {
+      "api_key": "orgunit.list",
+      "required_params": ["as_of"],
+      "optional_params": ["include_disabled", "parent_org_code", "keyword", "status", "page", "size"]
+    }
+  ]
+}
+```
 
-- **这次保持简单的关键点**：
-  - 不扩张业务 API
-  - 不引入计划 DSL
-  - 不把业务编排塞进 executor
-  - 不把当前 turn 的工作结果写成长期事实
-- **明确拒绝的“容易做法”**：
-  - [X] legacy alias / 双链路 / fallback
-  - [X] 第二写入口 / controller 直写表
-  - [X] 页面内自造第二套 object/action/capability 拼装
-  - [X] capability-specific 编排分支
-  - [X] 继续扩 `ReadPlan` 为业务 DSL
+知识包仍负责解释字段语义、默认策略、案例与安全边界；注册表目录负责告诉模型“当前真实可执行工具是什么”。
 
-## 4. 数据模型、状态模型与约束（Data / State Model & Constraints）
+### 4.5 `working_results` 最小契约
 
-### 4.1 状态模型
+`working_results` 是当前 turn 内的 tool observation，只存在于 `TryHandle(...)` 生命周期内。
 
-- **长期会话事实**：继续由 canonical events -> `query_dialogue_context` 承接
-- **当前 turn 工作事实**：新增 `working_results` 概念，仅在本次 `TryHandle(...)` 生命周期内存在，不入长期事件流
-- **最终用户可见结果**：仅 narrator 最终输出
+```json
+{
+  "working_results": {
+    "round_index": 2,
+    "original_user_goal": "把那些有下级的下级组织的下级组织列出来",
+    "completed_plans": [
+      {
+        "round": 1,
+        "intent": "orgunit.list",
+        "steps": [
+          {
+            "step_id": "step-1",
+            "api_key": "orgunit.list",
+            "params_fingerprint": "orgunit.list|as_of=2026-04-25|parent_org_code=100000",
+            "summary": {
+              "as_of": "2026-04-25",
+              "org_unit_count": 3
+            }
+          }
+        ]
+      }
+    ],
+    "latest_observation": {
+      "api_key": "orgunit.list",
+      "as_of": "2026-04-25",
+      "org_units": [
+        {
+          "org_code": "110000",
+          "name": "示例组织",
+          "status": "active",
+          "has_children": true
+        }
+      ]
+    },
+    "aggregated_facts": {
+      "orgunit_list_items_with_children": [
+        {
+          "org_code": "110000",
+          "name": "示例组织",
+          "as_of": "2026-04-25",
+          "parent_org_code": "100000"
+        }
+      ],
+      "queried_parent_org_codes": ["100000"],
+      "remaining_parent_org_codes": ["110000"]
+    }
+  }
+}
+```
 
-### 4.2 working_results 最小契约
+约束：
 
-- 只包含当前 turn 已执行的小计划结果摘要
-- 只作为 planner 再规划输入，不作为 narrator 之外的用户可见 JSON
-- 必须稳定、可裁剪、无执行痕迹泄露
-- 建议字段：
-  - `completed_steps`
-  - `latest_results`
-  - `aggregated_facts`
-  - `remaining_goal_hint`（如确有必要，只允许 query flow 生成极轻量提示，不允许业务专用 prose）
+- 不包含密钥、provider 配置、内部 session token 或未授权数据。
+- 不原样塞入无限 raw payload；必须按预算裁剪。
+- 不作为长期 canonical event，不进入 `query_dialogue_context`。
+- 不作为 narrator 之外的用户可见 JSON。
+- `remaining_goal_hint` 如确有必要，只能是 query flow 生成的通用短提示，不得包含业务专用 prose 或隐藏分支语义。
 
-### 4.3 预算与停止条件
+### 4.6 预算与去重
 
-- 每个用户 turn 允许的 planner-executor 小循环次数必须有限，例如 `max_planning_rounds`
-- 每次小循环仍需满足：
-  - `ReadPlan` 合法
-  - executor 白名单合法
-  - 参数白名单与类型校验合法
-- 若命中上限仍未收敛：
-  - fail-closed
-  - 输出统一 stopline，不进入 narrator
+P0 默认预算建议：
 
-## 5. 实施步骤（Implementation Steps）
+- `max_planning_rounds = 4`
+- `max_executed_steps = 8`
+- `max_working_result_items = 50`
+- `max_repeated_plan_fingerprint = 1`
 
-1. [ ] 冻结 `working_results` 在 planner 输入中的最小结构与 owner 边界，明确它不是长期会话事实，也不是用户可见 JSON。
-2. [ ] 重构 `cubeboxQueryFlow.TryHandle(...)`：
+每次执行前生成稳定 `plan_fingerprint` / `step_fingerprint`，至少包含：
+
+- `api_key`
+- 归一化参数 key/value
+- `as_of`
+- 主要目标参数，例如 `org_code` / `parent_org_code` / `query`
+
+若 planner 再次请求已执行过的同一 fingerprint：
+
+- 第一次重复：作为 observation 告知 planner 已执行过，不重复执行，要求其选择下一步或 `DONE`
+- 再次重复：fail-closed，输出统一 stopline
+
+### 4.7 Fanout 策略
+
+P0 不引入 fanout DSL，不并发执行。
+
+- planner 可在下一轮选择一个或一小批 `remaining_parent_org_codes` 继续生成普通 `orgunit.list` 小计划。
+- query flow 负责记录已查 parent 与待查 parent，防止重复。
+- 若待查 parent 超出预算，narrator 应基于已查结果说明本次已覆盖范围；是否允许 partial answer 必须在实现前冻结：
+  - 推荐 P0：预算耗尽且仍未 `DONE` 时 fail-closed，不进入 narrator
+  - 后续 P1 可考虑带明确范围说明的 partial answer，但必须有单独方案
+
+## 5. 模块归属与职责边界
+
+- **`internal/server/cubebox_query_flow.go`**
+  - 持有 loop orchestration
+  - 构造 planner 输入
+  - 解析 planner outcome
+  - 调用 executor
+  - 累积 `working_results`
+  - 执行预算、去重、错误映射和 SSE 事件顺序
+  - 最终只调用 narrator 一次
+- **`modules/cubebox`**
+  - 保持 `ReadPlan` schema、校验、执行注册表、参数引用解析与执行结果类型
+  - 增加通用 `working_results` / observation 构造所需的纯函数或 DTO 时，应保持业务无关
+- **`modules/orgunit/presentation/cubebox`**
+  - 更新知识包案例，告诉模型如何根据 `working_results` 中的 `has_children` 继续规划
+  - 不声明新 API，不写回答模板，不引入业务 DSL
+- **`third_party/openai-codex`**
+  - 仅作为源码参考，不参与构建和运行
+
+## 6. 失败路径与 Stopline
+
+| 场景 | 处理 |
+| --- | --- |
+| planner 输出非法 JSON / 非法 outcome | fail-closed，映射为计划边界错误 |
+| `ReadPlan` schema 或参数非法 | fail-closed，沿用现有计划边界错误 |
+| 未注册 `api_key` | fail-closed，沿用执行注册表漂移错误 |
+| executor 返回候选不可静默选择 | 进入澄清终态，写候选 metadata events |
+| executor 执行失败 | 沿用现有错误映射 |
+| planner 在已执行后返回 `NO_QUERY` | fail-closed，不当作完成 |
+| planner 返回 `DONE` 但无任何执行结果 | fail-closed |
+| 超过预算或重复查询不收敛 | fail-closed，输出统一 stopline |
+| narrator 输出泄露内部字段 | 沿用现有 narrator contract violation |
+
+## 7. 测试设计与分层
+
+| 层级 | 本计划承接内容 | 代表对象/文件 | 说明 |
+| --- | --- | --- | --- |
+| `modules/cubebox` | `working_results` DTO、fingerprint、预算、去重纯函数 | `modules/cubebox/*_test.go` | 优先黑盒测试 |
+| `internal/server` | query loop、planner outcome、SSE 顺序、错误映射、narrator 单次调用 | `internal/server/cubebox_query_flow_test.go`、`internal/server/cubebox_api_test.go` | 组合层测试 |
+| 知识包 | `working_results` 驱动再规划案例 | `modules/orgunit/presentation/cubebox/examples.md` | 配合 planner prompt 测试夹具 |
+| E2E | 浏览器真实对话复验 | `docs/dev-records/DEV-PLAN-471-READINESS.md` | readiness 记录为 P0 证据 |
+
+重点测试：
+
+- 单轮可完成问题仍只执行一次 planner/executor/narrator。
+- 需要“先执行再决定”的问题可在同一 turn 内进入第二次 planner。
+- planner 看到 `working_results` 后返回 `DONE`，narrator 只调用一次。
+- planner 在已执行后返回 `NO_QUERY` 必须 fail-closed。
+- planner 重复请求相同 fingerprint 时不会重复执行。
+- 超过 `max_planning_rounds` 时 fail-closed。
+- 中间 `working_results` 不写入长期 canonical event。
+- 用户可见输出不泄露 `api_key`、`step-*`、`payload`、`results`、`params` 等内部执行痕迹。
+
+## 8. 实施步骤
+
+1. [ ] 冻结 planner outcome：兼容现有裸 `ReadPlan` / `NO_QUERY`，新增严格 `DONE` 完成态；澄清态继续沿用 `missing_params + clarifying_question`。
+2. [ ] 从 `ExecutionRegistry` 派生 `read_api_catalog` prompt block，明确注册表是执行事实源，知识包是语义说明。
+3. [ ] 新增 `working_results` DTO 与纯函数：
+   - completed plan/step summary
+   - latest observation
+   - aggregated facts
+   - plan/step fingerprint
+   - budget counters
+4. [ ] 重构 `cubeboxQueryFlow.TryHandle(...)`：
    - 从单次 `ProduceReadPlan -> ExecutePlan -> Narrate`
-   - 收敛为有限次 `ProduceReadPlan -> ExecutePlan -> accumulate working_results`
-   - 最后一次统一 `NarrateQueryResult`
-3. [ ] 为 planner prompt 增加“当前 turn 已执行结果”输入块，明确模型可以根据该块继续决定是否需要下一次小计划。
-4. [ ] 明确小循环的终止协议：
-   - planner 返回澄清态
-   - planner 返回 `NO_QUERY`
-   - planner 返回合法小计划并执行
-   - planner 在看到 `working_results` 后明确“信息已足够，可结束查询”
-5. [ ] 扩展 query result -> planner working facts 的整理逻辑，保留继续编排所需关键事实；至少覆盖 `orgunit.list` 的 `has_children`。
-6. [ ] 更新 `modules/orgunit/presentation/cubebox/examples.md` 与必要知识包说明，新增“先查直接下级，再根据结果继续查那些仍有下级的组织”的样例。
+   - 改为有限次 `ProduceReadPlan -> outcome -> ExecutePlan -> append working_results`
+   - 最后在 `DONE` 后统一 `NarrateQueryResult`
+5. [ ] 扩展 planner prompt：
+   - 说明 `working_results` 是当前 turn observation
+   - 说明何时继续输出小 `ReadPlan`
+   - 说明何时输出 `DONE`
+   - 明确 `NO_QUERY` 不代表完成
+   - 禁止重复查询已完成 fingerprint
+6. [ ] 扩展 orgunit 知识包样例：
+   - 基于 `orgunit.list` 的 `has_children`
+   - 先查直接下级，再对 `has_children=true` 的组织继续查下级
+   - 不新增 API、不引入 DSL
 7. [ ] 增加自动化测试：
-   - 单轮可完成问题仍保持单次规划，不无故进入二次规划
-   - 需要“先执行再决定”的问题可在同一 turn 内进入第二次小计划
-   - 超过预算时 fail-closed
-   - 中间结果不泄露为用户可见执行痕迹
-8. [ ] 真实页面复验并登记 `docs/dev-records/DEV-PLAN-471-READINESS.md`
+   - planner outcome 解析
+   - working_results 构造与裁剪
+   - loop 正常完成
+   - loop 澄清终止
+   - budget / repeat fail-closed
+   - narrator 单次调用
+8. [ ] 真实页面复验并登记 `docs/dev-records/DEV-PLAN-471-READINESS.md`。
+9. [ ] 登记 `third_party/openai-codex` 参考源码版本：
+   - `git -C third_party/openai-codex rev-parse HEAD`
+   - `git -C third_party/openai-codex status --short`
 
-## 6. 验收口径（Acceptance）
+## 9. 验收口径
 
 1. [ ] 用户问题需要“先看执行结果，再决定下一步”时，系统可在同一 turn 内自动完成至少两轮小计划。
-2. [ ] 不新增 `orgunit` 专用读 API，`orgunit` executor 注册表保持 `details / list / search / audit` 不变。
-3. [ ] 不引入 DSL、JSONPath、脚本表达式或 capability-specific 编排分支。
-4. [ ] narrator 只在所有小循环结束后调用一次。
-5. [ ] 当前 turn 的 `working_results` 不写入长期 canonical event，不污染后续 turn 的 `query_dialogue_context`。
-6. [ ] 对“把那些有下级的下级组织的下级组织列出来”这类问题，模型可以通过已有能力自动分解并给出最终答案。
+2. [ ] 对“把那些有下级的下级组织的下级组织列出来”这类问题，模型可以通过已有 `orgunit.list` 能力自动分解并给出最终答案。
+3. [ ] 不新增 `orgunit` 专用读 API，`orgunit` executor 注册表保持 `details / list / search / audit` 不变。
+4. [ ] 不引入 DSL、JSONPath、脚本表达式、DAG/workflow engine 或 capability-specific 编排分支。
+5. [ ] planner 终止态明确：`DONE` 才能在已执行查询后进入 narrator；`NO_QUERY` 不得作为完成态。
+6. [ ] narrator 只在所有小循环结束后调用一次。
+7. [ ] 当前 turn 的 `working_results` 不写入长期 canonical event，不污染后续 turn 的 `query_dialogue_context`。
+8. [ ] 超预算、重复查询不收敛、非法 planner outcome 均 fail-closed。
+9. [ ] 用户可见回答不泄露内部执行痕迹。
+10. [ ] `third_party/openai-codex` 已完整克隆并记录 HEAD，用于后续本地对标学习。
 
-## 7. 风险与对策（Risks）
+## 10. 风险与对策
 
 | 风险 | 说明 | 对策 |
 | --- | --- | --- |
-| planner 循环失控 | 模型持续要求更多查询但不收敛 | 增加回合预算与 stopline |
+| Codex 借鉴过度 | 误建开放式 agent/tool 平台 | 只借鉴 loop，不开放任意工具 |
+| planner 循环失控 | 模型持续要求更多查询但不收敛 | 回合预算、step 预算、重复 fingerprint stopline |
+| `NO_QUERY` 语义混淆 | 查询已足够时误用 `NO_QUERY` | 冻结 `DONE`，已执行后 `NO_QUERY` 视为边界错误 |
 | 中间结果污染长期事实 | 当前 turn 工作态误写入会话事件 | `working_results` 仅内存存在，不进入 canonical events |
 | narrator 过早输出 | 中途回答导致后续不能继续查 | narrator 只保留为最终阶段 |
-| 结果回灌过宽 | 把过多原始 payload 喂回 planner，增加噪声与泄露面 | 仅保留继续编排所需关键事实窗口 |
-| 再次滑向业务 DSL | 为了多轮编排引入复杂计划语言 | 明确本计划只允许普通小 `ReadPlan` 循环，不扩 schema 为 DSL |
+| 结果回灌过宽 | 把过多 raw payload 喂回 planner | observation 裁剪、条数限制、字段预算 |
+| 再次滑向业务 DSL | 为多轮编排引入复杂计划语言 | 只允许普通小 `ReadPlan` + 薄 outcome |
+| fanout 超预算 | 多个 parent 都需继续查询 | P0 串行有限 fanout，预算耗尽 fail-closed |
 
-## 8. Readiness 与证据
+## 11. Readiness 与证据
 
 - [ ] 新建 readiness：`docs/dev-records/DEV-PLAN-471-READINESS.md`
+- [ ] 记录 `third_party/openai-codex` clone HEAD、命令、时间戳与结果
 - [ ] 记录自动化测试命令、时间戳与结果
 - [ ] 记录浏览器真实复验链路、截图与网络请求
