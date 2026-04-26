@@ -30,6 +30,10 @@ type cubeboxQueryClarifier interface {
 	ClarifyQuery(ctx context.Context, input cubeboxQueryClarificationInput) (string, error)
 }
 
+type cubeboxNoQueryGuidanceNarrator interface {
+	NarrateNoQueryGuidance(ctx context.Context, input cubeboxNoQueryGuidanceInput) (string, error)
+}
+
 type cubeboxReadPlanProductionInput struct {
 	TenantID       string
 	PrincipalID    string
@@ -37,14 +41,18 @@ type cubeboxReadPlanProductionInput struct {
 	Prompt         string
 	KnowledgePacks []cubebox.KnowledgePack
 	QueryContext   cubebox.QueryContext
+	ReadAPICatalog []cubebox.ReadAPICatalogEntry
+	WorkingResults *cubebox.QueryWorkingResults
 }
 
 type cubeboxReadPlanProductionResult struct {
-	Handled      bool
-	Plan         cubebox.ReadPlan
-	ProviderID   string
-	ProviderType string
-	ModelSlug    string
+	Handled         bool
+	Outcome         cubebox.PlannerOutcome
+	Plan            cubebox.ReadPlan
+	ProviderID      string
+	ProviderType    string
+	ModelSlug       string
+	ExplicitOutcome bool
 }
 
 type cubeboxQueryFlow struct {
@@ -104,6 +112,21 @@ type cubeboxQueryNarrationInput struct {
 	ExpectedModelSlug    string
 }
 
+type cubeboxNoQueryGuidanceInput struct {
+	TenantID             string
+	Prompt               string
+	ScopeSummary         string
+	SuggestedPrompts     []string
+	QueryContextHint     cubeboxNoQueryContextHint
+	ExpectedProviderID   string
+	ExpectedProviderType string
+	ExpectedModelSlug    string
+}
+
+type cubeboxNoQueryContextHint struct {
+	HasRecentConfirmedEntity bool `json:"has_recent_confirmed_entity"`
+}
+
 type cubeboxQueryLifecycle struct {
 	traceID      string
 	providerID   string
@@ -155,6 +178,12 @@ type cubeboxQueryClarificationEnvelope struct {
 	CandidateSource    string                          `json:"candidate_source,omitempty"`
 	CandidateCount     int                             `json:"candidate_count,omitempty"`
 	CannotSilentSelect bool                            `json:"cannot_silent_select,omitempty"`
+}
+
+type cubeboxNoQueryGuidanceEnvelope struct {
+	ScopeSummary     string                    `json:"scope_summary"`
+	SuggestedPrompts []string                  `json:"suggested_prompts"`
+	QueryContextHint cubeboxNoQueryContextHint `json:"query_context_hint"`
 }
 
 var errCubeboxQueryNarrationTargetMismatch = errors.New("cubebox query narration target mismatch")
@@ -324,6 +353,73 @@ func (n *cubeboxProviderQueryNarrator) ClarifyQuery(ctx context.Context, input c
 	return text, nil
 }
 
+func (n *cubeboxProviderQueryNarrator) NarrateNoQueryGuidance(ctx context.Context, input cubeboxNoQueryGuidanceInput) (string, error) {
+	if n == nil || n.configReader == nil || n.adapter == nil || n.secretResolver == nil {
+		return "", cubebox.ErrProviderConfigInvalid
+	}
+	config, err := n.configReader.GetActiveModelRuntimeConfig(ctx, strings.TrimSpace(input.TenantID))
+	if err != nil {
+		return "", err
+	}
+	if !config.Provider.Enabled {
+		return "", cubebox.ErrProviderDisabled
+	}
+	providerID := strings.TrimSpace(config.Provider.ID)
+	providerType := strings.TrimSpace(config.Provider.ProviderType)
+	modelSlug := strings.TrimSpace(config.Selection.ModelSlug)
+	if modelSlug == "" {
+		return "", cubebox.ErrModelSlugMissing
+	}
+	if providerID != strings.TrimSpace(input.ExpectedProviderID) ||
+		providerType != strings.TrimSpace(input.ExpectedProviderType) ||
+		modelSlug != strings.TrimSpace(input.ExpectedModelSlug) {
+		return "", errCubeboxQueryNarrationTargetMismatch
+	}
+	secret, err := n.secretResolver.ResolveSecretRef(ctx, strings.TrimSpace(input.TenantID), providerID, config.Credential.SecretRef)
+	if err != nil {
+		return "", err
+	}
+	envelope := buildNoQueryGuidanceEnvelope(input)
+	body, err := json.Marshal(envelope)
+	if err != nil {
+		return "", err
+	}
+	stream, err := n.adapter.StreamChatCompletion(ctx, cubebox.ProviderChatRequest{
+		BaseURL:  strings.TrimSpace(config.Provider.BaseURL),
+		APIKey:   secret,
+		Model:    modelSlug,
+		Messages: buildNoQueryGuidanceMessages(string(body)),
+		Input:    string(body),
+	})
+	if err != nil {
+		return "", err
+	}
+	defer func() { _ = stream.Close() }()
+
+	var out strings.Builder
+	for {
+		chunk, err := stream.Recv()
+		if err != nil {
+			if errors.Is(err, io.EOF) {
+				break
+			}
+			return "", err
+		}
+		out.WriteString(chunk.Delta)
+		if chunk.Done {
+			break
+		}
+	}
+	text := strings.TrimSpace(out.String())
+	if text == "" {
+		return "", cubebox.ErrProviderStreamInvalid
+	}
+	if err := validateNoQueryGuidanceText(text, envelope); err != nil {
+		return "", err
+	}
+	return text, nil
+}
+
 func (f *cubeboxQueryFlow) TryHandle(
 	ctx context.Context,
 	request cubebox.GatewayStreamRequest,
@@ -337,19 +433,19 @@ func (f *cubeboxQueryFlow) TryHandle(
 	if err != nil {
 		return false
 	}
-	produced, err := f.producer.ProduceReadPlan(ctx, cubeboxReadPlanProductionInput{
-		TenantID:       strings.TrimSpace(request.TenantID),
-		PrincipalID:    strings.TrimSpace(request.PrincipalID),
-		ConversationID: strings.TrimSpace(request.ConversationID),
-		Prompt:         request.Prompt,
-		KnowledgePacks: append([]cubebox.KnowledgePack(nil), f.knowledgePacks...),
-		QueryContext:   queryContext,
-	})
+	readAPICatalog := f.registry.ReadAPICatalog()
+	workingState := cubebox.NewQueryWorkingResultsState(request.Prompt, cubebox.DefaultQueryLoopBudget())
+	workingState.NotePlanningRound()
+	produced, err := f.produceReadPlan(ctx, request, queryContext, readAPICatalog, workingState)
 	if err != nil {
+		if isQueryPlannerContractError(err) {
+			return f.writeQueryPlannerTerminalError(ctx, request, sink, cubeboxReadPlanProductionResult{}, queryPlanErrorToTerminal(err))
+		}
 		return false
 	}
-	if !produced.Handled {
-		return f.writeQueryNoQueryStopline(ctx, request, sink, produced)
+	outcome := produced.Outcome
+	if outcome.Type == cubebox.PlannerOutcomeNoQuery {
+		return f.writeQueryNoQueryStopline(ctx, request, sink, produced, queryContext)
 	}
 
 	prepared, err := f.prepareQueryTurn(ctx, request, produced)
@@ -366,116 +462,110 @@ func (f *cubeboxQueryFlow) TryHandle(
 		return true
 	}
 
-	if err := cubebox.ValidateReadPlan(produced.Plan); err != nil {
-		f.writeQueryTerminalError(ctx, request, prepared.turn.TurnID, &prepared.sequence, prepared.lifecycle, sink, queryPlanErrorToTerminal(err))
-		return true
-	}
-
-	if len(produced.Plan.MissingParams) > 0 {
-		text := strings.TrimSpace(produced.Plan.ClarifyingQuestion)
-		if text == "" {
-			f.writeQueryTerminalError(ctx, request, prepared.turn.TurnID, &prepared.sequence, prepared.lifecycle, sink, queryTerminalError{
-				Code:      "ai_plan_boundary_violation",
-				Message:   "查询计划缺少必要澄清信息，请补充后重试。",
-				Retryable: false,
-			})
-			return true
-		}
-		if !writeEvent("turn.agent_message.delta", map[string]any{"message_id": prepared.turn.AssistantMessageID, "delta": text}) {
-			return true
-		}
-		f.appendQueryMetadataEvent(ctx, request, prepared.turn.TurnID, &prepared.sequence, cubebox.QueryClarificationRequestedEventType, map[string]any{
-			"intent":              strings.TrimSpace(produced.Plan.Intent),
-			"missing_params":      append([]string(nil), produced.Plan.MissingParams...),
-			"clarifying_question": text,
-		})
-		_ = writeEvent("turn.agent_message.completed", map[string]any{"message_id": prepared.turn.AssistantMessageID})
-		_ = writeEvent("turn.completed", f.queryCompletedPayload("completed", prepared.lifecycle))
-		return true
-	}
-
-	results, err := f.registry.ExecutePlan(ctx, cubebox.ExecuteRequest{
-		TenantID:       request.TenantID,
-		PrincipalID:    request.PrincipalID,
-		ConversationID: request.ConversationID,
-	}, produced.Plan)
-	if err != nil {
-		if candidates := queryExecutionCandidates(err); len(candidates) > 0 {
-			errorCode, candidateSource, candidateCount, cannotSilentSelect := queryExecutionClarificationFacts(err)
-			candidateGroup := cubebox.QueryCandidateGroup{
-				GroupID:            newQueryCandidateGroupID(),
-				CandidateSource:    candidateSource,
-				CandidateCount:     candidateCount,
-				CannotSilentSelect: cannotSilentSelect,
-				Candidates:         append([]cubebox.QueryCandidate(nil), candidates...),
-			}
-			text := f.buildExecutionClarificationText(ctx, request, produced, queryContext, candidateGroup, errorCode)
-			if text == "" {
-				text = "找到了多个候选项，请从中明确你要继续查询的对象。"
-			}
-			if !writeEvent("turn.agent_message.delta", map[string]any{"message_id": prepared.turn.AssistantMessageID, "delta": text}) {
+	var allResults []cubebox.ExecuteResult
+	for {
+		switch outcome.Type {
+		case cubebox.PlannerOutcomeReadPlan:
+			plan := outcome.Plan
+			if err := cubebox.ValidateReadPlan(plan); err != nil {
+				f.writeQueryTerminalError(ctx, request, prepared.turn.TurnID, &prepared.sequence, prepared.lifecycle, sink, queryPlanErrorToTerminal(err))
 				return true
 			}
-			payload := map[string]any{
-				"clarifying_question": text,
+			if exceeded, duplicated := noteRepeatedPlanSteps(workingState, plan); duplicated {
+				if exceeded {
+					f.writeQueryTerminalError(ctx, request, prepared.turn.TurnID, &prepared.sequence, prepared.lifecycle, sink, queryLoopRepeatedPlanTerminal())
+					return true
+				}
+				if !workingState.CanPlan() {
+					f.writeQueryTerminalError(ctx, request, prepared.turn.TurnID, &prepared.sequence, prepared.lifecycle, sink, queryLoopBudgetExceededTerminal())
+					return true
+				}
+				workingState.NotePlanningRound()
+				next, err := f.produceReadPlan(ctx, request, queryContext, readAPICatalog, workingState)
+				if err != nil {
+					f.writeQueryTerminalError(ctx, request, prepared.turn.TurnID, &prepared.sequence, prepared.lifecycle, sink, queryPlannerErrorToTerminal(err))
+					return true
+				}
+				produced = next
+				outcome = next.Outcome
+				continue
 			}
-			if candidateGroup.GroupID != "" {
-				payload["candidate_group_id"] = candidateGroup.GroupID
+			if !workingState.CanExecute(plan) {
+				f.writeQueryTerminalError(ctx, request, prepared.turn.TurnID, &prepared.sequence, prepared.lifecycle, sink, queryLoopBudgetExceededTerminal())
+				return true
 			}
-			if errorCode != "" {
-				payload["error_code"] = errorCode
+			results, err := f.registry.ExecutePlan(ctx, cubebox.ExecuteRequest{
+				TenantID:       request.TenantID,
+				PrincipalID:    request.PrincipalID,
+				ConversationID: request.ConversationID,
+			}, plan)
+			if err != nil {
+				if f.writeQueryExecutionClarification(ctx, request, prepared, queryContext, produced, err, writeEvent) {
+					return true
+				}
+				f.writeQueryTerminalError(ctx, request, prepared.turn.TurnID, &prepared.sequence, prepared.lifecycle, sink, queryExecutionErrorToTerminal(err))
+				return true
 			}
-			if candidateGroup.CandidateSource != "" {
-				payload["candidate_source"] = candidateGroup.CandidateSource
+			workingState.AppendPlan(workingState.Snapshot().RoundIndex, plan, results)
+			allResults = append(allResults, results...)
+			if !workingState.CanPlan() {
+				f.writeQueryTerminalError(ctx, request, prepared.turn.TurnID, &prepared.sequence, prepared.lifecycle, sink, queryLoopBudgetExceededTerminal())
+				return true
 			}
-			if candidateGroup.CandidateCount > 0 {
-				payload["candidate_count"] = candidateGroup.CandidateCount
+			workingState.NotePlanningRound()
+			next, err := f.produceReadPlan(ctx, request, queryContext, readAPICatalog, workingState)
+			if err != nil {
+				f.writeQueryTerminalError(ctx, request, prepared.turn.TurnID, &prepared.sequence, prepared.lifecycle, sink, queryPlannerErrorToTerminal(err))
+				return true
 			}
-			if candidateGroup.CannotSilentSelect {
-				payload["cannot_silent_select"] = true
+			produced = next
+			outcome = next.Outcome
+		case cubebox.PlannerOutcomeClarify:
+			return f.writePlannerClarification(ctx, request, prepared, outcome, sink, writeEvent)
+		case cubebox.PlannerOutcomeDone:
+			if !workingState.HasExecution() || len(allResults) == 0 {
+				f.writeQueryTerminalError(ctx, request, prepared.turn.TurnID, &prepared.sequence, prepared.lifecycle, sink, queryDoneWithoutResultTerminal())
+				return true
 			}
-			f.appendQueryMetadataEvent(ctx, request, prepared.turn.TurnID, &prepared.sequence, cubebox.QueryClarificationRequestedEventType, payload)
-			f.appendQueryMetadataEvent(ctx, request, prepared.turn.TurnID, &prepared.sequence, cubebox.QueryCandidatesPresentedEventType, candidateGroup.Payload())
+			answer, err := f.narrator.NarrateQueryResult(ctx, cubeboxQueryNarrationInput{
+				TenantID:             request.TenantID,
+				PrincipalID:          request.PrincipalID,
+				ConversationID:       request.ConversationID,
+				Prompt:               request.Prompt,
+				Results:              f.registry.ProjectNarrationResults(allResults),
+				QueryContext:         queryContext,
+				ExpectedProviderID:   produced.ProviderID,
+				ExpectedProviderType: produced.ProviderType,
+				ExpectedModelSlug:    produced.ModelSlug,
+			})
+			if err != nil {
+				f.writeQueryTerminalError(ctx, request, prepared.turn.TurnID, &prepared.sequence, prepared.lifecycle, sink, queryNarrationErrorToTerminal(err))
+				return true
+			}
+			f.writeQueryResultMetadata(ctx, request, prepared.turn.TurnID, &prepared.sequence, allResults)
+			if !writeEvent("turn.agent_message.delta", map[string]any{"message_id": prepared.turn.AssistantMessageID, "delta": answer}) {
+				return true
+			}
 			_ = writeEvent("turn.agent_message.completed", map[string]any{"message_id": prepared.turn.AssistantMessageID})
 			_ = writeEvent("turn.completed", f.queryCompletedPayload("completed", prepared.lifecycle))
 			return true
+		case cubebox.PlannerOutcomeNoQuery:
+			if workingState.HasExecution() {
+				f.writeQueryTerminalError(ctx, request, prepared.turn.TurnID, &prepared.sequence, prepared.lifecycle, sink, queryNoQueryAfterExecutionTerminal())
+				return true
+			}
+			answer := f.noQueryGuidanceText(ctx, request, queryContext, produced)
+			if !writeEvent("turn.agent_message.delta", map[string]any{"message_id": prepared.turn.AssistantMessageID, "delta": answer}) {
+				return true
+			}
+			_ = writeEvent("turn.agent_message.completed", map[string]any{"message_id": prepared.turn.AssistantMessageID})
+			_ = writeEvent("turn.completed", f.queryCompletedPayload("completed", prepared.lifecycle))
+			return true
+		default:
+			f.writeQueryTerminalError(ctx, request, prepared.turn.TurnID, &prepared.sequence, prepared.lifecycle, sink, queryPlanErrorToTerminal(cubebox.ErrPlannerOutcomeInvalid))
+			return true
 		}
-		f.writeQueryTerminalError(ctx, request, prepared.turn.TurnID, &prepared.sequence, prepared.lifecycle, sink, queryExecutionErrorToTerminal(err))
-		return true
 	}
-
-	answer, err := f.narrator.NarrateQueryResult(ctx, cubeboxQueryNarrationInput{
-		TenantID:             request.TenantID,
-		PrincipalID:          request.PrincipalID,
-		ConversationID:       request.ConversationID,
-		Prompt:               request.Prompt,
-		Results:              f.registry.ProjectNarrationResults(results),
-		QueryContext:         queryContext,
-		ExpectedProviderID:   produced.ProviderID,
-		ExpectedProviderType: produced.ProviderType,
-		ExpectedModelSlug:    produced.ModelSlug,
-	})
-	if err != nil {
-		f.writeQueryTerminalError(ctx, request, prepared.turn.TurnID, &prepared.sequence, prepared.lifecycle, sink, queryNarrationErrorToTerminal(err))
-		return true
-	}
-	if anchor := confirmedQueryEntity(results); anchor != nil {
-		f.appendQueryMetadataEvent(ctx, request, prepared.turn.TurnID, &prepared.sequence, cubebox.QueryEntityConfirmedEventType, map[string]any{"entity": anchor.Payload()})
-	}
-	if candidates := queryPresentedCandidates(results); len(candidates) > 0 {
-		f.appendQueryMetadataEvent(ctx, request, prepared.turn.TurnID, &prepared.sequence, cubebox.QueryCandidatesPresentedEventType, cubebox.QueryCandidateGroup{
-			GroupID:         newQueryCandidateGroupID(),
-			CandidateSource: "results",
-			CandidateCount:  len(candidates),
-			Candidates:      append([]cubebox.QueryCandidate(nil), candidates...),
-		}.Payload())
-	}
-	if !writeEvent("turn.agent_message.delta", map[string]any{"message_id": prepared.turn.AssistantMessageID, "delta": answer}) {
-		return true
-	}
-	_ = writeEvent("turn.agent_message.completed", map[string]any{"message_id": prepared.turn.AssistantMessageID})
-	_ = writeEvent("turn.completed", f.queryCompletedPayload("completed", prepared.lifecycle))
-	return true
 }
 
 func (p *cubeboxProviderReadPlanProducer) ProduceReadPlan(
@@ -529,24 +619,19 @@ func (p *cubeboxProviderReadPlanProducer) ProduceReadPlan(
 		}
 	}
 	raw := strings.TrimSpace(out.String())
-	if raw == "NO_QUERY" {
-		return cubeboxReadPlanProductionResult{
-			Handled:      false,
-			ProviderID:   strings.TrimSpace(config.Provider.ID),
-			ProviderType: strings.TrimSpace(config.Provider.ProviderType),
-			ModelSlug:    modelSlug,
-		}, nil
-	}
-	plan, err := cubebox.DecodeReadPlan([]byte(raw))
+	outcome, err := cubebox.DecodePlannerOutcome([]byte(raw))
 	if err != nil {
 		return cubeboxReadPlanProductionResult{}, err
 	}
+	handled := outcome.Type != cubebox.PlannerOutcomeNoQuery
 	return cubeboxReadPlanProductionResult{
-		Handled:      true,
-		Plan:         plan,
-		ProviderID:   strings.TrimSpace(config.Provider.ID),
-		ProviderType: strings.TrimSpace(config.Provider.ProviderType),
-		ModelSlug:    modelSlug,
+		Handled:         handled,
+		Outcome:         outcome,
+		Plan:            outcome.Plan,
+		ProviderID:      strings.TrimSpace(config.Provider.ID),
+		ProviderType:    strings.TrimSpace(config.Provider.ProviderType),
+		ModelSlug:       modelSlug,
+		ExplicitOutcome: true,
 	}, nil
 }
 
@@ -556,18 +641,25 @@ func (p *cubeboxProviderReadPlanProducer) buildPlannerMessages(input cubeboxRead
 			Role: "system",
 			Content: strings.TrimSpace(fmt.Sprintf(`
 你是 CubeBox 的只读查询计划器。
-你的职责只有两种：
-1. 如果用户请求可以由下面提供的模块知识包和已登记只读 API 完成，就输出一个严格合法的 ReadPlan JSON。
-2. 如果用户请求不是这些知识包支持的查询场景，就只输出 NO_QUERY。
+	你的职责只有两种：
+	1. 如果用户请求可以由下面提供的模块知识包、已登记只读 API 和当前 turn 内 working_results 继续推进，就输出 planner outcome JSON。
+	2. 如果用户请求不是这些知识包支持的查询场景，就输出 NO_QUERY outcome。
 
-输出要求：
-- 不要输出 Markdown 代码块
-- 不要输出解释、前后缀或额外文本
-- 只允许生成只读查询计划
-- 缺少必要参数时，必须输出带 missing_params 与 clarifying_question 的 ReadPlan
-- 可执行计划必须符合线性多步只读编排约束
-- 如果用户说“今天/当前/现在”，可按当前自然日 %s 解释
-`, p.now().Format("2006-01-02"))),
+	输出要求：
+	- 不要输出 Markdown 代码块
+	- 不要输出解释、前后缀或额外文本
+	- 只允许生成只读查询计划
+	- 推荐输出 JSON envelope：{"outcome":"READ_PLAN","plan":{...}}、{"outcome":"CLARIFY","missing_params":[...],"clarifying_question":"..."}、{"outcome":"DONE"}、{"outcome":"NO_QUERY"}
+	- 兼容裸 ReadPlan JSON 与裸 NO_QUERY；不要输出裸 DONE，DONE 必须使用 JSON envelope
+	- READ_PLAN.plan 必须符合线性多步只读编排约束，且每次只规划当前最小必要查询
+	- CLARIFY 表示缺少必要参数或无法稳定判断引用对象，必须给出 missing_params 与 clarifying_question
+	- DONE 表示当前 working_results 已足够进入最终回答；不要用 NO_QUERY 表示“已经查够”
+	- NO_QUERY 只表示用户请求超出当前查询域
+	- working_results 是当前 turn 内临时 tool observation；不要把它写成长时记忆，也不要生成业务专用待查队列或 winner 状态
+	- 不要重复执行 working_results.executed_fingerprints 中已经出现的查询 fingerprint；若重复提示已出现，必须选择新的 READ_PLAN、CLARIFY 或 DONE
+	- 判断是否继续查询时，只能阅读 working_results.latest_observation/items/summary 与知识包规则；通用 query flow 不会替你解释业务字段
+	- 如果用户说“今天/当前/现在”，可按当前自然日 %s 解释
+	`, p.now().Format("2006-01-02"))),
 		},
 	}
 	for _, pack := range input.KnowledgePacks {
@@ -576,11 +668,25 @@ func (p *cubeboxProviderReadPlanProducer) buildPlannerMessages(input cubeboxRead
 			Content: buildKnowledgePackPromptBlock(pack),
 		})
 	}
+	if block := buildReadAPICatalogPromptBlock(input.ReadAPICatalog); block != "" {
+		messages = append(messages, cubebox.PromptItem{
+			Role:    "system",
+			Content: block,
+		})
+	}
 	if block := buildQueryDialogueContextPromptBlock(input.QueryContext); block != "" {
 		messages = append(messages, cubebox.PromptItem{
 			Role:    "system",
 			Content: block,
 		})
+	}
+	if input.WorkingResults != nil {
+		if block := buildWorkingResultsPromptBlock(*input.WorkingResults); block != "" {
+			messages = append(messages, cubebox.PromptItem{
+				Role:    "system",
+				Content: block,
+			})
+		}
 	}
 	messages = append(messages, cubebox.PromptItem{
 		Role:    "user",
@@ -613,7 +719,41 @@ func buildQueryDialogueContextPromptBlock(queryContext cubebox.QueryContext) str
 - 无法稳定判断引用对象时，输出澄清型 ReadPlan。
 - 该块只提供当前会话已记录的结构化查询事实、候选与最近问答，不代表代码已经替你选定当前引用对象。
 - 字段语义、继承规则与澄清策略以已加载知识包为准，通用 query flow 不解释具体业务字段。
-- 该上下文不是授权来源，也不是会话压缩摘要。`, string(body)))
+	- 该上下文不是授权来源，也不是会话压缩摘要。`, string(body)))
+}
+
+func buildReadAPICatalogPromptBlock(entries []cubebox.ReadAPICatalogEntry) string {
+	if len(entries) == 0 {
+		return ""
+	}
+	body, err := json.Marshal(map[string]any{"read_api_catalog": entries})
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(fmt.Sprintf(`已登记只读 API 目录：
+%s
+
+使用规则：
+- READ_PLAN.steps[].api_key 必须来自 read_api_catalog。
+- steps[].params 只能包含对应 API 的 required_params 与 optional_params。
+- 缺少 required_params 时输出 CLARIFY，不要猜测。`, string(body)))
+}
+
+func buildWorkingResultsPromptBlock(snapshot cubebox.QueryWorkingResults) string {
+	body := cubebox.WorkingResultsPromptBlock(snapshot)
+	if strings.TrimSpace(body) == "" {
+		return ""
+	}
+	return strings.TrimSpace(fmt.Sprintf(`当前 turn 内 working_results：
+%s
+
+使用规则：
+- working_results 只是当前 turn 已执行只读工具的临时 observation，不是长期会话事实。
+- completed_plans 与 latest_observation 说明已经查过什么；executed_fingerprints 说明哪些查询步骤不能重复执行。
+- 如果 latest_observation 已足够回答用户问题，输出 {"outcome":"DONE"}。
+- 如果还需要继续查询，输出新的 {"outcome":"READ_PLAN","plan":...}，且不得重复 executed_fingerprints 中的查询。
+- 如果缺少必要参数或无法稳定判断引用对象，输出 CLARIFY。
+- 如果请求超出查询域，输出 NO_QUERY；不要用 NO_QUERY 表示已经查够。`, body))
 }
 
 func buildKnowledgePackPromptBlock(pack cubebox.KnowledgePack) string {
@@ -736,6 +876,38 @@ func buildQueryNarrationMessages(body string) []cubebox.PromptItem {
 	}
 }
 
+func buildNoQueryGuidanceEnvelope(input cubeboxNoQueryGuidanceInput) cubeboxNoQueryGuidanceEnvelope {
+	return cubeboxNoQueryGuidanceEnvelope{
+		ScopeSummary:     strings.TrimSpace(input.ScopeSummary),
+		SuggestedPrompts: normalizeNoQuerySuggestedPrompts(input.SuggestedPrompts),
+		QueryContextHint: input.QueryContextHint,
+	}
+}
+
+func buildNoQueryGuidanceMessages(body string) []cubebox.PromptItem {
+	return []cubebox.PromptItem{
+		{
+			Role: "system",
+			Content: strings.TrimSpace(`
+你负责把给定的受控事实整理成面向用户的中文回复。
+
+要求：
+1. 先用一句话说明当前支持范围。
+2. 空一行后输出“你可以直接这样问：”
+3. 然后输出带序号的列表，使用 1. 2. 3. 格式，每条单独一行。
+4. 只能使用 provided suggested_prompts，不得新增未提供的能力或示例。
+5. 不得提到内部术语，例如 NO_QUERY、ReadPlan、planner、知识包、API。
+6. 语气直接、简洁，不道歉，不解释系统内部机制。
+7. 输出纯文本，直接作为用户可见消息。
+`),
+		},
+		{
+			Role:    "user",
+			Content: body,
+		},
+	}
+}
+
 func buildQueryClarificationMessages(body string) []cubebox.PromptItem {
 	return []cubebox.PromptItem{
 		{
@@ -767,6 +939,30 @@ func validateQueryNarrationText(text string) error {
 	}
 	for _, pattern := range queryNarrationForbiddenPatterns {
 		if pattern.MatchString(text) {
+			return errCubeboxQueryNarrationContractViolation
+		}
+	}
+	return nil
+}
+
+func validateNoQueryGuidanceText(text string, facts cubeboxNoQueryGuidanceEnvelope) error {
+	text = strings.TrimSpace(text)
+	if text == "" {
+		return cubebox.ErrProviderStreamInvalid
+	}
+	if err := validateQueryNarrationText(text); err != nil {
+		return err
+	}
+	for _, forbidden := range []string{"NO_QUERY", "ReadPlan", "planner", "知识包", "API"} {
+		if strings.Contains(text, forbidden) {
+			return errCubeboxQueryNarrationContractViolation
+		}
+	}
+	if facts.ScopeSummary != "" && !strings.Contains(text, facts.ScopeSummary) {
+		return errCubeboxQueryNarrationContractViolation
+	}
+	for _, prompt := range facts.SuggestedPrompts {
+		if !strings.Contains(text, prompt) {
 			return errCubeboxQueryNarrationContractViolation
 		}
 	}
@@ -946,6 +1142,91 @@ func (f *cubeboxQueryFlow) queryContext(ctx context.Context, request cubebox.Gat
 	return cubebox.QueryContextFromEvents(replay.Events), nil
 }
 
+func (f *cubeboxQueryFlow) produceReadPlan(
+	ctx context.Context,
+	request cubebox.GatewayStreamRequest,
+	queryContext cubebox.QueryContext,
+	readAPICatalog []cubebox.ReadAPICatalogEntry,
+	workingState *cubebox.QueryWorkingResultsState,
+) (cubeboxReadPlanProductionResult, error) {
+	if f == nil || f.producer == nil {
+		return cubeboxReadPlanProductionResult{}, cubebox.ErrProviderConfigInvalid
+	}
+	snapshot := workingState.Snapshot()
+	produced, err := f.producer.ProduceReadPlan(ctx, cubeboxReadPlanProductionInput{
+		TenantID:       strings.TrimSpace(request.TenantID),
+		PrincipalID:    strings.TrimSpace(request.PrincipalID),
+		ConversationID: strings.TrimSpace(request.ConversationID),
+		Prompt:         request.Prompt,
+		KnowledgePacks: append([]cubebox.KnowledgePack(nil), f.knowledgePacks...),
+		QueryContext:   queryContext,
+		ReadAPICatalog: append([]cubebox.ReadAPICatalogEntry(nil), readAPICatalog...),
+		WorkingResults: &snapshot,
+	})
+	if err != nil {
+		return cubeboxReadPlanProductionResult{}, err
+	}
+	produced.Outcome = normalizeProducedPlannerOutcome(produced, workingState)
+	if produced.Outcome.Type == cubebox.PlannerOutcomeReadPlan || produced.Outcome.Type == cubebox.PlannerOutcomeClarify {
+		produced.Plan = produced.Outcome.Plan
+	}
+	produced.Handled = produced.Outcome.Type != cubebox.PlannerOutcomeNoQuery
+	return produced, nil
+}
+
+func normalizeProducedPlannerOutcome(produced cubeboxReadPlanProductionResult, workingState *cubebox.QueryWorkingResultsState) cubebox.PlannerOutcome {
+	if produced.ExplicitOutcome && produced.Outcome.Type != "" {
+		return produced.Outcome
+	}
+	if !produced.Handled {
+		return cubebox.PlannerOutcome{Type: cubebox.PlannerOutcomeNoQuery}
+	}
+	if len(produced.Plan.MissingParams) > 0 {
+		return cubebox.PlannerOutcome{
+			Type:               cubebox.PlannerOutcomeClarify,
+			Plan:               produced.Plan,
+			MissingParams:      append([]string(nil), produced.Plan.MissingParams...),
+			ClarifyingQuestion: strings.TrimSpace(produced.Plan.ClarifyingQuestion),
+		}
+	}
+	if workingState != nil && workingState.HasExecution() && len(produced.Plan.Steps) == 0 {
+		return cubebox.PlannerOutcome{Type: cubebox.PlannerOutcomeDone}
+	}
+	if workingState != nil && workingState.HasExecution() && len(produced.Plan.Steps) > 0 {
+		allStepsExecuted := true
+		for _, step := range produced.Plan.Steps {
+			fingerprint := cubebox.StepFingerprint(step)
+			if fingerprint == "" || !workingState.HasExecuted(fingerprint) {
+				allStepsExecuted = false
+				break
+			}
+		}
+		if allStepsExecuted {
+			return cubebox.PlannerOutcome{Type: cubebox.PlannerOutcomeDone}
+		}
+	}
+	return cubebox.PlannerOutcome{Type: cubebox.PlannerOutcomeReadPlan, Plan: produced.Plan}
+}
+
+func noteRepeatedPlanSteps(workingState *cubebox.QueryWorkingResultsState, plan cubebox.ReadPlan) (bool, bool) {
+	if workingState == nil {
+		return false, false
+	}
+	duplicated := false
+	exceeded := false
+	for _, step := range plan.Steps {
+		fingerprint := cubebox.StepFingerprint(step)
+		if fingerprint == "" || !workingState.HasExecuted(fingerprint) {
+			continue
+		}
+		duplicated = true
+		if workingState.NoteRepeat(fingerprint) {
+			exceeded = true
+		}
+	}
+	return exceeded, duplicated
+}
+
 func confirmedQueryEntity(results []cubebox.ExecuteResult) *cubebox.QueryEntity {
 	for i := len(results) - 1; i >= 0; i-- {
 		if entity := normalizedQueryEntity(results[i].ConfirmedEntity); entity != nil {
@@ -1054,6 +1335,7 @@ func (f *cubeboxQueryFlow) writeQueryNoQueryStopline(
 	request cubebox.GatewayStreamRequest,
 	sink cubebox.GatewayEventSink,
 	produced cubeboxReadPlanProductionResult,
+	queryContext cubebox.QueryContext,
 ) bool {
 	prepared, err := f.prepareQueryTurn(ctx, request, produced)
 	if err != nil {
@@ -1067,7 +1349,8 @@ func (f *cubeboxQueryFlow) writeQueryNoQueryStopline(
 	if !writeEvent("turn.user_message.accepted", map[string]any{"message_id": prepared.turn.UserMessageID, "text": prepared.turn.Prompt}) {
 		return true
 	}
-	if !writeEvent("turn.agent_message.delta", map[string]any{"message_id": prepared.turn.AssistantMessageID, "delta": queryNoQueryStoplineMessage()}) {
+	answer := f.noQueryGuidanceText(ctx, request, queryContext, produced)
+	if !writeEvent("turn.agent_message.delta", map[string]any{"message_id": prepared.turn.AssistantMessageID, "delta": answer}) {
 		return true
 	}
 	_ = writeEvent("turn.agent_message.completed", map[string]any{"message_id": prepared.turn.AssistantMessageID})
@@ -1075,8 +1358,232 @@ func (f *cubeboxQueryFlow) writeQueryNoQueryStopline(
 	return true
 }
 
-func queryNoQueryStoplineMessage() string {
-	return "当前请求未形成可安全执行的只读查询计划。请换成明确的数据查询问题，或补充查询对象、条件和日期后重试。"
+func (f *cubeboxQueryFlow) writeQueryPlannerTerminalError(
+	ctx context.Context,
+	request cubebox.GatewayStreamRequest,
+	sink cubebox.GatewayEventSink,
+	produced cubeboxReadPlanProductionResult,
+	terminal queryTerminalError,
+) bool {
+	prepared, err := f.prepareQueryTurn(ctx, request, produced)
+	if err != nil {
+		return false
+	}
+	defer f.runtime.FinishTurn(prepared.turn.TurnID)
+	writeEvent := f.newQueryEventWriter(ctx, request, prepared.turn.TurnID, &prepared.sequence, prepared.lifecycle, sink)
+	if !writeEvent("turn.started", f.queryStartedPayload(prepared.turn.UserMessageID, prepared.lifecycle)) {
+		return true
+	}
+	if !writeEvent("turn.user_message.accepted", map[string]any{"message_id": prepared.turn.UserMessageID, "text": prepared.turn.Prompt}) {
+		return true
+	}
+	f.writeQueryTerminalError(ctx, request, prepared.turn.TurnID, &prepared.sequence, prepared.lifecycle, sink, terminal)
+	return true
+}
+
+func (f *cubeboxQueryFlow) noQueryGuidanceText(
+	ctx context.Context,
+	request cubebox.GatewayStreamRequest,
+	queryContext cubebox.QueryContext,
+	produced cubeboxReadPlanProductionResult,
+) string {
+	input := f.noQueryGuidanceInput(request, queryContext, produced)
+	if strings.TrimSpace(input.ScopeSummary) == "" || len(normalizeNoQuerySuggestedPrompts(input.SuggestedPrompts)) == 0 {
+		return fallbackNoQueryGuidanceText(buildNoQueryGuidanceEnvelope(input))
+	}
+	if narrator, ok := f.narrator.(cubeboxNoQueryGuidanceNarrator); ok {
+		if text, err := narrator.NarrateNoQueryGuidance(ctx, input); err == nil && strings.TrimSpace(text) != "" {
+			return strings.TrimSpace(text)
+		}
+	}
+	return fallbackNoQueryGuidanceText(buildNoQueryGuidanceEnvelope(input))
+}
+
+func (f *cubeboxQueryFlow) noQueryGuidanceInput(
+	request cubebox.GatewayStreamRequest,
+	queryContext cubebox.QueryContext,
+	produced cubeboxReadPlanProductionResult,
+) cubeboxNoQueryGuidanceInput {
+	guidance := cubebox.NoQueryGuidanceFromKnowledgePacks(f.knowledgePacks)
+	prompts := guidance.SuggestedPrompts
+	if queryContext.RecentConfirmedEntity != nil && len(guidance.ContextFollowupPrompts) > 0 {
+		prompts = guidance.ContextFollowupPrompts
+	}
+	prompts = contextualizeNoQuerySuggestedPrompts(prompts, queryContext)
+	return cubeboxNoQueryGuidanceInput{
+		TenantID:         request.TenantID,
+		Prompt:           request.Prompt,
+		ScopeSummary:     guidance.ScopeSummary,
+		SuggestedPrompts: prompts,
+		QueryContextHint: cubeboxNoQueryContextHint{
+			HasRecentConfirmedEntity: queryContext.RecentConfirmedEntity != nil,
+		},
+		ExpectedProviderID:   produced.ProviderID,
+		ExpectedProviderType: produced.ProviderType,
+		ExpectedModelSlug:    produced.ModelSlug,
+	}
+}
+
+func contextualizeNoQuerySuggestedPrompts(items []string, queryContext cubebox.QueryContext) []string {
+	out := make([]string, 0, len(items))
+	asOf := ""
+	if queryContext.RecentConfirmedEntity != nil {
+		asOf = strings.TrimSpace(queryContext.RecentConfirmedEntity.AsOf)
+	}
+	for _, item := range items {
+		item = strings.TrimSpace(item)
+		if item == "" {
+			continue
+		}
+		if asOf != "" {
+			item = strings.ReplaceAll(item, "在当前日期的", "在 "+asOf+" 的")
+			item = strings.ReplaceAll(item, "当前日期", asOf)
+		}
+		out = append(out, item)
+	}
+	return out
+}
+
+func fallbackNoQueryGuidanceText(facts cubeboxNoQueryGuidanceEnvelope) string {
+	scope := strings.TrimSpace(facts.ScopeSummary)
+	if scope == "" {
+		scope = "当前输入未进入已支持查询闭环。"
+	}
+	prompts := normalizeNoQuerySuggestedPrompts(facts.SuggestedPrompts)
+	if len(prompts) == 0 {
+		prompts = []string{"请换成明确的数据查询问题"}
+	}
+	var out strings.Builder
+	out.WriteString(scope)
+	out.WriteString("\n\n你可以直接这样问：")
+	for index, prompt := range prompts {
+		out.WriteString("\n")
+		out.WriteString(fmt.Sprintf("%d. %s", index+1, prompt))
+	}
+	return out.String()
+}
+
+func normalizeNoQuerySuggestedPrompts(items []string) []string {
+	out := make([]string, 0, len(items))
+	seen := make(map[string]struct{}, len(items))
+	for _, item := range items {
+		item = strings.TrimSpace(item)
+		if item == "" {
+			continue
+		}
+		if _, ok := seen[item]; ok {
+			continue
+		}
+		seen[item] = struct{}{}
+		out = append(out, item)
+	}
+	return out
+}
+
+func (f *cubeboxQueryFlow) writePlannerClarification(
+	ctx context.Context,
+	request cubebox.GatewayStreamRequest,
+	prepared cubeboxPreparedQueryTurn,
+	outcome cubebox.PlannerOutcome,
+	sink cubebox.GatewayEventSink,
+	writeEvent func(string, map[string]any) bool,
+) bool {
+	text := strings.TrimSpace(outcome.ClarifyingQuestion)
+	if text == "" {
+		text = strings.TrimSpace(outcome.Plan.ClarifyingQuestion)
+	}
+	missingParams := append([]string(nil), outcome.MissingParams...)
+	if len(missingParams) == 0 {
+		missingParams = append([]string(nil), outcome.Plan.MissingParams...)
+	}
+	if text == "" || len(missingParams) == 0 {
+		f.writeQueryTerminalError(ctx, request, prepared.turn.TurnID, &prepared.sequence, prepared.lifecycle, sink, queryPlanErrorToTerminal(cubebox.ErrReadPlanBoundaryViolation))
+		return true
+	}
+	if !writeEvent("turn.agent_message.delta", map[string]any{"message_id": prepared.turn.AssistantMessageID, "delta": text}) {
+		return true
+	}
+	f.appendQueryMetadataEvent(ctx, request, prepared.turn.TurnID, &prepared.sequence, cubebox.QueryClarificationRequestedEventType, map[string]any{
+		"intent":              strings.TrimSpace(outcome.Plan.Intent),
+		"missing_params":      missingParams,
+		"clarifying_question": text,
+	})
+	_ = writeEvent("turn.agent_message.completed", map[string]any{"message_id": prepared.turn.AssistantMessageID})
+	_ = writeEvent("turn.completed", f.queryCompletedPayload("completed", prepared.lifecycle))
+	return true
+}
+
+func (f *cubeboxQueryFlow) writeQueryExecutionClarification(
+	ctx context.Context,
+	request cubebox.GatewayStreamRequest,
+	prepared cubeboxPreparedQueryTurn,
+	queryContext cubebox.QueryContext,
+	produced cubeboxReadPlanProductionResult,
+	err error,
+	writeEvent func(string, map[string]any) bool,
+) bool {
+	candidates := queryExecutionCandidates(err)
+	if len(candidates) == 0 {
+		return false
+	}
+	errorCode, candidateSource, candidateCount, cannotSilentSelect := queryExecutionClarificationFacts(err)
+	candidateGroup := cubebox.QueryCandidateGroup{
+		GroupID:            newQueryCandidateGroupID(),
+		CandidateSource:    candidateSource,
+		CandidateCount:     candidateCount,
+		CannotSilentSelect: cannotSilentSelect,
+		Candidates:         append([]cubebox.QueryCandidate(nil), candidates...),
+	}
+	text := f.buildExecutionClarificationText(ctx, request, produced, queryContext, candidateGroup, errorCode)
+	if text == "" {
+		text = "找到了多个候选项，请从中明确你要继续查询的对象。"
+	}
+	if !writeEvent("turn.agent_message.delta", map[string]any{"message_id": prepared.turn.AssistantMessageID, "delta": text}) {
+		return true
+	}
+	payload := map[string]any{
+		"clarifying_question": text,
+	}
+	if candidateGroup.GroupID != "" {
+		payload["candidate_group_id"] = candidateGroup.GroupID
+	}
+	if errorCode != "" {
+		payload["error_code"] = errorCode
+	}
+	if candidateGroup.CandidateSource != "" {
+		payload["candidate_source"] = candidateGroup.CandidateSource
+	}
+	if candidateGroup.CandidateCount > 0 {
+		payload["candidate_count"] = candidateGroup.CandidateCount
+	}
+	if candidateGroup.CannotSilentSelect {
+		payload["cannot_silent_select"] = true
+	}
+	f.appendQueryMetadataEvent(ctx, request, prepared.turn.TurnID, &prepared.sequence, cubebox.QueryClarificationRequestedEventType, payload)
+	f.appendQueryMetadataEvent(ctx, request, prepared.turn.TurnID, &prepared.sequence, cubebox.QueryCandidatesPresentedEventType, candidateGroup.Payload())
+	_ = writeEvent("turn.agent_message.completed", map[string]any{"message_id": prepared.turn.AssistantMessageID})
+	_ = writeEvent("turn.completed", f.queryCompletedPayload("completed", prepared.lifecycle))
+	return true
+}
+
+func (f *cubeboxQueryFlow) writeQueryResultMetadata(
+	ctx context.Context,
+	request cubebox.GatewayStreamRequest,
+	turnID string,
+	sequence *int,
+	results []cubebox.ExecuteResult,
+) {
+	if anchor := confirmedQueryEntity(results); anchor != nil {
+		f.appendQueryMetadataEvent(ctx, request, turnID, sequence, cubebox.QueryEntityConfirmedEventType, map[string]any{"entity": anchor.Payload()})
+	}
+	if candidates := queryPresentedCandidates(results); len(candidates) > 0 {
+		f.appendQueryMetadataEvent(ctx, request, turnID, sequence, cubebox.QueryCandidatesPresentedEventType, cubebox.QueryCandidateGroup{
+			GroupID:         newQueryCandidateGroupID(),
+			CandidateSource: "results",
+			CandidateCount:  len(candidates),
+			Candidates:      append([]cubebox.QueryCandidate(nil), candidates...),
+		}.Payload())
+	}
 }
 
 type queryTerminalError struct {
@@ -1195,10 +1702,59 @@ func findRepoRootFromCaller() (string, bool) {
 }
 
 func queryPlanErrorToTerminal(err error) queryTerminalError {
+	if errors.Is(err, cubebox.ErrPlannerOutcomeInvalid) {
+		return queryTerminalError{Code: "cubebox_query_planner_outcome_invalid", Message: "未能形成可执行查询计划，请换一种说法或补充查询条件后重试。", Retryable: false}
+	}
 	if errors.Is(err, cubebox.ErrReadPlanSchemaConstrainedDecodeFailed) {
 		return queryTerminalError{Code: "ai_plan_schema_constrained_decode_failed", Message: "查询计划解析失败，请补全信息后重试。", Retryable: false}
 	}
 	return queryTerminalError{Code: "ai_plan_boundary_violation", Message: "查询计划超出允许范围，请调整问题后重试。", Retryable: false}
+}
+
+func queryPlannerErrorToTerminal(err error) queryTerminalError {
+	if isQueryPlannerContractError(err) {
+		return queryPlanErrorToTerminal(err)
+	}
+	switch {
+	case errors.Is(err, errCubeboxQueryNarrationTargetMismatch):
+		return queryTerminalError{Code: "ai_reply_model_target_mismatch", Message: "查询计划未命中预期的大模型链路，请稍后重试。", Retryable: false}
+	case errors.Is(err, errCubeboxQueryNarrationContractViolation):
+		return queryTerminalError{Code: "ai_reply_render_failed", Message: "查询计划生成未通过输出约束校验，请稍后重试。", Retryable: true}
+	case errors.Is(err, cubebox.ErrProviderDisabled), errors.Is(err, cubebox.ErrModelSlugMissing), errors.Is(err, cubebox.ErrProviderConfigInvalid):
+		return queryTerminalError{Code: "ai_model_config_invalid", Message: "模型配置无效，请联系管理员检查。", Retryable: false}
+	case errors.Is(err, cubebox.ErrSecretMissing), errors.Is(err, cubebox.ErrSecretRefInvalid):
+		return queryTerminalError{Code: "ai_model_secret_missing", Message: "当前模型密钥不可用，请联系管理员检查。", Retryable: false}
+	case errors.Is(err, cubebox.ErrProviderUnauthorized):
+		return queryTerminalError{Code: "ai_model_provider_unavailable", Message: "当前模型认证失败，请联系管理员检查。", Retryable: false}
+	case errors.Is(err, cubebox.ErrProviderRateLimited):
+		return queryTerminalError{Code: "ai_reply_render_failed", Message: "查询计划生成失败，请稍后重试。", Retryable: true}
+	case errors.Is(err, cubebox.ErrProviderUnavailable), errors.Is(err, cubebox.ErrProviderTimeout), errors.Is(err, cubebox.ErrProviderStreamInvalid):
+		return queryTerminalError{Code: "ai_reply_render_failed", Message: "查询计划生成失败，请稍后重试。", Retryable: true}
+	default:
+		return queryTerminalError{Code: "ai_reply_render_failed", Message: "查询计划生成失败，请稍后重试。", Retryable: false}
+	}
+}
+
+func isQueryPlannerContractError(err error) bool {
+	return errors.Is(err, cubebox.ErrPlannerOutcomeInvalid) ||
+		errors.Is(err, cubebox.ErrReadPlanSchemaConstrainedDecodeFailed) ||
+		errors.Is(err, cubebox.ErrReadPlanBoundaryViolation)
+}
+
+func queryLoopBudgetExceededTerminal() queryTerminalError {
+	return queryTerminalError{Code: "cubebox_query_loop_budget_exceeded", Message: "这次查询需要的步骤超出当前单轮预算，请缩小查询范围后重试。", Retryable: false}
+}
+
+func queryLoopRepeatedPlanTerminal() queryTerminalError {
+	return queryTerminalError{Code: "cubebox_query_loop_repeated_plan", Message: "查询计划重复且无法继续推进，请缩小范围或换一种说法后重试。", Retryable: false}
+}
+
+func queryDoneWithoutResultTerminal() queryTerminalError {
+	return queryTerminalError{Code: "cubebox_query_done_without_result", Message: "查询计划未产生可用结果，请补充查询条件后重试。", Retryable: false}
+}
+
+func queryNoQueryAfterExecutionTerminal() queryTerminalError {
+	return queryTerminalError{Code: "cubebox_query_no_query_after_execution", Message: "查询计划在执行后偏离支持范围，请换一种说法后重试。", Retryable: false}
 }
 
 func queryExecutionErrorToTerminal(err error) queryTerminalError {
@@ -1212,10 +1768,6 @@ func queryExecutionErrorToTerminal(err error) queryTerminalError {
 	default:
 		return queryTerminalError{Code: "cubebox_turn_stream_failed", Message: "查询执行失败，请稍后重试。", Retryable: false}
 	}
-}
-
-func queryExecutionClarifyingQuestion(err error) string {
-	return ""
 }
 
 func queryExecutionCandidates(err error) []cubebox.QueryCandidate {

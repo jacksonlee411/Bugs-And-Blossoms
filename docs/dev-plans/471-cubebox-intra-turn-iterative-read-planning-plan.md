@@ -97,6 +97,7 @@
 - [ ] 每次小循环只允许模型输出合法小 `ReadPlan` 或冻结的循环控制态；不得引入新业务计划语言。
 - [ ] 将当前 turn 的已执行结果整理成业务无关的稳定结构化 `working_results`，作为下一次 planner 输入中的 tool observation。
 - [ ] 增加明确的 planner 终止协议与 wire format：`READ_PLAN`、`CLARIFY`、`DONE`、`NO_QUERY`。
+- [ ] 将 pre-execution `NO_QUERY` 的用户可见输出收敛为“服务端受控事实 + 模型纯文本序号列表”；不做卡片、不新增前端组件、不把整段回复硬编码在 Go 中。
 - [ ] 保持 narrator 只在 `DONE` 后调用一次；单步查询也通过“执行一次 `ReadPlan` -> 回灌 observation -> planner 返回 `DONE` -> narrator”闭环，避免隐藏式“执行后自动认为足够”的分支。
 - [ ] 通过 `max_planning_rounds`、`max_executed_steps`、`max_working_result_items`、重复查询检测与 fail-closed stopline 保证循环不会失控。
 - [ ] 对 P0 案例支持串行 fanout：当多个直接下级 `has_children=true` 时，允许 planner 在预算内分批或逐个继续查其下级。
@@ -171,7 +172,7 @@ flowchart TD
   O --> C
   P -->|DONE| N[Narrator once]
   P -->|CLARIFY| Q[Clarification terminal]
-  P -->|NO_QUERY before execution| X[No-query stopline]
+  P -->|NO_QUERY before execution| X[No-query guidance]
   P -->|NO_QUERY after execution| B[Boundary violation stopline]
   C -->|budget exceeded| S[Fail-closed stopline]
   N --> R[Final Reply]
@@ -222,7 +223,7 @@ P0 冻结以下 planner outcome：
    - 只允许在至少执行过一次只读计划后出现
 4. `NO_QUERY`
    - 只表示用户请求不属于当前知识包支持的查询域
-   - 仅允许在尚未执行任何查询时作为普通 no-query stopline
+   - 仅允许在尚未执行任何查询时作为 no-query guidance 入口
    - 若已执行过查询后又返回 `NO_QUERY`，视为 planner 边界错误，fail-closed；不能把 `NO_QUERY` 当完成态
 
 ### 4.4 Planner 输入结构
@@ -330,7 +331,62 @@ P0 冻结以下 planner outcome：
 - `remaining_goal_hint` 如确有必要，只能是 query flow 生成的通用短提示，不得包含业务专用 prose 或隐藏分支语义。
 - P0 orgunit 样例中的“挑出 `has_children=true` 后继续查”必须由 planner 根据 `latest_observation.items` 与知识包案例自行规划，不得由 `modules/cubebox` 纯函数计算待查队列。
 
-### 4.6 候选澄清事件契约
+### 4.6 Pre-execution NO_QUERY 用户引导
+
+`NO_QUERY` 不是执行错误；在尚未执行任何只读 API 前，它表示“当前输入未进入已支持查询闭环”。用户可见回复必须保持纯文本流，不做卡片、不加前端组件。
+
+P0 冻结以下分工：
+
+- planner 只负责判定 `READ_PLAN / CLARIFY / DONE / NO_QUERY`
+- 服务端负责从知识包与 `query_dialogue_context` 整理受控提示事实
+- 模型负责把受控事实组织成中文纯文本序号列表
+- 前端仍只消费普通文本 delta
+
+服务端提供给模型的事实只包含：
+
+```json
+{
+  "scope_summary": "当前主要支持组织相关只读查询。",
+  "suggested_prompts": [
+    "查“华东销售中心”的详情",
+    "查“华东销售中心”当前的下级组织",
+    "搜索名称包含“销售”的组织"
+  ],
+  "query_context_hint": {
+    "has_recent_confirmed_entity": false
+  }
+}
+```
+
+事实来源：
+
+- `scope_summary` 来自知识包固定描述
+- `suggested_prompts` 来自知识包 curated examples，默认使用名称型、关键词型、关系型问法，不默认展示编码
+- `query_context_hint.has_recent_confirmed_entity` 来自现有 `query_dialogue_context`
+- 当存在最近确认实体时，服务端可切换到知识包提供的“这个组织 / 它”续问示例；若示例中包含 `当前日期` 占位，可替换为最近确认实体的 `as_of`
+
+模型输出规则只约束格式与边界，不硬编码完整答案：
+
+```text
+你负责把给定的受控事实整理成面向用户的中文回复。
+
+要求：
+1. 先用一句话说明当前支持范围。
+2. 空一行后输出“你可以直接这样问：”
+3. 然后输出带序号的列表，使用 1. 2. 3. 格式，每条单独一行。
+4. 只能使用 provided suggested_prompts，不得新增未提供的能力或示例。
+5. 不得提到内部术语，例如 NO_QUERY、ReadPlan、planner、知识包、API。
+6. 语气直接、简洁，不道歉，不解释系统内部机制。
+```
+
+P0 不引入复杂 reason system；仅区分：
+
+- `not_query`：例如“你好”，返回支持范围 + 示例问题
+- `too_vague`：例如“查组织”，优先走 `CLARIFY`；如果仍无法形成澄清，则给更具体的名称型示例
+
+`unsupported_domain` 等更细 reason 暂不作为 471 范围。
+
+### 4.7 候选澄清事件契约
 
 当 loop 中某次执行返回“候选不可静默选择”时，471 必须沿用并显式对齐 `468C` 的事件契约，而不是再发明一套 loop 专用关联语义。
 
@@ -342,7 +398,7 @@ P0 冻结以下 planner outcome：
 4. `turn_id`、loop round、`working_results.round_index` 或其他内部计数器只可用于审计或调试，不得作为 prompt-facing 关联主键。
 5. `query_dialogue_context` 对候选事实的组织方式统一以 `468C` 的 `recent_candidate_groups` / `recent_candidates` compatibility alias 为准；471 不得改写其语义。
 
-### 4.7 预算与去重
+### 4.8 预算与去重
 
 P0 默认预算建议：
 
@@ -447,6 +503,7 @@ P0 不引入 fanout DSL，不并发执行，也不由 query flow 维护业务专
 - 候选澄清事件使用 `group_id` / `candidate_group_id` 串联，不得用 `candidate_source`、loop round 或 `turn_id` 当关联键。
 - `resolved_entity` 不参与 471 loop 输入、状态推进或完成判定。
 - 用户可见输出不泄露 `api_key`、`step-*`、`payload`、`results`、`params` 等内部执行痕迹。
+- pre-execution `NO_QUERY` 输出由模型基于受控事实生成纯文本序号列表；默认示例为名称/关键词/关系型，不要求用户记编码，也不泄露 `NO_QUERY`、`ReadPlan`、`planner`、知识包或 `API` 等内部术语。
 
 ## 8. 实施步骤
 
@@ -497,7 +554,7 @@ P0 不引入 fanout DSL，不并发执行，也不由 query flow 维护业务专
      - `READ_PLAN`：执行小 `ReadPlan`，追加 observation，进入下一轮 planner
      - `CLARIFY`：直接终止为澄清，不进入 narrator
      - `DONE`：仅在至少执行过一次只读计划后允许进入 narrator
-     - `NO_QUERY`：未执行前可作为普通 no-query stopline；已执行后返回 `NO_QUERY` 必须 fail-closed
+    - `NO_QUERY`：未执行前进入 no-query guidance；已执行后返回 `NO_QUERY` 必须 fail-closed
      - 预算耗尽且未 `DONE` 时 fail-closed，不进入 narrator
      - executor 返回候选不可静默选择时，继续沿用现有澄清终态，但 metadata event 必须按 `468C` 契约写 `group_id` / `candidate_group_id`
    - 本片完成判定：
@@ -519,6 +576,7 @@ P0 不引入 fanout DSL，不并发执行，也不由 query flow 维护业务专
      - 明确 `resolved_entity` 不在本计划输入范围
      - 明确禁止重复请求已执行 fingerprint
      - 在 orgunit 样例中加入“先查直接下级，再由 planner 阅读 observation item 的 `has_children=true` 字段并继续查其下级”的最小案例
+     - 在 orgunit 知识包加入 `no_query_guidance` 结构化片段，提供 `scope_summary`、默认名称/关键词/关系示例，以及最近确认实体存在时的续问示例
    - 本片完成判定：
      - planner 提示词与知识包案例对齐
      - 不新增 API、不引入 DSL、不写业务专用分支 prompt
@@ -541,6 +599,7 @@ P0 不引入 fanout DSL，不并发执行，也不由 query flow 维护业务专
      - 业务隔离：`working_results` 不包含 `remaining_parent_org_codes`、业务 winner 或 capability-specific 聚合字段
      - 候选澄清事件契约：`turn.query_candidates.presented.group_id` 与 `turn.query_clarification.requested.candidate_group_id` 正确关联
      - `resolved_entity` 不参与 planner 输入或 loop 完成判定
+     - pre-execution `NO_QUERY` guidance facts 与最终纯文本序号列表；覆盖无最近确认实体和有最近确认实体两种路径
    - 本片完成判定：
      - `modules/cubebox` 纯函数测试与 `internal/server` 组合层测试都能独立说明 471 的主约束
 
@@ -573,7 +632,8 @@ P0 不引入 fanout DSL，不并发执行，也不由 query flow 维护业务专
 11. [ ] `resolved_entity` 不参与 471 的 planner 输入、loop 状态推进或完成判定。
 12. [ ] 超预算、重复查询不收敛、非法 planner outcome 均 fail-closed，且 P0 不输出 partial answer。
 13. [ ] 用户可见回答不泄露内部执行痕迹。
-14. [ ] 新增用户可见 stopline 均登记稳定错误码、后端 message 与 `en/zh` 文案，并通过 `make check error-message`。
+14. [ ] pre-execution `NO_QUERY` 用户可见输出为模型基于受控事实生成的纯文本序号列表；默认不展示编码型示例，有最近确认实体时优先展示“这个组织 / 它”的续问示例。
+15. [ ] 新增用户可见 stopline 均登记稳定错误码、后端 message 与 `en/zh` 文案，并通过 `make check error-message`。
 
 ## 10. 风险与对策
 

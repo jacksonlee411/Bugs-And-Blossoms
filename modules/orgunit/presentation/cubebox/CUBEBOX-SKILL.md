@@ -43,6 +43,12 @@
 - 会话压缩摘要只用于普通对话连续性；不得把自然语言摘要当作查询锚点，也不得从摘要中猜测 `org_code` 或 `as_of`
 - 页面事实不在当前范围内；不要假设用户正在看的页面对象就是当前查询对象
 
+## no-query-guidance
+
+- `scope_summary` 与 `suggested_prompts` 由 `queries.md` 的 `no_query_guidance` 结构化片段提供
+- 默认示例必须使用组织名称、关键词或关系型问法，不把编码作为默认示例
+- 若 planner 输入已有最近确认实体，可优先使用“这个组织 / 它”的续问示例
+
 ## 首期允许的查询意图
 
 - `orgunit.details`

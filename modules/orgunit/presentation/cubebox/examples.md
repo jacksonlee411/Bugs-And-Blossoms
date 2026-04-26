@@ -536,3 +536,120 @@ query_dialogue_context:
 
 - 应在当前相关候选组内切换到另一项
 - 若“这个”指向仍不稳定，应回到澄清，而不是静默猜测跨组对象
+
+## 示例 12：同一 turn 内根据 `working_results` 继续展开
+
+用户问法：
+
+`展开完整组织树`
+
+第一轮 planner 期望输出：
+
+```json
+{
+  "outcome": "READ_PLAN",
+  "plan": {
+    "intent": "orgunit.list",
+    "confidence": 0.88,
+    "missing_params": [],
+    "steps": [
+      {
+        "id": "step-1",
+        "api_key": "orgunit.list",
+        "params": {
+          "as_of": "2026-04-25",
+          "include_disabled": false
+        },
+        "result_focus": [
+          "org_units[].org_code",
+          "org_units[].name",
+          "org_units[].has_children"
+        ],
+        "depends_on": []
+      }
+    ],
+    "explain_focus": [
+      "先查询一级组织",
+      "观察哪些组织仍有下级"
+    ]
+  }
+}
+```
+
+执行后 planner 看到的 `working_results` 示例：
+
+```json
+{
+  "working_results": {
+    "round_index": 1,
+    "latest_observation": {
+      "api_key": "orgunit.list",
+      "items": [
+        {
+          "org_code": "100000",
+          "name": "总部",
+          "has_children": true
+        },
+        {
+          "org_code": "200000",
+          "name": "共享服务中心",
+          "has_children": false
+        }
+      ],
+      "item_count": 2
+    },
+    "executed_fingerprints": [
+      "orgunit.list|as_of=\"2026-04-25\"|include_disabled=false"
+    ]
+  }
+}
+```
+
+下一轮 planner 期望输出：
+
+```json
+{
+  "outcome": "READ_PLAN",
+  "plan": {
+    "intent": "orgunit.list",
+    "confidence": 0.86,
+    "missing_params": [],
+    "steps": [
+      {
+        "id": "step-1",
+        "api_key": "orgunit.list",
+        "params": {
+          "as_of": "2026-04-25",
+          "parent_org_code": "100000",
+          "include_disabled": false
+        },
+        "result_focus": [
+          "org_units[].org_code",
+          "org_units[].name",
+          "org_units[].has_children"
+        ],
+        "depends_on": []
+      }
+    ],
+    "explain_focus": [
+      "继续查询 has_children=true 的直接下级"
+    ]
+  }
+}
+```
+
+若后续 `working_results.latest_observation.items` 已没有 `has_children=true` 的项目，planner 期望输出：
+
+```json
+{
+  "outcome": "DONE"
+}
+```
+
+说明：
+
+- `working_results` 不是新的 API 或 DSL，只是当前 turn 已执行只读 API 的 observation。
+- planner 可以阅读 `latest_observation.items[].has_children` 和 `org_code` 决定下一轮 `READ_PLAN`。
+- 不要输出裸文本 `DONE`；完成时必须输出 JSON envelope。
+- 不要重复执行 `executed_fingerprints` 中已经出现的查询。
+- 不要生成 `remaining_parent_org_codes`、业务 winner、聚合事实或其他 orgunit 专用状态字段。

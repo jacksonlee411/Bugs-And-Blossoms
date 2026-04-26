@@ -184,6 +184,16 @@ func knownErrorMessage(code string) string {
 		return "查询知识包不合法，请联系管理员检查模块知识配置。"
 	case "api_catalog_drift_or_executor_missing":
 		return "查询执行目录与系统注册表不一致，请稍后重试或联系管理员。"
+	case "cubebox_query_planner_outcome_invalid":
+		return "未能形成可执行查询计划，请换一种说法或补充查询条件后重试。"
+	case "cubebox_query_done_without_result":
+		return "查询计划未产生可用结果，请补充查询条件后重试。"
+	case "cubebox_query_no_query_after_execution":
+		return "查询计划在执行后偏离支持范围，请换一种说法后重试。"
+	case "cubebox_query_loop_budget_exceeded":
+		return "这次查询需要的步骤超出当前单轮预算，请缩小查询范围后重试。"
+	case "cubebox_query_loop_repeated_plan":
+		return "查询计划重复且无法继续推进，请缩小范围或换一种说法后重试。"
 	case "ai_model_provider_unavailable":
 		return "当前无可用模型服务，请检查模型健康状态后重试。"
 	case "ai_model_timeout":

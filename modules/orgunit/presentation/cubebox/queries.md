@@ -20,6 +20,16 @@ intents:
     description: 查询某个组织的审计事件摘要
     required_params: [org_code]
     optional_params: [limit]
+no_query_guidance:
+  scope_summary: 当前主要支持组织相关只读查询。
+  suggested_prompts:
+    - 查“华东销售中心”的详情
+    - 查“华东销售中心”当前的下级组织
+    - 搜索名称包含“销售”的组织
+  context_followup_prompts:
+    - 查这个组织的详情
+    - 查它当前的下级组织
+    - 查它在当前日期的状态
 ```
 
 ## 意图细则
