@@ -324,6 +324,7 @@ P0 冻结以下 planner outcome：
 
 - 不包含密钥、provider 配置、内部 session token 或未授权数据。
 - 不原样塞入无限 raw payload；必须按预算裁剪。
+- `executed_fingerprints` 在 prompt-facing 投影中应保持全量，以保证长链查询时 planner 仍能看到完整去重边界；`completed_plans`、`repeat_observations` 与 `latest_observation.items` 可按独立 prompt 预算裁剪。
 - 不新增 `aggregated_facts`、`remaining_parent_org_codes`、`current_winner` 等业务命名状态；若 observation item 中包含 `has_children` 等字段，只能来自已授权 read executor 的裁剪响应，query flow 不解释其业务含义。
 - 不作为长期 canonical event，不进入 `query_dialogue_context`，也不进入 `468C` 的 query dialogue fact window projection。
 - 不作为 narrator 之外的用户可见 JSON。
@@ -400,12 +401,18 @@ P0 不引入复杂 reason system；仅区分：
 
 ### 4.8 预算与去重
 
-P0 默认预算建议：
+项目初期默认预算建议：
 
-- `max_planning_rounds = 4`
-- `max_executed_steps = 8`
-- `max_working_result_items = 50`
-- `max_repeated_plan_fingerprint = 1`
+- `max_planning_rounds = 80`
+- `max_executed_steps = 160`
+- `max_working_result_items = 1000`
+- `max_repeated_plan_fingerprint = 2`
+
+补充说明：
+
+- 初期允许扩大单轮查询预算，优先保证“整树遍历/深层递归只读查询”能在单轮内继续推进。
+- 放大预算不改变 fail-closed 语义；预算耗尽时仍不进入 narrator，不输出 partial answer。
+- 预算放大后，`working_results` 进入 planner prompt 时必须继续裁剪，避免把完整历史执行轨迹线性塞回模型上下文；其中 `executed_fingerprints` 例外，仍保持全量提示，避免 planner 在长链查询中遗忘旧 fingerprint。
 
 每次执行前生成稳定 `plan_fingerprint` / `step_fingerprint`，至少包含：
 
@@ -416,7 +423,8 @@ P0 默认预算建议：
 若 planner 再次请求已执行过的同一 fingerprint：
 
 - 第一次重复：作为 `repeat_observations` 告知 planner 已执行过，不重复执行；消耗一次 planning round，不消耗 executed step，要求其选择下一步或 `DONE`
-- 再次重复：fail-closed，输出统一 stopline
+- 第二次重复：继续作为 `repeat_observations` 告知 planner 已执行过，不重复执行；仍只消耗 planning round，不消耗 executed step
+- 第三次重复：fail-closed，输出统一 stopline
 
 预算耗尽口径：
 

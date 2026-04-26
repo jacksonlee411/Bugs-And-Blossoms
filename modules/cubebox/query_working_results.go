@@ -9,10 +9,10 @@ import (
 )
 
 const (
-	DefaultQueryLoopMaxPlanningRounds     = 4
-	DefaultQueryLoopMaxExecutedSteps      = 8
-	DefaultQueryLoopMaxWorkingResultItems = 50
-	DefaultQueryLoopMaxRepeatedPlan       = 1
+	DefaultQueryLoopMaxPlanningRounds     = 80
+	DefaultQueryLoopMaxExecutedSteps      = 160
+	DefaultQueryLoopMaxWorkingResultItems = 1000
+	DefaultQueryLoopMaxRepeatedPlan       = 2
 )
 
 type QueryLoopBudget struct {
@@ -38,6 +38,12 @@ type QueryWorkingResultsBudget struct {
 	MaxExecutedSteps        int `json:"max_executed_steps"`
 	RemainingExecutedSteps  int `json:"remaining_executed_steps"`
 	MaxWorkingResultItems   int `json:"max_working_result_items"`
+}
+
+type QueryWorkingResultsPromptBudget struct {
+	MaxCompletedPlans         int
+	MaxLatestObservationItems int
+	MaxRepeatObservations     int
 }
 
 type QueryCompletedPlan struct {
@@ -226,11 +232,84 @@ func (s *QueryWorkingResultsState) HasExecution() bool {
 }
 
 func WorkingResultsPromptBlock(snapshot QueryWorkingResults) string {
-	body, err := json.Marshal(map[string]any{"working_results": snapshot})
+	body, err := json.Marshal(map[string]any{"working_results": ProjectQueryWorkingResultsForPrompt(snapshot)})
 	if err != nil {
 		return ""
 	}
 	return string(body)
+}
+
+func DefaultQueryWorkingResultsPromptBudget() QueryWorkingResultsPromptBudget {
+	return QueryWorkingResultsPromptBudget{
+		MaxCompletedPlans:         20,
+		MaxLatestObservationItems: 200,
+		MaxRepeatObservations:     8,
+	}
+}
+
+func NormalizeQueryWorkingResultsPromptBudget(budget QueryWorkingResultsPromptBudget) QueryWorkingResultsPromptBudget {
+	defaults := DefaultQueryWorkingResultsPromptBudget()
+	if budget.MaxCompletedPlans <= 0 {
+		budget.MaxCompletedPlans = defaults.MaxCompletedPlans
+	}
+	if budget.MaxLatestObservationItems <= 0 {
+		budget.MaxLatestObservationItems = defaults.MaxLatestObservationItems
+	}
+	if budget.MaxRepeatObservations <= 0 {
+		budget.MaxRepeatObservations = defaults.MaxRepeatObservations
+	}
+	return budget
+}
+
+func ProjectQueryWorkingResultsForPrompt(snapshot QueryWorkingResults) map[string]any {
+	return projectQueryWorkingResultsForPrompt(snapshot, DefaultQueryWorkingResultsPromptBudget())
+}
+
+func projectQueryWorkingResultsForPrompt(snapshot QueryWorkingResults, budget QueryWorkingResultsPromptBudget) map[string]any {
+	budget = NormalizeQueryWorkingResultsPromptBudget(budget)
+	projected := map[string]any{
+		"round_index":                snapshot.RoundIndex,
+		"original_user_goal":         snapshot.OriginalUserGoal,
+		"budget":                     snapshot.Budget,
+		"completed_plans":            projectCompletedPlansForPrompt(snapshot.CompletedPlans, budget.MaxCompletedPlans),
+		"executed_fingerprints":      cloneStrings(snapshot.ExecutedFingerprints),
+		"executed_fingerprint_count": len(snapshot.ExecutedFingerprints),
+		"repeat_observations":        projectRepeatObservationsForPrompt(snapshot.RepeatObservations, budget.MaxRepeatObservations),
+		"repeat_observation_count":   len(snapshot.RepeatObservations),
+	}
+	if snapshot.LatestObservation != nil {
+		projected["latest_observation"] = projectWorkingObservationForPrompt(snapshot.LatestObservation, budget.MaxLatestObservationItems)
+	}
+	return projected
+}
+
+func projectCompletedPlansForPrompt(items []QueryCompletedPlan, maxItems int) []QueryCompletedPlan {
+	items = cloneCompletedPlans(items)
+	if maxItems <= 0 || len(items) <= maxItems {
+		return items
+	}
+	return items[len(items)-maxItems:]
+}
+
+func projectRepeatObservationsForPrompt(items []QueryRepeatObservation, maxItems int) []QueryRepeatObservation {
+	items = cloneRepeatObservations(items)
+	if maxItems <= 0 || len(items) <= maxItems {
+		return items
+	}
+	return items[len(items)-maxItems:]
+}
+
+func projectWorkingObservationForPrompt(item *QueryWorkingObservation, maxItems int) *QueryWorkingObservation {
+	item = cloneWorkingObservation(item)
+	if item == nil {
+		return nil
+	}
+	if maxItems <= 0 || len(item.Items) <= maxItems {
+		return item
+	}
+	item.Items = append([]any(nil), item.Items[:maxItems]...)
+	item.Truncated = true
+	return item
 }
 
 func PlanFingerprint(plan ReadPlan) string {
