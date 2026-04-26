@@ -1,6 +1,6 @@
 # DEV-PLAN-468：CubeBox 同会话连续追问与模型自主性收敛方案
 
-**状态**: 实施中（2026-04-25 17:20 CST）
+**状态**: 实施中（2026-04-26 09:00 CST；`P2-1` / `P2-3a` / `P2-3b` 已完成）
 
 ## 0. 适用范围与评审分级
 
@@ -487,33 +487,37 @@ narrator 可以看到：
    - provider/runtime/model 元数据已从 provider prompt view 中剥离，仅保留在事件 metadata、管理 UI 或日志中
 3. [x] 已明确暂停的后续 owner：
    - 会话压缩 / 模型语义摘要相关后续项继续由 `DEV-PLAN-469` 持有；自 2026-04-26 起随 `469` 一并暂停实施，不再作为 `468` 当前主线
-4. [ ] `P2/后续 owner` 当前主线：
-   - 更完整的长结果语义收敛
+4. [x] `P2-1` 首轮代码落地已完成：删除 `NarrationProjector`，narrator 输入统一改为 raw `ExecuteResult.Payload`，`orgunit` AI 专用 projector 已从 shared query flow 与 executor 注册表移除。
+5. [x] `P2-3a` 首轮表达放开已完成：删除 narrator 固定 `1 到 3 句` 与业务字段名禁忌，`queryNarrationForbiddenPatterns` 收缩为 raw JSON / `step-*` / `payload/results` / 执行结构泄露拦截。
+6. [x] `P2-3b` 首轮澄清结构化已完成：候选澄清改为 `error_code`、`candidate_source`、`candidate_count`、`cannot_silent_select` 等结构化事实，自然追问由模型表达。
+7. [ ] `P2/后续 owner` 当前主线：
+   - `P2-2`：`ExecutionRegistry` / executor 层补齐 per-api 授权校验，避免只依赖“用户已进入 CubeBox + api_key 已注册 + 租户隔离”
+   - `P2-3c`：扩展 `page_context` 与 query context 的候选组/事实窗口，收敛 `recent_confirmed_entity` privileged winner 与“只保留最后一组候选”的残口
    - 第二个业务模块接入后的共享 narrator 去模块化污染复核
-   - `ExecutionRegistry` / executor 层补齐 per-api 授权校验，避免只依赖“用户已进入 CubeBox + api_key 已注册 + 租户隔离”
-   - 继续拆除模型输入前的事实过滤、业务字段禁忌、固定回答长度和本地澄清/错误模板，让模型在安全边界内承担自然表达与语义判断
-5. [ ] 每个后续实现 PR 必须先说明：它是在“给模型事实/上下文”，还是在“替模型做语义判断”。后者默认需要收敛或单独论证。
+8. [ ] 每个后续实现 PR 必须先说明：它是在“给模型事实/上下文”，还是在“替模型做语义判断”。后者默认需要收敛或单独论证。
 
-#### Slice E1：`P2-1` / 删除 projector，raw payload 统一进入 narrator 输入
+#### Slice E1：`P2-1` / 删除 projector，raw payload 统一进入 narrator 输入（2026-04-26 已完成）
 
 2026-04-26 策略更新：`NarrationProjector` 不作为可选工具保留，而是在当前阶段直接删除，避免后续模块接入时继续回流成第二套 AI 专用 DTO / 字段白名单保护层。默认策略改为：raw `ExecuteResult.Payload` 统一进入 narrator 输入，由模型基于执行结果事实生成最终自然语言回答；本地代码只负责输入装配、输出泄露拦截和 fail-closed 边界。
 
+2026-04-26 落地结果：首轮实现已完成，提交为 `83ca8453 (cubebox: feed narrator raw query payload)`。
+
 最小 PR 边界：
 
-1. [ ] 删除 `modules/cubebox.RegisteredExecutor.NarrationProjector` 字段与 `ExecutionRegistry.ProjectNarrationResults(...)` 中的 projector 分支。
-2. [ ] 删除 `defaultQueryNarrationResult(...)` 的 `data_present=true` 占位语义，改为统一将 `ExecuteResult.Payload` 浅拷贝为 `QueryNarrationResult.Data`。
-3. [ ] 删除当前 `orgunit` 侧 `projectOrgUnit*Narration(...)` 与 `copyAllowedNarrationField(...)` 等投影器实现，并从 executor 注册项中移除相关挂载。
-4. [ ] 保留 `Domain` 推断逻辑；不把 `APIKey`、`StepID`、`ResultFocus`、`ConfirmedEntity` 等执行 envelope 字段混入 `Data`。
-5. [ ] 调整 narrator prompt：
+1. [x] 删除 `modules/cubebox.RegisteredExecutor.NarrationProjector` 字段与 `ExecutionRegistry.ProjectNarrationResults(...)` 中的 projector 分支。
+2. [x] 删除 `defaultQueryNarrationResult(...)` 的 `data_present=true` 占位语义，改为统一将 `ExecuteResult.Payload` 浅拷贝为 `QueryNarrationResult.Data`。
+3. [x] 删除当前 `orgunit` 侧 `projectOrgUnit*Narration(...)` 与 `copyAllowedNarrationField(...)` 等投影器实现，并从 executor 注册项中移除相关挂载。
+4. [x] 保留 `Domain` 推断逻辑；不把 `APIKey`、`StepID`、`ResultFocus`、`ConfirmedEntity` 等执行 envelope 字段混入 `Data`。
+5. [x] 调整 narrator prompt：
    - 明确 `results[].data` 是执行结果 payload。
    - 允许模型读取 raw payload 中的业务事实。
    - 仍禁止逐字回显整份 JSON、内部执行字段或实现痕迹。
-6. [ ] 调整/新增测试：
+6. [x] 调整/新增测试：
    - narrator 输入包含 raw payload 中的业务字段。
    - 用户可见回答仍不得原样输出 raw JSON。
    - `APIKey`、`StepID`、`ResultFocus`、`ConfirmedEntity` 不进入 narrator `Data`。
    - 代码中不再存在 `NarrationProjector` 注册字段、`projectOrgUnit*Narration(...)` 或同类 AI 专用投影器。
-7. [ ] 更新 `DEV-PLAN-468-READINESS.md` 记录本策略变更、代码落地范围和验证命令。
+7. [x] 更新 `DEV-PLAN-468-READINESS.md` 记录本策略变更、代码落地范围和验证命令。
 
 明确非目标：
 
@@ -552,23 +556,29 @@ narrator 可以看到：
 - 不把 `api_key` 白名单误当成用户授权。
 - 不改变 DB / RLS / tenant 隔离作为数据边界的职责；per-api 授权只是补齐当前用户能否调用该只读能力的执行前门禁。
 
-#### Slice E3：`P2-3` / 放开事实输入与自然表达限制（未来待实现）
+#### Slice E3：`P2-3` / 放开事实输入与自然表达限制（`P2-3a` / `P2-3b` 已完成，`P2-3c` 待实现）
 
 2026-04-26 策略追加：延续删除 `NarrationProjector` 的同一批判，本计划确认当前仍有若干“保护性限制”实际属于错层控制。它们不是安全边界，而是在模型拿到事实之前裁剪事实、在模型生成回答之后限制自然表达，最终导致用户体验退化为短句、缺字段、缺上下文、误走 `NO_QUERY` 或固定澄清话术。
 
+当前分批状态：
+
+- `P2-3a`（已完成，提交 `83ca8453`）：放开 narrator 固定短答与业务字段名禁忌，允许“组织编码 100000”“生效日期 2026-04-25”、小标题、列表与普通业务字段表达，同时保留 raw JSON / `step-*` / `payload/results` / 执行计划结构泄露拦截。
+- `P2-3b`（已完成，提交 `c2482b9e`）：把 ambiguity clarification 从本地 prose owner 改为结构化事实输入，新增 `error_code`、`candidate_source`、`candidate_count`、`cannot_silent_select`，由模型组织自然追问。
+- `P2-3c`（待实现）：继续扩展 `page_context` 与 query context 候选组/事实窗口，解决“只保留最后一组候选”“`recent_confirmed_entity` privileged winner”“页面事实仍偏瘦”这三类残口。
+
 需要放开的限制：
 
-1. [ ] 业务字段名不再作为 narrator 输入或理解禁忌。`org_code`、`parent_org_code`、`as_of` 等字段是业务事实载体，模型应能读取、理解并在必要时用“组织编码”“上级组织”“生效日期”等自然语言表达；禁止的是原样回显 raw JSON、`params.org_code` 这类内部执行路径或完整执行结构。
-2. [ ] narrator 不再硬性默认 `1 到 3 句`。简单单对象结果可以短答；多对象列表、对比、审计、用户明确要求明细时，允许列表、分段和小标题。代码不得把回答长度、栏目词或自然键值表达作为 terminal error。
-3. [ ] 长结果不再先按业务字段白名单裁剪或降级。executor 返回什么，narrator 默认就能看什么；只有真正触及模型上下文预算时，才进入通用预算治理，且预算治理不得重新变成 capability-specific 字段投影器。
+1. [x] 业务字段名不再作为 narrator 输入或理解禁忌。`org_code`、`parent_org_code`、`as_of` 等字段是业务事实载体，模型应能读取、理解并在必要时用“组织编码”“上级组织”“生效日期”等自然语言表达；禁止的是原样回显 raw JSON、`params.org_code` 这类内部执行路径或完整执行结构。
+2. [x] narrator 不再硬性默认 `1 到 3 句`。简单单对象结果可以短答；多对象列表、对比、审计、用户明确要求明细时，允许列表、分段和小标题。代码不得把回答长度、栏目词或自然键值表达作为 terminal error。
+3. [x] 长结果不再先按业务字段白名单裁剪或降级。executor 返回什么，narrator 默认就能看什么；只有真正触及模型上下文预算时，才进入通用预算治理，且预算治理不得重新变成 capability-specific 字段投影器。
 4. [ ] 知识包只说明查询面、`api_key`、参数语义、字段含义、安全默认值与澄清规则，不持有“应该怎么回答”的模板库，不生成固定 prose，不扩大执行权限。
-5. [ ] 本地澄清/错误文案继续收敛。代码提供结构化 `candidates`、`missing_params`、错误码、错误事实和不可静默选择的约束；自然追问、候选说明和错误解释由模型基于当前用户输入、页面事实和对话上下文生成。
+5. [x] 当前 ambiguity clarification 已从本地 prose owner 收敛为结构化 `candidates`、错误码、错误事实和不可静默选择约束；自然追问由模型基于当前用户输入、页面事实和对话上下文生成。其他错误类型后续继续按同口径收敛。
 6. [ ] `page_context` 应给足事实：当前页面、当前对象、选中节点、历史日期、生效日期视图等都应结构化传给 planner/narrator。前端只提交事实 DTO，不拼 prompt、不替模型写解释。
 7. [ ] `NO_QUERY` 不应因为上下文缺失、字段被遮住或知识包过窄而误用。支持领域内缺参应优先走现有 `missing_params + clarifying_question`，可执行查询应生成 `ReadPlan`；`NO_QUERY` 只保留给真实不支持或不安全的查询。
 8. [ ] `recent_confirmed_entity` 不应继续作为唯一 privileged winner。保留它只为兼容，主输入应转向 `recent_confirmed_entities`、候选组、最近问答、澄清状态与页面事实组成的有序事实窗口。
 9. [ ] `recent_candidates` 不应只保留最后一组。应保留最近若干候选组，并带上 turn/来源/序号，让模型能处理“第一个”“最开始那个”“不是这个，另一个”。
 10. [ ] `api_key` 命名不应长期制造密钥误解。短期用户可见输出继续拦内部字段名；中期契约应评估改名为 `executor_key` 或相邻命名，只作为内部 planner/executor 协议字段。
-11. [ ] provider/runtime/model 元数据默认不进入模型业务上下文。它们可用于事件 metadata、运维诊断、管理 UI 或日志，但不应先主动注入 prompt 再靠禁词防泄露。
+11. [x] provider/runtime/model 元数据默认不进入模型业务上下文。它们可用于事件 metadata、运维诊断、管理 UI 或日志，但不应先主动注入 prompt 再靠禁词防泄露。
 
 仍然不能放开的限制：
 
@@ -581,10 +591,10 @@ narrator 可以看到：
 
 最小实现方向：
 
-1. [ ] 更新 narrator / clarifier / planner prompt：把“简短”降级为偏好，把“按用户问题选择表达结构”作为主规则；删除业务字段名禁忌和固定长度硬约束。
-2. [ ] 扩展输出泄露校验测试：确认自然中文列表、小标题、`组织编码 100000`、`生效日期 2026-04-25` 可通过；raw JSON、`params.org_code`、`api_key`、`payload/results`、`step-*` 仍被拒绝。
+1. [x] 首轮已更新 narrator / clarifier prompt：把“简短”降级为偏好，删除业务字段名禁忌和固定长度硬约束；后续若 planner 需要更多事实窗口，由 `P2-3c` 承接。
+2. [x] 已扩展输出泄露校验测试：自然中文列表、小标题、`组织编码 100000`、`生效日期 2026-04-25` 可通过；raw JSON、`params.org_code`、`api_key`、`payload/results`、`step-*` 仍被拒绝。
 3. [ ] 调整知识包规范：新增“不得写回答模板 / 不得声明权限 / 不得隐藏业务事实字段”的约束；字段语义说明必须服务于 plan 与理解，而不是本地展示模板。
-4. [ ] 继续把本地错误/澄清输出改为结构化事实 DTO，避免在 shared query flow 中增长模块专属中文文案。
+4. [x] 已先把 ambiguous candidate clarification 改为结构化事实 DTO，避免在 shared query flow 中继续增长模块专属中文文案；其他错误/澄清路径后续继续收敛。
 5. [ ] 统一 `page_context` 事实 DTO 的传递与消费，前端只传事实，后端只装配事实，模型负责语义选择。
 6. [ ] 调整 query context prompt view：把单个 `recent_confirmed_entity` 降级为兼容字段，强调模型应基于有序事实窗口自行解析当前指代；保留最近若干候选组而不是只保留最后一组。
 7. [ ] 清理知识包中的回答口吻与 prose 模板倾向，只保留字段语义、参数规则、默认值、澄清边界、候选处理规则和 `ReadPlan` 示例。
@@ -613,10 +623,21 @@ narrator 可以看到：
   - Web UI 对 `turn.context_compacted` 仅保留历史回放兼容展示，不再把它表述为当前运行时能力
 - [x] 2026-04-26 已裁决：`468 P2` 中与会话压缩 / 模型语义摘要相关的后续项随 `469` 暂停实施，不再作为 `468` 当前主线。
 - [x] 2026-04-26 已追加裁决：业务字段、长结果事实、页面事实和自然表达不应再被 projector、固定短答、本地 prose 模板或知识包回答模板提前限制；相关实现归入 `P2-3`。
+- [x] `P2-1` 已完成：
+  - 删除 `NarrationProjector`，raw `ExecuteResult.Payload` 统一进入 narrator 输入
+  - 删除 `data_present=true` 占位与 `orgunit` AI 专用 narration projector
+  - 保留 raw JSON / 内部执行结构泄露拦截
+- [x] `P2-3a` 已完成：
+  - narrator prompt 已删除固定 `1 到 3 句` 与业务字段名禁忌
+  - `queryNarrationForbiddenPatterns` 已收缩，允许“组织编码 100000”“生效日期 2026-04-25”、小标题、列表与普通业务字段表达
+- [x] `P2-3b` 已完成：
+  - clarification event / query context / clarifier 输入已补齐 `error_code`、`candidate_source`、`candidate_count`、`cannot_silent_select`
+  - `orgUnitSearchAmbiguousError` 已删除本地 `ClarifyingQuestion()` prose owner，仅保留结构化候选事实
 - [x] `P1` 回归修复已完成：
   - `page_context` 不再把 `/org/units/field-configs` 误识别为组织详情页
   - 组织详情页前端页面事实已优先读取 `effective_date`，但当前 DTO 仍保持 `view.as_of` 以避免把契约改名混入本次修复
   - 知识包 `apis.md` 与 `ExecutionRegistry` 已改为双向一致性校验
+- [ ] 当前剩余主线仅为：`P2-2` executor per-api 授权补强、`P2-3c` query/page context 候选组与事实窗口扩容，以及第二业务模块接入后的共享 narrator 去模块化污染复核。
 - [ ] DTO 契约改名后续 owner 已独立拆出：`DEV-PLAN-470`
 
 ## 7. 验收场景
@@ -721,3 +742,6 @@ narrator 可以看到：
 10. [X] 回写 `DEV-PLAN-468` 与 readiness 状态，并执行文档门禁校验。（2026-04-25）
 11. [X] 修复 `page_context` 路由误判、历史日期漏传与知识包-执行注册表单向校验残口；并把 `page_context.view.as_of -> effective_date` DTO 改名单独拆到 `DEV-PLAN-470`。（2026-04-25 21:48 CST）
 12. [X] 冻结 `468 P2-3`：放开业务事实输入、长结果事实、页面事实和自然表达限制，同时保留执行注册、权限、租户、参数校验与输出泄露防线。（2026-04-26）
+13. [X] 完成 `468 Slice E1 / P2-1`：删除 `NarrationProjector`，narrator 输入统一改为 raw `ExecuteResult.Payload`，`orgunit` AI 专用 projector 已移除。（2026-04-26 08:35 CST）
+14. [X] 完成 `468 Slice E3 / P2-3a`：删除 narrator 固定 `1 到 3 句` 与业务字段名禁忌，输出泄露校验收缩为 raw JSON / `step-*` / `payload/results` / 执行结构拦截。（2026-04-26 08:35 CST）
+15. [X] 完成 `468 Slice E3 / P2-3b`：候选澄清改为结构化事实 `error_code` / `candidate_source` / `candidate_count` / `cannot_silent_select`，自然追问由模型表达。（2026-04-26 09:00 CST）
