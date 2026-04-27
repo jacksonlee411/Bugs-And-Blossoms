@@ -1,8 +1,8 @@
 # DEV-PLAN-468C：CubeBox 查询上下文事实窗口扩展方案
 
-**状态**: 规划中（2026-04-27 07:26 CST；`recent_*` 语义槽位与消极防御方向已由 `DEV-PLAN-473` 纠偏）
+**状态**: 已关闭（2026-04-27 07:26 CST；原方案已被 `DEV-PLAN-473` 纠偏，并分别拆分到 `DEV-PLAN-471`、`DEV-PLAN-472`、`DEV-PLAN-474`）
 
-> 纠偏说明：本计划早期将 `recent_confirmed_entity`、`recent_candidates`、`recent_candidate_groups` 等设计为 prompt-facing 主事实窗口。该方向容易退化为本地“最近实体 / 最近候选 / target 绑定”状态机，也容易继续堆叠“不确定就本地防御”的保守分支。后续实施必须以 `DEV-PLAN-473` 为准：本地只提供中性的 `query_evidence_window`、工具目录和硬约束校验；模型负责语义续接、澄清恢复、日期补全、候选解释、显式 `ReadPlan` 参数和最终表达；执行器不得从 `recent_*` 字段隐式补 target。
+> 关闭说明：本计划早期将 `recent_confirmed_entity`、`recent_candidates`、`recent_candidate_groups` 等设计为 prompt-facing 主事实窗口。后续已确认该方向容易退化为本地 target 绑定与防御性状态机，因此不再作为独立活体 owner 继续推进。现行 owner 已拆分为：`DEV-PLAN-473` 持有“evidence 而非 winner”纠偏；`DEV-PLAN-471` 持有同一 turn loop 与 `working_results`；`DEV-PLAN-472` 持有 open clarification / 残缺日期续接；`DEV-PLAN-474` 持有跨 turn `result_list` 续接。本文仅保留为历史设计来源，不再作为当前实施前提。
 
 ## 0. 适用范围与评审分级
 

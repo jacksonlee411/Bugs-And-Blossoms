@@ -1,12 +1,12 @@
 # DEV-PLAN-464：CubeBox 查询链轻量化收敛与模型 owner 回正方案
 
-**状态**: 实施中（2026-04-24 23:40 CST）
+**状态**: 已完成（2026-04-24 23:40 CST；轻量化整改与验收项已收口）
 
 ## 0. 适用范围与评审分级
 
 - **评审分级**：`T2`
 - **范围一句话**：承接 `DEV-PLAN-463` 已冻结的问题诊断，作为 CubeBox 查询链的重构/整改方案，把当前“知识包外观 + server 二次业务理解 + 模板化回答”的偏航，收敛回“模型负责语义理解与解释、代码只负责护栏与执行”的最小查询链。
-- **关联模块/目录**：`docs/dev-plans/460-cubebox-digital-assistant-positioning-and-execution-contract.md`、`docs/dev-plans/461-cubebox-query-scenarios-minimal-contract.md`、`docs/dev-plans/462-cubebox-codex-compaction-adoption-value-and-unified-convergence-plan.md`、`docs/dev-plans/463-cubebox-orgunit-tree-discovery-gap-investigation-and-remediation-plan.md`、`modules/cubebox`、`modules/orgunit/presentation/cubebox`、`internal/server`
+- **关联模块/目录**：`docs/dev-plans/460-cubebox-digital-assistant-positioning-and-execution-contract.md`、`docs/dev-plans/461-cubebox-query-scenarios-minimal-contract.md`、`docs/dev-plans/462-cubebox-codex-compaction-adoption-value-and-unified-convergence-plan.md`、`docs/archive/dev-plans/463-cubebox-orgunit-tree-discovery-gap-investigation-and-remediation-plan.md`、`modules/cubebox`、`modules/orgunit/presentation/cubebox`、`internal/server`
 - **关联计划/标准**：`AGENTS.md`、`DEV-PLAN-003`、`DEV-PLAN-012`、`DEV-PLAN-017`、`DEV-PLAN-019`、`DEV-PLAN-022`、`DEV-PLAN-300`、`DEV-PLAN-301`、`DEV-PLAN-304`、`DEV-PLAN-430`、`DEV-PLAN-437A`、`DEV-PLAN-460`、`DEV-PLAN-461`、`DEV-PLAN-462`、`DEV-PLAN-463`
 - **用户入口/触点**：主应用壳层右侧 `CubeBox` 抽屉、`/internal/cubebox/turns:stream`、`internal/server/cubebox_query_flow.go`、`modules/cubebox/*`、`modules/orgunit/presentation/cubebox/*`
 - **上游调查 SSOT**：问题事实、偏航诊断、真实复验证据与直接 stopline 以 `DEV-PLAN-463` 及 `docs/dev-records/DEV-PLAN-463-READINESS.md` 为准；本文件只持有轻量化整改方向、owner 收口、迁移阶段与验收标准。

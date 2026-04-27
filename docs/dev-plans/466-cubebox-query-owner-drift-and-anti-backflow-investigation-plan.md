@@ -1,12 +1,12 @@
 # DEV-PLAN-466：CubeBox 查询链 owner 漂移与反回流扩大调查方案
 
-**状态**: 规划中（2026-04-25 08:12 CST）
+**状态**: 已完成（2026-04-25 08:12 CST；调查分类、owner 划分、优先级与 stopline 已冻结）
 
 ## 0. 适用范围与评审分级
 
 - **评审分级**：`T2`
 - **范围一句话**：承接 `DEV-PLAN-465` 对 `orgunit.details` 的局部收敛，扩大调查 `CubeBox` 查询链中仍残留的 owner 漂移、重复契约、模块私有语义回流与 fail-closed 缺口，并冻结后续整改优先级与 stopline。
-- **关联模块/目录**：`docs/dev-plans/460-cubebox-digital-assistant-positioning-and-execution-contract.md`、`docs/dev-plans/461-cubebox-query-scenarios-minimal-contract.md`、`docs/dev-plans/462-cubebox-codex-compaction-adoption-value-and-unified-convergence-plan.md`、`docs/dev-plans/463-cubebox-orgunit-tree-discovery-gap-investigation-and-remediation-plan.md`、`docs/dev-plans/464-cubebox-query-architecture-convergence-plan.md`、`docs/dev-plans/465-cubebox-orgunit-executor-contract-boundary-and-field-owner-convergence-plan.md`、`internal/server`、`modules/cubebox`、`modules/orgunit/presentation/cubebox`
+- **关联模块/目录**：`docs/dev-plans/460-cubebox-digital-assistant-positioning-and-execution-contract.md`、`docs/dev-plans/461-cubebox-query-scenarios-minimal-contract.md`、`docs/dev-plans/462-cubebox-codex-compaction-adoption-value-and-unified-convergence-plan.md`、`docs/archive/dev-plans/463-cubebox-orgunit-tree-discovery-gap-investigation-and-remediation-plan.md`、`docs/dev-plans/464-cubebox-query-architecture-convergence-plan.md`、`docs/dev-plans/465-cubebox-orgunit-executor-contract-boundary-and-field-owner-convergence-plan.md`、`internal/server`、`modules/cubebox`、`modules/orgunit/presentation/cubebox`
 - **关联计划/标准**：`AGENTS.md`、`DEV-PLAN-003`、`DEV-PLAN-460`、`DEV-PLAN-461`、`DEV-PLAN-462`、`DEV-PLAN-463`、`DEV-PLAN-464`、`DEV-PLAN-465`
 - **用户入口/触点**：Web Shell 右侧 `CubeBox` 抽屉、`/internal/cubebox/turns:stream`、`internal/server/cubebox_query_flow.go`、`internal/server/cubebox_orgunit_executors.go`、`modules/cubebox/*`、`modules/orgunit/presentation/cubebox/*`
 
@@ -37,10 +37,10 @@
 
 ## 2. 核心目标
 
-1. [ ] 冻结 `CubeBox` 查询链中仍残留的同型问题分类与优先级。
-2. [ ] 区分“代码行为风险”与“文档/测试漂移风险”，避免整改顺序失焦。
-3. [ ] 明确哪些问题应由 `orgunit` owner 收口，哪些问题应由共享 `CubeBox` query runtime 收口。
-4. [ ] 为后续 PR 分批落地提供 stopline 与验收标准，阻断相同问题继续回流。
+1. [x] 冻结 `CubeBox` 查询链中仍残留的同型问题分类与优先级。
+2. [x] 区分“代码行为风险”与“文档/测试漂移风险”，避免整改顺序失焦。
+3. [x] 明确哪些问题应由 `orgunit` owner 收口，哪些问题应由共享 `CubeBox` query runtime 收口。
+4. [x] 为后续 PR 分批落地提供 stopline 与验收标准，阻断相同问题继续回流。
 
 ## 3. 非目标
 
@@ -238,11 +238,11 @@ owner 冻结：
 
 ## 8. 验收标准
 
-1. [ ] 已形成覆盖上述 A-F 六类问题的正式调查 SSOT，而不是散落在对话或临时记录中。
-2. [ ] 已明确区分：哪些问题属于业务读契约 owner，哪些问题属于共享 `CubeBox` runtime owner。
-3. [ ] 已给出清晰的 `P1/P2/P3` 优先级与建议实施顺序。
-4. [ ] 已冻结 stopline，防止相同问题在后续 query 模块接入时继续回流。
-5. [ ] 未把本计划扩写成新的平台设计、DSL 设计或模板系统方案。
+1. [x] 已形成覆盖上述 A-F 六类问题的正式调查 SSOT，而不是散落在对话或临时记录中。
+2. [x] 已明确区分：哪些问题属于业务读契约 owner，哪些问题属于共享 `CubeBox` runtime owner。
+3. [x] 已给出清晰的 `P1/P2/P3` 优先级与建议实施顺序。
+4. [x] 已冻结 stopline，防止相同问题在后续 query 模块接入时继续回流。
+5. [x] 未把本计划扩写成新的平台设计、DSL 设计或模板系统方案。
 
 ## 9. 门禁与执行记录
 
@@ -258,6 +258,6 @@ owner 冻结：
 - `docs/dev-plans/460-cubebox-digital-assistant-positioning-and-execution-contract.md`
 - `docs/dev-plans/461-cubebox-query-scenarios-minimal-contract.md`
 - `docs/dev-plans/462-cubebox-codex-compaction-adoption-value-and-unified-convergence-plan.md`
-- `docs/dev-plans/463-cubebox-orgunit-tree-discovery-gap-investigation-and-remediation-plan.md`
+- `docs/archive/dev-plans/463-cubebox-orgunit-tree-discovery-gap-investigation-and-remediation-plan.md`
 - `docs/dev-plans/464-cubebox-query-architecture-convergence-plan.md`
 - `docs/dev-plans/465-cubebox-orgunit-executor-contract-boundary-and-field-owner-convergence-plan.md`

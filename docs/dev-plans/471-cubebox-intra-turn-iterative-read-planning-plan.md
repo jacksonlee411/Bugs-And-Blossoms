@@ -1,6 +1,8 @@
 # DEV-PLAN-471：CubeBox 借鉴 Codex Agent Loop 的同一 Turn 内迭代式只读编排方案
 
-**状态**: 规划中（2026-04-26 10:52 CST；已按 DEV-PLAN-003 评审收敛 P1/P2）
+**状态**: 已完成（2026-04-26 10:52 CST；P0 loop、working_results、wire format、真实复验与 readiness 已完成）
+
+> 回写说明：本文件下方保留了实施前的原始规划 checklist 作为设计过程记录；当前完成判定、自动化验证与真实页面证据以 `docs/dev-records/DEV-PLAN-471-READINESS.md` 为准。
 
 ## 0. 适用范围与评审分级
 

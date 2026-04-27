@@ -6,7 +6,7 @@
 
 - **评审分级**：`T2`
 - **范围一句话**：承接 `DEV-PLAN-467` 的调查结论，专门处理 `CubeBox` 在同一会话内基本连续追问时的记忆继承、指代解析、澄清表达与查询结果叙述问题，并扩大调查当前本地代码对大模型语义发挥的过度干预，以及哪些本可由模型承担的理解、澄清、候选选择、默认值选择、结果叙述与上下文收敛事项被提前编码到了 Go/TS 规则里。
-- **关联模块/目录**：`docs/dev-plans/438-cubebox-conversational-continuity-investigation-and-remediation-plan.md`、`docs/dev-plans/438a-cubebox-provider-message-role-normalization-and-codex-summary-alignment-plan.md`、`docs/dev-plans/460-cubebox-digital-assistant-positioning-and-execution-contract.md`、`docs/dev-plans/461-cubebox-query-scenarios-minimal-contract.md`、`docs/dev-plans/462-cubebox-codex-compaction-adoption-value-and-unified-convergence-plan.md`、`docs/dev-plans/464-cubebox-query-architecture-convergence-plan.md`、`docs/dev-plans/467-cubebox-query-conversational-continuity-and-memory-loss-investigation-plan.md`、`docs/dev-plans/469-cubebox-model-driven-compaction-critical-redesign-plan.md`、`internal/server/cubebox_query_flow.go`、`modules/cubebox/*`、`modules/orgunit/presentation/cubebox/*`
+- **关联模块/目录**：`docs/dev-plans/438-cubebox-conversational-continuity-investigation-and-remediation-plan.md`、`docs/dev-plans/438a-cubebox-provider-message-role-normalization-and-codex-summary-alignment-plan.md`、`docs/dev-plans/460-cubebox-digital-assistant-positioning-and-execution-contract.md`、`docs/dev-plans/461-cubebox-query-scenarios-minimal-contract.md`、`docs/dev-plans/462-cubebox-codex-compaction-adoption-value-and-unified-convergence-plan.md`、`docs/dev-plans/464-cubebox-query-architecture-convergence-plan.md`、`docs/archive/dev-plans/467-cubebox-query-conversational-continuity-and-memory-loss-investigation-plan.md`、`docs/dev-plans/469-cubebox-model-driven-compaction-critical-redesign-plan.md`、`internal/server/cubebox_query_flow.go`、`modules/cubebox/*`、`modules/orgunit/presentation/cubebox/*`
 - **关联计划/标准**：`AGENTS.md`、`DEV-PLAN-003`、`DEV-PLAN-004M1`、`DEV-PLAN-012`、`DEV-PLAN-300`、`DEV-PLAN-301`、`DEV-PLAN-304`、`DEV-PLAN-438`、`DEV-PLAN-460`、`DEV-PLAN-461`、`DEV-PLAN-462`、`DEV-PLAN-464`、`DEV-PLAN-467`、`DEV-PLAN-469`
 - **用户入口/触点**：主应用壳层右侧 `CubeBox` 抽屉、`/internal/cubebox/turns:stream`、查询 planner、只读执行器、查询 narrator、canonical events
 - **证据记录 SSOT**：后续真实页面复验、网络请求、对话样本、命令执行结果统一登记到 `docs/dev-records/DEV-PLAN-468-READINESS.md`；本文件只冻结方案、边界、实施切片与验收口径。
@@ -488,7 +488,7 @@ narrator 可以看到：
 6. [x] `P2-3b` 首轮澄清结构化已完成：候选澄清改为 `error_code`、`candidate_source`、`candidate_count`、`cannot_silent_select` 等结构化事实，自然追问由模型表达。
 7. [ ] `P2/后续 owner` 当前主线：
    - `P2-2`：`ExecutionRegistry` / executor 层补齐 per-api 授权校验，避免只依赖“用户已进入 CubeBox + api_key 已注册 + 租户隔离”
-   - `P2-3c`：扩展 query dialogue fact window，收敛 `recent_confirmed_entity` privileged winner 与“只保留最后一组候选”的残口；已拆出独立 owner `DEV-PLAN-468C`
+   - `P2-3c`：原先统一登记为 query dialogue fact window 残口；后续已拆分为 `DEV-PLAN-473`（evidence-window 纠偏）、`DEV-PLAN-471`（同 turn loop）、`DEV-PLAN-472`（open clarification / 残缺日期续接）与 `DEV-PLAN-474`（跨 turn `result_list` 续接）
    - 第二个业务模块接入后的共享 narrator 去模块化污染复核
 8. [ ] 每个后续实现 PR 必须先说明：它是在“给模型事实/上下文”，还是在“替模型做语义判断”。后者默认需要收敛或单独论证。
 
@@ -552,7 +552,7 @@ narrator 可以看到：
 - 不把 `api_key` 白名单误当成用户授权。
 - 不改变 DB / RLS / tenant 隔离作为数据边界的职责；per-api 授权只是补齐当前用户能否调用该只读能力的执行前门禁。
 
-#### Slice E3：`P2-3` / 放开事实输入与自然表达限制（`P2-3a` / `P2-3b` 已完成，`P2-3c` 待实现）
+#### Slice E3：`P2-3` / 放开事实输入与自然表达限制（`P2-3a` / `P2-3b` 已完成，原 `P2-3c` 已拆分到后续 owner）
 
 2026-04-26 策略追加：延续删除 `NarrationProjector` 的同一批判，本计划确认当前仍有若干“保护性限制”实际属于错层控制。它们不是安全边界，而是在模型拿到事实之前裁剪事实、在模型生成回答之后限制自然表达，最终导致用户体验退化为短句、缺字段、缺上下文、误走 `NO_QUERY` 或固定澄清话术。
 
@@ -560,7 +560,7 @@ narrator 可以看到：
 
 - `P2-3a`（已完成，提交 `83ca8453`）：放开 narrator 固定短答与业务字段名禁忌，允许“组织编码 100000”“生效日期 2026-04-25”、小标题、列表与普通业务字段表达，同时保留 raw JSON / `step-*` / `payload/results` / 执行计划结构泄露拦截。
 - `P2-3b`（已完成，提交 `c2482b9e`）：把 ambiguity clarification 从本地 prose owner 改为结构化事实输入，新增 `error_code`、`candidate_source`、`candidate_count`、`cannot_silent_select`，由模型组织自然追问。
-- `P2-3c`（待实现）：继续扩展 query dialogue fact window，解决“只保留最后一组候选”“`recent_confirmed_entity` privileged winner”“最近问答/澄清状态没有形成统一事实窗口”这三类残口。`page_context` 不纳入当前实施范围，清理由 `DEV-PLAN-470` 承接。
+- 原 `P2-3c` 已不再由单一 owner 持有：`DEV-PLAN-473` 已完成 evidence-window 纠偏，`DEV-PLAN-471` 已承接同一 turn observation/loop，`DEV-PLAN-472` 承接 open clarification / 残缺日期续接，`DEV-PLAN-474` 承接跨 turn `result_list` 续接。`page_context` 不纳入当前实施范围，清理由 `DEV-PLAN-470` 承接。
 
 需要放开的限制：
 
@@ -592,7 +592,7 @@ narrator 可以看到：
 3. [ ] 调整知识包规范：新增“不得写回答模板 / 不得声明权限 / 不得隐藏业务事实字段”的约束；字段语义说明必须服务于 plan 与理解，而不是本地展示模板。
 4. [x] 已先把 ambiguous candidate clarification 改为结构化事实 DTO，避免在 shared query flow 中继续增长模块专属中文文案；其他错误/澄清路径后续继续收敛。
 5. [ ] 按 `DEV-PLAN-470` 清理 `page_context` 当前运行时表面，不再作为当前事实输入扩展项。
-6. [ ] 调整 query context prompt view：把单个 `recent_confirmed_entity` 降级为兼容字段，强调模型应基于有序 query dialogue fact window 自行解析当前指代；保留最近若干候选组而不是只保留最后一组。
+6. [x] query context prompt-facing 主语义已改为 evidence-window 方向；`recent_confirmed_entity` 的 privileged winner 路径已由 `DEV-PLAN-473` 纠偏，候选组与后续续接残口分别转入 `DEV-PLAN-471/472/474`。
 7. [ ] 清理知识包中的回答口吻与 prose 模板倾向，只保留字段语义、参数规则、默认值、澄清边界、候选处理规则和 `ReadPlan` 示例。
 8. [ ] `api_key` -> `executor_key` 的契约改名切片已拆出独立 owner `DEV-PLAN-477`；执行时必须同步 read plan、知识包、执行注册表、泄露校验和测试，不引入双字段长期兼容。
 
@@ -632,8 +632,8 @@ narrator 可以看到：
 - [x] `P1` 回归修复已完成：
   - `page_context` 曾修复 `/org/units/field-configs` 误识别和组织详情页 `effective_date` 漏传；该链路已重新裁决为当前范围外，后续由 `DEV-PLAN-470` 清理
   - 知识包 `apis.md` 与 `ExecutionRegistry` 已改为双向一致性校验
-- [ ] 当前剩余主线仅为：`P2-2` executor per-api 授权补强、`P2-3c` query dialogue fact window 扩展（独立 owner：`DEV-PLAN-468C`），以及第二业务模块接入后的共享 narrator 去模块化污染复核。
-- [ ] `page_context` 当前范围剔除与清理 owner 已独立拆出：`DEV-PLAN-470`
+- [ ] 当前剩余主线仅为：`P2-2` executor per-api 授权补强，以及第二业务模块接入后的共享 narrator 去模块化污染复核。原 `P2-3c` 已拆分到 `DEV-PLAN-473/471/472/474`。
+- [x] `page_context` 当前范围剔除与清理 owner 已独立拆出并完成：`DEV-PLAN-470`
 
 ## 7. 验收场景
 

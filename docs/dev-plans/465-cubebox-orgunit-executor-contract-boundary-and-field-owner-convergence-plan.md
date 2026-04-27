@@ -6,7 +6,7 @@
 
 - **评审分级**：`T2`
 - **范围一句话**：冻结 `internal/server/cubebox_orgunit_executors.go` 与 `orgunit` 读契约之间的 owner 边界，明确字段展示归属、执行层职责与当前剩余风险，阻断 `CubeBox` 侧再次长出第二套 `orgunit` 响应契约。
-- **关联模块/目录**：`docs/dev-plans/460-cubebox-digital-assistant-positioning-and-execution-contract.md`、`docs/dev-plans/461-cubebox-query-scenarios-minimal-contract.md`、`docs/dev-plans/462-cubebox-codex-compaction-adoption-value-and-unified-convergence-plan.md`、`docs/dev-plans/463-cubebox-orgunit-tree-discovery-gap-investigation-and-remediation-plan.md`、`docs/dev-plans/464-cubebox-query-architecture-convergence-plan.md`、`internal/server`、`modules/cubebox`、`modules/orgunit`
+- **关联模块/目录**：`docs/dev-plans/460-cubebox-digital-assistant-positioning-and-execution-contract.md`、`docs/dev-plans/461-cubebox-query-scenarios-minimal-contract.md`、`docs/dev-plans/462-cubebox-codex-compaction-adoption-value-and-unified-convergence-plan.md`、`docs/archive/dev-plans/463-cubebox-orgunit-tree-discovery-gap-investigation-and-remediation-plan.md`、`docs/dev-plans/464-cubebox-query-architecture-convergence-plan.md`、`internal/server`、`modules/cubebox`、`modules/orgunit`
 - **关联计划/标准**：`AGENTS.md`、`DEV-PLAN-003`、`DEV-PLAN-460`、`DEV-PLAN-461`、`DEV-PLAN-462`、`DEV-PLAN-463`、`DEV-PLAN-464`
 - **用户入口/触点**：Web Shell 右侧 `CubeBox` 抽屉、`/internal/cubebox/turns:stream`、`internal/server/cubebox_orgunit_executors.go`、`internal/server/orgunit_api.go`
 
@@ -259,5 +259,5 @@
 - `docs/dev-plans/460-cubebox-digital-assistant-positioning-and-execution-contract.md`
 - `docs/dev-plans/461-cubebox-query-scenarios-minimal-contract.md`
 - `docs/dev-plans/462-cubebox-codex-compaction-adoption-value-and-unified-convergence-plan.md`
-- `docs/dev-plans/463-cubebox-orgunit-tree-discovery-gap-investigation-and-remediation-plan.md`
+- `docs/archive/dev-plans/463-cubebox-orgunit-tree-discovery-gap-investigation-and-remediation-plan.md`
 - `docs/dev-plans/464-cubebox-query-architecture-convergence-plan.md`

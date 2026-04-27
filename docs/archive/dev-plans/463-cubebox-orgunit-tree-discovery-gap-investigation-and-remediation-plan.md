@@ -1,6 +1,6 @@
 # DEV-PLAN-463：CubeBox 组织树查询暴露的知识包驱动偏航调查与收敛方案
 
-**状态**: 进行中（2026-04-24 17:10 CST）
+**状态**: 已归档（2026-04-24 17:10 CST；直接缺陷已修复并完成页面复验，后续轻量化整改与 owner 收口转入 `DEV-PLAN-464/465/466`）
 
 ## 0. 适用范围与评审分级
 
@@ -522,7 +522,7 @@ CubeBox 返回：
 
 ## 10. 交付物
 
-- `docs/dev-plans/463-cubebox-orgunit-tree-discovery-gap-investigation-and-remediation-plan.md`
+- `docs/archive/dev-plans/463-cubebox-orgunit-tree-discovery-gap-investigation-and-remediation-plan.md`
 - `docs/dev-records/DEV-PLAN-463-READINESS.md`
 - `internal/server` 中与 `orgunit.list` / `cubebox_query_flow` / `cubebox_orgunit_executors` 相关的修复与收敛实现
 - `modules/cubebox` 与 `modules/orgunit/presentation/cubebox` 中与知识包和执行边界相关的收敛更新

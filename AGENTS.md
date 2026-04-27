@@ -261,13 +261,13 @@ modules/{module}/
 - DEV-PLAN-460：CubeBox 数字助手定位与执行契约：`docs/dev-plans/460-cubebox-digital-assistant-positioning-and-execution-contract.md`
 - DEV-PLAN-461：CubeBox 查询场景最小契约：`docs/dev-plans/461-cubebox-query-scenarios-minimal-contract.md`
 - DEV-PLAN-462：CubeBox 借鉴 Codex 成熟压缩机制的统一收敛方案：`docs/dev-plans/462-cubebox-codex-compaction-adoption-value-and-unified-convergence-plan.md`
-- DEV-PLAN-463：CubeBox 组织树查询暴露的知识包驱动偏航调查与收敛方案：`docs/dev-plans/463-cubebox-orgunit-tree-discovery-gap-investigation-and-remediation-plan.md`
+- DEV-PLAN-463【归档】：CubeBox 组织树查询暴露的知识包驱动偏航调查与收敛方案（直接缺陷已修复；后续整改 owner 已转入 `DEV-PLAN-464/465/466`）：`docs/archive/dev-plans/463-cubebox-orgunit-tree-discovery-gap-investigation-and-remediation-plan.md`
 - DEV-PLAN-464：CubeBox 查询链架构收敛与知识包运行时重构方案：`docs/dev-plans/464-cubebox-query-architecture-convergence-plan.md`
 - DEV-PLAN-465：CubeBox OrgUnit Executor 契约边界与字段归属收敛方案：`docs/dev-plans/465-cubebox-orgunit-executor-contract-boundary-and-field-owner-convergence-plan.md`
 - DEV-PLAN-466：CubeBox 查询链 owner 漂移与反回流扩大调查方案：`docs/dev-plans/466-cubebox-query-owner-drift-and-anti-backflow-investigation-plan.md`
-- DEV-PLAN-467：CubeBox 查询会话不连贯与失去记忆专项调查方案：`docs/dev-plans/467-cubebox-query-conversational-continuity-and-memory-loss-investigation-plan.md`
+- DEV-PLAN-467【归档】：CubeBox 查询会话不连贯与失去记忆专项调查方案（调查与复验已完成；后续实施 owner 已转入 `DEV-PLAN-468/471/472`）：`docs/archive/dev-plans/467-cubebox-query-conversational-continuity-and-memory-loss-investigation-plan.md`
 - DEV-PLAN-468：CubeBox 同会话连续追问与模型自主性收敛方案：`docs/dev-plans/468-cubebox-session-continuity-and-model-autonomy-improvement-plan.md`
-- DEV-PLAN-468C：CubeBox 查询上下文事实窗口扩展方案：`docs/dev-plans/468c-cubebox-query-context-fact-window-plan.md`
+- DEV-PLAN-468C：CubeBox 查询上下文事实窗口扩展方案（已关闭；原范围已拆分到 `DEV-PLAN-473/471/472/474`）：`docs/dev-plans/468c-cubebox-query-context-fact-window-plan.md`
 - DEV-PLAN-469：CubeBox 模型驱动会话压缩批判与重构方案：`docs/dev-plans/469-cubebox-model-driven-compaction-critical-redesign-plan.md`
 - DEV-PLAN-470：CubeBox `page_context` 当前范围剔除与清理方案：`docs/dev-plans/470-cubebox-page-context-scope-removal-and-cleanup-plan.md`
 - DEV-PLAN-471：CubeBox 同一 Turn 内模型驱动的迭代式只读规划方案：`docs/dev-plans/471-cubebox-intra-turn-iterative-read-planning-plan.md`

@@ -9,7 +9,7 @@
 - **评审分级**：`T2`
 - **范围一句话**：专门处理 `CubeBox` 在同一 `conversation_id` 内进入澄清后，用户用短补充答复继续提供缺失信息时，系统无法让模型把该短答续接到上一轮澄清的问题；首期修复“残缺日期答复”“候选澄清后短答”和“本月 N 日”被误判为新缺参的问题。
 - **关联模块/目录**：`internal/server/cubebox_query_flow.go`、`modules/cubebox/*`、`modules/orgunit/presentation/cubebox/*`、`internal/server/cubebox_api_test.go`、`internal/server/cubebox_query_flow_test.go`
-- **关联计划/标准**：`AGENTS.md`、`docs/dev-plans/000-docs-format.md`、`docs/dev-plans/003-simple-not-easy-review-guide.md`、`docs/dev-plans/012-ci-quality-gates.md`、`docs/dev-plans/460-cubebox-digital-assistant-positioning-and-execution-contract.md`、`docs/dev-plans/461-cubebox-query-scenarios-minimal-contract.md`、`docs/dev-plans/464-cubebox-query-architecture-convergence-plan.md`、`docs/dev-plans/467-cubebox-query-conversational-continuity-and-memory-loss-investigation-plan.md`、`docs/dev-plans/468-cubebox-session-continuity-and-model-autonomy-improvement-plan.md`、`docs/dev-plans/468c-cubebox-query-context-fact-window-plan.md`、`docs/dev-plans/471-cubebox-intra-turn-iterative-read-planning-plan.md`
+- **关联计划/标准**：`AGENTS.md`、`docs/dev-plans/000-docs-format.md`、`docs/dev-plans/003-simple-not-easy-review-guide.md`、`docs/dev-plans/012-ci-quality-gates.md`、`docs/dev-plans/460-cubebox-digital-assistant-positioning-and-execution-contract.md`、`docs/dev-plans/461-cubebox-query-scenarios-minimal-contract.md`、`docs/dev-plans/464-cubebox-query-architecture-convergence-plan.md`、`docs/archive/dev-plans/467-cubebox-query-conversational-continuity-and-memory-loss-investigation-plan.md`、`docs/dev-plans/468-cubebox-session-continuity-and-model-autonomy-improvement-plan.md`、`docs/dev-plans/468c-cubebox-query-context-fact-window-plan.md`、`docs/dev-plans/471-cubebox-intra-turn-iterative-read-planning-plan.md`
 - **用户入口/触点**：主应用壳层右侧 `CubeBox` 抽屉、`/internal/cubebox/turns:stream`、查询 planner、查询澄清链路、查询会话上下文提取链路
 
 ### 0.1 Simple > Easy 三问
@@ -119,7 +119,7 @@
   - `docs/dev-plans/460-cubebox-digital-assistant-positioning-and-execution-contract.md`
   - `docs/dev-plans/461-cubebox-query-scenarios-minimal-contract.md`
   - `docs/dev-plans/464-cubebox-query-architecture-convergence-plan.md`
-  - `docs/dev-plans/467-cubebox-query-conversational-continuity-and-memory-loss-investigation-plan.md`
+  - `docs/archive/dev-plans/467-cubebox-query-conversational-continuity-and-memory-loss-investigation-plan.md`
   - `docs/dev-plans/468-cubebox-session-continuity-and-model-autonomy-improvement-plan.md`
   - `docs/dev-plans/468c-cubebox-query-context-fact-window-plan.md`
   - `docs/dev-plans/471-cubebox-intra-turn-iterative-read-planning-plan.md`
