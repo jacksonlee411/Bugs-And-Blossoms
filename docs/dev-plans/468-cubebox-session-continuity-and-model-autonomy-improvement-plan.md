@@ -489,7 +489,7 @@ narrator 可以看到：
 7. [ ] `P2/后续 owner` 当前主线：
    - `P2-2`：`ExecutionRegistry` / executor 层补齐 per-api 授权校验，避免只依赖“用户已进入 CubeBox + executor_key 已注册 + 租户隔离”
    - `P2-3c`：原先统一登记为 query dialogue fact window 残口；后续已拆分为 `DEV-PLAN-473`（evidence-window 纠偏）、`DEV-PLAN-471`（同 turn loop）、`DEV-PLAN-472`（open clarification / 残缺日期续接）与 `DEV-PLAN-474`（跨 turn `result_list` 续接）
-   - 第二个业务模块接入后的共享 narrator 去模块化污染复核
+   - 第二个业务模块接入前的共享 query runtime 去 `orgunit` 污染复核（owner 已拆至 `DEV-PLAN-478`）
 8. [ ] 每个后续实现 PR 必须先说明：它是在“给模型事实/上下文”，还是在“替模型做语义判断”。后者默认需要收敛或单独论证。
 
 #### Slice E1：`P2-1` / 删除 projector，raw payload 统一进入 narrator 输入（2026-04-26 已完成）
@@ -632,7 +632,7 @@ narrator 可以看到：
 - [x] `P1` 回归修复已完成：
   - `page_context` 曾修复 `/org/units/field-configs` 误识别和组织详情页 `effective_date` 漏传；该链路已重新裁决为当前范围外，后续由 `DEV-PLAN-470` 清理
   - 知识包 `apis.md` 与 `ExecutionRegistry` 已改为双向一致性校验
-- [ ] 当前剩余主线仅为：`P2-2` executor per-api 授权补强，以及第二业务模块接入后的共享 narrator 去模块化污染复核。原 `P2-3c` 已拆分到 `DEV-PLAN-473/471/472/474`。
+- [ ] 当前剩余主线仅为：`P2-2` executor per-api 授权补强，以及第二业务模块接入前的共享 query runtime 去 `orgunit` 污染复核（owner：`DEV-PLAN-478`）。原 `P2-3c` 已拆分到 `DEV-PLAN-473/471/472/474`。
 - [x] `page_context` 当前范围剔除与清理 owner 已独立拆出并完成：`DEV-PLAN-470`
 
 ## 7. 验收场景

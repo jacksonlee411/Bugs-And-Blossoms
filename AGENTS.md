@@ -277,6 +277,7 @@ modules/{module}/
 - DEV-PLAN-475：CubeBox OrgUnit 分页默认值与全部组织查询契约收敛方案：`docs/dev-plans/475-cubebox-orgunit-pagination-defaults-and-all-orgs-contract.md`
 - DEV-PLAN-476：CubeBox 全部组织纠错与重复计划收敛修复方案：`docs/dev-plans/476-cubebox-all-orgs-scope-correction-repeated-plan-remediation.md`
 - DEV-PLAN-477：CubeBox `api_key -> executor_key` 契约改名专项方案（已完成；当前仅保留边界与验证记录）：`docs/dev-plans/477-cubebox-api-key-to-executor-key-contract-rename-plan.md`
+- DEV-PLAN-478：CubeBox 第二业务模块接入前共享 Query Runtime 去 `orgunit` 污染复核方案：`docs/dev-plans/478-cubebox-shared-query-runtime-orgunit-bias-review-before-second-module-plan.md`
 - DEV-PLAN-440：彻底删除 SetID 的全仓收口方案（SetID 根删除唯一 PoR）：`docs/dev-plans/440-complete-setid-removal-plan.md`
 - DEV-PLAN-441：旧策略模块残余清理方案：`docs/dev-plans/441-legacy-strategy-module-residue-cleanup-plan.md`
 - DEV-PLAN-450：直接切除 jobcatalog / staffing / person 三模块方案（保留 orgunit）：`docs/dev-plans/450-direct-removal-of-jobcatalog-staffing-person-modules-plan.md`
