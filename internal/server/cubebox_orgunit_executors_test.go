@@ -147,6 +147,7 @@ func TestCubeBoxOrgUnitListExecutor(t *testing.T) {
 		"include_disabled": true,
 		"keyword":          "销售",
 		"status":           "disabled",
+		"is_business_unit": true,
 		"page":             float64(2),
 		"size":             float64(5),
 	})
@@ -163,6 +164,9 @@ func TestCubeBoxOrgUnitListExecutor(t *testing.T) {
 	if store.capturedReq.Status != orgUnitListStatusDisabled {
 		t.Fatalf("status=%q", store.capturedReq.Status)
 	}
+	if store.capturedReq.IsBusinessUnit == nil || !*store.capturedReq.IsBusinessUnit {
+		t.Fatalf("isBusinessUnit=%v", store.capturedReq.IsBusinessUnit)
+	}
 	if store.capturedReq.Limit != 5 || store.capturedReq.Offset != 10 {
 		t.Fatalf("limit=%d offset=%d", store.capturedReq.Limit, store.capturedReq.Offset)
 	}
@@ -171,6 +175,17 @@ func TestCubeBoxOrgUnitListExecutor(t *testing.T) {
 	}
 	if result.ConfirmedEntity != nil {
 		t.Fatalf("list result must not confirm a single entity, got %#v", result.ConfirmedEntity)
+	}
+}
+
+func TestCubeBoxOrgUnitListExecutorRejectsNonBoolBusinessUnitFilter(t *testing.T) {
+	executor := cubeBoxOrgUnitListExecutor{}
+	_, err := executor.ValidateParams(map[string]any{
+		"as_of":            "2026-04-23",
+		"is_business_unit": "true",
+	})
+	if err == nil {
+		t.Fatal("expected is_business_unit validation error")
 	}
 }
 

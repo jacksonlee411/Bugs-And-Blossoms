@@ -780,6 +780,11 @@ func (s *orgUnitPGStore) ListOrgUnitsPage(ctx context.Context, tenantID string, 
 	if req.Status == orgUnitListStatusDisabled {
 		where = append(where, `v.status = 'disabled'`)
 	}
+	if req.IsBusinessUnit != nil {
+		where = append(where, fmt.Sprintf("v.is_business_unit = $%d::boolean", argPos))
+		args = append(args, *req.IsBusinessUnit)
+		argPos++
+	}
 
 	keyword := strings.TrimSpace(req.Keyword)
 	if keyword != "" {

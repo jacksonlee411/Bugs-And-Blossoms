@@ -822,6 +822,37 @@ func TestOrgUnitPGStore_ListOrgUnitsPage(t *testing.T) {
 		}
 	})
 
+	t.Run("success business unit filter searches all org units", func(t *testing.T) {
+		isBusinessUnit := true
+		tx := &queryCaptureTx{stubTx: &stubTx{
+			row:  metadataScanRow{vals: []any{int(1)}},
+			rows: &metadataScanRows{records: [][]any{{"A001", "Root", "active", true, true}}},
+		}}
+		store := &orgUnitPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx, nil })}
+		items, total, err := store.ListOrgUnitsPage(ctx, "t1", orgUnitListPageRequest{
+			AsOf:           "2026-01-01",
+			IsBusinessUnit: &isBusinessUnit,
+		})
+		if err != nil {
+			t.Fatalf("err=%v", err)
+		}
+		if total != 1 || len(items) != 1 {
+			t.Fatalf("total=%d items=%v", total, items)
+		}
+		if len(tx.querySQLs) != 1 {
+			t.Fatalf("expected one list query, got %d", len(tx.querySQLs))
+		}
+		if !strings.Contains(tx.querySQLs[0], "v.is_business_unit = $3::boolean") {
+			t.Fatalf("business unit filter missing, sql=%q", tx.querySQLs[0])
+		}
+		if strings.Contains(tx.querySQLs[0], rootOrgNodeCompatCondition("v")) {
+			t.Fatalf("business unit list without parent must search all org units, got sql=%q", tx.querySQLs[0])
+		}
+		if len(tx.queryArgs) != 1 || len(tx.queryArgs[0]) < 3 || tx.queryArgs[0][2] != true {
+			t.Fatalf("expected business unit argument, got %#v", tx.queryArgs)
+		}
+	})
+
 	t.Run("success children list with has_children", func(t *testing.T) {
 		parentOrgNodeKey, err := encodeOrgNodeKeyFromID(123)
 		if err != nil {

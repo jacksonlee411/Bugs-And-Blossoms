@@ -357,7 +357,28 @@ func TestParseOrgUnitListQueryOptions(t *testing.T) {
 				}
 			},
 		},
+		{
+			name:    "is business unit true",
+			rawURL:  "/org/api/org-units?is_business_unit=true",
+			wantAny: true,
+			check: func(t *testing.T, opts orgUnitListQueryOptions) {
+				if opts.IsBusinessUnit == nil || !*opts.IsBusinessUnit {
+					t.Fatalf("opts=%+v", opts)
+				}
+			},
+		},
+		{
+			name:    "is business unit false",
+			rawURL:  "/org/api/org-units?is_business_unit=0",
+			wantAny: true,
+			check: func(t *testing.T, opts orgUnitListQueryOptions) {
+				if opts.IsBusinessUnit == nil || *opts.IsBusinessUnit {
+					t.Fatalf("opts=%+v", opts)
+				}
+			},
+		},
 		{name: "status invalid", rawURL: "/org/api/org-units?status=bad", wantErr: true},
+		{name: "is business unit invalid", rawURL: "/org/api/org-units?is_business_unit=yes", wantErr: true},
 		{name: "sort invalid", rawURL: "/org/api/org-units?sort=bad", wantErr: true},
 		{name: "sort empty", rawURL: "/org/api/org-units?sort=", wantErr: true},
 		{name: "order without sort", rawURL: "/org/api/org-units?order=asc", wantErr: true},
@@ -397,25 +418,32 @@ func TestParseOrgUnitListQueryOptions(t *testing.T) {
 }
 
 func TestFilterOrgUnitListItems(t *testing.T) {
+	isBU := true
+	notBU := false
 	items := []orgUnitListItem{
-		{OrgCode: "A001", Name: "Root Org", Status: ""},
-		{OrgCode: "B002", Name: "Beta Team", Status: "active"},
+		{OrgCode: "A001", Name: "Root Org", Status: "", IsBusinessUnit: &isBU},
+		{OrgCode: "B002", Name: "Beta Team", Status: "active", IsBusinessUnit: &notBU},
 		{OrgCode: "C003", Name: "Closed Team", Status: "disabled"},
 	}
 
-	all := filterOrgUnitListItems(items, "", "")
+	all := filterOrgUnitListItems(items, "", "", nil)
 	if len(all) != 3 {
 		t.Fatalf("len=%d", len(all))
 	}
 
-	byStatus := filterOrgUnitListItems(items, "", "active")
+	byStatus := filterOrgUnitListItems(items, "", "active", nil)
 	if len(byStatus) != 2 {
 		t.Fatalf("status len=%d", len(byStatus))
 	}
 
-	byKeyword := filterOrgUnitListItems(items, "closed", "")
+	byKeyword := filterOrgUnitListItems(items, "closed", "", nil)
 	if len(byKeyword) != 1 || byKeyword[0].OrgCode != "C003" {
 		t.Fatalf("keyword rows=%+v", byKeyword)
+	}
+
+	byBusinessUnit := filterOrgUnitListItems(items, "", "", &isBU)
+	if len(byBusinessUnit) != 1 || byBusinessUnit[0].OrgCode != "A001" {
+		t.Fatalf("business unit rows=%+v", byBusinessUnit)
 	}
 }
 
@@ -525,9 +553,9 @@ func TestListOrgUnitListPage(t *testing.T) {
 	t.Run("roots and errors", func(t *testing.T) {
 		store := &resolveOrgCodeStore{
 			listNodes: []OrgUnitNode{
-				{OrgCode: "Z009", Name: "Zero", Status: "", HasChildren: true},
-				{OrgCode: "B002", Name: "Beta", Status: "disabled", HasChildren: false},
-				{OrgCode: "A001", Name: "Alpha", Status: "active", HasChildren: false},
+				{OrgCode: "Z009", Name: "Zero", Status: "", IsBusinessUnit: false, HasChildren: true},
+				{OrgCode: "B002", Name: "Beta", Status: "disabled", IsBusinessUnit: true, HasChildren: false},
+				{OrgCode: "A001", Name: "Alpha", Status: "active", IsBusinessUnit: false, HasChildren: false},
 			},
 		}
 		items, total, err := listOrgUnitListPage(context.Background(), store, "t1", orgUnitListPageRequest{
@@ -543,8 +571,23 @@ func TestListOrgUnitListPage(t *testing.T) {
 		if !(orgUnitListPageRequest{AsOf: "2026-01-01", Keyword: "Alpha"}).ShouldSearchAllOrgUnits() {
 			t.Fatal("keyword list without parent should search all org units")
 		}
+		isBusinessUnit := true
+		if !(orgUnitListPageRequest{AsOf: "2026-01-01", IsBusinessUnit: &isBusinessUnit}).ShouldSearchAllOrgUnits() {
+			t.Fatal("business unit list without parent should search all org units")
+		}
 		if (orgUnitListPageRequest{AsOf: "2026-01-01"}).ShouldSearchAllOrgUnits() {
 			t.Fatal("plain list without parent should keep root scope")
+		}
+
+		businessUnits, totalBusinessUnits, err := listOrgUnitListPage(context.Background(), store, "t1", orgUnitListPageRequest{
+			AsOf:           "2026-01-01",
+			IsBusinessUnit: &isBusinessUnit,
+		})
+		if err != nil {
+			t.Fatalf("err=%v", err)
+		}
+		if totalBusinessUnits != 1 || len(businessUnits) != 1 || businessUnits[0].OrgCode != "B002" {
+			t.Fatalf("businessUnits=%+v total=%d", businessUnits, totalBusinessUnits)
 		}
 
 		roots, totalRoots, err := listOrgUnitListPage(context.Background(), store, "t1", orgUnitListPageRequest{

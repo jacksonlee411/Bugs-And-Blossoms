@@ -11,7 +11,7 @@ intents:
   - key: orgunit.list
     description: 查询组织列表、全租户关键词组织列表，或某个上级组织下的直接子组织列表
     required_params: [as_of]
-    optional_params: [include_disabled, parent_org_code, keyword, status, page, size]
+    optional_params: [include_disabled, parent_org_code, keyword, status, is_business_unit, page, size]
   - key: orgunit.search
     description: 根据关键词搜索组织并返回命中的组织与路径
     required_params: [query, as_of]
@@ -56,15 +56,17 @@ no_query_guidance:
 - “列出当前所有一级组织”
 - “看一下 1001 下面的子组织”
 - “按名称搜今天有效的组织列表”
+- “列出全部业务单元”
 
 参数规则：
 
 - 必填：`as_of`
-- 可选：`include_disabled`、`parent_org_code`、`keyword`、`status`、`page`、`size`
+- 可选：`include_disabled`、`parent_org_code`、`keyword`、`status`、`is_business_unit`、`page`、`size`
 - `status` 如需填写，只使用 canonical 值 `active`、`disabled`、`all`
 - 若用户只说“查询组织树”“列出组织”“看组织树”，未给 `as_of` 时默认按当前自然日
 - 若用户未说明范围，默认先查当前租户一级组织，不要求首轮必须提供 `parent_org_code`
 - 若用户说“列出全部/所有的 X 组织”“名称包含 X 的组织列表”，且没有给上级组织范围，使用 `keyword` 且不要填写 `parent_org_code`，表示在当前租户全部有效组织中检索
+- 若用户说“业务单元”“全部业务单元”“所有业务单元”，使用 `is_business_unit=true`；若没有给上级组织范围，不要填写 `parent_org_code`，表示在当前租户全部有效组织中按业务单元标记过滤
 - 若用户只说“某个组织下面有哪些组织”，优先使用 `parent_org_code`
 - 若用户强调“分页”“第几页”“每页多少条”，可补 `page`、`size`
 

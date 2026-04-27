@@ -123,6 +123,52 @@
 - 本例默认按当前自然日查询
 - 本例未给 `parent_org_code`，表示先返回当前租户一级组织
 
+## 示例 3A：全部业务单元列表
+
+用户问法：
+
+`列出全部业务单元`
+
+期望 `ReadPlan`：
+
+```json
+{
+  "intent": "orgunit.list",
+  "confidence": 0.91,
+  "missing_params": [],
+  "steps": [
+    {
+      "id": "step-1",
+      "api_key": "orgunit.list",
+      "params": {
+        "as_of": "2026-04-27",
+        "include_disabled": false,
+        "is_business_unit": true
+      },
+      "result_focus": [
+        "as_of",
+        "org_units[].org_code",
+        "org_units[].name",
+        "org_units[].status",
+        "org_units[].is_business_unit",
+        "org_units[].has_children"
+      ],
+      "depends_on": []
+    }
+  ],
+  "explain_focus": [
+    "当前租户全部启用业务单元",
+    "组织编码",
+    "是否还有下级"
+  ]
+}
+```
+
+说明：
+
+- 本例默认按当前自然日查询
+- 本例未给 `parent_org_code`，`is_business_unit=true` 表示在当前租户全部有效组织中按业务单元标记过滤，不是只查一级组织
+
 ## 示例 4：缺参追问
 
 用户问法：

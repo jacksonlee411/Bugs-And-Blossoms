@@ -83,7 +83,7 @@ func newCubeBoxOrgUnitRegisteredExecutors(store OrgUnitStore) ([]cubebox.Registe
 		cubebox.RegisteredExecutor{
 			APIKey:         "orgunit.list",
 			RequiredParams: []string{"as_of"},
-			OptionalParams: []string{"include_disabled", "parent_org_code", "keyword", "status", "page", "size"},
+			OptionalParams: []string{"include_disabled", "parent_org_code", "keyword", "status", "is_business_unit", "page", "size"},
 			Executor: cubeBoxOrgUnitListExecutor{
 				store: store,
 			},
@@ -212,6 +212,13 @@ func (e cubeBoxOrgUnitListExecutor) ValidateParams(raw map[string]any) (map[stri
 			params["status"] = status
 		}
 	}
+	if value, ok := raw["is_business_unit"]; ok && value != nil {
+		isBusinessUnit, ok := value.(bool)
+		if !ok {
+			return nil, newBadRequestError("is_business_unit invalid")
+		}
+		params["is_business_unit"] = isBusinessUnit
+	}
 	if value, ok := raw["page"]; ok && value != nil {
 		page, err := normalizeNonNegativeInt(value, "page")
 		if err != nil {
@@ -256,6 +263,10 @@ func (e cubeBoxOrgUnitListExecutor) Execute(ctx context.Context, request cubebox
 	}
 	if value, ok := params["status"]; ok {
 		pageReq.Status = strings.TrimSpace(value.(string))
+	}
+	if value, ok := params["is_business_unit"]; ok {
+		isBusinessUnit := value.(bool)
+		pageReq.IsBusinessUnit = &isBusinessUnit
 	}
 	page, hasPage := params["page"]
 	size, hasSize := params["size"]
