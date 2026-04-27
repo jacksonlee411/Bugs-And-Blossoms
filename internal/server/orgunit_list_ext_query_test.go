@@ -149,3 +149,30 @@ func TestHandleOrgUnitsAPI_ExtQuerySuccess_PassesParams(t *testing.T) {
 		t.Fatalf("limit=%d offset=%d", gotReq.Limit, gotReq.Offset)
 	}
 }
+
+func TestHandleOrgUnitsAPI_BusinessUnitFilterPassesParams(t *testing.T) {
+	var gotReq orgUnitListPageRequest
+	store := &extListStoreStub{
+		resolveOrgCodeStore: &resolveOrgCodeStore{},
+		listFn: func(_ context.Context, _ string, req orgUnitListPageRequest) ([]orgUnitListItem, int, error) {
+			gotReq = req
+			isBusinessUnit := true
+			return []orgUnitListItem{{OrgCode: "A001", Name: "Root", Status: "active", IsBusinessUnit: &isBusinessUnit}}, 1, nil
+		},
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/org/api/org-units?as_of=2026-01-01&is_business_unit=true", nil)
+	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "T"}))
+	rec := httptest.NewRecorder()
+	handleOrgUnitsAPI(rec, req, store, nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+	}
+
+	if gotReq.IsBusinessUnit == nil || !*gotReq.IsBusinessUnit {
+		t.Fatalf("isBusinessUnit=%v", gotReq.IsBusinessUnit)
+	}
+	if !gotReq.ShouldSearchAllOrgUnits() {
+		t.Fatal("business unit filter without parent should search all org units")
+	}
+}

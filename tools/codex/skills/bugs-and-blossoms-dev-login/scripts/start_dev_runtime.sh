@@ -30,7 +30,7 @@ env:
   DEV_SERVER_BASE_URL      default: http://localhost:8080
   DEV_SUPERADMIN_BASE_URL  default: http://localhost:8081
   DEV_RUNTIME_DIR          default: .local/runtime
-  OPENAI_API_KEY           required by CubeBox at runtime when secret_ref=env://OPENAI_API_KEY
+  CUBEBOX_OPENAI_API_KEY   required by CubeBox at runtime when secret_ref=env://CUBEBOX_OPENAI_API_KEY
 EOF
 }
 
@@ -225,10 +225,10 @@ load_env_file ".env"
 load_env_file ".env.local"
 load_env_file "env.local"
 
-if file_defines_env_key ".env" "OPENAI_API_KEY" && file_defines_env_key ".env.local" "OPENAI_API_KEY"; then
-  warn "OPENAI_API_KEY is present in both .env and .env.local; keep the real key in .env.local to avoid drift."
-elif file_defines_env_key ".env" "OPENAI_API_KEY" && ! file_defines_env_key ".env.local" "OPENAI_API_KEY"; then
-  warn "OPENAI_API_KEY is present in .env but not .env.local; CubeBox still works, but project policy prefers .env.local for local secrets."
+if file_defines_env_key ".env" "CUBEBOX_OPENAI_API_KEY" && file_defines_env_key ".env.local" "CUBEBOX_OPENAI_API_KEY"; then
+  warn "CUBEBOX_OPENAI_API_KEY is present in both .env and .env.local; keep the real key in .env.local to avoid drift."
+elif file_defines_env_key ".env" "CUBEBOX_OPENAI_API_KEY" && ! file_defines_env_key ".env.local" "CUBEBOX_OPENAI_API_KEY"; then
+  warn "CUBEBOX_OPENAI_API_KEY is present in .env but not .env.local; CubeBox still works, but project policy prefers .env.local for local secrets."
 fi
 
 if [[ "$build_ui" == "1" || ! -f internal/server/assets/web/index.html ]]; then
@@ -343,16 +343,16 @@ rm -f "$login_tmp"
 log "login OK: ${DEV_LOGIN_EMAIL:-admin@localhost}"
 
 if [[ "$setup_cubebox" == "1" ]]; then
-  if [[ -z "${OPENAI_API_KEY:-}" ]]; then
-    warn "OPENAI_API_KEY is not visible to this shell after loading env files. CubeBox settings will be saved, but real turns will fail until the server starts with OPENAI_API_KEY."
+  if [[ -z "${CUBEBOX_OPENAI_API_KEY:-}" ]]; then
+    warn "CUBEBOX_OPENAI_API_KEY is not visible to this shell after loading env files. CubeBox settings will be saved, but real turns will fail until the server starts with CUBEBOX_OPENAI_API_KEY."
   fi
 
   provider_id="${CUBEBOX_PROVIDER_ID:-openai-compatible}"
   provider_type="${CUBEBOX_PROVIDER_TYPE:-codex}"
   provider_display_name="${CUBEBOX_PROVIDER_DISPLAY_NAME:-codex}"
   provider_base_url="${CUBEBOX_BASE_URL:-https://code2026.pumpkinai.vip/v1}"
-  secret_ref="${CUBEBOX_SECRET_REF:-env://OPENAI_API_KEY}"
-  masked_secret="${CUBEBOX_MASKED_SECRET:-env://OPENAI_API_KEY}"
+  secret_ref="${CUBEBOX_SECRET_REF:-env://CUBEBOX_OPENAI_API_KEY}"
+  masked_secret="${CUBEBOX_MASKED_SECRET:-env://CUBEBOX_OPENAI_API_KEY}"
   model_slug="${CUBEBOX_MODEL_SLUG:-gpt-5.2}"
   capability_summary_json="${CUBEBOX_CAPABILITY_SUMMARY_JSON:-{}}"
 

@@ -224,6 +224,41 @@ errors:
     user_message_key: errors.api_catalog_drift_or_executor_missing
     backend_policy: mapped
     frontend_policy: mapped
+  - code: cubebox_query_planner_outcome_invalid
+    module: assistant
+    http_status: 422
+    severity: error
+    user_message_key: errors.cubebox_query_planner_outcome_invalid
+    backend_policy: mapped
+    frontend_policy: mapped
+  - code: cubebox_query_done_without_result
+    module: assistant
+    http_status: 422
+    severity: error
+    user_message_key: errors.cubebox_query_done_without_result
+    backend_policy: mapped
+    frontend_policy: mapped
+  - code: cubebox_query_no_query_after_execution
+    module: assistant
+    http_status: 422
+    severity: error
+    user_message_key: errors.cubebox_query_no_query_after_execution
+    backend_policy: mapped
+    frontend_policy: mapped
+  - code: cubebox_query_loop_budget_exceeded
+    module: assistant
+    http_status: 422
+    severity: error
+    user_message_key: errors.cubebox_query_loop_budget_exceeded
+    backend_policy: mapped
+    frontend_policy: mapped
+  - code: cubebox_query_loop_repeated_plan
+    module: assistant
+    http_status: 422
+    severity: error
+    user_message_key: errors.cubebox_query_loop_repeated_plan
+    backend_policy: mapped
+    frontend_policy: mapped
   - code: ai_reply_model_target_mismatch
     module: assistant
     http_status: 422

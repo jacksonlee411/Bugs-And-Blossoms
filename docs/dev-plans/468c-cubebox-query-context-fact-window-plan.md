@@ -1,6 +1,8 @@
 # DEV-PLAN-468C：CubeBox 查询上下文事实窗口扩展方案
 
-**状态**: 规划中（2026-04-26 10:15 CST；已剔除 `page_context` 范围）
+**状态**: 规划中（2026-04-27 07:26 CST；`recent_*` 语义槽位与消极防御方向已由 `DEV-PLAN-473` 纠偏）
+
+> 纠偏说明：本计划早期将 `recent_confirmed_entity`、`recent_candidates`、`recent_candidate_groups` 等设计为 prompt-facing 主事实窗口。该方向容易退化为本地“最近实体 / 最近候选 / target 绑定”状态机，也容易继续堆叠“不确定就本地防御”的保守分支。后续实施必须以 `DEV-PLAN-473` 为准：本地只提供中性的 `query_evidence_window`、工具目录和硬约束校验；模型负责语义续接、澄清恢复、日期补全、候选解释、显式 `ReadPlan` 参数和最终表达；执行器不得从 `recent_*` 字段隐式补 target。
 
 ## 0. 适用范围与评审分级
 

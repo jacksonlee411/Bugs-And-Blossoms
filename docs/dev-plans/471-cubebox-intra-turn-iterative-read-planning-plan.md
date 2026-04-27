@@ -1,6 +1,6 @@
 # DEV-PLAN-471：CubeBox 借鉴 Codex Agent Loop 的同一 Turn 内迭代式只读编排方案
 
-**状态**: 规划中（2026-04-26 10:52 CST）
+**状态**: 规划中（2026-04-26 10:52 CST；已按 DEV-PLAN-003 评审收敛 P1/P2）
 
 ## 0. 适用范围与评审分级
 
@@ -34,7 +34,7 @@
   - 不允许模型访问 shell、文件系统、数据库或任意 HTTP 工具
   - 不引入并发 subagent、DAG 调度、workflow engine、通用函数调用市场
   - 不把模型输出当作授权来源或执行事实源
-- **本地参考源码落点**：`third_party/openai-codex`。该目录仅作为源码学习参考，不得成为运行时依赖，不纳入 Go import、不参与 CubeBox 构建链路。
+- **本地参考源码落点**：`third_party/openai-codex`。该目录仅作为源码学习参考，不得成为运行时依赖，不纳入 Go import、不参与 CubeBox 构建链路；源码 HEAD 留痕只作为 readiness 辅助证据，不作为 P0 用户能力验收项。
 - **本地对标阅读路径**：
   - `third_party/openai-codex/codex-rs/core/src/session/turn.rs`：`run_turn(...)` 持有同一 turn 内的模型调用循环，并依据 `needs_follow_up` 决定是否继续 sampling。
   - `third_party/openai-codex/codex-rs/core/src/stream_events_utils.rs`：`handle_output_item_done(...)` 将模型输出解析为工具调用、执行工具，并把工具结果标记为需要后续模型调用。
@@ -58,6 +58,8 @@
 - 用 `NO_QUERY` 同时表达“不支持查询域”和“已有结果足够”，导致状态混淆
 - 把 `working_results` 写入长期 canonical events，污染后续 turn
 - 把当前 turn 的 observation 设计成业务 DSL、JSONPath 或 capability-specific 解释器
+- 把 `working_results` 写成 `orgunit` 专用状态，例如待查 parent 队列、业务聚合表或 winner 状态
+- 让 `DONE` 裸文本与“非法 JSON fail-closed”混用，导致 planner outcome 解析口径漂移
 - 未加预算、去重和重复查询检测，导致 planner/executor 循环失控
 - narrator 中途介入并输出半成品用户可见回答
 
@@ -93,9 +95,10 @@
 
 - [ ] 将当前 query flow 从“单次 planner-executor”升级为“同一用户 turn 内有限次 planner-executor-planner loop”。
 - [ ] 每次小循环只允许模型输出合法小 `ReadPlan` 或冻结的循环控制态；不得引入新业务计划语言。
-- [ ] 将当前 turn 的已执行结果整理成稳定结构化 `working_results`，作为下一次 planner 输入中的 tool observation。
-- [ ] 增加明确的 planner 终止协议：`READ_PLAN`、`CLARIFY`、`DONE`、`NO_QUERY`。
-- [ ] 保持 narrator 只在 `DONE` 或单轮执行后确认足够时调用一次，避免中间阶段产出半成品用户可见回答。
+- [ ] 将当前 turn 的已执行结果整理成业务无关的稳定结构化 `working_results`，作为下一次 planner 输入中的 tool observation。
+- [ ] 增加明确的 planner 终止协议与 wire format：`READ_PLAN`、`CLARIFY`、`DONE`、`NO_QUERY`。
+- [ ] 将 pre-execution `NO_QUERY` 的用户可见输出收敛为“服务端受控事实 + 模型纯文本序号列表”；不做卡片、不新增前端组件、不把整段回复硬编码在 Go 中。
+- [ ] 保持 narrator 只在 `DONE` 后调用一次；单步查询也通过“执行一次 `ReadPlan` -> 回灌 observation -> planner 返回 `DONE` -> narrator”闭环，避免隐藏式“执行后自动认为足够”的分支。
 - [ ] 通过 `max_planning_rounds`、`max_executed_steps`、`max_working_result_items`、重复查询检测与 fail-closed stopline 保证循环不会失控。
 - [ ] 对 P0 案例支持串行 fanout：当多个直接下级 `has_children=true` 时，允许 planner 在预算内分批或逐个继续查其下级。
 
@@ -169,7 +172,7 @@ flowchart TD
   O --> C
   P -->|DONE| N[Narrator once]
   P -->|CLARIFY| Q[Clarification terminal]
-  P -->|NO_QUERY before execution| X[No-query stopline]
+  P -->|NO_QUERY before execution| X[No-query guidance]
   P -->|NO_QUERY after execution| B[Boundary violation stopline]
   C -->|budget exceeded| S[Fail-closed stopline]
   N --> R[Final Reply]
@@ -177,21 +180,50 @@ flowchart TD
 
 ### 4.3 Planner 控制态
 
-当前 `ReadPlan` schema 不应被扩成业务 DSL，但 loop 需要一个薄控制 envelope。P0 冻结以下 planner outcome：
+当前 `ReadPlan` schema 不应被扩成业务 DSL，但 loop 需要一个薄控制 envelope。P0 冻结 JSON envelope 作为新增 planner outcome 的唯一推荐格式：
+
+```json
+{ "outcome": "READ_PLAN", "plan": { "intent": "orgunit.list", "missing_params": [], "steps": [] } }
+```
+
+```json
+{ "outcome": "DONE" }
+```
+
+```json
+{ "outcome": "NO_QUERY" }
+```
+
+```json
+{ "outcome": "CLARIFY", "missing_params": ["as_of"], "clarifying_question": "请提供查询日期。" }
+```
+
+解析兼容矩阵：
+
+| 模型输出 | 解析结果 | 约束 |
+| --- | --- | --- |
+| JSON envelope `{"outcome":"READ_PLAN","plan":...}` | `READ_PLAN` | `plan` 必须是合法小 `ReadPlan` |
+| 现有裸 `ReadPlan JSON` | `READ_PLAN` 或 `CLARIFY` | 仅为兼容现有 planner 输出；不得新增第二套业务语义 |
+| JSON envelope `{"outcome":"CLARIFY",...}` | `CLARIFY` | `missing_params` 与 `clarifying_question` 必须非空 |
+| JSON envelope `{"outcome":"DONE"}` | `DONE` | 只允许在至少执行过一次只读计划后出现 |
+| JSON envelope `{"outcome":"NO_QUERY"}` 或现有裸文本 `NO_QUERY` | `NO_QUERY` | 裸文本仅兼容现有 no-query 输出 |
+| 裸文本 `DONE`、其他裸文本、非法 JSON、未知 outcome | 非法 outcome | fail-closed，映射为 planner outcome 边界错误 |
+
+P0 冻结以下 planner outcome：
 
 1. `READ_PLAN`
    - 表示本轮需要执行一个合法小 `ReadPlan`
-   - 兼容现状：模型直接输出 `ReadPlan JSON` 时等价于 `READ_PLAN`
+   - 兼容现状：模型直接输出裸 `ReadPlan JSON` 时等价于 `READ_PLAN`
 2. `CLARIFY`
    - 表示缺少必要参数或候选不可静默选择
    - 兼容现状：带 `missing_params + clarifying_question` 且无 `steps` 的 `ReadPlan`
 3. `DONE`
    - 表示 planner 已看到足够 `working_results`，可以进入 narrator
-   - 推荐模型输出严格字面量 `DONE`
+   - 必须输出 JSON envelope；不接受裸字面量 `DONE`
    - 只允许在至少执行过一次只读计划后出现
 4. `NO_QUERY`
    - 只表示用户请求不属于当前知识包支持的查询域
-   - 仅允许在尚未执行任何查询时作为普通 no-query stopline
+   - 仅允许在尚未执行任何查询时作为 no-query guidance 入口
    - 若已执行过查询后又返回 `NO_QUERY`，视为 planner 边界错误，fail-closed；不能把 `NO_QUERY` 当完成态
 
 ### 4.4 Planner 输入结构
@@ -230,13 +262,20 @@ flowchart TD
 
 ### 4.5 `working_results` 最小契约
 
-`working_results` 是当前 turn 内的 tool observation，只存在于 `TryHandle(...)` 生命周期内。
+`working_results` 是当前 turn 内的 tool observation，只存在于 `TryHandle(...)` 生命周期内。它记录“已经执行了什么、最新看到什么、哪些 fingerprint 已经跑过、预算还剩多少”，不记录业务专用待办队列、业务 winner 或 capability-specific 聚合事实。
 
 ```json
 {
   "working_results": {
     "round_index": 2,
     "original_user_goal": "把那些有下级的下级组织的下级组织列出来",
+    "budget": {
+      "max_planning_rounds": 4,
+      "remaining_planning_rounds": 2,
+      "max_executed_steps": 8,
+      "remaining_executed_steps": 7,
+      "max_working_result_items": 50
+    },
     "completed_plans": [
       {
         "round": 1,
@@ -246,6 +285,8 @@ flowchart TD
             "step_id": "step-1",
             "api_key": "orgunit.list",
             "params_fingerprint": "orgunit.list|as_of=2026-04-25|parent_org_code=100000",
+            "item_count": 3,
+            "truncated": false,
             "summary": {
               "as_of": "2026-04-25",
               "org_unit_count": 3
@@ -255,29 +296,26 @@ flowchart TD
       }
     ],
     "latest_observation": {
+      "round": 1,
+      "step_id": "step-1",
       "api_key": "orgunit.list",
+      "params_fingerprint": "orgunit.list|as_of=2026-04-25|parent_org_code=100000",
       "as_of": "2026-04-25",
-      "org_units": [
+      "items": [
         {
           "org_code": "110000",
           "name": "示例组织",
           "status": "active",
           "has_children": true
         }
-      ]
-    },
-    "aggregated_facts": {
-      "orgunit_list_items_with_children": [
-        {
-          "org_code": "110000",
-          "name": "示例组织",
-          "as_of": "2026-04-25",
-          "parent_org_code": "100000"
-        }
       ],
-      "queried_parent_org_codes": ["100000"],
-      "remaining_parent_org_codes": ["110000"]
-    }
+      "item_count": 3,
+      "truncated": false
+    },
+    "executed_fingerprints": [
+      "orgunit.list|as_of=2026-04-25|parent_org_code=100000"
+    ],
+    "repeat_observations": []
   }
 }
 ```
@@ -286,12 +324,70 @@ flowchart TD
 
 - 不包含密钥、provider 配置、内部 session token 或未授权数据。
 - 不原样塞入无限 raw payload；必须按预算裁剪。
+- `executed_fingerprints` 在 prompt-facing 投影中应保持全量，以保证长链查询时 planner 仍能看到完整去重边界；`completed_plans`、`repeat_observations` 与 `latest_observation.items` 可按独立 prompt 预算裁剪。
+- 不新增 `aggregated_facts`、`remaining_parent_org_codes`、`current_winner` 等业务命名状态；若 observation item 中包含 `has_children` 等字段，只能来自已授权 read executor 的裁剪响应，query flow 不解释其业务含义。
 - 不作为长期 canonical event，不进入 `query_dialogue_context`，也不进入 `468C` 的 query dialogue fact window projection。
 - 不作为 narrator 之外的用户可见 JSON。
 - 跨 turn 锚点只来自 `468C` 的 `query_dialogue_context`；同一 turn 临时事实只来自 `working_results`。
 - `remaining_goal_hint` 如确有必要，只能是 query flow 生成的通用短提示，不得包含业务专用 prose 或隐藏分支语义。
+- P0 orgunit 样例中的“挑出 `has_children=true` 后继续查”必须由 planner 根据 `latest_observation.items` 与知识包案例自行规划，不得由 `modules/cubebox` 纯函数计算待查队列。
 
-### 4.6 候选澄清事件契约
+### 4.6 Pre-execution NO_QUERY 用户引导
+
+`NO_QUERY` 不是执行错误；在尚未执行任何只读 API 前，它表示“当前输入未进入已支持查询闭环”。用户可见回复必须保持纯文本流，不做卡片、不加前端组件。
+
+P0 冻结以下分工：
+
+- planner 只负责判定 `READ_PLAN / CLARIFY / DONE / NO_QUERY`
+- 服务端负责从知识包与 `query_dialogue_context` 整理受控提示事实
+- 模型负责把受控事实组织成中文纯文本序号列表
+- 前端仍只消费普通文本 delta
+
+服务端提供给模型的事实只包含：
+
+```json
+{
+  "scope_summary": "当前主要支持组织相关只读查询。",
+  "suggested_prompts": [
+    "查“华东销售中心”的详情",
+    "查“华东销售中心”当前的下级组织",
+    "搜索名称包含“销售”的组织"
+  ],
+  "query_context_hint": {
+    "has_recent_confirmed_entity": false
+  }
+}
+```
+
+事实来源：
+
+- `scope_summary` 来自知识包固定描述
+- `suggested_prompts` 来自知识包 curated examples，默认使用名称型、关键词型、关系型问法，不默认展示编码
+- `query_context_hint.has_recent_confirmed_entity` 来自现有 `query_dialogue_context`
+- 当存在最近确认实体时，服务端可切换到知识包提供的“这个组织 / 它”续问示例；若示例中包含 `当前日期` 占位，可替换为最近确认实体的 `as_of`
+
+模型输出规则只约束格式与边界，不硬编码完整答案：
+
+```text
+你负责把给定的受控事实整理成面向用户的中文回复。
+
+要求：
+1. 先用一句话说明当前支持范围。
+2. 空一行后输出“你可以直接这样问：”
+3. 然后输出带序号的列表，使用 1. 2. 3. 格式，每条单独一行。
+4. 只能使用 provided suggested_prompts，不得新增未提供的能力或示例。
+5. 不得提到内部术语，例如 NO_QUERY、ReadPlan、planner、知识包、API。
+6. 语气直接、简洁，不道歉，不解释系统内部机制。
+```
+
+P0 不引入复杂 reason system；仅区分：
+
+- `not_query`：例如“你好”，返回支持范围 + 示例问题
+- `too_vague`：例如“查组织”，优先走 `CLARIFY`；如果仍无法形成澄清，则给更具体的名称型示例
+
+`unsupported_domain` 等更细 reason 暂不作为 471 范围。
+
+### 4.7 候选澄清事件契约
 
 当 loop 中某次执行返回“候选不可静默选择”时，471 必须沿用并显式对齐 `468C` 的事件契约，而不是再发明一套 loop 专用关联语义。
 
@@ -303,36 +399,47 @@ flowchart TD
 4. `turn_id`、loop round、`working_results.round_index` 或其他内部计数器只可用于审计或调试，不得作为 prompt-facing 关联主键。
 5. `query_dialogue_context` 对候选事实的组织方式统一以 `468C` 的 `recent_candidate_groups` / `recent_candidates` compatibility alias 为准；471 不得改写其语义。
 
-### 4.7 预算与去重
+### 4.8 预算与去重
 
-P0 默认预算建议：
+项目初期默认预算建议：
 
-- `max_planning_rounds = 4`
-- `max_executed_steps = 8`
-- `max_working_result_items = 50`
-- `max_repeated_plan_fingerprint = 1`
+- `max_planning_rounds = 80`
+- `max_executed_steps = 160`
+- `max_working_result_items = 1000`
+- `max_repeated_plan_fingerprint = 2`
+
+补充说明：
+
+- 初期允许扩大单轮查询预算，优先保证“整树遍历/深层递归只读查询”能在单轮内继续推进。
+- 放大预算不改变 fail-closed 语义；预算耗尽时仍不进入 narrator，不输出 partial answer。
+- 预算放大后，`working_results` 进入 planner prompt 时必须继续裁剪，避免把完整历史执行轨迹线性塞回模型上下文；其中 `executed_fingerprints` 例外，仍保持全量提示，避免 planner 在长链查询中遗忘旧 fingerprint。
 
 每次执行前生成稳定 `plan_fingerprint` / `step_fingerprint`，至少包含：
 
 - `api_key`
-- 归一化参数 key/value
-- `as_of`
-- 主要目标参数，例如 `org_code` / `parent_org_code` / `query`
+- 全量归一化参数 key/value，按 key 稳定排序
+- 空值、布尔、日期、数字与字符串的稳定编码
 
 若 planner 再次请求已执行过的同一 fingerprint：
 
-- 第一次重复：作为 observation 告知 planner 已执行过，不重复执行，要求其选择下一步或 `DONE`
-- 再次重复：fail-closed，输出统一 stopline
+- 第一次重复：作为 `repeat_observations` 告知 planner 已执行过，不重复执行；消耗一次 planning round，不消耗 executed step，要求其选择下一步或 `DONE`
+- 第二次重复：继续作为 `repeat_observations` 告知 planner 已执行过，不重复执行；仍只消耗 planning round，不消耗 executed step
+- 第三次重复：fail-closed，输出统一 stopline
+
+预算耗尽口径：
+
+- 每次 planner 调用前检查 `max_planning_rounds`；每次执行前检查 `max_executed_steps`。
+- 若预算耗尽时 planner 尚未返回合法 `DONE` / `CLARIFY` / pre-execution `NO_QUERY`，P0 fail-closed，不进入 narrator。
+- P0 不提供 partial answer；带范围说明的 partial answer 必须后移到 P1 单独冻结用户可见语义。
 
 ### 4.8 Fanout 策略
 
-P0 不引入 fanout DSL，不并发执行。
+P0 不引入 fanout DSL，不并发执行，也不由 query flow 维护业务专用待查队列。
 
-- planner 可在下一轮选择一个或一小批 `remaining_parent_org_codes` 继续生成普通 `orgunit.list` 小计划。
-- query flow 负责记录已查 parent 与待查 parent，防止重复。
-- 若待查 parent 超出预算，narrator 应基于已查结果说明本次已覆盖范围；是否允许 partial answer 必须在实现前冻结：
-  - 推荐 P0：预算耗尽且仍未 `DONE` 时 fail-closed，不进入 narrator
-  - 后续 P1 可考虑带明确范围说明的 partial answer，但必须有单独方案
+- planner 可在下一轮基于 `latest_observation.items` 选择一个或一小批后续普通小 `ReadPlan`。
+- query flow 只负责记录已执行 fingerprint、防止重复执行、暴露剩余预算；不根据 `has_children`、`parent_org_code` 或其他业务字段自行生成下一步。
+- 多个候选后续调用存在时，知识包案例必须要求 planner 按 observation item 的出现顺序稳定处理；测试夹具也按该顺序断言。
+- 若候选后续调用超出预算，P0 fail-closed，不进入 narrator；P1 若要允许 partial answer，必须单独方案冻结“已覆盖范围”的用户可见表达与验收。
 
 ## 5. 模块归属与职责边界
 
@@ -368,28 +475,43 @@ P0 不引入 fanout DSL，不并发执行。
 | 超过预算或重复查询不收敛 | fail-closed，输出统一 stopline |
 | narrator 输出泄露内部字段 | 沿用现有 narrator contract violation |
 
+用户可见错误映射必须对齐 `DEV-PLAN-140` 与 `make check error-message`，新增稳定码时同步登记 catalog 与 `en/zh` 文案：
+
+| Stopline | 稳定错误码建议 | 用户可见提示要求 |
+| --- | --- | --- |
+| 非法 planner outcome / 裸文本 `DONE` / 未知 outcome | `cubebox_query_planner_outcome_invalid` | 说明“未能形成可执行查询计划”，提示用户换一种说法或补充查询条件 |
+| `DONE` 但没有任何执行结果 | `cubebox_query_done_without_result` | 说明“查询计划未产生可用结果”，提示补充查询条件 |
+| 已执行后返回 `NO_QUERY` | `cubebox_query_no_query_after_execution` | 说明“查询计划在执行后偏离支持范围”，提示换一种说法重试 |
+| planning / step 预算耗尽 | `cubebox_query_loop_budget_exceeded` | 说明“这次查询需要的步骤超出当前单轮预算”，提示缩小范围 |
+| 重复 fingerprint 不收敛 | `cubebox_query_loop_repeated_plan` | 说明“查询计划重复且无法继续推进”，提示缩小范围或换一种说法 |
+| narrator contract violation | 沿用现有码或登记 `cubebox_query_narrator_contract_violation` | 不暴露内部字段名、payload、step id 或 provider 细节 |
+
 ## 7. 测试设计与分层
 
 | 层级 | 本计划承接内容 | 代表对象/文件 | 说明 |
 | --- | --- | --- | --- |
-| `modules/cubebox` | `working_results` DTO、fingerprint、预算、去重纯函数 | `modules/cubebox/*_test.go` | 优先黑盒测试 |
+| `modules/cubebox` | 业务无关 `working_results` DTO、fingerprint、预算、去重纯函数 | `modules/cubebox/*_test.go` | 优先黑盒测试 |
 | `internal/server` | query loop、planner outcome、SSE 顺序、错误映射、narrator 单次调用 | `internal/server/cubebox_query_flow_test.go`、`internal/server/cubebox_api_test.go` | 组合层测试 |
 | 知识包 | `working_results` 驱动再规划案例 | `modules/orgunit/presentation/cubebox/examples.md` | 配合 planner prompt 测试夹具 |
 | E2E | 浏览器真实对话复验 | `docs/dev-records/DEV-PLAN-471-READINESS.md` | readiness 记录为 P0 证据 |
 
 重点测试：
 
-- 单轮可完成问题仍只执行一次 planner/executor/narrator。
+- 单步可完成问题仍只执行一次 executor、一次 narrator；planner 可按统一 loop 调用两次（`READ_PLAN` 后 `DONE`），不得引入“执行后自动完成”的隐藏分支。
 - 需要“先执行再决定”的问题可在同一 turn 内进入第二次 planner。
 - planner 看到 `working_results` 后返回 `DONE`，narrator 只调用一次。
+- planner outcome 解析覆盖 JSON envelope、兼容裸 `ReadPlan` / `NO_QUERY`、拒绝裸文本 `DONE`。
 - planner 在已执行后返回 `NO_QUERY` 必须 fail-closed。
 - planner 重复请求相同 fingerprint 时不会重复执行。
 - 超过 `max_planning_rounds` 时 fail-closed。
+- budget 耗尽且未 `DONE` 时不进入 narrator，不产生 partial answer。
 - 中间 `working_results` 不写入长期 canonical event。
+- `modules/cubebox` 的 `working_results` 不生成 `orgunit` 专用待查队列、业务 winner 或 capability-specific 聚合字段。
 - loop 每轮看到的 `query_dialogue_context` 使用 `468C` planner projection，且不吸收当前 turn observation。
 - 候选澄清事件使用 `group_id` / `candidate_group_id` 串联，不得用 `candidate_source`、loop round 或 `turn_id` 当关联键。
 - `resolved_entity` 不参与 471 loop 输入、状态推进或完成判定。
 - 用户可见输出不泄露 `api_key`、`step-*`、`payload`、`results`、`params` 等内部执行痕迹。
+- pre-execution `NO_QUERY` 输出由模型基于受控事实生成纯文本序号列表；默认示例为名称/关键词/关系型，不要求用户记编码，也不泄露 `NO_QUERY`、`ReadPlan`、`planner`、知识包或 `API` 等内部术语。
 
 ## 8. 实施步骤
 
@@ -402,9 +524,10 @@ P0 不引入 fanout DSL，不并发执行。
      - `modules/cubebox/read_plan.go`
      - 如有必要，新增 `modules/cubebox/planner_outcome.go`
    - 具体动作：
-     - 兼容现有裸 `ReadPlan JSON` 作为 `READ_PLAN`
-     - 保留现有 `NO_QUERY`
-     - 新增严格字面量 `DONE`
+     - 新增 JSON envelope planner outcome：`READ_PLAN` / `CLARIFY` / `DONE` / `NO_QUERY`
+     - 兼容现有裸 `ReadPlan JSON` 作为 `READ_PLAN` / `CLARIFY`
+     - 保留现有裸 `NO_QUERY`
+     - 新增 JSON envelope `DONE`，明确拒绝裸文本 `DONE`
      - 澄清态继续沿用现有 `missing_params + clarifying_question`
      - 从 `ExecutionRegistry` 派生稳定排序的 `read_api_catalog` prompt block，并明确“注册表是执行事实源，知识包只解释语义”
    - 本片完成判定：
@@ -419,14 +542,14 @@ P0 不引入 fanout DSL，不并发执行。
      - 建议新增 `modules/cubebox/query_loop_budget.go`
      - 如无必要，不改 `modules/orgunit/**` 业务 executor
    - 具体动作：
-     - 定义 `working_results` DTO：`completed_plans`、`latest_observation`、`aggregated_facts`
+     - 定义业务无关 `working_results` DTO：`budget`、`completed_plans`、`latest_observation`、`executed_fingerprints`、`repeat_observations`
      - 生成 `plan_fingerprint` / `step_fingerprint`
-     - 维护 `round_index`、`executed_steps`、`remaining_parent_org_codes` 等预算/聚合信息
+     - 维护 `round_index`、`executed_steps` 与剩余预算；不得维护 `remaining_parent_org_codes` 等业务专用待办队列
      - 对 observation 做条数与字段裁剪，禁止无限回灌 raw payload
      - 明确 `working_results` 仅存在于当前 `TryHandle(...)` 生命周期内，不写入 canonical events
    - 本片完成判定：
      - 可独立测试追加 observation、重复 fingerprint 检测、预算耗尽、裁剪结果
-     - `has_children` 场景所需的最小聚合事实可由纯函数得到
+     - 可证明 `modules/cubebox` 不根据 `has_children` 或其他业务字段生成下一步
 
 3. [ ] `PR-471-03`：把 `cubeboxQueryFlow.TryHandle(...)` 从单次链改成有限次 loop
    - 目标：把现有 `ProduceReadPlan -> ExecutePlan -> Narrate` 改成有限次 `ProduceReadPlan -> outcome -> ExecutePlan -> append working_results`，但仍只保留一个 narrator 终点。
@@ -436,13 +559,14 @@ P0 不引入 fanout DSL，不并发执行。
    - 具体动作：
      - 在 `TryHandle(...)` 内引入 `max_planning_rounds`、`max_executed_steps`、`max_repeated_plan_fingerprint` 限制
      - 每轮都重建 planner 输入：`knowledge packs + read_api_catalog + query_dialogue_context(按 468C planner projection) + current user prompt + working_results`
-     - `READ_PLAN`：执行小 `ReadPlan`，追加 observation，进入下一轮
+     - `READ_PLAN`：执行小 `ReadPlan`，追加 observation，进入下一轮 planner
      - `CLARIFY`：直接终止为澄清，不进入 narrator
      - `DONE`：仅在至少执行过一次只读计划后允许进入 narrator
-     - `NO_QUERY`：未执行前可作为普通 no-query stopline；已执行后返回 `NO_QUERY` 必须 fail-closed
+    - `NO_QUERY`：未执行前进入 no-query guidance；已执行后返回 `NO_QUERY` 必须 fail-closed
+     - 预算耗尽且未 `DONE` 时 fail-closed，不进入 narrator
      - executor 返回候选不可静默选择时，继续沿用现有澄清终态，但 metadata event 必须按 `468C` 契约写 `group_id` / `candidate_group_id`
    - 本片完成判定：
-     - 单轮问题仍只调用一次 planner/executor/narrator
+     - 单步问题仍只执行一次 executor、一次 narrator；planner 通过 `READ_PLAN` 后 `DONE` 的统一 loop 完成
      - 需要“先执行再决定”的问题可在同一 turn 内进入第二轮 planner
      - narrator 只在最终完成时调用一次
 
@@ -454,12 +578,13 @@ P0 不引入 fanout DSL，不并发执行。
      - 如需补说明，可同步 `modules/orgunit/presentation/cubebox/apis.md`
    - 具体动作：
      - 在 planner system prompt 中增加 `working_results` 说明，并明确 `query_dialogue_context` 使用 `468C` 的跨 turn fact window
-     - 明确 `DONE` 的语义是“当前 observation 已足够进入 narrator”
+     - 明确 `DONE` 必须使用 JSON envelope，语义是“当前 observation 已足够进入 narrator”
      - 明确 `NO_QUERY` 只表示“超出查询域”，不能表示“已经查够”
      - 明确 `recent_confirmed_entities` / `recent_candidate_groups` 是跨 turn 历史事实主输入，`recent_confirmed_entity` / `recent_candidates` 只是 compatibility alias
      - 明确 `resolved_entity` 不在本计划输入范围
      - 明确禁止重复请求已执行 fingerprint
-     - 在 orgunit 样例中加入“先查直接下级，再基于 `has_children=true` 继续查其下级”的最小案例
+     - 在 orgunit 样例中加入“先查直接下级，再由 planner 阅读 observation item 的 `has_children=true` 字段并继续查其下级”的最小案例
+     - 在 orgunit 知识包加入 `no_query_guidance` 结构化片段，提供 `scope_summary`、默认名称/关键词/关系示例，以及最近确认实体存在时的续问示例
    - 本片完成判定：
      - planner 提示词与知识包案例对齐
      - 不新增 API、不引入 DSL、不写业务专用分支 prompt
@@ -471,31 +596,34 @@ P0 不引入 fanout DSL，不并发执行。
      - `internal/server/cubebox_query_flow_test.go`
      - 如需组合层覆盖，可补 `internal/server/cubebox_api_test.go`
    - 重点覆盖：
-     - planner outcome 解析：裸 `ReadPlan` / `DONE` / `NO_QUERY` / 非法文本
-     - `working_results` 构造、聚合、裁剪、fingerprint
+     - planner outcome 解析：JSON envelope、兼容裸 `ReadPlan` / `NO_QUERY`、拒绝裸 `DONE` / 非法文本
+     - `working_results` 构造、预算快照、裁剪、fingerprint
      - loop 正常完成：至少两轮 planner 后 `DONE`
      - loop 澄清终止：候选不可静默选择时直接终止，不进入 narrator
      - repeat / budget fail-closed：重复请求同 fingerprint 或超预算时不重复执行
+     - P0 budget 耗尽不进入 narrator、不输出 partial answer
      - narrator 单次调用：中途不得输出用户可见半成品回答
      - 长期事件隔离：中间 `working_results` 不写入 canonical events
+     - 业务隔离：`working_results` 不包含 `remaining_parent_org_codes`、业务 winner 或 capability-specific 聚合字段
      - 候选澄清事件契约：`turn.query_candidates.presented.group_id` 与 `turn.query_clarification.requested.candidate_group_id` 正确关联
      - `resolved_entity` 不参与 planner 输入或 loop 完成判定
+     - pre-execution `NO_QUERY` guidance facts 与最终纯文本序号列表；覆盖无最近确认实体和有最近确认实体两种路径
    - 本片完成判定：
      - `modules/cubebox` 纯函数测试与 `internal/server` 组合层测试都能独立说明 471 的主约束
 
-6. [ ] `PR-471-06`：真实页面复验、readiness 证据与第三方源码留痕
-   - 目标：在自动化回归通过后，用真实页面验证“同一 turn 内二次规划”确实发生，并把对标源码版本固定到证据里。
+6. [ ] `PR-471-06`：真实页面复验与 readiness 证据
+   - 目标：在自动化回归通过后，用真实页面验证“同一 turn 内二次规划”确实发生；Codex 源码 HEAD 只作为对标参考留痕，不阻断 P0 功能验收。
    - 代码/文档落点：
      - `docs/dev-records/DEV-PLAN-471-READINESS.md`
    - 具体动作：
      - 记录自动化测试命令、时间戳、结果
      - 记录浏览器真实复验：输入、页面表现、网络请求、截图
-     - 记录 `third_party/openai-codex` 参考源码版本：
+     - 若本地对标使用 `third_party/openai-codex`，记录参考源码版本：
        - `git -C third_party/openai-codex rev-parse HEAD`
        - `git -C third_party/openai-codex status --short`
    - 本片完成判定：
      - readiness 能证明 P0 样例已在真实页面闭环通过
-     - 第三方参考源码 HEAD 已冻结，后续偏差分析有可追溯基线
+     - 第三方参考源码 HEAD 若已记录，只作为后续偏差分析基线，不作为用户能力验收项
 
 ## 9. 验收口径
 
@@ -503,15 +631,17 @@ P0 不引入 fanout DSL，不并发执行。
 2. [ ] 对“把那些有下级的下级组织的下级组织列出来”这类问题，模型可以通过已有 `orgunit.list` 能力自动分解并给出最终答案。
 3. [ ] 不新增 `orgunit` 专用读 API，`orgunit` executor 注册表保持 `details / list / search / audit` 不变。
 4. [ ] 不引入 DSL、JSONPath、脚本表达式、DAG/workflow engine 或 capability-specific 编排分支。
-5. [ ] planner 终止态明确：`DONE` 才能在已执行查询后进入 narrator；`NO_QUERY` 不得作为完成态。
+5. [ ] planner outcome wire format 冻结：新增终止态使用 JSON envelope；裸 `DONE` 被拒绝；裸 `ReadPlan` / `NO_QUERY` 仅为现有兼容输入。
 6. [ ] narrator 只在所有小循环结束后调用一次。
 7. [ ] 当前 turn 的 `working_results` 不写入长期 canonical event，不污染后续 turn 的 `query_dialogue_context`。
-8. [ ] 每轮 planner 输入中的 `query_dialogue_context` 以 `468C` planner projection 为 SSOT，且与 `working_results` 保持并列、分层、不互写。
-9. [ ] 候选澄清事件按 `468C` 契约使用 `group_id` / `candidate_group_id` 关联；`candidate_source`、loop round 与 `turn_id` 不作为主关联键。
-10. [ ] `resolved_entity` 不参与 471 的 planner 输入、loop 状态推进或完成判定。
-11. [ ] 超预算、重复查询不收敛、非法 planner outcome 均 fail-closed。
-12. [ ] 用户可见回答不泄露内部执行痕迹。
-13. [ ] `third_party/openai-codex` 已完整克隆并记录 HEAD，用于后续本地对标学习。
+8. [ ] `working_results` 只包含业务无关 observation ledger、预算与 fingerprint，不包含 `orgunit` 专用待查队列、业务 winner 或 capability-specific 聚合字段。
+9. [ ] 每轮 planner 输入中的 `query_dialogue_context` 以 `468C` planner projection 为 SSOT，且与 `working_results` 保持并列、分层、不互写。
+10. [ ] 候选澄清事件按 `468C` 契约使用 `group_id` / `candidate_group_id` 关联；`candidate_source`、loop round 与 `turn_id` 不作为主关联键。
+11. [ ] `resolved_entity` 不参与 471 的 planner 输入、loop 状态推进或完成判定。
+12. [ ] 超预算、重复查询不收敛、非法 planner outcome 均 fail-closed，且 P0 不输出 partial answer。
+13. [ ] 用户可见回答不泄露内部执行痕迹。
+14. [ ] pre-execution `NO_QUERY` 用户可见输出为模型基于受控事实生成的纯文本序号列表；默认不展示编码型示例，有最近确认实体时优先展示“这个组织 / 它”的续问示例。
+15. [ ] 新增用户可见 stopline 均登记稳定错误码、后端 message 与 `en/zh` 文案，并通过 `make check error-message`。
 
 ## 10. 风险与对策
 
@@ -525,10 +655,13 @@ P0 不引入 fanout DSL，不并发执行。
 | 结果回灌过宽 | 把过多 raw payload 喂回 planner | observation 裁剪、条数限制、字段预算 |
 | 再次滑向业务 DSL | 为多轮编排引入复杂计划语言 | 只允许普通小 `ReadPlan` + 薄 outcome |
 | fanout 超预算 | 多个 parent 都需继续查询 | P0 串行有限 fanout，预算耗尽 fail-closed |
+| 通用 loop 被业务状态污染 | `working_results` 长出 `orgunit` 待查队列或业务 winner | query flow 只记录 observation 与 fingerprint，业务判断留给 planner + 知识包 |
+| outcome wire format 漂移 | 新增 `DONE` 与非法文本解析混用 | 新增终止态统一 JSON envelope，裸 `DONE` fail-closed |
+| partial answer 语义提前膨胀 | 预算耗尽时试图让 narrator 解释已覆盖范围 | P0 不输出 partial answer，P1 单独冻结范围表达 |
 
 ## 11. Readiness 与证据
 
 - [ ] 新建 readiness：`docs/dev-records/DEV-PLAN-471-READINESS.md`
-- [ ] 记录 `third_party/openai-codex` clone HEAD、命令、时间戳与结果
 - [ ] 记录自动化测试命令、时间戳与结果
 - [ ] 记录浏览器真实复验链路、截图与网络请求
+- [ ] 若本地对标使用 `third_party/openai-codex`，记录 clone HEAD、命令、时间戳与结果；该记录是参考证据，不阻断 P0 功能验收

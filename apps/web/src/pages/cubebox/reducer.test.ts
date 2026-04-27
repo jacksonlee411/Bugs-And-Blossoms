@@ -101,6 +101,64 @@ describe('cubebox reducer', () => {
     expect(state.nextSequence).toBe(7)
   })
 
+  it('keeps post-restart turns separate when backend message IDs derive from sequence', () => {
+    const state = replayConversation({
+      conversation: {
+        id: 'conv_1',
+        title: '新对话',
+        status: 'active',
+        archived: false
+      },
+      next_sequence: 14,
+      events: [
+        {
+          event_id: 'evt_1',
+          conversation_id: 'conv_1',
+          turn_id: 'turn_seq_2',
+          sequence: 2,
+          type: 'turn.user_message.accepted',
+          ts: '2026-04-27T00:00:00Z',
+          payload: { message_id: 'msg_user_seq_2', text: '列出全部的成本组织' }
+        },
+        {
+          event_id: 'evt_2',
+          conversation_id: 'conv_1',
+          turn_id: 'turn_seq_2',
+          sequence: 3,
+          type: 'turn.agent_message.delta',
+          ts: '2026-04-27T00:00:01Z',
+          payload: { message_id: 'msg_agent_seq_2', delta: '旧结果' }
+        },
+        {
+          event_id: 'evt_3',
+          conversation_id: 'conv_1',
+          turn_id: 'turn_seq_10',
+          sequence: 10,
+          type: 'turn.user_message.accepted',
+          ts: '2026-04-27T00:01:00Z',
+          payload: { message_id: 'msg_user_seq_10', text: '列出全部的财务组织' }
+        },
+        {
+          event_id: 'evt_4',
+          conversation_id: 'conv_1',
+          turn_id: 'turn_seq_10',
+          sequence: 11,
+          type: 'turn.agent_message.delta',
+          ts: '2026-04-27T00:01:01Z',
+          payload: { message_id: 'msg_agent_seq_10', delta: '新结果' }
+        }
+      ]
+    })
+
+    expect(state.items.map((item) => item.id)).toEqual([
+      'msg_user_seq_2',
+      'msg_agent_seq_2',
+      'msg_user_seq_10',
+      'msg_agent_seq_10'
+    ])
+    expect(state.items.map((item) => item.text)).toEqual(['列出全部的成本组织', '旧结果', '列出全部的财务组织', '新结果'])
+  })
+
   it('preserves newline-only delta chunks so numbered items do not collapse during replay', () => {
     const state = replayConversation({
       conversation: {

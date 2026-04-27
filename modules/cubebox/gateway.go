@@ -114,13 +114,6 @@ func (s *GatewayService) StreamTurn(
 	sink GatewayEventSink,
 ) {
 	startedAt := s.now()
-	turn := s.runtime.StartTurn(TurnOwner{
-		TenantID:       request.TenantID,
-		PrincipalID:    request.PrincipalID,
-		ConversationID: request.ConversationID,
-	}, request.Prompt)
-	defer s.runtime.FinishTurn(turn.TurnID)
-
 	lifecycle := gatewayLifecycleMeta{
 		traceID:   "trace_" + strings.ReplaceAll(uuid.NewString(), "-", ""),
 		runtime:   "deterministic-fixture",
@@ -147,9 +140,17 @@ func (s *GatewayService) StreamTurn(
 		if sequence <= 0 {
 			sequence = 1
 		}
-		s.appendTerminalError(ctx, store, sink, request, turn.TurnID, &sequence, lifecycle, "cubebox_turn_stream_failed", "会话上下文准备失败，当前响应已终止。", false)
+		turnID := TurnIDsForSequence(sequence).TurnID
+		s.appendTerminalError(ctx, store, sink, request, turnID, &sequence, lifecycle, "cubebox_turn_stream_failed", "会话上下文准备失败，当前响应已终止。", false)
 		return
 	}
+	turn := s.runtime.StartTurnWithIDs(TurnOwner{
+		TenantID:       request.TenantID,
+		PrincipalID:    request.PrincipalID,
+		ConversationID: request.ConversationID,
+	}, request.Prompt, prepared.TurnIDs)
+	defer s.runtime.FinishTurn(turn.TurnID)
+
 	sequence := prepared.Sequence
 	providerPromptView := prepared.ProviderPromptView
 

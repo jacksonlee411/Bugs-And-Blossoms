@@ -33,6 +33,11 @@ type cubeBoxOrgUnitAuditExecutor struct {
 	store OrgUnitStore
 }
 
+const (
+	cubeBoxOrgUnitListDefaultUserPage = 1
+	cubeBoxOrgUnitListDefaultPageSize = 100
+)
+
 type orgUnitSearchAmbiguousError struct {
 	Query      string
 	Candidates []OrgUnitSearchCandidate
@@ -83,7 +88,7 @@ func newCubeBoxOrgUnitRegisteredExecutors(store OrgUnitStore) ([]cubebox.Registe
 		cubebox.RegisteredExecutor{
 			APIKey:         "orgunit.list",
 			RequiredParams: []string{"as_of"},
-			OptionalParams: []string{"include_disabled", "parent_org_code", "keyword", "status", "page", "size"},
+			OptionalParams: []string{"include_disabled", "parent_org_code", "all_org_units", "keyword", "status", "is_business_unit", "page", "size"},
 			Executor: cubeBoxOrgUnitListExecutor{
 				store: store,
 			},
@@ -196,6 +201,13 @@ func (e cubeBoxOrgUnitListExecutor) ValidateParams(raw map[string]any) (map[stri
 			params["parent_org_code"] = parentOrgCode
 		}
 	}
+	if value, ok := raw["all_org_units"]; ok && value != nil {
+		allOrgUnits, ok := value.(bool)
+		if !ok {
+			return nil, newBadRequestError("all_org_units invalid")
+		}
+		params["all_org_units"] = allOrgUnits
+	}
 	if value, ok := raw["keyword"]; ok && value != nil {
 		keyword, err := normalizeOptionalString(value)
 		if err != nil {
@@ -211,6 +223,13 @@ func (e cubeBoxOrgUnitListExecutor) ValidateParams(raw map[string]any) (map[stri
 		if status != "" {
 			params["status"] = status
 		}
+	}
+	if value, ok := raw["is_business_unit"]; ok && value != nil {
+		isBusinessUnit, ok := value.(bool)
+		if !ok {
+			return nil, newBadRequestError("is_business_unit invalid")
+		}
+		params["is_business_unit"] = isBusinessUnit
 	}
 	if value, ok := raw["page"]; ok && value != nil {
 		page, err := normalizeNonNegativeInt(value, "page")
@@ -240,6 +259,9 @@ func (e cubeBoxOrgUnitListExecutor) Execute(ctx context.Context, request cubebox
 		AsOf:            asOf,
 		IncludeDisabled: includeDisabled,
 	}
+	if value, ok := params["all_org_units"]; ok {
+		pageReq.AllOrgUnits = value.(bool)
+	}
 
 	if value, ok := params["parent_org_code"]; ok {
 		parentOrgCode := strings.TrimSpace(value.(string))
@@ -257,20 +279,13 @@ func (e cubeBoxOrgUnitListExecutor) Execute(ctx context.Context, request cubebox
 	if value, ok := params["status"]; ok {
 		pageReq.Status = strings.TrimSpace(value.(string))
 	}
-	page, hasPage := params["page"]
-	size, hasSize := params["size"]
-	if hasPage || hasSize {
-		pageValue := orgUnitListDefaultPage
-		if hasPage {
-			pageValue = page.(int)
-		}
-		sizeValue := orgUnitListDefaultPageSize
-		if hasSize {
-			sizeValue = size.(int)
-		}
-		pageReq.Limit = sizeValue
-		pageReq.Offset = pageValue * pageReq.Limit
+	if value, ok := params["is_business_unit"]; ok {
+		isBusinessUnit := value.(bool)
+		pageReq.IsBusinessUnit = &isBusinessUnit
 	}
+	pageValue, sizeValue := cubeBoxOrgUnitListPageControls(params)
+	pageReq.Limit = sizeValue
+	pageReq.Offset = orgUnitListOffsetFromUserPage(pageValue, pageReq.Limit)
 
 	items, total, err := listOrgUnitListPage(ctx, e.store, strings.TrimSpace(request.TenantID), pageReq)
 	if err != nil {
@@ -281,22 +296,12 @@ func (e cubeBoxOrgUnitListExecutor) Execute(ctx context.Context, request cubebox
 		AsOf:            asOf,
 		IncludeDisabled: includeDisabled,
 		OrgUnits:        items,
+		Page:            &pageValue,
+		Size:            &sizeValue,
+		Total:           &total,
 	}
 	if resp.OrgUnits == nil {
 		resp.OrgUnits = []orgUnitListItem{}
-	}
-	if hasPage || hasSize {
-		pageValue := orgUnitListDefaultPage
-		if hasPage {
-			pageValue = page.(int)
-		}
-		sizeValue := orgUnitListDefaultPageSize
-		if hasSize {
-			sizeValue = size.(int)
-		}
-		resp.Page = &pageValue
-		resp.Size = &sizeValue
-		resp.Total = &total
 	}
 	payload, err := marshalStructPayload(resp)
 	if err != nil {
@@ -304,14 +309,39 @@ func (e cubeBoxOrgUnitListExecutor) Execute(ctx context.Context, request cubebox
 	}
 	return cubebox.ExecuteResult{
 		Payload: payload,
-		ConfirmedEntity: orgUnitQueryEntity(cubebox.QueryEntity{
-			Intent:        strings.TrimSpace(request.PlanIntent),
-			EntityKey:     orgUnitListAnchor(params),
-			AsOf:          asOf,
-			SourceAPIKey:  "orgunit.list",
-			ParentOrgCode: orgUnitListAnchor(params),
-		}),
 	}, nil
+}
+
+func cubeBoxOrgUnitListPageControls(params map[string]any) (int, int) {
+	pageValue := cubeBoxOrgUnitListDefaultUserPage
+	if page, ok := params["page"].(int); ok {
+		pageValue = page
+	}
+	pageValue = orgUnitListNormalizeUserPage(pageValue)
+
+	sizeValue := cubeBoxOrgUnitListDefaultPageSize
+	if size, ok := params["size"].(int); ok {
+		sizeValue = size
+	}
+	return pageValue, sizeValue
+}
+
+func orgUnitListNormalizeUserPage(page int) int {
+	if page <= 0 {
+		return cubeBoxOrgUnitListDefaultUserPage
+	}
+	return page
+}
+
+func orgUnitListOffsetFromUserPage(page int, limit int) int {
+	if limit <= 0 {
+		return 0
+	}
+	page = orgUnitListNormalizeUserPage(page)
+	if page <= 1 {
+		return 0
+	}
+	return (page - 1) * limit
 }
 
 func (e cubeBoxOrgUnitSearchExecutor) ValidateParams(raw map[string]any) (map[string]any, error) {
@@ -463,13 +493,6 @@ func (e cubeBoxOrgUnitAuditExecutor) Execute(ctx context.Context, request cubebo
 func orgUnitQueryEntity(entity cubebox.QueryEntity) *cubebox.QueryEntity {
 	entity.Domain = "orgunit"
 	return cubebox.NormalizeQueryEntity(entity)
-}
-
-func orgUnitListAnchor(params map[string]any) string {
-	if value, ok := params["parent_org_code"].(string); ok {
-		return strings.TrimSpace(value)
-	}
-	return ""
 }
 
 func normalizeOrgUnitCommonParams(raw map[string]any) (map[string]any, error) {

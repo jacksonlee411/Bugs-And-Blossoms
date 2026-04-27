@@ -23,12 +23,21 @@ type KnowledgePack struct {
 	Files map[string]string
 }
 
+type KnowledgePackNoQueryGuidance struct {
+	ScopeSummary     string
+	SuggestedPrompts []string
+}
+
 type knowledgePackQueriesDoc struct {
 	Intents []struct {
 		Key            string   `yaml:"key"`
 		RequiredParams []string `yaml:"required_params"`
 		OptionalParams []string `yaml:"optional_params"`
 	} `yaml:"intents"`
+	NoQueryGuidance struct {
+		ScopeSummary     string   `yaml:"scope_summary"`
+		SuggestedPrompts []string `yaml:"suggested_prompts"`
+	} `yaml:"no_query_guidance"`
 }
 
 type knowledgePackAPIsDoc struct {
@@ -163,6 +172,53 @@ func ValidateKnowledgePack(pack KnowledgePack) error {
 	}
 
 	return nil
+}
+
+func NoQueryGuidanceFromKnowledgePacks(packs []KnowledgePack) KnowledgePackNoQueryGuidance {
+	for _, pack := range packs {
+		guidance, ok := noQueryGuidanceFromKnowledgePack(pack)
+		if ok {
+			return guidance
+		}
+	}
+	return KnowledgePackNoQueryGuidance{}
+}
+
+func noQueryGuidanceFromKnowledgePack(pack KnowledgePack) (KnowledgePackNoQueryGuidance, bool) {
+	block, err := extractFencedBlock(pack.Files["queries.md"], "yaml")
+	if err != nil {
+		return KnowledgePackNoQueryGuidance{}, false
+	}
+	var doc knowledgePackQueriesDoc
+	if err := yaml.Unmarshal([]byte(block), &doc); err != nil {
+		return KnowledgePackNoQueryGuidance{}, false
+	}
+	scope := strings.TrimSpace(doc.NoQueryGuidance.ScopeSummary)
+	prompts := normalizeGuidancePrompts(doc.NoQueryGuidance.SuggestedPrompts)
+	if scope == "" || len(prompts) == 0 {
+		return KnowledgePackNoQueryGuidance{}, false
+	}
+	return KnowledgePackNoQueryGuidance{
+		ScopeSummary:     scope,
+		SuggestedPrompts: prompts,
+	}, true
+}
+
+func normalizeGuidancePrompts(items []string) []string {
+	out := make([]string, 0, len(items))
+	seen := make(map[string]struct{}, len(items))
+	for _, item := range items {
+		item = strings.TrimSpace(item)
+		if item == "" {
+			continue
+		}
+		if _, ok := seen[item]; ok {
+			continue
+		}
+		seen[item] = struct{}{}
+		out = append(out, item)
+	}
+	return out
 }
 
 func ValidateKnowledgePackAgainstRegistry(pack KnowledgePack, registry *ExecutionRegistry) error {

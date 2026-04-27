@@ -767,7 +767,7 @@ func (s *orgUnitPGStore) ListOrgUnitsPage(ctx context.Context, tenantID string, 
 		where = append(where, fmt.Sprintf("%s = $%d::text", parentOrgNodeKeyCompatExpr("v"), argPos))
 		args = append(args, parentOrgNodeKey)
 		argPos++
-	} else {
+	} else if !req.ShouldSearchAllOrgUnits() {
 		where = append(where, rootOrgNodeCompatCondition("v"))
 	}
 
@@ -780,11 +780,16 @@ func (s *orgUnitPGStore) ListOrgUnitsPage(ctx context.Context, tenantID string, 
 	if req.Status == orgUnitListStatusDisabled {
 		where = append(where, `v.status = 'disabled'`)
 	}
+	if req.IsBusinessUnit != nil {
+		where = append(where, fmt.Sprintf("v.is_business_unit = $%d::boolean", argPos))
+		args = append(args, *req.IsBusinessUnit)
+		argPos++
+	}
 
 	keyword := strings.TrimSpace(req.Keyword)
 	if keyword != "" {
-		where = append(where, fmt.Sprintf(`(c.org_code ILIKE %% || $%d::text || %% OR v.name ILIKE %% || $%d::text || %%)`, argPos, argPos))
-		args = append(args, keyword)
+		where = append(where, fmt.Sprintf(`(c.org_code ILIKE $%d::text OR v.name ILIKE $%d::text)`, argPos, argPos))
+		args = append(args, "%"+keyword+"%")
 		argPos++
 	}
 

@@ -378,6 +378,7 @@ type orgUnitListQueryOptions struct {
 	GridMode          bool
 	Keyword           string
 	Status            string // "", "active", "disabled"
+	IsBusinessUnit    *bool
 	SortField         string
 	ExtSortFieldKey   string
 	SortOrder         string
@@ -392,8 +393,10 @@ type orgUnitListPageRequest struct {
 	AsOf              string
 	IncludeDisabled   bool
 	ParentOrgNodeKey  *string
+	AllOrgUnits       bool
 	Keyword           string
 	Status            string // "", "active", "disabled"
+	IsBusinessUnit    *bool
 	SortField         string
 	ExtSortFieldKey   string
 	SortOrder         string
@@ -401,6 +404,10 @@ type orgUnitListPageRequest struct {
 	ExtFilterValue    string
 	Limit             int
 	Offset            int
+}
+
+func (r orgUnitListPageRequest) ShouldSearchAllOrgUnits() bool {
+	return r.ParentOrgNodeKey == nil && (r.AllOrgUnits || strings.TrimSpace(r.Keyword) != "" || r.IsBusinessUnit != nil)
 }
 
 type orgUnitListPageReader interface {
@@ -442,6 +449,15 @@ func parseOrgUnitListQueryOptions(values url.Values) (orgUnitListQueryOptions, b
 		default:
 			return orgUnitListQueryOptions{}, false, errors.New("status invalid")
 		}
+	}
+
+	if hasKey("is_business_unit") {
+		hasAny = true
+		isBusinessUnit, err := parseOrgUnitListQueryBool(values.Get("is_business_unit"), "is_business_unit")
+		if err != nil {
+			return orgUnitListQueryOptions{}, false, err
+		}
+		opts.IsBusinessUnit = &isBusinessUnit
 	}
 
 	sortPresent := hasKey("sort")
@@ -538,6 +554,17 @@ func parseOrgUnitListQueryOptions(values url.Values) (orgUnitListQueryOptions, b
 	return opts, hasAny, nil
 }
 
+func parseOrgUnitListQueryBool(raw string, field string) (bool, error) {
+	switch strings.ToLower(strings.TrimSpace(raw)) {
+	case "1", "true":
+		return true, nil
+	case "0", "false":
+		return false, nil
+	default:
+		return false, errors.New(field + " invalid")
+	}
+}
+
 func listOrgUnitListPage(ctx context.Context, store OrgUnitStore, tenantID string, req orgUnitListPageRequest) ([]orgUnitListItem, int, error) {
 	if pager, ok := store.(orgUnitListPageReader); ok {
 		return pager.ListOrgUnitsPage(ctx, tenantID, req)
@@ -588,7 +615,7 @@ func listOrgUnitListPage(ctx context.Context, store OrgUnitStore, tenantID strin
 		}
 	}
 
-	items = filterOrgUnitListItems(items, req.Keyword, req.Status)
+	items = filterOrgUnitListItems(items, req.Keyword, req.Status, req.IsBusinessUnit)
 	if req.SortField != "" {
 		sortOrgUnitListItems(items, req.SortField, req.SortOrder)
 	}
@@ -608,11 +635,11 @@ func listOrgUnitListPage(ctx context.Context, store OrgUnitStore, tenantID strin
 	return items[start:end], total, nil
 }
 
-func filterOrgUnitListItems(items []orgUnitListItem, keyword string, status string) []orgUnitListItem {
+func filterOrgUnitListItems(items []orgUnitListItem, keyword string, status string, isBusinessUnit *bool) []orgUnitListItem {
 	normalizedKeyword := strings.ToLower(strings.TrimSpace(keyword))
 	normalizedStatus := strings.ToLower(strings.TrimSpace(status))
 
-	if normalizedKeyword == "" && normalizedStatus == "" {
+	if normalizedKeyword == "" && normalizedStatus == "" && isBusinessUnit == nil {
 		return items
 	}
 
@@ -631,6 +658,12 @@ func filterOrgUnitListItems(items []orgUnitListItem, keyword string, status stri
 			code := strings.ToLower(item.OrgCode)
 			name := strings.ToLower(item.Name)
 			if !strings.Contains(code, normalizedKeyword) && !strings.Contains(name, normalizedKeyword) {
+				continue
+			}
+		}
+
+		if isBusinessUnit != nil {
+			if item.IsBusinessUnit == nil || *item.IsBusinessUnit != *isBusinessUnit {
 				continue
 			}
 		}
@@ -733,6 +766,7 @@ func handleOrgUnitsAPI(w http.ResponseWriter, r *http.Request, store OrgUnitStor
 				ParentOrgNodeKey:  parentOrgNodeKey,
 				Keyword:           listOpts.Keyword,
 				Status:            listOpts.Status,
+				IsBusinessUnit:    listOpts.IsBusinessUnit,
 				SortField:         listOpts.SortField,
 				ExtSortFieldKey:   listOpts.ExtSortFieldKey,
 				SortOrder:         listOpts.SortOrder,

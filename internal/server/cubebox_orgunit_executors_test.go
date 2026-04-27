@@ -27,6 +27,13 @@ func TestNewCubeBoxOrgUnitRegisteredExecutors(t *testing.T) {
 			t.Fatalf("api_key %q not registered", apiKey)
 		}
 	}
+	list, ok := registry.Resolve("orgunit.list")
+	if !ok {
+		t.Fatal("orgunit.list not registered")
+	}
+	if !containsString(list.OptionalParams, "all_org_units") {
+		t.Fatalf("orgunit.list optional params missing all_org_units: %#v", list.OptionalParams)
+	}
 }
 
 func TestNewCubeBoxOrgUnitRegisteredExecutorsAllowsNonDetailsExecutorsWithoutExtStore(t *testing.T) {
@@ -147,6 +154,7 @@ func TestCubeBoxOrgUnitListExecutor(t *testing.T) {
 		"include_disabled": true,
 		"keyword":          "销售",
 		"status":           "disabled",
+		"is_business_unit": true,
 		"page":             float64(2),
 		"size":             float64(5),
 	})
@@ -163,11 +171,28 @@ func TestCubeBoxOrgUnitListExecutor(t *testing.T) {
 	if store.capturedReq.Status != orgUnitListStatusDisabled {
 		t.Fatalf("status=%q", store.capturedReq.Status)
 	}
-	if store.capturedReq.Limit != 5 || store.capturedReq.Offset != 10 {
+	if store.capturedReq.IsBusinessUnit == nil || !*store.capturedReq.IsBusinessUnit {
+		t.Fatalf("isBusinessUnit=%v", store.capturedReq.IsBusinessUnit)
+	}
+	if store.capturedReq.Limit != 5 || store.capturedReq.Offset != 5 {
 		t.Fatalf("limit=%d offset=%d", store.capturedReq.Limit, store.capturedReq.Offset)
 	}
 	if got := result.Payload["total"]; got != float64(12) {
 		t.Fatalf("total=%v", got)
+	}
+	if result.ConfirmedEntity != nil {
+		t.Fatalf("list result must not confirm a single entity, got %#v", result.ConfirmedEntity)
+	}
+}
+
+func TestCubeBoxOrgUnitListExecutorRejectsNonBoolBusinessUnitFilter(t *testing.T) {
+	executor := cubeBoxOrgUnitListExecutor{}
+	_, err := executor.ValidateParams(map[string]any{
+		"as_of":            "2026-04-23",
+		"is_business_unit": "true",
+	})
+	if err == nil {
+		t.Fatal("expected is_business_unit validation error")
 	}
 }
 
@@ -191,17 +216,145 @@ func TestCubeBoxOrgUnitListExecutorPaginatesWhenOnlyPageProvided(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Execute err=%v", err)
 	}
-	if store.capturedReq.Limit != orgUnitListDefaultPageSize || store.capturedReq.Offset != 2*orgUnitListDefaultPageSize {
+	if store.capturedReq.Limit != cubeBoxOrgUnitListDefaultPageSize || store.capturedReq.Offset != cubeBoxOrgUnitListDefaultPageSize {
 		t.Fatalf("limit=%d offset=%d", store.capturedReq.Limit, store.capturedReq.Offset)
 	}
 	if got := result.Payload["page"]; got != float64(2) {
 		t.Fatalf("page=%v", got)
 	}
-	if got := result.Payload["size"]; got != float64(orgUnitListDefaultPageSize) {
+	if got := result.Payload["size"]; got != float64(cubeBoxOrgUnitListDefaultPageSize) {
 		t.Fatalf("size=%v", got)
 	}
 	if got := result.Payload["total"]; got != float64(12) {
 		t.Fatalf("total=%v", got)
+	}
+}
+
+func TestCubeBoxOrgUnitListExecutorDefaultsPaginationWhenOmitted(t *testing.T) {
+	store := &orgUnitListPageReaderStore{
+		resolveOrgCodeStore: &resolveOrgCodeStore{},
+		items: []orgUnitListItem{
+			{OrgCode: "1002", Name: "上海销售组", Status: "active"},
+		},
+		total: 212,
+	}
+	executor := cubeBoxOrgUnitListExecutor{store: store}
+	params, err := executor.ValidateParams(map[string]any{
+		"as_of": "2026-04-23",
+	})
+	if err != nil {
+		t.Fatalf("ValidateParams err=%v", err)
+	}
+	result, err := executor.Execute(context.Background(), cubebox.ExecuteRequest{TenantID: "t1"}, params)
+	if err != nil {
+		t.Fatalf("Execute err=%v", err)
+	}
+	if store.capturedReq.Limit != cubeBoxOrgUnitListDefaultPageSize || store.capturedReq.Offset != 0 {
+		t.Fatalf("limit=%d offset=%d", store.capturedReq.Limit, store.capturedReq.Offset)
+	}
+	if got := result.Payload["page"]; got != float64(1) {
+		t.Fatalf("page=%v", got)
+	}
+	if got := result.Payload["size"]; got != float64(cubeBoxOrgUnitListDefaultPageSize) {
+		t.Fatalf("size=%v", got)
+	}
+	if got := result.Payload["total"]; got != float64(212) {
+		t.Fatalf("total=%v", got)
+	}
+}
+
+func TestCubeBoxOrgUnitListExecutorSupportsAllOrgUnitsScope(t *testing.T) {
+	store := &orgUnitListPageReaderStore{
+		resolveOrgCodeStore: &resolveOrgCodeStore{},
+		items: []orgUnitListItem{
+			{OrgCode: "100000", Name: "飞虫与鲜花", Status: "active"},
+			{OrgCode: "200007", Name: "成本C组", Status: "active"},
+		},
+		total: 10,
+	}
+	executor := cubeBoxOrgUnitListExecutor{store: store}
+	params, err := executor.ValidateParams(map[string]any{
+		"as_of":            "2026-04-27",
+		"all_org_units":    true,
+		"page":             float64(1),
+		"size":             float64(100),
+		"include_disabled": false,
+	})
+	if err != nil {
+		t.Fatalf("ValidateParams err=%v", err)
+	}
+	result, err := executor.Execute(context.Background(), cubebox.ExecuteRequest{TenantID: "t1"}, params)
+	if err != nil {
+		t.Fatalf("Execute err=%v", err)
+	}
+	if !store.capturedReq.AllOrgUnits {
+		t.Fatalf("expected all org units scope, got %+v", store.capturedReq)
+	}
+	if store.capturedReq.ParentOrgNodeKey != nil {
+		t.Fatalf("all_org_units must not require parent scope, got %+v", store.capturedReq)
+	}
+	if got := result.Payload["total"]; got != float64(10) {
+		t.Fatalf("total=%v", got)
+	}
+}
+
+func TestCubeBoxOrgUnitListExecutorDefaultsToFirstPageWhenOnlySizeProvided(t *testing.T) {
+	store := &orgUnitListPageReaderStore{
+		resolveOrgCodeStore: &resolveOrgCodeStore{},
+		items: []orgUnitListItem{
+			{OrgCode: "1002", Name: "上海销售组", Status: "active"},
+		},
+		total: 12,
+	}
+	executor := cubeBoxOrgUnitListExecutor{store: store}
+	params, err := executor.ValidateParams(map[string]any{
+		"as_of": "2026-04-23",
+		"size":  float64(100),
+	})
+	if err != nil {
+		t.Fatalf("ValidateParams err=%v", err)
+	}
+	result, err := executor.Execute(context.Background(), cubebox.ExecuteRequest{TenantID: "t1"}, params)
+	if err != nil {
+		t.Fatalf("Execute err=%v", err)
+	}
+	if store.capturedReq.Limit != 100 || store.capturedReq.Offset != 0 {
+		t.Fatalf("limit=%d offset=%d", store.capturedReq.Limit, store.capturedReq.Offset)
+	}
+	if got := result.Payload["page"]; got != float64(1) {
+		t.Fatalf("page=%v", got)
+	}
+	if got := result.Payload["size"]; got != float64(100) {
+		t.Fatalf("size=%v", got)
+	}
+}
+
+func TestCubeBoxOrgUnitListExecutorTreatsPageOneAsFirstPage(t *testing.T) {
+	store := &orgUnitListPageReaderStore{
+		resolveOrgCodeStore: &resolveOrgCodeStore{},
+		items: []orgUnitListItem{
+			{OrgCode: "1002", Name: "上海销售组", Status: "active"},
+		},
+		total: 12,
+	}
+	executor := cubeBoxOrgUnitListExecutor{store: store}
+	params, err := executor.ValidateParams(map[string]any{
+		"as_of": "2026-04-23",
+		"page":  float64(1),
+		"size":  float64(100),
+	})
+	if err != nil {
+		t.Fatalf("ValidateParams err=%v", err)
+	}
+	result, err := executor.Execute(context.Background(), cubebox.ExecuteRequest{TenantID: "t1"}, params)
+	if err != nil {
+		t.Fatalf("Execute err=%v", err)
+	}
+	if store.capturedReq.Limit != 100 || store.capturedReq.Offset != 0 {
+		t.Fatalf("limit=%d offset=%d", store.capturedReq.Limit, store.capturedReq.Offset)
+	}
+	if got := result.Payload["page"]; got != float64(1) {
+		t.Fatalf("page=%v", got)
 	}
 }
 

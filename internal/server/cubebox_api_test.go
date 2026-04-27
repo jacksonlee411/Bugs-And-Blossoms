@@ -18,9 +18,11 @@ func newTestGateway(runtime *cubebox.Runtime) *cubebox.GatewayService {
 }
 
 type cubeboxReadPlanProducerStub struct {
-	result cubeboxReadPlanProductionResult
-	err    error
-	fn     func(context.Context, cubeboxReadPlanProductionInput) (cubeboxReadPlanProductionResult, error)
+	result  cubeboxReadPlanProductionResult
+	results []cubeboxReadPlanProductionResult
+	err     error
+	fn      func(context.Context, cubeboxReadPlanProductionInput) (cubeboxReadPlanProductionResult, error)
+	index   *int
 }
 
 func (s cubeboxReadPlanProducerStub) ProduceReadPlan(ctx context.Context, input cubeboxReadPlanProductionInput) (cubeboxReadPlanProductionResult, error) {
@@ -30,13 +32,25 @@ func (s cubeboxReadPlanProducerStub) ProduceReadPlan(ctx context.Context, input 
 	if s.err != nil {
 		return cubeboxReadPlanProductionResult{}, s.err
 	}
+	if len(s.results) > 0 {
+		if s.index == nil {
+			return s.results[0], nil
+		}
+		if *s.index >= len(s.results) {
+			return s.results[len(s.results)-1], nil
+		}
+		result := s.results[*s.index]
+		*s.index = *s.index + 1
+		return result, nil
+	}
 	return s.result, nil
 }
 
 type cubeboxQueryNarratorStub struct {
-	text string
-	err  error
-	fn   func(context.Context, cubeboxQueryNarrationInput) (string, error)
+	text      string
+	err       error
+	fn        func(context.Context, cubeboxQueryNarrationInput) (string, error)
+	noQueryFn func(context.Context, cubeboxNoQueryGuidanceInput) (string, error)
 }
 
 func (s cubeboxQueryNarratorStub) NarrateQueryResult(ctx context.Context, input cubeboxQueryNarrationInput) (string, error) {
@@ -47,6 +61,13 @@ func (s cubeboxQueryNarratorStub) NarrateQueryResult(ctx context.Context, input 
 		return "", s.err
 	}
 	return s.text, nil
+}
+
+func (s cubeboxQueryNarratorStub) NarrateNoQueryGuidance(ctx context.Context, input cubeboxNoQueryGuidanceInput) (string, error) {
+	if s.noQueryFn != nil {
+		return s.noQueryFn(ctx, input)
+	}
+	return fallbackNoQueryGuidanceText(buildNoQueryGuidanceEnvelope(input)), nil
 }
 
 type cubeboxAuthorizerStub struct {
@@ -372,6 +393,57 @@ func TestCubeBoxStreamTurnAPI(t *testing.T) {
 	}
 	if !strings.Contains(body, `"latency_ms":`) {
 		t.Fatalf("missing latency payload: %s", body)
+	}
+}
+
+func TestCubeBoxStreamTurnAPIUsesPreparedSequenceForStableMessageIDs(t *testing.T) {
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/internal/cubebox/turns:stream", strings.NewReader(`{"conversation_id":"conv_1","prompt":"hello after restart","next_sequence":2}`))
+	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
+	req = req.WithContext(withPrincipal(req.Context(), Principal{ID: "p1"}))
+
+	runtime := cubebox.NewRuntime()
+	var appended []cubebox.CanonicalEvent
+	handleCubeBoxStreamTurnAPI(rec, req, runtime, cubeboxStoreStub{
+		preparePromptViewFn: func(context.Context, string, string, string, cubebox.CanonicalContext, string) (cubebox.PromptViewPreparationResponse, error) {
+			return cubebox.PromptViewPreparationResponse{
+				Conversation: cubebox.Conversation{ID: "conv_1", Title: "新对话", Status: "active"},
+				NextSequence: 10,
+			}, nil
+		},
+		appendFn: func(_ context.Context, _ string, _ string, _ string, event cubebox.CanonicalEvent) error {
+			appended = append(appended, event)
+			return nil
+		},
+	}, newTestGateway(runtime), nil)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+	}
+	if len(appended) == 0 {
+		t.Fatal("expected appended events")
+	}
+	for _, event := range appended {
+		if event.TurnID == nil || *event.TurnID != "turn_seq_10" {
+			t.Fatalf("event turn id should derive from prepared sequence, got %#v", event.TurnID)
+		}
+		if event.Sequence < 10 {
+			t.Fatalf("event sequence=%d should start from prepared sequence", event.Sequence)
+		}
+		switch event.Type {
+		case "turn.started":
+			if event.Payload["user_message_id"] != "msg_user_seq_10" {
+				t.Fatalf("started payload=%#v", event.Payload)
+			}
+		case "turn.user_message.accepted":
+			if event.Payload["message_id"] != "msg_user_seq_10" {
+				t.Fatalf("user payload=%#v", event.Payload)
+			}
+		case "turn.agent_message.delta", "turn.agent_message.completed":
+			if event.Payload["message_id"] != "msg_agent_seq_10" {
+				t.Fatalf("agent payload=%#v", event.Payload)
+			}
+		}
 	}
 }
 
@@ -1329,7 +1401,12 @@ func TestCubeBoxStreamTurnAPIStopsNoQueryWithoutGatewayFallback(t *testing.T) {
 		store:    cubeboxStoreStub{},
 		registry: &cubebox.ExecutionRegistry{},
 		producer: cubeboxReadPlanProducerStub{result: cubeboxReadPlanProductionResult{Handled: false}},
-		narrator: cubeboxQueryNarratorStub{text: "unused"},
+		narrator: cubeboxQueryNarratorStub{text: "unused", noQueryFn: func(_ context.Context, input cubeboxNoQueryGuidanceInput) (string, error) {
+			if input.ScopeSummary != "" || len(input.SuggestedPrompts) > 0 || input.QueryContextHint.HasConversationEvidence {
+				t.Fatalf("expected no hard-coded domain facts in generic test pack, got %#v", input)
+			}
+			return fallbackNoQueryGuidanceText(buildNoQueryGuidanceEnvelope(input)), nil
+		}},
 		knowledgePacks: []cubebox.KnowledgePack{
 			{Dir: "modules/orgunit/presentation/cubebox", Files: map[string]string{"CUBEBOX-SKILL.md": "x", "queries.md": "x", "apis.md": "x", "examples.md": "x"}},
 		},
@@ -1348,8 +1425,8 @@ func TestCubeBoxStreamTurnAPIStopsNoQueryWithoutGatewayFallback(t *testing.T) {
 		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
 	}
 	body := rec.Body.String()
-	if !strings.Contains(body, "当前请求未形成可安全执行的只读查询计划") {
-		t.Fatalf("expected no-query stopline body=%s", body)
+	if !strings.Contains(body, "当前输入未进入已支持查询闭环") || !strings.Contains(body, "你可以直接这样问：") {
+		t.Fatalf("expected no-query guidance body=%s", body)
 	}
 	if strings.Contains(body, `"runtime":"deterministic-fixture"`) {
 		t.Fatalf("expected no gateway fallback body=%s", body)
@@ -1662,7 +1739,7 @@ func TestCubeBoxStreamTurnAPIFallsBackToGatewayWhenPlannerErrors(t *testing.T) {
 	}
 }
 
-func TestCubeBoxQueryFlowInjectsRecentConfirmedEntity(t *testing.T) {
+func TestCubeBoxQueryFlowLetsPlannerUseConversationEvidenceExplicitly(t *testing.T) {
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodPost, "/internal/cubebox/turns:stream", strings.NewReader(`{"conversation_id":"conv_1","prompt":"查该组织的下级组织","next_sequence":10}`))
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
@@ -1717,10 +1794,19 @@ func TestCubeBoxQueryFlowInjectsRecentConfirmedEntity(t *testing.T) {
 		registry: registry,
 		producer: cubeboxReadPlanProducerStub{fn: func(ctx context.Context, input cubeboxReadPlanProductionInput) (cubeboxReadPlanProductionResult, error) {
 			if input.QueryContext.RecentConfirmedEntity == nil || input.QueryContext.RecentConfirmedEntity.EntityKey != "100000" || input.QueryContext.RecentConfirmedEntity.AsOf != "2026-04-25" {
-				t.Fatalf("expected recent entity injected, got %#v", input.QueryContext)
+				t.Fatalf("expected conversation evidence available to planner, got %#v", input.QueryContext)
 			}
 			if len(input.QueryContext.RecentConfirmedEntities) != 1 {
 				t.Fatalf("expected recent entities list, got %#v", input.QueryContext.RecentConfirmedEntities)
+			}
+			evidence := cubebox.BuildQueryEvidenceWindow(input.QueryContext, input.Prompt, cubebox.QueryEvidenceWindowBudget{
+				MaxEntityObservations: 5,
+				MaxOptionGroups:       5,
+				MaxOptionsPerGroup:    100,
+				MaxDialogueTurns:      5,
+			})
+			if len(evidence.Observations) != 1 || evidence.Observations[0].Kind != "entity_fact" {
+				t.Fatalf("expected neutral evidence window, got %#v", evidence)
 			}
 			return cubeboxReadPlanProductionResult{
 				Handled: true,
@@ -1865,7 +1951,12 @@ func TestCubeBoxQueryFlowWritesClarificationMetadataEvent(t *testing.T) {
 			},
 			ProviderID: "openai-compatible", ProviderType: "openai-compatible", ModelSlug: "gpt-5.2",
 		}},
-		narrator:       cubeboxQueryNarratorStub{text: "unused"},
+		narrator: cubeboxQueryNarratorStub{text: "unused", noQueryFn: func(_ context.Context, input cubeboxNoQueryGuidanceInput) (string, error) {
+			if input.ScopeSummary != "" || len(input.SuggestedPrompts) > 0 || input.QueryContextHint.HasConversationEvidence {
+				t.Fatalf("expected generic no-query guidance facts, got %#v", input)
+			}
+			return fallbackNoQueryGuidanceText(buildNoQueryGuidanceEnvelope(input)), nil
+		}},
 		knowledgePacks: []cubebox.KnowledgePack{{Dir: "modules/orgunit/presentation/cubebox", Files: map[string]string{"CUBEBOX-SKILL.md": "x", "queries.md": "x", "apis.md": "x", "examples.md": "x"}}},
 		now:            func() time.Time { return time.Date(2026, 4, 25, 12, 0, 0, 0, time.UTC) },
 	}
@@ -1933,7 +2024,12 @@ func TestCubeBoxQueryFlowWritesCandidateMetadataForAmbiguousSearch(t *testing.T)
 			},
 			ProviderID: "openai-compatible", ProviderType: "openai-compatible", ModelSlug: "gpt-5.2",
 		}},
-		narrator:       cubeboxQueryNarratorStub{text: "unused"},
+		narrator: cubeboxQueryNarratorStub{text: "unused", noQueryFn: func(_ context.Context, input cubeboxNoQueryGuidanceInput) (string, error) {
+			if input.ScopeSummary != "" || len(input.SuggestedPrompts) > 0 || input.QueryContextHint.HasConversationEvidence {
+				t.Fatalf("expected generic no-query guidance facts, got %#v", input)
+			}
+			return fallbackNoQueryGuidanceText(buildNoQueryGuidanceEnvelope(input)), nil
+		}},
 		knowledgePacks: []cubebox.KnowledgePack{{Dir: "modules/orgunit/presentation/cubebox", Files: map[string]string{"CUBEBOX-SKILL.md": "x", "queries.md": "x", "apis.md": "x", "examples.md": "x"}}},
 		now:            func() time.Time { return time.Date(2026, 4, 25, 12, 0, 0, 0, time.UTC) },
 	}
@@ -2084,11 +2180,11 @@ func TestCubeBoxQueryFlowStopsNoQueryFallbackWithGenericBoundary(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status=%d body=%s", rec.Code, body)
 	}
-	if !strings.Contains(body, "当前请求未形成可安全执行的只读查询计划") {
-		t.Fatalf("expected generic no-query stopline body=%s", body)
+	if !strings.Contains(body, "当前输入未进入已支持查询闭环") || !strings.Contains(body, "1. 请换成明确的数据查询问题") {
+		t.Fatalf("expected generic no-query guidance body=%s", body)
 	}
-	if strings.Contains(body, `"runtime":"deterministic-fixture"`) || strings.Contains(body, "没有查询接口") || strings.Contains(body, "没有工具权限") || strings.Contains(body, "组织详情") {
-		t.Fatalf("expected stopline without gateway fallback body=%s", body)
+	if strings.Contains(body, `"runtime":"deterministic-fixture"`) || strings.Contains(body, "没有查询接口") || strings.Contains(body, "没有工具权限") || strings.Contains(body, "组织详情") || strings.Contains(body, "NO_QUERY") || strings.Contains(body, "ReadPlan") || strings.Contains(body, "planner") {
+		t.Fatalf("expected guidance without gateway fallback or internals body=%s", body)
 	}
 }
 
@@ -2120,17 +2216,153 @@ func TestCubeBoxQueryFlowStopsNoQueryWithoutDomainSemantics(t *testing.T) {
 	if !handled {
 		t.Fatal("expected query no-query stopline to handle without domain policy")
 	}
-	if text := strings.Join(sink.deltas(), "\n"); !strings.Contains(text, "当前请求未形成可安全执行的只读查询计划") {
-		t.Fatalf("expected generic no-query stopline, got events=%#v", sink.events)
+	if text := strings.Join(sink.deltas(), "\n"); !strings.Contains(text, "当前输入未进入已支持查询闭环") || !strings.Contains(text, "你可以直接这样问：") {
+		t.Fatalf("expected generic no-query guidance, got events=%#v", sink.events)
 	}
 	if text := strings.Join(sink.deltas(), "\n"); strings.Contains(text, "组织") {
 		t.Fatalf("generic stopline must not include orgunit semantics, got %q", text)
 	}
 }
 
+func TestCubeBoxQueryFlowNoQueryGuidanceUsesControlledKnowledgePackFacts(t *testing.T) {
+	store := cubeboxStoreStub{
+		getFn: func(context.Context, string, string, string) (cubebox.ConversationReplayResponse, error) {
+			return cubebox.ConversationReplayResponse{Conversation: cubebox.Conversation{ID: "conv_1", Title: "新对话", Status: "active"}, NextSequence: 1}, nil
+		},
+		appendFn: func(context.Context, string, string, string, cubebox.CanonicalEvent) error { return nil },
+	}
+	var captured cubeboxNoQueryGuidanceInput
+	queryFlow := &cubeboxQueryFlow{
+		runtime:  cubebox.NewRuntime(),
+		store:    store,
+		registry: &cubebox.ExecutionRegistry{},
+		producer: cubeboxReadPlanProducerStub{result: cubeboxReadPlanProductionResult{Handled: false, ProviderID: "openai-compatible", ProviderType: "openai-compatible", ModelSlug: "gpt-5.2"}},
+		narrator: cubeboxQueryNarratorStub{text: "unused", noQueryFn: func(_ context.Context, input cubeboxNoQueryGuidanceInput) (string, error) {
+			captured = input
+			return fallbackNoQueryGuidanceText(buildNoQueryGuidanceEnvelope(input)), nil
+		}},
+		knowledgePacks: []cubebox.KnowledgePack{{Dir: "modules/orgunit/presentation/cubebox", Files: map[string]string{
+			"CUBEBOX-SKILL.md": "queries.md\napis.md\nexamples.md\n",
+			"queries.md":       "```yaml\nintents:\n  - key: orgunit.details\n    required_params: [org_code, as_of]\n    optional_params: []\nno_query_guidance:\n  scope_summary: 当前主要支持组织相关只读查询。\n  suggested_prompts:\n    - 查“华东销售中心”的详情\n    - 查“华东销售中心”当前的下级组织\n    - 搜索名称包含“销售”的组织\n```\n",
+			"apis.md":          "x",
+			"examples.md":      "x",
+		}}},
+		now: func() time.Time { return time.Date(2026, 4, 25, 12, 0, 0, 0, time.UTC) },
+	}
+
+	sink := &capturingGatewaySink{}
+	handled := queryFlow.TryHandle(context.Background(), cubebox.GatewayStreamRequest{
+		TenantID:       "t1",
+		PrincipalID:    "p1",
+		ConversationID: "conv_1",
+		Prompt:         "你好",
+		NextSequence:   1,
+	}, sink)
+	if !handled {
+		t.Fatal("expected query no-query guidance to handle")
+	}
+	if captured.ScopeSummary != "当前主要支持组织相关只读查询。" {
+		t.Fatalf("unexpected scope summary=%q", captured.ScopeSummary)
+	}
+	for _, prompt := range []string{"查“华东销售中心”的详情", "查“华东销售中心”当前的下级组织", "搜索名称包含“销售”的组织"} {
+		if !containsString(captured.SuggestedPrompts, prompt) {
+			t.Fatalf("expected suggested prompt %q, got %#v", prompt, captured.SuggestedPrompts)
+		}
+	}
+	if captured.QueryContextHint.HasConversationEvidence {
+		t.Fatalf("unexpected conversation evidence hint=%#v", captured.QueryContextHint)
+	}
+	text := strings.Join(sink.deltas(), "\n")
+	for _, snippet := range []string{"当前主要支持组织相关只读查询。", "你可以直接这样问：", "1. 查“华东销售中心”的详情", "2. 查“华东销售中心”当前的下级组织", "3. 搜索名称包含“销售”的组织"} {
+		if !strings.Contains(text, snippet) {
+			t.Fatalf("expected text to contain %q, got %q", snippet, text)
+		}
+	}
+	for _, forbidden := range []string{"org_code", "NO_QUERY", "ReadPlan", "planner", "API"} {
+		if strings.Contains(text, forbidden) {
+			t.Fatalf("guidance leaked %q in %q", forbidden, text)
+		}
+	}
+}
+
+func TestCubeBoxQueryFlowNoQueryGuidanceDoesNotSwitchToContextSpecificPrompts(t *testing.T) {
+	store := cubeboxStoreStub{
+		getFn: func(context.Context, string, string, string) (cubebox.ConversationReplayResponse, error) {
+			return cubebox.ConversationReplayResponse{
+				Conversation: cubebox.Conversation{ID: "conv_1", Title: "新对话", Status: "active"},
+				Events: []cubebox.CanonicalEvent{{
+					Type:    cubebox.QueryEntityConfirmedEventType,
+					Payload: map[string]any{"entity": map[string]any{"domain": "orgunit", "intent": "orgunit.details", "entity_key": "100000", "as_of": "2026-04-25"}},
+				}},
+				NextSequence: 2,
+			}, nil
+		},
+		preparePromptViewFn: func(context.Context, string, string, string, cubebox.CanonicalContext, string) (cubebox.PromptViewPreparationResponse, error) {
+			return cubebox.PromptViewPreparationResponse{Conversation: cubebox.Conversation{ID: "conv_1", Title: "新对话", Status: "active"}, NextSequence: 2}, nil
+		},
+		appendFn: func(context.Context, string, string, string, cubebox.CanonicalEvent) error { return nil },
+	}
+	var captured cubeboxNoQueryGuidanceInput
+	queryFlow := &cubeboxQueryFlow{
+		runtime:  cubebox.NewRuntime(),
+		store:    store,
+		registry: &cubebox.ExecutionRegistry{},
+		producer: cubeboxReadPlanProducerStub{result: cubeboxReadPlanProductionResult{Handled: false, ProviderID: "openai-compatible", ProviderType: "openai-compatible", ModelSlug: "gpt-5.2"}},
+		narrator: cubeboxQueryNarratorStub{text: "unused", noQueryFn: func(_ context.Context, input cubeboxNoQueryGuidanceInput) (string, error) {
+			captured = input
+			return fallbackNoQueryGuidanceText(buildNoQueryGuidanceEnvelope(input)), nil
+		}},
+		knowledgePacks: []cubebox.KnowledgePack{{Dir: "modules/orgunit/presentation/cubebox", Files: map[string]string{
+			"CUBEBOX-SKILL.md": "queries.md\napis.md\nexamples.md\n",
+			"queries.md":       "```yaml\nintents:\n  - key: orgunit.details\n    required_params: [org_code, as_of]\n    optional_params: []\nno_query_guidance:\n  scope_summary: 当前主要支持组织相关只读查询。\n  suggested_prompts:\n    - 查“华东销售中心”的详情\n    - 查“华东销售中心”当前的下级组织\n    - 搜索名称包含“销售”的组织\n```\n",
+			"apis.md":          "x",
+			"examples.md":      "x",
+		}}},
+		now: func() time.Time { return time.Date(2026, 4, 25, 12, 0, 0, 0, time.UTC) },
+	}
+
+	sink := &capturingGatewaySink{}
+	handled := queryFlow.TryHandle(context.Background(), cubebox.GatewayStreamRequest{
+		TenantID:       "t1",
+		PrincipalID:    "p1",
+		ConversationID: "conv_1",
+		Prompt:         "还能怎么问",
+		NextSequence:   2,
+	}, sink)
+	if !handled {
+		t.Fatal("expected query no-query guidance to handle")
+	}
+	if !captured.QueryContextHint.HasConversationEvidence {
+		t.Fatalf("expected conversation evidence hint, got %#v", captured.QueryContextHint)
+	}
+	for _, prompt := range []string{"查“华东销售中心”的详情", "查“华东销售中心”当前的下级组织", "搜索名称包含“销售”的组织"} {
+		if !containsString(captured.SuggestedPrompts, prompt) {
+			t.Fatalf("expected base prompt %q, got %#v", prompt, captured.SuggestedPrompts)
+		}
+	}
+	text := strings.Join(sink.deltas(), "\n")
+	for _, snippet := range []string{"1. 查“华东销售中心”的详情", "2. 查“华东销售中心”当前的下级组织", "3. 搜索名称包含“销售”的组织"} {
+		if !strings.Contains(text, snippet) {
+			t.Fatalf("expected text to contain %q, got %q", snippet, text)
+		}
+	}
+	if strings.Contains(text, "100000") || strings.Contains(text, "org_code") || strings.Contains(text, "NO_QUERY") || strings.Contains(text, "ReadPlan") || strings.Contains(text, "planner") {
+		t.Fatalf("context guidance leaked internal or code details: %q", text)
+	}
+}
+
 func containsCanonicalEventType(events []cubebox.CanonicalEvent, eventType string) bool {
 	for _, event := range events {
 		if event.Type == eventType {
+			return true
+		}
+	}
+	return false
+}
+
+func containsString(items []string, target string) bool {
+	for _, item := range items {
+		if item == target {
 			return true
 		}
 	}

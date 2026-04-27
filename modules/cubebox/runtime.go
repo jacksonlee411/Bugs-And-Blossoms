@@ -124,6 +124,12 @@ type TurnOwner struct {
 	ConversationID string
 }
 
+type TurnIDs struct {
+	TurnID             string
+	UserMessageID      string
+	AssistantMessageID string
+}
+
 func NewRuntime() *Runtime {
 	return &Runtime{
 		interrupts: make(map[string]chan struct{}),
@@ -192,7 +198,22 @@ func (r *Runtime) LoadConversation(conversationID string) ConversationReplayResp
 }
 
 func (r *Runtime) StartTurn(owner TurnOwner, prompt string) DeterministicTurn {
-	turnID := r.nextID("turn")
+	return r.StartTurnWithIDs(owner, prompt, TurnIDs{})
+}
+
+func (r *Runtime) StartTurnWithIDs(owner TurnOwner, prompt string, ids TurnIDs) DeterministicTurn {
+	turnID := strings.TrimSpace(ids.TurnID)
+	if turnID == "" {
+		turnID = r.nextID("turn")
+	}
+	userMessageID := strings.TrimSpace(ids.UserMessageID)
+	if userMessageID == "" {
+		userMessageID = r.nextID("msg_user")
+	}
+	assistantMessageID := strings.TrimSpace(ids.AssistantMessageID)
+	if assistantMessageID == "" {
+		assistantMessageID = r.nextID("msg_agent")
+	}
 	ch := make(chan struct{})
 
 	r.mu.Lock()
@@ -207,8 +228,8 @@ func (r *Runtime) StartTurn(owner TurnOwner, prompt string) DeterministicTurn {
 	return DeterministicTurn{
 		ConversationID:     strings.TrimSpace(owner.ConversationID),
 		TurnID:             turnID,
-		UserMessageID:      r.nextID("msg_user"),
-		AssistantMessageID: r.nextID("msg_agent"),
+		UserMessageID:      userMessageID,
+		AssistantMessageID: assistantMessageID,
 		Prompt:             prompt,
 		Chunks:             deterministicChunks(prompt),
 		ShouldError:        strings.Contains(strings.ToLower(prompt), "error"),
