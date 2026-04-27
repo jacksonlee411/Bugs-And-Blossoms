@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"os"
 	"reflect"
 	"strings"
 	"testing"
@@ -207,6 +208,33 @@ func TestBuildQueryClarificationEnvelopeOmitsQueryIntent(t *testing.T) {
 	} {
 		if strings.Contains(text, forbidden) {
 			t.Fatalf("expected clarification body to omit %q, got %q", forbidden, text)
+		}
+	}
+}
+
+func TestBuildQueryEvidenceWindowPromptBlockIncludesResultListGuidance(t *testing.T) {
+	block := buildQueryEvidenceWindowPromptBlock(cubebox.QueryContext{
+		RecentCandidateGroups: []cubebox.QueryCandidateGroup{
+			{
+				GroupID:         "resultgrp_finance",
+				CandidateSource: "results",
+				CandidateCount:  2,
+				Candidates: []cubebox.QueryCandidate{
+					{Domain: "orgunit", EntityKey: "200001", Name: "财务部", AsOf: "2026-04-27"},
+					{Domain: "orgunit", EntityKey: "200002", Name: "财务一组", AsOf: "2026-04-27"},
+				},
+			},
+		},
+	}, "增加列出他们的组织路径")
+
+	for _, snippet := range []string{
+		`"kind":"result_list"`,
+		`"group_id":"resultgrp_finance"`,
+		`"option_source":"results"`,
+		`补充字段/增加列/列出路径`,
+	} {
+		if !strings.Contains(block, snippet) {
+			t.Fatalf("expected result list snippet %q in block=%q", snippet, block)
 		}
 	}
 }
@@ -523,7 +551,7 @@ func TestBuildPlannerMessagesIncludesQueryEvidenceWindow(t *testing.T) {
 					t.Fatalf("expected planner context to omit %q, got %q", forbidden, message.Content)
 				}
 			}
-			for _, required := range []string{"不是本地目标绑定", "本地不会替你从历史上下文补 target", "不会因为输入短而抢先拒绝"} {
+			for _, required := range []string{"不是本地目标绑定", "本地不会替你从历史上下文补单个 winner", "不会因为输入短而抢先拒绝"} {
 				if !strings.Contains(message.Content, required) {
 					t.Fatalf("expected planner context to contain %q, got %q", required, message.Content)
 				}
@@ -593,6 +621,35 @@ func TestBuildPlannerMessagesIncludesRelativeMonthDayGuidance(t *testing.T) {
 	for _, expected := range []string{
 		"本月N日/这个月N号",
 		"2026-04-09",
+	} {
+		if !strings.Contains(joined, expected) {
+			t.Fatalf("expected planner prompt to contain %q, got %s", expected, joined)
+		}
+	}
+}
+
+func TestBuildPlannerMessagesGuidesKeywordListQueries(t *testing.T) {
+	producer := &cubeboxProviderReadPlanProducer{
+		now: func() time.Time { return time.Date(2026, 4, 27, 12, 0, 0, 0, time.UTC) },
+	}
+	messages := producer.buildPlannerMessages(cubeboxReadPlanProductionInput{
+		Prompt: "列出全部包含成本关键字的组织",
+		KnowledgePacks: []cubebox.KnowledgePack{
+			{Dir: "modules/orgunit/presentation/cubebox", Files: map[string]string{
+				"CUBEBOX-SKILL.md": "x",
+				"queries.md":       mustReadTestFile(t, "modules/orgunit/presentation/cubebox/queries.md"),
+				"apis.md":          "x",
+				"examples.md":      mustReadTestFile(t, "modules/orgunit/presentation/cubebox/examples.md"),
+			}},
+		},
+	})
+
+	joined := plannerMessageText(messages)
+	for _, expected := range []string{
+		"列出全部包含成本关键字的组织",
+		"keyword=成本",
+		`"keyword": "成本"`,
+		"不要填写 `parent_org_code`",
 	} {
 		if !strings.Contains(joined, expected) {
 			t.Fatalf("expected planner prompt to contain %q, got %s", expected, joined)
@@ -1005,6 +1062,147 @@ func TestQueryFlowLetsPlannerOwnAuditTargetAfterCandidateSelection(t *testing.T)
 	}
 	if text := strings.Join(sink.deltas(), "\n"); !strings.Contains(text, "3 个财务组织") {
 		t.Fatalf("expected final audit narration, got %#v", sink.events)
+	}
+}
+
+func TestQueryFlowAllowsCrossTurnResultListFollowUpForFullNamePath(t *testing.T) {
+	var plannerCalls int
+	var firstPlannerInput cubeboxReadPlanProductionInput
+	var executedOrgCodes []string
+
+	registry, err := cubebox.NewExecutionRegistry(cubebox.RegisteredExecutor{
+		APIKey:         "orgunit.details",
+		RequiredParams: []string{"org_code", "as_of"},
+		OptionalParams: []string{"include_disabled"},
+		Executor: queryExecutorStub{
+			validateParamsFn: func(raw map[string]any) (map[string]any, error) { return raw, nil },
+			executeFn: func(_ context.Context, _ cubebox.ExecuteRequest, params map[string]any) (cubebox.ExecuteResult, error) {
+				orgCode, _ := params["org_code"].(string)
+				executedOrgCodes = append(executedOrgCodes, orgCode)
+				return cubebox.ExecuteResult{
+					Payload: map[string]any{
+						"org_unit": map[string]any{
+							"org_code":       orgCode,
+							"name":           "组织" + orgCode,
+							"full_name_path": "飞虫与鲜花 / 飞虫公司 / 财务部 / 组织" + orgCode,
+						},
+					},
+					ConfirmedEntity: &cubebox.QueryEntity{
+						Domain:    "orgunit",
+						Intent:    "orgunit.details",
+						EntityKey: orgCode,
+						AsOf:      "2026-04-27",
+					},
+				}, nil
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("NewExecutionRegistry err=%v", err)
+	}
+
+	flow := &cubeboxQueryFlow{
+		runtime: cubebox.NewRuntime(),
+		store: cubeboxStoreStub{
+			appendFn: func(context.Context, string, string, string, cubebox.CanonicalEvent) error { return nil },
+			getFn: func(context.Context, string, string, string) (cubebox.ConversationReplayResponse, error) {
+				return cubebox.ConversationReplayResponse{
+					Conversation: cubebox.Conversation{ID: "conv-1"},
+					Events: []cubebox.CanonicalEvent{
+						{
+							Type: "turn.user_message.accepted",
+							Payload: map[string]any{
+								"text": "组织名称里包含“财务”（关键词）",
+							},
+						},
+						{
+							Type: cubebox.QueryCandidatesPresentedEventType,
+							Payload: map[string]any{
+								"group_id":         "resultgrp_finance",
+								"candidate_source": "results",
+								"candidate_count":  4,
+								"candidates": []any{
+									map[string]any{"domain": "orgunit", "entity_key": "200001", "name": "财务部", "as_of": "2026-04-27"},
+									map[string]any{"domain": "orgunit", "entity_key": "200002", "name": "财务一组", "as_of": "2026-04-27"},
+									map[string]any{"domain": "orgunit", "entity_key": "200003", "name": "财务三组", "as_of": "2026-04-27"},
+									map[string]any{"domain": "orgunit", "entity_key": "200004", "name": "财务四组", "as_of": "2026-04-27"},
+								},
+							},
+						},
+						{
+							Type: "turn.agent_message.completed",
+							Payload: map[string]any{
+								"message_id": "msg_prev",
+							},
+						},
+					},
+				}, nil
+			},
+			preparePromptViewFn: func(context.Context, string, string, string, cubebox.CanonicalContext, string) (cubebox.PromptViewPreparationResponse, error) {
+				return cubebox.PromptViewPreparationResponse{NextSequence: 1}, nil
+			},
+		},
+		registry: registry,
+		producer: cubeboxReadPlanProducerStub{fn: func(_ context.Context, input cubeboxReadPlanProductionInput) (cubeboxReadPlanProductionResult, error) {
+			plannerCalls++
+			if plannerCalls == 1 {
+				firstPlannerInput = input
+				evidence := cubebox.BuildQueryEvidenceWindow(input.QueryContext, input.Prompt, cubebox.QueryEvidenceWindowBudget{
+					MaxEntityObservations: 5,
+					MaxOptionGroups:       5,
+					MaxOptionsPerGroup:    10,
+					MaxDialogueTurns:      5,
+				})
+				if got, want := len(evidence.Observations), 1; got != want {
+					t.Fatalf("expected %d observation, got %#v", want, evidence.Observations)
+				}
+				if evidence.Observations[0].Kind != "result_list" {
+					t.Fatalf("expected result_list observation, got %#v", evidence.Observations[0])
+				}
+				return queryPlannerReadPlanResult(cubebox.ReadPlan{
+					Intent:     "orgunit.details",
+					Confidence: 0.82,
+					Steps: []cubebox.ReadPlanStep{
+						{ID: "step-1", APIKey: "orgunit.details", Params: map[string]any{"org_code": "200001", "as_of": "2026-04-27", "include_disabled": false}, DependsOn: []string{}},
+						{ID: "step-2", APIKey: "orgunit.details", Params: map[string]any{"org_code": "200002", "as_of": "2026-04-27", "include_disabled": false}, DependsOn: []string{"step-1"}},
+						{ID: "step-3", APIKey: "orgunit.details", Params: map[string]any{"org_code": "200003", "as_of": "2026-04-27", "include_disabled": false}, DependsOn: []string{"step-2"}},
+						{ID: "step-4", APIKey: "orgunit.details", Params: map[string]any{"org_code": "200004", "as_of": "2026-04-27", "include_disabled": false}, DependsOn: []string{"step-3"}},
+					},
+					ExplainFocus: []string{"组织编码", "组织名称", "组织路径长名称"},
+				}), nil
+			}
+			return queryPlannerDoneResult(), nil
+		}},
+		narrator: cubeboxQueryNarratorStub{fn: func(_ context.Context, input cubeboxQueryNarrationInput) (string, error) {
+			if got, want := len(input.Results), 4; got != want {
+				t.Fatalf("expected %d narration results, got %#v", want, input.Results)
+			}
+			return "已补充 4 个财务组织的组织路径长名称。", nil
+		}},
+		knowledgePacks: []cubebox.KnowledgePack{
+			{Dir: "modules/orgunit/presentation/cubebox", Files: map[string]string{"CUBEBOX-SKILL.md": "x", "queries.md": "x", "apis.md": "x", "examples.md": "x"}},
+		},
+		now: func() time.Time { return time.Date(2026, 4, 27, 12, 0, 0, 0, time.UTC) },
+	}
+
+	sink := &capturingGatewaySink{}
+	if handled := flow.TryHandle(context.Background(), queryGatewayRequest("增加列出他们的组织路径"), sink); !handled {
+		t.Fatal("expected handled")
+	}
+	if plannerCalls != 2 {
+		t.Fatalf("expected 2 planner calls, got %d", plannerCalls)
+	}
+	if sink.hasErrorCode("ai_plan_boundary_violation") {
+		t.Fatalf("result list follow-up must not hit boundary violation, got %#v", sink.events)
+	}
+	if !reflect.DeepEqual(executedOrgCodes, []string{"200001", "200002", "200003", "200004"}) {
+		t.Fatalf("unexpected executed org codes=%#v", executedOrgCodes)
+	}
+	if firstPlannerInput.Prompt != "增加列出他们的组织路径" {
+		t.Fatalf("unexpected planner prompt=%q", firstPlannerInput.Prompt)
+	}
+	if text := strings.Join(sink.deltas(), "\n"); !strings.Contains(text, "4 个财务组织") {
+		t.Fatalf("expected final narration, got %#v", sink.events)
 	}
 }
 
@@ -1610,6 +1808,15 @@ func queryPlanForOrgUnitList(asOf string, parentOrgCode string) cubebox.ReadPlan
 		}},
 		ExplainFocus: []string{"组织列表"},
 	}
+}
+
+func mustReadTestFile(t *testing.T, path string) string {
+	t.Helper()
+	raw, err := os.ReadFile(mustResolveRepoPath(path))
+	if err != nil {
+		t.Fatalf("read %s: %v", path, err)
+	}
+	return string(raw)
 }
 
 func queryPlannerReadPlanResult(plan cubebox.ReadPlan) cubeboxReadPlanProductionResult {

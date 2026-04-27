@@ -154,9 +154,13 @@ func BuildQueryEvidenceWindow(context QueryContext, currentUserInput string, bud
 		if group.CannotSilentSelect {
 			summary["requires_explicit_user_choice"] = true
 		}
+		kind := "presented_options"
+		if isQueryEvidenceResultList(group) {
+			kind = "result_list"
+		}
 		window.Observations = append(window.Observations, QueryEvidenceObservation{
 			Source:        "query_event",
-			Kind:          "presented_options",
+			Kind:          kind,
 			ResultSummary: summary,
 		})
 	}
@@ -503,6 +507,10 @@ func queryEvidenceOptionItems(candidates []QueryCandidate) []map[string]any {
 		return nil
 	}
 	return out
+}
+
+func isQueryEvidenceResultList(group QueryCandidateGroup) bool {
+	return strings.TrimSpace(group.CandidateSource) == "results" && !group.CannotSilentSelect
 }
 
 func projectQueryEvidenceClarification(in *QueryClarificationResume, maxOptions int) *QueryEvidenceClarification {

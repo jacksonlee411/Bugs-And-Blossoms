@@ -10,6 +10,8 @@ planner 输入可能包含 `query_evidence_window`。该窗口只用于向模型
 
 planner 输入还可能包含 `working_results`。它只表示当前 turn 内已经执行过的只读 API observation，不是长期记忆，也不是新的 orgunit 专用 DSL。需要继续展开组织树时，应阅读 `working_results.latest_observation.items[].has_children` 与 `org_code` 后再输出新的 `READ_PLAN`；不要生成 `remaining_parent_org_codes`、聚合事实、当前 winner 或其他业务专用状态字段。
 
+planner 输入中的 `query_evidence_window.observations.kind=result_list` 表示上一轮已经成功返回过一组明确组织。若当前轮只是补充 `orgunit.details` 才有的字段，例如 `org_unit.full_name_path`，可对该组小批量 `entity_key` 逐个生成 `orgunit.details` 线性步骤；若结果集过大，应返回 `CLARIFY`，不要静默展开大批量详情查询。
+
 禁止项：
 
 - 禁止直查数据库

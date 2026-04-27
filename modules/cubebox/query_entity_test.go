@@ -489,6 +489,49 @@ func TestBuildQueryEvidenceWindowProjectsNeutralObservations(t *testing.T) {
 	}
 }
 
+func TestBuildQueryEvidenceWindowKeepsClarificationOptionsSeparateFromResultLists(t *testing.T) {
+	context := QueryContext{
+		RecentCandidateGroups: []QueryCandidateGroup{
+			{
+				GroupID:         "resultgrp_finance",
+				CandidateSource: "results",
+				CandidateCount:  2,
+				Candidates: []QueryCandidate{
+					{Domain: "orgunit", EntityKey: "200001", Name: "财务部", AsOf: "2026-04-27"},
+					{Domain: "orgunit", EntityKey: "200002", Name: "财务一组", AsOf: "2026-04-27"},
+				},
+			},
+			{
+				GroupID:            "candgrp_ambiguous",
+				CandidateSource:    "execution_error",
+				CandidateCount:     2,
+				CannotSilentSelect: true,
+				Candidates: []QueryCandidate{
+					{Domain: "orgunit", EntityKey: "300001", Name: "华东销售中心", AsOf: "2026-04-27"},
+					{Domain: "orgunit", EntityKey: "300002", Name: "华东运营中心", AsOf: "2026-04-27"},
+				},
+			},
+		},
+	}
+
+	window := BuildQueryEvidenceWindow(context, "他们的路径", QueryEvidenceWindowBudget{
+		MaxEntityObservations: 5,
+		MaxOptionGroups:       5,
+		MaxOptionsPerGroup:    5,
+		MaxDialogueTurns:      5,
+	})
+
+	if got, want := len(window.Observations), 2; got != want {
+		t.Fatalf("expected %d observations, got %#v", want, window.Observations)
+	}
+	if window.Observations[0].Kind != "result_list" {
+		t.Fatalf("expected first observation result_list, got %#v", window.Observations[0])
+	}
+	if window.Observations[1].Kind != "presented_options" {
+		t.Fatalf("expected second observation presented_options, got %#v", window.Observations[1])
+	}
+}
+
 func TestQueryContextFromEventsClearsOpenClarificationResumeAfterNextUserMessage(t *testing.T) {
 	context := QueryContextFromEvents([]CanonicalEvent{
 		{

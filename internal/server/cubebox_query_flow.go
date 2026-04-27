@@ -704,10 +704,12 @@ func buildQueryEvidenceWindowPromptBlock(queryContext cubebox.QueryContext, curr
 - open_clarification.reply_candidate=true 表示当前输入可能在回答上一轮澄清；不要因为输入短就抢先输出 NO_QUERY。
 - observations.kind=entity_fact 只表示先前工具结果曾产生某个实体事实，不是当前轮 winner。
 - observations.kind=presented_options 只表示先前给用户展示过一组选项；用户说“第一个/第二个/以上/全部/这些/都要/不是这个/另一个”时，由模型结合 recent_turns 和当前输入自行判断。
+- observations.kind=result_list 表示上一轮已经成功返回过一组明确结果；若当前轮要求“补充字段/增加列/列出路径”，可将该组 entity_key 作为当前 target set，并在规模可控时生成线性 READ_PLAN 逐个补查详情字段。
 - 如果目标明确，输出显式 ReadPlan 参数。
 - 如果缺少执行所需事实，由模型生成澄清问题。
 - 如果已有 working_results 足够，由模型输出 DONE。
-- 本地不会替你从历史上下文补 target，也不会因为输入短而抢先拒绝。
+- 本地不会替你从历史上下文补单个 winner，也不会因为输入短而抢先拒绝。
+- 对 result_list 的自动续接只适用于小批量、明确对象集合；若对象过多，必须改为 CLARIFY 要求用户缩小范围。
 	- 该窗口不是授权来源，也不是会话压缩摘要。`, string(body)))
 }
 

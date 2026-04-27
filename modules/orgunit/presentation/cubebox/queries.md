@@ -65,7 +65,7 @@ no_query_guidance:
 - `status` 如需填写，只使用 canonical 值 `active`、`disabled`、`all`
 - 若用户只说“查询组织树”“列出组织”“看组织树”，未给 `as_of` 时默认按当前自然日
 - 若用户未说明范围，默认先查当前租户一级组织，不要求首轮必须提供 `parent_org_code`
-- 若用户说“列出全部/所有的 X 组织”“名称包含 X 的组织列表”，且没有给上级组织范围，使用 `keyword` 且不要填写 `parent_org_code`，表示在当前租户全部有效组织中检索
+- 若用户说“列出全部/所有的 X 组织”“名称包含 X 的组织列表”“包含 X 关键字的组织”，且没有给上级组织范围，使用 `keyword=X` 且不要填写 `parent_org_code`，表示在当前租户全部有效组织中检索；例如“列出全部包含成本关键字的组织”应使用 `keyword=成本`
 - 若用户说“业务单元”“全部业务单元”“所有业务单元”，使用 `is_business_unit=true`；若没有给上级组织范围，不要填写 `parent_org_code`，表示在当前租户全部有效组织中按业务单元标记过滤
 - 若用户只说“某个组织下面有哪些组织”，优先使用 `parent_org_code`
 - 若用户强调“分页”“第几页”“每页多少条”，可补 `page`、`size`
@@ -124,6 +124,7 @@ no_query_guidance:
 - `query_evidence_window.observations` 只提供历史工具 observation 和轻量结果摘要，不是本地目标绑定
 - `observations.kind=entity_fact` 只表示先前工具结果曾产生某个实体事实；模型需结合当前输入和 `recent_turns` 判断是否引用它
 - `observations.kind=presented_options` 只表示先前给用户展示过一组选项；当用户说“第一个”“第二个”“最开始那个”“不是这个，另一个”时，由模型结合 `recent_turns` 与当前输入解析
+- `observations.kind=result_list` 表示上一轮已经成功返回过一组明确结果；若当前轮说“他们/这些/上面这些/增加列出路径/补充路径长名称”，可把该组 `entity_key` 视为当前 target set，在数量可控时生成线性 `ReadPlan` 逐个补查 `orgunit.details`
 - 若 `query_evidence_window.open_clarification.reply_candidate=true`，先判断当前轮是否在回答上一轮澄清；不要因为输入短就退回 `NO_QUERY`
 - `open_clarification.raw_user_reply` 是当前轮原文；`open_clarification.known_params` 只可消费结构化保留的已知事实，不能假设代码已经做了自然语言解析
 - `open_clarification.options` 是上一轮澄清相关的选项；当前轮答“以上”“以上全部”“全部”“都查”“都要”时，由模型判断是否为集合答复，不要重新要求用户选择范围 A/B/C
@@ -137,7 +138,9 @@ no_query_guidance:
 ## 多步只读编排提示
 
 - 当用户先要“找到组织”，再要“看详情/下级组织/审计”时，优先先把目标组织定位清楚；如果可以先 search 唯一命中，再继续执行后续只读查询，则应优先生成线性多步 `ReadPlan`
+- 当上一轮已经成功列出一组组织，当前轮只是要求“补充字段/增加列/列出路径”，且该字段属于 `orgunit.details` 返回面时，可对上一轮 result_list 中的小批量对象逐个生成 `orgunit.details` 线性步骤
 - 多步只读编排必须是线性的前序依赖，不能并发、不能回环
 - 多步参数引用只能使用前序 step 的受控字段，例如 `@step-1.target_org_code` 或 `@step-1.payload.target_org_code`
 - 若第一步不能稳定定位唯一组织，应停止执行并回到澄清；必要时只给出少量候选组织供用户确认，不要猜测下一步参数，也不要静默选择第一条结果
+- 若 result_list 对象过多，不要静默展开大批量详情查询；应先澄清范围或要求用户缩小结果集
 - 列表状态过滤不要输出 `inactive` 这类别名；若用户说“无效/停用”，统一落到 `disabled`

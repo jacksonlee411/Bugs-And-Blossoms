@@ -294,6 +294,150 @@
 - `status` 只使用 canonical 值 `disabled`
 - 不要输出 `inactive`
 
+## 示例 6A：全租户关键词组织列表
+
+用户问法：
+
+`列出全部包含成本关键字的组织`
+
+期望 `ReadPlan`：
+
+```json
+{
+  "intent": "orgunit.list",
+  "confidence": 0.9,
+  "missing_params": [],
+  "steps": [
+    {
+      "id": "step-1",
+      "api_key": "orgunit.list",
+      "params": {
+        "as_of": "2026-04-27",
+        "keyword": "成本",
+        "include_disabled": false
+      },
+      "result_focus": [
+        "org_units[].org_code",
+        "org_units[].name",
+        "org_units[].status",
+        "org_units[].has_children"
+      ],
+      "depends_on": []
+    }
+  ],
+  "explain_focus": [
+    "名称或编码包含成本关键字的组织"
+  ]
+}
+```
+
+说明：
+
+- “包含 X 关键字的组织”是组织列表关键词检索，使用 `orgunit.list.keyword=X`
+- 没有上级组织范围时不要填写 `parent_org_code`，表示在当前租户全部有效组织中检索
+
+## 示例 6B：跨 Turn 结果集补路径列
+
+上一轮已回答：
+
+- `200001 财务部`
+- `200002 财务一组`
+- `200003 财务三组`
+- `200004 财务四组`
+
+当前轮用户问法：
+
+`增加列出他们的组织路径`
+
+期望 `ReadPlan`：
+
+```json
+{
+  "intent": "orgunit.details",
+  "confidence": 0.82,
+  "missing_params": [],
+  "steps": [
+    {
+      "id": "step-1",
+      "api_key": "orgunit.details",
+      "params": {
+        "org_code": "200001",
+        "as_of": "2026-04-27",
+        "include_disabled": false
+      },
+      "result_focus": [
+        "org_unit.org_code",
+        "org_unit.name",
+        "org_unit.full_name_path"
+      ],
+      "depends_on": []
+    },
+    {
+      "id": "step-2",
+      "api_key": "orgunit.details",
+      "params": {
+        "org_code": "200002",
+        "as_of": "2026-04-27",
+        "include_disabled": false
+      },
+      "result_focus": [
+        "org_unit.org_code",
+        "org_unit.name",
+        "org_unit.full_name_path"
+      ],
+      "depends_on": [
+        "step-1"
+      ]
+    },
+    {
+      "id": "step-3",
+      "api_key": "orgunit.details",
+      "params": {
+        "org_code": "200003",
+        "as_of": "2026-04-27",
+        "include_disabled": false
+      },
+      "result_focus": [
+        "org_unit.org_code",
+        "org_unit.name",
+        "org_unit.full_name_path"
+      ],
+      "depends_on": [
+        "step-2"
+      ]
+    },
+    {
+      "id": "step-4",
+      "api_key": "orgunit.details",
+      "params": {
+        "org_code": "200004",
+        "as_of": "2026-04-27",
+        "include_disabled": false
+      },
+      "result_focus": [
+        "org_unit.org_code",
+        "org_unit.name",
+        "org_unit.full_name_path"
+      ],
+      "depends_on": [
+        "step-3"
+      ]
+    }
+  ],
+  "explain_focus": [
+    "组织编码",
+    "组织名称",
+    "组织路径长名称"
+  ]
+}
+```
+
+说明：
+
+- 本例不是新的搜索或新的歧义候选选择，而是对上一轮明确 `result_list` 的补字段续接
+- `org_unit.full_name_path` 属于 `orgunit.details` 返回面，不属于 `orgunit.list` 默认返回面
+- 若上一轮结果集过大，不应静默展开全部详情查询，而应先澄清范围
+
 ## 示例 7：根据 evidence window 判断“该组织”的下级组织
 
 planner 上下文：
