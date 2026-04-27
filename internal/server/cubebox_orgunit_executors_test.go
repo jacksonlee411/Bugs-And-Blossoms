@@ -22,9 +22,9 @@ func TestNewCubeBoxOrgUnitRegisteredExecutors(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewExecutionRegistry err=%v", err)
 	}
-	for _, apiKey := range []string{"orgunit.details", "orgunit.list", "orgunit.search", "orgunit.audit"} {
-		if _, ok := registry.Resolve(apiKey); !ok {
-			t.Fatalf("api_key %q not registered", apiKey)
+	for _, executorKey := range []string{"orgunit.details", "orgunit.list", "orgunit.search", "orgunit.audit"} {
+		if _, ok := registry.Resolve(executorKey); !ok {
+			t.Fatalf("executor_key %q not registered", executorKey)
 		}
 	}
 	list, ok := registry.Resolve("orgunit.list")
@@ -49,9 +49,9 @@ func TestNewCubeBoxOrgUnitRegisteredExecutorsAllowsNonDetailsExecutorsWithoutExt
 	if _, ok := registry.Resolve("orgunit.details"); ok {
 		t.Fatal("orgunit.details should not be registered without ext store")
 	}
-	for _, apiKey := range []string{"orgunit.list", "orgunit.search", "orgunit.audit"} {
-		if _, ok := registry.Resolve(apiKey); !ok {
-			t.Fatalf("api_key %q not registered", apiKey)
+	for _, executorKey := range []string{"orgunit.list", "orgunit.search", "orgunit.audit"} {
+		if _, ok := registry.Resolve(executorKey); !ok {
+			t.Fatalf("executor_key %q not registered", executorKey)
 		}
 	}
 }

@@ -47,25 +47,6 @@ func TestQueryContextFromEventsReturnsMostRecentConfirmedEntity(t *testing.T) {
 	}
 }
 
-func TestQueryContextFromEventsAcceptsLegacySourceAPIKeyDuringReplay(t *testing.T) {
-	context := QueryContextFromEvents([]CanonicalEvent{{
-		Type: QueryEntityConfirmedEventType,
-		Payload: map[string]any{"entity": map[string]any{
-			"domain":         "orgunit",
-			"entity_key":     "100000",
-			"as_of":          "2026-04-24",
-			"source_api_key": "orgunit.details",
-		}},
-	}})
-
-	if context.RecentConfirmedEntity == nil {
-		t.Fatal("expected recent entity")
-	}
-	if got := context.RecentConfirmedEntity.SourceExecutorKey; got != "orgunit.details" {
-		t.Fatalf("expected legacy source_api_key normalized, got %#v", context.RecentConfirmedEntity)
-	}
-}
-
 func TestQueryContextFromEventsNormalizesConfirmedEntityDomain(t *testing.T) {
 	context := QueryContextFromEvents([]CanonicalEvent{
 		{

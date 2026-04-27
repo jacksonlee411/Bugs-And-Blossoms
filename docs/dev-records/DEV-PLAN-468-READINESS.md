@@ -63,7 +63,7 @@
   - query flow 不再写 synthetic resolved-context event
   - 通用前序结果引用解析
   - narrator/clarifier 输入 DTO 收口与轻量上下文注入
-  - prompt-facing 实体上下文不再泄露 `intent`、`source_api_key`、`target_org_code`、`parent_org_code`
+  - prompt-facing 实体上下文不再泄露 `intent`、`source_executor_key`、`target_org_code`、`parent_org_code`
   - narrator 不再接收 `plan`
   - clarifier 不再接收 `query_intent`
 
@@ -87,7 +87,7 @@
   - `git diff --check`
 - 2026-04-26 追加记录：`ExecutionRegistry` / executor 当前没有 per-api 授权校验，`PrincipalID` 仅透传；未来需补 `P2-2`，在每个 step 执行前基于注册表授权元数据与当前用户/租户做 fail-closed 校验。当前仅登记未来待实现事项，未改代码。
 - 2026-04-26 追加记录：`P2-3` 当前已分两轮完成 `P2-3a` / `P2-3b`；剩余待办集中为 `P2-3c`，即扩展 query dialogue fact window，解决“只保留最后一组候选”和 `recent_confirmed_entity` privileged winner 等残口。
-- 2026-04-26 二次扩大批判已写入 `DEV-PLAN-468`：除 projector 外，还需继续放开 narrator 固定短答、业务字段 forbidden pattern、候选澄清本地 prose、`recent_confirmed_entity` privileged winner、只保留最后一组候选、知识包回答模板化、`api_key` 命名误导与 provider/runtime/model 元数据进 prompt 的自造泄露面。`page_context` 已裁决为当前范围外，由 `DEV-PLAN-470` 清理。当前仅登记方案，未改代码。
+- 2026-04-26 二次扩大批判已写入 `DEV-PLAN-468`：除 projector 外，还需继续放开 narrator 固定短答、业务字段 forbidden pattern、候选澄清本地 prose、`recent_confirmed_entity` privileged winner、只保留最后一组候选、知识包回答模板化与 provider/runtime/model 元数据进 prompt 的自造泄露面。其中国内部执行键历史 `api_key` 命名误导已于 2026-04-27 由 `DEV-PLAN-477` 收口为 `executor_key`；`page_context` 已裁决为当前范围外，由 `DEV-PLAN-470` 清理。
 - `468 Slice E / P1` 评审发现的前端页面事实误判、历史日期漏传与知识包-注册表单向校验残口已完成修复。
 - 后续实现 PR 进入 `P2/后续 owner` 时，必须先说明：是在“给模型事实/上下文”，还是在“替模型做语义判断”；后者默认需要收敛或单独论证。
 

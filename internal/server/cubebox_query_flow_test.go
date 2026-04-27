@@ -87,6 +87,7 @@ func TestBuildQueryNarrationMessagesForbidsInternalLeakage(t *testing.T) {
 	for _, snippet := range []string{
 		"不得逐字回显整份原始 JSON",
 		"不得暴露实现细节或计划执行痕迹",
+		"api_key",
 		"executor_key",
 		"payload",
 		"好的回答",

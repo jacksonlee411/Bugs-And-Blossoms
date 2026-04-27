@@ -25,13 +25,13 @@ func (s readExecutorStub) Execute(ctx context.Context, request ExecuteRequest, p
 	return ExecuteResult{Payload: map[string]any{}}, nil
 }
 
-func TestNewExecutionRegistryRejectsDuplicateAPIKey(t *testing.T) {
+func TestNewExecutionRegistryRejectsDuplicateExecutorKey(t *testing.T) {
 	_, err := NewExecutionRegistry(
 		RegisteredExecutor{ExecutorKey: "orgunit.details", Executor: readExecutorStub{}},
 		RegisteredExecutor{ExecutorKey: "orgunit.details", Executor: readExecutorStub{}},
 	)
 	if err == nil {
-		t.Fatal("expected duplicate api_key error")
+		t.Fatal("expected duplicate executor_key error")
 	}
 }
 

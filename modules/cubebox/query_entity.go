@@ -373,19 +373,10 @@ func normalizeDecodedQueryEntity(raw map[string]any) *QueryEntity {
 		Intent:            stringValue(raw["intent"]),
 		EntityKey:         stringValue(raw["entity_key"]),
 		AsOf:              stringValue(raw["as_of"]),
-		SourceExecutorKey: coalesceStringValue(raw, "source_executor_key", "source_api_key"),
+		SourceExecutorKey: stringValue(raw["source_executor_key"]),
 		TargetOrgCode:     stringValue(raw["target_org_code"]),
 		ParentOrgCode:     stringValue(raw["parent_org_code"]),
 	})
-}
-
-func coalesceStringValue(raw map[string]any, keys ...string) string {
-	for _, key := range keys {
-		if value := stringValue(raw[key]); value != "" {
-			return value
-		}
-	}
-	return ""
 }
 
 func NormalizeQueryEntity(entity QueryEntity) *QueryEntity {
