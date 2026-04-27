@@ -6,7 +6,7 @@
 
 - **评审分级**：`T2`
 - **范围一句话**：在第二个业务模块接入 `CubeBox` 查询链之前，系统性复核共享 narrator、共享 query flow、共享 query context / evidence window、共享 knowledge pack 装配、执行注册表校验与 `no_query` guidance 是否仍被 `orgunit` 场景单边塑形，并冻结调查分类、owner 边界、实施顺序、测试准入与 stopline。
-- **关联模块/目录**：`docs/dev-plans/468-cubebox-session-continuity-and-model-autonomy-improvement-plan.md`、`docs/dev-plans/460-cubebox-digital-assistant-positioning-and-execution-contract.md`、`docs/dev-plans/461-cubebox-query-scenarios-minimal-contract.md`、`docs/dev-plans/464-cubebox-query-architecture-convergence-plan.md`、`docs/dev-plans/466-cubebox-query-owner-drift-and-anti-backflow-investigation-plan.md`、`internal/server/cubebox_query_flow.go`、`internal/server/cubebox_query_flow_test.go`、`internal/server/cubebox_orgunit_executors.go`、`modules/cubebox/knowledge_pack.go`、`modules/cubebox/query_entity.go`、`modules/cubebox/read_executor.go`、`modules/orgunit/presentation/cubebox/*`
+- **关联模块/目录**：`docs/dev-plans/468-cubebox-session-continuity-and-model-autonomy-improvement-plan.md`、`docs/dev-plans/460-cubebox-digital-assistant-positioning-and-execution-contract.md`、`docs/dev-plans/461-cubebox-query-scenarios-minimal-contract.md`、`docs/dev-plans/464-cubebox-query-architecture-convergence-plan.md`、`docs/dev-plans/466-cubebox-query-owner-drift-and-anti-backflow-investigation-plan.md`、`internal/server/cubebox_query_flow.go`、`internal/server/cubebox_query_flow_test.go`、`internal/server/cubebox_api_test.go`、`internal/server/cubebox_orgunit_executors.go`、`modules/cubebox/knowledge_pack.go`、`modules/cubebox/query_entity.go`、`modules/cubebox/read_executor.go`、`modules/orgunit/presentation/cubebox/*`
 - **关联计划/标准**：`AGENTS.md`、`DEV-PLAN-003`、`DEV-PLAN-460`、`DEV-PLAN-461`、`DEV-PLAN-464`、`DEV-PLAN-466`、`DEV-PLAN-468`、`DEV-PLAN-471`、`DEV-PLAN-472`、`DEV-PLAN-473`、`DEV-PLAN-474`、`DEV-PLAN-476`、`DEV-PLAN-477`
 - **用户入口/触点**：主应用壳层右侧 `CubeBox` 抽屉、`/internal/cubebox/turns:stream`、共享 planner/narrator/clarifier/no-query guidance 链路
 
@@ -46,7 +46,7 @@
 7. 查询流构造函数当前只装载 `modules/orgunit/presentation/cubebox` 这一条知识包目录，`NoQueryGuidanceFromKnowledgePacks(...)` 也只返回第一份命中的 guidance，说明多模块装配路径尚未真正复核，见 `internal/server/cubebox_query_flow.go:1666`、`1858-1865` 与 `modules/cubebox/knowledge_pack.go:177-205`。
 8. `modules/cubebox/query_entity.go` 的共享 `QueryEntity` 仍包含 `TargetOrgCode` / `ParentOrgCode` 这类 `orgunit` 字段，说明 evidence window 的数据结构本身也存在单模块塑形风险。
 9. `newCubeboxQueryFlow(...)` 当前对每份 knowledge pack 直接调用 `ValidateKnowledgePackAgainstRegistry(pack, registry)`；而该校验会要求单份 pack 覆盖注册表全部 executor_key。第二模块接入后，如果继续保持“每个模块一份 pack”，就需要先冻结 aggregate 校验或 pack 分组校验策略，否则多模块装配会被当前单模块假设阻断。
-10. 当前共享层测试大量使用 `orgunit` 作为唯一 fixture，缺少一个非 `orgunit` 假模块证明 narrator、planner prompt、no-query guidance、candidate extraction、terminal error fallback 与 registry validation 都不依赖组织字段。
+10. 当前共享层测试大量使用 `orgunit` 作为唯一 fixture，包括 `internal/server/cubebox_api_test.go` 中的 API 层流式入口测试；缺少一个非 `orgunit` 假模块证明 narrator、planner prompt、no-query guidance、candidate extraction、terminal error fallback、registry validation 与 `/internal/cubebox/turns:stream` API 入口都不依赖组织字段。
 
 因此，本计划的目的不是提前改代码，而是先把“什么算污染、谁来收、按什么顺序收”冻结成独立 owner 文档。
 
@@ -144,7 +144,9 @@ owner 冻结：
 
 - 共享层需要先明确“多知识包如何装入 planner prompt / no-query guidance / drift 校验”的最小 contract。
 - 该 contract 必须能支持多个模块并存，但不要求在本计划中实现动态模块发现。
-- 多模块 drift 校验应按“全部已装 knowledge packs 的 `apis.md` 并集”与 `ExecutionRegistry` 做一致性校验，或显式按模块分组注册/校验；不得继续要求单份 pack 覆盖全局 registry。
+- 默认策略冻结为：按 `knowledgePackDirs` 的稳定顺序装入全部已启用 knowledge packs；将所有已装 packs 的 `apis.md` executor_key 并集与全局 `ExecutionRegistry` 做双向一致性校验；同一 executor_key 只能由一份 pack 声明，重复声明默认 fail-closed。
+- 分组注册 / 分组校验不是当前默认路径；只有未来明确引入模块化 registry owner 时，才能作为单独计划替代并集校验。
+- `NoQueryGuidanceFromKnowledgePacks(...)` 的默认策略冻结为聚合而非第一份胜出：按 `knowledgePackDirs` 顺序合并各 pack 的 `scope_summary` 与 `suggested_prompts`，对 prompts 做稳定去重，并默认最多展示 6 条 suggested prompts；不得通过“把某个 pack 排在前面”规避 guidance 冲突。
 
 ### 4.5 类别 E：共享错误码/终端文案仍直接暴露模块专有语义
 
@@ -178,15 +180,15 @@ owner 冻结：
 
 owner 冻结：
 
-- 共享层只应持有 `domain`、`intent`、`entity_key`、`as_of`、`source_executor_key`、`display name/status` 等跨模块稳定事实。
-- 模块专属事实应进入模块 executor 显式返回的观察 payload，或进入受控 `attributes` / `facts` 结构；不得继续在共享 struct 上平铺模块字段。
-- 现有 `TargetOrgCode` / `ParentOrgCode` 必须在后续实现中被裁决为“过渡债务并迁出”或“归入模块事实容器”，不能默认为长期共享 contract。
+- 推荐最终形态冻结为：共享 `QueryEntity` / `QueryCandidate` 只保留 `domain`、`intent`、`entity_key`、`name`、`as_of`、`status`、`source_executor_key` 等跨模块稳定字段。
+- 模块专属事实只能进入模块 executor 显式返回的 observation payload；若后续确需被 evidence window 轻量投影，应进入受控 `attributes` / `facts` 容器，且不得被执行器当作隐式参数来源。
+- 现有 `TargetOrgCode` / `ParentOrgCode` 视为待迁出的过渡债务，不是长期共享 contract；后续不得再新增 `target_<module>_code`、`parent_<module>_code`、`<module>_id` 这类平铺字段。
 
 ### 4.7 类别 G：共享测试缺少非 `orgunit` 反例 fixture
 
 当前发现：
 
-1. `internal/server/cubebox_query_flow_test.go`、`modules/cubebox/knowledge_pack_test.go`、`modules/cubebox/read_executor_test.go` 等共享测试大量使用 `orgunit.details/list/search/audit` 作为唯一样例。
+1. `internal/server/cubebox_query_flow_test.go`、`internal/server/cubebox_api_test.go`、`modules/cubebox/knowledge_pack_test.go`、`modules/cubebox/read_executor_test.go` 等共享测试大量使用 `orgunit.details/list/search/audit` 作为唯一样例。
 2. 当前测试能保护 `orgunit` 主链，但不能证明共享 narrator、planner prompt、knowledge pack validation、candidate extraction 与 no-query guidance 在非组织模块下仍成立。
 
 风险：
@@ -197,7 +199,7 @@ owner 冻结：
 owner 冻结：
 
 - 后续实现必须引入一个最小非 `orgunit` fake module fixture，用于共享层单测；该 fixture 不需要接真实业务模块、数据库或 UI。
-- fake module 应覆盖最小 `executor_key`、knowledge pack、read result payload、candidate / no-query guidance 场景，证明共享层不依赖 `org_units`、`org_code`、`parent_org_code`、`target_org_code`、`orgunit.list`。
+- fake module 应覆盖最小 `executor_key`、knowledge pack、read result payload、candidate / no-query guidance 与 API 层流式入口场景，证明共享层不依赖 `org_units`、`org_code`、`parent_org_code`、`target_org_code`、`orgunit.list`。
 
 ### 4.8 类别 H：去污染整改可能滑向新的本地语义层
 
@@ -232,9 +234,11 @@ owner 冻结：
 ### Phase B / P1：冻结多知识包装配 contract
 
 1. [ ] 明确第二模块接入后 `knowledgePackDirs`、executor 注册项、`read_api_catalog` 与 knowledge pack 校验必须作为同一组装配单元更新。
-2. [ ] 明确多 knowledge pack 校验策略：按 pack 并集校验 registry，或按模块分组校验；不得继续要求单份 pack 覆盖全局 registry。
-3. [ ] 明确 `NoQueryGuidanceFromKnowledgePacks(...)` 的选择/聚合策略，包括多模块 scope summary 的排序、去重、冲突处理和默认展示数量。
-4. [ ] 明确共享层是否允许依赖 knowledge pack 声明模块 scope summary，还是必须有更高层受控组合策略。
+2. [ ] 默认采用“全部已装 knowledge packs 的 `apis.md` executor_key 并集”与全局 `ExecutionRegistry` 双向一致性校验；单份 pack 不再要求覆盖全局 registry。
+3. [ ] 明确重复 executor_key 默认 fail-closed；分组校验仅作为未来模块化 registry 的单独计划入口，不作为当前第二模块接入默认路径。
+4. [ ] 默认采用 `NoQueryGuidanceFromKnowledgePacks(...)` 聚合策略：按 `knowledgePackDirs` 顺序合并 scope summary 与 prompts，稳定去重并默认最多展示 6 条 suggested prompts。
+5. [ ] 明确 guidance 冲突处理：不得依赖 pack 排序让第一份胜出；无法安全聚合时应 fail-closed 或回到计划评审。
+6. [ ] 明确共享层是否允许依赖 knowledge pack 声明模块 scope summary，还是必须有更高层受控组合策略。
 
 ### Phase C / P2：逐项整改共享层 capability-specific 逻辑
 
@@ -249,7 +253,8 @@ owner 冻结：
 
 1. [ ] 新增最小 fake module knowledge pack，不接真实业务模块与数据库，只用于共享层单测。
 2. [ ] 新增 fake module executor 或 stub registry，覆盖 `executor_key` 注册、planner prompt block、no-query guidance、candidate observation 与 terminal fallback。
-3. [ ] 将共享测试从“断言 `orgunit` 默认文案”改为“断言共享 contract + 当前模块样例”；`orgunit` 场景测试必须明确归类为模块样例或模块 executor 测试。
+3. [ ] 在 `internal/server/cubebox_api_test.go` 增加或调整 API 层 fake-module 覆盖，确保 `/internal/cubebox/turns:stream` 不把 `modules/orgunit/presentation/cubebox` 作为唯一默认 fixture。
+4. [ ] 将共享测试从“断言 `orgunit` 默认文案”改为“断言共享 contract + 当前模块样例”；`orgunit` 场景测试必须明确归类为模块样例或模块 executor 测试。
 
 ### Phase E / P3：文档与门禁回写
 
@@ -278,12 +283,14 @@ owner 冻结：
 1. fake module 使用非组织命名，例如 `asset` / `project` / `sample`，不得包含 `org`、`orgunit`、`org_code`、`parent_org_code`、`target_org_code`、`org_units`。
 2. 至少包含一份内存 knowledge pack，声明一个 `executor_key`，例如 `sample.details` 或 `asset.search`。
 3. 至少包含一个 executor stub，返回非 `orgunit` payload，并能提供候选或实体事实。
-4. 测试必须覆盖：
+4. 至少包含一个 API 层测试路径，验证 `/internal/cubebox/turns:stream` 或等价内部流式入口在 fake module fixture 下能完成共享 query runtime 路径。
+5. 测试必须覆盖：
    - planner prompt 能同时装入多份 knowledge pack；
    - registry 与 knowledge packs 能成组通过 drift 校验；
-   - no-query guidance 不只取第一份模块 guidance 或能按冻结策略稳定聚合；
+   - no-query guidance 按冻结策略稳定聚合，不再第一份模块 guidance 胜出；
    - candidate / result_list observation 不依赖 `org_units` / `target_org_code`；
    - fake module 的候选与结果集只进入 `query_evidence_window`，不会被本地转换成 selected target 或隐式 executor 参数；
+   - API 层测试不依赖 `modules/orgunit/presentation/cubebox` 作为唯一 fixture；
    - terminal fallback 不需要新增模块专属中文错误分支。
 
 ## 8. 验收标准
@@ -291,12 +298,13 @@ owner 冻结：
 1. [ ] 能把当前命中清楚分成“共享层污染”“模块样例夹具”“模块本来该有的业务语义”三类。
 2. [ ] 为第二模块接入前的共享 narrator / query flow / knowledge pack 装配给出明确 owner 和实施顺序，而不是只写一句“后续复核”。
 3. [ ] 共享 `QueryContext` / `QueryEntity` / metadata event 的模块专属字段已有裁决：保留为通用字段、迁入受控事实容器、或登记为待删除过渡债务。
-4. [ ] 多 knowledge pack + `ExecutionRegistry` 的校验策略已冻结，不再以单份 `orgunit` pack 覆盖全局 registry 作为隐含前提。
-5. [ ] 至少一个非 `orgunit` fake module 测试能覆盖 planner prompt 装配、no-query guidance、candidate observation 与 terminal fallback。
-6. [ ] 478 与 `DEV-PLAN-473` 的边界已明确：去 `orgunit` 污染不会新增本地语义裁决层；所有目标选择、候选解释、澄清恢复和短输入理解仍由模型基于 evidence 与 knowledge pack 处理。
-7. [ ] Stopline 已能被 review checklist 或轻量门禁执行，阻断共享 query flow 新增模块 executor_key 特判、payload 字段猜测、模块专属错误文案、共享 context 模块字段平铺和本地语义 selector。
-8. [ ] `468` 当前剩余主线与 `AGENTS.md` 文档地图都能直接指向本 owner 文档。
-9. [ ] 文档门禁 `make check doc` 通过。
+4. [ ] 多 knowledge pack + `ExecutionRegistry` 的默认校验策略已冻结为“全部已装 packs 的 executor_key 并集”双向校验，且 `NoQueryGuidance` 默认聚合稳定去重、最多展示 6 条 suggested prompts，不再第一份胜出。
+5. [ ] 共享 `QueryEntity` / `QueryCandidate` 的推荐最终形态已冻结为中性字段；模块专属事实进入 observation payload 或受控 `attributes` / `facts`，现有 `TargetOrgCode` / `ParentOrgCode` 被登记为待迁出债务。
+6. [ ] 至少一个非 `orgunit` fake module 测试能覆盖 planner prompt 装配、no-query guidance、candidate observation、terminal fallback 与 API 层流式入口。
+7. [ ] 478 与 `DEV-PLAN-473` 的边界已明确：去 `orgunit` 污染不会新增本地语义裁决层；所有目标选择、候选解释、澄清恢复和短输入理解仍由模型基于 evidence 与 knowledge pack 处理。
+8. [ ] Stopline 已能被 review checklist 或轻量门禁执行，阻断共享 query flow 新增模块 executor_key 特判、payload 字段猜测、模块专属错误文案、共享 context 模块字段平铺和本地语义 selector。
+9. [ ] `468` 当前剩余主线与 `AGENTS.md` 文档地图都能直接指向本 owner 文档。
+10. [ ] 文档门禁 `make check doc` 通过。
 
 ## 9. 当前执行记录
 
@@ -304,3 +312,4 @@ owner 冻结：
 2. [X] 2026-04-28：确认 `468` line 635 所指“第二业务模块接入后的共享 narrator 去模块化污染复核”尚无独立 owner 文档，本计划即作为该剩余主线的正式承接者。
 3. [X] 2026-04-28：补充复核缺口：共享 `QueryEntity` / metadata event 字段污染、多 knowledge pack 与 registry 成组校验、非 `orgunit` fake module 测试准入、反回流门禁化要求。
 4. [X] 2026-04-28：按 `DEV-PLAN-473` 补充模型主导边界：478 的目标是删除共享层模块语义裁决，而不是把 `orgunit` 特判参数化为新的本地语义 runtime。
+5. [X] 2026-04-28：按评审意见冻结默认策略：多 knowledge pack 默认并集校验与 no-query guidance 聚合（suggested prompts 默认最多 6 条）；共享 entity 结构默认中性字段；API 层 fake-module 测试纳入准入。
