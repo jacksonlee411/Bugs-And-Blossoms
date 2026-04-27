@@ -30,7 +30,7 @@ env:
   DEV_SERVER_BASE_URL      default: http://localhost:8080
   DEV_SUPERADMIN_BASE_URL  default: http://localhost:8081
   DEV_RUNTIME_DIR          default: .local/runtime
-  CUBEBOX_OPENAI_API_KEY   required by CubeBox at runtime when secret_ref=env://CUBEBOX_OPENAI_API_KEY
+  CUBEBOX_OPENAI_API_KEY   required by CubeBox at runtime for the default DeepSeek baseline when secret_ref=env://CUBEBOX_OPENAI_API_KEY
 EOF
 }
 
@@ -344,16 +344,16 @@ log "login OK: ${DEV_LOGIN_EMAIL:-admin@localhost}"
 
 if [[ "$setup_cubebox" == "1" ]]; then
   if [[ -z "${CUBEBOX_OPENAI_API_KEY:-}" ]]; then
-    warn "CUBEBOX_OPENAI_API_KEY is not visible to this shell after loading env files. CubeBox settings will be saved, but real turns will fail until the server starts with CUBEBOX_OPENAI_API_KEY."
+    warn "CUBEBOX_OPENAI_API_KEY is not visible to this shell after loading env files. CubeBox settings will be saved, but the default DeepSeek baseline will fail real turns until the server starts with CUBEBOX_OPENAI_API_KEY."
   fi
 
-  provider_id="${CUBEBOX_PROVIDER_ID:-openai-compatible}"
-  provider_type="${CUBEBOX_PROVIDER_TYPE:-codex}"
-  provider_display_name="${CUBEBOX_PROVIDER_DISPLAY_NAME:-codex}"
-  provider_base_url="${CUBEBOX_BASE_URL:-https://code2026.pumpkinai.vip/v1}"
+  provider_id="${CUBEBOX_PROVIDER_ID:-deepseek}"
+  provider_type="${CUBEBOX_PROVIDER_TYPE:-openai-compatible}"
+  provider_display_name="${CUBEBOX_PROVIDER_DISPLAY_NAME:-DeepSeek}"
+  provider_base_url="${CUBEBOX_BASE_URL:-https://api.deepseek.com}"
   secret_ref="${CUBEBOX_SECRET_REF:-env://CUBEBOX_OPENAI_API_KEY}"
   masked_secret="${CUBEBOX_MASKED_SECRET:-env://CUBEBOX_OPENAI_API_KEY}"
-  model_slug="${CUBEBOX_MODEL_SLUG:-gpt-5.2}"
+  model_slug="${CUBEBOX_MODEL_SLUG:-deepseek-v4-flash}"
   capability_summary_json="${CUBEBOX_CAPABILITY_SUMMARY_JSON:-{}}"
 
   log "configure CubeBox provider: ${provider_id} / ${model_slug}"

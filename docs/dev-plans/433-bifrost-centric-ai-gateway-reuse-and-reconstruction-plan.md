@@ -196,18 +196,18 @@ Codex 在网关层只承担局部能力来源，不承担整体网关骨架：
 
 本小节冻结当前 CubeBox 在真实模型主链上的运行时配置，作为 `433/435/433A` 对齐时的当前口径；后续若管理面或运行时切换 provider/model，必须同步更新本小节与相关证据文档。
 
-- `provider_id`: `openai-compatible`
-- `provider_type`: `codex`
-- `base_url`: `https://code2026.pumpkinai.vip/v1`
+- `provider_id`: `deepseek`
+- `provider_type`: `openai-compatible`
+- `base_url`: `https://api.deepseek.com`
 - `enabled`: `true`
 - `secret_ref`: `env://CUBEBOX_OPENAI_API_KEY`
-- `model_slug`: `gpt-5.2`
+- `model_slug`: `deepseek-v4-flash`
 
 约束说明：
 
-- `provider_id` 延续当前管理面对象标识，不因上游 endpoint 或 provider adapter 调整而随意改名。
-- `provider_type` 当前以运行时实际配置 `codex` 为准；历史验证中出现的 `provider_type=openai-compatible` 只代表当时快照，不再视为当前基线。
-- `base_url` 当前以 `https://code2026.pumpkinai.vip/v1` 为准；历史证据中出现的 `https://api.openai.com/v1` 只代表早期验证快照，不再作为当前默认值。
+- `provider_id` 对齐当前默认真实 provider 标识为 `deepseek`；若后续切换新 provider，必须同步更新运行时基线与相关证据。
+- `provider_type` 以运行时实际协议形态 `openai-compatible` 为准；历史 `codex` 仅代表旧基线快照，不再视为当前默认值。
+- `base_url` 当前以 `https://api.deepseek.com` 为准；DeepSeek 官方同时兼容 `/v1` 路径，但当前默认值固定为根地址，避免把供应商私有反向代理继续当成项目基线。
 - `secret_ref` 只允许在服务端解析，UI、SSE payload、event log 与审计证据不得泄露真实 key。
 
 ## 5C. Phase E 共享对象口径
@@ -446,7 +446,7 @@ Codex 在网关层只承担局部能力来源，不承担整体网关骨架：
 - Playwright 真实浏览器证据已补齐：
   - success：`POST /internal/cubebox/turns:stream => 200`，prompt=`请用中文写一句简短问候，只回复一句。`，页面最终为 `completed/completed`，助手回复 `你好，祝你今天一切顺利。`
   - interrupted：`POST /internal/cubebox/turns:stream => 200` 后，`POST /internal/cubebox/turns/turn_000037:interrupt?conversation_id=conv_b223bd5689fb48b3ab2c7434ce952318 => 200`，页面状态为 `已中断`，replay 中存在 `turn.interrupted` 与 `turn.completed(status=interrupted)`。
-- 当前 settings 实时回显为 `provider.id=openai-compatible`、`provider.provider_type=openai-compatible`、`provider.display_name=codex`、`base_url=https://code2026.pumpkinai.vip/v1`、`selection.model_slug=gpt-5.2`、`health.status=healthy(latency_ms=3377)`；该回显事实与本计划 `5D.1` 的冻结基线需并行记录，不得混写。
+- 当前 settings 实时回显曾为 `provider.id=openai-compatible`、`provider.provider_type=openai-compatible`、`provider.display_name=codex`、`base_url=https://code2026.pumpkinai.vip/v1`、`selection.model_slug=gpt-5.2`、`health.status=healthy(latency_ms=3377)`；该条仅代表 2026-04-22 的历史 UI 快照，当前默认基线已切换到 `deepseek / https://api.deepseek.com / deepseek-v4-flash`，两者不得混写。
 
 当前验收裁决：
 

@@ -573,7 +573,7 @@ narrator 可以看到：
 7. [ ] `NO_QUERY` 不应因为上下文缺失、字段被遮住或知识包过窄而误用。支持领域内缺参应优先走现有 `missing_params + clarifying_question`，可执行查询应生成 `ReadPlan`；`NO_QUERY` 只保留给真实不支持或不安全的查询。
 8. [ ] `recent_confirmed_entity` 不应继续作为唯一 privileged winner。保留它只为兼容，主输入应转向 `recent_confirmed_entities`、候选组、最近问答和澄清状态组成的有序事实窗口。
 9. [ ] `recent_candidates` 不应只保留最后一组。应保留最近若干候选组，并带上 turn/来源/序号，让模型能处理“第一个”“最开始那个”“不是这个，另一个”。
-10. [ ] `api_key` 命名不应长期制造密钥误解。短期用户可见输出继续拦内部字段名；中期契约应评估改名为 `executor_key` 或相邻命名，只作为内部 planner/executor 协议字段。
+10. [ ] `api_key` 命名不应长期制造密钥误解。短期用户可见输出继续拦内部字段名；中期契约改名 owner 由 `DEV-PLAN-477` 承接，只作为内部 planner/executor 协议字段。
 11. [x] provider/runtime/model 元数据默认不进入模型业务上下文。它们可用于事件 metadata、运维诊断、管理 UI 或日志，但不应先主动注入 prompt 再靠禁词防泄露。
 
 仍然不能放开的限制：
@@ -594,7 +594,7 @@ narrator 可以看到：
 5. [ ] 按 `DEV-PLAN-470` 清理 `page_context` 当前运行时表面，不再作为当前事实输入扩展项。
 6. [ ] 调整 query context prompt view：把单个 `recent_confirmed_entity` 降级为兼容字段，强调模型应基于有序 query dialogue fact window 自行解析当前指代；保留最近若干候选组而不是只保留最后一组。
 7. [ ] 清理知识包中的回答口吻与 prose 模板倾向，只保留字段语义、参数规则、默认值、澄清边界、候选处理规则和 `ReadPlan` 示例。
-8. [ ] 评估 `api_key` -> `executor_key` 的契约改名切片；若执行，必须同步 read plan、知识包、执行注册表、泄露校验和测试，不引入双字段长期兼容。
+8. [ ] `api_key` -> `executor_key` 的契约改名切片已拆出独立 owner `DEV-PLAN-477`；执行时必须同步 read plan、知识包、执行注册表、泄露校验和测试，不引入双字段长期兼容。
 
 ### 6.1 2026-04-25 当前实施进度
 
@@ -685,7 +685,7 @@ narrator 可以看到：
 
 ### 8.3 真实页面验证
 
-- 使用当前真实 provider 基线：`provider_id=openai-compatible`、`provider_type=codex`、`model_slug=gpt-5.2`。
+- 使用当前真实 provider 基线：`provider_id=deepseek`、`provider_type=openai-compatible`、`model_slug=deepseek-v4-flash`。
 - 通过主应用壳层右侧 `CubeBox` 抽屉在 `DEV-PLAN-469 Phase 1 / No-Summary Baseline` 下执行 7.1 的关键链路。
 - 保存网络请求、canonical event 片段与最终回答样本到 readiness 记录。
 

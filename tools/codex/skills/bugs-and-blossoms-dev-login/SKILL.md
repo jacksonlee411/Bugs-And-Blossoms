@@ -41,7 +41,7 @@ Keep real secrets in `.env.local` or exported shell environment. Do not put real
 
 Runtime logs and pid files are written under `.local/runtime/` by default. Override with `DEV_RUNTIME_DIR` only for local debugging.
 
-For CubeBox, the DB stores `secret_ref=env://CUBEBOX_OPENAI_API_KEY`. The server resolves that at runtime through its environment. Removing a duplicate key from `.env` does not break CubeBox as long as `CUBEBOX_OPENAI_API_KEY` remains in `.env.local` or is exported when `make dev-server` starts.
+For CubeBox, the default DeepSeek baseline stores `secret_ref=env://CUBEBOX_OPENAI_API_KEY`. The server resolves that at runtime through its environment. Removing a duplicate key from `.env` does not break CubeBox as long as `CUBEBOX_OPENAI_API_KEY` remains in `.env.local` or is exported when `make dev-server` starts.
 
 The startup script never prints, moves, or deletes secrets. It only warns if `CUBEBOX_OPENAI_API_KEY` appears duplicated between `.env` and `.env.local`.
 
@@ -76,4 +76,4 @@ tools/codex/skills/bugs-and-blossoms-dev-login/scripts/stop_dev_runtime.sh
 - `make dev-server` loads `.env.local`, then `env.local`, then `.env`, then `.env.example`, choosing the first existing file unless `DEV_SERVER_ENV_FILE` is set.
 - `make dev-up` uses `DEV_INFRA_ENV_FILE`, defaulting to `.env.example`.
 - If DB roles are missing because an old Docker volume predates `scripts/dev/postgres-init`, run `make dev-reset` manually, then start again.
-- The current CubeBox baseline is `provider_id=openai-compatible`, `provider_type=codex`, `base_url=https://code2026.pumpkinai.vip/v1`, `secret_ref=env://CUBEBOX_OPENAI_API_KEY`, `model_slug=gpt-5.2`.
+- The current CubeBox baseline is `provider_id=deepseek`, `provider_type=openai-compatible`, `base_url=https://api.deepseek.com`, `secret_ref=env://CUBEBOX_OPENAI_API_KEY`, `model_slug=deepseek-v4-flash`.
