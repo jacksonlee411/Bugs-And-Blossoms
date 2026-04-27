@@ -137,9 +137,8 @@ type cubeboxQueryLifecycle struct {
 }
 
 type cubeboxQueryNarrationEnvelope struct {
-	UserPrompt          string                            `json:"user_prompt"`
-	QueryEvidenceWindow cubebox.QueryEvidenceWindow       `json:"query_evidence_window"`
-	Results             []cubeboxQueryNarrationResultView `json:"results"`
+	UserPrompt string                            `json:"user_prompt"`
+	Results    []cubeboxQueryNarrationResultView `json:"results"`
 }
 
 type cubeboxQueryNarrationResultView struct {
@@ -447,7 +446,7 @@ func (f *cubeboxQueryFlow) TryHandle(
 		return true
 	}
 
-	var allResults []cubebox.ExecuteResult
+	var finalResults []cubebox.ExecuteResult
 	for {
 		switch outcome.Type {
 		case cubebox.PlannerOutcomeReadPlan:
@@ -492,7 +491,7 @@ func (f *cubeboxQueryFlow) TryHandle(
 				return true
 			}
 			workingState.AppendPlan(workingState.Snapshot().RoundIndex, plan, results)
-			allResults = append(allResults, results...)
+			finalResults = results
 			if !workingState.CanPlan() {
 				f.writeQueryTerminalError(ctx, request, prepared.turn.TurnID, &prepared.sequence, prepared.lifecycle, sink, queryLoopBudgetExceededTerminal())
 				return true
@@ -508,7 +507,7 @@ func (f *cubeboxQueryFlow) TryHandle(
 		case cubebox.PlannerOutcomeClarify:
 			return f.writePlannerClarification(ctx, request, prepared, outcome, sink, writeEvent)
 		case cubebox.PlannerOutcomeDone:
-			if !workingState.HasExecution() || len(allResults) == 0 {
+			if !workingState.HasExecution() || len(finalResults) == 0 {
 				f.writeQueryTerminalError(ctx, request, prepared.turn.TurnID, &prepared.sequence, prepared.lifecycle, sink, queryDoneWithoutResultTerminal())
 				return true
 			}
@@ -517,7 +516,7 @@ func (f *cubeboxQueryFlow) TryHandle(
 				PrincipalID:          request.PrincipalID,
 				ConversationID:       request.ConversationID,
 				Prompt:               request.Prompt,
-				Results:              f.registry.ProjectNarrationResults(allResults),
+				Results:              f.registry.ProjectNarrationResults(finalResults),
 				QueryContext:         queryContext,
 				ExpectedProviderID:   produced.ProviderID,
 				ExpectedProviderType: produced.ProviderType,
@@ -527,7 +526,7 @@ func (f *cubeboxQueryFlow) TryHandle(
 				f.writeQueryTerminalError(ctx, request, prepared.turn.TurnID, &prepared.sequence, prepared.lifecycle, sink, queryNarrationErrorToTerminal(err))
 				return true
 			}
-			f.writeQueryResultMetadata(ctx, request, prepared.turn.TurnID, &prepared.sequence, allResults)
+			f.writeQueryResultMetadata(ctx, request, prepared.turn.TurnID, &prepared.sequence, finalResults)
 			if !writeEvent("turn.agent_message.delta", map[string]any{"message_id": prepared.turn.AssistantMessageID, "delta": answer}) {
 				return true
 			}
@@ -1909,13 +1908,7 @@ func buildQueryClarificationEnvelope(input cubeboxQueryClarificationInput) cubeb
 func buildQueryNarrationEnvelope(input cubeboxQueryNarrationInput) cubeboxQueryNarrationEnvelope {
 	return cubeboxQueryNarrationEnvelope{
 		UserPrompt: strings.TrimSpace(input.Prompt),
-		QueryEvidenceWindow: buildQueryEvidenceWindow(input.QueryContext, input.Prompt, cubeboxQueryEvidenceWindowProjectionBudget{
-			MaxConfirmedEntities:  queryContextMaxNarratorConfirmedEntities,
-			MaxCandidateGroups:    queryContextMaxNarratorCandidateGroups,
-			MaxCandidatesPerGroup: queryContextMaxNarratorCandidatesPerGroup,
-			MaxDialogueTurns:      queryContextMaxNarratorDialogueTurns,
-		}),
-		Results: buildQueryNarrationResults(input.Results),
+		Results:    buildQueryNarrationResults(input.Results),
 	}
 }
 

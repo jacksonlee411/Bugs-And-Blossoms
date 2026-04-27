@@ -304,13 +304,6 @@ func (e cubeBoxOrgUnitListExecutor) Execute(ctx context.Context, request cubebox
 	}
 	return cubebox.ExecuteResult{
 		Payload: payload,
-		ConfirmedEntity: orgUnitQueryEntity(cubebox.QueryEntity{
-			Intent:        strings.TrimSpace(request.PlanIntent),
-			EntityKey:     orgUnitListAnchor(params),
-			AsOf:          asOf,
-			SourceAPIKey:  "orgunit.list",
-			ParentOrgCode: orgUnitListAnchor(params),
-		}),
 	}, nil
 }
 
@@ -463,13 +456,6 @@ func (e cubeBoxOrgUnitAuditExecutor) Execute(ctx context.Context, request cubebo
 func orgUnitQueryEntity(entity cubebox.QueryEntity) *cubebox.QueryEntity {
 	entity.Domain = "orgunit"
 	return cubebox.NormalizeQueryEntity(entity)
-}
-
-func orgUnitListAnchor(params map[string]any) string {
-	if value, ok := params["parent_org_code"].(string); ok {
-		return strings.TrimSpace(value)
-	}
-	return ""
 }
 
 func normalizeOrgUnitCommonParams(raw map[string]any) (map[string]any, error) {

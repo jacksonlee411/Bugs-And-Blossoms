@@ -169,6 +169,9 @@ func TestCubeBoxOrgUnitListExecutor(t *testing.T) {
 	if got := result.Payload["total"]; got != float64(12) {
 		t.Fatalf("total=%v", got)
 	}
+	if result.ConfirmedEntity != nil {
+		t.Fatalf("list result must not confirm a single entity, got %#v", result.ConfirmedEntity)
+	}
 }
 
 func TestCubeBoxOrgUnitListExecutorPaginatesWhenOnlyPageProvided(t *testing.T) {

@@ -262,6 +262,42 @@ func TestBuildQueryClarificationEnvelopeProjectsCurrentCandidateGroupIntoEvidenc
 	}
 }
 
+func TestBuildQueryNarrationEnvelopeUsesOnlyCurrentResultsAsFacts(t *testing.T) {
+	envelope := buildQueryNarrationEnvelope(cubeboxQueryNarrationInput{
+		Prompt: "列出全部组织",
+		QueryContext: cubebox.QueryContext{
+			RecentConfirmedEntities: []cubebox.QueryEntity{
+				{Domain: "orgunit", Intent: "orgunit.list", EntityKey: "200006", AsOf: "2026-04-27", ParentOrgCode: "200006"},
+			},
+			RecentDialogueTurns: []cubebox.QueryDialogueTurn{
+				{UserPrompt: "列出成本组织", AssistantReply: "未查询到任何成本组织。"},
+			},
+		},
+		Results: []cubebox.QueryNarrationResult{{
+			Domain: "orgunit",
+			Data: map[string]any{
+				"as_of":     "2026-04-27",
+				"org_units": []map[string]any{{"org_code": "100000", "name": "飞虫与鲜花"}},
+			},
+		}},
+	})
+	body, err := json.Marshal(envelope)
+	if err != nil {
+		t.Fatalf("marshal envelope: %v", err)
+	}
+	text := string(body)
+	for _, snippet := range []string{`"user_prompt":"列出全部组织"`, `"org_units"`, `"org_code":"100000"`} {
+		if !strings.Contains(text, snippet) {
+			t.Fatalf("expected narration envelope to contain %q, got %s", snippet, text)
+		}
+	}
+	for _, forbidden := range []string{"query_evidence_window", "200006", "未查询到任何成本组织"} {
+		if strings.Contains(text, forbidden) {
+			t.Fatalf("expected narration envelope to omit historical fact %q, got %s", forbidden, text)
+		}
+	}
+}
+
 func TestValidateQueryNarrationTextRejectsInternalLeakage(t *testing.T) {
 	for _, text := range []string{
 		"```json\n{\"results\":[{\"payload\":{\"name\":\"飞虫与鲜花\"}}]}\n```",
@@ -1151,8 +1187,8 @@ func TestQueryFlowCanReplanFromWorkingResultsObservation(t *testing.T) {
 	if handled := flow.TryHandle(context.Background(), queryGatewayRequest("展开组织树"), sink); !handled {
 		t.Fatal("expected handled")
 	}
-	if plannerCalls != 3 || narratorResults != 2 {
-		t.Fatalf("expected 3 planner calls and 2 narration results, got planner=%d results=%d", plannerCalls, narratorResults)
+	if plannerCalls != 3 || narratorResults != 1 {
+		t.Fatalf("expected 3 planner calls and final narration result only, got planner=%d results=%d", plannerCalls, narratorResults)
 	}
 	if got, want := len(executeParams), 2; got != want {
 		t.Fatalf("expected %d executions, got %#v", want, executeParams)
@@ -1162,6 +1198,73 @@ func TestQueryFlowCanReplanFromWorkingResultsObservation(t *testing.T) {
 	}
 	if executeParams[1]["parent_org_code"] != "100000" {
 		t.Fatalf("expected second plan to query observed child parent, got %#v", executeParams[1])
+	}
+}
+
+func TestQueryFlowNarratesOnlyLatestExecutionResultsAfterExploration(t *testing.T) {
+	registry, err := cubebox.NewExecutionRegistry(cubebox.RegisteredExecutor{
+		APIKey:         "orgunit.list",
+		RequiredParams: []string{"as_of"},
+		OptionalParams: []string{"parent_org_code"},
+		Executor: queryExecutorStub{
+			executeFn: func(_ context.Context, _ cubebox.ExecuteRequest, params map[string]any) (cubebox.ExecuteResult, error) {
+				if _, ok := params["parent_org_code"]; !ok {
+					return cubebox.ExecuteResult{Payload: map[string]any{
+						"org_units": []map[string]any{{"org_code": "100000", "name": "飞虫与鲜花", "has_children": true}},
+					}}, nil
+				}
+				return cubebox.ExecuteResult{Payload: map[string]any{
+					"org_units": []map[string]any{
+						{"org_code": "100000", "name": "飞虫与鲜花"},
+						{"org_code": "200000", "name": "飞虫公司"},
+						{"org_code": "300000", "name": "鲜花公司"},
+						{"org_code": "200001", "name": "财务部"},
+						{"org_code": "200002", "name": "财务一组"},
+						{"org_code": "200003", "name": "财务三组"},
+						{"org_code": "200004", "name": "财务四组"},
+						{"org_code": "200005", "name": "成本A组"},
+						{"org_code": "200006", "name": "成本B组"},
+						{"org_code": "200007", "name": "成本C组"},
+					},
+				}}, nil
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("NewExecutionRegistry err=%v", err)
+	}
+	var plannerCalls int
+	var narratedItems int
+	flow := queryLoopTestFlow(registry, cubeboxReadPlanProducerStub{fn: func(context.Context, cubeboxReadPlanProductionInput) (cubeboxReadPlanProductionResult, error) {
+		plannerCalls++
+		if plannerCalls == 1 {
+			return queryPlannerReadPlanResult(queryPlanForOrgUnitList("2026-04-27", "")), nil
+		}
+		if plannerCalls == 2 {
+			return queryPlannerReadPlanResult(queryPlanForOrgUnitList("2026-04-27", "100000")), nil
+		}
+		return queryPlannerDoneResult(), nil
+	}}, cubeboxQueryNarratorStub{fn: func(_ context.Context, input cubeboxQueryNarrationInput) (string, error) {
+		if got, want := len(input.Results), 1; got != want {
+			t.Fatalf("expected only latest execution result, got %#v", input.Results)
+		}
+		items, ok := input.Results[0].Data["org_units"].([]map[string]any)
+		if !ok {
+			t.Fatalf("expected org_units result, got %#v", input.Results[0].Data["org_units"])
+		}
+		narratedItems = len(items)
+		return "系统中查询到的组织共有 10 个。", nil
+	}})
+
+	sink := &capturingGatewaySink{}
+	if handled := flow.TryHandle(context.Background(), queryGatewayRequest("列出全部组织"), sink); !handled {
+		t.Fatal("expected handled")
+	}
+	if plannerCalls != 3 {
+		t.Fatalf("expected 3 planner calls, got %d", plannerCalls)
+	}
+	if narratedItems != 10 {
+		t.Fatalf("expected narration to see final 10 org units, got %d", narratedItems)
 	}
 }
 
@@ -1701,12 +1804,10 @@ func TestCubeboxProviderQueryNarratorBuildsStrictMessagesAndRejectsInternalLeaka
 	}
 	body := adapter.lastRequest.Messages[1].Content
 	for _, snippet := range []string{
-		`"query_evidence_window"`,
-		`"entity_key":"100000"`,
-		`"as_of":"2026-04-24"`,
 		`"org_unit"`,
 		`"org_code":"100000"`,
 		`"parent_org_code":"ROOT"`,
+		`"as_of":"2026-04-24"`,
 	} {
 		if !strings.Contains(body, snippet) {
 			t.Fatalf("expected narrator body to contain %q, got %q", snippet, body)
@@ -1717,6 +1818,8 @@ func TestCubeboxProviderQueryNarratorBuildsStrictMessagesAndRejectsInternalLeaka
 		`"api_key":"orgunit.details"`,
 		`"payload":`,
 		`"plan":`,
+		`"query_evidence_window"`,
+		`"entity_key":"100000"`,
 		`"executed_steps"`,
 		`"executor_key"`,
 		`"resolved_entity"`,
