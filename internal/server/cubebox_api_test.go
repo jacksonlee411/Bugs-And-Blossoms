@@ -396,6 +396,57 @@ func TestCubeBoxStreamTurnAPI(t *testing.T) {
 	}
 }
 
+func TestCubeBoxStreamTurnAPIUsesPreparedSequenceForStableMessageIDs(t *testing.T) {
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/internal/cubebox/turns:stream", strings.NewReader(`{"conversation_id":"conv_1","prompt":"hello after restart","next_sequence":2}`))
+	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
+	req = req.WithContext(withPrincipal(req.Context(), Principal{ID: "p1"}))
+
+	runtime := cubebox.NewRuntime()
+	var appended []cubebox.CanonicalEvent
+	handleCubeBoxStreamTurnAPI(rec, req, runtime, cubeboxStoreStub{
+		preparePromptViewFn: func(context.Context, string, string, string, cubebox.CanonicalContext, string) (cubebox.PromptViewPreparationResponse, error) {
+			return cubebox.PromptViewPreparationResponse{
+				Conversation: cubebox.Conversation{ID: "conv_1", Title: "新对话", Status: "active"},
+				NextSequence: 10,
+			}, nil
+		},
+		appendFn: func(_ context.Context, _ string, _ string, _ string, event cubebox.CanonicalEvent) error {
+			appended = append(appended, event)
+			return nil
+		},
+	}, newTestGateway(runtime), nil)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+	}
+	if len(appended) == 0 {
+		t.Fatal("expected appended events")
+	}
+	for _, event := range appended {
+		if event.TurnID == nil || *event.TurnID != "turn_seq_10" {
+			t.Fatalf("event turn id should derive from prepared sequence, got %#v", event.TurnID)
+		}
+		if event.Sequence < 10 {
+			t.Fatalf("event sequence=%d should start from prepared sequence", event.Sequence)
+		}
+		switch event.Type {
+		case "turn.started":
+			if event.Payload["user_message_id"] != "msg_user_seq_10" {
+				t.Fatalf("started payload=%#v", event.Payload)
+			}
+		case "turn.user_message.accepted":
+			if event.Payload["message_id"] != "msg_user_seq_10" {
+				t.Fatalf("user payload=%#v", event.Payload)
+			}
+		case "turn.agent_message.delta", "turn.agent_message.completed":
+			if event.Payload["message_id"] != "msg_agent_seq_10" {
+				t.Fatalf("agent payload=%#v", event.Payload)
+			}
+		}
+	}
+}
+
 func TestCubeBoxStreamTurnAPIPreservesPromptWhitespace(t *testing.T) {
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodPost, "/internal/cubebox/turns:stream", strings.NewReader("{\"conversation_id\":\"conv_1\",\"prompt\":\"\\n  hello  \\n\",\"next_sequence\":1}"))

@@ -1615,11 +1615,6 @@ func (f *cubeboxQueryFlow) prepareQueryTurn(
 	request cubebox.GatewayStreamRequest,
 	produced cubeboxReadPlanProductionResult,
 ) (cubeboxPreparedQueryTurn, error) {
-	turn := f.runtime.StartTurn(cubebox.TurnOwner{
-		TenantID:       request.TenantID,
-		PrincipalID:    request.PrincipalID,
-		ConversationID: request.ConversationID,
-	}, request.Prompt)
 	lifecycle := cubeboxQueryLifecycle{
 		traceID:      "trace_" + strings.ReplaceAll(uuid.NewString(), "-", ""),
 		providerID:   strings.TrimSpace(produced.ProviderID),
@@ -1631,9 +1626,13 @@ func (f *cubeboxQueryFlow) prepareQueryTurn(
 	canonicalContext := f.buildQueryCanonicalContext(request, lifecycle)
 	prepared, err := cubebox.PrepareTurnStream(ctx, f.store, request, canonicalContext)
 	if err != nil {
-		f.runtime.FinishTurn(turn.TurnID)
 		return cubeboxPreparedQueryTurn{}, err
 	}
+	turn := f.runtime.StartTurnWithIDs(cubebox.TurnOwner{
+		TenantID:       request.TenantID,
+		PrincipalID:    request.PrincipalID,
+		ConversationID: request.ConversationID,
+	}, request.Prompt, prepared.TurnIDs)
 	return cubeboxPreparedQueryTurn{
 		turn:      turn,
 		lifecycle: lifecycle,
