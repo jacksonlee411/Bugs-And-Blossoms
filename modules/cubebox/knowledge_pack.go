@@ -24,9 +24,8 @@ type KnowledgePack struct {
 }
 
 type KnowledgePackNoQueryGuidance struct {
-	ScopeSummary           string
-	SuggestedPrompts       []string
-	ContextFollowupPrompts []string
+	ScopeSummary     string
+	SuggestedPrompts []string
 }
 
 type knowledgePackQueriesDoc struct {
@@ -36,9 +35,8 @@ type knowledgePackQueriesDoc struct {
 		OptionalParams []string `yaml:"optional_params"`
 	} `yaml:"intents"`
 	NoQueryGuidance struct {
-		ScopeSummary           string   `yaml:"scope_summary"`
-		SuggestedPrompts       []string `yaml:"suggested_prompts"`
-		ContextFollowupPrompts []string `yaml:"context_followup_prompts"`
+		ScopeSummary     string   `yaml:"scope_summary"`
+		SuggestedPrompts []string `yaml:"suggested_prompts"`
 	} `yaml:"no_query_guidance"`
 }
 
@@ -197,14 +195,12 @@ func noQueryGuidanceFromKnowledgePack(pack KnowledgePack) (KnowledgePackNoQueryG
 	}
 	scope := strings.TrimSpace(doc.NoQueryGuidance.ScopeSummary)
 	prompts := normalizeGuidancePrompts(doc.NoQueryGuidance.SuggestedPrompts)
-	followups := normalizeGuidancePrompts(doc.NoQueryGuidance.ContextFollowupPrompts)
 	if scope == "" || len(prompts) == 0 {
 		return KnowledgePackNoQueryGuidance{}, false
 	}
 	return KnowledgePackNoQueryGuidance{
-		ScopeSummary:           scope,
-		SuggestedPrompts:       prompts,
-		ContextFollowupPrompts: followups,
+		ScopeSummary:     scope,
+		SuggestedPrompts: prompts,
 	}, true
 }
 

@@ -272,6 +272,7 @@ modules/{module}/
 - DEV-PLAN-470：CubeBox `page_context` 当前范围剔除与清理方案：`docs/dev-plans/470-cubebox-page-context-scope-removal-and-cleanup-plan.md`
 - DEV-PLAN-471：CubeBox 同一 Turn 内模型驱动的迭代式只读规划方案：`docs/dev-plans/471-cubebox-intra-turn-iterative-read-planning-plan.md`
 - DEV-PLAN-472：CubeBox 澄清补槽续接与残缺日期连续性修复方案：`docs/dev-plans/472-cubebox-clarification-slot-repair-and-partial-date-continuity-plan.md`
+- DEV-PLAN-473：CubeBox 模型主导查询链与消极防御收敛纠偏方案：`docs/dev-plans/473-cubebox-model-owned-query-context-input-remediation-plan.md`
 - DEV-PLAN-440：彻底删除 SetID 的全仓收口方案（SetID 根删除唯一 PoR）：`docs/dev-plans/440-complete-setid-removal-plan.md`
 - DEV-PLAN-441：旧策略模块残余清理方案：`docs/dev-plans/441-legacy-strategy-module-residue-cleanup-plan.md`
 - DEV-PLAN-450：直接切除 jobcatalog / staffing / person 三模块方案（保留 orgunit）：`docs/dev-plans/450-direct-removal-of-jobcatalog-staffing-person-modules-plan.md`

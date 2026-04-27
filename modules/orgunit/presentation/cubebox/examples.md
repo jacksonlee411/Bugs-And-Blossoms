@@ -145,7 +145,7 @@
 
 说明：
 
-- “这个组织” 只能依赖 `query_dialogue_context` 中最近已确认的结构化实体事实；当前范围不允许从页面状态隐式补 `org_code`
+- “这个组织” 只能由模型结合 `query_evidence_window` 与当前输入判断；当前范围不允许从页面状态隐式补 `org_code`
 
 ## 示例 5：多步只读编排
 
@@ -248,21 +248,24 @@
 - `status` 只使用 canonical 值 `disabled`
 - 不要输出 `inactive`
 
-## 示例 7：继承最近已确认组织查询子组织
+## 示例 7：根据 evidence window 判断“该组织”的下级组织
 
 planner 上下文：
 
 ```yaml
-query_dialogue_context:
-  recent_confirmed_entity:
-    domain: orgunit
-    entity_key: "100000"
-    as_of: "2026-04-25"
-  recent_confirmed_entities:
-    - domain: orgunit
-      entity_key: "100000"
-      as_of: "2026-04-25"
-  recent_candidates: []
+query_evidence_window:
+  current_user_input: 查该组织的下级组织
+  recent_turns:
+    - user_prompt: 查 100000 在 2026-04-25 的详情
+      assistant_reply: 组织 100000 是“飞虫与鲜花”，当前为启用状态。
+  observations:
+    - source: query_event
+      kind: entity_fact
+      result_summary:
+        item:
+          domain: orgunit
+          entity_key: "100000"
+          as_of: "2026-04-25"
 ```
 
 用户问法：
@@ -304,20 +307,20 @@ query_dialogue_context:
 
 说明：
 
-- “该组织”继承最近已确认查询实体中的 `entity_key=100000`
-- 用户未显式给新日期，因此继承 `as_of=2026-04-25`
-- 若当前轮显式给出另一个组织编码，应使用当前轮编码覆盖历史实体
+- “该组织”由模型结合当前输入、最近问答和 `entity_fact` 判断为 `entity_key=100000`
+- 用户未显式给新日期，模型可结合 evidence 中的 `as_of=2026-04-25` 输出显式参数
+- 若当前轮显式给出另一个组织编码，应使用当前轮编码覆盖历史 evidence
 
 ## 示例 8：仍在查询域但缺少可继承实体时 fail-closed
 
 planner 上下文：
 
 ```yaml
-query_dialogue_context:
-  recent_confirmed_entity: null
-  recent_confirmed_entities: []
-  recent_candidate_groups: []
-  recent_candidates: []
+query_evidence_window:
+  current_user_input: 查该组织的下级组织
+  recent_turns: []
+  observations: []
+  open_clarification: null
 ```
 
 用户问法：
@@ -402,37 +405,33 @@ query_dialogue_context:
 - 用户虽然只给了名称，但目标查询需要稳定编码时，不必先追问编码
 - 若第一步搜索不是唯一命中，应回到澄清，并给出少量候选供用户确认
 
-## 示例 10：消费 recent_candidate_groups 中的“第一个”
+## 示例 10：根据 presented_options 判断“第一个”
 
 planner 上下文：
 
 ```yaml
-query_dialogue_context:
-  recent_confirmed_entity: null
-  recent_confirmed_entities: []
-  recent_candidate_groups:
-    - group_id: candgrp_aaa
-      candidate_source: execution_error
-      candidate_count: 2
-      cannot_silent_select: true
-      candidates:
-        - domain: orgunit
-          entity_key: "200000"
-          name: "飞虫公司"
-          as_of: "2026-04-25"
-        - domain: orgunit
-          entity_key: "300000"
-          name: "鲜花公司"
-          as_of: "2026-04-25"
-  recent_candidates:
-    - domain: orgunit
-      entity_key: "200000"
-      name: "飞虫公司"
-      as_of: "2026-04-25"
-    - domain: orgunit
-      entity_key: "300000"
-      name: "鲜花公司"
-      as_of: "2026-04-25"
+query_evidence_window:
+  current_user_input: 第一个
+  recent_turns:
+    - user_prompt: 查飞虫
+      assistant_reply: 找到了多个候选项，请确认要继续查询哪一个：200000「飞虫公司」、300000「鲜花公司」。
+  observations:
+    - source: query_event
+      kind: presented_options
+      result_summary:
+        group_id: candgrp_aaa
+        option_source: execution_error
+        item_count: 2
+        requires_explicit_user_choice: true
+        items:
+          - domain: orgunit
+            entity_key: "200000"
+            name: "飞虫公司"
+            as_of: "2026-04-25"
+          - domain: orgunit
+            entity_key: "300000"
+            name: "鲜花公司"
+            as_of: "2026-04-25"
 ```
 
 用户问法：
@@ -470,7 +469,7 @@ query_dialogue_context:
 
 说明：
 
-- 当上一轮已经给用户展示了候选列表时，“第一个”“第二个”“那个公司”应优先消费 `recent_candidate_groups`
+- 当上一轮已经给用户展示了候选列表时，“第一个”“第二个”“那个公司”应由模型结合 `presented_options` 和 `recent_turns` 判断
 - 只有在候选为空或用户指代仍然歧义时，才回到澄清
 
 ## 示例 11：跨组引用“最开始那个 / 不是这个，另一个”
@@ -478,45 +477,42 @@ query_dialogue_context:
 planner 上下文：
 
 ```yaml
-query_dialogue_context:
-  recent_confirmed_entity: null
-  recent_confirmed_entities: []
-  recent_candidate_groups:
-    - group_id: candgrp_old
-      candidate_source: execution_error
-      candidate_count: 2
-      cannot_silent_select: true
-      candidates:
-        - domain: orgunit
-          entity_key: "100100"
-          name: "华东销售中心"
-          as_of: "2026-04-25"
-        - domain: orgunit
-          entity_key: "100200"
-          name: "华东运营中心"
-          as_of: "2026-04-25"
-    - group_id: candgrp_new
-      candidate_source: execution_error
-      candidate_count: 2
-      cannot_silent_select: true
-      candidates:
-        - domain: orgunit
-          entity_key: "200100"
-          name: "飞虫公司"
-          as_of: "2026-04-25"
-        - domain: orgunit
-          entity_key: "200200"
-          name: "鲜花公司"
-          as_of: "2026-04-25"
-  recent_candidates:
-    - domain: orgunit
-      entity_key: "200100"
-      name: "飞虫公司"
-      as_of: "2026-04-25"
-    - domain: orgunit
-      entity_key: "200200"
-      name: "鲜花公司"
-      as_of: "2026-04-25"
+query_evidence_window:
+  current_user_input: 最开始那个
+  recent_turns:
+    - user_prompt: 搜索华东
+      assistant_reply: 找到了多个候选项：100100「华东销售中心」、100200「华东运营中心」。
+    - user_prompt: 搜索公司
+      assistant_reply: 找到了多个候选项：200100「飞虫公司」、200200「鲜花公司」。
+  observations:
+    - source: query_event
+      kind: presented_options
+      result_summary:
+        group_id: candgrp_old
+        item_count: 2
+        items:
+          - domain: orgunit
+            entity_key: "100100"
+            name: "华东销售中心"
+            as_of: "2026-04-25"
+          - domain: orgunit
+            entity_key: "100200"
+            name: "华东运营中心"
+            as_of: "2026-04-25"
+    - source: query_event
+      kind: presented_options
+      result_summary:
+        group_id: candgrp_new
+        item_count: 2
+        items:
+          - domain: orgunit
+            entity_key: "200100"
+            name: "飞虫公司"
+            as_of: "2026-04-25"
+          - domain: orgunit
+            entity_key: "200200"
+            name: "鲜花公司"
+            as_of: "2026-04-25"
 ```
 
 用户问法 1：
@@ -525,7 +521,7 @@ query_dialogue_context:
 
 期望行为：
 
-- 应优先回看较早的 `recent_candidate_groups[0]`
+- 应由模型结合 `recent_turns` 和较早的 `presented_options` 判断
 - 若表达足以唯一定位，则可继续查询 `org_code=100100`
 
 用户问法 2：
@@ -659,21 +655,13 @@ query_dialogue_context:
 planner 上下文：
 
 ```yaml
-query_dialogue_context:
-  recent_confirmed_entity: null
-  recent_confirmed_entities: []
-  recent_candidate_groups: []
-  recent_candidates: []
-  recent_dialogue_turns:
+query_evidence_window:
+  current_user_input: 1日
+  recent_turns:
     - user_prompt: 查出顶级点的全部各级下级组织，时间节点是2025年1月
       assistant_reply: 请提供完整查询日期，例如 2025-01-01。
-  last_clarification:
-    source_turn_id: turn_prev
-    intent: orgunit.list
-    missing_params:
-      - as_of
-    clarifying_question: 请提供完整查询日期，例如 2025-01-01。
-  clarification_resume:
+  observations: []
+  open_clarification:
     reply_candidate: true
     source_turn_id: turn_prev
     intent: orgunit.list
@@ -718,7 +706,7 @@ query_dialogue_context:
 
 说明：
 
-- `clarification_resume.reply_candidate=true` 表示当前轮很可能在回答上一轮澄清。
+- `open_clarification.reply_candidate=true` 表示当前轮很可能在回答上一轮澄清。
 - 应优先把 `1日` 解释成对上一轮日期澄清的补充，而不是重新追问“你想查什么”。
 - 最终执行参数必须是完整 `YYYY-MM-DD`；不能输出 `as_of_day` 这类临时槽位。
 
@@ -727,57 +715,40 @@ query_dialogue_context:
 planner 上下文：
 
 ```yaml
-query_dialogue_context:
-  recent_confirmed_entity: null
-  recent_confirmed_entities: []
-  recent_candidate_groups:
-    - group_id: candgrp_finance
-      candidate_source: execution_error
-      candidate_count: 3
-      cannot_silent_select: true
-      candidates:
-        - domain: orgunit
-          entity_key: "200001"
-          name: 财务部
-          as_of: "2026-04-25"
-        - domain: orgunit
-          entity_key: "200002"
-          name: 财务一组
-          as_of: "2026-04-25"
-        - domain: orgunit
-          entity_key: "200004"
-          name: 财务四组
-          as_of: "2026-04-25"
-  recent_candidates:
-    - domain: orgunit
-      entity_key: "200001"
-      name: 财务部
-      as_of: "2026-04-25"
-    - domain: orgunit
-      entity_key: "200002"
-      name: 财务一组
-      as_of: "2026-04-25"
-    - domain: orgunit
-      entity_key: "200004"
-      name: 财务四组
-      as_of: "2026-04-25"
-  recent_dialogue_turns:
+query_evidence_window:
+  current_user_input: 全部
+  recent_turns:
     - user_prompt: 列出全部财务组织的详情
       assistant_reply: 找到了多个候选项，请确认要继续查询哪一个。
-  last_clarification:
-    source_turn_id: turn_prev
-    clarifying_question: 找到了多个候选项，请确认要继续查询哪一个。
-    candidate_group_id: candgrp_finance
-    candidate_count: 3
-    cannot_silent_select: true
-  clarification_resume:
+  observations:
+    - source: query_event
+      kind: presented_options
+      result_summary:
+        group_id: candgrp_finance
+        option_source: execution_error
+        item_count: 3
+        requires_explicit_user_choice: true
+        items:
+          - domain: orgunit
+            entity_key: "200001"
+            name: 财务部
+            as_of: "2026-04-25"
+          - domain: orgunit
+            entity_key: "200002"
+            name: 财务一组
+            as_of: "2026-04-25"
+          - domain: orgunit
+            entity_key: "200004"
+            name: 财务四组
+            as_of: "2026-04-25"
+  open_clarification:
     reply_candidate: true
     source_turn_id: turn_prev
-    candidate_group_id: candgrp_finance
-    candidate_source: execution_error
-    candidate_count: 3
-    cannot_silent_select: true
-    candidates:
+    option_group_id: candgrp_finance
+    option_source: execution_error
+    option_count: 3
+    requires_explicit_user_choice: true
+    options:
       - domain: orgunit
         entity_key: "200001"
         name: 财务部

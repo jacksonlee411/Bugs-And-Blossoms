@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -181,11 +182,12 @@ func TestBuildQueryClarificationEnvelopeOmitsQueryIntent(t *testing.T) {
 	text := string(body)
 	for _, snippet := range []string{
 		`"user_prompt":"查华东"`,
-		`"dialogue_context"`,
+		`"query_evidence_window"`,
+		`"observations"`,
 		`"candidates"`,
 		`"candidate_group_id":"candgrp_test_1"`,
-		`"recent_candidate_groups"`,
 		`"group_id":"candgrp_test_1"`,
+		`"kind":"presented_options"`,
 		`"entity_key":"1001"`,
 		`"error_code":"org_unit_search_ambiguous"`,
 		`"candidate_source":"execution_error"`,
@@ -209,7 +211,7 @@ func TestBuildQueryClarificationEnvelopeOmitsQueryIntent(t *testing.T) {
 	}
 }
 
-func TestBuildQueryClarificationEnvelopeProjectsCurrentCandidateGroupIntoDialogueContext(t *testing.T) {
+func TestBuildQueryClarificationEnvelopeProjectsCurrentCandidateGroupIntoEvidenceWindow(t *testing.T) {
 	rawCandidates := make([]cubebox.QueryCandidate, 0, 25)
 	for i := 0; i < 25; i++ {
 		rawCandidates = append(rawCandidates, cubebox.QueryCandidate{
@@ -241,24 +243,22 @@ func TestBuildQueryClarificationEnvelopeProjectsCurrentCandidateGroupIntoDialogu
 		Candidates: rawCandidates,
 	})
 
-	if got, want := len(envelope.DialogueContext.RecentCandidateGroups), 2; got != want {
-		t.Fatalf("expected %d candidate groups, got %#v", want, envelope.DialogueContext.RecentCandidateGroups)
-	}
-	lastGroup := envelope.DialogueContext.RecentCandidateGroups[len(envelope.DialogueContext.RecentCandidateGroups)-1]
-	if lastGroup.GroupID != "candgrp_live_1" {
-		t.Fatalf("expected current group appended, got %#v", lastGroup)
-	}
-	if got, want := len(lastGroup.Candidates), queryContextMaxClarifierCandidatesPerGroup; got != want {
-		t.Fatalf("expected current group truncated to %d, got %d", want, got)
-	}
 	if got, want := len(envelope.Candidates), queryContextMaxClarifierCandidatesPerGroup; got != want {
 		t.Fatalf("expected top-level candidates truncated to %d, got %d", want, got)
 	}
 	if envelope.CandidateGroupID != "candgrp_live_1" || envelope.CandidateCount != len(rawCandidates) || !envelope.CannotSilentSelect {
 		t.Fatalf("unexpected envelope metadata=%#v", envelope)
 	}
-	if lastGroup.Candidates[len(lastGroup.Candidates)-1].EntityKey != envelope.Candidates[len(envelope.Candidates)-1].EntityKey {
-		t.Fatalf("expected top-level candidates to mirror projected current group, got %#v %#v", lastGroup.Candidates, envelope.Candidates)
+	body, err := json.Marshal(envelope.QueryEvidenceWindow)
+	if err != nil {
+		t.Fatalf("marshal evidence window: %v", err)
+	}
+	text := string(body)
+	if !strings.Contains(text, `"kind":"presented_options"`) || !strings.Contains(text, `"group_id":"candgrp_live_1"`) {
+		t.Fatalf("expected current group in evidence window, got %s", text)
+	}
+	if strings.Contains(text, `10`+strings.Repeat("0", 2)+`U`) {
+		t.Fatalf("expected evidence options truncated, got %s", text)
 	}
 }
 
@@ -437,7 +437,7 @@ func TestQueryFlowReturnsPlannerClarificationVerbatim(t *testing.T) {
 	}
 }
 
-func TestBuildPlannerMessagesIncludesQueryDialogueContext(t *testing.T) {
+func TestBuildPlannerMessagesIncludesQueryEvidenceWindow(t *testing.T) {
 	producer := &cubeboxProviderReadPlanProducer{
 		now: func() time.Time { return time.Date(2026, 4, 25, 12, 0, 0, 0, time.UTC) },
 	}
@@ -477,17 +477,17 @@ func TestBuildPlannerMessagesIncludesQueryDialogueContext(t *testing.T) {
 	}
 	found := false
 	for _, message := range messages {
-		if strings.Contains(message.Content, "query_dialogue_context") {
+		if strings.Contains(message.Content, "query_evidence_window") {
 			found = true
-			if !strings.Contains(message.Content, "recent_candidates") || !strings.Contains(message.Content, "recent_candidate_groups") || !strings.Contains(message.Content, "100000") {
+			if !strings.Contains(message.Content, "observations") || !strings.Contains(message.Content, "entity_fact") || !strings.Contains(message.Content, "presented_options") || !strings.Contains(message.Content, "100000") {
 				t.Fatalf("unexpected context block=%q", message.Content)
 			}
-			for _, forbidden := range []string{`"intent":"orgunit.details"`, `"source_api_key"`, `"target_org_code"`, `"parent_org_code"`} {
+			for _, forbidden := range []string{`"intent":"orgunit.details"`, `"source_api_key"`, `"target_org_code"`, `"parent_org_code"`, "recent_confirmed_entity", "recent_candidates", "recent_candidate_groups"} {
 				if strings.Contains(message.Content, forbidden) {
 					t.Fatalf("expected planner context to omit %q, got %q", forbidden, message.Content)
 				}
 			}
-			for _, required := range []string{"recent_confirmed_entity 只是 recent_confirmed_entities 最后一项的兼容别名", "recent_candidates 只是 recent_candidate_groups 最后一组的兼容别名"} {
+			for _, required := range []string{"不是本地目标绑定", "本地不会替你从历史上下文补 target", "不会因为输入短而抢先拒绝"} {
 				if !strings.Contains(message.Content, required) {
 					t.Fatalf("expected planner context to contain %q, got %q", required, message.Content)
 				}
@@ -495,7 +495,7 @@ func TestBuildPlannerMessagesIncludesQueryDialogueContext(t *testing.T) {
 		}
 	}
 	if !found {
-		t.Fatalf("expected query_dialogue_context block, got %+v", messages)
+		t.Fatalf("expected query_evidence_window block, got %+v", messages)
 	}
 }
 
@@ -531,10 +531,10 @@ func TestBuildPlannerMessagesIncludesClarificationResume(t *testing.T) {
 
 	joined := plannerMessageText(messages)
 	for _, expected := range []string{
-		`"clarification_resume"`,
+		`"open_clarification"`,
 		`"reply_candidate":true`,
 		`"raw_user_reply":"1日"`,
-		"不要因为输入很短就直接输出 NO_QUERY",
+		"不要因为输入短就抢先输出 NO_QUERY",
 	} {
 		if !strings.Contains(joined, expected) {
 			t.Fatalf("expected planner prompt to contain %q, got %s", expected, joined)
@@ -836,6 +836,139 @@ func TestQueryFlowInjectsCandidateClarificationResumeIntoPlannerInput(t *testing
 	}
 	if plannerCalls != 1 {
 		t.Fatalf("expected 1 planner call, got %d", plannerCalls)
+	}
+}
+
+func TestQueryFlowLetsPlannerOwnAuditTargetAfterCandidateSelection(t *testing.T) {
+	var executedOrgCodes []string
+	registry, err := cubebox.NewExecutionRegistry(cubebox.RegisteredExecutor{
+		APIKey:         "orgunit.audit",
+		RequiredParams: []string{"org_code"},
+		OptionalParams: []string{"limit"},
+		Executor: queryExecutorStub{
+			validateParamsFn: func(raw map[string]any) (map[string]any, error) { return raw, nil },
+			executeFn: func(_ context.Context, _ cubebox.ExecuteRequest, params map[string]any) (cubebox.ExecuteResult, error) {
+				orgCode, _ := params["org_code"].(string)
+				executedOrgCodes = append(executedOrgCodes, orgCode)
+				return cubebox.ExecuteResult{
+					Payload: map[string]any{
+						"org_code": orgCode,
+						"events":   []any{},
+					},
+					ConfirmedEntity: &cubebox.QueryEntity{
+						Domain:    "orgunit",
+						Intent:    "orgunit.audit",
+						EntityKey: orgCode,
+					},
+				}, nil
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("NewExecutionRegistry err=%v", err)
+	}
+
+	var firstPlannerInput cubeboxReadPlanProductionInput
+	var plannerCalls int
+	flow := &cubeboxQueryFlow{
+		runtime: cubebox.NewRuntime(),
+		store: cubeboxStoreStub{
+			appendFn: func(context.Context, string, string, string, cubebox.CanonicalEvent) error { return nil },
+			getFn: func(context.Context, string, string, string) (cubebox.ConversationReplayResponse, error) {
+				return cubebox.ConversationReplayResponse{
+					Conversation: cubebox.Conversation{ID: "conv-1"},
+					Events: []cubebox.CanonicalEvent{
+						{
+							Type: cubebox.QueryEntityConfirmedEventType,
+							Payload: map[string]any{"entity": map[string]any{
+								"domain":     "orgunit",
+								"intent":     "orgunit.audit",
+								"entity_key": "100000",
+							}},
+						},
+						{
+							Type: "turn.user_message.accepted",
+							Payload: map[string]any{
+								"text": "列出全部财务组织的详情",
+							},
+						},
+						{
+							Type: cubebox.QueryCandidatesPresentedEventType,
+							Payload: map[string]any{
+								"group_id":             "candgrp_finance",
+								"candidate_source":     "execution_error",
+								"candidate_count":      3,
+								"cannot_silent_select": true,
+								"candidates": []any{
+									map[string]any{"domain": "orgunit", "entity_key": "200001", "name": "财务部", "as_of": "2026-01-07"},
+									map[string]any{"domain": "orgunit", "entity_key": "200002", "name": "财务一组", "as_of": "2026-01-07"},
+									map[string]any{"domain": "orgunit", "entity_key": "200004", "name": "财务四组", "as_of": "2026-01-07"},
+								},
+							},
+						},
+						{
+							Type: "turn.user_message.accepted",
+							Payload: map[string]any{
+								"text": "以上全部",
+							},
+						},
+					},
+				}, nil
+			},
+			preparePromptViewFn: func(context.Context, string, string, string, cubebox.CanonicalContext, string) (cubebox.PromptViewPreparationResponse, error) {
+				return cubebox.PromptViewPreparationResponse{NextSequence: 1}, nil
+			},
+		},
+		registry: registry,
+		producer: cubeboxReadPlanProducerStub{fn: func(_ context.Context, input cubeboxReadPlanProductionInput) (cubeboxReadPlanProductionResult, error) {
+			plannerCalls++
+			if plannerCalls == 1 {
+				firstPlannerInput = input
+				return queryPlannerReadPlanResult(cubebox.ReadPlan{
+					Intent:     "orgunit.audit",
+					Confidence: 0.9,
+					Steps: []cubebox.ReadPlanStep{
+						{ID: "step-1", APIKey: "orgunit.audit", Params: map[string]any{"org_code": "200001"}, DependsOn: []string{}},
+						{ID: "step-2", APIKey: "orgunit.audit", Params: map[string]any{"org_code": "200002"}, DependsOn: []string{"step-1"}},
+						{ID: "step-3", APIKey: "orgunit.audit", Params: map[string]any{"org_code": "200004"}, DependsOn: []string{"step-2"}},
+					},
+				}), nil
+			}
+			return queryPlannerDoneResult(), nil
+		}},
+		narrator: cubeboxQueryNarratorStub{fn: func(_ context.Context, input cubeboxQueryNarrationInput) (string, error) {
+			if got, want := len(input.Results), 3; got != want {
+				t.Fatalf("expected %d narration results, got %#v", want, input.Results)
+			}
+			return "已查询 3 个财务组织的审计信息。", nil
+		}},
+		knowledgePacks: []cubebox.KnowledgePack{
+			{Dir: "modules/orgunit/presentation/cubebox", Files: map[string]string{"CUBEBOX-SKILL.md": "x", "queries.md": "x", "apis.md": "x", "examples.md": "x"}},
+		},
+		now: func() time.Time { return time.Date(2026, 4, 25, 12, 0, 0, 0, time.UTC) },
+	}
+
+	sink := &capturingGatewaySink{}
+	if handled := flow.TryHandle(context.Background(), queryGatewayRequest("审计信息"), sink); !handled {
+		t.Fatal("expected handled")
+	}
+	if plannerCalls != 2 {
+		t.Fatalf("expected 2 planner calls, got %d", plannerCalls)
+	}
+	if !reflect.DeepEqual(executedOrgCodes, []string{"200001", "200002", "200004"}) {
+		t.Fatalf("executor must use planner explicit audit targets, got %#v", executedOrgCodes)
+	}
+	if input := firstPlannerInput.Prompt; input != "审计信息" {
+		t.Fatalf("expected short audit prompt to reach planner, got %q", input)
+	}
+	if firstPlannerInput.QueryContext.RecentConfirmedEntity == nil || firstPlannerInput.QueryContext.RecentConfirmedEntity.EntityKey != "100000" {
+		t.Fatalf("expected earlier root evidence preserved for model input, got %#v", firstPlannerInput.QueryContext)
+	}
+	if got := len(firstPlannerInput.QueryContext.RecentCandidateGroups); got != 1 {
+		t.Fatalf("expected finance candidate evidence preserved, got %#v", firstPlannerInput.QueryContext.RecentCandidateGroups)
+	}
+	if text := strings.Join(sink.deltas(), "\n"); !strings.Contains(text, "3 个财务组织") {
+		t.Fatalf("expected final audit narration, got %#v", sink.events)
 	}
 }
 
@@ -1568,7 +1701,7 @@ func TestCubeboxProviderQueryNarratorBuildsStrictMessagesAndRejectsInternalLeaka
 	}
 	body := adapter.lastRequest.Messages[1].Content
 	for _, snippet := range []string{
-		`"dialogue_context"`,
+		`"query_evidence_window"`,
 		`"entity_key":"100000"`,
 		`"as_of":"2026-04-24"`,
 		`"org_unit"`,

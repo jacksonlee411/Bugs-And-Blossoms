@@ -6,7 +6,7 @@
 
 本文件不是运行时执行事实源。运行时唯一执行事实源以后续代码中的 `api_key -> executor` 注册表为准。
 
-planner 输入可能包含 `query_dialogue_context`。该上下文只用于补齐用户代词型追问中的稳定参数，不是新的 API，也不是授权来源；在 orgunit 域中 `entity_key` 表示组织编码，当前轮用户显式参数始终优先。涉及候选选择时，应优先读取 `recent_candidate_groups`，不要假设 `recent_confirmed_entity` 或 `recent_candidates` 已经替你选定当前对象。
+planner 输入可能包含 `query_evidence_window`。该窗口只用于向模型提供历史事实、用户/助手文本和只读 observation，不是新的 API，也不是授权来源；在 orgunit 域中 `entity_key` 表示组织编码，当前轮用户显式参数始终优先。涉及候选选择时，应由模型读取 `recent_turns`、`observations` 与 `open_clarification` 后输出显式 `ReadPlan` 参数，不要假设本地已经替你选定当前对象。
 
 planner 输入还可能包含 `working_results`。它只表示当前 turn 内已经执行过的只读 API observation，不是长期记忆，也不是新的 orgunit 专用 DSL。需要继续展开组织树时，应阅读 `working_results.latest_observation.items[].has_children` 与 `org_code` 后再输出新的 `READ_PLAN`；不要生成 `remaining_parent_org_codes`、聚合事实、当前 winner 或其他业务专用状态字段。
 
@@ -18,7 +18,7 @@ planner 输入还可能包含 `working_results`。它只表示当前 turn 内已
 - 禁止声明新的 `api_key`
 - 禁止把会话压缩摘要当作查询 API 结果或查询锚点
 - 禁止在组织架构查询域内输出“没有查询接口/工具权限”类能力描述；缺参时必须澄清
-- 禁止从页面上下文、当前 URL 或前端展示状态补查询参数；当前范围只允许消费 query dialogue fact window
+- 禁止从页面上下文、当前 URL 或前端展示状态补查询参数；当前范围只允许消费 `query_evidence_window`
 - 禁止把 `working_results` 写成长时事实或把 `NO_QUERY` 当作“已经查够”；查够时必须输出 `{"outcome":"DONE"}`
 
 ## API 目录

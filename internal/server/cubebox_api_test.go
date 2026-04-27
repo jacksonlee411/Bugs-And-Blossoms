@@ -1351,7 +1351,7 @@ func TestCubeBoxStreamTurnAPIStopsNoQueryWithoutGatewayFallback(t *testing.T) {
 		registry: &cubebox.ExecutionRegistry{},
 		producer: cubeboxReadPlanProducerStub{result: cubeboxReadPlanProductionResult{Handled: false}},
 		narrator: cubeboxQueryNarratorStub{text: "unused", noQueryFn: func(_ context.Context, input cubeboxNoQueryGuidanceInput) (string, error) {
-			if input.ScopeSummary != "" || len(input.SuggestedPrompts) > 0 || input.QueryContextHint.HasRecentConfirmedEntity {
+			if input.ScopeSummary != "" || len(input.SuggestedPrompts) > 0 || input.QueryContextHint.HasConversationEvidence {
 				t.Fatalf("expected no hard-coded domain facts in generic test pack, got %#v", input)
 			}
 			return fallbackNoQueryGuidanceText(buildNoQueryGuidanceEnvelope(input)), nil
@@ -1688,7 +1688,7 @@ func TestCubeBoxStreamTurnAPIFallsBackToGatewayWhenPlannerErrors(t *testing.T) {
 	}
 }
 
-func TestCubeBoxQueryFlowInjectsRecentConfirmedEntity(t *testing.T) {
+func TestCubeBoxQueryFlowLetsPlannerUseConversationEvidenceExplicitly(t *testing.T) {
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodPost, "/internal/cubebox/turns:stream", strings.NewReader(`{"conversation_id":"conv_1","prompt":"查该组织的下级组织","next_sequence":10}`))
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
@@ -1743,10 +1743,19 @@ func TestCubeBoxQueryFlowInjectsRecentConfirmedEntity(t *testing.T) {
 		registry: registry,
 		producer: cubeboxReadPlanProducerStub{fn: func(ctx context.Context, input cubeboxReadPlanProductionInput) (cubeboxReadPlanProductionResult, error) {
 			if input.QueryContext.RecentConfirmedEntity == nil || input.QueryContext.RecentConfirmedEntity.EntityKey != "100000" || input.QueryContext.RecentConfirmedEntity.AsOf != "2026-04-25" {
-				t.Fatalf("expected recent entity injected, got %#v", input.QueryContext)
+				t.Fatalf("expected conversation evidence available to planner, got %#v", input.QueryContext)
 			}
 			if len(input.QueryContext.RecentConfirmedEntities) != 1 {
 				t.Fatalf("expected recent entities list, got %#v", input.QueryContext.RecentConfirmedEntities)
+			}
+			evidence := cubebox.BuildQueryEvidenceWindow(input.QueryContext, input.Prompt, cubebox.QueryEvidenceWindowBudget{
+				MaxEntityObservations: 5,
+				MaxOptionGroups:       5,
+				MaxOptionsPerGroup:    100,
+				MaxDialogueTurns:      5,
+			})
+			if len(evidence.Observations) != 1 || evidence.Observations[0].Kind != "entity_fact" {
+				t.Fatalf("expected neutral evidence window, got %#v", evidence)
 			}
 			return cubeboxReadPlanProductionResult{
 				Handled: true,
@@ -1892,7 +1901,7 @@ func TestCubeBoxQueryFlowWritesClarificationMetadataEvent(t *testing.T) {
 			ProviderID: "openai-compatible", ProviderType: "openai-compatible", ModelSlug: "gpt-5.2",
 		}},
 		narrator: cubeboxQueryNarratorStub{text: "unused", noQueryFn: func(_ context.Context, input cubeboxNoQueryGuidanceInput) (string, error) {
-			if input.ScopeSummary != "" || len(input.SuggestedPrompts) > 0 || input.QueryContextHint.HasRecentConfirmedEntity {
+			if input.ScopeSummary != "" || len(input.SuggestedPrompts) > 0 || input.QueryContextHint.HasConversationEvidence {
 				t.Fatalf("expected generic no-query guidance facts, got %#v", input)
 			}
 			return fallbackNoQueryGuidanceText(buildNoQueryGuidanceEnvelope(input)), nil
@@ -1965,7 +1974,7 @@ func TestCubeBoxQueryFlowWritesCandidateMetadataForAmbiguousSearch(t *testing.T)
 			ProviderID: "openai-compatible", ProviderType: "openai-compatible", ModelSlug: "gpt-5.2",
 		}},
 		narrator: cubeboxQueryNarratorStub{text: "unused", noQueryFn: func(_ context.Context, input cubeboxNoQueryGuidanceInput) (string, error) {
-			if input.ScopeSummary != "" || len(input.SuggestedPrompts) > 0 || input.QueryContextHint.HasRecentConfirmedEntity {
+			if input.ScopeSummary != "" || len(input.SuggestedPrompts) > 0 || input.QueryContextHint.HasConversationEvidence {
 				t.Fatalf("expected generic no-query guidance facts, got %#v", input)
 			}
 			return fallbackNoQueryGuidanceText(buildNoQueryGuidanceEnvelope(input)), nil
@@ -2183,7 +2192,7 @@ func TestCubeBoxQueryFlowNoQueryGuidanceUsesControlledKnowledgePackFacts(t *test
 		}},
 		knowledgePacks: []cubebox.KnowledgePack{{Dir: "modules/orgunit/presentation/cubebox", Files: map[string]string{
 			"CUBEBOX-SKILL.md": "queries.md\napis.md\nexamples.md\n",
-			"queries.md":       "```yaml\nintents:\n  - key: orgunit.details\n    required_params: [org_code, as_of]\n    optional_params: []\nno_query_guidance:\n  scope_summary: 当前主要支持组织相关只读查询。\n  suggested_prompts:\n    - 查“华东销售中心”的详情\n    - 查“华东销售中心”当前的下级组织\n    - 搜索名称包含“销售”的组织\n  context_followup_prompts:\n    - 查这个组织的详情\n    - 查它当前的下级组织\n    - 查它在当前日期的状态\n```\n",
+			"queries.md":       "```yaml\nintents:\n  - key: orgunit.details\n    required_params: [org_code, as_of]\n    optional_params: []\nno_query_guidance:\n  scope_summary: 当前主要支持组织相关只读查询。\n  suggested_prompts:\n    - 查“华东销售中心”的详情\n    - 查“华东销售中心”当前的下级组织\n    - 搜索名称包含“销售”的组织\n```\n",
 			"apis.md":          "x",
 			"examples.md":      "x",
 		}}},
@@ -2209,8 +2218,8 @@ func TestCubeBoxQueryFlowNoQueryGuidanceUsesControlledKnowledgePackFacts(t *test
 			t.Fatalf("expected suggested prompt %q, got %#v", prompt, captured.SuggestedPrompts)
 		}
 	}
-	if captured.QueryContextHint.HasRecentConfirmedEntity {
-		t.Fatalf("unexpected recent confirmed entity hint=%#v", captured.QueryContextHint)
+	if captured.QueryContextHint.HasConversationEvidence {
+		t.Fatalf("unexpected conversation evidence hint=%#v", captured.QueryContextHint)
 	}
 	text := strings.Join(sink.deltas(), "\n")
 	for _, snippet := range []string{"当前主要支持组织相关只读查询。", "你可以直接这样问：", "1. 查“华东销售中心”的详情", "2. 查“华东销售中心”当前的下级组织", "3. 搜索名称包含“销售”的组织"} {
@@ -2225,7 +2234,7 @@ func TestCubeBoxQueryFlowNoQueryGuidanceUsesControlledKnowledgePackFacts(t *test
 	}
 }
 
-func TestCubeBoxQueryFlowNoQueryGuidanceUsesContextFollowupPrompts(t *testing.T) {
+func TestCubeBoxQueryFlowNoQueryGuidanceDoesNotSwitchToContextSpecificPrompts(t *testing.T) {
 	store := cubeboxStoreStub{
 		getFn: func(context.Context, string, string, string) (cubebox.ConversationReplayResponse, error) {
 			return cubebox.ConversationReplayResponse{
@@ -2254,7 +2263,7 @@ func TestCubeBoxQueryFlowNoQueryGuidanceUsesContextFollowupPrompts(t *testing.T)
 		}},
 		knowledgePacks: []cubebox.KnowledgePack{{Dir: "modules/orgunit/presentation/cubebox", Files: map[string]string{
 			"CUBEBOX-SKILL.md": "queries.md\napis.md\nexamples.md\n",
-			"queries.md":       "```yaml\nintents:\n  - key: orgunit.details\n    required_params: [org_code, as_of]\n    optional_params: []\nno_query_guidance:\n  scope_summary: 当前主要支持组织相关只读查询。\n  suggested_prompts:\n    - 查“华东销售中心”的详情\n    - 查“华东销售中心”当前的下级组织\n    - 搜索名称包含“销售”的组织\n  context_followup_prompts:\n    - 查这个组织的详情\n    - 查它当前的下级组织\n    - 查它在当前日期的状态\n```\n",
+			"queries.md":       "```yaml\nintents:\n  - key: orgunit.details\n    required_params: [org_code, as_of]\n    optional_params: []\nno_query_guidance:\n  scope_summary: 当前主要支持组织相关只读查询。\n  suggested_prompts:\n    - 查“华东销售中心”的详情\n    - 查“华东销售中心”当前的下级组织\n    - 搜索名称包含“销售”的组织\n```\n",
 			"apis.md":          "x",
 			"examples.md":      "x",
 		}}},
@@ -2272,16 +2281,16 @@ func TestCubeBoxQueryFlowNoQueryGuidanceUsesContextFollowupPrompts(t *testing.T)
 	if !handled {
 		t.Fatal("expected query no-query guidance to handle")
 	}
-	if !captured.QueryContextHint.HasRecentConfirmedEntity {
-		t.Fatalf("expected recent confirmed entity hint, got %#v", captured.QueryContextHint)
+	if !captured.QueryContextHint.HasConversationEvidence {
+		t.Fatalf("expected conversation evidence hint, got %#v", captured.QueryContextHint)
 	}
-	for _, prompt := range []string{"查这个组织的详情", "查它当前的下级组织", "查它在 2026-04-25 的状态"} {
+	for _, prompt := range []string{"查“华东销售中心”的详情", "查“华东销售中心”当前的下级组织", "搜索名称包含“销售”的组织"} {
 		if !containsString(captured.SuggestedPrompts, prompt) {
-			t.Fatalf("expected context prompt %q, got %#v", prompt, captured.SuggestedPrompts)
+			t.Fatalf("expected base prompt %q, got %#v", prompt, captured.SuggestedPrompts)
 		}
 	}
 	text := strings.Join(sink.deltas(), "\n")
-	for _, snippet := range []string{"1. 查这个组织的详情", "2. 查它当前的下级组织", "3. 查它在 2026-04-25 的状态"} {
+	for _, snippet := range []string{"1. 查“华东销售中心”的详情", "2. 查“华东销售中心”当前的下级组织", "3. 搜索名称包含“销售”的组织"} {
 		if !strings.Contains(text, snippet) {
 			t.Fatalf("expected text to contain %q, got %q", snippet, text)
 		}

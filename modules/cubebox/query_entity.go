@@ -14,6 +14,13 @@ const queryContextMaxEntities = 5
 const queryContextMaxCandidateGroups = 5
 const queryContextMaxCandidateItems = 100
 
+type QueryEvidenceWindowBudget struct {
+	MaxEntityObservations int
+	MaxOptionGroups       int
+	MaxOptionsPerGroup    int
+	MaxDialogueTurns      int
+}
+
 type QueryEntity struct {
 	Domain        string `json:"domain"`
 	Intent        string `json:"intent,omitempty"`
@@ -83,6 +90,78 @@ type QueryContext struct {
 	ClarificationResume     *QueryClarificationResume
 	RecentCandidateGroups   []QueryCandidateGroup
 	RecentCandidates        []QueryCandidate
+}
+
+type QueryEvidenceWindow struct {
+	CurrentUserInput  string                      `json:"current_user_input,omitempty"`
+	RecentTurns       []QueryDialogueTurn         `json:"recent_turns,omitempty"`
+	Observations      []QueryEvidenceObservation  `json:"observations,omitempty"`
+	OpenClarification *QueryEvidenceClarification `json:"open_clarification,omitempty"`
+}
+
+type QueryEvidenceObservation struct {
+	Source        string         `json:"source,omitempty"`
+	Kind          string         `json:"kind,omitempty"`
+	ResultSummary map[string]any `json:"result_summary,omitempty"`
+}
+
+type QueryEvidenceClarification struct {
+	ReplyCandidate             bool             `json:"reply_candidate,omitempty"`
+	SourceTurnID               string           `json:"source_turn_id,omitempty"`
+	Intent                     string           `json:"intent,omitempty"`
+	MissingParams              []string         `json:"missing_params,omitempty"`
+	ClarifyingQuestion         string           `json:"clarifying_question,omitempty"`
+	KnownParams                map[string]any   `json:"known_params,omitempty"`
+	OptionGroupID              string           `json:"option_group_id,omitempty"`
+	OptionSource               string           `json:"option_source,omitempty"`
+	OptionCount                int              `json:"option_count,omitempty"`
+	RequiresExplicitUserChoice bool             `json:"requires_explicit_user_choice,omitempty"`
+	Options                    []QueryCandidate `json:"options,omitempty"`
+	RawUserReply               string           `json:"raw_user_reply,omitempty"`
+}
+
+func BuildQueryEvidenceWindow(context QueryContext, currentUserInput string, budget QueryEvidenceWindowBudget) QueryEvidenceWindow {
+	window := QueryEvidenceWindow{
+		CurrentUserInput: strings.TrimSpace(currentUserInput),
+		RecentTurns:      projectQueryEvidenceDialogueTurns(context.RecentDialogueTurns, budget.MaxDialogueTurns),
+	}
+	for _, entity := range projectQueryEvidenceEntities(context.RecentConfirmedEntities, budget.MaxEntityObservations) {
+		window.Observations = append(window.Observations, QueryEvidenceObservation{
+			Source: "query_event",
+			Kind:   "entity_fact",
+			ResultSummary: map[string]any{
+				"item": queryEvidenceEntityItem(entity),
+			},
+		})
+	}
+	for _, group := range projectQueryEvidenceOptionGroups(context.RecentCandidateGroups, budget.MaxOptionGroups, budget.MaxOptionsPerGroup) {
+		summary := map[string]any{
+			"items": queryEvidenceOptionItems(group.Candidates),
+		}
+		if groupID := strings.TrimSpace(group.GroupID); groupID != "" {
+			summary["group_id"] = groupID
+		}
+		if source := strings.TrimSpace(group.CandidateSource); source != "" {
+			summary["option_source"] = source
+		}
+		count := group.CandidateCount
+		if count <= 0 {
+			count = len(group.Candidates)
+		}
+		if count > 0 {
+			summary["item_count"] = count
+		}
+		if group.CannotSilentSelect {
+			summary["requires_explicit_user_choice"] = true
+		}
+		window.Observations = append(window.Observations, QueryEvidenceObservation{
+			Source:        "query_event",
+			Kind:          "presented_options",
+			ResultSummary: summary,
+		})
+	}
+	window.OpenClarification = projectQueryEvidenceClarification(context.ClarificationResume, budget.MaxOptionsPerGroup)
+	return window
 }
 
 func QueryContextFromEvents(events []CanonicalEvent) QueryContext {
@@ -312,6 +391,162 @@ func NormalizeQueryEntity(entity QueryEntity) *QueryEntity {
 		return nil
 	}
 	return &entity
+}
+
+func projectQueryEvidenceDialogueTurns(turns []QueryDialogueTurn, maxTurns int) []QueryDialogueTurn {
+	if len(turns) == 0 {
+		return nil
+	}
+	selected := append([]QueryDialogueTurn(nil), turns...)
+	if maxTurns > 0 && len(selected) > maxTurns {
+		selected = selected[len(selected)-maxTurns:]
+	}
+	out := make([]QueryDialogueTurn, 0, len(selected))
+	for _, turn := range selected {
+		item := QueryDialogueTurn{
+			UserPrompt:       strings.TrimSpace(turn.UserPrompt),
+			AssistantReply:   strings.TrimSpace(turn.AssistantReply),
+			ClarificationFor: strings.TrimSpace(turn.ClarificationFor),
+		}
+		if item.UserPrompt == "" && item.AssistantReply == "" && item.ClarificationFor == "" {
+			continue
+		}
+		out = append(out, item)
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
+}
+
+func projectQueryEvidenceEntities(entities []QueryEntity, maxEntities int) []QueryEntity {
+	if len(entities) == 0 {
+		return nil
+	}
+	selected := append([]QueryEntity(nil), entities...)
+	if maxEntities > 0 && len(selected) > maxEntities {
+		selected = selected[len(selected)-maxEntities:]
+	}
+	out := make([]QueryEntity, 0, len(selected))
+	for _, entity := range selected {
+		normalized := NormalizeQueryEntity(entity)
+		if normalized == nil {
+			continue
+		}
+		out = append(out, *normalized)
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
+}
+
+func queryEvidenceEntityItem(entity QueryEntity) map[string]any {
+	item := map[string]any{
+		"domain":     entity.Domain,
+		"entity_key": entity.EntityKey,
+	}
+	if entity.AsOf != "" {
+		item["as_of"] = entity.AsOf
+	}
+	return item
+}
+
+func projectQueryEvidenceOptionGroups(groups []QueryCandidateGroup, maxGroups int, maxOptions int) []QueryCandidateGroup {
+	if len(groups) == 0 {
+		return nil
+	}
+	selected := append([]QueryCandidateGroup(nil), groups...)
+	if maxGroups > 0 && len(selected) > maxGroups {
+		selected = selected[len(selected)-maxGroups:]
+	}
+	out := make([]QueryCandidateGroup, 0, len(selected))
+	for _, group := range selected {
+		candidates := copyQueryCandidates(group.Candidates)
+		if maxOptions > 0 && len(candidates) > maxOptions {
+			candidates = candidates[:maxOptions]
+		}
+		if len(candidates) == 0 {
+			continue
+		}
+		item := QueryCandidateGroup{
+			GroupID:            strings.TrimSpace(group.GroupID),
+			CandidateSource:    strings.TrimSpace(group.CandidateSource),
+			CandidateCount:     group.CandidateCount,
+			CannotSilentSelect: group.CannotSilentSelect,
+			Candidates:         candidates,
+		}
+		if item.CandidateCount <= 0 {
+			item.CandidateCount = len(candidates)
+		}
+		out = append(out, item)
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
+}
+
+func queryEvidenceOptionItems(candidates []QueryCandidate) []map[string]any {
+	if len(candidates) == 0 {
+		return nil
+	}
+	out := make([]map[string]any, 0, len(candidates))
+	for _, candidate := range candidates {
+		payload := candidate.Payload()
+		if len(payload) == 0 {
+			continue
+		}
+		out = append(out, payload)
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
+}
+
+func projectQueryEvidenceClarification(in *QueryClarificationResume, maxOptions int) *QueryEvidenceClarification {
+	if in == nil {
+		return nil
+	}
+	options := copyQueryCandidates(in.Candidates)
+	if maxOptions > 0 && len(options) > maxOptions {
+		options = options[:maxOptions]
+	}
+	out := &QueryEvidenceClarification{
+		ReplyCandidate:             in.ReplyCandidate,
+		SourceTurnID:               strings.TrimSpace(in.SourceTurnID),
+		Intent:                     strings.TrimSpace(in.Intent),
+		MissingParams:              append([]string(nil), in.MissingParams...),
+		ClarifyingQuestion:         strings.TrimSpace(in.ClarifyingQuestion),
+		KnownParams:                copyQueryKnownParams(in.KnownParams),
+		OptionGroupID:              strings.TrimSpace(in.CandidateGroupID),
+		OptionSource:               strings.TrimSpace(in.CandidateSource),
+		OptionCount:                in.CandidateCount,
+		RequiresExplicitUserChoice: in.CannotSilentSelect,
+		Options:                    options,
+		RawUserReply:               strings.TrimSpace(in.RawUserReply),
+	}
+	if out.OptionCount <= 0 {
+		out.OptionCount = len(options)
+	}
+	if len(out.KnownParams) == 0 {
+		out.KnownParams = nil
+	}
+	if out.SourceTurnID == "" &&
+		out.Intent == "" &&
+		len(out.MissingParams) == 0 &&
+		out.ClarifyingQuestion == "" &&
+		len(out.KnownParams) == 0 &&
+		out.OptionGroupID == "" &&
+		out.OptionSource == "" &&
+		out.OptionCount == 0 &&
+		!out.RequiresExplicitUserChoice &&
+		len(out.Options) == 0 &&
+		out.RawUserReply == "" {
+		return nil
+	}
+	return out
 }
 
 func NormalizeQueryCandidate(candidate QueryCandidate) *QueryCandidate {

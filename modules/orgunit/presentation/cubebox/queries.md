@@ -26,10 +26,6 @@ no_query_guidance:
     - 查“华东销售中心”的详情
     - 查“华东销售中心”当前的下级组织
     - 搜索名称包含“销售”的组织
-  context_followup_prompts:
-    - 查这个组织的详情
-    - 查它当前的下级组织
-    - 查它在当前日期的状态
 ```
 
 ## 意图细则
@@ -121,19 +117,19 @@ no_query_guidance:
 - “列表”“下面有哪些”“子组织”“分页” 通常映射到 `orgunit.list`
 - “搜索”“找一下”“名称里有” 通常映射到 `orgunit.search`
 - “审计”“变更记录”“谁改过”“最近变更” 通常映射到 `orgunit.audit`
-- “该组织”“这个组织”“那个组织”“最开始那个组织”“第一个”属于查询连续性指代；应优先读取 planner 输入里的 `query_dialogue_context`
-- `query_dialogue_context.recent_confirmed_entities` 提供最近已确认的结构化实体事实；`recent_confirmed_entity` 只是最后一项兼容别名，可继承其中的 `entity_key`（组织编码）与 `as_of`
-- `query_dialogue_context.recent_candidate_groups` 提供最近若干组候选及其顺序、来源和候选项；当用户说“第一个”“第二个”“最开始那个”“不是这个，另一个”时，应优先从这里解析
-- `query_dialogue_context.recent_candidates` 只是最近一组候选的兼容扁平别名，不应作为候选主来源
-- 若 `query_dialogue_context.clarification_resume.reply_candidate=true`，先判断当前轮是否在回答上一轮澄清；不要因为输入短就退回 `NO_QUERY`
-- `query_dialogue_context.clarification_resume.raw_user_reply` 是当前轮原文；`clarification_resume.known_params` 只可消费结构化保留的已知事实，不能假设代码已经做了自然语言解析
-- `query_dialogue_context.clarification_resume.candidates` 是上一轮澄清明确绑定的候选列表；当前轮答“以上”“以上全部”“全部”“都查”“都要”时，优先理解为这些候选的集合答复，不要重新要求用户选择范围 A/B/C
+- “该组织”“这个组织”“那个组织”“最开始那个组织”“第一个”属于查询连续性指代；应读取 planner 输入里的 `query_evidence_window`
+- `query_evidence_window.observations` 只提供历史工具 observation 和轻量结果摘要，不是本地目标绑定
+- `observations.kind=entity_fact` 只表示先前工具结果曾产生某个实体事实；模型需结合当前输入和 `recent_turns` 判断是否引用它
+- `observations.kind=presented_options` 只表示先前给用户展示过一组选项；当用户说“第一个”“第二个”“最开始那个”“不是这个，另一个”时，由模型结合 `recent_turns` 与当前输入解析
+- 若 `query_evidence_window.open_clarification.reply_candidate=true`，先判断当前轮是否在回答上一轮澄清；不要因为输入短就退回 `NO_QUERY`
+- `open_clarification.raw_user_reply` 是当前轮原文；`open_clarification.known_params` 只可消费结构化保留的已知事实，不能假设代码已经做了自然语言解析
+- `open_clarification.options` 是上一轮澄清相关的选项；当前轮答“以上”“以上全部”“全部”“都查”“都要”时，由模型判断是否为集合答复，不要重新要求用户选择范围 A/B/C
 - 若用户说“本月9日”“这个月9号”，使用 planner system prompt 中的当前自然日年月补成完整 `YYYY-MM-DD`；例如当前自然日为 `2026-04-25` 时应输出 `2026-04-09`
-- 若上一轮已有 `2025年1月` 这类日期上下文，而当前轮只给 `1日`、`1号`、`1月1日`，应优先结合 `clarification_resume`、最近问答和当前轮原文补全完整 `YYYY-MM-DD`；若上下文不足，继续澄清
+- 若上一轮已有 `2025年1月` 这类日期上下文，而当前轮只给 `1日`、`1号`、`1月1日`，应优先结合 `open_clarification`、最近问答和当前轮原文补全完整 `YYYY-MM-DD`；若上下文不足，继续澄清
 - 若用户仍在询问组织架构，但缺少可继承实体或必要参数，应返回澄清型 `ReadPlan`，不得输出 `NO_QUERY` 让普通聊天链回答“没有查询接口/权限”
-- 若当前轮显式给出新的组织编码、组织名称或日期，应覆盖最近已确认查询实体中的同名事实
+- 若当前轮显式给出新的组织编码、组织名称或日期，应优先采用当前轮显式事实
 - 会话压缩摘要不能作为查询锚点；不要从自然语言 summary 中猜测组织编码、日期或父组织编码
-- `last_clarification` 只提供最近一次结构化澄清事实，可用于理解用户是否在确认候选，但不能替代执行结果事实
+- `open_clarification` 只提供最近一次仍待续接的结构化澄清事实，可用于理解用户是否在确认候选，但不能替代执行结果事实
 
 ## 多步只读编排提示
 

@@ -411,6 +411,84 @@ func TestBuildQueryClarificationResumeIncludesMatchingCandidateGroup(t *testing.
 	}
 }
 
+func TestBuildQueryEvidenceWindowProjectsNeutralObservations(t *testing.T) {
+	context := QueryContext{
+		RecentConfirmedEntities: []QueryEntity{
+			{
+				Domain:        "orgunit",
+				Intent:        "orgunit.details",
+				EntityKey:     "100000",
+				AsOf:          "2026-04-25",
+				SourceAPIKey:  "orgunit.details",
+				TargetOrgCode: "100000",
+				ParentOrgCode: "ROOT",
+			},
+		},
+		RecentCandidateGroups: []QueryCandidateGroup{
+			{
+				GroupID:            "candgrp_finance",
+				CandidateSource:    "execution_error",
+				CandidateCount:     3,
+				CannotSilentSelect: true,
+				Candidates: []QueryCandidate{
+					{Domain: "orgunit", EntityKey: "200001", Name: "财务部", AsOf: "2026-01-07"},
+					{Domain: "orgunit", EntityKey: "200002", Name: "财务一组", AsOf: "2026-01-07"},
+					{Domain: "orgunit", EntityKey: "200004", Name: "财务四组", AsOf: "2026-01-07"},
+				},
+			},
+		},
+		LastClarification: &QueryClarification{
+			SourceTurnID:       "turn_prev",
+			ClarifyingQuestion: "找到了多个候选项，请确认要继续查询哪一个。",
+			CandidateGroupID:   "candgrp_finance",
+			CandidateCount:     3,
+			CannotSilentSelect: true,
+		},
+	}
+	context.ClarificationResume = BuildQueryClarificationResume(context, "以上全部")
+
+	window := BuildQueryEvidenceWindow(context, "审计信息", QueryEvidenceWindowBudget{
+		MaxEntityObservations: 5,
+		MaxOptionGroups:       5,
+		MaxOptionsPerGroup:    2,
+		MaxDialogueTurns:      5,
+	})
+
+	if window.CurrentUserInput != "审计信息" {
+		t.Fatalf("unexpected current user input=%#v", window)
+	}
+	if got, want := len(window.Observations), 2; got != want {
+		t.Fatalf("expected %d observations, got %#v", want, window.Observations)
+	}
+	entity := window.Observations[0]
+	if entity.Kind != "entity_fact" {
+		t.Fatalf("expected entity fact observation, got %#v", entity)
+	}
+	item, ok := entity.ResultSummary["item"].(map[string]any)
+	if !ok || item["entity_key"] != "100000" || item["as_of"] != "2026-04-25" {
+		t.Fatalf("unexpected entity item=%#v", entity.ResultSummary)
+	}
+	for _, forbidden := range []string{"intent", "source_api_key", "target_org_code", "parent_org_code"} {
+		if _, exists := item[forbidden]; exists {
+			t.Fatalf("evidence entity item leaked %q in %#v", forbidden, item)
+		}
+	}
+	options := window.Observations[1]
+	if options.Kind != "presented_options" || options.ResultSummary["group_id"] != "candgrp_finance" {
+		t.Fatalf("unexpected presented options=%#v", options)
+	}
+	items, ok := options.ResultSummary["items"].([]map[string]any)
+	if !ok || len(items) != 2 {
+		t.Fatalf("expected options truncated to 2, got %#v", options.ResultSummary["items"])
+	}
+	if window.OpenClarification == nil || !window.OpenClarification.ReplyCandidate || window.OpenClarification.RawUserReply != "以上全部" {
+		t.Fatalf("expected open clarification resume, got %#v", window.OpenClarification)
+	}
+	if got := len(window.OpenClarification.Options); got != 2 {
+		t.Fatalf("expected open clarification options truncated to 2, got %d", got)
+	}
+}
+
 func TestQueryContextFromEventsClearsOpenClarificationResumeAfterNextUserMessage(t *testing.T) {
 	context := QueryContextFromEvents([]CanonicalEvent{
 		{

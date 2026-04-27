@@ -158,7 +158,7 @@ func TestNoQueryGuidanceFromKnowledgePacks(t *testing.T) {
 			Dir: "modules/orgunit/presentation/cubebox",
 			Files: map[string]string{
 				"CUBEBOX-SKILL.md": "# Skill\n\nqueries.md\napis.md\nexamples.md\n",
-				"queries.md":       "```yaml\nintents:\n  - key: orgunit.details\n    required_params: [org_code, as_of]\n    optional_params: []\nno_query_guidance:\n  scope_summary: 当前主要支持组织相关只读查询。\n  suggested_prompts:\n    - 查“华东销售中心”的详情\n    - 查“华东销售中心”的详情\n    - 搜索名称包含“销售”的组织\n  context_followup_prompts:\n    - 查这个组织的详情\n    - 查它当前的下级组织\n```\n",
+				"queries.md":       "```yaml\nintents:\n  - key: orgunit.details\n    required_params: [org_code, as_of]\n    optional_params: []\nno_query_guidance:\n  scope_summary: 当前主要支持组织相关只读查询。\n  suggested_prompts:\n    - 查“华东销售中心”的详情\n    - 查“华东销售中心”的详情\n    - 搜索名称包含“销售”的组织\n```\n",
 				"apis.md":          "```yaml\napis:\n  - api_key: orgunit.details\n    required_params: [org_code, as_of]\n    optional_params: []\n```\n",
 				"examples.md":      "```json\n{\"steps\": []}\n```\n",
 			},
@@ -171,9 +171,6 @@ func TestNoQueryGuidanceFromKnowledgePacks(t *testing.T) {
 	}
 	if !slices.Equal(guidance.SuggestedPrompts, []string{"查“华东销售中心”的详情", "搜索名称包含“销售”的组织"}) {
 		t.Fatalf("unexpected suggested prompts=%#v", guidance.SuggestedPrompts)
-	}
-	if !slices.Equal(guidance.ContextFollowupPrompts, []string{"查这个组织的详情", "查它当前的下级组织"}) {
-		t.Fatalf("unexpected followup prompts=%#v", guidance.ContextFollowupPrompts)
 	}
 }
 
