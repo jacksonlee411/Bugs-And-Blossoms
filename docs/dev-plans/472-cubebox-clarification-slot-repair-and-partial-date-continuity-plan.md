@@ -1,6 +1,6 @@
 # DEV-PLAN-472：CubeBox 模型主导的澄清续接与残缺日期连续性修复方案
 
-**状态**: 实施中（2026-04-27；模型 owner 方向继续保留，prompt-facing 上下文形态由 `DEV-PLAN-473` 统一收敛为 `query_evidence_window.open_clarification`）
+**状态**: 已关闭（2026-04-28 CST；本文保留问题定义、批判结论与实施草案，具体落地不再在本计划内继续推进，后续如需实施改为另起计划处理）
 
 > 纠偏说明：本计划早期文本使用 `query_dialogue_context` / `clarification_resume` 描述澄清续接事实块。`DEV-PLAN-473` 已将 CubeBox 查询链的 prompt-facing 上下文统一纠偏为中性的 `query_evidence_window`：上一轮 open clarification 应通过 `query_evidence_window.open_clarification` 提供给模型，`recent_*` 与 `clarification_resume` 不再作为新的主语义输入或 target 绑定来源。本文中保留的旧字段名仅作为历史设计语义说明；后续实现以 `DEV-PLAN-473` 为准。
 
@@ -423,6 +423,8 @@ planner contract 需要补充明确规则：
    - 无 open clarification 时的短输入：保持现有普通 planner 路径。
 9. [ ] 将真实对话 `conv_8856c2e507c74a229a7c3fbb325e72c3` 的最后两轮抽象为固定验收夹具。
 10. [ ] 执行门禁并登记 readiness 证据。
+
+> 2026-04-28 关闭说明：以上未完成项不再作为 `DEV-PLAN-472` 活体事项继续跟踪；本文件仅保留语义边界、失败样例与历史实施草案，后续如需恢复实施改为另起计划处理。
 
 ## 8. 验收场景
 

@@ -1,6 +1,6 @@
 # DEV-PLAN-468：CubeBox 同会话连续追问与模型自主性收敛方案
 
-**状态**: 实施中（2026-04-26 09:00 CST；`P2-1` / `P2-3a` / `P2-3b` 已完成）
+**状态**: 已关闭（2026-04-28 CST；本计划主体收口完成，原剩余事项不再在本计划内继续实施，后续如需推进改为另起计划处理）
 
 ## 0. 适用范围与评审分级
 
@@ -632,7 +632,7 @@ narrator 可以看到：
 - [x] `P1` 回归修复已完成：
   - `page_context` 曾修复 `/org/units/field-configs` 误识别和组织详情页 `effective_date` 漏传；该链路已重新裁决为当前范围外，后续由 `DEV-PLAN-470` 清理
   - 知识包 `apis.md` 与 `ExecutionRegistry` 已改为双向一致性校验
-- [ ] 当前剩余主线仅为：`P2-2` executor per-api 授权补强，以及第二业务模块接入前的共享 query runtime 去 `orgunit` 污染复核（owner：`DEV-PLAN-478`）。原 `P2-3c` 已拆分到 `DEV-PLAN-473/471/472/474`。
+- [X] 2026-04-28 已关闭本计划：`P2-2` executor per-api 授权补强与第二业务模块接入前的共享 query runtime 去 `orgunit` 污染复核不再作为 `DEV-PLAN-468` 活体剩余事项继续跟踪；当前文档仅保留已完成主线、裁决与历史记录，后续如需推进改为另起计划处理。
 - [x] `page_context` 当前范围剔除与清理 owner 已独立拆出并完成：`DEV-PLAN-470`
 
 ## 7. 验收场景
@@ -740,3 +740,4 @@ narrator 可以看到：
 13. [X] 完成 `468 Slice E1 / P2-1`：删除 `NarrationProjector`，narrator 输入统一改为 raw `ExecuteResult.Payload`，`orgunit` AI 专用 projector 已移除。（2026-04-26 08:35 CST）
 14. [X] 完成 `468 Slice E3 / P2-3a`：删除 narrator 固定 `1 到 3 句` 与业务字段名禁忌，输出泄露校验收缩为 raw JSON / `step-*` / `payload/results` / 执行结构拦截。（2026-04-26 08:35 CST）
 15. [X] 完成 `468 Slice E3 / P2-3b`：候选澄清改为结构化事实 `error_code` / `candidate_source` / `candidate_count` / `cannot_silent_select`，自然追问由模型表达。（2026-04-26 09:00 CST）
+16. [X] 2026-04-28：按文档收口裁决关闭本计划；原剩余事项不再在 `DEV-PLAN-468` 内继续展开，后续如需推进改为另起计划处理。

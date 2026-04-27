@@ -1,6 +1,6 @@
 # DEV-PLAN-478：CubeBox 第二业务模块接入前共享 Query Runtime 去 `orgunit` 污染复核方案
 
-**状态**: 规划中（2026-04-28 06:52 CST）
+**状态**: 已关闭（2026-04-28 CST；本轮仅完成调查、边界冻结与实施顺序收口，代码整改不在本计划内继续展开，后续如需推进改为另起计划处理）
 
 ## 0. 适用范围与评审分级
 
@@ -241,9 +241,16 @@ owner 冻结：
 4. [ ] 明确重复 executor_key 默认 fail-closed；分组校验仅作为未来模块化 registry 的单独计划入口，不作为当前第二模块接入默认路径。
 5. [ ] 默认采用 `NoQueryGuidanceFromKnowledgePacks(...)` 聚合策略：按 `knowledgePackDirs` 顺序合并 scope summary 与 prompts，稳定去重并默认最多展示 6 条 suggested prompts。
 6. [ ] 明确 guidance 冲突处理：不得依赖 pack 排序让第一份胜出；无法安全聚合时应 fail-closed 或回到计划评审。
-7. [ ] 明确共享层是否允许依赖 knowledge pack 声明模块 scope summary，还是必须有更高层受控组合策略。
+7. [ ] 默认允许依赖已启用 knowledge packs 的 `scope_summary` 聚合；不引入更高层组合策略，除非后续发现多模块 guidance 冲突无法安全聚合并单开计划。
 
-### Phase C / P2：逐项整改共享层 capability-specific 逻辑
+### Phase C / P1：先建立非 `orgunit` fixture 与测试准入
+
+1. [ ] 新增最小 fake module knowledge pack，不接真实业务模块与数据库，只用于共享层单测。
+2. [ ] 新增 fake module executor 或 stub registry，覆盖 `executor_key` 注册、planner prompt block、no-query guidance、candidate observation 与 terminal fallback。
+3. [ ] 在 `internal/server/cubebox_api_test.go` 增加或调整 API 层 fake-module 覆盖，确保 `/internal/cubebox/turns:stream` 不把 `modules/orgunit/presentation/cubebox` 作为唯一默认 fixture。
+4. [ ] 建立整改前基线断言：fake module 能先暴露当前共享层哪些路径仍依赖 `orgunit`，后续 Phase D 以这些断言为收敛目标。
+
+### Phase D / P2：基于 fake module 逐项整改共享层 capability-specific 逻辑
 
 1. [ ] narrator / clarifier prompt 去模块词。
 2. [ ] scope correction 与 unsupported-dimension 从 `orgunit` 硬编码收敛为模型可消费的中性 evidence / knowledge pack 规则；不得收敛为本地 scope engine。
@@ -252,13 +259,7 @@ owner 冻结：
 5. [ ] `QueryEntity` / metadata event 中模块专属字段迁出或收敛到受控事实容器，避免继续平铺 `target_<module>_code` 这类字段。
 6. [ ] 首期优先使用模块 executor observation payload 表达模块专属事实；只有 fake module 验证证明必要时，才允许引入受控 `attributes` / `facts` 容器。
 7. [ ] 对候选组、结果集和 clarification resume 的后续使用补充测试：本地只投影 evidence，不能隐式补 `ReadPlan` 参数或生成 selected target。
-
-### Phase D / P2：非 `orgunit` fixture 与测试准入
-
-1. [ ] 新增最小 fake module knowledge pack，不接真实业务模块与数据库，只用于共享层单测。
-2. [ ] 新增 fake module executor 或 stub registry，覆盖 `executor_key` 注册、planner prompt block、no-query guidance、candidate observation 与 terminal fallback。
-3. [ ] 在 `internal/server/cubebox_api_test.go` 增加或调整 API 层 fake-module 覆盖，确保 `/internal/cubebox/turns:stream` 不把 `modules/orgunit/presentation/cubebox` 作为唯一默认 fixture。
-4. [ ] 将共享测试从“断言 `orgunit` 默认文案”改为“断言共享 contract + 当前模块样例”；`orgunit` 场景测试必须明确归类为模块样例或模块 executor 测试。
+8. [ ] 将共享测试从“断言 `orgunit` 默认文案”改为“断言共享 contract + 当前模块样例”；`orgunit` 场景测试必须明确归类为模块样例或模块 executor 测试。
 
 ### Phase E / P3：文档与门禁回写
 
@@ -318,7 +319,7 @@ owner 冻结：
 3. [ ] 共享 `QueryContext` / `QueryEntity` / metadata event 的模块专属字段已有裁决：保留为通用字段、迁入受控事实容器、或登记为待删除过渡债务。
 4. [ ] 多 knowledge pack + `ExecutionRegistry` 的默认校验策略已冻结为“同一 enabled query module 装配清单派生的全部已装 packs executor_key 并集”双向校验，且 `NoQueryGuidance` 默认聚合稳定去重、最多展示 6 条 suggested prompts，不再第一份胜出。
 5. [ ] 共享 `QueryEntity` / `QueryCandidate` 的推荐最终形态已冻结为中性字段；模块专属事实默认只进入 observation payload，`attributes` / `facts` 容器后移到 fake module 证明必要之后，现有 `TargetOrgCode` / `ParentOrgCode` 被登记为待迁出债务。
-6. [ ] 至少一个非 `orgunit` fake module 测试能覆盖 planner prompt 装配、no-query guidance、candidate observation、terminal fallback 与 API 层流式入口。
+6. [ ] 至少一个非 `orgunit` fake module 测试先于共享层整改建立，并覆盖 planner prompt 装配、no-query guidance、candidate observation、terminal fallback 与 API 层流式入口。
 7. [ ] 478 与 `DEV-PLAN-473` 的边界已明确：去 `orgunit` 污染不会新增本地语义裁决层；所有目标选择、候选解释、澄清恢复和短输入理解仍由模型基于 evidence 与 knowledge pack 处理。
 8. [ ] Stopline 已能被 review checklist 或轻量门禁执行，阻断共享 query flow 新增模块 executor_key 特判、payload 字段猜测、模块专属错误文案、共享 context 模块字段平铺和本地语义 selector。
 9. [ ] 代码实施阶段的 Go 全量门禁、`modules/cubebox` 定向测试、`internal/server` query/API 定向测试已有执行证据。
@@ -333,3 +334,5 @@ owner 冻结：
 4. [X] 2026-04-28：按 `DEV-PLAN-473` 补充模型主导边界：478 的目标是删除共享层模块语义裁决，而不是把 `orgunit` 特判参数化为新的本地语义 runtime。
 5. [X] 2026-04-28：按评审意见冻结默认策略：多 knowledge pack 默认并集校验与 no-query guidance 聚合（suggested prompts 默认最多 6 条）；共享 entity 结构默认中性字段；API 层 fake-module 测试纳入准入。
 6. [X] 2026-04-28：按 `DEV-PLAN-003` 评审意见补充验证入口、enabled query module 显式装配清单口径，并将 `attributes` / `facts` 容器后移到 fake module 证明必要之后。
+7. [X] 2026-04-28：按实施顺序评审意见调整 Phase C/D：先建立非 `orgunit` fake module 基线测试，再基于该基线整改共享层 capability-specific 逻辑；同时将 scope summary 组合策略收敛为默认 knowledge pack 聚合。
+8. [X] 2026-04-28：按文档收口裁决关闭本计划；本文件保留为共享 query runtime 去 `orgunit` 污染的调查与边界冻结记录，后续若进入代码整改，改为另起计划处理。

@@ -266,18 +266,18 @@ modules/{module}/
 - DEV-PLAN-465：CubeBox OrgUnit Executor 契约边界与字段归属收敛方案：`docs/dev-plans/465-cubebox-orgunit-executor-contract-boundary-and-field-owner-convergence-plan.md`
 - DEV-PLAN-466：CubeBox 查询链 owner 漂移与反回流扩大调查方案：`docs/dev-plans/466-cubebox-query-owner-drift-and-anti-backflow-investigation-plan.md`
 - DEV-PLAN-467【归档】：CubeBox 查询会话不连贯与失去记忆专项调查方案（调查与复验已完成；后续实施 owner 已转入 `DEV-PLAN-468/471/472`）：`docs/archive/dev-plans/467-cubebox-query-conversational-continuity-and-memory-loss-investigation-plan.md`
-- DEV-PLAN-468：CubeBox 同会话连续追问与模型自主性收敛方案：`docs/dev-plans/468-cubebox-session-continuity-and-model-autonomy-improvement-plan.md`
+- DEV-PLAN-468：CubeBox 同会话连续追问与模型自主性收敛方案（已关闭；主体收口完成，原剩余事项不再在本计划内继续实施，后续如需推进改为另起计划处理）：`docs/dev-plans/468-cubebox-session-continuity-and-model-autonomy-improvement-plan.md`
 - DEV-PLAN-468C：CubeBox 查询上下文事实窗口扩展方案（已关闭；原范围已拆分到 `DEV-PLAN-473/471/472/474`）：`docs/dev-plans/468c-cubebox-query-context-fact-window-plan.md`
 - DEV-PLAN-469：CubeBox 模型驱动会话压缩批判与重构方案：`docs/dev-plans/469-cubebox-model-driven-compaction-critical-redesign-plan.md`
 - DEV-PLAN-470：CubeBox `page_context` 当前范围剔除与清理方案：`docs/dev-plans/470-cubebox-page-context-scope-removal-and-cleanup-plan.md`
 - DEV-PLAN-471：CubeBox 同一 Turn 内模型驱动的迭代式只读规划方案：`docs/dev-plans/471-cubebox-intra-turn-iterative-read-planning-plan.md`
-- DEV-PLAN-472：CubeBox 澄清补槽续接与残缺日期连续性修复方案：`docs/dev-plans/472-cubebox-clarification-slot-repair-and-partial-date-continuity-plan.md`
+- DEV-PLAN-472：CubeBox 澄清补槽续接与残缺日期连续性修复方案（已关闭；保留问题定义与实施草案，后续如需落地改为另起计划处理）：`docs/dev-plans/472-cubebox-clarification-slot-repair-and-partial-date-continuity-plan.md`
 - DEV-PLAN-473：CubeBox 模型主导查询链与消极防御收敛纠偏方案：`docs/dev-plans/473-cubebox-model-owned-query-context-input-remediation-plan.md`
 - DEV-PLAN-474：CubeBox 跨 Turn 结果集续接与补字段查询收敛方案：`docs/dev-plans/474-cubebox-cross-turn-result-list-follow-up-plan.md`
 - DEV-PLAN-475：CubeBox OrgUnit 分页默认值与全部组织查询契约收敛方案：`docs/dev-plans/475-cubebox-orgunit-pagination-defaults-and-all-orgs-contract.md`
 - DEV-PLAN-476：CubeBox 全部组织纠错与重复计划收敛修复方案：`docs/dev-plans/476-cubebox-all-orgs-scope-correction-repeated-plan-remediation.md`
 - DEV-PLAN-477：CubeBox `api_key -> executor_key` 契约改名专项方案（已完成；当前仅保留边界与验证记录）：`docs/dev-plans/477-cubebox-api-key-to-executor-key-contract-rename-plan.md`
-- DEV-PLAN-478：CubeBox 第二业务模块接入前共享 Query Runtime 去 `orgunit` 污染复核方案：`docs/dev-plans/478-cubebox-shared-query-runtime-orgunit-bias-review-before-second-module-plan.md`
+- DEV-PLAN-478：CubeBox 第二业务模块接入前共享 Query Runtime 去 `orgunit` 污染复核方案（已关闭；本轮完成调查与边界冻结，代码整改后续如需推进改为另起计划处理）：`docs/dev-plans/478-cubebox-shared-query-runtime-orgunit-bias-review-before-second-module-plan.md`
 - DEV-PLAN-440：彻底删除 SetID 的全仓收口方案（SetID 根删除唯一 PoR）：`docs/dev-plans/440-complete-setid-removal-plan.md`
 - DEV-PLAN-441：旧策略模块残余清理方案：`docs/dev-plans/441-legacy-strategy-module-residue-cleanup-plan.md`
 - DEV-PLAN-450：直接切除 jobcatalog / staffing / person 三模块方案（保留 orgunit）：`docs/dev-plans/450-direct-removal-of-jobcatalog-staffing-person-modules-plan.md`
