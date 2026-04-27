@@ -144,6 +144,7 @@ owner 冻结：
 
 - 共享层需要先明确“多知识包如何装入 planner prompt / no-query guidance / drift 校验”的最小 contract。
 - 该 contract 必须能支持多个模块并存，但不要求在本计划中实现动态模块发现。
+- 默认启用模块集合由同一份显式装配清单持有；`knowledgePackDirs`、executor registry、`read_api_catalog` 与 knowledge pack drift 校验必须从这份清单派生或在同一装配函数中成组构造，避免 pack 已启用但 executor 未注册，或 executor 已注册但 pack 未装入。
 - 默认策略冻结为：按 `knowledgePackDirs` 的稳定顺序装入全部已启用 knowledge packs；将所有已装 packs 的 `apis.md` executor_key 并集与全局 `ExecutionRegistry` 做双向一致性校验；同一 executor_key 只能由一份 pack 声明，重复声明默认 fail-closed。
 - 分组注册 / 分组校验不是当前默认路径；只有未来明确引入模块化 registry owner 时，才能作为单独计划替代并集校验。
 - `NoQueryGuidanceFromKnowledgePacks(...)` 的默认策略冻结为聚合而非第一份胜出：按 `knowledgePackDirs` 顺序合并各 pack 的 `scope_summary` 与 `suggested_prompts`，对 prompts 做稳定去重，并默认最多展示 6 条 suggested prompts；不得通过“把某个 pack 排在前面”规避 guidance 冲突。
@@ -181,7 +182,8 @@ owner 冻结：
 owner 冻结：
 
 - 推荐最终形态冻结为：共享 `QueryEntity` / `QueryCandidate` 只保留 `domain`、`intent`、`entity_key`、`name`、`as_of`、`status`、`source_executor_key` 等跨模块稳定字段。
-- 模块专属事实只能进入模块 executor 显式返回的 observation payload；若后续确需被 evidence window 轻量投影，应进入受控 `attributes` / `facts` 容器，且不得被执行器当作隐式参数来源。
+- 模块专属事实默认只进入模块 executor 显式返回的 observation payload；首期不得预先建设通用 `attributes` / `facts` 平台。
+- 只有当非 `orgunit` fake module 验证证明“仅靠 observation payload 无法表达必要轻量事实”时，才允许在后续实现中引入受控 `attributes` / `facts` 容器；该容器只能服务于 evidence window 投影，且不得被执行器当作隐式参数来源。
 - 现有 `TargetOrgCode` / `ParentOrgCode` 视为待迁出的过渡债务，不是长期共享 contract；后续不得再新增 `target_<module>_code`、`parent_<module>_code`、`<module>_id` 这类平铺字段。
 
 ### 4.7 类别 G：共享测试缺少非 `orgunit` 反例 fixture
@@ -234,11 +236,12 @@ owner 冻结：
 ### Phase B / P1：冻结多知识包装配 contract
 
 1. [ ] 明确第二模块接入后 `knowledgePackDirs`、executor 注册项、`read_api_catalog` 与 knowledge pack 校验必须作为同一组装配单元更新。
-2. [ ] 默认采用“全部已装 knowledge packs 的 `apis.md` executor_key 并集”与全局 `ExecutionRegistry` 双向一致性校验；单份 pack 不再要求覆盖全局 registry。
-3. [ ] 明确重复 executor_key 默认 fail-closed；分组校验仅作为未来模块化 registry 的单独计划入口，不作为当前第二模块接入默认路径。
-4. [ ] 默认采用 `NoQueryGuidanceFromKnowledgePacks(...)` 聚合策略：按 `knowledgePackDirs` 顺序合并 scope summary 与 prompts，稳定去重并默认最多展示 6 条 suggested prompts。
-5. [ ] 明确 guidance 冲突处理：不得依赖 pack 排序让第一份胜出；无法安全聚合时应 fail-closed 或回到计划评审。
-6. [ ] 明确共享层是否允许依赖 knowledge pack 声明模块 scope summary，还是必须有更高层受控组合策略。
+2. [ ] 冻结一份显式 enabled query module 装配清单，作为 `knowledgePackDirs`、executor registry、`read_api_catalog` 与 knowledge pack drift 校验的共同来源。
+3. [ ] 默认采用“全部已装 knowledge packs 的 `apis.md` executor_key 并集”与全局 `ExecutionRegistry` 双向一致性校验；单份 pack 不再要求覆盖全局 registry。
+4. [ ] 明确重复 executor_key 默认 fail-closed；分组校验仅作为未来模块化 registry 的单独计划入口，不作为当前第二模块接入默认路径。
+5. [ ] 默认采用 `NoQueryGuidanceFromKnowledgePacks(...)` 聚合策略：按 `knowledgePackDirs` 顺序合并 scope summary 与 prompts，稳定去重并默认最多展示 6 条 suggested prompts。
+6. [ ] 明确 guidance 冲突处理：不得依赖 pack 排序让第一份胜出；无法安全聚合时应 fail-closed 或回到计划评审。
+7. [ ] 明确共享层是否允许依赖 knowledge pack 声明模块 scope summary，还是必须有更高层受控组合策略。
 
 ### Phase C / P2：逐项整改共享层 capability-specific 逻辑
 
@@ -247,7 +250,8 @@ owner 冻结：
 3. [ ] 候选/结果集抽取从 `orgunit` payload 猜测收敛为模块显式事实提供。
 4. [ ] `queryExecutionErrorToTerminal(...)` 和澄清事实提取从模块专有错误分支收敛为共享错误 contract。
 5. [ ] `QueryEntity` / metadata event 中模块专属字段迁出或收敛到受控事实容器，避免继续平铺 `target_<module>_code` 这类字段。
-6. [ ] 对候选组、结果集和 clarification resume 的后续使用补充测试：本地只投影 evidence，不能隐式补 `ReadPlan` 参数或生成 selected target。
+6. [ ] 首期优先使用模块 executor observation payload 表达模块专属事实；只有 fake module 验证证明必要时，才允许引入受控 `attributes` / `facts` 容器。
+7. [ ] 对候选组、结果集和 clarification resume 的后续使用补充测试：本地只投影 evidence，不能隐式补 `ReadPlan` 参数或生成 selected target。
 
 ### Phase D / P2：非 `orgunit` fixture 与测试准入
 
@@ -261,7 +265,21 @@ owner 冻结：
 1. [ ] 在 `468` 与后续第二模块接入计划中回写 owner 关系与验证口径。
 2. [ ] 评估是否新增轻量反回流脚本或现有门禁扩展，用于扫描共享 query flow 中新增模块 executor_key、payload 字段猜测与模块专属错误文案。
 
-## 6. Stopline
+## 6. 门禁与验证入口
+
+本计划当前为文档方案阶段；后续若进入代码实施，应按命中范围补齐验证证据。
+
+1. 文档阶段：
+   - `make check doc`
+2. 命中 Go 代码阶段：
+   - `go fmt ./... && go vet ./... && make check lint && make test`
+3. 命中 CubeBox 查询链实施阶段，至少补跑定向测试：
+   - `go test ./modules/cubebox`
+   - `go test ./internal/server -run 'Test.*CubeBox|Test.*Cubebox|Test.*Query'`
+4. 命中 API 层 fake-module 入口时，必须包含 `/internal/cubebox/turns:stream` 或等价内部流式入口测试证据。
+5. 若新增或调整反回流脚本 / 门禁，补跑对应 `make check ...` 入口，并在后续实施记录中写明。
+
+## 7. Stopline
 
 在本计划关闭前，新增第二业务模块相关变更默认不得：
 
@@ -276,7 +294,7 @@ owner 冻结：
 9. [ ] 以“去 `orgunit` 硬编码”为名新增本地 NLU、scope classifier、candidate selector、slot repair、target binding、working set 或静态澄清策略。
 10. [ ] 从 `query_evidence_window`、metadata event、assistant prose 或历史工具结果中自动补 executor 参数；所有可执行 target 必须来自模型输出的显式 `ReadPlan` 并通过校验。
 
-## 7. 最小非 `orgunit` fixture 准入要求
+## 8. 最小非 `orgunit` fixture 准入要求
 
 后续实现不需要为了本计划接入真实第二业务模块，但必须用一个最小 fake module 证明共享层 contract 不依赖 `orgunit`。建议 fixture 约束如下：
 
@@ -293,23 +311,25 @@ owner 冻结：
    - API 层测试不依赖 `modules/orgunit/presentation/cubebox` 作为唯一 fixture；
    - terminal fallback 不需要新增模块专属中文错误分支。
 
-## 8. 验收标准
+## 9. 验收标准
 
 1. [ ] 能把当前命中清楚分成“共享层污染”“模块样例夹具”“模块本来该有的业务语义”三类。
 2. [ ] 为第二模块接入前的共享 narrator / query flow / knowledge pack 装配给出明确 owner 和实施顺序，而不是只写一句“后续复核”。
 3. [ ] 共享 `QueryContext` / `QueryEntity` / metadata event 的模块专属字段已有裁决：保留为通用字段、迁入受控事实容器、或登记为待删除过渡债务。
-4. [ ] 多 knowledge pack + `ExecutionRegistry` 的默认校验策略已冻结为“全部已装 packs 的 executor_key 并集”双向校验，且 `NoQueryGuidance` 默认聚合稳定去重、最多展示 6 条 suggested prompts，不再第一份胜出。
-5. [ ] 共享 `QueryEntity` / `QueryCandidate` 的推荐最终形态已冻结为中性字段；模块专属事实进入 observation payload 或受控 `attributes` / `facts`，现有 `TargetOrgCode` / `ParentOrgCode` 被登记为待迁出债务。
+4. [ ] 多 knowledge pack + `ExecutionRegistry` 的默认校验策略已冻结为“同一 enabled query module 装配清单派生的全部已装 packs executor_key 并集”双向校验，且 `NoQueryGuidance` 默认聚合稳定去重、最多展示 6 条 suggested prompts，不再第一份胜出。
+5. [ ] 共享 `QueryEntity` / `QueryCandidate` 的推荐最终形态已冻结为中性字段；模块专属事实默认只进入 observation payload，`attributes` / `facts` 容器后移到 fake module 证明必要之后，现有 `TargetOrgCode` / `ParentOrgCode` 被登记为待迁出债务。
 6. [ ] 至少一个非 `orgunit` fake module 测试能覆盖 planner prompt 装配、no-query guidance、candidate observation、terminal fallback 与 API 层流式入口。
 7. [ ] 478 与 `DEV-PLAN-473` 的边界已明确：去 `orgunit` 污染不会新增本地语义裁决层；所有目标选择、候选解释、澄清恢复和短输入理解仍由模型基于 evidence 与 knowledge pack 处理。
 8. [ ] Stopline 已能被 review checklist 或轻量门禁执行，阻断共享 query flow 新增模块 executor_key 特判、payload 字段猜测、模块专属错误文案、共享 context 模块字段平铺和本地语义 selector。
-9. [ ] `468` 当前剩余主线与 `AGENTS.md` 文档地图都能直接指向本 owner 文档。
-10. [ ] 文档门禁 `make check doc` 通过。
+9. [ ] 代码实施阶段的 Go 全量门禁、`modules/cubebox` 定向测试、`internal/server` query/API 定向测试已有执行证据。
+10. [ ] `468` 当前剩余主线与 `AGENTS.md` 文档地图都能直接指向本 owner 文档。
+11. [ ] 文档门禁 `make check doc` 通过。
 
-## 9. 当前执行记录
+## 10. 当前执行记录
 
 1. [X] 2026-04-28：完成共享层首轮扫描，确认主要命中集中在 `internal/server/cubebox_query_flow.go` 的 narrator/clarifier prompt、scope correction、unsupported-dimension 判定、候选抽取与单模块 knowledge pack 装配入口。
 2. [X] 2026-04-28：确认 `468` line 635 所指“第二业务模块接入后的共享 narrator 去模块化污染复核”尚无独立 owner 文档，本计划即作为该剩余主线的正式承接者。
 3. [X] 2026-04-28：补充复核缺口：共享 `QueryEntity` / metadata event 字段污染、多 knowledge pack 与 registry 成组校验、非 `orgunit` fake module 测试准入、反回流门禁化要求。
 4. [X] 2026-04-28：按 `DEV-PLAN-473` 补充模型主导边界：478 的目标是删除共享层模块语义裁决，而不是把 `orgunit` 特判参数化为新的本地语义 runtime。
 5. [X] 2026-04-28：按评审意见冻结默认策略：多 knowledge pack 默认并集校验与 no-query guidance 聚合（suggested prompts 默认最多 6 条）；共享 entity 结构默认中性字段；API 层 fake-module 测试纳入准入。
+6. [X] 2026-04-28：按 `DEV-PLAN-003` 评审意见补充验证入口、enabled query module 显式装配清单口径，并将 `attributes` / `facts` 容器后移到 fake module 证明必要之后。
