@@ -200,7 +200,7 @@ Codex 在网关层只承担局部能力来源，不承担整体网关骨架：
 - `provider_type`: `codex`
 - `base_url`: `https://code2026.pumpkinai.vip/v1`
 - `enabled`: `true`
-- `secret_ref`: `env://OPENAI_API_KEY`
+- `secret_ref`: `env://CUBEBOX_OPENAI_API_KEY`
 - `model_slug`: `gpt-5.2`
 
 约束说明：

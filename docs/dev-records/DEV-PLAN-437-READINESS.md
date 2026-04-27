@@ -402,7 +402,7 @@
 - 本次重验收结论：
   - `DEV-PLAN-433` 当前范围应记为“已完成封板”：`Slice 2.0-2.6`、上游映射、success/interrupted 浏览器证据、`430` 回链与 readiness 已补齐。
   - `DEV-PLAN-433A` 当前应记为“已实现范围重新验收通过”，剩余待补的是测试专用 credential 破坏性页面样本。
-- 当前运行时基线按 `DEV-PLAN-433/433A` 最新口径冻结为 `provider_id=openai-compatible`、`provider_type=codex`、`base_url=https://code2026.pumpkinai.vip/v1`、`enabled=true`、`secret_ref=env://OPENAI_API_KEY`、`model_slug=gpt-5.2`；`4.2` 中 `https://api.openai.com/v1` 与旧 `provider_type=openai-compatible` 仅代表早期复验证据快照。
+- 当前运行时基线按 `DEV-PLAN-433/433A` 最新口径冻结为 `provider_id=openai-compatible`、`provider_type=codex`、`base_url=https://code2026.pumpkinai.vip/v1`、`enabled=true`、`secret_ref=env://CUBEBOX_OPENAI_API_KEY`、`model_slug=gpt-5.2`；`4.2` 中 `https://api.openai.com/v1` 与旧 `provider_type=openai-compatible` 仅代表早期复验证据快照。
 
 ## 关联文档
 

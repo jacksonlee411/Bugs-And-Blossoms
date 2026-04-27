@@ -39,7 +39,7 @@
 - 计划/规范文档：`docs/dev-plans/`
 - 实施路线图【归档 / 历史来源】：`docs/archive/dev-plans/009-implementation-roadmap.md`
 - Readiness 证据记录：`docs/dev-records/`
-- CubeBox 当前真实模型运行时基线（当前开发参考，配置变更需同步 `DEV-PLAN-433/433A`）：`provider_id=openai-compatible`、`provider_type=codex`、`base_url=https://code2026.pumpkinai.vip/v1`、`enabled=true`、`secret_ref=env://OPENAI_API_KEY`、`model_slug=gpt-5.2`
+- CubeBox 当前真实模型运行时基线（当前开发参考，配置变更需同步 `DEV-PLAN-433/433A`）：`provider_id=openai-compatible`、`provider_type=codex`、`base_url=https://code2026.pumpkinai.vip/v1`、`enabled=true`、`secret_ref=env://CUBEBOX_OPENAI_API_KEY`、`model_slug=gpt-5.2`
 
 ## 2. 变更触发器矩阵（与 CI 对齐）
 
