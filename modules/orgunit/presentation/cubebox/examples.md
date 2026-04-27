@@ -1011,3 +1011,137 @@ planner 当前自然日：
 ```
 
 若首轮结果只有少量候选，planner 后续可在同一 turn 内按 `working_results.latest_observation.items` 的出现顺序继续查详情；若候选过多或预算不足，应继续澄清缩小范围。
+
+## 示例 16：全部组织分页默认值
+
+用户问法：
+
+`今天的全部组织，实现方式你自己编排`
+
+期望行为：
+
+- 不要要求用户确认 `page` 或 `size`。
+- 默认按当前自然日、第一页、每页 100 条执行受控分页查询。
+- 若用户没有明确要求包含停用组织，默认 `include_disabled=false`；若用户强调“全部包含停用”，则使用 `include_disabled=true`。
+- 当前 `orgunit.list` 无 `parent_org_code` 且无 `keyword`、无 `all_org_units=true` 时仍是一级组织清单；用户明确要求全部组织或全租户组织清单时，必须设置 `all_org_units=true`。
+
+期望首轮 `ReadPlan`：
+
+```json
+{
+  "intent": "orgunit.list",
+  "confidence": 0.88,
+  "missing_params": [],
+  "steps": [
+    {
+      "id": "step-1",
+      "api_key": "orgunit.list",
+      "params": {
+        "as_of": "2026-04-27",
+        "include_disabled": false,
+        "all_org_units": true,
+        "page": 1,
+        "size": 100
+      },
+      "result_focus": [
+        "page",
+        "size",
+        "total",
+        "org_units[].org_code",
+        "org_units[].name",
+        "org_units[].status",
+        "org_units[].has_children"
+      ],
+      "depends_on": []
+    }
+  ],
+  "explain_focus": [
+    "分页组织清单",
+    "本页范围",
+    "是否还有下级"
+  ]
+}
+```
+
+## 示例 17：分页短答只给一个数字
+
+相关历史事实：
+
+```yaml
+recent_turns:
+  - user_prompt: "B) 直接按分页给全租户组织清单"
+    assistant_reply: "已选择分页清单。未指定分页时默认第一页、每页 100 条。"
+current_user_input: "100"
+```
+
+用户问法：
+
+`100`
+
+期望行为：
+
+- 将 `100` 理解为 `size=100`，默认 `page=1`。
+- 不要再要求用户补 `page`。
+- 输出完整可执行 `ReadPlan`。
+
+## 示例 18：纠正上一轮关键词过滤为全部组织
+
+相关历史事实：
+
+```yaml
+recent_turns:
+  - user_prompt: "列出全部包含成本关键字的组织"
+    assistant_reply: "名称包含“成本”关键字的组织共有 3 个：成本A组、成本B组、成本C组。"
+observations:
+  - kind: result_list
+    result_summary:
+      items:
+        - {domain: orgunit, entity_key: "200005", name: "成本A组", as_of: "2026-04-27"}
+        - {domain: orgunit, entity_key: "200006", name: "成本B组", as_of: "2026-04-27"}
+        - {domain: orgunit, entity_key: "200007", name: "成本C组", as_of: "2026-04-27"}
+current_user_input: "不只是包含成本关键字的组织，而是全部的组织"
+```
+
+期望行为：
+
+- 当前轮是在纠正并扩大查询范围，不是让系统继续查“成本”结果集。
+- 不得继承历史 `keyword=成本`。
+- 不得继承历史单个候选 `200007` 或把上一轮 `result_list` 当作当前 target set。
+- 默认按当前自然日、第一页、每页 100 条执行组织清单查询。
+
+期望 `ReadPlan`：
+
+```json
+{
+  "intent": "orgunit.list",
+  "confidence": 0.9,
+  "missing_params": [],
+  "steps": [
+    {
+      "id": "step-1",
+      "api_key": "orgunit.list",
+      "params": {
+        "as_of": "2026-04-27",
+        "include_disabled": false,
+        "all_org_units": true,
+        "page": 1,
+        "size": 100
+      },
+      "result_focus": [
+        "page",
+        "size",
+        "total",
+        "org_units[].org_code",
+        "org_units[].name",
+        "org_units[].status",
+        "org_units[].has_children"
+      ],
+      "depends_on": []
+    }
+  ],
+  "explain_focus": [
+    "全部组织清单",
+    "已取消历史关键词过滤"
+  ]
+}
+```

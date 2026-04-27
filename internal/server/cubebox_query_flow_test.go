@@ -501,6 +501,72 @@ func TestQueryFlowReturnsPlannerClarificationVerbatim(t *testing.T) {
 	}
 }
 
+func TestQueryFlowReplansPaginationOnlyPlannerClarification(t *testing.T) {
+	registry, err := cubebox.NewExecutionRegistry(cubebox.RegisteredExecutor{
+		APIKey:         "orgunit.list",
+		RequiredParams: []string{"as_of"},
+		Executor: queryExecutorStub{
+			executeFn: func(context.Context, cubebox.ExecuteRequest, map[string]any) (cubebox.ExecuteResult, error) {
+				return cubebox.ExecuteResult{Payload: map[string]any{
+					"page":      float64(1),
+					"size":      float64(100),
+					"total":     float64(1),
+					"org_units": []any{map[string]any{"org_code": "100000", "name": "总部"}},
+				}}, nil
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("NewExecutionRegistry err=%v", err)
+	}
+	plannerCalls := 0
+	var correctionSeen bool
+	flow := queryLoopTestFlow(registry, cubeboxReadPlanProducerStub{fn: func(_ context.Context, input cubeboxReadPlanProductionInput) (cubeboxReadPlanProductionResult, error) {
+		plannerCalls++
+		if plannerCalls == 1 {
+			return cubeboxReadPlanProductionResult{
+				Handled: true,
+				Plan: cubebox.ReadPlan{
+					Intent:             "orgunit.list",
+					Confidence:         0.7,
+					MissingParams:      []string{"page", "size"},
+					ClarifyingQuestion: "请提供 page 和 size，例如 page=1,size=100。",
+				},
+				ProviderID:   "openai-compatible",
+				ProviderType: "openai-compatible",
+				ModelSlug:    "gpt-5.2",
+			}, nil
+		}
+		if plannerCalls == 3 {
+			return queryPlannerDoneResult(), nil
+		}
+		if len(input.Corrections) == 0 || !strings.Contains(input.Corrections[0], "默认 page=1,size=100") {
+			t.Fatalf("expected pagination correction, got %#v", input.Corrections)
+		}
+		correctionSeen = true
+		return queryPlannerReadPlanResult(queryPlanForOrgUnitList("2026-04-27", "")), nil
+	}}, cubeboxQueryNarratorStub{fn: func(context.Context, cubeboxQueryNarrationInput) (string, error) {
+		return "第 1 页，每页 100 条，共 1 条。", nil
+	}})
+	sink := &capturingGatewaySink{}
+
+	if handled := flow.TryHandle(context.Background(), queryGatewayRequest("今天全部组织"), sink); !handled {
+		t.Fatal("expected handled")
+	}
+	if plannerCalls != 3 {
+		t.Fatalf("expected clarification replan plus DONE, got calls=%d", plannerCalls)
+	}
+	if !correctionSeen {
+		t.Fatal("expected second planner call to receive pagination correction")
+	}
+	if sink.hasErrorCode("ai_plan_boundary_violation") {
+		t.Fatalf("pagination-only clarification should not fail user turn, got %+v", sink.events)
+	}
+	if text := strings.Join(sink.deltas(), "\n"); strings.Contains(text, "请提供 page") || strings.Contains(text, "请提供 page 和 size") {
+		t.Fatalf("pagination clarification must not be shown to user, got %q", text)
+	}
+}
+
 func TestBuildPlannerMessagesIncludesQueryEvidenceWindow(t *testing.T) {
 	producer := &cubeboxProviderReadPlanProducer{
 		now: func() time.Time { return time.Date(2026, 4, 25, 12, 0, 0, 0, time.UTC) },
@@ -657,6 +723,139 @@ func TestBuildPlannerMessagesGuidesKeywordListQueries(t *testing.T) {
 	}
 }
 
+func TestBuildPlannerMessagesGuidesCorrectionToOverrideHistoricalKeywordFilter(t *testing.T) {
+	producer := &cubeboxProviderReadPlanProducer{
+		now: func() time.Time { return time.Date(2026, 4, 27, 12, 0, 0, 0, time.UTC) },
+	}
+	messages := producer.buildPlannerMessages(cubeboxReadPlanProductionInput{
+		Prompt: "不只是包含成本关键字的组织，而是全部的组织",
+		QueryContext: cubebox.QueryContext{
+			RecentDialogueTurns: []cubebox.QueryDialogueTurn{
+				{
+					UserPrompt:     "列出全部包含成本关键字的组织",
+					AssistantReply: "名称包含“成本”关键字的组织共有 3 个：成本A组、成本B组、成本C组。",
+				},
+			},
+			RecentCandidateGroups: []cubebox.QueryCandidateGroup{{
+				CandidateSource: "results",
+				CandidateCount:  3,
+				Candidates: []cubebox.QueryCandidate{
+					{Domain: "orgunit", EntityKey: "200005", Name: "成本A组", AsOf: "2026-04-27"},
+					{Domain: "orgunit", EntityKey: "200006", Name: "成本B组", AsOf: "2026-04-27"},
+					{Domain: "orgunit", EntityKey: "200007", Name: "成本C组", AsOf: "2026-04-27"},
+				},
+			}},
+			RecentConfirmedEntities: []cubebox.QueryEntity{
+				{Domain: "orgunit", Intent: "orgunit.details", EntityKey: "200007", AsOf: "2026-04-27", SourceAPIKey: "orgunit.details", ParentOrgCode: "200006"},
+			},
+		},
+		KnowledgePacks: []cubebox.KnowledgePack{
+			{Dir: "modules/orgunit/presentation/cubebox", Files: map[string]string{
+				"CUBEBOX-SKILL.md": mustReadTestFile(t, "modules/orgunit/presentation/cubebox/CUBEBOX-SKILL.md"),
+				"queries.md":       mustReadTestFile(t, "modules/orgunit/presentation/cubebox/queries.md"),
+				"apis.md":          mustReadTestFile(t, "modules/orgunit/presentation/cubebox/apis.md"),
+				"examples.md":      mustReadTestFile(t, "modules/orgunit/presentation/cubebox/examples.md"),
+			}},
+		},
+		ReadAPICatalog: []cubebox.ReadAPICatalogEntry{{
+			APIKey:         "orgunit.list",
+			RequiredParams: []string{"as_of"},
+			OptionalParams: []string{"include_disabled", "parent_org_code", "all_org_units", "keyword", "page", "size"},
+		}},
+	})
+
+	joined := plannerMessageText(messages)
+	for _, expected := range []string{
+		"当前用户输入优先于历史事实",
+		"不得继承历史 keyword、parent_org_code、单个 entity_key 或 result_list target set",
+		"不得把旧 `keyword`、`parent_org_code`、`entity_key` 或 `result_list` 继续带入新计划",
+		"不只是包含成本关键字的组织，而是全部的组织",
+		"不得继承历史 `keyword=成本`",
+	} {
+		if !strings.Contains(joined, expected) {
+			t.Fatalf("expected planner prompt to contain %q, got %s", expected, joined)
+		}
+	}
+	for _, forbidden := range []string{
+		`"kind":"result_list"`,
+		`"kind":"entity_fact"`,
+		`"entity_key":"200007"`,
+		`"parent_org_code":"200006"`,
+	} {
+		if strings.Contains(joined, forbidden) {
+			t.Fatalf("expected scope override prompt to omit historical target %q, got %s", forbidden, joined)
+		}
+	}
+}
+
+func TestBuildQueryEvidenceWindowDropsHistoricalTargetsWhenPromptOverridesScope(t *testing.T) {
+	window := buildQueryEvidenceWindow(cubebox.QueryContext{
+		RecentDialogueTurns: []cubebox.QueryDialogueTurn{
+			{UserPrompt: "列出全部包含成本关键字的组织", AssistantReply: "成本A组、成本B组、成本C组。"},
+		},
+		RecentConfirmedEntities: []cubebox.QueryEntity{
+			{Domain: "orgunit", Intent: "orgunit.details", EntityKey: "200007", AsOf: "2026-04-27", ParentOrgCode: "200006"},
+		},
+		RecentCandidateGroups: []cubebox.QueryCandidateGroup{{
+			CandidateSource: "results",
+			CandidateCount:  1,
+			Candidates: []cubebox.QueryCandidate{
+				{Domain: "orgunit", EntityKey: "200007", Name: "成本C组", AsOf: "2026-04-27"},
+			},
+		}},
+	}, "不只是包含成本关键字的组织，而是全部的组织", cubeboxQueryEvidenceWindowProjectionBudget{
+		MaxConfirmedEntities:  5,
+		MaxCandidateGroups:    5,
+		MaxCandidatesPerGroup: 100,
+		MaxDialogueTurns:      5,
+	})
+
+	if window.CurrentUserInput != "不只是包含成本关键字的组织，而是全部的组织" {
+		t.Fatalf("unexpected current user input=%q", window.CurrentUserInput)
+	}
+	if len(window.RecentTurns) != 0 || len(window.Observations) != 0 || window.OpenClarification != nil {
+		t.Fatalf("expected historical targets omitted for scope override, got %+v", window)
+	}
+}
+
+func TestBuildPlannerMessagesTreatsPaginationAsControlDefaults(t *testing.T) {
+	producer := &cubeboxProviderReadPlanProducer{
+		now: func() time.Time { return time.Date(2026, 4, 27, 12, 0, 0, 0, time.UTC) },
+	}
+	messages := producer.buildPlannerMessages(cubeboxReadPlanProductionInput{
+		Prompt: "今天全部组织",
+		KnowledgePacks: []cubebox.KnowledgePack{
+			{Dir: "modules/orgunit/presentation/cubebox", Files: map[string]string{
+				"CUBEBOX-SKILL.md": mustReadTestFile(t, "modules/orgunit/presentation/cubebox/CUBEBOX-SKILL.md"),
+				"queries.md":       mustReadTestFile(t, "modules/orgunit/presentation/cubebox/queries.md"),
+				"apis.md":          mustReadTestFile(t, "modules/orgunit/presentation/cubebox/apis.md"),
+				"examples.md":      mustReadTestFile(t, "modules/orgunit/presentation/cubebox/examples.md"),
+			}},
+		},
+		ReadAPICatalog: []cubebox.ReadAPICatalogEntry{{
+			APIKey:         "orgunit.list",
+			RequiredParams: []string{"as_of"},
+			OptionalParams: []string{"include_disabled", "all_org_units", "page", "size"},
+		}},
+	})
+
+	joined := plannerMessageText(messages)
+	for _, expected := range []string{
+		"page/size 是分页执行控制，不是业务必填参数",
+		"缺省时默认 page=1,size=100",
+		"不要向用户追问 page=1,size=100",
+		"all_org_units=true",
+		"`page`、`size` 是执行控制参数，不是业务缺参",
+		"默认第一页、每页 100 条",
+		"用户只提供一个正整数作为分页短答时",
+		"`page=1` 表示第一页",
+	} {
+		if !strings.Contains(joined, expected) {
+			t.Fatalf("expected planner prompt to contain %q, got %s", expected, joined)
+		}
+	}
+}
+
 func TestQueryFlowInjectsClarificationResumeIntoPlannerInput(t *testing.T) {
 	registry, err := cubebox.NewExecutionRegistry(cubebox.RegisteredExecutor{
 		APIKey:         "orgunit.list",
@@ -755,6 +954,91 @@ func TestQueryFlowInjectsClarificationResumeIntoPlannerInput(t *testing.T) {
 	}
 	if text := strings.Join(sink.deltas(), "\n"); !strings.Contains(text, "2025-01-01") {
 		t.Fatalf("expected final narration to include resolved date, got %#v", sink.events)
+	}
+}
+
+func TestQueryFlowExecutesPaginationShortAnswerAsFirstPageSize(t *testing.T) {
+	registry, err := cubebox.NewExecutionRegistry(cubebox.RegisteredExecutor{
+		APIKey:         "orgunit.list",
+		RequiredParams: []string{"as_of"},
+		OptionalParams: []string{"include_disabled", "all_org_units", "page", "size"},
+		Executor: queryExecutorStub{
+			executeFn: func(_ context.Context, _ cubebox.ExecuteRequest, params map[string]any) (cubebox.ExecuteResult, error) {
+				if params["page"] != 1 || params["size"] != 100 {
+					t.Fatalf("expected page=1,size=100, got %#v", params)
+				}
+				return cubebox.ExecuteResult{Payload: map[string]any{
+					"page":      float64(1),
+					"size":      float64(100),
+					"total":     float64(1),
+					"org_units": []any{map[string]any{"org_code": "100000", "name": "总部"}},
+				}}, nil
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("NewExecutionRegistry err=%v", err)
+	}
+	plannerCalls := 0
+	flow := &cubeboxQueryFlow{
+		runtime: cubebox.NewRuntime(),
+		store: cubeboxStoreStub{
+			appendFn: func(context.Context, string, string, string, cubebox.CanonicalEvent) error { return nil },
+			getFn: func(context.Context, string, string, string) (cubebox.ConversationReplayResponse, error) {
+				return cubebox.ConversationReplayResponse{
+					Conversation: cubebox.Conversation{ID: "conv-1"},
+					Events: []cubebox.CanonicalEvent{
+						{Type: "turn.user_message.accepted", Payload: map[string]any{"text": "B) 直接按分页给全租户组织清单"}},
+						{Type: "turn.agent_message.delta", Payload: map[string]any{"message_id": "msg_agent_1", "delta": "已选择分页清单。未指定分页时默认第一页、每页 100 条。"}},
+						{Type: "turn.agent_message.completed", Payload: map[string]any{"message_id": "msg_agent_1"}},
+					},
+				}, nil
+			},
+			preparePromptViewFn: func(context.Context, string, string, string, cubebox.CanonicalContext, string) (cubebox.PromptViewPreparationResponse, error) {
+				return cubebox.PromptViewPreparationResponse{NextSequence: 1}, nil
+			},
+		},
+		registry: registry,
+		producer: cubeboxReadPlanProducerStub{fn: func(_ context.Context, input cubeboxReadPlanProductionInput) (cubeboxReadPlanProductionResult, error) {
+			plannerCalls++
+			if plannerCalls == 1 {
+				if got := input.Prompt; got != "100" {
+					t.Fatalf("unexpected prompt=%q", got)
+				}
+				return queryPlannerReadPlanResult(cubebox.ReadPlan{
+					Intent:        "orgunit.list",
+					Confidence:    0.86,
+					MissingParams: []string{},
+					Steps: []cubebox.ReadPlanStep{{
+						ID:          "step-1",
+						APIKey:      "orgunit.list",
+						Params:      map[string]any{"as_of": "2026-04-27", "include_disabled": false, "page": 1, "size": 100},
+						ResultFocus: []string{"page", "size", "total", "org_units[].org_code"},
+						DependsOn:   []string{},
+					}},
+					ExplainFocus: []string{"分页组织清单"},
+				}), nil
+			}
+			return queryPlannerDoneResult(), nil
+		}},
+		narrator: cubeboxQueryNarratorStub{fn: func(context.Context, cubeboxQueryNarrationInput) (string, error) {
+			return "第 1 页，每页 100 条。", nil
+		}},
+		knowledgePacks: []cubebox.KnowledgePack{
+			{Dir: "modules/orgunit/presentation/cubebox", Files: map[string]string{"CUBEBOX-SKILL.md": "x", "queries.md": "x", "apis.md": "x", "examples.md": "x"}},
+		},
+		now: func() time.Time { return time.Date(2026, 4, 27, 12, 0, 0, 0, time.UTC) },
+	}
+
+	sink := &capturingGatewaySink{}
+	if handled := flow.TryHandle(context.Background(), queryGatewayRequest("100"), sink); !handled {
+		t.Fatal("expected handled")
+	}
+	if plannerCalls != 2 {
+		t.Fatalf("expected 2 planner calls, got %d", plannerCalls)
+	}
+	if text := strings.Join(sink.deltas(), "\n"); !strings.Contains(text, "第 1 页") || strings.Contains(text, "请提供 page") {
+		t.Fatalf("unexpected final text=%q", text)
 	}
 }
 
@@ -1655,6 +1939,228 @@ func TestQueryFlowRepeatedPlanFailsClosedWithoutReexecution(t *testing.T) {
 	}
 }
 
+func TestQueryFlowReplansAllOrgScopeCorrectionBeforeExecutingHistoricalNarrowPlan(t *testing.T) {
+	var executedParams []map[string]any
+	registry, err := cubebox.NewExecutionRegistry(cubebox.RegisteredExecutor{
+		APIKey:         "orgunit.list",
+		RequiredParams: []string{"as_of"},
+		OptionalParams: []string{"include_disabled", "keyword", "parent_org_code", "all_org_units", "page", "size"},
+		Executor: queryExecutorStub{
+			executeFn: func(_ context.Context, _ cubebox.ExecuteRequest, params map[string]any) (cubebox.ExecuteResult, error) {
+				executedParams = append(executedParams, params)
+				if _, ok := params["keyword"]; ok {
+					t.Fatalf("historical keyword plan must not execute: %#v", params)
+				}
+				if _, ok := params["parent_org_code"]; ok {
+					t.Fatalf("historical parent scope plan must not execute: %#v", params)
+				}
+				return cubebox.ExecuteResult{Payload: map[string]any{
+					"page":  float64(1),
+					"size":  float64(100),
+					"total": float64(10),
+					"org_units": []any{
+						map[string]any{"org_code": "100000", "name": "飞虫与鲜花", "has_children": true},
+						map[string]any{"org_code": "200007", "name": "成本C组", "has_children": false},
+					},
+				}}, nil
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("NewExecutionRegistry err=%v", err)
+	}
+	var plannerCalls int
+	var sawCorrection bool
+	flow := queryLoopTestFlow(registry, cubeboxReadPlanProducerStub{fn: func(_ context.Context, input cubeboxReadPlanProductionInput) (cubeboxReadPlanProductionResult, error) {
+		plannerCalls++
+		switch plannerCalls {
+		case 1:
+			return queryPlannerReadPlanResult(queryPlanForOrgUnitListWithParams(map[string]any{
+				"as_of":            "2026-04-27",
+				"include_disabled": true,
+				"keyword":          "成本",
+				"parent_org_code":  "200006",
+				"page":             1,
+				"size":             100,
+			})), nil
+		case 2:
+			if len(input.Corrections) == 0 || !strings.Contains(input.Corrections[0], "纠正为全部组织") {
+				t.Fatalf("expected all-org scope correction, got %#v", input.Corrections)
+			}
+			sawCorrection = true
+			return queryPlannerReadPlanResult(queryPlanForOrgUnitListWithParams(map[string]any{
+				"as_of":            "2026-04-27",
+				"include_disabled": false,
+				"all_org_units":    true,
+				"page":             1,
+				"size":             100,
+			})), nil
+		default:
+			return queryPlannerDoneResult(), nil
+		}
+	}}, cubeboxQueryNarratorStub{fn: func(context.Context, cubeboxQueryNarrationInput) (string, error) {
+		return "已按全部组织返回第 1 页。", nil
+	}})
+	flow.store = cubeboxStoreStub{
+		appendFn: func(context.Context, string, string, string, cubebox.CanonicalEvent) error { return nil },
+		getFn:    allOrgScopeCorrectionHistory,
+	}
+
+	sink := &capturingGatewaySink{}
+	if handled := flow.TryHandle(context.Background(), queryGatewayRequest("不只是包含成本关键字的组织，而是全部的组织"), sink); !handled {
+		t.Fatal("expected handled")
+	}
+	if plannerCalls != 3 {
+		t.Fatalf("expected replan then done, got planner calls=%d", plannerCalls)
+	}
+	if !sawCorrection {
+		t.Fatal("expected correction to be passed to planner")
+	}
+	if got := len(executedParams); got != 1 {
+		t.Fatalf("expected only corrected plan to execute once, got %d params=%#v", got, executedParams)
+	}
+	if sink.hasErrorCode("cubebox_query_loop_repeated_plan") || sink.hasErrorCode("ai_plan_boundary_violation") {
+		t.Fatalf("scope correction should not fail, got %#v", sink.events)
+	}
+	if text := strings.Join(sink.deltas(), "\n"); !strings.Contains(text, "全部组织") {
+		t.Fatalf("expected final narration, got %q", text)
+	}
+}
+
+func TestQueryFlowReplansAllOrgScopeCorrectionWhenPlannerOmitsAllOrgUnitsFlag(t *testing.T) {
+	var executedParams []map[string]any
+	registry, err := cubebox.NewExecutionRegistry(cubebox.RegisteredExecutor{
+		APIKey:         "orgunit.list",
+		RequiredParams: []string{"as_of"},
+		OptionalParams: []string{"include_disabled", "all_org_units", "page", "size"},
+		Executor: queryExecutorStub{
+			executeFn: func(_ context.Context, _ cubebox.ExecuteRequest, params map[string]any) (cubebox.ExecuteResult, error) {
+				executedParams = append(executedParams, params)
+				if params["all_org_units"] != true {
+					t.Fatalf("root-only plan must not execute for all-org correction: %#v", params)
+				}
+				return cubebox.ExecuteResult{Payload: map[string]any{
+					"page":  float64(1),
+					"size":  float64(100),
+					"total": float64(10),
+					"org_units": []any{
+						map[string]any{"org_code": "100000", "name": "飞虫与鲜花", "has_children": true},
+						map[string]any{"org_code": "200007", "name": "成本C组", "has_children": false},
+					},
+				}}, nil
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("NewExecutionRegistry err=%v", err)
+	}
+	var plannerCalls int
+	flow := queryLoopTestFlow(registry, cubeboxReadPlanProducerStub{fn: func(_ context.Context, input cubeboxReadPlanProductionInput) (cubeboxReadPlanProductionResult, error) {
+		plannerCalls++
+		switch plannerCalls {
+		case 1:
+			return queryPlannerReadPlanResult(queryPlanForOrgUnitListWithParams(map[string]any{
+				"as_of":            "2026-04-27",
+				"include_disabled": false,
+				"page":             1,
+				"size":             100,
+			})), nil
+		case 2:
+			if len(input.Corrections) == 0 || !strings.Contains(input.Corrections[0], "all_org_units=true") {
+				t.Fatalf("expected all_org_units correction, got %#v", input.Corrections)
+			}
+			return queryPlannerReadPlanResult(queryPlanForOrgUnitListWithParams(map[string]any{
+				"as_of":            "2026-04-27",
+				"include_disabled": false,
+				"all_org_units":    true,
+				"page":             1,
+				"size":             100,
+			})), nil
+		default:
+			return queryPlannerDoneResult(), nil
+		}
+	}}, cubeboxQueryNarratorStub{fn: func(context.Context, cubeboxQueryNarrationInput) (string, error) {
+		return "已按全部组织返回第 1 页。", nil
+	}})
+	flow.store = cubeboxStoreStub{
+		appendFn: func(context.Context, string, string, string, cubebox.CanonicalEvent) error { return nil },
+		getFn:    allOrgScopeCorrectionHistory,
+	}
+
+	sink := &capturingGatewaySink{}
+	if handled := flow.TryHandle(context.Background(), queryGatewayRequest("不只是包含成本关键字的组织，而是全部的组织"), sink); !handled {
+		t.Fatal("expected handled")
+	}
+	if plannerCalls != 3 {
+		t.Fatalf("expected root-only plan replan then done, got planner calls=%d", plannerCalls)
+	}
+	if got := len(executedParams); got != 1 {
+		t.Fatalf("expected only all_org_units plan to execute once, got %d params=%#v", got, executedParams)
+	}
+	if sink.hasErrorCode("cubebox_query_loop_repeated_plan") || sink.hasErrorCode("ai_plan_boundary_violation") {
+		t.Fatalf("scope correction should not fail, got %#v", sink.events)
+	}
+}
+
+func TestQueryFlowCompletesAllOrgScopeCorrectionWhenPlannerRepeatsExecutedCleanPlan(t *testing.T) {
+	executions := 0
+	registry, err := cubebox.NewExecutionRegistry(cubebox.RegisteredExecutor{
+		APIKey:         "orgunit.list",
+		RequiredParams: []string{"as_of"},
+		OptionalParams: []string{"include_disabled", "all_org_units", "page", "size"},
+		Executor: queryExecutorStub{
+			executeFn: func(context.Context, cubebox.ExecuteRequest, map[string]any) (cubebox.ExecuteResult, error) {
+				executions++
+				return cubebox.ExecuteResult{Payload: map[string]any{
+					"page":  float64(1),
+					"size":  float64(100),
+					"total": float64(10),
+					"org_units": []any{
+						map[string]any{"org_code": "100000", "name": "飞虫与鲜花", "has_children": true},
+						map[string]any{"org_code": "200007", "name": "成本C组", "has_children": false},
+					},
+				}}, nil
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("NewExecutionRegistry err=%v", err)
+	}
+	plan := queryPlanForOrgUnitListWithParams(map[string]any{
+		"as_of":            "2026-04-27",
+		"include_disabled": false,
+		"all_org_units":    true,
+		"page":             1,
+		"size":             100,
+	})
+	flow := queryLoopTestFlow(registry, cubeboxReadPlanProducerStub{fn: func(context.Context, cubeboxReadPlanProductionInput) (cubeboxReadPlanProductionResult, error) {
+		return queryPlannerReadPlanResult(plan), nil
+	}}, cubeboxQueryNarratorStub{fn: func(_ context.Context, input cubeboxQueryNarrationInput) (string, error) {
+		if got, want := len(input.Results), 1; got != want {
+			t.Fatalf("expected latest execution result, got %#v", input.Results)
+		}
+		return "已按全部组织返回第 1 页。", nil
+	}})
+	flow.store = cubeboxStoreStub{
+		appendFn: func(context.Context, string, string, string, cubebox.CanonicalEvent) error { return nil },
+		getFn:    allOrgScopeCorrectionHistory,
+	}
+
+	sink := &capturingGatewaySink{}
+	if handled := flow.TryHandle(context.Background(), queryGatewayRequest("不只是包含成本关键字的组织，而是全部的组织"), sink); !handled {
+		t.Fatal("expected handled")
+	}
+	if executions != 1 {
+		t.Fatalf("repeated clean plan must not reexecute, got executions=%d", executions)
+	}
+	if sink.hasErrorCode("cubebox_query_loop_repeated_plan") {
+		t.Fatalf("repeated clean plan should complete as DONE, got %#v", sink.events)
+	}
+	if text := strings.Join(sink.deltas(), "\n"); !strings.Contains(text, "全部组织") {
+		t.Fatalf("expected final narration, got %q", text)
+	}
+}
+
 func TestCubeboxProviderReadPlanProducerRejectsBareDone(t *testing.T) {
 	producer := &cubeboxProviderReadPlanProducer{
 		configReader: cubeboxRuntimeConfigReaderStub{config: cubebox.ActiveModelRuntimeConfig{
@@ -1795,6 +2301,14 @@ func queryPlanForOrgUnitList(asOf string, parentOrgCode string) cubebox.ReadPlan
 	if strings.TrimSpace(parentOrgCode) != "" {
 		params["parent_org_code"] = strings.TrimSpace(parentOrgCode)
 	}
+	return queryPlanForOrgUnitListWithParams(params)
+}
+
+func queryPlanForOrgUnitListWithParams(params map[string]any) cubebox.ReadPlan {
+	copied := make(map[string]any, len(params))
+	for key, value := range params {
+		copied[key] = value
+	}
 	return cubebox.ReadPlan{
 		Intent:        "orgunit.list",
 		Confidence:    0.9,
@@ -1802,12 +2316,32 @@ func queryPlanForOrgUnitList(asOf string, parentOrgCode string) cubebox.ReadPlan
 		Steps: []cubebox.ReadPlanStep{{
 			ID:          "step-1",
 			APIKey:      "orgunit.list",
-			Params:      params,
+			Params:      copied,
 			ResultFocus: []string{"org_units[].org_code", "org_units[].has_children"},
 			DependsOn:   []string{},
 		}},
 		ExplainFocus: []string{"组织列表"},
 	}
+}
+
+func allOrgScopeCorrectionHistory(context.Context, string, string, string) (cubebox.ConversationReplayResponse, error) {
+	return cubebox.ConversationReplayResponse{
+		Conversation: cubebox.Conversation{ID: "conv-1", Title: "组织查询", Status: "active"},
+		Events: []cubebox.CanonicalEvent{
+			{Type: "turn.user_message.accepted", Payload: map[string]any{"text": "列出全部包含成本关键字的组织"}},
+			{Type: "turn.query_candidates.presented", Payload: map[string]any{
+				"candidate_source": "results",
+				"candidate_count":  float64(3),
+				"candidates": []any{
+					map[string]any{"domain": "orgunit", "entity_key": "200005", "name": "成本A组", "as_of": "2026-04-27"},
+					map[string]any{"domain": "orgunit", "entity_key": "200006", "name": "成本B组", "as_of": "2026-04-27"},
+					map[string]any{"domain": "orgunit", "entity_key": "200007", "name": "成本C组", "as_of": "2026-04-27"},
+				},
+			}},
+			{Type: "turn.agent_message.delta", Payload: map[string]any{"message_id": "msg_agent_1", "delta": "名称包含“成本”关键字的组织共有 3 个。"}},
+			{Type: "turn.agent_message.completed", Payload: map[string]any{"message_id": "msg_agent_1"}},
+		},
+	}, nil
 }
 
 func mustReadTestFile(t *testing.T, path string) string {

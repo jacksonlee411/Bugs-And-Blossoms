@@ -393,6 +393,7 @@ type orgUnitListPageRequest struct {
 	AsOf              string
 	IncludeDisabled   bool
 	ParentOrgNodeKey  *string
+	AllOrgUnits       bool
 	Keyword           string
 	Status            string // "", "active", "disabled"
 	IsBusinessUnit    *bool
@@ -406,7 +407,7 @@ type orgUnitListPageRequest struct {
 }
 
 func (r orgUnitListPageRequest) ShouldSearchAllOrgUnits() bool {
-	return r.ParentOrgNodeKey == nil && (strings.TrimSpace(r.Keyword) != "" || r.IsBusinessUnit != nil)
+	return r.ParentOrgNodeKey == nil && (r.AllOrgUnits || strings.TrimSpace(r.Keyword) != "" || r.IsBusinessUnit != nil)
 }
 
 type orgUnitListPageReader interface {

@@ -32,7 +32,7 @@ apis:
     optional_params: [include_disabled]
   - api_key: orgunit.list
     required_params: [as_of]
-    optional_params: [include_disabled, parent_org_code, keyword, status, is_business_unit, page, size]
+    optional_params: [include_disabled, parent_org_code, all_org_units, keyword, status, is_business_unit, page, size]
   - api_key: orgunit.search
     required_params: [query, as_of]
     optional_params: [include_disabled]
@@ -70,6 +70,7 @@ apis:
 - 可选参数：
   - `include_disabled`
   - `parent_org_code`
+  - `all_org_units`
   - `keyword`
   - `status`
   - `is_business_unit`
@@ -78,9 +79,14 @@ apis:
 - 参数约束：
   - `status` 只接受 canonical 值 `active`、`disabled`、`all`
   - 有 `parent_org_code` 时，只返回该上级组织的直接子组织
-  - 无 `parent_org_code` 且无 `keyword` 时，只返回当前租户一级组织
+  - `all_org_units=true` 且无 `parent_org_code` 时，返回当前租户全部组织分页清单
+  - 无 `parent_org_code` 且无 `keyword`、无 `all_org_units=true` 时，只返回当前租户一级组织
   - 无 `parent_org_code` 且有 `keyword` 时，在当前租户全部有效组织中按组织编码/名称关键词过滤
   - 无 `parent_org_code` 且有 `is_business_unit` 时，在当前租户全部有效组织中按业务单元标记过滤
+  - `page` / `size` 是分页控制参数，不是业务必填参数；不得因为缺少它们而向用户追问
+  - 若用户要求分页但未给页码或每页条数，默认 `page=1,size=100`
+  - 用户只给一个正整数作为分页短答时，按 `size` 处理并默认 `page=1`
+  - 用户可见 `page` 为 1 基页码；`page=1` 表示第一页
 - 关注字段：
   - `as_of`
   - `include_disabled`
