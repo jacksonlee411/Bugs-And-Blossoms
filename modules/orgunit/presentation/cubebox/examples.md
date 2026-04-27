@@ -16,7 +16,7 @@
   "steps": [
     {
       "id": "step-1",
-      "api_key": "orgunit.details",
+      "executor_key": "orgunit.details",
       "params": {
         "org_code": "1001",
         "as_of": "2026-04-23",
@@ -56,7 +56,7 @@
   "steps": [
     {
       "id": "step-1",
-      "api_key": "orgunit.list",
+      "executor_key": "orgunit.list",
       "params": {
         "as_of": "2026-04-23",
         "parent_org_code": "1001",
@@ -95,7 +95,7 @@
   "steps": [
     {
       "id": "step-1",
-      "api_key": "orgunit.list",
+      "executor_key": "orgunit.list",
       "params": {
         "as_of": "2026-04-23",
         "include_disabled": false
@@ -139,7 +139,7 @@
   "steps": [
     {
       "id": "step-1",
-      "api_key": "orgunit.list",
+      "executor_key": "orgunit.list",
       "params": {
         "as_of": "2026-04-27",
         "include_disabled": false,
@@ -209,7 +209,7 @@
   "steps": [
     {
       "id": "step-1",
-      "api_key": "orgunit.search",
+      "executor_key": "orgunit.search",
       "params": {
         "query": "华东",
         "as_of": "2026-04-23",
@@ -223,7 +223,7 @@
     },
     {
       "id": "step-2",
-      "api_key": "orgunit.details",
+      "executor_key": "orgunit.details",
       "params": {
         "org_code": "@step-1.target_org_code",
         "as_of": "2026-04-23",
@@ -268,7 +268,7 @@
   "steps": [
     {
       "id": "step-1",
-      "api_key": "orgunit.list",
+      "executor_key": "orgunit.list",
       "params": {
         "as_of": "2026-04-23",
         "parent_org_code": "1001",
@@ -310,7 +310,7 @@
   "steps": [
     {
       "id": "step-1",
-      "api_key": "orgunit.list",
+      "executor_key": "orgunit.list",
       "params": {
         "as_of": "2026-04-27",
         "keyword": "成本",
@@ -359,7 +359,7 @@
   "steps": [
     {
       "id": "step-1",
-      "api_key": "orgunit.details",
+      "executor_key": "orgunit.details",
       "params": {
         "org_code": "200001",
         "as_of": "2026-04-27",
@@ -374,7 +374,7 @@
     },
     {
       "id": "step-2",
-      "api_key": "orgunit.details",
+      "executor_key": "orgunit.details",
       "params": {
         "org_code": "200002",
         "as_of": "2026-04-27",
@@ -391,7 +391,7 @@
     },
     {
       "id": "step-3",
-      "api_key": "orgunit.details",
+      "executor_key": "orgunit.details",
       "params": {
         "org_code": "200003",
         "as_of": "2026-04-27",
@@ -408,7 +408,7 @@
     },
     {
       "id": "step-4",
-      "api_key": "orgunit.details",
+      "executor_key": "orgunit.details",
       "params": {
         "org_code": "200004",
         "as_of": "2026-04-27",
@@ -472,7 +472,7 @@ query_evidence_window:
   "steps": [
     {
       "id": "step-1",
-      "api_key": "orgunit.list",
+      "executor_key": "orgunit.list",
       "params": {
         "as_of": "2026-04-25",
         "parent_org_code": "100000",
@@ -552,7 +552,7 @@ query_evidence_window:
   "steps": [
     {
       "id": "step-1",
-      "api_key": "orgunit.search",
+      "executor_key": "orgunit.search",
       "params": {
         "query": "飞虫公司",
         "as_of": "2026-04-25",
@@ -566,7 +566,7 @@ query_evidence_window:
     },
     {
       "id": "step-2",
-      "api_key": "orgunit.list",
+      "executor_key": "orgunit.list",
       "params": {
         "as_of": "2026-04-25",
         "parent_org_code": "@step-1.target_org_code",
@@ -638,7 +638,7 @@ query_evidence_window:
   "steps": [
     {
       "id": "step-1",
-      "api_key": "orgunit.details",
+      "executor_key": "orgunit.details",
       "params": {
         "org_code": "200000",
         "as_of": "2026-04-25",
@@ -741,7 +741,7 @@ query_evidence_window:
     "steps": [
       {
         "id": "step-1",
-        "api_key": "orgunit.list",
+        "executor_key": "orgunit.list",
         "params": {
           "as_of": "2026-04-25",
           "include_disabled": false
@@ -769,7 +769,7 @@ query_evidence_window:
   "working_results": {
     "round_index": 1,
     "latest_observation": {
-      "api_key": "orgunit.list",
+      "executor_key": "orgunit.list",
       "items": [
         {
           "org_code": "100000",
@@ -803,7 +803,7 @@ query_evidence_window:
     "steps": [
       {
         "id": "step-1",
-        "api_key": "orgunit.list",
+        "executor_key": "orgunit.list",
         "params": {
           "as_of": "2026-04-25",
           "parent_org_code": "100000",
@@ -875,7 +875,7 @@ query_evidence_window:
   "steps": [
     {
       "id": "step-1",
-      "api_key": "orgunit.list",
+      "executor_key": "orgunit.list",
       "params": {
         "as_of": "2025-01-01",
         "include_disabled": false
@@ -989,7 +989,7 @@ planner 当前自然日：
   "steps": [
     {
       "id": "step-1",
-      "api_key": "orgunit.list",
+      "executor_key": "orgunit.list",
       "params": {
         "as_of": "2026-04-09",
         "keyword": "财务",
@@ -1035,7 +1035,7 @@ planner 当前自然日：
   "steps": [
     {
       "id": "step-1",
-      "api_key": "orgunit.list",
+      "executor_key": "orgunit.list",
       "params": {
         "as_of": "2026-04-27",
         "include_disabled": false,
@@ -1119,7 +1119,7 @@ current_user_input: "不只是包含成本关键字的组织，而是全部的�
   "steps": [
     {
       "id": "step-1",
-      "api_key": "orgunit.list",
+      "executor_key": "orgunit.list",
       "params": {
         "as_of": "2026-04-27",
         "include_disabled": false,

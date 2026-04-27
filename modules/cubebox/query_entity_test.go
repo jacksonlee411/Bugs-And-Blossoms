@@ -10,11 +10,11 @@ func TestQueryContextFromEventsReturnsMostRecentConfirmedEntity(t *testing.T) {
 		{
 			Type: QueryEntityConfirmedEventType,
 			Payload: map[string]any{"entity": map[string]any{
-				"domain":         "orgunit",
-				"intent":         "orgunit.details",
-				"entity_key":     "100000",
-				"as_of":          "2026-04-24",
-				"source_api_key": "orgunit.details",
+				"domain":              "orgunit",
+				"intent":              "orgunit.details",
+				"entity_key":          "100000",
+				"as_of":               "2026-04-24",
+				"source_executor_key": "orgunit.details",
 			}},
 		},
 		{
@@ -26,12 +26,12 @@ func TestQueryContextFromEventsReturnsMostRecentConfirmedEntity(t *testing.T) {
 		{
 			Type: QueryEntityConfirmedEventType,
 			Payload: map[string]any{"entity": map[string]any{
-				"domain":          "orgunit",
-				"intent":          "orgunit.list",
-				"entity_key":      "200000",
-				"as_of":           "2026-04-25",
-				"source_api_key":  "orgunit.list",
-				"parent_org_code": "200000",
+				"domain":              "orgunit",
+				"intent":              "orgunit.list",
+				"entity_key":          "200000",
+				"as_of":               "2026-04-25",
+				"source_executor_key": "orgunit.list",
+				"parent_org_code":     "200000",
 			}},
 		},
 	})
@@ -44,6 +44,25 @@ func TestQueryContextFromEventsReturnsMostRecentConfirmedEntity(t *testing.T) {
 	}
 	if len(context.RecentConfirmedEntities) != 2 {
 		t.Fatalf("expected recent entities, got %#v", context.RecentConfirmedEntities)
+	}
+}
+
+func TestQueryContextFromEventsAcceptsLegacySourceAPIKeyDuringReplay(t *testing.T) {
+	context := QueryContextFromEvents([]CanonicalEvent{{
+		Type: QueryEntityConfirmedEventType,
+		Payload: map[string]any{"entity": map[string]any{
+			"domain":         "orgunit",
+			"entity_key":     "100000",
+			"as_of":          "2026-04-24",
+			"source_api_key": "orgunit.details",
+		}},
+	}})
+
+	if context.RecentConfirmedEntity == nil {
+		t.Fatal("expected recent entity")
+	}
+	if got := context.RecentConfirmedEntity.SourceExecutorKey; got != "orgunit.details" {
+		t.Fatalf("expected legacy source_api_key normalized, got %#v", context.RecentConfirmedEntity)
 	}
 }
 
@@ -415,13 +434,13 @@ func TestBuildQueryEvidenceWindowProjectsNeutralObservations(t *testing.T) {
 	context := QueryContext{
 		RecentConfirmedEntities: []QueryEntity{
 			{
-				Domain:        "orgunit",
-				Intent:        "orgunit.details",
-				EntityKey:     "100000",
-				AsOf:          "2026-04-25",
-				SourceAPIKey:  "orgunit.details",
-				TargetOrgCode: "100000",
-				ParentOrgCode: "ROOT",
+				Domain:            "orgunit",
+				Intent:            "orgunit.details",
+				EntityKey:         "100000",
+				AsOf:              "2026-04-25",
+				SourceExecutorKey: "orgunit.details",
+				TargetOrgCode:     "100000",
+				ParentOrgCode:     "ROOT",
 			},
 		},
 		RecentCandidateGroups: []QueryCandidateGroup{
@@ -468,7 +487,7 @@ func TestBuildQueryEvidenceWindowProjectsNeutralObservations(t *testing.T) {
 	if !ok || item["entity_key"] != "100000" || item["as_of"] != "2026-04-25" {
 		t.Fatalf("unexpected entity item=%#v", entity.ResultSummary)
 	}
-	for _, forbidden := range []string{"intent", "source_api_key", "target_org_code", "parent_org_code"} {
+	for _, forbidden := range []string{"intent", "source_executor_key", "target_org_code", "parent_org_code"} {
 		if _, exists := item[forbidden]; exists {
 			t.Fatalf("evidence entity item leaked %q in %#v", forbidden, item)
 		}
@@ -580,13 +599,13 @@ func TestQueryContextFromEventsClearsOpenClarificationResumeAfterNextUserMessage
 
 func TestQueryEntityPayloadUsesMinimalSchema(t *testing.T) {
 	entity := QueryEntity{
-		Domain:        " OrgUnit ",
-		Intent:        " orgunit.details ",
-		EntityKey:     " 100000 ",
-		AsOf:          " 2026-04-25 ",
-		SourceAPIKey:  " orgunit.details ",
-		TargetOrgCode: " ",
-		ParentOrgCode: " ROOT ",
+		Domain:            " OrgUnit ",
+		Intent:            " orgunit.details ",
+		EntityKey:         " 100000 ",
+		AsOf:              " 2026-04-25 ",
+		SourceExecutorKey: " orgunit.details ",
+		TargetOrgCode:     " ",
+		ParentOrgCode:     " ROOT ",
 	}
 
 	payload := entity.Payload()

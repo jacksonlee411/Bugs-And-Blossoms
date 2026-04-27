@@ -48,7 +48,7 @@
 支持依据：
 
 1. `CubeBox` 执行时仍沿用当前租户上下文，没有独立 `subject`、独立 service account 或第二授权面，符合 `460` 的权限继承边界。
-2. 当前执行注册表仍以 `api_key -> executor` 白名单、参数白名单与顺序执行为主，没有在该文件继续长出 `SummaryRenderer`、模板摘要器或 `target_unique` 一类新的隐藏协议，符合 `461/464` 对执行层“变薄”的要求。
+2. 当前执行注册表仍以 `executor_key -> executor` 白名单、参数白名单与顺序执行为主，没有在该文件继续长出 `SummaryRenderer`、模板摘要器或 `target_unique` 一类新的隐藏协议，符合 `461/464` 对执行层“变薄”的要求。
 3. `orgunit.list.status` 已只接受 canonical 值 `active` / `disabled` / `all`，未继续保留 `inactive` 兼容语义，符合 `464` 的参数 owner 收敛要求。
 
 ### 4.2 关于“字段展示应该由谁决定”
@@ -103,7 +103,7 @@
 
 `modules/cubebox/read_executor.go` 当前仍通过以下方式控制执行边界：
 
-- `RegisteredExecutor` 持有 `APIKey`、`RequiredParams`、`OptionalParams`
+- `RegisteredExecutor` 持有 `ExecutorKey`、`RequiredParams`、`OptionalParams`
 - `ExecutionRegistry.ExecutePlan(...)` 先做 `ValidateReadPlan(plan)`
 - 执行前通过 `validateRegisteredParams(...)` 拒绝未注册参数
 
@@ -156,7 +156,7 @@
 
 当前 `modules/cubebox/read_executor.go` 的执行注册表主要负责：
 
-- `api_key -> executor` 白名单映射
+- `executor_key -> executor` 白名单映射
 - 必填参数存在性校验
 - 未注册参数拒绝
 - 顺序执行

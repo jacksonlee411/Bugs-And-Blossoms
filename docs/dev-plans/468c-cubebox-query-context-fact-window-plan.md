@@ -228,11 +228,11 @@ planner JSON 前必须增加固定 contract 文本：
 
 ## 6. 安全边界与 Stopline
 
-1. [ ] 未注册 `api_key` 不能执行。
+1. [ ] 未注册 `executor_key` 不能执行。
 2. [ ] `ReadPlan` schema、参数白名单、必填/可选参数、类型、日期、枚举与前序结果引用仍必须 fail-closed。
 3. [ ] tenant 隔离、RLS、当前 session、当前 principal 与审计归属不放松。
 4. [ ] 知识包、模型输出、候选组、最近问答和历史会话都不能声明或扩大权限。
-5. [ ] 用户可见输出不能原样泄露 raw JSON、`api_key`、`payload`、`results`、`step-*`、执行计划结构、密钥或 provider 配置。
+5. [ ] 用户可见输出不能原样泄露 raw JSON、`executor_key`、`payload`、`results`、`step-*`、执行计划结构、密钥或 provider 配置。
 6. [ ] 不得把候选组、最近问答或澄清状态当作执行结果事实源。
 7. [ ] 不得用本地关键词补丁替代模型对事实窗口的语义选择。
 8. [ ] 不得在本计划中恢复或换名引入 `page_context`。

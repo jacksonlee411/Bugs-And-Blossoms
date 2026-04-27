@@ -102,7 +102,7 @@ func TestCubeBoxOrgUnitDetailsExecutor(t *testing.T) {
 		Steps: []cubebox.ReadPlanStep{
 			{
 				ID:          "step-1",
-				APIKey:      "orgunit.details",
+				ExecutorKey: "orgunit.details",
 				Params:      map[string]any{"org_code": "1001", "as_of": "2026-04-23", "include_disabled": false},
 				ResultFocus: []string{"org_unit.name", "ext_fields"},
 				DependsOn:   []string{},

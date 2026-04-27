@@ -76,7 +76,7 @@ func newCubeBoxOrgUnitRegisteredExecutors(store OrgUnitStore) ([]cubebox.Registe
 	items := make([]cubebox.RegisteredExecutor, 0, 4)
 	if detailsStore, ok := store.(cubeBoxOrgUnitDetailsStore); ok {
 		items = append(items, cubebox.RegisteredExecutor{
-			APIKey:         "orgunit.details",
+			ExecutorKey:    "orgunit.details",
 			RequiredParams: []string{"org_code", "as_of"},
 			OptionalParams: []string{"include_disabled"},
 			Executor: cubeBoxOrgUnitDetailsExecutor{
@@ -86,7 +86,7 @@ func newCubeBoxOrgUnitRegisteredExecutors(store OrgUnitStore) ([]cubebox.Registe
 	}
 	items = append(items,
 		cubebox.RegisteredExecutor{
-			APIKey:         "orgunit.list",
+			ExecutorKey:    "orgunit.list",
 			RequiredParams: []string{"as_of"},
 			OptionalParams: []string{"include_disabled", "parent_org_code", "all_org_units", "keyword", "status", "is_business_unit", "page", "size"},
 			Executor: cubeBoxOrgUnitListExecutor{
@@ -94,7 +94,7 @@ func newCubeBoxOrgUnitRegisteredExecutors(store OrgUnitStore) ([]cubebox.Registe
 			},
 		},
 		cubebox.RegisteredExecutor{
-			APIKey:         "orgunit.search",
+			ExecutorKey:    "orgunit.search",
 			RequiredParams: []string{"query", "as_of"},
 			OptionalParams: []string{"include_disabled"},
 			Executor: cubeBoxOrgUnitSearchExecutor{
@@ -102,7 +102,7 @@ func newCubeBoxOrgUnitRegisteredExecutors(store OrgUnitStore) ([]cubebox.Registe
 			},
 		},
 		cubebox.RegisteredExecutor{
-			APIKey:         "orgunit.audit",
+			ExecutorKey:    "orgunit.audit",
 			RequiredParams: []string{"org_code"},
 			OptionalParams: []string{"limit"},
 			Executor: cubeBoxOrgUnitAuditExecutor{
@@ -178,11 +178,11 @@ func (e cubeBoxOrgUnitDetailsExecutor) Execute(ctx context.Context, request cube
 	return cubebox.ExecuteResult{
 		Payload: payload,
 		ConfirmedEntity: orgUnitQueryEntity(cubebox.QueryEntity{
-			Intent:        strings.TrimSpace(request.PlanIntent),
-			EntityKey:     details.OrgCode,
-			AsOf:          asOf,
-			SourceAPIKey:  "orgunit.details",
-			ParentOrgCode: details.ParentCode,
+			Intent:            strings.TrimSpace(request.PlanIntent),
+			EntityKey:         details.OrgCode,
+			AsOf:              asOf,
+			SourceExecutorKey: "orgunit.details",
+			ParentOrgCode:     details.ParentCode,
 		}),
 	}, nil
 }
@@ -399,11 +399,11 @@ func (e cubeBoxOrgUnitSearchExecutor) Execute(ctx context.Context, request cubeb
 	return cubebox.ExecuteResult{
 		Payload: payload,
 		ConfirmedEntity: orgUnitQueryEntity(cubebox.QueryEntity{
-			Intent:        strings.TrimSpace(request.PlanIntent),
-			EntityKey:     result.TargetOrgCode,
-			AsOf:          asOf,
-			SourceAPIKey:  "orgunit.search",
-			TargetOrgCode: result.TargetOrgCode,
+			Intent:            strings.TrimSpace(request.PlanIntent),
+			EntityKey:         result.TargetOrgCode,
+			AsOf:              asOf,
+			SourceExecutorKey: "orgunit.search",
+			TargetOrgCode:     result.TargetOrgCode,
 		}),
 	}, nil
 }
@@ -483,9 +483,9 @@ func (e cubeBoxOrgUnitAuditExecutor) Execute(ctx context.Context, request cubebo
 	return cubebox.ExecuteResult{
 		Payload: payload,
 		ConfirmedEntity: orgUnitQueryEntity(cubebox.QueryEntity{
-			Intent:       strings.TrimSpace(request.PlanIntent),
-			EntityKey:    orgCode,
-			SourceAPIKey: "orgunit.audit",
+			Intent:            strings.TrimSpace(request.PlanIntent),
+			EntityKey:         orgCode,
+			SourceExecutorKey: "orgunit.audit",
 		}),
 	}, nil
 }

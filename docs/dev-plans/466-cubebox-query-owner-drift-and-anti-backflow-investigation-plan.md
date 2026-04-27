@@ -58,7 +58,7 @@
 | A. 业务响应契约重复组装 | `P1` | 同一业务响应在公开 API 与 `CubeBox` executor 各实现一次 | `orgunit` 读契约 owner |
 | B. 共享 query flow 残留模块私有语义 | `P1` | 共享层仍持有 `orgunit` 专属澄清/错误语义 | 共享 `CubeBox` runtime owner |
 | C. 共享 narrator 残留模块私有回答约束 | `P2` | 共享 narrator 里写死 `orgunit` 字段和文案 | 共享 `CubeBox` runtime owner |
-| D. knowledge pack 与执行注册表缺少主动防漂移校验 | `P2` | 只能在运行时命中错误 `api_key` 后才 fail-closed | `modules/cubebox` owner |
+| D. knowledge pack 与执行注册表缺少主动防漂移校验 | `P2` | 只能在运行时命中错误 `executor_key` 后才 fail-closed | `modules/cubebox` owner |
 | E. 参数类型 fail-closed 零散分布 | `P2` | 参数名已收敛，但参数类型/枚举校验分散在各 executor | 模块 executor owner |
 | F. readiness / 文档叙事过时 | `P3` | 文档仍引用已不再存在的旧挂点 | 对应文档 owner |
 
@@ -139,13 +139,13 @@ owner 冻结：
 
 - 必填文件存在
 - `queries.md` 有 intents block
-- `apis.md` 有 api_key block
+- `apis.md` 有 executor_key block
 - `examples.md` 有至少一个可解析的 `ReadPlan` 示例
 
 但当前仍缺少以下主动校验：
 
-1. `apis.md` 中声明的 `api_key` 是否全部在执行注册表中注册；
-2. 执行注册表里实际存在的 `api_key` 是否已被知识包覆盖；
+1. `apis.md` 中声明的 `executor_key` 是否全部在执行注册表中注册；
+2. 执行注册表里实际存在的 `executor_key` 是否已被知识包覆盖；
 3. `queries.md` / `apis.md` 的参数口径是否与 executor 的必填/可选参数集合一致。
 
 因此当前只能在模型产出错误计划后，于运行时命中 `api_catalog_drift_or_executor_missing`；这属于“有 fail-closed，但缺少早发现”。
@@ -207,7 +207,7 @@ owner 冻结：
 
 优先处理：
 
-1. knowledge pack `api_key` 集合与执行注册表的一致性校验
+1. knowledge pack `executor_key` 集合与执行注册表的一致性校验
 2. knowledge pack 参数集合与 executor 参数集合的一致性校验
 
 目标是把“运行时才发现 drift”前移为“加载或测试阶段发现 drift”。

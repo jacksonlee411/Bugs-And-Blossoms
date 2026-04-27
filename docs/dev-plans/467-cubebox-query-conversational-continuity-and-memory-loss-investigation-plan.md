@@ -408,7 +408,7 @@ query flow 当前构建的 canonical context 中：
 ### 9.1 Slice A：会话事件回放与查询事实提取
 
 1. [ ] 复核 `conversation replay` / canonical events 中哪些事件足以恢复最近成功查询实体。
-2. [ ] 冻结“已确认实体”的最小字段集合，例如 `domain`、`entity_key`、`target_org_code`、`parent_org_code`、`as_of`、`intent`、`source_api_key`。
+2. [ ] 冻结“已确认实体”的最小字段集合，例如 `domain`、`entity_key`、`target_org_code`、`parent_org_code`、`as_of`、`intent`、`source_executor_key`。
 3. [ ] 明确哪些场景不得进入“已确认实体”，例如歧义搜索候选、未完成澄清、planner 缺参 plan。
 
 当前事件契约冻结为 `turn.query_entity.confirmed`：该事件只作为查询链恢复元数据，不作为 timeline 可见项；前端恢复时只推进 `next_sequence`，不展示额外消息。payload 使用 `entity` 包裹最小字段，`entity_key` 是当前查询域的可继承主键；`orgunit` 域下它对应组织编码。

@@ -115,7 +115,7 @@ Codex 的启发在于：
 
 没有这层上位方案时，reviewer 往往只能逐个检查：
 
-- 这里是不是又多了一个 `switch api_key`；
+- 这里是不是又多了一个 `switch executor_key`；
 - 那里是不是又补了一个字符串模板；
 - 某个列表结果是不是偷偷把整页原样展开；
 - 某个 compact/summary 特例是不是又绕过了 canonical context reinjection。
@@ -172,7 +172,7 @@ Codex 的启发在于：
 1. 后续涉及查询返回边界的实现，必须先以 `462` 作为上位方案对齐分层、统一原则和 reviewer 口径，再进入 `461` 的具体收口实施。
 2. `461` 的后续实现目标不是“在当前实现上继续叠加一个更复杂的专用摘要分支”，而是依据 `462` 的统一原则，删除现有 capability-specific 硬编码特判，并把结果叙述 owner 回交给模型。
 3. 当前已暴露的硬编码实现包括但不限于：
-   - 在 `buildCubeboxQueryAnswer` / `summarizeQueryResult` 总线中直接按 `api_key` 分支
+   - 在 `buildCubeboxQueryAnswer` / `summarizeQueryResult` 总线中直接按 `executor_key` 分支
    - 在 `summarizeStructuredQueryResult` 中对 `orgunit.list` 进行局部特判
    - 在 `internal/server` 中继续扩张查询回答专用字符串模板，而不经过统一收敛入口
 4. `462` 落地后的 `461` 收口必须以“替换并删除当前硬编码实现”为目标，而不是保留旧特判再叠加新入口。

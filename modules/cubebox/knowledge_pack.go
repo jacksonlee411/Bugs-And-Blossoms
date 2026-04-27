@@ -42,7 +42,7 @@ type knowledgePackQueriesDoc struct {
 
 type knowledgePackAPIsDoc struct {
 	APIs []struct {
-		APIKey         string   `yaml:"api_key"`
+		ExecutorKey    string   `yaml:"executor_key"`
 		RequiredParams []string `yaml:"required_params"`
 		OptionalParams []string `yaml:"optional_params"`
 	} `yaml:"apis"`
@@ -130,21 +130,21 @@ func ValidateKnowledgePack(pack KnowledgePack) error {
 		return wrapKnowledgePackError(fmt.Sprintf("apis.md yaml invalid: %v", err))
 	}
 	if len(apisDoc.APIs) == 0 {
-		return wrapKnowledgePackError("apis.md missing api_key declaration")
+		return wrapKnowledgePackError("apis.md missing executor_key declaration")
 	}
 	for _, item := range apisDoc.APIs {
-		apiKey := strings.TrimSpace(item.APIKey)
-		if apiKey == "" {
-			return wrapKnowledgePackError("apis.md api_key required")
+		executorKey := strings.TrimSpace(item.ExecutorKey)
+		if executorKey == "" {
+			return wrapKnowledgePackError("apis.md executor_key required")
 		}
 		if item.RequiredParams == nil || item.OptionalParams == nil {
-			return wrapKnowledgePackError(fmt.Sprintf("apis.md params missing for api_key: %s", apiKey))
+			return wrapKnowledgePackError(fmt.Sprintf("apis.md params missing for executor_key: %s", executorKey))
 		}
-		if queryDoc, ok := queriesByKey[apiKey]; ok {
+		if queryDoc, ok := queriesByKey[executorKey]; ok {
 			required := normalizeParamNames(item.RequiredParams)
 			optional := normalizeParamNames(item.OptionalParams)
 			if !sameNormalizedParamSet(required, queryDoc.RequiredParams) || !sameNormalizedParamSet(optional, queryDoc.OptionalParams) {
-				return wrapKnowledgePackError(fmt.Sprintf("queries/apis params drift for key: %s", apiKey))
+				return wrapKnowledgePackError(fmt.Sprintf("queries/apis params drift for key: %s", executorKey))
 			}
 		}
 	}
@@ -236,20 +236,20 @@ func ValidateKnowledgePackAgainstRegistry(pack KnowledgePack, registry *Executio
 	if err := yaml.Unmarshal([]byte(apisBlock), &apisDoc); err != nil {
 		return wrapKnowledgePackError(fmt.Sprintf("apis.md yaml invalid: %v", err))
 	}
-	declaredAPIKeys := make(map[string]struct{}, len(apisDoc.APIs))
+	declaredExecutorKeys := make(map[string]struct{}, len(apisDoc.APIs))
 	for _, item := range apisDoc.APIs {
-		apiKey := strings.TrimSpace(item.APIKey)
-		declaredAPIKeys[apiKey] = struct{}{}
-		registered, ok := registry.Resolve(apiKey)
+		executorKey := strings.TrimSpace(item.ExecutorKey)
+		declaredExecutorKeys[executorKey] = struct{}{}
+		registered, ok := registry.Resolve(executorKey)
 		if !ok {
-			return wrapKnowledgePackError(fmt.Sprintf("apis.md api_key not registered: %s", apiKey))
+			return wrapKnowledgePackError(fmt.Sprintf("apis.md executor_key not registered: %s", executorKey))
 		}
 		required := normalizeParamNames(item.RequiredParams)
 		optional := normalizeParamNames(item.OptionalParams)
 		if !sameNormalizedParamSet(required, registered.RequiredParams) || !sameNormalizedParamSet(optional, registered.OptionalParams) {
 			return wrapKnowledgePackError(fmt.Sprintf(
 				"apis.md params drift for %s: required=%v optional=%v registry_required=%v registry_optional=%v",
-				apiKey,
+				executorKey,
 				required,
 				optional,
 				registered.RequiredParams,
@@ -258,10 +258,10 @@ func ValidateKnowledgePackAgainstRegistry(pack KnowledgePack, registry *Executio
 		}
 	}
 	for _, registered := range registry.RegisteredExecutors() {
-		if _, ok := declaredAPIKeys[registered.APIKey]; ok {
+		if _, ok := declaredExecutorKeys[registered.ExecutorKey]; ok {
 			continue
 		}
-		return wrapKnowledgePackError(fmt.Sprintf("execution registry api_key missing from apis.md: %s", registered.APIKey))
+		return wrapKnowledgePackError(fmt.Sprintf("execution registry executor_key missing from apis.md: %s", registered.ExecutorKey))
 	}
 	return nil
 }

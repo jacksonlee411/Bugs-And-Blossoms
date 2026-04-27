@@ -198,7 +198,7 @@ var queryNarrationForbiddenPatterns = []*regexp.Regexp{
 	regexp.MustCompile(`(?m)^\s*\{`),
 	regexp.MustCompile(`(?m)^\s*[\}\]]\s*$`),
 	regexp.MustCompile(`(?i)\bstep-\d+\b`),
-	regexp.MustCompile(`(?i)\b(api_key|result_focus|payload|results)\b`),
+	regexp.MustCompile(`(?i)\b(api_key|executor_key|result_focus|payload|results)\b`),
 	regexp.MustCompile(`(?i)\b(plan|steps|params|depends_on|explain_focus|missing_params|clarifying_question)\s*["'：:=]`),
 	regexp.MustCompile(`(?i)\b(plan|steps|params|depends_on|explain_focus|missing_params|clarifying_question)(\.[A-Za-z0-9_-]+|\[[0-9]+\])+`),
 }
@@ -780,7 +780,7 @@ func buildReadAPICatalogPromptBlock(entries []cubebox.ReadAPICatalogEntry) strin
 %s
 
 使用规则：
-- READ_PLAN.steps[].api_key 必须来自 read_api_catalog。
+- READ_PLAN.steps[].executor_key 必须来自 read_api_catalog。
 - steps[].params 只能包含对应 API 的 required_params 与 optional_params。
 - 缺少 required_params 时输出 CLARIFY，不要猜测。`, string(body)))
 }
@@ -906,7 +906,7 @@ func buildQueryNarrationMessages(body string) []cubebox.PromptItem {
 - 不得补做新的查询、推断新的默认值、追加新的澄清问题。
 - 不得输出 Markdown 代码块。
 - 不得逐字回显整份原始 JSON。
-- 不得暴露实现细节或计划执行痕迹；不要出现“step-1”“api_key”“result_focus”“payload”“results”“executor_key”“params.org_code”“plan.steps”这类内部字段路径或执行结构名。
+- 不得暴露实现细节或计划执行痕迹；不要出现“step-1”“api_key”“executor_key”“result_focus”“payload”“results”“params.org_code”“plan.steps”这类内部字段路径或执行结构名。
 - 若结果不足以支持更强结论，只能如实说明。
 - 输出纯文本，直接作为用户可见最终回复。
 
@@ -1397,8 +1397,8 @@ func allOrgScopePlanHasNarrowingConflict(plan cubebox.ReadPlan) bool {
 		return true
 	}
 	for _, step := range plan.Steps {
-		apiKey := strings.ToLower(strings.TrimSpace(step.APIKey))
-		if apiKey == "orgunit.details" || apiKey == "orgunit.search" || apiKey == "orgunit.audit" || apiKey == "orgunit.tree" {
+		executorKey := strings.ToLower(strings.TrimSpace(step.ExecutorKey))
+		if executorKey == "orgunit.details" || executorKey == "orgunit.search" || executorKey == "orgunit.audit" || executorKey == "orgunit.tree" {
 			return true
 		}
 		for _, param := range []string{"keyword", "parent_org_code", "org_code", "entity_key", "target_org_code"} {
@@ -1406,7 +1406,7 @@ func allOrgScopePlanHasNarrowingConflict(plan cubebox.ReadPlan) bool {
 				return true
 			}
 		}
-		if apiKey == "orgunit.list" && !paramBoolIsTrue(step.Params["all_org_units"]) && !paramValueIsPresent(step.Params["keyword"]) && !paramValueIsPresent(step.Params["is_business_unit"]) {
+		if executorKey == "orgunit.list" && !paramBoolIsTrue(step.Params["all_org_units"]) && !paramValueIsPresent(step.Params["keyword"]) && !paramValueIsPresent(step.Params["is_business_unit"]) {
 			return true
 		}
 	}

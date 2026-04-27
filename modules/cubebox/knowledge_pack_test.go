@@ -12,7 +12,7 @@ func TestLoadKnowledgePack(t *testing.T) {
 	dir := t.TempDir()
 	writeKnowledgePackFile(t, dir, "CUBEBOX-SKILL.md", "# Skill\n\nqueries.md\napis.md\nexamples.md\n")
 	writeKnowledgePackFile(t, dir, "queries.md", "```yaml\nintents:\n  - key: orgunit.details\n    required_params: []\n    optional_params: []\n```\n")
-	writeKnowledgePackFile(t, dir, "apis.md", "```yaml\napis:\n  - api_key: orgunit.details\n    required_params: []\n    optional_params: []\n```\n")
+	writeKnowledgePackFile(t, dir, "apis.md", "```yaml\napis:\n  - executor_key: orgunit.details\n    required_params: []\n    optional_params: []\n```\n")
 	writeKnowledgePackFile(t, dir, "examples.md", "```json\n{\"steps\": []}\n```\n")
 
 	pack, err := LoadKnowledgePack(dir)
@@ -31,7 +31,7 @@ func TestLoadKnowledgePackRejectsMissingFile(t *testing.T) {
 	dir := t.TempDir()
 	writeKnowledgePackFile(t, dir, "CUBEBOX-SKILL.md", "# Skill\n\nqueries.md\napis.md\nexamples.md\n")
 	writeKnowledgePackFile(t, dir, "queries.md", "```yaml\nintents:\n  - key: orgunit.details\n    required_params: []\n    optional_params: []\n```\n")
-	writeKnowledgePackFile(t, dir, "apis.md", "```yaml\napis:\n  - api_key: orgunit.details\n    required_params: []\n    optional_params: []\n```\n")
+	writeKnowledgePackFile(t, dir, "apis.md", "```yaml\napis:\n  - executor_key: orgunit.details\n    required_params: []\n    optional_params: []\n```\n")
 
 	_, err := LoadKnowledgePack(dir)
 	if !errors.Is(err, ErrKnowledgePackInvalid) {
@@ -45,7 +45,7 @@ func TestValidateKnowledgePackRejectsMissingStructuredAnchor(t *testing.T) {
 		Files: map[string]string{
 			"CUBEBOX-SKILL.md": "# Skill\n\nqueries.md\napis.md\nexamples.md\n",
 			"queries.md":       "# Queries\n",
-			"apis.md":          "api_key: orgunit.details\n",
+			"apis.md":          "executor_key: orgunit.details\n",
 			"examples.md":      "{\"steps\": []}",
 		},
 	}
@@ -62,7 +62,7 @@ func TestValidateKnowledgePackRejectsBodyKeywordWithoutFencedBlock(t *testing.T)
 		Files: map[string]string{
 			"CUBEBOX-SKILL.md": "# Skill\n\nqueries.md\napis.md\nexamples.md\n",
 			"queries.md":       "这里提到了 intents: 但没有 yaml fenced block",
-			"apis.md":          "这里提到了 api_key: orgunit.details 但没有 yaml fenced block",
+			"apis.md":          "这里提到了 executor_key: orgunit.details 但没有 yaml fenced block",
 			"examples.md":      "这里提到了 \"steps\" 但没有 json fenced block",
 		},
 	}
@@ -79,7 +79,7 @@ func TestValidateKnowledgePackRejectsInvalidYAMLOrJSONBlock(t *testing.T) {
 		Files: map[string]string{
 			"CUBEBOX-SKILL.md": "# Skill\n\nqueries.md\napis.md\nexamples.md\n",
 			"queries.md":       "```yaml\nintents:\n  - key: [\n```\n",
-			"apis.md":          "```yaml\napis:\n  - api_key: orgunit.details\n    required_params: []\n    optional_params: []\n```\n",
+			"apis.md":          "```yaml\napis:\n  - executor_key: orgunit.details\n    required_params: []\n    optional_params: []\n```\n",
 			"examples.md":      "```json\n{\"steps\": [}\n```\n",
 		},
 	}
@@ -93,7 +93,7 @@ func TestValidateKnowledgePackRejectsInvalidYAMLOrJSONBlock(t *testing.T) {
 func TestValidateKnowledgePackAgainstRegistryRejectsParamDrift(t *testing.T) {
 	registry, err := NewExecutionRegistry(
 		RegisteredExecutor{
-			APIKey:         "orgunit.details",
+			ExecutorKey:    "orgunit.details",
 			RequiredParams: []string{"org_code", "as_of"},
 			OptionalParams: []string{"include_disabled"},
 			Executor:       readExecutorStub{},
@@ -107,8 +107,8 @@ func TestValidateKnowledgePackAgainstRegistryRejectsParamDrift(t *testing.T) {
 		Files: map[string]string{
 			"CUBEBOX-SKILL.md": "# Skill\n\nqueries.md\napis.md\nexamples.md\n",
 			"queries.md":       "```yaml\nintents:\n  - key: orgunit.details\n    required_params: [org_code, as_of]\n    optional_params: [include_disabled]\n```\n",
-			"apis.md":          "```yaml\napis:\n  - api_key: orgunit.details\n    required_params: [org_code]\n    optional_params: [include_disabled]\n```\n",
-			"examples.md":      "```json\n{\"steps\": [{\"id\":\"step-1\",\"api_key\":\"orgunit.details\",\"params\":{\"org_code\":\"1001\",\"as_of\":\"2026-04-23\"},\"depends_on\":[]}],\"intent\":\"orgunit.details\",\"confidence\":0.9}\n```\n",
+			"apis.md":          "```yaml\napis:\n  - executor_key: orgunit.details\n    required_params: [org_code]\n    optional_params: [include_disabled]\n```\n",
+			"examples.md":      "```json\n{\"steps\": [{\"id\":\"step-1\",\"executor_key\":\"orgunit.details\",\"params\":{\"org_code\":\"1001\",\"as_of\":\"2026-04-23\"},\"depends_on\":[]}],\"intent\":\"orgunit.details\",\"confidence\":0.9}\n```\n",
 		},
 	}
 
@@ -118,16 +118,16 @@ func TestValidateKnowledgePackAgainstRegistryRejectsParamDrift(t *testing.T) {
 	}
 }
 
-func TestValidateKnowledgePackAgainstRegistryRejectsRegistryAPIKeyMissingFromAPIsDoc(t *testing.T) {
+func TestValidateKnowledgePackAgainstRegistryRejectsRegistryExecutorKeyMissingFromAPIsDoc(t *testing.T) {
 	registry, err := NewExecutionRegistry(
 		RegisteredExecutor{
-			APIKey:         "orgunit.details",
+			ExecutorKey:    "orgunit.details",
 			RequiredParams: []string{"org_code"},
 			OptionalParams: []string{"as_of"},
 			Executor:       readExecutorStub{},
 		},
 		RegisteredExecutor{
-			APIKey:         "orgunit.list_children",
+			ExecutorKey:    "orgunit.list_children",
 			RequiredParams: []string{"parent_org_code"},
 			OptionalParams: []string{"as_of"},
 			Executor:       readExecutorStub{},
@@ -141,8 +141,8 @@ func TestValidateKnowledgePackAgainstRegistryRejectsRegistryAPIKeyMissingFromAPI
 		Files: map[string]string{
 			"CUBEBOX-SKILL.md": "# Skill\n\nqueries.md\napis.md\nexamples.md\n",
 			"queries.md":       "```yaml\nintents:\n  - key: orgunit.details\n    required_params: [org_code]\n    optional_params: [as_of]\n```\n",
-			"apis.md":          "```yaml\napis:\n  - api_key: orgunit.details\n    required_params: [org_code]\n    optional_params: [as_of]\n```\n",
-			"examples.md":      "```json\n{\"steps\": [{\"id\":\"step-1\",\"api_key\":\"orgunit.details\",\"params\":{\"org_code\":\"1001\"},\"depends_on\":[]}],\"intent\":\"orgunit.details\",\"confidence\":0.9}\n```\n",
+			"apis.md":          "```yaml\napis:\n  - executor_key: orgunit.details\n    required_params: [org_code]\n    optional_params: [as_of]\n```\n",
+			"examples.md":      "```json\n{\"steps\": [{\"id\":\"step-1\",\"executor_key\":\"orgunit.details\",\"params\":{\"org_code\":\"1001\"},\"depends_on\":[]}],\"intent\":\"orgunit.details\",\"confidence\":0.9}\n```\n",
 		},
 	}
 
@@ -159,7 +159,7 @@ func TestNoQueryGuidanceFromKnowledgePacks(t *testing.T) {
 			Files: map[string]string{
 				"CUBEBOX-SKILL.md": "# Skill\n\nqueries.md\napis.md\nexamples.md\n",
 				"queries.md":       "```yaml\nintents:\n  - key: orgunit.details\n    required_params: [org_code, as_of]\n    optional_params: []\nno_query_guidance:\n  scope_summary: 当前主要支持组织相关只读查询。\n  suggested_prompts:\n    - 查“华东销售中心”的详情\n    - 查“华东销售中心”的详情\n    - 搜索名称包含“销售”的组织\n```\n",
-				"apis.md":          "```yaml\napis:\n  - api_key: orgunit.details\n    required_params: [org_code, as_of]\n    optional_params: []\n```\n",
+				"apis.md":          "```yaml\napis:\n  - executor_key: orgunit.details\n    required_params: [org_code, as_of]\n    optional_params: []\n```\n",
 				"examples.md":      "```json\n{\"steps\": []}\n```\n",
 			},
 		},

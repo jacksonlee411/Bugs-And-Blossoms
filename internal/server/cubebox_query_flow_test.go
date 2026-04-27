@@ -87,7 +87,7 @@ func TestBuildQueryNarrationMessagesForbidsInternalLeakage(t *testing.T) {
 	for _, snippet := range []string{
 		"不得逐字回显整份原始 JSON",
 		"不得暴露实现细节或计划执行痕迹",
-		"api_key",
+		"executor_key",
 		"payload",
 		"好的回答",
 		"不好的回答",
@@ -158,7 +158,7 @@ func TestBuildQueryClarificationEnvelopeOmitsQueryIntent(t *testing.T) {
 		CannotSilentSelect: true,
 		QueryContext: cubebox.QueryContext{
 			RecentConfirmedEntities: []cubebox.QueryEntity{
-				{Domain: "orgunit", Intent: "orgunit.search", EntityKey: "1001", AsOf: "2026-04-24", SourceAPIKey: "orgunit.search", TargetOrgCode: "1001"},
+				{Domain: "orgunit", Intent: "orgunit.search", EntityKey: "1001", AsOf: "2026-04-24", SourceExecutorKey: "orgunit.search", TargetOrgCode: "1001"},
 			},
 			RecentCandidateGroups: []cubebox.QueryCandidateGroup{
 				{
@@ -203,7 +203,7 @@ func TestBuildQueryClarificationEnvelopeOmitsQueryIntent(t *testing.T) {
 		`"query_intent"`,
 		`"intent":"orgunit.search"`,
 		`"resolved_entity"`,
-		`"source_api_key"`,
+		`"source_executor_key"`,
 		`"target_org_code"`,
 	} {
 		if strings.Contains(text, forbidden) {
@@ -503,7 +503,7 @@ func TestQueryFlowReturnsPlannerClarificationVerbatim(t *testing.T) {
 
 func TestQueryFlowReplansPaginationOnlyPlannerClarification(t *testing.T) {
 	registry, err := cubebox.NewExecutionRegistry(cubebox.RegisteredExecutor{
-		APIKey:         "orgunit.list",
+		ExecutorKey:    "orgunit.list",
 		RequiredParams: []string{"as_of"},
 		Executor: queryExecutorStub{
 			executeFn: func(context.Context, cubebox.ExecuteRequest, map[string]any) (cubebox.ExecuteResult, error) {
@@ -580,13 +580,13 @@ func TestBuildPlannerMessagesIncludesQueryEvidenceWindow(t *testing.T) {
 		QueryContext: cubebox.QueryContext{
 			RecentConfirmedEntities: []cubebox.QueryEntity{
 				{
-					Domain:        "orgunit",
-					Intent:        "orgunit.details",
-					EntityKey:     "100000",
-					AsOf:          "2026-04-25",
-					SourceAPIKey:  "orgunit.details",
-					TargetOrgCode: "100000",
-					ParentOrgCode: "ROOT",
+					Domain:            "orgunit",
+					Intent:            "orgunit.details",
+					EntityKey:         "100000",
+					AsOf:              "2026-04-25",
+					SourceExecutorKey: "orgunit.details",
+					TargetOrgCode:     "100000",
+					ParentOrgCode:     "ROOT",
 				},
 			},
 			RecentCandidateGroups: []cubebox.QueryCandidateGroup{
@@ -612,7 +612,7 @@ func TestBuildPlannerMessagesIncludesQueryEvidenceWindow(t *testing.T) {
 			if !strings.Contains(message.Content, "observations") || !strings.Contains(message.Content, "entity_fact") || !strings.Contains(message.Content, "presented_options") || !strings.Contains(message.Content, "100000") {
 				t.Fatalf("unexpected context block=%q", message.Content)
 			}
-			for _, forbidden := range []string{`"intent":"orgunit.details"`, `"source_api_key"`, `"target_org_code"`, `"parent_org_code"`, "recent_confirmed_entity", "recent_candidates", "recent_candidate_groups"} {
+			for _, forbidden := range []string{`"intent":"orgunit.details"`, `"source_executor_key"`, `"target_org_code"`, `"parent_org_code"`, "recent_confirmed_entity", "recent_candidates", "recent_candidate_groups"} {
 				if strings.Contains(message.Content, forbidden) {
 					t.Fatalf("expected planner context to omit %q, got %q", forbidden, message.Content)
 				}
@@ -746,7 +746,7 @@ func TestBuildPlannerMessagesGuidesCorrectionToOverrideHistoricalKeywordFilter(t
 				},
 			}},
 			RecentConfirmedEntities: []cubebox.QueryEntity{
-				{Domain: "orgunit", Intent: "orgunit.details", EntityKey: "200007", AsOf: "2026-04-27", SourceAPIKey: "orgunit.details", ParentOrgCode: "200006"},
+				{Domain: "orgunit", Intent: "orgunit.details", EntityKey: "200007", AsOf: "2026-04-27", SourceExecutorKey: "orgunit.details", ParentOrgCode: "200006"},
 			},
 		},
 		KnowledgePacks: []cubebox.KnowledgePack{
@@ -758,7 +758,7 @@ func TestBuildPlannerMessagesGuidesCorrectionToOverrideHistoricalKeywordFilter(t
 			}},
 		},
 		ReadAPICatalog: []cubebox.ReadAPICatalogEntry{{
-			APIKey:         "orgunit.list",
+			ExecutorKey:    "orgunit.list",
 			RequiredParams: []string{"as_of"},
 			OptionalParams: []string{"include_disabled", "parent_org_code", "all_org_units", "keyword", "page", "size"},
 		}},
@@ -833,7 +833,7 @@ func TestBuildPlannerMessagesTreatsPaginationAsControlDefaults(t *testing.T) {
 			}},
 		},
 		ReadAPICatalog: []cubebox.ReadAPICatalogEntry{{
-			APIKey:         "orgunit.list",
+			ExecutorKey:    "orgunit.list",
 			RequiredParams: []string{"as_of"},
 			OptionalParams: []string{"include_disabled", "all_org_units", "page", "size"},
 		}},
@@ -858,7 +858,7 @@ func TestBuildPlannerMessagesTreatsPaginationAsControlDefaults(t *testing.T) {
 
 func TestQueryFlowInjectsClarificationResumeIntoPlannerInput(t *testing.T) {
 	registry, err := cubebox.NewExecutionRegistry(cubebox.RegisteredExecutor{
-		APIKey:         "orgunit.list",
+		ExecutorKey:    "orgunit.list",
 		RequiredParams: []string{"as_of"},
 		OptionalParams: []string{"parent_org_code", "include_disabled"},
 		Executor: queryExecutorStub{
@@ -959,7 +959,7 @@ func TestQueryFlowInjectsClarificationResumeIntoPlannerInput(t *testing.T) {
 
 func TestQueryFlowExecutesPaginationShortAnswerAsFirstPageSize(t *testing.T) {
 	registry, err := cubebox.NewExecutionRegistry(cubebox.RegisteredExecutor{
-		APIKey:         "orgunit.list",
+		ExecutorKey:    "orgunit.list",
 		RequiredParams: []string{"as_of"},
 		OptionalParams: []string{"include_disabled", "all_org_units", "page", "size"},
 		Executor: queryExecutorStub{
@@ -1011,7 +1011,7 @@ func TestQueryFlowExecutesPaginationShortAnswerAsFirstPageSize(t *testing.T) {
 					MissingParams: []string{},
 					Steps: []cubebox.ReadPlanStep{{
 						ID:          "step-1",
-						APIKey:      "orgunit.list",
+						ExecutorKey: "orgunit.list",
 						Params:      map[string]any{"as_of": "2026-04-27", "include_disabled": false, "page": 1, "size": 100},
 						ResultFocus: []string{"page", "size", "total", "org_units[].org_code"},
 						DependsOn:   []string{},
@@ -1219,7 +1219,7 @@ func TestQueryFlowInjectsCandidateClarificationResumeIntoPlannerInput(t *testing
 func TestQueryFlowLetsPlannerOwnAuditTargetAfterCandidateSelection(t *testing.T) {
 	var executedOrgCodes []string
 	registry, err := cubebox.NewExecutionRegistry(cubebox.RegisteredExecutor{
-		APIKey:         "orgunit.audit",
+		ExecutorKey:    "orgunit.audit",
 		RequiredParams: []string{"org_code"},
 		OptionalParams: []string{"limit"},
 		Executor: queryExecutorStub{
@@ -1305,9 +1305,9 @@ func TestQueryFlowLetsPlannerOwnAuditTargetAfterCandidateSelection(t *testing.T)
 					Intent:     "orgunit.audit",
 					Confidence: 0.9,
 					Steps: []cubebox.ReadPlanStep{
-						{ID: "step-1", APIKey: "orgunit.audit", Params: map[string]any{"org_code": "200001"}, DependsOn: []string{}},
-						{ID: "step-2", APIKey: "orgunit.audit", Params: map[string]any{"org_code": "200002"}, DependsOn: []string{"step-1"}},
-						{ID: "step-3", APIKey: "orgunit.audit", Params: map[string]any{"org_code": "200004"}, DependsOn: []string{"step-2"}},
+						{ID: "step-1", ExecutorKey: "orgunit.audit", Params: map[string]any{"org_code": "200001"}, DependsOn: []string{}},
+						{ID: "step-2", ExecutorKey: "orgunit.audit", Params: map[string]any{"org_code": "200002"}, DependsOn: []string{"step-1"}},
+						{ID: "step-3", ExecutorKey: "orgunit.audit", Params: map[string]any{"org_code": "200004"}, DependsOn: []string{"step-2"}},
 					},
 				}), nil
 			}
@@ -1355,7 +1355,7 @@ func TestQueryFlowAllowsCrossTurnResultListFollowUpForFullNamePath(t *testing.T)
 	var executedOrgCodes []string
 
 	registry, err := cubebox.NewExecutionRegistry(cubebox.RegisteredExecutor{
-		APIKey:         "orgunit.details",
+		ExecutorKey:    "orgunit.details",
 		RequiredParams: []string{"org_code", "as_of"},
 		OptionalParams: []string{"include_disabled"},
 		Executor: queryExecutorStub{
@@ -1447,10 +1447,10 @@ func TestQueryFlowAllowsCrossTurnResultListFollowUpForFullNamePath(t *testing.T)
 					Intent:     "orgunit.details",
 					Confidence: 0.82,
 					Steps: []cubebox.ReadPlanStep{
-						{ID: "step-1", APIKey: "orgunit.details", Params: map[string]any{"org_code": "200001", "as_of": "2026-04-27", "include_disabled": false}, DependsOn: []string{}},
-						{ID: "step-2", APIKey: "orgunit.details", Params: map[string]any{"org_code": "200002", "as_of": "2026-04-27", "include_disabled": false}, DependsOn: []string{"step-1"}},
-						{ID: "step-3", APIKey: "orgunit.details", Params: map[string]any{"org_code": "200003", "as_of": "2026-04-27", "include_disabled": false}, DependsOn: []string{"step-2"}},
-						{ID: "step-4", APIKey: "orgunit.details", Params: map[string]any{"org_code": "200004", "as_of": "2026-04-27", "include_disabled": false}, DependsOn: []string{"step-3"}},
+						{ID: "step-1", ExecutorKey: "orgunit.details", Params: map[string]any{"org_code": "200001", "as_of": "2026-04-27", "include_disabled": false}, DependsOn: []string{}},
+						{ID: "step-2", ExecutorKey: "orgunit.details", Params: map[string]any{"org_code": "200002", "as_of": "2026-04-27", "include_disabled": false}, DependsOn: []string{"step-1"}},
+						{ID: "step-3", ExecutorKey: "orgunit.details", Params: map[string]any{"org_code": "200003", "as_of": "2026-04-27", "include_disabled": false}, DependsOn: []string{"step-2"}},
+						{ID: "step-4", ExecutorKey: "orgunit.details", Params: map[string]any{"org_code": "200004", "as_of": "2026-04-27", "include_disabled": false}, DependsOn: []string{"step-3"}},
 					},
 					ExplainFocus: []string{"组织编码", "组织名称", "组织路径长名称"},
 				}), nil
@@ -1499,10 +1499,10 @@ func TestBuildPlannerMessagesIncludesReadCatalogAndWorkingResults(t *testing.T) 
 	state.AppendPlan(1, cubebox.ReadPlan{
 		Intent: "orgunit.list",
 		Steps: []cubebox.ReadPlanStep{{
-			ID:        "step-1",
-			APIKey:    "orgunit.list",
-			Params:    map[string]any{"as_of": "2026-04-25"},
-			DependsOn: []string{},
+			ID:          "step-1",
+			ExecutorKey: "orgunit.list",
+			Params:      map[string]any{"as_of": "2026-04-25"},
+			DependsOn:   []string{},
 		}},
 	}, []cubebox.ExecuteResult{{
 		Payload: map[string]any{"org_units": []map[string]any{{"org_code": "100000", "has_children": true}}},
@@ -1514,7 +1514,7 @@ func TestBuildPlannerMessagesIncludesReadCatalogAndWorkingResults(t *testing.T) 
 		KnowledgePacks: []cubebox.KnowledgePack{
 			{Dir: "modules/orgunit/presentation/cubebox", Files: map[string]string{"CUBEBOX-SKILL.md": "x", "queries.md": "x", "apis.md": "x", "examples.md": "x"}},
 		},
-		ReadAPICatalog: []cubebox.ReadAPICatalogEntry{{APIKey: "orgunit.list", RequiredParams: []string{"as_of"}, OptionalParams: []string{"parent_org_code"}}},
+		ReadAPICatalog: []cubebox.ReadAPICatalogEntry{{ExecutorKey: "orgunit.list", RequiredParams: []string{"as_of"}, OptionalParams: []string{"parent_org_code"}}},
 		WorkingResults: &snapshot,
 	})
 
@@ -1522,7 +1522,7 @@ func TestBuildPlannerMessagesIncludesReadCatalogAndWorkingResults(t *testing.T) 
 	for _, expected := range []string{
 		"read_api_catalog",
 		"working_results",
-		`"api_key":"orgunit.list"`,
+		`"executor_key":"orgunit.list"`,
 		"executed_fingerprints",
 		"不要输出裸 DONE",
 		"不要用 NO_QUERY 表示已经查够",
@@ -1535,7 +1535,7 @@ func TestBuildPlannerMessagesIncludesReadCatalogAndWorkingResults(t *testing.T) 
 
 func TestQueryFlowLoopsUntilPlannerDoneAndNarratesOnce(t *testing.T) {
 	registry, err := cubebox.NewExecutionRegistry(cubebox.RegisteredExecutor{
-		APIKey:         "orgunit.list",
+		ExecutorKey:    "orgunit.list",
 		RequiredParams: []string{"as_of"},
 		OptionalParams: []string{"include_disabled"},
 		Executor: queryExecutorStub{
@@ -1612,7 +1612,7 @@ func TestQueryFlowLoopsUntilPlannerDoneAndNarratesOnce(t *testing.T) {
 func TestQueryFlowCanReplanFromWorkingResultsObservation(t *testing.T) {
 	var executeParams []map[string]any
 	registry, err := cubebox.NewExecutionRegistry(cubebox.RegisteredExecutor{
-		APIKey:         "orgunit.list",
+		ExecutorKey:    "orgunit.list",
 		RequiredParams: []string{"as_of"},
 		OptionalParams: []string{"include_disabled", "parent_org_code"},
 		Executor: queryExecutorStub{
@@ -1685,7 +1685,7 @@ func TestQueryFlowCanReplanFromWorkingResultsObservation(t *testing.T) {
 
 func TestQueryFlowNarratesOnlyLatestExecutionResultsAfterExploration(t *testing.T) {
 	registry, err := cubebox.NewExecutionRegistry(cubebox.RegisteredExecutor{
-		APIKey:         "orgunit.list",
+		ExecutorKey:    "orgunit.list",
 		RequiredParams: []string{"as_of"},
 		OptionalParams: []string{"parent_org_code"},
 		Executor: queryExecutorStub{
@@ -1752,7 +1752,7 @@ func TestQueryFlowNarratesOnlyLatestExecutionResultsAfterExploration(t *testing.
 
 func TestQueryFlowFailsClosedWhenPlannerReturnsNoQueryAfterExecution(t *testing.T) {
 	registry, err := cubebox.NewExecutionRegistry(cubebox.RegisteredExecutor{
-		APIKey:         "orgunit.list",
+		ExecutorKey:    "orgunit.list",
 		RequiredParams: []string{"as_of"},
 		Executor: queryExecutorStub{
 			executeFn: func(context.Context, cubebox.ExecuteRequest, map[string]any) (cubebox.ExecuteResult, error) {
@@ -1803,7 +1803,7 @@ func TestQueryFlowFailsClosedWhenDoneHasNoExecution(t *testing.T) {
 
 func TestQueryFlowMapsPostExecutionPlannerProviderErrorAsModelFailure(t *testing.T) {
 	registry, err := cubebox.NewExecutionRegistry(cubebox.RegisteredExecutor{
-		APIKey:         "orgunit.list",
+		ExecutorKey:    "orgunit.list",
 		RequiredParams: []string{"as_of"},
 		Executor: queryExecutorStub{
 			executeFn: func(context.Context, cubebox.ExecuteRequest, map[string]any) (cubebox.ExecuteResult, error) {
@@ -1865,7 +1865,7 @@ func TestQueryFlowDowngradesUnsupportedOrgUnitDimensionBoundaryViolationToNoQuer
 func TestQueryFlowBudgetExhaustionDoesNotNarratePartialAnswer(t *testing.T) {
 	executions := 0
 	registry, err := cubebox.NewExecutionRegistry(cubebox.RegisteredExecutor{
-		APIKey:         "orgunit.list",
+		ExecutorKey:    "orgunit.list",
 		RequiredParams: []string{"as_of"},
 		OptionalParams: []string{"parent_org_code"},
 		Executor: queryExecutorStub{
@@ -1907,7 +1907,7 @@ func TestQueryFlowBudgetExhaustionDoesNotNarratePartialAnswer(t *testing.T) {
 func TestQueryFlowRepeatedPlanFailsClosedWithoutReexecution(t *testing.T) {
 	executions := 0
 	registry, err := cubebox.NewExecutionRegistry(cubebox.RegisteredExecutor{
-		APIKey:         "orgunit.list",
+		ExecutorKey:    "orgunit.list",
 		RequiredParams: []string{"as_of"},
 		Executor: queryExecutorStub{
 			executeFn: func(context.Context, cubebox.ExecuteRequest, map[string]any) (cubebox.ExecuteResult, error) {
@@ -1942,7 +1942,7 @@ func TestQueryFlowRepeatedPlanFailsClosedWithoutReexecution(t *testing.T) {
 func TestQueryFlowReplansAllOrgScopeCorrectionBeforeExecutingHistoricalNarrowPlan(t *testing.T) {
 	var executedParams []map[string]any
 	registry, err := cubebox.NewExecutionRegistry(cubebox.RegisteredExecutor{
-		APIKey:         "orgunit.list",
+		ExecutorKey:    "orgunit.list",
 		RequiredParams: []string{"as_of"},
 		OptionalParams: []string{"include_disabled", "keyword", "parent_org_code", "all_org_units", "page", "size"},
 		Executor: queryExecutorStub{
@@ -2030,7 +2030,7 @@ func TestQueryFlowReplansAllOrgScopeCorrectionBeforeExecutingHistoricalNarrowPla
 func TestQueryFlowReplansAllOrgScopeCorrectionWhenPlannerOmitsAllOrgUnitsFlag(t *testing.T) {
 	var executedParams []map[string]any
 	registry, err := cubebox.NewExecutionRegistry(cubebox.RegisteredExecutor{
-		APIKey:         "orgunit.list",
+		ExecutorKey:    "orgunit.list",
 		RequiredParams: []string{"as_of"},
 		OptionalParams: []string{"include_disabled", "all_org_units", "page", "size"},
 		Executor: queryExecutorStub{
@@ -2105,7 +2105,7 @@ func TestQueryFlowReplansAllOrgScopeCorrectionWhenPlannerOmitsAllOrgUnitsFlag(t 
 func TestQueryFlowCompletesAllOrgScopeCorrectionWhenPlannerRepeatsExecutedCleanPlan(t *testing.T) {
 	executions := 0
 	registry, err := cubebox.NewExecutionRegistry(cubebox.RegisteredExecutor{
-		APIKey:         "orgunit.list",
+		ExecutorKey:    "orgunit.list",
 		RequiredParams: []string{"as_of"},
 		OptionalParams: []string{"include_disabled", "all_org_units", "page", "size"},
 		Executor: queryExecutorStub{
@@ -2315,7 +2315,7 @@ func queryPlanForOrgUnitListWithParams(params map[string]any) cubebox.ReadPlan {
 		MissingParams: []string{},
 		Steps: []cubebox.ReadPlanStep{{
 			ID:          "step-1",
-			APIKey:      "orgunit.list",
+			ExecutorKey: "orgunit.list",
 			Params:      copied,
 			ResultFocus: []string{"org_units[].org_code", "org_units[].has_children"},
 			DependsOn:   []string{},
@@ -2521,13 +2521,13 @@ func TestCubeboxProviderQueryNarratorBuildsStrictMessagesAndRejectsInternalLeaka
 		QueryContext: cubebox.QueryContext{
 			RecentConfirmedEntities: []cubebox.QueryEntity{
 				{
-					Domain:        "orgunit",
-					Intent:        "orgunit.details",
-					EntityKey:     "100000",
-					AsOf:          "2026-04-24",
-					SourceAPIKey:  "orgunit.details",
-					TargetOrgCode: "100000",
-					ParentOrgCode: "ROOT",
+					Domain:            "orgunit",
+					Intent:            "orgunit.details",
+					EntityKey:         "100000",
+					AsOf:              "2026-04-24",
+					SourceExecutorKey: "orgunit.details",
+					TargetOrgCode:     "100000",
+					ParentOrgCode:     "ROOT",
 				},
 			},
 			RecentCandidateGroups: []cubebox.QueryCandidateGroup{
@@ -2580,7 +2580,7 @@ func TestCubeboxProviderQueryNarratorBuildsStrictMessagesAndRejectsInternalLeaka
 	}
 	for _, forbidden := range []string{
 		`"step_id":"step-1"`,
-		`"api_key":"orgunit.details"`,
+		`"executor_key":"orgunit.details"`,
 		`"payload":`,
 		`"plan":`,
 		`"query_evidence_window"`,
@@ -2588,7 +2588,7 @@ func TestCubeboxProviderQueryNarratorBuildsStrictMessagesAndRejectsInternalLeaka
 		`"executed_steps"`,
 		`"executor_key"`,
 		`"resolved_entity"`,
-		`"source_api_key"`,
+		`"source_executor_key"`,
 		`"target_org_code"`,
 	} {
 		if strings.Contains(body, forbidden) {

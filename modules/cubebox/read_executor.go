@@ -28,7 +28,7 @@ type ExecuteRequest struct {
 }
 
 type ExecuteResult struct {
-	APIKey          string
+	ExecutorKey     string
 	StepID          string
 	Payload         map[string]any
 	ResultFocus     []string
@@ -41,7 +41,7 @@ type QueryNarrationResult struct {
 }
 
 type RegisteredExecutor struct {
-	APIKey         string
+	ExecutorKey    string
 	RequiredParams []string
 	OptionalParams []string
 	Executor       ReadExecutor
@@ -67,28 +67,28 @@ func (r *ExecutionRegistry) Register(item RegisteredExecutor) error {
 	if r == nil {
 		return errors.New("execution registry nil")
 	}
-	apiKey := strings.TrimSpace(item.APIKey)
-	if apiKey == "" {
-		return errors.New("api_key required")
+	executorKey := strings.TrimSpace(item.ExecutorKey)
+	if executorKey == "" {
+		return errors.New("executor_key required")
 	}
 	if item.Executor == nil {
 		return errors.New("executor required")
 	}
-	if _, exists := r.executors[apiKey]; exists {
-		return fmt.Errorf("api_key duplicated: %s", apiKey)
+	if _, exists := r.executors[executorKey]; exists {
+		return fmt.Errorf("executor_key duplicated: %s", executorKey)
 	}
-	item.APIKey = apiKey
+	item.ExecutorKey = executorKey
 	item.RequiredParams = normalizeParamNames(item.RequiredParams)
 	item.OptionalParams = normalizeParamNames(item.OptionalParams)
-	r.executors[apiKey] = item
+	r.executors[executorKey] = item
 	return nil
 }
 
-func (r *ExecutionRegistry) Resolve(apiKey string) (RegisteredExecutor, bool) {
+func (r *ExecutionRegistry) Resolve(executorKey string) (RegisteredExecutor, bool) {
 	if r == nil {
 		return RegisteredExecutor{}, false
 	}
-	item, ok := r.executors[strings.TrimSpace(apiKey)]
+	item, ok := r.executors[strings.TrimSpace(executorKey)]
 	return item, ok
 }
 
@@ -101,7 +101,7 @@ func (r *ExecutionRegistry) RegisteredExecutors() []RegisteredExecutor {
 		items = append(items, item)
 	}
 	slices.SortFunc(items, func(left RegisteredExecutor, right RegisteredExecutor) int {
-		return strings.Compare(left.APIKey, right.APIKey)
+		return strings.Compare(left.ExecutorKey, right.ExecutorKey)
 	})
 	return items
 }
@@ -128,9 +128,9 @@ func (r *ExecutionRegistry) ExecutePlan(ctx context.Context, request ExecuteRequ
 	results := make([]ExecuteResult, 0, len(plan.Steps))
 	previousResults := make(map[string]ExecuteResult, len(plan.Steps))
 	for _, step := range plan.Steps {
-		item, ok := r.Resolve(step.APIKey)
+		item, ok := r.Resolve(step.ExecutorKey)
 		if !ok {
-			return nil, wrapExecutorMissingError(fmt.Sprintf("api_key not registered: %s", strings.TrimSpace(step.APIKey)))
+			return nil, wrapExecutorMissingError(fmt.Sprintf("executor_key not registered: %s", strings.TrimSpace(step.ExecutorKey)))
 		}
 		resolvedParams, err := resolveReadPlanStepParams(step.Params, previousResults)
 		if err != nil {
@@ -154,7 +154,7 @@ func (r *ExecutionRegistry) ExecutePlan(ctx context.Context, request ExecuteRequ
 		if err != nil {
 			return nil, err
 		}
-		result.APIKey = strings.TrimSpace(step.APIKey)
+		result.ExecutorKey = strings.TrimSpace(step.ExecutorKey)
 		result.StepID = strings.TrimSpace(step.ID)
 		if result.ResultFocus == nil {
 			result.ResultFocus = append([]string(nil), step.ResultFocus...)
@@ -182,15 +182,15 @@ func validateRegisteredParams(item RegisteredExecutor, params map[string]any) er
 		if _, ok := allowed[name]; ok {
 			continue
 		}
-		return wrapReadPlanBoundaryError(fmt.Sprintf("unexpected param for %s: %s", item.APIKey, strings.TrimSpace(name)))
+		return wrapReadPlanBoundaryError(fmt.Sprintf("unexpected param for %s: %s", item.ExecutorKey, strings.TrimSpace(name)))
 	}
 	for _, name := range item.RequiredParams {
 		value, ok := params[name]
 		if !ok || value == nil {
-			return wrapReadPlanBoundaryError(fmt.Sprintf("required param missing for %s: %s", item.APIKey, name))
+			return wrapReadPlanBoundaryError(fmt.Sprintf("required param missing for %s: %s", item.ExecutorKey, name))
 		}
 		if text, ok := value.(string); ok && strings.TrimSpace(text) == "" {
-			return wrapReadPlanBoundaryError(fmt.Sprintf("required param empty for %s: %s", item.APIKey, name))
+			return wrapReadPlanBoundaryError(fmt.Sprintf("required param empty for %s: %s", item.ExecutorKey, name))
 		}
 	}
 	return nil
@@ -310,8 +310,8 @@ func resolveReadPlanResultField(result ExecuteResult, fieldPath string) (any, er
 			return nil, errors.New("payload child field required")
 		}
 		return resolveNestedMapField(result.Payload, parts[1:])
-	case "api_key":
-		return result.APIKey, nil
+	case "executor_key":
+		return result.ExecutorKey, nil
 	case "step_id":
 		return result.StepID, nil
 	default:

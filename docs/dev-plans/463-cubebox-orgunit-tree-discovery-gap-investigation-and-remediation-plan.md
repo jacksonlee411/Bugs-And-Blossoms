@@ -198,7 +198,7 @@ CubeBox 返回：
 - 文件存在
 - fenced block 存在
 - `queries.md` 有 intents
-- `apis.md` 有 `api_key`
+- `apis.md` 有 `executor_key`
 - `examples.md` 有 `ReadPlan` 示例
 
 但它并不会把知识包提炼成真正的运行时结构对象，用于：
@@ -468,7 +468,7 @@ CubeBox 返回：
    - 可上提为通用 contract 的能力
    - 应删除的局部硬编码
 3. [ ] 收紧解释层
-   - 不再继续为单个 `api_key` 扩张专用字符串模板
+   - 不再继续为单个 `executor_key` 扩张专用字符串模板
    - 若短期仍保留 `SummaryRenderer`，必须明确其为过渡能力，并禁止复制扩散
 4. [ ] 若未来要做“自动展开一层”
    - 先冻结共享 contract：前序引用参数、可引用结果字段、唯一性约束
