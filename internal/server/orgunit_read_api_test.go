@@ -540,6 +540,12 @@ func TestListOrgUnitListPage(t *testing.T) {
 		if total != 1 || len(items) != 1 || items[0].OrgCode != "A001" {
 			t.Fatalf("items=%+v total=%d", items, total)
 		}
+		if !(orgUnitListPageRequest{AsOf: "2026-01-01", Keyword: "Alpha"}).ShouldSearchAllOrgUnits() {
+			t.Fatal("keyword list without parent should search all org units")
+		}
+		if (orgUnitListPageRequest{AsOf: "2026-01-01"}).ShouldSearchAllOrgUnits() {
+			t.Fatal("plain list without parent should keep root scope")
+		}
 
 		roots, totalRoots, err := listOrgUnitListPage(context.Background(), store, "t1", orgUnitListPageRequest{
 			AsOf: "2026-01-01",

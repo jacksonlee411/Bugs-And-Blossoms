@@ -62,7 +62,7 @@ apis:
 
 ### `orgunit.list`
 
-- 用途：查询组织列表，或某个上级组织下的直接子组织列表
+- 用途：查询组织列表、全租户关键词组织列表，或某个上级组织下的直接子组织列表
 - 必填参数：
   - `as_of`
 - 可选参数：
@@ -74,6 +74,9 @@ apis:
   - `size`
 - 参数约束：
   - `status` 只接受 canonical 值 `active`、`disabled`、`all`
+  - 有 `parent_org_code` 时，只返回该上级组织的直接子组织
+  - 无 `parent_org_code` 且无 `keyword` 时，只返回当前租户一级组织
+  - 无 `parent_org_code` 且有 `keyword` 时，在当前租户全部有效组织中按组织编码/名称关键词过滤
 - 关注字段：
   - `as_of`
   - `include_disabled`

@@ -764,10 +764,10 @@ func TestOrgUnitPGStore_ListOrgUnitsPage(t *testing.T) {
 	})
 
 	t.Run("success root list with pagination and keyword/status filter", func(t *testing.T) {
-		tx := &stubTx{
+		tx := &queryCaptureTx{stubTx: &stubTx{
 			row:  metadataScanRow{vals: []any{int(1)}},
 			rows: &metadataScanRows{records: [][]any{{"A001", "Root", "", true, true}}},
-		}
+		}}
 		store := &orgUnitPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx, nil })}
 		items, total, err := store.ListOrgUnitsPage(ctx, "t1", orgUnitListPageRequest{
 			AsOf:            "2026-01-01",
@@ -787,6 +787,38 @@ func TestOrgUnitPGStore_ListOrgUnitsPage(t *testing.T) {
 		}
 		if items[0].HasChildren == nil || !*items[0].HasChildren {
 			t.Fatalf("expected root has_children, items=%v", items)
+		}
+		if len(tx.querySQLs) != 1 {
+			t.Fatalf("expected one list query, got %d", len(tx.querySQLs))
+		}
+		if strings.Contains(tx.querySQLs[0], " ILIKE %") || strings.Contains(tx.querySQLs[0], " || %") {
+			t.Fatalf("keyword filter must bind wildcard pattern as an argument, got sql=%q", tx.querySQLs[0])
+		}
+		if len(tx.queryArgs) != 1 || len(tx.queryArgs[0]) < 3 || tx.queryArgs[0][2] != "%A%" {
+			t.Fatalf("expected wildcard keyword argument, got %#v", tx.queryArgs)
+		}
+		if strings.Contains(tx.querySQLs[0], rootOrgNodeCompatCondition("v")) {
+			t.Fatalf("keyword list without parent must search all org units, got sql=%q", tx.querySQLs[0])
+		}
+	})
+
+	t.Run("success root list without keyword keeps root scope", func(t *testing.T) {
+		tx := &queryCaptureTx{stubTx: &stubTx{
+			row:  metadataScanRow{vals: []any{int(1)}},
+			rows: &metadataScanRows{records: [][]any{{"A001", "Root", "active", true, true}}},
+		}}
+		store := &orgUnitPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx, nil })}
+		items, total, err := store.ListOrgUnitsPage(ctx, "t1", orgUnitListPageRequest{
+			AsOf: "2026-01-01",
+		})
+		if err != nil {
+			t.Fatalf("err=%v", err)
+		}
+		if total != 1 || len(items) != 1 {
+			t.Fatalf("total=%d items=%v", total, items)
+		}
+		if len(tx.querySQLs) != 1 || !strings.Contains(tx.querySQLs[0], rootOrgNodeCompatCondition("v")) {
+			t.Fatalf("root list without keyword must keep root scope, sqls=%q", tx.querySQLs)
 		}
 	})
 

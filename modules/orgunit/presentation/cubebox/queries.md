@@ -9,7 +9,7 @@ intents:
     required_params: [org_code, as_of]
     optional_params: [include_disabled]
   - key: orgunit.list
-    description: 查询组织列表或某个上级组织下的直接子组织列表
+    description: 查询组织列表、全租户关键词组织列表，或某个上级组织下的直接子组织列表
     required_params: [as_of]
     optional_params: [include_disabled, parent_org_code, keyword, status, page, size]
   - key: orgunit.search
@@ -64,6 +64,7 @@ no_query_guidance:
 - `status` 如需填写，只使用 canonical 值 `active`、`disabled`、`all`
 - 若用户只说“查询组织树”“列出组织”“看组织树”，未给 `as_of` 时默认按当前自然日
 - 若用户未说明范围，默认先查当前租户一级组织，不要求首轮必须提供 `parent_org_code`
+- 若用户说“列出全部/所有的 X 组织”“名称包含 X 的组织列表”，且没有给上级组织范围，使用 `keyword` 且不要填写 `parent_org_code`，表示在当前租户全部有效组织中检索
 - 若用户只说“某个组织下面有哪些组织”，优先使用 `parent_org_code`
 - 若用户强调“分页”“第几页”“每页多少条”，可补 `page`、`size`
 

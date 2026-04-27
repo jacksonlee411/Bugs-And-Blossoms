@@ -403,6 +403,10 @@ type orgUnitListPageRequest struct {
 	Offset            int
 }
 
+func (r orgUnitListPageRequest) ShouldSearchAllOrgUnits() bool {
+	return r.ParentOrgNodeKey == nil && strings.TrimSpace(r.Keyword) != ""
+}
+
 type orgUnitListPageReader interface {
 	ListOrgUnitsPage(ctx context.Context, tenantID string, req orgUnitListPageRequest) ([]orgUnitListItem, int, error)
 }
