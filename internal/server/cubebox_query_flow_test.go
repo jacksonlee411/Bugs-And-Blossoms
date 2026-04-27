@@ -1356,6 +1356,30 @@ func TestQueryFlowMapsPostExecutionPlannerProviderErrorAsModelFailure(t *testing
 	}
 }
 
+func TestQueryFlowDowngradesUnsupportedOrgUnitDimensionBoundaryViolationToNoQuery(t *testing.T) {
+	flow := queryLoopTestFlow(&cubebox.ExecutionRegistry{}, cubeboxReadPlanProducerStub{
+		err: cubebox.ErrReadPlanBoundaryViolation,
+	}, cubeboxQueryNarratorStub{fn: func(context.Context, cubeboxQueryNarrationInput) (string, error) {
+		t.Fatal("narrator should not run for no-query downgrade")
+		return "", nil
+	}})
+
+	sink := &capturingGatewaySink{}
+	if handled := flow.TryHandle(context.Background(), queryGatewayRequest("列出全部的成本组织，以及他们的路径长名称"), sink); !handled {
+		t.Fatal("expected handled")
+	}
+	if sink.hasErrorCode("ai_plan_boundary_violation") {
+		t.Fatalf("unsupported dimension should downgrade to no-query, got %#v", sink.events)
+	}
+	text := strings.Join(sink.deltas(), "\n")
+	if !strings.Contains(text, "当前输入未进入已支持查询闭环") && !strings.Contains(text, "当前主要支持组织相关只读查询") {
+		t.Fatalf("expected no-query guidance text, got %q", text)
+	}
+	if strings.Contains(text, "NO_QUERY") || strings.Contains(text, "planner") {
+		t.Fatalf("no-query guidance leaked internals: %q", text)
+	}
+}
+
 func TestQueryFlowBudgetExhaustionDoesNotNarratePartialAnswer(t *testing.T) {
 	executions := 0
 	registry, err := cubebox.NewExecutionRegistry(cubebox.RegisteredExecutor{

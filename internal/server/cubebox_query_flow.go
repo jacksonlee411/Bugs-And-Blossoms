@@ -1167,6 +1167,13 @@ func (f *cubeboxQueryFlow) produceReadPlan(
 		WorkingResults: &snapshot,
 	})
 	if err != nil {
+		if shouldDowngradeQueryBoundaryViolationToNoQuery(err, request.Prompt, snapshot) {
+			return cubeboxReadPlanProductionResult{
+				Handled:         false,
+				Outcome:         cubebox.PlannerOutcome{Type: cubebox.PlannerOutcomeNoQuery},
+				ExplicitOutcome: true,
+			}, nil
+		}
 		return cubeboxReadPlanProductionResult{}, err
 	}
 	produced.Outcome = normalizeProducedPlannerOutcome(produced, workingState)
@@ -1175,6 +1182,38 @@ func (f *cubeboxQueryFlow) produceReadPlan(
 	}
 	produced.Handled = produced.Outcome.Type != cubebox.PlannerOutcomeNoQuery
 	return produced, nil
+}
+
+func shouldDowngradeQueryBoundaryViolationToNoQuery(err error, prompt string, snapshot cubebox.QueryWorkingResults) bool {
+	if !errors.Is(err, cubebox.ErrReadPlanBoundaryViolation) {
+		return false
+	}
+	if snapshot.RoundIndex > 1 || len(snapshot.CompletedPlans) > 0 || len(snapshot.ExecutedFingerprints) > 0 || snapshot.LatestObservation != nil {
+		return false
+	}
+	return queryPromptMentionsUnsupportedOrgUnitDimension(prompt)
+}
+
+func queryPromptMentionsUnsupportedOrgUnitDimension(prompt string) bool {
+	text := strings.ToLower(strings.TrimSpace(prompt))
+	if text == "" {
+		return false
+	}
+	unsupportedTerms := []string{
+		"成本组织",
+		"成本中心",
+		"组织类型",
+		"org type",
+		"org_type",
+		"cost center",
+		"cost org",
+	}
+	for _, term := range unsupportedTerms {
+		if strings.Contains(text, strings.ToLower(term)) {
+			return true
+		}
+	}
+	return false
 }
 
 func normalizeProducedPlannerOutcome(produced cubeboxReadPlanProductionResult, workingState *cubebox.QueryWorkingResultsState) cubebox.PlannerOutcome {
