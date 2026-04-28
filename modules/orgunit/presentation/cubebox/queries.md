@@ -26,6 +26,18 @@ no_query_guidance:
     - 查“华东销售中心”的详情
     - 查“华东销售中心”当前的下级组织
     - 搜索名称包含“销售”的组织
+runtime_hints:
+  unsupported_prompt_terms:
+    - 成本组织
+    - 成本中心
+    - 组织类型
+    - org type
+    - org_type
+    - cost center
+    - cost org
+  scope_params:
+    expand_all: [all_org_units]
+    narrowing: [keyword, parent_org_code, org_code, entity_key, target_org_code]
 ```
 
 ## 意图细则

@@ -6,7 +6,7 @@
 
 - **评审分级**：`T2`
 - **范围一句话**：冻结 `internal/server/cubebox_orgunit_executors.go` 与 `orgunit` 读契约之间的 owner 边界，明确字段展示归属、执行层职责与当前剩余风险，阻断 `CubeBox` 侧再次长出第二套 `orgunit` 响应契约。
-- **关联模块/目录**：`docs/dev-plans/460-cubebox-digital-assistant-positioning-and-execution-contract.md`、`docs/dev-plans/461-cubebox-query-scenarios-minimal-contract.md`、`docs/dev-plans/462-cubebox-codex-compaction-adoption-value-and-unified-convergence-plan.md`、`docs/dev-plans/463-cubebox-orgunit-tree-discovery-gap-investigation-and-remediation-plan.md`、`docs/dev-plans/464-cubebox-query-architecture-convergence-plan.md`、`internal/server`、`modules/cubebox`、`modules/orgunit`
+- **关联模块/目录**：`docs/dev-plans/460-cubebox-digital-assistant-positioning-and-execution-contract.md`、`docs/dev-plans/461-cubebox-query-scenarios-minimal-contract.md`、`docs/dev-plans/462-cubebox-codex-compaction-adoption-value-and-unified-convergence-plan.md`、`docs/archive/dev-plans/463-cubebox-orgunit-tree-discovery-gap-investigation-and-remediation-plan.md`、`docs/dev-plans/464-cubebox-query-architecture-convergence-plan.md`、`internal/server`、`modules/cubebox`、`modules/orgunit`
 - **关联计划/标准**：`AGENTS.md`、`DEV-PLAN-003`、`DEV-PLAN-460`、`DEV-PLAN-461`、`DEV-PLAN-462`、`DEV-PLAN-463`、`DEV-PLAN-464`
 - **用户入口/触点**：Web Shell 右侧 `CubeBox` 抽屉、`/internal/cubebox/turns:stream`、`internal/server/cubebox_orgunit_executors.go`、`internal/server/orgunit_api.go`
 
@@ -48,7 +48,7 @@
 支持依据：
 
 1. `CubeBox` 执行时仍沿用当前租户上下文，没有独立 `subject`、独立 service account 或第二授权面，符合 `460` 的权限继承边界。
-2. 当前执行注册表仍以 `api_key -> executor` 白名单、参数白名单与顺序执行为主，没有在该文件继续长出 `SummaryRenderer`、模板摘要器或 `target_unique` 一类新的隐藏协议，符合 `461/464` 对执行层“变薄”的要求。
+2. 当前执行注册表仍以 `executor_key -> executor` 白名单、参数白名单与顺序执行为主，没有在该文件继续长出 `SummaryRenderer`、模板摘要器或 `target_unique` 一类新的隐藏协议，符合 `461/464` 对执行层“变薄”的要求。
 3. `orgunit.list.status` 已只接受 canonical 值 `active` / `disabled` / `all`，未继续保留 `inactive` 兼容语义，符合 `464` 的参数 owner 收敛要求。
 
 ### 4.2 关于“字段展示应该由谁决定”
@@ -103,7 +103,7 @@
 
 `modules/cubebox/read_executor.go` 当前仍通过以下方式控制执行边界：
 
-- `RegisteredExecutor` 持有 `APIKey`、`RequiredParams`、`OptionalParams`
+- `RegisteredExecutor` 持有 `ExecutorKey`、`RequiredParams`、`OptionalParams`
 - `ExecutionRegistry.ExecutePlan(...)` 先做 `ValidateReadPlan(plan)`
 - 执行前通过 `validateRegisteredParams(...)` 拒绝未注册参数
 
@@ -156,7 +156,7 @@
 
 当前 `modules/cubebox/read_executor.go` 的执行注册表主要负责：
 
-- `api_key -> executor` 白名单映射
+- `executor_key -> executor` 白名单映射
 - 必填参数存在性校验
 - 未注册参数拒绝
 - 顺序执行
@@ -259,5 +259,5 @@
 - `docs/dev-plans/460-cubebox-digital-assistant-positioning-and-execution-contract.md`
 - `docs/dev-plans/461-cubebox-query-scenarios-minimal-contract.md`
 - `docs/dev-plans/462-cubebox-codex-compaction-adoption-value-and-unified-convergence-plan.md`
-- `docs/dev-plans/463-cubebox-orgunit-tree-discovery-gap-investigation-and-remediation-plan.md`
+- `docs/archive/dev-plans/463-cubebox-orgunit-tree-discovery-gap-investigation-and-remediation-plan.md`
 - `docs/dev-plans/464-cubebox-query-architecture-convergence-plan.md`

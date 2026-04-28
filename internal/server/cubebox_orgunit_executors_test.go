@@ -22,9 +22,9 @@ func TestNewCubeBoxOrgUnitRegisteredExecutors(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewExecutionRegistry err=%v", err)
 	}
-	for _, apiKey := range []string{"orgunit.details", "orgunit.list", "orgunit.search", "orgunit.audit"} {
-		if _, ok := registry.Resolve(apiKey); !ok {
-			t.Fatalf("api_key %q not registered", apiKey)
+	for _, executorKey := range []string{"orgunit.details", "orgunit.list", "orgunit.search", "orgunit.audit"} {
+		if _, ok := registry.Resolve(executorKey); !ok {
+			t.Fatalf("executor_key %q not registered", executorKey)
 		}
 	}
 	list, ok := registry.Resolve("orgunit.list")
@@ -49,9 +49,9 @@ func TestNewCubeBoxOrgUnitRegisteredExecutorsAllowsNonDetailsExecutorsWithoutExt
 	if _, ok := registry.Resolve("orgunit.details"); ok {
 		t.Fatal("orgunit.details should not be registered without ext store")
 	}
-	for _, apiKey := range []string{"orgunit.list", "orgunit.search", "orgunit.audit"} {
-		if _, ok := registry.Resolve(apiKey); !ok {
-			t.Fatalf("api_key %q not registered", apiKey)
+	for _, executorKey := range []string{"orgunit.list", "orgunit.search", "orgunit.audit"} {
+		if _, ok := registry.Resolve(executorKey); !ok {
+			t.Fatalf("executor_key %q not registered", executorKey)
 		}
 	}
 }
@@ -102,7 +102,7 @@ func TestCubeBoxOrgUnitDetailsExecutor(t *testing.T) {
 		Steps: []cubebox.ReadPlanStep{
 			{
 				ID:          "step-1",
-				APIKey:      "orgunit.details",
+				ExecutorKey: "orgunit.details",
 				Params:      map[string]any{"org_code": "1001", "as_of": "2026-04-23", "include_disabled": false},
 				ResultFocus: []string{"org_unit.name", "ext_fields"},
 				DependsOn:   []string{},
@@ -134,6 +134,69 @@ func TestCubeBoxOrgUnitDetailsExecutor(t *testing.T) {
 	}
 	if store.snapshotByNodeKeyArg != "10000001" {
 		t.Fatalf("snapshotByNodeKeyArg=%q", store.snapshotByNodeKeyArg)
+	}
+}
+
+func TestCubeBoxOrgUnitExecutorsWrapNotFoundAsTerminalProvider(t *testing.T) {
+	tests := []struct {
+		name string
+		run  func() error
+	}{
+		{
+			name: "details resolve",
+			run: func() error {
+				executor := cubeBoxOrgUnitDetailsExecutor{store: &orgUnitDetailsExtStoreStub{
+					resolveOrgCodeStore: &resolveOrgCodeStore{resolveErr: errOrgUnitNotFound},
+				}}
+				params, err := executor.ValidateParams(map[string]any{"org_code": "1001", "as_of": "2026-04-23"})
+				if err != nil {
+					return err
+				}
+				_, err = executor.Execute(context.Background(), cubebox.ExecuteRequest{TenantID: "t1"}, params)
+				return err
+			},
+		},
+		{
+			name: "list parent resolve",
+			run: func() error {
+				executor := cubeBoxOrgUnitListExecutor{store: &resolveOrgCodeStore{resolveErr: errOrgUnitNotFound}}
+				params, err := executor.ValidateParams(map[string]any{"as_of": "2026-04-23", "parent_org_code": "1001"})
+				if err != nil {
+					return err
+				}
+				_, err = executor.Execute(context.Background(), cubebox.ExecuteRequest{TenantID: "t1"}, params)
+				return err
+			},
+		},
+		{
+			name: "audit resolve",
+			run: func() error {
+				executor := cubeBoxOrgUnitAuditExecutor{store: &resolveOrgCodeStore{resolveErr: errOrgUnitNotFound}}
+				params, err := executor.ValidateParams(map[string]any{"org_code": "1001"})
+				if err != nil {
+					return err
+				}
+				_, err = executor.Execute(context.Background(), cubebox.ExecuteRequest{TenantID: "t1"}, params)
+				return err
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := tt.run()
+			if !errors.Is(err, errOrgUnitNotFound) {
+				t.Fatalf("expected errOrgUnitNotFound, got %v", err)
+			}
+			var provider cubebox.QueryTerminalErrorProvider
+			if !errors.As(err, &provider) {
+				t.Fatalf("expected QueryTerminalErrorProvider, got %T", err)
+			}
+			terminal := provider.QueryTerminalError()
+			if terminal == nil || terminal.Code != "orgunit_not_found" || terminal.Message == "" || terminal.Retryable {
+				t.Fatalf("unexpected terminal error=%#v", terminal)
+			}
+		})
 	}
 }
 
@@ -407,6 +470,13 @@ func TestCubeBoxOrgUnitSearchExecutor(t *testing.T) {
 	if len(pathCodes) != 2 || pathCodes[0] != "0001" || pathCodes[1] != "1001" {
 		t.Fatalf("path_org_codes=%v", pathCodes)
 	}
+	if result.ConfirmedEntity == nil || result.ConfirmedEntity.EntityKey != "1001" || result.ConfirmedEntity.SourceExecutorKey != "orgunit.search" {
+		t.Fatalf("unexpected confirmed entity=%#v", result.ConfirmedEntity)
+	}
+	payload := result.ConfirmedEntity.Payload()
+	if _, exists := payload["target_org_code"]; exists {
+		t.Fatalf("confirmed entity must not expose target_org_code=%#v", payload)
+	}
 }
 
 func TestCubeBoxOrgUnitSearchExecutorReturnsClarificationWhenSearchIsAmbiguous(t *testing.T) {
@@ -438,6 +508,10 @@ func TestCubeBoxOrgUnitSearchExecutorReturnsClarificationWhenSearchIsAmbiguous(t
 	}
 	if candidates[1].Status != "disabled" {
 		t.Fatalf("expected disabled candidate hint in structured candidate, got %#v", candidates[1])
+	}
+	facts := ambiguous.QueryClarificationFacts()
+	if facts.ErrorCode != "org_unit_search_ambiguous" || facts.CandidateSource != "execution_error" || facts.CandidateCount != 2 || !facts.CannotSilentSelect {
+		t.Fatalf("unexpected clarification facts=%#v", facts)
 	}
 }
 

@@ -1,6 +1,6 @@
 # DEV-PLAN-474：CubeBox 跨 Turn 结果集续接与补字段查询收敛方案
 
-**状态**: 进行中（2026-04-27 16:55 CST）
+**状态**: 已完成（2026-04-27 16:55 CST；`result_list` evidence、知识包示例与回归链路已落地）
 
 ## 0. 范围一句话
 
@@ -23,10 +23,10 @@
 
 ## 2. 目标
 
-1. [ ] 将“上一轮成功结果集”与“待用户显式选择的候选项”在 `query_evidence_window` 中区分建模。
-2. [ ] 允许模型在结果集规模可控时，把上一轮明确结果集当作当前 turn 的 target set，生成线性 `ReadPlan` 去补查 `orgunit.details`。
-3. [ ] 保持现有只读执行边界、租户/权限校验、`ReadPlan` schema 与 fail-closed 行为不变。
-4. [ ] 为真实样例补回归测试：`财务组织列表 -> 增加列出他们的组织路径` 不再触发 `ai_plan_boundary_violation`。
+1. [x] 将“上一轮成功结果集”与“待用户显式选择的候选项”在 `query_evidence_window` 中区分建模。
+2. [x] 允许模型在结果集规模可控时，把上一轮明确结果集当作当前 turn 的 target set，生成线性 `ReadPlan` 去补查 `orgunit.details`。
+3. [x] 保持现有只读执行边界、租户/权限校验、`ReadPlan` schema 与 fail-closed 行为不变。
+4. [x] 为真实样例补回归测试：`财务组织列表 -> 增加列出他们的组织路径` 不再触发 `ai_plan_boundary_violation`。
 
 ## 3. 非目标
 
@@ -59,10 +59,10 @@
 
 ## 5. 实施步骤
 
-1. [ ] 在 `modules/cubebox/query_entity.go` 为 `query_evidence_window` 增加 `result_list` 投影规则。
-2. [ ] 在 planner prompt 与 `modules/orgunit/presentation/cubebox/*` 中补充 `result_list` 续接说明与示例。
-3. [ ] 补单元/服务端测试，覆盖 evidence 投影与“财务列表 -> 组织路径”回归链路。
-4. [ ] 执行文档与 Go 相关校验。
+1. [x] 在 `modules/cubebox/query_entity.go` 为 `query_evidence_window` 增加 `result_list` 投影规则。
+2. [x] 在 planner prompt 与 `modules/orgunit/presentation/cubebox/*` 中补充 `result_list` 续接说明与示例。
+3. [x] 补单元/服务端测试，覆盖 evidence 投影与“财务列表 -> 组织路径”回归链路。
+4. [x] 执行文档与 Go 相关校验。
 
 ## 6. 验收标准
 

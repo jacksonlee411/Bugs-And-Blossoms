@@ -1,6 +1,8 @@
 # DEV-PLAN-471：CubeBox 借鉴 Codex Agent Loop 的同一 Turn 内迭代式只读编排方案
 
-**状态**: 规划中（2026-04-26 10:52 CST；已按 DEV-PLAN-003 评审收敛 P1/P2）
+**状态**: 已完成（2026-04-26 10:52 CST；P0 loop、working_results、wire format、真实复验与 readiness 已完成）
+
+> 回写说明：本文件下方保留了实施前的原始规划 checklist 作为设计过程记录；当前完成判定、自动化验证与真实页面证据以 `docs/dev-records/DEV-PLAN-471-READINESS.md` 为准。
 
 ## 0. 适用范围与评审分级
 
@@ -250,7 +252,7 @@ P0 冻结以下 planner outcome：
 {
   "read_api_catalog": [
     {
-      "api_key": "orgunit.list",
+      "executor_key": "orgunit.list",
       "required_params": ["as_of"],
       "optional_params": ["include_disabled", "parent_org_code", "keyword", "status", "page", "size"]
     }
@@ -283,7 +285,7 @@ P0 冻结以下 planner outcome：
         "steps": [
           {
             "step_id": "step-1",
-            "api_key": "orgunit.list",
+            "executor_key": "orgunit.list",
             "params_fingerprint": "orgunit.list|as_of=2026-04-25|parent_org_code=100000",
             "item_count": 3,
             "truncated": false,
@@ -298,7 +300,7 @@ P0 冻结以下 planner outcome：
     "latest_observation": {
       "round": 1,
       "step_id": "step-1",
-      "api_key": "orgunit.list",
+      "executor_key": "orgunit.list",
       "params_fingerprint": "orgunit.list|as_of=2026-04-25|parent_org_code=100000",
       "as_of": "2026-04-25",
       "items": [
@@ -416,7 +418,7 @@ P0 不引入复杂 reason system；仅区分：
 
 每次执行前生成稳定 `plan_fingerprint` / `step_fingerprint`，至少包含：
 
-- `api_key`
+- `executor_key`
 - 全量归一化参数 key/value，按 key 稳定排序
 - 空值、布尔、日期、数字与字符串的稳定编码
 
@@ -467,7 +469,7 @@ P0 不引入 fanout DSL，不并发执行，也不由 query flow 维护业务专
 | --- | --- |
 | planner 输出非法 JSON / 非法 outcome | fail-closed，映射为计划边界错误 |
 | `ReadPlan` schema 或参数非法 | fail-closed，沿用现有计划边界错误 |
-| 未注册 `api_key` | fail-closed，沿用执行注册表漂移错误 |
+| 未注册 `executor_key` | fail-closed，沿用执行注册表漂移错误 |
 | executor 返回候选不可静默选择 | 进入澄清终态，并按 `468C` 契约写 `group_id` / `candidate_group_id` metadata events |
 | executor 执行失败 | 沿用现有错误映射 |
 | planner 在已执行后返回 `NO_QUERY` | fail-closed，不当作完成 |
@@ -510,7 +512,7 @@ P0 不引入 fanout DSL，不并发执行，也不由 query flow 维护业务专
 - loop 每轮看到的 `query_dialogue_context` 使用 `468C` planner projection，且不吸收当前 turn observation。
 - 候选澄清事件使用 `group_id` / `candidate_group_id` 串联，不得用 `candidate_source`、loop round 或 `turn_id` 当关联键。
 - `resolved_entity` 不参与 471 loop 输入、状态推进或完成判定。
-- 用户可见输出不泄露 `api_key`、`step-*`、`payload`、`results`、`params` 等内部执行痕迹。
+- 用户可见输出不泄露 `executor_key`、`step-*`、`payload`、`results`、`params` 等内部执行痕迹。
 - pre-execution `NO_QUERY` 输出由模型基于受控事实生成纯文本序号列表；默认示例为名称/关键词/关系型，不要求用户记编码，也不泄露 `NO_QUERY`、`ReadPlan`、`planner`、知识包或 `API` 等内部术语。
 
 ## 8. 实施步骤

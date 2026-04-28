@@ -1,8 +1,8 @@
 # DEV-PLAN-468C：CubeBox 查询上下文事实窗口扩展方案
 
-**状态**: 规划中（2026-04-27 07:26 CST；`recent_*` 语义槽位与消极防御方向已由 `DEV-PLAN-473` 纠偏）
+**状态**: 已关闭（2026-04-27 07:26 CST；原方案已被 `DEV-PLAN-473` 纠偏，并分别拆分到 `DEV-PLAN-471`、`DEV-PLAN-472`、`DEV-PLAN-474`）
 
-> 纠偏说明：本计划早期将 `recent_confirmed_entity`、`recent_candidates`、`recent_candidate_groups` 等设计为 prompt-facing 主事实窗口。该方向容易退化为本地“最近实体 / 最近候选 / target 绑定”状态机，也容易继续堆叠“不确定就本地防御”的保守分支。后续实施必须以 `DEV-PLAN-473` 为准：本地只提供中性的 `query_evidence_window`、工具目录和硬约束校验；模型负责语义续接、澄清恢复、日期补全、候选解释、显式 `ReadPlan` 参数和最终表达；执行器不得从 `recent_*` 字段隐式补 target。
+> 关闭说明：本计划早期将 `recent_confirmed_entity`、`recent_candidates`、`recent_candidate_groups` 等设计为 prompt-facing 主事实窗口。后续已确认该方向容易退化为本地 target 绑定与防御性状态机，因此不再作为独立活体 owner 继续推进。现行 owner 已拆分为：`DEV-PLAN-473` 持有“evidence 而非 winner”纠偏；`DEV-PLAN-471` 持有同一 turn loop 与 `working_results`；`DEV-PLAN-472` 持有 open clarification / 残缺日期续接；`DEV-PLAN-474` 持有跨 turn `result_list` 续接。本文仅保留为历史设计来源，不再作为当前实施前提。
 
 ## 0. 适用范围与评审分级
 
@@ -228,11 +228,11 @@ planner JSON 前必须增加固定 contract 文本：
 
 ## 6. 安全边界与 Stopline
 
-1. [ ] 未注册 `api_key` 不能执行。
+1. [ ] 未注册 `executor_key` 不能执行。
 2. [ ] `ReadPlan` schema、参数白名单、必填/可选参数、类型、日期、枚举与前序结果引用仍必须 fail-closed。
 3. [ ] tenant 隔离、RLS、当前 session、当前 principal 与审计归属不放松。
 4. [ ] 知识包、模型输出、候选组、最近问答和历史会话都不能声明或扩大权限。
-5. [ ] 用户可见输出不能原样泄露 raw JSON、`api_key`、`payload`、`results`、`step-*`、执行计划结构、密钥或 provider 配置。
+5. [ ] 用户可见输出不能原样泄露 raw JSON、`executor_key`、`payload`、`results`、`step-*`、执行计划结构、密钥或 provider 配置。
 6. [ ] 不得把候选组、最近问答或澄清状态当作执行结果事实源。
 7. [ ] 不得用本地关键词补丁替代模型对事实窗口的语义选择。
 8. [ ] 不得在本计划中恢复或换名引入 `page_context`。

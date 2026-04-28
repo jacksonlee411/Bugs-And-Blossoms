@@ -1,7 +1,7 @@
 package cubebox
 
 type ReadAPICatalogEntry struct {
-	APIKey         string   `json:"api_key"`
+	ExecutorKey    string   `json:"executor_key"`
 	RequiredParams []string `json:"required_params"`
 	OptionalParams []string `json:"optional_params"`
 }
@@ -14,7 +14,7 @@ func (r *ExecutionRegistry) ReadAPICatalog() []ReadAPICatalogEntry {
 	out := make([]ReadAPICatalogEntry, 0, len(items))
 	for _, item := range items {
 		out = append(out, ReadAPICatalogEntry{
-			APIKey:         item.APIKey,
+			ExecutorKey:    item.ExecutorKey,
 			RequiredParams: append([]string(nil), item.RequiredParams...),
 			OptionalParams: append([]string(nil), item.OptionalParams...),
 		})

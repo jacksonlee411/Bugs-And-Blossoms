@@ -24,7 +24,7 @@ type ReadPlan struct {
 
 type ReadPlanStep struct {
 	ID          string         `json:"id"`
-	APIKey      string         `json:"api_key"`
+	ExecutorKey string         `json:"executor_key"`
 	Params      map[string]any `json:"params"`
 	ResultFocus []string       `json:"result_focus,omitempty"`
 	DependsOn   []string       `json:"depends_on"`
@@ -100,7 +100,7 @@ func normalizeReadPlan(plan ReadPlan) ReadPlan {
 
 	for i := range normalized.Steps {
 		normalized.Steps[i].ID = strings.TrimSpace(normalized.Steps[i].ID)
-		normalized.Steps[i].APIKey = strings.TrimSpace(normalized.Steps[i].APIKey)
+		normalized.Steps[i].ExecutorKey = strings.TrimSpace(normalized.Steps[i].ExecutorKey)
 		if normalized.Steps[i].Params == nil {
 			normalized.Steps[i].Params = map[string]any{}
 		}
@@ -123,8 +123,8 @@ func validateReadPlanStep(step ReadPlanStep, index int, steps []ReadPlanStep, se
 	if _, exists := seenIDs[id]; exists {
 		return wrapReadPlanBoundaryError(fmt.Sprintf("steps[%d].id duplicated", index))
 	}
-	if strings.TrimSpace(step.APIKey) == "" {
-		return wrapReadPlanBoundaryError(fmt.Sprintf("steps[%d].api_key required", index))
+	if strings.TrimSpace(step.ExecutorKey) == "" {
+		return wrapReadPlanBoundaryError(fmt.Sprintf("steps[%d].executor_key required", index))
 	}
 	if step.Params == nil {
 		return wrapReadPlanBoundaryError(fmt.Sprintf("steps[%d].params required", index))

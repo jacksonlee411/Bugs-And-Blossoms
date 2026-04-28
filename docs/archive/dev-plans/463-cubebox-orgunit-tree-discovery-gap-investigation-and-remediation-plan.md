@@ -1,6 +1,6 @@
 # DEV-PLAN-463：CubeBox 组织树查询暴露的知识包驱动偏航调查与收敛方案
 
-**状态**: 进行中（2026-04-24 17:10 CST）
+**状态**: 已归档（2026-04-24 17:10 CST；直接缺陷已修复并完成页面复验，后续轻量化整改与 owner 收口转入 `DEV-PLAN-464/465/466`）
 
 ## 0. 适用范围与评审分级
 
@@ -198,7 +198,7 @@ CubeBox 返回：
 - 文件存在
 - fenced block 存在
 - `queries.md` 有 intents
-- `apis.md` 有 `api_key`
+- `apis.md` 有 `executor_key`
 - `examples.md` 有 `ReadPlan` 示例
 
 但它并不会把知识包提炼成真正的运行时结构对象，用于：
@@ -468,7 +468,7 @@ CubeBox 返回：
    - 可上提为通用 contract 的能力
    - 应删除的局部硬编码
 3. [ ] 收紧解释层
-   - 不再继续为单个 `api_key` 扩张专用字符串模板
+   - 不再继续为单个 `executor_key` 扩张专用字符串模板
    - 若短期仍保留 `SummaryRenderer`，必须明确其为过渡能力，并禁止复制扩散
 4. [ ] 若未来要做“自动展开一层”
    - 先冻结共享 contract：前序引用参数、可引用结果字段、唯一性约束
@@ -522,7 +522,7 @@ CubeBox 返回：
 
 ## 10. 交付物
 
-- `docs/dev-plans/463-cubebox-orgunit-tree-discovery-gap-investigation-and-remediation-plan.md`
+- `docs/archive/dev-plans/463-cubebox-orgunit-tree-discovery-gap-investigation-and-remediation-plan.md`
 - `docs/dev-records/DEV-PLAN-463-READINESS.md`
 - `internal/server` 中与 `orgunit.list` / `cubebox_query_flow` / `cubebox_orgunit_executors` 相关的修复与收敛实现
 - `modules/cubebox` 与 `modules/orgunit/presentation/cubebox` 中与知识包和执行边界相关的收敛更新

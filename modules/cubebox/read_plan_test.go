@@ -13,7 +13,7 @@ func TestDecodeReadPlanExecutable(t *testing.T) {
 	  "steps": [
 	    {
 	      "id": "step-1",
-	      "api_key": "orgunit.details",
+	      "executor_key": "orgunit.details",
 	      "params": {"org_code":"1001","as_of":"2026-04-23"},
 	      "result_focus": ["org_unit.name"],
 	      "depends_on": []
@@ -29,7 +29,7 @@ func TestDecodeReadPlanExecutable(t *testing.T) {
 	if plan.Intent != "orgunit.details" {
 		t.Fatalf("intent=%q", plan.Intent)
 	}
-	if len(plan.Steps) != 1 || plan.Steps[0].APIKey != "orgunit.details" {
+	if len(plan.Steps) != 1 || plan.Steps[0].ExecutorKey != "orgunit.details" {
 		t.Fatalf("unexpected steps=%+v", plan.Steps)
 	}
 }
@@ -81,7 +81,7 @@ func TestDecodeReadPlanRejectsUnknownTopLevelField(t *testing.T) {
 	  "steps": [
 	    {
 	      "id": "step-1",
-	      "api_key": "orgunit.details",
+	      "executor_key": "orgunit.details",
 	      "params": {"org_code":"1001","as_of":"2026-04-23"},
 	      "result_focus": [],
 	      "depends_on": []
@@ -103,7 +103,7 @@ func TestDecodeReadPlanRejectsUnknownStepField(t *testing.T) {
 	  "steps": [
 	    {
 	      "id": "step-1",
-	      "api_key": "orgunit.details",
+	      "executor_key": "orgunit.details",
 	      "params": {"org_code":"1001","as_of":"2026-04-23"},
 	      "result_focus": [],
 	      "depends_on": [],
@@ -132,14 +132,14 @@ func TestDecodeReadPlanRejectsSecondStepWithoutDependsOn(t *testing.T) {
 	  "steps": [
 	    {
 	      "id": "step-1",
-	      "api_key": "orgunit.search",
+	      "executor_key": "orgunit.search",
 	      "params": {"query":"华东","as_of":"2026-04-23"},
 	      "result_focus": [],
 	      "depends_on": []
 	    },
 		    {
 		      "id": "step-2",
-		      "api_key": "orgunit.details",
+		      "executor_key": "orgunit.details",
 		      "params": {"org_code":"1001","as_of":"2026-04-23"},
 		      "result_focus": [],
 		      "depends_on": []
@@ -160,21 +160,21 @@ func TestDecodeReadPlanRejectsNonLinearDependsOn(t *testing.T) {
 	  "steps": [
 	    {
 	      "id": "step-1",
-	      "api_key": "orgunit.search",
+	      "executor_key": "orgunit.search",
 	      "params": {"query":"华东","as_of":"2026-04-23"},
 	      "result_focus": [],
 	      "depends_on": []
 	    },
 	    {
 	      "id": "step-2",
-	      "api_key": "orgunit.list",
+	      "executor_key": "orgunit.list",
 	      "params": {"as_of":"2026-04-23"},
 	      "result_focus": [],
 	      "depends_on": []
 	    },
 		    {
 		      "id": "step-3",
-		      "api_key": "orgunit.details",
+		      "executor_key": "orgunit.details",
 		      "params": {"org_code":"1001","as_of":"2026-04-23"},
 		      "result_focus": [],
 		      "depends_on": ["step-1"]

@@ -8,7 +8,7 @@ import (
 )
 
 func TestDecodePlannerOutcomeEnvelopeReadPlan(t *testing.T) {
-	raw := `{"outcome":"READ_PLAN","plan":{"intent":"orgunit.list","confidence":0.9,"missing_params":[],"steps":[{"id":"step-1","api_key":"orgunit.list","params":{"as_of":"2026-04-25"},"depends_on":[]}],"explain_focus":[]}}`
+	raw := `{"outcome":"READ_PLAN","plan":{"intent":"orgunit.list","confidence":0.9,"missing_params":[],"steps":[{"id":"step-1","executor_key":"orgunit.list","params":{"as_of":"2026-04-25"},"depends_on":[]}],"explain_focus":[]}}`
 
 	outcome, err := cubebox.DecodePlannerOutcome([]byte(raw))
 	if err != nil {
@@ -63,7 +63,7 @@ func TestDecodePlannerOutcomeEnvelopeDoneAndNoQuery(t *testing.T) {
 }
 
 func TestDecodePlannerOutcomeCompatibilityBareReadPlanAndNoQuery(t *testing.T) {
-	readPlan := `{"intent":"orgunit.list","confidence":0.9,"missing_params":[],"steps":[{"id":"step-1","api_key":"orgunit.list","params":{"as_of":"2026-04-25"},"depends_on":[]}],"explain_focus":[]}`
+	readPlan := `{"intent":"orgunit.list","confidence":0.9,"missing_params":[],"steps":[{"id":"step-1","executor_key":"orgunit.list","params":{"as_of":"2026-04-25"},"depends_on":[]}],"explain_focus":[]}`
 	outcome, err := cubebox.DecodePlannerOutcome([]byte(readPlan))
 	if err != nil {
 		t.Fatalf("DecodePlannerOutcome bare read plan err=%v", err)
@@ -103,7 +103,7 @@ func TestDecodePlannerOutcomeRejectsInvalidPayloads(t *testing.T) {
 		`{"outcome":"MAYBE"}`,
 		`{"outcome":"DONE","plan":{"intent":"orgunit.list"}}`,
 		`{"outcome":"NO_QUERY","clarifying_question":"够了"}`,
-		`{"outcome":"READ_PLAN","missing_params":["as_of"],"plan":{"intent":"orgunit.list","confidence":0.9,"missing_params":[],"steps":[{"id":"step-1","api_key":"orgunit.list","params":{"as_of":"2026-04-25"},"depends_on":[]}],"explain_focus":[]}}`,
+		`{"outcome":"READ_PLAN","missing_params":["as_of"],"plan":{"intent":"orgunit.list","confidence":0.9,"missing_params":[],"steps":[{"id":"step-1","executor_key":"orgunit.list","params":{"as_of":"2026-04-25"},"depends_on":[]}],"explain_focus":[]}}`,
 		`{"outcome":"CLARIFY","missing_params":["as_of"],"clarifying_question":"请提供日期。","plan":{"intent":"orgunit.list"}}`,
 	} {
 		_, err := cubebox.DecodePlannerOutcome([]byte(raw))

@@ -1,6 +1,6 @@
 # DEV-PLAN-470：CubeBox `page_context` 当前范围剔除与清理方案
 
-**状态**: 规划中（2026-04-26 10:10 CST；完全重写，`page_context` 不纳入当前实施范围）
+**状态**: 已完成（2026-04-26 10:10 CST；`page_context` 剔除、代码清理与文档回写已完成）
 
 ## 1. 背景
 
@@ -33,13 +33,13 @@
 
 ## 3. 目标
 
-1. [ ] 从当前实施范围中剔除 `page_context`。
-2. [ ] 删除前端 `/internal/cubebox/turns:stream` 请求体中的 `page_context` 构造与发送。
-3. [ ] 删除服务端请求 DTO、规范化、canonical context、prompt-facing envelope 中的 `page_context` 字段。
-4. [ ] 删除 `modules/cubebox/page_context.go` 及对应测试，或在无引用后完全移除。
-5. [ ] 删除 `orgunit` 知识包中的“从当前页面补参”规则。
-6. [ ] 将 `468 P2-3c` 收敛为 query dialogue fact window：候选组、最近确认实体列表、最近问答、澄清状态与 `recent_confirmed_entity` 降级。
-7. [ ] 文档回写：`461`、`462`、`468`、`468C`、readiness、AGENTS 文档地图不再把 `page_context` / 页面上下文列为当前能力、当前扩展项或每轮注入要求。
+1. [x] 从当前实施范围中剔除 `page_context`。
+2. [x] 删除前端 `/internal/cubebox/turns:stream` 请求体中的 `page_context` 构造与发送。
+3. [x] 删除服务端请求 DTO、规范化、canonical context、prompt-facing envelope 中的 `page_context` 字段。
+4. [x] 删除 `modules/cubebox/page_context.go` 及对应测试，或在无引用后完全移除。
+5. [x] 删除 `orgunit` 知识包中的“从当前页面补参”规则。
+6. [x] 将 `468 P2-3c` 收敛为 query dialogue fact window：候选组、最近确认实体列表、最近问答、澄清状态与 `recent_confirmed_entity` 降级。
+7. [x] 文档回写：`461`、`462`、`468`、`468C`、readiness、AGENTS 文档地图不再把 `page_context` / 页面上下文列为当前能力、当前扩展项或每轮注入要求。
 
 ## 4. 非目标
 
@@ -147,12 +147,12 @@
 
 ## 6. 安全边界与 Stopline
 
-1. [ ] 不允许保留 legacy `page_context` 兼容读取、兼容写入、双字段发送或静默映射。
-2. [ ] 不允许换名引入同义字段，例如 `screen_context`、`route_context`、`ui_context`。
-3. [ ] 不允许知识包继续声明“从当前页面补参”，也不允许保留“页面上下文不覆盖用户输入”这类暗示性规则。
-4. [ ] 不允许 planner、narrator、clarifier prompt-facing 输入继续暴露页面事实。
-5. [ ] 不允许为了补参方便在 server 中新增 orgunit 页面路径特判。
-6. [ ] 若未来重新引入页面上下文，必须新建或重开独立计划，先证明真实用户闭环依赖它，且不得绕过 query dialogue fact window。
+1. [x] 不允许保留 legacy `page_context` 兼容读取、兼容写入、双字段发送或静默映射。
+2. [x] 不允许换名引入同义字段，例如 `screen_context`、`route_context`、`ui_context`。
+3. [x] 不允许知识包继续声明“从当前页面补参”，也不允许保留“页面上下文不覆盖用户输入”这类暗示性规则。
+4. [x] 不允许 planner、narrator、clarifier prompt-facing 输入继续暴露页面事实。
+5. [x] 不允许为了补参方便在 server 中新增 orgunit 页面路径特判。
+6. [x] 若未来重新引入页面上下文，必须新建或重开独立计划，先证明真实用户闭环依赖它，且不得绕过 query dialogue fact window。
 
 ## 7. 实施步骤
 

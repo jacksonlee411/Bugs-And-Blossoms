@@ -364,7 +364,7 @@ describe('cubebox reducer', () => {
               intent: 'orgunit.details',
               entity_key: '100000',
               as_of: '2026-04-25',
-              source_api_key: 'orgunit.details'
+              source_executor_key: 'orgunit.details'
             }
           }
         }

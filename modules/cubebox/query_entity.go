@@ -22,13 +22,11 @@ type QueryEvidenceWindowBudget struct {
 }
 
 type QueryEntity struct {
-	Domain        string `json:"domain"`
-	Intent        string `json:"intent,omitempty"`
-	EntityKey     string `json:"entity_key,omitempty"`
-	AsOf          string `json:"as_of,omitempty"`
-	SourceAPIKey  string `json:"source_api_key,omitempty"`
-	TargetOrgCode string `json:"target_org_code,omitempty"`
-	ParentOrgCode string `json:"parent_org_code,omitempty"`
+	Domain            string `json:"domain"`
+	Intent            string `json:"intent,omitempty"`
+	EntityKey         string `json:"entity_key,omitempty"`
+	AsOf              string `json:"as_of,omitempty"`
+	SourceExecutorKey string `json:"source_executor_key,omitempty"`
 }
 
 type QueryDialogueTurn struct {
@@ -362,24 +360,18 @@ func DecodeQueryEntity(payload map[string]any) *QueryEntity {
 		return nil
 	}
 	if raw, ok := payload["entity"].(map[string]any); ok {
-		return NormalizeQueryEntity(QueryEntity{
-			Domain:        stringValue(raw["domain"]),
-			Intent:        stringValue(raw["intent"]),
-			EntityKey:     stringValue(raw["entity_key"]),
-			AsOf:          stringValue(raw["as_of"]),
-			SourceAPIKey:  stringValue(raw["source_api_key"]),
-			TargetOrgCode: stringValue(raw["target_org_code"]),
-			ParentOrgCode: stringValue(raw["parent_org_code"]),
-		})
+		return normalizeDecodedQueryEntity(raw)
 	}
+	return normalizeDecodedQueryEntity(payload)
+}
+
+func normalizeDecodedQueryEntity(raw map[string]any) *QueryEntity {
 	return NormalizeQueryEntity(QueryEntity{
-		Domain:        stringValue(payload["domain"]),
-		Intent:        stringValue(payload["intent"]),
-		EntityKey:     stringValue(payload["entity_key"]),
-		AsOf:          stringValue(payload["as_of"]),
-		SourceAPIKey:  stringValue(payload["source_api_key"]),
-		TargetOrgCode: stringValue(payload["target_org_code"]),
-		ParentOrgCode: stringValue(payload["parent_org_code"]),
+		Domain:            stringValue(raw["domain"]),
+		Intent:            stringValue(raw["intent"]),
+		EntityKey:         stringValue(raw["entity_key"]),
+		AsOf:              stringValue(raw["as_of"]),
+		SourceExecutorKey: stringValue(raw["source_executor_key"]),
 	})
 }
 
@@ -388,9 +380,7 @@ func NormalizeQueryEntity(entity QueryEntity) *QueryEntity {
 	entity.Intent = strings.TrimSpace(entity.Intent)
 	entity.EntityKey = strings.TrimSpace(entity.EntityKey)
 	entity.AsOf = strings.TrimSpace(entity.AsOf)
-	entity.SourceAPIKey = strings.TrimSpace(entity.SourceAPIKey)
-	entity.TargetOrgCode = strings.TrimSpace(entity.TargetOrgCode)
-	entity.ParentOrgCode = strings.TrimSpace(entity.ParentOrgCode)
+	entity.SourceExecutorKey = strings.TrimSpace(entity.SourceExecutorKey)
 	if entity.Domain == "" || entity.EntityKey == "" {
 		return nil
 	}
@@ -584,14 +574,8 @@ func (e QueryEntity) Payload() map[string]any {
 	if asOf := normalized.AsOf; asOf != "" {
 		payload["as_of"] = asOf
 	}
-	if sourceAPIKey := normalized.SourceAPIKey; sourceAPIKey != "" {
-		payload["source_api_key"] = sourceAPIKey
-	}
-	if targetOrgCode := normalized.TargetOrgCode; targetOrgCode != "" {
-		payload["target_org_code"] = targetOrgCode
-	}
-	if parentOrgCode := normalized.ParentOrgCode; parentOrgCode != "" {
-		payload["parent_org_code"] = parentOrgCode
+	if sourceExecutorKey := normalized.SourceExecutorKey; sourceExecutorKey != "" {
+		payload["source_executor_key"] = sourceExecutorKey
 	}
 	return payload
 }

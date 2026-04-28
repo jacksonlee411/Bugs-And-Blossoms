@@ -962,7 +962,7 @@ func TestCubeBoxStreamTurnAPIUsesQueryFlowWhenHandled(t *testing.T) {
 	req = req.WithContext(withPrincipal(req.Context(), Principal{ID: "p1"}))
 
 	registry, err := cubebox.NewExecutionRegistry(cubebox.RegisteredExecutor{
-		APIKey:         "orgunit.details",
+		ExecutorKey:    "orgunit.details",
 		RequiredParams: []string{"org_code", "as_of"},
 		OptionalParams: []string{"include_disabled"},
 		Executor: queryExecutorStub{
@@ -1003,7 +1003,7 @@ func TestCubeBoxStreamTurnAPIUsesQueryFlowWhenHandled(t *testing.T) {
 					Steps: []cubebox.ReadPlanStep{
 						{
 							ID:          "step-1",
-							APIKey:      "orgunit.details",
+							ExecutorKey: "orgunit.details",
 							Params:      map[string]any{"org_code": "1001", "as_of": "2026-04-23", "include_disabled": false},
 							ResultFocus: []string{"org_unit.name", "org_unit.manager_name", "org_unit.full_name_path"},
 							DependsOn:   []string{},
@@ -1053,7 +1053,7 @@ func TestCubeBoxStreamTurnAPIUsesQueryFlowWhenHandledForOrgUnitList(t *testing.T
 	req = req.WithContext(withPrincipal(req.Context(), Principal{ID: "p1"}))
 
 	registry, err := cubebox.NewExecutionRegistry(cubebox.RegisteredExecutor{
-		APIKey:         "orgunit.list",
+		ExecutorKey:    "orgunit.list",
 		RequiredParams: []string{"as_of"},
 		OptionalParams: []string{"include_disabled"},
 		Executor: queryExecutorStub{
@@ -1106,7 +1106,7 @@ func TestCubeBoxStreamTurnAPIUsesQueryFlowWhenHandledForOrgUnitList(t *testing.T
 					Steps: []cubebox.ReadPlanStep{
 						{
 							ID:          "step-1",
-							APIKey:      "orgunit.list",
+							ExecutorKey: "orgunit.list",
 							Params:      map[string]any{"as_of": "2026-04-23", "include_disabled": false},
 							ResultFocus: []string{"as_of", "include_disabled"},
 							DependsOn:   []string{},
@@ -1156,7 +1156,7 @@ func TestCubeBoxStreamTurnAPIPromotesOrgTreeClarificationToDefaultRootList(t *te
 
 	var sawParams map[string]any
 	registry, err := cubebox.NewExecutionRegistry(cubebox.RegisteredExecutor{
-		APIKey:         "orgunit.list",
+		ExecutorKey:    "orgunit.list",
 		RequiredParams: []string{"as_of"},
 		OptionalParams: []string{"include_disabled", "parent_org_code"},
 		Executor: queryExecutorStub{
@@ -1249,7 +1249,7 @@ func TestCubeBoxStreamTurnAPIDoesNotDowngradeChildrenQueryToRootList(t *testing.
 
 	called := false
 	registry, err := cubebox.NewExecutionRegistry(cubebox.RegisteredExecutor{
-		APIKey:         "orgunit.list",
+		ExecutorKey:    "orgunit.list",
 		RequiredParams: []string{"as_of"},
 		OptionalParams: []string{"include_disabled", "parent_org_code"},
 		Executor: queryExecutorStub{
@@ -1325,7 +1325,7 @@ func TestCubeBoxStreamTurnAPILimitsLargeQueryPayloadInDelta(t *testing.T) {
 	req = req.WithContext(withPrincipal(req.Context(), Principal{ID: "p1"}))
 
 	registry, err := cubebox.NewExecutionRegistry(cubebox.RegisteredExecutor{
-		APIKey:         "orgunit.details",
+		ExecutorKey:    "orgunit.details",
 		RequiredParams: []string{"org_code", "as_of"},
 		Executor: queryExecutorStub{
 			validateParamsFn: func(raw map[string]any) (map[string]any, error) { return raw, nil },
@@ -1357,7 +1357,7 @@ func TestCubeBoxStreamTurnAPILimitsLargeQueryPayloadInDelta(t *testing.T) {
 				Steps: []cubebox.ReadPlanStep{
 					{
 						ID:          "step-1",
-						APIKey:      "orgunit.details",
+						ExecutorKey: "orgunit.details",
 						Params:      map[string]any{"org_code": "1001", "as_of": "2026-04-23"},
 						ResultFocus: []string{"org_unit.name"},
 						DependsOn:   []string{},
@@ -1440,7 +1440,7 @@ func TestCubeBoxStreamTurnAPIWritesQueryErrorWhenQueryExecutionFails(t *testing.
 	req = req.WithContext(withPrincipal(req.Context(), Principal{ID: "p1"}))
 
 	registry, err := cubebox.NewExecutionRegistry(cubebox.RegisteredExecutor{
-		APIKey:         "orgunit.details",
+		ExecutorKey:    "orgunit.details",
 		RequiredParams: []string{"org_code", "as_of"},
 		Executor: queryExecutorStub{
 			validateParamsFn: func(raw map[string]any) (map[string]any, error) { return raw, nil },
@@ -1467,7 +1467,7 @@ func TestCubeBoxStreamTurnAPIWritesQueryErrorWhenQueryExecutionFails(t *testing.
 				Steps: []cubebox.ReadPlanStep{
 					{
 						ID:          "step-1",
-						APIKey:      "orgunit.details",
+						ExecutorKey: "orgunit.details",
 						Params:      map[string]any{"org_code": "bad", "as_of": "2026-04-23"},
 						ResultFocus: []string{"org_unit.name"},
 						DependsOn:   []string{},
@@ -1505,12 +1505,12 @@ func TestCubeBoxStreamTurnAPIWritesNotFoundWhenQueryExecutionHasNoResult(t *test
 	req = req.WithContext(withPrincipal(req.Context(), Principal{ID: "p1"}))
 
 	registry, err := cubebox.NewExecutionRegistry(cubebox.RegisteredExecutor{
-		APIKey:         "orgunit.search",
+		ExecutorKey:    "orgunit.search",
 		RequiredParams: []string{"query", "as_of"},
 		Executor: queryExecutorStub{
 			validateParamsFn: func(raw map[string]any) (map[string]any, error) { return raw, nil },
 			executeFn: func(context.Context, cubebox.ExecuteRequest, map[string]any) (cubebox.ExecuteResult, error) {
-				return cubebox.ExecuteResult{}, errOrgUnitNotFound
+				return cubebox.ExecuteResult{}, &orgUnitNotFoundError{}
 			},
 		},
 	})
@@ -1532,7 +1532,7 @@ func TestCubeBoxStreamTurnAPIWritesNotFoundWhenQueryExecutionHasNoResult(t *test
 				Steps: []cubebox.ReadPlanStep{
 					{
 						ID:          "step-1",
-						APIKey:      "orgunit.search",
+						ExecutorKey: "orgunit.search",
 						Params:      map[string]any{"query": "总部", "as_of": "2026-04-23"},
 						ResultFocus: []string{"target_org_code"},
 						DependsOn:   []string{},
@@ -1570,7 +1570,7 @@ func TestCubeBoxStreamTurnAPIClarifiesAmbiguousOrgunitSearch(t *testing.T) {
 	req = req.WithContext(withPrincipal(req.Context(), Principal{ID: "p1"}))
 
 	registry, err := cubebox.NewExecutionRegistry(cubebox.RegisteredExecutor{
-		APIKey:         "orgunit.search",
+		ExecutorKey:    "orgunit.search",
 		RequiredParams: []string{"query", "as_of"},
 		Executor: queryExecutorStub{
 			validateParamsFn: func(raw map[string]any) (map[string]any, error) { return raw, nil },
@@ -1603,7 +1603,7 @@ func TestCubeBoxStreamTurnAPIClarifiesAmbiguousOrgunitSearch(t *testing.T) {
 				Steps: []cubebox.ReadPlanStep{
 					{
 						ID:          "step-1",
-						APIKey:      "orgunit.search",
+						ExecutorKey: "orgunit.search",
 						Params:      map[string]any{"query": "华东", "as_of": "2026-04-23"},
 						ResultFocus: []string{"target_org_code"},
 						DependsOn:   []string{},
@@ -1643,6 +1643,96 @@ func TestCubeBoxStreamTurnAPIClarifiesAmbiguousOrgunitSearch(t *testing.T) {
 	}
 }
 
+func TestCubeBoxStreamTurnAPISupportsNonOrgunitFakeModuleFixture(t *testing.T) {
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/internal/cubebox/turns:stream", strings.NewReader(`{"conversation_id":"conv_1","prompt":"搜索固定资产","next_sequence":1}`))
+	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
+	req = req.WithContext(withPrincipal(req.Context(), Principal{ID: "p1"}))
+
+	registry, err := cubebox.NewExecutionRegistry(cubebox.RegisteredExecutor{
+		ExecutorKey:    "sample.search",
+		RequiredParams: []string{"query"},
+		OptionalParams: []string{},
+		Executor: queryExecutorStub{
+			executeFn: func(context.Context, cubebox.ExecuteRequest, map[string]any) (cubebox.ExecuteResult, error) {
+				return cubebox.ExecuteResult{
+					Payload: map[string]any{
+						"domain": "sample",
+						"items": []any{
+							map[string]any{"sample_id": "S-100", "name": "固定资产台账"},
+							map[string]any{"sample_id": "S-101", "name": "固定资产目录"},
+						},
+					},
+					PresentedCandidates: []cubebox.QueryCandidate{
+						{Domain: "sample", EntityKey: "S-100", Name: "固定资产台账"},
+						{Domain: "sample", EntityKey: "S-101", Name: "固定资产目录"},
+					},
+				}, nil
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("NewExecutionRegistry err=%v", err)
+	}
+
+	var appended []cubebox.CanonicalEvent
+	var plannerCalls int
+	queryFlow := &cubeboxQueryFlow{
+		runtime: cubebox.NewRuntime(),
+		store: cubeboxStoreStub{
+			appendFn: func(_ context.Context, _ string, _ string, _ string, event cubebox.CanonicalEvent) error {
+				appended = append(appended, event)
+				return nil
+			},
+		},
+		registry: registry,
+		producer: cubeboxReadPlanProducerStub{fn: func(_ context.Context, _ cubeboxReadPlanProductionInput) (cubeboxReadPlanProductionResult, error) {
+			plannerCalls++
+			if plannerCalls == 1 {
+				return queryPlannerReadPlanResult(cubebox.ReadPlan{
+					Intent:     "sample.search",
+					Confidence: 0.8,
+					Steps: []cubebox.ReadPlanStep{{
+						ID: "step-1", ExecutorKey: "sample.search", Params: map[string]any{"query": "固定资产"}, DependsOn: []string{},
+					}},
+				}), nil
+			}
+			return queryPlannerDoneResult(), nil
+		}},
+		narrator: cubeboxQueryNarratorStub{fn: func(_ context.Context, input cubeboxQueryNarrationInput) (string, error) {
+			if got, want := len(input.Results), 1; got != want {
+				t.Fatalf("expected %d narration result, got %#v", want, input.Results)
+			}
+			return "已返回 2 个样例对象。", nil
+		}},
+		knowledgePacks: []cubebox.KnowledgePack{
+			fakeAPIModuleKnowledgePack("modules/sample/presentation/cubebox", "sample.search", []string{"query"}, "支持样例对象查询。", []string{"搜索样例对象"}),
+		},
+		now: func() time.Time { return time.Date(2026, 4, 23, 12, 0, 0, 0, time.UTC) },
+	}
+
+	handleCubeBoxStreamTurnAPI(rec, req, cubebox.NewRuntime(), cubeboxStoreStub{
+		appendFn: func(_ context.Context, _ string, _ string, _ string, event cubebox.CanonicalEvent) error {
+			appended = append(appended, event)
+			return nil
+		},
+	}, newTestGateway(cubebox.NewRuntime()), queryFlow)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+	}
+	body := rec.Body.String()
+	if !strings.Contains(body, "2 个样例对象") {
+		t.Fatalf("expected fake-module narration body=%s", body)
+	}
+	if !containsCanonicalEventType(appended, cubebox.QueryCandidatesPresentedEventType) {
+		t.Fatalf("expected query candidates metadata event, got %#v", appended)
+	}
+	if strings.Contains(body, "orgunit") || strings.Contains(body, "组织") {
+		t.Fatalf("expected non-orgunit fixture output, got body=%s", body)
+	}
+}
+
 func TestCubeBoxStreamTurnAPIWritesCatalogDriftWhenExecutorMissing(t *testing.T) {
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodPost, "/internal/cubebox/turns:stream", strings.NewReader(`{"conversation_id":"conv_1","prompt":"查组织","next_sequence":1}`))
@@ -1650,8 +1740,8 @@ func TestCubeBoxStreamTurnAPIWritesCatalogDriftWhenExecutorMissing(t *testing.T)
 	req = req.WithContext(withPrincipal(req.Context(), Principal{ID: "p1"}))
 
 	registry, err := cubebox.NewExecutionRegistry(cubebox.RegisteredExecutor{
-		APIKey:   "orgunit.search",
-		Executor: queryExecutorStub{},
+		ExecutorKey: "orgunit.search",
+		Executor:    queryExecutorStub{},
 	})
 	if err != nil {
 		t.Fatalf("NewExecutionRegistry err=%v", err)
@@ -1670,7 +1760,7 @@ func TestCubeBoxStreamTurnAPIWritesCatalogDriftWhenExecutorMissing(t *testing.T)
 				Steps: []cubebox.ReadPlanStep{
 					{
 						ID:          "step-1",
-						APIKey:      "orgunit.details",
+						ExecutorKey: "orgunit.details",
 						Params:      map[string]any{"org_code": "1001", "as_of": "2026-04-23"},
 						ResultFocus: []string{"org_unit.name"},
 						DependsOn:   []string{},
@@ -1746,7 +1836,7 @@ func TestCubeBoxQueryFlowLetsPlannerUseConversationEvidenceExplicitly(t *testing
 	req = req.WithContext(withPrincipal(req.Context(), Principal{ID: "p1"}))
 
 	registry, err := cubebox.NewExecutionRegistry(cubebox.RegisteredExecutor{
-		APIKey:         "orgunit.list",
+		ExecutorKey:    "orgunit.list",
 		RequiredParams: []string{"as_of"},
 		OptionalParams: []string{"parent_org_code", "include_disabled"},
 		Executor: queryExecutorStub{
@@ -1758,12 +1848,11 @@ func TestCubeBoxQueryFlowLetsPlannerUseConversationEvidenceExplicitly(t *testing
 				return cubebox.ExecuteResult{
 					Payload: map[string]any{"as_of": "2026-04-25", "org_units": []any{}},
 					ConfirmedEntity: &cubebox.QueryEntity{
-						Domain:        "orgunit",
-						Intent:        "orgunit.list",
-						EntityKey:     "100000",
-						AsOf:          "2026-04-25",
-						SourceAPIKey:  "orgunit.list",
-						ParentOrgCode: "100000",
+						Domain:            "orgunit",
+						Intent:            "orgunit.list",
+						EntityKey:         "100000",
+						AsOf:              "2026-04-25",
+						SourceExecutorKey: "orgunit.list",
 					},
 				}, nil
 			},
@@ -1811,7 +1900,7 @@ func TestCubeBoxQueryFlowLetsPlannerUseConversationEvidenceExplicitly(t *testing
 			return cubeboxReadPlanProductionResult{
 				Handled: true,
 				Plan: cubebox.ReadPlan{Intent: "orgunit.list", Confidence: 0.9, Steps: []cubebox.ReadPlanStep{{
-					ID: "step-1", APIKey: "orgunit.list", Params: map[string]any{"as_of": input.QueryContext.RecentConfirmedEntity.AsOf, "parent_org_code": input.QueryContext.RecentConfirmedEntity.EntityKey, "include_disabled": false}, DependsOn: []string{},
+					ID: "step-1", ExecutorKey: "orgunit.list", Params: map[string]any{"as_of": input.QueryContext.RecentConfirmedEntity.AsOf, "parent_org_code": input.QueryContext.RecentConfirmedEntity.EntityKey, "include_disabled": false}, DependsOn: []string{},
 				}}},
 				ProviderID: "openai-compatible", ProviderType: "openai-compatible", ModelSlug: "gpt-5.2",
 			}, nil
@@ -1841,18 +1930,18 @@ func TestCubeBoxQueryFlowIgnoresConfirmedEntityMetadataAppendFailure(t *testing.
 	req = req.WithContext(withPrincipal(req.Context(), Principal{ID: "p1"}))
 
 	registry, err := cubebox.NewExecutionRegistry(cubebox.RegisteredExecutor{
-		APIKey:         "orgunit.details",
+		ExecutorKey:    "orgunit.details",
 		RequiredParams: []string{"org_code", "as_of"},
 		Executor: queryExecutorStub{
 			executeFn: func(context.Context, cubebox.ExecuteRequest, map[string]any) (cubebox.ExecuteResult, error) {
 				return cubebox.ExecuteResult{
 					Payload: map[string]any{"org_unit": map[string]any{"org_code": "100000", "name": "总部"}},
 					ConfirmedEntity: &cubebox.QueryEntity{
-						Domain:       "orgunit",
-						Intent:       "orgunit.details",
-						EntityKey:    "100000",
-						AsOf:         "2026-04-25",
-						SourceAPIKey: "orgunit.details",
+						Domain:            "orgunit",
+						Intent:            "orgunit.details",
+						EntityKey:         "100000",
+						AsOf:              "2026-04-25",
+						SourceExecutorKey: "orgunit.details",
 					},
 				}, nil
 			},
@@ -1884,7 +1973,7 @@ func TestCubeBoxQueryFlowIgnoresConfirmedEntityMetadataAppendFailure(t *testing.
 		producer: cubeboxReadPlanProducerStub{result: cubeboxReadPlanProductionResult{
 			Handled: true,
 			Plan: cubebox.ReadPlan{Intent: "orgunit.details", Confidence: 0.9, Steps: []cubebox.ReadPlanStep{{
-				ID: "step-1", APIKey: "orgunit.details", Params: map[string]any{"org_code": "100000", "as_of": "2026-04-25"}, DependsOn: []string{},
+				ID: "step-1", ExecutorKey: "orgunit.details", Params: map[string]any{"org_code": "100000", "as_of": "2026-04-25"}, DependsOn: []string{},
 			}}},
 			ProviderID: "openai-compatible", ProviderType: "openai-compatible", ModelSlug: "gpt-5.2",
 		}},
@@ -1975,7 +2064,7 @@ func TestCubeBoxQueryFlowWritesCandidateMetadataForAmbiguousSearch(t *testing.T)
 	req = req.WithContext(withPrincipal(req.Context(), Principal{ID: "p1"}))
 
 	registry, err := cubebox.NewExecutionRegistry(cubebox.RegisteredExecutor{
-		APIKey:         "orgunit.search",
+		ExecutorKey:    "orgunit.search",
 		RequiredParams: []string{"query", "as_of"},
 		OptionalParams: []string{"include_disabled"},
 		Executor: queryExecutorStub{
@@ -2019,7 +2108,7 @@ func TestCubeBoxQueryFlowWritesCandidateMetadataForAmbiguousSearch(t *testing.T)
 				Intent:     "orgunit.search_then_list",
 				Confidence: 0.85,
 				Steps: []cubebox.ReadPlanStep{{
-					ID: "step-1", APIKey: "orgunit.search", Params: map[string]any{"query": "飞虫公司", "as_of": "2026-04-25", "include_disabled": false}, DependsOn: []string{},
+					ID: "step-1", ExecutorKey: "orgunit.search", Params: map[string]any{"query": "飞虫公司", "as_of": "2026-04-25", "include_disabled": false}, DependsOn: []string{},
 				}},
 			},
 			ProviderID: "openai-compatible", ProviderType: "openai-compatible", ModelSlug: "gpt-5.2",
@@ -2082,7 +2171,7 @@ func TestCubeBoxQueryFlowDoesNotWriteSyntheticResolvedContextEvent(t *testing.T)
 	req = req.WithContext(withPrincipal(req.Context(), Principal{ID: "p1"}))
 
 	registry, err := cubebox.NewExecutionRegistry(cubebox.RegisteredExecutor{
-		APIKey:         "orgunit.list",
+		ExecutorKey:    "orgunit.list",
 		RequiredParams: []string{"as_of"},
 		OptionalParams: []string{"parent_org_code", "include_disabled"},
 		Executor: queryExecutorStub{
@@ -2091,12 +2180,11 @@ func TestCubeBoxQueryFlowDoesNotWriteSyntheticResolvedContextEvent(t *testing.T)
 				return cubebox.ExecuteResult{
 					Payload: map[string]any{"as_of": "2026-04-25", "org_units": []any{}},
 					ConfirmedEntity: &cubebox.QueryEntity{
-						Domain:        "orgunit",
-						Intent:        "orgunit.list",
-						EntityKey:     "100000",
-						AsOf:          "2026-04-25",
-						SourceAPIKey:  "orgunit.list",
-						ParentOrgCode: "100000",
+						Domain:            "orgunit",
+						Intent:            "orgunit.list",
+						EntityKey:         "100000",
+						AsOf:              "2026-04-25",
+						SourceExecutorKey: "orgunit.list",
 					},
 				}, nil
 			},
@@ -2130,7 +2218,7 @@ func TestCubeBoxQueryFlowDoesNotWriteSyntheticResolvedContextEvent(t *testing.T)
 			return cubeboxReadPlanProductionResult{
 				Handled: true,
 				Plan: cubebox.ReadPlan{Intent: "orgunit.list", Confidence: 0.9, Steps: []cubebox.ReadPlanStep{{
-					ID: "step-1", APIKey: "orgunit.list", Params: map[string]any{"as_of": "2026-04-25", "parent_org_code": "100000", "include_disabled": false}, DependsOn: []string{},
+					ID: "step-1", ExecutorKey: "orgunit.list", Params: map[string]any{"as_of": "2026-04-25", "parent_org_code": "100000", "include_disabled": false}, DependsOn: []string{},
 				}}},
 				ProviderID: "openai-compatible", ProviderType: "openai-compatible", ModelSlug: "gpt-5.2",
 			}, nil
@@ -2390,4 +2478,22 @@ func (s queryExecutorStub) Execute(ctx context.Context, request cubebox.ExecuteR
 		return cubebox.ExecuteResult{}, nil
 	}
 	return s.executeFn(ctx, request, params)
+}
+
+func fakeAPIModuleKnowledgePack(dir string, executorKey string, requiredParams []string, scopeSummary string, prompts []string) cubebox.KnowledgePack {
+	var promptBlock strings.Builder
+	for _, prompt := range prompts {
+		promptBlock.WriteString("    - ")
+		promptBlock.WriteString(prompt)
+		promptBlock.WriteString("\n")
+	}
+	return cubebox.KnowledgePack{
+		Dir: dir,
+		Files: map[string]string{
+			"CUBEBOX-SKILL.md": "# Skill\n\nqueries.md\napis.md\nexamples.md\n",
+			"queries.md":       "```yaml\nintents:\n  - key: " + executorKey + "\n    required_params: [" + strings.Join(requiredParams, ", ") + "]\n    optional_params: []\nno_query_guidance:\n  scope_summary: " + scopeSummary + "\n  suggested_prompts:\n" + promptBlock.String() + "```\n",
+			"apis.md":          "```yaml\napis:\n  - executor_key: " + executorKey + "\n    required_params: [" + strings.Join(requiredParams, ", ") + "]\n    optional_params: []\n```\n",
+			"examples.md":      "```json\n{\"steps\":[{\"id\":\"step-1\",\"executor_key\":\"" + executorKey + "\",\"params\":{\"" + requiredParams[0] + "\":\"S-100\"},\"depends_on\":[]}]}\n```\n",
+		},
+	}
 }

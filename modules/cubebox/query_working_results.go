@@ -54,7 +54,7 @@ type QueryCompletedPlan struct {
 
 type QueryCompletedPlanStep struct {
 	StepID            string         `json:"step_id"`
-	APIKey            string         `json:"api_key"`
+	ExecutorKey       string         `json:"executor_key"`
 	ParamsFingerprint string         `json:"params_fingerprint"`
 	ItemCount         int            `json:"item_count"`
 	Truncated         bool           `json:"truncated"`
@@ -64,7 +64,7 @@ type QueryCompletedPlanStep struct {
 type QueryWorkingObservation struct {
 	Round             int            `json:"round"`
 	StepID            string         `json:"step_id"`
-	APIKey            string         `json:"api_key"`
+	ExecutorKey       string         `json:"executor_key"`
 	ParamsFingerprint string         `json:"params_fingerprint"`
 	Items             []any          `json:"items,omitempty"`
 	ItemCount         int            `json:"item_count"`
@@ -189,7 +189,7 @@ func (s *QueryWorkingResultsState) AppendPlan(round int, plan ReadPlan, results 
 		observation := buildWorkingObservation(round, step, result, fingerprint, s.budget.MaxWorkingResultItems)
 		completed.Steps = append(completed.Steps, QueryCompletedPlanStep{
 			StepID:            strings.TrimSpace(step.ID),
-			APIKey:            strings.TrimSpace(step.APIKey),
+			ExecutorKey:       strings.TrimSpace(step.ExecutorKey),
 			ParamsFingerprint: fingerprint,
 			ItemCount:         observation.ItemCount,
 			Truncated:         observation.Truncated,
@@ -321,7 +321,7 @@ func PlanFingerprint(plan ReadPlan) string {
 }
 
 func StepFingerprint(step ReadPlanStep) string {
-	return strings.TrimSpace(step.APIKey) + "|" + canonicalParamFingerprint(step.Params)
+	return strings.TrimSpace(step.ExecutorKey) + "|" + canonicalParamFingerprint(step.Params)
 }
 
 func buildWorkingObservation(round int, step ReadPlanStep, result ExecuteResult, fingerprint string, maxItems int) QueryWorkingObservation {
@@ -329,7 +329,7 @@ func buildWorkingObservation(round int, step ReadPlanStep, result ExecuteResult,
 	return QueryWorkingObservation{
 		Round:             round,
 		StepID:            strings.TrimSpace(step.ID),
-		APIKey:            strings.TrimSpace(step.APIKey),
+		ExecutorKey:       strings.TrimSpace(step.ExecutorKey),
 		ParamsFingerprint: fingerprint,
 		Items:             items,
 		ItemCount:         itemCount,

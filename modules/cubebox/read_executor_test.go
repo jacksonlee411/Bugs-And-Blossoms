@@ -25,20 +25,20 @@ func (s readExecutorStub) Execute(ctx context.Context, request ExecuteRequest, p
 	return ExecuteResult{Payload: map[string]any{}}, nil
 }
 
-func TestNewExecutionRegistryRejectsDuplicateAPIKey(t *testing.T) {
+func TestNewExecutionRegistryRejectsDuplicateExecutorKey(t *testing.T) {
 	_, err := NewExecutionRegistry(
-		RegisteredExecutor{APIKey: "orgunit.details", Executor: readExecutorStub{}},
-		RegisteredExecutor{APIKey: "orgunit.details", Executor: readExecutorStub{}},
+		RegisteredExecutor{ExecutorKey: "orgunit.details", Executor: readExecutorStub{}},
+		RegisteredExecutor{ExecutorKey: "orgunit.details", Executor: readExecutorStub{}},
 	)
 	if err == nil {
-		t.Fatal("expected duplicate api_key error")
+		t.Fatal("expected duplicate executor_key error")
 	}
 }
 
 func TestExecutionRegistryRegisteredExecutorsReturnsSortedSnapshot(t *testing.T) {
 	registry, err := NewExecutionRegistry(
-		RegisteredExecutor{APIKey: "orgunit.list_children", Executor: readExecutorStub{}},
-		RegisteredExecutor{APIKey: "orgunit.details", Executor: readExecutorStub{}},
+		RegisteredExecutor{ExecutorKey: "orgunit.list_children", Executor: readExecutorStub{}},
+		RegisteredExecutor{ExecutorKey: "orgunit.details", Executor: readExecutorStub{}},
 	)
 	if err != nil {
 		t.Fatalf("NewExecutionRegistry err=%v", err)
@@ -48,14 +48,14 @@ func TestExecutionRegistryRegisteredExecutorsReturnsSortedSnapshot(t *testing.T)
 	if len(items) != 2 {
 		t.Fatalf("registered executors=%d", len(items))
 	}
-	if items[0].APIKey != "orgunit.details" || items[1].APIKey != "orgunit.list_children" {
+	if items[0].ExecutorKey != "orgunit.details" || items[1].ExecutorKey != "orgunit.list_children" {
 		t.Fatalf("unexpected api key order: %#v", items)
 	}
 }
 
 func TestExecutionRegistryProjectNarrationResultsUsesRawPayloadCopy(t *testing.T) {
 	registry, err := NewExecutionRegistry(
-		RegisteredExecutor{APIKey: "orgunit.details", Executor: readExecutorStub{}},
+		RegisteredExecutor{ExecutorKey: "orgunit.details", Executor: readExecutorStub{}},
 	)
 	if err != nil {
 		t.Fatalf("NewExecutionRegistry err=%v", err)
@@ -70,7 +70,7 @@ func TestExecutionRegistryProjectNarrationResultsUsesRawPayloadCopy(t *testing.T
 	}
 	results := registry.ProjectNarrationResults([]ExecuteResult{
 		{
-			APIKey:      "orgunit.details",
+			ExecutorKey: "orgunit.details",
 			StepID:      "step-1",
 			Payload:     source,
 			ResultFocus: []string{"org_unit.name"},
@@ -95,7 +95,7 @@ func TestExecutionRegistryProjectNarrationResultsUsesRawPayloadCopy(t *testing.T
 	if got := results[0].Data["as_of"]; got != "2026-04-25" {
 		t.Fatalf("as_of=%v", got)
 	}
-	for _, forbidden := range []string{"api_key", "step_id", "result_focus", "confirmed_entity", "data_present"} {
+	for _, forbidden := range []string{"executor_key", "step_id", "result_focus", "confirmed_entity", "data_present"} {
 		if _, ok := results[0].Data[forbidden]; ok {
 			t.Fatalf("unexpected execution envelope field %q in narration data: %+v", forbidden, results[0].Data)
 		}
@@ -117,7 +117,7 @@ func TestExecutionRegistryProjectNarrationResultsUsesRawPayloadCopy(t *testing.T
 func TestExecutionRegistryExecutePlan(t *testing.T) {
 	registry, err := NewExecutionRegistry(
 		RegisteredExecutor{
-			APIKey:         "orgunit.search",
+			ExecutorKey:    "orgunit.search",
 			RequiredParams: []string{"query", "as_of"},
 			Executor: readExecutorStub{
 				validateFn: func(raw map[string]any) (map[string]any, error) {
@@ -137,7 +137,7 @@ func TestExecutionRegistryExecutePlan(t *testing.T) {
 			},
 		},
 		RegisteredExecutor{
-			APIKey:         "orgunit.details",
+			ExecutorKey:    "orgunit.details",
 			RequiredParams: []string{"org_code", "as_of"},
 			Executor: readExecutorStub{
 				validateFn: func(raw map[string]any) (map[string]any, error) {
@@ -175,14 +175,14 @@ func TestExecutionRegistryExecutePlan(t *testing.T) {
 		Steps: []ReadPlanStep{
 			{
 				ID:          "step-1",
-				APIKey:      "orgunit.search",
+				ExecutorKey: "orgunit.search",
 				Params:      map[string]any{"query": "华东", "as_of": "2026-04-23"},
 				ResultFocus: []string{"target_org_code"},
 				DependsOn:   []string{},
 			},
 			{
 				ID:          "step-2",
-				APIKey:      "orgunit.details",
+				ExecutorKey: "orgunit.details",
 				Params:      map[string]any{"org_code": "@step-1.target_org_code", "as_of": "2026-04-23"},
 				ResultFocus: []string{"org_unit.name"},
 				DependsOn:   []string{"step-1"},
@@ -202,7 +202,7 @@ func TestExecutionRegistryExecutePlan(t *testing.T) {
 	if len(results) != 2 {
 		t.Fatalf("results=%d", len(results))
 	}
-	if results[0].APIKey != "orgunit.search" || results[1].APIKey != "orgunit.details" {
+	if results[0].ExecutorKey != "orgunit.search" || results[1].ExecutorKey != "orgunit.details" {
 		t.Fatalf("results=%+v", results)
 	}
 	if results[1].Payload["resolved_from"] != "1001" {
@@ -213,7 +213,7 @@ func TestExecutionRegistryExecutePlan(t *testing.T) {
 func TestExecutionRegistryExecutePlanResolvesPayloadPathReference(t *testing.T) {
 	registry, err := NewExecutionRegistry(
 		RegisteredExecutor{
-			APIKey:         "orgunit.search",
+			ExecutorKey:    "orgunit.search",
 			RequiredParams: []string{"query", "as_of"},
 			Executor: readExecutorStub{
 				executeFn: func(_ context.Context, _ ExecuteRequest, _ map[string]any) (ExecuteResult, error) {
@@ -227,7 +227,7 @@ func TestExecutionRegistryExecutePlanResolvesPayloadPathReference(t *testing.T) 
 			},
 		},
 		RegisteredExecutor{
-			APIKey:         "orgunit.details",
+			ExecutorKey:    "orgunit.details",
 			RequiredParams: []string{"org_code", "as_of"},
 			Executor: readExecutorStub{
 				executeFn: func(_ context.Context, _ ExecuteRequest, params map[string]any) (ExecuteResult, error) {
@@ -248,16 +248,16 @@ func TestExecutionRegistryExecutePlanResolvesPayloadPathReference(t *testing.T) 
 		Confidence: 0.8,
 		Steps: []ReadPlanStep{
 			{
-				ID:        "step-1",
-				APIKey:    "orgunit.search",
-				Params:    map[string]any{"query": "华东", "as_of": "2026-04-23"},
-				DependsOn: []string{},
+				ID:          "step-1",
+				ExecutorKey: "orgunit.search",
+				Params:      map[string]any{"query": "华东", "as_of": "2026-04-23"},
+				DependsOn:   []string{},
 			},
 			{
-				ID:        "step-2",
-				APIKey:    "orgunit.details",
-				Params:    map[string]any{"org_code": "@step-1.payload.target_org_code", "as_of": "2026-04-23"},
-				DependsOn: []string{"step-1"},
+				ID:          "step-2",
+				ExecutorKey: "orgunit.details",
+				Params:      map[string]any{"org_code": "@step-1.payload.target_org_code", "as_of": "2026-04-23"},
+				DependsOn:   []string{"step-1"},
 			},
 		},
 	})
@@ -268,7 +268,7 @@ func TestExecutionRegistryExecutePlanResolvesPayloadPathReference(t *testing.T) 
 
 func TestExecutionRegistryExecutePlanRejectsMissingExecutor(t *testing.T) {
 	registry, err := NewExecutionRegistry(
-		RegisteredExecutor{APIKey: "orgunit.search", Executor: readExecutorStub{}},
+		RegisteredExecutor{ExecutorKey: "orgunit.search", Executor: readExecutorStub{}},
 	)
 	if err != nil {
 		t.Fatalf("NewExecutionRegistry err=%v", err)
@@ -281,7 +281,7 @@ func TestExecutionRegistryExecutePlanRejectsMissingExecutor(t *testing.T) {
 		Steps: []ReadPlanStep{
 			{
 				ID:          "step-1",
-				APIKey:      "orgunit.details",
+				ExecutorKey: "orgunit.details",
 				Params:      map[string]any{"org_code": "1001", "as_of": "2026-04-23"},
 				ResultFocus: []string{},
 				DependsOn:   []string{},
@@ -314,7 +314,7 @@ func TestExecutionRegistryExecutePlanRejectsClarifyingPlan(t *testing.T) {
 func TestExecutionRegistryExecutePlanRejectsMissingRequiredParam(t *testing.T) {
 	registry, err := NewExecutionRegistry(
 		RegisteredExecutor{
-			APIKey:         "orgunit.details",
+			ExecutorKey:    "orgunit.details",
 			RequiredParams: []string{"org_code", "as_of"},
 			Executor:       readExecutorStub{},
 		},
@@ -330,7 +330,7 @@ func TestExecutionRegistryExecutePlanRejectsMissingRequiredParam(t *testing.T) {
 		Steps: []ReadPlanStep{
 			{
 				ID:          "step-1",
-				APIKey:      "orgunit.details",
+				ExecutorKey: "orgunit.details",
 				Params:      map[string]any{"org_code": "1001"},
 				ResultFocus: []string{},
 				DependsOn:   []string{},
@@ -346,7 +346,7 @@ func TestExecutionRegistryExecutePlanRejectsMissingRequiredParam(t *testing.T) {
 func TestExecutionRegistryExecutePlanRejectsUnexpectedParam(t *testing.T) {
 	registry, err := NewExecutionRegistry(
 		RegisteredExecutor{
-			APIKey:         "orgunit.details",
+			ExecutorKey:    "orgunit.details",
 			RequiredParams: []string{"org_code", "as_of"},
 			OptionalParams: []string{"include_disabled"},
 			Executor:       readExecutorStub{},
@@ -363,7 +363,7 @@ func TestExecutionRegistryExecutePlanRejectsUnexpectedParam(t *testing.T) {
 		Steps: []ReadPlanStep{
 			{
 				ID:          "step-1",
-				APIKey:      "orgunit.details",
+				ExecutorKey: "orgunit.details",
 				Params:      map[string]any{"org_code": "1001", "as_of": "2026-04-23", "org_code_from": "step-0.target_org_code"},
 				ResultFocus: []string{},
 				DependsOn:   []string{},
@@ -379,7 +379,7 @@ func TestExecutionRegistryExecutePlanRejectsUnexpectedParam(t *testing.T) {
 func TestExecutionRegistryExecutePlanRejectsInvalidReferenceSyntax(t *testing.T) {
 	registry, err := NewExecutionRegistry(
 		RegisteredExecutor{
-			APIKey:         "orgunit.details",
+			ExecutorKey:    "orgunit.details",
 			RequiredParams: []string{"org_code", "as_of"},
 			Executor:       readExecutorStub{},
 		},
@@ -393,10 +393,10 @@ func TestExecutionRegistryExecutePlanRejectsInvalidReferenceSyntax(t *testing.T)
 		Confidence: 0.9,
 		Steps: []ReadPlanStep{
 			{
-				ID:        "step-1",
-				APIKey:    "orgunit.details",
-				Params:    map[string]any{"org_code": "@bad", "as_of": "2026-04-23"},
-				DependsOn: []string{},
+				ID:          "step-1",
+				ExecutorKey: "orgunit.details",
+				Params:      map[string]any{"org_code": "@bad", "as_of": "2026-04-23"},
+				DependsOn:   []string{},
 			},
 		},
 	})
@@ -408,12 +408,12 @@ func TestExecutionRegistryExecutePlanRejectsInvalidReferenceSyntax(t *testing.T)
 func TestExecutionRegistryExecutePlanRejectsReferenceToMissingStep(t *testing.T) {
 	registry, err := NewExecutionRegistry(
 		RegisteredExecutor{
-			APIKey:         "orgunit.search",
+			ExecutorKey:    "orgunit.search",
 			RequiredParams: []string{"query", "as_of"},
 			Executor:       readExecutorStub{},
 		},
 		RegisteredExecutor{
-			APIKey:         "orgunit.details",
+			ExecutorKey:    "orgunit.details",
 			RequiredParams: []string{"org_code", "as_of"},
 			Executor:       readExecutorStub{},
 		},
@@ -427,16 +427,16 @@ func TestExecutionRegistryExecutePlanRejectsReferenceToMissingStep(t *testing.T)
 		Confidence: 0.9,
 		Steps: []ReadPlanStep{
 			{
-				ID:        "step-1",
-				APIKey:    "orgunit.search",
-				Params:    map[string]any{"query": "华东", "as_of": "2026-04-23"},
-				DependsOn: []string{},
+				ID:          "step-1",
+				ExecutorKey: "orgunit.search",
+				Params:      map[string]any{"query": "华东", "as_of": "2026-04-23"},
+				DependsOn:   []string{},
 			},
 			{
-				ID:        "step-2",
-				APIKey:    "orgunit.details",
-				Params:    map[string]any{"org_code": "@step-0.target_org_code", "as_of": "2026-04-23"},
-				DependsOn: []string{"step-1"},
+				ID:          "step-2",
+				ExecutorKey: "orgunit.details",
+				Params:      map[string]any{"org_code": "@step-0.target_org_code", "as_of": "2026-04-23"},
+				DependsOn:   []string{"step-1"},
 			},
 		},
 	})

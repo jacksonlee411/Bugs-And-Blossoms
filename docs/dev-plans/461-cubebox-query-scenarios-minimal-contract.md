@@ -106,18 +106,18 @@
 1. 根据已登记查询域、用户意图和当前租户/权限上下文发现应加载哪些知识包；当前阶段不依赖页面上下文做知识包发现或补参。
 2. 读取并拼装知识包内容供模型使用。
 3. 校验模型产出的 `ReadPlan` 是否符合 schema 和允许范围。
-4. 通过代码中的 `api_key -> executor` 注册表，把步骤安全映射到现有读 API 执行器。
+4. 通过代码中的 `executor_key -> executor` 注册表，把步骤安全映射到现有读 API 执行器。
 5. 执行后将原始结果返回给结果解释阶段。
 
 代码层不持有模块知识本身。
 
 ### 3.4 执行注册层的正式边界
 
-本计划中的执行注册层，只是 `api_key -> executor` 的受控映射层，不是第二套业务实现。
+本计划中的执行注册层，只是 `executor_key -> executor` 的受控映射层，不是第二套业务实现。
 
 执行注册层只允许承担：
 
-- 白名单注册：声明哪些 `api_key` 允许进入执行面
+- 白名单注册：声明哪些 `executor_key` 允许进入执行面
 - 参数收口：把模型输出的 `params` 校验为受控输入
 - 顺序调度：按 `steps[]` 顺序调用现有只读 API
 - 结果转交：把原始结果交给结果解释阶段
@@ -202,7 +202,7 @@ modules/orgunit/presentation/cubebox/
 
 `apis.md` 不是运行时执行事实源。它只用于 prompt-facing 的说明与约束，帮助模型生成合法 `ReadPlan`。
 
-运行时唯一执行事实源必须是代码中的 `api_key -> executor` 注册表；知识包不能直接决定可执行面。
+运行时唯一执行事实源必须是代码中的 `executor_key -> executor` 注册表；知识包不能直接决定可执行面。
 
 ### 5.4 `examples.md`
 
@@ -246,7 +246,7 @@ modules/orgunit/presentation/cubebox/
 3. 服务端把知识包 + 当前上下文一并提供给模型。
 4. 模型输出支持线性多步只读编排的结构化 `ReadPlan`。
 5. 服务端校验 `ReadPlan`。
-6. 服务端按 `steps[]` 顺序，通过代码中的执行注册表把每一步的 `api_key` 映射到现有读 API 执行器。
+6. 服务端按 `steps[]` 顺序，通过代码中的执行注册表把每一步的 `executor_key` 映射到现有读 API 执行器。
 7. 获取各步原始结果后，再交给 `CubeBox` 做结果解释和整理。
 
 ### 7.1A 查询默认值与最小澄清
@@ -273,7 +273,7 @@ modules/orgunit/presentation/cubebox/
   "steps": [
     {
       "id": "step-1",
-      "api_key": "string",
+      "executor_key": "string",
       "params": {},
       "result_focus": [],
       "depends_on": []
@@ -286,7 +286,7 @@ modules/orgunit/presentation/cubebox/
 约束如下：
 
 - `steps` 至少 1 步。
-- 每一步必须包含 `id`、`api_key`、`params`、`depends_on`；`result_focus` 若存在，只作为模型提示材料，不作为代码侧解释契约。
+- 每一步必须包含 `id`、`executor_key`、`params`、`depends_on`；`result_focus` 若存在，只作为模型提示材料，不作为代码侧解释契约。
 - `depends_on` 只允许引用前序步骤，形成线性顺序，不允许图状执行、循环依赖或并发分叉。
 - 若某一步依赖前一步结果做参数补全，必须通过前序步骤结果显式派生，不能隐式猜测。
 
@@ -305,7 +305,7 @@ modules/orgunit/presentation/cubebox/
 
 执行边界冻结如下：
 
-1. `api_key` 只能映射到现有业务模块只读 API。
+1. `executor_key` 只能映射到现有业务模块只读 API。
 2. 模型不能直接指定数据库、SQL、内部表、内部函数或未登记的执行器。
 3. 模型不能在 `params` 中注入当前用户无权访问的对象。
 4. `apis.md` 只能帮助模型理解允许的查询面，不能替代代码中的执行注册表。
@@ -323,11 +323,11 @@ modules/orgunit/presentation/cubebox/
 
 1. 查询结果的自然语言叙述由模型负责，不再把结果解释正式冻结为代码侧摘要器体系。
 2. 代码侧只负责 schema / fail-closed 约束和输出泄露拦截，而不负责能力专属 prose 生成。
-3. `NarrationProjector` 不降级为可选工具，而是在当前阶段直接删除；不得继续保留 `api_key -> projector` 的第二套 narrator DTO 分支，避免后续模块接入时回流。
+3. `NarrationProjector` 不降级为可选工具，而是在当前阶段直接删除；不得继续保留 `executor_key -> projector` 的第二套 narrator DTO 分支，避免后续模块接入时回流。
 4. narrator 输入统一使用 `ExecuteResult.Payload` 的浅拷贝；由模型基于原始 payload 做自然语言叙述。
 5. 长结果的完整明细是否全部进入 narrator 输入，默认由 executor 返回 payload 与当前模型上下文预算共同决定；本计划不再以“无 projector”为理由主动丢弃 raw payload。
 6. 用户可见回答仍不得逐字回显整份原始 payload、内部执行结构或 raw JSON；若模型输出违反该边界，继续通过 narrator 输出校验 fail-closed。
-7. 禁止在通用回答总线中继续追加 `switch api_key` / `if api_key == ...` 式 capability-specific 渲染分支。
+7. 禁止在通用回答总线中继续追加 `switch executor_key` / `if executor_key == ...` 式 capability-specific 渲染分支。
 8. 禁止新增或恢复 `NarrationProjector`、`project*Narration(...)` 或同类“AI 专用结果 DTO 投影器”；若未来确有重启必要，必须另立计划说明为什么它不是第二套展示/保护层。
 9. 业务字段名不是 narrator 输入或自然语言表达禁忌。`org_code`、`parent_org_code`、`as_of` 等字段可作为模型理解事实进入回答阶段；用户可见回答应转成自然业务表达，禁止的是 raw JSON、内部执行路径、完整 payload 和执行结构泄露。
 10. 查询结果回答不再冻结为默认 `1 到 3 句`。简单结果可以短答；多对象列表、审计、对比或用户要求明细时，允许列表、分段和小标题。
@@ -384,7 +384,7 @@ modules/orgunit/presentation/cubebox/
 
 5. **执行目录漂移或底层 API 失败**
    - `api_catalog_drift_or_executor_missing`
-   - `ReadPlan` 中的 `api_key` 未在代码执行注册表中注册，或知识包声明与执行注册表不一致
+   - `ReadPlan` 中的 `executor_key` 未在代码执行注册表中注册，或知识包声明与执行注册表不一致
    - 继续走现有错误码与错误映射，不允许 `CubeBox` 发明第二套错误语义
 
 ## 10. 验收标准
@@ -394,7 +394,7 @@ modules/orgunit/presentation/cubebox/
 - [x] 模型只能通过知识包产出结构化 `ReadPlan`，而不是直接生成自由文本执行动作。
 - [x] `ReadPlan` 首期支持一个问题下的线性多步只读编排，但不引入图状执行、并发分叉或通用 workflow engine。
 - [x] `ReadPlan` 执行只能复用现有只读 API，不能直查数据库或形成第二读事实源。
-- [x] `apis.md` 只是 prompt-facing 说明，运行时唯一执行事实源仍是代码中的 `api_key -> executor` 注册表。
+- [x] `apis.md` 只是 prompt-facing 说明，运行时唯一执行事实源仍是代码中的 `executor_key -> executor` 注册表。
 - [x] 执行注册层删去后，现有模块只读能力本身仍成立；该层只承担受控映射、参数收口和顺序调度，而不是第二套实现。
 - [x] `orgunit` 首批样板能跑通最小查询闭环。
 - [x] 查询结果不会绕过 schema / fail-closed 约束，把完整结果页或整份原始 payload JSON 直接写入单次 SSE 用户可见回答；narrator 输入统一允许 raw payload 作为事实来源。
@@ -408,13 +408,13 @@ modules/orgunit/presentation/cubebox/
 - 不得复活旧 `assistant_knowledge_*` 路径或同类历史运行时
 - 不得把知识包做成第二套 API 或权限系统
 - 不得让模型直接拼 SQL、直读内部表或调用未登记执行器
-- 不得让知识包直接决定可执行面；执行面只能由代码中的 `api_key -> executor` 注册表冻结
+- 不得让知识包直接决定可执行面；执行面只能由代码中的 `executor_key -> executor` 注册表冻结
 - 不得让执行注册层重新承载模块查询逻辑、数据库访问、AI 专用 DTO、AI 专用权限判断或第二套错误体系
 - 不得一开始就引入通用 planner DSL、workflow engine 或大而全 tool registry
 - 不得把“支持多步查询”膨胀成 DAG 编排、并发 fan-out/fan-in、动态工具发现或通用任务图框架
 - 不得在 `461` 首期冻结租户级覆盖目录路径、存储面或发布面
 - 不得把知识包膨胀成重型固定模板，导致维护和演化成本过高
-- 不得在 `buildCubeboxQueryAnswer`、`summarizeQueryResult` 或同类通用回答总线中持续追加 `switch api_key` / `if api_key == ...` 式 capability-specific 渲染分支
+- 不得在 `buildCubeboxQueryAnswer`、`summarizeQueryResult` 或同类通用回答总线中持续追加 `switch executor_key` / `if executor_key == ...` 式 capability-specific 渲染分支
 - 不得让任意列表类结果绕过统一条目预算与文本预算，把默认页大小或大结果集完整写入单次 `turn.agent_message.delta`
 - 不得为了“更好看”而在查询回答主链上引入第二套展示 DTO、第二套结果模板或无上限的字符串拼装逻辑
 
@@ -426,7 +426,7 @@ modules/orgunit/presentation/cubebox/
 
 - [x] 在 `modules/orgunit/presentation/cubebox/` 下创建 `CUBEBOX-SKILL.md`、`queries.md`、`apis.md`、`examples.md`
 - [x] 只覆盖 `orgunit.details`、`orgunit.list`、`orgunit.search`、`orgunit.audit`
-- [x] `apis.md` 中的 `api_key` 命名与后续代码注册表保持一一对应
+- [x] `apis.md` 中的 `executor_key` 命名与后续代码注册表保持一一对应
 - [x] 不引入租户级覆盖目录、租户级发布机制或额外知识运行时
 
 交付结果：
@@ -446,17 +446,17 @@ modules/orgunit/presentation/cubebox/
 - 运行时能够稳定接收和校验结构化 `ReadPlan`
 - 非法输入会命中明确失败语义，而不是进入执行面
 
-### 12.3 Step 3：实现 `api_key -> executor` 执行注册层
+### 12.3 Step 3：实现 `executor_key -> executor` 执行注册层
 
 - [x] 在 `modules/cubebox` 增加受控执行注册表
-- [x] 冻结 `api_key -> executor` 注册元数据与受控映射骨架
+- [x] 冻结 `executor_key -> executor` 注册元数据与受控映射骨架
 - [x] 注册层只承担白名单注册、参数收口和顺序调度
 - [x] 不允许注册层直接查库、重写业务查询逻辑或形成第二读事实源
 
 交付结果：
 
 - 运行时存在唯一执行事实源
-- 未注册 `api_key` 会 fail-closed，并命中 `api_catalog_drift_or_executor_missing`
+- 未注册 `executor_key` 会 fail-closed，并命中 `api_catalog_drift_or_executor_missing`
 
 ### 12.4 Step 4：接入 `orgunit` 首批只读执行器
 
@@ -490,8 +490,8 @@ modules/orgunit/presentation/cubebox/
 - [x] 为知识包加载、`ReadPlan` 校验、执行注册表和 `orgunit` 样板补最小稳定测试
 - [x] 冻结查询结果返回的 schema / fail-closed 边界
 - [x] 补齐大 payload、超长返回与原始 payload 不得原样输出到用户可见回答的回归测试；后续需按 `DEV-PLAN-468 P2-1` 更新 raw payload 进入 narrator 输入与 projector 删除的回归测试
-- [x] 删除当前查询回答中的 capability-specific 硬编码实现，包括但不限于 `buildCubeboxQueryAnswer` / `summarizeQueryResult` 总线中的 `api_key` 特判，以及现有 `orgunit.list` 专用字符串模板分支
-- [x] 记录首期实现范围、已接入 `api_key`、未覆盖能力与已知限制
+- [x] 删除当前查询回答中的 capability-specific 硬编码实现，包括但不限于 `buildCubeboxQueryAnswer` / `summarizeQueryResult` 总线中的 `executor_key` 特判，以及现有 `orgunit.list` 专用字符串模板分支
+- [x] 记录首期实现范围、已接入 `executor_key`、未覆盖能力与已知限制
 - [x] 在对应 `docs/dev-records/` 中沉淀 readiness 证据
 
 交付结果：
@@ -538,22 +538,22 @@ modules/orgunit/presentation/cubebox/
   - 每个意图的必填参数、可选参数、缺参追问口径
   - 常见自然语言表达与意图映射
 - `apis.md`
-  - 只列出首批 4 个 `api_key`
-  - 每个 `api_key` 的用途、参数、关注字段、权限前提
+  - 只列出首批 4 个 `executor_key`
+  - 每个 `executor_key` 的用途、参数、关注字段、权限前提
   - 明确声明“禁止直查数据库、禁止调用未列出的接口”
   - 明确声明“本文件不是执行事实源，执行事实源以后续代码注册表为准”
 - `examples.md`
   - 每个意图至少 1 条高质量问法
   - 至少包含 1 个缺参追问示例
   - 至少包含 1 个多步只读编排示例
-  - 示例中的 `api_key` 必须只使用首批 4 个冻结值
+  - 示例中的 `executor_key` 必须只使用首批 4 个冻结值
 
 PR-1 验收点：
 
 - [x] 目录与文件路径符合 `461` 冻结的模块级知识包规范
 - [x] 4 个文件都能被 reviewer 独立阅读理解，不依赖运行时代码补完语义
 - [x] 查询意图范围没有超出 `orgunit.details/list/search/audit`
-- [x] `api_key` 命名在 4 个文件之间保持一致，没有同义漂移
+- [x] `executor_key` 命名在 4 个文件之间保持一致，没有同义漂移
 - [x] 文档未引入租户级覆盖目录、租户级发布机制或第二知识运行时
 - [x] 文档未声明数据库、SQL、store、内部函数等非法执行面
 - [x] 至少有 1 个示例体现“一个问题下的线性多步只读编排”
@@ -561,7 +561,7 @@ PR-1 验收点：
 
 PR-1 评审重点：
 
-- reviewer 应重点看“知识是否清楚、边界是否收敛、`api_key` 是否稳定”，而不是提前评审运行时实现细节
+- reviewer 应重点看“知识是否清楚、边界是否收敛、`executor_key` 是否稳定”，而不是提前评审运行时实现细节
 - 若在 PR-1 中发现必须依赖代码实现才能写清语义，优先回到文档收敛，而不是把运行时代码夹带进这个 PR
 
 #### PR-2：`ReadPlan` 最小契约与校验器
@@ -590,7 +590,7 @@ PR-2 验收点：
 #### PR-3：执行注册层骨架
 
 - 覆盖 Step 3
-- 增加 `api_key -> executor` 注册表、执行器接口和线性多步调度骨架
+- 增加 `executor_key -> executor` 注册表、执行器接口和线性多步调度骨架
 - 只冻结受控映射层，不引入第二套查询实现
 - 本 PR 可以使用 stub executor 验证主链，但不应复制任何真实业务查询逻辑
 
@@ -601,10 +601,10 @@ PR-3 实际落点：
 
 PR-3 验收点：
 
-- [x] 已存在唯一执行事实源：`api_key -> executor`
-- [x] 注册表支持白名单注册与查找，不允许重复 `api_key`
+- [x] 已存在唯一执行事实源：`executor_key -> executor`
+- [x] 注册表支持白名单注册与查找，不允许重复 `executor_key`
 - [x] 线性多步调度骨架已存在，且前序结果已进入后续步骤执行上下文
-- [x] 未注册 `api_key` 会命中 `api_catalog_drift_or_executor_missing`
+- [x] 未注册 `executor_key` 会命中 `api_catalog_drift_or_executor_missing`
 - [x] `go test ./modules/cubebox/...` 通过
 
 #### PR-4：`orgunit` 首批执行器接入
@@ -626,7 +626,7 @@ PR-4 验收点：
 - [x] `orgunit.details` 只接受显式 `org_code` 与 `as_of`；若用户输入不足以稳定定位目标组织，应先回到澄清，不再依赖 `org_code_from` 一类隐藏跨步参数
 - [x] `orgunit.search` 返回前会复用现有 `ResolveOrgCodesByNodeKeys` 补齐 `path_org_codes`
 - [x] `orgunit.audit` 默认 `limit` 与现有 `orgNodeAuditPageSize` 对齐
-- [x] 参数归一化仅覆盖该 4 个 `api_key` 的最小受控入参，不扩展成通用 planner/DSL/参数中台
+- [x] 参数归一化仅覆盖该 4 个 `executor_key` 的最小受控入参，不扩展成通用 planner/DSL/参数中台
 - [x] `go test ./internal/server/... ./modules/cubebox/...` 通过
 
 #### PR-5：接入 `CubeBox` 查询主链
@@ -666,7 +666,7 @@ PR-5 验收点：
 - `PR-1` 到 `PR-3` 解决“能否建立受控查询骨架”。
 - `PR-4` 到 `PR-5` 解决“首个模块样板能否接入并跑通”。
 - `PR-6` 负责把首期闭环收口到可验证状态。
-- 若时间或风险受限，允许在 `PR-4` 只先接一个 `api_key` 做最小样板，但必须在文档和 readiness 中显式记录缩范围结果。
+- 若时间或风险受限，允许在 `PR-4` 只先接一个 `executor_key` 做最小样板，但必须在文档和 readiness 中显式记录缩范围结果。
 
 ## 13. 关联文档
 
