@@ -420,8 +420,6 @@ func TestBuildQueryEvidenceWindowProjectsNeutralObservations(t *testing.T) {
 				EntityKey:         "100000",
 				AsOf:              "2026-04-25",
 				SourceExecutorKey: "orgunit.details",
-				TargetOrgCode:     "100000",
-				ParentOrgCode:     "ROOT",
 			},
 		},
 		RecentCandidateGroups: []QueryCandidateGroup{
@@ -585,8 +583,6 @@ func TestQueryEntityPayloadUsesMinimalSchema(t *testing.T) {
 		EntityKey:         " 100000 ",
 		AsOf:              " 2026-04-25 ",
 		SourceExecutorKey: " orgunit.details ",
-		TargetOrgCode:     " ",
-		ParentOrgCode:     " ROOT ",
 	}
 
 	payload := entity.Payload()
@@ -596,8 +592,8 @@ func TestQueryEntityPayloadUsesMinimalSchema(t *testing.T) {
 	if _, ok := payload["target_org_code"]; ok {
 		t.Fatalf("did not expect empty target_org_code in payload=%#v", payload)
 	}
-	if payload["parent_org_code"] != "ROOT" {
-		t.Fatalf("unexpected parent_org_code=%#v", payload)
+	if _, ok := payload["parent_org_code"]; ok {
+		t.Fatalf("did not expect parent_org_code in payload=%#v", payload)
 	}
 }
 

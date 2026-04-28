@@ -27,12 +27,48 @@ type ExecuteRequest struct {
 	PreviousResults map[string]ExecuteResult
 }
 
+type ExecutionTerminalError struct {
+	Code      string `json:"code,omitempty"`
+	Message   string `json:"message,omitempty"`
+	Retryable bool   `json:"retryable,omitempty"`
+}
+
+type QueryClarificationFacts struct {
+	ErrorCode          string `json:"error_code,omitempty"`
+	CandidateSource    string `json:"candidate_source,omitempty"`
+	CandidateCount     int    `json:"candidate_count,omitempty"`
+	CannotSilentSelect bool   `json:"cannot_silent_select,omitempty"`
+}
+
+type ScopeParamSemantics struct {
+	ExpandAll []string `json:"expand_all,omitempty"`
+	Narrowing []string `json:"narrowing,omitempty"`
+}
+
+type QueryRuntimeHints struct {
+	UnsupportedPromptTerms []string            `json:"unsupported_prompt_terms,omitempty"`
+	ScopeParams            ScopeParamSemantics `json:"scope_params,omitempty"`
+}
+
+type QueryCandidatesProvider interface {
+	QueryCandidates() []QueryCandidate
+}
+
+type QueryClarificationFactsProvider interface {
+	QueryClarificationFacts() QueryClarificationFacts
+}
+
+type QueryTerminalErrorProvider interface {
+	QueryTerminalError() *ExecutionTerminalError
+}
+
 type ExecuteResult struct {
-	ExecutorKey     string
-	StepID          string
-	Payload         map[string]any
-	ResultFocus     []string
-	ConfirmedEntity *QueryEntity
+	ExecutorKey         string
+	StepID              string
+	Payload             map[string]any
+	ResultFocus         []string
+	ConfirmedEntity     *QueryEntity
+	PresentedCandidates []QueryCandidate
 }
 
 type QueryNarrationResult struct {
@@ -44,6 +80,7 @@ type RegisteredExecutor struct {
 	ExecutorKey    string
 	RequiredParams []string
 	OptionalParams []string
+	RuntimeHints   QueryRuntimeHints
 	Executor       ReadExecutor
 }
 

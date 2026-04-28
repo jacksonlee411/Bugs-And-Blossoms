@@ -1,6 +1,6 @@
 # DEV-PLAN-478：CubeBox 第二业务模块接入前共享 Query Runtime 去 `orgunit` 污染复核方案
 
-**状态**: 已关闭（2026-04-28 CST；本轮仅完成调查、边界冻结与实施顺序收口，代码整改不在本计划内继续展开，后续如需推进改为另起计划处理）
+**状态**: 已完成（2026-04-28 CST；本轮完成共享 Query Runtime 去 `orgunit` 污染整改、fake-module 覆盖与门禁验证，后续仅保留轻量反回流门禁评估为独立后续事项）
 
 ## 0. 适用范围与评审分级
 
@@ -52,12 +52,12 @@
 
 ## 2. 核心目标
 
-1. [ ] 冻结共享 narrator / clarifier / no-query guidance / planner correction 中的 `orgunit` 污染命中清单。
-2. [ ] 明确共享 query runtime 与模块知识包/模块 executor 的 owner 边界，避免第二模块接入时继续把模块语义回灌到共享层。
-3. [ ] 冻结多知识包装配的最小策略：共享层如何装配多个知识包、如何把 knowledge pack 与 `ExecutionRegistry` 成组校验、如何汇总或选择 no-query guidance、哪些规则继续由模块知识包自带。
-4. [ ] 冻结共享 `QueryContext` / `QueryEntity` / metadata event 的字段归属，明确现有 `orgunit` 字段是过渡债务、模块事实，还是必须迁出的共享层污染。
-5. [ ] 将 `DEV-PLAN-473` 的模型主导原则固化为 478 的整改 stopline：去模块化污染不得新增本地语义裁决层。
-6. [ ] 产出分批整改切片、非 `orgunit` fixture 验证口径与 stopline，让后续实现 PR 能逐步落地而不引入“第二模块先兼容、共享层后收”的回流窗口。
+1. [X] 冻结共享 narrator / clarifier / no-query guidance / planner correction 中的 `orgunit` 污染命中清单。
+2. [X] 明确共享 query runtime 与模块知识包/模块 executor 的 owner 边界，避免第二模块接入时继续把模块语义回灌到共享层。
+3. [X] 冻结多知识包装配的最小策略：共享层如何装配多个知识包、如何把 knowledge pack 与 `ExecutionRegistry` 成组校验、如何汇总或选择 no-query guidance、哪些规则继续由模块知识包自带。
+4. [X] 冻结共享 `QueryContext` / `QueryEntity` / metadata event 的字段归属，明确现有 `orgunit` 字段是过渡债务、模块事实，还是必须迁出的共享层污染。
+5. [X] 将 `DEV-PLAN-473` 的模型主导原则固化为 478 的整改 stopline：去模块化污染不得新增本地语义裁决层。
+6. [X] 产出分批整改切片、非 `orgunit` fixture 验证口径与 stopline，让后续实现 PR 能逐步落地而不引入“第二模块先兼容、共享层后收”的回流窗口。
 
 ## 3. 非目标
 
@@ -227,48 +227,48 @@ owner 冻结：
 
 ### Phase A / P1：先做共享层污染盘点与边界冻结
 
-1. [ ] 为 narrator / clarifier / no-query guidance / planner correction 各自列出“允许保留的共享规则”和“必须下沉的模块语义”。
-2. [ ] 为 `extractQueryCandidatesFromPayload(...)`、scope correction、unsupported-dimension 判定补充 owner 裁决。
-3. [ ] 冻结“哪些测试命中只是 `orgunit` 样例，哪些测试其实把 `orgunit` 写成共享 contract”。
-4. [ ] 为 `QueryEntity`、`QueryCandidate`、`QueryCandidateGroup`、`QueryClarification` 与 metadata event payload 列出共享字段白名单；将 `TargetOrgCode` / `ParentOrgCode` 标记为待裁决迁移项。
-5. [ ] 对每个拟新增共享 contract 标注其类型：`hard-boundary`、`fact-transport`、`model-input` 或 `local-semantic-decision`；命中 `local-semantic-decision` 的设计默认退回。
+1. [X] 为 narrator / clarifier / no-query guidance / planner correction 各自列出“允许保留的共享规则”和“必须下沉的模块语义”。
+2. [X] 为 `extractQueryCandidatesFromPayload(...)`、scope correction、unsupported-dimension 判定补充 owner 裁决。
+3. [X] 冻结“哪些测试命中只是 `orgunit` 样例，哪些测试其实把 `orgunit` 写成共享 contract”。
+4. [X] 为 `QueryEntity`、`QueryCandidate`、`QueryCandidateGroup`、`QueryClarification` 与 metadata event payload 列出共享字段白名单；将 `TargetOrgCode` / `ParentOrgCode` 标记为待裁决迁移项。
+5. [X] 对每个拟新增共享 contract 标注其类型：`hard-boundary`、`fact-transport`、`model-input` 或 `local-semantic-decision`；命中 `local-semantic-decision` 的设计默认退回。
 
 ### Phase B / P1：冻结多知识包装配 contract
 
-1. [ ] 明确第二模块接入后 `knowledgePackDirs`、executor 注册项、`read_api_catalog` 与 knowledge pack 校验必须作为同一组装配单元更新。
-2. [ ] 冻结一份显式 enabled query module 装配清单，作为 `knowledgePackDirs`、executor registry、`read_api_catalog` 与 knowledge pack drift 校验的共同来源。
-3. [ ] 默认采用“全部已装 knowledge packs 的 `apis.md` executor_key 并集”与全局 `ExecutionRegistry` 双向一致性校验；单份 pack 不再要求覆盖全局 registry。
-4. [ ] 明确重复 executor_key 默认 fail-closed；分组校验仅作为未来模块化 registry 的单独计划入口，不作为当前第二模块接入默认路径。
-5. [ ] 默认采用 `NoQueryGuidanceFromKnowledgePacks(...)` 聚合策略：按 `knowledgePackDirs` 顺序合并 scope summary 与 prompts，稳定去重并默认最多展示 6 条 suggested prompts。
-6. [ ] 明确 guidance 冲突处理：不得依赖 pack 排序让第一份胜出；无法安全聚合时应 fail-closed 或回到计划评审。
-7. [ ] 默认允许依赖已启用 knowledge packs 的 `scope_summary` 聚合；不引入更高层组合策略，除非后续发现多模块 guidance 冲突无法安全聚合并单开计划。
+1. [X] 明确第二模块接入后 `knowledgePackDirs`、executor 注册项、`read_api_catalog` 与 knowledge pack 校验必须作为同一组装配单元更新。
+2. [X] 冻结一份显式 enabled query module 装配清单，作为 `knowledgePackDirs`、executor registry、`read_api_catalog` 与 knowledge pack drift 校验的共同来源。
+3. [X] 默认采用“全部已装 knowledge packs 的 `apis.md` executor_key 并集”与全局 `ExecutionRegistry` 双向一致性校验；单份 pack 不再要求覆盖全局 registry。
+4. [X] 明确重复 executor_key 默认 fail-closed；分组校验仅作为未来模块化 registry 的单独计划入口，不作为当前第二模块接入默认路径。
+5. [X] 默认采用 `NoQueryGuidanceFromKnowledgePacks(...)` 聚合策略：按 `knowledgePackDirs` 顺序合并 scope summary 与 prompts，稳定去重并默认最多展示 6 条 suggested prompts。
+6. [X] 明确 guidance 冲突处理：不得依赖 pack 排序让第一份胜出；无法安全聚合时应 fail-closed 或回到计划评审。
+7. [X] 默认允许依赖已启用 knowledge packs 的 `scope_summary` 聚合；不引入更高层组合策略，除非后续发现多模块 guidance 冲突无法安全聚合并单开计划。
 
 ### Phase C / P1：先建立非 `orgunit` fixture 与测试准入
 
-1. [ ] 新增最小 fake module knowledge pack，不接真实业务模块与数据库，只用于共享层单测。
-2. [ ] 新增 fake module executor 或 stub registry，覆盖 `executor_key` 注册、planner prompt block、no-query guidance、candidate observation 与 terminal fallback。
-3. [ ] 在 `internal/server/cubebox_api_test.go` 增加或调整 API 层 fake-module 覆盖，确保 `/internal/cubebox/turns:stream` 不把 `modules/orgunit/presentation/cubebox` 作为唯一默认 fixture。
-4. [ ] 建立整改前基线断言：fake module 能先暴露当前共享层哪些路径仍依赖 `orgunit`，后续 Phase D 以这些断言为收敛目标。
+1. [X] 新增最小 fake module knowledge pack，不接真实业务模块与数据库，只用于共享层单测。
+2. [X] 新增 fake module executor 或 stub registry，覆盖 `executor_key` 注册、planner prompt block、no-query guidance、candidate observation 与 terminal fallback。
+3. [X] 在 `internal/server/cubebox_api_test.go` 增加或调整 API 层 fake-module 覆盖，确保 `/internal/cubebox/turns:stream` 不把 `modules/orgunit/presentation/cubebox` 作为唯一默认 fixture。
+4. [X] 建立整改前基线断言：fake module 能先暴露当前共享层哪些路径仍依赖 `orgunit`，后续 Phase D 以这些断言为收敛目标。
 
 ### Phase D / P2：基于 fake module 逐项整改共享层 capability-specific 逻辑
 
-1. [ ] narrator / clarifier prompt 去模块词。
-2. [ ] scope correction 与 unsupported-dimension 从 `orgunit` 硬编码收敛为模型可消费的中性 evidence / knowledge pack 规则；不得收敛为本地 scope engine。
-3. [ ] 候选/结果集抽取从 `orgunit` payload 猜测收敛为模块显式事实提供。
-4. [ ] `queryExecutionErrorToTerminal(...)` 和澄清事实提取从模块专有错误分支收敛为共享错误 contract。
-5. [ ] `QueryEntity` / metadata event 中模块专属字段迁出或收敛到受控事实容器，避免继续平铺 `target_<module>_code` 这类字段。
-6. [ ] 首期优先使用模块 executor observation payload 表达模块专属事实；只有 fake module 验证证明必要时，才允许引入受控 `attributes` / `facts` 容器。
-7. [ ] 对候选组、结果集和 clarification resume 的后续使用补充测试：本地只投影 evidence，不能隐式补 `ReadPlan` 参数或生成 selected target。
-8. [ ] 将共享测试从“断言 `orgunit` 默认文案”改为“断言共享 contract + 当前模块样例”；`orgunit` 场景测试必须明确归类为模块样例或模块 executor 测试。
+1. [X] narrator / clarifier prompt 去模块词。
+2. [X] scope correction 与 unsupported-dimension 从 `orgunit` 硬编码收敛为模型可消费的中性 evidence / knowledge pack 规则；不得收敛为本地 scope engine。
+3. [X] 候选/结果集抽取从 `orgunit` payload 猜测收敛为模块显式事实提供。
+4. [X] `queryExecutionErrorToTerminal(...)` 和澄清事实提取从模块专有错误分支收敛为共享错误 contract。
+5. [X] `QueryEntity` / metadata event 中模块专属字段迁出或收敛到受控事实容器，避免继续平铺 `target_<module>_code` 这类字段。
+6. [X] 首期优先使用模块 executor observation payload 表达模块专属事实；只有 fake module 验证证明必要时，才允许引入受控 `attributes` / `facts` 容器。
+7. [X] 对候选组、结果集和 clarification resume 的后续使用补充测试：本地只投影 evidence，不能隐式补 `ReadPlan` 参数或生成 selected target。
+8. [X] 将共享测试从“断言 `orgunit` 默认文案”改为“断言共享 contract + 当前模块样例”；`orgunit` 场景测试必须明确归类为模块样例或模块 executor 测试。
 
 ### Phase E / P3：文档与门禁回写
 
-1. [ ] 在 `468` 与后续第二模块接入计划中回写 owner 关系与验证口径。
+1. [X] 在 `468` 与后续第二模块接入计划中回写 owner 关系与验证口径。
 2. [ ] 评估是否新增轻量反回流脚本或现有门禁扩展，用于扫描共享 query flow 中新增模块 executor_key、payload 字段猜测与模块专属错误文案。
 
 ## 6. 门禁与验证入口
 
-本计划当前为文档方案阶段；后续若进入代码实施，应按命中范围补齐验证证据。
+本计划已进入代码实施阶段；本轮命中范围必须补齐下列验证证据。
 
 1. 文档阶段：
    - `make check doc`
@@ -314,17 +314,17 @@ owner 冻结：
 
 ## 9. 验收标准
 
-1. [ ] 能把当前命中清楚分成“共享层污染”“模块样例夹具”“模块本来该有的业务语义”三类。
-2. [ ] 为第二模块接入前的共享 narrator / query flow / knowledge pack 装配给出明确 owner 和实施顺序，而不是只写一句“后续复核”。
-3. [ ] 共享 `QueryContext` / `QueryEntity` / metadata event 的模块专属字段已有裁决：保留为通用字段、迁入受控事实容器、或登记为待删除过渡债务。
-4. [ ] 多 knowledge pack + `ExecutionRegistry` 的默认校验策略已冻结为“同一 enabled query module 装配清单派生的全部已装 packs executor_key 并集”双向校验，且 `NoQueryGuidance` 默认聚合稳定去重、最多展示 6 条 suggested prompts，不再第一份胜出。
-5. [ ] 共享 `QueryEntity` / `QueryCandidate` 的推荐最终形态已冻结为中性字段；模块专属事实默认只进入 observation payload，`attributes` / `facts` 容器后移到 fake module 证明必要之后，现有 `TargetOrgCode` / `ParentOrgCode` 被登记为待迁出债务。
-6. [ ] 至少一个非 `orgunit` fake module 测试先于共享层整改建立，并覆盖 planner prompt 装配、no-query guidance、candidate observation、terminal fallback 与 API 层流式入口。
-7. [ ] 478 与 `DEV-PLAN-473` 的边界已明确：去 `orgunit` 污染不会新增本地语义裁决层；所有目标选择、候选解释、澄清恢复和短输入理解仍由模型基于 evidence 与 knowledge pack 处理。
+1. [X] 能把当前命中清楚分成“共享层污染”“模块样例夹具”“模块本来该有的业务语义”三类。
+2. [X] 为第二模块接入前的共享 narrator / query flow / knowledge pack 装配给出明确 owner 和实施顺序，而不是只写一句“后续复核”。
+3. [X] 共享 `QueryContext` / `QueryEntity` / metadata event 的模块专属字段已有裁决：保留为通用字段、迁入受控事实容器、或登记为待删除过渡债务。
+4. [X] 多 knowledge pack + `ExecutionRegistry` 的默认校验策略已冻结为“同一 enabled query module 装配清单派生的全部已装 packs executor_key 并集”双向校验，且 `NoQueryGuidance` 默认聚合稳定去重、最多展示 6 条 suggested prompts，不再第一份胜出。
+5. [X] 共享 `QueryEntity` / `QueryCandidate` 的推荐最终形态已冻结为中性字段；模块专属事实默认只进入 observation payload，`attributes` / `facts` 容器后移到 fake module 证明必要之后，现有 `TargetOrgCode` / `ParentOrgCode` 被登记为待迁出债务。
+6. [X] 至少一个非 `orgunit` fake module 测试先于共享层整改建立，并覆盖 planner prompt 装配、no-query guidance、candidate observation、terminal fallback 与 API 层流式入口。
+7. [X] 478 与 `DEV-PLAN-473` 的边界已明确：去 `orgunit` 污染不会新增本地语义裁决层；所有目标选择、候选解释、澄清恢复和短输入理解仍由模型基于 evidence 与 knowledge pack 处理。
 8. [ ] Stopline 已能被 review checklist 或轻量门禁执行，阻断共享 query flow 新增模块 executor_key 特判、payload 字段猜测、模块专属错误文案、共享 context 模块字段平铺和本地语义 selector。
-9. [ ] 代码实施阶段的 Go 全量门禁、`modules/cubebox` 定向测试、`internal/server` query/API 定向测试已有执行证据。
-10. [ ] `468` 当前剩余主线与 `AGENTS.md` 文档地图都能直接指向本 owner 文档。
-11. [ ] 文档门禁 `make check doc` 通过。
+9. [X] 代码实施阶段的 Go 全量门禁、`modules/cubebox` 定向测试、`internal/server` query/API 定向测试已有执行证据。
+10. [X] `468` 当前剩余主线与 `AGENTS.md` 文档地图都能直接指向本 owner 文档。
+11. [X] 文档门禁 `make check doc` 通过。
 
 ## 10. 当前执行记录
 
@@ -335,4 +335,9 @@ owner 冻结：
 5. [X] 2026-04-28：按评审意见冻结默认策略：多 knowledge pack 默认并集校验与 no-query guidance 聚合（suggested prompts 默认最多 6 条）；共享 entity 结构默认中性字段；API 层 fake-module 测试纳入准入。
 6. [X] 2026-04-28：按 `DEV-PLAN-003` 评审意见补充验证入口、enabled query module 显式装配清单口径，并将 `attributes` / `facts` 容器后移到 fake module 证明必要之后。
 7. [X] 2026-04-28：按实施顺序评审意见调整 Phase C/D：先建立非 `orgunit` fake module 基线测试，再基于该基线整改共享层 capability-specific 逻辑；同时将 scope summary 组合策略收敛为默认 knowledge pack 聚合。
-8. [X] 2026-04-28：按文档收口裁决关闭本计划；本文件保留为共享 query runtime 去 `orgunit` 污染的调查与边界冻结记录，后续若进入代码整改，改为另起计划处理。
+8. [X] 2026-04-28：完成调查/边界冻结阶段，形成共享 prompt、knowledge pack 装配、结果候选提取、终端错误映射与 fake-module 测试的实施清单。
+9. [X] 2026-04-28：按当前执行请求重新开启本计划并直接进入代码整改；后续实现、测试与收口继续在本 owner 文档下登记，不再另起同主题计划。
+10. [X] 2026-04-28：完成共享 `QueryEntity` 中 `TargetOrgCode` / `ParentOrgCode` 迁出，候选提取改为 executor 显式 `PresentedCandidates`，终端错误与澄清事实改为 provider contract，移除 shared query flow 对 `orgunit` payload 形状和错误类型的直接猜测。
+11. [X] 2026-04-28：完成多 knowledge pack 默认聚合与 registry 并集校验落地，并新增重复 `executor_key` fail-closed、non-`orgunit` fake module knowledge pack/query flow 测试。
+12. [X] 2026-04-28：完成 shared query flow 剩余 `unsupported-dimension` / `all-scope correction` 收敛；共享层改为读取模块 knowledge pack runtime hints 与 executor runtime hints，不再硬编码 `orgunit` 术语表或 `orgunit.list/details/search/...` 特判。
+13. [X] 2026-04-28：补齐 `/internal/cubebox/turns:stream` 的 non-`orgunit` fake-module API 流式入口验证，并完成 `go vet ./...`、`make check doc`、`make check lint`、`make test` 全量执行证据。

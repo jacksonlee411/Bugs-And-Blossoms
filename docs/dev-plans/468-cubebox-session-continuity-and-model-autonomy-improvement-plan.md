@@ -489,7 +489,7 @@ narrator 可以看到：
 7. [ ] `P2/后续 owner` 当前主线：
    - `P2-2`：`ExecutionRegistry` / executor 层补齐 per-api 授权校验，避免只依赖“用户已进入 CubeBox + executor_key 已注册 + 租户隔离”
    - `P2-3c`：原先统一登记为 query dialogue fact window 残口；后续已拆分为 `DEV-PLAN-473`（evidence-window 纠偏）、`DEV-PLAN-471`（同 turn loop）、`DEV-PLAN-472`（open clarification / 残缺日期续接）与 `DEV-PLAN-474`（跨 turn `result_list` 续接）
-   - 第二个业务模块接入前的共享 query runtime 去 `orgunit` 污染复核（owner 已拆至 `DEV-PLAN-478`）
+   - 第二个业务模块接入前的共享 query runtime 去 `orgunit` 污染复核（owner 已拆至 `DEV-PLAN-478`；2026-04-28 已完成共享 contract 收敛、non-`orgunit` fake-module 覆盖与全量验证）
 8. [ ] 每个后续实现 PR 必须先说明：它是在“给模型事实/上下文”，还是在“替模型做语义判断”。后者默认需要收敛或单独论证。
 
 #### Slice E1：`P2-1` / 删除 projector，raw payload 统一进入 narrator 输入（2026-04-26 已完成）

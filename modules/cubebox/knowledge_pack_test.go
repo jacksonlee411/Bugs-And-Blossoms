@@ -112,7 +112,7 @@ func TestValidateKnowledgePackAgainstRegistryRejectsParamDrift(t *testing.T) {
 		},
 	}
 
-	err = ValidateKnowledgePackAgainstRegistry(pack, registry)
+	err = ValidateKnowledgePacksAgainstRegistry([]KnowledgePack{pack}, registry)
 	if !errors.Is(err, ErrKnowledgePackInvalid) {
 		t.Fatalf("expected ErrKnowledgePackInvalid, got %v", err)
 	}
@@ -146,7 +146,7 @@ func TestValidateKnowledgePackAgainstRegistryRejectsRegistryExecutorKeyMissingFr
 		},
 	}
 
-	err = ValidateKnowledgePackAgainstRegistry(pack, registry)
+	err = ValidateKnowledgePacksAgainstRegistry([]KnowledgePack{pack}, registry)
 	if !errors.Is(err, ErrKnowledgePackInvalid) {
 		t.Fatalf("expected ErrKnowledgePackInvalid, got %v", err)
 	}
@@ -163,14 +163,158 @@ func TestNoQueryGuidanceFromKnowledgePacks(t *testing.T) {
 				"examples.md":      "```json\n{\"steps\": []}\n```\n",
 			},
 		},
+		{
+			Dir: "modules/sample/presentation/cubebox",
+			Files: map[string]string{
+				"CUBEBOX-SKILL.md": "# Skill\n\nqueries.md\napis.md\nexamples.md\n",
+				"queries.md":       "```yaml\nintents:\n  - key: sample.details\n    required_params: [sample_id]\n    optional_params: []\nno_query_guidance:\n  scope_summary: 也支持样例对象只读查询。\n  suggested_prompts:\n    - 查样例对象 S-100 的详情\n    - 搜索名称包含“固定资产”的样例对象\n    - 搜索名称包含“销售”的组织\n```\n",
+				"apis.md":          "```yaml\napis:\n  - executor_key: sample.details\n    required_params: [sample_id]\n    optional_params: []\n```\n",
+				"examples.md":      "```json\n{\"steps\": []}\n```\n",
+			},
+		},
 	}
 
 	guidance := NoQueryGuidanceFromKnowledgePacks(packs)
-	if guidance.ScopeSummary != "当前主要支持组织相关只读查询。" {
+	if guidance.ScopeSummary != "当前主要支持组织相关只读查询。 也支持样例对象只读查询。" {
 		t.Fatalf("unexpected scope summary=%q", guidance.ScopeSummary)
 	}
-	if !slices.Equal(guidance.SuggestedPrompts, []string{"查“华东销售中心”的详情", "搜索名称包含“销售”的组织"}) {
+	if !slices.Equal(guidance.SuggestedPrompts, []string{
+		"查“华东销售中心”的详情",
+		"搜索名称包含“销售”的组织",
+		"查样例对象 S-100 的详情",
+		"搜索名称包含“固定资产”的样例对象",
+	}) {
 		t.Fatalf("unexpected suggested prompts=%#v", guidance.SuggestedPrompts)
+	}
+}
+
+func TestNoQueryGuidanceFromKnowledgePacksKeepsLaterScopeSummaryWhenPromptsAreCapped(t *testing.T) {
+	packs := []KnowledgePack{
+		{
+			Dir: "modules/first/presentation/cubebox",
+			Files: map[string]string{
+				"CUBEBOX-SKILL.md": "# Skill\n\nqueries.md\napis.md\nexamples.md\n",
+				"queries.md":       "```yaml\nintents:\n  - key: first.search\n    required_params: [query]\n    optional_params: []\nno_query_guidance:\n  scope_summary: 支持第一类对象查询。\n  suggested_prompts:\n    - 第一类问题 1\n    - 第一类问题 2\n    - 第一类问题 3\n    - 第一类问题 4\n    - 第一类问题 5\n    - 第一类问题 6\n```\n",
+				"apis.md":          "```yaml\napis:\n  - executor_key: first.search\n    required_params: [query]\n    optional_params: []\n```\n",
+				"examples.md":      "```json\n{\"steps\": []}\n```\n",
+			},
+		},
+		{
+			Dir: "modules/second/presentation/cubebox",
+			Files: map[string]string{
+				"CUBEBOX-SKILL.md": "# Skill\n\nqueries.md\napis.md\nexamples.md\n",
+				"queries.md":       "```yaml\nintents:\n  - key: second.search\n    required_params: [query]\n    optional_params: []\nno_query_guidance:\n  scope_summary: 支持第二类对象查询。\n  suggested_prompts:\n    - 第二类问题 1\n```\n",
+				"apis.md":          "```yaml\napis:\n  - executor_key: second.search\n    required_params: [query]\n    optional_params: []\n```\n",
+				"examples.md":      "```json\n{\"steps\": []}\n```\n",
+			},
+		},
+	}
+
+	guidance := NoQueryGuidanceFromKnowledgePacks(packs)
+	if guidance.ScopeSummary != "支持第一类对象查询。 支持第二类对象查询。" {
+		t.Fatalf("unexpected scope summary=%q", guidance.ScopeSummary)
+	}
+	if !slices.Equal(guidance.SuggestedPrompts, []string{
+		"第一类问题 1",
+		"第一类问题 2",
+		"第一类问题 3",
+		"第一类问题 4",
+		"第一类问题 5",
+		"第一类问题 6",
+	}) {
+		t.Fatalf("unexpected suggested prompts=%#v", guidance.SuggestedPrompts)
+	}
+}
+
+func TestRuntimeHintsFromKnowledgePacks(t *testing.T) {
+	packs := []KnowledgePack{
+		{
+			Dir: "modules/orgunit/presentation/cubebox",
+			Files: map[string]string{
+				"CUBEBOX-SKILL.md": "# Skill\n\nqueries.md\napis.md\nexamples.md\n",
+				"queries.md":       "```yaml\nintents:\n  - key: orgunit.list\n    required_params: [as_of]\n    optional_params: [all_org_units, keyword]\nruntime_hints:\n  unsupported_prompt_terms:\n    - 成本组织\n    - org_type\n  scope_params:\n    expand_all: [all_org_units]\n    narrowing: [keyword, parent_org_code]\n```\n",
+				"apis.md":          "```yaml\napis:\n  - executor_key: orgunit.list\n    required_params: [as_of]\n    optional_params: [all_org_units, keyword]\n```\n",
+				"examples.md":      "```json\n{\"steps\": [{\"id\":\"step-1\",\"executor_key\":\"orgunit.list\",\"params\":{\"as_of\":\"2026-04-28\"},\"depends_on\":[]}]}\n```\n",
+			},
+		},
+		{
+			Dir: "modules/sample/presentation/cubebox",
+			Files: map[string]string{
+				"CUBEBOX-SKILL.md": "# Skill\n\nqueries.md\napis.md\nexamples.md\n",
+				"queries.md":       "```yaml\nintents:\n  - key: sample.details\n    required_params: [sample_id]\n    optional_params: []\nruntime_hints:\n  unsupported_prompt_terms:\n    - 成本组织\n    - sample hierarchy\n  scope_params:\n    expand_all: [all_samples]\n    narrowing: [sample_id]\n```\n",
+				"apis.md":          "```yaml\napis:\n  - executor_key: sample.details\n    required_params: [sample_id]\n    optional_params: []\n```\n",
+				"examples.md":      "```json\n{\"steps\": [{\"id\":\"step-1\",\"executor_key\":\"sample.details\",\"params\":{\"sample_id\":\"S-100\"},\"depends_on\":[]}]}\n```\n",
+			},
+		},
+	}
+
+	hints := RuntimeHintsFromKnowledgePacks(packs)
+	if !slices.Equal(hints.UnsupportedPromptTerms, []string{"成本组织", "org_type", "sample hierarchy"}) {
+		t.Fatalf("unexpected unsupported terms=%#v", hints.UnsupportedPromptTerms)
+	}
+	if !slices.Equal(hints.ScopeParams.ExpandAll, []string{"all_org_units", "all_samples"}) {
+		t.Fatalf("unexpected expand-all params=%#v", hints.ScopeParams.ExpandAll)
+	}
+	if !slices.Equal(hints.ScopeParams.Narrowing, []string{"keyword", "parent_org_code", "sample_id"}) {
+		t.Fatalf("unexpected narrowing params=%#v", hints.ScopeParams.Narrowing)
+	}
+}
+
+func TestValidateKnowledgePacksAgainstRegistryUsesUnionAndRejectsDuplicateExecutorKey(t *testing.T) {
+	registry, err := NewExecutionRegistry(
+		RegisteredExecutor{
+			ExecutorKey:    "orgunit.details",
+			RequiredParams: []string{"org_code"},
+			OptionalParams: []string{"as_of"},
+			Executor:       readExecutorStub{},
+		},
+		RegisteredExecutor{
+			ExecutorKey:    "sample.details",
+			RequiredParams: []string{"sample_id"},
+			OptionalParams: []string{},
+			Executor:       readExecutorStub{},
+		},
+	)
+	if err != nil {
+		t.Fatalf("NewExecutionRegistry err=%v", err)
+	}
+	packs := []KnowledgePack{
+		{
+			Dir: "modules/orgunit/presentation/cubebox",
+			Files: map[string]string{
+				"CUBEBOX-SKILL.md": "# Skill\n\nqueries.md\napis.md\nexamples.md\n",
+				"queries.md":       "```yaml\nintents:\n  - key: orgunit.details\n    required_params: [org_code]\n    optional_params: [as_of]\n```\n",
+				"apis.md":          "```yaml\napis:\n  - executor_key: orgunit.details\n    required_params: [org_code]\n    optional_params: [as_of]\n```\n",
+				"examples.md":      "```json\n{\"steps\": [{\"id\":\"step-1\",\"executor_key\":\"orgunit.details\",\"params\":{\"org_code\":\"1001\"},\"depends_on\":[]}]}\n```\n",
+			},
+		},
+		{
+			Dir: "modules/sample/presentation/cubebox",
+			Files: map[string]string{
+				"CUBEBOX-SKILL.md": "# Skill\n\nqueries.md\napis.md\nexamples.md\n",
+				"queries.md":       "```yaml\nintents:\n  - key: sample.details\n    required_params: [sample_id]\n    optional_params: []\n```\n",
+				"apis.md":          "```yaml\napis:\n  - executor_key: sample.details\n    required_params: [sample_id]\n    optional_params: []\n```\n",
+				"examples.md":      "```json\n{\"steps\": [{\"id\":\"step-1\",\"executor_key\":\"sample.details\",\"params\":{\"sample_id\":\"S-100\"},\"depends_on\":[]}]}\n```\n",
+			},
+		},
+	}
+	if err := ValidateKnowledgePacksAgainstRegistry(packs, registry); err != nil {
+		t.Fatalf("ValidateKnowledgePacksAgainstRegistry err=%v", err)
+	}
+
+	duplicate := append([]KnowledgePack(nil), packs...)
+	duplicate[1] = KnowledgePack{
+		Dir: "modules/sample/presentation/cubebox",
+		Files: map[string]string{
+			"CUBEBOX-SKILL.md": "# Skill\n\nqueries.md\napis.md\nexamples.md\n",
+			"queries.md":       "```yaml\nintents:\n  - key: orgunit.details\n    required_params: [org_code]\n    optional_params: [as_of]\n```\n",
+			"apis.md":          "```yaml\napis:\n  - executor_key: orgunit.details\n    required_params: [org_code]\n    optional_params: [as_of]\n```\n",
+			"examples.md":      "```json\n{\"steps\": [{\"id\":\"step-1\",\"executor_key\":\"orgunit.details\",\"params\":{\"org_code\":\"1001\"},\"depends_on\":[]}]}\n```\n",
+		},
+	}
+	err = ValidateKnowledgePacksAgainstRegistry(duplicate, registry)
+	if !errors.Is(err, ErrKnowledgePackInvalid) {
+		t.Fatalf("expected ErrKnowledgePackInvalid for duplicate executor key, got %v", err)
 	}
 }
 

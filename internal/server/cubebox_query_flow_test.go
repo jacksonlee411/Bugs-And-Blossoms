@@ -159,7 +159,7 @@ func TestBuildQueryClarificationEnvelopeOmitsQueryIntent(t *testing.T) {
 		CannotSilentSelect: true,
 		QueryContext: cubebox.QueryContext{
 			RecentConfirmedEntities: []cubebox.QueryEntity{
-				{Domain: "orgunit", Intent: "orgunit.search", EntityKey: "1001", AsOf: "2026-04-24", SourceExecutorKey: "orgunit.search", TargetOrgCode: "1001"},
+				{Domain: "orgunit", Intent: "orgunit.search", EntityKey: "1001", AsOf: "2026-04-24", SourceExecutorKey: "orgunit.search"},
 			},
 			RecentCandidateGroups: []cubebox.QueryCandidateGroup{
 				{
@@ -296,7 +296,7 @@ func TestBuildQueryNarrationEnvelopeUsesOnlyCurrentResultsAsFacts(t *testing.T) 
 		Prompt: "列出全部组织",
 		QueryContext: cubebox.QueryContext{
 			RecentConfirmedEntities: []cubebox.QueryEntity{
-				{Domain: "orgunit", Intent: "orgunit.list", EntityKey: "200006", AsOf: "2026-04-27", ParentOrgCode: "200006"},
+				{Domain: "orgunit", Intent: "orgunit.list", EntityKey: "200006", AsOf: "2026-04-27"},
 			},
 			RecentDialogueTurns: []cubebox.QueryDialogueTurn{
 				{UserPrompt: "列出成本组织", AssistantReply: "未查询到任何成本组织。"},
@@ -586,8 +586,6 @@ func TestBuildPlannerMessagesIncludesQueryEvidenceWindow(t *testing.T) {
 					EntityKey:         "100000",
 					AsOf:              "2026-04-25",
 					SourceExecutorKey: "orgunit.details",
-					TargetOrgCode:     "100000",
-					ParentOrgCode:     "ROOT",
 				},
 			},
 			RecentCandidateGroups: []cubebox.QueryCandidateGroup{
@@ -747,7 +745,7 @@ func TestBuildPlannerMessagesGuidesCorrectionToOverrideHistoricalKeywordFilter(t
 				},
 			}},
 			RecentConfirmedEntities: []cubebox.QueryEntity{
-				{Domain: "orgunit", Intent: "orgunit.details", EntityKey: "200007", AsOf: "2026-04-27", SourceExecutorKey: "orgunit.details", ParentOrgCode: "200006"},
+				{Domain: "orgunit", Intent: "orgunit.details", EntityKey: "200007", AsOf: "2026-04-27", SourceExecutorKey: "orgunit.details"},
 			},
 		},
 		KnowledgePacks: []cubebox.KnowledgePack{
@@ -768,7 +766,7 @@ func TestBuildPlannerMessagesGuidesCorrectionToOverrideHistoricalKeywordFilter(t
 	joined := plannerMessageText(messages)
 	for _, expected := range []string{
 		"当前用户输入优先于历史事实",
-		"不得继承历史 keyword、parent_org_code、单个 entity_key 或 result_list target set",
+		"不得继承历史缩窄参数、单个 entity_key 或 result_list target set",
 		"不得把旧 `keyword`、`parent_org_code`、`entity_key` 或 `result_list` 继续带入新计划",
 		"不只是包含成本关键字的组织，而是全部的组织",
 		"不得继承历史 `keyword=成本`",
@@ -789,13 +787,43 @@ func TestBuildPlannerMessagesGuidesCorrectionToOverrideHistoricalKeywordFilter(t
 	}
 }
 
+func TestBuildPlannerMessagesSharedGuidanceDoesNotNameOrgunitFields(t *testing.T) {
+	producer := &cubeboxProviderReadPlanProducer{
+		now: func() time.Time { return time.Date(2026, 4, 27, 12, 0, 0, 0, time.UTC) },
+	}
+	messages := producer.buildPlannerMessages(cubeboxReadPlanProductionInput{
+		Prompt: "不只是这个对象，而是全部",
+		KnowledgePacks: []cubebox.KnowledgePack{
+			{Dir: "modules/sample/presentation/cubebox", Files: map[string]string{
+				"CUBEBOX-SKILL.md": "# Skill\n\nqueries.md\napis.md\nexamples.md\n",
+				"queries.md":       "```yaml\nintents:\n  - key: sample.list\n    required_params: [as_of]\n    optional_params: [all_samples]\n```\n",
+				"apis.md":          "```yaml\napis:\n  - executor_key: sample.list\n    required_params: [as_of]\n    optional_params: [all_samples]\n```\n",
+				"examples.md":      "```json\n{\"steps\": []}\n```\n",
+			}},
+		},
+	})
+
+	if len(messages) == 0 {
+		t.Fatal("expected planner messages")
+	}
+	sharedSystemPrompt := messages[0].Content
+	for _, forbidden := range []string{"parent_org_code", "all_org_units", "orgunit.list", "all org", "all organization", "all organisations", "all organizations"} {
+		if strings.Contains(sharedSystemPrompt, forbidden) {
+			t.Fatalf("shared planner prompt leaked module term %q: %s", forbidden, sharedSystemPrompt)
+		}
+	}
+	if !strings.Contains(sharedSystemPrompt, "历史缩窄参数") {
+		t.Fatalf("expected neutral scope wording, got %s", sharedSystemPrompt)
+	}
+}
+
 func TestBuildQueryEvidenceWindowDropsHistoricalTargetsWhenPromptOverridesScope(t *testing.T) {
 	window := buildQueryEvidenceWindow(cubebox.QueryContext{
 		RecentDialogueTurns: []cubebox.QueryDialogueTurn{
 			{UserPrompt: "列出全部包含成本关键字的组织", AssistantReply: "成本A组、成本B组、成本C组。"},
 		},
 		RecentConfirmedEntities: []cubebox.QueryEntity{
-			{Domain: "orgunit", Intent: "orgunit.details", EntityKey: "200007", AsOf: "2026-04-27", ParentOrgCode: "200006"},
+			{Domain: "orgunit", Intent: "orgunit.details", EntityKey: "200007", AsOf: "2026-04-27"},
 		},
 		RecentCandidateGroups: []cubebox.QueryCandidateGroup{{
 			CandidateSource: "results",
@@ -1839,13 +1867,24 @@ func TestQueryFlowMapsPostExecutionPlannerProviderErrorAsModelFailure(t *testing
 	}
 }
 
-func TestQueryFlowDowngradesUnsupportedOrgUnitDimensionBoundaryViolationToNoQuery(t *testing.T) {
+func TestQueryFlowDowngradesUnsupportedDimensionBoundaryViolationToNoQuery(t *testing.T) {
 	flow := queryLoopTestFlow(&cubebox.ExecutionRegistry{}, cubeboxReadPlanProducerStub{
 		err: cubebox.ErrReadPlanBoundaryViolation,
 	}, cubeboxQueryNarratorStub{fn: func(context.Context, cubeboxQueryNarrationInput) (string, error) {
 		t.Fatal("narrator should not run for no-query downgrade")
 		return "", nil
 	}})
+	flow.knowledgePacks = []cubebox.KnowledgePack{
+		{
+			Dir: "modules/orgunit/presentation/cubebox",
+			Files: map[string]string{
+				"CUBEBOX-SKILL.md": "# Skill\n\nqueries.md\napis.md\nexamples.md\n",
+				"queries.md":       "```yaml\nintents:\n  - key: orgunit.list\n    required_params: [as_of]\n    optional_params: [all_org_units]\nno_query_guidance:\n  scope_summary: 当前主要支持组织相关只读查询。\n  suggested_prompts:\n    - 查“华东销售中心”的详情\nruntime_hints:\n  unsupported_prompt_terms:\n    - 成本组织\n    - 成本中心\n```\n",
+				"apis.md":          "```yaml\napis:\n  - executor_key: orgunit.list\n    required_params: [as_of]\n    optional_params: [all_org_units]\n```\n",
+				"examples.md":      "```json\n{\"steps\": [{\"id\":\"step-1\",\"executor_key\":\"orgunit.list\",\"params\":{\"as_of\":\"2026-04-25\"},\"depends_on\":[]}]}\n```\n",
+			},
+		},
+	}
 
 	sink := &capturingGatewaySink{}
 	if handled := flow.TryHandle(context.Background(), queryGatewayRequest("列出全部的成本组织，以及他们的路径长名称"), sink); !handled {
@@ -1860,6 +1899,65 @@ func TestQueryFlowDowngradesUnsupportedOrgUnitDimensionBoundaryViolationToNoQuer
 	}
 	if strings.Contains(text, "NO_QUERY") || strings.Contains(text, "planner") {
 		t.Fatalf("no-query guidance leaked internals: %q", text)
+	}
+}
+
+func TestAllOrgScopePlanConflictUsesExecutorRuntimeHints(t *testing.T) {
+	registry, err := cubebox.NewExecutionRegistry(
+		cubebox.RegisteredExecutor{
+			ExecutorKey:    "sample.list",
+			RequiredParams: []string{"as_of"},
+			OptionalParams: []string{"all_samples", "query"},
+			RuntimeHints: cubebox.QueryRuntimeHints{
+				ScopeParams: cubebox.ScopeParamSemantics{
+					ExpandAll: []string{"all_samples"},
+					Narrowing: []string{"query"},
+				},
+			},
+			Executor: queryExecutorStub{},
+		},
+		cubebox.RegisteredExecutor{
+			ExecutorKey:    "sample.details",
+			RequiredParams: []string{"sample_id"},
+			OptionalParams: []string{},
+			Executor:       queryExecutorStub{},
+		},
+	)
+	if err != nil {
+		t.Fatalf("NewExecutionRegistry err=%v", err)
+	}
+
+	if !allOrgScopePlanHasNarrowingConflict(cubebox.ReadPlan{
+		Intent: "sample.list",
+		Steps: []cubebox.ReadPlanStep{{
+			ID: "step-1", ExecutorKey: "sample.list", Params: map[string]any{"as_of": "2026-04-28", "query": "固定资产"},
+		}},
+	}, registry) {
+		t.Fatal("expected narrowing query param to conflict with all-scope correction")
+	}
+	if allOrgScopePlanHasNarrowingConflict(cubebox.ReadPlan{
+		Intent: "sample.list",
+		Steps: []cubebox.ReadPlanStep{{
+			ID: "step-1", ExecutorKey: "sample.list", Params: map[string]any{"as_of": "2026-04-28", "all_samples": true},
+		}},
+	}, registry) {
+		t.Fatal("expected explicit expand-all param to satisfy all-scope correction")
+	}
+	if !allOrgScopePlanHasNarrowingConflict(cubebox.ReadPlan{
+		Intent: "sample.list",
+		Steps: []cubebox.ReadPlanStep{{
+			ID: "step-1", ExecutorKey: "sample.list", Params: map[string]any{"as_of": "2026-04-28", "all_samples": false},
+		}},
+	}, registry) {
+		t.Fatal("expected false expand-all param to conflict with all-scope correction")
+	}
+	if !allOrgScopePlanHasNarrowingConflict(cubebox.ReadPlan{
+		Intent: "sample.details",
+		Steps: []cubebox.ReadPlanStep{{
+			ID: "step-1", ExecutorKey: "sample.details", Params: map[string]any{"sample_id": "S-100"},
+		}},
+	}, registry) {
+		t.Fatal("expected executor without runtime hints to fail closed")
 	}
 }
 
@@ -1946,6 +2044,12 @@ func TestQueryFlowReplansAllOrgScopeCorrectionBeforeExecutingHistoricalNarrowPla
 		ExecutorKey:    "orgunit.list",
 		RequiredParams: []string{"as_of"},
 		OptionalParams: []string{"include_disabled", "keyword", "parent_org_code", "all_org_units", "page", "size"},
+		RuntimeHints: cubebox.QueryRuntimeHints{
+			ScopeParams: cubebox.ScopeParamSemantics{
+				ExpandAll: []string{"all_org_units"},
+				Narrowing: []string{"keyword", "parent_org_code", "org_code", "entity_key", "target_org_code"},
+			},
+		},
 		Executor: queryExecutorStub{
 			executeFn: func(_ context.Context, _ cubebox.ExecuteRequest, params map[string]any) (cubebox.ExecuteResult, error) {
 				executedParams = append(executedParams, params)
@@ -1985,7 +2089,7 @@ func TestQueryFlowReplansAllOrgScopeCorrectionBeforeExecutingHistoricalNarrowPla
 				"size":             100,
 			})), nil
 		case 2:
-			if len(input.Corrections) == 0 || !strings.Contains(input.Corrections[0], "纠正为全部组织") {
+			if len(input.Corrections) == 0 || !strings.Contains(input.Corrections[0], "纠正为全量范围") {
 				t.Fatalf("expected all-org scope correction, got %#v", input.Corrections)
 			}
 			sawCorrection = true
@@ -2012,7 +2116,7 @@ func TestQueryFlowReplansAllOrgScopeCorrectionBeforeExecutingHistoricalNarrowPla
 		t.Fatal("expected handled")
 	}
 	if plannerCalls != 3 {
-		t.Fatalf("expected replan then done, got planner calls=%d", plannerCalls)
+		t.Fatalf("expected initial bad plan, corrected plan, then DONE, got planner calls=%d", plannerCalls)
 	}
 	if !sawCorrection {
 		t.Fatal("expected correction to be passed to planner")
@@ -2034,6 +2138,12 @@ func TestQueryFlowReplansAllOrgScopeCorrectionWhenPlannerOmitsAllOrgUnitsFlag(t 
 		ExecutorKey:    "orgunit.list",
 		RequiredParams: []string{"as_of"},
 		OptionalParams: []string{"include_disabled", "all_org_units", "page", "size"},
+		RuntimeHints: cubebox.QueryRuntimeHints{
+			ScopeParams: cubebox.ScopeParamSemantics{
+				ExpandAll: []string{"all_org_units"},
+				Narrowing: []string{"keyword", "parent_org_code", "org_code", "entity_key", "target_org_code"},
+			},
+		},
 		Executor: queryExecutorStub{
 			executeFn: func(_ context.Context, _ cubebox.ExecuteRequest, params map[string]any) (cubebox.ExecuteResult, error) {
 				executedParams = append(executedParams, params)
@@ -2067,7 +2177,7 @@ func TestQueryFlowReplansAllOrgScopeCorrectionWhenPlannerOmitsAllOrgUnitsFlag(t 
 				"size":             100,
 			})), nil
 		case 2:
-			if len(input.Corrections) == 0 || !strings.Contains(input.Corrections[0], "all_org_units=true") {
+			if len(input.Corrections) == 0 || !strings.Contains(input.Corrections[0], "显式 READ_PLAN") {
 				t.Fatalf("expected all_org_units correction, got %#v", input.Corrections)
 			}
 			return queryPlannerReadPlanResult(queryPlanForOrgUnitListWithParams(map[string]any{
@@ -2093,7 +2203,7 @@ func TestQueryFlowReplansAllOrgScopeCorrectionWhenPlannerOmitsAllOrgUnitsFlag(t 
 		t.Fatal("expected handled")
 	}
 	if plannerCalls != 3 {
-		t.Fatalf("expected root-only plan replan then done, got planner calls=%d", plannerCalls)
+		t.Fatalf("expected root-only plan, corrected all-org plan, then DONE, got planner calls=%d", plannerCalls)
 	}
 	if got := len(executedParams); got != 1 {
 		t.Fatalf("expected only all_org_units plan to execute once, got %d params=%#v", got, executedParams)
@@ -2109,6 +2219,12 @@ func TestQueryFlowCompletesAllOrgScopeCorrectionWhenPlannerRepeatsExecutedCleanP
 		ExecutorKey:    "orgunit.list",
 		RequiredParams: []string{"as_of"},
 		OptionalParams: []string{"include_disabled", "all_org_units", "page", "size"},
+		RuntimeHints: cubebox.QueryRuntimeHints{
+			ScopeParams: cubebox.ScopeParamSemantics{
+				ExpandAll: []string{"all_org_units"},
+				Narrowing: []string{"keyword", "parent_org_code", "org_code", "entity_key", "target_org_code"},
+			},
+		},
 		Executor: queryExecutorStub{
 			executeFn: func(context.Context, cubebox.ExecuteRequest, map[string]any) (cubebox.ExecuteResult, error) {
 				executions++
@@ -2134,7 +2250,12 @@ func TestQueryFlowCompletesAllOrgScopeCorrectionWhenPlannerRepeatsExecutedCleanP
 		"page":             1,
 		"size":             100,
 	})
+	var plannerCalls int
 	flow := queryLoopTestFlow(registry, cubeboxReadPlanProducerStub{fn: func(context.Context, cubeboxReadPlanProductionInput) (cubeboxReadPlanProductionResult, error) {
+		plannerCalls++
+		if plannerCalls == 1 {
+			return queryPlannerReadPlanResult(plan), nil
+		}
 		return queryPlannerReadPlanResult(plan), nil
 	}}, cubeboxQueryNarratorStub{fn: func(_ context.Context, input cubeboxQueryNarrationInput) (string, error) {
 		if got, want := len(input.Results), 1; got != want {
@@ -2396,6 +2517,129 @@ func queryLoopTestFlow(registry *cubebox.ExecutionRegistry, producer cubeboxRead
 	}
 }
 
+func fakeModuleKnowledgePack(dir string, executorKey string, requiredParams []string, scopeSummary string, prompts []string) cubebox.KnowledgePack {
+	return cubebox.KnowledgePack{
+		Dir: dir,
+		Files: map[string]string{
+			"CUBEBOX-SKILL.md": "# Skill\n\nqueries.md\napis.md\nexamples.md\n",
+			"queries.md":       "```yaml\nintents:\n  - key: " + executorKey + "\n    required_params: [" + strings.Join(requiredParams, ", ") + "]\n    optional_params: []\nno_query_guidance:\n  scope_summary: " + scopeSummary + "\n  suggested_prompts:\n" + yamlPromptList(prompts) + "```\n",
+			"apis.md":          "```yaml\napis:\n  - executor_key: " + executorKey + "\n    required_params: [" + strings.Join(requiredParams, ", ") + "]\n    optional_params: []\n```\n",
+			"examples.md":      "```json\n{\"steps\":[{\"id\":\"step-1\",\"executor_key\":\"" + executorKey + "\",\"params\":{\"" + requiredParams[0] + "\":\"S-100\"},\"depends_on\":[]}]}\n```\n",
+		},
+	}
+}
+
+func yamlPromptList(items []string) string {
+	if len(items) == 0 {
+		return ""
+	}
+	var out strings.Builder
+	for _, item := range items {
+		out.WriteString("    - ")
+		out.WriteString(item)
+		out.WriteString("\n")
+	}
+	return out.String()
+}
+
+func TestQueryFlowAggregatesNoQueryGuidanceAcrossKnowledgePacks(t *testing.T) {
+	flow := queryLoopTestFlow(&cubebox.ExecutionRegistry{}, cubeboxReadPlanProducerStub{result: cubeboxReadPlanProductionResult{
+		Handled:         false,
+		ProviderID:      "openai-compatible",
+		ProviderType:    "openai-compatible",
+		ModelSlug:       "gpt-5.2",
+		ExplicitOutcome: true,
+	}}, cubeboxQueryNarratorStub{noQueryFn: func(_ context.Context, input cubeboxNoQueryGuidanceInput) (string, error) {
+		return fallbackNoQueryGuidanceText(buildNoQueryGuidanceEnvelope(input)), nil
+	}})
+	flow.knowledgePacks = []cubebox.KnowledgePack{
+		fakeModuleKnowledgePack("modules/orgunit/presentation/cubebox", "orgunit.details", []string{"org_code"}, "当前主要支持组织相关只读查询。", []string{"查“华东销售中心”的详情", "搜索名称包含“销售”的组织"}),
+		fakeModuleKnowledgePack("modules/sample/presentation/cubebox", "sample.details", []string{"sample_id"}, "也支持样例对象只读查询。", []string{"查样例对象 S-100 的详情", "搜索名称包含“固定资产”的样例对象", "搜索名称包含“销售”的组织"}),
+	}
+
+	sink := &capturingGatewaySink{}
+	if handled := flow.TryHandle(context.Background(), queryGatewayRequest("帮我写封邮件"), sink); !handled {
+		t.Fatal("expected handled")
+	}
+	text := strings.Join(sink.deltas(), "\n")
+	for _, snippet := range []string{
+		"当前主要支持组织相关只读查询。 也支持样例对象只读查询。",
+		"1. 查“华东销售中心”的详情",
+		"2. 搜索名称包含“销售”的组织",
+		"3. 查样例对象 S-100 的详情",
+		"4. 搜索名称包含“固定资产”的样例对象",
+	} {
+		if !strings.Contains(text, snippet) {
+			t.Fatalf("expected aggregated guidance snippet %q, got %q", snippet, text)
+		}
+	}
+}
+
+func TestQueryFlowUsesPresentedCandidatesFromNonOrgunitExecutor(t *testing.T) {
+	registry, err := cubebox.NewExecutionRegistry(cubebox.RegisteredExecutor{
+		ExecutorKey:    "sample.search",
+		RequiredParams: []string{"query"},
+		OptionalParams: []string{},
+		Executor: queryExecutorStub{
+			executeFn: func(context.Context, cubebox.ExecuteRequest, map[string]any) (cubebox.ExecuteResult, error) {
+				return cubebox.ExecuteResult{
+					Payload: map[string]any{
+						"domain": "sample",
+						"items":  []any{map[string]any{"sample_id": "S-100", "name": "固定资产台账"}, map[string]any{"sample_id": "S-101", "name": "固定资产目录"}},
+					},
+					PresentedCandidates: []cubebox.QueryCandidate{
+						{Domain: "sample", EntityKey: "S-100", Name: "固定资产台账"},
+						{Domain: "sample", EntityKey: "S-101", Name: "固定资产目录"},
+					},
+				}, nil
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("NewExecutionRegistry err=%v", err)
+	}
+	var appended []cubebox.CanonicalEvent
+	var producerIndex int
+	flow := queryLoopTestFlow(registry, cubeboxReadPlanProducerStub{fn: func(_ context.Context, input cubeboxReadPlanProductionInput) (cubeboxReadPlanProductionResult, error) {
+		if producerIndex == 0 {
+			producerIndex++
+			return queryPlannerReadPlanResult(cubebox.ReadPlan{
+				Intent:     "sample.search",
+				Confidence: 0.8,
+				Steps: []cubebox.ReadPlanStep{{
+					ID: "step-1", ExecutorKey: "sample.search", Params: map[string]any{"query": "固定资产"}, DependsOn: []string{},
+				}},
+			}), nil
+		}
+		return queryPlannerDoneResult(), nil
+	}}, cubeboxQueryNarratorStub{fn: func(_ context.Context, input cubeboxQueryNarrationInput) (string, error) {
+		if got, want := len(input.Results), 1; got != want {
+			t.Fatalf("expected %d narration result, got %#v", want, input.Results)
+		}
+		return "已返回 2 个样例对象。", nil
+	}})
+	flow.store = cubeboxStoreStub{
+		appendFn: func(_ context.Context, _ string, _ string, _ string, event cubebox.CanonicalEvent) error {
+			appended = append(appended, event)
+			return nil
+		},
+	}
+	flow.knowledgePacks = []cubebox.KnowledgePack{
+		fakeModuleKnowledgePack("modules/sample/presentation/cubebox", "sample.search", []string{"query"}, "支持样例对象查询。", []string{"搜索样例对象"}),
+	}
+
+	sink := &capturingGatewaySink{}
+	if handled := flow.TryHandle(context.Background(), queryGatewayRequest("搜索固定资产"), sink); !handled {
+		t.Fatal("expected handled")
+	}
+	if !strings.Contains(strings.Join(sink.deltas(), "\n"), "2 个样例对象") {
+		t.Fatalf("expected fake-module narration, got %#v", sink.events)
+	}
+	if !containsCanonicalEventType(appended, cubebox.QueryCandidatesPresentedEventType) {
+		t.Fatalf("expected query candidates metadata event, got %#v", appended)
+	}
+}
+
 func workingObservationContainsOrgCode(observation *cubebox.QueryWorkingObservation, orgCode string) bool {
 	if observation == nil {
 		return false
@@ -2527,8 +2771,6 @@ func TestCubeboxProviderQueryNarratorBuildsStrictMessagesAndRejectsInternalLeaka
 					EntityKey:         "100000",
 					AsOf:              "2026-04-24",
 					SourceExecutorKey: "orgunit.details",
-					TargetOrgCode:     "100000",
-					ParentOrgCode:     "ROOT",
 				},
 			},
 			RecentCandidateGroups: []cubebox.QueryCandidateGroup{

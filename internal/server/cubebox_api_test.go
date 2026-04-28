@@ -1510,7 +1510,7 @@ func TestCubeBoxStreamTurnAPIWritesNotFoundWhenQueryExecutionHasNoResult(t *test
 		Executor: queryExecutorStub{
 			validateParamsFn: func(raw map[string]any) (map[string]any, error) { return raw, nil },
 			executeFn: func(context.Context, cubebox.ExecuteRequest, map[string]any) (cubebox.ExecuteResult, error) {
-				return cubebox.ExecuteResult{}, errOrgUnitNotFound
+				return cubebox.ExecuteResult{}, &orgUnitNotFoundError{}
 			},
 		},
 	})
@@ -1643,6 +1643,96 @@ func TestCubeBoxStreamTurnAPIClarifiesAmbiguousOrgunitSearch(t *testing.T) {
 	}
 }
 
+func TestCubeBoxStreamTurnAPISupportsNonOrgunitFakeModuleFixture(t *testing.T) {
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/internal/cubebox/turns:stream", strings.NewReader(`{"conversation_id":"conv_1","prompt":"搜索固定资产","next_sequence":1}`))
+	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
+	req = req.WithContext(withPrincipal(req.Context(), Principal{ID: "p1"}))
+
+	registry, err := cubebox.NewExecutionRegistry(cubebox.RegisteredExecutor{
+		ExecutorKey:    "sample.search",
+		RequiredParams: []string{"query"},
+		OptionalParams: []string{},
+		Executor: queryExecutorStub{
+			executeFn: func(context.Context, cubebox.ExecuteRequest, map[string]any) (cubebox.ExecuteResult, error) {
+				return cubebox.ExecuteResult{
+					Payload: map[string]any{
+						"domain": "sample",
+						"items": []any{
+							map[string]any{"sample_id": "S-100", "name": "固定资产台账"},
+							map[string]any{"sample_id": "S-101", "name": "固定资产目录"},
+						},
+					},
+					PresentedCandidates: []cubebox.QueryCandidate{
+						{Domain: "sample", EntityKey: "S-100", Name: "固定资产台账"},
+						{Domain: "sample", EntityKey: "S-101", Name: "固定资产目录"},
+					},
+				}, nil
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("NewExecutionRegistry err=%v", err)
+	}
+
+	var appended []cubebox.CanonicalEvent
+	var plannerCalls int
+	queryFlow := &cubeboxQueryFlow{
+		runtime: cubebox.NewRuntime(),
+		store: cubeboxStoreStub{
+			appendFn: func(_ context.Context, _ string, _ string, _ string, event cubebox.CanonicalEvent) error {
+				appended = append(appended, event)
+				return nil
+			},
+		},
+		registry: registry,
+		producer: cubeboxReadPlanProducerStub{fn: func(_ context.Context, _ cubeboxReadPlanProductionInput) (cubeboxReadPlanProductionResult, error) {
+			plannerCalls++
+			if plannerCalls == 1 {
+				return queryPlannerReadPlanResult(cubebox.ReadPlan{
+					Intent:     "sample.search",
+					Confidence: 0.8,
+					Steps: []cubebox.ReadPlanStep{{
+						ID: "step-1", ExecutorKey: "sample.search", Params: map[string]any{"query": "固定资产"}, DependsOn: []string{},
+					}},
+				}), nil
+			}
+			return queryPlannerDoneResult(), nil
+		}},
+		narrator: cubeboxQueryNarratorStub{fn: func(_ context.Context, input cubeboxQueryNarrationInput) (string, error) {
+			if got, want := len(input.Results), 1; got != want {
+				t.Fatalf("expected %d narration result, got %#v", want, input.Results)
+			}
+			return "已返回 2 个样例对象。", nil
+		}},
+		knowledgePacks: []cubebox.KnowledgePack{
+			fakeAPIModuleKnowledgePack("modules/sample/presentation/cubebox", "sample.search", []string{"query"}, "支持样例对象查询。", []string{"搜索样例对象"}),
+		},
+		now: func() time.Time { return time.Date(2026, 4, 23, 12, 0, 0, 0, time.UTC) },
+	}
+
+	handleCubeBoxStreamTurnAPI(rec, req, cubebox.NewRuntime(), cubeboxStoreStub{
+		appendFn: func(_ context.Context, _ string, _ string, _ string, event cubebox.CanonicalEvent) error {
+			appended = append(appended, event)
+			return nil
+		},
+	}, newTestGateway(cubebox.NewRuntime()), queryFlow)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+	}
+	body := rec.Body.String()
+	if !strings.Contains(body, "2 个样例对象") {
+		t.Fatalf("expected fake-module narration body=%s", body)
+	}
+	if !containsCanonicalEventType(appended, cubebox.QueryCandidatesPresentedEventType) {
+		t.Fatalf("expected query candidates metadata event, got %#v", appended)
+	}
+	if strings.Contains(body, "orgunit") || strings.Contains(body, "组织") {
+		t.Fatalf("expected non-orgunit fixture output, got body=%s", body)
+	}
+}
+
 func TestCubeBoxStreamTurnAPIWritesCatalogDriftWhenExecutorMissing(t *testing.T) {
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodPost, "/internal/cubebox/turns:stream", strings.NewReader(`{"conversation_id":"conv_1","prompt":"查组织","next_sequence":1}`))
@@ -1763,7 +1853,6 @@ func TestCubeBoxQueryFlowLetsPlannerUseConversationEvidenceExplicitly(t *testing
 						EntityKey:         "100000",
 						AsOf:              "2026-04-25",
 						SourceExecutorKey: "orgunit.list",
-						ParentOrgCode:     "100000",
 					},
 				}, nil
 			},
@@ -2096,7 +2185,6 @@ func TestCubeBoxQueryFlowDoesNotWriteSyntheticResolvedContextEvent(t *testing.T)
 						EntityKey:         "100000",
 						AsOf:              "2026-04-25",
 						SourceExecutorKey: "orgunit.list",
-						ParentOrgCode:     "100000",
 					},
 				}, nil
 			},
@@ -2390,4 +2478,22 @@ func (s queryExecutorStub) Execute(ctx context.Context, request cubebox.ExecuteR
 		return cubebox.ExecuteResult{}, nil
 	}
 	return s.executeFn(ctx, request, params)
+}
+
+func fakeAPIModuleKnowledgePack(dir string, executorKey string, requiredParams []string, scopeSummary string, prompts []string) cubebox.KnowledgePack {
+	var promptBlock strings.Builder
+	for _, prompt := range prompts {
+		promptBlock.WriteString("    - ")
+		promptBlock.WriteString(prompt)
+		promptBlock.WriteString("\n")
+	}
+	return cubebox.KnowledgePack{
+		Dir: dir,
+		Files: map[string]string{
+			"CUBEBOX-SKILL.md": "# Skill\n\nqueries.md\napis.md\nexamples.md\n",
+			"queries.md":       "```yaml\nintents:\n  - key: " + executorKey + "\n    required_params: [" + strings.Join(requiredParams, ", ") + "]\n    optional_params: []\nno_query_guidance:\n  scope_summary: " + scopeSummary + "\n  suggested_prompts:\n" + promptBlock.String() + "```\n",
+			"apis.md":          "```yaml\napis:\n  - executor_key: " + executorKey + "\n    required_params: [" + strings.Join(requiredParams, ", ") + "]\n    optional_params: []\n```\n",
+			"examples.md":      "```json\n{\"steps\":[{\"id\":\"step-1\",\"executor_key\":\"" + executorKey + "\",\"params\":{\"" + requiredParams[0] + "\":\"S-100\"},\"depends_on\":[]}]}\n```\n",
+		},
+	}
 }

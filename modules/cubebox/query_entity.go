@@ -27,8 +27,6 @@ type QueryEntity struct {
 	EntityKey         string `json:"entity_key,omitempty"`
 	AsOf              string `json:"as_of,omitempty"`
 	SourceExecutorKey string `json:"source_executor_key,omitempty"`
-	TargetOrgCode     string `json:"target_org_code,omitempty"`
-	ParentOrgCode     string `json:"parent_org_code,omitempty"`
 }
 
 type QueryDialogueTurn struct {
@@ -374,8 +372,6 @@ func normalizeDecodedQueryEntity(raw map[string]any) *QueryEntity {
 		EntityKey:         stringValue(raw["entity_key"]),
 		AsOf:              stringValue(raw["as_of"]),
 		SourceExecutorKey: stringValue(raw["source_executor_key"]),
-		TargetOrgCode:     stringValue(raw["target_org_code"]),
-		ParentOrgCode:     stringValue(raw["parent_org_code"]),
 	})
 }
 
@@ -385,8 +381,6 @@ func NormalizeQueryEntity(entity QueryEntity) *QueryEntity {
 	entity.EntityKey = strings.TrimSpace(entity.EntityKey)
 	entity.AsOf = strings.TrimSpace(entity.AsOf)
 	entity.SourceExecutorKey = strings.TrimSpace(entity.SourceExecutorKey)
-	entity.TargetOrgCode = strings.TrimSpace(entity.TargetOrgCode)
-	entity.ParentOrgCode = strings.TrimSpace(entity.ParentOrgCode)
 	if entity.Domain == "" || entity.EntityKey == "" {
 		return nil
 	}
@@ -582,12 +576,6 @@ func (e QueryEntity) Payload() map[string]any {
 	}
 	if sourceExecutorKey := normalized.SourceExecutorKey; sourceExecutorKey != "" {
 		payload["source_executor_key"] = sourceExecutorKey
-	}
-	if targetOrgCode := normalized.TargetOrgCode; targetOrgCode != "" {
-		payload["target_org_code"] = targetOrgCode
-	}
-	if parentOrgCode := normalized.ParentOrgCode; parentOrgCode != "" {
-		payload["parent_org_code"] = parentOrgCode
 	}
 	return payload
 }

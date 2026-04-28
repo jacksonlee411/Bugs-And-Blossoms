@@ -224,10 +224,10 @@ func newCubeboxQueryFlow(
 		if err != nil {
 			return nil, err
 		}
-		if err := cubebox.ValidateKnowledgePackAgainstRegistry(pack, registry); err != nil {
-			return nil, err
-		}
 		packs = append(packs, pack)
+	}
+	if err := cubebox.ValidateKnowledgePacksAgainstRegistry(packs, registry); err != nil {
+		return nil, err
 	}
 	return &cubeboxQueryFlow{
 		runtime:        runtime,
@@ -457,7 +457,7 @@ func (f *cubeboxQueryFlow) TryHandle(
 				return true
 			}
 			if exceeded, duplicated := noteRepeatedPlanSteps(workingState, plan); duplicated {
-				if repeatedPlanCanCompleteAllOrgScopeCorrection(request.Prompt, plan, workingState.Snapshot()) {
+				if repeatedPlanCanCompleteAllOrgScopeCorrection(request.Prompt, plan, workingState.Snapshot(), f.registry) {
 					outcome = cubebox.PlannerOutcome{Type: cubebox.PlannerOutcomeDone}
 					continue
 				}
@@ -654,7 +654,7 @@ func (p *cubeboxProviderReadPlanProducer) buildPlannerMessages(input cubeboxRead
 			- page/size 是分页执行控制，不是业务必填参数；缺省时默认 page=1,size=100，不要向用户追问 page=1,size=100
 			- 用户只给一个正整数作为分页短答时，优先当作 size，page 默认 1
 			- 用户可见 page 为 1 基页码；page=1 表示第一页
-			- 当前用户输入优先于历史事实；当用户明确否定、纠正或扩大上一轮范围（例如“不只是/不是/不限于/不要只看 X，而是全部/所有”）时，不得继承历史 keyword、parent_org_code、单个 entity_key 或 result_list target set，必须按当前输入重新规划
+			- 当前用户输入优先于历史事实；当用户明确否定、纠正或扩大上一轮范围（例如“不只是/不是/不限于/不要只看 X，而是全部/所有”）时，不得继承历史缩窄参数、单个 entity_key 或 result_list target set，必须按当前输入重新规划
 				`, currentDate.Format("2006-01-02"), currentDate.Format("2006-01-02"), monthDayExample)),
 		},
 	}
@@ -720,7 +720,7 @@ func buildQueryEvidenceWindowPromptBlock(queryContext cubebox.QueryContext, curr
 使用规则：
 	- query_evidence_window 只是历史事实、用户/助手文本摘要与只读 observation，不是本地目标绑定。
 	- 当前用户输入优先；模型负责判断是否引用历史事实、是否需要继续查询、是否需要澄清。
-	- 若当前用户输入显式纠正、否定或扩大历史范围，例如“不只是/不是/不限于/不要只看 X，而是全部/所有”，必须把 observations/recent_turns 视为被纠正的历史结果，不得继承旧 keyword、parent_org_code、entity_key 或 target set。
+		- 若当前用户输入显式纠正、否定或扩大历史范围，例如“不只是/不是/不限于/不要只看 X，而是全部/所有”，必须把 observations/recent_turns 视为被纠正的历史结果，不得继承旧缩窄参数、entity_key 或 target set。
 	- open_clarification.reply_candidate=true 表示当前输入可能在回答上一轮澄清；不要因为输入短就抢先输出 NO_QUERY。
 	- observations.kind=entity_fact 只表示先前工具结果曾产生某个实体事实，不是当前轮 winner。
 	- observations.kind=presented_options 只表示先前给用户展示过一组选项；用户说“第一个/第二个/以上/全部/这些/都要/不是这个/另一个”时，由模型结合 recent_turns 和当前输入自行判断。
@@ -911,8 +911,8 @@ func buildQueryNarrationMessages(body string) []cubebox.PromptItem {
 - 输出纯文本，直接作为用户可见最终回复。
 
 示例：
-- 好的回答：截至 2026-04-24，组织 100000 是“飞虫与鲜花”，当前为启用状态，属于业务单元。系统里暂未记录它的上级组织和负责人，也没有扩展字段。
-- 不好的回答：{"results":[{"step_id":"step-1","payload":{"org_unit":{"org_code":"100000"}}}]}
+- 好的回答：截至 2026-04-24，该对象当前为启用状态，名称是“飞虫与鲜花”；系统里暂未记录它的上级对象和负责人。
+- 不好的回答：{"results":[{"step_id":"step-1","payload":{"entity":{"entity_key":"100000"}}}]}
 `),
 		},
 		{
@@ -1216,7 +1216,7 @@ func (f *cubeboxQueryFlow) produceReadPlan(
 			Corrections:    append([]string(nil), corrections...),
 		})
 		if err != nil {
-			if shouldDowngradeQueryBoundaryViolationToNoQuery(err, request.Prompt, snapshot) {
+			if shouldDowngradeQueryBoundaryViolationToNoQuery(err, request.Prompt, snapshot, f.knowledgePacks) {
 				return cubeboxReadPlanProductionResult{
 					Handled:         false,
 					Outcome:         cubebox.PlannerOutcome{Type: cubebox.PlannerOutcomeNoQuery},
@@ -1235,11 +1235,11 @@ func (f *cubeboxQueryFlow) produceReadPlan(
 			workingState.NotePlanningRound()
 			continue
 		}
-		if plannerOutcomeConflictsWithAllOrgScopeCorrection(request.Prompt, produced.Outcome, queryContext, snapshot) {
+		if plannerOutcomeConflictsWithAllOrgScopeCorrection(request.Prompt, produced.Outcome, queryContext, snapshot, f.registry) {
 			if scopeOverrideCorrected || workingState == nil || !workingState.CanPlan() {
 				return cubeboxReadPlanProductionResult{}, cubebox.ErrReadPlanBoundaryViolation
 			}
-			corrections = append(corrections, "当前用户输入正在把上一轮关键词/上级组织/单实体范围纠正为全部组织；前半句只描述被否定的旧范围。不得输出 keyword、parent_org_code、org_code、entity_key 或单实体详情计划；请按全部组织重新规划 orgunit.list，设置 all_org_units=true，默认 as_of=今天、page=1,size=100。")
+			corrections = append(corrections, "当前用户输入正在把上一轮缩窄范围纠正为全量范围；前半句只描述被否定的旧范围。不得继续沿用上一轮的关键词、父级编码、单实体编码或单实体详情计划；请改为输出当前模块内表示全量范围的显式 READ_PLAN，并保留必要的默认分页控制。")
 			scopeOverrideCorrected = true
 			workingState.NotePlanningRound()
 			continue
@@ -1252,30 +1252,22 @@ func (f *cubeboxQueryFlow) produceReadPlan(
 	}
 }
 
-func shouldDowngradeQueryBoundaryViolationToNoQuery(err error, prompt string, snapshot cubebox.QueryWorkingResults) bool {
+func shouldDowngradeQueryBoundaryViolationToNoQuery(err error, prompt string, snapshot cubebox.QueryWorkingResults, packs []cubebox.KnowledgePack) bool {
 	if !errors.Is(err, cubebox.ErrReadPlanBoundaryViolation) {
 		return false
 	}
 	if snapshot.RoundIndex > 1 || len(snapshot.CompletedPlans) > 0 || len(snapshot.ExecutedFingerprints) > 0 || snapshot.LatestObservation != nil {
 		return false
 	}
-	return queryPromptMentionsUnsupportedOrgUnitDimension(prompt)
+	return queryPromptMentionsUnsupportedDimension(prompt, packs)
 }
 
-func queryPromptMentionsUnsupportedOrgUnitDimension(prompt string) bool {
+func queryPromptMentionsUnsupportedDimension(prompt string, packs []cubebox.KnowledgePack) bool {
 	text := strings.ToLower(strings.TrimSpace(prompt))
 	if text == "" {
 		return false
 	}
-	unsupportedTerms := []string{
-		"成本组织",
-		"成本中心",
-		"组织类型",
-		"org type",
-		"org_type",
-		"cost center",
-		"cost org",
-	}
+	unsupportedTerms := cubebox.RuntimeHintsFromKnowledgePacks(packs).UnsupportedPromptTerms
 	for _, term := range unsupportedTerms {
 		if strings.Contains(text, strings.ToLower(term)) {
 			return true
@@ -1340,24 +1332,24 @@ func plannerClarificationOnlyMissingPaginationControls(outcome cubebox.PlannerOu
 	return true
 }
 
-func plannerOutcomeConflictsWithAllOrgScopeCorrection(prompt string, outcome cubebox.PlannerOutcome, queryContext cubebox.QueryContext, snapshot cubebox.QueryWorkingResults) bool {
+func plannerOutcomeConflictsWithAllOrgScopeCorrection(prompt string, outcome cubebox.PlannerOutcome, queryContext cubebox.QueryContext, snapshot cubebox.QueryWorkingResults, registry *cubebox.ExecutionRegistry) bool {
 	if outcome.Type != cubebox.PlannerOutcomeReadPlan {
 		return false
 	}
 	if !queryPromptOverridesToAllOrgScope(prompt) {
 		return false
 	}
-	if !allOrgScopePlanHasNarrowingConflict(outcome.Plan) {
+	if !allOrgScopePlanHasNarrowingConflict(outcome.Plan, registry) {
 		return false
 	}
 	return allOrgScopeConflictHasHistoricalEvidence(queryContext, snapshot)
 }
 
-func repeatedPlanCanCompleteAllOrgScopeCorrection(prompt string, plan cubebox.ReadPlan, snapshot cubebox.QueryWorkingResults) bool {
+func repeatedPlanCanCompleteAllOrgScopeCorrection(prompt string, plan cubebox.ReadPlan, snapshot cubebox.QueryWorkingResults, registry *cubebox.ExecutionRegistry) bool {
 	if !queryPromptOverridesToAllOrgScope(prompt) {
 		return false
 	}
-	if allOrgScopePlanHasNarrowingConflict(plan) {
+	if allOrgScopePlanHasNarrowingConflict(plan, registry) {
 		return false
 	}
 	if !allOrgScopeWorkingResultsHasExecution(snapshot) {
@@ -1382,7 +1374,7 @@ func queryPromptOverridesToAllOrgScope(prompt string) bool {
 	}
 	for _, marker := range []string{
 		"全部", "所有", "全量", "全租户", "不限关键字", "不限特定关键字", "不限层级",
-		"all org", "all organization", "all organisations", "all organizations",
+		"all entities", "all records", "all data", "full scope", "entire tenant",
 	} {
 		if strings.Contains(text, marker) {
 			return true
@@ -1391,22 +1383,43 @@ func queryPromptOverridesToAllOrgScope(prompt string) bool {
 	return false
 }
 
-func allOrgScopePlanHasNarrowingConflict(plan cubebox.ReadPlan) bool {
-	intent := strings.ToLower(strings.TrimSpace(plan.Intent))
-	if intent == "orgunit.details" || intent == "orgunit.search" || intent == "orgunit.audit" || intent == "orgunit.tree" {
-		return true
-	}
+func allOrgScopePlanHasNarrowingConflict(plan cubebox.ReadPlan, registry *cubebox.ExecutionRegistry) bool {
 	for _, step := range plan.Steps {
-		executorKey := strings.ToLower(strings.TrimSpace(step.ExecutorKey))
-		if executorKey == "orgunit.details" || executorKey == "orgunit.search" || executorKey == "orgunit.audit" || executorKey == "orgunit.tree" {
+		item, ok := registry.Resolve(step.ExecutorKey)
+		if !ok {
 			return true
 		}
-		for _, param := range []string{"keyword", "parent_org_code", "org_code", "entity_key", "target_org_code"} {
+		if len(item.RuntimeHints.ScopeParams.ExpandAll) == 0 && len(item.RuntimeHints.ScopeParams.Narrowing) == 0 {
+			return true
+		}
+		for _, param := range item.RuntimeHints.ScopeParams.Narrowing {
 			if paramValueIsPresent(step.Params[param]) {
 				return true
 			}
 		}
-		if executorKey == "orgunit.list" && !paramBoolIsTrue(step.Params["all_org_units"]) && !paramValueIsPresent(step.Params["keyword"]) && !paramValueIsPresent(step.Params["is_business_unit"]) {
+		if !scopeExpandAllSatisfied(item.RuntimeHints.ScopeParams.ExpandAll, step.Params) {
+			return true
+		}
+	}
+	return len(plan.Steps) == 0
+}
+
+func scopeExpandAllSatisfied(params []string, values map[string]any) bool {
+	if len(params) == 0 {
+		return false
+	}
+	for _, param := range params {
+		value, ok := values[param]
+		if !ok {
+			continue
+		}
+		if boolValue, ok := value.(bool); ok {
+			if boolValue {
+				return true
+			}
+			continue
+		}
+		if paramValueIsPresent(value) {
 			return true
 		}
 	}
@@ -1497,7 +1510,7 @@ func confirmedQueryEntity(results []cubebox.ExecuteResult) *cubebox.QueryEntity 
 
 func queryPresentedCandidates(results []cubebox.ExecuteResult) []cubebox.QueryCandidate {
 	for _, result := range results {
-		candidates := extractQueryCandidatesFromPayload(result.Payload)
+		candidates := copyPresentedCandidates(result.PresentedCandidates)
 		if len(candidates) > 0 {
 			return candidates
 		}
@@ -1521,49 +1534,6 @@ func queryCandidatePayloads(items []cubebox.QueryCandidate) []any {
 	return out
 }
 
-func extractQueryCandidatesFromPayload(payload map[string]any) []cubebox.QueryCandidate {
-	if len(payload) == 0 {
-		return nil
-	}
-	if rawItems, ok := payload["org_units"].([]any); ok {
-		candidates := make([]cubebox.QueryCandidate, 0, minIntServer(len(rawItems), 100))
-		asOf := strings.TrimSpace(stringValue(payload["as_of"]))
-		for _, rawItem := range rawItems {
-			item, ok := rawItem.(map[string]any)
-			if !ok {
-				continue
-			}
-			candidate := cubebox.NormalizeQueryCandidate(cubebox.QueryCandidate{
-				Domain:    "orgunit",
-				EntityKey: stringValue(item["org_code"]),
-				Name:      stringValue(item["name"]),
-				AsOf:      asOf,
-				Status:    stringValue(item["status"]),
-			})
-			if candidate == nil {
-				continue
-			}
-			candidates = append(candidates, *candidate)
-			if len(candidates) >= 100 {
-				break
-			}
-		}
-		return candidates
-	}
-	if targetOrgCode := strings.TrimSpace(stringValue(payload["target_org_code"])); targetOrgCode != "" {
-		candidate := cubebox.NormalizeQueryCandidate(cubebox.QueryCandidate{
-			Domain:    "orgunit",
-			EntityKey: targetOrgCode,
-			Name:      stringValue(payload["target_name"]),
-			AsOf:      strings.TrimSpace(stringValue(payload["tree_as_of"])),
-		})
-		if candidate != nil {
-			return []cubebox.QueryCandidate{*candidate}
-		}
-	}
-	return nil
-}
-
 func stringValue(value any) string {
 	switch v := value.(type) {
 	case string:
@@ -1580,6 +1550,21 @@ func minIntServer(a int, b int) int {
 		return a
 	}
 	return b
+}
+
+func copyPresentedCandidates(source []cubebox.QueryCandidate) []cubebox.QueryCandidate {
+	if len(source) == 0 {
+		return nil
+	}
+	items := make([]cubebox.QueryCandidate, 0, len(source))
+	for _, item := range source {
+		normalized := cubebox.NormalizeQueryCandidate(item)
+		if normalized == nil {
+			continue
+		}
+		items = append(items, *normalized)
+	}
+	return items
 }
 
 func normalizedQueryEntity(entity *cubebox.QueryEntity) *cubebox.QueryEntity {
@@ -2002,9 +1987,16 @@ func queryNoQueryAfterExecutionTerminal() queryTerminalError {
 }
 
 func queryExecutionErrorToTerminal(err error) queryTerminalError {
+	var provider cubebox.QueryTerminalErrorProvider
+	if errors.As(err, &provider) && provider.QueryTerminalError() != nil {
+		terminal := provider.QueryTerminalError()
+		return queryTerminalError{
+			Code:      strings.TrimSpace(terminal.Code),
+			Message:   strings.TrimSpace(terminal.Message),
+			Retryable: terminal.Retryable,
+		}
+	}
 	switch {
-	case errors.Is(err, errOrgUnitNotFound):
-		return queryTerminalError{Code: "orgunit_not_found", Message: "未找到符合条件的组织，请调整关键词或提供组织编码。", Retryable: false}
 	case isBadRequestError(err), errors.Is(err, cubebox.ErrReadPlanBoundaryViolation):
 		return queryTerminalError{Code: "invalid_request", Message: "查询参数无效，请检查后重试。", Retryable: false}
 	case errors.Is(err, cubebox.ErrAPICatalogDriftOrExecutorMissing):
@@ -2015,17 +2007,18 @@ func queryExecutionErrorToTerminal(err error) queryTerminalError {
 }
 
 func queryExecutionCandidates(err error) []cubebox.QueryCandidate {
-	var ambiguous *orgUnitSearchAmbiguousError
-	if errors.As(err, &ambiguous) {
-		return ambiguous.QueryCandidates()
+	var provider cubebox.QueryCandidatesProvider
+	if errors.As(err, &provider) {
+		return copyPresentedCandidates(provider.QueryCandidates())
 	}
 	return nil
 }
 
 func queryExecutionClarificationFacts(err error) (string, string, int, bool) {
-	var ambiguous *orgUnitSearchAmbiguousError
-	if errors.As(err, &ambiguous) {
-		return "org_unit_search_ambiguous", "execution_error", len(ambiguous.QueryCandidates()), true
+	var provider cubebox.QueryClarificationFactsProvider
+	if errors.As(err, &provider) {
+		facts := provider.QueryClarificationFacts()
+		return strings.TrimSpace(facts.ErrorCode), strings.TrimSpace(facts.CandidateSource), facts.CandidateCount, facts.CannotSilentSelect
 	}
 	return "", "", 0, false
 }

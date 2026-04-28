@@ -69,6 +69,43 @@ func (e *orgUnitSearchAmbiguousError) QueryCandidates() []cubebox.QueryCandidate
 	return items
 }
 
+func (e *orgUnitSearchAmbiguousError) QueryClarificationFacts() cubebox.QueryClarificationFacts {
+	return cubebox.QueryClarificationFacts{
+		ErrorCode:          "org_unit_search_ambiguous",
+		CandidateSource:    "execution_error",
+		CandidateCount:     len(e.QueryCandidates()),
+		CannotSilentSelect: true,
+	}
+}
+
+type orgUnitNotFoundError struct{}
+
+func (e *orgUnitNotFoundError) Error() string {
+	return "org_unit_not_found"
+}
+
+func (e *orgUnitNotFoundError) Unwrap() error {
+	return errOrgUnitNotFound
+}
+
+func (e *orgUnitNotFoundError) QueryTerminalError() *cubebox.ExecutionTerminalError {
+	return &cubebox.ExecutionTerminalError{
+		Code:      "orgunit_not_found",
+		Message:   "未找到符合条件的组织，请调整关键词或提供组织编码。",
+		Retryable: false,
+	}
+}
+
+func wrapOrgUnitExecutionError(err error) error {
+	if err == nil {
+		return nil
+	}
+	if errors.Is(err, errOrgUnitNotFound) {
+		return &orgUnitNotFoundError{}
+	}
+	return err
+}
+
 func newCubeBoxOrgUnitRegisteredExecutors(store OrgUnitStore) ([]cubebox.RegisteredExecutor, error) {
 	if store == nil {
 		return nil, errors.New("orgunit store required")
@@ -89,6 +126,12 @@ func newCubeBoxOrgUnitRegisteredExecutors(store OrgUnitStore) ([]cubebox.Registe
 			ExecutorKey:    "orgunit.list",
 			RequiredParams: []string{"as_of"},
 			OptionalParams: []string{"include_disabled", "parent_org_code", "all_org_units", "keyword", "status", "is_business_unit", "page", "size"},
+			RuntimeHints: cubebox.QueryRuntimeHints{
+				ScopeParams: cubebox.ScopeParamSemantics{
+					ExpandAll: []string{"all_org_units"},
+					Narrowing: []string{"keyword", "parent_org_code", "org_code", "entity_key", "target_org_code"},
+				},
+			},
 			Executor: cubeBoxOrgUnitListExecutor{
 				store: store,
 			},
@@ -133,12 +176,12 @@ func (e cubeBoxOrgUnitDetailsExecutor) Execute(ctx context.Context, request cube
 
 	orgNodeKey, err := e.store.ResolveOrgNodeKeyByCode(ctx, strings.TrimSpace(request.TenantID), orgCode)
 	if err != nil {
-		return cubebox.ExecuteResult{}, err
+		return cubebox.ExecuteResult{}, wrapOrgUnitExecutionError(err)
 	}
 
 	details, err := getNodeDetailsByVisibilityByNodeKey(ctx, e.store, strings.TrimSpace(request.TenantID), orgNodeKey, asOf, includeDisabled)
 	if err != nil {
-		return cubebox.ExecuteResult{}, err
+		return cubebox.ExecuteResult{}, wrapOrgUnitExecutionError(err)
 	}
 
 	detailsOrgNodeKey := strings.TrimSpace(details.OrgNodeKey)
@@ -147,7 +190,7 @@ func (e cubeBoxOrgUnitDetailsExecutor) Execute(ctx context.Context, request cube
 	}
 	extFields, err := buildOrgUnitDetailsExtFieldsByNodeKey(ctx, e.store, strings.TrimSpace(request.TenantID), detailsOrgNodeKey, asOf)
 	if err != nil {
-		return cubebox.ExecuteResult{}, err
+		return cubebox.ExecuteResult{}, wrapOrgUnitExecutionError(err)
 	}
 	resp := orgUnitDetailsAPIResponse{
 		AsOf:      asOf,
@@ -182,7 +225,6 @@ func (e cubeBoxOrgUnitDetailsExecutor) Execute(ctx context.Context, request cube
 			EntityKey:         details.OrgCode,
 			AsOf:              asOf,
 			SourceExecutorKey: "orgunit.details",
-			ParentOrgCode:     details.ParentCode,
 		}),
 	}, nil
 }
@@ -268,7 +310,7 @@ func (e cubeBoxOrgUnitListExecutor) Execute(ctx context.Context, request cubebox
 		if parentOrgCode != "" {
 			parentOrgNodeKey, err := e.store.ResolveOrgNodeKeyByCode(ctx, strings.TrimSpace(request.TenantID), parentOrgCode)
 			if err != nil {
-				return cubebox.ExecuteResult{}, err
+				return cubebox.ExecuteResult{}, wrapOrgUnitExecutionError(err)
 			}
 			pageReq.ParentOrgNodeKey = &parentOrgNodeKey
 		}
@@ -307,8 +349,26 @@ func (e cubeBoxOrgUnitListExecutor) Execute(ctx context.Context, request cubebox
 	if err != nil {
 		return cubebox.ExecuteResult{}, err
 	}
+	presented := make([]cubebox.QueryCandidate, 0, min(len(items), 100))
+	for _, item := range items {
+		candidate := cubebox.NormalizeQueryCandidate(cubebox.QueryCandidate{
+			Domain:    "orgunit",
+			EntityKey: item.OrgCode,
+			Name:      item.Name,
+			AsOf:      asOf,
+			Status:    item.Status,
+		})
+		if candidate == nil {
+			continue
+		}
+		presented = append(presented, *candidate)
+		if len(presented) >= 100 {
+			break
+		}
+	}
 	return cubebox.ExecuteResult{
-		Payload: payload,
+		Payload:             payload,
+		PresentedCandidates: presented,
 	}, nil
 }
 
@@ -363,7 +423,7 @@ func (e cubeBoxOrgUnitSearchExecutor) Execute(ctx context.Context, request cubeb
 	includeDisabled := params["include_disabled"].(bool)
 	candidates, err := searchNodeCandidatesByVisibility(ctx, e.store, strings.TrimSpace(request.TenantID), query, asOf, 3, includeDisabled)
 	if err != nil {
-		return cubebox.ExecuteResult{}, err
+		return cubebox.ExecuteResult{}, wrapOrgUnitExecutionError(err)
 	}
 	if len(candidates) > 1 {
 		return cubebox.ExecuteResult{}, &orgUnitSearchAmbiguousError{
@@ -374,14 +434,14 @@ func (e cubeBoxOrgUnitSearchExecutor) Execute(ctx context.Context, request cubeb
 	}
 	result, err := searchNodeByVisibility(ctx, e.store, strings.TrimSpace(request.TenantID), query, asOf, includeDisabled)
 	if err != nil {
-		return cubebox.ExecuteResult{}, err
+		return cubebox.ExecuteResult{}, wrapOrgUnitExecutionError(err)
 	}
 
 	pathOrgNodeKeys := append([]string(nil), result.PathOrgNodeKeys...)
 	if len(pathOrgNodeKeys) > 0 {
 		codes, err := e.store.ResolveOrgCodesByNodeKeys(ctx, strings.TrimSpace(request.TenantID), pathOrgNodeKeys)
 		if err != nil {
-			return cubebox.ExecuteResult{}, err
+			return cubebox.ExecuteResult{}, wrapOrgUnitExecutionError(err)
 		}
 		pathCodes := make([]string, 0, len(pathOrgNodeKeys))
 		for _, orgNodeKey := range pathOrgNodeKeys {
@@ -403,7 +463,6 @@ func (e cubeBoxOrgUnitSearchExecutor) Execute(ctx context.Context, request cubeb
 			EntityKey:         result.TargetOrgCode,
 			AsOf:              asOf,
 			SourceExecutorKey: "orgunit.search",
-			TargetOrgCode:     result.TargetOrgCode,
 		}),
 	}, nil
 }
@@ -433,11 +492,11 @@ func (e cubeBoxOrgUnitAuditExecutor) Execute(ctx context.Context, request cubebo
 
 	orgNodeKey, err := e.store.ResolveOrgNodeKeyByCode(ctx, strings.TrimSpace(request.TenantID), orgCode)
 	if err != nil {
-		return cubebox.ExecuteResult{}, err
+		return cubebox.ExecuteResult{}, wrapOrgUnitExecutionError(err)
 	}
 	rows, err := listNodeAuditEventsByNodeKey(ctx, e.store, strings.TrimSpace(request.TenantID), orgNodeKey, limit+1)
 	if err != nil {
-		return cubebox.ExecuteResult{}, err
+		return cubebox.ExecuteResult{}, wrapOrgUnitExecutionError(err)
 	}
 
 	hasMore := len(rows) > limit
