@@ -8,13 +8,13 @@
 - **范围一句话**：把权限标识收敛为唯一 `object:action` capability key，硬删除前端 `permissionKey`、`module.verb` 别名、policy-only 权限和未实现能力；不提供兼容映射、双字段、过渡窗口或旧 key 自动转换。
 - **关联模块/目录**：`pkg/authz/**`、`config/access/**`、`scripts/authz/**`、`internal/server/**`、`internal/superadmin/**`、`apps/web/src/**`
 - **关联计划/标准**：`AGENTS.md`、`DEV-PLAN-000`、`DEV-PLAN-001`、`DEV-PLAN-004M1`、`DEV-PLAN-012`、`DEV-PLAN-017`、`DEV-PLAN-022`、`DEV-PLAN-480`、`DEV-PLAN-481`、`DEV-PLAN-482`、`DEV-PLAN-484`
-- **用户入口/触点**：权限目录、角色定义页、用户授权页、导航入口、页面守卫、服务端权限摘要 API、所有受保护 HTTP API 与 CubeBox executor
+- **用户入口/触点**：功能授权项、角色定义页、用户授权页、导航入口、页面守卫、服务端权限摘要 API、所有受保护 HTTP API 与 CubeBox executor
 
 ### 0.1 Simple > Easy 三问
 
 1. **边界**：`pkg/authz` 的 capability registry 是唯一权限标识事实源；policy 只表达授予结果；route/executor 只消费 registry key；前端只消费服务端权限摘要和 registry options，不再定义本地权限语言。route/executor/registry/policy 的覆盖门禁由 `DEV-PLAN-484` 承接。
 2. **不变量**：系统内唯一可保存、可传输、可展示给管理员的权限标识是 `object:action`；任何 `orgunit.read`、`dict.admin`、`foundation.read`、`approval.read`、`cubebox.conversations.read` 这类旧 key 都不是权限标识。
-3. **可解释**：管理员看到的“功能权限标识”就是运行时鉴权使用的 key；一个 key 可以保护多个 API，但 API 路由不能发明第二个 key；没有 API/executor 承接的 key 不进入权限系统。
+3. **可解释**：管理员看到的“授权项标识”就是运行时鉴权使用的 key；一个 key 可以保护多个 API，但 API 路由不能发明第二个 key；没有 API/executor 承接的 key 不进入权限系统。
 
 ## 1. 背景与问题
 
@@ -40,7 +40,7 @@
 
 1. 不引入 DB schema、迁移或在线 registry 管理页；本计划只冻结硬切换契约和实施要求。
 2. 不设计旧 key 兼容、别名表、自动转换、灰度窗口或 deprecated registry entry。
-3. 不把 API path 当成权限标识；API path 只是某个 capability key 的覆盖接口证据。
+3. 不把 API path 当成权限标识；API path 只是某个 capability key 的覆盖证据。
 4. 不把 superadmin 权限混入 HRMS tenant 权限管理员页面；superadmin 可以继续使用同一 `object:action` 格式，但属于独立 surface。
 5. 不恢复 SetID、scope/package、org_level/scope_type/scope_key 或历史共享读语义。
 
@@ -76,9 +76,9 @@
 | `foundation.read` | UI 本地守卫，无后端授权实现 |
 | `approval.read` | 当前无对应后端 API 权限实现 |
 
-### 4.2 功能权限标识与 API 的关系
+### 4.2 授权项标识与 API 的关系
 
-功能权限标识不是 API 地址。它是授权 ID，由 `authz_object` 与 `authz_action` 组合而成；API 是被访问的接口入口。
+授权项标识不是 API 地址。它是授权 ID，由 `authz_object` 与 `authz_action` 组合而成；API 是被访问的接口入口。
 
 正确关系：
 
@@ -86,13 +86,13 @@
 API Route Requirement = method + route -> authz_object + authz_action
 Capability Key        = authz_object + ":" + authz_action
 
-一个 API 入口 -> 绑定一个功能权限标识 / capability key
-一个功能权限标识 -> 可以保护多个 API 入口 / executor
+一个 API 入口 -> 绑定一个授权项标识 / capability key
+一个授权项标识 -> 可以保护多个 API 入口 / executor
 ```
 
 示例：
 
-| 功能权限标识 | 覆盖接口 |
+| 授权项标识 | 关联的访问入口 |
 | --- | --- |
 | `orgunit.orgunits:read` | `GET /org/api/org-units` |
 | `orgunit.orgunits:read` | `GET /org/api/org-units/details` |
@@ -122,7 +122,7 @@ key = /org/api/org-units
 2. 一个 capability key 可以保护多个 route，例如 `orgunit.orgunits:read` 可保护 list/search/details/audit 等读取 API。
 3. `assignable=true` 的 capability 必须有当前可运行的 tenant API 或 executor 承接；没有实现面的能力不得进入角色候选项。
 4. policy 中每条授权记录必须能在 registry 和当前实现面中找到证据；找不到就删除，不保留空壳。覆盖证据校验以 `DEV-PLAN-484` 为准。
-5. UI 权限目录主表列名统一使用“功能权限标识”；若需要展示 API，只能放在独立“覆盖接口”详情中，不得把 API 地址和 key 混在同一列。
+5. UI 功能授权项主表列名统一使用“授权项标识”；若需要展示 API，只能在点击对应授权项标识后打开的“关联的访问入口”弹窗中展示，不得把 API 地址和 key 混在同一列。
 
 ### 4.3 前端使用要求
 
@@ -149,8 +149,8 @@ key = /org/api/org-units
 
 | 现有 key / surface | 处理要求 |
 | --- | --- |
-| `foundation.read` | 删除权限语义；若 Foundation demo 保留，它不能作为权限目录项 |
-| `approval.read` | 删除权限语义；审批模块未落地前不进入权限目录 |
+| `foundation.read` | 删除权限语义；若 Foundation demo 保留，它不能作为功能授权项 |
+| `approval.read` | 删除权限语义；审批模块未落地前不进入功能授权项 |
 | `orgunit.read` | 替换为 `orgunit.orgunits:read`，不保留别名 |
 | `orgunit.admin` | 替换为 `orgunit.orgunits:admin`，不保留别名 |
 | `dict.admin` | 替换为 `iam.dicts:admin`，不保留别名 |
@@ -194,7 +194,7 @@ key = /org/api/org-units
 
 1. [ ] 483 被 AGENTS Doc Map 收录。
 2. [ ] 480/481/482 引用 483，明确旧 `permissionKey` 和旧 key 无兼容删除。
-3. [ ] 设计图与权限目录文案统一称为“功能权限标识”，值只展示 `object:action`；API route/method 只进入“覆盖接口”详情。
+3. [ ] 设计图页面文案统一称为“功能授权项”，主表列名统一称为“授权项标识”，值只展示 `object:action`；API route/method 只进入点击授权项标识后打开的“关联的访问入口”弹窗。
 
 ### 7.2 P1：后端 registry 与 policy 硬清理
 
@@ -216,12 +216,12 @@ key = /org/api/org-units
 3. [ ] 前端从服务端权限摘要读取当前用户 capability 集合。
 4. [ ] 旧 key 测试全部改为 canonical key；不得新增兼容测试。
 
-### 7.5 P4：角色定义与权限目录消费
+### 7.5 P4：角色定义与功能授权项消费
 
 1. [ ] 481 角色定义页只从 482 options API 获取 canonical capability。
 2. [ ] 角色保存 payload 只提交 `object:action`。
 3. [ ] 未知、禁用、不可分配、未实现或旧格式 key 均阻断保存。
-4. [ ] 权限目录默认只展示 `enabled + assignable + tenant_api/internal_executor` 的 capability。
+4. [ ] 功能授权项默认只展示 `enabled + assignable + tenant_api/internal_executor` 的 capability。
 
 ## 8. 验收标准
 
@@ -230,7 +230,7 @@ key = /org/api/org-units
 3. [ ] policy、route requirement、executor requirement 与 registry 的覆盖关系按 `DEV-PLAN-484` 校验，任意 key 不在 registry 时 authz lint 失败。
 4. [ ] registry 中 `assignable=true` 但无当前实现面的 key 按 `DEV-PLAN-484` 导致 authz lint 失败。
 5. [ ] 角色保存提交旧 key 时失败，且服务端不返回替换建议或自动修正结果。
-6. [ ] HRMS tenant 权限目录不展示 superadmin key、不展示 policy-only key、不展示 UI 本地守卫 key。
+6. [ ] HRMS tenant 功能授权项不展示 superadmin key、不展示 policy-only key、不展示 UI 本地守卫 key。
 
 ## 9. 风险与停止线
 
@@ -239,7 +239,7 @@ key = /org/api/org-units
 | 为减少改动保留 alias | 旧 key 和新 key 同时存在 | 停止实现，删除 alias 后再继续 |
 | 前端先改名但值仍是旧 key | `requiredCapabilityKey="orgunit.read"` | 门禁必须按值检查，不只检查字段名 |
 | policy-only key 继续保留 | 管理员看到不可执行权限 | policy/registry lint 失败 |
-| superadmin 混入 tenant 权限目录 | HRMS 管理员看到租户管理后台权限 | options API 默认过滤 superadmin surface |
+| superadmin 混入 tenant 功能授权项 | HRMS 管理员看到租户管理后台权限 | options API 默认过滤 superadmin surface |
 | 空权限默认全权限 | 未配置环境变量时 UI 全量可见 | 删除 `*` fallback，缺摘要时 fail-closed |
 
 ## 10. 验证记录

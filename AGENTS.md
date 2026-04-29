@@ -28,7 +28,7 @@
 - sqlc：`make sqlc-generate`，然后 `git status --short` 必须为空；命中 DB 触发器时补跑 `make sqlc-verify-schema`
 - Routing：`make check routing`
 - Authz：`make authz-pack && make authz-test && make authz-lint`
-- 新增/调整受保护 API、CubeBox executor、authz requirement、capability registry、policy 或权限目录候选项：`make authz-pack && make authz-test && make authz-lint`（覆盖门禁见 `DEV-PLAN-484`）
+- 新增/调整受保护 API、CubeBox executor、authz requirement、capability registry、policy、功能授权项候选项或 API 访问入口目录：`make authz-pack && make authz-test && make authz-lint`（覆盖门禁见 `DEV-PLAN-484/485`）
 - E2E：`make e2e`
 - 文档新增/整理：`make check doc`
 
@@ -54,7 +54,7 @@
 | sqlc（schema/queries/config） | `make sqlc-generate` + `git status --short`（命中 DB 触发器再跑 `make sqlc-verify-schema`） | 规范与 stopline 见 `DEV-PLAN-025/025A` |
 | Routing（allowlist/分类/responder） | `make check routing` | 口径见 `DEV-PLAN-017` |
 | Authz（Casbin） | `make authz-pack && make authz-test && make authz-lint` | 口径见 `DEV-PLAN-022` |
-| 受保护 API / CubeBox executor / authz requirement / capability registry / policy / 权限目录候选项 | `make authz-pack && make authz-test && make authz-lint` | 覆盖门禁见 `DEV-PLAN-484`；新增入口必须能追溯到 registry，`assignable=true` 必须有当前实现覆盖 |
+| 受保护 API / CubeBox executor / authz requirement / capability registry / policy / 功能授权项候选项 / API 访问入口目录 | `make authz-pack && make authz-test && make authz-lint` | 覆盖门禁见 `DEV-PLAN-484/485`；新增入口必须能追溯到 registry，`assignable=true` 必须有当前实现覆盖 |
 | E2E（Playwright） | `make e2e` | 门禁结构见 `DEV-PLAN-012`；数据库依赖口径冻结为 Docker / compose，E2E 不得把宿主机 `psql` 等工具作为唯一前置条件 |
 | 新增/调整文档 | `make check doc` | 门禁见“文档收敛与门禁” |
 | 根目录新增/移动文件或调整本地运行产物落点 | `make check root-surface` | 根目录只允许固定入口、配置与顶层目录；运行产物必须进入 `.local/` 或归属目录 |
@@ -119,7 +119,7 @@
 - No Tx, No RLS：访问 Greenfield 表必须显式事务 + 租户注入，且 fail-closed（`DEV-PLAN-021/019/025`）。
 - 路由治理：命名空间/route_class/全局 responder 契约统一，并由门禁阻断漂移（`DEV-PLAN-017/012`）。
 - 授权边界：RLS 圈地 ≠ Casbin 授权；subject/domain/object/action 命名冻结（`DEV-PLAN-021/022/019`）。
-- 权限目录覆盖：新增受保护 API / executor 必须声明 `object/action` requirement 并进入 capability registry；`assignable=true` capability 必须有当前 API/executor 覆盖证据，门禁 owner 为 `DEV-PLAN-484`。
+- 功能授权项与 API 访问入口覆盖：新增受保护 API / executor 必须声明 `object/action` requirement 并进入 capability registry；`assignable=true` capability 必须有当前 API/executor 覆盖证据，门禁 owner 为 `DEV-PLAN-484`；全量 API 正向目录与菜单 owner 为 `DEV-PLAN-485`。
 - i18n：仅 `en/zh`，语言写入口唯一；不做业务数据多语言（`DEV-PLAN-020`）。
 - 模块边界：现行业务域保留 `orgunit`，平台模块保留 `iam`；跨模块优先通过 `pkg/**` 与 HTTP/JSON API 组合，避免 Go 代码跨模块 import（`DEV-PLAN-015/016/019`）。
 - SetID：现行删除与收口以 `DEV-PLAN-440` 为唯一 PoR；历史 SetID 方案仅允许作为 archive/历史来源或待归档调查材料保留，不得再作为当前实现前提、当前用户入口或回退依据。
@@ -286,6 +286,8 @@ modules/{module}/
 - DEV-PLAN-482：EHR Capability Registry 与角色能力候选项方案：`docs/dev-plans/482-ehr-capability-registry-and-role-options-plan.md`
 - DEV-PLAN-483：权限标识单主源与前端 permissionKey 硬删除方案：`docs/dev-plans/483-authz-single-capability-key-hard-cutover-plan.md`
 - DEV-PLAN-484：Authz Capability Registry 覆盖门禁方案：`docs/dev-plans/484-authz-capability-registry-coverage-gate-plan.md`
+- DEV-PLAN-485：API 访问入口目录页面方案：`docs/dev-plans/485-api-access-entry-catalog-page-plan.md`
+- DEV-PLAN-486：CubeBox Executor 授权与模块边界整改方案：`docs/dev-plans/486-cubebox-executor-authz-and-module-boundary-remediation-plan.md`
 - DEV-PLAN-440：彻底删除 SetID 的全仓收口方案（SetID 根删除唯一 PoR）：`docs/dev-plans/440-complete-setid-removal-plan.md`
 - DEV-PLAN-441：旧策略模块残余清理方案：`docs/dev-plans/441-legacy-strategy-module-residue-cleanup-plan.md`
 - DEV-PLAN-450：直接切除 jobcatalog / staffing / person 三模块方案（保留 orgunit）：`docs/dev-plans/450-direct-removal-of-jobcatalog-staffing-person-modules-plan.md`

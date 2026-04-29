@@ -13,11 +13,11 @@
 - `apps/web` 的 `permissionKey` 来自构建期/本地配置，不能作为授权事实源或角色能力候选源。
 - 历史 `Capability Registry` / capability key 下拉方案已归档，且绑定 SetID / scope/package 历史语义，不得作为当前实现前提。
 
-因此需要一个独立方案承接：全量 capability registry、候选项 options API 与 capability key 校验规则。482 不拥有角色定义页面本身；角色基础信息、保存按钮和角色编辑工作流继续归属 `DEV-PLAN-481`。现有前端 `permissionKey`、旧 key 的硬删除要求由 `DEV-PLAN-483` 承接；新增 API/executor 必然进入权限目录、policy-only 权限与覆盖证据门禁由 `DEV-PLAN-484` 承接。482 不提供兼容映射。
+因此需要一个独立方案承接：全量 capability registry、候选项 options API 与 capability key 校验规则。482 不拥有角色定义页面本身；角色基础信息、保存按钮和角色编辑工作流继续归属 `DEV-PLAN-481`。现有前端 `permissionKey`、旧 key 的硬删除要求由 `DEV-PLAN-483` 承接；新增 API/executor 必然进入功能授权项、policy-only 权限与覆盖证据门禁由 `DEV-PLAN-484` 承接。482 不提供兼容映射。
 
 ## 2. 目标
 
-1. [ ] 冻结功能权限标识 / capability key 格式：统一为 `object:action`，例如 `orgunit.orgunits:read`；不得新增 `orgunit.view` 这类 `module.verb` 兼容别名。
+1. [ ] 冻结授权项标识 / capability key 格式：统一为 `object:action`，例如 `orgunit.orgunits:read`；不得新增 `orgunit.view` 这类 `module.verb` 兼容别名。
 2. [ ] 冻结 `Capability Registry` 的最小元数据，使 UI 能展示资源、动作、中文/英文标签、范围维度、启停状态。
 3. [ ] 定义服务端 options API，使 `DEV-PLAN-481` 的角色定义页可从该 API 获取全部启用且可分配的 capability。
 4. [ ] 定义 capability key 校验契约：角色保存提交的 key 必须存在于 registry 且处于可分配状态。
@@ -60,9 +60,9 @@
 
 说明：
 
-1. `key` 是功能权限标识，不是 API 地址。
+1. `key` 是授权项标识，不是 API 地址。
 2. 一个 `key` 可以覆盖多个 HTTP API route 或 executor；具体覆盖关系由 route/executor requirement 提供实现证据。
-3. 482 的 options API 默认返回 capability 元数据；若 UI 需要展示 API，应通过 `DEV-PLAN-484` 定义的覆盖接口证据读取或展开，不得把 route path 放进 `key` 字段。
+3. 482 的 options API 默认返回 capability 元数据；若 UI 需要展示 API，应通过 `DEV-PLAN-484` 定义的覆盖证据读取，并在点击对应授权项标识后打开“关联的访问入口”弹窗展示；不得把 route path 放进 `key` 字段。
 
 派生规则：
 
@@ -124,7 +124,7 @@
 推荐交互：
 
 1. 能力数量较少时：按资源分组的矩阵，行是资源，列是动作，选中后形成 capability key 集合。
-2. 能力数量较多时：使用可搜索 `Autocomplete`，展示 `资源 / 操作 / 功能权限标识`，支持按模块或范围维度筛选。
+2. 能力数量较多时：使用可搜索 `Autocomplete`，展示 `资源 / 操作 / 授权项标识`，支持按模块或范围维度筛选。
 3. 已保存角色中出现未知、禁用或废弃 key 时：由 481 页面以警告 chip 展示，并由服务端阻止保存，直到管理员移除或替换。
 4. 消费方不允许 freeSolo 手输 capability key；管理员只能选择 registry 返回的候选项。
 
