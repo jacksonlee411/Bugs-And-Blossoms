@@ -13,16 +13,16 @@
 - `apps/web` 的 `permissionKey` 来自构建期/本地配置，不能作为授权事实源或角色能力候选源。
 - 历史 `Capability Registry` / capability key 下拉方案已归档，且绑定 SetID / scope/package 历史语义，不得作为当前实现前提。
 
-因此需要一个独立方案承接：全量 capability registry、候选项 options API、capability key 校验规则和反漂移门禁。482 不拥有角色定义页面本身；角色基础信息、保存按钮和角色编辑工作流继续归属 `DEV-PLAN-481`。现有前端 `permissionKey`、旧 key 与 policy-only 权限的硬删除要求由 `DEV-PLAN-483` 承接，482 不提供兼容映射。
+因此需要一个独立方案承接：全量 capability registry、候选项 options API 与 capability key 校验规则。482 不拥有角色定义页面本身；角色基础信息、保存按钮和角色编辑工作流继续归属 `DEV-PLAN-481`。现有前端 `permissionKey`、旧 key 的硬删除要求由 `DEV-PLAN-483` 承接；新增 API/executor 必然进入权限目录、policy-only 权限与覆盖证据门禁由 `DEV-PLAN-484` 承接。482 不提供兼容映射。
 
 ## 2. 目标
 
-1. [ ] 冻结 capability key 格式：统一为 `object:action`，例如 `orgunit.orgunits:read`；不得新增 `orgunit.view` 这类 `module.verb` 兼容别名。
+1. [ ] 冻结功能权限标识 / capability key 格式：统一为 `object:action`，例如 `orgunit.orgunits:read`；不得新增 `orgunit.view` 这类 `module.verb` 兼容别名。
 2. [ ] 冻结 `Capability Registry` 的最小元数据，使 UI 能展示资源、动作、中文/英文标签、范围维度、启停状态。
 3. [ ] 定义服务端 options API，使 `DEV-PLAN-481` 的角色定义页可从该 API 获取全部启用且可分配的 capability。
 4. [ ] 定义 capability key 校验契约：角色保存提交的 key 必须存在于 registry 且处于可分配状态。
-5. [ ] 定义门禁：policy、route authz、executor requirement、role definition 与 registry 不得漂移。
-6. [ ] 对齐 `DEV-PLAN-483`：registry 与 options API 只输出 canonical `object:action`，不输出旧 `permissionKey` 或别名。
+5. [ ] 定义 registry 校验基础，供 `DEV-PLAN-484` 校验 policy、route authz、executor requirement、role definition 与 registry 不得漂移。
+6. [ ] 对齐 `DEV-PLAN-483/484`：registry 与 options API 只输出 canonical `object:action`，不输出旧 `permissionKey` 或别名，且不输出无当前实现覆盖的 assignable capability。
 
 ## 3. 非目标
 
@@ -32,6 +32,7 @@
 4. 不恢复 SetID、scope/package、legacy capability key 或历史兼容别名。
 5. 不把组织范围、字段策略、有效期、冲突检测放回角色定义页；这些边界继续以 `DEV-PLAN-480/481` 为准。
 6. 不维护旧 key 到新 key 的映射；旧 key 的删除与反回流验收以 `DEV-PLAN-483` 为准。
+7. 不在 482 内重复定义覆盖门禁；新增 API/executor 与 registry/policy/options 的覆盖校验以 `DEV-PLAN-484` 为准。
 
 ## 4. 事实源设计
 
@@ -56,6 +57,12 @@
 | `assignable` | 是否允许出现在角色定义候选项中 |
 | `status` | `enabled`、`disabled`、`deprecated` |
 | `sort_order` | UI 分组和排序 |
+
+说明：
+
+1. `key` 是功能权限标识，不是 API 地址。
+2. 一个 `key` 可以覆盖多个 HTTP API route 或 executor；具体覆盖关系由 route/executor requirement 提供实现证据。
+3. 482 的 options API 默认返回 capability 元数据；若 UI 需要展示 API，应通过 `DEV-PLAN-484` 定义的覆盖接口证据读取或展开，不得把 route path 放进 `key` 字段。
 
 派生规则：
 
@@ -117,7 +124,7 @@
 推荐交互：
 
 1. 能力数量较少时：按资源分组的矩阵，行是资源，列是动作，选中后形成 capability key 集合。
-2. 能力数量较多时：使用可搜索 `Autocomplete`，展示 `资源 / 操作 / key`，支持按模块或范围维度筛选。
+2. 能力数量较多时：使用可搜索 `Autocomplete`，展示 `资源 / 操作 / 功能权限标识`，支持按模块或范围维度筛选。
 3. 已保存角色中出现未知、禁用或废弃 key 时：由 481 页面以警告 chip 展示，并由服务端阻止保存，直到管理员移除或替换。
 4. 消费方不允许 freeSolo 手输 capability key；管理员只能选择 registry 返回的候选项。
 
@@ -135,13 +142,14 @@
 
 ### 7.2 反漂移门禁
 
-后续实现时应增加或扩展 authz lint，至少覆盖：
+后续实现时应按 `DEV-PLAN-484` 增加或扩展 authz lint，至少覆盖：
 
 1. `config/access/policies/**` 中每个 object/action 必须存在于 registry。
 2. `internal/server` route requirement 中每个 object/action 必须存在于 registry。
 3. `modules/cubebox` executor requirement 中每个 object/action 必须存在于 registry。
 4. 角色定义 fixture / API payload 中每个 capability key 必须存在于 registry。
 5. registry 中不得出现 `module.verb` 兼容别名或 SetID/scope/package 历史字段。
+6. `enabled + assignable` 的 capability 必须具备当前 tenant API 或 internal executor 覆盖证据。
 
 ## 8. 实施切片
 
@@ -149,7 +157,8 @@
 
 1. [ ] 482 文档作为 capability registry 与角色候选项 SSOT 被 AGENTS Doc Map 收录。
 2. [ ] 480/481 引用 482，明确角色定义页候选源不是 policy CSV，也不是前端 permissionKey。
-3. [ ] 明确首期不建 DB 表、不做在线 registry 管理。
+3. [ ] 482 引用 484，明确覆盖门禁与空壳 capability 阻断不由 482 重复承接。
+4. [ ] 明确首期不建 DB 表、不做在线 registry 管理。
 
 ### 8.2 P1：Registry 与校验
 
@@ -174,7 +183,7 @@
 
 ### 8.5 P4：门禁补强
 
-1. [ ] 扩展 authz lint，检查 policy、route requirement、executor requirement、role fixture 均引用 registry 已登记 object/action。
+1. [ ] 按 `DEV-PLAN-484` 扩展 authz lint，检查 policy、route requirement、executor requirement、role fixture 均引用 registry 已登记 object/action，并检查 assignable capability 覆盖证据。
 2. [ ] 把旧格式 `module.verb` 与 SetID/scope/package 历史字段加入反回流检查。
 3. [ ] 将门禁纳入 `make authz-lint` 或 `make check authz` 对应入口，避免新增独立漂移脚本无人运行。
 

@@ -7,7 +7,7 @@
 - **评审分级**：`T2`
 - **范围一句话**：把 EHR 授权从当前 route/object/action 级 Casbin 门禁，升级为覆盖 API 能力、组织数据范围、对象实例、字段、AI 代用户执行、审计解释与 UI 可见性的全域授权体系蓝图；`DEV-PLAN-468` 留下的 CubeBox executor per-api 授权补强作为本方案的首批落地切片之一。
 - **关联模块/目录**：`pkg/authz/**`、`config/access/**`、`scripts/authz/**`、`internal/server/authz_middleware.go`、`modules/*/services`、`modules/*/infrastructure`、`modules/cubebox/read_executor.go`、`internal/server/cubebox_*`、`apps/web/src/**`
-- **关联计划/标准**：`AGENTS.md`、`DEV-PLAN-000`、`DEV-PLAN-001`、`DEV-PLAN-011`、`DEV-PLAN-012`、`DEV-PLAN-015`、`DEV-PLAN-017`、`DEV-PLAN-019`、`DEV-PLAN-020`、`DEV-PLAN-022`、`DEV-PLAN-032`、`DEV-PLAN-300`、`DEV-PLAN-304`、`DEV-PLAN-460`、`DEV-PLAN-468`、`DEV-PLAN-481`、`DEV-PLAN-482`、`DEV-PLAN-483`
+- **关联计划/标准**：`AGENTS.md`、`DEV-PLAN-000`、`DEV-PLAN-001`、`DEV-PLAN-011`、`DEV-PLAN-012`、`DEV-PLAN-015`、`DEV-PLAN-017`、`DEV-PLAN-019`、`DEV-PLAN-020`、`DEV-PLAN-022`、`DEV-PLAN-032`、`DEV-PLAN-300`、`DEV-PLAN-304`、`DEV-PLAN-460`、`DEV-PLAN-468`、`DEV-PLAN-481`、`DEV-PLAN-482`、`DEV-PLAN-483`、`DEV-PLAN-484`
 - **用户入口/触点**：授权管理配置页、服务端权限摘要 API、`CubeBox` 右侧抽屉、所有受保护 HTTP API 与内部 executor
 
 ### 0.1 Simple > Easy 三问
@@ -89,7 +89,7 @@ EHR 系统的授权不能只停留在“页面能不能进”或“API 能不能
   - `DEV-PLAN-011` 可支撑 480：Go、Casbin、Go test、lint、authz pack/test/lint、前端 MUI/React/Vite 工具链均在仓库基线内。
   - 不需要新增 policy engine 或外部基础设施。
   - 后续若落地数据范围 SoT，会命中 DB/schema/sqlc 门禁，但这不是工具链缺口。
-- 当前 authz lint 强度仍偏基础，后续需要按 `DEV-PLAN-483` 把“object/action registry、route 映射、前端旧权限键、policy 源文件”的漂移检查纳入专项切片。
+- 当前 authz lint 强度仍偏基础，后续需要按 `DEV-PLAN-484` 把“object/action registry、route 映射、executor requirement、policy 源文件、权限目录覆盖证据”的漂移检查纳入专项切片；旧权限键回流仍按 `DEV-PLAN-483` 阻断。
 
 ### 2.4.1 当前授权模块是否需要改造
 
@@ -109,7 +109,7 @@ EHR 系统的授权不能只停留在“页面能不能进”或“API 能不能
 3. 增加 Decision 结构：`Allowed`、`Enforced`、`ReasonCode`、`AppliedScopes`、`MaskedFields`、`PolicyRev`、`DecisionID`、`AuditFacts`。
 4. 增加数据范围裁剪接口，用于 list/search 默认裁剪，用于 details/audit/write 目标校验。
 5. 增加服务端给 UI 的权限摘要 API，替代构建期 `VITE_PERMISSIONS` 作为真实用户会话的 UI 可见性输入。
-6. 增强 authz lint/test，按 `DEV-PLAN-483` 阻止前端 permission key、route requirement、policy object/action、executor requirement 各写一套。
+6. 增强 authz lint/test，按 `DEV-PLAN-484` 阻止 route requirement、policy object/action、executor requirement 与 registry 漂移；按 `DEV-PLAN-483` 阻止前端旧 permission key 回流。
 
 不应做的改造：
 
@@ -175,6 +175,15 @@ flowchart LR
 | Field | 字段是否可见/可写/脱敏 | 薪酬、证件号、联系方式 | projection/filter |
 | AI / Executor | 工具能否代用户执行 | CubeBox `orgunit.audit` | executor registry PEP |
 | Audit / Explain | 为什么允许/拒绝 | decision_id、reason_code | audit log / admin UI |
+
+Capability/API 层的标识关系：
+
+```text
+API Route Requirement = method + route -> authz_object + authz_action
+Capability Key        = authz_object + ":" + authz_action
+```
+
+因此 `orgunit.orgunits:read` 是功能权限标识，不是 API 地址；它可以覆盖 `GET /org/api/org-units`、`GET /org/api/org-units/details`、`GET /org/api/org-units/audit` 等多个读取接口。UI 权限目录主列应展示“功能权限标识”，API method/path 只能作为独立“覆盖接口”详情展示。
 
 补充说明：
 
@@ -435,8 +444,8 @@ Decision 的逻辑字段：
 
 ### 6.1 P0：授权语义冻结与门禁补强
 
-1. [ ] 按 `DEV-PLAN-482/483` 整理 object/action registry，删除前端旧 permission key、policy-only key，并确认 route authz、policy、executor requirement 的映射关系。
-2. [ ] 增加 authz lint/test，阻止未登记 object/action、未打包 policy、前端旧权限键回流和前后端权限键漂移。
+1. [ ] 按 `DEV-PLAN-482/483/484` 整理 object/action registry，删除前端旧 permission key、policy-only key，并确认 route authz、policy、executor requirement 与权限目录覆盖证据的映射关系。
+2. [ ] 按 `DEV-PLAN-484` 增加 authz 覆盖 lint/test，阻止未登记 object/action、未打包 policy、API/executor 覆盖缺失和前后端权限键漂移；前端旧权限键回流按 `DEV-PLAN-483` 承接。
 3. [ ] 补 `docs/dev-records/DEV-PLAN-480-READINESS.md` 记录工具链、门禁和当前差距。
 
 ### 6.2 P1：CubeBox executor per-api 授权

@@ -2154,7 +2154,7 @@
                                   "type": "text",
                                   "id": "capRegistryMeta",
                                   "fill": "#60717A",
-                                  "content": "业务名称优先；key 用于保存、审计和排查",
+                                  "content": "功能权限标识用于保存、审计和排查；不是 API 地址",
                                   "fontFamily": "Inter",
                                   "fontSize": 11,
                                   "fontWeight": "500"
@@ -2402,7 +2402,7 @@
                                   "fill": "#60717A",
                                   "textGrowth": "fixed-width",
                                   "width": 230,
-                                  "content": "系统标识",
+                                  "content": "功能权限标识",
                                   "fontFamily": "Inter",
                                   "fontSize": 10,
                                   "fontWeight": "700"
@@ -3264,6 +3264,471 @@
                                       "fontFamily": "Inter",
                                       "fontSize": 11,
                                       "fontWeight": "700"
+                                    }
+                                  ]
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "capCoverageInterfaces",
+                              "name": "coverageInterfaces",
+                              "width": "fill_container",
+                              "fill": "#FFFFFF",
+                              "stroke": {
+                                "align": "inside",
+                                "thickness": 1,
+                                "fill": "#EEF2F3"
+                              },
+                              "layout": "vertical",
+                              "gap": 12,
+                              "padding": [
+                                16,
+                                16
+                              ],
+                              "children": [
+                                {
+                                  "type": "frame",
+                                  "id": "capCoverageHeader",
+                                  "width": "fill_container",
+                                  "justifyContent": "space_between",
+                                  "alignItems": "center",
+                                  "children": [
+                                    {
+                                      "type": "frame",
+                                      "id": "capCoverageCopy",
+                                      "layout": "vertical",
+                                      "gap": 4,
+                                      "width": 620,
+                                      "children": [
+                                        {
+                                          "type": "text",
+                                          "id": "capCoverageTitle",
+                                          "fill": "#10212B",
+                                          "content": "覆盖接口",
+                                          "fontFamily": "Inter",
+                                          "fontSize": 15,
+                                          "fontWeight": "700"
+                                        },
+                                        {
+                                          "type": "text",
+                                          "id": "capCoverageMeta",
+                                          "fill": "#60717A",
+                                          "content": "所选功能权限标识可保护多个 API 入口",
+                                          "fontFamily": "Inter",
+                                          "fontSize": 11,
+                                          "fontWeight": "500"
+                                        }
+                                      ]
+                                    },
+                                    {
+                                      "type": "frame",
+                                      "id": "capCoverageKey",
+                                      "width": "fit_content",
+                                      "fill": "#E1F7F6",
+                                      "cornerRadius": 999,
+                                      "layout": "horizontal",
+                                      "gap": 6,
+                                      "padding": [
+                                        6,
+                                        9
+                                      ],
+                                      "alignItems": "center",
+                                      "children": [
+                                        {
+                                          "type": "text",
+                                          "id": "capCoverageKeyText",
+                                          "fill": "#047C78",
+                                          "content": "orgunit.orgunits:read",
+                                          "fontFamily": "Inter",
+                                          "fontSize": 11,
+                                          "fontWeight": "700"
+                                        }
+                                      ]
+                                    }
+                                  ]
+                                },
+                                {
+                                  "type": "frame",
+                                  "id": "capCoverageMap",
+                                  "width": "fill_container",
+                                  "layout": "horizontal",
+                                  "gap": 12,
+                                  "children": [
+                                    {
+                                      "type": "frame",
+                                      "id": "capCoverageRouteRequirement",
+                                      "width": "fill_container",
+                                      "fill": "#F8FAFA",
+                                      "cornerRadius": 8,
+                                      "layout": "vertical",
+                                      "gap": 4,
+                                      "padding": 12,
+                                      "children": [
+                                        {
+                                          "type": "text",
+                                          "id": "capCoverageRouteRequirementLabel",
+                                          "fill": "#60717A",
+                                          "content": "API Route Requirement",
+                                          "fontFamily": "Inter",
+                                          "fontSize": 10,
+                                          "fontWeight": "700"
+                                        },
+                                        {
+                                          "type": "text",
+                                          "id": "capCoverageRouteRequirementValue",
+                                          "fill": "#10212B",
+                                          "textGrowth": "fixed-width",
+                                          "width": "fill_container",
+                                          "content": "GET /org/api/org-units -> orgunit.orgunits + read",
+                                          "fontFamily": "Inter",
+                                          "fontSize": 11,
+                                          "fontWeight": "700"
+                                        }
+                                      ]
+                                    },
+                                    {
+                                      "type": "frame",
+                                      "id": "capCoverageKeyFormula",
+                                      "width": "fill_container",
+                                      "fill": "#F8FAFA",
+                                      "cornerRadius": 8,
+                                      "layout": "vertical",
+                                      "gap": 4,
+                                      "padding": 12,
+                                      "children": [
+                                        {
+                                          "type": "text",
+                                          "id": "capCoverageKeyFormulaLabel",
+                                          "fill": "#60717A",
+                                          "content": "Capability Key",
+                                          "fontFamily": "Inter",
+                                          "fontSize": 10,
+                                          "fontWeight": "700"
+                                        },
+                                        {
+                                          "type": "text",
+                                          "id": "capCoverageKeyFormulaValue",
+                                          "fill": "#10212B",
+                                          "textGrowth": "fixed-width",
+                                          "width": "fill_container",
+                                          "content": "orgunit.orgunits + read -> orgunit.orgunits:read",
+                                          "fontFamily": "Inter",
+                                          "fontSize": 11,
+                                          "fontWeight": "700"
+                                        }
+                                      ]
+                                    }
+                                  ]
+                                },
+                                {
+                                  "type": "frame",
+                                  "id": "capCoverageTable",
+                                  "width": "fill_container",
+                                  "layout": "vertical",
+                                  "children": [
+                                    {
+                                      "type": "frame",
+                                      "id": "capCoverageHead",
+                                      "width": "fill_container",
+                                      "fill": "#F6F8F9",
+                                      "layout": "horizontal",
+                                      "gap": 12,
+                                      "padding": [
+                                        9,
+                                        12
+                                      ],
+                                      "alignItems": "center",
+                                      "children": [
+                                        {
+                                          "type": "text",
+                                          "id": "capCoverageHeadMethod",
+                                          "fill": "#60717A",
+                                          "textGrowth": "fixed-width",
+                                          "width": 90,
+                                          "content": "方法",
+                                          "fontFamily": "Inter",
+                                          "fontSize": 10,
+                                          "fontWeight": "700"
+                                        },
+                                        {
+                                          "type": "text",
+                                          "id": "capCoverageHeadRoute",
+                                          "fill": "#60717A",
+                                          "textGrowth": "fixed-width",
+                                          "width": 420,
+                                          "content": "API Route",
+                                          "fontFamily": "Inter",
+                                          "fontSize": 10,
+                                          "fontWeight": "700"
+                                        },
+                                        {
+                                          "type": "text",
+                                          "id": "capCoverageHeadRequirement",
+                                          "fill": "#60717A",
+                                          "textGrowth": "fixed-width",
+                                          "width": 420,
+                                          "content": "绑定授权要求",
+                                          "fontFamily": "Inter",
+                                          "fontSize": 10,
+                                          "fontWeight": "700"
+                                        },
+                                        {
+                                          "type": "text",
+                                          "id": "capCoverageHeadRelation",
+                                          "fill": "#60717A",
+                                          "textGrowth": "fixed-width",
+                                          "width": 150,
+                                          "content": "关系",
+                                          "fontFamily": "Inter",
+                                          "fontSize": 10,
+                                          "fontWeight": "700"
+                                        }
+                                      ]
+                                    },
+                                    {
+                                      "type": "frame",
+                                      "id": "capCoverageRowOrgUnits",
+                                      "width": "fill_container",
+                                      "fill": "#FFFFFF",
+                                      "stroke": {
+                                        "align": "inside",
+                                        "thickness": 1,
+                                        "fill": "#EEF2F3"
+                                      },
+                                      "layout": "horizontal",
+                                      "gap": 12,
+                                      "padding": 12,
+                                      "alignItems": "center",
+                                      "children": [
+                                        {
+                                          "type": "text",
+                                          "id": "capCoverageRowOrgUnitsMethod",
+                                          "fill": "#147A45",
+                                          "textGrowth": "fixed-width",
+                                          "width": 90,
+                                          "content": "GET",
+                                          "fontFamily": "Inter",
+                                          "fontSize": 11,
+                                          "fontWeight": "700"
+                                        },
+                                        {
+                                          "type": "text",
+                                          "id": "capCoverageRowOrgUnitsRoute",
+                                          "fill": "#10212B",
+                                          "textGrowth": "fixed-width",
+                                          "width": 420,
+                                          "content": "/org/api/org-units",
+                                          "fontFamily": "Inter",
+                                          "fontSize": 11,
+                                          "fontWeight": "700"
+                                        },
+                                        {
+                                          "type": "text",
+                                          "id": "capCoverageRowOrgUnitsRequirement",
+                                          "fill": "#33434C",
+                                          "textGrowth": "fixed-width",
+                                          "width": 420,
+                                          "content": "orgunit.orgunits + read",
+                                          "fontFamily": "Inter",
+                                          "fontSize": 11,
+                                          "fontWeight": "600"
+                                        },
+                                        {
+                                          "type": "text",
+                                          "id": "capCoverageRowOrgUnitsRelation",
+                                          "fill": "#60717A",
+                                          "textGrowth": "fixed-width",
+                                          "width": 150,
+                                          "content": "多接口共享同一 key",
+                                          "fontFamily": "Inter",
+                                          "fontSize": 11,
+                                          "fontWeight": "600"
+                                        }
+                                      ]
+                                    },
+                                    {
+                                      "type": "frame",
+                                      "id": "capCoverageRowDetails",
+                                      "width": "fill_container",
+                                      "fill": "#FFFFFF",
+                                      "stroke": {
+                                        "align": "inside",
+                                        "thickness": 1,
+                                        "fill": "#EEF2F3"
+                                      },
+                                      "layout": "horizontal",
+                                      "gap": 12,
+                                      "padding": 12,
+                                      "alignItems": "center",
+                                      "children": [
+                                        {
+                                          "type": "text",
+                                          "id": "capCoverageRowDetailsMethod",
+                                          "fill": "#147A45",
+                                          "textGrowth": "fixed-width",
+                                          "width": 90,
+                                          "content": "GET",
+                                          "fontFamily": "Inter",
+                                          "fontSize": 11,
+                                          "fontWeight": "700"
+                                        },
+                                        {
+                                          "type": "text",
+                                          "id": "capCoverageRowDetailsRoute",
+                                          "fill": "#10212B",
+                                          "textGrowth": "fixed-width",
+                                          "width": 420,
+                                          "content": "/org/api/org-units/details",
+                                          "fontFamily": "Inter",
+                                          "fontSize": 11,
+                                          "fontWeight": "700"
+                                        },
+                                        {
+                                          "type": "text",
+                                          "id": "capCoverageRowDetailsRequirement",
+                                          "fill": "#33434C",
+                                          "textGrowth": "fixed-width",
+                                          "width": 420,
+                                          "content": "orgunit.orgunits + read",
+                                          "fontFamily": "Inter",
+                                          "fontSize": 11,
+                                          "fontWeight": "600"
+                                        },
+                                        {
+                                          "type": "text",
+                                          "id": "capCoverageRowDetailsRelation",
+                                          "fill": "#60717A",
+                                          "textGrowth": "fixed-width",
+                                          "width": 150,
+                                          "content": "多接口共享同一 key",
+                                          "fontFamily": "Inter",
+                                          "fontSize": 11,
+                                          "fontWeight": "600"
+                                        }
+                                      ]
+                                    },
+                                    {
+                                      "type": "frame",
+                                      "id": "capCoverageRowAudit",
+                                      "width": "fill_container",
+                                      "fill": "#FFFFFF",
+                                      "stroke": {
+                                        "align": "inside",
+                                        "thickness": 1,
+                                        "fill": "#EEF2F3"
+                                      },
+                                      "layout": "horizontal",
+                                      "gap": 12,
+                                      "padding": 12,
+                                      "alignItems": "center",
+                                      "children": [
+                                        {
+                                          "type": "text",
+                                          "id": "capCoverageRowAuditMethod",
+                                          "fill": "#147A45",
+                                          "textGrowth": "fixed-width",
+                                          "width": 90,
+                                          "content": "GET",
+                                          "fontFamily": "Inter",
+                                          "fontSize": 11,
+                                          "fontWeight": "700"
+                                        },
+                                        {
+                                          "type": "text",
+                                          "id": "capCoverageRowAuditRoute",
+                                          "fill": "#10212B",
+                                          "textGrowth": "fixed-width",
+                                          "width": 420,
+                                          "content": "/org/api/org-units/audit",
+                                          "fontFamily": "Inter",
+                                          "fontSize": 11,
+                                          "fontWeight": "700"
+                                        },
+                                        {
+                                          "type": "text",
+                                          "id": "capCoverageRowAuditRequirement",
+                                          "fill": "#33434C",
+                                          "textGrowth": "fixed-width",
+                                          "width": 420,
+                                          "content": "orgunit.orgunits + read",
+                                          "fontFamily": "Inter",
+                                          "fontSize": 11,
+                                          "fontWeight": "600"
+                                        },
+                                        {
+                                          "type": "text",
+                                          "id": "capCoverageRowAuditRelation",
+                                          "fill": "#60717A",
+                                          "textGrowth": "fixed-width",
+                                          "width": 150,
+                                          "content": "多接口共享同一 key",
+                                          "fontFamily": "Inter",
+                                          "fontSize": 11,
+                                          "fontWeight": "600"
+                                        }
+                                      ]
+                                    },
+                                    {
+                                      "type": "frame",
+                                      "id": "capCoverageRowSearch",
+                                      "width": "fill_container",
+                                      "fill": "#FFFFFF",
+                                      "stroke": {
+                                        "align": "inside",
+                                        "thickness": 1,
+                                        "fill": "#EEF2F3"
+                                      },
+                                      "layout": "horizontal",
+                                      "gap": 12,
+                                      "padding": 12,
+                                      "alignItems": "center",
+                                      "children": [
+                                        {
+                                          "type": "text",
+                                          "id": "capCoverageRowSearchMethod",
+                                          "fill": "#147A45",
+                                          "textGrowth": "fixed-width",
+                                          "width": 90,
+                                          "content": "GET",
+                                          "fontFamily": "Inter",
+                                          "fontSize": 11,
+                                          "fontWeight": "700"
+                                        },
+                                        {
+                                          "type": "text",
+                                          "id": "capCoverageRowSearchRoute",
+                                          "fill": "#10212B",
+                                          "textGrowth": "fixed-width",
+                                          "width": 420,
+                                          "content": "/org/api/org-units/search",
+                                          "fontFamily": "Inter",
+                                          "fontSize": 11,
+                                          "fontWeight": "700"
+                                        },
+                                        {
+                                          "type": "text",
+                                          "id": "capCoverageRowSearchRequirement",
+                                          "fill": "#33434C",
+                                          "textGrowth": "fixed-width",
+                                          "width": 420,
+                                          "content": "orgunit.orgunits + read",
+                                          "fontFamily": "Inter",
+                                          "fontSize": 11,
+                                          "fontWeight": "600"
+                                        },
+                                        {
+                                          "type": "text",
+                                          "id": "capCoverageRowSearchRelation",
+                                          "fill": "#60717A",
+                                          "textGrowth": "fixed-width",
+                                          "width": 150,
+                                          "content": "多接口共享同一 key",
+                                          "fontFamily": "Inter",
+                                          "fontSize": 11,
+                                          "fontWeight": "600"
+                                        }
+                                      ]
                                     }
                                   ]
                                 }
