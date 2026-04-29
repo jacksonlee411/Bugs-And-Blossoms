@@ -13,7 +13,7 @@
 - `apps/web` 的 `permissionKey` 来自构建期/本地配置，不能作为授权事实源或角色能力候选源。
 - 历史 `Capability Registry` / capability key 下拉方案已归档，且绑定 SetID / scope/package 历史语义，不得作为当前实现前提。
 
-因此需要一个独立方案承接：全量 capability registry、候选项 options API、capability key 校验规则和反漂移门禁。482 不拥有角色定义页面本身；角色基础信息、保存按钮和角色编辑工作流继续归属 `DEV-PLAN-481`。
+因此需要一个独立方案承接：全量 capability registry、候选项 options API、capability key 校验规则和反漂移门禁。482 不拥有角色定义页面本身；角色基础信息、保存按钮和角色编辑工作流继续归属 `DEV-PLAN-481`。现有前端 `permissionKey`、旧 key 与 policy-only 权限的硬删除要求由 `DEV-PLAN-483` 承接，482 不提供兼容映射。
 
 ## 2. 目标
 
@@ -22,6 +22,7 @@
 3. [ ] 定义服务端 options API，使 `DEV-PLAN-481` 的角色定义页可从该 API 获取全部启用且可分配的 capability。
 4. [ ] 定义 capability key 校验契约：角色保存提交的 key 必须存在于 registry 且处于可分配状态。
 5. [ ] 定义门禁：policy、route authz、executor requirement、role definition 与 registry 不得漂移。
+6. [ ] 对齐 `DEV-PLAN-483`：registry 与 options API 只输出 canonical `object:action`，不输出旧 `permissionKey` 或别名。
 
 ## 3. 非目标
 
@@ -30,6 +31,7 @@
 3. 不把前端 `permissionKey`、`VITE_PERMISSIONS` 或导航配置当成授权事实源。
 4. 不恢复 SetID、scope/package、legacy capability key 或历史兼容别名。
 5. 不把组织范围、字段策略、有效期、冲突检测放回角色定义页；这些边界继续以 `DEV-PLAN-480/481` 为准。
+6. 不维护旧 key 到新 key 的映射；旧 key 的删除与反回流验收以 `DEV-PLAN-483` 为准。
 
 ## 4. 事实源设计
 

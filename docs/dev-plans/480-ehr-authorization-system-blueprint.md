@@ -7,7 +7,7 @@
 - **评审分级**：`T2`
 - **范围一句话**：把 EHR 授权从当前 route/object/action 级 Casbin 门禁，升级为覆盖 API 能力、组织数据范围、对象实例、字段、AI 代用户执行、审计解释与 UI 可见性的全域授权体系蓝图；`DEV-PLAN-468` 留下的 CubeBox executor per-api 授权补强作为本方案的首批落地切片之一。
 - **关联模块/目录**：`pkg/authz/**`、`config/access/**`、`scripts/authz/**`、`internal/server/authz_middleware.go`、`modules/*/services`、`modules/*/infrastructure`、`modules/cubebox/read_executor.go`、`internal/server/cubebox_*`、`apps/web/src/**`
-- **关联计划/标准**：`AGENTS.md`、`DEV-PLAN-000`、`DEV-PLAN-001`、`DEV-PLAN-011`、`DEV-PLAN-012`、`DEV-PLAN-015`、`DEV-PLAN-017`、`DEV-PLAN-019`、`DEV-PLAN-020`、`DEV-PLAN-022`、`DEV-PLAN-032`、`DEV-PLAN-300`、`DEV-PLAN-304`、`DEV-PLAN-460`、`DEV-PLAN-468`、`DEV-PLAN-481`
+- **关联计划/标准**：`AGENTS.md`、`DEV-PLAN-000`、`DEV-PLAN-001`、`DEV-PLAN-011`、`DEV-PLAN-012`、`DEV-PLAN-015`、`DEV-PLAN-017`、`DEV-PLAN-019`、`DEV-PLAN-020`、`DEV-PLAN-022`、`DEV-PLAN-032`、`DEV-PLAN-300`、`DEV-PLAN-304`、`DEV-PLAN-460`、`DEV-PLAN-468`、`DEV-PLAN-481`、`DEV-PLAN-482`、`DEV-PLAN-483`
 - **用户入口/触点**：授权管理配置页、服务端权限摘要 API、`CubeBox` 右侧抽屉、所有受保护 HTTP API 与内部 executor
 
 ### 0.1 Simple > Easy 三问
@@ -23,7 +23,7 @@
 - 当前 `internal/server/authz_middleware.go` 以 route 映射 object/action；`/internal/cubebox/turns:stream` 只校验 `cubebox.conversations:use`，不校验 plan 内每个 executor 代表的业务 API。
 - 当前 `RegisteredExecutor` 没有授权元数据，`ExecutionRegistry.ExecutePlan(...)` 执行 step 前不调用 authorizer；这就是 `DEV-PLAN-468` P2-2 留下的直接缺口。
 - 当前 `ExecuteRequest` 有 `TenantID`、`PrincipalID`、`ConversationID`，缺少 `PrincipalRoleSlug`；现有 Casbin subject 从 role slug 推导，不能把 `PrincipalID` 误当 subject。
-- 当前前端 `RequirePermission` / `permissionKey` 只基于本地 `VITE_PERMISSIONS` 做导航和页面提示，默认空权限时甚至是 `*`；它不是安全边界，必须改造成服务端裁决摘要的消费方。
+- 当前前端 `RequirePermission` / `permissionKey` 只基于本地 `VITE_PERMISSIONS` 做导航和页面提示，默认空权限时甚至是 `*`；它不是安全边界，且按 `DEV-PLAN-483` 必须硬删除旧 key、旧字段和构建期权限 fallback，前端只能消费 canonical `object:action` capability。
 - “用户 A 能看整个飞虫与鲜花，用户 B 只能查看鲜花公司”属于同租户内组织数据范围授权，不是 route authz、RLS 或 CubeBox prompt 能解决的问题。
 
 ## 1. 背景与上下文
@@ -89,7 +89,7 @@ EHR 系统的授权不能只停留在“页面能不能进”或“API 能不能
   - `DEV-PLAN-011` 可支撑 480：Go、Casbin、Go test、lint、authz pack/test/lint、前端 MUI/React/Vite 工具链均在仓库基线内。
   - 不需要新增 policy engine 或外部基础设施。
   - 后续若落地数据范围 SoT，会命中 DB/schema/sqlc 门禁，但这不是工具链缺口。
-  - 当前 authz lint 强度仍偏基础，后续需要把“object/action registry、route 映射、前端 permission key、policy 源文件”的漂移检查纳入专项切片。
+- 当前 authz lint 强度仍偏基础，后续需要按 `DEV-PLAN-483` 把“object/action registry、route 映射、前端旧权限键、policy 源文件”的漂移检查纳入专项切片。
 
 ### 2.4.1 当前授权模块是否需要改造
 
@@ -109,13 +109,13 @@ EHR 系统的授权不能只停留在“页面能不能进”或“API 能不能
 3. 增加 Decision 结构：`Allowed`、`Enforced`、`ReasonCode`、`AppliedScopes`、`MaskedFields`、`PolicyRev`、`DecisionID`、`AuditFacts`。
 4. 增加数据范围裁剪接口，用于 list/search 默认裁剪，用于 details/audit/write 目标校验。
 5. 增加服务端给 UI 的权限摘要 API，替代构建期 `VITE_PERMISSIONS` 作为真实用户会话的 UI 可见性输入。
-6. 增强 authz lint/test，阻止前端 permission key、route requirement、policy object/action、executor requirement 各写一套。
+6. 增强 authz lint/test，按 `DEV-PLAN-483` 阻止前端 permission key、route requirement、policy object/action、executor requirement 各写一套。
 
 不应做的改造：
 
 1. 不把 Casbin subject 改成 principal 级 policy；principal 继续用于审计和数据范围事实关联。
 2. 不在 Casbin policy 中维护每个组织节点或每个员工实例。
-3. 不把 UI permission key 作为后端 policy 的主事实源。
+3. 不把 UI permission key 作为后端 policy 的主事实源；旧 UI permission key 按 `DEV-PLAN-483` 硬删除。
 4. 不让业务模块绕过统一门面直接调用 Casbin enforcer。
 
 ## 2.5 测试设计与分层
@@ -435,8 +435,8 @@ Decision 的逻辑字段：
 
 ### 6.1 P0：授权语义冻结与门禁补强
 
-1. [ ] 按 `DEV-PLAN-482` 整理 object/action registry，确认前端 permission key、route authz、policy、executor requirement 的映射关系。
-2. [ ] 增加 authz lint/test，阻止未登记 object/action、未打包 policy、前后端权限键漂移。
+1. [ ] 按 `DEV-PLAN-482/483` 整理 object/action registry，删除前端旧 permission key、policy-only key，并确认 route authz、policy、executor requirement 的映射关系。
+2. [ ] 增加 authz lint/test，阻止未登记 object/action、未打包 policy、前端旧权限键回流和前后端权限键漂移。
 3. [ ] 补 `docs/dev-records/DEV-PLAN-480-READINESS.md` 记录工具链、门禁和当前差距。
 
 ### 6.2 P1：CubeBox executor per-api 授权
@@ -450,7 +450,7 @@ Decision 的逻辑字段：
 ### 6.3 P2：服务端权限摘要与 UI 消费
 
 1. [ ] 新增会话权限摘要 API。
-2. [ ] 前端 `AppPreferencesProvider` 改为读取服务端摘要；`VITE_PERMISSIONS` 仅保留本地开发 fallback，且不能默认 `*` 代表真实用户。
+2. [ ] 前端 `AppPreferencesProvider` 改为读取服务端摘要；按 `DEV-PLAN-483` 删除 `VITE_PERMISSIONS` 和默认 `*` fallback。
 3. [ ] 导航、搜索、页面守卫、按钮状态统一消费摘要。
 4. [ ] 补 UI 测试：无入口、有读无写、权限摘要消费、CubeBox 授权反馈；不新增普通用户错误页测试。
 

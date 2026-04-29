@@ -1,0 +1,218 @@
+# DEV-PLAN-483：权限标识单主源与前端 permissionKey 硬删除方案
+
+**状态**: 规划中（2026-04-29 19:43 CST）
+
+## 0. 适用范围与评审分级
+
+- **评审分级**：`T2`
+- **范围一句话**：把权限标识收敛为唯一 `object:action` capability key，硬删除前端 `permissionKey`、`module.verb` 别名、policy-only 权限和未实现能力；不提供兼容映射、双字段、过渡窗口或旧 key 自动转换。
+- **关联模块/目录**：`pkg/authz/**`、`config/access/**`、`scripts/authz/**`、`internal/server/**`、`internal/superadmin/**`、`apps/web/src/**`
+- **关联计划/标准**：`AGENTS.md`、`DEV-PLAN-000`、`DEV-PLAN-001`、`DEV-PLAN-004M1`、`DEV-PLAN-012`、`DEV-PLAN-017`、`DEV-PLAN-022`、`DEV-PLAN-480`、`DEV-PLAN-481`、`DEV-PLAN-482`
+- **用户入口/触点**：权限目录、角色定义页、用户授权页、导航入口、页面守卫、服务端权限摘要 API、所有受保护 HTTP API 与 CubeBox executor
+
+### 0.1 Simple > Easy 三问
+
+1. **边界**：`pkg/authz` 的 capability registry 是唯一权限标识事实源；policy 只表达授予结果；route/executor 只消费 registry key；前端只消费服务端权限摘要和 registry options，不再定义本地权限语言。
+2. **不变量**：系统内唯一可保存、可传输、可展示给管理员的权限标识是 `object:action`；任何 `orgunit.read`、`dict.admin`、`foundation.read`、`approval.read`、`cubebox.conversations.read` 这类旧 key 都不是权限标识。
+3. **可解释**：管理员看到的“系统标识”就是运行时鉴权使用的 key；一个 key 可以保护多个 API，但 API 路由不能发明第二个 key；没有 API/executor 承接的 key 不进入权限系统。
+
+## 1. 背景与问题
+
+当前实现暴露出三类漂移：
+
+1. 后端 Casbin 使用 `object/action`，而前端导航和页面守卫使用 `permissionKey`，例如 `orgunit.read`、`dict.admin`。
+2. 有些前端 key 只是本地 UI 守卫，例如 `foundation.read`、`approval.read`，没有对应后端 API 权限实现。
+3. policy 中存在未找到当前 tenant API route requirement 的权限，例如 `iam.ping:read`、`iam.session:read`、`org.share_read:read`。
+
+这些问题会让权限管理员无法判断“分配这个权限后用户能做什么”，也会让审计、测试和后续角色管理出现 UI、policy、route、executor 各写一套的风险。
+
+本计划是 `DEV-PLAN-482` 的硬切换补充：482 冻结 capability registry 和 options API；483 专门冻结旧权限语言的删除要求、无兼容要求和反漂移验收。
+
+## 2. 核心目标
+
+1. [ ] 冻结唯一权限标识：`CapabilityKey = object + ":" + action`，例如 `orgunit.orgunits:read`。
+2. [ ] 删除前端独立 `permissionKey` 语言；前端若需要守卫，只能使用同一个 canonical capability key。
+3. [ ] 删除或改造所有 policy-only 权限；policy 中不得存在没有当前 route/executor/superadmin surface 承接的 key。
+4. [ ] 删除 `module.verb`、点号 action、构建期权限、示例权限和历史共享读权限等旧表达。
+5. [ ] 扩展门禁，使 registry、policy、route requirement、executor requirement、角色定义 payload、前端路由守卫只能使用同一套 key。
+
+## 3. 非目标
+
+1. 不引入 DB schema、迁移或在线 registry 管理页；本计划只冻结硬切换契约和实施要求。
+2. 不设计旧 key 兼容、别名表、自动转换、灰度窗口或 deprecated registry entry。
+3. 不把 API path 当成权限标识；API path 只是某个 capability key 的实现证据。
+4. 不把 superadmin 权限混入 HRMS tenant 权限管理员页面；superadmin 可以继续使用同一 `object:action` 格式，但属于独立 surface。
+5. 不恢复 SetID、scope/package、org_level/scope_type/scope_key 或历史共享读语义。
+
+## 4. 不可变要求
+
+### 4.1 唯一标识格式
+
+唯一格式：
+
+```text
+<object>:<action>
+```
+
+示例：
+
+| 合法 key | 含义 |
+| --- | --- |
+| `orgunit.orgunits:read` | 查看组织 |
+| `orgunit.orgunits:admin` | 管理组织 |
+| `iam.dicts:admin` | 管理字典 |
+| `iam.dict_release:admin` | 发布字典 |
+| `cubebox.conversations:use` | 使用 CubeBox 会话 |
+
+禁止格式：
+
+| 禁止 key | 原因 |
+| --- | --- |
+| `orgunit.read` | 前端旧别名，不是 Casbin object/action |
+| `orgunit.admin` | 前端旧别名 |
+| `dict.admin` | 前端旧别名 |
+| `dict.release.admin` | 前端旧别名 |
+| `cubebox.conversations.read` | 点号 action 旧表达；必须是 `cubebox.conversations:read` |
+| `foundation.read` | UI 本地守卫，无后端授权实现 |
+| `approval.read` | 当前无对应后端 API 权限实现 |
+
+### 4.2 系统标识与 API 的关系
+
+系统标识不是 API path。
+
+正确关系：
+
+```text
+CapabilityKey(object:action) 1 -> N API routes / executors
+```
+
+要求：
+
+1. 每个受保护 API route 必须映射到且只映射到一个 registry 中存在的 capability key。
+2. 一个 capability key 可以保护多个 route，例如 `orgunit.orgunits:read` 可保护 list/search/details/audit 等读取 API。
+3. `assignable=true` 的 capability 必须有当前可运行的 tenant API 或 executor 承接；没有实现面的能力不得进入角色候选项。
+4. policy 中每条授权记录必须能在 registry 和当前实现面中找到证据；找不到就删除，不保留空壳。
+
+### 4.3 前端使用要求
+
+前端只能消费 canonical capability key：
+
+1. 删除 `permissionKey` 这个概念和类型字段；若组件需要守卫，字段命名应表达“需要的 capability”，例如 `requiredCapabilityKey`，且值必须是 `object:action`。
+2. 删除 `VITE_PERMISSIONS` 与空权限默认 `*` 的构建期权限模型。
+3. 导航、页面守卫、按钮状态、CubeBox 设置入口都从服务端会话权限摘要或业务 API 裁决读取 canonical key。
+4. 前端不维护旧 key 到新 key 的映射表。
+5. 前端测试不得继续断言 `orgunit.read`、`dict.admin` 等旧 key。
+
+### 4.4 服务端保存与校验要求
+
+服务端不接受旧 key：
+
+1. 角色定义、角色 fixture、权限 options、权限摘要 response 只出现 `object:action`。
+2. 提交 `orgunit.read`、`dict.admin`、`cubebox.conversations.read` 等旧 key 时，直接返回明确错误，例如 `invalid_capability_key`。
+3. 服务端不做 normalize，不把点号 action 转成冒号 action。
+4. 未登记、禁用、未实现、不可分配的 key 均不能保存到角色定义。
+
+## 5. 当前清理清单
+
+### 5.1 前端旧 key
+
+| 现有 key / surface | 处理要求 |
+| --- | --- |
+| `foundation.read` | 删除权限语义；若 Foundation demo 保留，它不能作为权限目录项 |
+| `approval.read` | 删除权限语义；审批模块未落地前不进入权限目录 |
+| `orgunit.read` | 替换为 `orgunit.orgunits:read`，不保留别名 |
+| `orgunit.admin` | 替换为 `orgunit.orgunits:admin`，不保留别名 |
+| `dict.admin` | 替换为 `iam.dicts:admin`，不保留别名 |
+| `dict.release.admin` | 替换为 `iam.dict_release:admin`，不保留别名 |
+| `cubebox.conversations.read` | 替换为 `cubebox.conversations:read`，不保留别名 |
+| `cubebox.conversations.use` | 替换为 `cubebox.conversations:use`，不保留别名 |
+| `permissionKey` prop/type | 删除；改为 canonical capability key 语义 |
+| `VITE_PERMISSIONS` | 删除；不得继续作为真实权限输入 |
+
+### 5.2 policy-only / 未绑定 key
+
+| 当前 key | 处理要求 |
+| --- | --- |
+| `iam.ping:read` | 若无当前受保护 route 承接，则从 policy/registry 删除；不得作为示例权限保留 |
+| `iam.session:read` | 当前 tenant route 使用 `iam.session:admin`；若无 read route 承接，则删除 |
+| `org.share_read:read` | 历史共享读/SetID-scope 语义残留；删除 |
+
+### 5.3 superadmin key
+
+| 当前 key | 处理要求 |
+| --- | --- |
+| `superadmin.session:read/admin` | 保留同一 `object:action` 格式，但归属 `superadmin_route` surface |
+| `superadmin.tenants:read/admin` | 保留同一 `object:action` 格式，但不进入 HRMS tenant 权限管理员页面 |
+
+## 6. 无兼容要求
+
+本计划明确禁止：
+
+1. 禁止 alias map，例如 `orgunit.read -> orgunit.orgunits:read`。
+2. 禁止 API 同时接收 `permissionKey` 和 `capabilityKey`。
+3. 禁止 response 同时返回旧 key 和新 key。
+4. 禁止在 registry 中登记旧 key 并标记 `deprecated`。
+5. 禁止前端在运行时把旧 key normalize 成新 key。
+6. 禁止 `VITE_PERMISSIONS`、`*` 或空权限默认全权限作为 fallback。
+7. 禁止 policy 中保留无 route/executor/superadmin surface 的 key。
+8. 禁止为了不改测试而保留旧 key fixture。
+
+## 7. 实施切片
+
+### 7.1 P0：契约冻结
+
+1. [ ] 483 被 AGENTS Doc Map 收录。
+2. [ ] 480/481/482 引用 483，明确旧 `permissionKey` 和旧 key 无兼容删除。
+3. [ ] 设计图与权限目录文案统一称为“系统标识”或“权限标识”，值只展示 `object:action`。
+
+### 7.2 P1：后端 registry 与 policy 硬清理
+
+1. [ ] `pkg/authz` 增加 canonical key 构造、解析和 registry 校验函数。
+2. [ ] registry 中每条 entry 使用 `object/action` 派生 key，不手写第二套 key。
+3. [ ] 删除 `iam.ping:read`、`iam.session:read`、`org.share_read:read` 等无当前实现面 key，或在同一 PR 中补齐当前实现面；不得 policy-only。
+4. [ ] `superadmin.*` 保留同格式，但标记或分类为独立 superadmin surface，不进入 tenant options。
+
+### 7.3 P2：route / executor / policy 反漂移门禁
+
+1. [ ] policy 中每个 object/action 必须存在于 registry。
+2. [ ] route requirement 中每个 object/action 必须存在于 registry。
+3. [ ] executor requirement 中每个 object/action 必须存在于 registry。
+4. [ ] `assignable=true` 的 registry entry 必须有当前 tenant API 或 executor 实现证据。
+5. [ ] 旧 key 正则命中 `apps/web/src/**`、role fixture、policy、测试 payload 时门禁失败。
+
+### 7.4 P3：前端权限语言硬切换
+
+1. [ ] 删除 `permissionKey` 类型字段、`VITE_PERMISSIONS` 解析和默认 `*` 行为。
+2. [ ] 导航和路由守卫只使用 canonical capability key。
+3. [ ] 前端从服务端权限摘要读取当前用户 capability 集合。
+4. [ ] 旧 key 测试全部改为 canonical key；不得新增兼容测试。
+
+### 7.5 P4：角色定义与权限目录消费
+
+1. [ ] 481 角色定义页只从 482 options API 获取 canonical capability。
+2. [ ] 角色保存 payload 只提交 `object:action`。
+3. [ ] 未知、禁用、不可分配、未实现或旧格式 key 均阻断保存。
+4. [ ] 权限目录默认只展示 `enabled + assignable + tenant_api/internal_executor` 的 capability。
+
+## 8. 验收标准
+
+1. [ ] `apps/web/src/**` 不再出现 `permissionKey`、`VITE_PERMISSIONS`、`foundation.read`、`approval.read`、`orgunit.read`、`orgunit.admin`、`dict.admin`、`dict.release.admin` 作为权限判断。
+2. [ ] 前端导航、页面守卫和按钮状态使用的 key 与后端 registry key 完全相同。
+3. [ ] policy、route requirement、executor requirement 中任意 key 不在 registry 时，authz lint 失败。
+4. [ ] registry 中 `assignable=true` 但无当前实现面的 key 会导致 authz lint 失败。
+5. [ ] 角色保存提交旧 key 时失败，且服务端不返回替换建议或自动修正结果。
+6. [ ] HRMS tenant 权限目录不展示 superadmin key、不展示 policy-only key、不展示 UI 本地守卫 key。
+
+## 9. 风险与停止线
+
+| 风险 | 表现 | 停止线 |
+| --- | --- | --- |
+| 为减少改动保留 alias | 旧 key 和新 key 同时存在 | 停止实现，删除 alias 后再继续 |
+| 前端先改名但值仍是旧 key | `requiredCapabilityKey="orgunit.read"` | 门禁必须按值检查，不只检查字段名 |
+| policy-only key 继续保留 | 管理员看到不可执行权限 | policy/registry lint 失败 |
+| superadmin 混入 tenant 权限目录 | HRMS 管理员看到租户管理后台权限 | options API 默认过滤 superadmin surface |
+| 空权限默认全权限 | 未配置环境变量时 UI 全量可见 | 删除 `*` fallback，缺摘要时 fail-closed |
+
+## 10. 验证记录
+
+- 待实施阶段按命中范围运行：`make check doc`、`go fmt ./... && go vet ./... && make check lint && make test`、`make authz-pack && make authz-test && make authz-lint`、前端测试与 E2E。

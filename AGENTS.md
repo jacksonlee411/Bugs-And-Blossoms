@@ -281,6 +281,7 @@ modules/{module}/
 - DEV-PLAN-480：EHR 授权体系总体方案：`docs/dev-plans/480-ehr-authorization-system-blueprint.md`
 - DEV-PLAN-481：EHR 角色定义与极简用户授权方案：`docs/dev-plans/481-ehr-role-design-and-configuration-plan.md`
 - DEV-PLAN-482：EHR Capability Registry 与角色能力候选项方案：`docs/dev-plans/482-ehr-capability-registry-and-role-options-plan.md`
+- DEV-PLAN-483：权限标识单主源与前端 permissionKey 硬删除方案：`docs/dev-plans/483-authz-single-capability-key-hard-cutover-plan.md`
 - DEV-PLAN-440：彻底删除 SetID 的全仓收口方案（SetID 根删除唯一 PoR）：`docs/dev-plans/440-complete-setid-removal-plan.md`
 - DEV-PLAN-441：旧策略模块残余清理方案：`docs/dev-plans/441-legacy-strategy-module-residue-cleanup-plan.md`
 - DEV-PLAN-450：直接切除 jobcatalog / staffing / person 三模块方案（保留 orgunit）：`docs/dev-plans/450-direct-removal-of-jobcatalog-staffing-person-modules-plan.md`
