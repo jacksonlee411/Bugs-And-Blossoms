@@ -1813,6 +1813,2482 @@
           ]
         }
       ]
+    },
+    {
+      "type": "frame",
+      "id": "scr4820",
+      "name": "482 · Capability Registry",
+      "x": 6020,
+      "y": 0,
+      "width": 1440,
+      "height": 1024,
+      "layout": "vertical",
+      "gap": 16,
+      "padding": 24,
+      "clip": true,
+      "fill": "#F5F7F8",
+      "children": [
+        {
+          "type": "frame",
+          "id": "capShell",
+          "width": "fill_container",
+          "height": "fill_container",
+          "gap": 16,
+          "children": [
+            {
+              "type": "frame",
+              "id": "capSidebar",
+              "name": "sidebar",
+              "width": 220,
+              "height": "fill_container",
+              "layout": "vertical",
+              "gap": 10,
+              "padding": 14,
+              "cornerRadius": 8,
+              "fill": "#FFFFFF",
+              "stroke": {
+                "align": "inside",
+                "thickness": 1,
+                "fill": "#DDE4E6"
+              },
+              "children": [
+                {
+                  "type": "text",
+                  "id": "capBrand",
+                  "content": "EHR",
+                  "fontFamily": "Inter",
+                  "fontSize": 13,
+                  "fontWeight": "700",
+                  "fill": "#60717A"
+                },
+                {
+                  "type": "frame",
+                  "id": "capNavRoles",
+                  "alignItems": "center",
+                  "gap": 9,
+                  "padding": [
+                    10,
+                    12
+                  ],
+                  "cornerRadius": 8,
+                  "fill": "#F3F6F7",
+                  "children": [
+                    {
+                      "type": "icon_font",
+                      "id": "capNavRolesIcon",
+                      "iconFontFamily": "lucide",
+                      "iconFontName": "building-2",
+                      "width": 17,
+                      "height": 17,
+                      "fill": "#33434C"
+                    },
+                    {
+                      "type": "text",
+                      "id": "capNavRolesText",
+                      "content": "角色管理",
+                      "fontFamily": "Inter",
+                      "fontSize": 13,
+                      "fontWeight": "600",
+                      "fill": "#33434C"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "capNavUsers",
+                  "alignItems": "center",
+                  "gap": 9,
+                  "padding": [
+                    10,
+                    12
+                  ],
+                  "cornerRadius": 8,
+                  "fill": "#F3F6F7",
+                  "children": [
+                    {
+                      "type": "icon_font",
+                      "id": "capNavUsersIcon",
+                      "iconFontFamily": "lucide",
+                      "iconFontName": "users",
+                      "width": 17,
+                      "height": 17,
+                      "fill": "#33434C"
+                    },
+                    {
+                      "type": "text",
+                      "id": "capNavUsersText",
+                      "content": "用户授权",
+                      "fontFamily": "Inter",
+                      "fontSize": 13,
+                      "fontWeight": "600",
+                      "fill": "#33434C"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "capNavRegistry",
+                  "alignItems": "center",
+                  "gap": 9,
+                  "padding": [
+                    10,
+                    12
+                  ],
+                  "cornerRadius": 8,
+                  "fill": "#09A7A3",
+                  "children": [
+                    {
+                      "type": "icon_font",
+                      "id": "capNavRegistryIcon",
+                      "iconFontFamily": "lucide",
+                      "iconFontName": "list-checks",
+                      "width": 17,
+                      "height": 17,
+                      "fill": "#FFFFFF"
+                    },
+                    {
+                      "type": "text",
+                      "id": "capNavRegistryText",
+                      "content": "能力候选项",
+                      "fontFamily": "Inter",
+                      "fontSize": 13,
+                      "fontWeight": "700",
+                      "fill": "#FFFFFF"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "capNavCube",
+                  "alignItems": "center",
+                  "gap": 9,
+                  "padding": [
+                    10,
+                    12
+                  ],
+                  "cornerRadius": 8,
+                  "fill": "#F3F6F7",
+                  "children": [
+                    {
+                      "type": "icon_font",
+                      "id": "capNavCubeIcon",
+                      "iconFontFamily": "lucide",
+                      "iconFontName": "message-square",
+                      "width": 17,
+                      "height": 17,
+                      "fill": "#33434C"
+                    },
+                    {
+                      "type": "text",
+                      "id": "capNavCubeText",
+                      "content": "CubeBox",
+                      "fontFamily": "Inter",
+                      "fontSize": 13,
+                      "fontWeight": "600",
+                      "fill": "#33434C"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "capMain",
+              "width": "fill_container",
+              "height": "fill_container",
+              "layout": "vertical",
+              "gap": 14,
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "capHeader",
+                  "width": "fill_container",
+                  "justifyContent": "space_between",
+                  "alignItems": "center",
+                  "gap": 12,
+                  "padding": [
+                    18,
+                    20
+                  ],
+                  "cornerRadius": 8,
+                  "fill": "#FFFFFF",
+                  "stroke": {
+                    "align": "inside",
+                    "thickness": 1,
+                    "fill": "#DDE4E6"
+                  },
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "capHeaderCopy",
+                      "width": 680,
+                      "layout": "vertical",
+                      "gap": 5,
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "capTitle",
+                          "content": "能力候选项",
+                          "fontFamily": "Inter",
+                          "fontSize": 24,
+                          "fontWeight": "700",
+                          "fill": "#10212B"
+                        },
+                        {
+                          "type": "text",
+                          "id": "capSubtitle",
+                          "content": "Capability Registry · DEV-PLAN-482",
+                          "fontFamily": "Inter",
+                          "fontSize": 12,
+                          "fontWeight": "600",
+                          "fill": "#60717A"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "capHeaderActions",
+                      "alignItems": "center",
+                      "gap": 10,
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "capRevChip",
+                          "width": 190,
+                          "justifyContent": "center",
+                          "alignItems": "center",
+                          "padding": [
+                            6,
+                            9
+                          ],
+                          "cornerRadius": 999,
+                          "fill": "#F3F6F7",
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "capRevChipText",
+                              "content": "registry_rev 20260429-static",
+                              "fontFamily": "Inter",
+                              "fontSize": 11,
+                              "fontWeight": "700",
+                              "fill": "#60717A"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "capSaveRole",
+                          "width": 118,
+                          "justifyContent": "center",
+                          "alignItems": "center",
+                          "gap": 7,
+                          "padding": [
+                            9,
+                            12
+                          ],
+                          "cornerRadius": 8,
+                          "fill": "#09A7A3",
+                          "children": [
+                            {
+                              "type": "icon_font",
+                              "id": "capSaveRoleIcon",
+                              "iconFontFamily": "lucide",
+                              "iconFontName": "refresh-cw",
+                              "width": 15,
+                              "height": 15,
+                              "fill": "#FFFFFF"
+                            },
+                            {
+                              "type": "text",
+                              "id": "capSaveRoleText",
+                              "content": "刷新候选",
+                              "fontFamily": "Inter",
+                              "fontSize": 12,
+                              "fontWeight": "700",
+                              "fill": "#FFFFFF"
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "capContent",
+                  "width": "fill_container",
+                  "height": "fill_container",
+                  "gap": 16,
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "capRegistryPanel",
+                      "width": 720,
+                      "height": "fill_container",
+                      "layout": "vertical",
+                      "cornerRadius": 8,
+                      "fill": "#FFFFFF",
+                      "stroke": {
+                        "align": "inside",
+                        "thickness": 1,
+                        "fill": "#DDE4E6"
+                      },
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "capRegistryTitleRow",
+                          "width": "fill_container",
+                          "justifyContent": "space_between",
+                          "alignItems": "center",
+                          "padding": [
+                            14,
+                            16
+                          ],
+                          "fill": "#FFFFFF",
+                          "stroke": {
+                            "align": "inside",
+                            "thickness": 1,
+                            "fill": "#EEF2F3"
+                          },
+                          "children": [
+                            {
+                              "type": "frame",
+                              "id": "capRegistryTitleCopy",
+                              "layout": "vertical",
+                              "gap": 3,
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "capRegistryTitle",
+                                  "content": "Registry",
+                                  "fontFamily": "Inter",
+                                  "fontSize": 15,
+                                  "fontWeight": "700",
+                                  "fill": "#10212B"
+                                },
+                                {
+                                  "type": "text",
+                                  "id": "capRegistryMeta",
+                                  "content": "enabled + assignable 默认进入角色候选项",
+                                  "fontFamily": "Inter",
+                                  "fontSize": 11,
+                                  "fontWeight": "500",
+                                  "fill": "#60717A"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "capRegistryCount",
+                              "width": 116,
+                              "justifyContent": "center",
+                              "alignItems": "center",
+                              "padding": [
+                                6,
+                                9
+                              ],
+                              "cornerRadius": 999,
+                              "fill": "#E1F7F6",
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "capRegistryCountText",
+                                  "content": "6 capabilities",
+                                  "fontFamily": "Inter",
+                                  "fontSize": 11,
+                                  "fontWeight": "700",
+                                  "fill": "#047C78"
+                                }
+                              ]
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "capToolbar",
+                          "width": "fill_container",
+                          "alignItems": "center",
+                          "gap": 10,
+                          "padding": [
+                            12,
+                            14
+                          ],
+                          "children": [
+                            {
+                              "type": "frame",
+                              "id": "capSearch",
+                              "width": 274,
+                              "alignItems": "center",
+                              "gap": 8,
+                              "padding": [
+                                9,
+                                10
+                              ],
+                              "cornerRadius": 8,
+                              "fill": "#F8FAFA",
+                              "stroke": {
+                                "align": "inside",
+                                "thickness": 1,
+                                "fill": "#DDE4E6"
+                              },
+                              "children": [
+                                {
+                                  "type": "icon_font",
+                                  "id": "capSearchIcon",
+                                  "iconFontFamily": "lucide",
+                                  "iconFontName": "search",
+                                  "width": 15,
+                                  "height": 15,
+                                  "fill": "#60717A"
+                                },
+                                {
+                                  "type": "text",
+                                  "id": "capSearchText",
+                                  "content": "搜索 key / 资源 / 操作",
+                                  "fontFamily": "Inter",
+                                  "fontSize": 12,
+                                  "fontWeight": "500",
+                                  "fill": "#60717A",
+                                  "width": 220,
+                                  "textGrowth": "fixed-width"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "capModuleFilter",
+                              "width": 132,
+                              "justifyContent": "space_between",
+                              "alignItems": "center",
+                              "padding": [
+                                9,
+                                10
+                              ],
+                              "cornerRadius": 8,
+                              "fill": "#F8FAFA",
+                              "stroke": {
+                                "align": "inside",
+                                "thickness": 1,
+                                "fill": "#DDE4E6"
+                              },
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "capModuleFilterText",
+                                  "content": "全部模块",
+                                  "fontFamily": "Inter",
+                                  "fontSize": 12,
+                                  "fontWeight": "600",
+                                  "fill": "#33434C"
+                                },
+                                {
+                                  "type": "icon_font",
+                                  "id": "capModuleFilterChevron",
+                                  "iconFontFamily": "lucide",
+                                  "iconFontName": "chevron-down",
+                                  "width": 15,
+                                  "height": 15,
+                                  "fill": "#60717A"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "capScopeFilter",
+                              "width": 132,
+                              "justifyContent": "space_between",
+                              "alignItems": "center",
+                              "padding": [
+                                9,
+                                10
+                              ],
+                              "cornerRadius": 8,
+                              "fill": "#F8FAFA",
+                              "stroke": {
+                                "align": "inside",
+                                "thickness": 1,
+                                "fill": "#DDE4E6"
+                              },
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "capScopeFilterText",
+                                  "content": "全部范围",
+                                  "fontFamily": "Inter",
+                                  "fontSize": 12,
+                                  "fontWeight": "600",
+                                  "fill": "#33434C"
+                                },
+                                {
+                                  "type": "icon_font",
+                                  "id": "capScopeFilterChevron",
+                                  "iconFontFamily": "lucide",
+                                  "iconFontName": "chevron-down",
+                                  "width": 15,
+                                  "height": 15,
+                                  "fill": "#60717A"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "capStatusFilter",
+                              "width": 112,
+                              "justifyContent": "space_between",
+                              "alignItems": "center",
+                              "padding": [
+                                9,
+                                10
+                              ],
+                              "cornerRadius": 8,
+                              "fill": "#F8FAFA",
+                              "stroke": {
+                                "align": "inside",
+                                "thickness": 1,
+                                "fill": "#DDE4E6"
+                              },
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "capStatusFilterText",
+                                  "content": "enabled",
+                                  "fontFamily": "Inter",
+                                  "fontSize": 12,
+                                  "fontWeight": "600",
+                                  "fill": "#33434C"
+                                },
+                                {
+                                  "type": "icon_font",
+                                  "id": "capStatusFilterChevron",
+                                  "iconFontFamily": "lucide",
+                                  "iconFontName": "chevron-down",
+                                  "width": 15,
+                                  "height": 15,
+                                  "fill": "#60717A"
+                                }
+                              ]
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "capTable",
+                          "width": "fill_container",
+                          "layout": "vertical",
+                          "children": [
+                            {
+                              "type": "frame",
+                              "id": "capTableHead",
+                              "width": "fill_container",
+                              "alignItems": "center",
+                              "gap": 10,
+                              "padding": [
+                                10,
+                                12
+                              ],
+                              "fill": "#F6F8F9",
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "capHeadKey",
+                                  "content": "CAPABILITY KEY",
+                                  "fontFamily": "Inter",
+                                  "fontSize": 10,
+                                  "fontWeight": "700",
+                                  "fill": "#60717A",
+                                  "width": 250,
+                                  "textGrowth": "fixed-width"
+                                },
+                                {
+                                  "type": "text",
+                                  "id": "capHeadResource",
+                                  "content": "资源",
+                                  "fontFamily": "Inter",
+                                  "fontSize": 10,
+                                  "fontWeight": "700",
+                                  "fill": "#60717A",
+                                  "width": 110,
+                                  "textGrowth": "fixed-width"
+                                },
+                                {
+                                  "type": "text",
+                                  "id": "capHeadAction",
+                                  "content": "操作",
+                                  "fontFamily": "Inter",
+                                  "fontSize": 10,
+                                  "fontWeight": "700",
+                                  "fill": "#60717A",
+                                  "width": 80,
+                                  "textGrowth": "fixed-width"
+                                },
+                                {
+                                  "type": "text",
+                                  "id": "capHeadScope",
+                                  "content": "范围维度",
+                                  "fontFamily": "Inter",
+                                  "fontSize": 10,
+                                  "fontWeight": "700",
+                                  "fill": "#60717A",
+                                  "width": 110,
+                                  "textGrowth": "fixed-width"
+                                },
+                                {
+                                  "type": "text",
+                                  "id": "capHeadAssignable",
+                                  "content": "候选",
+                                  "fontFamily": "Inter",
+                                  "fontSize": 10,
+                                  "fontWeight": "700",
+                                  "fill": "#60717A",
+                                  "width": 82,
+                                  "textGrowth": "fixed-width"
+                                },
+                                {
+                                  "type": "text",
+                                  "id": "capHeadStatus",
+                                  "content": "状态",
+                                  "fontFamily": "Inter",
+                                  "fontSize": 10,
+                                  "fontWeight": "700",
+                                  "fill": "#60717A",
+                                  "width": 78,
+                                  "textGrowth": "fixed-width"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "capRowOrgRead",
+                              "width": "fill_container",
+                              "alignItems": "center",
+                              "gap": 10,
+                              "padding": [
+                                12,
+                                12
+                              ],
+                              "fill": "#FFFFFF",
+                              "stroke": {
+                                "align": "inside",
+                                "thickness": 1,
+                                "fill": "#EEF2F3"
+                              },
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "capRowOrgReadKey",
+                                  "content": "orgunit.orgunits:read",
+                                  "fontFamily": "Inter",
+                                  "fontSize": 11,
+                                  "fontWeight": "700",
+                                  "fill": "#10212B",
+                                  "width": 250,
+                                  "textGrowth": "fixed-width"
+                                },
+                                {
+                                  "type": "text",
+                                  "id": "capRowOrgReadResource",
+                                  "content": "组织管理",
+                                  "fontFamily": "Inter",
+                                  "fontSize": 11,
+                                  "fontWeight": "600",
+                                  "fill": "#33434C",
+                                  "width": 110,
+                                  "textGrowth": "fixed-width"
+                                },
+                                {
+                                  "type": "text",
+                                  "id": "capRowOrgReadAction",
+                                  "content": "查看",
+                                  "fontFamily": "Inter",
+                                  "fontSize": 11,
+                                  "fontWeight": "600",
+                                  "fill": "#33434C",
+                                  "width": 80,
+                                  "textGrowth": "fixed-width"
+                                },
+                                {
+                                  "type": "frame",
+                                  "id": "capRowOrgReadScope",
+                                  "width": 110,
+                                  "justifyContent": "center",
+                                  "alignItems": "center",
+                                  "padding": [
+                                    6,
+                                    9
+                                  ],
+                                  "cornerRadius": 999,
+                                  "fill": "#E1F7F6",
+                                  "children": [
+                                    {
+                                      "type": "text",
+                                      "id": "capRowOrgReadScopeText",
+                                      "content": "organization",
+                                      "fontFamily": "Inter",
+                                      "fontSize": 11,
+                                      "fontWeight": "700",
+                                      "fill": "#047C78"
+                                    }
+                                  ]
+                                },
+                                {
+                                  "type": "frame",
+                                  "id": "capRowOrgReadAssignable",
+                                  "width": 82,
+                                  "justifyContent": "center",
+                                  "alignItems": "center",
+                                  "padding": [
+                                    6,
+                                    9
+                                  ],
+                                  "cornerRadius": 999,
+                                  "fill": "#EAF8EF",
+                                  "children": [
+                                    {
+                                      "type": "text",
+                                      "id": "capRowOrgReadAssignableText",
+                                      "content": "可分配",
+                                      "fontFamily": "Inter",
+                                      "fontSize": 11,
+                                      "fontWeight": "700",
+                                      "fill": "#147A45"
+                                    }
+                                  ]
+                                },
+                                {
+                                  "type": "frame",
+                                  "id": "capRowOrgReadStatus",
+                                  "width": 78,
+                                  "justifyContent": "center",
+                                  "alignItems": "center",
+                                  "padding": [
+                                    6,
+                                    9
+                                  ],
+                                  "cornerRadius": 999,
+                                  "fill": "#EAF8EF",
+                                  "children": [
+                                    {
+                                      "type": "text",
+                                      "id": "capRowOrgReadStatusText",
+                                      "content": "enabled",
+                                      "fontFamily": "Inter",
+                                      "fontSize": 11,
+                                      "fontWeight": "700",
+                                      "fill": "#147A45"
+                                    }
+                                  ]
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "capRowOrgExport",
+                              "width": "fill_container",
+                              "alignItems": "center",
+                              "gap": 10,
+                              "padding": [
+                                12,
+                                12
+                              ],
+                              "fill": "#FFFFFF",
+                              "stroke": {
+                                "align": "inside",
+                                "thickness": 1,
+                                "fill": "#EEF2F3"
+                              },
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "capRowOrgExportKey",
+                                  "content": "orgunit.orgunits:export",
+                                  "fontFamily": "Inter",
+                                  "fontSize": 11,
+                                  "fontWeight": "700",
+                                  "fill": "#10212B",
+                                  "width": 250,
+                                  "textGrowth": "fixed-width"
+                                },
+                                {
+                                  "type": "text",
+                                  "id": "capRowOrgExportResource",
+                                  "content": "组织管理",
+                                  "fontFamily": "Inter",
+                                  "fontSize": 11,
+                                  "fontWeight": "600",
+                                  "fill": "#33434C",
+                                  "width": 110,
+                                  "textGrowth": "fixed-width"
+                                },
+                                {
+                                  "type": "text",
+                                  "id": "capRowOrgExportAction",
+                                  "content": "导出",
+                                  "fontFamily": "Inter",
+                                  "fontSize": 11,
+                                  "fontWeight": "600",
+                                  "fill": "#33434C",
+                                  "width": 80,
+                                  "textGrowth": "fixed-width"
+                                },
+                                {
+                                  "type": "frame",
+                                  "id": "capRowOrgExportScope",
+                                  "width": 110,
+                                  "justifyContent": "center",
+                                  "alignItems": "center",
+                                  "padding": [
+                                    6,
+                                    9
+                                  ],
+                                  "cornerRadius": 999,
+                                  "fill": "#E1F7F6",
+                                  "children": [
+                                    {
+                                      "type": "text",
+                                      "id": "capRowOrgExportScopeText",
+                                      "content": "organization",
+                                      "fontFamily": "Inter",
+                                      "fontSize": 11,
+                                      "fontWeight": "700",
+                                      "fill": "#047C78"
+                                    }
+                                  ]
+                                },
+                                {
+                                  "type": "frame",
+                                  "id": "capRowOrgExportAssignable",
+                                  "width": 82,
+                                  "justifyContent": "center",
+                                  "alignItems": "center",
+                                  "padding": [
+                                    6,
+                                    9
+                                  ],
+                                  "cornerRadius": 999,
+                                  "fill": "#EAF8EF",
+                                  "children": [
+                                    {
+                                      "type": "text",
+                                      "id": "capRowOrgExportAssignableText",
+                                      "content": "可分配",
+                                      "fontFamily": "Inter",
+                                      "fontSize": 11,
+                                      "fontWeight": "700",
+                                      "fill": "#147A45"
+                                    }
+                                  ]
+                                },
+                                {
+                                  "type": "frame",
+                                  "id": "capRowOrgExportStatus",
+                                  "width": 78,
+                                  "justifyContent": "center",
+                                  "alignItems": "center",
+                                  "padding": [
+                                    6,
+                                    9
+                                  ],
+                                  "cornerRadius": 999,
+                                  "fill": "#EAF8EF",
+                                  "children": [
+                                    {
+                                      "type": "text",
+                                      "id": "capRowOrgExportStatusText",
+                                      "content": "enabled",
+                                      "fontFamily": "Inter",
+                                      "fontSize": 11,
+                                      "fontWeight": "700",
+                                      "fill": "#147A45"
+                                    }
+                                  ]
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "capRowEmployeeRead",
+                              "width": "fill_container",
+                              "alignItems": "center",
+                              "gap": 10,
+                              "padding": [
+                                12,
+                                12
+                              ],
+                              "fill": "#FFFFFF",
+                              "stroke": {
+                                "align": "inside",
+                                "thickness": 1,
+                                "fill": "#EEF2F3"
+                              },
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "capRowEmployeeReadKey",
+                                  "content": "employee.employees:read",
+                                  "fontFamily": "Inter",
+                                  "fontSize": 11,
+                                  "fontWeight": "700",
+                                  "fill": "#10212B",
+                                  "width": 250,
+                                  "textGrowth": "fixed-width"
+                                },
+                                {
+                                  "type": "text",
+                                  "id": "capRowEmployeeReadResource",
+                                  "content": "员工信息",
+                                  "fontFamily": "Inter",
+                                  "fontSize": 11,
+                                  "fontWeight": "600",
+                                  "fill": "#33434C",
+                                  "width": 110,
+                                  "textGrowth": "fixed-width"
+                                },
+                                {
+                                  "type": "text",
+                                  "id": "capRowEmployeeReadAction",
+                                  "content": "查看",
+                                  "fontFamily": "Inter",
+                                  "fontSize": 11,
+                                  "fontWeight": "600",
+                                  "fill": "#33434C",
+                                  "width": 80,
+                                  "textGrowth": "fixed-width"
+                                },
+                                {
+                                  "type": "frame",
+                                  "id": "capRowEmployeeReadScope",
+                                  "width": 110,
+                                  "justifyContent": "center",
+                                  "alignItems": "center",
+                                  "padding": [
+                                    6,
+                                    9
+                                  ],
+                                  "cornerRadius": 999,
+                                  "fill": "#E1F7F6",
+                                  "children": [
+                                    {
+                                      "type": "text",
+                                      "id": "capRowEmployeeReadScopeText",
+                                      "content": "organization",
+                                      "fontFamily": "Inter",
+                                      "fontSize": 11,
+                                      "fontWeight": "700",
+                                      "fill": "#047C78"
+                                    }
+                                  ]
+                                },
+                                {
+                                  "type": "frame",
+                                  "id": "capRowEmployeeReadAssignable",
+                                  "width": 82,
+                                  "justifyContent": "center",
+                                  "alignItems": "center",
+                                  "padding": [
+                                    6,
+                                    9
+                                  ],
+                                  "cornerRadius": 999,
+                                  "fill": "#EAF8EF",
+                                  "children": [
+                                    {
+                                      "type": "text",
+                                      "id": "capRowEmployeeReadAssignableText",
+                                      "content": "可分配",
+                                      "fontFamily": "Inter",
+                                      "fontSize": 11,
+                                      "fontWeight": "700",
+                                      "fill": "#147A45"
+                                    }
+                                  ]
+                                },
+                                {
+                                  "type": "frame",
+                                  "id": "capRowEmployeeReadStatus",
+                                  "width": 78,
+                                  "justifyContent": "center",
+                                  "alignItems": "center",
+                                  "padding": [
+                                    6,
+                                    9
+                                  ],
+                                  "cornerRadius": 999,
+                                  "fill": "#EAF8EF",
+                                  "children": [
+                                    {
+                                      "type": "text",
+                                      "id": "capRowEmployeeReadStatusText",
+                                      "content": "enabled",
+                                      "fontFamily": "Inter",
+                                      "fontSize": 11,
+                                      "fontWeight": "700",
+                                      "fill": "#147A45"
+                                    }
+                                  ]
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "capRowAuthzRead",
+                              "width": "fill_container",
+                              "alignItems": "center",
+                              "gap": 10,
+                              "padding": [
+                                12,
+                                12
+                              ],
+                              "fill": "#FFFFFF",
+                              "stroke": {
+                                "align": "inside",
+                                "thickness": 1,
+                                "fill": "#EEF2F3"
+                              },
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "capRowAuthzReadKey",
+                                  "content": "iam.authz:read",
+                                  "fontFamily": "Inter",
+                                  "fontSize": 11,
+                                  "fontWeight": "700",
+                                  "fill": "#10212B",
+                                  "width": 250,
+                                  "textGrowth": "fixed-width"
+                                },
+                                {
+                                  "type": "text",
+                                  "id": "capRowAuthzReadResource",
+                                  "content": "授权管理",
+                                  "fontFamily": "Inter",
+                                  "fontSize": 11,
+                                  "fontWeight": "600",
+                                  "fill": "#33434C",
+                                  "width": 110,
+                                  "textGrowth": "fixed-width"
+                                },
+                                {
+                                  "type": "text",
+                                  "id": "capRowAuthzReadAction",
+                                  "content": "读取",
+                                  "fontFamily": "Inter",
+                                  "fontSize": 11,
+                                  "fontWeight": "600",
+                                  "fill": "#33434C",
+                                  "width": 80,
+                                  "textGrowth": "fixed-width"
+                                },
+                                {
+                                  "type": "frame",
+                                  "id": "capRowAuthzReadScope",
+                                  "width": 110,
+                                  "justifyContent": "center",
+                                  "alignItems": "center",
+                                  "padding": [
+                                    6,
+                                    9
+                                  ],
+                                  "cornerRadius": 999,
+                                  "fill": "#F3F6F7",
+                                  "children": [
+                                    {
+                                      "type": "text",
+                                      "id": "capRowAuthzReadScopeText",
+                                      "content": "none",
+                                      "fontFamily": "Inter",
+                                      "fontSize": 11,
+                                      "fontWeight": "700",
+                                      "fill": "#60717A"
+                                    }
+                                  ]
+                                },
+                                {
+                                  "type": "frame",
+                                  "id": "capRowAuthzReadAssignable",
+                                  "width": 82,
+                                  "justifyContent": "center",
+                                  "alignItems": "center",
+                                  "padding": [
+                                    6,
+                                    9
+                                  ],
+                                  "cornerRadius": 999,
+                                  "fill": "#EAF8EF",
+                                  "children": [
+                                    {
+                                      "type": "text",
+                                      "id": "capRowAuthzReadAssignableText",
+                                      "content": "可分配",
+                                      "fontFamily": "Inter",
+                                      "fontSize": 11,
+                                      "fontWeight": "700",
+                                      "fill": "#147A45"
+                                    }
+                                  ]
+                                },
+                                {
+                                  "type": "frame",
+                                  "id": "capRowAuthzReadStatus",
+                                  "width": 78,
+                                  "justifyContent": "center",
+                                  "alignItems": "center",
+                                  "padding": [
+                                    6,
+                                    9
+                                  ],
+                                  "cornerRadius": 999,
+                                  "fill": "#EAF8EF",
+                                  "children": [
+                                    {
+                                      "type": "text",
+                                      "id": "capRowAuthzReadStatusText",
+                                      "content": "enabled",
+                                      "fontFamily": "Inter",
+                                      "fontSize": 11,
+                                      "fontWeight": "700",
+                                      "fill": "#147A45"
+                                    }
+                                  ]
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "capRowCubeUse",
+                              "width": "fill_container",
+                              "alignItems": "center",
+                              "gap": 10,
+                              "padding": [
+                                12,
+                                12
+                              ],
+                              "fill": "#FFFFFF",
+                              "stroke": {
+                                "align": "inside",
+                                "thickness": 1,
+                                "fill": "#EEF2F3"
+                              },
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "capRowCubeUseKey",
+                                  "content": "cubebox.conversations:use",
+                                  "fontFamily": "Inter",
+                                  "fontSize": 11,
+                                  "fontWeight": "700",
+                                  "fill": "#10212B",
+                                  "width": 250,
+                                  "textGrowth": "fixed-width"
+                                },
+                                {
+                                  "type": "text",
+                                  "id": "capRowCubeUseResource",
+                                  "content": "CubeBox",
+                                  "fontFamily": "Inter",
+                                  "fontSize": 11,
+                                  "fontWeight": "600",
+                                  "fill": "#33434C",
+                                  "width": 110,
+                                  "textGrowth": "fixed-width"
+                                },
+                                {
+                                  "type": "text",
+                                  "id": "capRowCubeUseAction",
+                                  "content": "使用",
+                                  "fontFamily": "Inter",
+                                  "fontSize": 11,
+                                  "fontWeight": "600",
+                                  "fill": "#33434C",
+                                  "width": 80,
+                                  "textGrowth": "fixed-width"
+                                },
+                                {
+                                  "type": "frame",
+                                  "id": "capRowCubeUseScope",
+                                  "width": 110,
+                                  "justifyContent": "center",
+                                  "alignItems": "center",
+                                  "padding": [
+                                    6,
+                                    9
+                                  ],
+                                  "cornerRadius": 999,
+                                  "fill": "#F3F6F7",
+                                  "children": [
+                                    {
+                                      "type": "text",
+                                      "id": "capRowCubeUseScopeText",
+                                      "content": "none",
+                                      "fontFamily": "Inter",
+                                      "fontSize": 11,
+                                      "fontWeight": "700",
+                                      "fill": "#60717A"
+                                    }
+                                  ]
+                                },
+                                {
+                                  "type": "frame",
+                                  "id": "capRowCubeUseAssignable",
+                                  "width": 82,
+                                  "justifyContent": "center",
+                                  "alignItems": "center",
+                                  "padding": [
+                                    6,
+                                    9
+                                  ],
+                                  "cornerRadius": 999,
+                                  "fill": "#EAF8EF",
+                                  "children": [
+                                    {
+                                      "type": "text",
+                                      "id": "capRowCubeUseAssignableText",
+                                      "content": "可分配",
+                                      "fontFamily": "Inter",
+                                      "fontSize": 11,
+                                      "fontWeight": "700",
+                                      "fill": "#147A45"
+                                    }
+                                  ]
+                                },
+                                {
+                                  "type": "frame",
+                                  "id": "capRowCubeUseStatus",
+                                  "width": 78,
+                                  "justifyContent": "center",
+                                  "alignItems": "center",
+                                  "padding": [
+                                    6,
+                                    9
+                                  ],
+                                  "cornerRadius": 999,
+                                  "fill": "#EAF8EF",
+                                  "children": [
+                                    {
+                                      "type": "text",
+                                      "id": "capRowCubeUseStatusText",
+                                      "content": "enabled",
+                                      "fontFamily": "Inter",
+                                      "fontSize": 11,
+                                      "fontWeight": "700",
+                                      "fill": "#147A45"
+                                    }
+                                  ]
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "capRowCredentialRotate",
+                              "width": "fill_container",
+                              "alignItems": "center",
+                              "gap": 10,
+                              "padding": [
+                                12,
+                                12
+                              ],
+                              "fill": "#FFFFFF",
+                              "stroke": {
+                                "align": "inside",
+                                "thickness": 1,
+                                "fill": "#EEF2F3"
+                              },
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "capRowCredentialRotateKey",
+                                  "content": "cubebox.model_credential:rotate",
+                                  "fontFamily": "Inter",
+                                  "fontSize": 11,
+                                  "fontWeight": "700",
+                                  "fill": "#60717A",
+                                  "width": 250,
+                                  "textGrowth": "fixed-width"
+                                },
+                                {
+                                  "type": "text",
+                                  "id": "capRowCredentialRotateResource",
+                                  "content": "模型凭证",
+                                  "fontFamily": "Inter",
+                                  "fontSize": 11,
+                                  "fontWeight": "600",
+                                  "fill": "#33434C",
+                                  "width": 110,
+                                  "textGrowth": "fixed-width"
+                                },
+                                {
+                                  "type": "text",
+                                  "id": "capRowCredentialRotateAction",
+                                  "content": "轮换",
+                                  "fontFamily": "Inter",
+                                  "fontSize": 11,
+                                  "fontWeight": "600",
+                                  "fill": "#33434C",
+                                  "width": 80,
+                                  "textGrowth": "fixed-width"
+                                },
+                                {
+                                  "type": "frame",
+                                  "id": "capRowCredentialRotateScope",
+                                  "width": 110,
+                                  "justifyContent": "center",
+                                  "alignItems": "center",
+                                  "padding": [
+                                    6,
+                                    9
+                                  ],
+                                  "cornerRadius": 999,
+                                  "fill": "#F3F6F7",
+                                  "children": [
+                                    {
+                                      "type": "text",
+                                      "id": "capRowCredentialRotateScopeText",
+                                      "content": "none",
+                                      "fontFamily": "Inter",
+                                      "fontSize": 11,
+                                      "fontWeight": "700",
+                                      "fill": "#60717A"
+                                    }
+                                  ]
+                                },
+                                {
+                                  "type": "frame",
+                                  "id": "capRowCredentialRotateAssignable",
+                                  "width": 82,
+                                  "justifyContent": "center",
+                                  "alignItems": "center",
+                                  "padding": [
+                                    6,
+                                    9
+                                  ],
+                                  "cornerRadius": 999,
+                                  "fill": "#FFF4E5",
+                                  "children": [
+                                    {
+                                      "type": "text",
+                                      "id": "capRowCredentialRotateAssignableText",
+                                      "content": "不可分配",
+                                      "fontFamily": "Inter",
+                                      "fontSize": 11,
+                                      "fontWeight": "700",
+                                      "fill": "#B45309"
+                                    }
+                                  ]
+                                },
+                                {
+                                  "type": "frame",
+                                  "id": "capRowCredentialRotateStatus",
+                                  "width": 78,
+                                  "justifyContent": "center",
+                                  "alignItems": "center",
+                                  "padding": [
+                                    6,
+                                    9
+                                  ],
+                                  "cornerRadius": 999,
+                                  "fill": "#FFF1F2",
+                                  "children": [
+                                    {
+                                      "type": "text",
+                                      "id": "capRowCredentialRotateStatusText",
+                                      "content": "disabled",
+                                      "fontFamily": "Inter",
+                                      "fontSize": 11,
+                                      "fontWeight": "700",
+                                      "fill": "#B42318"
+                                    }
+                                  ]
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "capContractPanel",
+                      "width": "fill_container",
+                      "height": "fill_container",
+                      "layout": "vertical",
+                      "gap": 14,
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "capApiCard",
+                          "width": "fill_container",
+                          "layout": "vertical",
+                          "cornerRadius": 8,
+                          "fill": "#FFFFFF",
+                          "stroke": {
+                            "align": "inside",
+                            "thickness": 1,
+                            "fill": "#DDE4E6"
+                          },
+                          "children": [
+                            {
+                              "type": "frame",
+                              "id": "capApiHeader",
+                              "width": "fill_container",
+                              "justifyContent": "space_between",
+                              "alignItems": "center",
+                              "padding": [
+                                14,
+                                16
+                              ],
+                              "fill": "#FFFFFF",
+                              "stroke": {
+                                "align": "inside",
+                                "thickness": 1,
+                                "fill": "#EEF2F3"
+                              },
+                              "children": [
+                                {
+                                  "type": "frame",
+                                  "id": "capApiHeaderCopy",
+                                  "layout": "vertical",
+                                  "gap": 3,
+                                  "children": [
+                                    {
+                                      "type": "text",
+                                      "id": "capApiHeaderTitle",
+                                      "content": "Options API 契约",
+                                      "fontFamily": "Inter",
+                                      "fontSize": 15,
+                                      "fontWeight": "700",
+                                      "fill": "#10212B"
+                                    },
+                                    {
+                                      "type": "text",
+                                      "id": "capApiHeaderSubtitle",
+                                      "content": "482 只定义候选来源，不定义角色编辑页",
+                                      "fontFamily": "Inter",
+                                      "fontSize": 11,
+                                      "fontWeight": "500",
+                                      "fill": "#60717A"
+                                    }
+                                  ]
+                                },
+                                {
+                                  "type": "frame",
+                                  "id": "capApiHeaderBadge",
+                                  "width": 88,
+                                  "justifyContent": "center",
+                                  "alignItems": "center",
+                                  "padding": [
+                                    6,
+                                    9
+                                  ],
+                                  "cornerRadius": 999,
+                                  "fill": "#E1F7F6",
+                                  "children": [
+                                    {
+                                      "type": "text",
+                                      "id": "capApiHeaderBadgeText",
+                                      "content": "read only",
+                                      "fontFamily": "Inter",
+                                      "fontSize": 11,
+                                      "fontWeight": "700",
+                                      "fill": "#047C78"
+                                    }
+                                  ]
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "capApiRows",
+                              "width": "fill_container",
+                              "layout": "vertical",
+                              "children": [
+                                {
+                                  "type": "frame",
+                                  "id": "capApiMethod",
+                                  "width": "fill_container",
+                                  "alignItems": "center",
+                                  "gap": 10,
+                                  "padding": [
+                                    10,
+                                    12
+                                  ],
+                                  "fill": "#FFFFFF",
+                                  "stroke": {
+                                    "align": "inside",
+                                    "thickness": 1,
+                                    "fill": "#EEF2F3"
+                                  },
+                                  "children": [
+                                    {
+                                      "type": "text",
+                                      "id": "capApiMethodLabel",
+                                      "content": "METHOD",
+                                      "fontFamily": "Inter",
+                                      "fontSize": 11,
+                                      "fontWeight": "700",
+                                      "fill": "#60717A",
+                                      "width": 132,
+                                      "textGrowth": "fixed-width"
+                                    },
+                                    {
+                                      "type": "text",
+                                      "id": "capApiMethodValue",
+                                      "content": "GET",
+                                      "fontFamily": "Inter",
+                                      "fontSize": 12,
+                                      "fontWeight": "700",
+                                      "fill": "#10212B",
+                                      "width": 360,
+                                      "textGrowth": "fixed-width"
+                                    },
+                                    {
+                                      "type": "frame",
+                                      "id": "capApiMethodBadge",
+                                      "width": 92,
+                                      "justifyContent": "center",
+                                      "alignItems": "center",
+                                      "padding": [
+                                        6,
+                                        9
+                                      ],
+                                      "cornerRadius": 999,
+                                      "fill": "#EAF8EF",
+                                      "children": [
+                                        {
+                                          "type": "text",
+                                          "id": "capApiMethodBadgeText",
+                                          "content": "protected",
+                                          "fontFamily": "Inter",
+                                          "fontSize": 11,
+                                          "fontWeight": "700",
+                                          "fill": "#147A45"
+                                        }
+                                      ]
+                                    }
+                                  ]
+                                },
+                                {
+                                  "type": "frame",
+                                  "id": "capApiPath",
+                                  "width": "fill_container",
+                                  "alignItems": "center",
+                                  "gap": 10,
+                                  "padding": [
+                                    10,
+                                    12
+                                  ],
+                                  "fill": "#FFFFFF",
+                                  "stroke": {
+                                    "align": "inside",
+                                    "thickness": 1,
+                                    "fill": "#EEF2F3"
+                                  },
+                                  "children": [
+                                    {
+                                      "type": "text",
+                                      "id": "capApiPathLabel",
+                                      "content": "PATH",
+                                      "fontFamily": "Inter",
+                                      "fontSize": 11,
+                                      "fontWeight": "700",
+                                      "fill": "#60717A",
+                                      "width": 132,
+                                      "textGrowth": "fixed-width"
+                                    },
+                                    {
+                                      "type": "text",
+                                      "id": "capApiPathValue",
+                                      "content": "/iam/api/authz/capabilities",
+                                      "fontFamily": "Inter",
+                                      "fontSize": 12,
+                                      "fontWeight": "700",
+                                      "fill": "#10212B",
+                                      "width": 360,
+                                      "textGrowth": "fixed-width"
+                                    }
+                                  ]
+                                },
+                                {
+                                  "type": "frame",
+                                  "id": "capApiDefault",
+                                  "width": "fill_container",
+                                  "alignItems": "center",
+                                  "gap": 10,
+                                  "padding": [
+                                    10,
+                                    12
+                                  ],
+                                  "fill": "#FFFFFF",
+                                  "stroke": {
+                                    "align": "inside",
+                                    "thickness": 1,
+                                    "fill": "#EEF2F3"
+                                  },
+                                  "children": [
+                                    {
+                                      "type": "text",
+                                      "id": "capApiDefaultLabel",
+                                      "content": "DEFAULT",
+                                      "fontFamily": "Inter",
+                                      "fontSize": 11,
+                                      "fontWeight": "700",
+                                      "fill": "#60717A",
+                                      "width": 132,
+                                      "textGrowth": "fixed-width"
+                                    },
+                                    {
+                                      "type": "text",
+                                      "id": "capApiDefaultValue",
+                                      "content": "enabled + assignable",
+                                      "fontFamily": "Inter",
+                                      "fontSize": 12,
+                                      "fontWeight": "700",
+                                      "fill": "#10212B",
+                                      "width": 360,
+                                      "textGrowth": "fixed-width"
+                                    }
+                                  ]
+                                },
+                                {
+                                  "type": "frame",
+                                  "id": "capApiQuery",
+                                  "width": "fill_container",
+                                  "alignItems": "center",
+                                  "gap": 10,
+                                  "padding": [
+                                    10,
+                                    12
+                                  ],
+                                  "fill": "#FFFFFF",
+                                  "stroke": {
+                                    "align": "inside",
+                                    "thickness": 1,
+                                    "fill": "#EEF2F3"
+                                  },
+                                  "children": [
+                                    {
+                                      "type": "text",
+                                      "id": "capApiQueryLabel",
+                                      "content": "QUERY",
+                                      "fontFamily": "Inter",
+                                      "fontSize": 11,
+                                      "fontWeight": "700",
+                                      "fill": "#60717A",
+                                      "width": 132,
+                                      "textGrowth": "fixed-width"
+                                    },
+                                    {
+                                      "type": "text",
+                                      "id": "capApiQueryValue",
+                                      "content": "q / owner_module / scope_dimension / include_disabled",
+                                      "fontFamily": "Inter",
+                                      "fontSize": 12,
+                                      "fontWeight": "700",
+                                      "fill": "#10212B",
+                                      "width": 360,
+                                      "textGrowth": "fixed-width"
+                                    }
+                                  ]
+                                }
+                              ]
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "capResponseCard",
+                          "width": "fill_container",
+                          "layout": "vertical",
+                          "cornerRadius": 8,
+                          "fill": "#FFFFFF",
+                          "stroke": {
+                            "align": "inside",
+                            "thickness": 1,
+                            "fill": "#DDE4E6"
+                          },
+                          "children": [
+                            {
+                              "type": "frame",
+                              "id": "capResponseHeader",
+                              "width": "fill_container",
+                              "justifyContent": "space_between",
+                              "alignItems": "center",
+                              "padding": [
+                                14,
+                                16
+                              ],
+                              "fill": "#FFFFFF",
+                              "stroke": {
+                                "align": "inside",
+                                "thickness": 1,
+                                "fill": "#EEF2F3"
+                              },
+                              "children": [
+                                {
+                                  "type": "frame",
+                                  "id": "capResponseHeaderCopy",
+                                  "layout": "vertical",
+                                  "gap": 3,
+                                  "children": [
+                                    {
+                                      "type": "text",
+                                      "id": "capResponseHeaderTitle",
+                                      "content": "Response 字段",
+                                      "fontFamily": "Inter",
+                                      "fontSize": 15,
+                                      "fontWeight": "700",
+                                      "fill": "#10212B"
+                                    },
+                                    {
+                                      "type": "text",
+                                      "id": "capResponseHeaderSubtitle",
+                                      "content": "返回候选全集和 registry_rev",
+                                      "fontFamily": "Inter",
+                                      "fontSize": 11,
+                                      "fontWeight": "500",
+                                      "fill": "#60717A"
+                                    }
+                                  ]
+                                },
+                                {
+                                  "type": "frame",
+                                  "id": "capResponseHeaderBadge",
+                                  "width": 64,
+                                  "justifyContent": "center",
+                                  "alignItems": "center",
+                                  "padding": [
+                                    6,
+                                    9
+                                  ],
+                                  "cornerRadius": 999,
+                                  "fill": "#F3F6F7",
+                                  "children": [
+                                    {
+                                      "type": "text",
+                                      "id": "capResponseHeaderBadgeText",
+                                      "content": "JSON",
+                                      "fontFamily": "Inter",
+                                      "fontSize": 11,
+                                      "fontWeight": "700",
+                                      "fill": "#60717A"
+                                    }
+                                  ]
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "capResponseRows",
+                              "width": "fill_container",
+                              "layout": "vertical",
+                              "children": [
+                                {
+                                  "type": "frame",
+                                  "id": "capFieldKey",
+                                  "width": "fill_container",
+                                  "alignItems": "center",
+                                  "gap": 10,
+                                  "padding": [
+                                    10,
+                                    12
+                                  ],
+                                  "fill": "#FFFFFF",
+                                  "stroke": {
+                                    "align": "inside",
+                                    "thickness": 1,
+                                    "fill": "#EEF2F3"
+                                  },
+                                  "children": [
+                                    {
+                                      "type": "text",
+                                      "id": "capFieldKeyName",
+                                      "content": "key",
+                                      "fontFamily": "Inter",
+                                      "fontSize": 11,
+                                      "fontWeight": "700",
+                                      "fill": "#10212B",
+                                      "width": 170,
+                                      "textGrowth": "fixed-width"
+                                    },
+                                    {
+                                      "type": "frame",
+                                      "id": "capFieldKeyType",
+                                      "width": 92,
+                                      "justifyContent": "center",
+                                      "alignItems": "center",
+                                      "padding": [
+                                        6,
+                                        9
+                                      ],
+                                      "cornerRadius": 999,
+                                      "fill": "#E1F7F6",
+                                      "children": [
+                                        {
+                                          "type": "text",
+                                          "id": "capFieldKeyTypeText",
+                                          "content": "derived",
+                                          "fontFamily": "Inter",
+                                          "fontSize": 11,
+                                          "fontWeight": "700",
+                                          "fill": "#047C78"
+                                        }
+                                      ]
+                                    },
+                                    {
+                                      "type": "text",
+                                      "id": "capFieldKeyNote",
+                                      "content": "object + \":\" + action",
+                                      "fontFamily": "Inter",
+                                      "fontSize": 11,
+                                      "fontWeight": "600",
+                                      "fill": "#33434C",
+                                      "width": 300,
+                                      "textGrowth": "fixed-width"
+                                    }
+                                  ]
+                                },
+                                {
+                                  "type": "frame",
+                                  "id": "capFieldObject",
+                                  "width": "fill_container",
+                                  "alignItems": "center",
+                                  "gap": 10,
+                                  "padding": [
+                                    10,
+                                    12
+                                  ],
+                                  "fill": "#FFFFFF",
+                                  "stroke": {
+                                    "align": "inside",
+                                    "thickness": 1,
+                                    "fill": "#EEF2F3"
+                                  },
+                                  "children": [
+                                    {
+                                      "type": "text",
+                                      "id": "capFieldObjectName",
+                                      "content": "object",
+                                      "fontFamily": "Inter",
+                                      "fontSize": 11,
+                                      "fontWeight": "700",
+                                      "fill": "#10212B",
+                                      "width": 170,
+                                      "textGrowth": "fixed-width"
+                                    },
+                                    {
+                                      "type": "frame",
+                                      "id": "capFieldObjectType",
+                                      "width": 92,
+                                      "justifyContent": "center",
+                                      "alignItems": "center",
+                                      "padding": [
+                                        6,
+                                        9
+                                      ],
+                                      "cornerRadius": 999,
+                                      "fill": "#F3F6F7",
+                                      "children": [
+                                        {
+                                          "type": "text",
+                                          "id": "capFieldObjectTypeText",
+                                          "content": "string",
+                                          "fontFamily": "Inter",
+                                          "fontSize": 11,
+                                          "fontWeight": "700",
+                                          "fill": "#60717A"
+                                        }
+                                      ]
+                                    },
+                                    {
+                                      "type": "text",
+                                      "id": "capFieldObjectNote",
+                                      "content": "Casbin object/resource",
+                                      "fontFamily": "Inter",
+                                      "fontSize": 11,
+                                      "fontWeight": "600",
+                                      "fill": "#33434C",
+                                      "width": 300,
+                                      "textGrowth": "fixed-width"
+                                    }
+                                  ]
+                                },
+                                {
+                                  "type": "frame",
+                                  "id": "capFieldAction",
+                                  "width": "fill_container",
+                                  "alignItems": "center",
+                                  "gap": 10,
+                                  "padding": [
+                                    10,
+                                    12
+                                  ],
+                                  "fill": "#FFFFFF",
+                                  "stroke": {
+                                    "align": "inside",
+                                    "thickness": 1,
+                                    "fill": "#EEF2F3"
+                                  },
+                                  "children": [
+                                    {
+                                      "type": "text",
+                                      "id": "capFieldActionName",
+                                      "content": "action",
+                                      "fontFamily": "Inter",
+                                      "fontSize": 11,
+                                      "fontWeight": "700",
+                                      "fill": "#10212B",
+                                      "width": 170,
+                                      "textGrowth": "fixed-width"
+                                    },
+                                    {
+                                      "type": "frame",
+                                      "id": "capFieldActionType",
+                                      "width": 92,
+                                      "justifyContent": "center",
+                                      "alignItems": "center",
+                                      "padding": [
+                                        6,
+                                        9
+                                      ],
+                                      "cornerRadius": 999,
+                                      "fill": "#F3F6F7",
+                                      "children": [
+                                        {
+                                          "type": "text",
+                                          "id": "capFieldActionTypeText",
+                                          "content": "string",
+                                          "fontFamily": "Inter",
+                                          "fontSize": 11,
+                                          "fontWeight": "700",
+                                          "fill": "#60717A"
+                                        }
+                                      ]
+                                    },
+                                    {
+                                      "type": "text",
+                                      "id": "capFieldActionNote",
+                                      "content": "Casbin action",
+                                      "fontFamily": "Inter",
+                                      "fontSize": 11,
+                                      "fontWeight": "600",
+                                      "fill": "#33434C",
+                                      "width": 300,
+                                      "textGrowth": "fixed-width"
+                                    }
+                                  ]
+                                },
+                                {
+                                  "type": "frame",
+                                  "id": "capFieldScope",
+                                  "width": "fill_container",
+                                  "alignItems": "center",
+                                  "gap": 10,
+                                  "padding": [
+                                    10,
+                                    12
+                                  ],
+                                  "fill": "#FFFFFF",
+                                  "stroke": {
+                                    "align": "inside",
+                                    "thickness": 1,
+                                    "fill": "#EEF2F3"
+                                  },
+                                  "children": [
+                                    {
+                                      "type": "text",
+                                      "id": "capFieldScopeName",
+                                      "content": "scope_dimension",
+                                      "fontFamily": "Inter",
+                                      "fontSize": 11,
+                                      "fontWeight": "700",
+                                      "fill": "#10212B",
+                                      "width": 170,
+                                      "textGrowth": "fixed-width"
+                                    },
+                                    {
+                                      "type": "frame",
+                                      "id": "capFieldScopeType",
+                                      "width": 92,
+                                      "justifyContent": "center",
+                                      "alignItems": "center",
+                                      "padding": [
+                                        6,
+                                        9
+                                      ],
+                                      "cornerRadius": 999,
+                                      "fill": "#F3F6F7",
+                                      "children": [
+                                        {
+                                          "type": "text",
+                                          "id": "capFieldScopeTypeText",
+                                          "content": "enum",
+                                          "fontFamily": "Inter",
+                                          "fontSize": 11,
+                                          "fontWeight": "700",
+                                          "fill": "#60717A"
+                                        }
+                                      ]
+                                    },
+                                    {
+                                      "type": "text",
+                                      "id": "capFieldScopeNote",
+                                      "content": "none / organization",
+                                      "fontFamily": "Inter",
+                                      "fontSize": 11,
+                                      "fontWeight": "600",
+                                      "fill": "#33434C",
+                                      "width": 300,
+                                      "textGrowth": "fixed-width"
+                                    }
+                                  ]
+                                },
+                                {
+                                  "type": "frame",
+                                  "id": "capFieldAssignable",
+                                  "width": "fill_container",
+                                  "alignItems": "center",
+                                  "gap": 10,
+                                  "padding": [
+                                    10,
+                                    12
+                                  ],
+                                  "fill": "#FFFFFF",
+                                  "stroke": {
+                                    "align": "inside",
+                                    "thickness": 1,
+                                    "fill": "#EEF2F3"
+                                  },
+                                  "children": [
+                                    {
+                                      "type": "text",
+                                      "id": "capFieldAssignableName",
+                                      "content": "assignable",
+                                      "fontFamily": "Inter",
+                                      "fontSize": 11,
+                                      "fontWeight": "700",
+                                      "fill": "#10212B",
+                                      "width": 170,
+                                      "textGrowth": "fixed-width"
+                                    },
+                                    {
+                                      "type": "frame",
+                                      "id": "capFieldAssignableType",
+                                      "width": 92,
+                                      "justifyContent": "center",
+                                      "alignItems": "center",
+                                      "padding": [
+                                        6,
+                                        9
+                                      ],
+                                      "cornerRadius": 999,
+                                      "fill": "#EAF8EF",
+                                      "children": [
+                                        {
+                                          "type": "text",
+                                          "id": "capFieldAssignableTypeText",
+                                          "content": "boolean",
+                                          "fontFamily": "Inter",
+                                          "fontSize": 11,
+                                          "fontWeight": "700",
+                                          "fill": "#147A45"
+                                        }
+                                      ]
+                                    },
+                                    {
+                                      "type": "text",
+                                      "id": "capFieldAssignableNote",
+                                      "content": "是否进入候选项",
+                                      "fontFamily": "Inter",
+                                      "fontSize": 11,
+                                      "fontWeight": "600",
+                                      "fill": "#33434C",
+                                      "width": 300,
+                                      "textGrowth": "fixed-width"
+                                    }
+                                  ]
+                                },
+                                {
+                                  "type": "frame",
+                                  "id": "capFieldStatus",
+                                  "width": "fill_container",
+                                  "alignItems": "center",
+                                  "gap": 10,
+                                  "padding": [
+                                    10,
+                                    12
+                                  ],
+                                  "fill": "#FFFFFF",
+                                  "stroke": {
+                                    "align": "inside",
+                                    "thickness": 1,
+                                    "fill": "#EEF2F3"
+                                  },
+                                  "children": [
+                                    {
+                                      "type": "text",
+                                      "id": "capFieldStatusName",
+                                      "content": "status",
+                                      "fontFamily": "Inter",
+                                      "fontSize": 11,
+                                      "fontWeight": "700",
+                                      "fill": "#10212B",
+                                      "width": 170,
+                                      "textGrowth": "fixed-width"
+                                    },
+                                    {
+                                      "type": "frame",
+                                      "id": "capFieldStatusType",
+                                      "width": 92,
+                                      "justifyContent": "center",
+                                      "alignItems": "center",
+                                      "padding": [
+                                        6,
+                                        9
+                                      ],
+                                      "cornerRadius": 999,
+                                      "fill": "#F3F6F7",
+                                      "children": [
+                                        {
+                                          "type": "text",
+                                          "id": "capFieldStatusTypeText",
+                                          "content": "enum",
+                                          "fontFamily": "Inter",
+                                          "fontSize": 11,
+                                          "fontWeight": "700",
+                                          "fill": "#60717A"
+                                        }
+                                      ]
+                                    },
+                                    {
+                                      "type": "text",
+                                      "id": "capFieldStatusNote",
+                                      "content": "enabled / disabled / deprecated",
+                                      "fontFamily": "Inter",
+                                      "fontSize": 11,
+                                      "fontWeight": "600",
+                                      "fill": "#33434C",
+                                      "width": 300,
+                                      "textGrowth": "fixed-width"
+                                    }
+                                  ]
+                                }
+                              ]
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "capBoundaryCard",
+                          "width": "fill_container",
+                          "layout": "vertical",
+                          "gap": 10,
+                          "padding": [
+                            14,
+                            16
+                          ],
+                          "cornerRadius": 8,
+                          "fill": "#FFFFFF",
+                          "stroke": {
+                            "align": "inside",
+                            "thickness": 1,
+                            "fill": "#DDE4E6"
+                          },
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "capBoundaryTitle",
+                              "content": "消费边界",
+                              "fontFamily": "Inter",
+                              "fontSize": 15,
+                              "fontWeight": "700",
+                              "fill": "#10212B"
+                            },
+                            {
+                              "type": "frame",
+                              "id": "capBoundary481",
+                              "width": "fill_container",
+                              "alignItems": "center",
+                              "gap": 8,
+                              "padding": [
+                                3,
+                                0
+                              ],
+                              "children": [
+                                {
+                                  "type": "icon_font",
+                                  "id": "capBoundary481Icon",
+                                  "iconFontFamily": "lucide",
+                                  "iconFontName": "check-circle-2",
+                                  "width": 16,
+                                  "height": 16,
+                                  "fill": "#147A45"
+                                },
+                                {
+                                  "type": "text",
+                                  "id": "capBoundary481Text",
+                                  "content": "481 的角色定义页消费 options API",
+                                  "fontFamily": "Inter",
+                                  "fontSize": 12,
+                                  "fontWeight": "600",
+                                  "fill": "#33434C"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "capBoundaryNoForm",
+                              "width": "fill_container",
+                              "alignItems": "center",
+                              "gap": 8,
+                              "padding": [
+                                3,
+                                0
+                              ],
+                              "children": [
+                                {
+                                  "type": "icon_font",
+                                  "id": "capBoundaryNoFormIcon",
+                                  "iconFontFamily": "lucide",
+                                  "iconFontName": "check-circle-2",
+                                  "width": 16,
+                                  "height": 16,
+                                  "fill": "#147A45"
+                                },
+                                {
+                                  "type": "text",
+                                  "id": "capBoundaryNoFormText",
+                                  "content": "482 不画角色名称、slug、描述或保存按钮",
+                                  "fontFamily": "Inter",
+                                  "fontSize": 12,
+                                  "fontWeight": "600",
+                                  "fill": "#33434C"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "capBoundaryNoPolicy",
+                              "width": "fill_container",
+                              "alignItems": "center",
+                              "gap": 8,
+                              "padding": [
+                                3,
+                                0
+                              ],
+                              "children": [
+                                {
+                                  "type": "icon_font",
+                                  "id": "capBoundaryNoPolicyIcon",
+                                  "iconFontFamily": "lucide",
+                                  "iconFontName": "check-circle-2",
+                                  "width": 16,
+                                  "height": 16,
+                                  "fill": "#147A45"
+                                },
+                                {
+                                  "type": "text",
+                                  "id": "capBoundaryNoPolicyText",
+                                  "content": "policy CSV 不是候选全集来源",
+                                  "fontFamily": "Inter",
+                                  "fontSize": 12,
+                                  "fontWeight": "600",
+                                  "fill": "#33434C"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "capBoundaryNoFreeSolo",
+                              "width": "fill_container",
+                              "alignItems": "center",
+                              "gap": 8,
+                              "padding": [
+                                3,
+                                0
+                              ],
+                              "children": [
+                                {
+                                  "type": "icon_font",
+                                  "id": "capBoundaryNoFreeSoloIcon",
+                                  "iconFontFamily": "lucide",
+                                  "iconFontName": "ban",
+                                  "width": 16,
+                                  "height": 16,
+                                  "fill": "#B42318"
+                                },
+                                {
+                                  "type": "text",
+                                  "id": "capBoundaryNoFreeSoloText",
+                                  "content": "消费方禁止 freeSolo 手输 capability key",
+                                  "fontFamily": "Inter",
+                                  "fontSize": 12,
+                                  "fontWeight": "600",
+                                  "fill": "#33434C"
+                                }
+                              ]
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "capValidationCard",
+                          "width": "fill_container",
+                          "layout": "vertical",
+                          "gap": 10,
+                          "padding": [
+                            14,
+                            16
+                          ],
+                          "cornerRadius": 8,
+                          "fill": "#FFFFFF",
+                          "stroke": {
+                            "align": "inside",
+                            "thickness": 1,
+                            "fill": "#DDE4E6"
+                          },
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "capValidationTitle",
+                              "content": "服务端校验规则",
+                              "fontFamily": "Inter",
+                              "fontSize": 15,
+                              "fontWeight": "700",
+                              "fill": "#10212B"
+                            },
+                            {
+                              "type": "frame",
+                              "id": "capCheckKeyExists",
+                              "width": "fill_container",
+                              "alignItems": "center",
+                              "gap": 8,
+                              "padding": [
+                                3,
+                                0
+                              ],
+                              "children": [
+                                {
+                                  "type": "icon_font",
+                                  "id": "capCheckKeyExistsIcon",
+                                  "iconFontFamily": "lucide",
+                                  "iconFontName": "check-circle-2",
+                                  "width": 16,
+                                  "height": 16,
+                                  "fill": "#147A45"
+                                },
+                                {
+                                  "type": "text",
+                                  "id": "capCheckKeyExistsText",
+                                  "content": "key 必须存在于 registry",
+                                  "fontFamily": "Inter",
+                                  "fontSize": 12,
+                                  "fontWeight": "600",
+                                  "fill": "#33434C"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "capCheckNoAlias",
+                              "width": "fill_container",
+                              "alignItems": "center",
+                              "gap": 8,
+                              "padding": [
+                                3,
+                                0
+                              ],
+                              "children": [
+                                {
+                                  "type": "icon_font",
+                                  "id": "capCheckNoAliasIcon",
+                                  "iconFontFamily": "lucide",
+                                  "iconFontName": "ban",
+                                  "width": 16,
+                                  "height": 16,
+                                  "fill": "#B42318"
+                                },
+                                {
+                                  "type": "text",
+                                  "id": "capCheckNoAliasText",
+                                  "content": "拒绝 module.verb 旧格式",
+                                  "fontFamily": "Inter",
+                                  "fontSize": 12,
+                                  "fontWeight": "600",
+                                  "fill": "#33434C"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "capCheckNoDuplicate",
+                              "width": "fill_container",
+                              "alignItems": "center",
+                              "gap": 8,
+                              "padding": [
+                                3,
+                                0
+                              ],
+                              "children": [
+                                {
+                                  "type": "icon_font",
+                                  "id": "capCheckNoDuplicateIcon",
+                                  "iconFontFamily": "lucide",
+                                  "iconFontName": "check-circle-2",
+                                  "width": 16,
+                                  "height": 16,
+                                  "fill": "#147A45"
+                                },
+                                {
+                                  "type": "text",
+                                  "id": "capCheckNoDuplicateText",
+                                  "content": "同一 payload 内无重复 key",
+                                  "fontFamily": "Inter",
+                                  "fontSize": 12,
+                                  "fontWeight": "600",
+                                  "fill": "#33434C"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "capCheckAssignable",
+                              "width": "fill_container",
+                              "alignItems": "center",
+                              "gap": 8,
+                              "padding": [
+                                3,
+                                0
+                              ],
+                              "children": [
+                                {
+                                  "type": "icon_font",
+                                  "id": "capCheckAssignableIcon",
+                                  "iconFontFamily": "lucide",
+                                  "iconFontName": "check-circle-2",
+                                  "width": 16,
+                                  "height": 16,
+                                  "fill": "#147A45"
+                                },
+                                {
+                                  "type": "text",
+                                  "id": "capCheckAssignableText",
+                                  "content": "仅允许 enabled + assignable",
+                                  "fontFamily": "Inter",
+                                  "fontSize": 12,
+                                  "fontWeight": "600",
+                                  "fill": "#33434C"
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
     }
   ]
 }

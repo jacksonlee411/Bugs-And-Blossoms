@@ -280,6 +280,7 @@ modules/{module}/
 - DEV-PLAN-478：CubeBox 第二业务模块接入前共享 Query Runtime 去 `orgunit` 污染复核方案（已完成；本轮已落地共享 contract 收敛、non-`orgunit` fake-module 覆盖与验证证据，后续仅保留轻量反回流门禁评估）：`docs/dev-plans/478-cubebox-shared-query-runtime-orgunit-bias-review-before-second-module-plan.md`
 - DEV-PLAN-480：EHR 授权体系总体方案：`docs/dev-plans/480-ehr-authorization-system-blueprint.md`
 - DEV-PLAN-481：EHR 角色定义与极简用户授权方案：`docs/dev-plans/481-ehr-role-design-and-configuration-plan.md`
+- DEV-PLAN-482：EHR Capability Registry 与角色能力候选项方案：`docs/dev-plans/482-ehr-capability-registry-and-role-options-plan.md`
 - DEV-PLAN-440：彻底删除 SetID 的全仓收口方案（SetID 根删除唯一 PoR）：`docs/dev-plans/440-complete-setid-removal-plan.md`
 - DEV-PLAN-441：旧策略模块残余清理方案：`docs/dev-plans/441-legacy-strategy-module-residue-cleanup-plan.md`
 - DEV-PLAN-450：直接切除 jobcatalog / staffing / person 三模块方案（保留 orgunit）：`docs/dev-plans/450-direct-removal-of-jobcatalog-staffing-person-modules-plan.md`

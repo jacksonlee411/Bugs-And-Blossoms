@@ -161,6 +161,8 @@ flowchart LR
 - **`modules/cubebox`**：executor registry 负责 per-step 授权强制点；不直接 import `pkg/authz`，通过接口接收 server adapter。
 - **`apps/web`**：只消费服务端会话权限摘要与 API 错误，负责可见性、禁用态、脱敏态、拒绝页和配置页面交互。
 
+能力候选项与角色 UI 下拉/矩阵的全量来源由 `DEV-PLAN-482` 承接；不得从 policy CSV 或前端 `permissionKey` 反推可选全集。
+
 ### 3.3 授权体系分层
 
 | 层 | 解决的问题 | 例子 | 强制位置 |
@@ -294,7 +296,7 @@ type RegisteredExecutor struct {
 | `tenant_id` | 租户域，RLS 与 Casbin domain 的输入 |
 | `principal_id` | 审计主体，不直接作为 Casbin subject |
 | `role_slug` | 当前 session 有效角色 |
-| `object` / `action` | 稳定能力授权键 |
+| `object` / `action` | 稳定授权维度；对外 capability key 统一序列化为 `object:action`，例如 `orgunit.orgunits:read` |
 | `resource_type` / `resource_id` | 具体对象实例，可为空 |
 | `effective_date` | 业务有效日期，date 粒度 |
 | `purpose` | 访问目的，如 normal、admin_audit |
@@ -403,7 +405,7 @@ Decision 的逻辑字段：
 1. 不新增独立的管理员画像类页面；统一使用“授权摘要”“角色管理”“用户授权”“角色分配”“权限核查”等业务可理解名称；页面命名不得把角色定义与角色分配混成一个入口。
 2. `授权管理 > 角色管理` 不选择具体用户或具体组织根，只定义角色基础信息和功能权限；保存即生效，不再提供第二个生效按钮。
 3. `授权管理 > 用户授权` 顶部选择主体，主区拆成“角色”和“组织范围”两个页签；不得在用户授权页配置字段策略、有效期、冲突检测或策略预览。
-4. 对带范围语义的资源/能力，用户授权时数据范围是必填项；若主体被授予 `orgunit.view` 但没有组织范围，授权记录不可保存，而不是默认全租户。
+4. 对带范围语义的资源/能力，用户授权时数据范围是必填项；若主体被授予 `orgunit.orgunits:read` 但没有组织范围，授权记录不可保存，而不是默认全租户。
 5. “角色”页签是可加行表格：每行选择一个授权角色，并通过只读“角色说明”列说明该角色可查看或操作什么。
 6. “组织范围”页签是可加行表格：每行选择一个组织，并提供“包含下级组织”勾选列；新增行初始为已选中，界面不额外显示说明文字。
 7. 授权管理里的组织选择器是配置主体数据范围的控件，应复用服务端组织读路径和范围语义；它不是新的业务组织页面。
@@ -433,7 +435,7 @@ Decision 的逻辑字段：
 
 ### 6.1 P0：授权语义冻结与门禁补强
 
-1. [ ] 整理 object/action registry，确认前端 permission key、route authz、policy、executor requirement 的映射关系。
+1. [ ] 按 `DEV-PLAN-482` 整理 object/action registry，确认前端 permission key、route authz、policy、executor requirement 的映射关系。
 2. [ ] 增加 authz lint/test，阻止未登记 object/action、未打包 policy、前后端权限键漂移。
 3. [ ] 补 `docs/dev-records/DEV-PLAN-480-READINESS.md` 记录工具链、门禁和当前差距。
 
