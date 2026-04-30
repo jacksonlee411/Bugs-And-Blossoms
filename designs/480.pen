@@ -179,39 +179,6 @@
                       "fontWeight": "600"
                     }
                   ]
-                },
-                {
-                  "type": "frame",
-                  "id": "AQmgO",
-                  "name": "nav cubebox",
-                  "fill": "#F3F6F7",
-                  "cornerRadius": 8,
-                  "gap": 9,
-                  "padding": [
-                    10,
-                    12
-                  ],
-                  "alignItems": "center",
-                  "children": [
-                    {
-                      "type": "icon_font",
-                      "id": "cAS3K",
-                      "width": 17,
-                      "height": 17,
-                      "iconFontName": "message-square",
-                      "iconFontFamily": "lucide",
-                      "fill": "#33434C"
-                    },
-                    {
-                      "type": "text",
-                      "id": "Ynzd9",
-                      "fill": "#33434C",
-                      "content": "CubeBox",
-                      "fontFamily": "Inter",
-                      "fontSize": 13,
-                      "fontWeight": "600"
-                    }
-                  ]
                 }
               ]
             },
@@ -348,29 +315,6 @@
                               "fontFamily": "Inter",
                               "fontSize": 16,
                               "fontWeight": "700"
-                            },
-                            {
-                              "type": "frame",
-                              "id": "jqfE7",
-                              "fill": "#E1F7F6",
-                              "cornerRadius": 999,
-                              "padding": [
-                                6,
-                                9
-                              ],
-                              "justifyContent": "center",
-                              "alignItems": "center",
-                              "children": [
-                                {
-                                  "type": "text",
-                                  "id": "U4hBS",
-                                  "fill": "#047C78",
-                                  "content": "3 个",
-                                  "fontFamily": "Inter",
-                                  "fontSize": 11,
-                                  "fontWeight": "700"
-                                }
-                              ]
                             }
                           ]
                         },
@@ -454,29 +398,6 @@
                                       "fontFamily": "Inter",
                                       "fontSize": 13,
                                       "fontWeight": "800"
-                                    },
-                                    {
-                                      "type": "frame",
-                                      "id": "X7Xlzz",
-                                      "fill": "#DDF8F7",
-                                      "cornerRadius": 999,
-                                      "padding": [
-                                        5,
-                                        8
-                                      ],
-                                      "justifyContent": "center",
-                                      "alignItems": "center",
-                                      "children": [
-                                        {
-                                          "type": "text",
-                                          "id": "MPdlk",
-                                          "fill": "#047C78",
-                                          "content": "已选",
-                                          "fontFamily": "Inter",
-                                          "fontSize": 10,
-                                          "fontWeight": "700"
-                                        }
-                                      ]
                                     }
                                   ]
                                 },
@@ -661,44 +582,6 @@
                               "gap": 8,
                               "alignItems": "center",
                               "children": [
-                                {
-                                  "type": "frame",
-                                  "id": "IDsWi",
-                                  "fill": "#FFFFFF",
-                                  "cornerRadius": 8,
-                                  "stroke": {
-                                    "align": "inside",
-                                    "thickness": 1,
-                                    "fill": "#DDE4E6"
-                                  },
-                                  "gap": 7,
-                                  "padding": [
-                                    8,
-                                    11
-                                  ],
-                                  "justifyContent": "center",
-                                  "alignItems": "center",
-                                  "children": [
-                                    {
-                                      "type": "icon_font",
-                                      "id": "gYm2A",
-                                      "width": 15,
-                                      "height": 15,
-                                      "iconFontName": "copy",
-                                      "iconFontFamily": "lucide",
-                                      "fill": "#33434C"
-                                    },
-                                    {
-                                      "type": "text",
-                                      "id": "snECe",
-                                      "fill": "#33434C",
-                                      "content": "复制",
-                                      "fontFamily": "Inter",
-                                      "fontSize": 12,
-                                      "fontWeight": "700"
-                                    }
-                                  ]
-                                },
                                 {
                                   "type": "frame",
                                   "id": "k81AqY",
@@ -995,31 +878,6 @@
                                       "iconFontName": "chevron-down",
                                       "iconFontFamily": "lucide",
                                       "fill": "#60717A"
-                                    }
-                                  ]
-                                },
-                                {
-                                  "type": "frame",
-                                  "id": "ZGYJ6",
-                                  "name": "badge3",
-                                  "fill": "#EAF8EF",
-                                  "cornerRadius": 999,
-                                  "padding": [
-                                    6,
-                                    9
-                                  ],
-                                  "justifyContent": "center",
-                                  "alignItems": "center",
-                                  "children": [
-                                    {
-                                      "type": "text",
-                                      "id": "IfLoC",
-                                      "name": "badgeText3",
-                                      "fill": "#147A45",
-                                      "content": "已选 4",
-                                      "fontFamily": "Inter",
-                                      "fontSize": 11,
-                                      "fontWeight": "700"
                                     }
                                   ]
                                 }
@@ -2974,38 +2832,6 @@
                       "fontWeight": "700"
                     }
                   ]
-                },
-                {
-                  "type": "frame",
-                  "id": "capNavCube",
-                  "fill": "#F3F6F7",
-                  "cornerRadius": 8,
-                  "gap": 9,
-                  "padding": [
-                    10,
-                    12
-                  ],
-                  "alignItems": "center",
-                  "children": [
-                    {
-                      "type": "icon_font",
-                      "id": "capNavCubeIcon",
-                      "width": 17,
-                      "height": 17,
-                      "iconFontName": "message-square",
-                      "iconFontFamily": "lucide",
-                      "fill": "#33434C"
-                    },
-                    {
-                      "type": "text",
-                      "id": "capNavCubeText",
-                      "fill": "#33434C",
-                      "content": "CubeBox",
-                      "fontFamily": "Inter",
-                      "fontSize": 13,
-                      "fontWeight": "600"
-                    }
-                  ]
                 }
               ]
             },
@@ -4724,38 +4550,6 @@
                       "id": "J1U7xk",
                       "fill": "#33434C",
                       "content": "功能授权项",
-                      "fontFamily": "Inter",
-                      "fontSize": 13,
-                      "fontWeight": "600"
-                    }
-                  ]
-                },
-                {
-                  "type": "frame",
-                  "id": "J4bUc",
-                  "fill": "#F3F6F7",
-                  "cornerRadius": 8,
-                  "gap": 9,
-                  "padding": [
-                    10,
-                    12
-                  ],
-                  "alignItems": "center",
-                  "children": [
-                    {
-                      "type": "icon_font",
-                      "id": "QPrms",
-                      "width": 17,
-                      "height": 17,
-                      "iconFontName": "message-square",
-                      "iconFontFamily": "lucide",
-                      "fill": "#33434C"
-                    },
-                    {
-                      "type": "text",
-                      "id": "p1MYn",
-                      "fill": "#33434C",
-                      "content": "CubeBox",
                       "fontFamily": "Inter",
                       "fontSize": 13,
                       "fontWeight": "600"
