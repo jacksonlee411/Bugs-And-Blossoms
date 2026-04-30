@@ -584,6 +584,44 @@
                               "children": [
                                 {
                                   "type": "frame",
+                                  "id": "roleCancelButton",
+                                  "fill": "#FFFFFF",
+                                  "cornerRadius": 8,
+                                  "stroke": {
+                                    "align": "inside",
+                                    "thickness": 1,
+                                    "fill": "#DDE4E6"
+                                  },
+                                  "gap": 7,
+                                  "padding": [
+                                    8,
+                                    12
+                                  ],
+                                  "justifyContent": "center",
+                                  "alignItems": "center",
+                                  "children": [
+                                    {
+                                      "type": "icon_font",
+                                      "id": "roleCancelIcon",
+                                      "width": 15,
+                                      "height": 15,
+                                      "iconFontName": "x",
+                                      "iconFontFamily": "lucide",
+                                      "fill": "#60717A"
+                                    },
+                                    {
+                                      "type": "text",
+                                      "id": "roleCancelText",
+                                      "fill": "#33434C",
+                                      "content": "取消",
+                                      "fontFamily": "Inter",
+                                      "fontSize": 12,
+                                      "fontWeight": "700"
+                                    }
+                                  ]
+                                },
+                                {
+                                  "type": "frame",
                                   "id": "k81AqY",
                                   "fill": "#09A7A3",
                                   "cornerRadius": 8,
@@ -1649,40 +1687,120 @@
                     },
                     {
                       "type": "frame",
-                      "id": "authRoleUserSelect",
-                      "name": "user selector",
-                      "width": 252,
-                      "fill": "#F8FAFA",
-                      "cornerRadius": 8,
-                      "stroke": {
-                        "align": "inside",
-                        "thickness": 1,
-                        "fill": "#DDE4E6"
-                      },
-                      "padding": [
-                        9,
-                        12
-                      ],
-                      "justifyContent": "space_between",
+                      "id": "authRoleActions",
+                      "name": "edit actions",
+                      "gap": 8,
                       "alignItems": "center",
                       "children": [
                         {
-                          "type": "text",
-                          "id": "authRoleUserText",
-                          "fill": "#10212B",
-                          "content": "用户：user-b · 王小花",
-                          "fontFamily": "Inter",
-                          "fontSize": 13,
-                          "fontWeight": "700"
+                          "type": "frame",
+                          "id": "authRoleUserSelect",
+                          "name": "user selector",
+                          "width": 252,
+                          "fill": "#F8FAFA",
+                          "cornerRadius": 8,
+                          "stroke": {
+                            "align": "inside",
+                            "thickness": 1,
+                            "fill": "#DDE4E6"
+                          },
+                          "padding": [
+                            9,
+                            12
+                          ],
+                          "justifyContent": "space_between",
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "authRoleUserText",
+                              "fill": "#10212B",
+                              "content": "用户：user-b · 王小花",
+                              "fontFamily": "Inter",
+                              "fontSize": 13,
+                              "fontWeight": "700"
+                            },
+                            {
+                              "type": "icon_font",
+                              "id": "authRoleUserChevron",
+                              "width": 16,
+                              "height": 16,
+                              "iconFontName": "chevron-down",
+                              "iconFontFamily": "lucide",
+                              "fill": "#60717A"
+                            }
+                          ]
                         },
                         {
-                          "type": "icon_font",
-                          "id": "authRoleUserChevron",
-                          "width": 16,
-                          "height": 16,
-                          "iconFontName": "chevron-down",
-                          "iconFontFamily": "lucide",
-                          "fill": "#60717A"
+                          "type": "frame",
+                          "id": "authRoleCancelButton",
+                          "fill": "#FFFFFF",
+                          "cornerRadius": 8,
+                          "stroke": {
+                            "align": "inside",
+                            "thickness": 1,
+                            "fill": "#DDE4E6"
+                          },
+                          "gap": 7,
+                          "padding": [
+                            9,
+                            12
+                          ],
+                          "justifyContent": "center",
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "icon_font",
+                              "id": "authRoleCancelIcon",
+                              "width": 15,
+                              "height": 15,
+                              "iconFontName": "x",
+                              "iconFontFamily": "lucide",
+                              "fill": "#60717A"
+                            },
+                            {
+                              "type": "text",
+                              "id": "authRoleCancelText",
+                              "fill": "#33434C",
+                              "content": "取消",
+                              "fontFamily": "Inter",
+                              "fontSize": 12,
+                              "fontWeight": "700"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "authRoleSaveButton",
+                          "fill": "#09A7A3",
+                          "cornerRadius": 8,
+                          "gap": 7,
+                          "padding": [
+                            9,
+                            12
+                          ],
+                          "justifyContent": "center",
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "icon_font",
+                              "id": "authRoleSaveIcon",
+                              "width": 15,
+                              "height": 15,
+                              "iconFontName": "save",
+                              "iconFontFamily": "lucide",
+                              "fill": "#FFFFFF"
+                            },
+                            {
+                              "type": "text",
+                              "id": "authRoleSaveText",
+                              "fill": "#FFFFFF",
+                              "content": "保存",
+                              "fontFamily": "Inter",
+                              "fontSize": 12,
+                              "fontWeight": "700"
+                            }
+                          ]
                         }
                       ]
                     }
@@ -2173,40 +2291,120 @@
                     },
                     {
                       "type": "frame",
-                      "id": "authOrgUserSelect",
-                      "name": "user selector",
-                      "width": 252,
-                      "fill": "#F8FAFA",
-                      "cornerRadius": 8,
-                      "stroke": {
-                        "align": "inside",
-                        "thickness": 1,
-                        "fill": "#DDE4E6"
-                      },
-                      "padding": [
-                        9,
-                        12
-                      ],
-                      "justifyContent": "space_between",
+                      "id": "authOrgActions",
+                      "name": "edit actions",
+                      "gap": 8,
                       "alignItems": "center",
                       "children": [
                         {
-                          "type": "text",
-                          "id": "authOrgUserText",
-                          "fill": "#10212B",
-                          "content": "用户：user-b · 王小花",
-                          "fontFamily": "Inter",
-                          "fontSize": 13,
-                          "fontWeight": "700"
+                          "type": "frame",
+                          "id": "authOrgUserSelect",
+                          "name": "user selector",
+                          "width": 252,
+                          "fill": "#F8FAFA",
+                          "cornerRadius": 8,
+                          "stroke": {
+                            "align": "inside",
+                            "thickness": 1,
+                            "fill": "#DDE4E6"
+                          },
+                          "padding": [
+                            9,
+                            12
+                          ],
+                          "justifyContent": "space_between",
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "authOrgUserText",
+                              "fill": "#10212B",
+                              "content": "用户：user-b · 王小花",
+                              "fontFamily": "Inter",
+                              "fontSize": 13,
+                              "fontWeight": "700"
+                            },
+                            {
+                              "type": "icon_font",
+                              "id": "authOrgUserChevron",
+                              "width": 16,
+                              "height": 16,
+                              "iconFontName": "chevron-down",
+                              "iconFontFamily": "lucide",
+                              "fill": "#60717A"
+                            }
+                          ]
                         },
                         {
-                          "type": "icon_font",
-                          "id": "authOrgUserChevron",
-                          "width": 16,
-                          "height": 16,
-                          "iconFontName": "chevron-down",
-                          "iconFontFamily": "lucide",
-                          "fill": "#60717A"
+                          "type": "frame",
+                          "id": "authOrgCancelButton",
+                          "fill": "#FFFFFF",
+                          "cornerRadius": 8,
+                          "stroke": {
+                            "align": "inside",
+                            "thickness": 1,
+                            "fill": "#DDE4E6"
+                          },
+                          "gap": 7,
+                          "padding": [
+                            9,
+                            12
+                          ],
+                          "justifyContent": "center",
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "icon_font",
+                              "id": "authOrgCancelIcon",
+                              "width": 15,
+                              "height": 15,
+                              "iconFontName": "x",
+                              "iconFontFamily": "lucide",
+                              "fill": "#60717A"
+                            },
+                            {
+                              "type": "text",
+                              "id": "authOrgCancelText",
+                              "fill": "#33434C",
+                              "content": "取消",
+                              "fontFamily": "Inter",
+                              "fontSize": 12,
+                              "fontWeight": "700"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "authOrgSaveButton",
+                          "fill": "#09A7A3",
+                          "cornerRadius": 8,
+                          "gap": 7,
+                          "padding": [
+                            9,
+                            12
+                          ],
+                          "justifyContent": "center",
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "icon_font",
+                              "id": "authOrgSaveIcon",
+                              "width": 15,
+                              "height": 15,
+                              "iconFontName": "save",
+                              "iconFontFamily": "lucide",
+                              "fill": "#FFFFFF"
+                            },
+                            {
+                              "type": "text",
+                              "id": "authOrgSaveText",
+                              "fill": "#FFFFFF",
+                              "content": "保存",
+                              "fontFamily": "Inter",
+                              "fontSize": 12,
+                              "fontWeight": "700"
+                            }
+                          ]
                         }
                       ]
                     }
