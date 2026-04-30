@@ -5024,7 +5024,7 @@
                               "name": "apiHead",
                               "width": "fill_container",
                               "fill": "#F6F8F9",
-                              "gap": 14,
+                              "gap": 8,
                               "padding": [
                                 10,
                                 12
@@ -5049,7 +5049,7 @@
                                   "name": "hPath",
                                   "fill": "#60717A",
                                   "textGrowth": "fixed-width",
-                                  "width": 330,
+                                  "width": 300,
                                   "content": "API 路径",
                                   "fontFamily": "Inter",
                                   "fontSize": 10,
@@ -5085,7 +5085,7 @@
                                   "name": "hObject",
                                   "fill": "#60717A",
                                   "textGrowth": "fixed-width",
-                                  "width": 190,
+                                  "width": 170,
                                   "content": "资源对象",
                                   "fontFamily": "Inter",
                                   "fontSize": 10,
@@ -5109,7 +5109,7 @@
                                   "name": "hKey",
                                   "fill": "#60717A",
                                   "textGrowth": "fixed-width",
-                                  "width": 220,
+                                  "width": 200,
                                   "content": "授权项标识",
                                   "fontFamily": "Inter",
                                   "fontSize": 10,
@@ -5122,7 +5122,19 @@
                                   "fill": "#60717A",
                                   "textGrowth": "fixed-width",
                                   "width": 90,
-                                  "content": "模块",
+                                  "content": "归属模块",
+                                  "fontFamily": "Inter",
+                                  "fontSize": 10,
+                                  "fontWeight": "700"
+                                },
+                                {
+                                  "type": "text",
+                                  "id": "zGnSM",
+                                  "name": "hCubeboxCallable",
+                                  "fill": "#60717A",
+                                  "textGrowth": "fixed-width",
+                                  "width": 86,
+                                  "content": "丘宝可调用",
                                   "fontFamily": "Inter",
                                   "fontSize": 10,
                                   "fontWeight": "700"
@@ -5140,7 +5152,7 @@
                                 "thickness": 1,
                                 "fill": "#EEF2F3"
                               },
-                              "gap": 14,
+                              "gap": 8,
                               "padding": 12,
                               "alignItems": "center",
                               "children": [
@@ -5162,7 +5174,7 @@
                                   "name": "aPath",
                                   "fill": "#10212B",
                                   "textGrowth": "fixed-width",
-                                  "width": 330,
+                                  "width": 300,
                                   "content": "/org/api/org-units",
                                   "fontFamily": "Inter",
                                   "fontSize": 11,
@@ -5198,7 +5210,7 @@
                                   "name": "aObject",
                                   "fill": "#60717A",
                                   "textGrowth": "fixed-width",
-                                  "width": 190,
+                                  "width": 170,
                                   "content": "orgunit.orgunits",
                                   "fontFamily": "Inter",
                                   "fontSize": 10,
@@ -5222,7 +5234,7 @@
                                   "name": "aKey",
                                   "fill": "#047C78",
                                   "textGrowth": "fixed-width",
-                                  "width": 220,
+                                  "width": 200,
                                   "content": "orgunit.orgunits:read",
                                   "fontFamily": "Inter",
                                   "fontSize": 10,
@@ -5239,6 +5251,18 @@
                                   "fontFamily": "Inter",
                                   "fontSize": 11,
                                   "fontWeight": "600"
+                                },
+                                {
+                                  "type": "text",
+                                  "id": "l0yY0g",
+                                  "name": "aCubeboxCallable",
+                                  "fill": "#047C78",
+                                  "textGrowth": "fixed-width",
+                                  "width": 86,
+                                  "content": "是",
+                                  "fontFamily": "Inter",
+                                  "fontSize": 11,
+                                  "fontWeight": "800"
                                 }
                               ]
                             },
@@ -5253,7 +5277,7 @@
                                 "thickness": 1,
                                 "fill": "#EEF2F3"
                               },
-                              "gap": 14,
+                              "gap": 8,
                               "padding": 12,
                               "alignItems": "center",
                               "children": [
@@ -5275,7 +5299,7 @@
                                   "name": "bPath",
                                   "fill": "#10212B",
                                   "textGrowth": "fixed-width",
-                                  "width": 330,
+                                  "width": 300,
                                   "content": "/org/api/org-units/details",
                                   "fontFamily": "Inter",
                                   "fontSize": 11,
@@ -5311,7 +5335,7 @@
                                   "name": "bObject",
                                   "fill": "#60717A",
                                   "textGrowth": "fixed-width",
-                                  "width": 190,
+                                  "width": 170,
                                   "content": "orgunit.orgunits",
                                   "fontFamily": "Inter",
                                   "fontSize": 10,
@@ -5335,7 +5359,7 @@
                                   "name": "bKey",
                                   "fill": "#047C78",
                                   "textGrowth": "fixed-width",
-                                  "width": 220,
+                                  "width": 200,
                                   "content": "orgunit.orgunits:read",
                                   "fontFamily": "Inter",
                                   "fontSize": 10,
@@ -5352,6 +5376,18 @@
                                   "fontFamily": "Inter",
                                   "fontSize": 11,
                                   "fontWeight": "600"
+                                },
+                                {
+                                  "type": "text",
+                                  "id": "GNN6e",
+                                  "name": "bCubeboxCallable",
+                                  "fill": "#047C78",
+                                  "textGrowth": "fixed-width",
+                                  "width": 86,
+                                  "content": "是",
+                                  "fontFamily": "Inter",
+                                  "fontSize": 11,
+                                  "fontWeight": "800"
                                 }
                               ]
                             },
@@ -5366,7 +5402,7 @@
                                 "thickness": 1,
                                 "fill": "#EEF2F3"
                               },
-                              "gap": 14,
+                              "gap": 8,
                               "padding": 12,
                               "alignItems": "center",
                               "children": [
@@ -5388,7 +5424,7 @@
                                   "name": "cPath",
                                   "fill": "#10212B",
                                   "textGrowth": "fixed-width",
-                                  "width": 330,
+                                  "width": 300,
                                   "content": "/iam/api/authz/capabilities",
                                   "fontFamily": "Inter",
                                   "fontSize": 11,
@@ -5424,7 +5460,7 @@
                                   "name": "cObject",
                                   "fill": "#60717A",
                                   "textGrowth": "fixed-width",
-                                  "width": 190,
+                                  "width": 170,
                                   "content": "iam.authz",
                                   "fontFamily": "Inter",
                                   "fontSize": 10,
@@ -5448,7 +5484,7 @@
                                   "name": "cKey",
                                   "fill": "#047C78",
                                   "textGrowth": "fixed-width",
-                                  "width": 220,
+                                  "width": 200,
                                   "content": "iam.authz:read",
                                   "fontFamily": "Inter",
                                   "fontSize": 10,
@@ -5465,6 +5501,18 @@
                                   "fontFamily": "Inter",
                                   "fontSize": 11,
                                   "fontWeight": "600"
+                                },
+                                {
+                                  "type": "text",
+                                  "id": "RTp4q",
+                                  "name": "cCubeboxCallable",
+                                  "fill": "#9AA7AD",
+                                  "textGrowth": "fixed-width",
+                                  "width": 86,
+                                  "content": "否",
+                                  "fontFamily": "Inter",
+                                  "fontSize": 11,
+                                  "fontWeight": "700"
                                 }
                               ]
                             },
@@ -5479,7 +5527,7 @@
                                 "thickness": 1,
                                 "fill": "#EEF2F3"
                               },
-                              "gap": 14,
+                              "gap": 8,
                               "padding": 12,
                               "alignItems": "center",
                               "children": [
@@ -5501,7 +5549,7 @@
                                   "name": "dPath",
                                   "fill": "#10212B",
                                   "textGrowth": "fixed-width",
-                                  "width": 330,
+                                  "width": 300,
                                   "content": "/org/api/org-units",
                                   "fontFamily": "Inter",
                                   "fontSize": 11,
@@ -5537,7 +5585,7 @@
                                   "name": "dObject",
                                   "fill": "#60717A",
                                   "textGrowth": "fixed-width",
-                                  "width": 190,
+                                  "width": 170,
                                   "content": "orgunit.orgunits",
                                   "fontFamily": "Inter",
                                   "fontSize": 10,
@@ -5561,7 +5609,7 @@
                                   "name": "dKey",
                                   "fill": "#047C78",
                                   "textGrowth": "fixed-width",
-                                  "width": 220,
+                                  "width": 200,
                                   "content": "orgunit.orgunits:admin",
                                   "fontFamily": "Inter",
                                   "fontSize": 10,
@@ -5578,6 +5626,18 @@
                                   "fontFamily": "Inter",
                                   "fontSize": 11,
                                   "fontWeight": "600"
+                                },
+                                {
+                                  "type": "text",
+                                  "id": "GwLFi",
+                                  "name": "dCubeboxCallable",
+                                  "fill": "#9AA7AD",
+                                  "textGrowth": "fixed-width",
+                                  "width": 86,
+                                  "content": "否",
+                                  "fontFamily": "Inter",
+                                  "fontSize": 11,
+                                  "fontWeight": "700"
                                 }
                               ]
                             },
@@ -5592,7 +5652,7 @@
                                 "thickness": 1,
                                 "fill": "#EEF2F3"
                               },
-                              "gap": 14,
+                              "gap": 8,
                               "padding": 12,
                               "alignItems": "center",
                               "children": [
@@ -5614,7 +5674,7 @@
                                   "name": "ePath",
                                   "fill": "#10212B",
                                   "textGrowth": "fixed-width",
-                                  "width": 330,
+                                  "width": 300,
                                   "content": "/healthz",
                                   "fontFamily": "Inter",
                                   "fontSize": 11,
@@ -5650,7 +5710,7 @@
                                   "name": "eObject",
                                   "fill": "#9AA7AD",
                                   "textGrowth": "fixed-width",
-                                  "width": 190,
+                                  "width": 170,
                                   "content": "-",
                                   "fontFamily": "Inter",
                                   "fontSize": 11,
@@ -5674,7 +5734,7 @@
                                   "name": "eKey",
                                   "fill": "#9AA7AD",
                                   "textGrowth": "fixed-width",
-                                  "width": 220,
+                                  "width": 200,
                                   "content": "-",
                                   "fontFamily": "Inter",
                                   "fontSize": 11,
@@ -5691,6 +5751,18 @@
                                   "fontFamily": "Inter",
                                   "fontSize": 11,
                                   "fontWeight": "600"
+                                },
+                                {
+                                  "type": "text",
+                                  "id": "mBe0m",
+                                  "name": "eCubeboxCallable",
+                                  "fill": "#9AA7AD",
+                                  "textGrowth": "fixed-width",
+                                  "width": 86,
+                                  "content": "否",
+                                  "fontFamily": "Inter",
+                                  "fontSize": 11,
+                                  "fontWeight": "700"
                                 }
                               ]
                             },
@@ -5705,7 +5777,7 @@
                                 "thickness": 1,
                                 "fill": "#EEF2F3"
                               },
-                              "gap": 14,
+                              "gap": 8,
                               "padding": 12,
                               "alignItems": "center",
                               "children": [
@@ -5727,7 +5799,7 @@
                                   "name": "fPath",
                                   "fill": "#10212B",
                                   "textGrowth": "fixed-width",
-                                  "width": 330,
+                                  "width": 300,
                                   "content": "/auth/kratos/login",
                                   "fontFamily": "Inter",
                                   "fontSize": 11,
@@ -5763,7 +5835,7 @@
                                   "name": "fObject",
                                   "fill": "#9AA7AD",
                                   "textGrowth": "fixed-width",
-                                  "width": 190,
+                                  "width": 170,
                                   "content": "-",
                                   "fontFamily": "Inter",
                                   "fontSize": 11,
@@ -5787,7 +5859,7 @@
                                   "name": "fKey",
                                   "fill": "#9AA7AD",
                                   "textGrowth": "fixed-width",
-                                  "width": 220,
+                                  "width": 200,
                                   "content": "-",
                                   "fontFamily": "Inter",
                                   "fontSize": 11,
@@ -5804,6 +5876,18 @@
                                   "fontFamily": "Inter",
                                   "fontSize": 11,
                                   "fontWeight": "600"
+                                },
+                                {
+                                  "type": "text",
+                                  "id": "YQbPE",
+                                  "name": "fCubeboxCallable",
+                                  "fill": "#9AA7AD",
+                                  "textGrowth": "fixed-width",
+                                  "width": 86,
+                                  "content": "否",
+                                  "fontFamily": "Inter",
+                                  "fontSize": 11,
+                                  "fontWeight": "700"
                                 }
                               ]
                             }
