@@ -28,7 +28,7 @@
 2. 不在功能授权项、API 授权目录或关联 API 弹窗展示 executor key。
 3. 不新增 executor 管理页、executor 目录、executor 类型列或 executor 专属用户入口。
 4. 不把 `ReadAPICatalog` / `apis.md` 继续收敛为 executor catalog；命名与知识包后续按 `DEV-PLAN-490` 收敛到 API tool overlay / API call plan。
-5. 当前实现中已经存在的业务 executor 只作为迁移前技术债处理；迁移、停用或删除由 `DEV-PLAN-490` 的 P3 切片承接。
+5. 当前实现中已经存在的业务 executor 只作为迁移前技术债处理；删除 active runtime 中的业务 executor 执行入口由 `DEV-PLAN-490` 的 P3 切片承接，不以长期停用、空 registry 或兼容封装替代删除。
 
 ## 3. 保留的历史判断
 
@@ -45,7 +45,7 @@
 | --- | --- | --- |
 | executor 路线回流 | 新增 executor requirement、executor authorizer 或 executor catalog | 停止实施，回到 `DEV-PLAN-490` 的 API-first 工具契约 |
 | UI 泄露内部工具键 | 功能授权项或 API 授权目录展示 executor key | 删除该展示；用户可见面只展示 HTTP API 授权事实 |
-| 双运行面扩大 | 同一能力同时新增 HTTP API 工具和 executor 工具 | 只保留 490 派生的 HTTP API 工具面 |
+| 双运行面扩大 | 同一能力同时新增 HTTP API 工具和 executor 工具 | 只保留 490 派生的 HTTP API 工具面，删除 active runtime 的业务 executor 可执行入口 |
 | 486 被当成当前 owner | 新计划引用 486 作为实施依据 | 改为引用 `DEV-PLAN-490`，486 仅作历史对照 |
 
 ## 5. 验证记录
