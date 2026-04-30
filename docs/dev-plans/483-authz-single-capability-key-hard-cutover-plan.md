@@ -8,13 +8,13 @@
 - **范围一句话**：把权限标识收敛为唯一 `object:action` capability key，硬删除前端 `permissionKey`、`module.verb` 别名、policy-only 权限和未实现能力；不提供兼容映射、双字段、过渡窗口或旧 key 自动转换。
 - **关联模块/目录**：`pkg/authz/**`、`config/access/**`、`scripts/authz/**`、`internal/server/**`、`internal/superadmin/**`、`apps/web/src/**`
 - **关联计划/标准**：`AGENTS.md`、`DEV-PLAN-000`、`DEV-PLAN-001`、`DEV-PLAN-004M1`、`DEV-PLAN-012`、`DEV-PLAN-017`、`DEV-PLAN-022`、`DEV-PLAN-480`、`DEV-PLAN-481`、`DEV-PLAN-482`、`DEV-PLAN-484`
-- **用户入口/触点**：功能授权项、角色定义页、用户授权页、导航入口、页面守卫、服务端权限摘要 API、所有受保护 HTTP API 与 CubeBox executor
+- **用户入口/触点**：功能授权项、角色定义页、用户授权页、导航入口、页面守卫、所有受保护 HTTP API 与 CubeBox API-first 工具链
 
 ### 0.1 Simple > Easy 三问
 
-1. **边界**：`pkg/authz` 的 capability registry 是唯一权限标识事实源；policy 只表达授予结果；route/executor 只消费 registry key；前端只消费服务端权限摘要和 registry options，不再定义本地权限语言。route/executor/registry/policy 的覆盖门禁由 `DEV-PLAN-484` 承接。
+1. **边界**：`pkg/authz` 的 capability registry 是唯一权限标识事实源；policy 只表达授予结果；route 与 CubeBox API tool overlay 只消费 registry key；前端不再定义本地权限语言。route/tool overlay/registry/policy 的覆盖门禁由 `DEV-PLAN-484` 承接。
 2. **不变量**：系统内唯一可保存、可传输、可展示给管理员的权限标识是 `object:action`；任何 `orgunit.read`、`dict.admin`、`foundation.read`、`approval.read`、`cubebox.conversations.read` 这类旧 key 都不是权限标识。
-3. **可解释**：管理员看到的“授权项标识”就是运行时鉴权使用的 key；一个 key 可以保护多个 API，但 API 路由不能发明第二个 key；没有 API/executor 承接的 key 不进入权限系统。
+3. **可解释**：管理员看到的“授权项标识”就是运行时鉴权使用的 key；一个 key 可以保护多个 API，但 API 路由不能发明第二个 key；没有当前 HTTP API 或明确 surface 承接的 key 不进入权限系统。
 
 ## 1. 背景与问题
 
@@ -24,7 +24,7 @@
 2. 有些前端 key 只是本地 UI 守卫，例如 `foundation.read`、`approval.read`，没有对应后端 API 权限实现。
 3. policy 中存在未找到当前 tenant API route requirement 的权限，例如 `iam.ping:read`、`iam.session:read`、`org.share_read:read`；这些 policy-only 权限的覆盖门禁由 `DEV-PLAN-484` 承接。
 
-这些问题会让权限管理员无法判断“分配这个权限后用户能做什么”，也会让审计、测试和后续角色管理出现 UI、policy、route、executor 各写一套的风险。
+这些问题会让权限管理员无法判断“分配这个权限后用户能做什么”，也会让审计、测试和后续角色管理出现 UI、policy、route、CubeBox tool overlay 各写一套的风险。
 
 本计划是 `DEV-PLAN-482` 的硬切换补充：482 冻结 capability registry 和 options API；483 专门冻结旧权限语言的删除要求、无兼容要求和反漂移验收。
 
@@ -32,9 +32,9 @@
 
 1. [ ] 冻结唯一权限标识：`CapabilityKey = object + ":" + action`，例如 `orgunit.orgunits:read`。
 2. [ ] 删除前端独立 `permissionKey` 语言；前端若需要守卫，只能使用同一个 canonical capability key。
-3. [ ] 删除或改造所有 policy-only 权限；policy 中不得存在没有当前 route/executor/superadmin surface 承接的 key。
+3. [ ] 删除或改造所有 policy-only 权限；policy 中不得存在没有当前 route/CubeBox API tool overlay/superadmin surface 承接的 key。
 4. [ ] 删除 `module.verb`、点号 action、构建期权限、示例权限和历史共享读权限等旧表达。
-5. [ ] 对齐 `DEV-PLAN-484` 覆盖门禁，使 registry、policy、route requirement、executor requirement、角色定义 payload、前端路由守卫只能使用同一套 key；483 本身只拥有旧 key 和旧字段硬删除。
+5. [ ] 对齐 `DEV-PLAN-484` 覆盖门禁，使 registry、policy、route requirement、CubeBox API tool overlay、角色定义 payload、前端路由守卫只能使用同一套 key；483 本身只拥有旧 key 和旧字段硬删除。
 
 ## 3. 非目标
 
@@ -87,7 +87,7 @@ API Route Requirement = method + route -> authz_object + authz_action
 Capability Key        = authz_object + ":" + authz_action
 
 一个 API route -> 绑定一个授权项标识 / capability key
-一个授权项标识 -> 可以保护多个 API route / executor
+一个授权项标识 -> 可以保护多个 API route
 ```
 
 示例：
@@ -120,9 +120,9 @@ key = /org/api/org-units
 
 1. 每个受保护 API route 必须映射到且只映射到一个 registry 中存在的 capability key。
 2. 一个 capability key 可以保护多个 route，例如 `orgunit.orgunits:read` 可保护 list/search/details/audit 等读取 API。
-3. `assignable=true` 的 capability 必须有当前可运行的 tenant API 或 executor 承接；没有实现面的能力不得进入角色候选项。
+3. `assignable=true` 的 capability 必须有当前可运行的 tenant API 承接；没有实现面的能力不得进入角色候选项。
 4. policy 中每条授权记录必须能在 registry 和当前实现面中找到证据；找不到就删除，不保留空壳。覆盖证据校验以 `DEV-PLAN-484` 为准。
-5. UI 功能授权项主表列名统一使用“授权项标识”；若需要展示 API，只能在点击对应授权项标识后打开的“关联 API”弹窗中展示；全量 HTTP API 正向查看面由 `DEV-PLAN-485` 的 `API 授权目录` 承接；不得把 API 地址和 key 混在同一列。
+5. UI 功能授权项主表列名统一使用“授权项标识”；API method/path 只允许出现在“关联 API”弹窗或 `DEV-PLAN-485` 的 `API 授权目录` 中；不得把 API 地址和 key 混在同一列。
 
 ### 4.3 前端使用要求
 
@@ -130,7 +130,7 @@ key = /org/api/org-units
 
 1. 删除 `permissionKey` 这个概念和类型字段；若组件需要守卫，字段命名应表达“需要的 capability”，例如 `requiredCapabilityKey`，且值必须是 `object:action`。
 2. 删除 `VITE_PERMISSIONS` 与空权限默认 `*` 的构建期权限模型。
-3. 导航、页面守卫、按钮状态、CubeBox 设置入口都从服务端会话权限摘要或业务 API 裁决读取 canonical key。
+3. 导航、页面守卫、按钮状态、CubeBox 设置入口不得继续使用旧 `permissionKey` 语言；若需要权限判断，使用 canonical key 并由后续实现计划接入真实会话来源。
 4. 前端不维护旧 key 到新 key 的映射表。
 5. 前端测试不得继续断言 `orgunit.read`、`dict.admin` 等旧 key。
 
@@ -138,7 +138,7 @@ key = /org/api/org-units
 
 服务端不接受旧 key：
 
-1. 角色定义、角色 fixture、权限 options、权限摘要 response 只出现 `object:action`。
+1. 角色定义、角色 fixture、权限 options response 只出现 `object:action`。
 2. 提交 `orgunit.read`、`dict.admin`、`cubebox.conversations.read` 等旧 key 时，直接返回明确错误，例如 `invalid_capability_key`。
 3. 服务端不做 normalize，不把点号 action 转成冒号 action。
 4. 未登记、禁用、未实现、不可分配的 key 均不能保存到角色定义。
@@ -185,7 +185,7 @@ key = /org/api/org-units
 4. 禁止在 registry 中登记旧 key 并标记 `deprecated`。
 5. 禁止前端在运行时把旧 key normalize 成新 key。
 6. 禁止 `VITE_PERMISSIONS`、`*` 或空权限默认全权限作为 fallback。
-7. 禁止 policy 中保留无 route/executor/superadmin surface 的 key。
+7. 禁止 policy 中保留无 route/CubeBox API tool overlay/superadmin surface 的 key。
 8. 禁止为了不改测试而保留旧 key fixture。
 
 ## 7. 实施切片
@@ -203,9 +203,9 @@ key = /org/api/org-units
 3. [ ] 删除 `iam.ping:read`、`iam.session:read`、`org.share_read:read` 等无当前实现面 key，或在同一 PR 中补齐当前实现面；不得 policy-only。
 4. [ ] `superadmin.*` 保留同格式，但标记或分类为独立 superadmin surface，不进入 tenant options。
 
-### 7.3 P2：route / executor / policy 反漂移门禁
+### 7.3 P2：route / tool overlay / policy 反漂移门禁
 
-1. [ ] route / executor / policy / registry 覆盖关系按 `DEV-PLAN-484` 落入 authz lint。
+1. [ ] route / CubeBox API tool overlay / policy / registry 覆盖关系按 `DEV-PLAN-484` 落入 authz lint。
 2. [ ] `assignable=true` 的 registry entry 覆盖证据按 `DEV-PLAN-484` 校验。
 3. [ ] 旧 key 正则命中 `apps/web/src/**`、role fixture、policy、测试 payload 时门禁失败。
 
@@ -213,7 +213,7 @@ key = /org/api/org-units
 
 1. [ ] 删除 `permissionKey` 类型字段、`VITE_PERMISSIONS` 解析和默认 `*` 行为。
 2. [ ] 导航和路由守卫只使用 canonical capability key。
-3. [ ] 前端从服务端权限摘要读取当前用户 capability 集合。
+3. [ ] 当前用户 capability 来源由后续实现计划接入；本计划只负责删除旧 `permissionKey` / `VITE_PERMISSIONS` 语言和旧 key。
 4. [ ] 旧 key 测试全部改为 canonical key；不得新增兼容测试。
 
 ### 7.5 P4：角色定义与功能授权项消费
@@ -221,13 +221,13 @@ key = /org/api/org-units
 1. [ ] 481 角色定义页只从 482 options API 获取 canonical capability。
 2. [ ] 角色保存 payload 只提交 `object:action`。
 3. [ ] 未知、禁用、不可分配、未实现或旧格式 key 均阻断保存。
-4. [ ] 功能授权项默认只展示 `enabled + assignable + tenant_api/internal_executor` 的 capability。
+4. [ ] 功能授权项默认只展示 `enabled + assignable + tenant_api` 覆盖的 capability。
 
 ## 8. 验收标准
 
 1. [ ] `apps/web/src/**` 不再出现 `permissionKey`、`VITE_PERMISSIONS`、`foundation.read`、`approval.read`、`orgunit.read`、`orgunit.admin`、`dict.admin`、`dict.release.admin` 作为权限判断。
 2. [ ] 前端导航、页面守卫和按钮状态使用的 key 与后端 registry key 完全相同。
-3. [ ] policy、route requirement、executor requirement 与 registry 的覆盖关系按 `DEV-PLAN-484` 校验，任意 key 不在 registry 时 authz lint 失败。
+3. [ ] policy、route requirement、CubeBox API tool overlay 与 registry 的覆盖关系按 `DEV-PLAN-484` 校验，任意 key 不在 registry 时 authz lint 失败。
 4. [ ] registry 中 `assignable=true` 但无当前实现面的 key 按 `DEV-PLAN-484` 导致 authz lint 失败。
 5. [ ] 角色保存提交旧 key 时失败，且服务端不返回替换建议或自动修正结果。
 6. [ ] HRMS tenant 功能授权项不展示 superadmin key、不展示 policy-only key、不展示 UI 本地守卫 key。

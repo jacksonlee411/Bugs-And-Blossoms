@@ -8,13 +8,13 @@
 - **范围一句话**：新增一个只读菜单与页面，用于查看全部 HTTP API 授权目录项、每个 API 绑定的授权资源/操作/授权项标识，以及该 API 是否进入 CubeBox 可调用 HTTP API 工具面；页面不承担编辑、修复或运行时授权裁决职责。
 - **关联模块/目录**：`apps/web/src/**`、`internal/server/**`、`internal/routing/**`、`pkg/authz/**`、`scripts/authz/**`
 - **关联计划/标准**：`AGENTS.md`、`DEV-PLAN-000`、`DEV-PLAN-001`、`DEV-PLAN-012`、`DEV-PLAN-017`、`DEV-PLAN-022`、`DEV-PLAN-480`、`DEV-PLAN-482`、`DEV-PLAN-483`、`DEV-PLAN-484`
-- **用户入口/触点**：授权管理菜单中的 `API 授权目录` 页面、服务端 API 授权目录列表接口、功能授权项页面中的“关联 API”弹窗跳转关系
+- **用户入口/触点**：授权管理菜单中的 `API 授权目录` 页面、服务端 API 授权目录列表接口、功能授权项页面中的“关联 API”弹窗
 
 ### 0.1 Simple > Easy 三问
 
-1. **边界**：485 只拥有“API 授权目录”的只读用户入口与查询 API；484 继续拥有 route/executor/registry/policy 覆盖门禁；482 继续拥有 capability registry 与功能授权项 options API；490 只提供 HTTP API 是否进入 CubeBox 工具面的最小标记。
+1. **边界**：485 只拥有“API 授权目录”的只读用户入口与查询 API；484 继续拥有 route/CubeBox API tool overlay/registry/policy 覆盖门禁；482 继续拥有 capability registry 与功能授权项 options API；490 只提供 HTTP API 是否进入 CubeBox 工具面的最小标记。
 2. **不变量**：API path/method 不是授权项标识；每个受保护 API 的 `method + path` 必须能追溯到一个 `authz_object + authz_action`，并派生出一个 `object:action` 授权项标识；公开或 allowlist API 必须明确展示为未绑定授权项且说明公开原因。
-3. **可解释**：管理员能从 API 角度回答“这个接口受哪个授权资源和哪个授权项控制”，也能从功能授权项页面反向查看该授权项关联了哪些 API。
+3. **可解释**：管理员能从 API 角度回答“这个接口受哪个授权资源和哪个授权项控制”；功能授权项页面只保留反向“关联 API”查看，不规划跨页跳转联动。
 
 ## 1. 背景
 
@@ -35,16 +35,16 @@
 2. [ ] 新增只读 API 授权目录列表接口，返回全量 HTTP API 的 method、path、访问控制状态、授权资源、操作、授权项标识、归属模块与 `丘宝可调用` 标记。
 3. [ ] 页面以表格展示全部 API；`方法`、`API 路径`、`访问控制`、`资源名称`、`资源对象`、`操作`、`授权项标识`、`归属模块`、`丘宝可调用` 必须分列展示，不得把不同字段塞进同一列。
 4. [ ] 页面支持按路径/授权项标识搜索，并按方法、归属模块、访问控制状态、授权资源筛选。
-5. [ ] 从 API 授权目录页面可以跳转或定位到对应功能授权项；从功能授权项页面“关联 API”弹窗可以追溯回 API 授权目录页面的同一条 API。
 
 ### 2.2 非目标
 
 1. 不新增 DB 表、迁移或在线编辑能力；API 授权目录首期由路由注册、route requirement、allowlist 与 capability registry 派生。
-2. 不把 CubeBox executor 混入本页；本页只标记现有 HTTP API 是否可被 CubeBox 作为工具调用，executor 仍在功能授权项的“关联 API”弹窗或后续专门 executor 目录中展示。
+2. 不把 CubeBox executor 混入本页；本页只标记现有 HTTP API 是否可被 CubeBox 作为工具调用。当前已明确不走 executor 路线，不再规划 executor 目录或弹窗展示。
 3. 不把 API route path 当成授权项标识，也不允许前端从 path 反推 `object/action`。
 4. 不在页面中提供“刷新目录”、`registry_rev`、覆盖 lint 状态面板或修复按钮；这些属于开发诊断和 CI 门禁，不是管理员主路径。
 5. 不改变 484 的覆盖门禁；本页消费覆盖事实，不重新实现第二套漂移校验。
-6. 不新增 `调用策略`、`工具类型`、`只读/写入策略` 等 CubeBox 策略列；读写属性已由 `方法`、`操作` 和 `授权项标识` 表达，写入确认属于 CubeBox runtime 不变量。
+6. 不新增 `调用策略`、`工具类型`、`只读/写入策略` 等 CubeBox 策略列；读写属性已由 `方法`、`操作` 和 `授权项标识` 表达，写入确认已按 `DEV-PLAN-490` 暂缓。
+7. 不新增 API 行详情抽屉；`route source`、`requirement source` 等诊断字段不进入首期 UI。
 
 ## 3. 用户可见性交付
 
@@ -79,8 +79,6 @@
 
 1. 搜索框按 `method`、`path`、`resource_object`、`capability_key`、资源名称搜索。
 2. 筛选器首期支持：方法、访问控制、归属模块、授权资源。
-3. 点击 `授权项标识` 跳转或定位到 `功能授权项` 页面对应授权项。
-4. 点击 API 行可打开只读详情抽屉，展示 route source、route_class、allowlist reason、requirement source 等诊断字段；这些字段不得常驻占据主表。
 
 ## 4. 数据契约
 
@@ -90,7 +88,7 @@
 
 服务端聚合来源：
 
-1. Routing 事实：`method/path/route_class/surface/owner_module`。
+1. Routing 事实：`method/path/surface/owner_module`。
 2. Authz route requirement：`method/path -> authz_object/authz_action`。
 3. Capability registry：`object/action -> capability_key/resource_label/action_label/assignable/status`。
 4. Routing allowlist：公开、登录握手、静态资源、health 等分类原因。
@@ -128,7 +126,6 @@ GET /iam/api/authz/api-catalog
       "path": "/org/api/org-units",
       "access_control": "protected",
       "owner_module": "orgunit",
-      "route_class": "tenant_api",
       "resource_label": "组织管理",
       "resource_object": "orgunit.orgunits",
       "action": "read",
@@ -142,8 +139,6 @@ GET /iam/api/authz/api-catalog
       "path": "/healthz",
       "access_control": "allowlisted",
       "owner_module": "platform",
-      "route_class": "health",
-      "allowlist_reason": "health_check",
       "cubebox_callable": false
     }
   ]
@@ -156,7 +151,7 @@ GET /iam/api/authz/api-catalog
 | --- | --- |
 | `DEV-PLAN-482` | capability registry、功能授权项 options API、授权项标识校验 |
 | `DEV-PLAN-483` | `object:action` 单主源、旧 `permissionKey` 与旧 key 硬删除 |
-| `DEV-PLAN-484` | route/executor/registry/policy 覆盖事实与反漂移门禁 |
+| `DEV-PLAN-484` | route/CubeBox API tool overlay/registry/policy 覆盖事实与反漂移门禁 |
 | `DEV-PLAN-485` | API 授权目录页面与只读查询 API |
 | `DEV-PLAN-490` | CubeBox 复用现有 HTTP API 的工具面标记与 runtime 执行链 |
 
@@ -170,7 +165,7 @@ GET /iam/api/authz/api-catalog
 1. [ ] 485 文档加入 AGENTS Doc Map。
 2. [ ] 480/482/483/484 引用 485，明确“全量 API 正向目录”统一命名为 `API 授权目录`，不属于功能授权项页面。
 3. [ ] 冻结 UI 列契约：`方法`、`API 路径`、`访问控制`、`资源名称`、`资源对象`、`操作`、`授权项标识`、`归属模块`、`丘宝可调用` 分列展示。
-4. [ ] 冻结禁止新增 `调用策略` 主表列；写入确认不在 API 授权目录主表重复表达。
+4. [ ] 冻结禁止新增 `调用策略` 主表列；写入确认暂缓，不在 API 授权目录主表预留表达。
 
 ### 6.2 P1：覆盖事实读取接口
 
@@ -191,12 +186,11 @@ GET /iam/api/authz/api-catalog
 1. [ ] 新增授权管理菜单 `API 授权目录`。
 2. [ ] 新增只读列表页，按列契约展示数据。
 3. [ ] 支持搜索和筛选。
-4. [ ] `授权项标识` 可跳转或定位到 `功能授权项` 页面。
-5. [ ] 主页面显示 `丘宝可调用`，不显示 `调用策略`、`registry_rev`、刷新按钮、覆盖 lint 状态或数量 chip。
+4. [ ] 主页面显示 `丘宝可调用`，不显示 `调用策略`、`registry_rev`、刷新按钮、覆盖 lint 状态或数量 chip。
 
 ### 6.5 P4：测试与门禁
 
-1. [ ] 前端测试覆盖搜索、筛选、空公开字段展示、授权项跳转和 `丘宝可调用` 列展示。
+1. [ ] 前端测试覆盖搜索、筛选、空公开字段展示和 `丘宝可调用` 列展示。
 2. [ ] 服务端测试覆盖 route/requirement/registry 聚合。
 3. [ ] 命中 Authz/Routing/UI 时按 AGENTS 触发器运行对应门禁；实际执行记录进入 dev-record 或 PR 说明。
 
@@ -220,7 +214,7 @@ GET /iam/api/authz/api-catalog
 | 合并字段节省列数 | `API · GET`、`资源 / 授权项` 回流 | 表格字段必须分列展示 |
 | 把 allowlist 当未配置错误 | health/login/static 被误标红 | allowlist/public 必须有明确分类和原因 |
 | 复制 484 lint 逻辑 | 两套覆盖判断漂移 | 485 只消费 484 的覆盖事实或同一枚举函数 |
-| 把 CubeBox 策略做成主表分类 | `调用策略=只读` 重复 `方法/操作`，未来写入策略被提前固化 | 主表只保留 `丘宝可调用`，读写与确认由现有 API 事实和 CubeBox runtime 不变量派生 |
+| 把 CubeBox 策略做成主表分类 | `调用策略=只读` 重复 `方法/操作`，未来写入策略被提前固化 | 主表只保留 `丘宝可调用`，写入确认暂缓，不在本页预留策略分类 |
 
 ## 9. 验证记录
 

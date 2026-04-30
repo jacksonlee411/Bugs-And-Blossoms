@@ -5,7 +5,7 @@
 ## 0. 适用范围与评审分级
 
 - **评审分级**：`T2`
-- **范围一句话**：将 CubeBox 业务查询/操作工具面从当前 executor payload + knowledge pack 双轨，重构为“现有 HTTP API 是唯一业务工具契约”，由 485 API 授权目录聚合事实、490 最小 CubeBox 可调用标记、当前用户权限、API schema、写入确认和 observation adapter 共同约束模型调用。
+- **范围一句话**：将 CubeBox 业务查询/操作工具面从当前 executor payload + knowledge pack 双轨，重构为“现有 HTTP API 是唯一业务工具契约”，由 485 API 授权目录聚合事实、490 最小 CubeBox 可调用标记、当前用户权限、API schema 和 observation adapter 共同约束模型调用；写入确认机制暂缓，不进入本轮实施。
 - **关联模块/目录**：`modules/cubebox/**`、`modules/orgunit/presentation/cubebox/**`、`internal/server/cubebox_query_flow.go`、`internal/server/cubebox_api.go`、`internal/server/orgunit_api.go`、`internal/server/authz_middleware.go`、`apps/web/src/api/**`、`pkg/authz/**`
 - **关联计划/标准**：`AGENTS.md`、`DEV-PLAN-000`、`DEV-PLAN-015`、`DEV-PLAN-017`、`DEV-PLAN-022`、`DEV-PLAN-460`、`DEV-PLAN-480`、`DEV-PLAN-484`、`DEV-PLAN-485`、`DEV-PLAN-486`
 - **用户入口/触点**：CubeBox 对话流式入口、API 授权目录页面的 `丘宝可调用` 列、服务端 API tool builder、现有业务 HTTP API、功能授权项的“关联 API”
@@ -35,7 +35,7 @@
 2. [ ] 在 485 API 授权目录聚合事实上叠加最小 CubeBox 工具标记，列出可供 CubeBox 使用的现有 HTTP API；`method/path/object/action/capability_key` 不在 490 中重复维护。
 3. [ ] CubeBox planner 输出 API call plan，而不是 executor key plan；后端只允许调用 485/490 派生出的可调用工具条目。
 4. [ ] API 调用必须以当前用户身份经过现有 route/service authz、RLS、数据范围和字段裁剪。
-5. [ ] 写入 API 只能进入“提案 + 用户确认 + 当前用户提交”流程，不允许模型直接提交正式写入。
+5. [ ] 写入 API 首期不对 planner 开放；“提案 + 用户确认 + 当前用户提交”机制暂缓，后续另起计划冻结 UI 和契约。
 6. [ ] 逐步删除或降级现有 orgunit executor 业务实现，避免 HTTP API 与 executor 双写读契约。
 
 ### 2.2 非目标
@@ -55,7 +55,7 @@ CubeBox 的权限完全来自当前操作它的用户：
 
 1. 当前用户没有某 API 的 route/service 权限，CubeBox 也不能调用。
 2. 当前用户有读权限但数据范围受限，CubeBox 只能看到裁剪后的结果。
-3. 当前用户有写权限，也必须先确认，不能由模型直接提交。
+3. 首期不向 planner 暴露写 API；写入确认机制暂缓，不能作为本轮 UI 或 runtime 验收项。
 4. 审计 actor/principal 仍是当前用户，CubeBox 只作为 `channel/source/tool`。
 
 ### 3.2 Tool Overlay 是工具标记，不是授权来源
@@ -66,7 +66,7 @@ API tool builder 的职责：
 2. 告诉模型可用 API 的业务用途。
 3. 提供请求参数 schema、默认值和参数约束。
 4. 规定 response 如何投影为 observation。
-5. 对写入/危险操作执行 runtime 确认不变量；首期不把确认策略做成 485 主表列。
+5. 首期仅开放只读工具；写入/危险操作的确认机制暂缓，不能进入 485 主表列或本轮运行时契约。
 
 API tool builder 不得：
 
@@ -75,7 +75,7 @@ API tool builder 不得：
 3. 绕过业务 API 参数校验。
 4. 让未登记 path 进入模型调用面。
 5. 复制维护 `method/path/object/action/capability_key` 事实源。
-6. 重新发明 `调用策略=只读/写入需确认` 一类分类语言；API 的读写语义来自现有 `method`、`action` 和 capability key，写入确认来自 CubeBox runtime 不变量。
+6. 重新发明 `调用策略=只读/写入需确认` 一类分类语言；API 的读写语义来自现有 `method`、`action` 和 capability key，写入确认暂缓到后续计划。
 
 ### 3.3 API 是唯一业务工具契约
 
@@ -162,7 +162,6 @@ HTTP POST /internal/cubebox/turns:stream
 | `method` | HTTP method |
 | `path` | HTTP route path |
 | `owner_module` | 归属模块 |
-| `route_class` | route 分类 |
 | `access_control` | 受保护 / allowlist / public 等 |
 | `authz_object` / `authz_action` | 来自 route requirement |
 | `capability_key` | `object:action` 派生 |
@@ -179,7 +178,7 @@ HTTP POST /internal/cubebox/turns:stream
 | `response_schema_ref` | 响应 schema 或 DTO 引用 |
 | `observation_projection` | response 到 observation 的投影规则 |
 
-读写语义不得以 `调用策略` 主表列重复表达。CubeBox runtime 根据现有 HTTP method、route action 和后续写入确认契约判断是否需要 proposal/确认；首期只开放只读 API。
+读写语义不得以 `调用策略` 主表列重复表达。首期只开放只读 API；写入确认契约暂缓，不作为本轮 tool overlay 字段、UI 列或运行时验收项。
 
 ### 5.2 首批 OrgUnit API
 
@@ -192,7 +191,7 @@ HTTP POST /internal/cubebox/turns:stream
 | `GET /org/api/org-units/search` | `orgunit.search` | `read` | `orgunit.orgunits:read` |
 | `GET /org/api/org-units/audit` | `orgunit.audit` | `read` | `orgunit.orgunits:read` |
 
-首期不纳入 orgunit 写 API。写入 API 进入 P4 确认流程后再开放。
+首期不纳入 orgunit 写 API。写入 API 开放与确认流程暂缓，后续另起计划处理。
 
 ### 5.3 当前用户可用性过滤
 
@@ -208,25 +207,25 @@ HTTP POST /internal/cubebox/turns:stream
 
 1. 是否只读已由 `方法`、`操作`、`授权项标识` 明确表达。
 2. CubeBox 是否可调用由 `丘宝可调用` 表达。
-3. 写入是否需要确认是 CubeBox runtime 不变量，不是 API 授权目录主表分类。
+3. 写入确认暂缓；API 授权目录主表不得预留确认策略列。
 
 ## 6. 与 486 的关系
 
-`DEV-PLAN-486` 是 executor 路线的整改方案，目标是让当前 executor 成为一等授权入口。490 是 API-first 路线，目标是删除业务 executor 作为平行执行面。
+`DEV-PLAN-486` 原本是 executor 路线的整改方案，目标是让当前 executor 成为一等授权入口。该路线已停止；490 是当前 PoR，目标是删除业务 executor 作为平行执行面。
 
-默认取舍：
+当前取舍：
 
-1. 如果采纳 490，486 中“per-step executor authorizer”不作为主线实施。
+1. 486 中“per-step executor authorizer”不作为主线实施。
 2. 486 中关于“当前用户权限、模块边界、命名混乱、第二套实现风险”的问题判断继续有效。
 3. 490 用 485 API 授权目录聚合事实、490 tool overlay、当前用户 API authz 和 observation adapter 解决这些问题。
-4. 486 可保留为历史对照或应急备选，不得与 490 同时实施成双运行面。
+4. 486 仅保留为历史对照，不得与 490 同时实施成双运行面。
 
 ## 7. 实施切片
 
 ### 7.1 P0：契约冻结
 
 1. [ ] 490 文档加入 AGENTS Doc Map。
-2. [ ] 480/486/485 引用 490，明确若走 API-first 路线，业务工具契约 owner 从 executor registry 转为 485 API 授权目录聚合事实 + 490 最小 tool overlay。
+2. [ ] 480/486/485 引用 490，明确当前业务工具契约 owner 已从 executor registry 转为 485 API 授权目录聚合事实 + 490 最小 tool overlay。
 3. [ ] 冻结首批仅覆盖 orgunit 只读 API，不纳入写入 API。
 4. [ ] 冻结“不自由拼 API”：planner 只能输出派生可调用工具条目中存在的 method/path。
 
@@ -239,7 +238,7 @@ HTTP POST /internal/cubebox/turns:stream
 
 ### 7.3 P2：API Call Plan 与 Runner
 
-1. [ ] 新增 `APICallPlan` 解码与校验，替代或并行封装现有 `ReadPlan`。
+1. [ ] 新增 `APICallPlan` 解码与校验，替代现有业务 `ReadPlan` 执行面；迁移期兼容不得形成第二执行入口。
 2. [ ] API runner 校验 method/path 完全匹配派生后的可调用工具条目。
 3. [ ] API runner 校验 query/body 参数 schema，不允许未知参数。
 4. [ ] API runner 以当前用户上下文调用现有 HTTP API 或等价 in-process route adapter。
@@ -252,13 +251,11 @@ HTTP POST /internal/cubebox/turns:stream
 3. [ ] `has_children`、`full_name_path`、`path_org_codes`、`has_more` 等字段只以 HTTP API response schema 为事实源。
 4. [ ] 保留现有多步规划、working results、candidate clarification 和 narration 行为。
 
-### 7.5 P4：写入 API 确认机制
+### 7.5 P4：写入 API 确认机制（暂缓）
 
-1. [ ] 为 write/dangerous API 定义 proposal schema。
-2. [ ] planner 对写入只能输出 proposal，不直接执行 API。
-3. [ ] UI 展示动作、影响对象、关键字段、有效日期、request_code/幂等键。
-4. [ ] 用户确认后，以当前用户身份调用现有业务 API / One Door。
-5. [ ] 用户确认不替代后端权限、参数和业务不变量校验。
+1. [ ] 暂缓，不进入本轮实施切片、测试或验收。
+2. [ ] 后续若恢复，必须另起计划冻结 proposal schema、UI 展示、确认动作、幂等语义和 One Door 调用边界。
+3. [ ] 暂缓期间，write/dangerous API 不对 planner 开放。
 
 ### 7.6 P5：文档与命名收敛
 
@@ -280,7 +277,7 @@ HTTP POST /internal/cubebox/turns:stream
 3. API runner：以当前用户身份调用现有 API，权限不足返回 terminal error。
 4. OrgUnit 迁移：list/details/search/audit 通过 API path 获取与当前页面 API 一致的字段。
 5. 多步查询：search 后 details、list 后继续查 children、result_list 补 `full_name_path` 等行为保持。
-6. 写入确认：写 API 在未确认前不执行；确认后仍走现有 API 和 One Door。
+6. 写入确认暂缓：本轮只验证 write/dangerous API 不进入 planner 可调用工具集。
 
 ### 8.3 验证命令
 
@@ -300,7 +297,7 @@ HTTP POST /internal/cubebox/turns:stream
 3. [ ] 四个 orgunit 只读能力通过现有 HTTP API 契约执行，并继承当前用户权限。
 4. [ ] 页面和 CubeBox 对 `has_children`、`full_name_path`、`path_org_codes`、`has_more` 的依赖来自同一 API response schema。
 5. [ ] 无权限用户无法借 CubeBox 调用对应 API；拒绝为 terminal error，不 fallback 到普通聊天。
-6. [ ] 写入 API 未进入确认流程前不对 planner 开放直接执行。
+6. [ ] 写入 API 暂不对 planner 开放；确认流程不进入本轮验收。
 7. [ ] 不新增 `/api/ai/**` 或 CubeBox 专用业务 API。
 8. [ ] 484/485 覆盖事实仍能追踪 API route 到 capability key。
 
@@ -312,9 +309,9 @@ HTTP POST /internal/cubebox/turns:stream
 | tool overlay 变成第二授权源 | overlay 允许但用户无权限仍执行 | 所有调用仍走当前用户 route/service authz |
 | tool overlay 变成第二 API 目录 | 490 手写 method/path/object/action/capability_key，与 485/484 漂移 | 490 只保存 tool overlay，route/authz/capability 字段从 485/484 派生 |
 | 页面 API 被 AI 需求污染 | 为模型随意改页面 response | observation adapter 做投影，API schema 变更需同时评估页面与 CubeBox |
-| `调用策略` 回流 | API 授权目录主表出现 `调用策略=只读`，重复 method/action 语义 | 主表只保留 `丘宝可调用`，写入确认由 CubeBox runtime 不变量承担 |
+| `调用策略` 回流 | API 授权目录主表出现 `调用策略=只读`，重复 method/action 语义 | 主表只保留 `丘宝可调用`，写入确认暂缓到后续计划 |
 | AI 专用 API 回流 | 新增 `/api/ai/orgunit-tree` 聚合口 | 停止实施，回到现有业务 API 或正式业务 API 设计 |
-| 写入绕过确认 | 模型直接 POST 写 API | write/dangerous kind 无确认不得执行 |
+| 写入 API 提前开放 | 模型直接 POST 写 API | write/dangerous API 暂不进入 planner 可调用工具集；确认机制后续另起计划 |
 | 保留 executor 与 API 双链路 | 同一能力 API 和 executor 同时可执行 | 迁移完成后停用业务 executor 入口，避免双运行面 |
 
 ## 11. 验证记录

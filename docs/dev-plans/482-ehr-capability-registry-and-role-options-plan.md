@@ -13,7 +13,7 @@
 - `apps/web` 的 `permissionKey` 来自构建期/本地配置，不能作为授权事实源或角色能力候选源。
 - 历史 `Capability Registry` / capability key 下拉方案已归档，且绑定 SetID / scope/package 历史语义，不得作为当前实现前提。
 
-因此需要一个独立方案承接：全量 capability registry、候选项 options API 与 capability key 校验规则。482 不拥有角色定义页面本身；角色基础信息、保存按钮和角色编辑工作流继续归属 `DEV-PLAN-481`。现有前端 `permissionKey`、旧 key 的硬删除要求由 `DEV-PLAN-483` 承接；新增 API/executor 必然进入功能授权项、policy-only 权限与覆盖证据门禁由 `DEV-PLAN-484` 承接。482 不提供兼容映射。
+因此需要一个独立方案承接：全量 capability registry、候选项 options API 与 capability key 校验规则。482 不拥有角色定义页面本身；角色基础信息、保存按钮和角色编辑工作流继续归属 `DEV-PLAN-481`。现有前端 `permissionKey`、旧 key 的硬删除要求由 `DEV-PLAN-483` 承接；新增受保护 API 与 CubeBox API tool overlay 必然进入功能授权项、policy-only 权限与覆盖证据门禁由 `DEV-PLAN-484` 承接。482 不提供兼容映射。
 
 ## 2. 目标
 
@@ -21,7 +21,7 @@
 2. [ ] 冻结 `Capability Registry` 的最小元数据，使 UI 能展示资源、动作、中文/英文标签、范围维度、启停状态。
 3. [ ] 定义服务端 options API，使 `DEV-PLAN-481` 的角色定义页可从该 API 获取全部启用且可分配的 capability。
 4. [ ] 定义 capability key 校验契约：角色保存提交的 key 必须存在于 registry 且处于可分配状态。
-5. [ ] 定义 registry 校验基础，供 `DEV-PLAN-484` 校验 policy、route authz、executor requirement、role definition 与 registry 不得漂移。
+5. [ ] 定义 registry 校验基础，供 `DEV-PLAN-484` 校验 policy、route authz、CubeBox API tool overlay、role definition 与 registry 不得漂移。
 6. [ ] 对齐 `DEV-PLAN-483/484`：registry 与 options API 只输出 canonical `object:action`，不输出旧 `permissionKey` 或别名，且不输出无当前实现覆盖的 assignable capability。
 
 ## 3. 非目标
@@ -32,7 +32,7 @@
 4. 不恢复 SetID、scope/package、legacy capability key 或历史兼容别名。
 5. 不把组织范围、字段策略、有效期、冲突检测放回角色定义页；这些边界继续以 `DEV-PLAN-480/481` 为准。
 6. 不维护旧 key 到新 key 的映射；旧 key 的删除与反回流验收以 `DEV-PLAN-483` 为准。
-7. 不在 482 内重复定义覆盖门禁；新增 API/executor 与 registry/policy/options 的覆盖校验以 `DEV-PLAN-484` 为准。
+7. 不在 482 内重复定义覆盖门禁；新增受保护 API、CubeBox API tool overlay 与 registry/policy/options 的覆盖校验以 `DEV-PLAN-484` 为准。
 
 ## 4. 事实源设计
 
@@ -61,7 +61,7 @@
 说明：
 
 1. `key` 是授权项标识，不是 API 地址。
-2. 一个 `key` 可以覆盖多个 HTTP API route 或 executor；具体覆盖关系由 route/executor requirement 提供实现证据。
+2. 一个 `key` 可以覆盖多个 HTTP API route；CubeBox API tool overlay 只能引用这些既有 HTTP API，不新增第二套业务工具 key。
 3. 482 的 options API 默认返回 capability 元数据；若 UI 需要展示 API，应通过 `DEV-PLAN-484` 定义的覆盖证据读取，并在点击对应授权项标识后打开“关联 API”弹窗展示；全量 HTTP API 正向查看面由 `DEV-PLAN-485` 的 `API 授权目录` 承接；不得把 route path 放进 `key` 字段。
 
 派生规则：
@@ -125,8 +125,7 @@
 
 1. 能力数量较少时：按资源分组的矩阵，行是资源，列是动作，选中后形成 capability key 集合。
 2. 能力数量较多时：使用可搜索 `Autocomplete`，展示 `资源 / 操作 / 授权项标识`，支持按模块或范围维度筛选。
-3. 已保存角色中出现未知、禁用或废弃 key 时：由 481 页面以警告 chip 展示，并由服务端阻止保存，直到管理员移除或替换。
-4. 消费方不允许 freeSolo 手输 capability key；管理员只能选择 registry 返回的候选项。
+3. 消费方不允许 freeSolo 手输 capability key；管理员只能选择 registry 返回的候选项。
 
 ## 7. 校验与门禁
 
@@ -138,7 +137,7 @@
 2. key 存在于 registry。
 3. entry `status=enabled` 且 `assignable=true`。
 4. 同一角色内 key 不重复。
-5. 包含 `scope_dimension=organization` 的角色，在用户授权保存时必须有组织范围；角色定义页不手工维护 `scope_required`。
+5. 包含 `scope_dimension=organization` 的角色，在用户授权保存时必须有组织范围；角色定义页不手工维护 `scope_required`。保存 UI 的错误态由后续实现计划承接。
 
 ### 7.2 反漂移门禁
 
@@ -146,10 +145,10 @@
 
 1. `config/access/policies/**` 中每个 object/action 必须存在于 registry。
 2. `internal/server` route requirement 中每个 object/action 必须存在于 registry。
-3. `modules/cubebox` executor requirement 中每个 object/action 必须存在于 registry。
+3. CubeBox API tool overlay 引用的 HTTP API route requirement 中每个 object/action 必须存在于 registry。
 4. 角色定义 fixture / API payload 中每个 capability key 必须存在于 registry。
 5. registry 中不得出现 `module.verb` 兼容别名或 SetID/scope/package 历史字段。
-6. `enabled + assignable` 的 capability 必须具备当前 tenant API 或 internal executor 覆盖证据。
+6. `enabled + assignable` 的 capability 必须具备当前 tenant API 覆盖证据。
 
 ## 8. 实施切片
 
@@ -179,11 +178,11 @@
 1. [ ] 481 的角色定义页从 options API 拉取候选 capability。
 2. [ ] 481 页面使用资源-操作矩阵或可搜索 Autocomplete 展示全部可选项。
 3. [ ] 481 的保存 payload 只提交 capability keys。
-4. [ ] 481 UI 测试覆盖加载候选、搜索选择、未知 key 警告、禁用 key 阻断保存。
+4. [ ] 481 UI 测试覆盖加载候选和搜索选择；保存错误态由后续实现计划承接。
 
 ### 8.5 P4：门禁补强
 
-1. [ ] 按 `DEV-PLAN-484` 扩展 authz lint，检查 policy、route requirement、executor requirement、role fixture 均引用 registry 已登记 object/action，并检查 assignable capability 覆盖证据。
+1. [ ] 按 `DEV-PLAN-484` 扩展 authz lint，检查 policy、route requirement、CubeBox API tool overlay、role fixture 均引用 registry 已登记 object/action，并检查 assignable capability 覆盖证据。
 2. [ ] 把旧格式 `module.verb` 与 SetID/scope/package 历史字段加入反回流检查。
 3. [ ] 将门禁纳入 `make authz-lint` 或 `make check authz` 对应入口，避免新增独立漂移脚本无人运行。
 
@@ -192,8 +191,8 @@
 1. [ ] 481 角色定义页的能力候选项可覆盖 registry 中全部 `enabled + assignable` capability。
 2. [ ] 从 policy CSV 删除某条授权记录不会导致该 capability 从候选项消失。
 3. [ ] registry 新增一个 `enabled + assignable` capability 后，options API 与 481 角色定义页可发现该项。
-4. [ ] 未登记、禁用、废弃、旧格式 capability key 均不能被角色保存。
-5. [ ] route authz、policy、CubeBox executor requirement 与 registry 漂移时，authz lint 失败。
+4. [ ] 未登记、禁用、废弃、旧格式 capability key 均不能被服务端保存接口接受；本计划不要求新增对应 UI 异常态。
+5. [ ] route authz、policy、CubeBox API tool overlay 与 registry 漂移时，authz lint 失败。
 
 ## 10. 风险与停止线
 
