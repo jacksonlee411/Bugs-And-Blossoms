@@ -140,7 +140,7 @@
                       "type": "text",
                       "id": "SzCrR",
                       "fill": "#33434C",
-                      "content": "API 访问入口",
+                      "content": "API 授权目录",
                       "fontFamily": "Inter",
                       "fontSize": 13,
                       "fontWeight": "600"
@@ -2794,7 +2794,7 @@
                       "id": "xDcMw",
                       "name": "apiNavMainText",
                       "fill": "#33434C",
-                      "content": "API 访问入口",
+                      "content": "API 授权目录",
                       "fontFamily": "Inter",
                       "fontSize": 13,
                       "fontWeight": "600"
@@ -4019,7 +4019,7 @@
             {
               "type": "frame",
               "id": "ZM4Ml",
-              "name": "关联的访问入口弹窗",
+              "name": "关联 API 弹窗",
               "width": 860,
               "fill": "#FFFFFF",
               "cornerRadius": 8,
@@ -4054,7 +4054,7 @@
                       "id": "hFh9W",
                       "name": "modalTitle",
                       "fill": "#10212B",
-                      "content": "关联的访问入口",
+                      "content": "关联 API",
                       "fontFamily": "Inter",
                       "fontSize": 17,
                       "fontWeight": "700"
@@ -4125,7 +4125,7 @@
                               "fill": "#60717A",
                               "textGrowth": "fixed-width",
                               "width": 110,
-                              "content": "类型 / 方法",
+                              "content": "方法",
                               "fontFamily": "Inter",
                               "fontSize": 10,
                               "fontWeight": "700"
@@ -4137,7 +4137,7 @@
                               "fill": "#60717A",
                               "textGrowth": "fixed-width",
                               "width": 360,
-                              "content": "访问入口",
+                              "content": "API 路径",
                               "fontFamily": "Inter",
                               "fontSize": 10,
                               "fontWeight": "700"
@@ -4178,7 +4178,7 @@
                               "fill": "#047C78",
                               "textGrowth": "fixed-width",
                               "width": 110,
-                              "content": "API · GET",
+                              "content": "GET",
                               "fontFamily": "Inter",
                               "fontSize": 11,
                               "fontWeight": "700"
@@ -4231,7 +4231,7 @@
                               "fill": "#047C78",
                               "textGrowth": "fixed-width",
                               "width": 110,
-                              "content": "API · GET",
+                              "content": "GET",
                               "fontFamily": "Inter",
                               "fontSize": 11,
                               "fontWeight": "700"
@@ -4284,7 +4284,7 @@
                               "fill": "#047C78",
                               "textGrowth": "fixed-width",
                               "width": 110,
-                              "content": "API · GET",
+                              "content": "GET",
                               "fontFamily": "Inter",
                               "fontSize": 11,
                               "fontWeight": "700"
@@ -4337,7 +4337,7 @@
                               "fill": "#047C78",
                               "textGrowth": "fixed-width",
                               "width": 110,
-                              "content": "API · GET",
+                              "content": "GET",
                               "fontFamily": "Inter",
                               "fontSize": 11,
                               "fontWeight": "700"
@@ -4383,7 +4383,7 @@
       "id": "grpbs",
       "x": 7791,
       "y": 0,
-      "name": "API 访问入口",
+      "name": "API 授权目录",
       "clip": true,
       "width": 1651,
       "height": 1236,
@@ -4517,7 +4517,7 @@
                       "id": "NUagy",
                       "name": "apiNavText",
                       "fill": "#FFFFFF",
-                      "content": "API 访问入口",
+                      "content": "API 授权目录",
                       "fontFamily": "Inter",
                       "fontSize": 13,
                       "fontWeight": "700"
@@ -4595,7 +4595,7 @@
                           "type": "text",
                           "id": "W6eC3",
                           "fill": "#10212B",
-                          "content": "API 访问入口",
+                          "content": "API 授权目录",
                           "fontFamily": "Inter",
                           "fontSize": 24,
                           "fontWeight": "700"
@@ -4604,7 +4604,7 @@
                           "type": "text",
                           "id": "l0oST1",
                           "fill": "#60717A",
-                          "content": "查看 API 与授权资源、授权项标识的绑定关系",
+                          "content": "查看 API 路径与授权资源、操作、授权项标识的绑定关系",
                           "fontFamily": "Inter",
                           "fontSize": 12,
                           "fontWeight": "600"

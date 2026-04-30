@@ -86,13 +86,13 @@
 API Route Requirement = method + route -> authz_object + authz_action
 Capability Key        = authz_object + ":" + authz_action
 
-一个 API 入口 -> 绑定一个授权项标识 / capability key
-一个授权项标识 -> 可以保护多个 API 入口 / executor
+一个 API route -> 绑定一个授权项标识 / capability key
+一个授权项标识 -> 可以保护多个 API route / executor
 ```
 
 示例：
 
-| 授权项标识 | 关联的访问入口 |
+| 授权项标识 | 关联 API |
 | --- | --- |
 | `orgunit.orgunits:read` | `GET /org/api/org-units` |
 | `orgunit.orgunits:read` | `GET /org/api/org-units/details` |
@@ -122,7 +122,7 @@ key = /org/api/org-units
 2. 一个 capability key 可以保护多个 route，例如 `orgunit.orgunits:read` 可保护 list/search/details/audit 等读取 API。
 3. `assignable=true` 的 capability 必须有当前可运行的 tenant API 或 executor 承接；没有实现面的能力不得进入角色候选项。
 4. policy 中每条授权记录必须能在 registry 和当前实现面中找到证据；找不到就删除，不保留空壳。覆盖证据校验以 `DEV-PLAN-484` 为准。
-5. UI 功能授权项主表列名统一使用“授权项标识”；若需要展示 API，只能在点击对应授权项标识后打开的“关联的访问入口”弹窗中展示，不得把 API 地址和 key 混在同一列。
+5. UI 功能授权项主表列名统一使用“授权项标识”；若需要展示 API，只能在点击对应授权项标识后打开的“关联 API”弹窗中展示；全量 HTTP API 正向查看面由 `DEV-PLAN-485` 的 `API 授权目录` 承接；不得把 API 地址和 key 混在同一列。
 
 ### 4.3 前端使用要求
 
@@ -194,7 +194,7 @@ key = /org/api/org-units
 
 1. [ ] 483 被 AGENTS Doc Map 收录。
 2. [ ] 480/481/482 引用 483，明确旧 `permissionKey` 和旧 key 无兼容删除。
-3. [ ] 设计图页面文案统一称为“功能授权项”，主表列名统一称为“授权项标识”，值只展示 `object:action`；API route/method 只进入点击授权项标识后打开的“关联的访问入口”弹窗。
+3. [ ] 设计图页面文案统一称为“功能授权项”，主表列名统一称为“授权项标识”，值只展示 `object:action`；API route/method 只进入点击授权项标识后打开的“关联 API”弹窗；全量 HTTP API 正向查看面统一命名为“API 授权目录”。
 
 ### 7.2 P1：后端 registry 与 policy 硬清理
 

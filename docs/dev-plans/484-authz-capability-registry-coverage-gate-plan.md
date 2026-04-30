@@ -104,9 +104,9 @@ Capability Key        = authz_object + ":" + authz_action
 
 1. 功能授权项 UI 只消费 482 options API，不从 route、policy CSV、导航配置或本地常量反推候选项。
 2. 角色定义页保存 payload 只提交 capability keys。
-3. 点击功能授权项中的授权项标识时，可以打开标题为“关联的访问入口”的弹窗展示 API method/path 或 executor key；主表不得常驻展示 method/path，也不能把 method/path 放进 key 列。弹窗表格中“类型”和“方法”必须分列展示，不得把不同字段塞进同一列。
+3. 点击功能授权项中的授权项标识时，可以打开标题为“关联 API”的弹窗展示 API method/path 或 executor key；主表不得常驻展示 method/path，也不能把 method/path 放进 key 列。若弹窗同时展示 HTTP API 与 executor，表格中“类型”和“方法”必须分列展示，不得把不同字段塞进同一列；若首期只展示 HTTP API，则不显示无意义的 `类型=API` 列。
 4. 前端不得新增 hardcoded capability candidate list；测试 fixture 如需模拟候选项，必须复用 registry/options response shape。
-5. 全量 HTTP API 正向查看入口归属 `DEV-PLAN-485` 的 `API 访问入口` 页面；功能授权项页面只保留点击授权项标识后的反向“关联的访问入口”弹窗。
+5. 全量 HTTP API 正向查看面归属 `DEV-PLAN-485` 的 `API 授权目录` 页面；功能授权项页面只保留点击授权项标识后的反向“关联 API”弹窗。
 
 ## 6. 新增模块/API 开发模板要求
 
@@ -154,7 +154,7 @@ Capability Key        = authz_object + ":" + authz_action
 
 1. [ ] 新增模块/API 的脚手架或检查清单包含 authz requirement 与 registry entry。
 2. [ ] 增加最小表驱动测试，覆盖有效复用、多 route 共享同一 key、空壳 capability、policy-only key。
-3. [ ] 前端功能授权项测试覆盖“授权项标识列”和“关联的访问入口”弹窗分离，并覆盖弹窗中“类型”“方法”分列展示。
+3. [ ] 前端功能授权项测试覆盖“授权项标识列”和“关联 API”弹窗分离；若弹窗同时展示 HTTP API 与 executor，覆盖“类型”“方法”分列展示。
 
 ### 7.5 P4：CI 串联
 
@@ -169,7 +169,7 @@ Capability Key        = authz_object + ":" + authz_action
 3. [ ] registry 新增 `enabled + assignable` capability 但没有 API/executor 覆盖时，lint 失败。
 4. [ ] policy 引用 registry 外 key 或 policy-only key 时，lint 失败。
 5. [ ] 功能授权项 options API 只输出 `enabled + assignable + 当前实现覆盖` 的 HRMS tenant capability。
-6. [ ] UI 中“授权项标识”和“关联的访问入口”弹窗分离展示，不把 API path 当 key；弹窗中“类型”和“方法”分列展示。
+6. [ ] UI 中“授权项标识”和“关联 API”弹窗分离展示，不把 API path 当 key；若弹窗同时展示 HTTP API 与 executor，弹窗中“类型”和“方法”分列展示。
 
 ## 9. 风险与停止线
 

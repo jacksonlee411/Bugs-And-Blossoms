@@ -5,15 +5,15 @@
 ## 0. 适用范围与评审分级
 
 - **评审分级**：`T2`
-- **范围一句话**：将 CubeBox 业务查询/操作工具面从当前 executor payload + knowledge pack 双轨，重构为“现有 HTTP API 是唯一业务工具契约”，由 485 API 访问入口聚合事实、490 最小 CubeBox 可调用标记、当前用户权限、API schema、写入确认和 observation adapter 共同约束模型调用。
+- **范围一句话**：将 CubeBox 业务查询/操作工具面从当前 executor payload + knowledge pack 双轨，重构为“现有 HTTP API 是唯一业务工具契约”，由 485 API 授权目录聚合事实、490 最小 CubeBox 可调用标记、当前用户权限、API schema、写入确认和 observation adapter 共同约束模型调用。
 - **关联模块/目录**：`modules/cubebox/**`、`modules/orgunit/presentation/cubebox/**`、`internal/server/cubebox_query_flow.go`、`internal/server/cubebox_api.go`、`internal/server/orgunit_api.go`、`internal/server/authz_middleware.go`、`apps/web/src/api/**`、`pkg/authz/**`
 - **关联计划/标准**：`AGENTS.md`、`DEV-PLAN-000`、`DEV-PLAN-015`、`DEV-PLAN-017`、`DEV-PLAN-022`、`DEV-PLAN-460`、`DEV-PLAN-480`、`DEV-PLAN-484`、`DEV-PLAN-485`、`DEV-PLAN-486`
-- **用户入口/触点**：CubeBox 对话流式入口、API 访问入口页面的 `丘宝可调用` 列、服务端 API tool builder、现有业务 HTTP API、功能授权项的“关联的访问入口”
+- **用户入口/触点**：CubeBox 对话流式入口、API 授权目录页面的 `丘宝可调用` 列、服务端 API tool builder、现有业务 HTTP API、功能授权项的“关联 API”
 
 ### 0.1 Simple > Easy 三问
 
 1. **边界**：490 只拥有 CubeBox 统一使用现有业务 HTTP API 的工具化重构和 `method/path -> cubebox_callable` 最小标记；480/484 继续拥有授权语义与覆盖门禁；485 继续拥有全量 HTTP API 正向目录页面；486 作为 executor 路线的对照方案，不作为本路线默认实施 owner。
-2. **不变量**：CubeBox 不是独立授权主体；所有 API 调用都以当前用户、当前租户、当前 session 执行。API tool builder 不是授权来源，也不是第二套 API 目录；route/authz/capability 字段必须从 484 覆盖事实或 485 API 访问入口聚合派生。
+2. **不变量**：CubeBox 不是独立授权主体；所有 API 调用都以当前用户、当前租户、当前 session 执行。API tool builder 不是授权来源，也不是第二套 API 目录；route/authz/capability 字段必须从 484 覆盖事实或 485 API 授权目录聚合派生。
 3. **可解释**：任意 CubeBox 工具调用都能追溯到一个现有 HTTP API route、该 route 的 `object/action` requirement、当前用户授权决策、请求 schema、响应 schema和 observation 投影。
 
 ## 1. 背景
@@ -25,14 +25,14 @@
 3. `has_children`、`full_name_path`、`path_org_codes`、`has_more` 等字段同时出现在页面 API、executor payload、知识包和测试里，但没有一个共同的 API schema 事实源。
 4. executor 为了给模型提供 observation，实际在复刻页面 API 的一部分读契约，形成第二套实现和第二套字段契约风险。
 
-因此，本计划提出另一条路线：**业务工具调用统一回到现有 HTTP API 契约**。CubeBox 不再维护业务 executor payload 作为事实源，而是通过 485 API 访问入口聚合事实筛选可调用 API，并把 API response 投影为模型 observation。
+因此，本计划提出另一条路线：**业务工具调用统一回到现有 HTTP API 契约**。CubeBox 不再维护业务 executor payload 作为事实源，而是通过 485 API 授权目录聚合事实筛选可调用 API，并把 API response 投影为模型 observation。
 
 ## 2. 目标与非目标
 
 ### 2.1 核心目标
 
 1. [ ] 冻结 CubeBox API-first 工具路线：业务查询/操作以现有 HTTP API 为唯一业务契约，不再新增平行业务 executor payload 契约。
-2. [ ] 在 485 API 访问入口聚合事实上叠加最小 CubeBox 工具标记，列出可供 CubeBox 使用的现有 HTTP API；`method/path/object/action/capability_key` 不在 490 中重复维护。
+2. [ ] 在 485 API 授权目录聚合事实上叠加最小 CubeBox 工具标记，列出可供 CubeBox 使用的现有 HTTP API；`method/path/object/action/capability_key` 不在 490 中重复维护。
 3. [ ] CubeBox planner 输出 API call plan，而不是 executor key plan；后端只允许调用 485/490 派生出的可调用工具条目。
 4. [ ] API 调用必须以当前用户身份经过现有 route/service authz、RLS、数据范围和字段裁剪。
 5. [ ] 写入 API 只能进入“提案 + 用户确认 + 当前用户提交”流程，不允许模型直接提交正式写入。
@@ -62,7 +62,7 @@ CubeBox 的权限完全来自当前操作它的用户：
 
 API tool builder 的职责：
 
-1. 从 485 API 访问入口聚合事实中筛选 `cubebox_callable=true` 的现有 HTTP API。
+1. 从 485 API 授权目录聚合事实中筛选 `cubebox_callable=true` 的现有 HTTP API。
 2. 告诉模型可用 API 的业务用途。
 3. 提供请求参数 schema、默认值和参数约束。
 4. 规定 response 如何投影为 observation。
@@ -152,10 +152,10 @@ HTTP POST /internal/cubebox/turns:stream
 
 490 不新增独立 API catalog 事实源。服务端 API tool entry 由两部分合成：
 
-1. `APIAccessEntry`：来自 485 API 访问入口聚合，字段由 routing、route requirement、capability registry 和 484 覆盖事实派生。
+1. `APIAuthzCatalogEntry`：来自 485 API 授权目录聚合，字段由 routing、route requirement、capability registry 和 484 覆盖事实派生。
 2. `APIToolOverlay`：490 只拥有 CubeBox 工具面增量字段。
 
-`APIAccessEntry` 字段：
+`APIAuthzCatalogEntry` 字段：
 
 | 字段 | 含义 |
 | --- | --- |
@@ -202,13 +202,13 @@ HTTP POST /internal/cubebox/turns:stream
 2. 若为了解释“为什么不能做”保留不可用 API，只能展示为不可调用项，不能生成 call。
 3. 数据范围不在 catalog 层提前展开；仍由 API 调用后的业务读路径裁剪。
 
-### 5.4 与 API 访问入口页面的关系
+### 5.4 与 API 授权目录页面的关系
 
-485 `API 访问入口` 页面主表只增加 `丘宝可调用` 一列，对应服务端 `cubebox_callable` 字段。不得新增 `调用策略`、`只读/写入策略` 或其他重复读写语义的主表列：
+485 `API 授权目录` 页面主表只增加 `丘宝可调用` 一列，对应服务端 `cubebox_callable` 字段。不得新增 `调用策略`、`只读/写入策略` 或其他重复读写语义的主表列：
 
 1. 是否只读已由 `方法`、`操作`、`授权项标识` 明确表达。
 2. CubeBox 是否可调用由 `丘宝可调用` 表达。
-3. 写入是否需要确认是 CubeBox runtime 不变量，不是 API 访问入口主表分类。
+3. 写入是否需要确认是 CubeBox runtime 不变量，不是 API 授权目录主表分类。
 
 ## 6. 与 486 的关系
 
@@ -218,7 +218,7 @@ HTTP POST /internal/cubebox/turns:stream
 
 1. 如果采纳 490，486 中“per-step executor authorizer”不作为主线实施。
 2. 486 中关于“当前用户权限、模块边界、命名混乱、第二套实现风险”的问题判断继续有效。
-3. 490 用 485 API 访问入口聚合事实、490 tool overlay、当前用户 API authz 和 observation adapter 解决这些问题。
+3. 490 用 485 API 授权目录聚合事实、490 tool overlay、当前用户 API authz 和 observation adapter 解决这些问题。
 4. 486 可保留为历史对照或应急备选，不得与 490 同时实施成双运行面。
 
 ## 7. 实施切片
@@ -226,7 +226,7 @@ HTTP POST /internal/cubebox/turns:stream
 ### 7.1 P0：契约冻结
 
 1. [ ] 490 文档加入 AGENTS Doc Map。
-2. [ ] 480/486/485 引用 490，明确若走 API-first 路线，业务工具契约 owner 从 executor registry 转为 485 API 访问入口聚合事实 + 490 最小 tool overlay。
+2. [ ] 480/486/485 引用 490，明确若走 API-first 路线，业务工具契约 owner 从 executor registry 转为 485 API 授权目录聚合事实 + 490 最小 tool overlay。
 3. [ ] 冻结首批仅覆盖 orgunit 只读 API，不纳入写入 API。
 4. [ ] 冻结“不自由拼 API”：planner 只能输出派生可调用工具条目中存在的 method/path。
 
@@ -265,7 +265,7 @@ HTTP POST /internal/cubebox/turns:stream
 1. [ ] 将 `ReadAPICatalog` 更名或替换为表达 overlay/builder 语义的 `APIToolOverlay` / `APIToolBuilder`。
 2. [ ] 将 `modules/orgunit/presentation/cubebox/apis.md` 改为从派生工具条目提取或仅保留语义说明。
 3. [ ] 删除 executor payload 事实源语义，避免 `executor_key` 成为业务工具主键。
-4. [ ] 更新功能授权项“关联的访问入口”弹窗：首期只展示 HTTP API，不展示无意义 `类型=API` 列。
+4. [ ] 更新功能授权项“关联 API”弹窗：首期只展示 HTTP API，不展示无意义 `类型=API` 列。
 
 ## 8. 测试与覆盖率
 
@@ -312,7 +312,7 @@ HTTP POST /internal/cubebox/turns:stream
 | tool overlay 变成第二授权源 | overlay 允许但用户无权限仍执行 | 所有调用仍走当前用户 route/service authz |
 | tool overlay 变成第二 API 目录 | 490 手写 method/path/object/action/capability_key，与 485/484 漂移 | 490 只保存 tool overlay，route/authz/capability 字段从 485/484 派生 |
 | 页面 API 被 AI 需求污染 | 为模型随意改页面 response | observation adapter 做投影，API schema 变更需同时评估页面与 CubeBox |
-| `调用策略` 回流 | API 访问入口主表出现 `调用策略=只读`，重复 method/action 语义 | 主表只保留 `丘宝可调用`，写入确认由 CubeBox runtime 不变量承担 |
+| `调用策略` 回流 | API 授权目录主表出现 `调用策略=只读`，重复 method/action 语义 | 主表只保留 `丘宝可调用`，写入确认由 CubeBox runtime 不变量承担 |
 | AI 专用 API 回流 | 新增 `/api/ai/orgunit-tree` 聚合口 | 停止实施，回到现有业务 API 或正式业务 API 设计 |
 | 写入绕过确认 | 模型直接 POST 写 API | write/dangerous kind 无确认不得执行 |
 | 保留 executor 与 API 双链路 | 同一能力 API 和 executor 同时可执行 | 迁移完成后停用业务 executor 入口，避免双运行面 |

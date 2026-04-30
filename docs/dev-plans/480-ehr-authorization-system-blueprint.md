@@ -183,7 +183,7 @@ API Route Requirement = method + route -> authz_object + authz_action
 Capability Key        = authz_object + ":" + authz_action
 ```
 
-因此 `orgunit.orgunits:read` 是授权项标识（capability key），不是 API 地址；它可以覆盖 `GET /org/api/org-units`、`GET /org/api/org-units/details`、`GET /org/api/org-units/audit` 等多个读取接口。UI 功能授权项主列应展示“授权项标识”，API method/path 只能在点击对应授权项标识后打开的“关联的访问入口”弹窗中展示。
+因此 `orgunit.orgunits:read` 是授权项标识（capability key），不是 API 地址；它可以覆盖 `GET /org/api/org-units`、`GET /org/api/org-units/details`、`GET /org/api/org-units/audit` 等多个读取接口。UI 功能授权项主列应展示“授权项标识”，API method/path 只能在点击对应授权项标识后打开的“关联 API”弹窗中展示；全量 HTTP API 正向查看面由 `DEV-PLAN-485` 的 `API 授权目录` 承接。
 
 补充说明：
 

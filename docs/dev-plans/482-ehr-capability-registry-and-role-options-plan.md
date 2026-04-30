@@ -62,7 +62,7 @@
 
 1. `key` 是授权项标识，不是 API 地址。
 2. 一个 `key` 可以覆盖多个 HTTP API route 或 executor；具体覆盖关系由 route/executor requirement 提供实现证据。
-3. 482 的 options API 默认返回 capability 元数据；若 UI 需要展示 API，应通过 `DEV-PLAN-484` 定义的覆盖证据读取，并在点击对应授权项标识后打开“关联的访问入口”弹窗展示；不得把 route path 放进 `key` 字段。
+3. 482 的 options API 默认返回 capability 元数据；若 UI 需要展示 API，应通过 `DEV-PLAN-484` 定义的覆盖证据读取，并在点击对应授权项标识后打开“关联 API”弹窗展示；全量 HTTP API 正向查看面由 `DEV-PLAN-485` 的 `API 授权目录` 承接；不得把 route path 放进 `key` 字段。
 
 派生规则：
 

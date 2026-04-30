@@ -1,24 +1,24 @@
-# DEV-PLAN-485：API 访问入口目录页面方案
+# DEV-PLAN-485：API 授权目录页面方案
 
 **状态**: 规划中（2026-04-29 22:55 CST）
 
 ## 0. 适用范围与评审分级
 
 - **评审分级**：`T2`
-- **范围一句话**：新增一个只读菜单与页面，用于查看全部 HTTP API 访问入口、每个 API 绑定的授权资源/操作/授权项标识，以及该 API 是否进入 CubeBox 可调用 HTTP API 工具面；页面不承担编辑、修复或运行时授权裁决职责。
+- **范围一句话**：新增一个只读菜单与页面，用于查看全部 HTTP API 授权目录项、每个 API 绑定的授权资源/操作/授权项标识，以及该 API 是否进入 CubeBox 可调用 HTTP API 工具面；页面不承担编辑、修复或运行时授权裁决职责。
 - **关联模块/目录**：`apps/web/src/**`、`internal/server/**`、`internal/routing/**`、`pkg/authz/**`、`scripts/authz/**`
 - **关联计划/标准**：`AGENTS.md`、`DEV-PLAN-000`、`DEV-PLAN-001`、`DEV-PLAN-012`、`DEV-PLAN-017`、`DEV-PLAN-022`、`DEV-PLAN-480`、`DEV-PLAN-482`、`DEV-PLAN-483`、`DEV-PLAN-484`
-- **用户入口/触点**：授权管理菜单中的 `API 访问入口` 页面、服务端 API 访问入口列表接口、功能授权项页面中的“关联的访问入口”弹窗跳转关系
+- **用户入口/触点**：授权管理菜单中的 `API 授权目录` 页面、服务端 API 授权目录列表接口、功能授权项页面中的“关联 API”弹窗跳转关系
 
 ### 0.1 Simple > Easy 三问
 
-1. **边界**：485 只拥有“API 访问入口目录”的只读用户入口与查询 API；484 继续拥有 route/executor/registry/policy 覆盖门禁；482 继续拥有 capability registry 与功能授权项 options API；490 只提供 HTTP API 是否进入 CubeBox 工具面的最小标记。
+1. **边界**：485 只拥有“API 授权目录”的只读用户入口与查询 API；484 继续拥有 route/executor/registry/policy 覆盖门禁；482 继续拥有 capability registry 与功能授权项 options API；490 只提供 HTTP API 是否进入 CubeBox 工具面的最小标记。
 2. **不变量**：API path/method 不是授权项标识；每个受保护 API 的 `method + path` 必须能追溯到一个 `authz_object + authz_action`，并派生出一个 `object:action` 授权项标识；公开或 allowlist API 必须明确展示为未绑定授权项且说明公开原因。
 3. **可解释**：管理员能从 API 角度回答“这个接口受哪个授权资源和哪个授权项控制”，也能从功能授权项页面反向查看该授权项关联了哪些 API。
 
 ## 1. 背景
 
-`DEV-PLAN-482/483/484` 已把角色候选能力收敛为功能授权项，并要求授权项标识与 API method/path 分离。当前功能授权项页面只回答“某个授权项关联哪些访问入口”，不能从 API 角度查看全量清单。
+`DEV-PLAN-482/483/484` 已把角色候选能力收敛为功能授权项，并要求授权项标识与 API method/path 分离。当前功能授权项页面只回答“某个授权项关联哪些 API”，不能从 API 角度查看全量清单。
 
 授权管理员和开发排查还需要一个正向目录：
 
@@ -31,16 +31,16 @@
 
 ### 2.1 核心目标
 
-1. [ ] 新增菜单 `API 访问入口`，与 `功能授权项` 并列作为授权管理下的只读治理页面。
-2. [ ] 新增只读 API 访问入口列表接口，返回全量 HTTP API 的 method、path、访问控制状态、授权资源、操作、授权项标识、归属模块与 `丘宝可调用` 标记。
+1. [ ] 新增菜单 `API 授权目录`，与 `功能授权项` 并列作为授权管理下的只读治理页面。
+2. [ ] 新增只读 API 授权目录列表接口，返回全量 HTTP API 的 method、path、访问控制状态、授权资源、操作、授权项标识、归属模块与 `丘宝可调用` 标记。
 3. [ ] 页面以表格展示全部 API；`方法`、`API 路径`、`访问控制`、`资源名称`、`资源对象`、`操作`、`授权项标识`、`归属模块`、`丘宝可调用` 必须分列展示，不得把不同字段塞进同一列。
 4. [ ] 页面支持按路径/授权项标识搜索，并按方法、归属模块、访问控制状态、授权资源筛选。
-5. [ ] 从 API 访问入口页面可以跳转或定位到对应功能授权项；从功能授权项页面“关联的访问入口”弹窗可以追溯回 API 访问入口页面的同一条 API。
+5. [ ] 从 API 授权目录页面可以跳转或定位到对应功能授权项；从功能授权项页面“关联 API”弹窗可以追溯回 API 授权目录页面的同一条 API。
 
 ### 2.2 非目标
 
-1. 不新增 DB 表、迁移或在线编辑能力；API 访问入口目录首期由路由注册、route requirement、allowlist 与 capability registry 派生。
-2. 不把 CubeBox executor 混入本页；本页只标记现有 HTTP API 是否可被 CubeBox 作为工具调用，executor 仍在功能授权项的“关联的访问入口”弹窗或后续专门 executor 目录中展示。
+1. 不新增 DB 表、迁移或在线编辑能力；API 授权目录首期由路由注册、route requirement、allowlist 与 capability registry 派生。
+2. 不把 CubeBox executor 混入本页；本页只标记现有 HTTP API 是否可被 CubeBox 作为工具调用，executor 仍在功能授权项的“关联 API”弹窗或后续专门 executor 目录中展示。
 3. 不把 API route path 当成授权项标识，也不允许前端从 path 反推 `object/action`。
 4. 不在页面中提供“刷新目录”、`registry_rev`、覆盖 lint 状态面板或修复按钮；这些属于开发诊断和 CI 门禁，不是管理员主路径。
 5. 不改变 484 的覆盖门禁；本页消费覆盖事实，不重新实现第二套漂移校验。
@@ -50,9 +50,9 @@
 
 ### 3.1 菜单与页面
 
-- 菜单：`授权管理 > API 访问入口`
-- 页面标题：`API 访问入口`
-- 页面副标题：`查看 API 与授权资源、授权项标识的绑定关系`
+- 菜单：`授权管理 > API 授权目录`
+- 页面标题：`API 授权目录`
+- 页面副标题：`查看 API 路径与授权资源、操作、授权项标识的绑定关系`
 - 页面属性：只读，不提供新增、编辑、删除、刷新、导出首期能力。
 
 ### 3.2 表格列契约
@@ -102,7 +102,7 @@
 首期建议新增：
 
 ```text
-GET /iam/api/authz/api-access-entries
+GET /iam/api/authz/api-catalog
 ```
 
 该 endpoint 必须受 `iam.authz:read` 或后续冻结的更明确授权项保护。
@@ -157,7 +157,7 @@ GET /iam/api/authz/api-access-entries
 | `DEV-PLAN-482` | capability registry、功能授权项 options API、授权项标识校验 |
 | `DEV-PLAN-483` | `object:action` 单主源、旧 `permissionKey` 与旧 key 硬删除 |
 | `DEV-PLAN-484` | route/executor/registry/policy 覆盖事实与反漂移门禁 |
-| `DEV-PLAN-485` | API 访问入口目录页面与只读查询 API |
+| `DEV-PLAN-485` | API 授权目录页面与只读查询 API |
 | `DEV-PLAN-490` | CubeBox 复用现有 HTTP API 的工具面标记与 runtime 执行链 |
 
 485 不复制 484 的 lint 逻辑；如果覆盖事实缺失，应先补 484 的枚举能力，再由 485 消费。
@@ -168,27 +168,27 @@ GET /iam/api/authz/api-access-entries
 ### 6.1 P0：契约冻结
 
 1. [ ] 485 文档加入 AGENTS Doc Map。
-2. [ ] 480/482/483/484 引用 485，明确“全量 API 正向目录”不属于功能授权项页面。
+2. [ ] 480/482/483/484 引用 485，明确“全量 API 正向目录”统一命名为 `API 授权目录`，不属于功能授权项页面。
 3. [ ] 冻结 UI 列契约：`方法`、`API 路径`、`访问控制`、`资源名称`、`资源对象`、`操作`、`授权项标识`、`归属模块`、`丘宝可调用` 分列展示。
-4. [ ] 冻结禁止新增 `调用策略` 主表列；写入确认不在 API 访问入口目录主表重复表达。
+4. [ ] 冻结禁止新增 `调用策略` 主表列；写入确认不在 API 授权目录主表重复表达。
 
 ### 6.2 P1：覆盖事实读取接口
 
 1. [ ] 复用或补齐 484 的 route requirement 枚举能力。
-2. [ ] 提供服务端聚合函数，输出 API access entry 列表。
+2. [ ] 提供服务端聚合函数，输出 API 授权目录列表。
 3. [ ] 对 allowlist/public route 输出明确 `access_control` 与原因，不静默空字段。
 4. [ ] 叠加 490 的 `cubebox_callable` 标记；标记引用不存在的 `method/path` 时 fail-closed。
 
 ### 6.3 P2：服务端 API
 
-1. [ ] 新增 `GET /iam/api/authz/api-access-entries`。
+1. [ ] 新增 `GET /iam/api/authz/api-catalog`。
 2. [ ] endpoint 受 `iam.authz:read` 或后续冻结的授权项保护。
 3. [ ] 支持搜索和基础筛选。
 4. [ ] 补 handler/API 测试，覆盖受保护 API、allowlist API、未知 requirement fail-closed。
 
 ### 6.4 P3：前端页面
 
-1. [ ] 新增授权管理菜单 `API 访问入口`。
+1. [ ] 新增授权管理菜单 `API 授权目录`。
 2. [ ] 新增只读列表页，按列契约展示数据。
 3. [ ] 支持搜索和筛选。
 4. [ ] `授权项标识` 可跳转或定位到 `功能授权项` 页面。
@@ -202,7 +202,7 @@ GET /iam/api/authz/api-access-entries
 
 ## 7. 验收标准
 
-1. [ ] 授权管理菜单中存在 `API 访问入口` 页面。
+1. [ ] 授权管理菜单中存在 `API 授权目录` 页面。
 2. [ ] 页面能展示全部 HTTP API，包括受保护 API 与公开/allowlist API。
 3. [ ] 受保护 API 行展示资源名称、资源对象、操作与授权项标识。
 4. [ ] 公开/allowlist API 行不伪造授权项标识，并明确展示访问控制分类。

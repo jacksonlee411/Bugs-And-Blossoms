@@ -8,7 +8,7 @@
 - **范围一句话**：把当前已经真实执行业务读取的 CubeBox executor 从“查询链内部工具”提升为一等授权入口，补齐 per-step 授权、executor requirement、模块归属、命名收敛与共享读路径边界。
 - **关联模块/目录**：`modules/cubebox/**`、`modules/orgunit/presentation/cubebox/**`、`internal/server/cubebox_query_flow.go`、`internal/server/cubebox_orgunit_executors.go`、`internal/server/cubebox_api.go`、`pkg/authz/**`、`scripts/authz/**`
 - **关联计划/标准**：`AGENTS.md`、`DEV-PLAN-000`、`DEV-PLAN-015`、`DEV-PLAN-022`、`DEV-PLAN-480`、`DEV-PLAN-482`、`DEV-PLAN-484`、`DEV-PLAN-485`
-- **用户入口/触点**：CubeBox 对话流式入口、模型生成的 `ReadPlan`、executor registry、功能授权项的“关联的访问入口”弹窗、后续 executor 覆盖门禁
+- **用户入口/触点**：CubeBox 对话流式入口、模型生成的 `ReadPlan`、executor registry、功能授权项的“关联 API”弹窗、后续 executor 覆盖门禁
 
 ### 0.1 Simple > Easy 三问
 
@@ -50,7 +50,7 @@
 2. 不新增 DB 表、迁移、在线 executor 管理页或在线 capability registry 管理。
 3. 不在本计划内实现复杂 ABAC、字段级授权配置 UI 或组织范围 SoT；executor 授权只覆盖 capability/API 层，数据范围仍由业务读路径承接。
 4. 不新增第二套 orgunit 查询 endpoint，不为了 CubeBox 创建专用 HTTP API。
-5. 不改变 485 的 HTTP API 访问入口目录页面边界；executor 展示只进入功能授权项的“关联的访问入口”或后续专门 executor 目录。
+5. 不改变 485 的 HTTP API 授权目录页面边界；executor 展示只进入功能授权项的“关联 API”弹窗或后续专门 executor 目录。
 
 ## 3. 决策
 
@@ -224,7 +224,7 @@ type ExecuteAuthorizationDecision struct {
 
 1. [ ] 484 的 executor requirement 枚举读取 `RegisteredExecutor.Authorization`。
 2. [ ] 缺 requirement、registry 外 object/action、assignable capability 无 API/executor 覆盖时 lint 失败。
-3. [ ] 功能授权项“关联的访问入口”弹窗可展示 executor key；当前首期若页面只展示 HTTP API，则不展示 `类型=API` 的无意义列。
+3. [ ] 功能授权项“关联 API”弹窗可展示 executor key；当前首期若页面只展示 HTTP API，则不展示 `类型=API` 的无意义列。
 
 ## 7. 测试与覆盖率
 
