@@ -2658,8 +2658,8 @@
     {
       "type": "frame",
       "id": "scr4820",
-      "x": 6020,
-      "y": 9,
+      "x": 6028,
+      "y": 8,
       "name": "功能授权项",
       "clip": true,
       "width": 1651,
@@ -4637,7 +4637,7 @@
                           "type": "frame",
                           "id": "K6t6cb",
                           "width": "fill_container",
-                          "gap": 12,
+                          "gap": 8,
                           "padding": [
                             12,
                             14
@@ -4647,7 +4647,7 @@
                             {
                               "type": "frame",
                               "id": "stCep",
-                              "width": 360,
+                              "width": 320,
                               "fill": "#F8FAFA",
                               "cornerRadius": 8,
                               "stroke": {
@@ -4676,7 +4676,7 @@
                                   "id": "GHnd1",
                                   "fill": "#60717A",
                                   "textGrowth": "fixed-width",
-                                  "width": 300,
+                                  "width": 260,
                                   "content": "搜索 API 路径 / 授权项标识 / 资源",
                                   "fontFamily": "Inter",
                                   "fontSize": 12,
@@ -4687,7 +4687,7 @@
                             {
                               "type": "frame",
                               "id": "WZprG",
-                              "width": 132,
+                              "width": 112,
                               "fill": "#F8FAFA",
                               "cornerRadius": 8,
                               "stroke": {
@@ -4725,7 +4725,7 @@
                             {
                               "type": "frame",
                               "id": "u5cS9p",
-                              "width": 132,
+                              "width": 116,
                               "fill": "#F8FAFA",
                               "cornerRadius": 8,
                               "stroke": {
@@ -4763,7 +4763,7 @@
                             {
                               "type": "frame",
                               "id": "mVR4j",
-                              "width": 112,
+                              "width": 104,
                               "fill": "#F8FAFA",
                               "cornerRadius": 8,
                               "stroke": {
@@ -4790,6 +4790,47 @@
                                 {
                                   "type": "icon_font",
                                   "id": "y6qGd3",
+                                  "width": 15,
+                                  "height": 15,
+                                  "iconFontName": "chevron-down",
+                                  "iconFontFamily": "lucide",
+                                  "fill": "#60717A"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "G3Evj",
+                              "name": "resource filter",
+                              "width": 116,
+                              "fill": "#F8FAFA",
+                              "cornerRadius": 8,
+                              "stroke": {
+                                "align": "inside",
+                                "thickness": 1,
+                                "fill": "#DDE4E6"
+                              },
+                              "padding": [
+                                9,
+                                10
+                              ],
+                              "justifyContent": "space_between",
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "DQz8v",
+                                  "name": "resourceFilterText",
+                                  "fill": "#33434C",
+                                  "content": "全部资源",
+                                  "fontFamily": "Inter",
+                                  "fontSize": 12,
+                                  "fontWeight": "600"
+                                },
+                                {
+                                  "type": "icon_font",
+                                  "id": "Dvk5P",
+                                  "name": "resourceFilterChevron",
                                   "width": 15,
                                   "height": 15,
                                   "iconFontName": "chevron-down",
@@ -5675,6 +5716,131 @@
                                   "type": "text",
                                   "id": "YQbPE",
                                   "name": "fCubeboxCallable",
+                                  "fill": "#9AA7AD",
+                                  "textGrowth": "fixed-width",
+                                  "width": 86,
+                                  "content": "否",
+                                  "fontFamily": "Inter",
+                                  "fontSize": 11,
+                                  "fontWeight": "700"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "nax6b",
+                              "name": "rowG",
+                              "width": "fill_container",
+                              "fill": "#FFFFFF",
+                              "stroke": {
+                                "align": "inside",
+                                "thickness": 1,
+                                "fill": "#EEF2F3"
+                              },
+                              "gap": 8,
+                              "padding": 12,
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "X5fYp",
+                                  "name": "eMethod",
+                                  "fill": "#047C78",
+                                  "textGrowth": "fixed-width",
+                                  "width": 70,
+                                  "content": "GET",
+                                  "fontFamily": "Inter",
+                                  "fontSize": 11,
+                                  "fontWeight": "700"
+                                },
+                                {
+                                  "type": "text",
+                                  "id": "G1PoHF",
+                                  "name": "ePath",
+                                  "fill": "#10212B",
+                                  "textGrowth": "fixed-width",
+                                  "width": 300,
+                                  "content": "/assets/app.js",
+                                  "fontFamily": "Inter",
+                                  "fontSize": 11,
+                                  "fontWeight": "700"
+                                },
+                                {
+                                  "type": "text",
+                                  "id": "IOrrU",
+                                  "name": "eAccess",
+                                  "fill": "#60717A",
+                                  "textGrowth": "fixed-width",
+                                  "width": 110,
+                                  "content": "静态资源",
+                                  "fontFamily": "Inter",
+                                  "fontSize": 11,
+                                  "fontWeight": "700"
+                                },
+                                {
+                                  "type": "text",
+                                  "id": "wua4P",
+                                  "name": "eLabel",
+                                  "fill": "#9AA7AD",
+                                  "textGrowth": "fixed-width",
+                                  "width": 120,
+                                  "content": "-",
+                                  "fontFamily": "Inter",
+                                  "fontSize": 11,
+                                  "fontWeight": "600"
+                                },
+                                {
+                                  "type": "text",
+                                  "id": "py64H",
+                                  "name": "eObject",
+                                  "fill": "#9AA7AD",
+                                  "textGrowth": "fixed-width",
+                                  "width": 170,
+                                  "content": "-",
+                                  "fontFamily": "Inter",
+                                  "fontSize": 11,
+                                  "fontWeight": "600"
+                                },
+                                {
+                                  "type": "text",
+                                  "id": "vJh7m",
+                                  "name": "eAction",
+                                  "fill": "#9AA7AD",
+                                  "textGrowth": "fixed-width",
+                                  "width": 70,
+                                  "content": "-",
+                                  "fontFamily": "Inter",
+                                  "fontSize": 11,
+                                  "fontWeight": "600"
+                                },
+                                {
+                                  "type": "text",
+                                  "id": "JToob",
+                                  "name": "eKey",
+                                  "fill": "#9AA7AD",
+                                  "textGrowth": "fixed-width",
+                                  "width": 200,
+                                  "content": "-",
+                                  "fontFamily": "Inter",
+                                  "fontSize": 11,
+                                  "fontWeight": "600"
+                                },
+                                {
+                                  "type": "text",
+                                  "id": "jewGj",
+                                  "name": "eModule",
+                                  "fill": "#60717A",
+                                  "textGrowth": "fixed-width",
+                                  "width": 90,
+                                  "content": "platform",
+                                  "fontFamily": "Inter",
+                                  "fontSize": 11,
+                                  "fontWeight": "600"
+                                },
+                                {
+                                  "type": "text",
+                                  "id": "x8Llu",
+                                  "name": "eCubeboxCallable",
                                   "fill": "#9AA7AD",
                                   "textGrowth": "fixed-width",
                                   "width": 86,
