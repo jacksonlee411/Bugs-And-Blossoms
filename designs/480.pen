@@ -5000,7 +5000,7 @@
                               "type": "frame",
                               "id": "G3Evj",
                               "name": "resource filter",
-                              "width": 116,
+                              "width": 124,
                               "fill": "#F8FAFA",
                               "cornerRadius": 8,
                               "stroke": {
@@ -5020,7 +5020,7 @@
                                   "id": "DQz8v",
                                   "name": "resourceFilterText",
                                   "fill": "#33434C",
-                                  "content": "全部资源",
+                                  "content": "资源：全部",
                                   "fontFamily": "Inter",
                                   "fontSize": 12,
                                   "fontWeight": "600"
@@ -5214,16 +5214,31 @@
                                   "fontWeight": "700"
                                 },
                                 {
-                                  "type": "text",
-                                  "id": "Il7dF",
-                                  "name": "aAccess",
-                                  "fill": "#147A45",
-                                  "textGrowth": "fixed-width",
+                                  "type": "frame",
+                                  "id": "c74OhY",
+                                  "name": "aAccessTag",
                                   "width": 110,
-                                  "content": "受保护",
-                                  "fontFamily": "Inter",
-                                  "fontSize": 11,
-                                  "fontWeight": "700"
+                                  "fill": "#E7F6F4",
+                                  "cornerRadius": 6,
+                                  "padding": [
+                                    5,
+                                    8
+                                  ],
+                                  "justifyContent": "center",
+                                  "alignItems": "center",
+                                  "layout": "vertical",
+                                  "children": [
+                                    {
+                                      "type": "text",
+                                      "id": "t6hMo5",
+                                      "name": "protectedAText",
+                                      "fill": "#047C78",
+                                      "content": "受保护",
+                                      "fontFamily": "Inter",
+                                      "fontSize": 11,
+                                      "fontWeight": "800"
+                                    }
+                                  ]
                                 },
                                 {
                                   "type": "text",
@@ -5339,16 +5354,31 @@
                                   "fontWeight": "700"
                                 },
                                 {
-                                  "type": "text",
-                                  "id": "XzYLV",
-                                  "name": "bAccess",
-                                  "fill": "#147A45",
-                                  "textGrowth": "fixed-width",
+                                  "type": "frame",
+                                  "id": "hK8Y0",
+                                  "name": "bAccessTag",
                                   "width": 110,
-                                  "content": "受保护",
-                                  "fontFamily": "Inter",
-                                  "fontSize": 11,
-                                  "fontWeight": "700"
+                                  "fill": "#E7F6F4",
+                                  "cornerRadius": 6,
+                                  "padding": [
+                                    5,
+                                    8
+                                  ],
+                                  "justifyContent": "center",
+                                  "alignItems": "center",
+                                  "layout": "vertical",
+                                  "children": [
+                                    {
+                                      "type": "text",
+                                      "id": "lolCn",
+                                      "name": "protectedBText",
+                                      "fill": "#047C78",
+                                      "content": "受保护",
+                                      "fontFamily": "Inter",
+                                      "fontSize": 11,
+                                      "fontWeight": "800"
+                                    }
+                                  ]
                                 },
                                 {
                                   "type": "text",
@@ -5464,16 +5494,31 @@
                                   "fontWeight": "700"
                                 },
                                 {
-                                  "type": "text",
-                                  "id": "BABdf",
-                                  "name": "cAccess",
-                                  "fill": "#147A45",
-                                  "textGrowth": "fixed-width",
+                                  "type": "frame",
+                                  "id": "SBtdf",
+                                  "name": "cAccessTag",
                                   "width": 110,
-                                  "content": "受保护",
-                                  "fontFamily": "Inter",
-                                  "fontSize": 11,
-                                  "fontWeight": "700"
+                                  "fill": "#E7F6F4",
+                                  "cornerRadius": 6,
+                                  "padding": [
+                                    5,
+                                    8
+                                  ],
+                                  "justifyContent": "center",
+                                  "alignItems": "center",
+                                  "layout": "vertical",
+                                  "children": [
+                                    {
+                                      "type": "text",
+                                      "id": "kccsf",
+                                      "name": "protectedCText",
+                                      "fill": "#047C78",
+                                      "content": "受保护",
+                                      "fontFamily": "Inter",
+                                      "fontSize": 11,
+                                      "fontWeight": "800"
+                                    }
+                                  ]
                                 },
                                 {
                                   "type": "text",
@@ -5589,16 +5634,31 @@
                                   "fontWeight": "700"
                                 },
                                 {
-                                  "type": "text",
-                                  "id": "E8bTy",
-                                  "name": "dAccess",
-                                  "fill": "#147A45",
-                                  "textGrowth": "fixed-width",
+                                  "type": "frame",
+                                  "id": "iJwmN",
+                                  "name": "dAccessTag",
                                   "width": 110,
-                                  "content": "受保护",
-                                  "fontFamily": "Inter",
-                                  "fontSize": 11,
-                                  "fontWeight": "700"
+                                  "fill": "#E7F6F4",
+                                  "cornerRadius": 6,
+                                  "padding": [
+                                    5,
+                                    8
+                                  ],
+                                  "justifyContent": "center",
+                                  "alignItems": "center",
+                                  "layout": "vertical",
+                                  "children": [
+                                    {
+                                      "type": "text",
+                                      "id": "lWUN5",
+                                      "name": "protectedDText",
+                                      "fill": "#047C78",
+                                      "content": "受保护",
+                                      "fontFamily": "Inter",
+                                      "fontSize": 11,
+                                      "fontWeight": "800"
+                                    }
+                                  ]
                                 },
                                 {
                                   "type": "text",
@@ -5714,16 +5774,31 @@
                                   "fontWeight": "700"
                                 },
                                 {
-                                  "type": "text",
-                                  "id": "mZv67",
-                                  "name": "eAccess",
-                                  "fill": "#60717A",
-                                  "textGrowth": "fixed-width",
+                                  "type": "frame",
+                                  "id": "PPirP",
+                                  "name": "healthAccessTag",
                                   "width": 110,
-                                  "content": "health",
-                                  "fontFamily": "Inter",
-                                  "fontSize": 11,
-                                  "fontWeight": "700"
+                                  "fill": "#EEF4F7",
+                                  "cornerRadius": 6,
+                                  "padding": [
+                                    5,
+                                    8
+                                  ],
+                                  "justifyContent": "center",
+                                  "alignItems": "center",
+                                  "layout": "vertical",
+                                  "children": [
+                                    {
+                                      "type": "text",
+                                      "id": "YsKXX",
+                                      "name": "healthTagText",
+                                      "fill": "#49606B",
+                                      "content": "health",
+                                      "fontFamily": "Inter",
+                                      "fontSize": 11,
+                                      "fontWeight": "800"
+                                    }
+                                  ]
                                 },
                                 {
                                   "type": "text",
@@ -5801,135 +5876,10 @@
                             },
                             {
                               "type": "frame",
-                              "id": "grUaD",
-                              "name": "rowF",
-                              "width": "fill_container",
-                              "fill": "#FFFFFF",
-                              "stroke": {
-                                "align": "inside",
-                                "thickness": 1,
-                                "fill": "#EEF2F3"
-                              },
-                              "gap": 8,
-                              "padding": 12,
-                              "alignItems": "center",
-                              "children": [
-                                {
-                                  "type": "text",
-                                  "id": "MHuN0",
-                                  "name": "fMethod",
-                                  "fill": "#B45309",
-                                  "textGrowth": "fixed-width",
-                                  "width": 70,
-                                  "content": "POST",
-                                  "fontFamily": "Inter",
-                                  "fontSize": 11,
-                                  "fontWeight": "700"
-                                },
-                                {
-                                  "type": "text",
-                                  "id": "vkYme",
-                                  "name": "fPath",
-                                  "fill": "#10212B",
-                                  "textGrowth": "fixed-width",
-                                  "width": 300,
-                                  "content": "/auth/kratos/login",
-                                  "fontFamily": "Inter",
-                                  "fontSize": 11,
-                                  "fontWeight": "700"
-                                },
-                                {
-                                  "type": "text",
-                                  "id": "AFzqB",
-                                  "name": "fAccess",
-                                  "fill": "#60717A",
-                                  "textGrowth": "fixed-width",
-                                  "width": 110,
-                                  "content": "登录握手",
-                                  "fontFamily": "Inter",
-                                  "fontSize": 11,
-                                  "fontWeight": "700"
-                                },
-                                {
-                                  "type": "text",
-                                  "id": "TSfSO",
-                                  "name": "fLabel",
-                                  "fill": "#9AA7AD",
-                                  "textGrowth": "fixed-width",
-                                  "width": 120,
-                                  "content": "-",
-                                  "fontFamily": "Inter",
-                                  "fontSize": 11,
-                                  "fontWeight": "600"
-                                },
-                                {
-                                  "type": "text",
-                                  "id": "e1wPM",
-                                  "name": "fObject",
-                                  "fill": "#9AA7AD",
-                                  "textGrowth": "fixed-width",
-                                  "width": 170,
-                                  "content": "-",
-                                  "fontFamily": "Inter",
-                                  "fontSize": 11,
-                                  "fontWeight": "600"
-                                },
-                                {
-                                  "type": "text",
-                                  "id": "S3D7Az",
-                                  "name": "fAction",
-                                  "fill": "#9AA7AD",
-                                  "textGrowth": "fixed-width",
-                                  "width": 70,
-                                  "content": "-",
-                                  "fontFamily": "Inter",
-                                  "fontSize": 11,
-                                  "fontWeight": "600"
-                                },
-                                {
-                                  "type": "text",
-                                  "id": "s1VcSI",
-                                  "name": "fKey",
-                                  "fill": "#9AA7AD",
-                                  "textGrowth": "fixed-width",
-                                  "width": 200,
-                                  "content": "-",
-                                  "fontFamily": "Inter",
-                                  "fontSize": 11,
-                                  "fontWeight": "600"
-                                },
-                                {
-                                  "type": "text",
-                                  "id": "GgTtt",
-                                  "name": "fModule",
-                                  "fill": "#60717A",
-                                  "textGrowth": "fixed-width",
-                                  "width": 90,
-                                  "content": "iam",
-                                  "fontFamily": "Inter",
-                                  "fontSize": 11,
-                                  "fontWeight": "600"
-                                },
-                                {
-                                  "type": "text",
-                                  "id": "YQbPE",
-                                  "name": "fCubeboxCallable",
-                                  "fill": "#9AA7AD",
-                                  "textGrowth": "fixed-width",
-                                  "width": 86,
-                                  "content": "否",
-                                  "fontFamily": "Inter",
-                                  "fontSize": 11,
-                                  "fontWeight": "700"
-                                }
-                              ]
-                            },
-                            {
-                              "type": "frame",
                               "id": "nax6b",
                               "name": "rowG",
                               "width": "fill_container",
-                              "fill": "#FFFFFF",
+                              "fill": "#FFFCF7",
                               "stroke": {
                                 "align": "inside",
                                 "thickness": 1,
@@ -5964,16 +5914,31 @@
                                   "fontWeight": "700"
                                 },
                                 {
-                                  "type": "text",
-                                  "id": "IOrrU",
-                                  "name": "eAccess",
-                                  "fill": "#60717A",
-                                  "textGrowth": "fixed-width",
+                                  "type": "frame",
+                                  "id": "Zv8V2",
+                                  "name": "staticAccessTag",
                                   "width": 110,
-                                  "content": "静态资源",
-                                  "fontFamily": "Inter",
-                                  "fontSize": 11,
-                                  "fontWeight": "700"
+                                  "fill": "#FFF4E6",
+                                  "cornerRadius": 6,
+                                  "padding": [
+                                    5,
+                                    8
+                                  ],
+                                  "justifyContent": "center",
+                                  "alignItems": "center",
+                                  "layout": "vertical",
+                                  "children": [
+                                    {
+                                      "type": "text",
+                                      "id": "o3sWVp",
+                                      "name": "staticTagText",
+                                      "fill": "#B45309",
+                                      "content": "静态资源",
+                                      "fontFamily": "Inter",
+                                      "fontSize": 11,
+                                      "fontWeight": "800"
+                                    }
+                                  ]
                                 },
                                 {
                                   "type": "text",
@@ -6039,6 +6004,146 @@
                                   "type": "text",
                                   "id": "x8Llu",
                                   "name": "eCubeboxCallable",
+                                  "fill": "#9AA7AD",
+                                  "textGrowth": "fixed-width",
+                                  "width": 86,
+                                  "content": "否",
+                                  "fontFamily": "Inter",
+                                  "fontSize": 11,
+                                  "fontWeight": "700"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "grUaD",
+                              "name": "rowF",
+                              "width": "fill_container",
+                              "fill": "#FFFFFF",
+                              "stroke": {
+                                "align": "inside",
+                                "thickness": 1,
+                                "fill": "#EEF2F3"
+                              },
+                              "gap": 8,
+                              "padding": 12,
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "MHuN0",
+                                  "name": "fMethod",
+                                  "fill": "#B45309",
+                                  "textGrowth": "fixed-width",
+                                  "width": 70,
+                                  "content": "POST",
+                                  "fontFamily": "Inter",
+                                  "fontSize": 11,
+                                  "fontWeight": "700"
+                                },
+                                {
+                                  "type": "text",
+                                  "id": "vkYme",
+                                  "name": "fPath",
+                                  "fill": "#10212B",
+                                  "textGrowth": "fixed-width",
+                                  "width": 300,
+                                  "content": "/auth/kratos/login",
+                                  "fontFamily": "Inter",
+                                  "fontSize": 11,
+                                  "fontWeight": "700"
+                                },
+                                {
+                                  "type": "frame",
+                                  "id": "C3Ilr",
+                                  "name": "loginAccessTag",
+                                  "width": 110,
+                                  "fill": "#F2ECFF",
+                                  "cornerRadius": 6,
+                                  "padding": [
+                                    5,
+                                    8
+                                  ],
+                                  "justifyContent": "center",
+                                  "alignItems": "center",
+                                  "layout": "vertical",
+                                  "children": [
+                                    {
+                                      "type": "text",
+                                      "id": "wZWG2",
+                                      "name": "loginTagText",
+                                      "fill": "#6D4DB8",
+                                      "content": "登录握手",
+                                      "fontFamily": "Inter",
+                                      "fontSize": 11,
+                                      "fontWeight": "800"
+                                    }
+                                  ]
+                                },
+                                {
+                                  "type": "text",
+                                  "id": "TSfSO",
+                                  "name": "fLabel",
+                                  "fill": "#9AA7AD",
+                                  "textGrowth": "fixed-width",
+                                  "width": 120,
+                                  "content": "-",
+                                  "fontFamily": "Inter",
+                                  "fontSize": 11,
+                                  "fontWeight": "600"
+                                },
+                                {
+                                  "type": "text",
+                                  "id": "e1wPM",
+                                  "name": "fObject",
+                                  "fill": "#9AA7AD",
+                                  "textGrowth": "fixed-width",
+                                  "width": 170,
+                                  "content": "-",
+                                  "fontFamily": "Inter",
+                                  "fontSize": 11,
+                                  "fontWeight": "600"
+                                },
+                                {
+                                  "type": "text",
+                                  "id": "S3D7Az",
+                                  "name": "fAction",
+                                  "fill": "#9AA7AD",
+                                  "textGrowth": "fixed-width",
+                                  "width": 70,
+                                  "content": "-",
+                                  "fontFamily": "Inter",
+                                  "fontSize": 11,
+                                  "fontWeight": "600"
+                                },
+                                {
+                                  "type": "text",
+                                  "id": "s1VcSI",
+                                  "name": "fKey",
+                                  "fill": "#9AA7AD",
+                                  "textGrowth": "fixed-width",
+                                  "width": 200,
+                                  "content": "-",
+                                  "fontFamily": "Inter",
+                                  "fontSize": 11,
+                                  "fontWeight": "600"
+                                },
+                                {
+                                  "type": "text",
+                                  "id": "GgTtt",
+                                  "name": "fModule",
+                                  "fill": "#60717A",
+                                  "textGrowth": "fixed-width",
+                                  "width": 90,
+                                  "content": "iam",
+                                  "fontFamily": "Inter",
+                                  "fontSize": 11,
+                                  "fontWeight": "600"
+                                },
+                                {
+                                  "type": "text",
+                                  "id": "YQbPE",
+                                  "name": "fCubeboxCallable",
                                   "fill": "#9AA7AD",
                                   "textGrowth": "fixed-width",
                                   "width": 86,

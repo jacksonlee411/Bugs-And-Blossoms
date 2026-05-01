@@ -1,6 +1,6 @@
 # DEV-PLAN-482：EHR Capability Registry 与角色能力候选项方案
 
-**状态**: 规划中（2026-04-29 08:01 CST）
+**状态**: 规划中（2026-05-01 08:14 CST）
 
 ## 1. 背景
 
@@ -19,7 +19,7 @@
 
 1. [ ] 冻结授权项标识 / capability key 格式：统一为 `object:action`，例如 `orgunit.orgunits:read`；不得新增 `orgunit.view` 这类 `module.verb` 兼容别名。
 2. [ ] 冻结 `Capability Registry` 的最小元数据，使 UI 能展示资源、动作、中文/英文标签、范围维度、启停状态。
-3. [ ] 定义服务端 options API，使 `DEV-PLAN-481` 的角色定义页可从该 API 获取全部启用且可分配的 capability。
+3. [ ] 定义服务端 options API，使 `DEV-PLAN-481` 的角色定义页可从该 API 获取全部启用、可分配且有当前 tenant API 覆盖的 capability。
 4. [ ] 定义 capability key 校验契约：角色保存提交的 key 必须存在于 registry 且处于可分配状态。
 5. [ ] 定义 registry 校验基础，供 `DEV-PLAN-484` 校验 policy、route authz、CubeBox API tool overlay、role definition 与 registry 不得漂移。
 6. [ ] 对齐 `DEV-PLAN-483/484`：registry 与 options API 只输出 canonical `object:action`，不输出旧 `permissionKey` 或别名，且不输出无当前实现覆盖的 assignable capability。
@@ -56,6 +56,7 @@
 | `scope_dimension` | `none` 或 `organization`；用户授权页据此判断是否需要组织范围 |
 | `assignable` | 是否允许出现在角色定义候选项中 |
 | `status` | `enabled`、`disabled`、`deprecated` |
+| `surface` | `tenant_api`、`superadmin`、`internal_system` 等；tenant 功能授权项默认只输出 `tenant_api` |
 | `sort_order` | UI 分组和排序 |
 
 说明：
@@ -70,6 +71,7 @@
 2. key 不允许手工覆盖。
 3. 同一个 `object/action` 只能有一条 registry entry。
 4. `assignable=false` 的能力可用于系统内部或超级管理员场景，但不进入普通角色定义候选项。
+5. 首批必须登记 `iam.authz:read`，用于保护 capability options 与 API 授权目录查询；如需要在线写入角色/授权，再登记 `iam.authz:admin` 或更明确 object/action。该 object/action 必须进入 registry、route requirement 和 policy，不得只在文档示例中出现。
 
 ## 5. Options API
 
@@ -87,6 +89,7 @@
 | `owner_module` | 可选，按模块过滤 |
 | `scope_dimension` | 可选，按范围维度过滤 |
 | `include_disabled` | 默认 `false`；仅授权管理员诊断场景允许开启 |
+| `include_uncovered` | 默认 `false`；仅诊断场景允许返回无当前 tenant API 覆盖的 assignable capability |
 
 响应示例：
 
@@ -103,8 +106,10 @@
       "label": "组织管理 / 查看",
       "scope_dimension": "organization",
       "assignable": true,
-      "status": "enabled",
-      "sort_order": 100
+	      "status": "enabled",
+	      "surface": "tenant_api",
+	      "covered": true,
+	      "sort_order": 100
     }
   ],
   "registry_rev": "20260429-static"
@@ -113,7 +118,7 @@
 
 ### 5.2 权限保护
 
-该 endpoint 本身必须受授权保护。首期建议使用 `iam.authz:read`；角色保存和 registry 诊断类写操作如后续出现，应使用 `iam.authz:admin` 或更明确的 object/action。
+该 endpoint 本身必须受授权保护。首期使用 `iam.authz:read`；角色保存和 registry 诊断类写操作如后续出现，应使用 `iam.authz:admin` 或更明确的 object/action。实现前必须先在 registry 中登记 `iam.authz` object/action，并由 `DEV-PLAN-484` 覆盖门禁验证 route requirement、policy 与 registry 一致。
 
 ## 6. 候选项消费契约
 
@@ -135,9 +140,9 @@
 
 1. capability key 格式为 `object:action`。
 2. key 存在于 registry。
-3. entry `status=enabled` 且 `assignable=true`。
+3. entry `status=enabled`、`assignable=true`、`surface=tenant_api` 且具备当前 tenant API 覆盖。
 4. 同一角色内 key 不重复。
-5. 包含 `scope_dimension=organization` 的角色，在用户授权保存时必须有组织范围；角色定义页不手工维护 `scope_required`。保存 UI 的错误态由后续实现计划承接。
+5. 包含 `scope_dimension=organization` 的角色，在用户授权保存时必须有组织范围；角色定义页不手工维护 `scope_required`。服务端必须返回明确错误，具体行内错误 UI 表现可由用户授权实现计划细化。
 
 ### 7.2 反漂移门禁
 
@@ -163,14 +168,15 @@
 
 1. [ ] 在 `pkg/authz` 增加结构化 capability registry。
 2. [ ] 增加 `ParseCapabilityKey`、`CapabilityKey(object, action)`、`LookupCapability`、`ListCapabilities` 等纯函数。
-3. [ ] 增加角色 capability 校验函数，覆盖未知 key、禁用 key、重复 key、旧格式 key。
-4. [ ] 补 `pkg/authz` 黑盒表驱动测试。
+3. [ ] 首批 registry seed 至少包含当前受保护 tenant API 与 `iam.authz:read`；`iam.authz:admin` 仅在首批出现在线写入时登记。
+4. [ ] 增加角色 capability 校验函数，覆盖未知 key、禁用 key、无覆盖 key、非 tenant surface key、重复 key、旧格式 key。
+5. [ ] 补 `pkg/authz` 黑盒表驱动测试。
 
 ### 8.3 P2：Options API
 
 1. [ ] 新增 `GET /iam/api/authz/capabilities`。
 2. [ ] endpoint 受 `iam.authz:read` 保护。
-3. [ ] 支持搜索与基础过滤，默认只返回 `enabled + assignable`。
+3. [ ] 支持搜索与基础过滤，默认只返回 `enabled + assignable + tenant_api + 当前 tenant API 覆盖`。
 4. [ ] 补 `internal/server` handler、authz requirement 与响应测试。
 
 ### 8.4 P3：481 页面消费契约
@@ -178,7 +184,7 @@
 1. [ ] 481 的角色定义页从 options API 拉取候选 capability。
 2. [ ] 481 页面使用资源-操作矩阵或可搜索 Autocomplete 展示全部可选项。
 3. [ ] 481 的保存 payload 只提交 capability keys。
-4. [ ] 481 UI 测试覆盖加载候选和搜索选择；保存错误态由后续实现计划承接。
+4. [ ] 481 UI 测试覆盖加载候选和搜索选择；用户授权组织范围缺失的服务端保存错误必须被消费，具体行内错误表现由用户授权实现计划细化。
 
 ### 8.5 P4：门禁补强
 
@@ -188,10 +194,10 @@
 
 ## 9. 验收标准
 
-1. [ ] 481 角色定义页的能力候选项可覆盖 registry 中全部 `enabled + assignable` capability。
+1. [ ] 481 角色定义页的能力候选项可覆盖 registry 中全部 `enabled + assignable + tenant_api + 当前 tenant API 覆盖` capability。
 2. [ ] 从 policy CSV 删除某条授权记录不会导致该 capability 从候选项消失。
-3. [ ] registry 新增一个 `enabled + assignable` capability 后，options API 与 481 角色定义页可发现该项。
-4. [ ] 未登记、禁用、废弃、旧格式 capability key 均不能被服务端保存接口接受；本计划不要求新增对应 UI 异常态。
+3. [ ] registry 新增一个 `enabled + assignable + tenant_api` capability 后，只有在具备当前 tenant API 覆盖时 options API 与 481 角色定义页才可发现该项；无覆盖时 `DEV-PLAN-484` lint 失败。
+4. [ ] 未登记、禁用、废弃、无覆盖、非 tenant surface、旧格式 capability key 均不能被服务端保存接口接受；本计划不要求新增对应 UI 异常态。
 5. [ ] route authz、policy、CubeBox API tool overlay 与 registry 漂移时，authz lint 失败。
 
 ## 10. 风险与停止线

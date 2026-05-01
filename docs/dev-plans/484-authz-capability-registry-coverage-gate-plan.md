@@ -1,6 +1,6 @@
 # DEV-PLAN-484：Authz Capability Registry 覆盖门禁方案
 
-**状态**: 规划中（2026-04-29 21:20 CST）
+**状态**: 规划中（2026-05-01 08:14 CST）
 
 ## 0. 适用范围与评审分级
 
@@ -15,6 +15,10 @@
 1. **边界**：484 只拥有“覆盖关系和反漂移门禁”；482 继续拥有 capability registry 数据结构与 options API；483 继续拥有旧 `permissionKey` 和旧 key 硬删除。
 2. **不变量**：一个受保护 API 或 CubeBox API tool overlay 必须绑定且只绑定一个 `authz_object + authz_action`；每个 requirement 必须存在于 registry；每个 `assignable=true` capability 必须有当前实现覆盖证据。
 3. **可解释**：管理员在功能授权项看到的授权项标识一定能追溯到至少一个当前可运行 API；新增模块如果忘记登记权限或登记了空壳权限，CI 失败。
+
+### 0.2 当前门禁缺口
+
+当前 `make authz-lint` 只做基础 policy 文件格式检查，尚不能枚举 route requirement、capability registry、policy 与 CubeBox API tool overlay 的覆盖关系。因此 482/483/485/490 的实施 PR 在合入前，必须先完成本计划 P1/P2 覆盖事实提取与 lint 串联；否则“覆盖门禁”只是文档约束，不能作为已具备的 CI 保护。
 
 ## 1. 背景
 
@@ -38,7 +42,7 @@
 
 ## 3. 非目标
 
-1. 不改变 482 的 registry 字段模型和 options API 主契约；484 只规定覆盖证据和门禁。
+1. 不改变 482 的 registry 字段模型和 options API 主契约；484 只规定覆盖证据和门禁。482 options API 默认输出口径必须与本计划一致：`enabled + assignable + tenant_api + 当前 tenant API 覆盖`。
 2. 不恢复旧 `permissionKey`、`module.verb`、SetID、scope/package 或 legacy 别名；这些删除要求仍由 483 承接。
 3. 不把 API route path 当成授权项标识；API route 只是覆盖证据。
 4. 不要求每个 route 都有独立 capability key；一个 capability key 可以覆盖多个 route。
@@ -90,8 +94,9 @@ Capability Key        = authz_object + ":" + authz_action
 
 1. registry 中每个 `assignable=true` 且 `status=enabled` 的 capability 必须至少有一个当前 tenant API 覆盖。
 2. 无覆盖但必须保留的系统内部 capability 必须设为 `assignable=false`，并标明 surface，例如 `superadmin`、`internal_system` 或后续冻结的专用分类。
-3. `deprecated`、`disabled` 或 `assignable=false` capability 默认不得进入 HRMS tenant 功能授权项。
+3. `deprecated`、`disabled`、`assignable=false`、非 `tenant_api` surface 或无当前 tenant API 覆盖的 capability 默认不得进入 HRMS tenant 功能授权项。
 4. registry 不得登记 API path 作为 key。
+5. `iam.authz:read` 必须作为 tenant API capability 登记并覆盖保护 482 capabilities endpoint 与 485 API catalog endpoint；如出现在线写入能力，再登记并覆盖 `iam.authz:admin` 或更明确 action。
 
 ### 5.4 Policy 覆盖
 
@@ -102,7 +107,7 @@ Capability Key        = authz_object + ":" + authz_action
 
 ### 5.5 前端消费
 
-1. 功能授权项 UI 只消费 482 options API，不从 route、policy CSV、导航配置或本地常量反推候选项。
+1. 功能授权项 UI 只消费 482 options API，不从 route、policy CSV、导航配置或本地常量反推候选项；482 options API 默认只输出 `enabled + assignable + tenant_api + 当前实现覆盖` 的 capability。
 2. 角色定义页保存 payload 只提交 capability keys。
 3. 点击功能授权项中的授权项标识时，可以打开标题为“关联 API”的弹窗展示 API method/path；主表不得常驻展示 method/path，也不能把 method/path 放进 key 列。当前已明确不走 executor 路线，弹窗不得规划 executor key 展示。
 4. 前端不得新增 hardcoded capability candidate list；测试 fixture 如需模拟候选项，必须复用 registry/options response shape。
@@ -134,6 +139,7 @@ Capability Key        = authz_object + ":" + authz_action
 1. [ ] 484 被 AGENTS Doc Map 收录。
 2. [ ] 480/482/483 引用 484，覆盖门禁 owner 不再散落。
 3. [ ] 现有 route/CubeBox API tool overlay/registry/policy/front-end 权限语义按 482/483/484 分工重新标注。
+4. [ ] 在 482/483/485/490 任一实施 PR 合入前，先完成本计划 P1/P2，使 `make authz-lint` 真正覆盖 route/registry/policy/tool overlay 交叉校验。
 
 ### 7.2 P1：提取覆盖事实
 
@@ -148,7 +154,8 @@ Capability Key        = authz_object + ":" + authz_action
 2. [ ] tool overlay 引用未知 route、缺 requirement 或 registry 外 object/action 时 lint 失败。
 3. [ ] policy 引用 registry 外 key 时 lint 失败。
 4. [ ] `enabled + assignable` registry entry 无 tenant API 覆盖时 lint 失败。
-5. [ ] HRMS tenant options API 输出 superadmin/internal-only capability 时 lint 或测试失败。
+5. [ ] HRMS tenant options API 输出 superadmin/internal-only capability 或无覆盖 capability 时 lint 或测试失败。
+6. [ ] `iam.authz:read` 缺 registry、缺 route requirement、缺 policy 或无 endpoint 覆盖时 lint 失败。
 
 ### 7.4 P3：开发模板与测试
 
@@ -168,7 +175,7 @@ Capability Key        = authz_object + ":" + authz_action
 2. [ ] route requirement 或 tool overlay 引用 registry 外 object/action 时，lint 失败。
 3. [ ] registry 新增 `enabled + assignable` capability 但没有 API 覆盖时，lint 失败。
 4. [ ] policy 引用 registry 外 key 或 policy-only key 时，lint 失败。
-5. [ ] 功能授权项 options API 只输出 `enabled + assignable + 当前实现覆盖` 的 HRMS tenant capability。
+5. [ ] 功能授权项 options API 只输出 `enabled + assignable + tenant_api + 当前实现覆盖` 的 HRMS tenant capability。
 6. [ ] UI 中“授权项标识”和“关联 API”弹窗分离展示，不把 API path 当 key，且不展示 executor key。
 
 ## 9. 风险与停止线

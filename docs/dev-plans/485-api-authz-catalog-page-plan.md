@@ -1,6 +1,6 @@
 # DEV-PLAN-485：API 授权目录页面方案
 
-**状态**: 规划中（2026-04-29 22:55 CST）
+**状态**: 规划中（2026-05-01 08:14 CST）
 
 ## 0. 适用范围与评审分级
 
@@ -103,7 +103,7 @@
 GET /iam/api/authz/api-catalog
 ```
 
-该 endpoint 必须受 `iam.authz:read` 或后续冻结的更明确授权项保护。
+该 endpoint 必须受 `iam.authz:read` 或后续冻结的更明确授权项保护。实现前必须先按 `DEV-PLAN-482/484` 登记 `iam.authz:read` registry entry、route requirement 与 policy 覆盖；不得只在本计划中引用一个未登记 object/action。
 
 查询参数：
 
@@ -177,7 +177,7 @@ GET /iam/api/authz/api-catalog
 ### 6.3 P2：服务端 API
 
 1. [ ] 新增 `GET /iam/api/authz/api-catalog`。
-2. [ ] endpoint 受 `iam.authz:read` 或后续冻结的授权项保护。
+2. [ ] endpoint 受已登记并有 policy 覆盖的 `iam.authz:read` 或后续冻结的授权项保护。
 3. [ ] 支持搜索和基础筛选。
 4. [ ] 补 handler/API 测试，覆盖受保护 API、allowlist API、未知 requirement fail-closed。
 

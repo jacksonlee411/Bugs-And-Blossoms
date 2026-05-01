@@ -1,11 +1,11 @@
-# DEV-PLAN-486：CubeBox Executor 路线历史对照（已停止）
+# DEV-PLAN-486：CubeBox Executor 路线活体警示（已停止）
 
-**状态**: 已停止（2026-04-30 CST；当前 PoR 转入 `DEV-PLAN-490`）
+**状态**: 已停止（2026-05-01 08:14 CST；当前 PoR 转入 `DEV-PLAN-490`，本文件保留在活体目录仅作警示）
 
 ## 0. 适用范围与评审分级
 
-- **评审分级**：`T1`（文档收敛）
-- **范围一句话**：记录 CubeBox executor 路线为何不再作为当前实施 owner；本文件不得再作为新增 UI、授权目录、覆盖门禁或业务工具契约的依据。
+- **评审分级**：`T1`（活体警示）
+- **范围一句话**：记录 CubeBox executor 路线为何不再作为当前实施 owner；本文件保留在 `docs/dev-plans/` 不是为了实施 executor，而是为了在活体文档地图中阻断 executor 路线回流。本文件不得再作为新增 UI、授权目录、覆盖门禁或业务工具契约的依据。
 - **关联模块/目录**：`modules/cubebox/**`、`modules/orgunit/presentation/cubebox/**`、`internal/server/cubebox_query_flow.go`、`internal/server/cubebox_orgunit_executors.go`
 - **关联计划/标准**：`AGENTS.md`、`DEV-PLAN-480`、`DEV-PLAN-484`、`DEV-PLAN-485`、`DEV-PLAN-490`
 - **用户入口/触点**：无新增用户入口；不规划 executor key 展示、executor 目录或 executor 管理页。
@@ -15,6 +15,10 @@
 1. **边界**：486 不再拥有 CubeBox runtime 授权、executor requirement、executor catalog 或模块边界整改的实施切片；当前业务工具路线由 `DEV-PLAN-490` 统一承接。
 2. **不变量**：CubeBox 不是独立授权主体；当前路线要求业务工具调用回到现有 HTTP API 契约，以当前用户和当前租户执行。
 3. **可解释**：文档中出现 executor 只表示历史实现与风险来源；任何当前可执行需求必须引用 `DEV-PLAN-490`，不得引用 486 作为实施依据。
+
+### 0.2 为什么不归档
+
+通常已停止计划应归档。但 executor 路线在当前代码、历史计划和测试中仍有大量残留词汇，且容易被误解为“缺少授权的当前工具面”。因此 486 暂时作为活体警示文档保留，编号和 Doc Map 均指向“已停止、禁止回流”的结论。后续当 `DEV-PLAN-490` 完成 active runtime 删除 executor 执行入口，并有反回流门禁覆盖 `READ_PLAN`、`ReadAPICatalog`、`ExecutionRegistry.ExecutePlan` 与 `executor_key` 时，486 可再转入 `docs/archive/dev-plans/`。
 
 ## 1. 背景
 
@@ -46,9 +50,10 @@
 | executor 路线回流 | 新增 executor requirement、executor authorizer 或 executor catalog | 停止实施，回到 `DEV-PLAN-490` 的 API-first 工具契约 |
 | UI 泄露内部工具键 | 功能授权项或 API 授权目录展示 executor key | 删除该展示；用户可见面只展示 HTTP API 授权事实 |
 | 双运行面扩大 | 同一能力同时新增 HTTP API 工具和 executor 工具 | 只保留 490 派生的 HTTP API 工具面，删除 active runtime 的业务 executor 可执行入口 |
-| 486 被当成当前 owner | 新计划引用 486 作为实施依据 | 改为引用 `DEV-PLAN-490`，486 仅作历史对照 |
+| 486 被当成当前 owner | 新计划引用 486 作为实施依据 | 改为引用 `DEV-PLAN-490`，486 仅作活体警示 |
 
 ## 5. 验证记录
 
 - 2026-04-29 23:08 CST：创建方案文档，记录当时 CubeBox executor 已实际进入主链路但缺 per-step 授权与模块边界治理。
 - 2026-04-30 CST：按最新产品与架构决策停止 executor 路线；当前业务工具契约转入 `DEV-PLAN-490` API-first 方案，486 仅保留历史对照与反回流停止线。
+- 2026-05-01 08:14 CST：按评审结论将 486 定位改为活体警示；暂不归档，直到 490 删除 active executor 执行入口并补齐反回流门禁。
