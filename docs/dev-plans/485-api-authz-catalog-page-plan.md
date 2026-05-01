@@ -7,18 +7,18 @@
 - **评审分级**：`T2`
 - **范围一句话**：新增一个只读菜单与页面，用于查看全部 HTTP API 授权目录项、每个 API 绑定的授权资源/操作/授权项标识，以及该 API 是否进入 CubeBox 可调用 HTTP API 工具面；页面不承担编辑、修复或运行时授权裁决职责。
 - **关联模块/目录**：`apps/web/src/**`、`internal/server/**`、`internal/routing/**`、`pkg/authz/**`、`scripts/authz/**`
-- **关联计划/标准**：`AGENTS.md`、`DEV-PLAN-000`、`DEV-PLAN-001`、`DEV-PLAN-012`、`DEV-PLAN-017`、`DEV-PLAN-022`、`DEV-PLAN-480`、`DEV-PLAN-482`、`DEV-PLAN-483`、`DEV-PLAN-484`、`DEV-PLAN-488`
-- **用户入口/触点**：授权管理菜单中的 `API 授权目录` 页面、服务端 API 授权目录列表接口、功能授权项页面中的“关联 API”弹窗
+- **关联计划/标准**：`AGENTS.md`、`DEV-PLAN-000`、`DEV-PLAN-001`、`DEV-PLAN-012`、`DEV-PLAN-017`、`DEV-PLAN-022`、`DEV-PLAN-480`、`DEV-PLAN-482`、`DEV-PLAN-482A`、`DEV-PLAN-483`、`DEV-PLAN-484`、`DEV-PLAN-488`
+- **用户入口/触点**：授权管理菜单中的 `API 授权目录` 页面、服务端 API 授权目录列表接口；功能授权项页面中的“关联 API”弹窗由 `DEV-PLAN-482A` 承接并复用 485 的同源聚合能力
 
 ### 0.1 Simple > Easy 三问
 
-1. **边界**：485 只拥有“API 授权目录”的只读用户入口与查询 API；484 继续拥有 route/CubeBox API tool overlay/registry/policy 覆盖门禁；482 继续拥有 capability registry 与功能授权项 options API；490 只提供 HTTP API 是否进入 CubeBox 工具面的最小标记。
+1. **边界**：485 只拥有“API 授权目录”的只读用户入口与查询 API；482A 拥有功能授权项主页面与反向“关联 API”弹窗；484 继续拥有 route/CubeBox API tool overlay/registry/policy 覆盖门禁；482 继续拥有 capability registry 与功能授权项 options API；490 只提供 HTTP API 是否进入 CubeBox 工具面的最小标记。
 2. **不变量**：API path/method 不是授权项标识；每个受保护 API 的 `method + path` 必须能追溯到一个 `authz_object + authz_action`，并派生出一个 `object:action` 授权项标识；公开或 allowlist API 必须明确展示为未绑定授权项且说明公开原因。
-3. **可解释**：管理员能从 API 角度回答“这个接口受哪个授权资源和哪个授权项控制”；功能授权项页面只保留反向“关联 API”查看，不规划跨页跳转联动。
+3. **可解释**：管理员能从 API 角度回答“这个接口受哪个授权资源和哪个授权项控制”；功能授权项页面的反向“关联 API”查看由 482A 承接，485 只提供同源聚合能力或可复用过滤口径。
 
 ## 1. 背景
 
-`DEV-PLAN-482/483/484` 已把角色候选能力收敛为功能授权项，并要求授权项标识与 API method/path 分离。当前功能授权项页面只回答“某个授权项关联哪些 API”，不能从 API 角度查看全量清单。
+`DEV-PLAN-482/482A/483/484` 已把角色候选能力收敛为功能授权项，并要求授权项标识与 API method/path 分离。功能授权项页面只回答“当前可分配授权项有哪些，以及某个授权项关联哪些 API”；本计划从 API 角度查看全量清单。
 
 授权管理员和开发排查还需要一个正向目录：
 
@@ -151,13 +151,14 @@ GET /iam/api/authz/api-catalog
 | 计划 | Owner |
 | --- | --- |
 | `DEV-PLAN-482` | capability registry、功能授权项 options API、授权项标识校验 |
+| `DEV-PLAN-482A` | 功能授权项主页面与反向 `关联 API` 弹窗 |
 | `DEV-PLAN-483` | `object:action` 单主源、旧 `permissionKey` 与旧 key 硬删除 |
 | `DEV-PLAN-484` | route/CubeBox API tool overlay/registry/policy 覆盖事实与反漂移门禁 |
 | `DEV-PLAN-485` | API 授权目录页面与只读查询 API |
 | `DEV-PLAN-488` | 授权项诊断视图，从 capability 角度查看未进入普通候选项的原因 |
 | `DEV-PLAN-490` | CubeBox 复用现有 HTTP API 的工具面标记与 runtime 执行链 |
 
-485 不复制 484 的 lint 逻辑；如果覆盖事实缺失，应先补 484 的枚举能力，再由 485 消费。
+485 不复制 484 的 lint 逻辑；如果覆盖事实缺失，应先补 484 的枚举能力，再由 485 消费。482A 的反向弹窗可以复用 485 的 API catalog 聚合函数或 `capability_key` 过滤口径，但不能让前端拉全量后自行筛选。
 485 也不复制 490 的 runtime 执行策略；主表只增加 `丘宝可调用` 一列，API 的读写语义继续由 `方法`、`操作` 与 `授权项标识` 表达。
 485 不承接 488 的授权项诊断；485 从 API 角度展示 method/path 到授权项的绑定，488 从 capability 角度展示未入候选项原因。
 

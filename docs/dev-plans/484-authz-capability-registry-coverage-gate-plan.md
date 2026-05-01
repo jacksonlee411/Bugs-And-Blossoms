@@ -7,7 +7,7 @@
 - **评审分级**：`T2`
 - **范围一句话**：冻结新增模块、功能、HTTP API 与 CubeBox API tool overlay 必然进入 capability registry 和功能授权项的覆盖门禁；任何未声明、未登记、未覆盖或 policy-only 的权限漂移都必须在 CI 被阻断。
 - **关联模块/目录**：`pkg/authz/**`、`config/access/**`、`scripts/authz/**`、`internal/server/**`、`internal/superadmin/**`、`modules/cubebox/**`、`apps/web/src/**`
-- **关联计划/标准**：`AGENTS.md`、`DEV-PLAN-000`、`DEV-PLAN-001`、`DEV-PLAN-012`、`DEV-PLAN-017`、`DEV-PLAN-022`、`DEV-PLAN-480`、`DEV-PLAN-481`、`DEV-PLAN-482`、`DEV-PLAN-483`、`DEV-PLAN-485`、`DEV-PLAN-487`、`DEV-PLAN-488`
+- **关联计划/标准**：`AGENTS.md`、`DEV-PLAN-000`、`DEV-PLAN-001`、`DEV-PLAN-012`、`DEV-PLAN-017`、`DEV-PLAN-022`、`DEV-PLAN-480`、`DEV-PLAN-481`、`DEV-PLAN-482`、`DEV-PLAN-482A`、`DEV-PLAN-483`、`DEV-PLAN-485`、`DEV-PLAN-487`、`DEV-PLAN-488`
 - **用户入口/触点**：功能授权项、授权项诊断、角色定义页 capability 候选项、所有受保护 HTTP API、CubeBox API-first 工具链
 
 ### 0.1 Simple > Easy 三问
@@ -111,9 +111,9 @@ Capability Key        = authz_object + ":" + authz_action
 
 1. 功能授权项 UI 只消费 482 options API，不从 route、policy CSV、导航配置或本地常量反推候选项；482 options API 默认只输出 `enabled + assignable + tenant_api + 当前实现覆盖` 的 capability。
 2. 角色定义页保存 payload 只提交 capability keys；487 保存 API 必须做服务端二次校验，不信任前端候选项。
-3. 点击功能授权项中的授权项标识时，可以打开标题为“关联 API”的弹窗展示 API method/path；主表不得常驻展示 method/path，也不能把 method/path 放进 key 列。当前已明确不走 executor 路线，弹窗不得规划 executor key 展示。
+3. 点击功能授权项中的授权项标识时，可以打开标题为“关联 API”的弹窗展示 API method/path；主表不得常驻展示 method/path，也不能把 method/path 放进 key 列。该页面与弹窗实施 owner 为 `DEV-PLAN-482A`。当前已明确不走 executor 路线，弹窗不得规划 executor key 展示。
 4. 前端不得新增 hardcoded capability candidate list；测试 fixture 如需模拟候选项，必须复用 registry/options response shape。
-5. 全量 HTTP API 正向查看面归属 `DEV-PLAN-485` 的 `API 授权目录` 页面；功能授权项页面只保留点击授权项标识后的反向“关联 API”弹窗。
+5. 全量 HTTP API 正向查看面归属 `DEV-PLAN-485` 的 `API 授权目录` 页面；普通功能授权项主页面与点击授权项标识后的反向“关联 API”弹窗归属 `DEV-PLAN-482A`。
 6. 不可分配、停用、无覆盖、内部 surface 等诊断信息归属 `DEV-PLAN-488` 的授权项诊断视图；不得混入普通功能授权项默认列表或角色定义候选项。
 
 ## 6. 新增模块/API 开发模板要求
@@ -167,7 +167,7 @@ Capability Key        = authz_object + ":" + authz_action
 
 1. [ ] 新增模块/API 的脚手架或检查清单包含 authz requirement 与 registry entry。
 2. [ ] 增加最小表驱动测试，覆盖有效复用、多 route 共享同一 key、空壳 capability、policy-only key。
-3. [ ] 前端功能授权项测试覆盖“授权项标识列”和“关联 API”弹窗分离。
+3. [ ] 前端功能授权项测试按 `DEV-PLAN-482A` 覆盖“授权项标识列”和“关联 API”弹窗分离。
 
 ### 7.5 P4：CI 串联
 

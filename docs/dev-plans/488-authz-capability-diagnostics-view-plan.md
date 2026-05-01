@@ -7,7 +7,7 @@
 - **评审分级**：`T2`
 - **范围一句话**：新增一个只读诊断视图，用于查看 capability registry 中未进入普通功能授权项候选列表的能力及原因，避免不可分配、停用、无覆盖、系统内部能力混入角色配置主路径。
 - **关联模块/目录**：`apps/web/src/**`、`internal/server/**`、`pkg/authz/**`、`scripts/authz/**`
-- **关联计划/标准**：`AGENTS.md`、`DEV-PLAN-000`、`DEV-PLAN-001`、`DEV-PLAN-012`、`DEV-PLAN-022`、`DEV-PLAN-480`、`DEV-PLAN-482`、`DEV-PLAN-483`、`DEV-PLAN-484`、`DEV-PLAN-485`
+- **关联计划/标准**：`AGENTS.md`、`DEV-PLAN-000`、`DEV-PLAN-001`、`DEV-PLAN-012`、`DEV-PLAN-022`、`DEV-PLAN-480`、`DEV-PLAN-482`、`DEV-PLAN-482A`、`DEV-PLAN-483`、`DEV-PLAN-484`、`DEV-PLAN-485`
 - **用户入口/触点**：授权管理菜单中的 `授权项诊断` 只读页面、482 capability options/diagnostics 查询接口、484 覆盖事实枚举能力
 
 ### 0.1 Simple > Easy 三问
@@ -46,7 +46,7 @@
 2. 不提供启用、停用、修复、刷新、覆盖重算或 policy 修改按钮。
 3. 不把无覆盖 capability 变成可分配能力；无覆盖的 `assignable=true` 仍必须按 `DEV-PLAN-484` 导致 lint 失败。
 4. 不在角色定义页、普通功能授权项主表或保存 payload 中暴露不可分配、停用、无覆盖、内部能力。
-5. 不把 API method/path 当成 capability key；API 只作为覆盖证据展示，反向关联 API 弹窗仍按 482/484，正向 API 目录仍按 485。
+5. 不把 API method/path 当成 capability key；API 只作为覆盖证据展示，普通功能授权项的反向 `关联 API` 弹窗仍按 482A，正向 API 目录仍按 485。
 6. 不展示 CubeBox executor key；当前授权事实统一基于 HTTP API、route requirement 与 capability registry。
 
 ## 3. 页面与交互
@@ -72,7 +72,7 @@
 | 当前覆盖 | 是否有当前 tenant API 覆盖 | `否` |
 | 诊断原因 | 排除或异常原因 | `not_assignable` |
 
-主表不常驻展示 API method/path。点击授权项标识可沿用功能授权项的“关联 API”弹窗展示覆盖 API；如果没有覆盖，弹窗展示空态，不把无覆盖当成可分配。
+主表不常驻展示 API method/path。点击授权项标识可沿用 `DEV-PLAN-482A` 的“关联 API”弹窗展示覆盖 API；如果没有覆盖，弹窗展示空态，不把无覆盖当成可分配。
 
 ### 3.3 过滤与搜索
 
@@ -168,6 +168,7 @@ GET /iam/api/authz/capability-diagnostics
 | --- | --- |
 | `DEV-PLAN-480` | 授权体系蓝图与授权管理 UI 总体边界 |
 | `DEV-PLAN-482` | capability registry 字段模型、普通功能授权项 options API、角色保存 capability 校验 |
+| `DEV-PLAN-482A` | 普通 `功能授权项` 主页面与反向 `关联 API` 弹窗 |
 | `DEV-PLAN-483` | canonical `object:action` 单主源、旧权限语言硬删除 |
 | `DEV-PLAN-484` | route/tool overlay/registry/policy 覆盖事实与 CI 反漂移门禁 |
 | `DEV-PLAN-485` | API 授权目录，从 API 角度查看 method/path 到授权项的绑定 |

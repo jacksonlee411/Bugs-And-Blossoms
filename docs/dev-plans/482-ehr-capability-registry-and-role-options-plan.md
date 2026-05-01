@@ -13,7 +13,7 @@
 - `apps/web` 的 `permissionKey` 来自构建期/本地配置，不能作为授权事实源或角色能力候选源。
 - 历史 `Capability Registry` / capability key 下拉方案已归档，且绑定 SetID / scope/package 历史语义，不得作为当前实现前提。
 
-因此需要一个独立方案承接：全量 capability registry、候选项 options API 与 capability key 校验规则。482 不拥有角色定义页面本身；角色基础信息、保存按钮和角色编辑工作流继续归属 `DEV-PLAN-481`，角色定义在线保存 API、持久化模型、服务端校验和运行时生效由 `DEV-PLAN-487` 承接。现有前端 `permissionKey`、旧 key 的硬删除要求由 `DEV-PLAN-483` 承接；新增受保护 API 与 CubeBox API tool overlay 必然进入功能授权项、policy-only 权限与覆盖证据门禁由 `DEV-PLAN-484` 承接；不可分配、停用、无覆盖和内部 surface 的只读诊断视图由 `DEV-PLAN-488` 承接。482 不提供兼容映射。
+因此需要一个独立方案承接：全量 capability registry、候选项 options API 与 capability key 校验规则。482 不拥有角色定义页面本身；角色基础信息、保存按钮和角色编辑工作流继续归属 `DEV-PLAN-481`，角色定义在线保存 API、持久化模型、服务端校验和运行时生效由 `DEV-PLAN-487` 承接。普通 `功能授权项` 主页面与 `关联 API` 反向弹窗由 `DEV-PLAN-482A` 承接。现有前端 `permissionKey`、旧 key 的硬删除要求由 `DEV-PLAN-483` 承接；新增受保护 API 与 CubeBox API tool overlay 必然进入功能授权项、policy-only 权限与覆盖证据门禁由 `DEV-PLAN-484` 承接；不可分配、停用、无覆盖和内部 surface 的只读诊断视图由 `DEV-PLAN-488` 承接。482 不提供兼容映射。
 
 ## 2. 目标
 
@@ -65,7 +65,7 @@
 
 1. `key` 是授权项标识，不是 API 地址。
 2. 一个 `key` 可以覆盖多个 HTTP API route；CubeBox API tool overlay 只能引用这些既有 HTTP API，不新增第二套业务工具 key。
-3. 482 的 options API 默认返回 capability 元数据；若 UI 需要展示 API，应通过 `DEV-PLAN-484` 定义的覆盖证据读取，并在点击对应授权项标识后打开“关联 API”弹窗展示；全量 HTTP API 正向查看面由 `DEV-PLAN-485` 的 `API 授权目录` 承接；不得把 route path 放进 `key` 字段。
+3. 482 的 options API 默认返回 capability 元数据；普通 `功能授权项` 主页面与点击授权项标识后打开的“关联 API”弹窗由 `DEV-PLAN-482A` 承接。弹窗应通过 `DEV-PLAN-484/485` 的同源覆盖事实读取 API method/path；全量 HTTP API 正向查看面由 `DEV-PLAN-485` 的 `API 授权目录` 承接；不得把 route path 放进 `key` 字段。
 
 派生规则：
 

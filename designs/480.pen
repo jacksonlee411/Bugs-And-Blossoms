@@ -416,7 +416,7 @@
                                   "fill": "#33434C",
                                   "textGrowth": "fixed-width",
                                   "width": "fill_container",
-                                  "content": "查看组织、维护组织、使用 CubeBox 与查看字典",
+                                  "content": "查看组织、导出组织、查看员工与薪酬报表",
                                   "lineHeight": 1.25,
                                   "fontFamily": "Inter",
                                   "fontSize": 11,
@@ -464,7 +464,7 @@
                                   "fill": "#33434C",
                                   "textGrowth": "fixed-width",
                                   "width": "fill_container",
-                                  "content": "集团范围内查看和维护组织数据",
+                                  "content": "集团范围内查看、编辑和导出核心 HR 数据",
                                   "lineHeight": 1.25,
                                   "fontFamily": "Inter",
                                   "fontSize": 11,
@@ -584,7 +584,8 @@
                               "children": [
                                 {
                                   "type": "frame",
-                                  "id": "roleCancelButton",
+                                  "id": "R1jonJ",
+                                  "name": "roleCancel",
                                   "fill": "#FFFFFF",
                                   "cornerRadius": 8,
                                   "stroke": {
@@ -602,7 +603,8 @@
                                   "children": [
                                     {
                                       "type": "icon_font",
-                                      "id": "roleCancelIcon",
+                                      "id": "aI7wi",
+                                      "name": "roleCancelIcon",
                                       "width": 15,
                                       "height": 15,
                                       "iconFontName": "x",
@@ -611,7 +613,8 @@
                                     },
                                     {
                                       "type": "text",
-                                      "id": "roleCancelText",
+                                      "id": "Uyti8",
+                                      "name": "roleCancelText",
                                       "fill": "#33434C",
                                       "content": "取消",
                                       "fontFamily": "Inter",
@@ -821,7 +824,7 @@
                                       "fill": "#33434C",
                                       "textGrowth": "fixed-width",
                                       "width": "fill_container",
-                                      "content": "鲜花事业部 HR，可查看和维护组织，并使用 CubeBox 与查看字典",
+                                      "content": "鲜花事业部 HR，可查看组织、导出组织，并读取员工和薪酬报表",
                                       "lineHeight": 1.25,
                                       "fontFamily": "Inter",
                                       "fontSize": 13,
@@ -1169,7 +1172,7 @@
                                       "fill": "#10212B",
                                       "textGrowth": "fixed-width",
                                       "width": 54,
-                                      "content": "维护",
+                                      "content": "导出",
                                       "fontFamily": "Inter",
                                       "fontSize": 11,
                                       "fontWeight": "700"
@@ -1181,7 +1184,7 @@
                                       "fill": "#047C78",
                                       "textGrowth": "fixed-width",
                                       "width": 230,
-                                      "content": "orgunit.orgunits:admin",
+                                      "content": "orgunit.orgunits:export",
                                       "fontFamily": "Inter",
                                       "fontSize": 10,
                                       "fontWeight": "800"
@@ -1193,7 +1196,7 @@
                                       "fill": "#33434C",
                                       "textGrowth": "fixed-width",
                                       "width": "fill_container",
-                                      "content": "允许维护可见范围内的组织数据",
+                                      "content": "允许导出可见范围内的组织数据",
                                       "lineHeight": 1.25,
                                       "fontFamily": "Inter",
                                       "fontSize": 11,
@@ -1256,7 +1259,7 @@
                                       "fill": "#10212B",
                                       "textGrowth": "fixed-width",
                                       "width": 130,
-                                      "content": "CubeBox",
+                                      "content": "员工信息",
                                       "fontFamily": "Inter",
                                       "fontSize": 11,
                                       "fontWeight": "700"
@@ -1280,7 +1283,7 @@
                                       "fill": "#047C78",
                                       "textGrowth": "fixed-width",
                                       "width": 230,
-                                      "content": "cubebox.conversations:use",
+                                      "content": "employee.employees:read",
                                       "fontFamily": "Inter",
                                       "fontSize": 10,
                                       "fontWeight": "800"
@@ -1292,7 +1295,7 @@
                                       "fill": "#33434C",
                                       "textGrowth": "fixed-width",
                                       "width": "fill_container",
-                                      "content": "允许进入对话入口，不代表业务 API 权限",
+                                      "content": "可查看员工列表与基础信息",
                                       "lineHeight": 1.25,
                                       "fontFamily": "Inter",
                                       "fontSize": 11,
@@ -1346,7 +1349,7 @@
                                       "fill": "#10212B",
                                       "textGrowth": "fixed-width",
                                       "width": 130,
-                                      "content": "CubeBox",
+                                      "content": "员工信息",
                                       "fontFamily": "Inter",
                                       "fontSize": 11,
                                       "fontWeight": "700"
@@ -1358,7 +1361,7 @@
                                       "fill": "#10212B",
                                       "textGrowth": "fixed-width",
                                       "width": 54,
-                                      "content": "查看",
+                                      "content": "编辑",
                                       "fontFamily": "Inter",
                                       "fontSize": 11,
                                       "fontWeight": "700"
@@ -1370,7 +1373,7 @@
                                       "fill": "#047C78",
                                       "textGrowth": "fixed-width",
                                       "width": 230,
-                                      "content": "cubebox.conversations:read",
+                                      "content": "employee.employees:update",
                                       "fontFamily": "Inter",
                                       "fontSize": 10,
                                       "fontWeight": "800"
@@ -1382,7 +1385,7 @@
                                       "fill": "#60717A",
                                       "textGrowth": "fixed-width",
                                       "width": "fill_container",
-                                      "content": "可查看会话列表与会话内容，未授予当前角色",
+                                      "content": "可维护员工基础信息，未授予当前角色",
                                       "lineHeight": 1.25,
                                       "fontFamily": "Inter",
                                       "fontSize": 11,
@@ -1445,7 +1448,7 @@
                                       "fill": "#10212B",
                                       "textGrowth": "fixed-width",
                                       "width": 130,
-                                      "content": "IAM 字典",
+                                      "content": "薪酬报表",
                                       "fontFamily": "Inter",
                                       "fontSize": 11,
                                       "fontWeight": "700"
@@ -1469,7 +1472,7 @@
                                       "fill": "#047C78",
                                       "textGrowth": "fixed-width",
                                       "width": 230,
-                                      "content": "iam.dicts:read",
+                                      "content": "salary.reports:read",
                                       "fontFamily": "Inter",
                                       "fontSize": 10,
                                       "fontWeight": "800"
@@ -1481,7 +1484,7 @@
                                       "fill": "#33434C",
                                       "textGrowth": "fixed-width",
                                       "width": "fill_container",
-                                      "content": "可查看字典配置与字典值",
+                                      "content": "可查看薪酬汇总报表与统计摘要",
                                       "lineHeight": 1.25,
                                       "fontFamily": "Inter",
                                       "fontSize": 11,
@@ -1687,7 +1690,7 @@
                     },
                     {
                       "type": "frame",
-                      "id": "authRoleActions",
+                      "id": "m2gxxw",
                       "name": "edit actions",
                       "gap": 8,
                       "alignItems": "center",
@@ -1733,7 +1736,8 @@
                         },
                         {
                           "type": "frame",
-                          "id": "authRoleCancelButton",
+                          "id": "F3NSnR",
+                          "name": "authRoleCancel",
                           "fill": "#FFFFFF",
                           "cornerRadius": 8,
                           "stroke": {
@@ -1751,7 +1755,8 @@
                           "children": [
                             {
                               "type": "icon_font",
-                              "id": "authRoleCancelIcon",
+                              "id": "zjWZH",
+                              "name": "authRoleCancelIcon",
                               "width": 15,
                               "height": 15,
                               "iconFontName": "x",
@@ -1760,7 +1765,8 @@
                             },
                             {
                               "type": "text",
-                              "id": "authRoleCancelText",
+                              "id": "eOenb",
+                              "name": "authRoleCancelText",
                               "fill": "#33434C",
                               "content": "取消",
                               "fontFamily": "Inter",
@@ -1771,7 +1777,8 @@
                         },
                         {
                           "type": "frame",
-                          "id": "authRoleSaveButton",
+                          "id": "vz5RF",
+                          "name": "authRoleSave",
                           "fill": "#09A7A3",
                           "cornerRadius": 8,
                           "gap": 7,
@@ -1784,7 +1791,8 @@
                           "children": [
                             {
                               "type": "icon_font",
-                              "id": "authRoleSaveIcon",
+                              "id": "B1dhYx",
+                              "name": "authRoleSaveIcon",
                               "width": 15,
                               "height": 15,
                               "iconFontName": "save",
@@ -1793,7 +1801,8 @@
                             },
                             {
                               "type": "text",
-                              "id": "authRoleSaveText",
+                              "id": "O8g4w",
+                              "name": "authRoleSaveText",
                               "fill": "#FFFFFF",
                               "content": "保存",
                               "fontFamily": "Inter",
@@ -2060,7 +2069,7 @@
                           "fill": "#33434C",
                           "textGrowth": "fixed-width",
                           "width": 340,
-                          "content": "查看组织、维护组织、使用 CubeBox 与查看字典",
+                          "content": "查看组织、导出组织、查看员工与薪酬报表",
                           "fontFamily": "Inter",
                           "fontSize": 13,
                           "fontWeight": "600"
@@ -2152,7 +2161,7 @@
                           "fill": "#33434C",
                           "textGrowth": "fixed-width",
                           "width": 340,
-                          "content": "查看角色定义与目录版本，不编辑业务数据",
+                          "content": "查看授权摘要与审计信息，不编辑业务数据",
                           "fontFamily": "Inter",
                           "fontSize": 13,
                           "fontWeight": "600"
@@ -2291,7 +2300,7 @@
                     },
                     {
                       "type": "frame",
-                      "id": "authOrgActions",
+                      "id": "f02qRK",
                       "name": "edit actions",
                       "gap": 8,
                       "alignItems": "center",
@@ -2337,7 +2346,8 @@
                         },
                         {
                           "type": "frame",
-                          "id": "authOrgCancelButton",
+                          "id": "ngFG7",
+                          "name": "authOrgCancel",
                           "fill": "#FFFFFF",
                           "cornerRadius": 8,
                           "stroke": {
@@ -2355,7 +2365,8 @@
                           "children": [
                             {
                               "type": "icon_font",
-                              "id": "authOrgCancelIcon",
+                              "id": "rAJBr",
+                              "name": "authOrgCancelIcon",
                               "width": 15,
                               "height": 15,
                               "iconFontName": "x",
@@ -2364,7 +2375,8 @@
                             },
                             {
                               "type": "text",
-                              "id": "authOrgCancelText",
+                              "id": "IHJkC",
+                              "name": "authOrgCancelText",
                               "fill": "#33434C",
                               "content": "取消",
                               "fontFamily": "Inter",
@@ -2375,7 +2387,8 @@
                         },
                         {
                           "type": "frame",
-                          "id": "authOrgSaveButton",
+                          "id": "kQdJH",
+                          "name": "authOrgSave",
                           "fill": "#09A7A3",
                           "cornerRadius": 8,
                           "gap": 7,
@@ -2388,7 +2401,8 @@
                           "children": [
                             {
                               "type": "icon_font",
-                              "id": "authOrgSaveIcon",
+                              "id": "U96XLv",
+                              "name": "authOrgSaveIcon",
                               "width": 15,
                               "height": 15,
                               "iconFontName": "save",
@@ -2397,7 +2411,8 @@
                             },
                             {
                               "type": "text",
-                              "id": "authOrgSaveText",
+                              "id": "hta51",
+                              "name": "authOrgSaveText",
                               "fill": "#FFFFFF",
                               "content": "保存",
                               "fontFamily": "Inter",
@@ -3543,7 +3558,7 @@
                                   "fill": "#10212B",
                                   "textGrowth": "fixed-width",
                                   "width": 48,
-                                  "content": "维护",
+                                  "content": "导出",
                                   "fontFamily": "Inter",
                                   "fontSize": 11,
                                   "fontWeight": "700"
@@ -3555,7 +3570,7 @@
                                   "fill": "#047C78",
                                   "textGrowth": "fixed-width",
                                   "width": 230,
-                                  "content": "orgunit.orgunits:admin",
+                                  "content": "orgunit.orgunits:export",
                                   "fontFamily": "Inter",
                                   "fontSize": 10,
                                   "fontWeight": "800"
@@ -3566,7 +3581,7 @@
                                   "fill": "#33434C",
                                   "textGrowth": "fixed-width",
                                   "width": 360,
-                                  "content": "允许维护可见范围内的组织数据",
+                                  "content": "允许导出可见范围内的组织数据",
                                   "lineHeight": 1.25,
                                   "fontFamily": "Inter",
                                   "fontSize": 11,
@@ -3666,7 +3681,7 @@
                                   "fill": "#10212B",
                                   "textGrowth": "fixed-width",
                                   "width": 150,
-                                  "content": "CubeBox",
+                                  "content": "员工信息",
                                   "lineHeight": 1.2,
                                   "fontFamily": "Inter",
                                   "fontSize": 11,
@@ -3691,7 +3706,7 @@
                                   "fill": "#047C78",
                                   "textGrowth": "fixed-width",
                                   "width": 230,
-                                  "content": "cubebox.conversations:read",
+                                  "content": "employee.employees:read",
                                   "fontFamily": "Inter",
                                   "fontSize": 10,
                                   "fontWeight": "800"
@@ -3702,7 +3717,7 @@
                                   "fill": "#33434C",
                                   "textGrowth": "fixed-width",
                                   "width": 360,
-                                  "content": "可查看会话列表与会话内容",
+                                  "content": "可查看员工列表与基础信息",
                                   "lineHeight": 1.25,
                                   "fontFamily": "Inter",
                                   "fontSize": 11,
@@ -3712,7 +3727,7 @@
                                   "type": "frame",
                                   "id": "capRowEmployeeReadScope",
                                   "width": 100,
-                                  "fill": "#F3F6F7",
+                                  "fill": "#E1F7F6",
                                   "cornerRadius": 999,
                                   "padding": [
                                     6,
@@ -3724,8 +3739,8 @@
                                     {
                                       "type": "text",
                                       "id": "capRowEmployeeReadScopeText",
-                                      "fill": "#60717A",
-                                      "content": "不需要",
+                                      "fill": "#047C78",
+                                      "content": "需要",
                                       "fontFamily": "Inter",
                                       "fontSize": 11,
                                       "fontWeight": "700"
@@ -3838,7 +3853,7 @@
                                   "fill": "#33434C",
                                   "textGrowth": "fixed-width",
                                   "width": 360,
-                                  "content": "可读取角色定义与目录版本",
+                                  "content": "可读取角色、授权摘要与目录版本",
                                   "lineHeight": 1.25,
                                   "fontFamily": "Inter",
                                   "fontSize": 11,
@@ -5220,13 +5235,13 @@
                                   "width": 110,
                                   "fill": "#E7F6F4",
                                   "cornerRadius": 6,
+                                  "layout": "vertical",
                                   "padding": [
                                     5,
                                     8
                                   ],
                                   "justifyContent": "center",
                                   "alignItems": "center",
-                                  "layout": "vertical",
                                   "children": [
                                     {
                                       "type": "text",
@@ -5360,13 +5375,13 @@
                                   "width": 110,
                                   "fill": "#E7F6F4",
                                   "cornerRadius": 6,
+                                  "layout": "vertical",
                                   "padding": [
                                     5,
                                     8
                                   ],
                                   "justifyContent": "center",
                                   "alignItems": "center",
-                                  "layout": "vertical",
                                   "children": [
                                     {
                                       "type": "text",
@@ -5500,13 +5515,13 @@
                                   "width": 110,
                                   "fill": "#E7F6F4",
                                   "cornerRadius": 6,
+                                  "layout": "vertical",
                                   "padding": [
                                     5,
                                     8
                                   ],
                                   "justifyContent": "center",
                                   "alignItems": "center",
-                                  "layout": "vertical",
                                   "children": [
                                     {
                                       "type": "text",
@@ -5640,13 +5655,13 @@
                                   "width": 110,
                                   "fill": "#E7F6F4",
                                   "cornerRadius": 6,
+                                  "layout": "vertical",
                                   "padding": [
                                     5,
                                     8
                                   ],
                                   "justifyContent": "center",
                                   "alignItems": "center",
-                                  "layout": "vertical",
                                   "children": [
                                     {
                                       "type": "text",
@@ -5780,13 +5795,13 @@
                                   "width": 110,
                                   "fill": "#EEF4F7",
                                   "cornerRadius": 6,
+                                  "layout": "vertical",
                                   "padding": [
                                     5,
                                     8
                                   ],
                                   "justifyContent": "center",
                                   "alignItems": "center",
-                                  "layout": "vertical",
                                   "children": [
                                     {
                                       "type": "text",
@@ -5920,13 +5935,13 @@
                                   "width": 110,
                                   "fill": "#FFF4E6",
                                   "cornerRadius": 6,
+                                  "layout": "vertical",
                                   "padding": [
                                     5,
                                     8
                                   ],
                                   "justifyContent": "center",
                                   "alignItems": "center",
-                                  "layout": "vertical",
                                   "children": [
                                     {
                                       "type": "text",
@@ -6060,13 +6075,13 @@
                                   "width": 110,
                                   "fill": "#F2ECFF",
                                   "cornerRadius": 6,
+                                  "layout": "vertical",
                                   "padding": [
                                     5,
                                     8
                                   ],
                                   "justifyContent": "center",
                                   "alignItems": "center",
-                                  "layout": "vertical",
                                   "children": [
                                     {
                                       "type": "text",
