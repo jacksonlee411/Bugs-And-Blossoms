@@ -12,7 +12,6 @@ const appPreferencesMocks = vi.hoisted(() => ({
 
 const apiMocks = vi.hoisted(() => ({
   deactivateModelCredential: vi.fn(),
-  loadCubeBoxCapabilities: vi.fn(),
   loadModelSettings: vi.fn(),
   rotateModelCredential: vi.fn(),
   selectActiveModel: vi.fn(),
@@ -166,20 +165,6 @@ describe('CubeBoxPanel', () => {
         status: 'healthy',
         latency_ms: 120,
         validated_at: '2026-04-22T00:00:00Z'
-      }
-    })
-    apiMocks.loadCubeBoxCapabilities.mockResolvedValue({
-      conversation: {
-        read: true,
-        use: true
-      },
-      settings: {
-        read: true,
-        verify: true,
-        select: true,
-        update: true,
-        rotate: true,
-        deactivate: true
       }
     })
     apiMocks.deactivateModelCredential.mockResolvedValue(undefined)
@@ -372,25 +357,14 @@ describe('CubeBoxPanel', () => {
     expect(message).toHaveStyle({ whiteSpace: 'pre-wrap' })
   })
 
-  it('hides settings entry when model settings permission is missing', async () => {
-    apiMocks.loadCubeBoxCapabilities.mockResolvedValueOnce({
-      conversation: {
-        read: true,
-        use: true
-      },
-      settings: {
-        read: false,
-        verify: false,
-        select: false,
-        update: false,
-        rotate: false,
-        deactivate: false
-      }
+  it('hides settings entry when model settings capability is missing', () => {
+    appPreferencesMocks.useAppPreferences.mockReturnValueOnce({
+      ...appPreferencesMocks.useAppPreferences(),
+      hasRequiredCapability: vi.fn((key?: string) => key !== 'cubebox.model_credential:read')
     })
 
     render(<CubeBoxPanel />)
 
-    await waitFor(() => expect(apiMocks.loadCubeBoxCapabilities).toHaveBeenCalledTimes(1))
     expect(screen.queryByRole('button', { name: '设置' })).not.toBeInTheDocument()
   })
 

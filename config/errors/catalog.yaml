@@ -518,6 +518,13 @@ errors:
     user_message_key: errors.dict_value_label_required
     backend_policy: passthrough
     frontend_policy: mapped
+  - code: diagnostic_parameter_not_supported
+    module: iam
+    http_status: 400
+    severity: error
+    user_message_key: errors.diagnostic_parameter_not_supported
+    backend_policy: mapped
+    frontend_policy: mapped
   - code: forbidden
     module: iam
     http_status: 403

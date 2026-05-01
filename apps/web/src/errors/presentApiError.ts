@@ -63,6 +63,7 @@ const localizedMessages: Record<string, LocalizedErrorMessage> = {
   dict_store_missing: { en: 'Dict store is missing.', zh: '请求失败（dict store missing）。' },
   dict_value_code_required: { en: 'Dict value code is required.', zh: '请求失败（dict value code required）。' },
   dict_value_label_required: { en: 'Dict value label is required.', zh: '请求失败（dict value label required）。' },
+  diagnostic_parameter_not_supported: { en: 'This endpoint does not support diagnostic parameters. Use the authz diagnostics view.', zh: '当前接口不支持诊断参数，请使用授权项诊断入口。' },
   conversation_confirmation_required: { en: 'Confirmation is required before commit.', zh: '当前计划仍需补充必填信息或确认候选对象。' },
   conversation_confirmation_expired: { en: 'Confirmation window expired. Please regenerate and confirm again.', zh: '确认窗口已过期，请重新生成并确认后再继续。' },
   conversation_id_required: { en: 'Conversation ID is required.', zh: '缺少会话 ID，请重试。' },

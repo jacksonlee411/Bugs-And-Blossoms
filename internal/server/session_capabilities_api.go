@@ -23,8 +23,16 @@ type policyAllowAuthorizer interface {
 var sessionCapabilityRequirements = []sessionCapabilityRequirement{
 	{Object: authz.ObjectCubeBoxConversations, Action: authz.ActionRead},
 	{Object: authz.ObjectCubeBoxConversations, Action: authz.ActionUse},
+	{Object: authz.ObjectCubeBoxModelCredential, Action: authz.ActionRead},
+	{Object: authz.ObjectCubeBoxModelCredential, Action: authz.ActionRotate},
+	{Object: authz.ObjectCubeBoxModelCredential, Action: authz.ActionDeactivate},
+	{Object: authz.ObjectCubeBoxModelProvider, Action: authz.ActionUpdate},
+	{Object: authz.ObjectCubeBoxModelSelection, Action: authz.ActionSelect},
+	{Object: authz.ObjectCubeBoxModelSelection, Action: authz.ActionVerify},
+	{Object: authz.ObjectIAMAuthz, Action: authz.ActionRead},
 	{Object: authz.ObjectIAMDictRelease, Action: authz.ActionAdmin},
 	{Object: authz.ObjectIAMDicts, Action: authz.ActionAdmin},
+	{Object: authz.ObjectIAMDicts, Action: authz.ActionRead},
 	{Object: authz.ObjectOrgUnitOrgUnits, Action: authz.ActionAdmin},
 	{Object: authz.ObjectOrgUnitOrgUnits, Action: authz.ActionRead},
 }

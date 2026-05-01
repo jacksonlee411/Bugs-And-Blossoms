@@ -211,6 +211,7 @@ func TestKnownErrorMessage_AllCases(t *testing.T) {
 		{code: "forbidden", want: "无权限执行该操作。"},
 		{code: "unauthorized", want: "登录已失效，请重新登录。"},
 		{code: "invalid_request", want: "请求参数无效，请检查后重试。"},
+		{code: "diagnostic_parameter_not_supported", want: "当前接口不支持诊断参数，请使用授权项诊断入口。"},
 		{code: "tenant_not_found", want: "未找到租户，请检查访问域名。"},
 		{code: "tenant_missing", want: "租户上下文缺失，请刷新后重试。"},
 		{code: "tenant_resolve_error", want: "租户解析失败，请稍后重试。"},

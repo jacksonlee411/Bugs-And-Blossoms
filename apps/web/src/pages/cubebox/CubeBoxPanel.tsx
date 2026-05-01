@@ -34,7 +34,6 @@ import { useAppPreferences } from '../../app/providers/AppPreferencesContext'
 import { AUTHZ_CAPABILITY_KEYS } from '../../authz/capabilities'
 import {
   deactivateModelCredential,
-  loadCubeBoxCapabilities,
   loadModelSettings,
   rotateModelCredential,
   selectActiveModel,
@@ -42,7 +41,6 @@ import {
   verifyActiveModel
 } from './api'
 import type { CubeBoxModelSettingsSnapshot } from './types'
-import type { CubeBoxCapabilities } from './types'
 import { useCubeBox } from './CubeBoxProvider'
 
 export function CubeBoxPanel() {
@@ -65,7 +63,6 @@ export function CubeBoxPanel() {
   const [settingsSaving, setSettingsSaving] = useState(false)
   const [settingsError, setSettingsError] = useState<string | null>(null)
   const [settingsSnapshot, setSettingsSnapshot] = useState<CubeBoxModelSettingsSnapshot | null>(null)
-  const [capabilities, setCapabilities] = useState<CubeBoxCapabilities | null>(null)
   const [providerID, setProviderID] = useState('openai-compatible')
   const [providerType, setProviderType] = useState('openai-compatible')
   const [providerName, setProviderName] = useState('Primary Provider')
@@ -79,14 +76,14 @@ export function CubeBoxPanel() {
     hasRequiredCapability(AUTHZ_CAPABILITY_KEYS.cubeboxConversationsRead) ||
     hasRequiredCapability(AUTHZ_CAPABILITY_KEYS.cubeboxConversationsUse)
   const localCanUseConversations = hasRequiredCapability(AUTHZ_CAPABILITY_KEYS.cubeboxConversationsUse)
-  const canReadConversations = capabilities ? capabilities.conversation.read || capabilities.conversation.use : localCanReadConversations
-  const canUseConversations = capabilities ? capabilities.conversation.use : localCanUseConversations
-  const canOpenSettings = capabilities ? capabilities.settings.read : false
-  const canEditProvider = capabilities ? capabilities.settings.update : false
-  const canRotateCredential = capabilities ? capabilities.settings.rotate : false
-  const canDeactivateCredential = capabilities ? capabilities.settings.deactivate : false
-  const canSelectActiveModel = capabilities ? capabilities.settings.select : false
-  const canVerifyActiveModel = capabilities ? capabilities.settings.verify : false
+  const canReadConversations = localCanReadConversations
+  const canUseConversations = localCanUseConversations
+  const canOpenSettings = hasRequiredCapability(AUTHZ_CAPABILITY_KEYS.cubeboxModelCredentialRead)
+  const canEditProvider = hasRequiredCapability(AUTHZ_CAPABILITY_KEYS.cubeboxModelProviderUpdate)
+  const canRotateCredential = hasRequiredCapability(AUTHZ_CAPABILITY_KEYS.cubeboxModelCredentialRotate)
+  const canDeactivateCredential = hasRequiredCapability(AUTHZ_CAPABILITY_KEYS.cubeboxModelCredentialDeactivate)
+  const canSelectActiveModel = hasRequiredCapability(AUTHZ_CAPABILITY_KEYS.cubeboxModelSelectionSelect)
+  const canVerifyActiveModel = hasRequiredCapability(AUTHZ_CAPABILITY_KEYS.cubeboxModelSelectionVerify)
   const currentTitle = state.conversation?.title?.trim() || t('page_cubebox_title')
   const latestHealthLabel = settingsSnapshot?.health ? formatHealth(settingsSnapshot.health.status, t) : t('cubebox_settings_health_unknown')
   const activeSelectionLabel = settingsSnapshot?.selection
@@ -123,26 +120,6 @@ export function CubeBoxPanel() {
       setSettingsLoading(false)
     }
   }
-
-  useEffect(() => {
-    let cancelled = false
-    async function loadCapabilities() {
-      try {
-        const payload = await loadCubeBoxCapabilities()
-        if (!cancelled) {
-          setCapabilities(payload)
-        }
-      } catch {
-        if (!cancelled) {
-          setCapabilities(null)
-        }
-      }
-    }
-    void loadCapabilities()
-    return () => {
-      cancelled = true
-    }
-  }, [])
 
   useEffect(() => {
     if (!settingsOpen) {

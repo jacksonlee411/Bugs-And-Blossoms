@@ -1,6 +1,6 @@
 # DEV-PLAN-490：CubeBox 统一 API 工具化重构方案
 
-**状态**: 规划中（2026-04-29 23:40 CST）
+**状态**: 规划中；484 覆盖事实聚合扩展点已落地，485 API 授权目录与 490 overlay/runtime 仍未实施（2026-05-01 18:58 CST）
 
 ## 0. 适用范围与评审分级
 
@@ -32,7 +32,7 @@
 ### 2.1 核心目标
 
 1. [ ] 冻结 CubeBox API-first 工具路线：业务查询/操作以现有 HTTP API 为唯一业务契约，不再新增平行业务 executor payload 契约。
-2. [ ] 在 484 单一覆盖事实聚合源经 485 API 授权目录投影后的 API 条目上叠加最小 CubeBox 工具标记，列出可供 CubeBox 使用的现有 HTTP API；`method/path/object/action/authz_capability_key` 不在 490 中重复维护。
+2. [ ] 在 484 单一覆盖事实聚合源经 485 API 授权目录投影后的 API 条目上叠加最小 CubeBox 工具标记，列出可供 CubeBox 使用的现有 HTTP API；`method/path/object/action/authz_capability_key` 不在 490 中重复维护。484 聚合源已预留 CubeBox API tool overlay 空集合扩展点，490 必须接入该扩展点。
 3. [ ] CubeBox planner 输出 API call plan，而不是 executor key plan；后端只允许调用 485/490 派生出的可调用工具条目。
 4. [ ] API 调用必须以当前用户身份经过现有 route/service authz、RLS、数据范围和字段裁剪。
 5. [ ] 写入 API 首期不对 planner 开放；“提案 + 用户确认 + 当前用户提交”机制暂缓，后续另起计划冻结 UI 和契约。
@@ -339,3 +339,4 @@ HTTP POST /internal/cubebox/turns:stream
 ## 11. 验证记录
 
 - 2026-04-29 23:40 CST：创建方案文档，冻结 CubeBox API-first 工具化重构方向。待实施阶段按命中范围运行文档、Go、Routing、Authz、UI 与 E2E 门禁。
+- 2026-05-01 18:58 CST：登记前置状态：484 覆盖事实聚合已预留 CubeBox API tool overlay 空集合扩展点，490 后续必须接入同一聚合源；485 API 授权目录、490 overlay 与 API-first active runtime 仍未实施。

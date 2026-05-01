@@ -1,6 +1,6 @@
 # DEV-PLAN-482A：功能授权项主页面与关联 API 弹窗实施方案
 
-**状态**: 规划中（2026-05-01 11:18 CST）
+**状态**: 规划中；482/483/484 P1 事实基础已可作为前置输入（2026-05-01 18:58 CST）
 
 ## 0. 适用范围与评审分级
 
@@ -199,8 +199,8 @@ GET /iam/api/authz/api-catalog?authz_capability_key={key}
 
 ### 7.2 P1：服务端查询聚合
 
-1. [ ] 复用 482 registry/options 能力输出普通功能授权项列表。
-2. [ ] 复用 484 单一覆盖事实聚合能力，支持按 `authz_capability_key` 反向查询关联 API。
+1. [ ] 复用 482 registry/options 能力输出普通功能授权项列表；482 options API 基础已落地。
+2. [ ] 复用 484 单一覆盖事实聚合能力，支持按 `authz_capability_key` 反向查询关联 API；484 聚合源基础已落地，482A 不得另写 join。
 3. [ ] 补服务层或 handler 黑盒测试，覆盖有覆盖、多 API 共享同一 key、未知 key、无覆盖 key。
 
 ### 7.3 P2：服务端 API
@@ -250,3 +250,4 @@ GET /iam/api/authz/api-catalog?authz_capability_key={key}
 ## 10. 验证记录
 
 - 2026-05-01 11:18 CST：创建方案文档，待实施阶段按命中范围运行 `make check doc`、Authz/UI 相关门禁与前端测试。
+- 2026-05-01 18:58 CST：登记前置状态：482 registry/options、483 canonical key 硬删除、484 覆盖事实聚合与 `make authz-lint` 基础已落地；482A 页面、关联 API 弹窗和 API catalog facade 消费仍未实施。

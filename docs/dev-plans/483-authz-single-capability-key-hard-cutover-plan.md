@@ -1,6 +1,6 @@
 # DEV-PLAN-483：权限标识单主源与前端 permissionKey 硬删除方案
 
-**状态**: 规划中（2026-05-01 10:31 CST）
+**状态**: P0/P1/P2/P3 旧权限语言硬删除与反回流门禁已落地并完成文档登记收敛（2026-05-01 18:58 CST）
 
 ## 0. 适用范围与评审分级
 
@@ -30,11 +30,11 @@
 
 ## 2. 核心目标
 
-1. [ ] 冻结唯一权限标识：`AuthzCapabilityKey = object + ":" + action`，例如 `orgunit.orgunits:read`。
-2. [ ] 删除前端独立 `permissionKey` 语言；前端若需要守卫，只能使用同一个 canonical authz capability key。
-3. [ ] 删除或改造所有 policy-only 权限；policy 中不得存在没有当前 route/CubeBox API tool overlay/superadmin surface 承接的 key。
-4. [ ] 删除 `module.verb`、点号 action、构建期权限、示例权限和历史共享读权限等旧表达。
-5. [ ] 对齐 `DEV-PLAN-484` 覆盖门禁与 `DEV-PLAN-487` 角色保存 API，使 registry、policy、route requirement、CubeBox API tool overlay、角色定义 payload、前端路由守卫只能使用同一套 key；483 本身只拥有旧 key 和旧字段硬删除。
+1. [X] 冻结唯一权限标识：`AuthzCapabilityKey = object + ":" + action`，例如 `orgunit.orgunits:read`。
+2. [X] 删除前端独立 `permissionKey` 语言；前端若需要守卫，只能使用同一个 canonical authz capability key。
+3. [X] 删除或改造所有 policy-only 权限；policy 中不得存在没有当前 route/CubeBox API tool overlay/superadmin surface 承接的 key。
+4. [X] 删除 `module.verb`、点号 action、构建期权限、示例权限和历史共享读权限等旧表达。
+5. [X] 对齐 `DEV-PLAN-484` 覆盖门禁与 `DEV-PLAN-487` 角色保存 API，使 registry、policy、route requirement、CubeBox API tool overlay、角色定义 payload、前端路由守卫只能使用同一套 key；483 本身只拥有旧 key 和旧字段硬删除。
 
 ## 3. 非目标
 
@@ -207,31 +207,31 @@ key = /org/api/org-units
 
 ### 7.1 P0：契约冻结
 
-1. [ ] 483 被 AGENTS Doc Map 收录。
-2. [ ] 480/481/482 引用 483，明确旧 `permissionKey` 和旧 key 无兼容删除。
-3. [ ] 设计图页面文案统一称为“功能授权项”，主表列名统一称为“授权项标识”，值只展示 `object:action`；普通功能授权项主页面与点击授权项标识后打开的“关联 API”弹窗按 `DEV-PLAN-482A`；全量 HTTP API 正向查看面统一命名为“API 授权目录”。
-4. [ ] 设计图如需展示不可分配、停用、无覆盖或内部 surface capability，必须进入 `DEV-PLAN-488` 的“授权项诊断”视图，不得混入功能授权项默认列表。
+1. [X] 483 被 AGENTS Doc Map 收录。
+2. [X] 480/481/482 引用 483，明确旧 `permissionKey` 和旧 key 无兼容删除。
+3. [X] 设计图页面文案统一称为“功能授权项”，主表列名统一称为“授权项标识”，值只展示 `object:action`；普通功能授权项主页面与点击授权项标识后打开的“关联 API”弹窗按 `DEV-PLAN-482A`；全量 HTTP API 正向查看面统一命名为“API 授权目录”。
+4. [X] 设计图如需展示不可分配、停用、无覆盖或内部 surface capability，必须进入 `DEV-PLAN-488` 的“授权项诊断”视图，不得混入功能授权项默认列表。
 
 ### 7.2 P1：后端 registry 与 policy 硬清理
 
-1. [ ] `pkg/authz` 增加 canonical key 构造、解析和 registry 校验函数。
-2. [ ] registry 中每条 entry 使用 `object/action` 派生 key，不手写第二套 key。
-3. [ ] 删除 `iam.ping:read`、`iam.session:read`、`org.share_read:read` 等无当前实现面 key，或在同一 PR 中补齐当前实现面；不得 policy-only。
-4. [ ] `superadmin.*` 保留同格式，但标记或分类为独立 superadmin surface，不进入 tenant options。
+1. [X] `pkg/authz` 增加 canonical key 构造、解析和 registry 校验函数。
+2. [X] registry 中每条 entry 使用 `object/action` 派生 key，不手写第二套 key。
+3. [X] 删除 `iam.ping:read`、`iam.session:read`、`org.share_read:read` 等无当前实现面 key，或在同一 PR 中补齐当前实现面；不得 policy-only。
+4. [X] `superadmin.*` 保留同格式，但标记或分类为独立 superadmin surface，不进入 tenant options。
 
 ### 7.3 P2：route / tool overlay / policy 反漂移门禁
 
-1. [ ] route / CubeBox API tool overlay / policy / registry 覆盖关系按 `DEV-PLAN-484` 落入 authz lint。
-2. [ ] `assignable=true` 的 registry entry 覆盖证据按 `DEV-PLAN-484` 校验。
-3. [ ] 旧 key 正则命中 `apps/web/src/**`、role fixture、policy、测试 payload 时门禁失败。
+1. [X] route / CubeBox API tool overlay / policy / registry 覆盖关系按 `DEV-PLAN-484` 落入 authz lint。
+2. [X] `assignable=true` 的 registry entry 覆盖证据按 `DEV-PLAN-484` 校验。
+3. [X] 旧 key 正则命中 `apps/web/src/**`、role fixture、policy、测试 payload 时门禁失败。
 
 ### 7.4 P3：前端权限语言硬切换
 
-1. [ ] 删除 `permissionKey` 类型字段、`VITE_PERMISSIONS` 解析和默认 `*` 行为。
-2. [ ] 同一切片接入服务端当前用户 authz capability 摘要来源 `GET /iam/api/me/capabilities`；缺摘要或加载失败时 fail-closed。
-3. [ ] 导航和路由守卫只使用 canonical authz capability key。
-4. [ ] 旧 key 测试全部改为 canonical key；不得新增兼容测试。
-5. [ ] 前端测试覆盖无 authz capability 摘要时导航/页面守卫不会默认全量可见。
+1. [X] 删除 `permissionKey` 类型字段、`VITE_PERMISSIONS` 解析和默认 `*` 行为。
+2. [X] 同一切片接入服务端当前用户 authz capability 摘要来源 `GET /iam/api/me/capabilities`；缺摘要或加载失败时 fail-closed。
+3. [X] 导航和路由守卫只使用 canonical authz capability key。
+4. [X] 旧 key 测试全部改为 canonical key；不得新增兼容测试。
+5. [X] 前端测试覆盖无 authz capability 摘要时导航/页面守卫不会默认全量可见。
 
 ### 7.5 P4：角色定义与功能授权项消费
 
@@ -243,13 +243,13 @@ key = /org/api/org-units
 
 ## 8. 验收标准
 
-1. [ ] `apps/web/src/**` 不再出现 `permissionKey`、`VITE_PERMISSIONS`、`foundation.read`、`approval.read`、`orgunit.read`、`orgunit.admin`、`dict.admin`、`dict.release.admin` 作为权限判断。
-2. [ ] 前端导航、页面守卫和按钮状态使用的 key 与后端 registry key 完全相同。
-3. [ ] 删除构建期权限 fallback 的同一 PR 中，前端已接入服务端当前用户 authz capability 摘要 `GET /iam/api/me/capabilities`，响应字段为 `authz_capability_keys`；缺摘要时 fail-closed。
-4. [ ] policy、route requirement、CubeBox API tool overlay 与 registry 的覆盖关系按 `DEV-PLAN-484` 校验，任意 key 不在 registry 时 authz lint 失败。
-5. [ ] registry 中 `assignable=true` 但无当前实现面的 key 按 `DEV-PLAN-484` 导致 authz lint 失败。
+1. [X] `apps/web/src/**` 不再出现 `permissionKey`、`VITE_PERMISSIONS`、`foundation.read`、`approval.read`、`orgunit.read`、`orgunit.admin`、`dict.admin`、`dict.release.admin` 作为权限判断。
+2. [X] 前端导航、页面守卫和按钮状态使用的 key 与后端 registry key 完全相同。
+3. [X] 删除构建期权限 fallback 的同一 PR 中，前端已接入服务端当前用户 authz capability 摘要 `GET /iam/api/me/capabilities`，响应字段为 `authz_capability_keys`；缺摘要时 fail-closed。
+4. [X] policy、route requirement、CubeBox API tool overlay 与 registry 的覆盖关系按 `DEV-PLAN-484` 校验，任意 key 不在 registry 时 authz lint 失败。
+5. [X] registry 中 `assignable=true` 但无当前实现面的 key 按 `DEV-PLAN-484` 导致 authz lint 失败。
 6. [ ] 角色保存提交旧 key 时失败，且服务端不返回替换建议或自动修正结果。
-7. [ ] HRMS tenant 功能授权项不展示 superadmin key、不展示 policy-only key、不展示 UI 本地守卫 key。
+7. [X] HRMS tenant 功能授权项不展示 superadmin key、不展示 policy-only key、不展示 UI 本地守卫 key。
 8. [ ] 授权项诊断可展示被排除 key 的诊断原因，但这些 key 不得成为前端守卫、角色候选项或保存 payload 的兼容来源。
 
 ## 9. 风险与停止线
@@ -266,4 +266,5 @@ key = /org/api/org-units
 
 ## 10. 验证记录
 
-- 待实施阶段按命中范围运行：`make check doc`、`go fmt ./... && go vet ./... && make check lint && make test`、`make authz-pack && make authz-test && make authz-lint`、前端测试与 E2E。
+- 2026-05-01 18:22 CST：P1/P2/P3 已落地，旧权限语言由 `cmd/authz-lint` 反回流扫描阻断，前端当前用户能力来源收敛为 `GET /iam/api/me/capabilities` 的 `authz_capability_keys`；已执行 `make authz-pack && make authz-test && make authz-lint`、Go fmt/vet/lint/test、前端相关测试与旧权限 token 扫描。
+- 2026-05-01 18:58 CST：补齐 P0 契约冻结登记；P4 角色定义与功能授权项消费仍归 `DEV-PLAN-481/487/482A/488` 后续实施，不在 483 中提前标记完成。

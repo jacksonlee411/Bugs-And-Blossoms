@@ -1,6 +1,6 @@
 # DEV-PLAN-485：API 授权目录页面方案
 
-**状态**: 规划中（2026-05-01 10:31 CST）
+**状态**: 规划中；482/483/484 P1 事实基础已可作为前置输入（2026-05-01 18:58 CST）
 
 ## 0. 适用范围与评审分级
 
@@ -173,7 +173,7 @@ GET /iam/api/authz/api-catalog
 
 ### 6.2 P1：覆盖事实读取接口
 
-1. [ ] 复用 484 的单一覆盖事实聚合能力；若缺字段，先补 484，不在 485 新建第二套枚举。
+1. [ ] 复用 484 的单一覆盖事实聚合能力；484 聚合源基础已落地，若缺 485 所需投影字段，先补 484，不在 485 新建第二套枚举。
 2. [ ] 提供 API 视角投影函数，输出 API 授权目录列表。
 3. [ ] 对 allowlist/public route 输出明确 `access_control` 与原因，不静默空字段。
 4. [ ] 叠加 490 的 `cubebox_callable` 标记；标记引用不存在的 `method/path` 时 fail-closed。
@@ -224,3 +224,4 @@ GET /iam/api/authz/api-catalog
 ## 9. 验证记录
 
 - 2026-04-29 22:55 CST：创建方案文档。待实施阶段按命中范围运行 `make check doc`、Routing/Authz/UI 相关门禁与前端测试。
+- 2026-05-01 18:58 CST：登记前置状态：482 registry/options、483 canonical key 硬删除、484 覆盖事实聚合与 `make authz-lint` 基础已落地；485 页面和 `GET /iam/api/authz/api-catalog` 仍未实施。

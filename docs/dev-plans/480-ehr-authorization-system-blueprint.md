@@ -1,6 +1,6 @@
 # DEV-PLAN-480：EHR 授权体系总体方案
 
-**状态**: 规划中（2026-05-01 10:31 CST）
+**状态**: 授权体系蓝图持续推进；P0 授权标识/registry/覆盖门禁基础已按 480A P1 落地（2026-05-01 18:58 CST）
 
 ## 0. 适用范围与评审分级
 
@@ -100,7 +100,7 @@ EHR 系统的授权不能只停留在“页面能不能进”或“API 能不能
   - `DEV-PLAN-011` 可支撑 480：Go、Casbin、Go test、lint、authz pack/test/lint、前端 MUI/React/Vite 工具链均在仓库基线内。
   - 不需要新增 policy engine 或外部基础设施。
   - 后续若落地数据范围 SoT，会命中 DB/schema/sqlc 门禁，但这不是工具链缺口。
-- 当前 authz lint 强度仍偏基础，后续需要按 `DEV-PLAN-484` 把“object/action registry、route 映射、CubeBox API tool overlay、policy 源文件、功能授权项覆盖证据”的漂移检查纳入专项切片；旧权限键回流仍按 `DEV-PLAN-483` 阻断。
+- 当前 authz lint 已按 `DEV-PLAN-484` 纳入 route requirement、registry、policy、CubeBox API tool overlay 与 DB role seed 扩展点的覆盖事实聚合和漂移检查；CubeBox API tool overlay 与 DB role seed 当前按空集合处理，后续 `DEV-PLAN-490/487` 必须接入同一聚合源。旧权限键回流已按 `DEV-PLAN-483` 进入 authz lint 扫描阻断。
 
 ### 2.4.1 当前授权模块是否需要改造
 
@@ -406,9 +406,9 @@ Decision 的逻辑字段：
 
 ### 6.1 P0：授权语义冻结与门禁补强
 
-1. [ ] 按 `DEV-PLAN-482/483/484` 整理 object/action registry，删除前端旧 permission key、policy-only key，并确认 route authz、policy、CubeBox API tool overlay 与功能授权项覆盖证据的映射关系。
-2. [ ] 按 `DEV-PLAN-484` 增加 authz 覆盖 lint/test，阻止未登记 object/action、未打包 policy、API 覆盖缺失和前后端权限键漂移；前端旧权限键回流按 `DEV-PLAN-483` 承接。
-3. [ ] 补 `iam.authz:read/admin` 或更明确授权项的 registry seed、route requirement 与 policy 归属，作为 482 capabilities 和 485 API catalog endpoint 的保护对象。
+1. [X] 按 `DEV-PLAN-482/483/484` 整理 object/action registry，删除前端旧 permission key、policy-only key，并确认 route authz、policy、CubeBox API tool overlay 与功能授权项覆盖证据的映射关系。
+2. [X] 按 `DEV-PLAN-484` 增加 authz 覆盖 lint/test，阻止未登记 object/action、未打包 policy、API 覆盖缺失和前后端权限键漂移；前端旧权限键回流按 `DEV-PLAN-483` 承接。
+3. [X] 补 `iam.authz:read` 的 registry seed、route requirement 与 policy 归属，作为 482 capabilities endpoint 的保护对象；首期 bootstrap policy 仅授予 `tenant-admin`，`iam.authz:admin` 或更明确写权限仅在 `DEV-PLAN-487` 在线写入落地时登记。
 4. [ ] 补 `docs/dev-records/DEV-PLAN-480-READINESS.md` 记录工具链、门禁和当前差距。
 
 ### 6.2 P1：CubeBox API-first 工具授权
@@ -450,6 +450,7 @@ Decision 的逻辑字段：
 | 角色授权双链路 | DB role authz capability 与 policy CSV 任一命中即放行 | 487 cutover 后普通 tenant role 只读 DB SoT；CSV 仅保留 bootstrap/static/system surface |
 | 单角色回流 | 运行时从 `iam.principals.role_slug`、`roles[0]` 或 current role 字段推导普通 tenant 授权 | 489A 冻结 principal 多角色 union；角色集合为空或无效 fail-closed |
 | 覆盖事实多套实现 | 功能授权项、API 授权目录、诊断页各自解析 route/registry/policy | 484 提供唯一覆盖事实枚举与 lint，482/482A/485/488/490 只消费同源聚合；488 后置 |
+| 覆盖自证 | 手写 route requirement 不对应实际 allowlist route 但仍让授权项可分配 | 484 覆盖事实必须校验 allowlist route 与 requirement 交集 |
 | 敏感字段泄露 | API 下发原值，前端隐藏 | 服务端 projection/filter 先处理 |
 | AI 扩权 | 模型生成合法 API 调用绕过授权 | 490 API runner + 既有 route/service authz + 业务读路径 scope |
 | 403 泄露资源存在性 | 用户猜测组织/人员是否存在 | 子计划冻结 403/404 策略 |

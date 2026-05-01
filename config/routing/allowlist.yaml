@@ -50,6 +50,9 @@ entrypoints:
       - path: /iam/api/me/capabilities
         methods: [GET]
         route_class: internal_api
+      - path: /iam/api/authz/capabilities
+        methods: [GET]
+        route_class: internal_api
       - path: /iam/api/dicts
         methods: [GET, POST]
         route_class: internal_api

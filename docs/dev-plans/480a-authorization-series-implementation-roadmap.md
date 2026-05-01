@@ -1,6 +1,6 @@
 # DEV-PLAN-480A：480 系列授权子计划实施顺序路线图
 
-**状态**: P0 文档与入口收敛已完成（2026-05-01 16:56 CST）
+**状态**: P1 权限标识、registry 与覆盖事实基础已完成并完成文档登记收敛（2026-05-01 18:58 CST）
 
 ## 0. 适用范围与评审分级
 
@@ -105,9 +105,9 @@ Owner：`DEV-PLAN-483/482/484`
 
 建议顺序：
 
-1. [ ] `DEV-PLAN-483`：删除旧 `permissionKey`、`VITE_PERMISSIONS`、`module.verb`、policy-only key 和旧 key fallback；前端当前用户能力只来自服务端 canonical `authz_capability_keys`。
-2. [ ] `DEV-PLAN-482`：建立 `pkg/authz` 静态 authz capability registry、key 解析/构造/校验函数、默认 options API 口径。
-3. [ ] `DEV-PLAN-484`：建立单一覆盖事实聚合源，枚举 route requirement、registry、policy，并为后续 DB role seed 与 CubeBox API tool overlay 预留同一枚举接口；当前尚未落地的来源按空集合处理，不得在 482A/485/488/490 中另起第二套 join。
+1. [X] `DEV-PLAN-483`：删除旧 `permissionKey`、`VITE_PERMISSIONS`、`module.verb`、policy-only key 和旧 key fallback；前端当前用户能力只来自服务端 canonical `authz_capability_keys`。
+2. [X] `DEV-PLAN-482`：建立 `pkg/authz` 静态 authz capability registry、key 解析/构造/校验函数、默认 options API 口径。
+3. [X] `DEV-PLAN-484`：建立单一覆盖事实聚合源，枚举 route requirement、registry、policy，并为后续 DB role seed 与 CubeBox API tool overlay 预留同一枚举接口；当前尚未落地的来源按空集合处理，不得在 482A/485/488/490 中另起第二套 join。
 
 并行规则：
 
@@ -120,6 +120,8 @@ Owner：`DEV-PLAN-483/482/484`
 1. 发现 `requiredCapabilityKey="orgunit.read"` 等旧值时停止，回到 483。
 2. 发现 482A/485/488/490 自行解析 route/policy/registry 时停止，回到 484。
 3. `assignable=true/status=enabled/surface=tenant_api` 但无当前 API 覆盖时必须 lint 失败，不能靠页面诊断放行。
+4. route requirement 必须能反向匹配 allowlist/实际 route surface；不存在实际 route 的手写 requirement 不得计为当前 API 覆盖。
+5. 普通 options API 不暴露诊断全集参数；诊断需求后置到 488 专用入口。
 
 ### 4.3 P2：只读授权目录面
 
@@ -243,11 +245,11 @@ Owner：`DEV-PLAN-488`
 
 ### 5.1 可先交付的最小只读组合
 
-首批只读治理面可以按以下组合验收：
+首批只读治理面可以按以下组合验收。P1 基础已完成；P2 页面仍未交付：
 
-1. [ ] 483 旧 key 删除完成。
-2. [ ] 482 registry/options 默认口径可用。
-3. [ ] 484 单一覆盖事实聚合和 lint 可用。
+1. [X] 483 旧 key 删除完成。
+2. [X] 482 registry/options 默认口径可用。
+3. [X] 484 单一覆盖事实聚合和 lint 可用。
 4. [ ] 482A 功能授权项页面可展示当前可分配且有覆盖的授权项。
 5. [ ] 485 API 授权目录可从 API 角度展示 method/path 到授权项绑定。
 
@@ -310,3 +312,7 @@ CubeBox 切换必须等待：
 - 2026-05-01 15:48 CST：创建 480A 路线图文档，待本轮文档同步后运行 `make check doc`。
 - 2026-05-01 16:56 CST：启动并完成 P0 文档与入口收敛；确认 `AGENTS.md` Doc Map 已将 480A 放在 480 与各子计划之间，并为 480 系列子计划补充 480A 作为实施顺序入口。同步确认 `DEV-PLAN-486` 仍为 executor 路线停止警示，当前实现 owner 继续指向 `DEV-PLAN-490`。发现 AGENTS 中 410/411 链接对应文件当前缺失，按 P0 边界仅记录为后续 Doc Map 清理事项，不作为 480 当前实现前提。
 - 2026-05-01 16:56 CST：`make check doc` 通过。
+- 2026-05-01 18:22 CST：P1 已完成，`DEV-PLAN-483/482/484` 分别落地旧权限语言硬删除、静态 authz capability registry/options API、单一覆盖事实聚合源与 `make authz-lint` 门禁；已执行 `make authz-pack && make authz-test && make authz-lint`、Go fmt/vet/lint/test、前端相关测试、`make generate`、`make css`、文档/路由/root/no-legacy/chat-surface/no-scope/granularity/diff check 等门禁。
+- 2026-05-01 18:58 CST：完成 480A 与 `DEV-PLAN-480/482/483/484` 文档登记收敛；P1 基础项在首批只读治理面组合中标记完成，482A/485 页面、487/489/489A 运行时闭环、488 诊断和 490 API-first 仍保持未完成。
+- 2026-05-01 19:05 CST：本轮文档登记收敛后再次运行 `make check doc`，通过。
+- 2026-05-01 19:54 CST：根据待提交评审补强 P1 停止线：覆盖事实必须由 allowlist route 与 route requirement 交集产生；482 普通 options API 拒绝诊断参数；`iam.authz:read` 首期 bootstrap policy 仅授予 `tenant-admin`。

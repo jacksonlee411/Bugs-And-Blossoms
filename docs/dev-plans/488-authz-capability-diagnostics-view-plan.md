@@ -1,6 +1,6 @@
 # DEV-PLAN-488：授权项诊断视图方案
 
-**状态**: 规划中（2026-05-01 10:31 CST）
+**状态**: 后置规划中；482/483/484 P1 事实基础已可作为前置输入（2026-05-01 18:58 CST）
 
 ## 0. 适用范围与评审分级
 
@@ -20,7 +20,7 @@
 
 `DEV-PLAN-482` 已冻结功能授权项 options API 默认口径：只输出启用、可分配、tenant API surface 且有当前实现覆盖的能力。这个口径适合角色定义和普通功能授权项页面，因为管理员看到的每一项都应该可授予、可执行。
 
-488 不应成为首批授权管理闭环的前置条件。首批顺序应先完成 484 覆盖事实枚举与 lint，再让 482 options、482A `关联 API` 弹窗、485 `API 授权目录` 和 490 CubeBox API tool builder 消费同一聚合源；488 只在这些闭环稳定后提供治理排查视图。
+488 不应成为首批授权管理闭环的前置条件。当前 484 覆盖事实枚举与 lint 基础已完成；后续应先让 482A `关联 API` 弹窗、485 `API 授权目录` 和 490 CubeBox API tool builder 消费同一聚合源，488 只在这些闭环稳定后提供治理排查视图。
 
 但排查时还需要回答另一类问题：
 
@@ -104,7 +104,7 @@
 GET /iam/api/authz/capability-diagnostics
 ```
 
-该 endpoint 必须受 `iam.authz:read` 或更严格授权项保护。若实现阶段决定复用 `GET /iam/api/authz/capabilities` 的 `include_disabled/include_uncovered` 参数，也必须在路由/handler 层区分调用场景，确保角色定义页和普通功能授权项默认列表无法通过前端参数切到诊断全集。
+该 endpoint 必须受 `iam.authz:read` 或更严格授权项保护。P1 已明确普通 `GET /iam/api/authz/capabilities` 拒绝 `include_disabled/include_uncovered` 诊断参数；488 如需诊断全集，应新增本节专用 endpoint 或受控服务端入口，不复用 482 普通 options route 的查询参数。
 
 查询参数：
 
@@ -188,14 +188,14 @@ GET /iam/api/authz/capability-diagnostics
 
 ### 6.2 P1：诊断数据聚合
 
-1. [ ] 复用 482 registry 枚举能力。
-2. [ ] 复用 484 单一覆盖事实聚合能力；若缺诊断字段，先补 484 聚合输出，不在 488 新建第二套枚举。
+1. [ ] 复用 482 registry 枚举能力；482 registry 基础已落地。
+2. [ ] 复用 484 单一覆盖事实聚合能力；484 聚合源基础已落地，若缺诊断字段，先补 484 聚合输出，不在 488 新建第二套枚举。
 3. [ ] 增加诊断原因派生函数，覆盖候选项、停用、废弃、不可分配、非 tenant surface、无覆盖、policy-only、registry-only。
 4. [ ] 补 `pkg/authz` 或服务层黑盒表驱动测试。
 
 ### 6.3 P2：服务端 API
 
-1. [ ] 新增 `GET /iam/api/authz/capability-diagnostics`，或在实现前明确复用 482 endpoint 的受控诊断参数方案。
+1. [ ] 新增 `GET /iam/api/authz/capability-diagnostics`，或在实现前另行冻结受控服务端诊断入口；不得通过 482 普通 options endpoint 参数暴露诊断全集。
 2. [ ] endpoint 受已登记并有覆盖的 `iam.authz:read` 或更严格授权项保护。
 3. [ ] 支持搜索和基础筛选。
 4. [ ] 补 handler/API 测试，覆盖默认候选与诊断全集不会混淆。
@@ -238,3 +238,5 @@ GET /iam/api/authz/capability-diagnostics
 ## 9. 验证记录
 
 - 2026-05-01 10:31 CST：创建方案文档，待实施阶段按命中范围运行 `make check doc`、Authz/UI 相关门禁与前端测试。
+- 2026-05-01 18:58 CST：登记前置状态：482 registry/options、483 canonical key 硬删除、484 覆盖事实聚合与 `make authz-lint` 基础已落地；488 仍保持后置规划，诊断页面和诊断 API 未实施。
+- 2026-05-01 19:54 CST：同步 P1 评审修复后的入口约束：482 普通 options API 拒绝诊断参数，488 后续必须使用专用诊断 endpoint 或另行冻结的受控服务端入口。

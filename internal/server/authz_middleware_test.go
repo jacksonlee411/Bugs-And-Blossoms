@@ -5,6 +5,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"testing"
 
@@ -207,6 +208,9 @@ func TestAuthzRequirementForRoute(t *testing.T) {
 	}
 	if object, action, ok := authzRequirementForRoute(http.MethodGet, "/iam/api/me/capabilities"); ok || object != "" || action != "" {
 		t.Fatalf("unexpected session capabilities authz: object=%q action=%q ok=%v", object, action, ok)
+	}
+	if object, action, ok := authzRequirementForRoute(http.MethodGet, "/iam/api/authz/capabilities"); !ok || object != authz.ObjectIAMAuthz || action != authz.ActionRead {
+		t.Fatalf("unexpected authz capabilities requirement: object=%q action=%q ok=%v", object, action, ok)
 	}
 	if _, _, ok := authzRequirementForRoute(http.MethodGet, "/iam/api/dicts"); !ok {
 		t.Fatal("expected ok=true")
@@ -429,6 +433,30 @@ func TestAuthzRequirementForRoute(t *testing.T) {
 	}
 	if _, _, ok := authzRequirementForRoute(http.MethodGet, ""); ok {
 		t.Fatal("expected ok=false")
+	}
+}
+
+func TestListRouteRequirements_NoDuplicateAndAllRegistered(t *testing.T) {
+	requirements := listRouteRequirements()
+	if len(requirements) == 0 {
+		t.Fatal("expected route requirements")
+	}
+	seen := map[string]bool{}
+	var ids []string
+	for _, req := range requirements {
+		id := req.Method + " " + req.Path
+		if seen[id] {
+			t.Fatalf("duplicate route requirement: %s", id)
+		}
+		seen[id] = true
+		ids = append(ids, id)
+		if _, ok := authz.LookupAuthzCapabilityByObjectAction(req.Object, req.Action); !ok {
+			t.Fatalf("unregistered requirement %s object=%q action=%q", id, req.Object, req.Action)
+		}
+	}
+	sort.Strings(ids)
+	if !seen[http.MethodGet+" /iam/api/authz/capabilities"] {
+		t.Fatal("missing authz capabilities requirement")
 	}
 }
 

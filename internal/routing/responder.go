@@ -122,6 +122,8 @@ func knownErrorMessage(code string) string {
 		return "登录已失效，请重新登录。"
 	case "invalid_request":
 		return "请求参数无效，请检查后重试。"
+	case "diagnostic_parameter_not_supported":
+		return "当前接口不支持诊断参数，请使用授权项诊断入口。"
 	case "tenant_not_found":
 		return "未找到租户，请检查访问域名。"
 	case "tenant_missing":

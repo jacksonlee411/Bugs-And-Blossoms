@@ -108,18 +108,3 @@ export interface CubeBoxModelSettingsSnapshot {
   selection?: CubeBoxActiveModelSelection | null
   health?: CubeBoxModelHealth | null
 }
-
-export interface CubeBoxCapabilities {
-  conversation: {
-    read: boolean
-    use: boolean
-  }
-  settings: {
-    read: boolean
-    verify: boolean
-    select: boolean
-    update: boolean
-    rotate: boolean
-    deactivate: boolean
-  }
-}
