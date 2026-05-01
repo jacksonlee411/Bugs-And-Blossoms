@@ -6,6 +6,7 @@ SHELL := bash
 export ATLAS_VERSION ?= v0.38.0
 export DEV_COMPOSE_PROJECT ?= bugs-and-blossoms-dev
 export DEV_INFRA_ENV_FILE ?= .env.example
+export DEV_RUNTIME_IMAGE_MIRROR_PREFIX ?= docker.m.daocloud.io/library
 
 .PHONY: help preflight check pr-branch root-surface naming no-legacy chat-surface-clean no-scope-package granularity ddd-layering-p0 ddd-layering-p2 org-node-key-backflow request-code as-of-explicit dict-tenant-only go-version error-message fmt lint test routing e2e doc tr generate css
 .PHONY: sqlc-generate sqlc-verify-schema authz-pack authz-test authz-lint
@@ -156,6 +157,7 @@ test: ## 单元/集成测试
 dev: dev-up dev-server
 
 dev-up:
+	@./scripts/dev/ensure-runtime-images.sh
 	docker compose -p "$(DEV_COMPOSE_PROJECT)" --env-file "$(DEV_INFRA_ENV_FILE)" -f compose.dev.yml up -d
 
 dev-down:

@@ -20,7 +20,7 @@ user="${DB_USER:-app}"
 password="${DB_PASSWORD:-app}"
 sslmode="${DB_SSLMODE:-disable}"
 admin_db="${DB_ADMIN_DB:-postgres}"
-pg_client_image="${SQLC_VERIFY_PG_IMAGE:-postgres:17}"
+pg_client_image="${SQLC_VERIFY_PG_IMAGE:-${POSTGRES_IMAGE:-postgres:17}}"
 
 export PGPASSWORD="$password"
 
