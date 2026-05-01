@@ -7,7 +7,7 @@
 - **评审分级**：`T2`
 - **范围一句话**：冻结角色定义与用户授权的最小交互边界；角色只定义功能权限，用户授权页顶部选择用户，主区用“角色 / 组织范围”两个页签维护授权表格，其中组织范围是首批用户授权闭环的一部分，不是未来占位。
 - **关联模块/目录**：`pkg/authz/**`、`config/access/**`、`scripts/authz/**`、`internal/server/**`、`apps/web/src/**`
-- **关联计划/标准**：`AGENTS.md`、`DEV-PLAN-000`、`DEV-PLAN-001`、`DEV-PLAN-012`、`DEV-PLAN-022`、`DEV-PLAN-032`、`DEV-PLAN-480`、`DEV-PLAN-482`、`DEV-PLAN-483`、`DEV-PLAN-487`、`DEV-PLAN-489`、`DEV-PLAN-489A`
+- **关联计划/标准**：`AGENTS.md`、`DEV-PLAN-000`、`DEV-PLAN-001`、`DEV-PLAN-012`、`DEV-PLAN-022`、`DEV-PLAN-032`、`DEV-PLAN-480`、`DEV-PLAN-480A`、`DEV-PLAN-482`、`DEV-PLAN-483`、`DEV-PLAN-487`、`DEV-PLAN-489`、`DEV-PLAN-489A`
 - **用户入口/触点**：角色列表、角色详情、角色定义表单、用户角色分配、组织范围选择器
 
 ### 0.1 Simple > Easy 三问

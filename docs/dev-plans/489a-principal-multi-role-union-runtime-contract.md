@@ -7,7 +7,7 @@
 - **评审分级**：`T2`
 - **范围一句话**：正式将 480 系列普通 tenant 授权从“每个 session 单 `role_slug`”升级为“principal 角色集合 union”，冻结 session subject set、审计字段、scope 合并规则与反回流门禁；本计划不拥有角色定义主表、角色 capability 主表或用户授权表的新增迁移。
 - **关联模块/目录**：`modules/iam/**`、`modules/orgunit/**`、`pkg/authz/**`、`internal/server/**`、`apps/web/src/**`、`config/access/**`、`scripts/authz/**`
-- **关联计划/标准**：`AGENTS.md`、`DEV-PLAN-000`、`DEV-PLAN-012`、`DEV-PLAN-017`、`DEV-PLAN-019`、`DEV-PLAN-022`、`DEV-PLAN-480`、`DEV-PLAN-481`、`DEV-PLAN-482`、`DEV-PLAN-484`、`DEV-PLAN-487`、`DEV-PLAN-489`、`DEV-PLAN-490`
+- **关联计划/标准**：`AGENTS.md`、`DEV-PLAN-000`、`DEV-PLAN-012`、`DEV-PLAN-017`、`DEV-PLAN-019`、`DEV-PLAN-022`、`DEV-PLAN-480`、`DEV-PLAN-480A`、`DEV-PLAN-481`、`DEV-PLAN-482`、`DEV-PLAN-484`、`DEV-PLAN-487`、`DEV-PLAN-489`、`DEV-PLAN-490`
 
 ### 0.1 Simple > Easy 三问
 

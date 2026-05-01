@@ -7,7 +7,7 @@
 - **评审分级**：`T2`
 - **范围一句话**：冻结新增模块、功能、HTTP API 与 CubeBox API tool overlay 必然进入 authz capability registry 和功能授权项的覆盖门禁；任何未声明、未登记、未覆盖或 policy-only 的权限漂移都必须在 CI 被阻断。
 - **关联模块/目录**：`pkg/authz/**`、`config/access/**`、`scripts/authz/**`、`internal/server/**`、`internal/superadmin/**`、`modules/cubebox/**`、`apps/web/src/**`
-- **关联计划/标准**：`AGENTS.md`、`DEV-PLAN-000`、`DEV-PLAN-001`、`DEV-PLAN-012`、`DEV-PLAN-017`、`DEV-PLAN-022`、`DEV-PLAN-480`、`DEV-PLAN-481`、`DEV-PLAN-482`、`DEV-PLAN-482A`、`DEV-PLAN-483`、`DEV-PLAN-485`、`DEV-PLAN-487`、`DEV-PLAN-488`
+- **关联计划/标准**：`AGENTS.md`、`DEV-PLAN-000`、`DEV-PLAN-001`、`DEV-PLAN-012`、`DEV-PLAN-017`、`DEV-PLAN-022`、`DEV-PLAN-480`、`DEV-PLAN-480A`、`DEV-PLAN-481`、`DEV-PLAN-482`、`DEV-PLAN-482A`、`DEV-PLAN-483`、`DEV-PLAN-485`、`DEV-PLAN-487`、`DEV-PLAN-488`
 - **用户入口/触点**：功能授权项、授权项诊断、角色定义页 authz capability 候选项、所有受保护 HTTP API、CubeBox API-first 工具链
 
 ### 0.1 Simple > Easy 三问

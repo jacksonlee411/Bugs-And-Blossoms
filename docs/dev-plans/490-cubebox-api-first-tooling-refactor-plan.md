@@ -7,7 +7,7 @@
 - **评审分级**：`T2`
 - **范围一句话**：将 CubeBox 业务查询/操作工具面从当前 executor payload + knowledge pack 双轨，硬切换为“现有 HTTP API 是唯一业务工具契约”，由 484 单一覆盖事实聚合源、485 API 授权目录投影、490 最小 CubeBox 可调用标记、当前用户权限、API schema 和 observation adapter 共同约束模型调用；本轮不保留 `ReadPlan` / `executor_key` 兼容执行面，写入确认机制暂缓，不进入本轮实施。
 - **关联模块/目录**：`modules/cubebox/**`、`modules/orgunit/presentation/cubebox/**`、`internal/server/cubebox_query_flow.go`、`internal/server/cubebox_api.go`、`internal/server/orgunit_api.go`、`internal/server/authz_middleware.go`、`apps/web/src/api/**`、`pkg/authz/**`
-- **关联计划/标准**：`AGENTS.md`、`DEV-PLAN-000`、`DEV-PLAN-015`、`DEV-PLAN-017`、`DEV-PLAN-022`、`DEV-PLAN-460`、`DEV-PLAN-480`、`DEV-PLAN-484`、`DEV-PLAN-485`、`DEV-PLAN-486`
+- **关联计划/标准**：`AGENTS.md`、`DEV-PLAN-000`、`DEV-PLAN-015`、`DEV-PLAN-017`、`DEV-PLAN-022`、`DEV-PLAN-460`、`DEV-PLAN-480`、`DEV-PLAN-480A`、`DEV-PLAN-484`、`DEV-PLAN-485`、`DEV-PLAN-486`
 - **用户入口/触点**：CubeBox 对话流式入口、API 授权目录页面的 `丘宝可调用` 列、服务端 API tool builder、现有业务 HTTP API、功能授权项的“关联 API”
 
 ### 0.1 Simple > Easy 三问

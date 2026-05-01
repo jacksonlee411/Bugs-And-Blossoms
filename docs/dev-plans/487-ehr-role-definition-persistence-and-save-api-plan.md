@@ -7,7 +7,7 @@
 - **评审分级**：`T2`
 - **范围一句话**：冻结角色定义的在线保存 API、持久化模型、服务端校验与运行时能力授权生效路径；承接 `DEV-PLAN-481` 留出的角色定义后端闭环，不扩展到角色复制、组织范围、字段策略或用户授权分配。
 - **关联模块/目录**：`pkg/authz/**`、`modules/iam/domain/**`、`modules/iam/services/**`、`modules/iam/infrastructure/**`、`modules/iam/infrastructure/persistence/schema/**`、`internal/server/**`、`config/access/**`、`scripts/authz/**`、`apps/web/src/**`
-- **关联计划/标准**：`AGENTS.md`、`DEV-PLAN-000`、`DEV-PLAN-001`、`DEV-PLAN-012`、`DEV-PLAN-017`、`DEV-PLAN-019`、`DEV-PLAN-022`、`DEV-PLAN-024`、`DEV-PLAN-025`、`DEV-PLAN-032`、`DEV-PLAN-300`、`DEV-PLAN-304`、`DEV-PLAN-480`、`DEV-PLAN-481`、`DEV-PLAN-482`、`DEV-PLAN-483`、`DEV-PLAN-484`、`DEV-PLAN-489`、`DEV-PLAN-489A`
+- **关联计划/标准**：`AGENTS.md`、`DEV-PLAN-000`、`DEV-PLAN-001`、`DEV-PLAN-012`、`DEV-PLAN-017`、`DEV-PLAN-019`、`DEV-PLAN-022`、`DEV-PLAN-024`、`DEV-PLAN-025`、`DEV-PLAN-032`、`DEV-PLAN-300`、`DEV-PLAN-304`、`DEV-PLAN-480`、`DEV-PLAN-480A`、`DEV-PLAN-481`、`DEV-PLAN-482`、`DEV-PLAN-483`、`DEV-PLAN-484`、`DEV-PLAN-489`、`DEV-PLAN-489A`
 - **用户入口/触点**：`系统管理 > 角色管理 > 新建/编辑角色`、角色列表、角色详情、角色定义保存按钮、角色 authz capability 候选项 options API
 
 ### 0.1 Simple > Easy 三问

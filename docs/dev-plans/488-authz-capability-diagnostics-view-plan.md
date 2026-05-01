@@ -7,7 +7,7 @@
 - **评审分级**：`T2`
 - **范围一句话**：后置新增一个只读诊断视图，用于查看 authz capability registry 中未进入普通功能授权项候选列表的能力及原因，避免不可分配、停用、无覆盖、系统内部能力混入角色配置主路径。
 - **关联模块/目录**：`apps/web/src/**`、`internal/server/**`、`pkg/authz/**`、`scripts/authz/**`
-- **关联计划/标准**：`AGENTS.md`、`DEV-PLAN-000`、`DEV-PLAN-001`、`DEV-PLAN-012`、`DEV-PLAN-022`、`DEV-PLAN-480`、`DEV-PLAN-482`、`DEV-PLAN-482A`、`DEV-PLAN-483`、`DEV-PLAN-484`、`DEV-PLAN-485`
+- **关联计划/标准**：`AGENTS.md`、`DEV-PLAN-000`、`DEV-PLAN-001`、`DEV-PLAN-012`、`DEV-PLAN-022`、`DEV-PLAN-480`、`DEV-PLAN-480A`、`DEV-PLAN-482`、`DEV-PLAN-482A`、`DEV-PLAN-483`、`DEV-PLAN-484`、`DEV-PLAN-485`
 - **用户入口/触点**：授权管理菜单中的 `授权项诊断` 只读页面、482 authz capability options/diagnostics 查询接口、484 单一覆盖事实聚合能力
 
 ### 0.1 Simple > Easy 三问

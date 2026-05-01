@@ -4,7 +4,7 @@
 
 ## 1. 背景
 
-`DEV-PLAN-480` 已冻结 EHR 授权体系蓝图，`DEV-PLAN-481` 已冻结角色定义与用户授权的极简交互边界。二者都依赖一个前提：角色定义页面能从统一事实源拿到“所有可配置 authz capability”，并能由服务端校验提交的 authz capability key。
+`DEV-PLAN-480` 已冻结 EHR 授权体系蓝图，`DEV-PLAN-481` 已冻结角色定义与用户授权的极简交互边界。`DEV-PLAN-480A` 仅作为 480 系列实施顺序、前置依赖与停止线入口引用，不复制 482 的 registry/options 详细契约。二者都依赖一个前提：角色定义页面能从统一事实源拿到“所有可配置 authz capability”，并能由服务端校验提交的 authz capability key。
 
 当前仓库还没有这个专门事实源：
 

@@ -7,7 +7,7 @@
 - **评审分级**：`T2`
 - **范围一句话**：新增授权管理下的 `功能授权项` 只读主页面，展示可分配且有当前实现覆盖的 authz capability，并定义点击授权项标识后打开的 `关联 API` 弹窗；页面不承担 registry 在线编辑、角色保存或 API 正向目录职责。
 - **关联模块/目录**：`apps/web/src/**`、`internal/server/**`、`pkg/authz/**`、`scripts/authz/**`
-- **关联计划/标准**：`AGENTS.md`、`DEV-PLAN-000`、`DEV-PLAN-001`、`DEV-PLAN-012`、`DEV-PLAN-022`、`DEV-PLAN-480`、`DEV-PLAN-481`、`DEV-PLAN-482`、`DEV-PLAN-483`、`DEV-PLAN-484`、`DEV-PLAN-485`、`DEV-PLAN-488`
+- **关联计划/标准**：`AGENTS.md`、`DEV-PLAN-000`、`DEV-PLAN-001`、`DEV-PLAN-012`、`DEV-PLAN-022`、`DEV-PLAN-480`、`DEV-PLAN-480A`、`DEV-PLAN-481`、`DEV-PLAN-482`、`DEV-PLAN-483`、`DEV-PLAN-484`、`DEV-PLAN-485`、`DEV-PLAN-488`
 - **用户入口/触点**：授权管理菜单中的 `功能授权项` 页面、482 authz capability options API、484 单一覆盖事实聚合能力、基于同一聚合结果暴露的 authz capability 反向 API 查询面
 
 ### 0.1 Simple > Easy 三问

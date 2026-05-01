@@ -7,7 +7,7 @@
 - **评审分级**：`T2`
 - **范围一句话**：冻结 `DEV-PLAN-481` 用户授权页两个页签背后的首批可保存闭环：principal 角色授权、组织范围 SoT、保存 API、运行时读取与 orgunit 服务端强制裁剪；本计划不拥有角色定义主表或角色 authz capability 主表，不直接提交迁移，新增 DB 表实施前必须再次获得用户手工确认。
 - **关联模块/目录**：`modules/iam/**`、`modules/orgunit/**`、`pkg/authz/**`、`internal/server/**`、`apps/web/src/**`、`config/access/**`、`scripts/authz/**`
-- **关联计划/标准**：`AGENTS.md`、`DEV-PLAN-000`、`DEV-PLAN-001`、`DEV-PLAN-012`、`DEV-PLAN-017`、`DEV-PLAN-019`、`DEV-PLAN-022`、`DEV-PLAN-032`、`DEV-PLAN-480`、`DEV-PLAN-481`、`DEV-PLAN-482`、`DEV-PLAN-484`、`DEV-PLAN-485`、`DEV-PLAN-487`、`DEV-PLAN-489A`、`DEV-PLAN-490`
+- **关联计划/标准**：`AGENTS.md`、`DEV-PLAN-000`、`DEV-PLAN-001`、`DEV-PLAN-012`、`DEV-PLAN-017`、`DEV-PLAN-019`、`DEV-PLAN-022`、`DEV-PLAN-032`、`DEV-PLAN-480`、`DEV-PLAN-480A`、`DEV-PLAN-481`、`DEV-PLAN-482`、`DEV-PLAN-484`、`DEV-PLAN-485`、`DEV-PLAN-487`、`DEV-PLAN-489A`、`DEV-PLAN-490`
 - **用户入口/触点**：`授权管理 > 用户授权` 顶部用户选择器、`角色` 页签、`组织范围` 页签、统一 `保存` 按钮、orgunit 普通 API、CubeBox API-first orgunit 查询
 
 ### 0.1 Simple > Easy 三问

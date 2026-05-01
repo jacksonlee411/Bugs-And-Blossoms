@@ -7,7 +7,7 @@
 - **评审分级**：`T2`
 - **范围一句话**：把权限标识收敛为唯一 `object:action` authz capability key，硬删除前端 `permissionKey`、`module.verb` 别名、policy-only 权限和未实现能力；不提供兼容映射、双字段、过渡窗口或旧 key 自动转换。
 - **关联模块/目录**：`pkg/authz/**`、`config/access/**`、`scripts/authz/**`、`internal/server/**`、`internal/superadmin/**`、`apps/web/src/**`
-- **关联计划/标准**：`AGENTS.md`、`DEV-PLAN-000`、`DEV-PLAN-001`、`DEV-PLAN-004M1`、`DEV-PLAN-012`、`DEV-PLAN-017`、`DEV-PLAN-022`、`DEV-PLAN-480`、`DEV-PLAN-481`、`DEV-PLAN-482`、`DEV-PLAN-482A`、`DEV-PLAN-484`、`DEV-PLAN-487`、`DEV-PLAN-488`
+- **关联计划/标准**：`AGENTS.md`、`DEV-PLAN-000`、`DEV-PLAN-001`、`DEV-PLAN-004M1`、`DEV-PLAN-012`、`DEV-PLAN-017`、`DEV-PLAN-022`、`DEV-PLAN-480`、`DEV-PLAN-480A`、`DEV-PLAN-481`、`DEV-PLAN-482`、`DEV-PLAN-482A`、`DEV-PLAN-484`、`DEV-PLAN-487`、`DEV-PLAN-488`
 - **用户入口/触点**：功能授权项、授权项诊断、角色定义页、用户授权页、导航入口、页面守卫、所有受保护 HTTP API 与 CubeBox API-first 工具链
 
 ### 0.1 Simple > Easy 三问
