@@ -1,13 +1,13 @@
 # DEV-PLAN-484：Authz Capability Registry 覆盖门禁方案
 
-**状态**: 规划中（2026-05-01 08:14 CST）
+**状态**: 规划中（2026-05-01 10:23 CST）
 
 ## 0. 适用范围与评审分级
 
 - **评审分级**：`T2`
 - **范围一句话**：冻结新增模块、功能、HTTP API 与 CubeBox API tool overlay 必然进入 capability registry 和功能授权项的覆盖门禁；任何未声明、未登记、未覆盖或 policy-only 的权限漂移都必须在 CI 被阻断。
 - **关联模块/目录**：`pkg/authz/**`、`config/access/**`、`scripts/authz/**`、`internal/server/**`、`internal/superadmin/**`、`modules/cubebox/**`、`apps/web/src/**`
-- **关联计划/标准**：`AGENTS.md`、`DEV-PLAN-000`、`DEV-PLAN-001`、`DEV-PLAN-012`、`DEV-PLAN-017`、`DEV-PLAN-022`、`DEV-PLAN-480`、`DEV-PLAN-481`、`DEV-PLAN-482`、`DEV-PLAN-483`、`DEV-PLAN-485`
+- **关联计划/标准**：`AGENTS.md`、`DEV-PLAN-000`、`DEV-PLAN-001`、`DEV-PLAN-012`、`DEV-PLAN-017`、`DEV-PLAN-022`、`DEV-PLAN-480`、`DEV-PLAN-481`、`DEV-PLAN-482`、`DEV-PLAN-483`、`DEV-PLAN-485`、`DEV-PLAN-487`
 - **用户入口/触点**：功能授权项、角色定义页 capability 候选项、所有受保护 HTTP API、CubeBox API-first 工具链
 
 ### 0.1 Simple > Easy 三问
@@ -18,7 +18,7 @@
 
 ### 0.2 当前门禁缺口
 
-当前 `make authz-lint` 只做基础 policy 文件格式检查，尚不能枚举 route requirement、capability registry、policy 与 CubeBox API tool overlay 的覆盖关系。因此 482/483/485/490 的实施 PR 在合入前，必须先完成本计划 P1/P2 覆盖事实提取与 lint 串联；否则“覆盖门禁”只是文档约束，不能作为已具备的 CI 保护。
+当前 `make authz-lint` 只做基础 policy 文件格式检查，尚不能枚举 route requirement、capability registry、policy、DB role capability seed 与 CubeBox API tool overlay 的覆盖关系。因此 482/483/485/487/490 的实施 PR 在合入前，必须先完成本计划 P1/P2 覆盖事实提取与 lint 串联；否则“覆盖门禁”只是文档约束，不能作为已具备的 CI 保护。
 
 ## 1. 背景
 
@@ -96,7 +96,7 @@ Capability Key        = authz_object + ":" + authz_action
 2. 无覆盖但必须保留的系统内部 capability 必须设为 `assignable=false`，并标明 surface，例如 `superadmin`、`internal_system` 或后续冻结的专用分类。
 3. `deprecated`、`disabled`、`assignable=false`、非 `tenant_api` surface 或无当前 tenant API 覆盖的 capability 默认不得进入 HRMS tenant 功能授权项。
 4. registry 不得登记 API path 作为 key。
-5. `iam.authz:read` 必须作为 tenant API capability 登记并覆盖保护 482 capabilities endpoint 与 485 API catalog endpoint；如出现在线写入能力，再登记并覆盖 `iam.authz:admin` 或更明确 action。
+5. `iam.authz:read` 必须作为 tenant API capability 登记并覆盖保护 482 capabilities endpoint 与 485 API catalog endpoint；`DEV-PLAN-487` 角色定义在线写入必须登记并覆盖 `iam.authz:admin` 或更明确 action。
 
 ### 5.4 Policy 覆盖
 
@@ -104,11 +104,12 @@ Capability Key        = authz_object + ":" + authz_action
 2. policy 中普通 tenant 权限不得引用无当前 tenant API 覆盖的 capability。
 3. superadmin policy 可以使用同一 `object:action` 格式，但必须归属 superadmin surface，不进入 HRMS tenant 功能授权项。
 4. policy-only 权限必须删除或在同一实施切片中补齐当前实现面；不得作为示例权限保留。
+5. 487 切换普通 tenant role 到 DB role capability SoT 后，普通 tenant role 的 capability seed 同样必须引用 registry 内 key；policy CSV 不得作为普通 tenant role 的 fallback 覆盖。
 
 ### 5.5 前端消费
 
 1. 功能授权项 UI 只消费 482 options API，不从 route、policy CSV、导航配置或本地常量反推候选项；482 options API 默认只输出 `enabled + assignable + tenant_api + 当前实现覆盖` 的 capability。
-2. 角色定义页保存 payload 只提交 capability keys。
+2. 角色定义页保存 payload 只提交 capability keys；487 保存 API 必须做服务端二次校验，不信任前端候选项。
 3. 点击功能授权项中的授权项标识时，可以打开标题为“关联 API”的弹窗展示 API method/path；主表不得常驻展示 method/path，也不能把 method/path 放进 key 列。当前已明确不走 executor 路线，弹窗不得规划 executor key 展示。
 4. 前端不得新增 hardcoded capability candidate list；测试 fixture 如需模拟候选项，必须复用 registry/options response shape。
 5. 全量 HTTP API 正向查看面归属 `DEV-PLAN-485` 的 `API 授权目录` 页面；功能授权项页面只保留点击授权项标识后的反向“关联 API”弹窗。
@@ -147,6 +148,7 @@ Capability Key        = authz_object + ":" + authz_action
 2. [ ] 提供 CubeBox API tool overlay 枚举能力，输出 `method/path/cubebox_callable/surface`。
 3. [ ] 提供 registry 枚举能力，输出 `key/object/action/assignable/status/surface`。
 4. [ ] 提供 policy 枚举能力，输出 `subject/domain/object/action`。
+5. [ ] 487 实施后提供普通 tenant role capability seed/DB 定义枚举能力，输出 `tenant/role_slug/capability_key/system_managed`。
 
 ### 7.3 P2：覆盖 lint
 

@@ -71,6 +71,8 @@
 ### 4.3 Subject 语义（选定：role 为授权主体；principal 为审计标识）
 
 > `DEV-PLAN-019` 选定“本地主体”为 `principal`。但若把“principal↔role 绑定”写进 Casbin policy，会导致“创建用户/租户 = 修改 policy 文件”的运维耦合。为保持简单性：**MVP 的 Casbin 授权以 role 为主体**；principal 仅作为审计/日志/诊断标识。
+>
+> 后续角色定义在线保存、DB SoT 与普通 tenant role 运行时能力授权来源由 `DEV-PLAN-487` 承接。487 不改变本节 `role:{slug}` subject 语义，也不引入 principal 作为 Casbin subject。
 
 - **审计标识（principal id，非 Casbin Enforce 输入）**：
   - tenant principal：`tenant:{tenant_id}:principal:{principal_id}`
@@ -141,6 +143,7 @@
   - `role:tenant_viewer`（租户只读）
   - `role:anonymous`（匿名；仅用于**明确白名单**的必要资源）
 - **动作口径（MVP）**：只允许使用 `read/admin/debug`。
+- **在线角色定义扩展**：角色定义持久化与 `tenant-admin` / `tenant-viewer` seed 到 DB 的切换由 `DEV-PLAN-487` 承接；本节的 Git-managed policy 仍是 bootstrap/static baseline，不代表在线角色保存 API。
 
 策略矩阵（MVP，建议从此起步）：
 

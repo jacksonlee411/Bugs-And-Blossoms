@@ -7,12 +7,12 @@
 - **评审分级**：`T2`
 - **范围一句话**：冻结 `DEV-PLAN-481` 用户授权页两个页签背后的首批可保存闭环：用户角色授权、组织范围 SoT、保存 API、运行时读取与 orgunit 服务端强制裁剪；本计划不直接提交迁移，新增 DB 表实施前必须再次获得用户手工确认。
 - **关联模块/目录**：`modules/iam/**`、`modules/orgunit/**`、`pkg/authz/**`、`internal/server/**`、`apps/web/src/**`、`config/access/**`、`scripts/authz/**`
-- **关联计划/标准**：`AGENTS.md`、`DEV-PLAN-000`、`DEV-PLAN-001`、`DEV-PLAN-012`、`DEV-PLAN-017`、`DEV-PLAN-019`、`DEV-PLAN-022`、`DEV-PLAN-032`、`DEV-PLAN-480`、`DEV-PLAN-481`、`DEV-PLAN-482`、`DEV-PLAN-484`、`DEV-PLAN-485`、`DEV-PLAN-490`
+- **关联计划/标准**：`AGENTS.md`、`DEV-PLAN-000`、`DEV-PLAN-001`、`DEV-PLAN-012`、`DEV-PLAN-017`、`DEV-PLAN-019`、`DEV-PLAN-022`、`DEV-PLAN-032`、`DEV-PLAN-480`、`DEV-PLAN-481`、`DEV-PLAN-482`、`DEV-PLAN-484`、`DEV-PLAN-485`、`DEV-PLAN-487`、`DEV-PLAN-490`
 - **用户入口/触点**：`授权管理 > 用户授权` 顶部用户选择器、`角色` 页签、`组织范围` 页签、统一 `保存` 按钮、orgunit 普通 API、CubeBox API-first orgunit 查询
 
 ### 0.1 Simple > Easy 三问
 
-1. **边界**：481 只拥有用户授权 UI 与交互骨架；489 拥有首批用户授权保存 SoT、读取 API、服务端校验和运行时组织范围强制；482 继续拥有 capability registry 与 `scope_dimension` 元数据；480 继续拥有授权体系蓝图与运行时原则。
+1. **边界**：481 只拥有用户授权 UI 与交互骨架；487 拥有角色定义保存、能力集合和运行时 capability 来源；489 拥有首批用户授权保存 SoT、读取 API、服务端校验和运行时组织范围强制；482 继续拥有 capability registry 与 `scope_dimension` 元数据；480 继续拥有授权体系蓝图与运行时原则。
 2. **不变量**：包含 `scope_dimension=organization` capability 的角色被授予某用户时，该用户必须至少有一条组织范围绑定；缺失时保存失败，不得默认全租户。所有 orgunit 列表、搜索、详情、审计和 CubeBox API-first 调用都必须消费同一服务端 scope 事实。
 3. **可解释**：管理员选择用户，添加角色行，添加组织范围行，点击保存；服务端在同一事务中保存角色授权与组织范围，并在运行时把当前用户的组织范围注入 orgunit 查询。越界目标 fail-closed，前端本地状态、prompt、Casbin object 字符串都不能代替 SoT。
 
@@ -21,6 +21,7 @@
 - `DEV-PLAN-480` 已冻结授权体系蓝图，明确 RLS 只负责跨租户隔离，数据范围必须在服务端读路径强制。
 - `DEV-PLAN-481` 已冻结用户授权 UI：顶部用户选择器、`角色` / `组织范围` 两个页签、添加行、移除、统一保存、组织范围必填校验；但 481 明确不直接建表或冻结迁移 SQL。
 - `DEV-PLAN-482` 已冻结 capability registry 字段，其中 `scope_dimension=organization` 是用户授权页判断是否必须配置组织范围的来源。
+- `DEV-PLAN-487` 冻结角色定义保存 API、角色能力集合持久化与普通 tenant role 运行时 capability 来源；489 只引用当前有效角色定义，不拥有角色定义本身。
 - 当前 `config/access/policies/**` 与 Casbin 只覆盖 capability/API 级授权，不是在线用户授权记录、组织范围绑定或运行时数据范围 SoT。
 - 最容易出错的位置：把组织范围只做成前端状态；把范围塞进 Casbin object/action；给缺失范围默认全租户；CubeBox 走 executor 或绕过 HTTP API 读路径；在角色定义页回流 `scope_required` 字段。
 
@@ -290,6 +291,7 @@ type PrincipalScopeProvider interface {
 | `DEV-PLAN-482` | capability registry、`scope_dimension`、候选项 options API |
 | `DEV-PLAN-484` | registry / route / policy / CubeBox API tool overlay 覆盖门禁 |
 | `DEV-PLAN-485` | API 授权目录只读页面 |
+| `DEV-PLAN-487` | 角色定义保存 API、角色 capability 持久化、普通 tenant role 运行时能力来源 |
 | `DEV-PLAN-489` | 用户授权保存 SoT、组织范围绑定、scope provider、orgunit 强制裁剪 |
 | `DEV-PLAN-490` | CubeBox API-first 工具化，复用当前用户 HTTP API 授权与数据范围 |
 

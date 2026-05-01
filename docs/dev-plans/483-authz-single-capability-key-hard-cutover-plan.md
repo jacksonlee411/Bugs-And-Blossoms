@@ -1,13 +1,13 @@
 # DEV-PLAN-483：权限标识单主源与前端 permissionKey 硬删除方案
 
-**状态**: 规划中（2026-05-01 08:14 CST）
+**状态**: 规划中（2026-05-01 10:23 CST）
 
 ## 0. 适用范围与评审分级
 
 - **评审分级**：`T2`
 - **范围一句话**：把权限标识收敛为唯一 `object:action` capability key，硬删除前端 `permissionKey`、`module.verb` 别名、policy-only 权限和未实现能力；不提供兼容映射、双字段、过渡窗口或旧 key 自动转换。
 - **关联模块/目录**：`pkg/authz/**`、`config/access/**`、`scripts/authz/**`、`internal/server/**`、`internal/superadmin/**`、`apps/web/src/**`
-- **关联计划/标准**：`AGENTS.md`、`DEV-PLAN-000`、`DEV-PLAN-001`、`DEV-PLAN-004M1`、`DEV-PLAN-012`、`DEV-PLAN-017`、`DEV-PLAN-022`、`DEV-PLAN-480`、`DEV-PLAN-481`、`DEV-PLAN-482`、`DEV-PLAN-484`
+- **关联计划/标准**：`AGENTS.md`、`DEV-PLAN-000`、`DEV-PLAN-001`、`DEV-PLAN-004M1`、`DEV-PLAN-012`、`DEV-PLAN-017`、`DEV-PLAN-022`、`DEV-PLAN-480`、`DEV-PLAN-481`、`DEV-PLAN-482`、`DEV-PLAN-484`、`DEV-PLAN-487`
 - **用户入口/触点**：功能授权项、角色定义页、用户授权页、导航入口、页面守卫、所有受保护 HTTP API 与 CubeBox API-first 工具链
 
 ### 0.1 Simple > Easy 三问
@@ -34,7 +34,7 @@
 2. [ ] 删除前端独立 `permissionKey` 语言；前端若需要守卫，只能使用同一个 canonical capability key。
 3. [ ] 删除或改造所有 policy-only 权限；policy 中不得存在没有当前 route/CubeBox API tool overlay/superadmin surface 承接的 key。
 4. [ ] 删除 `module.verb`、点号 action、构建期权限、示例权限和历史共享读权限等旧表达。
-5. [ ] 对齐 `DEV-PLAN-484` 覆盖门禁，使 registry、policy、route requirement、CubeBox API tool overlay、角色定义 payload、前端路由守卫只能使用同一套 key；483 本身只拥有旧 key 和旧字段硬删除。
+5. [ ] 对齐 `DEV-PLAN-484` 覆盖门禁与 `DEV-PLAN-487` 角色保存 API，使 registry、policy、route requirement、CubeBox API tool overlay、角色定义 payload、前端路由守卫只能使用同一套 key；483 本身只拥有旧 key 和旧字段硬删除。
 
 ## 3. 非目标
 

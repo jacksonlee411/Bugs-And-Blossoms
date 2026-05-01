@@ -1,6 +1,6 @@
 # DEV-PLAN-482：EHR Capability Registry 与角色能力候选项方案
 
-**状态**: 规划中（2026-05-01 08:14 CST）
+**状态**: 规划中（2026-05-01 10:23 CST）
 
 ## 1. 背景
 
@@ -13,7 +13,7 @@
 - `apps/web` 的 `permissionKey` 来自构建期/本地配置，不能作为授权事实源或角色能力候选源。
 - 历史 `Capability Registry` / capability key 下拉方案已归档，且绑定 SetID / scope/package 历史语义，不得作为当前实现前提。
 
-因此需要一个独立方案承接：全量 capability registry、候选项 options API 与 capability key 校验规则。482 不拥有角色定义页面本身；角色基础信息、保存按钮和角色编辑工作流继续归属 `DEV-PLAN-481`。现有前端 `permissionKey`、旧 key 的硬删除要求由 `DEV-PLAN-483` 承接；新增受保护 API 与 CubeBox API tool overlay 必然进入功能授权项、policy-only 权限与覆盖证据门禁由 `DEV-PLAN-484` 承接。482 不提供兼容映射。
+因此需要一个独立方案承接：全量 capability registry、候选项 options API 与 capability key 校验规则。482 不拥有角色定义页面本身；角色基础信息、保存按钮和角色编辑工作流继续归属 `DEV-PLAN-481`，角色定义在线保存 API、持久化模型、服务端校验和运行时生效由 `DEV-PLAN-487` 承接。现有前端 `permissionKey`、旧 key 的硬删除要求由 `DEV-PLAN-483` 承接；新增受保护 API 与 CubeBox API tool overlay 必然进入功能授权项、policy-only 权限与覆盖证据门禁由 `DEV-PLAN-484` 承接。482 不提供兼容映射。
 
 ## 2. 目标
 
@@ -71,7 +71,7 @@
 2. key 不允许手工覆盖。
 3. 同一个 `object/action` 只能有一条 registry entry。
 4. `assignable=false` 的能力可用于系统内部或超级管理员场景，但不进入普通角色定义候选项。
-5. 首批必须登记 `iam.authz:read`，用于保护 capability options 与 API 授权目录查询；如需要在线写入角色/授权，再登记 `iam.authz:admin` 或更明确 object/action。该 object/action 必须进入 registry、route requirement 和 policy，不得只在文档示例中出现。
+5. 首批必须登记 `iam.authz:read`，用于保护 capability options 与 API 授权目录查询；`DEV-PLAN-487` 的角色定义在线写入必须登记 `iam.authz:admin` 或更明确 object/action。该 object/action 必须进入 registry、route requirement 和 policy/bootstrap 或 DB role seed，不得只在文档示例中出现。
 
 ## 5. Options API
 
@@ -122,7 +122,7 @@
 
 ## 6. 候选项消费契约
 
-482 只定义候选项来源、选择器行为和服务端校验规则。`DEV-PLAN-481` 的角色定义页消费这些契约；482 不新增单独的角色定义界面，不定义角色名称、slug、描述或保存按钮。
+482 只定义候选项来源、选择器行为和 capability key 校验规则。`DEV-PLAN-481` 的角色定义页消费这些契约；`DEV-PLAN-487` 的保存 API 复用这些服务端校验规则。482 不新增单独的角色定义界面，不定义角色名称、slug、描述、保存按钮或角色定义持久化模型。
 
 角色定义页不从 policy CSV 反推候选项，必须从 options API 获取候选 capability。
 
@@ -179,11 +179,11 @@
 3. [ ] 支持搜索与基础过滤，默认只返回 `enabled + assignable + tenant_api + 当前 tenant API 覆盖`。
 4. [ ] 补 `internal/server` handler、authz requirement 与响应测试。
 
-### 8.4 P3：481 页面消费契约
+### 8.4 P3：481/487 消费契约
 
 1. [ ] 481 的角色定义页从 options API 拉取候选 capability。
 2. [ ] 481 页面使用资源-操作矩阵或可搜索 Autocomplete 展示全部可选项。
-3. [ ] 481 的保存 payload 只提交 capability keys。
+3. [ ] 481 的保存 payload 只提交 capability keys，并由 487 保存 API 二次校验。
 4. [ ] 481 UI 测试覆盖加载候选和搜索选择；用户授权组织范围缺失的服务端保存错误必须被消费，具体行内错误表现由用户授权实现计划细化。
 
 ### 8.5 P4：门禁补强
