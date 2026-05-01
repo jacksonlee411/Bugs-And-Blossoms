@@ -190,10 +190,16 @@ Capability/API 层的标识关系：
 
 ```text
 API Route Requirement = method + route -> authz_object + authz_action
-Capability Key        = authz_object + ":" + authz_action
+Authz Capability Key  = authz_object + ":" + authz_action
 ```
 
-因此 `orgunit.orgunits:read` 是授权项标识（capability key），不是 API 地址；它可以覆盖 `GET /org/api/org-units`、`GET /org/api/org-units/details`、`GET /org/api/org-units/audit` 等多个读取接口。UI 功能授权项主页面与点击授权项标识后打开的“关联 API”弹窗由 `DEV-PLAN-482A` 承接，主表只展示 capability 语义，API method/path 只能在弹窗中展示；全量 HTTP API 正向查看面由 `DEV-PLAN-485` 的 `API 授权目录` 承接；不可分配、停用、无覆盖或内部 surface 的 capability 诊断由 `DEV-PLAN-488` 的 `授权项诊断` 承接，不进入普通功能授权项默认列表。
+因此 `orgunit.orgunits:read` 是授权项标识（authz capability key），不是 API 地址；它可以覆盖 `GET /org/api/org-units`、`GET /org/api/org-units/details`、`GET /org/api/org-units/audit` 等多个读取接口。UI 功能授权项主页面与点击授权项标识后打开的“关联 API”弹窗由 `DEV-PLAN-482A` 承接，主表只展示 capability 语义，API method/path 只能在弹窗中展示；全量 HTTP API 正向查看面由 `DEV-PLAN-485` 的 `API 授权目录` 承接；不可分配、停用、无覆盖或内部 surface 的 capability 诊断由 `DEV-PLAN-488` 的 `授权项诊断` 承接，不进入普通功能授权项默认列表。
+
+术语收敛：
+
+1. 480 系列中的 capability 若用于授权管理，统一指 `authz capability key = object:action`，用户可见中文统一称为“授权项标识”。
+2. 历史 Strategy Registry / SetID / 字段策略文档中的 `capability_key` 表达业务策略上下文或流程能力锚点，不等同于 480 系列的授权项标识；实现和文档不得把二者混用。
+3. 新增 API、角色保存 payload、前端守卫和 API 授权目录只允许使用 authz capability key；字段策略、动态规则、SetID 配置若仍需业务 capability 语义，必须在对应计划中明确称为“业务策略 capability key”或更具体名称。
 
 补充说明：
 
@@ -276,6 +282,18 @@ CubeBox 的规则必须更严格，因为模型会生成执行计划。当前路
   - **备选 A**：在 480 中继续规划权限摘要、范围提示、字段脱敏和 CubeBox 授权反馈页面。拒绝，这些页面未进入当前设计稿，继续保留会造成文档漂移。
   - **选定理由**：首期只保留角色管理、用户授权、功能授权项和 API 授权目录四类管理面。
 
+- **决策 4：授权项标识与历史业务 capability 术语硬区分**
+  - **备选 A**：继续在所有场景裸用 `capability_key`。拒绝，会把 authz `object:action` 与历史 SetID/字段策略 capability 混成同一概念。
+  - **选定理由**：480 系列只冻结授权项标识；历史业务策略 capability 不得作为角色候选、API route requirement 或前端守卫 key。
+
+- **决策 5：角色能力运行时只允许一个普通 tenant SoT**
+  - **备选 A**：角色定义 DB 与 policy CSV 同时参与普通 tenant role 放行。拒绝，这是双链路授权，会导致管理员保存角色后与运行时结果不一致。
+  - **选定理由**：`DEV-PLAN-487` 完成 cutover 后，普通 tenant role 的能力集合只从 DB role authz capability SoT 读取；policy CSV 仅保留 bootstrap/static/system surface。
+
+- **决策 6：覆盖事实只能有一个枚举源**
+  - **备选 A**：482A、485、488 各自解析 route/registry/policy。拒绝，会把“功能授权项”“API 授权目录”“授权项诊断”做成三套覆盖判断。
+  - **选定理由**：`DEV-PLAN-484` 拥有 route/tool overlay/registry/policy 的覆盖事实枚举与 lint；482A/485/488 只能消费同一服务端聚合函数或同一枚举结果。
+
 ## 4. 数据模型、状态模型与约束
 
 ### 4.1 权限上下文模型
@@ -287,7 +305,7 @@ CubeBox 的规则必须更严格，因为模型会生成执行计划。当前路
 | `tenant_id` | 租户域，RLS 与 Casbin domain 的输入 |
 | `principal_id` | 审计主体，不直接作为 Casbin subject |
 | `role_slug` | 当前 session 有效角色 |
-| `object` / `action` | 稳定授权维度；对外 capability key 统一序列化为 `object:action`，例如 `orgunit.orgunits:read` |
+| `object` / `action` | 稳定授权维度；对外 authz capability key 统一序列化为 `object:action`，例如 `orgunit.orgunits:read` |
 | `resource_type` / `resource_id` | 具体对象实例，可为空 |
 | `effective_date` | 业务有效日期，date 粒度 |
 | `purpose` | 访问目的，如 normal、admin_audit |
@@ -321,8 +339,8 @@ Decision 的逻辑字段：
 
 本方案不直接建表。后续子计划若需要持久化授权事实，必须独立冻结：
 
-- 角色/权限策略是否仍以文件 policy 为主，是否需要管理 UI 保存入口。
-- 数据范围绑定表：principal/role/team 到 org root、法律实体、地理范围等。
+- 角色定义 DB SoT、角色 authz capability 集合与普通 tenant role 运行时 cutover 由 `DEV-PLAN-487` 独立冻结；480 不允许 DB 与 policy CSV 双链路 OR 放行。
+- 用户授权、principal 角色分配与组织范围绑定由 `DEV-PLAN-489` 独立冻结；489 不重复定义角色定义主表或角色 authz capability 主表。
 - 字段敏感级别与字段策略表。
 - 授权 decision audit 表或事件流。
 
@@ -425,6 +443,9 @@ Decision 的逻辑字段：
 | 把 UI 当授权 | 隐藏按钮但 API 可直调 | 所有 API/service/CubeBox API runner 都有 PEP |
 | 策略键漂移 | policy、route、UI、tool overlay 名称不一致 | registry + lint + 测试统一 |
 | 数据范围过度设计 | 首期还没跑通就建复杂 ABAC DSL | 先 orgunit subtree，后续再加管理链/服务范围 |
+| capability 术语混淆 | authz `object:action` 与历史字段策略/SetID capability 互相引用 | 480 系列统一称 authz capability key / 授权项标识；业务策略 capability 只在对应业务计划中使用 |
+| 角色授权双链路 | DB role authz capability 与 policy CSV 任一命中即放行 | 487 cutover 后普通 tenant role 只读 DB SoT；CSV 仅保留 bootstrap/static/system surface |
+| 覆盖事实多套实现 | 功能授权项、API 授权目录、诊断页各自解析 route/registry/policy | 484 提供唯一覆盖事实枚举与 lint，482A/485/488 只消费同源聚合 |
 | 敏感字段泄露 | API 下发原值，前端隐藏 | 服务端 projection/filter 先处理 |
 | AI 扩权 | 模型生成合法 API 调用绕过授权 | 490 API runner + 既有 route/service authz + 业务读路径 scope |
 | 403 泄露资源存在性 | 用户猜测组织/人员是否存在 | 子计划冻结 403/404 策略 |

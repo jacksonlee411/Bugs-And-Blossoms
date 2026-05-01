@@ -12,13 +12,13 @@
 
 ### 0.1 Simple > Easy 三问
 
-1. **边界**：484 只拥有“覆盖关系和反漂移门禁”；482 继续拥有 capability registry 数据结构与 options API；483 继续拥有旧 `permissionKey` 和旧 key 硬删除；488 可消费覆盖事实做只读诊断，但不复制 lint 逻辑。
+1. **边界**：484 只拥有“覆盖关系和反漂移门禁”；482 继续拥有 capability registry 数据结构与 options API；483 继续拥有旧 `permissionKey` 和旧 key 硬删除；482A/485/488 可消费覆盖事实做页面或弹窗，但不复制覆盖判断或 lint 逻辑。
 2. **不变量**：一个受保护 API 或 CubeBox API tool overlay 必须绑定且只绑定一个 `authz_object + authz_action`；每个 requirement 必须存在于 registry；每个 `assignable=true` capability 必须有当前实现覆盖证据。
 3. **可解释**：管理员在功能授权项看到的授权项标识一定能追溯到至少一个当前可运行 API；新增模块如果忘记登记权限或登记了空壳权限，CI 失败。
 
 ### 0.2 当前门禁缺口
 
-当前 `make authz-lint` 只做基础 policy 文件格式检查，尚不能枚举 route requirement、capability registry、policy、DB role capability seed 与 CubeBox API tool overlay 的覆盖关系。因此 482/483/485/487/490 的实施 PR 在合入前，必须先完成本计划 P1/P2 覆盖事实提取与 lint 串联；否则“覆盖门禁”只是文档约束，不能作为已具备的 CI 保护。
+当前 `make authz-lint` 只做基础 policy 文件格式检查，尚不能枚举 route requirement、capability registry、policy、DB role authz capability seed 与 CubeBox API tool overlay 的覆盖关系。因此 482/483/485/487/490 的实施 PR 在合入前，必须先完成本计划 P1/P2 覆盖事实提取与 lint 串联；否则“覆盖门禁”只是文档约束，不能作为已具备的 CI 保护。
 
 ## 1. 背景
 
@@ -34,18 +34,19 @@
 
 ## 2. 核心目标
 
-1. [ ] 冻结 API / CubeBox API tool overlay 到 capability key 的覆盖关系契约。
+1. [ ] 冻结 API / CubeBox API tool overlay 到 authz capability key 的覆盖关系契约。
 2. [ ] 冻结 capability registry、route requirement、tool overlay、policy、前端消费之间的交叉校验规则。
 3. [ ] 定义 `assignable=true` capability 的实现覆盖证据要求，阻断空壳权限进入功能授权项。
 4. [ ] 定义新增模块/API 的开发模板要求，使新增功能天然携带权限元数据。
 5. [ ] 定义门禁入口，优先并入 `make authz-lint` 或现有 `make check` 链路，不新增无人运行的孤立脚本。
+6. [ ] 冻结覆盖事实的唯一服务端枚举源，供 lint、482A 关联 API、485 API 授权目录和 488 授权项诊断共同消费。
 
 ## 3. 非目标
 
 1. 不改变 482 的 registry 字段模型和 options API 主契约；484 只规定覆盖证据和门禁。482 options API 默认输出口径必须与本计划一致：`enabled + assignable + tenant_api + 当前 tenant API 覆盖`。
 2. 不恢复旧 `permissionKey`、`module.verb`、SetID、scope/package 或 legacy 别名；这些删除要求仍由 483 承接。
 3. 不把 API route path 当成授权项标识；API route 只是覆盖证据。
-4. 不要求每个 route 都有独立 capability key；一个 capability key 可以覆盖多个 route。
+4. 不要求每个 route 都有独立 authz capability key；一个 authz capability key 可以覆盖多个 route。
 5. 不在本计划中新建 DB 表、迁移或在线功能授权项管理页。
 6. 不在本计划中定义授权项诊断页面；诊断视图由 `DEV-PLAN-488` 承接，484 只提供覆盖事实和阻断规则。
 
@@ -54,14 +55,14 @@
 ```text
 API Route Requirement = method + route -> authz_object + authz_action
 Tool Overlay          = method + route -> cubebox_callable
-Capability Key        = authz_object + ":" + authz_action
+Authz Capability Key  = authz_object + ":" + authz_action
 ```
 
 关系基数：
 
 ```text
-一个受保护 API -> 绑定一个 capability key
-一个 capability key -> 可以覆盖多个 API
+一个受保护 API -> 绑定一个 authz capability key
+一个 authz capability key -> 可以覆盖多个 API
 ```
 
 示例：
@@ -105,12 +106,12 @@ Capability Key        = authz_object + ":" + authz_action
 2. policy 中普通 tenant 权限不得引用无当前 tenant API 覆盖的 capability。
 3. superadmin policy 可以使用同一 `object:action` 格式，但必须归属 superadmin surface，不进入 HRMS tenant 功能授权项。
 4. policy-only 权限必须删除或在同一实施切片中补齐当前实现面；不得作为示例权限保留。
-5. 487 切换普通 tenant role 到 DB role capability SoT 后，普通 tenant role 的 capability seed 同样必须引用 registry 内 key；policy CSV 不得作为普通 tenant role 的 fallback 覆盖。
+5. 487 切换普通 tenant role 到 DB role authz capability SoT 后，普通 tenant role 的 authz capability seed 同样必须引用 registry 内 key；policy CSV 不得作为普通 tenant role 的 fallback 覆盖。
 
 ### 5.5 前端消费
 
 1. 功能授权项 UI 只消费 482 options API，不从 route、policy CSV、导航配置或本地常量反推候选项；482 options API 默认只输出 `enabled + assignable + tenant_api + 当前实现覆盖` 的 capability。
-2. 角色定义页保存 payload 只提交 capability keys；487 保存 API 必须做服务端二次校验，不信任前端候选项。
+2. 角色定义页保存 payload 只提交 `authz_capability_keys`；487 保存 API 必须做服务端二次校验，不信任前端候选项。
 3. 点击功能授权项中的授权项标识时，可以打开标题为“关联 API”的弹窗展示 API method/path；主表不得常驻展示 method/path，也不能把 method/path 放进 key 列。该页面与弹窗实施 owner 为 `DEV-PLAN-482A`。当前已明确不走 executor 路线，弹窗不得规划 executor key 展示。
 4. 前端不得新增 hardcoded capability candidate list；测试 fixture 如需模拟候选项，必须复用 registry/options response shape。
 5. 全量 HTTP API 正向查看面归属 `DEV-PLAN-485` 的 `API 授权目录` 页面；普通功能授权项主页面与点击授权项标识后的反向“关联 API”弹窗归属 `DEV-PLAN-482A`。
@@ -142,16 +143,18 @@ Capability Key        = authz_object + ":" + authz_action
 1. [ ] 484 被 AGENTS Doc Map 收录。
 2. [ ] 480/482/483 引用 484，覆盖门禁 owner 不再散落。
 3. [ ] 现有 route/CubeBox API tool overlay/registry/policy/front-end 权限语义按 482/483/484 分工重新标注。
-4. [ ] 在 482/483/485/490 任一实施 PR 合入前，先完成本计划 P1/P2，使 `make authz-lint` 真正覆盖 route/registry/policy/tool overlay 交叉校验。
+4. [ ] 在 482/483/485/487/490 任一实施 PR 合入前，先完成本计划 P1/P2，使 `make authz-lint` 真正覆盖 route/registry/policy/tool overlay/DB role authz capability 交叉校验。
 5. [ ] 488 如落地授权项诊断视图，必须复用本计划 P1/P2 覆盖事实或同一枚举函数，不得复制第二套覆盖判断。
 
 ### 7.2 P1：提取覆盖事实
 
-1. [ ] 提供 route requirement 枚举能力，输出 `method/path/object/action/surface`。
-2. [ ] 提供 CubeBox API tool overlay 枚举能力，输出 `method/path/cubebox_callable/surface`。
-3. [ ] 提供 registry 枚举能力，输出 `key/object/action/assignable/status/surface`。
-4. [ ] 提供 policy 枚举能力，输出 `subject/domain/object/action`。
-5. [ ] 487 实施后提供普通 tenant role capability seed/DB 定义枚举能力，输出 `tenant/role_slug/capability_key/system_managed`。
+1. [ ] 提供单一服务端覆盖事实枚举包或聚合函数，作为 lint、API 授权目录、关联 API 弹窗和授权项诊断的共同输入。
+2. [ ] route requirement 枚举输出 `method/path/object/action/surface`。
+3. [ ] CubeBox API tool overlay 枚举输出 `method/path/cubebox_callable/surface`。
+4. [ ] registry 枚举输出 `key/object/action/assignable/status/surface`。
+5. [ ] policy 枚举输出 `subject/domain/object/action`。
+6. [ ] 487 实施后提供普通 tenant role authz capability seed/DB 定义枚举能力，输出 `tenant/role_slug/authz_capability_key/system_managed`。
+7. [ ] 482A/485/488 不得重新解析 route switch、policy CSV 或 registry 常量；需要页面数据时只能调用本节同源聚合能力。
 
 ### 7.3 P2：覆盖 lint
 
@@ -195,6 +198,7 @@ Capability Key        = authz_object + ":" + authz_action
 | 只检查字段名不检查值 | `requiredCapabilityKey=\"orgunit.read\"` 回流 | lint 必须检查 key 值格式与 registry |
 | superadmin 混入 tenant 目录 | HRMS 管理员看到后台租户权限 | surface 分类和 options API 过滤必须阻断 |
 | 诊断视图变成门禁替代品 | 页面能看到问题但 CI 仍放行 | 488 只读展示，484 lint 继续阻断 |
+| 覆盖事实多套实现 | 482A、485、488 页面与 lint 对同一 route 得出不同授权项 | 484 P1 单一枚举源是前置条件；页面只能消费同源聚合函数 |
 
 ## 10. 验证记录
 

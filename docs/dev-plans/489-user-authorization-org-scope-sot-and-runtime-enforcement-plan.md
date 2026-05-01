@@ -5,14 +5,14 @@
 ## 0. 适用范围与评审分级
 
 - **评审分级**：`T2`
-- **范围一句话**：冻结 `DEV-PLAN-481` 用户授权页两个页签背后的首批可保存闭环：用户角色授权、组织范围 SoT、保存 API、运行时读取与 orgunit 服务端强制裁剪；本计划不直接提交迁移，新增 DB 表实施前必须再次获得用户手工确认。
+- **范围一句话**：冻结 `DEV-PLAN-481` 用户授权页两个页签背后的首批可保存闭环：principal 角色授权、组织范围 SoT、保存 API、运行时读取与 orgunit 服务端强制裁剪；本计划不拥有角色定义主表或角色 authz capability 主表，不直接提交迁移，新增 DB 表实施前必须再次获得用户手工确认。
 - **关联模块/目录**：`modules/iam/**`、`modules/orgunit/**`、`pkg/authz/**`、`internal/server/**`、`apps/web/src/**`、`config/access/**`、`scripts/authz/**`
 - **关联计划/标准**：`AGENTS.md`、`DEV-PLAN-000`、`DEV-PLAN-001`、`DEV-PLAN-012`、`DEV-PLAN-017`、`DEV-PLAN-019`、`DEV-PLAN-022`、`DEV-PLAN-032`、`DEV-PLAN-480`、`DEV-PLAN-481`、`DEV-PLAN-482`、`DEV-PLAN-484`、`DEV-PLAN-485`、`DEV-PLAN-487`、`DEV-PLAN-490`
 - **用户入口/触点**：`授权管理 > 用户授权` 顶部用户选择器、`角色` 页签、`组织范围` 页签、统一 `保存` 按钮、orgunit 普通 API、CubeBox API-first orgunit 查询
 
 ### 0.1 Simple > Easy 三问
 
-1. **边界**：481 只拥有用户授权 UI 与交互骨架；487 拥有角色定义保存、能力集合和运行时 capability 来源；489 拥有首批用户授权保存 SoT、读取 API、服务端校验和运行时组织范围强制；482 继续拥有 capability registry 与 `scope_dimension` 元数据；480 继续拥有授权体系蓝图与运行时原则。
+1. **边界**：481 只拥有用户授权 UI 与交互骨架；487 拥有角色定义保存、能力集合和运行时 capability 来源；489 只拥有首批 principal 角色授权、组织范围绑定、读取/保存 API、服务端校验和运行时组织范围强制；482 继续拥有 capability registry 与 `scope_dimension` 元数据；480 继续拥有授权体系蓝图与运行时原则。
 2. **不变量**：包含 `scope_dimension=organization` capability 的角色被授予某用户时，该用户必须至少有一条组织范围绑定；缺失时保存失败，不得默认全租户。所有 orgunit 列表、搜索、详情、审计和 CubeBox API-first 调用都必须消费同一服务端 scope 事实。
 3. **可解释**：管理员选择用户，添加角色行，添加组织范围行，点击保存；服务端在同一事务中保存角色授权与组织范围，并在运行时把当前用户的组织范围注入 orgunit 查询。越界目标 fail-closed，前端本地状态、prompt、Casbin object 字符串都不能代替 SoT。
 
@@ -42,7 +42,7 @@
 
 ### 2.1 核心目标
 
-1. [ ] 冻结用户授权组织范围 SoT：角色授权与组织范围绑定归属 IAM 模块，orgunit 只提供组织节点与 subtree 解析能力。
+1. [ ] 冻结用户授权组织范围 SoT：principal 角色授权与组织范围绑定归属 IAM 模块，orgunit 只提供组织节点与 subtree 解析能力；角色定义与角色 authz capability 集合继续归 `DEV-PLAN-487`。
 2. [ ] 冻结首批保存 API：用户授权页一次性提交角色行与组织范围行，服务端同事务保存并校验。
 3. [ ] 冻结必填校验：任一被授予角色包含 `scope_dimension=organization` capability 时，组织范围行必须非空。
 4. [ ] 冻结运行时强制：orgunit list/search/tree/detail/audit/write 和 CubeBox API-first orgunit 查询使用同一 scope provider。
@@ -90,7 +90,7 @@
 
 | 层级 | 本计划承接内容 | 代表对象/文件 | 说明 |
 | --- | --- | --- | --- |
-| `pkg/authz` | capability key、scope dimension、角色是否需要组织范围的纯函数判断 | `pkg/authz/*_test.go` | 黑盒表驱动，覆盖无范围、organization 范围、未知 key |
+| `pkg/authz` | authz capability key、scope dimension、角色是否需要组织范围的纯函数判断 | `pkg/authz/*_test.go` | 黑盒表驱动，覆盖无范围、organization 范围、未知 key |
 | `modules/iam/services` | 用户授权保存校验、角色授权与组织范围绑定规则 | `modules/iam/services/*_test.go` | 不把业务规则堆在 handler |
 | `modules/iam/infrastructure` | IAM 授权 SoT 读写、显式事务、tenant 注入、RLS | `modules/iam/infrastructure/**` | 后续实现命中 sqlc/PG 测试时补 |
 | `modules/orgunit/services` | scope filter 注入后的 list/search/detail/audit/write 行为 | `modules/orgunit/services/*_test.go` | 业务路径只消费 scope provider，不读取前端状态 |
@@ -121,7 +121,7 @@ flowchart LR
 
 1. 管理员打开用户授权页，选择 principal/user。
 2. 页面加载该用户的角色授权行与组织范围行。
-3. 管理员保存时，服务端校验角色存在、capability key 有效、是否需要 organization 范围、组织节点是否属于当前 tenant。
+3. 管理员保存时，服务端校验角色存在、authz capability key 有效、是否需要 organization 范围、组织节点是否属于当前 tenant。
 4. 服务端在同一事务中替换该用户首批授权集合，并返回保存后的版本。
 5. 运行时 orgunit API 根据当前 session principal 读取 IAM scope provider 输出，把 scope filter 注入 orgunit 查询。
 6. CubeBox API-first 工具链以当前用户调用同一 HTTP API 或等价 route/service path，因此自动复用同一 scope filter。
@@ -141,7 +141,7 @@ flowchart LR
 
 ### 3.2 模块归属与职责边界
 
-- **IAM owner**：角色定义、角色 capability 集合、principal 角色授权、principal 组织范围绑定、scope provider。
+- **IAM owner**：角色定义、角色 authz capability 集合、principal 角色授权、principal 组织范围绑定、scope provider。
 - **OrgUnit owner**：组织节点、组织树、subtree 解析、带 scope filter 的业务查询。
 - **Authz registry owner**：482 继续拥有 capability 元数据与 `scope_dimension`。
 - **Server composition owner**：`internal/server` 只编排 HTTP payload、session/tenant/authz、事务边界和错误映射，不承载业务规则。
@@ -154,27 +154,25 @@ flowchart LR
 
 Go DDD 分工：
 
-1. `modules/iam/domain`：角色、授权行、组织范围绑定、校验错误类型。
-2. `modules/iam/services`：保存用户授权、计算角色是否需要组织范围、组装 scope provider 输出。
+1. `modules/iam/domain`：principal 授权行、组织范围绑定、校验错误类型；角色定义实体复用 `DEV-PLAN-487`，不在 489 重复建模。
+2. `modules/iam/services`：保存用户授权、读取 487 角色摘要、计算角色是否需要组织范围、组装 scope provider 输出。
 3. `modules/iam/infrastructure`：PG 读写实现、显式事务、tenant 注入、RLS。
 4. `modules/orgunit/services`：接收已解析 scope filter 并强制裁剪业务查询。
 
-### 3.4 建议 DB SoT
+### 3.4 用户授权 DB SoT
 
-本节冻结建议模型，不等同于允许立即新增表。实施迁移前必须再次获得用户手工确认。
+本节只冻结用户授权与组织范围建议模型，不等同于允许立即新增表。实施迁移前必须再次获得用户手工确认。角色定义主表和角色 authz capability 集合由 `DEV-PLAN-487` 拥有，489 不重复创建 `authz_roles` / `authz_role_capabilities` / `role_authz_capabilities` 或同义表。
 
 | 表 | 归属 | 首批字段要点 | 说明 |
 | --- | --- | --- | --- |
-| `iam.authz_roles` | IAM | `tenant_uuid`、`role_slug`、`display_name`、`description`、`status`、`revision`、审计字段 | 角色定义主表 |
-| `iam.authz_role_capabilities` | IAM | `tenant_uuid`、`role_slug`、`capability_key` | 角色到 `object:action` capability 集合 |
 | `iam.principal_role_assignments` | IAM | `tenant_uuid`、`principal_id`、`role_slug`、审计字段 | 用户角色授权行，首批只支持 principal |
 | `iam.principal_org_scope_bindings` | IAM | `tenant_uuid`、`principal_id`、`org_node_key`、`include_descendants`、审计字段 | 用户组织范围行 |
 
 约束：
 
 1. 所有表必须 tenant-scoped，启用并强制 RLS。
-2. `role_slug` 在同一 tenant 内唯一。
-3. `capability_key` 必须存在于 482 registry，且保存角色时只能使用 `enabled + assignable + tenant_api + covered` 的 capability。
+2. `principal_role_assignments.role_slug` 必须引用或服务端校验命中 487 的当前有效角色定义；不得在 489 表中复制角色名称、描述或 capability 集合作为事实源。
+3. 是否需要组织范围由 487 角色 authz capability 集合 + 482 registry `scope_dimension` 计算，不在 489 表中保存 `scope_required`。
 4. `org_node_key` 使用 orgunit 现行 node key，不引入 org_level/scope_type/scope_key。
 5. 不保存“全租户”隐式范围。若未来需要全租户显式授权，应另起计划冻结表达方式；首批可通过选择租户根组织并勾选包含下级表达。
 
@@ -257,6 +255,7 @@ type PrincipalScopeProvider interface {
 3. `scope_dimension=none` 的 capability 不要求组织范围。
 4. `scope_dimension=organization` 的 capability 如果运行时读不到组织范围，必须 fail-closed。
 5. 运行时不得从前端 query 参数、localStorage、prompt、CubeBox context 或 policy CSV 推导组织范围。
+6. Scope provider 可以调用 487 的角色能力读取接口判断 authz capability 集合，但不得自行读取或复制 `role_authz_capabilities` 表实现第二套角色能力来源。
 
 ### 3.7 OrgUnit 裁剪契约
 
@@ -291,7 +290,7 @@ type PrincipalScopeProvider interface {
 | `DEV-PLAN-482` | capability registry、`scope_dimension`、候选项 options API |
 | `DEV-PLAN-484` | registry / route / policy / CubeBox API tool overlay 覆盖门禁 |
 | `DEV-PLAN-485` | API 授权目录只读页面 |
-| `DEV-PLAN-487` | 角色定义保存 API、角色 capability 持久化、普通 tenant role 运行时能力来源 |
+| `DEV-PLAN-487` | 角色定义保存 API、角色 authz capability 持久化、普通 tenant role 运行时能力来源 |
 | `DEV-PLAN-489` | 用户授权保存 SoT、组织范围绑定、scope provider、orgunit 强制裁剪 |
 | `DEV-PLAN-490` | CubeBox API-first 工具化，复用当前用户 HTTP API 授权与数据范围 |
 
@@ -312,9 +311,9 @@ type PrincipalScopeProvider interface {
 
 ### 6.3 P2：IAM SoT 与服务
 
-1. [ ] 新增 IAM 授权 SoT schema、RLS、迁移、sqlc query。
-2. [ ] 实现角色定义读取、用户授权读取、replace-all 保存。
-3. [ ] 服务端校验 capability key、角色启用状态、组织范围必填、组织节点归属 tenant。
+1. [ ] 新增 IAM 用户授权 SoT schema、RLS、迁移、sqlc query；不新增角色定义主表或角色 authz capability 主表。
+2. [ ] 通过 487 服务读取角色定义摘要，实现用户授权读取、replace-all 保存。
+3. [ ] 服务端校验角色启用状态、角色 authz capability 是否仍有效、组织范围必填、组织节点归属 tenant。
 4. [ ] 保存失败不得产生部分写入。
 
 ### 6.4 P3：Scope Provider 与 OrgUnit 强制裁剪
@@ -356,6 +355,7 @@ type PrincipalScopeProvider interface {
 | --- | --- | --- |
 | UI 静态化 | 两页签可编辑但刷新丢失，运行时不生效 | 保存必须写服务端 SoT，E2E 验证 API 裁剪 |
 | 默认全租户 | 缺组织范围也保存成功 | `scope_dimension=organization` 缺范围必须失败 |
+| 重复角色 SoT | 489 新增或维护角色定义 / role authz capability 表 | 角色定义与能力集合只归 487；489 只保存 principal assignment 与 org scope |
 | 组织范围塞进 Casbin | policy object/action 带组织节点 | 组织范围只在 IAM SoT 与 scope provider |
 | OrgUnit 自读 IAM 表 | orgunit store 直接依赖 IAM schema | 由服务层注入 scope filter，避免跨模块耦合 |
 | CubeBox 绕过裁剪 | 模型 executor 或旧 read plan 直读全量 orgunit | CubeBox API-first 复用 HTTP API / route-service path |

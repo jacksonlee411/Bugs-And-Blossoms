@@ -5,7 +5,7 @@
 ## 0. 适用范围与评审分级
 
 - **评审分级**：`T2`
-- **范围一句话**：把权限标识收敛为唯一 `object:action` capability key，硬删除前端 `permissionKey`、`module.verb` 别名、policy-only 权限和未实现能力；不提供兼容映射、双字段、过渡窗口或旧 key 自动转换。
+- **范围一句话**：把权限标识收敛为唯一 `object:action` authz capability key，硬删除前端 `permissionKey`、`module.verb` 别名、policy-only 权限和未实现能力；不提供兼容映射、双字段、过渡窗口或旧 key 自动转换。
 - **关联模块/目录**：`pkg/authz/**`、`config/access/**`、`scripts/authz/**`、`internal/server/**`、`internal/superadmin/**`、`apps/web/src/**`
 - **关联计划/标准**：`AGENTS.md`、`DEV-PLAN-000`、`DEV-PLAN-001`、`DEV-PLAN-004M1`、`DEV-PLAN-012`、`DEV-PLAN-017`、`DEV-PLAN-022`、`DEV-PLAN-480`、`DEV-PLAN-481`、`DEV-PLAN-482`、`DEV-PLAN-482A`、`DEV-PLAN-484`、`DEV-PLAN-487`、`DEV-PLAN-488`
 - **用户入口/触点**：功能授权项、授权项诊断、角色定义页、用户授权页、导航入口、页面守卫、所有受保护 HTTP API 与 CubeBox API-first 工具链
@@ -30,8 +30,8 @@
 
 ## 2. 核心目标
 
-1. [ ] 冻结唯一权限标识：`CapabilityKey = object + ":" + action`，例如 `orgunit.orgunits:read`。
-2. [ ] 删除前端独立 `permissionKey` 语言；前端若需要守卫，只能使用同一个 canonical capability key。
+1. [ ] 冻结唯一权限标识：`AuthzCapabilityKey = object + ":" + action`，例如 `orgunit.orgunits:read`。
+2. [ ] 删除前端独立 `permissionKey` 语言；前端若需要守卫，只能使用同一个 canonical authz capability key。
 3. [ ] 删除或改造所有 policy-only 权限；policy 中不得存在没有当前 route/CubeBox API tool overlay/superadmin surface 承接的 key。
 4. [ ] 删除 `module.verb`、点号 action、构建期权限、示例权限和历史共享读权限等旧表达。
 5. [ ] 对齐 `DEV-PLAN-484` 覆盖门禁与 `DEV-PLAN-487` 角色保存 API，使 registry、policy、route requirement、CubeBox API tool overlay、角色定义 payload、前端路由守卫只能使用同一套 key；483 本身只拥有旧 key 和旧字段硬删除。
@@ -40,7 +40,7 @@
 
 1. 不引入 DB schema、迁移或在线 registry 管理页；本计划只冻结硬切换契约和实施要求。
 2. 不设计旧 key 兼容、别名表、自动转换、灰度窗口或 deprecated registry entry。
-3. 不把 API path 当成权限标识；API path 只是某个 capability key 的覆盖证据。
+3. 不把 API path 当成权限标识；API path 只是某个 authz capability key 的覆盖证据。
 4. 不把 superadmin 权限混入 HRMS tenant 权限管理员页面；superadmin 可以继续使用同一 `object:action` 格式，但属于独立 surface。
 5. 不恢复 SetID、scope/package、org_level/scope_type/scope_key 或历史共享读语义。
 
@@ -76,6 +76,12 @@
 | `foundation.read` | UI 本地守卫，无后端授权实现 |
 | `approval.read` | 当前无对应后端 API 权限实现 |
 
+术语约束：
+
+1. 本计划中的 capability key 只表示授权项标识，即 authz capability key。
+2. 历史业务策略 `capability_key`、SetID 策略 key、字段策略 key 不属于前端权限语言，不得被迁移成 `requiredCapabilityKey`。
+3. 前端字段命名可改为 `requiredCapabilityKey`，但该字段值必须是 `object:action`；字段改名不能让旧业务策略 key 或旧 `module.verb` key 合法化。
+
 ### 4.2 授权项标识与 API 的关系
 
 授权项标识不是 API 地址。它是授权 ID，由 `authz_object` 与 `authz_action` 组合而成；API 是被访问的接口入口。
@@ -84,9 +90,9 @@
 
 ```text
 API Route Requirement = method + route -> authz_object + authz_action
-Capability Key        = authz_object + ":" + authz_action
+Authz Capability Key  = authz_object + ":" + authz_action
 
-一个 API route -> 绑定一个授权项标识 / capability key
+一个 API route -> 绑定一个授权项标识 / authz capability key
 一个授权项标识 -> 可以保护多个 API route
 ```
 
@@ -118,15 +124,15 @@ key = /org/api/org-units
 
 要求：
 
-1. 每个受保护 API route 必须映射到且只映射到一个 registry 中存在的 capability key。
-2. 一个 capability key 可以保护多个 route，例如 `orgunit.orgunits:read` 可保护 list/search/details/audit 等读取 API。
+1. 每个受保护 API route 必须映射到且只映射到一个 registry 中存在的 authz capability key。
+2. 一个 authz capability key 可以保护多个 route，例如 `orgunit.orgunits:read` 可保护 list/search/details/audit 等读取 API。
 3. `assignable=true` 的 capability 必须有当前可运行的 tenant API 承接；没有实现面的能力不得进入角色候选项。
 4. policy 中每条授权记录必须能在 registry 和当前实现面中找到证据；找不到就删除，不保留空壳。覆盖证据校验以 `DEV-PLAN-484` 为准。
 5. UI 功能授权项主表列名统一使用“授权项标识”；普通功能授权项主页面与“关联 API”弹窗由 `DEV-PLAN-482A` 承接。API method/path 只允许出现在“关联 API”弹窗或 `DEV-PLAN-485` 的 `API 授权目录` 中；不可分配、停用、无覆盖、内部 surface 等诊断信息只进入 `DEV-PLAN-488` 的授权项诊断视图；不得把 API 地址和 key 混在同一列。
 
 ### 4.3 前端使用要求
 
-前端只能消费 canonical capability key：
+前端只能消费 canonical authz capability key：
 
 1. 删除 `permissionKey` 这个概念和类型字段；若组件需要守卫，字段命名应表达“需要的 capability”，例如 `requiredCapabilityKey`，且值必须是 `object:action`。
 2. 删除 `VITE_PERMISSIONS` 与空权限默认 `*` 的构建期权限模型。
@@ -164,7 +170,7 @@ key = /org/api/org-units
 | `dict.release.admin` | 替换为 `iam.dict_release:admin`，不保留别名 |
 | `cubebox.conversations.read` | 替换为 `cubebox.conversations:read`，不保留别名 |
 | `cubebox.conversations.use` | 替换为 `cubebox.conversations:use`，不保留别名 |
-| `permissionKey` prop/type | 删除；改为 canonical capability key 语义 |
+| `permissionKey` prop/type | 删除；改为 canonical authz capability key 语义 |
 | `VITE_PERMISSIONS` | 删除；不得继续作为真实权限输入 |
 
 ### 5.2 policy-only / 未绑定 key
@@ -221,7 +227,7 @@ key = /org/api/org-units
 
 1. [ ] 删除 `permissionKey` 类型字段、`VITE_PERMISSIONS` 解析和默认 `*` 行为。
 2. [ ] 同一切片接入服务端当前用户 capability 摘要来源；缺摘要或加载失败时 fail-closed。
-3. [ ] 导航和路由守卫只使用 canonical capability key。
+3. [ ] 导航和路由守卫只使用 canonical authz capability key。
 4. [ ] 旧 key 测试全部改为 canonical key；不得新增兼容测试。
 5. [ ] 前端测试覆盖无 capability 摘要时导航/页面守卫不会默认全量可见。
 
@@ -254,6 +260,7 @@ key = /org/api/org-units
 | superadmin 混入 tenant 功能授权项 | HRMS 管理员看到租户管理后台权限 | options API 默认过滤 superadmin surface |
 | 空权限默认全权限 | 未配置环境变量时 UI 全量可见 | 删除 `*` fallback，缺摘要时 fail-closed |
 | 删除旧权限语言后无服务端来源 | 导航全关或开发者重新加本地 fallback | 483 P3 必须同切片接入服务端 capability 摘要 |
+| 业务策略 key 被误当权限 key | `org.orgunit_create.field_policy` 等历史 key 出现在导航守卫或角色 payload | 前端守卫和保存 API 只接受 registry 中的 `object:action` authz capability key |
 
 ## 10. 验证记录
 
