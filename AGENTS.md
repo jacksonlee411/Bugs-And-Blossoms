@@ -288,6 +288,7 @@ modules/{module}/
 - DEV-PLAN-484：Authz Capability Registry 覆盖门禁方案：`docs/dev-plans/484-authz-capability-registry-coverage-gate-plan.md`
 - DEV-PLAN-485：API 授权目录页面方案：`docs/dev-plans/485-api-authz-catalog-page-plan.md`
 - DEV-PLAN-486：CubeBox Executor 路线活体警示（已停止；保留在活体目录仅用于阻断 executor 路线回流）：`docs/dev-plans/486-cubebox-executor-authz-and-module-boundary-remediation-plan.md`
+- DEV-PLAN-489：用户授权组织范围 SoT 与运行时强制实施方案：`docs/dev-plans/489-user-authorization-org-scope-sot-and-runtime-enforcement-plan.md`
 - DEV-PLAN-490：CubeBox 统一 API 工具化重构方案：`docs/dev-plans/490-cubebox-api-first-tooling-refactor-plan.md`
 - DEV-PLAN-440：彻底删除 SetID 的全仓收口方案（SetID 根删除唯一 PoR）：`docs/dev-plans/440-complete-setid-removal-plan.md`
 - DEV-PLAN-441：旧策略模块残余清理方案：`docs/dev-plans/441-legacy-strategy-module-residue-cleanup-plan.md`
