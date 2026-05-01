@@ -90,7 +90,7 @@ describe('DictConfigsPage', () => {
       themeMode: 'light',
       toggleThemeMode: vi.fn(),
       navDebugMode: false,
-      hasPermission: () => true,
+      hasRequiredCapability: () => true,
       t: (key: string) =>
         ({
           dict_release_title: '发布',

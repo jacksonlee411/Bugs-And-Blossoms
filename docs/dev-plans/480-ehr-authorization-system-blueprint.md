@@ -13,7 +13,7 @@
 ### 0.1 Simple > Easy 三问
 
 1. **边界**：AuthN/session 只证明是谁；RLS 只做租户圈地；EHR 授权 PDP 负责“谁能对什么对象做什么事”；数据范围 resolver 负责“同租户内能看哪些实例”；字段策略负责“哪些字段可见、可写、需脱敏”；首期 UI 只覆盖授权管理面，其中用户授权页的组织范围不是占位，而是首批授权管理闭环的一部分；授权项诊断是只读治理视图，不进入角色配置主路径。
-2. **不变量**：所有服务端入口 fail-closed；registry 白名单、前端 permissionKey、模型输出、知识包、导航可见性、RLS 都不等于授权；同一个业务读写路径必须同时服务 UI、API 与 CubeBox，避免两套可见性规则。
+2. **不变量**：所有服务端入口 fail-closed；registry 白名单、历史前端 `permissionKey`、模型输出、知识包、导航可见性、RLS 都不等于授权；同一个业务读写路径必须同时服务 UI、API 与 CubeBox，避免两套可见性规则。
 3. **可解释**：主流程可在 5 分钟内复述为：请求解析 principal/tenant/context，PEP 组装动作与资源，PDP 先判能力，再用数据范围裁剪或拒绝实例，再按字段策略过滤/脱敏，最后记录可审计 decision；授权管理 UI 只展示当前已冻结的角色、用户授权、功能授权项、授权项诊断和 API 授权目录。
 
 ### 0.2 现状研究摘要
@@ -23,7 +23,7 @@
 - 当前 `internal/server/authz_middleware.go` 以 route 映射 object/action；CubeBox 业务工具链后续按 `DEV-PLAN-490` 从 API 授权目录聚合事实筛选可调用 HTTP API。
 - `DEV-PLAN-486` 的 executor 路线只保留为活体警示；当前方案不再以 executor registry 作为业务工具契约。
 - 当前 `ExecuteRequest` 有 `TenantID`、`PrincipalID`、`ConversationID`，缺少 `PrincipalRoleSlug`；现有 Casbin subject 从 role slug 推导，不能把 `PrincipalID` 误当 subject。
-- 当前前端 `RequirePermission` / `permissionKey` 只基于本地 `VITE_PERMISSIONS` 做导航和页面提示，默认空权限时甚至是 `*`；它不是安全边界，且按 `DEV-PLAN-483` 必须硬删除旧 key、旧字段和构建期权限 fallback，前端只能消费 canonical `object:action` capability。
+- 历史前端 `RequirePermission` / `permissionKey` 只基于本地 `VITE_PERMISSIONS` 做导航和页面提示，默认空权限时甚至是 `*`；它不是安全边界，且按 `DEV-PLAN-483` 必须硬删除旧 key、旧字段和构建期权限 fallback。现行前端只能通过 `requiredCapabilityKey` 消费 canonical `object:action` authz capability key，当前用户集合字段只能是 `authz_capability_keys`。
 - “用户 A 能看整个飞虫与鲜花，用户 B 只能查看鲜花公司”属于同租户内组织数据范围授权，不是 route authz、RLS 或 CubeBox prompt 能解决的问题。
 
 ## 1. 背景与上下文
@@ -44,7 +44,7 @@ EHR 系统的授权不能只停留在“页面能不能进”或“API 能不能
 1. [ ] 冻结 EHR 授权体系分层：身份与上下文、能力/API 授权、数据范围、对象实例、字段级授权、AI 代用户执行。
 2. [ ] 评估并明确当前 `pkg/authz` 的改造边界：Casbin 不替换；核心四元组可保留；需要增加统一 Request/Decision 门面、PIP 数据范围 resolver 与服务端裁决摘要。
 3. [ ] 明确组织数据范围授权方案，覆盖“用户 A 能看整个飞虫与鲜花，用户 B 只能查看鲜花公司”这类同租户内可见范围差异。
-4. [ ] 明确 registry 白名单、前端 permissionKey、知识包、模型输出、RLS、导航可见性都不等于授权。
+4. [ ] 明确 registry 白名单、历史前端 `permissionKey`、知识包、模型输出、RLS、导航可见性都不等于授权。
 5. [ ] 将 CubeBox 业务工具授权收敛到 `DEV-PLAN-490`：基于 API 授权目录聚合事实、当前用户权限和业务 HTTP API 执行，不走 executor UI 或第二业务工具面。
 6. [ ] 增加 UI 设计方案：只覆盖角色管理、用户授权、功能授权项、授权项诊断、API 授权目录；不新增普通用户错误页、权限摘要页、CubeBox 授权反馈页或字段脱敏运行态页面。
 7. [ ] 定义实施切片、测试分层和验收门禁，避免一次性大爆炸实现。
@@ -171,7 +171,7 @@ flowchart LR
 - **`modules/cubebox`**：按 `DEV-PLAN-490` 使用 API tool overlay 与 API call plan，不维护平行业务 executor payload 事实源。
 - **`apps/web`**：负责 `designs/480.pen` 已冻结的管理页面交互；不在本方案扩展普通业务页提示、字段脱敏运行态或 CubeBox 授权反馈 UI。
 
-能力候选项与角色 UI 下拉/矩阵的全量来源由 `DEV-PLAN-482` 承接；不得从 policy CSV 或前端 `permissionKey` 反推可选全集。
+authz capability 候选项与角色 UI 下拉/矩阵的全量来源由 `DEV-PLAN-482` 承接；不得从 policy CSV 或历史前端 `permissionKey` 反推可选全集。
 
 ### 3.3 授权体系分层
 
@@ -193,13 +193,14 @@ API Route Requirement = method + route -> authz_object + authz_action
 Authz Capability Key  = authz_object + ":" + authz_action
 ```
 
-因此 `orgunit.orgunits:read` 是授权项标识（authz capability key），不是 API 地址；它可以覆盖 `GET /org/api/org-units`、`GET /org/api/org-units/details`、`GET /org/api/org-units/audit` 等多个读取接口。UI 功能授权项主页面与点击授权项标识后打开的“关联 API”弹窗由 `DEV-PLAN-482A` 承接，主表只展示 capability 语义，API method/path 只能在弹窗中展示；全量 HTTP API 正向查看面由 `DEV-PLAN-485` 的 `API 授权目录` 承接；不可分配、停用、无覆盖或内部 surface 的 capability 诊断由 `DEV-PLAN-488` 的 `授权项诊断` 承接，不进入普通功能授权项默认列表。
+因此 `orgunit.orgunits:read` 是授权项标识（authz capability key），不是 API 地址；它可以覆盖 `GET /org/api/org-units`、`GET /org/api/org-units/details`、`GET /org/api/org-units/audit` 等多个读取接口。UI 功能授权项主页面与点击授权项标识后打开的“关联 API”弹窗由 `DEV-PLAN-482A` 承接，主表只展示 authz capability 语义，API method/path 只能在弹窗中展示；全量 HTTP API 正向查看面由 `DEV-PLAN-485` 的 `API 授权目录` 承接；不可分配、停用、无覆盖或内部 surface 的 authz capability 诊断由 `DEV-PLAN-488` 的 `授权项诊断` 承接，不进入普通功能授权项默认列表。
 
 术语收敛：
 
 1. 480 系列中的 capability 若用于授权管理，统一指 `authz capability key = object:action`，用户可见中文统一称为“授权项标识”。
-2. 历史 Strategy Registry / SetID / 字段策略文档中的 `capability_key` 表达业务策略上下文或流程能力锚点，不等同于 480 系列的授权项标识；实现和文档不得把二者混用。
-3. 新增 API、角色保存 payload、前端守卫和 API 授权目录只允许使用 authz capability key；字段策略、动态规则、SetID 配置若仍需业务 capability 语义，必须在对应计划中明确称为“业务策略 capability key”或更具体名称。
+2. 新增 API、角色保存 payload、前端守卫和 API 授权目录只允许使用 `authz_capability_key` / `authz_capability_keys` / `requiredCapabilityKey` 这类显式字段名；不得新增裸 `capability_key` / `capability_keys` 字段作为授权项标识。
+3. 历史 Strategy Registry / SetID / 字段策略文档中的 `capability_key` 表达业务策略上下文或流程能力锚点，不等同于 480 系列的授权项标识；实现和文档不得把二者混用。
+4. 字段策略、动态规则、SetID 配置若仍需业务 capability 语义，必须在对应计划中明确称为“业务策略 capability key”或更具体名称。
 
 补充说明：
 
@@ -283,8 +284,8 @@ CubeBox 的规则必须更严格，因为模型会生成执行计划。当前路
   - **选定理由**：首期只保留角色管理、用户授权、功能授权项和 API 授权目录四类管理面。
 
 - **决策 4：授权项标识与历史业务 capability 术语硬区分**
-  - **备选 A**：继续在所有场景裸用 `capability_key`。拒绝，会把 authz `object:action` 与历史 SetID/字段策略 capability 混成同一概念。
-  - **选定理由**：480 系列只冻结授权项标识；历史业务策略 capability 不得作为角色候选、API route requirement 或前端守卫 key。
+  - **备选 A**：继续在所有场景裸用 `capability_key`。拒绝，会把 authz `object:action` 与历史 SetID/字段策略业务策略 capability key 混成同一概念。
+  - **选定理由**：480 系列只冻结授权项标识；历史业务策略 capability key 不得作为角色候选、API route requirement 或前端守卫 key。
 
 - **决策 5：角色能力运行时只允许一个普通 tenant SoT**
   - **备选 A**：角色定义 DB 与 policy CSV 同时参与普通 tenant role 放行。拒绝，这是双链路授权，会导致管理员保存角色后与运行时结果不一致。
@@ -382,7 +383,7 @@ Decision 的逻辑字段：
 6. “组织范围”页签是可加行表格：每行选择一个组织，并提供“包含下级组织”勾选列；新增行初始为已选中，界面不额外显示说明文字。
 7. 授权管理里的组织选择器是配置主体数据范围的控件，应复用服务端组织读路径和范围语义；它不是新的业务组织页面。
 8. 用户授权页冻结当前设计稿中的选择器、角色表格、组织范围表格和统一“取消 / 保存”操作；组织范围保存、必填校验和运行时生效必须进入首批用户授权实施闭环。保存后审计解释不进入本轮 UI 范围。
-9. `授权管理 > 授权项诊断` 是只读治理视图，用于查看不可分配、停用、无覆盖或内部 surface 的 capability 及排除原因；它不得作为角色定义候选源，也不得提供 registry 编辑或 policy 修复入口。
+9. `授权管理 > 授权项诊断` 是只读治理视图，用于查看不可分配、停用、无覆盖或内部 surface 的 authz capability 及排除原因；它不得作为角色定义候选源，也不得提供 registry 编辑或 policy 修复入口。
 
 管理 UI 操作必须本身受 `iam.authz` 或专用 object/action 保护；角色定义在线写入由 `DEV-PLAN-487` 承接，用户授权在线写入由 `DEV-PLAN-489` 承接，审计展示若后续需要，必须另起计划。
 
@@ -443,7 +444,7 @@ Decision 的逻辑字段：
 | 把 UI 当授权 | 隐藏按钮但 API 可直调 | 所有 API/service/CubeBox API runner 都有 PEP |
 | 策略键漂移 | policy、route、UI、tool overlay 名称不一致 | registry + lint + 测试统一 |
 | 数据范围过度设计 | 首期还没跑通就建复杂 ABAC DSL | 先 orgunit subtree，后续再加管理链/服务范围 |
-| capability 术语混淆 | authz `object:action` 与历史字段策略/SetID capability 互相引用 | 480 系列统一称 authz capability key / 授权项标识；业务策略 capability 只在对应业务计划中使用 |
+| capability 术语混淆 | authz `object:action` 与历史字段策略/SetID 业务策略 capability key 互相引用 | 480 系列统一称 authz capability key / 授权项标识；业务策略 capability key 只在对应业务计划中显式使用 |
 | 角色授权双链路 | DB role authz capability 与 policy CSV 任一命中即放行 | 487 cutover 后普通 tenant role 只读 DB SoT；CSV 仅保留 bootstrap/static/system surface |
 | 覆盖事实多套实现 | 功能授权项、API 授权目录、诊断页各自解析 route/registry/policy | 484 提供唯一覆盖事实枚举与 lint，482A/485/488 只消费同源聚合 |
 | 敏感字段泄露 | API 下发原值，前端隐藏 | 服务端 projection/filter 先处理 |

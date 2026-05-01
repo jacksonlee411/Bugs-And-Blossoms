@@ -38,6 +38,7 @@ import {
 } from '../../api/orgUnits'
 import { ApiClientError } from '../../api/errors'
 import { useAppPreferences } from '../../app/providers/AppPreferencesContext'
+import { AUTHZ_CAPABILITY_KEYS } from '../../authz/capabilities'
 import { DataGridPage } from '../../components/DataGridPage'
 import { FilterBar } from '../../components/FilterBar'
 import { PageHeader } from '../../components/PageHeader'
@@ -348,7 +349,7 @@ function emptyCreateForm(defaultEffectiveDate: string, parentOrgCode: string | n
 export function OrgUnitsPage() {
   const queryClient = useQueryClient()
   const navigate = useNavigate()
-  const { t, tenantId, hasPermission } = useAppPreferences()
+  const { t, tenantId, hasRequiredCapability } = useAppPreferences()
   const [searchParams, setSearchParams] = useSearchParams()
   const currentDate = useMemo(() => todayISODate(), [])
   const readView = useMemo(() => resolveReadViewState(searchParams.get('as_of'), currentDate), [searchParams, currentDate])
@@ -396,7 +397,7 @@ export function OrgUnitsPage() {
   const [createErrorMessage, setCreateErrorMessage] = useState('')
   const [toast, setToast] = useState<{ message: string; severity: 'success' | 'warning' | 'error' } | null>(null)
 
-  const canWrite = hasPermission('orgunit.admin')
+  const canWrite = hasRequiredCapability(AUTHZ_CAPABILITY_KEYS.orgunitOrgUnitsAdmin)
   const canUseExt = canWrite
 
   const formatApiErrorMessage = useCallback(

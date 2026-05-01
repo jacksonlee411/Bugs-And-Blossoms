@@ -47,6 +47,9 @@ entrypoints:
       - path: /iam/api/sessions
         methods: [POST]
         route_class: internal_api
+      - path: /iam/api/me/capabilities
+        methods: [GET]
+        route_class: internal_api
       - path: /iam/api/dicts
         methods: [GET, POST]
         route_class: internal_api

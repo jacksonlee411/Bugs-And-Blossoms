@@ -85,7 +85,7 @@ describe('OrgUnitsPage', () => {
       themeMode: 'light',
       toggleThemeMode: vi.fn(),
       navDebugMode: false,
-      hasPermission: () => false,
+      hasRequiredCapability: () => false,
       t: (key: string) =>
         ({
           page_org_title: 'Organization Units',

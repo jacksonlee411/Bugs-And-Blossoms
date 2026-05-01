@@ -110,7 +110,7 @@ describe('OrgUnitFieldConfigsPage', () => {
       themeMode: 'light',
       toggleThemeMode: vi.fn(),
       navDebugMode: false,
-      hasPermission: () => true,
+      hasRequiredCapability: () => true,
       t: (key: string) =>
         ({
           nav_org_units: 'Organization Units',

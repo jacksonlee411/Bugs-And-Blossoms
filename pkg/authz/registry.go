@@ -36,3 +36,7 @@ const (
 	ObjectSuperadminTenants = "superadmin.tenants"
 	ObjectSuperadminSession = "superadmin.session"
 )
+
+func AuthzCapabilityKey(object string, action string) string {
+	return object + ":" + action
+}

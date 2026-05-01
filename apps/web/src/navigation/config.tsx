@@ -3,6 +3,7 @@ import HomeWorkIcon from '@mui/icons-material/HomeWork'
 import MenuBookIcon from '@mui/icons-material/MenuBook'
 import PendingActionsIcon from '@mui/icons-material/PendingActions'
 import TuneIcon from '@mui/icons-material/Tune'
+import { AUTHZ_CAPABILITY_KEYS } from '../authz/capabilities'
 import type { NavItem, SearchEntry } from '../types/navigation'
 
 export const navItems: NavItem[] = [
@@ -12,7 +13,6 @@ export const navItems: NavItem[] = [
     labelKey: 'nav_foundation_demo',
     icon: <HomeWorkIcon fontSize='small' />,
     order: 10,
-    permissionKey: 'foundation.read',
     keywords: ['foundation', 'demo', 'mui', '基座', '示例']
   },
   {
@@ -21,7 +21,7 @@ export const navItems: NavItem[] = [
     labelKey: 'nav_org_units',
     icon: <ApartmentIcon fontSize='small' />,
     order: 20,
-    permissionKey: 'orgunit.read',
+    requiredCapabilityKey: AUTHZ_CAPABILITY_KEYS.orgunitOrgUnitsRead,
     keywords: ['org', 'unit', 'department', '组织', '部门']
   },
   {
@@ -30,7 +30,7 @@ export const navItems: NavItem[] = [
     labelKey: 'nav_org_field_configs',
     icon: <TuneIcon fontSize='small' />,
     order: 21,
-    permissionKey: 'orgunit.admin',
+    requiredCapabilityKey: AUTHZ_CAPABILITY_KEYS.orgunitOrgUnitsAdmin,
     keywords: ['field', 'config', 'metadata', 'orgunit', '字段', '配置', '元数据']
   },
   {
@@ -39,7 +39,7 @@ export const navItems: NavItem[] = [
     labelKey: 'nav_dicts',
     icon: <MenuBookIcon fontSize='small' />,
     order: 22,
-    permissionKey: 'dict.admin',
+    requiredCapabilityKey: AUTHZ_CAPABILITY_KEYS.iamDictsAdmin,
     keywords: ['dict', 'dictionary', 'value', '配置', '字典', '编码']
   },
   {
@@ -48,7 +48,6 @@ export const navItems: NavItem[] = [
     labelKey: 'nav_approvals',
     icon: <PendingActionsIcon fontSize='small' />,
     order: 30,
-    permissionKey: 'approval.read',
     keywords: ['approval', 'workflow', 'task', '审批', '待办']
   }
 ]
@@ -66,6 +65,7 @@ export const commonSearchEntries: SearchEntry[] = [
     labelKey: 'common_recent_changes',
     path: '/org/units',
     source: 'common',
+    requiredCapabilityKey: AUTHZ_CAPABILITY_KEYS.orgunitOrgUnitsRead,
     keywords: ['change', 'history', 'audit', '变更', '审计']
   },
   {
@@ -83,6 +83,7 @@ export function buildNavigationSearchEntries(items: NavItem[]): SearchEntry[] {
     labelKey: item.labelKey,
     path: item.path,
     source: 'navigation',
+    requiredCapabilityKey: item.requiredCapabilityKey,
     keywords: item.keywords
   }))
 }

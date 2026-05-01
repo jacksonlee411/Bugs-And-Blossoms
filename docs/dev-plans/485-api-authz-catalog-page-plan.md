@@ -12,7 +12,7 @@
 
 ### 0.1 Simple > Easy 三问
 
-1. **边界**：485 只拥有“API 授权目录”的只读用户入口与查询 API；482A 拥有功能授权项主页面与反向“关联 API”弹窗；484 继续拥有 route/CubeBox API tool overlay/registry/policy 覆盖门禁；482 继续拥有 capability registry 与功能授权项 options API；490 只提供 HTTP API 是否进入 CubeBox 工具面的最小标记。
+1. **边界**：485 只拥有“API 授权目录”的只读用户入口与查询 API；482A 拥有功能授权项主页面与反向“关联 API”弹窗；484 继续拥有 route/CubeBox API tool overlay/registry/policy 覆盖门禁；482 继续拥有 authz capability registry 与功能授权项 options API；490 只提供 HTTP API 是否进入 CubeBox 工具面的最小标记。
 2. **不变量**：API path/method 不是授权项标识；每个受保护 API 的 `method + path` 必须能追溯到一个 `authz_object + authz_action`，并派生出一个 `object:action` 授权项标识；公开或 allowlist API 必须明确展示为未绑定授权项且说明公开原因。
 3. **可解释**：管理员能从 API 角度回答“这个接口受哪个授权资源和哪个授权项控制”；功能授权项页面的反向“关联 API”查看由 482A 承接，485 只提供同源聚合能力或可复用过滤口径。
 
@@ -38,14 +38,14 @@
 
 ### 2.2 非目标
 
-1. 不新增 DB 表、迁移或在线编辑能力；API 授权目录首期由路由注册、route requirement、allowlist 与 capability registry 派生。
+1. 不新增 DB 表、迁移或在线编辑能力；API 授权目录首期由路由注册、route requirement、allowlist 与 authz capability registry 派生。
 2. 不把 CubeBox executor 混入本页；本页只标记现有 HTTP API 是否可被 CubeBox 作为工具调用。当前已明确不走 executor 路线，不再规划 executor 目录或弹窗展示。
 3. 不把 API route path 当成授权项标识，也不允许前端从 path 反推 `object/action`。
 4. 不在页面中提供“刷新目录”、`registry_rev`、覆盖 lint 状态面板或修复按钮；这些属于开发诊断和 CI 门禁，不是管理员主路径。
 5. 不改变 484 的覆盖门禁；本页消费覆盖事实，不重新实现第二套漂移校验。
 6. 不新增 `调用策略`、`工具类型`、`只读/写入策略` 等 CubeBox 策略列；读写属性已由 `方法`、`操作` 和 `授权项标识` 表达，写入确认已按 `DEV-PLAN-490` 暂缓。
 7. 不新增 API 行详情抽屉；`route source`、`requirement source` 等诊断字段不进入首期 UI。
-8. 不展示 capability registry 中不可分配、停用、无覆盖或内部 surface 的授权项诊断全集；这些从 capability 角度出发的诊断视图归属 `DEV-PLAN-488`。
+8. 不展示 authz capability registry 中不可分配、停用、无覆盖或内部 surface 的授权项诊断全集；这些从 authz capability 角度出发的诊断视图归属 `DEV-PLAN-488`。
 
 ## 3. 用户可见性交付
 
@@ -65,10 +65,10 @@
 | 方法 | HTTP method | `GET` |
 | API 路径 | HTTP route path | `/org/api/org-units` |
 | 访问控制 | `受保护` / `公开` / `登录握手` / `静态资源` 等 | `受保护` |
-| 资源名称 | capability registry 中的资源展示名 | `组织管理` |
+| 资源名称 | authz capability registry 中的资源展示名 | `组织管理` |
 | 资源对象 | Casbin object/resource | `orgunit.orgunits` |
 | 操作 | Casbin action | `read` |
-| 授权项标识 | `object:action` capability key | `orgunit.orgunits:read` |
+| 授权项标识 | `object:action` authz capability key | `orgunit.orgunits:read` |
 | 归属模块 | owner module / surface | `orgunit` |
 | 丘宝可调用 | 该 HTTP API 是否进入 CubeBox 可调用工具面 | `是` |
 
@@ -78,7 +78,7 @@
 
 ### 3.3 交互
 
-1. 搜索框按 `method`、`path`、`resource_object`、`capability_key`、资源名称搜索。
+1. 搜索框按 `method`、`path`、`resource_object`、`authz_capability_key`、资源名称搜索。
 2. 筛选器首期支持：方法、访问控制、归属模块、授权资源。
 
 ## 4. 数据契约
@@ -91,7 +91,7 @@
 
 1. Routing 事实：`method/path/surface/owner_module`。
 2. Authz route requirement：`method/path -> authz_object/authz_action`。
-3. Capability registry：`object/action -> capability_key/resource_label/action_label/assignable/status`。
+3. Authz capability registry：`object/action -> authz_capability_key/resource_label/action_label/assignable/status`。
 4. Routing allowlist：公开、登录握手、静态资源、health 等分类原因。
 5. `DEV-PLAN-484` 覆盖事实：用于保证受保护 API 与 registry 不漂移。
 6. `DEV-PLAN-490` CubeBox HTTP API 工具面最小标记：`method/path -> cubebox_callable`，只能引用本目录已经存在的 HTTP API。
@@ -115,7 +115,7 @@ GET /iam/api/authz/api-catalog
 | `access_control` | 可选，`protected` / `allowlisted` / `public` 等 |
 | `owner_module` | 可选，按归属模块过滤 |
 | `resource_object` | 可选，按授权资源对象过滤 |
-| `capability_key` | 可选，按授权项标识过滤 |
+| `authz_capability_key` | 可选，按授权项标识过滤 |
 
 响应示例：
 
@@ -130,7 +130,7 @@ GET /iam/api/authz/api-catalog
       "resource_label": "组织管理",
       "resource_object": "orgunit.orgunits",
       "action": "read",
-      "capability_key": "orgunit.orgunits:read",
+      "authz_capability_key": "orgunit.orgunits:read",
       "capability_status": "enabled",
       "assignable": true,
       "cubebox_callable": true
@@ -150,17 +150,17 @@ GET /iam/api/authz/api-catalog
 
 | 计划 | Owner |
 | --- | --- |
-| `DEV-PLAN-482` | capability registry、功能授权项 options API、授权项标识校验 |
+| `DEV-PLAN-482` | authz capability registry、功能授权项 options API、授权项标识校验 |
 | `DEV-PLAN-482A` | 功能授权项主页面与反向 `关联 API` 弹窗 |
 | `DEV-PLAN-483` | `object:action` 单主源、旧 `permissionKey` 与旧 key 硬删除 |
 | `DEV-PLAN-484` | route/CubeBox API tool overlay/registry/policy 覆盖事实与反漂移门禁 |
 | `DEV-PLAN-485` | API 授权目录页面与只读查询 API |
-| `DEV-PLAN-488` | 授权项诊断视图，从 capability 角度查看未进入普通候选项的原因 |
+| `DEV-PLAN-488` | 授权项诊断视图，从 authz capability 角度查看未进入普通候选项的原因 |
 | `DEV-PLAN-490` | CubeBox 复用现有 HTTP API 的工具面标记与 runtime 执行链 |
 
-485 不复制 484 的 lint 逻辑；如果覆盖事实缺失，应先补 484 的枚举能力，再由 485 消费。482A 的反向弹窗可以复用 485 的 API catalog 聚合函数或 `capability_key` 过滤口径，但不能让前端拉全量后自行筛选。
+485 不复制 484 的 lint 逻辑；如果覆盖事实缺失，应先补 484 的枚举能力，再由 485 消费。482A 的反向弹窗可以复用 485 的 API catalog 聚合函数或 `authz_capability_key` 过滤口径，但不能让前端拉全量后自行筛选。
 485 也不复制 490 的 runtime 执行策略；主表只增加 `丘宝可调用` 一列，API 的读写语义继续由 `方法`、`操作` 与 `授权项标识` 表达。
-485 不承接 488 的授权项诊断；485 从 API 角度展示 method/path 到授权项的绑定，488 从 capability 角度展示未入候选项原因。
+485 不承接 488 的授权项诊断；485 从 API 角度展示 method/path 到授权项的绑定，488 从 authz capability 角度展示未入候选项原因。
 
 ## 6. 实施切片
 
@@ -219,7 +219,7 @@ GET /iam/api/authz/api-catalog
 | 把 allowlist 当未配置错误 | health/login/static 被误标红 | allowlist/public 必须有明确分类和原因 |
 | 复制 484 lint 逻辑 | 两套覆盖判断漂移 | 485 只消费 484 的覆盖事实或同一枚举函数 |
 | 把 CubeBox 策略做成主表分类 | `调用策略=只读` 重复 `方法/操作`，未来写入策略被提前固化 | 主表只保留 `丘宝可调用`，写入确认暂缓，不在本页预留策略分类 |
-| 把授权项诊断塞进 API 目录 | API 页面展示不可分配/停用/无覆盖 capability 全集 | 从 capability 角度的诊断归 488，485 只做 API 正向目录 |
+| 把授权项诊断塞进 API 目录 | API 页面展示不可分配/停用/无覆盖 authz capability 全集 | 从 authz capability 角度的诊断归 488，485 只做 API 正向目录 |
 
 ## 9. 验证记录
 

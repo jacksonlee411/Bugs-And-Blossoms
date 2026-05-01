@@ -51,6 +51,7 @@ import {
   type OrgUnitWriteIntent
 } from '../../api/orgUnits'
 import { useAppPreferences } from '../../app/providers/AppPreferencesContext'
+import { AUTHZ_CAPABILITY_KEYS } from '../../authz/capabilities'
 import { PageHeader } from '../../components/PageHeader'
 import { isMessageKey, type MessageKey } from '../../i18n/messages'
 import { normalizePlainExtDraft } from './orgUnitPlainExtValidation'
@@ -481,7 +482,7 @@ export function OrgUnitDetailsPage() {
   const queryClient = useQueryClient()
   const navigate = useNavigate()
   const { orgCode } = useParams()
-  const { hasPermission, t } = useAppPreferences()
+  const { hasRequiredCapability, t } = useAppPreferences()
   const [searchParams, setSearchParams] = useSearchParams()
   const today = useMemo(() => todayISODate(), [])
   const readView = useMemo(() => resolveReadViewState(searchParams.get('as_of'), today), [searchParams, today])
@@ -493,7 +494,7 @@ export function OrgUnitDetailsPage() {
   const requestedEffectiveDate = parseOptionalValue(searchParams.get('effective_date'))
   const auditEventUUID = parseOptionalValue(searchParams.get('audit_event_uuid'))
 
-  const canWrite = hasPermission('orgunit.admin')
+  const canWrite = hasRequiredCapability(AUTHZ_CAPABILITY_KEYS.orgunitOrgUnitsAdmin)
   const orgCodeValue = (orgCode ?? '').trim()
 
   const [actionState, setActionState] = useState<OrgActionState | null>(null)

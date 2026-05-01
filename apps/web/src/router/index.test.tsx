@@ -27,8 +27,8 @@ vi.mock('../pages/org/OrgUnitDetailsPage', () => ({
 vi.mock('../pages/org/OrgUnitsPage', () => ({
   OrgUnitsPage: () => null
 }))
-vi.mock('./RequirePermission', () => ({
-  RequirePermission: ({ children }: { children: unknown }) => children
+vi.mock('./RequireCapability', () => ({
+  RequireCapability: ({ children }: { children: unknown }) => children
 }))
 vi.mock('./RouteErrorPage', () => ({
   RouteErrorPage: () => null

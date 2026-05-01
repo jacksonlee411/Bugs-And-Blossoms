@@ -35,12 +35,13 @@ pnpm check
 
 - `AppShell / PageHeader / FilterBar / DataGridPage / DetailPanel` 平台组件骨架。
 - 统一 API 客户端（鉴权 header、租户 header、request-id、基础重试、错误归一）。
+- 前端授权项可见性来自服务端会话 API `GET /iam/api/me/capabilities` 的 `authz_capability_keys`，只消费 canonical `object:action`。
 - Foundation Demo 页面：树 + 表 + 详情侧栏。
 
 ## P092 壳层能力
 
-- 统一导航配置（`icon/route/permission/order/keywords`）。
-- 权限菜单联动：无权限菜单默认隐藏；开发环境支持 `VITE_NAV_DEBUG=true` 显示隐藏项。
+- 统一导航配置（`icon/route/requiredCapabilityKey/order/keywords`）。
+- 授权项菜单联动：无授权项菜单默认隐藏；开发环境支持 `VITE_NAV_DEBUG=true` 显示隐藏项。
 - 全局搜索入口（`Ctrl/Cmd + K`）：支持导航项与常用页面搜索，预留多 provider 扩展。
 - 主题与语言切换：`light/dark`、`en/zh`，状态持久化到 `localStorage`。
 - 埋点基线：`nav_click/filter_submit/detail_open/bulk_action` 字段模型，开发环境可在 `window.__WEB_MUI_UI_EVENTS__` 观察。
@@ -69,12 +70,12 @@ VITE_API_BASE_URL=http://localhost:8080
 VITE_API_TIMEOUT_MS=10000
 VITE_CUBEBOX_TURN_TIMEOUT_MS=60000
 VITE_TENANT_ID=demo-tenant
-VITE_PERMISSIONS=*
 VITE_NAV_DEBUG=false
 ```
 
-## 权限键映射补充（070B1）
+## 授权项标识补充
 
-- 字典页面访问：`dict.admin`（对应后端 `iam.dicts/admin`）。
-- 字典发布（预检/执行）：`dict.release.admin`（对应后端 `iam.dict_release/admin`）。
-- `/dicts` 路由继续用 `dict.admin` 控制页面可见性；页面内“预检发布/执行发布”按钮再做 `dict.release.admin` 细粒度控制。
+- 字典页面访问：`iam.dicts:admin`。
+- 字典发布（预检/执行）：`iam.dict_release:admin`。
+- `/dicts` 路由继续用 `iam.dicts:admin` 控制页面可见性；页面内“预检发布/执行发布”按钮再做 `iam.dict_release:admin` 细粒度控制。
+- 前端不再接受构建期授权项列表；缺少会话 authz capability 摘要、加载失败或摘要为空时导航与页面守卫 fail-closed。

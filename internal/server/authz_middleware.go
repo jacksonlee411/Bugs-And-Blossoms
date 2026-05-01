@@ -128,6 +128,8 @@ func authzRequirementForRoute(method string, path string) (object string, action
 			return authz.ObjectIAMSession, authz.ActionAdmin, true
 		}
 		return "", "", false
+	case "/iam/api/me/capabilities":
+		return "", "", false
 	case "/iam/api/dicts":
 		if method == http.MethodGet {
 			return authz.ObjectIAMDicts, authz.ActionRead, true

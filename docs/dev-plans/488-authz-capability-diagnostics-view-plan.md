@@ -5,16 +5,16 @@
 ## 0. 适用范围与评审分级
 
 - **评审分级**：`T2`
-- **范围一句话**：新增一个只读诊断视图，用于查看 capability registry 中未进入普通功能授权项候选列表的能力及原因，避免不可分配、停用、无覆盖、系统内部能力混入角色配置主路径。
+- **范围一句话**：新增一个只读诊断视图，用于查看 authz capability registry 中未进入普通功能授权项候选列表的能力及原因，避免不可分配、停用、无覆盖、系统内部能力混入角色配置主路径。
 - **关联模块/目录**：`apps/web/src/**`、`internal/server/**`、`pkg/authz/**`、`scripts/authz/**`
 - **关联计划/标准**：`AGENTS.md`、`DEV-PLAN-000`、`DEV-PLAN-001`、`DEV-PLAN-012`、`DEV-PLAN-022`、`DEV-PLAN-480`、`DEV-PLAN-482`、`DEV-PLAN-482A`、`DEV-PLAN-483`、`DEV-PLAN-484`、`DEV-PLAN-485`
-- **用户入口/触点**：授权管理菜单中的 `授权项诊断` 只读页面、482 capability options/diagnostics 查询接口、484 覆盖事实枚举能力
+- **用户入口/触点**：授权管理菜单中的 `授权项诊断` 只读页面、482 authz capability options/diagnostics 查询接口、484 覆盖事实枚举能力
 
 ### 0.1 Simple > Easy 三问
 
-1. **边界**：488 只拥有“为什么某个 registry capability 不在普通功能授权项候选中”的只读诊断视图；482 继续拥有 registry 字段模型与普通 options API 主契约；484 继续拥有覆盖事实和 CI 门禁；485 继续拥有 API 正向目录。
-2. **不变量**：角色定义页和普通功能授权项默认列表只能展示 `enabled + assignable + tenant_api + 当前 tenant API 覆盖` 的 capability。诊断视图不得成为角色保存候选源，也不得放宽服务端保存校验。
-3. **可解释**：授权管理员或开发排查人员能看到某个 capability 被排除的明确原因，例如停用、不可分配、非 tenant surface、无当前 API 覆盖或仅存在于 registry/policy 中。
+1. **边界**：488 只拥有“为什么某个 registry authz capability 不在普通功能授权项候选中”的只读诊断视图；482 继续拥有 registry 字段模型与普通 options API 主契约；484 继续拥有覆盖事实和 CI 门禁；485 继续拥有 API 正向目录。
+2. **不变量**：角色定义页和普通功能授权项默认列表只能展示 `enabled + assignable + tenant_api + 当前 tenant API 覆盖` 的 authz capability。诊断视图不得成为角色保存候选源，也不得放宽服务端保存校验。
+3. **可解释**：授权管理员或开发排查人员能看到某个 authz capability 被排除的明确原因，例如停用、不可分配、非 tenant surface、无当前 API 覆盖或仅存在于 registry/policy 中。
 
 ## 1. 背景
 
@@ -24,7 +24,7 @@
 
 1. registry 中哪些能力因为 `assignable=false` 没有进入候选项。
 2. 哪些能力处于 `disabled` 或 `deprecated`。
-3. 哪些能力没有当前 tenant API 覆盖。
+3. 哪些 authz capability 没有当前 tenant API 覆盖。
 4. 哪些能力属于 `superadmin` 或 `internal_system` surface。
 5. 哪些 policy/registry 漂移已经被 484 lint 阻断，但需要在页面上辅助定位。
 
@@ -44,10 +44,10 @@
 
 1. 不新增 DB 表、迁移或在线 registry 编辑能力；首期仍以 `pkg/authz` 静态 registry 为 SoT。
 2. 不提供启用、停用、修复、刷新、覆盖重算或 policy 修改按钮。
-3. 不把无覆盖 capability 变成可分配能力；无覆盖的 `assignable=true` 仍必须按 `DEV-PLAN-484` 导致 lint 失败。
+3. 不把无覆盖 authz capability 变成可分配能力；无覆盖的 `assignable=true` 仍必须按 `DEV-PLAN-484` 导致 lint 失败。
 4. 不在角色定义页、普通功能授权项主表或保存 payload 中暴露不可分配、停用、无覆盖、内部能力。
-5. 不把 API method/path 当成 capability key；API 只作为覆盖证据展示，普通功能授权项的反向 `关联 API` 弹窗仍按 482A，正向 API 目录仍按 485。
-6. 不展示 CubeBox executor key；当前授权事实统一基于 HTTP API、route requirement 与 capability registry。
+5. 不把 API method/path 当成 authz capability key；API 只作为覆盖证据展示，普通功能授权项的反向 `关联 API` 弹窗仍按 482A，正向 API 目录仍按 485。
+6. 不展示 CubeBox executor key；当前授权事实统一基于 HTTP API、route requirement 与 authz capability registry。
 
 ## 3. 页面与交互
 
@@ -62,7 +62,7 @@
 
 | 列 | 含义 | 示例 |
 | --- | --- | --- |
-| 授权项标识 | `object:action` capability key | `orgunit.orgunits:read` |
+| 授权项标识 | `object:action` authz capability key | `orgunit.orgunits:read` |
 | 资源名称 | registry 展示标签 | `组织管理` |
 | 操作 | action 展示标签或 action | `查看` |
 | 归属模块 | `owner_module` | `orgunit` |
@@ -78,7 +78,7 @@
 
 首期支持：
 
-1. 按 `key`、资源名称、`owner_module` 搜索。
+1. 按 `authz_capability_key`、资源名称、`owner_module` 搜索。
 2. 按状态、可分配、surface、当前覆盖、诊断原因筛选。
 3. 默认筛选建议为“仅显示异常/被排除项”，避免和普通功能授权项重复；用户可切换查看全部 registry entries。
 
@@ -88,8 +88,8 @@
 
 服务端聚合来源：
 
-1. 482 capability registry：`key/object/action/owner_module/resource_label/action_label/scope_dimension/assignable/status/surface/sort_order`。
-2. 484 覆盖事实：`capability_key -> covered_routes[]` 与是否具备当前 tenant API 覆盖。
+1. 482 authz capability registry：`authz_capability_key/object/action/owner_module/resource_label/action_label/scope_dimension/assignable/status/surface/sort_order`。
+2. 484 覆盖事实：`authz_capability_key -> covered_routes[]` 与是否具备当前 tenant API 覆盖。
 3. 484 policy/route/tool overlay 枚举结果：仅用于派生诊断原因，不在 488 中重新实现 lint。
 
 ### 4.2 建议 Endpoint
@@ -108,7 +108,7 @@ GET /iam/api/authz/capability-diagnostics
 
 | 参数 | 说明 |
 | --- | --- |
-| `q` | 可选，按 key、资源标签、动作标签搜索 |
+| `q` | 可选，按 authz capability key、资源标签、动作标签搜索 |
 | `owner_module` | 可选，按模块过滤 |
 | `status` | 可选，`enabled` / `disabled` / `deprecated` |
 | `assignable` | 可选，按可分配状态过滤 |
@@ -122,7 +122,7 @@ GET /iam/api/authz/capability-diagnostics
 {
   "capabilities": [
     {
-      "key": "iam.internal_jobs:admin",
+      "authz_capability_key": "iam.internal_jobs:admin",
       "object": "iam.internal_jobs",
       "action": "admin",
       "owner_module": "iam",
@@ -167,12 +167,12 @@ GET /iam/api/authz/capability-diagnostics
 | 计划 | Owner |
 | --- | --- |
 | `DEV-PLAN-480` | 授权体系蓝图与授权管理 UI 总体边界 |
-| `DEV-PLAN-482` | capability registry 字段模型、普通功能授权项 options API、角色保存 capability 校验 |
+| `DEV-PLAN-482` | authz capability registry 字段模型、普通功能授权项 options API、角色保存 authz capability 校验 |
 | `DEV-PLAN-482A` | 普通 `功能授权项` 主页面与反向 `关联 API` 弹窗 |
 | `DEV-PLAN-483` | canonical `object:action` 单主源、旧权限语言硬删除 |
 | `DEV-PLAN-484` | route/tool overlay/registry/policy 覆盖事实与 CI 反漂移门禁 |
 | `DEV-PLAN-485` | API 授权目录，从 API 角度查看 method/path 到授权项的绑定 |
-| `DEV-PLAN-488` | 授权项诊断视图，从 capability 角度查看未入候选项原因 |
+| `DEV-PLAN-488` | 授权项诊断视图，从 authz capability 角度查看未入候选项原因 |
 
 488 只消费 484 的覆盖事实或同一枚举函数，不复制一套覆盖判断。488 的页面存在不改变 482 默认 options API 的候选项语义，也不改变 483 对旧 key 的硬删除要求。
 
@@ -214,12 +214,12 @@ GET /iam/api/authz/capability-diagnostics
 
 ## 7. 验收标准
 
-1. [ ] `授权管理 > 功能授权项` 默认只展示 `enabled + assignable + tenant_api + 当前 tenant API 覆盖` capability。
-2. [ ] `授权管理 > 授权项诊断` 可查看普通候选项之外的不可分配、停用、废弃、无覆盖、内部 surface capability，并展示明确诊断原因。
+1. [ ] `授权管理 > 功能授权项` 默认只展示 `enabled + assignable + tenant_api + 当前 tenant API 覆盖` authz capability。
+2. [ ] `授权管理 > 授权项诊断` 可查看普通候选项之外的不可分配、停用、废弃、无覆盖、内部 surface authz capability，并展示明确诊断原因。
 3. [ ] 角色定义页不能通过前端参数切换到诊断全集。
 4. [ ] 角色保存接口继续拒绝未知、禁用、不可分配、非 tenant surface、无覆盖 key。
 5. [ ] `assignable=true/status=enabled/surface=tenant_api` 但无当前 API 覆盖时，484 lint 仍失败；诊断视图不能替代 CI 阻断。
-6. [ ] 页面不展示 executor key，不把 API path 当 capability key。
+6. [ ] 页面不展示 executor key，不把 API path 当 authz capability key。
 7. [ ] `make check doc`、Authz/UI 命中门禁通过。
 
 ## 8. 风险与停止线
@@ -227,7 +227,7 @@ GET /iam/api/authz/capability-diagnostics
 | 风险 | 表现 | 停止线 |
 | --- | --- | --- |
 | 诊断全集混入角色候选项 | 管理员可分配停用/无覆盖/内部能力 | 角色定义页只能使用 482 默认候选口径，服务端二次校验 |
-| 用诊断页替代 lint | 空壳 capability 被展示但 CI 放行 | 484 lint 仍是阻断 owner，488 只读展示 |
+| 用诊断页替代 lint | 空壳 authz capability 被展示但 CI 放行 | 484 lint 仍是阻断 owner，488 只读展示 |
 | 诊断页变成 registry 管理台 | 页面出现启用、修复、编辑 policy 按钮 | 首期只读；在线管理另起计划 |
 | 复制 API 目录 | 主表常驻 method/path，和 485 重复 | API method/path 只进关联 API 弹窗；正向目录归 485 |
 | 泄露内部 surface | 普通 tenant 管理员看到 superadmin/internal 细节 | 实现阶段按权限分级；必要时升级到 `iam.authz:admin` 或 superadmin-only |
