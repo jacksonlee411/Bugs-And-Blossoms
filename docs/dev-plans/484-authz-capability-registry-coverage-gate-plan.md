@@ -1,6 +1,6 @@
 # DEV-PLAN-484：Authz Capability Registry 覆盖门禁方案
 
-**状态**: P0/P1/P2/P4 覆盖事实聚合与 authz-lint 门禁基础已落地并完成文档登记收敛；P3 下游 UI 展示测试仍待 482A/485 实施（2026-05-01 18:58 CST）
+**状态**: P0/P1/P2/P4 覆盖事实聚合与 authz-lint 门禁基础已落地；P3 中 482A/485 下游 UI 展示测试已完成，487 role seed 与 488 诊断仍待实施（2026-05-01 23:10 CST）
 
 ## 0. 适用范围与评审分级
 
@@ -133,7 +133,7 @@ Authz Capability Key  = authz_object + ":" + authz_action
 2. 角色定义页保存 payload 只提交 `authz_capability_keys`；487 保存 API 必须做服务端二次校验，不信任前端候选项。
 3. 点击功能授权项中的授权项标识时，可以打开标题为“关联 API”的弹窗展示 API method/path；主表不得常驻展示 method/path，也不能把 method/path 放进 authz capability key 列。该页面与弹窗实施 owner 为 `DEV-PLAN-482A`。当前已明确不走 executor 路线，弹窗不得规划 executor key 展示。
 4. 前端不得新增 hardcoded authz capability candidate list；测试 fixture 如需模拟候选项，必须复用 registry/options response shape。
-5. 全量 HTTP API 正向查看面归属 `DEV-PLAN-485` 的 `API 授权目录` 页面；普通功能授权项主页面与点击授权项标识后的反向“关联 API”弹窗归属 `DEV-PLAN-482A`。
+5. 当前覆盖 API 正向查看面归属 `DEV-PLAN-485` 的 `API 授权目录` 页面；普通功能授权项主页面与点击授权项标识后的反向“关联 API”弹窗归属 `DEV-PLAN-482A`。
 6. 不可分配、停用、无覆盖、内部 surface 等诊断信息归属 `DEV-PLAN-488` 的授权项诊断视图；不得混入普通功能授权项默认列表或角色定义候选项。
 
 ## 6. 新增模块/API 开发模板要求
@@ -189,7 +189,7 @@ Authz Capability Key  = authz_object + ":" + authz_action
 
 1. [X] 新增模块/API 的脚手架或检查清单包含 authz requirement 与 registry entry。
 2. [X] 增加最小表驱动测试，覆盖有效复用、多 route 共享同一 key、空壳 authz capability、policy-only key。
-3. [ ] 前端功能授权项测试按 `DEV-PLAN-482A` 覆盖“授权项标识列”和“关联 API”弹窗分离。
+3. [X] 前端功能授权项测试按 `DEV-PLAN-482A` 覆盖“授权项标识列”和“关联 API”弹窗分离。
 
 ### 7.5 P4：CI 串联
 
@@ -204,7 +204,7 @@ Authz Capability Key  = authz_object + ":" + authz_action
 3. [X] registry 新增 `enabled + assignable` authz capability 但没有 allowlist/route requirement 交集形成的 API 覆盖时，lint 失败。
 4. [X] policy 引用 registry 外 key 或 policy-only key 时，lint 失败。
 5. [X] 功能授权项 options API 只输出 `enabled + assignable + tenant_api + 当前实现覆盖` 的 HRMS tenant authz capability。
-6. [ ] UI 中“授权项标识”和“关联 API”弹窗分离展示，不把 API path 当 key，且不展示 executor key。
+6. [X] UI 中“授权项标识”和“关联 API”弹窗分离展示，不把 API path 当 key，且不展示 executor key。
 7. [ ] 授权项诊断如展示无覆盖、不可分配、停用或内部 surface authz capability，必须消费 484 覆盖事实且不能替代 lint 阻断。
 
 ## 9. 风险与停止线
@@ -225,3 +225,5 @@ Authz Capability Key  = authz_object + ":" + authz_action
 - 2026-05-01 18:22 CST：P1/P2/P4 已落地，新增 `CollectAuthzCoverageFactsWithAllowlist`、route/allowlist/registry/policy/tool overlay/role seed 聚合结构与 `cmd/authz-lint` 门禁；CubeBox tool overlay 与 DB role seed 当前按空集合扩展点处理，后续 490/487 必须接入同一聚合源；已执行 `make authz-pack && make authz-test && make authz-lint`、Go fmt/vet/lint/test、路由与文档相关门禁。
 - 2026-05-01 18:58 CST：补齐 P0/P3/诊断后置登记；确认 482A/485 UI 展示测试、487 role seed 接入和 488 诊断页面仍未实施，不把页面存在性作为 484 完成条件。
 - 2026-05-01 19:54 CST：根据待提交评审补强覆盖事实口径：tenant API covered keys 改为从 allowlist route 与 route requirement 的交集派生，并新增 route requirement 反向校验，避免手写 requirement 自证覆盖。
+- 2026-05-01 22:03 CST：482A/485 已消费同一 484 覆盖事实聚合源；API catalog 已收敛为仅展示当前覆盖的 `enabled + assignable + tenant_api` 授权 API，浏览器复验 `count=46,badPaths=[],accessControls=["protected"],missingCapabilityKeyCount=0,nonAssignableCount=0`。
+- 2026-05-01 23:10 CST：补齐文档状态登记；确认 P3 中 482A/485 UI 展示测试已完成，487 role seed 枚举接入与 488 授权项诊断页面仍未实施。

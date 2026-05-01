@@ -2,6 +2,7 @@ import { Navigate, createBrowserRouter } from 'react-router-dom'
 import { AUTHZ_CAPABILITY_KEYS } from '../authz/capabilities'
 import { AppShell } from '../layout/AppShell'
 import { navItems } from '../navigation/config'
+import { APIAuthorizationCatalogPage, CapabilityAuthorizationsPage } from '../pages/authz/AuthzCatalogPage'
 import { ApprovalsInboxPage } from '../pages/approvals/ApprovalsInboxPage'
 import { FoundationDemoPage } from '../pages/FoundationDemoPage'
 import { DictConfigsPage } from '../pages/dicts/DictConfigsPage'
@@ -69,6 +70,22 @@ export const router = createBrowserRouter([
         element: (
           <RequireCapability requiredCapabilityKey={AUTHZ_CAPABILITY_KEYS.orgunitOrgUnitsRead}>
             <OrgUnitsPage />
+          </RequireCapability>
+        )
+      },
+      {
+        path: 'authz/capabilities',
+        element: (
+          <RequireCapability requiredCapabilityKey={AUTHZ_CAPABILITY_KEYS.iamAuthzRead}>
+            <CapabilityAuthorizationsPage />
+          </RequireCapability>
+        )
+      },
+      {
+        path: 'authz/api-catalog',
+        element: (
+          <RequireCapability requiredCapabilityKey={AUTHZ_CAPABILITY_KEYS.iamAuthzRead}>
+            <APIAuthorizationCatalogPage />
           </RequireCapability>
         )
       },

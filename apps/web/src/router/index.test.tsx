@@ -6,6 +6,10 @@ vi.mock('../layout/AppShell', () => ({
 vi.mock('../pages/approvals/ApprovalsInboxPage', () => ({
   ApprovalsInboxPage: () => null
 }))
+vi.mock('../pages/authz/AuthzCatalogPage', () => ({
+  APIAuthorizationCatalogPage: () => null,
+  CapabilityAuthorizationsPage: () => null
+}))
 vi.mock('../pages/FoundationDemoPage', () => ({
   FoundationDemoPage: () => null
 }))
@@ -54,6 +58,8 @@ describe('app router', () => {
     expect(routePaths.has('org/units/:orgCode')).toBe(true)
     expect(routePaths.has('org/units/field-configs')).toBe(true)
     expect(routePaths.has('dicts')).toBe(true)
+    expect(routePaths.has('authz/capabilities')).toBe(true)
+    expect(routePaths.has('authz/api-catalog')).toBe(true)
     expect(routePaths.has('approvals')).toBe(true)
     expect(routePaths.has('cubebox')).toBe(false)
   })

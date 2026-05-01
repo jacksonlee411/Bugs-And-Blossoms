@@ -1,6 +1,6 @@
 # DEV-PLAN-480：EHR 授权体系总体方案
 
-**状态**: 授权体系蓝图持续推进；P0 授权标识/registry/覆盖门禁基础已按 480A P1 落地（2026-05-01 18:58 CST）
+**状态**: 授权体系蓝图持续推进；480A P1 基础与 P2 只读授权目录面已落地，运行时授权闭环仍待后续阶段（2026-05-01 23:10 CST）
 
 ## 0. 适用范围与评审分级
 
@@ -193,7 +193,7 @@ API Route Requirement = method + route -> authz_object + authz_action
 Authz Capability Key  = authz_object + ":" + authz_action
 ```
 
-因此 `orgunit.orgunits:read` 是授权项标识（authz capability key），不是 API 地址；它可以覆盖 `GET /org/api/org-units`、`GET /org/api/org-units/details`、`GET /org/api/org-units/audit` 等多个读取接口。UI 功能授权项主页面与点击授权项标识后打开的“关联 API”弹窗由 `DEV-PLAN-482A` 承接，主表只展示 authz capability 语义，API method/path 只能在弹窗中展示；全量 HTTP API 正向查看面由 `DEV-PLAN-485` 的 `API 授权目录` 承接；两者都只能消费 `DEV-PLAN-484` 的单一覆盖事实聚合源。不可分配、停用、无覆盖或内部 surface 的 authz capability 诊断由 `DEV-PLAN-488` 的后置 `授权项诊断` 承接，不进入普通功能授权项默认列表。
+因此 `orgunit.orgunits:read` 是授权项标识（authz capability key），不是 API 地址；它可以覆盖 `GET /org/api/org-units`、`GET /org/api/org-units/details`、`GET /org/api/org-units/audit` 等多个读取接口。UI 功能授权项主页面与点击授权项标识后打开的“关联 API”弹窗由 `DEV-PLAN-482A` 承接，主表只展示 authz capability 语义，API method/path 只能在弹窗中展示；当前覆盖 API 正向查看面由 `DEV-PLAN-485` 的 `API 授权目录` 承接；两者都只能消费 `DEV-PLAN-484` 的单一覆盖事实聚合源。不可分配、停用、无覆盖或内部 surface 的 authz capability 诊断由 `DEV-PLAN-488` 的后置 `授权项诊断` 承接，不进入普通功能授权项默认列表。
 
 术语收敛：
 

@@ -124,6 +124,14 @@ func knownErrorMessage(code string) string {
 		return "请求参数无效，请检查后重试。"
 	case "diagnostic_parameter_not_supported":
 		return "当前接口不支持诊断参数，请使用授权项诊断入口。"
+	case "invalid_authz_capability_key":
+		return "授权项标识格式无效。"
+	case "unknown_authz_capability_key":
+		return "授权项标识未登记。"
+	case "authz_capability_key_not_supported":
+		return "该授权项标识不支持用于租户 API 目录查询。"
+	case "authz_catalog_error":
+		return "授权目录暂不可用，请稍后重试。"
 	case "tenant_not_found":
 		return "未找到租户，请检查访问域名。"
 	case "tenant_missing":

@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"os"
 	"sort"
+	"strings"
 
 	"github.com/jacksonlee411/Bugs-And-Blossoms/internal/routing"
 	"github.com/jacksonlee411/Bugs-And-Blossoms/pkg/authz"
@@ -20,10 +21,11 @@ type AuthzCoverageFacts struct {
 }
 
 type AuthzAllowlistRoute struct {
-	Entrypoint string
-	Method     string
-	Path       string
-	RouteClass string
+	Entrypoint  string
+	Method      string
+	Path        string
+	RouteClass  string
+	OwnerModule string
 }
 
 type AuthzRouteCoverage struct {
@@ -89,10 +91,11 @@ func ListAuthzAllowlistRoutes(allowlist routing.Allowlist) []AuthzAllowlistRoute
 		for _, route := range ep.Routes {
 			for _, method := range route.Methods {
 				out = append(out, AuthzAllowlistRoute{
-					Entrypoint: entrypoint,
-					Method:     method,
-					Path:       route.Path,
-					RouteClass: route.RouteClass,
+					Entrypoint:  entrypoint,
+					Method:      method,
+					Path:        route.Path,
+					RouteClass:  route.RouteClass,
+					OwnerModule: ownerModuleForAllowlistRoute(entrypoint, route),
 				})
 			}
 		}
@@ -107,6 +110,24 @@ func ListAuthzAllowlistRoutes(allowlist routing.Allowlist) []AuthzAllowlistRoute
 		return out[i].Method < out[j].Method
 	})
 	return out
+}
+
+func ownerModuleForAllowlistRoute(entrypoint string, route routing.Route) string {
+	path := strings.TrimSpace(route.Path)
+	switch {
+	case entrypoint == "superadmin":
+		return "superadmin"
+	case path == "/health" || path == "/healthz" || strings.HasPrefix(path, "/assets/"):
+		return "platform"
+	case path == "/logout" || strings.HasPrefix(path, "/iam/"):
+		return "iam"
+	case strings.HasPrefix(path, "/org/"):
+		return "orgunit"
+	case strings.HasPrefix(path, "/internal/cubebox/"):
+		return "cubebox"
+	default:
+		return "platform"
+	}
 }
 
 func ListAuthzRouteCoverage() []AuthzRouteCoverage {

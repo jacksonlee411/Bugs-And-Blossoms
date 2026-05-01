@@ -214,6 +214,7 @@ func testAuthzAllowlist() routing.Allowlist {
 				Routes: []routing.Route{
 					{Path: "/iam/api/sessions", Methods: []string{"POST"}, RouteClass: string(routing.RouteClassInternalAPI)},
 					{Path: "/iam/api/authz/capabilities", Methods: []string{"GET"}, RouteClass: string(routing.RouteClassInternalAPI)},
+					{Path: "/iam/api/authz/api-catalog", Methods: []string{"GET"}, RouteClass: string(routing.RouteClassInternalAPI)},
 					{Path: "/iam/api/dicts", Methods: []string{"GET", "POST"}, RouteClass: string(routing.RouteClassInternalAPI)},
 					{Path: "/iam/api/dicts:disable", Methods: []string{"POST"}, RouteClass: string(routing.RouteClassInternalAPI)},
 					{Path: "/iam/api/dicts/values", Methods: []string{"GET", "POST"}, RouteClass: string(routing.RouteClassInternalAPI)},

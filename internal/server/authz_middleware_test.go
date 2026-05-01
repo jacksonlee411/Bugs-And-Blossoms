@@ -212,6 +212,9 @@ func TestAuthzRequirementForRoute(t *testing.T) {
 	if object, action, ok := authzRequirementForRoute(http.MethodGet, "/iam/api/authz/capabilities"); !ok || object != authz.ObjectIAMAuthz || action != authz.ActionRead {
 		t.Fatalf("unexpected authz capabilities requirement: object=%q action=%q ok=%v", object, action, ok)
 	}
+	if object, action, ok := authzRequirementForRoute(http.MethodGet, "/iam/api/authz/api-catalog"); !ok || object != authz.ObjectIAMAuthz || action != authz.ActionRead {
+		t.Fatalf("unexpected authz api catalog requirement: object=%q action=%q ok=%v", object, action, ok)
+	}
 	if _, _, ok := authzRequirementForRoute(http.MethodGet, "/iam/api/dicts"); !ok {
 		t.Fatal("expected ok=true")
 	}

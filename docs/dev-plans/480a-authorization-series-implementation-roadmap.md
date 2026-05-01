@@ -1,6 +1,6 @@
 # DEV-PLAN-480A：480 系列授权子计划实施顺序路线图
 
-**状态**: P1 权限标识、registry 与覆盖事实基础已完成并完成文档登记收敛（2026-05-01 18:58 CST）
+**状态**: P2 只读授权目录面已完成并复验；P3/P4/P5/P6 运行时闭环与后置治理仍待实施（2026-05-01 23:10 CST）
 
 ## 0. 适用范围与评审分级
 
@@ -50,11 +50,11 @@
 
 ### 2.1 核心目标
 
-1. [ ] 冻结 480 系列实施阶段顺序和每阶段出入口条件。
-2. [ ] 明确哪些计划可并行，哪些计划必须等待前置门槛。
-3. [ ] 明确不得提前暴露的在线入口，避免半闭环功能进入用户可见面。
-4. [ ] 明确重复实现停止线：覆盖事实、角色能力来源、组织范围来源、CubeBox 工具来源都只能有一个 active runtime SoT。
-5. [ ] 明确首批最小闭环：功能授权项 / API 授权目录可读，角色定义保存生效，用户授权范围实际裁剪，CubeBox 只走 API-first。
+1. [X] 冻结 480 系列实施阶段顺序和每阶段出入口条件。
+2. [X] 明确哪些计划可并行，哪些计划必须等待前置门槛。
+3. [X] 明确不得提前暴露的在线入口，避免半闭环功能进入用户可见面。
+4. [X] 明确重复实现停止线：覆盖事实、角色能力来源、组织范围来源、CubeBox 工具来源都只能有一个 active runtime SoT。
+5. [ ] 明确并完成完整运行时闭环：只读治理面已完成；角色定义保存生效、用户授权范围实际裁剪、CubeBox 只走 API-first 仍分别待 P3/P4/P5 实施。
 
 ### 2.2 非目标
 
@@ -129,9 +129,9 @@ Owner：`DEV-PLAN-482A/485`
 
 建议顺序：
 
-1. [ ] `DEV-PLAN-482A`：实现 `功能授权项` 普通只读页面，只消费 482 默认 options 口径。
-2. [ ] `DEV-PLAN-485`：实现 `API 授权目录` 正向只读页面，API 视角投影必须来自 484 聚合源。
-3. [ ] 482A 的 `关联 API` 弹窗固定复用 485 的 API catalog facade 和服务端过滤口径；首期不新增第二个窄 endpoint。具体 endpoint 与 payload 以 482A/485 为准，480A 只冻结“复用同一 facade、不新增第二事实源”的顺序约束。若后续确有性能、权限边界或响应形态隔离需求，必须先更新 482A/485/480A 契约或另起计划说明原因。
+1. [X] `DEV-PLAN-482A`：实现 `功能授权项` 普通只读页面，只消费 482 默认 options 口径。
+2. [X] `DEV-PLAN-485`：实现 `API 授权目录` 正向只读页面，当前覆盖的普通 tenant 授权 API 视角投影必须来自 484 聚合源。
+3. [X] 482A 的 `关联 API` 弹窗固定复用 485 的 API catalog facade 和服务端过滤口径；首期不新增第二个窄 endpoint。具体 endpoint 与 payload 以 482A/485 为准，480A 只冻结“复用同一 facade、不新增第二事实源”的顺序约束。若后续确有性能、权限边界或响应形态隔离需求，必须先更新 482A/485/480A 契约或另起计划说明原因。
 
 并行规则：
 
@@ -245,13 +245,13 @@ Owner：`DEV-PLAN-488`
 
 ### 5.1 可先交付的最小只读组合
 
-首批只读治理面可以按以下组合验收。P1 基础已完成；P2 页面仍未交付：
+首批只读治理面可以按以下组合验收。P1 基础已完成；P2 页面已落地且命中门禁已通过：
 
 1. [X] 483 旧 key 删除完成。
 2. [X] 482 registry/options 默认口径可用。
 3. [X] 484 单一覆盖事实聚合和 lint 可用。
-4. [ ] 482A 功能授权项页面可展示当前可分配且有覆盖的授权项。
-5. [ ] 485 API 授权目录可从 API 角度展示 method/path 到授权项绑定。
+4. [X] 482A 功能授权项页面可展示当前可分配且有覆盖的授权项。
+5. [X] 485 API 授权目录可从 API 角度展示 method/path 到授权项绑定。
 
 该组合不要求角色在线保存、不要求用户授权组织范围保存、不要求 CubeBox API-first 完整切换。
 
@@ -276,7 +276,7 @@ Owner：`DEV-PLAN-488`
 
 CubeBox 切换必须等待：
 
-1. [ ] 484/485 可追踪 API 到 authz capability。
+1. [X] 484/485 可追踪 API 到 authz capability。
 2. [ ] 490 overlay 引用的 HTTP API 全部存在并有 requirement。
 3. [ ] 当前用户 capability 与组织范围裁剪通过普通 HTTP API 生效。
 4. [ ] active runtime 不再接受 executor 业务计划。
@@ -316,3 +316,6 @@ CubeBox 切换必须等待：
 - 2026-05-01 18:58 CST：完成 480A 与 `DEV-PLAN-480/482/483/484` 文档登记收敛；P1 基础项在首批只读治理面组合中标记完成，482A/485 页面、487/489/489A 运行时闭环、488 诊断和 490 API-first 仍保持未完成。
 - 2026-05-01 19:05 CST：本轮文档登记收敛后再次运行 `make check doc`，通过。
 - 2026-05-01 19:54 CST：根据待提交评审补强 P1 停止线：覆盖事实必须由 allowlist route 与 route requirement 交集产生；482 普通 options API 拒绝诊断参数；`iam.authz:read` 首期 bootstrap policy 仅授予 `tenant-admin`。
+- 2026-05-01 21:22 CST：P2 只读授权目录面落地并通过命中门禁；482A 功能授权项页面、关联 API 弹窗和 485 API 授权目录均复用 484 覆盖事实聚合源，未新增第二套 route/policy/registry join。
+- 2026-05-01 22:03 CST：按 P2 停止线修正 485 普通目录口径，API 授权目录仅展示当前覆盖的 `enabled + assignable + tenant_api` 授权 API；浏览器复验 `GET /iam/api/authz/api-catalog` 返回 `status=200,count=46,badPaths=[],accessControls=["protected"],missingCapabilityKeyCount=0,nonAssignableCount=0`，未展示 health/static/internal no-requirement route、不可分配项或 executor key。
+- 2026-05-01 23:10 CST：补齐 480A 与相关子计划文档状态登记；P2 只读治理面标记完成，P3/P4/P5/P6 仍保持未完成边界。

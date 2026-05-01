@@ -17,6 +17,12 @@ entrypoints:
       - path: /app/dicts/{dict_code}/values/{code}
         methods: [GET]
         route_class: ui
+      - path: /app/authz/capabilities
+        methods: [GET]
+        route_class: ui
+      - path: /app/authz/api-catalog
+        methods: [GET]
+        route_class: ui
       - path: /app/org/units
         methods: [GET]
         route_class: ui
@@ -51,6 +57,9 @@ entrypoints:
         methods: [GET]
         route_class: internal_api
       - path: /iam/api/authz/capabilities
+        methods: [GET]
+        route_class: internal_api
+      - path: /iam/api/authz/api-catalog
         methods: [GET]
         route_class: internal_api
       - path: /iam/api/dicts

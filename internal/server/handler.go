@@ -204,6 +204,9 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, error) {
 	router.Handle(routing.RouteClassInternalAPI, http.MethodGet, "/iam/api/authz/capabilities", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		handleAuthzCapabilitiesAPI(w, r)
 	}))
+	router.Handle(routing.RouteClassInternalAPI, http.MethodGet, "/iam/api/authz/api-catalog", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handleAuthzAPICatalogAPI(w, r)
+	}))
 	router.Handle(routing.RouteClassInternalAPI, http.MethodGet, "/iam/api/dicts", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		handleDictsAPI(w, r, dictStore)
 	}))

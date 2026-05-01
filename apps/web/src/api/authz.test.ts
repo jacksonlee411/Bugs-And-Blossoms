@@ -10,7 +10,7 @@ vi.mock('./httpClient', () => ({
   }
 }))
 
-import { loadCurrentAuthzCapabilities } from './authz'
+import { listAuthzAPICatalog, listAuthzCapabilities, loadCurrentAuthzCapabilities } from './authz'
 
 describe('authz api', () => {
   beforeEach(() => {
@@ -33,5 +33,30 @@ describe('authz api', () => {
       'iam.dicts:admin'
     ])
     expect(getMock).toHaveBeenCalledWith('/iam/api/me/capabilities')
+  })
+
+  it('loads function authorization options without diagnostic parameters', async () => {
+    getMock.mockResolvedValue({ capabilities: [], registry_rev: 'rev' })
+
+    await expect(listAuthzCapabilities({ q: 'org', ownerModule: 'orgunit', scopeDimension: 'organization' })).resolves.toEqual({
+      capabilities: [],
+      registry_rev: 'rev'
+    })
+
+    expect(getMock).toHaveBeenCalledWith(
+      '/iam/api/authz/capabilities?q=org&owner_module=orgunit&scope_dimension=organization'
+    )
+  })
+
+  it('loads API catalog and supports server-side capability filtering', async () => {
+    getMock.mockResolvedValue({ api_entries: [] })
+
+    await expect(listAuthzAPICatalog({ authzCapabilityKey: 'orgunit.orgunits:read', method: 'GET' })).resolves.toEqual({
+      api_entries: []
+    })
+
+    expect(getMock).toHaveBeenCalledWith(
+      '/iam/api/authz/api-catalog?method=GET&authz_capability_key=orgunit.orgunits%3Aread'
+    )
   })
 })

@@ -1,6 +1,6 @@
 # DEV-PLAN-482：EHR Authz Capability Registry 与角色授权项候选项方案
 
-**状态**: P0/P1/P2/P4 registry、options API 与覆盖门禁基础已落地并完成文档登记收敛（2026-05-01 18:58 CST）
+**状态**: P0/P1/P2/P4 registry、options API 与覆盖门禁基础已落地；482A/485 下游只读消费已完成，481/487 消费仍待实施（2026-05-01 23:10 CST）
 
 ## 1. 背景
 
@@ -73,7 +73,7 @@ P1 已在当前仓库落地这个专门事实源，形成以下基线：
 
 1. `authz_capability_key` 是授权项标识，不是 API 地址。
 2. 一个 `authz_capability_key` 可以覆盖多个 HTTP API route；CubeBox API tool overlay 只能引用这些既有 HTTP API，不新增第二套业务工具 key。
-3. 482 的 options API 默认返回 authz capability 元数据；普通 `功能授权项` 主页面与点击授权项标识后打开的“关联 API”弹窗由 `DEV-PLAN-482A` 承接。弹窗应通过 `DEV-PLAN-484` 的单一覆盖事实聚合能力读取 API method/path；全量 HTTP API 正向查看面由 `DEV-PLAN-485` 的 `API 授权目录` facade 承接；不得把 route path 放进 `authz_capability_key` 字段。
+3. 482 的 options API 默认返回 authz capability 元数据；普通 `功能授权项` 主页面与点击授权项标识后打开的“关联 API”弹窗由 `DEV-PLAN-482A` 承接。弹窗应通过 `DEV-PLAN-484` 的单一覆盖事实聚合能力读取 API method/path；当前覆盖 API 正向查看面由 `DEV-PLAN-485` 的 `API 授权目录` facade 承接；不得把 route path 放进 `authz_capability_key` 字段。
 
 派生规则：
 
@@ -235,3 +235,5 @@ P1 已在当前仓库落地这个专门事实源，形成以下基线：
 - 2026-05-01 18:22 CST：P1/P2/P4 已落地，新增 `pkg/authz` registry/key 校验、`GET /iam/api/authz/capabilities` 与 `make authz-lint` 覆盖门禁；已执行 `make authz-pack && make authz-test && make authz-lint`、Go fmt/vet/lint/test、前端相关测试与文档/路由/root/no-legacy 等相关门禁。
 - 2026-05-01 18:58 CST：补齐 P0 契约冻结与 488 后置诊断登记；确认 481/487 消费契约仍未实施，482 不声明角色定义页面或保存 API 完成。
 - 2026-05-01 19:54 CST：根据待提交评审收紧 P2 实现口径：普通 `GET /iam/api/authz/capabilities` 拒绝 `include_disabled/include_uncovered` 诊断参数，并同步登记 `diagnostic_parameter_not_supported` 错误码；`iam.authz:read` 首期 bootstrap policy 仅授予 `tenant-admin`，不再授予 `tenant-viewer`。
+- 2026-05-01 22:03 CST：482A `功能授权项` 主页面已消费 482 默认 options 口径；485 API catalog facade 已按 `enabled + assignable + tenant_api + 当前 tenant API 覆盖` 口径完成浏览器复验。482 仍不声明角色定义页、角色保存 API 或 DB role SoT 完成。
+- 2026-05-01 23:10 CST：补齐文档状态登记；确认 481/487 角色定义消费与保存闭环仍未实施。

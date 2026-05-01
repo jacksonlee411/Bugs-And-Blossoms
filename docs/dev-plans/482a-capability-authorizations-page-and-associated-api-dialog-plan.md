@@ -1,6 +1,6 @@
 # DEV-PLAN-482A：功能授权项主页面与关联 API 弹窗实施方案
 
-**状态**: 规划中；482/483/484 P1 事实基础已可作为前置输入（2026-05-01 18:58 CST）
+**状态**: 已实现并完成浏览器复验；命中门禁已通过（2026-05-01 23:10 CST）
 
 ## 0. 适用范围与评审分级
 
@@ -12,13 +12,13 @@
 
 ### 0.1 Simple > Easy 三问
 
-1. **边界**：482A 只拥有普通 tenant 功能授权项页面和反向 `关联 API` 弹窗；482 继续拥有 registry 字段模型、options API 和 authz capability key 校验；484 继续拥有唯一服务端覆盖事实聚合源与 CI 反漂移门禁；485 继续拥有全量 API 正向目录 facade；488 继续拥有后置的不可分配、停用、内部 surface 和无覆盖能力诊断视图。
+1. **边界**：482A 只拥有普通 tenant 功能授权项页面和反向 `关联 API` 弹窗；482 继续拥有 registry 字段模型、options API 和 authz capability key 校验；484 继续拥有唯一服务端覆盖事实聚合源与 CI 反漂移门禁；485 继续拥有当前覆盖 API 正向目录 facade；488 继续拥有后置的不可分配、停用、内部 surface 和无覆盖能力诊断视图。
 2. **不变量**：普通功能授权项默认列表只能展示 `enabled + assignable + tenant_api + 当前 tenant API 覆盖` 的 authz capability。API method/path 只能在 `关联 API` 弹窗里展示，不进入主表常驻列，也不能被当作授权项标识。
 3. **可解释**：管理员在 `功能授权项` 页面能回答“系统当前有哪些可授予的功能权限”；点击某个授权项标识后，弹窗只回答“这个授权项由哪些当前 HTTP API 覆盖”。
 
 ## 1. 背景
 
-`DEV-PLAN-482` 已冻结 authz capability registry、角色候选项 options API 和服务端 authz capability key 校验；`DEV-PLAN-484` 已冻结 route/tool overlay/registry/policy 覆盖门禁；`DEV-PLAN-485` 已冻结从 API 角度查看全量 HTTP API 授权归属的 `API 授权目录` 页面。
+`DEV-PLAN-482` 已冻结 authz capability registry、角色候选项 options API 和服务端 authz capability key 校验；`DEV-PLAN-484` 已冻结 route/tool overlay/registry/policy 覆盖门禁；`DEV-PLAN-485` 已冻结从 API 角度查看当前覆盖的普通 tenant 授权 API 归属的 `API 授权目录` 页面。
 
 但普通用户可见的 `功能授权项` 页面本身仍缺少清晰 owner：
 
@@ -33,11 +33,11 @@
 
 ### 2.1 核心目标
 
-1. [ ] 新增授权管理只读页面 `功能授权项`。
-2. [ ] 定义主页面路由、菜单落点、表格列、搜索筛选、加载态、空态和错误态。
-3. [ ] 定义页面默认只消费 482 普通 options 口径：`enabled + assignable + tenant_api + 当前 tenant API 覆盖`。
-4. [ ] 定义 `关联 API` 弹窗的数据契约、触发方式、展示列、空态和测试切片。
-5. [ ] 明确页面不得展示 executor key，不得把 API method/path 常驻在主表，也不得从 route、policy CSV、导航配置或本地常量反推候选项。
+1. [X] 新增授权管理只读页面 `功能授权项`。
+2. [X] 定义主页面路由、菜单落点、表格列、搜索筛选、加载态、空态和错误态。
+3. [X] 定义页面默认只消费 482 普通 options 口径：`enabled + assignable + tenant_api + 当前 tenant API 覆盖`。
+4. [X] 定义 `关联 API` 弹窗的数据契约、触发方式、展示列、空态和测试切片。
+5. [X] 明确页面不得展示 executor key，不得把 API method/path 常驻在主表，也不得从 route、policy CSV、导航配置或本地常量反推候选项。
 
 ### 2.2 非目标
 
@@ -45,7 +45,7 @@
 2. 不提供新增、编辑、删除、启用、停用、修复、刷新覆盖事实或导出功能。
 3. 不承担角色定义保存、角色持久化或用户授权组织范围；这些分别由 `DEV-PLAN-481/487/489` 承接。
 4. 不展示不可分配、停用、废弃、非 tenant surface 或无覆盖 authz capability；这些归 `DEV-PLAN-488` 的 `授权项诊断`。
-5. 不做 API 正向目录；全量 HTTP API method/path 主表归 `DEV-PLAN-485`。
+5. 不做 API 正向目录；当前覆盖 API 的 method/path 主表归 `DEV-PLAN-485`。
 6. 不展示 CubeBox executor key；当前授权事实统一基于 HTTP API、route requirement 与 authz capability registry。
 
 ## 3. 页面与交互
@@ -54,7 +54,7 @@
 
 - 菜单：`授权管理 > 功能授权项`
 - 页面标题：`功能授权项`
-- 页面副标题：`查看当前可分配功能权限及其授权项标识`
+- 页面副标题：`管理角色可选择的功能授权项及其授权维度`
 - 页面属性：只读，不提供新增、编辑、删除、修复、刷新、导出首期能力。
 - 权限保护：首期使用已登记并有覆盖的 `iam.authz:read`。
 
@@ -157,17 +157,22 @@ GET /iam/api/authz/api-catalog?authz_capability_key={key}
 2. 482A 不新增 `GET /iam/api/authz/capabilities/{authz_capability_key}/apis` 等窄 endpoint；若后续出现明确性能、权限边界或响应形态隔离需求，必须先更新 482A/485/480A 契约或另起计划说明原因。
 3. endpoint 必须受 `iam.authz:read` 或更严格已登记 capability 保护。
 
-建议响应字段：
+响应字段复用 485 API catalog facade：
 
 ```json
 {
-  "authz_capability_key": "orgunit.orgunits:read",
-  "apis": [
+  "api_entries": [
     {
       "method": "GET",
       "path": "/org/api/org-units",
       "access_control": "protected",
       "owner_module": "orgunit",
+      "resource_label": "组织管理",
+      "resource_object": "orgunit.orgunits",
+      "action": "read",
+      "authz_capability_key": "orgunit.orgunits:read",
+      "capability_status": "enabled",
+      "assignable": true,
       "cubebox_callable": true
     }
   ]
@@ -193,49 +198,49 @@ GET /iam/api/authz/api-catalog?authz_capability_key={key}
 
 ### 7.1 P0：契约冻结
 
-1. [ ] 482A 文档加入 AGENTS Doc Map。
-2. [ ] 480/482/484/485/488 引用 482A，明确普通 `功能授权项` 页面与 `关联 API` 弹窗 owner 不再散落。
-3. [ ] 冻结主表不展示 API method/path、弹窗不展示 executor key 的约束。
+1. [X] 482A 文档加入 AGENTS Doc Map。
+2. [X] 480/482/484/485/488 引用 482A，明确普通 `功能授权项` 页面与 `关联 API` 弹窗 owner 不再散落。
+3. [X] 冻结主表不展示 API method/path、弹窗不展示 executor key 的约束。
 
 ### 7.2 P1：服务端查询聚合
 
-1. [ ] 复用 482 registry/options 能力输出普通功能授权项列表；482 options API 基础已落地。
-2. [ ] 复用 484 单一覆盖事实聚合能力，支持按 `authz_capability_key` 反向查询关联 API；484 聚合源基础已落地，482A 不得另写 join。
-3. [ ] 补服务层或 handler 黑盒测试，覆盖有覆盖、多 API 共享同一 key、未知 key、无覆盖 key。
+1. [X] 复用 482 registry/options 能力输出普通功能授权项列表；482 options API 基础已落地。
+2. [X] 复用 484 单一覆盖事实聚合能力，支持按 `authz_capability_key` 反向查询关联 API；484 聚合源基础已落地，482A 不得另写 join。
+3. [X] 补服务层或 handler 黑盒测试，覆盖有覆盖、多 API 共享同一 key、未知 key、无覆盖 key。
 
 ### 7.3 P2：服务端 API
 
-1. [ ] 确认主列表 endpoint 使用 `GET /iam/api/authz/capabilities` 默认口径。
-2. [ ] 固定 `关联 API` 查询使用 `GET /iam/api/authz/api-catalog?authz_capability_key=`；首期不新增窄 endpoint。
-3. [ ] endpoint 受已登记并有覆盖的 `iam.authz:read` 或更严格授权项保护。
-4. [ ] handler/API 测试覆盖搜索筛选、默认不返回诊断全集、反向 API 查询不展示 executor key。
+1. [X] 确认主列表 endpoint 使用 `GET /iam/api/authz/capabilities` 默认口径。
+2. [X] 固定 `关联 API` 查询使用 `GET /iam/api/authz/api-catalog?authz_capability_key=`；首期不新增窄 endpoint。
+3. [X] endpoint 受已登记并有覆盖的 `iam.authz:read` 或更严格授权项保护。
+4. [X] handler/API 测试覆盖搜索筛选、默认不返回诊断全集、反向 API 查询不展示 executor key。
 
 ### 7.4 P3：前端页面
 
-1. [ ] 新增授权管理菜单 `功能授权项`。
-2. [ ] 新增只读主页面，按列契约展示数据。
-3. [ ] 支持搜索、归属模块筛选、范围维度筛选、加载态、空态、搜索无结果和错误态。
-4. [ ] 点击 `授权项标识` 打开 `关联 API` 弹窗。
-5. [ ] 弹窗按列契约展示 method/path/access_control/owner_module/cubebox_callable，不展示 executor key。
+1. [X] 新增授权管理菜单 `功能授权项`。
+2. [X] 新增只读主页面，按列契约展示数据。
+3. [X] 支持搜索、归属模块筛选、范围维度筛选、加载态、空态、搜索无结果和错误态。
+4. [X] 点击 `授权项标识` 打开 `关联 API` 弹窗。
+5. [X] 弹窗按列契约展示 method/path/access_control/owner_module/cubebox_callable，不展示 executor key。
 
 ### 7.5 P4：测试与门禁
 
-1. [ ] 前端测试覆盖主列表渲染、搜索筛选、空态、错误态。
-2. [ ] 前端测试覆盖点击授权项标识打开 `关联 API` 弹窗，并验证 method/path 只出现在弹窗中。
-3. [ ] 前端测试覆盖不可分配、停用、无覆盖或内部 surface 项不会出现在普通功能授权项默认列表。
-4. [ ] 服务端测试覆盖 options 默认口径与关联 API 反向查询。
-5. [ ] 命中 Authz/UI/文档时按 AGENTS 触发器运行对应门禁。
+1. [X] 前端测试覆盖主列表渲染、搜索筛选、空态、错误态。
+2. [X] 前端测试覆盖点击授权项标识打开 `关联 API` 弹窗，并验证 method/path 只出现在弹窗中。
+3. [X] 前端测试覆盖不可分配、停用、无覆盖或内部 surface 项不会出现在普通功能授权项默认列表。
+4. [X] 服务端测试覆盖 options 默认口径与关联 API 反向查询。
+5. [X] 命中 Authz/UI/文档时按 AGENTS 触发器运行对应门禁。
 
 ## 8. 验收标准
 
-1. [ ] 授权管理菜单中存在 `功能授权项` 页面。
-2. [ ] 页面默认只展示 `enabled + assignable + tenant_api + 当前 tenant API 覆盖` authz capability。
-3. [ ] 主表展示资源名称、操作、授权项标识、归属模块、范围维度、当前覆盖和状态，不常驻展示 method/path。
-4. [ ] 点击授权项标识能打开 `关联 API` 弹窗。
-5. [ ] `关联 API` 弹窗展示当前 capability 关联的 method/path/access_control/owner_module/cubebox_callable。
-6. [ ] 页面和弹窗均不展示 executor key，也不从前端本地常量、policy CSV 或导航配置反推授权项。
-7. [ ] `API 授权目录` 仍由 485 作为 API 视角 facade 承接；`授权项诊断` 仍由 488 后置承接；三者共享 484 单一覆盖事实聚合源。
-8. [ ] `make check doc`、Authz/UI 命中门禁通过。
+1. [X] 授权管理菜单中存在 `功能授权项` 页面。
+2. [X] 页面默认只展示 `enabled + assignable + tenant_api + 当前 tenant API 覆盖` authz capability。
+3. [X] 主表展示资源名称、操作、授权项标识、归属模块、范围维度、当前覆盖和状态，不常驻展示 method/path。
+4. [X] 点击授权项标识能打开 `关联 API` 弹窗。
+5. [X] `关联 API` 弹窗展示当前 capability 关联的 method/path/access_control/owner_module/cubebox_callable。
+6. [X] 页面和弹窗均不展示 executor key，也不从前端本地常量、policy CSV 或导航配置反推授权项。
+7. [X] `API 授权目录` 仍由 485 作为 API 视角 facade 承接；`授权项诊断` 仍由 488 后置承接；三者共享 484 单一覆盖事实聚合源。
+8. [X] `make check doc`、Authz/UI 命中门禁通过。
 
 ## 9. 风险与停止线
 
@@ -251,3 +256,7 @@ GET /iam/api/authz/api-catalog?authz_capability_key={key}
 
 - 2026-05-01 11:18 CST：创建方案文档，待实施阶段按命中范围运行 `make check doc`、Authz/UI 相关门禁与前端测试。
 - 2026-05-01 18:58 CST：登记前置状态：482 registry/options、483 canonical key 硬删除、484 覆盖事实聚合与 `make authz-lint` 基础已落地；482A 页面、关联 API 弹窗和 API catalog facade 消费仍未实施。
+- 2026-05-01 20:48 CST：落地 `功能授权项` 只读页面、`关联 API` 弹窗、菜单/路由和前后端测试；弹窗复用 `GET /iam/api/authz/api-catalog?authz_capability_key=`，未新增窄 endpoint。
+- 2026-05-01 21:22 CST：命中门禁通过：`go fmt ./... && go vet ./... && make check lint && make test`、`make check routing`、`make authz-pack && make authz-test && make authz-lint`、`make generate && make css`、`make check tr`、`make check doc`、`make check error-message`、`pnpm -C apps/web typecheck`、相关 Vitest。
+- 2026-05-01 22:03 CST：浏览器复验通过：主表仍不常驻展示 method/path；点击授权项标识打开 `关联 API` 弹窗，弹窗仅展示 method/path/access_control/owner_module/cubebox_callable，不展示 executor key、tool executor 或调用策略主表列。本地截图证据：`.local/480a/authz-associated-api-dialog-480a-final.png`。
+- 2026-05-01 23:10 CST：补齐文档状态登记；确认 482A 已完成，后续角色定义保存、用户授权范围与授权项诊断不在本计划完成口径内。

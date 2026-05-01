@@ -329,6 +329,20 @@ errors:
     user_message_key: errors.authz_error
     backend_policy: passthrough
     frontend_policy: mapped
+  - code: authz_catalog_error
+    module: iam
+    http_status: 500
+    severity: error
+    user_message_key: errors.authz_catalog_error
+    backend_policy: mapped
+    frontend_policy: mapped
+  - code: authz_capability_key_not_supported
+    module: iam
+    http_status: 400
+    severity: error
+    user_message_key: errors.authz_capability_key_not_supported
+    backend_policy: mapped
+    frontend_policy: mapped
   - code: conversation_confirmation_required
     module: assistant
     http_status: 409
@@ -609,6 +623,13 @@ errors:
     user_message_key: errors.invalid_input
     backend_policy: passthrough
     frontend_policy: mapped
+  - code: invalid_authz_capability_key
+    module: iam
+    http_status: 400
+    severity: error
+    user_message_key: errors.invalid_authz_capability_key
+    backend_policy: mapped
+    frontend_policy: mapped
   - code: invalid_json
     module: iam
     http_status: 400
@@ -754,6 +775,13 @@ errors:
     http_status: 401
     severity: error
     user_message_key: errors.unauthorized
+    backend_policy: mapped
+    frontend_policy: mapped
+  - code: unknown_authz_capability_key
+    module: iam
+    http_status: 400
+    severity: error
+    user_message_key: errors.unknown_authz_capability_key
     backend_policy: mapped
     frontend_policy: mapped
   - code: web_mui_index_missing

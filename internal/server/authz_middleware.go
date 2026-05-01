@@ -21,13 +21,9 @@ func loadAuthorizer() (*authz.Authorizer, error) {
 		modelPath = p
 	}
 
-	policyPath := os.Getenv("AUTHZ_POLICY_PATH")
-	if policyPath == "" {
-		p, err := defaultAuthzPolicyPath()
-		if err != nil {
-			return nil, err
-		}
-		policyPath = p
+	policyPath, err := authzPolicyPath()
+	if err != nil {
+		return nil, err
 	}
 
 	mode, err := authz.ModeFromEnv()
@@ -60,6 +56,13 @@ func defaultAuthzPolicyPath() (string, error) {
 	return "", errors.New("server: authz policy not found")
 }
 
+func authzPolicyPath() (string, error) {
+	if path := os.Getenv("AUTHZ_POLICY_PATH"); strings.TrimSpace(path) != "" {
+		return path, nil
+	}
+	return defaultAuthzPolicyPath()
+}
+
 type authorizer interface {
 	Authorize(subject string, domain string, object string, action string) (allowed bool, enforced bool, err error)
 }
@@ -75,6 +78,7 @@ type routeRequirement struct {
 var exactRouteRequirements = []routeRequirement{
 	{Method: http.MethodPost, Path: "/iam/api/sessions", Object: authz.ObjectIAMSession, Action: authz.ActionAdmin, Surface: authz.CapabilitySurfaceTenantAPI},
 	{Method: http.MethodGet, Path: "/iam/api/authz/capabilities", Object: authz.ObjectIAMAuthz, Action: authz.ActionRead, Surface: authz.CapabilitySurfaceTenantAPI},
+	{Method: http.MethodGet, Path: "/iam/api/authz/api-catalog", Object: authz.ObjectIAMAuthz, Action: authz.ActionRead, Surface: authz.CapabilitySurfaceTenantAPI},
 	{Method: http.MethodGet, Path: "/iam/api/dicts", Object: authz.ObjectIAMDicts, Action: authz.ActionRead, Surface: authz.CapabilitySurfaceTenantAPI},
 	{Method: http.MethodPost, Path: "/iam/api/dicts", Object: authz.ObjectIAMDicts, Action: authz.ActionAdmin, Surface: authz.CapabilitySurfaceTenantAPI},
 	{Method: http.MethodPost, Path: "/iam/api/dicts:disable", Object: authz.ObjectIAMDicts, Action: authz.ActionAdmin, Surface: authz.CapabilitySurfaceTenantAPI},
