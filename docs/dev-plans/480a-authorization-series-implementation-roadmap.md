@@ -69,8 +69,8 @@
 P0  文档与语义冻结
     -> P1  权限标识 / registry / 覆盖事实门禁
        -> P2  只读授权目录面
-          -> P3  角色定义保存与普通 tenant role cutover
-             -> P4  用户授权组织范围 SoT 与运行时裁剪
+          -> P3  角色定义 DB SoT 与运行时准备
+             -> P4  用户授权组织范围 SoT 与统一运行时 cutover
                 -> P5  CubeBox API-first 迁移
                    -> P6  授权项诊断后置治理
 ```
@@ -78,9 +78,9 @@ P0  文档与语义冻结
 关键门槛：
 
 1. 没有 484 P1/P2 单一覆盖事实聚合源，不得实现 482A/485/488/490 的覆盖 join。
-2. 没有 487 运行时 cutover，不得暴露“角色保存成功即生效”的在线入口。
+2. 没有 487/489/489A 运行时闭环，不得暴露“角色保存成功即生效”或“用户授权保存成功即生效”的在线入口。
 3. 没有 489 scope provider 与 orgunit 裁剪，不得把用户授权组织范围作为可保存交付。
-4. 没有 485 API 授权目录投影和 490 overlay 校验，不得让 CubeBox planner 调用 API 工具。
+4. 没有 485 API 授权目录基础投影和 490 overlay 校验，不得让 CubeBox planner 调用 API 工具。
 5. 488 诊断视图必须后置到 484 + 482A + 485 首批闭环之后。
 6. 487/489/489A 不得分别宣布运行时完成；角色定义 DB SoT、`principal_role_assignments`、scope provider 和多角色 union 必须作为同一个运行时闭环验收。
 
@@ -107,7 +107,7 @@ Owner：`DEV-PLAN-483/482/484`
 
 1. [ ] `DEV-PLAN-483`：删除旧 `permissionKey`、`VITE_PERMISSIONS`、`module.verb`、policy-only key 和旧 key fallback；前端当前用户能力只来自服务端 canonical `authz_capability_keys`。
 2. [ ] `DEV-PLAN-482`：建立 `pkg/authz` 静态 authz capability registry、key 解析/构造/校验函数、默认 options API 口径。
-3. [ ] `DEV-PLAN-484`：建立单一覆盖事实聚合源，枚举 route requirement、registry、policy、CubeBox API tool overlay、后续 DB role seed，并接入 `make authz-lint`。
+3. [ ] `DEV-PLAN-484`：建立单一覆盖事实聚合源，枚举 route requirement、registry、policy，并为后续 DB role seed 与 CubeBox API tool overlay 预留同一枚举接口；当前尚未落地的来源按空集合处理，不得在 482A/485/488/490 中另起第二套 join。
 
 并行规则：
 
@@ -129,7 +129,7 @@ Owner：`DEV-PLAN-482A/485`
 
 1. [ ] `DEV-PLAN-482A`：实现 `功能授权项` 普通只读页面，只消费 482 默认 options 口径。
 2. [ ] `DEV-PLAN-485`：实现 `API 授权目录` 正向只读页面，API 视角投影必须来自 484 聚合源。
-3. [ ] 482A 的 `关联 API` 弹窗固定复用 485 endpoint：`GET /iam/api/authz/api-catalog?authz_capability_key=`；首期不新增第二个窄 endpoint。若后续确有性能、权限边界或响应形态隔离需求，必须先更新 482A/485/480A 契约或另起计划说明原因。
+3. [ ] 482A 的 `关联 API` 弹窗固定复用 485 的 API catalog facade 和服务端过滤口径；首期不新增第二个窄 endpoint。具体 endpoint 与 payload 以 482A/485 为准，480A 只冻结“复用同一 facade、不新增第二事实源”的顺序约束。若后续确有性能、权限边界或响应形态隔离需求，必须先更新 482A/485/480A 契约或另起计划说明原因。
 
 并行规则：
 
@@ -142,47 +142,49 @@ Owner：`DEV-PLAN-482A/485`
 2. 485 页面展示不可分配、停用、无覆盖或内部 surface 的 authz capability 全集时停止，转回 488。
 3. 页面出现 executor key、tool executor 名称或 `调用策略` 主表列时停止，转回 486/490 边界。
 
-### 4.4 P3：角色定义保存与运行时 cutover
+### 4.4 P3：角色定义 DB SoT 与运行时准备
 
-Owner：`DEV-PLAN-481/487/489A`
+Owner：`DEV-PLAN-481/487`
 
 建议顺序：
 
 1. [ ] `DEV-PLAN-481`：角色定义 UI 只提交基础信息、`role_slug`、`revision` 和 `authz_capability_keys`。
 2. [ ] `DEV-PLAN-487`：获得新增 DB 表手工确认后，落地 role definition / role authz capability DB SoT、保存 API、服务端校验。
-3. [ ] `DEV-PLAN-489A`：运行时授权门面按 principal assigned role set 做 capability union，不读 `roles[0]` 或 `iam.principals.role_slug`。
-4. [ ] `DEV-PLAN-487` P4 cutover：普通 tenant role 能力授权只读 DB role SoT；policy CSV 仅保留 bootstrap/static/system surface。
+3. [ ] `DEV-PLAN-487` 提供角色定义摘要和 role capability 读取能力，供后续 489A union 与 489 scope provider 消费。
+4. [ ] 若 P3 拆 PR 先行，在线入口只能保持不可保存、不可路由或明确不宣称运行时生效；保存即生效入口必须等 P4 统一 cutover。
 
 并行规则：
 
 - 481 UI 草案可先做只读或不可保存状态。
-- 487 API route 挂载为可调用入口前，必须完成运行时 cutover；不得交付“保存成功但运行时不生效”。
-- 489A 的门面和反回流门禁应在 487 cutover 前或同一 PR 完成。
-- 487 的“完成”只能表示角色定义子能力完成；不得单独宣称 480 系列运行时授权闭环完成。运行时闭环必须等 489 的 `principal_role_assignments`、scope provider、orgunit 裁剪和 489A union 一起验收。
+- 487 API route 挂载为可调用保存入口前，必须等 P4 同步完成 489 `principal_role_assignments`、489A union、scope provider 和 orgunit 裁剪；不得交付“保存成功但运行时不生效”。
+- 489A 的门面和反回流门禁可在 P3 做不可路由准备，但 active runtime union 必须等 489 的 `principal_role_assignments` 事实源落地后统一启用。
+- 487 的“完成”只能表示角色定义 DB SoT 子能力完成；不得单独宣称 480 系列运行时授权闭环完成。
 
 停止线：
 
 1. 普通 tenant role 同时从 DB 和 policy CSV OR 放行时停止。
-2. 保存 API 写入 DB，但业务请求仍按 CSV tenant policy 判定时停止。
+2. 保存 API 可被管理员调用，但业务请求仍按 CSV tenant policy 判定时停止。
 3. 运行时出现 `current_role_slug`、`primary_role_slug`、`roles[0]` 参与普通 tenant allow/deny 时停止。
 
-### 4.5 P4：用户授权组织范围与运行时强制
+### 4.5 P4：用户授权组织范围与统一运行时 cutover
 
-Owner：`DEV-PLAN-481/489/489A`
+Owner：`DEV-PLAN-481/487/489/489A`
 
 建议顺序：
 
 1. [ ] `DEV-PLAN-489`：获得新增 DB 表手工确认后，落地 `principal_role_assignments` 与 `principal_org_scope_bindings`。
 2. [ ] 用户授权保存 API 使用 replace-all 语义，同事务保存角色集合和组织范围。
-3. [ ] 保存时按 489A union 后的角色 capability 集合判断是否需要 `scope_dimension=organization`。
-4. [ ] 实现 principal scope provider；orgunit list/search/tree/detail/audit/write 统一消费 scope filter。
-5. [ ] 481 用户授权 UI 接入 489 API；组织范围保存失败必须定位到组织范围页签。
+3. [ ] `DEV-PLAN-489A`：运行时授权门面按 489 `principal_role_assignments` 做 role capability union，不读 `roles[0]` 或 `iam.principals.role_slug`。
+4. [ ] `DEV-PLAN-487` 普通 tenant role cutover：能力授权只读 DB role SoT；policy CSV 仅保留 bootstrap/static/system surface。
+5. [ ] 保存时按 489A union 后的角色 capability 集合判断是否需要 `scope_dimension=organization`。
+6. [ ] 实现 principal scope provider；orgunit list/search/tree/detail/audit/write 统一消费 scope filter。
+7. [ ] 481 用户授权 UI 接入 489 API；组织范围保存失败必须定位到组织范围页签。
 
 并行规则：
 
 - 用户授权 UI 骨架可与 489 服务端并行，但可保存交付必须等待 scope provider 与 orgunit 裁剪。
 - orgunit 不直接读取 IAM 表；IAM scope provider 输出 filter，orgunit service 强制消费。
-- 489 的“完成”不能只看用户授权保存 API；必须证明 487 角色定义 DB SoT、489A 多角色 union、scope provider 和 orgunit 裁剪在同一运行时路径中生效。
+- 489 的“完成”不能只看用户授权保存 API；必须证明 487 角色定义 DB SoT、489 `principal_role_assignments`、489A 多角色 union、scope provider 和 orgunit 裁剪在同一运行时路径中生效。
 
 停止线：
 
@@ -197,14 +199,14 @@ Owner：`DEV-PLAN-490`，`DEV-PLAN-486` 仅作停止警示
 
 前置条件：
 
-1. 484 单一覆盖事实聚合源已可枚举 route requirement 和 CubeBox API tool overlay。
-2. 485 API 授权目录投影已可输出 `method/path/access_control/authz_capability_key/cubebox_callable`。
+1. 484 单一覆盖事实聚合源已可枚举 route requirement，并提供 CubeBox API tool overlay 的同源枚举扩展点；P5 前没有 overlay 时应是空集合，而不是由 490 之外的代码手写工具目录。
+2. 485 API 授权目录基础投影已可从 484 覆盖事实输出现有 HTTP API 与 authz capability 绑定；`cubebox_callable` 等 CubeBox 增量标记由 490 overlay 在 P5 引入后再合成展示。
 3. 当前用户 capability 与 orgunit scope 裁剪已可通过普通 HTTP API 验证。
 
 建议顺序：
 
-1. [ ] 490 APIToolOverlay 只保存 CubeBox 增量字段：`cubebox_callable`、`operation_id`、用途摘要、schema 引用、observation projection。
-2. [ ] `method/path/object/action/authz_capability_key` 从 484/485 派生，不在 490 手写第二事实源。
+1. [ ] 490 APIToolOverlay 只保存 CubeBox 增量字段；具体字段以 `DEV-PLAN-490` 为准。
+2. [ ] HTTP API 标识、route requirement 与 authz capability 绑定从 484/485 派生，不在 490 手写第二事实源。
 3. [ ] planner 只输出 `API_CALLS`；runner 只接受已派生可调用工具条目的 method/path 和 schema 参数。
 4. [ ] 删除 active runtime 业务 executor 执行入口，不保留 `READ_PLAN` / 裸 `ReadPlan` / `executor_key` 兼容窗口。
 
@@ -213,11 +215,7 @@ Owner：`DEV-PLAN-490`，`DEV-PLAN-486` 仅作停止警示
 1. 490 中新增 `/api/ai/**` 或 CubeBox 专用业务 API 时停止。
 2. active runtime 同时接受 `READ_PLAN` 与 `API_CALLS` 时停止。
 3. API runner 直接调用 store/helper 绕过现有 HTTP API 或等价 route/service authz path 时停止。
-4. `APIToolOverlay` 保存或维护 `object/action/authz_capability_key` 作为事实源时停止。
-
-命名收敛：
-
-- 490 中对授权项字段应使用 `authz_capability_key`，不得回流裸 `capability_key`。
+4. `APIToolOverlay` 保存或维护 route requirement 或 authz capability 绑定作为事实源时停止。
 
 ### 4.7 P6：授权项诊断后置治理
 
