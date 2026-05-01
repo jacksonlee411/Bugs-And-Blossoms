@@ -5,20 +5,22 @@
 ## 0. 适用范围与评审分级
 
 - **评审分级**：`T2`
-- **范围一句话**：新增一个只读诊断视图，用于查看 authz capability registry 中未进入普通功能授权项候选列表的能力及原因，避免不可分配、停用、无覆盖、系统内部能力混入角色配置主路径。
+- **范围一句话**：后置新增一个只读诊断视图，用于查看 authz capability registry 中未进入普通功能授权项候选列表的能力及原因，避免不可分配、停用、无覆盖、系统内部能力混入角色配置主路径。
 - **关联模块/目录**：`apps/web/src/**`、`internal/server/**`、`pkg/authz/**`、`scripts/authz/**`
 - **关联计划/标准**：`AGENTS.md`、`DEV-PLAN-000`、`DEV-PLAN-001`、`DEV-PLAN-012`、`DEV-PLAN-022`、`DEV-PLAN-480`、`DEV-PLAN-482`、`DEV-PLAN-482A`、`DEV-PLAN-483`、`DEV-PLAN-484`、`DEV-PLAN-485`
-- **用户入口/触点**：授权管理菜单中的 `授权项诊断` 只读页面、482 authz capability options/diagnostics 查询接口、484 覆盖事实枚举能力
+- **用户入口/触点**：授权管理菜单中的 `授权项诊断` 只读页面、482 authz capability options/diagnostics 查询接口、484 单一覆盖事实聚合能力
 
 ### 0.1 Simple > Easy 三问
 
-1. **边界**：488 只拥有“为什么某个 registry authz capability 不在普通功能授权项候选中”的只读诊断视图；482 继续拥有 registry 字段模型与普通 options API 主契约；484 继续拥有覆盖事实和 CI 门禁；485 继续拥有 API 正向目录。
+1. **边界**：488 只拥有“为什么某个 registry authz capability 不在普通功能授权项候选中”的后置只读诊断视图；482 继续拥有 registry 字段模型与普通 options API 主契约；484 继续拥有唯一服务端覆盖事实聚合源和 CI 门禁；485 继续拥有 API 正向目录 facade。
 2. **不变量**：角色定义页和普通功能授权项默认列表只能展示 `enabled + assignable + tenant_api + 当前 tenant API 覆盖` 的 authz capability。诊断视图不得成为角色保存候选源，也不得放宽服务端保存校验。
 3. **可解释**：授权管理员或开发排查人员能看到某个 authz capability 被排除的明确原因，例如停用、不可分配、非 tenant surface、无当前 API 覆盖或仅存在于 registry/policy 中。
 
 ## 1. 背景
 
 `DEV-PLAN-482` 已冻结功能授权项 options API 默认口径：只输出启用、可分配、tenant API surface 且有当前实现覆盖的能力。这个口径适合角色定义和普通功能授权项页面，因为管理员看到的每一项都应该可授予、可执行。
+
+488 不应成为首批授权管理闭环的前置条件。首批顺序应先完成 484 覆盖事实枚举与 lint，再让 482 options、482A `关联 API` 弹窗、485 `API 授权目录` 和 490 CubeBox API tool builder 消费同一聚合源；488 只在这些闭环稳定后提供治理排查视图。
 
 但排查时还需要回答另一类问题：
 
@@ -36,7 +38,7 @@
 
 1. [ ] 新增授权管理只读页面 `授权项诊断`，与 `功能授权项`、`API 授权目录` 分离。
 2. [ ] 定义诊断查询口径：可返回普通候选项之外的 `disabled`、`deprecated`、`assignable=false`、非 `tenant_api` surface、无覆盖能力，并给出明确排除原因。
-3. [ ] 明确诊断视图消费 482 registry 与 484 覆盖事实，不复制 lint 逻辑，不替代 CI 门禁。
+3. [ ] 明确诊断视图消费 482 registry 与 484 单一覆盖事实聚合结果，不复制 lint 逻辑，不替代 CI 门禁。
 4. [ ] 明确角色定义页、角色保存校验和普通功能授权项默认列表不消费诊断全集。
 5. [ ] 定义最小测试与验收，防止诊断字段回流到角色配置主路径。
 
@@ -89,8 +91,8 @@
 服务端聚合来源：
 
 1. 482 authz capability registry：`authz_capability_key/object/action/owner_module/resource_label/action_label/scope_dimension/assignable/status/surface/sort_order`。
-2. 484 覆盖事实：`authz_capability_key -> covered_routes[]` 与是否具备当前 tenant API 覆盖。
-3. 484 policy/route/tool overlay 枚举结果：仅用于派生诊断原因，不在 488 中重新实现 lint。
+2. 484 单一覆盖事实聚合结果：`authz_capability_key -> covered_routes[]` 与是否具备当前 tenant API 覆盖。
+3. 484 policy/route/tool overlay 聚合结果：仅用于派生诊断原因，不在 488 中重新解析源文件或重新实现 lint。
 
 ### 4.2 建议 Endpoint
 
@@ -174,20 +176,20 @@ GET /iam/api/authz/capability-diagnostics
 | `DEV-PLAN-485` | API 授权目录，从 API 角度查看 method/path 到授权项的绑定 |
 | `DEV-PLAN-488` | 授权项诊断视图，从 authz capability 角度查看未入候选项原因 |
 
-488 只消费 484 的覆盖事实或同一枚举函数，不复制一套覆盖判断。488 的页面存在不改变 482 默认 options API 的候选项语义，也不改变 483 对旧 key 的硬删除要求。
+488 只消费 484 的单一覆盖事实聚合结果，不复制一套覆盖判断。488 的页面存在不改变 482 默认 options API 的候选项语义，也不改变 483 对旧 key 的硬删除要求。488 是 484+482A+485 首批闭环之后的治理增强，不作为功能授权项页面、关联 API 弹窗或 API 授权目录的前置交付。
 
 ## 6. 实施切片
 
 ### 6.1 P0：契约冻结
 
 1. [ ] 488 文档加入 AGENTS Doc Map。
-2. [ ] 480/482/483/484/485 引用 488，明确授权项诊断不属于普通功能授权项候选列表，也不属于 API 授权目录。
+2. [ ] 480/482/483/484/485 引用 488，明确授权项诊断不属于普通功能授权项候选列表，也不属于 API 授权目录，且不作为 482A/485 首批闭环前置。
 3. [ ] 冻结诊断原因码和页面只读边界。
 
 ### 6.2 P1：诊断数据聚合
 
 1. [ ] 复用 482 registry 枚举能力。
-2. [ ] 复用或补齐 484 覆盖事实枚举能力。
+2. [ ] 复用 484 单一覆盖事实聚合能力；若缺诊断字段，先补 484 聚合输出，不在 488 新建第二套枚举。
 3. [ ] 增加诊断原因派生函数，覆盖候选项、停用、废弃、不可分配、非 tenant surface、无覆盖、policy-only、registry-only。
 4. [ ] 补 `pkg/authz` 或服务层黑盒表驱动测试。
 
@@ -228,6 +230,7 @@ GET /iam/api/authz/capability-diagnostics
 | --- | --- | --- |
 | 诊断全集混入角色候选项 | 管理员可分配停用/无覆盖/内部能力 | 角色定义页只能使用 482 默认候选口径，服务端二次校验 |
 | 用诊断页替代 lint | 空壳 authz capability 被展示但 CI 放行 | 484 lint 仍是阻断 owner，488 只读展示 |
+| 诊断页抢跑成为前置 | 482A/485 尚未闭环就先实现 488，导致排查视图倒逼三套解析 | 488 后置；没有 484 单一聚合源时不得实现诊断事实枚举 |
 | 诊断页变成 registry 管理台 | 页面出现启用、修复、编辑 policy 按钮 | 首期只读；在线管理另起计划 |
 | 复制 API 目录 | 主表常驻 method/path，和 485 重复 | API method/path 只进关联 API 弹窗；正向目录归 485 |
 | 泄露内部 surface | 普通 tenant 管理员看到 superadmin/internal 细节 | 实现阶段按权限分级；必要时升级到 `iam.authz:admin` 或 superadmin-only |

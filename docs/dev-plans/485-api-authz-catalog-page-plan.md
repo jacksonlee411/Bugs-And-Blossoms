@@ -8,13 +8,13 @@
 - **范围一句话**：新增一个只读菜单与页面，用于查看全部 HTTP API 授权目录项、每个 API 绑定的授权资源/操作/授权项标识，以及该 API 是否进入 CubeBox 可调用 HTTP API 工具面；页面不承担编辑、修复或运行时授权裁决职责。
 - **关联模块/目录**：`apps/web/src/**`、`internal/server/**`、`internal/routing/**`、`pkg/authz/**`、`scripts/authz/**`
 - **关联计划/标准**：`AGENTS.md`、`DEV-PLAN-000`、`DEV-PLAN-001`、`DEV-PLAN-012`、`DEV-PLAN-017`、`DEV-PLAN-022`、`DEV-PLAN-480`、`DEV-PLAN-482`、`DEV-PLAN-482A`、`DEV-PLAN-483`、`DEV-PLAN-484`、`DEV-PLAN-488`
-- **用户入口/触点**：授权管理菜单中的 `API 授权目录` 页面、服务端 API 授权目录列表接口；功能授权项页面中的“关联 API”弹窗由 `DEV-PLAN-482A` 承接并复用 485 的同源聚合能力
+- **用户入口/触点**：授权管理菜单中的 `API 授权目录` 页面、服务端 API 授权目录列表接口；功能授权项页面中的“关联 API”弹窗由 `DEV-PLAN-482A` 承接；二者都消费 `DEV-PLAN-484` 的单一覆盖事实聚合能力
 
 ### 0.1 Simple > Easy 三问
 
-1. **边界**：485 只拥有“API 授权目录”的只读用户入口与查询 API；482A 拥有功能授权项主页面与反向“关联 API”弹窗；484 继续拥有 route/CubeBox API tool overlay/registry/policy 覆盖门禁；482 继续拥有 authz capability registry 与功能授权项 options API；490 只提供 HTTP API 是否进入 CubeBox 工具面的最小标记。
+1. **边界**：485 只拥有“API 授权目录”的只读用户入口与查询 API facade；482A 拥有功能授权项主页面与反向“关联 API”弹窗；484 继续拥有 route/CubeBox API tool overlay/registry/policy 的唯一覆盖事实聚合源与覆盖门禁；482 继续拥有 authz capability registry 与功能授权项 options API；490 只提供 HTTP API 是否进入 CubeBox 工具面的最小标记。
 2. **不变量**：API path/method 不是授权项标识；每个受保护 API 的 `method + path` 必须能追溯到一个 `authz_object + authz_action`，并派生出一个 `object:action` 授权项标识；公开或 allowlist API 必须明确展示为未绑定授权项且说明公开原因。
-3. **可解释**：管理员能从 API 角度回答“这个接口受哪个授权资源和哪个授权项控制”；功能授权项页面的反向“关联 API”查看由 482A 承接，485 只提供同源聚合能力或可复用过滤口径。
+3. **可解释**：管理员能从 API 角度回答“这个接口受哪个授权资源和哪个授权项控制”；功能授权项页面的反向“关联 API”查看由 482A 承接，485 只把 484 覆盖事实呈现为 API 正向目录。
 
 ## 1. 背景
 
@@ -38,11 +38,11 @@
 
 ### 2.2 非目标
 
-1. 不新增 DB 表、迁移或在线编辑能力；API 授权目录首期由路由注册、route requirement、allowlist 与 authz capability registry 派生。
+1. 不新增 DB 表、迁移或在线编辑能力；API 授权目录首期由 484 单一覆盖事实聚合能力派生，底层事实包括路由注册、route requirement、allowlist、authz capability registry、policy 与 CubeBox overlay。
 2. 不把 CubeBox executor 混入本页；本页只标记现有 HTTP API 是否可被 CubeBox 作为工具调用。当前已明确不走 executor 路线，不再规划 executor 目录或弹窗展示。
 3. 不把 API route path 当成授权项标识，也不允许前端从 path 反推 `object/action`。
 4. 不在页面中提供“刷新目录”、`registry_rev`、覆盖 lint 状态面板或修复按钮；这些属于开发诊断和 CI 门禁，不是管理员主路径。
-5. 不改变 484 的覆盖门禁；本页消费覆盖事实，不重新实现第二套漂移校验。
+5. 不改变 484 的覆盖门禁；本页消费 484 聚合后的覆盖事实，不重新实现第二套事实枚举或漂移校验。
 6. 不新增 `调用策略`、`工具类型`、`只读/写入策略` 等 CubeBox 策略列；读写属性已由 `方法`、`操作` 和 `授权项标识` 表达，写入确认已按 `DEV-PLAN-490` 暂缓。
 7. 不新增 API 行详情抽屉；`route source`、`requirement source` 等诊断字段不进入首期 UI。
 8. 不展示 authz capability registry 中不可分配、停用、无覆盖或内部 surface 的授权项诊断全集；这些从 authz capability 角度出发的诊断视图归属 `DEV-PLAN-488`。
@@ -85,15 +85,15 @@
 
 ### 4.1 数据来源
 
-本页只消费服务端聚合后的目录，不从前端本地路由、导航配置、policy CSV 或硬编码常量拼装。
+本页只消费服务端聚合后的目录，不从前端本地路由、导航配置、policy CSV 或硬编码常量拼装。服务端目录 API 也不得自行解析 route/policy/registry；它必须调用 484 的单一覆盖事实聚合能力后按 API 视角投影。
 
-服务端聚合来源：
+484 单一覆盖事实聚合来源：
 
 1. Routing 事实：`method/path/surface/owner_module`。
 2. Authz route requirement：`method/path -> authz_object/authz_action`。
 3. Authz capability registry：`object/action -> authz_capability_key/resource_label/action_label/assignable/status`。
 4. Routing allowlist：公开、登录握手、静态资源、health 等分类原因。
-5. `DEV-PLAN-484` 覆盖事实：用于保证受保护 API 与 registry 不漂移。
+5. Policy / DB role seed 覆盖事实：用于保证 registry 与授权授予面不漂移。
 6. `DEV-PLAN-490` CubeBox HTTP API 工具面最小标记：`method/path -> cubebox_callable`，只能引用本目录已经存在的 HTTP API。
 
 ### 4.2 建议 Endpoint
@@ -158,7 +158,7 @@ GET /iam/api/authz/api-catalog
 | `DEV-PLAN-488` | 授权项诊断视图，从 authz capability 角度查看未进入普通候选项的原因 |
 | `DEV-PLAN-490` | CubeBox 复用现有 HTTP API 的工具面标记与 runtime 执行链 |
 
-485 不复制 484 的 lint 逻辑；如果覆盖事实缺失，应先补 484 的枚举能力，再由 485 消费。482A 的反向弹窗可以复用 485 的 API catalog 聚合函数或 `authz_capability_key` 过滤口径，但不能让前端拉全量后自行筛选。
+485 不复制 484 的 lint 逻辑，也不拥有独立覆盖事实枚举；如果覆盖事实缺失，应先补 484 的枚举能力，再由 485 消费。482A 的反向弹窗可以复用 485 endpoint 的 `authz_capability_key` 服务端过滤 facade，但过滤前的数据仍必须来自 484 单一聚合源，不能让前端拉全量后自行筛选。
 485 也不复制 490 的 runtime 执行策略；主表只增加 `丘宝可调用` 一列，API 的读写语义继续由 `方法`、`操作` 与 `授权项标识` 表达。
 485 不承接 488 的授权项诊断；485 从 API 角度展示 method/path 到授权项的绑定，488 从 authz capability 角度展示未入候选项原因。
 
@@ -173,8 +173,8 @@ GET /iam/api/authz/api-catalog
 
 ### 6.2 P1：覆盖事实读取接口
 
-1. [ ] 复用或补齐 484 的 route requirement 枚举能力。
-2. [ ] 提供服务端聚合函数，输出 API 授权目录列表。
+1. [ ] 复用 484 的单一覆盖事实聚合能力；若缺字段，先补 484，不在 485 新建第二套枚举。
+2. [ ] 提供 API 视角投影函数，输出 API 授权目录列表。
 3. [ ] 对 allowlist/public route 输出明确 `access_control` 与原因，不静默空字段。
 4. [ ] 叠加 490 的 `cubebox_callable` 标记；标记引用不存在的 `method/path` 时 fail-closed。
 
@@ -217,7 +217,7 @@ GET /iam/api/authz/api-catalog
 | 前端自行拼装 API 归属 | UI 与 route requirement 漂移 | 页面只能消费服务端聚合 API |
 | 合并字段节省列数 | `API · GET`、`资源 / 授权项` 回流 | 表格字段必须分列展示 |
 | 把 allowlist 当未配置错误 | health/login/static 被误标红 | allowlist/public 必须有明确分类和原因 |
-| 复制 484 lint 逻辑 | 两套覆盖判断漂移 | 485 只消费 484 的覆盖事实或同一枚举函数 |
+| 复制 484 lint 逻辑 | 两套覆盖判断漂移 | 485 只消费 484 的单一覆盖事实聚合结果 |
 | 把 CubeBox 策略做成主表分类 | `调用策略=只读` 重复 `方法/操作`，未来写入策略被提前固化 | 主表只保留 `丘宝可调用`，写入确认暂缓，不在本页预留策略分类 |
 | 把授权项诊断塞进 API 目录 | API 页面展示不可分配/停用/无覆盖 authz capability 全集 | 从 authz capability 角度的诊断归 488，485 只做 API 正向目录 |
 

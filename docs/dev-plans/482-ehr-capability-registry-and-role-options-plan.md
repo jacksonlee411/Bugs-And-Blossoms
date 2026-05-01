@@ -23,7 +23,7 @@
 4. [ ] 定义 authz capability key 校验契约：角色保存提交的 key 必须存在于 registry 且处于可分配状态。
 5. [ ] 定义 registry 校验基础，供 `DEV-PLAN-484` 校验 policy、route authz、CubeBox API tool overlay、role definition 与 registry 不得漂移。
 6. [ ] 对齐 `DEV-PLAN-483/484`：registry 与 options API 只输出 canonical `object:action`，不输出旧 `permissionKey` 或别名，且不输出无当前实现覆盖的 assignable authz capability。
-7. [ ] 对齐 `DEV-PLAN-488`：普通 options API 默认口径不得为了诊断场景扩大；诊断全集只能进入授权项诊断视图，不能成为角色定义候选源。
+7. [ ] 对齐 `DEV-PLAN-488`：普通 options API 默认口径不得为了诊断场景扩大；诊断全集只能进入后置授权项诊断视图，不能成为角色定义候选源，也不能作为 482A/485 首批闭环前置。
 
 ## 3. 非目标
 
@@ -73,7 +73,7 @@
 
 1. `authz_capability_key` 是授权项标识，不是 API 地址。
 2. 一个 `authz_capability_key` 可以覆盖多个 HTTP API route；CubeBox API tool overlay 只能引用这些既有 HTTP API，不新增第二套业务工具 key。
-3. 482 的 options API 默认返回 authz capability 元数据；普通 `功能授权项` 主页面与点击授权项标识后打开的“关联 API”弹窗由 `DEV-PLAN-482A` 承接。弹窗应通过 `DEV-PLAN-484/485` 的同源覆盖事实读取 API method/path；全量 HTTP API 正向查看面由 `DEV-PLAN-485` 的 `API 授权目录` 承接；不得把 route path 放进 `authz_capability_key` 字段。
+3. 482 的 options API 默认返回 authz capability 元数据；普通 `功能授权项` 主页面与点击授权项标识后打开的“关联 API”弹窗由 `DEV-PLAN-482A` 承接。弹窗应通过 `DEV-PLAN-484` 的单一覆盖事实聚合能力读取 API method/path；全量 HTTP API 正向查看面由 `DEV-PLAN-485` 的 `API 授权目录` facade 承接；不得把 route path 放进 `authz_capability_key` 字段。
 
 派生规则：
 
@@ -175,7 +175,7 @@
 1. [ ] 482 文档作为 authz capability registry 与角色候选项 SSOT 被 AGENTS Doc Map 收录。
 2. [ ] 480/481 引用 482，明确角色定义页候选源不是 policy CSV，也不是历史前端 `permissionKey`。
 3. [ ] 482 引用 484，明确覆盖门禁与空壳 authz capability 阻断不由 482 重复承接。
-4. [ ] 482 引用 488，明确诊断全集不属于普通 options API 默认候选口径。
+4. [ ] 482 引用 488，明确诊断全集不属于普通 options API 默认候选口径，且 488 后置于 484 覆盖事实与 482A/485 首批闭环。
 5. [ ] 明确首期不建 DB 表、不做在线 registry 管理。
 
 ### 8.2 P1：Registry 与校验
@@ -214,7 +214,7 @@
 3. [ ] registry 新增一个 `enabled + assignable + tenant_api` authz capability 后，只有在具备当前 tenant API 覆盖时 options API 与 481 角色定义页才可发现该项；无覆盖时 `DEV-PLAN-484` lint 失败。
 4. [ ] 未登记、禁用、废弃、无覆盖、非 tenant surface、旧格式 authz capability key 均不能被服务端保存接口接受；本计划不要求新增对应 UI 异常态。
 5. [ ] route authz、policy、CubeBox API tool overlay 与 registry 漂移时，authz lint 失败。
-6. [ ] 授权项诊断视图如需展示普通候选项之外的 capability，必须按 `DEV-PLAN-488` 独立实现或受控复用诊断参数，不得改变角色定义页默认候选口径。
+6. [ ] 授权项诊断视图如需展示普通候选项之外的 capability，必须按 `DEV-PLAN-488` 后置实现，并复用 484 单一覆盖事实聚合结果或受控诊断参数，不得改变角色定义页默认候选口径。
 
 ## 10. 风险与停止线
 
@@ -225,7 +225,7 @@
 | registry 过早 DB 化 | 需要新增表和迁移 | 本计划停止，另起 DB 方案并获得用户确认 |
 | 与 480/481 边界混淆 | 角色页出现组织范围或字段策略 | 回退到 481：角色只定义功能权限 |
 | 历史 key 兼容 | `orgunit.view`、SetID/scope/package 字段回流 | lint 阻断，不提供兼容别名 |
-| 诊断全集混入候选项 | 停用/无覆盖/内部 authz capability 出现在角色定义页 | 诊断视图归 488；482 默认 options 继续严格过滤 |
+| 诊断全集混入候选项 | 停用/无覆盖/内部 authz capability 出现在角色定义页 | 诊断视图归后置 488；482 默认 options 继续严格过滤 |
 | 历史业务 capability 混入授权项 | 字段策略或 SetID 配置 key 被当作角色能力 | 482 registry 只接收 `object:action` authz capability key；业务策略 capability key 必须留在业务计划与策略表 |
 
 ## 11. 验证记录

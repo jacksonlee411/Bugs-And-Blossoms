@@ -8,19 +8,19 @@
 - **范围一句话**：把 EHR 授权从当前 route/object/action 级 Casbin 门禁，升级为覆盖 API 能力、组织数据范围、对象实例、字段和 AI 代用户执行的运行时授权体系蓝图；CubeBox 业务工具链当前统一走 `DEV-PLAN-490` 的 API-first 路线，不再规划 executor UI 展示。
 - **关联模块/目录**：`pkg/authz/**`、`config/access/**`、`scripts/authz/**`、`internal/server/authz_middleware.go`、`modules/*/services`、`modules/*/infrastructure`、`modules/cubebox/**`、`internal/server/cubebox_*`、`apps/web/src/**`
 - **关联计划/标准**：`AGENTS.md`、`DEV-PLAN-000`、`DEV-PLAN-001`、`DEV-PLAN-011`、`DEV-PLAN-012`、`DEV-PLAN-015`、`DEV-PLAN-017`、`DEV-PLAN-019`、`DEV-PLAN-020`、`DEV-PLAN-022`、`DEV-PLAN-032`、`DEV-PLAN-300`、`DEV-PLAN-304`、`DEV-PLAN-460`、`DEV-PLAN-468`、`DEV-PLAN-481`、`DEV-PLAN-482`、`DEV-PLAN-482A`、`DEV-PLAN-483`、`DEV-PLAN-484`、`DEV-PLAN-487`、`DEV-PLAN-488`、`DEV-PLAN-489`
-- **用户入口/触点**：授权管理配置页、功能授权项、授权项诊断、API 授权目录、所有受保护 HTTP API 与 CubeBox API-first 工具调用链
+- **用户入口/触点**：授权管理配置页、功能授权项、API 授权目录、后置授权项诊断、所有受保护 HTTP API 与 CubeBox API-first 工具调用链
 
 ### 0.1 Simple > Easy 三问
 
-1. **边界**：AuthN/session 只证明是谁；RLS 只做租户圈地；EHR 授权 PDP 负责“谁能对什么对象做什么事”；数据范围 resolver 负责“同租户内能看哪些实例”；字段策略负责“哪些字段可见、可写、需脱敏”；首期 UI 只覆盖授权管理面，其中用户授权页的组织范围不是占位，而是首批授权管理闭环的一部分；授权项诊断是只读治理视图，不进入角色配置主路径。
+1. **边界**：AuthN/session 只证明是谁；RLS 只做租户圈地；EHR 授权 PDP 负责“谁能对什么对象做什么事”；数据范围 resolver 负责“同租户内能看哪些实例”；字段策略负责“哪些字段可见、可写、需脱敏”；首期 UI 只覆盖授权管理面，其中用户授权页的组织范围不是占位，而是首批授权管理闭环的一部分；授权项诊断是后置只读治理视图，不进入角色配置主路径，也不作为功能授权项/API 授权目录首批闭环前置。
 2. **不变量**：所有服务端入口 fail-closed；registry 白名单、历史前端 `permissionKey`、模型输出、知识包、导航可见性、RLS 都不等于授权；同一个业务读写路径必须同时服务 UI、API 与 CubeBox，避免两套可见性规则。
-3. **可解释**：主流程可在 5 分钟内复述为：请求解析 principal/tenant/context，PEP 组装动作与资源，PDP 先判能力，再用数据范围裁剪或拒绝实例，再按字段策略过滤/脱敏，最后记录可审计 decision；授权管理 UI 只展示当前已冻结的角色、用户授权、功能授权项、授权项诊断和 API 授权目录。
+3. **可解释**：主流程可在 5 分钟内复述为：请求解析 principal/tenant/context，PEP 组装动作与资源，PDP 先判能力，再用数据范围裁剪或拒绝实例，再按字段策略过滤/脱敏，最后记录可审计 decision；授权管理 UI 首批展示当前已冻结的角色、用户授权、功能授权项和 API 授权目录，授权项诊断作为后置治理视图。
 
 ### 0.2 现状研究摘要
 
 - `DEV-PLAN-022` 已冻结 Casbin 工具链、role-based subject、tenant domain、object/action registry 与 `AUTHZ_MODE` 三态；当前 `pkg/authz.Authorizer.Authorize(subject, domain, object, action)` 能支撑 API 能力授权。
 - 当前 `pkg/authz` 仍是角色粒度 RBAC + tenant domain；它不表达组织树数据范围、对象实例或字段级裁决。
-- 当前 `internal/server/authz_middleware.go` 以 route 映射 object/action；CubeBox 业务工具链后续按 `DEV-PLAN-490` 从 API 授权目录聚合事实筛选可调用 HTTP API。
+- 当前 `internal/server/authz_middleware.go` 以 route 映射 object/action；CubeBox 业务工具链后续按 `DEV-PLAN-490` 从 484 单一覆盖事实聚合源与 485 API 授权目录投影筛选可调用 HTTP API。
 - `DEV-PLAN-486` 的 executor 路线只保留为活体警示；当前方案不再以 executor registry 作为业务工具契约。
 - 当前 `ExecuteRequest` 有 `TenantID`、`PrincipalID`、`ConversationID`，缺少 `PrincipalRoleSlug`；现有 Casbin subject 从 role slug 推导，不能把 `PrincipalID` 误当 subject。
 - 历史前端 `RequirePermission` / `permissionKey` 只基于本地 `VITE_PERMISSIONS` 做导航和页面提示，默认空权限时甚至是 `*`；它不是安全边界，且按 `DEV-PLAN-483` 必须硬删除旧 key、旧字段和构建期权限 fallback。现行前端只能通过 `requiredCapabilityKey` 消费 canonical `object:action` authz capability key，当前用户集合字段只能是 `authz_capability_keys`。
@@ -45,8 +45,8 @@ EHR 系统的授权不能只停留在“页面能不能进”或“API 能不能
 2. [ ] 评估并明确当前 `pkg/authz` 的改造边界：Casbin 不替换；核心四元组可保留；需要增加统一 Request/Decision 门面、PIP 数据范围 resolver 与服务端裁决摘要。
 3. [ ] 明确组织数据范围授权方案，覆盖“用户 A 能看整个飞虫与鲜花，用户 B 只能查看鲜花公司”这类同租户内可见范围差异。
 4. [ ] 明确 registry 白名单、历史前端 `permissionKey`、知识包、模型输出、RLS、导航可见性都不等于授权。
-5. [ ] 将 CubeBox 业务工具授权收敛到 `DEV-PLAN-490`：基于 API 授权目录聚合事实、当前用户权限和业务 HTTP API 执行，不走 executor UI 或第二业务工具面。
-6. [ ] 增加 UI 设计方案：只覆盖角色管理、用户授权、功能授权项、授权项诊断、API 授权目录；不新增普通用户错误页、权限摘要页、CubeBox 授权反馈页或字段脱敏运行态页面。
+5. [ ] 将 CubeBox 业务工具授权收敛到 `DEV-PLAN-490`：基于 484 单一覆盖事实聚合源、485 API 授权目录投影、当前用户权限和业务 HTTP API 执行，不走 executor UI 或第二业务工具面。
+6. [ ] 增加 UI 设计方案：首批只覆盖角色管理、用户授权、功能授权项、API 授权目录；授权项诊断按 `DEV-PLAN-488` 后置，不新增普通用户错误页、权限摘要页、CubeBox 授权反馈页或字段脱敏运行态页面。
 7. [ ] 定义实施切片、测试分层和验收门禁，避免一次性大爆炸实现。
 
 ### 2.2 非目标
@@ -61,7 +61,7 @@ EHR 系统的授权不能只停留在“页面能不能进”或“API 能不能
 ### 2.3 用户可见性交付
 
 - **用户可见入口**：
-  - 授权管理员：角色管理（基础信息 + 功能权限，UI 边界详见 `DEV-PLAN-481`，保存 API 与持久化详见 `DEV-PLAN-487`）、用户授权/角色分配（主体 + 角色 + 组织范围绑定，详见 `DEV-PLAN-489`）、功能授权项、授权项诊断（详见 `DEV-PLAN-488`）、API 授权目录。
+  - 授权管理员：角色管理（基础信息 + 功能权限，UI 边界详见 `DEV-PLAN-481`，保存 API 与持久化详见 `DEV-PLAN-487`）、用户授权/角色分配（主体 + 角色 + 组织范围绑定，详见 `DEV-PLAN-489`）、功能授权项、API 授权目录；授权项诊断按 `DEV-PLAN-488` 后置提供。
   - 普通用户：`CubeBox` 查询与现有业务 API/页面消费服务端授权裁决；480 不新增新的组织业务页面。
 - **最小可操作闭环**：
   - 授权管理员可在用户授权页配置“用户 B 被授予 `flower-hr`，组织数据范围为鲜花公司及下级”的授权关系；该组织范围配置必须能保存、校验并进入运行时裁决，不得只是 UI 占位。
@@ -193,7 +193,7 @@ API Route Requirement = method + route -> authz_object + authz_action
 Authz Capability Key  = authz_object + ":" + authz_action
 ```
 
-因此 `orgunit.orgunits:read` 是授权项标识（authz capability key），不是 API 地址；它可以覆盖 `GET /org/api/org-units`、`GET /org/api/org-units/details`、`GET /org/api/org-units/audit` 等多个读取接口。UI 功能授权项主页面与点击授权项标识后打开的“关联 API”弹窗由 `DEV-PLAN-482A` 承接，主表只展示 authz capability 语义，API method/path 只能在弹窗中展示；全量 HTTP API 正向查看面由 `DEV-PLAN-485` 的 `API 授权目录` 承接；不可分配、停用、无覆盖或内部 surface 的 authz capability 诊断由 `DEV-PLAN-488` 的 `授权项诊断` 承接，不进入普通功能授权项默认列表。
+因此 `orgunit.orgunits:read` 是授权项标识（authz capability key），不是 API 地址；它可以覆盖 `GET /org/api/org-units`、`GET /org/api/org-units/details`、`GET /org/api/org-units/audit` 等多个读取接口。UI 功能授权项主页面与点击授权项标识后打开的“关联 API”弹窗由 `DEV-PLAN-482A` 承接，主表只展示 authz capability 语义，API method/path 只能在弹窗中展示；全量 HTTP API 正向查看面由 `DEV-PLAN-485` 的 `API 授权目录` 承接；两者都只能消费 `DEV-PLAN-484` 的单一覆盖事实聚合源。不可分配、停用、无覆盖或内部 surface 的 authz capability 诊断由 `DEV-PLAN-488` 的后置 `授权项诊断` 承接，不进入普通功能授权项默认列表。
 
 术语收敛：
 
@@ -262,7 +262,7 @@ EHR 字段必须分层：
 CubeBox 的规则必须更严格，因为模型会生成执行计划。当前路线按 `DEV-PLAN-490` 走 API-first：
 
 1. `cubebox.conversations:use` 只表示用户可以使用对话入口，不表示可以调用业务 API。
-2. 可调用工具必须来自 485 API 授权目录聚合事实 + 490 tool overlay；模型不得自由拼 path。
+2. 可调用工具必须来自 484 单一覆盖事实聚合源经 485 API 授权目录 facade 投影后的 API 条目 + 490 tool overlay；模型不得自由拼 path。
 3. 每次 API 调用都以当前用户、当前租户、当前 session 执行，继续经过既有 route/service authz、RLS、数据范围和字段裁剪。
 4. registry 白名单、knowledge pack、模型输出、candidate window、history summary 都不能声明或扩大权限。
 5. 多 step plan 中任一步拒绝时，整个执行链返回 terminal error，不 fallback 到普通聊天链路。
@@ -293,7 +293,8 @@ CubeBox 的规则必须更严格，因为模型会生成执行计划。当前路
 
 - **决策 6：覆盖事实只能有一个枚举源**
   - **备选 A**：482A、485、488 各自解析 route/registry/policy。拒绝，会把“功能授权项”“API 授权目录”“授权项诊断”做成三套覆盖判断。
-  - **选定理由**：`DEV-PLAN-484` 拥有 route/tool overlay/registry/policy 的覆盖事实枚举与 lint；482A/485/488 只能消费同一服务端聚合函数或同一枚举结果。
+  - **选定理由**：`DEV-PLAN-484` 拥有 route/tool overlay/registry/policy 的唯一服务端覆盖事实枚举与 lint；482 options、482A 关联 API、485 API 授权目录、490 CubeBox tool builder 和 488 授权项诊断只能消费同一聚合函数或同一枚举结果。
+  - **实施顺序**：先完成 484 覆盖事实枚举与 lint，再让 482 options、482A 弹窗、485 目录和 490 tool builder 接入同源聚合；488 诊断页后置，不作为首批闭环前置。
 
 ## 4. 数据模型、状态模型与约束
 
@@ -349,7 +350,7 @@ Decision 的逻辑字段：
 
 ### 5.1 UI 原则
 
-1. 480 的 UI 范围只覆盖已冻结的授权管理面；新增授权项诊断时必须按 `DEV-PLAN-488` 保持只读治理视图边界。
+1. 480 的 UI 范围首批只覆盖已冻结的授权管理主路径；新增授权项诊断时必须按 `DEV-PLAN-488` 后置实施，并保持只读治理视图边界。
 2. UI 不承担安全强制；所有安全判断必须在服务端 PEP/PDP 和业务读写路径 fail-closed。
 3. 普通业务页的范围提示、字段脱敏运行态、CubeBox 授权反馈和权限摘要页不属于本方案 UI 交付。
 
@@ -371,7 +372,7 @@ Decision 的逻辑字段：
 1. **角色管理 / 角色定义**：定义一个角色的基础信息与功能权限；不配置组织范围，不配置字段脱敏/隐藏。UI/交互边界详见 `DEV-PLAN-481`，在线保存 API、持久化模型、服务端校验与运行时生效详见 `DEV-PLAN-487`。
 2. **用户授权 / 角色分配**：把角色授予 principal/team/position，按资源/能力 registry 推导的数据维度绑定具体组织范围。组织范围配置是用户授权首批闭环的一部分，不得退化为静态展示或未来占位。
 
-本方案 480 冻结体系蓝图、运行时裁决、数据范围强制和管理 UI 边界。角色如何定义、授权分配如何绑定范围，以 `DEV-PLAN-481` 为 UI/交互 SSOT；角色定义的在线保存 API、DB SoT、校验与普通 tenant role 运行时能力授权来源由 `DEV-PLAN-487` 承接；数据范围 SoT、保存模型和服务端强制由 `DEV-PLAN-489` 的首批用户授权实施链路承接；授权项诊断视图由 `DEV-PLAN-488` 承接，且不得改变 482 普通候选项口径。字段级授权仍属于 480 运行时蓝图，但不进入本轮极简用户授权界面或运行态 UI。
+本方案 480 冻结体系蓝图、运行时裁决、数据范围强制和管理 UI 边界。角色如何定义、授权分配如何绑定范围，以 `DEV-PLAN-481` 为 UI/交互 SSOT；角色定义的在线保存 API、DB SoT、校验与普通 tenant role 运行时能力授权来源由 `DEV-PLAN-487` 承接；数据范围 SoT、保存模型和服务端强制由 `DEV-PLAN-489` 的首批用户授权实施链路承接；授权项诊断视图由 `DEV-PLAN-488` 后置承接，且不得改变 482 普通候选项口径。字段级授权仍属于 480 运行时蓝图，但不进入本轮极简用户授权界面或运行态 UI。
 
 修正后的信息架构：
 
@@ -383,7 +384,7 @@ Decision 的逻辑字段：
 6. “组织范围”页签是可加行表格：每行选择一个组织，并提供“包含下级组织”勾选列；新增行初始为已选中，界面不额外显示说明文字。
 7. 授权管理里的组织选择器是配置主体数据范围的控件，应复用服务端组织读路径和范围语义；它不是新的业务组织页面。
 8. 用户授权页冻结当前设计稿中的选择器、角色表格、组织范围表格和统一“取消 / 保存”操作；组织范围保存、必填校验和运行时生效必须进入首批用户授权实施闭环。保存后审计解释不进入本轮 UI 范围。
-9. `授权管理 > 授权项诊断` 是只读治理视图，用于查看不可分配、停用、无覆盖或内部 surface 的 authz capability 及排除原因；它不得作为角色定义候选源，也不得提供 registry 编辑或 policy 修复入口。
+9. `授权管理 > 授权项诊断` 是后置只读治理视图，用于查看不可分配、停用、无覆盖或内部 surface 的 authz capability 及排除原因；它不得作为角色定义候选源，也不得提供 registry 编辑或 policy 修复入口。
 
 管理 UI 操作必须本身受 `iam.authz` 或专用 object/action 保护；角色定义在线写入由 `DEV-PLAN-487` 承接，用户授权在线写入由 `DEV-PLAN-489` 承接，审计展示若后续需要，必须另起计划。
 
@@ -411,14 +412,14 @@ Decision 的逻辑字段：
 
 ### 6.2 P1：CubeBox API-first 工具授权
 
-1. [ ] 按 `DEV-PLAN-490` 从 API 授权目录聚合事实派生 CubeBox 可调用 HTTP API。
+1. [ ] 按 `DEV-PLAN-490` 从 484 单一覆盖事实聚合源与 485 API 授权目录投影派生 CubeBox 可调用 HTTP API。
 2. [ ] API runner 以当前用户上下文调用既有业务 HTTP API 或等价 in-process route adapter。
 3. [ ] 未登记 method/path、无权限、参数非法时 fail-closed。
 4. [ ] 补未知 path、权限拒绝、参数校验和多 step 中途拒绝测试。
 
 ### 6.3 P2：管理 UI 与数据范围配置闭环
 
-1. [ ] 角色管理、用户授权、功能授权项、授权项诊断和 API 授权目录与对应 dev-plan 边界保持一致。
+1. [ ] 角色管理、用户授权、功能授权项和 API 授权目录与对应 dev-plan 边界保持一致；授权项诊断按 488 后置，不阻塞首批闭环。
 2. [ ] 按 `DEV-PLAN-483` 删除旧 `permissionKey` / `VITE_PERMISSIONS` 权限语言回流。
 3. [ ] 用户授权页的组织范围配置必须能保存并校验：`scope_dimension=organization` 的角色授权缺少组织范围时不得保存为全租户。
 4. [ ] 数据范围 SoT 由 `DEV-PLAN-489` 承接；如需新增 DB schema，必须先获得用户手工确认；实现 PR 不得绕过 schema 确认用前端本地状态或 prompt 代替。
@@ -446,7 +447,7 @@ Decision 的逻辑字段：
 | 数据范围过度设计 | 首期还没跑通就建复杂 ABAC DSL | 先 orgunit subtree，后续再加管理链/服务范围 |
 | capability 术语混淆 | authz `object:action` 与历史字段策略/SetID 业务策略 capability key 互相引用 | 480 系列统一称 authz capability key / 授权项标识；业务策略 capability key 只在对应业务计划中显式使用 |
 | 角色授权双链路 | DB role authz capability 与 policy CSV 任一命中即放行 | 487 cutover 后普通 tenant role 只读 DB SoT；CSV 仅保留 bootstrap/static/system surface |
-| 覆盖事实多套实现 | 功能授权项、API 授权目录、诊断页各自解析 route/registry/policy | 484 提供唯一覆盖事实枚举与 lint，482A/485/488 只消费同源聚合 |
+| 覆盖事实多套实现 | 功能授权项、API 授权目录、诊断页各自解析 route/registry/policy | 484 提供唯一覆盖事实枚举与 lint，482/482A/485/488/490 只消费同源聚合；488 后置 |
 | 敏感字段泄露 | API 下发原值，前端隐藏 | 服务端 projection/filter 先处理 |
 | AI 扩权 | 模型生成合法 API 调用绕过授权 | 490 API runner + 既有 route/service authz + 业务读路径 scope |
 | 403 泄露资源存在性 | 用户猜测组织/人员是否存在 | 子计划冻结 403/404 策略 |

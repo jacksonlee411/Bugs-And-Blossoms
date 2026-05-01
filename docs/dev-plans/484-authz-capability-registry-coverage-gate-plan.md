@@ -12,13 +12,13 @@
 
 ### 0.1 Simple > Easy 三问
 
-1. **边界**：484 只拥有“覆盖关系和反漂移门禁”；482 继续拥有 authz capability registry 数据结构与 options API；483 继续拥有旧 `permissionKey` 和旧 key 硬删除；482A/485/488 可消费覆盖事实做页面或弹窗，但不复制覆盖判断或 lint 逻辑。
+1. **边界**：484 拥有“覆盖关系、唯一服务端覆盖事实枚举源和反漂移门禁”；482 继续拥有 authz capability registry 数据结构与 options API；483 继续拥有旧 `permissionKey` 和旧 key 硬删除；482A/485/488 只能把 484 的同一聚合结果包装成页面/弹窗查询，不得自行解析 route、policy、registry 或 CubeBox overlay。
 2. **不变量**：一个受保护 API 或 CubeBox API tool overlay 必须绑定且只绑定一个 `authz_object + authz_action`；每个 requirement 必须存在于 registry；每个 `assignable=true` authz capability 必须有当前实现覆盖证据。
 3. **可解释**：管理员在功能授权项看到的授权项标识一定能追溯到至少一个当前可运行 API；新增模块如果忘记登记权限或登记了空壳权限，CI 失败。
 
 ### 0.2 当前门禁缺口
 
-当前 `make authz-lint` 只做基础 policy 文件格式检查，尚不能枚举 route requirement、authz capability registry、policy、DB role authz capability seed 与 CubeBox API tool overlay 的覆盖关系。因此 482/483/485/487/490 的实施 PR 在合入前，必须先完成本计划 P1/P2 覆盖事实提取与 lint 串联；否则“覆盖门禁”只是文档约束，不能作为已具备的 CI 保护。
+当前 `make authz-lint` 只做基础 policy 文件格式检查，尚不能枚举 route requirement、authz capability registry、policy、DB role authz capability seed 与 CubeBox API tool overlay 的覆盖关系。因此 482/482A/483/485/487/490 的实施 PR 在合入前，必须先完成本计划 P1/P2 覆盖事实提取与 lint 串联；否则“覆盖门禁”只是文档约束，不能作为已具备的 CI 保护。488 授权项诊断可后置，且后置时也只能消费本计划已完成的同一聚合源。
 
 ## 1. 背景
 
@@ -39,7 +39,7 @@
 3. [ ] 定义 `assignable=true` authz capability 的实现覆盖证据要求，阻断空壳权限进入功能授权项。
 4. [ ] 定义新增模块/API 的开发模板要求，使新增功能天然携带权限元数据。
 5. [ ] 定义门禁入口，优先并入 `make authz-lint` 或现有 `make check` 链路，不新增无人运行的孤立脚本。
-6. [ ] 冻结覆盖事实的唯一服务端枚举源，供 lint、482A 关联 API、485 API 授权目录和 488 授权项诊断共同消费。
+6. [ ] 冻结覆盖事实的唯一服务端枚举源，供 lint、482 options 覆盖过滤、482A 关联 API、485 API 授权目录、490 CubeBox API tool builder 和 488 授权项诊断共同消费。
 
 ## 3. 非目标
 
@@ -75,6 +75,24 @@ Authz Capability Key  = authz_object + ":" + authz_action
 | `POST /org/api/org-units` | `orgunit.orgunits + admin` | `orgunit.orgunits:admin` |
 | `POST /org/api/org-units/rename` | `orgunit.orgunits + admin` | `orgunit.orgunits:admin` |
 | `POST /org/api/org-units/move` | `orgunit.orgunits + admin` | `orgunit.orgunits:admin` |
+
+### 4.1 单一服务端聚合源
+
+484 的 P1 产物必须是一个服务端可复用的覆盖事实聚合能力，后续实现可在命名上落为包、服务或函数，但职责必须唯一。该聚合能力是以下消费者的共同输入：
+
+1. `make authz-lint` / authz 覆盖门禁。
+2. 482 options API 的“当前 tenant API 覆盖”过滤。
+3. 482A `关联 API` 弹窗的 authz capability 反向 API 查询。
+4. 485 `API 授权目录` 的正向 API 列表。
+5. 490 CubeBox API tool builder 的 `method/path -> cubebox_callable` 引用校验与工具筛选。
+6. 488 `授权项诊断` 的诊断原因派生。
+
+禁止的实现形态：
+
+1. 482A、485、488 各自读取 route switch、policy CSV、registry 常量或 CubeBox overlay 后再自行 join。
+2. 前端为了弹窗或目录拉取全量 route/policy 数据并本地筛选。
+3. 485 目录服务成为 484 之外的第二个事实源；485 只能是 API 视角 facade。
+4. 488 诊断服务重新实现 lint 判断；诊断只能解释 484 聚合事实和 lint 结果，不能让漂移通过 CI。
 
 ## 5. 门禁规则
 
@@ -143,18 +161,18 @@ Authz Capability Key  = authz_object + ":" + authz_action
 1. [ ] 484 被 AGENTS Doc Map 收录。
 2. [ ] 480/482/483 引用 484，覆盖门禁 owner 不再散落。
 3. [ ] 现有 route/CubeBox API tool overlay/registry/policy/front-end 权限语义按 482/483/484 分工重新标注。
-4. [ ] 在 482/483/485/487/490 任一实施 PR 合入前，先完成本计划 P1/P2，使 `make authz-lint` 真正覆盖 route/registry/policy/tool overlay/DB role authz capability 交叉校验。
-5. [ ] 488 如落地授权项诊断视图，必须复用本计划 P1/P2 覆盖事实或同一枚举函数，不得复制第二套覆盖判断。
+4. [ ] 在 482A/483/485/487/490 任一依赖覆盖事实的实施 PR 合入前，先完成本计划 P1/P2，使 `make authz-lint` 真正覆盖 route/registry/policy/tool overlay/DB role authz capability 交叉校验；482 registry 纯结构化落地可先行，但 options API 的覆盖过滤必须等 P1/P2 可用。
+5. [ ] 488 授权项诊断视图后置到 484 P1/P2 与 482A/485 首批闭环之后；如提前实现服务端雏形，也只能复用本计划 P1/P2 覆盖事实或同一枚举函数，不得复制第二套覆盖判断。
 
 ### 7.2 P1：提取覆盖事实
 
-1. [ ] 提供单一服务端覆盖事实枚举包或聚合函数，作为 lint、API 授权目录、关联 API 弹窗和授权项诊断的共同输入。
+1. [ ] 提供单一服务端覆盖事实枚举包或聚合函数，作为 lint、482 options 覆盖过滤、API 授权目录、关联 API 弹窗、CubeBox API tool builder 和授权项诊断的共同输入。
 2. [ ] route requirement 枚举输出 `method/path/object/action/surface`。
 3. [ ] CubeBox API tool overlay 枚举输出 `method/path/cubebox_callable/surface`。
 4. [ ] registry 枚举输出 `authz_capability_key/object/action/assignable/status/surface`。
 5. [ ] policy 枚举输出 `subject/domain/object/action`。
 6. [ ] 487 实施后提供普通 tenant role authz capability seed/DB 定义枚举能力，输出 `tenant/role_slug/authz_capability_key/system_managed`。
-7. [ ] 482A/485/488 不得重新解析 route switch、policy CSV 或 registry 常量；需要页面数据时只能调用本节同源聚合能力。
+7. [ ] 482/482A/485/488/490 不得重新解析 route switch、policy CSV 或 registry 常量来判断覆盖关系；需要页面、options 或工具数据时只能调用本节同源聚合能力。
 
 ### 7.3 P2：覆盖 lint
 
