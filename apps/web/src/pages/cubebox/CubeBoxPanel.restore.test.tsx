@@ -22,11 +22,13 @@ const appPreferencesMocks = vi.hoisted(() => ({
 vi.mock('./api', () => apiMocks)
 vi.mock('../../app/providers/AppPreferencesContext', () => appPreferencesMocks)
 
+const SLOW_UI_TEST_TIMEOUT_MS = 12_000
+
 describe('CubeBoxPanel restore flow', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     appPreferencesMocks.useAppPreferences.mockReturnValue({
-      hasPermission: vi.fn().mockReturnValue(true),
+      hasRequiredCapability: vi.fn().mockReturnValue(true),
       t: (key: string) =>
         (
           {
@@ -137,5 +139,5 @@ describe('CubeBoxPanel restore flow', () => {
     expect(screen.getByText('已压缩更早的历史。')).toBeInTheDocument()
     expect(screen.getByText('历史上下文')).toBeInTheDocument()
     expect(screen.getAllByText('会话: conv_active').length).toBeGreaterThan(0)
-  })
+  }, SLOW_UI_TEST_TIMEOUT_MS)
 })

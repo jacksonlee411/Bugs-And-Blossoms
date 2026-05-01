@@ -193,6 +193,12 @@ func TestDomainFromTenantID_BlackBox(t *testing.T) {
 	}
 }
 
+func TestAuthzCapabilityKey_BlackBox(t *testing.T) {
+	if got := authz.AuthzCapabilityKey(authz.ObjectOrgUnitOrgUnits, authz.ActionRead); got != "orgunit.orgunits:read" {
+		t.Fatalf("got=%q", got)
+	}
+}
+
 func TestAuthorize_UnknownMode_BlackBox(t *testing.T) {
 	a := &authz.Authorizer{}
 	if _, _, err := a.Authorize("role:x", "d", "o", "a"); err == nil {

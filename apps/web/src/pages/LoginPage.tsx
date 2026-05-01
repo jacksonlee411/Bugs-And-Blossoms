@@ -7,7 +7,7 @@ import { useAppPreferences } from '../app/providers/AppPreferencesContext'
 
 export function LoginPage() {
   const navigate = useNavigate()
-  const { t } = useAppPreferences()
+  const { reloadAuthzCapabilities, t } = useAppPreferences()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [submitting, setSubmitting] = useState(false)
@@ -25,6 +25,7 @@ export function LoginPage() {
     setSubmitting(true)
     try {
       await httpClient.post('/iam/api/sessions', { email: email.trim(), password })
+      await reloadAuthzCapabilities?.()
       navigate('/', { replace: true })
     } catch (raw) {
       const err = raw instanceof ApiClientError ? raw : new ApiClientError(t('login_failed'), 'UNKNOWN_ERROR')

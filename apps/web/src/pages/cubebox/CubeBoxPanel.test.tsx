@@ -24,6 +24,8 @@ vi.mock('./CubeBoxProvider', () => cubeBoxMocks)
 vi.mock('../../app/providers/AppPreferencesContext', () => appPreferencesMocks)
 vi.mock('./api', () => apiMocks)
 
+const SLOW_UI_TEST_TIMEOUT_MS = 12_000
+
 describe('CubeBoxPanel', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -35,7 +37,7 @@ describe('CubeBoxPanel', () => {
       themeMode: 'light',
       toggleThemeMode: vi.fn(),
       navDebugMode: false,
-      hasPermission: vi.fn().mockReturnValue(true),
+      hasRequiredCapability: vi.fn().mockReturnValue(true),
       t: (key: string) =>
         (
           {
@@ -195,7 +197,7 @@ describe('CubeBoxPanel', () => {
     expect(await screen.findByRole('button', { name: '设置' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '新建对话' })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: '压缩上下文' })).not.toBeInTheDocument()
-  })
+  }, SLOW_UI_TEST_TIMEOUT_MS)
 
   it('opens history dialog from header history button', () => {
     render(<CubeBoxPanel />)

@@ -31,6 +31,7 @@ import {
 } from '@mui/material'
 import { useEffect, useMemo, useState, type KeyboardEvent } from 'react'
 import { useAppPreferences } from '../../app/providers/AppPreferencesContext'
+import { AUTHZ_CAPABILITY_KEYS } from '../../authz/capabilities'
 import {
   deactivateModelCredential,
   loadCubeBoxCapabilities,
@@ -57,7 +58,7 @@ export function CubeBoxPanel() {
     sendMessage,
     setComposerText
   } = useCubeBox()
-  const { hasPermission, t } = useAppPreferences()
+  const { hasRequiredCapability, t } = useAppPreferences()
   const [historyOpen, setHistoryOpen] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [settingsLoading, setSettingsLoading] = useState(false)
@@ -74,8 +75,10 @@ export function CubeBoxPanel() {
   const [credentialMaskedSecret, setCredentialMaskedSecret] = useState('sk-****')
   const [modelSlug, setModelSlug] = useState('gpt-4.1')
   const [capabilitySummaryText, setCapabilitySummaryText] = useState('{"streaming":true,"tool_calls":false}')
-  const localCanReadConversations = hasPermission('cubebox.conversations.read') || hasPermission('cubebox.conversations.use')
-  const localCanUseConversations = hasPermission('cubebox.conversations.use')
+  const localCanReadConversations =
+    hasRequiredCapability(AUTHZ_CAPABILITY_KEYS.cubeboxConversationsRead) ||
+    hasRequiredCapability(AUTHZ_CAPABILITY_KEYS.cubeboxConversationsUse)
+  const localCanUseConversations = hasRequiredCapability(AUTHZ_CAPABILITY_KEYS.cubeboxConversationsUse)
   const canReadConversations = capabilities ? capabilities.conversation.read || capabilities.conversation.use : localCanReadConversations
   const canUseConversations = capabilities ? capabilities.conversation.use : localCanUseConversations
   const canOpenSettings = capabilities ? capabilities.settings.read : false

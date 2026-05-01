@@ -81,7 +81,7 @@ describe('OrgUnitDetailsPage', () => {
       themeMode: 'light',
       toggleThemeMode: vi.fn(),
       navDebugMode: false,
-      hasPermission: () => true,
+      hasRequiredCapability: () => true,
       t: (key: string, vars?: Record<string, string>) =>
         ({
           common_detail: 'Detail',

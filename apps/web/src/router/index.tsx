@@ -1,4 +1,5 @@
 import { Navigate, createBrowserRouter } from 'react-router-dom'
+import { AUTHZ_CAPABILITY_KEYS } from '../authz/capabilities'
 import { AppShell } from '../layout/AppShell'
 import { navItems } from '../navigation/config'
 import { ApprovalsInboxPage } from '../pages/approvals/ApprovalsInboxPage'
@@ -9,7 +10,7 @@ import { LoginPage } from '../pages/LoginPage'
 import { OrgUnitFieldConfigsPage } from '../pages/org/OrgUnitFieldConfigsPage'
 import { OrgUnitDetailsPage } from '../pages/org/OrgUnitDetailsPage'
 import { OrgUnitsPage } from '../pages/org/OrgUnitsPage'
-import { RequirePermission } from './RequirePermission'
+import { RequireCapability } from './RequireCapability'
 import { RouteErrorPage } from './RouteErrorPage'
 import { APP_ROUTER_BASENAME } from './paths'
 
@@ -25,11 +26,7 @@ export const router = createBrowserRouter([
     children: [
       {
         index: true,
-        element: (
-          <RequirePermission permissionKey='foundation.read'>
-            <FoundationDemoPage />
-          </RequirePermission>
-        )
+        element: <FoundationDemoPage />
       },
       {
         path: 'home',
@@ -38,50 +35,46 @@ export const router = createBrowserRouter([
       {
         path: 'org/units/field-configs',
         element: (
-          <RequirePermission permissionKey='orgunit.admin'>
+          <RequireCapability requiredCapabilityKey={AUTHZ_CAPABILITY_KEYS.orgunitOrgUnitsAdmin}>
             <OrgUnitFieldConfigsPage />
-          </RequirePermission>
+          </RequireCapability>
         )
       },
       {
         path: 'dicts',
         element: (
-          <RequirePermission permissionKey='dict.admin'>
+          <RequireCapability requiredCapabilityKey={AUTHZ_CAPABILITY_KEYS.iamDictsAdmin}>
             <DictConfigsPage />
-          </RequirePermission>
+          </RequireCapability>
         )
       },
       {
         path: 'dicts/:dictCode/values/:code',
         element: (
-          <RequirePermission permissionKey='dict.admin'>
+          <RequireCapability requiredCapabilityKey={AUTHZ_CAPABILITY_KEYS.iamDictsAdmin}>
             <DictValueDetailsPage />
-          </RequirePermission>
+          </RequireCapability>
         )
       },
       {
         path: 'org/units/:orgCode',
         element: (
-          <RequirePermission permissionKey='orgunit.read'>
+          <RequireCapability requiredCapabilityKey={AUTHZ_CAPABILITY_KEYS.orgunitOrgUnitsRead}>
             <OrgUnitDetailsPage />
-          </RequirePermission>
+          </RequireCapability>
         )
       },
       {
         path: 'org/units',
         element: (
-          <RequirePermission permissionKey='orgunit.read'>
+          <RequireCapability requiredCapabilityKey={AUTHZ_CAPABILITY_KEYS.orgunitOrgUnitsRead}>
             <OrgUnitsPage />
-          </RequirePermission>
+          </RequireCapability>
         )
       },
       {
         path: 'approvals',
-        element: (
-          <RequirePermission permissionKey='approval.read'>
-            <ApprovalsInboxPage />
-          </RequirePermission>
-        )
+        element: <ApprovalsInboxPage />
       },
       {
         path: '*',

@@ -36,10 +36,11 @@ import {
 import useMediaQuery from '@mui/material/useMediaQuery'
 import { useTheme } from '@mui/material/styles'
 import { useAppPreferences } from '../app/providers/AppPreferencesContext'
+import { AUTHZ_CAPABILITY_KEYS } from '../authz/capabilities'
 import { buildNavigationSearchEntries, commonSearchEntries } from '../navigation/config'
 import { trackUiEvent } from '../observability/tracker'
 import { createLocalSearchProvider, mergeSearchProviders } from '../search/globalSearch'
-import type { NavItem } from '../types/navigation'
+import type { NavItem, SearchEntry } from '../types/navigation'
 import { CubeBoxProvider } from '../pages/cubebox/CubeBoxProvider'
 import { CubeBoxPanel } from '../pages/cubebox/CubeBoxPanel'
 
@@ -64,27 +65,39 @@ export function AppShell({ navItems }: PropsWithChildren<AppShellProps>) {
   const navigate = useNavigate()
   const location = useLocation()
   const theme = useTheme()
-  const { hasPermission, locale, navDebugMode, setLocale, t, tenantId, themeMode, toggleThemeMode } =
+  const {
+    hasRequiredCapability,
+    locale,
+    navDebugMode,
+    resetAuthzCapabilities,
+    setLocale,
+    t,
+    tenantId,
+    themeMode,
+    toggleThemeMode
+  } =
     useAppPreferences()
   const [searchOpen, setSearchOpen] = useState(false)
   const [cubeBoxOpen, setCubeBoxOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
-  const [searchResults, setSearchResults] = useState(() => buildNavigationSearchEntries(navItems))
+  const [searchResults, setSearchResults] = useState<SearchEntry[]>([])
   const cubeBoxWide = useMediaQuery(theme.breakpoints.up('lg'))
   const cubeBoxDesktop = useMediaQuery(theme.breakpoints.up('md'))
   const cubeBoxShellMode: CubeBoxShellMode = cubeBoxWide ? 'wide' : cubeBoxDesktop ? 'medium' : 'compact'
   const cubeBoxDrawerVariant = cubeBoxDesktop ? 'persistent' : 'temporary'
   const cubeBoxToggleLabel = t(cubeBoxOpen ? 'cubebox_close_drawer' : 'cubebox_open_drawer')
-  const canAccessCubeBox = hasPermission('cubebox.conversations.read') || hasPermission('cubebox.conversations.use')
+  const canAccessCubeBox =
+    hasRequiredCapability(AUTHZ_CAPABILITY_KEYS.cubeboxConversationsRead) ||
+    hasRequiredCapability(AUTHZ_CAPABILITY_KEYS.cubeboxConversationsUse)
 
   const sortedNavItems = useMemo(() => [...navItems].sort((left, right) => left.order - right.order), [navItems])
   const visibleNavItems = useMemo(
-    () => sortedNavItems.filter((item) => hasPermission(item.permissionKey)),
-    [hasPermission, sortedNavItems]
+    () => sortedNavItems.filter((item) => hasRequiredCapability(item.requiredCapabilityKey)),
+    [hasRequiredCapability, sortedNavItems]
   )
   const hiddenNavItems = useMemo(
-    () => sortedNavItems.filter((item) => !hasPermission(item.permissionKey)),
-    [hasPermission, sortedNavItems]
+    () => sortedNavItems.filter((item) => !hasRequiredCapability(item.requiredCapabilityKey)),
+    [hasRequiredCapability, sortedNavItems]
   )
   const topLevelNavItems = useMemo(
     () => visibleNavItems.filter((item) => !item.parentKey),
@@ -107,8 +120,11 @@ export function AppShell({ navItems }: PropsWithChildren<AppShellProps>) {
   const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({})
 
   const searchEntries = useMemo(
-    () => [...buildNavigationSearchEntries(sortedNavItems), ...commonSearchEntries],
-    [sortedNavItems]
+    () => [
+      ...buildNavigationSearchEntries(visibleNavItems),
+      ...commonSearchEntries.filter((entry) => hasRequiredCapability(entry.requiredCapabilityKey))
+    ],
+    [hasRequiredCapability, visibleNavItems]
   )
   const localizedSearchEntries = useMemo(
     () =>
@@ -152,12 +168,13 @@ export function AppShell({ navItems }: PropsWithChildren<AppShellProps>) {
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
         event.preventDefault()
         setSearchOpen(true)
+        void runSearch(searchQuery, false)
       }
     }
 
     window.addEventListener('keydown', onShortcut)
     return () => window.removeEventListener('keydown', onShortcut)
-  }, [])
+  }, [runSearch, searchQuery])
 
   useEffect(() => {
     if (!cubeBoxOpen || searchOpen) {
@@ -192,6 +209,7 @@ export function AppShell({ navItems }: PropsWithChildren<AppShellProps>) {
   )
 
   async function handleLogout() {
+    resetAuthzCapabilities?.()
     await fetch('/logout', { credentials: 'include', method: 'POST' })
     navigate('/login', { replace: true })
   }

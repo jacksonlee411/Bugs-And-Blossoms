@@ -1,5 +1,6 @@
 import { createContext, useContext } from 'react'
 import type { PaletteMode } from '@mui/material'
+import type { AuthzCapabilityKey } from '../../authz/capabilities'
 import type { Locale, MessageKey, MessageVars } from '../../i18n/messages'
 
 export interface AppPreferencesContextValue {
@@ -9,7 +10,9 @@ export interface AppPreferencesContextValue {
   themeMode: PaletteMode
   toggleThemeMode: () => void
   navDebugMode: boolean
-  hasPermission: (permissionKey?: string) => boolean
+  hasRequiredCapability: (requiredCapabilityKey?: AuthzCapabilityKey) => boolean
+  reloadAuthzCapabilities?: () => Promise<void>
+  resetAuthzCapabilities?: () => void
   t: (key: MessageKey, vars?: MessageVars) => string
 }
 

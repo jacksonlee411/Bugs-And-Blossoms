@@ -6,7 +6,6 @@ interface ImportMetaEnv {
   readonly VITE_CUBEBOX_TURN_TIMEOUT_MS?: string
   readonly VITE_ASSISTANT_TURN_TIMEOUT_MS?: string
   readonly VITE_TENANT_ID?: string
-  readonly VITE_PERMISSIONS?: string
   readonly VITE_NAV_DEBUG?: string
   readonly VITE_ASSISTANT_ALLOWED_ORIGINS?: string
 }

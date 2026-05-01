@@ -85,3 +85,7 @@ func (a *Authorizer) Authorize(subject string, domain string, object string, act
 		return false, false, errors.New("authz: unknown mode")
 	}
 }
+
+func (a *Authorizer) PolicyAllows(subject string, domain string, object string, action string) (bool, error) {
+	return a.enforcer.Enforce(subject, domain, object, action)
+}

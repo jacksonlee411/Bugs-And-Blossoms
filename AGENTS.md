@@ -28,6 +28,7 @@
 - sqlc：`make sqlc-generate`，然后 `git status --short` 必须为空；命中 DB 触发器时补跑 `make sqlc-verify-schema`
 - Routing：`make check routing`
 - Authz：`make authz-pack && make authz-test && make authz-lint`
+- 新增/调整受保护 API、CubeBox API tool overlay、authz requirement、capability registry、policy、功能授权项候选项、功能授权项页面或 API 授权目录：`make authz-pack && make authz-test && make authz-lint`（覆盖门禁见 `DEV-PLAN-484/485`，功能授权项页面见 `DEV-PLAN-482A`）
 - E2E：`make e2e`
 - 文档新增/整理：`make check doc`
 
@@ -53,6 +54,7 @@
 | sqlc（schema/queries/config） | `make sqlc-generate` + `git status --short`（命中 DB 触发器再跑 `make sqlc-verify-schema`） | 规范与 stopline 见 `DEV-PLAN-025/025A` |
 | Routing（allowlist/分类/responder） | `make check routing` | 口径见 `DEV-PLAN-017` |
 | Authz（Casbin） | `make authz-pack && make authz-test && make authz-lint` | 口径见 `DEV-PLAN-022` |
+| 受保护 API / CubeBox API tool overlay / authz requirement / capability registry / policy / 功能授权项候选项 / 功能授权项页面 / API 授权目录 | `make authz-pack && make authz-test && make authz-lint` | 覆盖门禁见 `DEV-PLAN-484/485`，功能授权项页面见 `DEV-PLAN-482A`；新增受保护 API / CubeBox API tool overlay 必须能追溯到 registry，`assignable=true` 必须有当前 API 覆盖 |
 | E2E（Playwright） | `make e2e` | 门禁结构见 `DEV-PLAN-012`；数据库依赖口径冻结为 Docker / compose，E2E 不得把宿主机 `psql` 等工具作为唯一前置条件 |
 | 新增/调整文档 | `make check doc` | 门禁见“文档收敛与门禁” |
 | 根目录新增/移动文件或调整本地运行产物落点 | `make check root-surface` | 根目录只允许固定入口、配置与顶层目录；运行产物必须进入 `.local/` 或归属目录 |
@@ -117,6 +119,7 @@
 - No Tx, No RLS：访问 Greenfield 表必须显式事务 + 租户注入，且 fail-closed（`DEV-PLAN-021/019/025`）。
 - 路由治理：命名空间/route_class/全局 responder 契约统一，并由门禁阻断漂移（`DEV-PLAN-017/012`）。
 - 授权边界：RLS 圈地 ≠ Casbin 授权；subject/domain/object/action 命名冻结（`DEV-PLAN-021/022/019`）。
+- 功能授权项与 API 授权目录覆盖：新增受保护 API / CubeBox API tool overlay 必须声明或引用 `object/action` requirement 并进入 capability registry；`assignable=true` capability 必须有当前 API 覆盖证据，门禁 owner 为 `DEV-PLAN-484`；普通功能授权项主页面与 `关联 API` 弹窗 owner 为 `DEV-PLAN-482A`；全量 API 正向目录与菜单 owner 为 `DEV-PLAN-485`。
 - i18n：仅 `en/zh`，语言写入口唯一；不做业务数据多语言（`DEV-PLAN-020`）。
 - 模块边界：现行业务域保留 `orgunit`，平台模块保留 `iam`；跨模块优先通过 `pkg/**` 与 HTTP/JSON API 组合，避免 Go 代码跨模块 import（`DEV-PLAN-015/016/019`）。
 - SetID：现行删除与收口以 `DEV-PLAN-440` 为唯一 PoR；历史 SetID 方案仅允许作为 archive/历史来源或待归档调查材料保留，不得再作为当前实现前提、当前用户入口或回退依据。
@@ -278,6 +281,20 @@ modules/{module}/
 - DEV-PLAN-476：CubeBox 全部组织纠错与重复计划收敛修复方案：`docs/dev-plans/476-cubebox-all-orgs-scope-correction-repeated-plan-remediation.md`
 - DEV-PLAN-477：CubeBox `api_key -> executor_key` 契约改名专项方案（已完成；当前仅保留边界与验证记录）：`docs/dev-plans/477-cubebox-api-key-to-executor-key-contract-rename-plan.md`
 - DEV-PLAN-478：CubeBox 第二业务模块接入前共享 Query Runtime 去 `orgunit` 污染复核方案（已完成；本轮已落地共享 contract 收敛、non-`orgunit` fake-module 覆盖与验证证据，后续仅保留轻量反回流门禁评估）：`docs/dev-plans/478-cubebox-shared-query-runtime-orgunit-bias-review-before-second-module-plan.md`
+- DEV-PLAN-480：EHR 授权体系总体方案：`docs/dev-plans/480-ehr-authorization-system-blueprint.md`
+- DEV-PLAN-480A：480 系列授权子计划实施顺序路线图：`docs/dev-plans/480a-authorization-series-implementation-roadmap.md`
+- DEV-PLAN-481：EHR 角色定义与极简用户授权方案：`docs/dev-plans/481-ehr-role-design-and-configuration-plan.md`
+- DEV-PLAN-482：EHR Capability Registry 与角色能力候选项方案：`docs/dev-plans/482-ehr-capability-registry-and-role-options-plan.md`
+- DEV-PLAN-482A：功能授权项主页面与关联 API 弹窗实施方案：`docs/dev-plans/482a-capability-authorizations-page-and-associated-api-dialog-plan.md`
+- DEV-PLAN-483：权限标识单主源与前端 permissionKey 硬删除方案：`docs/dev-plans/483-authz-single-capability-key-hard-cutover-plan.md`
+- DEV-PLAN-484：Authz Capability Registry 覆盖门禁方案：`docs/dev-plans/484-authz-capability-registry-coverage-gate-plan.md`
+- DEV-PLAN-485：API 授权目录页面方案：`docs/dev-plans/485-api-authz-catalog-page-plan.md`
+- DEV-PLAN-486：CubeBox Executor 路线活体警示（已停止；保留在活体目录仅用于阻断 executor 路线回流）：`docs/dev-plans/486-cubebox-executor-authz-and-module-boundary-remediation-plan.md`
+- DEV-PLAN-487：EHR 角色定义持久化与保存 API 方案：`docs/dev-plans/487-ehr-role-definition-persistence-and-save-api-plan.md`
+- DEV-PLAN-488：授权项诊断视图方案：`docs/dev-plans/488-authz-capability-diagnostics-view-plan.md`
+- DEV-PLAN-489：用户授权组织范围 SoT 与运行时强制实施方案：`docs/dev-plans/489-user-authorization-org-scope-sot-and-runtime-enforcement-plan.md`
+- DEV-PLAN-489A：Principal 多角色 Union 运行时契约修订方案：`docs/dev-plans/489a-principal-multi-role-union-runtime-contract.md`
+- DEV-PLAN-490：CubeBox 统一 API 工具化重构方案：`docs/dev-plans/490-cubebox-api-first-tooling-refactor-plan.md`
 - DEV-PLAN-440：彻底删除 SetID 的全仓收口方案（SetID 根删除唯一 PoR）：`docs/dev-plans/440-complete-setid-removal-plan.md`
 - DEV-PLAN-441：旧策略模块残余清理方案：`docs/dev-plans/441-legacy-strategy-module-residue-cleanup-plan.md`
 - DEV-PLAN-450：直接切除 jobcatalog / staffing / person 三模块方案（保留 orgunit）：`docs/dev-plans/450-direct-removal-of-jobcatalog-staffing-person-modules-plan.md`

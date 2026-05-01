@@ -2,6 +2,7 @@ import { fireEvent, render, screen } from '@testing-library/react'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { AppShell } from './AppShell'
+import { AUTHZ_CAPABILITY_KEYS } from '../authz/capabilities'
 import type { NavItem } from '../types/navigation'
 
 const appPreferencesMocks = vi.hoisted(() => ({
@@ -26,10 +27,20 @@ const navItems: NavItem[] = [
     labelKey: 'nav_foundation_demo',
     icon: <span />,
     order: 1,
-    permissionKey: 'foundation.read',
     keywords: ['home']
+  },
+  {
+    key: 'org-units',
+    path: '/org/units',
+    labelKey: 'nav_org_units',
+    icon: <span />,
+    order: 2,
+    requiredCapabilityKey: AUTHZ_CAPABILITY_KEYS.orgunitOrgUnitsRead,
+    keywords: ['org', '组织']
   }
 ]
+
+const SLOW_UI_TEST_TIMEOUT_MS = 12_000
 
 function renderShell() {
   return render(
@@ -75,7 +86,7 @@ describe('AppShell CubeBox shell', () => {
       themeMode: 'light',
       toggleThemeMode: vi.fn(),
       navDebugMode: false,
-      hasPermission: vi.fn().mockReturnValue(true),
+      hasRequiredCapability: vi.fn().mockReturnValue(true),
       t: (key: string) =>
         (
           {
@@ -90,7 +101,10 @@ describe('AppShell CubeBox shell', () => {
             language_zh: '中文',
             language_en: 'English',
             nav_foundation_demo: '基座示例',
+            nav_org_units: '组织单元',
             nav_debug_mode: '导航调试',
+            common_my_tasks: '我的待办',
+            common_recent_changes: '最近变更',
             search_source_navigation: '导航',
             search_source_common: '常用',
             theme_dark: '深色',
@@ -111,7 +125,7 @@ describe('AppShell CubeBox shell', () => {
     expect(screen.getByRole('main')).toHaveAttribute('data-cubebox-main-reserves-panel', 'true')
     expect(screen.getByRole('complementary', { name: 'CubeBox' })).toHaveAttribute('data-cubebox-non-modal', 'true')
     expect(screen.getByRole('button', { name: 'Left action' })).toBeInTheDocument()
-  })
+  }, SLOW_UI_TEST_TIMEOUT_MS)
 
   it('uses medium non-modal overlay shell on md screens', () => {
     setViewport(960)
@@ -149,7 +163,9 @@ describe('AppShell CubeBox shell', () => {
       themeMode: 'light',
       toggleThemeMode: vi.fn(),
       navDebugMode: false,
-      hasPermission: vi.fn().mockImplementation((permissionKey?: string) => permissionKey === 'foundation.read'),
+      hasRequiredCapability: vi
+        .fn()
+        .mockImplementation((requiredCapabilityKey?: string) => requiredCapabilityKey === undefined),
       t: (key: string) =>
         (
           {
@@ -164,7 +180,10 @@ describe('AppShell CubeBox shell', () => {
             language_zh: '中文',
             language_en: 'English',
             nav_foundation_demo: '基座示例',
+            nav_org_units: '组织单元',
             nav_debug_mode: '导航调试',
+            common_my_tasks: '我的待办',
+            common_recent_changes: '最近变更',
             search_source_navigation: '导航',
             search_source_common: '常用',
             theme_dark: '深色',
@@ -176,5 +195,51 @@ describe('AppShell CubeBox shell', () => {
     renderShell()
 
     expect(screen.queryByRole('button', { name: '打开 CubeBox 抽屉' })).not.toBeInTheDocument()
+  })
+
+  it('filters global search entries by visible capabilities', async () => {
+    setViewport(1280)
+    appPreferencesMocks.useAppPreferences.mockReturnValue({
+      tenantId: 'tenant-a',
+      locale: 'zh',
+      setLocale: vi.fn(),
+      themeMode: 'light',
+      toggleThemeMode: vi.fn(),
+      navDebugMode: false,
+      hasRequiredCapability: vi
+        .fn()
+        .mockImplementation((requiredCapabilityKey?: string) => requiredCapabilityKey === undefined),
+      t: (key: string) =>
+        (
+          {
+            app_title: 'Bugs & Blossoms',
+            action_logout: '退出登录',
+            cubebox_open_drawer: '打开 CubeBox 抽屉',
+            cubebox_close_drawer: '关闭 CubeBox 抽屉',
+            page_cubebox_title: 'CubeBox',
+            global_search: '全局搜索',
+            global_search_placeholder: '搜索',
+            global_search_empty: '无结果',
+            language_zh: '中文',
+            language_en: 'English',
+            nav_foundation_demo: '基座示例',
+            nav_org_units: '组织单元',
+            nav_debug_mode: '导航调试',
+            common_my_tasks: '我的待办',
+            common_recent_changes: '最近变更',
+            search_source_navigation: '导航',
+            search_source_common: '常用',
+            theme_dark: '深色',
+            theme_light: '浅色'
+          } as Record<string, string>
+        )[key] ?? key
+    })
+
+    renderShell()
+    fireEvent.click(screen.getByRole('button', { name: 'Ctrl/Cmd + K' }))
+
+    expect(await screen.findByText('基座示例')).toBeInTheDocument()
+    expect(screen.queryByText('组织单元')).not.toBeInTheDocument()
+    expect(screen.queryByText('最近变更')).not.toBeInTheDocument()
   })
 })

@@ -205,6 +205,9 @@ func TestAuthzRequirementForRoute(t *testing.T) {
 	if _, _, ok := authzRequirementForRoute(http.MethodGet, "/iam/api/sessions"); ok {
 		t.Fatal("expected ok=false")
 	}
+	if object, action, ok := authzRequirementForRoute(http.MethodGet, "/iam/api/me/capabilities"); ok || object != "" || action != "" {
+		t.Fatalf("unexpected session capabilities authz: object=%q action=%q ok=%v", object, action, ok)
+	}
 	if _, _, ok := authzRequirementForRoute(http.MethodGet, "/iam/api/dicts"); !ok {
 		t.Fatal("expected ok=true")
 	}
@@ -468,7 +471,7 @@ m = r.sub == p.sub && r.dom == p.dom && r.obj == p.obj && r.act == p.act
 `), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(policy, []byte("p, role:tenant-admin, t1, orgunit.read, read\n"), 0o644); err != nil {
+	if err := os.WriteFile(policy, []byte("p, role:tenant-admin, t1, orgunit.orgunits, read\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -480,7 +483,7 @@ m = r.sub == p.sub && r.dom == p.dom && r.obj == p.obj && r.act == p.act
 	if err != nil {
 		t.Fatalf("err=%v", err)
 	}
-	allowed, enforced, err := a.Authorize("role:tenant-admin", "t1", "orgunit.read", "read")
+	allowed, enforced, err := a.Authorize("role:tenant-admin", "t1", authz.ObjectOrgUnitOrgUnits, authz.ActionRead)
 	if err != nil {
 		t.Fatalf("err=%v", err)
 	}
@@ -534,11 +537,11 @@ func TestLoadAuthorizer_DefaultPaths_Success(t *testing.T) {
 	if err != nil {
 		t.Fatalf("err=%v", err)
 	}
-	allowed, enforced, err := a.Authorize("role:tenant-admin", "00000000-0000-0000-0000-000000000001", "orgunit.read", "read")
+	allowed, enforced, err := a.Authorize("role:tenant-admin", "00000000-0000-0000-0000-000000000001", authz.ObjectOrgUnitOrgUnits, authz.ActionRead)
 	if err != nil {
 		t.Fatalf("err=%v", err)
 	}
-	if allowed || !enforced {
+	if !allowed || !enforced {
 		t.Fatalf("allowed=%v enforced=%v", allowed, enforced)
 	}
 }

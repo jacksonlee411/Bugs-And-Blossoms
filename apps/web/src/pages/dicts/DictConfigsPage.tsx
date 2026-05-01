@@ -32,6 +32,7 @@ import {
 } from '../../api/dicts'
 import { ApiClientError } from '../../api/errors'
 import { useAppPreferences } from '../../app/providers/AppPreferencesContext'
+import { AUTHZ_CAPABILITY_KEYS } from '../../authz/capabilities'
 import { type MessageKey } from '../../i18n/messages'
 import { PageHeader } from '../../components/PageHeader'
 import {
@@ -142,7 +143,7 @@ export function DictConfigsPage() {
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
   const queryClient = useQueryClient()
-  const { hasPermission, t } = useAppPreferences()
+  const { hasRequiredCapability, t } = useAppPreferences()
   const readView = useMemo(() => resolveReadViewState(searchParams.get('as_of')), [searchParams])
   const readMode = readView.mode
   const asOf = readView.effectiveAsOf
@@ -179,7 +180,7 @@ export function DictConfigsPage() {
   const [releaseErrorCode, setReleaseErrorCode] = useState<string | null>(null)
   const [releaseNotice, setReleaseNotice] = useState<string | null>(null)
 
-  const canDictRelease = hasPermission('dict.release.admin')
+  const canDictRelease = hasRequiredCapability(AUTHZ_CAPABILITY_KEYS.iamDictReleaseAdmin)
   const releaseBusy = releaseStage === 'previewing' || releaseStage === 'releasing'
 
   const dictsQuery = useQuery({

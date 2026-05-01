@@ -130,19 +130,20 @@
 
 ### 4.4 授权（Casbin）与主体表达
 - **审计标识（principal）**：`tenant:{tenant_id}:principal:{principal_id}`（用于日志/审计/诊断；不作为 MVP 的 Casbin enforce 输入）。
-- **授权主体（effective subject）**：`role:{role_slug}`（MVP 单角色；口径见 `DEV-PLAN-022`）。
+- **授权主体（effective subject）**：历史 baseline 为 `role:{role_slug}`（MVP 单角色；口径见 `DEV-PLAN-022`）。480 系列普通 tenant EHR 授权已由 `DEV-PLAN-489A` 正式升级为 principal 多角色 union：session 证明 `principal_id/tenant_id`，运行时从 `principal_role_assignments` 读取 `role:{slug}` subject set。
 - **边界**：
   - AuthN（登录）只负责建立 `principal_id` 与 `tenant_id` 的可信来源；
   - AuthZ（Casbin）只负责“是否允许做事”，不得承担 tenant 解析与 session 校验职责；
   - DB（RLS）只负责“圈地”，不得放宽 policy 作为跨租户旁路。
 
 ### 4.5 `role_slug`（最小角色集，冻结）
-- **权威来源**：`principals.role_slug`；禁止以“有 session 就默认是 admin”等隐式推导作为授权依据。
+- **历史 baseline 权威来源**：`principals.role_slug`；禁止以“有 session 就默认是 admin”等隐式推导作为授权依据。
+- **489A 修订**：480 系列普通 tenant EHR 在线授权的角色事实源是 `principal_role_assignments` 的角色集合；`principals.role_slug` 只能作为既有字段、seed/backfill 输入或非 480 baseline 说明，不得在 489A cutover 后参与普通 tenant 运行时 allow/deny。
 - **MVP 角色集**：
   - tenant app：`tenant-admin`（管理）、`tenant-viewer`（只读，用于 060/061 的 403 验证）
   - 未登录：`anonymous`（仅作为 Authz 输入，不落库）
   - superadmin：使用其专用 principal/session（见 `DEV-PLAN-023`），不得复用 tenant principal。
-- **注入规则（冻结）**：session 中间件必须加载 principal 并注入 `principal_id/role_slug/tenant_id`；缺任一项即拒绝进入受保护路径（fail-closed）。
+- **注入规则（冻结）**：session 中间件必须加载 principal 并注入可信 `principal_id/tenant_id`；历史 baseline 同时注入单 `role_slug`。489A 普通 tenant 路径必须通过 IAM 授权门面解析 `assigned_role_slugs[]`，角色集合为空、跨租户或含无效角色均 fail-closed。
 
 ## 5. 数据模型（新仓库建议）
 
@@ -168,7 +169,7 @@
   - `id uuid pk`
   - `tenant_id uuid not null`
   - `email text not null`
-  - `role_slug text not null`（MVP：`tenant-admin`、`tenant-viewer`）
+  - `role_slug text not null`（历史 MVP：`tenant-admin`、`tenant-viewer`；489A 普通 tenant 在线授权不再以该单字段为运行时 SSOT）
   - `display_name text null`
   - `status text not null`（`active|disabled`）
   - `kratos_identity_id uuid not null unique`

@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react'
+import type { AuthzCapabilityKey } from '../authz/capabilities'
 import type { MessageKey } from '../i18n/messages'
 
 export interface NavItem {
@@ -8,7 +9,7 @@ export interface NavItem {
   icon: ReactNode
   order: number
   parentKey?: string
-  permissionKey?: string
+  requiredCapabilityKey?: AuthzCapabilityKey
   keywords: string[]
 }
 
@@ -17,5 +18,6 @@ export interface SearchEntry {
   labelKey: MessageKey
   path: string
   source: 'navigation' | 'common'
+  requiredCapabilityKey?: AuthzCapabilityKey
   keywords: string[]
 }
