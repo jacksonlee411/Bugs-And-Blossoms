@@ -1,13 +1,13 @@
 # DEV-PLAN-485：API 授权目录页面方案
 
-**状态**: 规划中（2026-05-01 08:14 CST）
+**状态**: 规划中（2026-05-01 10:31 CST）
 
 ## 0. 适用范围与评审分级
 
 - **评审分级**：`T2`
 - **范围一句话**：新增一个只读菜单与页面，用于查看全部 HTTP API 授权目录项、每个 API 绑定的授权资源/操作/授权项标识，以及该 API 是否进入 CubeBox 可调用 HTTP API 工具面；页面不承担编辑、修复或运行时授权裁决职责。
 - **关联模块/目录**：`apps/web/src/**`、`internal/server/**`、`internal/routing/**`、`pkg/authz/**`、`scripts/authz/**`
-- **关联计划/标准**：`AGENTS.md`、`DEV-PLAN-000`、`DEV-PLAN-001`、`DEV-PLAN-012`、`DEV-PLAN-017`、`DEV-PLAN-022`、`DEV-PLAN-480`、`DEV-PLAN-482`、`DEV-PLAN-483`、`DEV-PLAN-484`
+- **关联计划/标准**：`AGENTS.md`、`DEV-PLAN-000`、`DEV-PLAN-001`、`DEV-PLAN-012`、`DEV-PLAN-017`、`DEV-PLAN-022`、`DEV-PLAN-480`、`DEV-PLAN-482`、`DEV-PLAN-483`、`DEV-PLAN-484`、`DEV-PLAN-488`
 - **用户入口/触点**：授权管理菜单中的 `API 授权目录` 页面、服务端 API 授权目录列表接口、功能授权项页面中的“关联 API”弹窗
 
 ### 0.1 Simple > Easy 三问
@@ -45,6 +45,7 @@
 5. 不改变 484 的覆盖门禁；本页消费覆盖事实，不重新实现第二套漂移校验。
 6. 不新增 `调用策略`、`工具类型`、`只读/写入策略` 等 CubeBox 策略列；读写属性已由 `方法`、`操作` 和 `授权项标识` 表达，写入确认已按 `DEV-PLAN-490` 暂缓。
 7. 不新增 API 行详情抽屉；`route source`、`requirement source` 等诊断字段不进入首期 UI。
+8. 不展示 capability registry 中不可分配、停用、无覆盖或内部 surface 的授权项诊断全集；这些从 capability 角度出发的诊断视图归属 `DEV-PLAN-488`。
 
 ## 3. 用户可见性交付
 
@@ -153,10 +154,12 @@ GET /iam/api/authz/api-catalog
 | `DEV-PLAN-483` | `object:action` 单主源、旧 `permissionKey` 与旧 key 硬删除 |
 | `DEV-PLAN-484` | route/CubeBox API tool overlay/registry/policy 覆盖事实与反漂移门禁 |
 | `DEV-PLAN-485` | API 授权目录页面与只读查询 API |
+| `DEV-PLAN-488` | 授权项诊断视图，从 capability 角度查看未进入普通候选项的原因 |
 | `DEV-PLAN-490` | CubeBox 复用现有 HTTP API 的工具面标记与 runtime 执行链 |
 
 485 不复制 484 的 lint 逻辑；如果覆盖事实缺失，应先补 484 的枚举能力，再由 485 消费。
 485 也不复制 490 的 runtime 执行策略；主表只增加 `丘宝可调用` 一列，API 的读写语义继续由 `方法`、`操作` 与 `授权项标识` 表达。
+485 不承接 488 的授权项诊断；485 从 API 角度展示 method/path 到授权项的绑定，488 从 capability 角度展示未入候选项原因。
 
 ## 6. 实施切片
 
@@ -215,6 +218,7 @@ GET /iam/api/authz/api-catalog
 | 把 allowlist 当未配置错误 | health/login/static 被误标红 | allowlist/public 必须有明确分类和原因 |
 | 复制 484 lint 逻辑 | 两套覆盖判断漂移 | 485 只消费 484 的覆盖事实或同一枚举函数 |
 | 把 CubeBox 策略做成主表分类 | `调用策略=只读` 重复 `方法/操作`，未来写入策略被提前固化 | 主表只保留 `丘宝可调用`，写入确认暂缓，不在本页预留策略分类 |
+| 把授权项诊断塞进 API 目录 | API 页面展示不可分配/停用/无覆盖 capability 全集 | 从 capability 角度的诊断归 488，485 只做 API 正向目录 |
 
 ## 9. 验证记录
 

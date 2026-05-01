@@ -1,14 +1,14 @@
 # DEV-PLAN-483：权限标识单主源与前端 permissionKey 硬删除方案
 
-**状态**: 规划中（2026-05-01 10:23 CST）
+**状态**: 规划中（2026-05-01 10:31 CST）
 
 ## 0. 适用范围与评审分级
 
 - **评审分级**：`T2`
 - **范围一句话**：把权限标识收敛为唯一 `object:action` capability key，硬删除前端 `permissionKey`、`module.verb` 别名、policy-only 权限和未实现能力；不提供兼容映射、双字段、过渡窗口或旧 key 自动转换。
 - **关联模块/目录**：`pkg/authz/**`、`config/access/**`、`scripts/authz/**`、`internal/server/**`、`internal/superadmin/**`、`apps/web/src/**`
-- **关联计划/标准**：`AGENTS.md`、`DEV-PLAN-000`、`DEV-PLAN-001`、`DEV-PLAN-004M1`、`DEV-PLAN-012`、`DEV-PLAN-017`、`DEV-PLAN-022`、`DEV-PLAN-480`、`DEV-PLAN-481`、`DEV-PLAN-482`、`DEV-PLAN-484`、`DEV-PLAN-487`
-- **用户入口/触点**：功能授权项、角色定义页、用户授权页、导航入口、页面守卫、所有受保护 HTTP API 与 CubeBox API-first 工具链
+- **关联计划/标准**：`AGENTS.md`、`DEV-PLAN-000`、`DEV-PLAN-001`、`DEV-PLAN-004M1`、`DEV-PLAN-012`、`DEV-PLAN-017`、`DEV-PLAN-022`、`DEV-PLAN-480`、`DEV-PLAN-481`、`DEV-PLAN-482`、`DEV-PLAN-484`、`DEV-PLAN-487`、`DEV-PLAN-488`
+- **用户入口/触点**：功能授权项、授权项诊断、角色定义页、用户授权页、导航入口、页面守卫、所有受保护 HTTP API 与 CubeBox API-first 工具链
 
 ### 0.1 Simple > Easy 三问
 
@@ -122,7 +122,7 @@ key = /org/api/org-units
 2. 一个 capability key 可以保护多个 route，例如 `orgunit.orgunits:read` 可保护 list/search/details/audit 等读取 API。
 3. `assignable=true` 的 capability 必须有当前可运行的 tenant API 承接；没有实现面的能力不得进入角色候选项。
 4. policy 中每条授权记录必须能在 registry 和当前实现面中找到证据；找不到就删除，不保留空壳。覆盖证据校验以 `DEV-PLAN-484` 为准。
-5. UI 功能授权项主表列名统一使用“授权项标识”；API method/path 只允许出现在“关联 API”弹窗或 `DEV-PLAN-485` 的 `API 授权目录` 中；不得把 API 地址和 key 混在同一列。
+5. UI 功能授权项主表列名统一使用“授权项标识”；API method/path 只允许出现在“关联 API”弹窗或 `DEV-PLAN-485` 的 `API 授权目录` 中；不可分配、停用、无覆盖、内部 surface 等诊断信息只进入 `DEV-PLAN-488` 的授权项诊断视图；不得把 API 地址和 key 混在同一列。
 
 ### 4.3 前端使用要求
 
@@ -202,6 +202,7 @@ key = /org/api/org-units
 1. [ ] 483 被 AGENTS Doc Map 收录。
 2. [ ] 480/481/482 引用 483，明确旧 `permissionKey` 和旧 key 无兼容删除。
 3. [ ] 设计图页面文案统一称为“功能授权项”，主表列名统一称为“授权项标识”，值只展示 `object:action`；API route/method 只进入点击授权项标识后打开的“关联 API”弹窗；全量 HTTP API 正向查看面统一命名为“API 授权目录”。
+4. [ ] 设计图如需展示不可分配、停用、无覆盖或内部 surface capability，必须进入 `DEV-PLAN-488` 的“授权项诊断”视图，不得混入功能授权项默认列表。
 
 ### 7.2 P1：后端 registry 与 policy 硬清理
 
@@ -230,6 +231,7 @@ key = /org/api/org-units
 2. [ ] 角色保存 payload 只提交 `object:action`。
 3. [ ] 未知、禁用、不可分配、未实现或旧格式 key 均阻断保存。
 4. [ ] 功能授权项默认只展示 `enabled + assignable + tenant_api + 当前实现覆盖` 的 capability。
+5. [ ] 授权项诊断按 `DEV-PLAN-488` 展示普通候选项之外的 capability，但不得放宽角色保存校验。
 
 ## 8. 验收标准
 
@@ -240,6 +242,7 @@ key = /org/api/org-units
 5. [ ] registry 中 `assignable=true` 但无当前实现面的 key 按 `DEV-PLAN-484` 导致 authz lint 失败。
 6. [ ] 角色保存提交旧 key 时失败，且服务端不返回替换建议或自动修正结果。
 7. [ ] HRMS tenant 功能授权项不展示 superadmin key、不展示 policy-only key、不展示 UI 本地守卫 key。
+8. [ ] 授权项诊断可展示被排除 key 的诊断原因，但这些 key 不得成为前端守卫、角色候选项或保存 payload 的兼容来源。
 
 ## 9. 风险与停止线
 

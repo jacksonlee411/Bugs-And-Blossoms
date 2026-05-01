@@ -1,18 +1,18 @@
 # DEV-PLAN-484：Authz Capability Registry 覆盖门禁方案
 
-**状态**: 规划中（2026-05-01 10:23 CST）
+**状态**: 规划中（2026-05-01 10:31 CST）
 
 ## 0. 适用范围与评审分级
 
 - **评审分级**：`T2`
 - **范围一句话**：冻结新增模块、功能、HTTP API 与 CubeBox API tool overlay 必然进入 capability registry 和功能授权项的覆盖门禁；任何未声明、未登记、未覆盖或 policy-only 的权限漂移都必须在 CI 被阻断。
 - **关联模块/目录**：`pkg/authz/**`、`config/access/**`、`scripts/authz/**`、`internal/server/**`、`internal/superadmin/**`、`modules/cubebox/**`、`apps/web/src/**`
-- **关联计划/标准**：`AGENTS.md`、`DEV-PLAN-000`、`DEV-PLAN-001`、`DEV-PLAN-012`、`DEV-PLAN-017`、`DEV-PLAN-022`、`DEV-PLAN-480`、`DEV-PLAN-481`、`DEV-PLAN-482`、`DEV-PLAN-483`、`DEV-PLAN-485`、`DEV-PLAN-487`
-- **用户入口/触点**：功能授权项、角色定义页 capability 候选项、所有受保护 HTTP API、CubeBox API-first 工具链
+- **关联计划/标准**：`AGENTS.md`、`DEV-PLAN-000`、`DEV-PLAN-001`、`DEV-PLAN-012`、`DEV-PLAN-017`、`DEV-PLAN-022`、`DEV-PLAN-480`、`DEV-PLAN-481`、`DEV-PLAN-482`、`DEV-PLAN-483`、`DEV-PLAN-485`、`DEV-PLAN-487`、`DEV-PLAN-488`
+- **用户入口/触点**：功能授权项、授权项诊断、角色定义页 capability 候选项、所有受保护 HTTP API、CubeBox API-first 工具链
 
 ### 0.1 Simple > Easy 三问
 
-1. **边界**：484 只拥有“覆盖关系和反漂移门禁”；482 继续拥有 capability registry 数据结构与 options API；483 继续拥有旧 `permissionKey` 和旧 key 硬删除。
+1. **边界**：484 只拥有“覆盖关系和反漂移门禁”；482 继续拥有 capability registry 数据结构与 options API；483 继续拥有旧 `permissionKey` 和旧 key 硬删除；488 可消费覆盖事实做只读诊断，但不复制 lint 逻辑。
 2. **不变量**：一个受保护 API 或 CubeBox API tool overlay 必须绑定且只绑定一个 `authz_object + authz_action`；每个 requirement 必须存在于 registry；每个 `assignable=true` capability 必须有当前实现覆盖证据。
 3. **可解释**：管理员在功能授权项看到的授权项标识一定能追溯到至少一个当前可运行 API；新增模块如果忘记登记权限或登记了空壳权限，CI 失败。
 
@@ -47,6 +47,7 @@
 3. 不把 API route path 当成授权项标识；API route 只是覆盖证据。
 4. 不要求每个 route 都有独立 capability key；一个 capability key 可以覆盖多个 route。
 5. 不在本计划中新建 DB 表、迁移或在线功能授权项管理页。
+6. 不在本计划中定义授权项诊断页面；诊断视图由 `DEV-PLAN-488` 承接，484 只提供覆盖事实和阻断规则。
 
 ## 4. 核心关系
 
@@ -113,6 +114,7 @@ Capability Key        = authz_object + ":" + authz_action
 3. 点击功能授权项中的授权项标识时，可以打开标题为“关联 API”的弹窗展示 API method/path；主表不得常驻展示 method/path，也不能把 method/path 放进 key 列。当前已明确不走 executor 路线，弹窗不得规划 executor key 展示。
 4. 前端不得新增 hardcoded capability candidate list；测试 fixture 如需模拟候选项，必须复用 registry/options response shape。
 5. 全量 HTTP API 正向查看面归属 `DEV-PLAN-485` 的 `API 授权目录` 页面；功能授权项页面只保留点击授权项标识后的反向“关联 API”弹窗。
+6. 不可分配、停用、无覆盖、内部 surface 等诊断信息归属 `DEV-PLAN-488` 的授权项诊断视图；不得混入普通功能授权项默认列表或角色定义候选项。
 
 ## 6. 新增模块/API 开发模板要求
 
@@ -141,6 +143,7 @@ Capability Key        = authz_object + ":" + authz_action
 2. [ ] 480/482/483 引用 484，覆盖门禁 owner 不再散落。
 3. [ ] 现有 route/CubeBox API tool overlay/registry/policy/front-end 权限语义按 482/483/484 分工重新标注。
 4. [ ] 在 482/483/485/490 任一实施 PR 合入前，先完成本计划 P1/P2，使 `make authz-lint` 真正覆盖 route/registry/policy/tool overlay 交叉校验。
+5. [ ] 488 如落地授权项诊断视图，必须复用本计划 P1/P2 覆盖事实或同一枚举函数，不得复制第二套覆盖判断。
 
 ### 7.2 P1：提取覆盖事实
 
@@ -158,6 +161,7 @@ Capability Key        = authz_object + ":" + authz_action
 4. [ ] `enabled + assignable` registry entry 无 tenant API 覆盖时 lint 失败。
 5. [ ] HRMS tenant options API 输出 superadmin/internal-only capability 或无覆盖 capability 时 lint 或测试失败。
 6. [ ] `iam.authz:read` 缺 registry、缺 route requirement、缺 policy 或无 endpoint 覆盖时 lint 失败。
+7. [ ] 授权项诊断视图展示无覆盖或 policy-only 信息时，lint 阻断语义不变；页面存在不能让漂移通过 CI。
 
 ### 7.4 P3：开发模板与测试
 
@@ -179,6 +183,7 @@ Capability Key        = authz_object + ":" + authz_action
 4. [ ] policy 引用 registry 外 key 或 policy-only key 时，lint 失败。
 5. [ ] 功能授权项 options API 只输出 `enabled + assignable + tenant_api + 当前实现覆盖` 的 HRMS tenant capability。
 6. [ ] UI 中“授权项标识”和“关联 API”弹窗分离展示，不把 API path 当 key，且不展示 executor key。
+7. [ ] 授权项诊断如展示无覆盖、不可分配、停用或内部 surface capability，必须消费 484 覆盖事实且不能替代 lint 阻断。
 
 ## 9. 风险与停止线
 
@@ -189,6 +194,7 @@ Capability Key        = authz_object + ":" + authz_action
 | 每个 API 都新建 key | `GET list/details/audit` 各自发明 key | 回到 `object/action` 语义，复用同一 read key |
 | 只检查字段名不检查值 | `requiredCapabilityKey=\"orgunit.read\"` 回流 | lint 必须检查 key 值格式与 registry |
 | superadmin 混入 tenant 目录 | HRMS 管理员看到后台租户权限 | surface 分类和 options API 过滤必须阻断 |
+| 诊断视图变成门禁替代品 | 页面能看到问题但 CI 仍放行 | 488 只读展示，484 lint 继续阻断 |
 
 ## 10. 验证记录
 
