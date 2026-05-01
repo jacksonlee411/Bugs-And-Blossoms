@@ -72,15 +72,16 @@
 
 > `DEV-PLAN-019` 选定“本地主体”为 `principal`。但若把“principal↔role 绑定”写进 Casbin policy，会导致“创建用户/租户 = 修改 policy 文件”的运维耦合。为保持简单性：**MVP 的 Casbin 授权以 role 为主体**；principal 仅作为审计/日志/诊断标识。
 >
-> 后续角色定义在线保存、DB SoT 与普通 tenant role 运行时能力授权来源由 `DEV-PLAN-487` 承接。487 不改变本节 `role:{slug}` subject 语义，也不引入 principal 作为 Casbin subject。
+> 后续角色定义在线保存、DB SoT 与普通 tenant role 运行时能力授权来源由 `DEV-PLAN-487` 承接。`DEV-PLAN-489A` 已将 480 系列普通 tenant EHR 授权从单 `role_slug` 修订为 principal 多角色 union：仍使用 `role:{slug}` subject 形态，但运行时输入是 subject set，而不是单个 session role。
 
 - **审计标识（principal id，非 Casbin Enforce 输入）**：
   - tenant principal：`tenant:{tenant_id}:principal:{principal_id}`
   - global principal（仅控制面）：`global:principal:{principal_id}`
 - **授权主体（Effective Subject，Casbin Enforce 输入）**：
   - `role:{slug}`（全小写，slug 作为稳定标识）
-- **MVP 约束（选定）**：
-  - 每个 session 恰好一个 `role_slug`（不做多角色 OR 判定）
+- **历史 MVP 约束（被 489A 修订）**：
+  - 022 baseline 为每个 session 恰好一个 `role_slug`（不做多角色 OR 判定）
+  - 480 系列普通 tenant EHR 运行时以 `DEV-PLAN-489A` 为准：session 注入 `principal_id/tenant_id`，授权门面读取 `assigned_role_slugs[]` 并按 role subject set 做 union
   - 匿名请求使用 `role:anonymous`（由 AuthN/Session 层判定并注入）
 
 ### 4.4 Object 命名（选定：module.resource）
@@ -177,7 +178,7 @@
 > 目标：让实现“对齐规格”而不是“撞出来”；让 reviewer 能只看本节就判断是否出现多套权威表达。
 
 **输入四元组（Casbin Enforce 输入）**
-- `subject`：`role:{slug}`（全小写；由 session 的 `role_slug` 映射得到；MVP 不支持多角色 OR 判定）
+- `subject`：`role:{slug}`（全小写；历史 baseline 由 session 的 `role_slug` 映射得到；480 系列普通 tenant EHR 按 `DEV-PLAN-489A` 从 `principal_role_assignments` 解析为 subject set 并由统一授权门面做 deterministic union）
 - `domain`：tenant UUID（lowercase string）或 `global`（注意：这是请求侧 `r.dom`；策略侧 `p.dom` 允许 `*` 通配）
 - `object`：`module.resource`（全小写）
 - `action`：MVP 仅允许 `read|admin|debug`（`create|update|delete` 保留但默认不启用）
@@ -195,6 +196,7 @@
 
 **日志与缺口诊断契约（冻结）**
 - 记录字段（最小集）：`request_id`（或等价链路 id）、`method`、`path`、`principal_id`、`role_slug`、`tenant_id`（如有）、`domain`、`object`、`action`、`mode`、`decision`（allow/deny）、`policy_rev`（`config/access/policy.csv.rev` 的值）。
+- 480 系列 489A cutover 后，普通 tenant EHR 授权日志必须用 `role_slugs` 与 `matched_role_slugs` 替代单值 `role_slug` 解释 union 判定；`role_slug` 仅可作为历史 baseline 字段或非 480 surface 字段保留。
 - 缺口（missing policy）的口径：指“在当前 `subject/domain/object/action` 下无匹配策略导致 deny”；与“enforcer/加载失败”等系统错误区分开。
 
 **Policy 形态约束（MVP）**
@@ -224,10 +226,10 @@
 
 > 目标：reviewer 能用 5 分钟复述“为什么会放行/为什么会拒绝”，而不需要翻多处实现细节。
 
-1. 请求进入后，先由 AuthN/session 中间件解析 `principal_id` 并确定 `role_slug`（匿名为 `anonymous`；superadmin 控制面使用其专用 principal）。
+1. 请求进入后，先由 AuthN/session 中间件解析 `principal_id` 与 `tenant_id`；历史 baseline 同时确定单 `role_slug`（匿名为 `anonymous`；superadmin 控制面使用其专用 principal）。480 系列普通 tenant EHR 路径按 `DEV-PLAN-489A` 从 IAM 用户授权 SoT 读取 `assigned_role_slugs[]`。
 2. tenant app 的请求必须先解析 tenant（Host → `tenant_id`，fail-closed），并把 `tenant_id` 放入上下文（对齐 `DEV-PLAN-019`）。
 3. 计算 Casbin `domain`：tenant app 用 `strings.ToLower(tenant_id.String())`；superadmin 控制面固定为 `global`。
-4. 计算 Casbin `subject`（Effective Subject）：`role:{slug}`（MVP 单角色）。
+4. 计算 Casbin `subject`（Effective Subject）：历史 baseline 为 `role:{slug}`（MVP 单角色）；489A 普通 tenant EHR 为 `role:{slug}` subject set，并由统一授权门面做 union。
 5. 计算 `object/action`：由 `pkg/authz` registry/helper 映射得到（MVP action 仅 `read/admin/debug`）。
 6. 调用 `authz.Authorize(ctx, Request{subject, domain, object, action})` 得到 allow/deny（由 `AUTHZ_MODE` 决定是否阻断）。
 7. `AUTHZ_MODE=enforce` 且 deny：返回统一 403，并记录缺口（missing policy）。
@@ -257,7 +259,7 @@
 - 覆盖率口径（待本仓库 SSOT 冻结）：默认 line coverage；统计范围应包含 `pkg/authz` 与各模块的授权接入层。
 - 排除项原则：仅允许排除生成代码/第三方；不允许排除“难测的业务分支”。
 - 最小用例集（必须覆盖）：
-  - `role_slug → role:{slug}` 的映射规则（MVP 单角色）
+  - `role_slug → role:{slug}` 的历史 baseline 映射规则，以及 489A `assigned_role_slugs[] → role:{slug}[]` subject set 映射规则
   - subject/domain/object/action 的 normalize 与不变量校验
   - `AUTHZ_MODE` 三态行为（disabled/shadow/enforce）与 `AUTHZ_UNSAFE_ALLOW_DISABLED` fail-fast
   - allow/deny 与错误映射（含 missing policy 的诊断信息）
