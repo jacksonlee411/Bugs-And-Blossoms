@@ -149,7 +149,8 @@ OrgScopesForPrincipal(principal, capability)
 1. [ ] 补授权门面测试：多角色任一命中允许、全不命中拒绝、空角色集合拒绝、禁用角色拒绝。
 2. [ ] 补 scope provider 测试：多组织范围 union、缺失组织范围 fail-closed、无隐式全租户。
 3. [ ] 补反回流门禁测试：`role_slug` 单字段、`roles[0]`、DB+CSV OR、前端/prompt 范围推导均被阻断。
-4. [ ] 更新 readiness 记录，登记 `make check authz-role-union`、`make authz-pack && make authz-test && make authz-lint`、相关 Go/UI 测试结果。
+4. [ ] 补运行时闭环证据：角色能力来自 487 DB SoT，principal 角色集合来自 489 `principal_role_assignments`，组织范围来自 489 scope provider，普通 API 与 CubeBox API-first 不回读 CSV、`iam.principals.role_slug` 或 `roles[0]`。
+5. [ ] 更新 readiness 记录，登记 `make check authz-role-union`、`make authz-pack && make authz-test && make authz-lint`、相关 Go/UI 测试结果。
 
 ## 5. ADR 摘要
 
@@ -175,4 +176,5 @@ OrgScopesForPrincipal(principal, capability)
 2. [ ] 480/487/489 明确引用 489A，且不存在“当前 session 有效角色 = 单 `role_slug`”作为普通 tenant EHR 运行时授权 SSOT 的表述。
 3. [ ] 489 的 `roles: []`、`principal_role_assignments`、`CapabilitiesForPrincipal` 与 489A 的 union 语义一致。
 4. [ ] 实施前没有新增 DB 表；实施新增表时按 AGENTS 要求再次获得用户手工确认。
-5. [ ] `make check doc` 通过。
+5. [ ] 489A 若作为 480 系列运行时授权交付的一部分验收，必须同时满足 480A 中 487/489/489A 闭环口径；不得仅凭授权门面或反回流门禁单点完成宣称运行时授权完成。
+6. [ ] `make check doc` 通过。

@@ -305,6 +305,7 @@ principal assigned_role_slugs[] (DEV-PLAN-489A)
 3. `make authz-lint` 必须能区分 bootstrap/static/system surface policy 与普通 tenant role DB authz capability；普通 tenant role 在 CSV 中残留可放行 capability 时应失败。
 4. 489 用户授权链路只能引用 487 的角色定义摘要和 `role_slug`；489A 只能通过 487 服务读取角色 capability 集合做 union，不得另建角色定义表或角色 authz capability 表。
 5. P3 HTTP 写入 API 与 P4 运行时 cutover 必须形成同一可用闭环；不得合入“角色可保存到 DB，但普通请求仍按 CSV tenant policy 判定”的可调用管理入口。若工程上拆 PR，前置 PR 只能提交不可路由的 service/repository 或离线迁移对账，不能暴露在线保存入口。
+6. 487 不得单独宣布“480 系列运行时授权完成”。运行时闭环必须与 489 的 `principal_role_assignments`、scope provider / orgunit 裁剪，以及 489A 的多角色 union 一起验收；否则只能声明角色定义 DB SoT 子能力完成。
 
 ### 7.2 与 Casbin 的关系
 
@@ -399,6 +400,7 @@ principal assigned_role_slugs[] (DEV-PLAN-489A)
 | 角色与范围混淆 | 角色定义 payload 接收组织范围 | 400 拒绝，范围只属于 489 用户授权 |
 | schema 未确认 | 未获确认就创建表 | 停止实施，先获得用户手工确认 |
 | UI 保存但运行时不生效 | 角色保存成功，API 仍按旧 policy 判断 | P4 cutover 未完成前不得宣称角色保存闭环交付 |
+| 子计划单独宣布运行时完成 | 487 DB SoT 可保存，但 principal assignments、scope provider 或 489A union 尚未接入 | 只能声明 487 子能力完成；480 系列运行时闭环必须按 480A 的 487/489/489A 组合验收 |
 
 ## 11. 验收标准
 
@@ -408,7 +410,8 @@ principal assigned_role_slugs[] (DEV-PLAN-489A)
 4. [ ] revision 冲突返回 `409 stale_revision`。
 5. [ ] 普通 tenant role 的运行时授权来自 DB role authz capability，CSV 旧 tenant policy 不会兜底放行。
 6. [ ] 481 页面只提交基础信息、revision 与 `authz_capability_keys`，不提交组织范围、字段策略或复制语义字段。
-7. [ ] 相关文档引用 487，`make check doc` 通过。
+7. [ ] 487 若作为 480 系列运行时授权交付的一部分验收，必须同时满足 480A 中 487/489/489A 闭环口径；不得仅凭角色保存 API 和 DB SoT 宣称运行时授权完成。
+8. [ ] 相关文档引用 487，`make check doc` 通过。
 
 ## 12. 验证记录
 

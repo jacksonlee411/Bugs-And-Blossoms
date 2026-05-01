@@ -340,7 +340,8 @@ type PrincipalScopeProvider interface {
 2. [ ] 补 orgunit scope 裁剪测试。
 3. [ ] 补 UI 交互测试。
 4. [ ] 补 E2E：A 全集团，B 仅鲜花事业部；普通 API 与 CubeBox 查询一致。
-5. [ ] 更新 `docs/dev-records/DEV-PLAN-489-READINESS.md` 记录命中命令和结果。
+5. [ ] 补闭环测试或 E2E 证据：角色能力来自 487 DB SoT，principal 角色集合来自 489 `principal_role_assignments`，能力判断按 489A union，组织范围来自 489 scope provider，普通 API 与 CubeBox API-first 不回读 CSV、`iam.principals.role_slug` 或 `roles[0]`。
+6. [ ] 更新 `docs/dev-records/DEV-PLAN-489-READINESS.md` 记录命中命令和结果。
 
 ## 7. 验收标准
 
@@ -351,7 +352,8 @@ type PrincipalScopeProvider interface {
 5. [ ] CubeBox API-first orgunit 查询与普通 HTTP API 使用同一权限和组织范围结果。
 6. [ ] 角色定义页不出现组织范围、`scope_required`、字段策略、有效期或策略预览。
 7. [ ] policy CSV、route requirement、capability registry 和 API catalog 能追溯到 `iam.authz:read/admin` 或更明确管理能力。
-8. [ ] 命中的 Go/Authz/Routing/DB/sqlc/UI/E2E/doc 门禁通过，证据写入 readiness 记录或 PR 说明。
+8. [ ] 若 489 作为 480 系列运行时授权交付的一部分验收，必须同时满足 480A 中 487/489/489A 闭环口径；不得仅凭用户授权保存 API 或 scope provider 单点完成宣称运行时授权完成。
+9. [ ] 命中的 Go/Authz/Routing/DB/sqlc/UI/E2E/doc 门禁通过，证据写入 readiness 记录或 PR 说明。
 
 ## 8. 风险与停止线
 
@@ -364,6 +366,7 @@ type PrincipalScopeProvider interface {
 | 组织范围塞进 Casbin | policy object/action 带组织节点 | 组织范围只在 IAM SoT 与 scope provider |
 | OrgUnit 自读 IAM 表 | orgunit store 直接依赖 IAM schema | 由服务层注入 scope filter，避免跨模块耦合 |
 | CubeBox 绕过裁剪 | 模型 executor 或旧 read plan 直读全量 orgunit | CubeBox API-first 复用 HTTP API / route-service path |
+| 子计划单独宣布运行时完成 | 489 用户授权可保存，但 487 DB role cutover 或 489A union 尚未接入 | 只能声明 489 子能力完成；480 系列运行时闭环必须按 480A 的 487/489/489A 组合验收 |
 | 过度设计 | 首批加入 effective_date、字段策略、team/position | 全部后移独立计划 |
 | 新表未经确认 | 实施 PR 直接提交迁移 | 新增 DB 表前必须再次获得用户手工确认 |
 

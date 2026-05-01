@@ -145,24 +145,16 @@ enabled + assignable + tenant_api + 当前 tenant API 覆盖
 
 ### 5.2 关联 API 反向查询
 
-首期必须复用 484 的单一覆盖事实聚合能力，并在服务端提供一个 authz capability 反向查询口径。endpoint 形态可以在实施 PR 中固定，但覆盖关系的 join 只能发生在 484 同源聚合层：
-
-1. 复用 485 endpoint facade：
+首期必须复用 484 的单一覆盖事实聚合能力，并固定复用 485 的 API 授权目录 endpoint facade 做服务端过滤。覆盖关系的 join 只能发生在 484 同源聚合层：
 
 ```text
 GET /iam/api/authz/api-catalog?authz_capability_key={key}
 ```
 
-2. 新增更窄的反向 endpoint facade：
+规则：
 
-```text
-GET /iam/api/authz/capabilities/{authz_capability_key}/apis
-```
-
-选择规则：
-
-1. 无论选择哪个 endpoint，响应都必须由服务端按 `authz_capability_key` 过滤，前端不得拉全量后本地筛选。
-2. 窄 endpoint 只能包装 484 单一覆盖事实聚合能力，不得复制第二套 route/registry/policy/CubeBox overlay 关联判断。
+1. 响应必须由服务端按 `authz_capability_key` 过滤，前端不得拉全量后本地筛选。
+2. 482A 不新增 `GET /iam/api/authz/capabilities/{authz_capability_key}/apis` 等窄 endpoint；若后续出现明确性能、权限边界或响应形态隔离需求，必须先更新 482A/485/480A 契约或另起计划说明原因。
 3. endpoint 必须受 `iam.authz:read` 或更严格已登记 capability 保护。
 
 建议响应字段：
@@ -214,7 +206,7 @@ GET /iam/api/authz/capabilities/{authz_capability_key}/apis
 ### 7.3 P2：服务端 API
 
 1. [ ] 确认主列表 endpoint 使用 `GET /iam/api/authz/capabilities` 默认口径。
-2. [ ] 固定 `关联 API` 查询使用 `api-catalog?authz_capability_key=` 或窄 endpoint 二选一；二者都只能是 484 聚合结果的服务端过滤 facade。
+2. [ ] 固定 `关联 API` 查询使用 `GET /iam/api/authz/api-catalog?authz_capability_key=`；首期不新增窄 endpoint。
 3. [ ] endpoint 受已登记并有覆盖的 `iam.authz:read` 或更严格授权项保护。
 4. [ ] handler/API 测试覆盖搜索筛选、默认不返回诊断全集、反向 API 查询不展示 executor key。
 
