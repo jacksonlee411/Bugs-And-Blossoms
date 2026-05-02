@@ -3,6 +3,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { GridColDef } from '@mui/x-data-grid'
 import { ApiClientError } from '../../api/errors'
+import { getMessage, type MessageKey, type MessageVars } from '../../i18n/messages'
 import { RoleManagementPage, UserAuthorizationPage } from './AuthzRolePages'
 
 const authzApiMocks = vi.hoisted(() => ({
@@ -37,6 +38,13 @@ vi.mock('../../components/DataGridPage', () => ({
     rows: Array<Record<string, unknown>>
   }) => (
     <div data-testid='grid'>
+      <div data-testid='grid-headers'>
+        {columns.map((column) => (
+          <div data-field={String(column.field)} key={String(column.field)}>
+            {column.headerName}
+          </div>
+        ))}
+      </div>
       {rows.length === 0 ? <div>{noRowsLabel}</div> : null}
       {rows.map((row) => (
         <div data-testid={`row-${String(row.id)}`} key={String(row.id)}>
@@ -152,11 +160,7 @@ describe('AuthzRolePages', () => {
       locale: 'zh',
       navDebugMode: false,
       setLocale: vi.fn(),
-      t: (key: string) =>
-        ({
-          common_action_done: '操作已完成',
-          text_loading: '加载中'
-        })[key] ?? key,
+      t: (key: MessageKey, vars?: MessageVars) => getMessage('zh', key, vars),
       tenantId: 'tenant-a',
       themeMode: 'light',
       toggleThemeMode: vi.fn()
@@ -185,13 +189,17 @@ describe('AuthzRolePages', () => {
       role: { ...initialRole!, name: '鲜花公司HR', revision: 4 }
     })
 
-	    renderWithQueryClient(<RoleManagementPage />)
+    renderWithQueryClient(<RoleManagementPage />)
 
-	    await screen.findByText('编辑角色：鲜花公司HR')
-	    fireEvent.change(screen.getByLabelText('角色描述'), { target: { value: '查看组织范围内组织' } })
-	    const saveButton = screen.getByRole('button', { name: '保存' })
-	    await waitFor(() => expect(saveButton).toBeEnabled())
-	    fireEvent.click(saveButton)
+    await screen.findByText('编辑角色：鲜花公司HR')
+    expect(within(screen.getByTestId('grid-headers')).queryByText('组织范围')).not.toBeInTheDocument()
+    expect(within(screen.getByTestId('grid')).queryByText('需要')).not.toBeInTheDocument()
+    expect(within(screen.getByTestId('grid')).queryByText('不需要')).not.toBeInTheDocument()
+
+    fireEvent.change(screen.getByLabelText('角色描述'), { target: { value: '查看组织范围内组织' } })
+    const saveButton = screen.getByRole('button', { name: '保存' })
+    await waitFor(() => expect(saveButton).toBeEnabled())
+    fireEvent.click(saveButton)
 
     await waitFor(() => {
       expect(authzApiMocks.updateAuthzRole).toHaveBeenCalledWith('flower-hr', {
@@ -209,13 +217,13 @@ describe('AuthzRolePages', () => {
       new ApiClientError('该角色需要选择组织范围。', 'UNKNOWN_ERROR', 422, undefined, { code: 'authz_org_scope_required' })
     )
 
-	    renderWithQueryClient(<UserAuthorizationPage />)
+    renderWithQueryClient(<UserAuthorizationPage />)
 
-	    await screen.findByText('用户：user-b@example.invalid · 王小花')
-	    await screen.findByTestId('row-flower-hr')
-	    const saveButton = screen.getByRole('button', { name: '保存' })
-	    await waitFor(() => expect(saveButton).toBeEnabled())
-	    fireEvent.click(saveButton)
+    await screen.findByText('用户：user-b@example.invalid · 王小花')
+    await screen.findByTestId('row-flower-hr')
+    const saveButton = screen.getByRole('button', { name: '保存' })
+    await waitFor(() => expect(saveButton).toBeEnabled())
+    fireEvent.click(saveButton)
 
     await waitFor(() => {
       expect(authzApiMocks.replacePrincipalAuthzAssignment).toHaveBeenCalledWith('principal-b', {
@@ -234,13 +242,13 @@ describe('AuthzRolePages', () => {
     authzApiMocks.getPrincipalAuthzAssignment.mockResolvedValue({
       principal_id: 'principal-b',
       roles: [{ role_slug: 'flower-hr', display_name: '鲜花公司HR', description: '查看组织', requires_org_scope: true }],
-      org_scopes: [{ org_code: 'FLOWERS', org_name: '鲜花事业部', include_descendants: true }],
+      org_scopes: [{ org_node_key: 'A2345678', org_code: 'FLOWERS', org_name: '鲜花事业部', include_descendants: true }],
       revision: 5
     })
     authzApiMocks.replacePrincipalAuthzAssignment.mockResolvedValue({
       principal_id: 'principal-b',
       roles: [{ role_slug: 'dict-reader', display_name: '字典只读', description: '查看字典', requires_org_scope: false }],
-      org_scopes: [{ org_code: 'FLOWERS', org_name: '鲜花事业部', include_descendants: true }],
+      org_scopes: [{ org_node_key: 'A2345678', org_code: 'FLOWERS', org_name: '鲜花事业部', include_descendants: true }],
       revision: 6
     })
 
@@ -255,7 +263,7 @@ describe('AuthzRolePages', () => {
     await waitFor(() => {
       expect(authzApiMocks.replacePrincipalAuthzAssignment).toHaveBeenCalledWith('principal-b', {
         roles: [{ role_slug: 'flower-hr' }, { role_slug: 'dict-reader' }],
-        org_scopes: [{ org_code: 'FLOWERS', org_name: '鲜花事业部', include_descendants: true }],
+        org_scopes: [{ org_node_key: 'A2345678', org_code: 'FLOWERS', org_name: '鲜花事业部', include_descendants: true }],
         revision: 5
       })
     })

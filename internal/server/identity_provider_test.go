@@ -107,20 +107,20 @@ func TestKratosIdentityProvider_AuthenticatePassword(t *testing.T) {
 	p := &kratosIdentityProvider{client: kc}
 
 	t.Run("success", func(t *testing.T) {
-			st.loginStatus = http.StatusOK
-			st.whoamiID = "kid1"
-			st.tenantID = "t1"
-			st.email = "a@example.invalid"
-			st.whoamiBody = ""
+		st.loginStatus = http.StatusOK
+		st.whoamiID = "kid1"
+		st.tenantID = "t1"
+		st.email = "a@example.invalid"
+		st.whoamiBody = ""
 
-			ident, err := p.AuthenticatePassword(context.Background(), Tenant{ID: "t1"}, "A@Example.Invalid", "pw")
-			if err != nil {
-				t.Fatal(err)
-			}
-			if ident.KratosIdentityID != "kid1" || ident.Email != "a@example.invalid" || ident.DisplayName != "" {
-				t.Fatalf("ident=%+v", ident)
-			}
-		})
+		ident, err := p.AuthenticatePassword(context.Background(), Tenant{ID: "t1"}, "A@Example.Invalid", "pw")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if ident.KratosIdentityID != "kid1" || ident.Email != "a@example.invalid" || ident.DisplayName != "" {
+			t.Fatalf("ident=%+v", ident)
+		}
+	})
 
 	t.Run("prefers display_name and falls back to name", func(t *testing.T) {
 		st.loginStatus = http.StatusOK

@@ -70,6 +70,7 @@ export interface PrincipalRoleAssignment {
 }
 
 export interface PrincipalOrgScope {
+  org_node_key?: string
   org_code?: string
   org_name?: string
   include_descendants: boolean

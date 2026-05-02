@@ -5,7 +5,6 @@ import {
   Box,
   Button,
   Checkbox,
-  Chip,
   CircularProgress,
   Divider,
   FormControlLabel,
@@ -70,7 +69,6 @@ interface RoleRow {
   actionLabel: string
   authzCapabilityKey: AuthzCapabilityKey
   description: string
-  scopeDimension: string
 }
 
 interface AssignmentRoleRow {
@@ -80,6 +78,7 @@ interface AssignmentRoleRow {
 
 interface AssignmentOrgScopeRow {
   id: string
+  orgNodeKey: string
   orgCode: string
   orgName: string
   includeDescendants: boolean
@@ -132,9 +131,8 @@ function draftFromRole(role: AuthzRoleDefinition): RoleDraft {
   }
 }
 
-function roleSummary(role: AuthzRoleDefinition): string {
-  const count = role.authz_capability_keys.length
-  return `${role.role_slug} · ${count} 项功能权限`
+function roleSummary(role: AuthzRoleDefinition, capabilityCountLabel: string): string {
+  return `${role.role_slug} · ${capabilityCountLabel}`
 }
 
 function roleDescription(role: AuthzRoleDefinition, capabilitiesByKey: Map<string, AuthzCapabilityOption>): string {
@@ -166,8 +164,9 @@ function selectedRoleSlugs(rows: AssignmentRoleRow[]): string[] {
 }
 
 function scopeRowsFromAssignment(assignment: PrincipalAuthzAssignmentResponse | undefined): AssignmentOrgScopeRow[] {
-  return (assignment?.org_scopes ?? []).map((scope) => ({
-    id: scope.org_code ?? '',
+  return (assignment?.org_scopes ?? []).map((scope, index) => ({
+    id: scope.org_code ?? scope.org_node_key ?? `scope-${index}`,
+    orgNodeKey: scope.org_node_key ?? '',
     orgCode: scope.org_code ?? '',
     orgName: scope.org_name ?? '',
     includeDescendants: scope.include_descendants
@@ -192,11 +191,12 @@ function assignmentDraftFromResponse(assignment: PrincipalAuthzAssignmentRespons
 function buildScopePayload(rows: AssignmentOrgScopeRow[]): PrincipalOrgScope[] {
   return rows
     .map((row) => ({
+      org_node_key: row.orgNodeKey.trim() || undefined,
       org_code: row.orgCode.trim(),
       org_name: row.orgName.trim() || undefined,
       include_descendants: row.includeDescendants
     }))
-    .filter((row) => row.org_code.length > 0)
+    .filter((row) => (row.org_code?.length ?? 0) > 0 || (row.org_node_key?.length ?? 0) > 0)
 }
 
 export function RoleManagementPage() {
@@ -238,8 +238,7 @@ export function RoleManagementPage() {
       resourceLabel: item.resource_label,
       actionLabel: item.action_label,
       authzCapabilityKey: item.authz_capability_key,
-      description: item.label,
-      scopeDimension: item.scope_dimension
+      description: item.label
     }))
   }, [capabilities, activeDraft.capabilityKeys])
 
@@ -272,7 +271,7 @@ export function RoleManagementPage() {
   const roleColumns = useMemo<GridColDef<RoleRow>[]>(() => [
     {
       field: 'selected',
-      headerName: '选择',
+      headerName: t('authz_role_column_select'),
       minWidth: 80,
       sortable: false,
       renderCell: (params) => (
@@ -281,31 +280,25 @@ export function RoleManagementPage() {
           disabled={activeDraft.systemManaged || saveMutation.isPending}
           onChange={(event) => {
             const key = params.row.authzCapabilityKey
-                setDraft((previous) => {
-                  const base = previous ?? activeDraft
-                  const keys = new Set(base.capabilityKeys)
-                  if (event.target.checked) {
-                    keys.add(key)
-                  } else {
-                    keys.delete(key)
-                  }
-                  return { ...base, capabilityKeys: [...keys].sort() }
-                })
-              }}
-            />
+            setDraft((previous) => {
+              const base = previous ?? activeDraft
+              const keys = new Set(base.capabilityKeys)
+              if (event.target.checked) {
+                keys.add(key)
+              } else {
+                keys.delete(key)
+              }
+              return { ...base, capabilityKeys: [...keys].sort() }
+            })
+          }}
+        />
       )
     },
-    { field: 'resourceLabel', headerName: '资源', minWidth: 150, flex: 0.8 },
-    { field: 'actionLabel', headerName: '操作', minWidth: 90 },
-    { field: 'authzCapabilityKey', headerName: '授权项标识', minWidth: 220, flex: 1 },
-    { field: 'description', headerName: '权限说明', minWidth: 260, flex: 1.2 },
-    {
-      field: 'scopeDimension',
-      headerName: '组织范围',
-      minWidth: 110,
-      renderCell: (params) => <Chip label={params.value === 'organization' ? '需要' : '不需要'} size='small' />
-    }
-  ], [activeDraft, saveMutation.isPending])
+    { field: 'resourceLabel', headerName: t('authz_role_column_resource'), minWidth: 150, flex: 0.8 },
+    { field: 'actionLabel', headerName: t('authz_role_column_action'), minWidth: 90 },
+    { field: 'authzCapabilityKey', headerName: t('authz_role_column_key'), minWidth: 220, flex: 1 },
+    { field: 'description', headerName: t('authz_role_column_description'), minWidth: 260, flex: 1.2 }
+  ], [activeDraft, saveMutation.isPending, t])
 
   const saveDisabled =
     saveMutation.isPending ||
@@ -317,8 +310,8 @@ export function RoleManagementPage() {
   return (
     <>
       <PageHeader
-        title='角色管理'
-        subtitle='定义角色基础信息与可分配功能权限，保存后立即生效'
+        title={t('page_authz_roles_title')}
+        subtitle={t('page_authz_roles_subtitle')}
         actions={
           <>
             <Button onClick={() => {
@@ -326,10 +319,10 @@ export function RoleManagementPage() {
               setDraft(emptyRoleDraft())
               setErrorMessage('')
             }} startIcon={<AddIcon />} variant='outlined'>
-              新建角色
+              {t('authz_role_create')}
             </Button>
             <Button disabled={saveDisabled} onClick={() => saveMutation.mutate()} startIcon={<SaveIcon />} variant='contained'>
-              保存
+              {t('common_save')}
             </Button>
           </>
         }
@@ -348,7 +341,7 @@ export function RoleManagementPage() {
           }}
         >
           <Typography sx={{ px: 1, py: 0.5 }} variant='subtitle2'>
-            角色
+            {t('authz_role_list_title')}
           </Typography>
           {rolesQuery.isLoading ? (
             <Stack alignItems='center' sx={{ py: 4 }}>
@@ -367,16 +360,18 @@ export function RoleManagementPage() {
                   selected={role.role_slug === selectedRole?.role_slug}
                   sx={{ borderRadius: 1, mb: 0.5 }}
                 >
-	                  <ListItemText
-	                    primary={role.name}
-	                    secondary={
-	                      <Stack spacing={0.5}>
-	                        <Typography color='text.secondary' variant='caption'>{roleSummary(role)}</Typography>
-	                        <Typography color='text.secondary' variant='caption'>{roleDescription(role, capabilitiesByKey)}</Typography>
-	                      </Stack>
-	                    }
-	                    secondaryTypographyProps={{ component: 'div' }}
-	                  />
+                  <ListItemText
+                    primary={role.name}
+                    secondary={
+                      <Stack spacing={0.5}>
+                        <Typography color='text.secondary' variant='caption'>
+                          {roleSummary(role, t('authz_role_capability_count', { count: role.authz_capability_keys.length }))}
+                        </Typography>
+                        <Typography color='text.secondary' variant='caption'>{roleDescription(role, capabilitiesByKey)}</Typography>
+                      </Stack>
+                    }
+                    secondaryTypographyProps={{ component: 'div' }}
+                  />
                 </ListItemButton>
               ))}
             </List>
@@ -390,28 +385,30 @@ export function RoleManagementPage() {
             </Alert>
           ) : null}
           {errorMessage ? <Alert severity='error' sx={{ mb: 2 }}>{errorMessage}</Alert> : null}
-          {activeDraft.systemManaged ? <Alert severity='info' sx={{ mb: 2 }}>系统内置角色不可修改。</Alert> : null}
+          {activeDraft.systemManaged ? <Alert severity='info' sx={{ mb: 2 }}>{t('authz_role_system_readonly')}</Alert> : null}
 
           <Box sx={{ bgcolor: 'background.paper', border: 1, borderColor: 'divider', borderRadius: 1, p: 2, mb: 2 }}>
             <Typography variant='h6'>
-              {activeDraft.mode === 'create' ? '新建角色' : `编辑角色：${activeDraft.name || activeDraft.roleSlug}`}
+              {activeDraft.mode === 'create'
+                ? t('authz_role_create_title')
+                : t('authz_role_edit_title', { name: activeDraft.name || activeDraft.roleSlug })}
             </Typography>
             <Typography color='text.secondary' variant='body2'>
-              角色只维护基础信息和功能权限；组织范围在用户授权中配置
+              {t('authz_role_form_hint')}
             </Typography>
             <Divider sx={{ my: 2 }} />
             <Stack direction={{ md: 'row', xs: 'column' }} spacing={2}>
               <TextField
                 disabled={activeDraft.systemManaged}
                 fullWidth
-                label='角色名称'
+                label={t('authz_role_name')}
                 onChange={(event) => setDraft((previous) => ({ ...(previous ?? activeDraft), name: event.target.value }))}
                 value={activeDraft.name}
               />
               <TextField
                 disabled={activeDraft.mode === 'edit' || activeDraft.systemManaged}
                 fullWidth
-                label='角色标识'
+                label={t('authz_role_slug')}
                 onChange={(event) => setDraft((previous) => ({ ...(previous ?? activeDraft), roleSlug: event.target.value }))}
                 value={activeDraft.roleSlug}
               />
@@ -419,7 +416,7 @@ export function RoleManagementPage() {
             <TextField
               disabled={activeDraft.systemManaged}
               fullWidth
-              label='角色描述'
+              label={t('authz_role_description')}
               multiline
               minRows={2}
               onChange={(event) => setDraft((previous) => ({ ...(previous ?? activeDraft), description: event.target.value }))}
@@ -428,7 +425,7 @@ export function RoleManagementPage() {
             />
           </Box>
 
-          <Typography sx={{ mb: 1 }} variant='h6'>功能权限分配</Typography>
+          <Typography sx={{ mb: 1 }} variant='h6'>{t('authz_role_capability_section')}</Typography>
           <DataGridPage
             columns={roleColumns}
             gridProps={{
@@ -437,7 +434,7 @@ export function RoleManagementPage() {
             }}
             loading={capabilitiesQuery.isFetching}
             loadingLabel={t('text_loading')}
-            noRowsLabel='暂无可分配功能授权项'
+            noRowsLabel={t('authz_role_capability_empty')}
             rows={capabilityRows}
             storageKey={`authz-role-definition/${tenantId}`}
           />
@@ -539,6 +536,7 @@ export function UserAuthorizationPage() {
         {
           id: `scope-${Date.now()}`,
           orgCode: nextOrg?.org_code ?? '',
+          orgNodeKey: '',
           orgName: nextOrg?.name ?? '',
           includeDescendants: true
         }
@@ -549,7 +547,7 @@ export function UserAuthorizationPage() {
   const roleColumns = useMemo<GridColDef<AssignmentRoleRow>[]>(() => [
     {
       field: 'roleSlug',
-      headerName: '授权角色',
+      headerName: t('authz_assignment_role'),
       minWidth: 260,
       flex: 1,
       renderCell: (params) => {
@@ -568,7 +566,7 @@ export function UserAuthorizationPage() {
               }))
             }}
             options={roles}
-            renderInput={(inputParams) => <TextField {...inputParams} label='授权角色' size='small' />}
+            renderInput={(inputParams) => <TextField {...inputParams} label={t('authz_assignment_role')} size='small' />}
             value={value}
           />
         )
@@ -576,7 +574,7 @@ export function UserAuthorizationPage() {
     },
     {
       field: 'description',
-      headerName: '角色说明',
+      headerName: t('authz_assignment_role_description'),
       minWidth: 300,
       flex: 1.2,
       valueGetter: (_, row) => {
@@ -586,12 +584,12 @@ export function UserAuthorizationPage() {
     },
     {
       field: 'actions',
-      headerName: '操作',
+      headerName: t('authz_assignment_actions'),
       minWidth: 90,
       sortable: false,
       renderCell: (params) => (
         <IconButton
-          aria-label='移除角色'
+          aria-label={t('authz_assignment_remove_role')}
           onClick={() => {
             updateDraft((current) => ({
               ...current,
@@ -604,12 +602,12 @@ export function UserAuthorizationPage() {
         </IconButton>
       )
     }
-  ], [roleRows, roles, rolesBySlug])
+  ], [roles, rolesBySlug, t, updateDraft])
 
   const scopeColumns = useMemo<GridColDef<AssignmentOrgScopeRow>[]>(() => [
     {
       field: 'orgCode',
-      headerName: '组织',
+      headerName: t('authz_assignment_org'),
       minWidth: 280,
       flex: 1,
       renderCell: (params) => {
@@ -625,13 +623,13 @@ export function UserAuthorizationPage() {
                 ...current,
                 scopeRows: current.scopeRows.map((row) => (
                   row.id === params.row.id
-                    ? { ...row, orgCode: option?.org_code ?? '', orgName: option?.name ?? '' }
+                    ? { ...row, orgNodeKey: '', orgCode: option?.org_code ?? '', orgName: option?.name ?? '' }
                     : row
                 ))
               }))
             }}
             options={orgUnits}
-            renderInput={(inputParams) => <TextField {...inputParams} label='组织' size='small' />}
+            renderInput={(inputParams) => <TextField {...inputParams} label={t('authz_assignment_org')} size='small' />}
             value={value}
           />
         )
@@ -639,7 +637,7 @@ export function UserAuthorizationPage() {
     },
     {
       field: 'includeDescendants',
-      headerName: '包含下级组织',
+      headerName: t('authz_assignment_include_descendants'),
       minWidth: 150,
       renderCell: (params) => (
         <FormControlLabel
@@ -662,12 +660,12 @@ export function UserAuthorizationPage() {
     },
     {
       field: 'actions',
-      headerName: '操作',
+      headerName: t('authz_assignment_actions'),
       minWidth: 90,
       sortable: false,
       renderCell: (params) => (
         <IconButton
-          aria-label='移除组织范围'
+          aria-label={t('authz_assignment_remove_org_scope')}
           onClick={() => {
             updateDraft((current) => ({
               ...current,
@@ -680,7 +678,7 @@ export function UserAuthorizationPage() {
         </IconButton>
       )
     }
-  ], [orgUnits, orgUnitsQuery.isFetching, scopeRows])
+  ], [orgUnits, orgUnitsQuery.isFetching, t, updateDraft])
 
   const saveDisabled =
     !activePrincipalID ||
@@ -691,8 +689,10 @@ export function UserAuthorizationPage() {
   return (
     <>
       <PageHeader
-        title='用户授权'
-        subtitle={selectedPrincipal ? `用户：${principalOptionLabel(selectedPrincipal)}` : '选择用户后维护角色与组织范围'}
+        title={t('page_authz_user_assignments_title')}
+        subtitle={selectedPrincipal
+          ? t('page_authz_user_assignments_subtitle_selected', { user: principalOptionLabel(selectedPrincipal) })
+          : t('page_authz_user_assignments_subtitle_empty')}
         actions={
           <>
             <Button
@@ -704,10 +704,10 @@ export function UserAuthorizationPage() {
               }}
               variant='outlined'
             >
-              取消
+              {t('common_cancel')}
             </Button>
             <Button disabled={saveDisabled} onClick={() => saveMutation.mutate()} startIcon={<SaveIcon />} variant='contained'>
-              保存
+              {t('common_save')}
             </Button>
           </>
         }
@@ -725,7 +725,7 @@ export function UserAuthorizationPage() {
               setErrorMessage('')
             }}
             options={principals}
-            renderInput={(params) => <TextField {...params} label='用户' />}
+            renderInput={(params) => <TextField {...params} label={t('authz_assignment_user')} />}
             value={selectedPrincipal}
           />
         </Box>
@@ -739,23 +739,23 @@ export function UserAuthorizationPage() {
 
         <Box sx={{ bgcolor: 'background.paper', border: 1, borderColor: 'divider', borderRadius: 1, overflow: 'hidden' }}>
           <Tabs onChange={(_, value: 'roles' | 'org') => setTab(value)} value={tab}>
-            <Tab label='角色' value='roles' />
-            <Tab label='组织范围' value='org' />
+            <Tab label={t('authz_assignment_tab_roles')} value='roles' />
+            <Tab label={t('authz_assignment_tab_org_scopes')} value='org' />
           </Tabs>
           <Divider />
           <Box sx={{ p: 2 }}>
             {tab === 'roles' ? (
               <Stack spacing={1.5}>
                 <Stack alignItems='center' direction='row' justifyContent='space-between'>
-                  <Typography variant='h6'>授权角色</Typography>
-                  <Button onClick={addRoleRow} startIcon={<AddIcon />} variant='outlined'>添加行</Button>
+                  <Typography variant='h6'>{t('authz_assignment_roles_title')}</Typography>
+                  <Button onClick={addRoleRow} startIcon={<AddIcon />} variant='outlined'>{t('common_add_row')}</Button>
                 </Stack>
                 <DataGridPage
                   columns={roleColumns}
                   gridProps={{ hideFooter: true, sx: { minHeight: 360 } }}
                   loading={rolesQuery.isFetching || assignmentQuery.isFetching}
                   loadingLabel={t('text_loading')}
-                  noRowsLabel='暂无授权角色'
+                  noRowsLabel={t('authz_assignment_roles_empty')}
                   rows={roleRows}
                   storageKey={`authz-user-roles/${tenantId}`}
                 />
@@ -763,15 +763,15 @@ export function UserAuthorizationPage() {
             ) : (
               <Stack spacing={1.5}>
                 <Stack alignItems='center' direction='row' justifyContent='space-between'>
-                  <Typography variant='h6'>组织范围</Typography>
-                  <Button onClick={addScopeRow} startIcon={<AddIcon />} variant='outlined'>添加行</Button>
+                  <Typography variant='h6'>{t('authz_assignment_org_scopes_title')}</Typography>
+                  <Button onClick={addScopeRow} startIcon={<AddIcon />} variant='outlined'>{t('common_add_row')}</Button>
                 </Stack>
                 <DataGridPage
                   columns={scopeColumns}
                   gridProps={{ hideFooter: true, sx: { minHeight: 360 } }}
                   loading={orgUnitsQuery.isFetching || assignmentQuery.isFetching}
                   loadingLabel={t('text_loading')}
-                  noRowsLabel='暂无组织范围'
+                  noRowsLabel={t('authz_assignment_org_scopes_empty')}
                   rows={scopeRows}
                   storageKey={`authz-user-org-scopes/${tenantId}`}
                 />

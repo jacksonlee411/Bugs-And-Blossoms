@@ -187,7 +187,7 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, error) {
 			return
 		}
 
-			p, err := principals.UpsertFromKratos(r.Context(), tenant.ID, ident.Email, ident.DisplayName, roleSlug, ident.KratosIdentityID)
+		p, err := principals.UpsertFromKratos(r.Context(), tenant.ID, ident.Email, ident.DisplayName, roleSlug, ident.KratosIdentityID)
 		if err != nil {
 			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusInternalServerError, "principal_error", "principal error")
 			return

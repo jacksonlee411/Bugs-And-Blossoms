@@ -150,3 +150,44 @@ func TestHandlePrincipalAuthzAssignmentPutAPI_ResolvesOrgCodeBeforeSave(t *testi
 		t.Fatalf("scope=%+v", scope)
 	}
 }
+
+func TestHandlePrincipalAuthzAssignmentGetAPI_FailsClosedWhenOrgCodeMissing(t *testing.T) {
+	store := newMemoryAuthzRuntimeStore()
+	rootOrgNodeKey := mustOrgNodeKeyForTest(t, 10000000)
+	_, err := store.ReplacePrincipalAssignment(context.Background(), "tenant-a", "principal-a", replacePrincipalAssignmentInput{
+		Roles:     []string{authz.RoleTenantViewer},
+		OrgScopes: []principalOrgScope{{OrgNodeKey: rootOrgNodeKey, IncludeDescendants: true}},
+		Revision:  1,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/iam/api/authz/user-assignments?principal_id=principal-a", nil)
+	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "tenant-a", Domain: "localhost", Name: "Tenant A"}))
+	rec := httptest.NewRecorder()
+
+	resolver := orgUnitCodeResolverStub{
+		resolveOrgCodesByNodeKeysFn: func(_ context.Context, tenantID string, orgNodeKeys []string) (map[string]string, error) {
+			if tenantID != "tenant-a" || len(orgNodeKeys) != 1 || orgNodeKeys[0] != rootOrgNodeKey {
+				t.Fatalf("resolve codes tenant=%q keys=%v", tenantID, orgNodeKeys)
+			}
+			return map[string]string{}, nil
+		},
+	}
+
+	handlePrincipalAuthzAssignmentGetAPI(rec, req, store, &principalListStoreStub{}, resolver)
+
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+	}
+	var payload struct {
+		Code string `json:"code"`
+	}
+	if err := json.NewDecoder(rec.Body).Decode(&payload); err != nil {
+		t.Fatal(err)
+	}
+	if payload.Code != "org_code_not_found" {
+		t.Fatalf("payload=%+v", payload)
+	}
+}

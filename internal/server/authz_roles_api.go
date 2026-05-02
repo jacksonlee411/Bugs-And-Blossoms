@@ -367,7 +367,11 @@ func principalAuthzAssignmentDTOFromModelWithOrgCodes(ctx context.Context, tenan
 		return principalAuthzAssignmentResponse{}, err
 	}
 	for i := range response.OrgScopes {
-		response.OrgScopes[i].OrgCode = strings.TrimSpace(codes[response.OrgScopes[i].OrgNodeKey])
+		orgCode := strings.TrimSpace(codes[response.OrgScopes[i].OrgNodeKey])
+		if orgCode == "" {
+			return principalAuthzAssignmentResponse{}, orgunitpkg.ErrOrgNodeKeyNotFound
+		}
+		response.OrgScopes[i].OrgCode = orgCode
 	}
 	return response, nil
 }
