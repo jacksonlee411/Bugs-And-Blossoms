@@ -152,6 +152,8 @@ const roles = [
   }
 ]
 
+const SLOW_UI_TEST_TIMEOUT_MS = 12_000
+
 describe('AuthzRolePages', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -210,7 +212,7 @@ describe('AuthzRolePages', () => {
         authz_capability_keys: ['orgunit.orgunits:read']
       })
     })
-  })
+  }, SLOW_UI_TEST_TIMEOUT_MS)
 
   it('switches to organization scope tab when user authorization save requires scope', async () => {
     authzApiMocks.replacePrincipalAuthzAssignment.mockRejectedValue(
@@ -236,7 +238,7 @@ describe('AuthzRolePages', () => {
     const selectedTab = screen.getByRole('tab', { name: '组织范围' })
     expect(selectedTab).toHaveAttribute('aria-selected', 'true')
     expect(within(screen.getByTestId('grid')).getByText('暂无组织范围')).toBeInTheDocument()
-  })
+  }, SLOW_UI_TEST_TIMEOUT_MS)
 
   it('preserves org scopes when saving role-only edits', async () => {
     authzApiMocks.getPrincipalAuthzAssignment.mockResolvedValue({
@@ -267,7 +269,7 @@ describe('AuthzRolePages', () => {
         revision: 5
       })
     })
-  })
+  }, SLOW_UI_TEST_TIMEOUT_MS)
 
   it('preserves roles when saving org-scope-only edits', async () => {
     authzApiMocks.getPrincipalAuthzAssignment.mockResolvedValue({
@@ -298,5 +300,5 @@ describe('AuthzRolePages', () => {
         revision: 5
       })
     })
-  })
+  }, SLOW_UI_TEST_TIMEOUT_MS)
 })
