@@ -14,6 +14,7 @@ var errInvalidCredentials = errors.New("server: invalid credentials")
 type authenticatedIdentity struct {
 	KratosIdentityID string
 	Email            string
+	DisplayName      string
 	RoleSlug         string
 }
 
@@ -66,10 +67,12 @@ func (p *kratosIdentityProvider) AuthenticatePassword(ctx context.Context, tenan
 
 	roleSlug, _ := stringTrait(ident.Traits, "role_slug")
 	roleSlug = strings.ToLower(strings.TrimSpace(roleSlug))
+	displayName, _ := firstStringTrait(ident.Traits, "display_name", "name")
 
 	return authenticatedIdentity{
 		KratosIdentityID: ident.ID,
 		Email:            email,
+		DisplayName:      displayName,
 		RoleSlug:         roleSlug,
 	}, nil
 }
@@ -88,4 +91,13 @@ func stringTrait(m map[string]any, key string) (string, bool) {
 		return "", false
 	}
 	return s, true
+}
+
+func firstStringTrait(m map[string]any, keys ...string) (string, bool) {
+	for _, key := range keys {
+		if value, ok := stringTrait(m, key); ok {
+			return value, true
+		}
+	}
+	return "", false
 }

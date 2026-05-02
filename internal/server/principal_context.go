@@ -8,6 +8,7 @@ type Principal struct {
 	RoleSlug         string
 	Status           string
 	Email            string
+	DisplayName      string
 	KratosIdentityID string
 }
 

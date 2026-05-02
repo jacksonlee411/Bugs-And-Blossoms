@@ -187,7 +187,7 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, error) {
 			return
 		}
 
-		p, err := principals.UpsertFromKratos(r.Context(), tenant.ID, ident.Email, roleSlug, ident.KratosIdentityID)
+			p, err := principals.UpsertFromKratos(r.Context(), tenant.ID, ident.Email, ident.DisplayName, roleSlug, ident.KratosIdentityID)
 		if err != nil {
 			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusInternalServerError, "principal_error", "principal error")
 			return
@@ -231,10 +231,10 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, error) {
 		handleAuthzRoleAPI(w, r, authzRuntime)
 	}))
 	router.Handle(routing.RouteClassInternalAPI, http.MethodGet, "/iam/api/authz/user-assignments", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		handlePrincipalAuthzAssignmentGetAPI(w, r, authzRuntime)
+		handlePrincipalAuthzAssignmentGetAPI(w, r, authzRuntime, principals, orgStore)
 	}))
 	router.Handle(routing.RouteClassInternalAPI, http.MethodPut, "/iam/api/authz/user-assignments/{principal_id}", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		handlePrincipalAuthzAssignmentPutAPI(w, r, authzRuntime)
+		handlePrincipalAuthzAssignmentPutAPI(w, r, authzRuntime, orgStore)
 	}))
 	router.Handle(routing.RouteClassInternalAPI, http.MethodGet, "/iam/api/dicts", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		handleDictsAPI(w, r, dictStore)

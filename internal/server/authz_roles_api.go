@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"io"
@@ -8,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/jacksonlee411/Bugs-And-Blossoms/internal/routing"
+	orgunitpkg "github.com/jacksonlee411/Bugs-And-Blossoms/pkg/orgunit"
 )
 
 type authzRolesResponse struct {
@@ -43,6 +45,16 @@ type principalAuthzAssignmentResponse struct {
 	Revision    int64                        `json:"revision"`
 }
 
+type principalAssignmentCandidatesResponse struct {
+	Principals []principalAssignmentCandidateDTO `json:"principals"`
+}
+
+type principalAssignmentCandidateDTO struct {
+	PrincipalID string `json:"principal_id"`
+	Email       string `json:"email"`
+	DisplayName string `json:"display_name,omitempty"`
+}
+
 type principalRoleAssignmentDTO struct {
 	RoleSlug         string `json:"role_slug"`
 	DisplayName      string `json:"display_name"`
@@ -52,6 +64,7 @@ type principalRoleAssignmentDTO struct {
 
 type principalOrgScopeDTO struct {
 	OrgNodeKey         string `json:"org_node_key"`
+	OrgCode            string `json:"org_code,omitempty"`
 	OrgName            string `json:"org_name,omitempty"`
 	IncludeDescendants bool   `json:"include_descendants"`
 }
@@ -187,7 +200,7 @@ func handleAuthzRoleUpdateAPI(w http.ResponseWriter, r *http.Request, store auth
 	writeJSON(w, http.StatusOK, authzRoleResponse{Role: authzRoleDefinitionDTOFromModel(role)})
 }
 
-func handlePrincipalAuthzAssignmentGetAPI(w http.ResponseWriter, r *http.Request, store authzRuntimeStore) {
+func handlePrincipalAuthzAssignmentGetAPI(w http.ResponseWriter, r *http.Request, store authzRuntimeStore, principals principalStore, orgResolver OrgUnitCodeResolver) {
 	if r.Method != http.MethodGet {
 		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusMethodNotAllowed, "method_not_allowed", "method not allowed")
 		return
@@ -203,7 +216,7 @@ func handlePrincipalAuthzAssignmentGetAPI(w http.ResponseWriter, r *http.Request
 	}
 	principalID := strings.TrimSpace(r.URL.Query().Get("principal_id"))
 	if principalID == "" {
-		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "invalid_user_assignment", "principal_id required")
+		handlePrincipalAuthzAssignmentCandidatesAPI(w, r, principals, tenant.ID)
 		return
 	}
 	assignment, found, err := store.GetPrincipalAssignment(r.Context(), tenant.ID, principalID)
@@ -215,10 +228,36 @@ func handlePrincipalAuthzAssignmentGetAPI(w http.ResponseWriter, r *http.Request
 		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusNotFound, "principal_missing", "principal missing")
 		return
 	}
-	writeJSON(w, http.StatusOK, principalAuthzAssignmentDTOFromModel(assignment))
+	response, err := principalAuthzAssignmentDTOFromModelWithOrgCodes(r.Context(), tenant.ID, assignment, orgResolver)
+	if err != nil {
+		writePrincipalAssignmentOrgResolveError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, response)
 }
 
-func handlePrincipalAuthzAssignmentPutAPI(w http.ResponseWriter, r *http.Request, store authzRuntimeStore) {
+func handlePrincipalAuthzAssignmentCandidatesAPI(w http.ResponseWriter, r *http.Request, principals principalStore, tenantID string) {
+	if principals == nil {
+		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusInternalServerError, "principal_error", "principal error")
+		return
+	}
+	items, err := principals.ListActive(r.Context(), tenantID)
+	if err != nil {
+		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusInternalServerError, "principal_lookup_error", "principal lookup error")
+		return
+	}
+	out := make([]principalAssignmentCandidateDTO, 0, len(items))
+	for _, item := range items {
+		out = append(out, principalAssignmentCandidateDTO{
+			PrincipalID: item.ID,
+			Email:       item.Email,
+			DisplayName: strings.TrimSpace(item.DisplayName),
+		})
+	}
+	writeJSON(w, http.StatusOK, principalAssignmentCandidatesResponse{Principals: out})
+}
+
+func handlePrincipalAuthzAssignmentPutAPI(w http.ResponseWriter, r *http.Request, store authzRuntimeStore, orgResolver OrgUnitCodeResolver) {
 	if r.Method != http.MethodPut {
 		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusMethodNotAllowed, "method_not_allowed", "method not allowed")
 		return
@@ -240,12 +279,10 @@ func handlePrincipalAuthzAssignmentPutAPI(w http.ResponseWriter, r *http.Request
 	for _, role := range req.Roles {
 		roleSlugs = append(roleSlugs, role.RoleSlug)
 	}
-	orgScopes := make([]principalOrgScope, 0, len(req.OrgScopes))
-	for _, scope := range req.OrgScopes {
-		orgScopes = append(orgScopes, principalOrgScope{
-			OrgNodeKey:         scope.OrgNodeKey,
-			IncludeDescendants: scope.IncludeDescendants,
-		})
+	orgScopes, err := resolvePrincipalAssignmentOrgScopes(r.Context(), tenant.ID, req.OrgScopes, orgResolver)
+	if err != nil {
+		writePrincipalAssignmentOrgResolveError(w, r, err)
+		return
 	}
 	assignment, err := store.ReplacePrincipalAssignment(r.Context(), tenant.ID, principalIDFromAssignmentPath(r.URL.Path), replacePrincipalAssignmentInput{
 		Roles:     roleSlugs,
@@ -256,7 +293,12 @@ func handlePrincipalAuthzAssignmentPutAPI(w http.ResponseWriter, r *http.Request
 		writePrincipalAssignmentStoreError(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, principalAuthzAssignmentDTOFromModel(assignment))
+	response, err := principalAuthzAssignmentDTOFromModelWithOrgCodes(r.Context(), tenant.ID, assignment, orgResolver)
+	if err != nil {
+		writePrincipalAssignmentOrgResolveError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, response)
 }
 
 func decodeStrictJSON(w http.ResponseWriter, r *http.Request, dest any, code string) bool {
@@ -311,6 +353,54 @@ func principalAuthzAssignmentDTOFromModel(assignment principalAuthzAssignment) p
 	}
 }
 
+func principalAuthzAssignmentDTOFromModelWithOrgCodes(ctx context.Context, tenantID string, assignment principalAuthzAssignment, resolver OrgUnitCodeResolver) (principalAuthzAssignmentResponse, error) {
+	response := principalAuthzAssignmentDTOFromModel(assignment)
+	if resolver == nil || len(response.OrgScopes) == 0 {
+		return response, nil
+	}
+	orgNodeKeys := make([]string, 0, len(response.OrgScopes))
+	for _, scope := range response.OrgScopes {
+		orgNodeKeys = append(orgNodeKeys, scope.OrgNodeKey)
+	}
+	codes, err := resolver.ResolveOrgCodesByNodeKeys(ctx, tenantID, orgNodeKeys)
+	if err != nil {
+		return principalAuthzAssignmentResponse{}, err
+	}
+	for i := range response.OrgScopes {
+		response.OrgScopes[i].OrgCode = strings.TrimSpace(codes[response.OrgScopes[i].OrgNodeKey])
+	}
+	return response, nil
+}
+
+func resolvePrincipalAssignmentOrgScopes(ctx context.Context, tenantID string, values []principalOrgScopeDTO, resolver OrgUnitCodeResolver) ([]principalOrgScope, error) {
+	scopes := make([]principalOrgScope, 0, len(values))
+	for _, value := range values {
+		orgNodeKey := strings.TrimSpace(value.OrgNodeKey)
+		orgCode := strings.TrimSpace(value.OrgCode)
+		if orgCode != "" {
+			if resolver == nil {
+				return nil, errAuthzRuntimeUnavailable
+			}
+			resolvedNodeKey, err := resolver.ResolveOrgNodeKeyByCode(ctx, tenantID, orgCode)
+			if err != nil {
+				return nil, err
+			}
+			if orgNodeKey != "" {
+				normalizedNodeKey, err := orgunitpkg.NormalizeOrgNodeKey(orgNodeKey)
+				if err != nil || normalizedNodeKey != resolvedNodeKey {
+					return nil, errInvalidAssignment
+				}
+			}
+			orgNodeKey = resolvedNodeKey
+		}
+		scopes = append(scopes, principalOrgScope{
+			OrgNodeKey:         orgNodeKey,
+			IncludeDescendants: value.IncludeDescendants,
+		})
+	}
+	return normalizePrincipalOrgScopes(scopes)
+}
+
 func writeAuthzRoleStoreError(w http.ResponseWriter, r *http.Request, err error) {
 	switch {
 	case errors.Is(err, errInvalidRolePayload):
@@ -325,6 +415,21 @@ func writeAuthzRoleStoreError(w http.ResponseWriter, r *http.Request, err error)
 		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusConflict, "stale_revision", "stale revision")
 	case errors.Is(err, errSystemRoleReadonly):
 		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusConflict, "system_role_readonly", "system role readonly")
+	case errors.Is(err, errAuthzRuntimeUnavailable):
+		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusInternalServerError, "authz_runtime_unavailable", "authz runtime unavailable")
+	default:
+		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusInternalServerError, "authz_error", "authz error")
+	}
+}
+
+func writePrincipalAssignmentOrgResolveError(w http.ResponseWriter, r *http.Request, err error) {
+	switch {
+	case errors.Is(err, orgunitpkg.ErrOrgCodeInvalid):
+		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "org_code_invalid", "org_code invalid")
+	case errors.Is(err, orgunitpkg.ErrOrgCodeNotFound), errors.Is(err, orgunitpkg.ErrOrgNodeKeyNotFound):
+		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusNotFound, "org_code_not_found", "org_code not found")
+	case errors.Is(err, errInvalidAssignment):
+		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "invalid_user_assignment", "invalid user assignment")
 	case errors.Is(err, errAuthzRuntimeUnavailable):
 		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusInternalServerError, "authz_runtime_unavailable", "authz runtime unavailable")
 	default:

@@ -344,3 +344,4 @@ HTTP POST /internal/cubebox/turns:stream
 - 2026-05-01 18:58 CST：登记前置状态：484 覆盖事实聚合已预留 CubeBox API tool overlay 空集合扩展点，490 后续必须接入同一聚合源；485 API 授权目录、490 overlay 与 API-first active runtime 仍未实施。
 - 2026-05-01 23:10 CST：补齐文档状态登记；485 API 授权目录已落地并按当前覆盖普通授权 API 口径复验，490 tool overlay、planner/runner API-first runtime 与 executor 删除仍未实施。
 - 2026-05-02 CST：登记运行时授权前置状态；487/489/489A 已使普通 HTTP API 按 current principal capability union 与 org scope 裁剪，CubeBox orgunit executor 当前也复用同一 scope provider。490 overlay、planner/runner `API_CALLS` hard cutover 与业务 executor 删除仍未实施。
+- 2026-05-02 CST：随 481/489 A/B 组织范围 E2E 复验，当前 CubeBox orgunit executor 路径与普通 orgunit API 返回范围一致；该证据只证明 scope provider 已复用，不代表 490 API-first overlay、`API_CALLS` runtime hard cutover 或 executor 删除已完成。

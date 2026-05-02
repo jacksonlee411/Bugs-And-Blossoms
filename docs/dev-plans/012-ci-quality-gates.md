@@ -192,6 +192,11 @@ Gate-4 继续以 `make e2e -> scripts/e2e/run.sh` 为唯一入口，负责：
 - 产出报告、trace、screenshot、video artifact
 - 缺依赖/0 tests/运行态缺口时 fail-fast
 
+额外约束：
+
+- `make e2e` 只跑稳定、可复现的默认 smoke 集；
+- 真实模型 / 外部依赖验收必须显式走 `make e2e-live`，不得成为 `make preflight` 或 required gate 默认前置。
+
 约束保持不变：
 
 - 命中 Full Run 时不得 no-op；

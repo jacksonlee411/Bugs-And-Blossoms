@@ -9,7 +9,9 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"sort"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -37,8 +39,9 @@ type sessionStore interface {
 
 type principalStore interface {
 	GetOrCreateTenantAdmin(ctx context.Context, tenantID string) (Principal, error)
-	UpsertFromKratos(ctx context.Context, tenantID string, email string, roleSlug string, kratosIdentityID string) (Principal, error)
+	UpsertFromKratos(ctx context.Context, tenantID string, email string, displayName string, roleSlug string, kratosIdentityID string) (Principal, error)
 	GetByID(ctx context.Context, tenantID string, principalID string) (Principal, bool, error)
+	ListActive(ctx context.Context, tenantID string) ([]Principal, error)
 }
 
 func sidTTLFromEnv() time.Duration {
@@ -126,7 +129,7 @@ func (s *memoryPrincipalStore) GetOrCreateTenantAdmin(_ context.Context, tenantI
 	return p, nil
 }
 
-func (s *memoryPrincipalStore) UpsertFromKratos(_ context.Context, tenantID string, email string, roleSlug string, kratosIdentityID string) (Principal, error) {
+func (s *memoryPrincipalStore) UpsertFromKratos(_ context.Context, tenantID string, email string, displayName string, roleSlug string, kratosIdentityID string) (Principal, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -140,9 +143,13 @@ func (s *memoryPrincipalStore) UpsertFromKratos(_ context.Context, tenantID stri
 		}
 		if p.KratosIdentityID == "" {
 			p.KratosIdentityID = kratosIdentityID
-			s.byKey[key] = p
-			s.byID[p.ID] = p
 		}
+		trimmedDisplayName := strings.TrimSpace(displayName)
+		if trimmedDisplayName != "" {
+			p.DisplayName = trimmedDisplayName
+		}
+		s.byKey[key] = p
+		s.byID[p.ID] = p
 		return p, nil
 	}
 
@@ -151,6 +158,7 @@ func (s *memoryPrincipalStore) UpsertFromKratos(_ context.Context, tenantID stri
 		return Principal{}, err
 	}
 	p.KratosIdentityID = kratosIdentityID
+	p.DisplayName = strings.TrimSpace(displayName)
 	s.byKey[key] = p
 	s.byID[p.ID] = p
 	return p, nil
@@ -168,6 +176,22 @@ func (s *memoryPrincipalStore) GetByID(_ context.Context, tenantID string, princ
 		return Principal{}, false, nil
 	}
 	return p, true, nil
+}
+
+func (s *memoryPrincipalStore) ListActive(_ context.Context, tenantID string) ([]Principal, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	var out []Principal
+	for _, p := range s.byID {
+		if p.TenantID == tenantID && p.Status == "active" {
+			out = append(out, p)
+		}
+	}
+	sort.SliceStable(out, func(i, j int) bool {
+		return out[i].Email < out[j].Email
+	})
+	return out, nil
 }
 
 func (s *memoryPrincipalStore) newPrincipalLocked(tenantID string, email string, roleSlug string) (Principal, error) {
@@ -244,6 +268,7 @@ type pgPrincipalStore struct {
 }
 
 type queryExecer interface {
+	Query(ctx context.Context, sql string, args ...any) (pgx.Rows, error)
 	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
 	Exec(ctx context.Context, sql string, args ...any) (pgconn.CommandTag, error)
 }
@@ -282,22 +307,24 @@ RETURNING id::text, status;
 	return p, nil
 }
 
-func (s *pgPrincipalStore) UpsertFromKratos(ctx context.Context, tenantID string, email string, roleSlug string, kratosIdentityID string) (Principal, error) {
+func (s *pgPrincipalStore) UpsertFromKratos(ctx context.Context, tenantID string, email string, displayName string, roleSlug string, kratosIdentityID string) (Principal, error) {
 	var p Principal
 	p.Email = email
+	p.DisplayName = strings.TrimSpace(displayName)
 	p.TenantID = tenantID
 	p.RoleSlug = roleSlug
 	p.Status = "active"
 	p.KratosIdentityID = kratosIdentityID
 
 	err := s.q.QueryRow(ctx, `
-	INSERT INTO iam.principals (tenant_uuid, email, role_slug, status, kratos_identity_id)
-	VALUES ($1, $2, $3, 'active', $4::uuid)
-	ON CONFLICT (tenant_uuid, email) DO UPDATE SET
-	  kratos_identity_id = COALESCE(iam.principals.kratos_identity_id, EXCLUDED.kratos_identity_id),
-	  updated_at = now()
-	RETURNING id::text, role_slug, status, COALESCE(kratos_identity_id::text, '');
-	`, tenantID, email, roleSlug, kratosIdentityID).Scan(&p.ID, &p.RoleSlug, &p.Status, &p.KratosIdentityID)
+		INSERT INTO iam.principals (tenant_uuid, email, display_name, role_slug, status, kratos_identity_id)
+		VALUES ($1, $2, NULLIF($3, ''), $4, 'active', $5::uuid)
+		ON CONFLICT (tenant_uuid, email) DO UPDATE SET
+		  display_name = COALESCE(NULLIF(EXCLUDED.display_name, ''), iam.principals.display_name),
+		  kratos_identity_id = COALESCE(iam.principals.kratos_identity_id, EXCLUDED.kratos_identity_id),
+		  updated_at = now()
+		RETURNING id::text, COALESCE(display_name, ''), role_slug, status, COALESCE(kratos_identity_id::text, '');
+		`, tenantID, email, p.DisplayName, roleSlug, kratosIdentityID).Scan(&p.ID, &p.DisplayName, &p.RoleSlug, &p.Status, &p.KratosIdentityID)
 	if err != nil {
 		return Principal{}, err
 	}
@@ -330,6 +357,33 @@ WHERE tenant_uuid = $1 AND id = $2;
 		return Principal{}, false, err
 	}
 	return p, true, nil
+}
+
+func (s *pgPrincipalStore) ListActive(ctx context.Context, tenantID string) ([]Principal, error) {
+	rows, err := s.q.Query(ctx, `
+SELECT id::text, tenant_uuid::text, email, role_slug, status, COALESCE(display_name, '')
+FROM iam.principals
+WHERE tenant_uuid = $1
+  AND status = 'active'
+ORDER BY email ASC;
+	`, tenantID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var out []Principal
+	for rows.Next() {
+		var p Principal
+		if err := rows.Scan(&p.ID, &p.TenantID, &p.Email, &p.RoleSlug, &p.Status, &p.DisplayName); err != nil {
+			return nil, err
+		}
+		out = append(out, p)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return out, nil
 }
 
 type pgSessionStore struct {

@@ -1,6 +1,6 @@
 # DEV-PLAN-489A：Principal 多角色 Union 运行时契约修订方案
 
-**状态**: 已实施运行时门面、DB union cutover 与专用反回流门禁，并完成 480A 组合运行时验收（2026-05-02 CST；E2E 待后续补齐）
+**状态**: 已实施运行时门面、DB union cutover 与专用反回流门禁，并完成 480A 组合运行时与 A/B E2E 验收（2026-05-02 CST）
 
 ## 0. 适用范围与评审分级
 
@@ -150,7 +150,7 @@ OrgScopesForPrincipal(principal, capability)
 2. [X] 补 scope provider 测试：多组织范围 union、缺失组织范围 fail-closed、无隐式全租户。
 3. [X] 补专用反回流门禁测试：`make check authz-role-union` 已阻断普通 tenant 单 `role_slug`/`roles[0]` 回流、DB+CSV OR 放行、普通 tenant CSV role grant 与当前角色字段回流。
 4. [X] 补运行时闭环证据：角色能力来自 487 DB SoT，principal 角色集合来自 489 `principal_role_assignments`，组织范围来自 489 scope provider，普通 API 与 CubeBox API-first 不回读 CSV、`iam.principals.role_slug` 或 `roles[0]`。
-5. [ ] 更新 readiness 记录，登记专用反回流门禁、`make authz-pack && make authz-test && make authz-lint`、相关 Go/UI 测试结果；本轮证据先记录于 487/489/489A 计划验证段与最终说明。
+5. [X] 更新计划验证记录，登记专用反回流门禁、`make authz-pack && make authz-test && make authz-lint`、相关 Go/UI/E2E 测试结果；readiness 独立记录如后续需要再补。
 
 ## 5. ADR 摘要
 
@@ -176,7 +176,7 @@ OrgScopesForPrincipal(principal, capability)
 2. [X] 480/487/489 明确引用 489A，且不存在“当前 session 有效角色 = 单 `role_slug`”作为普通 tenant EHR 运行时授权 SSOT 的表述。
 3. [X] 489 的 `roles: []`、`principal_role_assignments`、`CapabilitiesForPrincipal` 与 489A 的 union 语义一致。
 4. [X] 实施新增表前已按 AGENTS 要求获得用户手工确认。
-5. [X] 489A 作为 480 系列后端运行时授权交付的一部分，已与 487/489 同步满足 480A 的组合闭环口径；不得仅凭授权门面或反回流门禁单点宣称完整用户可见闭环。
+5. [X] 489A 作为 480 系列运行时授权交付的一部分，已与 487/489 以及 481 UI 保存交互同步满足 480A 的首批用户可见闭环口径；不得仅凭授权门面或反回流门禁单点宣称完成。
 6. [X] `make check doc` 通过。
 
 ## 7. 本轮验证记录
@@ -185,4 +185,4 @@ OrgScopesForPrincipal(principal, capability)
 - 2026-05-02 CST：已新增并接线专用 `make check authz-role-union` 反回流门禁，纳入 `make preflight` 与 CI Gate-1，阻断单角色/当前角色/CSV role grant 回流。
 - 已验证：`go test ./...`、`go vet ./...`、`make check lint`、`make authz-pack && make authz-test && make authz-lint`、`make check routing`、`make check error-message`、`make check doc`、`make check authz-role-union`。
 - 补充复核：`go test ./internal/server ./internal/routing ./pkg/authz`、`make test`、`make check no-legacy && make check chat-surface-clean && make check no-scope-package && make check granularity && make check request-code`、`make check root-surface`。
-- 待补：E2E 与用户授权 UI 保存交互。
+- 2026-05-02 CST：A/B 组织范围 E2E 随 481/489 闭环补齐，覆盖普通 API 裁剪、范围外 detail fail-closed、CubeBox orgunit 查询与普通 API 一致；完整 `make preflight` 通过。

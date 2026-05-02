@@ -30,7 +30,7 @@
 - Authz：`make authz-pack && make authz-test && make authz-lint`
 - Principal 多角色 union 反回流：`make check authz-role-union`
 - 新增/调整受保护 API、CubeBox API tool overlay、authz requirement、capability registry、policy、功能授权项候选项、功能授权项页面或 API 授权目录：`make authz-pack && make authz-test && make authz-lint`（覆盖门禁见 `DEV-PLAN-484/485`，功能授权项页面见 `DEV-PLAN-482A`）
-- E2E：`make e2e`
+- E2E：`make e2e`（稳定 smoke）；真实模型 / 外部依赖验收：`make e2e-live`
 - 文档新增/整理：`make check doc`
 
 > 说明：命令入口与门禁结构以 `docs/dev-plans/012-ci-quality-gates.md` 为准；本文件只维护“入口与触发器”，尽量不复制脚本内部实现。

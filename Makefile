@@ -8,7 +8,7 @@ export DEV_COMPOSE_PROJECT ?= bugs-and-blossoms-dev
 export DEV_INFRA_ENV_FILE ?= .env.example
 export DEV_RUNTIME_IMAGE_MIRROR_PREFIX ?= docker.m.daocloud.io/library
 
-.PHONY: help preflight check pr-branch root-surface naming no-legacy chat-surface-clean no-scope-package granularity ddd-layering-p0 ddd-layering-p2 org-node-key-backflow authz-role-union request-code as-of-explicit dict-tenant-only go-version error-message fmt lint test routing e2e doc tr generate css
+.PHONY: help preflight check pr-branch root-surface naming no-legacy chat-surface-clean no-scope-package granularity ddd-layering-p0 ddd-layering-p2 org-node-key-backflow authz-role-union request-code as-of-explicit dict-tenant-only go-version error-message fmt lint test routing e2e e2e-live doc tr generate css
 .PHONY: sqlc-generate sqlc-verify-schema authz-pack authz-test authz-lint
 .PHONY: plan migrate up
 .PHONY: iam orgunit
@@ -39,6 +39,7 @@ help:
 		"  make test" \
 		"  make check routing" \
 		"  make e2e" \
+		"  make e2e-live" \
 		"开发环境：" \
 		"  make dev-up" \
 		"  make dev-server" \
@@ -218,6 +219,9 @@ routing: ## 路由门禁（allowlist/entrypoint key 等）
 e2e: ## E2E smoke（按项目能力渐进接入）
 	@./scripts/e2e/run.sh
 
+e2e-live: ## 真实模型 / 外部依赖验收（默认不进 preflight）
+	@E2E_ENABLE_LIVE_CUBEBOX=1 ./scripts/e2e/run.sh --grep @live --workers=1
+
 doc: ## 文档门禁（按项目能力渐进接入）
 	@./scripts/doc/check.sh
 
@@ -252,7 +256,7 @@ iam:
 	@:
 orgunit:
 	@:
-MODULE := $(firstword $(filter-out preflight check fmt lint test routing e2e doc tr generate css sqlc-generate sqlc-verify-schema authz-pack authz-test authz-lint no-legacy chat-surface-clean no-scope-package granularity ddd-layering-p0 ddd-layering-p2 org-node-key-backflow authz-role-union request-code as-of-explicit dict-tenant-only go-version error-message plan migrate up dev dev-up dev-down dev-reset dev-ps dev-server,$(MAKECMDGOALS)))
+MODULE := $(firstword $(filter-out preflight check fmt lint test routing e2e e2e-live doc tr generate css sqlc-generate sqlc-verify-schema authz-pack authz-test authz-lint no-legacy chat-surface-clean no-scope-package granularity ddd-layering-p0 ddd-layering-p2 org-node-key-backflow authz-role-union request-code as-of-explicit dict-tenant-only go-version error-message plan migrate up dev dev-up dev-down dev-reset dev-ps dev-server,$(MAKECMDGOALS)))
 MIGRATE_DIR := $(lastword $(filter up down,$(MAKECMDGOALS)))
 
 plan:

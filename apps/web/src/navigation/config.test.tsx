@@ -9,6 +9,8 @@ describe('navigation config', () => {
       'org-units',
       'org-field-configs',
       'dict-configs',
+      'authz-roles',
+      'authz-user-assignments',
       'authz-capabilities',
       'authz-api-catalog',
       'approval-inbox'
@@ -22,6 +24,12 @@ describe('navigation config', () => {
     )
     expect(navItems.find((item) => item.key === 'dict-configs')?.requiredCapabilityKey).toBe(
       AUTHZ_CAPABILITY_KEYS.iamDictsAdmin
+    )
+    expect(navItems.find((item) => item.key === 'authz-roles')?.requiredCapabilityKey).toBe(
+      AUTHZ_CAPABILITY_KEYS.iamAuthzAdmin
+    )
+    expect(navItems.find((item) => item.key === 'authz-user-assignments')?.requiredCapabilityKey).toBe(
+      AUTHZ_CAPABILITY_KEYS.iamAuthzAdmin
     )
     expect(navItems.find((item) => item.key === 'authz-capabilities')?.requiredCapabilityKey).toBe(
       AUTHZ_CAPABILITY_KEYS.iamAuthzRead

@@ -25,9 +25,11 @@ type scanRow struct {
 func (r scanRow) Scan(dest ...any) error { return r.scan(dest...) }
 
 type stubQ struct {
-	row     pgx.Row
-	rowErr  error
-	execErr error
+	row      pgx.Row
+	rows     pgx.Rows
+	rowErr   error
+	queryErr error
+	execErr  error
 }
 
 func (s *stubQ) QueryRow(_ context.Context, _ string, _ ...any) pgx.Row {
@@ -35,6 +37,16 @@ func (s *stubQ) QueryRow(_ context.Context, _ string, _ ...any) pgx.Row {
 		return scanRow{scan: func(_ ...any) error { return s.rowErr }}
 	}
 	return s.row
+}
+
+func (s *stubQ) Query(context.Context, string, ...any) (pgx.Rows, error) {
+	if s.queryErr != nil {
+		return nil, s.queryErr
+	}
+	if s.rows != nil {
+		return s.rows, nil
+	}
+	return nil, errors.New("unexpected query")
 }
 
 func (s *stubQ) Exec(context.Context, string, ...any) (pgconn.CommandTag, error) {
@@ -300,23 +312,31 @@ func TestMemoryPrincipalStore_UpsertFromKratos_Branches(t *testing.T) {
 		t.Fatalf("unexpected kratos id: %q", p.KratosIdentityID)
 	}
 
-	p2, err := s.UpsertFromKratos(context.Background(), "t1", "tenant-admin@example.invalid", "tenant-admin", "kid1")
+	p2, err := s.UpsertFromKratos(context.Background(), "t1", "tenant-admin@example.invalid", "王小花", "tenant-admin", "kid1")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if p2.ID != p.ID || p2.KratosIdentityID != "kid1" {
+	if p2.ID != p.ID || p2.KratosIdentityID != "kid1" || p2.DisplayName != "王小花" {
 		t.Fatalf("p2=%+v p=%+v", p2, p)
 	}
 
-	p3, err := s.UpsertFromKratos(context.Background(), "t1", "tenant-admin@example.invalid", "tenant-admin", "kid1")
+	p3, err := s.UpsertFromKratos(context.Background(), "t1", "tenant-admin@example.invalid", "", "tenant-admin", "kid1")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if p3.ID != p.ID {
+	if p3.ID != p.ID || p3.DisplayName != "王小花" {
 		t.Fatalf("p3=%+v", p3)
 	}
 
-	if _, err := s.UpsertFromKratos(context.Background(), "t1", "tenant-admin@example.invalid", "tenant-admin", "kid2"); err == nil {
+	p4, err := s.UpsertFromKratos(context.Background(), "t1", "tenant-admin@example.invalid", "李四", "tenant-admin", "kid1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if p4.DisplayName != "李四" {
+		t.Fatalf("p4=%+v", p4)
+	}
+
+	if _, err := s.UpsertFromKratos(context.Background(), "t1", "tenant-admin@example.invalid", "tenant-admin", "tenant-admin", "kid2"); err == nil {
 		t.Fatal("expected error")
 	}
 
@@ -324,7 +344,7 @@ func TestMemoryPrincipalStore_UpsertFromKratos_Branches(t *testing.T) {
 	pDisabled.Status = "disabled"
 	s.byKey["t1|tenant-admin@example.invalid"] = pDisabled
 	s.byID[pDisabled.ID] = pDisabled
-	if _, err := s.UpsertFromKratos(context.Background(), "t1", "tenant-admin@example.invalid", "tenant-admin", "kid1"); err == nil {
+	if _, err := s.UpsertFromKratos(context.Background(), "t1", "tenant-admin@example.invalid", "", "tenant-admin", "kid1"); err == nil {
 		t.Fatal("expected error")
 	}
 }
@@ -450,54 +470,88 @@ func TestPGPrincipalStore_UpsertFromKratos(t *testing.T) {
 
 	q.row = scanRow{scan: func(dest ...any) error {
 		*(dest[0].(*string)) = "p1"
-		*(dest[1].(*string)) = "tenant-admin"
-		*(dest[2].(*string)) = "active"
-		*(dest[3].(*string)) = "kid1"
+		*(dest[1].(*string)) = "王小花"
+		*(dest[2].(*string)) = "tenant-admin"
+		*(dest[3].(*string)) = "active"
+		*(dest[4].(*string)) = "kid1"
 		return nil
 	}}
-	p, err := s.UpsertFromKratos(context.Background(), "t1", "a@example.invalid", "tenant-admin", "kid1")
+	p, err := s.UpsertFromKratos(context.Background(), "t1", "a@example.invalid", "王小花", "tenant-admin", "kid1")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if p.ID != "p1" || p.KratosIdentityID != "kid1" {
+	if p.ID != "p1" || p.KratosIdentityID != "kid1" || p.DisplayName != "王小花" {
 		t.Fatalf("p=%+v", p)
 	}
 
 	q.row = scanRow{scan: func(dest ...any) error {
 		*(dest[0].(*string)) = "p1"
-		*(dest[1].(*string)) = "tenant-admin"
-		*(dest[2].(*string)) = "disabled"
-		*(dest[3].(*string)) = "kid1"
+		*(dest[1].(*string)) = "王小花"
+		*(dest[2].(*string)) = "tenant-admin"
+		*(dest[3].(*string)) = "disabled"
+		*(dest[4].(*string)) = "kid1"
 		return nil
 	}}
-	if _, err := s.UpsertFromKratos(context.Background(), "t1", "a@example.invalid", "tenant-admin", "kid1"); err == nil {
+	if _, err := s.UpsertFromKratos(context.Background(), "t1", "a@example.invalid", "王小花", "tenant-admin", "kid1"); err == nil {
 		t.Fatal("expected error")
 	}
 
 	q.row = scanRow{scan: func(dest ...any) error {
 		*(dest[0].(*string)) = "p1"
-		*(dest[1].(*string)) = "tenant-admin"
-		*(dest[2].(*string)) = "active"
-		*(dest[3].(*string)) = ""
+		*(dest[1].(*string)) = "王小花"
+		*(dest[2].(*string)) = "tenant-admin"
+		*(dest[3].(*string)) = "active"
+		*(dest[4].(*string)) = ""
 		return nil
 	}}
-	if _, err := s.UpsertFromKratos(context.Background(), "t1", "a@example.invalid", "tenant-admin", "kid1"); err == nil {
+	if _, err := s.UpsertFromKratos(context.Background(), "t1", "a@example.invalid", "王小花", "tenant-admin", "kid1"); err == nil {
 		t.Fatal("expected error")
 	}
 
 	q.row = scanRow{scan: func(dest ...any) error {
 		*(dest[0].(*string)) = "p1"
-		*(dest[1].(*string)) = "tenant-admin"
-		*(dest[2].(*string)) = "active"
-		*(dest[3].(*string)) = "kid2"
+		*(dest[1].(*string)) = "王小花"
+		*(dest[2].(*string)) = "tenant-admin"
+		*(dest[3].(*string)) = "active"
+		*(dest[4].(*string)) = "kid2"
 		return nil
 	}}
-	if _, err := s.UpsertFromKratos(context.Background(), "t1", "a@example.invalid", "tenant-admin", "kid1"); err == nil {
+	if _, err := s.UpsertFromKratos(context.Background(), "t1", "a@example.invalid", "王小花", "tenant-admin", "kid1"); err == nil {
 		t.Fatal("expected error")
 	}
 
 	q.rowErr = os.ErrInvalid
-	if _, err := s.UpsertFromKratos(context.Background(), "t1", "a@example.invalid", "tenant-admin", "kid1"); err == nil {
+	if _, err := s.UpsertFromKratos(context.Background(), "t1", "a@example.invalid", "王小花", "tenant-admin", "kid1"); err == nil {
+		t.Fatal("expected error")
+	}
+}
+
+func TestPGPrincipalStore_ListActive(t *testing.T) {
+	q := &stubQ{
+		rows: &recordRows{records: [][]any{
+			{"p1", "t1", "a@example.invalid", "tenant-admin", "active", "王小花"},
+			{"p2", "t1", "b@example.invalid", "tenant-viewer", "active", ""},
+		}},
+	}
+	s := &pgPrincipalStore{q: q}
+
+	items, err := s.ListActive(context.Background(), "t1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(items) != 2 {
+		t.Fatalf("items=%+v", items)
+	}
+	if items[0].Email != "a@example.invalid" || items[0].DisplayName != "王小花" {
+		t.Fatalf("items[0]=%+v", items[0])
+	}
+	if items[1].Email != "b@example.invalid" || items[1].DisplayName != "" {
+		t.Fatalf("items[1]=%+v", items[1])
+	}
+
+	q = &stubQ{queryErr: os.ErrInvalid}
+	s = &pgPrincipalStore{q: q}
+	if _, err := s.ListActive(context.Background(), "t1"); err == nil {
 		t.Fatal("expected error")
 	}
 }
