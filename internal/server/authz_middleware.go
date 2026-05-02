@@ -79,6 +79,9 @@ var exactRouteRequirements = []routeRequirement{
 	{Method: http.MethodPost, Path: "/iam/api/sessions", Object: authz.ObjectIAMSession, Action: authz.ActionAdmin, Surface: authz.CapabilitySurfaceTenantAPI},
 	{Method: http.MethodGet, Path: "/iam/api/authz/capabilities", Object: authz.ObjectIAMAuthz, Action: authz.ActionRead, Surface: authz.CapabilitySurfaceTenantAPI},
 	{Method: http.MethodGet, Path: "/iam/api/authz/api-catalog", Object: authz.ObjectIAMAuthz, Action: authz.ActionRead, Surface: authz.CapabilitySurfaceTenantAPI},
+	{Method: http.MethodGet, Path: "/iam/api/authz/roles", Object: authz.ObjectIAMAuthz, Action: authz.ActionRead, Surface: authz.CapabilitySurfaceTenantAPI},
+	{Method: http.MethodPost, Path: "/iam/api/authz/roles", Object: authz.ObjectIAMAuthz, Action: authz.ActionAdmin, Surface: authz.CapabilitySurfaceTenantAPI},
+	{Method: http.MethodGet, Path: "/iam/api/authz/user-assignments", Object: authz.ObjectIAMAuthz, Action: authz.ActionAdmin, Surface: authz.CapabilitySurfaceTenantAPI},
 	{Method: http.MethodGet, Path: "/iam/api/dicts", Object: authz.ObjectIAMDicts, Action: authz.ActionRead, Surface: authz.CapabilitySurfaceTenantAPI},
 	{Method: http.MethodPost, Path: "/iam/api/dicts", Object: authz.ObjectIAMDicts, Action: authz.ActionAdmin, Surface: authz.CapabilitySurfaceTenantAPI},
 	{Method: http.MethodPost, Path: "/iam/api/dicts:disable", Object: authz.ObjectIAMDicts, Action: authz.ActionAdmin, Surface: authz.CapabilitySurfaceTenantAPI},
@@ -123,13 +126,16 @@ var exactRouteRequirements = []routeRequirement{
 }
 
 var patternRouteRequirements = []routeRequirement{
+	{Method: http.MethodGet, Path: "/iam/api/authz/roles/{role_slug}", Object: authz.ObjectIAMAuthz, Action: authz.ActionRead, Surface: authz.CapabilitySurfaceTenantAPI},
+	{Method: http.MethodPut, Path: "/iam/api/authz/roles/{role_slug}", Object: authz.ObjectIAMAuthz, Action: authz.ActionAdmin, Surface: authz.CapabilitySurfaceTenantAPI},
+	{Method: http.MethodPut, Path: "/iam/api/authz/user-assignments/{principal_id}", Object: authz.ObjectIAMAuthz, Action: authz.ActionAdmin, Surface: authz.CapabilitySurfaceTenantAPI},
 	{Method: http.MethodGet, Path: "/internal/cubebox/conversations/{conversation_id}", Object: authz.ObjectCubeBoxConversations, Action: authz.ActionRead, Surface: authz.CapabilitySurfaceTenantAPI},
 	{Method: http.MethodPatch, Path: "/internal/cubebox/conversations/{conversation_id}", Object: authz.ObjectCubeBoxConversations, Action: authz.ActionUse, Surface: authz.CapabilitySurfaceTenantAPI},
 	{Method: http.MethodPost, Path: "/internal/cubebox/turns/{turn_id}:interrupt", Object: authz.ObjectCubeBoxConversations, Action: authz.ActionUse, Surface: authz.CapabilitySurfaceTenantAPI},
 	{Method: http.MethodPost, Path: "/internal/cubebox/settings/credentials/{credential_id}:deactivate", Object: authz.ObjectCubeBoxModelCredential, Action: authz.ActionDeactivate, Surface: authz.CapabilitySurfaceTenantAPI},
 }
 
-func withAuthz(classifier *routing.Classifier, a authorizer, next http.Handler) http.Handler {
+func withAuthz(classifier *routing.Classifier, a authorizer, runtime authzRuntimeStore, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		path := r.URL.Path
 		rc := routing.RouteClassUI
@@ -154,26 +160,41 @@ func withAuthz(classifier *routing.Classifier, a authorizer, next http.Handler) 
 			return
 		}
 
-		roleSlug := authz.RoleAnonymous
-		if p, ok := currentPrincipal(r.Context()); ok {
-			roleSlug = p.RoleSlug
-		}
-
-		subject := authz.SubjectFromRoleSlug(roleSlug)
-		domain := authz.DomainFromTenantID(tenant.ID)
-
 		object, action, shouldCheck := authzRequirementForRoute(r.Method, path)
 		if !shouldCheck {
 			next.ServeHTTP(w, r)
 			return
 		}
 
-		allowed, enforced, err := a.Authorize(subject, domain, object, action)
+		if isBootstrapPolicyRoute(r.Method, path) {
+			allowed, enforced, err := a.Authorize(authz.SubjectFromRoleSlug(authz.RoleAnonymous), authz.DomainFromTenantID(tenant.ID), object, action)
+			if err != nil {
+				routing.WriteError(w, r, rc, http.StatusInternalServerError, "authz_error", "authz error")
+				return
+			}
+			if enforced && !allowed {
+				routing.WriteError(w, r, rc, http.StatusForbidden, "forbidden", "forbidden")
+				return
+			}
+			next.ServeHTTP(w, r)
+			return
+		}
+
+		principal, ok := currentPrincipal(r.Context())
+		if !ok || strings.TrimSpace(principal.ID) == "" {
+			routing.WriteError(w, r, rc, http.StatusUnauthorized, "principal_missing", "principal missing")
+			return
+		}
+		if runtime == nil {
+			routing.WriteError(w, r, rc, http.StatusInternalServerError, "authz_runtime_unavailable", "authz runtime unavailable")
+			return
+		}
+		allowed, err := runtime.AuthorizePrincipal(r.Context(), tenant.ID, principal.ID, object, action)
 		if err != nil {
 			routing.WriteError(w, r, rc, http.StatusInternalServerError, "authz_error", "authz error")
 			return
 		}
-		if enforced && !allowed {
+		if !allowed {
 			routing.WriteError(w, r, rc, http.StatusForbidden, "forbidden", "forbidden")
 			return
 		}
@@ -208,6 +229,11 @@ func findRouteRequirement(method string, path string) (routeRequirement, bool) {
 		}
 	}
 	return routeRequirement{}, false
+}
+
+func isBootstrapPolicyRoute(method string, path string) bool {
+	return (method == http.MethodPost && path == "/iam/api/sessions") ||
+		(method == http.MethodPost && path == "/logout")
 }
 
 func pathMatchRouteTemplate(path string, template string) bool {

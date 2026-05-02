@@ -232,7 +232,28 @@ func ListAuthzToolOverlayCoverage() []AuthzToolOverlayCoverage {
 }
 
 func ListAuthzRoleSeedCoverage() []AuthzRoleSeedCoverage {
-	return nil
+	out := make([]AuthzRoleSeedCoverage, 0)
+	for _, key := range builtinTenantAdminCapabilityKeys() {
+		out = append(out, AuthzRoleSeedCoverage{
+			RoleSlug:           authz.RoleTenantAdmin,
+			AuthzCapabilityKey: key,
+			SystemManaged:      true,
+		})
+	}
+	for _, key := range builtinTenantViewerCapabilityKeys() {
+		out = append(out, AuthzRoleSeedCoverage{
+			RoleSlug:           authz.RoleTenantViewer,
+			AuthzCapabilityKey: key,
+			SystemManaged:      true,
+		})
+	}
+	sort.SliceStable(out, func(i, j int) bool {
+		if out[i].RoleSlug != out[j].RoleSlug {
+			return out[i].RoleSlug < out[j].RoleSlug
+		}
+		return out[i].AuthzCapabilityKey < out[j].AuthzCapabilityKey
+	})
+	return out
 }
 
 func LintAuthzCoverage(facts AuthzCoverageFacts) []error {
@@ -331,6 +352,9 @@ func LintAuthzCoverage(facts AuthzCoverageFacts) []error {
 			errs = append(errs, fmt.Errorf("policy grant %s/%s references unregistered authz capability key %s", grant.Subject, grant.Domain, key))
 			continue
 		}
+		if isBuiltinTenantRoleSubject(grant.Subject) && entry.Status == authz.CapabilityStatusEnabled && entry.Assignable && entry.Surface == authz.CapabilitySurfaceTenantAPI {
+			errs = append(errs, fmt.Errorf("policy grant %s/%s must not grant assignable tenant API capability %s; use DB role seed/runtime instead", grant.Subject, grant.Domain, key))
+		}
 		if entry.Surface == authz.CapabilitySurfaceTenantAPI && !tenantAPICovered[key] {
 			errs = append(errs, fmt.Errorf("policy grant %s/%s references tenant authz capability key without API coverage: %s", grant.Subject, grant.Domain, key))
 		}
@@ -351,6 +375,15 @@ func LintAuthzCoverage(facts AuthzCoverageFacts) []error {
 	}
 
 	return errs
+}
+
+func isBuiltinTenantRoleSubject(subject string) bool {
+	switch strings.TrimSpace(subject) {
+	case authz.SubjectFromRoleSlug(authz.RoleTenantAdmin), authz.SubjectFromRoleSlug(authz.RoleTenantViewer):
+		return true
+	default:
+		return false
+	}
 }
 
 func authzAllowlistRouteRequiresRequirement(route AuthzAllowlistRoute) bool {

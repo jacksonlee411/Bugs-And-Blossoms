@@ -1,4 +1,4 @@
-h1:XtzzRDr/r8l/GMOJImvdr7PryWBsqt3WLYMtxCnpy3I=
+h1:2C1mxmiEtin8xkpI523eVmjj+F8kY59U2YSDIpkBp/s=
 20260106003000_iam_baseline.sql h1:4cRdz130X33pSQ0tm+LXZ1ptR+zChkscFHWrmYy/UgM=
 20260107120000_iam_tenancy_and_superadmin.sql h1:a0K5XB/KuT+D5L/J87q7Rg7vNFy1Q6p4rHc2Wje3O/k=
 20260107130000_iam_principals_and_sessions.sql h1:3Zw+4IZDqhGJwkKofNwwKAaNZ3H20AWCrBSCKQmEZ94=
@@ -8,3 +8,4 @@ h1:XtzzRDr/r8l/GMOJImvdr7PryWBsqt3WLYMtxCnpy3I=
 20260222162000_iam_dict_runtime_tenant_only.sql h1:KOrXQtpxeizHXX6B/dvcY6HBtPBx5g465fMav94kz7E=
 20260421120000_iam_cubebox_conversations.sql h1:SN2KlNvL3X0N2YAScNSCC9ZO20J9facz1HmrlBkp6X8=
 20260422100000_iam_cubebox_model_settings.sql h1:OI6QhSYyjPk2FbCnF61m/JEM13C4tahSh+llXAlOTaU=
+20260501120000_iam_authz_role_runtime.sql h1:Ailt32tc1cD4I5PxE4rQCB1MRzTtWZLC5VAHslwq/bg=

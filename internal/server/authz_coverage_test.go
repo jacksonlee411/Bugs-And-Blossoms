@@ -15,7 +15,8 @@ func TestLintAuthzCoverage_CurrentFactsPass(t *testing.T) {
 		AllowlistRoutes: ListAuthzAllowlistRoutes(testAuthzAllowlist()),
 		Routes:          ListAuthzRouteCoverage(),
 		Registry:        authz.ListAuthzCapabilities(),
-		PolicyGrants:    []authz.PolicyGrant{{Subject: "role:tenant-admin", Domain: "*", Object: authz.ObjectOrgUnitOrgUnits, Action: authz.ActionRead}},
+		RoleSeeds:       ListAuthzRoleSeedCoverage(),
+		PolicyGrants:    nil,
 	}
 	if errs := LintAuthzCoverage(facts); len(errs) != 0 {
 		t.Fatalf("errs=%v", errs)
@@ -43,7 +44,19 @@ func TestLintAuthzCoverage_Failures(t *testing.T) {
 				{Subject: "role:tenant-admin", Domain: "*", Object: authz.ObjectOrgUnitOrgUnits, Action: authz.ActionRead},
 			},
 		}
-		assertLintContains(t, facts, "without API coverage")
+		assertLintContains(t, facts, "must not grant assignable tenant API capability")
+	})
+
+	t.Run("builtin tenant role policy grant is rejected even with api coverage", func(t *testing.T) {
+		facts := AuthzCoverageFacts{
+			AllowlistRoutes: ListAuthzAllowlistRoutes(testAuthzAllowlist()),
+			Routes:          ListAuthzRouteCoverage(),
+			Registry:        authz.ListAuthzCapabilities(),
+			PolicyGrants: []authz.PolicyGrant{
+				{Subject: "role:tenant-viewer", Domain: "*", Object: authz.ObjectOrgUnitOrgUnits, Action: authz.ActionRead},
+			},
+		}
+		assertLintContains(t, facts, "use DB role seed/runtime instead")
 	})
 
 	t.Run("assignable without tenant api coverage", func(t *testing.T) {
@@ -215,6 +228,10 @@ func testAuthzAllowlist() routing.Allowlist {
 					{Path: "/iam/api/sessions", Methods: []string{"POST"}, RouteClass: string(routing.RouteClassInternalAPI)},
 					{Path: "/iam/api/authz/capabilities", Methods: []string{"GET"}, RouteClass: string(routing.RouteClassInternalAPI)},
 					{Path: "/iam/api/authz/api-catalog", Methods: []string{"GET"}, RouteClass: string(routing.RouteClassInternalAPI)},
+					{Path: "/iam/api/authz/roles", Methods: []string{"GET", "POST"}, RouteClass: string(routing.RouteClassInternalAPI)},
+					{Path: "/iam/api/authz/roles/{role_slug}", Methods: []string{"GET", "PUT"}, RouteClass: string(routing.RouteClassInternalAPI)},
+					{Path: "/iam/api/authz/user-assignments", Methods: []string{"GET"}, RouteClass: string(routing.RouteClassInternalAPI)},
+					{Path: "/iam/api/authz/user-assignments/{principal_id}", Methods: []string{"PUT"}, RouteClass: string(routing.RouteClassInternalAPI)},
 					{Path: "/iam/api/dicts", Methods: []string{"GET", "POST"}, RouteClass: string(routing.RouteClassInternalAPI)},
 					{Path: "/iam/api/dicts:disable", Methods: []string{"POST"}, RouteClass: string(routing.RouteClassInternalAPI)},
 					{Path: "/iam/api/dicts/values", Methods: []string{"GET", "POST"}, RouteClass: string(routing.RouteClassInternalAPI)},

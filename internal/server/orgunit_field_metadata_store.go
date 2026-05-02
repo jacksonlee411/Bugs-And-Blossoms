@@ -874,20 +874,22 @@ WHERE ` + whereSQL
 	}
 
 	selectCols := fmt.Sprintf(`
-SELECT
-  c.org_code,
-  v.name,
-  v.status,
-  v.is_business_unit,
-  EXISTS (
+	SELECT
+	  c.org_code,
+	  v.name,
+	  v.status,
+	  v.is_business_unit,
+	  EXISTS (
     SELECT 1
     FROM orgunit.org_unit_versions ch
      WHERE ch.tenant_uuid = v.tenant_uuid
        AND %s = %s
-       AND ch.validity @> $2::date
-       AND ch.status = 'active'
-     LIMIT 1
-   ) AS has_children`, parentOrgNodeKeyCompatExpr("ch"), orgNodeKeyCompatExpr("v"))
+	       AND ch.validity @> $2::date
+	       AND ch.status = 'active'
+	     LIMIT 1
+	   ) AS has_children,
+	  %s AS org_node_key,
+	  %s AS path_org_node_keys`, parentOrgNodeKeyCompatExpr("ch"), orgNodeKeyCompatExpr("v"), orgNodeKeyCompatExpr("v"), pathOrgNodeKeysCompatExpr("v"))
 
 	listSQL := selectCols + `
 FROM orgunit.org_unit_versions v
@@ -912,12 +914,14 @@ ORDER BY ` + sortExpr + ` ` + sortOrder + `, c.org_code ASC`
 	items := make([]orgUnitListItem, 0)
 	for rows.Next() {
 		item := orgUnitListItem{}
+		var pathOrgNodeKeys []string
 		var status string
 		var isBusinessUnit bool
 		var hasChildren bool
-		if err := rows.Scan(&item.OrgCode, &item.Name, &status, &isBusinessUnit, &hasChildren); err != nil {
+		if err := rows.Scan(&item.OrgCode, &item.Name, &status, &isBusinessUnit, &hasChildren, &item.OrgNodeKey, &pathOrgNodeKeys); err != nil {
 			return nil, 0, err
 		}
+		item.PathOrgNodeKeys = append([]string(nil), pathOrgNodeKeys...)
 		item.HasChildren = &hasChildren
 		if strings.TrimSpace(status) == "" {
 			status = orgUnitListStatusActive

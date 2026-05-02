@@ -37,7 +37,7 @@ type orgUnitWriteAPIResponse struct {
 	Fields        map[string]any `json:"fields,omitempty"`
 }
 
-func handleOrgUnitsWriteAPI(w http.ResponseWriter, r *http.Request, writeSvc orgunitservices.OrgUnitWriteService) {
+func handleOrgUnitsWriteAPI(w http.ResponseWriter, r *http.Request, writeSvc orgunitservices.OrgUnitWriteService, scopeDeps ...orgUnitScopeDeps) {
 	if r.Method != http.MethodPost {
 		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusMethodNotAllowed, "method_not_allowed", "method not allowed")
 		return
@@ -63,6 +63,17 @@ func handleOrgUnitsWriteAPI(w http.ResponseWriter, r *http.Request, writeSvc org
 	if len(req.Patch.ExtLabelsSnapshot) > 0 {
 		writeOrgUnitServiceError(w, r, newBadRequestError(orgUnitErrPatchFieldNotAllowed), "orgunit_write_failed")
 		return
+	}
+	scope := orgUnitScopeDepsFromVariadic(scopeDeps)
+	if err := ensureCurrentPrincipalOrgCodeScopeAllows(r.Context(), scope.store, scope.runtime, tenant.ID, req.OrgCode); err != nil {
+		writeOrgUnitScopeError(w, r, err)
+		return
+	}
+	if req.Patch.ParentOrgCode != nil && strings.TrimSpace(*req.Patch.ParentOrgCode) != "" {
+		if err := ensureCurrentPrincipalOrgCodeScopeAllows(r.Context(), scope.store, scope.runtime, tenant.ID, *req.Patch.ParentOrgCode); err != nil {
+			writeOrgUnitScopeError(w, r, err)
+			return
+		}
 	}
 
 	intent := strings.TrimSpace(req.Intent)

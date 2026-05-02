@@ -116,6 +116,7 @@ func ParseAuthzCapabilityKey(key string) (object string, action string, err erro
 var registryEntries = []AuthzCapability{
 	capability(ObjectIAMSession, ActionAdmin, "iam", "会话", "登录/退出", ScopeDimensionNone, false, CapabilitySurfaceTenantAPI, 10),
 	capability(ObjectIAMAuthz, ActionRead, "iam", "功能授权项", "查看", ScopeDimensionNone, true, CapabilitySurfaceTenantAPI, 20),
+	capability(ObjectIAMAuthz, ActionAdmin, "iam", "授权管理", "管理", ScopeDimensionNone, true, CapabilitySurfaceTenantAPI, 30),
 	capability(ObjectIAMDicts, ActionRead, "iam", "字典配置", "查看", ScopeDimensionNone, true, CapabilitySurfaceTenantAPI, 100),
 	capability(ObjectIAMDicts, ActionAdmin, "iam", "字典配置", "管理", ScopeDimensionNone, true, CapabilitySurfaceTenantAPI, 110),
 	capability(ObjectIAMDictRelease, ActionAdmin, "iam", "字典发布", "管理", ScopeDimensionNone, true, CapabilitySurfaceTenantAPI, 120),

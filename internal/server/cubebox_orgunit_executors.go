@@ -18,19 +18,23 @@ type cubeBoxOrgUnitDetailsStore interface {
 }
 
 type cubeBoxOrgUnitDetailsExecutor struct {
-	store cubeBoxOrgUnitDetailsStore
+	store   cubeBoxOrgUnitDetailsStore
+	runtime authzRuntimeStore
 }
 
 type cubeBoxOrgUnitListExecutor struct {
-	store OrgUnitStore
+	store   OrgUnitStore
+	runtime authzRuntimeStore
 }
 
 type cubeBoxOrgUnitSearchExecutor struct {
-	store OrgUnitStore
+	store   OrgUnitStore
+	runtime authzRuntimeStore
 }
 
 type cubeBoxOrgUnitAuditExecutor struct {
-	store OrgUnitStore
+	store   OrgUnitStore
+	runtime authzRuntimeStore
 }
 
 const (
@@ -96,9 +100,32 @@ func (e *orgUnitNotFoundError) QueryTerminalError() *cubebox.ExecutionTerminalEr
 	}
 }
 
+type orgUnitAuthzScopeError struct {
+	err error
+}
+
+func (e *orgUnitAuthzScopeError) Error() string {
+	return "authz_scope_forbidden"
+}
+
+func (e *orgUnitAuthzScopeError) Unwrap() error {
+	return e.err
+}
+
+func (e *orgUnitAuthzScopeError) QueryTerminalError() *cubebox.ExecutionTerminalError {
+	return &cubebox.ExecutionTerminalError{
+		Code:      "authz_scope_forbidden",
+		Message:   "当前账号没有访问该组织范围的权限。",
+		Retryable: false,
+	}
+}
+
 func wrapOrgUnitExecutionError(err error) error {
 	if err == nil {
 		return nil
+	}
+	if isOrgUnitAuthzScopeError(err) {
+		return &orgUnitAuthzScopeError{err: err}
 	}
 	if errors.Is(err, errOrgUnitNotFound) {
 		return &orgUnitNotFoundError{}
@@ -106,10 +133,11 @@ func wrapOrgUnitExecutionError(err error) error {
 	return err
 }
 
-func newCubeBoxOrgUnitRegisteredExecutors(store OrgUnitStore) ([]cubebox.RegisteredExecutor, error) {
+func newCubeBoxOrgUnitRegisteredExecutors(store OrgUnitStore, runtime ...authzRuntimeStore) ([]cubebox.RegisteredExecutor, error) {
 	if store == nil {
 		return nil, errors.New("orgunit store required")
 	}
+	authzRuntime := runtimeStoreFromVariadic(runtime)
 	items := make([]cubebox.RegisteredExecutor, 0, 4)
 	if detailsStore, ok := store.(cubeBoxOrgUnitDetailsStore); ok {
 		items = append(items, cubebox.RegisteredExecutor{
@@ -117,7 +145,8 @@ func newCubeBoxOrgUnitRegisteredExecutors(store OrgUnitStore) ([]cubebox.Registe
 			RequiredParams: []string{"org_code", "as_of"},
 			OptionalParams: []string{"include_disabled"},
 			Executor: cubeBoxOrgUnitDetailsExecutor{
-				store: detailsStore,
+				store:   detailsStore,
+				runtime: authzRuntime,
 			},
 		})
 	}
@@ -133,7 +162,8 @@ func newCubeBoxOrgUnitRegisteredExecutors(store OrgUnitStore) ([]cubebox.Registe
 				},
 			},
 			Executor: cubeBoxOrgUnitListExecutor{
-				store: store,
+				store:   store,
+				runtime: authzRuntime,
 			},
 		},
 		cubebox.RegisteredExecutor{
@@ -141,7 +171,8 @@ func newCubeBoxOrgUnitRegisteredExecutors(store OrgUnitStore) ([]cubebox.Registe
 			RequiredParams: []string{"query", "as_of"},
 			OptionalParams: []string{"include_disabled"},
 			Executor: cubeBoxOrgUnitSearchExecutor{
-				store: store,
+				store:   store,
+				runtime: authzRuntime,
 			},
 		},
 		cubebox.RegisteredExecutor{
@@ -149,7 +180,8 @@ func newCubeBoxOrgUnitRegisteredExecutors(store OrgUnitStore) ([]cubebox.Registe
 			RequiredParams: []string{"org_code"},
 			OptionalParams: []string{"limit"},
 			Executor: cubeBoxOrgUnitAuditExecutor{
-				store: store,
+				store:   store,
+				runtime: authzRuntime,
 			},
 		},
 	)
@@ -176,6 +208,9 @@ func (e cubeBoxOrgUnitDetailsExecutor) Execute(ctx context.Context, request cube
 
 	orgNodeKey, err := e.store.ResolveOrgNodeKeyByCode(ctx, strings.TrimSpace(request.TenantID), orgCode)
 	if err != nil {
+		return cubebox.ExecuteResult{}, wrapOrgUnitExecutionError(err)
+	}
+	if err := ensurePrincipalOrgNodeScopeAllows(ctx, e.store, e.runtime, strings.TrimSpace(request.TenantID), strings.TrimSpace(request.PrincipalID), orgNodeKey, asOf); err != nil {
 		return cubebox.ExecuteResult{}, wrapOrgUnitExecutionError(err)
 	}
 
@@ -333,6 +368,28 @@ func (e cubeBoxOrgUnitListExecutor) Execute(ctx context.Context, request cubebox
 	if err != nil {
 		return cubebox.ExecuteResult{}, err
 	}
+	if e.runtime != nil {
+		pageReq.Limit = 0
+		pageReq.Offset = 0
+		items, total, err = listOrgUnitListPage(ctx, e.store, strings.TrimSpace(request.TenantID), pageReq)
+		if err != nil {
+			return cubebox.ExecuteResult{}, wrapOrgUnitExecutionError(err)
+		}
+		if err := hydrateOrgUnitListItemScopePaths(ctx, e.store, strings.TrimSpace(request.TenantID), asOf, items); err != nil {
+			return cubebox.ExecuteResult{}, wrapOrgUnitExecutionError(err)
+		}
+		items, total, err = filterOrgUnitListItemsByPrincipalScope(ctx, e.runtime, strings.TrimSpace(request.TenantID), strings.TrimSpace(request.PrincipalID), items, total)
+		if err != nil {
+			return cubebox.ExecuteResult{}, wrapOrgUnitExecutionError(err)
+		}
+		start := orgUnitListOffsetFromUserPage(pageValue, sizeValue)
+		if start >= len(items) {
+			items = []orgUnitListItem{}
+		} else {
+			end := min(start+sizeValue, len(items))
+			items = items[start:end]
+		}
+	}
 
 	resp := orgUnitListResponse{
 		AsOf:            asOf,
@@ -425,6 +482,13 @@ func (e cubeBoxOrgUnitSearchExecutor) Execute(ctx context.Context, request cubeb
 	if err != nil {
 		return cubebox.ExecuteResult{}, wrapOrgUnitExecutionError(err)
 	}
+	candidates, err = e.filterSearchCandidatesByScope(ctx, request, candidates, asOf)
+	if err != nil {
+		return cubebox.ExecuteResult{}, wrapOrgUnitExecutionError(err)
+	}
+	if len(candidates) == 0 {
+		return cubebox.ExecuteResult{}, wrapOrgUnitExecutionError(errOrgUnitNotFound)
+	}
 	if len(candidates) > 1 {
 		return cubebox.ExecuteResult{}, &orgUnitSearchAmbiguousError{
 			Query:      query,
@@ -434,6 +498,9 @@ func (e cubeBoxOrgUnitSearchExecutor) Execute(ctx context.Context, request cubeb
 	}
 	result, err := searchNodeByVisibility(ctx, e.store, strings.TrimSpace(request.TenantID), query, asOf, includeDisabled)
 	if err != nil {
+		return cubebox.ExecuteResult{}, wrapOrgUnitExecutionError(err)
+	}
+	if err := ensurePrincipalOrgScopeAllows(ctx, e.runtime, strings.TrimSpace(request.TenantID), strings.TrimSpace(request.PrincipalID), result.TargetOrgNodeKey, result.PathOrgNodeKeys); err != nil {
 		return cubebox.ExecuteResult{}, wrapOrgUnitExecutionError(err)
 	}
 
@@ -494,6 +561,9 @@ func (e cubeBoxOrgUnitAuditExecutor) Execute(ctx context.Context, request cubebo
 	if err != nil {
 		return cubebox.ExecuteResult{}, wrapOrgUnitExecutionError(err)
 	}
+	if err := ensurePrincipalOrgNodeScopeAllows(ctx, e.store, e.runtime, strings.TrimSpace(request.TenantID), strings.TrimSpace(request.PrincipalID), orgNodeKey, ""); err != nil {
+		return cubebox.ExecuteResult{}, wrapOrgUnitExecutionError(err)
+	}
 	rows, err := listNodeAuditEventsByNodeKey(ctx, e.store, strings.TrimSpace(request.TenantID), orgNodeKey, limit+1)
 	if err != nil {
 		return cubebox.ExecuteResult{}, wrapOrgUnitExecutionError(err)
@@ -547,6 +617,27 @@ func (e cubeBoxOrgUnitAuditExecutor) Execute(ctx context.Context, request cubebo
 			SourceExecutorKey: "orgunit.audit",
 		}),
 	}, nil
+}
+
+func (e cubeBoxOrgUnitSearchExecutor) filterSearchCandidatesByScope(ctx context.Context, request cubebox.ExecuteRequest, candidates []OrgUnitSearchCandidate, asOf string) ([]OrgUnitSearchCandidate, error) {
+	if e.runtime == nil {
+		return candidates, nil
+	}
+	out := make([]OrgUnitSearchCandidate, 0, len(candidates))
+	for _, candidate := range candidates {
+		targetOrgNodeKey, pathOrgNodeKeys, err := orgUnitScopePathOrgNodeKeys(ctx, e.store, strings.TrimSpace(request.TenantID), candidate.OrgNodeKey, asOf)
+		if err != nil {
+			return nil, err
+		}
+		if err := ensurePrincipalOrgScopeAllows(ctx, e.runtime, strings.TrimSpace(request.TenantID), strings.TrimSpace(request.PrincipalID), targetOrgNodeKey, pathOrgNodeKeys); err != nil {
+			if errors.Is(err, errAuthzScopeForbidden) {
+				continue
+			}
+			return nil, err
+		}
+		out = append(out, candidate)
+	}
+	return out, nil
 }
 
 func orgUnitQueryEntity(entity cubebox.QueryEntity) *cubebox.QueryEntity {

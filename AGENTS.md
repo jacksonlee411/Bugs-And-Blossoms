@@ -28,6 +28,7 @@
 - sqlc：`make sqlc-generate`，然后 `git status --short` 必须为空；命中 DB 触发器时补跑 `make sqlc-verify-schema`
 - Routing：`make check routing`
 - Authz：`make authz-pack && make authz-test && make authz-lint`
+- Principal 多角色 union 反回流：`make check authz-role-union`
 - 新增/调整受保护 API、CubeBox API tool overlay、authz requirement、capability registry、policy、功能授权项候选项、功能授权项页面或 API 授权目录：`make authz-pack && make authz-test && make authz-lint`（覆盖门禁见 `DEV-PLAN-484/485`，功能授权项页面见 `DEV-PLAN-482A`）
 - E2E：`make e2e`
 - 文档新增/整理：`make check doc`
@@ -54,6 +55,7 @@
 | sqlc（schema/queries/config） | `make sqlc-generate` + `git status --short`（命中 DB 触发器再跑 `make sqlc-verify-schema`） | 规范与 stopline 见 `DEV-PLAN-025/025A` |
 | Routing（allowlist/分类/responder） | `make check routing` | 口径见 `DEV-PLAN-017` |
 | Authz（Casbin） | `make authz-pack && make authz-test && make authz-lint` | 口径见 `DEV-PLAN-022` |
+| Principal 多角色 union / 普通 tenant 授权运行时 | `make check authz-role-union` | 阻断单 `role_slug`、`roles[0]`、普通 tenant CSV role grant 或 DB+CSV OR 放行回流；口径见 `DEV-PLAN-489A` |
 | 受保护 API / CubeBox API tool overlay / authz requirement / capability registry / policy / 功能授权项候选项 / 功能授权项页面 / API 授权目录 | `make authz-pack && make authz-test && make authz-lint` | 覆盖门禁见 `DEV-PLAN-484/485`，功能授权项页面见 `DEV-PLAN-482A`；新增受保护 API / CubeBox API tool overlay 必须能追溯到 registry，`assignable=true` 必须有当前 API 覆盖 |
 | E2E（Playwright） | `make e2e` | 门禁结构见 `DEV-PLAN-012`；数据库依赖口径冻结为 Docker / compose，E2E 不得把宿主机 `psql` 等工具作为唯一前置条件 |
 | 新增/调整文档 | `make check doc` | 门禁见“文档收敛与门禁” |

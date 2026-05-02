@@ -1,6 +1,6 @@
 # DEV-PLAN-480：EHR 授权体系总体方案
 
-**状态**: 授权体系蓝图持续推进；480A P1 基础与 P2 只读授权目录面已落地，运行时授权闭环仍待后续阶段（2026-05-01 23:10 CST）
+**状态**: 授权体系蓝图持续推进；480A P1/P2 只读治理面与 487/489/489A 后端运行时闭环已落地，481 UI 保存交互、490 API-first、488 诊断与字段级授权仍待后续（2026-05-02 CST）
 
 ## 0. 适用范围与评审分级
 
@@ -19,10 +19,10 @@
 ### 0.2 现状研究摘要
 
 - `DEV-PLAN-022` 已冻结 Casbin 工具链、role-based subject、tenant domain、object/action registry 与 `AUTHZ_MODE` 三态；当前 `pkg/authz.Authorizer.Authorize(subject, domain, object, action)` 能支撑 API 能力授权。
-- 当前 `pkg/authz` 仍是角色粒度 RBAC + tenant domain；它不表达组织树数据范围、对象实例或字段级裁决。
-- 当前 `internal/server/authz_middleware.go` 以 route 映射 object/action；CubeBox 业务工具链后续按 `DEV-PLAN-490` 从 484 单一覆盖事实聚合源与 485 API 授权目录投影筛选可调用 HTTP API。
+- 当前普通 tenant 能力授权已由 `DEV-PLAN-487/489/489A` 切到 DB role capability SoT + principal 多角色 union；`config/access/policy.csv` 仅保留 anonymous/superadmin/bootstrap/static/system surface。
+- 当前 `internal/server/authz_middleware.go` 以 route 映射 object/action，并对普通 tenant 受保护请求调用 runtime store；CubeBox 业务工具链后续按 `DEV-PLAN-490` 从 484 单一覆盖事实聚合源与 485 API 授权目录投影筛选可调用 HTTP API。
 - `DEV-PLAN-486` 的 executor 路线只保留为活体警示；当前方案不再以 executor registry 作为业务工具契约。
-- 当前 `ExecuteRequest` 有 `TenantID`、`PrincipalID`、`ConversationID`，缺少 `PrincipalRoleSlug`；现有 Casbin subject 从 role slug 推导，不能把 `PrincipalID` 误当 subject。
+- 当前 `ExecuteRequest` 有 `TenantID`、`PrincipalID`、`ConversationID`；普通 tenant EHR 授权不再从 session 单 `role_slug` 推导 subject，而是由 489A runtime 从 `principal_role_assignments` 读取角色集合做 capability union。
 - 历史前端 `RequirePermission` / `permissionKey` 只基于本地 `VITE_PERMISSIONS` 做导航和页面提示，默认空权限时甚至是 `*`；它不是安全边界，且按 `DEV-PLAN-483` 必须硬删除旧 key、旧字段和构建期权限 fallback。现行前端只能通过 `requiredCapabilityKey` 消费 canonical `object:action` authz capability key，当前用户集合字段只能是 `authz_capability_keys`。
 - “用户 A 能看整个飞虫与鲜花，用户 B 只能查看鲜花公司”属于同租户内组织数据范围授权，不是 route authz、RLS 或 CubeBox prompt 能解决的问题。
 
@@ -422,16 +422,16 @@ Decision 的逻辑字段：
 
 1. [ ] 角色管理、用户授权、功能授权项和 API 授权目录与对应 dev-plan 边界保持一致；授权项诊断按 488 后置，不阻塞首批闭环。
 2. [ ] 按 `DEV-PLAN-483` 删除旧 `permissionKey` / `VITE_PERMISSIONS` 权限语言回流。
-3. [ ] 用户授权页的组织范围配置必须能保存并校验：`scope_dimension=organization` 的角色授权缺少组织范围时不得保存为全租户。
-4. [ ] 数据范围 SoT 由 `DEV-PLAN-489` 承接，多角色 union 运行时语义由 `DEV-PLAN-489A` 承接；如需新增 DB schema，必须先获得用户手工确认；实现 PR 不得绕过 schema 确认用前端本地状态或 prompt 代替。
+3. [X] 用户授权后端保存 API 已能保存并校验组织范围：`scope_dimension=organization` 的角色授权缺少组织范围时不得保存为全租户；481 UI 保存交互待后续接入。
+4. [X] 数据范围 SoT 由 `DEV-PLAN-489` 承接，多角色 union 运行时语义由 `DEV-PLAN-489A` 承接；新增 DB schema 已获得用户手工确认；后续 UI 不得绕过 schema 确认用前端本地状态或 prompt 代替。
 5. [ ] 不新增权限摘要页、范围提示、字段脱敏运行态或 CubeBox 授权反馈 UI。
 
 ### 6.4 P3：组织数据范围运行时强制
 
-1. [ ] 在 orgunit 读路径统一注入 scope filter。
-2. [ ] 覆盖 A/B 用户：A 全集团，B 仅鲜花公司。
-3. [ ] CubeBox API-first 工具链和普通 orgunit API 复用同一读路径。
-4. [ ] details/audit/write 越界 fail-closed，`403/404` 策略在 `DEV-PLAN-489` 中冻结。
+1. [X] 在 orgunit 读路径统一注入 scope filter。
+2. [X] 服务端测试覆盖全范围/受限范围用户；A/B E2E 待补。
+3. [X] CubeBox orgunit 查询与普通 orgunit API 复用同一 scope provider；490 API-first 全面迁移待后续。
+4. [X] details/audit/write 越界 fail-closed，`403/404` 策略在 `DEV-PLAN-489` 中冻结。
 
 ### 6.5 P4：字段级授权
 
@@ -459,7 +459,7 @@ Decision 的逻辑字段：
 
 1. [ ] 480 文档作为 EHR 授权体系 SSOT 被 AGENTS Doc Map 收录。
 2. [ ] 当前授权模块改造边界明确：保留 Casbin，补 Request/Decision/PIP，不替换引擎。
-3. [ ] A/B 组织数据范围示例有明确服务端行为：用户授权页可配置范围，list/search 裁剪，details/audit fail-closed。
+3. [X] A/B 组织数据范围示例已有明确服务端行为：用户授权后端可保存范围，list/search 裁剪，details/audit/write fail-closed；用户授权页保存交互与 E2E 待补。
 4. [ ] CubeBox API-first 工具授权切片具备可实施步骤和测试要求。
 5. [ ] UI 设计只覆盖角色管理、用户授权、功能授权项和 API 授权目录；不包含权限摘要页、范围提示、字段脱敏运行态、CubeBox 授权反馈或普通用户错误页。
 6. [ ] 实施切片按 P0-P4 分批，未把 DB schema 或在线策略管理混入首批文档变更。

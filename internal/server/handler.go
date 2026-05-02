@@ -36,6 +36,7 @@ type HandlerOptions struct {
 	OrgUnitStore        OrgUnitStore
 	OrgUnitWriteService orgunitservices.OrgUnitWriteService
 	DictStore           DictStore
+	AuthzRuntimeStore   authzRuntimeStore
 }
 
 func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, error) {
@@ -63,6 +64,7 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, error) {
 	dictStore := opts.DictStore
 	tenancyResolver := opts.TenancyResolver
 	identityProvider := opts.IdentityProvider
+	authzRuntime := opts.AuthzRuntimeStore
 
 	var pgPool *pgxpool.Pool
 	if orgStore == nil {
@@ -93,6 +95,9 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, error) {
 	if err := dictpkg.RegisterResolver(dictStore); err != nil {
 		return nil, err
 	}
+	if authzRuntime == nil {
+		authzRuntime = newAuthzRuntimeStore(pgPool)
+	}
 
 	cubeboxRuntime := cubebox.NewRuntime()
 	cubeboxStore := cubebox.NewStore(pgPool)
@@ -101,7 +106,7 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, error) {
 	cubeboxGateway := cubebox.NewGatewayService(cubeboxRuntime, cubeboxStore, cubeboxAdapter, cubeboxSecretResolver)
 	cubeboxQueryProducer := newCubeboxProviderReadPlanProducer(cubeboxStore, cubeboxAdapter, cubeboxSecretResolver)
 	cubeboxQueryNarrator := newCubeboxProviderQueryNarrator(cubeboxStore, cubeboxAdapter, cubeboxSecretResolver)
-	cubeboxQueryFlow, err := buildDefaultCubeboxQueryFlow(cubeboxRuntime, cubeboxStore, orgStore, cubeboxQueryProducer, cubeboxQueryNarrator)
+	cubeboxQueryFlow, err := buildDefaultCubeboxQueryFlow(cubeboxRuntime, cubeboxStore, orgStore, authzRuntime, cubeboxQueryProducer, cubeboxQueryNarrator)
 	if err != nil {
 		return nil, err
 	}
@@ -187,6 +192,12 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, error) {
 			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusInternalServerError, "principal_error", "principal error")
 			return
 		}
+		if seeder, ok := authzRuntime.(authzRuntimeRoleSeeder); ok {
+			if err := seeder.EnsurePrincipalRoleAssignment(r.Context(), tenant.ID, p.ID, roleSlug); err != nil {
+				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusInternalServerError, "principal_assignment_error", "principal assignment error")
+				return
+			}
+		}
 
 		expiresAt := time.Now().Add(sidTTLFromEnv())
 		sid, err := sessions.Create(r.Context(), tenant.ID, p.ID, expiresAt, r.RemoteAddr, r.UserAgent())
@@ -199,13 +210,31 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, error) {
 		w.WriteHeader(http.StatusNoContent)
 	}))
 	router.Handle(routing.RouteClassInternalAPI, http.MethodGet, "/iam/api/me/capabilities", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		handleSessionCapabilitiesAPI(w, r, authorizer)
+		handleSessionCapabilitiesAPI(w, r, authzRuntime)
 	}))
 	router.Handle(routing.RouteClassInternalAPI, http.MethodGet, "/iam/api/authz/capabilities", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		handleAuthzCapabilitiesAPI(w, r)
 	}))
 	router.Handle(routing.RouteClassInternalAPI, http.MethodGet, "/iam/api/authz/api-catalog", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		handleAuthzAPICatalogAPI(w, r)
+	}))
+	router.Handle(routing.RouteClassInternalAPI, http.MethodGet, "/iam/api/authz/roles", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handleAuthzRolesAPI(w, r, authzRuntime)
+	}))
+	router.Handle(routing.RouteClassInternalAPI, http.MethodPost, "/iam/api/authz/roles", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handleAuthzRolesAPI(w, r, authzRuntime)
+	}))
+	router.Handle(routing.RouteClassInternalAPI, http.MethodGet, "/iam/api/authz/roles/{role_slug}", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handleAuthzRoleAPI(w, r, authzRuntime)
+	}))
+	router.Handle(routing.RouteClassInternalAPI, http.MethodPut, "/iam/api/authz/roles/{role_slug}", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handleAuthzRoleAPI(w, r, authzRuntime)
+	}))
+	router.Handle(routing.RouteClassInternalAPI, http.MethodGet, "/iam/api/authz/user-assignments", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handlePrincipalAuthzAssignmentGetAPI(w, r, authzRuntime)
+	}))
+	router.Handle(routing.RouteClassInternalAPI, http.MethodPut, "/iam/api/authz/user-assignments/{principal_id}", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handlePrincipalAuthzAssignmentPutAPI(w, r, authzRuntime)
 	}))
 	router.Handle(routing.RouteClassInternalAPI, http.MethodGet, "/iam/api/dicts", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		handleDictsAPI(w, r, dictStore)
@@ -247,10 +276,10 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, error) {
 		http.Redirect(w, r, "/app/login", http.StatusFound)
 	}))
 	router.Handle(routing.RouteClassInternalAPI, http.MethodGet, "/org/api/org-units", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		handleOrgUnitsAPI(w, r, orgStore, orgUnitWriteService)
+		handleOrgUnitsAPI(w, r, orgStore, orgUnitWriteService, authzRuntime)
 	}))
 	router.Handle(routing.RouteClassInternalAPI, http.MethodPost, "/org/api/org-units", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		handleOrgUnitsAPI(w, r, orgStore, orgUnitWriteService)
+		handleOrgUnitsAPI(w, r, orgStore, orgUnitWriteService, authzRuntime)
 	}))
 	router.Handle(routing.RouteClassInternalAPI, http.MethodGet, "/org/api/org-units/field-definitions", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		handleOrgUnitFieldDefinitionsAPI(w, r)
@@ -271,46 +300,46 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, error) {
 		handleOrgUnitFieldOptionsAPI(w, r, orgStore)
 	}))
 	router.Handle(routing.RouteClassInternalAPI, http.MethodGet, "/org/api/org-units/details", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		handleOrgUnitsDetailsAPI(w, r, orgStore)
+		handleOrgUnitsDetailsAPI(w, r, orgStore, authzRuntime)
 	}))
 	router.Handle(routing.RouteClassInternalAPI, http.MethodGet, "/org/api/org-units/versions", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		handleOrgUnitsVersionsAPI(w, r, orgStore)
+		handleOrgUnitsVersionsAPI(w, r, orgStore, authzRuntime)
 	}))
 	router.Handle(routing.RouteClassInternalAPI, http.MethodGet, "/org/api/org-units/audit", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		handleOrgUnitsAuditAPI(w, r, orgStore)
+		handleOrgUnitsAuditAPI(w, r, orgStore, authzRuntime)
 	}))
 	router.Handle(routing.RouteClassInternalAPI, http.MethodGet, "/org/api/org-units/search", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		handleOrgUnitsSearchAPI(w, r, orgStore)
+		handleOrgUnitsSearchAPI(w, r, orgStore, authzRuntime)
 	}))
 	router.Handle(routing.RouteClassInternalAPI, http.MethodPost, "/org/api/org-units/rename", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		handleOrgUnitsRenameAPI(w, r, orgUnitWriteService)
+		handleOrgUnitsRenameAPI(w, r, orgUnitWriteService, orgUnitScopeDeps{store: orgStore, runtime: authzRuntime})
 	}))
 	router.Handle(routing.RouteClassInternalAPI, http.MethodPost, "/org/api/org-units/move", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		handleOrgUnitsMoveAPI(w, r, orgUnitWriteService)
+		handleOrgUnitsMoveAPI(w, r, orgUnitWriteService, orgUnitScopeDeps{store: orgStore, runtime: authzRuntime})
 	}))
 	router.Handle(routing.RouteClassInternalAPI, http.MethodPost, "/org/api/org-units/disable", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		handleOrgUnitsDisableAPI(w, r, orgUnitWriteService)
+		handleOrgUnitsDisableAPI(w, r, orgUnitWriteService, orgUnitScopeDeps{store: orgStore, runtime: authzRuntime})
 	}))
 	router.Handle(routing.RouteClassInternalAPI, http.MethodPost, "/org/api/org-units/enable", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		handleOrgUnitsEnableAPI(w, r, orgUnitWriteService)
+		handleOrgUnitsEnableAPI(w, r, orgUnitWriteService, orgUnitScopeDeps{store: orgStore, runtime: authzRuntime})
 	}))
 	router.Handle(routing.RouteClassInternalAPI, http.MethodPost, "/org/api/org-units/write", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		handleOrgUnitsWriteAPI(w, r, orgUnitWriteService)
+		handleOrgUnitsWriteAPI(w, r, orgUnitWriteService, orgUnitScopeDeps{store: orgStore, runtime: authzRuntime})
 	}))
 	router.Handle(routing.RouteClassInternalAPI, http.MethodPost, "/org/api/org-units/corrections", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		handleOrgUnitsCorrectionsAPI(w, r, orgUnitWriteService)
+		handleOrgUnitsCorrectionsAPI(w, r, orgUnitWriteService, orgUnitScopeDeps{store: orgStore, runtime: authzRuntime})
 	}))
 	router.Handle(routing.RouteClassInternalAPI, http.MethodPost, "/org/api/org-units/status-corrections", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		handleOrgUnitsStatusCorrectionsAPI(w, r, orgUnitWriteService)
+		handleOrgUnitsStatusCorrectionsAPI(w, r, orgUnitWriteService, orgUnitScopeDeps{store: orgStore, runtime: authzRuntime})
 	}))
 	router.Handle(routing.RouteClassInternalAPI, http.MethodPost, "/org/api/org-units/rescinds", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		handleOrgUnitsRescindsAPI(w, r, orgUnitWriteService)
+		handleOrgUnitsRescindsAPI(w, r, orgUnitWriteService, orgUnitScopeDeps{store: orgStore, runtime: authzRuntime})
 	}))
 	router.Handle(routing.RouteClassInternalAPI, http.MethodPost, "/org/api/org-units/rescinds/org", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		handleOrgUnitsRescindsOrgAPI(w, r, orgUnitWriteService)
+		handleOrgUnitsRescindsOrgAPI(w, r, orgUnitWriteService, orgUnitScopeDeps{store: orgStore, runtime: authzRuntime})
 	}))
 	router.Handle(routing.RouteClassInternalAPI, http.MethodPost, "/org/api/org-units/set-business-unit", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		handleOrgUnitsBusinessUnitAPI(w, r, orgUnitWriteService)
+		handleOrgUnitsBusinessUnitAPI(w, r, orgUnitWriteService, orgUnitScopeDeps{store: orgStore, runtime: authzRuntime})
 	}))
 	router.Handle(routing.RouteClassInternalAPI, http.MethodPost, "/internal/cubebox/conversations", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		handleCubeBoxConversationsAPI(w, r, cubeboxStore)
@@ -319,7 +348,7 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, error) {
 		handleCubeBoxConversationsAPI(w, r, cubeboxStore)
 	}))
 	router.Handle(routing.RouteClassInternalAPI, http.MethodGet, "/internal/cubebox/capabilities", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		handleCubeBoxCapabilitiesAPI(w, r, authorizer)
+		handleCubeBoxCapabilitiesAPI(w, r, authzRuntime)
 	}))
 	router.Handle(routing.RouteClassInternalAPI, http.MethodGet, "/internal/cubebox/conversations/{conversation_id}", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		handleCubeBoxConversationAPI(w, r, cubeboxStore)
@@ -362,7 +391,7 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, error) {
 	}))
 	entrypoint.Handle("/", router)
 
-	guarded := withTenantAndSession(classifier, tenancyResolver, principals, sessions, withAuthz(classifier, authorizer, entrypoint))
+	guarded := withTenantAndSession(classifier, tenancyResolver, principals, sessions, withAuthz(classifier, authorizer, authzRuntime, entrypoint))
 
 	mux := http.NewServeMux()
 	mux.Handle("/assets/", http.StripPrefix("/assets/", http.FileServer(http.FS(assetsSub))))

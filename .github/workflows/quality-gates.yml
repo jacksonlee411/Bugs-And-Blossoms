@@ -80,6 +80,10 @@ jobs:
         if: steps.changes.outputs.relevant == 'true'
         run: make check org-node-key-backflow
 
+      - name: Authz role union gate
+        if: steps.changes.outputs.relevant == 'true'
+        run: make check authz-role-union
+
       - name: Docs gate
         if: steps.changes.outputs.relevant == 'true'
         run: make check doc

@@ -269,24 +269,6 @@ func TestParseOptionalOrgID8(t *testing.T) {
 	})
 }
 
-func TestCanEditOrgNodes(t *testing.T) {
-	if canEditOrgNodes(context.Background()) {
-		t.Fatal("expected false without principal")
-	}
-	if canEditOrgNodes(withPrincipal(context.Background(), Principal{RoleSlug: " "})) {
-		t.Fatal("expected false for empty role")
-	}
-	if canEditOrgNodes(withPrincipal(context.Background(), Principal{RoleSlug: "tenant-viewer"})) {
-		t.Fatal("expected false for viewer")
-	}
-	if !canEditOrgNodes(withPrincipal(context.Background(), Principal{RoleSlug: authz.RoleTenantAdmin})) {
-		t.Fatal("expected true for tenant admin")
-	}
-	if !canEditOrgNodes(withPrincipal(context.Background(), Principal{RoleSlug: " SUPERADMIN "})) {
-		t.Fatal("expected true for superadmin")
-	}
-}
-
 func TestOrgUnitInitiatorUUID_PrefersValidPrincipalID(t *testing.T) {
 	ctx := withPrincipal(context.Background(), Principal{ID: "00000000-0000-0000-0000-000000000000", RoleSlug: authz.RoleTenantAdmin})
 	if got := orgUnitInitiatorUUID(ctx, "t1"); got != "00000000-0000-0000-0000-000000000000" {

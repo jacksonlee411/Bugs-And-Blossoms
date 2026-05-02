@@ -1,6 +1,6 @@
 # DEV-PLAN-490：CubeBox 统一 API 工具化重构方案
 
-**状态**: 规划中；484 覆盖事实聚合扩展点与 485 API 授权目录已落地，490 overlay/runtime 仍未实施（2026-05-01 23:10 CST）
+**状态**: 规划中；484/485 与 487/489/489A 当前用户 capability + org scope 后端裁剪已落地，490 overlay/API_CALLS runtime 硬切换仍未实施（2026-05-02 CST）
 
 ## 0. 适用范围与评审分级
 
@@ -77,6 +77,8 @@ API tool builder 不得：
 4. 让未登记 path 进入模型调用面。
 5. 复制维护 `method/path/object/action/capability_key` 事实源。
 6. 重新发明 `调用策略=只读/写入需确认` 一类分类语言；API 的读写语义来自现有 `method`、`action` 和 capability key，写入确认暂缓到后续计划。
+
+当前 487/489/489A 已证明普通 HTTP API 能按 current principal capability union 与 org scope 裁剪；490 后续只继承该结果，不新增 CubeBox 专用授权或第二套范围判断。active runtime 仍待从 executor 路线硬切换到 API-first `API_CALLS`。
 
 ### 3.3 API 是唯一业务工具契约
 
@@ -341,3 +343,4 @@ HTTP POST /internal/cubebox/turns:stream
 - 2026-04-29 23:40 CST：创建方案文档，冻结 CubeBox API-first 工具化重构方向。待实施阶段按命中范围运行文档、Go、Routing、Authz、UI 与 E2E 门禁。
 - 2026-05-01 18:58 CST：登记前置状态：484 覆盖事实聚合已预留 CubeBox API tool overlay 空集合扩展点，490 后续必须接入同一聚合源；485 API 授权目录、490 overlay 与 API-first active runtime 仍未实施。
 - 2026-05-01 23:10 CST：补齐文档状态登记；485 API 授权目录已落地并按当前覆盖普通授权 API 口径复验，490 tool overlay、planner/runner API-first runtime 与 executor 删除仍未实施。
+- 2026-05-02 CST：登记运行时授权前置状态；487/489/489A 已使普通 HTTP API 按 current principal capability union 与 org scope 裁剪，CubeBox orgunit executor 当前也复用同一 scope provider。490 overlay、planner/runner `API_CALLS` hard cutover 与业务 executor 删除仍未实施。

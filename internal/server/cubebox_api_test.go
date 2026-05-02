@@ -75,11 +75,49 @@ type cubeboxAuthorizerStub struct {
 	err     error
 }
 
-func (s cubeboxAuthorizerStub) Authorize(_ string, _ string, object string, action string) (bool, bool, error) {
+func (s cubeboxAuthorizerStub) CapabilitiesForPrincipal(context.Context, string, string) ([]string, error) {
 	if s.err != nil {
-		return false, true, s.err
+		return nil, s.err
 	}
-	return s.allowed[object+":"+action], true, nil
+	out := make([]string, 0, len(s.allowed))
+	for key, allowed := range s.allowed {
+		if allowed {
+			out = append(out, key)
+		}
+	}
+	return out, nil
+}
+
+func (s cubeboxAuthorizerStub) AuthorizePrincipal(context.Context, string, string, string, string) (bool, error) {
+	return false, nil
+}
+
+func (s cubeboxAuthorizerStub) OrgScopesForPrincipal(context.Context, string, string, string) ([]principalOrgScope, error) {
+	return nil, nil
+}
+
+func (s cubeboxAuthorizerStub) ListRoleDefinitions(context.Context, string) ([]authzRoleDefinition, error) {
+	return nil, nil
+}
+
+func (s cubeboxAuthorizerStub) GetRoleDefinition(context.Context, string, string) (authzRoleDefinition, bool, error) {
+	return authzRoleDefinition{}, false, nil
+}
+
+func (s cubeboxAuthorizerStub) CreateRoleDefinition(context.Context, string, saveAuthzRoleDefinitionInput) (authzRoleDefinition, error) {
+	return authzRoleDefinition{}, nil
+}
+
+func (s cubeboxAuthorizerStub) UpdateRoleDefinition(context.Context, string, string, saveAuthzRoleDefinitionInput) (authzRoleDefinition, error) {
+	return authzRoleDefinition{}, nil
+}
+
+func (s cubeboxAuthorizerStub) GetPrincipalAssignment(context.Context, string, string) (principalAuthzAssignment, bool, error) {
+	return principalAuthzAssignment{}, false, nil
+}
+
+func (s cubeboxAuthorizerStub) ReplacePrincipalAssignment(context.Context, string, string, replacePrincipalAssignmentInput) (principalAuthzAssignment, error) {
+	return principalAuthzAssignment{}, nil
 }
 
 type cubeboxStoreStub struct {

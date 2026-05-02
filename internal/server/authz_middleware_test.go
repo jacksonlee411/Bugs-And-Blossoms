@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -23,6 +24,49 @@ func (a stubAuthorizer) Authorize(string, string, string, string) (bool, bool, e
 	return a.allowed, a.enforced, a.err
 }
 
+type stubAuthzRuntime struct {
+	allowed bool
+	err     error
+	calls   int
+}
+
+func (s *stubAuthzRuntime) AuthorizePrincipal(context.Context, string, string, string, string) (bool, error) {
+	s.calls++
+	return s.allowed, s.err
+}
+
+func (s *stubAuthzRuntime) CapabilitiesForPrincipal(context.Context, string, string) ([]string, error) {
+	return nil, nil
+}
+
+func (s *stubAuthzRuntime) OrgScopesForPrincipal(context.Context, string, string, string) ([]principalOrgScope, error) {
+	return nil, nil
+}
+
+func (s *stubAuthzRuntime) ListRoleDefinitions(context.Context, string) ([]authzRoleDefinition, error) {
+	return nil, nil
+}
+
+func (s *stubAuthzRuntime) GetRoleDefinition(context.Context, string, string) (authzRoleDefinition, bool, error) {
+	return authzRoleDefinition{}, false, nil
+}
+
+func (s *stubAuthzRuntime) CreateRoleDefinition(context.Context, string, saveAuthzRoleDefinitionInput) (authzRoleDefinition, error) {
+	return authzRoleDefinition{}, nil
+}
+
+func (s *stubAuthzRuntime) UpdateRoleDefinition(context.Context, string, string, saveAuthzRoleDefinitionInput) (authzRoleDefinition, error) {
+	return authzRoleDefinition{}, nil
+}
+
+func (s *stubAuthzRuntime) GetPrincipalAssignment(context.Context, string, string) (principalAuthzAssignment, bool, error) {
+	return principalAuthzAssignment{}, false, nil
+}
+
+func (s *stubAuthzRuntime) ReplacePrincipalAssignment(context.Context, string, string, replacePrincipalAssignmentInput) (principalAuthzAssignment, error) {
+	return principalAuthzAssignment{}, nil
+}
+
 func mustTestClassifier(t *testing.T) *routing.Classifier {
 	t.Helper()
 
@@ -39,7 +83,7 @@ func TestWithAuthz_AllowsBypassRoutes(t *testing.T) {
 	next := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	})
-	h := withAuthz(mustTestClassifier(t), stubAuthorizer{allowed: false, enforced: true}, next)
+	h := withAuthz(mustTestClassifier(t), stubAuthorizer{allowed: false, enforced: true}, nil, next)
 
 	req := httptest.NewRequest(http.MethodGet, "/health", nil)
 	rec := httptest.NewRecorder()
@@ -53,7 +97,7 @@ func TestWithAuthz_LoginForbiddenWhenEnforced(t *testing.T) {
 	next := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	})
-	h := withAuthz(mustTestClassifier(t), stubAuthorizer{allowed: false, enforced: true}, next)
+	h := withAuthz(mustTestClassifier(t), stubAuthorizer{allowed: false, enforced: true}, nil, next)
 
 	req := httptest.NewRequest(http.MethodPost, "/iam/api/sessions", nil)
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Domain: "localhost", Name: "T"}))
@@ -70,7 +114,7 @@ func TestWithAuthz_SkipsWhenNoRequirement(t *testing.T) {
 		nextCalled = true
 		w.WriteHeader(http.StatusOK)
 	})
-	h := withAuthz(mustTestClassifier(t), stubAuthorizer{allowed: false, enforced: true}, next)
+	h := withAuthz(mustTestClassifier(t), stubAuthorizer{allowed: false, enforced: true}, nil, next)
 
 	req := httptest.NewRequest(http.MethodGet, "/org/unprotected", nil)
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Domain: "localhost", Name: "T"}))
@@ -85,7 +129,7 @@ func TestWithAuthz_AnonymousRole(t *testing.T) {
 	next := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	})
-	h := withAuthz(mustTestClassifier(t), stubAuthorizer{allowed: true, enforced: true}, next)
+	h := withAuthz(mustTestClassifier(t), stubAuthorizer{allowed: true, enforced: true}, nil, next)
 
 	req := httptest.NewRequest(http.MethodPost, "/iam/api/sessions", nil)
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Domain: "localhost", Name: "T"}))
@@ -100,7 +144,8 @@ func TestWithAuthz_ForbiddenWhenEnforced(t *testing.T) {
 	next := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	})
-	h := withAuthz(mustTestClassifier(t), stubAuthorizer{allowed: false, enforced: true}, next)
+	runtime := &stubAuthzRuntime{allowed: false}
+	h := withAuthz(mustTestClassifier(t), stubAuthorizer{allowed: true, enforced: true}, runtime, next)
 
 	req := httptest.NewRequest(http.MethodGet, "/org/api/org-units", nil)
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Domain: "localhost", Name: "T"}))
@@ -110,13 +155,17 @@ func TestWithAuthz_ForbiddenWhenEnforced(t *testing.T) {
 	if rec.Code != http.StatusForbidden {
 		t.Fatalf("status=%d", rec.Code)
 	}
+	if runtime.calls != 1 {
+		t.Fatalf("runtime calls=%d", runtime.calls)
+	}
 }
 
 func TestWithAuthz_CubeBoxForbiddenWhenEnforced(t *testing.T) {
 	next := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	})
-	h := withAuthz(mustTestClassifier(t), stubAuthorizer{allowed: false, enforced: true}, next)
+	runtime := &stubAuthzRuntime{allowed: false}
+	h := withAuthz(mustTestClassifier(t), stubAuthorizer{allowed: true, enforced: true}, runtime, next)
 
 	req := httptest.NewRequest(http.MethodPost, "/internal/cubebox/turns:stream", strings.NewReader(`{"conversation_id":"conv_1","prompt":"hello"}`))
 	req.Header.Set("Content-Type", "application/json")
@@ -127,13 +176,17 @@ func TestWithAuthz_CubeBoxForbiddenWhenEnforced(t *testing.T) {
 	if rec.Code != http.StatusForbidden {
 		t.Fatalf("status=%d body=%q", rec.Code, rec.Body.String())
 	}
+	if runtime.calls != 1 {
+		t.Fatalf("runtime calls=%d", runtime.calls)
+	}
 }
 
 func TestWithAuthz_OrgUnitRescindForbiddenWhenEnforced(t *testing.T) {
 	next := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	})
-	h := withAuthz(mustTestClassifier(t), stubAuthorizer{allowed: false, enforced: true}, next)
+	runtime := &stubAuthzRuntime{allowed: false}
+	h := withAuthz(mustTestClassifier(t), stubAuthorizer{allowed: true, enforced: true}, runtime, next)
 
 	req := httptest.NewRequest(http.MethodPost, "/org/api/org-units/rescinds", strings.NewReader(`{"org_code":"A001","effective_date":"2026-01-01","request_id":"r1","reason":"bad"}`))
 	req.Header.Set("Content-Type", "application/json")
@@ -147,15 +200,19 @@ func TestWithAuthz_OrgUnitRescindForbiddenWhenEnforced(t *testing.T) {
 	if !strings.Contains(rec.Body.String(), "forbidden") {
 		t.Fatalf("unexpected body: %q", rec.Body.String())
 	}
+	if runtime.calls != 1 {
+		t.Fatalf("runtime calls=%d", runtime.calls)
+	}
 }
 
-func TestWithAuthz_AllowsWhenNotEnforced(t *testing.T) {
+func TestWithAuthz_AllowsWhenRuntimeAllows(t *testing.T) {
 	next := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	})
-	h := withAuthz(mustTestClassifier(t), stubAuthorizer{allowed: false, enforced: false}, next)
+	runtime := &stubAuthzRuntime{allowed: true}
+	h := withAuthz(mustTestClassifier(t), stubAuthorizer{allowed: false, enforced: false}, runtime, next)
 
-	req := httptest.NewRequest(http.MethodPost, "/jobcatalog/api/catalog/actions", nil)
+	req := httptest.NewRequest(http.MethodGet, "/org/api/org-units", nil)
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Domain: "localhost", Name: "T"}))
 	req = req.WithContext(withPrincipal(req.Context(), Principal{ID: "p1", TenantID: "t1", RoleSlug: "tenant-admin", Status: "active"}))
 	rec := httptest.NewRecorder()
@@ -163,13 +220,17 @@ func TestWithAuthz_AllowsWhenNotEnforced(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status=%d", rec.Code)
 	}
+	if runtime.calls != 1 {
+		t.Fatalf("runtime calls=%d", runtime.calls)
+	}
 }
 
 func TestWithAuthz_AuthzError(t *testing.T) {
 	next := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	})
-	h := withAuthz(mustTestClassifier(t), stubAuthorizer{allowed: false, enforced: true, err: os.ErrInvalid}, next)
+	runtime := &stubAuthzRuntime{err: os.ErrInvalid}
+	h := withAuthz(mustTestClassifier(t), stubAuthorizer{allowed: true, enforced: true}, runtime, next)
 
 	req := httptest.NewRequest(http.MethodGet, "/org/api/org-units", nil)
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Domain: "localhost", Name: "T"}))
@@ -185,7 +246,7 @@ func TestWithAuthz_TenantMissing(t *testing.T) {
 	next := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	})
-	h := withAuthz(mustTestClassifier(t), stubAuthorizer{allowed: true, enforced: true}, next)
+	h := withAuthz(mustTestClassifier(t), stubAuthorizer{allowed: true, enforced: true}, &stubAuthzRuntime{allowed: true}, next)
 
 	req := httptest.NewRequest(http.MethodGet, "/org/api/org-units", nil)
 	req = req.WithContext(withPrincipal(req.Context(), Principal{ID: "p1", TenantID: "t1", RoleSlug: "tenant-admin", Status: "active"}))
@@ -214,6 +275,9 @@ func TestAuthzRequirementForRoute(t *testing.T) {
 	}
 	if object, action, ok := authzRequirementForRoute(http.MethodGet, "/iam/api/authz/api-catalog"); !ok || object != authz.ObjectIAMAuthz || action != authz.ActionRead {
 		t.Fatalf("unexpected authz api catalog requirement: object=%q action=%q ok=%v", object, action, ok)
+	}
+	if object, action, ok := authzRequirementForRoute(http.MethodGet, "/iam/api/authz/user-assignments"); !ok || object != authz.ObjectIAMAuthz || action != authz.ActionAdmin {
+		t.Fatalf("unexpected user assignment list requirement: object=%q action=%q ok=%v", object, action, ok)
 	}
 	if _, _, ok := authzRequirementForRoute(http.MethodGet, "/iam/api/dicts"); !ok {
 		t.Fatal("expected ok=true")
@@ -568,12 +632,26 @@ func TestLoadAuthorizer_DefaultPaths_Success(t *testing.T) {
 	if err != nil {
 		t.Fatalf("err=%v", err)
 	}
-	allowed, enforced, err := a.Authorize("role:tenant-admin", "00000000-0000-0000-0000-000000000001", authz.ObjectOrgUnitOrgUnits, authz.ActionRead)
+	allowed, enforced, err := a.Authorize(authz.SubjectFromRoleSlug(authz.RoleAnonymous), "00000000-0000-0000-0000-000000000001", authz.ObjectIAMSession, authz.ActionAdmin)
 	if err != nil {
 		t.Fatalf("err=%v", err)
 	}
 	if !allowed || !enforced {
-		t.Fatalf("allowed=%v enforced=%v", allowed, enforced)
+		t.Fatalf("anonymous session allowed=%v enforced=%v", allowed, enforced)
+	}
+	allowed, enforced, err = a.Authorize(authz.SubjectFromRoleSlug(authz.RoleSuperadmin), authz.DomainGlobal, authz.ObjectSuperadminTenants, authz.ActionRead)
+	if err != nil {
+		t.Fatalf("err=%v", err)
+	}
+	if !allowed || !enforced {
+		t.Fatalf("superadmin allowed=%v enforced=%v", allowed, enforced)
+	}
+	allowed, enforced, err = a.Authorize(authz.SubjectFromRoleSlug(authz.RoleTenantAdmin), "00000000-0000-0000-0000-000000000001", authz.ObjectOrgUnitOrgUnits, authz.ActionRead)
+	if err != nil {
+		t.Fatalf("err=%v", err)
+	}
+	if allowed || !enforced {
+		t.Fatalf("tenant CSV fallback allowed=%v enforced=%v", allowed, enforced)
 	}
 }
 

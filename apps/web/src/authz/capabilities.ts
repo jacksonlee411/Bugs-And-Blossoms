@@ -9,6 +9,7 @@ export const AUTHZ_CAPABILITY_KEYS = {
   cubeboxModelProviderUpdate: 'cubebox.model_provider:update',
   cubeboxModelSelectionSelect: 'cubebox.model_selection:select',
   cubeboxModelSelectionVerify: 'cubebox.model_selection:verify',
+  iamAuthzAdmin: 'iam.authz:admin',
   iamAuthzRead: 'iam.authz:read',
   iamDictReleaseAdmin: 'iam.dict_release:admin',
   iamDictsAdmin: 'iam.dicts:admin',

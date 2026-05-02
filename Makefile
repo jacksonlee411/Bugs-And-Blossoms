@@ -8,7 +8,7 @@ export DEV_COMPOSE_PROJECT ?= bugs-and-blossoms-dev
 export DEV_INFRA_ENV_FILE ?= .env.example
 export DEV_RUNTIME_IMAGE_MIRROR_PREFIX ?= docker.m.daocloud.io/library
 
-.PHONY: help preflight check pr-branch root-surface naming no-legacy chat-surface-clean no-scope-package granularity ddd-layering-p0 ddd-layering-p2 org-node-key-backflow request-code as-of-explicit dict-tenant-only go-version error-message fmt lint test routing e2e doc tr generate css
+.PHONY: help preflight check pr-branch root-surface naming no-legacy chat-surface-clean no-scope-package granularity ddd-layering-p0 ddd-layering-p2 org-node-key-backflow authz-role-union request-code as-of-explicit dict-tenant-only go-version error-message fmt lint test routing e2e doc tr generate css
 .PHONY: sqlc-generate sqlc-verify-schema authz-pack authz-test authz-lint
 .PHONY: plan migrate up
 .PHONY: iam orgunit
@@ -26,9 +26,10 @@ help:
 					"  make check no-scope-package" \
 					"  make check granularity" \
 					"  make check ddd-layering-p0" \
-					"  make check ddd-layering-p2" \
-					"  make check org-node-key-backflow" \
-				"  make check request-code" \
+						"  make check ddd-layering-p2" \
+						"  make check org-node-key-backflow" \
+						"  make check authz-role-union" \
+					"  make check request-code" \
 				"  make check as-of-explicit" \
 				"  make check dict-tenant-only" \
 			"  make check go-version" \
@@ -61,6 +62,7 @@ preflight: ## 本地一键对齐CI（严格版：含 UI build/typecheck）
 	@$(MAKE) check ddd-layering-p0
 	@$(MAKE) check ddd-layering-p2
 	@$(MAKE) check org-node-key-backflow
+	@$(MAKE) check authz-role-union
 	@$(MAKE) check request-code
 	@$(MAKE) check as-of-explicit
 	@$(MAKE) check dict-tenant-only
@@ -107,6 +109,9 @@ ddd-layering-p2: ## DDD 分层 P2 组合根门禁（模块扩张时要求 module
 
 org-node-key-backflow: ## Org node key 切窗反回流门禁（阻断 org_id/org_node_key DTO 暴露、旧 resolver 与 legacy parent payload）
 	@./scripts/ci/check-org-node-key-backflow.sh
+
+authz-role-union: ## Principal 多角色 union 反回流门禁（阻断单 role_slug/roles[0]/CSV role grant 回流）
+	@./scripts/ci/check-authz-role-union.sh
 
 request-code: ## 业务幂等字段命名收敛（统一 request_id；阻断 request_code 与 tracing 场景 request_id/X-Request-ID）
 	@./scripts/ci/check-request-code.sh --full
@@ -247,7 +252,7 @@ iam:
 	@:
 orgunit:
 	@:
-MODULE := $(firstword $(filter-out preflight check fmt lint test routing e2e doc tr generate css sqlc-generate sqlc-verify-schema authz-pack authz-test authz-lint no-legacy chat-surface-clean no-scope-package granularity ddd-layering-p0 ddd-layering-p2 org-node-key-backflow request-code as-of-explicit dict-tenant-only go-version error-message plan migrate up dev dev-up dev-down dev-reset dev-ps dev-server,$(MAKECMDGOALS)))
+MODULE := $(firstword $(filter-out preflight check fmt lint test routing e2e doc tr generate css sqlc-generate sqlc-verify-schema authz-pack authz-test authz-lint no-legacy chat-surface-clean no-scope-package granularity ddd-layering-p0 ddd-layering-p2 org-node-key-backflow authz-role-union request-code as-of-explicit dict-tenant-only go-version error-message plan migrate up dev dev-up dev-down dev-reset dev-ps dev-server,$(MAKECMDGOALS)))
 MIGRATE_DIR := $(lastword $(filter up down,$(MAKECMDGOALS)))
 
 plan:

@@ -343,6 +343,27 @@ errors:
     user_message_key: errors.authz_capability_key_not_supported
     backend_policy: mapped
     frontend_policy: mapped
+  - code: authz_org_scope_required
+    module: iam
+    http_status: 422
+    severity: error
+    user_message_key: errors.authz_org_scope_required
+    backend_policy: mapped
+    frontend_policy: mapped
+  - code: authz_runtime_unavailable
+    module: iam
+    http_status: 500
+    severity: error
+    user_message_key: errors.authz_runtime_unavailable
+    backend_policy: mapped
+    frontend_policy: mapped
+  - code: authz_scope_forbidden
+    module: iam
+    http_status: 403
+    severity: error
+    user_message_key: errors.authz_scope_forbidden
+    backend_policy: mapped
+    frontend_policy: mapped
   - code: conversation_confirmation_required
     module: assistant
     http_status: 409
@@ -644,6 +665,27 @@ errors:
     user_message_key: errors.invalid_request
     backend_policy: mapped
     frontend_policy: mapped
+  - code: invalid_role_definition
+    module: iam
+    http_status: 400
+    severity: error
+    user_message_key: errors.invalid_role_definition
+    backend_policy: mapped
+    frontend_policy: mapped
+  - code: invalid_role_payload
+    module: iam
+    http_status: 400
+    severity: error
+    user_message_key: errors.invalid_role_payload
+    backend_policy: mapped
+    frontend_policy: mapped
+  - code: invalid_user_assignment
+    module: iam
+    http_status: 400
+    severity: error
+    user_message_key: errors.invalid_user_assignment
+    backend_policy: mapped
+    frontend_policy: mapped
   - code: method_not_allowed
     module: platform
     http_status: 405
@@ -714,6 +756,13 @@ errors:
     user_message_key: errors.principal_lookup_error
     backend_policy: passthrough
     frontend_policy: mapped
+  - code: principal_assignment_error
+    module: iam
+    http_status: 500
+    severity: error
+    user_message_key: errors.principal_assignment_error
+    backend_policy: mapped
+    frontend_policy: mapped
   - code: principal_missing
     module: iam
     http_status: 401
@@ -734,6 +783,34 @@ errors:
     severity: error
     user_message_key: errors.session_lookup_error
     backend_policy: passthrough
+    frontend_policy: mapped
+  - code: role_not_found
+    module: iam
+    http_status: 404
+    severity: error
+    user_message_key: errors.role_not_found
+    backend_policy: mapped
+    frontend_policy: mapped
+  - code: role_slug_conflict
+    module: iam
+    http_status: 409
+    severity: error
+    user_message_key: errors.role_slug_conflict
+    backend_policy: mapped
+    frontend_policy: mapped
+  - code: stale_revision
+    module: iam
+    http_status: 409
+    severity: error
+    user_message_key: errors.stale_revision
+    backend_policy: mapped
+    frontend_policy: mapped
+  - code: system_role_readonly
+    module: iam
+    http_status: 409
+    severity: error
+    user_message_key: errors.system_role_readonly
+    backend_policy: mapped
     frontend_policy: mapped
   - code: stream_not_supported
     module: cubebox
