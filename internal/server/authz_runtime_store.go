@@ -258,14 +258,12 @@ func (s *pgAuthzRuntimeStore) EnsurePrincipalRoleAssignment(ctx context.Context,
 	if !exists {
 		return errAuthzPrincipalMissing
 	}
-	if _, err := tx.Exec(ctx, `
-		DELETE FROM iam.principal_role_assignments
-		WHERE tenant_uuid = $1::uuid
-		  AND principal_id = $2::uuid
-		  AND role_slug IN ($3, $4)
-		  AND role_slug <> $5
-		`, tenantID, principalID, authz.RoleTenantAdmin, authz.RoleTenantViewer, roleSlug); err != nil {
+	assignedRoleCount, err := principalRoleAssignmentCountTx(ctx, tx, tenantID, principalID)
+	if err != nil {
 		return err
+	}
+	if assignedRoleCount > 0 {
+		return tx.Commit(ctx)
 	}
 	if _, err := tx.Exec(ctx, `
 		INSERT INTO iam.principal_role_assignments (tenant_uuid, principal_id, role_slug)
@@ -277,10 +275,21 @@ func (s *pgAuthzRuntimeStore) EnsurePrincipalRoleAssignment(ctx context.Context,
 	if _, err := ensurePrincipalAssignmentRevisionTx(ctx, tx, tenantID, principalID); err != nil {
 		return err
 	}
-	if err := seedRootOrgScopeForPrincipalTx(ctx, tx, tenantID, principalID); err != nil {
+	if err := ensureRootOrgScopeForUnscopedPrincipalTx(ctx, tx, tenantID, principalID); err != nil {
 		return err
 	}
 	return tx.Commit(ctx)
+}
+
+func principalRoleAssignmentCountTx(ctx context.Context, tx pgx.Tx, tenantID string, principalID string) (int, error) {
+	var count int
+	err := tx.QueryRow(ctx, `
+SELECT count(*)
+FROM iam.principal_role_assignments
+WHERE tenant_uuid = $1::uuid
+  AND principal_id = $2::uuid
+`, tenantID, principalID).Scan(&count)
+	return count, err
 }
 
 func capabilityKeysForPrincipalTx(ctx context.Context, tx pgx.Tx, tenantID string, principalID string) ([]string, error) {
@@ -336,6 +345,21 @@ func (s *pgAuthzRuntimeStore) OrgScopesForPrincipal(ctx context.Context, tenantI
 	scopes, err := orgScopesForPrincipalTx(ctx, tx, tenantID, principalID)
 	if err != nil {
 		return nil, err
+	}
+	if len(scopes) == 0 {
+		revision, err := ensurePrincipalAssignmentRevisionTx(ctx, tx, tenantID, principalID)
+		if err != nil {
+			return nil, err
+		}
+		if revision == 1 {
+			if err := ensureRootOrgScopeForUnscopedPrincipalTx(ctx, tx, tenantID, principalID); err != nil {
+				return nil, err
+			}
+			scopes, err = orgScopesForPrincipalTx(ctx, tx, tenantID, principalID)
+			if err != nil {
+				return nil, err
+			}
+		}
 	}
 	if len(scopes) == 0 {
 		return nil, errAuthzOrgScopeRequired
@@ -815,7 +839,14 @@ SELECT EXISTS (
 	return nil
 }
 
-func seedRootOrgScopeForPrincipalTx(ctx context.Context, tx pgx.Tx, tenantID string, principalID string) error {
+func ensureRootOrgScopeForUnscopedPrincipalTx(ctx context.Context, tx pgx.Tx, tenantID string, principalID string) error {
+	scopes, err := orgScopesForPrincipalTx(ctx, tx, tenantID, principalID)
+	if err != nil {
+		return err
+	}
+	if len(scopes) > 0 {
+		return nil
+	}
 	var orgTreesExists bool
 	if err := tx.QueryRow(ctx, `SELECT to_regclass('orgunit.org_trees') IS NOT NULL`).Scan(&orgTreesExists); err != nil {
 		return err
@@ -837,7 +868,7 @@ func seedRootOrgScopeForPrincipalTx(ctx context.Context, tx pgx.Tx, tenantID str
 	if rootOrgNodeKey == nil || strings.TrimSpace(*rootOrgNodeKey) == "" {
 		return nil
 	}
-	_, err := tx.Exec(ctx, `
+	_, err = tx.Exec(ctx, `
 	INSERT INTO iam.principal_org_scope_bindings (tenant_uuid, principal_id, org_node_key, include_descendants)
 	VALUES ($1::uuid, $2::uuid, $3, true)
 	ON CONFLICT DO NOTHING
@@ -1039,6 +1070,20 @@ func (s *memoryAuthzRuntimeStore) OrgScopesForPrincipal(_ context.Context, tenan
 	defer s.mu.Unlock()
 	scopes := append([]principalOrgScope(nil), s.orgScopes[memoryRuntimeKey(tenantID, principalID)]...)
 	if len(scopes) == 0 {
+		key := memoryRuntimeKey(tenantID, principalID)
+		if s.assignmentRevisions[key] == 1 && len(s.principalRoles[key]) > 0 {
+			rootOrgNodeKey, err := encodeOrgNodeKeyFromID(10000000)
+			if err != nil {
+				return nil, errInvalidAssignment
+			}
+			scopes = []principalOrgScope{{
+				OrgNodeKey:         rootOrgNodeKey,
+				IncludeDescendants: true,
+			}}
+			s.orgScopes[key] = append([]principalOrgScope(nil), scopes...)
+		}
+	}
+	if len(scopes) == 0 {
 		return nil, errAuthzOrgScopeRequired
 	}
 	return scopes, nil
@@ -1227,10 +1272,8 @@ func (s *memoryAuthzRuntimeStore) EnsurePrincipalRoleAssignment(_ context.Contex
 		s.principalRoles[key] = map[string]bool{}
 	}
 	s.ensureAssignmentRevisionLocked(key)
-	for builtinRoleSlug := range builtinIdentityRoleSlugs {
-		if builtinRoleSlug != roleSlug {
-			delete(s.principalRoles[key], builtinRoleSlug)
-		}
+	if len(s.principalRoles[key]) > 0 {
+		return nil
 	}
 	s.principalRoles[key][roleSlug] = true
 	if len(s.orgScopes[key]) == 0 {

@@ -65,6 +65,7 @@ func authzPolicyPath() (string, error) {
 
 type authorizer interface {
 	Authorize(subject string, domain string, object string, action string) (allowed bool, enforced bool, err error)
+	Mode() authz.Mode
 }
 
 type routeRequirement struct {
@@ -185,6 +186,10 @@ func withAuthz(classifier *routing.Classifier, a authorizer, runtime authzRuntim
 			routing.WriteError(w, r, rc, http.StatusUnauthorized, "principal_missing", "principal missing")
 			return
 		}
+		if a.Mode() == authz.ModeDisabled {
+			next.ServeHTTP(w, r)
+			return
+		}
 		if runtime == nil {
 			routing.WriteError(w, r, rc, http.StatusInternalServerError, "authz_runtime_unavailable", "authz runtime unavailable")
 			return
@@ -194,7 +199,7 @@ func withAuthz(classifier *routing.Classifier, a authorizer, runtime authzRuntim
 			routing.WriteError(w, r, rc, http.StatusInternalServerError, "authz_error", "authz error")
 			return
 		}
-		if !allowed {
+		if a.Mode() == authz.ModeEnforce && !allowed {
 			routing.WriteError(w, r, rc, http.StatusForbidden, "forbidden", "forbidden")
 			return
 		}

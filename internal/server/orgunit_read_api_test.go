@@ -13,8 +13,9 @@ import (
 )
 
 type orgUnitScopeRuntimeStub struct {
-	scopes []principalOrgScope
-	err    error
+	scopes     []principalOrgScope
+	err        error
+	scopeCalls int
 }
 
 func (s orgUnitScopeRuntimeStub) AuthorizePrincipal(context.Context, string, string, string, string) (bool, error) {
@@ -25,7 +26,8 @@ func (s orgUnitScopeRuntimeStub) CapabilitiesForPrincipal(context.Context, strin
 	return nil, nil
 }
 
-func (s orgUnitScopeRuntimeStub) OrgScopesForPrincipal(context.Context, string, string, string) ([]principalOrgScope, error) {
+func (s *orgUnitScopeRuntimeStub) OrgScopesForPrincipal(context.Context, string, string, string) ([]principalOrgScope, error) {
+	s.scopeCalls++
 	if s.err != nil {
 		return nil, s.err
 	}
@@ -696,7 +698,7 @@ func TestListOrgUnitListPage_HydratesFallbackScopePath(t *testing.T) {
 	}
 
 	scopeCtx := withPrincipal(ctx, Principal{ID: "principal-a"})
-	filtered, filteredTotal, err := filterOrgUnitListItemsByCurrentScope(scopeCtx, orgUnitScopeRuntimeStub{
+	filtered, filteredTotal, err := filterOrgUnitListItemsByCurrentScope(scopeCtx, &orgUnitScopeRuntimeStub{
 		scopes: []principalOrgScope{{
 			OrgNodeKey:         child.ID,
 			IncludeDescendants: true,
@@ -708,6 +710,37 @@ func TestListOrgUnitListPage_HydratesFallbackScopePath(t *testing.T) {
 	if filteredTotal != 1 || len(filtered) != 1 || filtered[0].OrgNodeKey != grandchild.ID {
 		t.Fatalf("filtered=%+v total=%d", filtered, filteredTotal)
 	}
+}
+
+func TestFilterOrgUnitListItemsByScope_AllowsEmptyCandidateList(t *testing.T) {
+	t.Run("current principal", func(t *testing.T) {
+		runtime := &orgUnitScopeRuntimeStub{err: errAuthzOrgScopeRequired}
+		ctx := withPrincipal(context.Background(), Principal{ID: "principal-a"})
+		filtered, total, err := filterOrgUnitListItemsByCurrentScope(ctx, runtime, "t1", []orgUnitListItem{}, 0)
+		if err != nil {
+			t.Fatalf("filter err=%v", err)
+		}
+		if len(filtered) != 0 || total != 0 {
+			t.Fatalf("filtered=%+v total=%d", filtered, total)
+		}
+		if runtime.scopeCalls != 0 {
+			t.Fatalf("scopeCalls=%d", runtime.scopeCalls)
+		}
+	})
+
+	t.Run("explicit principal", func(t *testing.T) {
+		runtime := &orgUnitScopeRuntimeStub{err: errAuthzOrgScopeRequired}
+		filtered, total, err := filterOrgUnitListItemsByPrincipalScope(context.Background(), runtime, "t1", "principal-a", []orgUnitListItem{}, 0)
+		if err != nil {
+			t.Fatalf("filter err=%v", err)
+		}
+		if len(filtered) != 0 || total != 0 {
+			t.Fatalf("filtered=%+v total=%d", filtered, total)
+		}
+		if runtime.scopeCalls != 0 {
+			t.Fatalf("scopeCalls=%d", runtime.scopeCalls)
+		}
+	})
 }
 
 func TestHandleOrgUnitsAPI_ListNodesError(t *testing.T) {

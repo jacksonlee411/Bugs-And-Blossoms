@@ -784,6 +784,9 @@ func filterOrgUnitListItemsByCurrentScope(ctx context.Context, runtime authzRunt
 	if runtime == nil {
 		return items, total, nil
 	}
+	if len(items) == 0 {
+		return items, total, nil
+	}
 	if err := hydrateOrgUnitListItemScopePaths(ctx, nil, tenantID, "", items); err != nil {
 		return nil, 0, err
 	}
@@ -802,6 +805,9 @@ func filterOrgUnitListItemsByCurrentScope(ctx context.Context, runtime authzRunt
 
 func filterOrgUnitListItemsByPrincipalScope(ctx context.Context, runtime authzRuntimeStore, tenantID string, principalID string, items []orgUnitListItem, total int) ([]orgUnitListItem, int, error) {
 	if runtime == nil {
+		return items, total, nil
+	}
+	if len(items) == 0 {
 		return items, total, nil
 	}
 	if err := hydrateOrgUnitListItemScopePaths(ctx, nil, tenantID, "", items); err != nil {

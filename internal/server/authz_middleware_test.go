@@ -18,10 +18,21 @@ type stubAuthorizer struct {
 	allowed  bool
 	enforced bool
 	err      error
+	mode     authz.Mode
 }
 
 func (a stubAuthorizer) Authorize(string, string, string, string) (bool, bool, error) {
 	return a.allowed, a.enforced, a.err
+}
+
+func (a stubAuthorizer) Mode() authz.Mode {
+	if a.mode != "" {
+		return a.mode
+	}
+	if a.enforced {
+		return authz.ModeEnforce
+	}
+	return authz.ModeShadow
 }
 
 type stubAuthzRuntime struct {
@@ -156,6 +167,50 @@ func TestWithAuthz_ForbiddenWhenEnforced(t *testing.T) {
 		t.Fatalf("status=%d", rec.Code)
 	}
 	if runtime.calls != 1 {
+		t.Fatalf("runtime calls=%d", runtime.calls)
+	}
+}
+
+func TestWithAuthz_RuntimeDenyDoesNotBlockWhenModeIsShadow(t *testing.T) {
+	nextCalled := false
+	next := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		nextCalled = true
+		w.WriteHeader(http.StatusOK)
+	})
+	runtime := &stubAuthzRuntime{allowed: false}
+	h := withAuthz(mustTestClassifier(t), stubAuthorizer{allowed: false, enforced: false, mode: authz.ModeShadow}, runtime, next)
+
+	req := httptest.NewRequest(http.MethodGet, "/org/api/org-units", nil)
+	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Domain: "localhost", Name: "T"}))
+	req = req.WithContext(withPrincipal(req.Context(), Principal{ID: "p1", TenantID: "t1", RoleSlug: "tenant-viewer", Status: "active"}))
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK || !nextCalled {
+		t.Fatalf("status=%d next=%v body=%q", rec.Code, nextCalled, rec.Body.String())
+	}
+	if runtime.calls != 1 {
+		t.Fatalf("runtime calls=%d", runtime.calls)
+	}
+}
+
+func TestWithAuthz_RuntimeSkippedWhenModeIsDisabled(t *testing.T) {
+	nextCalled := false
+	next := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		nextCalled = true
+		w.WriteHeader(http.StatusOK)
+	})
+	runtime := &stubAuthzRuntime{allowed: false}
+	h := withAuthz(mustTestClassifier(t), stubAuthorizer{allowed: true, enforced: false, mode: authz.ModeDisabled}, runtime, next)
+
+	req := httptest.NewRequest(http.MethodGet, "/org/api/org-units", nil)
+	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Domain: "localhost", Name: "T"}))
+	req = req.WithContext(withPrincipal(req.Context(), Principal{ID: "p1", TenantID: "t1", RoleSlug: "tenant-viewer", Status: "active"}))
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK || !nextCalled {
+		t.Fatalf("status=%d next=%v body=%q", rec.Code, nextCalled, rec.Body.String())
+	}
+	if runtime.calls != 0 {
 		t.Fatalf("runtime calls=%d", runtime.calls)
 	}
 }
