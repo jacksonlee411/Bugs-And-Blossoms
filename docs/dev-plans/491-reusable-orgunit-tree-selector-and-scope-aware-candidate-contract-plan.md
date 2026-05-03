@@ -1,6 +1,6 @@
 # DEV-PLAN-491：通用可复用 OrgUnit 树选择器与范围感知候选契约方案
 
-**状态**: 规划中（2026-05-03 11:06 CST）
+**状态**: 规划中；后端前置缺口已随 490 评审修复补齐 `all_org_units` parser、scope-aware search 唯一候选与多候选澄清，前端 selector/facade 与用户授权页接入仍未实施（2026-05-03 CST）
 
 ## 0. 适用范围与评审分级
 
@@ -21,7 +21,7 @@
 - 当前仓库已有通用展示组件 [TreePanel](/home/lee/Projects/Bugs-And-Blossoms/apps/web/src/components/TreePanel.tsx:1)，组织架构页也已有“根节点 + 懒加载子节点 + 搜索定位”的现成链路 [OrgUnitsPage](/home/lee/Projects/Bugs-And-Blossoms/apps/web/src/pages/org/OrgUnitsPage.tsx:124) 与 [orgUnits API client](/home/lee/Projects/Bugs-And-Blossoms/apps/web/src/api/orgUnits.ts:20)。
 - 但 `用户授权 > 组织范围` 目前没有复用树链路，而是直接调用 [listOrgUnits({ asOf, includeDisabled:false })](/home/lee/Projects/Bugs-And-Blossoms/apps/web/src/pages/authz/AuthzRolePages.tsx:469) 作为下拉候选，导致页面只拿到默认一级组织列表。
 - `GET /org/api/org-units` 的当前语义是：无 `parent_org_code` 且无 `keyword`、无 `all_org_units=true` 时，只返回当前租户一级组织；该语义在 [orgunit_api.go](/home/lee/Projects/Bugs-And-Blossoms/internal/server/orgunit_api.go:1168) 和 [orgunit_field_metadata_store.go](/home/lee/Projects/Bugs-And-Blossoms/internal/server/orgunit_field_metadata_store.go:770) 已固化。
-- 当前 Web API 侧虽然已有 `AllOrgUnits` 运行时结构 [orgunit_api.go](/home/lee/Projects/Bugs-And-Blossoms/internal/server/orgunit_api.go:403)，但 query 解析 [orgunit_api.go](/home/lee/Projects/Bugs-And-Blossoms/internal/server/orgunit_api.go:428) 尚未接入 `all_org_units`，说明“全量组织候选”在普通 Web 页面链路里并未形成稳定契约。
+- 当前 Web API 侧的 `AllOrgUnits` 运行时结构已随 490 评审修复接入 query parser；`all_org_units=true` 现只表示当前调用者可见范围内全部组织。491 后续仍不采用“用户授权页临时全量下拉”作为交付方案，selector/facade 仍需按本计划统一收敛。
 - `DEV-PLAN-481` 已明确“组织范围页签”应是“组织下拉或组织树选择结果” [481](/home/lee/Projects/Bugs-And-Blossoms/docs/dev-plans/481-ehr-role-design-and-configuration-plan.md:195)；`DEV-PLAN-489` 已冻结“运行时组织范围必须由服务端 scope provider 强制” [489](/home/lee/Projects/Bugs-And-Blossoms/docs/dev-plans/489-user-authorization-org-scope-sot-and-runtime-enforcement-plan.md:15)。因此本次问题不是单页 UI bug，而是缺少仓库级 selector 契约。
 - 本次不沿用的“容易做法”：
   - 在用户授权页临时加一个 `all_org_units=true` 下拉分支。
@@ -283,10 +283,10 @@ interface OrgUnitSelectorNode {
 
 ### 5.1 Phase A：契约冻结与 facade 收敛
 
-1. [ ] 冻结首期不新增后端 selector route；selector 读操作复用现有 `/org/api/org-units` 与 `/org/api/org-units/search`。
+1. [X] 冻结首期不新增后端 selector route；selector 读操作复用现有 `/org/api/org-units` 与 `/org/api/org-units/search`。
 2. [ ] 在 `apps/web/src/api/**` 增加 selector 前端薄 facade，统一封装 root/children/search/value normalize。
-3. [ ] 补齐 `all_org_units` 与“默认一级组织”在 Web HTTP API 里的现行 owner 和禁止漂移语义。
-4. [ ] 冻结节点 DTO、回显 DTO、搜索返回 DTO，尤其冻结 `path_org_codes` 为安全展开路径。
+3. [X] 补齐 `all_org_units` 与“默认一级组织”在 Web HTTP API 里的现行 owner 和禁止漂移语义；`all_org_units=true` 已接入 parser 且不得突破当前 principal scope。
+4. [ ] 冻结节点 DTO、回显 DTO、搜索返回 DTO，尤其冻结 `path_org_codes` 为安全展开路径；后端 search 已补齐多候选澄清与唯一 scope 可见候选返回路径，前端 DTO/facade 尚未实施。
 
 ### 5.2 Phase B：前端通用组件
 
@@ -337,3 +337,4 @@ interface OrgUnitSelectorNode {
 
 - 2026-05-03 CST：调查确认 `用户授权 > 组织范围` 当前只能选到根组织，不是 489 运行时 scope 裁剪错误，而是页面直接复用了 `GET /org/api/org-units` 的默认一级组织列表语义。
 - 2026-05-03 CST：调查确认仓库已具备 `TreePanel`、根节点 + 懒加载子节点 + 搜索定位基础链路，但缺少仓库级“可复用 selector 契约”与“范围感知候选”统一 owner。
+- 2026-05-03 CST：随 490 评审修复补齐后端前置缺口：普通 Web API parser 已接入 `all_org_units=true`，且语义冻结为当前调用者可见范围内全部组织；`orgunit.search` 已改为 scope-aware candidates 决策，多候选返回澄清，scope 过滤后唯一候选直接返回该可见候选。491 的前端 selector facade、组件族和用户授权页切换仍未实施，不能宣称用户可见 selector 闭环完成。

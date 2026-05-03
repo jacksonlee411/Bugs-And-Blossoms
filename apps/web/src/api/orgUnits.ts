@@ -208,6 +208,23 @@ export interface OrgUnitSearchResult {
   tree_as_of: string
 }
 
+export interface OrgUnitSearchCandidate {
+  org_code: string
+  name: string
+  status?: string
+  as_of?: string
+}
+
+export interface OrgUnitSearchAmbiguousDetails {
+  ambiguous?: boolean
+  error_code?: string
+  candidate_source?: string
+  candidate_count?: number
+  cannot_silent_select?: boolean
+  candidates?: OrgUnitSearchCandidate[]
+  tree_as_of?: string
+}
+
 export async function searchOrgUnit(options: {
   query: string
   asOf: string

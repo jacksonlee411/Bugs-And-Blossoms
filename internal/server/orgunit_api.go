@@ -387,6 +387,7 @@ const (
 
 type orgUnitListQueryOptions struct {
 	GridMode          bool
+	AllOrgUnits       bool
 	Keyword           string
 	Status            string // "", "active", "disabled"
 	IsBusinessUnit    *bool
@@ -440,6 +441,15 @@ func parseOrgUnitListQueryOptions(values url.Values) (orgUnitListQueryOptions, b
 	if strings.EqualFold(strings.TrimSpace(values.Get("mode")), orgUnitListModeGrid) {
 		hasAny = true
 		opts.GridMode = true
+	}
+
+	if hasKey("all_org_units") {
+		hasAny = true
+		allOrgUnits, err := parseOrgUnitListQueryBool(values.Get("all_org_units"), "all_org_units")
+		if err != nil {
+			return orgUnitListQueryOptions{}, false, err
+		}
+		opts.AllOrgUnits = allOrgUnits
 	}
 
 	if hasKey("q") {
@@ -1088,6 +1098,7 @@ func handleOrgUnitsAPI(w http.ResponseWriter, r *http.Request, store OrgUnitStor
 				AsOf:              asOf,
 				IncludeDisabled:   includeDisabled,
 				ParentOrgNodeKey:  parentOrgNodeKey,
+				AllOrgUnits:       listOpts.AllOrgUnits,
 				Keyword:           listOpts.Keyword,
 				Status:            listOpts.Status,
 				IsBusinessUnit:    listOpts.IsBusinessUnit,
@@ -1614,39 +1625,169 @@ func handleOrgUnitsSearchAPI(w http.ResponseWriter, r *http.Request, store OrgUn
 		return
 	}
 
-	result, err := searchNodeByVisibility(r.Context(), store, tenant.ID, query, asOf, includeDisabled)
+	candidates, err := scopedOrgUnitSearchCandidates(r.Context(), store, runtimeStoreFromVariadic(runtime), tenant.ID, query, asOf, includeDisabled, 8)
 	if err != nil {
 		if errors.Is(err, errOrgUnitNotFound) {
 			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusNotFound, "org_unit_not_found", "org unit not found")
 			return
 		}
+		if isOrgUnitAuthzScopeError(err) {
+			writeOrgUnitScopeError(w, r, err)
+			return
+		}
 		writeInternalAPIError(w, r, err, "orgunit_search_failed")
 		return
 	}
-	if err := ensureCurrentPrincipalOrgScopeAllowsResult(r.Context(), runtimeStoreFromVariadic(runtime), tenant.ID, result); err != nil {
-		writeOrgUnitScopeError(w, r, err)
+	if len(candidates) > 1 {
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		w.WriteHeader(http.StatusConflict)
+		_ = json.NewEncoder(w).Encode(orgUnitSearchCandidatesAPIResponse{
+			Ambiguous:          true,
+			ErrorCode:          "org_unit_search_ambiguous",
+			CandidateSource:    "execution_error",
+			CandidateCount:     len(candidates),
+			CannotSilentSelect: true,
+			Candidates:         orgUnitSearchCandidateAPIItems(candidates, asOf),
+			TreeAsOf:           asOf,
+		})
+		return
+	}
+	if len(candidates) == 0 {
+		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusNotFound, "org_unit_not_found", "org unit not found")
 		return
 	}
 
-	pathOrgNodeKeys := append([]string(nil), result.PathOrgNodeKeys...)
-	if len(pathOrgNodeKeys) > 0 {
-		codes, err := store.ResolveOrgCodesByNodeKeys(r.Context(), tenant.ID, pathOrgNodeKeys)
-		if err != nil {
-			writeInternalAPIError(w, r, err, "orgunit_resolve_org_codes_failed")
-			return
-		}
-		pathCodes := make([]string, 0, len(pathOrgNodeKeys))
-		for _, orgNodeKey := range pathOrgNodeKeys {
-			if code, ok := codes[orgNodeKey]; ok && strings.TrimSpace(code) != "" {
-				pathCodes = append(pathCodes, code)
-			}
-		}
-		result.PathOrgCodes = pathCodes
+	result, err := orgUnitSearchResultFromCandidate(r.Context(), store, tenant.ID, candidates[0], asOf)
+	if err != nil {
+		writeInternalAPIError(w, r, err, "orgunit_search_failed")
+		return
 	}
 
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
 	_ = json.NewEncoder(w).Encode(result)
+}
+
+type orgUnitSearchCandidateAPIItem struct {
+	OrgCode string `json:"org_code"`
+	Name    string `json:"name"`
+	Status  string `json:"status,omitempty"`
+	AsOf    string `json:"as_of,omitempty"`
+}
+
+type orgUnitSearchCandidatesAPIResponse struct {
+	Ambiguous          bool                            `json:"ambiguous"`
+	ErrorCode          string                          `json:"error_code"`
+	CandidateSource    string                          `json:"candidate_source"`
+	CandidateCount     int                             `json:"candidate_count"`
+	CannotSilentSelect bool                            `json:"cannot_silent_select"`
+	Candidates         []orgUnitSearchCandidateAPIItem `json:"candidates"`
+	TreeAsOf           string                          `json:"tree_as_of"`
+}
+
+func scopedOrgUnitSearchCandidates(ctx context.Context, store OrgUnitStore, runtime authzRuntimeStore, tenantID string, query string, asOf string, includeDisabled bool, limit int) ([]OrgUnitSearchCandidate, error) {
+	searchLimit := limit
+	if runtime != nil {
+		searchLimit = -1
+	}
+	candidates, err := searchNodeCandidatesByVisibility(ctx, store, tenantID, query, asOf, searchLimit, includeDisabled)
+	if err != nil {
+		return nil, err
+	}
+	if runtime == nil || len(candidates) == 0 {
+		return candidates, nil
+	}
+	scopes, err := currentPrincipalOrgScopes(ctx, runtime, tenantID)
+	if err != nil {
+		return nil, err
+	}
+	filtered := make([]OrgUnitSearchCandidate, 0, len(candidates))
+	for _, candidate := range candidates {
+		orgNodeKey, err := orgNodeKeyFromCompat(candidate.OrgNodeKey, candidate.OrgID)
+		if err != nil {
+			return nil, err
+		}
+		if orgNodeKey == "" {
+			continue
+		}
+		_, pathOrgNodeKeys, err := orgUnitScopePathOrgNodeKeys(ctx, store, tenantID, orgNodeKey, asOf)
+		if err != nil {
+			return nil, err
+		}
+		if orgScopeAllows(scopes, orgNodeKey, pathOrgNodeKeys) {
+			candidate.OrgNodeKey = orgNodeKey
+			filtered = append(filtered, candidate)
+			if limit > 0 && len(filtered) >= limit {
+				break
+			}
+		}
+	}
+	if len(filtered) == 0 {
+		return nil, errOrgUnitNotFound
+	}
+	return filtered, nil
+}
+
+func orgUnitSearchResultFromCandidate(ctx context.Context, store OrgUnitStore, tenantID string, candidate OrgUnitSearchCandidate, asOf string) (OrgUnitSearchResult, error) {
+	orgNodeKey, err := orgNodeKeyFromCompat(candidate.OrgNodeKey, candidate.OrgID)
+	if err != nil {
+		return OrgUnitSearchResult{}, err
+	}
+	if orgNodeKey == "" {
+		return OrgUnitSearchResult{}, errOrgUnitNotFound
+	}
+	targetOrgNodeKey, pathOrgNodeKeys, err := orgUnitScopePathOrgNodeKeys(ctx, store, tenantID, orgNodeKey, asOf)
+	if err != nil {
+		return OrgUnitSearchResult{}, err
+	}
+
+	result := OrgUnitSearchResult{
+		TargetOrgNodeKey: targetOrgNodeKey,
+		TargetOrgCode:    strings.TrimSpace(candidate.OrgCode),
+		TargetName:       strings.TrimSpace(candidate.Name),
+		PathOrgNodeKeys:  append([]string(nil), pathOrgNodeKeys...),
+		TreeAsOf:         strings.TrimSpace(asOf),
+	}
+	if err := hydrateOrgUnitSearchResultCompat(&result); err != nil {
+		return OrgUnitSearchResult{}, err
+	}
+	if len(result.PathOrgNodeKeys) == 0 {
+		return result, nil
+	}
+
+	codes, err := store.ResolveOrgCodesByNodeKeys(ctx, tenantID, result.PathOrgNodeKeys)
+	if err != nil {
+		return OrgUnitSearchResult{}, err
+	}
+	pathCodes := make([]string, 0, len(result.PathOrgNodeKeys))
+	for _, pathOrgNodeKey := range result.PathOrgNodeKeys {
+		if code, ok := codes[pathOrgNodeKey]; ok && strings.TrimSpace(code) != "" {
+			pathCodes = append(pathCodes, code)
+		}
+	}
+	result.PathOrgCodes = pathCodes
+	return result, nil
+}
+
+func orgUnitSearchCandidateAPIItems(candidates []OrgUnitSearchCandidate, asOf string) []orgUnitSearchCandidateAPIItem {
+	items := make([]orgUnitSearchCandidateAPIItem, 0, len(candidates))
+	for _, candidate := range candidates {
+		orgCode := strings.TrimSpace(candidate.OrgCode)
+		if orgCode == "" {
+			continue
+		}
+		status := strings.TrimSpace(candidate.Status)
+		if status == "" {
+			status = orgUnitListStatusActive
+		}
+		items = append(items, orgUnitSearchCandidateAPIItem{
+			OrgCode: orgCode,
+			Name:    strings.TrimSpace(candidate.Name),
+			Status:  status,
+			AsOf:    strings.TrimSpace(asOf),
+		})
+	}
+	return items
 }
 
 func handleOrgUnitsRenameAPI(w http.ResponseWriter, r *http.Request, writeSvc orgunitservices.OrgUnitWriteService, scopeDeps ...orgUnitScopeDeps) {

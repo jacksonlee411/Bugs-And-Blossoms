@@ -34,7 +34,8 @@ import {
   type OrgUnitAPIItem,
   type OrgUnitListSortField,
   type OrgUnitListSortOrder,
-  type OrgUnitListStatusFilter
+  type OrgUnitListStatusFilter,
+  type OrgUnitSearchAmbiguousDetails
 } from '../../api/orgUnits'
 import { ApiClientError } from '../../api/errors'
 import { useAppPreferences } from '../../app/providers/AppPreferencesContext'
@@ -156,6 +157,34 @@ function getErrorMessage(error: unknown): string {
     return error.message
   }
   return String(error)
+}
+
+function formatOrgUnitSearchAmbiguousMessage(error: unknown, prefix: string): string | null {
+  if (!(error instanceof ApiClientError) || error.status !== 409) {
+    return null
+  }
+  const details = error.details as OrgUnitSearchAmbiguousDetails | undefined
+  if (!details || details.error_code !== 'org_unit_search_ambiguous') {
+    return null
+  }
+  const candidates = Array.isArray(details.candidates) ? details.candidates : []
+  if (candidates.length === 0) {
+    return error.message
+  }
+  const labels = candidates
+    .map((candidate) => {
+      const code = candidate.org_code?.trim()
+      const name = candidate.name?.trim()
+      if (code && name) {
+        return `${name} (${code})`
+      }
+      return code || name || ''
+    })
+    .filter((label) => label.length > 0)
+  if (labels.length === 0) {
+    return error.message
+  }
+  return `${prefix} ${labels.join(', ')}`
 }
 
 type FieldOption = { value: string; label: string }
@@ -1106,7 +1135,7 @@ export function OrgUnitsPage() {
         metadata: { query: queryValue, target: result.target_org_code }
       })
     } catch (error) {
-      setTreeSearchErrorMessage(getErrorMessage(error))
+      setTreeSearchErrorMessage(formatOrgUnitSearchAmbiguousMessage(error, t('org_search_ambiguous_prefix')) ?? getErrorMessage(error))
     }
   }
 

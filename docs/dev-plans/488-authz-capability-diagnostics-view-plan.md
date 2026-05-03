@@ -1,6 +1,6 @@
 # DEV-PLAN-488：授权项诊断视图方案
 
-**状态**: 后置规划中；482/483/484 事实基础、482A/485 首批只读闭环、487/489/489A 后端运行时闭环、481 首批 UI 保存/E2E 与 490 API-first 首期硬切换已完成，诊断页面/API 仍未实施（2026-05-03 CST）
+**状态**: 后置规划中；482/483/484 事实基础、482A/485 首批只读闭环、487/489/489A 后端运行时闭环、481 首批 UI 保存/E2E 与 490 API-first 首期硬切换及评审修复已完成，诊断页面/API 仍未实施（2026-05-03 CST）
 
 ## 0. 适用范围与评审分级
 
@@ -243,4 +243,4 @@ GET /iam/api/authz/capability-diagnostics
 - 2026-05-01 23:10 CST：补齐文档状态登记；482A 功能授权项页面、关联 API 弹窗与 485 API 授权目录首批只读闭环已完成，但 488 诊断页面/API 仍保持未实施，不进入 P2 完成口径。
 - 2026-05-02 CST：登记后端运行时前置状态；487/489/489A 已完成普通 tenant DB role capability SoT、principal 多角色 union、用户授权组织范围 SoT、orgunit/CubeBox orgunit scope 裁剪与 `make check authz-role-union` 反回流门禁。488 仍保持后置规划，诊断页面/API 不进入 480A P3/P4 完成口径。
 - 2026-05-02 CST：同步 481 首批 UI 保存与 A/B 组织范围 E2E 完成事实；488 仍保持后置规划，诊断页面/API 不进入首批用户可见闭环完成口径。
-- 2026-05-03 CST：490 首期 API-first hard cutover 已完成；CubeBox overlay 已接入 484 聚合源，485 `丘宝可调用` 来自同源投影，active runtime 不再接受 executor 业务计划。488 现为 480A P6 后续治理项，诊断页面/API 仍未实施。
+- 2026-05-03 CST：490 首期 API-first hard cutover 及评审修复已完成；CubeBox overlay 已接入 484 聚合源，485 `丘宝可调用` 来自同源投影，active runtime 不再接受 executor 业务计划；`all_org_units`、search candidate 澄清与 `depends_on` 漂移已补齐。488 现为 480A P6 后续治理项，诊断页面/API 仍未实施。

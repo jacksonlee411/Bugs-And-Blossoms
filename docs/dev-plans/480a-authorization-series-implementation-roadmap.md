@@ -1,6 +1,6 @@
 # DEV-PLAN-480A：480 系列授权子计划实施顺序路线图
 
-**状态**: P1/P2 只读治理面、P3/P4 后端运行时闭环、481 UI 保存交互与 A/B 组织范围 E2E、P5 CubeBox API-first 首期硬切换已完成；P6 授权项诊断仍待后续补齐（2026-05-03 CST）
+**状态**: P1/P2 只读治理面、P3/P4 后端运行时闭环、481 UI 保存交互与 A/B 组织范围 E2E、P5 CubeBox API-first 首期硬切换及评审修复已完成；491 已补齐 `all_org_units` / scope-aware search 后端前置缺口但 selector/UI 仍规划中；P6 授权项诊断仍待后续补齐（2026-05-03 CST）
 
 ## 0. 适用范围与评审分级
 
@@ -79,7 +79,7 @@ P0  文档与语义冻结
 关键门槛：
 
 1. 没有 484 P1/P2 单一覆盖事实聚合源，不得实现 482A/485/488/490 的覆盖 join。
-2. 487/489/489A 后端运行时闭环、481 UI 保存交互与 A/B 组织范围 E2E、490 API-first 首期硬切换已完成；当前 480 系列可宣称首批角色/用户授权用户可见闭环与 CubeBox API-first 首期闭环完成，但不得把 488 诊断视图一并宣称完成。
+2. 487/489/489A 后端运行时闭环、481 UI 保存交互与 A/B 组织范围 E2E、490 API-first 首期硬切换及评审修复已完成；当前 480 系列可宣称首批角色/用户授权用户可见闭环与 CubeBox API-first 首期闭环完成，但不得把 488 诊断视图或 491 selector/UI 一并宣称完成。
 3. 489 scope provider 与 orgunit 裁剪已完成；用户授权 UI 保存交互已消费 489 API，不得落回前端本地状态。
 4. 没有 485 API 授权目录基础投影和 490 overlay 校验，不得让 CubeBox planner 调用 API 工具。
 5. 488 诊断视图必须后置到 484 + 482A + 485 首批闭环之后。
@@ -281,6 +281,7 @@ CubeBox 切换必须等待：
 2. [X] 490 overlay 引用的 HTTP API 全部存在并有 requirement。
 3. [X] 当前用户 capability 与组织范围裁剪通过普通 HTTP API 生效。
 4. [X] active runtime 不再接受 executor 业务计划。
+5. [X] 评审修复已补齐 `all_org_units=true` 透传、API result 候选投影、search 多候选澄清与唯一 scope 可见候选返回路径；知识包示例 `depends_on` 不再跨 turn 引用。
 
 ## 6. 跨计划重复实现检查清单
 
@@ -296,6 +297,7 @@ CubeBox 切换必须等待：
 8. [ ] 是否从 `iam.principals.role_slug`、`roles[0]` 或 current role 推导普通 tenant 授权。
 9. [ ] 是否把组织范围放进 Casbin object/action、前端 query、prompt 或 CubeBox context。
 10. [ ] 是否保留 CubeBox executor 与 HTTP API tool 双执行面。
+11. [ ] 是否把 491 的 selector/UI 后续范围误标成 480A/P5 已完成。
 
 命中任一项时，当前 PR 应停止合入，回到对应 owner 计划收敛。
 
@@ -325,3 +327,4 @@ CubeBox 切换必须等待：
 - 2026-05-02 CST：481 角色定义 / 用户授权 UI 保存交互已按 `designs/480.pen` 接入 487/489 API，并补齐 `dev481` A/B 组织范围 E2E：A 用户全范围，B 用户仅鲜花事业部及下级；覆盖普通 orgunit API 裁剪、范围外 detail fail-closed、CubeBox orgunit 查询与普通 API 结果一致。稳定门禁继续走 `make preflight` / `make e2e`；真实模型验收改为显式 `make e2e-live`。490 API-first hard cutover 与 488 诊断仍待后续。
 - 2026-05-03 CST：完成 P5（DEV-PLAN-490 API-first 硬切换）首期实现：四个 orgunit 只读 API 进入 CubeBox API tool overlay，`cubebox_callable` 由 overlay 投影到 485 API 授权目录；query flow active runtime 切为 `cubebox-query-api-calls`，planner/decoder/runner 不再接受旧 `READ_PLAN`、裸 `ReadPlan` 或 `executor_key` 成功路径；新增 `make check cubebox-api-first` 并接入 `make preflight`。P6（DEV-PLAN-488 授权项诊断）成为后续治理顺序。
 - 2026-05-03 CST：同步 480A 与 `DEV-PLAN-480/484/485/486/488/490` 当前进度状态，消除“490 未实施 / P5 待后续”漂移；本次文档状态同步后 `make check doc` 通过。
+- 2026-05-03 CST：完成 P5 评审修复登记：普通 Web API 与 CubeBox runner 均保留并校验 `all_org_units=true`，语义仍为当前调用者可见范围内全部组织；`orgunit.search` 对多候选返回澄清候选，scope 过滤后唯一候选直接返回该可见候选；API observation 投影 `PresentedCandidates`，knowledge pack `depends_on` 仅允许同一 `API_CALLS` envelope 内引用。491 的 selector/UI 仍按后续计划推进，不并入 P5 完成口径。已验证 Go fmt/vet/lint/test、`make check cubebox-api-first`、authz 三件套、routing/doc/no-legacy/chat-surface/root-surface/no-scope/granularity/request-code/go-version/error-message/authz-role-union。

@@ -176,3 +176,29 @@ func TestHandleOrgUnitsAPI_BusinessUnitFilterPassesParams(t *testing.T) {
 		t.Fatal("business unit filter without parent should search all org units")
 	}
 }
+
+func TestHandleOrgUnitsAPI_AllOrgUnitsPassesParams(t *testing.T) {
+	var gotReq orgUnitListPageRequest
+	store := &extListStoreStub{
+		resolveOrgCodeStore: &resolveOrgCodeStore{},
+		listFn: func(_ context.Context, _ string, req orgUnitListPageRequest) ([]orgUnitListItem, int, error) {
+			gotReq = req
+			return []orgUnitListItem{{OrgCode: "A001", Name: "Root", Status: "active"}}, 1, nil
+		},
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/org/api/org-units?as_of=2026-01-01&all_org_units=true&page=0&size=100", nil)
+	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "T"}))
+	rec := httptest.NewRecorder()
+	handleOrgUnitsAPI(rec, req, store, nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+	}
+
+	if !gotReq.AllOrgUnits {
+		t.Fatalf("AllOrgUnits=%v", gotReq.AllOrgUnits)
+	}
+	if !gotReq.ShouldSearchAllOrgUnits() {
+		t.Fatal("all_org_units=true without parent should search all org units")
+	}
+}

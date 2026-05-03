@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"reflect"
@@ -424,7 +425,18 @@ func TestParseOrgUnitListQueryOptions(t *testing.T) {
 				}
 			},
 		},
+		{
+			name:    "all org units",
+			rawURL:  "/org/api/org-units?all_org_units=true",
+			wantAny: true,
+			check: func(t *testing.T, opts orgUnitListQueryOptions) {
+				if !opts.AllOrgUnits {
+					t.Fatalf("opts=%+v", opts)
+				}
+			},
+		},
 		{name: "status invalid", rawURL: "/org/api/org-units?status=bad", wantErr: true},
+		{name: "all org units invalid", rawURL: "/org/api/org-units?all_org_units=yes", wantErr: true},
 		{name: "is business unit invalid", rawURL: "/org/api/org-units?is_business_unit=yes", wantErr: true},
 		{name: "sort invalid", rawURL: "/org/api/org-units?sort=bad", wantErr: true},
 		{name: "sort empty", rawURL: "/org/api/org-units?sort=", wantErr: true},
@@ -1013,6 +1025,117 @@ func TestHandleOrgUnitsSearchAPI_Success(t *testing.T) {
 	}
 	if !strings.Contains(rec.Body.String(), "\"target_org_code\":\"A001\"") {
 		t.Fatalf("body=%q", rec.Body.String())
+	}
+}
+
+func TestHandleOrgUnitsSearchAPI_AmbiguousCandidates(t *testing.T) {
+	store := newOrgUnitMemoryStore()
+	for _, item := range []struct {
+		code string
+		name string
+	}{
+		{code: "A001", name: "East Sales Center"},
+		{code: "A002", name: "East Operations Center"},
+	} {
+		if _, err := store.CreateNodeCurrent(context.Background(), "t1", "2026-01-01", item.code, item.name, "", true); err != nil {
+			t.Fatalf("create %s err=%v", item.code, err)
+		}
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/org/api/org-units/search?query=East&as_of=2026-01-01", nil)
+	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "T"}))
+	rec := httptest.NewRecorder()
+	handleOrgUnitsSearchAPI(rec, req, store)
+	if rec.Code != http.StatusConflict {
+		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+	}
+	for _, expected := range []string{
+		`"error_code":"org_unit_search_ambiguous"`,
+		`"cannot_silent_select":true`,
+		`"org_code":"A001"`,
+		`"org_code":"A002"`,
+	} {
+		if !strings.Contains(rec.Body.String(), expected) {
+			t.Fatalf("expected body to contain %q, got %s", expected, rec.Body.String())
+		}
+	}
+}
+
+func TestHandleOrgUnitsSearchAPI_ReturnsOnlyVisibleCandidate(t *testing.T) {
+	store := newOrgUnitMemoryStore()
+	for _, item := range []struct {
+		code string
+		name string
+	}{
+		{code: "A001", name: "East Center"},
+		{code: "A002", name: "East Center"},
+	} {
+		if _, err := store.CreateNodeCurrent(context.Background(), "t1", "2026-01-01", item.code, item.name, "", true); err != nil {
+			t.Fatalf("create %s err=%v", item.code, err)
+		}
+	}
+	visibleOrgNodeKey, err := store.ResolveOrgNodeKeyByCode(context.Background(), "t1", "A002")
+	if err != nil {
+		t.Fatalf("resolve org node key err=%v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/org/api/org-units/search?query=East&as_of=2026-01-01", nil)
+	ctx := withTenant(req.Context(), Tenant{ID: "t1", Name: "T"})
+	ctx = withPrincipal(ctx, Principal{ID: "principal-a"})
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+	runtime := &orgUnitScopeRuntimeStub{scopes: []principalOrgScope{{
+		OrgNodeKey: visibleOrgNodeKey,
+	}}}
+	handleOrgUnitsSearchAPI(rec, req, store, runtime)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+	}
+
+	var result OrgUnitSearchResult
+	if err := json.NewDecoder(rec.Body).Decode(&result); err != nil {
+		t.Fatalf("decode err=%v", err)
+	}
+	if result.TargetOrgCode != "A002" {
+		t.Fatalf("target_org_code=%q result=%+v body=%s", result.TargetOrgCode, result, rec.Body.String())
+	}
+	if len(result.PathOrgCodes) != 1 || result.PathOrgCodes[0] != "A002" {
+		t.Fatalf("path_org_codes=%v", result.PathOrgCodes)
+	}
+}
+
+func TestHandleOrgUnitsSearchAPI_ScopeFilterScansPastInitialCandidateLimit(t *testing.T) {
+	store := newOrgUnitMemoryStore()
+	for i := 1; i <= 9; i++ {
+		code := fmt.Sprintf("A%03d", i)
+		if _, err := store.CreateNodeCurrent(context.Background(), "t1", "2026-01-01", code, "East Center", "", true); err != nil {
+			t.Fatalf("create %s err=%v", code, err)
+		}
+	}
+	visibleOrgNodeKey, err := store.ResolveOrgNodeKeyByCode(context.Background(), "t1", "A009")
+	if err != nil {
+		t.Fatalf("resolve org node key err=%v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/org/api/org-units/search?query=East&as_of=2026-01-01", nil)
+	ctx := withTenant(req.Context(), Tenant{ID: "t1", Name: "T"})
+	ctx = withPrincipal(ctx, Principal{ID: "principal-a"})
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+	runtime := &orgUnitScopeRuntimeStub{scopes: []principalOrgScope{{
+		OrgNodeKey: visibleOrgNodeKey,
+	}}}
+	handleOrgUnitsSearchAPI(rec, req, store, runtime)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+	}
+
+	var result OrgUnitSearchResult
+	if err := json.NewDecoder(rec.Body).Decode(&result); err != nil {
+		t.Fatalf("decode err=%v", err)
+	}
+	if result.TargetOrgCode != "A009" {
+		t.Fatalf("target_org_code=%q result=%+v", result.TargetOrgCode, result)
 	}
 }
 

@@ -124,6 +124,23 @@ func TestValidateKnowledgePackRejectsLegacyExampleShape(t *testing.T) {
 	}
 }
 
+func TestValidateKnowledgePackRejectsInvalidAPIExampleDependsOn(t *testing.T) {
+	pack := KnowledgePack{
+		Dir: "modules/orgunit/presentation/cubebox",
+		Files: map[string]string{
+			"CUBEBOX-SKILL.md": "# Skill\n\nqueries.md\napis.md\nexamples.md\n",
+			"queries.md":       "```yaml\nintents:\n  - key: orgunit.details\n    required_params: [org_code, as_of]\n    optional_params: []\n```\n",
+			"apis.md":          "```yaml\napi_tools:\n  - operation_id: orgunit.details\n    query_intent: orgunit.details\n```\n",
+			"examples.md":      "```json\n{\"outcome\":\"API_CALLS\",\"calls\":[{\"id\":\"step-2\",\"method\":\"GET\",\"path\":\"/org/api/org-units/details\",\"params\":{\"org_code\":\"1001\",\"as_of\":\"2026-04-23\"},\"depends_on\":[\"step-1\"]}]}\n```\n",
+		},
+	}
+
+	err := ValidateKnowledgePack(pack)
+	if !errors.Is(err, ErrKnowledgePackInvalid) {
+		t.Fatalf("expected ErrKnowledgePackInvalid, got %v", err)
+	}
+}
+
 func TestNoQueryGuidanceFromKnowledgePacks(t *testing.T) {
 	packs := []KnowledgePack{
 		fakeKnowledgePack("modules/orgunit/presentation/cubebox", "orgunit.details", []string{"org_code", "as_of"}, "当前主要支持组织相关只读查询。", []string{

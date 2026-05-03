@@ -28,6 +28,7 @@
 - 用户明确纠正或扩大范围时，例如“不只是包含成本关键字的组织，而是全部组织”，不得继承历史 `keyword`、`parent_org_code`、单个 `entity_key` 或 `result_list`。
 - `working_results` 只表示当前 turn 内已经执行过的 API observation；不要把它写成长时记忆或业务专用队列。
 - 若 `working_results.latest_observation.items` 已足够回答，输出 `DONE`。
+- `depends_on` 只允许引用同一 `API_CALLS` envelope 内的前一步；跨 turn 续接必须读取 `working_results` 或 `query_evidence_window` 中的事实，新一轮第一个 call 使用 `depends_on: []`。
 
 ## 查询默认值
 

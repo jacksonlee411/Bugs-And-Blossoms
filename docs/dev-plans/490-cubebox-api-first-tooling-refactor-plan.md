@@ -1,6 +1,6 @@
 # DEV-PLAN-490：CubeBox 统一 API 工具化重构方案
 
-**状态**: 首期已完成；四个 orgunit 只读 API overlay/API_CALLS runtime 硬切换已落地并接入反回流门禁，写入 API 确认机制仍按本计划非目标暂缓（2026-05-03 CST）
+**状态**: 首期已完成；四个 orgunit 只读 API overlay/API_CALLS runtime 硬切换已落地并接入反回流门禁，`all_org_units` / search candidate / `depends_on` 评审修复已补齐，写入 API 确认机制仍按本计划非目标暂缓（2026-05-03 CST）
 
 ## 0. 适用范围与评审分级
 
@@ -436,6 +436,10 @@ API runner 对 planner 和用户只暴露受控结果，不暴露内部 API raw 
 13. [X] `make check cubebox-api-first` 已接入并能阻断 active runtime、prompt、知识包和 active tests 中旧执行面作为成功路径回流。
 14. [X] `APIToolOverlayDefinition` 是唯一 overlay 定义源；484 coverage overlay、485 `cubebox_callable` 和 runtime tool builder 均由它派生，未出现第二 path 清单。
 15. [X] OrgUnit list 的 planner-facing 分页参数到 HTTP query 的转换有测试覆盖，第一页语义与普通页面 API 一致。
+16. [X] `all_org_units=true` 从 planner params 到普通 HTTP query parser 保持端到端透传；语义只表示当前用户授权范围内的全部组织，不扩大 489 scope provider 输出。
+17. [X] `orgunit.search` 多候选返回可澄清候选；scope 过滤后仅剩一个候选时直接返回该唯一可见候选，不回到旧 first-match 搜索路径造成误拒绝。
+18. [X] `orgunit.list/search` observation 可投影 `PresentedCandidates`，供跨轮追问和澄清复用；API 409 search ambiguous 可映射为执行澄清错误，不 fallback。
+19. [X] knowledge pack 示例与校验阻断跨 turn `depends_on`；新一轮首个 call 必须 `depends_on: []`，上一轮事实只能通过 `working_results` / `query_evidence_window` 读取。
 
 ## 10. 风险与停止线
 
@@ -468,3 +472,4 @@ API runner 对 planner 和用户只暴露受控结果，不暴露内部 API raw 
 - 2026-05-03 CST：根据 490 方案评审补强实施契约：新增旧执行面残留分级、same-route PEP adapter 边界、APICallPlan 最小解码契约、最小 request schema 与 runner error contract；这些修订用于约束后续实现，不代表 overlay/API_CALLS runtime 已实施。
 - 2026-05-03 CST：根据架构一致性收敛评审继续修正方案：将 same-route PEP adapter 收敛为同栈 HTTP 或显式 route PEP facade 两种可合入形态；冻结 `APIToolOverlayDefinition` 同源双投影；把旧执行面扫描提升为 `make check cubebox-api-first` 硬门禁；补充 OrgUnit list 1 基 planner-facing 分页到普通 HTTP API query 的转换契约。此为方案修订，仍不代表 490 runtime 已实施。
 - 2026-05-03 CST：完成首期 API-first hard cutover 实施：新增 `APICallPlan`、API tool overlay、API tool runner 与 API-call execution projection；四个 orgunit 只读 API 由同一 `APIToolOverlayDefinition` 派生到 484 coverage overlay、485 `cubebox_callable` 与 runtime tool builder；active query flow runtime 切为 `cubebox-query-api-calls`，删除 orgunit business executor/read-plan/read-api-catalog active files；知识包与 planner prompt 改为 `API_CALLS`；新增 `make check cubebox-api-first` 并接入 `make preflight`。已验证专项门禁、authz 三件套与命中包 Go 测试；全量 Go/lint/doc 验证见本轮提交前记录。
+- 2026-05-03 CST：完成首期评审修复：`all_org_units=true` 不再被 API runner 丢弃，并接入普通 `GET /org/api/org-units` query parser；`orgunit.search` 改为候选集决策，多候选返回 `409 org_unit_search_ambiguous`，scope 过滤后唯一候选直接返回该可见候选；runner 将 list/search response 投影为 `PresentedCandidates` 并把 search ambiguous 映射为澄清候选；knowledge pack 示例和校验阻断跨 turn `depends_on`。已验证 Go fmt/vet/lint/test、`make check cubebox-api-first`、authz 三件套、routing/doc/no-legacy/chat-surface/root-surface/no-scope/granularity/request-code/go-version/error-message/authz-role-union。

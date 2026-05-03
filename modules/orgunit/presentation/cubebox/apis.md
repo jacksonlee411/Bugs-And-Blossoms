@@ -43,4 +43,5 @@ api_tools:
 - `page` / `page_size` 缺省时按 `page=1,page_size=100` 处理，不要追问。
 - `orgunit.search` 的 `query` 保留用户原始搜索词，不要擅自扩写。
 - 多步查询必须线性排列，后一步 `depends_on` 只引用前一步 ID。
+- `depends_on` 不能跨 turn 引用；即使使用 `working_results.latest_observation` 中的上一轮事实，新一轮首个 call 也必须是 `depends_on: []`。
 - 不要生成隐藏字段引用、SQL、store/helper 调用或页面状态依赖。

@@ -193,9 +193,6 @@ func appendAPIToolQueryParam(values url.Values, name string, value any) error {
 	if name == "" || value == nil {
 		return nil
 	}
-	if name == "all_org_units" {
-		return nil
-	}
 	if name == "page_size" {
 		name = "size"
 	}
@@ -252,6 +249,9 @@ func projectAPIToolResult(tool cubebox.APITool, payload map[string]any) cubebox.
 	if entity := apiToolConfirmedEntity(tool, payload); entity != nil {
 		result.ConfirmedEntity = entity
 	}
+	if candidates := apiToolPresentedCandidates(tool, payload); len(candidates) > 0 {
+		result.PresentedCandidates = candidates
+	}
 	return result
 }
 
@@ -293,6 +293,75 @@ func stringFromPayload(value any) string {
 	}
 }
 
+func apiToolPresentedCandidates(tool cubebox.APITool, payload map[string]any) []cubebox.QueryCandidate {
+	switch strings.TrimSpace(tool.OperationID) {
+	case "orgunit.list":
+		return apiToolCandidatesFromListPayload(payload)
+	case "orgunit.search":
+		return apiToolCandidatesFromSearchPayload(payload)
+	default:
+		return nil
+	}
+}
+
+func apiToolCandidatesFromListPayload(payload map[string]any) []cubebox.QueryCandidate {
+	rawItems, ok := payload["org_units"].([]any)
+	if !ok || len(rawItems) == 0 {
+		return nil
+	}
+	asOf := stringFromPayload(payload["as_of"])
+	items := make([]cubebox.QueryCandidate, 0, len(rawItems))
+	for _, rawItem := range rawItems {
+		item, ok := rawItem.(map[string]any)
+		if !ok {
+			continue
+		}
+		candidate := cubebox.NormalizeQueryCandidate(cubebox.QueryCandidate{
+			Domain:    "orgunit",
+			EntityKey: stringFromPayload(item["org_code"]),
+			Name:      stringFromPayload(item["name"]),
+			AsOf:      asOf,
+			Status:    stringFromPayload(item["status"]),
+		})
+		if candidate == nil {
+			continue
+		}
+		items = append(items, *candidate)
+	}
+	return items
+}
+
+func apiToolCandidatesFromSearchPayload(payload map[string]any) []cubebox.QueryCandidate {
+	rawItems, ok := payload["candidates"].([]any)
+	if !ok || len(rawItems) == 0 {
+		return nil
+	}
+	asOf := stringFromPayload(payload["tree_as_of"])
+	items := make([]cubebox.QueryCandidate, 0, len(rawItems))
+	for _, rawItem := range rawItems {
+		item, ok := rawItem.(map[string]any)
+		if !ok {
+			continue
+		}
+		candidateAsOf := stringFromPayload(item["as_of"])
+		if candidateAsOf == "" {
+			candidateAsOf = asOf
+		}
+		candidate := cubebox.NormalizeQueryCandidate(cubebox.QueryCandidate{
+			Domain:    "orgunit",
+			EntityKey: stringFromPayload(item["org_code"]),
+			Name:      stringFromPayload(item["name"]),
+			AsOf:      candidateAsOf,
+			Status:    stringFromPayload(item["status"]),
+		})
+		if candidate == nil {
+			continue
+		}
+		items = append(items, *candidate)
+	}
+	return items
+}
+
 type apiToolHTTPStatusError struct {
 	status int
 	body   string
@@ -307,11 +376,50 @@ func apiToolHTTPError(status int, body string) error {
 	switch status {
 	case http.StatusBadRequest, http.StatusUnprocessableEntity:
 		return newBadRequestError(body)
+	case http.StatusConflict:
+		if ambiguous := apiToolSearchAmbiguousError(body); ambiguous != nil {
+			return ambiguous
+		}
+		return apiToolHTTPStatusError{status: status, body: body}
 	case http.StatusForbidden, http.StatusUnauthorized:
 		return &orgUnitAuthzScopeError{err: errAuthzScopeForbidden}
 	case http.StatusNotFound:
 		return &orgUnitNotFoundError{}
 	default:
 		return apiToolHTTPStatusError{status: status, body: body}
+	}
+}
+
+func apiToolSearchAmbiguousError(body string) error {
+	var payload map[string]any
+	if err := json.Unmarshal([]byte(body), &payload); err != nil {
+		return nil
+	}
+	if stringFromPayload(payload["error_code"]) != "org_unit_search_ambiguous" {
+		return nil
+	}
+	candidates := make([]OrgUnitSearchCandidate, 0)
+	rawItems, _ := payload["candidates"].([]any)
+	for _, rawItem := range rawItems {
+		item, ok := rawItem.(map[string]any)
+		if !ok {
+			continue
+		}
+		orgCode := stringFromPayload(item["org_code"])
+		if orgCode == "" {
+			continue
+		}
+		candidates = append(candidates, OrgUnitSearchCandidate{
+			OrgCode: orgCode,
+			Name:    stringFromPayload(item["name"]),
+			Status:  stringFromPayload(item["status"]),
+		})
+	}
+	if len(candidates) == 0 {
+		return nil
+	}
+	return &orgUnitSearchAmbiguousError{
+		Candidates: candidates,
+		AsOf:       stringFromPayload(payload["tree_as_of"]),
 	}
 }

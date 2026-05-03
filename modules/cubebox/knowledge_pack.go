@@ -156,13 +156,16 @@ func ValidateKnowledgePack(pack KnowledgePack) error {
 	for _, block := range exampleBlocks {
 		var payload map[string]any
 		if err := json.Unmarshal([]byte(block), &payload); err != nil {
+			return wrapKnowledgePackError(fmt.Sprintf("examples.md json invalid: %v", err))
+		}
+		if payload["outcome"] != "API_CALLS" {
 			continue
 		}
-		if payload["outcome"] == "API_CALLS" {
-			if _, ok := payload["calls"]; ok {
-				validExample = true
-				break
-			}
+		if _, err := DecodePlannerOutcome([]byte(block)); err != nil {
+			return wrapKnowledgePackError(fmt.Sprintf("examples.md API_CALLS invalid: %v", err))
+		}
+		if _, ok := payload["calls"]; ok {
+			validExample = true
 		}
 	}
 	if !validExample {

@@ -100,5 +100,6 @@ runtime_hints:
 
 - 每轮只规划当前最小必要 API 调用。
 - 后续调用必须继续使用 `API_CALLS` 的 `method/path/params/depends_on`。
+- `depends_on` 只表达同一 `API_CALLS` envelope 内的线性步骤；新一轮第一个 call 必须使用 `depends_on: []`，不要引用上一轮的 `step-1`。
 - 已有 `working_results` 足够回答时输出 `DONE`。
 - 不要重复执行 `working_results.executed_fingerprints` 中已有的查询。

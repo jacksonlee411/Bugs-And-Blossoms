@@ -2,6 +2,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { ApiClientError } from '../../api/errors'
 import { OrgUnitsPage } from './OrgUnitsPage'
 
 const orgUnitApiMocks = vi.hoisted(() => ({
@@ -102,6 +103,10 @@ describe('OrgUnitsPage', () => {
           org_filter_include_disabled: 'Include Disabled',
           action_apply_filters: 'Apply Filters',
           org_tree_title: 'Tree',
+          org_search_label: 'Search in tree',
+          org_search_action: 'Locate',
+          org_search_query_required: 'Please input a search query',
+          org_search_ambiguous_prefix: 'Found multiple matching organization units:',
           text_loading: 'Loading',
           text_no_data: 'No data'
         })[key] ?? key
@@ -166,6 +171,28 @@ describe('OrgUnitsPage', () => {
     )
     await waitFor(() =>
       expect(orgUnitApiMocks.listOrgUnits).toHaveBeenLastCalledWith({ asOf: '2026-03-01', includeDisabled: false })
+    )
+  }, 20000)
+
+  it('shows ambiguous tree search candidates from the API response', async () => {
+    orgUnitApiMocks.searchOrgUnit.mockRejectedValue(
+      new ApiClientError('api tool http status 409', 'UNKNOWN_ERROR', 409, undefined, {
+        error_code: 'org_unit_search_ambiguous',
+        candidates: [
+          { org_code: 'A001', name: 'East Sales Center' },
+          { org_code: 'A002', name: 'East Operations Center' }
+        ]
+      })
+    )
+
+    renderPage()
+    await waitFor(() => expect(orgUnitApiMocks.listOrgUnits).toHaveBeenCalled())
+
+    fireEvent.change(screen.getByLabelText('Search in tree'), { target: { value: 'East' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Locate' }))
+
+    await waitFor(() =>
+      expect(screen.getByText(/East Sales Center \(A001\).*East Operations Center \(A002\)/)).toBeInTheDocument()
     )
   }, 20000)
 })

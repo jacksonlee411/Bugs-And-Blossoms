@@ -182,7 +182,7 @@
   "outcome": "API_CALLS",
   "calls": [
     {
-      "id": "step-2",
+      "id": "step-1",
       "method": "GET",
       "path": "/org/api/org-units/details",
       "params": {
@@ -191,7 +191,7 @@
         "include_disabled": false
       },
       "result_focus": ["org_unit.org_code", "org_unit.name", "org_unit.full_name_path"],
-      "depends_on": ["step-1"]
+      "depends_on": []
     }
   ]
 }
@@ -235,7 +235,7 @@
   "outcome": "API_CALLS",
   "calls": [
     {
-      "id": "step-2",
+      "id": "step-1",
       "method": "GET",
       "path": "/org/api/org-units",
       "params": {
@@ -246,7 +246,7 @@
         "page_size": 100
       },
       "result_focus": ["org_units[].org_code", "org_units[].name", "org_units[].has_children"],
-      "depends_on": ["step-1"]
+      "depends_on": []
     }
   ]
 }
