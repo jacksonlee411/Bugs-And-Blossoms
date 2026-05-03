@@ -297,6 +297,7 @@ modules/{module}/
 - DEV-PLAN-489：用户授权组织范围 SoT 与运行时强制实施方案：`docs/dev-plans/489-user-authorization-org-scope-sot-and-runtime-enforcement-plan.md`
 - DEV-PLAN-489A：Principal 多角色 Union 运行时契约修订方案：`docs/dev-plans/489a-principal-multi-role-union-runtime-contract.md`
 - DEV-PLAN-490：CubeBox 统一 API 工具化重构方案：`docs/dev-plans/490-cubebox-api-first-tooling-refactor-plan.md`
+- DEV-PLAN-491：通用可复用 OrgUnit 树选择器与范围感知候选契约方案：`docs/dev-plans/491-reusable-orgunit-tree-selector-and-scope-aware-candidate-contract-plan.md`
 - DEV-PLAN-440：彻底删除 SetID 的全仓收口方案（SetID 根删除唯一 PoR）：`docs/dev-plans/440-complete-setid-removal-plan.md`
 - DEV-PLAN-441：旧策略模块残余清理方案：`docs/dev-plans/441-legacy-strategy-module-residue-cleanup-plan.md`
 - DEV-PLAN-450：直接切除 jobcatalog / staffing / person 三模块方案（保留 orgunit）：`docs/dev-plans/450-direct-removal-of-jobcatalog-staffing-person-modules-plan.md`
