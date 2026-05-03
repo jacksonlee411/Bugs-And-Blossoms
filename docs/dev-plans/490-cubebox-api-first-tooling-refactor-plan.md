@@ -175,7 +175,12 @@ HTTP POST /internal/cubebox/turns:stream
 
 ### 4.1 Same-route PEP Adapter 边界
 
-API runner 不得直接调用 store、repository、业务 helper 或旧 executor。若实现为 in-process 调用，而不是发起真实 HTTP request，也必须显式经过一个 same-route PEP adapter，并满足以下等价条件：
+API runner 不得直接调用 store、repository、业务 helper、业务 handler 内部函数或旧 executor。`same-route PEP adapter` 不是“把当前 principal 塞进 context 后调用业务函数”的轻量包装，而是 CubeBox 调用现有 HTTP API 的唯一策略执行边界。首期只允许两种实现形态：
+
+1. **同栈 HTTP 形态**：runner 构造受控的内部 HTTP request，进入与用户请求相同的 `withTenantAndSession -> withAuthz -> router -> handler` 链路；上下文、tenant、principal、session、request metadata 只能来自当前 turn 的已认证请求。
+2. **显式 route PEP facade 形态**：若因测试或性能原因选择 in-process 调用，必须先抽出可测试的 route PEP facade，复用 `authzRequirementForRoute`、489A 多角色 union、487 DB role capability SoT、tenant/RLS 注入与普通 route responder 语义；业务 handler/helper/store 只能在该 facade 完成同等 PEP 决策后被调用。
+
+两种形态都必须满足以下等价条件：
 
 1. **同身份**：使用当前 request 中的 principal、tenant、session、roles/capability union 和 request metadata；不得使用 CubeBox service account、系统角色或新建授权主体。
 2. **同 route requirement**：按 `method + path` 查同一份 route requirement；未知 path、无 requirement、非 `tenant_api` surface 或未标记 `cubebox_callable` 均 fail-closed。
@@ -183,6 +188,13 @@ API runner 不得直接调用 store、repository、业务 helper 或旧 executor
 4. **同租户与 RLS**：进入业务读路径前必须具备普通 API 相同的显式事务、tenant 注入、RLS 与服务层数据范围裁剪；list/search 不扩大范围，details/audit 越界按普通 API 契约拒绝或隐藏。
 5. **同 responder 语义**：adapter 捕获普通 API 的 status/error code，并按本计划错误映射转为 CubeBox observation 或 terminal error；不得吞掉 403/404/422 后 fallback 到普通聊天。
 6. **同参数入口**：runner 只能把 schema 校验后的 query/body 参数传给该 API；不得额外补写业务参数、scope、org root、role 或 capability。
+
+禁止形态：
+
+1. runner 直接调用 `handleOrgUnits*`、`listOrgUnitListPage`、`searchNodeByVisibility`、`ensurePrincipalOrgScopeAllows`、store 或 repository。
+2. runner 自行复制 `withAuthz` 的判断分支，或只检查 `method/path` 与 `cubebox_callable` 后跳过 route requirement。
+3. runner 在 adapter 外补写 scope、role、capability、org root、父级范围或分页业务默认值。
+4. 用测试 helper、空 registry、feature flag 或“当前只注册 API 工具”保留可恢复的 executor 执行路径。
 
 ### 4.2 APICallPlan 最小解码契约
 
@@ -203,6 +215,14 @@ API runner 不得直接调用 store、repository、业务 helper 或旧 executor
 
 1. `APIAuthzCatalogEntry`：来自 484 单一覆盖事实聚合源经 485 API 授权目录投影后的 API 条目，字段由 routing、route requirement、capability registry、policy 覆盖事实和 CubeBox overlay 校验派生。
 2. `APIToolOverlay`：490 只拥有 CubeBox 工具面增量字段。
+
+为防止 490 runtime overlay 与 484 lint overlay 分叉，overlay 必须采用**同源定义、双投影**：
+
+1. `APIToolOverlayDefinition` 是 490 唯一可维护的静态定义源，保存完整运行时增量字段：`method/path`、`cubebox_callable`、`operation_id`、用途摘要、request schema、response schema 引用与 observation projection。
+2. `CoverageOverlay` 从同一个 `APIToolOverlayDefinition` 派生为 484 覆盖事实需要的最小结构：`method/path/cubebox_callable/surface`，并接入 `ListAuthzToolOverlayCoverage()`；不得在 484 或 lint 侧另写一份 path 清单。
+3. `RuntimeToolOverlay` 从同一个 `APIToolOverlayDefinition` 派生，再与 484/485 的 `APIAuthzCatalogEntry` join 成 planner 可见工具；不得绕过 484/485 直接用 overlay definition 生成可调用 path。
+4. 同一个 `method/path` 在 overlay definition 中只能出现一次；重复、引用不存在 route、引用非 `tenant_api` route、引用无 requirement route、引用未注册 capability 或引用 write/dangerous API 都必须 fail-closed。
+5. 485 主表只消费派生后的 `cubebox_callable`；`operation_id`、schema 与 projection 不进入 485 主表列，也不成为 API 授权目录的新事实源。
 
 `APIAuthzCatalogEntry` 字段：
 
@@ -282,6 +302,13 @@ API runner 不得直接调用 store、repository、业务 helper 或旧 executor
 4. `all_org_units=true` 只能表示“当前用户授权范围内的全部组织”，不得扩大 489 scope provider 输出。
 5. observation projection 只能消费 API response；不得因 schema 缺字段而回退到旧 executor payload。
 
+首期 OrgUnit list 存在历史分页口径差异，必须显式冻结：
+
+1. planner-facing schema 使用用户可见 1 基页码：`page=1` 表示第一页，默认 `page=1`、`page_size=100`。
+2. HTTP API `/org/api/org-units` 现有 query 使用 0 基 `page` 与 `pageSize`/`size` 口径时，runner 必须在 adapter 参数编码层完成转换；转换前后都要保留 schema 校验，不得把转换逻辑写进 observation adapter 或业务 handler。
+3. `request_schema.parameters[].http_name` 可用于表达 planner 参数名与 HTTP query 参数名不同的情况；未设置时默认等于 `name`。
+4. 分页转换只属于执行控制参数转换，不得改变业务过滤语义、scope provider 输入、排序、搜索或 `all_org_units` 语义。
+
 ### 5.6 Runner Error Contract
 
 API runner 对 planner 和用户只暴露受控结果，不暴露内部 API raw error。首期映射如下：
@@ -323,17 +350,18 @@ API runner 对 planner 和用户只暴露受控结果，不暴露内部 API raw 
 ### 7.2 P1：API Tool Overlay 最小实现
 
 1. [ ] 在服务端新增静态 CubeBox tool overlay，首批引用四个 orgunit 只读 API。
-2. [ ] overlay 只保存 `cubebox_callable`、`operation_id`、用途摘要、schema 引用和 observation projection；`object/action/authz_capability_key` 从 484 单一覆盖事实聚合源派生。
-3. [ ] 为每个条目定义最小 request schema、参数默认值和 observation projection；首期只允许 GET/query、`body_allowed=false`、`allow_unknown_params=false`。
-4. [ ] 增加 overlay 校验：method/path 必须存在、非 allowlist 受保护 route 必须有 requirement、capability 必须存在 registry；引用不存在的 API 时 fail-closed。
+2. [ ] overlay 必须采用同源定义、双投影：同一份 `APIToolOverlayDefinition` 同时派生 484 `CoverageOverlay` 与 490 `RuntimeToolOverlay`；不得在 lint、485 页面和 runner 中各自维护 path 清单。
+3. [ ] overlay 只保存 `cubebox_callable`、`operation_id`、用途摘要、schema 引用和 observation projection；`object/action/authz_capability_key` 从 484 单一覆盖事实聚合源派生。
+4. [ ] 为每个条目定义最小 request schema、参数默认值、planner-facing 到 HTTP query 的参数名/分页转换和 observation projection；首期只允许 GET/query、`body_allowed=false`、`allow_unknown_params=false`。
+5. [ ] 增加 overlay 校验：method/path 必须存在、非 allowlist 受保护 route 必须有 requirement、capability 必须存在 registry；重复定义、引用不存在 API、引用非 `tenant_api` route 或 write/dangerous API 时 fail-closed。
 
 ### 7.3 P2：API Call Plan 与 Runner
 
 1. [ ] 新增 `APICallPlan` 解码与校验，并删除 active runtime 中的业务 `ReadPlan` 解码/执行入口；不得以“双解码”“兼容裸 ReadPlan”“ReadPlan 转 APICallPlan”等方式形成第二业务执行面。
 2. [ ] API runner 校验 method/path 完全匹配派生后的可调用工具条目。
 3. [ ] API runner 校验 query/body 参数 schema，不允许未知参数。
-4. [ ] API runner 通过 same-route PEP adapter 以当前用户上下文调用现有 HTTP API，并证明经过同一 route requirement、489A union、RLS/tenant 注入和服务层数据范围裁剪。
-5. [ ] API runner 不直接调用 store/helper，不自行补 scope、role、capability 或业务默认范围。
+4. [ ] API runner 通过 same-route PEP adapter 以当前用户上下文调用现有 HTTP API，并证明经过同一 route requirement、489A union、RLS/tenant 注入和服务层数据范围裁剪；adapter 只能采用同栈 HTTP 形态或显式 route PEP facade 形态。
+5. [ ] API runner 不直接调用业务 handler 内部函数、store/helper，不自行补 scope、role、capability 或业务默认范围。
 6. [ ] 实现 runner error contract：旧计划、未知 path、schema 错误、403/404/422/5xx 均按冻结规则 terminal 或 observation，不 fallback。
 7. [ ] 更新 planner prompt、outcome decoder、query loop 和工作结果结构，使多步查询只围绕 API call result 继续推进。
 
@@ -357,7 +385,8 @@ API runner 对 planner 和用户只暴露受控结果，不暴露内部 API raw 
 2. [ ] 将 `modules/orgunit/presentation/cubebox/apis.md` 改为 API tool overlay / API schema 派生说明，或直接删除该文件并同步 `LoadKnowledgePack` 校验；不得继续要求 `executor_key`。
 3. [ ] 删除 executor payload 事实源语义，避免 `executor_key` 成为业务工具主键；active runtime、prompt、知识包和测试成功路径都不得再依赖 `executor_key`。
 4. [ ] 更新功能授权项“关联 API”弹窗：首期只展示 HTTP API，不展示无意义 `类型=API` 列。
-5. [ ] 增加反回流检查：按 3.6 残留分级扫描 active runtime、prompt、知识包和 active tests；`READ_PLAN`、裸 `ReadPlan`、`ReadAPICatalog`、`ExecutionRegistry.ExecutePlan` 或 `executor_key` 不得作为业务工具契约保留，允许命中必须是归档文档、历史说明、490 迁移清单、负向测试或用户输出泄露防线。
+5. [ ] 增加硬门禁 `make check cubebox-api-first`，按 3.6 残留分级扫描 active runtime、prompt、知识包和 active tests；`READ_PLAN`、裸 `ReadPlan`、`ReadAPICatalog`、`ExecutionRegistry.ExecutePlan` 或 `executor_key` 不得作为业务工具契约保留，允许命中必须是归档文档、历史说明、490 迁移清单、负向测试或用户输出泄露防线。
+6. [ ] `make preflight` 或至少 CI Gate-1 必须接入 `make check cubebox-api-first`；未接入前，490 实施 PR 不得宣称反回流门禁完成。
 
 ## 8. 测试与覆盖率
 
@@ -369,12 +398,14 @@ API runner 对 planner 和用户只暴露受控结果，不暴露内部 API raw 
 
 1. API tool overlay 校验：引用 route 存在、requirement 存在、capability 存在、schema 不允许未知参数。
 2. API call plan 校验：未知 method/path、未知参数、缺必填参数、错误类型参数均 fail-closed。
-3. API runner：通过 same-route PEP adapter 以当前用户身份调用现有 API，权限不足返回 terminal error，并证明没有绕过 489A union、RLS/tenant 注入或 scope provider。
+3. API runner：通过 same-route PEP adapter 以当前用户身份调用现有 API，权限不足返回 terminal error，并证明没有绕过同一 route requirement、489A union、RLS/tenant 注入或 scope provider；直接调用业务 handler/store/helper 的测试实现不得作为通过证据。
 4. OrgUnit 迁移：list/details/search/audit 通过 API path 获取与当前页面 API 一致的字段。
 5. 多步查询：search 后 details、list 后继续查 children、result_list 补 `full_name_path` 等行为保持。
 6. 写入确认暂缓：本轮只验证 write/dangerous API 不进入 planner 可调用工具集。
 7. 反回流测试：planner 输出 `READ_PLAN`、裸 `ReadPlan`、`steps[].executor_key`、未知 method/path 或旧 executor payload 时均 fail-closed，不 fallback 到旧执行链。
 8. 错误映射测试：schema 错误、403、范围外 404、422、5xx/timeout 和空列表分别命中 runner error contract。
+9. 分页语义测试：planner-facing `page=1/page_size=100` 被编码为普通 `/org/api/org-units` 接受的 HTTP query，并与页面第一页返回一致；不得出现 0/1 基偏移。
+10. Overlay 同源测试：484 `ToolOverlays` 与 runtime tool builder 来自同一 `APIToolOverlayDefinition`；故意新增只在一侧出现的 path 必须触发测试或 lint 失败。
 
 ### 8.3 验证命令
 
@@ -386,7 +417,7 @@ API runner 对 planner 和用户只暴露受控结果，不暴露内部 API raw 
 4. 文档：`make check doc`
 5. UI / `.templ` / MUI assets 命中时：`make generate && make css`，并检查 `git status --short`
 6. 关键用户闭环命中时：`make e2e`
-7. 反回流检查：实施 PR 需记录对 active runtime 路径执行的关键词扫描，确认 `READ_PLAN`、裸 `ReadPlan`、`ReadAPICatalog`、`ExecutionRegistry.ExecutePlan`、`executor_key` 不再作为业务工具契约存在。
+7. 反回流门禁：`make check cubebox-api-first`
 
 ## 9. 验收标准
 
@@ -402,6 +433,9 @@ API runner 对 planner 和用户只暴露受控结果，不暴露内部 API raw 
 10. [ ] orgunit 业务 executor 不再作为可执行入口存在；同一能力不能同时通过 HTTP API tool 和 executor tool 执行。
 11. [ ] 知识包、prompt 和 active tests 不再把 `executor_key`、`ReadAPICatalog` 或 executor payload 作为业务工具契约。
 12. [ ] API runner 的 same-route PEP adapter、request schema 和错误映射均有测试覆盖；无法证明同路径授权/RLS/scope 的实现不得合入。
+13. [ ] `make check cubebox-api-first` 已接入并能阻断 active runtime、prompt、知识包和 active tests 中旧执行面作为成功路径回流。
+14. [ ] `APIToolOverlayDefinition` 是唯一 overlay 定义源；484 coverage overlay、485 `cubebox_callable` 和 runtime tool builder 均由它派生，未出现第二 path 清单。
+15. [ ] OrgUnit list 的 planner-facing 分页参数到 HTTP query 的转换有测试覆盖，第一页语义与普通页面 API 一致。
 
 ## 10. 风险与停止线
 
@@ -420,6 +454,9 @@ API runner 对 planner 和用户只暴露受控结果，不暴露内部 API raw 
 | in-process adapter 绕过普通 API PEP | runner 直接调用 handler 内部 helper、store 或补写 scope | 停止实施；必须补 same-route PEP adapter 或改为真实 HTTP route 调用 |
 | request schema 过重或不明 | 为首期引入 OpenAPI/JSON Schema 平台，或 schema 无法判断未知参数 | 首期只用最小代码内 schema；未知参数与 body 默认拒绝 |
 | API 错误被普通聊天吞掉 | 403/404/422/5xx 后 narrator 编造成成功回答 | runner error contract 必须 terminal 或受控 observation，不允许 fallback |
+| overlay 同源破裂 | 484 lint overlay、485 页面标记、runner 可调用工具各自维护 path | 停止实施；回到单一 `APIToolOverlayDefinition` 并由同一 helper 派生 coverage/runtime 投影 |
+| 反回流只靠人工扫描 | PR 记录了 `rg` 结果但没有 `make check` 门禁 | 不允许宣称完成；必须补 `make check cubebox-api-first` 并接入 CI/preflight |
+| 分页语义偏移 | planner `page=1` 调用普通 API 时落到第二页或返回不一致 | 停止实施；补 planner-facing 到 HTTP query 的转换测试后再继续 |
 
 ## 11. 验证记录
 
@@ -429,3 +466,4 @@ API runner 对 planner 和用户只暴露受控结果，不暴露内部 API raw 
 - 2026-05-02 CST：登记运行时授权前置状态；487/489/489A 已使普通 HTTP API 按 current principal capability union 与 org scope 裁剪，CubeBox orgunit executor 当前也复用同一 scope provider。490 overlay、planner/runner `API_CALLS` hard cutover 与业务 executor 删除仍未实施。
 - 2026-05-02 CST：随 481/489 A/B 组织范围 E2E 复验，当前 CubeBox orgunit executor 路径与普通 orgunit API 返回范围一致；该证据只证明 scope provider 已复用，不代表 490 API-first overlay、`API_CALLS` runtime hard cutover 或 executor 删除已完成。
 - 2026-05-03 CST：根据 490 方案评审补强实施契约：新增旧执行面残留分级、same-route PEP adapter 边界、APICallPlan 最小解码契约、最小 request schema 与 runner error contract；这些修订用于约束后续实现，不代表 overlay/API_CALLS runtime 已实施。
+- 2026-05-03 CST：根据架构一致性收敛评审继续修正方案：将 same-route PEP adapter 收敛为同栈 HTTP 或显式 route PEP facade 两种可合入形态；冻结 `APIToolOverlayDefinition` 同源双投影；把旧执行面扫描提升为 `make check cubebox-api-first` 硬门禁；补充 OrgUnit list 1 基 planner-facing 分页到普通 HTTP API query 的转换契约。此为方案修订，仍不代表 490 runtime 已实施。
