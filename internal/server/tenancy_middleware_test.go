@@ -59,12 +59,22 @@ func (*stubPrincipalStore) GetOrCreateTenantAdmin(context.Context, string) (Prin
 	panic("unused")
 }
 
-func (*stubPrincipalStore) UpsertFromKratos(context.Context, string, string, string, string) (Principal, error) {
+func (*stubPrincipalStore) UpsertFromKratos(context.Context, string, string, string, string, string) (Principal, error) {
 	panic("unused")
 }
 
 func (s *stubPrincipalStore) GetByID(context.Context, string, string) (Principal, bool, error) {
 	return s.p, s.ok, s.err
+}
+
+func (s *stubPrincipalStore) ListActive(context.Context, string) ([]Principal, error) {
+	if s.err != nil {
+		return nil, s.err
+	}
+	if !s.ok {
+		return nil, nil
+	}
+	return []Principal{s.p}, nil
 }
 
 func mustInternalAPIClassifier(t *testing.T) *routing.Classifier {

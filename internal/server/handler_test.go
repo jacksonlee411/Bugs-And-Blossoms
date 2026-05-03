@@ -455,6 +455,16 @@ func TestUI_MUIOnly(t *testing.T) {
 		t.Fatalf("asset status=%d body=%s", recAsset.Code, recAsset.Body.String())
 	}
 
+	reqFavicon := httptest.NewRequest(http.MethodGet, "/favicon.ico", nil)
+	recFavicon := httptest.NewRecorder()
+	h.ServeHTTP(recFavicon, reqFavicon)
+	if recFavicon.Code != http.StatusMovedPermanently {
+		t.Fatalf("favicon status=%d body=%s", recFavicon.Code, recFavicon.Body.String())
+	}
+	if loc := recFavicon.Result().Header.Get("Location"); loc != "/assets/web/favicon.svg" {
+		t.Fatalf("unexpected favicon redirect location=%q", loc)
+	}
+
 	reqNoTenant := httptest.NewRequest(http.MethodGet, "/app/login", nil)
 	reqNoTenant.Host = ""
 	recNoTenant := httptest.NewRecorder()
@@ -529,11 +539,49 @@ func TestNewHandler_InternalAPIRoutes(t *testing.T) {
 		t.Fatal(err)
 	}
 	writeSvc := orgUnitWriteServiceStub{
-		createFn: func(_ context.Context, _ string, req orgunitservices.CreateOrgUnitRequest) (orgunittypes.OrgUnitResult, error) {
+		createFn: func(ctx context.Context, tenantID string, req orgunitservices.CreateOrgUnitRequest) (orgunittypes.OrgUnitResult, error) {
+			var parentOrgNodeKey string
+			if strings.TrimSpace(req.ParentOrgCode) != "" {
+				var err error
+				parentOrgNodeKey, err = orgStore.ResolveOrgNodeKeyByCode(ctx, tenantID, req.ParentOrgCode)
+				if err != nil {
+					return orgunittypes.OrgUnitResult{}, err
+				}
+			}
+			if _, err := orgStore.CreateNodeCurrent(ctx, tenantID, req.EffectiveDate, req.OrgCode, req.Name, parentOrgNodeKey, req.IsBusinessUnit); err != nil {
+				return orgunittypes.OrgUnitResult{}, err
+			}
 			return orgunittypes.OrgUnitResult{
 				OrgCode:       req.OrgCode,
 				EffectiveDate: req.EffectiveDate,
 			}, nil
+		},
+		renameFn: func(ctx context.Context, tenantID string, req orgunitservices.RenameOrgUnitRequest) error {
+			orgNodeKey, err := orgStore.ResolveOrgNodeKeyByCode(ctx, tenantID, req.OrgCode)
+			if err != nil {
+				return err
+			}
+			return orgStore.RenameNodeCurrent(ctx, tenantID, req.EffectiveDate, orgNodeKey, req.NewName)
+		},
+		moveFn: func(ctx context.Context, tenantID string, req orgunitservices.MoveOrgUnitRequest) error {
+			orgNodeKey, err := orgStore.ResolveOrgNodeKeyByCode(ctx, tenantID, req.OrgCode)
+			if err != nil {
+				return err
+			}
+			var newParentOrgNodeKey string
+			if strings.TrimSpace(req.NewParentOrgCode) != "" {
+				newParentOrgNodeKey, err = orgStore.ResolveOrgNodeKeyByCode(ctx, tenantID, req.NewParentOrgCode)
+				if err != nil {
+					return err
+				}
+			}
+			return orgStore.MoveNodeCurrent(ctx, tenantID, req.EffectiveDate, orgNodeKey, newParentOrgNodeKey)
+		},
+		disableFn: func(context.Context, string, orgunitservices.DisableOrgUnitRequest) error {
+			return nil
+		},
+		enableFn: func(context.Context, string, orgunitservices.EnableOrgUnitRequest) error {
+			return nil
 		},
 	}
 
@@ -662,7 +710,7 @@ func TestNewHandler_InternalAPIRoutes(t *testing.T) {
 		t.Fatalf("org units search status=%d body=%s", recOrgSearch.Code, recOrgSearch.Body.String())
 	}
 
-	recOrgCreate := postJSON("/org/api/org-units", `{"org_code":"ORG2","name":"Org2","effective_date":"2026-01-01"}`, nil)
+	recOrgCreate := postJSON("/org/api/org-units", `{"org_code":"ORG2","name":"Org2","parent_org_code":"ORG1","effective_date":"2026-01-01"}`, nil)
 	if recOrgCreate.Code != http.StatusCreated {
 		t.Fatalf("org units create status=%d", recOrgCreate.Code)
 	}

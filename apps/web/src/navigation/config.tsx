@@ -1,7 +1,11 @@
 import ApartmentIcon from '@mui/icons-material/Apartment'
+import ChecklistIcon from '@mui/icons-material/Checklist'
 import HomeWorkIcon from '@mui/icons-material/HomeWork'
+import ManageAccountsIcon from '@mui/icons-material/ManageAccounts'
 import MenuBookIcon from '@mui/icons-material/MenuBook'
 import PendingActionsIcon from '@mui/icons-material/PendingActions'
+import RouteIcon from '@mui/icons-material/Route'
+import SecurityIcon from '@mui/icons-material/Security'
 import TuneIcon from '@mui/icons-material/Tune'
 import { AUTHZ_CAPABILITY_KEYS } from '../authz/capabilities'
 import type { NavItem, SearchEntry } from '../types/navigation'
@@ -41,6 +45,42 @@ export const navItems: NavItem[] = [
     order: 22,
     requiredCapabilityKey: AUTHZ_CAPABILITY_KEYS.iamDictsAdmin,
     keywords: ['dict', 'dictionary', 'value', '配置', '字典', '编码']
+  },
+  {
+    key: 'authz-roles',
+    path: '/authz/roles',
+    labelKey: 'nav_authz_roles',
+    icon: <SecurityIcon fontSize='small' />,
+    order: 23,
+    requiredCapabilityKey: AUTHZ_CAPABILITY_KEYS.iamAuthzAdmin,
+    keywords: ['authz', 'role', 'permission', '角色', '授权']
+  },
+  {
+    key: 'authz-user-assignments',
+    path: '/authz/user-assignments',
+    labelKey: 'nav_authz_user_assignments',
+    icon: <ManageAccountsIcon fontSize='small' />,
+    order: 24,
+    requiredCapabilityKey: AUTHZ_CAPABILITY_KEYS.iamAuthzAdmin,
+    keywords: ['authz', 'user', 'assignment', '角色', '用户授权']
+  },
+  {
+    key: 'authz-capabilities',
+    path: '/authz/capabilities',
+    labelKey: 'nav_authz_capabilities',
+    icon: <ChecklistIcon fontSize='small' />,
+    order: 25,
+    requiredCapabilityKey: AUTHZ_CAPABILITY_KEYS.iamAuthzRead,
+    keywords: ['authz', 'capability', 'permission', '功能', '授权项', '权限']
+  },
+  {
+    key: 'authz-api-catalog',
+    path: '/authz/api-catalog',
+    labelKey: 'nav_authz_api_catalog',
+    icon: <RouteIcon fontSize='small' />,
+    order: 26,
+    requiredCapabilityKey: AUTHZ_CAPABILITY_KEYS.iamAuthzRead,
+    keywords: ['authz', 'api', 'route', 'catalog', '授权', '接口', '目录']
   },
   {
     key: 'approval-inbox',

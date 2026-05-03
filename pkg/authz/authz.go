@@ -86,6 +86,13 @@ func (a *Authorizer) Authorize(subject string, domain string, object string, act
 	}
 }
 
+func (a *Authorizer) Mode() Mode {
+	if a == nil {
+		return ModeEnforce
+	}
+	return a.mode
+}
+
 func (a *Authorizer) PolicyAllows(subject string, domain string, object string, action string) (bool, error) {
 	return a.enforcer.Enforce(subject, domain, object, action)
 }

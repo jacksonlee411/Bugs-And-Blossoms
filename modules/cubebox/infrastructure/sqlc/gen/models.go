@@ -148,6 +148,49 @@ type IamPrincipal struct {
 	UpdatedAt        pgtype.Timestamptz `json:"updated_at"`
 }
 
+type IamPrincipalAuthzAssignmentRevision struct {
+	TenantUuid  pgtype.UUID        `json:"tenant_uuid"`
+	PrincipalID pgtype.UUID        `json:"principal_id"`
+	Revision    int64              `json:"revision"`
+	CreatedAt   pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
+}
+
+type IamPrincipalOrgScopeBinding struct {
+	TenantUuid         pgtype.UUID        `json:"tenant_uuid"`
+	PrincipalID        pgtype.UUID        `json:"principal_id"`
+	OrgNodeKey         string             `json:"org_node_key"`
+	IncludeDescendants bool               `json:"include_descendants"`
+	CreatedAt          pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt          pgtype.Timestamptz `json:"updated_at"`
+}
+
+type IamPrincipalRoleAssignment struct {
+	TenantUuid  pgtype.UUID        `json:"tenant_uuid"`
+	PrincipalID pgtype.UUID        `json:"principal_id"`
+	RoleSlug    string             `json:"role_slug"`
+	CreatedAt   pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
+}
+
+type IamRoleAuthzCapability struct {
+	RoleID             pgtype.UUID        `json:"role_id"`
+	AuthzCapabilityKey string             `json:"authz_capability_key"`
+	CreatedAt          pgtype.Timestamptz `json:"created_at"`
+}
+
+type IamRoleDefinition struct {
+	ID            pgtype.UUID        `json:"id"`
+	TenantUuid    pgtype.UUID        `json:"tenant_uuid"`
+	RoleSlug      string             `json:"role_slug"`
+	Name          string             `json:"name"`
+	Description   string             `json:"description"`
+	SystemManaged bool               `json:"system_managed"`
+	Revision      int64              `json:"revision"`
+	CreatedAt     pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt     pgtype.Timestamptz `json:"updated_at"`
+}
+
 type IamSession struct {
 	TokenSha256 []byte             `json:"token_sha256"`
 	TenantUuid  pgtype.UUID        `json:"tenant_uuid"`

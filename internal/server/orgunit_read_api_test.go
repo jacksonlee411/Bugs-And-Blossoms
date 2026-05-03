@@ -5,11 +5,58 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"strings"
 	"testing"
 
 	orgunitpkg "github.com/jacksonlee411/Bugs-And-Blossoms/pkg/orgunit"
 )
+
+type orgUnitScopeRuntimeStub struct {
+	scopes     []principalOrgScope
+	err        error
+	scopeCalls int
+}
+
+func (s orgUnitScopeRuntimeStub) AuthorizePrincipal(context.Context, string, string, string, string) (bool, error) {
+	return false, nil
+}
+
+func (s orgUnitScopeRuntimeStub) CapabilitiesForPrincipal(context.Context, string, string) ([]string, error) {
+	return nil, nil
+}
+
+func (s *orgUnitScopeRuntimeStub) OrgScopesForPrincipal(context.Context, string, string, string) ([]principalOrgScope, error) {
+	s.scopeCalls++
+	if s.err != nil {
+		return nil, s.err
+	}
+	return append([]principalOrgScope(nil), s.scopes...), nil
+}
+
+func (s orgUnitScopeRuntimeStub) ListRoleDefinitions(context.Context, string) ([]authzRoleDefinition, error) {
+	return nil, nil
+}
+
+func (s orgUnitScopeRuntimeStub) GetRoleDefinition(context.Context, string, string) (authzRoleDefinition, bool, error) {
+	return authzRoleDefinition{}, false, nil
+}
+
+func (s orgUnitScopeRuntimeStub) CreateRoleDefinition(context.Context, string, saveAuthzRoleDefinitionInput) (authzRoleDefinition, error) {
+	return authzRoleDefinition{}, nil
+}
+
+func (s orgUnitScopeRuntimeStub) UpdateRoleDefinition(context.Context, string, string, saveAuthzRoleDefinitionInput) (authzRoleDefinition, error) {
+	return authzRoleDefinition{}, nil
+}
+
+func (s orgUnitScopeRuntimeStub) GetPrincipalAssignment(context.Context, string, string) (principalAuthzAssignment, bool, error) {
+	return principalAuthzAssignment{}, false, nil
+}
+
+func (s orgUnitScopeRuntimeStub) ReplacePrincipalAssignment(context.Context, string, string, replacePrincipalAssignmentInput) (principalAuthzAssignment, error) {
+	return principalAuthzAssignment{}, nil
+}
 
 func TestHandleOrgUnitsAPI_ListRoots(t *testing.T) {
 	store := &resolveOrgCodeStore{
@@ -615,6 +662,83 @@ func TestListOrgUnitListPage(t *testing.T) {
 		}
 		if _, _, err := listOrgUnitListPage(context.Background(), childErrStore, "t1", orgUnitListPageRequest{AsOf: "2026-01-01", ParentOrgNodeKey: &parentOrgNodeKey}); err == nil {
 			t.Fatalf("expected list children error")
+		}
+	})
+}
+
+func TestListOrgUnitListPage_HydratesFallbackScopePath(t *testing.T) {
+	store := newOrgUnitMemoryStore()
+	ctx := context.Background()
+	root, err := store.CreateNodeCurrent(ctx, "t1", "2026-01-01", "ROOT", "Root", "", false)
+	if err != nil {
+		t.Fatalf("create root err=%v", err)
+	}
+	child, err := store.CreateNodeCurrent(ctx, "t1", "2026-01-01", "CHILD", "Child", root.ID, false)
+	if err != nil {
+		t.Fatalf("create child err=%v", err)
+	}
+	grandchild, err := store.CreateNodeCurrent(ctx, "t1", "2026-01-01", "GRAND", "Grandchild", child.ID, false)
+	if err != nil {
+		t.Fatalf("create grandchild err=%v", err)
+	}
+
+	items, total, err := listOrgUnitListPage(ctx, store, "t1", orgUnitListPageRequest{
+		AsOf:    "2026-01-01",
+		Keyword: "grand",
+	})
+	if err != nil {
+		t.Fatalf("list err=%v", err)
+	}
+	if total != 1 || len(items) != 1 {
+		t.Fatalf("items=%+v total=%d", items, total)
+	}
+	wantPath := []string{root.ID, child.ID, grandchild.ID}
+	if !reflect.DeepEqual(items[0].PathOrgNodeKeys, wantPath) {
+		t.Fatalf("path=%v want=%v", items[0].PathOrgNodeKeys, wantPath)
+	}
+
+	scopeCtx := withPrincipal(ctx, Principal{ID: "principal-a"})
+	filtered, filteredTotal, err := filterOrgUnitListItemsByCurrentScope(scopeCtx, &orgUnitScopeRuntimeStub{
+		scopes: []principalOrgScope{{
+			OrgNodeKey:         child.ID,
+			IncludeDescendants: true,
+		}},
+	}, "t1", items, total)
+	if err != nil {
+		t.Fatalf("filter err=%v", err)
+	}
+	if filteredTotal != 1 || len(filtered) != 1 || filtered[0].OrgNodeKey != grandchild.ID {
+		t.Fatalf("filtered=%+v total=%d", filtered, filteredTotal)
+	}
+}
+
+func TestFilterOrgUnitListItemsByScope_AllowsEmptyCandidateList(t *testing.T) {
+	t.Run("current principal", func(t *testing.T) {
+		runtime := &orgUnitScopeRuntimeStub{err: errAuthzOrgScopeRequired}
+		ctx := withPrincipal(context.Background(), Principal{ID: "principal-a"})
+		filtered, total, err := filterOrgUnitListItemsByCurrentScope(ctx, runtime, "t1", []orgUnitListItem{}, 0)
+		if err != nil {
+			t.Fatalf("filter err=%v", err)
+		}
+		if len(filtered) != 0 || total != 0 {
+			t.Fatalf("filtered=%+v total=%d", filtered, total)
+		}
+		if runtime.scopeCalls != 0 {
+			t.Fatalf("scopeCalls=%d", runtime.scopeCalls)
+		}
+	})
+
+	t.Run("explicit principal", func(t *testing.T) {
+		runtime := &orgUnitScopeRuntimeStub{err: errAuthzOrgScopeRequired}
+		filtered, total, err := filterOrgUnitListItemsByPrincipalScope(context.Background(), runtime, "t1", "principal-a", []orgUnitListItem{}, 0)
+		if err != nil {
+			t.Fatalf("filter err=%v", err)
+		}
+		if len(filtered) != 0 || total != 0 {
+			t.Fatalf("filtered=%+v total=%d", filtered, total)
+		}
+		if runtime.scopeCalls != 0 {
+			t.Fatalf("scopeCalls=%d", runtime.scopeCalls)
 		}
 	})
 }

@@ -152,13 +152,13 @@ func TestHandleOrgUnitWriteAPIs_RequireExplicitEffectiveDate(t *testing.T) {
 		name string
 		url  string
 		body string
-		call func(http.ResponseWriter, *http.Request, orgunitservices.OrgUnitWriteService)
+		call func(http.ResponseWriter, *http.Request, orgunitservices.OrgUnitWriteService, ...orgUnitScopeDeps)
 	}{
 		{
 			name: "create",
 			url:  "/org/api/org-units",
 			body: `{"org_code":"A001","name":"Root"}`,
-			call: func(w http.ResponseWriter, r *http.Request, svc orgunitservices.OrgUnitWriteService) {
+			call: func(w http.ResponseWriter, r *http.Request, svc orgunitservices.OrgUnitWriteService, _ ...orgUnitScopeDeps) {
 				handleOrgUnitsAPI(w, r, newOrgUnitMemoryStore(), svc)
 			},
 		},
@@ -342,7 +342,7 @@ func TestHandleOrgUnitsAppendActionAPIs_RejectExtLabelsSnapshot(t *testing.T) {
 		name string
 		url  string
 		body string
-		call func(http.ResponseWriter, *http.Request, orgunitservices.OrgUnitWriteService)
+		call func(http.ResponseWriter, *http.Request, orgunitservices.OrgUnitWriteService, ...orgUnitScopeDeps)
 	}{
 		{
 			name: "rename",

@@ -28,8 +28,9 @@
 - sqlc：`make sqlc-generate`，然后 `git status --short` 必须为空；命中 DB 触发器时补跑 `make sqlc-verify-schema`
 - Routing：`make check routing`
 - Authz：`make authz-pack && make authz-test && make authz-lint`
+- Principal 多角色 union 反回流：`make check authz-role-union`
 - 新增/调整受保护 API、CubeBox API tool overlay、authz requirement、capability registry、policy、功能授权项候选项、功能授权项页面或 API 授权目录：`make authz-pack && make authz-test && make authz-lint`（覆盖门禁见 `DEV-PLAN-484/485`，功能授权项页面见 `DEV-PLAN-482A`）
-- E2E：`make e2e`
+- E2E：`make e2e`（稳定 smoke）；真实模型 / 外部依赖验收：`make e2e-live`
 - 文档新增/整理：`make check doc`
 
 > 说明：命令入口与门禁结构以 `docs/dev-plans/012-ci-quality-gates.md` 为准；本文件只维护“入口与触发器”，尽量不复制脚本内部实现。
@@ -54,6 +55,7 @@
 | sqlc（schema/queries/config） | `make sqlc-generate` + `git status --short`（命中 DB 触发器再跑 `make sqlc-verify-schema`） | 规范与 stopline 见 `DEV-PLAN-025/025A` |
 | Routing（allowlist/分类/responder） | `make check routing` | 口径见 `DEV-PLAN-017` |
 | Authz（Casbin） | `make authz-pack && make authz-test && make authz-lint` | 口径见 `DEV-PLAN-022` |
+| Principal 多角色 union / 普通 tenant 授权运行时 | `make check authz-role-union` | 阻断单 `role_slug`、`roles[0]`、普通 tenant CSV role grant 或 DB+CSV OR 放行回流；口径见 `DEV-PLAN-489A` |
 | 受保护 API / CubeBox API tool overlay / authz requirement / capability registry / policy / 功能授权项候选项 / 功能授权项页面 / API 授权目录 | `make authz-pack && make authz-test && make authz-lint` | 覆盖门禁见 `DEV-PLAN-484/485`，功能授权项页面见 `DEV-PLAN-482A`；新增受保护 API / CubeBox API tool overlay 必须能追溯到 registry，`assignable=true` 必须有当前 API 覆盖 |
 | E2E（Playwright） | `make e2e` | 门禁结构见 `DEV-PLAN-012`；数据库依赖口径冻结为 Docker / compose，E2E 不得把宿主机 `psql` 等工具作为唯一前置条件 |
 | 新增/调整文档 | `make check doc` | 门禁见“文档收敛与门禁” |
@@ -295,6 +297,7 @@ modules/{module}/
 - DEV-PLAN-489：用户授权组织范围 SoT 与运行时强制实施方案：`docs/dev-plans/489-user-authorization-org-scope-sot-and-runtime-enforcement-plan.md`
 - DEV-PLAN-489A：Principal 多角色 Union 运行时契约修订方案：`docs/dev-plans/489a-principal-multi-role-union-runtime-contract.md`
 - DEV-PLAN-490：CubeBox 统一 API 工具化重构方案：`docs/dev-plans/490-cubebox-api-first-tooling-refactor-plan.md`
+- DEV-PLAN-491：通用可复用 OrgUnit 树选择器与范围感知候选契约方案：`docs/dev-plans/491-reusable-orgunit-tree-selector-and-scope-aware-candidate-contract-plan.md`
 - DEV-PLAN-440：彻底删除 SetID 的全仓收口方案（SetID 根删除唯一 PoR）：`docs/dev-plans/440-complete-setid-removal-plan.md`
 - DEV-PLAN-441：旧策略模块残余清理方案：`docs/dev-plans/441-legacy-strategy-module-residue-cleanup-plan.md`
 - DEV-PLAN-450：直接切除 jobcatalog / staffing / person 三模块方案（保留 orgunit）：`docs/dev-plans/450-direct-removal-of-jobcatalog-staffing-person-modules-plan.md`

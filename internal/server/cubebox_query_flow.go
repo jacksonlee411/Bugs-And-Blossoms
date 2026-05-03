@@ -1826,13 +1826,14 @@ func buildDefaultCubeboxQueryFlow(
 	runtime *cubebox.Runtime,
 	store cubeboxTurnStore,
 	orgStore OrgUnitStore,
+	authzRuntime authzRuntimeStore,
 	producer cubeboxReadPlanProducer,
 	narrator cubeboxQueryNarrator,
 ) (*cubeboxQueryFlow, error) {
 	if runtime == nil || store == nil || orgStore == nil || producer == nil || narrator == nil {
 		return nil, nil
 	}
-	items, err := newCubeBoxOrgUnitRegisteredExecutors(orgStore)
+	items, err := newCubeBoxOrgUnitRegisteredExecutors(orgStore, authzRuntime)
 	if err != nil {
 		return nil, err
 	}

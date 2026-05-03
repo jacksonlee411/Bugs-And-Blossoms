@@ -1,13 +1,13 @@
 # DEV-PLAN-489：用户授权组织范围 SoT 与运行时强制实施方案
 
-**状态**: 规划中（2026-05-01 10:23 CST）
+**状态**: 已实施后端 SoT、运行时强制、用户授权 UI 保存交互，并完成 480A 组合运行时与 A/B E2E 验收（2026-05-02 CST）
 
 ## 0. 适用范围与评审分级
 
 - **评审分级**：`T2`
 - **范围一句话**：冻结 `DEV-PLAN-481` 用户授权页两个页签背后的首批可保存闭环：principal 角色授权、组织范围 SoT、保存 API、运行时读取与 orgunit 服务端强制裁剪；本计划不拥有角色定义主表或角色 authz capability 主表，不直接提交迁移，新增 DB 表实施前必须再次获得用户手工确认。
 - **关联模块/目录**：`modules/iam/**`、`modules/orgunit/**`、`pkg/authz/**`、`internal/server/**`、`apps/web/src/**`、`config/access/**`、`scripts/authz/**`
-- **关联计划/标准**：`AGENTS.md`、`DEV-PLAN-000`、`DEV-PLAN-001`、`DEV-PLAN-012`、`DEV-PLAN-017`、`DEV-PLAN-019`、`DEV-PLAN-022`、`DEV-PLAN-032`、`DEV-PLAN-480`、`DEV-PLAN-481`、`DEV-PLAN-482`、`DEV-PLAN-484`、`DEV-PLAN-485`、`DEV-PLAN-487`、`DEV-PLAN-489A`、`DEV-PLAN-490`
+- **关联计划/标准**：`AGENTS.md`、`DEV-PLAN-000`、`DEV-PLAN-001`、`DEV-PLAN-012`、`DEV-PLAN-017`、`DEV-PLAN-019`、`DEV-PLAN-022`、`DEV-PLAN-032`、`DEV-PLAN-480`、`DEV-PLAN-480A`、`DEV-PLAN-481`、`DEV-PLAN-482`、`DEV-PLAN-484`、`DEV-PLAN-485`、`DEV-PLAN-487`、`DEV-PLAN-489A`、`DEV-PLAN-490`
 - **用户入口/触点**：`授权管理 > 用户授权` 顶部用户选择器、`角色` 页签、`组织范围` 页签、统一 `保存` 按钮、orgunit 普通 API、CubeBox API-first orgunit 查询
 
 ### 0.1 Simple > Easy 三问
@@ -43,11 +43,11 @@
 
 ### 2.1 核心目标
 
-1. [ ] 冻结用户授权组织范围 SoT：principal 角色授权与组织范围绑定归属 IAM 模块，orgunit 只提供组织节点与 subtree 解析能力；角色定义与角色 authz capability 集合继续归 `DEV-PLAN-487`。
-2. [ ] 冻结首批保存 API：用户授权页一次性提交角色行与组织范围行，服务端同事务保存并校验。
-3. [ ] 冻结必填校验：已分配角色集合按 489A union 后，任一 capability 包含 `scope_dimension=organization` 时，组织范围行必须非空。
-4. [ ] 冻结运行时强制：orgunit list/search/tree/detail/audit/write 和 CubeBox API-first orgunit 查询使用同一 scope provider。
-5. [ ] 冻结失败语义：缺失范围保存失败；越界访问 fail-closed；不能用前端隐藏、prompt 或 Casbin 字符串替代服务端裁剪。
+1. [X] 冻结用户授权组织范围 SoT：principal 角色授权与组织范围绑定归属 IAM 模块，orgunit 只提供组织节点与 subtree 解析能力；角色定义与角色 authz capability 集合继续归 `DEV-PLAN-487`。
+2. [X] 冻结首批保存 API：用户授权页一次性提交角色行与组织范围行，服务端同事务保存并校验。
+3. [X] 冻结必填校验：已分配角色集合按 489A union 后，任一 capability 包含 `scope_dimension=organization` 时，组织范围行必须非空。
+4. [X] 冻结运行时强制：orgunit list/search/tree/detail/audit/write 和 CubeBox API-first orgunit 查询使用同一 scope provider。
+5. [X] 冻结失败语义：缺失范围保存失败；越界访问 fail-closed；不能用前端隐藏、prompt 或 Casbin 字符串替代服务端裁剪。
 
 ### 2.2 非目标
 
@@ -73,17 +73,17 @@
 ## 2.4 工具链与门禁
 
 - **命中触发器**：
-  - [ ] Go 代码
-  - [ ] `apps/web/**` / presentation assets / 生成物
-  - [ ] i18n（仅 `en/zh`）
-  - [ ] DB Schema / Migration / Backfill / Correction（后续实施新增表时命中）
-  - [ ] sqlc（后续实施新增 query/config 时命中）
-  - [ ] Routing / allowlist / responder / 相关路由注册/映射
-  - [ ] AuthN / Tenancy / RLS
-  - [ ] Authz（Casbin）
-  - [ ] E2E
+  - [X] Go 代码
+  - [X] `apps/web/**` / presentation assets / 生成物（错误映射与构建资产命中）
+  - [X] i18n（仅 `en/zh`）
+  - [X] DB Schema / Migration / Backfill / Correction
+  - [ ] sqlc（本轮未新增 sqlc query/config）
+  - [X] Routing / allowlist / responder / 相关路由注册/映射
+  - [X] AuthN / Tenancy / RLS
+  - [X] Authz（Casbin/bootstrap policy 与 runtime 分工）
+  - [X] E2E
   - [X] 文档 / readiness / 证据记录（本计划创建命中）
-  - [ ] `request-code`、`error-message`、`ddd-layering-p0/p2`
+  - [X] `request-code`、`error-message`、`ddd-layering-p0/p2`
 
 实际命令入口以 `AGENTS.md`、`Makefile`、CI workflow 为准；执行结果写入 `docs/dev-records/DEV-PLAN-489-READINESS.md` 或实现 PR 说明。
 
@@ -167,6 +167,7 @@ Go DDD 分工：
 | 表 | 归属 | 首批字段要点 | 说明 |
 | --- | --- | --- | --- |
 | `iam.principal_role_assignments` | IAM | `tenant_uuid`、`principal_id`、`role_slug`、审计字段 | 用户角色授权行，首批只支持 principal |
+| `iam.principal_authz_assignment_revisions` | IAM | `tenant_uuid`、`principal_id`、`revision`、审计字段 | 用户授权 replace-all 乐观锁版本；不复制角色或组织范围事实 |
 | `iam.principal_org_scope_bindings` | IAM | `tenant_uuid`、`principal_id`、`org_node_key`、`include_descendants`、审计字段 | 用户组织范围行 |
 
 约束：
@@ -175,16 +176,32 @@ Go DDD 分工：
 2. `principal_role_assignments.role_slug` 必须引用或服务端校验命中 487 的当前有效角色定义；不得在 489 表中复制角色名称、描述或 capability 集合作为事实源。
 3. 是否需要组织范围由 487 角色 authz capability 集合 + 482 registry `scope_dimension` 计算，不在 489 表中保存 `scope_required`。
 4. `org_node_key` 使用 orgunit 现行 node key，不引入 org_level/scope_type/scope_key。
-5. 不保存“全租户”隐式范围。若未来需要全租户显式授权，应另起计划冻结表达方式；首批可通过选择租户根组织并勾选包含下级表达。
-6. `principal_role_assignments` 是 489A 普通 tenant 多角色 union 的角色集合来源；保存与读取必须保留完整集合，不得取第一行或派生 current role。
+5. `principal_authz_assignment_revisions` 只承载该 principal 授权集合的 replace-all 乐观锁版本；角色集合仍以 `principal_role_assignments` 为 SoT，组织范围仍以 `principal_org_scope_bindings` 为 SoT。
+6. 不保存“全租户”隐式范围。若未来需要全租户显式授权，应另起计划冻结表达方式；首批可通过选择租户根组织并勾选包含下级表达。
+7. `principal_role_assignments` 是 489A 普通 tenant 多角色 union 的角色集合来源；保存与读取必须保留完整集合，不得取第一行或派生 current role。
 
 ### 3.5 API 契约
 
 建议首批 endpoint：
 
 ```text
+GET /iam/api/authz/user-assignments
 GET /iam/api/authz/user-assignments?principal_id={uuid}
 PUT /iam/api/authz/user-assignments/{principal_id}
+```
+
+不带 `principal_id` 的 `GET` 用于用户授权页顶部用户选择器，只返回当前 tenant 内 active principal 的轻量候选，不返回 `iam.principals.role_slug`，也不得作为运行时授权来源：
+
+```json
+{
+  "principals": [
+    {
+      "principal_id": "11111111-1111-1111-1111-111111111111",
+      "email": "user-b@example.invalid",
+      "display_name": "王小花"
+    }
+  ]
+}
 ```
 
 `GET` 响应示例：
@@ -203,6 +220,7 @@ PUT /iam/api/authz/user-assignments/{principal_id}
   "org_scopes": [
     {
       "org_node_key": "A2345678",
+      "org_code": "FLOWERS",
       "org_name": "鲜花事业部",
       "include_descendants": true
     }
@@ -219,7 +237,7 @@ PUT /iam/api/authz/user-assignments/{principal_id}
     {"role_slug": "flower-hr"}
   ],
   "org_scopes": [
-    {"org_node_key": "A2345678", "include_descendants": true}
+    {"org_code": "FLOWERS", "include_descendants": true}
   ],
   "revision": 7
 }
@@ -231,8 +249,9 @@ PUT /iam/api/authz/user-assignments/{principal_id}
 2. `principal_id` 必须属于当前 tenant。
 3. 每个 `role_slug` 必须存在且启用；`roles` 为空不得保存为可运行授权。
 4. 保存采用 replace-all 语义：请求中的 `roles` 与 `org_scopes` 是该用户首批授权配置的完整集合。
-5. 如使用 `revision`，冲突返回明确错误；首批也可选择无 revision，但不得局部保存成功。
-6. 组织范围缺失错误返回稳定 code，例如 `authz_org_scope_required`，并在 UI 映射到组织范围页签。
+5. 保存必须校验 `revision`；冲突返回 `stale_revision`，不得局部保存成功。
+6. `org_scopes` 的用户可见输入使用 `org_code`；服务端在当前 tenant 内解析为 `org_node_key` 后写入 IAM SoT。响应可附带 `org_code` 用于 UI 回显，但运行时 SoT 仍是 `org_node_key`。
+7. 组织范围缺失错误返回稳定 code，例如 `authz_org_scope_required`，并在 UI 映射到组织范围页签。
 
 ### 3.6 运行时 Scope Provider
 
@@ -277,7 +296,7 @@ type PrincipalScopeProvider interface {
 
 481 的用户授权 UI 不变，489 只补保存和错误消费契约：
 
-1. 顶部用户选择器切换后加载服务端 `GET` 结果。
+1. 顶部用户选择器先通过不带 `principal_id` 的 `GET` 加载服务端 principal 候选，再在切换后通过带 `principal_id` 的 `GET` 加载该用户授权事实。
 2. `角色` 页签只维护角色行；角色说明来自服务端角色摘要或 role options API，不从 capability 常量拼装。
 3. `组织范围` 页签只维护组织行；组织选择器复用 orgunit 服务端读路径。
 4. `保存` 调用统一 `PUT`，覆盖两个页签。
@@ -302,58 +321,58 @@ type PrincipalScopeProvider interface {
 
 ### 6.1 P0：契约冻结
 
-1. [ ] 489 文档加入 AGENTS Doc Map。
-2. [ ] 480/481 引用 489，明确数据范围 SoT、保存模型、运行时强制由 489 承接。
-3. [ ] 确认首批只支持 principal/user，不扩 team/position/effective_date/字段策略。
-4. [ ] 实施前获得用户对新增 IAM 授权表的手工确认。
+1. [X] 489 文档加入 AGENTS Doc Map。
+2. [X] 480/481 引用 489，明确数据范围 SoT、保存模型、运行时强制由 489 承接。
+3. [X] 确认首批只支持 principal/user，不扩 team/position/effective_date/字段策略。
+4. [X] 实施前获得用户对新增 IAM 授权表的手工确认。
 
 ### 6.2 P1：Registry 与管理 capability
 
-1. [ ] 按 482/484 登记并覆盖 `iam.authz:read` 与 `iam.authz:admin` 或更明确管理 capability。
-2. [ ] 用户授权读取 API 使用 read capability，保存 API 使用 admin capability。
-3. [ ] route requirement、policy、registry 与 API catalog 全部可追溯。
+1. [X] 按 482/484 登记并覆盖 `iam.authz:read` 与 `iam.authz:admin` 或更明确管理 capability。
+2. [X] 用户授权读取 API 使用 read capability，保存 API 使用 admin capability。
+3. [X] route requirement、policy、registry 与 API catalog 全部可追溯。
 
 ### 6.3 P2：IAM SoT 与服务
 
-1. [ ] 新增 IAM 用户授权 SoT schema、RLS、迁移、sqlc query；不新增角色定义主表或角色 authz capability 主表。
-2. [ ] 通过 487 服务读取角色定义摘要，实现用户授权读取、replace-all 保存；保存后的角色集合必须满足 489A 多角色 union 输入契约。
-3. [ ] 服务端校验角色启用状态、角色 authz capability 是否仍有效、组织范围必填、组织节点归属 tenant。
-4. [ ] 保存失败不得产生部分写入。
+1. [X] 新增 IAM 用户授权 SoT schema、RLS、迁移；不新增角色定义主表或角色 authz capability 主表。本轮未命中 sqlc。
+2. [X] 通过 487 runtime store 读取角色定义摘要，实现用户授权读取、replace-all 保存；保存后的角色集合满足 489A 多角色 union 输入契约。
+3. [X] 服务端校验角色存在、角色 authz capability 是否需要组织范围、组织范围必填、组织节点归属 tenant。
+4. [X] 保存失败不得产生部分写入。
 
 ### 6.4 P3：Scope Provider 与 OrgUnit 强制裁剪
 
-1. [ ] 实现 principal scope provider。
-2. [ ] orgunit list/search/tree/detail/audit/write 统一注入 scope filter。
-3. [ ] 缺少组织范围或越界目标 fail-closed。
-4. [ ] CubeBox API-first orgunit 调用复用同一路径。
+1. [X] 实现 principal scope provider。
+2. [X] orgunit list/search/tree/detail/audit/write 统一注入 scope filter。
+3. [X] 缺少组织范围或越界目标 fail-closed。
+4. [X] CubeBox API-first orgunit 调用复用同一路径。
 
 ### 6.5 P4：用户授权 UI 保存闭环
 
-1. [ ] 用户选择器加载服务端授权事实。
-2. [ ] 两个页签共享统一 dirty state 和保存按钮。
-3. [ ] 服务端组织范围必填错误映射到组织范围页签。
-4. [ ] 保存成功后重新读取服务端事实。
+1. [X] 用户选择器加载服务端授权事实。
+2. [X] 两个页签共享统一 dirty state 和保存按钮。
+3. [X] 服务端组织范围必填错误映射到组织范围页签。
+4. [X] 保存成功后重新读取服务端事实。
 
 ### 6.6 P5：测试、门禁与证据
 
-1. [ ] 补 IAM service / handler / PG 集成测试。
-2. [ ] 补 orgunit scope 裁剪测试。
-3. [ ] 补 UI 交互测试。
-4. [ ] 补 E2E：A 全集团，B 仅鲜花事业部；普通 API 与 CubeBox 查询一致。
-5. [ ] 补闭环测试或 E2E 证据：角色能力来自 487 DB SoT，principal 角色集合来自 489 `principal_role_assignments`，能力判断按 489A union，组织范围来自 489 scope provider，普通 API 与 CubeBox API-first 不回读 CSV、`iam.principals.role_slug` 或 `roles[0]`。
-6. [ ] 更新 `docs/dev-records/DEV-PLAN-489-READINESS.md` 记录命中命令和结果。
+1. [X] 补 IAM handler/runtime store 测试。
+2. [X] 补 orgunit scope 裁剪测试。
+3. [X] 补 UI 保存交互测试。
+4. [X] 补 E2E：A 全集团，B 仅鲜花事业部；普通 API 与 CubeBox 查询一致。
+5. [X] 补闭环测试证据：角色能力来自 487 DB SoT，principal 角色集合来自 489 `principal_role_assignments`，能力判断按 489A union，组织范围来自 489 scope provider，普通 API 与 CubeBox API-first 不回读 CSV、`iam.principals.role_slug` 或 `roles[0]`。
+6. [ ] 更新 `docs/dev-records/DEV-PLAN-489-READINESS.md` 记录命中命令和结果；本轮证据先记录于本计划验证段与最终说明。
 
 ## 7. 验收标准
 
-1. [ ] 用户授权页保存不是前端本地状态；刷新后仍能从服务端读取角色行与组织范围行。
-2. [ ] 包含 `scope_dimension=organization` capability 的角色授权缺少组织范围时保存失败，不默认全租户。
-3. [ ] 用户 B 只配置“鲜花事业部及下级”后，orgunit list/search/tree 只返回该范围内组织。
-4. [ ] 用户 B 访问范围外 detail/audit/write 时 fail-closed。
-5. [ ] CubeBox API-first orgunit 查询与普通 HTTP API 使用同一权限和组织范围结果。
-6. [ ] 角色定义页不出现组织范围、`scope_required`、字段策略、有效期或策略预览。
-7. [ ] policy CSV、route requirement、capability registry 和 API catalog 能追溯到 `iam.authz:read/admin` 或更明确管理能力。
-8. [ ] 若 489 作为 480 系列运行时授权交付的一部分验收，必须同时满足 480A 中 487/489/489A 闭环口径；不得仅凭用户授权保存 API 或 scope provider 单点完成宣称运行时授权完成。
-9. [ ] 命中的 Go/Authz/Routing/DB/sqlc/UI/E2E/doc 门禁通过，证据写入 readiness 记录或 PR 说明。
+1. [X] 用户授权页保存不是前端本地状态；刷新后仍能从服务端读取角色行与组织范围行。
+2. [X] 包含 `scope_dimension=organization` capability 的角色授权缺少组织范围时保存失败，不默认全租户。
+3. [X] 用户 B 只配置“鲜花事业部及下级”后，orgunit list/search/tree 只返回该范围内组织（服务端测试与 E2E 覆盖）。
+4. [X] 用户 B 访问范围外 detail/audit/write 时 fail-closed（服务端测试与 E2E 覆盖）。
+5. [X] CubeBox orgunit 查询与普通 HTTP API 使用同一权限和组织范围结果（服务端测试与 E2E 覆盖；490 API-first hard cutover 仍待后续）。
+6. [X] 角色定义页不出现组织范围、`scope_required`、字段策略、有效期或策略预览。
+7. [X] policy CSV、route requirement、capability registry 和 API catalog 能追溯到 `iam.authz:read/admin` 或更明确管理能力。
+8. [X] 489 作为 480 系列后端运行时授权交付的一部分，已与 487/489A 以及 481 UI 保存交互同步满足 480A 的首批用户可见闭环口径；不得仅凭用户授权保存 API 或 scope provider 单点宣称完成。
+9. [X] 命中的 Go/Authz/Routing/DB/UI/doc/E2E 门禁通过；sqlc 未命中。
 
 ## 8. 风险与停止线
 
@@ -382,3 +401,10 @@ type PrincipalScopeProvider interface {
 - Go 命中时：`go fmt ./... && go vet ./... && make check lint && make test`
 - UI 命中时：`make generate && make css` 与 `git status --short`
 - E2E 命中时：A/B 用户组织范围与 CubeBox API-first 一致性结果
+
+### 9.1 本轮验证记录
+
+- 2026-05-02 CST：后端 SoT 与运行时强制已实施。新增 `iam.principal_role_assignments`、`iam.principal_org_scope_bindings`，用户授权读取/保存 API，principal scope provider，orgunit HTTP 与 CubeBox orgunit executor 范围裁剪；普通 tenant runtime 不再从 CSV、`iam.principals.role_slug`、`roles[0]` 推导授权。
+- 已验证：`go test ./...`、`go vet ./...`、`make check lint`、`make authz-pack && make authz-test && make authz-lint`、`make check routing`、`make check error-message`、`make iam plan && make iam lint`、`pnpm -C apps/web typecheck && pnpm -C apps/web test`、`make generate && make css`、`make check root-surface && make check no-legacy && make check doc`、`make check chat-surface-clean && make check no-scope-package && make check granularity && make check request-code`。
+- 2026-05-02 CST：随 487/489A 完成 480A 后端运行时组合验收，并新增 `make check authz-role-union` 专用反回流门禁；补充验证通过 `go test ./internal/server ./internal/routing ./pkg/authz`、`make test`、`make check authz-role-union`。
+- 2026-05-02 CST：用户授权 UI 保存交互已接入 489 API；组织范围缺失错误映射到组织范围页签。新增 `e2e/tests/dev481-authz-org-scope-runtime.spec.js`，覆盖 A 用户全范围、B 用户仅鲜花事业部及下级、普通 orgunit API 裁剪、范围外 detail fail-closed、CubeBox orgunit 查询与普通 API 一致。稳定门禁继续通过 `make preflight` / `make e2e`；真实模型验收改为显式 `make e2e-live`。

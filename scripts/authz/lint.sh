@@ -15,22 +15,6 @@ if [[ ! -s "$policy" ]]; then
   exit 1
 fi
 
-bad=0
-while IFS= read -r line; do
-  [[ -z "$line" ]] && continue
-  case "$line" in
-    p,*) ;;
-    g,*) ;;
-    *)
-      echo "[authz-lint] invalid line (must start with p, or g,): $line" >&2
-      bad=1
-      ;;
-  esac
-done <"$policy"
-
-if [[ "$bad" -ne 0 ]]; then
-  exit 1
-fi
+go run ./cmd/authz-lint
 
 echo "[authz-lint] OK"
-

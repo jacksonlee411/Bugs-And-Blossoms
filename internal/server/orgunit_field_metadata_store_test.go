@@ -119,6 +119,13 @@ func assignScanValue(dest any, value any) error {
 		}
 		*d = append([]byte(nil), value.([]byte)...)
 		return nil
+	case *[]string:
+		if value == nil {
+			*d = nil
+			return nil
+		}
+		*d = append([]string(nil), value.([]string)...)
+		return nil
 	case **string:
 		if value == nil {
 			*d = nil

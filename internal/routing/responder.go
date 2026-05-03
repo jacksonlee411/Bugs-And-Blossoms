@@ -122,6 +122,38 @@ func knownErrorMessage(code string) string {
 		return "登录已失效，请重新登录。"
 	case "invalid_request":
 		return "请求参数无效，请检查后重试。"
+	case "diagnostic_parameter_not_supported":
+		return "当前接口不支持诊断参数，请使用授权项诊断入口。"
+	case "invalid_authz_capability_key":
+		return "授权项标识格式无效。"
+	case "unknown_authz_capability_key":
+		return "授权项标识未登记。"
+	case "authz_capability_key_not_supported":
+		return "该授权项标识不支持用于租户 API 目录查询。"
+	case "authz_catalog_error":
+		return "授权目录暂不可用，请稍后重试。"
+	case "invalid_role_payload":
+		return "角色定义请求无效，请检查后重试。"
+	case "invalid_role_definition":
+		return "角色定义不合法，请检查授权项和名称。"
+	case "role_not_found":
+		return "角色不存在，请刷新后重试。"
+	case "role_slug_conflict":
+		return "角色标识已存在，请使用其他标识。"
+	case "stale_revision":
+		return "数据版本已变化，请刷新后重试。"
+	case "system_role_readonly":
+		return "系统内置角色不可修改。"
+	case "invalid_user_assignment":
+		return "用户授权设置无效，请检查角色和组织范围。"
+	case "authz_org_scope_required":
+		return "该角色需要选择组织范围。"
+	case "authz_scope_forbidden":
+		return "当前组织不在你的授权范围内。"
+	case "authz_runtime_unavailable":
+		return "授权运行时暂不可用，请稍后重试。"
+	case "principal_assignment_error":
+		return "用户授权初始化失败，请稍后重试。"
 	case "tenant_not_found":
 		return "未找到租户，请检查访问域名。"
 	case "tenant_missing":

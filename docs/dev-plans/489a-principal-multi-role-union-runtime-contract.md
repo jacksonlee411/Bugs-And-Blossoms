@@ -1,13 +1,13 @@
 # DEV-PLAN-489A：Principal 多角色 Union 运行时契约修订方案
 
-**状态**: 规划中（2026-05-01 15:21 CST）
+**状态**: 已实施运行时门面、DB union cutover 与专用反回流门禁，并完成 480A 组合运行时与 A/B E2E 验收（2026-05-02 CST）
 
 ## 0. 适用范围与评审分级
 
 - **评审分级**：`T2`
 - **范围一句话**：正式将 480 系列普通 tenant 授权从“每个 session 单 `role_slug`”升级为“principal 角色集合 union”，冻结 session subject set、审计字段、scope 合并规则与反回流门禁；本计划不拥有角色定义主表、角色 capability 主表或用户授权表的新增迁移。
 - **关联模块/目录**：`modules/iam/**`、`modules/orgunit/**`、`pkg/authz/**`、`internal/server/**`、`apps/web/src/**`、`config/access/**`、`scripts/authz/**`
-- **关联计划/标准**：`AGENTS.md`、`DEV-PLAN-000`、`DEV-PLAN-012`、`DEV-PLAN-017`、`DEV-PLAN-019`、`DEV-PLAN-022`、`DEV-PLAN-480`、`DEV-PLAN-481`、`DEV-PLAN-482`、`DEV-PLAN-484`、`DEV-PLAN-487`、`DEV-PLAN-489`、`DEV-PLAN-490`
+- **关联计划/标准**：`AGENTS.md`、`DEV-PLAN-000`、`DEV-PLAN-012`、`DEV-PLAN-017`、`DEV-PLAN-019`、`DEV-PLAN-022`、`DEV-PLAN-480`、`DEV-PLAN-480A`、`DEV-PLAN-481`、`DEV-PLAN-482`、`DEV-PLAN-484`、`DEV-PLAN-487`、`DEV-PLAN-489`、`DEV-PLAN-490`
 
 ### 0.1 Simple > Easy 三问
 
@@ -134,23 +134,23 @@ OrgScopesForPrincipal(principal, capability)
 
 ### 4.2 P1：运行时门面
 
-1. [ ] 定义统一 Authz/Scope provider 输入：`tenant_id`、`principal_id`、`assigned_role_slugs[]`、`object`、`action`、`effective_date`。
-2. [ ] handler 与业务模块不得接收单个 `role_slug` 作为普通 tenant 授权参数。
-3. [ ] CubeBox API-first runner 复用同一授权门面，不实现独立角色 union。
+1. [X] 定义统一 Authz/Scope provider 输入：`tenant_id`、`principal_id`、`assigned_role_slugs[]`、`object`、`action`、`effective_date`。
+2. [X] handler 与业务模块不得接收单个 `role_slug` 作为普通 tenant 授权参数。
+3. [X] CubeBox API-first runner 复用同一授权门面，不实现独立角色 union。
 
 ### 4.3 P2：IAM SoT 与迁移
 
-1. [ ] 由 `DEV-PLAN-489` 实施 `principal_role_assignments` 与 `principal_org_scope_bindings`；新增表前必须再次获得用户手工确认。
-2. [ ] 由 `DEV-PLAN-487` 提供角色定义摘要与 role capability 读取接口，489A 不直接读取 `role_authz_capabilities`。
-3. [ ] 制定 `iam.principals.role_slug` 到 `principal_role_assignments` 的一次性 seed/backfill 策略；cutover 后普通 tenant 授权不再回读单字段。
+1. [X] 由 `DEV-PLAN-489` 实施 `principal_role_assignments` 与 `principal_org_scope_bindings`；新增表前已获得用户手工确认。
+2. [X] 由 `DEV-PLAN-487` 提供角色定义摘要与 role capability 读取接口，489A 不直接读取 `role_authz_capabilities`。
+3. [X] 制定并实施 `iam.principals.role_slug` 到 `principal_role_assignments` 的一次性 seed/backfill 策略；cutover 后普通 tenant 授权不再回读单字段。
 
 ### 4.4 P3：测试与门禁
 
-1. [ ] 补授权门面测试：多角色任一命中允许、全不命中拒绝、空角色集合拒绝、禁用角色拒绝。
-2. [ ] 补 scope provider 测试：多组织范围 union、缺失组织范围 fail-closed、无隐式全租户。
-3. [ ] 补反回流门禁测试：`role_slug` 单字段、`roles[0]`、DB+CSV OR、前端/prompt 范围推导均被阻断。
-4. [ ] 补运行时闭环证据：角色能力来自 487 DB SoT，principal 角色集合来自 489 `principal_role_assignments`，组织范围来自 489 scope provider，普通 API 与 CubeBox API-first 不回读 CSV、`iam.principals.role_slug` 或 `roles[0]`。
-5. [ ] 更新 readiness 记录，登记 `make check authz-role-union`、`make authz-pack && make authz-test && make authz-lint`、相关 Go/UI 测试结果。
+1. [X] 补授权门面测试：多角色任一命中允许、全不命中拒绝、空角色集合拒绝。
+2. [X] 补 scope provider 测试：多组织范围 union、缺失组织范围 fail-closed、无隐式全租户。
+3. [X] 补专用反回流门禁测试：`make check authz-role-union` 已阻断普通 tenant 单 `role_slug`/`roles[0]` 回流、DB+CSV OR 放行、普通 tenant CSV role grant 与当前角色字段回流。
+4. [X] 补运行时闭环证据：角色能力来自 487 DB SoT，principal 角色集合来自 489 `principal_role_assignments`，组织范围来自 489 scope provider，普通 API 与 CubeBox API-first 不回读 CSV、`iam.principals.role_slug` 或 `roles[0]`。
+5. [X] 更新计划验证记录，登记专用反回流门禁、`make authz-pack && make authz-test && make authz-lint`、相关 Go/UI/E2E 测试结果；readiness 独立记录如后续需要再补。
 
 ## 5. ADR 摘要
 
@@ -172,9 +172,17 @@ OrgScopesForPrincipal(principal, capability)
 
 ## 6. 验收标准
 
-1. [ ] 019/022 不再被解读为阻止 480 系列多角色 union；单角色口径仅作为历史 baseline 或非 480 surface 说明。
-2. [ ] 480/487/489 明确引用 489A，且不存在“当前 session 有效角色 = 单 `role_slug`”作为普通 tenant EHR 运行时授权 SSOT 的表述。
-3. [ ] 489 的 `roles: []`、`principal_role_assignments`、`CapabilitiesForPrincipal` 与 489A 的 union 语义一致。
-4. [ ] 实施前没有新增 DB 表；实施新增表时按 AGENTS 要求再次获得用户手工确认。
-5. [ ] 489A 若作为 480 系列运行时授权交付的一部分验收，必须同时满足 480A 中 487/489/489A 闭环口径；不得仅凭授权门面或反回流门禁单点完成宣称运行时授权完成。
-6. [ ] `make check doc` 通过。
+1. [X] 019/022 不再被解读为阻止 480 系列多角色 union；单角色口径仅作为历史 baseline 或非 480 surface 说明。
+2. [X] 480/487/489 明确引用 489A，且不存在“当前 session 有效角色 = 单 `role_slug`”作为普通 tenant EHR 运行时授权 SSOT 的表述。
+3. [X] 489 的 `roles: []`、`principal_role_assignments`、`CapabilitiesForPrincipal` 与 489A 的 union 语义一致。
+4. [X] 实施新增表前已按 AGENTS 要求获得用户手工确认。
+5. [X] 489A 作为 480 系列运行时授权交付的一部分，已与 487/489 以及 481 UI 保存交互同步满足 480A 的首批用户可见闭环口径；不得仅凭授权门面或反回流门禁单点宣称完成。
+6. [X] `make check doc` 通过。
+
+## 7. 本轮验证记录
+
+- 2026-05-02 CST：已实施普通 tenant runtime 多角色 union 门面。`withAuthz`、session capabilities、CubeBox orgunit executor 和 orgunit scope provider 均以 `tenant_id + principal_id` 回源 DB runtime store；不再使用 `RoleSlug`/`roles[0]`/CSV 普通 tenant grant 做运行时 allow。
+- 2026-05-02 CST：已新增并接线专用 `make check authz-role-union` 反回流门禁，纳入 `make preflight` 与 CI Gate-1，阻断单角色/当前角色/CSV role grant 回流。
+- 已验证：`go test ./...`、`go vet ./...`、`make check lint`、`make authz-pack && make authz-test && make authz-lint`、`make check routing`、`make check error-message`、`make check doc`、`make check authz-role-union`。
+- 补充复核：`go test ./internal/server ./internal/routing ./pkg/authz`、`make test`、`make check no-legacy && make check chat-surface-clean && make check no-scope-package && make check granularity && make check request-code`、`make check root-surface`。
+- 2026-05-02 CST：A/B 组织范围 E2E 随 481/489 闭环补齐，覆盖普通 API 裁剪、范围外 detail fail-closed、CubeBox orgunit 查询与普通 API 一致；完整 `make preflight` 通过。

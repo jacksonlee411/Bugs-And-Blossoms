@@ -1,29 +1,29 @@
 # DEV-PLAN-482：EHR Authz Capability Registry 与角色授权项候选项方案
 
-**状态**: 规划中（2026-05-01 10:31 CST）
+**状态**: P0/P1/P2/P4 registry、options API 与覆盖门禁基础已落地；482A/485 下游只读消费已完成，481/487 消费仍待实施（2026-05-01 23:10 CST）
 
 ## 1. 背景
 
-`DEV-PLAN-480` 已冻结 EHR 授权体系蓝图，`DEV-PLAN-481` 已冻结角色定义与用户授权的极简交互边界。二者都依赖一个前提：角色定义页面能从统一事实源拿到“所有可配置 authz capability”，并能由服务端校验提交的 authz capability key。
+`DEV-PLAN-480` 已冻结 EHR 授权体系蓝图，`DEV-PLAN-481` 已冻结角色定义与用户授权的极简交互边界。`DEV-PLAN-480A` 仅作为 480 系列实施顺序、前置依赖与停止线入口引用，不复制 482 的 registry/options 详细契约。二者都依赖一个前提：角色定义页面能从统一事实源拿到“所有可配置 authz capability”，并能由服务端校验提交的 authz capability key。
 
-当前仓库还没有这个专门事实源：
+P1 已在当前仓库落地这个专门事实源，形成以下基线：
 
-- `pkg/authz/registry.go` 只有 role、object、action 常量，缺少结构化 authz capability 元数据。
-- `config/access/policies/**` 只能表达“某角色已经被授予什么”，不能反推出“所有可选能力”。
-- 历史 `apps/web` 的 `permissionKey` 来自构建期/本地配置，不能作为授权事实源或角色能力候选源。
+- `pkg/authz/registry.go` 已承载结构化 authz capability registry、key 解析/构造/lookup/list/options 校验基础。
+- `config/access/policies/**` 仍只表达“某角色已经被授予什么”，不能反推出“所有可选能力”。
+- 历史 `apps/web` 的 `permissionKey` 与构建期权限 fallback 已按 `DEV-PLAN-483` 硬删除，不能作为授权事实源或角色能力候选源。
 - 历史业务策略 `Capability Registry` / 裸 `capability_key` 下拉方案已归档，且绑定 SetID / scope/package / 字段策略等业务策略语义，不得作为当前实现前提。
 
 因此需要一个独立方案承接：全量 authz capability registry、候选项 options API 与 authz capability key 校验规则。482 不拥有角色定义页面本身；角色基础信息、保存按钮和角色编辑工作流继续归属 `DEV-PLAN-481`，角色定义在线保存 API、持久化模型、服务端校验和运行时生效由 `DEV-PLAN-487` 承接。普通 `功能授权项` 主页面与 `关联 API` 反向弹窗由 `DEV-PLAN-482A` 承接。历史前端 `permissionKey`、旧 key 的硬删除要求由 `DEV-PLAN-483` 承接；新增受保护 API 与 CubeBox API tool overlay 必然进入功能授权项、policy-only 权限与覆盖证据门禁由 `DEV-PLAN-484` 承接；不可分配、停用、无覆盖和内部 surface 的只读诊断视图由 `DEV-PLAN-488` 承接。482 不提供兼容映射。
 
 ## 2. 目标
 
-1. [ ] 冻结授权项标识 / authz capability key 格式：统一为 `object:action`，例如 `orgunit.orgunits:read`；不得新增 `orgunit.view` 这类 `module.verb` 兼容别名。
-2. [ ] 冻结 `Authz Capability Registry` 的最小元数据，使 UI 能展示资源、动作、中文/英文标签、范围维度、启停状态。
-3. [ ] 定义服务端 options API，使 `DEV-PLAN-481` 的角色定义页可从该 API 获取全部启用、可分配且有当前 tenant API 覆盖的 authz capability。
-4. [ ] 定义 authz capability key 校验契约：角色保存提交的 key 必须存在于 registry 且处于可分配状态。
-5. [ ] 定义 registry 校验基础，供 `DEV-PLAN-484` 校验 policy、route authz、CubeBox API tool overlay、role definition 与 registry 不得漂移。
-6. [ ] 对齐 `DEV-PLAN-483/484`：registry 与 options API 只输出 canonical `object:action`，不输出旧 `permissionKey` 或别名，且不输出无当前实现覆盖的 assignable authz capability。
-7. [ ] 对齐 `DEV-PLAN-488`：普通 options API 默认口径不得为了诊断场景扩大；诊断全集只能进入后置授权项诊断视图，不能成为角色定义候选源，也不能作为 482A/485 首批闭环前置。
+1. [X] 冻结授权项标识 / authz capability key 格式：统一为 `object:action`，例如 `orgunit.orgunits:read`；不得新增 `orgunit.view` 这类 `module.verb` 兼容别名。
+2. [X] 冻结 `Authz Capability Registry` 的最小元数据，使 UI 能展示资源、动作、中文/英文标签、范围维度、启停状态。
+3. [X] 定义服务端 options API，使 `DEV-PLAN-481` 的角色定义页可从该 API 获取全部启用、可分配且有当前 tenant API 覆盖的 authz capability。
+4. [X] 定义 authz capability key 校验契约：角色保存提交的 key 必须存在于 registry 且处于可分配状态。
+5. [X] 定义 registry 校验基础，供 `DEV-PLAN-484` 校验 policy、route authz、CubeBox API tool overlay、role definition 与 registry 不得漂移。
+6. [X] 对齐 `DEV-PLAN-483/484`：registry 与 options API 只输出 canonical `object:action`，不输出旧 `permissionKey` 或别名，且不输出无当前实现覆盖的 assignable authz capability。
+7. [X] 对齐 `DEV-PLAN-488`：普通 options API 默认口径不得为了诊断场景扩大；诊断全集只能进入后置授权项诊断视图，不能成为角色定义候选源，也不能作为 482A/485 首批闭环前置。
 
 ## 3. 非目标
 
@@ -73,7 +73,7 @@
 
 1. `authz_capability_key` 是授权项标识，不是 API 地址。
 2. 一个 `authz_capability_key` 可以覆盖多个 HTTP API route；CubeBox API tool overlay 只能引用这些既有 HTTP API，不新增第二套业务工具 key。
-3. 482 的 options API 默认返回 authz capability 元数据；普通 `功能授权项` 主页面与点击授权项标识后打开的“关联 API”弹窗由 `DEV-PLAN-482A` 承接。弹窗应通过 `DEV-PLAN-484` 的单一覆盖事实聚合能力读取 API method/path；全量 HTTP API 正向查看面由 `DEV-PLAN-485` 的 `API 授权目录` facade 承接；不得把 route path 放进 `authz_capability_key` 字段。
+3. 482 的 options API 默认返回 authz capability 元数据；普通 `功能授权项` 主页面与点击授权项标识后打开的“关联 API”弹窗由 `DEV-PLAN-482A` 承接。弹窗应通过 `DEV-PLAN-484` 的单一覆盖事实聚合能力读取 API method/path；当前覆盖 API 正向查看面由 `DEV-PLAN-485` 的 `API 授权目录` facade 承接；不得把 route path 放进 `authz_capability_key` 字段。
 
 派生规则：
 
@@ -98,8 +98,8 @@
 | `q` | 可选，按 authz capability key、资源标签、动作标签搜索 |
 | `owner_module` | 可选，按模块过滤 |
 | `scope_dimension` | 可选，按范围维度过滤 |
-| `include_disabled` | 默认 `false`；仅授权项诊断场景允许开启，角色定义页不得使用 |
-| `include_uncovered` | 默认 `false`；仅授权项诊断场景允许返回无当前 tenant API 覆盖的 assignable authz capability，角色定义页不得使用 |
+
+普通 options endpoint 不接受 `include_disabled`、`include_uncovered` 或同义诊断参数；收到此类参数必须返回 400。诊断全集只能由 `DEV-PLAN-488` 的专用诊断 endpoint 或同等受控服务端入口承接。
 
 响应示例：
 
@@ -130,7 +130,9 @@
 
 该 endpoint 本身必须受授权保护。首期使用 `iam.authz:read`；角色保存和 registry 诊断类写操作如后续出现，应使用 `iam.authz:admin` 或更明确的 object/action。实现前必须先在 registry 中登记 `iam.authz` object/action，并由 `DEV-PLAN-484` 覆盖门禁验证 route requirement、policy 与 registry 一致。
 
-诊断用途不得改变默认候选口径。若实现阶段保留 `include_disabled/include_uncovered` 参数，它们只能被 `DEV-PLAN-488` 的授权项诊断视图或同等受控服务端调用使用；角色定义页、普通功能授权项页面和角色保存校验必须继续使用默认过滤后的候选集合。
+诊断用途不得改变默认候选口径。首期 `GET /iam/api/authz/capabilities` 已选择拒绝 `include_disabled/include_uncovered`，而不是在同一 route 上保留诊断开关；角色定义页、普通功能授权项页面和角色保存校验必须继续使用默认过滤后的候选集合。
+
+首期 bootstrap policy 仅将 `iam.authz:read` 授予 `tenant-admin`；`tenant-viewer` 不默认拥有功能授权项候选列表读取权限。如后续产品语义需要只读授权管理员，应通过 487/489A 的角色能力 SoT 显式建模，不在 bootstrap 只读业务角色中隐式放开。
 
 ## 6. 候选项消费契约
 
@@ -172,27 +174,27 @@
 
 ### 8.1 P0：契约冻结
 
-1. [ ] 482 文档作为 authz capability registry 与角色候选项 SSOT 被 AGENTS Doc Map 收录。
-2. [ ] 480/481 引用 482，明确角色定义页候选源不是 policy CSV，也不是历史前端 `permissionKey`。
-3. [ ] 482 引用 484，明确覆盖门禁与空壳 authz capability 阻断不由 482 重复承接。
-4. [ ] 482 引用 488，明确诊断全集不属于普通 options API 默认候选口径，且 488 后置于 484 覆盖事实与 482A/485 首批闭环。
-5. [ ] 明确首期不建 DB 表、不做在线 registry 管理。
+1. [X] 482 文档作为 authz capability registry 与角色候选项 SSOT 被 AGENTS Doc Map 收录。
+2. [X] 480/481 引用 482，明确角色定义页候选源不是 policy CSV，也不是历史前端 `permissionKey`。
+3. [X] 482 引用 484，明确覆盖门禁与空壳 authz capability 阻断不由 482 重复承接。
+4. [X] 482 引用 488，明确诊断全集不属于普通 options API 默认候选口径，且 488 后置于 484 覆盖事实与 482A/485 首批闭环。
+5. [X] 明确首期不建 DB 表、不做在线 registry 管理。
 
 ### 8.2 P1：Registry 与校验
 
-1. [ ] 在 `pkg/authz` 增加结构化 authz capability registry。
-2. [ ] 增加 `ParseAuthzCapabilityKey`、`AuthzCapabilityKey(object, action)`、`LookupAuthzCapability`、`ListAuthzCapabilities` 等纯函数。
-3. [ ] 首批 registry seed 至少包含当前受保护 tenant API 与 `iam.authz:read`；`iam.authz:admin` 仅在首批出现在线写入时登记。
-4. [ ] 增加角色 authz capability 校验函数，覆盖未知 key、禁用 key、无覆盖 key、非 tenant surface key、重复 key、旧格式 key。
-5. [ ] 补 `pkg/authz` 黑盒表驱动测试。
+1. [X] 在 `pkg/authz` 增加结构化 authz capability registry。
+2. [X] 增加 `ParseAuthzCapabilityKey`、`AuthzCapabilityKey(object, action)`、`LookupAuthzCapability`、`ListAuthzCapabilities` 等纯函数。
+3. [X] 首批 registry seed 至少包含当前受保护 tenant API 与 `iam.authz:read`；`iam.authz:admin` 仅在首批出现在线写入时登记。
+4. [X] 增加角色 authz capability 校验函数，覆盖未知 key、禁用 key、无覆盖 key、非 tenant surface key、重复 key、旧格式 key。
+5. [X] 补 `pkg/authz` 黑盒表驱动测试。
 
 ### 8.3 P2：Options API
 
-1. [ ] 新增 `GET /iam/api/authz/capabilities`。
-2. [ ] endpoint 受 `iam.authz:read` 保护。
-3. [ ] 支持搜索与基础过滤，默认只返回 `enabled + assignable + tenant_api + 当前 tenant API 覆盖`。
-4. [ ] 增加测试确保角色定义页不能通过诊断参数获取不可分配、停用、无覆盖或内部 surface authz capability。
-5. [ ] 补 `internal/server` handler、authz requirement 与响应测试。
+1. [X] 新增 `GET /iam/api/authz/capabilities`。
+2. [X] endpoint 受 `iam.authz:read` 保护。
+3. [X] 支持搜索与基础过滤，默认只返回 `enabled + assignable + tenant_api + 当前 tenant API 覆盖`。
+4. [X] 增加测试确保角色定义页不能通过诊断参数获取不可分配、停用、无覆盖或内部 surface authz capability。
+5. [X] 补 `internal/server` handler、authz requirement 与响应测试。
 
 ### 8.4 P3：481/487 消费契约
 
@@ -203,18 +205,18 @@
 
 ### 8.5 P4：门禁补强
 
-1. [ ] 按 `DEV-PLAN-484` 扩展 authz lint，检查 policy、route requirement、CubeBox API tool overlay、role fixture 均引用 registry 已登记 object/action，并检查 assignable authz capability 覆盖证据。
-2. [ ] 把旧格式 `module.verb` 与 SetID/scope/package 历史字段加入反回流检查。
-3. [ ] 将门禁纳入 `make authz-lint` 或 `make check authz` 对应入口，避免新增独立漂移脚本无人运行。
+1. [X] 按 `DEV-PLAN-484` 扩展 authz lint，检查 policy、route requirement、CubeBox API tool overlay、role fixture 均引用 registry 已登记 object/action，并检查 assignable authz capability 覆盖证据。
+2. [X] 把旧格式 `module.verb` 加入 authz 反回流检查；SetID/scope/package 历史字段继续由 `make check no-scope-package`、`make check granularity` 等既有专项门禁承接。
+3. [X] 将门禁纳入 `make authz-lint` 或 `make check authz` 对应入口，避免新增独立漂移脚本无人运行。
 
 ## 9. 验收标准
 
 1. [ ] 481 角色定义页的能力候选项可覆盖 registry 中全部 `enabled + assignable + tenant_api + 当前 tenant API 覆盖` authz capability。
-2. [ ] 从 policy CSV 删除某条授权记录不会导致该 capability 从候选项消失。
-3. [ ] registry 新增一个 `enabled + assignable + tenant_api` authz capability 后，只有在具备当前 tenant API 覆盖时 options API 与 481 角色定义页才可发现该项；无覆盖时 `DEV-PLAN-484` lint 失败。
-4. [ ] 未登记、禁用、废弃、无覆盖、非 tenant surface、旧格式 authz capability key 均不能被服务端保存接口接受；本计划不要求新增对应 UI 异常态。
-5. [ ] route authz、policy、CubeBox API tool overlay 与 registry 漂移时，authz lint 失败。
-6. [ ] 授权项诊断视图如需展示普通候选项之外的 capability，必须按 `DEV-PLAN-488` 后置实现，并复用 484 单一覆盖事实聚合结果或受控诊断参数，不得改变角色定义页默认候选口径。
+2. [X] 从 policy CSV 删除某条授权记录不会导致该 capability 从候选项消失。
+3. [X] registry 新增一个 `enabled + assignable + tenant_api` authz capability 后，只有在具备当前 tenant API 覆盖时 options API 与 481 角色定义页才可发现该项；无覆盖时 `DEV-PLAN-484` lint 失败。
+4. [X] 未登记、禁用、废弃、无覆盖、非 tenant surface、旧格式 authz capability key 均不能被服务端保存接口接受；本计划不要求新增对应 UI 异常态。
+5. [X] route authz、policy、CubeBox API tool overlay 与 registry 漂移时，authz lint 失败。
+6. [X] 授权项诊断视图如需展示普通候选项之外的 capability，必须按 `DEV-PLAN-488` 后置实现，并复用 484 单一覆盖事实聚合结果；不得通过 482 普通 options endpoint 的参数改变角色定义页默认候选口径。
 
 ## 10. 风险与停止线
 
@@ -230,4 +232,8 @@
 
 ## 11. 验证记录
 
-- 待实施阶段按命中范围运行：`make check doc`、`go fmt ./... && go vet ./... && make check lint && make test`、`make authz-pack && make authz-test && make authz-lint`、前端测试与 E2E。
+- 2026-05-01 18:22 CST：P1/P2/P4 已落地，新增 `pkg/authz` registry/key 校验、`GET /iam/api/authz/capabilities` 与 `make authz-lint` 覆盖门禁；已执行 `make authz-pack && make authz-test && make authz-lint`、Go fmt/vet/lint/test、前端相关测试与文档/路由/root/no-legacy 等相关门禁。
+- 2026-05-01 18:58 CST：补齐 P0 契约冻结与 488 后置诊断登记；确认 481/487 消费契约仍未实施，482 不声明角色定义页面或保存 API 完成。
+- 2026-05-01 19:54 CST：根据待提交评审收紧 P2 实现口径：普通 `GET /iam/api/authz/capabilities` 拒绝 `include_disabled/include_uncovered` 诊断参数，并同步登记 `diagnostic_parameter_not_supported` 错误码；`iam.authz:read` 首期 bootstrap policy 仅授予 `tenant-admin`，不再授予 `tenant-viewer`。
+- 2026-05-01 22:03 CST：482A `功能授权项` 主页面已消费 482 默认 options 口径；485 API catalog facade 已按 `enabled + assignable + tenant_api + 当前 tenant API 覆盖` 口径完成浏览器复验。482 仍不声明角色定义页、角色保存 API 或 DB role SoT 完成。
+- 2026-05-01 23:10 CST：补齐文档状态登记；确认 481/487 角色定义消费与保存闭环仍未实施。

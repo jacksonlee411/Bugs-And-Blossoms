@@ -79,7 +79,7 @@
    - 覆盖 `allowed_fields` deny 场景（fail-closed：字段不可编辑/不入 patch）
 4. [ ] 运行门禁并记录结果：
    - `pnpm -C apps/web exec tsc --noEmit`
-   - `pnpm -C apps/web test -- org`（或同等前端测试入口，覆盖新增测试）
+   - `pnpm -C apps/web exec vitest run org`（或同等前端测试入口，覆盖新增测试）
    - `make check doc`
 
 ## 7. 验收标准（DoD）

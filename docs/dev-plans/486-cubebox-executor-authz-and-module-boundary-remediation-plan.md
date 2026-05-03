@@ -7,7 +7,7 @@
 - **评审分级**：`T1`（活体警示）
 - **范围一句话**：记录 CubeBox executor 路线为何不再作为当前实施 owner；本文件保留在 `docs/dev-plans/` 不是为了实施 executor，而是为了在活体文档地图中阻断 executor 路线回流。本文件不得再作为新增 UI、授权目录、覆盖门禁或业务工具契约的依据。
 - **关联模块/目录**：`modules/cubebox/**`、`modules/orgunit/presentation/cubebox/**`、`internal/server/cubebox_query_flow.go`、`internal/server/cubebox_orgunit_executors.go`
-- **关联计划/标准**：`AGENTS.md`、`DEV-PLAN-480`、`DEV-PLAN-484`、`DEV-PLAN-485`、`DEV-PLAN-490`
+- **关联计划/标准**：`AGENTS.md`、`DEV-PLAN-480`、`DEV-PLAN-480A`、`DEV-PLAN-484`、`DEV-PLAN-485`、`DEV-PLAN-490`
 - **用户入口/触点**：无新增用户入口；不规划 executor key 展示、executor 目录或 executor 管理页。
 
 ### 0.1 Simple > Easy 三问

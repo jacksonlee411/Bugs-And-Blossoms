@@ -287,7 +287,7 @@ Codex 的连贯对话不是“保存历史即可”，而是：
    - 必要的 `internal/server` / `apps/web` 测试
 2. [ ] 自动化验证：
    - `go test ./modules/cubebox ./internal/server`
-   - `pnpm --dir apps/web test -- --run ...`（按实际命中文件补充）
+   - `pnpm --dir apps/web exec vitest run ...`（按实际命中文件补充）
 3. [ ] 页面复验证据回填到 `docs/dev-records/DEV-PLAN-437-READINESS.md`
 
 ## 10. 关联文档

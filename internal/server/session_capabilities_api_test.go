@@ -1,10 +1,12 @@
 package server
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"sort"
 	"testing"
 
 	"github.com/jacksonlee411/Bugs-And-Blossoms/pkg/authz"
@@ -16,11 +18,53 @@ type sessionCapabilitiesAuthorizerStub struct {
 	err         error
 }
 
-func (a sessionCapabilitiesAuthorizerStub) Authorize(_ string, _ string, object string, action string) (bool, bool, error) {
+func (a sessionCapabilitiesAuthorizerStub) CapabilitiesForPrincipal(context.Context, string, string) ([]string, error) {
 	if a.err != nil {
-		return false, true, a.err
+		return nil, a.err
 	}
-	return a.allowed[authz.AuthzCapabilityKey(object, action)], !a.notEnforced, nil
+	if a.notEnforced {
+		return nil, nil
+	}
+	out := make([]string, 0, len(a.allowed))
+	for key, allowed := range a.allowed {
+		if allowed {
+			out = append(out, key)
+		}
+	}
+	sort.Strings(out)
+	return out, nil
+}
+
+func (a sessionCapabilitiesAuthorizerStub) AuthorizePrincipal(context.Context, string, string, string, string) (bool, error) {
+	return false, nil
+}
+
+func (a sessionCapabilitiesAuthorizerStub) OrgScopesForPrincipal(context.Context, string, string, string) ([]principalOrgScope, error) {
+	return nil, nil
+}
+
+func (a sessionCapabilitiesAuthorizerStub) ListRoleDefinitions(context.Context, string) ([]authzRoleDefinition, error) {
+	return nil, nil
+}
+
+func (a sessionCapabilitiesAuthorizerStub) GetRoleDefinition(context.Context, string, string) (authzRoleDefinition, bool, error) {
+	return authzRoleDefinition{}, false, nil
+}
+
+func (a sessionCapabilitiesAuthorizerStub) CreateRoleDefinition(context.Context, string, saveAuthzRoleDefinitionInput) (authzRoleDefinition, error) {
+	return authzRoleDefinition{}, nil
+}
+
+func (a sessionCapabilitiesAuthorizerStub) UpdateRoleDefinition(context.Context, string, string, saveAuthzRoleDefinitionInput) (authzRoleDefinition, error) {
+	return authzRoleDefinition{}, nil
+}
+
+func (a sessionCapabilitiesAuthorizerStub) GetPrincipalAssignment(context.Context, string, string) (principalAuthzAssignment, bool, error) {
+	return principalAuthzAssignment{}, false, nil
+}
+
+func (a sessionCapabilitiesAuthorizerStub) ReplacePrincipalAssignment(context.Context, string, string, replacePrincipalAssignmentInput) (principalAuthzAssignment, error) {
+	return principalAuthzAssignment{}, nil
 }
 
 func TestHandleSessionCapabilitiesAPI_ReturnsAllowedCanonicalKeys(t *testing.T) {

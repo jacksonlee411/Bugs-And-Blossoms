@@ -117,7 +117,32 @@ func TestKratosIdentityProvider_AuthenticatePassword(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if ident.KratosIdentityID != "kid1" || ident.Email != "a@example.invalid" {
+		if ident.KratosIdentityID != "kid1" || ident.Email != "a@example.invalid" || ident.DisplayName != "" {
+			t.Fatalf("ident=%+v", ident)
+		}
+	})
+
+	t.Run("prefers display_name and falls back to name", func(t *testing.T) {
+		st.loginStatus = http.StatusOK
+		st.whoamiID = "kid1"
+		st.tenantID = "t1"
+		st.email = "a@example.invalid"
+		st.whoamiBody = `{"identity":{"id":"kid1","traits":{"tenant_uuid":"t1","email":"a@example.invalid","display_name":"王小花","name":"备用姓名"}}}`
+
+		ident, err := p.AuthenticatePassword(context.Background(), Tenant{ID: "t1"}, "a@example.invalid", "pw")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if ident.DisplayName != "王小花" {
+			t.Fatalf("ident=%+v", ident)
+		}
+
+		st.whoamiBody = `{"identity":{"id":"kid1","traits":{"tenant_uuid":"t1","email":"a@example.invalid","name":"备用姓名"}}}`
+		ident, err = p.AuthenticatePassword(context.Background(), Tenant{ID: "t1"}, "a@example.invalid", "pw")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if ident.DisplayName != "备用姓名" {
 			t.Fatalf("ident=%+v", ident)
 		}
 	})

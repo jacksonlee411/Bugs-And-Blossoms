@@ -2,7 +2,6 @@ import { describe, expect, it, vi, afterEach } from 'vitest'
 import {
   deactivateModelCredential,
   interruptTurn,
-  loadCubeBoxCapabilities,
   loadModelSettings,
   streamTurn,
   upsertModelProvider,
@@ -105,37 +104,6 @@ describe('cubebox api', () => {
 
     expect(fetchMock).toHaveBeenCalledWith(
       '/internal/cubebox/settings',
-      expect.objectContaining({
-        method: 'GET',
-        credentials: 'include'
-      })
-    )
-  })
-
-  it('loads cubebox capabilities from the session principal', async () => {
-    const fetchMock = vi.fn().mockResolvedValue({
-      ok: true,
-      json: vi.fn().mockResolvedValue({
-        conversation: {
-          read: true,
-          use: true
-        },
-        settings: {
-          read: false,
-          verify: false,
-          select: false,
-          update: false,
-          rotate: false,
-          deactivate: false
-        }
-      })
-    })
-    vi.stubGlobal('fetch', fetchMock)
-
-    await loadCubeBoxCapabilities()
-
-    expect(fetchMock).toHaveBeenCalledWith(
-      '/internal/cubebox/capabilities',
       expect.objectContaining({
         method: 'GET',
         credentials: 'include'

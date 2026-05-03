@@ -70,6 +70,10 @@ load_env_file() {
   fi
 }
 
+default_runtime_env_file() {
+  echo "$infra_env_file"
+}
+
 require_cmd() {
   local name="${1:?}"
   if ! command -v "$name" >/dev/null 2>&1; then
@@ -208,8 +212,9 @@ make authz-pack >/dev/null
 export KRATOS_PUBLIC_URL="${KRATOS_PUBLIC_URL:-http://127.0.0.1:4433}"
 export E2E_KRATOS_ADMIN_URL="${E2E_KRATOS_ADMIN_URL:-http://127.0.0.1:4434}"
 superadmin_base_url="${E2E_SUPERADMIN_BASE_URL:-http://localhost:8081}"
-e2e_server_env_file="${E2E_SERVER_ENV_FILE:-$infra_env_file}"
-e2e_superadmin_env_file="${E2E_SUPERADMIN_ENV_FILE:-$infra_env_file}"
+runtime_env_file="$(default_runtime_env_file)"
+e2e_server_env_file="${E2E_SERVER_ENV_FILE:-$runtime_env_file}"
+e2e_superadmin_env_file="${E2E_SUPERADMIN_ENV_FILE:-$runtime_env_file}"
 if [[ -z "${ASSISTANT_MODEL_CONFIG_JSON:-}" ]]; then
   export ASSISTANT_MODEL_CONFIG_JSON='{"provider_routing":{"strategy":"priority_failover","fallback_enabled":true},"providers":[{"name":"openai","enabled":true,"model":"gpt-5-codex","endpoint":"https://api.openai.com/v1","timeout_ms":8000,"retries":1,"priority":10,"key_ref":"OPENAI_API_KEY"}]}'
 fi
@@ -392,6 +397,10 @@ echo "[e2e] seed default kratosstub identities"
 echo "[e2e] install e2e deps (pnpm --frozen-lockfile)"
 (cd e2e && pnpm install --frozen-lockfile)
 
+if [[ "${E2E_ENABLE_LIVE_CUBEBOX:-}" != "1" ]]; then
+  set -- --grep-invert "@live" "$@"
+fi
+
 echo "[e2e] assert tests exist (fail-fast on 0 tests)"
 list_out="$(cd e2e && pnpm exec playwright test --list "$@")"
 printf "%s\n" "$list_out"
@@ -410,7 +419,11 @@ fi
 
 echo "[e2e] run playwright: baseURL=$base_url"
 if ! (cd e2e && E2E_BASE_URL="$base_url" E2E_SUPERADMIN_BASE_URL="${E2E_SUPERADMIN_BASE_URL:-http://localhost:8081}" E2E_SUPERADMIN_USER="${E2E_SUPERADMIN_USER:-admin}" E2E_SUPERADMIN_PASS="${E2E_SUPERADMIN_PASS:-admin}" pnpm exec playwright test "$@"); then
-  echo "[e2e] reproduce locally: make e2e" >&2
+  if [[ "${E2E_ENABLE_LIVE_CUBEBOX:-}" == "1" ]]; then
+    echo "[e2e] reproduce locally: make e2e-live" >&2
+  else
+    echo "[e2e] reproduce locally: make e2e" >&2
+  fi
   echo "[e2e] artifacts: e2e/test-results/ e2e/playwright-report/ (server log: $server_log; superadmin log: $superadmin_log)" >&2
   exit 1
 fi

@@ -98,10 +98,6 @@ type cubeboxSettingsCapabilities struct {
 	Deactivate bool `json:"deactivate"`
 }
 
-type cubeboxCapabilityAuthorizer interface {
-	Authorize(subject string, domain string, object string, action string) (allowed bool, enforced bool, err error)
-}
-
 func handleCubeBoxConversationsAPI(w http.ResponseWriter, r *http.Request, store cubeboxConversationStore) {
 	switch r.Method {
 	case http.MethodPost:
@@ -113,7 +109,7 @@ func handleCubeBoxConversationsAPI(w http.ResponseWriter, r *http.Request, store
 	}
 }
 
-func handleCubeBoxCapabilitiesAPI(w http.ResponseWriter, r *http.Request, authorizer cubeboxCapabilityAuthorizer) {
+func handleCubeBoxCapabilitiesAPI(w http.ResponseWriter, r *http.Request, runtime authzRuntimeStore) {
 	if r.Method != http.MethodGet {
 		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusMethodNotAllowed, "method_not_allowed", "method not allowed")
 		return
@@ -122,72 +118,35 @@ func handleCubeBoxCapabilitiesAPI(w http.ResponseWriter, r *http.Request, author
 	if !ok {
 		return
 	}
-	if authorizer == nil {
+	if runtime == nil {
+		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusInternalServerError, "authz_runtime_unavailable", "authz runtime unavailable")
+		return
+	}
+	keys, err := runtime.CapabilitiesForPrincipal(r.Context(), tenant.ID, principal.ID)
+	if err != nil {
 		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusInternalServerError, "authz_error", "authz error")
 		return
 	}
-	subject := authz.SubjectFromRoleSlug(principal.RoleSlug)
-	domain := authz.DomainFromTenantID(tenant.ID)
-	can := func(object string, action string) (bool, bool) {
-		allowed, enforced, err := authorizer.Authorize(subject, domain, object, action)
-		if err != nil {
-			return false, false
-		}
-		return !enforced || allowed, true
+	allowed := map[string]bool{}
+	for _, key := range keys {
+		allowed[key] = true
 	}
-	conversationRead, ok := can(authz.ObjectCubeBoxConversations, authz.ActionRead)
-	if !ok {
-		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusInternalServerError, "authz_error", "authz error")
-		return
-	}
-	conversationUse, ok := can(authz.ObjectCubeBoxConversations, authz.ActionUse)
-	if !ok {
-		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusInternalServerError, "authz_error", "authz error")
-		return
-	}
-	settingsRead, ok := can(authz.ObjectCubeBoxModelCredential, authz.ActionRead)
-	if !ok {
-		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusInternalServerError, "authz_error", "authz error")
-		return
-	}
-	settingsVerify, ok := can(authz.ObjectCubeBoxModelSelection, authz.ActionVerify)
-	if !ok {
-		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusInternalServerError, "authz_error", "authz error")
-		return
-	}
-	settingsSelect, ok := can(authz.ObjectCubeBoxModelSelection, authz.ActionSelect)
-	if !ok {
-		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusInternalServerError, "authz_error", "authz error")
-		return
-	}
-	settingsUpdate, ok := can(authz.ObjectCubeBoxModelProvider, authz.ActionUpdate)
-	if !ok {
-		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusInternalServerError, "authz_error", "authz error")
-		return
-	}
-	settingsRotate, ok := can(authz.ObjectCubeBoxModelCredential, authz.ActionRotate)
-	if !ok {
-		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusInternalServerError, "authz_error", "authz error")
-		return
-	}
-	settingsDeactivate, ok := can(authz.ObjectCubeBoxModelCredential, authz.ActionDeactivate)
-	if !ok {
-		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusInternalServerError, "authz_error", "authz error")
-		return
+	can := func(object string, action string) bool {
+		return allowed[authz.AuthzCapabilityKey(object, action)]
 	}
 
 	writeJSON(w, http.StatusOK, cubeboxCapabilitiesResponse{
 		Conversation: cubeboxConversationCapabilities{
-			Read: conversationRead,
-			Use:  conversationUse,
+			Read: can(authz.ObjectCubeBoxConversations, authz.ActionRead),
+			Use:  can(authz.ObjectCubeBoxConversations, authz.ActionUse),
 		},
 		Settings: cubeboxSettingsCapabilities{
-			Read:       settingsRead,
-			Verify:     settingsVerify,
-			Select:     settingsSelect,
-			Update:     settingsUpdate,
-			Rotate:     settingsRotate,
-			Deactivate: settingsDeactivate,
+			Read:       can(authz.ObjectCubeBoxModelCredential, authz.ActionRead),
+			Verify:     can(authz.ObjectCubeBoxModelSelection, authz.ActionVerify),
+			Select:     can(authz.ObjectCubeBoxModelSelection, authz.ActionSelect),
+			Update:     can(authz.ObjectCubeBoxModelProvider, authz.ActionUpdate),
+			Rotate:     can(authz.ObjectCubeBoxModelCredential, authz.ActionRotate),
+			Deactivate: can(authz.ObjectCubeBoxModelCredential, authz.ActionDeactivate),
 		},
 	})
 }
