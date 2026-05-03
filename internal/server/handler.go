@@ -394,6 +394,7 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, error) {
 	guarded := withTenantAndSession(classifier, tenancyResolver, principals, sessions, withAuthz(classifier, authorizer, authzRuntime, entrypoint))
 
 	mux := http.NewServeMux()
+	mux.Handle("/favicon.ico", http.RedirectHandler("/assets/web/favicon.svg", http.StatusMovedPermanently))
 	mux.Handle("/assets/", http.StripPrefix("/assets/", http.FileServer(http.FS(assetsSub))))
 	mux.Handle("/", guarded)
 

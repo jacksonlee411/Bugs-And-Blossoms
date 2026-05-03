@@ -455,6 +455,16 @@ func TestUI_MUIOnly(t *testing.T) {
 		t.Fatalf("asset status=%d body=%s", recAsset.Code, recAsset.Body.String())
 	}
 
+	reqFavicon := httptest.NewRequest(http.MethodGet, "/favicon.ico", nil)
+	recFavicon := httptest.NewRecorder()
+	h.ServeHTTP(recFavicon, reqFavicon)
+	if recFavicon.Code != http.StatusMovedPermanently {
+		t.Fatalf("favicon status=%d body=%s", recFavicon.Code, recFavicon.Body.String())
+	}
+	if loc := recFavicon.Result().Header.Get("Location"); loc != "/assets/web/favicon.svg" {
+		t.Fatalf("unexpected favicon redirect location=%q", loc)
+	}
+
 	reqNoTenant := httptest.NewRequest(http.MethodGet, "/app/login", nil)
 	reqNoTenant.Host = ""
 	recNoTenant := httptest.NewRecorder()
