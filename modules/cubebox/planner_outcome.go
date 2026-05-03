@@ -14,23 +14,22 @@ var ErrPlannerOutcomeInvalid = errors.New("CUBEBOX_PLANNER_OUTCOME_INVALID")
 type PlannerOutcomeType string
 
 const (
-	PlannerOutcomeReadPlan PlannerOutcomeType = "READ_PLAN"
+	PlannerOutcomeAPICalls PlannerOutcomeType = "API_CALLS"
 	PlannerOutcomeClarify  PlannerOutcomeType = "CLARIFY"
 	PlannerOutcomeDone     PlannerOutcomeType = "DONE"
 	PlannerOutcomeNoQuery  PlannerOutcomeType = "NO_QUERY"
 )
 
 type PlannerOutcome struct {
-	Type                PlannerOutcomeType `json:"outcome"`
-	Plan                ReadPlan           `json:"plan,omitempty"`
-	MissingParams       []string           `json:"missing_params,omitempty"`
-	ClarifyingQuestion  string             `json:"clarifying_question,omitempty"`
-	CompatibilitySource string             `json:"-"`
+	Type               PlannerOutcomeType `json:"outcome"`
+	Calls              APICallPlan        `json:"calls,omitempty"`
+	MissingParams      []string           `json:"missing_params,omitempty"`
+	ClarifyingQuestion string             `json:"clarifying_question,omitempty"`
 }
 
 type plannerOutcomeEnvelope struct {
 	Outcome            string          `json:"outcome"`
-	Plan               json.RawMessage `json:"plan,omitempty"`
+	Calls              json.RawMessage `json:"calls,omitempty"`
 	MissingParams      []string        `json:"missing_params,omitempty"`
 	ClarifyingQuestion string          `json:"clarifying_question,omitempty"`
 }
@@ -44,7 +43,7 @@ func DecodePlannerOutcome(raw []byte) (PlannerOutcome, error) {
 		return PlannerOutcome{}, wrapPlannerOutcomeError("bare DONE is not allowed")
 	}
 	if text == "NO_QUERY" {
-		return PlannerOutcome{Type: PlannerOutcomeNoQuery, CompatibilitySource: "bare_no_query"}, nil
+		return PlannerOutcome{}, wrapPlannerOutcomeError("bare NO_QUERY is not allowed")
 	}
 
 	var probe map[string]json.RawMessage
@@ -52,15 +51,7 @@ func DecodePlannerOutcome(raw []byte) (PlannerOutcome, error) {
 		return PlannerOutcome{}, wrapPlannerOutcomeError(err.Error())
 	}
 	if _, hasOutcome := probe["outcome"]; !hasOutcome {
-		plan, err := DecodeReadPlan([]byte(text))
-		if err != nil {
-			return PlannerOutcome{}, err
-		}
-		outcomeType := PlannerOutcomeReadPlan
-		if len(plan.MissingParams) > 0 {
-			outcomeType = PlannerOutcomeClarify
-		}
-		return PlannerOutcome{Type: outcomeType, Plan: plan, MissingParams: append([]string(nil), plan.MissingParams...), ClarifyingQuestion: plan.ClarifyingQuestion, CompatibilitySource: "bare_read_plan"}, nil
+		return PlannerOutcome{}, wrapPlannerOutcomeError("outcome required")
 	}
 
 	var envelope plannerOutcomeEnvelope
@@ -69,24 +60,31 @@ func DecodePlannerOutcome(raw []byte) (PlannerOutcome, error) {
 	}
 	outcomeType := PlannerOutcomeType(strings.TrimSpace(envelope.Outcome))
 	switch outcomeType {
-	case PlannerOutcomeReadPlan:
-		if len(envelope.Plan) == 0 || string(envelope.Plan) == "null" {
-			return PlannerOutcome{}, wrapPlannerOutcomeError("READ_PLAN requires plan")
+	case PlannerOutcomeAPICalls:
+		if len(envelope.Calls) == 0 || string(envelope.Calls) == "null" {
+			return PlannerOutcome{}, wrapPlannerOutcomeError("API_CALLS requires calls")
 		}
 		if len(envelope.MissingParams) > 0 || strings.TrimSpace(envelope.ClarifyingQuestion) != "" {
-			return PlannerOutcome{}, wrapPlannerOutcomeError("READ_PLAN cannot carry clarification fields")
+			return PlannerOutcome{}, wrapPlannerOutcomeError("API_CALLS cannot carry clarification fields")
 		}
-		plan, err := DecodeReadPlan(envelope.Plan)
+		var body []byte
+		if bytes.HasPrefix(bytes.TrimSpace(envelope.Calls), []byte("[")) {
+			wrapped, err := json.Marshal(map[string]json.RawMessage{"calls": envelope.Calls})
+			if err != nil {
+				return PlannerOutcome{}, wrapPlannerOutcomeError(err.Error())
+			}
+			body = wrapped
+		} else {
+			body = envelope.Calls
+		}
+		plan, err := DecodeAPICallPlan(body)
 		if err != nil {
 			return PlannerOutcome{}, err
 		}
-		if len(plan.MissingParams) > 0 {
-			return PlannerOutcome{}, wrapPlannerOutcomeError("READ_PLAN cannot carry missing_params")
-		}
-		return PlannerOutcome{Type: PlannerOutcomeReadPlan, Plan: plan}, nil
+		return PlannerOutcome{Type: PlannerOutcomeAPICalls, Calls: plan}, nil
 	case PlannerOutcomeClarify:
-		if len(envelope.Plan) > 0 {
-			return PlannerOutcome{}, wrapPlannerOutcomeError("CLARIFY cannot carry plan")
+		if len(envelope.Calls) > 0 {
+			return PlannerOutcome{}, wrapPlannerOutcomeError("CLARIFY cannot carry calls")
 		}
 		missing := normalizePlannerMissingParams(envelope.MissingParams)
 		question := strings.TrimSpace(envelope.ClarifyingQuestion)
@@ -95,18 +93,17 @@ func DecodePlannerOutcome(raw []byte) (PlannerOutcome, error) {
 		}
 		return PlannerOutcome{
 			Type:               PlannerOutcomeClarify,
-			Plan:               ReadPlan{Intent: "clarify", Confidence: 0, MissingParams: missing, ClarifyingQuestion: question},
 			MissingParams:      missing,
 			ClarifyingQuestion: question,
 		}, nil
 	case PlannerOutcomeDone:
-		if len(envelope.Plan) > 0 || len(envelope.MissingParams) > 0 || strings.TrimSpace(envelope.ClarifyingQuestion) != "" {
-			return PlannerOutcome{}, wrapPlannerOutcomeError("DONE cannot carry plan or clarification fields")
+		if len(envelope.Calls) > 0 || len(envelope.MissingParams) > 0 || strings.TrimSpace(envelope.ClarifyingQuestion) != "" {
+			return PlannerOutcome{}, wrapPlannerOutcomeError("DONE cannot carry calls or clarification fields")
 		}
 		return PlannerOutcome{Type: PlannerOutcomeDone}, nil
 	case PlannerOutcomeNoQuery:
-		if len(envelope.Plan) > 0 || len(envelope.MissingParams) > 0 || strings.TrimSpace(envelope.ClarifyingQuestion) != "" {
-			return PlannerOutcome{}, wrapPlannerOutcomeError("NO_QUERY cannot carry plan or clarification fields")
+		if len(envelope.Calls) > 0 || len(envelope.MissingParams) > 0 || strings.TrimSpace(envelope.ClarifyingQuestion) != "" {
+			return PlannerOutcome{}, wrapPlannerOutcomeError("NO_QUERY cannot carry calls or clarification fields")
 		}
 		return PlannerOutcome{Type: PlannerOutcomeNoQuery}, nil
 	default:

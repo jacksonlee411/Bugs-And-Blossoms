@@ -104,7 +104,7 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, error) {
 	cubeboxAdapter := cubebox.NewOpenAICompatibleAdapter(nil)
 	cubeboxSecretResolver := cubebox.EnvSecretResolver{}
 	cubeboxGateway := cubebox.NewGatewayService(cubeboxRuntime, cubeboxStore, cubeboxAdapter, cubeboxSecretResolver)
-	cubeboxQueryProducer := newCubeboxProviderReadPlanProducer(cubeboxStore, cubeboxAdapter, cubeboxSecretResolver)
+	cubeboxQueryProducer := newCubeboxProviderAPIPlanProducer(cubeboxStore, cubeboxAdapter, cubeboxSecretResolver)
 	cubeboxQueryNarrator := newCubeboxProviderQueryNarrator(cubeboxStore, cubeboxAdapter, cubeboxSecretResolver)
 	cubeboxQueryFlow, err := buildDefaultCubeboxQueryFlow(cubeboxRuntime, cubeboxStore, orgStore, authzRuntime, cubeboxQueryProducer, cubeboxQueryNarrator)
 	if err != nil {

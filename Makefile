@@ -8,7 +8,7 @@ export DEV_COMPOSE_PROJECT ?= bugs-and-blossoms-dev
 export DEV_INFRA_ENV_FILE ?= .env.example
 export DEV_RUNTIME_IMAGE_MIRROR_PREFIX ?= docker.m.daocloud.io/library
 
-.PHONY: help preflight check pr-branch root-surface naming no-legacy chat-surface-clean no-scope-package granularity ddd-layering-p0 ddd-layering-p2 org-node-key-backflow authz-role-union request-code as-of-explicit dict-tenant-only go-version error-message fmt lint test routing e2e e2e-live doc tr generate css
+.PHONY: help preflight check pr-branch root-surface naming no-legacy chat-surface-clean cubebox-api-first no-scope-package granularity ddd-layering-p0 ddd-layering-p2 org-node-key-backflow authz-role-union request-code as-of-explicit dict-tenant-only go-version error-message fmt lint test routing e2e e2e-live doc tr generate css
 .PHONY: sqlc-generate sqlc-verify-schema authz-pack authz-test authz-lint
 .PHONY: plan migrate up
 .PHONY: iam orgunit
@@ -23,6 +23,7 @@ help:
 			"  make check naming" \
 					"  make check no-legacy" \
 					"  make check chat-surface-clean" \
+					"  make check cubebox-api-first" \
 					"  make check no-scope-package" \
 					"  make check granularity" \
 					"  make check ddd-layering-p0" \
@@ -58,6 +59,7 @@ preflight: ## 本地一键对齐CI（严格版：含 UI build/typecheck）
 	@$(MAKE) check naming
 	@$(MAKE) check no-legacy
 	@$(MAKE) check chat-surface-clean
+	@$(MAKE) check cubebox-api-first
 	@$(MAKE) check no-scope-package
 	@$(MAKE) check granularity
 	@$(MAKE) check ddd-layering-p0
@@ -95,6 +97,9 @@ no-legacy: ## 禁止 legacy 分支/回退通道（单链路原则）
 
 chat-surface-clean: ## 历史对话面清场门禁（阻断旧聊天面路径与兼容语义）
 	@./scripts/ci/check-chat-surface-clean.sh
+
+cubebox-api-first: ## CubeBox API-first 硬切换反回流门禁
+	@./scripts/ci/check-cubebox-api-first.sh
 
 no-scope-package: ## 反漂移门禁（阻断新增 scope/package 语义）
 	@./scripts/ci/check-no-scope-package.sh
@@ -256,7 +261,7 @@ iam:
 	@:
 orgunit:
 	@:
-MODULE := $(firstword $(filter-out preflight check fmt lint test routing e2e e2e-live doc tr generate css sqlc-generate sqlc-verify-schema authz-pack authz-test authz-lint no-legacy chat-surface-clean no-scope-package granularity ddd-layering-p0 ddd-layering-p2 org-node-key-backflow authz-role-union request-code as-of-explicit dict-tenant-only go-version error-message plan migrate up dev dev-up dev-down dev-reset dev-ps dev-server,$(MAKECMDGOALS)))
+MODULE := $(firstword $(filter-out preflight check fmt lint test routing e2e e2e-live doc tr generate css sqlc-generate sqlc-verify-schema authz-pack authz-test authz-lint no-legacy chat-surface-clean cubebox-api-first no-scope-package granularity ddd-layering-p0 ddd-layering-p2 org-node-key-backflow authz-role-union request-code as-of-explicit dict-tenant-only go-version error-message plan migrate up dev dev-up dev-down dev-reset dev-ps dev-server,$(MAKECMDGOALS)))
 MIGRATE_DIR := $(lastword $(filter up down,$(MAKECMDGOALS)))
 
 plan:

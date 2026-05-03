@@ -59,6 +59,26 @@ func CollectAuthzCoverageFacts(policyPath string) (AuthzCoverageFacts, error) {
 	return CollectAuthzCoverageFactsWithAllowlist(policyPath, allowlistPath)
 }
 
+func CollectAuthzAPICatalogRuntimeFacts() (AuthzCoverageFacts, error) {
+	if err := authz.ValidateRegistry(); err != nil {
+		return AuthzCoverageFacts{}, err
+	}
+	allowlistPath, err := authzCoverageAllowlistPath()
+	if err != nil {
+		return AuthzCoverageFacts{}, err
+	}
+	allowlist, err := routing.LoadAllowlist(allowlistPath)
+	if err != nil {
+		return AuthzCoverageFacts{}, err
+	}
+	return AuthzCoverageFacts{
+		AllowlistRoutes: ListAuthzAllowlistRoutes(allowlist),
+		Routes:          ListAuthzRouteCoverage(),
+		ToolOverlays:    ListAuthzToolOverlayCoverage(),
+		Registry:        authz.ListAuthzCapabilities(),
+	}, nil
+}
+
 func CollectAuthzCoverageFactsWithAllowlist(policyPath string, allowlistPath string) (AuthzCoverageFacts, error) {
 	if err := authz.ValidateRegistry(); err != nil {
 		return AuthzCoverageFacts{}, err
@@ -225,10 +245,6 @@ func tenantAPICoveredCapabilityKeys(allowlistRoutes []AuthzAllowlistRoute, route
 		covered[requirement.Key] = true
 	}
 	return covered
-}
-
-func ListAuthzToolOverlayCoverage() []AuthzToolOverlayCoverage {
-	return nil
 }
 
 func ListAuthzRoleSeedCoverage() []AuthzRoleSeedCoverage {

@@ -1,6 +1,6 @@
 # DEV-PLAN-480A：480 系列授权子计划实施顺序路线图
 
-**状态**: P1/P2 只读治理面、P3/P4 后端运行时闭环、481 UI 保存交互与 A/B 组织范围 E2E 已完成；P5 API-first 与 P6 诊断仍待后续补齐（2026-05-02 CST）
+**状态**: P1/P2 只读治理面、P3/P4 后端运行时闭环、481 UI 保存交互与 A/B 组织范围 E2E、P5 CubeBox API-first 首期硬切换已完成；P6 授权项诊断仍待后续补齐（2026-05-03 CST）
 
 ## 0. 适用范围与评审分级
 
@@ -55,7 +55,7 @@
 3. [X] 明确不得提前暴露的在线入口，避免半闭环功能进入用户可见面。
 4. [X] 明确重复实现停止线：覆盖事实、角色能力来源、组织范围来源、CubeBox 工具来源都只能有一个 active runtime SoT。
 5. [X] 明确并完成 487/489/489A 后端运行时闭环：角色定义保存生效、用户授权角色集合和组织范围进入服务端 SoT，orgunit 与 CubeBox orgunit 查询按服务端 scope provider 裁剪。
-6. [X] 补齐 481 角色/用户授权 UI 保存交互与 A/B 组织范围 E2E；490 CubeBox API-first 全面迁移、488 授权项诊断视图仍待后续。
+6. [X] 补齐 481 角色/用户授权 UI 保存交互与 A/B 组织范围 E2E；完成 490 CubeBox API-first 首期硬切换，488 授权项诊断视图仍待后续。
 
 ### 2.2 非目标
 
@@ -79,7 +79,7 @@ P0  文档与语义冻结
 关键门槛：
 
 1. 没有 484 P1/P2 单一覆盖事实聚合源，不得实现 482A/485/488/490 的覆盖 join。
-2. 487/489/489A 后端运行时闭环、481 UI 保存交互与 A/B 组织范围 E2E 已完成；当前 480 系列可宣称首批角色/用户授权用户可见闭环完成，但不得把 490 API-first 硬切换或 488 诊断视图一并宣称完成。
+2. 487/489/489A 后端运行时闭环、481 UI 保存交互与 A/B 组织范围 E2E、490 API-first 首期硬切换已完成；当前 480 系列可宣称首批角色/用户授权用户可见闭环与 CubeBox API-first 首期闭环完成，但不得把 488 诊断视图一并宣称完成。
 3. 489 scope provider 与 orgunit 裁剪已完成；用户授权 UI 保存交互已消费 489 API，不得落回前端本地状态。
 4. 没有 485 API 授权目录基础投影和 490 overlay 校验，不得让 CubeBox planner 调用 API 工具。
 5. 488 诊断视图必须后置到 484 + 482A + 485 首批闭环之后。
@@ -108,7 +108,7 @@ Owner：`DEV-PLAN-483/482/484`
 
 1. [X] `DEV-PLAN-483`：删除旧 `permissionKey`、`VITE_PERMISSIONS`、`module.verb`、policy-only key 和旧 key fallback；前端当前用户能力只来自服务端 canonical `authz_capability_keys`。
 2. [X] `DEV-PLAN-482`：建立 `pkg/authz` 静态 authz capability registry、key 解析/构造/校验函数、默认 options API 口径。
-3. [X] `DEV-PLAN-484`：建立单一覆盖事实聚合源，枚举 route requirement、registry、policy，并为后续 DB role seed 与 CubeBox API tool overlay 预留同一枚举接口；当前尚未落地的来源按空集合处理，不得在 482A/485/488/490 中另起第二套 join。
+3. [X] `DEV-PLAN-484`：建立单一覆盖事实聚合源，枚举 route requirement、registry、policy，并为 DB role seed 与 CubeBox API tool overlay 提供同一枚举接口；487/490 已接入同一聚合源，后续不得在 482A/485/488/490 中另起第二套 join。
 
 并行规则：
 
@@ -202,16 +202,16 @@ Owner：`DEV-PLAN-490`，`DEV-PLAN-486` 仅作停止警示
 
 前置条件：
 
-1. 484 单一覆盖事实聚合源已可枚举 route requirement，并提供 CubeBox API tool overlay 的同源枚举扩展点；P5 前没有 overlay 时应是空集合，而不是由 490 之外的代码手写工具目录。
-2. 485 API 授权目录基础投影已可从 484 覆盖事实输出现有 HTTP API 与 authz capability 绑定；`cubebox_callable` 等 CubeBox 增量标记由 490 overlay 在 P5 引入后再合成展示。
+1. 484 单一覆盖事实聚合源已可枚举 route requirement，并提供 CubeBox API tool overlay 的同源枚举扩展点；490 overlay 已按该扩展点接入，后续不得由 490 之外的代码手写工具目录。
+2. 485 API 授权目录基础投影已可从 484 覆盖事实输出现有 HTTP API 与 authz capability 绑定；`cubebox_callable` 等 CubeBox 增量标记已由 490 overlay 合成展示。
 3. 当前用户 capability 与 orgunit scope 裁剪已可通过普通 HTTP API 验证。
 
 建议顺序：
 
-1. [ ] 490 APIToolOverlay 只保存 CubeBox 增量字段；具体字段以 `DEV-PLAN-490` 为准。
-2. [ ] HTTP API 标识、route requirement 与 authz capability 绑定从 484/485 派生，不在 490 手写第二事实源。
-3. [ ] planner 只输出 `API_CALLS`；runner 只接受已派生可调用工具条目的 method/path 和 schema 参数。
-4. [ ] 删除 active runtime 业务 executor 执行入口，不保留 `READ_PLAN` / 裸 `ReadPlan` / `executor_key` 兼容窗口。
+1. [X] 490 APIToolOverlay 只保存 CubeBox 增量字段；具体字段以 `DEV-PLAN-490` 为准。
+2. [X] HTTP API 标识、route requirement 与 authz capability 绑定从 484/485 派生，不在 490 手写第二事实源。
+3. [X] planner 只输出 `API_CALLS`；runner 只接受已派生可调用工具条目的 method/path 和 schema 参数。
+4. [X] 删除 active runtime 业务 executor 执行入口，不保留 `READ_PLAN` / 裸 `ReadPlan` / `executor_key` 兼容窗口。
 
 停止线：
 
@@ -254,7 +254,7 @@ Owner：`DEV-PLAN-488`
 4. [X] 482A 功能授权项页面可展示当前可分配且有覆盖的授权项。
 5. [X] 485 API 授权目录可从 API 角度展示 method/path 到授权项绑定。
 
-该组合不要求角色在线保存、不要求用户授权组织范围保存、不要求 CubeBox API-first 完整切换。
+该组合作为 P2 首批只读治理面验收时，不要求角色在线保存、不要求用户授权组织范围保存、不要求 CubeBox API-first 完整切换；当前这些后续闭环已分别由 P3/P4/P5 继续推进并完成首期范围。
 
 ### 5.2 可交付的最小运行时授权组合
 
@@ -271,16 +271,16 @@ Owner：`DEV-PLAN-488`
 
 1. 487、489、489A 可以按职责拆 PR，但不能分别宣布“480 系列运行时授权已完成”。
 2. 运行时闭环验收必须同时证明：角色能力来自 487 DB SoT，principal 角色集合来自 489 `principal_role_assignments`，能力判断按 489A 多角色 union，组织范围来自 489 scope provider，普通 API 和 CubeBox API-first 不再回读 policy CSV、`iam.principals.role_slug` 或 `roles[0]`。
-3. 本轮已满足后端运行时闭环、481 用户可见保存交互和 A/B 组织范围 E2E；对外仍不能宣称 490 API-first 硬切换或 488 诊断视图已完成。
+3. 本轮已满足后端运行时闭环、481 用户可见保存交互、A/B 组织范围 E2E 与 490 API-first 首期硬切换；对外仍不能宣称 488 诊断视图已完成。
 
 ### 5.3 CubeBox 最小 API-first 组合
 
 CubeBox 切换必须等待：
 
 1. [X] 484/485 可追踪 API 到 authz capability。
-2. [ ] 490 overlay 引用的 HTTP API 全部存在并有 requirement。
+2. [X] 490 overlay 引用的 HTTP API 全部存在并有 requirement。
 3. [X] 当前用户 capability 与组织范围裁剪通过普通 HTTP API 生效。
-4. [ ] active runtime 不再接受 executor 业务计划。
+4. [X] active runtime 不再接受 executor 业务计划。
 
 ## 6. 跨计划重复实现检查清单
 
@@ -323,3 +323,5 @@ CubeBox 切换必须等待：
 - 2026-05-02 CST：P3/P4 后端运行时闭环已实施。487 新增角色定义 DB SoT 与保存 API，489 新增 principal role assignment / org scope SoT 与保存 API，489A runtime 按 principal 多角色 union 授权；普通 tenant role 不再从 policy CSV、`iam.principals.role_slug` 或 `roles[0]` 放行；orgunit HTTP 与 CubeBox orgunit executor 均通过服务端 scope provider 裁剪。
 - 2026-05-02 CST：新增 `make check authz-role-union` 专用反回流门禁并接入 `make preflight` 与 CI Gate-1；删除不可达的单 `RoleSlug` orgunit 判权死分支。已验证：`go test ./internal/server ./internal/routing ./pkg/authz`、`make test`、`make check lint`、`make authz-pack && make authz-test && make authz-lint`、`make check authz-role-union`、`make check routing`、`make check error-message`、`make check root-surface`、`make check doc`、`make check no-legacy && make check chat-surface-clean && make check no-scope-package && make check granularity && make check request-code`。
 - 2026-05-02 CST：481 角色定义 / 用户授权 UI 保存交互已按 `designs/480.pen` 接入 487/489 API，并补齐 `dev481` A/B 组织范围 E2E：A 用户全范围，B 用户仅鲜花事业部及下级；覆盖普通 orgunit API 裁剪、范围外 detail fail-closed、CubeBox orgunit 查询与普通 API 结果一致。稳定门禁继续走 `make preflight` / `make e2e`；真实模型验收改为显式 `make e2e-live`。490 API-first hard cutover 与 488 诊断仍待后续。
+- 2026-05-03 CST：完成 P5（DEV-PLAN-490 API-first 硬切换）首期实现：四个 orgunit 只读 API 进入 CubeBox API tool overlay，`cubebox_callable` 由 overlay 投影到 485 API 授权目录；query flow active runtime 切为 `cubebox-query-api-calls`，planner/decoder/runner 不再接受旧 `READ_PLAN`、裸 `ReadPlan` 或 `executor_key` 成功路径；新增 `make check cubebox-api-first` 并接入 `make preflight`。P6（DEV-PLAN-488 授权项诊断）成为后续治理顺序。
+- 2026-05-03 CST：同步 480A 与 `DEV-PLAN-480/484/485/486/488/490` 当前进度状态，消除“490 未实施 / P5 待后续”漂移；本次文档状态同步后 `make check doc` 通过。

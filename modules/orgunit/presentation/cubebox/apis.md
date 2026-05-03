@@ -1,137 +1,46 @@
-# OrgUnit APIs
+# OrgUnit CubeBox API Tools
 
-## 说明
-
-本文件是面向模型的只读 API 说明，用于帮助生成合法 `ReadPlan`。
-
-本文件不是运行时执行事实源。运行时唯一执行事实源以后续代码中的 `executor_key -> executor` 注册表为准。
-
-planner 输入可能包含 `query_evidence_window`。该窗口只用于向模型提供历史事实、用户/助手文本和只读 observation，不是新的 API，也不是授权来源；在 orgunit 域中 `entity_key` 表示组织编码，当前轮用户显式参数始终优先。涉及候选选择时，应由模型读取 `recent_turns`、`observations` 与 `open_clarification` 后输出显式 `ReadPlan` 参数，不要假设本地已经替你选定当前对象。
-
-planner 输入还可能包含 `working_results`。它只表示当前 turn 内已经执行过的只读 API observation，不是长期记忆，也不是新的 orgunit 专用 DSL。需要继续展开组织树时，应阅读 `working_results.latest_observation.items[].has_children` 与 `org_code` 后再输出新的 `READ_PLAN`；不要生成 `remaining_parent_org_codes`、聚合事实、当前 winner 或其他业务专用状态字段。
-
-planner 输入中的 `query_evidence_window.observations.kind=result_list` 表示上一轮已经成功返回过一组明确组织。若当前轮只是补充 `orgunit.details` 才有的字段，例如 `org_unit.full_name_path`，可对该组小批量 `entity_key` 逐个生成 `orgunit.details` 线性步骤；若结果集过大，应返回 `CLARIFY`，不要静默展开大批量详情查询。
-
-禁止项：
-
-- 禁止直查数据库
-- 禁止调用 SQL、store、projection 或内部函数
-- 禁止调用未列出的接口
-- 禁止声明新的 `executor_key`
-- 禁止把会话压缩摘要当作查询 API 结果或查询锚点
-- 禁止在组织架构查询域内输出“没有查询接口/工具权限”类能力描述；缺参时必须澄清
-- 禁止从页面上下文、当前 URL 或前端展示状态补查询参数；当前范围只允许消费 `query_evidence_window`
-- 禁止把 `working_results` 写成长时事实或把 `NO_QUERY` 当作“已经查够”；查够时必须输出 `{"outcome":"DONE"}`
-
-## API 目录
+本文件只声明模型侧可引用的 API tool overlay 语义。运行时执行事实源来自 484/485 派生出的 HTTP API catalog 与 490 overlay builder；planner 必须使用 `api_tools` 中的 `method` + `path`，不能声明新业务工具。
 
 ```yaml
-apis:
-  - executor_key: orgunit.details
+api_tools:
+  - operation_id: orgunit.details
+    query_intent: orgunit.details
+    method: GET
+    path: /org/api/org-units/details
     required_params: [org_code, as_of]
     optional_params: [include_disabled]
-  - executor_key: orgunit.list
+    observation: single_org_unit
+  - operation_id: orgunit.list
+    query_intent: orgunit.list
+    method: GET
+    path: /org/api/org-units
     required_params: [as_of]
-    optional_params: [include_disabled, parent_org_code, all_org_units, keyword, status, is_business_unit, page, size]
-  - executor_key: orgunit.search
+    optional_params: [include_disabled, parent_org_code, all_org_units, keyword, status, is_business_unit, page, page_size]
+    observation: org_unit_list
+  - operation_id: orgunit.search
+    query_intent: orgunit.search
+    method: GET
+    path: /org/api/org-units/search
     required_params: [query, as_of]
     optional_params: [include_disabled]
-  - executor_key: orgunit.audit
+    observation: org_unit_search_result
+  - operation_id: orgunit.audit
+    query_intent: orgunit.audit
+    method: GET
+    path: /org/api/org-units/audit
     required_params: [org_code]
     optional_params: [limit]
+    observation: org_unit_audit_events
 ```
 
-### `orgunit.details`
+## 使用规则
 
-- 用途：查询单个组织在指定时点的详情
-- 必填参数：
-  - `org_code`
-  - `as_of`
-- 可选参数：
-  - `include_disabled`
-- 关注字段：
-  - `org_unit.org_code`
-  - `org_unit.name`
-  - `org_unit.status`
-  - `org_unit.parent_org_code`
-  - `org_unit.parent_name`
-  - `org_unit.is_business_unit`
-  - `org_unit.manager_pernr`
-  - `org_unit.manager_name`
-  - `org_unit.full_name_path`
-  - `ext_fields`
-- 权限前提：必须沿用当前用户、当前租户、当前 session 的现有只读权限边界
-
-### `orgunit.list`
-
-- 用途：查询组织列表、全租户关键词组织列表，或某个上级组织下的直接子组织列表
-- 必填参数：
-  - `as_of`
-- 可选参数：
-  - `include_disabled`
-  - `parent_org_code`
-  - `all_org_units`
-  - `keyword`
-  - `status`
-  - `is_business_unit`
-  - `page`
-  - `size`
-- 参数约束：
-  - `status` 只接受 canonical 值 `active`、`disabled`、`all`
-  - 有 `parent_org_code` 时，只返回该上级组织的直接子组织
-  - `all_org_units=true` 且无 `parent_org_code` 时，返回当前租户全部组织分页清单
-  - 无 `parent_org_code` 且无 `keyword`、无 `all_org_units=true` 时，只返回当前租户一级组织
-  - 无 `parent_org_code` 且有 `keyword` 时，在当前租户全部有效组织中按组织编码/名称关键词过滤
-  - 无 `parent_org_code` 且有 `is_business_unit` 时，在当前租户全部有效组织中按业务单元标记过滤
-  - `page` / `size` 是分页控制参数，不是业务必填参数；不得因为缺少它们而向用户追问
-  - 若用户要求分页但未给页码或每页条数，默认 `page=1,size=100`
-  - 用户只给一个正整数作为分页短答时，按 `size` 处理并默认 `page=1`
-  - 用户可见 `page` 为 1 基页码；`page=1` 表示第一页
-- 关注字段：
-  - `as_of`
-  - `include_disabled`
-  - `org_units[].org_code`
-  - `org_units[].name`
-  - `org_units[].status`
-  - `org_units[].is_business_unit`
-  - `org_units[].has_children`
-- 权限前提：必须沿用当前用户、当前租户、当前 session 的现有只读权限边界
-
-### `orgunit.search`
-
-- 用途：根据关键词搜索组织并返回命中目标与路径
-- 必填参数：
-  - `query`
-  - `as_of`
-- 可选参数：
-  - `include_disabled`
-- 关注字段：
-  - `target_org_code`
-  - `target_name`
-  - `path_org_codes`
-  - `tree_as_of`
-- 多步编排提示：若 `orgunit.search` 已唯一命中，后续 step 可合法引用 `@step-1.target_org_code` 或 `@step-1.payload.target_org_code`
-- owner 说明：`path_org_codes` 当前属于现有 `orgunit.search` 读契约字段；若未来删除，必须同步调整 `orgunit` 读契约与知识包，不能只在 CubeBox executor 单点删除
-- 权限前提：必须沿用当前用户、当前租户、当前 session 的现有只读权限边界
-
-### `orgunit.audit`
-
-- 用途：查询某个组织的审计事件摘要
-- 必填参数：
-  - `org_code`
-- 可选参数：
-  - `limit`
-- 关注字段：
-  - `org_code`
-  - `limit`
-  - `has_more`
-  - `events[].event_uuid`
-  - `events[].event_type`
-  - `events[].effective_date`
-  - `events[].tx_time`
-  - `events[].initiator_name`
-  - `events[].request_id`
-  - `events[].reason`
-  - `events[].is_rescinded`
-- owner 说明：`has_more` 当前属于现有 `orgunit.audit` 读契约字段；若未来删除，必须同步调整 `orgunit` 读契约与知识包，不能只在 CubeBox executor 单点删除
-- 权限前提：必须沿用当前用户、当前租户、当前 session 的现有只读权限边界
+- `API_CALLS.calls[].method/path` 必须来自当前 planner 输入中的 `api_tools`。
+- `params` 只能包含对应 tool 的 `request_schema.required` 和 `request_schema.optional` 参数。
+- 缺少 required 参数时输出 `CLARIFY`。
+- `orgunit.list` 的 `page` 是用户可见 1 基页码；`page_size` 是每页条数。
+- `page` / `page_size` 缺省时按 `page=1,page_size=100` 处理，不要追问。
+- `orgunit.search` 的 `query` 保留用户原始搜索词，不要擅自扩写。
+- 多步查询必须线性排列，后一步 `depends_on` 只引用前一步 ID。
+- 不要生成隐藏字段引用、SQL、store/helper 调用或页面状态依赖。

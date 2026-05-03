@@ -25,16 +25,18 @@ func TestDefaultQueryLoopBudgetUsesEarlyStageExpandedLimits(t *testing.T) {
 }
 
 func TestStepFingerprintSortsParamKeysAndNormalizesValues(t *testing.T) {
-	left := cubebox.StepFingerprint(cubebox.ReadPlanStep{
-		ExecutorKey: "orgunit.list",
+	left := cubebox.StepFingerprint(cubebox.APICallStep{
+		Method: "GET",
+		Path:   "/org/api/org-units",
 		Params: map[string]any{
 			"parent_org_code":  " 100000 ",
 			"as_of":            "2026-04-25",
 			"include_disabled": false,
 		},
 	})
-	right := cubebox.StepFingerprint(cubebox.ReadPlanStep{
-		ExecutorKey: "orgunit.list",
+	right := cubebox.StepFingerprint(cubebox.APICallStep{
+		Method: "get",
+		Path:   "org/api/org-units",
 		Params: map[string]any{
 			"include_disabled": false,
 			"as_of":            "2026-04-25",
@@ -45,7 +47,7 @@ func TestStepFingerprintSortsParamKeysAndNormalizesValues(t *testing.T) {
 	if left != right {
 		t.Fatalf("expected stable fingerprint, left=%q right=%q", left, right)
 	}
-	if !strings.Contains(left, `as_of="2026-04-25"|include_disabled=false|parent_org_code="100000"`) {
+	if !strings.Contains(left, `GET|/org/api/org-units|as_of="2026-04-25"|include_disabled=false|parent_org_code="100000"`) {
 		t.Fatalf("unexpected fingerprint=%q", left)
 	}
 }
@@ -58,15 +60,16 @@ func TestQueryWorkingResultsAppendPlanBuildsObservationLedger(t *testing.T) {
 		MaxRepeatedPlan:       1,
 	})
 	state.NotePlanningRound()
-	plan := cubebox.ReadPlan{
-		Intent: "orgunit.list",
-		Steps: []cubebox.ReadPlanStep{{
-			ID:          "step-1",
-			ExecutorKey: "orgunit.list",
-			Params:      map[string]any{"as_of": "2026-04-25"},
+	plan := cubebox.APICallPlan{
+		Calls: []cubebox.APICallStep{{
+			ID:     "step-1",
+			Method: "GET",
+			Path:   "/org/api/org-units",
+			Params: map[string]any{"as_of": "2026-04-25"},
 		}},
 	}
 	state.AppendPlan(1, plan, []cubebox.ExecuteResult{{
+		OperationID: "orgunit.list",
 		Payload: map[string]any{
 			"as_of": "2026-04-25",
 			"org_units": []map[string]any{
@@ -104,9 +107,9 @@ func TestQueryWorkingResultsRepeatDetectionUsesBudget(t *testing.T) {
 		MaxWorkingResultItems: 50,
 		MaxRepeatedPlan:       1,
 	})
-	step := cubebox.ReadPlanStep{ID: "step-1", ExecutorKey: "orgunit.list", Params: map[string]any{"as_of": "2026-04-25"}}
+	step := cubebox.APICallStep{ID: "step-1", Method: "GET", Path: "/org/api/org-units", Params: map[string]any{"as_of": "2026-04-25"}}
 	fingerprint := cubebox.StepFingerprint(step)
-	state.AppendPlan(1, cubebox.ReadPlan{Intent: "orgunit.list", Steps: []cubebox.ReadPlanStep{step}}, []cubebox.ExecuteResult{{Payload: map[string]any{"org_units": []any{}}}})
+	state.AppendPlan(1, cubebox.APICallPlan{Calls: []cubebox.APICallStep{step}}, []cubebox.ExecuteResult{{OperationID: "orgunit.list", Payload: map[string]any{"org_units": []any{}}}})
 
 	if !state.HasExecuted(fingerprint) {
 		t.Fatalf("expected fingerprint recorded")
@@ -125,15 +128,16 @@ func TestQueryWorkingResultsRepeatDetectionUsesBudget(t *testing.T) {
 func TestWorkingResultsPromptBlockStaysBusinessAgnostic(t *testing.T) {
 	state := cubebox.NewQueryWorkingResultsState("查组织树", cubebox.DefaultQueryLoopBudget())
 	state.NotePlanningRound()
-	state.AppendPlan(1, cubebox.ReadPlan{
-		Intent: "orgunit.list",
-		Steps: []cubebox.ReadPlanStep{{
-			ID:          "step-1",
-			ExecutorKey: "orgunit.list",
-			Params:      map[string]any{"as_of": "2026-04-25"},
+	state.AppendPlan(1, cubebox.APICallPlan{
+		Calls: []cubebox.APICallStep{{
+			ID:     "step-1",
+			Method: "GET",
+			Path:   "/org/api/org-units",
+			Params: map[string]any{"as_of": "2026-04-25"},
 		}},
 	}, []cubebox.ExecuteResult{{
-		Payload: map[string]any{"org_units": []map[string]any{{"org_code": "100000", "has_children": true}}},
+		OperationID: "orgunit.list",
+		Payload:     map[string]any{"org_units": []map[string]any{{"org_code": "100000", "has_children": true}}},
 	}})
 
 	body := cubebox.WorkingResultsPromptBlock(state.Snapshot())
@@ -169,8 +173,10 @@ func TestWorkingResultsPromptBlockProjectsRecentHistoryWindow(t *testing.T) {
 		LatestObservation: &cubebox.QueryWorkingObservation{
 			Round:             80,
 			StepID:            "step-80",
-			ExecutorKey:       "orgunit.list",
-			ParamsFingerprint: `orgunit.list|as_of="2026-04-25"|parent_org_code="999999"`,
+			Method:            "GET",
+			Path:              "/org/api/org-units",
+			OperationID:       "orgunit.list",
+			ParamsFingerprint: `GET|/org/api/org-units|as_of="2026-04-25"|parent_org_code="999999"`,
 			Items:             make([]any, 0, 250),
 			ItemCount:         250,
 			Truncated:         false,
@@ -188,7 +194,9 @@ func TestWorkingResultsPromptBlockProjectsRecentHistoryWindow(t *testing.T) {
 			Intent: "orgunit.list",
 			Steps: []cubebox.QueryCompletedPlanStep{{
 				StepID:            "step-" + string(rune('A'+i-1)),
-				ExecutorKey:       "orgunit.list",
+				Method:            "GET",
+				Path:              "/org/api/org-units",
+				OperationID:       "orgunit.list",
 				ParamsFingerprint: "fp-plan-" + strings.Repeat("x", i%3) + string(rune('A'+i-1)),
 				ItemCount:         1,
 			}},

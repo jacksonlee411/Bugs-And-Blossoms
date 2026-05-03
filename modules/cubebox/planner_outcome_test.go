@@ -7,18 +7,22 @@ import (
 	"github.com/jacksonlee411/Bugs-And-Blossoms/modules/cubebox"
 )
 
-func TestDecodePlannerOutcomeEnvelopeReadPlan(t *testing.T) {
-	raw := `{"outcome":"READ_PLAN","plan":{"intent":"orgunit.list","confidence":0.9,"missing_params":[],"steps":[{"id":"step-1","executor_key":"orgunit.list","params":{"as_of":"2026-04-25"},"depends_on":[]}],"explain_focus":[]}}`
+func TestDecodePlannerOutcomeEnvelopeAPICalls(t *testing.T) {
+	raw := `{"outcome":"API_CALLS","calls":[{"id":"step-1","method":"get","path":"org/api/org-units","params":{"as_of":"2026-04-25"},"depends_on":[]}]}`
 
 	outcome, err := cubebox.DecodePlannerOutcome([]byte(raw))
 	if err != nil {
 		t.Fatalf("DecodePlannerOutcome err=%v", err)
 	}
-	if outcome.Type != cubebox.PlannerOutcomeReadPlan {
+	if outcome.Type != cubebox.PlannerOutcomeAPICalls {
 		t.Fatalf("unexpected outcome=%#v", outcome)
 	}
-	if got := outcome.Plan.Steps[0].Params["as_of"]; got != "2026-04-25" {
-		t.Fatalf("unexpected plan params=%#v", outcome.Plan.Steps[0].Params)
+	call := outcome.Calls.Calls[0]
+	if call.Method != "GET" || call.Path != "/org/api/org-units" {
+		t.Fatalf("unexpected call route=%#v", call)
+	}
+	if got := call.Params["as_of"]; got != "2026-04-25" {
+		t.Fatalf("unexpected call params=%#v", call.Params)
 	}
 }
 
@@ -62,37 +66,18 @@ func TestDecodePlannerOutcomeEnvelopeDoneAndNoQuery(t *testing.T) {
 	}
 }
 
-func TestDecodePlannerOutcomeCompatibilityBareReadPlanAndNoQuery(t *testing.T) {
-	readPlan := `{"intent":"orgunit.list","confidence":0.9,"missing_params":[],"steps":[{"id":"step-1","executor_key":"orgunit.list","params":{"as_of":"2026-04-25"},"depends_on":[]}],"explain_focus":[]}`
-	outcome, err := cubebox.DecodePlannerOutcome([]byte(readPlan))
-	if err != nil {
-		t.Fatalf("DecodePlannerOutcome bare read plan err=%v", err)
-	}
-	if outcome.Type != cubebox.PlannerOutcomeReadPlan || outcome.CompatibilitySource != "bare_read_plan" {
-		t.Fatalf("unexpected bare read plan outcome=%#v", outcome)
-	}
-
-	outcome, err = cubebox.DecodePlannerOutcome([]byte("NO_QUERY"))
-	if err != nil {
-		t.Fatalf("DecodePlannerOutcome bare NO_QUERY err=%v", err)
-	}
-	if outcome.Type != cubebox.PlannerOutcomeNoQuery || outcome.CompatibilitySource != "bare_no_query" {
-		t.Fatalf("unexpected bare no query outcome=%#v", outcome)
-	}
-}
-
-func TestDecodePlannerOutcomeCompatibilityBareClarifyingReadPlan(t *testing.T) {
-	readPlan := `{"intent":"orgunit.list","confidence":0.4,"missing_params":["as_of"],"steps":[],"explain_focus":[],"clarifying_question":"请提供查询日期。"}`
-
-	outcome, err := cubebox.DecodePlannerOutcome([]byte(readPlan))
-	if err != nil {
-		t.Fatalf("DecodePlannerOutcome bare clarifying read plan err=%v", err)
-	}
-	if outcome.Type != cubebox.PlannerOutcomeClarify {
-		t.Fatalf("unexpected outcome=%#v", outcome)
-	}
-	if outcome.ClarifyingQuestion != "请提供查询日期。" {
-		t.Fatalf("unexpected question=%q", outcome.ClarifyingQuestion)
+func TestDecodePlannerOutcomeRejectsLegacyReadPlanShapes(t *testing.T) {
+	for _, raw := range []string{
+		`NO_QUERY`,
+		`{"intent":"orgunit.list","confidence":0.9,"missing_params":[],"steps":[{"id":"step-1","executor_key":"orgunit.list","params":{"as_of":"2026-04-25"},"depends_on":[]}],"explain_focus":[]}`,
+		`{"outcome":"READ_PLAN","plan":{"intent":"orgunit.list","confidence":0.9,"missing_params":[],"steps":[{"id":"step-1","executor_key":"orgunit.list","params":{"as_of":"2026-04-25"},"depends_on":[]}],"explain_focus":[]}}`,
+		`{"outcome":"API_CALLS","plan":{"intent":"orgunit.list","steps":[]},"calls":[{"id":"step-1","method":"GET","path":"/org/api/org-units","params":{"as_of":"2026-04-25"},"depends_on":[]}]}`,
+		`{"outcome":"API_CALLS","calls":[{"id":"step-1","method":"GET","path":"/org/api/org-units","executor_key":"orgunit.list","params":{"as_of":"2026-04-25"},"depends_on":[]}]}`,
+	} {
+		_, err := cubebox.DecodePlannerOutcome([]byte(raw))
+		if err == nil {
+			t.Fatalf("expected legacy payload rejected: %s", raw)
+		}
 	}
 }
 
@@ -101,10 +86,10 @@ func TestDecodePlannerOutcomeRejectsInvalidPayloads(t *testing.T) {
 		`DONE`,
 		`plain text`,
 		`{"outcome":"MAYBE"}`,
-		`{"outcome":"DONE","plan":{"intent":"orgunit.list"}}`,
+		`{"outcome":"DONE","calls":[]}`,
 		`{"outcome":"NO_QUERY","clarifying_question":"够了"}`,
-		`{"outcome":"READ_PLAN","missing_params":["as_of"],"plan":{"intent":"orgunit.list","confidence":0.9,"missing_params":[],"steps":[{"id":"step-1","executor_key":"orgunit.list","params":{"as_of":"2026-04-25"},"depends_on":[]}],"explain_focus":[]}}`,
-		`{"outcome":"CLARIFY","missing_params":["as_of"],"clarifying_question":"请提供日期。","plan":{"intent":"orgunit.list"}}`,
+		`{"outcome":"API_CALLS","missing_params":["as_of"],"calls":[{"id":"step-1","method":"GET","path":"/org/api/org-units","params":{"as_of":"2026-04-25"},"depends_on":[]}]}`,
+		`{"outcome":"CLARIFY","missing_params":["as_of"],"clarifying_question":"请提供日期。","calls":[]}`,
 	} {
 		_, err := cubebox.DecodePlannerOutcome([]byte(raw))
 		if !errors.Is(err, cubebox.ErrPlannerOutcomeInvalid) {
