@@ -1,6 +1,6 @@
 # DEV-PLAN-480：EHR 授权体系总体方案
 
-**状态**: 授权体系蓝图持续推进；480A P1/P2 只读治理面、487/489/489A 后端运行时闭环、481 UI 保存交互与 A/B 组织范围 E2E、490 API-first 首期硬切换及评审修复已落地，491 后端候选前置缺口已补齐但 selector/UI 未实施，488 诊断与字段级授权仍待后续（2026-05-03 CST）
+**状态**: 授权体系蓝图持续推进；480A P1/P2 只读治理面、487/489/489A 后端运行时闭环、481 UI 保存交互与 A/B 组织范围 E2E、490 API-first 首期硬切换及评审修复已落地，491 Phase A/B/C 已完成 selector facade、组件族与用户授权页首个接入，488 诊断、字段级授权、491/492 联合 E2E 与 492 后续读取收敛仍待后续（2026-05-04 CST）
 
 ## 0. 适用范围与评审分级
 
@@ -478,3 +478,4 @@ Decision 的逻辑字段：
 ### 9.1 当前验证摘记
 
 - 2026-05-03 CST：490 首期 API-first hard cutover 已完成；四个 orgunit 只读 API 进入 CubeBox API tool overlay，active runtime 切为 `API_CALLS`，旧 `READ_PLAN` / 裸 `ReadPlan` / `executor_key` 成功路径已退出 active runtime。随后完成评审修复：`all_org_units=true` 透传到普通 Web API parser，search 多候选返回澄清且唯一 scope 可见候选直接返回，runner 投影 `PresentedCandidates`，knowledge pack 阻断跨 turn `depends_on`。已验证 `make check cubebox-api-first`、`make authz-pack && make authz-test && make authz-lint`、Go fmt/vet/lint/test、routing/doc/no-legacy/chat-surface/root-surface 等命中门禁；491 selector/UI、488 诊断与字段级授权仍为后续范围。
+- 2026-05-04 CST：491 Phase A/B/C 已完成前端 selector facade、`OrgUnitTreeSelector` / picker / field 最小组件族与用户授权页首个接入；`AuthzRolePages.tsx` 组织范围行已移除 `listOrgUnits()` 一级候选并切到 `OrgUnitTreeField`，可选择非根节点并按 489 payload 保存。该进展不改变 480/480A P5 完成边界；488 诊断、字段级授权、491/492 联合 E2E、组织管理页读取继续下沉与 SQL 级 scoped pagination 仍为后续范围。

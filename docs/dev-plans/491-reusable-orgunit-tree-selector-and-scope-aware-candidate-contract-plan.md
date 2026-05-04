@@ -1,6 +1,6 @@
 # DEV-PLAN-491：通用可复用 OrgUnit 树选择器与范围感知候选契约方案
 
-**状态**: 实施中（2026-05-04 CST）— Phase A 已完成、Phase B 最小单选骨架已完成、Phase C 未开始。OrgUnit Read Core、selector-ready DTO、scope-aware visible roots 与 safe path 架构缺口已转由 `DEV-PLAN-492` 承接；本计划保留前端 selector/facade 与选择入口接入 owner，并明确不接管组织管理页浏览/编辑主 UI。当前已新增 selector facade 与 `OrgUnitTreeSelector` / picker / field 最小组件族；`授权管理 > 用户授权 > 组织范围` 仍未接入 selector，仍不能宣称用户可见闭环完成。
+**状态**: 实施中（2026-05-04 CST）— Phase A 已完成、Phase B 最小单选骨架已完成、Phase C 用户授权页首个接入已落地，联合 E2E 仍待后续。OrgUnit Read Core、selector-ready DTO、scope-aware visible roots 与 safe path 架构缺口已转由 `DEV-PLAN-492` 承接；本计划保留前端 selector/facade 与选择入口接入 owner，并明确不接管组织管理页浏览/编辑主 UI。当前已新增 selector facade 与 `OrgUnitTreeSelector` / picker / field 最小组件族；`授权管理 > 用户授权 > 组织范围` 已切换为 `OrgUnitTreeField`，保存 payload 仍沿用 489。
 
 ## 0. 适用范围与评审分级
 
@@ -19,12 +19,12 @@
 ### 0.2 现状研究摘要
 
 - 当前仓库已有通用展示组件 [TreePanel](/home/lee/Projects/Bugs-And-Blossoms/apps/web/src/components/TreePanel.tsx:1)，组织架构页也已有“根节点 + 懒加载子节点 + 搜索定位”的现成链路 [OrgUnitsPage](/home/lee/Projects/Bugs-And-Blossoms/apps/web/src/pages/org/OrgUnitsPage.tsx:124) 与 [orgUnits API client](/home/lee/Projects/Bugs-And-Blossoms/apps/web/src/api/orgUnits.ts:20)。这些是 selector 可复用素材，不表示 491 要把组织管理页整体替换成 selector。
-- 但 `用户授权 > 组织范围` 目前没有复用树链路，而是直接调用 [listOrgUnits({ asOf, includeDisabled:false })](/home/lee/Projects/Bugs-And-Blossoms/apps/web/src/pages/authz/AuthzRolePages.tsx:469) 作为下拉候选，导致页面只拿到默认一级组织列表。
+- 491 实施前，`用户授权 > 组织范围` 没有复用树链路，而是直接调用 `listOrgUnits({ asOf, includeDisabled:false })` 作为下拉候选，导致页面只拿到默认一级组织列表；该入口已在 Phase C 移除，当前用户授权页消费 `OrgUnitTreeField`。
 - `GET /org/api/org-units` 的当前语义是：无 `parent_org_code` 且无 `keyword`、无 `all_org_units=true` 时，只返回当前租户一级组织；该语义在 [orgunit_api.go](/home/lee/Projects/Bugs-And-Blossoms/internal/server/orgunit_api.go:1168) 和 [orgunit_field_metadata_store.go](/home/lee/Projects/Bugs-And-Blossoms/internal/server/orgunit_field_metadata_store.go:770) 已固化。
 - 当前 Web API 侧的 `AllOrgUnits` 运行时结构已随 490 评审修复接入 query parser；`all_org_units=true` 现只表示当前调用者可见范围内全部组织。491 后续仍不采用“用户授权页临时全量下拉”作为交付方案，selector/facade 仍需按本计划统一收敛。
 - `DEV-PLAN-492` 已成为 OrgUnit 基础模块 read core、`org_node_key` DTO 暴露、scope-aware visible roots、安全展开路径和 handler 瘦身的上游 owner；491 不在页面或 selector 内补这些后端架构缺口。
 - 2026-05-04 前端首切已完成：新增 [orgUnitSelector facade](/home/lee/Projects/Bugs-And-Blossoms/apps/web/src/api/orgUnitSelector.ts:1) 与 [OrgUnitTreeSelector 组件族](/home/lee/Projects/Bugs-And-Blossoms/apps/web/src/components/OrgUnitTreeSelector.tsx:1)，并扩展 [TreePanel](/home/lee/Projects/Bugs-And-Blossoms/apps/web/src/components/TreePanel.tsx:1) 支持可选受控展开，用于搜索定位后展开到命中节点。
-- `用户授权 > 组织范围` 仍直接使用 [AuthzRolePages.tsx](/home/lee/Projects/Bugs-And-Blossoms/apps/web/src/pages/authz/AuthzRolePages.tsx:469) 中的 `listOrgUnits()` 一级候选；Phase C 必须替换该入口，保存 payload 仍沿用 489。
+- 2026-05-04 Phase C 首切已完成：`用户授权 > 组织范围` 不再直接调用 `listOrgUnits()` 一级候选，已改为在组织范围行使用 [OrgUnitTreeField](/home/lee/Projects/Bugs-And-Blossoms/apps/web/src/pages/authz/AuthzRolePages.tsx:617)，picker 选中后写入 `org_code`、`org_node_key` 与 `name`；保存 payload 仍沿用 489。
 - `DEV-PLAN-481` 已明确“组织范围页签”应是“组织下拉或组织树选择结果” [481](/home/lee/Projects/Bugs-And-Blossoms/docs/dev-plans/481-ehr-role-design-and-configuration-plan.md:195)；`DEV-PLAN-489` 已冻结“运行时组织范围必须由服务端 scope provider 强制” [489](/home/lee/Projects/Bugs-And-Blossoms/docs/dev-plans/489-user-authorization-org-scope-sot-and-runtime-enforcement-plan.md:15)。因此本次问题不是单页 UI bug，而是缺少仓库级 selector 契约。
 - 本次不沿用的“容易做法”：
   - 在用户授权页临时加一个 `all_org_units=true` 下拉分支。
@@ -52,9 +52,9 @@
 ### 2.1 核心目标
 
 1. [ ] 冻结仓库级 `OrgUnitTreeSelector` 概念模型：节点结构、选中值、搜索结果、路径回显、懒加载和多选语义一致。（2026-05-04：单选节点、搜索定位、懒加载与回显模型已落地；多选语义仍未实施，继续保持非首期范围。）
-2. [X] 消费并验证 492 冻结的服务端 selector 候选契约：根节点、子节点、搜索、按 code/id 回显、路径解析都走同一 OrgUnit 读链路，并按当前 principal 组织范围裁剪。（2026-05-04：491 facade/组件已消费 roots/children/search；不新增后端 route、不做前端权限裁剪。用户授权页页面级接入与 E2E 仍待 Phase C/P6。）
+2. [X] 消费并验证 492 冻结的服务端 selector 候选契约：根节点、子节点、搜索、按 code/id 回显、路径解析都走同一 OrgUnit 读链路，并按当前 principal 组织范围裁剪。（2026-05-04：491 facade/组件已消费 roots/children/search；用户授权页已接 `OrgUnitTreeField`；不新增后端 route、不做前端权限裁剪。联合 E2E 仍待 P6。）
 3. [ ] 冻结范围感知不变量：普通用户只能选择当前组织范围内节点；管理员配置其他用户授权时也不能通过 selector 越权选择自己范围外的节点；任何页面都不得自行构造“超范围候选”。
-4. [ ] 冻结前端复用边界：用户授权页、上级组织选择、后续范围绑定页面统一复用 selector facade，不再直接拿 `listOrgUnits()` 的一级列表塞进下拉。
+4. [ ] 冻结前端复用边界：用户授权页已复用 selector；上级组织选择、后续范围绑定页面仍需继续替换为 selector facade，不再直接拿 `listOrgUnits()` 的一级列表塞进下拉。
 5. [ ] 冻结分阶段实施路线：先交付可复用契约和用户授权页切换，再逐步替换其他散落“选择组织”入口，避免一轮内大规模 UI 重写。
 
 ### 2.2 非目标
@@ -301,9 +301,9 @@ interface OrgUnitSelectorNode {
 
 ### 5.3 Phase C：用户授权页首个接入
 
-1. [ ] 用户授权页组织范围从一级下拉切到 selector。
-2. [ ] 支持选择非根节点。
-3. [ ] 普通用户/受限管理员只能看到自己范围内节点。
+1. [X] 用户授权页组织范围从一级下拉切到 selector。（2026-05-04：组织列改为只读 `OrgUnitTreeField`，移除页面内 `listOrgUnits()` 查询和 `OrgUnitAPIItem` 依赖。）
+2. [X] 支持选择非根节点。（2026-05-04：页面测试 mock selector field 选择 `FLOWERS-CHILD` 并验证 489 payload 写入 `org_node_key/org_code/org_name`。）
+3. [ ] 普通用户/受限管理员只能看到自己范围内节点。（候选裁剪由 492 ReadService 提供；受限管理员页面级或 E2E 验证仍待后续。）
 
 ### 5.4 Phase D：仓内其他页面复用推广
 
@@ -324,10 +324,10 @@ interface OrgUnitSelectorNode {
 
 ## 7. 验收标准
 
-1. [ ] 新建/编辑用户授权组织范围时，可以选择非根节点。
+1. [X] 新建/编辑用户授权组织范围时，可以选择非根节点。（2026-05-04：页面级测试覆盖 selector field 选中非根节点并保存。）
 2. [ ] 当前用户没有范围访问权的组织不会出现在 selector 根列表、子列表或搜索结果中。
-3. [X] selector 选中的节点能稳定回显，不依赖页面手写 label 拼装。（2026-05-04：组件测试已覆盖根节点、子节点和搜索定位后的完整节点回调；页面接入回显仍待 Phase C。）
-4. [ ] 至少用户授权页接入统一 selector；不再直接使用一级组织下拉。
+3. [X] selector 选中的节点能稳定回显，不依赖页面手写 label 拼装。（2026-05-04：组件测试已覆盖根节点、子节点和搜索定位后的完整节点回调；页面接入测试已覆盖 assignment 响应缺 `org_name` 时用 `org_code` 稳定回显。）
+4. [X] 至少用户授权页接入统一 selector；不再直接使用一级组织下拉。（2026-05-04：`AuthzRolePages.tsx` 已移除授权页组织范围 `listOrgUnits()` 查询。）
 5. [ ] 普通 orgunit API、用户授权页 selector、后续接入页面在“当前 principal 可见组织”口径上一致。
 6. [ ] 受限管理员给其他用户配置组织范围时，selector 不显示当前管理员范围外的组织；直接输入/回显范围外 `org_code` 必须 fail-closed。
 7. [ ] 搜索命中当前范围内的深层子节点时，`path_org_codes` 只包含当前 principal 可见且前端可展开的路径，不包含范围外祖先。
@@ -344,7 +344,8 @@ interface OrgUnitSelectorNode {
 
 - 2026-05-03 CST：调查确认 `用户授权 > 组织范围` 当前只能选到根组织，不是 489 运行时 scope 裁剪错误，而是页面直接复用了 `GET /org/api/org-units` 的默认一级组织列表语义。
 - 2026-05-03 CST：调查确认仓库已具备 `TreePanel`、根节点 + 懒加载子节点 + 搜索定位基础链路，但缺少仓库级“可复用 selector 契约”与“范围感知候选”统一 owner。
-- 2026-05-03 CST：随 490 评审修复补齐后端前置缺口：普通 Web API parser 已接入 `all_org_units=true`，且语义冻结为当前调用者可见范围内全部组织；`orgunit.search` 已改为 scope-aware candidates 决策，多候选返回澄清，scope 过滤后唯一候选直接返回该可见候选。491 的前端 selector facade、组件族和用户授权页切换仍未实施，不能宣称用户可见 selector 闭环完成。
+- 2026-05-03 CST：随 490 评审修复补齐后端前置缺口：普通 Web API parser 已接入 `all_org_units=true`，且语义冻结为当前调用者可见范围内全部组织；`orgunit.search` 已改为 scope-aware candidates 决策，多候选返回澄清，scope 过滤后唯一候选直接返回该可见候选。当日 491 的前端 selector facade、组件族和用户授权页切换仍未实施，不能宣称用户可见 selector 闭环完成；该历史状态已被 2026-05-04 Phase A/B/C 记录更新。
 - 2026-05-03 CST：新增 `DEV-PLAN-492` 作为 OrgUnit 基础模块 read core 与架构统一 owner；491 不再承接后端 read core 重构，只消费 492 输出的 selector-ready 契约并完成前端落地。
 - 2026-05-04 CST：按评审补齐边界：491 只治理“选择组织”的前端 selector/facade，不接管组织管理页浏览/编辑主 UI；组织管理页读取规则统一由 492 read core 收敛。
-- 2026-05-04 CST：Phase A/B 前端首切落地：新增 `orgUnitSelector` facade、`OrgUnitTreeSelector` / `OrgUnitTreePickerDialog` / `OrgUnitTreeField` 最小单选骨架与 Vitest 覆盖；`TreePanel` 增加可选受控展开以支持搜索定位后的路径展开。验证已覆盖 `pnpm --dir apps/web test`、`pnpm --dir apps/web build`、`pnpm --dir apps/web typecheck`、`pnpm --dir apps/web lint`、`make generate`、`make css`、`make check tr`、`make check doc`；`make check root-surface` 因根目录既有 `.playwright-mcp` 本地产物失败，非本轮新增代码导致。用户授权页仍未接入，下一 PR 承接 Phase C，保存 payload 仍沿用 489。
+- 2026-05-04 CST：Phase A/B 前端首切落地：新增 `orgUnitSelector` facade、`OrgUnitTreeSelector` / `OrgUnitTreePickerDialog` / `OrgUnitTreeField` 最小单选骨架与 Vitest 覆盖；`TreePanel` 增加可选受控展开以支持搜索定位后的路径展开。验证已覆盖 `pnpm --dir apps/web test`、`pnpm --dir apps/web build`、`pnpm --dir apps/web typecheck`、`pnpm --dir apps/web lint`、`make generate`、`make css`、`make check tr`、`make check doc`；`make check root-surface` 因根目录既有 `.playwright-mcp` 本地产物失败，非本轮新增代码导致。该记录仅描述 Phase A/B 当时状态，后续 Phase C 已完成用户授权页首个接入。
+- 2026-05-04 CST：Phase C 用户授权页首个接入落地：`AuthzRolePages.tsx` 组织范围行切到 `OrgUnitTreeField`，移除页面内 `listOrgUnits()` 查询和 `OrgUnitAPIItem` 依赖；`addScopeRow` 改为新增空行，不再自动取第一个根组织；选择器选中后写入 `orgCode/orgNodeKey/orgName`，`buildScopePayload()` 继续沿用 489 payload。页面测试改为 mock selector field，并验证选择非根节点后保存 `org_node_key/org_code/org_name`；评审修复已补 assignment 响应缺 `org_name` 时用 `org_code` 回显，避免既有授权行显示为空。受限管理员 E2E、其他组织选择入口替换、组织管理页读取规则下沉仍待后续。
