@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/jacksonlee411/Bugs-And-Blossoms/pkg/authz"
+	orgunitpkg "github.com/jacksonlee411/Bugs-And-Blossoms/pkg/orgunit"
 )
 
 type principalListStoreStub struct {
@@ -106,13 +107,24 @@ func TestHandlePrincipalAuthzAssignmentGetAPI_ReadsAssignmentWithPrincipalID(t *
 func TestHandlePrincipalAuthzAssignmentPutAPI_ResolvesOrgCodeBeforeSave(t *testing.T) {
 	store := newMemoryAuthzRuntimeStore()
 	rootOrgNodeKey := mustOrgNodeKeyForTest(t, 10000000)
+	if _, err := store.ReplacePrincipalAssignment(context.Background(), "tenant-a", "actor-a", replacePrincipalAssignmentInput{
+		Roles:     []string{authz.RoleTenantAdmin},
+		OrgScopes: []principalOrgScope{{OrgNodeKey: rootOrgNodeKey, IncludeDescendants: true}},
+		Revision:  1,
+	}); err != nil {
+		t.Fatal(err)
+	}
 	reqBody := bytes.NewBufferString(`{
 		"roles": [{"role_slug": "tenant-viewer"}],
 		"org_scopes": [{"org_code": "flowers", "include_descendants": true}],
 		"revision": 1
 	}`)
 	req := httptest.NewRequest(http.MethodPut, "/iam/api/authz/user-assignments/principal-b", reqBody)
-	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "tenant-a", Domain: "localhost", Name: "Tenant A"}))
+	req = req.WithContext(withPrincipal(withTenant(req.Context(), Tenant{ID: "tenant-a", Domain: "localhost", Name: "Tenant A"}), Principal{
+		ID:       "actor-a",
+		TenantID: "tenant-a",
+		Status:   "active",
+	}))
 	rec := httptest.NewRecorder()
 
 	resolver := orgUnitCodeResolverStub{
@@ -130,7 +142,7 @@ func TestHandlePrincipalAuthzAssignmentPutAPI_ResolvesOrgCodeBeforeSave(t *testi
 		},
 	}
 
-	handlePrincipalAuthzAssignmentPutAPI(rec, req, store, resolver)
+	handlePrincipalAuthzAssignmentPutAPI(rec, req, store, resolver, store)
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
@@ -148,6 +160,111 @@ func TestHandlePrincipalAuthzAssignmentPutAPI_ResolvesOrgCodeBeforeSave(t *testi
 	scope := payload.OrgScopes[0]
 	if scope.OrgNodeKey != rootOrgNodeKey || scope.OrgCode != "FLOWERS" || !scope.IncludeDescendants {
 		t.Fatalf("scope=%+v", scope)
+	}
+}
+
+func TestHandlePrincipalAuthzAssignmentPutAPI_FailsClosedWhenActorScopeDoesNotAllowRequestedOrg(t *testing.T) {
+	store := newMemoryAuthzRuntimeStore()
+	flowersOrgNodeKey := mustOrgNodeKeyForTest(t, 10000001)
+	bugsOrgNodeKey := mustOrgNodeKeyForTest(t, 10000002)
+	if _, err := store.ReplacePrincipalAssignment(context.Background(), "tenant-a", "actor-a", replacePrincipalAssignmentInput{
+		Roles:     []string{authz.RoleTenantAdmin},
+		OrgScopes: []principalOrgScope{{OrgNodeKey: flowersOrgNodeKey, IncludeDescendants: true}},
+		Revision:  1,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	reqBody := bytes.NewBufferString(`{
+		"roles": [{"role_slug": "tenant-viewer"}],
+		"org_scopes": [{"org_code": "bugs", "include_descendants": true}],
+		"revision": 1
+	}`)
+	req := httptest.NewRequest(http.MethodPut, "/iam/api/authz/user-assignments/principal-b", reqBody)
+	req = req.WithContext(withPrincipal(withTenant(req.Context(), Tenant{ID: "tenant-a", Domain: "localhost", Name: "Tenant A"}), Principal{
+		ID:       "actor-a",
+		TenantID: "tenant-a",
+		Status:   "active",
+	}))
+	rec := httptest.NewRecorder()
+
+	resolver := orgUnitCodeResolverStub{
+		resolveOrgNodeKeyByCodeFn: func(_ context.Context, tenantID string, orgCode string) (string, error) {
+			if tenantID != "tenant-a" || orgCode != "bugs" {
+				t.Fatalf("resolve tenant=%q orgCode=%q", tenantID, orgCode)
+			}
+			return bugsOrgNodeKey, nil
+		},
+		resolveOrgCodesByNodeKeysFn: func(_ context.Context, _ string, _ []string) (map[string]string, error) {
+			t.Fatal("scope check should fail before response org code hydration")
+			return nil, nil
+		},
+	}
+
+	handlePrincipalAuthzAssignmentPutAPI(rec, req, store, resolver, store)
+
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+	}
+	var payload struct {
+		Code string `json:"code"`
+	}
+	if err := json.NewDecoder(rec.Body).Decode(&payload); err != nil {
+		t.Fatal(err)
+	}
+	if payload.Code != "authz_scope_forbidden" {
+		t.Fatalf("payload=%+v", payload)
+	}
+}
+
+func TestHandlePrincipalAuthzAssignmentPutAPI_HidesUnknownOrgCodeAsScopeForbidden(t *testing.T) {
+	store := newMemoryAuthzRuntimeStore()
+	rootOrgNodeKey := mustOrgNodeKeyForTest(t, 10000000)
+	if _, err := store.ReplacePrincipalAssignment(context.Background(), "tenant-a", "actor-a", replacePrincipalAssignmentInput{
+		Roles:     []string{authz.RoleTenantAdmin},
+		OrgScopes: []principalOrgScope{{OrgNodeKey: rootOrgNodeKey, IncludeDescendants: true}},
+		Revision:  1,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	reqBody := bytes.NewBufferString(`{
+		"roles": [{"role_slug": "tenant-viewer"}],
+		"org_scopes": [{"org_code": "missing", "include_descendants": true}],
+		"revision": 1
+	}`)
+	req := httptest.NewRequest(http.MethodPut, "/iam/api/authz/user-assignments/principal-b", reqBody)
+	req = req.WithContext(withPrincipal(withTenant(req.Context(), Tenant{ID: "tenant-a", Domain: "localhost", Name: "Tenant A"}), Principal{
+		ID:       "actor-a",
+		TenantID: "tenant-a",
+		Status:   "active",
+	}))
+	rec := httptest.NewRecorder()
+
+	resolver := orgUnitCodeResolverStub{
+		resolveOrgNodeKeyByCodeFn: func(_ context.Context, tenantID string, orgCode string) (string, error) {
+			if tenantID != "tenant-a" || orgCode != "missing" {
+				t.Fatalf("resolve tenant=%q orgCode=%q", tenantID, orgCode)
+			}
+			return "", orgunitpkg.ErrOrgCodeNotFound
+		},
+		resolveOrgCodesByNodeKeysFn: func(_ context.Context, _ string, _ []string) (map[string]string, error) {
+			t.Fatal("scope check should fail before response org code hydration")
+			return nil, nil
+		},
+	}
+
+	handlePrincipalAuthzAssignmentPutAPI(rec, req, store, resolver, store)
+
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+	}
+	var payload struct {
+		Code string `json:"code"`
+	}
+	if err := json.NewDecoder(rec.Body).Decode(&payload); err != nil {
+		t.Fatal(err)
+	}
+	if payload.Code != "authz_scope_forbidden" {
+		t.Fatalf("payload=%+v", payload)
 	}
 }
 

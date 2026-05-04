@@ -234,7 +234,7 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, error) {
 		handlePrincipalAuthzAssignmentGetAPI(w, r, authzRuntime, principals, orgStore)
 	}))
 	router.Handle(routing.RouteClassInternalAPI, http.MethodPut, "/iam/api/authz/user-assignments/{principal_id}", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		handlePrincipalAuthzAssignmentPutAPI(w, r, authzRuntime, orgStore)
+		handlePrincipalAuthzAssignmentPutAPI(w, r, authzRuntime, orgStore, authzRuntime)
 	}))
 	router.Handle(routing.RouteClassInternalAPI, http.MethodGet, "/iam/api/dicts", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		handleDictsAPI(w, r, dictStore)
