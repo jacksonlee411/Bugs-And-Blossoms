@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -10,6 +11,7 @@ import (
 	"strings"
 	"testing"
 
+	orgunitservices "github.com/jacksonlee411/Bugs-And-Blossoms/modules/orgunit/services"
 	orgunitpkg "github.com/jacksonlee411/Bugs-And-Blossoms/pkg/orgunit"
 )
 
@@ -127,6 +129,28 @@ func TestHandleOrgUnitsAPI_ListVisibleRootsFromScopedMiddleNode(t *testing.T) {
 	}
 	if payload.OrgUnits[0].HasVisibleChildren == nil || !*payload.OrgUnits[0].HasVisibleChildren {
 		t.Fatalf("has_visible_children missing: %+v", payload.OrgUnits[0])
+	}
+}
+
+func TestOrgUnitReadStoreAdapterResolveFailsClosedWhenPathCodeMissing(t *testing.T) {
+	rootKey := mustReadTestOrgNodeKey(t, 10000001)
+	childKey := mustReadTestOrgNodeKey(t, 10000002)
+	store := &resolveOrgCodeStore{
+		getNodeDetails: OrgUnitNodeDetails{
+			OrgNodeKey:      childKey,
+			OrgCode:         "CHILD",
+			Name:            "Child",
+			Status:          "active",
+			PathOrgNodeKeys: []string{rootKey, childKey},
+		},
+		resolveCodesByNodeKey: map[string]string{
+			childKey: "CHILD",
+		},
+	}
+
+	_, err := orgUnitReadStoreAdapter{store: store}.ResolveByOrgNodeKey(context.Background(), "t1", childKey, "2026-01-01", false)
+	if !errors.Is(err, orgunitservices.ErrOrgUnitReadSafePathUnavailable) {
+		t.Fatalf("err=%v want safe path unavailable", err)
 	}
 }
 

@@ -154,7 +154,11 @@ func resolveOrgUnitPathCodes(ctx context.Context, store OrgUnitStore, tenantID s
 	}
 	out := make([]string, 0, len(pathOrgNodeKeys))
 	for _, orgNodeKey := range pathOrgNodeKeys {
-		out = append(out, resolved[orgNodeKey])
+		code, ok := resolved[orgNodeKey]
+		if !ok || strings.TrimSpace(code) == "" {
+			return nil, orgunitservices.ErrOrgUnitReadSafePathUnavailable
+		}
+		out = append(out, code)
 	}
 	return out, nil
 }

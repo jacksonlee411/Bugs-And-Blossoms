@@ -26,8 +26,10 @@ type resolveOrgCodeStore struct {
 	listChildren    []OrgUnitChild
 	listChildrenErr error
 
-	resolveCodes    map[int]string
-	resolveCodesErr error
+	resolveCodes             map[int]string
+	resolveCodesErr          error
+	resolveCodesByNodeKey    map[string]string
+	resolveCodesByNodeKeyErr error
 
 	getNodeDetails    OrgUnitNodeDetails
 	getNodeDetailsErr error
@@ -118,6 +120,12 @@ func (s *resolveOrgCodeStore) ResolveOrgCodes(context.Context, string, []int) (m
 }
 
 func (s *resolveOrgCodeStore) ResolveOrgCodesByNodeKeys(ctx context.Context, tenantID string, orgNodeKeys []string) (map[string]string, error) {
+	if s.resolveCodesByNodeKeyErr != nil {
+		return nil, s.resolveCodesByNodeKeyErr
+	}
+	if s.resolveCodesByNodeKey != nil {
+		return s.resolveCodesByNodeKey, nil
+	}
 	if s.resolveCodesErr != nil {
 		return nil, s.resolveCodesErr
 	}

@@ -221,7 +221,12 @@ func (s orgUnitReadService) visibleRootsFromScope(ctx context.Context, tenantID 
 		return nil, ErrOrgUnitReadScopeRequired
 	}
 
-	nodes := make([]OrgUnitReadNode, 0, len(scopes))
+	type scopedReadNode struct {
+		scope OrgUnitScope
+		node  OrgUnitReadNode
+	}
+
+	nodes := make([]scopedReadNode, 0, len(scopes))
 	for _, scope := range scopes {
 		node, err := s.store.ResolveByOrgNodeKey(ctx, tenantID, scope.OrgNodeKey, asOf, includeDisabled)
 		if err != nil {
@@ -232,26 +237,26 @@ func (s orgUnitReadService) visibleRootsFromScope(ctx context.Context, tenantID 
 		}
 		node.OrgNodeKey = scope.OrgNodeKey
 		node.PathOrgNodeKeys = normalizePathOrgNodeKeys(node.PathOrgNodeKeys, node.OrgNodeKey)
-		nodes = append(nodes, node)
+		nodes = append(nodes, scopedReadNode{scope: scope, node: node})
 	}
 	if len(nodes) == 0 {
 		return nil, ErrOrgUnitReadScopeForbidden
 	}
 
 	roots := make([]OrgUnitReadNode, 0, len(nodes))
-	for i, node := range nodes {
+	for i, candidate := range nodes {
 		covered := false
-		for j, scope := range nodes {
+		for j, ancestor := range nodes {
 			if i == j {
 				continue
 			}
-			if pathContainsOrgNodeKey(node.PathOrgNodeKeys, scope.OrgNodeKey) {
+			if ancestor.scope.IncludeDescendants && pathContainsOrgNodeKey(candidate.node.PathOrgNodeKeys, ancestor.scope.OrgNodeKey) {
 				covered = true
 				break
 			}
 		}
 		if !covered {
-			roots = append(roots, node)
+			roots = append(roots, candidate.node)
 		}
 	}
 	if len(roots) == 0 {

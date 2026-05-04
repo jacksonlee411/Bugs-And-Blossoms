@@ -234,7 +234,57 @@ func TestOrgUnitReadServiceVisibleRootsReturnsTopmostVisibleScopes(t *testing.T)
 	if err != nil {
 		t.Fatalf("VisibleRoots err=%v", err)
 	}
-	if len(got) != 1 || got[0].OrgCode != "BLOSSOM" {
+	if gotCodes := orgUnitReadNodeCodes(got); !reflect.DeepEqual(gotCodes, []string{"BLOSSOM", "EAST"}) {
+		t.Fatalf("root codes=%v want [BLOSSOM EAST]", gotCodes)
+	}
+}
+
+func TestOrgUnitReadServiceVisibleRootsKeepsDescendantWhenAncestorDoesNotCoverDescendants(t *testing.T) {
+	store := newOrgUnitReadFakeStore(t)
+	svc := NewOrgUnitReadService(store)
+	root := mustOrgUnitReadKey(t, 10000001)
+	sh := mustOrgUnitReadKey(t, 10000004)
+
+	got, err := svc.VisibleRoots(context.Background(), OrgUnitReadRequest{
+		TenantID: "t1",
+		AsOf:     "2026-01-01",
+		ScopeFilter: OrgUnitReadScopeFilter{
+			PrincipalID: "principal-a",
+			Scopes: []OrgUnitScope{
+				{OrgNodeKey: root, IncludeDescendants: false},
+				{OrgNodeKey: sh, IncludeDescendants: false},
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("VisibleRoots err=%v", err)
+	}
+	if gotCodes := orgUnitReadNodeCodes(got); !reflect.DeepEqual(gotCodes, []string{"ROOT", "SH"}) {
+		t.Fatalf("root codes=%v want [ROOT SH]", gotCodes)
+	}
+}
+
+func TestOrgUnitReadServiceVisibleRootsAncestorDescendantScopeCoversChildScope(t *testing.T) {
+	store := newOrgUnitReadFakeStore(t)
+	svc := NewOrgUnitReadService(store)
+	root := mustOrgUnitReadKey(t, 10000001)
+	sh := mustOrgUnitReadKey(t, 10000004)
+
+	got, err := svc.VisibleRoots(context.Background(), OrgUnitReadRequest{
+		TenantID: "t1",
+		AsOf:     "2026-01-01",
+		ScopeFilter: OrgUnitReadScopeFilter{
+			PrincipalID: "principal-a",
+			Scopes: []OrgUnitScope{
+				{OrgNodeKey: root, IncludeDescendants: true},
+				{OrgNodeKey: sh, IncludeDescendants: false},
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("VisibleRoots err=%v", err)
+	}
+	if len(got) != 1 || got[0].OrgCode != "ROOT" {
 		t.Fatalf("roots=%+v", got)
 	}
 }
@@ -371,4 +421,12 @@ func mustOrgUnitReadKey(t *testing.T, seq int64) string {
 		t.Fatalf("EncodeOrgNodeKey(%d) err=%v", seq, err)
 	}
 	return key
+}
+
+func orgUnitReadNodeCodes(nodes []OrgUnitReadNode) []string {
+	out := make([]string, 0, len(nodes))
+	for _, node := range nodes {
+		out = append(out, node.OrgCode)
+	}
+	return out
 }
