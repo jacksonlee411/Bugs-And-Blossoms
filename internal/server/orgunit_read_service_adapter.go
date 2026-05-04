@@ -45,6 +45,19 @@ func (a orgUnitReadStoreAdapter) ListChildren(ctx context.Context, tenantID stri
 			return nil, err
 		}
 		readNode.HasVisibleChildren = child.HasChildren
+		if strings.TrimSpace(readNode.Name) == "" {
+			readNode.Name = child.Name
+		}
+		if strings.TrimSpace(readNode.OrgCode) == "" {
+			readNode.OrgCode = child.OrgCode
+		}
+		if strings.TrimSpace(readNode.Status) == "" {
+			readNode.Status = orgUnitReadStatusOrActive(child.Status)
+		}
+		if readNode.IsBusinessUnit == nil {
+			isBU := child.IsBusinessUnit
+			readNode.IsBusinessUnit = &isBU
+		}
 		out = append(out, readNode)
 	}
 	return out, nil
@@ -184,6 +197,17 @@ func orgUnitReadScopeFilterFromPrincipalScopes(scopes []principalOrgScope) orgun
 	return out
 }
 
+func orgUnitReadScopeFilterFromRuntime(ctx context.Context, runtime authzRuntimeStore, tenantID string) (orgunitservices.OrgUnitReadScopeFilter, error) {
+	if runtime == nil {
+		return orgunitservices.OrgUnitReadScopeFilter{AllTenant: true}, nil
+	}
+	scopes, err := currentPrincipalOrgScopes(ctx, runtime, tenantID)
+	if err != nil {
+		return orgunitservices.OrgUnitReadScopeFilter{}, err
+	}
+	return orgUnitReadScopeFilterFromPrincipalScopes(scopes), nil
+}
+
 func orgUnitListItemsFromReadNodes(nodes []orgunitservices.OrgUnitReadNode) []orgUnitListItem {
 	out := make([]orgUnitListItem, 0, len(nodes))
 	for _, node := range nodes {
@@ -201,4 +225,17 @@ func orgUnitListItemsFromReadNodes(nodes []orgunitservices.OrgUnitReadNode) []or
 		})
 	}
 	return out
+}
+
+func orgUnitSearchResultFromReadNode(node orgunitservices.OrgUnitReadNode, asOf string) OrgUnitSearchResult {
+	result := OrgUnitSearchResult{
+		TargetOrgNodeKey: strings.TrimSpace(node.OrgNodeKey),
+		TargetOrgCode:    strings.TrimSpace(node.OrgCode),
+		TargetName:       strings.TrimSpace(node.Name),
+		PathOrgNodeKeys:  append([]string(nil), node.PathOrgNodeKeys...),
+		PathOrgCodes:     append([]string(nil), node.PathOrgCodes...),
+		TreeAsOf:         strings.TrimSpace(asOf),
+	}
+	_ = hydrateOrgUnitSearchResultCompat(&result)
+	return result
 }
