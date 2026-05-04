@@ -299,6 +299,7 @@ modules/{module}/
 - DEV-PLAN-490：CubeBox 统一 API 工具化重构方案：`docs/dev-plans/490-cubebox-api-first-tooling-refactor-plan.md`
 - DEV-PLAN-491：通用可复用 OrgUnit 树选择器与范围感知候选契约方案：`docs/dev-plans/491-reusable-orgunit-tree-selector-and-scope-aware-candidate-contract-plan.md`
 - DEV-PLAN-492：OrgUnit 基础模块架构收敛与 Selector-Ready Read Core 重构方案：`docs/dev-plans/492-orgunit-foundation-module-architecture-convergence-and-selector-ready-read-core-plan.md`
+- DEV-PLAN-493：OrgUnit 组织架构页搜索与筛选入口唯一性收敛方案：`docs/dev-plans/493-orgunit-search-and-filter-entry-convergence-plan.md`
 - DEV-PLAN-440：彻底删除 SetID 的全仓收口方案（SetID 根删除唯一 PoR）：`docs/dev-plans/440-complete-setid-removal-plan.md`
 - DEV-PLAN-441：旧策略模块残余清理方案：`docs/dev-plans/441-legacy-strategy-module-residue-cleanup-plan.md`
 - DEV-PLAN-450：直接切除 jobcatalog / staffing / person 三模块方案（保留 orgunit）：`docs/dev-plans/450-direct-removal-of-jobcatalog-staffing-person-modules-plan.md`
