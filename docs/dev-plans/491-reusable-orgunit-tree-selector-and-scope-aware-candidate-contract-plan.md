@@ -1,27 +1,28 @@
 # DEV-PLAN-491：通用可复用 OrgUnit 树选择器与范围感知候选契约方案
 
-**状态**: 规划中；后端前置缺口已随 490 评审修复补齐 `all_org_units` parser、scope-aware search 唯一候选与多候选澄清，前端 selector/facade 与用户授权页接入仍未实施（2026-05-03 CST）
+**状态**: 规划中（2026-05-04 06:59 CST）— OrgUnit Read Core、selector-ready DTO、scope-aware visible roots 与 safe path 架构缺口已转由 `DEV-PLAN-492` 承接；本计划保留前端 selector/facade 与选择入口接入 owner，并明确不接管组织管理页浏览/编辑主 UI。
 
 ## 0. 适用范围与评审分级
 
 - **评审分级**：`T2`
-- **范围一句话**：冻结一个仓库级可复用的 OrgUnit 树选择器契约，统一“候选组织如何加载、如何懒展开、如何搜索、如何按当前用户组织范围裁剪、如何在管理员/普通用户场景复用”的边界；本计划不只修用户授权页根组织下拉问题，而是定义后续所有组织选择入口的统一实现路线。
+- **范围一句话**：冻结一个仓库级可复用的 OrgUnit 树选择器契约，统一前端 selector/facade、懒展开、搜索、回显和页面接入方式；后端 OrgUnit read core、selector-ready DTO、scope-aware visible roots 与 safe path 由 `DEV-PLAN-492` 作为上游 owner 承接。
 - **关联模块/目录**：`apps/web/src/components/**`、`apps/web/src/pages/**`、`apps/web/src/api/**`、`internal/server/**`、`modules/orgunit/**`、`modules/iam/**`
-- **关联计划/标准**：`AGENTS.md`、`DEV-PLAN-000`、`DEV-PLAN-001`、`DEV-PLAN-002`、`DEV-PLAN-012`、`DEV-PLAN-017`、`DEV-PLAN-019`、`DEV-PLAN-022`、`DEV-PLAN-032`、`DEV-PLAN-073`、`DEV-PLAN-130`、`DEV-PLAN-180`、`DEV-PLAN-475`、`DEV-PLAN-476`、`DEV-PLAN-480`、`DEV-PLAN-481`、`DEV-PLAN-489`、`DEV-PLAN-489A`
+- **关联计划/标准**：`AGENTS.md`、`DEV-PLAN-000`、`DEV-PLAN-001`、`DEV-PLAN-002`、`DEV-PLAN-012`、`DEV-PLAN-017`、`DEV-PLAN-019`、`DEV-PLAN-022`、`DEV-PLAN-032`、`DEV-PLAN-073`、`DEV-PLAN-130`、`DEV-PLAN-180`、`DEV-PLAN-475`、`DEV-PLAN-476`、`DEV-PLAN-480`、`DEV-PLAN-481`、`DEV-PLAN-489`、`DEV-PLAN-489A`、`DEV-PLAN-492`
 - **用户入口/触点**：`授权管理 > 用户授权 > 组织范围`、组织相关表单中的上级组织选择、范围限制类表单、后续任何需要“选择一个组织节点或组织子树”的 UI
 
 ### 0.1 Simple > Easy 三问
 
-1. **边界**：树选择器 owner 是前端通用组件与配套 facade；OrgUnit 模块 owner 是节点读取、树展开、搜索和路径解析；IAM/Authz owner 是“当前用户可见组织范围”的服务端事实与裁剪；页面只消费 selector 契约，不再各自拼候选组织逻辑。
-2. **不变量**：同一租户内，任何“组织候选列表/树/搜索结果”只允许来自同一条服务端读链路，并按当前调用者组织范围 fail-closed 裁剪。管理员若需要给他人配置组织范围，也只能在“自己当前可见范围”内选择，不能通过前端组件绕过运行时裁剪。
+1. **边界**：树选择器 owner 是前端通用组件与配套 facade；`DEV-PLAN-492` 拥有 OrgUnit 节点读取、树展开、搜索、路径解析和 selector-ready DTO 的后端 read core；IAM/Authz owner 是“当前用户可见组织范围”的服务端事实与裁剪；需要“选择组织”的页面只消费 selector 契约，不再各自拼候选组织逻辑。组织管理页的浏览/编辑主 UI 仍由组织页 owner 承接，只复用 492 read core 与可抽取展示组件。
+2. **不变量**：同一租户内，任何“组织候选列表/树/搜索结果”只允许来自 492 收敛后的同一条服务端读链路，并按当前调用者组织范围 fail-closed 裁剪。管理员若需要给他人配置组织范围，也只能在“自己当前可见范围”内选择，不能通过前端组件绕过运行时裁剪。
 3. **可解释**：页面传入“选择模式 + 初始值 + 是否允许多选/选父级/选叶子”的最小配置；组件通过统一 API facade 拉取根节点、懒加载子节点、搜索命中与路径补全；服务端统一按当前 principal 组织范围裁剪；页面最终只收到可见且可选的组织节点。
 
 ### 0.2 现状研究摘要
 
-- 当前仓库已有通用展示组件 [TreePanel](/home/lee/Projects/Bugs-And-Blossoms/apps/web/src/components/TreePanel.tsx:1)，组织架构页也已有“根节点 + 懒加载子节点 + 搜索定位”的现成链路 [OrgUnitsPage](/home/lee/Projects/Bugs-And-Blossoms/apps/web/src/pages/org/OrgUnitsPage.tsx:124) 与 [orgUnits API client](/home/lee/Projects/Bugs-And-Blossoms/apps/web/src/api/orgUnits.ts:20)。
+- 当前仓库已有通用展示组件 [TreePanel](/home/lee/Projects/Bugs-And-Blossoms/apps/web/src/components/TreePanel.tsx:1)，组织架构页也已有“根节点 + 懒加载子节点 + 搜索定位”的现成链路 [OrgUnitsPage](/home/lee/Projects/Bugs-And-Blossoms/apps/web/src/pages/org/OrgUnitsPage.tsx:124) 与 [orgUnits API client](/home/lee/Projects/Bugs-And-Blossoms/apps/web/src/api/orgUnits.ts:20)。这些是 selector 可复用素材，不表示 491 要把组织管理页整体替换成 selector。
 - 但 `用户授权 > 组织范围` 目前没有复用树链路，而是直接调用 [listOrgUnits({ asOf, includeDisabled:false })](/home/lee/Projects/Bugs-And-Blossoms/apps/web/src/pages/authz/AuthzRolePages.tsx:469) 作为下拉候选，导致页面只拿到默认一级组织列表。
 - `GET /org/api/org-units` 的当前语义是：无 `parent_org_code` 且无 `keyword`、无 `all_org_units=true` 时，只返回当前租户一级组织；该语义在 [orgunit_api.go](/home/lee/Projects/Bugs-And-Blossoms/internal/server/orgunit_api.go:1168) 和 [orgunit_field_metadata_store.go](/home/lee/Projects/Bugs-And-Blossoms/internal/server/orgunit_field_metadata_store.go:770) 已固化。
 - 当前 Web API 侧的 `AllOrgUnits` 运行时结构已随 490 评审修复接入 query parser；`all_org_units=true` 现只表示当前调用者可见范围内全部组织。491 后续仍不采用“用户授权页临时全量下拉”作为交付方案，selector/facade 仍需按本计划统一收敛。
+- `DEV-PLAN-492` 已成为 OrgUnit 基础模块 read core、`org_node_key` DTO 暴露、scope-aware visible roots、安全展开路径和 handler 瘦身的上游 owner；491 不在页面或 selector 内补这些后端架构缺口。
 - `DEV-PLAN-481` 已明确“组织范围页签”应是“组织下拉或组织树选择结果” [481](/home/lee/Projects/Bugs-And-Blossoms/docs/dev-plans/481-ehr-role-design-and-configuration-plan.md:195)；`DEV-PLAN-489` 已冻结“运行时组织范围必须由服务端 scope provider 强制” [489](/home/lee/Projects/Bugs-And-Blossoms/docs/dev-plans/489-user-authorization-org-scope-sot-and-runtime-enforcement-plan.md:15)。因此本次问题不是单页 UI bug，而是缺少仓库级 selector 契约。
 - 本次不沿用的“容易做法”：
   - 在用户授权页临时加一个 `all_org_units=true` 下拉分支。
@@ -49,14 +50,14 @@
 ### 2.1 核心目标
 
 1. [ ] 冻结仓库级 `OrgUnitTreeSelector` 概念模型：节点结构、选中值、搜索结果、路径回显、懒加载和多选语义一致。
-2. [ ] 冻结服务端 selector 候选契约：根节点、子节点、搜索、按 code/id 回显、路径解析都走同一 OrgUnit 读链路，并按当前 principal 组织范围裁剪。
+2. [ ] 消费并验证 492 冻结的服务端 selector 候选契约：根节点、子节点、搜索、按 code/id 回显、路径解析都走同一 OrgUnit 读链路，并按当前 principal 组织范围裁剪。
 3. [ ] 冻结范围感知不变量：普通用户只能选择当前组织范围内节点；管理员配置其他用户授权时也不能通过 selector 越权选择自己范围外的节点；任何页面都不得自行构造“超范围候选”。
 4. [ ] 冻结前端复用边界：用户授权页、上级组织选择、后续范围绑定页面统一复用 selector facade，不再直接拿 `listOrgUnits()` 的一级列表塞进下拉。
-5. [ ] 冻结分阶段实施路线：先交付可复用契约和用户授权页切换，再逐步替换其他散落入口，避免一轮内大规模 UI 重写。
+5. [ ] 冻结分阶段实施路线：先交付可复用契约和用户授权页切换，再逐步替换其他散落“选择组织”入口，避免一轮内大规模 UI 重写。
 
 ### 2.2 非目标
 
-1. 不在本计划内重做整套组织管理页 UI；现有 `/org/units` 页面继续保留其列表 + 树浏览职责，只把可复用部分抽出来。
+1. 不在本计划内重做整套组织管理页 UI；现有 `/org/units` 页面继续保留其列表 + 树浏览/编辑职责。491 只抽取选择交互需要的组件/facade，组织管理页的数据读取收敛由 492 承接。
 2. 不在本计划内引入无限层级整树一次性加载；默认仍以“根节点 + 懒加载 + 搜索定位”为主。
 3. 不在本计划内新增“按角色分别配置组织范围”；selector 只解决“如何选择组织节点”，不改变 489 的范围绑定模型。
 4. 不在本计划内引入前端本地权限模型或离线树缓存；权限与范围裁剪继续只以服务端当前 principal 事实为准。
@@ -94,8 +95,8 @@
 | 层级 | 本计划承接内容 | 代表对象/文件 | 说明 |
 | --- | --- | --- | --- |
 | `pkg/**` | 节点 canonicalize、selector value normalize、路径/label 纯函数 | `apps/web/src/**` 内纯函数或 `pkg/**` 纯工具 | 优先黑盒表驱动 |
-| `modules/orgunit/services` | selector 候选查询所需的树/搜索/path 读取规则 | `modules/orgunit/services/*_test.go` | 不新增第二套业务规则 |
-| `internal/server` | selector facade API、query 解析、错误映射、按当前 principal 范围裁剪 | `internal/server/*_test.go` | 覆盖 root/children/search/path/越界 |
+| `modules/orgunit/services` | selector 候选查询所需的树/搜索/path 读取规则 | `modules/orgunit/services/*_test.go` | 由 492 承接，491 只消费 |
+| `internal/server` | 现有 orgunit HTTP 读取面的 query 解析、错误映射、scope 注入与 selector DTO 映射 | `internal/server/*_test.go` | 覆盖 root/children/search/path/越界；不新增 selector 专用 route |
 | `apps/web/src/components` | 选择器状态机、懒加载、搜索结果回显、单选/多选 UI 行为 | Vitest / Testing Library | 优先测状态，再测页面集成 |
 | `apps/web/src/pages` | 用户授权页与其他接入页对 selector 的消费 | 页面级测试 | 不重复测 selector 内部逻辑 |
 | `E2E` | 普通用户范围内可选、范围外不可见、管理员授权页选择非根节点并保存 | `e2e/**` | 证明 UI 候选与运行时裁剪一致 |
@@ -142,23 +143,25 @@ flowchart LR
 - **`modules/orgunit` owner**：
   - 组织节点、树结构、子节点查询、搜索、路径解析。
   - selector 所需 node DTO 的基础事实。
+  - 具体 read core、visible roots、`org_node_key` 暴露与 safe path 由 `DEV-PLAN-492` 承接。
 - **`modules/iam` / authz owner**：
   - 当前 principal 的组织范围事实。
   - scope-aware 裁剪输入，不拥有树节点本身。
 - **`internal/server` owner**：
-  - selector facade API。
-  - query 参数、错误映射、当前 principal 组织范围注入。
+  - 现有 orgunit HTTP 读取面适配。
+  - query 参数、错误映射、当前 principal 组织范围注入；首期不新增 selector 专用 route。
 - **`apps/web/src/components` owner**：
   - 通用 `OrgUnitTreeSelector` / `OrgUnitTreePickerDialog` / `OrgUnitTreeField` 组件族。
   - 组件内部状态机、懒加载、搜索与回显交互。
 - **各页面 owner**：
-  - 只消费 selector 标准 value，不自行查询组织候选。
+  - 需要选择组织节点时，只消费 selector 标准 value，不自行查询组织候选。
+  - 组织管理页浏览/编辑主流程不属于 selector 场景，但其读取事实应随 492 收敛到同一 read core。
 
 ### 3.3 统一策略：候选组织只有一条主链
 
 本计划选定：
 
-- **唯一候选读取事实源**：OrgUnit 当前读链路。
+- **唯一候选读取事实源**：492 收敛后的 OrgUnit ReadService。
 - **唯一范围裁剪事实源**：489 当前 principal org scope provider。
 - **唯一后端 HTTP 读取面（首期）**：复用现有 `/org/api/org-units` 与 `/org/api/org-units/search`，不新增 selector 专用后端 route。
 - **唯一前端组件入口**：`OrgUnitTreeSelector` + 前端薄 facade，不再让页面直接拼 `listOrgUnits()` + `Autocomplete`。
@@ -281,18 +284,18 @@ interface OrgUnitSelectorNode {
 
 ## 5. 分阶段实施
 
-### 5.1 Phase A：契约冻结与 facade 收敛
+### 5.1 Phase A：契约冻结与 492 后端前置对齐
 
-1. [X] 冻结首期不新增后端 selector route；selector 读操作复用现有 `/org/api/org-units` 与 `/org/api/org-units/search`。
+1. [X] 冻结首期不新增后端 selector route；selector 读操作复用 492 收敛后的 orgunit HTTP 读取面。
 2. [ ] 在 `apps/web/src/api/**` 增加 selector 前端薄 facade，统一封装 root/children/search/value normalize。
 3. [X] 补齐 `all_org_units` 与“默认一级组织”在 Web HTTP API 里的现行 owner 和禁止漂移语义；`all_org_units=true` 已接入 parser 且不得突破当前 principal scope。
-4. [ ] 冻结节点 DTO、回显 DTO、搜索返回 DTO，尤其冻结 `path_org_codes` 为安全展开路径；后端 search 已补齐多候选澄清与唯一 scope 可见候选返回路径，前端 DTO/facade 尚未实施。
+4. [ ] 对齐 492 冻结的节点 DTO、回显 DTO、搜索返回 DTO，尤其是 `org_node_key` 与 `path_org_codes` 安全展开路径；491 不在前端补造这些字段或路径。
 
 ### 5.2 Phase B：前端通用组件
 
 1. [ ] 从现有 `TreePanel` 与 org 页面抽取 `OrgUnitTreeSelector`。
 2. [ ] 补齐搜索、懒加载、选中回显、空态、错误态。
-3. [ ] 保持现有 org 页面能消费新 selector 基础能力，但不强行同 PR 完整替换所有 UI。
+3. [ ] 可复用现有 org 页面中的 `TreePanel`/展示能力建设 selector，但不把组织管理页浏览/编辑主流程强行改造成 selector。
 
 ### 5.3 Phase C：用户授权页首个接入
 
@@ -302,7 +305,7 @@ interface OrgUnitSelectorNode {
 
 ### 5.4 Phase D：仓内其他页面复用推广
 
-1. [ ] 梳理所有“选组织”入口。
+1. [ ] 梳理所有“选组织”入口，不把组织管理页的浏览/编辑树纳入 selector 强制替换范围。
 2. [ ] 按优先级替换为统一 selector。
 3. [ ] 删除页面内散落的局部候选组织拼装逻辑。
 
@@ -311,7 +314,8 @@ interface OrgUnitSelectorNode {
 | 风险 | 表现 | 止损 |
 | --- | --- | --- |
 | selector 变成第二套 org 浏览器 | 组件内堆列表、详情、审计能力 | 只保留“选节点”所需最小能力 |
-| 页面继续绕过 facade | 新页面再次直接调 `listOrgUnits()` 做下拉 | 在文档与 code review 中冻结“组织候选只能走 selector facade” |
+| 选择入口继续绕过 facade | 新页面再次直接调 `listOrgUnits()` 做下拉 | 在文档与 code review 中冻结“组织选择候选只能走 selector facade” |
+| selector 误接管组织管理页 | 为了复用把 `/org/units` 浏览/编辑能力塞进 picker | 组织管理页只共享 492 read core 和可抽取展示组件，主页面交互不归 491 |
 | 当前 principal 与目标 principal 语义混淆 | 管理员以为能给别人配置自己看不到的节点 | 文档明确 selector 只看当前 principal，可在保存阶段再次 fail-closed |
 | UI 可选但运行时不可达 | 保存成功后 API 仍越界失败 | selector 与 489 scope provider 必须复用同一服务端范围裁剪事实 |
 | 过度设计 | 一开始就做拖拽、多树同步、虚拟滚动、离线缓存 | 首期只做单树、懒加载、搜索、单节点选择/可选多选扩展位 |
@@ -330,11 +334,14 @@ interface OrgUnitSelectorNode {
 ## 8. 文档联动
 
 1. [ ] `DEV-PLAN-481` 引用本计划，明确“组织下拉或组织树选择结果”的现行 owner 已由 491 收口。
-2. [ ] `DEV-PLAN-489` 引用本计划，明确用户授权页候选组织读取面与运行时 scope provider 的 UI owner 在 491。
-3. [ ] 首期 selector 不新增后端 route；若后续确需形成新 route/read contract，必须先更新本计划，并补充 `DEV-PLAN-017` / 相关 API owner 文档引用。
+2. [X] `DEV-PLAN-489` 引用本计划，明确用户授权页候选组织读取面的 UI owner 在 491，IAM scope SoT/provider 仍由 489 承接。
+3. [X] `DEV-PLAN-492` 引用本计划，明确 OrgUnit read core、selector-ready DTO、scope-aware visible roots 与 safe path 是 491 的上游依赖。
+4. [ ] 首期 selector 不新增后端 route；若后续确需形成新 route/read contract，必须先更新本计划与 `DEV-PLAN-492`，并补充 `DEV-PLAN-017` / 相关 API owner 文档引用。
 
 ## 9. 当前结论记录
 
 - 2026-05-03 CST：调查确认 `用户授权 > 组织范围` 当前只能选到根组织，不是 489 运行时 scope 裁剪错误，而是页面直接复用了 `GET /org/api/org-units` 的默认一级组织列表语义。
 - 2026-05-03 CST：调查确认仓库已具备 `TreePanel`、根节点 + 懒加载子节点 + 搜索定位基础链路，但缺少仓库级“可复用 selector 契约”与“范围感知候选”统一 owner。
 - 2026-05-03 CST：随 490 评审修复补齐后端前置缺口：普通 Web API parser 已接入 `all_org_units=true`，且语义冻结为当前调用者可见范围内全部组织；`orgunit.search` 已改为 scope-aware candidates 决策，多候选返回澄清，scope 过滤后唯一候选直接返回该可见候选。491 的前端 selector facade、组件族和用户授权页切换仍未实施，不能宣称用户可见 selector 闭环完成。
+- 2026-05-03 CST：新增 `DEV-PLAN-492` 作为 OrgUnit 基础模块 read core 与架构统一 owner；491 不再承接后端 read core 重构，只消费 492 输出的 selector-ready 契约并完成前端落地。
+- 2026-05-04 CST：按评审补齐边界：491 只治理“选择组织”的前端 selector/facade，不接管组织管理页浏览/编辑主 UI；组织管理页读取规则统一由 492 read core 收敛。

@@ -7,12 +7,12 @@
 - **评审分级**：`T2`
 - **范围一句话**：冻结 `DEV-PLAN-481` 用户授权页两个页签背后的首批可保存闭环：principal 角色授权、组织范围 SoT、保存 API、运行时读取与 orgunit 服务端强制裁剪；本计划不拥有角色定义主表或角色 authz capability 主表，不直接提交迁移，新增 DB 表实施前必须再次获得用户手工确认。
 - **关联模块/目录**：`modules/iam/**`、`modules/orgunit/**`、`pkg/authz/**`、`internal/server/**`、`apps/web/src/**`、`config/access/**`、`scripts/authz/**`
-- **关联计划/标准**：`AGENTS.md`、`DEV-PLAN-000`、`DEV-PLAN-001`、`DEV-PLAN-012`、`DEV-PLAN-017`、`DEV-PLAN-019`、`DEV-PLAN-022`、`DEV-PLAN-032`、`DEV-PLAN-480`、`DEV-PLAN-480A`、`DEV-PLAN-481`、`DEV-PLAN-482`、`DEV-PLAN-484`、`DEV-PLAN-485`、`DEV-PLAN-487`、`DEV-PLAN-489A`、`DEV-PLAN-490`
+- **关联计划/标准**：`AGENTS.md`、`DEV-PLAN-000`、`DEV-PLAN-001`、`DEV-PLAN-012`、`DEV-PLAN-017`、`DEV-PLAN-019`、`DEV-PLAN-022`、`DEV-PLAN-032`、`DEV-PLAN-480`、`DEV-PLAN-480A`、`DEV-PLAN-481`、`DEV-PLAN-482`、`DEV-PLAN-484`、`DEV-PLAN-485`、`DEV-PLAN-487`、`DEV-PLAN-489A`、`DEV-PLAN-490`、`DEV-PLAN-491`、`DEV-PLAN-492`
 - **用户入口/触点**：`授权管理 > 用户授权` 顶部用户选择器、`角色` 页签、`组织范围` 页签、统一 `保存` 按钮、orgunit 普通 API、CubeBox API-first orgunit 查询
 
 ### 0.1 Simple > Easy 三问
 
-1. **边界**：481 只拥有用户授权 UI 与交互骨架；487 拥有角色定义保存、能力集合和运行时 capability 来源；489 只拥有首批 principal 角色授权、组织范围绑定、读取/保存 API、服务端校验和运行时组织范围强制；489A 拥有 principal 多角色 union、subject set、审计与 scope 合并规则；482 继续拥有 capability registry 与 `scope_dimension` 元数据；480 继续拥有授权体系蓝图与运行时原则。
+1. **边界**：481 只拥有用户授权 UI 与交互骨架；487 拥有角色定义保存、能力集合和运行时 capability 来源；489 只拥有首批 principal 角色授权、组织范围绑定、读取/保存 API、服务端校验和运行时组织范围强制；489A 拥有 principal 多角色 union、subject set、审计与 scope 合并规则；491 拥有组织范围 selector 的前端组件/facade/页面接入；492 拥有 OrgUnit read core、selector-ready DTO、scope-aware visible roots 与 safe path；482 继续拥有 capability registry 与 `scope_dimension` 元数据；480 继续拥有授权体系蓝图与运行时原则。
 2. **不变量**：包含 `scope_dimension=organization` capability 的角色集合被授予某用户时，该用户必须至少有一条组织范围绑定；缺失时保存失败，不得默认全租户。所有 orgunit 列表、搜索、详情、审计和 CubeBox API-first 调用都必须消费同一服务端 scope 事实。多角色能力判断按 489A 做 union，不选择当前角色。
 3. **可解释**：管理员选择用户，添加一个或多个角色行，添加组织范围行，点击保存；服务端在同一事务中保存角色授权集合与组织范围，并在运行时按 489A 把角色能力 union 与当前用户组织范围注入 orgunit 查询。越界目标 fail-closed，前端本地状态、prompt、Casbin object 字符串都不能代替 SoT。
 
@@ -23,6 +23,7 @@
 - `DEV-PLAN-482` 已冻结 capability registry 字段，其中 `scope_dimension=organization` 是用户授权页判断是否必须配置组织范围的来源。
 - `DEV-PLAN-487` 冻结角色定义保存 API、角色能力集合持久化与普通 tenant role 运行时 capability 来源；489 只引用当前有效角色定义，不拥有角色定义本身。
 - `DEV-PLAN-489A` 冻结 principal 多角色 union 运行时语义：`roles: []` 不是展示集合，而是普通 tenant 授权 subject set 的来源；不得回退成 `roles[0]` 或当前角色。
+- `DEV-PLAN-491` / `DEV-PLAN-492` 已拆分组织选择与组织读核心 owner：491 承接用户授权页 selector UI；492 承接 OrgUnit 基础模块 read core、selector-ready DTO、visible roots 和 safe path。489 仅提供 IAM 组织范围 SoT/provider，不在页面或 OrgUnit 模块中复制候选读取规则。
 - 当前 `config/access/policies/**` 与 Casbin 只覆盖 capability/API 级授权，不是在线用户授权记录、组织范围绑定或运行时数据范围 SoT。
 - 最容易出错的位置：把组织范围只做成前端状态；把范围塞进 Casbin object/action；给缺失范围默认全租户；CubeBox 走 executor 或绕过 HTTP API 读路径；在角色定义页回流 `scope_required` 字段。
 
@@ -298,7 +299,7 @@ type PrincipalScopeProvider interface {
 
 1. 顶部用户选择器先通过不带 `principal_id` 的 `GET` 加载服务端 principal 候选，再在切换后通过带 `principal_id` 的 `GET` 加载该用户授权事实。
 2. `角色` 页签只维护角色行；角色说明来自服务端角色摘要或 role options API，不从 capability 常量拼装。
-3. `组织范围` 页签只维护组织行；组织选择器复用 orgunit 服务端读路径。
+3. `组织范围` 页签只维护组织行；组织选择器由 491 承接，候选数据复用 492 收敛后的 orgunit 服务端读路径。
 4. `保存` 调用统一 `PUT`，覆盖两个页签。
 5. `authz_org_scope_required` 错误必须把用户带到组织范围页签，并标记组织范围缺失。
 6. 切换用户时若存在未保存变更，必须确认或丢弃，不得把 A 用户的范围保存到 B 用户。
@@ -316,6 +317,8 @@ type PrincipalScopeProvider interface {
 | `DEV-PLAN-489` | 用户授权保存 SoT、组织范围绑定、scope provider、orgunit 强制裁剪 |
 | `DEV-PLAN-489A` | principal 多角色 union、subject set、审计字段、scope 合并和反回流门禁 |
 | `DEV-PLAN-490` | CubeBox API-first 工具化，复用当前用户 HTTP API 授权与数据范围 |
+| `DEV-PLAN-491` | 通用 OrgUnit 树选择器前端组件/facade 与用户授权页组织范围接入 |
+| `DEV-PLAN-492` | OrgUnit 基础模块 read core、selector-ready DTO、scope-aware visible roots、safe path 与多重实现收敛 |
 
 ## 6. 实施切片
 
