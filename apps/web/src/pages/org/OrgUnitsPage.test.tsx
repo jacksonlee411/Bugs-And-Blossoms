@@ -43,6 +43,33 @@ vi.mock('../../components/TreePanel', () => ({
 vi.mock('../../components/StatusChip', () => ({
   StatusChip: ({ label }: { label: string }) => <span>{label}</span>
 }))
+vi.mock('../../components/OrgUnitTreeSelector', () => ({
+  OrgUnitTreeField: ({
+    label,
+    onChange,
+    value
+  }: {
+    label: string
+    onChange: (value: { org_code: string; org_node_key: string; name: string; status: 'active'; has_visible_children: boolean }) => void
+    value?: { org_code: string; name: string } | null
+  }) => (
+    <button
+      aria-label={label}
+      type='button'
+      onClick={() =>
+        onChange({
+          org_code: 'DEEP',
+          org_node_key: '10000099',
+          name: 'Deep Parent',
+          status: 'active',
+          has_visible_children: false
+        })
+      }
+    >
+      {value ? `${value.name} (${value.org_code})` : label}
+    </button>
+  )
+}))
 
 function LocationProbe() {
   const location = useLocation()
@@ -101,6 +128,17 @@ describe('OrgUnitsPage', () => {
           common_view_history: 'View History',
           common_view_current: 'View Current',
           org_filter_include_disabled: 'Include Disabled',
+          common_confirm: 'Confirm',
+          org_action_create: 'Create',
+          org_column_code: 'Code',
+          org_column_name: 'Name',
+          org_column_parent: 'Parent',
+          org_column_status: 'Status',
+          org_status_active_short: 'Active',
+          org_status_inactive_short: 'Inactive',
+          org_column_manager: 'Manager',
+          org_column_effective_date: 'Effective Date',
+          org_column_is_business_unit: 'Business Unit',
           action_apply_filters: 'Apply Filters',
           org_tree_title: 'Tree',
           org_search_label: 'Search in tree',
@@ -193,6 +231,81 @@ describe('OrgUnitsPage', () => {
 
     await waitFor(() =>
       expect(screen.getByText(/East Sales Center \(A001\).*East Operations Center \(A002\)/)).toBeInTheDocument()
+    )
+  }, 20000)
+
+  it('keeps create parent selector label for nodes outside the already loaded page tree', async () => {
+    appPreferencesMocks.useAppPreferences.mockReturnValue({
+      tenantId: 'tenant-a',
+      locale: 'en',
+      setLocale: vi.fn(),
+      themeMode: 'light',
+      toggleThemeMode: vi.fn(),
+      navDebugMode: false,
+      hasRequiredCapability: () => true,
+      t: (key: string) =>
+        ({
+          page_org_title: 'Organization Units',
+          page_org_subtitle: 'Org subtitle',
+          nav_org_field_configs: 'Field Configs',
+          org_filter_keyword: 'Keyword',
+          org_filter_status: 'Status',
+          status_all: 'All',
+          status_active: 'Active',
+          status_inactive: 'Inactive',
+          org_filter_as_of: 'As Of Date',
+          common_view_current_label: 'Viewing current data by default',
+          common_view_history: 'View History',
+          common_view_current: 'View Current',
+          common_confirm: 'Confirm',
+          common_cancel: 'Cancel',
+          common_action_done: 'Done',
+          org_filter_include_disabled: 'Include Disabled',
+          org_action_create: 'Create',
+          org_column_code: 'Code',
+          org_column_name: 'Name',
+          org_column_parent: 'Parent',
+          org_column_status: 'Status',
+          org_status_active_short: 'Active',
+          org_status_inactive_short: 'Inactive',
+          org_column_manager: 'Manager',
+          org_column_effective_date: 'Effective Date',
+          org_column_is_business_unit: 'Business Unit',
+          action_apply_filters: 'Apply Filters',
+          org_tree_title: 'Tree',
+          org_search_label: 'Search in tree',
+          org_search_action: 'Locate',
+          org_search_query_required: 'Please input a search query',
+          org_search_ambiguous_prefix: 'Found multiple matching organization units:',
+          text_loading: 'Loading',
+          text_no_data: 'No data'
+        })[key] ?? key
+    })
+    orgUnitApiMocks.writeOrgUnit.mockResolvedValue({})
+    orgUnitApiMocks.listOrgUnitFieldConfigs.mockResolvedValue({ field_configs: [] })
+
+    renderPage()
+
+    await waitFor(() => expect(orgUnitApiMocks.listOrgUnits).toHaveBeenCalled())
+    fireEvent.click(screen.getByRole('button', { name: 'Create' }))
+    fireEvent.change(screen.getByLabelText('Code'), { target: { value: 'NEW' } })
+    fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'New Org' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Parent' }))
+
+    expect(screen.getByRole('button', { name: 'Parent' })).toHaveTextContent('Deep Parent (DEEP)')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm' }))
+
+    await waitFor(() =>
+      expect(orgUnitApiMocks.writeOrgUnit).toHaveBeenCalledWith(
+        expect.objectContaining({
+          intent: 'create_org',
+          org_code: 'NEW',
+          patch: expect.objectContaining({
+            parent_org_code: 'DEEP'
+          })
+        })
+      )
     )
   }, 20000)
 })

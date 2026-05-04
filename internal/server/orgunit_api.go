@@ -174,18 +174,19 @@ type orgUnitListResponse struct {
 }
 
 type orgUnitDetailsAPIItem struct {
-	OrgCode        string    `json:"org_code"`
-	Name           string    `json:"name"`
-	Status         string    `json:"status"`
-	ParentOrgCode  string    `json:"parent_org_code"`
-	ParentName     string    `json:"parent_name"`
-	IsBusinessUnit bool      `json:"is_business_unit"`
-	ManagerPernr   string    `json:"manager_pernr"`
-	ManagerName    string    `json:"manager_name"`
-	FullNamePath   string    `json:"full_name_path"`
-	CreatedAt      time.Time `json:"created_at"`
-	UpdatedAt      time.Time `json:"updated_at"`
-	EventUUID      string    `json:"event_uuid"`
+	OrgCode          string    `json:"org_code"`
+	Name             string    `json:"name"`
+	Status           string    `json:"status"`
+	ParentOrgNodeKey string    `json:"parent_org_node_key"`
+	ParentOrgCode    string    `json:"parent_org_code"`
+	ParentName       string    `json:"parent_name"`
+	IsBusinessUnit   bool      `json:"is_business_unit"`
+	ManagerPernr     string    `json:"manager_pernr"`
+	ManagerName      string    `json:"manager_name"`
+	FullNamePath     string    `json:"full_name_path"`
+	CreatedAt        time.Time `json:"created_at"`
+	UpdatedAt        time.Time `json:"updated_at"`
+	EventUUID        string    `json:"event_uuid"`
 }
 
 type orgUnitExtFieldAPIItem struct {
@@ -1385,18 +1386,19 @@ func handleOrgUnitsDetailsAPI(w http.ResponseWriter, r *http.Request, store OrgU
 		AsOf:      asOf,
 		ExtFields: []orgUnitExtFieldAPIItem{},
 		OrgUnit: orgUnitDetailsAPIItem{
-			OrgCode:        details.OrgCode,
-			Name:           details.Name,
-			Status:         strings.TrimSpace(details.Status),
-			ParentOrgCode:  details.ParentCode,
-			ParentName:     details.ParentName,
-			IsBusinessUnit: details.IsBusinessUnit,
-			ManagerPernr:   details.ManagerPernr,
-			ManagerName:    details.ManagerName,
-			FullNamePath:   details.FullNamePath,
-			CreatedAt:      details.CreatedAt,
-			UpdatedAt:      details.UpdatedAt,
-			EventUUID:      details.EventUUID,
+			OrgCode:          details.OrgCode,
+			Name:             details.Name,
+			Status:           strings.TrimSpace(details.Status),
+			ParentOrgNodeKey: strings.TrimSpace(details.ParentOrgNodeKey),
+			ParentOrgCode:    details.ParentCode,
+			ParentName:       details.ParentName,
+			IsBusinessUnit:   details.IsBusinessUnit,
+			ManagerPernr:     details.ManagerPernr,
+			ManagerName:      details.ManagerName,
+			FullNamePath:     details.FullNamePath,
+			CreatedAt:        details.CreatedAt,
+			UpdatedAt:        details.UpdatedAt,
+			EventUUID:        details.EventUUID,
 		},
 	}
 

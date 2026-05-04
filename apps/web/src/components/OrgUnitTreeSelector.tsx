@@ -7,9 +7,12 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
+  IconButton,
+  InputAdornment,
   Stack,
   TextField
 } from '@mui/material'
+import ClearIcon from '@mui/icons-material/Clear'
 import {
   formatOrgUnitSelectorLabel,
   listOrgUnitSelectorChildren,
@@ -42,6 +45,9 @@ export interface OrgUnitTreeFieldProps {
   value?: OrgUnitSelectorNode | null
   label: string
   disabled?: boolean
+  helperText?: string
+  clearable?: boolean
+  onClear?: () => void
   onChange: (value: OrgUnitSelectorNode) => void
 }
 
@@ -311,6 +317,9 @@ export function OrgUnitTreeField({
   value,
   label,
   disabled = false,
+  helperText,
+  clearable = false,
+  onClear,
   onChange
 }: OrgUnitTreeFieldProps) {
   const { t } = useAppPreferences()
@@ -320,7 +329,25 @@ export function OrgUnitTreeField({
       <TextField
         disabled={disabled}
         fullWidth
+        helperText={helperText}
         inputProps={{ readOnly: true }}
+        InputProps={{
+          endAdornment: clearable && value && !disabled ? (
+            <InputAdornment position='end'>
+              <IconButton
+                aria-label={t('common_clear')}
+                edge='end'
+                onClick={(event) => {
+                  event.stopPropagation()
+                  onClear?.()
+                }}
+                size='small'
+              >
+                <ClearIcon fontSize='small' />
+              </IconButton>
+            </InputAdornment>
+          ) : undefined
+        }}
         label={label}
         onClick={() => {
           if (!disabled) {

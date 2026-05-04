@@ -360,6 +360,80 @@ func TestOrgUnitReadServiceSearchReturnsSafePathFromVisibleRoot(t *testing.T) {
 	}
 }
 
+func TestOrgUnitReadServiceSearchReturnsDeepSafePathFromVisibleRoot(t *testing.T) {
+	store := newOrgUnitReadFakeStore(t)
+	svc := NewOrgUnitReadService(store)
+	blossom := mustOrgUnitReadKey(t, 10000002)
+	team := mustOrgUnitReadKey(t, 10000006)
+	leaf := mustOrgUnitReadKey(t, 10000007)
+	store.nodes[team] = OrgUnitReadNode{
+		OrgCode:         "TEAM",
+		OrgNodeKey:      team,
+		Name:            "Team",
+		Status:          "active",
+		PathOrgCodes:    []string{"ROOT", "BLOSSOM", "EAST", "TEAM"},
+		PathOrgNodeKeys: []string{mustOrgUnitReadKey(t, 10000001), blossom, mustOrgUnitReadKey(t, 10000003), team},
+	}
+	store.nodes[leaf] = OrgUnitReadNode{
+		OrgCode:         "LEAF",
+		OrgNodeKey:      leaf,
+		Name:            "Leaf",
+		Status:          "active",
+		PathOrgCodes:    []string{"ROOT", "BLOSSOM", "EAST", "TEAM", "LEAF"},
+		PathOrgNodeKeys: []string{mustOrgUnitReadKey(t, 10000001), blossom, mustOrgUnitReadKey(t, 10000003), team, leaf},
+	}
+	store.children[mustOrgUnitReadKey(t, 10000003)] = []string{team}
+	store.children[team] = []string{leaf}
+
+	got, err := svc.Search(context.Background(), OrgUnitSearchRequest{
+		TenantID: "t1",
+		AsOf:     "2026-01-01",
+		Query:    "Leaf",
+		ScopeFilter: OrgUnitReadScopeFilter{
+			PrincipalID: "principal-a",
+			Scopes: []OrgUnitScope{{
+				OrgNodeKey:         blossom,
+				IncludeDescendants: true,
+			}},
+		},
+	})
+	if err != nil {
+		t.Fatalf("Search err=%v", err)
+	}
+	if len(got) != 1 || got[0].OrgCode != "LEAF" {
+		t.Fatalf("search=%+v", got)
+	}
+	wantPath := []string{"BLOSSOM", "EAST", "TEAM", "LEAF"}
+	if !reflect.DeepEqual(got[0].PathOrgCodes, wantPath) {
+		t.Fatalf("path=%v want=%v", got[0].PathOrgCodes, wantPath)
+	}
+}
+
+func TestOrgUnitReadServiceSearchOmitsInvisibleOtherBranch(t *testing.T) {
+	store := newOrgUnitReadFakeStore(t)
+	svc := NewOrgUnitReadService(store)
+	flowers := mustOrgUnitReadKey(t, 10000005)
+
+	got, err := svc.Search(context.Background(), OrgUnitSearchRequest{
+		TenantID: "t1",
+		AsOf:     "2026-01-01",
+		Query:    "Shanghai",
+		ScopeFilter: OrgUnitReadScopeFilter{
+			PrincipalID: "principal-a",
+			Scopes: []OrgUnitScope{{
+				OrgNodeKey:         flowers,
+				IncludeDescendants: true,
+			}},
+		},
+	})
+	if err != nil {
+		t.Fatalf("Search err=%v", err)
+	}
+	if len(got) != 0 {
+		t.Fatalf("expected no invisible branch results, got %+v", got)
+	}
+}
+
 func TestOrgUnitReadServiceSearchScansPastPhysicalLimitBeforeScopeFilter(t *testing.T) {
 	store := newOrgUnitReadFakeStore(t)
 	svc := NewOrgUnitReadService(store)

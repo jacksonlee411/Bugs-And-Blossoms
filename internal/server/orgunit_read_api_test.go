@@ -979,16 +979,27 @@ func TestHandleOrgUnitsDetailsAPI_Success(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create err=%v", err)
 	}
+	child, err := store.CreateNodeCurrent(context.Background(), "t1", "2026-01-01", "A002", "Child", created.ID, false)
+	if err != nil {
+		t.Fatalf("create child err=%v", err)
+	}
 
-	req := httptest.NewRequest(http.MethodGet, "/org/api/org-units/details?org_code="+created.OrgCode+"&as_of=2026-01-01", nil)
+	req := httptest.NewRequest(http.MethodGet, "/org/api/org-units/details?org_code="+child.OrgCode+"&as_of=2026-01-01", nil)
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "T"}))
 	rec := httptest.NewRecorder()
 	handleOrgUnitsDetailsAPI(rec, req, store)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
 	}
-	if !strings.Contains(rec.Body.String(), created.OrgCode) {
-		t.Fatalf("body=%q", rec.Body.String())
+	var payload orgUnitDetailsAPIResponse
+	if err := json.NewDecoder(rec.Body).Decode(&payload); err != nil {
+		t.Fatalf("decode err=%v", err)
+	}
+	if payload.OrgUnit.OrgCode != child.OrgCode || payload.OrgUnit.ParentOrgCode != created.OrgCode {
+		t.Fatalf("org unit=%+v", payload.OrgUnit)
+	}
+	if payload.OrgUnit.ParentOrgNodeKey != created.ID {
+		t.Fatalf("parent_org_node_key=%q want=%q", payload.OrgUnit.ParentOrgNodeKey, created.ID)
 	}
 }
 
@@ -1303,6 +1314,79 @@ func TestHandleOrgUnitsSearchAPI_SafePathStartsAtVisibleRoot(t *testing.T) {
 	wantPath := []string{"MID", "LEAF"}
 	if !reflect.DeepEqual(result.PathOrgCodes, wantPath) {
 		t.Fatalf("path_org_codes=%v want=%v", result.PathOrgCodes, wantPath)
+	}
+}
+
+func TestHandleOrgUnitsSearchAPI_DeepSafePathStartsAtVisibleRoot(t *testing.T) {
+	store := newOrgUnitMemoryStore()
+	ctx := context.Background()
+	root, err := store.CreateNodeCurrent(ctx, "t1", "2026-01-01", "ROOT", "Root", "", false)
+	if err != nil {
+		t.Fatalf("create root err=%v", err)
+	}
+	middle, err := store.CreateNodeCurrent(ctx, "t1", "2026-01-01", "MID", "Middle", root.ID, false)
+	if err != nil {
+		t.Fatalf("create middle err=%v", err)
+	}
+	team, err := store.CreateNodeCurrent(ctx, "t1", "2026-01-01", "TEAM", "Team", middle.ID, false)
+	if err != nil {
+		t.Fatalf("create team err=%v", err)
+	}
+	leaf, err := store.CreateNodeCurrent(ctx, "t1", "2026-01-01", "LEAF", "Leaf", team.ID, false)
+	if err != nil {
+		t.Fatalf("create leaf err=%v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/org/api/org-units/search?query=LEAF&as_of=2026-01-01", nil)
+	req = req.WithContext(withPrincipal(withTenant(req.Context(), Tenant{ID: "t1", Name: "T"}), Principal{ID: "principal-a"}))
+	rec := httptest.NewRecorder()
+	runtime := &orgUnitScopeRuntimeStub{scopes: []principalOrgScope{{
+		OrgNodeKey:         middle.ID,
+		IncludeDescendants: true,
+	}}}
+	handleOrgUnitsSearchAPI(rec, req, store, runtime)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s leaf=%s", rec.Code, rec.Body.String(), leaf.ID)
+	}
+	var result OrgUnitSearchResult
+	if err := json.NewDecoder(rec.Body).Decode(&result); err != nil {
+		t.Fatalf("decode err=%v", err)
+	}
+	wantPath := []string{"MID", "TEAM", "LEAF"}
+	if !reflect.DeepEqual(result.PathOrgCodes, wantPath) {
+		t.Fatalf("path_org_codes=%v want=%v", result.PathOrgCodes, wantPath)
+	}
+}
+
+func TestHandleOrgUnitsSearchAPI_OtherBranchInvisible(t *testing.T) {
+	store := newOrgUnitMemoryStore()
+	ctx := context.Background()
+	root, err := store.CreateNodeCurrent(ctx, "t1", "2026-01-01", "ROOT", "Root", "", false)
+	if err != nil {
+		t.Fatalf("create root err=%v", err)
+	}
+	visible, err := store.CreateNodeCurrent(ctx, "t1", "2026-01-01", "VISIBLE", "Visible", root.ID, false)
+	if err != nil {
+		t.Fatalf("create visible err=%v", err)
+	}
+	other, err := store.CreateNodeCurrent(ctx, "t1", "2026-01-01", "OTHER", "Other", root.ID, false)
+	if err != nil {
+		t.Fatalf("create other err=%v", err)
+	}
+	if _, err := store.CreateNodeCurrent(ctx, "t1", "2026-01-01", "TARGET", "Target", other.ID, false); err != nil {
+		t.Fatalf("create target err=%v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/org/api/org-units/search?query=TARGET&as_of=2026-01-01", nil)
+	req = req.WithContext(withPrincipal(withTenant(req.Context(), Tenant{ID: "t1", Name: "T"}), Principal{ID: "principal-a"}))
+	rec := httptest.NewRecorder()
+	runtime := &orgUnitScopeRuntimeStub{scopes: []principalOrgScope{{
+		OrgNodeKey:         visible.ID,
+		IncludeDescendants: true,
+	}}}
+	handleOrgUnitsSearchAPI(rec, req, store, runtime)
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
 	}
 }
 

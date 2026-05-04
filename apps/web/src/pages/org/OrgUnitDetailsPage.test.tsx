@@ -28,6 +28,33 @@ vi.mock('../../components/PageHeader', () => ({
     </div>
   )
 }))
+vi.mock('../../components/OrgUnitTreeSelector', () => ({
+  OrgUnitTreeField: ({
+    label,
+    onChange,
+    value
+  }: {
+    label: string
+    onChange: (value: { org_code: string; org_node_key: string; name: string; status: 'active'; has_visible_children: boolean }) => void
+    value?: { org_code: string; name: string } | null
+  }) => (
+    <button
+      aria-label={label}
+      type='button'
+      onClick={() =>
+        onChange({
+          org_code: 'PARENT-NEW',
+          org_node_key: '10000099',
+          name: 'New Parent',
+          status: 'active',
+          has_visible_children: false
+        })
+      }
+    >
+      {value ? `${value.name} (${value.org_code})` : label}
+    </button>
+  )
+}))
 vi.mock('./readViewState', async () => {
   const actual = await vi.importActual<typeof import('./readViewState')>('./readViewState')
   return {
@@ -132,6 +159,7 @@ describe('OrgUnitDetailsPage', () => {
         org_code: 'ROOT',
         name: asOf === '2026-04-01' ? 'Root Unit V2' : 'Root Unit',
         status: 'active',
+        parent_org_node_key: '10000001',
         parent_org_code: '',
         parent_name: '',
         is_business_unit: true,
@@ -215,5 +243,28 @@ describe('OrgUnitDetailsPage', () => {
         )
       )
     expect(screen.getByTestId('location-state').textContent).toBe('/org/units/ROOT?effective_date=2026-03-01')
+  }, 20000)
+
+  it('uses the orgunit selector field when editing parent organization', async () => {
+    renderPage('/org/units/ROOT?effective_date=2026-03-01')
+
+    const correctButton = await screen.findByRole('button', { name: 'Correct' })
+    await waitFor(() => expect(correctButton).not.toBeDisabled())
+
+    fireEvent.click(correctButton)
+    const dialog = await screen.findByRole('dialog')
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Parent' }))
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Confirm' }))
+
+    await waitFor(() =>
+      expect(orgUnitApiMocks.writeOrgUnit).toHaveBeenCalledWith(
+        expect.objectContaining({
+          intent: 'correct',
+          patch: expect.objectContaining({
+            parent_org_code: 'PARENT-NEW'
+          })
+        })
+      )
+    )
   }, 20000)
 })

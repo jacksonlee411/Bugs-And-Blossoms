@@ -50,8 +50,10 @@ import {
   writeOrgUnit,
   type OrgUnitWriteIntent
 } from '../../api/orgUnits'
+import type { OrgUnitSelectorNode } from '../../api/orgUnitSelector'
 import { useAppPreferences } from '../../app/providers/AppPreferencesContext'
 import { AUTHZ_CAPABILITY_KEYS } from '../../authz/capabilities'
+import { OrgUnitTreeField } from '../../components/OrgUnitTreeSelector'
 import { PageHeader } from '../../components/PageHeader'
 import { isMessageKey, type MessageKey } from '../../i18n/messages'
 import { normalizePlainExtDraft } from './orgUnitPlainExtValidation'
@@ -80,7 +82,9 @@ interface OrgActionState {
 interface OrgActionForm {
   orgCode: string
   name: string
+  parentOrgNodeKey: string
   parentOrgCode: string
+  parentOrgName: string
   status: OrgStatus
   managerPernr: string
   effectiveDate: string
@@ -138,6 +142,21 @@ function trimToUndefined(value: string): string | undefined {
   return normalized.length > 0 ? normalized : undefined
 }
 
+function toParentSelectorNode(input: { orgCode?: string; orgNodeKey?: string; name?: string; status?: string } | undefined): OrgUnitSelectorNode | null {
+  const orgCode = input?.orgCode?.trim() ?? ''
+  const orgNodeKey = input?.orgNodeKey?.trim() ?? ''
+  if (orgCode.length === 0 || orgNodeKey.length === 0) {
+    return null
+  }
+  return {
+    org_code: orgCode,
+    org_node_key: orgNodeKey,
+    name: input?.name?.trim() || orgCode,
+    status: parseOrgStatus(input?.status ?? 'active'),
+    has_visible_children: false
+  }
+}
+
 function getErrorMessage(error: unknown): string {
   if (error instanceof Error) {
     return error.message
@@ -156,7 +175,9 @@ function emptyActionForm(effectiveDate: string): OrgActionForm {
   return {
     orgCode: '',
     name: '',
+    parentOrgNodeKey: '',
     parentOrgCode: '',
+    parentOrgName: '',
     status: 'active',
     managerPernr: '',
     effectiveDate,
@@ -881,7 +902,9 @@ export function OrgUnitDetailsPage() {
     const form = emptyActionForm(plan.defaultDate)
     form.orgCode = orgCodeValue
     form.name = details?.name ?? ''
+    form.parentOrgNodeKey = details?.parent_org_node_key ?? ''
     form.parentOrgCode = details?.parent_org_code ?? ''
+    form.parentOrgName = details?.parent_name ?? ''
     form.status = parseOrgStatus(details?.status ?? '')
     form.managerPernr = details?.manager_pernr ?? ''
     form.isBusinessUnit = details?.is_business_unit ?? false
@@ -933,7 +956,9 @@ export function OrgUnitDetailsPage() {
     const form = emptyActionForm(effectiveDate)
     form.orgCode = orgCodeValue
     form.name = details?.name ?? ''
+    form.parentOrgNodeKey = details?.parent_org_node_key ?? ''
     form.parentOrgCode = details?.parent_org_code ?? ''
+    form.parentOrgName = details?.parent_name ?? ''
     form.status = parseOrgStatus(details?.status ?? '')
     form.managerPernr = details?.manager_pernr ?? ''
     form.isBusinessUnit = details?.is_business_unit ?? false
@@ -981,7 +1006,9 @@ export function OrgUnitDetailsPage() {
     const form = emptyActionForm(effectiveDate)
     form.orgCode = orgCodeValue
     form.name = details?.name ?? ''
+    form.parentOrgNodeKey = details?.parent_org_node_key ?? ''
     form.parentOrgCode = details?.parent_org_code ?? ''
+    form.parentOrgName = details?.parent_name ?? ''
     form.status = parseOrgStatus(details?.status ?? '')
     form.managerPernr = details?.manager_pernr ?? ''
     form.isBusinessUnit = details?.is_business_unit ?? false
@@ -1133,6 +1160,18 @@ export function OrgUnitDetailsPage() {
     return parseOrgStatus(raw) === 'active' ? t('org_status_active_short') : t('org_status_inactive_short')
   }, [detailQuery.data, t])
   const deleteActionLabel = useMemo(() => buildDeleteActionLabel(shouldDeleteOrg, t), [shouldDeleteOrg, t])
+  const actionParentSelectorValue = useMemo(() => {
+    const selectedParentCode = actionForm.parentOrgCode.trim()
+    if (selectedParentCode.length === 0) {
+      return null
+    }
+    return toParentSelectorNode({
+      orgCode: selectedParentCode,
+      orgNodeKey: actionForm.parentOrgNodeKey,
+      name: actionForm.parentOrgName,
+      status: 'active'
+    })
+  }, [actionForm.parentOrgCode, actionForm.parentOrgName, actionForm.parentOrgNodeKey])
   const profileExtFields = detailQuery.data?.ext_fields ?? []
   const hasProfileMissingI18nLabels = profileExtFields.some((field) => {
     const labelKey = field.label_i18n_key?.trim()
@@ -1630,11 +1669,28 @@ export function OrgUnitDetailsPage() {
               ) : null}
 
               {!isDeleteAction ? (
-                <TextField
+                <OrgUnitTreeField
+                  asOf={actionForm.effectiveDate.trim() || effectiveDate}
+                  clearable
                   disabled={!isWriteFieldEditable('parent_org_code')}
                   label={t('org_column_parent')}
-                  onChange={(event) => setActionForm((previous) => ({ ...previous, parentOrgCode: event.target.value }))}
-                  value={actionForm.parentOrgCode}
+                  onChange={(option) =>
+                    setActionForm((previous) => ({
+                      ...previous,
+                      parentOrgNodeKey: option.org_node_key,
+                      parentOrgCode: option.org_code,
+                      parentOrgName: option.name
+                    }))
+                  }
+                  onClear={() =>
+                    setActionForm((previous) => ({
+                      ...previous,
+                      parentOrgNodeKey: '',
+                      parentOrgCode: '',
+                      parentOrgName: ''
+                    }))
+                  }
+                  value={actionParentSelectorValue}
                 />
               ) : null}
 

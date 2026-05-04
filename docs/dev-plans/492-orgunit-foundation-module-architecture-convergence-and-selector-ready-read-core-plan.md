@@ -1,6 +1,6 @@
 # DEV-PLAN-492：OrgUnit 基础模块架构收敛与 Selector-Ready Read Core 重构方案
 
-**状态**: 实施中（2026-05-04 CST）— PR-1/PR-3 后端先行切片已落地：`modules/orgunit/services` 已建立 ReadService 骨架与 fake-store 单元测试；默认 roots、children 与 search HTTP 已接入 scope-aware ReadService；list DTO 已暴露 `org_node_key` 与 `has_visible_children`；search 已返回 safe `path_org_codes`；`all_org_units=true` + pagination 的 HTTP 响应 total 已按 scope 裁剪后的结果计算。491 Phase A/B/C 已开始消费该 contract：前端 selector facade、最小单选组件骨架与用户授权页首个接入已落地；组织管理页局部读取规则继续下沉、SQL 级 scoped pagination 优化与联合 E2E 仍按后续 PR 推进。
+**状态**: 实施中（2026-05-04 CST）— PR-1/PR-3 后端先行切片已落地：`modules/orgunit/services` 已建立 ReadService 骨架与 fake-store 单元测试；默认 roots、children 与 search HTTP 已接入 scope-aware ReadService；list DTO 已暴露 `org_node_key` 与 `has_visible_children`；search 已返回 safe `path_org_codes`；`all_org_units=true` + pagination 的 HTTP 响应 total 已按 scope 裁剪后的结果计算。491 Phase A/B/C/D 已消费该 contract：前端 selector facade、最小单选组件骨架、用户授权页首个接入，以及创建/详情上级组织选择入口已落地；组织管理页浏览/编辑主树读取规则继续下沉、SQL 级 scoped pagination 优化与联合 E2E 仍按后续 PR 推进。
 
 ## 0. 适用范围与评审分级
 
@@ -18,8 +18,8 @@
 
 ### 0.2 现状研究摘要
 
-- `用户授权 > 组织范围` 已在 491 Phase C 从直接调用 `listOrgUnits({ asOf, includeDisabled:false })` 的一级下拉切到 [OrgUnitTreeField](/home/lee/Projects/Bugs-And-Blossoms/apps/web/src/pages/authz/AuthzRolePages.tsx:617)；候选读取由 491 facade 消费 492 ReadService contract，保存 payload 仍沿用 489。
-- 已完成的后端收敛：orgunit list response 的 `OrgNodeKey` 已从隐藏字段改为 `org_node_key` response 字段，并新增 `has_visible_children`；491 已新增 [orgUnitSelector facade](/home/lee/Projects/Bugs-And-Blossoms/apps/web/src/api/orgUnitSelector.ts:1) 消费这些 selector-ready 字段。原 [OrgUnitAPIItem](/home/lee/Projects/Bugs-And-Blossoms/apps/web/src/api/orgUnits.ts:3) 仍服务组织管理页既有 API client，尚未整体替换。
+- `用户授权 > 组织范围` 已在 491 Phase C 从直接调用 `listOrgUnits({ asOf, includeDisabled:false })` 的一级下拉切到 [OrgUnitTreeField](/home/lee/Projects/Bugs-And-Blossoms/apps/web/src/pages/authz/AuthzRolePages.tsx:617)；创建组织与组织详情编辑上级组织也已在 491 Phase D 切到同一 selector。候选读取由 491 facade 消费 492 ReadService contract，保存 payload 仍沿用 489。
+- 已完成的后端收敛：orgunit list response 的 `OrgNodeKey` 已从隐藏字段改为 `org_node_key` response 字段，并新增 `has_visible_children`；491 已新增 [orgUnitSelector facade](/home/lee/Projects/Bugs-And-Blossoms/apps/web/src/api/orgUnitSelector.ts:1) 消费这些 selector-ready 字段。原 [OrgUnitAPIItem](/home/lee/Projects/Bugs-And-Blossoms/apps/web/src/api/orgUnits.ts:3) 仍服务组织管理页既有 API client；与此同时 `orgUnits.ts` 也已补齐 `org_node_key`、`has_visible_children` 与详情回显所需的 `parent_org_node_key`，但组织管理页浏览/编辑主树读取规则仍未整体替换。
 - 已完成的 roots/children/search 收敛：`GET /org/api/org-units` 默认 roots 与 children 已通过 `modules/orgunit/services.ReadService` 返回当前 principal scope-aware visible roots/children；`GET /org/api/org-units/search` 已通过同一 ReadService 返回 safe `path_org_codes`。grid/list 的 SQL 级 scoped pagination 优化仍需后续 PR 继续处理，当前 HTTP contract 已保证对外 total/page 以 scope 裁剪结果为准。
 - 组织页已有可复用素材：通用 [TreePanel](/home/lee/Projects/Bugs-And-Blossoms/apps/web/src/components/TreePanel.tsx:1)、组织页面树状态、懒加载与搜索定位链路；491 已把选择场景沉淀为 [OrgUnitTreeSelector 组件族](/home/lee/Projects/Bugs-And-Blossoms/apps/web/src/components/OrgUnitTreeSelector.tsx:1)，但组织管理页浏览/编辑读取规则仍需继续向 492 ReadService 收敛。492 不要求把组织管理页的浏览/编辑树强行改造成 selector，只要求其读取事实复用同一 read core。
 - 489 已实现当前 principal 组织范围 provider，例如 [OrgScopesForPrincipal](/home/lee/Projects/Bugs-And-Blossoms/internal/server/authz_runtime_store.go:330)；handler 也已能拿到 `authzRuntime`，但 orgunit 读规则仍分散在 `internal/server` 与 store 查询中，没有形成模块级统一入口。
@@ -341,12 +341,12 @@ visible roots 不是物理 root，也不是全租户 root。
 | --- | --- | --- |
 | 用户授权页直接 `listOrgUnits()` 一级下拉 | 已由 491 Phase C 切换为 `OrgUnitTreeField`；数据来自 492 ReadService | 491/492 |
 | 组织管理页自有业务读取规则、搜索定位与懒加载取数 | 492 提供同一 read core；491 只抽取可复用选择组件，不接管组织浏览/编辑主页面 | 491/492 |
-| 创建/编辑组织时上级组织编码手填或局部下拉 | 后续接入 selector，不再页面自拼候选 | 491 后续推广 |
+| 创建/编辑组织时上级组织编码手填或局部下拉 | 已由 491 Phase D 切到 selector | 491 |
 | `internal/server` 自建 root/search/path 业务规则 | 下沉到 `modules/orgunit/services.ReadService` | 492 |
 | 物理 root SQL 与 visible root 语义混用 | ReadService 统一计算 scope-aware visible roots | 492 |
 | PG list 与 fallback list 分叉 | infrastructure 只保留一条 scoped query 主链 | 492 |
 | store/handler 中 legacy 或兼容写分支 | 按 no-legacy 原则删除或前移为明确不变量 | 492 |
-| 前端 DTO 缺 `org_node_key` | 492 后端 response 暴露，491 facade 类型消费已落地；组织管理页旧 `orgUnits.ts` 类型仍待后续收敛 | 492/491 |
+| 前端 DTO 缺 `org_node_key` | 492 后端 response 暴露，491 facade 类型消费已落地；`orgUnits.ts` 也已补齐 selector 回显所需字段，组织管理页旧浏览/编辑主树读取规则仍待后续收敛 | 492/491 |
 
 ### 3.9 退场清单
 
@@ -408,14 +408,14 @@ visible roots 不是物理 root，也不是全租户 root。
 
 1. [X] 491 selector facade 消费 492 DTO。（2026-05-04：`apps/web/src/api/orgUnitSelector.ts` 已消费 roots/children/search 的 `org_code`、`org_node_key`、`name`、`status`、`has_visible_children`、`path_org_codes`。）
 2. [X] 用户授权页组织范围切换为 selector。（2026-05-04：491 Phase C 已切换为 `OrgUnitTreeField`，页面内 `listOrgUnits()` 一级候选已移除。）
-3. [ ] 组织管理页逐步替换局部业务读取规则；创建/编辑组织、后续范围配置等“选择入口”逐步替换为 selector。
+3. [ ] 组织管理页逐步替换局部业务读取规则；创建/编辑组织、后续范围配置等“选择入口”已逐步替换为 selector，但浏览/编辑主树读取规则仍需继续下沉。
 4. [ ] 删除不再使用的下拉候选拼装和局部树实现。
 
 ### 4.7 P6：测试、门禁与证据
 
 1. [ ] 补 ReadService 单元测试：visible roots、children、search、内部 resolve、safe path、disabled、空范围。（2026-05-04：已覆盖 visible roots、children、search safe path、resolve 范围外 fail-closed；disabled/空范围仍待补齐。）
 2. [ ] 补 handler contract 测试：query 解析、错误映射、越权、范围外回显。（2026-05-04：已补默认 roots/children `org_node_key` / `has_visible_children`、“scope 在树中段”的 visible roots、search safe path 与 `all_org_units=true` scoped total；范围外回显 HTTP route 仍未新增且按 stopline 暂不实施。）
-3. [ ] 补 491/492 联合 E2E：受限管理员只能选择自己可见范围内的非根节点并保存。
+3. [ ] 补更广 491/492 联合 E2E：受限管理员只能选择自己可见范围内的非根节点并保存。（2026-05-04：用户授权页受限管理员 selector E2E 已覆盖；创建/详情上级组织入口当前由组件测试与 API contract 测试覆盖，更广联合 E2E 后续补齐。）
 4. [X] 执行命中的 `AGENTS.md` 门禁，并把结果写入实现 PR 或 `docs/dev-records/DEV-PLAN-492-READINESS.md`。
 
 ## 5. 停止线
@@ -436,7 +436,7 @@ visible roots 不是物理 root，也不是全租户 root。
 3. [X] 搜索当前范围内深层节点时，`path_org_codes` 从 visible root 开始，不泄露范围外祖先。
 4. [X] 搜索或回显范围外节点 fail-closed，不返回半截路径、物理完整路径或空权限旁路。
 5. [ ] `internal/server` 中不再保留可见根、路径、安全候选等业务读规则的第二实现。（2026-05-04：roots/children/search 默认 HTTP 读取已收敛；旧 helper 仍服务 list/grid、details/write scope checks 与兼容测试，后续继续退场。）
-6. [ ] 用户授权页和后续组织选择入口通过 491 facade 消费同一 OrgUnit read core；组织管理页的浏览/编辑读取也复用 492 ReadService，但不强制以 selector 作为主页面实现。（2026-05-04：491 facade/组件与用户授权页首个接入已完成；创建/编辑组织入口和组织管理页读取收敛仍待后续。）
+6. [ ] 用户授权页和后续组织选择入口通过 491 facade 消费同一 OrgUnit read core；组织管理页的浏览/编辑读取也复用 492 ReadService，但不强制以 selector 作为主页面实现。（2026-05-04：491 facade/组件与用户授权页首个接入已完成；创建/编辑组织入口也已接入 selector，组织管理页浏览/编辑主树读取收敛仍待后续。）
 7. [X] `all_org_units=true` 只表示当前调用者可见范围内全部组织。
 8. [X] list/grid 的 `total` 与分页结果基于 scope 裁剪后的结果集，不出现空页、错页或 total 漂移。（2026-05-04：HTTP contract 已锁定；SQL 级 scoped pagination 优化后续处理。）
 9. [ ] `has_visible_children` 或等价字段表达可见子节点，不误用物理子节点状态。（2026-05-04：roots/children 已返回 `has_visible_children`；grid/list 场景仍需后续复核。）
@@ -457,6 +457,7 @@ visible roots 不是物理 root，也不是全租户 root。
 - 2026-05-04 CST：按评审补齐两项边界：`Resolve` 首期为 ReadService 内部回显/定位能力，不新增独立 HTTP route；组织管理页复用 492 read core，但其浏览/编辑树不强制改造成 491 selector。
 - 2026-05-04 CST：按 `DEV-PLAN-003` 进一步补齐假设/排除解释、ReadService 字段级契约、visible roots 算法、pagination/total 语义、退场清单与停止线，避免后续实现继续靠 handler/store/page 局部补洞。
 - 2026-05-04 CST：PR-1/PR-2 后端先行切片已落地并验证：新增 `modules/orgunit/services.OrgUnitReadService` 骨架、fake-store 单元测试、`internal/server` adapter；默认 roots HTTP 已改为 scope-aware visible roots；list response 已暴露 `org_node_key` 与 `has_visible_children`。本轮未切换前端 selector，未完成 children/list/grid/search HTTP 全量迁移，也未收敛 scoped pagination/total。
-- 2026-05-04 CST：PR-3 后端 contract 切片已落地并验证：默认 children/search HTTP 已接入 `OrgUnitReadService`；children 返回 `org_node_key` 与 `has_visible_children`；search 返回从 visible root 开始的 safe `path_org_codes`；`all_org_units=true` + pagination 的 HTTP total/page 已按 scope 裁剪结果计算。SQL 级 scoped pagination 优化、组织管理页局部读取规则继续下沉、491 前端 selector 消费与联合 E2E 仍待后续。
+- 2026-05-04 CST：PR-3 后端 contract 切片已落地并验证：默认 children/search HTTP 已接入 `OrgUnitReadService`；children 返回 `org_node_key` 与 `has_visible_children`；search 返回从 visible root 开始的 safe `path_org_codes`；`all_org_units=true` + pagination 的 HTTP total/page 已按 scope 裁剪结果计算。SQL 级 scoped pagination 优化、组织管理页局部读取规则继续下沉、491 前端 selector 消费与联合 E2E 在该阶段仍待后续；后续 491 Phase A/B/C/D 已分批消费该 contract。
 - 2026-05-04 CST：491 Phase A/B 前端首切已消费 492 contract：新增 selector facade 与 `OrgUnitTreeSelector` / picker / field 最小单选骨架，验证 roots/children/search facade URL 与组件懒加载、搜索路径展开、完整节点选择回调。该记录仅描述 Phase A/B 当时状态，后续 Phase C 已完成用户授权页首个接入。
-- 2026-05-04 CST：491 Phase C 用户授权页首个接入已消费 492 contract：`AuthzRolePages.tsx` 组织范围行切到 `OrgUnitTreeField`，移除页面内 `listOrgUnits()` 一级候选，支持 selector 选中非根节点后按 489 payload 保存 `org_node_key/org_code/org_name`；评审修复已覆盖 assignment 缺 `org_name` 时用 `org_code` 回显。联合 E2E、组织管理页读取继续下沉与 SQL 级 scoped pagination 仍待后续。
+- 2026-05-04 CST：491 Phase C 用户授权页首个接入已消费 492 contract：`AuthzRolePages.tsx` 组织范围行切到 `OrgUnitTreeField`，移除页面内 `listOrgUnits()` 一级候选，支持 selector 选中非根节点后按 489 payload 保存 `org_node_key/org_code/org_name`；评审修复已覆盖 assignment 缺 `org_name` 时用 `org_code` 回显。该记录描述 Phase C 当时状态；后续 Phase D 已完成创建/详情上级组织选择入口替换。更广联合 E2E、组织管理页浏览/编辑主树读取继续下沉与 SQL 级 scoped pagination 仍待后续。
+- 2026-05-04 CST：491 Phase D 复用推广已完成：`OrgUnitsPage` 创建组织上级组织与 `OrgUnitDetailsPage` 编辑上级组织入口均切到 `OrgUnitTreeField`，详情 API 补 `parent_org_node_key` 供 selector 稳定回显；safe path 深层/跨分支验证已补。组织管理页浏览/编辑主树读取仍按 492 继续下沉，不并入 selector 强制替换范围。

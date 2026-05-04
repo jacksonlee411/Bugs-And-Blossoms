@@ -23,6 +23,7 @@ vi.mock('../app/providers/AppPreferencesContext', () => ({
     t: (key: MessageKey, vars?: MessageVars) => {
       const labels: Partial<Record<MessageKey, string>> = {
         common_cancel: 'Cancel',
+        common_clear: 'Clear',
         common_confirm: 'Confirm',
         org_search_action: 'Locate',
         org_search_label: 'Search in tree',
@@ -41,7 +42,7 @@ vi.mock('../app/providers/AppPreferencesContext', () => ({
   })
 }))
 
-import { OrgUnitTreeSelector } from './OrgUnitTreeSelector'
+import { OrgUnitTreeField, OrgUnitTreeSelector } from './OrgUnitTreeSelector'
 
 describe('OrgUnitTreeSelector', () => {
   beforeEach(() => {
@@ -142,5 +143,31 @@ describe('OrgUnitTreeSelector', () => {
     })
     expect(screen.getByText('Shanghai (SH)')).toBeInTheDocument()
     expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ org_code: 'SH', org_node_key: '10000002' }))
+  })
+
+  it('clears a selected field value without opening the picker', () => {
+    const onClear = vi.fn()
+
+    render(
+      <OrgUnitTreeField
+        asOf='2026-05-04'
+        clearable
+        label='Parent'
+        onChange={vi.fn()}
+        onClear={onClear}
+        value={{
+          org_code: 'ROOT',
+          org_node_key: '10000000',
+          name: 'Root',
+          status: 'active',
+          has_visible_children: false
+        }}
+      />
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: 'Clear' }))
+
+    expect(onClear).toHaveBeenCalledOnce()
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
   })
 })
