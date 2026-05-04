@@ -163,6 +163,51 @@ func TestHandlePrincipalAuthzAssignmentPutAPI_ResolvesOrgCodeBeforeSave(t *testi
 	}
 }
 
+func TestHandlePrincipalAuthzAssignmentPutAPI_AllowsIAMOnlyAssignmentWithoutActorOrgScope(t *testing.T) {
+	store := newMemoryAuthzRuntimeStore()
+	if _, err := store.CreateRoleDefinition(context.Background(), "tenant-a", saveAuthzRoleDefinitionInput{
+		RoleSlug:            "authz-delegator",
+		Name:                "Authz Delegator",
+		AuthzCapabilityKeys: []string{"iam.authz:admin"},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.ReplacePrincipalAssignment(context.Background(), "tenant-a", "actor-a", replacePrincipalAssignmentInput{
+		Roles:    []string{"authz-delegator"},
+		Revision: 1,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	reqBody := bytes.NewBufferString(`{
+		"roles": [{"role_slug": "authz-delegator"}],
+		"org_scopes": [],
+		"revision": 1
+	}`)
+	req := httptest.NewRequest(http.MethodPut, "/iam/api/authz/user-assignments/principal-b", reqBody)
+	req = req.WithContext(withPrincipal(withTenant(req.Context(), Tenant{ID: "tenant-a", Domain: "localhost", Name: "Tenant A"}), Principal{
+		ID:       "actor-a",
+		TenantID: "tenant-a",
+		Status:   "active",
+	}))
+	rec := httptest.NewRecorder()
+
+	handlePrincipalAuthzAssignmentPutAPI(rec, req, store, nil, store)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+	}
+	var payload principalAuthzAssignmentResponse
+	if err := json.NewDecoder(rec.Body).Decode(&payload); err != nil {
+		t.Fatal(err)
+	}
+	if payload.PrincipalID != "principal-b" || payload.Revision != 2 || len(payload.Roles) != 1 || payload.Roles[0].RoleSlug != "authz-delegator" {
+		t.Fatalf("payload=%+v", payload)
+	}
+	if len(payload.OrgScopes) != 0 {
+		t.Fatalf("org scopes=%+v", payload.OrgScopes)
+	}
+}
+
 func TestHandlePrincipalAuthzAssignmentPutAPI_FailsClosedWhenActorScopeDoesNotAllowRequestedOrg(t *testing.T) {
 	store := newMemoryAuthzRuntimeStore()
 	flowersOrgNodeKey := mustOrgNodeKeyForTest(t, 10000001)

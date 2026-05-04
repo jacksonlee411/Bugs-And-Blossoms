@@ -289,9 +289,11 @@ func handlePrincipalAuthzAssignmentPutAPI(w http.ResponseWriter, r *http.Request
 		writePrincipalAssignmentOrgResolveError(w, r, err)
 		return
 	}
-	if err := ensurePrincipalAssignmentOrgScopesAllowed(r.Context(), tenant.ID, orgScopes, orgResolver, scopeRuntime); err != nil {
-		writeOrgUnitScopeError(w, r, err)
-		return
+	if len(orgScopes) > 0 {
+		if err := ensurePrincipalAssignmentOrgScopesAllowed(r.Context(), tenant.ID, orgScopes, orgResolver, scopeRuntime); err != nil {
+			writeOrgUnitScopeError(w, r, err)
+			return
+		}
 	}
 	assignment, err := store.ReplacePrincipalAssignment(r.Context(), tenant.ID, principalIDFromAssignmentPath(r.URL.Path), replacePrincipalAssignmentInput{
 		Roles:     roleSlugs,
