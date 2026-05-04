@@ -1,6 +1,6 @@
 # DEV-PLAN-480：EHR 授权体系总体方案
 
-**状态**: 授权体系蓝图持续推进；480A P1/P2 只读治理面、487/489/489A 后端运行时闭环、481 UI 保存交互与 A/B 组织范围 E2E、490 API-first 首期硬切换及评审修复已落地，491 Phase A/B/C/D 已完成 selector facade、组件族与主要组织选择入口接入，492 普通 list/grid 读取已下沉到 ReadService 并避免递归 children N+1；488 诊断、字段级授权、更广 491/492 联合 E2E、492 ext 字段 list/grid 查询下沉与 SQL 级 scoped pagination 仍待后续（2026-05-04 CST）
+**状态**: 授权体系蓝图持续推进；480A P1/P2 只读治理面、487/489/489A 后端运行时闭环、481 UI 保存交互与 A/B 组织范围 E2E、490 API-first 首期硬切换及评审修复已落地，491 Phase A/B/C/D 已完成 selector facade、组件族与主要组织选择入口接入，492 普通 list/grid 与 ext 字段 list/grid 读取已下沉到 ReadService，并补齐 ext parent scope fail-closed 与 adapter scope path 回归测试；488 诊断、字段级授权、更广 491/492 联合 E2E、492 SQL 级 scoped pagination 仍待后续（2026-05-04 CST）
 
 ## 0. 适用范围与评审分级
 
@@ -478,4 +478,4 @@ Decision 的逻辑字段：
 ### 9.1 当前验证摘记
 
 - 2026-05-03 CST：490 首期 API-first hard cutover 已完成；四个 orgunit 只读 API 进入 CubeBox API tool overlay，active runtime 切为 `API_CALLS`，旧 `READ_PLAN` / 裸 `ReadPlan` / `executor_key` 成功路径已退出 active runtime。随后完成评审修复：`all_org_units=true` 透传到普通 Web API parser，search 多候选返回澄清且唯一 scope 可见候选直接返回，runner 投影 `PresentedCandidates`，knowledge pack 阻断跨 turn `depends_on`。已验证 `make check cubebox-api-first`、`make authz-pack && make authz-test && make authz-lint`、Go fmt/vet/lint/test、routing/doc/no-legacy/chat-surface/root-surface 等命中门禁；491 selector/UI、488 诊断与字段级授权仍为后续范围。
-- 2026-05-04 CST：491 Phase A/B/C/D 已完成前端 selector facade、`OrgUnitTreeSelector` / picker / field 最小组件族与主要组织选择入口接入；`AuthzRolePages.tsx` 组织范围行已移除 `listOrgUnits()` 一级候选并切到 `OrgUnitTreeField`，`OrgUnitsPage` 创建组织上级组织与 `OrgUnitDetailsPage` 编辑上级组织也已切到同一 selector，可选择非根节点并按既有 payload 保存。safe path 深层/跨分支测试已补。随后 492 普通 list/grid 读取继续下沉到 `OrgUnitReadService.List`，非 ext HTTP list/grid 分支已消费 ReadService，adapter 使用批量 tree 原语避免递归 children N+1。该进展不改变 480/480A P5 完成边界；488 诊断、字段级授权、更广 491/492 联合 E2E、492 ext 字段 list/grid 查询下沉与 SQL 级 scoped pagination 仍为后续范围。
+- 2026-05-04 CST：491 Phase A/B/C/D 已完成前端 selector facade、`OrgUnitTreeSelector` / picker / field 最小组件族与主要组织选择入口接入；`AuthzRolePages.tsx` 组织范围行已移除 `listOrgUnits()` 一级候选并切到 `OrgUnitTreeField`，`OrgUnitsPage` 创建组织上级组织与 `OrgUnitDetailsPage` 编辑上级组织也已切到同一 selector，可选择非根节点并按既有 payload 保存。safe path 深层/跨分支测试已补。随后 492 普通 list/grid 与 ext 字段 list/grid 读取继续下沉到 `OrgUnitReadService.List`，HTTP list/grid 分支已消费 ReadService，adapter 使用批量 tree/page 原语避免递归 children N+1；评审修复已补 ext parent scope fail-closed 与 adapter page row path 补齐。该进展不改变 480/480A P5 完成边界；488 诊断、字段级授权、更广 491/492 联合 E2E、492 SQL 级 scoped pagination 仍为后续范围。

@@ -1058,6 +1058,8 @@ func writeOrgUnitReadServiceError(w http.ResponseWriter, r *http.Request, err er
 	switch {
 	case isOrgUnitReadAuthzError(err):
 		writeOrgUnitScopeError(w, r, errAuthzScopeForbidden)
+	case errors.Is(err, orgunitservices.ErrOrgUnitReadExtQueryNotAllowed):
+		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, orgUnitErrExtQueryFieldNotAllowed, "ext query not allowed")
 	case errors.Is(err, orgunitservices.ErrOrgUnitReadInvalidArgument), errors.Is(err, orgunitpkg.ErrOrgCodeInvalid):
 		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "invalid_request", "invalid request")
 	case errors.Is(err, orgunitservices.ErrOrgUnitReadNotFound), errors.Is(err, orgunitpkg.ErrOrgCodeNotFound), errors.Is(err, errOrgUnitNotFound):
@@ -1116,12 +1118,6 @@ func handleOrgUnitsAPI(w http.ResponseWriter, r *http.Request, store OrgUnitStor
 		}
 
 		if hasListOpts {
-			if listOpts.ExtFilterFieldKey != "" || listOpts.ExtSortFieldKey != "" {
-				if _, ok := store.(orgUnitListPageReader); !ok {
-					routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, orgUnitErrExtQueryFieldNotAllowed, "ext query not allowed")
-					return
-				}
-			}
 			readSvc := orgunitservices.NewOrgUnitReadService(orgUnitReadStoreAdapter{store: store})
 			scopeFilter, err := orgUnitReadScopeFilterFromRuntime(r.Context(), runtimeStoreFromVariadic(runtime), tenant.ID)
 			if err != nil {
@@ -1154,73 +1150,30 @@ func handleOrgUnitsAPI(w http.ResponseWriter, r *http.Request, store OrgUnitStor
 				sizePtr = &listOpts.PageSize
 			}
 
-			var items []orgUnitListItem
-			var total int
-			if listOpts.ExtFilterFieldKey != "" || listOpts.ExtSortFieldKey != "" {
-				items, total, err = listOrgUnitListPage(r.Context(), store, tenant.ID, req)
-				if err != nil {
-					if errors.Is(err, errOrgUnitNotFound) {
-						routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusNotFound, "org_unit_not_found", "org unit not found")
-						return
-					}
-					if errors.Is(err, errOrgUnitExtQueryFieldNotAllowed) {
-						routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, orgUnitErrExtQueryFieldNotAllowed, "ext query not allowed")
-						return
-					}
-					writeInternalAPIError(w, r, err, "orgunit_list_failed")
-					return
-				}
-				if runtimeStoreFromVariadic(runtime) != nil {
-					req.Limit = 0
-					req.Offset = 0
-					items, total, err = listOrgUnitListPage(r.Context(), store, tenant.ID, req)
-					if err != nil {
-						writeInternalAPIError(w, r, err, "orgunit_list_failed")
-						return
-					}
-					if err := hydrateOrgUnitListItemScopePaths(r.Context(), store, tenant.ID, asOf, items); err != nil {
-						writeInternalAPIError(w, r, err, "orgunit_scope_path_failed")
-						return
-					}
-				}
-				items, total, err = filterOrgUnitListItemsByCurrentScope(r.Context(), runtimeStoreFromVariadic(runtime), tenant.ID, items, total)
-				if err != nil {
-					writeOrgUnitScopeError(w, r, err)
-					return
-				}
-				if listOpts.Paginate && runtimeStoreFromVariadic(runtime) != nil {
-					start := listOpts.Page * listOpts.PageSize
-					if start >= len(items) {
-						items = []orgUnitListItem{}
-					} else {
-						end := min(start+listOpts.PageSize, len(items))
-						items = items[start:end]
-					}
-				}
-			} else {
-				var nodes []orgunitservices.OrgUnitReadNode
-				nodes, total, err = readSvc.List(r.Context(), orgunitservices.OrgUnitListRequest{
-					TenantID:         tenant.ID,
-					AsOf:             asOf,
-					ScopeFilter:      scopeFilter,
-					ParentOrgNodeKey: derefString(parentOrgNodeKey),
-					AllOrgUnits:      listOpts.AllOrgUnits,
-					Keyword:          listOpts.Keyword,
-					Status:           listOpts.Status,
-					IsBusinessUnit:   listOpts.IsBusinessUnit,
-					SortField:        listOpts.SortField,
-					SortOrder:        listOpts.SortOrder,
-					IncludeDisabled:  includeDisabled,
-					Limit:            req.Limit,
-					Offset:           req.Offset,
-					Caller:           "orgunit.http.list",
-				})
-				if err != nil {
-					writeOrgUnitReadServiceError(w, r, err, "orgunit_list_failed")
-					return
-				}
-				items = orgUnitListItemsFromReadNodes(nodes)
+			nodes, total, err := readSvc.List(r.Context(), orgunitservices.OrgUnitListRequest{
+				TenantID:          tenant.ID,
+				AsOf:              asOf,
+				ScopeFilter:       scopeFilter,
+				ParentOrgNodeKey:  derefString(parentOrgNodeKey),
+				AllOrgUnits:       listOpts.AllOrgUnits,
+				Keyword:           listOpts.Keyword,
+				Status:            listOpts.Status,
+				IsBusinessUnit:    listOpts.IsBusinessUnit,
+				SortField:         listOpts.SortField,
+				ExtSortFieldKey:   listOpts.ExtSortFieldKey,
+				SortOrder:         listOpts.SortOrder,
+				ExtFilterFieldKey: listOpts.ExtFilterFieldKey,
+				ExtFilterValue:    listOpts.ExtFilterValue,
+				IncludeDisabled:   includeDisabled,
+				Limit:             req.Limit,
+				Offset:            req.Offset,
+				Caller:            "orgunit.http.list",
+			})
+			if err != nil {
+				writeOrgUnitReadServiceError(w, r, err, "orgunit_list_failed")
+				return
 			}
+			items := orgUnitListItemsFromReadNodes(nodes)
 
 			if listOpts.Paginate {
 				totalPtr = &total

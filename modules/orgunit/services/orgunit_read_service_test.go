@@ -16,6 +16,8 @@ type orgUnitReadFakeStore struct {
 	listTree        bool
 	listChildrenN   int
 	lastSearchLimit int
+	listPageFn      func(context.Context, OrgUnitReadListPageRequest) ([]OrgUnitReadNode, int, error)
+	lastListPageReq OrgUnitReadListPageRequest
 }
 
 func newOrgUnitReadFakeStore(t *testing.T) *orgUnitReadFakeStore {
@@ -103,6 +105,18 @@ func (s *orgUnitReadFakeStore) ListTree(context.Context, string, string, bool) (
 		out = append(out, node)
 	}
 	return out, nil
+}
+
+func (s *orgUnitReadFakeStore) ListPage(ctx context.Context, req OrgUnitReadListPageRequest) ([]OrgUnitReadNode, int, error) {
+	s.lastListPageReq = req
+	if s.listPageFn != nil {
+		return s.listPageFn(ctx, req)
+	}
+	out := make([]OrgUnitReadNode, 0, len(s.nodes))
+	for _, node := range s.nodes {
+		out = append(out, node)
+	}
+	return out, len(out), nil
 }
 
 func (s *orgUnitReadFakeStore) ResolveByOrgNodeKey(_ context.Context, _ string, orgNodeKey string, _ string, _ bool) (OrgUnitReadNode, error) {
@@ -404,6 +418,114 @@ func TestOrgUnitReadServiceListFiltersChildrenWithinScope(t *testing.T) {
 	}
 	if total != 1 || len(got) != 1 || got[0].OrgCode != "EAST" {
 		t.Fatalf("children=%+v total=%d", got, total)
+	}
+}
+
+func TestOrgUnitReadServiceListExtQueryUsesStorePageAndScopesBeforePagination(t *testing.T) {
+	store := newOrgUnitReadFakeStore(t)
+	blossom := mustOrgUnitReadKey(t, 10000002)
+	east := mustOrgUnitReadKey(t, 10000003)
+	sh := mustOrgUnitReadKey(t, 10000004)
+	store.listPageFn = func(_ context.Context, req OrgUnitReadListPageRequest) ([]OrgUnitReadNode, int, error) {
+		if req.Limit != 0 || req.Offset != 0 {
+			t.Fatalf("scoped ext list should not push pagination before scope filter, req=%+v", req)
+		}
+		nodes := []OrgUnitReadNode{
+			store.nodes[mustOrgUnitReadKey(t, 10000001)],
+			store.nodes[blossom],
+			store.nodes[east],
+			store.nodes[sh],
+		}
+		return nodes, len(nodes), nil
+	}
+
+	svc := NewOrgUnitReadService(store)
+	got, total, err := svc.List(context.Background(), OrgUnitListRequest{
+		TenantID:          "t1",
+		AsOf:              "2026-01-01",
+		AllOrgUnits:       true,
+		ExtSortFieldKey:   "org_type",
+		ExtFilterFieldKey: "org_type",
+		ExtFilterValue:    "DEPARTMENT",
+		Limit:             2,
+		Offset:            1,
+		ScopeFilter: OrgUnitReadScopeFilter{
+			PrincipalID: "principal-a",
+			Scopes: []OrgUnitScope{{
+				OrgNodeKey:         blossom,
+				IncludeDescendants: true,
+			}},
+		},
+	})
+	if err != nil {
+		t.Fatalf("List err=%v", err)
+	}
+	if total != 3 {
+		t.Fatalf("total=%d want 3", total)
+	}
+	if gotCodes := orgUnitReadNodeCodes(got); !reflect.DeepEqual(gotCodes, []string{"EAST", "SH"}) {
+		t.Fatalf("page codes=%v want [EAST SH]", gotCodes)
+	}
+	if store.lastListPageReq.ExtSortFieldKey != "org_type" || store.lastListPageReq.ExtFilterFieldKey != "org_type" {
+		t.Fatalf("ext req=%+v", store.lastListPageReq)
+	}
+}
+
+func TestOrgUnitReadServiceListExtQueryPushesPaginationForAllTenant(t *testing.T) {
+	store := newOrgUnitReadFakeStore(t)
+	store.listPageFn = func(_ context.Context, req OrgUnitReadListPageRequest) ([]OrgUnitReadNode, int, error) {
+		if req.Limit != 10 || req.Offset != 20 {
+			t.Fatalf("pagination req=%+v", req)
+		}
+		return []OrgUnitReadNode{store.nodes[mustOrgUnitReadKey(t, 10000003)]}, 42, nil
+	}
+
+	svc := NewOrgUnitReadService(store)
+	got, total, err := svc.List(context.Background(), OrgUnitListRequest{
+		TenantID:        "t1",
+		AsOf:            "2026-01-01",
+		ExtSortFieldKey: "org_type",
+		Limit:           10,
+		Offset:          20,
+		ScopeFilter: OrgUnitReadScopeFilter{
+			AllTenant: true,
+		},
+	})
+	if err != nil {
+		t.Fatalf("List err=%v", err)
+	}
+	if total != 42 || len(got) != 1 || got[0].OrgCode != "EAST" {
+		t.Fatalf("got=%+v total=%d", got, total)
+	}
+}
+
+func TestOrgUnitReadServiceListExtQueryRejectsParentOutsideScope(t *testing.T) {
+	store := newOrgUnitReadFakeStore(t)
+	blossom := mustOrgUnitReadKey(t, 10000002)
+	flowers := mustOrgUnitReadKey(t, 10000005)
+	store.listPageFn = func(_ context.Context, _ OrgUnitReadListPageRequest) ([]OrgUnitReadNode, int, error) {
+		t.Fatal("ListPage should not be called when parent is outside scope")
+		return nil, 0, nil
+	}
+
+	svc := NewOrgUnitReadService(store)
+	_, _, err := svc.List(context.Background(), OrgUnitListRequest{
+		TenantID:          "t1",
+		AsOf:              "2026-01-01",
+		ParentOrgNodeKey:  flowers,
+		ExtSortFieldKey:   "org_type",
+		ExtFilterFieldKey: "org_type",
+		ExtFilterValue:    "DEPARTMENT",
+		ScopeFilter: OrgUnitReadScopeFilter{
+			PrincipalID: "principal-a",
+			Scopes: []OrgUnitScope{{
+				OrgNodeKey:         blossom,
+				IncludeDescendants: true,
+			}},
+		},
+	})
+	if !errors.Is(err, ErrOrgUnitReadScopeForbidden) {
+		t.Fatalf("err=%v want ErrOrgUnitReadScopeForbidden", err)
 	}
 }
 

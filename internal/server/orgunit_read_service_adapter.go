@@ -75,6 +75,69 @@ func (a orgUnitReadStoreAdapter) ListTree(ctx context.Context, tenantID string, 
 	return orgUnitReadNodesFromListItems(items), nil
 }
 
+func (a orgUnitReadStoreAdapter) ListPage(ctx context.Context, req orgunitservices.OrgUnitReadListPageRequest) ([]orgunitservices.OrgUnitReadNode, int, error) {
+	if strings.TrimSpace(req.ExtFilterFieldKey) != "" || strings.TrimSpace(req.ExtSortFieldKey) != "" {
+		if _, ok := a.store.(orgUnitListPageReader); !ok {
+			return nil, 0, orgunitservices.ErrOrgUnitReadExtQueryNotAllowed
+		}
+	}
+
+	var parentOrgNodeKey *string
+	if strings.TrimSpace(req.ParentOrgNodeKey) != "" {
+		normalized, err := normalizeOrgNodeKeyInput(req.ParentOrgNodeKey)
+		if err != nil {
+			return nil, 0, err
+		}
+		parentOrgNodeKey = &normalized
+	} else if strings.TrimSpace(req.ParentOrgCode) != "" {
+		normalized, err := orgunitpkg.NormalizeOrgCode(req.ParentOrgCode)
+		if err != nil {
+			return nil, 0, err
+		}
+		resolved, err := a.store.ResolveOrgNodeKeyByCode(ctx, req.TenantID, normalized)
+		if err != nil {
+			if errors.Is(err, orgunitpkg.ErrOrgCodeNotFound) {
+				return nil, 0, orgunitservices.ErrOrgUnitReadNotFound
+			}
+			return nil, 0, err
+		}
+		parentOrgNodeKey = &resolved
+	}
+
+	items, total, err := listOrgUnitListPage(ctx, a.store, req.TenantID, orgUnitListPageRequest{
+		AsOf:              req.AsOf,
+		IncludeDisabled:   req.IncludeDisabled,
+		ParentOrgNodeKey:  parentOrgNodeKey,
+		AllOrgUnits:       req.AllOrgUnits,
+		Keyword:           req.Keyword,
+		Status:            req.Status,
+		IsBusinessUnit:    req.IsBusinessUnit,
+		SortField:         req.SortField,
+		ExtSortFieldKey:   req.ExtSortFieldKey,
+		SortOrder:         req.SortOrder,
+		ExtFilterFieldKey: req.ExtFilterFieldKey,
+		ExtFilterValue:    req.ExtFilterValue,
+		Limit:             req.Limit,
+		Offset:            req.Offset,
+	})
+	if err != nil {
+		if errors.Is(err, errOrgUnitExtQueryFieldNotAllowed) {
+			return nil, 0, orgunitservices.ErrOrgUnitReadExtQueryNotAllowed
+		}
+		if errors.Is(err, errOrgUnitNotFound) || errors.Is(err, orgunitpkg.ErrOrgNodeKeyNotFound) {
+			return nil, 0, orgunitservices.ErrOrgUnitReadNotFound
+		}
+		return nil, 0, err
+	}
+	if err := hydrateOrgUnitListItemScopePaths(ctx, a.store, req.TenantID, req.AsOf, items); err != nil {
+		if errors.Is(err, errOrgUnitNotFound) || errors.Is(err, orgunitpkg.ErrOrgNodeKeyNotFound) {
+			return nil, 0, orgunitservices.ErrOrgUnitReadNotFound
+		}
+		return nil, 0, err
+	}
+	return orgUnitReadNodesFromListItems(items), total, nil
+}
+
 func (a orgUnitReadStoreAdapter) ResolveByOrgNodeKey(ctx context.Context, tenantID string, orgNodeKey string, asOf string, includeDisabled bool) (orgunitservices.OrgUnitReadNode, error) {
 	details, err := getNodeDetailsByVisibilityByNodeKey(ctx, a.store, tenantID, orgNodeKey, asOf, includeDisabled)
 	if err != nil {

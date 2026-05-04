@@ -16,6 +16,7 @@ var (
 	ErrOrgUnitReadScopeForbidden      = errors.New("orgunit_read_scope_forbidden")
 	ErrOrgUnitReadNotFound            = errors.New("orgunit_read_not_found")
 	ErrOrgUnitReadSafePathUnavailable = errors.New("orgunit_read_safe_path_unavailable")
+	ErrOrgUnitReadExtQueryNotAllowed  = errors.New("orgunit_read_ext_query_not_allowed")
 )
 
 type OrgUnitReadService interface {
@@ -38,6 +39,10 @@ type OrgUnitReadTreeStore interface {
 	ListTree(ctx context.Context, tenantID string, asOf string, includeDisabled bool) ([]OrgUnitReadNode, error)
 }
 
+type OrgUnitReadListPageStore interface {
+	ListPage(ctx context.Context, req OrgUnitReadListPageRequest) ([]OrgUnitReadNode, int, error)
+}
+
 type OrgUnitScope struct {
 	OrgNodeKey         string
 	IncludeDescendants bool
@@ -58,21 +63,43 @@ type OrgUnitReadRequest struct {
 }
 
 type OrgUnitListRequest struct {
-	TenantID         string
-	AsOf             string
-	ScopeFilter      OrgUnitReadScopeFilter
-	ParentOrgCode    string
-	ParentOrgNodeKey string
-	AllOrgUnits      bool
-	Keyword          string
-	Status           string
-	IsBusinessUnit   *bool
-	SortField        string
-	SortOrder        string
-	IncludeDisabled  bool
-	Limit            int
-	Offset           int
-	Caller           string
+	TenantID          string
+	AsOf              string
+	ScopeFilter       OrgUnitReadScopeFilter
+	ParentOrgCode     string
+	ParentOrgNodeKey  string
+	AllOrgUnits       bool
+	Keyword           string
+	Status            string
+	IsBusinessUnit    *bool
+	SortField         string
+	ExtSortFieldKey   string
+	SortOrder         string
+	ExtFilterFieldKey string
+	ExtFilterValue    string
+	IncludeDisabled   bool
+	Limit             int
+	Offset            int
+	Caller            string
+}
+
+type OrgUnitReadListPageRequest struct {
+	TenantID          string
+	AsOf              string
+	ParentOrgCode     string
+	ParentOrgNodeKey  string
+	AllOrgUnits       bool
+	Keyword           string
+	Status            string
+	IsBusinessUnit    *bool
+	SortField         string
+	ExtSortFieldKey   string
+	SortOrder         string
+	ExtFilterFieldKey string
+	ExtFilterValue    string
+	IncludeDisabled   bool
+	Limit             int
+	Offset            int
 }
 
 type OrgUnitChildrenRequest struct {
@@ -128,6 +155,9 @@ func (s orgUnitReadService) List(ctx context.Context, req OrgUnitListRequest) ([
 	if err := validateOrgUnitReadBase(req.TenantID, req.AsOf); err != nil {
 		return nil, 0, err
 	}
+	if req.hasExtQuery() {
+		return s.listWithStorePage(ctx, req)
+	}
 
 	var nodes []OrgUnitReadNode
 	var err error
@@ -162,6 +192,67 @@ func (s orgUnitReadService) List(ctx context.Context, req OrgUnitListRequest) ([
 	}
 	total := len(nodes)
 	return paginateReadNodes(nodes, req.Limit, req.Offset), total, nil
+}
+
+func (req OrgUnitListRequest) hasExtQuery() bool {
+	return strings.TrimSpace(req.ExtFilterFieldKey) != "" || strings.TrimSpace(req.ExtSortFieldKey) != ""
+}
+
+func (s orgUnitReadService) listWithStorePage(ctx context.Context, req OrgUnitListRequest) ([]OrgUnitReadNode, int, error) {
+	pageStore, ok := s.store.(OrgUnitReadListPageStore)
+	if !ok {
+		return nil, 0, ErrOrgUnitReadExtQueryNotAllowed
+	}
+
+	if strings.TrimSpace(req.ParentOrgNodeKey) != "" || strings.TrimSpace(req.ParentOrgCode) != "" {
+		parent, err := s.resolveParent(ctx, OrgUnitChildrenRequest{
+			TenantID:         req.TenantID,
+			AsOf:             req.AsOf,
+			ScopeFilter:      req.ScopeFilter,
+			ParentOrgCode:    req.ParentOrgCode,
+			ParentOrgNodeKey: req.ParentOrgNodeKey,
+			IncludeDisabled:  req.IncludeDisabled,
+			Caller:           req.Caller,
+		})
+		if err != nil {
+			return nil, 0, err
+		}
+		if !scopeAllowsReadNode(req.ScopeFilter, parent) {
+			return nil, 0, ErrOrgUnitReadScopeForbidden
+		}
+	}
+
+	storeReq := OrgUnitReadListPageRequest{
+		TenantID:          req.TenantID,
+		AsOf:              req.AsOf,
+		ParentOrgCode:     req.ParentOrgCode,
+		ParentOrgNodeKey:  req.ParentOrgNodeKey,
+		AllOrgUnits:       req.AllOrgUnits,
+		Keyword:           req.Keyword,
+		Status:            req.Status,
+		IsBusinessUnit:    req.IsBusinessUnit,
+		SortField:         req.SortField,
+		ExtSortFieldKey:   strings.TrimSpace(req.ExtSortFieldKey),
+		SortOrder:         req.SortOrder,
+		ExtFilterFieldKey: strings.TrimSpace(req.ExtFilterFieldKey),
+		ExtFilterValue:    req.ExtFilterValue,
+		IncludeDisabled:   req.IncludeDisabled,
+	}
+	if req.ScopeFilter.AllTenant {
+		storeReq.Limit = req.Limit
+		storeReq.Offset = req.Offset
+	}
+
+	nodes, total, err := pageStore.ListPage(ctx, storeReq)
+	if err != nil {
+		return nil, 0, err
+	}
+	if req.ScopeFilter.AllTenant {
+		return nodes, total, nil
+	}
+	visible := filterReadNodesByScope(req.ScopeFilter, nodes)
+	total = len(visible)
+	return paginateReadNodes(visible, req.Limit, req.Offset), total, nil
 }
 
 func (s orgUnitReadService) VisibleRoots(ctx context.Context, req OrgUnitReadRequest) ([]OrgUnitReadNode, error) {

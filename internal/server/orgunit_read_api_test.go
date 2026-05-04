@@ -851,6 +851,70 @@ func TestListOrgUnitListPage_HydratesFallbackScopePath(t *testing.T) {
 	}
 }
 
+func TestOrgUnitReadStoreAdapterListPageHydratesScopePath(t *testing.T) {
+	ctx := context.Background()
+	rootKey, err := encodeOrgNodeKeyFromID(10000001)
+	if err != nil {
+		t.Fatalf("root key err=%v", err)
+	}
+	childKey, err := encodeOrgNodeKeyFromID(10000002)
+	if err != nil {
+		t.Fatalf("child key err=%v", err)
+	}
+	grandchildKey, err := encodeOrgNodeKeyFromID(10000003)
+	if err != nil {
+		t.Fatalf("grandchild key err=%v", err)
+	}
+	store := &orgUnitListPageReaderStore{
+		resolveOrgCodeStore: &resolveOrgCodeStore{
+			resolveID: 10000001,
+			getNodeDetails: OrgUnitNodeDetails{
+				OrgID:           10000003,
+				OrgNodeKey:      grandchildKey,
+				OrgCode:         "GRAND",
+				Name:            "Grand",
+				Status:          orgUnitListStatusActive,
+				PathOrgNodeKeys: []string{rootKey, childKey, grandchildKey},
+			},
+			resolveCodesByNodeKey: map[string]string{
+				rootKey:       "ROOT",
+				childKey:      "CHILD",
+				grandchildKey: "GRAND",
+			},
+		},
+		items: []orgUnitListItem{{
+			OrgCode:    "GRAND",
+			OrgNodeKey: grandchildKey,
+			Name:       "Grand",
+			Status:     orgUnitListStatusActive,
+		}},
+		total: 1,
+	}
+
+	svc := orgunitservices.NewOrgUnitReadService(orgUnitReadStoreAdapter{store: store})
+	nodes, total, err := svc.List(ctx, orgunitservices.OrgUnitListRequest{
+		TenantID:        "t1",
+		AsOf:            "2026-01-01",
+		ExtSortFieldKey: "org_type",
+		ScopeFilter: orgunitservices.OrgUnitReadScopeFilter{
+			PrincipalID: "principal-a",
+			Scopes: []orgunitservices.OrgUnitScope{{
+				OrgNodeKey:         childKey,
+				IncludeDescendants: true,
+			}},
+		},
+	})
+	if err != nil {
+		t.Fatalf("List err=%v", err)
+	}
+	if total != 1 || len(nodes) != 1 || nodes[0].OrgNodeKey != grandchildKey {
+		t.Fatalf("nodes=%+v total=%d", nodes, total)
+	}
+	if !reflect.DeepEqual(nodes[0].PathOrgNodeKeys, []string{rootKey, childKey, grandchildKey}) {
+		t.Fatalf("path=%v", nodes[0].PathOrgNodeKeys)
+	}
+}
+
 func TestHandleOrgUnitsAPI_ListPaginationTotalUsesScopedResult(t *testing.T) {
 	store := newOrgUnitMemoryStore()
 	ctx := context.Background()
