@@ -63,6 +63,18 @@ func (a orgUnitReadStoreAdapter) ListChildren(ctx context.Context, tenantID stri
 	return out, nil
 }
 
+func (a orgUnitReadStoreAdapter) ListTree(ctx context.Context, tenantID string, asOf string, includeDisabled bool) ([]orgunitservices.OrgUnitReadNode, error) {
+	items, _, err := listOrgUnitListPage(ctx, a.store, tenantID, orgUnitListPageRequest{
+		AsOf:            asOf,
+		IncludeDisabled: includeDisabled,
+		AllOrgUnits:     true,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return orgUnitReadNodesFromListItems(items), nil
+}
+
 func (a orgUnitReadStoreAdapter) ResolveByOrgNodeKey(ctx context.Context, tenantID string, orgNodeKey string, asOf string, includeDisabled bool) (orgunitservices.OrgUnitReadNode, error) {
 	details, err := getNodeDetailsByVisibilityByNodeKey(ctx, a.store, tenantID, orgNodeKey, asOf, includeDisabled)
 	if err != nil {
@@ -225,6 +237,29 @@ func orgUnitListItemsFromReadNodes(nodes []orgunitservices.OrgUnitReadNode) []or
 		})
 	}
 	return out
+}
+
+func orgUnitReadNodesFromListItems(items []orgUnitListItem) []orgunitservices.OrgUnitReadNode {
+	out := make([]orgunitservices.OrgUnitReadNode, 0, len(items))
+	for _, item := range items {
+		out = append(out, orgunitservices.OrgUnitReadNode{
+			OrgCode:            item.OrgCode,
+			OrgNodeKey:         item.OrgNodeKey,
+			Name:               item.Name,
+			Status:             orgUnitReadStatusOrActive(item.Status),
+			IsBusinessUnit:     item.IsBusinessUnit,
+			HasVisibleChildren: boolPtrValue(item.HasVisibleChildren, boolPtrValue(item.HasChildren, false)),
+			PathOrgNodeKeys:    append([]string(nil), item.PathOrgNodeKeys...),
+		})
+	}
+	return out
+}
+
+func boolPtrValue(value *bool, fallback bool) bool {
+	if value == nil {
+		return fallback
+	}
+	return *value
 }
 
 func orgUnitSearchResultFromReadNode(node orgunitservices.OrgUnitReadNode, asOf string) OrgUnitSearchResult {

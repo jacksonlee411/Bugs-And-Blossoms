@@ -3,6 +3,7 @@ package services
 import (
 	"context"
 	"errors"
+	"sort"
 	"strings"
 	"time"
 
@@ -18,6 +19,7 @@ var (
 )
 
 type OrgUnitReadService interface {
+	List(ctx context.Context, req OrgUnitListRequest) ([]OrgUnitReadNode, int, error)
 	VisibleRoots(ctx context.Context, req OrgUnitReadRequest) ([]OrgUnitReadNode, error)
 	Children(ctx context.Context, req OrgUnitChildrenRequest) ([]OrgUnitReadNode, error)
 	Search(ctx context.Context, req OrgUnitSearchRequest) ([]OrgUnitReadNode, error)
@@ -30,6 +32,10 @@ type OrgUnitReadStore interface {
 	ResolveByOrgNodeKey(ctx context.Context, tenantID string, orgNodeKey string, asOf string, includeDisabled bool) (OrgUnitReadNode, error)
 	ResolveByOrgCode(ctx context.Context, tenantID string, orgCode string, asOf string, includeDisabled bool) (OrgUnitReadNode, error)
 	Search(ctx context.Context, tenantID string, query string, asOf string, includeDisabled bool, limit int) ([]OrgUnitReadNode, error)
+}
+
+type OrgUnitReadTreeStore interface {
+	ListTree(ctx context.Context, tenantID string, asOf string, includeDisabled bool) ([]OrgUnitReadNode, error)
 }
 
 type OrgUnitScope struct {
@@ -49,6 +55,24 @@ type OrgUnitReadRequest struct {
 	ScopeFilter     OrgUnitReadScopeFilter
 	IncludeDisabled bool
 	Caller          string
+}
+
+type OrgUnitListRequest struct {
+	TenantID         string
+	AsOf             string
+	ScopeFilter      OrgUnitReadScopeFilter
+	ParentOrgCode    string
+	ParentOrgNodeKey string
+	AllOrgUnits      bool
+	Keyword          string
+	Status           string
+	IsBusinessUnit   *bool
+	SortField        string
+	SortOrder        string
+	IncludeDisabled  bool
+	Limit            int
+	Offset           int
+	Caller           string
 }
 
 type OrgUnitChildrenRequest struct {
@@ -98,6 +122,46 @@ type orgUnitReadService struct {
 
 func NewOrgUnitReadService(store OrgUnitReadStore) OrgUnitReadService {
 	return orgUnitReadService{store: store}
+}
+
+func (s orgUnitReadService) List(ctx context.Context, req OrgUnitListRequest) ([]OrgUnitReadNode, int, error) {
+	if err := validateOrgUnitReadBase(req.TenantID, req.AsOf); err != nil {
+		return nil, 0, err
+	}
+
+	var nodes []OrgUnitReadNode
+	var err error
+	if strings.TrimSpace(req.ParentOrgNodeKey) != "" || strings.TrimSpace(req.ParentOrgCode) != "" {
+		nodes, err = s.Children(ctx, OrgUnitChildrenRequest{
+			TenantID:         req.TenantID,
+			AsOf:             req.AsOf,
+			ScopeFilter:      req.ScopeFilter,
+			ParentOrgCode:    req.ParentOrgCode,
+			ParentOrgNodeKey: req.ParentOrgNodeKey,
+			IncludeDisabled:  req.IncludeDisabled,
+			Caller:           req.Caller,
+		})
+	} else if req.AllOrgUnits || strings.TrimSpace(req.Keyword) != "" || req.IsBusinessUnit != nil {
+		nodes, err = s.collectVisibleTree(ctx, req.TenantID, req.AsOf, req.IncludeDisabled, req.ScopeFilter, req.Caller)
+	} else {
+		nodes, err = s.VisibleRoots(ctx, OrgUnitReadRequest{
+			TenantID:        req.TenantID,
+			AsOf:            req.AsOf,
+			ScopeFilter:     req.ScopeFilter,
+			IncludeDisabled: req.IncludeDisabled,
+			Caller:          req.Caller,
+		})
+	}
+	if err != nil {
+		return nil, 0, err
+	}
+
+	nodes = filterReadNodesForList(nodes, req.Keyword, req.Status, req.IsBusinessUnit)
+	if strings.TrimSpace(req.SortField) != "" {
+		sortReadNodesForList(nodes, req.SortField, req.SortOrder)
+	}
+	total := len(nodes)
+	return paginateReadNodes(nodes, req.Limit, req.Offset), total, nil
 }
 
 func (s orgUnitReadService) VisibleRoots(ctx context.Context, req OrgUnitReadRequest) ([]OrgUnitReadNode, error) {
@@ -321,6 +385,73 @@ func (s orgUnitReadService) withSafePaths(nodes []OrgUnitReadNode, roots []OrgUn
 	return out, nil
 }
 
+func (s orgUnitReadService) collectVisibleTree(ctx context.Context, tenantID string, asOf string, includeDisabled bool, filter OrgUnitReadScopeFilter, caller string) ([]OrgUnitReadNode, error) {
+	if treeStore, ok := s.store.(OrgUnitReadTreeStore); ok {
+		nodes, err := treeStore.ListTree(ctx, tenantID, asOf, includeDisabled)
+		if err != nil {
+			return nil, err
+		}
+		visible := filterReadNodesByScope(filter, nodes)
+		return s.decorateVisibleChildrenFromCandidates(visible, visible), nil
+	}
+
+	roots, err := s.VisibleRoots(ctx, OrgUnitReadRequest{
+		TenantID:        tenantID,
+		AsOf:            asOf,
+		ScopeFilter:     filter,
+		IncludeDisabled: includeDisabled,
+		Caller:          caller,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	out := make([]OrgUnitReadNode, 0, len(roots))
+	seen := map[string]bool{}
+	var walk func(nodes []OrgUnitReadNode) error
+	walk = func(nodes []OrgUnitReadNode) error {
+		for _, node := range nodes {
+			key := strings.TrimSpace(node.OrgNodeKey)
+			if key == "" || seen[key] {
+				continue
+			}
+			seen[key] = true
+			out = append(out, node)
+			if !node.HasVisibleChildren {
+				continue
+			}
+			children, err := s.Children(ctx, OrgUnitChildrenRequest{
+				TenantID:         tenantID,
+				AsOf:             asOf,
+				ScopeFilter:      filter,
+				ParentOrgNodeKey: key,
+				IncludeDisabled:  includeDisabled,
+				Caller:           caller,
+			})
+			if err != nil {
+				return err
+			}
+			if err := walk(children); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+	if err := walk(roots); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (s orgUnitReadService) decorateVisibleChildrenFromCandidates(nodes []OrgUnitReadNode, candidates []OrgUnitReadNode) []OrgUnitReadNode {
+	out := append([]OrgUnitReadNode(nil), nodes...)
+	for i := range out {
+		out[i].PathOrgNodeKeys = normalizePathOrgNodeKeys(out[i].PathOrgNodeKeys, out[i].OrgNodeKey)
+		out[i].HasVisibleChildren = hasDirectVisibleChild(out[i], candidates)
+	}
+	return out
+}
+
 func validateOrgUnitReadBase(tenantID string, asOf string) error {
 	if strings.TrimSpace(tenantID) == "" || strings.TrimSpace(asOf) == "" {
 		return ErrOrgUnitReadInvalidArgument
@@ -431,9 +562,123 @@ func safePathOrgCodes(node OrgUnitReadNode, roots []OrgUnitReadNode) ([]string, 
 	return nil, ErrOrgUnitReadScopeForbidden
 }
 
+func hasDirectVisibleChild(parent OrgUnitReadNode, candidates []OrgUnitReadNode) bool {
+	parentKey := strings.TrimSpace(parent.OrgNodeKey)
+	if parentKey == "" {
+		return false
+	}
+	parentPath := normalizePathOrgNodeKeys(parent.PathOrgNodeKeys, parent.OrgNodeKey)
+	if len(parentPath) == 0 {
+		return false
+	}
+	for _, candidate := range candidates {
+		if strings.TrimSpace(candidate.OrgNodeKey) == "" || strings.TrimSpace(candidate.OrgNodeKey) == parentKey {
+			continue
+		}
+		candidatePath := normalizePathOrgNodeKeys(candidate.PathOrgNodeKeys, candidate.OrgNodeKey)
+		if len(candidatePath) != len(parentPath)+1 {
+			continue
+		}
+		if pathHasPrefix(candidatePath, parentPath) {
+			return true
+		}
+	}
+	return false
+}
+
+func pathHasPrefix(path []string, prefix []string) bool {
+	if len(prefix) == 0 || len(path) < len(prefix) {
+		return false
+	}
+	for idx := range prefix {
+		if strings.TrimSpace(path[idx]) != strings.TrimSpace(prefix[idx]) {
+			return false
+		}
+	}
+	return true
+}
+
 func limitReadNodes(nodes []OrgUnitReadNode, limit int) []OrgUnitReadNode {
 	if limit <= 0 || len(nodes) <= limit {
 		return nodes
 	}
 	return append([]OrgUnitReadNode(nil), nodes[:limit]...)
+}
+
+func filterReadNodesForList(nodes []OrgUnitReadNode, keyword string, status string, isBusinessUnit *bool) []OrgUnitReadNode {
+	keyword = strings.ToLower(strings.TrimSpace(keyword))
+	status = normalizeOrgUnitListStatus(status)
+	if keyword == "" && status == "" && isBusinessUnit == nil {
+		return append([]OrgUnitReadNode(nil), nodes...)
+	}
+
+	out := make([]OrgUnitReadNode, 0, len(nodes))
+	for _, node := range nodes {
+		nodeStatus := normalizeOrgUnitListStatus(node.Status)
+		if nodeStatus == "" {
+			nodeStatus = "active"
+		}
+		if status != "" && nodeStatus != status {
+			continue
+		}
+		if keyword != "" {
+			code := strings.ToLower(node.OrgCode)
+			name := strings.ToLower(node.Name)
+			if !strings.Contains(code, keyword) && !strings.Contains(name, keyword) {
+				continue
+			}
+		}
+		if isBusinessUnit != nil && (node.IsBusinessUnit == nil || *node.IsBusinessUnit != *isBusinessUnit) {
+			continue
+		}
+		out = append(out, node)
+	}
+	return out
+}
+
+func sortReadNodesForList(nodes []OrgUnitReadNode, sortField string, sortOrder string) {
+	field := strings.ToLower(strings.TrimSpace(sortField))
+	desc := strings.EqualFold(strings.TrimSpace(sortOrder), "desc")
+	sort.SliceStable(nodes, func(i, j int) bool {
+		left := nodes[i]
+		right := nodes[j]
+		var cmp int
+		switch field {
+		case "name":
+			cmp = strings.Compare(strings.ToLower(left.Name), strings.ToLower(right.Name))
+		case "status":
+			cmp = strings.Compare(normalizeOrgUnitListStatus(left.Status), normalizeOrgUnitListStatus(right.Status))
+		case "code":
+			fallthrough
+		default:
+			cmp = strings.Compare(strings.ToLower(left.OrgCode), strings.ToLower(right.OrgCode))
+		}
+		if cmp == 0 {
+			cmp = strings.Compare(strings.ToLower(left.OrgCode), strings.ToLower(right.OrgCode))
+		}
+		if desc {
+			return cmp > 0
+		}
+		return cmp < 0
+	})
+}
+
+func paginateReadNodes(nodes []OrgUnitReadNode, limit int, offset int) []OrgUnitReadNode {
+	if limit <= 0 {
+		return append([]OrgUnitReadNode(nil), nodes...)
+	}
+	start := max(offset, 0)
+	if start >= len(nodes) {
+		return []OrgUnitReadNode{}
+	}
+	end := min(start+limit, len(nodes))
+	return append([]OrgUnitReadNode(nil), nodes[start:end]...)
+}
+
+func normalizeOrgUnitListStatus(status string) string {
+	status = strings.ToLower(strings.TrimSpace(status))
+	if status == "inactive" {
+		return "disabled"
+	}
+	return status
 }

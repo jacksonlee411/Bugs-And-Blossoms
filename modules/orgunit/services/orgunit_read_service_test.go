@@ -13,6 +13,8 @@ import (
 type orgUnitReadFakeStore struct {
 	nodes           map[string]OrgUnitReadNode
 	children        map[string][]string
+	listTree        bool
+	listChildrenN   int
 	lastSearchLimit int
 }
 
@@ -86,9 +88,19 @@ func (s *orgUnitReadFakeStore) ListRoots(context.Context, string, string, bool) 
 }
 
 func (s *orgUnitReadFakeStore) ListChildren(_ context.Context, _ string, parentOrgNodeKey string, _ string, _ bool) ([]OrgUnitReadNode, error) {
+	s.listChildrenN++
 	var out []OrgUnitReadNode
 	for _, key := range s.children[strings.TrimSpace(parentOrgNodeKey)] {
 		out = append(out, s.nodes[key])
+	}
+	return out, nil
+}
+
+func (s *orgUnitReadFakeStore) ListTree(context.Context, string, string, bool) ([]OrgUnitReadNode, error) {
+	s.listTree = true
+	out := make([]OrgUnitReadNode, 0, len(s.nodes))
+	for _, node := range s.nodes {
+		out = append(out, node)
 	}
 	return out, nil
 }
@@ -328,6 +340,102 @@ func TestOrgUnitReadServiceChildrenAreScopeAware(t *testing.T) {
 	}
 	if len(got) != 1 || got[0].OrgCode != "EAST" {
 		t.Fatalf("children=%+v", got)
+	}
+}
+
+func TestOrgUnitReadServiceListScopesBeforePagination(t *testing.T) {
+	store := newOrgUnitReadFakeStore(t)
+	svc := NewOrgUnitReadService(store)
+	blossom := mustOrgUnitReadKey(t, 10000002)
+
+	got, total, err := svc.List(context.Background(), OrgUnitListRequest{
+		TenantID:    "t1",
+		AsOf:        "2026-01-01",
+		AllOrgUnits: true,
+		ScopeFilter: OrgUnitReadScopeFilter{
+			PrincipalID: "principal-a",
+			Scopes: []OrgUnitScope{{
+				OrgNodeKey:         blossom,
+				IncludeDescendants: true,
+			}},
+		},
+		SortField: "code",
+		SortOrder: "asc",
+		Limit:     2,
+		Offset:    1,
+	})
+	if err != nil {
+		t.Fatalf("List err=%v", err)
+	}
+	if total != 3 {
+		t.Fatalf("total=%d want 3", total)
+	}
+	if gotCodes := orgUnitReadNodeCodes(got); !reflect.DeepEqual(gotCodes, []string{"EAST", "SH"}) {
+		t.Fatalf("page codes=%v want [EAST SH]", gotCodes)
+	}
+	if !store.listTree {
+		t.Fatal("expected List to use bulk tree store")
+	}
+	if store.listChildrenN != 0 {
+		t.Fatalf("ListChildren calls=%d, want 0", store.listChildrenN)
+	}
+}
+
+func TestOrgUnitReadServiceListFiltersChildrenWithinScope(t *testing.T) {
+	store := newOrgUnitReadFakeStore(t)
+	svc := NewOrgUnitReadService(store)
+	blossom := mustOrgUnitReadKey(t, 10000002)
+
+	got, total, err := svc.List(context.Background(), OrgUnitListRequest{
+		TenantID:         "t1",
+		AsOf:             "2026-01-01",
+		ParentOrgNodeKey: blossom,
+		ScopeFilter: OrgUnitReadScopeFilter{
+			PrincipalID: "principal-a",
+			Scopes: []OrgUnitScope{{
+				OrgNodeKey:         blossom,
+				IncludeDescendants: true,
+			}},
+		},
+		Status: "active",
+	})
+	if err != nil {
+		t.Fatalf("List err=%v", err)
+	}
+	if total != 1 || len(got) != 1 || got[0].OrgCode != "EAST" {
+		t.Fatalf("children=%+v total=%d", got, total)
+	}
+}
+
+func TestOrgUnitReadServiceListVisibleChildrenUsesExactPathPrefix(t *testing.T) {
+	root := mustOrgUnitReadKey(t, 10000001)
+	blossom := mustOrgUnitReadKey(t, 10000002)
+	east := mustOrgUnitReadKey(t, 10000003)
+	sh := mustOrgUnitReadKey(t, 10000004)
+
+	nodes := []OrgUnitReadNode{
+		{
+			OrgCode:         "BLOSSOM",
+			OrgNodeKey:      blossom,
+			Name:            "Blossom",
+			Status:          "active",
+			PathOrgNodeKeys: []string{root, blossom},
+		},
+		{
+			OrgCode:         "SH",
+			OrgNodeKey:      sh,
+			Name:            "Shanghai",
+			Status:          "active",
+			PathOrgNodeKeys: []string{root, east, sh},
+		},
+	}
+
+	got := orgUnitReadService{}.decorateVisibleChildrenFromCandidates(nodes, nodes)
+	if len(got) != 2 {
+		t.Fatalf("nodes=%+v", got)
+	}
+	if got[0].HasVisibleChildren {
+		t.Fatalf("cross-branch candidate marked as visible child: %+v", got[0])
 	}
 }
 
