@@ -154,13 +154,14 @@ func handleOrgUnitsBusinessUnitAPIStoreLegacy(w http.ResponseWriter, r *http.Req
 }
 
 type orgUnitListItem struct {
-	OrgCode         string   `json:"org_code"`
-	Name            string   `json:"name"`
-	Status          string   `json:"status"`
-	IsBusinessUnit  *bool    `json:"is_business_unit,omitempty"`
-	HasChildren     *bool    `json:"has_children,omitempty"`
-	OrgNodeKey      string   `json:"-"`
-	PathOrgNodeKeys []string `json:"-"`
+	OrgCode            string   `json:"org_code"`
+	OrgNodeKey         string   `json:"org_node_key,omitempty"`
+	Name               string   `json:"name"`
+	Status             string   `json:"status"`
+	IsBusinessUnit     *bool    `json:"is_business_unit,omitempty"`
+	HasChildren        *bool    `json:"has_children,omitempty"`
+	HasVisibleChildren *bool    `json:"has_visible_children,omitempty"`
+	PathOrgNodeKeys    []string `json:"-"`
 }
 
 type orgUnitListResponse struct {
@@ -1040,6 +1041,11 @@ func isOrgUnitAuthzScopeError(err error) bool {
 		errors.Is(err, errAuthzScopeForbidden)
 }
 
+func isOrgUnitReadAuthzError(err error) bool {
+	return errors.Is(err, orgunitservices.ErrOrgUnitReadScopeRequired) ||
+		errors.Is(err, orgunitservices.ErrOrgUnitReadScopeForbidden)
+}
+
 func handleOrgUnitsAPI(w http.ResponseWriter, r *http.Request, store OrgUnitStore, writeSvc orgunitservices.OrgUnitWriteService, runtime ...authzRuntimeStore) {
 	tenant, ok := currentTenant(r.Context())
 	if !ok {
@@ -1229,43 +1235,32 @@ func handleOrgUnitsAPI(w http.ResponseWriter, r *http.Request, store OrgUnitStor
 			return
 		}
 
-		nodes, err := listNodesCurrentByVisibility(r.Context(), store, tenant.ID, asOf, includeDisabled)
+		readSvc := orgunitservices.NewOrgUnitReadService(orgUnitReadStoreAdapter{store: store})
+		scopeFilter := orgunitservices.OrgUnitReadScopeFilter{AllTenant: runtimeStoreFromVariadic(runtime) == nil}
+		if rt := runtimeStoreFromVariadic(runtime); rt != nil {
+			scopes, err := currentPrincipalOrgScopes(r.Context(), rt, tenant.ID)
+			if err != nil {
+				writeOrgUnitScopeError(w, r, err)
+				return
+			}
+			scopeFilter = orgUnitReadScopeFilterFromPrincipalScopes(scopes)
+		}
+		roots, err := readSvc.VisibleRoots(r.Context(), orgunitservices.OrgUnitReadRequest{
+			TenantID:        tenant.ID,
+			AsOf:            asOf,
+			ScopeFilter:     scopeFilter,
+			IncludeDisabled: includeDisabled,
+			Caller:          "orgunit.http.roots",
+		})
 		if err != nil {
+			if isOrgUnitReadAuthzError(err) {
+				writeOrgUnitScopeError(w, r, errAuthzScopeForbidden)
+				return
+			}
 			writeInternalAPIError(w, r, err, "orgunit_list_failed")
 			return
 		}
-
-		items := make([]orgUnitListItem, 0, len(nodes))
-		for _, node := range nodes {
-			isBU := node.IsBusinessUnit
-			hasChildren := node.HasChildren
-			status := strings.TrimSpace(node.Status)
-			if status == "" {
-				status = "active"
-			}
-			orgNodeKey, err := orgNodeKeyFromCompat(node.ID, node.OrgID)
-			if err != nil {
-				writeInternalAPIError(w, r, err, "orgunit_scope_path_failed")
-				return
-			}
-			items = append(items, orgUnitListItem{
-				OrgCode:        node.OrgCode,
-				Name:           node.Name,
-				Status:         status,
-				IsBusinessUnit: &isBU,
-				HasChildren:    &hasChildren,
-				OrgNodeKey:     orgNodeKey,
-			})
-		}
-		if err := hydrateOrgUnitListItemScopePaths(r.Context(), store, tenant.ID, asOf, items); err != nil {
-			writeInternalAPIError(w, r, err, "orgunit_scope_path_failed")
-			return
-		}
-		items, _, err = filterOrgUnitListItemsByCurrentScope(r.Context(), runtimeStoreFromVariadic(runtime), tenant.ID, items, len(items))
-		if err != nil {
-			writeOrgUnitScopeError(w, r, err)
-			return
-		}
+		items := orgUnitListItemsFromReadNodes(roots)
 
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		_ = json.NewEncoder(w).Encode(orgUnitListResponse{

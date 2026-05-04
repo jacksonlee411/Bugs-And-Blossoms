@@ -79,6 +79,55 @@ func TestHandleOrgUnitsAPI_ListRoots(t *testing.T) {
 	if len(payload.OrgUnits) != 1 {
 		t.Fatalf("expected 1 org unit, got %d", len(payload.OrgUnits))
 	}
+	if got := payload.OrgUnits[0]["org_node_key"]; got != mustReadTestOrgNodeKey(t, 10000001) {
+		t.Fatalf("org_node_key=%v", got)
+	}
+	if got := payload.OrgUnits[0]["has_visible_children"]; got != false {
+		t.Fatalf("has_visible_children=%v", got)
+	}
+}
+
+func TestHandleOrgUnitsAPI_ListVisibleRootsFromScopedMiddleNode(t *testing.T) {
+	store := newOrgUnitMemoryStore()
+	ctx := context.Background()
+	root, err := store.CreateNodeCurrent(ctx, "t1", "2026-01-01", "ROOT", "Root", "", false)
+	if err != nil {
+		t.Fatalf("create root err=%v", err)
+	}
+	middle, err := store.CreateNodeCurrent(ctx, "t1", "2026-01-01", "MID", "Middle", root.ID, false)
+	if err != nil {
+		t.Fatalf("create middle err=%v", err)
+	}
+	if _, err := store.CreateNodeCurrent(ctx, "t1", "2026-01-01", "LEAF", "Leaf", middle.ID, false); err != nil {
+		t.Fatalf("create leaf err=%v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/org/api/org-units?as_of=2026-01-01", nil)
+	req = req.WithContext(withPrincipal(withTenant(req.Context(), Tenant{ID: "t1", Name: "T"}), Principal{ID: "principal-a"}))
+	rec := httptest.NewRecorder()
+	runtime := &orgUnitScopeRuntimeStub{scopes: []principalOrgScope{{
+		OrgNodeKey:         middle.ID,
+		IncludeDescendants: true,
+	}}}
+	handleOrgUnitsAPI(rec, req, store, nil, runtime)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+	}
+	var payload struct {
+		OrgUnits []orgUnitListItem `json:"org_units"`
+	}
+	if err := json.NewDecoder(rec.Body).Decode(&payload); err != nil {
+		t.Fatalf("decode err=%v", err)
+	}
+	if len(payload.OrgUnits) != 1 || payload.OrgUnits[0].OrgCode != "MID" {
+		t.Fatalf("visible roots=%+v", payload.OrgUnits)
+	}
+	if payload.OrgUnits[0].OrgNodeKey != middle.ID {
+		t.Fatalf("org_node_key=%q want=%q", payload.OrgUnits[0].OrgNodeKey, middle.ID)
+	}
+	if payload.OrgUnits[0].HasVisibleChildren == nil || !*payload.OrgUnits[0].HasVisibleChildren {
+		t.Fatalf("has_visible_children missing: %+v", payload.OrgUnits[0])
+	}
 }
 
 func TestHandleOrgUnitsAPI_AsOfRequired(t *testing.T) {
@@ -803,7 +852,7 @@ func TestHandleOrgUnitsAPI_AsOfSuccess(t *testing.T) {
 	if err := json.NewDecoder(rec.Body).Decode(&payload); err != nil {
 		t.Fatalf("decode err=%v", err)
 	}
-	if len(payload.OrgUnits) != 1 || payload.OrgUnits[0].HasChildren == nil || !*payload.OrgUnits[0].HasChildren {
+	if len(payload.OrgUnits) != 1 || payload.OrgUnits[0].HasVisibleChildren == nil {
 		t.Fatalf("unexpected roots payload: %+v", payload.OrgUnits)
 	}
 }

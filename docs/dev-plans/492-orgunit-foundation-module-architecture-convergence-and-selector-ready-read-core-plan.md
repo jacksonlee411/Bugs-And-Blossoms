@@ -1,6 +1,6 @@
 # DEV-PLAN-492：OrgUnit 基础模块架构收敛与 Selector-Ready Read Core 重构方案
 
-**状态**: 规划中（2026-05-04 07:36 CST）— 已按评审补齐 resolve HTTP 暴露边界、组织管理页/selector 职责边界、ReadService 字段契约、visible roots 算法、分页语义与停止线。
+**状态**: 实施中（2026-05-04 08:54 CST）— PR-1/PR-2 后端先行切片已落地：`modules/orgunit/services` 已建立 ReadService 骨架与 fake-store 单元测试；默认 roots HTTP 响应已接入 scope-aware visible roots；list DTO 已暴露 `org_node_key` 与 `has_visible_children`。children/list/grid/search HTTP 迁移、前端 selector 消费、分页 total 收敛仍按后续 PR 推进。
 
 ## 0. 适用范围与评审分级
 
@@ -19,8 +19,8 @@
 ### 0.2 现状研究摘要
 
 - `用户授权 > 组织范围` 当前仍直接调用 [listOrgUnits({ asOf, includeDisabled:false })](/home/lee/Projects/Bugs-And-Blossoms/apps/web/src/pages/authz/AuthzRolePages.tsx:469) 填充下拉，导致选择入口只能拿到默认一级组织语义，而不是可展开、可搜索、范围感知的 selector 契约。
-- 当前 orgunit list response 的 `OrgNodeKey` 被隐藏为 [json:"-"](/home/lee/Projects/Bugs-And-Blossoms/internal/server/orgunit_api.go:156)，前端 [OrgUnitAPIItem](/home/lee/Projects/Bugs-And-Blossoms/apps/web/src/api/orgUnits.ts:3) 也没有 `org_node_key`，无法让 selector value 和服务端 path/scope 校验稳定对齐。
-- `GET /org/api/org-units` 默认 root 语义仍偏向物理一级组织，相关 SQL 依赖 [rootOrgNodeCompatCondition("v")](/home/lee/Projects/Bugs-And-Blossoms/internal/server/orgunit_nodes.go:733)；这不足以表达“当前 principal 可见根节点”，例如授权范围从物理树中段开始时的 visible roots。
+- 已完成的后端收敛：orgunit list response 的 `OrgNodeKey` 已从隐藏字段改为 `org_node_key` response 字段，并新增 `has_visible_children`；前端 [OrgUnitAPIItem](/home/lee/Projects/Bugs-And-Blossoms/apps/web/src/api/orgUnits.ts:3) 尚未消费这些字段，仍由 491 后续承接。
+- 已完成的 roots 收敛：`GET /org/api/org-units` 默认 roots 已通过 `modules/orgunit/services.ReadService.VisibleRoots` 返回当前 principal scope-aware visible roots；children、grid/list、search 仍需后续 PR 继续迁移到同一 read core。
 - 组织页已有可复用素材：通用 [TreePanel](/home/lee/Projects/Bugs-And-Blossoms/apps/web/src/components/TreePanel.tsx:1)、组织页面树状态、懒加载与搜索定位链路，但这些能力仍集中在页面实现中，尚未沉淀为 OrgUnit 基础模块 read core 与可复用前端组件/facade。492 不要求把组织管理页的浏览/编辑树强行改造成 selector，只要求其读取事实复用同一 read core。
 - 489 已实现当前 principal 组织范围 provider，例如 [OrgScopesForPrincipal](/home/lee/Projects/Bugs-And-Blossoms/internal/server/authz_runtime_store.go:330)；handler 也已能拿到 `authzRuntime`，但 orgunit 读规则仍分散在 `internal/server` 与 store 查询中，没有形成模块级统一入口。
 - 490/491 的局部修复补齐了部分 parser 与 search 行为，但它们不能替代基础模块重构。492 的职责是把这些局部行为收口成可维护的架构边界，避免“某个页面能用，另一个页面重新造”的后续漂移。
@@ -48,9 +48,9 @@ OrgUnit 已经不是一个只给组织管理页使用的普通页面模块。它
 
 ### 2.1 核心目标
 
-1. [ ] 新增或重组 `modules/orgunit/services` 中的模块级 `ReadService`，统一承接 list、visible roots、children、search、内部 resolve-by-code、path 解析与 selector-ready DTO 构造。
-2. [ ] 冻结 `OrgUnitReadNode` / selector-ready DTO：必须包含 `org_code`、`org_node_key`、`name`、`status`、`has_visible_children` 或等价字段，以及按场景返回的 `path_org_codes`。
-3. [ ] 把 roots 语义从“物理根组织过滤”收敛为“当前 principal scope-aware visible roots”：当前用户可见范围从树中段开始时，该范围入口就是 selector root，不向上泄露物理祖先。
+1. [ ] 新增或重组 `modules/orgunit/services` 中的模块级 `ReadService`，统一承接 list、visible roots、children、search、内部 resolve-by-code、path 解析与 selector-ready DTO 构造。（2026-05-04：ReadService 骨架与 visible roots/children/search/resolve 服务层测试已完成；list/grid/search HTTP 全量迁移仍未完成。）
+2. [ ] 冻结 `OrgUnitReadNode` / selector-ready DTO：必须包含 `org_code`、`org_node_key`、`name`、`status`、`has_visible_children` 或等价字段，以及按场景返回的 `path_org_codes`。（2026-05-04：后端 DTO 与 HTTP list 字段已落地；前端类型消费仍未完成。）
+3. [X] 把 roots 语义从“物理根组织过滤”收敛为“当前 principal scope-aware visible roots”：当前用户可见范围从树中段开始时，该范围入口就是 selector root，不向上泄露物理祖先。
 4. [ ] 冻结 search/内部 resolve 的 `path_org_codes` 为 safe expandable path：只包含当前 principal 可见且前端可展开的节点；无法安全构造时 fail-closed。
 5. [ ] 让 `internal/server` 从 orgunit 业务读规则中退出，只负责 HTTP query/body 解析、tenant/session/authz/scope 注入、事务边界和错误映射。
 6. [ ] 删除或统一仓内多重组织读取实现，尤其是页面直接 `listOrgUnits()` 拼候选、组织管理页自有业务读取规则、handler 自建规则、PG list/fallback list 分叉和 legacy 写分支；组织管理页可以保留浏览/编辑状态机，但数据读取必须复用 492 ReadService。
@@ -98,15 +98,15 @@ OrgUnit 已经不是一个只给组织管理页使用的普通页面模块。它
 ## 2.5 工具链与门禁
 
 - **命中触发器（后续实施）**：
-  - [ ] Go 代码
+  - [X] Go 代码
   - [ ] `apps/web/**` / presentation assets / 生成物
   - [ ] i18n（如新增用户可见错误文案）
   - [ ] Routing / responder / allowlist
   - [ ] AuthN / Tenancy / RLS
-  - [ ] Authz / scope provider 消费
+  - [X] Authz / scope provider 消费
   - [ ] E2E
   - [X] 文档 / readiness / 证据记录
-  - [ ] `ddd-layering-p0/p2`、`no-legacy`、`granularity`
+  - [X] `ddd-layering-p0/p2`、`no-legacy`、`granularity`
 
 实际命令入口以 `AGENTS.md`、`Makefile` 与 CI 为准。本计划只冻结架构契约，不复制命令矩阵。
 
@@ -376,17 +376,17 @@ visible roots 不是物理 root，也不是全租户 root。
 
 ### 4.2 P1：ReadService 骨架与行为搬迁
 
-1. [ ] 盘点当前 `internal/server/orgunit*`、`modules/orgunit/**`、`apps/web/src/api/orgUnits.ts` 中的 list/children/search/内部 resolve/path 规则。
-2. [ ] 在 `modules/orgunit/services` 建立 ReadService 与 request/response 类型。
-3. [ ] 将 visible roots、children、search、内部 resolve/path 的业务判断从 handler 搬入 ReadService。
-4. [ ] 建立 store 侧 scoped query/resolve 原语，handler 不再直接拼物理 root、path 或 scope 过滤规则。
-5. [ ] 保持 HTTP 外部行为可控，避免同一 PR 混入前端 selector 大改。
+1. [X] 盘点当前 `internal/server/orgunit*`、`modules/orgunit/**`、`apps/web/src/api/orgUnits.ts` 中的 list/children/search/内部 resolve/path 规则。（2026-05-04：已确认首切只迁移后端 roots，children/list/grid/search/UI 后续处理。）
+2. [X] 在 `modules/orgunit/services` 建立 ReadService 与 request/response 类型。
+3. [ ] 将 visible roots、children、search、内部 resolve/path 的业务判断从 handler 搬入 ReadService。（2026-05-04：visible roots 已接入 HTTP；children/search/resolve 服务层骨架和单测已存在，但 HTTP handler 尚未全部切换。）
+4. [ ] 建立 store 侧 scoped query/resolve 原语，handler 不再直接拼物理 root、path 或 scope 过滤规则。（2026-05-04：已新增 `internal/server` adapter 作为过渡；infrastructure scoped query 主链仍未收敛。）
+5. [X] 保持 HTTP 外部行为可控，避免同一 PR 混入前端 selector 大改。
 
 ### 4.3 P2：Selector-Ready DTO 与 scope-aware roots
 
-1. [ ] response 暴露 `org_node_key`，前端类型补齐 `org_node_key`。
-2. [ ] 默认 roots 改为当前 principal scope-aware visible roots。
-3. [ ] `has_children` 收敛为 selector 场景可用的可见子节点判断，或拆分为明确字段。
+1. [ ] response 暴露 `org_node_key`，前端类型补齐 `org_node_key`。（2026-05-04：后端 response 已暴露；前端类型与 selector facade 仍由 491 后续完成。）
+2. [X] 默认 roots 改为当前 principal scope-aware visible roots。
+3. [ ] `has_children` 收敛为 selector 场景可用的可见子节点判断，或拆分为明确字段。（2026-05-04：已新增 `has_visible_children` 并在 roots 响应中返回；children/grid/search 场景仍需后续复核。）
 4. [ ] `all_org_units=true` 与默认 list 都不得突破当前 principal scope。
 5. [ ] list/grid 的 `total` 与 pagination 以 scope 裁剪后的结果为准。
 
@@ -413,10 +413,10 @@ visible roots 不是物理 root，也不是全租户 root。
 
 ### 4.7 P6：测试、门禁与证据
 
-1. [ ] 补 ReadService 单元测试：visible roots、children、search、内部 resolve、safe path、disabled、空范围。
-2. [ ] 补 handler contract 测试：query 解析、错误映射、越权、范围外回显。
+1. [ ] 补 ReadService 单元测试：visible roots、children、search、内部 resolve、safe path、disabled、空范围。（2026-05-04：已覆盖 visible roots、children、search safe path、resolve 范围外 fail-closed；disabled/空范围仍待补齐。）
+2. [ ] 补 handler contract 测试：query 解析、错误映射、越权、范围外回显。（2026-05-04：已补默认 roots `org_node_key` / `has_visible_children` 与“scope 在树中段”的 visible roots；越权/范围外回显仍待后续 PR。）
 3. [ ] 补 491/492 联合 E2E：受限管理员只能选择自己可见范围内的非根节点并保存。
-4. [ ] 执行命中的 `AGENTS.md` 门禁，并把结果写入实现 PR 或 `docs/dev-records/DEV-PLAN-492-READINESS.md`。
+4. [X] 执行命中的 `AGENTS.md` 门禁，并把结果写入实现 PR 或 `docs/dev-records/DEV-PLAN-492-READINESS.md`。
 
 ## 5. 停止线
 
@@ -431,17 +431,17 @@ visible roots 不是物理 root，也不是全租户 root。
 
 ## 6. 验收标准
 
-1. [ ] orgunit roots API 在受限 principal 下返回 visible roots，而不是物理 roots。
-2. [ ] orgunit list/children/search HTTP response 与 ReadService 内部 resolve 结果可提供 selector 所需 `org_node_key`。
+1. [X] orgunit roots API 在受限 principal 下返回 visible roots，而不是物理 roots。
+2. [ ] orgunit list/children/search HTTP response 与 ReadService 内部 resolve 结果可提供 selector 所需 `org_node_key`。（2026-05-04：roots/list DTO 已提供 `org_node_key`；children/search HTTP 与前端消费仍待后续。）
 3. [ ] 搜索当前范围内深层节点时，`path_org_codes` 从 visible root 开始，不泄露范围外祖先。
 4. [ ] 搜索或回显范围外节点 fail-closed，不返回半截路径、物理完整路径或空权限旁路。
 5. [ ] `internal/server` 中不再保留可见根、路径、安全候选等业务读规则的第二实现。
 6. [ ] 用户授权页和后续组织选择入口通过 491 facade 消费同一 OrgUnit read core；组织管理页的浏览/编辑读取也复用 492 ReadService，但不强制以 selector 作为主页面实现。
 7. [ ] `all_org_units=true` 只表示当前调用者可见范围内全部组织。
 8. [ ] list/grid 的 `total` 与分页结果基于 scope 裁剪后的结果集，不出现空页、错页或 total 漂移。
-9. [ ] `has_visible_children` 或等价字段表达可见子节点，不误用物理子节点状态。
-10. [ ] 实现 PR 按 `3.9 退场清单` 标注散落实现的迁移结果。
-11. [ ] 无 SetID、legacy、scope/package、`org_level/scope_type/scope_key` 语义回流。
+9. [ ] `has_visible_children` 或等价字段表达可见子节点，不误用物理子节点状态。（2026-05-04：roots 已返回 `has_visible_children`；全场景语义仍待 PR-3/PR-4 复核。）
+10. [ ] 实现 PR 按 `3.9 退场清单` 标注散落实现的迁移结果。（2026-05-04：roots 业务判断已迁移；children/list/search/path、前端下拉和 CubeBox 查询仍待退场标注。）
+11. [X] 无 SetID、legacy、scope/package、`org_level/scope_type/scope_key` 语义回流。
 
 ## 7. 文档联动
 
@@ -456,3 +456,4 @@ visible roots 不是物理 root，也不是全租户 root。
 - 2026-05-03 CST：冻结 492 为 OrgUnit 基础模块重构 owner；491 作为首个 selector 消费计划；489 保持 IAM scope SoT/provider owner。
 - 2026-05-04 CST：按评审补齐两项边界：`Resolve` 首期为 ReadService 内部回显/定位能力，不新增独立 HTTP route；组织管理页复用 492 read core，但其浏览/编辑树不强制改造成 491 selector。
 - 2026-05-04 CST：按 `DEV-PLAN-003` 进一步补齐假设/排除解释、ReadService 字段级契约、visible roots 算法、pagination/total 语义、退场清单与停止线，避免后续实现继续靠 handler/store/page 局部补洞。
+- 2026-05-04 CST：PR-1/PR-2 后端先行切片已落地并验证：新增 `modules/orgunit/services.OrgUnitReadService` 骨架、fake-store 单元测试、`internal/server` adapter；默认 roots HTTP 已改为 scope-aware visible roots；list response 已暴露 `org_node_key` 与 `has_visible_children`。本轮未切换前端 selector，未完成 children/list/grid/search HTTP 全量迁移，也未收敛 scoped pagination/total。
