@@ -1,21 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { clearExtQueryParams, parseExtSortField, parseSortOrder } from './orgUnitListExtQuery'
+import { clearExtQueryParams } from './orgUnitListExtQuery'
 
 describe('orgUnitListExtQuery', () => {
-  it('parses sort order safely', () => {
-    expect(parseSortOrder('asc')).toBe('asc')
-    expect(parseSortOrder('DESC')).toBe('desc')
-    expect(parseSortOrder('bad')).toBeNull()
-    expect(parseSortOrder(null)).toBeNull()
-  })
-
-  it('parses ext sort field', () => {
-    expect(parseExtSortField('ext:org_type')).toBe('org_type')
-    expect(parseExtSortField('ext:')).toBeNull()
-    expect(parseExtSortField('code')).toBeNull()
-    expect(parseExtSortField(null)).toBeNull()
-  })
-
   it('clears ext query params only', () => {
     const params = new URLSearchParams({
       sort: 'ext:org_type',

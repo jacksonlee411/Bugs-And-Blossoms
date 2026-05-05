@@ -12,21 +12,22 @@ import (
 )
 
 type orgUnitListPageRequest struct {
-	AsOf              string
-	IncludeDisabled   bool
-	ScopeFilter       orgunitservices.OrgUnitReadScopeFilter
-	ParentOrgNodeKey  *string
-	AllOrgUnits       bool
-	Keyword           string
-	Status            string // "", "active", "disabled"
-	IsBusinessUnit    *bool
-	SortField         string
-	ExtSortFieldKey   string
-	SortOrder         string
-	ExtFilterFieldKey string
-	ExtFilterValue    string
-	Limit             int
-	Offset            int
+	AsOf               string
+	IncludeDisabled    bool
+	ScopeFilter        orgunitservices.OrgUnitReadScopeFilter
+	ParentOrgNodeKey   *string
+	IncludeDescendants *bool
+	AllOrgUnits        bool
+	Keyword            string
+	Status             string // "", "active", "disabled"
+	IsBusinessUnit     *bool
+	SortField          string
+	ExtSortFieldKey    string
+	SortOrder          string
+	ExtFilterFieldKey  string
+	ExtFilterValue     string
+	Limit              int
+	Offset             int
 }
 
 func (r orgUnitListPageRequest) ShouldSearchAllOrgUnits() bool {
@@ -133,21 +134,22 @@ func (a orgUnitReadStoreAdapter) ListPage(ctx context.Context, req orgunitservic
 	}
 
 	items, total, err := listOrgUnitListPage(ctx, a.store, req.TenantID, orgUnitListPageRequest{
-		AsOf:              req.AsOf,
-		IncludeDisabled:   req.IncludeDisabled,
-		ScopeFilter:       req.ScopeFilter,
-		ParentOrgNodeKey:  parentOrgNodeKey,
-		AllOrgUnits:       req.AllOrgUnits,
-		Keyword:           req.Keyword,
-		Status:            req.Status,
-		IsBusinessUnit:    req.IsBusinessUnit,
-		SortField:         req.SortField,
-		ExtSortFieldKey:   req.ExtSortFieldKey,
-		SortOrder:         req.SortOrder,
-		ExtFilterFieldKey: req.ExtFilterFieldKey,
-		ExtFilterValue:    req.ExtFilterValue,
-		Limit:             req.Limit,
-		Offset:            req.Offset,
+		AsOf:               req.AsOf,
+		IncludeDisabled:    req.IncludeDisabled,
+		ScopeFilter:        req.ScopeFilter,
+		ParentOrgNodeKey:   parentOrgNodeKey,
+		IncludeDescendants: req.IncludeDescendants,
+		AllOrgUnits:        req.AllOrgUnits,
+		Keyword:            req.Keyword,
+		Status:             req.Status,
+		IsBusinessUnit:     req.IsBusinessUnit,
+		SortField:          req.SortField,
+		ExtSortFieldKey:    req.ExtSortFieldKey,
+		SortOrder:          req.SortOrder,
+		ExtFilterFieldKey:  req.ExtFilterFieldKey,
+		ExtFilterValue:     req.ExtFilterValue,
+		Limit:              req.Limit,
+		Offset:             req.Offset,
 	})
 	if err != nil {
 		if errors.Is(err, errOrgUnitExtQueryFieldNotAllowed) {

@@ -305,19 +305,20 @@ const (
 )
 
 type orgUnitListQueryOptions struct {
-	GridMode          bool
-	AllOrgUnits       bool
-	Keyword           string
-	Status            string // "", "active", "disabled"
-	IsBusinessUnit    *bool
-	SortField         string
-	ExtSortFieldKey   string
-	SortOrder         string
-	ExtFilterFieldKey string
-	ExtFilterValue    string
-	Paginate          bool
-	Page              int
-	PageSize          int
+	GridMode           bool
+	AllOrgUnits        bool
+	IncludeDescendants *bool
+	Keyword            string
+	Status             string // "", "active", "disabled"
+	IsBusinessUnit     *bool
+	SortField          string
+	ExtSortFieldKey    string
+	SortOrder          string
+	ExtFilterFieldKey  string
+	ExtFilterValue     string
+	Paginate           bool
+	Page               int
+	PageSize           int
 }
 
 func parseOrgUnitListQueryOptions(values url.Values) (orgUnitListQueryOptions, bool, error) {
@@ -344,6 +345,15 @@ func parseOrgUnitListQueryOptions(values url.Values) (orgUnitListQueryOptions, b
 			return orgUnitListQueryOptions{}, false, err
 		}
 		opts.AllOrgUnits = allOrgUnits
+	}
+
+	if hasKey("include_descendants") {
+		hasAny = true
+		includeDescendants, err := parseOrgUnitListQueryBool(values.Get("include_descendants"), "include_descendants")
+		if err != nil {
+			return orgUnitListQueryOptions{}, false, err
+		}
+		opts.IncludeDescendants = &includeDescendants
 	}
 
 	if hasKey("q") {
@@ -822,23 +832,24 @@ func handleOrgUnitsAPI(w http.ResponseWriter, r *http.Request, store OrgUnitStor
 			}
 
 			nodes, total, err := readSvc.List(r.Context(), orgunitservices.OrgUnitListRequest{
-				TenantID:          tenant.ID,
-				AsOf:              asOf,
-				ScopeFilter:       scopeFilter,
-				ParentOrgCode:     parentCode,
-				AllOrgUnits:       listOpts.AllOrgUnits,
-				Keyword:           listOpts.Keyword,
-				Status:            listOpts.Status,
-				IsBusinessUnit:    listOpts.IsBusinessUnit,
-				SortField:         listOpts.SortField,
-				ExtSortFieldKey:   listOpts.ExtSortFieldKey,
-				SortOrder:         listOpts.SortOrder,
-				ExtFilterFieldKey: listOpts.ExtFilterFieldKey,
-				ExtFilterValue:    listOpts.ExtFilterValue,
-				IncludeDisabled:   includeDisabled,
-				Limit:             limit,
-				Offset:            offset,
-				Caller:            "orgunit.http.list",
+				TenantID:           tenant.ID,
+				AsOf:               asOf,
+				ScopeFilter:        scopeFilter,
+				ParentOrgCode:      parentCode,
+				IncludeDescendants: listOpts.IncludeDescendants,
+				AllOrgUnits:        listOpts.AllOrgUnits,
+				Keyword:            listOpts.Keyword,
+				Status:             listOpts.Status,
+				IsBusinessUnit:     listOpts.IsBusinessUnit,
+				SortField:          listOpts.SortField,
+				ExtSortFieldKey:    listOpts.ExtSortFieldKey,
+				SortOrder:          listOpts.SortOrder,
+				ExtFilterFieldKey:  listOpts.ExtFilterFieldKey,
+				ExtFilterValue:     listOpts.ExtFilterValue,
+				IncludeDisabled:    includeDisabled,
+				Limit:              limit,
+				Offset:             offset,
+				Caller:             "orgunit.http.list",
 			})
 			if err != nil {
 				writeOrgUnitReadServiceError(w, r, err, "orgunit_list_failed")

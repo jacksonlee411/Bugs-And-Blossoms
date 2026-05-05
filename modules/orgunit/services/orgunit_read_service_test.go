@@ -604,6 +604,164 @@ func TestOrgUnitReadServiceListFiltersChildrenWithinScope(t *testing.T) {
 	}
 }
 
+func TestOrgUnitReadServiceListExplicitRangeIncludesAnchorAndDirectChildrenWhenAllLevelsDisabled(t *testing.T) {
+	store := newOrgUnitReadFakeStore(t)
+	svc := NewOrgUnitReadService(store)
+	blossom := mustOrgUnitReadKey(t, 10000002)
+	east := mustOrgUnitReadKey(t, 10000003)
+	includeDescendants := false
+	store.listPageFn = func(_ context.Context, req OrgUnitReadListPageRequest) ([]OrgUnitReadNode, int, error) {
+		if req.ParentOrgNodeKey != "" || req.ParentOrgCode != "" || !req.AllOrgUnits {
+			t.Fatalf("range direct-child req=%+v", req)
+		}
+		if req.Keyword != "east" {
+			t.Fatalf("keyword=%q", req.Keyword)
+		}
+		return []OrgUnitReadNode{store.nodes[east]}, 1, nil
+	}
+
+	got, total, err := svc.List(context.Background(), OrgUnitListRequest{
+		TenantID:           "t1",
+		AsOf:               "2026-01-01",
+		ParentOrgNodeKey:   blossom,
+		IncludeDescendants: &includeDescendants,
+		Keyword:            "east",
+		ScopeFilter: OrgUnitReadScopeFilter{
+			PrincipalID: "principal-a",
+			Scopes: []OrgUnitScope{{
+				OrgNodeKey:         blossom,
+				IncludeDescendants: true,
+			}},
+		},
+		Limit:  10,
+		Offset: 0,
+	})
+	if err != nil {
+		t.Fatalf("List err=%v", err)
+	}
+	if total != 2 {
+		t.Fatalf("total=%d want 2", total)
+	}
+	if gotCodes := orgUnitReadNodeCodes(got); !reflect.DeepEqual(gotCodes, []string{"BLOSSOM", "EAST"}) {
+		t.Fatalf("codes=%v want [BLOSSOM EAST]", gotCodes)
+	}
+}
+
+func TestOrgUnitReadServiceListExplicitRangeIncludesAnchorAndFilteredDescendants(t *testing.T) {
+	store := newOrgUnitReadFakeStore(t)
+	svc := NewOrgUnitReadService(store)
+	blossom := mustOrgUnitReadKey(t, 10000002)
+	sh := mustOrgUnitReadKey(t, 10000004)
+	includeDescendants := true
+	store.listPageFn = func(_ context.Context, req OrgUnitReadListPageRequest) ([]OrgUnitReadNode, int, error) {
+		if req.ParentOrgNodeKey != "" || req.ParentOrgCode != "" || !req.AllOrgUnits {
+			t.Fatalf("range descendant req=%+v", req)
+		}
+		if req.Keyword != "shanghai" {
+			t.Fatalf("keyword=%q", req.Keyword)
+		}
+		return []OrgUnitReadNode{store.nodes[sh]}, 1, nil
+	}
+
+	got, total, err := svc.List(context.Background(), OrgUnitListRequest{
+		TenantID:           "t1",
+		AsOf:               "2026-01-01",
+		ParentOrgNodeKey:   blossom,
+		IncludeDescendants: &includeDescendants,
+		Keyword:            "shanghai",
+		ScopeFilter: OrgUnitReadScopeFilter{
+			PrincipalID: "principal-a",
+			Scopes: []OrgUnitScope{{
+				OrgNodeKey:         blossom,
+				IncludeDescendants: true,
+			}},
+		},
+		Limit:  10,
+		Offset: 0,
+	})
+	if err != nil {
+		t.Fatalf("List err=%v", err)
+	}
+	if total != 2 {
+		t.Fatalf("total=%d want 2", total)
+	}
+	if gotCodes := orgUnitReadNodeCodes(got); !reflect.DeepEqual(gotCodes, []string{"BLOSSOM", "SH"}) {
+		t.Fatalf("codes=%v want [BLOSSOM SH]", gotCodes)
+	}
+}
+
+func TestOrgUnitReadServiceListExplicitRangePaginatesAnchorAsFirstRow(t *testing.T) {
+	store := newOrgUnitReadFakeStore(t)
+	svc := NewOrgUnitReadService(store)
+	blossom := mustOrgUnitReadKey(t, 10000002)
+	east := mustOrgUnitReadKey(t, 10000003)
+	sh := mustOrgUnitReadKey(t, 10000004)
+	includeDescendants := true
+	store.listPageFn = func(_ context.Context, req OrgUnitReadListPageRequest) ([]OrgUnitReadNode, int, error) {
+		if req.Limit != 0 || req.Offset != 0 {
+			t.Fatalf("range descendants must be fetched before anchor pagination, req=%+v", req)
+		}
+		if req.SortField != "code" || req.SortOrder != "asc" {
+			t.Fatalf("sort req=%+v", req)
+		}
+		return []OrgUnitReadNode{store.nodes[east], store.nodes[sh]}, 2, nil
+	}
+
+	got, total, err := svc.List(context.Background(), OrgUnitListRequest{
+		TenantID:           "t1",
+		AsOf:               "2026-01-01",
+		ParentOrgNodeKey:   blossom,
+		IncludeDescendants: &includeDescendants,
+		ScopeFilter: OrgUnitReadScopeFilter{
+			PrincipalID: "principal-a",
+			Scopes: []OrgUnitScope{{
+				OrgNodeKey:         blossom,
+				IncludeDescendants: true,
+			}},
+		},
+		SortField: "code",
+		SortOrder: "asc",
+		Limit:     2,
+		Offset:    0,
+	})
+	if err != nil {
+		t.Fatalf("List err=%v", err)
+	}
+	if total != 3 {
+		t.Fatalf("total=%d want 3", total)
+	}
+	if gotCodes := orgUnitReadNodeCodes(got); !reflect.DeepEqual(gotCodes, []string{"BLOSSOM", "EAST"}) {
+		t.Fatalf("first page codes=%v want [BLOSSOM EAST]", gotCodes)
+	}
+
+	got, total, err = svc.List(context.Background(), OrgUnitListRequest{
+		TenantID:           "t1",
+		AsOf:               "2026-01-01",
+		ParentOrgNodeKey:   blossom,
+		IncludeDescendants: &includeDescendants,
+		ScopeFilter: OrgUnitReadScopeFilter{
+			PrincipalID: "principal-a",
+			Scopes: []OrgUnitScope{{
+				OrgNodeKey:         blossom,
+				IncludeDescendants: true,
+			}},
+		},
+		SortField: "code",
+		SortOrder: "asc",
+		Limit:     2,
+		Offset:    2,
+	})
+	if err != nil {
+		t.Fatalf("List page 2 err=%v", err)
+	}
+	if total != 3 {
+		t.Fatalf("page 2 total=%d want 3", total)
+	}
+	if gotCodes := orgUnitReadNodeCodes(got); !reflect.DeepEqual(gotCodes, []string{"SH"}) {
+		t.Fatalf("second page codes=%v want [SH]", gotCodes)
+	}
+}
+
 func TestOrgUnitReadServiceListExtQueryUsesStorePageAndScopesBeforePagination(t *testing.T) {
 	store := newOrgUnitReadFakeStore(t)
 	blossom := mustOrgUnitReadKey(t, 10000002)

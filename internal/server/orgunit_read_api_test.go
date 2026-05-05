@@ -607,8 +607,29 @@ func TestParseOrgUnitListQueryOptions(t *testing.T) {
 				}
 			},
 		},
+		{
+			name:    "include descendants explicit true",
+			rawURL:  "/org/api/org-units?include_descendants=true",
+			wantAny: true,
+			check: func(t *testing.T, opts orgUnitListQueryOptions) {
+				if opts.IncludeDescendants == nil || !*opts.IncludeDescendants {
+					t.Fatalf("include descendants=%v", opts.IncludeDescendants)
+				}
+			},
+		},
+		{
+			name:    "include descendants explicit false",
+			rawURL:  "/org/api/org-units?include_descendants=false",
+			wantAny: true,
+			check: func(t *testing.T, opts orgUnitListQueryOptions) {
+				if opts.IncludeDescendants == nil || *opts.IncludeDescendants {
+					t.Fatalf("include descendants=%v", opts.IncludeDescendants)
+				}
+			},
+		},
 		{name: "status invalid", rawURL: "/org/api/org-units?status=bad", wantErr: true},
 		{name: "all org units invalid", rawURL: "/org/api/org-units?all_org_units=yes", wantErr: true},
+		{name: "include descendants invalid", rawURL: "/org/api/org-units?include_descendants=yes", wantErr: true},
 		{name: "is business unit invalid", rawURL: "/org/api/org-units?is_business_unit=yes", wantErr: true},
 		{name: "sort invalid", rawURL: "/org/api/org-units?sort=bad", wantErr: true},
 		{name: "sort empty", rawURL: "/org/api/org-units?sort=", wantErr: true},
