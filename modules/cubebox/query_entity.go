@@ -26,7 +26,7 @@ type QueryEntity struct {
 	Intent            string `json:"intent,omitempty"`
 	EntityKey         string `json:"entity_key,omitempty"`
 	AsOf              string `json:"as_of,omitempty"`
-	SourceExecutorKey string `json:"source_executor_key,omitempty"`
+	SourceOperationID string `json:"source_operation_id,omitempty"`
 }
 
 type QueryDialogueTurn struct {
@@ -371,7 +371,7 @@ func normalizeDecodedQueryEntity(raw map[string]any) *QueryEntity {
 		Intent:            stringValue(raw["intent"]),
 		EntityKey:         stringValue(raw["entity_key"]),
 		AsOf:              stringValue(raw["as_of"]),
-		SourceExecutorKey: stringValue(raw["source_executor_key"]),
+		SourceOperationID: stringValue(raw["source_operation_id"]),
 	})
 }
 
@@ -380,7 +380,7 @@ func NormalizeQueryEntity(entity QueryEntity) *QueryEntity {
 	entity.Intent = strings.TrimSpace(entity.Intent)
 	entity.EntityKey = strings.TrimSpace(entity.EntityKey)
 	entity.AsOf = strings.TrimSpace(entity.AsOf)
-	entity.SourceExecutorKey = strings.TrimSpace(entity.SourceExecutorKey)
+	entity.SourceOperationID = strings.TrimSpace(entity.SourceOperationID)
 	if entity.Domain == "" || entity.EntityKey == "" {
 		return nil
 	}
@@ -574,8 +574,8 @@ func (e QueryEntity) Payload() map[string]any {
 	if asOf := normalized.AsOf; asOf != "" {
 		payload["as_of"] = asOf
 	}
-	if sourceExecutorKey := normalized.SourceExecutorKey; sourceExecutorKey != "" {
-		payload["source_executor_key"] = sourceExecutorKey
+	if sourceOperationID := normalized.SourceOperationID; sourceOperationID != "" {
+		payload["source_operation_id"] = sourceOperationID
 	}
 	return payload
 }

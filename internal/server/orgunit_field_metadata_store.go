@@ -14,6 +14,8 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	orgunitservices "github.com/jacksonlee411/Bugs-And-Blossoms/modules/orgunit/services"
+	orgunitpkg "github.com/jacksonlee411/Bugs-And-Blossoms/pkg/orgunit"
 )
 
 type orgUnitTenantFieldConfig struct {
@@ -771,6 +773,25 @@ func (s *orgUnitPGStore) ListOrgUnitsPage(ctx context.Context, tenantID string, 
 		where = append(where, rootOrgNodeCompatCondition("v"))
 	}
 
+	scopeWhere, scopeArgs, err := orgUnitListPageScopeWhere("v", req.ScopeFilter)
+	if err != nil {
+		return nil, 0, err
+	}
+	childScopeWhere, _, err := orgUnitListPageScopeWhere("ch", req.ScopeFilter)
+	if err != nil {
+		return nil, 0, err
+	}
+	scopeArgStart := argPos
+	if len(scopeWhere) > 0 {
+		rewritten := make([]string, 0, len(scopeArgs))
+		for _, sql := range scopeWhere {
+			rewritten = append(rewritten, fmt.Sprintf(sql, argPos))
+			argPos++
+		}
+		where = append(where, "("+strings.Join(rewritten, " OR ")+")")
+		args = append(args, scopeArgs...)
+	}
+
 	if !req.IncludeDisabled {
 		where = append(where, `v.status = 'active'`)
 	}
@@ -873,6 +894,22 @@ WHERE ` + whereSQL
 		sortOrder = "ASC"
 	}
 
+	visibleChildWhere := []string{
+		`ch.tenant_uuid = v.tenant_uuid`,
+		fmt.Sprintf("%s = %s", parentOrgNodeKeyCompatExpr("ch"), orgNodeKeyCompatExpr("v")),
+		`ch.validity @> $2::date`,
+	}
+	if !req.IncludeDisabled {
+		visibleChildWhere = append(visibleChildWhere, `ch.status = 'active'`)
+	}
+	if len(childScopeWhere) > 0 {
+		rewritten := make([]string, 0, len(childScopeWhere))
+		for idx, sql := range childScopeWhere {
+			rewritten = append(rewritten, fmt.Sprintf(sql, scopeArgStart+idx))
+		}
+		visibleChildWhere = append(visibleChildWhere, "("+strings.Join(rewritten, " OR ")+")")
+	}
+
 	selectCols := fmt.Sprintf(`
 	SELECT
 	  c.org_code,
@@ -882,14 +919,11 @@ WHERE ` + whereSQL
 	  EXISTS (
     SELECT 1
     FROM orgunit.org_unit_versions ch
-     WHERE ch.tenant_uuid = v.tenant_uuid
-       AND %s = %s
-	       AND ch.validity @> $2::date
-	       AND ch.status = 'active'
+     WHERE %s
 	     LIMIT 1
 	   ) AS has_children,
 	  %s AS org_node_key,
-	  %s AS path_org_node_keys`, parentOrgNodeKeyCompatExpr("ch"), orgNodeKeyCompatExpr("v"), orgNodeKeyCompatExpr("v"), pathOrgNodeKeysCompatExpr("v"))
+	  %s AS path_org_node_keys`, strings.Join(visibleChildWhere, "\n       AND "), orgNodeKeyCompatExpr("v"), pathOrgNodeKeysCompatExpr("v"))
 
 	listSQL := selectCols + `
 FROM orgunit.org_unit_versions v
@@ -938,6 +972,51 @@ ORDER BY ` + sortExpr + ` ` + sortOrder + `, c.org_code ASC`
 		return nil, 0, err
 	}
 	return items, total, nil
+}
+
+func orgUnitListPageScopeWhere(alias string, filter orgunitservices.OrgUnitReadScopeFilter) ([]string, []any, error) {
+	if filter.AllTenant {
+		return nil, nil, nil
+	}
+	scopes := normalizeOrgUnitReadScopeFilterForSQL(filter.Scopes)
+	if len(scopes) == 0 {
+		return nil, nil, nil
+	}
+
+	orgNodeExpr := orgNodeKeyCompatExpr(alias)
+	pathExpr := pathOrgNodeKeysCompatExpr(alias)
+	where := make([]string, 0, len(scopes))
+	args := make([]any, 0, len(scopes))
+	for _, scope := range scopes {
+		if scope.IncludeDescendants {
+			where = append(where, fmt.Sprintf("$%%d::text = ANY(%s)", pathExpr))
+		} else {
+			where = append(where, fmt.Sprintf("%s = $%%d::text", orgNodeExpr))
+		}
+		args = append(args, scope.OrgNodeKey)
+	}
+	return where, args, nil
+}
+
+func normalizeOrgUnitReadScopeFilterForSQL(scopes []orgunitservices.OrgUnitScope) []orgunitservices.OrgUnitScope {
+	out := make([]orgunitservices.OrgUnitScope, 0, len(scopes))
+	seen := map[string]int{}
+	for _, scope := range scopes {
+		orgNodeKey, err := orgunitpkg.NormalizeOrgNodeKey(scope.OrgNodeKey)
+		if err != nil {
+			continue
+		}
+		if idx, ok := seen[orgNodeKey]; ok {
+			out[idx].IncludeDescendants = out[idx].IncludeDescendants || scope.IncludeDescendants
+			continue
+		}
+		seen[orgNodeKey] = len(out)
+		out = append(out, orgunitservices.OrgUnitScope{
+			OrgNodeKey:         orgNodeKey,
+			IncludeDescendants: scope.IncludeDescendants,
+		})
+	}
+	return out
 }
 
 func scanOrgUnitTenantFieldConfig(row interface {

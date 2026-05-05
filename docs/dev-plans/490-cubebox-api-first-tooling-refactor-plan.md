@@ -1,6 +1,6 @@
 # DEV-PLAN-490：CubeBox 统一 API 工具化重构方案
 
-**状态**: 规划中；484/485 与 487/489/489A 当前用户 capability + org scope 后端裁剪已落地，490 overlay/API_CALLS runtime 硬切换仍未实施（2026-05-02 CST）
+**状态**: 首期已完成；四个 orgunit 只读 API overlay/API_CALLS runtime 硬切换已落地并接入反回流门禁，`all_org_units` / search candidate / `depends_on` 评审修复已补齐，写入 API 确认机制仍按本计划非目标暂缓（2026-05-03 CST）
 
 ## 0. 适用范围与评审分级
 
@@ -31,12 +31,12 @@
 
 ### 2.1 核心目标
 
-1. [ ] 冻结 CubeBox API-first 工具路线：业务查询/操作以现有 HTTP API 为唯一业务契约，不再新增平行业务 executor payload 契约。
-2. [ ] 在 484 单一覆盖事实聚合源经 485 API 授权目录投影后的 API 条目上叠加最小 CubeBox 工具标记，列出可供 CubeBox 使用的现有 HTTP API；`method/path/object/action/authz_capability_key` 不在 490 中重复维护。484 聚合源已预留 CubeBox API tool overlay 空集合扩展点，490 必须接入该扩展点。
-3. [ ] CubeBox planner 输出 API call plan，而不是 executor key plan；后端只允许调用 485/490 派生出的可调用工具条目。
-4. [ ] API 调用必须以当前用户身份经过现有 route/service authz、RLS、数据范围和字段裁剪。
-5. [ ] 写入 API 首期不对 planner 开放；“提案 + 用户确认 + 当前用户提交”机制暂缓，后续另起计划冻结 UI 和契约。
-6. [ ] 删除现有 orgunit executor 业务执行面，避免 HTTP API 与 executor 双读契约；迁移完成后 `executor_key` 不再是 planner、知识包、运行时 catalog 或用户可见目录中的业务工具主键。
+1. [X] 冻结 CubeBox API-first 工具路线：业务查询/操作以现有 HTTP API 为唯一业务契约，不再新增平行业务 executor payload 契约。
+2. [X] 在 484 单一覆盖事实聚合源经 485 API 授权目录投影后的 API 条目上叠加最小 CubeBox 工具标记，列出可供 CubeBox 使用的现有 HTTP API；`method/path/object/action/authz_capability_key` 不在 490 中重复维护。490 已接入 484 聚合源预留的 CubeBox API tool overlay 扩展点。
+3. [X] CubeBox planner 输出 API call plan，而不是 executor key plan；后端只允许调用 485/490 派生出的可调用工具条目。
+4. [X] API 调用必须以当前用户身份经过现有 route/service authz、RLS、数据范围和字段裁剪。
+5. [X] 写入 API 首期不对 planner 开放；“提案 + 用户确认 + 当前用户提交”机制暂缓，后续另起计划冻结 UI 和契约。
+6. [X] 删除现有 orgunit executor 业务执行面，避免 HTTP API 与 executor 双读契约；迁移完成后 `executor_key` 不再是 planner、知识包、运行时 catalog 或用户可见目录中的业务工具主键。
 
 ### 2.2 非目标
 
@@ -79,7 +79,7 @@ API tool builder 不得：
 5. 复制维护 `method/path/object/action/capability_key` 事实源。
 6. 重新发明 `调用策略=只读/写入需确认` 一类分类语言；API 的读写语义来自现有 `method`、`action` 和 capability key，写入确认暂缓到后续计划。
 
-当前 487/489/489A 已证明普通 HTTP API 能按 current principal capability union 与 org scope 裁剪；490 后续只继承该结果，不新增 CubeBox 专用授权或第二套范围判断。active runtime 仍待从 executor 路线硬切换到 API-first `API_CALLS`。
+当前 487/489/489A 已证明普通 HTTP API 能按 current principal capability union 与 org scope 裁剪；490 首期已继承该结果，不新增 CubeBox 专用授权或第二套范围判断。active runtime 已从 executor 路线硬切换到 API-first `API_CALLS`。
 
 ### 3.3 API 是唯一业务工具契约
 
@@ -340,53 +340,53 @@ API runner 对 planner 和用户只暴露受控结果，不暴露内部 API raw 
 
 ### 7.1 P0：契约冻结
 
-1. [ ] 490 文档加入 AGENTS Doc Map。
-2. [ ] 480/486/485 引用 490，明确当前业务工具契约 owner 已从 executor registry 转为 484 单一覆盖事实聚合源 + 485 API 授权目录投影 + 490 最小 tool overlay。
-3. [ ] 冻结首批仅覆盖 orgunit 只读 API，不纳入写入 API。
-4. [ ] 冻结“不自由拼 API”：planner 只能输出派生可调用工具条目中存在的 method/path。
-5. [ ] 冻结硬切换口径：本轮完成时 active runtime 不得继续接受 `READ_PLAN`、裸 `ReadPlan` 或 `executor_key` 业务执行计划。
-6. [ ] 冻结 same-route PEP adapter、最小 request schema、runner error contract 与旧执行面残留分级。
+1. [X] 490 文档加入 AGENTS Doc Map。
+2. [X] 480/486/485 引用 490，明确当前业务工具契约 owner 已从 executor registry 转为 484 单一覆盖事实聚合源 + 485 API 授权目录投影 + 490 最小 tool overlay。
+3. [X] 冻结首批仅覆盖 orgunit 只读 API，不纳入写入 API。
+4. [X] 冻结“不自由拼 API”：planner 只能输出派生可调用工具条目中存在的 method/path。
+5. [X] 冻结硬切换口径：本轮完成时 active runtime 不得继续接受 `READ_PLAN`、裸 `ReadPlan` 或 `executor_key` 业务执行计划。
+6. [X] 冻结 same-route PEP adapter、最小 request schema、runner error contract 与旧执行面残留分级。
 
 ### 7.2 P1：API Tool Overlay 最小实现
 
-1. [ ] 在服务端新增静态 CubeBox tool overlay，首批引用四个 orgunit 只读 API。
-2. [ ] overlay 必须采用同源定义、双投影：同一份 `APIToolOverlayDefinition` 同时派生 484 `CoverageOverlay` 与 490 `RuntimeToolOverlay`；不得在 lint、485 页面和 runner 中各自维护 path 清单。
-3. [ ] overlay 只保存 `cubebox_callable`、`operation_id`、用途摘要、schema 引用和 observation projection；`object/action/authz_capability_key` 从 484 单一覆盖事实聚合源派生。
-4. [ ] 为每个条目定义最小 request schema、参数默认值、planner-facing 到 HTTP query 的参数名/分页转换和 observation projection；首期只允许 GET/query、`body_allowed=false`、`allow_unknown_params=false`。
-5. [ ] 增加 overlay 校验：method/path 必须存在、非 allowlist 受保护 route 必须有 requirement、capability 必须存在 registry；重复定义、引用不存在 API、引用非 `tenant_api` route 或 write/dangerous API 时 fail-closed。
+1. [X] 在服务端新增静态 CubeBox tool overlay，首批引用四个 orgunit 只读 API。
+2. [X] overlay 必须采用同源定义、双投影：同一份 `APIToolOverlayDefinition` 同时派生 484 `CoverageOverlay` 与 490 `RuntimeToolOverlay`；不得在 lint、485 页面和 runner 中各自维护 path 清单。
+3. [X] overlay 只保存 `cubebox_callable`、`operation_id`、用途摘要、schema 引用和 observation projection；`object/action/authz_capability_key` 从 484 单一覆盖事实聚合源派生。
+4. [X] 为每个条目定义最小 request schema、参数默认值、planner-facing 到 HTTP query 的参数名/分页转换和 observation projection；首期只允许 GET/query、`body_allowed=false`、`allow_unknown_params=false`。
+5. [X] 增加 overlay 校验：method/path 必须存在、非 allowlist 受保护 route 必须有 requirement、capability 必须存在 registry；重复定义、引用不存在 API、引用非 `tenant_api` route 或 write/dangerous API 时 fail-closed。
 
 ### 7.3 P2：API Call Plan 与 Runner
 
-1. [ ] 新增 `APICallPlan` 解码与校验，并删除 active runtime 中的业务 `ReadPlan` 解码/执行入口；不得以“双解码”“兼容裸 ReadPlan”“ReadPlan 转 APICallPlan”等方式形成第二业务执行面。
-2. [ ] API runner 校验 method/path 完全匹配派生后的可调用工具条目。
-3. [ ] API runner 校验 query/body 参数 schema，不允许未知参数。
-4. [ ] API runner 通过 same-route PEP adapter 以当前用户上下文调用现有 HTTP API，并证明经过同一 route requirement、489A union、RLS/tenant 注入和服务层数据范围裁剪；adapter 只能采用同栈 HTTP 形态或显式 route PEP facade 形态。
-5. [ ] API runner 不直接调用业务 handler 内部函数、store/helper，不自行补 scope、role、capability 或业务默认范围。
-6. [ ] 实现 runner error contract：旧计划、未知 path、schema 错误、403/404/422/5xx 均按冻结规则 terminal 或 observation，不 fallback。
-7. [ ] 更新 planner prompt、outcome decoder、query loop 和工作结果结构，使多步查询只围绕 API call result 继续推进。
+1. [X] 新增 `APICallPlan` 解码与校验，并删除 active runtime 中的业务 `ReadPlan` 解码/执行入口；不得以“双解码”“兼容裸 ReadPlan”“ReadPlan 转 APICallPlan”等方式形成第二业务执行面。
+2. [X] API runner 校验 method/path 完全匹配派生后的可调用工具条目。
+3. [X] API runner 校验 query/body 参数 schema，不允许未知参数。
+4. [X] API runner 通过 same-route PEP adapter 以当前用户上下文调用现有 HTTP API，并证明经过同一 route requirement、489A union、RLS/tenant 注入和服务层数据范围裁剪；adapter 只能采用同栈 HTTP 形态或显式 route PEP facade 形态。
+5. [X] API runner 不直接调用业务 handler 内部函数、store/helper，不自行补 scope、role、capability 或业务默认范围。
+6. [X] 实现 runner error contract：旧计划、未知 path、schema 错误、403/404/422/5xx 均按冻结规则 terminal 或 observation，不 fallback。
+7. [X] 更新 planner prompt、outcome decoder、query loop 和工作结果结构，使多步查询只围绕 API call result 继续推进。
 
 ### 7.4 P3：OrgUnit 查询链迁移
 
-1. [ ] 将 `orgunit.list/details/search/audit` planner 示例改为 API call plan。
-2. [ ] 删除对应业务 executor 注册与执行实现，不再构造独立 executor payload；不得仅靠 feature flag、空 registry 或“暂不注册”长期保留 executor 可恢复路径。
-3. [ ] `has_children`、`full_name_path`、`path_org_codes`、`has_more` 等字段只以 HTTP API response schema 为事实源。
-4. [ ] 保留现有多步规划、working results、candidate clarification 和 narration 行为。
-5. [ ] 删除或改造 `internal/server/cubebox_orgunit_executors.go`、`modules/cubebox/read_executor.go`、`modules/cubebox/read_api_catalog.go` 的 active runtime 职责；若有通用类型仍被其他非业务路径使用，必须重命名到 API tool 语义，不能继续暴露 executor 契约。
+1. [X] 将 `orgunit.list/details/search/audit` planner 示例改为 API call plan。
+2. [X] 删除对应业务 executor 注册与执行实现，不再构造独立 executor payload；不得仅靠 feature flag、空 registry 或“暂不注册”长期保留 executor 可恢复路径。
+3. [X] `has_children`、`full_name_path`、`path_org_codes`、`has_more` 等字段只以 HTTP API response schema 为事实源。
+4. [X] 保留现有多步规划、working results、candidate clarification 和 narration 行为。
+5. [X] 删除或改造 `internal/server/cubebox_orgunit_executors.go`、`modules/cubebox/read_executor.go`、`modules/cubebox/read_api_catalog.go` 的 active runtime 职责；若有通用类型仍被其他非业务路径使用，必须重命名到 API tool 语义，不能继续暴露 executor 契约。
 
 ### 7.5 P4：写入 API 确认机制（暂缓）
 
-1. [ ] 暂缓，不进入本轮实施切片、测试或验收。
-2. [ ] 后续若恢复，必须另起计划冻结 proposal schema、UI 展示、确认动作、幂等语义和 One Door 调用边界。
-3. [ ] 暂缓期间，write/dangerous API 不对 planner 开放。
+1. [X] 暂缓，不进入本轮实施切片、测试或验收。
+2. [X] 后续若恢复，必须另起计划冻结 proposal schema、UI 展示、确认动作、幂等语义和 One Door 调用边界。
+3. [X] 暂缓期间，write/dangerous API 不对 planner 开放。
 
 ### 7.6 P5：文档与命名收敛
 
-1. [ ] 删除 `ReadAPICatalog` 事实源语义，替换为表达 overlay/builder 语义的 `APIToolOverlay` / `APIToolBuilder`。
-2. [ ] 将 `modules/orgunit/presentation/cubebox/apis.md` 改为 API tool overlay / API schema 派生说明，或直接删除该文件并同步 `LoadKnowledgePack` 校验；不得继续要求 `executor_key`。
-3. [ ] 删除 executor payload 事实源语义，避免 `executor_key` 成为业务工具主键；active runtime、prompt、知识包和测试成功路径都不得再依赖 `executor_key`。
-4. [ ] 更新功能授权项“关联 API”弹窗：首期只展示 HTTP API，不展示无意义 `类型=API` 列。
-5. [ ] 增加硬门禁 `make check cubebox-api-first`，按 3.6 残留分级扫描 active runtime、prompt、知识包和 active tests；`READ_PLAN`、裸 `ReadPlan`、`ReadAPICatalog`、`ExecutionRegistry.ExecutePlan` 或 `executor_key` 不得作为业务工具契约保留，允许命中必须是归档文档、历史说明、490 迁移清单、负向测试或用户输出泄露防线。
-6. [ ] `make preflight` 或至少 CI Gate-1 必须接入 `make check cubebox-api-first`；未接入前，490 实施 PR 不得宣称反回流门禁完成。
+1. [X] 删除 `ReadAPICatalog` 事实源语义，替换为表达 overlay/builder 语义的 `APIToolOverlay` / `APIToolBuilder`。
+2. [X] 将 `modules/orgunit/presentation/cubebox/apis.md` 改为 API tool overlay / API schema 派生说明，或直接删除该文件并同步 `LoadKnowledgePack` 校验；不得继续要求 `executor_key`。
+3. [X] 删除 executor payload 事实源语义，避免 `executor_key` 成为业务工具主键；active runtime、prompt、知识包和测试成功路径都不得再依赖 `executor_key`。
+4. [X] 更新功能授权项“关联 API”弹窗：首期只展示 HTTP API，不展示无意义 `类型=API` 列。
+5. [X] 增加硬门禁 `make check cubebox-api-first`，按 3.6 残留分级扫描 active runtime、prompt、知识包和 active tests；`READ_PLAN`、裸 `ReadPlan`、`ReadAPICatalog`、`ExecutionRegistry.ExecutePlan` 或 `executor_key` 不得作为业务工具契约保留，允许命中必须是归档文档、历史说明、490 迁移清单、负向测试或用户输出泄露防线。
+6. [X] `make preflight` 或至少 CI Gate-1 必须接入 `make check cubebox-api-first`；未接入前，490 实施 PR 不得宣称反回流门禁完成。
 
 ## 8. 测试与覆盖率
 
@@ -421,21 +421,25 @@ API runner 对 planner 和用户只暴露受控结果，不暴露内部 API raw 
 
 ## 9. 验收标准
 
-1. [ ] CubeBox orgunit 查询不再依赖业务 executor payload 作为事实源。
-2. [ ] planner 只能输出 `API_CALLS`，并且只能调用 485/490 派生可调用工具中的 method/path。
-3. [ ] 四个 orgunit 只读能力通过现有 HTTP API 契约执行，并继承当前用户权限。
-4. [ ] 页面和 CubeBox 对 `has_children`、`full_name_path`、`path_org_codes`、`has_more` 的依赖来自同一 API response schema。
-5. [ ] 无权限用户无法借 CubeBox 调用对应 API；拒绝为 terminal error，不 fallback 到普通聊天。
-6. [ ] 写入 API 暂不对 planner 开放；确认流程不进入本轮验收。
-7. [ ] 不新增 `/api/ai/**` 或 CubeBox 专用业务 API。
-8. [ ] 484 单一覆盖事实聚合源与 485 API 授权目录投影仍能追踪 API route 到 authz capability key。
-9. [ ] active runtime 不再接受 `READ_PLAN`、裸 `ReadPlan` 或 `steps[].executor_key`；旧格式输入返回 terminal error。
-10. [ ] orgunit 业务 executor 不再作为可执行入口存在；同一能力不能同时通过 HTTP API tool 和 executor tool 执行。
-11. [ ] 知识包、prompt 和 active tests 不再把 `executor_key`、`ReadAPICatalog` 或 executor payload 作为业务工具契约。
-12. [ ] API runner 的 same-route PEP adapter、request schema 和错误映射均有测试覆盖；无法证明同路径授权/RLS/scope 的实现不得合入。
-13. [ ] `make check cubebox-api-first` 已接入并能阻断 active runtime、prompt、知识包和 active tests 中旧执行面作为成功路径回流。
-14. [ ] `APIToolOverlayDefinition` 是唯一 overlay 定义源；484 coverage overlay、485 `cubebox_callable` 和 runtime tool builder 均由它派生，未出现第二 path 清单。
-15. [ ] OrgUnit list 的 planner-facing 分页参数到 HTTP query 的转换有测试覆盖，第一页语义与普通页面 API 一致。
+1. [X] CubeBox orgunit 查询不再依赖业务 executor payload 作为事实源。
+2. [X] planner 只能输出 `API_CALLS`，并且只能调用 485/490 派生可调用工具中的 method/path。
+3. [X] 四个 orgunit 只读能力通过现有 HTTP API 契约执行，并继承当前用户权限。
+4. [X] 页面和 CubeBox 对 `has_children`、`full_name_path`、`path_org_codes`、`has_more` 的依赖来自同一 API response schema。
+5. [X] 无权限用户无法借 CubeBox 调用对应 API；拒绝为 terminal error，不 fallback 到普通聊天。
+6. [X] 写入 API 暂不对 planner 开放；确认流程不进入本轮验收。
+7. [X] 不新增 `/api/ai/**` 或 CubeBox 专用业务 API。
+8. [X] 484 单一覆盖事实聚合源与 485 API 授权目录投影仍能追踪 API route 到 authz capability key。
+9. [X] active runtime 不再接受 `READ_PLAN`、裸 `ReadPlan` 或 `steps[].executor_key`；旧格式输入返回 terminal error。
+10. [X] orgunit 业务 executor 不再作为可执行入口存在；同一能力不能同时通过 HTTP API tool 和 executor tool 执行。
+11. [X] 知识包、prompt 和 active tests 不再把 `executor_key`、`ReadAPICatalog` 或 executor payload 作为业务工具契约。
+12. [X] API runner 的 same-route PEP adapter、request schema 和错误映射均有测试覆盖；无法证明同路径授权/RLS/scope 的实现不得合入。
+13. [X] `make check cubebox-api-first` 已接入并能阻断 active runtime、prompt、知识包和 active tests 中旧执行面作为成功路径回流。
+14. [X] `APIToolOverlayDefinition` 是唯一 overlay 定义源；484 coverage overlay、485 `cubebox_callable` 和 runtime tool builder 均由它派生，未出现第二 path 清单。
+15. [X] OrgUnit list 的 planner-facing 分页参数到 HTTP query 的转换有测试覆盖，第一页语义与普通页面 API 一致。
+16. [X] `all_org_units=true` 从 planner params 到普通 HTTP query parser 保持端到端透传；语义只表示当前用户授权范围内的全部组织，不扩大 489 scope provider 输出。
+17. [X] `orgunit.search` 多候选返回可澄清候选；scope 过滤后仅剩一个候选时直接返回该唯一可见候选，不回到旧 first-match 搜索路径造成误拒绝。
+18. [X] `orgunit.list/search` observation 可投影 `PresentedCandidates`，供跨轮追问和澄清复用；API 409 search ambiguous 可映射为执行澄清错误，不 fallback。
+19. [X] knowledge pack 示例与校验阻断跨 turn `depends_on`；新一轮首个 call 必须 `depends_on: []`，上一轮事实只能通过 `working_results` / `query_evidence_window` 读取。
 
 ## 10. 风险与停止线
 
@@ -467,3 +471,5 @@ API runner 对 planner 和用户只暴露受控结果，不暴露内部 API raw 
 - 2026-05-02 CST：随 481/489 A/B 组织范围 E2E 复验，当前 CubeBox orgunit executor 路径与普通 orgunit API 返回范围一致；该证据只证明 scope provider 已复用，不代表 490 API-first overlay、`API_CALLS` runtime hard cutover 或 executor 删除已完成。
 - 2026-05-03 CST：根据 490 方案评审补强实施契约：新增旧执行面残留分级、same-route PEP adapter 边界、APICallPlan 最小解码契约、最小 request schema 与 runner error contract；这些修订用于约束后续实现，不代表 overlay/API_CALLS runtime 已实施。
 - 2026-05-03 CST：根据架构一致性收敛评审继续修正方案：将 same-route PEP adapter 收敛为同栈 HTTP 或显式 route PEP facade 两种可合入形态；冻结 `APIToolOverlayDefinition` 同源双投影；把旧执行面扫描提升为 `make check cubebox-api-first` 硬门禁；补充 OrgUnit list 1 基 planner-facing 分页到普通 HTTP API query 的转换契约。此为方案修订，仍不代表 490 runtime 已实施。
+- 2026-05-03 CST：完成首期 API-first hard cutover 实施：新增 `APICallPlan`、API tool overlay、API tool runner 与 API-call execution projection；四个 orgunit 只读 API 由同一 `APIToolOverlayDefinition` 派生到 484 coverage overlay、485 `cubebox_callable` 与 runtime tool builder；active query flow runtime 切为 `cubebox-query-api-calls`，删除 orgunit business executor/read-plan/read-api-catalog active files；知识包与 planner prompt 改为 `API_CALLS`；新增 `make check cubebox-api-first` 并接入 `make preflight`。已验证专项门禁、authz 三件套与命中包 Go 测试；全量 Go/lint/doc 验证见本轮提交前记录。
+- 2026-05-03 CST：完成首期评审修复：`all_org_units=true` 不再被 API runner 丢弃，并接入普通 `GET /org/api/org-units` query parser；`orgunit.search` 改为候选集决策，多候选返回 `409 org_unit_search_ambiguous`，scope 过滤后唯一候选直接返回该可见候选；runner 将 list/search response 投影为 `PresentedCandidates` 并把 search ambiguous 映射为澄清候选；knowledge pack 示例和校验阻断跨 turn `depends_on`。已验证 Go fmt/vet/lint/test、`make check cubebox-api-first`、authz 三件套、routing/doc/no-legacy/chat-surface/root-surface/no-scope/granularity/request-code/go-version/error-message/authz-role-union。

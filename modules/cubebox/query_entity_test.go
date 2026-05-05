@@ -14,7 +14,7 @@ func TestQueryContextFromEventsReturnsMostRecentConfirmedEntity(t *testing.T) {
 				"intent":              "orgunit.details",
 				"entity_key":          "100000",
 				"as_of":               "2026-04-24",
-				"source_executor_key": "orgunit.details",
+				"source_operation_id": "orgunit.details",
 			}},
 		},
 		{
@@ -30,7 +30,7 @@ func TestQueryContextFromEventsReturnsMostRecentConfirmedEntity(t *testing.T) {
 				"intent":              "orgunit.list",
 				"entity_key":          "200000",
 				"as_of":               "2026-04-25",
-				"source_executor_key": "orgunit.list",
+				"source_operation_id": "orgunit.list",
 				"parent_org_code":     "200000",
 			}},
 		},
@@ -419,7 +419,7 @@ func TestBuildQueryEvidenceWindowProjectsNeutralObservations(t *testing.T) {
 				Intent:            "orgunit.details",
 				EntityKey:         "100000",
 				AsOf:              "2026-04-25",
-				SourceExecutorKey: "orgunit.details",
+				SourceOperationID: "orgunit.details",
 			},
 		},
 		RecentCandidateGroups: []QueryCandidateGroup{
@@ -466,7 +466,7 @@ func TestBuildQueryEvidenceWindowProjectsNeutralObservations(t *testing.T) {
 	if !ok || item["entity_key"] != "100000" || item["as_of"] != "2026-04-25" {
 		t.Fatalf("unexpected entity item=%#v", entity.ResultSummary)
 	}
-	for _, forbidden := range []string{"intent", "source_executor_key", "target_org_code", "parent_org_code"} {
+	for _, forbidden := range []string{"intent", "source_operation_id", "target_org_code", "parent_org_code"} {
 		if _, exists := item[forbidden]; exists {
 			t.Fatalf("evidence entity item leaked %q in %#v", forbidden, item)
 		}
@@ -582,7 +582,7 @@ func TestQueryEntityPayloadUsesMinimalSchema(t *testing.T) {
 		Intent:            " orgunit.details ",
 		EntityKey:         " 100000 ",
 		AsOf:              " 2026-04-25 ",
-		SourceExecutorKey: " orgunit.details ",
+		SourceOperationID: " orgunit.details ",
 	}
 
 	payload := entity.Payload()

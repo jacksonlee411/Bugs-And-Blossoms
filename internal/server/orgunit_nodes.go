@@ -1449,8 +1449,12 @@ func (s *orgUnitPGStore) SearchNodeCandidates(ctx context.Context, tenantID stri
 	if trimmed == "" {
 		return nil, errors.New("query is required")
 	}
-	if limit <= 0 {
+	if limit == 0 {
 		limit = 8
+	}
+	var queryLimit any = limit
+	if limit < 0 {
+		queryLimit = nil
 	}
 
 	tx, err := s.pool.Begin(ctx)
@@ -1516,7 +1520,7 @@ func (s *orgUnitPGStore) SearchNodeCandidates(ctx context.Context, tenantID stri
 	  AND v.name ILIKE $2::text
 	ORDER BY v.node_path
 	LIMIT $4::int
-	`, tenantID, "%"+trimmed+"%", asOfDate, limit)
+		`, tenantID, "%"+trimmed+"%", asOfDate, queryLimit)
 	if err != nil {
 		return nil, err
 	}
@@ -1555,8 +1559,12 @@ func (s *orgUnitPGStore) SearchNodeCandidatesWithVisibility(ctx context.Context,
 	if trimmed == "" {
 		return nil, errors.New("query is required")
 	}
-	if limit <= 0 {
+	if limit == 0 {
 		limit = 8
+	}
+	var queryLimit any = limit
+	if limit < 0 {
+		queryLimit = nil
 	}
 
 	tx, err := s.pool.Begin(ctx)
@@ -1619,7 +1627,7 @@ func (s *orgUnitPGStore) SearchNodeCandidatesWithVisibility(ctx context.Context,
 	  AND v.name ILIKE $2::text
 	ORDER BY v.node_path
 	LIMIT $4::int
-	`, tenantID, "%"+trimmed+"%", asOfDate, limit)
+		`, tenantID, "%"+trimmed+"%", asOfDate, queryLimit)
 	if err != nil {
 		return nil, err
 	}
@@ -2768,7 +2776,7 @@ func (s *orgUnitMemoryStore) SearchNodeCandidates(_ context.Context, tenantID st
 	if trimmed == "" {
 		return nil, errors.New("query is required")
 	}
-	if limit <= 0 {
+	if limit == 0 {
 		limit = 8
 	}
 	if normalized, err := orgunitpkg.NormalizeOrgCode(trimmed); err == nil {
@@ -2810,7 +2818,7 @@ func (s *orgUnitMemoryStore) SearchNodeCandidates(_ context.Context, tenantID st
 				return nil, err
 			}
 			out = append(out, item)
-			if len(out) >= limit {
+			if limit > 0 && len(out) >= limit {
 				break
 			}
 		}

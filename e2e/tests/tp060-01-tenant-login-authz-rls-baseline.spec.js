@@ -197,7 +197,7 @@ test("tp060-01: tenant/login/authz/rls baseline", async ({ browser }) => {
     `/org/api/org-units/details?org_code=${encodeURIComponent(tenantBOrgCode)}&as_of=${asOf}`,
     { headers: { Accept: "application/json" } }
   );
-  await expectExplicitError(crossTenantDataResp, { status: 404, code: "org_code_not_found" });
+  await expectExplicitError(crossTenantDataResp, { status: 404, code: "org_unit_not_found" });
 
   const tenantAViewerContext = await browser.newContext({
     baseURL: appBaseURL,

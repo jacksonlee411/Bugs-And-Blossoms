@@ -54,7 +54,9 @@ type QueryCompletedPlan struct {
 
 type QueryCompletedPlanStep struct {
 	StepID            string         `json:"step_id"`
-	ExecutorKey       string         `json:"executor_key"`
+	Method            string         `json:"method"`
+	Path              string         `json:"path"`
+	OperationID       string         `json:"operation_id,omitempty"`
 	ParamsFingerprint string         `json:"params_fingerprint"`
 	ItemCount         int            `json:"item_count"`
 	Truncated         bool           `json:"truncated"`
@@ -64,7 +66,9 @@ type QueryCompletedPlanStep struct {
 type QueryWorkingObservation struct {
 	Round             int            `json:"round"`
 	StepID            string         `json:"step_id"`
-	ExecutorKey       string         `json:"executor_key"`
+	Method            string         `json:"method"`
+	Path              string         `json:"path"`
+	OperationID       string         `json:"operation_id,omitempty"`
 	ParamsFingerprint string         `json:"params_fingerprint"`
 	Items             []any          `json:"items,omitempty"`
 	ItemCount         int            `json:"item_count"`
@@ -137,11 +141,11 @@ func (s *QueryWorkingResultsState) NotePlanningRound() {
 	s.planningRounds++
 }
 
-func (s *QueryWorkingResultsState) CanExecute(plan ReadPlan) bool {
+func (s *QueryWorkingResultsState) CanExecute(plan APICallPlan) bool {
 	if s == nil {
 		return true
 	}
-	return s.executedSteps+len(plan.Steps) <= s.budget.MaxExecutedSteps
+	return s.executedSteps+len(plan.Calls) <= s.budget.MaxExecutedSteps
 }
 
 func (s *QueryWorkingResultsState) HasExecuted(fingerprint string) bool {
@@ -169,27 +173,28 @@ func (s *QueryWorkingResultsState) NoteRepeat(fingerprint string) bool {
 	return s.repeats[fingerprint] > s.budget.MaxRepeatedPlan
 }
 
-func (s *QueryWorkingResultsState) AppendPlan(round int, plan ReadPlan, results []ExecuteResult) {
+func (s *QueryWorkingResultsState) AppendPlan(round int, plan APICallPlan, results []ExecuteResult) {
 	if s == nil {
 		return
 	}
 	completed := QueryCompletedPlan{
-		Round:  round,
-		Intent: strings.TrimSpace(plan.Intent),
-		Steps:  make([]QueryCompletedPlanStep, 0, len(plan.Steps)),
+		Round: round,
+		Steps: make([]QueryCompletedPlanStep, 0, len(plan.Calls)),
 	}
-	for index, step := range plan.Steps {
+	for index, call := range plan.Calls {
 		var result ExecuteResult
 		if index < len(results) {
 			result = results[index]
 		}
-		fingerprint := StepFingerprint(step)
+		fingerprint := StepFingerprint(call)
 		s.executed[fingerprint] = struct{}{}
 		s.executedOrder = appendIfMissing(s.executedOrder, fingerprint)
-		observation := buildWorkingObservation(round, step, result, fingerprint, s.budget.MaxWorkingResultItems)
+		observation := buildWorkingObservation(round, call, result, fingerprint, s.budget.MaxWorkingResultItems)
 		completed.Steps = append(completed.Steps, QueryCompletedPlanStep{
-			StepID:            strings.TrimSpace(step.ID),
-			ExecutorKey:       strings.TrimSpace(step.ExecutorKey),
+			StepID:            strings.TrimSpace(call.ID),
+			Method:            strings.ToUpper(strings.TrimSpace(call.Method)),
+			Path:              normalizeAPICallPath(call.Path),
+			OperationID:       strings.TrimSpace(result.OperationID),
 			ParamsFingerprint: fingerprint,
 			ItemCount:         observation.ItemCount,
 			Truncated:         observation.Truncated,
@@ -198,7 +203,7 @@ func (s *QueryWorkingResultsState) AppendPlan(round int, plan ReadPlan, results 
 		copyObservation := observation
 		s.latest = &copyObservation
 	}
-	s.executedSteps += len(plan.Steps)
+	s.executedSteps += len(plan.Calls)
 	s.completed = append(s.completed, completed)
 }
 
@@ -312,24 +317,26 @@ func projectWorkingObservationForPrompt(item *QueryWorkingObservation, maxItems 
 	return item
 }
 
-func PlanFingerprint(plan ReadPlan) string {
-	parts := make([]string, 0, len(plan.Steps))
-	for _, step := range plan.Steps {
-		parts = append(parts, StepFingerprint(step))
+func PlanFingerprint(plan APICallPlan) string {
+	parts := make([]string, 0, len(plan.Calls))
+	for _, call := range plan.Calls {
+		parts = append(parts, StepFingerprint(call))
 	}
 	return strings.Join(parts, "||")
 }
 
-func StepFingerprint(step ReadPlanStep) string {
-	return strings.TrimSpace(step.ExecutorKey) + "|" + canonicalParamFingerprint(step.Params)
+func StepFingerprint(call APICallStep) string {
+	return strings.ToUpper(strings.TrimSpace(call.Method)) + "|" + normalizeAPICallPath(call.Path) + "|" + canonicalParamFingerprint(call.Params)
 }
 
-func buildWorkingObservation(round int, step ReadPlanStep, result ExecuteResult, fingerprint string, maxItems int) QueryWorkingObservation {
+func buildWorkingObservation(round int, call APICallStep, result ExecuteResult, fingerprint string, maxItems int) QueryWorkingObservation {
 	items, itemCount, truncated := observationItems(result.Payload, maxItems)
 	return QueryWorkingObservation{
 		Round:             round,
-		StepID:            strings.TrimSpace(step.ID),
-		ExecutorKey:       strings.TrimSpace(step.ExecutorKey),
+		StepID:            strings.TrimSpace(call.ID),
+		Method:            strings.ToUpper(strings.TrimSpace(call.Method)),
+		Path:              normalizeAPICallPath(call.Path),
+		OperationID:       strings.TrimSpace(result.OperationID),
 		ParamsFingerprint: fingerprint,
 		Items:             items,
 		ItemCount:         itemCount,

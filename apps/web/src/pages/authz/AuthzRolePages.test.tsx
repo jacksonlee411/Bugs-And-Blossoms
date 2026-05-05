@@ -16,17 +16,43 @@ const authzApiMocks = vi.hoisted(() => ({
   updateAuthzRole: vi.fn()
 }))
 
-const orgUnitsApiMocks = vi.hoisted(() => ({
-  listOrgUnits: vi.fn()
-}))
-
 const appPreferencesMocks = vi.hoisted(() => ({
   useAppPreferences: vi.fn()
 }))
 
 vi.mock('../../api/authz', () => authzApiMocks)
-vi.mock('../../api/orgUnits', () => orgUnitsApiMocks)
 vi.mock('../../app/providers/AppPreferencesContext', () => appPreferencesMocks)
+vi.mock('../../components/OrgUnitTreeSelector', () => ({
+  OrgUnitTreeField: ({
+    label,
+    onChange,
+    value
+  }: {
+    label: string
+    onChange: (value: {
+      org_code: string
+      org_node_key: string
+      name: string
+      status: 'active'
+      has_visible_children: boolean
+    }) => void
+    value?: { name: string; org_code: string } | null
+  }) => (
+    <button
+      aria-label={label}
+      onClick={() => onChange({
+        org_code: 'FLOWERS-CHILD',
+        org_node_key: 'B2345678',
+        name: '鲜花二级部门',
+        status: 'active',
+        has_visible_children: false
+      })}
+      type='button'
+    >
+      {value ? `${value.name} (${value.org_code})` : '选择组织'}
+    </button>
+  )
+}))
 vi.mock('../../components/DataGridPage', () => ({
   DataGridPage: ({
     columns,
@@ -178,10 +204,6 @@ describe('AuthzRolePages', () => {
       org_scopes: [],
       revision: 5
     })
-    orgUnitsApiMocks.listOrgUnits.mockResolvedValue({
-      as_of: '2026-05-02',
-      org_units: [{ org_code: 'FLOWERS', name: '鲜花事业部', status: 'active', has_children: true }]
-    })
   })
 
   it('saves the selected role definition through the 487 API', async () => {
@@ -297,6 +319,58 @@ describe('AuthzRolePages', () => {
       expect(authzApiMocks.replacePrincipalAuthzAssignment).toHaveBeenCalledWith('principal-b', {
         roles: [{ role_slug: 'flower-hr' }],
         org_scopes: [],
+        revision: 5
+      })
+    })
+  }, SLOW_UI_TEST_TIMEOUT_MS)
+
+  it('displays existing org scopes when the assignment response omits org_name', async () => {
+    authzApiMocks.getPrincipalAuthzAssignment.mockResolvedValue({
+      principal_id: 'principal-b',
+      roles: [{ role_slug: 'flower-hr', display_name: '鲜花公司HR', description: '查看组织', requires_org_scope: true }],
+      org_scopes: [{ org_node_key: 'A2345678', org_code: 'FLOWERS', include_descendants: true }],
+      revision: 5
+    })
+
+    renderWithQueryClient(<UserAuthorizationPage />)
+
+    await screen.findByText('用户：user-b@example.invalid · 王小花')
+    fireEvent.click(screen.getByRole('tab', { name: '组织范围' }))
+    const scopeRow = await screen.findByTestId('row-FLOWERS')
+
+    expect(within(scopeRow).getByRole('button', { name: '组织' })).toHaveTextContent('FLOWERS (FLOWERS)')
+  }, SLOW_UI_TEST_TIMEOUT_MS)
+
+  it('saves a non-root organization selected through the 491 selector field', async () => {
+    authzApiMocks.replacePrincipalAuthzAssignment.mockResolvedValue({
+      principal_id: 'principal-b',
+      roles: [{ role_slug: 'flower-hr', display_name: '鲜花公司HR', description: '查看组织', requires_org_scope: true }],
+      org_scopes: [
+        { org_node_key: 'B2345678', org_code: 'FLOWERS-CHILD', org_name: '鲜花二级部门', include_descendants: true }
+      ],
+      revision: 6
+    })
+
+    renderWithQueryClient(<UserAuthorizationPage />)
+
+    await screen.findByText('用户：user-b@example.invalid · 王小花')
+    fireEvent.click(screen.getByRole('tab', { name: '组织范围' }))
+    fireEvent.click(screen.getByRole('button', { name: '添加行' }))
+    const scopeRow = await screen.findByTestId(/row-scope-/)
+    fireEvent.click(within(scopeRow).getByRole('button', { name: '组织' }))
+    fireEvent.click(screen.getByRole('button', { name: '保存' }))
+
+    await waitFor(() => {
+      expect(authzApiMocks.replacePrincipalAuthzAssignment).toHaveBeenCalledWith('principal-b', {
+        roles: [{ role_slug: 'flower-hr' }],
+        org_scopes: [
+          {
+            org_node_key: 'B2345678',
+            org_code: 'FLOWERS-CHILD',
+            org_name: '鲜花二级部门',
+            include_descendants: true
+          }
+        ],
         revision: 5
       })
     })

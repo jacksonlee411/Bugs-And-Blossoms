@@ -7,7 +7,7 @@
 - **评审分级**：`T2`
 - **范围一句话**：新增一个只读菜单与页面，用于查看当前已覆盖的普通 tenant 授权 API、每个 API 绑定的授权资源/操作/授权项标识，以及该 API 是否进入 CubeBox 可调用 HTTP API 工具面；页面不承担编辑、修复或运行时授权裁决职责。
 - **关联模块/目录**：`apps/web/src/**`、`internal/server/**`、`internal/routing/**`、`pkg/authz/**`、`scripts/authz/**`
-- **关联计划/标准**：`AGENTS.md`、`DEV-PLAN-000`、`DEV-PLAN-001`、`DEV-PLAN-012`、`DEV-PLAN-017`、`DEV-PLAN-022`、`DEV-PLAN-480`、`DEV-PLAN-480A`、`DEV-PLAN-482`、`DEV-PLAN-482A`、`DEV-PLAN-483`、`DEV-PLAN-484`、`DEV-PLAN-488`
+- **关联计划/标准**：`AGENTS.md`、`DEV-PLAN-000`、`DEV-PLAN-001`、`DEV-PLAN-012`、`DEV-PLAN-017`、`DEV-PLAN-022`、`DEV-PLAN-480`、`DEV-PLAN-480A`、`DEV-PLAN-482`、`DEV-PLAN-482A`、`DEV-PLAN-483`、`DEV-PLAN-484`、`DEV-PLAN-488`、`DEV-PLAN-490`
 - **用户入口/触点**：授权管理菜单中的 `API 授权目录` 页面、服务端 API 授权目录列表接口；功能授权项页面中的“关联 API”弹窗由 `DEV-PLAN-482A` 承接；二者都消费 `DEV-PLAN-484` 的单一覆盖事实聚合能力
 
 ### 0.1 Simple > Easy 三问
@@ -220,3 +220,4 @@ GET /iam/api/authz/api-catalog
 - 2026-05-01 21:40 CST：浏览器验收发现普通 API 授权目录仍展示 health/static/internal no-requirement route；按 480A P2 停止线收敛为仅展示当前覆盖的 `enabled + assignable + tenant_api` 授权 API。
 - 2026-05-01 22:03 CST：浏览器复验通过：`GET /iam/api/authz/api-catalog` 返回 `status=200,count=46,badPaths=[],accessControls=["protected"],missingCapabilityKeyCount=0,nonAssignableCount=0`；页面不展示 health/static/login/internal no-requirement route、不可分配能力、无授权项标识行、executor key 或 `调用策略` 主表列。
 - 2026-05-01 23:10 CST：补齐文档状态登记；确认 485 是当前覆盖 API 正向目录 facade，488 诊断全集与 490 CubeBox overlay/runtime 仍不属于本计划完成口径。
+- 2026-05-03 CST：490 首期 overlay 已接入；485 主表 `丘宝可调用` 继续只来自 484/490 同源聚合投影，不由 485 自行维护 runtime 工具目录。485 本身仍只拥有 API 正向目录 facade，不拥有 CubeBox planner/runner runtime。

@@ -9,6 +9,8 @@ import (
 	"strings"
 
 	"github.com/jacksonlee411/Bugs-And-Blossoms/internal/routing"
+	orgunitservices "github.com/jacksonlee411/Bugs-And-Blossoms/modules/orgunit/services"
+	"github.com/jacksonlee411/Bugs-And-Blossoms/pkg/authz"
 	orgunitpkg "github.com/jacksonlee411/Bugs-And-Blossoms/pkg/orgunit"
 )
 
@@ -257,7 +259,7 @@ func handlePrincipalAuthzAssignmentCandidatesAPI(w http.ResponseWriter, r *http.
 	writeJSON(w, http.StatusOK, principalAssignmentCandidatesResponse{Principals: out})
 }
 
-func handlePrincipalAuthzAssignmentPutAPI(w http.ResponseWriter, r *http.Request, store authzRuntimeStore, orgResolver OrgUnitCodeResolver) {
+func handlePrincipalAuthzAssignmentPutAPI(w http.ResponseWriter, r *http.Request, store authzRuntimeStore, orgResolver OrgUnitCodeResolver, scopeRuntime authzRuntimeStore) {
 	if r.Method != http.MethodPut {
 		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusMethodNotAllowed, "method_not_allowed", "method not allowed")
 		return
@@ -281,8 +283,18 @@ func handlePrincipalAuthzAssignmentPutAPI(w http.ResponseWriter, r *http.Request
 	}
 	orgScopes, err := resolvePrincipalAssignmentOrgScopes(r.Context(), tenant.ID, req.OrgScopes, orgResolver)
 	if err != nil {
+		if errors.Is(err, orgunitpkg.ErrOrgCodeNotFound) || errors.Is(err, orgunitpkg.ErrOrgNodeKeyNotFound) {
+			writeOrgUnitScopeError(w, r, errAuthzScopeForbidden)
+			return
+		}
 		writePrincipalAssignmentOrgResolveError(w, r, err)
 		return
+	}
+	if len(orgScopes) > 0 {
+		if err := ensurePrincipalAssignmentOrgScopesAllowed(r.Context(), tenant.ID, orgScopes, orgResolver, scopeRuntime); err != nil {
+			writeOrgUnitScopeError(w, r, err)
+			return
+		}
 	}
 	assignment, err := store.ReplacePrincipalAssignment(r.Context(), tenant.ID, principalIDFromAssignmentPath(r.URL.Path), replacePrincipalAssignmentInput{
 		Roles:     roleSlugs,
@@ -403,6 +415,57 @@ func resolvePrincipalAssignmentOrgScopes(ctx context.Context, tenantID string, v
 		})
 	}
 	return normalizePrincipalOrgScopes(scopes)
+}
+
+func ensurePrincipalAssignmentOrgScopesAllowed(ctx context.Context, tenantID string, scopes []principalOrgScope, orgResolver OrgUnitCodeResolver, runtime authzRuntimeStore) error {
+	if runtime == nil {
+		return nil
+	}
+	if len(scopes) == 0 {
+		return nil
+	}
+	principal, ok := currentPrincipal(ctx)
+	if !ok || strings.TrimSpace(principal.ID) == "" {
+		return errAuthzPrincipalMissing
+	}
+	actorScopes, err := runtime.OrgScopesForPrincipal(ctx, tenantID, principal.ID, authz.AuthzCapabilityKey(authz.ObjectOrgUnitOrgUnits, authz.ActionRead))
+	if err != nil {
+		return err
+	}
+	orgStore, ok := orgResolver.(OrgUnitStore)
+	if !ok || orgStore == nil {
+		return errAuthzRuntimeUnavailable
+	}
+	asOf, err := orgUnitScopeCheckAsOf(ctx, orgStore, tenantID, "")
+	if err != nil {
+		return err
+	}
+	readSvc := orgunitservices.NewOrgUnitReadService(orgUnitReadStoreAdapter{store: orgStore})
+	scopeFilter := orgUnitReadScopeFilterFromPrincipalScopes(actorScopes)
+	for _, scope := range scopes {
+		targetOrgNodeKey := strings.TrimSpace(scope.OrgNodeKey)
+		if targetOrgNodeKey == "" {
+			return errAuthzScopeForbidden
+		}
+		resolved, err := readSvc.Resolve(ctx, orgunitservices.OrgUnitResolveRequest{
+			TenantID:        tenantID,
+			AsOf:            asOf,
+			ScopeFilter:     scopeFilter,
+			OrgNodeKeys:     []string{targetOrgNodeKey},
+			IncludeDisabled: true,
+			Caller:          "authz.assignment.org_scope",
+		})
+		if err != nil {
+			if errors.Is(err, orgunitservices.ErrOrgUnitReadNotFound) {
+				return errAuthzScopeForbidden
+			}
+			return err
+		}
+		if len(resolved) == 0 {
+			return errAuthzScopeForbidden
+		}
+	}
+	return nil
 }
 
 func writeAuthzRoleStoreError(w http.ResponseWriter, r *http.Request, err error) {

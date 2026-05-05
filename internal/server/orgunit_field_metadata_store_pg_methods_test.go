@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	orgunitservices "github.com/jacksonlee411/Bugs-And-Blossoms/modules/orgunit/services"
 )
 
 func mustTestOrgNodeKey(tb testing.TB, orgID int) string {
@@ -961,6 +962,52 @@ func TestOrgUnitPGStore_ListOrgUnitsPage(t *testing.T) {
 		}
 		if total != 1 || len(items) != 1 {
 			t.Fatalf("total=%d items=%v", total, items)
+		}
+	})
+
+	t.Run("success scoped pagination pushes scope where before limit", func(t *testing.T) {
+		scopeKey, err := encodeOrgNodeKeyFromID(10000002)
+		if err != nil {
+			t.Fatalf("scope key err=%v", err)
+		}
+		tx := &queryCaptureTx{stubTx: &stubTx{
+			row:  metadataScanRow{vals: []any{int(3)}},
+			rows: &metadataScanRows{records: [][]any{{"A001", "Scoped", "active", true, false, scopeKey, []string{scopeKey}}}},
+		}}
+		store := &orgUnitPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx, nil })}
+		items, total, err := store.ListOrgUnitsPage(ctx, "t1", orgUnitListPageRequest{
+			AsOf:    "2026-01-01",
+			Keyword: "A",
+			Limit:   2,
+			Offset:  4,
+			ScopeFilter: orgunitservices.OrgUnitReadScopeFilter{
+				PrincipalID: "principal-a",
+				Scopes: []orgunitservices.OrgUnitScope{{
+					OrgNodeKey:         scopeKey,
+					IncludeDescendants: true,
+				}},
+			},
+		})
+		if err != nil {
+			t.Fatalf("err=%v", err)
+		}
+		if total != 3 || len(items) != 1 {
+			t.Fatalf("total=%d items=%v", total, items)
+		}
+		if len(tx.querySQLs) != 1 {
+			t.Fatalf("expected one list query, got %d", len(tx.querySQLs))
+		}
+		if !strings.Contains(tx.querySQLs[0], "$3::text = ANY("+pathOrgNodeKeysCompatExpr("v")+")") {
+			t.Fatalf("scope where missing from list sql=%q", tx.querySQLs[0])
+		}
+		if !strings.Contains(tx.querySQLs[0], "LIMIT $5 OFFSET $6") {
+			t.Fatalf("pagination placeholders not after scoped args, sql=%q", tx.querySQLs[0])
+		}
+		if len(tx.queryArgs) != 1 || len(tx.queryArgs[0]) != 6 {
+			t.Fatalf("query args=%#v", tx.queryArgs)
+		}
+		if tx.queryArgs[0][2] != scopeKey || tx.queryArgs[0][3] != "%A%" || tx.queryArgs[0][4] != 2 || tx.queryArgs[0][5] != 4 {
+			t.Fatalf("query args=%#v", tx.queryArgs[0])
 		}
 	})
 }

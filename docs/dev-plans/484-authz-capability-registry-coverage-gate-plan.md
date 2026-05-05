@@ -1,6 +1,6 @@
 # DEV-PLAN-484：Authz Capability Registry 覆盖门禁方案
 
-**状态**: P0/P1/P2/P4 覆盖事实聚合与 authz-lint 门禁基础已落地；P3 中 482A/485 下游 UI 展示测试已完成，487 role seed 与 488 诊断仍待实施（2026-05-01 23:10 CST）
+**状态**: P0/P1/P2/P4 覆盖事实聚合与 authz-lint 门禁基础已落地；P3 中 482A/485 下游 UI 展示测试、487 role seed 与 490 CubeBox overlay 接入已完成，488 诊断仍待实施（2026-05-03 CST）
 
 ## 0. 适用范围与评审分级
 
@@ -18,7 +18,7 @@
 
 ### 0.2 当前门禁基线与剩余缺口
 
-P1/P2 已将 `make authz-lint` 从基础 policy 文件格式检查扩展为覆盖事实门禁：当前可枚举 route requirement、authz capability registry、policy、allowlist，并为 DB role authz capability seed 与 CubeBox API tool overlay 预留同一聚合结构；尚未落地的 DB role seed 与 CubeBox overlay 当前按空集合处理。后续 482A/485/487/488/490 需要覆盖事实时，必须复用本计划已完成的同一聚合源，不得重新解析 route、policy、registry 或另写 join。
+P1/P2 已将 `make authz-lint` 从基础 policy 文件格式检查扩展为覆盖事实门禁：当前可枚举 route requirement、authz capability registry、policy、allowlist，并为 DB role authz capability seed 与 CubeBox API tool overlay 提供同一聚合结构；487 role seed 与 490 CubeBox overlay 已接入该聚合源。后续 482A/485/488/490 需要覆盖事实时，必须复用本计划已完成的同一聚合源，不得重新解析 route、policy、registry 或另写 join。
 
 ## 1. 背景
 
@@ -172,7 +172,7 @@ Authz Capability Key  = authz_object + ":" + authz_action
 3. [X] CubeBox API tool overlay 枚举输出 `method/path/cubebox_callable/surface`。
 4. [X] registry 枚举输出 `authz_capability_key/object/action/assignable/status/surface`。
 5. [X] policy 枚举输出 `subject/domain/object/action`。
-6. [ ] 487 实施后提供普通 tenant role authz capability seed/DB 定义枚举能力，输出 `tenant/role_slug/authz_capability_key/system_managed`；当前 484 聚合结构已预留 role seed 空集合扩展点。
+6. [X] 487 实施后提供普通 tenant role authz capability seed/DB 定义枚举能力，输出 `tenant/role_slug/authz_capability_key/system_managed`；当前 484 聚合结构已接入 role seed。
 7. [X] 482/482A/485/488/490 不得重新解析 route switch、policy CSV 或 registry 常量来判断覆盖关系；需要页面、options 或工具数据时只能调用本节同源聚合能力。
 
 ### 7.3 P2：覆盖 lint
@@ -227,3 +227,4 @@ Authz Capability Key  = authz_object + ":" + authz_action
 - 2026-05-01 19:54 CST：根据待提交评审补强覆盖事实口径：tenant API covered keys 改为从 allowlist route 与 route requirement 的交集派生，并新增 route requirement 反向校验，避免手写 requirement 自证覆盖。
 - 2026-05-01 22:03 CST：482A/485 已消费同一 484 覆盖事实聚合源；API catalog 已收敛为仅展示当前覆盖的 `enabled + assignable + tenant_api` 授权 API，浏览器复验 `count=46,badPaths=[],accessControls=["protected"],missingCapabilityKeyCount=0,nonAssignableCount=0`。
 - 2026-05-01 23:10 CST：补齐文档状态登记；确认 P3 中 482A/485 UI 展示测试已完成，487 role seed 枚举接入与 488 授权项诊断页面仍未实施。
+- 2026-05-03 CST：490 CubeBox API tool overlay 已接入同一覆盖事实聚合源；四个 orgunit 只读 API 由同一 `APIToolOverlayDefinition` 投影到 484 coverage overlay、485 `cubebox_callable` 与 runtime tool builder。已验证 `make authz-pack && make authz-test && make authz-lint` 与 `make check cubebox-api-first`；488 授权项诊断仍保持后置未实施。

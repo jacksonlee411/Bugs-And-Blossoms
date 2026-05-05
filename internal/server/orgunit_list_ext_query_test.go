@@ -151,14 +151,12 @@ func TestHandleOrgUnitsAPI_ExtQuerySuccess_PassesParams(t *testing.T) {
 }
 
 func TestHandleOrgUnitsAPI_BusinessUnitFilterPassesParams(t *testing.T) {
-	var gotReq orgUnitListPageRequest
-	store := &extListStoreStub{
-		resolveOrgCodeStore: &resolveOrgCodeStore{},
-		listFn: func(_ context.Context, _ string, req orgUnitListPageRequest) ([]orgUnitListItem, int, error) {
-			gotReq = req
-			isBusinessUnit := true
-			return []orgUnitListItem{{OrgCode: "A001", Name: "Root", Status: "active", IsBusinessUnit: &isBusinessUnit}}, 1, nil
-		},
+	store := newOrgUnitMemoryStore()
+	if _, err := store.CreateNodeCurrent(context.Background(), "t1", "2026-01-01", "ROOT", "Root", "", false); err != nil {
+		t.Fatalf("create root err=%v", err)
+	}
+	if _, err := store.CreateNodeCurrent(context.Background(), "t1", "2026-01-01", "BU001", "Business Unit", "", true); err != nil {
+		t.Fatalf("create bu err=%v", err)
 	}
 
 	req := httptest.NewRequest(http.MethodGet, "/org/api/org-units?as_of=2026-01-01&is_business_unit=true", nil)
@@ -169,10 +167,38 @@ func TestHandleOrgUnitsAPI_BusinessUnitFilterPassesParams(t *testing.T) {
 		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
 	}
 
-	if gotReq.IsBusinessUnit == nil || !*gotReq.IsBusinessUnit {
-		t.Fatalf("isBusinessUnit=%v", gotReq.IsBusinessUnit)
+	var payload orgUnitListResponse
+	if err := json.NewDecoder(rec.Body).Decode(&payload); err != nil {
+		t.Fatalf("decode err=%v", err)
 	}
-	if !gotReq.ShouldSearchAllOrgUnits() {
-		t.Fatal("business unit filter without parent should search all org units")
+	if len(payload.OrgUnits) != 1 || payload.OrgUnits[0].OrgCode != "BU001" {
+		t.Fatalf("org_units=%+v", payload.OrgUnits)
+	}
+}
+
+func TestHandleOrgUnitsAPI_AllOrgUnitsPassesParams(t *testing.T) {
+	store := newOrgUnitMemoryStore()
+	root, err := store.CreateNodeCurrent(context.Background(), "t1", "2026-01-01", "ROOT", "Root", "", false)
+	if err != nil {
+		t.Fatalf("create root err=%v", err)
+	}
+	if _, err := store.CreateNodeCurrent(context.Background(), "t1", "2026-01-01", "CHILD", "Child", root.ID, false); err != nil {
+		t.Fatalf("create child err=%v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/org/api/org-units?as_of=2026-01-01&all_org_units=true&page=0&size=100", nil)
+	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "T"}))
+	rec := httptest.NewRecorder()
+	handleOrgUnitsAPI(rec, req, store, nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+	}
+
+	var payload orgUnitListResponse
+	if err := json.NewDecoder(rec.Body).Decode(&payload); err != nil {
+		t.Fatalf("decode err=%v", err)
+	}
+	if payload.Total == nil || *payload.Total != 2 || len(payload.OrgUnits) != 2 {
+		t.Fatalf("payload=%+v", payload)
 	}
 }

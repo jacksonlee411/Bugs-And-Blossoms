@@ -2,10 +2,12 @@ import { httpClient } from './httpClient'
 
 export interface OrgUnitAPIItem {
   org_code: string
+  org_node_key?: string
   name: string
   status: string
   is_business_unit?: boolean
   has_children: boolean
+  has_visible_children?: boolean
 }
 
 export interface OrgUnitListResponse {
@@ -89,6 +91,7 @@ export interface OrgUnitDetailsAPIItem {
   org_code: string
   name: string
   status: string
+  parent_org_node_key?: string
   parent_org_code: string
   parent_name: string
   is_business_unit: boolean
@@ -206,6 +209,23 @@ export interface OrgUnitSearchResult {
   path_org_ids: number[]
   path_org_codes?: string[]
   tree_as_of: string
+}
+
+export interface OrgUnitSearchCandidate {
+  org_code: string
+  name: string
+  status?: string
+  as_of?: string
+}
+
+export interface OrgUnitSearchAmbiguousDetails {
+  ambiguous?: boolean
+  error_code?: string
+  candidate_source?: string
+  candidate_count?: number
+  cannot_silent_select?: boolean
+  candidates?: OrgUnitSearchCandidate[]
+  tree_as_of?: string
 }
 
 export async function searchOrgUnit(options: {

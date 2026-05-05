@@ -34,14 +34,17 @@ import {
   type OrgUnitAPIItem,
   type OrgUnitListSortField,
   type OrgUnitListSortOrder,
-  type OrgUnitListStatusFilter
+  type OrgUnitListStatusFilter,
+  type OrgUnitSearchAmbiguousDetails
 } from '../../api/orgUnits'
+import type { OrgUnitSelectorNode } from '../../api/orgUnitSelector'
 import { ApiClientError } from '../../api/errors'
 import { useAppPreferences } from '../../app/providers/AppPreferencesContext'
 import { AUTHZ_CAPABILITY_KEYS } from '../../authz/capabilities'
 import { DataGridPage } from '../../components/DataGridPage'
 import { FilterBar } from '../../components/FilterBar'
 import { PageHeader } from '../../components/PageHeader'
+import { OrgUnitTreeField } from '../../components/OrgUnitTreeSelector'
 import { StatusChip } from '../../components/StatusChip'
 import { type TreePanelNode, TreePanel } from '../../components/TreePanel'
 import { isMessageKey, type MessageKey } from '../../i18n/messages'
@@ -70,7 +73,9 @@ interface OrgUnitRow {
 interface CreateOrgUnitForm {
   orgCode: string
   name: string
+  parentOrgNodeKey: string
   parentOrgCode: string
+  parentOrgName: string
   status: OrgStatus
   managerPernr: string
   effectiveDate: string
@@ -121,6 +126,21 @@ function toOrgUnitRow(item: OrgUnitAPIItem): OrgUnitRow {
   }
 }
 
+function toOrgUnitSelectorNode(item: OrgUnitAPIItem | undefined): OrgUnitSelectorNode | null {
+  const orgCode = item?.org_code.trim() ?? ''
+  const orgNodeKey = item?.org_node_key?.trim() ?? ''
+  if (!item || orgCode.length === 0 || orgNodeKey.length === 0) {
+    return null
+  }
+  return {
+    org_code: orgCode,
+    org_node_key: orgNodeKey,
+    name: item.name.trim(),
+    status: parseOrgStatus(item.status),
+    has_visible_children: item.has_visible_children ?? item.has_children
+  }
+}
+
 function buildTreeNodes(
   roots: OrgUnitAPIItem[],
   childrenByParent: Record<string, OrgUnitAPIItem[]>
@@ -156,6 +176,34 @@ function getErrorMessage(error: unknown): string {
     return error.message
   }
   return String(error)
+}
+
+function formatOrgUnitSearchAmbiguousMessage(error: unknown, prefix: string): string | null {
+  if (!(error instanceof ApiClientError) || error.status !== 409) {
+    return null
+  }
+  const details = error.details as OrgUnitSearchAmbiguousDetails | undefined
+  if (!details || details.error_code !== 'org_unit_search_ambiguous') {
+    return null
+  }
+  const candidates = Array.isArray(details.candidates) ? details.candidates : []
+  if (candidates.length === 0) {
+    return error.message
+  }
+  const labels = candidates
+    .map((candidate) => {
+      const code = candidate.org_code?.trim()
+      const name = candidate.name?.trim()
+      if (code && name) {
+        return `${name} (${code})`
+      }
+      return code || name || ''
+    })
+    .filter((label) => label.length > 0)
+  if (labels.length === 0) {
+    return error.message
+  }
+  return `${prefix} ${labels.join(', ')}`
 }
 
 type FieldOption = { value: string; label: string }
@@ -331,11 +379,13 @@ function ExtFilterValueInput(props: {
   )
 }
 
-function emptyCreateForm(defaultEffectiveDate: string, parentOrgCode: string | null): CreateOrgUnitForm {
+function emptyCreateForm(defaultEffectiveDate: string, parent: OrgUnitSelectorNode | null): CreateOrgUnitForm {
   return {
     orgCode: '',
     name: '',
-    parentOrgCode: parentOrgCode ?? '',
+    parentOrgNodeKey: parent?.org_node_key ?? '',
+    parentOrgCode: parent?.org_code ?? '',
+    parentOrgName: parent?.name ?? '',
     status: 'active',
     managerPernr: '',
     effectiveDate: defaultEffectiveDate,
@@ -476,6 +526,18 @@ export function OrgUnitsPage() {
   })
 
   const rootOrgUnits = useMemo(() => rootOrgUnitsQuery.data?.org_units ?? [], [rootOrgUnitsQuery.data])
+  const orgUnitNodeByCode = useMemo(() => {
+    const nodes = new Map<string, OrgUnitAPIItem>()
+    const visit = (item: OrgUnitAPIItem) => {
+      nodes.set(item.org_code, item)
+      for (const child of childrenByParent[item.org_code] ?? []) {
+        visit(child)
+      }
+    }
+    rootOrgUnits.forEach(visit)
+    return nodes
+  }, [childrenByParent, rootOrgUnits])
+
   const fieldConfigsQuery = useQuery({
     enabled: canUseExt,
     queryKey: ['org-units', 'field-configs', asOf],
@@ -934,7 +996,9 @@ export function OrgUnitsPage() {
       }
       return {
         ...previous,
+        parentOrgNodeKey: '',
         parentOrgCode: nextParentOrgCode,
+        parentOrgName: '',
         isBusinessUnit: nextIsBusinessUnit
       }
     })
@@ -1106,13 +1170,17 @@ export function OrgUnitsPage() {
         metadata: { query: queryValue, target: result.target_org_code }
       })
     } catch (error) {
-      setTreeSearchErrorMessage(getErrorMessage(error))
+      setTreeSearchErrorMessage(formatOrgUnitSearchAmbiguousMessage(error, t('org_search_ambiguous_prefix')) ?? getErrorMessage(error))
     }
   }
 
   function openCreateDialog() {
     setCreateErrorMessage('')
-    setCreateForm(() => emptyCreateForm(currentDate, selectedNodeCode))
+    const selectedParent =
+      selectedNodeCode && selectedNodeCode.trim().length > 0
+        ? toOrgUnitSelectorNode(orgUnitNodeByCode.get(selectedNodeCode))
+        : null
+    setCreateForm(() => emptyCreateForm(currentDate, selectedParent))
     setCreateOpen(true)
   }
 
@@ -1408,7 +1476,9 @@ export function OrgUnitsPage() {
               onChange={(event) => setCreateForm((previous) => ({ ...previous, name: event.target.value }))}
               value={createForm.name}
             />
-            <TextField
+            <OrgUnitTreeField
+              asOf={asOf}
+              clearable
               disabled={!isCreateFieldEditable('parent_org_code') || createTreeNotInitialized}
               helperText={
                 createTreeNotInitialized
@@ -1418,10 +1488,34 @@ export function OrgUnitsPage() {
                   : undefined
               }
               label={t('org_column_parent')}
-              onChange={(event) => {
-                setCreateForm((previous) => ({ ...previous, parentOrgCode: event.target.value }))
+              onChange={(option) => {
+                setCreateForm((previous) => ({
+                  ...previous,
+                  parentOrgNodeKey: option.org_node_key,
+                  parentOrgCode: option.org_code,
+                  parentOrgName: option.name
+                }))
               }}
-              value={createForm.parentOrgCode}
+              onClear={() => {
+                setCreateForm((previous) => ({
+                  ...previous,
+                  parentOrgNodeKey: '',
+                  parentOrgCode: '',
+                  parentOrgName: ''
+                }))
+              }}
+              value={
+                createForm.parentOrgCode.trim().length > 0
+                  ? toOrgUnitSelectorNode({
+                    org_code: createForm.parentOrgCode,
+                    org_node_key: createForm.parentOrgNodeKey,
+                    name: createForm.parentOrgName || createForm.parentOrgCode,
+                    status: 'active',
+                    has_children: false,
+                    has_visible_children: false
+                  })
+                  : null
+              }
             />
             <TextField
               select

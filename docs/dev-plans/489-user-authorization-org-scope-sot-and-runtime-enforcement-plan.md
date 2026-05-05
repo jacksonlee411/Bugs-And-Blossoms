@@ -1,18 +1,18 @@
 # DEV-PLAN-489：用户授权组织范围 SoT 与运行时强制实施方案
 
-**状态**: 已实施后端 SoT、运行时强制、用户授权 UI 保存交互，并完成 480A 组合运行时与 A/B E2E 验收（2026-05-02 CST）
+**状态**: 已实施后端 SoT、运行时强制、用户授权 UI 保存交互，并完成 480A 组合运行时与 A/B E2E 验收；组织范围保存阶段的当前操作者可见性校验已改为消费 492 ReadService（2026-05-05 CST）
 
 ## 0. 适用范围与评审分级
 
 - **评审分级**：`T2`
 - **范围一句话**：冻结 `DEV-PLAN-481` 用户授权页两个页签背后的首批可保存闭环：principal 角色授权、组织范围 SoT、保存 API、运行时读取与 orgunit 服务端强制裁剪；本计划不拥有角色定义主表或角色 authz capability 主表，不直接提交迁移，新增 DB 表实施前必须再次获得用户手工确认。
 - **关联模块/目录**：`modules/iam/**`、`modules/orgunit/**`、`pkg/authz/**`、`internal/server/**`、`apps/web/src/**`、`config/access/**`、`scripts/authz/**`
-- **关联计划/标准**：`AGENTS.md`、`DEV-PLAN-000`、`DEV-PLAN-001`、`DEV-PLAN-012`、`DEV-PLAN-017`、`DEV-PLAN-019`、`DEV-PLAN-022`、`DEV-PLAN-032`、`DEV-PLAN-480`、`DEV-PLAN-480A`、`DEV-PLAN-481`、`DEV-PLAN-482`、`DEV-PLAN-484`、`DEV-PLAN-485`、`DEV-PLAN-487`、`DEV-PLAN-489A`、`DEV-PLAN-490`
+- **关联计划/标准**：`AGENTS.md`、`DEV-PLAN-000`、`DEV-PLAN-001`、`DEV-PLAN-012`、`DEV-PLAN-017`、`DEV-PLAN-019`、`DEV-PLAN-022`、`DEV-PLAN-032`、`DEV-PLAN-480`、`DEV-PLAN-480A`、`DEV-PLAN-481`、`DEV-PLAN-482`、`DEV-PLAN-484`、`DEV-PLAN-485`、`DEV-PLAN-487`、`DEV-PLAN-489A`、`DEV-PLAN-490`、`DEV-PLAN-491`、`DEV-PLAN-492`
 - **用户入口/触点**：`授权管理 > 用户授权` 顶部用户选择器、`角色` 页签、`组织范围` 页签、统一 `保存` 按钮、orgunit 普通 API、CubeBox API-first orgunit 查询
 
 ### 0.1 Simple > Easy 三问
 
-1. **边界**：481 只拥有用户授权 UI 与交互骨架；487 拥有角色定义保存、能力集合和运行时 capability 来源；489 只拥有首批 principal 角色授权、组织范围绑定、读取/保存 API、服务端校验和运行时组织范围强制；489A 拥有 principal 多角色 union、subject set、审计与 scope 合并规则；482 继续拥有 capability registry 与 `scope_dimension` 元数据；480 继续拥有授权体系蓝图与运行时原则。
+1. **边界**：481 只拥有用户授权 UI 与交互骨架；487 拥有角色定义保存、能力集合和运行时 capability 来源；489 只拥有首批 principal 角色授权、组织范围绑定、读取/保存 API、服务端校验和运行时组织范围强制；489A 拥有 principal 多角色 union、subject set、审计与 scope 合并规则；491 拥有组织范围 selector 的前端组件/facade/页面接入；492 拥有 OrgUnit read core、selector-ready DTO、scope-aware visible roots 与 safe path；482 继续拥有 capability registry 与 `scope_dimension` 元数据；480 继续拥有授权体系蓝图与运行时原则。
 2. **不变量**：包含 `scope_dimension=organization` capability 的角色集合被授予某用户时，该用户必须至少有一条组织范围绑定；缺失时保存失败，不得默认全租户。所有 orgunit 列表、搜索、详情、审计和 CubeBox API-first 调用都必须消费同一服务端 scope 事实。多角色能力判断按 489A 做 union，不选择当前角色。
 3. **可解释**：管理员选择用户，添加一个或多个角色行，添加组织范围行，点击保存；服务端在同一事务中保存角色授权集合与组织范围，并在运行时按 489A 把角色能力 union 与当前用户组织范围注入 orgunit 查询。越界目标 fail-closed，前端本地状态、prompt、Casbin object 字符串都不能代替 SoT。
 
@@ -23,6 +23,7 @@
 - `DEV-PLAN-482` 已冻结 capability registry 字段，其中 `scope_dimension=organization` 是用户授权页判断是否必须配置组织范围的来源。
 - `DEV-PLAN-487` 冻结角色定义保存 API、角色能力集合持久化与普通 tenant role 运行时 capability 来源；489 只引用当前有效角色定义，不拥有角色定义本身。
 - `DEV-PLAN-489A` 冻结 principal 多角色 union 运行时语义：`roles: []` 不是展示集合，而是普通 tenant 授权 subject set 的来源；不得回退成 `roles[0]` 或当前角色。
+- `DEV-PLAN-491` / `DEV-PLAN-492` 已拆分组织选择与组织读核心 owner：491 承接用户授权页 selector UI；492 承接 OrgUnit 基础模块 read core、selector-ready DTO、visible roots 和 safe path。489 仅提供 IAM 组织范围 SoT/provider，不在页面或 OrgUnit 模块中复制候选读取规则。
 - 当前 `config/access/policies/**` 与 Casbin 只覆盖 capability/API 级授权，不是在线用户授权记录、组织范围绑定或运行时数据范围 SoT。
 - 最容易出错的位置：把组织范围只做成前端状态；把范围塞进 Casbin object/action；给缺失范围默认全租户；CubeBox 走 executor 或绕过 HTTP API 读路径；在角色定义页回流 `scope_required` 字段。
 
@@ -252,6 +253,7 @@ PUT /iam/api/authz/user-assignments/{principal_id}
 5. 保存必须校验 `revision`；冲突返回 `stale_revision`，不得局部保存成功。
 6. `org_scopes` 的用户可见输入使用 `org_code`；服务端在当前 tenant 内解析为 `org_node_key` 后写入 IAM SoT。响应可附带 `org_code` 用于 UI 回显，但运行时 SoT 仍是 `org_node_key`。
 7. 组织范围缺失错误返回稳定 code，例如 `authz_org_scope_required`，并在 UI 映射到组织范围页签。
+8. 保存阶段必须校验请求中的组织范围在当前操作者可见范围内；该校验消费 `DEV-PLAN-492` ReadService `Resolve`，不得在 authz handler 中直接构造 orgunit path/scope 判断。范围外或未知 `org_code/org_node_key` 均 fail-closed 为 `authz_scope_forbidden`，不泄露组织节点存在性。
 
 ### 3.6 运行时 Scope Provider
 
@@ -289,6 +291,7 @@ type PrincipalScopeProvider interface {
 4. `detail/audit`：目标组织不在范围内时 fail-closed。
 5. `write/admin`：若 action 为 `orgunit.orgunits:admin`，同样必须检查目标组织在范围内；没有组织范围不得写。
 6. CubeBox API-first orgunit 查询必须与普通 HTTP API 结果一致。
+7. 用户授权 assignment 保存时，当前操作者对被保存 `org_scopes` 的可见性也必须通过 492 ReadService `Resolve` 判定；IAM 489 只保存 scope SoT，不复制 OrgUnit path 解析规则。
 
 首批建议 detail/audit/write 越界返回 `403`；如后续决定用 `404` 避免泄露资源存在性，必须在本计划更新后再实现。
 
@@ -298,7 +301,7 @@ type PrincipalScopeProvider interface {
 
 1. 顶部用户选择器先通过不带 `principal_id` 的 `GET` 加载服务端 principal 候选，再在切换后通过带 `principal_id` 的 `GET` 加载该用户授权事实。
 2. `角色` 页签只维护角色行；角色说明来自服务端角色摘要或 role options API，不从 capability 常量拼装。
-3. `组织范围` 页签只维护组织行；组织选择器复用 orgunit 服务端读路径。
+3. `组织范围` 页签只维护组织行；组织选择器由 491 承接，候选数据复用 492 收敛后的 orgunit 服务端读路径。
 4. `保存` 调用统一 `PUT`，覆盖两个页签。
 5. `authz_org_scope_required` 错误必须把用户带到组织范围页签，并标记组织范围缺失。
 6. 切换用户时若存在未保存变更，必须确认或丢弃，不得把 A 用户的范围保存到 B 用户。
@@ -316,6 +319,8 @@ type PrincipalScopeProvider interface {
 | `DEV-PLAN-489` | 用户授权保存 SoT、组织范围绑定、scope provider、orgunit 强制裁剪 |
 | `DEV-PLAN-489A` | principal 多角色 union、subject set、审计字段、scope 合并和反回流门禁 |
 | `DEV-PLAN-490` | CubeBox API-first 工具化，复用当前用户 HTTP API 授权与数据范围 |
+| `DEV-PLAN-491` | 通用 OrgUnit 树选择器前端组件/facade 与用户授权页组织范围接入 |
+| `DEV-PLAN-492` | OrgUnit 基础模块 read core、selector-ready DTO、scope-aware visible roots、safe path 与多重实现收敛 |
 
 ## 6. 实施切片
 
@@ -338,6 +343,7 @@ type PrincipalScopeProvider interface {
 2. [X] 通过 487 runtime store 读取角色定义摘要，实现用户授权读取、replace-all 保存；保存后的角色集合满足 489A 多角色 union 输入契约。
 3. [X] 服务端校验角色存在、角色 authz capability 是否需要组织范围、组织范围必填、组织节点归属 tenant。
 4. [X] 保存失败不得产生部分写入。
+5. [X] 服务端保存组织范围时通过 492 ReadService `Resolve` 校验当前操作者可见性；范围外或未知组织节点统一 `authz_scope_forbidden`。
 
 ### 6.4 P3：Scope Provider 与 OrgUnit 强制裁剪
 
@@ -408,3 +414,4 @@ type PrincipalScopeProvider interface {
 - 已验证：`go test ./...`、`go vet ./...`、`make check lint`、`make authz-pack && make authz-test && make authz-lint`、`make check routing`、`make check error-message`、`make iam plan && make iam lint`、`pnpm -C apps/web typecheck && pnpm -C apps/web test`、`make generate && make css`、`make check root-surface && make check no-legacy && make check doc`、`make check chat-surface-clean && make check no-scope-package && make check granularity && make check request-code`。
 - 2026-05-02 CST：随 487/489A 完成 480A 后端运行时组合验收，并新增 `make check authz-role-union` 专用反回流门禁；补充验证通过 `go test ./internal/server ./internal/routing ./pkg/authz`、`make test`、`make check authz-role-union`。
 - 2026-05-02 CST：用户授权 UI 保存交互已接入 489 API；组织范围缺失错误映射到组织范围页签。新增 `e2e/tests/dev481-authz-org-scope-runtime.spec.js`，覆盖 A 用户全范围、B 用户仅鲜花事业部及下级、普通 orgunit API 裁剪、范围外 detail fail-closed、CubeBox orgunit 查询与普通 API 一致。稳定门禁继续通过 `make preflight` / `make e2e`；真实模型验收改为显式 `make e2e-live`。
+- 2026-05-05 CST：assignment 保存阶段的组织范围可见性校验已从 authz handler 直接 path/scope 判断改为消费 492 ReadService `Resolve`；范围外 `org_node_key` 与未知 `org_node_key` 均返回 `403 authz_scope_forbidden`，避免存在性泄露。验证通过：`go fmt ./... && go test ./modules/orgunit/services ./internal/server`、`make check ddd-layering-p0 && make check ddd-layering-p2`、`make check doc`、`git diff --check`；`dev491` Playwright 本轮因本地 Kratos admin `127.0.0.1:4434` 未启动而未完成。

@@ -1,6 +1,6 @@
 # DEV-PLAN-486：CubeBox Executor 路线活体警示（已停止）
 
-**状态**: 已停止（2026-05-01 08:14 CST；当前 PoR 转入 `DEV-PLAN-490`，本文件保留在活体目录仅作警示）
+**状态**: 已停止（2026-05-03 CST；当前 PoR `DEV-PLAN-490` 首期已完成 active executor 删除与反回流门禁，本文件暂留活体目录仅作警示，待单独文档整理时归档）
 
 ## 0. 适用范围与评审分级
 
@@ -18,7 +18,7 @@
 
 ### 0.2 为什么不归档
 
-通常已停止计划应归档。但 executor 路线在当前代码、历史计划和测试中仍有大量残留词汇，且容易被误解为“缺少授权的当前工具面”。因此 486 暂时作为活体警示文档保留，编号和 Doc Map 均指向“已停止、禁止回流”的结论。后续当 `DEV-PLAN-490` 完成 active runtime 删除 executor 执行入口，并有反回流门禁覆盖 `READ_PLAN`、`ReadAPICatalog`、`ExecutionRegistry.ExecutePlan` 与 `executor_key` 时，486 可再转入 `docs/archive/dev-plans/`。
+通常已停止计划应归档。但 executor 路线在历史计划、迁移说明和负向测试中仍有残留词汇，且容易被误解为“缺少授权的当前工具面”。因此 486 暂时作为活体警示文档保留，编号和 Doc Map 均指向“已停止、禁止回流”的结论。当前 `DEV-PLAN-490` 已完成 active runtime 删除 executor 执行入口，并有反回流门禁覆盖 `READ_PLAN`、`ReadAPICatalog`、`ExecutionRegistry.ExecutePlan` 与 `executor_key`；486 可在后续单独文档整理中转入 `docs/archive/dev-plans/`，但不得在归档前被重新当作实施 owner。
 
 ## 1. 背景
 
@@ -32,7 +32,7 @@
 2. 不在功能授权项、API 授权目录或关联 API 弹窗展示 executor key。
 3. 不新增 executor 管理页、executor 目录、executor 类型列或 executor 专属用户入口。
 4. 不把 `ReadAPICatalog` / `apis.md` 继续收敛为 executor catalog；命名与知识包后续按 `DEV-PLAN-490` 收敛到 API tool overlay / API call plan。
-5. 当前实现中已经存在的业务 executor 只作为迁移前技术债处理；删除 active runtime 中的业务 executor 执行入口由 `DEV-PLAN-490` 的 P3 切片承接，不以长期停用、空 registry 或兼容封装替代删除。
+5. 迁移前存在的业务 executor 已由 `DEV-PLAN-490` 首期切换删除 active runtime 执行入口；后续不得以长期停用、空 registry 或兼容封装恢复 executor 可执行路径。
 
 ## 3. 保留的历史判断
 
@@ -57,3 +57,4 @@
 - 2026-04-29 23:08 CST：创建方案文档，记录当时 CubeBox executor 已实际进入主链路但缺 per-step 授权与模块边界治理。
 - 2026-04-30 CST：按最新产品与架构决策停止 executor 路线；当前业务工具契约转入 `DEV-PLAN-490` API-first 方案，486 仅保留历史对照与反回流停止线。
 - 2026-05-01 08:14 CST：按评审结论将 486 定位改为活体警示；暂不归档，直到 490 删除 active executor 执行入口并补齐反回流门禁。
+- 2026-05-03 CST：490 首期已删除 active executor/read-plan/read-api-catalog 执行面，并新增 `make check cubebox-api-first` 覆盖 `READ_PLAN`、`ReadAPICatalog`、`ExecutionRegistry.ExecutePlan` 与 `executor_key` 反回流。486 仍暂留活体警示，后续可单独归档；当前实现不得再引用 486 作为 owner。

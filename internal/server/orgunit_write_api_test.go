@@ -7,6 +7,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	orgunittypes "github.com/jacksonlee411/Bugs-And-Blossoms/modules/orgunit/domain/types"
@@ -194,4 +195,176 @@ func TestHandleOrgUnitsWriteAPI_ResultAndErrorMapping(t *testing.T) {
 			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
 		}
 	})
+}
+
+func TestHandleOrgUnitsWriteAPI_CreateOrgSkipsNewOrgScopeCheckButChecksParent(t *testing.T) {
+	store := newOrgUnitMemoryStore()
+	ctx := context.Background()
+	root, err := store.CreateNodeCurrent(ctx, "t1", "2026-01-01", "ROOT", "Root", "", true)
+	if err != nil {
+		t.Fatalf("create root err=%v", err)
+	}
+	other, err := store.CreateNodeCurrent(ctx, "t1", "2026-01-01", "OTHER", "Other", "", true)
+	if err != nil {
+		t.Fatalf("create other err=%v", err)
+	}
+	runtime := &orgUnitScopeRuntimeStub{scopes: []principalOrgScope{{
+		OrgNodeKey:         root.ID,
+		IncludeDescendants: true,
+	}}}
+	svc := fakeOrgUnitWriteService{
+		writeFn: func(_ context.Context, tenantID string, req orgunitservices.WriteOrgUnitRequest) (orgunitservices.OrgUnitWriteResult, error) {
+			if tenantID != "t1" || req.Intent != "create_org" || req.OrgCode != "NEW" {
+				t.Fatalf("tenant=%s req=%+v", tenantID, req)
+			}
+			if req.Patch.ParentOrgCode == nil || *req.Patch.ParentOrgCode != "ROOT" {
+				t.Fatalf("parent patch=%+v", req.Patch.ParentOrgCode)
+			}
+			return orgunitservices.OrgUnitWriteResult{
+				OrgCode:       req.OrgCode,
+				EffectiveDate: req.EffectiveDate,
+				EventType:     "CREATE",
+				EventUUID:     "evt-new",
+			}, nil
+		},
+	}
+
+	body := `{"intent":"create_org","org_code":"NEW","effective_date":"2026-01-01","request_id":"r1","patch":{"name":"New","parent_org_code":"ROOT"}}`
+	req := httptest.NewRequest(http.MethodPost, "/org/api/org-units/write", bytes.NewBufferString(body))
+	req = req.WithContext(withPrincipal(withTenant(req.Context(), Tenant{ID: "t1"}), Principal{ID: "principal-a"}))
+	rec := httptest.NewRecorder()
+	handleOrgUnitsWriteAPI(rec, req, svc, orgUnitScopeDeps{store: store, runtime: runtime})
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+	}
+
+	body = `{"intent":"create_org","org_code":"NEW2","effective_date":"2026-01-01","request_id":"r2","patch":{"name":"New 2","parent_org_code":"OTHER"}}`
+	req = httptest.NewRequest(http.MethodPost, "/org/api/org-units/write", bytes.NewBufferString(body))
+	req = req.WithContext(withPrincipal(withTenant(req.Context(), Tenant{ID: "t1"}), Principal{ID: "principal-a"}))
+	rec = httptest.NewRecorder()
+	handleOrgUnitsWriteAPI(rec, req, svc, orgUnitScopeDeps{store: store, runtime: runtime})
+	if rec.Code != http.StatusForbidden || !strings.Contains(rec.Body.String(), "authz_scope_forbidden") {
+		t.Fatalf("status=%d body=%s other=%s", rec.Code, rec.Body.String(), other.ID)
+	}
+}
+
+func TestHandleOrgUnitsWriteAPI_CreateOrgWithoutParentFailsClosedUnderScope(t *testing.T) {
+	store := newOrgUnitMemoryStore()
+	root, err := store.CreateNodeCurrent(context.Background(), "t1", "2026-01-01", "ROOT", "Root", "", true)
+	if err != nil {
+		t.Fatalf("create root err=%v", err)
+	}
+	runtime := &orgUnitScopeRuntimeStub{scopes: []principalOrgScope{{
+		OrgNodeKey:         root.ID,
+		IncludeDescendants: true,
+	}}}
+	svc := fakeOrgUnitWriteService{
+		writeFn: func(context.Context, string, orgunitservices.WriteOrgUnitRequest) (orgunitservices.OrgUnitWriteResult, error) {
+			t.Fatal("write should not be called for scoped root create")
+			return orgunitservices.OrgUnitWriteResult{}, nil
+		},
+	}
+
+	body := `{"intent":"create_org","org_code":"NEWROOT","effective_date":"2026-01-01","request_id":"r1","patch":{"name":"New Root"}}`
+	req := httptest.NewRequest(http.MethodPost, "/org/api/org-units/write", bytes.NewBufferString(body))
+	req = req.WithContext(withPrincipal(withTenant(req.Context(), Tenant{ID: "t1"}), Principal{ID: "principal-a"}))
+	rec := httptest.NewRecorder()
+	handleOrgUnitsWriteAPI(rec, req, svc, orgUnitScopeDeps{store: store, runtime: runtime})
+	if rec.Code != http.StatusForbidden || !strings.Contains(rec.Body.String(), "authz_scope_forbidden") {
+		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestHandleOrgUnitsWriteAPI_InvalidEffectiveDateReturns400BeforeScopeCheck(t *testing.T) {
+	store := newOrgUnitMemoryStore()
+	ctx := context.Background()
+	root, err := store.CreateNodeCurrent(ctx, "t1", "2026-01-01", "ROOT", "Root", "", true)
+	if err != nil {
+		t.Fatalf("create root err=%v", err)
+	}
+	runtime := &orgUnitScopeRuntimeStub{scopes: []principalOrgScope{{
+		OrgNodeKey:         root.ID,
+		IncludeDescendants: true,
+	}}}
+	svc := fakeOrgUnitWriteService{
+		writeFn: func(context.Context, string, orgunitservices.WriteOrgUnitRequest) (orgunitservices.OrgUnitWriteResult, error) {
+			t.Fatal("write should not be called when effective_date is invalid")
+			return orgunitservices.OrgUnitWriteResult{}, nil
+		},
+	}
+
+	body := `{"intent":"correct","org_code":"ROOT","effective_date":"bad","target_effective_date":"2026-01-01","request_id":"r1","patch":{"name":"Root 2"}}`
+	req := httptest.NewRequest(http.MethodPost, "/org/api/org-units/write", bytes.NewBufferString(body))
+	req = req.WithContext(withPrincipal(withTenant(req.Context(), Tenant{ID: "t1"}), Principal{ID: "principal-a"}))
+	rec := httptest.NewRecorder()
+	handleOrgUnitsWriteAPI(rec, req, svc, orgUnitScopeDeps{store: store, runtime: runtime})
+	if rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), orgUnitErrEffectiveDate) {
+		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestHandleOrgUnitsWriteAPI_CorrectScopesTargetByTargetEffectiveDateAndParentByEffectiveDate(t *testing.T) {
+	targetKey, err := encodeOrgNodeKeyFromID(10000001)
+	if err != nil {
+		t.Fatalf("target key err=%v", err)
+	}
+	parentKey, err := encodeOrgNodeKeyFromID(10000002)
+	if err != nil {
+		t.Fatalf("parent key err=%v", err)
+	}
+	store := &resolveOrgCodeStore{
+		resolveID: 10000001,
+		resolveCodesByNodeKey: map[string]string{
+			targetKey: "TARGET",
+			parentKey: "PARENT",
+		},
+		listChildren: []OrgUnitChild{{
+			OrgID:      10000002,
+			OrgNodeKey: parentKey,
+			OrgCode:    "PARENT",
+			Name:       "Parent",
+			Status:     orgUnitListStatusActive,
+		}},
+	}
+	runtime := &orgUnitScopeRuntimeStub{scopes: []principalOrgScope{{
+		OrgNodeKey:         targetKey,
+		IncludeDescendants: true,
+	}}}
+	svc := fakeOrgUnitWriteService{
+		writeFn: func(_ context.Context, tenantID string, req orgunitservices.WriteOrgUnitRequest) (orgunitservices.OrgUnitWriteResult, error) {
+			if tenantID != "t1" || req.EffectiveDate != "2026-02-01" || req.TargetEffectiveDate != "2026-01-01" {
+				t.Fatalf("tenant=%s req=%+v", tenantID, req)
+			}
+			return orgunitservices.OrgUnitWriteResult{
+				OrgCode:       req.OrgCode,
+				EffectiveDate: req.EffectiveDate,
+				EventType:     "CORRECT_EVENT",
+				EventUUID:     "evt-correct",
+			}, nil
+		},
+	}
+
+	body := `{"intent":"correct","org_code":"TARGET","effective_date":"2026-02-01","target_effective_date":"2026-01-01","request_id":"r1","patch":{"parent_org_code":"PARENT"}}`
+	req := httptest.NewRequest(http.MethodPost, "/org/api/org-units/write", bytes.NewBufferString(body))
+	req = req.WithContext(withPrincipal(withTenant(req.Context(), Tenant{ID: "t1"}), Principal{ID: "principal-a"}))
+	rec := httptest.NewRecorder()
+	handleOrgUnitsWriteAPI(rec, req, svc, orgUnitScopeDeps{store: store, runtime: runtime})
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+	}
+	if !sawOrgUnitDetailsLookup(store, targetKey, "2026-01-01") {
+		t.Fatalf("target scope lookup missing target_effective_date; keys=%v asOf=%v", store.detailsByNodeKeyArgs, store.detailsByNodeKeyAsOfArgs)
+	}
+	if !sawOrgUnitDetailsLookup(store, parentKey, "2026-02-01") {
+		t.Fatalf("parent scope lookup missing effective_date; keys=%v asOf=%v", store.detailsByNodeKeyArgs, store.detailsByNodeKeyAsOfArgs)
+	}
+}
+
+func sawOrgUnitDetailsLookup(store *resolveOrgCodeStore, orgNodeKey string, asOf string) bool {
+	for idx, key := range store.detailsByNodeKeyArgs {
+		if key == orgNodeKey && idx < len(store.detailsByNodeKeyAsOfArgs) && store.detailsByNodeKeyAsOfArgs[idx] == asOf {
+			return true
+		}
+	}
+	return false
 }

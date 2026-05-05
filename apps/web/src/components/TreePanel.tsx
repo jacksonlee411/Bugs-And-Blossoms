@@ -15,6 +15,8 @@ interface TreePanelProps {
   onSelect: (nodeId: string) => void
   onExpand?: (nodeId: string) => void
   selectedItemId?: string
+  expandedItemIds?: string[]
+  onExpandedItemIdsChange?: (itemIds: string[]) => void
   loading?: boolean
   loadingLabel: string
   emptyLabel: string
@@ -57,6 +59,8 @@ export function TreePanel({
   onSelect,
   onExpand,
   selectedItemId,
+  expandedItemIds,
+  onExpandedItemIdsChange,
   loading = false,
   loadingLabel,
   emptyLabel,
@@ -73,13 +77,19 @@ export function TreePanel({
         </Typography>
       ) : (
         <SimpleTreeView
+          expandedItems={expandedItemIds}
           onItemExpansionToggle={(_event, itemId, isExpanded) => {
-            if (!isExpanded || !onExpand) {
-              return
+            if (onExpandedItemIdsChange && expandedItemIds) {
+              const nextItems = isExpanded
+                ? Array.from(new Set([...expandedItemIds, itemId]))
+                : expandedItemIds.filter((expandedItemId) => expandedItemId !== itemId)
+              onExpandedItemIdsChange(nextItems)
             }
-            onExpand(itemId)
+            if (isExpanded && onExpand) {
+              onExpand(itemId)
+            }
           }}
-          selectedItems={selectedItemId}
+          selectedItems={selectedItemId ?? null}
         >
           {renderNodes(nodes, onSelect)}
         </SimpleTreeView>

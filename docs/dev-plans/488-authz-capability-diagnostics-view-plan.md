@@ -1,13 +1,13 @@
 # DEV-PLAN-488：授权项诊断视图方案
 
-**状态**: 后置规划中；482/483/484 事实基础、482A/485 首批只读闭环、487/489/489A 后端运行时闭环与 481 首批 UI 保存/E2E 已完成，诊断页面/API 仍未实施（2026-05-02 CST）
+**状态**: 后置规划中；482/483/484 事实基础、482A/485 首批只读闭环、487/489/489A 后端运行时闭环、481 首批 UI 保存/E2E 与 490 API-first 首期硬切换及评审修复已完成，诊断页面/API 仍未实施（2026-05-03 CST）
 
 ## 0. 适用范围与评审分级
 
 - **评审分级**：`T2`
 - **范围一句话**：后置新增一个只读诊断视图，用于查看 authz capability registry 中未进入普通功能授权项候选列表的能力及原因，避免不可分配、停用、无覆盖、系统内部能力混入角色配置主路径。
 - **关联模块/目录**：`apps/web/src/**`、`internal/server/**`、`pkg/authz/**`、`scripts/authz/**`
-- **关联计划/标准**：`AGENTS.md`、`DEV-PLAN-000`、`DEV-PLAN-001`、`DEV-PLAN-012`、`DEV-PLAN-022`、`DEV-PLAN-480`、`DEV-PLAN-480A`、`DEV-PLAN-482`、`DEV-PLAN-482A`、`DEV-PLAN-483`、`DEV-PLAN-484`、`DEV-PLAN-485`
+- **关联计划/标准**：`AGENTS.md`、`DEV-PLAN-000`、`DEV-PLAN-001`、`DEV-PLAN-012`、`DEV-PLAN-022`、`DEV-PLAN-480`、`DEV-PLAN-480A`、`DEV-PLAN-482`、`DEV-PLAN-482A`、`DEV-PLAN-483`、`DEV-PLAN-484`、`DEV-PLAN-485`、`DEV-PLAN-490`
 - **用户入口/触点**：授权管理菜单中的 `授权项诊断` 只读页面、482 authz capability options/diagnostics 查询接口、484 单一覆盖事实聚合能力
 
 ### 0.1 Simple > Easy 三问
@@ -20,7 +20,7 @@
 
 `DEV-PLAN-482` 已冻结功能授权项 options API 默认口径：只输出启用、可分配、tenant API surface 且有当前实现覆盖的能力。这个口径适合角色定义和普通功能授权项页面，因为管理员看到的每一项都应该可授予、可执行。
 
-488 不应成为首批授权管理闭环的前置条件。当前 484 覆盖事实枚举与 lint 基础已完成，482A `关联 API` 弹窗和 485 `API 授权目录` 已消费同一聚合源；487/489/489A 已完成后端保存与运行时授权闭环，481 已补齐首批 UI 保存交互与 A/B 组织范围 E2E；490 CubeBox API tool builder 仍待后续接入。488 只在这些只读目录与运行时闭环稳定后提供治理排查视图。
+488 不应成为首批授权管理闭环的前置条件。当前 484 覆盖事实枚举与 lint 基础已完成，482A `关联 API` 弹窗和 485 `API 授权目录` 已消费同一聚合源；487/489/489A 已完成后端保存与运行时授权闭环，481 已补齐首批 UI 保存交互与 A/B 组织范围 E2E；490 CubeBox API tool builder 与 `API_CALLS` runtime 首期硬切换已完成。488 只在这些只读目录与运行时闭环稳定后提供治理排查视图。
 
 但排查时还需要回答另一类问题：
 
@@ -243,3 +243,4 @@ GET /iam/api/authz/capability-diagnostics
 - 2026-05-01 23:10 CST：补齐文档状态登记；482A 功能授权项页面、关联 API 弹窗与 485 API 授权目录首批只读闭环已完成，但 488 诊断页面/API 仍保持未实施，不进入 P2 完成口径。
 - 2026-05-02 CST：登记后端运行时前置状态；487/489/489A 已完成普通 tenant DB role capability SoT、principal 多角色 union、用户授权组织范围 SoT、orgunit/CubeBox orgunit scope 裁剪与 `make check authz-role-union` 反回流门禁。488 仍保持后置规划，诊断页面/API 不进入 480A P3/P4 完成口径。
 - 2026-05-02 CST：同步 481 首批 UI 保存与 A/B 组织范围 E2E 完成事实；488 仍保持后置规划，诊断页面/API 不进入首批用户可见闭环完成口径。
+- 2026-05-03 CST：490 首期 API-first hard cutover 及评审修复已完成；CubeBox overlay 已接入 484 聚合源，485 `丘宝可调用` 来自同源投影，active runtime 不再接受 executor 业务计划；`all_org_units`、search candidate 澄清与 `depends_on` 漂移已补齐。488 现为 480A P6 后续治理项，诊断页面/API 仍未实施。

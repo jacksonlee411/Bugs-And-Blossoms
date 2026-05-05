@@ -1,13 +1,13 @@
 # DEV-PLAN-480：EHR 授权体系总体方案
 
-**状态**: 授权体系蓝图持续推进；480A P1/P2 只读治理面、487/489/489A 后端运行时闭环、481 UI 保存交互与 A/B 组织范围 E2E 已落地，490 API-first、488 诊断与字段级授权仍待后续（2026-05-02 CST）
+**状态**: 授权体系蓝图持续推进；480A P1/P2 只读治理面、487/489/489A 后端运行时闭环、481 UI 保存交互与 A/B 组织范围 E2E、490 API-first 首期硬切换及评审修复已落地，491 Phase A/B/C/D 已完成 selector facade、组件族与主要组织选择入口接入，更广 491/492 联合 E2E 已覆盖主要 selector 入口；492 普通 list/grid 与 ext 字段 list/grid 读取已下沉到 ReadService，并完成 SQL 级 scoped pagination、ext parent scope fail-closed、adapter scope path 补齐与 details/write scope check 下沉；488 诊断、字段级授权与 492 剩余局部读取 helper 退场仍待后续（2026-05-04 CST）
 
 ## 0. 适用范围与评审分级
 
 - **评审分级**：`T2`
 - **范围一句话**：把 EHR 授权从当前 route/object/action 级 Casbin 门禁，升级为覆盖 API 能力、组织数据范围、对象实例、字段和 AI 代用户执行的运行时授权体系蓝图；CubeBox 业务工具链当前统一走 `DEV-PLAN-490` 的 API-first 路线，不再规划 executor UI 展示。
 - **关联模块/目录**：`pkg/authz/**`、`config/access/**`、`scripts/authz/**`、`internal/server/authz_middleware.go`、`modules/*/services`、`modules/*/infrastructure`、`modules/cubebox/**`、`internal/server/cubebox_*`、`apps/web/src/**`
-- **关联计划/标准**：`AGENTS.md`、`DEV-PLAN-000`、`DEV-PLAN-001`、`DEV-PLAN-011`、`DEV-PLAN-012`、`DEV-PLAN-015`、`DEV-PLAN-017`、`DEV-PLAN-019`、`DEV-PLAN-020`、`DEV-PLAN-022`、`DEV-PLAN-032`、`DEV-PLAN-300`、`DEV-PLAN-304`、`DEV-PLAN-460`、`DEV-PLAN-468`、`DEV-PLAN-480A`、`DEV-PLAN-481`、`DEV-PLAN-482`、`DEV-PLAN-482A`、`DEV-PLAN-483`、`DEV-PLAN-484`、`DEV-PLAN-487`、`DEV-PLAN-488`、`DEV-PLAN-489`、`DEV-PLAN-489A`
+- **关联计划/标准**：`AGENTS.md`、`DEV-PLAN-000`、`DEV-PLAN-001`、`DEV-PLAN-011`、`DEV-PLAN-012`、`DEV-PLAN-015`、`DEV-PLAN-017`、`DEV-PLAN-019`、`DEV-PLAN-020`、`DEV-PLAN-022`、`DEV-PLAN-032`、`DEV-PLAN-300`、`DEV-PLAN-304`、`DEV-PLAN-460`、`DEV-PLAN-468`、`DEV-PLAN-480A`、`DEV-PLAN-481`、`DEV-PLAN-482`、`DEV-PLAN-482A`、`DEV-PLAN-483`、`DEV-PLAN-484`、`DEV-PLAN-485`、`DEV-PLAN-486`、`DEV-PLAN-487`、`DEV-PLAN-488`、`DEV-PLAN-489`、`DEV-PLAN-489A`、`DEV-PLAN-490`
 - **用户入口/触点**：授权管理配置页、功能授权项、API 授权目录、后置授权项诊断、所有受保护 HTTP API 与 CubeBox API-first 工具调用链
 
 ### 0.1 Simple > Easy 三问
@@ -20,7 +20,7 @@
 
 - `DEV-PLAN-022` 已冻结 Casbin 工具链、role-based subject、tenant domain、object/action registry 与 `AUTHZ_MODE` 三态；当前 `pkg/authz.Authorizer.Authorize(subject, domain, object, action)` 能支撑 API 能力授权。
 - 当前普通 tenant 能力授权已由 `DEV-PLAN-487/489/489A` 切到 DB role capability SoT + principal 多角色 union；`config/access/policy.csv` 仅保留 anonymous/superadmin/bootstrap/static/system surface。
-- 当前 `internal/server/authz_middleware.go` 以 route 映射 object/action，并对普通 tenant 受保护请求调用 runtime store；CubeBox 业务工具链后续按 `DEV-PLAN-490` 从 484 单一覆盖事实聚合源与 485 API 授权目录投影筛选可调用 HTTP API。
+- 当前 `internal/server/authz_middleware.go` 以 route 映射 object/action，并对普通 tenant 受保护请求调用 runtime store；CubeBox 业务工具链已按 `DEV-PLAN-490` 从 484 单一覆盖事实聚合源与 485 API 授权目录投影筛选可调用 HTTP API。
 - `DEV-PLAN-486` 的 executor 路线只保留为活体警示；当前方案不再以 executor registry 作为业务工具契约。
 - 当前 `ExecuteRequest` 有 `TenantID`、`PrincipalID`、`ConversationID`；普通 tenant EHR 授权不再从 session 单 `role_slug` 推导 subject，而是由 489A runtime 从 `principal_role_assignments` 读取角色集合做 capability union。
 - 历史前端 `RequirePermission` / `permissionKey` 只基于本地 `VITE_PERMISSIONS` 做导航和页面提示，默认空权限时甚至是 `*`；它不是安全边界，且按 `DEV-PLAN-483` 必须硬删除旧 key、旧字段和构建期权限 fallback。现行前端只能通过 `requiredCapabilityKey` 消费 canonical `object:action` authz capability key，当前用户集合字段只能是 `authz_capability_keys`。
@@ -45,7 +45,7 @@ EHR 系统的授权不能只停留在“页面能不能进”或“API 能不能
 2. [ ] 评估并明确当前 `pkg/authz` 的改造边界：Casbin 不替换；核心四元组可保留；需要增加统一 Request/Decision 门面、PIP 数据范围 resolver 与服务端裁决摘要。
 3. [ ] 明确组织数据范围授权方案，覆盖“用户 A 能看整个飞虫与鲜花，用户 B 只能查看鲜花公司”这类同租户内可见范围差异。
 4. [ ] 明确 registry 白名单、历史前端 `permissionKey`、知识包、模型输出、RLS、导航可见性都不等于授权。
-5. [ ] 将 CubeBox 业务工具授权收敛到 `DEV-PLAN-490`：基于 484 单一覆盖事实聚合源、485 API 授权目录投影、当前用户权限和业务 HTTP API 执行，不走 executor UI 或第二业务工具面。
+5. [X] 将 CubeBox 业务工具授权收敛到 `DEV-PLAN-490`：基于 484 单一覆盖事实聚合源、485 API 授权目录投影、当前用户权限和业务 HTTP API 执行，不走 executor UI 或第二业务工具面。
 6. [ ] 增加 UI 设计方案：首批只覆盖角色管理、用户授权、功能授权项、API 授权目录；授权项诊断按 `DEV-PLAN-488` 后置，不新增普通用户错误页、权限摘要页、CubeBox 授权反馈页或字段脱敏运行态页面。
 7. [ ] 定义实施切片、测试分层和验收门禁，避免一次性大爆炸实现。
 
@@ -100,7 +100,7 @@ EHR 系统的授权不能只停留在“页面能不能进”或“API 能不能
   - `DEV-PLAN-011` 可支撑 480：Go、Casbin、Go test、lint、authz pack/test/lint、前端 MUI/React/Vite 工具链均在仓库基线内。
   - 不需要新增 policy engine 或外部基础设施。
   - 后续若落地数据范围 SoT，会命中 DB/schema/sqlc 门禁，但这不是工具链缺口。
-- 当前 authz lint 已按 `DEV-PLAN-484` 纳入 route requirement、registry、policy、CubeBox API tool overlay 与 DB role seed 扩展点的覆盖事实聚合和漂移检查；CubeBox API tool overlay 与 DB role seed 当前按空集合处理，后续 `DEV-PLAN-490/487` 必须接入同一聚合源。旧权限键回流已按 `DEV-PLAN-483` 进入 authz lint 扫描阻断。
+- 当前 authz lint 已按 `DEV-PLAN-484` 纳入 route requirement、registry、policy、CubeBox API tool overlay 与 DB role seed 扩展点的覆盖事实聚合和漂移检查；487 DB role seed 与 490 CubeBox API tool overlay 已接入同一聚合源。旧权限键回流已按 `DEV-PLAN-483` 进入 authz lint 扫描阻断。
 
 ### 2.4.1 当前授权模块是否需要改造
 
@@ -294,7 +294,7 @@ CubeBox 的规则必须更严格，因为模型会生成执行计划。当前路
 - **决策 6：覆盖事实只能有一个枚举源**
   - **备选 A**：482A、485、488 各自解析 route/registry/policy。拒绝，会把“功能授权项”“API 授权目录”“授权项诊断”做成三套覆盖判断。
   - **选定理由**：`DEV-PLAN-484` 拥有 route/tool overlay/registry/policy 的唯一服务端覆盖事实枚举与 lint；482 options、482A 关联 API、485 API 授权目录、490 CubeBox tool builder 和 488 授权项诊断只能消费同一聚合函数或同一枚举结果。
-  - **实施顺序**：先完成 484 覆盖事实枚举与 lint，再让 482 options、482A 弹窗、485 目录和 490 tool builder 接入同源聚合；488 诊断页后置，不作为首批闭环前置。
+  - **实施顺序**：先完成 484 覆盖事实枚举与 lint，再让 482 options、482A 弹窗、485 目录和 490 tool builder 接入同源聚合；当前 490 首期接入已完成，488 诊断页后置，不作为首批闭环前置。
 
 ## 4. 数据模型、状态模型与约束
 
@@ -413,10 +413,10 @@ Decision 的逻辑字段：
 
 ### 6.2 P1：CubeBox API-first 工具授权
 
-1. [ ] 按 `DEV-PLAN-490` 从 484 单一覆盖事实聚合源与 485 API 授权目录投影派生 CubeBox 可调用 HTTP API。
-2. [ ] API runner 以当前用户上下文调用既有业务 HTTP API 或等价 in-process route adapter。
-3. [ ] 未登记 method/path、无权限、参数非法时 fail-closed。
-4. [ ] 补未知 path、权限拒绝、参数校验和多 step 中途拒绝测试。
+1. [X] 按 `DEV-PLAN-490` 从 484 单一覆盖事实聚合源与 485 API 授权目录投影派生 CubeBox 可调用 HTTP API。
+2. [X] API runner 以当前用户上下文调用既有业务 HTTP API 或等价 route PEP facade。
+3. [X] 未登记 method/path、无权限、参数非法时 fail-closed。
+4. [X] 补未知 path、权限拒绝、参数校验和多 step 中途拒绝测试。
 
 ### 6.3 P2：管理 UI 与数据范围配置闭环
 
@@ -430,7 +430,7 @@ Decision 的逻辑字段：
 
 1. [X] 在 orgunit 读路径统一注入 scope filter。
 2. [X] 服务端测试与 A/B E2E 覆盖全范围/受限范围用户。
-3. [X] CubeBox orgunit 查询与普通 orgunit API 复用同一 scope provider；490 API-first 全面迁移待后续。
+3. [X] CubeBox orgunit 查询与普通 orgunit API 复用同一 scope provider；490 API-first 首期硬切换已完成。
 4. [X] details/audit/write 越界 fail-closed，`403/404` 策略在 `DEV-PLAN-489` 中冻结。
 
 ### 6.5 P4：字段级授权
@@ -460,10 +460,10 @@ Decision 的逻辑字段：
 1. [ ] 480 文档作为 EHR 授权体系 SSOT 被 AGENTS Doc Map 收录。
 2. [ ] 当前授权模块改造边界明确：保留 Casbin，补 Request/Decision/PIP，不替换引擎。
 3. [X] A/B 组织数据范围示例已有明确用户可见闭环：用户授权页可保存范围，list/search 裁剪，details/audit/write fail-closed，普通 API 与 CubeBox orgunit 查询结果一致。
-4. [ ] CubeBox API-first 工具授权切片具备可实施步骤和测试要求。
+4. [X] CubeBox API-first 工具授权切片具备可实施步骤和测试要求，且首期 orgunit 只读 API 已按 `DEV-PLAN-490` 落地。
 5. [ ] UI 设计只覆盖角色管理、用户授权、功能授权项和 API 授权目录；不包含权限摘要页、范围提示、字段脱敏运行态、CubeBox 授权反馈或普通用户错误页。
 6. [ ] 实施切片按 P0-P4 分批，未把 DB schema 或在线策略管理混入首批文档变更。
-7. [ ] 文档门禁 `make check doc` 通过。
+7. [X] 文档门禁 `make check doc` 通过。
 
 ## 9. Readiness 证据
 
@@ -474,3 +474,8 @@ Decision 的逻辑字段：
 - `make authz-pack && make authz-test && make authz-lint`
 - 首批 CubeBox API-first 工具授权测试结果
 - 用户授权组织范围保存/校验测试、A/B 数据范围服务端集成测试或 CubeBox API-first 一致性验证结果
+
+### 9.1 当前验证摘记
+
+- 2026-05-03 CST：490 首期 API-first hard cutover 已完成；四个 orgunit 只读 API 进入 CubeBox API tool overlay，active runtime 切为 `API_CALLS`，旧 `READ_PLAN` / 裸 `ReadPlan` / `executor_key` 成功路径已退出 active runtime。随后完成评审修复：`all_org_units=true` 透传到普通 Web API parser，search 多候选返回澄清且唯一 scope 可见候选直接返回，runner 投影 `PresentedCandidates`，knowledge pack 阻断跨 turn `depends_on`。已验证 `make check cubebox-api-first`、`make authz-pack && make authz-test && make authz-lint`、Go fmt/vet/lint/test、routing/doc/no-legacy/chat-surface/root-surface 等命中门禁；491 selector/UI、488 诊断与字段级授权仍为后续范围。
+- 2026-05-04 CST：491 Phase A/B/C/D 已完成前端 selector facade、`OrgUnitTreeSelector` / picker / field 最小组件族与主要组织选择入口接入；`AuthzRolePages.tsx` 组织范围行已移除 `listOrgUnits()` 一级候选并切到 `OrgUnitTreeField`，`OrgUnitsPage` 创建组织上级组织与 `OrgUnitDetailsPage` 编辑上级组织也已切到同一 selector，可选择非根节点并按既有 payload 保存。safe path 深层/跨分支测试已补，更广 `dev491` E2E 已覆盖用户授权页、创建组织与组织详情页父组织 selector 的可见范围、范围外搜索与直接提交 fail-closed。随后 492 普通 list/grid 与 ext 字段 list/grid 读取继续下沉到 `OrgUnitReadService.List`，HTTP list/grid 分支已消费 ReadService，adapter page 原语已将 scope 裁剪、filter/sort、count、limit/offset 下推到 store pager；评审修复已补 ext parent scope fail-closed 与 adapter page row path 补齐，details/write scope check 已复用 ReadService `Resolve`。该进展不改变 480/480A P5 完成边界；488 诊断、字段级授权与 492 剩余局部读取 helper 退场仍为后续范围。

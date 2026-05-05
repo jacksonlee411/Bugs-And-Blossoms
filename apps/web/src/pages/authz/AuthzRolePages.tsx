@@ -39,17 +39,17 @@ import {
   type PrincipalOrgScope
 } from '../../api/authz'
 import { ApiClientError } from '../../api/errors'
-import { listOrgUnits, type OrgUnitAPIItem } from '../../api/orgUnits'
+import type { OrgUnitSelectorNode } from '../../api/orgUnitSelector'
 import { useAppPreferences } from '../../app/providers/AppPreferencesContext'
 import type { AuthzCapabilityKey } from '../../authz/capabilities'
 import { DataGridPage } from '../../components/DataGridPage'
+import { OrgUnitTreeField } from '../../components/OrgUnitTreeSelector'
 import { PageHeader } from '../../components/PageHeader'
 import { todayISODate } from '../../utils/readViewState'
 
 const EMPTY_CAPABILITIES: AuthzCapabilityOption[] = []
 const EMPTY_ROLES: AuthzRoleDefinition[] = []
 const EMPTY_PRINCIPALS: PrincipalAssignmentCandidate[] = []
-const EMPTY_ORG_UNITS: OrgUnitAPIItem[] = []
 
 interface RoleDraft {
   mode: 'create' | 'edit'
@@ -155,10 +155,6 @@ function principalOptionLabel(principal: PrincipalAssignmentCandidate): string {
   return displayName ? `${principal.email} · ${displayName}` : principal.email
 }
 
-function orgOptionLabel(org: OrgUnitAPIItem): string {
-  return `${org.name} (${org.org_code})`
-}
-
 function selectedRoleSlugs(rows: AssignmentRoleRow[]): string[] {
   return rows.map((row) => row.roleSlug.trim()).filter((value) => value.length > 0)
 }
@@ -197,6 +193,21 @@ function buildScopePayload(rows: AssignmentOrgScopeRow[]): PrincipalOrgScope[] {
       include_descendants: row.includeDescendants
     }))
     .filter((row) => (row.org_code?.length ?? 0) > 0 || (row.org_node_key?.length ?? 0) > 0)
+}
+
+function orgScopeRowSelectorValue(row: AssignmentOrgScopeRow): OrgUnitSelectorNode | null {
+  const orgCode = row.orgCode.trim()
+  if (!orgCode) {
+    return null
+  }
+  const orgName = row.orgName.trim() || orgCode
+  return {
+    org_code: orgCode,
+    org_node_key: row.orgNodeKey.trim(),
+    name: orgName,
+    status: 'active',
+    has_visible_children: false
+  }
 }
 
 export function RoleManagementPage() {
@@ -466,15 +477,8 @@ export function UserAuthorizationPage() {
     queryKey: ['authz-roles'],
     queryFn: () => listAuthzRoles()
   })
-  const orgUnitsQuery = useQuery({
-    queryKey: ['org-units', 'authz-scope-options', currentDate],
-    queryFn: () => listOrgUnits({ asOf: currentDate, includeDisabled: false }),
-    staleTime: 60_000
-  })
-
   const principals = principalsQuery.data?.principals ?? EMPTY_PRINCIPALS
   const roles = rolesQuery.data?.roles ?? EMPTY_ROLES
-  const orgUnits = orgUnitsQuery.data?.org_units ?? EMPTY_ORG_UNITS
   const rolesBySlug = useMemo(() => new Map(roles.map((role) => [role.role_slug, role])), [roles])
   const activePrincipalID = selectedPrincipalID || principals.at(0)?.principal_id || ''
   const assignmentQueryKey = ['authz-user-assignment', activePrincipalID] as const
@@ -527,22 +531,20 @@ export function UserAuthorizationPage() {
   }, [roleRows, roles, updateDraft])
 
   const addScopeRow = useCallback(() => {
-    const used = new Set(scopeRows.map((row) => row.orgCode).filter((value) => value.length > 0))
-    const nextOrg = orgUnits.find((org) => !used.has(org.org_code))
     updateDraft((current) => ({
       ...current,
       scopeRows: [
         ...current.scopeRows,
         {
           id: `scope-${Date.now()}`,
-          orgCode: nextOrg?.org_code ?? '',
+          orgCode: '',
           orgNodeKey: '',
-          orgName: nextOrg?.name ?? '',
+          orgName: '',
           includeDescendants: true
         }
       ]
     }))
-  }, [orgUnits, scopeRows, updateDraft])
+  }, [updateDraft])
 
   const roleColumns = useMemo<GridColDef<AssignmentRoleRow>[]>(() => [
     {
@@ -611,26 +613,26 @@ export function UserAuthorizationPage() {
       minWidth: 280,
       flex: 1,
       renderCell: (params) => {
-        const value = orgUnits.find((org) => org.org_code === params.row.orgCode) ?? null
         return (
-          <Autocomplete
-            fullWidth
-            getOptionLabel={orgOptionLabel}
-            isOptionEqualToValue={(option, selected) => option.org_code === selected.org_code}
-            loading={orgUnitsQuery.isFetching}
-            onChange={(_, option) => {
+          <OrgUnitTreeField
+            asOf={currentDate}
+            label={t('authz_assignment_org')}
+            onChange={(option) => {
               updateDraft((current) => ({
                 ...current,
                 scopeRows: current.scopeRows.map((row) => (
                   row.id === params.row.id
-                    ? { ...row, orgNodeKey: '', orgCode: option?.org_code ?? '', orgName: option?.name ?? '' }
+                    ? {
+                        ...row,
+                        orgCode: option.org_code,
+                        orgNodeKey: option.org_node_key,
+                        orgName: option.name
+                      }
                     : row
                 ))
               }))
             }}
-            options={orgUnits}
-            renderInput={(inputParams) => <TextField {...inputParams} label={t('authz_assignment_org')} size='small' />}
-            value={value}
+            value={orgScopeRowSelectorValue(params.row)}
           />
         )
       }
@@ -678,7 +680,7 @@ export function UserAuthorizationPage() {
         </IconButton>
       )
     }
-  ], [orgUnits, orgUnitsQuery.isFetching, t, updateDraft])
+  ], [currentDate, t, updateDraft])
 
   const saveDisabled =
     !activePrincipalID ||
@@ -730,9 +732,9 @@ export function UserAuthorizationPage() {
           />
         </Box>
 
-        {principalsQuery.error || rolesQuery.error || assignmentQuery.error || orgUnitsQuery.error ? (
+        {principalsQuery.error || rolesQuery.error || assignmentQuery.error ? (
           <Alert severity='error'>
-            {getErrorMessage(principalsQuery.error ?? rolesQuery.error ?? assignmentQuery.error ?? orgUnitsQuery.error)}
+            {getErrorMessage(principalsQuery.error ?? rolesQuery.error ?? assignmentQuery.error)}
           </Alert>
         ) : null}
         {errorMessage ? <Alert severity='error'>{errorMessage}</Alert> : null}
@@ -769,7 +771,7 @@ export function UserAuthorizationPage() {
                 <DataGridPage
                   columns={scopeColumns}
                   gridProps={{ hideFooter: true, sx: { minHeight: 360 } }}
-                  loading={orgUnitsQuery.isFetching || assignmentQuery.isFetching}
+                  loading={assignmentQuery.isFetching}
                   loadingLabel={t('text_loading')}
                   noRowsLabel={t('authz_assignment_org_scopes_empty')}
                   rows={scopeRows}

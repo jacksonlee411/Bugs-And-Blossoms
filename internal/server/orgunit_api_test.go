@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"strings"
 
 	orgunittypes "github.com/jacksonlee411/Bugs-And-Blossoms/modules/orgunit/domain/types"
 	orgunitservices "github.com/jacksonlee411/Bugs-And-Blossoms/modules/orgunit/services"
@@ -14,11 +15,14 @@ type resolveOrgCodeStore struct {
 	setErr  error
 	setArgs []string
 
-	listChildrenByNodeKeyArg string
-	detailsByNodeKeyArg      string
-	versionsByNodeKeyArg     string
-	auditByNodeKeyArg        string
-	resolveCodeByNodeKeyArg  string
+	listChildrenByNodeKeyArg  string
+	listChildrenByNodeKeyArgs []string
+	detailsByNodeKeyArg       string
+	detailsByNodeKeyArgs      []string
+	detailsByNodeKeyAsOfArgs  []string
+	versionsByNodeKeyArg      string
+	auditByNodeKeyArg         string
+	resolveCodeByNodeKeyArg   string
 
 	listNodes    []OrgUnitNode
 	listNodesErr error
@@ -26,8 +30,10 @@ type resolveOrgCodeStore struct {
 	listChildren    []OrgUnitChild
 	listChildrenErr error
 
-	resolveCodes    map[int]string
-	resolveCodesErr error
+	resolveCodes             map[int]string
+	resolveCodesErr          error
+	resolveCodesByNodeKey    map[string]string
+	resolveCodesByNodeKeyErr error
 
 	getNodeDetails    OrgUnitNodeDetails
 	getNodeDetailsErr error
@@ -118,6 +124,12 @@ func (s *resolveOrgCodeStore) ResolveOrgCodes(context.Context, string, []int) (m
 }
 
 func (s *resolveOrgCodeStore) ResolveOrgCodesByNodeKeys(ctx context.Context, tenantID string, orgNodeKeys []string) (map[string]string, error) {
+	if s.resolveCodesByNodeKeyErr != nil {
+		return nil, s.resolveCodesByNodeKeyErr
+	}
+	if s.resolveCodesByNodeKey != nil {
+		return s.resolveCodesByNodeKey, nil
+	}
 	if s.resolveCodesErr != nil {
 		return nil, s.resolveCodesErr
 	}
@@ -126,6 +138,23 @@ func (s *resolveOrgCodeStore) ResolveOrgCodesByNodeKeys(ctx context.Context, ten
 		orgID, err := decodeOrgNodeKeyToID(orgNodeKey)
 		if err != nil {
 			return nil, err
+		}
+		if s.resolveID > 0 && orgID == s.resolveID {
+			out[orgNodeKey] = "A001"
+			continue
+		}
+		for _, child := range s.listChildren {
+			childNodeKey, err := orgNodeKeyFromCompat(child.OrgNodeKey, child.OrgID)
+			if err != nil {
+				return nil, err
+			}
+			if childNodeKey == orgNodeKey {
+				out[orgNodeKey] = child.OrgCode
+				continue
+			}
+		}
+		if _, ok := out[orgNodeKey]; ok {
+			continue
 		}
 		code, err := s.ResolveOrgCode(ctx, tenantID, orgID)
 		if err != nil {
@@ -145,6 +174,7 @@ func (s *resolveOrgCodeStore) ListChildren(context.Context, string, int, string)
 
 func (s *resolveOrgCodeStore) ListChildrenByNodeKey(_ context.Context, _ string, parentOrgNodeKey string, _ string) ([]OrgUnitChild, error) {
 	s.listChildrenByNodeKeyArg = parentOrgNodeKey
+	s.listChildrenByNodeKeyArgs = append(s.listChildrenByNodeKeyArgs, parentOrgNodeKey)
 	if s.listChildrenErr != nil {
 		return nil, s.listChildrenErr
 	}
@@ -158,10 +188,50 @@ func (s *resolveOrgCodeStore) GetNodeDetails(context.Context, string, int, strin
 	return s.getNodeDetails, nil
 }
 
-func (s *resolveOrgCodeStore) GetNodeDetailsByNodeKey(_ context.Context, _ string, orgNodeKey string, _ string) (OrgUnitNodeDetails, error) {
+func (s *resolveOrgCodeStore) GetNodeDetailsByNodeKey(_ context.Context, _ string, orgNodeKey string, asOf string) (OrgUnitNodeDetails, error) {
 	s.detailsByNodeKeyArg = orgNodeKey
+	s.detailsByNodeKeyArgs = append(s.detailsByNodeKeyArgs, strings.TrimSpace(orgNodeKey))
+	s.detailsByNodeKeyAsOfArgs = append(s.detailsByNodeKeyAsOfArgs, strings.TrimSpace(asOf))
 	if s.getNodeDetailsErr != nil {
 		return OrgUnitNodeDetails{}, s.getNodeDetailsErr
+	}
+	if strings.TrimSpace(s.getNodeDetails.OrgCode) == "" {
+		var parentPath []string
+		if s.resolveID > 0 {
+			resolveNodeKey, err := encodeOrgNodeKeyFromID(s.resolveID)
+			if err != nil {
+				return OrgUnitNodeDetails{}, err
+			}
+			parentPath = []string{resolveNodeKey}
+			if resolveNodeKey == orgNodeKey {
+				return OrgUnitNodeDetails{
+					OrgID:           s.resolveID,
+					OrgNodeKey:      resolveNodeKey,
+					OrgCode:         "A001",
+					Name:            "Parent",
+					Status:          orgUnitListStatusActive,
+					PathOrgNodeKeys: parentPath,
+				}, nil
+			}
+		}
+		for _, child := range s.listChildren {
+			childNodeKey, err := orgNodeKeyFromCompat(child.OrgNodeKey, child.OrgID)
+			if err != nil {
+				return OrgUnitNodeDetails{}, err
+			}
+			if childNodeKey == orgNodeKey {
+				return OrgUnitNodeDetails{
+					OrgID:           child.OrgID,
+					OrgNodeKey:      childNodeKey,
+					OrgCode:         child.OrgCode,
+					Name:            child.Name,
+					Status:          child.Status,
+					IsBusinessUnit:  child.IsBusinessUnit,
+					PathOrgNodeKeys: append(append([]string(nil), parentPath...), childNodeKey),
+				}, nil
+			}
+		}
+		return OrgUnitNodeDetails{}, errOrgUnitNotFound
 	}
 	return s.getNodeDetails, nil
 }
