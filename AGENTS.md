@@ -301,6 +301,7 @@ modules/{module}/
 - DEV-PLAN-501：CubeBox 两次相同查询会话差异与边界判定正式调查报告：`docs/dev-plans/501-cubebox-two-conversations-boundary-investigation-report.md`
 - DEV-PLAN-502：CubeBox 查询边界契约与 Turn 生命周期收敛方案：`docs/dev-plans/502-cubebox-query-boundary-contract-and-turn-lifecycle-convergence-plan.md`
 - DEV-PLAN-520：仓库定期清理与检索噪音治理方案：`docs/dev-plans/520-periodic-repository-noise-cleanup-and-search-surface-governance-plan.md`
+- DEV-PLAN-521：开发计划文档目的分类与元数据治理方案：`docs/dev-plans/521-dev-plan-purpose-classification-and-metadata-taxonomy.md`
 - DEV-PLAN-491：通用可复用 OrgUnit 树选择器与范围感知候选契约方案：`docs/dev-plans/491-reusable-orgunit-tree-selector-and-scope-aware-candidate-contract-plan.md`
 - DEV-PLAN-492：OrgUnit 基础模块架构收敛与 Selector-Ready Read Core 重构方案：`docs/dev-plans/492-orgunit-foundation-module-architecture-convergence-and-selector-ready-read-core-plan.md`
 - DEV-PLAN-493：OrgUnit 组织架构页搜索与筛选入口唯一性收敛方案：`docs/dev-plans/493-orgunit-search-and-filter-entry-convergence-plan.md`

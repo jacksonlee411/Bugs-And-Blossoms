@@ -7,13 +7,14 @@
 - **评审分级**：`T1`
 - **范围一句话**：建立仓库级定期清理机制，降低 AI/人工评审时被历史文档、旧设计、生成物、本地运行产物和大平面实现目录干扰的概率，同时不破坏契约可追溯性与 CI 门禁。
 - **关联模块/目录**：`AGENTS.md`、`docs/dev-plans/`、`docs/archive/`、`docs/dev-records/`、`designs/`、`.local/`、`coverage/`、`e2e/_artifacts/`、`internal/server/`、`apps/web/`、`scripts/ci/*`
-- **关联计划/标准**：`AGENTS.md`、`docs/dev-plans/000-docs-format.md`、`docs/dev-plans/003-simple-not-easy-review-guide.md`、`docs/dev-plans/012-ci-quality-gates.md`、`docs/dev-plans/013-docs-creation-and-governance-guide.md`、`docs/dev-plans/304-test-asset-tiering-and-remediation-plan.md`、`docs/dev-plans/436-cubebox-historical-surface-hard-delete-plan.md`、`docs/dev-plans/440-complete-setid-removal-plan.md`
+- **关联计划/标准**：`AGENTS.md`、`docs/dev-plans/000-docs-format.md`、`docs/dev-plans/003-simple-not-easy-review-guide.md`、`docs/dev-plans/012-ci-quality-gates.md`、`docs/dev-plans/013-docs-creation-and-governance-guide.md`、`docs/dev-plans/304-test-asset-tiering-and-remediation-plan.md`、`docs/dev-plans/436-cubebox-historical-surface-hard-delete-plan.md`、`docs/dev-plans/440-complete-setid-removal-plan.md`、`docs/dev-plans/521-dev-plan-purpose-classification-and-metadata-taxonomy.md`
 
 ### 0.1 Simple > Easy 三问
 
 1. **边界**：本计划只治理“搜索面、文档面、设计面、本地产物面和大平面噪音”，不借机修改业务契约、数据库、授权、路由或 UI 行为。
 2. **不变量**：当前有效契约必须可发现；历史来源必须可追溯但不得污染当前实现判断；本地运行产物不得进入默认评审面或入仓面。
 3. **可解释**：任一文件应能被快速判断为 `active contract`、`current evidence`、`archive reference`、`generated artifact`、`local runtime artifact` 或 `implementation source`，否则需要补归类或清理。
+4. **分类来源**：`docs/dev-plans/` 的 `doc_type`、`status` 与最小元数据口径统一由 `DEV-PLAN-521` 定义；本计划只负责清理节奏、索引收敛和噪音治理。
 
 ## 1. 背景与问题陈述
 
@@ -59,7 +60,7 @@
 
 | 类别 | 位置 | 规则 |
 | --- | --- | --- |
-| 当前契约 | `docs/dev-plans/` | 必须有状态行、owner 编号、范围和验收；新增活体文档必须进入 `AGENTS.md` Doc Map |
+| 当前契约 | `docs/dev-plans/` | 必须有状态行、owner 编号、范围和验收；`doc_type` / `status` / 最小元数据口径见 `DEV-PLAN-521`；新增活体文档必须进入 `AGENTS.md` Doc Map |
 | 当前证据 | `docs/dev-records/` | 只保留 readiness、验收记录和仍被当前计划引用的证据 |
 | 历史来源 | `docs/archive/` | 仅保留仍有追溯价值的历史方案；不得作为当前实现前提 |
 | 过程日志 | `docs/archive/dev-records/` | 可压缩为 summary；不逐条进入 Doc Map |
@@ -157,7 +158,7 @@ internal/server/assets/web/assets/*.js
 
 ### 5.2 文档元数据收敛
 
-后续实施 PR 应评估为活体 dev-plan 增加轻量机器可读头部或统一正文段落，字段控制在最小集合：
+后续实施 PR 应以 `DEV-PLAN-521` 为准，为活体 dev-plan 增加轻量机器可读头部或统一正文段落；本计划只定义落地节奏，不重复定义分类枚举：
 
 ```yaml
 status: active
@@ -262,6 +263,7 @@ archive_refs: []
 1. 文档格式：`docs/dev-plans/000-docs-format.md`
 2. Simple > Easy 评审：`docs/dev-plans/003-simple-not-easy-review-guide.md`
 3. Docs 治理：`docs/dev-plans/013-docs-creation-and-governance-guide.md`
-4. 测试资产分级治理：`docs/dev-plans/304-test-asset-tiering-and-remediation-plan.md`
-5. CubeBox 历史对话面硬删除：`docs/dev-plans/436-cubebox-historical-surface-hard-delete-plan.md`
-6. SetID 根删除唯一 PoR：`docs/dev-plans/440-complete-setid-removal-plan.md`
+4. 文档分类与元数据：`docs/dev-plans/521-dev-plan-purpose-classification-and-metadata-taxonomy.md`
+5. 测试资产分级治理：`docs/dev-plans/304-test-asset-tiering-and-remediation-plan.md`
+6. CubeBox 历史对话面硬删除：`docs/dev-plans/436-cubebox-historical-surface-hard-delete-plan.md`
+7. SetID 根删除唯一 PoR：`docs/dev-plans/440-complete-setid-removal-plan.md`
