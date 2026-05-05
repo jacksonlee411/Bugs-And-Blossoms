@@ -211,19 +211,21 @@ export function DataGridPage({
     }
   }, [gridProps?.initialState, sanitizedPreferences, storageEnabled])
 
+  const showToolbar = gridProps?.showToolbar
+  const slotProps = gridProps?.slotProps
   const resolvedSlotProps = useMemo<DataGridProps['slotProps'] | undefined>(() => {
-    if (!gridProps?.showToolbar) {
-      return gridProps?.slotProps
+    if (!showToolbar) {
+      return slotProps
     }
-    const toolbarProps = gridProps.slotProps?.toolbar as DataGridToolbarProps | undefined
+    const toolbarProps = slotProps?.toolbar as DataGridToolbarProps | undefined
     return {
-      ...gridProps.slotProps,
+      ...slotProps,
       toolbar: {
         showQuickFilter: false,
         ...toolbarProps
       } as DataGridToolbarProps
     }
-  }, [gridProps?.showToolbar, gridProps?.slotProps])
+  }, [showToolbar, slotProps])
 
   const handleColumnVisibilityModelChange = useCallback<NonNullable<DataGridProps['onColumnVisibilityModelChange']>>(
     (model, details) => {
