@@ -156,7 +156,16 @@ func (s orgUnitReadService) List(ctx context.Context, req OrgUnitListRequest) ([
 	if err := validateOrgUnitReadBase(req.TenantID, req.AsOf); err != nil {
 		return nil, 0, err
 	}
-	if _, ok := s.store.(OrgUnitReadListPageStore); ok {
+	if req.shouldUseStorePage() {
+		if _, ok := s.store.(OrgUnitReadListPageStore); ok {
+			return s.listWithStorePage(ctx, req)
+		}
+		if req.hasExtQuery() {
+			return nil, 0, ErrOrgUnitReadExtQueryNotAllowed
+		}
+	}
+
+	if req.hasExtQuery() {
 		return s.listWithStorePage(ctx, req)
 	}
 
@@ -193,6 +202,25 @@ func (s orgUnitReadService) List(ctx context.Context, req OrgUnitListRequest) ([
 	}
 	total := len(nodes)
 	return paginateReadNodes(nodes, req.Limit, req.Offset), total, nil
+}
+
+func (req OrgUnitListRequest) shouldUseStorePage() bool {
+	if strings.TrimSpace(req.ParentOrgNodeKey) != "" || strings.TrimSpace(req.ParentOrgCode) != "" {
+		return true
+	}
+	return req.AllOrgUnits ||
+		strings.TrimSpace(req.Keyword) != "" ||
+		req.IsBusinessUnit != nil ||
+		strings.TrimSpace(req.Status) != "" ||
+		strings.TrimSpace(req.SortField) != "" ||
+		strings.TrimSpace(req.ExtSortFieldKey) != "" ||
+		strings.TrimSpace(req.ExtFilterFieldKey) != "" ||
+		req.Limit > 0 ||
+		req.Offset > 0
+}
+
+func (req OrgUnitListRequest) hasExtQuery() bool {
+	return strings.TrimSpace(req.ExtFilterFieldKey) != "" || strings.TrimSpace(req.ExtSortFieldKey) != ""
 }
 
 func (s orgUnitReadService) listWithStorePage(ctx context.Context, req OrgUnitListRequest) ([]OrgUnitReadNode, int, error) {

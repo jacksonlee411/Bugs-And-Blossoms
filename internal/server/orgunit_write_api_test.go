@@ -248,6 +248,33 @@ func TestHandleOrgUnitsWriteAPI_CreateOrgSkipsNewOrgScopeCheckButChecksParent(t 
 	}
 }
 
+func TestHandleOrgUnitsWriteAPI_CreateOrgWithoutParentFailsClosedUnderScope(t *testing.T) {
+	store := newOrgUnitMemoryStore()
+	root, err := store.CreateNodeCurrent(context.Background(), "t1", "2026-01-01", "ROOT", "Root", "", true)
+	if err != nil {
+		t.Fatalf("create root err=%v", err)
+	}
+	runtime := &orgUnitScopeRuntimeStub{scopes: []principalOrgScope{{
+		OrgNodeKey:         root.ID,
+		IncludeDescendants: true,
+	}}}
+	svc := fakeOrgUnitWriteService{
+		writeFn: func(context.Context, string, orgunitservices.WriteOrgUnitRequest) (orgunitservices.OrgUnitWriteResult, error) {
+			t.Fatal("write should not be called for scoped root create")
+			return orgunitservices.OrgUnitWriteResult{}, nil
+		},
+	}
+
+	body := `{"intent":"create_org","org_code":"NEWROOT","effective_date":"2026-01-01","request_id":"r1","patch":{"name":"New Root"}}`
+	req := httptest.NewRequest(http.MethodPost, "/org/api/org-units/write", bytes.NewBufferString(body))
+	req = req.WithContext(withPrincipal(withTenant(req.Context(), Tenant{ID: "t1"}), Principal{ID: "principal-a"}))
+	rec := httptest.NewRecorder()
+	handleOrgUnitsWriteAPI(rec, req, svc, orgUnitScopeDeps{store: store, runtime: runtime})
+	if rec.Code != http.StatusForbidden || !strings.Contains(rec.Body.String(), "authz_scope_forbidden") {
+		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+	}
+}
+
 func TestHandleOrgUnitsWriteAPI_InvalidEffectiveDateReturns400BeforeScopeCheck(t *testing.T) {
 	store := newOrgUnitMemoryStore()
 	ctx := context.Background()

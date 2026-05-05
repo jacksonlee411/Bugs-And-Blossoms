@@ -389,6 +389,37 @@ func TestOrgUnitReadServiceVisibleRootsAncestorDescendantScopeCoversChildScope(t
 	}
 }
 
+func TestOrgUnitReadServiceListDefaultRootsUsesVisibleRootsWithPageStore(t *testing.T) {
+	store := newOrgUnitReadFakeStore(t)
+	blossom := mustOrgUnitReadKey(t, 10000002)
+	store.listPageFn = func(context.Context, OrgUnitReadListPageRequest) ([]OrgUnitReadNode, int, error) {
+		t.Fatal("default root list must use visible-root semantics, not SQL page root filtering")
+		return nil, 0, nil
+	}
+
+	svc := NewOrgUnitReadService(store)
+	got, total, err := svc.List(context.Background(), OrgUnitListRequest{
+		TenantID: "t1",
+		AsOf:     "2026-01-01",
+		ScopeFilter: OrgUnitReadScopeFilter{
+			PrincipalID: "principal-a",
+			Scopes: []OrgUnitScope{{
+				OrgNodeKey:         blossom,
+				IncludeDescendants: true,
+			}},
+		},
+	})
+	if err != nil {
+		t.Fatalf("List err=%v", err)
+	}
+	if total != 1 || len(got) != 1 || got[0].OrgCode != "BLOSSOM" {
+		t.Fatalf("roots=%+v total=%d", got, total)
+	}
+	if !got[0].HasVisibleChildren {
+		t.Fatalf("visible child marker missing: %+v", got[0])
+	}
+}
+
 func TestOrgUnitReadServiceChildrenAreScopeAware(t *testing.T) {
 	store := newOrgUnitReadFakeStore(t)
 	svc := NewOrgUnitReadService(store)

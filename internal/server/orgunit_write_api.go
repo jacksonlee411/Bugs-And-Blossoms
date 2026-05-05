@@ -82,6 +82,9 @@ func handleOrgUnitsWriteAPI(w http.ResponseWriter, r *http.Request, writeSvc org
 			writeOrgUnitScopeError(w, r, err)
 			return
 		}
+	} else if intent == string(orgunitservices.OrgUnitWriteIntentCreateOrg) && scope.runtime != nil {
+		writeOrgUnitScopeError(w, r, errAuthzScopeForbidden)
+		return
 	}
 
 	result, err := writeSvc.Write(r.Context(), tenant.ID, orgunitservices.WriteOrgUnitRequest{
