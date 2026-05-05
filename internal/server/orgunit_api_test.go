@@ -18,6 +18,8 @@ type resolveOrgCodeStore struct {
 	listChildrenByNodeKeyArg  string
 	listChildrenByNodeKeyArgs []string
 	detailsByNodeKeyArg       string
+	detailsByNodeKeyArgs      []string
+	detailsByNodeKeyAsOfArgs  []string
 	versionsByNodeKeyArg      string
 	auditByNodeKeyArg         string
 	resolveCodeByNodeKeyArg   string
@@ -186,8 +188,10 @@ func (s *resolveOrgCodeStore) GetNodeDetails(context.Context, string, int, strin
 	return s.getNodeDetails, nil
 }
 
-func (s *resolveOrgCodeStore) GetNodeDetailsByNodeKey(_ context.Context, _ string, orgNodeKey string, _ string) (OrgUnitNodeDetails, error) {
+func (s *resolveOrgCodeStore) GetNodeDetailsByNodeKey(_ context.Context, _ string, orgNodeKey string, asOf string) (OrgUnitNodeDetails, error) {
 	s.detailsByNodeKeyArg = orgNodeKey
+	s.detailsByNodeKeyArgs = append(s.detailsByNodeKeyArgs, strings.TrimSpace(orgNodeKey))
+	s.detailsByNodeKeyAsOfArgs = append(s.detailsByNodeKeyAsOfArgs, strings.TrimSpace(asOf))
 	if s.getNodeDetailsErr != nil {
 		return OrgUnitNodeDetails{}, s.getNodeDetailsErr
 	}

@@ -86,6 +86,7 @@ type OrgUnitListRequest struct {
 type OrgUnitReadListPageRequest struct {
 	TenantID          string
 	AsOf              string
+	ScopeFilter       OrgUnitReadScopeFilter
 	ParentOrgCode     string
 	ParentOrgNodeKey  string
 	AllOrgUnits       bool
@@ -155,7 +156,7 @@ func (s orgUnitReadService) List(ctx context.Context, req OrgUnitListRequest) ([
 	if err := validateOrgUnitReadBase(req.TenantID, req.AsOf); err != nil {
 		return nil, 0, err
 	}
-	if req.hasExtQuery() {
+	if _, ok := s.store.(OrgUnitReadListPageStore); ok {
 		return s.listWithStorePage(ctx, req)
 	}
 
@@ -194,14 +195,13 @@ func (s orgUnitReadService) List(ctx context.Context, req OrgUnitListRequest) ([
 	return paginateReadNodes(nodes, req.Limit, req.Offset), total, nil
 }
 
-func (req OrgUnitListRequest) hasExtQuery() bool {
-	return strings.TrimSpace(req.ExtFilterFieldKey) != "" || strings.TrimSpace(req.ExtSortFieldKey) != ""
-}
-
 func (s orgUnitReadService) listWithStorePage(ctx context.Context, req OrgUnitListRequest) ([]OrgUnitReadNode, int, error) {
 	pageStore, ok := s.store.(OrgUnitReadListPageStore)
 	if !ok {
 		return nil, 0, ErrOrgUnitReadExtQueryNotAllowed
+	}
+	if !req.ScopeFilter.AllTenant && len(normalizeReadScopes(req.ScopeFilter.Scopes)) == 0 {
+		return nil, 0, ErrOrgUnitReadScopeRequired
 	}
 
 	if strings.TrimSpace(req.ParentOrgNodeKey) != "" || strings.TrimSpace(req.ParentOrgCode) != "" {
@@ -225,6 +225,7 @@ func (s orgUnitReadService) listWithStorePage(ctx context.Context, req OrgUnitLi
 	storeReq := OrgUnitReadListPageRequest{
 		TenantID:          req.TenantID,
 		AsOf:              req.AsOf,
+		ScopeFilter:       req.ScopeFilter,
 		ParentOrgCode:     req.ParentOrgCode,
 		ParentOrgNodeKey:  req.ParentOrgNodeKey,
 		AllOrgUnits:       req.AllOrgUnits,
@@ -238,21 +239,14 @@ func (s orgUnitReadService) listWithStorePage(ctx context.Context, req OrgUnitLi
 		ExtFilterValue:    req.ExtFilterValue,
 		IncludeDisabled:   req.IncludeDisabled,
 	}
-	if req.ScopeFilter.AllTenant {
-		storeReq.Limit = req.Limit
-		storeReq.Offset = req.Offset
-	}
+	storeReq.Limit = req.Limit
+	storeReq.Offset = req.Offset
 
 	nodes, total, err := pageStore.ListPage(ctx, storeReq)
 	if err != nil {
 		return nil, 0, err
 	}
-	if req.ScopeFilter.AllTenant {
-		return nodes, total, nil
-	}
-	visible := filterReadNodesByScope(req.ScopeFilter, nodes)
-	total = len(visible)
-	return paginateReadNodes(visible, req.Limit, req.Offset), total, nil
+	return nodes, total, nil
 }
 
 func (s orgUnitReadService) VisibleRoots(ctx context.Context, req OrgUnitReadRequest) ([]OrgUnitReadNode, error) {
@@ -366,6 +360,9 @@ func (s orgUnitReadService) Resolve(ctx context.Context, req OrgUnitResolveReque
 	}
 	if len(nodes) == 0 {
 		return nil, ErrOrgUnitReadInvalidArgument
+	}
+	if req.ScopeFilter.AllTenant {
+		return nodes, nil
 	}
 	return s.withSafePaths(filterReadNodesByScope(req.ScopeFilter, nodes), roots)
 }

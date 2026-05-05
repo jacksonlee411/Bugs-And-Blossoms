@@ -107,6 +107,7 @@ func (a orgUnitReadStoreAdapter) ListPage(ctx context.Context, req orgunitservic
 	items, total, err := listOrgUnitListPage(ctx, a.store, req.TenantID, orgUnitListPageRequest{
 		AsOf:              req.AsOf,
 		IncludeDisabled:   req.IncludeDisabled,
+		ScopeFilter:       req.ScopeFilter,
 		ParentOrgNodeKey:  parentOrgNodeKey,
 		AllOrgUnits:       req.AllOrgUnits,
 		Keyword:           req.Keyword,

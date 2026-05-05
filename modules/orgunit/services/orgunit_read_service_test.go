@@ -79,9 +79,12 @@ func newOrgUnitReadFakeStore(t *testing.T) *orgUnitReadFakeStore {
 	}
 }
 
-func (s *orgUnitReadFakeStore) ListRoots(context.Context, string, string, bool) ([]OrgUnitReadNode, error) {
+func (s *orgUnitReadFakeStore) ListRoots(_ context.Context, _ string, _ string, includeDisabled bool) ([]OrgUnitReadNode, error) {
 	var out []OrgUnitReadNode
 	for key, node := range s.nodes {
+		if !s.nodeIncluded(node, includeDisabled) {
+			continue
+		}
 		if len(node.PathOrgNodeKeys) == 1 && node.PathOrgNodeKeys[0] == key {
 			out = append(out, node)
 		}
@@ -89,20 +92,25 @@ func (s *orgUnitReadFakeStore) ListRoots(context.Context, string, string, bool) 
 	return out, nil
 }
 
-func (s *orgUnitReadFakeStore) ListChildren(_ context.Context, _ string, parentOrgNodeKey string, _ string, _ bool) ([]OrgUnitReadNode, error) {
+func (s *orgUnitReadFakeStore) ListChildren(_ context.Context, _ string, parentOrgNodeKey string, _ string, includeDisabled bool) ([]OrgUnitReadNode, error) {
 	s.listChildrenN++
 	var out []OrgUnitReadNode
 	for _, key := range s.children[strings.TrimSpace(parentOrgNodeKey)] {
-		out = append(out, s.nodes[key])
+		node := s.nodes[key]
+		if s.nodeIncluded(node, includeDisabled) {
+			out = append(out, node)
+		}
 	}
 	return out, nil
 }
 
-func (s *orgUnitReadFakeStore) ListTree(context.Context, string, string, bool) ([]OrgUnitReadNode, error) {
+func (s *orgUnitReadFakeStore) ListTree(_ context.Context, _ string, _ string, includeDisabled bool) ([]OrgUnitReadNode, error) {
 	s.listTree = true
 	out := make([]OrgUnitReadNode, 0, len(s.nodes))
 	for _, node := range s.nodes {
-		out = append(out, node)
+		if s.nodeIncluded(node, includeDisabled) {
+			out = append(out, node)
+		}
 	}
 	return out, nil
 }
@@ -119,33 +127,40 @@ func (s *orgUnitReadFakeStore) ListPage(ctx context.Context, req OrgUnitReadList
 	return out, len(out), nil
 }
 
-func (s *orgUnitReadFakeStore) ResolveByOrgNodeKey(_ context.Context, _ string, orgNodeKey string, _ string, _ bool) (OrgUnitReadNode, error) {
+func (s *orgUnitReadFakeStore) ResolveByOrgNodeKey(_ context.Context, _ string, orgNodeKey string, _ string, includeDisabled bool) (OrgUnitReadNode, error) {
 	node, ok := s.nodes[strings.TrimSpace(orgNodeKey)]
-	if !ok {
+	if !ok || !s.nodeIncluded(node, includeDisabled) {
 		return OrgUnitReadNode{}, ErrOrgUnitReadNotFound
 	}
 	return node, nil
 }
 
-func (s *orgUnitReadFakeStore) ResolveByOrgCode(_ context.Context, _ string, orgCode string, _ string, _ bool) (OrgUnitReadNode, error) {
+func (s *orgUnitReadFakeStore) ResolveByOrgCode(_ context.Context, _ string, orgCode string, _ string, includeDisabled bool) (OrgUnitReadNode, error) {
 	for _, node := range s.nodes {
-		if node.OrgCode == strings.TrimSpace(orgCode) {
+		if node.OrgCode == strings.TrimSpace(orgCode) && s.nodeIncluded(node, includeDisabled) {
 			return node, nil
 		}
 	}
 	return OrgUnitReadNode{}, ErrOrgUnitReadNotFound
 }
 
-func (s *orgUnitReadFakeStore) Search(_ context.Context, _ string, query string, _ string, _ bool, limit int) ([]OrgUnitReadNode, error) {
+func (s *orgUnitReadFakeStore) Search(_ context.Context, _ string, query string, _ string, includeDisabled bool, limit int) ([]OrgUnitReadNode, error) {
 	s.lastSearchLimit = limit
 	query = strings.ToLower(strings.TrimSpace(query))
 	var out []OrgUnitReadNode
 	for _, node := range s.nodes {
+		if !s.nodeIncluded(node, includeDisabled) {
+			continue
+		}
 		if strings.Contains(strings.ToLower(node.OrgCode), query) || strings.Contains(strings.ToLower(node.Name), query) {
 			out = append(out, node)
 		}
 	}
 	return out, nil
+}
+
+func (s *orgUnitReadFakeStore) nodeIncluded(node OrgUnitReadNode, includeDisabled bool) bool {
+	return includeDisabled || normalizeOrgUnitListStatus(node.Status) != "disabled"
 }
 
 func TestOrgUnitReadServiceVisibleRoots(t *testing.T) {
@@ -237,6 +252,65 @@ func TestOrgUnitReadServiceVisibleRootsSkipsStaleScopeAndFailsClosed(t *testing.
 	})
 	if err == nil || !errors.Is(err, ErrOrgUnitReadScopeForbidden) {
 		t.Fatalf("expected scope forbidden, got roots=%+v err=%v", got, err)
+	}
+}
+
+func TestOrgUnitReadServiceVisibleRootsEmptyScopeFailsClosed(t *testing.T) {
+	store := newOrgUnitReadFakeStore(t)
+	svc := NewOrgUnitReadService(store)
+
+	got, err := svc.VisibleRoots(context.Background(), OrgUnitReadRequest{
+		TenantID: "t1",
+		AsOf:     "2026-01-01",
+		ScopeFilter: OrgUnitReadScopeFilter{
+			PrincipalID: "principal-a",
+			Scopes:      nil,
+		},
+	})
+	if !errors.Is(err, ErrOrgUnitReadScopeRequired) {
+		t.Fatalf("roots=%+v err=%v want ErrOrgUnitReadScopeRequired", got, err)
+	}
+}
+
+func TestOrgUnitReadServiceVisibleRootsDisabledScopeHonorsIncludeDisabled(t *testing.T) {
+	store := newOrgUnitReadFakeStore(t)
+	svc := NewOrgUnitReadService(store)
+	disabled := mustOrgUnitReadKey(t, 10000008)
+	root := mustOrgUnitReadKey(t, 10000001)
+	store.nodes[disabled] = OrgUnitReadNode{
+		OrgCode:         "DISABLED",
+		OrgNodeKey:      disabled,
+		Name:            "Disabled",
+		Status:          "disabled",
+		PathOrgCodes:    []string{"ROOT", "DISABLED"},
+		PathOrgNodeKeys: []string{root, disabled},
+	}
+	store.children[root] = append(store.children[root], disabled)
+
+	req := OrgUnitReadRequest{
+		TenantID: "t1",
+		AsOf:     "2026-01-01",
+		ScopeFilter: OrgUnitReadScopeFilter{
+			PrincipalID: "principal-a",
+			Scopes: []OrgUnitScope{{
+				OrgNodeKey:         disabled,
+				IncludeDescendants: true,
+			}},
+		},
+	}
+
+	got, err := svc.VisibleRoots(context.Background(), req)
+	if !errors.Is(err, ErrOrgUnitReadScopeForbidden) {
+		t.Fatalf("roots=%+v err=%v want ErrOrgUnitReadScopeForbidden", got, err)
+	}
+
+	req.IncludeDisabled = true
+	got, err = svc.VisibleRoots(context.Background(), req)
+	if err != nil {
+		t.Fatalf("VisibleRoots include disabled err=%v", err)
+	}
+	if len(got) != 1 || got[0].OrgCode != "DISABLED" {
+		t.Fatalf("roots=%+v", got)
 	}
 }
 
@@ -361,6 +435,17 @@ func TestOrgUnitReadServiceListScopesBeforePagination(t *testing.T) {
 	store := newOrgUnitReadFakeStore(t)
 	svc := NewOrgUnitReadService(store)
 	blossom := mustOrgUnitReadKey(t, 10000002)
+	east := mustOrgUnitReadKey(t, 10000003)
+	sh := mustOrgUnitReadKey(t, 10000004)
+	store.listPageFn = func(_ context.Context, req OrgUnitReadListPageRequest) ([]OrgUnitReadNode, int, error) {
+		if len(req.ScopeFilter.Scopes) != 1 || req.ScopeFilter.Scopes[0].OrgNodeKey != blossom || !req.ScopeFilter.Scopes[0].IncludeDescendants {
+			t.Fatalf("scope filter not passed to page store: %+v", req.ScopeFilter)
+		}
+		if req.Limit != 2 || req.Offset != 1 {
+			t.Fatalf("pagination req=%+v", req)
+		}
+		return []OrgUnitReadNode{store.nodes[east], store.nodes[sh]}, 3, nil
+	}
 
 	got, total, err := svc.List(context.Background(), OrgUnitListRequest{
 		TenantID:    "t1",
@@ -387,9 +472,6 @@ func TestOrgUnitReadServiceListScopesBeforePagination(t *testing.T) {
 	if gotCodes := orgUnitReadNodeCodes(got); !reflect.DeepEqual(gotCodes, []string{"EAST", "SH"}) {
 		t.Fatalf("page codes=%v want [EAST SH]", gotCodes)
 	}
-	if !store.listTree {
-		t.Fatal("expected List to use bulk tree store")
-	}
 	if store.listChildrenN != 0 {
 		t.Fatalf("ListChildren calls=%d, want 0", store.listChildrenN)
 	}
@@ -399,6 +481,13 @@ func TestOrgUnitReadServiceListFiltersChildrenWithinScope(t *testing.T) {
 	store := newOrgUnitReadFakeStore(t)
 	svc := NewOrgUnitReadService(store)
 	blossom := mustOrgUnitReadKey(t, 10000002)
+	east := mustOrgUnitReadKey(t, 10000003)
+	store.listPageFn = func(_ context.Context, req OrgUnitReadListPageRequest) ([]OrgUnitReadNode, int, error) {
+		if req.ParentOrgNodeKey != blossom {
+			t.Fatalf("parent node key=%q", req.ParentOrgNodeKey)
+		}
+		return []OrgUnitReadNode{store.nodes[east]}, 1, nil
+	}
 
 	got, total, err := svc.List(context.Background(), OrgUnitListRequest{
 		TenantID:         "t1",
@@ -427,16 +516,17 @@ func TestOrgUnitReadServiceListExtQueryUsesStorePageAndScopesBeforePagination(t 
 	east := mustOrgUnitReadKey(t, 10000003)
 	sh := mustOrgUnitReadKey(t, 10000004)
 	store.listPageFn = func(_ context.Context, req OrgUnitReadListPageRequest) ([]OrgUnitReadNode, int, error) {
-		if req.Limit != 0 || req.Offset != 0 {
-			t.Fatalf("scoped ext list should not push pagination before scope filter, req=%+v", req)
+		if req.Limit != 2 || req.Offset != 1 {
+			t.Fatalf("scoped ext list must push pagination after scoped store filtering, req=%+v", req)
+		}
+		if len(req.ScopeFilter.Scopes) != 1 || req.ScopeFilter.Scopes[0].OrgNodeKey != blossom || !req.ScopeFilter.Scopes[0].IncludeDescendants {
+			t.Fatalf("scope filter not passed to page store: %+v", req.ScopeFilter)
 		}
 		nodes := []OrgUnitReadNode{
-			store.nodes[mustOrgUnitReadKey(t, 10000001)],
-			store.nodes[blossom],
 			store.nodes[east],
 			store.nodes[sh],
 		}
-		return nodes, len(nodes), nil
+		return nodes, 3, nil
 	}
 
 	svc := NewOrgUnitReadService(store)
@@ -558,6 +648,42 @@ func TestOrgUnitReadServiceListVisibleChildrenUsesExactPathPrefix(t *testing.T) 
 	}
 	if got[0].HasVisibleChildren {
 		t.Fatalf("cross-branch candidate marked as visible child: %+v", got[0])
+	}
+}
+
+func TestOrgUnitReadServiceListHasVisibleChildrenUsesScopedCandidates(t *testing.T) {
+	store := newOrgUnitReadFakeStore(t)
+	svc := NewOrgUnitReadService(store)
+	blossom := mustOrgUnitReadKey(t, 10000002)
+	store.listPageFn = func(_ context.Context, req OrgUnitReadListPageRequest) ([]OrgUnitReadNode, int, error) {
+		if len(req.ScopeFilter.Scopes) != 1 || req.ScopeFilter.Scopes[0].OrgNodeKey != blossom || req.ScopeFilter.Scopes[0].IncludeDescendants {
+			t.Fatalf("scope filter=%+v", req.ScopeFilter)
+		}
+		node := store.nodes[blossom]
+		node.HasVisibleChildren = false
+		return []OrgUnitReadNode{node}, 1, nil
+	}
+
+	got, total, err := svc.List(context.Background(), OrgUnitListRequest{
+		TenantID:    "t1",
+		AsOf:        "2026-01-01",
+		AllOrgUnits: true,
+		ScopeFilter: OrgUnitReadScopeFilter{
+			PrincipalID: "principal-a",
+			Scopes: []OrgUnitScope{{
+				OrgNodeKey:         blossom,
+				IncludeDescendants: false,
+			}},
+		},
+	})
+	if err != nil {
+		t.Fatalf("List err=%v", err)
+	}
+	if total != 1 || len(got) != 1 || got[0].OrgCode != "BLOSSOM" {
+		t.Fatalf("nodes=%+v total=%d", got, total)
+	}
+	if got[0].HasVisibleChildren {
+		t.Fatalf("physical child must not be reported as visible child outside scope: %+v", got[0])
 	}
 }
 

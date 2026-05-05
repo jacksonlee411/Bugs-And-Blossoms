@@ -64,26 +64,31 @@ func handleOrgUnitsWriteAPI(w http.ResponseWriter, r *http.Request, writeSvc org
 		writeOrgUnitServiceError(w, r, newBadRequestError(orgUnitErrPatchFieldNotAllowed), "orgunit_write_failed")
 		return
 	}
-	scope := orgUnitScopeDepsFromVariadic(scopeDeps)
-	if err := ensureCurrentPrincipalOrgCodeScopeAllows(r.Context(), scope.store, scope.runtime, tenant.ID, req.OrgCode); err != nil {
-		writeOrgUnitScopeError(w, r, err)
+	intent := strings.TrimSpace(req.Intent)
+	effectiveDate, targetEffectiveDate, scopeTargetDate, scopeParentDate, err := normalizeOrgUnitWriteAPIDates(req)
+	if err != nil {
+		writeOrgUnitServiceError(w, r, err, "orgunit_write_failed")
 		return
 	}
+	scope := orgUnitScopeDepsFromVariadic(scopeDeps)
+	if intent != string(orgunitservices.OrgUnitWriteIntentCreateOrg) {
+		if err := ensureCurrentPrincipalOrgCodeScopeAllows(r.Context(), scope.store, scope.runtime, tenant.ID, req.OrgCode, scopeTargetDate); err != nil {
+			writeOrgUnitScopeError(w, r, err)
+			return
+		}
+	}
 	if req.Patch.ParentOrgCode != nil && strings.TrimSpace(*req.Patch.ParentOrgCode) != "" {
-		if err := ensureCurrentPrincipalOrgCodeScopeAllows(r.Context(), scope.store, scope.runtime, tenant.ID, *req.Patch.ParentOrgCode); err != nil {
+		if err := ensureCurrentPrincipalOrgCodeScopeAllows(r.Context(), scope.store, scope.runtime, tenant.ID, *req.Patch.ParentOrgCode, scopeParentDate); err != nil {
 			writeOrgUnitScopeError(w, r, err)
 			return
 		}
 	}
 
-	intent := strings.TrimSpace(req.Intent)
-	effectiveDate := strings.TrimSpace(req.EffectiveDate)
-
 	result, err := writeSvc.Write(r.Context(), tenant.ID, orgunitservices.WriteOrgUnitRequest{
 		Intent:              intent,
 		OrgCode:             strings.TrimSpace(req.OrgCode),
 		EffectiveDate:       effectiveDate,
-		TargetEffectiveDate: strings.TrimSpace(req.TargetEffectiveDate),
+		TargetEffectiveDate: targetEffectiveDate,
 		RequestID:           strings.TrimSpace(req.RequestID),
 		Patch: orgunitservices.OrgUnitWritePatch{
 			Name:           req.Patch.Name,
@@ -115,4 +120,30 @@ func handleOrgUnitsWriteAPI(w http.ResponseWriter, r *http.Request, writeSvc org
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
 	_ = json.NewEncoder(w).Encode(resp)
+}
+
+func normalizeOrgUnitWriteAPIDates(req orgUnitWriteAPIRequest) (effectiveDate string, targetEffectiveDate string, scopeTargetDate string, scopeParentDate string, err error) {
+	effectiveDate = strings.TrimSpace(req.EffectiveDate)
+	targetEffectiveDate = strings.TrimSpace(req.TargetEffectiveDate)
+	intent := strings.TrimSpace(req.Intent)
+
+	if effectiveDate == "" {
+		return "", "", "", "", newBadRequestError(orgUnitErrEffectiveDate)
+	}
+	if _, parseErr := parseRequiredDay(effectiveDate, "effective_date"); parseErr != nil {
+		return "", "", "", "", newBadRequestError(orgUnitErrEffectiveDate)
+	}
+
+	scopeTargetDate = effectiveDate
+	scopeParentDate = effectiveDate
+	if intent == string(orgunitservices.OrgUnitWriteIntentCorrect) {
+		if targetEffectiveDate == "" {
+			return "", "", "", "", newBadRequestError(orgUnitErrEffectiveDate)
+		}
+		if _, parseErr := parseRequiredDay(targetEffectiveDate, "target_effective_date"); parseErr != nil {
+			return "", "", "", "", newBadRequestError(orgUnitErrEffectiveDate)
+		}
+		scopeTargetDate = targetEffectiveDate
+	}
+	return effectiveDate, targetEffectiveDate, scopeTargetDate, scopeParentDate, nil
 }

@@ -3,7 +3,7 @@
 ## 说明
 
 - 本文件记录 `DEV-PLAN-492` 的阶段性实施进展与验证结果，避免计划文档与实际代码状态漂移。
-- 当前记录已完成且已验证的后端先行切片与 491 Phase A/B/C/D 前端消费进展；普通 list/grid 与 ext 字段 list/grid 查询均已接入 ReadService `List`，并通过 adapter 批量 tree/page 原语避免递归 children N+1；ext list/grid 已补 parent scope fail-closed 与 adapter scope path 补齐回归测试；SQL 级 scoped pagination 优化与更广联合 E2E 仍保持待办。
+- 当前记录已完成且已验证的后端先行切片与 491 Phase A/B/C/D 前端消费进展；普通 list/grid 与 ext 字段 list/grid 查询均已接入 ReadService `List`，并通过 adapter page 原语下推 scope 裁剪、filter/sort、total、limit/offset；ext list/grid 已补 parent scope fail-closed 与 adapter scope path 补齐回归测试；更广联合 E2E 已覆盖主要 selector 入口。
 
 ## 2026-05-04 实施记录
 
@@ -46,16 +46,22 @@
   - ReadService search 覆盖当前 principal 只可见其他分支时不返回目标分支路径
   - HTTP `/org/api/org-units/search` 覆盖深层 safe path 与其他分支不可见时 404/fail-closed
 - 普通 list/grid 读取已继续下沉：
-  - `OrgUnitReadService` 新增 `List`，在服务层统一处理 visible tree 收集、scope 裁剪、keyword/status/business-unit 过滤、排序与分页
+  - `OrgUnitReadService` 新增 `List`，普通 list/grid 优先走 adapter page 原语；scope filter、keyword/status/business-unit 过滤、排序、total 与 limit/offset 由 store pager 同一口径处理
   - `handleOrgUnitsAPI` 的非 ext list/grid 分支已改为消费 ReadService `List`
-  - `internal/server` adapter 已提供批量 tree 原语，普通 list/grid 不再通过递归 children 收集可见全集
+  - `internal/server` adapter 已提供 page 原语，普通 list/grid 不再通过递归 children 收集可见全集
 - ext 字段 list/grid 查询已继续下沉：
   - `OrgUnitListRequest` 新增 `ExtFilterFieldKey` / `ExtFilterValue` / `ExtSortFieldKey`，ext filter/sort 与普通 list/grid 统一进入 ReadService `List`
   - `internal/server` adapter 新增 ReadService list page port，字段元数据查询与物理列校验仍由 store adapter 背后的基础设施查询承接
   - `handleOrgUnitsAPI` 不再为 ext 分支直接调用旧 store path，也不再在 handler 内二次执行 scope 裁剪与分页
   - ext list/grid 带 `parent_org_code` / `parent_org_node_key` 时，ReadService 会先校验 parent 在当前 principal scope 内；范围外 parent fail-closed，不进入 page store
   - adapter 在 page rows 转换为 ReadService node 前补齐 `PathOrgNodeKeys`，确保 include-descendants scope 不因底层 pager 缺 path 被误裁
-  - 当前 scoped principal 下 ext 查询仍先由 store 返回候选全集，再由 ReadService 做 scope 裁剪和分页；SQL 级 scoped pagination 继续后续优化
+  - scoped principal 下 list/grid 不再由 ReadService 拉取候选全集后分页；PG pager 已将 scope where、filter/sort、count、limit/offset 合并到 SQL 主链，`has_visible_children` 也按当前 scope 与 include-disabled 口径计算
+- details 读取 scope check 已继续下沉：
+  - `handleOrgUnitsDetailsAPI` 使用 `OrgUnitReadService.Resolve` 校验当前 principal 对目标组织的可见性
+  - 范围外 details 请求 fail-closed 为 `403 authz_scope_forbidden`，空 resolve 结果不会进入 details 读取或触发 panic
+- write scope check 已继续向 ReadService 统一：
+  - `ensureCurrentPrincipalOrgCodeScopeAllows` 通过 `OrgUnitReadService.Resolve` 判断目标组织或父组织是否在当前 principal 可见范围内
+  - write helper 显式使用当前写请求的 `effective_date` 做 scope check，避免用当前日期推断导致历史/测试日期误判
 
 ### 已验证
 
@@ -84,13 +90,21 @@
 - `go test ./internal/server -run 'TestHandleOrgUnitsAPI_(Ext|BusinessUnit|AllOrgUnits)|TestOrgUnitReadService|TestListOrgUnitListPage|TestSortOrgUnitListItems|TestFilterOrgUnitListItems'`
 - `go test ./modules/orgunit/services -run 'TestOrgUnitReadServiceListExtQuery'`
 - `go test ./internal/server -run 'TestOrgUnitReadStoreAdapterListPageHydratesScopePath|TestHandleOrgUnitsAPI_Ext|TestHandleOrgUnitsAPI_ListPaginationTotalUsesScopedResult'`
+- `go test ./modules/orgunit/services -run 'TestOrgUnitReadService(VisibleRootsEmptyScopeFailsClosed|VisibleRootsDisabledScopeHonorsIncludeDisabled|ListHasVisibleChildrenUsesScopedCandidates|List|VisibleRoots|Children|Search|Resolve)'`
+- `go test ./modules/orgunit/services ./internal/server -run 'TestOrgUnitReadService|TestHandleOrgUnitsAPI|TestHandleOrgUnitsWrite|TestHandleOrgUnitsCorrections|TestHandleOrgUnitsDetailsAPI|TestHandlePrincipalAuthzAssignmentPutAPI'`
+- `npm --prefix apps/web test -- --run src/components/OrgUnitTreeSelector.test.tsx src/pages/org/OrgUnitsPage.test.tsx src/pages/org/OrgUnitDetailsPage.test.tsx`
+- `node --check e2e/tests/dev491-authz-org-selector-scope.spec.js`
+- `pnpm --dir e2e exec playwright test tests/dev491-authz-org-selector-scope.spec.js`
+- `go test ./modules/orgunit/services -run 'TestOrgUnitReadServiceList'`
+- `go test ./internal/server -run 'TestOrgUnitPGStore_ListOrgUnitsPage|TestOrgUnitReadStoreAdapterListPageHydratesScopePath|TestOrgUnitReadStoreAdapterListPagePushesScopeAndPagination|TestHandleOrgUnitsAPI_Ext|TestHandleOrgUnitsAPI_ListPaginationTotalUsesScopedResult|TestListOrgUnitListPage'`
+- `go test ./modules/orgunit/services ./internal/server -run 'TestOrgUnitReadServiceResolve|TestHandleOrgUnitsDetailsAPI'`
+- `go test ./internal/server -run 'TestHandleOrgUnitsWriteAPI_CreateOrgSkipsNewOrgScopeCheckButChecksParent|TestHandleOrgUnitsAPI|TestHandleOrgUnitsBusinessUnitAPI|TestHandleOrgUnitsDetailsAPI'`
 
 ### 当前结论
 
 - `492 P1/P2/P3` 的首轮后端 contract 已落地：roots、children、search 均已通过 ReadService 对外提供 selector-ready DTO 与 scope-aware safe path。
-- 普通 list/grid 与 ext 字段 list/grid 的读取规则已向 ReadService 下沉；adapter 已避免递归 children N+1；服务层已保证对外 total/page 以 scope 裁剪后的结果为准；ext parent scope 与 adapter path 补齐已补回归测试，但仍不等同于 SQL 级 scoped pagination 已完成。
-- `491 Phase A/B/C/D` 已消费 492 contract 并完成用户授权页、创建组织上级组织、组织详情编辑上级组织这些主要选择入口接入；不再存在“selector/facade 已有但页面主要选择入口仍用一级下拉/手填”的窗口。
+- 普通 list/grid 与 ext 字段 list/grid 的读取规则已向 ReadService 下沉；adapter 已避免递归 children N+1；PG pager 已下推 scoped pagination，确保 scope 裁剪、filter/sort、count 与 limit/offset 在 SQL 主链内完成；ext parent scope、adapter path 补齐、空 scope、disabled scope、list `has_visible_children` scoped candidates 语义均已补回归测试。
+- `491 Phase A/B/C/D` 已消费 492 contract 并完成用户授权页、创建组织上级组织、组织详情编辑上级组织这些主要选择入口接入；不再存在“selector/facade 已有但页面主要选择入口仍用一级下拉/手填”的窗口。更广 `dev491` E2E 已覆盖受限管理员在三类入口只能选择当前可见组织，范围外搜索与直接提交均 fail-closed。
+- 统一 write API 已修正 create scope check 顺序：新建组织时不要求新 org code 已存在于当前 scope，仍对非空 parent 做当前 principal scope 校验；详情/更正等非 create intent 继续校验目标 org 与 parent。当前目标/父组织校验已复用 `OrgUnitReadService.Resolve` 的 scope 判断。
 - 目前尚未完成的工作仍包括：
-  - list/grid 的 SQL 级 scoped pagination 优化；当前 ReadService 层已保证对外 total/page 以 scope 裁剪后的结果为准
-  - details/write scope checks 与剩余局部读取 helper 继续向 492 ReadService 下沉或标注为 adapter
-  - 更广 491/492 联合 E2E；当前已有用户授权页受限管理员 selector E2E 与本轮组件/API contract 测试
+  - 剩余局部读取 helper 继续向 492 ReadService 下沉或标注为 adapter

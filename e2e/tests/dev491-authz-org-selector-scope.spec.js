@@ -75,6 +75,27 @@ async function expectVisibleSelectorOption(page, query, label) {
   await expect(page.getByText(label)).toBeVisible()
 }
 
+async function selectOrgUnitTreeFieldOption(page, field, query, label) {
+  await field.click()
+  const dialog = page.getByRole("dialog").filter({ hasText: /Select Organization|选择组织/ }).last()
+  await expect(dialog.getByRole("heading", { name: /Select Organization|选择组织/ })).toBeVisible()
+  await dialog.getByRole("textbox").fill(query)
+  await dialog.getByRole("button", { name: /Locate|定位|搜索/ }).click()
+  await expect(dialog.getByRole("treeitem", { name: label })).toBeVisible()
+  await dialog.getByRole("button", { name: /Confirm|确认/ }).click()
+  await expect(field).toHaveValue(label)
+}
+
+async function expectOrgUnitTreeFieldCannotFind(page, field, query, label) {
+  await field.click()
+  const dialog = page.getByRole("dialog").filter({ hasText: /Select Organization|选择组织/ }).last()
+  await expect(dialog.getByRole("heading", { name: /Select Organization|选择组织/ })).toBeVisible()
+  await dialog.getByRole("textbox").fill(query)
+  await dialog.getByRole("button", { name: /Locate|定位|搜索/ }).click()
+  await expect(dialog.getByRole("treeitem", { name: label })).toHaveCount(0)
+  await dialog.getByRole("button", { name: /Cancel|取消/ }).click()
+}
+
 test("dev491: restricted authz admin selector is scoped and assignment save is fail-closed", async ({ browser }) => {
   test.setTimeout(180_000)
 
@@ -100,6 +121,8 @@ test("dev491: restricted authz admin selector is scoped and assignment save is f
   const flowersCode = `D491F${runSuffix}`
   const flowersChildCode = `D491FC${runSuffix}`
   const bugsCode = `D491B${runSuffix}`
+  const createChildCode = `D491NC${runSuffix}`
+  const detailChildCode = `D491DC${runSuffix}`
 
   await createOrgUnit(adminContext, {
     org_code: rootCode,
@@ -209,6 +232,74 @@ test("dev491: restricted authz admin selector is scoped and assignment save is f
   const { text: directBody, json: directJSON } = await responseJSON(directSave)
   expect(directSave.status(), directBody).toBe(403)
   expect(directJSON.code).toBe("authz_scope_forbidden")
+
+  await page.goto("/app/org/units")
+  await expect(page.getByRole("heading", { name: /Organization Units|组织架构/ })).toBeVisible()
+  await page.getByRole("button", { name: /Create|新建/ }).click()
+  const createDialog = page.getByRole("dialog")
+  await expect(createDialog.getByRole("heading", { name: /Create|新建/ })).toBeVisible()
+  await createDialog.getByLabel(/Code|编码/).fill(createChildCode)
+  await createDialog.getByLabel(/Name|名称/).fill(`${runMarker} New Child`)
+  await createDialog.getByLabel(/Effective Date|生效日期/).fill(AS_OF)
+  const createParentField = createDialog.getByLabel(/Parent|上级组织/)
+  await selectOrgUnitTreeFieldOption(page, createParentField, flowersCode, `${runMarker} Flowers (${flowersCode})`)
+  await expectOrgUnitTreeFieldCannotFind(page, createParentField, bugsCode, `${runMarker} Bugs (${bugsCode})`)
+  await createDialog.getByRole("button", { name: /Confirm|确认/ }).click()
+  await expect(page.getByText(/Action completed|操作已完成/)).toBeVisible()
+  const createdDetails = await waitForOrgUnitDetails(adminContext, createChildCode, AS_OF, 15_000)
+  expect(createdDetails?.org_unit?.parent_org_code).toBe(flowersCode)
+
+  const directCreate = await restrictedContext.request.post("/org/api/org-units", {
+    headers: { Accept: "application/json" },
+    data: {
+      org_code: `D491OC${runSuffix}`,
+      name: `${runMarker} Outside Create`,
+      effective_date: AS_OF,
+      parent_org_code: bugsCode,
+      is_business_unit: false
+    }
+  })
+  const { text: directCreateBody, json: directCreateJSON } = await responseJSON(directCreate)
+  expect(directCreate.status(), directCreateBody).toBe(403)
+  expect(directCreateJSON.code).toBe("authz_scope_forbidden")
+
+  await createOrgUnit(adminContext, {
+    org_code: detailChildCode,
+    name: `${runMarker} Detail Child`,
+    effective_date: AS_OF,
+    parent_org_code: flowersCode,
+    is_business_unit: false
+  })
+  await waitForOrgUnitDetails(adminContext, detailChildCode, AS_OF, 15_000)
+  await page.goto(`/app/org/units/${detailChildCode}?as_of=${AS_OF}`)
+  await expect(page.getByRole("heading", { name: new RegExp(`${runMarker} Detail Child`) })).toBeVisible()
+  await page.getByRole("button", { name: /Correct|更正/ }).click()
+  const detailDialog = page.getByRole("dialog")
+  await expect(detailDialog.getByRole("heading", { name: /Correct|更正/ })).toBeVisible()
+  const detailParentField = detailDialog.getByLabel(/Parent|上级组织/)
+  await selectOrgUnitTreeFieldOption(page, detailParentField, flowersChildCode, `${runMarker} Flowers Child (${flowersChildCode})`)
+  await expectOrgUnitTreeFieldCannotFind(page, detailParentField, bugsCode, `${runMarker} Bugs (${bugsCode})`)
+  await detailDialog.getByRole("button", { name: /Confirm|确认/ }).click()
+  await expect(page.getByText(/Action completed|操作已完成/)).toBeVisible()
+  const correctedDetails = await waitForOrgUnitDetails(adminContext, detailChildCode, AS_OF, 15_000)
+  expect(correctedDetails?.org_unit?.parent_org_code).toBe(flowersChildCode)
+
+  const directCorrect = await restrictedContext.request.post("/org/api/org-units/write", {
+    headers: { Accept: "application/json" },
+    data: {
+      intent: "correct",
+      org_code: detailChildCode,
+      effective_date: AS_OF,
+      target_effective_date: AS_OF,
+      request_id: `dev491:correct-outside:${runID}`,
+      patch: {
+        parent_org_code: bugsCode
+      }
+    }
+  })
+  const { text: directCorrectBody, json: directCorrectJSON } = await responseJSON(directCorrect)
+  expect(directCorrect.status(), directCorrectBody).toBe(403)
+  expect(directCorrectJSON.code).toBe("authz_scope_forbidden")
 
   await page.close()
   await restrictedContext.close()

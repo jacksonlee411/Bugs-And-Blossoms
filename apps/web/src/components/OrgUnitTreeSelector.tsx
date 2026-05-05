@@ -324,13 +324,18 @@ export function OrgUnitTreeField({
 }: OrgUnitTreeFieldProps) {
   const { t } = useAppPreferences()
   const [open, setOpen] = useState(false)
+  const openPicker = () => {
+    if (!disabled) {
+      setOpen(true)
+    }
+  }
   return (
     <>
       <TextField
         disabled={disabled}
         fullWidth
         helperText={helperText}
-        inputProps={{ readOnly: true }}
+        inputProps={{ readOnly: true, onClick: openPicker }}
         InputProps={{
           endAdornment: clearable && value && !disabled ? (
             <InputAdornment position='end'>
@@ -349,11 +354,7 @@ export function OrgUnitTreeField({
           ) : undefined
         }}
         label={label}
-        onClick={() => {
-          if (!disabled) {
-            setOpen(true)
-          }
-        }}
+        onClick={openPicker}
         value={value ? formatOrgUnitSelectorLabel(value) : ''}
       />
       <OrgUnitTreePickerDialog

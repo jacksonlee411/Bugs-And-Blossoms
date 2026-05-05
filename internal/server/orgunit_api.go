@@ -56,7 +56,7 @@ func handleOrgUnitsBusinessUnitAPI(w http.ResponseWriter, r *http.Request, dep a
 			if strings.TrimSpace(req.OrgCode) == "" {
 				return "", "", newBadRequestError("org_code required")
 			}
-			if err := ensureCurrentPrincipalOrgCodeScopeAllows(ctx, scope.store, scope.runtime, tenantID, req.OrgCode); err != nil {
+			if err := ensureCurrentPrincipalOrgCodeScopeAllows(ctx, scope.store, scope.runtime, tenantID, req.OrgCode, req.EffectiveDate); err != nil {
 				return "", "", err
 			}
 
@@ -134,7 +134,7 @@ func handleOrgUnitsBusinessUnitAPIStoreLegacy(w http.ResponseWriter, r *http.Req
 		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "invalid_effective_date", "invalid effective_date")
 		return
 	}
-	if err := ensureCurrentPrincipalOrgScopeAllows(r.Context(), runtime, tenant.ID, orgNodeKey); err != nil {
+	if err := ensureCurrentPrincipalOrgNodeScopeAllows(r.Context(), store, runtime, tenant.ID, orgNodeKey, req.EffectiveDate); err != nil {
 		writeOrgUnitScopeError(w, r, err)
 		return
 	}
@@ -406,6 +406,7 @@ type orgUnitListQueryOptions struct {
 type orgUnitListPageRequest struct {
 	AsOf              string
 	IncludeDisabled   bool
+	ScopeFilter       orgunitservices.OrgUnitReadScopeFilter
 	ParentOrgNodeKey  *string
 	AllOrgUnits       bool
 	Keyword           string
@@ -654,6 +655,7 @@ func listOrgUnitListPage(ctx context.Context, store OrgUnitStore, tenantID strin
 	if err := hydrateOrgUnitListItemScopePaths(ctx, store, tenantID, req.AsOf, items); err != nil {
 		return nil, 0, err
 	}
+	items = filterOrgUnitListItemsByReadScope(items, req.ScopeFilter)
 
 	total := len(items)
 	if req.Limit <= 0 {
@@ -707,6 +709,59 @@ func filterOrgUnitListItems(items []orgUnitListItem, keyword string, status stri
 	}
 
 	return out
+}
+
+func filterOrgUnitListItemsByReadScope(items []orgUnitListItem, filter orgunitservices.OrgUnitReadScopeFilter) []orgUnitListItem {
+	if filter.AllTenant || len(filter.Scopes) == 0 {
+		return items
+	}
+	out := make([]orgUnitListItem, 0, len(items))
+	for _, item := range items {
+		if orgUnitReadScopeAllowsListItem(filter, item) {
+			out = append(out, item)
+		}
+	}
+	return out
+}
+
+func orgUnitReadScopeAllowsListItem(filter orgunitservices.OrgUnitReadScopeFilter, item orgUnitListItem) bool {
+	orgNodeKey := strings.TrimSpace(item.OrgNodeKey)
+	if orgNodeKey == "" {
+		return false
+	}
+	path := append([]string(nil), item.PathOrgNodeKeys...)
+	if len(path) == 0 || strings.TrimSpace(path[len(path)-1]) != orgNodeKey {
+		path = append(path, orgNodeKey)
+	}
+	for _, scope := range filter.Scopes {
+		boundOrgNodeKey := strings.TrimSpace(scope.OrgNodeKey)
+		if boundOrgNodeKey == "" {
+			continue
+		}
+		if orgNodeKey == boundOrgNodeKey {
+			return true
+		}
+		if !scope.IncludeDescendants {
+			continue
+		}
+		for _, pathOrgNodeKey := range path {
+			if strings.TrimSpace(pathOrgNodeKey) == boundOrgNodeKey {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func orgUnitScopeRequiredEmptyList(ctx context.Context, store OrgUnitStore, tenantID string, asOf string, includeDisabled bool, err error) (bool, error) {
+	if !errors.Is(err, orgunitservices.ErrOrgUnitReadScopeRequired) && !errors.Is(err, errAuthzOrgScopeRequired) {
+		return false, nil
+	}
+	nodes, listErr := listNodesCurrentByVisibility(ctx, store, tenantID, asOf, includeDisabled)
+	if listErr != nil {
+		return false, listErr
+	}
+	return len(nodes) == 0, nil
 }
 
 func sortOrgUnitListItems(items []orgUnitListItem, sortField string, sortOrder string) {
@@ -856,6 +911,43 @@ func ensureCurrentPrincipalOrgScopeAllows(ctx context.Context, runtime authzRunt
 	return ensurePrincipalOrgScopeAllows(ctx, runtime, tenantID, principal.ID, orgNodeKey, nil)
 }
 
+func ensureCurrentPrincipalOrgNodeScopeAllows(ctx context.Context, store OrgUnitStore, runtime authzRuntimeStore, tenantID string, orgNodeKey string, asOf string) error {
+	if runtime == nil {
+		return nil
+	}
+	orgNodeKey = strings.TrimSpace(orgNodeKey)
+	if orgNodeKey == "" {
+		return nil
+	}
+	if store == nil {
+		return errAuthzRuntimeUnavailable
+	}
+	scopeFilter, err := orgUnitReadScopeFilterFromRuntime(ctx, runtime, tenantID)
+	if err != nil {
+		return err
+	}
+	targetAsOf, err := orgUnitScopeCheckAsOf(ctx, store, tenantID, asOf)
+	if err != nil {
+		return err
+	}
+	readSvc := orgunitservices.NewOrgUnitReadService(orgUnitReadStoreAdapter{store: store})
+	resolved, err := readSvc.Resolve(ctx, orgunitservices.OrgUnitResolveRequest{
+		TenantID:        tenantID,
+		AsOf:            targetAsOf,
+		ScopeFilter:     scopeFilter,
+		OrgNodeKeys:     []string{orgNodeKey},
+		IncludeDisabled: true,
+		Caller:          "orgunit.scope.write",
+	})
+	if err != nil {
+		return err
+	}
+	if len(resolved) == 0 {
+		return orgunitservices.ErrOrgUnitReadScopeForbidden
+	}
+	return nil
+}
+
 func ensurePrincipalOrgScopeAllows(ctx context.Context, runtime authzRuntimeStore, tenantID string, principalID string, orgNodeKey string, pathOrgNodeKeys []string) error {
 	if runtime == nil {
 		return nil
@@ -893,7 +985,7 @@ func ensureCurrentPrincipalOrgScopeAllowsResult(ctx context.Context, runtime aut
 	return nil
 }
 
-func ensureCurrentPrincipalOrgCodeScopeAllows(ctx context.Context, store OrgUnitStore, runtime authzRuntimeStore, tenantID string, orgCode string) error {
+func ensureCurrentPrincipalOrgCodeScopeAllows(ctx context.Context, store OrgUnitStore, runtime authzRuntimeStore, tenantID string, orgCode string, asOf string) error {
 	if runtime == nil {
 		return nil
 	}
@@ -904,15 +996,30 @@ func ensureCurrentPrincipalOrgCodeScopeAllows(ctx context.Context, store OrgUnit
 	if store == nil {
 		return errAuthzRuntimeUnavailable
 	}
-	orgNodeKey, err := store.ResolveOrgNodeKeyByCode(ctx, tenantID, orgCode)
+	scopeFilter, err := orgUnitReadScopeFilterFromRuntime(ctx, runtime, tenantID)
 	if err != nil {
 		return err
 	}
-	principal, ok := currentPrincipal(ctx)
-	if !ok || strings.TrimSpace(principal.ID) == "" {
-		return errAuthzPrincipalMissing
+	targetAsOf, err := orgUnitScopeCheckAsOf(ctx, store, tenantID, asOf)
+	if err != nil {
+		return err
 	}
-	return ensurePrincipalOrgNodeScopeAllows(ctx, store, runtime, tenantID, principal.ID, orgNodeKey, "")
+	readSvc := orgunitservices.NewOrgUnitReadService(orgUnitReadStoreAdapter{store: store})
+	resolved, err := readSvc.Resolve(ctx, orgunitservices.OrgUnitResolveRequest{
+		TenantID:        tenantID,
+		AsOf:            targetAsOf,
+		ScopeFilter:     scopeFilter,
+		OrgCodes:        []string{orgCode},
+		IncludeDisabled: true,
+		Caller:          "orgunit.scope.write",
+	})
+	if err != nil {
+		return err
+	}
+	if len(resolved) == 0 {
+		return orgunitservices.ErrOrgUnitReadScopeForbidden
+	}
+	return nil
 }
 
 func ensurePrincipalOrgCodeScopeAllows(ctx context.Context, store OrgUnitStore, runtime authzRuntimeStore, tenantID string, principalID string, orgCode string, asOf string) error {
@@ -942,6 +1049,21 @@ func ensurePrincipalOrgNodeScopeAllows(ctx context.Context, store OrgUnitStore, 
 		return err
 	}
 	return ensurePrincipalOrgScopeAllows(ctx, runtime, tenantID, principalID, targetOrgNodeKey, pathOrgNodeKeys)
+}
+
+func orgUnitScopeCheckAsOf(ctx context.Context, store OrgUnitStore, tenantID string, asOf string) (string, error) {
+	targetAsOf := strings.TrimSpace(asOf)
+	if targetAsOf != "" {
+		return targetAsOf, nil
+	}
+	maxAsOf, ok, err := store.MaxEffectiveDateOnOrBefore(ctx, tenantID, time.Now().UTC().Format(asOfLayout))
+	if err != nil {
+		return "", err
+	}
+	if ok && strings.TrimSpace(maxAsOf) != "" {
+		return strings.TrimSpace(maxAsOf), nil
+	}
+	return time.Now().UTC().Format(asOfLayout), nil
 }
 
 func currentPrincipalOrgScopes(ctx context.Context, runtime authzRuntimeStore, tenantID string) ([]principalOrgScope, error) {
@@ -1035,7 +1157,7 @@ func writeOrgUnitScopeError(w http.ResponseWriter, r *http.Request, err error) {
 		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusInternalServerError, "authz_runtime_unavailable", "authz runtime unavailable")
 	case errors.Is(err, errAuthzPrincipalMissing):
 		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusUnauthorized, "principal_missing", "principal missing")
-	case errors.Is(err, errAuthzOrgScopeRequired), errors.Is(err, errAuthzScopeForbidden):
+	case errors.Is(err, errAuthzOrgScopeRequired), errors.Is(err, errAuthzScopeForbidden), isOrgUnitReadAuthzError(err):
 		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusForbidden, "authz_scope_forbidden", "authz scope forbidden")
 	default:
 		writeInternalAPIError(w, r, err, "authz_scope_check_failed")
@@ -1046,7 +1168,8 @@ func isOrgUnitAuthzScopeError(err error) bool {
 	return errors.Is(err, errAuthzRuntimeUnavailable) ||
 		errors.Is(err, errAuthzPrincipalMissing) ||
 		errors.Is(err, errAuthzOrgScopeRequired) ||
-		errors.Is(err, errAuthzScopeForbidden)
+		errors.Is(err, errAuthzScopeForbidden) ||
+		isOrgUnitReadAuthzError(err)
 }
 
 func isOrgUnitReadAuthzError(err error) bool {
@@ -1121,6 +1244,30 @@ func handleOrgUnitsAPI(w http.ResponseWriter, r *http.Request, store OrgUnitStor
 			readSvc := orgunitservices.NewOrgUnitReadService(orgUnitReadStoreAdapter{store: store})
 			scopeFilter, err := orgUnitReadScopeFilterFromRuntime(r.Context(), runtimeStoreFromVariadic(runtime), tenant.ID)
 			if err != nil {
+				if empty, emptyErr := orgUnitScopeRequiredEmptyList(r.Context(), store, tenant.ID, asOf, includeDisabled, err); emptyErr != nil {
+					writeInternalAPIError(w, r, emptyErr, "orgunit_list_failed")
+					return
+				} else if empty {
+					var pagePtr *int
+					var sizePtr *int
+					var totalPtr *int
+					if listOpts.Paginate {
+						pagePtr = &listOpts.Page
+						sizePtr = &listOpts.PageSize
+						total := 0
+						totalPtr = &total
+					}
+					w.Header().Set("Content-Type", "application/json; charset=utf-8")
+					_ = json.NewEncoder(w).Encode(orgUnitListResponse{
+						AsOf:            asOf,
+						IncludeDisabled: includeDisabled,
+						Page:            pagePtr,
+						Size:            sizePtr,
+						Total:           totalPtr,
+						OrgUnits:        []orgUnitListItem{},
+					})
+					return
+				}
 				writeOrgUnitScopeError(w, r, err)
 				return
 			}
@@ -1170,6 +1317,25 @@ func handleOrgUnitsAPI(w http.ResponseWriter, r *http.Request, store OrgUnitStor
 				Caller:            "orgunit.http.list",
 			})
 			if err != nil {
+				if empty, emptyErr := orgUnitScopeRequiredEmptyList(r.Context(), store, tenant.ID, asOf, includeDisabled, err); emptyErr != nil {
+					writeInternalAPIError(w, r, emptyErr, "orgunit_list_failed")
+					return
+				} else if empty {
+					total := 0
+					if listOpts.Paginate {
+						totalPtr = &total
+					}
+					w.Header().Set("Content-Type", "application/json; charset=utf-8")
+					_ = json.NewEncoder(w).Encode(orgUnitListResponse{
+						AsOf:            asOf,
+						IncludeDisabled: includeDisabled,
+						Page:            pagePtr,
+						Size:            sizePtr,
+						Total:           totalPtr,
+						OrgUnits:        []orgUnitListItem{},
+					})
+					return
+				}
 				writeOrgUnitReadServiceError(w, r, err, "orgunit_list_failed")
 				return
 			}
@@ -1194,6 +1360,18 @@ func handleOrgUnitsAPI(w http.ResponseWriter, r *http.Request, store OrgUnitStor
 		readSvc := orgunitservices.NewOrgUnitReadService(orgUnitReadStoreAdapter{store: store})
 		scopeFilter, err := orgUnitReadScopeFilterFromRuntime(r.Context(), runtimeStoreFromVariadic(runtime), tenant.ID)
 		if err != nil {
+			if empty, emptyErr := orgUnitScopeRequiredEmptyList(r.Context(), store, tenant.ID, asOf, includeDisabled, err); emptyErr != nil {
+				writeInternalAPIError(w, r, emptyErr, "orgunit_list_failed")
+				return
+			} else if empty {
+				w.Header().Set("Content-Type", "application/json; charset=utf-8")
+				_ = json.NewEncoder(w).Encode(orgUnitListResponse{
+					AsOf:            asOf,
+					IncludeDisabled: includeDisabled,
+					OrgUnits:        []orgUnitListItem{},
+				})
+				return
+			}
 			writeOrgUnitScopeError(w, r, err)
 			return
 		}
@@ -1248,6 +1426,18 @@ func handleOrgUnitsAPI(w http.ResponseWriter, r *http.Request, store OrgUnitStor
 			Caller:          "orgunit.http.roots",
 		})
 		if err != nil {
+			if empty, emptyErr := orgUnitScopeRequiredEmptyList(r.Context(), store, tenant.ID, asOf, includeDisabled, err); emptyErr != nil {
+				writeInternalAPIError(w, r, emptyErr, "orgunit_list_failed")
+				return
+			} else if empty {
+				w.Header().Set("Content-Type", "application/json; charset=utf-8")
+				_ = json.NewEncoder(w).Encode(orgUnitListResponse{
+					AsOf:            asOf,
+					IncludeDisabled: includeDisabled,
+					OrgUnits:        []orgUnitListItem{},
+				})
+				return
+			}
 			writeOrgUnitReadServiceError(w, r, err, "orgunit_list_failed")
 			return
 		}
@@ -1283,7 +1473,7 @@ func handleOrgUnitsAPI(w http.ResponseWriter, r *http.Request, store OrgUnitStor
 		}
 		req.EffectiveDate = effectiveDate
 		if strings.TrimSpace(req.ParentOrgCode) != "" {
-			if err := ensureCurrentPrincipalOrgCodeScopeAllows(r.Context(), store, runtimeStoreFromVariadic(runtime), tenant.ID, req.ParentOrgCode); err != nil {
+			if err := ensureCurrentPrincipalOrgCodeScopeAllows(r.Context(), store, runtimeStoreFromVariadic(runtime), tenant.ID, req.ParentOrgCode, req.EffectiveDate); err != nil {
 				writeOrgUnitScopeError(w, r, err)
 				return
 			}
@@ -1353,13 +1543,10 @@ func handleOrgUnitsDetailsAPI(w http.ResponseWriter, r *http.Request, store OrgU
 		}
 		return
 	}
-	if rt := runtimeStoreFromVariadic(runtime); rt != nil {
-		principal, ok := currentPrincipal(r.Context())
-		if !ok || strings.TrimSpace(principal.ID) == "" {
-			writeOrgUnitScopeError(w, r, errAuthzPrincipalMissing)
-			return
-		}
-		if err := ensurePrincipalOrgNodeScopeAllows(r.Context(), store, rt, tenant.ID, principal.ID, orgNodeKey, asOf); err != nil {
+
+	rt := runtimeStoreFromVariadic(runtime)
+	if rt != nil {
+		if err := ensureCurrentPrincipalOrgNodeScopeAllows(r.Context(), store, rt, tenant.ID, orgNodeKey, asOf); err != nil {
 			writeOrgUnitScopeError(w, r, err)
 			return
 		}
@@ -1712,7 +1899,7 @@ func handleOrgUnitsRenameAPI(w http.ResponseWriter, r *http.Request, writeSvc or
 			return "", "", err
 		}
 		req.EffectiveDate = effectiveDate
-		if err := ensureCurrentPrincipalOrgCodeScopeAllows(ctx, scope.store, scope.runtime, tenantID, req.OrgCode); err != nil {
+		if err := ensureCurrentPrincipalOrgCodeScopeAllows(ctx, scope.store, scope.runtime, tenantID, req.OrgCode, req.EffectiveDate); err != nil {
 			return "", "", err
 		}
 		initiatorUUID := orgUnitInitiatorUUID(ctx, tenantID)
@@ -1744,11 +1931,11 @@ func handleOrgUnitsMoveAPI(w http.ResponseWriter, r *http.Request, writeSvc orgu
 			return "", "", err
 		}
 		req.EffectiveDate = effectiveDate
-		if err := ensureCurrentPrincipalOrgCodeScopeAllows(ctx, scope.store, scope.runtime, tenantID, req.OrgCode); err != nil {
+		if err := ensureCurrentPrincipalOrgCodeScopeAllows(ctx, scope.store, scope.runtime, tenantID, req.OrgCode, req.EffectiveDate); err != nil {
 			return "", "", err
 		}
 		if strings.TrimSpace(req.NewParentOrgCode) != "" {
-			if err := ensureCurrentPrincipalOrgCodeScopeAllows(ctx, scope.store, scope.runtime, tenantID, req.NewParentOrgCode); err != nil {
+			if err := ensureCurrentPrincipalOrgCodeScopeAllows(ctx, scope.store, scope.runtime, tenantID, req.NewParentOrgCode, req.EffectiveDate); err != nil {
 				return "", "", err
 			}
 		}
@@ -1781,7 +1968,7 @@ func handleOrgUnitsDisableAPI(w http.ResponseWriter, r *http.Request, writeSvc o
 			return "", "", err
 		}
 		req.EffectiveDate = effectiveDate
-		if err := ensureCurrentPrincipalOrgCodeScopeAllows(ctx, scope.store, scope.runtime, tenantID, req.OrgCode); err != nil {
+		if err := ensureCurrentPrincipalOrgCodeScopeAllows(ctx, scope.store, scope.runtime, tenantID, req.OrgCode, req.EffectiveDate); err != nil {
 			return "", "", err
 		}
 		initiatorUUID := orgUnitInitiatorUUID(ctx, tenantID)
@@ -1812,7 +1999,7 @@ func handleOrgUnitsEnableAPI(w http.ResponseWriter, r *http.Request, writeSvc or
 			return "", "", err
 		}
 		req.EffectiveDate = effectiveDate
-		if err := ensureCurrentPrincipalOrgCodeScopeAllows(ctx, scope.store, scope.runtime, tenantID, req.OrgCode); err != nil {
+		if err := ensureCurrentPrincipalOrgCodeScopeAllows(ctx, scope.store, scope.runtime, tenantID, req.OrgCode, req.EffectiveDate); err != nil {
 			return "", "", err
 		}
 		initiatorUUID := orgUnitInitiatorUUID(ctx, tenantID)
@@ -1856,12 +2043,12 @@ func handleOrgUnitsCorrectionsAPI(w http.ResponseWriter, r *http.Request, writeS
 		writeOrgUnitServiceError(w, r, newBadRequestError(orgUnitErrPatchFieldNotAllowed), "orgunit_correct_failed")
 		return
 	}
-	if err := ensureCurrentPrincipalOrgCodeScopeAllows(r.Context(), scope.store, scope.runtime, tenant.ID, req.OrgCode); err != nil {
+	if err := ensureCurrentPrincipalOrgCodeScopeAllows(r.Context(), scope.store, scope.runtime, tenant.ID, req.OrgCode, req.EffectiveDate); err != nil {
 		writeOrgUnitScopeError(w, r, err)
 		return
 	}
 	if req.Patch.ParentOrgCode != nil && strings.TrimSpace(*req.Patch.ParentOrgCode) != "" {
-		if err := ensureCurrentPrincipalOrgCodeScopeAllows(r.Context(), scope.store, scope.runtime, tenant.ID, *req.Patch.ParentOrgCode); err != nil {
+		if err := ensureCurrentPrincipalOrgCodeScopeAllows(r.Context(), scope.store, scope.runtime, tenant.ID, *req.Patch.ParentOrgCode, req.EffectiveDate); err != nil {
 			writeOrgUnitScopeError(w, r, err)
 			return
 		}
@@ -1911,7 +2098,7 @@ func handleOrgUnitsStatusCorrectionsAPI(w http.ResponseWriter, r *http.Request, 
 		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "bad_json", "bad json")
 		return
 	}
-	if err := ensureCurrentPrincipalOrgCodeScopeAllows(r.Context(), scope.store, scope.runtime, tenant.ID, req.OrgCode); err != nil {
+	if err := ensureCurrentPrincipalOrgCodeScopeAllows(r.Context(), scope.store, scope.runtime, tenant.ID, req.OrgCode, req.EffectiveDate); err != nil {
 		writeOrgUnitScopeError(w, r, err)
 		return
 	}
@@ -1953,7 +2140,7 @@ func handleOrgUnitsRescindsAPI(w http.ResponseWriter, r *http.Request, writeSvc 
 		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "bad_json", "bad json")
 		return
 	}
-	if err := ensureCurrentPrincipalOrgCodeScopeAllows(r.Context(), scope.store, scope.runtime, tenant.ID, req.OrgCode); err != nil {
+	if err := ensureCurrentPrincipalOrgCodeScopeAllows(r.Context(), scope.store, scope.runtime, tenant.ID, req.OrgCode, req.EffectiveDate); err != nil {
 		writeOrgUnitScopeError(w, r, err)
 		return
 	}
@@ -2002,7 +2189,7 @@ func handleOrgUnitsRescindsOrgAPI(w http.ResponseWriter, r *http.Request, writeS
 		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "bad_json", "bad json")
 		return
 	}
-	if err := ensureCurrentPrincipalOrgCodeScopeAllows(r.Context(), scope.store, scope.runtime, tenant.ID, req.OrgCode); err != nil {
+	if err := ensureCurrentPrincipalOrgCodeScopeAllows(r.Context(), scope.store, scope.runtime, tenant.ID, req.OrgCode, ""); err != nil {
 		writeOrgUnitScopeError(w, r, err)
 		return
 	}

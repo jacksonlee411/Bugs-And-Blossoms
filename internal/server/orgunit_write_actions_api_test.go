@@ -66,6 +66,40 @@ func TestHandleOrgUnitsRenameAPI_NotFound(t *testing.T) {
 	}
 }
 
+func TestHandleOrgUnitsRenameAPI_ScopeForbiddenMapsTo403(t *testing.T) {
+	store := newOrgUnitMemoryStore()
+	ctx := context.Background()
+	if _, err := store.CreateNodeCurrent(ctx, "t1", "2026-01-01", "VISIBLE", "Visible", "", true); err != nil {
+		t.Fatalf("create visible err=%v", err)
+	}
+	if _, err := store.CreateNodeCurrent(ctx, "t1", "2026-01-01", "HIDDEN", "Hidden", "", true); err != nil {
+		t.Fatalf("create hidden err=%v", err)
+	}
+	visibleKey, err := store.ResolveOrgNodeKeyByCode(ctx, "t1", "VISIBLE")
+	if err != nil {
+		t.Fatalf("resolve visible err=%v", err)
+	}
+	runtime := &orgUnitScopeRuntimeStub{scopes: []principalOrgScope{{
+		OrgNodeKey:         visibleKey,
+		IncludeDescendants: true,
+	}}}
+	svc := orgUnitWriteServiceStub{
+		renameFn: func(context.Context, string, orgunitservices.RenameOrgUnitRequest) error {
+			t.Fatal("rename should not be called when scope check fails")
+			return nil
+		},
+	}
+
+	body := strings.NewReader(`{"org_code":"HIDDEN","new_name":"Nope","effective_date":"2026-01-01"}`)
+	req := httptest.NewRequest(http.MethodPost, "/org/api/org-units/rename", body)
+	req = req.WithContext(withPrincipal(withTenant(req.Context(), Tenant{ID: "t1", Name: "T"}), Principal{ID: "principal-a"}))
+	rec := httptest.NewRecorder()
+	handleOrgUnitsRenameAPI(rec, req, svc, orgUnitScopeDeps{store: store, runtime: runtime})
+	if rec.Code != http.StatusForbidden || !strings.Contains(rec.Body.String(), "authz_scope_forbidden") {
+		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+	}
+}
+
 func TestHandleOrgUnitsRenameAPI_BadJSON(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/org/api/org-units/rename", strings.NewReader("{"))
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "T"}))

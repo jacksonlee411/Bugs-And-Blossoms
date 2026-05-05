@@ -1,6 +1,6 @@
 # DEV-PLAN-480A：480 系列授权子计划实施顺序路线图
 
-**状态**: P1/P2 只读治理面、P3/P4 后端运行时闭环、481 UI 保存交互与 A/B 组织范围 E2E、P5 CubeBox API-first 首期硬切换及评审修复已完成；491 Phase A/B/C/D 已完成 selector facade、组件与主要组织选择入口接入；492 普通 list/grid 与 ext 字段 list/grid 读取已下沉到 ReadService，并补齐 ext parent scope fail-closed 与 adapter scope path 回归测试；P6 授权项诊断仍待后续补齐，492 SQL 级 scoped pagination 与更广 491/492 联合 E2E 仍待后续（2026-05-04 CST）
+**状态**: P1/P2 只读治理面、P3/P4 后端运行时闭环、481 UI 保存交互与 A/B 组织范围 E2E、P5 CubeBox API-first 首期硬切换及评审修复已完成；491 Phase A/B/C/D 已完成 selector facade、组件与主要组织选择入口接入，更广 491/492 联合 E2E 已覆盖主要 selector 入口；492 普通 list/grid 与 ext 字段 list/grid 读取已下沉到 ReadService，并完成 SQL 级 scoped pagination、ext parent scope fail-closed、adapter scope path 补齐与 details/write scope check 下沉；P6 授权项诊断与 492 剩余局部读取 helper 退场仍待后续（2026-05-04 CST）
 
 ## 0. 适用范围与评审分级
 
@@ -79,7 +79,7 @@ P0  文档与语义冻结
 关键门槛：
 
 1. 没有 484 P1/P2 单一覆盖事实聚合源，不得实现 482A/485/488/490 的覆盖 join。
-2. 487/489/489A 后端运行时闭环、481 UI 保存交互与 A/B 组织范围 E2E、490 API-first 首期硬切换及评审修复已完成；491 Phase A/B/C/D 的 selector facade、组件与主要组织选择入口接入已完成；492 普通 list/grid 与 ext 字段 list/grid 读取已下沉到 ReadService，但不得把 488 诊断视图、更广 491/492 联合 E2E 或 492 SQL scoped pagination 一并宣称完成。
+2. 487/489/489A 后端运行时闭环、481 UI 保存交互与 A/B 组织范围 E2E、490 API-first 首期硬切换及评审修复已完成；491 Phase A/B/C/D 的 selector facade、组件与主要组织选择入口接入已完成，更广 491/492 联合 E2E 已覆盖主要 selector 入口；492 普通 list/grid 与 ext 字段 list/grid 读取已下沉到 ReadService，SQL scoped pagination、details/write scope check 下沉已完成；但不得把 488 诊断视图、字段级授权或 492 剩余局部读取 helper 退场一并宣称完成。
 3. 489 scope provider 与 orgunit 裁剪已完成；用户授权 UI 保存交互已消费 489 API，不得落回前端本地状态。
 4. 没有 485 API 授权目录基础投影和 490 overlay 校验，不得让 CubeBox planner 调用 API 工具。
 5. 488 诊断视图必须后置到 484 + 482A + 485 首批闭环之后。
@@ -328,4 +328,4 @@ CubeBox 切换必须等待：
 - 2026-05-03 CST：完成 P5（DEV-PLAN-490 API-first 硬切换）首期实现：四个 orgunit 只读 API 进入 CubeBox API tool overlay，`cubebox_callable` 由 overlay 投影到 485 API 授权目录；query flow active runtime 切为 `cubebox-query-api-calls`，planner/decoder/runner 不再接受旧 `READ_PLAN`、裸 `ReadPlan` 或 `executor_key` 成功路径；新增 `make check cubebox-api-first` 并接入 `make preflight`。P6（DEV-PLAN-488 授权项诊断）成为后续治理顺序。
 - 2026-05-03 CST：同步 480A 与 `DEV-PLAN-480/484/485/486/488/490` 当前进度状态，消除“490 未实施 / P5 待后续”漂移；本次文档状态同步后 `make check doc` 通过。
 - 2026-05-03 CST：完成 P5 评审修复登记：普通 Web API 与 CubeBox runner 均保留并校验 `all_org_units=true`，语义仍为当前调用者可见范围内全部组织；`orgunit.search` 对多候选返回澄清候选，scope 过滤后唯一候选直接返回该可见候选；API observation 投影 `PresentedCandidates`，knowledge pack `depends_on` 仅允许同一 `API_CALLS` envelope 内引用。491 selector/UI 当时仍按后续计划推进，不并入 P5 完成口径。随后 2026-05-04 已完成 491 Phase A/B/C/D selector facade、组件与用户授权页、创建/详情上级组织选择入口接入，但该进展仍不并入 P5 完成口径。已验证 Go fmt/vet/lint/test、`make check cubebox-api-first`、authz 三件套、routing/doc/no-legacy/chat-surface/root-surface/no-scope/granularity/request-code/go-version/error-message/authz-role-union。
-- 2026-05-04 CST：同步 491 Phase D 与 492 readiness 状态：主要组织选择入口已统一走 `OrgUnitTreeField`/`orgUnitSelector`，safe path 深层/跨分支测试已补；492 普通 list/grid 与 ext 字段 list/grid 读取已下沉到 `OrgUnitReadService.List`，HTTP list/grid 分支已消费 ReadService，adapter 使用批量 tree/page 原语避免递归 children N+1；评审修复已补 ext parent scope fail-closed 与 adapter page row path 补齐。488 诊断、更广 491/492 联合 E2E 与 492 SQL 级 scoped pagination 仍保持后续范围。
+- 2026-05-04 CST：同步 491 Phase D 与 492 readiness 状态：主要组织选择入口已统一走 `OrgUnitTreeField`/`orgUnitSelector`，safe path 深层/跨分支测试已补；更广 `dev491` E2E 已覆盖用户授权页、创建组织与组织详情页父组织 selector 的可见范围、范围外搜索与直接提交 fail-closed。492 普通 list/grid 与 ext 字段 list/grid 读取已下沉到 `OrgUnitReadService.List`，HTTP list/grid 分支已消费 ReadService，adapter page 原语已将 scope 裁剪、filter/sort、count、limit/offset 下推到 store pager；评审修复已补 ext parent scope fail-closed 与 adapter page row path 补齐，details/write scope check 已复用 ReadService `Resolve`。488 诊断、字段级授权与 492 剩余局部读取 helper 退场仍保持后续范围。

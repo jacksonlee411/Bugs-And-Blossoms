@@ -132,6 +132,25 @@ func TestHandleOrgUnitsAPI_ListVisibleRootsFromScopedMiddleNode(t *testing.T) {
 	}
 }
 
+func TestHandleOrgUnitsAPI_ListRootsNoScopeAndNoOrgDataReturnsEmpty(t *testing.T) {
+	store := newOrgUnitMemoryStore()
+	req := httptest.NewRequest(http.MethodGet, "/org/api/org-units?as_of=2026-01-01", nil)
+	req = req.WithContext(withPrincipal(withTenant(req.Context(), Tenant{ID: "t1", Name: "T"}), Principal{ID: "principal-a"}))
+	rec := httptest.NewRecorder()
+	runtime := &orgUnitScopeRuntimeStub{err: errAuthzOrgScopeRequired}
+	handleOrgUnitsAPI(rec, req, store, nil, runtime)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+	}
+	var payload orgUnitListResponse
+	if err := json.NewDecoder(rec.Body).Decode(&payload); err != nil {
+		t.Fatalf("decode err=%v", err)
+	}
+	if len(payload.OrgUnits) != 0 {
+		t.Fatalf("org_units=%+v", payload.OrgUnits)
+	}
+}
+
 func TestOrgUnitReadStoreAdapterResolveFailsClosedWhenPathCodeMissing(t *testing.T) {
 	rootKey := mustReadTestOrgNodeKey(t, 10000001)
 	childKey := mustReadTestOrgNodeKey(t, 10000002)
@@ -915,6 +934,54 @@ func TestOrgUnitReadStoreAdapterListPageHydratesScopePath(t *testing.T) {
 	}
 }
 
+func TestOrgUnitReadStoreAdapterListPagePushesScopeAndPagination(t *testing.T) {
+	ctx := context.Background()
+	scopeKey, err := encodeOrgNodeKeyFromID(10000002)
+	if err != nil {
+		t.Fatalf("scope key err=%v", err)
+	}
+	store := &orgUnitListPageReaderStore{
+		resolveOrgCodeStore: &resolveOrgCodeStore{},
+		items: []orgUnitListItem{{
+			OrgCode:         "CHILD",
+			OrgNodeKey:      scopeKey,
+			PathOrgNodeKeys: []string{scopeKey},
+			Name:            "Child",
+			Status:          orgUnitListStatusActive,
+		}},
+		total: 3,
+	}
+
+	svc := orgunitservices.NewOrgUnitReadService(orgUnitReadStoreAdapter{store: store})
+	nodes, total, err := svc.List(ctx, orgunitservices.OrgUnitListRequest{
+		TenantID:        "t1",
+		AsOf:            "2026-01-01",
+		AllOrgUnits:     true,
+		ExtSortFieldKey: "org_type",
+		Limit:           2,
+		Offset:          4,
+		ScopeFilter: orgunitservices.OrgUnitReadScopeFilter{
+			PrincipalID: "principal-a",
+			Scopes: []orgunitservices.OrgUnitScope{{
+				OrgNodeKey:         scopeKey,
+				IncludeDescendants: true,
+			}},
+		},
+	})
+	if err != nil {
+		t.Fatalf("List err=%v", err)
+	}
+	if total != 3 || len(nodes) != 1 {
+		t.Fatalf("nodes=%+v total=%d", nodes, total)
+	}
+	if store.capturedReq.Limit != 2 || store.capturedReq.Offset != 4 {
+		t.Fatalf("pagination not pushed: %+v", store.capturedReq)
+	}
+	if len(store.capturedReq.ScopeFilter.Scopes) != 1 || store.capturedReq.ScopeFilter.Scopes[0].OrgNodeKey != scopeKey {
+		t.Fatalf("scope not pushed: %+v", store.capturedReq.ScopeFilter)
+	}
+}
+
 func TestHandleOrgUnitsAPI_ListPaginationTotalUsesScopedResult(t *testing.T) {
 	store := newOrgUnitMemoryStore()
 	ctx := context.Background()
@@ -1103,6 +1170,39 @@ func TestHandleOrgUnitsDetailsAPI_BasicErrors(t *testing.T) {
 	handleOrgUnitsDetailsAPI(rec2, req2, newOrgUnitMemoryStore())
 	if rec2.Code != http.StatusNotFound {
 		t.Fatalf("status=%d", rec2.Code)
+	}
+}
+
+func TestHandleOrgUnitsDetailsAPI_FailsClosedOutsideScope(t *testing.T) {
+	store := newOrgUnitMemoryStore()
+	if _, err := store.CreateNodeCurrent(context.Background(), "t1", "2026-01-01", "VISIBLE", "Visible", "", true); err != nil {
+		t.Fatalf("create visible err=%v", err)
+	}
+	if _, err := store.CreateNodeCurrent(context.Background(), "t1", "2026-01-01", "HIDDEN", "Hidden", "", true); err != nil {
+		t.Fatalf("create hidden err=%v", err)
+	}
+	visibleOrgNodeKey, err := store.ResolveOrgNodeKeyByCode(context.Background(), "t1", "VISIBLE")
+	if err != nil {
+		t.Fatalf("resolve visible err=%v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/org/api/org-units/details?org_code=HIDDEN&as_of=2026-01-01", nil)
+	req = req.WithContext(withPrincipal(withTenant(req.Context(), Tenant{ID: "t1", Name: "T"}), Principal{ID: "principal-a"}))
+	rec := httptest.NewRecorder()
+	runtime := &orgUnitScopeRuntimeStub{scopes: []principalOrgScope{{
+		OrgNodeKey: visibleOrgNodeKey,
+	}}}
+	handleOrgUnitsDetailsAPI(rec, req, store, runtime)
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+	}
+
+	var payload map[string]any
+	if err := json.NewDecoder(rec.Body).Decode(&payload); err != nil {
+		t.Fatalf("decode err=%v", err)
+	}
+	if payload["code"] != "authz_scope_forbidden" {
+		t.Fatalf("payload=%+v", payload)
 	}
 }
 
