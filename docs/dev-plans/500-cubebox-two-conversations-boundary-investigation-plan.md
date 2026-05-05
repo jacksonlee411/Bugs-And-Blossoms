@@ -1,11 +1,11 @@
 # DEV-PLAN-500：CubeBox 两次相同查询会话差异与边界判定专项调查方案
 
-**状态**: 规划中（2026-05-04 22:35 CST）
+**状态**: 已关闭（2026-05-05 12:37 CST；由 `DEV-PLAN-501` 交付并关闭）
 
 ## 0. 适用范围与评审分级
 
 - **评审分级**：`T2`
-- **范围一句话**：针对 `conv_0fc7637be99c47538e311860ffe972b2` 与 `conv_2d934635cd6449e48eb45ff4b9a0dddb` 两次内容相同但结果不同的 `CubeBox` 查询会话，冻结专项调查范围、证据口径、步骤分解、模型输入输出取证口径，以及“允许范围/超出范围”判定链路的逐步审计方法。
+- **范围一句话**：针对 `conv_0fc7637be99c47538e311860ffe972b2` 与 `conv_2d934635cd6449e48eb45ff4b9a0dddb` 两次内容相同但结果不同的 `CubeBox` 查询会话，冻结专项调查范围、证据口径、步骤分解、模型输入输出取证口径，以及调查期口语问题中所谓“允许范围/超出范围”的逐步审计方法。
 - **关联模块/目录**：`internal/server/cubebox_query_flow.go`、`internal/server/cubebox_api.go`、`internal/server/cubebox_api_tool_runner.go`、`modules/cubebox/*`、`modules/orgunit/presentation/cubebox/*`、`apps/web/src/pages/cubebox/*`、`modules/cubebox/infrastructure/sqlc/*`
 - **关联计划/标准**：`AGENTS.md`、`docs/dev-plans/000-docs-format.md`、`docs/dev-plans/001-technical-design-template.md`、`docs/dev-plans/003-simple-not-easy-review-guide.md`、`docs/dev-plans/012-ci-quality-gates.md`、`docs/dev-plans/460-cubebox-digital-assistant-positioning-and-execution-contract.md`、`docs/dev-plans/464-cubebox-query-architecture-convergence-plan.md`、`docs/dev-plans/473-cubebox-model-owned-query-context-input-remediation-plan.md`、`docs/dev-plans/474-cubebox-cross-turn-result-list-follow-up-plan.md`、`docs/dev-plans/490-cubebox-api-first-tooling-refactor-plan.md`
 - **用户入口/触点**：`/internal/cubebox/turns:stream`、CubeBox 右侧抽屉、会话持久化回放、query planner、query runner、query narrator、前端流式恢复/重发链路
@@ -14,14 +14,21 @@
 
 1. **边界**：本调查只回答“这两次真实会话为什么出现不同结果”，不顺手把 planner 稳定性问题、UI 自动重试策略、query runtime 宽化改动直接并入本计划实施。
 2. **不变量**：调查必须基于真实证据链，优先使用会话事件、真实落库记录、前端/后端当前实现和可复现实验；不得用“模型随机”“网络偶发”等笼统措辞替代证据。
-3. **可解释**：reviewer 必须能在 5 分钟内讲清两次会话各自经历了哪些步骤、每一步调用了什么、模型是否参与、何时计算“允许范围”、以及在哪一步被认定“超出范围”。
+3. **可解释**：reviewer 必须能在 5 分钟内讲清两次会话各自经历了哪些步骤、每一步调用了什么、模型是否参与、何时触发边界/协议校验、以及在哪一步被认定失败。
 
-### 0.2 现状研究摘要
+### 0.2 文档职责封口
+
+1. `DEV-PLAN-500` 只定义专项调查协议、问题清单和取证口径；不得作为后续实现、错误分类或产品行为契约的 owner。
+2. `DEV-PLAN-501` 是本调查协议的正式交付物，并已关闭本计划。
+3. `DEV-PLAN-502` 是唯一实施入口，负责把调查期口语中的“允许范围/超出范围”正式替换为 typed contract 分类：`ModelOutputContract`、`ToolExecutionContract`、`RuntimeGuardrail`、`AuthorizationContract`、`TurnLifecycleContract`。
+4. 本文件中保留的“允许范围/超出范围”仅用于对应用户原始问题和调查语境，不再作为内部工程模型名称。
+
+### 0.3 现状研究摘要
 
 - 当前 `CubeBox` 查询链采用 `cubebox-query-api-calls` runtime：planner 输出 `API_CALLS / CLARIFY / DONE / NO_QUERY`，执行面只允许当前注册的 HTTP API tool overlay。
 - 当前会话会持久化到 `iam.cubebox_conversations` 与 `iam.cubebox_conversation_events`；query flow 每次开工前会回放整段 canonical events，构造 `QueryContext`。
 - 当前前端 `streamTurn()` 要求流式过程中必须收到 `turn.completed` 或 `turn.error` 作为终态；若流结束但未见终态，前端本地 fail-closed 报 `stream turn failed: missing terminal event`。
-- 当前“允许范围/超出范围”并不是单一一处判定，而是由多层共同构成：
+- 调查期口语中的“允许范围/超出范围”并不是单一一处判定，而是由多层共同构成；长期工程分类见 `DEV-PLAN-502`：
   - planner outcome schema/边界校验
   - API call plan 线性约束校验
   - API tool 参数白名单/必填校验
@@ -47,7 +54,7 @@
 2. [ ] 对每个步骤列出实际调用的 API / 运行时功能 / 本地状态转换，回答“**每次步骤调用了什么 API 或其他功能**”。
 3. [ ] 对每个步骤标明是否调用模型、调用的是 planner 还是 narrator，并记录是否存在“未调用模型直接返回”的分支，回答“**每次是否都调用了模型**”。
 4. [ ] 对每次模型调用冻结输入材料与输出结果的取证方案，回答“**输入给模型的内容是什么，模型返回的内容是什么**”。
-5. [ ] 对每个关键步骤冻结“允许范围”的计算来源、校验逻辑和越界判定条件，回答“**每一步骤是如何计算当前的允许范围，又是如何判断超出范围的**”。
+5. [ ] 对每个关键步骤冻结边界/协议校验来源、校验逻辑和失败判定条件，回答用户原始问题中“**每一步骤是如何计算当前的允许范围，又是如何判断超出范围的**”。
 6. [ ] 输出一份最终调查报告，能够明确指出两次会话差异发生在哪些步骤、由哪些输入差异触发、由哪一层判定导致结果分叉。
 
 ### 2.2 非目标
@@ -56,6 +63,7 @@
 - 不把本计划扩张成 CubeBox 全量稳定性治理路线图。
 - 不把单次调查结论直接升级为产品契约；除非后续另起实施计划并补测试。
 - 不把“可能是网络/模型随机”作为结论；若需要引用此类因素，必须有日志或实验支撑。
+- 不在本计划内冻结 typed error category/subcode/source_layer；该职责由 `DEV-PLAN-502` 统一承接。
 
 ### 2.3 用户可见性交付
 
@@ -65,17 +73,17 @@
 ## 2.4 工具链与门禁（SSOT 引用）
 
 - **命中触发器（勾选）**：
-  - [X] Go 代码
-  - [X] `apps/web/**`
+  - [ ] Go 代码（本计划只读代码，不实施）
+  - [ ] `apps/web/**`（本计划只读代码，不实施）
   - [ ] i18n
   - [ ] DB Schema / Migration
   - [ ] sqlc
   - [ ] Routing
-  - [X] AuthN / Tenancy / RLS（只读调查口径）
+  - [ ] AuthN / Tenancy / RLS（本计划只读调查，不调整契约）
   - [ ] Authz（若调查中发现 capability 裁剪需补记）
   - [ ] E2E
   - [X] 文档 / readiness / 证据记录
-  - [X] 其他专项门禁：`error-message`
+  - [ ] 其他专项门禁：`error-message`（实施期由 `DEV-PLAN-502` 触发）
 
 - **本次引用的 SSOT**：
   - `AGENTS.md`
@@ -95,7 +103,7 @@
 | 层级 | 本计划承接内容 | 代表对象/文件 | 说明 |
 | --- | --- | --- | --- |
 | `modules/cubebox` | `QueryContext` 回放、evidence window、working results / budget、API call plan 约束 | `modules/cubebox/*.go` | 明确 query memory 和边界校验来源 |
-| `internal/server` | query flow 编排、planner/narrator 调用点、terminal error 写入、API tool runner 校验 | `internal/server/cubebox_query_flow.go`、`internal/server/cubebox_api_tool_runner.go` | 明确“在哪里算允许范围、在哪里 fail-closed” |
+| `internal/server` | query flow 编排、planner/narrator 调用点、terminal error 写入、API tool runner 校验 | `internal/server/cubebox_query_flow.go`、`internal/server/cubebox_api_tool_runner.go` | 明确“在哪里触发边界/协议校验、在哪里 fail-closed” |
 | `apps/web/src/pages/cubebox` | `turns:stream` 流式消费、终态要求、悬空 turn 本地处理、会话重发行为 | `api.ts`、`CubeBoxProvider.tsx`、`reducer.ts` | 明确第一次请求未收口时前端如何影响第二次请求 |
 | 数据证据 | `iam.cubebox_conversation_events` / `iam.cubebox_conversations` | PostgreSQL | 真实步骤与 payload SSOT |
 
@@ -169,11 +177,11 @@
 - 输出原文
 - 输出经过了哪层 decode / validate / normalize
 
-### 4.4 允许范围与越界判定清单
+### 4.4 Typed Contract 边界与失败判定清单
 
 对每个关键步骤必须回答：
 
-1. 当前“允许范围”由哪些事实共同决定：
+1. 当前 typed contract 边界由哪些事实共同决定：
    - query evidence window
    - current API tools
    - working results
@@ -181,7 +189,7 @@
    - query loop budget
    - authz/runtime
 2. 当前步骤具体用了哪段代码做校验。
-3. 超出范围时具体抛了哪个 error。
+3. 触发失败时具体抛了哪个 error。
 4. 该 error 如何映射到用户可见报错。
 
 ## 5. 实施步骤
@@ -221,15 +229,15 @@
    - 若失败，失败发生在 decode、validate 还是 correction 后
 3. [ ] 复原 narrator 调用输入与原始输出（若存在 narrator）。
 
-### 5.4 阶段 D：允许范围与越界判定链复盘
+### 5.4 阶段 D：Typed Contract 边界与失败判定链复盘
 
-1. [ ] 为每个 planner/runner/narrator 关键步骤制作“允许范围计算表”：
+1. [ ] 为每个 planner/runner/narrator 关键步骤制作“typed contract 边界校验表”：
    - 输入事实
    - 校验规则
    - 所在代码位置
    - 结果
 2. [ ] 对失败会话明确指出：
-   - 哪一步第一次认定“超出允许范围”
+   - 哪一步第一次触发 typed contract 失败
    - 具体命中的 boundary 条件
    - 是否存在 planner correction 机会，为什么没有转成可执行 plan
 3. [ ] 对成功会话明确指出：
@@ -256,7 +264,7 @@
    - API/功能调用矩阵
    - 模型调用矩阵
    - 模型输入输出证据
-   - 允许范围/越界判定矩阵
+   - typed contract 边界/失败判定矩阵
    - 差异根因结论
 
 ## 7. 验收标准
@@ -265,7 +273,7 @@
 2. [ ] 能完整回答每次步骤**调用了什么 API 或其他功能**。
 3. [ ] 能完整回答每次步骤**是否调用了模型**。
 4. [ ] 能完整给出每次模型调用的**输入内容与返回内容**，且注明取证来源。
-5. [ ] 能完整说明每一步是如何**计算当前允许范围**，以及如何**判断超出范围**。
+5. [ ] 能完整说明每一步是如何触发 typed contract 边界校验，以及如何判定失败；同时能回答用户原始问题中“允许范围/超出范围”的口语表述。
 6. [ ] 能明确指出两次会话第一次分叉发生在哪一步、由什么输入差异触发、最终为何一个成功一个失败。
 
 ## 8. 风险与注意事项
