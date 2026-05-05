@@ -5,14 +5,21 @@
 ## 0. 适用范围与评审分级
 
 - **评审分级**：`T2`
-- **范围一句话**：承接 `DEV-PLAN-500/501` 的真实会话调查结论和本地 `openai/codex` 资源对照评估，把当前被笼统称为“允许范围”的多层失败语义收敛为可审计、可重放、可定位的查询边界契约与 `turn` 生命周期契约。
+- **范围一句话**：承接 `DEV-PLAN-500/501` 的真实会话调查结论和本地 `openai/codex` 资源对照评估，把当前被笼统称为“允许范围”的多层失败语义收敛为可审计、可重放、可定位的 typed query boundary contract 与 `turn` 生命周期契约。
 - **关联模块/目录**：`internal/server/cubebox_query_flow.go`、`internal/server/cubebox_api_tool_runner.go`、`modules/cubebox/*`、`apps/web/src/pages/cubebox/*`、`modules/orgunit/presentation/cubebox/*`
 - **关联计划/标准**：`AGENTS.md`、`docs/dev-plans/003-simple-not-easy-review-guide.md`、`docs/dev-plans/431-codex-ui-protocol-and-shell-reuse-plan.md`、`docs/dev-plans/432-codex-session-persistence-reuse-plan.md`、`docs/dev-plans/434-codex-context-management-and-compaction-reuse-plan.md`、`docs/dev-plans/437a-cubebox-phase-a-canonical-conversation-contract.md`、`docs/dev-plans/464-cubebox-query-architecture-convergence-plan.md`、`docs/dev-plans/490-cubebox-api-first-tooling-refactor-plan.md`、`docs/dev-plans/500-cubebox-two-conversations-boundary-investigation-plan.md`、`docs/dev-plans/501-cubebox-two-conversations-boundary-investigation-report.md`
 - **本地 Codex 对照口径**：`third_party/openai-codex` 当前本地提交 `5591912f0bf176257f71b3efbd37ee4479dfdfaf`；本计划只借鉴协议与边界设计，不引入 Codex runtime、CLI/TUI、exec、patch、plugin 或 MCP 写操作能力。
 
-### 0.1 Simple > Easy 三问
+### 0.1 文档职责封口
 
-1. **边界**：本计划只解决边界契约、错误分类、事件闭环和可观测性；不顺手重写 planner、不放宽工具白名单、不新增自动 retry 策略。
+1. `DEV-PLAN-502` 是本组文档的唯一实施入口与长期 owner。
+2. `DEV-PLAN-500` 只保留调查协议职责，`DEV-PLAN-501` 只保留事实报告职责。
+3. 本计划是唯一把调查期口语中的“允许范围/超出范围”替换为 typed contract 分类的文档，不再在其他 500/501 文档中重复定义长期术语。
+4. 后续代码、测试、采样、前端恢复语义与 error mapping 的实施路径统一跟随本计划推进。
+
+### 0.2 Simple > Easy 三问
+
+1. **边界**：本计划只解决 boundary contract、错误分类、事件闭环和可观测性；不顺手重写 planner、不放宽工具白名单、不新增自动 retry 策略。
 2. **不变量**：相同用户输入是否能成功，必须由当前权威上下文、工具目录、权限、预算和模型输出契约共同决定；任何失败都必须能追溯到唯一主分类和具体子分类，不得继续只落到模糊的 `ai_plan_boundary_violation`。
 3. **可解释**：reviewer 必须能在 5 分钟内说明某次失败属于 `ModelOutputContract`、`ToolExecutionContract`、`RuntimeGuardrail`、`AuthorizationContract` 还是 `TurnLifecycleContract`，以及它如何写入事件、如何回放、如何展示。
 
@@ -33,7 +40,7 @@
 
 ### 2.1 目标
 
-1. [ ] 将“允许范围”从笼统口语改为明确的工程契约分类。
+1. [ ] 将调查期口语中的“允许范围”改写为明确的 typed contract 分类。
 2. [ ] 把 planner 输出失败、plan shape 失败、tool 参数失败、预算失败、权限失败、stream terminal 失败拆成稳定错误主类与子类。
 3. [ ] 保证每个后端 `turn` 要么完成、失败、被中断，要么能被恢复/标记为悬空异常；不得继续静默留下不可解释的半截状态。
 4. [ ] 为 planner/narrator 增加受控可审计 raw request/response 采样能力，至少本地与排障环境可追。
@@ -60,12 +67,26 @@
 | `AuthorizationContract` | 租户、principal、capability、route requirement | authz deny、capability/catalog drift | 否，属于权限边界 |
 | `TurnLifecycleContract` | 流式协议与事件闭环 | 缺 terminal event、悬空 turn、interrupt/abort/replaced | 否，属于生命周期协议 |
 
-### 3.2 命名裁决
+### 3.2 Owner 边界表
+
+| 事项 | Owner | 本计划职责 |
+| --- | --- | --- |
+| 调查协议与原始问题拆解 | `DEV-PLAN-500` | 只引用，不再修改调查协议语义 |
+| 事实报告与证据缺口 | `DEV-PLAN-501` | 只引用事实结论和已标注缺口 |
+| typed error 分类与映射 | `DEV-PLAN-502` | 唯一 owner |
+| `turn.error` payload 增量字段 | `DEV-PLAN-502` + `DEV-PLAN-437A` | 本计划定义字段语义；若触及 envelope，由 `DEV-PLAN-437A` 裁决 |
+| 前端 reducer / typed lifecycle 消费 | `DEV-PLAN-502` + `DEV-PLAN-431/437A` | 本计划定义 failure 分类与验收；UI 协议形态沿用既有 owner |
+| context budget / compaction | `DEV-PLAN-434` | 本计划只引用预算失败分类，不改 compaction 策略 |
+| API tool registry / overlay | `DEV-PLAN-490` | 本计划只细分 tool contract 失败，不扩张工具目录 |
+| raw request/response 采样 | `DEV-PLAN-502` | 首期仅限本地/排障采样；若落库必须另起数据契约计划 |
+
+### 3.3 命名裁决
 
 1. “允许范围”仅作为用户可见自然语言提示保留，不再作为内部主模型名称。
 2. 内部错误、日志、事件 payload 使用上表主分类。
 3. `ai_plan_boundary_violation` 保留为兼容期用户可见 code 的候选，但必须增加内部 `category/subcode/source_layer`，避免排障时丢失子型。
 4. 前端 `stream turn failed: missing terminal event` 归入 `TurnLifecycleContract`，不得继续归入 query plan boundary。
+5. `boundary` 在本计划内只表示 typed contract 边界，不再表示一个笼统的“允许范围”总桶。
 
 ## 4. 事件与错误契约
 

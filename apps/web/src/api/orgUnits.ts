@@ -42,6 +42,7 @@ export type OrgUnitListSortOrder = 'asc' | 'desc'
 export async function listOrgUnitsPage(options: {
   asOf: string
   parentOrgCode?: string
+  includeDescendants?: boolean
   includeDisabled?: boolean
   keyword?: string
   status?: OrgUnitListStatusFilter
@@ -60,6 +61,9 @@ export async function listOrgUnitsPage(options: {
   })
   if (options.parentOrgCode) {
     query.set('parent_org_code', options.parentOrgCode)
+  }
+  if (typeof options.includeDescendants === 'boolean') {
+    query.set('include_descendants', options.includeDescendants ? 'true' : 'false')
   }
   if (options.includeDisabled) {
     query.set('include_disabled', '1')
@@ -216,6 +220,7 @@ export interface OrgUnitSearchCandidate {
   name: string
   status?: string
   as_of?: string
+  path_org_codes?: string[]
 }
 
 export interface OrgUnitSearchAmbiguousDetails {

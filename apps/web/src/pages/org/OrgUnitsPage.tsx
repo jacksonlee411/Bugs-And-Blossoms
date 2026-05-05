@@ -11,17 +11,17 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
-  FormControl,
   FormControlLabel,
-  InputLabel,
+  IconButton,
+  InputAdornment,
   MenuItem,
-  Select,
   Snackbar,
   Stack,
   Switch,
   TextField,
   Typography
 } from '@mui/material'
+import SearchIcon from '@mui/icons-material/Search'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import type { GridColDef, GridPaginationModel, GridSortModel } from '@mui/x-data-grid'
 import {
@@ -33,9 +33,9 @@ import {
   writeOrgUnit,
   type OrgUnitAPIItem,
   type OrgUnitListSortField,
-  type OrgUnitListSortOrder,
   type OrgUnitListStatusFilter,
-  type OrgUnitSearchAmbiguousDetails
+  type OrgUnitSearchAmbiguousDetails,
+  type OrgUnitSearchCandidate
 } from '../../api/orgUnits'
 import type { OrgUnitSelectorNode } from '../../api/orgUnitSelector'
 import { ApiClientError } from '../../api/errors'
@@ -57,7 +57,7 @@ import {
 } from '../../utils/gridQueryState'
 import { normalizePlainExtDraft } from './orgUnitPlainExtValidation'
 import { buildOrgFieldConfigsSearchParams, buildOrgUnitDetailSearchParams } from './orgReadNavigation'
-import { clearExtQueryParams, parseExtSortField, parseSortOrder } from './orgUnitListExtQuery'
+import { clearExtQueryParams } from './orgUnitListExtQuery'
 import { resolveReadViewState, todayISODate } from './readViewState'
 
 type OrgStatus = 'active' | 'inactive'
@@ -106,6 +106,24 @@ function parseBool(raw: string | null): boolean {
   return value === '1' || value === 'true' || value === 'yes' || value === 'on'
 }
 
+function parseBoolDefault(raw: string | null, fallback: boolean): boolean {
+  if (!raw) {
+    return fallback
+  }
+  const value = raw.trim().toLowerCase()
+  if (value === '1' || value === 'true' || value === 'yes' || value === 'on') {
+    return true
+  }
+  if (value === '0' || value === 'false' || value === 'no' || value === 'off') {
+    return false
+  }
+  return fallback
+}
+
+function isValidDay(value: string): boolean {
+  return /^\d{4}-\d{2}-\d{2}$/.test(value)
+}
+
 function parseOrgStatus(raw: string): OrgStatus {
   const value = raw.trim().toLowerCase()
   return value === 'disabled' || value === 'inactive' ? 'inactive' : 'active'
@@ -150,7 +168,7 @@ function buildTreeNodes(
     const labelSuffix = status === 'inactive' ? ' · Inactive' : ''
 
     if (path.has(item.org_code)) {
-      return { id: item.org_code, label: `${item.name} (${item.org_code})${labelSuffix}`, hasChildren: false }
+      return { id: item.org_code, label: `${item.name}${labelSuffix}`, hasChildren: false }
     }
 
     const nextPath = new Set(path)
@@ -162,7 +180,7 @@ function buildTreeNodes(
 
     return {
       id: item.org_code,
-      label: `${item.name} (${item.org_code})${labelSuffix}`,
+      label: `${item.name}${labelSuffix}`,
       hasChildren,
       children: childNodes.length > 0 ? childNodes : undefined
     }
@@ -206,12 +224,21 @@ function formatOrgUnitSearchAmbiguousMessage(error: unknown, prefix: string): st
   return `${prefix} ${labels.join(', ')}`
 }
 
+function getOrgUnitSearchAmbiguousCandidates(error: unknown): OrgUnitSearchCandidate[] {
+  if (!(error instanceof ApiClientError) || error.status !== 409) {
+    return []
+  }
+  const details = error.details as OrgUnitSearchAmbiguousDetails | undefined
+  if (!details || details.error_code !== 'org_unit_search_ambiguous') {
+    return []
+  }
+  return Array.isArray(details.candidates) ? details.candidates : []
+}
+
 type FieldOption = { value: string; label: string }
 
-type OrgUnitExtQueryField = Pick<import('../../api/orgUnits').OrgUnitTenantFieldConfig, 'field_key' | 'value_type' | 'data_source_type'> & {
+type OrgUnitExtFieldDefinition = Pick<import('../../api/orgUnits').OrgUnitTenantFieldConfig, 'field_key' | 'value_type' | 'data_source_type'> & {
   label: string
-  allowFilter: boolean
-  allowSort: boolean
 }
 
 function useDebouncedValue<T>(value: T, delayMs: number): T {
@@ -243,8 +270,8 @@ function formatFieldOptionLabel(option: FieldOption): string {
   return option.label
 }
 
-function ExtFilterValueInput(props: {
-  field: OrgUnitExtQueryField | null
+function OrgExtFieldValueInput(props: {
+  field: OrgUnitExtFieldDefinition | null
   asOf: string
   label: string
   value: string
@@ -267,7 +294,7 @@ function ExtFilterValueInput(props: {
     queryKey: ['org-units', 'field-options', field?.field_key ?? '', props.asOf, debouncedKeyword],
     queryFn: () => {
       if (!field) {
-        throw new Error('org ext filter field is required')
+        throw new Error('org ext field is required')
       }
       return getOrgUnitFieldOptions({
         fieldKey: field.field_key,
@@ -330,7 +357,6 @@ function ExtFilterValueInput(props: {
         onChange={(event) => props.onChange(event.target.value)}
         value={props.value}
         helperText={helperText}
-        inputProps={{ 'data-testid': 'org-ext-filter-value' }}
       />
     )
   }
@@ -363,7 +389,6 @@ function ExtFilterValueInput(props: {
           error={queryErrorMessage.length > 0}
           helperText={helperText}
           label={props.label}
-          inputProps={{ ...params.inputProps, 'data-testid': 'org-ext-filter-value' }}
           InputProps={{
             ...params.InputProps,
             endAdornment: (
@@ -417,30 +442,24 @@ export function OrgUnitsPage() {
   const requestedAsOf = readView.requestedAsOf
   const readMode = readView.mode
   const includeDisabled = parseBool(searchParams.get('include_disabled'))
-  const extFilterFieldKey = parseOptionalValue(searchParams.get('ext_filter_field_key'))
-  const extFilterValue = parseOptionalValue(searchParams.get('ext_filter_value'))
-  const extSortFieldKey = parseExtSortField(searchParams.get('sort'))
-  const extSortOrder = parseSortOrder(searchParams.get('order')) ?? 'asc'
-
+  const includeDescendants = parseBoolDefault(searchParams.get('include_descendants'), false)
+  const legacyStatusParam = parseOptionalValue(searchParams.get('status'))
+  const legacyStatusForRequest =
+    legacyStatusParam === 'active' || legacyStatusParam === 'inactive'
+      ? legacyStatusParam
+      : legacyStatusParam === 'disabled'
+        ? 'inactive'
+        : null
   const [keywordInput, setKeywordInput] = useState(query.keyword)
-  const [statusInput, setStatusInput] = useState<'all' | OrgStatus>(query.status)
-  const [historyModeInput, setHistoryModeInput] = useState(readMode === 'history')
   const [asOfInput, setAsOfInput] = useState(requestedAsOf ?? asOf)
-  const [includeDisabledInput, setIncludeDisabledInput] = useState(includeDisabled)
-  const [treeSearchInput, setTreeSearchInput] = useState('')
-  const [extFilterFieldInput, setExtFilterFieldInput] = useState(extFilterFieldKey ?? '')
-  const [extFilterValueInput, setExtFilterValueInput] = useState(extFilterValue ?? '')
-  const [sortFieldInput, setSortFieldInput] = useState<string>(
-    extSortFieldKey ? `ext:${extSortFieldKey}` : query.sortField ?? ''
-  )
-  const [sortOrderInput, setSortOrderInput] = useState<OrgUnitListSortOrder>(
-    extSortFieldKey ? extSortOrder : query.sortOrder ?? 'asc'
-  )
+  const debouncedKeywordInput = useDebouncedValue(keywordInput, 350)
 
   const [childrenByParent, setChildrenByParent] = useState<Record<string, OrgUnitAPIItem[]>>({})
+  const [expandedOrgCodes, setExpandedOrgCodes] = useState<string[]>([])
   const [childrenLoading, setChildrenLoading] = useState(false)
   const [childrenErrorMessage, setChildrenErrorMessage] = useState('')
   const [treeSearchErrorMessage, setTreeSearchErrorMessage] = useState('')
+  const [searchCandidates, setSearchCandidates] = useState<OrgUnitSearchCandidate[]>([])
 
   const [createOpen, setCreateOpen] = useState(false)
   const [createForm, setCreateForm] = useState<CreateOrgUnitForm>(() => emptyCreateForm(currentDate, null))
@@ -448,8 +467,6 @@ export function OrgUnitsPage() {
   const [toast, setToast] = useState<{ message: string; severity: 'success' | 'warning' | 'error' } | null>(null)
 
   const canWrite = hasRequiredCapability(AUTHZ_CAPABILITY_KEYS.orgunitOrgUnitsAdmin)
-  const canUseExt = canWrite
-
   const formatApiErrorMessage = useCallback(
     (error: unknown): string => {
       if (error instanceof ApiClientError) {
@@ -493,31 +510,26 @@ export function OrgUnitsPage() {
 
   useEffect(() => {
     setKeywordInput(query.keyword)
-    setStatusInput(query.status)
-  }, [query.keyword, query.status])
+  }, [query.keyword])
 
   useEffect(() => {
-    setHistoryModeInput(readMode === 'history')
     setAsOfInput(requestedAsOf ?? asOf)
-    setIncludeDisabledInput(includeDisabled)
-  }, [asOf, includeDisabled, readMode, requestedAsOf])
-
-  useEffect(() => {
-    setExtFilterFieldInput(extFilterFieldKey ?? '')
-    setExtFilterValueInput(extFilterValue ?? '')
-  }, [extFilterFieldKey, extFilterValue])
-
-  useEffect(() => {
-    const nextSortField = extSortFieldKey ? `ext:${extSortFieldKey}` : query.sortField ?? ''
-    const nextSortOrder = extSortFieldKey ? extSortOrder : query.sortOrder ?? 'asc'
-    setSortFieldInput(nextSortField)
-    setSortOrderInput(nextSortOrder)
-  }, [extSortFieldKey, extSortOrder, query.sortField, query.sortOrder])
+  }, [asOf, requestedAsOf])
 
   useEffect(() => {
     setChildrenByParent({})
+    setExpandedOrgCodes([])
     setChildrenErrorMessage('')
   }, [asOf, includeDisabled])
+
+  useEffect(() => {
+    if (searchParams.has('include_descendants')) {
+      return
+    }
+    const nextParams = new URLSearchParams(searchParams)
+    nextParams.set('include_descendants', 'false')
+    setSearchParams(nextParams, { replace: true })
+  }, [searchParams, setSearchParams])
 
   const rootOrgUnitsQuery = useQuery({
     queryKey: ['org-units', 'roots', asOf, includeDisabled],
@@ -528,7 +540,12 @@ export function OrgUnitsPage() {
   const rootOrgUnits = useMemo(() => rootOrgUnitsQuery.data?.org_units ?? [], [rootOrgUnitsQuery.data])
   const orgUnitNodeByCode = useMemo(() => {
     const nodes = new Map<string, OrgUnitAPIItem>()
+    const visited = new Set<string>()
     const visit = (item: OrgUnitAPIItem) => {
+      if (visited.has(item.org_code)) {
+        return
+      }
+      visited.add(item.org_code)
       nodes.set(item.org_code, item)
       for (const child of childrenByParent[item.org_code] ?? []) {
         visit(child)
@@ -539,13 +556,13 @@ export function OrgUnitsPage() {
   }, [childrenByParent, rootOrgUnits])
 
   const fieldConfigsQuery = useQuery({
-    enabled: canUseExt,
+    enabled: canWrite,
     queryKey: ['org-units', 'field-configs', asOf],
     queryFn: () => listOrgUnitFieldConfigs({ asOf, status: 'enabled' }),
     staleTime: 30_000
   })
 
-  const enabledExtFields = useMemo<OrgUnitExtQueryField[]>(() => {
+  const enabledExtFields = useMemo<OrgUnitExtFieldDefinition[]>(() => {
     const cfgs = fieldConfigsQuery.data?.field_configs ?? []
     return cfgs
       .filter((cfg) => {
@@ -560,35 +577,10 @@ export function OrgUnitsPage() {
         field_key: cfg.field_key,
         value_type: cfg.value_type,
         data_source_type: cfg.data_source_type,
-        label,
-        allowFilter: Boolean(cfg.allow_filter),
-        allowSort: Boolean(cfg.allow_sort)
+        label
       }
       })
   }, [fieldConfigsQuery.data, t])
-  const extFilterFields = useMemo(() => enabledExtFields.filter((field) => field.allowFilter), [enabledExtFields])
-  const extSortFields = useMemo(() => enabledExtFields.filter((field) => field.allowSort), [enabledExtFields])
-  const extMetadataError = fieldConfigsQuery.error
-  const extMetadataReady = canUseExt && fieldConfigsQuery.isSuccess
-  const extFilterFieldKeys = useMemo(() => new Set(extFilterFields.map((field) => field.field_key)), [extFilterFields])
-  const extSortFieldKeys = useMemo(() => new Set(extSortFields.map((field) => field.field_key)), [extSortFields])
-  const selectedExtFilterField = useMemo(() => extFilterFields.find((field) => field.field_key === extFilterFieldInput) ?? null, [extFilterFieldInput, extFilterFields])
-  const sortFieldOptions = useMemo<FieldOption[]>(() => {
-    const options: FieldOption[] = [
-      { value: '', label: t('org_ext_sort_none') },
-      { value: 'code', label: t('org_column_code') },
-      { value: 'name', label: t('org_column_name') },
-      { value: 'status', label: t('text_status') }
-    ]
-    const prefix = t('org_ext_field_prefix')
-    extSortFields.forEach((field) => {
-      options.push({ value: `ext:${field.field_key}`, label: `${prefix}${field.label}` })
-    })
-    return options
-  }, [extSortFields, t])
-  const hasExtFilterParams = Boolean(extFilterFieldKey || extFilterValue)
-  const hasExtSortParams = Boolean(extSortFieldKey)
-  const hasAnyExtParams = hasExtFilterParams || hasExtSortParams
   const selectedNodeCode = parseOptionalValue(searchParams.get('node')) ?? rootOrgUnits[0]?.org_code ?? null
   const createTreeNotInitialized = rootOrgUnits.length === 0
   const createAllowedFieldSet = useMemo(
@@ -620,81 +612,12 @@ export function OrgUnitsPage() {
   )
 
   useEffect(() => {
-    if (canUseExt || !hasAnyExtParams) {
-      return
-    }
     const nextParams = new URLSearchParams(searchParams)
     clearExtQueryParams(nextParams)
-    if (nextParams.toString() === searchParams.toString()) {
-      return
-    }
-    setSearchParams(nextParams, { replace: true })
-    setToast({ message: t('org_ext_query_admin_only_cleared'), severity: 'warning' })
-  }, [canUseExt, hasAnyExtParams, searchParams, setSearchParams, t])
-
-  useEffect(() => {
-    if (!canUseExt || !hasAnyExtParams) {
-      return
-    }
-    if (extMetadataError) {
-      const nextParams = new URLSearchParams(searchParams)
-      clearExtQueryParams(nextParams)
-      if (nextParams.toString() === searchParams.toString()) {
-        return
-      }
+    if (nextParams.toString() !== searchParams.toString()) {
       setSearchParams(nextParams, { replace: true })
-      setToast({ message: t('org_ext_query_metadata_failed_cleared'), severity: 'warning' })
-      return
     }
-    if (!extMetadataReady) {
-      return
-    }
-
-    let messageKey = ''
-    const nextParams = new URLSearchParams(searchParams)
-
-    if (hasExtFilterParams) {
-      if (!extFilterFieldKey || !extFilterValue) {
-        nextParams.delete('ext_filter_field_key')
-        nextParams.delete('ext_filter_value')
-        messageKey = 'org_ext_query_pair_missing_cleared'
-      } else if (!extFilterFieldKeys.has(extFilterFieldKey)) {
-        nextParams.delete('ext_filter_field_key')
-        nextParams.delete('ext_filter_value')
-        messageKey = 'org_ext_query_field_unavailable_cleared'
-      }
-    }
-
-    if (extSortFieldKey && !extSortFieldKeys.has(extSortFieldKey)) {
-      const sortValue = nextParams.get('sort')?.trim() ?? ''
-      if (sortValue.startsWith('ext:')) {
-        nextParams.delete('sort')
-        nextParams.delete('order')
-        if (!messageKey) {
-          messageKey = 'org_ext_query_sort_unavailable_cleared'
-        }
-      }
-    }
-
-    if (messageKey && nextParams.toString() !== searchParams.toString()) {
-      setSearchParams(nextParams, { replace: true })
-      setToast({ message: t(messageKey as MessageKey), severity: 'warning' })
-    }
-  }, [
-    canUseExt,
-    extFilterFieldKey,
-    extFilterFieldKeys,
-    extFilterValue,
-    extMetadataError,
-    extMetadataReady,
-    extSortFieldKey,
-    extSortFieldKeys,
-    hasAnyExtParams,
-    hasExtFilterParams,
-    searchParams,
-    setSearchParams,
-    t
-  ])
+  }, [searchParams, setSearchParams])
 
   const legacyDetailCode = parseOptionalValue(searchParams.get('detail'))
   useEffect(() => {
@@ -747,7 +670,9 @@ export function OrgUnitsPage() {
       if (!pathOrgCodes || pathOrgCodes.length <= 1) {
         return
       }
-      for (const parentOrgCode of pathOrgCodes.slice(0, -1)) {
+      const parentOrgCodes = pathOrgCodes.slice(0, -1)
+      setExpandedOrgCodes((previous) => Array.from(new Set([...previous, ...parentOrgCodes])))
+      for (const parentOrgCode of parentOrgCodes) {
         await ensureChildrenLoaded(parentOrgCode)
       }
     },
@@ -756,33 +681,6 @@ export function OrgUnitsPage() {
 
   const treeNodes = useMemo(() => buildTreeNodes(rootOrgUnits, childrenByParent), [childrenByParent, rootOrgUnits])
   const sortModel = useMemo(() => toGridSortModel(query.sortField, query.sortOrder), [query.sortField, query.sortOrder])
-  const extFilterForRequest = useMemo(() => {
-    if (!canUseExt || !extMetadataReady) {
-      return null
-    }
-    if (!extFilterFieldKey || !extFilterValue) {
-      return null
-    }
-    if (!extFilterFieldKeys.has(extFilterFieldKey)) {
-      return null
-    }
-    return { fieldKey: extFilterFieldKey, value: extFilterValue }
-  }, [canUseExt, extMetadataReady, extFilterFieldKey, extFilterFieldKeys, extFilterValue])
-  const extSortForRequest = useMemo(() => {
-    if (!canUseExt || !extMetadataReady) {
-      return null
-    }
-    if (!extSortFieldKey || !extSortFieldKeys.has(extSortFieldKey)) {
-      return null
-    }
-    return { fieldKey: extSortFieldKey, order: extSortOrder }
-  }, [canUseExt, extMetadataReady, extSortFieldKey, extSortFieldKeys, extSortOrder])
-  const effectiveSortField = (extSortForRequest ? `ext:${extSortForRequest.fieldKey}` : query.sortField ?? null) as
-    | OrgUnitListSortField
-    | null
-  const effectiveSortOrder = (extSortForRequest ? extSortForRequest.order : query.sortOrder ?? null) as
-    | OrgUnitListSortOrder
-    | null
 
   const orgUnitListQuery = useQuery({
     enabled: rootOrgUnitsQuery.isSuccess,
@@ -791,29 +689,27 @@ export function OrgUnitsPage() {
       'list',
       asOf,
       includeDisabled,
+      includeDescendants,
       selectedNodeCode,
       query.keyword,
-      query.status,
+      legacyStatusForRequest ?? 'all',
       query.page,
       query.pageSize,
-      effectiveSortField,
-      effectiveSortOrder,
-      extFilterForRequest?.fieldKey ?? '',
-      extFilterForRequest?.value ?? ''
+      query.sortField ?? null,
+      query.sortOrder ?? null
     ],
     queryFn: () =>
       listOrgUnitsPage({
         asOf,
         includeDisabled,
+        includeDescendants,
         parentOrgCode: selectedNodeCode ?? undefined,
         keyword: query.keyword,
-        status: query.status as OrgUnitListStatusFilter,
+        status: (legacyStatusForRequest ?? 'all') as OrgUnitListStatusFilter,
         page: query.page,
         pageSize: query.pageSize,
-        sortField: effectiveSortField,
-        sortOrder: effectiveSortOrder,
-        extFilterFieldKey: extFilterForRequest?.fieldKey,
-        extFilterValue: extFilterForRequest?.value
+        sortField: query.sortField as OrgUnitListSortField | null,
+        sortOrder: query.sortOrder
       })
   })
 
@@ -828,15 +724,8 @@ export function OrgUnitsPage() {
       options?: {
         asOf?: string | null
         includeDisabled?: boolean
+        includeDescendants?: boolean
         selectedNodeCode?: string | null
-        extFilter?: {
-          fieldKey: string | null
-          value: string | null
-        }
-        extSort?: {
-          fieldKey: string | null
-          order: OrgUnitListSortOrder | null
-        }
       }
     ) => {
       const nextParams = patchGridQueryState(searchParams, patch)
@@ -857,6 +746,10 @@ export function OrgUnitsPage() {
         }
       }
 
+      if (options && Object.hasOwn(options, 'includeDescendants')) {
+        nextParams.set('include_descendants', options.includeDescendants ? 'true' : 'false')
+      }
+
       if (options && Object.hasOwn(options, 'selectedNodeCode')) {
         if (options.selectedNodeCode) {
           nextParams.set('node', options.selectedNodeCode)
@@ -865,31 +758,15 @@ export function OrgUnitsPage() {
         }
       }
 
-      if (options?.extFilter) {
-        const fieldKey = options.extFilter.fieldKey?.trim() ?? ''
-        const value = options.extFilter.value?.trim() ?? ''
-        if (fieldKey.length > 0 && value.length > 0) {
-          nextParams.set('ext_filter_field_key', fieldKey)
-          nextParams.set('ext_filter_value', value)
-        } else {
-          nextParams.delete('ext_filter_field_key')
-          nextParams.delete('ext_filter_value')
-        }
-      }
-
-      if (options?.extSort) {
-        const fieldKey = options.extSort.fieldKey?.trim() ?? ''
-        const order = options.extSort.order ?? null
-        if (fieldKey.length > 0 && order) {
-          nextParams.set('sort', `ext:${fieldKey}`)
-          nextParams.set('order', order)
-        } else {
-          const sortValue = nextParams.get('sort')?.trim() ?? ''
-          if (sortValue.startsWith('ext:')) {
-            nextParams.delete('sort')
-            nextParams.delete('order')
-          }
-        }
+      if (
+        Object.hasOwn(patch, 'keyword') ||
+        (options &&
+          (Object.hasOwn(options, 'asOf') ||
+            Object.hasOwn(options, 'includeDisabled') ||
+            Object.hasOwn(options, 'includeDescendants') ||
+            Object.hasOwn(options, 'selectedNodeCode')))
+      ) {
+        nextParams.delete('status')
       }
 
       setSearchParams(nextParams)
@@ -1073,54 +950,6 @@ export function OrgUnitsPage() {
     }
   })
 
-  function handleApplyFilters() {
-    const startedAt = performance.now()
-    const nextSortField = sortFieldInput.trim()
-    const isExtSort = nextSortField.startsWith('ext:')
-    const extSortFieldKey = isExtSort ? nextSortField.slice(4).trim() : null
-    const coreSortField = !isExtSort && nextSortField.length > 0 ? nextSortField : null
-    updateSearch(
-      {
-        keyword: keywordInput,
-        page: 0,
-        status: statusInput,
-        sortField: coreSortField,
-        sortOrder: coreSortField ? sortOrderInput : null
-      },
-      {
-        asOf: historyModeInput ? asOfInput : null,
-        includeDisabled: includeDisabledInput,
-        extFilter: {
-          fieldKey: extFilterFieldInput,
-          value: extFilterValueInput
-        },
-        extSort: {
-          fieldKey: extSortFieldKey,
-          order: isExtSort ? sortOrderInput : null
-        }
-      }
-    )
-    trackUiEvent({
-      eventName: 'filter_submit',
-      tenant: tenantId,
-      module: 'orgunit',
-      page: 'org-units',
-      action: 'apply_filters',
-      result: 'success',
-      latencyMs: Math.round(performance.now() - startedAt),
-      metadata: {
-        has_keyword: keywordInput.trim().length > 0,
-        status: statusInput,
-        as_of: historyModeInput ? asOfInput : '',
-        include_disabled: includeDisabledInput,
-        ext_filter_field: extFilterFieldInput.trim(),
-        ext_filter_value: extFilterValueInput.trim(),
-        ext_sort_field: extSortFieldKey ?? '',
-        ext_sort_order: isExtSort ? sortOrderInput : ''
-      }
-    })
-  }
-
   function handleTreeSelect(nextNodeCode: string) {
     updateSearch(
       { page: 0 },
@@ -1139,14 +968,45 @@ export function OrgUnitsPage() {
     })
   }
 
-  async function handleTreeSearch() {
-    const queryValue = treeSearchInput.trim()
+  useEffect(() => {
+    if (debouncedKeywordInput === query.keyword) {
+      return
+    }
+    updateSearch({ keyword: debouncedKeywordInput, page: 0 })
+  }, [debouncedKeywordInput, query.keyword, updateSearch])
+
+  function handleIncludeDescendantsChange(nextValue: boolean) {
+    updateSearch({ page: 0 }, { includeDescendants: nextValue })
+  }
+
+  function handleIncludeDisabledChange(nextValue: boolean) {
+    updateSearch({ page: 0 }, { includeDisabled: nextValue })
+  }
+
+  function handleAsOfChange(nextValue: string) {
+    setAsOfInput(nextValue)
+    if (nextValue.trim().length === 0) {
+      updateSearch({ page: 0 }, { asOf: null })
+      return
+    }
+    if (isValidDay(nextValue)) {
+      updateSearch({ page: 0 }, { asOf: nextValue })
+    }
+  }
+
+  function clearLegacyStatusFilter() {
+    updateSearch({ page: 0, status: null })
+  }
+
+  async function handleMainSearchLocate() {
+    const queryValue = keywordInput.trim()
     if (queryValue.length === 0) {
       setTreeSearchErrorMessage(t('org_search_query_required'))
       return
     }
 
     setTreeSearchErrorMessage('')
+    setSearchCandidates([])
     try {
       const result = await searchOrgUnit({
         query: queryValue,
@@ -1170,8 +1030,39 @@ export function OrgUnitsPage() {
         metadata: { query: queryValue, target: result.target_org_code }
       })
     } catch (error) {
+      const candidates = getOrgUnitSearchAmbiguousCandidates(error)
+      if (candidates.length > 0) {
+        setSearchCandidates(candidates)
+      }
       setTreeSearchErrorMessage(formatOrgUnitSearchAmbiguousMessage(error, t('org_search_ambiguous_prefix')) ?? getErrorMessage(error))
     }
+  }
+
+  async function resolveSearchCandidatePath(candidate: OrgUnitSearchCandidate): Promise<string[] | undefined> {
+    if (candidate.path_org_codes && candidate.path_org_codes.length > 0) {
+      return candidate.path_org_codes
+    }
+    const result = await searchOrgUnit({
+      query: candidate.org_code,
+      asOf: candidate.as_of && candidate.as_of.trim().length > 0 ? candidate.as_of : asOf,
+      includeDisabled
+    })
+    return result.path_org_codes
+  }
+
+  async function selectSearchCandidate(candidate: OrgUnitSearchCandidate) {
+    const orgCode = candidate.org_code.trim()
+    if (!orgCode) {
+      return
+    }
+    setTreeSearchErrorMessage('')
+    setSearchCandidates([])
+    try {
+      await ensurePathLoaded(await resolveSearchCandidatePath(candidate))
+    } catch {
+      await ensurePathLoaded([orgCode])
+    }
+    updateSearch({ page: 0 }, { selectedNodeCode: orgCode })
   }
 
   function openCreateDialog() {
@@ -1222,177 +1113,103 @@ export function OrgUnitsPage() {
         }
       />
 
-      <FilterBar>
+	      <FilterBar>
         <TextField
           fullWidth
           label={t('org_filter_keyword')}
-          onChange={(event) => setKeywordInput(event.target.value)}
+	          onChange={(event) => setKeywordInput(event.target.value)}
+	          onKeyDown={(event) => {
+	            const nativeEvent = event.nativeEvent
+	            if (nativeEvent.isComposing || nativeEvent.keyCode === 229) {
+	              return
+	            }
+	            if (event.key === 'Enter') {
+	              event.preventDefault()
+	              void handleMainSearchLocate()
+	            }
+	          }}
+	          InputProps={{
+	            endAdornment: (
+	              <InputAdornment position='end'>
+	                <IconButton aria-label={t('org_search_action')} edge='end' onClick={() => void handleMainSearchLocate()} size='small'>
+	                  <SearchIcon fontSize='small' />
+	                </IconButton>
+	              </InputAdornment>
+	            )
+          }}
+          sx={{ flex: '1 1 520px', minWidth: { md: 360, xs: '100%' } }}
           value={keywordInput}
         />
-        <FormControl sx={{ minWidth: 180 }}>
-          <InputLabel id='org-status-filter'>{t('org_filter_status')}</InputLabel>
-          <Select
-            id='org-status-filter-select'
-            label={t('org_filter_status')}
-            labelId='org-status-filter'
-            onChange={(event) => setStatusInput(String(event.target.value) as 'all' | OrgStatus)}
-            value={statusInput}
-          >
-            <MenuItem value='all'>{t('status_all')}</MenuItem>
-            <MenuItem value='active'>{t('status_active')}</MenuItem>
-            <MenuItem value='inactive'>{t('status_inactive')}</MenuItem>
-          </Select>
-        </FormControl>
-        {historyModeInput ? (
-          <TextField
-            InputLabelProps={{ shrink: true }}
-            label={t('org_filter_as_of')}
-            onChange={(event) => setAsOfInput(event.target.value)}
-            type='date'
-            value={asOfInput}
-          />
-        ) : (
-          <Typography color='text.secondary' sx={{ alignSelf: 'center', minWidth: 160 }} variant='body2'>
-            {t('common_view_current_label')}
-          </Typography>
-        )}
         <FormControlLabel
-          control={
-            <Switch
-              checked={includeDisabledInput}
-              onChange={(event) => setIncludeDisabledInput(event.target.checked)}
-            />
-          }
-          label={t('org_filter_include_disabled')}
-        />
-        {historyModeInput ? (
-          <Button
-            onClick={() => {
-              setHistoryModeInput(false)
-              setAsOfInput(currentDate)
-              updateSearch({ page: 0 }, { asOf: null })
-            }}
-            variant='outlined'
-          >
-            {t('common_view_current')}
-          </Button>
-        ) : (
-          <Button
-            onClick={() => {
-              setHistoryModeInput(true)
-              setAsOfInput(asOf)
-            }}
-            variant='outlined'
-          >
-            {t('common_view_history')}
-          </Button>
-        )}
-        <Button onClick={handleApplyFilters} variant='contained'>
-          {t('action_apply_filters')}
-        </Button>
-      </FilterBar>
-
-      {canUseExt ? (
-        <FilterBar>
-          <FormControl sx={{ minWidth: 220 }} disabled={!extMetadataReady}>
-            <InputLabel id='org-ext-filter-field'>{t('org_ext_filter_field')}</InputLabel>
-            <Select
-              id='org-ext-filter-field-select'
-              label={t('org_ext_filter_field')}
-              labelId='org-ext-filter-field'
-              onChange={(event) => {
-                const nextField = String(event.target.value)
-                setExtFilterFieldInput(nextField)
-                if (nextField !== extFilterFieldInput) {
-                  setExtFilterValueInput('')
-                }
-              }}
-              value={extFilterFieldInput}
-            >
-              <MenuItem value=''>{t('org_ext_filter_field_none')}</MenuItem>
-              {extFilterFields.map((field) => (
-                <MenuItem key={field.field_key} value={field.field_key}>
-                  {field.label}
-                </MenuItem>
-              ))}
-            </Select>
-          </FormControl>
-          <ExtFilterValueInput
-            asOf={asOfInput}
-            disabled={!extMetadataReady || !selectedExtFilterField}
-            field={selectedExtFilterField}
-            formatError={formatApiErrorMessage}
-            label={t('org_ext_filter_value')}
-            onChange={(nextValue) => setExtFilterValueInput(nextValue)}
-            value={extFilterValueInput}
-          />
-          <FormControl sx={{ minWidth: 200 }}>
-            <InputLabel id='org-ext-sort-field'>{t('org_ext_sort_field')}</InputLabel>
-            <Select
-              id='org-ext-sort-field-select'
-              label={t('org_ext_sort_field')}
-              labelId='org-ext-sort-field'
-              onChange={(event) => setSortFieldInput(String(event.target.value))}
-              value={sortFieldInput}
-            >
-              {sortFieldOptions.map((option) => (
-                <MenuItem key={option.value || 'none'} value={option.value}>
-                  {option.label}
-                </MenuItem>
-              ))}
-            </Select>
-          </FormControl>
-          <FormControl sx={{ minWidth: 140 }} disabled={sortFieldInput.trim().length === 0}>
-            <InputLabel id='org-ext-sort-order'>{t('org_ext_sort_order')}</InputLabel>
-            <Select
-              id='org-ext-sort-order-select'
-              label={t('org_ext_sort_order')}
-              labelId='org-ext-sort-order'
-              onChange={(event) => setSortOrderInput(String(event.target.value) as OrgUnitListSortOrder)}
-              value={sortOrderInput}
-            >
-              <MenuItem value='asc'>{t('org_ext_sort_order_asc')}</MenuItem>
-              <MenuItem value='desc'>{t('org_ext_sort_order_desc')}</MenuItem>
-            </Select>
-          </FormControl>
-          <Button onClick={handleApplyFilters} variant='contained'>
-            {t('action_apply_filters')}
-          </Button>
-        </FilterBar>
-      ) : null}
-
-      <FilterBar>
-        <TextField
-          fullWidth
-          label={t('org_search_label')}
-          onChange={(event) => setTreeSearchInput(event.target.value)}
-          onKeyDown={(event) => {
-            const nativeEvent = event.nativeEvent
-            if (nativeEvent.isComposing || nativeEvent.keyCode === 229) {
-              return
-            }
-            if (event.key === 'Enter') {
-              event.preventDefault()
-              void handleTreeSearch()
-            }
+          control={<Switch checked={includeDescendants} onChange={(event) => handleIncludeDescendantsChange(event.target.checked)} />}
+          label={t('org_filter_include_descendants')}
+          sx={{
+            flex: '0 0 156px',
+            m: 0,
+            whiteSpace: 'nowrap',
+            '& .MuiFormControlLabel-label': { whiteSpace: 'nowrap' }
           }}
-          value={treeSearchInput}
         />
-        <Button onClick={() => void handleTreeSearch()} variant='outlined'>
-          {t('org_search_action')}
-        </Button>
-      </FilterBar>
+        <FormControlLabel
+          control={<Switch checked={includeDisabled} onChange={(event) => handleIncludeDisabledChange(event.target.checked)} />}
+          label={t('org_filter_include_disabled')}
+          sx={{
+            flex: '0 0 124px',
+            m: 0,
+            whiteSpace: 'nowrap',
+            '& .MuiFormControlLabel-label': { whiteSpace: 'nowrap' }
+          }}
+        />
+        <TextField
+          InputLabelProps={{ shrink: true }}
+          label={t('org_filter_as_of')}
+          onChange={(event) => handleAsOfChange(event.target.value)}
+          sx={{ flex: '0 0 176px', minWidth: 176 }}
+          type='date'
+          value={asOfInput}
+        />
+	      </FilterBar>
+
+	      {legacyStatusForRequest ? (
+	        <Alert
+	          action={
+	            <Button color='inherit' onClick={clearLegacyStatusFilter} size='small'>
+	              {t('common_clear')}
+	            </Button>
+	          }
+	          severity='info'
+	          sx={{ mb: 2 }}
+	        >
+	          {t('org_legacy_status_filter_applied')}
+	        </Alert>
+	      ) : null}
 
       {requestErrorMessage.length > 0 ? (
         <Alert severity='error' sx={{ mb: 2 }}>
           {requestErrorMessage}
         </Alert>
       ) : null}
-      {treeSearchErrorMessage.length > 0 ? (
-        <Alert severity='warning' sx={{ mb: 2 }}>
-          {treeSearchErrorMessage}
-        </Alert>
-      ) : null}
+	      {treeSearchErrorMessage.length > 0 ? (
+	        <Alert severity='warning' sx={{ mb: 2 }}>
+	          <Stack spacing={1}>
+	            <span>{treeSearchErrorMessage}</span>
+	            {searchCandidates.length > 0 ? (
+	              <Stack direction={{ md: 'row', xs: 'column' }} spacing={1}>
+	                {searchCandidates.map((candidate) => (
+	                  <Button
+	                    key={candidate.org_code}
+	                    onClick={() => void selectSearchCandidate(candidate)}
+	                    size='small'
+	                    variant='outlined'
+	                  >
+	                    {candidate.name} ({candidate.org_code})
+	                  </Button>
+	                ))}
+	              </Stack>
+	            ) : null}
+	          </Stack>
+	        </Alert>
+	      ) : null}
 
       <Stack direction={{ md: 'row', xs: 'column' }} spacing={2}>
         <TreePanel
@@ -1401,9 +1218,11 @@ export function OrgUnitsPage() {
           loadingLabel={t('text_loading')}
           minWidth={300}
           nodes={treeNodes}
+          expandedItemIds={expandedOrgCodes}
           onExpand={(nodeId) => {
             void ensureChildrenLoaded(nodeId)
           }}
+          onExpandedItemIdsChange={setExpandedOrgCodes}
           onSelect={handleTreeSelect}
           selectedItemId={selectedNodeCode ?? undefined}
           title={t('org_tree_title')}
@@ -1437,6 +1256,7 @@ export function OrgUnitsPage() {
               paginationModel: { page: query.page, pageSize: query.pageSize },
               rowCount: gridRowCount,
               showToolbar: true,
+              slotProps: { toolbar: { showQuickFilter: false } },
               sortModel,
               sortingMode: 'server',
               sx: { minHeight: 560 }
@@ -1692,7 +1512,7 @@ export function OrgUnitsPage() {
                       : String(currentValue)
 
                   return (
-                    <ExtFilterValueInput
+                    <OrgExtFieldValueInput
                       key={fieldKey}
                       asOf={createForm.effectiveDate.trim() || currentDate}
                       disabled={!isEditable}

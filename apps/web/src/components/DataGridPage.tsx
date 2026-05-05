@@ -11,6 +11,8 @@ import {
   type GridRowsProp
 } from '@mui/x-data-grid'
 
+type DataGridToolbarProps = NonNullable<DataGridProps['slotProps']>['toolbar']
+
 interface GridColumnDimension {
   width?: number
 }
@@ -209,6 +211,22 @@ export function DataGridPage({
     }
   }, [gridProps?.initialState, sanitizedPreferences, storageEnabled])
 
+  const showToolbar = gridProps?.showToolbar
+  const slotProps = gridProps?.slotProps
+  const resolvedSlotProps = useMemo<DataGridProps['slotProps'] | undefined>(() => {
+    if (!showToolbar) {
+      return slotProps
+    }
+    const toolbarProps = slotProps?.toolbar as DataGridToolbarProps | undefined
+    return {
+      ...slotProps,
+      toolbar: {
+        showQuickFilter: false,
+        ...toolbarProps
+      } as DataGridToolbarProps
+    }
+  }, [showToolbar, slotProps])
+
   const handleColumnVisibilityModelChange = useCallback<NonNullable<DataGridProps['onColumnVisibilityModelChange']>>(
     (model, details) => {
       updatePreferences((previous) => ({
@@ -304,6 +322,7 @@ export function DataGridPage({
         onColumnVisibilityModelChange={handleColumnVisibilityModelChange}
         onColumnWidthChange={handleColumnWidthChange}
         onDensityChange={handleDensityChange}
+        slotProps={resolvedSlotProps}
       />
     </Box>
   )

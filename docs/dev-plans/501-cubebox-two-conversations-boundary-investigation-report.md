@@ -12,8 +12,14 @@
   1. 两次会话的输入文本、租户、principal、模型链路一致，差异不来自租户/权限/模型配置切换。
   2. 失败会话只有一次 turn，planner/plan contract 层直接触发 `ai_plan_boundary_violation`，随后写入 `turn.error + turn.completed(status=failed)`。
   3. 成功会话并不是“一次请求直接成功”，而是第一次同句请求悬空，第二次同句请求成功。
-  4. 第二次同句请求会读取第一次已落库的 `turn.user_message.accepted` 历史，因此第二次 planner 的模型输入上下文已经不同于失败会话首轮。
-  5. 当前系统对该问法的表现不稳定，已证实存在“首轮失败或悬空，同句再次发送后成功”的现象。
+4. 第二次同句请求会读取第一次已落库的 `turn.user_message.accepted` 历史，因此第二次 planner 的模型输入上下文已经不同于失败会话首轮。
+5. 当前系统对该问法的表现不稳定，已证实存在“首轮失败或悬空，同句再次发送后成功”的现象。
+
+### 0.1 文档职责封口
+
+1. `DEV-PLAN-501` 只承载调查事实、证据来源与已证实结论，不作为后续实现 owner。
+2. 任何 typed contract 分类、错误主类/子类、turn 生命周期收敛、raw 采样与测试补齐，统一转由 `DEV-PLAN-502` 承接。
+3. 本报告中的“允许范围”仅保留为当时调查口语与原始问法，不作为长期工程术语。
 
 ## 1. 证据来源与口径
 
@@ -317,11 +323,11 @@ narrator 调用在 [`NarrateQueryResult()`](/home/lee/Projects/Bugs-And-Blossoms
 
 失败会话没有 narrator 输出。
 
-## 7. 每一步骤是如何计算当前的允许范围，又是如何判断超出范围的
+## 7. 每一步骤如何触发边界/协议校验，又是如何判定失败的
 
-## 7.1 允许范围不是单点，而是多层叠加
+## 7.1 调查期口语中的“允许范围”不是单点
 
-当前“允许范围”至少由以下六层共同构成：
+调查期口语中的“允许范围/超出范围”至少由以下六层共同构成。长期工程术语与 typed contract 分类由 `DEV-PLAN-502` 统一承接。
 
 1. planner outcome contract
 2. API call plan 线性结构 contract
@@ -473,14 +479,13 @@ query flow 每轮会通过：
    - 成功会话 narrator 的最终输出已直接落在 `turn.agent_message.delta`。
 
 5. **每一步骤是如何计算当前的允许范围，又是如何判断超出范围的**
-   - 允许范围由 planner contract、plan shape、tool schema、budget、authz、前端终态要求共同计算。
-   - 超出范围首先在 planner/plan contract、tool schema、budget 或 authz 这些层被 fail-closed，再映射到用户可见 terminal error。
+   - 按调查事实，该口语问题实际对应 planner contract、plan shape、tool schema、budget、authz、前端终态要求六类边界/协议校验。
+   - 失败首先在 planner/plan contract、tool schema、budget 或 authz 这些层被 fail-closed，再映射到用户可见 terminal error；长期 typed contract 分类见 `DEV-PLAN-502`。
 
 ## 11. 后续审计建议
 
-1. 为 planner / narrator 增加可审计的 raw request / raw response 采样记录，至少在受控本地环境可追。
-2. 为 `turns:stream` 增加“无 terminal event 结束”的服务端与前端联合审计标记。
-3. 单独起实施计划，稳定处理“同句首轮失败或悬空、二次发送成功”的 query planner 行为。
+1. 证据层当前缺口已在本报告中明确标注，不再在本报告内延伸实现建议。
+2. 实施 owner 与后续修复范围见 `DEV-PLAN-502`。
 
 ## 12. 关联文档
 
