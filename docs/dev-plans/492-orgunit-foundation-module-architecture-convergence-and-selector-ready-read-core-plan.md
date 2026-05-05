@@ -1,6 +1,6 @@
 # DEV-PLAN-492：OrgUnit 基础模块架构收敛与 Selector-Ready Read Core 重构方案
 
-**状态**: 实施中（2026-05-05 CST）— 492 read core 已承接 roots、children、search、普通 list/grid、ext list/grid、details/write scope check、versions/audit scope check 与 authz assignment 保存可见性校验；保存组织范围时未知或范围外 `org_node_key` 均通过 ReadService `Resolve` fail-closed 为 `authz_scope_forbidden`，authz handler 不再直接调用 path/scope helper。`internal/server/orgunit_api.go` 中直接业务判断 helper 已删除，仍保留的 path/scope helper 已标注为 `orgUnitReadStoreAdapter` 的 adapter bridge。`orgUnitScopeRequiredEmptyList` 已删除，空 scope 兼容语义下沉到 ReadService：租户组织树未初始化时返回空列表，组织树已初始化后按 `ErrOrgUnitReadScopeRequired` fail-closed。491 Phase A/B/C/D 已消费该 contract；组织管理页浏览/编辑主树不归 491 强制替换，但其 `/org/api/org-units` 读取继续走 492 ReadService 后端链路。
+**状态**: 已关闭（2026-05-05 CST）— 492 首期关闭口径已达成：ReadService 已承接 roots、children、search、普通 list/grid、ext list/grid、details/write scope check、versions/audit scope check 与 authz assignment 保存可见性校验；保存组织范围时未知或范围外 `org_node_key` 均通过 ReadService `Resolve` fail-closed 为 `authz_scope_forbidden`。`internal/server/orgunit_api.go` 中直接业务判断 helper 已删除，list/filter/sort/path hydration 等过渡 helper 已搬入 `orgunit_read_service_adapter.go` 并标注为 `orgUnitReadStoreAdapter` bridge；该 bridge 仅作为 ReadService store adapter 基础设施适配，不是 handler 业务读规则第二实现。`set-business-unit` 旧 store fallback 已删除，只保留 `OrgUnitWriteService` 主链路。491 Phase A/B/C/D 已消费该 contract；组织管理页浏览/编辑主树不归 491 强制替换，但其 `/org/api/org-units` 读取继续走 492 ReadService 后端链路。
 
 ## 0. 适用范围与评审分级
 
@@ -52,8 +52,8 @@ OrgUnit 已经不是一个只给组织管理页使用的普通页面模块。它
 2. [X] 冻结 `OrgUnitReadNode` / selector-ready DTO：必须包含 `org_code`、`org_node_key`、`name`、`status`、`has_visible_children` 或等价字段，以及按场景返回的 `path_org_codes`。（2026-05-04：后端 DTO 与 HTTP list 字段已落地；491 facade 已补 `OrgUnitSelectorNode` 并消费 roots/children/search。）
 3. [X] 把 roots 语义从“物理根组织过滤”收敛为“当前 principal scope-aware visible roots”：当前用户可见范围从树中段开始时，该范围入口就是 selector root，不向上泄露物理祖先。
 4. [X] 冻结 search/内部 resolve 的 `path_org_codes` 为 safe expandable path：只包含当前 principal 可见且前端可展开的节点；无法安全构造时 fail-closed。（2026-05-04：search HTTP 已验证 safe path 从 visible root 开始。）
-5. [ ] 让 `internal/server` 从 orgunit 业务读规则中退出，只负责 HTTP query/body 解析、tenant/session/authz/scope 注入、事务边界和错误映射。（2026-05-05：handler/authz 中直接 path/scope 业务判断已继续退场；仍保留 `orgUnitReadStoreAdapter` 所需 adapter bridge helper，作为过渡基础设施适配，不作为 handler 判断入口。）
-6. [ ] 删除或统一仓内多重组织读取实现，尤其是页面直接 `listOrgUnits()` 拼候选、组织管理页自有业务读取规则、handler 自建规则、PG list/fallback list 分叉和 legacy 写分支；组织管理页可以保留浏览/编辑状态机，但数据读取必须复用 492 ReadService。（2026-05-05：用户授权页候选拼装已删除；`OrgUnitsPage` 主树 `listOrgUnits()` 属于组织管理页浏览/编辑读取，不强制改 selector，后端继续走 492 ReadService。）
+5. [X] 让 `internal/server` 从 orgunit 业务读规则中退出，只负责 HTTP query/body 解析、tenant/session/authz/scope 注入、事务边界和错误映射。（2026-05-05：handler/authz 中直接 path/scope 业务判断已退场；`orgunit_api.go` 不再承载 list/filter/sort/path hydration adapter bridge，details/versions/audit 目标定位统一通过 ReadService `Resolve`；剩余 bridge 位于 `orgunit_read_service_adapter.go`，仅作为基础设施适配，不作为 handler 判断入口。）
+6. [X] 删除或统一仓内多重组织读取实现，尤其是页面直接 `listOrgUnits()` 拼候选、组织管理页自有业务读取规则、handler 自建规则、PG list/fallback list 分叉和 legacy 写分支；组织管理页可以保留浏览/编辑状态机，但数据读取必须复用 492 ReadService。（2026-05-05：用户授权页候选拼装已删除；`OrgUnitsPage` 主树 `listOrgUnits()` 属于组织管理页浏览/编辑读取，不强制改 selector，后端继续走 492 ReadService；`set-business-unit` 旧 store fallback 已删除，只保留 `OrgUnitWriteService` 主链路。）
 7. [X] 为 491 提供稳定后端前置：前端 selector/facade 不需要在页面侧补 `org_node_key`、权限裁剪、根节点语义或路径安全逻辑。（2026-05-05：491 facade/组件已消费 492 DTO；直接提交未知或范围外组织由服务端 fail-closed。）
 
 ### 2.2 非目标
@@ -97,16 +97,19 @@ OrgUnit 已经不是一个只给组织管理页使用的普通页面模块。它
 
 ## 2.5 工具链与门禁
 
-- **命中触发器（后续实施）**：
+- **命中触发器（首期关闭口径）**：
   - [X] Go 代码
-  - [ ] `apps/web/**` / presentation assets / 生成物
-  - [ ] i18n（如新增用户可见错误文案）
-  - [ ] Routing / responder / allowlist
-  - [ ] AuthN / Tenancy / RLS
   - [X] Authz / scope provider 消费
-  - [ ] E2E
   - [X] 文档 / readiness / 证据记录
   - [X] `ddd-layering-p0/p2`、`no-legacy`、`granularity`
+
+未命中首期触发器、不计入关闭剩余项：
+
+- `apps/web/**` / presentation assets / 生成物：492 首期为后端 read core 收口；前端 selector 消费由 491 承接并已完成。
+- i18n：492 首期未新增用户可见错误文案。
+- Routing / responder / allowlist：492 首期复用既有 `/org/api/org-units` 与 `/org/api/org-units/search`，未新增 route。
+- AuthN / Tenancy / RLS：492 首期消费既有 session/tenant/RLS 边界，未调整其契约。
+- E2E：用户可见联合 E2E owner 由 491 承接；本轮 492 文档关闭不新增 E2E 场景。
 
 实际命令入口以 `AGENTS.md`、`Makefile` 与 CI 为准。本计划只冻结架构契约，不复制命令矩阵。
 
@@ -385,7 +388,7 @@ visible roots 不是物理 root，也不是全租户 root。
 1. [X] 盘点当前 `internal/server/orgunit*`、`modules/orgunit/**`、`apps/web/src/api/orgUnits.ts` 中的 list/children/search/内部 resolve/path 规则。（2026-05-04：已分批迁移 roots、children、search、普通 list/grid、ext 字段 list/grid、details scope check 与 write scope check；剩余局部 helper 后续处理。）
 2. [X] 在 `modules/orgunit/services` 建立 ReadService 与 request/response 类型。
 3. [X] 将 visible roots、children、search、内部 resolve/path 的业务判断从 handler 搬入 ReadService。（2026-05-05：visible roots、children、search、普通 list/grid、ext list/grid、details/write、versions/audit 与 authz assignment 保存校验均已复用 ReadService；内部 resolve 仍为服务内契约，不新增 HTTP route。）
-4. [ ] 建立 store 侧 scoped query/resolve 原语，handler 不再直接拼物理 root、path 或 scope 过滤规则。（2026-05-05：已新增 `internal/server` adapter 作为过渡；业务判断已下沉，剩余 path/scope helper 仅作为 adapter bridge；后续继续把基础设施 port 从 `internal/server` adapter 中拆薄。）
+4. [X] 建立 store 侧 scoped query/resolve 原语，handler 不再直接拼物理 root、path 或 scope 过滤规则。（2026-05-05：业务判断已下沉到 ReadService；`orgunit_api.go` 不再直接拼父级 resolve、root/search/path 或 scope 过滤规则；剩余 path/scope helper 位于 `orgunit_read_service_adapter.go`，仅作为 ReadService store adapter bridge。）
 5. [X] 保持 HTTP 外部行为可控，避免同一 PR 混入前端 selector 大改。
 
 ### 4.3 P2：Selector-Ready DTO 与 scope-aware roots
@@ -405,8 +408,8 @@ visible roots 不是物理 root，也不是全租户 root。
 
 ### 4.5 P4：Handler 瘦身与 DDD 分层收敛
 
-1. [ ] `internal/server` 只保留协议适配、scope 注入、错误映射与 route wiring。（2026-05-05：handler/authz 业务判断已继续退场，adapter bridge 仍作为过渡保留。）
-2. [ ] 删除 handler 中重复的 orgunit root/search/path 判断。（2026-05-05：直接 handler/authz 判断 helper 已删除；adapter bridge helper 已标注用途，后续继续拆薄。）
+1. [X] `internal/server` 只保留协议适配、scope 注入、错误映射与 route wiring。（2026-05-05：`orgunit_api.go` 已删除旧 list/filter/sort/path helper 与 `set-business-unit` store fallback；handler 读取入口通过 ReadService `List`、`VisibleRoots`、`Children`、`Search`、`Resolve` 承接业务判断。）
+2. [X] 删除 handler 中重复的 orgunit root/search/path 判断。（2026-05-05：重复 root/children/search/path 与 scope 过滤 helper 已从 `orgunit_api.go` 移出；保留内容仅为 `orgUnitReadStoreAdapter` bridge，且不作为 handler/authz 判断入口。）
 3. [X] 按 `3.9 退场清单` 标注已迁移、保留适配和后续处理项。（2026-05-05：见 `3.10`。）
 4. [X] 通过 `make check ddd-layering-p0` 与 `make check ddd-layering-p2` 阻断规则回流。
 
@@ -415,7 +418,7 @@ visible roots 不是物理 root，也不是全租户 root。
 1. [X] 491 selector facade 消费 492 DTO。（2026-05-04：`apps/web/src/api/orgUnitSelector.ts` 已消费 roots/children/search 的 `org_code`、`org_node_key`、`name`、`status`、`has_visible_children`、`path_org_codes`。）
 2. [X] 用户授权页组织范围切换为 selector。（2026-05-04：491 Phase C 已切换为 `OrgUnitTreeField`，页面内 `listOrgUnits()` 一级候选已移除。）
 3. [X] 组织管理页逐步替换局部业务读取规则；创建/详情编辑上级组织等“选择入口”已替换为 selector，普通 list/grid 与 ext 字段 list/grid 读取已接入 ReadService `List`，details/write/versions/audit scope checks 已复用 ReadService `Resolve`；组织管理页浏览/编辑主树 UI 不归 491 强制替换，但读取链路继续由 492 承接。
-4. [ ] 删除不再使用的下拉候选拼装和局部树实现。（2026-05-05：用户授权页与上级组织选择入口的局部候选拼装已退场；组织管理页主树状态机保留。）
+4. [X] 删除不再使用的下拉候选拼装和局部树实现。（2026-05-05：用户授权页与上级组织选择入口的局部候选拼装已退场；组织管理页主树状态机按 491/492 边界保留，后端读取继续走 492 ReadService。）
 
 ### 4.7 P6：测试、门禁与证据
 
@@ -441,7 +444,7 @@ visible roots 不是物理 root，也不是全租户 root。
 2. [X] orgunit list/children/search HTTP response 与 ReadService 内部 resolve 结果可提供 selector 所需 `org_node_key`。（2026-05-04：roots/list/children/search HTTP 已提供；491 facade 已完成前端消费。）
 3. [X] 搜索当前范围内深层节点时，`path_org_codes` 从 visible root 开始，不泄露范围外祖先。
 4. [X] 搜索或回显范围外节点 fail-closed，不返回半截路径、物理完整路径或空权限旁路。
-5. [ ] `internal/server` 中不再保留可见根、路径、安全候选等业务读规则的第二实现。（2026-05-05：handler/authz 不再直接使用 scope/path helper 做业务判断；保留 helper 已明确降级为 adapter bridge，后续继续从 `internal/server` adapter 中拆薄。）
+5. [X] `internal/server` 中不再保留可见根、路径、安全候选等业务读规则的第二实现。（2026-05-05：`orgunit_api.go` 已删除重复 helper；`orgunit_read_service_adapter.go` 中仅保留 ReadService store adapter bridge，作为基础设施适配，不作为业务读规则第二入口。）
 6. [X] 用户授权页和后续组织选择入口通过 491 facade 消费同一 OrgUnit read core；组织管理页的浏览/编辑读取也复用 492 ReadService，但不强制以 selector 作为主页面实现。（2026-05-05：用户授权页、创建组织上级组织、详情编辑上级组织均走 491 selector；组织管理页主树 `listOrgUnits()` 仍是浏览/编辑读取入口，后端走 492 ReadService。）
 7. [X] `all_org_units=true` 只表示当前调用者可见范围内全部组织。
 8. [X] list/grid 的 `total` 与分页结果基于 scope 裁剪后的结果集，不出现空页、错页或 total 漂移。（2026-05-04：HTTP contract 已锁定；普通 list/grid 与 ext 字段 list/grid 已接入 ReadService `List`；ext parent scope 与 adapter path 补齐已补回归测试；SQL 级 scoped pagination 已完成。）
@@ -453,8 +456,8 @@ visible roots 不是物理 root，也不是全租户 root。
 
 1. [X] `DEV-PLAN-491` 引用本计划，明确 492 是 OrgUnit read core、DTO、visible roots 与 safe path 的上游 owner。
 2. [X] `DEV-PLAN-489` 引用本计划，明确 489 只拥有 IAM scope SoT/provider，不拥有 orgunit selector-ready read core。
-3. [ ] 后续实现若新增/调整 route，必须同步 `DEV-PLAN-017`、authz requirement、capability registry 与 API catalog owner 文档。
-4. [ ] 后续实现若新增迁移、表或 sqlc query，必须按 `AGENTS.md` 触发数据库与 sqlc 门禁，并在实施前获得用户手工确认。
+3. 后续实现若新增/调整 route，必须同步 `DEV-PLAN-017`、authz requirement、capability registry 与 API catalog owner 文档；该条件性 stopline 不属于 492 首期关闭剩余项。
+4. 后续实现若新增迁移、表或 sqlc query，必须按 `AGENTS.md` 触发数据库与 sqlc 门禁，并在实施前获得用户手工确认；该条件性 stopline 不属于 492 首期关闭剩余项。
 
 ## 8. 当前结论记录
 
@@ -474,3 +477,5 @@ visible roots 不是物理 root，也不是全租户 root。
 - 2026-05-04 CST：write scope check 已继续下沉：`ensureCurrentPrincipalOrgCodeScopeAllows` 通过 `OrgUnitReadService.Resolve` 判断目标组织或父组织是否在当前 principal 可见范围内，并显式使用写请求 `effective_date` 做 scope check，避免历史/测试日期被当前日期误裁。验证：`go test ./internal/server -run 'TestHandleOrgUnitsWriteAPI_CreateOrgSkipsNewOrgScopeCheckButChecksParent|TestHandleOrgUnitsAPI|TestHandleOrgUnitsBusinessUnitAPI|TestHandleOrgUnitsDetailsAPI'`。
 - 2026-05-04 CST：ReadService 边界测试与 491/492 联合 E2E 已补一轮：`modules/orgunit/services` 覆盖空 scope fail-closed、disabled scope 按 `include_disabled` 裁剪、list `has_visible_children` 只按 scoped candidates 判断；`dev491` E2E 扩展到组织创建页与详情页父组织 selector，验证受限管理员只能搜索/选择可见组织，范围外直接提交被服务端 `authz_scope_forbidden` 拦截。过程中修正统一 write API 的 create scope 顺序：`create_org` 不要求尚未存在的新组织码已在当前 scope 内，但仍校验非空 parent 必须在当前 principal 可见范围内。验证：`go test ./modules/orgunit/services ./internal/server -run 'TestOrgUnitReadService|TestHandleOrgUnitsAPI|TestHandleOrgUnitsWrite|TestHandleOrgUnitsCorrections|TestHandleOrgUnitsDetailsAPI|TestHandlePrincipalAuthzAssignmentPutAPI'`、`npm --prefix apps/web test -- --run src/components/OrgUnitTreeSelector.test.tsx src/pages/org/OrgUnitsPage.test.tsx src/pages/org/OrgUnitDetailsPage.test.tsx`、`node --check e2e/tests/dev491-authz-org-selector-scope.spec.js`、`pnpm --dir e2e exec playwright test tests/dev491-authz-org-selector-scope.spec.js`、`git diff --check`。
 - 2026-05-05 CST：P1/P2/P3 收口继续落地：authz assignment 保存校验改为通过 492 ReadService `Resolve` 判断当前操作者可见性，范围外或未知 `org_node_key` 均 fail-closed 为 `authz_scope_forbidden`；versions/audit scope check 也改用当前 principal + ReadService `Resolve`；`orgunit_api.go` 中旧 handler 业务 helper 已删除，仍保留 helper 标注为 adapter bridge；`orgUnitScopeRequiredEmptyList` 删除，空 scope 未初始化兼容下沉到 ReadService。验证通过：`go fmt ./... && go test ./modules/orgunit/services ./internal/server`、`make check ddd-layering-p0 && make check ddd-layering-p2`、`make check doc`、`git diff --check`。`pnpm --dir e2e exec playwright test tests/dev491-authz-org-selector-scope.spec.js` 本轮因本地 Kratos admin `127.0.0.1:4434` 未启动而 `ECONNREFUSED`，未形成业务断言结果。
+- 2026-05-05 CST：P4/P5 handler 瘦身与 legacy 清理继续落地：`orgunit_api.go` 不再直接承载 list/filter/sort/path hydration adapter bridge，相关 helper 已移动到 `orgunit_read_service_adapter.go` 并继续标注为 adapter-only；`GET /org/api/org-units` 的 parent 解析不再由 handler 预先 resolve，统一交给 ReadService；details/versions/audit 的目标定位统一通过 ReadService `Resolve`；`set-business-unit` 旧 store fallback 已删除，仅保留 `OrgUnitWriteService` 主链路。验证通过：`go test ./modules/orgunit/services ./internal/server`、`make check ddd-layering-p0 && make check ddd-layering-p2 && make check no-legacy`。
+- 2026-05-05 CST：492 首期关闭。核心目标、P0-P6、验收标准与现行文档联动均已完成；未命中的前端/i18n/routing/AuthN/Tenancy/RLS/E2E 触发器为本期未新增或由 491 承接的条件项，不作为关闭阻塞。后续新增 route、迁移、表或 sqlc query 时，必须重新打开对应 owner 计划并按停止线补齐文档、授权目录与用户手工确认。

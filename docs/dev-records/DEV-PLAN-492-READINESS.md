@@ -100,11 +100,19 @@
 - `go test ./modules/orgunit/services ./internal/server -run 'TestOrgUnitReadServiceResolve|TestHandleOrgUnitsDetailsAPI'`
 - `go test ./internal/server -run 'TestHandleOrgUnitsWriteAPI_CreateOrgSkipsNewOrgScopeCheckButChecksParent|TestHandleOrgUnitsAPI|TestHandleOrgUnitsBusinessUnitAPI|TestHandleOrgUnitsDetailsAPI'`
 
+## 2026-05-05 收口记录
+
+- `DEV-PLAN-492` 首期已关闭：ReadService read core、handler 瘦身、store adapter bridge 收口、491 selector 消费与统一 scope fail-closed 均已完成。
+- `DEV-PLAN-491` 首期已关闭：多选 selector 语义暂缓，不计入首期剩余实施事项；当前用户授权组织范围通过多行单选表达多个组织范围。
+- 本次仅做文档状态收口，不新增代码验证；现有验证记录继续作为关闭证据保留。
+
 ### 当前结论
 
 - `492 P1/P2/P3` 的首轮后端 contract 已落地：roots、children、search 均已通过 ReadService 对外提供 selector-ready DTO 与 scope-aware safe path。
 - 普通 list/grid 与 ext 字段 list/grid 的读取规则已向 ReadService 下沉；adapter 已避免递归 children N+1；PG pager 已下推 scoped pagination，确保 scope 裁剪、filter/sort、count 与 limit/offset 在 SQL 主链内完成；ext parent scope、adapter path 补齐、空 scope、disabled scope、list `has_visible_children` scoped candidates 语义均已补回归测试。
 - `491 Phase A/B/C/D` 已消费 492 contract 并完成用户授权页、创建组织上级组织、组织详情编辑上级组织这些主要选择入口接入；不再存在“selector/facade 已有但页面主要选择入口仍用一级下拉/手填”的窗口。更广 `dev491` E2E 已覆盖受限管理员在三类入口只能选择当前可见组织，范围外搜索与直接提交均 fail-closed。
 - 统一 write API 已修正 create scope check 顺序：新建组织时不要求新 org code 已存在于当前 scope，仍对非空 parent 做当前 principal scope 校验；详情/更正等非 create intent 继续校验目标 org 与 parent。当前目标/父组织校验已复用 `OrgUnitReadService.Resolve` 的 scope 判断。
-- 目前尚未完成的工作仍包括：
-  - 剩余局部读取 helper 继续向 492 ReadService 下沉或标注为 adapter
+- `492 P4/P5` handler 瘦身已继续收口：`orgunit_api.go` 不再承载 list/filter/sort/path hydration adapter bridge，相关 helper 已移动到 `orgunit_read_service_adapter.go` 并标注为 adapter-only；`GET /org/api/org-units` parent 解析、details/versions/audit 目标定位均统一通过 ReadService；`set-business-unit` 旧 store fallback 已删除，只保留 `OrgUnitWriteService` 主链路。
+- 本轮验证通过：
+  - `go test ./modules/orgunit/services ./internal/server`
+  - `make check ddd-layering-p0 && make check ddd-layering-p2 && make check no-legacy`

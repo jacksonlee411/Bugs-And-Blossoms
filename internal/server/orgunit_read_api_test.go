@@ -222,6 +222,19 @@ func TestHandleOrgUnitsAPI_ListParentInvalidOrgCode(t *testing.T) {
 	}
 }
 
+func TestHandleOrgUnitsAPI_ListPageParentInvalidOrgCode(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/org/api/org-units?as_of=2026-01-01&parent_org_code=bad%7F&page=0&size=20", nil)
+	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "T"}))
+	rec := httptest.NewRecorder()
+	handleOrgUnitsAPI(rec, req, newOrgUnitMemoryStore(), nil)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status=%d", rec.Code)
+	}
+	if !strings.Contains(rec.Body.String(), `"code":"org_code_invalid"`) {
+		t.Fatalf("body=%s", rec.Body.String())
+	}
+}
+
 func TestHandleOrgUnitsAPI_ListParentNotFound(t *testing.T) {
 	store := &resolveOrgCodeStore{resolveErr: orgunitpkg.ErrOrgCodeNotFound}
 	req := httptest.NewRequest(http.MethodGet, "/org/api/org-units?as_of=2026-01-01&parent_org_code=A001", nil)
@@ -231,7 +244,7 @@ func TestHandleOrgUnitsAPI_ListParentNotFound(t *testing.T) {
 	if rec.Code != http.StatusNotFound {
 		t.Fatalf("status=%d", rec.Code)
 	}
-	if !strings.Contains(rec.Body.String(), `"code":"org_code_not_found"`) {
+	if !strings.Contains(rec.Body.String(), `"code":"org_unit_not_found"`) {
 		t.Fatalf("body=%s", rec.Body.String())
 	}
 }
@@ -1157,6 +1170,9 @@ func TestHandleOrgUnitsDetailsAPI_BasicErrors(t *testing.T) {
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("status=%d", rec.Code)
 	}
+	if !strings.Contains(rec.Body.String(), `"code":"org_code_invalid"`) {
+		t.Fatalf("body=%s", rec.Body.String())
+	}
 
 	req2 := httptest.NewRequest(http.MethodGet, "/org/api/org-units/details?org_code=A001&as_of=2026-01-01", nil)
 	req2 = req2.WithContext(withTenant(req2.Context(), Tenant{ID: "t1", Name: "T"}))
@@ -1303,6 +1319,57 @@ func TestHandleOrgUnitsVersionsAPI_PassesNodeKeyToReader(t *testing.T) {
 	}
 }
 
+func TestHandleOrgUnitsVersionsAPI_DoesNotRequireCurrentDetails(t *testing.T) {
+	store := &resolveOrgCodeStore{
+		resolveID:                10000001,
+		getNodeDetailsErr:        errOrgUnitNotFound,
+		resolveCodesByNodeKey:    map[string]string{mustOrgNodeKeyForTest(t, 10000001): "A001"},
+		listNodeVersions:         []OrgUnitNodeVersion{{EventID: 1, EffectiveDate: "2027-01-01", EventType: "CREATE"}},
+		listChildrenByNodeKeyArg: "",
+	}
+	req := httptest.NewRequest(http.MethodGet, "/org/api/org-units/versions?org_code=A001", nil)
+	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "T"}))
+	rec := httptest.NewRecorder()
+	handleOrgUnitsVersionsAPI(rec, req, store)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+	}
+	if !strings.Contains(rec.Body.String(), "2027-01-01") {
+		t.Fatalf("body=%q", rec.Body.String())
+	}
+}
+
+func TestHandleOrgUnitsVersionsAPI_InvalidOrgCodeCode(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/org/api/org-units/versions?org_code=bad%7F", nil)
+	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "T"}))
+	rec := httptest.NewRecorder()
+	handleOrgUnitsVersionsAPI(rec, req, newOrgUnitMemoryStore())
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status=%d", rec.Code)
+	}
+	if !strings.Contains(rec.Body.String(), `"code":"org_code_invalid"`) {
+		t.Fatalf("body=%s", rec.Body.String())
+	}
+}
+
+func TestHandleOrgUnitsVersionsAPI_AllowsDirectHistoryScopeBindingWithoutCurrentDetails(t *testing.T) {
+	orgNodeKey := mustOrgNodeKeyForTest(t, 10000001)
+	store := &resolveOrgCodeStore{
+		resolveID:             10000001,
+		getNodeDetailsErr:     errOrgUnitNotFound,
+		resolveCodesByNodeKey: map[string]string{orgNodeKey: "A001"},
+		listNodeVersions:      []OrgUnitNodeVersion{{EventID: 1, EffectiveDate: "2027-01-01", EventType: "CREATE"}},
+	}
+	req := httptest.NewRequest(http.MethodGet, "/org/api/org-units/versions?org_code=A001", nil)
+	req = req.WithContext(withPrincipal(withTenant(req.Context(), Tenant{ID: "t1", Name: "T"}), Principal{ID: "principal-a"}))
+	rec := httptest.NewRecorder()
+	runtime := &orgUnitScopeRuntimeStub{scopes: []principalOrgScope{{OrgNodeKey: orgNodeKey}}}
+	handleOrgUnitsVersionsAPI(rec, req, store, runtime)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+	}
+}
+
 func TestHandleOrgUnitsVersionsAPI_FailsClosedOutsideCurrentPrincipalScope(t *testing.T) {
 	store := newOrgUnitMemoryStore()
 	visible, err := store.CreateNodeCurrent(context.Background(), "t1", "2026-01-01", "VISIBLE", "Visible", "", true)
@@ -1340,6 +1407,56 @@ func TestHandleOrgUnitsAuditAPI_PassesNodeKeyToReader(t *testing.T) {
 	}
 	if store.auditByNodeKeyArg != want {
 		t.Fatalf("orgNodeKey=%q want=%q", store.auditByNodeKeyArg, want)
+	}
+}
+
+func TestHandleOrgUnitsAuditAPI_DoesNotRequireCurrentDetails(t *testing.T) {
+	store := &resolveOrgCodeStore{
+		resolveID:             10000001,
+		getNodeDetailsErr:     errOrgUnitNotFound,
+		resolveCodesByNodeKey: map[string]string{mustOrgNodeKeyForTest(t, 10000001): "A001"},
+		auditEvents:           []OrgUnitNodeAuditEvent{{EventID: 1, EventUUID: "e1", EventType: "CREATE", EffectiveDate: "2027-01-01"}},
+	}
+	req := httptest.NewRequest(http.MethodGet, "/org/api/org-units/audit?org_code=A001", nil)
+	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "T"}))
+	rec := httptest.NewRecorder()
+	handleOrgUnitsAuditAPI(rec, req, store)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+	}
+	if !strings.Contains(rec.Body.String(), "2027-01-01") {
+		t.Fatalf("body=%q", rec.Body.String())
+	}
+}
+
+func TestHandleOrgUnitsAuditAPI_InvalidOrgCodeCode(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/org/api/org-units/audit?org_code=bad%7F", nil)
+	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "T"}))
+	rec := httptest.NewRecorder()
+	handleOrgUnitsAuditAPI(rec, req, newOrgUnitMemoryStore())
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status=%d", rec.Code)
+	}
+	if !strings.Contains(rec.Body.String(), `"code":"org_code_invalid"`) {
+		t.Fatalf("body=%s", rec.Body.String())
+	}
+}
+
+func TestHandleOrgUnitsAuditAPI_AllowsDirectHistoryScopeBindingWithoutCurrentDetails(t *testing.T) {
+	orgNodeKey := mustOrgNodeKeyForTest(t, 10000001)
+	store := &resolveOrgCodeStore{
+		resolveID:             10000001,
+		getNodeDetailsErr:     errOrgUnitNotFound,
+		resolveCodesByNodeKey: map[string]string{orgNodeKey: "A001"},
+		auditEvents:           []OrgUnitNodeAuditEvent{{EventID: 1, EventUUID: "e1", EventType: "CREATE", EffectiveDate: "2027-01-01"}},
+	}
+	req := httptest.NewRequest(http.MethodGet, "/org/api/org-units/audit?org_code=A001", nil)
+	req = req.WithContext(withPrincipal(withTenant(req.Context(), Tenant{ID: "t1", Name: "T"}), Principal{ID: "principal-a"}))
+	rec := httptest.NewRecorder()
+	runtime := &orgUnitScopeRuntimeStub{scopes: []principalOrgScope{{OrgNodeKey: orgNodeKey}}}
+	handleOrgUnitsAuditAPI(rec, req, store, runtime)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
 	}
 }
 
