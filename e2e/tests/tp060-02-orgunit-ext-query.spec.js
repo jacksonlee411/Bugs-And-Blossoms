@@ -130,21 +130,16 @@ async function setOrgTypeViaAPI(ctx, { asOf, orgCode, value }) {
   expect(resp.status(), await resp.text()).toBe(200);
 }
 
-async function waitForRowOrder(page, { firstOrgCode, secondOrgCode, timeoutMs = 30_000 }) {
-  const deadline = Date.now() + timeoutMs;
-  let firstIndex = -1;
-  let secondIndex = -1;
-  let rowTexts = [];
-  while (Date.now() < deadline) {
-    rowTexts = await page.locator('[role="rowgroup"] [role="row"]').allTextContents();
-    firstIndex = rowTexts.findIndex((text) => text.includes(firstOrgCode));
-    secondIndex = rowTexts.findIndex((text) => text.includes(secondOrgCode));
-    if (firstIndex >= 0 && secondIndex >= 0 && firstIndex < secondIndex) {
-      return { firstIndex, secondIndex, rowTexts };
-    }
-    await new Promise((resolve) => setTimeout(resolve, 500));
-  }
-  return { firstIndex, secondIndex, rowTexts };
+async function listOrgUnitsPageViaAPI(ctx, params) {
+  const query = new URLSearchParams({
+    mode: "grid",
+    page: "0",
+    size: "20",
+    ...params
+  });
+  const resp = await ctx.request.get(`/org/api/org-units?${query.toString()}`);
+  expect(resp.status(), await resp.text()).toBe(200);
+  return resp.json();
 }
 
 function seedOrgTypeDictForTenant({ tenantID, asOf, runID }) {
@@ -306,47 +301,37 @@ test("tp060-02: orgunit list ext filter/sort (admin)", async ({ browser }) => {
   await setOrgTypeViaAPI(appContext, { asOf, orgCode: org.company, value: "20" });
   await setOrgTypeViaAPI(appContext, { asOf, orgCode: org.dept, value: "10" });
 
-  await page.goto(`/app/org/units?as_of=${asOf}&node=${org.root}`);
-
-  await page.getByLabel(/Sort by/).click();
-  await page.getByRole("option", { name: /Org Type/ }).click();
-  await page.getByLabel(/Sort order/).click();
-  await page.getByRole("option", { name: /Ascending/ }).click();
-
-  const applyButtons = page.getByRole("button", { name: /Apply Filters/ });
-  await applyButtons.last().click();
-
-  const companyRow = page.getByRole("row", { name: new RegExp(org.company) });
-  const deptRow = page.getByRole("row", { name: new RegExp(org.dept) });
-  await expect(companyRow).toBeVisible({ timeout: 30_000 });
-  await expect(deptRow).toBeVisible({ timeout: 30_000 });
-
-  const order = await waitForRowOrder(page, {
-    firstOrgCode: org.dept,
-    secondOrgCode: org.company
+  const sortedPayload = await listOrgUnitsPageViaAPI(appContext, {
+    as_of: asOf,
+    parent_org_code: org.root,
+    sort: "ext:d_org_type",
+    order: "asc"
   });
-  expect(order.firstIndex, `dept row missing in list: ${org.dept}`).toBeGreaterThanOrEqual(0);
-  expect(order.secondIndex, `company row missing in list: ${org.company}`).toBeGreaterThanOrEqual(0);
-  expect(
-    order.firstIndex,
-    `unexpected row order (rowTexts=${JSON.stringify(order.rowTexts)})`
-  ).toBeLessThan(order.secondIndex);
+  const sortedCodes = sortedPayload.org_units.map((item) => item.org_code);
+  expect(sortedCodes, `unexpected ext sort result: ${JSON.stringify(sortedPayload.org_units)}`).toEqual([
+    org.dept,
+    org.company
+  ]);
 
-  const extFilterField = page.getByLabel(/Ext Filter Field|扩展筛选字段/);
-  await expect(extFilterField).toBeEnabled({ timeout: 30_000 });
-  await extFilterField.click();
-  await page.getByRole("option", { name: /Org Type/ }).click();
+  const filteredPayload = await listOrgUnitsPageViaAPI(appContext, {
+    as_of: asOf,
+    parent_org_code: org.root,
+    ext_filter_field_key: "d_org_type",
+    ext_filter_value: "20"
+  });
+  expect(filteredPayload.org_units.map((item) => item.org_code)).toEqual([org.company]);
 
-  const extValueInput = page.getByTestId("org-ext-filter-value");
-  await expect(extValueInput).toBeEnabled({ timeout: 30_000 });
-  await extValueInput.click();
-  await extValueInput.fill("单位");
-  await page.getByRole("option", { name: "单位" }).click();
+  await page.goto(
+    `/app/org/units?as_of=${asOf}&node=${org.root}&ext_filter_field_key=d_org_type&ext_filter_value=20&sort=ext:d_org_type&order=asc`
+  );
+  await expect(page).toHaveURL(/include_descendants=false/);
+  await expect(page).not.toHaveURL(/ext_filter_field_key/);
+  await expect(page).not.toHaveURL(/ext_filter_value/);
+  await expect(page).not.toHaveURL(/sort=ext/);
+  await expect(page.getByLabel(/Sort by/)).toHaveCount(0);
+  await expect(page.getByLabel(/Ext Filter Field|扩展筛选字段/)).toHaveCount(0);
 
-  await applyButtons.last().click();
-
-  await expect(page.getByText(org.dept)).toHaveCount(0);
-  await expect(page.getByText(org.company)).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByRole("row", { name: new RegExp(org.company) })).toBeVisible({ timeout: 30_000 });
 
   await page.getByRole("row", { name: new RegExp(org.company) }).click();
   await expect(page).toHaveURL(new RegExp(`/app/org/units/${org.company}`));
