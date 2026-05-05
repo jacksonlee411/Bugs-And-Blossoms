@@ -279,6 +279,9 @@ func orgUnitReadScopeFilterFromRuntime(ctx context.Context, runtime authzRuntime
 	}
 	scopes, err := currentPrincipalOrgScopes(ctx, runtime, tenantID)
 	if err != nil {
+		if errors.Is(err, errAuthzOrgScopeRequired) {
+			return orgunitservices.OrgUnitReadScopeFilter{}, nil
+		}
 		return orgunitservices.OrgUnitReadScopeFilter{}, err
 	}
 	return orgUnitReadScopeFilterFromPrincipalScopes(scopes), nil

@@ -9,7 +9,6 @@ import (
 	"testing"
 
 	"github.com/jacksonlee411/Bugs-And-Blossoms/pkg/authz"
-	orgunitpkg "github.com/jacksonlee411/Bugs-And-Blossoms/pkg/orgunit"
 )
 
 type principalListStoreStub struct {
@@ -106,10 +105,14 @@ func TestHandlePrincipalAuthzAssignmentGetAPI_ReadsAssignmentWithPrincipalID(t *
 
 func TestHandlePrincipalAuthzAssignmentPutAPI_ResolvesOrgCodeBeforeSave(t *testing.T) {
 	store := newMemoryAuthzRuntimeStore()
-	rootOrgNodeKey := mustOrgNodeKeyForTest(t, 10000000)
+	orgStore := newOrgUnitMemoryStore()
+	root, err := orgStore.CreateNodeCurrent(context.Background(), "tenant-a", "2026-01-01", "FLOWERS", "Flowers", "", false)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if _, err := store.ReplacePrincipalAssignment(context.Background(), "tenant-a", "actor-a", replacePrincipalAssignmentInput{
 		Roles:     []string{authz.RoleTenantAdmin},
-		OrgScopes: []principalOrgScope{{OrgNodeKey: rootOrgNodeKey, IncludeDescendants: true}},
+		OrgScopes: []principalOrgScope{{OrgNodeKey: root.ID, IncludeDescendants: true}},
 		Revision:  1,
 	}); err != nil {
 		t.Fatal(err)
@@ -127,22 +130,7 @@ func TestHandlePrincipalAuthzAssignmentPutAPI_ResolvesOrgCodeBeforeSave(t *testi
 	}))
 	rec := httptest.NewRecorder()
 
-	resolver := orgUnitCodeResolverStub{
-		resolveOrgNodeKeyByCodeFn: func(_ context.Context, tenantID string, orgCode string) (string, error) {
-			if tenantID != "tenant-a" || orgCode != "flowers" {
-				t.Fatalf("resolve tenant=%q orgCode=%q", tenantID, orgCode)
-			}
-			return rootOrgNodeKey, nil
-		},
-		resolveOrgCodesByNodeKeysFn: func(_ context.Context, tenantID string, orgNodeKeys []string) (map[string]string, error) {
-			if tenantID != "tenant-a" || len(orgNodeKeys) != 1 || orgNodeKeys[0] != rootOrgNodeKey {
-				t.Fatalf("resolve codes tenant=%q keys=%v", tenantID, orgNodeKeys)
-			}
-			return map[string]string{rootOrgNodeKey: "FLOWERS"}, nil
-		},
-	}
-
-	handlePrincipalAuthzAssignmentPutAPI(rec, req, store, resolver, store)
+	handlePrincipalAuthzAssignmentPutAPI(rec, req, store, orgStore, store)
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
@@ -158,7 +146,7 @@ func TestHandlePrincipalAuthzAssignmentPutAPI_ResolvesOrgCodeBeforeSave(t *testi
 		t.Fatalf("org scopes=%+v", payload.OrgScopes)
 	}
 	scope := payload.OrgScopes[0]
-	if scope.OrgNodeKey != rootOrgNodeKey || scope.OrgCode != "FLOWERS" || !scope.IncludeDescendants {
+	if scope.OrgNodeKey != root.ID || scope.OrgCode != "FLOWERS" || !scope.IncludeDescendants {
 		t.Fatalf("scope=%+v", scope)
 	}
 }
@@ -210,11 +198,17 @@ func TestHandlePrincipalAuthzAssignmentPutAPI_AllowsIAMOnlyAssignmentWithoutActo
 
 func TestHandlePrincipalAuthzAssignmentPutAPI_FailsClosedWhenActorScopeDoesNotAllowRequestedOrg(t *testing.T) {
 	store := newMemoryAuthzRuntimeStore()
-	flowersOrgNodeKey := mustOrgNodeKeyForTest(t, 10000001)
-	bugsOrgNodeKey := mustOrgNodeKeyForTest(t, 10000002)
+	orgStore := newOrgUnitMemoryStore()
+	flowers, err := orgStore.CreateNodeCurrent(context.Background(), "tenant-a", "2026-01-01", "FLOWERS", "Flowers", "", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := orgStore.CreateNodeCurrent(context.Background(), "tenant-a", "2026-01-01", "BUGS", "Bugs", "", false); err != nil {
+		t.Fatal(err)
+	}
 	if _, err := store.ReplacePrincipalAssignment(context.Background(), "tenant-a", "actor-a", replacePrincipalAssignmentInput{
 		Roles:     []string{authz.RoleTenantAdmin},
-		OrgScopes: []principalOrgScope{{OrgNodeKey: flowersOrgNodeKey, IncludeDescendants: true}},
+		OrgScopes: []principalOrgScope{{OrgNodeKey: flowers.ID, IncludeDescendants: true}},
 		Revision:  1,
 	}); err != nil {
 		t.Fatal(err)
@@ -232,41 +226,21 @@ func TestHandlePrincipalAuthzAssignmentPutAPI_FailsClosedWhenActorScopeDoesNotAl
 	}))
 	rec := httptest.NewRecorder()
 
-	resolver := orgUnitCodeResolverStub{
-		resolveOrgNodeKeyByCodeFn: func(_ context.Context, tenantID string, orgCode string) (string, error) {
-			if tenantID != "tenant-a" || orgCode != "bugs" {
-				t.Fatalf("resolve tenant=%q orgCode=%q", tenantID, orgCode)
-			}
-			return bugsOrgNodeKey, nil
-		},
-		resolveOrgCodesByNodeKeysFn: func(_ context.Context, _ string, _ []string) (map[string]string, error) {
-			t.Fatal("scope check should fail before response org code hydration")
-			return nil, nil
-		},
-	}
+	handlePrincipalAuthzAssignmentPutAPI(rec, req, store, orgStore, store)
 
-	handlePrincipalAuthzAssignmentPutAPI(rec, req, store, resolver, store)
-
-	if rec.Code != http.StatusForbidden {
-		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
-	}
-	var payload struct {
-		Code string `json:"code"`
-	}
-	if err := json.NewDecoder(rec.Body).Decode(&payload); err != nil {
-		t.Fatal(err)
-	}
-	if payload.Code != "authz_scope_forbidden" {
-		t.Fatalf("payload=%+v", payload)
-	}
+	assertAuthzScopeForbiddenResponse(t, rec)
 }
 
 func TestHandlePrincipalAuthzAssignmentPutAPI_HidesUnknownOrgCodeAsScopeForbidden(t *testing.T) {
 	store := newMemoryAuthzRuntimeStore()
-	rootOrgNodeKey := mustOrgNodeKeyForTest(t, 10000000)
+	orgStore := newOrgUnitMemoryStore()
+	root, err := orgStore.CreateNodeCurrent(context.Background(), "tenant-a", "2026-01-01", "ROOT", "Root", "", false)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if _, err := store.ReplacePrincipalAssignment(context.Background(), "tenant-a", "actor-a", replacePrincipalAssignmentInput{
 		Roles:     []string{authz.RoleTenantAdmin},
-		OrgScopes: []principalOrgScope{{OrgNodeKey: rootOrgNodeKey, IncludeDescendants: true}},
+		OrgScopes: []principalOrgScope{{OrgNodeKey: root.ID, IncludeDescendants: true}},
 		Revision:  1,
 	}); err != nil {
 		t.Fatal(err)
@@ -284,21 +258,81 @@ func TestHandlePrincipalAuthzAssignmentPutAPI_HidesUnknownOrgCodeAsScopeForbidde
 	}))
 	rec := httptest.NewRecorder()
 
-	resolver := orgUnitCodeResolverStub{
-		resolveOrgNodeKeyByCodeFn: func(_ context.Context, tenantID string, orgCode string) (string, error) {
-			if tenantID != "tenant-a" || orgCode != "missing" {
-				t.Fatalf("resolve tenant=%q orgCode=%q", tenantID, orgCode)
-			}
-			return "", orgunitpkg.ErrOrgCodeNotFound
-		},
-		resolveOrgCodesByNodeKeysFn: func(_ context.Context, _ string, _ []string) (map[string]string, error) {
-			t.Fatal("scope check should fail before response org code hydration")
-			return nil, nil
-		},
+	handlePrincipalAuthzAssignmentPutAPI(rec, req, store, orgStore, store)
+
+	assertAuthzScopeForbiddenResponse(t, rec)
+}
+
+func TestHandlePrincipalAuthzAssignmentPutAPI_FailsClosedForOrgNodeKeyOutsideActorScope(t *testing.T) {
+	store := newMemoryAuthzRuntimeStore()
+	orgStore := newOrgUnitMemoryStore()
+	flowers, err := orgStore.CreateNodeCurrent(context.Background(), "tenant-a", "2026-01-01", "FLOWERS", "Flowers", "", false)
+	if err != nil {
+		t.Fatal(err)
 	}
+	bugs, err := orgStore.CreateNodeCurrent(context.Background(), "tenant-a", "2026-01-01", "BUGS", "Bugs", "", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.ReplacePrincipalAssignment(context.Background(), "tenant-a", "actor-a", replacePrincipalAssignmentInput{
+		Roles:     []string{authz.RoleTenantAdmin},
+		OrgScopes: []principalOrgScope{{OrgNodeKey: flowers.ID, IncludeDescendants: true}},
+		Revision:  1,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	reqBody := bytes.NewBufferString(`{
+		"roles": [{"role_slug": "tenant-viewer"}],
+		"org_scopes": [{"org_node_key": "` + bugs.ID + `", "include_descendants": true}],
+		"revision": 1
+	}`)
+	req := httptest.NewRequest(http.MethodPut, "/iam/api/authz/user-assignments/principal-b", reqBody)
+	req = req.WithContext(withPrincipal(withTenant(req.Context(), Tenant{ID: "tenant-a", Domain: "localhost", Name: "Tenant A"}), Principal{
+		ID:       "actor-a",
+		TenantID: "tenant-a",
+		Status:   "active",
+	}))
+	rec := httptest.NewRecorder()
 
-	handlePrincipalAuthzAssignmentPutAPI(rec, req, store, resolver, store)
+	handlePrincipalAuthzAssignmentPutAPI(rec, req, store, orgStore, store)
 
+	assertAuthzScopeForbiddenResponse(t, rec)
+}
+
+func TestHandlePrincipalAuthzAssignmentPutAPI_HidesUnknownOrgNodeKeyAsScopeForbidden(t *testing.T) {
+	store := newMemoryAuthzRuntimeStore()
+	orgStore := newOrgUnitMemoryStore()
+	root, err := orgStore.CreateNodeCurrent(context.Background(), "tenant-a", "2026-01-01", "ROOT", "Root", "", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.ReplacePrincipalAssignment(context.Background(), "tenant-a", "actor-a", replacePrincipalAssignmentInput{
+		Roles:     []string{authz.RoleTenantAdmin},
+		OrgScopes: []principalOrgScope{{OrgNodeKey: root.ID, IncludeDescendants: true}},
+		Revision:  1,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	reqBody := bytes.NewBufferString(`{
+		"roles": [{"role_slug": "tenant-viewer"}],
+		"org_scopes": [{"org_node_key": "` + mustOrgNodeKeyForTest(t, 99999999) + `", "include_descendants": true}],
+		"revision": 1
+	}`)
+	req := httptest.NewRequest(http.MethodPut, "/iam/api/authz/user-assignments/principal-b", reqBody)
+	req = req.WithContext(withPrincipal(withTenant(req.Context(), Tenant{ID: "tenant-a", Domain: "localhost", Name: "Tenant A"}), Principal{
+		ID:       "actor-a",
+		TenantID: "tenant-a",
+		Status:   "active",
+	}))
+	rec := httptest.NewRecorder()
+
+	handlePrincipalAuthzAssignmentPutAPI(rec, req, store, orgStore, store)
+
+	assertAuthzScopeForbiddenResponse(t, rec)
+}
+
+func assertAuthzScopeForbiddenResponse(t *testing.T, rec *httptest.ResponseRecorder) {
+	t.Helper()
 	if rec.Code != http.StatusForbidden {
 		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
 	}

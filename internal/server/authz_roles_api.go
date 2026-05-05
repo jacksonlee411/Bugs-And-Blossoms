@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/jacksonlee411/Bugs-And-Blossoms/internal/routing"
+	orgunitservices "github.com/jacksonlee411/Bugs-And-Blossoms/modules/orgunit/services"
 	"github.com/jacksonlee411/Bugs-And-Blossoms/pkg/authz"
 	orgunitpkg "github.com/jacksonlee411/Bugs-And-Blossoms/pkg/orgunit"
 )
@@ -420,6 +421,9 @@ func ensurePrincipalAssignmentOrgScopesAllowed(ctx context.Context, tenantID str
 	if runtime == nil {
 		return nil
 	}
+	if len(scopes) == 0 {
+		return nil
+	}
 	principal, ok := currentPrincipal(ctx)
 	if !ok || strings.TrimSpace(principal.ID) == "" {
 		return errAuthzPrincipalMissing
@@ -428,18 +432,36 @@ func ensurePrincipalAssignmentOrgScopesAllowed(ctx context.Context, tenantID str
 	if err != nil {
 		return err
 	}
+	orgStore, ok := orgResolver.(OrgUnitStore)
+	if !ok || orgStore == nil {
+		return errAuthzRuntimeUnavailable
+	}
+	asOf, err := orgUnitScopeCheckAsOf(ctx, orgStore, tenantID, "")
+	if err != nil {
+		return err
+	}
+	readSvc := orgunitservices.NewOrgUnitReadService(orgUnitReadStoreAdapter{store: orgStore})
+	scopeFilter := orgUnitReadScopeFilterFromPrincipalScopes(actorScopes)
 	for _, scope := range scopes {
 		targetOrgNodeKey := strings.TrimSpace(scope.OrgNodeKey)
-		pathOrgNodeKeys := []string{targetOrgNodeKey}
-		if orgStore, ok := orgResolver.(OrgUnitStore); ok {
-			resolvedTarget, resolvedPath, err := orgUnitScopePathOrgNodeKeys(ctx, orgStore, tenantID, targetOrgNodeKey, "")
-			if err != nil {
-				return err
-			}
-			targetOrgNodeKey = resolvedTarget
-			pathOrgNodeKeys = resolvedPath
+		if targetOrgNodeKey == "" {
+			return errAuthzScopeForbidden
 		}
-		if !orgScopeAllows(actorScopes, targetOrgNodeKey, pathOrgNodeKeys) {
+		resolved, err := readSvc.Resolve(ctx, orgunitservices.OrgUnitResolveRequest{
+			TenantID:        tenantID,
+			AsOf:            asOf,
+			ScopeFilter:     scopeFilter,
+			OrgNodeKeys:     []string{targetOrgNodeKey},
+			IncludeDisabled: true,
+			Caller:          "authz.assignment.org_scope",
+		})
+		if err != nil {
+			if errors.Is(err, orgunitservices.ErrOrgUnitReadNotFound) {
+				return errAuthzScopeForbidden
+			}
+			return err
+		}
+		if len(resolved) == 0 {
 			return errAuthzScopeForbidden
 		}
 	}

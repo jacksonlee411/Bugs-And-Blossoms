@@ -1,6 +1,6 @@
 # DEV-PLAN-491：通用可复用 OrgUnit 树选择器与范围感知候选契约方案
 
-**状态**: 实施中（2026-05-04 CST）— Phase A 已完成、Phase B 最小单选骨架已完成、Phase C 用户授权页首个接入与受限管理员 E2E 闭环已落地；Phase D 主要组织选择入口复用已完成，组织管理页浏览/编辑树不纳入强制替换范围。OrgUnit Read Core、selector-ready DTO、scope-aware visible roots 与 safe path 架构缺口已转由 `DEV-PLAN-492` 承接；本计划保留前端 selector/facade 与选择入口接入 owner，并明确不接管组织管理页浏览/编辑主 UI。当前已新增 selector facade 与 `OrgUnitTreeSelector` / picker / field 最小组件族；`授权管理 > 用户授权 > 组织范围`、组织管理页创建上级组织与详情页编辑上级组织均已切到 `OrgUnitTreeField`，保存 payload 仍沿用 489，保存阶段已增加当前操作者组织范围 fail-closed 校验；更广 `dev491` E2E 已覆盖三类主要 selector 入口的可见范围、范围外搜索与直接提交 fail-closed。
+**状态**: 实施中（2026-05-05 CST）— Phase A 已完成、Phase B 最小单选骨架已完成、Phase C 用户授权页首个接入与受限管理员 E2E 闭环已落地；Phase D 主要组织选择入口复用已完成，组织管理页浏览/编辑树不纳入强制替换范围。OrgUnit Read Core、selector-ready DTO、scope-aware visible roots 与 safe path 架构缺口已转由 `DEV-PLAN-492` 承接；本计划保留前端 selector/facade 与选择入口接入 owner，并明确不接管组织管理页浏览/编辑主 UI。当前已新增 selector facade 与 `OrgUnitTreeSelector` / picker / field 最小组件族；`授权管理 > 用户授权 > 组织范围`、组织管理页创建上级组织与详情页编辑上级组织均已切到 `OrgUnitTreeField`，保存 payload 仍沿用 489，保存阶段的当前操作者组织范围校验已改为 492 ReadService `Resolve`；更广 `dev491` E2E 已覆盖三类主要 selector 入口的可见范围、范围外搜索与直接提交 fail-closed，本轮回归因本地 Kratos admin 未启动而未能重新跑通。
 
 ## 0. 适用范围与评审分级
 
@@ -337,7 +337,7 @@ interface OrgUnitSelectorNode {
 
 ## 8. 文档联动
 
-1. [ ] `DEV-PLAN-481` 引用本计划，明确“组织下拉或组织树选择结果”的现行 owner 已由 491 收口。
+1. [X] `DEV-PLAN-481` 引用本计划，明确“组织下拉或组织树选择结果”的现行 owner 已由 491 收口。（2026-05-05：481 已改为引用 `DEV-PLAN-491` selector/facade。）
 2. [X] `DEV-PLAN-489` 引用本计划，明确用户授权页候选组织读取面的 UI owner 在 491，IAM scope SoT/provider 仍由 489 承接。
 3. [X] `DEV-PLAN-492` 引用本计划，明确 OrgUnit read core、selector-ready DTO、scope-aware visible roots 与 safe path 是 491 的上游依赖。
 4. [X] 首期 selector 不新增后端 route；若后续确需形成新 route/read contract，必须先更新本计划与 `DEV-PLAN-492`，并补充 `DEV-PLAN-017` / 相关 API owner 文档引用。（2026-05-04：本轮只新增前端 facade，HTTP 仍复用 `/org/api/org-units` 与 `/org/api/org-units/search`。）
@@ -357,3 +357,4 @@ interface OrgUnitSelectorNode {
 - 2026-05-04 CST：Phase D 继续推广到组织详情页：`OrgUnitDetailsPage` 编辑上级组织字段切到 `OrgUnitTreeField`，详情 API 响应补 `parent_org_node_key` 支撑 selector 稳定回显；写入 payload 仍只提交既有 `parent_org_code` patch。补齐 safe path 深层/跨分支验证：服务层 `OrgUnitReadService.Search` 与 HTTP `/org/api/org-units/search` 均覆盖 visible root 下深层子节点 path 从 visible root 开始、其他分支不可见不返回路径。验证：`npm --prefix apps/web test -- --run src/pages/org/OrgUnitDetailsPage.test.tsx src/components/OrgUnitTreeSelector.test.tsx src/pages/org/OrgUnitsPage.test.tsx`、`npm --prefix apps/web run typecheck`、`go test ./modules/orgunit/services ./internal/server -run 'TestOrgUnitReadServiceSearch|TestHandleOrgUnitsSearchAPI|TestHandleOrgUnitsDetailsAPI'`。
 - 2026-05-04 CST：492 读取收敛已有新增进展：普通 list/grid 与 ext 字段 list/grid HTTP 分支已接入 `OrgUnitReadService.List`，通过 adapter page 原语将 scope 裁剪、keyword/status/business-unit/ext filter/ext sort、count、limit/offset 下推到 store pager 主链，并避免递归 children N+1；评审修复已补 ext parent scope fail-closed 与 adapter page row path 补齐。491 仍只记录上游 contract 消费状态，SQL 级 scoped pagination 的 owner 与完成状态以 492 为准。
 - 2026-05-04 CST：更广 491/492 联合 E2E 已补到 `dev491` spec 并通过：在受限管理员上下文下，组织创建页父组织 selector 只能选择当前可见组织、范围外搜索不可见，直接创建到范围外 parent 返回 `authz_scope_forbidden`；组织详情页更正父组织同样只能选择可见组织，直接更正到范围外 parent 返回 `authz_scope_forbidden`。过程中修正统一 write API 的 create scope check 顺序，避免新建组织被“新 org code 尚不存在”误拦截。该记录补 491 selector 消费侧验收；SQL 级 scoped pagination 已由 492 完成并在 492/readiness 文档记录。
+- 2026-05-05 CST：本轮仅做文档与边界同步，不改 selector UI 结构；`OrgUnitsPage` 主树浏览/编辑读取仍不属于 491 强制替换范围，但其后端读取继续走 492 ReadService。`handlePrincipalAuthzAssignmentPutAPI` 保存阶段的当前操作者可见性校验已改为 492 ReadService `Resolve`，未知或范围外 `org_node_key` 继续统一 `authz_scope_forbidden`。`dev491` Playwright 复跑因本地 Kratos admin `127.0.0.1:4434` 未启动而失败，未能得到新的业务通过证据。

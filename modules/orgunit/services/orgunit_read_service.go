@@ -156,9 +156,20 @@ func (s orgUnitReadService) List(ctx context.Context, req OrgUnitListRequest) ([
 	if err := validateOrgUnitReadBase(req.TenantID, req.AsOf); err != nil {
 		return nil, 0, err
 	}
+	tenantHasOrgData := true
+	if !req.ScopeFilter.AllTenant && len(normalizeReadScopes(req.ScopeFilter.Scopes)) == 0 {
+		hasOrgData, err := s.tenantHasOrgData(ctx, req.TenantID, req.AsOf, req.IncludeDisabled)
+		if err != nil {
+			return nil, 0, err
+		}
+		if !hasOrgData {
+			return []OrgUnitReadNode{}, 0, nil
+		}
+		tenantHasOrgData = hasOrgData
+	}
 	if req.shouldUseStorePage() {
 		if _, ok := s.store.(OrgUnitReadListPageStore); ok {
-			return s.listWithStorePage(ctx, req)
+			return s.listWithStorePage(ctx, req, tenantHasOrgData)
 		}
 		if req.hasExtQuery() {
 			return nil, 0, ErrOrgUnitReadExtQueryNotAllowed
@@ -166,7 +177,7 @@ func (s orgUnitReadService) List(ctx context.Context, req OrgUnitListRequest) ([
 	}
 
 	if req.hasExtQuery() {
-		return s.listWithStorePage(ctx, req)
+		return s.listWithStorePage(ctx, req, tenantHasOrgData)
 	}
 
 	var nodes []OrgUnitReadNode
@@ -223,12 +234,15 @@ func (req OrgUnitListRequest) hasExtQuery() bool {
 	return strings.TrimSpace(req.ExtFilterFieldKey) != "" || strings.TrimSpace(req.ExtSortFieldKey) != ""
 }
 
-func (s orgUnitReadService) listWithStorePage(ctx context.Context, req OrgUnitListRequest) ([]OrgUnitReadNode, int, error) {
+func (s orgUnitReadService) listWithStorePage(ctx context.Context, req OrgUnitListRequest, tenantHasOrgData bool) ([]OrgUnitReadNode, int, error) {
 	pageStore, ok := s.store.(OrgUnitReadListPageStore)
 	if !ok {
 		return nil, 0, ErrOrgUnitReadExtQueryNotAllowed
 	}
 	if !req.ScopeFilter.AllTenant && len(normalizeReadScopes(req.ScopeFilter.Scopes)) == 0 {
+		if !tenantHasOrgData {
+			return []OrgUnitReadNode{}, 0, nil
+		}
 		return nil, 0, ErrOrgUnitReadScopeRequired
 	}
 
@@ -277,6 +291,14 @@ func (s orgUnitReadService) listWithStorePage(ctx context.Context, req OrgUnitLi
 	return nodes, total, nil
 }
 
+func (s orgUnitReadService) tenantHasOrgData(ctx context.Context, tenantID string, asOf string, includeDisabled bool) (bool, error) {
+	roots, err := s.store.ListRoots(ctx, tenantID, asOf, includeDisabled)
+	if err != nil {
+		return false, err
+	}
+	return len(roots) > 0, nil
+}
+
 func (s orgUnitReadService) VisibleRoots(ctx context.Context, req OrgUnitReadRequest) ([]OrgUnitReadNode, error) {
 	if err := validateOrgUnitReadBase(req.TenantID, req.AsOf); err != nil {
 		return nil, err
@@ -287,6 +309,17 @@ func (s orgUnitReadService) VisibleRoots(ctx context.Context, req OrgUnitReadReq
 			return nil, err
 		}
 		return s.decorateVisibleChildren(ctx, req.TenantID, req.AsOf, req.IncludeDisabled, req.ScopeFilter, roots)
+	}
+
+	if len(normalizeReadScopes(req.ScopeFilter.Scopes)) == 0 {
+		hasOrgData, err := s.tenantHasOrgData(ctx, req.TenantID, req.AsOf, req.IncludeDisabled)
+		if err != nil {
+			return nil, err
+		}
+		if !hasOrgData {
+			return []OrgUnitReadNode{}, nil
+		}
+		return nil, ErrOrgUnitReadScopeRequired
 	}
 
 	roots, err := s.visibleRootsFromScope(ctx, req.TenantID, req.AsOf, req.IncludeDisabled, req.ScopeFilter)

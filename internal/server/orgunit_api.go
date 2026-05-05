@@ -712,6 +712,8 @@ func filterOrgUnitListItems(items []orgUnitListItem, keyword string, status stri
 }
 
 func filterOrgUnitListItemsByReadScope(items []orgUnitListItem, filter orgunitservices.OrgUnitReadScopeFilter) []orgUnitListItem {
+	// DEV-PLAN-492 adapter bridge: listOrgUnitListPage still returns API list DTOs for
+	// orgUnitReadStoreAdapter.ListPage; handler scope checks must use OrgUnitReadService.
 	if filter.AllTenant || len(filter.Scopes) == 0 {
 		return items
 	}
@@ -725,6 +727,8 @@ func filterOrgUnitListItemsByReadScope(items []orgUnitListItem, filter orgunitse
 }
 
 func orgUnitReadScopeAllowsListItem(filter orgunitservices.OrgUnitReadScopeFilter, item orgUnitListItem) bool {
+	// DEV-PLAN-492 adapter bridge: path-based matching is retained only for
+	// list DTOs that have already been hydrated before conversion to read nodes.
 	orgNodeKey := strings.TrimSpace(item.OrgNodeKey)
 	if orgNodeKey == "" {
 		return false
@@ -751,17 +755,6 @@ func orgUnitReadScopeAllowsListItem(filter orgunitservices.OrgUnitReadScopeFilte
 		}
 	}
 	return false
-}
-
-func orgUnitScopeRequiredEmptyList(ctx context.Context, store OrgUnitStore, tenantID string, asOf string, includeDisabled bool, err error) (bool, error) {
-	if !errors.Is(err, orgunitservices.ErrOrgUnitReadScopeRequired) && !errors.Is(err, errAuthzOrgScopeRequired) {
-		return false, nil
-	}
-	nodes, listErr := listNodesCurrentByVisibility(ctx, store, tenantID, asOf, includeDisabled)
-	if listErr != nil {
-		return false, listErr
-	}
-	return len(nodes) == 0, nil
 }
 
 func sortOrgUnitListItems(items []orgUnitListItem, sortField string, sortOrder string) {
@@ -797,6 +790,8 @@ func sortOrgUnitListItems(items []orgUnitListItem, sortField string, sortOrder s
 }
 
 func hydrateOrgUnitListItemScopePaths(ctx context.Context, store OrgUnitStore, tenantID string, asOf string, items []orgUnitListItem) error {
+	// DEV-PLAN-492 adapter bridge: hydrate path data for list DTOs before the
+	// orgUnitReadStoreAdapter converts them into OrgUnitReadNode values.
 	for i := range items {
 		if len(items[i].PathOrgNodeKeys) > 0 {
 			continue
@@ -854,63 +849,6 @@ func orgUnitScopeDepsFromVariadic(deps []orgUnitScopeDeps) orgUnitScopeDeps {
 	return deps[0]
 }
 
-func filterOrgUnitListItemsByCurrentScope(ctx context.Context, runtime authzRuntimeStore, tenantID string, items []orgUnitListItem, total int) ([]orgUnitListItem, int, error) {
-	if runtime == nil {
-		return items, total, nil
-	}
-	if len(items) == 0 {
-		return items, total, nil
-	}
-	if err := hydrateOrgUnitListItemScopePaths(ctx, nil, tenantID, "", items); err != nil {
-		return nil, 0, err
-	}
-	scopes, err := currentPrincipalOrgScopes(ctx, runtime, tenantID)
-	if err != nil {
-		return nil, 0, err
-	}
-	filtered := make([]orgUnitListItem, 0, len(items))
-	for _, item := range items {
-		if orgScopeAllows(scopes, item.OrgNodeKey, item.PathOrgNodeKeys) {
-			filtered = append(filtered, item)
-		}
-	}
-	return filtered, len(filtered), nil
-}
-
-func filterOrgUnitListItemsByPrincipalScope(ctx context.Context, runtime authzRuntimeStore, tenantID string, principalID string, items []orgUnitListItem, total int) ([]orgUnitListItem, int, error) {
-	if runtime == nil {
-		return items, total, nil
-	}
-	if len(items) == 0 {
-		return items, total, nil
-	}
-	if err := hydrateOrgUnitListItemScopePaths(ctx, nil, tenantID, "", items); err != nil {
-		return nil, 0, err
-	}
-	scopes, err := principalOrgScopes(ctx, runtime, tenantID, principalID)
-	if err != nil {
-		return nil, 0, err
-	}
-	filtered := make([]orgUnitListItem, 0, len(items))
-	for _, item := range items {
-		if orgScopeAllows(scopes, item.OrgNodeKey, item.PathOrgNodeKeys) {
-			filtered = append(filtered, item)
-		}
-	}
-	return filtered, len(filtered), nil
-}
-
-func ensureCurrentPrincipalOrgScopeAllows(ctx context.Context, runtime authzRuntimeStore, tenantID string, orgNodeKey string) error {
-	if runtime == nil {
-		return nil
-	}
-	principal, ok := currentPrincipal(ctx)
-	if !ok || strings.TrimSpace(principal.ID) == "" {
-		return errAuthzPrincipalMissing
-	}
-	return ensurePrincipalOrgScopeAllows(ctx, runtime, tenantID, principal.ID, orgNodeKey, nil)
-}
-
 func ensureCurrentPrincipalOrgNodeScopeAllows(ctx context.Context, store OrgUnitStore, runtime authzRuntimeStore, tenantID string, orgNodeKey string, asOf string) error {
 	if runtime == nil {
 		return nil
@@ -944,43 +882,6 @@ func ensureCurrentPrincipalOrgNodeScopeAllows(ctx context.Context, store OrgUnit
 	}
 	if len(resolved) == 0 {
 		return orgunitservices.ErrOrgUnitReadScopeForbidden
-	}
-	return nil
-}
-
-func ensurePrincipalOrgScopeAllows(ctx context.Context, runtime authzRuntimeStore, tenantID string, principalID string, orgNodeKey string, pathOrgNodeKeys []string) error {
-	if runtime == nil {
-		return nil
-	}
-	var scopes []principalOrgScope
-	var err error
-	if strings.TrimSpace(principalID) != "" {
-		scopes, err = runtime.OrgScopesForPrincipal(ctx, tenantID, strings.TrimSpace(principalID), authz.AuthzCapabilityKey(authz.ObjectOrgUnitOrgUnits, authz.ActionRead))
-		if err != nil {
-			return err
-		}
-	} else {
-		scopes, err = currentPrincipalOrgScopes(ctx, runtime, tenantID)
-		if err != nil {
-			return err
-		}
-	}
-	if !orgScopeAllows(scopes, orgNodeKey, pathOrgNodeKeys) {
-		return errAuthzScopeForbidden
-	}
-	return nil
-}
-
-func ensureCurrentPrincipalOrgScopeAllowsResult(ctx context.Context, runtime authzRuntimeStore, tenantID string, result OrgUnitSearchResult) error {
-	if runtime == nil {
-		return nil
-	}
-	scopes, err := currentPrincipalOrgScopes(ctx, runtime, tenantID)
-	if err != nil {
-		return err
-	}
-	if !orgScopeAllows(scopes, result.TargetOrgNodeKey, result.PathOrgNodeKeys) {
-		return errAuthzScopeForbidden
 	}
 	return nil
 }
@@ -1022,35 +923,6 @@ func ensureCurrentPrincipalOrgCodeScopeAllows(ctx context.Context, store OrgUnit
 	return nil
 }
 
-func ensurePrincipalOrgCodeScopeAllows(ctx context.Context, store OrgUnitStore, runtime authzRuntimeStore, tenantID string, principalID string, orgCode string, asOf string) error {
-	if runtime == nil {
-		return nil
-	}
-	orgCode = strings.TrimSpace(orgCode)
-	if orgCode == "" {
-		return nil
-	}
-	if store == nil {
-		return errAuthzRuntimeUnavailable
-	}
-	orgNodeKey, err := store.ResolveOrgNodeKeyByCode(ctx, tenantID, orgCode)
-	if err != nil {
-		return err
-	}
-	return ensurePrincipalOrgNodeScopeAllows(ctx, store, runtime, tenantID, principalID, orgNodeKey, asOf)
-}
-
-func ensurePrincipalOrgNodeScopeAllows(ctx context.Context, store OrgUnitStore, runtime authzRuntimeStore, tenantID string, principalID string, orgNodeKey string, asOf string) error {
-	if runtime == nil {
-		return nil
-	}
-	targetOrgNodeKey, pathOrgNodeKeys, err := orgUnitScopePathOrgNodeKeys(ctx, store, tenantID, orgNodeKey, asOf)
-	if err != nil {
-		return err
-	}
-	return ensurePrincipalOrgScopeAllows(ctx, runtime, tenantID, principalID, targetOrgNodeKey, pathOrgNodeKeys)
-}
-
 func orgUnitScopeCheckAsOf(ctx context.Context, store OrgUnitStore, tenantID string, asOf string) (string, error) {
 	targetAsOf := strings.TrimSpace(asOf)
 	if targetAsOf != "" {
@@ -1089,6 +961,9 @@ func principalOrgScopes(ctx context.Context, runtime authzRuntimeStore, tenantID
 }
 
 func orgUnitScopePathOrgNodeKeys(ctx context.Context, store OrgUnitStore, tenantID string, orgNodeKey string, asOf string) (string, []string, error) {
+	// DEV-PLAN-492 adapter bridge: this exists only to hydrate list DTO paths for
+	// orgUnitReadStoreAdapter. Handler/authz visibility checks must resolve
+	// through OrgUnitReadService instead of using this path data directly.
 	orgNodeKey = strings.TrimSpace(orgNodeKey)
 	if orgNodeKey == "" {
 		return "", nil, errAuthzScopeForbidden
@@ -1244,30 +1119,6 @@ func handleOrgUnitsAPI(w http.ResponseWriter, r *http.Request, store OrgUnitStor
 			readSvc := orgunitservices.NewOrgUnitReadService(orgUnitReadStoreAdapter{store: store})
 			scopeFilter, err := orgUnitReadScopeFilterFromRuntime(r.Context(), runtimeStoreFromVariadic(runtime), tenant.ID)
 			if err != nil {
-				if empty, emptyErr := orgUnitScopeRequiredEmptyList(r.Context(), store, tenant.ID, asOf, includeDisabled, err); emptyErr != nil {
-					writeInternalAPIError(w, r, emptyErr, "orgunit_list_failed")
-					return
-				} else if empty {
-					var pagePtr *int
-					var sizePtr *int
-					var totalPtr *int
-					if listOpts.Paginate {
-						pagePtr = &listOpts.Page
-						sizePtr = &listOpts.PageSize
-						total := 0
-						totalPtr = &total
-					}
-					w.Header().Set("Content-Type", "application/json; charset=utf-8")
-					_ = json.NewEncoder(w).Encode(orgUnitListResponse{
-						AsOf:            asOf,
-						IncludeDisabled: includeDisabled,
-						Page:            pagePtr,
-						Size:            sizePtr,
-						Total:           totalPtr,
-						OrgUnits:        []orgUnitListItem{},
-					})
-					return
-				}
 				writeOrgUnitScopeError(w, r, err)
 				return
 			}
@@ -1317,25 +1168,6 @@ func handleOrgUnitsAPI(w http.ResponseWriter, r *http.Request, store OrgUnitStor
 				Caller:            "orgunit.http.list",
 			})
 			if err != nil {
-				if empty, emptyErr := orgUnitScopeRequiredEmptyList(r.Context(), store, tenant.ID, asOf, includeDisabled, err); emptyErr != nil {
-					writeInternalAPIError(w, r, emptyErr, "orgunit_list_failed")
-					return
-				} else if empty {
-					total := 0
-					if listOpts.Paginate {
-						totalPtr = &total
-					}
-					w.Header().Set("Content-Type", "application/json; charset=utf-8")
-					_ = json.NewEncoder(w).Encode(orgUnitListResponse{
-						AsOf:            asOf,
-						IncludeDisabled: includeDisabled,
-						Page:            pagePtr,
-						Size:            sizePtr,
-						Total:           totalPtr,
-						OrgUnits:        []orgUnitListItem{},
-					})
-					return
-				}
 				writeOrgUnitReadServiceError(w, r, err, "orgunit_list_failed")
 				return
 			}
@@ -1360,18 +1192,6 @@ func handleOrgUnitsAPI(w http.ResponseWriter, r *http.Request, store OrgUnitStor
 		readSvc := orgunitservices.NewOrgUnitReadService(orgUnitReadStoreAdapter{store: store})
 		scopeFilter, err := orgUnitReadScopeFilterFromRuntime(r.Context(), runtimeStoreFromVariadic(runtime), tenant.ID)
 		if err != nil {
-			if empty, emptyErr := orgUnitScopeRequiredEmptyList(r.Context(), store, tenant.ID, asOf, includeDisabled, err); emptyErr != nil {
-				writeInternalAPIError(w, r, emptyErr, "orgunit_list_failed")
-				return
-			} else if empty {
-				w.Header().Set("Content-Type", "application/json; charset=utf-8")
-				_ = json.NewEncoder(w).Encode(orgUnitListResponse{
-					AsOf:            asOf,
-					IncludeDisabled: includeDisabled,
-					OrgUnits:        []orgUnitListItem{},
-				})
-				return
-			}
 			writeOrgUnitScopeError(w, r, err)
 			return
 		}
@@ -1426,18 +1246,6 @@ func handleOrgUnitsAPI(w http.ResponseWriter, r *http.Request, store OrgUnitStor
 			Caller:          "orgunit.http.roots",
 		})
 		if err != nil {
-			if empty, emptyErr := orgUnitScopeRequiredEmptyList(r.Context(), store, tenant.ID, asOf, includeDisabled, err); emptyErr != nil {
-				writeInternalAPIError(w, r, emptyErr, "orgunit_list_failed")
-				return
-			} else if empty {
-				w.Header().Set("Content-Type", "application/json; charset=utf-8")
-				_ = json.NewEncoder(w).Encode(orgUnitListResponse{
-					AsOf:            asOf,
-					IncludeDisabled: includeDisabled,
-					OrgUnits:        []orgUnitListItem{},
-				})
-				return
-			}
 			writeOrgUnitReadServiceError(w, r, err, "orgunit_list_failed")
 			return
 		}
@@ -1642,12 +1450,7 @@ func handleOrgUnitsVersionsAPI(w http.ResponseWriter, r *http.Request, store Org
 		return
 	}
 	if rt := runtimeStoreFromVariadic(runtime); rt != nil {
-		principal, ok := currentPrincipal(r.Context())
-		if !ok || strings.TrimSpace(principal.ID) == "" {
-			writeOrgUnitScopeError(w, r, errAuthzPrincipalMissing)
-			return
-		}
-		if err := ensurePrincipalOrgNodeScopeAllows(r.Context(), store, rt, tenant.ID, principal.ID, orgNodeKey, ""); err != nil {
+		if err := ensureCurrentPrincipalOrgNodeScopeAllows(r.Context(), store, rt, tenant.ID, orgNodeKey, ""); err != nil {
 			writeOrgUnitScopeError(w, r, err)
 			return
 		}
@@ -1716,12 +1519,7 @@ func handleOrgUnitsAuditAPI(w http.ResponseWriter, r *http.Request, store OrgUni
 		return
 	}
 	if rt := runtimeStoreFromVariadic(runtime); rt != nil {
-		principal, ok := currentPrincipal(r.Context())
-		if !ok || strings.TrimSpace(principal.ID) == "" {
-			writeOrgUnitScopeError(w, r, errAuthzPrincipalMissing)
-			return
-		}
-		if err := ensurePrincipalOrgNodeScopeAllows(r.Context(), store, rt, tenant.ID, principal.ID, orgNodeKey, ""); err != nil {
+		if err := ensureCurrentPrincipalOrgNodeScopeAllows(r.Context(), store, rt, tenant.ID, orgNodeKey, ""); err != nil {
 			writeOrgUnitScopeError(w, r, err)
 			return
 		}

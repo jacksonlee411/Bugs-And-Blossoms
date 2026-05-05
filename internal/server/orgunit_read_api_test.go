@@ -151,6 +151,19 @@ func TestHandleOrgUnitsAPI_ListRootsNoScopeAndNoOrgDataReturnsEmpty(t *testing.T
 	}
 }
 
+func TestHandleOrgUnitsAPI_ListRootsNoScopeFailsClosedAfterOrgInitialization(t *testing.T) {
+	store := newOrgUnitMemoryStore()
+	if _, err := store.CreateNodeCurrent(context.Background(), "t1", "2026-01-01", "ROOT", "Root", "", false); err != nil {
+		t.Fatalf("create root err=%v", err)
+	}
+	req := httptest.NewRequest(http.MethodGet, "/org/api/org-units?as_of=2026-01-01", nil)
+	req = req.WithContext(withPrincipal(withTenant(req.Context(), Tenant{ID: "t1", Name: "T"}), Principal{ID: "principal-a"}))
+	rec := httptest.NewRecorder()
+	runtime := &orgUnitScopeRuntimeStub{err: errAuthzOrgScopeRequired}
+	handleOrgUnitsAPI(rec, req, store, nil, runtime)
+	assertOrgUnitScopeForbiddenResponse(t, rec)
+}
+
 func TestOrgUnitReadStoreAdapterResolveFailsClosedWhenPathCodeMissing(t *testing.T) {
 	rootKey := mustReadTestOrgNodeKey(t, 10000001)
 	childKey := mustReadTestOrgNodeKey(t, 10000002)
@@ -855,13 +868,16 @@ func TestListOrgUnitListPage_HydratesFallbackScopePath(t *testing.T) {
 		t.Fatalf("path=%v want=%v", items[0].PathOrgNodeKeys, wantPath)
 	}
 
-	scopeCtx := withPrincipal(ctx, Principal{ID: "principal-a"})
-	filtered, filteredTotal, err := filterOrgUnitListItemsByCurrentScope(scopeCtx, &orgUnitScopeRuntimeStub{
-		scopes: []principalOrgScope{{
+	readSvc := orgunitservices.NewOrgUnitReadService(orgUnitReadStoreAdapter{store: store})
+	filtered, filteredTotal, err := readSvc.List(ctx, orgunitservices.OrgUnitListRequest{
+		TenantID: "t1",
+		AsOf:     "2026-01-01",
+		Keyword:  "grand",
+		ScopeFilter: orgunitservices.OrgUnitReadScopeFilter{Scopes: []orgunitservices.OrgUnitScope{{
 			OrgNodeKey:         child.ID,
 			IncludeDescendants: true,
-		}},
-	}, "t1", items, total)
+		}}},
+	})
 	if err != nil {
 		t.Fatalf("filter err=%v", err)
 	}
@@ -1021,34 +1037,12 @@ func TestHandleOrgUnitsAPI_ListPaginationTotalUsesScopedResult(t *testing.T) {
 }
 
 func TestFilterOrgUnitListItemsByScope_AllowsEmptyCandidateList(t *testing.T) {
-	t.Run("current principal", func(t *testing.T) {
-		runtime := &orgUnitScopeRuntimeStub{err: errAuthzOrgScopeRequired}
-		ctx := withPrincipal(context.Background(), Principal{ID: "principal-a"})
-		filtered, total, err := filterOrgUnitListItemsByCurrentScope(ctx, runtime, "t1", []orgUnitListItem{}, 0)
-		if err != nil {
-			t.Fatalf("filter err=%v", err)
-		}
-		if len(filtered) != 0 || total != 0 {
-			t.Fatalf("filtered=%+v total=%d", filtered, total)
-		}
-		if runtime.scopeCalls != 0 {
-			t.Fatalf("scopeCalls=%d", runtime.scopeCalls)
-		}
+	filtered := filterOrgUnitListItemsByReadScope([]orgUnitListItem{}, orgunitservices.OrgUnitReadScopeFilter{
+		Scopes: []orgunitservices.OrgUnitScope{{OrgNodeKey: mustOrgNodeKeyForTest(t, 10000001)}},
 	})
-
-	t.Run("explicit principal", func(t *testing.T) {
-		runtime := &orgUnitScopeRuntimeStub{err: errAuthzOrgScopeRequired}
-		filtered, total, err := filterOrgUnitListItemsByPrincipalScope(context.Background(), runtime, "t1", "principal-a", []orgUnitListItem{}, 0)
-		if err != nil {
-			t.Fatalf("filter err=%v", err)
-		}
-		if len(filtered) != 0 || total != 0 {
-			t.Fatalf("filtered=%+v total=%d", filtered, total)
-		}
-		if runtime.scopeCalls != 0 {
-			t.Fatalf("scopeCalls=%d", runtime.scopeCalls)
-		}
-	})
+	if len(filtered) != 0 {
+		t.Fatalf("filtered=%+v", filtered)
+	}
 }
 
 func TestHandleOrgUnitsAPI_ListNodesError(t *testing.T) {
@@ -1309,6 +1303,25 @@ func TestHandleOrgUnitsVersionsAPI_PassesNodeKeyToReader(t *testing.T) {
 	}
 }
 
+func TestHandleOrgUnitsVersionsAPI_FailsClosedOutsideCurrentPrincipalScope(t *testing.T) {
+	store := newOrgUnitMemoryStore()
+	visible, err := store.CreateNodeCurrent(context.Background(), "t1", "2026-01-01", "VISIBLE", "Visible", "", true)
+	if err != nil {
+		t.Fatalf("create visible err=%v", err)
+	}
+	if _, err := store.CreateNodeCurrent(context.Background(), "t1", "2026-01-01", "HIDDEN", "Hidden", "", true); err != nil {
+		t.Fatalf("create hidden err=%v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/org/api/org-units/versions?org_code=HIDDEN", nil)
+	req = req.WithContext(withPrincipal(withTenant(req.Context(), Tenant{ID: "t1", Name: "T"}), Principal{ID: "principal-a"}))
+	rec := httptest.NewRecorder()
+	runtime := &orgUnitScopeRuntimeStub{scopes: []principalOrgScope{{OrgNodeKey: visible.ID}}}
+	handleOrgUnitsVersionsAPI(rec, req, store, runtime)
+
+	assertOrgUnitScopeForbiddenResponse(t, rec)
+}
+
 func TestHandleOrgUnitsAuditAPI_PassesNodeKeyToReader(t *testing.T) {
 	store := &resolveOrgCodeStore{
 		resolveID:   10000001,
@@ -1328,6 +1341,25 @@ func TestHandleOrgUnitsAuditAPI_PassesNodeKeyToReader(t *testing.T) {
 	if store.auditByNodeKeyArg != want {
 		t.Fatalf("orgNodeKey=%q want=%q", store.auditByNodeKeyArg, want)
 	}
+}
+
+func TestHandleOrgUnitsAuditAPI_FailsClosedOutsideCurrentPrincipalScope(t *testing.T) {
+	store := newOrgUnitMemoryStore()
+	visible, err := store.CreateNodeCurrent(context.Background(), "t1", "2026-01-01", "VISIBLE", "Visible", "", true)
+	if err != nil {
+		t.Fatalf("create visible err=%v", err)
+	}
+	if _, err := store.CreateNodeCurrent(context.Background(), "t1", "2026-01-01", "HIDDEN", "Hidden", "", true); err != nil {
+		t.Fatalf("create hidden err=%v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/org/api/org-units/audit?org_code=HIDDEN", nil)
+	req = req.WithContext(withPrincipal(withTenant(req.Context(), Tenant{ID: "t1", Name: "T"}), Principal{ID: "principal-a"}))
+	rec := httptest.NewRecorder()
+	runtime := &orgUnitScopeRuntimeStub{scopes: []principalOrgScope{{OrgNodeKey: visible.ID}}}
+	handleOrgUnitsAuditAPI(rec, req, store, runtime)
+
+	assertOrgUnitScopeForbiddenResponse(t, rec)
 }
 
 func TestHandleOrgUnitsAuditAPI_Success(t *testing.T) {
@@ -1604,5 +1636,19 @@ func TestHandleOrgUnitsSearchAPI_BasicErrors(t *testing.T) {
 	handleOrgUnitsSearchAPI(rec2, req2, newOrgUnitMemoryStore())
 	if rec2.Code != http.StatusNotFound {
 		t.Fatalf("status=%d", rec2.Code)
+	}
+}
+
+func assertOrgUnitScopeForbiddenResponse(t *testing.T, rec *httptest.ResponseRecorder) {
+	t.Helper()
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+	}
+	var payload map[string]any
+	if err := json.NewDecoder(rec.Body).Decode(&payload); err != nil {
+		t.Fatalf("decode err=%v", err)
+	}
+	if payload["code"] != "authz_scope_forbidden" {
+		t.Fatalf("payload=%+v", payload)
 	}
 }

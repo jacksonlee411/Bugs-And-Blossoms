@@ -272,6 +272,69 @@ func TestOrgUnitReadServiceVisibleRootsEmptyScopeFailsClosed(t *testing.T) {
 	}
 }
 
+func TestOrgUnitReadServiceVisibleRootsEmptyScopeAllowsUninitializedTenant(t *testing.T) {
+	store := &orgUnitReadFakeStore{
+		nodes:    map[string]OrgUnitReadNode{},
+		children: map[string][]string{},
+	}
+	svc := NewOrgUnitReadService(store)
+
+	got, err := svc.VisibleRoots(context.Background(), OrgUnitReadRequest{
+		TenantID: "t1",
+		AsOf:     "2026-01-01",
+		ScopeFilter: OrgUnitReadScopeFilter{
+			PrincipalID: "principal-a",
+			Scopes:      nil,
+		},
+	})
+	if err != nil {
+		t.Fatalf("VisibleRoots err=%v", err)
+	}
+	if len(got) != 0 {
+		t.Fatalf("roots=%+v", got)
+	}
+}
+
+func TestOrgUnitReadServiceListEmptyScopeAllowsUninitializedTenant(t *testing.T) {
+	store := &orgUnitReadFakeStore{
+		nodes:    map[string]OrgUnitReadNode{},
+		children: map[string][]string{},
+	}
+	svc := NewOrgUnitReadService(store)
+
+	got, total, err := svc.List(context.Background(), OrgUnitListRequest{
+		TenantID: "t1",
+		AsOf:     "2026-01-01",
+		ScopeFilter: OrgUnitReadScopeFilter{
+			PrincipalID: "principal-a",
+			Scopes:      nil,
+		},
+	})
+	if err != nil {
+		t.Fatalf("List err=%v", err)
+	}
+	if total != 0 || len(got) != 0 {
+		t.Fatalf("nodes=%+v total=%d", got, total)
+	}
+}
+
+func TestOrgUnitReadServiceListEmptyScopeFailsClosedAfterOrgInitialization(t *testing.T) {
+	store := newOrgUnitReadFakeStore(t)
+	svc := NewOrgUnitReadService(store)
+
+	got, total, err := svc.List(context.Background(), OrgUnitListRequest{
+		TenantID: "t1",
+		AsOf:     "2026-01-01",
+		ScopeFilter: OrgUnitReadScopeFilter{
+			PrincipalID: "principal-a",
+			Scopes:      nil,
+		},
+	})
+	if !errors.Is(err, ErrOrgUnitReadScopeRequired) {
+		t.Fatalf("nodes=%+v total=%d err=%v want ErrOrgUnitReadScopeRequired", got, total, err)
+	}
+}
+
 func TestOrgUnitReadServiceVisibleRootsDisabledScopeHonorsIncludeDisabled(t *testing.T) {
 	store := newOrgUnitReadFakeStore(t)
 	svc := NewOrgUnitReadService(store)
